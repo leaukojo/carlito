@@ -23,6 +23,9 @@ signal level_requested
 ## A new Dashboard.Density SETTING was picked. The shell owns applying it and writing it to
 ## user:// — this menu only knows it is an int with a name.
 signal dashboard_density_changed(setting: int)
+## A new UI-size multiplier was picked. Same deal: the shell applies it to the UiScale root and
+## writes it to user://.
+signal ui_scale_changed(factor: float)
 
 ## Widest sensible button in logical px (scaled through UiTheme), matching the garage.
 const BUTTON_W := 260.0
@@ -36,6 +39,10 @@ const DRIVE_FOOTNOTE := "Arrow keys and a gamepad also drive."
 ## tell you what you would lose.
 const DENSITY_HELP := "AUTO uses the compact cluster on a small screen or while the bridge is live."
 
+## Same, for UI SIZE — the automatic scale aims at one physical size on every screen, which is the
+## right default and still the wrong size for somebody sitting closer or on a smaller monitor.
+const UI_SCALE_HELP := "Scales all on-screen controls and text. 100% is the automatic size."
+
 ## How far Up/Down move the CONTROLS sheet, in logical px (scaled). About two rows.
 const SHEET_STEP := 64.0
 
@@ -45,20 +52,25 @@ var _settings: VBoxContainer
 var _sheet: ScrollContainer  ## the CONTROLS sheet's scroll area, driven by Up/Down (see _unhandled_input)
 var _resume_btn: Button
 var _density_btn: Button
+var _ui_scale_btn: Button
 ## The active vehicle's capabilities, from the shell (boot.gd _capabilities) — the same read the
 ## touch buttons gate on, so a control greyed here is a button that is not on screen.
 var _caps := {}
 ## The dashboard density SETTING as the shell has it (Dashboard.Density, AUTO included).
 var _density := Dashboard.Density.AUTO
+## The UI-size multiplier as the shell has it (UiScale.USER_STEPS).
+var _ui_scale := UiScale.USER_DEFAULT
 
 
-## What the active vehicle can do (so the CONTROLS sheet greys what it does not have) and what the
-## dashboard density is currently set to. Called by the shell BEFORE add_child (the VehicleSelect
-## pattern) — the pages are built in _ready. Optional: with nothing handed over, capability-gated
-## rows simply read as unavailable and the density reads AUTO.
-func setup(caps: Dictionary, density_setting := Dashboard.Density.AUTO) -> void:
+## What the active vehicle can do (so the CONTROLS sheet greys what it does not have), what the
+## dashboard density is currently set to and how big the UI is. Called by the shell BEFORE
+## add_child (the VehicleSelect pattern) — the pages are built in _ready. Optional: with nothing
+## handed over, capability-gated rows simply read as unavailable and both settings read default.
+func setup(caps: Dictionary, density_setting := Dashboard.Density.AUTO,
+		ui_scale_factor := UiScale.USER_DEFAULT) -> void:
 	_caps = caps
 	_density = density_setting
+	_ui_scale = ui_scale_factor
 
 
 func _ready() -> void:
@@ -162,24 +174,33 @@ func _build_controls() -> void:
 	_controls.add_child(_menu_button("BACK", func() -> void: _show_page(_root)))
 
 
-## One setting, one button, cycling AUTO / FULL / COMPACT / OFF. The value is not applied here —
-## it is emitted, and the shell applies it to the dashboard and writes it to user://, so this
-## screen still owns nothing (standing rule 6). The button relabels in place, and the cluster
-## behind the scrim changes as you press it, which is the whole demonstration of what it does.
+## Two settings, one button each, cycling their steps. Neither value is applied here — both are
+## emitted, and the shell applies and persists them, so this screen still owns nothing (standing
+## rule 6). Each button relabels in place, and what is behind the scrim changes as you press it,
+## which is the whole demonstration of what it does — UI SIZE most of all, since this menu is
+## itself one of the things it resizes.
 func _build_settings() -> void:
 	_settings.add_child(_title("SETTINGS"))
 
 	_density_btn = _menu_button("", _on_density_pressed)
 	_relabel_density()
 	_settings.add_child(_density_btn)
+	_settings.add_child(_help(DENSITY_HELP))
 
-	var help := Label.new()
-	help.text = DENSITY_HELP
-	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	help.theme_type_variation = &"Small"
-	_settings.add_child(help)
+	_ui_scale_btn = _menu_button("", _on_ui_scale_pressed)
+	_relabel_ui_scale()
+	_settings.add_child(_ui_scale_btn)
+	_settings.add_child(_help(UI_SCALE_HELP))
 
 	_settings.add_child(_menu_button("BACK", func() -> void: _show_page(_root)))
+
+
+func _help(text: String) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.theme_type_variation = &"Small"
+	return label
 
 
 func _on_density_pressed() -> void:
@@ -190,6 +211,20 @@ func _on_density_pressed() -> void:
 
 func _relabel_density() -> void:
 	_density_btn.text = "DASHBOARD: %s" % Dashboard.key_of(_density).to_upper()
+
+
+## The press rebuilds the theme, which re-lays-out this menu underneath the finger that pressed it
+## — so the button is re-labelled BEFORE the signal goes out, and focus is put back afterwards, or
+## a keyboard player loses the button they were cycling.
+func _on_ui_scale_pressed() -> void:
+	_ui_scale = UiScale.next_user_scale(_ui_scale)
+	_relabel_ui_scale()
+	ui_scale_changed.emit(_ui_scale)
+	_ui_scale_btn.grab_focus()
+
+
+func _relabel_ui_scale() -> void:
+	_ui_scale_btn.text = "UI SIZE: %d%%" % int(roundf(_ui_scale * 100.0))
 
 
 ## The CONTROLS sheet is taller than a phone and every row on it is a LABEL, so there is nothing
@@ -208,6 +243,23 @@ func _unhandled_input(event: InputEvent) -> void:
 	else:
 		return
 	get_viewport().set_input_as_handled()
+
+
+## The menu used to be built at a scale that could not change while it was open, so its
+## pixel-laid-out parts (button min sizes, page margins) were set once in _build_*. UI SIZE changes
+## the scale from INSIDE the menu, so they are re-applied here — the Controls' own theme-driven
+## parts (type, padding, separation) relayout on their own. Same NOTIFICATION_THEME_CHANGED seam
+## the touch overlay and the dashboard use.
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_THEME_CHANGED or _root == null:
+		return
+	var margin := int(UiTheme.px(self, UiTheme.MARGIN))
+	for page: VBoxContainer in [_root, _controls, _settings]:
+		page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT,
+				Control.PRESET_MODE_MINSIZE, margin)
+		for child in page.get_children():
+			if child is Button:
+				_size_button(child as Button)
 
 
 ## Step back one page; true if there was one to step back to. The shell calls this on Esc
@@ -241,7 +293,11 @@ func _title(text: String) -> Label:
 func _menu_button(text: String, on_press: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(UiTheme.px(self, BUTTON_W), UiTheme.px(self, UiTheme.TOUCH_MIN))
+	_size_button(b)
 	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	b.pressed.connect(on_press)
 	return b
+
+
+func _size_button(b: Button) -> void:
+	b.custom_minimum_size = Vector2(UiTheme.px(self, BUTTON_W), UiTheme.px(self, UiTheme.TOUCH_MIN))

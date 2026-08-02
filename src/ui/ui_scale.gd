@@ -33,7 +33,18 @@ const MAX_SCALE := 2.0
 ## Rebuilding the theme re-lays-out every Control, so ignore changes below this.
 const EPSILON := 0.02
 
+## The player's own UI-size multiplier, applied ON TOP of the computed scale (SETTINGS ▸ UI SIZE).
+## The formula below sizes the UI to a fixed PHYSICAL size, which is the right default and is
+## demonstrably consistent across devices — but "the right physical size" is not one number: the
+## same millimetres are comfortable on a 32" desk monitor and overbearing on a 24" one, and no
+## amount of formula can know how far away the screen is. So the last word is the player's.
+## Steps rather than a slider: it is a pause-menu button like the others, and six coarse steps
+## cover the whole useful range.
+const USER_STEPS: Array[float] = [0.7, 0.85, 1.0, 1.15, 1.35, 1.6]
+const USER_DEFAULT := 1.0
+
 var _scale := 0.0
+var _user := USER_DEFAULT
 
 
 func _ready() -> void:
@@ -41,6 +52,29 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE  # a passthrough frame, never a click target
 	get_window().size_changed.connect(_apply)
 	_apply()
+
+
+## The player's UI-size multiplier. Set by the shell from SETTINGS (and from `user://` on boot);
+## rebuilds the theme immediately, which is what makes the pause menu resize under the press.
+func set_user_scale(factor: float) -> void:
+	var f := clampf(factor, USER_STEPS[0], USER_STEPS[USER_STEPS.size() - 1])
+	if is_equal_approx(f, _user):
+		return
+	_user = f
+	_apply()
+
+
+func user_scale() -> float:
+	return _user
+
+
+## The step after `factor`, wrapping — how the SETTINGS button cycles. Static so the menu can
+## label itself without reaching for the node.
+static func next_user_scale(factor: float) -> float:
+	for step in USER_STEPS:
+		if step > factor + 0.01:
+			return step
+	return USER_STEPS[0]
 
 
 func _apply() -> void:
@@ -54,9 +88,12 @@ func _apply() -> void:
 ## Scale from the window's SHORT edge in logical (density-independent) pixels. The short edge
 ## is what runs out first — a phone held sideways and an ultrawide monitor both have plenty of
 ## width and it tells you nothing about how big text should be.
+## The player's multiplier is applied AFTER the clamp, deliberately: the floors and the ceiling
+## are what the automatic formula is willing to choose on its own, not a limit on what the player
+## is allowed to ask for.
 func _compute() -> float:
-	var floor_scale := MIN_TOUCH if DisplayServer.is_touchscreen_available() else MIN_DESKTOP
-	return clampf(logical_short_edge(get_window()) / REF_SHORT, floor_scale, MAX_SCALE)
+	var floor_scale := MIN_TOUCH if is_touch_display() else MIN_DESKTOP
+	return clampf(logical_short_edge(get_window()) / REF_SHORT, floor_scale, MAX_SCALE) * _user
 
 
 ## The window's short edge in logical (density-independent) pixels. Static because it is also
@@ -84,6 +121,38 @@ static func logical_short_edge(win: Window) -> float:
 	if win == null:
 		return REF_SHORT
 	return float(mini(win.size.x, win.size.y)) / display_scale()
+
+
+## Whether this is a display driven by a FINGER — which decides the scale floor here, the touch
+## overlay's pad sizing and the first-run cue's wording. Not just
+## `DisplayServer.is_touchscreen_available()`: on web that answer comes from a single browser
+## probe, and browsers disagree about it. A phone whose browser answers "no" lands on the desktop
+## floor (0.85 instead of 1.05) and every control comes out a fifth too small for a thumb — which
+## is exactly what a phone on Opera looked like next to the same phone on Chrome.
+##
+## So on web the question is asked three ways and ANY yes counts: the pointer media query, the
+## touch-point count, and the presence of the touch event API. A false positive costs a
+## touchscreen laptop slightly chunkier controls; a false negative costs a phone player a UI they
+## cannot hit. Cached — this cannot change while the page is open, and it is read per frame by the
+## touch overlay's rebuild guard.
+static var _touch_cache := -1
+static func is_touch_display() -> bool:
+	if _touch_cache < 0:
+		_touch_cache = 1 if _probe_touch() else 0
+	return _touch_cache == 1
+
+
+static func _probe_touch() -> bool:
+	if DisplayServer.is_touchscreen_available():
+		return true
+	if OS.has_feature("web"):
+		var js := """(function(){try{
+			return (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+				|| (navigator.maxTouchPoints || 0) > 0
+				|| ('ontouchstart' in window);
+		}catch(e){return false;}})()"""
+		return bool(JavaScriptBridge.eval(js, true))
+	return false
 
 
 ## Device pixel ratio (OS display scaling), or 1.0 where the platform does not report one.

@@ -73,6 +73,7 @@ func _refresh() -> void:
 		Engine.get_frames_per_second(), frame_ms, draw_calls, prims, vram, nodes]
 	text += _grip_line()
 	text += _articulation_line()
+	text += _ui_scale_line()
 
 
 ## Per-wheel painted-surface grip of the active vehicle (1.00 on unpainted ground), or "" when
@@ -99,3 +100,22 @@ func _articulation_line() -> String:
 	if vehicle == null or not vehicle.has_method("articulation"):
 		return ""
 	return "\nartic %+.1f deg" % rad_to_deg(vehicle.call("articulation"))
+
+
+## TEMP diagnostic for the cross-device UI-scale bug: every number UiScale's formula touches,
+## so a report from a friend's browser (F3, screenshot) tells us which one is lying instead of
+## guessing blind. Remove once the touch-UI sizing is confirmed consistent across browsers.
+func _ui_scale_line() -> String:
+	var win := get_window()
+	var w := 0.0
+	var h := 0.0
+	var dpr := 0.0
+	if OS.has_feature("web"):
+		w = float(JavaScriptBridge.eval("window.innerWidth", true))
+		h = float(JavaScriptBridge.eval("window.innerHeight", true))
+		dpr = float(JavaScriptBridge.eval("window.devicePixelRatio", true))
+	return "\nwin %dx%d  css %dx%d  dpr %.2f\nscreen_scale %.2f  touch %s  short %.0f  ui_scale %.2f" % [
+		win.size.x, win.size.y, int(w), int(h), dpr,
+		DisplayServer.screen_get_scale(DisplayServer.SCREEN_OF_MAIN_WINDOW),
+		UiScale.is_touch_display(), UiScale.logical_short_edge(win),
+		UiTheme.scale_of(self)]

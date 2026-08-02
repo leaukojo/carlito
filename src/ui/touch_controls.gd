@@ -674,6 +674,6 @@ func _px(logical: float) -> float:
 ## How much bigger than the theme scale the widgets are drawn (see PAD_SCALE_REF). 1.0 on any
 ## touchscreen — there the theme scale's fingertip sizing is already the right answer.
 func _compute_pad_scale() -> float:
-	if DisplayServer.is_touchscreen_available():
+	if UiScale.is_touch_display():
 		return 1.0
 	return clampf(UiScale.logical_short_edge(get_window()) / PAD_SCALE_REF, 1.0, PAD_SCALE_MAX)

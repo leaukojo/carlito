@@ -52,7 +52,7 @@ func _ready() -> void:
 ## Keys are named here rather than pulled from ActionRegistry on purpose: the registry's labels are
 ## the settings sheet's sentences, and this line is one short sentence of its own.
 func _text() -> String:
-	var touch := DisplayServer.is_touchscreen_available()
+	var touch := UiScale.is_touch_display()
 	match family:
 		"plane":
 			if touch:

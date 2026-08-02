@@ -24,7 +24,7 @@ const DEFAULT_LEVEL := "level_1"
 
 ## Every screen is parented to the UiScale Control, not the CanvasLayer: that is where the
 ## scaled theme lives, and a Control only inherits a theme from its Control ancestors.
-@onready var _ui: Control = $UI/UiScale
+@onready var _ui: UiScale = $UI/UiScale
 @onready var _notice: Label = $UI/UiScale/Notice
 @onready var _dashboard: Dashboard = $UI/UiScale/Dashboard
 @onready var _touch: TouchControls = $UI/UiScale/TouchControls
@@ -85,6 +85,8 @@ func _ready() -> void:
 	# How dense the cluster is, as last chosen (AUTO by default, which decides from screen size
 	# and whether the bridge is live). Set before the first bind so nothing builds twice.
 	_dashboard.set_density_setting(ShellPrefs.dashboard_density())
+	# The player's UI-size multiplier, likewise before anything lays itself out.
+	_ui.set_user_scale(ShellPrefs.ui_scale())
 	_set_hud_visible(false)  # nothing to bind to until the level is up
 	_boot()
 
@@ -210,11 +212,12 @@ func _open_pause() -> void:
 	_pause = PauseMenu.new()
 	# Before add_child (the VehicleSelect.setup pattern): the CONTROLS sheet greys what this
 	# machine does not have, off the same capability read the touch buttons gate on.
-	_pause.setup(_capabilities(), _dashboard.density_setting())
+	_pause.setup(_capabilities(), _dashboard.density_setting(), _ui.user_scale())
 	_pause.resume_requested.connect(_close_pause)
 	_pause.vehicle_requested.connect(_open_vehicle_select)
 	_pause.level_requested.connect(_show_level_select)
 	_pause.dashboard_density_changed.connect(_on_density_changed)
+	_pause.ui_scale_changed.connect(_on_ui_scale_changed)
 	_ui.add_child(_pause)
 	# The driving pads sit behind the scrim and are not reachable; hiding them also releases
 	# anything held (Pad drops its pointer when it loses visibility) so nothing sticks.
@@ -239,6 +242,15 @@ func _close_pause() -> void:
 func _on_density_changed(setting: int) -> void:
 	_dashboard.set_density_setting(setting)
 	ShellPrefs.set_dashboard_density(setting)
+
+
+## SETTINGS picked a new UI size. Applying it means handing it to the UiScale root, which rebuilds
+## the theme — every Control below relayouts from that one assignment, the pause menu included.
+## Remembered for the same reason the density is: how big you need the type is yours, not the
+## link's, and it is the setting most likely to differ between two people's screens.
+func _on_ui_scale_changed(factor: float) -> void:
+	_ui.set_user_scale(factor)
+	ShellPrefs.set_ui_scale(factor)
 
 
 ## F2: hide the instrument cluster, and bring it back the way it was. It moves the SAME density

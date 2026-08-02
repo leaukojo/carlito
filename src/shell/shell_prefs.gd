@@ -71,6 +71,21 @@ static func set_dashboard_density(setting: int) -> void:
 	cfg.save(PATH)
 
 
+## The player's UI-size multiplier (SETTINGS ▸ UI SIZE), clamped to the range UiScale offers so a
+## stale or hand-edited cfg cannot leave the UI unreadably small or off the screen.
+static func ui_scale() -> float:
+	var f := float(_config().get_value(SECTION, "ui_scale", UiScale.USER_DEFAULT))
+	return clampf(f, UiScale.USER_STEPS[0], UiScale.USER_STEPS[UiScale.USER_STEPS.size() - 1])
+
+
+static func set_ui_scale(factor: float) -> void:
+	if not ENABLED:
+		return
+	var cfg := _config()
+	cfg.set_value(SECTION, "ui_scale", factor)
+	cfg.save(PATH)
+
+
 ## The parsed file, loaded once per run. A missing or corrupt file is simply an empty one:
 ## nothing here is worth failing a boot over.
 static func _config() -> ConfigFile:
