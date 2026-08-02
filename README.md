@@ -73,6 +73,8 @@ godot --headless --path . --export-release "Web" build/web/index.html
 ```
 The project is well documented for AI agents, so you should be able to make requests such as "add a level" or "add a vehicle" with minimal token usage.
 
+If you want to contribute, see `docs/TODO.md` for a list of current issues. If you want to make a new level, see `docs/making_a_level.md`. If you want to understand how the simulation works, see `docs/HUMAN_EXPLANATIONS.md`.
+
 ## Credits
 
 - [**Kenney**](https://kenney.nl) (CC0) for almost all of the art: City Kit (Roads,
