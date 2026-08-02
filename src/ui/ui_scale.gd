@@ -62,15 +62,32 @@ func _compute() -> float:
 ## The window's short edge in logical (density-independent) pixels. Static because it is also
 ## how the dashboard decides "phone-sized" for its automatic density — one definition of how
 ## big the screen actually is, rather than two that can disagree.
+##
+## ON WEB, this reads the browser's CSS viewport (window.innerWidth/innerHeight) directly rather
+## than `win.size / DisplayServer.screen_get_scale()`. That pairing looked right but wasn't: with
+## `html/canvas_resize_policy=Adaptive`, Godot's own JS shim already folds devicePixelRatio into
+## the canvas's backing-store size when HiDPI is allowed, so `win.size` can already BE in device
+## pixels — and `screen_get_scale()` (== devicePixelRatio there) then divides it out a second
+## time. Whether that double-divide fires depends on the browser's devicePixelRatio, which varies
+## with OS display-scaling% and is unrelated to actual resolution — a friend's identically-"1080p"
+## screen at 125% scaling (common on Windows) or a phone (always > 1) reports a different ratio
+## than the dev machine's, so the same formula lands on a different scale on each. innerWidth/
+## innerHeight are CSS pixels by definition, with devicePixelRatio never entering the number at
+## all, so there is nothing left to double-count.
 static func logical_short_edge(win: Window) -> float:
+	if OS.has_feature("web"):
+		var w: Variant = JavaScriptBridge.eval("window.innerWidth", true)
+		var h: Variant = JavaScriptBridge.eval("window.innerHeight", true)
+		if typeof(w) in [TYPE_FLOAT, TYPE_INT] and typeof(h) in [TYPE_FLOAT, TYPE_INT] \
+				and float(w) > 0.0 and float(h) > 0.0:
+			return minf(float(w), float(h))
 	if win == null:
 		return REF_SHORT
 	return float(mini(win.size.x, win.size.y)) / display_scale()
 
 
-## Device pixel ratio (browser devicePixelRatio / OS display scaling), or 1.0 where the
-## platform does not report one. Without it a high-density phone reports a huge pixel count
-## and would be handed the SMALLEST ui, which is backwards.
+## Device pixel ratio (OS display scaling), or 1.0 where the platform does not report one.
+## Native-platform fallback only now — see logical_short_edge for why web bypasses this.
 static func display_scale() -> float:
 	var s := DisplayServer.screen_get_scale(DisplayServer.SCREEN_OF_MAIN_WINDOW)
 	return s if s > 0.0 else 1.0
