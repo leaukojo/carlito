@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_8ss0w"]
+[ext_resource type="PackedScene" path="res://kit/raw/racing/lightPost_exclusive.glb" id="2_6vheg"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_427eh"]
+size = Vector3(0.4224, 9.548399, 0.4224)
+
+[node name="LightPostExclusive" type="Node3D" unique_id=1591534462]
+script = ExtResource("1_8ss0w")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=26523221 instance=ExtResource("2_6vheg")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, 4.2, 0.12, 7.4285994)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=367894496]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1108510038]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.7741995, -0.37140036)
+shape = SubResource("BoxShape3D_427eh")

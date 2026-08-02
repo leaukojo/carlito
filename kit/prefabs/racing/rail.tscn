@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_vpi7a"]
+[ext_resource type="PackedScene" path="res://kit/raw/racing/rail.glb" id="2_egoi7"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ms42k"]
+size = Vector3(12, 1.92, 0.6000006)
+
+[node name="Rail" type="Node3D" unique_id=2135762678]
+script = ExtResource("1_vpi7a")
+
+[node name="Model" type="Node3D" parent="." unique_id=628463330 instance=ExtResource("2_egoi7")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, -1.8000001, 0.12, 7.5)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=156007398]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=479243325]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.96, -8.940697e-08)
+shape = SubResource("BoxShape3D_ms42k")

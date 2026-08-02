@@ -1,0 +1,27 @@
+<!--
+  Carlito bridge transport. Reviewable source of truth for the Web export
+  preset's "Head Include" (export_presets.cfg html/head_include) — paste this <script>
+  verbatim into that field. It installs the postMessage plumbing as early as possible,
+  before the WASM boots, so no early carlitoInput message is missed.
+
+  Contract with sloppyCAN's carlito.js:
+    IN  : parent posts {type:'carlitoInput',  version, values:{…}}  -> stashed here
+    OUT : game calls __carlito.publish(values) -> posts {type:'carlitoOutput', version, values}
+
+  Inbound is intentionally not origin-gated on the game side: it only drives the local
+  car (no sensitive sink). The dangerous direction — telemetry reaching a live CAN bus —
+  is origin-gated on the sloppyCAN side (carlito.js checks e.origin === GAME_ORIGIN).
+-->
+<script>
+  window.__carlito = { in: {}, inT: 0, ver: 0, outVer: 0, publish: null };
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || d.type !== 'carlitoInput' || !d.values) return;
+    window.__carlito.in = d.values;
+    window.__carlito.inT = Date.now();
+    if (typeof d.version === 'number') window.__carlito.ver = d.version;
+  });
+  window.__carlito.publish = function (values) {
+    parent.postMessage({ type: 'carlitoOutput', version: window.__carlito.outVer, values: values }, '*');
+  };
+</script>

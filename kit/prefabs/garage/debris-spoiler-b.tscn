@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_6mwuh"]
+[ext_resource type="PackedScene" path="res://kit/raw/garage/debris-spoiler-b.glb" id="2_yulxr"]
+
+[node name="DebrisSpoilerB" type="Node3D" unique_id=1218612543]
+script = ExtResource("1_6mwuh")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=1729055853 instance=ExtResource("2_yulxr")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, 0, -1.7881394e-08)

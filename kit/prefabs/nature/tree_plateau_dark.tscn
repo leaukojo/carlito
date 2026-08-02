@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_yvrag"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/tree_plateau_dark.glb" id="2_1j6gw"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_0jt73"]
+size = Vector3(0.652, 6.2465, 0.652)
+
+[node name="TreePlateauDark" type="Node3D" unique_id=1726248152]
+script = ExtResource("1_yvrag")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=1427791644 instance=ExtResource("2_1j6gw")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0.111500025, 0.25, -0.009750128)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=172561049]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1291437763]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.111500025, 3.12325, -0.009750128)
+shape = SubResource("BoxShape3D_0jt73")

@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_tqcoj"]
+[ext_resource type="PackedScene" path="res://kit/raw/racing/overheadLights.glb" id="2_kc78g"]
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_x31bv"]
+points = PackedVector3Array(-6.912, 6.7909846, -1.14, 1.6794362, 8.279812, 0.8996712, -7.466667, -8.881784e-16, 1.1066668, 7.6800003, -0.119999886, -1.26, 7.466667, 0, 1.1066668, 6.263831, 7.6549006, -1.14, -7.6800003, -0.119999886, -1.26, -7.6800003, 6.599342, 0.6595772, 7.6800003, 6.599342, 0.6595772, -6.263831, 7.6549006, -1.14, -7.6800003, 2.2810335, 1.1400001, 7.6800003, 2.2810335, 1.1400001, -1.6794362, 8.279812, 0.8996712, -6.655341, 7.8708434, 0.39873192, 6.655232, 7.870783, 0.39872438, 6.912, 6.7909846, -1.14, -1.5462749, 8.17747, -0.059999943, 1.5462749, 8.17747, -0.059999943, -7.199916, 7.4510937, 0.40427312, 7.1997724, 7.451029, 0.40426385, -6.6954927, 7.2233233, -1.14, 6.6954927, 7.2233233, -1.14, -7.4612246, 6.996863, 0.4060527, 7.4610476, 6.9967966, 0.40604162)
+
+[node name="OverheadLights" type="Node3D" unique_id=314576578]
+script = ExtResource("1_tqcoj")
+collision_mode = "multiconvex"
+
+[node name="Model" type="Node3D" parent="." unique_id=2082486378 instance=ExtResource("2_kc78g")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, -1.8000001, 0.12, 6.6599994)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=8367546]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1710487939]
+shape = SubResource("ConvexPolygonShape3D_x31bv")

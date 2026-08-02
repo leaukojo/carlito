@@ -1,0 +1,42 @@
+[gd_resource type="Resource" script_class="VehicleSpec" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
+
+[resource]
+script = ExtResource("1_spec")
+mass = 260.0
+center_of_mass = Vector3(0, -0.38, 0.12)
+angular_damping = 2.5
+wheel_positions = PackedVector3Array(-0.7, -0.1, -0.7, 0.7, -0.1, -0.7, -0.7, -0.1, 0.7, 0.7, -0.1, 0.7)
+wheel_radius = 0.3
+wheel_inertia = 0.7
+driven_front = false
+driven_rear = true
+rest_length = 0.28
+spring_rate = 12000.0
+damper_bump = 1200.0
+damper_rebound = 1600.0
+max_suspension_force = 20000.0
+grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
+mu_long = 1.1
+mu_lat = 1.0
+handbrake_grip = 0.5
+torque_curve = PackedVector2Array(2000, 40, 5000, 70, 8000, 90, 9500, 85, 11000, 55)
+idle_rpm = 1200.0
+redline_rpm = 11000.0
+gear_ratios = PackedFloat32Array(2.6, 1.9, 1.5, 1.25, 1.05, 0.9)
+reverse_ratio = 2.6
+final_drive = 3.2
+efficiency = 0.92
+shift_up_rpm = 9500.0
+shift_down_rpm = 4000.0
+brake_torque = 220.0
+handbrake_torque = 55.0
+max_steer_deg = 27.0
+steer_speed = 6.0
+min_steer_frac = 0.28
+steer_falloff_speed = 22.0
+headlight_paths = [NodePath("Body/Lamps/Headlight")]
+brake_lamp_paths = [NodePath("Body/Lamps/BrakeLamp")]
+turn_left_paths = [NodePath("Body/Lamps/TurnLF"), NodePath("Body/Lamps/TurnLR")]
+turn_right_paths = [NodePath("Body/Lamps/TurnRF"), NodePath("Body/Lamps/TurnRR")]

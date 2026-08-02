@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_74qq8"]
+[ext_resource type="PackedScene" path="res://kit/raw/garage/debris-bolt.glb" id="2_2ol41"]
+
+[node name="DebrisBolt" type="Node3D" unique_id=106792240]
+script = ExtResource("1_74qq8")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=1446847955 instance=ExtResource("2_2ol41")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, 0, 0)

@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_3n6hd"]
+[ext_resource type="PackedScene" path="res://kit/raw/racing/overhead.glb" id="2_2qsk5"]
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_7aceh"]
+points = PackedVector3Array(-7.6800003, -0.119999886, -1.26, 6.66388, 7.866518, 0.39932048, 7.6800003, 6.599859, 0.6595772, -7.6800003, 2.2802348, 1.1400001, 7.4541183, 0, 1.104706, 6.912, 0.2880001, -1.14, -6.263831, 7.632, -1.14, 6.263831, 7.632, -1.14, -7.6800003, 6.599859, 0.6595772, -7.4541183, -8.881784e-16, 1.104706, -6.663988, 7.866581, 0.39932793, 7.6800003, 2.2802348, 1.1400001, 6.912, 6.7679152, -1.14, -6.912, 6.7679152, -1.14, -7.2047286, 7.4456043, 0.40458345, 7.204588, 7.445536, 0.4045744, -6.6954927, 7.1992393, -1.14, 6.6954927, 7.1992393, -1.14, -7.462961, 6.9917364, 0.40616116, 7.4627852, 6.991665, 0.4061502)
+
+[node name="Overhead" type="Node3D" unique_id=498840709]
+script = ExtResource("1_3n6hd")
+collision_mode = "multiconvex"
+
+[node name="Model" type="Node3D" parent="." unique_id=178208401 instance=ExtResource("2_2qsk5")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, -1.8000001, 0.12, 6.6599994)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=645626283]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=960767271]
+shape = SubResource("ConvexPolygonShape3D_7aceh")

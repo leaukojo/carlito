@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tools/gen_kenney_vehicles.gd" id="1_gen"]
+
+[node name="GenKenneyVehicles" type="Node"]
+script = ExtResource("1_gen")

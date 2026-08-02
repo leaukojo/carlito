@@ -1,0 +1,63 @@
+# Promote dev -> stable. Manual button: Actions -> "Promote dev -> stable" -> Run workflow.
+#
+# Deliberately does NOT rebuild. It fast-forwards main to dev and copies the
+# already-published gh-pages:/dev/ bytes over gh-pages:/stable/, so the artifact
+# you approved by driving dev is byte-for-byte the one anonymous visitors get.
+# A rebuild would reintroduce the "it built again and something changed" class of
+# bug, and would cost a full Godot export for no added confidence.
+#
+# A contract change is a PAIRED promote: carlito and sloppycan agree by contract
+# version, so promote both, or neither.
+name: Promote dev -> stable
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    # Shared with ci.yml's publish-dev: both force-push gh-pages.
+    concurrency:
+      group: gh-pages
+      cancel-in-progress: false
+    steps:
+      # dev, because the redirect page published below should match the commit
+      # being promoted.
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      # Resolved from the checkout, not from github.sha: on a workflow_dispatch the
+      # latter is whatever ref the run was started from.
+      - name: Resolve dev tip
+        id: dev
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # Before touching the live site: a non-fast-forward here means main has
+      # commits dev does not, and this promote would quietly rewrite them.
+      # Failing first leaves gh-pages untouched and the promote re-runnable.
+      - name: Fast-forward main to dev
+        run: git push origin "${{ steps.dev.outputs.sha }}:refs/heads/main"
+
+      - name: Copy gh-pages:/dev/ over gh-pages:/stable/
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SITE_SHA: ${{ steps.dev.outputs.sha }}
+        # Invoked via `bash` rather than executed directly: the repo is authored on
+        # Windows, where git does not track the exec bit.
+        run: bash .github/scripts/publish-pages.sh promote
+
+      - name: Summary
+        run: |
+          {
+            echo "### Promoted"
+            echo ""
+            echo "- main is now \`${{ steps.dev.outputs.sha }}\`"
+            echo "- <https://leaukojo.github.io/carlito/> (stable) now serves the dev build"
+            echo ""
+            echo "First visit after a promote may need one reload while the new service worker takes over."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,18 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="PackedScene" path="res://src/vehicles/bike/bike.tscn" id="1_base"]
+[ext_resource type="Resource" path="res://src/vehicles/bike/bike_motocross_spec.tres" id="2_spec"]
+
+[sub_resource type="StandardMaterial3D" id="MxMat"]
+albedo_color = Color(0.9, 0.42, 0.06, 1)
+metallic = 0.4
+roughness = 0.35
+
+[node name="Bike" instance=ExtResource("1_base")]
+spec = ExtResource("2_spec")
+
+[node name="Tank" parent="Body" index="2"]
+surface_material_override/0 = SubResource("MxMat")
+
+[node name="HoodCam" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0, -0.1)

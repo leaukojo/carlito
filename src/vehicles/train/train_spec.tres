@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="VehicleSpec" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
+
+[resource]
+script = ExtResource("1_spec")
+mass = 50000.0
+center_of_mass = Vector3(0, 0.6, 0)
+wheel_positions = PackedVector3Array()
+driven_front = false
+driven_rear = false
+torque_curve = PackedVector2Array(600, 200, 2000, 260, 3600, 200)
+idle_rpm = 600.0
+redline_rpm = 3600.0
+gear_ratios = PackedFloat32Array(3.0, 2.2, 1.6, 1.2, 0.95, 0.75)
+reverse_ratio = 3.0
+final_drive = 3.0
+shift_up_rpm = 3000.0
+shift_down_rpm = 1200.0
+max_steer_deg = 0.0
+steer_speed = 1.0

@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_vybwb"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/tree_default_fall.glb" id="2_prfv5"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_p1llr"]
+size = Vector3(0.68799996, 8.539499, 0.68799996)
+
+[node name="TreeDefaultFall" type="Node3D" unique_id=1761030440]
+script = ExtResource("1_vybwb")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=699106686 instance=ExtResource("2_prfv5")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0.25, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=2070299063]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=648843314]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.2697496, 0)
+shape = SubResource("BoxShape3D_p1llr")

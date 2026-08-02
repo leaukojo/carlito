@@ -1,0 +1,407 @@
+[gd_scene load_steps=30 format=3]
+
+; Rear three-point linkage + PTO stub for the Kenney tractor body. Measured against that
+; body: near the centreline it ends at z ~ +0.99, ground is y ~ 0 at ride height, and the
+; rear tyre inner faces are at |x| = 0.253 -- so the draft arms run inboard at |x| = 0.19
+; until they are clear of the tyres (z > 1.27), then splay to the ball ends at |x| = 0.37.
+;
+; Every pivot node is authored with its geometry along local +Z and posed by
+; ThreePointHitch as rotation.x = -planar_angle; the poses below are the RAISED state, so
+; the scene opens looking like the tractor's spawn pose. NO CollisionShape anywhere.
+
+[ext_resource type="Script" path="res://src/vehicles/tractor/three_point_hitch.gd" id="1_hitch"]
+
+[sub_resource type="StandardMaterial3D" id="MatCast"]
+resource_name = "hitch_cast"
+albedo_color = Color(0.24, 0.26, 0.29, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="MatSteel"]
+resource_name = "hitch_steel"
+albedo_color = Color(0.34, 0.37, 0.41, 1)
+metallic_specular = 0.6
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="MatYellow"]
+resource_name = "pto_guard"
+albedo_color = Color(0.9, 0.72, 0.15, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="MatShaft"]
+resource_name = "pto_shaft"
+albedo_color = Color(0.62, 0.64, 0.67, 1)
+metallic_specular = 0.8
+roughness = 0.35
+
+[sub_resource type="StandardMaterial3D" id="MatMark"]
+resource_name = "index_mark"
+albedo_color = Color(0.85, 0.18, 0.14, 1)
+roughness = 0.6
+
+[sub_resource type="BoxMesh" id="MeshCase"]
+material = SubResource("MatCast")
+size = Vector3(0.4, 0.42, 0.24)
+
+[sub_resource type="BoxMesh" id="MeshRib"]
+material = SubResource("MatCast")
+size = Vector3(0.05, 0.3, 0.06)
+
+[sub_resource type="CylinderMesh" id="MeshPivotBoss"]
+material = SubResource("MatSteel")
+top_radius = 0.07
+bottom_radius = 0.07
+height = 0.1
+radial_segments = 8
+rings = 0
+
+[sub_resource type="BoxMesh" id="MeshMastPlate"]
+material = SubResource("MatCast")
+size = Vector3(0.035, 0.26, 0.13)
+
+[sub_resource type="CylinderMesh" id="MeshMastPin"]
+material = SubResource("MatSteel")
+top_radius = 0.032
+bottom_radius = 0.032
+height = 0.17
+radial_segments = 8
+rings = 0
+
+[sub_resource type="CylinderMesh" id="MeshRockCover"]
+material = SubResource("MatCast")
+top_radius = 0.075
+bottom_radius = 0.075
+height = 0.3
+radial_segments = 8
+rings = 0
+
+[sub_resource type="BoxMesh" id="MeshGuardHood"]
+material = SubResource("MatYellow")
+size = Vector3(0.26, 0.13, 0.24)
+
+[sub_resource type="BoxMesh" id="MeshGuardCheek"]
+material = SubResource("MatYellow")
+size = Vector3(0.03, 0.16, 0.24)
+
+[sub_resource type="CylinderMesh" id="MeshPtoShaft"]
+material = SubResource("MatShaft")
+top_radius = 0.045
+bottom_radius = 0.045
+height = 0.22
+radial_segments = 6
+rings = 0
+
+[sub_resource type="CylinderMesh" id="MeshPtoCollar"]
+material = SubResource("MatShaft")
+top_radius = 0.062
+bottom_radius = 0.062
+height = 0.05
+radial_segments = 8
+rings = 0
+
+[sub_resource type="BoxMesh" id="MeshPtoSpline"]
+material = SubResource("MatShaft")
+size = Vector3(0.02, 0.048, 0.15)
+
+[sub_resource type="BoxMesh" id="MeshPtoSplineMark"]
+material = SubResource("MatMark")
+size = Vector3(0.02, 0.048, 0.15)
+
+[sub_resource type="BoxMesh" id="MeshLinkInner"]
+material = SubResource("MatSteel")
+size = Vector3(0.075, 0.085, 0.4)
+
+[sub_resource type="BoxMesh" id="MeshLinkGusset"]
+material = SubResource("MatSteel")
+size = Vector3(0.09, 0.1, 0.09)
+
+[sub_resource type="BoxMesh" id="MeshLinkOuter"]
+material = SubResource("MatSteel")
+size = Vector3(0.075, 0.085, 0.463)
+
+[sub_resource type="SphereMesh" id="MeshBall"]
+material = SubResource("MatSteel")
+radius = 0.055
+height = 0.11
+radial_segments = 8
+rings = 4
+
+[sub_resource type="CylinderMesh" id="MeshArmBoss"]
+material = SubResource("MatCast")
+top_radius = 0.065
+bottom_radius = 0.065
+height = 0.09
+radial_segments = 8
+rings = 0
+
+[sub_resource type="BoxMesh" id="MeshArm"]
+material = SubResource("MatSteel")
+size = Vector3(0.055, 0.1, 0.2)
+
+[sub_resource type="CylinderMesh" id="MeshArmPin"]
+material = SubResource("MatSteel")
+top_radius = 0.028
+bottom_radius = 0.028
+height = 0.1
+radial_segments = 8
+rings = 0
+
+[sub_resource type="CylinderMesh" id="MeshRod"]
+material = SubResource("MatSteel")
+top_radius = 0.022
+bottom_radius = 0.022
+height = 0.36
+radial_segments = 8
+rings = 0
+
+[sub_resource type="BoxMesh" id="MeshTurnbuckle"]
+material = SubResource("MatSteel")
+size = Vector3(0.052, 0.052, 0.16)
+
+[sub_resource type="CylinderMesh" id="MeshTopEye"]
+material = SubResource("MatSteel")
+top_radius = 0.045
+bottom_radius = 0.045
+height = 0.075
+radial_segments = 8
+rings = 0
+
+[sub_resource type="CylinderMesh" id="MeshTopTube"]
+material = SubResource("MatSteel")
+top_radius = 0.03
+bottom_radius = 0.03
+height = 0.53
+radial_segments = 8
+rings = 0
+
+[sub_resource type="BoxMesh" id="MeshTopHandle"]
+material = SubResource("MatSteel")
+size = Vector3(0.018, 0.09, 0.018)
+
+[node name="ThreePointHitch" type="Node3D"]
+script = ExtResource("1_hitch")
+
+[node name="Housing" type="Node3D" parent="."]
+
+[node name="Case" type="MeshInstance3D" parent="Housing"]
+position = Vector3(0, 0.545, 1)
+mesh = SubResource("MeshCase")
+
+[node name="RibL" type="MeshInstance3D" parent="Housing"]
+position = Vector3(-0.13, 0.56, 1.13)
+mesh = SubResource("MeshRib")
+
+[node name="RibR" type="MeshInstance3D" parent="Housing"]
+position = Vector3(0.13, 0.56, 1.13)
+mesh = SubResource("MeshRib")
+
+[node name="PivotBossL" type="MeshInstance3D" parent="Housing"]
+position = Vector3(-0.19, 0.42, 0.92)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshPivotBoss")
+
+[node name="PivotBossR" type="MeshInstance3D" parent="Housing"]
+position = Vector3(0.19, 0.42, 0.92)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshPivotBoss")
+
+[node name="MastPlateL" type="MeshInstance3D" parent="Housing"]
+position = Vector3(-0.055, 0.73, 0.99)
+mesh = SubResource("MeshMastPlate")
+
+[node name="MastPlateR" type="MeshInstance3D" parent="Housing"]
+position = Vector3(0.055, 0.73, 0.99)
+mesh = SubResource("MeshMastPlate")
+
+[node name="MastPin" type="MeshInstance3D" parent="Housing"]
+position = Vector3(0, 0.78, 1)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshMastPin")
+
+[node name="RockCover" type="MeshInstance3D" parent="Housing"]
+position = Vector3(0, 0.95, 1.02)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshRockCover")
+
+[node name="PtoGuard" type="Node3D" parent="."]
+
+[node name="Hood" type="MeshInstance3D" parent="PtoGuard"]
+position = Vector3(0, 0.76, 1.18)
+mesh = SubResource("MeshGuardHood")
+
+[node name="CheekL" type="MeshInstance3D" parent="PtoGuard"]
+position = Vector3(-0.115, 0.645, 1.18)
+mesh = SubResource("MeshGuardCheek")
+
+[node name="CheekR" type="MeshInstance3D" parent="PtoGuard"]
+position = Vector3(0.115, 0.645, 1.18)
+mesh = SubResource("MeshGuardCheek")
+
+[node name="PtoStub" type="Node3D" parent="."]
+position = Vector3(0, 0.6, 1.08)
+
+[node name="Collar" type="MeshInstance3D" parent="PtoStub"]
+position = Vector3(0, 0, 0.03)
+rotation = Vector3(1.5707964, 0, 0)
+mesh = SubResource("MeshPtoCollar")
+
+[node name="Shaft" type="MeshInstance3D" parent="PtoStub"]
+position = Vector3(0, 0, 0.11)
+rotation = Vector3(1.5707964, 0, 0)
+mesh = SubResource("MeshPtoShaft")
+
+[node name="Spline0" type="MeshInstance3D" parent="PtoStub"]
+position = Vector3(0, 0.045, 0.135)
+mesh = SubResource("MeshPtoSplineMark")
+
+[node name="Spline1" type="MeshInstance3D" parent="PtoStub"]
+position = Vector3(-0.03897, 0.0225, 0.135)
+rotation = Vector3(0, 0, 1.0471976)
+mesh = SubResource("MeshPtoSpline")
+
+[node name="Spline2" type="MeshInstance3D" parent="PtoStub"]
+position = Vector3(-0.03897, -0.0225, 0.135)
+rotation = Vector3(0, 0, 2.0943951)
+mesh = SubResource("MeshPtoSpline")
+
+[node name="Spline3" type="MeshInstance3D" parent="PtoStub"]
+position = Vector3(0, -0.045, 0.135)
+rotation = Vector3(0, 0, 3.1415927)
+mesh = SubResource("MeshPtoSpline")
+
+[node name="Spline4" type="MeshInstance3D" parent="PtoStub"]
+position = Vector3(0.03897, -0.0225, 0.135)
+rotation = Vector3(0, 0, 4.1887902)
+mesh = SubResource("MeshPtoSpline")
+
+[node name="Spline5" type="MeshInstance3D" parent="PtoStub"]
+position = Vector3(0.03897, 0.0225, 0.135)
+rotation = Vector3(0, 0, -1.0471976)
+mesh = SubResource("MeshPtoSpline")
+
+[node name="LowerLinkL" type="Node3D" parent="."]
+position = Vector3(-0.19, 0.42, 0.92)
+rotation = Vector3(-0.4502949, 0, 0)
+
+[node name="Inner" type="MeshInstance3D" parent="LowerLinkL"]
+position = Vector3(0, 0, 0.2)
+mesh = SubResource("MeshLinkInner")
+
+[node name="Gusset" type="MeshInstance3D" parent="LowerLinkL"]
+position = Vector3(-0.01, 0, 0.4)
+mesh = SubResource("MeshLinkGusset")
+
+[node name="Outer" type="MeshInstance3D" parent="LowerLinkL"]
+position = Vector3(-0.09, 0, 0.6135)
+rotation = Vector3(0, -0.39926, 0)
+mesh = SubResource("MeshLinkOuter")
+
+[node name="Ball" type="MeshInstance3D" parent="LowerLinkL"]
+position = Vector3(-0.18, 0, 0.827)
+mesh = SubResource("MeshBall")
+
+[node name="LowerLinkR" type="Node3D" parent="."]
+position = Vector3(0.19, 0.42, 0.92)
+rotation = Vector3(-0.4502949, 0, 0)
+
+[node name="Inner" type="MeshInstance3D" parent="LowerLinkR"]
+position = Vector3(0, 0, 0.2)
+mesh = SubResource("MeshLinkInner")
+
+[node name="Gusset" type="MeshInstance3D" parent="LowerLinkR"]
+position = Vector3(0.01, 0, 0.4)
+mesh = SubResource("MeshLinkGusset")
+
+[node name="Outer" type="MeshInstance3D" parent="LowerLinkR"]
+position = Vector3(0.09, 0, 0.6135)
+rotation = Vector3(0, 0.39926, 0)
+mesh = SubResource("MeshLinkOuter")
+
+[node name="Ball" type="MeshInstance3D" parent="LowerLinkR"]
+position = Vector3(0.18, 0, 0.827)
+mesh = SubResource("MeshBall")
+
+[node name="RockArmL" type="Node3D" parent="."]
+position = Vector3(-0.19, 0.95, 1.02)
+rotation = Vector3(-0.5288, 0, 0)
+
+[node name="Boss" type="MeshInstance3D" parent="RockArmL"]
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshArmBoss")
+
+[node name="Arm" type="MeshInstance3D" parent="RockArmL"]
+position = Vector3(0, 0, 0.12)
+mesh = SubResource("MeshArm")
+
+[node name="Pin" type="MeshInstance3D" parent="RockArmL"]
+position = Vector3(0, 0, 0.24)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshArmPin")
+
+[node name="RockArmR" type="Node3D" parent="."]
+position = Vector3(0.19, 0.95, 1.02)
+rotation = Vector3(-0.5288, 0, 0)
+
+[node name="Boss" type="MeshInstance3D" parent="RockArmR"]
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshArmBoss")
+
+[node name="Arm" type="MeshInstance3D" parent="RockArmR"]
+position = Vector3(0, 0, 0.12)
+mesh = SubResource("MeshArm")
+
+[node name="Pin" type="MeshInstance3D" parent="RockArmR"]
+position = Vector3(0, 0, 0.24)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshArmPin")
+
+[node name="LiftRodL" type="Node3D" parent="."]
+position = Vector3(-0.19, 1.0713, 1.2272)
+rotation = Vector3(1.5811, 0, 0)
+
+[node name="Rod" type="MeshInstance3D" parent="LiftRodL"]
+position = Vector3(0, 0, 0.18)
+rotation = Vector3(1.5707964, 0, 0)
+mesh = SubResource("MeshRod")
+
+[node name="Turnbuckle" type="MeshInstance3D" parent="LiftRodL"]
+position = Vector3(0, 0, 0.42)
+mesh = SubResource("MeshTurnbuckle")
+
+[node name="LiftRodR" type="Node3D" parent="."]
+position = Vector3(0.19, 1.0713, 1.2272)
+rotation = Vector3(1.5811, 0, 0)
+
+[node name="Rod" type="MeshInstance3D" parent="LiftRodR"]
+position = Vector3(0, 0, 0.18)
+rotation = Vector3(1.5707964, 0, 0)
+mesh = SubResource("MeshRod")
+
+[node name="Turnbuckle" type="MeshInstance3D" parent="LiftRodR"]
+position = Vector3(0, 0, 0.42)
+mesh = SubResource("MeshTurnbuckle")
+
+[node name="TopLink" type="Node3D" parent="."]
+position = Vector3(0, 0.78, 1)
+rotation = Vector3(-0.6355, 0, 0)
+
+[node name="EyeFront" type="MeshInstance3D" parent="TopLink"]
+position = Vector3(0, 0, 0.04)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshTopEye")
+
+[node name="Tube" type="MeshInstance3D" parent="TopLink"]
+position = Vector3(0, 0, 0.35)
+rotation = Vector3(1.5707964, 0, 0)
+mesh = SubResource("MeshTopTube")
+
+[node name="Handle" type="MeshInstance3D" parent="TopLink"]
+position = Vector3(0, 0, 0.35)
+mesh = SubResource("MeshTopHandle")
+
+[node name="EyeRear" type="MeshInstance3D" parent="TopLink"]
+position = Vector3(0, 0, 0.661)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshTopEye")
+
+[node name="Mount" type="Marker3D" parent="."]
+position = Vector3(0, 0.78, 1.6647)

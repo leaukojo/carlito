@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_hvu4x"]
+[ext_resource type="PackedScene" path="res://kit/raw/watercraft/boat-fishing-small.glb" id="2_exsfx"]
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_gr2np"]
+points = PackedVector3Array(0.73322874, 2.02772, 3.8082824, -0.92040783, 0.1151557, -3.3238657, -1.395416, 0.6666654, -3.7110178, 1.8392857, 2.02772, -3.9314284, -1.231772, 5.2214284, -0.49027416, -1.7498767, 1.3576776, 2.9105406, 0.81366694, 0.06939532, 1.8683567, 1.2249298, 5.2214284, -0.49027416, 1.8392857, 2.02772, 3.0709472, -1.8461279, 2.02772, -3.9306588, 1.2896959, 0.52245855, -3.7629719, -1.8461279, 2.02772, 3.0709472, -0.81987923, 0.071330726, 1.8669164, -0.87835324, 3.3999999, 2.2970233, 1.7448173, 1.3564299, 2.9135115, -0.1204082, 0.8863272, 3.3881683, 0.9153171, 0.10954097, -3.331437, -0.7404316, 2.02772, 3.8082824, 1.1994501, 3.3999999, 2.1866949, -1.395416, 0.6666654, 2.4357414, 1.3922338, 0.6606755, 2.4420147, 1.7130266, 1.2645208, -3.6620538, -1.714825, 1.267906, -3.650578, 1.0432512, 5.0812407, -0.6974741, -1.8461279, 2.2738671, -2.211236, 1.8392857, 2.2733502, -2.2104664, 0.6958709, 0.6561967, 3.03211, 0.24152762, 2.02772, 3.931428, -1.2066134, 3.3999999, 2.18738, 1.046702, 1.3547336, 3.5010614, -1.0527622, 1.3560454, 3.4973128, -0.120264776, 0.53819805, 3.0338433)
+
+[node name="BoatFishingSmall" type="Node3D" unique_id=1652792768]
+script = ExtResource("1_hvu4x")
+collision_mode = "hull"
+
+[node name="Model" type="Node3D" parent="." unique_id=680583441 instance=ExtResource("2_exsfx")]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=2058665422]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1124213650]
+shape = SubResource("ConvexPolygonShape3D_gr2np")

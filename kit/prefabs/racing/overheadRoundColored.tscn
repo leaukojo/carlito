@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_lo7vb"]
+[ext_resource type="PackedScene" path="res://kit/raw/racing/overheadRoundColored.glb" id="2_ltc5x"]
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_1oyrl"]
+points = PackedVector3Array(-10.430938, 0.3111477, -1.9799999, 0.33006647, 11.157916, 1.9642794, 2.6639566, 10.850633, 1.973797, -10.689162, 0.17800067, 1.9799999, 10.430837, 0.3111477, -1.9799999, -2.6057303, 10.741589, -1.9799999, 10.689061, 0.17800067, 1.9799999, 8.474535, 6.8299103, -1.9799999, -8.682338, 6.85814, 1.9799999, 9.351876, 5.8557415, 1.9799999, -9.126056, 5.8517275, -1.9799999, 5.215393, 9.763406, -1.9799999, -5.2952642, 9.827335, 1.9622743, -6.189561, 9.111635, -1.9799999, 6.2941895, 9.16839, 1.9640198, -10.354343, 3.5186098, 1.9799999, 0.3246384, 11.068001, -1.9799999, 10.104106, 3.5710552, -1.9799999, 10.689061, 1.8483051, 1.9799999, -10.430938, 1.9411014, -1.9799999, -2.6621234, 10.850926, 1.9739108, 2.6076713, 10.741589, -1.9799999, 8.68433, 6.85814, 1.9799999, 6.191502, 9.111635, -1.9799999, 10.354242, 3.5186098, 1.9799999, -10.104207, 3.5710552, -1.9799999, -5.2134523, 9.763406, -1.9799999, -10.019524, 4.5210085, 1.9799999, -7.0145187, 8.528444, 1.9799999, -8.472594, 6.8299103, -1.9799999, 9.777375, 4.549238, -1.9799999, -10.689162, 1.8483051, 1.9799999)
+
+[node name="OverheadRoundColored" type="Node3D" unique_id=495448936]
+script = ExtResource("1_lo7vb")
+collision_mode = "multiconvex"
+
+[node name="Model" type="Node3D" parent="." unique_id=2126394295 instance=ExtResource("2_ltc5x")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, -7.0013995, 0.12, 9.779999)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=192080508]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1768411097]
+shape = SubResource("ConvexPolygonShape3D_1oyrl")

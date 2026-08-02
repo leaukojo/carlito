@@ -1,0 +1,34 @@
+[gd_scene format=3 uid="uid://bdubkoywq7ehr"]
+
+[ext_resource type="Script" uid="uid://81gx7eh4vwms" path="res://kit/helpers/kit_piece.gd" id="1_cgib5"]
+[ext_resource type="PackedScene" uid="uid://c4nxr8xvhanw6" path="res://kit/raw/roads/sign-highway-wide.glb" id="2_anbhq"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_cgib5"]
+size = Vector3(0.5718384, 7.199707, 0.60791016)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_anbhq"]
+size = Vector3(0.5718384, 7.199707, 0.60791016)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_u1ch7"]
+size = Vector3(0.40760803, 2.866211, 9.883484)
+
+[node name="SignHighwayWide" type="Node3D" unique_id=1976006427]
+script = ExtResource("1_cgib5")
+collision_mode = "multiconvex"
+
+[node name="Model" parent="." unique_id=582419064 instance=ExtResource("2_anbhq")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, 0.49439996, 0, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1417128593]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=2049653511]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.48666382, 3.6052246, -5.6932993)
+shape = SubResource("BoxShape3D_cgib5")
+
+[node name="Shape1" type="CollisionShape3D" parent="DevCollision" unique_id=1435804495]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.49075842, 3.615282, 5.699709)
+shape = SubResource("BoxShape3D_anbhq")
+
+[node name="Shape2" type="CollisionShape3D" parent="DevCollision" unique_id=2065095045]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.27448273, 7.0636644, 0.005862236)
+shape = SubResource("BoxShape3D_u1ch7")

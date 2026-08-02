@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_kfan8"]
+[ext_resource type="PackedScene" path="res://kit/raw/roads/construction-cone.glb" id="2_gdv4o"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_qq23i"]
+size = Vector3(0.9, 1.1256, 0.9)
+
+[node name="ConstructionCone" type="Node3D" unique_id=1539031997]
+script = ExtResource("1_kfan8")
+
+[node name="Model" type="Node3D" parent="." unique_id=210085113 instance=ExtResource("2_gdv4o")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, 0, 0, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=113560841]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=349540061]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5628, 0)
+shape = SubResource("BoxShape3D_qq23i")

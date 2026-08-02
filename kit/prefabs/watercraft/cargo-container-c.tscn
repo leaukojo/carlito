@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_pks0j"]
+[ext_resource type="PackedScene" path="res://kit/raw/watercraft/cargo-container-c.glb" id="2_qeoan"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_in8hc"]
+size = Vector3(2.76, 2.208, 5.52)
+
+[node name="CargoContainerC" type="Node3D" unique_id=469435762]
+script = ExtResource("1_pks0j")
+
+[node name="Model" type="Node3D" parent="." unique_id=1713656621 instance=ExtResource("2_qeoan")]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1062445033]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1350663103]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.104, 0)
+shape = SubResource("BoxShape3D_in8hc")

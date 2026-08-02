@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_qmvve"]
+[ext_resource type="PackedScene" path="res://kit/raw/parked/sedan.glb" id="2_naykg"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_m556w"]
+size = Vector3(1.8000001, 1.56, 3.0600002)
+
+[node name="Sedan" type="Node3D" unique_id=1053688563]
+script = ExtResource("1_qmvve")
+
+[node name="Model" type="Node3D" parent="." unique_id=1062384610 instance=ExtResource("2_naykg")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, -3.576279e-08, 0.029999973)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=450562311]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1209410671]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.78, 0)
+shape = SubResource("BoxShape3D_m556w")

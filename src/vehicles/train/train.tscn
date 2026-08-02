@@ -1,0 +1,63 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://src/vehicles/train/train.gd" id="1_train"]
+[ext_resource type="Resource" path="res://src/vehicles/train/train_spec.tres" id="2_spec"]
+[ext_resource type="PackedScene" uid="uid://dywiv4vdt5y6q" path="res://src/vehicles/train/models/train-electric-bullet-a.glb" id="3_loco"]
+[ext_resource type="PackedScene" uid="uid://dw8swp3xtk5eg" path="res://src/vehicles/train/models/train-electric-bullet-b.glb" id="4_door"]
+[ext_resource type="PackedScene" uid="uid://f1o5i5mjrioo" path="res://src/vehicles/train/models/train-electric-bullet-c.glb" id="5_plain"]
+
+[sub_resource type="BoxShape3D" id="LocoBox"]
+size = Vector3(3.0, 2.8, 6.5)
+
+[sub_resource type="BoxShape3D" id="WagonBox"]
+size = Vector3(3.0, 2.8, 6.0)
+
+[node name="Train" type="RigidBody3D"]
+script = ExtResource("1_train")
+spec = ExtResource("2_spec")
+
+[node name="CollisionLower" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+shape = SubResource("LocoBox")
+
+[node name="Loco" parent="." instance=ExtResource("3_loco")]
+transform = Transform3D(-2.4, 0, 0, 0, 2.4, 0, 0, 0, -2.4, 0, 0, 0)
+
+[node name="HoodCam" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.6, -2.6)
+
+[node name="Wagon1" type="AnimatableBody3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Wagon1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+shape = SubResource("WagonBox")
+
+[node name="Mesh" parent="Wagon1" instance=ExtResource("4_door")]
+transform = Transform3D(-2.4, 0, 0, 0, 2.4, 0, 0, 0, -2.4, 0, 0, 0)
+
+[node name="Wagon2" type="AnimatableBody3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Wagon2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+shape = SubResource("WagonBox")
+
+[node name="Mesh" parent="Wagon2" instance=ExtResource("5_plain")]
+transform = Transform3D(-2.4, 0, 0, 0, 2.4, 0, 0, 0, -2.4, 0, 0, 0)
+
+[node name="Wagon3" type="AnimatableBody3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Wagon3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+shape = SubResource("WagonBox")
+
+[node name="Mesh" parent="Wagon3" instance=ExtResource("4_door")]
+transform = Transform3D(-2.4, 0, 0, 0, 2.4, 0, 0, 0, -2.4, 0, 0, 0)
+
+[node name="Wagon4" type="AnimatableBody3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Wagon4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+shape = SubResource("WagonBox")
+
+[node name="Mesh" parent="Wagon4" instance=ExtResource("5_plain")]
+transform = Transform3D(-2.4, 0, 0, 0, 2.4, 0, 0, 0, -2.4, 0, 0, 0)

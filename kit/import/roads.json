@@ -1,0 +1,64 @@
+{
+	"kit": "roads",
+	"source": "res://kit/raw/roads",
+	"scale": 12.0,
+	"_notes": "City Kit Roads. LANE-FIT: road-straight is a 1x1 unit two-lane tile (measured, XZ-centered, Y=0 base). Forgiving-arcade target = 12 m two-lane tile (~6 m/lane vs the 1.8 m car), so scale = 12.0 (an initial 8 drove too tight). tile-high is 0.25 -> 0.25*12 = 3 m vertical cell, so cell_size [12,3,12]; paint the deck at y-index 1. GridMaps using this palette need cell_center_y = false. NB: road-curve is a 2x2-unit sweeping curve; road-bend is the tight 1x1 corner. Signs/lights/construction/bridge-pillars are props -> prefabs (the palette is for road/tile pieces only). The three sign-highway* prefabs carry hand-built post/panel boxes and are `manual` (the generator leaves their .tscn alone).",
+	"palette": {
+		"output": "res://kit/palettes/roads.meshlib",
+		"cell_size": [12.0, 3.0, 12.0],
+		"align": "raw"
+	},
+	"ports": {
+		"_notes": "RoadPath endpoint sockets (docs/plans/road_sockets.md), consumed by kit/helpers/road_ports.gd. Measured from roads.meshlib: tiles are XZ-centered on the anchor cell, asphalt surface y=0.12 above the cell base (curb top 0.24), paved strip 9.6 m wide (road-straight runs along local X, asphalt z +/-4.8). `cell` is the anchor-relative offset of the port's home cell in the item's local frame (pre-rotation); `face` is the open face the road crosses. First matching entry wins (families-style regexes); tiles matching nothing have no ports. Deliberately portless: road-curve (2x2) is a centered piece whose road ends land on half-cell planes (off-lattice, cannot mate with straights on this lattice); road-side* overhangs to z=-9.72; road-square's asphalt is a plaza that reaches no face; -barrier-end, slants, bridge, driveways are out of scope. road-roundabout is a lattice-aligned 3x3 (spans +/-18) with 4 exits on its outer ring.",
+		"surface_y": 0.12,
+		"entries": [
+			{ "match": ["^road-straight(-barrier)?$", "^road-crossing$"], "ports": [
+				{ "cell": [0, 0], "face": "+x" }, { "cell": [0, 0], "face": "-x" } ] },
+			{ "match": ["^road-bend(-sidewalk|-square)?(-barrier)?$"], "ports": [
+				{ "cell": [0, 0], "face": "-x" }, { "cell": [0, 0], "face": "+z" } ] },
+			{ "match": ["^road-crossroad(-line|-path|-barrier)?$"], "ports": [
+				{ "cell": [0, 0], "face": "+x" }, { "cell": [0, 0], "face": "-x" },
+				{ "cell": [0, 0], "face": "+z" }, { "cell": [0, 0], "face": "-z" } ] },
+			{ "match": ["^road-intersection(-line|-path|-barrier)?$"], "ports": [
+				{ "cell": [0, 0], "face": "+x" }, { "cell": [0, 0], "face": "-x" },
+				{ "cell": [0, 0], "face": "+z" } ] },
+			{ "match": ["^road-end(-round)?(-barrier)?$"], "ports": [
+				{ "cell": [0, 0], "face": "+x" } ] },
+			{ "match": ["^road-roundabout(-barrier)?$"], "ports": [
+				{ "cell": [1, 0], "face": "+x" }, { "cell": [-1, 0], "face": "-x" },
+				{ "cell": [0, 1], "face": "+z" }, { "cell": [0, -1], "face": "-z" } ] }
+		]
+	},
+	"families": [
+		{ "name": "city-lights", "label": "Street lights",
+			"match": ["^light-"], "pipeline": "prefab", "collision_mode": "footprint" },
+		{ "name": "city-signs", "label": "Highway signs",
+			"match": ["^sign-"], "pipeline": "prefab", "collision_mode": "multiconvex",
+			"assets": {
+				"sign-highway": { "manual": true },
+				"sign-highway-wide": { "manual": true },
+				"sign-highway-detailed": { "manual": true }
+			} },
+		{ "name": "city-fixtures", "label": "Fixtures (cones/barriers/pillars)",
+			"match": ["^(construction|bridge-pillar)"], "pipeline": "prefab", "collision_mode": "box" },
+		{ "name": "city-roads-barrier", "label": "Roads (barrier)",
+			"match": ["^road-.*barrier"], "pipeline": "palette",
+			"palette_output": "res://kit/palettes/roads_barrier.meshlib",
+			"assets": {
+				"road-curve-barrier": { "x_offset": 6, "z_offset": 6 },
+				"road-curve-intersection-barrier": { "x_offset": 6, "z_offset": 6 },
+				"road-slant-curve-barrier": { "x_offset": -6 }
+			} },
+		{ "name": "city-roads", "label": "Roads (plain)",
+			"match": ["^road-"], "pipeline": "palette",
+			"assets": {
+				"road-curve": { "x_offset": 6, "z_offset": 6 },
+				"road-curve-intersection": { "x_offset": 6, "z_offset": 6 },
+				"road-curve-pavement": { "x_offset": 6, "z_offset": 6 },
+				"road-slant-curve": { "x_offset": -6 },
+				"road-slant-flat-curve": { "x_offset": -6 }
+			} },
+		{ "name": "city-ground-tiles", "label": "Ground tiles",
+			"match": ["^tile-"], "pipeline": "palette" }
+	]
+}

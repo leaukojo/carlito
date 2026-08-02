@@ -1,0 +1,134 @@
+[gd_scene load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://src/vehicles/drone/drone.gd" id="1_drone"]
+[ext_resource type="Resource" path="res://src/vehicles/drone/drone_spec.tres" id="2_spec"]
+
+[sub_resource type="BoxShape3D" id="HullShape"]
+size = Vector3(1.0, 0.24, 1.0)
+
+[sub_resource type="PhysicsMaterial" id="HullPhysMat"]
+bounce = 0.35
+
+[sub_resource type="StandardMaterial3D" id="FrameMat"]
+albedo_color = Color(0.12, 0.13, 0.15, 1)
+roughness = 0.6
+
+[sub_resource type="StandardMaterial3D" id="BodyMat"]
+albedo_color = Color(0.2, 0.22, 0.26, 1)
+roughness = 0.45
+
+[sub_resource type="StandardMaterial3D" id="MotorMat"]
+albedo_color = Color(0.07, 0.07, 0.08, 1)
+roughness = 0.5
+metallic = 0.3
+
+[sub_resource type="StandardMaterial3D" id="RotorFrontMat"]
+albedo_color = Color(0.2, 0.8, 0.35, 1)
+roughness = 0.4
+
+[sub_resource type="StandardMaterial3D" id="RotorRearMat"]
+albedo_color = Color(0.85, 0.2, 0.2, 1)
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BodyMesh"]
+size = Vector3(0.34, 0.16, 0.42)
+
+[sub_resource type="PrismMesh" id="NoseMesh"]
+left_to_right = 0.5
+size = Vector3(0.3, 0.12, 0.22)
+
+[sub_resource type="BoxMesh" id="ArmMesh"]
+size = Vector3(1.15, 0.05, 0.06)
+
+[sub_resource type="CylinderMesh" id="MotorMesh"]
+top_radius = 0.045
+bottom_radius = 0.045
+height = 0.1
+
+[sub_resource type="BoxMesh" id="RotorMesh"]
+size = Vector3(0.44, 0.02, 0.05)
+
+[sub_resource type="BoxMesh" id="SkidMesh"]
+size = Vector3(0.04, 0.12, 0.5)
+
+[node name="Drone" type="RigidBody3D"]
+physics_material_override = SubResource("HullPhysMat")
+script = ExtResource("1_drone")
+spec = ExtResource("2_spec")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, 0)
+shape = SubResource("HullShape")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
+mesh = SubResource("BodyMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="Nose" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0.05, -0.28)
+mesh = SubResource("NoseMesh")
+surface_material_override/0 = SubResource("RotorFrontMat")
+
+[node name="ArmA" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.7071, 0, -0.7071, 0, 1, 0, 0.7071, 0, 0.7071, 0, 0.04, 0)
+mesh = SubResource("ArmMesh")
+surface_material_override/0 = SubResource("FrameMat")
+
+[node name="ArmB" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.7071, 0, 0.7071, 0, 1, 0, -0.7071, 0, 0.7071, 0, 0.04, 0)
+mesh = SubResource("ArmMesh")
+surface_material_override/0 = SubResource("FrameMat")
+
+[node name="MotorFL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.407, 0.09, -0.407)
+mesh = SubResource("MotorMesh")
+surface_material_override/0 = SubResource("MotorMat")
+
+[node name="RotorFL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.407, 0.15, -0.407)
+mesh = SubResource("RotorMesh")
+surface_material_override/0 = SubResource("RotorFrontMat")
+
+[node name="MotorFR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.407, 0.09, -0.407)
+mesh = SubResource("MotorMesh")
+surface_material_override/0 = SubResource("MotorMat")
+
+[node name="RotorFR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.407, 0.15, -0.407)
+mesh = SubResource("RotorMesh")
+surface_material_override/0 = SubResource("RotorFrontMat")
+
+[node name="MotorRL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.407, 0.09, 0.407)
+mesh = SubResource("MotorMesh")
+surface_material_override/0 = SubResource("MotorMat")
+
+[node name="RotorRL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.407, 0.15, 0.407)
+mesh = SubResource("RotorMesh")
+surface_material_override/0 = SubResource("RotorRearMat")
+
+[node name="MotorRR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.407, 0.09, 0.407)
+mesh = SubResource("MotorMesh")
+surface_material_override/0 = SubResource("MotorMat")
+
+[node name="RotorRR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.407, 0.15, 0.407)
+mesh = SubResource("RotorMesh")
+surface_material_override/0 = SubResource("RotorRearMat")
+
+[node name="SkidL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.22, -0.06, 0)
+mesh = SubResource("SkidMesh")
+surface_material_override/0 = SubResource("FrameMat")
+
+[node name="SkidR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.22, -0.06, 0)
+mesh = SubResource("SkidMesh")
+surface_material_override/0 = SubResource("FrameMat")
+
+[node name="HoodCam" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, -0.32)

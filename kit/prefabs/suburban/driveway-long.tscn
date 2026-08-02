@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_pqcbq"]
+[ext_resource type="PackedScene" path="res://kit/raw/suburban/driveway-long.glb" id="2_cxc5j"]
+
+[sub_resource type="ConcavePolygonShape3D" id="ConcavePolygonShape3D_6pky2"]
+data = PackedVector3Array(-1.62, 0, 1.8, 1.62, 0, 1.8, 1.62, 0, -1.8, 1.62, 0, -1.8, -1.62, 0, -1.8, -1.62, 0, 1.8, -1.17, 0.089999996, -1.8, 1.17, 0.089999996, -1.8, 1.17, 0.089999996, 1.8, 1.17, 0.089999996, 1.8, -1.17, 0.089999996, 1.8, -1.17, 0.089999996, -1.8, 1.17, 0.089999996, 1.8, 1.62, 0, 1.8, -1.62, 0, 1.8, -1.62, 0, 1.8, -1.17, 0.089999996, 1.8, 1.17, 0.089999996, 1.8, -1.17, 0.089999996, -1.8, -1.62, 0, -1.8, 1.62, 0, -1.8, 1.62, 0, -1.8, 1.17, 0.089999996, -1.8, -1.17, 0.089999996, -1.8, -1.62, 0, -1.8, -1.17, 0.089999996, -1.8, -1.17, 0.089999996, 1.8, -1.17, 0.089999996, 1.8, -1.62, 0, 1.8, -1.62, 0, -1.8, 1.17, 0.089999996, -1.8, 1.62, 0, -1.8, 1.62, 0, 1.8, 1.62, 0, 1.8, 1.17, 0.089999996, 1.8, 1.17, 0.089999996, -1.8)
+
+[node name="DrivewayLong" type="Node3D" unique_id=1866429803]
+script = ExtResource("1_pqcbq")
+collision_mode = "weld"
+
+[node name="Model" type="Node3D" parent="." unique_id=1161879728 instance=ExtResource("2_cxc5j")]
+transform = Transform3D(9, 0, 0, 0, 9, 0, 0, 0, 9, 0, 0, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1828259073]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1948396467]
+shape = SubResource("ConcavePolygonShape3D_6pky2")

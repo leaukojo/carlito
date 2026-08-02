@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_ydscn"]
+[ext_resource type="PackedScene" path="res://kit/raw/parked/suv.glb" id="2_epg6y"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_4v86a"]
+size = Vector3(1.8000001, 1.5600002, 3.2399998)
+
+[node name="Suv" type="Node3D" unique_id=670502743]
+script = ExtResource("1_ydscn")
+
+[node name="Model" type="Node3D" parent="." unique_id=2040398859 instance=ExtResource("2_epg6y")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, -3.576279e-08, -2.861023e-07)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=185074418]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1237198800]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7800001, -1.1920929e-07)
+shape = SubResource("BoxShape3D_4v86a")

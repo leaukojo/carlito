@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_st7m0"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/grass.glb" id="2_e4eso"]
+
+[node name="Grass" type="Node3D" unique_id=1973672256]
+script = ExtResource("1_st7m0")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=1969699006 instance=ExtResource("2_e4eso")]
+transform = Transform3D(2.5, 0, 0, 0, 2.5, 0, 0, 0, 2.5, 0.020750016, 0.125, 0.10812502)

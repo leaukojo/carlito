@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="VehicleSpec" format=3]
+
+[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_cj202"]
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="2_af8ow"]
+
+[resource]
+script = ExtResource("1_cj202")
+mass = 1250.0
+center_of_mass = Vector3(0, 0.2, 0)
+wheel_positions = PackedVector3Array(-0.6900001, 0.5007955, -0.9419999, 0.6900001, 0.5007955, -0.94200003, -0.5700002, 0.5007955, 0.8820001, 0.5700002, 0.5007955, 0.88199997)
+wheel_radius = 0.36
+wheel_scene = ExtResource("2_af8ow")
+driven_front = true
+rest_length = 0.28
+grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
+mu_lat = 1.1
+handbrake_grip = 0.45
+torque_curve = PackedVector2Array(900, 150, 2000, 235, 3200, 285, 4800, 290, 6000, 255, 6800, 100)
+gear_ratios = PackedFloat32Array(3.5, 2.2, 1.55, 1.18, 0.88, 0.66)
+brake_torque = 1247.0
+handbrake_torque = 346.0
+max_steer_deg = 38.0
+steer_speed = 7.0
+headlight_paths = Array[NodePath]([NodePath("Lamps/HeadlightL"), NodePath("Lamps/HeadlightR")])
+head_lamp_paths = Array[NodePath]([NodePath("Lamps/HeadLensL"), NodePath("Lamps/HeadLensR")])
+brake_lamp_paths = Array[NodePath]([NodePath("Lamps/BrakeLampL"), NodePath("Lamps/BrakeLampR")])
+turn_left_paths = Array[NodePath]([NodePath("Lamps/TurnLF"), NodePath("Lamps/TurnLR")])
+turn_right_paths = Array[NodePath]([NodePath("Lamps/TurnRF"), NodePath("Lamps/TurnRR")])

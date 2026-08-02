@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_c5b5n"]
+[ext_resource type="PackedScene" path="res://kit/raw/racing/pitsOfficeRoof.glb" id="2_sjwth"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hd4t5"]
+size = Vector3(12, 10.217999, 12.48)
+
+[node name="PitsOfficeRoof" type="Node3D" unique_id=257462905]
+script = ExtResource("1_c5b5n")
+
+[node name="Model" type="Node3D" parent="." unique_id=1220663223 instance=ExtResource("2_sjwth")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, -1.8000001, 0.12, 13.559999)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=907087217]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1446494522]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.1089997, -4.7683716e-07)
+shape = SubResource("BoxShape3D_hd4t5")

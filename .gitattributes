@@ -1,0 +1,16 @@
+# Normalize line endings in the repo regardless of each clone's core.autocrlf, so a
+# checkout on Windows and one on the Linux CI runner produce identical files.
+* text=auto
+
+# Shell scripts must stay LF for the Linux CI runner
+*.sh text eol=lf
+
+# Binary assets: never eol-convert, never diff as text.
+*.png binary
+*.jpg binary
+*.glb binary
+*.ttf binary
+*.wav binary
+*.ogg binary
+*.scn binary
+*.ctex binary

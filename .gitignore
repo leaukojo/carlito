@@ -1,0 +1,17 @@
+# Godot 4 cache
+.godot/
+
+# Local export output (CI builds its own)
+build/
+
+*.tmp
+
+# Scratch copies (e.g. tmp/level_1_original/ — the pre-farm level 1 backup)
+tmp/
+
+# gdUnit4 output
+reports/
+/docs/plans
+
+# scratch measurement scenes (not shipped)
+tools/claude/

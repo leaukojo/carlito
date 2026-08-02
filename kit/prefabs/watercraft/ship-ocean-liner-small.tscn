@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_jl8hl"]
+[ext_resource type="PackedScene" path="res://kit/raw/watercraft/ship-ocean-liner-small.glb" id="2_fhtrc"]
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_8fbdm"]
+points = PackedVector3Array(1.2087122, 1.6094253, 13.264178, -0.16656527, 0.10378917, -14.860118, -5.00127, 7.9631324, 6.272638, 0.30643046, 18.095238, 9.165608, 4.6490045, 7.9631324, -7.720635, -0.17563689, 17.612415, -10.6136055, -4.56, 3.2034934, -5.7263365, 4.2937784, 2.2525373, 6.2299137, -2.8677666, 0.3528638, 10.378138, 4.166937, 8.445955, 9.649282, -4.0361433, 8.445955, -10.132956, 3.8129807, 0.5499354, -5.7313194, -0.59314865, 8.488899, 14.062735, 0.30643046, 8.445955, -15.44127, 2.9522626, 0.48819903, 10.214327, -3.5530841, 8.445955, 11.580953, -2.8729167, 0.337809, -10.396359, -4.1303287, 10.6932, -4.856337, -0.65770423, 17.612415, 9.165608, 3.7512412, 11.0932, -4.3356586, 1.7536244, 8.926984, 13.5096, 3.6838777, 9.408012, -10.6136055, 0.30643046, 18.095238, -9.165608, 0.29635268, 2.4552398, 14.795661, 3.3646371, 2.33014, -10.118221, -3.681092, 0.55238307, 6.6104913, -5.00127, 7.9631324, -6.272638, 4.6490045, 7.9631324, 7.720635, -0.65770423, 8.445955, -15.44127, 4.754988, 4.014516, -4.465578, -0.65770423, 17.612415, -9.165608, -4.56, 3.2034934, 5.7263365)
+
+[node name="ShipOceanLinerSmall" type="Node3D" unique_id=2018054332]
+script = ExtResource("1_jl8hl")
+collision_mode = "hull"
+
+[node name="Model" type="Node3D" parent="." unique_id=1703614972 instance=ExtResource("2_fhtrc")]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, -6.079999)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=2024542554]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1346079351]
+shape = SubResource("ConvexPolygonShape3D_8fbdm")

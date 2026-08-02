@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_lhj72"]
+[ext_resource type="PackedScene" path="res://kit/raw/parked/tractor.glb" id="2_qlnnn"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_22ix5"]
+size = Vector3(1.6105926, 1.9225107, 2.6418066)
+
+[node name="Tractor" type="Node3D" unique_id=781353457]
+script = ExtResource("1_lhj72")
+
+[node name="Model" type="Node3D" parent="." unique_id=739366963 instance=ExtResource("2_qlnnn")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, -1.3017654e-05, 1.5306474e-05)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=521834099]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=7440325]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9612554, 0)
+shape = SubResource("BoxShape3D_22ix5")

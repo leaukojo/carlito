@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_a0mbt"]
+[ext_resource type="PackedScene" path="res://kit/raw/suburban/fence.glb" id="2_inc4f"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_1vm1a"]
+size = Vector3(4.275, 2.4299998, 0.67499995)
+
+[node name="Fence" type="Node3D" unique_id=822110286]
+script = ExtResource("1_a0mbt")
+
+[node name="Model" type="Node3D" parent="." unique_id=1118973096 instance=ExtResource("2_inc4f")]
+transform = Transform3D(9, 0, 0, 0, 9, 0, 0, 0, 9, 0, 0, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=712918868]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=791747363]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2149999, 0)
+shape = SubResource("BoxShape3D_1vm1a")

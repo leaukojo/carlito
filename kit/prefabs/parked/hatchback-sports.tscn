@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_trus1"]
+[ext_resource type="PackedScene" path="res://kit/raw/parked/hatchback-sports.glb" id="2_v3a43"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_8y2fs"]
+size = Vector3(1.5600001, 1.3199999, 3.42)
+
+[node name="HatchbackSports" type="Node3D" unique_id=1531671339]
+script = ExtResource("1_trus1")
+
+[node name="Model" type="Node3D" parent="." unique_id=564012284 instance=ExtResource("2_v3a43")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, -3.576279e-08, 0.029999973)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=2104668089]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1831252912]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65999997, 0)
+shape = SubResource("BoxShape3D_8y2fs")

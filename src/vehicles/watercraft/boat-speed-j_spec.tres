@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="VehicleSpec" format=3]
+
+[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_3i2jv"]
+
+[resource]
+script = ExtResource("1_3i2jv")
+mass = 1400.0
+center_of_mass = Vector3(0, -0.31110147, 0)
+wheel_positions = PackedVector3Array()
+driven_rear = false
+grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
+torque_curve = PackedVector2Array(800, 192, 2500, 320, 4200, 336, 5200, 144)
+idle_rpm = 800.0
+redline_rpm = 5200.0
+gear_ratios = PackedFloat32Array(2.6, 1.9, 1.4, 1.05, 0.8, 0.62)
+reverse_ratio = 2.0
+final_drive = 2.1
+shift_up_rpm = 4400.0
+shift_down_rpm = 1800.0
+brake_torque = 0.0
+handbrake_torque = 0.0
+max_steer_deg = 26.0
+steer_speed = 1.6
+headlight_paths = Array[NodePath]([NodePath("Lamps/Headlight")])

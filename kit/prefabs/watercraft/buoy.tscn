@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_253fk"]
+[ext_resource type="PackedScene" path="res://kit/raw/watercraft/buoy.glb" id="2_i387o"]
+
+[node name="Buoy" type="Node3D" unique_id=1989828025]
+script = ExtResource("1_253fk")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=51390195 instance=ExtResource("2_i387o")]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0)

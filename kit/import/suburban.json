@@ -1,0 +1,18 @@
+{
+	"kit": "suburban",
+	"source": "res://kit/raw/suburban",
+	"scale": 9.0,
+	"_notes": "City Kit Suburban. Prefab-only (no GridMap palette): driveway/path pieces are weld prefabs like all other decoration; a farm gravel lane is a RoadPath, not a driveway lattice. Scale 9 (75% of the 12 m city-road module) so houses sit right on the streets (building-type-a -> 11.7 x 7.6 x 9.2 m). Authored clean (XZ-centered, Y=0 base).",
+	"families": [
+		{ "name": "suburban-buildings", "label": "Houses",
+			"match": ["^building-"], "pipeline": "prefab", "collision_mode": "box" },
+		{ "name": "suburban-fence", "label": "Fences",
+			"match": ["^fence"], "pipeline": "prefab", "collision_mode": "box" },
+		{ "name": "suburban-path", "label": "Driveways & paths",
+			"match": ["^(driveway|path)"], "pipeline": "prefab", "collision_mode": "weld" },
+		{ "name": "suburban-trees", "label": "Trees",
+			"match": ["^tree"], "pipeline": "prefab", "collision_mode": "footprint" },
+		{ "name": "suburban-plants", "label": "Planters",
+			"match": ["^planter"], "pipeline": "prefab", "collision_mode": "box" }
+	]
+}

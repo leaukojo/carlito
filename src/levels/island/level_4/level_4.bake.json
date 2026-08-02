@@ -1,0 +1,19 @@
+{
+	"baker_version": 11,
+	"chunk_size": 64.0,
+	"input_hash": "5f3ca285e27718929761174a7ec0b5a30594659f457c6e45594933277ac516d2",
+	"level": "res://src/levels/island/level_4/level_4.tscn",
+	"output_hash": "4d9156c0187e158f5d69b3f586a9b33610f729652241a13fa642c348ed25fe89",
+	"stats": {
+		"bodies": 8,
+		"chunks": 19,
+		"drivable_triangles": 6096,
+		"rail_tracks": 0,
+		"roads": 1,
+		"scatter_instances": 0,
+		"scatter_multimeshes": 0,
+		"shapes": 26,
+		"surfaces": 108,
+		"vertices": 21376
+	}
+}

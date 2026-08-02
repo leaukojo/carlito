@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_c1wmp"]
+[ext_resource type="PackedScene" path="res://kit/raw/watercraft/boat-speed-e.glb" id="2_84lhk"]
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_mwbv7"]
+points = PackedVector3Array(-0.54817647, 0.30830172, 1.5326014, 1.86839, 2.0786624, 0.745, 1.86839, 1.4165815, 0.745, -1.7478191, 1.3298407, -2.737364, 0.8336644, 0.019482832, -2.44047, -1.2242343, 2.961111, -2.8242304, -1.7044958, 2, 1.8350428, 1.1444223, 2.961111, -2.64158, 0.21381234, 2, 2.6697235, 1.7481376, 1.330612, -2.7208607, 1.313296, 0.5717497, 1.4339032, -0.826769, 0.011877584, -2.4533744, -1.7478191, 1.3298407, 1.8815358, -2.0441542, 2.1408703, -0.36415905, 0.4753416, 0.047383167, 1.1106176, 0.8247275, 1.3288144, 2.5859182, 1.7153846, 2, 1.8350428, -0.80193573, 0.055023268, 0.85002106, -0.92858744, 2.5544958, 0.080925584, 2.0550427, 2.1408703, -0.36358827, -1.322218, 0.5583285, -2.7416387, -0.55241585, 1.3294498, 2.659722, 1.3263613, 0.5628984, -2.7277093, 0.93947625, 2.5544958, 0.080925584, -1.3050556, 0.5699554, 1.4373367, 1.7481376, 1.330612, 1.8701922, 0.21855405, 0.56199044, 2.047323, -1.0371304, 2, 2.4193714, 1.7153846, 2, -2.6697235, -1.8575014, 1.4165815, 0.745, -1.7044958, 2, -2.6697235, 0.8115069, 0.05796176, 0.847709)
+
+[node name="BoatSpeedE" type="Node3D" unique_id=1822918263]
+script = ExtResource("1_c1wmp")
+collision_mode = "hull"
+
+[node name="Model" type="Node3D" parent="." unique_id=1595522247 instance=ExtResource("2_84lhk")]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1539618381]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=248462195]
+shape = SubResource("ConvexPolygonShape3D_mwbv7")

@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_66b6t"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/tree_oak_dark.glb" id="2_6fp4d"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_gjema"]
+size = Vector3(1.912, 6.1310005, 1.8699999)
+
+[node name="TreeOakDark" type="Node3D" unique_id=1158808062]
+script = ExtResource("1_66b6t")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=1711747357 instance=ExtResource("2_6fp4d")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0.25, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=2075801012]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=46612112]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.074500054, 3.0655003, 0)
+shape = SubResource("BoxShape3D_gjema")

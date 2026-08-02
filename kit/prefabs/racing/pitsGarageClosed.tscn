@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_pf03b"]
+[ext_resource type="PackedScene" path="res://kit/raw/racing/pitsGarageClosed.glb" id="2_6fej6"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_n5kew"]
+size = Vector3(12, 8.4, 13.08)
+
+[node name="PitsGarageClosed" type="Node3D" unique_id=1933644797]
+script = ExtResource("1_pf03b")
+
+[node name="Model" type="Node3D" parent="." unique_id=73030602 instance=ExtResource("2_6fej6")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, -1.8000001, 0.12, 13.26)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1551780500]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=167571155]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.2, 4.7683716e-07)
+shape = SubResource("BoxShape3D_n5kew")

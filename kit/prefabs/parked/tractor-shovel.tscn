@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_27kqy"]
+[ext_resource type="PackedScene" path="res://kit/raw/parked/tractor-shovel.glb" id="2_nm3uy"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_k6uxi"]
+size = Vector3(1.9926853, 1.8144242, 2.9639995)
+
+[node name="TractorShovel" type="Node3D" unique_id=1092360506]
+script = ExtResource("1_27kqy")
+
+[node name="Model" type="Node3D" parent="." unique_id=877593860 instance=ExtResource("2_nm3uy")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, 2.4032594e-05, 4.2915346e-07)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=2048944096]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1316400314]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9072121, 1.1920929e-07)
+shape = SubResource("BoxShape3D_k6uxi")

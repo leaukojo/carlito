@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_qhhdx"]
+[ext_resource type="PackedScene" path="res://kit/raw/racing/billboardDouble_exclusive.glb" id="2_xfkn2"]
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_cghd3"]
+points = PackedVector3Array(-5.2344, 0.018320218, -1.6749977, 5.799195, 11.79803, 2.1828, 6.094045, 5.810885, 2.2933905, 6.094045, 5.810885, -2.2780383, -5.8401265, 11.838958, -2.1828, -6.094045, 5.810885, 2.2933905, 5.2344, 0.018320218, 1.6903499, 5.8401265, 11.838958, -2.1828, -5.799195, 11.79803, 2.1828, 5.2344, 0.018320218, -1.6749977, -5.2344, 0.018320218, 1.6903499, -6.094045, 5.810885, -2.2780383)
+
+[node name="BillboardDoubleExclusive" type="Node3D" unique_id=1294729726]
+script = ExtResource("1_qhhdx")
+collision_mode = "multiconvex"
+
+[node name="Model" type="Node3D" parent="." unique_id=1520343534 instance=ExtResource("2_xfkn2")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, -1.0344, 0.12, 9.502799)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=96138866]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=2139132664]
+shape = SubResource("ConvexPolygonShape3D_cghd3")

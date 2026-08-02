@@ -1,0 +1,32 @@
+[gd_scene load_steps=5 format=3]
+
+; Level template: duplicate this scene, then add
+; terrain/props, drop VehicleSpawn markers, and point `info` at a LevelInfo .tres.
+; It ships the pieces every level needs — env, sun, chase camera, one spawn — and
+; nothing else. See src/levels/island/level_1/level_1.tscn for a dressed example.
+
+[ext_resource type="Script" path="res://src/levels/base/level.gd" id="1_level"]
+[ext_resource type="Script" path="res://src/vehicles/base/chase_camera.gd" id="2_cam"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="3_spawn"]
+[ext_resource type="Environment" path="res://src/levels/base/default_env.tres" id="4_env"]
+
+[node name="Level" type="Node3D"]
+script = ExtResource("1_level")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("4_env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, 0.353553, -0.353553, 0, 0.707107, 0.707107, 0.5, -0.612372, 0.612372, 0, 40, 0)
+light_color = Color(1, 0.96, 0.88, 1)
+shadow_enabled = true
+directional_shadow_blend_splits = true
+directional_shadow_max_distance = 150.0
+
+[node name="ChaseCamera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 6)
+script = ExtResource("2_cam")
+
+[node name="Spawn" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+script = ExtResource("3_spawn")

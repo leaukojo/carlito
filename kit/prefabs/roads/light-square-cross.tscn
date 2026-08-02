@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_8m4c6"]
+[ext_resource type="PackedScene" path="res://kit/raw/roads/light-square-cross.glb" id="2_b5is1"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_0eh0y"]
+size = Vector3(0.59999996, 7.2, 0.59999996)
+
+[node name="LightSquareCross" type="Node3D" unique_id=293236907]
+script = ExtResource("1_8m4c6")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=628361237 instance=ExtResource("2_b5is1")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, 0, 0, -1.7881393e-07)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1136423647]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1507367549]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.6, -1.7881393e-07)
+shape = SubResource("BoxShape3D_0eh0y")

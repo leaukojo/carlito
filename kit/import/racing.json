@@ -1,0 +1,51 @@
+{
+	"kit": "racing",
+	"source": "res://kit/raw/racing",
+	"scale": 12.0,
+	"_notes": "Racing Kit. LANE-FIT: road tiles are 1x1 unit (measured; +X/+Z corner at max.x=0.65, max.z=-0.65, hence corner-anchor). Forgiving-arcade target = 12 m track (matches the roads kit's 12 m two-lane — the lane-fit rule keeps road-bearing kits consistent), so scale = 12.0 (an initial 8 drove too tight). Cubic cell_size [12,12,12] = footprint(1) x scale, for the bridge/ramp vertical stacking. cell_center_y = false. Y-OFFSETS MEASURED FROM AABBs: the ground-authored bridge corners (deck at native 0..0.117) must lift to the straight-span deck (roadStraightBridgeMid base 0.383) -> lift 0.393 native = 4.716 at scale 12; roadStraightBridgeMid is already at deck height so its offset drops to 0. Bridge use is decorative until the island -> re-verify then. X-offsets (roadStart/roadStartPositions) scaled to the 12 m lattice. COLLISION FLAG: pitsGarageClosed/Corner are solid garage BUILDINGS, not drive-on surfaces, so they are box (never welded into the drivable body) — the drivable pit LANE is the separate thin roadPit* palette tile.",
+	"palette": {
+		"output": "res://kit/palettes/racing.meshlib",
+		"cell_size": [12.0, 12.0, 12.0],
+		"align": "corner"
+	},
+	"families": [
+		{ "name": "racing-cars", "label": "Race cars (excluded)",
+			"match": ["^raceCar"], "pipeline": "exclude",
+			"reason": "hand-built playable vehicles, not scenery" },
+		{ "name": "racing-road-sand", "label": "Roads (sand run-off)",
+			"match": ["^roadCorner.*Sand"], "pipeline": "palette",
+			"palette_output": "res://kit/palettes/racing_sand.meshlib" },
+		{ "name": "racing-sand-grass", "label": "Grass run-off",
+			"match": ["^grass$"], "pipeline": "palette",
+			"palette_output": "res://kit/palettes/racing_sand.meshlib" },
+		{ "name": "racing-road-wall", "label": "Roads (wall/border)",
+			"match": ["^roadCorner.*(Wall|Border)"], "pipeline": "palette",
+			"palette_output": "res://kit/palettes/racing_wall.meshlib" },
+		{ "name": "racing-roads", "label": "Roads (track)",
+			"match": ["^road"], "pipeline": "palette",
+			"assets": {
+				"roadCornerBridgeSmall": {"y_offset": 4.716},
+				"roadCornerBridgeLarge": {"y_offset": 4.716},
+				"roadCornerBridgeLarger": {"y_offset": 4.716},
+				"roadStart": {"x_offset": 1.56},
+				"roadStartPositions": {"x_offset": 6.0}
+			} },
+		{ "name": "racing-tents", "label": "Tents",
+			"match": ["^tent"], "pipeline": "prefab", "collision_mode": "multiconvex" },
+		{ "name": "racing-overhead", "label": "Overhead gantries",
+			"match": ["^overhead"], "pipeline": "prefab", "collision_mode": "multiconvex" },
+		{ "name": "racing-grandstands", "label": "Grandstands",
+			"match": ["^grandStand"], "pipeline": "prefab", "collision_mode": "multiconvex" },
+		{ "name": "racing-pits", "label": "Pit buildings",
+			"match": ["^pits"], "pipeline": "prefab", "collision_mode": "box" },
+		{ "name": "racing-posts", "label": "Posts (flags/fences/cameras/lights/trees)",
+			"match": ["^(flag|fence|camera|light|tree)"], "pipeline": "prefab",
+			"collision_mode": "footprint" },
+		{ "name": "racing-props", "label": "Props (barriers/misc)",
+			"match": ["."], "pipeline": "prefab", "collision_mode": "box",
+			"assets": {
+				"ramp": {"collision_mode": "weld"},
+				"billboardDouble_exclusive": {"collision_mode": "multiconvex"}
+			} }
+	]
+}

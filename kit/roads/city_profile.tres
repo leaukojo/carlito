@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="RoadProfile" format=3 uid="uid://dr65wywfdruc0"]
+
+[ext_resource type="Script" uid="uid://b22n2cbu30opf" path="res://kit/helpers/road_profile.gd" id="1_profile"]
+
+[sub_resource type="StandardMaterial3D" id="mat_edge_line"]
+albedo_color = Color(0.968627, 0.968627, 0.980392, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_shoulder"]
+albedo_color = Color(0.321569, 0.333333, 0.396078, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_asphalt"]
+albedo_color = Color(0.396078, 0.423529, 0.505882, 1)
+
+[resource]
+script = ExtResource("1_profile")
+lane_width = 4.8
+surface_material = SubResource("mat_asphalt")
+edge_line_material = SubResource("mat_edge_line")
+shoulder_material = SubResource("mat_shoulder")

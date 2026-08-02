@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_gpfig"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/mushroom_tanGroup.glb" id="2_xwfs6"]
+
+[node name="MushroomTanGroup" type="Node3D" unique_id=1081028878]
+script = ExtResource("1_gpfig")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=954381643 instance=ExtResource("2_xwfs6")]
+transform = Transform3D(2.5, 0, 0, 0, 2.5, 0, 0, 0, 2.5, 0.0037500262, 0.125, -0.037749987)

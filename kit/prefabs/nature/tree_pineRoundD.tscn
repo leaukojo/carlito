@@ -1,0 +1,21 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_yvo5c"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/tree_pineRoundD.glb" id="2_8rli1"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_behi5"]
+height = 5.4084997
+radius = 0.5981012
+
+[node name="TreePineRoundD" type="Node3D" unique_id=1217846918]
+script = ExtResource("1_yvo5c")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=1712026861 instance=ExtResource("2_8rli1")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, -7.4505806e-08, 0.25, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=235659784]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=2117828499]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.9604645e-08, 2.7042499, 0)
+shape = SubResource("CylinderShape3D_behi5")

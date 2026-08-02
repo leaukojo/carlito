@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_gg2cg"]
+[ext_resource type="PackedScene" path="res://kit/raw/commercial/building-skyscraper-e.glb" id="2_4bc4r"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_lhai5"]
+size = Vector3(11.655001, 36.72, 11.1779995)
+
+[node name="BuildingSkyscraperE" type="Node3D" unique_id=238800334]
+script = ExtResource("1_gg2cg")
+
+[node name="Model" type="Node3D" parent="." unique_id=1365678210 instance=ExtResource("2_4bc4r")]
+transform = Transform3D(9, 0, 0, 0, 9, 0, 0, 0, 9, -5.364418e-07, 0, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=2022224665]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1500057462]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 18.36, 0)
+shape = SubResource("BoxShape3D_lhai5")

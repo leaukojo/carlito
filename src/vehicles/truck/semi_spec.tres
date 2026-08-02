@@ -1,0 +1,103 @@
+[gd_resource type="Resource" script_class="VehicleSpec" load_steps=3 format=3]
+
+; Cab-over tractor unit. HAND-AUTHORED, like train_spec.tres and the bikes — this variant is not
+; in gen_kenney_vehicles.gd's VARIANTS (Kenney ships no semi), so there is no generator baseline
+; behind it and every flag has to be right here or it is simply absent.
+;
+; THE DRIVETRAIN AND BRAKE BLOCK IS NO LONGER THE GARBAGE TRUCK'S — a TRACTOR UNIT IS THE ONLY
+; TRUCK HERE THAT TOWS 24 t, and it was specced as if it did not. At the old 1040 Nm peak (a 7-litre
+; medium truck) a 32 t rig could not pull away up a grade, which is honest for that engine and wrong
+; for this vehicle: a European artic runs an 11-13 L six. There is no clutch or converter model, so
+; pulling away is decided by the torque at IDLE, and the old curve's 520 Nm there was the actual
+; complaint. The shipped curve peaks at 1500 Nm and holds 975 at idle (65 % of peak, which is the
+; shape of a real truck diesel and not of the car curve this was scaled from) — 0-100 % throttle at
+; rest now makes 71 kN at the wheel against 38 kN before, i.e. a laden rig starts on a ~20 % grade
+; where it used to stall on 11 %. The rpm range is untouched, so every rpm-dependent tune (shift
+; points, engine_load's peak-torque denominator, the retarder fade) still means what it meant.
+;
+; 1500 Nm IS THE CEILING THE HIERARCHY ALLOWS, NOT A CHOICE, and the chain is worth knowing before
+; anyone reaches for more. tests/test_truck.gd requires brake > peak drive, so peak engine torque is
+; bounded by 4 * brake_torque / (gear1 * final * efficiency); brake_torque is itself bounded above by
+; the retarder band, because retarder_rating is a FRACTION of it (0.20 * B * 2 / 0.36 / 8000 must
+; stay under 1.6 m/s^2, so B < 11520). Shipped: B = 10500 gives a 1.46 m/s^2 retarder and 42000 Nm of
+; service brake against 39488 Nm of peak drive. A real 32 t artic makes 2300-2800 Nm, and reaching it
+; means raising the service brake, which means the retarder can no longer be quoted as a fraction of
+; it — a bigger change than a number.
+;
+; handbrake_torque 4800 is likewise pinned by construction, not tuned: the same test holds the total
+; handbrake inside (25 %, 50 %) of the drive torque at idle, and that window MOVED with the engine
+; (3209-6417 per wheel now). 4800 sits mid-window. It is nowhere near enough to park 32 t on its own
+; — see the trailer specs, which is where a rig's parking brake actually lives.
+;
+; trailer_bus_equipped IS THE ISO 7638 CONNECTOR'S DATA PAIR, and it is a flag rather than an
+; assumption because the whole trailer bus is regional: this European unit has pins 6 and 7, so a
+; coupled trailer claims and the ISO 11992 cluster comes alive. A unit without it tows exactly the
+; same trailer, brakes it exactly the same way through the pneumatic lines, and publishes
+; trailer_connected FALSE with honest zeros behind it.
+;
+; Geometry is measured off semi.tscn: 3.40 m long (shorter than the 3.85 m garbage truck — a
+; tractor unit's silhouette is a tall flat-fronted cab and almost nothing behind the drive axle),
+; wheelbase 2.10 (front axle -1.15 under the cab, drive axle +0.95), 1.92 wide like the rest of the
+; family.
+;
+; CENTRE OF MASS IS FORWARD OF CENTRE, WHICH LOOKS WRONG UNTIL YOU COUPLE IT. A cab-over's own mass
+; is cab and engine, both over the steer axle, so a BOBTAIL tractor unit is front-heavy (z -0.15
+; puts 52 % on the steer axle) — which is why real bobtails are notoriously easy to lock up. Coupled
+; to the box the plate's 6473 kg lands 90 % on the drive axle. Driving found this: at z +0.10 the
+; coupled steer axle carried only 20 % and BOTH front wheels left the road under throttle in a
+; corner, i.e. the rig lost its steering exactly when it needed it.
+;
+; SPRING RATE IS THE OTHER NUMBER THAT IS NOT THE GARBAGE TRUCK'S, because the rear carries the
+; fifth-wheel load as well as its own — and it went 190000 -> 240000 N/m when the trailers' plate
+; share was corrected to a realistic 27 %. That correction is what makes this a 4x2 that can pull:
+; the drive axle is the ONLY driven axle, so what the plate puts on it IS the rig's traction budget,
+; and at the old 19 % share it was starved. Coupled to the box the drive axle now carries 9636 kg
+; against 7979 before. 240000 N/m lands every case inside the 0.32 m travel: rear 62 % coupled to
+; the box, 63 % behind a 25 t trailer, 24 % solo, front 27 %. The shipped Kenney trucks ride on
+; their rear bump stops (26.3 kN/wheel against a spring that maxes at 20.8 kN); a trailer on top of
+; that is what "the rig sinks" looks like. It is one rate for all four corners, so it is a
+; compromise between a light steer axle and a heavily loaded drive axle — the front-biased centre of
+; mass above is what makes the compromise a comfortable one.
+
+[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="2_wheel"]
+
+[resource]
+script = ExtResource("1_spec")
+mass = 8000.0
+center_of_mass = Vector3(0, 0.35, -0.15)
+wheel_positions = PackedVector3Array(-0.72, 0.424, -1.15, 0.72, 0.424, -1.15, -0.62, 0.424, 0.95, 0.62, 0.424, 0.95)
+wheel_radius = 0.36
+wheel_inertia = 3.0
+wheel_scene = ExtResource("2_wheel")
+driven_front = false
+driven_rear = true
+retarder_equipped = true
+trailer_bus_equipped = true
+rest_length = 0.32
+spring_rate = 240000.0
+damper_bump = 12000.0
+damper_rebound = 15800.0
+max_suspension_force = 120000.0
+grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
+mu_long = 1.0
+mu_lat = 0.95
+handbrake_grip = 1.0
+torque_curve = PackedVector2Array(700, 975, 1200, 1290, 1800, 1500, 2400, 1440, 2800, 1120, 3200, 375)
+idle_rpm = 700.0
+redline_rpm = 3200.0
+gear_ratios = PackedFloat32Array(6.5, 3.7, 2.4, 1.6, 1.2, 1)
+reverse_ratio = 6.0
+final_drive = 4.5
+efficiency = 0.9
+shift_up_rpm = 2600.0
+shift_down_rpm = 1200.0
+brake_torque = 10500.0
+handbrake_torque = 4800.0
+max_steer_deg = 24.0
+steer_speed = 1.8
+headlight_paths = Array[NodePath]([NodePath("Lamps/HeadlightL"), NodePath("Lamps/HeadlightR")])
+head_lamp_paths = Array[NodePath]([NodePath("Lamps/HeadLensL"), NodePath("Lamps/HeadLensR")])
+brake_lamp_paths = Array[NodePath]([NodePath("Lamps/BrakeLampL"), NodePath("Lamps/BrakeLampR")])
+turn_left_paths = Array[NodePath]([NodePath("Lamps/TurnLF"), NodePath("Lamps/TurnLR")])
+turn_right_paths = Array[NodePath]([NodePath("Lamps/TurnRF"), NodePath("Lamps/TurnRR")])

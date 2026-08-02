@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_1s4d7"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/crops_bambooStageA.glb" id="2_d50c4"]
+
+[node name="CropsBambooStageA" type="Node3D" unique_id=1987530391]
+script = ExtResource("1_1s4d7")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=1154294594 instance=ExtResource("2_d50c4")]
+transform = Transform3D(2.5, 0, 0, 0, 2.5, 0, 0, 0, 2.5, 0.016875006, 0.125, 0.018000007)

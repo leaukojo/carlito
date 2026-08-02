@@ -1,0 +1,204 @@
+[gd_scene load_steps=19 format=3]
+
+; Mounted power harrow. Authored in the LOWERED (working) pose with the origin ON THE LOWER
+; PIN LINE, the frame HitchLinkage solves against; ground is y = -0.21 in this frame, so the
+; tines reach 0.02 m INTO the soil and the rear packer roller rests exactly on it — which is
+; how a real harrow carries itself and sets its own working depth.
+;
+; The tine rotor turns about the machine's TRANSVERSE axis, under a hood, which is what makes
+; this machine read differently from the mower and the spreader at a glance: their discs sweep
+; parallel to the ground, these tines swing through it. One tine bar is painted the same index
+; red as the tractor's PTO stub spline, because a symmetric spinning part reads as standing
+; still. NO CollisionShape: implements are visual.
+
+[ext_resource type="Script" path="res://src/vehicles/tractor/implements/harrow.gd" id="1_harrow"]
+[ext_resource type="PackedScene" path="res://src/vehicles/tractor/implements/headstock.tscn" id="2_head"]
+
+[sub_resource type="StandardMaterial3D" id="MatPaint"]
+resource_name = "harrow_paint"
+albedo_color = Color(0.68, 0.27, 0.2, 1)
+roughness = 0.75
+
+[sub_resource type="StandardMaterial3D" id="MatSteel"]
+resource_name = "harrow_steel"
+albedo_color = Color(0.3, 0.33, 0.37, 1)
+metallic_specular = 0.55
+roughness = 0.55
+
+; The rotor lives in the hood's shadow, so it is deliberately the BRIGHTEST thing on the
+; machine — a dark rotor under a hood reads as a black gap from the chase camera.
+[sub_resource type="StandardMaterial3D" id="MatTine"]
+resource_name = "harrow_tines"
+albedo_color = Color(0.86, 0.88, 0.9, 1)
+metallic_specular = 0.7
+roughness = 0.4
+
+[sub_resource type="StandardMaterial3D" id="MatMark"]
+resource_name = "index_mark"
+albedo_color = Color(0.85, 0.18, 0.14, 1)
+roughness = 0.6
+
+[sub_resource type="BoxMesh" id="MeshLink"]
+material = SubResource("MatPaint")
+size = Vector3(0.08, 0.1, 0.32)
+
+[sub_resource type="BoxMesh" id="MeshMainBeam"]
+material = SubResource("MatPaint")
+size = Vector3(1.3, 0.13, 0.12)
+
+[sub_resource type="BoxMesh" id="MeshSidePlate"]
+material = SubResource("MatPaint")
+size = Vector3(0.04, 0.38, 0.52)
+
+[sub_resource type="BoxMesh" id="MeshHood"]
+material = SubResource("MatPaint")
+size = Vector3(1.26, 0.26, 0.44)
+
+[sub_resource type="BoxMesh" id="MeshHoodLip"]
+material = SubResource("MatPaint")
+size = Vector3(1.26, 0.06, 0.09)
+
+[sub_resource type="BoxMesh" id="MeshGearbox"]
+material = SubResource("MatSteel")
+size = Vector3(0.26, 0.24, 0.26)
+
+[sub_resource type="CylinderMesh" id="MeshGearCap"]
+material = SubResource("MatSteel")
+top_radius = 0.1
+bottom_radius = 0.1
+height = 0.06
+radial_segments = 8
+rings = 0
+
+[sub_resource type="CylinderMesh" id="MeshInputShaft"]
+material = SubResource("MatTine")
+top_radius = 0.05
+bottom_radius = 0.05
+height = 0.44
+radial_segments = 6
+rings = 0
+
+[sub_resource type="BoxMesh" id="MeshYoke"]
+material = SubResource("MatSteel")
+size = Vector3(0.11, 0.11, 0.12)
+
+[sub_resource type="CylinderMesh" id="MeshRotorShaft"]
+material = SubResource("MatTine")
+top_radius = 0.055
+bottom_radius = 0.055
+height = 1.22
+radial_segments = 6
+rings = 0
+
+[sub_resource type="BoxMesh" id="MeshTine"]
+material = SubResource("MatTine")
+size = Vector3(1.14, 0.04, 0.3)
+
+[sub_resource type="BoxMesh" id="MeshTineMark"]
+material = SubResource("MatMark")
+size = Vector3(1.14, 0.04, 0.3)
+
+[sub_resource type="BoxMesh" id="MeshRollerArm"]
+material = SubResource("MatPaint")
+size = Vector3(0.05, 0.16, 0.42)
+
+; The packer roller carries the machine and sets its working depth, so it rests exactly on the
+; ground — but it is deliberately kept SMALL and set well back on its arms: any bigger and it
+; blocks the line of sight from the chase camera into the gap under the hood, which is the
+; only place the spinning tines can be seen.
+[sub_resource type="CylinderMesh" id="MeshRoller"]
+material = SubResource("MatSteel")
+top_radius = 0.13
+bottom_radius = 0.13
+height = 1.22
+radial_segments = 8
+rings = 0
+
+[node name="Harrow" type="Node3D"]
+script = ExtResource("1_harrow")
+
+[node name="Headstock" parent="." instance=ExtResource("2_head")]
+
+[node name="LinkL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.2, 0.05, 0.16)
+mesh = SubResource("MeshLink")
+
+[node name="LinkR" type="MeshInstance3D" parent="."]
+position = Vector3(0.2, 0.05, 0.16)
+mesh = SubResource("MeshLink")
+
+[node name="MainBeam" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.1, 0.3)
+mesh = SubResource("MeshMainBeam")
+
+[node name="SidePlateL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.65, 0.05, 0.52)
+mesh = SubResource("MeshSidePlate")
+
+[node name="SidePlateR" type="MeshInstance3D" parent="."]
+position = Vector3(0.65, 0.05, 0.52)
+mesh = SubResource("MeshSidePlate")
+
+[node name="RotorHood" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.15, 0.52)
+mesh = SubResource("MeshHood")
+
+[node name="HoodLipFront" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0, 0.305)
+mesh = SubResource("MeshHoodLip")
+
+[node name="HoodLipRear" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0, 0.735)
+mesh = SubResource("MeshHoodLip")
+
+[node name="Gearbox" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.36, 0.45)
+mesh = SubResource("MeshGearbox")
+
+[node name="GearCap" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.5, 0.45)
+mesh = SubResource("MeshGearCap")
+
+[node name="InputShaft" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.35, 0.12)
+rotation = Vector3(1.6107963, 0, 0)
+mesh = SubResource("MeshInputShaft")
+
+[node name="Yoke" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.351, -0.1)
+mesh = SubResource("MeshYoke")
+
+[node name="Rotor" type="Node3D" parent="."]
+position = Vector3(0, -0.08, 0.52)
+
+[node name="Shaft" type="MeshInstance3D" parent="Rotor"]
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshRotorShaft")
+
+[node name="TineA" type="MeshInstance3D" parent="Rotor"]
+mesh = SubResource("MeshTineMark")
+
+[node name="TineB" type="MeshInstance3D" parent="Rotor"]
+rotation = Vector3(0.7853982, 0, 0)
+mesh = SubResource("MeshTine")
+
+[node name="TineC" type="MeshInstance3D" parent="Rotor"]
+rotation = Vector3(1.5707964, 0, 0)
+mesh = SubResource("MeshTine")
+
+[node name="TineD" type="MeshInstance3D" parent="Rotor"]
+rotation = Vector3(2.3561945, 0, 0)
+mesh = SubResource("MeshTine")
+
+[node name="RollerArmL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.63, -0.02, 0.9)
+mesh = SubResource("MeshRollerArm")
+
+[node name="RollerArmR" type="MeshInstance3D" parent="."]
+position = Vector3(0.63, -0.02, 0.9)
+mesh = SubResource("MeshRollerArm")
+
+[node name="Roller" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.08, 1.02)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshRoller")

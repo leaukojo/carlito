@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_rj7ul"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/plant_bushLarge.glb" id="2_67too"]
+
+[node name="PlantBushLarge" type="Node3D" unique_id=1758638439]
+script = ExtResource("1_rj7ul")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=1573295198 instance=ExtResource("2_67too")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0.25, -7.4505806e-08)

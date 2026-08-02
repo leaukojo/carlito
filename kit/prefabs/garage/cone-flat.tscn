@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_1bls8"]
+[ext_resource type="PackedScene" path="res://kit/raw/garage/cone-flat.glb" id="2_0o7t7"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_qapw7"]
+size = Vector3(0.57144, 0.3372, 0.57144)
+
+[node name="ConeFlat" type="Node3D" unique_id=278983500]
+script = ExtResource("1_1bls8")
+
+[node name="Model" type="Node3D" parent="." unique_id=676632950 instance=ExtResource("2_0o7t7")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, 0, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1082479575]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=142692522]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1686, 0)
+shape = SubResource("BoxShape3D_qapw7")

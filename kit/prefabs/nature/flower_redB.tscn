@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_583x3"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/flower_redB.glb" id="2_eawlo"]
+
+[node name="FlowerRedB" type="Node3D" unique_id=654869787]
+script = ExtResource("1_583x3")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=1723594668 instance=ExtResource("2_eawlo")]
+transform = Transform3D(2.5, 0, 0, 0, 2.5, 0, 0, 0, 2.5, 0.062625, 0.125, 0)

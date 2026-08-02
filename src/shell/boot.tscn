@@ -1,0 +1,54 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://src/shell/boot.gd" id="1_boot"]
+[ext_resource type="Script" path="res://src/ui/dashboard.gd" id="2_dash"]
+[ext_resource type="Script" path="res://src/ui/debug_overlay.gd" id="3_dbg"]
+[ext_resource type="Script" path="res://src/ui/touch_controls.gd" id="4_touch"]
+[ext_resource type="Script" path="res://src/ui/ui_scale.gd" id="5_uiscale"]
+[ext_resource type="Script" path="res://src/ui/notice_line.gd" id="6_notice"]
+
+; PROCESS_MODE_ALWAYS: the shell and its menus keep running while the world is paused. The
+; level is a CHILD of this node, so boot.gd puts it back to PAUSABLE when it adds it —
+; otherwise it would inherit this and the pause menu would pause nothing.
+[node name="Boot" type="Node3D"]
+process_mode = 3
+script = ExtResource("1_boot")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+; Rebuilds the UI theme from the window size and assigns it to ITSELF, so every Control below
+; inherits one scaled theme. It is a Control under the CanvasLayer (not a Node on the root)
+; because Controls under a CanvasLayer do not inherit the Window's theme. Every screen the
+; shell builds is parented here.
+[node name="UiScale" type="Control" parent="UI"]
+script = ExtResource("5_uiscale")
+
+; Transient message line at the top of the screen (it sat under the permanently-on key hint
+; until that label was deleted — the controls now live in the pause menu): the sim raising
+; something the driver has to know ("no room to couple"). Hidden until GameState.notice fires.
+; Its geometry is the SCRIPT's (notice_line.gd) — the raw offsets it used to carry here did not
+; scale with the theme and ran under the touch overlay's button columns, and its warning panel
+; (dark box, red border) is installed there too so the padding scales with the type.
+[node name="Notice" type="Label" parent="UI/UiScale"]
+visible = false
+anchor_right = 1.0
+theme_override_colors/font_color = Color(1, 0.36, 0.32, 1)
+theme_type_variation = &"Title"
+text = ""
+horizontal_alignment = 1
+autowrap_mode = 3
+script = ExtResource("6_notice")
+
+[node name="Dashboard" type="Control" parent="UI/UiScale"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("2_dash")
+
+[node name="TouchControls" type="Control" parent="UI/UiScale"]
+script = ExtResource("4_touch")
+
+[node name="DebugOverlay" type="Label" parent="UI/UiScale"]
+mouse_filter = 2
+script = ExtResource("3_dbg")

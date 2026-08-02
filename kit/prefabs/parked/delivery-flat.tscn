@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_ui6dx"]
+[ext_resource type="PackedScene" path="res://kit/raw/parked/delivery-flat.glb" id="2_kev12"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_b6go5"]
+size = Vector3(1.8000001, 1.6199999, 3.9)
+
+[node name="DeliveryFlat" type="Node3D" unique_id=572407925]
+script = ExtResource("1_ui6dx")
+
+[node name="Model" type="Node3D" parent="." unique_id=1774452738 instance=ExtResource("2_kev12")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, -3.576279e-08, 0.029999973)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=194891133]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=127653931]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.80999994, 0)
+shape = SubResource("BoxShape3D_b6go5")

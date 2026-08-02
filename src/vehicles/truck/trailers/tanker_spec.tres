@@ -1,0 +1,48 @@
+[gd_resource type="Resource" script_class="VehicleSpec" load_steps=2 format=3]
+
+; Tanker semi-trailer running gear. A VehicleSpec because that is what RayWheel consumes; the
+; drivetrain / steering / lamp fields are meaningless on a towed body and stay at their defaults.
+;
+; Everything below is measured off tanker.tscn (origin AT THE KINGPIN, ground at y = -1.05):
+;   - the tri-axle bogie is the family's: z 4.90 / 5.45 / 6.00, anchors at y = 0.424 - 1.05.
+;   - center_of_mass z 4.25 puts 22.0 % on the fifth wheel ((5.45 - 4.25) / 5.45) = 4623 kg. The
+;     barrel runs z 0.30 - 6.10 and its saddles carry it evenly, so the rest position is close to
+;     the barrel's own middle, pulled forward by the gooseneck.
+;   - center_of_mass y -0.25 is 0.80 m above the road — THE HIGHEST IN THE CATALOG, and that is the
+;     shape of the vehicle rather than a tuning choice: the barrel's own centre is at y 0.66 and a
+;     part-filled tank puts its load well up inside it. It is why a tanker feels tall in a corner.
+;   - THE SURGE MOVES IT, +-0.55 m along z. tanker.gd is a LABELLED HONEST MODEL of a shifting
+;     centre of mass, NOT fluid dynamics — read its header before changing anything here. The two
+;     ends of the travel are covered by the spring below: the load fully rearward (z 4.80) sits the
+;     bogie at 41 % of travel, fully forward (z 3.70) at 31 %, against 36 % at rest.
+;   - spring_rate 232000 is sized off the load the bogie ACTUALLY carries at rest, 16 376 kg:
+;     26 748 N per wheel compresses it 0.115 m of its 0.32 m travel (36 %), the flatbed's fraction.
+;   - brake_torque 10595 is load-apportioned by the family's one formula, never copied:
+;     10500 * (25.07 kN per trailer wheel / 26.5 kN per tractor wheel) — the formula keeps the two
+;     ends of the rig scrubbing at matched fractions of what each carries, which is what stops a
+;     trailer over-braking into a jackknife.
+;   - handbrake_torque 2484 is the bogie's SPRING PARKING BRAKE, a quarter of this trailer's own
+;     service brake like every trailer here — see box_spec.tres for the whole derivation. Without
+;     it the rig parked on two tractor wheels and rolled away on any real grade.
+
+[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
+
+[resource]
+script = ExtResource("1_spec")
+mass = 21000.0
+center_of_mass = Vector3(0, -0.25, 3.98)
+wheel_positions = PackedVector3Array(-0.72, -0.626, 4.9, 0.72, -0.626, 4.9, -0.72, -0.626, 5.45, 0.72, -0.626, 5.45, -0.72, -0.626, 6, 0.72, -0.626, 6)
+wheel_radius = 0.36
+wheel_inertia = 3.0
+driven_front = false
+driven_rear = false
+rest_length = 0.32
+spring_rate = 218000.0
+damper_bump = 11750.0
+damper_rebound = 16000.0
+max_suspension_force = 90000.0
+grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
+mu_long = 1.0
+mu_lat = 0.95
+brake_torque = 9935.0
+handbrake_torque = 2484.0

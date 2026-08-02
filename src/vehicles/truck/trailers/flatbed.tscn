@@ -1,0 +1,425 @@
+[gd_scene load_steps=30 format=3]
+
+; Tri-axle flatbed semi-trailer. Hand-built low-poly (Kenney ships no trailers at all), flat
+; boxes and 10-segment cylinders to match the kit's flat-shaded look.
+;
+; AUTHORED WITH THE ORIGIN AT THE KINGPIN, ground at y = -1.05 — measured off the tractor unit's
+; fifth-wheel plate, whose top face is 1.05 m above the road. That makes the coupling datum the
+; origin, so Articulation.coupled_pose is one transform multiply and the joint sits exactly on
+; this node. It is the implements' convention in the same shape ("origin on the lower pin line,
+; ground at y = -0.21"), and for the same reason: the geometry lives here and is MEASURED off it,
+; never restated as constants in code.
+;
+; Sizes are measured against the shipped kit, not against real trucks: the sedan is 1.80 m wide
+; and 2.88 long, the garbage truck 1.92 x 3.85 x 1.72. So this is 1.92 wide (truck-family width)
+; with a 5.40 m deck behind a 1.35 m neck, and the whole rig behind the 3.40 m tractor unit comes
+; to ~8.9 m.
+;
+; IT IS A GOOSENECK, AND THAT IS STRUCTURAL RATHER THAN DECORATIVE. NOTHING of the trailer may hang
+; below the coupling plane (y = 0) over the tractor: the front 1.35 m is a raised NECK whose
+; underside is the bolster plate, and the frame + deck step DOWN behind the tractor's tail (from
+; z 1.05, which clears its rear bumper at z 0.96 in this frame). Authored flat instead — one deck
+; height end to end, 0.46 m BELOW the plate — the deck and both frame rails ran straight through
+; the tractor's own frame rails, mudguards and fifth wheel. A real semi-trailer has this shape for
+; exactly this reason.
+;
+; The clearances that are geometry rather than taste:
+;   - the front overhang is 0.33 m (the neck, which is the frontmost part), so the front corners
+;     swing on sqrt(0.96^2 + 0.33^2) = 1.02 m, INSIDE the 1.15 m from the kingpin to the cab's rear
+;     face. A real artic is built to exactly this rule, and it is what lets the rig fold right round
+;     without the trailer reaching the cab. test_trailer measures it off this scene.
+;   - the landing legs are authored RETRACTED, feet 0.14 m clear of the road, because the trailer
+;     spawns coupled. There is nothing to lower them with and they are not collision.
+;
+; Undriven and unsteered: the axles only ever brake. Suspension/mass/grip live in
+; flatbed_spec.tres, wheels are the kit's own truck wheel scaled on the INSTANCE (RayWheel
+; overwrites each Wheels/* root transform every tick, so the scale must ride the child).
+
+[ext_resource type="Script" path="res://src/vehicles/truck/towed_body.gd" id="1_towed"]
+[ext_resource type="Resource" path="res://src/vehicles/truck/trailers/flatbed_spec.tres" id="2_spec"]
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="3_wheel"]
+
+[sub_resource type="StandardMaterial3D" id="MatFrame"]
+resource_name = "flatbed_frame"
+albedo_color = Color(0.21, 0.26, 0.33, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="MatDeck"]
+resource_name = "flatbed_deck"
+albedo_color = Color(0.55, 0.42, 0.28, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="MatSteel"]
+resource_name = "flatbed_steel"
+albedo_color = Color(0.6, 0.63, 0.67, 1)
+metallic_specular = 0.5
+roughness = 0.55
+
+[sub_resource type="StandardMaterial3D" id="MatLensRed"]
+resource_name = "flatbed_lens_red"
+albedo_color = Color(0.55, 0.07, 0.05, 1)
+roughness = 0.4
+
+[sub_resource type="StandardMaterial3D" id="MatLensAmber"]
+resource_name = "flatbed_lens_amber"
+albedo_color = Color(0.76, 0.43, 0.06, 1)
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="MeshRail"]
+material = SubResource("MatFrame")
+size = Vector3(0.14, 0.26, 5.4)
+
+[sub_resource type="BoxMesh" id="MeshCross"]
+material = SubResource("MatFrame")
+size = Vector3(1.1, 0.1, 0.12)
+
+[sub_resource type="BoxMesh" id="MeshPlank"]
+material = SubResource("MatDeck")
+size = Vector3(0.34, 0.08, 5.36)
+
+[sub_resource type="BoxMesh" id="MeshRave"]
+material = SubResource("MatSteel")
+size = Vector3(0.08, 0.16, 5.4)
+
+[sub_resource type="BoxMesh" id="MeshPocket"]
+material = SubResource("MatSteel")
+size = Vector3(0.05, 0.14, 0.12)
+
+; The bolster plate: the trailer's own steel face, which RESTS ON TOP of the tractor's fifth wheel.
+; It sits ABOVE the origin plane (y = 0.02 .. 0.10) and the tractor's plate ends AT it (world
+; 0.95 .. 1.05), so the two are stacked with a 2 cm gap rather than sharing the same slab of space —
+; authored coplanar they z-fought into one flickering white slab, which is what this comment exists
+; to stop happening again. It is deliberately NARROWER than the fifth wheel (1.14) so the plate the
+; tractor unit is recognised by stays visible from the side.
+[sub_resource type="BoxMesh" id="MeshPlate"]
+material = SubResource("MatSteel")
+size = Vector3(1.06, 0.08, 1.0)
+
+; The pin, hanging below the bolster plate into the fifth wheel's jaws: mostly swallowed by the
+; tractor's plate, with the 2 cm of it that crosses the gap visible.
+[sub_resource type="CylinderMesh" id="MeshKingpin"]
+material = SubResource("MatSteel")
+top_radius = 0.065
+bottom_radius = 0.065
+height = 0.18
+radial_segments = 10
+rings = 1
+
+; The neck: it sits ON the bolster plate (0.10) and its top is the trailer's front deck level, so
+; nothing here reaches below the coupling plane.
+[sub_resource type="BoxMesh" id="MeshNeck"]
+material = SubResource("MatFrame")
+size = Vector3(1.92, 0.16, 1.38)
+
+; The step face closing the drop from the neck down to the deck.
+[sub_resource type="BoxMesh" id="MeshNeckStep"]
+material = SubResource("MatFrame")
+size = Vector3(1.88, 0.4, 0.1)
+
+[sub_resource type="BoxMesh" id="MeshHeadboard"]
+material = SubResource("MatFrame")
+size = Vector3(1.92, 0.55, 0.1)
+
+[sub_resource type="BoxMesh" id="MeshLeg"]
+material = SubResource("MatSteel")
+size = Vector3(0.12, 0.42, 0.12)
+
+[sub_resource type="BoxMesh" id="MeshFoot"]
+material = SubResource("MatSteel")
+size = Vector3(0.28, 0.08, 0.3)
+
+[sub_resource type="BoxMesh" id="MeshBrace"]
+material = SubResource("MatSteel")
+size = Vector3(1.2, 0.08, 0.08)
+
+[sub_resource type="CylinderMesh" id="MeshCrank"]
+material = SubResource("MatSteel")
+top_radius = 0.03
+bottom_radius = 0.03
+height = 0.22
+radial_segments = 8
+rings = 1
+
+[sub_resource type="BoxMesh" id="MeshBogie"]
+material = SubResource("MatFrame")
+size = Vector3(1.5, 0.16, 1.55)
+
+[sub_resource type="CylinderMesh" id="MeshAxle"]
+material = SubResource("MatSteel")
+top_radius = 0.07
+bottom_radius = 0.07
+height = 1.55
+radial_segments = 10
+rings = 1
+
+[sub_resource type="BoxMesh" id="MeshSpringBeam"]
+material = SubResource("MatSteel")
+size = Vector3(0.14, 0.18, 1.45)
+
+; 0.32 wide, not 0.36: at 0.36 its outer face landed at x +-0.96, which is EXACTLY the rave's
+; outer face — two coplanar faces pointing the same way, which is the z-fight the header warns
+; about. 0.32 buries the outer edge 0.02 inside the rave instead, and still covers the tyre
+; (wheel centre 0.72, tyre half-width ~0.15, so the tread ends at 0.87).
+[sub_resource type="BoxMesh" id="MeshMudguard"]
+material = SubResource("MatFrame")
+size = Vector3(0.32, 0.06, 1.8)
+
+[sub_resource type="BoxMesh" id="MeshRearBar"]
+material = SubResource("MatSteel")
+size = Vector3(1.7, 0.12, 0.1)
+
+[sub_resource type="BoxMesh" id="MeshStay"]
+material = SubResource("MatSteel")
+size = Vector3(0.08, 0.32, 0.08)
+
+[sub_resource type="BoxMesh" id="MeshLensRed"]
+material = SubResource("MatLensRed")
+size = Vector3(0.18, 0.12, 0.04)
+
+[sub_resource type="BoxMesh" id="MeshLensAmber"]
+material = SubResource("MatLensAmber")
+size = Vector3(0.12, 0.1, 0.04)
+
+[sub_resource type="BoxShape3D" id="ShapeFrame"]
+size = Vector3(1.92, 0.55, 5.4)
+
+[sub_resource type="BoxShape3D" id="ShapeNeck"]
+size = Vector3(1.92, 0.2, 1.35)
+
+[sub_resource type="BoxShape3D" id="ShapeHeadboard"]
+size = Vector3(1.92, 0.6, 0.12)
+
+[sub_resource type="BoxShape3D" id="ShapeBogie"]
+size = Vector3(1.7, 0.4, 1.9)
+
+[node name="Flatbed" type="RigidBody3D"]
+script = ExtResource("1_towed")
+spec = ExtResource("2_spec")
+
+[node name="CollisionFrame" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 3.75)
+shape = SubResource("ShapeFrame")
+
+[node name="CollisionNeck" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0.375)
+shape = SubResource("ShapeNeck")
+
+[node name="CollisionHeadboard" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.49, -0.15)
+shape = SubResource("ShapeHeadboard")
+
+[node name="CollisionBogie" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.52, 5.45)
+shape = SubResource("ShapeBogie")
+
+[node name="RailL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, -0.33, 3.75)
+mesh = SubResource("MeshRail")
+
+[node name="RailR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, -0.33, 3.75)
+mesh = SubResource("MeshRail")
+
+[node name="Cross1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.38, 1.4)
+mesh = SubResource("MeshCross")
+
+[node name="Cross2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.38, 2.2)
+mesh = SubResource("MeshCross")
+
+[node name="Cross3" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.38, 3.9)
+mesh = SubResource("MeshCross")
+
+[node name="Plank1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.76, -0.16, 3.75)
+mesh = SubResource("MeshPlank")
+
+[node name="Plank2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.38, -0.16, 3.75)
+mesh = SubResource("MeshPlank")
+
+[node name="Plank3" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.16, 3.75)
+mesh = SubResource("MeshPlank")
+
+[node name="Plank4" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.38, -0.16, 3.75)
+mesh = SubResource("MeshPlank")
+
+[node name="Plank5" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.76, -0.16, 3.75)
+mesh = SubResource("MeshPlank")
+
+[node name="RaveL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.92, -0.16, 3.75)
+mesh = SubResource("MeshRave")
+
+[node name="RaveR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.92, -0.16, 3.75)
+mesh = SubResource("MeshRave")
+
+[node name="PocketL1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.955, -0.18, 1.4)
+mesh = SubResource("MeshPocket")
+
+[node name="PocketL2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.955, -0.18, 4.2)
+mesh = SubResource("MeshPocket")
+
+[node name="PocketR1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.955, -0.18, 1.4)
+mesh = SubResource("MeshPocket")
+
+[node name="PocketR2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.955, -0.18, 4.2)
+mesh = SubResource("MeshPocket")
+
+[node name="KingpinPlate" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, 0.2)
+mesh = SubResource("MeshPlate")
+
+[node name="Kingpin" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.07, 0)
+mesh = SubResource("MeshKingpin")
+
+[node name="Neck" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.14, 0.36)
+mesh = SubResource("MeshNeck")
+
+[node name="NeckStep" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.99)
+mesh = SubResource("MeshNeckStep")
+
+[node name="Headboard" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.49, -0.15)
+mesh = SubResource("MeshHeadboard")
+
+[node name="LegL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, -0.62, 1.6)
+mesh = SubResource("MeshLeg")
+
+[node name="LegR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, -0.62, 1.6)
+mesh = SubResource("MeshLeg")
+
+[node name="FootL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, -0.87, 1.6)
+mesh = SubResource("MeshFoot")
+
+[node name="FootR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, -0.87, 1.6)
+mesh = SubResource("MeshFoot")
+
+[node name="LegBrace" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.55, 1.6)
+mesh = SubResource("MeshBrace")
+
+[node name="LegCrank" type="MeshInstance3D" parent="."]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0.78, -0.5, 1.6)
+mesh = SubResource("MeshCrank")
+
+[node name="BogieFrame" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.52, 5.45)
+mesh = SubResource("MeshBogie")
+
+[node name="Axle1" type="MeshInstance3D" parent="."]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0, -0.626, 4.9)
+mesh = SubResource("MeshAxle")
+
+[node name="Axle2" type="MeshInstance3D" parent="."]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0, -0.626, 5.45)
+mesh = SubResource("MeshAxle")
+
+[node name="Axle3" type="MeshInstance3D" parent="."]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0, -0.626, 6)
+mesh = SubResource("MeshAxle")
+
+[node name="SpringBeamL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, -0.55, 5.45)
+mesh = SubResource("MeshSpringBeam")
+
+[node name="SpringBeamR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, -0.55, 5.45)
+mesh = SubResource("MeshSpringBeam")
+
+[node name="MudguardL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.78, -0.2, 5.45)
+mesh = SubResource("MeshMudguard")
+
+[node name="MudguardR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.78, -0.2, 5.45)
+mesh = SubResource("MeshMudguard")
+
+[node name="RearBar" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.76, 6.52)
+mesh = SubResource("MeshRearBar")
+
+[node name="StayL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.7, -0.6, 6.48)
+mesh = SubResource("MeshStay")
+
+[node name="StayR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.7, -0.6, 6.48)
+mesh = SubResource("MeshStay")
+
+; Lamps sit PROUD of the stays they are bolted to, at z 6.53 rather than 6.5. At 6.5 the lens's
+; rear face was 6.52 — exactly the stay's rear face, so the red lens and the grey steel bar behind
+; it fought over the same plane. A lamp is a fitting, not an inlay: stand it 0.03 off the frame.
+[node name="TailLensL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.66, -0.56, 6.53)
+mesh = SubResource("MeshLensRed")
+
+[node name="TailLensR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.66, -0.56, 6.53)
+mesh = SubResource("MeshLensRed")
+
+; The amber pair butts straight up against the red one: half of 0.18 plus half of 0.12 out from
+; the tail lamp's 0.66 puts it at 0.81, so the two lenses share the plane at x +-0.75. Touching is
+; safe HERE where stacking was not, and the difference is the rule: these two faces point at each
+; other, so back-face culling drops one of them, while the mudguard/rave pair pointed the same way.
+[node name="MarkerLensL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.81, -0.56, 6.53)
+mesh = SubResource("MeshLensAmber")
+
+[node name="MarkerLensR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.81, -0.56, 6.53)
+mesh = SubResource("MeshLensAmber")
+
+; Wheel visual roots, IN THE SAME ORDER as flatbed_spec.tres's wheel_positions (L/R per axle,
+; front bogie axle first) — TowedBody pairs them by index and errors on a count mismatch.
+; RayWheel overwrites each root's transform every tick, so the radius scale and the right-side
+; flip ride the INSTANCED CHILD. The flip is about Vector3.RIGHT, never UP: in the frame RayWheel
+; builds, the wheel's local Y is the AXLE, so a yaw would just spin it about its own axis.
+[node name="Wheels" type="Node3D" parent="."]
+
+[node name="WheelL1" type="Node3D" parent="Wheels"]
+
+[node name="Wheel" parent="Wheels/WheelL1" instance=ExtResource("3_wheel")]
+transform = Transform3D(0.36, 0, 0, 0, 0.36, 0, 0, 0, 0.36, 0, 0, 0)
+
+[node name="WheelR1" type="Node3D" parent="Wheels"]
+
+[node name="Wheel" parent="Wheels/WheelR1" instance=ExtResource("3_wheel")]
+transform = Transform3D(0.36, 0, 0, 0, -0.36, 0, 0, 0, -0.36, 0, 0, 0)
+
+[node name="WheelL2" type="Node3D" parent="Wheels"]
+
+[node name="Wheel" parent="Wheels/WheelL2" instance=ExtResource("3_wheel")]
+transform = Transform3D(0.36, 0, 0, 0, 0.36, 0, 0, 0, 0.36, 0, 0, 0)
+
+[node name="WheelR2" type="Node3D" parent="Wheels"]
+
+[node name="Wheel" parent="Wheels/WheelR2" instance=ExtResource("3_wheel")]
+transform = Transform3D(0.36, 0, 0, 0, -0.36, 0, 0, 0, -0.36, 0, 0, 0)
+
+[node name="WheelL3" type="Node3D" parent="Wheels"]
+
+[node name="Wheel" parent="Wheels/WheelL3" instance=ExtResource("3_wheel")]
+transform = Transform3D(0.36, 0, 0, 0, 0.36, 0, 0, 0, 0.36, 0, 0, 0)
+
+[node name="WheelR3" type="Node3D" parent="Wheels"]
+
+[node name="Wheel" parent="Wheels/WheelR3" instance=ExtResource("3_wheel")]
+transform = Transform3D(0.36, 0, 0, 0, -0.36, 0, 0, 0, -0.36, 0, 0, 0)

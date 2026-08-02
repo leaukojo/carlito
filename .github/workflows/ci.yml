@@ -1,0 +1,159 @@
+# CI: the full gate stack on PRs and on pushes to dev/main, then a cache-busted
+# headless web export. A push to dev publishes that export into gh-pages:/dev/.
+# stable is NEVER touched here - it only moves via promote.yml (Actions ->
+# "Promote dev -> stable"), which copies the approved dev bytes rather than
+# rebuilding them.
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+
+# Read-only by default; only the publishing job is granted contents: write, so a
+# same-repo PR cannot reach a writable token through the build steps it can edit.
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: 4.7.1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot + export templates
+        run: |
+          curl -sSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          sudo mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          curl -sSL -o templates.tpz "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          unzip -q templates.tpz -d /tmp/templates
+          mv /tmp/templates/templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+
+      # Editor-only classes used as type annotations outside addons/ parse-fail in
+      # exported builds (the node silently does nothing) — hard gate. The [^#]* prefix
+      # skips comment-only mentions.
+      - name: Editor-type annotation gate
+        shell: bash
+        run: |
+          if grep -rnE '^[^#]*(:|->)[[:space:]]*Editor[A-Z][A-Za-z0-9]*' --include='*.gd' src kit tools tests; then
+            echo "editor-only type annotation outside addons/ (breaks exported builds)"
+            exit 1
+          fi
+
+      - name: Import project
+        run: godot --headless --import
+
+      # Invokes the gdUnit4 command tool directly instead of runtest.sh: the script
+      # launches Godot without --headless, which dies on a display-less runner.
+      # --ignoreHeadlessMode is safe here — it only guards InputEvent-driven UI tests,
+      # and this suite is pure logic. The --remote-debug port-0 errors it prints are
+      # intentional (disables the interactive CLI debugger; see runtest.sh).
+      - name: Unit tests (gdUnit4)
+        run: godot --headless --path . -s -d --remote-debug tcp://127.0.0.1:0 res://addons/gdUnit4/bin/GdUnitCmdTool.gd --ignoreHeadlessMode -a tests
+
+      # Boot the real main scene headless; a nonzero exit (shell: bash => pipefail)
+      # or any SCRIPT ERROR / ERROR fails the build. "still in use" / "leaked at
+      # exit" / "Pages in use exist at exit" (PagedAllocator, Linux-only) are
+      # known-harmless leak-at-exit noise emitted after the run's real work.
+      - name: Headless smoke
+        shell: bash
+        run: |
+          godot --headless --quit-after 120 2>&1 | tee smoke.log
+          if grep -E "SCRIPT ERROR|ERROR:" smoke.log | grep -vE "still in use at exit|leaked at exit|Pages in use exist at exit"; then
+            echo "smoke failed: errors above"
+            exit 1
+          fi
+
+      # Stale-bake check: recompute each registered level's
+      # authoring-input hash and compare against its committed bake manifest.
+      # Game-mode tool scene (not --script): level scripts only compile with
+      # autoloads registered.
+      - name: Stale-bake check
+        run: godot --headless res://tools/check_bakes.tscn
+
+      # Baked-level smoke (load -> baked-scene swap -> spawn -> play) against the
+      # dressed level_1 island. CARLITO_LEVEL
+      # picks the registry id; boot.gd loads it headless. Same error gate as the default
+      # smoke; "still in use"/"leaked at exit"/"Pages in use exist at exit" are known-harmless
+      # leak-at-exit noise.
+      - name: Baked-level smoke (level_1)
+        shell: bash
+        env:
+          CARLITO_LEVEL: level_1
+        run: |
+          godot --headless --quit-after 120 2>&1 | tee baked.log
+          if grep -E "SCRIPT ERROR|ERROR:" baked.log | grep -vE "still in use at exit|leaked at exit|Pages in use exist at exit"; then
+            echo "baked smoke failed: errors above"
+            exit 1
+          fi
+
+      # Cache-busting: Godot derives every artifact name (.js/.pck/.wasm/.side.wasm,
+      # PWA worker + manifest) from the export basename, so exporting as c2-<sha>.html
+      # gives all heavy files hash-unique names. index.html is a small copy (copy, not
+      # rename: the PWA service worker's cached-file list references c2-<sha>.html).
+      # Names are per-directory, so stable/ and dev/ never collide — and matching
+      # basenames across the two are the tell that stable is up to date with dev.
+      #
+      # "Attempting to parent and popup a dialog" (window.cpp _try_parent_dialog) is
+      # excluded from the error gate: Godot 4.7.1 emits it mid-savepack on the FIRST
+      # export after a cold import — which is CI's state on every run — and not on
+      # subsequent exports in the same clone. The export completes and the .pck is
+      # correct; it is headless editor-UI noise, not an export failure.
+      - name: Web export (cache-busted)
+        shell: bash
+        run: |
+          SHORT_SHA="${GITHUB_SHA:0:8}"
+          mkdir -p build/web
+          godot --headless --export-release "Web" "build/web/c2-${SHORT_SHA}.html" 2>&1 | tee export.log
+          if grep -E "ERROR:" export.log | grep -vE "still in use at exit|leaked at exit|Pages in use exist at exit|Attempting to parent and popup a dialog"; then
+            echo "export failed: errors above"
+            exit 1
+          fi
+          cp "build/web/c2-${SHORT_SHA}.html" build/web/index.html
+          touch build/web/.nojekyll
+          ls -la build/web
+
+      # include-hidden-files: upload-artifact@v4 drops dotfiles by default, which
+      # would silently strip .nojekyll and let Jekyll eat Godot's _-prefixed files.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: build/web
+          include-hidden-files: true
+          retention-days: 7
+
+  # Publishes the just-built site into gh-pages:/dev/. Pushes to main run the gate
+  # stack above but publish nothing: main only ever moves via a promote, and those
+  # bytes are already live on dev.
+  publish-dev:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Shared with promote.yml: both force-push gh-pages, and a race between them
+    # would silently drop one channel's update. Never cancel — a cancelled publish
+    # leaves dev stale with a green tick.
+    concurrency:
+      group: gh-pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-build
+          path: build/web
+
+      - name: Publish to gh-pages:/dev/
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SITE_SHA: ${{ github.sha }}
+        # Invoked via `bash` rather than executed directly: the repo is authored on
+        # Windows, where git does not track the exec bit.
+        run: bash .github/scripts/publish-pages.sh dev build/web

@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_y5nn7"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/crop_pumpkin.glb" id="2_30s8e"]
+
+[node name="CropPumpkin" type="Node3D" unique_id=1035272577]
+script = ExtResource("1_y5nn7")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=1516609231 instance=ExtResource("2_30s8e")]
+transform = Transform3D(2.5, 0, 0, 0, 2.5, 0, 0, 0, 2.5, 0, 0.125, 0)

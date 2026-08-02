@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_m47ge"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/tree_palm.glb" id="2_83agb"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_owy4c"]
+size = Vector3(0.538, 7.5729995, 0.538)
+
+[node name="TreePalm" type="Node3D" unique_id=473799996]
+script = ExtResource("1_m47ge")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=364957272 instance=ExtResource("2_83agb")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0.25, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1830140961]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=976051035]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.7864997, 0)
+shape = SubResource("BoxShape3D_owy4c")

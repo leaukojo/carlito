@@ -1,0 +1,70 @@
+#!/bin/sh
+# Carlito pre-commit gates. Bypass (rarely) with: git commit --no-verify
+# Fast checks always run; the Godot bake check runs only when staged files touch
+# levels/kit/authoring inputs.
+set -e
+# Godot binary: $GODOT_BIN -> `git config carlito.godotbin` -> `godot` on PATH.
+# Resolved lazily in gate 4 (the only one that needs it), so a machine without it still
+# gets the cheap gates. The git-config fallback exists because hooks run with a bare
+# environment — they do NOT inherit the $GODOT_BIN you set in your shell.
+resolve_godot() {
+  GODOT="$GODOT_BIN"
+  [ -n "$GODOT" ] || GODOT=$(git config --get carlito.godotbin || true)
+  if [ -n "$GODOT" ]; then
+    if [ ! -x "$GODOT" ] && [ ! -f "$GODOT" ]; then
+      echo "pre-commit: configured Godot binary does not exist: $GODOT" >&2
+      exit 1
+    fi
+  elif command -v godot >/dev/null 2>&1; then
+    GODOT=godot
+  else
+    echo "pre-commit: Godot not found. Set it once for this clone with:" >&2
+    echo "  git config carlito.godotbin '<path>/Godot_v4.7.1-stable_win64_console.exe'" >&2
+    echo "(or export GODOT_BIN, or put godot on PATH)" >&2
+    exit 1
+  fi
+}
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$staged" ] && exit 0
+
+# 1. Editor-only classes as type annotations outside addons/ parse-fail in exported
+#    builds (the node silently does nothing — this emptied the deployed terrain once).
+gd_staged=$(echo "$staged" | grep '\.gd$' | grep -v '^addons/' || true)
+if [ -n "$gd_staged" ]; then
+  bad=$(echo "$gd_staged" | xargs grep -nE '^[^#]*(:|->)[[:space:]]*Editor[A-Z][A-Za-z0-9]*' 2>/dev/null || true)
+  if [ -n "$bad" ]; then
+    echo "pre-commit: editor-only type annotation in runtime script (breaks exported builds):"
+    echo "$bad"
+    echo "Fix: fetch via Engine.get_singleton(&\"EditorInterface\") into an UNTYPED var."
+    exit 1
+  fi
+fi
+
+# 2. Contract edited -> synced sloppyCAN copy must be regenerated.
+if echo "$staged" | grep -q '^contract/carlito_contract\.json$'; then
+  out="../sloppycan/carlito_contract.js"
+  before=$(git hash-object "$out" 2>/dev/null || echo none)
+  node tools/gen_js_contract.mjs
+  after=$(git hash-object "$out" 2>/dev/null || echo regen-failed)
+  if [ "$before" != "$after" ]; then
+    echo "pre-commit: sloppyCAN contract copy was stale — just regenerated it."
+    echo "Review + commit it in the sloppycan repo, then re-run this commit."
+    exit 1
+  fi
+fi
+
+# 3. Head include touched -> pasted preset copy must match the reviewable source.
+if echo "$staged" | grep -qE '^(src/bridge/web/head_include\.html|export_presets\.cfg)$'; then
+  node tools/check_head_include.mjs || exit 1
+fi
+
+# 4. Bake inputs touched -> stale-bake check (same gate CI runs, ~30s).
+if echo "$staged" | grep -qE '^(src/levels/|kit/)'; then
+  echo "pre-commit: level/kit files staged — running stale-bake check..."
+  resolve_godot
+  "$GODOT" --headless --path . res://tools/check_bakes.tscn || {
+    echo "pre-commit: stale bakes. Run:  & \$GODOT --headless --path . res://tools/bake_levels.tscn"
+    exit 1
+  }
+fi
+exit 0

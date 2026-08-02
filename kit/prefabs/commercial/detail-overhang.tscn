@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_qqhav"]
+[ext_resource type="PackedScene" path="res://kit/raw/commercial/detail-overhang.glb" id="2_5v1ho"]
+
+[node name="DetailOverhang" type="Node3D" unique_id=382597001]
+script = ExtResource("1_qqhav")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=1166886801 instance=ExtResource("2_5v1ho")]
+transform = Transform3D(9, 0, 0, 0, 9, 0, 0, 0, 9, 0, 0, -1.35)

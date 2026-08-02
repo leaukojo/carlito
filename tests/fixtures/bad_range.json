@@ -1,0 +1,6 @@
+{
+	"version": 2,
+	"signals": [
+		{ "name": "accel", "dir": "in", "type": "u8", "unit": "%", "range": [100, 0] }
+	]
+}

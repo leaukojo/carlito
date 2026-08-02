@@ -1,0 +1,48 @@
+[gd_resource type="Resource" script_class="VehicleSpec" load_steps=2 format=3]
+
+; Tipper / dump semi-trailer running gear. A VehicleSpec because that is what RayWheel consumes;
+; the drivetrain / steering / lamp fields are meaningless on a towed body and stay at their
+; defaults.
+;
+; Everything below is measured off tipper.tscn (origin AT THE KINGPIN, ground at y = -1.05):
+;   - the tri-axle bogie is the family's: z 4.90 / 5.45 / 6.00, anchors at y = 0.424 - 1.05.
+;   - center_of_mass z 3.98 puts 27.0 % on the fifth wheel ((5.45 - 3.98) / 5.45) = 5125 kg — the
+;     catalog-wide realistic plate share (see box_spec.tres), which is what feeds the 4x2's single
+;     driven axle.
+;   - center_of_mass y -0.30 is 0.75 m above the road: the payload rides IN a body whose floor is
+;     at y -0.10, so it sits higher than a flat deck's and lower than a tank's.
+;   - THE TIP MOVES IT. tipper.gd walks the centre of mass 0.90 m rearward at full tip, which takes
+;     the fifth wheel's share from 27.0 % down to 10.5 % — 3135 kg off the tractor's drive axle and
+;     onto the trailer's bogie. That is the whole point of the trailer, and it is a real centre of
+;     mass move rather than a term added to either axle-load signal. At full tip the bogie sits at
+;     44 % of its travel against 36 % parked, so the spring below covers both ends.
+;   - spring_rate 197000 is sized off the load the bogie ACTUALLY carries parked, 13 875 kg:
+;     22 686 N per wheel compresses it 0.115 m of its 0.32 m travel (36 %), the family's fraction.
+;   - brake_torque 9695 is load-apportioned by the family's one formula, never copied:
+;     10500 * (22.69 kN per trailer wheel / 26.5 kN per tractor wheel).
+;   - handbrake_torque 2247 is the bogie's SPRING PARKING BRAKE, a quarter of this trailer's own
+;     service brake like every trailer here — see box_spec.tres for the whole derivation. Without
+;     it the rig parked on two tractor wheels and rolled away on any real grade. It matters most
+;     here: the tip interlock WANTS a parking brake, and now there is one worth asking for.
+
+[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
+
+[resource]
+script = ExtResource("1_spec")
+mass = 19000.0
+center_of_mass = Vector3(0, -0.3, 3.98)
+wheel_positions = PackedVector3Array(-0.72, -0.626, 4.9, 0.72, -0.626, 4.9, -0.72, -0.626, 5.45, 0.72, -0.626, 5.45, -0.72, -0.626, 6, 0.72, -0.626, 6)
+wheel_radius = 0.36
+wheel_inertia = 3.0
+driven_front = false
+driven_rear = false
+rest_length = 0.32
+spring_rate = 197000.0
+damper_bump = 10700.0
+damper_rebound = 14400.0
+max_suspension_force = 90000.0
+grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
+mu_long = 1.0
+mu_lat = 0.95
+brake_torque = 8990.0
+handbrake_torque = 2247.0

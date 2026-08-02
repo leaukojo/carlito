@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_g1kpr"]
+[ext_resource type="PackedScene" path="res://kit/raw/racing/fenceStraight.glb" id="2_kqaqt"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_32g2d"]
+size = Vector3(12, 6, 0.41399997)
+
+[node name="FenceStraight" type="Node3D" unique_id=1794983143]
+script = ExtResource("1_g1kpr")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=168882177 instance=ExtResource("2_kqaqt")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, -1.8000001, 0.12, 8.007)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=941468599]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=255118135]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 2.682209e-07)
+shape = SubResource("BoxShape3D_32g2d")

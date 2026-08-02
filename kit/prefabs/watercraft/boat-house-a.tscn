@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_oes4m"]
+[ext_resource type="PackedScene" path="res://kit/raw/watercraft/boat-house-a.glb" id="2_csl5u"]
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_3aypf"]
+points = PackedVector3Array(-0.7341, 4.074418, -2.3230333, 2.6106162, 1.7111831, 4.556803, 2.595718, 1.1468557, 4.5310335, -2.637514, 1.1490401, 4.5210443, 1.5885534, 0.034502074, -4.065222, -2.6362166, 1.1495309, -4.5188, 2.555738, 2.1377144, -4.7177143, 1.6037391, 3.9768624, 3.1122127, -1.621371, 0.053747687, 3.3326058, -1.6350152, 3.9584482, 3.081052, 1.603902, 3.9770465, -3.68005, -2.6033092, 2.1377144, -4.7177143, 1.5885534, 0.034502074, 3.3633828, -1.621371, 0.053747687, -4.028023, -2.6033092, 2.1377144, 4.569016, -1.6369207, 3.9606016, -3.6471477, 2.5510318, 0.607096, -4.174726, -2.5046842, 0.5783652, 4.2530885, 2.555738, 2.1377144, 4.569016, 0.7341, 4.2054853, -2.4802454, 2.5510318, 0.607096, 4.174726, -2.4986002, 0.5821893, -4.242658, 1.6999999, 3.9298508, 2.8952827, 2.5886455, 1.1495309, -4.5188, 0.72523034, 4.181286, 0.40711394, 1.6999999, 3.9298508, -3.4465184, 2.2878122, 0.4564274, 4.06252, -0.7341, 4.074418, 0.38582414, -2.595719, 0.88682985, -4.3085294, -2.3222122, 0.4660072, -4.039372, -2.595719, 0.88682985, 4.3085294, 2.1148686, 0.34409925, 3.7252297)
+
+[node name="BoatHouseA" type="Node3D" unique_id=1844501867]
+script = ExtResource("1_oes4m")
+collision_mode = "multiconvex"
+
+[node name="Model" type="Node3D" parent="." unique_id=1651404581 instance=ExtResource("2_csl5u")]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=22748848]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=90082431]
+shape = SubResource("ConvexPolygonShape3D_3aypf")

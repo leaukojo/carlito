@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_cnl04"]
+[ext_resource type="PackedScene" path="res://kit/raw/suburban/planter.glb" id="2_6sumi"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_bk7wd"]
+size = Vector3(3.6, 1.5939, 2.6999998)
+
+[node name="Planter" type="Node3D" unique_id=1574654126]
+script = ExtResource("1_cnl04")
+
+[node name="Model" type="Node3D" parent="." unique_id=1748266048 instance=ExtResource("2_6sumi")]
+transform = Transform3D(9, 0, 0, 0, 9, 0, 0, 0, 9, 0, 0, 0.0053999573)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1376772871]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=76876159]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.79695, -1.1920929e-07)
+shape = SubResource("BoxShape3D_bk7wd")

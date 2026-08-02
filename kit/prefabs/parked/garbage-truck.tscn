@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_o4ve4"]
+[ext_resource type="PackedScene" path="res://kit/raw/parked/garbage-truck.glb" id="2_qt5i8"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ybwp3"]
+size = Vector3(1.92, 1.9200001, 4.14)
+
+[node name="GarbageTruck" type="Node3D" unique_id=1741420553]
+script = ExtResource("1_o4ve4")
+
+[node name="Model" type="Node3D" parent="." unique_id=643523801 instance=ExtResource("2_qt5i8")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, -3.576279e-08, -0.029999973)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=757288042]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1471701559]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.96000004, 0)
+shape = SubResource("BoxShape3D_ybwp3")

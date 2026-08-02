@@ -1,0 +1,215 @@
+[gd_scene format=3 uid="uid://bdhn86nwxvsue"]
+
+[ext_resource type="Script" uid="uid://u35lv3gwqh5q" path="res://src/levels/garage/garage.gd" id="1_garage"]
+[ext_resource type="Resource" path="res://src/levels/garage/garage_info.tres" id="2_info"]
+[ext_resource type="Script" uid="uid://diotm20o8nnl6" path="res://src/levels/garage/orbit_camera.gd" id="3_cam"]
+[ext_resource type="Script" uid="uid://5y8krjlda43v" path="res://src/levels/base/vehicle_spawn.gd" id="4_spawn"]
+[ext_resource type="Environment" uid="uid://bjh6g6yntyvh1" path="res://src/levels/base/default_env.tres" id="5_env"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/garage/cone.tscn" id="6_cone"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/garage/box.tscn" id="7_box"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/garage/debris-tire.tscn" id="8_tire"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/garage/debris-drivetrain.tscn" id="9_drivetrain"]
+
+[sub_resource type="BoxShape3D" id="FloorShape"]
+size = Vector3(50, 1, 30)
+
+[sub_resource type="BoxMesh" id="FloorMesh"]
+size = Vector3(50, 1, 30)
+
+[sub_resource type="StandardMaterial3D" id="FloorMat"]
+albedo_color = Color(0.28, 0.29, 0.32, 1)
+
+[sub_resource type="BoxShape3D" id="BackWallShape"]
+size = Vector3(50, 12, 0.5)
+
+[sub_resource type="BoxMesh" id="BackWallMesh"]
+size = Vector3(50, 12, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="WallMat"]
+albedo_color = Color(0.5, 0.52, 0.55, 1)
+
+[sub_resource type="BoxShape3D" id="FrontSegShape"]
+size = Vector3(20, 12, 0.5)
+
+[sub_resource type="BoxMesh" id="FrontSegMesh"]
+size = Vector3(20, 12, 0.5)
+
+[sub_resource type="BoxShape3D" id="SideWallShape"]
+size = Vector3(0.5, 12, 30)
+
+[sub_resource type="BoxMesh" id="SideWallMesh"]
+size = Vector3(0.5, 12, 30)
+
+[sub_resource type="BoxMesh" id="CeilMesh"]
+size = Vector3(50, 0.5, 30)
+
+[sub_resource type="BoxMesh" id="ScreenMesh"]
+size = Vector3(15, 6.5, 0.2)
+
+[sub_resource type="StandardMaterial3D" id="ScreenMat"]
+albedo_color = Color(0.04, 0.05, 0.07, 1)
+
+[node name="Garage" type="Node3D" unique_id=1435809414]
+script = ExtResource("1_garage")
+info = ExtResource("2_info")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=266672979]
+environment = ExtResource("5_env")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=167487191]
+transform = Transform3D(0.866025, 0.25, -0.433013, 0, 0.866025, 0.5, 0.5, -0.433013, 0.75, 0, 20, 20)
+light_color = Color(1, 0.96, 0.88, 1)
+light_energy = 0.6
+shadow_enabled = true
+directional_shadow_blend_splits = true
+directional_shadow_max_distance = 60.0
+
+[node name="ChaseCamera" type="Camera3D" parent="." unique_id=2115374114]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 4, 8)
+script = ExtResource("3_cam")
+look_height = 1.0
+
+[node name="Ceiling1" type="OmniLight3D" parent="." unique_id=462044664]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 11, -8)
+light_energy = 4.0
+omni_range = 22.0
+
+[node name="Ceiling2" type="OmniLight3D" parent="." unique_id=9617993]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 11, -8)
+light_energy = 4.0
+omni_range = 22.0
+
+[node name="Ceiling3" type="OmniLight3D" parent="." unique_id=1707539712]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 11, 8)
+light_energy = 4.0
+omni_range = 22.0
+
+[node name="Ceiling4" type="OmniLight3D" parent="." unique_id=1708770423]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 11, 8)
+light_energy = 4.0
+omni_range = 22.0
+
+[node name="Floor" type="StaticBody3D" parent="." unique_id=2021292663]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+
+[node name="Collision" type="CollisionShape3D" parent="Floor" unique_id=1812195235]
+shape = SubResource("FloorShape")
+
+[node name="Mesh" type="MeshInstance3D" parent="Floor" unique_id=564195960]
+mesh = SubResource("FloorMesh")
+surface_material_override/0 = SubResource("FloorMat")
+
+[node name="BackWall" type="StaticBody3D" parent="." unique_id=901475044]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6, -15)
+
+[node name="Collision" type="CollisionShape3D" parent="BackWall" unique_id=1028833455]
+shape = SubResource("BackWallShape")
+
+[node name="Mesh" type="MeshInstance3D" parent="BackWall" unique_id=56381242]
+mesh = SubResource("BackWallMesh")
+surface_material_override/0 = SubResource("WallMat")
+
+[node name="FrontWallLeft" type="StaticBody3D" parent="." unique_id=1251958169]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 6, 15)
+
+[node name="Collision" type="CollisionShape3D" parent="FrontWallLeft" unique_id=1715890719]
+shape = SubResource("FrontSegShape")
+
+[node name="Mesh" type="MeshInstance3D" parent="FrontWallLeft" unique_id=631519814]
+mesh = SubResource("FrontSegMesh")
+surface_material_override/0 = SubResource("WallMat")
+
+[node name="FrontWallRight" type="StaticBody3D" parent="." unique_id=1827167472]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 6, 15)
+
+[node name="Collision" type="CollisionShape3D" parent="FrontWallRight" unique_id=980514879]
+shape = SubResource("FrontSegShape")
+
+[node name="Mesh" type="MeshInstance3D" parent="FrontWallRight" unique_id=814704589]
+mesh = SubResource("FrontSegMesh")
+surface_material_override/0 = SubResource("WallMat")
+
+[node name="LeftWall" type="StaticBody3D" parent="." unique_id=1177040033]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25, 6, 0)
+
+[node name="Collision" type="CollisionShape3D" parent="LeftWall" unique_id=1058320421]
+shape = SubResource("SideWallShape")
+
+[node name="Mesh" type="MeshInstance3D" parent="LeftWall" unique_id=1955776339]
+mesh = SubResource("SideWallMesh")
+surface_material_override/0 = SubResource("WallMat")
+
+[node name="RightWall" type="StaticBody3D" parent="." unique_id=44003107]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 25, 6, 0)
+
+[node name="Collision" type="CollisionShape3D" parent="RightWall" unique_id=1442175917]
+shape = SubResource("SideWallShape")
+
+[node name="Mesh" type="MeshInstance3D" parent="RightWall" unique_id=1851788007]
+mesh = SubResource("SideWallMesh")
+surface_material_override/0 = SubResource("WallMat")
+
+[node name="Ceiling" type="MeshInstance3D" parent="." unique_id=1044500687]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 12, 0)
+mesh = SubResource("CeilMesh")
+surface_material_override/0 = SubResource("WallMat")
+
+[node name="Screen" type="MeshInstance3D" parent="." unique_id=287470598]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.5, -14.6)
+mesh = SubResource("ScreenMesh")
+surface_material_override/0 = SubResource("ScreenMat")
+
+[node name="Title" type="Label3D" parent="Screen" unique_id=502468566]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.95, 0.19999981)
+pixel_size = 0.012
+text = "VEHICLE"
+font_size = 96
+horizontal_alignment = 1
+vertical_alignment = 0
+
+[node name="StatsLeft" type="Label3D" parent="Screen" unique_id=502468565]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.9, 1.5, 0.19999981)
+pixel_size = 0.012
+font_size = 56
+horizontal_alignment = 0
+vertical_alignment = 0
+line_spacing = 6.0
+
+[node name="StatsRight" type="Label3D" parent="Screen" unique_id=2078794700]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, 1.5, 0.19999981)
+pixel_size = 0.012
+font_size = 56
+horizontal_alignment = 0
+vertical_alignment = 0
+line_spacing = 6.0
+
+[node name="Spawn" type="Marker3D" parent="." unique_id=491230552]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 2.5, 0)
+script = ExtResource("4_spawn")
+vehicle_types = PackedStringArray()
+
+[node name="Props" type="Node3D" parent="." unique_id=844682665]
+
+[node name="Cone1" parent="Props" unique_id=967112869 instance=ExtResource("6_cone")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, 6)
+
+[node name="Cone2" parent="Props" unique_id=609341114 instance=ExtResource("6_cone")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, 6)
+
+[node name="Box1" parent="Props" unique_id=274134313 instance=ExtResource("7_box")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -23, 0, -10)
+
+[node name="Box2" parent="Props" unique_id=1446075163 instance=ExtResource("7_box")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -23, 1.03, -10)
+
+[node name="Box3" parent="Props" unique_id=1691470478 instance=ExtResource("7_box")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -23, 0, -8.8)
+
+[node name="Tire1" parent="Props" unique_id=107898529 instance=ExtResource("8_tire")]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 23, 0.36, -6)
+
+[node name="Tire2" parent="Props" unique_id=1716964995 instance=ExtResource("8_tire")]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 23, 0.36, -5.2)
+
+[node name="Drivetrain1" parent="Props" unique_id=1390506788 instance=ExtResource("9_drivetrain")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 0, 10)

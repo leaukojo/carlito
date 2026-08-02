@@ -1,0 +1,12 @@
+{
+	"kit": "garage",
+	"source": "res://kit/raw/garage",
+	"scale": 1.2,
+	"_notes": "Kenney Car Kit non-vehicle props (CC0). box/cone/cone-flat are touchable street furniture (box collision); the debris-* set is small drive-over litter (bolts/plates/tires/spoilers/doors), collision none. Scale 1.2 is the same kit-wide scale as the Kenney vehicles (sedan 1.5 m -> 1.8 m wide), so props read at true size against the cars. Prefab-only, NO palette (these are scattered/placed props, not tiles). Materials embed an external colormap texture copied alongside the GLBs. NO catch-all: an unrecognized garage GLB fails the coverage gate. CC0, credited in README.",
+	"families": [
+		{ "name": "garage-props", "label": "Cones & boxes",
+			"match": ["^box", "^cone"], "pipeline": "prefab", "collision_mode": "box" },
+		{ "name": "garage-debris", "label": "Debris & litter",
+			"match": ["^debris-"], "pipeline": "prefab", "collision_mode": "none" }
+	]
+}

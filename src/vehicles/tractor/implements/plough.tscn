@@ -1,0 +1,289 @@
+[gd_scene load_steps=21 format=3]
+
+; Three-furrow mounted mouldboard plough. Authored in the LOWERED (working) pose with the
+; origin ON THE LOWER PIN LINE — the frame HitchLinkage solves against — so the scene as it
+; looks in the editor is the plough in the soil. Ground is at y = -0.21 in this frame
+; (measured: the tractor's lower-link balls settle 0.21 m above the ground when fully
+; lowered, 0.78 m when raised), which is why every share straddles y = -0.21 here and clears
+; the ground by ~0.5 m once the hitch lifts.
+;
+; The beam is YAWED 28.5deg to the left of travel and the three bodies step out along it, one
+; furrow width apart — that asymmetry is not a modelling slip, it is what a conventional
+; right-hand plough is: each body cuts the furrow the one ahead of it left behind. Shares and
+; mouldboards are bright steel against the blue frame so the working edge reads from the
+; chase camera. NO CollisionShape and no PTO gear: this machine is pulled, not driven
+; (see plough.gd).
+
+[ext_resource type="Script" path="res://src/vehicles/tractor/implements/plough.gd" id="1_plough"]
+[ext_resource type="PackedScene" path="res://src/vehicles/tractor/implements/headstock.tscn" id="2_head"]
+
+[sub_resource type="StandardMaterial3D" id="MatPaint"]
+resource_name = "plough_paint"
+albedo_color = Color(0.24, 0.34, 0.55, 1)
+roughness = 0.75
+
+[sub_resource type="StandardMaterial3D" id="MatSteel"]
+resource_name = "plough_steel"
+albedo_color = Color(0.3, 0.33, 0.37, 1)
+metallic_specular = 0.55
+roughness = 0.55
+
+; Shares, mouldboards and coulters: polished by the soil, and the one thing the player is
+; meant to watch cross the ground line. Deliberately the brightest material on the machine.
+[sub_resource type="StandardMaterial3D" id="MatEdge"]
+resource_name = "plough_share"
+albedo_color = Color(0.84, 0.86, 0.89, 1)
+metallic_specular = 0.7
+roughness = 0.35
+
+[sub_resource type="BoxMesh" id="MeshRiser"]
+material = SubResource("MatPaint")
+size = Vector3(0.15, 0.4, 0.16)
+
+[sub_resource type="BoxMesh" id="MeshBeam"]
+material = SubResource("MatPaint")
+size = Vector3(0.15, 0.2, 1.468)
+
+[sub_resource type="BoxMesh" id="MeshBracket"]
+material = SubResource("MatPaint")
+size = Vector3(0.98, 0.09, 0.1)
+
+[sub_resource type="BoxMesh" id="MeshLegUpper"]
+material = SubResource("MatPaint")
+size = Vector3(0.055, 0.3, 0.16)
+
+[sub_resource type="BoxMesh" id="MeshLegLower"]
+material = SubResource("MatPaint")
+size = Vector3(0.055, 0.24, 0.14)
+
+; The frog: the casting the share, the mouldboard and the landside all bolt to. Without it the
+; three plates read as loose flags rather than one body.
+[sub_resource type="BoxMesh" id="MeshFrog"]
+material = SubResource("MatPaint")
+size = Vector3(0.12, 0.12, 0.2)
+
+; The share point: a triangular prism in PLAN view, laid flat so its apex leads. That is the
+; real shape of a plough point and it costs three triangles more than a box.
+[sub_resource type="PrismMesh" id="MeshShare"]
+material = SubResource("MatEdge")
+size = Vector3(0.28, 0.32, 0.1)
+
+; The mouldboard, as three plates standing progressively more upright: the real part is one
+; twisted surface that lifts the slice and rolls it to the RIGHT, and a staircase of three
+; flat plates is the low-poly way to say that. They are plates, not slabs — but thick enough
+; to catch the light on their edge, or they read as paper from the chase camera.
+[sub_resource type="BoxMesh" id="MeshMouldLow"]
+material = SubResource("MatEdge")
+size = Vector3(0.34, 0.05, 0.34)
+
+[sub_resource type="BoxMesh" id="MeshMouldMid"]
+material = SubResource("MatEdge")
+size = Vector3(0.3, 0.05, 0.32)
+
+[sub_resource type="BoxMesh" id="MeshMouldTop"]
+material = SubResource("MatEdge")
+size = Vector3(0.26, 0.05, 0.3)
+
+[sub_resource type="BoxMesh" id="MeshLandside"]
+material = SubResource("MatSteel")
+size = Vector3(0.03, 0.2, 0.36)
+
+[sub_resource type="CylinderMesh" id="MeshCoulter"]
+material = SubResource("MatEdge")
+top_radius = 0.16
+bottom_radius = 0.16
+height = 0.028
+radial_segments = 8
+rings = 0
+
+[sub_resource type="BoxMesh" id="MeshArm"]
+material = SubResource("MatPaint")
+size = Vector3(0.06, 0.34, 0.09)
+
+[sub_resource type="CylinderMesh" id="MeshWheel"]
+material = SubResource("MatSteel")
+top_radius = 0.19
+bottom_radius = 0.19
+height = 0.1
+radial_segments = 8
+rings = 0
+
+[sub_resource type="CylinderMesh" id="MeshHub"]
+material = SubResource("MatEdge")
+top_radius = 0.07
+bottom_radius = 0.07
+height = 0.12
+radial_segments = 8
+rings = 0
+
+[node name="Plough" type="Node3D"]
+script = ExtResource("1_plough")
+
+[node name="Headstock" parent="." instance=ExtResource("2_head")]
+
+[node name="Riser" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.14, 0.06)
+rotation = Vector3(0.4, 0, 0)
+mesh = SubResource("MeshRiser")
+
+[node name="MainBeam" type="MeshInstance3D" parent="."]
+position = Vector3(-0.35, 0.28, 0.825)
+rotation = Vector3(0, -0.497, 0)
+mesh = SubResource("MeshBeam")
+
+[node name="Body1" type="Node3D" parent="."]
+position = Vector3(-0.1, 0.28, 0.34)
+
+[node name="LegUpper" type="MeshInstance3D" parent="Body1"]
+position = Vector3(0, -0.15, 0)
+mesh = SubResource("MeshLegUpper")
+
+[node name="LegLower" type="MeshInstance3D" parent="Body1"]
+position = Vector3(0, -0.4, -0.05)
+rotation = Vector3(0.3, 0, 0)
+mesh = SubResource("MeshLegLower")
+
+[node name="Frog" type="MeshInstance3D" parent="Body1"]
+position = Vector3(0.03, -0.46, -0.02)
+mesh = SubResource("MeshFrog")
+
+[node name="Share" type="MeshInstance3D" parent="Body1"]
+position = Vector3(0.02, -0.5, -0.16)
+rotation = Vector3(-1.5707964, 0, 0)
+mesh = SubResource("MeshShare")
+
+[node name="MouldLow" type="MeshInstance3D" parent="Body1"]
+position = Vector3(0.15, -0.44, 0.06)
+rotation = Vector3(0, 0.22, 0.35)
+mesh = SubResource("MeshMouldLow")
+
+[node name="MouldMid" type="MeshInstance3D" parent="Body1"]
+position = Vector3(0.26, -0.29, 0.14)
+rotation = Vector3(0, 0.3, 0.85)
+mesh = SubResource("MeshMouldMid")
+
+[node name="MouldTop" type="MeshInstance3D" parent="Body1"]
+position = Vector3(0.33, -0.11, 0.2)
+rotation = Vector3(0, 0.36, 1.25)
+mesh = SubResource("MeshMouldTop")
+
+[node name="Landside" type="MeshInstance3D" parent="Body1"]
+position = Vector3(-0.05, -0.42, 0.04)
+mesh = SubResource("MeshLandside")
+
+[node name="Coulter" type="MeshInstance3D" parent="Body1"]
+position = Vector3(0.02, -0.3, -0.3)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshCoulter")
+
+[node name="Body2" type="Node3D" parent="."]
+position = Vector3(-0.35, 0.28, 0.8)
+
+[node name="LegUpper" type="MeshInstance3D" parent="Body2"]
+position = Vector3(0, -0.15, 0)
+mesh = SubResource("MeshLegUpper")
+
+[node name="LegLower" type="MeshInstance3D" parent="Body2"]
+position = Vector3(0, -0.4, -0.05)
+rotation = Vector3(0.3, 0, 0)
+mesh = SubResource("MeshLegLower")
+
+[node name="Frog" type="MeshInstance3D" parent="Body2"]
+position = Vector3(0.03, -0.46, -0.02)
+mesh = SubResource("MeshFrog")
+
+[node name="Share" type="MeshInstance3D" parent="Body2"]
+position = Vector3(0.02, -0.5, -0.16)
+rotation = Vector3(-1.5707964, 0, 0)
+mesh = SubResource("MeshShare")
+
+[node name="MouldLow" type="MeshInstance3D" parent="Body2"]
+position = Vector3(0.15, -0.44, 0.06)
+rotation = Vector3(0, 0.22, 0.35)
+mesh = SubResource("MeshMouldLow")
+
+[node name="MouldMid" type="MeshInstance3D" parent="Body2"]
+position = Vector3(0.26, -0.29, 0.14)
+rotation = Vector3(0, 0.3, 0.85)
+mesh = SubResource("MeshMouldMid")
+
+[node name="MouldTop" type="MeshInstance3D" parent="Body2"]
+position = Vector3(0.33, -0.11, 0.2)
+rotation = Vector3(0, 0.36, 1.25)
+mesh = SubResource("MeshMouldTop")
+
+[node name="Landside" type="MeshInstance3D" parent="Body2"]
+position = Vector3(-0.05, -0.42, 0.04)
+mesh = SubResource("MeshLandside")
+
+[node name="Coulter" type="MeshInstance3D" parent="Body2"]
+position = Vector3(0.02, -0.3, -0.3)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshCoulter")
+
+[node name="Body3" type="Node3D" parent="."]
+position = Vector3(-0.6, 0.28, 1.26)
+
+[node name="LegUpper" type="MeshInstance3D" parent="Body3"]
+position = Vector3(0, -0.15, 0)
+mesh = SubResource("MeshLegUpper")
+
+[node name="LegLower" type="MeshInstance3D" parent="Body3"]
+position = Vector3(0, -0.4, -0.05)
+rotation = Vector3(0.3, 0, 0)
+mesh = SubResource("MeshLegLower")
+
+[node name="Frog" type="MeshInstance3D" parent="Body3"]
+position = Vector3(0.03, -0.46, -0.02)
+mesh = SubResource("MeshFrog")
+
+[node name="Share" type="MeshInstance3D" parent="Body3"]
+position = Vector3(0.02, -0.5, -0.16)
+rotation = Vector3(-1.5707964, 0, 0)
+mesh = SubResource("MeshShare")
+
+[node name="MouldLow" type="MeshInstance3D" parent="Body3"]
+position = Vector3(0.15, -0.44, 0.06)
+rotation = Vector3(0, 0.22, 0.35)
+mesh = SubResource("MeshMouldLow")
+
+[node name="MouldMid" type="MeshInstance3D" parent="Body3"]
+position = Vector3(0.26, -0.29, 0.14)
+rotation = Vector3(0, 0.3, 0.85)
+mesh = SubResource("MeshMouldMid")
+
+[node name="MouldTop" type="MeshInstance3D" parent="Body3"]
+position = Vector3(0.33, -0.11, 0.2)
+rotation = Vector3(0, 0.36, 1.25)
+mesh = SubResource("MeshMouldTop")
+
+[node name="Landside" type="MeshInstance3D" parent="Body3"]
+position = Vector3(-0.05, -0.42, 0.04)
+mesh = SubResource("MeshLandside")
+
+[node name="Coulter" type="MeshInstance3D" parent="Body3"]
+position = Vector3(0.02, -0.3, -0.3)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshCoulter")
+
+[node name="RearBracket" type="MeshInstance3D" parent="."]
+position = Vector3(-0.21, 0.28, 1.42)
+mesh = SubResource("MeshBracket")
+
+[node name="DepthWheel" type="Node3D" parent="."]
+position = Vector3(0.22, 0.28, 1.42)
+
+[node name="Arm" type="MeshInstance3D" parent="DepthWheel"]
+position = Vector3(0, -0.15, 0.06)
+rotation = Vector3(-0.38, 0, 0)
+mesh = SubResource("MeshArm")
+
+[node name="Tyre" type="MeshInstance3D" parent="DepthWheel"]
+position = Vector3(0, -0.3, 0.12)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshWheel")
+
+[node name="Hub" type="MeshInstance3D" parent="DepthWheel"]
+position = Vector3(0, -0.3, 0.12)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshHub")

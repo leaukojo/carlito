@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="RailProfile" format=3 uid="uid://bkjsk8mj8ydc"]
+
+[ext_resource type="Script" uid="uid://dgapapabu5as1" path="res://kit/helpers/rail_profile.gd" id="1_profile"]
+
+[sub_resource type="StandardMaterial3D" id="mat_ballast"]
+albedo_color = Color(0.552941, 0.521569, 0.470588, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_rail"]
+albedo_color = Color(0.258824, 0.270588, 0.301961, 1)
+
+[resource]
+script = ExtResource("1_profile")
+ballast_material = SubResource("mat_ballast")
+rail_material = SubResource("mat_rail")
+edge_drop = 0.4
+drop_run = 0.6
+splat_channel = 7

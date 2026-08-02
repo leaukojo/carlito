@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_jpvbf"]
+[ext_resource type="PackedScene" path="res://kit/raw/racing/camera_exclusive.glb" id="2_wt3ah"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_w7anj"]
+size = Vector3(1.2828, 4.908, 1.572)
+
+[node name="CameraExclusive" type="Node3D" unique_id=181932964]
+script = ExtResource("1_jpvbf")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=1283683296 instance=ExtResource("2_wt3ah")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, 3.5585997, 0.12, 8.34)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1117605636]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1624984244]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.1920929e-07, 2.454, -0.24599957)
+shape = SubResource("BoxShape3D_w7anj")

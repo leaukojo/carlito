@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_4adn3"]
+[ext_resource type="PackedScene" path="res://kit/raw/racing/barrierWhite.glb" id="2_545ni"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_0icmq"]
+size = Vector3(3, 1.5744, 1.476)
+
+[node name="BarrierWhite" type="Node3D" unique_id=380997335]
+script = ExtResource("1_4adn3")
+
+[node name="Model" type="Node3D" parent="." unique_id=1546981820 instance=ExtResource("2_545ni")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, 2.6999998, 0.12, 8.538)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1666074757]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1262405134]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7872, 4.172325e-07)
+shape = SubResource("BoxShape3D_0icmq")

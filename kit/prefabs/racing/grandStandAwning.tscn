@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_ygkc8"]
+[ext_resource type="PackedScene" path="res://kit/raw/racing/grandStandAwning.glb" id="2_nrpvi"]
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_esgka"]
+points = PackedVector3Array(-6, 0.051601917, -6, 5.8723564, 0.051601917, -6, 5.909449, 1.7763568e-15, 5.909449, -6.131915, 2.7717924, 6.0042715, -5.9028897, 11.3552, -5.9028897, -6.131915, 16.487137, 4.156996, 5.775246, 11.3552, -5.9028897, -6, 0.051601917, 5.8723564, 3.3658154, 15.959941, 4.684449, 6.0042715, 16.75156, 3.3658152, 6.0042715, 2.7717924, 6.0042715, -3.4922705, 15.959941, 4.684449, -5.9946485, 16.5606, 3.8037553, 6.0042715, 16.487137, 4.156996, -5.07582, 16.222712, 4.4207225, 4.9481764, 16.222712, 4.4207225)
+
+[node name="GrandStandAwning" type="Node3D" unique_id=1442112038]
+script = ExtResource("1_ygkc8")
+collision_mode = "multiconvex"
+
+[node name="Model" type="Node3D" parent="." unique_id=964931176 instance=ExtResource("2_nrpvi")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, -1.8000001, 0.12, 13.799999)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=2139863708]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=793816892]
+shape = SubResource("ConvexPolygonShape3D_esgka")

@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_yju1n"]
+[ext_resource type="PackedScene" path="res://kit/raw/parked/van.glb" id="2_udh8q"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_vku65"]
+size = Vector3(1.8000001, 1.62, 3.3000002)
+
+[node name="Van" type="Node3D" unique_id=614664509]
+script = ExtResource("1_yju1n")
+
+[node name="Model" type="Node3D" parent="." unique_id=2074808525 instance=ExtResource("2_udh8q")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, -3.576279e-08, 0.029999973)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1603228424]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1445063998]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.81, 0)
+shape = SubResource("BoxShape3D_vku65")

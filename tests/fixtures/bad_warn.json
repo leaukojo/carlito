@@ -1,0 +1,6 @@
+{
+	"version": 3,
+	"signals": [
+		{ "name": "rpm", "dir": "out", "type": "u16", "unit": "rev/min", "range": [0, 8000], "warn": "redline" }
+	]
+}

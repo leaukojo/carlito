@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_7irry"]
+[ext_resource type="PackedScene" path="res://kit/raw/garage/debris-plate-small-b.glb" id="2_sk0jg"]
+
+[node name="DebrisPlateSmallB" type="Node3D" unique_id=744134501]
+script = ExtResource("1_7irry")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=1500457401 instance=ExtResource("2_sk0jg")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, 0, 0)

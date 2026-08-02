@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_0wdji"]
+[ext_resource type="PackedScene" path="res://kit/raw/roads/light-curved-double.glb" id="2_r3kx7"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_e4x33"]
+size = Vector3(0.59999996, 8.1, 0.59999996)
+
+[node name="LightCurvedDouble" type="Node3D" unique_id=563689408]
+script = ExtResource("1_0wdji")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=769968018 instance=ExtResource("2_r3kx7")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, 0, 0, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1937520287]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=2018224719]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.05, 0)
+shape = SubResource("BoxShape3D_e4x33")

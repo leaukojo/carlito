@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="VehicleSpec" format=3 uid="uid://c0bb8jcafe5g6"]
+
+[ext_resource type="Script" uid="uid://dfx5igkkufs6j" path="res://src/vehicles/base/vehicle_spec.gd" id="1_fwowv"]
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="2_ewuch"]
+
+[resource]
+script = ExtResource("1_fwowv")
+mass = 7500.0
+center_of_mass = Vector3(0, 0.3, 0)
+wheel_positions = PackedVector3Array(-0.6900002, 0.424, -1.1520001, 0.6900002, 0.424, -1.1520001, -0.6900002, 0.424, 0.79200006, 0.6900002, 0.424, 0.79199994)
+wheel_radius = 0.36
+wheel_inertia = 3.0
+wheel_scene = ExtResource("2_ewuch")
+retarder_equipped = true
+rest_length = 0.32
+spring_rate = 240000.0
+damper_bump = 12000.0
+damper_rebound = 15800.0
+max_suspension_force = 120000.0
+grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
+mu_long = 1.0
+torque_curve = PackedVector2Array(700, 520, 1200, 845, 1800, 1040, 2400, 1014, 2800, 780, 3200, 260)
+idle_rpm = 700.0
+redline_rpm = 3200.0
+gear_ratios = PackedFloat32Array(6.5, 3.7, 2.4, 1.6, 1.2, 1)
+reverse_ratio = 6.0
+final_drive = 4.5
+shift_up_rpm = 2600.0
+shift_down_rpm = 1200.0
+brake_torque = 9583.0
+handbrake_torque = 2567.0
+max_steer_deg = 22.0
+steer_speed = 1.6
+headlight_paths = Array[NodePath]([NodePath("Lamps/HeadlightL"), NodePath("Lamps/HeadlightR")])
+head_lamp_paths = Array[NodePath]([NodePath("Lamps/HeadLensL"), NodePath("Lamps/HeadLensR")])
+brake_lamp_paths = Array[NodePath]([NodePath("Lamps/BrakeLampL"), NodePath("Lamps/BrakeLampR")])
+turn_left_paths = Array[NodePath]([NodePath("Lamps/TurnLF"), NodePath("Lamps/TurnLR")])
+turn_right_paths = Array[NodePath]([NodePath("Lamps/TurnRF"), NodePath("Lamps/TurnRR")])

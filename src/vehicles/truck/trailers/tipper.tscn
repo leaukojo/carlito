@@ -1,0 +1,588 @@
+[gd_scene load_steps=46 format=3]
+
+; Tri-axle tipper / dump semi-trailer. Hand-built low-poly (Kenney ships no trailers at all), flat
+; boxes and 8/10-segment cylinders to match the kit's flat-shaded look.
+;
+; AUTHORED WITH THE ORIGIN AT THE KINGPIN, ground at y = -1.05 — the family convention, measured
+; off the tractor unit's fifth-wheel plate. See flatbed.tscn's header for why.
+;
+; THE ONLY TRAILER WITH A FUNCTION. tipper.gd owns what it consumes (the chassis PTO and a
+; proportional hydraulic valve) and what the tip does to the load; this file owns the steel:
+;
+;   - TipBody is a PIVOT AT THE REAR HINGE, at (0, -0.06, 6.25), and everything that tips is a
+;     child of it. So the hinge line is the node's own origin and the pose is one rotation about
+;     local X — the same "the datum IS the origin" discipline the kingpin gets.
+;   - The body is 5.15 m long and starts at z 1.10, BEHIND the tractor's tail (z 0.96 in this
+;     frame). The gooseneck ahead of it stays exposed, which is what a real bulk tipper looks like
+;     and is also what keeps the gooseneck rule: nothing hangs below the coupling plane (y = 0)
+;     over the tractor.
+;   - THE RAMS ARE POSED FROM MARKERS, not from constants: RamAnchorL/R are the frame eyes and
+;     TipBody/RamHeadL/R the body eyes, and tipper.gd lays each ram between its pair and slides the
+;     rod out of the barrel. Re-author either marker and the ram follows. They span 1.12 m closed
+;     and 3.12 m at full tip, which is why the rod is a separate mesh rather than a stretched
+;     cylinder — a hydraulic ram extends, it does not stretch.
+;   - The TAILGATE is TOP-HINGED (Tailgate is its hinge line, at the top rear of the body) and
+;     swings under the load's own weight once the body is up. It is not separately commanded, so
+;     there is no second control and no second signal.
+;
+; COLLISION IS AUTHORED FOR THE LOWERED POSE and does NOT follow the tip. That is deliberate rather
+; than missed: a CollisionShape3D re-transformed every tick inside a RigidBody3D rebuilds the
+; compound and re-derives the inertia tensor at 60 Hz, on the one body that is also writing its own
+; centre of mass — two churning physics properties on a jointed body is exactly how a rig starts
+; buzzing. The body only ever rises with the parking brake set and the rig stopped (the interlock),
+; so the raised pose is a pose nothing is driving into.
+;
+; MEASURED against the tractor unit: 1.92 over the frame, body 1.80 wide x 0.95 deep x 5.15 long,
+; sides topping out at y 0.99 = 2.04 m above the road parked, and about 5.4 m at full tip.
+;
+; Swing clearance: the frontmost part is the gooseneck at 0.33 m ahead of the kingpin and 0.96
+; half-width, swinging on 1.02 m inside the 1.15 m to the cab's rear face. The tipping body starts
+; well behind the kingpin, so tipping only ever moves it further away. test_trailer sweeps it.
+
+[ext_resource type="Script" path="res://src/vehicles/truck/trailers/tipper.gd" id="1_tipper"]
+[ext_resource type="Resource" path="res://src/vehicles/truck/trailers/tipper_spec.tres" id="2_spec"]
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="3_wheel"]
+
+[sub_resource type="StandardMaterial3D" id="MatFrame"]
+resource_name = "tipper_frame"
+albedo_color = Color(0.21, 0.26, 0.33, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="MatBody"]
+resource_name = "tipper_body"
+albedo_color = Color(0.72, 0.36, 0.14, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="MatSteel"]
+resource_name = "tipper_steel"
+albedo_color = Color(0.6, 0.63, 0.67, 1)
+metallic_specular = 0.5
+roughness = 0.55
+
+[sub_resource type="StandardMaterial3D" id="MatLensRed"]
+resource_name = "tipper_lens_red"
+albedo_color = Color(0.55, 0.07, 0.05, 1)
+roughness = 0.4
+
+[sub_resource type="StandardMaterial3D" id="MatLensAmber"]
+resource_name = "tipper_lens_amber"
+albedo_color = Color(0.76, 0.43, 0.06, 1)
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="MeshRail"]
+material = SubResource("MatFrame")
+size = Vector3(0.14, 0.26, 5.4)
+
+[sub_resource type="BoxMesh" id="MeshCross"]
+material = SubResource("MatFrame")
+size = Vector3(1.1, 0.1, 0.12)
+
+; The bolster plate: rests ON TOP of the tractor's fifth wheel with a 2 cm gap (y 0.02 .. 0.10
+; against the plate's 0.95 .. 1.05 in world). Authored coplanar the two z-fought into one slab.
+[sub_resource type="BoxMesh" id="MeshPlate"]
+material = SubResource("MatSteel")
+size = Vector3(1.06, 0.08, 1.0)
+
+[sub_resource type="CylinderMesh" id="MeshKingpin"]
+material = SubResource("MatSteel")
+top_radius = 0.065
+bottom_radius = 0.065
+height = 0.18
+radial_segments = 10
+rings = 1
+
+[sub_resource type="BoxMesh" id="MeshNeck"]
+material = SubResource("MatFrame")
+size = Vector3(1.92, 0.16, 1.38)
+
+; The front bulkhead the body shuts against — visible only when the body is up, which is the point
+; of authoring it: a tipped body that showed bare frame underneath would read as hollow.
+[sub_resource type="BoxMesh" id="MeshBulkhead"]
+material = SubResource("MatFrame")
+size = Vector3(1.88, 0.8, 0.1)
+
+[sub_resource type="BoxMesh" id="MeshHingeBracket"]
+material = SubResource("MatSteel")
+size = Vector3(0.12, 0.3, 0.3)
+
+[sub_resource type="BoxMesh" id="MeshRamBracket"]
+material = SubResource("MatSteel")
+size = Vector3(0.14, 0.22, 0.26)
+
+; The ram: a fixed barrel at the frame eye and a rod that slides out of it. tipper.gd reads the
+; barrel's HEIGHT off this mesh and scales the rod's, so re-sizing either here moves the pose.
+[sub_resource type="CylinderMesh" id="MeshBarrel"]
+material = SubResource("MatSteel")
+top_radius = 0.095
+bottom_radius = 0.095
+height = 0.75
+radial_segments = 10
+rings = 1
+
+[sub_resource type="CylinderMesh" id="MeshRod"]
+material = SubResource("MatSteel")
+top_radius = 0.058
+bottom_radius = 0.058
+height = 1.0
+radial_segments = 8
+rings = 1
+
+[sub_resource type="BoxMesh" id="MeshRamEye"]
+material = SubResource("MatSteel")
+size = Vector3(0.16, 0.12, 0.12)
+
+[sub_resource type="BoxMesh" id="MeshFloor"]
+material = SubResource("MatBody")
+size = Vector3(1.8, 0.1, 5.15)
+
+[sub_resource type="BoxMesh" id="MeshSide"]
+material = SubResource("MatBody")
+size = Vector3(0.07, 0.95, 5.15)
+
+[sub_resource type="BoxMesh" id="MeshFrontWall"]
+material = SubResource("MatBody")
+size = Vector3(1.76, 0.91, 0.08)
+
+[sub_resource type="BoxMesh" id="MeshTopRail"]
+material = SubResource("MatSteel")
+size = Vector3(0.11, 0.06, 5.15)
+
+[sub_resource type="BoxMesh" id="MeshRib"]
+material = SubResource("MatSteel")
+size = Vector3(0.05, 0.91, 0.1)
+
+[sub_resource type="BoxMesh" id="MeshHingeLug"]
+material = SubResource("MatSteel")
+size = Vector3(0.1, 0.22, 0.26)
+
+[sub_resource type="BoxMesh" id="MeshGate"]
+material = SubResource("MatBody")
+size = Vector3(1.8, 0.98, 0.07)
+
+[sub_resource type="BoxMesh" id="MeshGateRib"]
+material = SubResource("MatSteel")
+size = Vector3(0.06, 0.92, 0.08)
+
+[sub_resource type="BoxMesh" id="MeshGateBar"]
+material = SubResource("MatSteel")
+size = Vector3(1.7, 0.07, 0.07)
+
+[sub_resource type="BoxMesh" id="MeshGateLatch"]
+material = SubResource("MatSteel")
+size = Vector3(0.1, 0.14, 0.12)
+
+[sub_resource type="CylinderMesh" id="MeshHingePin"]
+material = SubResource("MatSteel")
+top_radius = 0.04
+bottom_radius = 0.04
+height = 0.16
+radial_segments = 8
+rings = 1
+
+[sub_resource type="BoxMesh" id="MeshLeg"]
+material = SubResource("MatSteel")
+size = Vector3(0.12, 0.42, 0.12)
+
+[sub_resource type="BoxMesh" id="MeshFoot"]
+material = SubResource("MatSteel")
+size = Vector3(0.28, 0.08, 0.3)
+
+[sub_resource type="BoxMesh" id="MeshBrace"]
+material = SubResource("MatSteel")
+size = Vector3(1.2, 0.08, 0.08)
+
+[sub_resource type="CylinderMesh" id="MeshCrank"]
+material = SubResource("MatSteel")
+top_radius = 0.03
+bottom_radius = 0.03
+height = 0.22
+radial_segments = 8
+rings = 1
+
+[sub_resource type="BoxMesh" id="MeshBogie"]
+material = SubResource("MatFrame")
+size = Vector3(1.5, 0.16, 1.55)
+
+[sub_resource type="CylinderMesh" id="MeshAxle"]
+material = SubResource("MatSteel")
+top_radius = 0.07
+bottom_radius = 0.07
+height = 1.55
+radial_segments = 10
+rings = 1
+
+[sub_resource type="BoxMesh" id="MeshSpringBeam"]
+material = SubResource("MatSteel")
+size = Vector3(0.14, 0.18, 1.45)
+
+[sub_resource type="BoxMesh" id="MeshMudguard"]
+material = SubResource("MatFrame")
+size = Vector3(0.32, 0.06, 1.8)
+
+[sub_resource type="BoxMesh" id="MeshRearBar"]
+material = SubResource("MatSteel")
+size = Vector3(1.7, 0.12, 0.1)
+
+[sub_resource type="BoxMesh" id="MeshStay"]
+material = SubResource("MatSteel")
+size = Vector3(0.08, 0.32, 0.08)
+
+[sub_resource type="BoxMesh" id="MeshLensRed"]
+material = SubResource("MatLensRed")
+size = Vector3(0.18, 0.12, 0.04)
+
+[sub_resource type="BoxMesh" id="MeshLensAmber"]
+material = SubResource("MatLensAmber")
+size = Vector3(0.12, 0.1, 0.04)
+
+[sub_resource type="BoxShape3D" id="ShapeNeck"]
+size = Vector3(1.92, 0.2, 1.35)
+
+[sub_resource type="BoxShape3D" id="ShapeTipBody"]
+size = Vector3(1.8, 1.05, 5.15)
+
+[sub_resource type="BoxShape3D" id="ShapeBogie"]
+size = Vector3(1.7, 0.4, 1.9)
+
+[node name="Tipper" type="RigidBody3D"]
+script = ExtResource("1_tipper")
+spec = ExtResource("2_spec")
+
+[node name="CollisionNeck" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0.375)
+shape = SubResource("ShapeNeck")
+
+[node name="CollisionTipBody" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.465, 3.675)
+shape = SubResource("ShapeTipBody")
+
+[node name="CollisionBogie" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.52, 5.45)
+shape = SubResource("ShapeBogie")
+
+[node name="RailL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, -0.33, 3.75)
+mesh = SubResource("MeshRail")
+
+[node name="RailR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, -0.33, 3.75)
+mesh = SubResource("MeshRail")
+
+[node name="Cross1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.38, 1.6)
+mesh = SubResource("MeshCross")
+
+[node name="Cross2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.38, 3.0)
+mesh = SubResource("MeshCross")
+
+[node name="Cross3" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.38, 4.4)
+mesh = SubResource("MeshCross")
+
+[node name="KingpinPlate" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, 0.2)
+mesh = SubResource("MeshPlate")
+
+[node name="Kingpin" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.07, 0)
+mesh = SubResource("MeshKingpin")
+
+[node name="Neck" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.14, 0.36)
+mesh = SubResource("MeshNeck")
+
+[node name="Bulkhead" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 1.05)
+mesh = SubResource("MeshBulkhead")
+
+[node name="HingeBracketL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.72, -0.1, 6.25)
+mesh = SubResource("MeshHingeBracket")
+
+[node name="HingeBracketR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.72, -0.1, 6.25)
+mesh = SubResource("MeshHingeBracket")
+
+[node name="RamBracketL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.86, -0.3, 2.4)
+mesh = SubResource("MeshRamBracket")
+
+[node name="RamBracketR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.86, -0.3, 2.4)
+mesh = SubResource("MeshRamBracket")
+
+; The frame-end eye of each ram. tipper.gd reads these positions instead of restating them.
+[node name="RamAnchorL" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.86, -0.3, 2.4)
+
+[node name="RamAnchorR" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.86, -0.3, 2.4)
+
+; Both rams are POSED FROM CODE every tick — position, aim and rod extension. The authored
+; transforms below are only the parked pose, so the scene opens looking right in the editor.
+[node name="RamL" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.86, -0.3, 2.4)
+
+[node name="Eye" type="MeshInstance3D" parent="RamL"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
+mesh = SubResource("MeshRamEye")
+
+[node name="Barrel" type="MeshInstance3D" parent="RamL"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.375, 0)
+mesh = SubResource("MeshBarrel")
+
+[node name="Rod" type="MeshInstance3D" parent="RamL"]
+transform = Transform3D(1, 0, 0, 0, 0.574, 0, 0, 0, 1, 0, 0.837, 0)
+mesh = SubResource("MeshRod")
+
+[node name="RamR" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.86, -0.3, 2.4)
+
+[node name="Eye" type="MeshInstance3D" parent="RamR"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
+mesh = SubResource("MeshRamEye")
+
+[node name="Barrel" type="MeshInstance3D" parent="RamR"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.375, 0)
+mesh = SubResource("MeshBarrel")
+
+[node name="Rod" type="MeshInstance3D" parent="RamR"]
+transform = Transform3D(1, 0, 0, 0, 0.574, 0, 0, 0, 1, 0, 0.837, 0)
+mesh = SubResource("MeshRod")
+
+; THE TIPPING BODY. Its origin IS the rear hinge line, so the pose is one rotation about local X
+; and everything below is authored as a distance FORWARD of the hinge (negative local z).
+[node name="TipBody" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.06, 6.25)
+
+[node name="Floor" type="MeshInstance3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, -2.575)
+mesh = SubResource("MeshFloor")
+
+[node name="SideL" type="MeshInstance3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.865, 0.575, -2.575)
+mesh = SubResource("MeshSide")
+
+[node name="SideR" type="MeshInstance3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.865, 0.575, -2.575)
+mesh = SubResource("MeshSide")
+
+[node name="FrontWall" type="MeshInstance3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.575, -5.09)
+mesh = SubResource("MeshFrontWall")
+
+[node name="TopRailL" type="MeshInstance3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.865, 1.08, -2.575)
+mesh = SubResource("MeshTopRail")
+
+[node name="TopRailR" type="MeshInstance3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.865, 1.08, -2.575)
+mesh = SubResource("MeshTopRail")
+
+[node name="RibL1" type="MeshInstance3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.905, 0.575, -1)
+mesh = SubResource("MeshRib")
+
+[node name="RibL2" type="MeshInstance3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.905, 0.575, -2.1)
+mesh = SubResource("MeshRib")
+
+[node name="RibL3" type="MeshInstance3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.905, 0.575, -3.2)
+mesh = SubResource("MeshRib")
+
+[node name="RibL4" type="MeshInstance3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.905, 0.575, -4.3)
+mesh = SubResource("MeshRib")
+
+[node name="RibR1" type="MeshInstance3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.905, 0.575, -1)
+mesh = SubResource("MeshRib")
+
+[node name="RibR2" type="MeshInstance3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.905, 0.575, -2.1)
+mesh = SubResource("MeshRib")
+
+[node name="RibR3" type="MeshInstance3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.905, 0.575, -3.2)
+mesh = SubResource("MeshRib")
+
+[node name="RibR4" type="MeshInstance3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.905, 0.575, -4.3)
+mesh = SubResource("MeshRib")
+
+[node name="HingeLugL" type="MeshInstance3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, -0.02, 0.05)
+mesh = SubResource("MeshHingeLug")
+
+[node name="HingeLugR" type="MeshInstance3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, -0.02, 0.05)
+mesh = SubResource("MeshHingeLug")
+
+; The body-end eyes of the two rams. Children of the tipping body, so they travel with it and
+; tipper.gd gets the ram's far end for free out of the body's own transform.
+[node name="RamHeadL" type="Marker3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.86, 0.36, -2.9)
+
+[node name="RamHeadR" type="Marker3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.86, 0.36, -2.9)
+
+; The tailgate's hinge line, at the top rear of the body. Top-hinged, so the gate swings from here
+; and its bottom edge is what travels — tipper.gd rotates this node, never the gate mesh.
+[node name="Tailgate" type="Node3D" parent="TipBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.05, 0.02)
+
+[node name="Gate" type="MeshInstance3D" parent="TipBody/Tailgate"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.49, 0)
+mesh = SubResource("MeshGate")
+
+[node name="GateRibL" type="MeshInstance3D" parent="TipBody/Tailgate"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, -0.49, 0.06)
+mesh = SubResource("MeshGateRib")
+
+[node name="GateRibR" type="MeshInstance3D" parent="TipBody/Tailgate"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, -0.49, 0.06)
+mesh = SubResource("MeshGateRib")
+
+[node name="GateBar" type="MeshInstance3D" parent="TipBody/Tailgate"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.15, 0.06)
+mesh = SubResource("MeshGateBar")
+
+[node name="GateLatchL" type="MeshInstance3D" parent="TipBody/Tailgate"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8, -0.88, 0.05)
+mesh = SubResource("MeshGateLatch")
+
+[node name="GateLatchR" type="MeshInstance3D" parent="TipBody/Tailgate"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, -0.88, 0.05)
+mesh = SubResource("MeshGateLatch")
+
+[node name="HingePinL" type="MeshInstance3D" parent="TipBody/Tailgate"]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, -0.78, 0, 0)
+mesh = SubResource("MeshHingePin")
+
+[node name="HingePinR" type="MeshInstance3D" parent="TipBody/Tailgate"]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0.78, 0, 0)
+mesh = SubResource("MeshHingePin")
+
+[node name="LegL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, -0.62, 1.6)
+mesh = SubResource("MeshLeg")
+
+[node name="LegR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, -0.62, 1.6)
+mesh = SubResource("MeshLeg")
+
+[node name="FootL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, -0.87, 1.6)
+mesh = SubResource("MeshFoot")
+
+[node name="FootR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, -0.87, 1.6)
+mesh = SubResource("MeshFoot")
+
+[node name="LegBrace" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.55, 1.6)
+mesh = SubResource("MeshBrace")
+
+[node name="LegCrank" type="MeshInstance3D" parent="."]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0.78, -0.5, 1.6)
+mesh = SubResource("MeshCrank")
+
+[node name="BogieFrame" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.52, 5.45)
+mesh = SubResource("MeshBogie")
+
+[node name="Axle1" type="MeshInstance3D" parent="."]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0, -0.626, 4.9)
+mesh = SubResource("MeshAxle")
+
+[node name="Axle2" type="MeshInstance3D" parent="."]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0, -0.626, 5.45)
+mesh = SubResource("MeshAxle")
+
+[node name="Axle3" type="MeshInstance3D" parent="."]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0, -0.626, 6)
+mesh = SubResource("MeshAxle")
+
+[node name="SpringBeamL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, -0.55, 5.45)
+mesh = SubResource("MeshSpringBeam")
+
+[node name="SpringBeamR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, -0.55, 5.45)
+mesh = SubResource("MeshSpringBeam")
+
+[node name="MudguardL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.78, -0.2, 5.45)
+mesh = SubResource("MeshMudguard")
+
+[node name="MudguardR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.78, -0.2, 5.45)
+mesh = SubResource("MeshMudguard")
+
+[node name="RearBar" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.76, 6.52)
+mesh = SubResource("MeshRearBar")
+
+[node name="StayL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.7, -0.6, 6.48)
+mesh = SubResource("MeshStay")
+
+[node name="StayR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.7, -0.6, 6.48)
+mesh = SubResource("MeshStay")
+
+; Lamps stand 0.03 PROUD of the stays they are bolted to: authored flush, the red lens and the grey
+; bar behind it fought over the same plane. A lamp is a fitting, not an inlay.
+[node name="TailLensL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.66, -0.56, 6.53)
+mesh = SubResource("MeshLensRed")
+
+[node name="TailLensR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.66, -0.56, 6.53)
+mesh = SubResource("MeshLensRed")
+
+[node name="MarkerLensL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.81, -0.56, 6.53)
+mesh = SubResource("MeshLensAmber")
+
+[node name="MarkerLensR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.81, -0.56, 6.53)
+mesh = SubResource("MeshLensAmber")
+
+; Wheel visual roots, IN THE SAME ORDER as tipper_spec.tres's wheel_positions (L/R per axle, front
+; bogie axle first) — TowedBody pairs them by index and errors on a count mismatch. The radius
+; scale and the right-side flip ride the INSTANCED CHILD, because RayWheel overwrites each root's
+; transform every tick; the flip is about Vector3.RIGHT, never UP (local Y is the axle).
+[node name="Wheels" type="Node3D" parent="."]
+
+[node name="WheelL1" type="Node3D" parent="Wheels"]
+
+[node name="Wheel" parent="Wheels/WheelL1" instance=ExtResource("3_wheel")]
+transform = Transform3D(0.36, 0, 0, 0, 0.36, 0, 0, 0, 0.36, 0, 0, 0)
+
+[node name="WheelR1" type="Node3D" parent="Wheels"]
+
+[node name="Wheel" parent="Wheels/WheelR1" instance=ExtResource("3_wheel")]
+transform = Transform3D(0.36, 0, 0, 0, -0.36, 0, 0, 0, -0.36, 0, 0, 0)
+
+[node name="WheelL2" type="Node3D" parent="Wheels"]
+
+[node name="Wheel" parent="Wheels/WheelL2" instance=ExtResource("3_wheel")]
+transform = Transform3D(0.36, 0, 0, 0, 0.36, 0, 0, 0, 0.36, 0, 0, 0)
+
+[node name="WheelR2" type="Node3D" parent="Wheels"]
+
+[node name="Wheel" parent="Wheels/WheelR2" instance=ExtResource("3_wheel")]
+transform = Transform3D(0.36, 0, 0, 0, -0.36, 0, 0, 0, -0.36, 0, 0, 0)
+
+[node name="WheelL3" type="Node3D" parent="Wheels"]
+
+[node name="Wheel" parent="Wheels/WheelL3" instance=ExtResource("3_wheel")]
+transform = Transform3D(0.36, 0, 0, 0, 0.36, 0, 0, 0, 0.36, 0, 0, 0)
+
+[node name="WheelR3" type="Node3D" parent="Wheels"]
+
+[node name="Wheel" parent="Wheels/WheelR3" instance=ExtResource("3_wheel")]
+transform = Transform3D(0.36, 0, 0, 0, -0.36, 0, 0, 0, -0.36, 0, 0, 0)

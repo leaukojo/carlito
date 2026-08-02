@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_4jg8q"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/plant_flatTall.glb" id="2_eit1a"]
+
+[node name="PlantFlatTall" type="Node3D" unique_id=480655011]
+script = ExtResource("1_4jg8q")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=8771200 instance=ExtResource("2_eit1a")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0.25, 0)

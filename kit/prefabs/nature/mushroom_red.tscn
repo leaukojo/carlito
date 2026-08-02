@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_k7p0v"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/mushroom_red.glb" id="2_n07tg"]
+
+[node name="MushroomRed" type="Node3D" unique_id=2046849498]
+script = ExtResource("1_k7p0v")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=899040995 instance=ExtResource("2_n07tg")]
+transform = Transform3D(2.5, 0, 0, 0, 2.5, 0, 0, 0, 2.5, -0.0022500008, 0.125, -0.01262499)

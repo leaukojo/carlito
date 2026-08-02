@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_adwta"]
+[ext_resource type="PackedScene" path="res://kit/raw/commercial/detail-parasol-b.glb" id="2_ebjrk"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ogusc"]
+size = Vector3(1.5588, 2.0249999, 1.8)
+
+[node name="DetailParasolB" type="Node3D" unique_id=800618507]
+script = ExtResource("1_adwta")
+
+[node name="Model" type="Node3D" parent="." unique_id=1936598765 instance=ExtResource("2_ebjrk")]
+transform = Transform3D(4.5, 0, 0, 0, 4.5, 0, 0, 0, 4.5, 0, 0, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1512424006]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1617145850]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0124999, 0)
+shape = SubResource("BoxShape3D_ogusc")

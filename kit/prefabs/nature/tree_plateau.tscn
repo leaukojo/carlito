@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_t1841"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/tree_plateau.glb" id="2_vcbpu"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_alb5g"]
+size = Vector3(0.652, 6.2465, 0.652)
+
+[node name="TreePlateau" type="Node3D" unique_id=1411609864]
+script = ExtResource("1_t1841")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=1521963373 instance=ExtResource("2_vcbpu")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0.111500025, 0.25, -0.009750128)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=2027856497]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1437267963]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.111500025, 3.12325, -0.009750128)
+shape = SubResource("BoxShape3D_alb5g")

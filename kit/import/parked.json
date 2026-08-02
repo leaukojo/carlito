@@ -1,0 +1,10 @@
+{
+	"kit": "parked",
+	"source": "res://kit/raw/parked",
+	"scale": 1.2,
+	"_notes": "Kenney Car Kit VEHICLE bodies (CC0) as STATIC PARKED PROPS — deliberately independent of the drivable vehicle system (src/vehicles/kenney): these GLBs already include their wheels, so nothing is attached at runtime and no VehicleSpec exists for them. Prefab-only, NO palette (placed/scattered like the garage props). Scale 1.2 is the kit-wide Kenney scale (sedan 1.5 m -> 1.8 m wide), matching the drivable cars. Box collision so they park solidly. Materials embed the external colormap copied alongside the GLBs. One deliberate catch-all family: this kit dir holds nothing but vehicle bodies, so every GLB dropped in becomes a parked prop. CC0, credited in README.",
+	"families": [
+		{ "name": "parked-vehicles", "label": "Parked vehicles",
+			"match": [".*"], "pipeline": "prefab", "collision_mode": "box" }
+	]
+}

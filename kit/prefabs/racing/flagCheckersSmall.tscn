@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_8idcb"]
+[ext_resource type="PackedScene" path="res://kit/raw/racing/flagCheckersSmall.glb" id="2_ahggl"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_5xmti"]
+size = Vector3(0.24000001, 3.6, 0.24)
+
+[node name="FlagCheckersSmall" type="Node3D" unique_id=1354939769]
+script = ExtResource("1_8idcb")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=865308701 instance=ExtResource("2_ahggl")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, 3.06, 0.12, 7.9199996)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=613359293]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=397437208]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.0199999, 1.8, -1.1175871e-07)
+shape = SubResource("BoxShape3D_5xmti")

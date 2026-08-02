@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_u6psp"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/flower_yellowC.glb" id="2_606jc"]
+
+[node name="FlowerYellowC" type="Node3D" unique_id=1526480301]
+script = ExtResource("1_u6psp")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=2114774561 instance=ExtResource("2_606jc")]
+transform = Transform3D(2.5, 0, 0, 0, 2.5, 0, 0, 0, 2.5, 0.035500005, 0.125, 0)

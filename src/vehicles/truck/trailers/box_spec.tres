@@ -1,0 +1,65 @@
+[gd_resource type="Resource" script_class="VehicleSpec" load_steps=2 format=3]
+
+; Box / curtainside semi-trailer running gear. A VehicleSpec because that is what RayWheel
+; consumes; the drivetrain / steering / lamp fields are meaningless on a towed body and stay at
+; their defaults.
+;
+; THE HEAVIEST TRAILER IN THE CATALOG, and mass is the ONLY thing that separates it from the
+; flatbed — see box.gd for why that is the lesson rather than a gap. 24 000 kg against the
+; flatbed's 14 000 is a 3.0 : 1 ratio against the 8 000 kg tractor unit, which is exactly the
+; ceiling Phase 4 verified by re-speccing (src/vehicles/CLAUDE.md). Going past it is a re-tune
+; needing re-verification, not a free number, and test_trailer fails instead of shipping one.
+;
+; Everything below is measured off box.tscn (origin AT THE KINGPIN, ground at y = -1.05):
+;   - the tri-axle bogie is the family's: z 4.90 / 5.45 / 6.00, anchors at y = 0.424 - 1.05.
+;   - center_of_mass z 3.98 puts 27.0 % on the fifth wheel ((5.45 - 3.98) / 5.45) = 6473 kg, of
+;     which ~90 % lands on the tractor's drive axle. THE SHARE IS THE SAME 27 % ON ALL FOUR TRAILERS
+;     AND IT IS NOT A STYLING CHOICE: a real van semi-trailer puts 25-30 % of its weight on the
+;     plate, and the plate is sitting on the tractor's SINGLE DRIVEN AXLE. This shipped at 19.3 %,
+;     which is a fifth of the trailer's weight simply not helping the drive wheels grip — reported
+;     as "it still struggles to climb" once the fifth-wheel pitch limit was fixed, and correctly so:
+;     a 4x2's whole traction budget is what the plate hands it. Moving it forward is worth more than
+;     any engine number, because the rig is grip-limited and not power-limited.
+;   - center_of_mass y -0.40 is 0.65 m above the road — palletised freight sits on the floor, so a
+;     box is not the high-centred load a tanker is.
+;   - spring_rate 249000 is sized off the load the bogie ACTUALLY carries, 17 527 kg: 28 656 N per
+;     wheel compresses it 0.115 m of its 0.32 m travel (36 %), the same fraction every trailer sits
+;     at. It came DOWN with the share, because weight moved onto the plate is weight off the bogie —
+;     re-derive it whenever the share moves, or the trailer rides high on an over-stiff spring. A
+;     spring sized for the full mass would ride on its stops, which is the "trailer sinks" failure
+;     the shipped Kenney trucks already have.
+;   - brake_torque 11355 is load-apportioned by the family's one formula, never copied:
+;     10500 * (per-trailer-wheel kN / 26.5 kN per tractor wheel) = 10500 * 28.66 / 26.5. Every
+;     trailer therefore brakes at the same fraction of what it carries as the unit pulling it.
+;     The reference moved with the tractor's own service brake (9583 -> 10500, see semi_spec.tres);
+;     it is one formula, so it is re-evaluated rather than left at yesterday's answer.
+;   - handbrake_torque 2839 IS THE RIG'S PARKING BRAKE, and it is new. A semi-trailer's spring
+;     brakes sit on every axle of the bogie and are applied by the same dash control as the tractor's
+;     — so a trailer parked with handbrake_torque 0 meant 32 t held by TWO tractor wheels, which is
+;     why the rig ran away downhill. It is a quarter of this trailer's own service brake, the same
+;     load-apportioned fraction on all four: 6 wheels * 2839 / 0.36 = 47 kN, plus the tractor's
+;     27 kN, holds a laden rig on a 24 % grade. That is deliberately above the 18 % a combination
+;     must hold under UNECE R13 and far below a locked-wheel skid (the bogie has ~190 kN of grip
+;     under it), so the parking brake is brake-limited like a real one rather than grip-limited.
+
+[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
+
+[resource]
+script = ExtResource("1_spec")
+mass = 24000.0
+center_of_mass = Vector3(0, -0.4, 3.98)
+wheel_positions = PackedVector3Array(-0.72, -0.626, 4.9, 0.72, -0.626, 4.9, -0.72, -0.626, 5.45, 0.72, -0.626, 5.45, -0.72, -0.626, 6, 0.72, -0.626, 6)
+wheel_radius = 0.36
+wheel_inertia = 3.0
+driven_front = false
+driven_rear = false
+rest_length = 0.32
+spring_rate = 249000.0
+damper_bump = 13100.0
+damper_rebound = 17650.0
+max_suspension_force = 110000.0
+grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
+mu_long = 1.0
+mu_lat = 0.95
+brake_torque = 11355.0
+handbrake_torque = 2839.0

@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_5v3vv"]
+[ext_resource type="PackedScene" path="res://kit/raw/garage/debris-tire.glb" id="2_x6muv"]
+
+[node name="DebrisTire" type="Node3D" unique_id=781087412]
+script = ExtResource("1_5v3vv")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=1664476837 instance=ExtResource("2_x6muv")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, -1.7881394e-08, 0.35999998, -3.576279e-08)

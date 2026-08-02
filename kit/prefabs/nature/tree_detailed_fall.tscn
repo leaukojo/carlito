@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_egxe4"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/tree_detailed_fall.glb" id="2_c0v6j"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_373yy"]
+size = Vector3(0.63199997, 6.6619997, 0.63199997)
+
+[node name="TreeDetailedFall" type="Node3D" unique_id=826564643]
+script = ExtResource("1_egxe4")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=574574703 instance=ExtResource("2_c0v6j")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0.044749826, 0.25, -0.043500066)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=2000309847]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1427819590]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.044749826, 3.3309999, -0.043500066)
+shape = SubResource("BoxShape3D_373yy")

@@ -1,0 +1,244 @@
+[gd_scene load_steps=24 format=3]
+
+; Rotary mower (mounted rotary cutter). Authored in the LOWERED (working) pose with the
+; origin ON THE LOWER PIN LINE, the frame HitchLinkage solves against; ground is y = -0.21 in
+; this frame, so the skids rest exactly on it and the blades sweep 0.07 m above it.
+;
+; The blades are the point of this machine — they are what 'pto_rpm' looks like. So the rear
+; chain guard is a ROW OF HANGING BARS rather than a closed skirt, and the blade plane sits
+; just below the bars' bottom edge: from the chase camera you see the rotor turning through
+; the gaps, and with the hitch raised the whole underside is on show. One blade is painted the
+; same index red as the tractor's PTO stub spline, because a symmetric spinning part reads as
+; standing still.
+;
+; The telescoping driveshaft from the tractor's PTO stub to this gearbox is NOT modelled (the
+; one mechanical part left out, same as on every implement); the input shaft angling forward
+; and up out of the gearbox toward the stub is. NO CollisionShape: implements are visual.
+
+[ext_resource type="Script" path="res://src/vehicles/tractor/implements/mower.gd" id="1_mower"]
+[ext_resource type="PackedScene" path="res://src/vehicles/tractor/implements/headstock.tscn" id="2_head"]
+
+[sub_resource type="StandardMaterial3D" id="MatPaint"]
+resource_name = "mower_paint"
+albedo_color = Color(0.87, 0.42, 0.13, 1)
+roughness = 0.75
+
+[sub_resource type="StandardMaterial3D" id="MatSteel"]
+resource_name = "mower_steel"
+albedo_color = Color(0.3, 0.33, 0.37, 1)
+metallic_specular = 0.55
+roughness = 0.55
+
+; The rotor lives in the deck's shadow, so it is deliberately the BRIGHTEST thing on the
+; machine — a dark rotor under a dark deck reads as a black gap from the chase camera.
+[sub_resource type="StandardMaterial3D" id="MatBlade"]
+resource_name = "mower_blades"
+albedo_color = Color(0.86, 0.88, 0.9, 1)
+metallic_specular = 0.7
+roughness = 0.4
+
+[sub_resource type="StandardMaterial3D" id="MatMark"]
+resource_name = "index_mark"
+albedo_color = Color(0.85, 0.18, 0.14, 1)
+roughness = 0.6
+
+[sub_resource type="BoxMesh" id="MeshRail"]
+material = SubResource("MatPaint")
+size = Vector3(0.1, 0.1, 0.34)
+
+; The deck is very nearly square, because it has to COVER the blade circle: the rotor sweeps
+; 1.42 m across, so a shallower deck would leave the blades scything out past the front and
+; rear edges.
+[sub_resource type="BoxMesh" id="MeshDeck"]
+material = SubResource("MatPaint")
+size = Vector3(1.5, 0.1, 1.45)
+
+[sub_resource type="BoxMesh" id="MeshRib"]
+material = SubResource("MatPaint")
+size = Vector3(0.08, 0.06, 1.4)
+
+[sub_resource type="BoxMesh" id="MeshSkirtSide"]
+material = SubResource("MatPaint")
+size = Vector3(0.05, 0.14, 1.45)
+
+[sub_resource type="BoxMesh" id="MeshSkirtFront"]
+material = SubResource("MatPaint")
+size = Vector3(1.5, 0.14, 0.05)
+
+[sub_resource type="BoxMesh" id="MeshGuardRail"]
+material = SubResource("MatPaint")
+size = Vector3(1.5, 0.06, 0.05)
+
+[sub_resource type="BoxMesh" id="MeshGuardBar"]
+material = SubResource("MatSteel")
+size = Vector3(0.16, 0.12, 0.03)
+
+[sub_resource type="BoxMesh" id="MeshGearbox"]
+material = SubResource("MatSteel")
+size = Vector3(0.26, 0.24, 0.26)
+
+[sub_resource type="CylinderMesh" id="MeshGearCap"]
+material = SubResource("MatSteel")
+top_radius = 0.1
+bottom_radius = 0.1
+height = 0.06
+radial_segments = 8
+rings = 0
+
+[sub_resource type="CylinderMesh" id="MeshInputShaft"]
+material = SubResource("MatBlade")
+top_radius = 0.05
+bottom_radius = 0.05
+height = 0.7
+radial_segments = 6
+rings = 0
+
+[sub_resource type="BoxMesh" id="MeshYoke"]
+material = SubResource("MatSteel")
+size = Vector3(0.11, 0.11, 0.12)
+
+[sub_resource type="CylinderMesh" id="MeshDisc"]
+material = SubResource("MatBlade")
+top_radius = 0.3
+bottom_radius = 0.3
+height = 0.045
+radial_segments = 8
+rings = 0
+
+[sub_resource type="CylinderMesh" id="MeshRotorHub"]
+material = SubResource("MatSteel")
+top_radius = 0.09
+bottom_radius = 0.09
+height = 0.1
+radial_segments = 8
+rings = 0
+
+[sub_resource type="BoxMesh" id="MeshBlade"]
+material = SubResource("MatBlade")
+size = Vector3(0.46, 0.03, 0.12)
+
+[sub_resource type="BoxMesh" id="MeshBladeMark"]
+material = SubResource("MatMark")
+size = Vector3(0.46, 0.03, 0.12)
+
+[sub_resource type="BoxMesh" id="MeshSkid"]
+material = SubResource("MatSteel")
+size = Vector3(0.09, 0.05, 0.8)
+
+[sub_resource type="BoxMesh" id="MeshSkidNose"]
+material = SubResource("MatSteel")
+size = Vector3(0.09, 0.05, 0.16)
+
+[node name="Mower" type="Node3D"]
+script = ExtResource("1_mower")
+
+[node name="Headstock" parent="." instance=ExtResource("2_head")]
+
+[node name="FrameRailL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.3, 0.02, 0.12)
+mesh = SubResource("MeshRail")
+
+[node name="FrameRailR" type="MeshInstance3D" parent="."]
+position = Vector3(0.3, 0.02, 0.12)
+mesh = SubResource("MeshRail")
+
+[node name="Deck" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.02, 0.87)
+mesh = SubResource("MeshDeck")
+
+[node name="RibL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.45, 0.06, 0.87)
+mesh = SubResource("MeshRib")
+
+[node name="RibR" type="MeshInstance3D" parent="."]
+position = Vector3(0.45, 0.06, 0.87)
+mesh = SubResource("MeshRib")
+
+[node name="SkirtL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.725, -0.12, 0.87)
+mesh = SubResource("MeshSkirtSide")
+
+[node name="SkirtR" type="MeshInstance3D" parent="."]
+position = Vector3(0.725, -0.12, 0.87)
+mesh = SubResource("MeshSkirtSide")
+
+[node name="SkirtFront" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.12, 0.17)
+mesh = SubResource("MeshSkirtFront")
+
+[node name="GuardRail" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.06, 1.58)
+mesh = SubResource("MeshGuardRail")
+
+[node name="GuardBar1" type="MeshInstance3D" parent="."]
+position = Vector3(-0.56, -0.09, 1.58)
+mesh = SubResource("MeshGuardBar")
+
+[node name="GuardBar2" type="MeshInstance3D" parent="."]
+position = Vector3(-0.28, -0.09, 1.58)
+mesh = SubResource("MeshGuardBar")
+
+[node name="GuardBar3" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.09, 1.58)
+mesh = SubResource("MeshGuardBar")
+
+[node name="GuardBar4" type="MeshInstance3D" parent="."]
+position = Vector3(0.28, -0.09, 1.58)
+mesh = SubResource("MeshGuardBar")
+
+[node name="GuardBar5" type="MeshInstance3D" parent="."]
+position = Vector3(0.56, -0.09, 1.58)
+mesh = SubResource("MeshGuardBar")
+
+[node name="Gearbox" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.15, 0.87)
+mesh = SubResource("MeshGearbox")
+
+[node name="GearCap" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.29, 0.87)
+mesh = SubResource("MeshGearCap")
+
+[node name="InputShaft" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.24, 0.45)
+rotation = Vector3(1.8307964, 0, 0)
+mesh = SubResource("MeshInputShaft")
+
+[node name="Yoke" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.33, 0.1)
+mesh = SubResource("MeshYoke")
+
+[node name="Rotor" type="Node3D" parent="."]
+position = Vector3(0, -0.14, 0.87)
+
+[node name="Disc" type="MeshInstance3D" parent="Rotor"]
+mesh = SubResource("MeshDisc")
+
+[node name="Hub" type="MeshInstance3D" parent="Rotor"]
+position = Vector3(0, 0.05, 0)
+mesh = SubResource("MeshRotorHub")
+
+[node name="BladeL" type="MeshInstance3D" parent="Rotor"]
+position = Vector3(-0.5, 0, 0)
+mesh = SubResource("MeshBlade")
+
+[node name="BladeR" type="MeshInstance3D" parent="Rotor"]
+position = Vector3(0.5, 0, 0)
+mesh = SubResource("MeshBladeMark")
+
+[node name="SkidL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.62, -0.185, 0.87)
+mesh = SubResource("MeshSkid")
+
+[node name="SkidR" type="MeshInstance3D" parent="."]
+position = Vector3(0.62, -0.185, 0.87)
+mesh = SubResource("MeshSkid")
+
+[node name="SkidNoseL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.62, -0.17, 0.42)
+rotation = Vector3(0.5, 0, 0)
+mesh = SubResource("MeshSkidNose")
+
+[node name="SkidNoseR" type="MeshInstance3D" parent="."]
+position = Vector3(0.62, -0.17, 0.42)
+rotation = Vector3(0.5, 0, 0)
+mesh = SubResource("MeshSkidNose")

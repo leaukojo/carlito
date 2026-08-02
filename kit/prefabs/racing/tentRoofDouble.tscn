@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_p0cox"]
+[ext_resource type="PackedScene" path="res://kit/raw/racing/tentRoofDouble.glb" id="2_4pc7n"]
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_enaba"]
+points = PackedVector3Array(3.9134974, 7.441928, 5.9052734, -6.637037, 4.440892e-16, -5.8777785, -6.632047, 0.0028067194, 5.94, 6.637037, -4.440892e-16, -5.8777785, -3.9134974, 7.441928, -5.838608, 6.632047, 0.0028067194, 5.94, -6.5180464, 5.769665, 5.838468, 6.5180464, 5.769665, -5.7718024, 6.5180464, 5.769665, 5.838468, -6.5180464, 5.769665, -5.7718024, 3.9134974, 7.441928, -5.838608, -3.9134974, 7.441928, 5.9052734)
+
+[node name="TentRoofDouble" type="Node3D" unique_id=1470938102]
+script = ExtResource("1_p0cox")
+collision_mode = "multiconvex"
+
+[node name="Model" type="Node3D" parent="." unique_id=668729805 instance=ExtResource("2_4pc7n")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, -2.52, 0.12, 13.74)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=665549978]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=189076191]
+shape = SubResource("ConvexPolygonShape3D_enaba")

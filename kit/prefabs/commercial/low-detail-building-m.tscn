@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_ng2hf"]
+[ext_resource type="PackedScene" path="res://kit/raw/commercial/low-detail-building-m.glb" id="2_tp5g5"]
+
+[node name="LowDetailBuildingM" type="Node3D" unique_id=951196211]
+script = ExtResource("1_ng2hf")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=827778794 instance=ExtResource("2_tp5g5")]
+transform = Transform3D(90, 0, 0, 0, 90, 0, 0, 0, 90, 0, 0, 0)

@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_vbxwu"]
+[ext_resource type="PackedScene" path="res://kit/raw/watercraft/arrow.glb" id="2_ai2yv"]
+
+[node name="Arrow" type="Node3D" unique_id=1154628604]
+script = ExtResource("1_vbxwu")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=1241023508 instance=ExtResource("2_ai2yv")]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0)

@@ -1,0 +1,12 @@
+{
+	"kit": "industrial",
+	"source": "res://kit/raw/industrial",
+	"scale": 9.0,
+	"_notes": "City Kit Industrial. Scale 9 (75% of the 12 m city-road module; building-a ~13.3 m warehouse). Chimneys and the tank are rounded solids -> hull.",
+	"families": [
+		{ "name": "industrial-detail", "label": "Chimneys & tanks",
+			"match": ["^(chimney|detail)"], "pipeline": "prefab", "collision_mode": "hull" },
+		{ "name": "industrial-buildings", "label": "Buildings",
+			"match": ["^building-"], "pipeline": "prefab", "collision_mode": "box" }
+	]
+}

@@ -1,0 +1,30 @@
+{
+	"kit": "watercraft",
+	"source": "res://kit/raw/watercraft",
+	"scale": 2.0,
+	"_notes": "Watercraft Pack. Near-real-scale authoring (speedboat ~3.4 units); scale 2 puts the cargo container at real 20 ft proportions and ship-small at ~21 m. Boat launch ramps are drivable by cars -> weld. Vessels are static dressing props (hull); the playable boat is the hand-built vehicle scene. Buoys keep their authored waterline origin (raw align + none). boat-house family is ordered BEFORE water-craft so '^boat' doesn't swallow the houses.",
+	"families": [
+		{ "name": "water-buoys", "label": "Buoys",
+			"match": ["^buoy"], "pipeline": "prefab", "collision_mode": "none",
+			"assets": {
+				"buoy": {"align": "raw"},
+				"buoy-flag": {"align": "raw"}
+			} },
+		{ "name": "water-arrows", "label": "Arrow markers",
+			"match": ["^arrow"], "pipeline": "prefab", "collision_mode": "none" },
+		{ "name": "water-gates", "label": "Course gates",
+			"match": ["^gate"], "pipeline": "prefab", "collision_mode": "multiconvex" },
+		{ "name": "water-ramps", "label": "Boat-launch ramps",
+			"match": ["^ramp"], "pipeline": "prefab", "collision_mode": "weld" },
+		{ "name": "water-boat-houses", "label": "Boat houses",
+			"match": ["^boat-house"], "pipeline": "prefab", "collision_mode": "multiconvex" },
+		{ "name": "water-craft", "label": "Boats & ships",
+			"match": ["^(boat|ship)"], "pipeline": "prefab", "collision_mode": "hull" },
+		{ "name": "water-cargo", "label": "Cargo",
+			"match": ["^cargo"], "pipeline": "prefab", "collision_mode": "box",
+			"assets": {
+				"cargo-pile-a": {"collision_mode": "hull"},
+				"cargo-pile-b": {"collision_mode": "hull"}
+			} }
+	]
+}

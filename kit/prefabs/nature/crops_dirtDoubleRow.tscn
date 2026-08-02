@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_jdygx"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/crops_dirtDoubleRow.glb" id="2_gugl7"]
+
+[node name="CropsDirtDoubleRow" type="Node3D" unique_id=1842691366]
+script = ExtResource("1_jdygx")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=1534352362 instance=ExtResource("2_gugl7")]
+transform = Transform3D(2.5, 0, 0, 0, 2.5, 0, 0, 0, 2.5, 0, 0.125, -0.07749997)

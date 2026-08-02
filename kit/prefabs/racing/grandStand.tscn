@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_k5qu7"]
+[ext_resource type="PackedScene" path="res://kit/raw/racing/grandStand.glb" id="2_pfaq4"]
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_maodf"]
+points = PackedVector3Array(6.0950146, 10.570608, -1.1417387, -5.988306, 0, -5.9871325, -5.988306, 0, 5.9871325, -6, 10.677082, -5.998824, 5.988083, 0, -5.9871325, 5.988083, 0, 5.9871325, -6.0952377, 2.7625203, 6.094045, 6, 10.67728, -5.9990473, -6.0952377, 10.570608, -1.1417387, 6.0950146, 2.7625203, 6.094045)
+
+[node name="GrandStand" type="Node3D" unique_id=686874143]
+script = ExtResource("1_k5qu7")
+collision_mode = "multiconvex"
+
+[node name="Model" type="Node3D" parent="." unique_id=1312476138 instance=ExtResource("2_pfaq4")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, -1.8000001, 0.12, 13.799999)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=499258493]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1686120268]
+shape = SubResource("ConvexPolygonShape3D_maodf")

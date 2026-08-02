@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_yrd6d"]
+[ext_resource type="PackedScene" path="res://kit/raw/suburban/tree-large.glb" id="2_7v5ng"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_rk67o"]
+size = Vector3(0.46979997, 6.903, 0.46979997)
+
+[node name="TreeLarge" type="Node3D" unique_id=2026291282]
+script = ExtResource("1_yrd6d")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=955579478 instance=ExtResource("2_7v5ng")]
+transform = Transform3D(9, 0, 0, 0, 9, 0, 0, 0, 9, -6.7055225e-08, 0, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1582864819]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1324681833]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.4505806e-08, 3.4515, 0)
+shape = SubResource("BoxShape3D_rk67o")

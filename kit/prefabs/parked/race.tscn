@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_msovi"]
+[ext_resource type="PackedScene" path="res://kit/raw/parked/race.glb" id="2_13j5b"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_akqpj"]
+size = Vector3(1.56, 0.87899995, 3.07176)
+
+[node name="Race" type="Node3D" unique_id=1358177135]
+script = ExtResource("1_msovi")
+
+[node name="Model" type="Node3D" parent="." unique_id=482388899 instance=ExtResource("2_13j5b")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, -3.576279e-08, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1680011552]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1496321611]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.43949997, 0)
+shape = SubResource("BoxShape3D_akqpj")

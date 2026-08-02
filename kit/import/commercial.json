@@ -1,0 +1,22 @@
+{
+	"kit": "commercial",
+	"source": "res://kit/raw/commercial",
+	"scale": 9.0,
+	"_notes": "City Kit Commercial. Scale 9 (75% of the 12 m city-road module; building-a ~11 m, skyscraper-a ~26 m). low-detail-* is the distant-skyline set (scale_mul 10 -> effective 90, sized to read on the horizon) and detail-* are facade decorations (awnings/overhangs/parasols). Parasols get a per-asset scale_mul 0.5 (halved) and a box so they read as touchable street furniture; other details stay none. building-a/-c carry hand-tightened collision boxes and are `manual` (the generator leaves their .tscn alone).",
+	"families": [
+		{ "name": "commercial-detail", "label": "Facade details",
+			"match": ["^detail-"], "pipeline": "prefab", "collision_mode": "none",
+			"assets": {
+				"detail-parasol-a": { "scale_mul": 0.5, "collision_mode": "box" },
+				"detail-parasol-b": { "scale_mul": 0.5, "collision_mode": "box" }
+			} },
+		{ "name": "commercial-low-detail", "label": "Distant skyline",
+			"match": ["^low-detail-"], "pipeline": "prefab", "collision_mode": "none", "scale_mul": 10.0 },
+		{ "name": "commercial-buildings", "label": "Buildings",
+			"match": ["^building-"], "pipeline": "prefab", "collision_mode": "box",
+			"assets": {
+				"building-a": { "manual": true },
+				"building-c": { "manual": true }
+			} }
+	]
+}

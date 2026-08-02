@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_84id0"]
+[ext_resource type="PackedScene" path="res://kit/raw/industrial/building-b.glb" id="2_dnthc"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_5txqw"]
+size = Vector3(18.7524, 13.23, 11.358)
+
+[node name="BuildingB" type="Node3D" unique_id=1523496595]
+script = ExtResource("1_84id0")
+
+[node name="Model" type="Node3D" parent="." unique_id=1013064115 instance=ExtResource("2_dnthc")]
+transform = Transform3D(9, 0, 0, 0, 9, 0, 0, 0, 9, -0.0063010454, 0, 0.072000146)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1492603961]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=2119566534]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.536743e-07, 6.615, 0)
+shape = SubResource("BoxShape3D_5txqw")

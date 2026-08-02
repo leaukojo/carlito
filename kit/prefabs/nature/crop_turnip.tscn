@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_lgrmt"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/crop_turnip.glb" id="2_mgxk4"]
+
+[node name="CropTurnip" type="Node3D" unique_id=215343778]
+script = ExtResource("1_lgrmt")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=300465171 instance=ExtResource("2_mgxk4")]
+transform = Transform3D(2.5, 0, 0, 0, 2.5, 0, 0, 0, 2.5, 0, 0.125, 0)

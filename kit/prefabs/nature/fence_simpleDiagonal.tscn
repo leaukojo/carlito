@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_jlnf3"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/fence_simpleDiagonal.glb" id="2_uunem"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_mamho"]
+size = Vector3(5, 1.7250001, 5)
+
+[node name="FenceSimpleDiagonal" type="Node3D" unique_id=457289384]
+script = ExtResource("1_jlnf3")
+
+[node name="Model" type="Node3D" parent="." unique_id=736578037 instance=ExtResource("2_uunem")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0.25, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=108045538]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1868286813]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8625001, 0)
+shape = SubResource("BoxShape3D_mamho")

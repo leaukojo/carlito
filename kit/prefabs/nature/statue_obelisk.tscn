@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_kb5lq"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/statue_obelisk.glb" id="2_qrcgq"]
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_17vj3"]
+points = PackedVector3Array(0.030205455, 4.331251, 0.030205455, -0.80223805, -0.034738064, -0.80223805, -0.80223805, -0.034738064, 0.7957142, 0.7957142, -0.034738064, -0.80223805, 0.7957142, 0.17374492, 0.7957142, -0.2800351, 3.850284, -0.2800351, 0.27847442, 3.8800836, 0.27847442, -0.2800351, 3.850284, 0.27351126, 0.27351126, 3.850284, -0.2800351, -0.80223805, 0.17374492, -0.80223805, 0.7957142, 0.17374492, -0.80223805, -0.80223805, 0.17374492, 0.7957142, 0.7341402, 0.13659832, 0.7341402, -0.16479878, 4.1273975, -0.16479878, 0.15827493, 4.1273975, -0.16479878, -0.16479878, 4.1273975, 0.15827493, -0.03657854, 4.3215985, -0.03657854, 0.15900591, 4.1361713, 0.15900591, -0.03657854, 4.3215985, 0.03005469, 0.03005469, 4.3215985, -0.03657854)
+
+[node name="StatueObelisk" type="Node3D" unique_id=1036280447]
+script = ExtResource("1_kb5lq")
+collision_mode = "hull"
+
+[node name="Model" type="Node3D" parent="." unique_id=1354933299 instance=ExtResource("2_qrcgq")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0.25, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1037390584]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=231126399]
+shape = SubResource("ConvexPolygonShape3D_17vj3")

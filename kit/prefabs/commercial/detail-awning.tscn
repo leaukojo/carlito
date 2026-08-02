@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_yvre6"]
+[ext_resource type="PackedScene" path="res://kit/raw/commercial/detail-awning.glb" id="2_i3blk"]
+
+[node name="DetailAwning" type="Node3D" unique_id=171387034]
+script = ExtResource("1_yvre6")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=1277952197 instance=ExtResource("2_i3blk")]
+transform = Transform3D(9, 0, 0, 0, 9, 0, 0, 0, 9, 0, 0, -1.56555)

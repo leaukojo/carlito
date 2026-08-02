@@ -1,0 +1,142 @@
+[gd_scene load_steps=12 format=3]
+
+; The standard three-point HEADSTOCK — the A-frame every mounted implement bolts to, and the
+; only part of an implement whose dimensions are not free: the two lower pins must meet the
+; tractor's lower-link ball ends and the top pin must sit exactly at
+; ImplementBase.mast_offset() = (z -0.06, y 0.533), which is what HitchLinkage closes its
+; four-bar on. It lives in ONE scene so the four implements cannot drift apart from the
+; linkage one at a time.
+;
+; Origin is ON THE LOWER PIN LINE, which is where ThreePointHitch's Mount sits, so an
+; implement instancing this at its own origin is correctly hung by construction. Painted
+; structural grey rather than any machine colour — it is the interface, not the machine.
+; NO CollisionShape: implements are visual (ImplementBase).
+
+[sub_resource type="StandardMaterial3D" id="MatSteel"]
+resource_name = "headstock_steel"
+albedo_color = Color(0.3, 0.33, 0.37, 1)
+metallic_specular = 0.55
+roughness = 0.55
+
+[sub_resource type="StandardMaterial3D" id="MatPin"]
+resource_name = "headstock_pin"
+albedo_color = Color(0.72, 0.75, 0.78, 1)
+metallic_specular = 0.7
+roughness = 0.4
+
+[sub_resource type="CylinderMesh" id="MeshPin"]
+material = SubResource("MatPin")
+top_radius = 0.045
+bottom_radius = 0.045
+height = 0.1
+radial_segments = 8
+rings = 0
+
+[sub_resource type="CylinderMesh" id="MeshCollar"]
+material = SubResource("MatSteel")
+top_radius = 0.062
+bottom_radius = 0.062
+height = 0.035
+radial_segments = 8
+rings = 0
+
+[sub_resource type="CylinderMesh" id="MeshCrossTube"]
+material = SubResource("MatSteel")
+top_radius = 0.05
+bottom_radius = 0.05
+height = 0.8
+radial_segments = 8
+rings = 0
+
+[sub_resource type="BoxMesh" id="MeshLug"]
+material = SubResource("MatSteel")
+size = Vector3(0.03, 0.15, 0.15)
+
+[sub_resource type="BoxMesh" id="MeshGusset"]
+material = SubResource("MatSteel")
+size = Vector3(0.05, 0.13, 0.16)
+
+[sub_resource type="BoxMesh" id="MeshStrut"]
+material = SubResource("MatSteel")
+size = Vector3(0.045, 0.5693, 0.08)
+
+[sub_resource type="BoxMesh" id="MeshBrace"]
+material = SubResource("MatSteel")
+size = Vector3(0.42, 0.05, 0.06)
+
+[sub_resource type="BoxMesh" id="MeshMastCap"]
+material = SubResource("MatSteel")
+size = Vector3(0.14, 0.1, 0.1)
+
+[sub_resource type="CylinderMesh" id="MeshTopPin"]
+material = SubResource("MatPin")
+top_radius = 0.032
+bottom_radius = 0.032
+height = 0.16
+radial_segments = 8
+rings = 0
+
+[node name="Headstock" type="Node3D"]
+
+[node name="PinL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.37, 0, 0)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshPin")
+
+[node name="PinR" type="MeshInstance3D" parent="."]
+position = Vector3(0.37, 0, 0)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshPin")
+
+[node name="CollarL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.335, 0, 0)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshCollar")
+
+[node name="CollarR" type="MeshInstance3D" parent="."]
+position = Vector3(0.335, 0, 0)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshCollar")
+
+[node name="LugL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.305, 0, 0)
+mesh = SubResource("MeshLug")
+
+[node name="LugR" type="MeshInstance3D" parent="."]
+position = Vector3(0.305, 0, 0)
+mesh = SubResource("MeshLug")
+
+[node name="CrossTube" type="MeshInstance3D" parent="."]
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshCrossTube")
+
+[node name="GussetL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.2, 0.04, -0.02)
+mesh = SubResource("MeshGusset")
+
+[node name="GussetR" type="MeshInstance3D" parent="."]
+position = Vector3(0.2, 0.04, -0.02)
+mesh = SubResource("MeshGusset")
+
+[node name="StrutL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.1, 0.2665, -0.03)
+rotation = Vector3(0, 0, -0.3595)
+mesh = SubResource("MeshStrut")
+
+[node name="StrutR" type="MeshInstance3D" parent="."]
+position = Vector3(0.1, 0.2665, -0.03)
+rotation = Vector3(0, 0, 0.3595)
+mesh = SubResource("MeshStrut")
+
+[node name="Brace" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.3, -0.03)
+mesh = SubResource("MeshBrace")
+
+[node name="MastCap" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.51, -0.045)
+mesh = SubResource("MeshMastCap")
+
+[node name="TopPin" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.533, -0.06)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshTopPin")

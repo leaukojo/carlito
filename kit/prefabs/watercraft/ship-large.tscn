@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_wst6y"]
+[ext_resource type="PackedScene" path="res://kit/raw/watercraft/ship-large.glb" id="2_vlkju"]
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_mipd0"]
+points = PackedVector3Array(0.39776152, 13.930442, 8.733007, -2.767825, 0.35252076, -4.320815, 2.739619, 0.32901576, -4.331363, 0.39776152, 18.506264, -13.307937, -4.59076, 16.4258, -9.980952, -0.84888035, 5.6145706, 12.891087, 4.556817, 6.863248, 5.820268, 4.360668, 3.0163426, -11.939331, 4.556817, 16.4258, -9.978347, -4.385536, 3.030849, -11.914463, -4.59076, 6.863248, 5.4060235, -0.43268174, 20.169838, 0, 2.3200698, 0.8229936, 5.4545426, -3.144019, 1.1866825, 4.6890736, 3.8297913, 14.701887, 0, -4.175538, 8.528815, -13.307937, -3.8638897, 14.701887, 0, 4.1406183, 8.526821, -13.305331, 2.38804, 0.5567001, -10.427291, 4.973016, 4.367888, -4.9891734, 0.81298316, 5.6145706, 13.307937, -5.0079355, 4.367888, -4.9891734, -0.43268174, 13.515546, 9.147252, 0.39776152, 20.169838, 0, 3.449699, 1.699275, 5.0078173, -0.809892, 2.2527618, 9.907728, -2.4168355, 0.58069617, -10.400741, -0.43268174, 18.506264, -13.307937, -4.34043, 4.281061, 5.110112, -4.59076, 8.528815, -12.891087, 4.556817, 8.526821, -12.888481, -3.5928922, 1.0400769, -4.3689356)
+
+[node name="ShipLarge" type="Node3D" unique_id=166588017]
+script = ExtResource("1_wst6y")
+collision_mode = "hull"
+
+[node name="Model" type="Node3D" parent="." unique_id=1082164798 instance=ExtResource("2_vlkju")]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, -2.861023e-06)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=726418628]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=512373525]
+shape = SubResource("ConvexPolygonShape3D_mipd0")

@@ -1,0 +1,172 @@
+[gd_scene format=3 uid="uid://btjsi27fmr0tc"]
+
+[ext_resource type="Script" uid="uid://dfqaw0jscyvlx" path="res://src/levels/base/level.gd" id="1_level"]
+[ext_resource type="Resource" uid="uid://ecqcvatc6145" path="res://src/levels/island/level_2/level_2_info.tres" id="2_info"]
+[ext_resource type="Script" uid="uid://ckxshtqj7odax" path="res://src/vehicles/base/chase_camera.gd" id="3_cam"]
+[ext_resource type="Script" uid="uid://5y8krjlda43v" path="res://src/levels/base/vehicle_spawn.gd" id="4_spawn"]
+[ext_resource type="Script" uid="uid://ctk4ghrrwqt7i" path="res://src/levels/base/heightmap_terrain.gd" id="5_terrain"]
+[ext_resource type="Texture2D" uid="uid://dabdrujvdy4oh" path="res://src/levels/island/level_2/level_2_island_height.png" id="6_height"]
+[ext_resource type="Texture2D" uid="uid://cq4tvahpypj0v" path="res://src/levels/island/level_2/level_2_island_splat.png" id="7_splat"]
+[ext_resource type="Shader" uid="uid://bcdkfxw2svriw" path="res://kit/terrain/terrain_splat.gdshader" id="8_shader"]
+[ext_resource type="Script" uid="uid://1gxlnkadilor" path="res://src/levels/base/skyline_ring.gd" id="9_skyline"]
+[ext_resource type="Script" uid="uid://bqwd2fww3l5yg" path="res://src/water/water_surface.gd" id="9_water"]
+[ext_resource type="Script" uid="uid://t88htpmwukbg" path="res://kit/helpers/authoring_root.gd" id="10_authoring"]
+[ext_resource type="Texture2D" uid="uid://b1rclbqqfpp0r" path="res://src/levels/island/level_2/level_2_island_splat2.png" id="11_0473h"]
+[ext_resource type="Environment" uid="uid://bjh6g6yntyvh1" path="res://src/levels/base/default_env.tres" id="11_env"]
+[ext_resource type="Script" uid="uid://cpl5vh8pdc04w" path="res://kit/helpers/road_path.gd" id="12_ctgma"]
+[ext_resource type="Resource" uid="uid://3r6iaciwp2fk" path="res://kit/roads/asphalt_profile.tres" id="13_6n34x"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/suburban/building-type-b.tscn" id="14_moklg"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/suburban/path-stones-messy.tscn" id="16_bfksj"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/suburban/tree-large.tscn" id="17_t0jqp"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/roads/construction-barrier.tscn" id="18_0473h"]
+
+[sub_resource type="PlaneMesh" id="SeaBedMesh"]
+size = Vector2(560, 560)
+
+[sub_resource type="StandardMaterial3D" id="SeaBedMat"]
+albedo_color = Color(0.83, 0.76, 0.55, 1)
+
+[sub_resource type="ShaderMaterial" id="SplatMat"]
+render_priority = 0
+shader = ExtResource("8_shader")
+shader_parameter/grass_color = Color(0.35, 0.55, 0.25, 1)
+shader_parameter/dirt_color = Color(0.52, 0.4, 0.26, 1)
+shader_parameter/sand_color = Color(0.83, 0.76, 0.55, 1)
+shader_parameter/rock_color = Color(0.45, 0.44, 0.42, 1)
+shader_parameter/color5 = Color(0.92, 0.94, 0.97, 1)
+shader_parameter/color6 = Color(0.3, 0.24, 0.17, 1)
+shader_parameter/color7 = Color(0.22, 0.22, 0.24, 1)
+shader_parameter/color8 = Color(0.62, 0.6, 0.56, 1)
+shader_parameter/splatmap = ExtResource("7_splat")
+shader_parameter/splatmap2 = ExtResource("11_0473h")
+shader_parameter/blend_sharpness = 8.0
+shader_parameter/roughness_value = 1.0
+
+[sub_resource type="Curve3D" id="Curve3D_ctgma"]
+_data = {
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, 136.30646, 50.496082, 182.80353, 13.275581, -0.33010036, -2.6375768, -18.739965, 0.46597353, 3.723234, 98.917244, 53.633335, 198.35878, 18.72532, -1.9490105, -3.2908273, -9.946449, 1.0352684, 1.7480098, 41.67874, 52.849022, 201.60405, 9.809511, -2.432877, 0.95592403, -13.263348, 3.2894702, -1.2924958, 15.120453, 59.12353, 213.0854, 13.643428, -0.93668413, 1.1777269, -21.656206, 1.4867982, -1.8694052, -21.569275, 68.53529, 195.44061, 20.824152, -1.5296859, 6.2218275, -25.319313, 1.8598883, -7.5648894, -86.31996, 69.31961, 204.32887, 11.956404, -1.8732312, 23.564589, -15.2784815, 2.393707, -30.111992, -149.69495, 77.94706, 157.1593, -28.330774, -3.3889093, 18.214731, 32.536835, 3.8920357, -20.918936, -161.41135, 81.08431, 56.33307, -38.69892, 0.94098765, -3.592153, 19.037113, -0.4628989, 1.7670835, -51.343735, 89.71177, 93.92627, -17.774878, 4.24852, 5.6349206, 17.429607, -4.1659937, -5.525464, -0.1337471, 77.16275, 71.30335, -17.67019, -2.034266, 5.941686, 22.900976, 2.6364558, -7.7005634, 53.660973, 64.61373, 60.6381, -24.025759, -3.3471463, 1.5045488, 18.382692, 2.5609827, -1.1511668, 115.68318, 90.49608, 32.359352, -16.545721, 0.122987755, 8.487117, 27.798096, -0.20662896, -14.259015, 166.25677, 80.3, 53.58709, -9.7796955, -8.9153595, 28.301418, 5.1983805, 4.7389445, -15.043571, 221.19746, 89.71177, -21.76413, 15.9127035, -4.6111465, 1.1458486, -27.376513, 7.9331026, -1.9713395, 205.83298, 116.37843, -60.942307, 25.647541, 0, -12.589573, -38.86363, 0, 19.076935, 126.46629, 117.16275, -28.585571, 43.0459, 1.4122392, -4.400843, -58.457554, -1.9178609, 5.97647, 12.610397, 116.37843, 33.904587, 53.581654, 1.9491122, 24.122383, -25.54825, -0.92935556, -11.501786, -160.40997, 107.750984, 0.7435303, 3.7693381, -6.3919473, 27.033367, -3.5373757, 5.9985914, -25.369755, -210.72699, 108.2542, -66.641594, -15.016029, -1.2480974, 21.565752, 16.510283, 1.3722963, -23.711773, -178.9104, 139.12354, -131.93994, -25.660421, 8.888783, 9.96258, 11.045141, -3.826043, -4.2882423, -122.41942, 115.594124, -193.46735, 4.826044, -2.4328377, -11.216656, -10.401588, 5.2435026, 24.175295, -104.1924, 113.24118, -160.94897, 11.105977, -7.614876, -23.212135, -6.0308995, 4.1351204, 12.604929, -159.75983, 134.41765, -106.681046, -12.332324, -4.3215938, -6.449248, 16.698141, 5.8514996, 8.732373, -149.94794, 144.61372, -65.31725, -19.210419, -3.436944, -2.910261, 30.05755, 5.377609, 4.553535, -92.61506, 157.94707, -71.56737, -30.496994, 3.2154055, -3.564287, 16.064365, -1.6937226, 1.8774967, -5.281372, 170.49608, -43.401154, -14.542521, 4.154577, 5.9759593, 16.026325, -4.578477, -6.585699, 33.84703, 144.61372, -56.787315, 0, 0, 0, 0, 0, 0, 82.57083, 145.39804, -79.502266),
+"tilts": PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+}
+point_count = 28
+
+[node name="Level2" type="Node3D" unique_id=831656400]
+script = ExtResource("1_level")
+info = ExtResource("2_info")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=974361122]
+environment = ExtResource("11_env")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=817050080]
+transform = Transform3D(0.866025, 0.353553, -0.353553, 0, 0.707107, 0.707107, 0.5, -0.612372, 0.612372, 0, 40, 0)
+light_color = Color(1, 0.96, 0.88, 1)
+shadow_enabled = true
+directional_shadow_blend_splits = true
+directional_shadow_max_distance = 150.0
+
+[node name="ChaseCamera" type="Camera3D" parent="." unique_id=1616479266]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 6)
+script = ExtResource("3_cam")
+
+[node name="Spawn" type="Marker3D" parent="." unique_id=1134507317]
+transform = Transform3D(0.04758963, 0, 0.99886703, 0, 1, 0, -0.99886703, 0, 0.04758963, 73.64502, 53.275227, 200.46413)
+script = ExtResource("4_spawn")
+vehicle_types = PackedStringArray("car", "truck", "tractor", "bike", "drone")
+
+[node name="WaterSpawn" type="Marker3D" parent="." unique_id=2087814946]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 270, 1.3, 0)
+script = ExtResource("4_spawn")
+vehicle_types = PackedStringArray("boat")
+is_water = true
+
+[node name="PlaneSpawn" type="Marker3D" parent="." unique_id=1159526462]
+transform = Transform3D(0.07513564, 0, 0.9971734, 0, 1, 0, -0.9971734, 0, 0.07513564, 0.47984314, 117.3406, 37.04197)
+script = ExtResource("4_spawn")
+vehicle_types = PackedStringArray("plane")
+
+[node name="Sea" type="Area3D" parent="." unique_id=770879758]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+script = ExtResource("9_water")
+size = Vector2(560, 560)
+depth = 3.0
+far_sea_extent = 1900.0
+
+[node name="SeaBed" type="MeshInstance3D" parent="." unique_id=345938898]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.01, 0)
+mesh = SubResource("SeaBedMesh")
+surface_material_override/0 = SubResource("SeaBedMat")
+
+[node name="Skyline" type="Node3D" parent="." unique_id=1147330502]
+script = ExtResource("9_skyline")
+radius = 640.0
+height = 130.0
+band_depth = 280.0
+gen_seed = 202
+
+[node name="Island" type="StaticBody3D" parent="." unique_id=374379151]
+script = ExtResource("5_terrain")
+heightmap = ExtResource("6_height")
+terrain_size = Vector2(512, 512)
+height = 200.0
+material = SubResource("SplatMat")
+gen_seed = 316590
+feature_scale = 512.0
+gen_octaves = 8
+falloff_start = 0.933
+falloff_end = 1.0
+coast_roughness = 0.7
+terrace_flat = 0.095
+splatmap = ExtResource("7_splat")
+splatmap2 = ExtResource("11_0473h")
+channel_names = PackedStringArray("Grass", "Dirt", "Sand", "Rock", "Snow", "Mud", "Asphalt", "Gravel")
+channel_grip = PackedFloat32Array(0.8, 0.7, 0.6, 0.7, 0.75, 0.5, 1, 0.85)
+dirt_slope_deg = 45.0
+rock_slope_deg = 79.0
+
+[node name="AuthoringRoot" type="Node3D" parent="." unique_id=1193762569]
+script = ExtResource("10_authoring")
+chunk_size = 64.0
+metadata/_custom_type_script = "uid://t88htpmwukbg"
+
+[node name="RoadPath" type="Node3D" parent="AuthoringRoot" unique_id=1589243748]
+script = ExtResource("12_ctgma")
+profile = ExtResource("13_6n34x")
+conform_falloff = 5.0
+conform_epsilon = 0.005
+metadata/_custom_type_script = "uid://cpl5vh8pdc04w"
+
+[node name="Path" type="Path3D" parent="AuthoringRoot/RoadPath" unique_id=1827718795]
+curve = SubResource("Curve3D_ctgma")
+
+[node name="SuburbanProps" type="Node3D" parent="AuthoringRoot" unique_id=1670716248]
+
+[node name="BuildingTypeB" parent="AuthoringRoot/SuburbanProps" unique_id=1030771529 instance=ExtResource("14_moklg")]
+transform = Transform3D(0.69997466, 0, 0.71416765, 0, 1, 0, -0.71416765, 0, 0.69997466, 78.45949, 144.31374, -55.951813)
+
+[node name="PathStonesMessy" parent="AuthoringRoot/SuburbanProps" unique_id=161412862 instance=ExtResource("16_bfksj")]
+transform = Transform3D(-0.6790273, 0, -0.73411304, 0, 1, 0, 0.73411304, 0, -0.6790273, 75.92908, 144.31374, -61.371407)
+
+[node name="@Node3D@65711" parent="AuthoringRoot/SuburbanProps" unique_id=695582067 instance=ExtResource("16_bfksj")]
+transform = Transform3D(-0.8465251, 0, -0.5323489, 0, 1, 0, 0.5323489, 0, -0.8465251, 73.61579, 144.31374, -64.14876)
+
+[node name="TreeLarge" parent="AuthoringRoot/SuburbanProps" unique_id=1741990176 instance=ExtResource("17_t0jqp")]
+transform = Transform3D(-0.87787384, 0, -0.478892, 0, 1, 0, 0.478892, 0, -0.87787384, 66.85305, 144.31374, -47.589836)
+
+[node name="@Node3D@65712" parent="AuthoringRoot/SuburbanProps" unique_id=868440817 instance=ExtResource("17_t0jqp")]
+transform = Transform3D(0.9873351, 0, -0.15864892, 0, 1, 0, 0.15864892, 0, 0.9873351, 81.7204, 144.31374, -68.81091)
+
+[node name="@Node3D@65714" parent="AuthoringRoot/SuburbanProps" unique_id=1367733887 instance=ExtResource("17_t0jqp")]
+transform = Transform3D(-0.9390858, 0, -0.3436829, 0, 1, 0, 0.3436829, 0, -0.9390858, 52.41648, 144.31374, -50.754154)
+
+[node name="@Node3D@65715" parent="AuthoringRoot/SuburbanProps" unique_id=343312805 instance=ExtResource("17_t0jqp")]
+transform = Transform3D(-0.99752295, 0, 0.07034201, 0, 1, 0, -0.07034201, 0, -0.99752295, 41.092155, 144.3141, -77.36115)
+
+[node name="@Node3D@65716" parent="AuthoringRoot/SuburbanProps" unique_id=1245661925 instance=ExtResource("17_t0jqp")]
+transform = Transform3D(-0.998939, 0, 0.046053715, 0, 1, 0, -0.046053715, 0, -0.998939, 34.438286, 145.09804, -69.79941)
+
+[node name="@Node3D@65717" parent="AuthoringRoot/SuburbanProps" unique_id=2145717130 instance=ExtResource("17_t0jqp")]
+transform = Transform3D(0.9611692, 0, -0.27595973, 0, 1, 0, 0.27595973, 0, 0.9611692, 94.71671, 145.09804, -69.442856)
+
+[node name="RoadsProps" type="Node3D" parent="AuthoringRoot" unique_id=1132337609]
+
+[node name="ConstructionBarrier" parent="AuthoringRoot/RoadsProps" unique_id=1465481513 instance=ExtResource("18_0473h")]
+transform = Transform3D(0.9290201, 0, 0.37002924, 0, 1, 0, -0.37002924, 0, 0.9290201, 80.19119, 145.09804, -78.20102)

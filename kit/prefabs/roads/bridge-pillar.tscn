@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_j7ao7"]
+[ext_resource type="PackedScene" path="res://kit/raw/roads/bridge-pillar.glb" id="2_m1yv1"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_jf3bs"]
+size = Vector3(1.1999999, 6, 1.1999999)
+
+[node name="BridgePillar" type="Node3D" unique_id=361652456]
+script = ExtResource("1_j7ao7")
+
+[node name="Model" type="Node3D" parent="." unique_id=601293582 instance=ExtResource("2_m1yv1")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, 0, 0, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=854389670]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=6634979]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
+shape = SubResource("BoxShape3D_jf3bs")

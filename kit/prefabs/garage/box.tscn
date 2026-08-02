@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_gouya"]
+[ext_resource type="PackedScene" path="res://kit/raw/garage/box.glb" id="2_h3d0g"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hs3gj"]
+size = Vector3(0.858, 0.858, 0.858)
+
+[node name="Box" type="Node3D" unique_id=213493548]
+script = ExtResource("1_gouya")
+
+[node name="Model" type="Node3D" parent="." unique_id=456634425 instance=ExtResource("2_h3d0g")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, 0, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=76111541]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=180047512]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.429, 0)
+shape = SubResource("BoxShape3D_hs3gj")

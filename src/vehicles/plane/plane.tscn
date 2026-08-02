@@ -1,0 +1,688 @@
+[gd_scene format=3 uid="uid://qv33doeo8bcf"]
+
+[ext_resource type="Script" uid="uid://bkmn0sjddjb4t" path="res://src/vehicles/plane/plane.gd" id="1_plane"]
+[ext_resource type="Resource" path="res://src/vehicles/plane/plane_spec.tres" id="2_spec"]
+
+[sub_resource type="BoxShape3D" id="FuselageShape"]
+size = Vector3(0.9, 0.9, 5.2)
+
+[sub_resource type="BoxShape3D" id="WingShape"]
+size = Vector3(7, 0.14, 1.4)
+
+[sub_resource type="CylinderMesh" id="CowlMesh"]
+top_radius = 0.45
+bottom_radius = 0.34
+height = 0.8
+radial_segments = 12
+rings = 1
+
+[sub_resource type="StandardMaterial3D" id="AccentMat"]
+albedo_color = Color(0.78, 0.16, 0.16, 1)
+roughness = 0.5
+
+[sub_resource type="CylinderMesh" id="NoseRingMesh"]
+top_radius = 0.34
+bottom_radius = 0.19
+height = 0.28
+radial_segments = 12
+rings = 1
+
+[sub_resource type="CylinderMesh" id="CabinMesh"]
+top_radius = 0.45
+bottom_radius = 0.45
+height = 1.8
+radial_segments = 12
+rings = 1
+
+[sub_resource type="StandardMaterial3D" id="BodyMat"]
+albedo_color = Color(0.93, 0.93, 0.91, 1)
+roughness = 0.5
+
+[sub_resource type="CylinderMesh" id="AftMesh"]
+top_radius = 0.34
+bottom_radius = 0.45
+height = 1.05
+radial_segments = 12
+rings = 1
+
+[sub_resource type="CylinderMesh" id="TailconeMesh"]
+top_radius = 0.13
+bottom_radius = 0.34
+height = 1.25
+radial_segments = 12
+rings = 1
+
+[sub_resource type="BoxMesh" id="KeelMesh"]
+size = Vector3(0.22, 0.16, 2.2)
+
+[sub_resource type="BoxMesh" id="StripeMesh"]
+size = Vector3(0.925, 0.09, 1.8)
+
+[sub_resource type="StandardMaterial3D" id="TrimMat"]
+albedo_color = Color(0.16, 0.24, 0.42, 1)
+roughness = 0.45
+
+[sub_resource type="BoxMesh" id="IntakeMesh"]
+size = Vector3(0.1, 0.1, 0.24)
+
+[sub_resource type="StandardMaterial3D" id="InteriorMat"]
+albedo_color = Color(0.13, 0.12, 0.12, 1)
+roughness = 0.85
+
+[sub_resource type="CylinderMesh" id="ExhaustMesh"]
+top_radius = 0.05
+bottom_radius = 0.05
+height = 0.38
+radial_segments = 8
+rings = 1
+
+[sub_resource type="StandardMaterial3D" id="ChromeMat"]
+albedo_color = Color(0.72, 0.74, 0.78, 1)
+metallic = 0.9
+roughness = 0.22
+
+[sub_resource type="CylinderMesh" id="SpinnerMesh"]
+top_radius = 0.0
+bottom_radius = 0.18
+height = 0.4
+radial_segments = 10
+rings = 1
+
+[sub_resource type="CylinderMesh" id="PropDiscMesh"]
+top_radius = 0.91
+bottom_radius = 0.91
+height = 0.015
+radial_segments = 24
+rings = 1
+
+[sub_resource type="StandardMaterial3D" id="PropDiscMat"]
+transparency = 1
+cull_mode = 2
+albedo_color = Color(0.09, 0.09, 0.1, 0.28)
+roughness = 0.6
+
+[sub_resource type="BoxMesh" id="BladeMesh"]
+size = Vector3(0.8, 0.14, 0.045)
+
+[sub_resource type="StandardMaterial3D" id="PropMat"]
+albedo_color = Color(0.09, 0.09, 0.1, 1)
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="BladeTipMesh"]
+size = Vector3(0.18, 0.15, 0.05)
+
+[sub_resource type="BoxMesh" id="WindshieldMesh"]
+size = Vector3(0.82, 0.58, 0.05)
+
+[sub_resource type="StandardMaterial3D" id="GlassMat"]
+transparency = 1
+albedo_color = Color(0.3, 0.42, 0.52, 0.45)
+metallic = 0.2
+roughness = 0.08
+
+[sub_resource type="BoxMesh" id="GreenhouseMesh"]
+size = Vector3(0.86, 0.34, 1.45)
+
+[sub_resource type="BoxMesh" id="RoofMesh"]
+size = Vector3(0.88, 0.14, 1.5)
+
+[sub_resource type="BoxMesh" id="RearFairingMesh"]
+size = Vector3(0.78, 0.26, 0.45)
+
+[sub_resource type="BoxMesh" id="SeatMesh"]
+size = Vector3(0.62, 0.3, 0.22)
+
+[sub_resource type="BoxMesh" id="DashMesh"]
+size = Vector3(0.72, 0.14, 0.1)
+
+[sub_resource type="BoxMesh" id="DoorMesh"]
+size = Vector3(0.02, 0.4, 0.62)
+
+[sub_resource type="StandardMaterial3D" id="GearMat"]
+albedo_color = Color(0.16, 0.16, 0.17, 1)
+roughness = 0.6
+
+[sub_resource type="BoxMesh" id="WingFairingMesh"]
+size = Vector3(1, 0.2, 1.45)
+
+[sub_resource type="BoxMesh" id="WingPanelMesh"]
+size = Vector3(3.3, 0.12, 1.4)
+
+[sub_resource type="CylinderMesh" id="WingLEMesh"]
+top_radius = 0.06
+bottom_radius = 0.06
+height = 3.3
+radial_segments = 8
+rings = 1
+
+[sub_resource type="SphereMesh" id="TipCapMesh"]
+radial_segments = 12
+rings = 6
+
+[sub_resource type="PrismMesh" id="FlapMesh"]
+size = Vector3(0.1, 0.36, 1.85)
+
+[sub_resource type="PrismMesh" id="AileronMesh"]
+size = Vector3(0.1, 0.3, 1)
+
+[sub_resource type="BoxMesh" id="NavLensMesh"]
+size = Vector3(0.14, 0.08, 0.1)
+
+[sub_resource type="StandardMaterial3D" id="NavGreenMat"]
+albedo_color = Color(0.02, 0.3, 0.06, 1)
+roughness = 0.3
+emission_enabled = true
+emission = Color(0.05, 0.95, 0.18, 1)
+emission_energy_multiplier = 0.15
+
+[sub_resource type="StandardMaterial3D" id="NavRedMat"]
+albedo_color = Color(0.34, 0.03, 0.02, 1)
+roughness = 0.3
+emission_enabled = true
+emission = Color(0.95, 0.06, 0.03, 1)
+emission_energy_multiplier = 0.15
+
+[sub_resource type="BoxMesh" id="LandingLensMesh"]
+size = Vector3(0.24, 0.1, 0.05)
+
+[sub_resource type="StandardMaterial3D" id="LandingLensMat"]
+albedo_color = Color(0.4, 0.38, 0.33, 1)
+roughness = 0.2
+emission_enabled = true
+emission = Color(1, 0.96, 0.85, 1)
+emission_energy_multiplier = 0.15
+
+[sub_resource type="BoxMesh" id="StrutMesh"]
+size = Vector3(0.07, 1.53, 0.16)
+
+[sub_resource type="BoxMesh" id="FinMesh"]
+size = Vector3(0.09, 0.96, 0.38)
+
+[sub_resource type="PrismMesh" id="FinSweepMesh"]
+left_to_right = 1.0
+size = Vector3(0.4, 0.96, 0.09)
+
+[sub_resource type="PrismMesh" id="RudderMesh"]
+size = Vector3(0.09, 0.3, 0.96)
+
+[sub_resource type="BoxMesh" id="StabMesh"]
+size = Vector3(2.4, 0.09, 0.4)
+
+[sub_resource type="PrismMesh" id="StabWedgeMesh"]
+left_to_right = 1.0
+size = Vector3(0.22, 1.2, 0.09)
+
+[sub_resource type="PrismMesh" id="ElevatorMesh"]
+size = Vector3(0.09, 0.34, 1.06)
+
+[sub_resource type="CylinderMesh" id="NoseLegMesh"]
+top_radius = 0.055
+bottom_radius = 0.055
+height = 0.4
+radial_segments = 8
+rings = 1
+
+[sub_resource type="BoxMesh" id="ForkMesh"]
+size = Vector3(0.03, 0.24, 0.09)
+
+[sub_resource type="SphereMesh" id="PantMesh"]
+radius = 0.2
+height = 0.4
+radial_segments = 10
+rings = 6
+
+[sub_resource type="BoxMesh" id="MainLegMesh"]
+size = Vector3(0.1, 0.965, 0.14)
+
+[sub_resource type="BoxMesh" id="StepMesh"]
+size = Vector3(0.22, 0.05, 0.12)
+
+[sub_resource type="CylinderMesh" id="PitotMesh"]
+top_radius = 0.02
+bottom_radius = 0.02
+height = 0.26
+radial_segments = 6
+rings = 1
+
+[sub_resource type="PrismMesh" id="AntennaMesh"]
+left_to_right = 1.0
+size = Vector3(0.16, 0.12, 0.025)
+
+[sub_resource type="TorusMesh" id="TyreMesh"]
+inner_radius = 0.09
+outer_radius = 0.22
+rings = 14
+ring_segments = 6
+
+[sub_resource type="StandardMaterial3D" id="WheelMat"]
+albedo_color = Color(0.09, 0.09, 0.1, 1)
+roughness = 0.75
+
+[sub_resource type="CylinderMesh" id="HubMesh"]
+top_radius = 0.1
+bottom_radius = 0.1
+height = 0.15
+radial_segments = 10
+rings = 1
+
+[sub_resource type="BoxMesh" id="TailLensMesh"]
+size = Vector3(0.09, 0.08, 0.06)
+
+[sub_resource type="StandardMaterial3D" id="NavWhiteMat"]
+albedo_color = Color(0.35, 0.35, 0.34, 1)
+roughness = 0.3
+emission_enabled = true
+emission = Color(1, 0.98, 0.94, 1)
+emission_energy_multiplier = 0.15
+
+[sub_resource type="SphereMesh" id="BeaconMesh"]
+radius = 0.06
+height = 0.12
+radial_segments = 8
+rings = 4
+
+[node name="Plane" type="RigidBody3D" unique_id=379134613]
+script = ExtResource("1_plane")
+spec = ExtResource("2_spec")
+
+[node name="FuselageCollision" type="CollisionShape3D" parent="." unique_id=1040132197]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0.2)
+shape = SubResource("FuselageShape")
+
+[node name="WingCollision" type="CollisionShape3D" parent="." unique_id=509904068]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.36, -0.2)
+shape = SubResource("WingShape")
+
+[node name="HoodCam" type="Marker3D" parent="." unique_id=376754876]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.03484732, 1.1828845, -1.5282934)
+
+[node name="Cowl" type="MeshInstance3D" parent="." unique_id=1554278776]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0.55, -1.75)
+mesh = SubResource("CowlMesh")
+surface_material_override/0 = SubResource("AccentMat")
+
+[node name="NoseRing" type="MeshInstance3D" parent="." unique_id=1889749676]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0.55, -2.29)
+mesh = SubResource("NoseRingMesh")
+surface_material_override/0 = SubResource("AccentMat")
+
+[node name="Cabin" type="MeshInstance3D" parent="." unique_id=1000506113]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0.55, -0.45)
+mesh = SubResource("CabinMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="AftFuselage" type="MeshInstance3D" parent="." unique_id=1480680103]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0.55, 0.975)
+mesh = SubResource("AftMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="Tailcone" type="MeshInstance3D" parent="." unique_id=429096186]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0.55, 2.125)
+mesh = SubResource("TailconeMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="BellyKeel" type="MeshInstance3D" parent="." unique_id=2106575117]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, -0.2)
+mesh = SubResource("KeelMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="Stripe" type="MeshInstance3D" parent="." unique_id=1115959307]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.42, -0.45)
+mesh = SubResource("StripeMesh")
+surface_material_override/0 = SubResource("TrimMat")
+
+[node name="IntakeL" type="MeshInstance3D" parent="." unique_id=191082472]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.34, 0.6, -1.95)
+mesh = SubResource("IntakeMesh")
+surface_material_override/0 = SubResource("InteriorMat")
+
+[node name="IntakeR" type="MeshInstance3D" parent="." unique_id=890523782]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.34, 0.6, -1.95)
+mesh = SubResource("IntakeMesh")
+surface_material_override/0 = SubResource("InteriorMat")
+
+[node name="Exhaust" type="MeshInstance3D" parent="." unique_id=623193287]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, -0.16, 0.1, -1.45)
+mesh = SubResource("ExhaustMesh")
+surface_material_override/0 = SubResource("ChromeMat")
+
+[node name="Prop" type="Node3D" parent="." unique_id=571608900]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, -2.5)
+
+[node name="Spinner" type="MeshInstance3D" parent="Prop" unique_id=2038883794]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, -0.13)
+mesh = SubResource("SpinnerMesh")
+surface_material_override/0 = SubResource("ChromeMat")
+
+[node name="Disc" type="MeshInstance3D" parent="Prop" unique_id=639903568]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0, -0.1)
+visible = false
+cast_shadow = 0
+mesh = SubResource("PropDiscMesh")
+surface_material_override/0 = SubResource("PropDiscMat")
+
+[node name="Blades" type="Node3D" parent="Prop" unique_id=2127063786]
+
+[node name="BladeR" type="MeshInstance3D" parent="Prop/Blades" unique_id=1452951063]
+transform = Transform3D(1, 0, 0, 0, 0.9781, -0.2079, 0, 0.2079, 0.9781, 0.46, 0, -0.1)
+mesh = SubResource("BladeMesh")
+surface_material_override/0 = SubResource("PropMat")
+
+[node name="BladeTipR" type="MeshInstance3D" parent="Prop/Blades" unique_id=289908530]
+transform = Transform3D(1, 0, 0, 0, 0.9781, -0.2079, 0, 0.2079, 0.9781, 0.82, 0, -0.1)
+mesh = SubResource("BladeTipMesh")
+surface_material_override/0 = SubResource("AccentMat")
+
+[node name="BladeL" type="MeshInstance3D" parent="Prop/Blades" unique_id=154905633]
+transform = Transform3D(-1, 0, 0, 0, -0.9781, 0.2079, 0, 0.2079, 0.9781, -0.46, 0, -0.1)
+mesh = SubResource("BladeMesh")
+surface_material_override/0 = SubResource("PropMat")
+
+[node name="BladeTipL" type="MeshInstance3D" parent="Prop/Blades" unique_id=29665488]
+transform = Transform3D(-1, 0, 0, 0, -0.9781, 0.2079, 0, 0.2079, 0.9781, -0.82, 0, -0.1)
+mesh = SubResource("BladeTipMesh")
+surface_material_override/0 = SubResource("AccentMat")
+
+[node name="Windshield" type="MeshInstance3D" parent="." unique_id=1070784064]
+transform = Transform3D(1, 0, 0, 0, 0.8988, -0.4384, 0, 0.4384, 0.8988, 0, 1, -1.38)
+mesh = SubResource("WindshieldMesh")
+surface_material_override/0 = SubResource("GlassMat")
+
+[node name="Greenhouse" type="MeshInstance3D" parent="." unique_id=1695172442]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.94, -0.55)
+mesh = SubResource("GreenhouseMesh")
+surface_material_override/0 = SubResource("GlassMat")
+
+[node name="CabinRoof" type="MeshInstance3D" parent="." unique_id=1473994084]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.15, -0.55)
+mesh = SubResource("RoofMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="RearFairing" type="MeshInstance3D" parent="." unique_id=1746116954]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0.35)
+mesh = SubResource("RearFairingMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="Seats" type="MeshInstance3D" parent="." unique_id=1997618482]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, -0.55)
+mesh = SubResource("SeatMesh")
+surface_material_override/0 = SubResource("InteriorMat")
+
+[node name="Dash" type="MeshInstance3D" parent="." unique_id=339507473]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, -1.19)
+mesh = SubResource("DashMesh")
+surface_material_override/0 = SubResource("InteriorMat")
+
+[node name="DoorL" type="MeshInstance3D" parent="." unique_id=89897762]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.455, 0.62, -0.8)
+mesh = SubResource("DoorMesh")
+surface_material_override/0 = SubResource("GearMat")
+
+[node name="DoorR" type="MeshInstance3D" parent="." unique_id=1426090263]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.455, 0.62, -0.8)
+mesh = SubResource("DoorMesh")
+surface_material_override/0 = SubResource("GearMat")
+
+[node name="WingRootFairing" type="MeshInstance3D" parent="." unique_id=1634847591]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.24, -0.3)
+mesh = SubResource("WingFairingMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="WingR" type="Node3D" parent="." unique_id=1850529597]
+transform = Transform3D(0.99905, -0.04362, 0, 0.04362, 0.99905, 0, 0, 0, 1, 0, 1.36, -0.2)
+
+[node name="PanelR" type="MeshInstance3D" parent="WingR" unique_id=2094828530]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.65, 0, 0)
+mesh = SubResource("WingPanelMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="LeadingEdgeR" type="MeshInstance3D" parent="WingR" unique_id=992215075]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 1.65, 0.005, -0.7)
+mesh = SubResource("WingLEMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="TipR" type="MeshInstance3D" parent="WingR" unique_id=1553770861]
+transform = Transform3D(0.4, 0, 0, 0, 0.12, 0, 0, 0, 1.4, 3.3, 0, 0)
+mesh = SubResource("TipCapMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="FlapR" type="Node3D" parent="WingR" unique_id=1106431307]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.025, 0, 0.7)
+
+[node name="FlapRMesh" type="MeshInstance3D" parent="WingR/FlapR" unique_id=1366791166]
+transform = Transform3D(0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0.16)
+mesh = SubResource("FlapMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="AileronR" type="Node3D" parent="WingR" unique_id=343481284]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.55, 0, 0.7)
+
+[node name="AileronRMesh" type="MeshInstance3D" parent="WingR/AileronR" unique_id=146717795]
+transform = Transform3D(0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0.13)
+mesh = SubResource("AileronMesh")
+surface_material_override/0 = SubResource("AccentMat")
+
+[node name="NavGreenR" type="MeshInstance3D" parent="WingR" unique_id=1495875548]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.3, 0, -0.72)
+mesh = SubResource("NavLensMesh")
+surface_material_override/0 = SubResource("NavGreenMat")
+
+[node name="WingL" type="Node3D" parent="." unique_id=1854654287]
+transform = Transform3D(0.99905, 0.04362, 0, -0.04362, 0.99905, 0, 0, 0, 1, 0, 1.36, -0.2)
+
+[node name="PanelL" type="MeshInstance3D" parent="WingL" unique_id=1544922917]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.65, 0, 0)
+mesh = SubResource("WingPanelMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="LeadingEdgeL" type="MeshInstance3D" parent="WingL" unique_id=1302050120]
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, -1.65, 0.005, -0.7)
+mesh = SubResource("WingLEMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="TipL" type="MeshInstance3D" parent="WingL" unique_id=1119046900]
+transform = Transform3D(0.4, 0, 0, 0, 0.12, 0, 0, 0, 1.4, -3.3, 0, 0)
+mesh = SubResource("TipCapMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="FlapL" type="Node3D" parent="WingL" unique_id=1556921241]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.025, 0, 0.7)
+
+[node name="FlapLMesh" type="MeshInstance3D" parent="WingL/FlapL" unique_id=800590358]
+transform = Transform3D(0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0.16)
+mesh = SubResource("FlapMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="AileronL" type="Node3D" parent="WingL" unique_id=571087699]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.55, 0, 0.7)
+
+[node name="AileronLMesh" type="MeshInstance3D" parent="WingL/AileronL" unique_id=1127248349]
+transform = Transform3D(0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0.13)
+mesh = SubResource("AileronMesh")
+surface_material_override/0 = SubResource("AccentMat")
+
+[node name="NavRedL" type="MeshInstance3D" parent="WingL" unique_id=1298174904]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.3, 0, -0.72)
+mesh = SubResource("NavLensMesh")
+surface_material_override/0 = SubResource("NavRedMat")
+
+[node name="LandingLens" type="MeshInstance3D" parent="WingL" unique_id=1844056109]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.6, 0, -0.755)
+mesh = SubResource("LandingLensMesh")
+surface_material_override/0 = SubResource("LandingLensMat")
+
+[node name="LandingLight" type="SpotLight3D" parent="WingL" unique_id=894720298]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.6, 0, -0.85)
+visible = false
+light_energy = 0.0
+spot_range = 30.0
+spot_angle = 38.0
+
+[node name="StrutR" type="MeshInstance3D" parent="." unique_id=1135968264]
+transform = Transform3D(0.6957, 0.7179, 0, -0.7179, 0.6957, 0, 0, 0, 1, 0.95, 0.833, -0.27)
+mesh = SubResource("StrutMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="StrutL" type="MeshInstance3D" parent="." unique_id=407249991]
+transform = Transform3D(0.6957, -0.7179, 0, 0.7179, 0.6957, 0, 0, 0, 1, -0.95, 0.833, -0.27)
+mesh = SubResource("StrutMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="Fin" type="MeshInstance3D" parent="." unique_id=566313539]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.14, 2.54)
+mesh = SubResource("FinMesh")
+surface_material_override/0 = SubResource("AccentMat")
+
+[node name="FinSweep" type="MeshInstance3D" parent="." unique_id=2089857759]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 0, 1.14, 2.15)
+mesh = SubResource("FinSweepMesh")
+surface_material_override/0 = SubResource("AccentMat")
+
+[node name="Rudder" type="Node3D" parent="." unique_id=101133687]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.14, 2.73)
+
+[node name="RudderMesh" type="MeshInstance3D" parent="Rudder" unique_id=1164092804]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, 0.15)
+mesh = SubResource("RudderMesh")
+surface_material_override/0 = SubResource("AccentMat")
+
+[node name="Stabilizer" type="MeshInstance3D" parent="." unique_id=565498773]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.57, 2.39)
+mesh = SubResource("StabMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="StabTipR" type="MeshInstance3D" parent="." unique_id=632733933]
+transform = Transform3D(0.2, 0, 0, 0, 0.09, 0, 0, 0, 0.4, 1.2, 0.57, 2.39)
+mesh = SubResource("TipCapMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="StabTipL" type="MeshInstance3D" parent="." unique_id=906103536]
+transform = Transform3D(0.2, 0, 0, 0, 0.09, 0, 0, 0, 0.4, -1.2, 0.57, 2.39)
+mesh = SubResource("TipCapMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="StabWedgeR" type="MeshInstance3D" parent="." unique_id=544191672]
+transform = Transform3D(0, 1, 0, 0, 0, 1, 1, 0, 0, 0.6, 0.57, 2.08)
+mesh = SubResource("StabWedgeMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="StabWedgeL" type="MeshInstance3D" parent="." unique_id=1797163592]
+transform = Transform3D(0, -1, 0, 0, 0, -1, 1, 0, 0, -0.6, 0.57, 2.08)
+mesh = SubResource("StabWedgeMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="ElevatorL" type="Node3D" parent="." unique_id=349827556]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.67, 0.57, 2.59)
+
+[node name="ElevatorLMesh" type="MeshInstance3D" parent="ElevatorL" unique_id=2083727557]
+transform = Transform3D(0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0.17)
+mesh = SubResource("ElevatorMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="ElevatorR" type="Node3D" parent="." unique_id=190626192]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.67, 0.57, 2.59)
+
+[node name="ElevatorRMesh" type="MeshInstance3D" parent="ElevatorR" unique_id=253490639]
+transform = Transform3D(0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0.17)
+mesh = SubResource("ElevatorMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="NoseGearLeg" type="MeshInstance3D" parent="." unique_id=1786819472]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.04, -1.99)
+mesh = SubResource("NoseLegMesh")
+surface_material_override/0 = SubResource("GearMat")
+
+[node name="NoseForkL" type="MeshInstance3D" parent="." unique_id=446875914]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.115, -0.18, -2)
+mesh = SubResource("ForkMesh")
+surface_material_override/0 = SubResource("GearMat")
+
+[node name="NoseForkR" type="MeshInstance3D" parent="." unique_id=307029838]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.115, -0.18, -2)
+mesh = SubResource("ForkMesh")
+surface_material_override/0 = SubResource("GearMat")
+
+[node name="NosePant" type="MeshInstance3D" parent="." unique_id=814422159]
+transform = Transform3D(0.6, 0, 0, 0, 1, 0, 0, 0, 1.5, 0, 0.02, -2)
+mesh = SubResource("PantMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="MainGearLegL" type="MeshInstance3D" parent="." unique_id=1843465640]
+transform = Transform3D(-0.2279, -0.9737, 0, 0.9737, -0.2279, 0, 0, 0, 1, -0.63, -0.03, 0.6)
+mesh = SubResource("MainLegMesh")
+surface_material_override/0 = SubResource("GearMat")
+
+[node name="MainGearLegR" type="MeshInstance3D" parent="." unique_id=1771216429]
+transform = Transform3D(-0.2279, 0.9737, 0, -0.9737, -0.2279, 0, 0, 0, 1, 0.63, -0.03, 0.6)
+mesh = SubResource("MainLegMesh")
+surface_material_override/0 = SubResource("GearMat")
+
+[node name="MainPantL" type="MeshInstance3D" parent="." unique_id=2102929879]
+transform = Transform3D(0.6, 0, 0, 0, 1, 0, 0, 0, 1.5, -1.1, 0, 0.6)
+mesh = SubResource("PantMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="MainPantR" type="MeshInstance3D" parent="." unique_id=252648550]
+transform = Transform3D(0.6, 0, 0, 0, 1, 0, 0, 0, 1.5, 1.1, 0, 0.6)
+mesh = SubResource("PantMesh")
+surface_material_override/0 = SubResource("BodyMat")
+
+[node name="Step" type="MeshInstance3D" parent="." unique_id=2050656345]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.7, -0.02, 0.45)
+mesh = SubResource("StepMesh")
+surface_material_override/0 = SubResource("GearMat")
+
+[node name="Pitot" type="MeshInstance3D" parent="." unique_id=4952467]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, -1.2, 1.33, -0.82)
+mesh = SubResource("PitotMesh")
+surface_material_override/0 = SubResource("GearMat")
+
+[node name="Antenna" type="MeshInstance3D" parent="." unique_id=1905879411]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 0, 1, 0.9)
+mesh = SubResource("AntennaMesh")
+surface_material_override/0 = SubResource("GearMat")
+
+[node name="WheelFL" type="Node3D" parent="." unique_id=32799314]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -2)
+
+[node name="WheelFLTyre" type="MeshInstance3D" parent="WheelFL" unique_id=2092170526]
+mesh = SubResource("TyreMesh")
+surface_material_override/0 = SubResource("WheelMat")
+
+[node name="WheelFLHub" type="MeshInstance3D" parent="WheelFL" unique_id=1637590603]
+mesh = SubResource("HubMesh")
+surface_material_override/0 = SubResource("GearMat")
+
+[node name="WheelFR" type="Node3D" parent="." unique_id=909943186]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.1, 0, 0.6)
+
+[node name="WheelFRTyre" type="MeshInstance3D" parent="WheelFR" unique_id=16931322]
+mesh = SubResource("TyreMesh")
+surface_material_override/0 = SubResource("WheelMat")
+
+[node name="WheelFRHub" type="MeshInstance3D" parent="WheelFR" unique_id=1802065239]
+mesh = SubResource("HubMesh")
+surface_material_override/0 = SubResource("GearMat")
+
+[node name="WheelRL" type="Node3D" parent="." unique_id=609012522]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1, 0, 0.6)
+
+[node name="WheelRLTyre" type="MeshInstance3D" parent="WheelRL" unique_id=240592095]
+mesh = SubResource("TyreMesh")
+surface_material_override/0 = SubResource("WheelMat")
+
+[node name="WheelRLHub" type="MeshInstance3D" parent="WheelRL" unique_id=1488163608]
+mesh = SubResource("HubMesh")
+surface_material_override/0 = SubResource("GearMat")
+
+[node name="Lamps" type="Node3D" parent="." unique_id=679523001]
+
+[node name="NavTailWhite" type="MeshInstance3D" parent="Lamps" unique_id=1718079458]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 2.76)
+mesh = SubResource("TailLensMesh")
+surface_material_override/0 = SubResource("NavWhiteMat")
+
+[node name="BeaconTop" type="MeshInstance3D" parent="Lamps" unique_id=212868064]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.58, 2.54)
+mesh = SubResource("BeaconMesh")
+surface_material_override/0 = SubResource("NavRedMat")

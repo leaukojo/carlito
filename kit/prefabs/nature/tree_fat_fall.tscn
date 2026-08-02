@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_jgrdf"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/tree_fat_fall.glb" id="2_me0ho"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_saoqo"]
+size = Vector3(0.68799996, 5.752, 0.68799996)
+
+[node name="TreeFatFall" type="Node3D" unique_id=796378170]
+script = ExtResource("1_jgrdf")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=448928839 instance=ExtResource("2_me0ho")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0.25, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=197795463]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1468628690]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.876, 0)
+shape = SubResource("BoxShape3D_saoqo")

@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_32xcj"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/statue_ring.glb" id="2_dpkmd"]
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_wicvg"]
+points = PackedVector3Array(0.097659655, 3.790822, 0.433, -1.4856358, 0.030072317, -1, 0.84323704, 0.029688304, -1, -1.4526851, 0.07399885, 1, 1.4233902, 0.07362344, 1, 1.4076684, 3.1167502, -0.433, -1.4369633, 3.1163793, -0.433, 1.5023091, 0.85380197, -1.0316039, -1.531604, 0.85380197, 1.054258, 1.5023091, 0.85380197, 1.054258, -0.073956996, 3.8875134, -0.433, -1.531604, 0.85380197, -1.0316039, -1.3644464, 3.059004, 0.433, 1.3351514, 3.0593562, 0.433, 1.4563408, 0.029688304, -1, 0.10369327, 3.8875134, -0.433, -0.2958115, 3.6777198, 0.433, 1.2297397, 3.2355576, -0.433, -0.3109168, 3.7683349, -0.433, -0.070933096, 3.790822, 0.433, 1.1662945, 3.1721063, 0.433, -0.7255269, 3.5314624, -0.433, 0.5185818, 3.6498988, -0.433, -0.6892827, 3.4529243, 0.433, 0.49139506, 3.5653222, 0.433)
+
+[node name="StatueRing" type="Node3D" unique_id=374885392]
+script = ExtResource("1_32xcj")
+collision_mode = "hull"
+
+[node name="Model" type="Node3D" parent="." unique_id=177655586 instance=ExtResource("2_dpkmd")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0.25, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=2057172270]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1192346113]
+shape = SubResource("ConvexPolygonShape3D_wicvg")

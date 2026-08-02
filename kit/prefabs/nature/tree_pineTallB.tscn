@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_2k3xr"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/tree_pineTallB.glb" id="2_1jk3b"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_63c75"]
+size = Vector3(0.464, 9.673, 0.464)
+
+[node name="TreePineTallB" type="Node3D" unique_id=595718701]
+script = ExtResource("1_2k3xr")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=2137433025 instance=ExtResource("2_1jk3b")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, -0.06974995, 0.25, -0.010250062)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1418060813]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1963658735]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.06974995, 4.8365, -0.010250062)
+shape = SubResource("BoxShape3D_63c75")

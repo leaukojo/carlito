@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_ax3k6"]
+[ext_resource type="PackedScene" path="res://kit/raw/parked/police.glb" id="2_2ecyf"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_tc6si"]
+size = Vector3(1.8000001, 1.5600001, 3.72)
+
+[node name="Police" type="Node3D" unique_id=911441265]
+script = ExtResource("1_ax3k6")
+
+[node name="Model" type="Node3D" parent="." unique_id=1358344770 instance=ExtResource("2_2ecyf")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, -3.576279e-08, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=712329187]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=249649501]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.78000003, 0)
+shape = SubResource("BoxShape3D_tc6si")

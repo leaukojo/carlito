@@ -1,0 +1,77 @@
+[gd_resource type="Resource" script_class="VehicleSpec" load_steps=3 format=3]
+
+; North American conventional (bonneted) tractor unit. HAND-AUTHORED like semi_spec.tres, and a
+; VARIANT of it rather than a fresh tune: the drivetrain, brake, handbrake, wheel, suspension and
+; tyre blocks are semi_spec.tres's VERBATIM, so everything tests/test_truck.gd walks across the
+; truck family (the retarder band, the brake > peak drive > handbrake hierarchy, the retarder's
+; slip-cap backstop margin) holds here by construction. What differs is GEOMETRY and one flag.
+;
+; trailer_bus_equipped IS DELIBERATELY ABSENT, and that absence is the whole variant. Europe puts
+; a CAN pair on pins 6 and 7 of the ISO 7638 connector; North America has no data pair there at
+; all, so trailer ABS status rides the POWER line (SAE J2497 / PLC4TRUCKS) as one lamp bit. This
+; unit therefore tows the same trailers, brakes them exactly the same way through the same
+; pneumatic lines, and publishes trailer_connected FALSE with honest zeros behind it — attached
+; steel and bus silence. The default is false, but it is written out below anyway: a flag this
+; load-bearing being ABSENT and a flag being MISSING must not look the same in a diff.
+;
+; Geometry is measured off conventional.tscn: 4.70 m long (z -2.90 .. 1.80 — 1.38x the cab-over's
+; 3.40, which is what a hood and a sleeper cost), wheelbase 3.00 (steer axle -1.95 behind the hood,
+; drive axle +1.05), 1.92 wide like the rest of the family, kingpin (0, 1.05, 0.85). The COUPLING
+; PLANE stays at y 1.05: every trailer in TrailerCatalog is authored against that height, so it is
+; the one number a tractor-unit variant may not move.
+;
+; CENTRE OF MASS z -0.55 keeps the cab-over's front bias for the cab-over's reason, arrived at by
+; the same arithmetic. Bobtail it puts 53 % on the steer axle (com sits 0.10 m ahead of the
+; wheelbase midpoint); coupled, the plate's load lands at z 0.85 and the steer axle keeps a bigger
+; share than the cab-over's does, because the longer wheelbase gives that load a shorter lever on
+; the front. That is the honest upside of the silhouette, and it is why this unit is the forgiving
+; one to reverse — and the flip side, now that the plate carries a realistic 27 % of the trailer,
+; is that LESS of it reaches the single driven axle than on the cab-over. A long wheelbase trades
+; traction for manners; on a real 4x2 that is exactly the trade.
+;
+; SPRING RATE, DAMPING AND TRAVEL ARE THE SEMI'S 240000 N/m over 0.32 m, and they land the same
+; band on this geometry. The rear carries the fifth-wheel load here as well, so the compromise the
+; cab-over documents is the same one.
+
+[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="2_wheel"]
+
+[resource]
+script = ExtResource("1_spec")
+mass = 8000.0
+center_of_mass = Vector3(0, 0.35, -0.55)
+wheel_positions = PackedVector3Array(-0.72, 0.424, -1.95, 0.72, 0.424, -1.95, -0.62, 0.424, 1.05, 0.62, 0.424, 1.05)
+wheel_radius = 0.36
+wheel_inertia = 3.0
+wheel_scene = ExtResource("2_wheel")
+driven_front = false
+driven_rear = true
+retarder_equipped = true
+trailer_bus_equipped = false
+rest_length = 0.32
+spring_rate = 240000.0
+damper_bump = 12000.0
+damper_rebound = 15800.0
+max_suspension_force = 120000.0
+grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
+mu_long = 1.0
+mu_lat = 0.95
+handbrake_grip = 1.0
+torque_curve = PackedVector2Array(700, 975, 1200, 1290, 1800, 1500, 2400, 1440, 2800, 1120, 3200, 375)
+idle_rpm = 700.0
+redline_rpm = 3200.0
+gear_ratios = PackedFloat32Array(6.5, 3.7, 2.4, 1.6, 1.2, 1)
+reverse_ratio = 6.0
+final_drive = 4.5
+efficiency = 0.9
+shift_up_rpm = 2600.0
+shift_down_rpm = 1200.0
+brake_torque = 10500.0
+handbrake_torque = 4800.0
+max_steer_deg = 24.0
+steer_speed = 1.8
+headlight_paths = Array[NodePath]([NodePath("Lamps/HeadlightL"), NodePath("Lamps/HeadlightR")])
+head_lamp_paths = Array[NodePath]([NodePath("Lamps/HeadLensL"), NodePath("Lamps/HeadLensR")])
+brake_lamp_paths = Array[NodePath]([NodePath("Lamps/BrakeLampL"), NodePath("Lamps/BrakeLampR")])
+turn_left_paths = Array[NodePath]([NodePath("Lamps/TurnLF"), NodePath("Lamps/TurnLR")])
+turn_right_paths = Array[NodePath]([NodePath("Lamps/TurnRF"), NodePath("Lamps/TurnRR")])

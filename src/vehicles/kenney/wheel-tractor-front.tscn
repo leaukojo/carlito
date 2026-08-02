@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/models/wheel-tractor-dark-front.glb" id="1_glb"]
+
+[node name="Wheel" type="Node3D"]
+
+[node name="Model" type="Node3D" parent="." instance=ExtResource("1_glb")]
+transform = Transform3D(0, -3.713607, 0, 3.713607, 0, 0, 0, 0, 3.713607, 0, 0, 0)

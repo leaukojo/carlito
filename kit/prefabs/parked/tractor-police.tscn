@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_0cqx8"]
+[ext_resource type="PackedScene" path="res://kit/raw/parked/tractor-police.glb" id="2_x1tim"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_pxev8"]
+size = Vector3(1.6105926, 2.0425107, 2.7618504)
+
+[node name="TractorPolice" type="Node3D" unique_id=994095657]
+script = ExtResource("1_0cqx8")
+
+[node name="Model" type="Node3D" parent="." unique_id=550250716 instance=ExtResource("2_x1tim")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, -1.3017654e-05, -0.060006525)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=460148364]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1038682592]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0212554, 0)
+shape = SubResource("BoxShape3D_pxev8")

@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_8e6ug"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/tree_pineRoundA.glb" id="2_a0aib"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_3sp44"]
+size = Vector3(0.652, 6.832, 0.652)
+
+[node name="TreePineRoundA" type="Node3D" unique_id=1674914590]
+script = ExtResource("1_8e6ug")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=183844476 instance=ExtResource("2_a0aib")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0.25, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1693171664]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1507174419]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.416, 0)
+shape = SubResource("BoxShape3D_3sp44")

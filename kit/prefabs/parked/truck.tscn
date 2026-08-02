@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_g28tk"]
+[ext_resource type="PackedScene" path="res://kit/raw/parked/truck.glb" id="2_01feo"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_xtd5l"]
+size = Vector3(1.8000001, 1.56, 3.54)
+
+[node name="Truck" type="Node3D" unique_id=90831588]
+script = ExtResource("1_g28tk")
+
+[node name="Model" type="Node3D" parent="." unique_id=2081158953 instance=ExtResource("2_01feo")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, -3.576279e-08, 0.029999973)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=310392599]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=579177641]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.78, 0)
+shape = SubResource("BoxShape3D_xtd5l")

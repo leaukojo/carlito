@@ -1,0 +1,45 @@
+[gd_resource type="Resource" script_class="VehicleSpec" load_steps=2 format=3]
+
+; Flatbed semi-trailer running gear. A VehicleSpec because that is what RayWheel consumes; the
+; drivetrain / steering / lamp fields are meaningless on a towed body and stay at their defaults.
+;
+; Everything below is measured off flatbed.tscn (origin AT THE KINGPIN, ground at y = -1.05):
+;   - the tri-axle bogie sits at z 4.90 / 5.45 / 6.00, so the bogie centre is 5.45 m behind the
+;     coupling and the anchors are at y = 0.424 - 1.05 = -0.626 (the truck family's hub height).
+;   - center_of_mass z 3.98 puts 27.0 % of the trailer's weight on the fifth wheel
+;     ((5.45 - 3.98) / 5.45), i.e. 3776 kg onto the tractor's drive axle — the catalog-wide
+;     realistic plate share (see box_spec.tres), and the reason axle_load rises the moment you
+;     couple. On a 4x2 that load IS the traction budget.
+;   - spring_rate 145000 is sized so the 10 224 kg the bogie actually carries compresses it
+;     0.115 m of its 0.32 m travel (36 %), and a 25 t trailer 64 %. A spring sized for
+;     the FULL mass would ride on its stops, which is the "trailer sinks" failure — and is what
+;     the shipped Kenney trucks do (their rear static load exceeds what their springs can make).
+;   - brake_torque 6623 is load-apportioned, not copied: 16.72 kN per trailer wheel against
+;     26.5 kN per tractor wheel, so 10500 * 16.72 / 26.5. A trailer braking harder per tonne than
+;     the unit pulling it is how a rig jackknifes under braking.
+;   - handbrake_torque 1656 is the bogie's SPRING PARKING BRAKE, a quarter of this trailer's own
+;     service brake like every trailer here — see box_spec.tres for the whole derivation. The
+;     lightest trailer gets the weakest one, and because both scale with what the bogie carries,
+;     all four rigs hold the same ~24 % grade rather than the empty one holding best.
+
+[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
+
+[resource]
+script = ExtResource("1_spec")
+mass = 14000.0
+center_of_mass = Vector3(0, -0.55, 3.98)
+wheel_positions = PackedVector3Array(-0.72, -0.626, 4.9, 0.72, -0.626, 4.9, -0.72, -0.626, 5.45, 0.72, -0.626, 5.45, -0.72, -0.626, 6, 0.72, -0.626, 6)
+wheel_radius = 0.36
+wheel_inertia = 3.0
+driven_front = false
+driven_rear = false
+rest_length = 0.32
+spring_rate = 145000.0
+damper_bump = 7700.0
+damper_rebound = 10400.0
+max_suspension_force = 70000.0
+grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
+mu_long = 1.0
+mu_lat = 0.95
+brake_torque = 6623.0
+handbrake_torque = 1656.0

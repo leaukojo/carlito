@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_gkio1"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/tree_simple_fall.glb" id="2_2h4wq"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_fexc3"]
+size = Vector3(0.405, 7.597, 0.405)
+
+[node name="TreeSimpleFall" type="Node3D" unique_id=581174833]
+script = ExtResource("1_gkio1")
+collision_mode = "footprint"
+
+[node name="Model" type="Node3D" parent="." unique_id=1509399135 instance=ExtResource("2_2h4wq")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0.25, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1307153680]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=2020348656]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.7985, 0)
+shape = SubResource("BoxShape3D_fexc3")

@@ -1,0 +1,232 @@
+[gd_scene format=3 uid="uid://b73asdjvfv7iu"]
+
+[ext_resource type="Script" uid="uid://dfqaw0jscyvlx" path="res://src/levels/base/level.gd" id="1_level"]
+[ext_resource type="Resource" path="res://src/levels/island/level_4/level_4_info.tres" id="2_info"]
+[ext_resource type="Script" uid="uid://ckxshtqj7odax" path="res://src/vehicles/base/chase_camera.gd" id="3_cam"]
+[ext_resource type="Script" uid="uid://5y8krjlda43v" path="res://src/levels/base/vehicle_spawn.gd" id="4_spawn"]
+[ext_resource type="Script" uid="uid://ctk4ghrrwqt7i" path="res://src/levels/base/heightmap_terrain.gd" id="5_terrain"]
+[ext_resource type="Texture2D" uid="uid://4jp08544bbgp" path="res://src/levels/island/level_4/level_4_island_height.png" id="6_height"]
+[ext_resource type="Texture2D" uid="uid://bbk4a14jol186" path="res://src/levels/island/level_4/level_4_island_splat.png" id="7_splat"]
+[ext_resource type="Shader" uid="uid://bcdkfxw2svriw" path="res://kit/terrain/terrain_splat.gdshader" id="8_shader"]
+[ext_resource type="Script" uid="uid://1gxlnkadilor" path="res://src/levels/base/skyline_ring.gd" id="9_skyline"]
+[ext_resource type="Script" uid="uid://bqwd2fww3l5yg" path="res://src/water/water_surface.gd" id="9_water"]
+[ext_resource type="Script" uid="uid://t88htpmwukbg" path="res://kit/helpers/authoring_root.gd" id="10_authoring"]
+[ext_resource type="Environment" uid="uid://bjh6g6yntyvh1" path="res://src/levels/base/default_env.tres" id="11_env"]
+[ext_resource type="Texture2D" uid="uid://d0prl53txn35c" path="res://src/levels/island/level_4/level_4_island_splat2.png" id="12_826b5"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/racing/grandStandAwning.tscn" id="13_8djw3"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/racing/pitsGarageClosed.tscn" id="14_h4w1n"]
+[ext_resource type="Script" uid="uid://cpl5vh8pdc04w" path="res://kit/helpers/road_path.gd" id="15_3crsd"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/racing/pitsGarage.tscn" id="16_826b5"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/racing/pitsOfficeRoof.tscn" id="17_1tx03"]
+[ext_resource type="Resource" uid="uid://cbr1dgepr0f1l" path="res://kit/roads/bridge_profile.tres" id="18_2ah51"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/racing/pitsOfficeCorner.tscn" id="18_tp0xp"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/racing/radarEquipment.tscn" id="19_juskc"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/racing/barrierWall.tscn" id="21_juskc"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/racing/barrierRed.tscn" id="22_sj7ey"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/racing/tentRoofDouble.tscn" id="23_iwkas"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/racing/bannerTowerRed.tscn" id="24_r6r16"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/racing/billboardDouble_exclusive.tscn" id="25_vxylw"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/parked/race-future.tscn" id="27_vxylw"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/parked/race.tscn" id="28_ejnli"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/watercraft/boat-speed-g.tscn" id="30_ixaku"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/watercraft/boat-speed-c.tscn" id="31_htery"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/watercraft/arrow-standing.tscn" id="32_ixaku"]
+
+[sub_resource type="PlaneMesh" id="SeaBedMesh"]
+size = Vector2(560, 560)
+
+[sub_resource type="StandardMaterial3D" id="SeaBedMat"]
+albedo_color = Color(0.83, 0.76, 0.55, 1)
+
+[sub_resource type="ShaderMaterial" id="SplatMat"]
+render_priority = 0
+shader = ExtResource("8_shader")
+shader_parameter/grass_color = Color(0.35, 0.55, 0.25, 1)
+shader_parameter/dirt_color = Color(0.52, 0.4, 0.26, 1)
+shader_parameter/sand_color = Color(0.83, 0.76, 0.55, 1)
+shader_parameter/rock_color = Color(0.45, 0.44, 0.42, 1)
+shader_parameter/color5 = Color(0.92, 0.94, 0.97, 1)
+shader_parameter/color6 = Color(0.3, 0.24, 0.17, 1)
+shader_parameter/color7 = Color(0.22, 0.22, 0.24, 1)
+shader_parameter/color8 = Color(0.62, 0.6, 0.56, 1)
+shader_parameter/splatmap = ExtResource("7_splat")
+shader_parameter/splatmap2 = ExtResource("12_826b5")
+shader_parameter/blend_sharpness = 8.0
+shader_parameter/roughness_value = 1.0
+
+[sub_resource type="Curve3D" id="Curve3D_rvhb4"]
+_data = {
+"points": PackedVector3Array(0, 0, 0, 31.109623, 2.985855, -1.0028354, 10.707443, 4.3, -9.207755, -30.608263, -0.3959423, -6.3802233, 19.788612, 0.25598148, 4.1248918, 104.45853, 6.9881682, -10.961426, -8.812401, 0.31974062, -18.190897, 8.8124075, -0.31974086, 18.19091, 155.95113, 6.178843, 21.067963, 12.636081, 0.32403973, -15.77639, -12.636129, -0.32404098, 15.776451, 149.16756, 5.365989, 81.32867, 19.796043, -0.077439286, -4.0968065, -31.848305, 0.12458601, 6.591032, 91.8428, 4.5348487, 101.108444, 32.49487, 0.83570176, -1.0755372, -16.131119, -0.41485944, 0.5339187, -4.961437, 5.9689198, 113.225784, 11.401182, -0.65039057, 11.413157, -11.502882, 0.6561921, -11.514964, -52.560684, 0.82108593, 105.88801, 2.0844545, 0.08744686, 16.155146, -2.120579, -0.08896235, -16.43512, -59.848488, 9.1, 58.281082, 10.54688, 0.9621473, 12.745804, -10.415987, -0.95020646, -12.58762, -64.98171, 0.3, 9.621334, 15.749481, -0.07348423, 4.448856, -7.072821, 0.033000503, -1.9979045, -111.82117, 4.3587527, -4.527401, 5.2140574, 1.4363761, 4.9767394, -5.214055, -1.4363754, -4.976737, -132.9549, 0.6171506, -9.579483, -1.7570641, 1.4363754, 6.9904943, 1.7570641, -1.4363754, -6.9904943, -138.98526, -3.1244514, -30.45512, -5.414665, 0.32786262, 4.9589677, 7.1690784, -0.43409383, -6.5657296, -123.80097, -6.8660536, -45.998444, -4.1406374, -0.53978115, 8.789578, 4.140637, 0.5397811, -8.789578, -101.50281, -5.394046, -64.78305, -1.4677893, -0.16479261, 9.618282, 1.3017589, 0.14615194, -8.5303, -101.21756, -3.922038, -93.93761, -7.4526005, 0.24651428, 4.3451066, 7.4525986, -0.24651422, -4.3451056, -93.2932, -4.472331, -118.579834, -5.117328, 0.24651422, -6.945079, 5.1173296, -0.24651428, 6.9450808, -67.94473, -5.022624, -113.33674, 1.3125063, 0.07055929, -8.529614, -2.8948565, -0.15562518, 18.81287, -70.4464, -5.572917, -87.572876, -8.664921, 0.053517587, -16.948296, 8.66492, -0.05351758, 16.948296, -80.5574, -5.700671, -31.370495, -18.393347, -2.0155165, -4.4666367, 13.248927, 1.4517984, 3.217367, -29.077566, -5.8284254, -6.6568184, -13.641323, -1.3092737, 0.43973535, 0, 0, 0, 10.707443, 4.3, -9.207755),
+"tilts": PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+}
+point_count = 21
+
+[node name="Level4" type="Node3D" unique_id=1960347888]
+script = ExtResource("1_level")
+info = ExtResource("2_info")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=264666575]
+environment = ExtResource("11_env")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1490999694]
+transform = Transform3D(0.866025, 0.353553, -0.353553, 0, 0.707107, 0.707107, 0.5, -0.612372, 0.612372, 0, 40, 0)
+light_color = Color(1, 0.96, 0.88, 1)
+shadow_enabled = true
+directional_shadow_blend_splits = true
+directional_shadow_max_distance = 150.0
+
+[node name="ChaseCamera" type="Camera3D" parent="." unique_id=522819997]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 6)
+script = ExtResource("3_cam")
+
+[node name="Spawn" type="Marker3D" parent="." unique_id=245184177]
+transform = Transform3D(0.089433074, 0, -0.99599284, 0, 1, 0, 0.99599284, 0, 0.089433074, 42.37245, 20.177467, -10.881861)
+script = ExtResource("4_spawn")
+vehicle_types = PackedStringArray("car", "truck", "tractor")
+
+[node name="WaterSpawn" type="Marker3D" parent="." unique_id=764744830]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 54.011295, 1.3, -8.017178)
+script = ExtResource("4_spawn")
+vehicle_types = PackedStringArray("boat")
+is_water = true
+
+[node name="Sea" type="Area3D" parent="." unique_id=2039717273]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+script = ExtResource("9_water")
+size = Vector2(560, 560)
+depth = 3.0
+far_sea_extent = 1900.0
+
+[node name="SeaBed" type="MeshInstance3D" parent="." unique_id=167908362]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.01, 0)
+mesh = SubResource("SeaBedMesh")
+surface_material_override/0 = SubResource("SeaBedMat")
+
+[node name="Skyline" type="Node3D" parent="." unique_id=1147330504]
+script = ExtResource("9_skyline")
+height = 75.0
+band_depth = 200.0
+gen_seed = 404
+
+[node name="Island" type="StaticBody3D" parent="." unique_id=1703291961]
+script = ExtResource("5_terrain")
+heightmap = ExtResource("6_height")
+terrain_size = Vector2(256, 256)
+height = 51.0
+material = SubResource("SplatMat")
+preset = 2
+gen_seed = 967573
+feature_scale = 140.0
+falloff_start = 0.6
+falloff_end = 0.92
+coast_roughness = 0.9
+splatmap = ExtResource("7_splat")
+splatmap2 = ExtResource("12_826b5")
+channel_names = PackedStringArray("Grass", "Dirt", "Sand", "Rock", "Snow", "Mud", "Asphalt", "Gravel")
+channel_grip = PackedFloat32Array(0.8, 0.7, 0.6, 0.7, 0.75, 0.5, 1, 0.85)
+sand_height = 3.0
+dirt_slope_deg = 45.0
+
+[node name="AuthoringRoot" type="Node3D" parent="." unique_id=1851528191]
+script = ExtResource("10_authoring")
+chunk_size = 64.0
+metadata/_custom_type_script = "uid://t88htpmwukbg"
+
+[node name="RacingProps" type="Node3D" parent="AuthoringRoot" unique_id=1672542747]
+
+[node name="GrandStandAwning" parent="AuthoringRoot/RacingProps" unique_id=1442112038 instance=ExtResource("13_8djw3")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 30.923336, 4, 47.11239)
+
+[node name="@Node3D@51092" parent="AuthoringRoot/RacingProps" unique_id=714109657 instance=ExtResource("13_8djw3")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 30.923336, 4, 35.11239)
+
+[node name="@Node3D@51093" parent="AuthoringRoot/RacingProps" unique_id=1887109009 instance=ExtResource("13_8djw3")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 30.923336, 4, 23.112389)
+
+[node name="@Node3D@51094" parent="AuthoringRoot/RacingProps" unique_id=201909247 instance=ExtResource("13_8djw3")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 30.923336, 4, 11.112389)
+
+[node name="PitsGarageClosed" parent="AuthoringRoot/RacingProps" unique_id=1933644797 instance=ExtResource("14_h4w1n")]
+transform = Transform3D(1.1924881e-08, 0, -1, 0, 1, 0, 1, 0, 1.1924881e-08, 0, 4, 12)
+
+[node name="@Node3D@39317" parent="AuthoringRoot/RacingProps" unique_id=1354027538 instance=ExtResource("14_h4w1n")]
+transform = Transform3D(1.1924881e-08, 0, -1, 0, 1, 0, 1, 0, 1.1924881e-08, 0, 4, 24)
+
+[node name="PitsGarage" parent="AuthoringRoot/RacingProps" unique_id=1551129900 instance=ExtResource("16_826b5")]
+transform = Transform3D(1.1924881e-08, 0, -1, 0, 1, 0, 1, 0, 1.1924881e-08, 0, 4, 36)
+
+[node name="PitsOfficeRoof" parent="AuthoringRoot/RacingProps" unique_id=257462905 instance=ExtResource("17_1tx03")]
+transform = Transform3D(-0.70710677, 0, 0.70710677, 0, 1, 0, -0.70710677, 0, -0.70710677, -29.329132, 4, 38.10894)
+
+[node name="PitsOfficeCorner" parent="AuthoringRoot/RacingProps" unique_id=686970887 instance=ExtResource("18_tp0xp")]
+transform = Transform3D(0.25881907, 0, 0.9659258, 0, 1, 0, -0.9659258, 0, 0.25881907, -32.23069, 3.2376108, 15.394453)
+
+[node name="RadarEquipment" parent="AuthoringRoot/RacingProps" unique_id=895973896 instance=ExtResource("19_juskc")]
+transform = Transform3D(-0.4999999, 0, -0.86602545, 0, 1, 0, 0.86602545, 0, -0.4999999, -1.8065758, 12.400002, 11.636048)
+
+[node name="BarrierWall" parent="AuthoringRoot/RacingProps" unique_id=1620355278 instance=ExtResource("21_juskc")]
+transform = Transform3D(1, 0, 1.7484555e-07, 0, 1, 0, -1.7484555e-07, 0, 1, -14.223777, 3.999998, 42.852997)
+
+[node name="BarrierRed" parent="AuthoringRoot/RacingProps" unique_id=337391405 instance=ExtResource("22_sj7ey")]
+transform = Transform3D(0.70710665, 0, -0.7071069, 0, 1, 0, 0.7071069, 0, 0.70710665, -6.7586975, 4.0482616, 3.0761683)
+
+[node name="TentRoofDouble" parent="AuthoringRoot/RacingProps" unique_id=1470938102 instance=ExtResource("23_iwkas")]
+transform = Transform3D(1.1924881e-08, 0, -1, 0, 1, 0, 1, 0, 1.1924881e-08, 15.772371, 4, 15.376835)
+
+[node name="@Node3D@41048" parent="AuthoringRoot/RacingProps" unique_id=1154342375 instance=ExtResource("23_iwkas")]
+transform = Transform3D(1.1924881e-08, 0, -1, 0, 1, 0, 1, 0, 1.1924881e-08, 15.626699, 4, 31.262737)
+
+[node name="BannerTowerRed" parent="AuthoringRoot/RacingProps" unique_id=1033521587 instance=ExtResource("24_r6r16")]
+transform = Transform3D(1.1924881e-08, 0, -1, 0, 1, 0, 1, 0, 1.1924881e-08, 44.660454, 5.9116774, -66.425964)
+
+[node name="@Node3D@42106" parent="AuthoringRoot/RacingProps" unique_id=1338049571 instance=ExtResource("24_r6r16")]
+transform = Transform3D(1.1924881e-08, 0, -1, 0, 1, 0, 1, 0, 1.1924881e-08, -104.72638, 8.083361, 96.425766)
+
+[node name="@Node3D@42107" parent="AuthoringRoot/RacingProps" unique_id=1768323899 instance=ExtResource("24_r6r16")]
+transform = Transform3D(1.1924881e-08, 0, -1, 0, 1, 0, 1, 0, 1.1924881e-08, 24.132034, 4.258196, 91.74183)
+
+[node name="BillboardDoubleExclusive" parent="AuthoringRoot/RacingProps" unique_id=1294729726 instance=ExtResource("25_vxylw")]
+transform = Transform3D(1.1924881e-08, 0, -1, 0, 1, 0, 1, 0, 1.1924881e-08, 23.514132, 1.7130928, -51.477154)
+
+[node name="@Node3D@42113" parent="AuthoringRoot/RacingProps" unique_id=1362122570 instance=ExtResource("25_vxylw")]
+transform = Transform3D(-0.13963109, 0, -0.9902036, 0, 1, 0, 0.9902036, 0, -0.13963109, -86.390564, 4.526867, -102.74739)
+
+[node name="@Node3D@42114" parent="AuthoringRoot/RacingProps" unique_id=668826209 instance=ExtResource("25_vxylw")]
+transform = Transform3D(0.258819, 0, -0.9659258, 0, 1, 0, 0.9659258, 0, 0.258819, -104.17953, 7.648777, 28.971739)
+
+[node name="@Node3D@42123" parent="AuthoringRoot/RacingProps" unique_id=1637421465 instance=ExtResource("25_vxylw")]
+transform = Transform3D(1.1924881e-08, 0, -1, 0, 1, 0, 1, 0, 1.1924881e-08, 23.59071, 4.631301, 71.55766)
+
+[node name="RoadPath" type="Node3D" parent="AuthoringRoot" unique_id=508471179]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 13.56863, 0)
+script = ExtResource("15_3crsd")
+profile = ExtResource("18_2ah51")
+metadata/_custom_type_script = "uid://cpl5vh8pdc04w"
+
+[node name="Path" type="Path3D" parent="AuthoringRoot/RoadPath" unique_id=631331023]
+curve = SubResource("Curve3D_rvhb4")
+
+[node name="ParkedProps" type="Node3D" parent="AuthoringRoot" unique_id=1287137246]
+
+[node name="RaceFuture" parent="AuthoringRoot/ParkedProps" unique_id=643602444 instance=ExtResource("27_vxylw")]
+transform = Transform3D(-0.7071068, 0, -0.7071067, 0, 1, 0, 0.7071067, 0, -0.7071068, -8.849312, 3.8988895, 31.773983)
+
+[node name="Race" parent="AuthoringRoot/ParkedProps" unique_id=1358177135 instance=ExtResource("28_ejnli")]
+transform = Transform3D(1.1924881e-08, 0, -1, 0, 1, 0, 1, 0, 1.1924881e-08, -9.171313, 4, 38.23067)
+
+[node name="WatercraftProps" type="Node3D" parent="AuthoringRoot" unique_id=1153377466]
+
+[node name="BoatSpeedG" parent="AuthoringRoot/WatercraftProps" unique_id=139339224 instance=ExtResource("30_ixaku")]
+transform = Transform3D(-0.25881904, 0, 0.9659258, 0, 1, 0, -0.9659258, 0, -0.25881904, 41.1679, 0.5664196, 62.91368)
+
+[node name="BoatSpeedC" parent="AuthoringRoot/WatercraftProps" unique_id=1632612833 instance=ExtResource("31_htery")]
+transform = Transform3D(0.70710677, 0, 0.70710677, 0, 1, 0, -0.70710677, 0, 0.70710677, 41.91173, 0.7298126, 73.43921)
+
+[node name="@Node3D@45157" parent="AuthoringRoot/WatercraftProps" unique_id=1405998987 instance=ExtResource("31_htery")]
+transform = Transform3D(0.9659259, 0, -0.25881884, 0, 1, 0, 0.25881884, 0, 0.9659259, 39.56826, 0, -3.4108143)
+
+[node name="ArrowStanding" parent="AuthoringRoot/WatercraftProps" unique_id=598436597 instance=ExtResource("32_ixaku")]
+transform = Transform3D(0.97002786, 0, -0.24299344, 0, 1, 0, 0.24299344, 0, 0.97002786, 77.775246, 1.4764299, 36.089268)
+
+[node name="@Node3D@47686" parent="AuthoringRoot/WatercraftProps" unique_id=1540453011 instance=ExtResource("32_ixaku")]
+transform = Transform3D(-0.8660254, 0, 0.50000006, 0, 1, 0, -0.50000006, 0, -0.8660254, -14.274284, 2.0338192, -47.238876)

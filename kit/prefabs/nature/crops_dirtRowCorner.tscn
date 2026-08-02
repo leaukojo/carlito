@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_2353d"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/crops_dirtRowCorner.glb" id="2_471w2"]
+
+[node name="CropsDirtRowCorner" type="Node3D" unique_id=78252187]
+script = ExtResource("1_2353d")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=574262117 instance=ExtResource("2_471w2")]
+transform = Transform3D(2.5, 0, 0, 0, 2.5, 0, 0, 0, 2.5, 0.27625, 0.125, -0.27625)

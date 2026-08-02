@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_44oud"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/fence_gate.glb" id="2_jug0h"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ol3s0"]
+size = Vector3(5, 1.725, 0.3509334)
+
+[node name="FenceGate" type="Node3D" unique_id=775527558]
+script = ExtResource("1_44oud")
+
+[node name="Model" type="Node3D" parent="." unique_id=777357018 instance=ExtResource("2_jug0h")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0.25, 2.325)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=920971771]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=34617235]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8625, -4.4703484e-08)
+shape = SubResource("BoxShape3D_ol3s0")

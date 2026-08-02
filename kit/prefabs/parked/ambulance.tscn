@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_j7vo3"]
+[ext_resource type="PackedScene" path="res://kit/raw/parked/ambulance.glb" id="2_yw6xu"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_nh4aa"]
+size = Vector3(1.8000001, 2.1599998, 3.9)
+
+[node name="Ambulance" type="Node3D" unique_id=2120247340]
+script = ExtResource("1_j7vo3")
+
+[node name="Model" type="Node3D" parent="." unique_id=840879939 instance=ExtResource("2_yw6xu")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, -3.576279e-08, 0.029999973)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=307033575]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1799241621]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0799999, 0)
+shape = SubResource("BoxShape3D_nh4aa")

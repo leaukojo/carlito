@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_uaj8f"]
+[ext_resource type="PackedScene" path="res://kit/raw/garage/debris-door.glb" id="2_2ts03"]
+
+[node name="DebrisDoor" type="Node3D" unique_id=159220243]
+script = ExtResource("1_uaj8f")
+collision_mode = "none"
+
+[node name="Model" type="Node3D" parent="." unique_id=452920704 instance=ExtResource("2_2ts03")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, 0, 0)

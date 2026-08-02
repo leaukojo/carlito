@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_374jf"]
+[ext_resource type="PackedScene" path="res://kit/raw/racing/bannerTowerGreen.glb" id="2_1pcxm"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_i8lhd"]
+size = Vector3(4.6224, 14.9484005, 4.6224)
+
+[node name="BannerTowerGreen" type="Node3D" unique_id=975744264]
+script = ExtResource("1_374jf")
+
+[node name="Model" type="Node3D" parent="." unique_id=1990112730 instance=ExtResource("2_1pcxm")]
+transform = Transform3D(12, 0, 0, 0, 12, 0, 0, 0, 12, 1.8887999, 0.12, 10.1112)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=1809305514]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=444799047]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 7.4742002, 7.1525574e-07)
+shape = SubResource("BoxShape3D_i8lhd")

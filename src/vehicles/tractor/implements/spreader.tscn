@@ -1,0 +1,298 @@
+[gd_scene load_steps=29 format=3]
+
+; Mounted single-disc fertilizer spreader (broadcaster). Authored in the LOWERED (working)
+; pose with the origin ON THE LOWER PIN LINE, the frame HitchLinkage solves against; ground is
+; y = -0.21 in this frame. Unlike the plough and the mower, NOTHING on this machine touches
+; the ground at any hitch position — a spreader throws from a disc held clear of the crop, and
+; that is exactly why it is not draft-relevant (see spreader.gd).
+;
+; The drive train is drawn the way a real single-disc machine runs it: input shaft angling
+; forward and up out of the gearbox toward the tractor's PTO stub, a shaft back UNDER the
+; hopper, a small bevel box under the outlet, and a short vertical shaft down into the disc.
+; The telescoping driveshaft between the stub and the input shaft is not modelled (the one
+; mechanical part left out on every implement).
+;
+; The slide GATE under the hopper outlet and the ram beside it are real parts, not decoration:
+; they are what makes declaring Connection.SCV honest, and 'scv_flow' slides them (spreader.gd
+; reads their AUTHORED positions as the shut pose, so moving them here moves the shut gate).
+; NO CollisionShape: implements are visual.
+
+[ext_resource type="Script" path="res://src/vehicles/tractor/implements/spreader.gd" id="1_spread"]
+[ext_resource type="PackedScene" path="res://src/vehicles/tractor/implements/headstock.tscn" id="2_head"]
+
+[sub_resource type="StandardMaterial3D" id="MatPaint"]
+resource_name = "spreader_paint"
+albedo_color = Color(0.26, 0.47, 0.28, 1)
+roughness = 0.75
+
+[sub_resource type="StandardMaterial3D" id="MatSteel"]
+resource_name = "spreader_steel"
+albedo_color = Color(0.3, 0.33, 0.37, 1)
+metallic_specular = 0.55
+roughness = 0.55
+
+; The disc sits in the hopper's shadow and is the part that shows 'pto_rpm', so it is the
+; brightest thing on the machine — same reasoning as the mower's blades.
+[sub_resource type="StandardMaterial3D" id="MatBright"]
+resource_name = "spreader_disc"
+albedo_color = Color(0.86, 0.88, 0.9, 1)
+metallic_specular = 0.7
+roughness = 0.4
+
+[sub_resource type="StandardMaterial3D" id="MatMark"]
+resource_name = "index_mark"
+albedo_color = Color(0.85, 0.18, 0.14, 1)
+roughness = 0.6
+
+[sub_resource type="BoxMesh" id="MeshRail"]
+material = SubResource("MatPaint")
+size = Vector3(0.1, 0.1, 0.4)
+
+[sub_resource type="BoxMesh" id="MeshCrossRail"]
+material = SubResource("MatPaint")
+size = Vector3(0.7, 0.09, 0.1)
+
+[sub_resource type="BoxMesh" id="MeshLeg"]
+material = SubResource("MatPaint")
+size = Vector3(0.08, 0.34, 0.09)
+
+; Eight-sided cone: the hopper reads as a real tapered bin at a fraction of the triangles a
+; round one would cost, and the facets suit the kit's flat-shaded look.
+[sub_resource type="CylinderMesh" id="MeshHopper"]
+material = SubResource("MatPaint")
+top_radius = 0.58
+bottom_radius = 0.16
+height = 0.62
+radial_segments = 8
+rings = 0
+
+[sub_resource type="CylinderMesh" id="MeshRim"]
+material = SubResource("MatSteel")
+top_radius = 0.61
+bottom_radius = 0.61
+height = 0.05
+radial_segments = 8
+rings = 0
+
+[sub_resource type="BoxMesh" id="MeshGrateX"]
+material = SubResource("MatSteel")
+size = Vector3(1.16, 0.03, 0.05)
+
+[sub_resource type="BoxMesh" id="MeshGrateZ"]
+material = SubResource("MatSteel")
+size = Vector3(0.05, 0.03, 1.16)
+
+[sub_resource type="CylinderMesh" id="MeshNeck"]
+material = SubResource("MatSteel")
+top_radius = 0.17
+bottom_radius = 0.17
+height = 0.12
+radial_segments = 8
+rings = 0
+
+[sub_resource type="BoxMesh" id="MeshGate"]
+material = SubResource("MatBright")
+size = Vector3(0.36, 0.03, 0.26)
+
+[sub_resource type="BoxMesh" id="MeshGuide"]
+material = SubResource("MatSteel")
+size = Vector3(0.46, 0.05, 0.04)
+
+[sub_resource type="CylinderMesh" id="MeshRamBody"]
+material = SubResource("MatSteel")
+top_radius = 0.05
+bottom_radius = 0.05
+height = 0.2
+radial_segments = 8
+rings = 0
+
+[sub_resource type="CylinderMesh" id="MeshRamRod"]
+material = SubResource("MatBright")
+top_radius = 0.025
+bottom_radius = 0.025
+height = 0.18
+radial_segments = 6
+rings = 0
+
+[sub_resource type="BoxMesh" id="MeshRamMount"]
+material = SubResource("MatPaint")
+size = Vector3(0.06, 0.1, 0.1)
+
+[sub_resource type="BoxMesh" id="MeshGearbox"]
+material = SubResource("MatSteel")
+size = Vector3(0.2, 0.18, 0.2)
+
+[sub_resource type="CylinderMesh" id="MeshInputShaft"]
+material = SubResource("MatBright")
+top_radius = 0.05
+bottom_radius = 0.05
+height = 0.3
+radial_segments = 6
+rings = 0
+
+[sub_resource type="CylinderMesh" id="MeshDriveShaft"]
+material = SubResource("MatSteel")
+top_radius = 0.04
+bottom_radius = 0.04
+height = 0.24
+radial_segments = 6
+rings = 0
+
+[sub_resource type="BoxMesh" id="MeshBevel"]
+material = SubResource("MatSteel")
+size = Vector3(0.12, 0.12, 0.12)
+
+[sub_resource type="CylinderMesh" id="MeshVertShaft"]
+material = SubResource("MatBright")
+top_radius = 0.035
+bottom_radius = 0.035
+height = 0.08
+radial_segments = 6
+rings = 0
+
+[sub_resource type="CylinderMesh" id="MeshDisc"]
+material = SubResource("MatBright")
+top_radius = 0.3
+bottom_radius = 0.3
+height = 0.035
+radial_segments = 8
+rings = 0
+
+[sub_resource type="BoxMesh" id="MeshVane"]
+material = SubResource("MatBright")
+size = Vector3(0.03, 0.1, 0.24)
+
+[sub_resource type="BoxMesh" id="MeshVaneMark"]
+material = SubResource("MatMark")
+size = Vector3(0.03, 0.1, 0.24)
+
+[sub_resource type="CylinderMesh" id="MeshSpinnerHub"]
+material = SubResource("MatSteel")
+top_radius = 0.07
+bottom_radius = 0.07
+height = 0.1
+radial_segments = 8
+rings = 0
+
+[node name="Spreader" type="Node3D"]
+script = ExtResource("1_spread")
+
+[node name="Headstock" parent="." instance=ExtResource("2_head")]
+
+[node name="FrameRailL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.3, 0.03, 0.16)
+mesh = SubResource("MeshRail")
+
+[node name="FrameRailR" type="MeshInstance3D" parent="."]
+position = Vector3(0.3, 0.03, 0.16)
+mesh = SubResource("MeshRail")
+
+[node name="CrossRail" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.03, 0.34)
+mesh = SubResource("MeshCrossRail")
+
+[node name="HopperLegL" type="MeshInstance3D" parent="."]
+position = Vector3(-0.3, 0.2, 0.3)
+mesh = SubResource("MeshLeg")
+
+[node name="HopperLegR" type="MeshInstance3D" parent="."]
+position = Vector3(0.3, 0.2, 0.3)
+mesh = SubResource("MeshLeg")
+
+[node name="Hopper" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.65, 0.3)
+mesh = SubResource("MeshHopper")
+
+[node name="Rim" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.965, 0.3)
+mesh = SubResource("MeshRim")
+
+[node name="GrateX" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.98, 0.3)
+mesh = SubResource("MeshGrateX")
+
+[node name="GrateZ" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.98, 0.3)
+mesh = SubResource("MeshGrateZ")
+
+[node name="Neck" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.3, 0.3)
+mesh = SubResource("MeshNeck")
+
+[node name="Gate" type="MeshInstance3D" parent="."]
+position = Vector3(0.1, 0.225, 0.3)
+mesh = SubResource("MeshGate")
+
+[node name="GuideF" type="MeshInstance3D" parent="."]
+position = Vector3(0.08, 0.225, 0.15)
+mesh = SubResource("MeshGuide")
+
+[node name="GuideR" type="MeshInstance3D" parent="."]
+position = Vector3(0.08, 0.225, 0.45)
+mesh = SubResource("MeshGuide")
+
+[node name="RamBody" type="MeshInstance3D" parent="."]
+position = Vector3(0.46, 0.27, 0.3)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshRamBody")
+
+[node name="RamRod" type="MeshInstance3D" parent="."]
+position = Vector3(0.3, 0.27, 0.3)
+rotation = Vector3(0, 0, 1.5707964)
+mesh = SubResource("MeshRamRod")
+
+[node name="RamMount" type="MeshInstance3D" parent="."]
+position = Vector3(0.58, 0.27, 0.3)
+mesh = SubResource("MeshRamMount")
+
+[node name="Gearbox" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.22, 0.1)
+mesh = SubResource("MeshGearbox")
+
+[node name="InputShaft" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.3, -0.14)
+rotation = Vector3(1.7707964, 0, 0)
+mesh = SubResource("MeshInputShaft")
+
+[node name="DriveShaft" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.13, 0.18)
+rotation = Vector3(1.5707964, 0, 0)
+mesh = SubResource("MeshDriveShaft")
+
+[node name="BevelBox" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.12, 0.3)
+mesh = SubResource("MeshBevel")
+
+[node name="VertShaft" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.07, 0.3)
+mesh = SubResource("MeshVertShaft")
+
+[node name="Spinner" type="Node3D" parent="."]
+position = Vector3(0, 0.05, 0.3)
+
+[node name="Disc" type="MeshInstance3D" parent="Spinner"]
+mesh = SubResource("MeshDisc")
+
+[node name="Hub" type="MeshInstance3D" parent="Spinner"]
+position = Vector3(0, 0.03, 0)
+mesh = SubResource("MeshSpinnerHub")
+
+[node name="Vane1" type="MeshInstance3D" parent="Spinner"]
+position = Vector3(0, 0.06, 0.16)
+rotation = Vector3(0, 0.4, 0)
+mesh = SubResource("MeshVaneMark")
+
+[node name="Vane2" type="MeshInstance3D" parent="Spinner"]
+position = Vector3(0.16, 0.06, 0)
+rotation = Vector3(0, 1.9707963, 0)
+mesh = SubResource("MeshVane")
+
+[node name="Vane3" type="MeshInstance3D" parent="Spinner"]
+position = Vector3(0, 0.06, -0.16)
+rotation = Vector3(0, 3.5415926, 0)
+mesh = SubResource("MeshVane")
+
+[node name="Vane4" type="MeshInstance3D" parent="Spinner"]
+position = Vector3(-0.16, 0.06, 0)
+rotation = Vector3(0, 5.112389, 0)
+mesh = SubResource("MeshVane")

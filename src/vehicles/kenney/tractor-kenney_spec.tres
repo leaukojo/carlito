@@ -1,0 +1,43 @@
+[gd_resource type="Resource" script_class="VehicleSpec" format=3]
+
+[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_d7t6w"]
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-tractor-front.tscn" id="2_6q52r"]
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-tractor-rear.tscn" id="3_3gcuq"]
+
+[resource]
+script = ExtResource("1_d7t6w")
+mass = 4000.0
+center_of_mass = Vector3(0, 0.35, 0)
+wheel_positions = PackedVector3Array(-0.45387998, 0.57, -0.74529934, 0.45387998, 0.57, -0.74529934, -0.52920014, 0.57, 0.82164663, 0.52920014, 0.57, 0.82164663)
+wheel_radius = 0.36
+wheel_inertia = 4.0
+wheel_scene = ExtResource("2_6q52r")
+wheel_scene_rear = ExtResource("3_3gcuq")
+wheel_visual_radius = 0.3
+wheel_visual_radius_rear = 0.45
+rear_diff_lockable = true
+front_axle_engageable = true
+rest_length = 0.35
+spring_rate = 70000.0
+damper_bump = 6000.0
+damper_rebound = 8000.0
+max_suspension_force = 110000.0
+grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
+mu_long = 1.0
+torque_curve = PackedVector2Array(800, 550, 1200, 680, 1600, 700, 2000, 640, 2400, 480, 2600, 300)
+idle_rpm = 800.0
+redline_rpm = 2600.0
+gear_ratios = PackedFloat32Array(7, 4.2, 2.8, 1.9, 1.4, 1.1)
+reverse_ratio = 7.0
+final_drive = 5.5
+shift_up_rpm = 2200.0
+shift_down_rpm = 1000.0
+brake_torque = 8490.0
+handbrake_torque = 3573.0
+max_steer_deg = 38.0
+steer_speed = 1.8
+headlight_paths = Array[NodePath]([NodePath("Lamps/HeadlightL"), NodePath("Lamps/HeadlightR")])
+head_lamp_paths = Array[NodePath]([NodePath("Lamps/HeadLensL"), NodePath("Lamps/HeadLensR")])
+brake_lamp_paths = Array[NodePath]([NodePath("Lamps/BrakeLampL"), NodePath("Lamps/BrakeLampR")])
+turn_left_paths = Array[NodePath]([NodePath("Lamps/TurnLF"), NodePath("Lamps/TurnLR")])
+turn_right_paths = Array[NodePath]([NodePath("Lamps/TurnRF"), NodePath("Lamps/TurnRR")])

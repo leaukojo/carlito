@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="LevelInfo" format=3 uid="uid://ecqcvatc6145"]
+
+[ext_resource type="Script" uid="uid://bfk28m2k5gpds" path="res://src/levels/base/level_info.gd" id="1_info"]
+
+[resource]
+script = ExtResource("1_info")
+display_name = "Level 2 - Mountain"
+allowed_vehicles = PackedStringArray("car", "truck", "tractor", "boat", "bike", "drone", "plane")

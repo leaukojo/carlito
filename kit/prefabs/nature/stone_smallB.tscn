@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="1_7rf2h"]
+[ext_resource type="PackedScene" path="res://kit/raw/nature/stone_smallB.glb" id="2_e38jr"]
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_68037"]
+points = PackedVector3Array(0.21183695, 0.7616277, 0.47673807, -0.88773495, 5.551115e-17, -0.8875032, -0.878139, 0.0047968915, 0.027253179, 0.8871039, 0.0003756313, -0.5819924, -0.43002072, 0.8737794, -0.4298091, 0.46988153, 0.0016106131, 0.8844614, 0.4299988, 0.8736371, -0.2148727, -0.24207303, 0.013547687, 0.8604188, 6.0227998e-05, 0.8634408, 0.41948754, 0.8701489, 0.008851205, 0.054425925, -0.13655962, 0.0066440715, -0.87421507, -0.41738752, 0.8611491, -0.1303381, -0.23680411, 0.86468285, -0.4207143, 0.16123907, 0.8738455, 0.42988616, 0.4208384, 0.86447877, -0.07882427, -0.8671442, 0.064528674, -0.8669172, 0.30508775, 5.551115e-17, 0.8876826, -0.21187553, 0.07333016, 0.8468106, 0.29803136, 0.064505555, 0.8671494, 0.7942932, 0.17912798, 8.970499e-05, -0.18554392, 0.12587859, -0.82132345, 0.42731518, 0.844275, -0.24029623, 0.80171055, 0.17665625, -0.5075389, 0.40350497, 0.17491037, 0.8069533, 0.844334, 0.07455729, 0.026369117, 0.18575639, 0.86867094, 0.39825875)
+
+[node name="StoneSmallB" type="Node3D" unique_id=676487587]
+script = ExtResource("1_7rf2h")
+collision_mode = "hull"
+
+[node name="Model" type="Node3D" parent="." unique_id=172865038 instance=ExtResource("2_e38jr")]
+transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0.25, 0)
+
+[node name="DevCollision" type="StaticBody3D" parent="." unique_id=442589573]
+
+[node name="Shape0" type="CollisionShape3D" parent="DevCollision" unique_id=1649280531]
+shape = SubResource("ConvexPolygonShape3D_68037")
