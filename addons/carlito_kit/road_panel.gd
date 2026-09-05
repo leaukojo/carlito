@@ -1,10 +1,7 @@
 @tool
 extends VBoxContainer
-## Road-draw panel: the inspector-side toggle for the draw-on-terrain road tool.
-## Off/Draw mode buttons only — clearance lives on the RoadPath node itself
-## (draw_clearance), matching where a ScatterCanvas keeps its knobs. UI only; the
-## viewport/edit logic lives in road_draw_tool.gd (the editor/runtime split).
-## Modes are index-matched to the plugin's expectation (0 = Off, 1 = Draw).
+## Inspector-side toggle for the draw-on-terrain road tool. UI only; edit logic lives in
+## road_draw_tool.gd. Modes: 0 = Off, 1 = Draw. Clearance lives on the RoadPath node itself.
 
 signal mode_changed(mode: int)
 signal close_requested
@@ -185,8 +182,7 @@ func _build() -> void:
 
 # ------------------------------------------------------------------ plugin API
 
-## Draw-tool feedback on the status line (refused clicks). Empty restores the ready
-## text — the tool emits "" after every successful commit.
+## Draw-tool feedback on the status line. Empty restores the ready text.
 func show_warning(text: String) -> void:
 	if text.is_empty():
 		_status.text = "RoadPath selected — ready to draw."
@@ -196,7 +192,6 @@ func show_warning(text: String) -> void:
 		_status.add_theme_color_override("font_color", Color(0.95, 0.6, 0.3))
 
 
-## Live min-turn-radius readout from the draw ghost ("" = idle; warn tints red).
 func set_radius_display(text: String, warn: bool) -> void:
 	if text.is_empty():
 		_radius.text = "min radius: —"
@@ -207,16 +202,14 @@ func set_radius_display(text: String, warn: bool) -> void:
 				Color(0.95, 0.4, 0.3) if warn else Color(0.75, 0.75, 0.75))
 
 
-## Reflect a tool-driven exit (RMB/Escape) without re-emitting mode_changed — the
-## plugin already knows (programmatic button_pressed doesn't emit `pressed`).
+## Reflects a tool-driven exit (RMB/Escape) without re-emitting mode_changed.
 func show_off() -> void:
 	if not _mode_buttons.is_empty():
 		_mode_buttons[0].button_pressed = true
 
 
-## Reflect the selected road's profile. set_pressed_no_signal, NOT button_pressed:
-## unlike `pressed`, `toggled` DOES fire on a programmatic set, and that would swap the
-## profile of the road the user just selected.
+## Uses set_pressed_no_signal: unlike `pressed`, `toggled` fires on a programmatic set,
+## which would swap the profile of the road just selected.
 func set_rail(on: bool) -> void:
 	_rail.set_pressed_no_signal(on)
 
@@ -245,8 +238,7 @@ func set_has_road(has: bool) -> void:
 	else:
 		_status.text = "No RoadPath selected."
 		_status.add_theme_color_override("font_color", Color(0.9, 0.7, 0.4))
-		# Snap back to Off so a stale mode can't act on the next selected road (the
-		# scatter panel pattern: programmatic button_pressed doesn't emit, so emit).
+		# Programmatic button_pressed doesn't emit `pressed`, so emit mode_changed here.
 		if not _mode_buttons.is_empty() and not _mode_buttons[0].button_pressed:
 			_mode_buttons[0].button_pressed = true
 			mode_changed.emit(0)

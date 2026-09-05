@@ -1,50 +1,14 @@
 extends Node
-## Author the ISOBUS farm playground into the free centre of level 1 — phase 5 of
-## docs/plans/tractor_improvements.md. Four features, each there to make one tractor signal
-## visibly perform:
-##
-##   FIELD    a painted soil region (splat channel 4, "Field") big enough for real plough
-##            passes. This region is what phase 6's draft force tests for "in soil".
-##   WALLOW   a mud hollow (channel 5, grip 0.5) with a DIAGONAL cross-axle ridge course
-##            cut into its floor, so the two rear wheels are alternately unloaded — the
-##            open diff spins the light one, diff_lock walks you through.
-##   RAMP     a progressively steepening mud climb onto the 36 m terrace: shallow enough to
-##            enter in rear-drive, too steep at the top without fwd_drive (MFWD).
-##   YARD     a tiled apron with a shed, a tank and the four implements parked on it, so
-##            swapping implements with V is somewhere you drive to.
-##
-## Runs as a GAME-MODE tool scene, never --script: it loads a level scene, and level scenes
-## pull in scripts that only compile with the autoloads registered (the bake_levels
-## rationale in kit/CLAUDE.md). Modelled on tools/paint_road_asphalt.gd, which already
-## loads level 1, rewrites its splat PNGs and saves.
-##
-##   godot --headless --path . res://tools/gen_farm_playground.tscn -- build
-##   godot --headless --path . --import
-##   godot --headless --path . res://tools/gen_farm_playground.tscn -- resnap
-##   godot --headless --path . --import
-##   godot --headless --path . res://tools/bake_levels.tscn
-##
-## TWO STAGES on purpose:
-##  - `build` sculpts, paints and rebuilds every farm node, then leaves each scatter
-##    canvas's stored_ground_hash EMPTY so a skipped resnap fails the bake loudly instead
-##    of shipping floating props.
-##  - `resnap` only re-snaps scatter Ys and stamps the real ground hash. That hash can only
-##    be computed after the sculpted PNG has been REIMPORTED (ScatterBase.ground_hash reads
-##    the heightmap TEXTURE, not our in-memory image). Keeping the sculpt out of this stage
-##    also keeps it honest — BrushOps' flatten stamp lerps at its soft rim, so it is not
-##    idempotent there and must run exactly once per pipeline.
-##
-## Re-running `build` deletes and rebuilds the nodes it owns, and every sculpt/paint op
-## writes an absolute target, so the result is deterministic. It does re-flatten on top of
-## the previous flatten though, which very slightly sharpens the blend rims — if you change
-## the geometry constants below, restore the level from tmp/level_1_original/ first.
-##
-## Everything drawn here goes through the real kit tools: BrushOps (the terrain brush's own
-## per-pixel stamp math), a roads-palette GridMap for the apron, KitPiece prefabs, and a
-## ScatterCanvas on the grid pattern for the furrows. The single exception is the wallow's
-## ridge course — there is no ridge brush mode, and growing the kit API plus a gdUnit4 case
-## for one level's feature is not worth it, so it is written straight into the working image
-## here (tools/gen_rail_level.gd is the precedent for bespoke terrain math in a level tool).
+## Author the ISOBUS farm playground into the free centre of level 1. Four features, each
+## there to make one tractor signal visibly perform: FIELD (splat channel 4, ploughable soil),
+## WALLOW (mud hollow with a cross-axle ridge course for diff_lock), RAMP (a climb needing
+## fwd_drive/MFWD at the top), YARD (apron with shed/tank/implements to drive to).
+## Game-mode tool scene (loads a level scene, needs autoloads registered). Chain recorded in
+## src/levels/island/level_1/level_1_gen.json (tools/CLAUDE.md). Re-running `build` is
+## deterministic but re-flattens on top of the previous flatten (slightly sharpens blend
+## rims) — restore from tmp/level_1_original/ before changing the geometry constants below.
+
+const Groups := preload("res://src/levels/base/carlito_groups.gd")
 
 const LEVEL_PATH := "res://src/levels/island/level_1/level_1.tscn"
 
@@ -92,13 +56,11 @@ const FIELD_RECT := Rect2(-24, 26, 64, 90)        ## 64 x 90 m — ~90 m plough 
 const FURROW_RECT := Rect2(-24, 34, 18, 70)       ## the already-ploughed western strip
 const PADDOCK_RECT := Rect2(-100, -16, 20, 44)    ## the haul ramp's destination, at 36 m
 
-## The wallow sits in the gap between the yard pad (which ends at z = 0) and the fence line,
-## so leaving the yard for the field takes you through it — but its west and east edges are
-## open, so it can be driven around by anyone who would rather not.
+## The wallow sits between the yard pad (ends at z = 0) and the fence line, so leaving the yard
+## for the field goes through it, though its west/east edges stay open to drive around.
 const WALLOW_RECT := Rect2(-2, 4, 24, 14)
-## The blend ring IS the wallow's entry and exit ramp, so its width sets their grade: the
-## floor is WALLOW_Y below the plateau, spread over this run. 8 m gives ~7.5%, half of what
-## a 4 m ring gave — climbing out onto the field should be a gentle roll, not a step.
+## The blend ring is the wallow's entry/exit ramp, so its width sets their grade: 8 m gives
+## ~7.5% (half of a 4 m ring) so climbing out is a gentle roll, not a step.
 const WALLOW_MARGIN := 8.0
 const WALLOW_Y := 26.4                            ## 0.6 m below the plateau (3 height steps)
 const RIDGE_AMPLITUDE := 0.4                      ## m; 2 steps of the 8-bit 0.2 m grid
@@ -106,11 +68,9 @@ const RIDGE_PITCH := 5.0                          ## m between crests, measured 
 const RIDGE_TAPER := 3.0                          ## m of fade to nothing at the wallow rim
 const RIM_SMOOTH_PASSES := 4                      ## evens the exit ramp's 8-bit staircase
 
-## Haul ramp: three straight segments along z = RAMP_Z, grades 8.1 / 14.0 / 23.6 degrees.
-## Sized against mu = 1.0 * 0.5 (mud), rear static share 0.476, CoM height / wheelbase 0.415:
-## rear-drive alone tops out near tan(t) = mu*0.476/(1 - mu*0.415) ~ 16.7 deg, all-wheel near
-## tan(t) = mu ~ 26.6 deg. Progressive on purpose — the crossover is then a PLACE on the
-## hill rather than a knife-edge threshold a small error in those estimates would ruin.
+## Haul ramp: three straight segments along z = RAMP_Z, grades 8.1 / 14.0 / 23.6 degrees. Sized
+## against mu 0.5 (mud), rear static share 0.476: rear-drive alone tops out ~16.7 deg, all-wheel
+## ~26.6 deg. Progressive so the crossover is a place on the hill, not a knife-edge threshold.
 const RAMP_Z := -18.0
 const RAMP_HALF_WIDTH := 8.0
 const RAMP_PROFILE: Array[Vector2] = [   ## (world x, world y) along the climb
@@ -120,18 +80,21 @@ const RAMP_PROFILE: Array[Vector2] = [   ## (world x, world y) along the climb
 	Vector2(-78.0, 36.0),
 ]
 
-## The cell the apron is anchored on is chosen by asking the GridMap where this point lands.
-## The tiles themselves are corner-anchored on a centre-true lattice ("align": "raw" in
-## kit/import/roads.json), so a cell's slab actually spans [12i, 12i+12] — half a cell east
-## and south of the request. This value is therefore offset to compensate; the code MEASURES
-## where the tiles ended up regardless, and the run prints it.
+## Apron cell chosen by asking the GridMap where this point lands. Tiles are corner-anchored on
+## a centre-true lattice ("align": "raw" in kit/import/roads.json), so a slab spans
+## [12i, 12i+12], half a cell east/south of the request — offset to compensate; the code
+## measures where tiles actually land and prints it regardless.
 const APRON_CENTER := Vector2(6.0, -24.0)    ## -> tiles at x [-6, 30], z [-30, -6]
 const APRON_CELLS_X := 3
 const APRON_CELLS_Z := 2
 const APRON_MARGIN := 6.0                    ## flattened + gravelled ring around the tiles
 ## Apron-local layout, metres from its south-west corner (the apron is 36 x 24 m).
 const BUILDING_ROW_Z := 6.0                  ## shed + tank
-const PARKING_ROW_Z := 18.0                  ## implements + tractor spawn
+## The parking row sits this far north so the tractor spawn has a trailer-length of clear
+## concrete behind it: drawbar pin 1.6 m aft of chassis origin + tipper reaching 5.3 m aft of
+## the pin needs ~6.9 m at -Z. 18.0 left only 6.1 m clear of the shed wall and the first E
+## press at spawn was refused by the fit check; 22.0 leaves 3.2 m of slack.
+const PARKING_ROW_Z := 22.0                  ## implements + tractor spawn
 const SHED_X := 9.0
 const SHED_YAW := PI                         ## frontage faces +Z, into the yard
 const TANK_X := 30.0
@@ -179,6 +142,8 @@ func _ready() -> void:
 		return
 	var root := packed.instantiate()
 
+	# `build` sculpts/paints/rebuilds every farm node; `resnap` re-snaps scatter Ys and
+	# stamps the real ground hash once the sculpted PNG is reimported.
 	var code := _build(root) if stage == "build" else _resnap(root)
 	if code == 0:
 		code = _save(root)
@@ -192,7 +157,7 @@ func _ready() -> void:
 func _build(root: Node) -> int:
 	if not _read_terrain(root):
 		return 1
-	var authoring := _find_authoring(root)
+	var authoring := Groups.find_authoring(root)
 	if authoring == null:
 		printerr("[farm] level has no AuthoringRoot")
 		return 1
@@ -213,9 +178,8 @@ func _build(root: Node) -> int:
 		printerr("[farm] heightmap and splatmap sizes disagree — refusing to paint")
 		return 1
 
-	# The apron is a real GridMap, so where it lands is decided by the palette lattice and
-	# the tile's own mesh, not by me: build it first, MEASURE the world rect its cells
-	# occupy, and derive the yard pad, the props and the spawn from that.
+	# The apron is a real GridMap; build it first, measure the world rect its cells occupy,
+	# and derive the yard pad, props and spawn from that.
 	var built := _build_apron_gridmap()
 	if built.is_empty():
 		return 1
@@ -236,9 +200,8 @@ func _build(root: Node) -> int:
 	_smooth(height_img, _wallow_rim_rect(), RIM_SMOOTH_PASSES)
 
 	# --- paint (later strokes win, so the gravel track visibly dies in the wallow) ------
-	# Grass first over every rectangle whose slope we just removed: auto-splat had painted
-	# dirt and rock on the old hump and bank, and that paint would otherwise survive on
-	# ground that is now dead flat.
+	# Grass first over every rectangle whose slope we just removed, since auto-splat's old
+	# dirt/rock on the hump and bank would otherwise survive on now-flat ground.
 	var repairs: Array[Rect2] = [
 		FIELD_RECT.grow(FLATTEN_MARGIN + 4.0), PADDOCK_RECT.grow(FLATTEN_MARGIN + 4.0),
 		yard_pad.grow(FLATTEN_MARGIN), WALLOW_RECT.grow(WALLOW_MARGIN), _ramp_rect(),
@@ -281,9 +244,8 @@ func _build(root: Node) -> int:
 	for canvas in _scatter_canvases(root):
 		cleared += _erase_rects(canvas, footprint)
 		moved += _resnap_from_image(canvas, height_img)
-		# Deliberately empty: the real hash needs the REIMPORTED png, so the `resnap` stage
-		# stamps it. Skipping that stage now fails the bake instead of quietly shipping
-		# props snapped to ground that no longer exists.
+		# Left empty: needs the reimported png, so `resnap` stamps it — skipping that stage
+		# then fails the bake loudly instead of shipping props snapped to stale ground.
 		canvas.set("stored_ground_hash", "")
 	print("[farm] scatter: %d instances erased inside the farm, %d re-snapped" % [cleared, moved])
 
@@ -301,10 +263,9 @@ func _build(root: Node) -> int:
 # -------------------------------------------------------------------------- sculpting
 
 
-## Flatten `rect` to `target_y` with a soft blend ring `margin` wide outside it, using the
-## terrain brush's own square stamp. The falloff is derived from the LONGER half-extent so
-## the hard core covers the rectangle on both axes: BrushOps' square brush measures one
-## Chebyshev distance against per-axis radii, so a single falloff has to satisfy both.
+## Flatten `rect` to `target_y` with a soft blend ring `margin` wide, using the square brush
+## stamp. Falloff derives from the longer half-extent so the hard core covers both axes
+## (BrushOps' square brush measures one Chebyshev distance against per-axis radii).
 func _flatten(img: Image, rect: Rect2, target_y: float, margin := FLATTEN_MARGIN) -> void:
 	var half_x := rect.size.x * 0.5 + margin
 	var half_z := rect.size.y * 0.5 + margin
@@ -322,15 +283,10 @@ func _wallow_rim_rect() -> Rect2:
 			WALLOW_RECT.size.x + WALLOW_MARGIN * 2.0, WALLOW_MARGIN + 3.0)
 
 
-## Run the terrain brush's SMOOTH mode over `rect`, `passes` times, hard-edged.
-##
-## This exists because of the 8-bit heightmap: at height = 51 one level is 0.2 m, so the
-## wallow's 0.6 m climb out onto the field is only THREE steps. However long the ramp, the
-## flatten's smoothstep quantizes to a staircase — and because two blend rings overlap there
-## (the field's and the wallow's) the steps come out uneven and even non-monotonic, which is
-## a bump you drive over rather than a ramp. Smoothing redistributes the same three risers
-## evenly along the run. It cannot add vertical resolution — nothing can at this bit depth —
-## so the ramp stays a shallow staircase; it just stops being a lumpy one.
+## Run the terrain brush's SMOOTH mode over `rect`, `passes` times, hard-edged. The 8-bit
+## heightmap makes the wallow's 0.6 m climb onto the field only three steps, uneven and
+## non-monotonic where the field's and wallow's blend rings overlap; smoothing redistributes
+## those risers evenly (can't add resolution, just stops the staircase being lumpy).
 func _smooth(img: Image, rect: Rect2, passes: int) -> void:
 	var c := rect.get_center()
 	for _i in passes:
@@ -351,12 +307,12 @@ func _ramp(img: Image) -> void:
 				RAMP_HALF_WIDTH * _sx, RAMP_HALF_WIDTH * _sz, 1.0, 0.45)
 
 
-## The cross-axle course in the wallow floor: a sine whose wavefronts run at 45 degrees to
-## the yard -> field direction, so the left and right rear wheels ride opposite phases and
-## the axle articulates instead of staying square. The phase is (x + z), whose gradient has
-## magnitude sqrt(2) — hence the sqrt(2) in the wavelength, which makes RIDGE_PITCH the true
-## perpendicular crest spacing. Tapered to nothing over the outer RIDGE_TAPER metres so the
-## ridges never leave a step at the wallow rim.
+## The cross-axle course in the wallow floor: a sine whose wavefronts run at 45 degrees to the
+## yard -> field direction, so the rear wheels ride opposite phases and the axle articulates.
+## Phase is (x + z), gradient magnitude sqrt(2), hence the sqrt(2) in wavelength (makes
+## RIDGE_PITCH the true perpendicular crest spacing). Tapers to nothing over RIDGE_TAPER metres
+## so no step forms at the wallow rim. Written straight into the working image (no ridge brush
+## mode exists in the kit) rather than through BrushOps, the only such exception here.
 func _ridges(img: Image) -> void:
 	var amp := RIDGE_AMPLITUDE / _theight
 	var wavelength := RIDGE_PITCH * sqrt(2.0)
@@ -378,12 +334,10 @@ func _ridges(img: Image) -> void:
 # --------------------------------------------------------------------------- painting
 
 
-## Paint `rect` with paint channel `channel` at full strength and a hard edge, into BOTH
-## weight images (each takes its own BrushOps.unit_slice, which is what fades the other
-## seven channels regardless of which image they live in). Full strength + hard edge is the
-## kit's own rule for a destructive paint: the shader pow-sharpens weights and grip_at
-## sharpens identically, so this reads as a crisp low-poly border AND full surface grip,
-## with none of the low-grip apron a feathered edge would leave behind.
+## Paint `rect` with `channel` at full strength and a hard edge into both weight images (each
+## takes its own BrushOps.unit_slice). Full strength + hard edge is the kit's rule for a
+## destructive paint: shader pow-sharpen and grip_at sharpen identically, giving a crisp
+## low-poly border and full grip with no feathered low-grip apron.
 func _paint(splat: Image, splat2: Image, rect: Rect2, channel: int) -> void:
 	var c := rect.get_center()
 	var cx := _px_x(c.x)
@@ -431,9 +385,8 @@ func _farm_footprint(apron: Rect2) -> Array[Rect2]:
 
 
 ## The yard apron as a real roads-palette GridMap. Cell indices come from asking the GridMap
-## itself where APRON_CENTER lands (local_to_map), and the resulting world rect is measured
-## back off the item mesh and its palette transform — the lattice decides where the tiles
-## sit, never a hand-guessed offset. Returns {} on failure.
+## where APRON_CENTER lands (local_to_map); the world rect is measured back off the item mesh
+## and palette transform, never a hand-guessed offset. Returns {} on failure.
 func _build_apron_gridmap() -> Dictionary:
 	var ml := load(ROADS_MESHLIB) as MeshLibrary
 	if ml == null:
@@ -453,9 +406,8 @@ func _build_apron_gridmap() -> Dictionary:
 	grid.mesh_library = ml
 	grid.cell_size = Vector3(12, 3, 12)
 	grid.cell_center_y = false
-	# Level 3's tile city uses exactly this offset: the tile deck is 0.24 m thick and sits
-	# on the cell base, so dropping the map 0.22 m lands the driving surface 0.02 m above
-	# the plateau instead of behind a 24 cm lip.
+	# Level 3's tile city uses the same offset: deck is 0.24 m thick, dropping the map 0.22 m
+	# lands the driving surface 0.02 m above the plateau instead of behind a 24 cm lip.
 	grid.position = Vector3(0, -0.22, 0)
 
 	var y_cell := int(round(PLATEAU_Y / grid.cell_size.y))
@@ -480,27 +432,24 @@ func _build_apron_gridmap() -> Dictionary:
 	}
 
 
-## Shed, tank and the field fence. Every piece is positioned from its MEASURED merged mesh
-## AABB (centre on XZ, base on the ground), never from a guessed origin convention.
+## Shed, tank and the field fence. Every piece positioned from its measured merged mesh AABB
+## (centre on XZ, base on ground), never a guessed origin convention.
 func _build_props(authoring: Node, root: Node, img: Image, apron: Rect2, deck_y: float) -> void:
 	var props := Node3D.new()
 	props.name = "FarmProps"
 	_add(authoring, props, root)
 
-	# Apron-local layout, in metres from its south-west corner. The south row (z + 6) holds
-	# the buildings, the north row (z + 18) the parked implements and the spawn, so nothing
-	# is ever placed inside the shed's footprint.
+	# Apron-local layout: south row (z + 6) holds the buildings, north row (z + 18) the parked
+	# implements and spawn.
 	var south_z := apron.position.y + BUILDING_ROW_Z
-	# Yawed 180 so the shed's frontage faces +Z, i.e. north into the yard and the parking
-	# row, rather than out over the apron's back edge.
+	# Yawed 180 so the shed's frontage faces +Z (into the yard), not the apron's back edge.
 	_place(props, root, SHED_PREFAB, "Shed", Vector3(apron.position.x + SHED_X, deck_y, south_z),
 			SHED_YAW)
 	_place(props, root, TANK_PREFAB, "FuelTank",
 			Vector3(apron.position.x + TANK_X, deck_y, south_z))
 
-	# The field fence, with a gap left for the gateway. No fence_gate piece: the nature
-	# recipe gives fences "box" collision, so a gate prefab would be a solid block across
-	# its own opening — an open gap is the only honest way to make a drivable gateway.
+	# Field fence, with a gap for the gateway. No fence_gate piece: fences have "box"
+	# collision, so a gate prefab would block its own opening — an open gap is the honest fix.
 	var runs: Array[Vector2] = [
 		Vector2(FIELD_RECT.position.x, GATE_X.x),
 		Vector2(GATE_X.y, FIELD_RECT.end.x),
@@ -515,10 +464,9 @@ func _build_props(authoring: Node, root: Node, img: Image, apron: Rect2, deck_y:
 	print("[farm] props: shed + tank + %d fence sections" % n)
 
 
-## The four implements parked on the apron. Each is wrapped in a KitPiece with collision
-## "none" — MANDATORY: LevelBaker._collect only harvests MeshInstance3D from inside a
-## KitPiece, so an implement instanced as a plain Node3D under AuthoringRoot would have its
-## meshes silently dropped at bake and the yard would be empty in the shipped level.
+## The four implements parked on the apron. Each wrapped in a KitPiece with collision "none":
+## mandatory, since LevelBaker._collect only harvests MeshInstance3D from inside a KitPiece —
+## a plain Node3D would have its meshes silently dropped at bake.
 func _build_implements(authoring: Node, root: Node, apron: Rect2, deck_y: float) -> void:
 	var group := Node3D.new()
 	group.name = "FarmImplements"
@@ -538,8 +486,8 @@ func _build_implements(authoring: Node, root: Node, apron: Rect2, deck_y: float)
 		_add(piece, scene.instantiate(), root)
 
 
-## Furrow dressing on the field's western strip: a ScatterCanvas on the world-anchored grid
-## pattern, laying drive-through dirt rows. One side already ploughed, the rest bare to work.
+## Furrow dressing on the field's western strip: a ScatterCanvas on the grid pattern, laying
+## drive-through dirt rows. One side already ploughed, the rest bare to work.
 func _build_furrows(authoring: Node, root: Node, img: Image) -> void:
 	var prefab := load(FURROW_PREFAB) as PackedScene
 	if prefab == null:
@@ -593,9 +541,9 @@ func _build_furrows(authoring: Node, root: Node, img: Image) -> void:
 			count, FURROW_RECT.size.x, FURROW_RECT.size.y])
 
 
-## A tractor spawn on the apron, and "tractor" removed from the island's road-side spawn.
-## Level._pick_spawn takes the FIRST marker that accepts the family, so the two filters have
-## to be disjoint or the farm spawn would never be reached.
+## A tractor spawn on the apron, "tractor" removed from the island's road-side spawn.
+## Level._pick_spawn takes the first marker that accepts the family, so the filters must be
+## disjoint or the farm spawn would never be reached.
 func _build_spawns(root: Node, apron: Rect2, deck_y: float) -> void:
 	var stale := root.get_node_or_null(NodePath(SPAWN_NODE))
 	if stale != null:
@@ -622,16 +570,11 @@ func _build_spawns(root: Node, apron: Rect2, deck_y: float) -> void:
 # =================================================================== resnap (stage two)
 
 
-## Re-snap every scatter canvas against the REIMPORTED heightmap and stamp the ground hash.
-##
-## Deliberately NOT ScatterBase.snap_ground: its terrain branch calls HeightmapTerrain's
-## height_at / contains_xz, and those read `global_position`, which needs the node to be in
-## a SceneTree. This level is instantiated detached (adding it to the tree would run
-## Level._ready and start spawning vehicles), so every call would push an engine error and
-## silently fall back to a zero transform. Decoding the terrain's own texture and sampling
-## it here is the same bilinear query without that dependency — and because `build` already
-## snapped to the identical image, a clean run reports zero moved, which doubles as proof
-## that the png round-tripped byte-exactly.
+## Re-snap every scatter canvas against the reimported heightmap and stamp the ground hash
+## (ScatterBase.ground_hash reads the texture, not the in-memory image, hence the reimport).
+## Not ScatterBase.snap_ground: that reads `global_position`, needing a SceneTree, and this
+## level is instantiated detached (joining the tree would run Level._ready and spawn vehicles).
+## A clean run reports zero moved, proving the png round-tripped exactly.
 func _resnap(root: Node) -> int:
 	if not _read_terrain(root):
 		return 1
@@ -660,8 +603,7 @@ func _resnap(root: Node) -> int:
 
 
 ## Drop stored instances whose world XZ lies outside the terrain extent — the tree-free
-## equivalent of HeightmapTerrain.contains_xz, and the no-Y=0-fallback rule scatter lives by
-## (a floating instance is worse than a missing one).
+## equivalent of HeightmapTerrain.contains_xz (a floating instance is worse than a missing one).
 func _drop_off_terrain(canvas: Node) -> int:
 	var to_world := (canvas as Node3D).transform
 	var after: Array[PackedFloat32Array] = []
@@ -699,16 +641,6 @@ func _read_terrain(root: Node) -> bool:
 	return true
 
 
-func _find_authoring(node: Node) -> Node:
-	if node.has_method("is_carlito_authoring"):
-		return node
-	for child in node.get_children():
-		var found := _find_authoring(child)
-		if found != null:
-			return found
-	return null
-
-
 func _scatter_canvases(root: Node) -> Array[Node]:
 	var out: Array[Node] = []
 	_collect_scatter(root, out)
@@ -716,7 +648,7 @@ func _scatter_canvases(root: Node) -> Array[Node]:
 
 
 func _collect_scatter(node: Node, out: Array[Node]) -> void:
-	if node.has_method("is_carlito_scatter"):
+	if node.is_in_group(Groups.SCATTER):
 		out.append(node)
 	for child in node.get_children():
 		_collect_scatter(child, out)
@@ -729,11 +661,9 @@ func _add(parent: Node, child: Node, root: Node) -> void:
 	child.owner = root
 
 
-## Instance a kit prefab, yaw it, and sit it on the ground at `at`, positioned from its
-## MEASURED merged mesh AABB: the ROTATED AABB's centre lands on the target XZ and its base
-## on the target Y. Measuring after the rotation is the point — a prefab whose origin is not
-## its centre walks sideways when yawed, and guessing a prefab's origin convention is
-## exactly the mistake the measure-first rule exists to prevent.
+## Instance a kit prefab, yaw it, and sit it on the ground at `at`, positioned from its measured
+## merged mesh AABB (rotated centre on target XZ, base on target Y) — measuring after rotation
+## matters, a prefab whose origin isn't its centre would walk sideways when yawed.
 func _place(parent: Node, root: Node, path: String, node_name: String, at: Vector3,
 		yaw := 0.0) -> void:
 	var scene := load(path) as PackedScene
@@ -839,13 +769,10 @@ func _decode(tex: Texture2D) -> Image:
 
 ## Write a working image back over the png the terrain texture came from.
 ##
-## The path is checked against the level's own directory first, and that guard is load
-## bearing: a COPY of these pngs left anywhere inside the project (a backup folder, say)
-## brings its .import sidecar along, which claims the same uid:// — Godot's import scan then
-## resolves the level's texture to the copy, and this function cheerfully sculpts the backup
-## while the real level is left untouched, with every downstream step still reporting
-## success. Put backups outside the project or drop a .gdignore in them; either way, fail
-## loudly here rather than write to the wrong file.
+## Checked against the level's own directory first — load-bearing: a copy of these pngs left
+## anywhere in the project brings a `.import` sidecar claiming the same uid://, so Godot's
+## import scan resolves the level's texture to the copy and this function sculpts the backup
+## while the real level stays untouched, silently. Fail loudly here instead.
 func _write(img: Image, tex: Texture2D) -> bool:
 	var path := tex.resource_path
 	if path.is_empty():
@@ -971,11 +898,10 @@ func _report(img: Image, splat: Image, splat2: Image, apron: Rect2, deck_y: floa
 			lo, hi, PLATEAU_Y - lo, hi - lo])
 	print("[farm] wallow max left/right ground step across the 1.06 m rear track: %.2f m" % cross)
 
-	# The exit ramp onto the field IS the wallow's blend ring. Report the grade the tractor
-	# actually feels (average over the whole climb) alongside the worst single 1 m facet:
-	# with 0.2 m height steps the facet figure is the 8-bit floor, not a design choice, and
-	# quoting it alone would make a gentle ramp look like a wall. `back` counts pixels where
-	# the profile goes DOWN on the way up — those are the bumps worth caring about.
+	# The exit ramp onto the field is the wallow's blend ring. Report average grade over the
+	# climb alongside the worst single 1 m facet (the 8-bit floor at 0.2 m steps, not a design
+	# choice — quoting it alone would make a gentle ramp look like a wall). `back` counts
+	# pixels where the profile goes down on the way up.
 	var rim_x := WALLOW_RECT.get_center().x
 	var facet := 0.0
 	var back := 0
@@ -994,8 +920,8 @@ func _report(img: Image, splat: Image, splat2: Image, apron: Rect2, deck_y: floa
 			high - low, run, avg * 100.0, rad_to_deg(atan(avg))]
 			+ " worst 1 m facet %.2f m, %d backward step(s)" % [facet, back])
 
-	# grip_at reads the terrain's CACHED splat images, which still hold the pre-paint pixels
-	# here, so sharpen the freshly painted weights the same way it does instead.
+	# grip_at reads the terrain's cached splat images (still pre-paint here), so sharpen the
+	# freshly painted weights the same way it does instead.
 	var probes: Array[Array] = [
 		["field ", FIELD_RECT.get_center()],
 		["mud   ", WALLOW_RECT.get_center()],

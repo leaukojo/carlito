@@ -1,19 +1,11 @@
 extends Node
-## Stamp the "Asphalt" splat channel (channel 6 = splatmap2.B) into a level's terrain
-## along its RoadPath corridors, so splat-paint friction (HeightmapTerrain.grip_at) can
-## tell road from offroad. Roads themselves are welded geometry with no paint of their own;
-## this paints the ground underneath their paved half-width so the XZ grip lookup reads
-## asphalt on-road and the terrain's own channels off-road.
-##
-## Runs as a GAME-MODE tool scene, not --script (level scenes pull in scripts that only
-## compile with autoloads registered — the bake_levels rationale). Run after --import:
-##   godot --headless --path . res://tools/paint_road_asphalt.tscn -- src/levels/island/level_1/level_1.tscn
-## then re-import so the edited PNGs are picked up:
-##   godot --headless --path . --import
-##
-## Additive by design: it only writes pixels inside the CURRENT corridors (base channels
-## zeroed there, asphalt set to 1). Re-run after editing roads leaves stale asphalt where a
-## road used to be — re-run Auto-splat on the terrain first if you need a clean base.
+## Stamps the "Asphalt" splat channel (channel 6 = splatmap2.B) into a level's terrain
+## along its RoadPath corridors, so splat-paint friction reads road vs offroad. Additive:
+## only writes pixels inside the current corridors. Re-run after any road or road-profile
+## edit — nothing else notices when the paint goes stale (level 1 shipped 2073 px of
+## unpainted edge after one profile widen went unpainted).
+
+const Groups := preload("res://src/levels/base/carlito_groups.gd")
 
 const CENTERLINE_STEP := 0.5   ## m between centerline samples (short segments = smooth stamp)
 
@@ -60,7 +52,7 @@ func _collect(node: Node, xform: Transform3D, roads: Array, terrains: Array) -> 
 		var cx := xform
 		if child is Node3D:
 			cx = xform * (child as Node3D).transform
-		if child.has_method("is_carlito_road"):
+		if child.is_in_group(Groups.ROAD):
 			roads.append({"node": child, "xform": cx})
 		elif child.has_method("grip_at") and child.has_method("contains_xz"):
 			terrains.append({"node": child, "xform": cx})

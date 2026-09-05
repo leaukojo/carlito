@@ -1,46 +1,10 @@
 extends SceneTree
-## Kit asset generator: turns the CC0 GLBs under
-## kit/raw/ into the two authoring surfaces, driven by the kit/import/*.json recipes.
-##
-## Recipes are FAMILIES-DRIVEN (single source of truth): one ordered `families` list
-## classifies every GLB — first matching family wins, so ordering resolves overlaps and
-## patterns stay simple. Each family declares a pipeline:
-##   - "palette"  -> a MeshLibrary tile (kit/palettes/<kit>.meshlib): mesh with the kit's
-##                   scale + alignment baked into the verts, materials deduped per kit, plus
-##                   a trimesh dev shape so UNBAKED levels drive (the bake replaces GridMap
-##                   collision with the single welded drivable body). Road/tile kits only.
-##   - "prefab"   -> kit/prefabs/<kit>/<name>.tscn: a KitPiece root carrying collision_mode,
-##                   a scaled ExtResource instance of the GLB, and a pre-built DevCollision
-##                   StaticBody3D the baker harvests into per-chunk bodies.
-##   - "exclude"  -> not emitted (requires a non-empty reason string).
-##
-## HAND-EDITED PREFABS: an asset override `{"manual": true}` makes the generator LEAVE the
-## existing .tscn alone (it still counts for the coverage gate). That is the opt-out for
-## pieces whose collision was tuned by hand in the editor — the generator would otherwise
-## overwrite the hand work on the next regen. Say why in the recipe's `_notes`.
-##
-## UIDs: generated files keep whatever `uid://` they already had on disk. Re-minting one
-## breaks every level .tscn that references the file by uid ("invalid UID: ... using text
-## path instead" at load), so _keep_uid re-binds the old id before each save.
-##
-## COVERAGE GATE: every GLB under kit/raw/<kit>/ must match exactly one family, or the
-## generator FAILS listing the unaccounted names — availability can no longer be an accident
-## of pattern-writing. Per-family member counts are printed (catch-all families tagged) so an
-## oversized "box everything else" bucket is visible, not silent.
-##
-## Run after --import (needs the GLB import cache):
-##   godot --headless --path . --script res://tools/gen_kit_assets.gd            # all kits
-##   godot --headless --path . --script res://tools/gen_kit_assets.gd -- racing  # one kit
-##
-## Meshlib item ids are preserved across regens (painted GridMaps reference them); see
-## KitRecipe.assign_item_ids. Classification/id/coverage logic is pure + unit-tested in
-## tests/test_kit_gen.gd (kit/helpers/kit_recipe.gd).
-##
-## Palette items get a MeshLibrary preview from kit/thumbs/<kit>/<name>.png when present, so
-## the built-in GridMap palette shows pictures. Full thumb workflow, run locally:
-##   godot --path . res://tools/gen_thumbs.tscn        # windowed render -> kit/thumbs PNGs
-##   godot --headless --path . --import                # import the new PNGs
-##   godot --headless --path . --script res://tools/gen_kit_assets.gd   # embed the previews
+## Kit asset generator: turns CC0 GLBs under kit/raw/ into palettes/prefabs, driven by
+## kit/import/*.json recipes (one ordered `families` list, first match wins). Pipelines:
+## "palette" -> meshlib tile, "prefab" -> KitPiece + DevCollision, "exclude" -> not emitted
+## (needs a reason). Asset override `{"manual": true}` leaves an existing prefab untouched
+## (opt-out for hand-tuned collision). Coverage gate: every GLB must match exactly one
+## family or the generator fails. Classification/id/coverage logic: tests/test_kit_gen.gd.
 
 const Baker := preload("res://kit/bake/level_baker.gd")
 const Recipe := preload("res://kit/helpers/kit_recipe.gd")
@@ -119,8 +83,7 @@ func _run_recipe(recipe_path: String) -> void:
 		var asset_ov: Dictionary = (fam.get("assets", {}) as Dictionary).get(name, {})
 		match pipeline:
 			"palette":
-				# A palette family may route to its own meshlib (overlay layers like
-				# barriers/walls/sand paint onto a separate GridMap that overlaps roads).
+				# A palette family may route to its own meshlib (overlay layers like barriers/sand).
 				var out := String(fam.get("palette_output", default_output))
 				if not palette_groups.has(out):
 					palette_groups[out] = {"items": [], "overrides": {}}
@@ -131,9 +94,7 @@ func _run_recipe(recipe_path: String) -> void:
 					manual.append(name)
 					continue
 				var mode := String(asset_ov.get("collision_mode", fam.get("collision_mode", "box")))
-				# per-family scale_mul (default 1.0) multiplies the kit scale — e.g. the
-				# distant-skyline low-detail buildings are authored huge for the horizon; a
-				# per-asset scale_mul stacks on top (e.g. parasols halved within their family).
+				# per-family scale_mul multiplies the kit scale; a per-asset scale_mul stacks on top.
 				var eff_scale := scale * float(fam.get("scale_mul", 1.0)) \
 						* float(asset_ov.get("scale_mul", 1.0))
 				prefab_items[name] = {"mode": mode, "ov": asset_ov, "scale": eff_scale}
@@ -158,8 +119,7 @@ func _run_recipe(recipe_path: String) -> void:
 		print("[%s] manual (hand-edited, not regenerated): %s" % [kit, ", ".join(manual)])
 
 
-## Per-kit visibility line: family=count, with (catch-all) tagged so an oversized default
-## bucket surfaces (the failure the coverage gate targets).
+## Per-kit visibility line: family=count, with (catch-all) tagged.
 func _report(kit: String, families: Array, counts: Dictionary) -> void:
 	var parts := []
 	for fam: Dictionary in families:
@@ -183,8 +143,7 @@ func _build_palette(kit: String, source: String, scale: float, palette: Dictiona
 	for id in ml.get_item_list():
 		existing[ml.get_item_name(id)] = id
 	var ids := Recipe.assign_item_ids(existing, items)
-	# prune items this meshlib no longer produces (a removed GLB, or a family rerouted to
-	# another overlay meshlib) — kept items keep their ids, so innocent painted cells survive.
+	# prune items this meshlib no longer produces; kept items keep their ids.
 	var keep := {}
 	for n in items:
 		keep[n] = true
@@ -206,8 +165,7 @@ func _build_palette(kit: String, source: String, scale: float, palette: Dictiona
 		ml.set_item_mesh(id, mesh)
 		ml.set_item_mesh_transform(id, Transform3D.IDENTITY)
 		ml.set_item_shapes(id, [mesh.create_trimesh_shape(), Transform3D.IDENTITY])
-		# built-in GridMap palette shows pictures when a thumb exists (gen_thumbs.tscn,
-		# then --import). Best-effort: an un-generated/-imported thumb just leaves it blank.
+		# Best-effort preview: an un-generated/-imported thumb just leaves it blank.
 		var thumb := "%s/%s/%s.png" % [THUMB_DIR, kit, name]
 		if ResourceLoader.exists(thumb):
 			ml.set_item_preview(id, load(thumb))
@@ -310,11 +268,7 @@ func _add_dev_collision(piece_root: Node3D, mode: String, pairs: Array,
 ## Fraction of the piece's height sampled as its "base slab" for footprint mode.
 const FOOTPRINT_SLAB := 0.08
 
-## Footprint mode: the XZ area the piece actually stands on (trunk, pole, base
-## plate), extruded to the piece's FULL height — a tree is then only solid where
-## its trunk is, instead of hitting the car on a canopy it should pass under.
-## Box vs cylinder is decided by which cross-section is tighter (a round pole
-## wants the cylinder; a rail or plate wants the box), never by taste.
+## Footprint mode: the XZ area the piece stands on, extruded to full height. Box vs cylinder decided by tighter cross-section.
 func _footprint_shape(pairs: Array, xform: Transform3D) -> Dictionary:
 	var aabb := _transformed_aabb(pairs, xform)
 	var cut := aabb.position.y + maxf(aabb.size.y * FOOTPRINT_SLAB, 0.001)
@@ -355,8 +309,7 @@ func _footprint_shape(pairs: Array, xform: Transform3D) -> Dictionary:
 	return {"shape": shape, "xform": Transform3D(Basis.IDENTITY, origin)}
 
 
-## V-HACD decomposition for open structures (grandstands, gantries, dock houses);
-## falls back to a single hull if the module yields nothing.
+## V-HACD decomposition for open structures; falls back to a single hull if empty.
 func _decompose(mesh: ArrayMesh) -> Array:
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
@@ -416,9 +369,7 @@ func _collect_meshes(node: Node, xform: Transform3D, pairs: Array) -> void:
 		_collect_meshes(child, nx, pairs)
 
 
-## Merge all mesh pairs into one ArrayMesh (one surface per distinct material),
-## with `xform` (scale + alignment) applied on top of each node transform.
-## Materials are deduped kit-wide and duplicated so outputs never depend on GLBs.
+## Merge all mesh pairs into one ArrayMesh; materials deduped kit-wide and duplicated so outputs never depend on GLBs.
 func _merged_mesh(pairs: Array, xform: Transform3D, mats: Dictionary) -> ArrayMesh:
 	var groups := {}  # material_key -> SurfaceAccumulator
 	for pair: Array in pairs:
@@ -455,16 +406,11 @@ func _transformed_aabb(pairs: Array, xform: Transform3D) -> AABB:
 	return aabb
 
 
-## Godot 4.6 stamps a random per-node `unique_id` into every saved scene, so a
-## regeneration that changes nothing real would still churn git and flag every
-## bake stale. Save, then restore the previous bytes when the only difference is
-## those ids — making re-runs of this tool idempotent for unchanged pieces.
+## Godot 4.6 stamps a random per-node `unique_id`; restore previous bytes when that's the only diff.
 var _unique_id_re := RegEx.create_from_string(" unique_id=\\d+")
 
 
-## Re-bind the uid the file already has so ResourceSaver embeds it again instead of
-## minting a fresh one. Without this, every regen silently invalidates the `uid://`
-## references that placed levels store, and loading a level warns per reference.
+## Re-bind the uid the file already has, or every regen invalidates the `uid://` references.
 func _keep_uid(path: String) -> void:
 	var id := ResourceLoader.get_resource_uid(path)
 	if id == ResourceUID.INVALID_ID:

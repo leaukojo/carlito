@@ -1,20 +1,14 @@
 class_name TerrainGen
 extends RefCounted
-## Pure, unit-tested terrain-generation math. HeightmapTerrain's
-## Generate / Auto-splat buttons and the chunked render mesh all call these statics, so
-## the noise remap, island falloff, splat classification, and chunk lattice get the same
-## test discipline as Drivetrain (tests/test_terrain_gen.gd). Everything is deterministic
-## from its arguments — same seed, same island, forever.
-##
-## Heightmaps stay the existing pipeline: an 8-bit greyscale PNG whose red channel is
-## normalized height [0,1]; the node's `height` export is the world amplitude (meters of
-## a white pixel). The splatmap is an RGBA weight image: R=grass, G=dirt, B=sand, A=rock.
+## Pure, unit-tested terrain-generation math. HeightmapTerrain's Generate / Auto-splat
+## buttons and the chunked render mesh call these statics (tests/test_terrain_gen.gd).
+## Deterministic from its arguments — same seed, same island, forever.
+## Heightmap: 8-bit greyscale PNG, red channel = normalized height [0,1]; `height` export
+## is the world amplitude. Splatmap is RGBA: R=grass, G=dirt, B=sand, A=rock.
 
 enum Preset { ISLAND, ROLLING_HILLS, PLAINS, DUNES }
 
-## Per-preset character: fractal type, frequency multiplier (relative to feature_scale),
-## default octave count, relative amplitude (fraction of `height` the preset peaks at, so
-## plains read gentle and islands tall at the same world scale), and radial falloff.
+## Per-preset character: fractal type, frequency multiplier, relative amplitude, falloff.
 const PRESETS := {
 	Preset.ISLAND: {
 		"fractal": FastNoiseLite.FRACTAL_FBM, "freq_mult": 1.0,
@@ -35,9 +29,7 @@ const PRESETS := {
 }
 
 
-## Deterministically configured noise for a preset. feature_scale is meters per noise
-## feature (grid cells are 1 m); sampling happens at integer grid coordinates, so the
-## same seed produces the same landscape independent of terrain size.
+## Deterministically configured noise for a preset (feature_scale in meters per feature).
 static func make_noise(preset: Preset, seed_value: int, feature_scale: float,
 		octaves: int) -> FastNoiseLite:
 	var cfg: Dictionary = PRESETS[preset]
@@ -50,13 +42,11 @@ static func make_noise(preset: Preset, seed_value: int, feature_scale: float,
 	return noise
 
 
-## Noise sample [-1,1] -> normalized height [0,1], clamped.
 static func remap01(n: float) -> float:
 	return clampf((n + 1.0) * 0.5, 0.0, 1.0)
 
 
-## Normalized elliptical radius from the image centre: 0 at centre, 1 at the midpoint of
-## each edge, >1 in the corners (so a rectangular map still reads as one island).
+## Normalized elliptical radius from the image centre: 0 at centre, 1 at edge midpoints.
 static func radius01(x: int, y: int, cols: int, rows: int) -> float:
 	var hx := maxf(float(cols - 1) * 0.5, 0.001)
 	var hy := maxf(float(rows - 1) * 0.5, 0.001)
@@ -65,8 +55,7 @@ static func radius01(x: int, y: int, cols: int, rows: int) -> float:
 	return sqrt(dx * dx + dy * dy)
 
 
-## Island falloff: 1 inside radius `start`, smoothstep down to 0 at `end` (edges reach
-## sea level). Degenerate start >= end acts as a hard step at `start`.
+## Island falloff: 1 inside radius `start`, smoothstep to 0 at `end`.
 static func island_falloff(r: float, start: float, end: float) -> float:
 	if r <= start:
 		return 1.0
@@ -76,16 +65,9 @@ static func island_falloff(r: float, start: float, end: float) -> float:
 	return 1.0 - t * t * (3.0 - 2.0 * t)
 
 
-## Terrace the normalized height into plateau bands of height `step01` (band height as a
-## fraction of the terrain amplitude — i.e. step_metres / terrain height — so a metres
-## step lands the same regardless of world scale). Buildable flats for villages/farms.
-## Each flat plateau level is snapped to the NEAREST 8-bit heightmap value
-## (roundf(level * 255.0) / 255.0) — the same residual class as the Conform button's
-## round-quantize: at most half a height/255 step either side of the grid plane, hidden
-## by the tile deck (terrain height = 51 m stores every 3 m level byte-exactly).
-## flat_frac in [0,1) is the portion of each band that stays dead flat; the rest ramps
-## between plateaus.
-## step01 <= 0.0 or >= 1.0 is a no-op (terracing disabled / band taller than the terrain).
+## Terrace into plateau bands of height `step01` (fraction of terrain amplitude).
+## Buildable flats for villages/farms. flat_frac in [0,1) is the dead-flat portion of
+## each band; the rest ramps between plateaus. step01 <= 0.0 or >= 1.0 is a no-op.
 static func terrace(h: float, step01: float, flat_frac: float) -> float:
 	if step01 <= 0.0 or step01 >= 1.0:
 		return h
@@ -97,24 +79,16 @@ static func terrace(h: float, step01: float, flat_frac: float) -> float:
 	return clampf(level + ramp * step01, 0.0, 1.0)
 
 
-## Build the normalized heightmap image (8-bit greyscale, the existing pipeline format).
-## cols x rows should be the terrain's vertex grid so 1 px = 1 vertex. Terracing (when
-## terrace_step01 is in (0,1)) is applied last — after amplitude and falloff — so island
-## coasts step into concentric plateau rings.
-##
-## coast_roughness [0,1] perturbs the island falloff's radial distance with a dedicated
-## coast noise, turning the perfect circle into bays and headlands (0 = round; higher =
-## raggeder). It only touches falloff presets, and a hard unperturbed guard past r=0.92
-## keeps every map-border pixel at sea level regardless of roughness. At coast_roughness
-## == 0 the output is byte-identical to the pre-roughness generator (back-compat pin).
+## Build the normalized heightmap image (8-bit greyscale, 1 px = 1 vertex). Terracing
+## applies last, after amplitude and falloff, so island coasts step into plateau rings.
+## coast_roughness [0,1] perturbs the falloff radius with a dedicated coast noise (0 =
+## round); a hard guard past r=0.92 keeps every map-border pixel at sea level.
 static func generate_heights(preset: Preset, seed_value: int, feature_scale: float,
 		octaves: int, falloff_start: float, falloff_end: float,
 		cols: int, rows: int, terrace_step01 := 0.0, terrace_flat := 0.6,
 		coast_roughness := 0.0) -> Image:
 	var cfg: Dictionary = PRESETS[preset]
 	var noise := make_noise(preset, seed_value, feature_scale, octaves)
-	# Dedicated coast noise (derived seed) sampled at the grid cells, ~32 m per feature —
-	# roughly the falloff band width, so bays read at coastline scale, not per-pixel fuzz.
 	var coast_noise: FastNoiseLite = null
 	if cfg.falloff and coast_roughness > 0.0:
 		coast_noise = FastNoiseLite.new()
@@ -130,8 +104,6 @@ static func generate_heights(preset: Preset, seed_value: int, feature_scale: flo
 				if coast_noise != null:
 					var n := coast_noise.get_noise_2d(float(x), float(y))
 					var rp := r + coast_roughness * (falloff_end - falloff_start) * n
-					# Perturbed falloff shapes the coast; the unperturbed guard forces the
-					# outermost ring to 0 so a negative sample can never lift the border.
 					h *= island_falloff(rp, falloff_start, falloff_end) \
 							* island_falloff(r, 0.92, 1.0)
 				else:
@@ -141,10 +113,8 @@ static func generate_heights(preset: Preset, seed_value: int, feature_scale: flo
 	return img
 
 
-## Surface normal at grid vertex (x, z) by central differences over the meter-unit
-## height grid (row-major, z * cols + x). Chunk meshes share these analytically derived
-## normals, so chunk borders never seam the lighting (per-chunk generate_normals would —
-## border verts only see one chunk's triangles).
+## Surface normal at grid vertex by central differences. Chunk meshes share these
+## analytic normals, so chunk borders never seam the lighting.
 static func grid_normal(heights: PackedFloat32Array, cols: int, rows: int,
 		x: int, z: int) -> Vector3:
 	var x0 := maxi(x - 1, 0)
@@ -156,7 +126,6 @@ static func grid_normal(heights: PackedFloat32Array, cols: int, rows: int,
 	return Vector3(-gx, 1.0, -gz).normalized()
 
 
-## Slope in degrees from 4 meter-unit neighbor heights and the pixel spacing (meters).
 static func slope_deg(hl: float, hr: float, hu: float, hd: float,
 		px_x: float, px_z: float) -> float:
 	var gx := (hr - hl) / maxf(2.0 * px_x, 0.001)
@@ -164,10 +133,8 @@ static func slope_deg(hl: float, hr: float, hu: float, hd: float,
 	return rad_to_deg(atan(sqrt(gx * gx + gz * gz)))
 
 
-## RGBA splat weights for one point (R=grass, G=dirt, B=sand, A=rock; sums to 1):
-## rock takes over above rock_slope_deg, dirt ramps in toward dirt_slope_deg, and the
-## remaining flat share is sand below sand_height (fading out over half of it again —
-## the beach band) else grass.
+## RGBA splat weights for one point (sums to 1): rock above rock_slope_deg, dirt ramps
+## toward dirt_slope_deg, sand below sand_height (beach band), else grass.
 static func classify_splat(height_m: float, slope: float, sand_height: float,
 		dirt_slope_deg: float, rock_slope_deg: float) -> Color:
 	var t_dirt := _smooth01(slope / maxf(dirt_slope_deg, 0.001))
@@ -178,8 +145,7 @@ static func classify_splat(height_m: float, slope: float, sand_height: float,
 	return Color(flat * (1.0 - sand_w), dirt, flat * sand_w, t_rock)
 
 
-## Per-pixel auto-splat over a heightmap image. height_scale is the world amplitude of a
-## white pixel; px_x/px_z the world meters between pixels (terrain extent / (px - 1)).
+## Per-pixel auto-splat over a heightmap image.
 static func build_splatmap(height_img: Image, height_scale: float, px_x: float,
 		px_z: float, sand_height: float, dirt_slope_deg: float,
 		rock_slope_deg: float) -> Image:
@@ -199,9 +165,7 @@ static func build_splatmap(height_img: Image, height_scale: float, px_x: float,
 	return splat
 
 
-## Whether every height in the grid is the same value (a dead-flat terrain). The mesher
-## uses this to collapse a flat terrain to one two-triangle quad — the few-polygon path
-## for flat ground; any relief (sculpt, generate) re-densifies on the next rebuild.
+## Whether every height in the grid is the same value (mesher collapses to one quad).
 static func is_uniform(heights: PackedFloat32Array) -> bool:
 	if heights.is_empty():
 		return true
@@ -212,9 +176,8 @@ static func is_uniform(heights: PackedFloat32Array) -> bool:
 	return true
 
 
-## Cell-space chunk lattice for the render mesh: Rect2i positions/sizes in cells (a
-## chunk of N cells has N+1 verts, sharing its border row/column with the neighbor).
-## Covers (cols-1) x (rows-1) cells exactly, last chunk takes the remainder.
+## Cell-space chunk lattice for the render mesh (a chunk of N cells has N+1 verts,
+## sharing its border row/column with the neighbor).
 static func chunk_ranges(cols: int, rows: int, chunk_cells: int) -> Array[Rect2i]:
 	var out: Array[Rect2i] = []
 	var cells_x := maxi(cols - 1, 1)
@@ -226,15 +189,13 @@ static func chunk_ranges(cols: int, rows: int, chunk_cells: int) -> Array[Rect2i
 	return out
 
 
-## Write/patch the PNG's .import sidecar so generated images survive the importer:
-## lossless (runtime get_image() needs real bytes), no mipmaps, detect_3d off (the
-## splatmap is sampled by a 3D shader — the default detect_3d would silently reimport it
-## VRAM-compressed), and no alpha-border fix (it rewrites RGB wherever alpha == 0, which
-## would corrupt grass/dirt/sand weights at rock == 0). Round-trips existing sidecars.
+## Write/patch the PNG's .import sidecar: lossless (runtime get_image() needs real
+## bytes), no mipmaps, detect_3d off (would silently VRAM-compress the splatmap), no
+## alpha-border fix (would corrupt RGB weights where alpha == 0).
 static func ensure_import_settings(png_path: String) -> void:
 	var cfg := ConfigFile.new()
 	var import_path := png_path + ".import"
-	cfg.load(import_path)   # missing file is fine — we're creating it
+	cfg.load(import_path)   # missing file is fine, creates one
 	cfg.set_value("remap", "importer", "texture")
 	cfg.set_value("remap", "type", "CompressedTexture2D")
 	cfg.set_value("params", "compress/mode", 0)
@@ -244,7 +205,6 @@ static func ensure_import_settings(png_path: String) -> void:
 	cfg.save(import_path)
 
 
-## Clamped smoothstep 0..1 (GDScript's smoothstep needs from < to; this is the bare t).
 static func _smooth01(t: float) -> float:
 	var c := clampf(t, 0.0, 1.0)
 	return c * c * (3.0 - 2.0 * c)

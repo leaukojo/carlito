@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://bi50w45500g7w" path="res://src/vehicles/truck/semi.gd" id="1_semi"]
 [ext_resource type="Resource" path="res://src/vehicles/truck/semi_spec.tres" id="2_spec"]
+[ext_resource type="Script" uid="uid://cnxxnd6o64d3d" path="res://src/vehicles/truck/fifth_wheel.gd" id="3_fifthwheel"]
 
 [sub_resource type="BoxShape3D" id="BoxLower"]
 size = Vector3(1.92, 0.64, 3.4)
@@ -155,7 +156,18 @@ shape = SubResource("BoxLower")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.28, -1.05)
 shape = SubResource("BoxUpper")
 
-[node name="Kingpin" type="Marker3D" parent="." unique_id=1078315644]
+; THE COUPLING. No geometry of its own -- the plate meshes live under Body -- so this is a bare
+; node running fifth_wheel.gd, at IDENTITY, with the kingpin marker as its child. TowHost reads
+; `transform * marker.position`, so the datum below is still a chassis coordinate and the plate
+; and the joint cannot disagree. The Drawbar / Pin shape (src/vehicles/tractor/drawbar.tscn).
+[node name="FifthWheel" type="Node3D" parent="." unique_id=2145000101]
+script = ExtResource("3_fifthwheel")
+
+; THE COUPLING DATUM, and y = 1.05 is SHARED GEOMETRY: every trailer in TrailerCatalog is
+; authored with its ground at y = -1.05 against this plane, so a variant that raised or dropped
+; it would float or bury all four. The Z is free per variant (0.75 here, 0.85 on the
+; conventional) -- but the kingpin-to-rearmost-cab-structure gap is not; see test_truck.
+[node name="Kingpin" type="Marker3D" parent="FifthWheel" unique_id=1078315644]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.05, 0.75)
 
 [node name="Body" type="Node3D" parent="." unique_id=168499701]

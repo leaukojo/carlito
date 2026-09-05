@@ -1,14 +1,6 @@
 extends GdUnitTestSuite
-## ThreePointHitch — does the AUTHORED SCENE agree with the SOLVED linkage?
-##
-## hitch_linkage.gd proves the maths closes; this proves the geometry someone drew in the
-## .tscn is pinned to that maths. Those are different failures: a link authored at the wrong
-## length or a pivot node moved in the editor leaves the solver perfectly happy while the
-## rendered linkage pulls itself apart. Every joint drawn as a pin is checked to sit where
-## the solver says the pin is, across the whole travel.
-##
-## It also holds the clearances that were measured off the Kenney body — the rear tyre inner
-## faces at |x| = 0.253 are the tightest constraint on the whole assembly.
+## ThreePointHitch: authored scene vs solved linkage. Geometry pinned to solver's
+## math; measured clearances from Kenney body (rear tyre inner = tightest).
 
 const HitchScene := preload("res://src/vehicles/tractor/three_point_hitch.tscn")
 const PloughScene := preload("res://src/vehicles/tractor/implements/plough.tscn")
@@ -19,14 +11,11 @@ const TractorScene := preload("res://src/vehicles/kenney/tractor-kenney.tscn")
 
 ## Joint slop we accept. The parts are rigid, so this is float noise, not a fudge factor.
 const JOINT_EPS := 0.002
-## Measured off wheel-tractor-rear.tscn at its 0.45 visual radius: half-width 0.276 at
-## x = +/-0.529, so the gap between the rear tyres is this half-width.
+## Rear tyre inner (half-width 0.276, gap between tyres).
 const TYRE_INNER_X := 0.253
-## Rearmost tyre contact in body Z (wheel centre 0.822 + visual radius 0.45).
+## Rearmost tyre contact (wheel centre 0.822 + radius 0.45).
 const TYRE_REAR_Z := 1.272
-## Tyre crown in body Y (wheel centre 0.45 + visual radius 0.45). Anything above this passes
-## OVER the wheel and cannot sweep into it — which is how a tall implement's hopper leans in
-## over the tractor as the hitch raises without that being a clash.
+## Tyre crown (wheel centre + radius; above this clears the wheel).
 const TYRE_TOP_Y := 0.9
 
 
@@ -88,7 +77,7 @@ func test_lift_rods_stay_pinned_to_the_rockshaft_arms_and_the_links() -> void:
 
 
 func test_attached_implement_pins_meet_the_linkage() -> void:
-	# The whole point of the four-bar solve: all three pins stay connected through the lift.
+	# The four-bar solve keeps all three pins connected through the lift.
 	# Run for EVERY implement — they share one Headstock scene precisely so this cannot drift
 	# for one machine at a time, and that is only true while all three actually instance it.
 	for scene in [PloughScene, HarrowScene, MowerScene, SpreaderScene]:
@@ -329,7 +318,7 @@ func test_both_implement_signals_are_published_in_both_states() -> void:
 	# must still have a value, or the Bridge silently drops it (and warns once).
 	var tractor := _tractor()
 	var hitch: ThreePointHitch = tractor.get_node("ThreePointHitch")
-	var input := InputRouter.VehicleInput.new()
+	var input := VehicleInput.new()
 
 	tractor._tick_extras(input, 1.0 / 60.0)
 	var attached: Dictionary = tractor.telemetry.to_bridge_dict()
@@ -346,12 +335,12 @@ func test_both_implement_signals_are_published_in_both_states() -> void:
 
 func test_an_implement_off_the_bus_is_attached_but_claims_no_address() -> void:
 	# The third state, and the one these signals exist to distinguish: steel on the linkage
-	# with nothing answering on the bus. Phase 3's plough is the real case — implement_connected
+	# with nothing answering on the bus. The plough is the real case — implement_connected
 	# reports the ADDRESS CLAIM, so it reads false here even though something IS attached.
 	var tractor := _tractor()
 	var hitch: ThreePointHitch = tractor.get_node("ThreePointHitch")
 	hitch.attach(_mechanical_only())
-	var input := InputRouter.VehicleInput.new()
+	var input := VehicleInput.new()
 	input.key = InputRouter.KEY_IGNITION
 	input.pto = true
 

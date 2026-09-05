@@ -1,0 +1,6 @@
+{
+	"version": 3,
+	"signals": [
+		{ "name": "esc_mode", "dir": "out", "type": "u8", "unit": "enum", "enum": { "0": "OFF", "1": "RUN" }, "count": 4 }
+	]
+}

@@ -1,23 +1,25 @@
 @tool
 class_name WaterSurface
 extends Area3D
-## One rectangular water region: the water HEIGHT API, the visual
-## surface, and the non-boat kill/respawn volume in a single node a level drops in.
+## One rectangular water region: height API, visual surface, and non-boat kill/respawn
+## volume in a single node a level drops in.
 ##
-## - Height API: get_height() returns the node's global Y — FLAT at launch.
-##   The visual waves live entirely in water.gdshader and never feed physics.
-## - Buoyancy callers (BoatVehicle) find water via the "water" group + contains_xz().
-## - Kill volume:
-##   the Area's box spans the water body but its top sits kill_margin below the surface,
-##   so a splash at the shoreline is survivable while a sunk vehicle respawns (the
-##   existing BaseVehicle.respawn path, which already zeroes the accel history).
-##
-## The region is an axis-aligned rect around the node's origin; don't rotate the node.
+## get_height() returns the node's global Y, flat; shader waves are visual-only and never
+## feed physics. Containment (map-edge walls) is NOT here — that's WorldBounds. The kill
+## box top sits kill_margin below the surface so a shoreline splash is survivable.
+## Axis-aligned rect around the node's origin; don't rotate the node.
 
+const Layers := preload("res://src/physics/collision_layers.gd")
 const WATER_GROUP := "water"
 const SHADER := preload("res://src/water/water.gdshader")
-## Visual plane subdivisions (fixed: enough for the vertex waves, one draw call).
-const MESH_SUBDIV := 32
+## Target width of one visual plane quad, in metres. Subdivisions are derived from
+## `size` so a bigger water body keeps the same wave sampling density instead of
+## stretching the quads past the ~11 m wave wavelength (which turns the waves to noise).
+const WAVE_QUAD_M := 17.5
+## Clamp on the derived subdivision count: enough detail on a small pond, and a ceiling
+## so a very large sea can't explode the vertex count. Still one draw call either way.
+const MESH_SUBDIV_MIN := 32
+const MESH_SUBDIV_MAX := 192
 
 @export var size := Vector2(24.0, 24.0):
 	set(v):
@@ -52,19 +54,17 @@ const MESH_SUBDIV := 32
 ## How far the far-sea quad sits below the surface (must clear the wave troughs).
 const FAR_SEA_DROP := 0.25
 
-## Invisible perimeter walls at the water's edge so boats can't sail off the map into
-## the (visual-only) far sea. Four thin static boxes ring the `size` rect.
-## Height above/below the surface and thickness in metres.
-const WALL_HEIGHT := 20.0
-const WALL_THICKNESS := 2.0
-
 var _mesh: MeshInstance3D
 var _shape: CollisionShape3D
 var _far_mesh: MeshInstance3D
-var _walls: StaticBody3D
 
 
 func _ready() -> void:
+	# The mask is what makes the kill volume fire: an Area3D reports a body only if its mask
+	# names that body's layer. This line and BaseVehicle's layer are one mechanism in two
+	# files — drop VEHICLE here and drowning stops silently.
+	collision_layer = Layers.TRIGGER
+	collision_mask = Layers.VEHICLE
 	add_to_group(WATER_GROUP)
 	_rebuild()
 	if not Engine.is_editor_hint():
@@ -100,42 +100,20 @@ func _rebuild() -> void:
 		add_child(_shape, false, Node.INTERNAL_MODE_BACK)
 	var plane := PlaneMesh.new()
 	plane.size = size
-	plane.subdivide_width = MESH_SUBDIV
-	plane.subdivide_depth = MESH_SUBDIV
+	plane.subdivide_width = _wave_subdiv(size.x)
+	plane.subdivide_depth = _wave_subdiv(size.y)
 	_mesh.mesh = plane
 	var box_height := maxf(depth - kill_margin, 0.05)
 	(_shape.shape as BoxShape3D).size = Vector3(size.x, box_height, size.y)
 	_shape.position = Vector3(0.0, -kill_margin - box_height * 0.5, 0.0)
-	_rebuild_walls()
 	_rebuild_far_sea()
 
 
-## Ring the water region with four thin static walls at its outer edge. The vehicle
-## sits on the near side of the wall, so the collision boxes hug the `size` rect from
-## outside; the wall spans WALL_HEIGHT centred on the surface (blocks both floating and
-## airborne vehicles). Rebuilt with size like everything else.
-func _rebuild_walls() -> void:
-	if _walls == null:
-		_walls = StaticBody3D.new()
-		add_child(_walls, false, Node.INTERNAL_MODE_BACK)
-	for child in _walls.get_children():
-		child.queue_free()
-	var half := size * 0.5
-	var t := WALL_THICKNESS
-	# Each entry: (box size, centre offset). Long axis spans the full side plus corners.
-	var walls := [
-		[Vector3(size.x + t * 2.0, WALL_HEIGHT, t), Vector3(0.0, 0.0, half.y + t * 0.5)],
-		[Vector3(size.x + t * 2.0, WALL_HEIGHT, t), Vector3(0.0, 0.0, -half.y - t * 0.5)],
-		[Vector3(t, WALL_HEIGHT, size.y), Vector3(half.x + t * 0.5, 0.0, 0.0)],
-		[Vector3(t, WALL_HEIGHT, size.y), Vector3(-half.x - t * 0.5, 0.0, 0.0)],
-	]
-	for w in walls:
-		var cs := CollisionShape3D.new()
-		var box := BoxShape3D.new()
-		box.size = w[0]
-		cs.shape = box
-		cs.position = w[1]
-		_walls.add_child(cs)
+## Subdivisions along an edge of `length` metres, holding the quad size near
+## WAVE_QUAD_M so the wave field samples the same on any size of water body.
+func _wave_subdiv(length: float) -> int:
+	var n := int(roundf(length / WAVE_QUAD_M))
+	return clampi(n, MESH_SUBDIV_MIN, MESH_SUBDIV_MAX)
 
 
 func _rebuild_far_sea() -> void:

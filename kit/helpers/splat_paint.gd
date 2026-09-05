@@ -1,23 +1,14 @@
 extends RefCounted
-## Pure splat-paint math for the destructive "Paint splat under ..." buttons (RoadPath's
-## paint-under-road, the palette dock's paint-under-tiles): rasterizes a road strip or a
-## tile's actual mesh-face footprint into the terrain's splat weight images at FULL
-## strength with a hard edge, biased to UNDERCOVER (the road strip is inset by its
-## caller, the tile mask eroded here) so the paint always stays hidden under the deck. Full strength + hard edge on purpose: the splat shader pow-sharpens
-## weights and grip_at sharpens the same way, so a hard paint reads as a crisp low-poly
-## border AND full surface grip, with none of the low-grip apron a feathered edge would
-## reintroduce. Same terrain-local conventions and pixel mapping as RoadBuilder's conform
-## math (px = (x + span*0.5) / span * (iw-1), separate x/z scales); everything is static,
-## deterministic and editor-free (tests/test_splat_paint.gd).
-##
-## Both entry points take parallel `images` / `units` arrays — one BrushOps.unit_slice per
-## weight image. Painting a channel's slice into BOTH images zeroes the other seven
-## channels at the pixel, whichever image each lives in. All images must share one size
-## (a mismatched splatmap2 already has a terrain config warning; callers skip it).
+## Pure splat-paint math for the destructive "Paint splat under ..." buttons: rasterizes
+## a road strip or tile mesh-face footprint into the terrain's splat weight images at
+## full strength with a hard edge, biased to undercover so paint stays hidden under the
+## deck. Hard edge matches the splat shader's pow-sharpening, so it reads as a crisp
+## low-poly border with full surface grip. Static, deterministic, editor-free
+## (tests/test_splat_paint.gd). Both entry points take parallel `images`/`units` arrays —
+## one BrushOps.unit_slice per weight image, so painting zeroes the other seven channels.
 
 
-## Editable, uncompressed RGBA8 working copy of a splat texture, or null when unset or
-## undecodable. get_image() returns a copy, so painting it never touches the live texture.
+## Editable, uncompressed RGBA8 working copy of a splat texture, or null if unset.
 static func decode(tex: Texture2D) -> Image:
 	if tex == null:
 		return null
@@ -32,13 +23,9 @@ static func decode(tex: Texture2D) -> Image:
 	return img
 
 
-## Paint every pixel whose center lies within `half_width` (m) of the centerline polyline
-## (`samples`: terrain-local XZ, meters — callers sample AT the extrusion's ring offsets)
-## or inside a deck triangle (`deck`: terrain-local XZ verts, 3 per triangle — a strip
-## extruded on the ribbon's frames at the SAME half_width, which covers what the
-## centerline sweep misses on yawing segments). Callers pass an already-inset half_width
-## (undercoverage bias — see RoadPath.SPLAT_PAINT_INSET). Returns the tight dirty Rect2i in pixels (empty if
-## nothing painted, or on empty/mismatched input). Same inputs -> identical bytes.
+## Paint every pixel within `half_width` (m) of the centerline polyline (`samples`) or
+## inside a deck triangle (`deck` — covers what the centerline sweep misses on yawing
+## segments). Callers pass an already-inset half_width (RoadPath.SPLAT_PAINT_INSET).
 static func paint_strip(images: Array[Image], units: Array[Color],
 		samples: PackedVector2Array, half_width: float, span_x: float, span_z: float,
 		deck := PackedVector2Array()) -> Rect2i:
@@ -48,7 +35,7 @@ static func paint_strip(images: Array[Image], units: Array[Color],
 	var ih := images[0].get_height()
 	var pts := samples
 	if pts.size() == 1:
-		pts.append(pts[0])   # local CoW copy: one degenerate segment (a paint dot)
+		pts.append(pts[0])   # one degenerate segment (a paint dot)
 	var sx := float(iw - 1) / maxf(span_x, 0.001)   # pixels per meter
 	var sz := float(ih - 1) / maxf(span_z, 0.001)
 	var rx := half_width * sx
@@ -56,8 +43,6 @@ static func paint_strip(images: Array[Image], units: Array[Color],
 	var hw2 := half_width * half_width
 	var dirty := [iw, ih, -1, -1]   # plain Array: reference semantics for _paint
 
-	# Centerline pass: pixel centers within half_width of the nearest point on any
-	# segment. Pixels the padded box over-covers simply fail the distance test.
 	for si in pts.size() - 1:
 		var a := pts[si]
 		var b := pts[si + 1]
@@ -84,8 +69,6 @@ static func paint_strip(images: Array[Image], units: Array[Color],
 				if dxm * dxm + dzm * dzm <= hw2:
 					_paint(images, units, px, pz, dirty)
 
-	# Deck raster pass: pixel centers inside a deck triangle. No erosion here — the
-	# caller already insets the deck strip laterally (see RoadPath.SPLAT_PAINT_INSET).
 	var mask := _tri_mask(deck, iw, ih, sx, sz, span_x, span_z)
 	for pz in ih:
 		for px in iw:
@@ -94,13 +77,9 @@ static func paint_strip(images: Array[Image], units: Array[Color],
 	return _dirty_rect(dirty)
 
 
-## Paint every pixel whose center lies inside one of the terrain-local XZ triangles
-## (`tris`: meters, 3 verts per triangle — a GridMap cell's actual item-mesh faces
-## projected to XZ, so a curve tile paints only the curve, never its full cell AABB),
-## then ERODED by one pixel (8-neighbor, diagonals included): a covered pixel with any
-## uncovered neighbor is dropped. Undercoverage on purpose — splat weights are bilinear-sampled, so a painted
-## pixel bleeds up to one pixel outward; eroding keeps the sharpened border under the
-## mesh instead of peeking past its edge. Returns the tight dirty Rect2i in pixels.
+## Paint every pixel inside one of the terrain-local XZ triangles (`tris`, a GridMap
+## cell's actual item-mesh faces), then eroded by one pixel (8-neighbor) to keep the
+## sharpened border under the mesh instead of bleeding past its edge.
 static func paint_tris(images: Array[Image], units: Array[Color], tris: PackedVector2Array,
 		span_x: float, span_z: float) -> Rect2i:
 	if tris.size() < 3 or not _images_valid(images, units):
@@ -115,11 +94,6 @@ static func paint_tris(images: Array[Image], units: Array[Color], tris: PackedVe
 		for px in iw:
 			if mask[pz * iw + px] != 1:
 				continue
-			# 8-neighbor erosion — diagonals INCLUDED: at a convex corner (two road
-			# tiles meeting at an angle) a 4-neighbor check keeps the corner pixel
-			# (both its axis neighbors lie on the L's arms) and its bilinear bleed
-			# peeks diagonally past the mesh edge. Off-image counts as uncovered (a
-			# mesh reaching the map border still stays inset).
 			if px == 0 or px == iw - 1 or pz == 0 or pz == ih - 1:
 				continue
 			var open := false
@@ -133,10 +107,7 @@ static func paint_tris(images: Array[Image], units: Array[Color], tris: PackedVe
 	return _dirty_rect(dirty)
 
 
-## Full-image coverage mask (1 byte per pixel) of pixel centers inside any XZ triangle —
-## the shared barycentric raster (the conform_heights raster with the plane-height math
-## dropped). Interior shared edges stay covered (the small negative tolerance), so a
-## triangulated surface never gets pinholes along its own seams.
+## Full-image coverage mask (1 byte per pixel) of pixel centers inside any XZ triangle.
 static func _tri_mask(tris: PackedVector2Array, iw: int, ih: int, sx: float, sz: float,
 		span_x: float, span_z: float) -> PackedByteArray:
 	var mask := PackedByteArray()
@@ -151,7 +122,7 @@ static func _tri_mask(tris: PackedVector2Array, iw: int, ih: int, sx: float, sz:
 		var acz := tc.y - ta.y
 		var den := abx * acz - abz * acx
 		if absf(den) < 1e-9:
-			continue   # degenerate in XZ: a vertical face's projection
+			continue   # degenerate in XZ (a vertical face's projection)
 		var x0 := clampi(int(floor((minf(ta.x, minf(tb.x, tc.x)) + span_x * 0.5) * sx)),
 				0, iw - 1)
 		var x1 := clampi(int(ceil((maxf(ta.x, maxf(tb.x, tc.x)) + span_x * 0.5) * sx)),
@@ -174,7 +145,6 @@ static func _tri_mask(tris: PackedVector2Array, iw: int, ih: int, sx: float, sz:
 	return mask
 
 
-## Shared input guard: at least one image, parallel units, all sizes equal and paintable.
 static func _images_valid(images: Array[Image], units: Array[Color]) -> bool:
 	if images.is_empty() or units.size() != images.size():
 		return false
@@ -188,8 +158,6 @@ static func _images_valid(images: Array[Image], units: Array[Color]) -> bool:
 	return true
 
 
-## Write the unit colors into every image at (px, pz) and grow the dirty bounds
-## ([minx, minz, maxx, maxz] — a plain Array so mutation reaches the caller).
 static func _paint(images: Array[Image], units: Array[Color], px: int, pz: int,
 		dirty: Array) -> void:
 	for i in images.size():

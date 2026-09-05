@@ -1,66 +1,35 @@
 @tool
 class_name HeightmapTerrain
 extends StaticBody3D
-## Terrain from a heightmap image: a greyscale texture becomes both a
-## welded ground mesh and a matching HeightMapShape3D. This is the §2-rule-2 ground
-## path — a dedicated collision surface, never a trimesh scatter. One grid cell = one
-## world unit, so the mesh and collision vertices coincide exactly (no shape scaling).
+## Terrain from a heightmap image: a greyscale texture becomes a welded ground mesh and a
+## matching HeightMapShape3D (never a trimesh). One cell = one world unit, so mesh and
+## collision coincide exactly. @tool; call rebuild() after changing image/size.
 ##
-## @tool so authors see the terrain in the editor; call rebuild() after changing the
-## image or size. Cells sample the red channel as normalized height [0,1] * height.
-##
-## Generation/chunking:
-##  - The render mesh is CHUNKED (one MeshInstance3D per chunk_cells tile) so island-
-##    scale maps frustum-cull instead of drawing one giant always-on mesh. Culling
-##    granularity only, not LOD. Collision stays ONE HeightMapShape3D (§2-2 untouched).
-##  - A FastNoiseLite GENERATOR (preset/seed/feature scale/octaves + island falloff +
-##    terrace plateaus) behind Generate / Generate-random tool buttons ("random" just
-##    rolls a fresh seed into gen_seed): destructive-by-button, deterministic from the seed,
-##    one undoable action, writes the level's heightmap PNG (pipeline unchanged). The
-##    world amplitude is the existing `height` export — generated pixels stay [0,1].
-##  - An AUTO-SPLAT button seeding the RGBA splatmap (kit/terrain/terrain_splat.gdshader
-##    colors: R=grass G=dirt B=sand A=rock) from slope + height, same undo discipline.
-##    Pure math lives in TerrainGen (kit/terrain/terrain_gen.gd), unit-tested.
-##
-## Ground painting has EIGHT channels: 0..3 are splatmap.RGBA, 4..7 the optional
-## splatmap2.RGBA (absent = the plain 4-channel terrain, unchanged). Both the colors and the
-## names are per-level data — the colors ARE the material's shader params (edit them on the
-## material to repaint a level's palette), the names are `channel_names` below. Auto-splat
-## still only classifies the base four.
+## Eight paint channels: 0..3 = splatmap.RGBA, 4..7 = optional splatmap2.RGBA (absent =
+## plain 4-channel terrain). Colors are the material's shader params; names are `channel_names`.
 
+const Layers := preload("res://src/physics/collision_layers.gd")
 const SPLAT_SHADER_PATH := "res://kit/terrain/terrain_splat.gdshader"
-## Splat shader color param per channel index (0..7). The one place the channel order is
-## written down: the brush cursor and the panel's swatches read colors through it.
+## Splat shader color param per channel index (0..7); the one place channel order is written.
 const CHANNEL_PARAMS: Array[StringName] = [
 	&"grass_color", &"dirt_color", &"sand_color", &"rock_color",
 	&"color5", &"color6", &"color7", &"color8",
 ]
-## The splat shader's own `blend_sharpness` default — the fallback when the material isn't
-## the splat shader (or hasn't set the param). grip_at sharpens with the same exponent the
-## shader does, so friction and the drawn border agree.
+## Splat shader's default `blend_sharpness`; grip_at sharpens with the same exponent.
 const DEFAULT_BLEND_SHARPNESS := 8.0
-## Sharpened-weight total below which a pixel counts as unpainted. Same threshold the splat
-## shader uses to fall back to a flat color.
+## Sharpened-weight total below which a pixel counts as unpainted (matches the shader).
 const MIN_SPLAT_TOTAL := 0.001
 const DEFAULT_CHANNEL_NAMES := [
 	"Grass", "Dirt", "Sand", "Rock", "Snow", "Mud", "Asphalt", "Gravel",
 ]
 
 
-## Emitted when one of the source images is REPLACED wholesale — `kind` is "height",
-## "splat" or "splat2". Fires for Generate, Auto-splat, road Conform, an inspector
-## assignment, and the undo of any of them (they all land through the property setters).
-##
-## This is the seam the kit brush needs: it keeps a decoded working copy of each image in
-## memory until scene save, so anything that rewrites a PNG behind its back leaves that copy
-## stale — and the next stroke would stamp into the pre-button pixels and flush them, undoing
-## the button. Brush-side identity checks can't stand in for this: _apply_generated reloads
-## with CACHE_MODE_REPLACE, which keeps the same Texture2D instance and swaps its contents.
+## Emitted when a source image is replaced wholesale (`kind`: "height"/"splat"/"splat2").
+## The kit brush needs this to invalidate its decoded working copy of a PNG rewritten behind its back.
 signal source_image_replaced(kind: String)
 
 
-## The stock channel names: the `channel_names` export default, and the panel's fallback.
-## A function because a PackedStringArray isn't a constant expression.
+## Function because a PackedStringArray isn't a constant expression.
 static func default_channel_names() -> PackedStringArray:
 	return PackedStringArray(DEFAULT_CHANNEL_NAMES)
 
@@ -71,13 +40,12 @@ static func default_channel_names() -> PackedStringArray:
 		_height_dirty = true
 		_rebuild_if_ready()
 		source_image_replaced.emit("height")
-## World-unit extent on X (width) and Z (depth). Also the collision/mesh grid size.
+## World-unit extent on X/Z; also the collision/mesh grid size.
 @export var terrain_size := Vector2(64, 64):
 	set(value):
 		terrain_size = value
 		_rebuild_if_ready()
-## How tall a fully white pixel is, in meters. The overall vertical scale — and
-## therefore the generator's amplitude knob (presets peak at a fraction of it).
+## How tall a fully white pixel is, in meters (also the generator's amplitude knob).
 @export var height := 8.0:
 	set(value):
 		height = value
@@ -85,10 +53,9 @@ static func default_channel_names() -> PackedStringArray:
 @export var material: Material:
 	set(value):
 		material = value
-		# The splat cache also holds the material's blend_sharpness (see _ensure_splat_cache).
-		_splat_dirty = true
+		_splat_dirty = true  # the splat cache also holds material.blend_sharpness
 		_rebuild_if_ready()
-## Render-mesh tile size in cells (one MeshInstance3D per tile — the frustum-cull unit).
+## Render-mesh tile size in cells (one MeshInstance3D per tile).
 @export var chunk_cells := 64:
 	set(value):
 		chunk_cells = maxi(1, value)
@@ -96,45 +63,32 @@ static func default_channel_names() -> PackedStringArray:
 @warning_ignore("unused_private_class_variable")
 @export_tool_button("Rebuild terrain") var _rebuild_action := rebuild
 
-## The roads GridMap's vertical cell (kit/import/roads.json cell_size.y) — the world-space
-## lattice terraced plateaus must land on for painted tiles to sit flush.
+## The roads GridMap's vertical cell (roads.json cell_size.y); plateaus must land on it.
 const GRID_LEVEL_M := 3.0
 
 @export_group("Generation")
 @export var preset: TerrainGen.Preset = TerrainGen.Preset.ISLAND
-## The terrain's fingerprint: the same seed always regenerates the exact same landscape.
-## Change it (or use the random button) for a different one.
+## Fingerprint: the same seed always regenerates the exact same landscape.
 @export var gen_seed := 0
-## Size of hills/valleys in meters. Bigger = broader, calmer shapes.
+## Size of hills/valleys in meters; bigger = broader, calmer shapes.
 @export var feature_scale := 60.0
-## Detail layers stacked on the base shape: 1 = smooth blobs, 8 = lots of fine crinkly
-## detail. More octaves = slower generation, bumpier ground.
+## Detail layers stacked on the base shape: 1 = smooth blobs, 8 = fine crinkly detail.
 @export_range(1, 8) var gen_octaves := 4
-## Island preset only: where the land starts descending to sea level, as a fraction of
-## the map radius.
+## Island preset only: where land starts descending to sea level, as a fraction of map radius.
 @export_range(0.0, 1.0) var falloff_start := 0.55
-## Island preset only: where the descent reaches sea level, as a fraction of the map
-## radius.
+## Island preset only: where the descent reaches sea level, as a fraction of map radius.
 @export_range(0.0, 1.0) var falloff_end := 0.95
-## Island preset only: how ragged the coastline is. 0 = perfectly round island, 1 = deep
-## bays and jutting headlands. The map border always reaches sea level regardless.
+## Island preset only: coastline raggedness (0 = round, 1 = deep bays/headlands).
 @export_range(0.0, 1.0) var coast_roughness := 0.5
-## Plateau band height in road-grid levels — 1 level = the roads GridMap's 3 m vertical
-## cell, so plateau flats always land on paintable road heights (tiles sit flush, Conform
-## becomes a touch-up). 0 disables terracing. Tip: terrain height = 51 stores the 3 m
-## levels byte-exactly in the 8-bit heightmap; any other height leaves at most half a
-## height/255 residual, hidden by the tile deck.
+## Plateau band height in road-grid levels (1 = the roads GridMap's 3 m vertical cell), so
+## flats land on paintable road heights; 0 disables terracing. height=51 is byte-exact.
 @export_range(0, 8) var terrace_levels := 3
 ## Portion of each terrace band that stays dead flat; the rest ramps between plateaus.
 @export_range(0.0, 0.9) var terrace_flat := 0.6
-## Runs the noise generator from the current gen_seed. Same generator as "Generate new
-## random terrain" — that button just rolls a fresh gen_seed first (written back, so the
-## result stays reproducible and undoable).
+## Runs the noise generator from the current gen_seed.
 @warning_ignore("unused_private_class_variable")
 @export_tool_button("Generate terrain (from seed)") var _generate_action := _generate
-## Rolls a new gen_seed and runs the same generator as "Generate terrain (from seed)".
-## The new seed is written back, so the result stays reproducible and undo restores the
-## old seed with the old image.
+## Rolls a new gen_seed (written back, undoable) then runs the same generator.
 @warning_ignore("unused_private_class_variable")
 @export_tool_button("Generate new random terrain") var _generate_random_action := _generate_random
 
@@ -146,62 +100,47 @@ const GRID_LEVEL_M := 3.0
 		_splat_dirty = true
 		_push_splat_param()
 		source_image_replaced.emit("splat")
-## Weights for paint channels 4..7 (RGBA). Optional: without it the terrain is a plain
-## 4-channel one. The brush creates it on the first stroke of a channel >= 4.
+## Weights for paint channels 4..7; optional (absent = plain 4-channel terrain).
 @export var splatmap2: Texture2D:
 	set(value):
 		splatmap2 = value
 		_splat_dirty = true
 		_push_splat_param()
 		source_image_replaced.emit("splat2")
-## Display names for the eight paint channels, shown in the brush panel's channel picker.
-## Names only — a channel's COLOR is the matching shader param on `material` (see
-## CHANNEL_PARAMS); rename and recolor per level to taste.
+## Display names for the eight paint channels. Color is the matching CHANNEL_PARAMS shader param.
 @export var channel_names := default_channel_names()
-## Tire grip multiplier per paint channel 0..7 (1.0 = the vehicle's spec grip; lower =
-## slippery, e.g. ice/mud). RayWheel scales mu_long/mu_lat by the weighted splat mix under
-## each contact (see grip_at). All-1.0 default = no effect, so unpainted levels are unchanged.
-## Clamped to [0, 1] on read: a value above 1 would raise mu past the tuned spec (breaking
-## the brake > peak-drive hierarchy on that surface) and a negative one would invert the
-## friction force outright. A per-element @export_range is not a thing, hence the read clamp
-## plus the configuration warning.
+## Tire grip multiplier per paint channel 0..7 (1.0 = spec grip, lower = slippery).
+## Clamped to [0, 1] on read: above 1 breaks the brake > drive hierarchy, below 0 inverts friction.
 @export var channel_grip := PackedFloat32Array([1, 1, 1, 1, 1, 1, 1, 1])
-## Beaches appear below this world height (the band fades out over another half of it);
-## above, grass.
+## Beaches appear below this world height, fading out over another half of it.
 @export var sand_height := 2.0
 ## Ground steeper than this becomes dirt.
 @export var dirt_slope_deg := 22.0
 ## Ground steeper than this becomes rock.
 @export var rock_slope_deg := 38.0
-## Colors the terrain automatically from height and slope: beaches low, grass flat, dirt
-## on slopes, rock on cliffs. Overwrites hand painting (undoable).
+## Colors the terrain from height/slope: beaches low, grass flat, dirt on slopes, rock on cliffs.
 @warning_ignore("unused_private_class_variable")
 @export_tool_button("Auto-splat") var _auto_splat_action := _auto_splat
 
 
-# Decoded splatmap copies kept for the per-tick grip query (get_splat_weights): decoding a
-# Texture2D every wheel every frame would be ruinous, so they are cached and only re-decoded
-# when a splatmap is replaced (_splat_dirty, set in the setters above).
-#
-# EDITOR CAVEAT: the kit brush keeps its own working image and only assigns splatmap back at
-# scene save, so mid-stroke these copies hold the pre-stroke pixels. Nothing drives in the
-# editor, so the runtime grip query is unaffected; an in-editor consumer of grip_at would
-# need the brush to push its working image.
+# Decoded splatmap copies cached for the per-tick grip query, re-decoded only on _splat_dirty.
+# Editor caveat: the kit brush's working image lands in splatmap only at scene save, so
+# mid-stroke these hold pre-stroke pixels (harmless — nothing drives in the editor).
 var _splat_img: Image
 var _splat2_img: Image
 var _splat_dirty := true
 var _sharpness := DEFAULT_BLEND_SHARPNESS  ## cached with the splat images (material param)
 var _decode_warned := false                ## one-shot guard for the decode-failure warning
 
-# Same deal for the heightmap, which grip terrain selection samples per wheel per tick
-# (RayWheel compares the contact height against the terrain surface). Runtime only: in the
-# editor height_at keeps reading the texture directly, so an external PNG edit reimported in
-# place still shows up without a scene reload.
+# Same deal for the heightmap; runtime only (editor height_at reads the texture directly).
 var _height_img: Image
 var _height_dirty := true
 
 
 func _ready() -> void:
+	# A static body initiates nothing, so its mask is only the two families that move.
+	collision_layer = Layers.TERRAIN
+	collision_mask = Layers.DYNAMIC
 	rebuild()
 
 
@@ -225,8 +164,7 @@ func _rebuild_if_ready() -> void:
 		rebuild()
 
 
-## (Re)generate the mesh + collision from the current heightmap. Safe to call in the
-## editor or at runtime; a null heightmap flattens to a plane at y=0.
+## (Re)generates mesh + collision from the current heightmap; a null heightmap flattens to y=0.
 func rebuild() -> void:
 	var dims := _grid_dims()
 	var cols := dims.x   # vertices along X
@@ -239,10 +177,8 @@ func rebuild() -> void:
 	_push_splat_param()
 
 
-## Editor incremental rebuild (terrain brush): remesh only the render chunks overlapping the
-## world-space XZ rectangle, sampling heights from `img` — the brush's live working image,
-## not the exported (stale) heightmap texture. Lets a sculpt stroke update geometry without
-## remeshing a whole island every sample; collision is refreshed separately on stroke end.
+## Editor incremental rebuild (terrain brush): remesh only chunks overlapping the world-space
+## XZ rect, sampling from `img` (brush's live image, not the stale texture). Collision refreshes on stroke end.
 func rebuild_region_world(img: Image, min_x: float, max_x: float,
 		min_z: float, max_z: float) -> void:
 	var container := get_node_or_null(^"Chunks") as Node3D
@@ -253,15 +189,13 @@ func rebuild_region_world(img: Image, min_x: float, max_x: float,
 	var cols := dims.x
 	var rows := dims.y
 	var heights := _sample_heights(img, cols, rows)
-	# A collapsed flat terrain has no chunk nodes to patch — the first sculpt stroke
-	# densifies the whole mesh from the brush's live image (once; later samples patch).
+	# A collapsed flat terrain has no chunk nodes; the first stroke densifies the whole mesh.
 	if container.get_node_or_null(^"FlatQuad") != null:
 		_apply_chunks(cols, rows, heights)
 		_push_splat_param()
 		return
-	# World XZ -> cell indices (see _build_chunk: world x of cell cx = gpos.x - (cols-1)/2 +
-	# cx). Expanded one cell each side so an edit on a chunk border also refreshes the
-	# neighbour's shared verts/normals.
+	# World XZ -> cell indices, expanded one cell each side so a border edit also
+	# refreshes the neighbour's shared verts/normals.
 	var span_x := float(cols - 1)
 	var span_z := float(rows - 1)
 	var c0 := int(floor(min_x - global_position.x + span_x * 0.5)) - 1
@@ -280,17 +214,13 @@ func rebuild_region_world(img: Image, min_x: float, max_x: float,
 	_push_splat_param()
 
 
-## Rebuild the collision HeightMapShape3D from `img` (terrain brush, called once at stroke end —
-## HeightMapShape3D has no partial-update API, so the whole shape is reassigned, but that's
-## cheap data next to remeshing and only happens on release).
+## Rebuilds the collision HeightMapShape3D from `img`, once at brush stroke end (no partial-update API).
 func rebuild_collision_from_image(img: Image) -> void:
 	var dims := _grid_dims()
 	_apply_collision(dims.x, dims.y, _sample_heights(img, dims.x, dims.y))
 
 
-## The source PNG a brush writes on save: the heightmap's / splatmap's own PNG when it
-## has one, else beside the scene. Wraps _target_png_path so the addon reuses the exact same
-## path logic as the generation buttons.
+## The source PNG a brush writes on save; wraps _target_png_path for the same path logic.
 func png_path_for(kind: String) -> String:
 	if kind == "height":
 		return _target_png_path(heightmap, "height")
@@ -299,9 +229,7 @@ func png_path_for(kind: String) -> String:
 	return _target_png_path(splatmap, "splat")
 
 
-## The editable color of paint channel `ch` (0..7): the material's shader param when the
-## level set one, else the splat shader's own default. Gray when the material isn't a
-## shader material (nothing to paint into).
+## Editable color of paint channel `ch` (0..7); gray when the material isn't a shader material.
 func channel_color(ch: int) -> Color:
 	var mat := material as ShaderMaterial
 	if mat == null:
@@ -311,15 +239,14 @@ func channel_color(ch: int) -> Color:
 	if value is Color:
 		return value
 	if mat.shader != null:
-		# An unset param reads back null — ask the shader for the uniform's own default.
+		# Unset param reads back null — ask the shader for the uniform's own default.
 		var def: Variant = RenderingServer.shader_get_parameter_default(mat.shader.get_rid(), param)
 		if def is Color:
 			return def
 	return Color.GRAY
 
 
-## Display name of paint channel `ch`, falling back to the default when `channel_names` is
-## short (a level may store fewer than eight).
+## Display name of paint channel `ch`, falling back to the default when `channel_names` is short.
 func channel_name(ch: int) -> String:
 	var i := clampi(ch, 0, 7)
 	if i < channel_names.size() and not channel_names[i].is_empty():
@@ -328,15 +255,11 @@ func channel_name(ch: int) -> String:
 
 
 ## Vertex grid dimensions: one cell = one world unit, so verts = extent + 1 (min 2).
-## Shared by rebuild() and height_at() so the world<->grid mapping lives in one place.
 func _grid_dims() -> Vector2i:
 	return Vector2i(maxi(2, int(terrain_size.x) + 1), maxi(2, int(terrain_size.y) + 1))
 
 
-## World-space surface height under `world_pos`'s XZ, bilinearly sampled from the
-## heightmap (the ground query used by the editor placement fallback and
-## scatter ground-snap). Assumes the terrain is axis-aligned (unrotated/unscaled, as
-## all authored HeightmapTerrains are); a null heightmap is flat at the node's Y.
+## World-space surface height under `world_pos`'s XZ, bilinearly sampled; assumes axis-aligned.
 func height_at(world_pos: Vector3) -> float:
 	var img := _height_image()
 	if img == null:
@@ -345,15 +268,12 @@ func height_at(world_pos: Vector3) -> float:
 	return global_position.y + _sample_red_bilinear(img, uv.x, uv.y) * height
 
 
-## Normalized terrain UV under `world_pos`'s XZ, clamped to the extent. The one place the
-## world -> splat/heightmap mapping is written down: height_at, get_splat_weights and grip_at
-## all go through it, and it matches the render mesh's global UV (see _build_chunk), so the
-## friction lookup lines up with what's drawn.
+## Normalized terrain UV under `world_pos`'s XZ, clamped to the extent; matches the render mesh's global UV.
 func _terrain_uv(world_pos: Vector3) -> Vector2:
 	var dims := _grid_dims()
 	var span_x := float(dims.x - 1)
 	var span_z := float(dims.y - 1)
-	# grid X spans [-span_x/2, +span_x/2] in local space (see _apply_chunks's x0/z0).
+	# grid X spans [-span_x/2, +span_x/2] in local space.
 	var lx := world_pos.x - global_position.x
 	var lz := world_pos.z - global_position.z
 	return Vector2(
@@ -361,19 +281,14 @@ func _terrain_uv(world_pos: Vector3) -> Vector2:
 			clampf((lz + span_z * 0.5) / span_z, 0.0, 1.0))
 
 
-## Whether `world_pos`'s XZ lies within this terrain's extent (axis-aligned rect).
+## Whether `world_pos`'s XZ lies within this terrain's extent.
 func contains_xz(world_pos: Vector3) -> bool:
 	var lx := world_pos.x - global_position.x
 	var lz := world_pos.z - global_position.z
 	return absf(lx) <= terrain_size.x * 0.5 and absf(lz) <= terrain_size.y * 0.5
 
 
-## The eight paint weights under `world_pos`'s XZ: [0..3] = splatmap.RGBA, [4..7] =
-## splatmap2.RGBA (all-zero when the second map is absent), bilinearly sampled from the cached
-## splat Images. Uses the SAME world->(u,v) mapping as height_at, i.e. the shader's global
-## terrain UV, so the friction lookup lines up with what's drawn. Raw weights on purpose (no
-## `blend_sharpness` pow — that only crispens the visual border; grip fades smoothly across a
-## painted seam, which is the sensible physical behavior). All-zero when no splatmap is set.
+## Eight paint weights: [0..3]=splatmap.RGBA, [4..7]=splatmap2.RGBA, raw (no sharpening).
 func get_splat_weights(world_pos: Vector3) -> PackedFloat32Array:
 	var weights := PackedFloat32Array([0, 0, 0, 0, 0, 0, 0, 0])
 	_ensure_splat_cache()
@@ -388,22 +303,10 @@ func get_splat_weights(world_pos: Vector3) -> PackedFloat32Array:
 	return weights
 
 
-## Tire grip multiplier under `world_pos`: the paint-weight-blended channel_grip. 1.0 (spec
-## grip) when unpainted or with no splatmap. RayWheel scales its friction coefficients by
-## this. Cheap and allocation-free: <= 8 cached-Image bilinear reads, no weights array.
-##
-## Weights are pow-sharpened by the material's `blend_sharpness` and normalized EXACTLY as
-## the splat shader does before they are mixed. Raw weights would be wrong here: the shader's
-## sharpening makes the dominant channel win almost immediately, so a brush-falloff pixel of
-## 0.7 grass / 0.3 ice draws as 99.9% grass while raw normalization hands it 30% of the ice
-## grip — an invisible slick apron around every painted patch. Sharpening also disposes of the
-## other half of that bug: normalization alone makes weight MAGNITUDE irrelevant, so the
-## faintest trace of ice read as full ice. After pow(8) a faint trace falls under
-## MIN_SPLAT_TOTAL and reads as unpainted, same as the shader's flat-color fallback.
-##
-## The one deliberate divergence from the shader: below MIN_SPLAT_TOTAL it falls back to
-## neutral 1.0, not to channel 0 (the shader's grass) — channel 0 is ice in the gym, and
-## unpainted ground must never inherit it.
+## Tire grip multiplier under `world_pos`: paint-weight-blended channel_grip, 1.0 when
+## unpainted. Weights are pow-sharpened/normalized exactly as the splat shader, so a
+## brush-falloff pixel doesn't leak an invisible slick apron. Diverges from the shader
+## below MIN_SPLAT_TOTAL: falls back to neutral 1.0, never channel 0 (which can be ice).
 func grip_at(world_pos: Vector3) -> float:
 	if splatmap == null:
 		return 1.0
@@ -427,16 +330,7 @@ func grip_at(world_pos: Vector3) -> float:
 	return grip / total
 
 
-## How strongly paint channel `ch` covers `world_pos`, 0..1 — the "is this surface X?" query.
-## The tractor's draft force asks it "is this the ploughable field?" once per tick, so it takes
-## the same allocation-free, cached-Image path as grip_at: <= 8 bilinear reads, never a
-## get_image() per tick.
-##
-## Weights are pow-sharpened by the material's `blend_sharpness` and normalized exactly as
-## grip_at (and the splat shader) does, for the same two reasons: a brush-falloff pixel must not
-## report a channel the shader draws as absent, and normalization alone would make the faintest
-## trace read as full coverage. 0 when unpainted, below MIN_SPLAT_TOTAL, or with no splatmap —
-## unlike grip_at there is no neutral value to fall back to, "not painted" IS 0 here.
+## How strongly channel `ch` covers `world_pos`, 0..1. Same sharpening as grip_at, but no neutral fallback — "not painted" is 0.
 func channel_weight_at(world_pos: Vector3, ch: int) -> float:
 	if splatmap == null or ch < 0 or ch >= CHANNEL_PARAMS.size():
 		return 0.0
@@ -444,7 +338,7 @@ func channel_weight_at(world_pos: Vector3, ch: int) -> float:
 	if _splat_img == null:
 		return 0.0
 	if ch >= 4 and _splat2_img == null:
-		return 0.0   # a plain 4-channel terrain: channels 4..7 are unpainted by construction
+		return 0.0   # plain 4-channel terrain: 4..7 unpainted by construction
 	var uv := _terrain_uv(world_pos)
 	var c0 := _sample_rgba_bilinear(_splat_img, uv.x, uv.y)
 	var c1 := Color(0, 0, 0, 0)
@@ -463,17 +357,14 @@ func channel_weight_at(world_pos: Vector3, ch: int) -> float:
 	return want / total
 
 
-## The grip multiplier of channel `ch`, clamped to the sane [0, 1] range (see channel_grip)
-## and defaulting to 1.0 for a level that stores a short array.
+## Grip multiplier of channel `ch`, clamped to [0, 1], defaulting to 1.0 for a short array.
 func channel_grip_at(ch: int) -> float:
 	if ch < 0 or ch >= channel_grip.size():
 		return 1.0
 	return clampf(channel_grip[ch], 0.0, 1.0)
 
 
-## Decode both splatmaps once into uncompressed working Images for get_splat_weights (and
-## cache the material's blend sharpness with them); only re-runs after a splatmap or the
-## material is replaced (_splat_dirty). Same decompress dance as _read_image.
+## Decodes both splatmaps into uncompressed working Images, re-running only on _splat_dirty.
 func _ensure_splat_cache() -> void:
 	if not _splat_dirty:
 		return
@@ -481,19 +372,13 @@ func _ensure_splat_cache() -> void:
 	_splat2_img = _decode_texture(splatmap2)
 	_sharpness = _blend_sharpness()
 	_splat_dirty = false
-	# A texture that refuses to decode is indistinguishable from unpainted ground: grip
-	# silently goes neutral everywhere and stays there (retrying per tick would mean a
-	# get_image() per wheel per frame, which is exactly what this cache exists to avoid).
-	# Warn once so it is visible — including in the browser console on the web export, where
-	# a texture readback is the failure most likely to differ from a desktop run.
+	# A decode failure reads as unpainted ground (grip goes neutral); warn once.
 	if splatmap != null and _splat_img == null and not _decode_warned:
 		_decode_warned = true
 		push_warning("HeightmapTerrain '%s': splatmap could not be decoded — per-surface tire grip is disabled for this terrain." % name)
 
 
-## Decoded heightmap for the per-tick surface query, cached at runtime (see _height_img).
-## In the editor it decodes per call, so an externally edited + reimported PNG is picked up
-## without a scene reload.
+## Decoded heightmap, cached at runtime; decodes per call in the editor for reimport freshness.
 func _height_image() -> Image:
 	if Engine.is_editor_hint():
 		return _read_image()
@@ -503,22 +388,20 @@ func _height_image() -> Image:
 	return _height_img
 
 
-## The material's splat `blend_sharpness`, or the shader's own default (same lookup shape as
-## channel_color). Read once per cache refresh — never per query.
+## The material's splat `blend_sharpness`, or the shader's default. Read once per cache refresh.
 func _blend_sharpness() -> float:
 	var mat := material as ShaderMaterial
 	if mat == null:
 		return DEFAULT_BLEND_SHARPNESS
 	var value: Variant = mat.get_shader_parameter(&"blend_sharpness")
 	if value == null and mat.shader != null:
-		# An unset param reads back null — ask the shader for the uniform's own default.
 		value = RenderingServer.shader_get_parameter_default(mat.shader.get_rid(), &"blend_sharpness")
 	if value is float or value is int:
 		return maxf(1.0, float(value))
 	return DEFAULT_BLEND_SHARPNESS
 
 
-## Uncompressed decoded copy of `tex`, or null when unset (shared by the splat cache).
+## Uncompressed decoded copy of `tex`, or null when unset.
 static func _decode_texture(tex: Texture2D) -> Image:
 	if tex == null:
 		return null
@@ -531,8 +414,7 @@ static func _decode_texture(tex: Texture2D) -> Image:
 	return img
 
 
-## Bilinear RGBA lookup at normalized (u, v) in [0,1] — the all-channel sibling of
-## _sample_red_bilinear, used by get_splat_weights.
+## Bilinear RGBA lookup at normalized (u, v); all-channel sibling of _sample_red_bilinear.
 func _sample_rgba_bilinear(img: Image, u: float, v: float) -> Color:
 	var iw := img.get_width()
 	var ih := img.get_height()
@@ -549,8 +431,7 @@ func _sample_rgba_bilinear(img: Image, u: float, v: float) -> Color:
 	return top.lerp(bot, ty)
 
 
-## Bilinear red-channel lookup at normalized (u, v) in [0,1]. Smoother than the mesh's
-## nearest sampling, so a placed prop sits on the interpolated surface, not a vertex step.
+## Bilinear red-channel lookup; smoother than nearest sampling, so props sit on the interpolated surface.
 func _sample_red_bilinear(img: Image, u: float, v: float) -> float:
 	var iw := img.get_width()
 	var ih := img.get_height()
@@ -567,7 +448,7 @@ func _sample_red_bilinear(img: Image, u: float, v: float) -> float:
 	return lerpf(top, bot, ty)
 
 
-## Decoded, uncompressed copy of the heightmap image, or null when unset.
+## Decoded, uncompressed copy of the heightmap image, or null.
 func _read_image() -> Image:
 	if heightmap == null:
 		return null
@@ -580,7 +461,7 @@ func _read_image() -> Image:
 	return img
 
 
-## Row-major (z*cols + x) height grid: red channel * height, or all-zero without an image.
+## Row-major (z*cols + x) height grid: red channel * height, all-zero without an image.
 func _sample_heights(img: Image, cols: int, rows: int) -> PackedFloat32Array:
 	var data := PackedFloat32Array()
 	data.resize(cols * rows)
@@ -598,26 +479,20 @@ func _sample_heights(img: Image, cols: int, rows: int) -> PackedFloat32Array:
 	return data
 
 
-## Rebuild every render chunk (one MeshInstance3D per chunk_cells tile). Full rebuild is
-## button/load-time only; brush strokes call _build_chunk for just the touched tiles.
+## Rebuilds every render chunk (button/load-time; brush strokes call _build_chunk directly).
 func _apply_chunks(cols: int, rows: int, heights: PackedFloat32Array) -> void:
 	var container := get_node_or_null(^"Chunks") as Node3D
 	if container == null:
 		var legacy := get_node_or_null(^"Mesh")   # legacy single-mesh child (hot reload)
 		if legacy != null:
 			legacy.free()
-		# Left unowned on purpose: the mesh is regenerated from the heightmap on
-		# every load, so it must never be serialized into the level scene (an
-		# editor save would otherwise bake stale geometry). It
-		# still renders in the editor viewport as a preview.
+		# Unowned on purpose: regenerated every load, must never bake stale geometry into the scene.
 		container = Node3D.new()
 		container.name = "Chunks"
 		add_child(container)
 	for child in container.get_children():
 		child.free()
-	# A dead-flat terrain (null heightmap or an all-uniform image) renders
-	# as one two-triangle quad — the few-polygon path. Any relief re-densifies here on
-	# the next full rebuild. Collision is untouched: still the one HeightMapShape3D.
+	# A dead-flat terrain renders as one two-triangle quad; collision stays untouched.
 	if TerrainGen.is_uniform(heights):
 		container.add_child(_build_flat_quad(cols, rows,
 				heights[0] if not heights.is_empty() else 0.0))
@@ -626,14 +501,12 @@ func _apply_chunks(cols: int, rows: int, heights: PackedFloat32Array) -> void:
 		container.add_child(_build_chunk(rect, cols, rows, heights))
 
 
-## One chunk tile: verts chunk-local (the MeshInstance3D carries the offset, so its AABB
-## is tile-sized and frustum-culls), UVs global 0..1 across the whole terrain (splat
-## continuity), normals analytic from the full grid (chunk borders never seam).
+## One chunk tile: verts chunk-local, UVs global 0..1, normals analytic (borders never seam).
 func _build_chunk(rect: Rect2i, cols: int, rows: int,
 		heights: PackedFloat32Array) -> MeshInstance3D:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var w := rect.size.x   # cells; verts = cells + 1 (border shared with the neighbor)
+	var w := rect.size.x   # cells; verts = cells + 1
 	var h := rect.size.y
 	for z in h + 1:
 		for x in w + 1:
@@ -645,8 +518,7 @@ func _build_chunk(rect: Rect2i, cols: int, rows: int,
 	for z in h:
 		for x in w:
 			var i := z * (w + 1) + x
-			# two triangles per quad, wound CW (Godot's front-face order) so the
-			# top surface renders / lights.
+			# CW winding (Godot's front-face order) so the top surface renders/lights.
 			st.add_index(i); st.add_index(i + 1); st.add_index(i + w + 1)
 			st.add_index(i + 1); st.add_index(i + w + 2); st.add_index(i + w + 1)
 	var mi := MeshInstance3D.new()
@@ -659,9 +531,7 @@ func _build_chunk(rect: Rect2i, cols: int, rows: int,
 	return mi
 
 
-## Single quad covering the whole terrain at uniform height `y` (see _apply_chunks).
-## Same conventions as _build_chunk: UVs 0..1 across the terrain (splat continuity),
-## CW winding, normal straight up (exact for a flat surface).
+## Single quad covering the whole terrain at uniform height `y`; same conventions as _build_chunk.
 func _build_flat_quad(cols: int, rows: int, y: float) -> MeshInstance3D:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -688,14 +558,14 @@ func _apply_collision(cols: int, rows: int, heights: PackedFloat32Array) -> void
 	shape.map_data = heights
 	var cs := get_node_or_null(^"Collision") as CollisionShape3D
 	if cs == null:
-		# Unowned like the chunks (see _apply_chunks): regenerated per load, never saved.
+		# Unowned like the chunks: regenerated per load, never saved.
 		cs = CollisionShape3D.new()
 		cs.name = "Collision"
 		add_child(cs)
 	cs.shape = shape
 
 
-## Feed both splatmaps to the splat ShaderMaterial (no-op on other material types).
+## Feeds both splatmaps to the splat ShaderMaterial (no-op on other material types).
 func _push_splat_param() -> void:
 	if material is ShaderMaterial:
 		(material as ShaderMaterial).set_shader_parameter(&"splatmap", splatmap)
@@ -721,8 +591,7 @@ func _generate_with_seed(seed_value: int) -> void:
 		return
 	var dims := _grid_dims()
 	if terrace_levels > 0:
-		# Plateaus are grid-aligned in the terrain's LOCAL frame; a terrain node sitting
-		# off the 3 m world lattice shifts every plateau off the paintable road heights.
+		# Plateaus are grid-aligned in local space; off-lattice Y shifts them off road heights.
 		var y_off := fposmod(global_position.y, GRID_LEVEL_M)
 		if y_off > 0.01 and y_off < GRID_LEVEL_M - 0.01:
 			push_warning("Terrain Y = %.2f is not a multiple of %.0f m — terraced plateaus won't align with the road GridMap levels." % [global_position.y, GRID_LEVEL_M])
@@ -751,9 +620,8 @@ func _auto_splat() -> void:
 	var splat := TerrainGen.build_splatmap(img, height, px_x, px_z,
 			sand_height, dirt_slope_deg, rock_slope_deg)
 	var images: Array = [[&"splatmap", path, splat]]
-	# Auto-splat classifies channels 0..3 only, so any painted 4..7 weight has to be zeroed
-	# in the SAME action — left alone it would keep double-counting against the fresh base
-	# weights, and the terrain would still read as snow/asphalt where it now says grass.
+	# Auto-splat classifies 0..3 only, so a painted 4..7 weight must be zeroed in the same
+	# action or it double-counts against the fresh base weights.
 	if splatmap2 != null:
 		var path2 := _target_png_path(splatmap2, "splat2")
 		if not path2.is_empty():
@@ -761,8 +629,7 @@ func _auto_splat() -> void:
 					Image.FORMAT_RGBA8)
 			zero.fill(Color(0, 0, 0, 0))
 			images.append([&"splatmap2", path2, zero])
-	# One-click promise: if the current material isn't the splat shader, swap in a fresh
-	# splat ShaderMaterial (inside the same undo action, so undo restores the old look).
+	# One-click: swap in a fresh splat ShaderMaterial if the current one isn't the splat shader.
 	var props := {}
 	var current := material as ShaderMaterial
 	if current == null or current.shader == null \
@@ -773,23 +640,14 @@ func _auto_splat() -> void:
 	_commit_generated("Auto-splat terrain", images, props)
 
 
-## One undoable action around the generated image(s) (a stray click must not
-## destroy hand-sculpted brush work): do applies the new images, undo restores a
-## snapshot of the prior ones — both through _apply_generated, which writes the PNG and
-## reimports, so disk always matches the scene. `images` is a list of
-## [property, png path, new image] triples that must land or revert together (auto-splat
-## rewrites splatmap AND clears splatmap2). `props` are sibling property changes
-## ({name: [old, new]} — the random seed, the material swap) riding the same action.
+## One undoable action around the generated image(s), via _apply_generated. `images` is
+## [property, png path, new image] triples; `props` are sibling {name: [old, new]} changes.
 func _commit_generated(action_name: String, images: Array, props: Dictionary) -> void:
-	# Untyped on purpose: EditorUndoRedoManager is an editor-only class, so ANNOTATING with it
-	# makes this @tool script fail to PARSE in exported (non-editor) builds — which silently
-	# breaks every HeightmapTerrain at runtime. The value is fetched by string singleton lookup
-	# and this whole function is is_editor_hint()-guarded, so dynamic typing costs nothing.
+	# Untyped: EditorUndoRedoManager is editor-only, so annotating breaks this @tool script's parse in exported builds.
 	var undo_redo = Engine.get_singleton(&"EditorInterface").get_editor_undo_redo()
 	undo_redo.create_action(action_name)
 	for prop_name: StringName in props:
-		# Registered first so e.g. the material is live before the image applies (do
-		# runs in registration order, undo reversed).
+		# Registered first so e.g. the material is live before the image applies.
 		undo_redo.add_do_property(self, prop_name, props[prop_name][1])
 		undo_redo.add_undo_property(self, prop_name, props[prop_name][0])
 	for entry: Array in images:
@@ -807,9 +665,7 @@ func _commit_generated(action_name: String, images: Array, props: Dictionary) ->
 	undo_redo.commit_action()
 
 
-## Write the image to its PNG (lossless import sidecar enforced), reimport, and point
-## `prop` at the imported texture. A null image (undoing a first-ever Generate) just
-## clears the property; the file stays on disk, harmless.
+## Writes the image to its PNG, reimports, points `prop` at it. Null image just clears the property.
 func _apply_generated(prop: StringName, path: String, img: Image) -> void:
 	if not Engine.is_editor_hint():
 		return
@@ -821,17 +677,14 @@ func _apply_generated(prop: StringName, path: String, img: Image) -> void:
 		push_error("HeightmapTerrain: failed to write %s (%s)" % [path, error_string(err)])
 		return
 	TerrainGen.ensure_import_settings(path)
-	# Untyped: EditorFileSystem is editor-only — see the note in _commit_generated (a type
-	# annotation here breaks the exported build's parse of this runtime script).
+	# Untyped: EditorFileSystem is editor-only, same parse-break risk as EditorUndoRedoManager.
 	var filesystem = Engine.get_singleton(&"EditorInterface").get_resource_filesystem()
 	filesystem.update_file(path)
 	filesystem.reimport_files(PackedStringArray([path]))
 	set(prop, ResourceLoader.load(path, "Texture2D", ResourceLoader.CACHE_MODE_REPLACE))
 
 
-## Where a generated PNG lands: over the current texture's source PNG when there is
-## one (the level's heightmap), else beside the scene as
-## <scene>_<node>_<kind>.png — which requires the scene to be saved once.
+## Where a generated PNG lands: over the current texture's source PNG, else beside the scene.
 func _target_png_path(tex: Texture2D, kind: String) -> String:
 	if tex != null and tex.resource_path.begins_with("res://") \
 			and tex.resource_path.get_extension() == "png":

@@ -1,9 +1,5 @@
 extends GdUnitTestSuite
-## ImplementCatalog — the V-cycle order for the tractor's implements, and the ImplementBase
-## declarations every implement makes about itself.
-##
-## The detached state is a real cycle entry, so it is tested like one: you must be able to
-## reach it and to leave it.
+## ImplementCatalog: V-cycle order for tractor implements. Detached is a real cycle entry.
 
 const PloughScript := preload("res://src/vehicles/tractor/implements/plough.gd")
 const HarrowScript := preload("res://src/vehicles/tractor/implements/harrow.gd")
@@ -36,10 +32,23 @@ func test_unknown_id_restarts_the_cycle() -> void:
 	assert_str(ImplementCatalog.next("res://nope.tscn")).is_equal(ImplementCatalog.IMPLEMENTS[0])
 
 
-func test_every_implement_scene_exists_and_extends_the_base() -> void:
+## The entries in the cycle that hang on the LINKAGE. Everything below is about three-point
+## implements — visual children of the chassis, posed by the four-bar solve — and the cycle also
+## carries a DRAWBAR trailer, which is a jointed RigidBody3D with collision, wheels and no device
+## class at all. That machine has its own suite (tests/test_drawbar_trailer.gd), which ALSO sweeps
+## this catalog and asserts the two kinds declare the connection they are routed by — so nothing
+## falls between the two files by being skipped here.
+func _three_point_entries() -> PackedStringArray:
+	var out := PackedStringArray()
 	for path in ImplementCatalog.IMPLEMENTS:
-		if not ImplementCatalog.is_attached(path):
-			continue
+		if ImplementCatalog.is_attached(path) and not ImplementCatalog.is_towed(path):
+			out.append(path)
+	assert_int(out.size()).override_failure_message("no three-point implements left").is_greater(3)
+	return out
+
+
+func test_every_implement_scene_exists_and_extends_the_base() -> void:
+	for path in _three_point_entries():
 		assert_bool(ResourceLoader.exists(path)) \
 			.override_failure_message("missing implement scene: %s" % path).is_true()
 		var node := (load(path) as PackedScene).instantiate()
@@ -69,9 +78,7 @@ func test_a_draft_machine_declares_its_own_working_depth() -> void:
 	# switches the force on and tool_depth() is the span it ramps across, so a draft machine with
 	# no declared depth would publish a permanent honest-looking zero and a machine that works
 	# above the ground with a depth would be waiting for someone to flip the other flag.
-	for path in ImplementCatalog.IMPLEMENTS:
-		if not ImplementCatalog.is_attached(path):
-			continue
+	for path in _three_point_entries():
 		var node: ImplementBase = (load(path) as PackedScene).instantiate()
 		if node.draft_relevant():
 			assert_float(node.tool_depth()) \
@@ -155,9 +162,7 @@ func test_spreader_adds_the_hydraulic_remote() -> void:
 func test_every_implement_hangs_on_the_three_point_linkage() -> void:
 	# There is one hitch and it is a three-point linkage: an implement in this cycle that did
 	# not declare THREE_POINT would be hung off a connection the tractor does not have.
-	for path in ImplementCatalog.IMPLEMENTS:
-		if not ImplementCatalog.is_attached(path):
-			continue
+	for path in _three_point_entries():
 		var node: ImplementBase = (load(path) as PackedScene).instantiate()
 		assert_bool(node.uses(ImplementBase.Connection.THREE_POINT)) \
 			.override_failure_message("%s is in the cycle but not three-point mounted" % path) \
@@ -169,9 +174,7 @@ func test_no_two_implements_report_the_same_device_class() -> void:
 	# implement_type is how the bus tells them apart; two machines sharing a class would make
 	# the signal unable to answer "what is on the hitch".
 	var seen := {}
-	for path in ImplementCatalog.IMPLEMENTS:
-		if not ImplementCatalog.is_attached(path):
-			continue
+	for path in _three_point_entries():
 		var node: ImplementBase = (load(path) as PackedScene).instantiate()
 		var cls := node.device_class()
 		assert_bool(seen.has(cls)) \
@@ -194,9 +197,7 @@ func test_device_classes_are_declared_by_the_contract() -> void:
 	assert_object(sig).is_not_null()
 	assert_str(sig.flavor).is_equal("isobus")
 	assert_str(sig.enum_label(ImplementBase.CLASS_NONE)).is_equal("None")
-	for path in ImplementCatalog.IMPLEMENTS:
-		if not ImplementCatalog.is_attached(path):
-			continue
+	for path in _three_point_entries():
 		var node: ImplementBase = (load(path) as PackedScene).instantiate()
 		assert_str(sig.enum_label(node.device_class())) \
 			.override_failure_message("contract has no implement_type label for %s" % path) \

@@ -1,13 +1,11 @@
 class_name Gauge
 extends Control
-## Hand-built radial gauge. There are exactly TWO of these on the dash —
-## the speedometer and the tachometer — so this is one bespoke widget instanced twice,
-## deliberately NOT a from-JSON gauge framework. The dashboard configures its scale
-## (min/max) and redline from the contract and feeds `value` every frame.
+## Hand-built radial gauge. Exactly two on the dash (speedometer, tachometer), one bespoke
+## widget instanced twice. The dashboard configures min/max and redline from the contract and
+## feeds `value` every frame.
 ##
-## Geometry: a 270° arc with the 90° gap at the bottom (min at 7:30, sweeping clockwise
-## over the top to max at 4:30). Gauge text lives in that bottom gap so the needle never
-## crosses it. Plain text + color only — no emoji.
+## Geometry: a 270° arc with the 90° gap at the bottom (min at 7:30, clockwise to max at 4:30).
+## Gauge text lives in that gap so the needle never crosses it. Plain text + color only, no emoji.
 
 const START_DEG := 135.0  ## min value, lower-left (7:30) — draw_arc angle, y-down screen space
 const SWEEP_DEG := 270.0  ## clockwise to lower-right (4:30)

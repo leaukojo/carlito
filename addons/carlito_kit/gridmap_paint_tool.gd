@@ -1,17 +1,9 @@
 @tool
 extends RefCounted
-## Terrain-aware GridMap painting ("auto-floor"). The built-in GridMap editor paints on a
-## MANUAL floor plane and exposes no script hook to drive that floor, so this is a
-## replacement paint tool: each viewport click raycasts the ground via the shared
-## ground-snap chain (ground_snap.gd), lets the GridMap derive the cell Y from the hit
-## height (local_to_map floors per axis), and commits ONE undoable set_cell_item with the
-## palette's selected item + a Y-rotation from the [ / ] hotkeys.
-##
-## Inert (handle_input returns false) unless a GridMap is armed AND the panel toggle is on,
-## so editor navigation/selection is untouched otherwise. Left-click paints (drag paints a
-## streak, one cell per undo step); Ctrl+left-click erases; right-click / Escape exits.
-## The ghost is an unowned wire box at the hovered cell (brush-cursor discipline: unshaded,
-## no-depth-test, never serialized).
+## Terrain-aware GridMap painting ("auto-floor"): replaces the built-in GridMap editor's
+## manual floor plane with one raycast per click (ground_snap.gd) so the cell Y follows
+## terrain height. Inert unless a GridMap is armed and the panel toggle is on. Left-click
+## paints (one undo step per cell per drag); Ctrl+left-click erases; right-click/Escape exits.
 
 const GroundSnap := preload("res://addons/carlito_kit/ground_snap.gd")
 
@@ -33,8 +25,7 @@ func _init(undo: EditorUndoRedoManager) -> void:
 	_undo = undo
 
 
-## Arm from a palette pick: the target GridMap plus the item id resolved from its meshlib
-## by name. A missing item leaves the tool inert.
+## Resolves tile_name to an item id in grid's meshlib; a missing item leaves the tool inert.
 func arm(grid: GridMap, tile_name: String) -> void:
 	_grid = grid
 	_item = _resolve_item(grid, tile_name)
@@ -149,7 +140,6 @@ func _resolve_item(grid: GridMap, tile_name: String) -> int:
 
 # ------------------------------------------------------------------ ghost
 
-## Wire box at the hovered cell so the auto-derived floor is visible before the click.
 func _update_ghost(camera: Camera3D, mouse_pos: Vector2) -> void:
 	var hit := GroundSnap.ground_point(camera, mouse_pos, _no_excludes)
 	var cell := _grid.local_to_map(_grid.to_local(hit))

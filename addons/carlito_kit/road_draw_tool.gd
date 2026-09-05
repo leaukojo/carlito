@@ -1,39 +1,15 @@
 @tool
 extends RefCounted
-## Draw-on-terrain road authoring. The built-in Path3D gizmo places
-## points on a plane at the node's origin; this tool instead appends ground-snapped
-## curve points to the selected RoadPath — each viewport click resolves the ground via
-## the shared ground-snap fallback chain (ground_snap.gd), lifts it by the road's
-## draw_clearance, and commits ONE undoable curve point (the placement_tool pattern).
-## Right-click / Escape exits Draw mode (Arc mode's right-click first drops a pending
-## tangent pick). The ghost previews the candidate segment as the actual tessellated
-## ribbon EDGES — tinted red when it would dip under the fold limit — and feeds the
-## panel's live min-radius readout (the brush-cursor discipline: unowned, unshaded,
-## no-depth-test — never serialized).
-##
-## Draw shapes (panel radio): Free is the historical click-and-smooth flow; Straight
-## emits exact zero-handle chords (the previous point's out-handle is zeroed with it;
-## corners tighter than the fold limit are refused — draw those as arcs);
-## Arc is the 3-click circular arc — start, tangent, end (RoadBuilder.arc_points) —
-## reusing the start point's out-handle as the tangent when it has one, so chained
-## arcs stay tangent-continuous with one click each. Arc END clicks ignore ports (the
-## arc's end tangent is already fully determined by start + tangent + end); a fresh
-## arc road may still START on a port, which locks the first tangent outward.
-##
-## Inert (handle_input returns false) unless a RoadPath is targeted AND the panel's
-## Draw mode is on, so editor navigation/selection is untouched otherwise. The live
-## ribbon rebuild (RoadPath's curve_changed debounce) is the per-click feedback.
-##
-## Port snapping (docs/level_kit.md): a click near an open roads-GridMap tile edge
-## snaps onto its port (RoadPorts, kit/helpers/road_ports.gd) with the tangent locked
-## along the outward face normal, so spline roads join city tiles seamlessly. A fresh
-## road can START on a port; ARRIVING at one commits the point and exits Draw mode —
-## the road ends there, which also keeps the locked tangent safe from the next click's
-## smooth-handle rewrite. The port cache refreshes on activation / grid change only:
-## mode exclusivity guarantees tiles can't be painted while Draw mode owns the
-## viewport. Snap Ends (panel button) is the post-gizmo-drag fixup: the built-in
-## Path3D point gizmo can't be intercepted, so dragged endpoints are re-snapped
-## destructively-by-button instead.
+## Draw-on-terrain road authoring: each viewport click ground-snaps and appends
+## a curve point to the selected RoadPath (one undoable point per click).
+## Shapes: Free (click-and-smooth), Straight (zero-handle chords, refuses
+## corners tighter than the fold limit), Arc (3-click: start, tangent, end).
+## A click near an open roads-GridMap tile edge snaps onto its port with the
+## tangent locked outward, and arriving at one exits Draw mode. Snap Ends
+## re-snaps endpoints dragged with the built-in gizmo (drags can't be
+## intercepted directly).
+
+const Groups := preload("res://src/levels/base/carlito_groups.gd")
 
 const GroundSnap := preload("res://addons/carlito_kit/ground_snap.gd")
 const RoadBuilderScript := preload("res://kit/helpers/road_builder.gd")
@@ -52,34 +28,17 @@ const WARN_COLOR := Color(1.0, 0.3, 0.25)
 
 enum Submode { FREE, STRAIGHT, ARC }
 
-## The default stub curve _ensure_path authors on a fresh RoadPath (two points, zero
-## handles). The first draw click replaces it, so drawing a road from scratch never
-## keeps the placeholder segment at the node origin.
-const STUB_A := Vector3.ZERO
+const STUB_A := Vector3.ZERO  # the fresh-RoadPath stub curve; the first draw click replaces it
 const STUB_B := Vector3(0, 0, 12)
 
 signal deactivated  # RMB/Escape exit -> the panel flips its toggle back to Off
-## Draw feedback for the panel status line: a refusal message, or "" after a
-## successful commit (restores the ready text).
-signal draw_status(msg: String)
-## Live min-turn-radius readout for the panel, updated per ghost motion ("" = idle;
-## warn = the candidate is under the ribbon's fold limit).
-signal radius_display(text: String, warn: bool)
+signal draw_status(msg: String)  # panel status line; "" after a successful commit
+signal radius_display(text: String, warn: bool)  # live min-turn-radius readout
 
-## Panel checkbox (default ON, Free mode only): each click gives the PREVIOUS point
-## Catmull-Rom handles. OFF draws a zero-handle polyline — the road follows the
-## clicks exactly; shallow corners render as clean miters, and corners tighter than
-## the fold limit are refused like any other click (_click_sim measures the kink).
-var smooth_corners := true
-
-## Panel checkbox (default ON): drawn end points capture onto GridMap ports.
-var snap_ports := true
-
-## Panel radio (Free/Straight/Arc): how clicks turn into curve points.
+var smooth_corners := true  # Free mode: each click smooths the previous point (Catmull-Rom)
+var snap_ports := true  # drawn end points capture onto GridMap ports
 var draw_submode: Submode = Submode.FREE
-## Panel option: snap candidate directions (Straight chord / Arc tangent + chord) to
-## multiples of this heading step. 0 = off.
-var angle_snap_deg := 0.0
+var angle_snap_deg := 0.0  # snap candidate directions to this heading step, 0 = off
 
 var _undo: EditorUndoRedoManager
 var _road: Node3D = null
@@ -97,8 +56,6 @@ func _init(undo: EditorUndoRedoManager) -> void:
 	_undo = undo
 
 
-## Selection tracking (plugin): the tool follows the selected RoadPath; deselecting
-## drops the target and leaves Draw mode.
 func set_target(road: Node3D) -> void:
 	if road == _road:
 		return
@@ -109,8 +66,6 @@ func set_target(road: Node3D) -> void:
 	_free_ghost()
 
 
-## Panel toggle. Turning off programmatically never emits `deactivated` (the panel
-## already knows); only input-driven exits (_exit) do.
 func set_active(active: bool) -> void:
 	_active = active
 	_arc_dir = Vector3.ZERO
@@ -121,7 +76,6 @@ func set_active(active: bool) -> void:
 		_free_ghost()
 
 
-## Panel radio. Switching shapes drops any half-made arc.
 func set_submode(mode: int) -> void:
 	draw_submode = mode as Submode
 	_arc_dir = Vector3.ZERO
@@ -129,8 +83,6 @@ func set_submode(mode: int) -> void:
 		_prompt()
 
 
-## Selection tracking (plugin): the roads GridMap ports snap onto, re-resolved per
-## selection change like the terrain brush's set_grid.
 func set_grid(grid: GridMap) -> void:
 	if grid == _grid:
 		return
@@ -148,8 +100,7 @@ func teardown() -> void:
 
 # ------------------------------------------------------------------ input
 
-## Returns true when the event was consumed (the plugin then returns
-## AFTER_GUI_INPUT_STOP).
+## True when consumed (the plugin then returns AFTER_GUI_INPUT_STOP).
 func handle_input(camera: Camera3D, event: InputEvent) -> bool:
 	if not _active or not _target_valid():
 		_hide_ghost()
@@ -196,8 +147,6 @@ func _exit() -> void:
 	deactivated.emit()
 
 
-## Ground hit + the road's clearance, so the ribbon never starts buried before
-## Conform runs.
 func _snap(camera: Camera3D, mouse_pos: Vector2) -> Vector3:
 	var clearance: float = _road.get("draw_clearance")
 	return GroundSnap.ground_point(camera, mouse_pos, _no_excludes) \
@@ -206,21 +155,11 @@ func _snap(camera: Camera3D, mouse_pos: Vector2) -> Vector3:
 
 # ------------------------------------------------------------------ commit
 
-## One undoable action per click (the placement_tool undo-context pattern). When the
-## curve is still the untouched default stub, the same action swaps it for the first
-## drawn point. Free mode with smooth_corners on also gives the PREVIOUS point
-## Catmull-Rom handles (RoadBuilder.smooth_handles) so drawn roads come out C1-smooth;
-## off skips them for an exact angled polyline. Straight mode instead angle-snaps the
-## chord and zeroes both the new point's handles AND the previous point's out-handle
-## in the same action — the segment is exactly the chord, with a predictable miter
-## kink at the joint.
-## A click within SNAP_RADIUS of an open port lands ON the port (exactly at the tile's
-## asphalt surface — no draw_clearance, so the ribbon meets the deck flush) with the
-## end tangent locked outward; arriving at a port also exits Draw mode.
-## Fold guard: a click whose new/reshaped segments would turn tighter than the ribbon
-## half-width is REFUSED (panel status + warning) — extrude would pinch the inside
-## edge to the fold point and the corner reads as a slit. Only the segments this click
-## changes are checked, so a pre-existing tight corner elsewhere never blocks drawing.
+## One undoable action per click. Straight zeroes the new point's handles and
+## the previous out-handle for an exact miter. A click within SNAP_RADIUS of
+## an open port lands on it flush with the deck and exits Draw mode. Fold
+## guard: refuses a click that would turn the changed segments tighter than
+## the ribbon half-width (would pinch the inside edge to a slit).
 func _commit_point(world: Vector3) -> void:
 	var straight := draw_submode == Submode.STRAIGHT
 	var path := _road.get_node_or_null(^"Path") as Path3D
@@ -234,8 +173,6 @@ func _commit_point(world: Vector3) -> void:
 	var inv := path.global_transform.affine_inverse()
 	var port := _snap_port(world)
 	if straight and port.is_empty():
-		# Port capture wins over angle snap: the ghost previews the capture at the
-		# raw click, so snapping first could veto a port the preview promised.
 		var last: Variant = _last_point_world()
 		if last != null:
 			world = _apply_angle_snap(world, last)
@@ -250,9 +187,6 @@ func _commit_point(world: Vector3) -> void:
 	var prev_handles := {}         # planned Catmull-Rom rewrite of the previous point
 	var zero_prev_out := false     # straight mode: chord needs the previous out gone
 	if not stub:
-		# Refuse a point that lands on the previous one — a zero-length segment makes the
-		# Curve3D bake spam "Zero length interval." (e.g. clicking twice on the same
-		# snapped end). Same refuse-with-status pattern as the fold guard.
 		if idx >= 1 and local.is_equal_approx(curve.get_point_position(idx - 1)):
 			var msg := "Point refused: it lands on the previous point (a zero-length " \
 					+ "segment) — click farther along."
@@ -274,7 +208,6 @@ func _commit_point(world: Vector3) -> void:
 		_undo.add_do_method(curve, "remove_point", 0)
 		_undo.add_do_method(curve, "add_point", local)
 		if not port.is_empty():
-			# leaving the port: lock the start tangent along the outward face normal
 			_undo.add_do_method(curve, "set_point_out", 0, port_handle)
 		_undo.add_undo_method(curve, "remove_point", 0)
 		_undo.add_undo_method(curve, "add_point", STUB_A)
@@ -282,7 +215,6 @@ func _commit_point(world: Vector3) -> void:
 	else:
 		_undo.add_do_method(curve, "add_point", local)
 		if not port.is_empty():
-			# arriving at the port: lock the end tangent perpendicular to the face
 			_undo.add_do_method(curve, "set_point_in", idx, port_handle)
 		if zero_prev_out:
 			_undo.add_do_method(curve, "set_point_out", idx - 1, Vector3.ZERO)
@@ -290,24 +222,20 @@ func _commit_point(world: Vector3) -> void:
 		if not prev_handles.is_empty():
 			_undo.add_do_method(curve, "set_point_in", idx - 1, prev_handles["in"])
 			_undo.add_do_method(curve, "set_point_out", idx - 1, prev_handles["out"])
-			# undo methods run in REGISTRATION order (verified on 4.6): these restore
-			# the previous point's handles, then remove_point below drops the added
-			# point — the operations are independent, so the order is safe
+			# undo methods run in registration order (verified on 4.6)
 			_undo.add_undo_method(curve, "set_point_in", idx - 1, curve.get_point_in(idx - 1))
 			_undo.add_undo_method(curve, "set_point_out", idx - 1, curve.get_point_out(idx - 1))
 		_undo.add_undo_method(curve, "remove_point", idx)
 	_undo.commit_action()
 	draw_status.emit("")
-	# after commit a snapped FIRST point leaves 1 point (keep drawing away from the
-	# tile); a snapped ARRIVAL leaves >= 2 and ends the road
+	# a snapped first point leaves 1 point (keep drawing); a snapped arrival
+	# leaves >= 2 and ends the road
 	if not port.is_empty() and curve.point_count >= 2:
 		_exit()
 
 
-## True when the click may commit: rebuild ONLY the segments the click changes or
-## creates (_click_sim) and check RoadBuilder.min_turn_radius against the ribbon's
-## full half-width. All positions/handles are path-local, matching what extrude sees;
-## a pre-existing tight corner elsewhere never blocks drawing.
+## True when the click may commit (checks RoadBuilder.min_turn_radius against
+## the ribbon's full half-width).
 func _fold_guard_ok(curve: Curve3D, idx: int, local: Vector3, port_handle: Vector3,
 		prev_handles: Dictionary, straight := false) -> bool:
 	var prof: RoadProfile = _road.get("profile")
@@ -327,13 +255,8 @@ func _fold_guard_ok(curve: Curve3D, idx: int, local: Vector3, port_handle: Vecto
 	return false
 
 
-## Path-local scratch curve of the segments a click at `local` creates or reshapes:
-## the new segment, the previous point's Catmull-Rom rewrite (Free + smooth), and —
-## for polyline clicks (Straight, or Free with smoothing off) — the CORNER the click
-## forms at the previous point, incoming segment included (a kink past the fold limit
-## pinches the inside edge into a slit, so it must be measured). Shared by the fold
-## guard and the ghost, so the preview, the radius readout, and refusal can never
-## disagree. `zero_prev_out` mirrors Straight's planned out-handle zeroing.
+## Path-local scratch curve of the segments a click at `local` creates or
+## reshapes; shared by the fold guard and the ghost so they can never disagree.
 func _click_sim(curve: Curve3D, idx: int, local: Vector3, port_handle: Vector3,
 		prev_handles: Dictionary, zero_prev_out: bool) -> Curve3D:
 	var sim := Curve3D.new()
@@ -357,12 +280,7 @@ func _click_sim(curve: Curve3D, idx: int, local: Vector3, port_handle: Vector3,
 # ------------------------------------------------------------------ arc mode
 
 
-## Arc-mode click router (the Cities: Skylines 3-click pattern). No drawable last
-## point: the click commits the start (the shared stub-replace path — starting ON a
-## port still works and locks the first tangent). No tangent yet: reuse the start
-## point's out-handle when it has one (chained arcs continue tangent-continuously),
-## otherwise this click picks the tangent direction (nothing committed). Tangent
-## known: the click is the arc end.
+## Arc-mode click router (3-click pattern: start, tangent, end).
 func _arc_click(world: Vector3) -> void:
 	var last: Variant = _last_point_world()
 	if last == null:
@@ -383,12 +301,9 @@ func _arc_click(world: Vector3) -> void:
 	_commit_arc(world, start_world)
 
 
-## Arc end click: fit the circular arc from the start point + pending tangent to the
-## (angle-snapped) end via RoadBuilder.arc_points; refuse when the analytic radius is
-## under the ribbon's half-width (same floor as the fold guard), else ONE undoable
-## action sets the start's out-handle and appends the emitted points. The end point
-## keeps its out-handle (the end tangent), so the next arc chains without a tangent
-## click. Ports are ignored — the arc's end tangent is already fully determined.
+## Arc end click: fit via RoadBuilder.arc_points, refuse if the radius is
+## under the ribbon's half-width. Ports are ignored — the end tangent is
+## already fully determined.
 func _commit_arc(world: Vector3, start_world: Vector3) -> void:
 	var path := _road.get_node_or_null(^"Path") as Path3D
 	if path == null or path.curve == null:
@@ -427,15 +342,12 @@ func _commit_arc(world: Vector3, start_world: Vector3) -> void:
 	_prompt()
 
 
-## Rotate the candidate so the (from -> world) heading lands on the angle-snap grid;
-## identity when snapping is off.
 func _apply_angle_snap(world: Vector3, from: Vector3) -> Vector3:
 	if angle_snap_deg <= 0.0:
 		return world
 	return from + RoadBuilderScript.snap_direction(world - from, angle_snap_deg)
 
 
-## World-space unit direction of the last point's out-handle (ZERO when absent).
 func _last_out_world() -> Vector3:
 	var path := _road.get_node_or_null(^"Path") as Path3D
 	if path == null or path.curve == null or path.curve.point_count == 0:
@@ -446,7 +358,6 @@ func _last_out_world() -> Vector3:
 	return (path.global_transform.basis * out).normalized()
 
 
-## Status-line prompt for the current shape / arc state ("" = the panel's ready text).
 func _prompt() -> void:
 	if draw_submode != Submode.ARC or not _target_valid():
 		draw_status.emit("")
@@ -459,14 +370,8 @@ func _prompt() -> void:
 		draw_status.emit("Arc: click the end point (right-click re-picks the tangent).")
 
 
-## Close the loop (panel button): append a point AT the first point's position. With
-## smooth_corners on, the seam gets matching Catmull-Rom tangents — the first point's
-## out-handle and the new end point's in-handle both follow the last->second chord
-## (smooth_handles with the seam treated as an interior point), so the ribbon is C1
-## through the seam, and the previous point is smoothed like any other click. Off, the
-## seam point lands with NO handles (the extruder's closed-loop bisector frame miters
-## the angled seam). The duplicated seam ring welds at bake. Draw mode exits —
-## clicking past a closed loop makes no sense. One undoable action.
+## Close the loop (panel button): append a point at the first point's
+## position, C1-smoothed if smooth_corners is on. Exits Draw mode.
 func close_loop() -> void:
 	if not _target_valid():
 		return
@@ -497,9 +402,7 @@ func close_loop() -> void:
 		_undo.add_do_method(curve, "set_point_out", 0, seam["out"])
 		_undo.add_do_method(curve, "set_point_in", n - 1, prev_h["in"])
 		_undo.add_do_method(curve, "set_point_out", n - 1, prev_h["out"])
-		# undo methods run in REGISTRATION order (verified on 4.6): the handle
-		# restores land first, then remove_point below drops the seam point — the
-		# operations are independent, so the order is safe
+		# undo methods run in registration order (verified on 4.6)
 		_undo.add_undo_method(curve, "set_point_out", n - 1, curve.get_point_out(n - 1))
 		_undo.add_undo_method(curve, "set_point_in", n - 1, curve.get_point_in(n - 1))
 		_undo.add_undo_method(curve, "set_point_out", 0, curve.get_point_out(0))
@@ -509,10 +412,8 @@ func close_loop() -> void:
 		_exit()
 
 
-## Panel button: snap the selected road's FIRST and LAST curve points to their nearest
-## open port (within SNAP_ENDS_RADIUS) and lock the end tangents — the fixup for
-## endpoints dragged with the built-in Path3D gizmo. Works with Draw mode off; one
-## undoable action. Ends that find no port are left alone.
+## Panel button: snap the road's first/last curve points to their nearest
+## open port and lock the end tangents. Ends that find no port are left alone.
 func snap_ends() -> void:
 	if not _target_valid():
 		return
@@ -560,8 +461,6 @@ func snap_ends() -> void:
 	_undo.commit_action()
 
 
-## Panel button passthrough: reverse the selected road's curve so Draw appends from
-## the other end. The guard + undo action live on RoadPath (_reverse_curve).
 func reverse_road() -> void:
 	if not _target_valid():
 		return
@@ -570,9 +469,7 @@ func reverse_road() -> void:
 
 # ------------------------------------------------------------------ ports
 
-## Rebuild the port cache from the current grid AND every other RoadPath's endpoints.
-## Cheap enough per activation; never per-frame (ghost updates only read the cache) —
-## the other roads don't change while the selected one is being drawn.
+## Rebuilt on activation / grid change only, never per-frame.
 func _refresh_ports() -> void:
 	_ports = []
 	if _grid != null and is_instance_valid(_grid) and _grid.is_inside_tree():
@@ -580,13 +477,9 @@ func _refresh_ports() -> void:
 	_ports.append_array(_enumerate_road_ends())
 
 
-## Other RoadPaths' first/last curve points under the same Authoring root, shaped as snap
-## "ports" ({position, normal, cell}) so nearest_port + the handle-lock path treat a
-## road-to-road join exactly like a tile port. `normal` is the road's OUTWARD end tangent
-## (RoadBuilder.end_tangent_out): locking a joined road's handle along it keeps the two
-## tangents collinear = seamless deck (the ribbon is direction-invariant). Excludes the
-## road being drawn and undrawn stub roads. `cell` is a sentinel — road ends never reach
-## the GridMap-repaint code that reads it.
+## Other RoadPaths' first/last curve points, shaped as snap "ports" so a
+## road-to-road join uses the same nearest_port + handle-lock path as a tile
+## port. `cell` is a sentinel; road ends never reach the GridMap-repaint code.
 func _enumerate_road_ends() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if not is_instance_valid(_road):
@@ -618,33 +511,23 @@ func _enumerate_road_ends() -> Array[Dictionary]:
 	return out
 
 
-## First Authoring ancestor (duck-typed marker, like RoadPath._find_authoring_ancestor).
 static func _authoring_root(node: Node) -> Node:
-	var n := node.get_parent()
-	while n != null:
-		if n.has_method("is_carlito_authoring"):
-			return n
-		n = n.get_parent()
-	return null
+	return Groups.authoring_ancestor(node)
 
 
-## Every RoadPath under `node` (duck-typed marker, the CLI-robust rule).
 static func _collect_roads(node: Node, out: Array[Node]) -> void:
-	if node.has_method("is_carlito_road"):
+	if node.is_in_group(Groups.ROAD):
 		out.append(node)
 	for child in node.get_children():
 		_collect_roads(child, out)
 
 
-## Nearest open port a click at `world` would capture, or {}.
 func _snap_port(world: Vector3) -> Dictionary:
 	if not snap_ports or _ports.is_empty():
 		return {}
 	return RoadPortsScript.nearest_port(_ports, world, SNAP_RADIUS)
 
 
-## The recipe's ports table, loaded once per tool instance (recipe edits are rare and
-## come with a plugin reload). Validation problems are warnings, not hard stops.
 func _load_table() -> Dictionary:
 	if _table_loaded:
 		return _table
@@ -669,15 +552,8 @@ static func _is_default_stub(curve: Curve3D) -> bool:
 
 # ------------------------------------------------------------------ ghost
 
-## Ghost preview: the candidate segment as the actual tessellated ribbon EDGES (the
-## same adaptive sampling + frames the extruder uses, at the profile's full
-## half-width), tinted red when the candidate turns tighter than the fold limit, plus
-## a short vertical tick at the cursor. Arc mode previews the fitted arc once a
-## tangent is known (a plain direction line while picking one) and draws no port
-## markers (arc ends ignore ports). First point of a fresh road: tick only. With port
-## snapping on (Free/Straight), nearby ports draw as small diamond markers and the
-## preview locks onto the port a click would capture (highlighted larger, in
-## SNAP_COLOR). Also feeds the panel's live min-radius readout.
+## Ghost preview: the candidate segment as the tessellated ribbon edges, tinted
+## red under the fold limit. Also feeds the panel's live min-radius readout.
 func _update_ghost(camera: Camera3D, mouse_pos: Vector2) -> void:
 	var world := _snap(camera, mouse_pos)
 	var arc := draw_submode == Submode.ARC
@@ -704,9 +580,7 @@ func _update_ghost(camera: Camera3D, mouse_pos: Vector2) -> void:
 	var tangent_line := false     # arc tangent pick: plain direction line
 	var start_world := Vector3.ZERO
 	if last != null:
-		# Mirror the commit's exact computation (angle snap, port handle, smoothing
-		# rewrite / corner via _click_sim, arc fit in path-local space) so the preview
-		# and the readout ARE the click's outcome — red ghost <=> refused click.
+		# mirrors _commit_point's exact computation, so the preview IS the click's outcome
 		start_world = last
 		var path := _road.get_node_or_null(^"Path") as Path3D
 		var curve := path.curve
@@ -786,8 +660,6 @@ func _update_ghost(camera: Camera3D, mouse_pos: Vector2) -> void:
 		radius_display.emit("min radius %.1f m" % radius, false)
 
 
-## World-space copy of a path-local curve (positions by the transform, handles by its
-## basis) for ghost drawing.
 static func _to_world_curve(curve: Curve3D, xform: Transform3D) -> Curve3D:
 	var out := Curve3D.new()
 	for i in curve.point_count:
@@ -796,9 +668,8 @@ static func _to_world_curve(curve: Curve3D, xform: Transform3D) -> Curve3D:
 	return out
 
 
-## Left/right ribbon edge polylines of the world-space candidate at +-`half` lateral,
-## sampled and framed exactly like the extruder (centerline only when half is 0 — no
-## profile assigned yet). PRIMITIVE_LINES pairs in ghost-local space.
+## Left/right ribbon edge polylines at +-`half` lateral (centerline only when
+## half is 0), framed like the extruder.
 func _add_ribbon_edges(im: ImmediateMesh, curve: Curve3D, half: float) -> void:
 	var offsets := RoadBuilderScript.adaptive_offsets(curve,
 			_road.get("max_segment_length"), _road.get("max_segment_angle_deg"))
@@ -824,7 +695,6 @@ func _add_ribbon_edges(im: ImmediateMesh, curve: Curve3D, half: float) -> void:
 		prev_r = edge_r
 
 
-## Horizontal diamond + vertical tick, in ghost-local space (PRIMITIVE_LINES pairs).
 func _add_marker(im: ImmediateMesh, center: Vector3, size: float) -> void:
 	var corners := [
 		center + Vector3(0, 0, -size), center + Vector3(size, 0, 0),
@@ -837,8 +707,6 @@ func _add_marker(im: ImmediateMesh, center: Vector3, size: float) -> void:
 	im.surface_add_vertex(center + Vector3.UP * 1.5)
 
 
-## World position of the last curve point, or null when there is nothing to draw
-## from (empty curve, or the default stub the first click will replace).
 func _last_point_world() -> Variant:
 	var path := _road.get_node_or_null(^"Path") as Path3D
 	if path == null or path.curve == null or path.curve.point_count == 0 \

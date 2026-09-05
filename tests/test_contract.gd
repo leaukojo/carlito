@@ -5,8 +5,7 @@ extends GdUnitTestSuite
 const ContractScript := preload("res://src/bridge/contract.gd")
 const BridgeSourceScript := preload("res://src/input/sources/bridge_source.gd")
 
-## Every core bridge signal (the original parity set). The contract must
-## cover all of them.
+## Every core bridge signal (the original parity set). The contract must cover all of them.
 const CORE_IN_SIGNALS: PackedStringArray = [
 	"accel", "brake", "steer", "handbrake", "key", "lights", "gear",
 	"turnL", "turnR", "horn", "checkEngine", "battery", "brakeLamp",
@@ -28,10 +27,10 @@ func _real_contract() -> ContractScript.ContractData:
 	return _parse_file(ContractScript.CONTRACT_PATH)
 
 
-func test_real_contract_is_valid_v19() -> void:
+func test_real_contract_is_valid_v33() -> void:
 	var data := _real_contract()
 	assert_array(data.errors).is_empty()
-	assert_int(data.version).is_equal(19)
+	assert_int(data.version).is_equal(33)
 
 
 func _assert_core_signals_present(names: PackedStringArray, dir: String) -> void:
@@ -75,10 +74,103 @@ func test_warn_thresholds_parse_and_classify() -> void:
 	assert_bool(data.get_signal_def("kmh", "out").has_warn()).is_false()
 
 
+# --- 'count': the instanced-signal shape (DroneCAN esc_index) ------------------
+
+func test_count_defaults_to_one_and_an_ordinary_signal_is_not_instanced() -> void:
+	# The default is the path every un-annotated signal takes, so it has to be the exact behaviour
+	# they had before 'count' existed.
+	var data := _real_contract()
+	# Instanced signals NAMED rather than pattern-matched, so a fifth one is a deliberate edit here
+	# as well as in the contract. An `esc_` prefix test once let `slip` through when it grew a count.
+	var instanced := ["esc_rpm", "esc_current", "esc_temp", "node_health", "slip"]
+	for sig in data.signals:
+		if not (sig.name in instanced):
+			assert_int(sig.count) \
+				.override_failure_message("signal '%s' (%s) must default to count 1" % [sig.name, sig.dir]) \
+				.is_equal(1)
+	# ...and every name on that list really is instanced, so it cannot go stale the other way round.
+	for sig_name in instanced:
+		assert_bool(data.get_signal_def(sig_name, "out").is_instanced()) \
+			.override_failure_message("'%s' is listed as instanced but declares no count" % sig_name) \
+			.is_true()
+	assert_bool(data.get_signal_def("rpm", "out").is_instanced()).is_false()
+
+
+func test_the_four_esc_signals_are_the_instanced_dronecan_bus() -> void:
+	var data := _real_contract()
+	for sig_name in ["esc_rpm", "esc_current", "esc_temp"]:
+		var sig := data.get_signal_def(sig_name, "out")
+		assert_object(sig).override_failure_message("missing '%s'" % sig_name).is_not_null()
+		assert_int(sig.count).override_failure_message("'%s' count" % sig_name).is_equal(4)
+		assert_bool(sig.is_instanced()).is_true()
+		assert_str(sig.flavor).is_equal("dronecan")
+		assert_array(sig.vehicles).contains(["drone"])
+		# 'range'/'warn' apply PER ELEMENT, so an instanced signal still carries one range.
+		assert_int(sig.range.size()).is_equal(2)
+	# esc_temp's warn is the high-side overheat threshold (the wheel_slip rule): above the
+	# midpoint of its range, or the dashboard would highlight the cold end.
+	var temp := data.get_signal_def("esc_temp", "out")
+	assert_bool(temp.has_warn()).is_true()
+	assert_bool(temp.warn_is_low()).is_false()
+	# esc_fault is the summary bitfield, deliberately NOT instanced.
+	var fault := data.get_signal_def("esc_fault", "out")
+	assert_object(fault).is_not_null()
+	assert_int(fault.count).is_equal(1)
+	assert_bool(fault.is_instanced()).is_false()
+	# ...and rotor_rpm stays the plain scalar mean beside them.
+	assert_int(data.get_signal_def("rotor_rpm", "out").count).is_equal(1)
+
+
+func test_fixture_bad_count_fails() -> void:
+	var data := _parse_file("res://tests/fixtures/bad_count.json")
+	assert_bool(data.is_valid()).is_false()
+	assert_str("\n".join(data.errors)).contains("'count'")
+
+
+## 'count' > 1 is refused on the three shapes no reader can express: an inbound signal
+## (bridge_source.gd normalizes by hand, per name, and float(Array) is a silent 0), a bool (the
+## tell-tale path is bool(value) and ANY non-empty array is true) and an enum (the chip path is
+## int(value), which throws). Each would otherwise publish correctly and render as a lie.
+func test_count_is_refused_where_no_reader_can_express_an_array() -> void:
+	for fixture in ["bad_count_shape", "bad_count_bool", "bad_count_enum"]:
+		var data := _parse_file("res://tests/fixtures/%s.json" % fixture)
+		assert_bool(data.is_valid()) \
+			.override_failure_message("%s should not parse" % fixture).is_false()
+		assert_str("\n".join(data.errors)) \
+			.override_failure_message("%s: wrong error" % fixture).contains("'count'")
+	# ...and the real contract keeps every instanced signal on the legal side of that.
+	for sig in _real_contract().signals:
+		if not sig.is_instanced():
+			continue
+		assert_str(sig.dir).override_failure_message("'%s' must be out" % sig.name).is_equal("out")
+		assert_str(sig.type).is_not_equal("bool")
+		assert_bool(sig.has_enum()) \
+			.override_failure_message("'%s' may not carry an enum" % sig.name).is_false()
+
+
 func test_fixture_bad_warn_fails() -> void:
 	var data := _parse_file("res://tests/fixtures/bad_warn.json")
 	assert_bool(data.is_valid()).is_false()
 	assert_str("\n".join(data.errors)).contains("'warn'")
+
+
+## A threshold with no declared side is half a threshold: the dashboard would not know whether to
+## highlight above or below it. So 'warn' and 'warn_side' are required together and refused apart,
+## and the side is never guessed from where the threshold sits in 'range'.
+func test_warn_and_warn_side_are_required_together() -> void:
+	for fixture in ["bad_warn_side_missing", "bad_warn_side_value", "bad_warn_side_orphan"]:
+		var data := _parse_file("res://tests/fixtures/%s.json" % fixture)
+		assert_bool(data.is_valid()) \
+			.override_failure_message("%s should not parse" % fixture).is_false()
+		assert_str("\n".join(data.errors)) \
+			.override_failure_message("%s: wrong error" % fixture).contains("warn_side")
+	# ...and every warn in the real contract declares one.
+	for sig in _real_contract().signals:
+		if not sig.has_warn():
+			continue
+		assert_array(ContractScript.WARN_SIDES) \
+			.override_failure_message("'%s' (%s) needs a warn_side" % [sig.name, sig.dir]) \
+			.contains([sig.warn_side])
 
 
 func test_gear_enum_decodes_ramn_byte_semantics() -> void:
@@ -160,6 +252,9 @@ func test_plane_and_drone_wired_into_shared_signals() -> void:
 	var drone_out := data.signals_for_vehicle("drone", "out").map(
 			func(s: ContractScript.SignalDef) -> String: return s.name)
 	assert_array(drone_out).contains(["kmh", "altitude", "vspeed", "rotor_rpm", "armed", "pitch", "roll"])
+	# The pack: it keeps the SHARED 'battery' volts (a pack voltage is a battery voltage) and
+	# adds the rest of DroneCAN's BatteryInfo. 'fuel' stays absent — soc is its charge gauge.
+	assert_array(drone_out).contains(["battery", "pack_current", "soc", "pack_temp"])
 	assert_array(drone_out).not_contains(["rpm", "gear", "ground", "fuel", "coolant"])
 	var drone_in := data.signals_for_vehicle("drone", "in").map(
 			func(s: ContractScript.SignalDef) -> String: return s.name)
@@ -216,9 +311,8 @@ func test_tier1_isobus_signals_are_tractor_only_and_flavored() -> void:
 			func(s: ContractScript.SignalDef) -> String: return s.name)
 	assert_array(tractor_out).contains(["diff_lock_state", "fwd_drive_state",
 			"wheel_speed", "ground_speed", "wheel_slip", "engine_hours"])
-	# Driveline signals belong to the tractor alone — nothing else may declare them, or a
-	# spec-gated behaviour would start looking like a cross-family one. engine_hours is
-	# deliberately NOT in this list: it is a shared meter, asserted below.
+	# Driveline signals belong to the tractor alone, or a spec-gated behaviour would start looking
+	# like a cross-family one. engine_hours is deliberately not in this list: it is a shared meter.
 	for entry: Array in [["diff_lock", "in"], ["fwd_drive", "in"], ["pto_mode", "in"],
 			["diff_lock_state", "out"], ["fwd_drive_state", "out"], ["wheel_speed", "out"],
 			["ground_speed", "out"], ["wheel_slip", "out"]]:
@@ -231,10 +325,9 @@ func test_tier1_isobus_signals_are_tractor_only_and_flavored() -> void:
 
 
 func test_shared_engine_signals_are_reused_by_the_truck_not_duplicated() -> void:
-	# Rule 4: engine_load / engine_hours / pto / pto_state are ONE signal each, listing both
-	# families. They keep the isobus flavor because ISO 11783 is built on J1939 and the
-	# tractor's was always the borrowed one — engine_load is SPN 92 whoever reads it. If a
-	# truck-flavored copy ever appears beside these, this fails.
+	# Rule 4: engine_load / engine_hours / pto / pto_state are one signal each, listing both families.
+	# They keep the isobus flavor because ISO 11783 is built on J1939 — engine_load is SPN 92 whoever
+	# reads it. If a truck-flavored copy ever appears beside these, this fails.
 	var data := _real_contract()
 	for entry: Array in [["engine_load", "out"], ["engine_hours", "out"],
 			["pto", "in"], ["pto_state", "out"]]:
@@ -293,8 +386,8 @@ func test_dm1_lamps_are_bools_and_add_nothing_for_the_mil() -> void:
 
 
 func test_air_pressure_warns_low_and_axle_load_warns_high() -> void:
-	# The whole reason the plan pins these: warn_is_low() infers the side from the RANGE
-	# MIDPOINT, so a threshold on the wrong side of it highlights the safe end of the bar.
+	# The side is DECLARED (warn_side) rather than inferred: air pressure is dangerous when LOW, axle
+	# load when HIGH.
 	var data := _real_contract()
 	for sig_name in ["air_primary", "air_secondary"]:
 		var air := data.get_signal_def(sig_name, "out")
@@ -310,10 +403,9 @@ func test_air_pressure_warns_low_and_axle_load_warns_high() -> void:
 
 
 func test_retarder_state_range_fills_its_bar_the_right_way() -> void:
-	# SPN 520 reports retarder torque NEGATIVE (it is a brake). The dashboard generates bars
-	# straight from 'range' and DashBar fills linearly min -> max, so a [-100, 0] range would
-	# show full retardation as an EMPTY bar. The magnitude is published instead and the
-	# convention is documented in the desc — pin both halves of that decision here.
+	# SPN 520 reports retarder torque NEGATIVE (it is a brake). DashBar fills linearly min -> max, so
+	# a [-100, 0] range would show full retardation as an empty bar. The magnitude is published
+	# instead and the convention documented in the desc; both halves of that decision are pinned here.
 	var sig := _real_contract().get_signal_def("retarder_state", "out")
 	assert_array(sig.range).is_equal([0.0, 100.0])
 	assert_str(sig.desc).contains("SPN 520")
@@ -334,8 +426,8 @@ func test_cleanopen_body_signals_are_truck_only_and_flavored() -> void:
 			func(s: ContractScript.SignalDef) -> String: return s.name)
 	assert_array(truck_out).contains(["body_state", "body_pos", "body_inhibit", "body_bus",
 			"hopper_load"])
-	# The body network is the truck's alone, and it is a DIFFERENT flavor from the chassis around
-	# it — that difference is the whole lesson, so a copy-paste of "j1939" here must fail.
+	# The body network is the truck's alone and a DIFFERENT flavor from the chassis around it, so a
+	# copy-paste of "j1939" here must fail.
 	for entry: Array in [["body_cmd", "in"], ["body_state", "out"], ["body_pos", "out"],
 			["body_inhibit", "out"], ["body_bus", "out"], ["hopper_load", "out"]]:
 		var sig := data.get_signal_def(entry[0], entry[1])
@@ -367,9 +459,8 @@ func test_the_body_command_and_state_enums_cover_the_whole_cycle() -> void:
 
 
 func test_the_body_bars_are_plain_percentages_with_no_warn() -> void:
-	# body_pos and hopper_load become generated bars because they are flavored and ranged, NOT
-	# because they are warn'd. A warn here would highlight a full hopper as a fault, which it is
-	# not — the axle_load warn is where an overload belongs, and it gets there through mass.
+	# body_pos and hopper_load become generated bars because they are flavored and ranged, NOT because
+	# they are warn'd. A warn would highlight a full hopper as a fault; overload belongs on axle_load.
 	var data := _real_contract()
 	for sig_name in ["body_pos", "hopper_load"]:
 		var sig := data.get_signal_def(sig_name, "out")
@@ -381,9 +472,8 @@ func test_the_body_bars_are_plain_percentages_with_no_warn() -> void:
 
 
 func test_there_is_no_trailer_type_style_body_type_signal() -> void:
-	# CiA 422 reports a body's FUNCTIONAL UNITS, not a body-type code, and the firetruck stays in
-	# the family with no body network at all — so a "body_type" enum would have exactly one real
-	# value and would undercut the family boundary this phase is built on.
+	# CiA 422 reports a body's FUNCTIONAL UNITS, not a body-type code, and the firetruck stays in the
+	# family with no body network at all — so a "body_type" enum would have exactly one real value.
 	var data := _real_contract()
 	assert_bool(data.has_signal_def("body_type", "out")).is_false()
 	assert_bool(data.has_signal_def("body_type", "in")).is_false()
@@ -401,7 +491,7 @@ func test_iso11992_trailer_signals_are_truck_only_and_flavored() -> void:
 	assert_array(truck_out).contains(["trailer_connected", "trailer_axle_load",
 			"trailer_brake_demand", "trailer_abs"])
 	# The trailer bus is a DIFFERENT flavor from the chassis it hangs off and from the body network
-	# on the other side of the same truck — three networks, three flavors, which is the whole point.
+	# on the other side of the same truck: three networks, three flavors.
 	for entry: Array in [["trailer_ebs_fault", "in"], ["trailer_connected", "out"],
 			["trailer_axle_load", "out"], ["trailer_brake_demand", "out"], ["trailer_abs", "out"]]:
 		var sig := data.get_signal_def(entry[0], entry[1])
@@ -413,10 +503,9 @@ func test_iso11992_trailer_signals_are_truck_only_and_flavored() -> void:
 
 
 func test_the_trailer_bus_is_bidirectional_and_carries_no_body_type() -> void:
-	# ISO 11992-2 is the application layer for BRAKES AND RUNNING GEAR ONLY, and it runs both ways:
-	# EBS11 towing-to-towed, EBS21 towed-to-towing. No other signal group here does that, and none
-	# of it says what the trailer IS — a trailer_type would undercut the exact thin-boundary lesson
-	# the flavor exists to teach, so its absence is asserted rather than merely intended.
+	# ISO 11992-2 is the application layer for brakes and running gear only, and it runs both ways:
+	# EBS11 towing-to-towed, EBS21 towed-to-towing. None of it says what the trailer IS, so the
+	# absence of a trailer_type is asserted rather than merely intended.
 	var data := _real_contract()
 	assert_bool(data.has_signal_def("trailer_type", "out")).is_false()
 	assert_bool(data.has_signal_def("trailer_type", "in")).is_false()
@@ -440,8 +529,7 @@ func test_the_trailer_bus_display_assignment_is_two_bars_and_three_lamps() -> vo
 		assert_int(data.get_signal_def(sig_name, "out").range.size()) \
 			.override_failure_message("%s must not generate a bar" % sig_name).is_equal(0)
 	assert_str(data.get_signal_def("trailer_ebs_fault", "in").type).is_equal("bool")
-	# The load bar: 'warn' must sit ABOVE the range midpoint or the dashboard highlights the safe
-	# end — the same trap air_primary sits on the other side of.
+	# The load bar: dangerous when HIGH, the opposite side to air_primary.
 	var load_sig := data.get_signal_def("trailer_axle_load", "out")
 	assert_array(load_sig.range).is_equal([0.0, 30000.0])
 	assert_float(load_sig.warn).is_equal_approx(24000.0, 1e-6)
@@ -467,10 +555,9 @@ func test_guidance_and_scv_are_tractor_only_and_flavored() -> void:
 
 
 func test_guidance_curvature_range_matches_the_full_lock_scale() -> void:
-	# bridge_source divides the command by FULL_LOCK_CURVATURE to reach the -1..1 steer
-	# channel, so the contract's range and that constant must be the same number: the
-	# signal is meant to saturate exactly at the steering stop, with no dead top end and no
-	# reachable command that asks for more lock than exists.
+	# bridge_source divides the command by FULL_LOCK_CURVATURE to reach the -1..1 steer channel, so
+	# the contract's range and that constant must be the same number: the signal saturates exactly at
+	# the steering stop, with no dead top end and no command asking for more lock than exists.
 	var sig := _real_contract().get_signal_def("guidance_curvature", "in")
 	assert_str(sig.type).is_equal("i8")
 	assert_str(sig.unit).is_equal("1/km")
@@ -493,14 +580,36 @@ func test_engine_hours_is_range_less_so_it_never_becomes_a_bar() -> void:
 	var hours := _real_contract().get_signal_def("engine_hours", "out")
 	assert_array(hours.range).is_empty()
 	assert_str(hours.unit).is_equal("h")
-	# The two speeds DO get bars. Slip's warn must sit in the HIGH half of its range, or
-	# warn_is_low() infers the wrong side and the dashboard highlights good traction as danger.
+	# The two speeds DO get bars. Slip is dangerous when HIGH — good traction is not a warning.
 	var data := _real_contract()
 	assert_array(data.get_signal_def("wheel_speed", "out").range).is_equal([0.0, 60.0])
 	assert_array(data.get_signal_def("ground_speed", "out").range).is_equal([0.0, 60.0])
 	var slip := data.get_signal_def("wheel_slip", "out")
 	assert_bool(slip.has_warn()).is_true()
 	assert_bool(slip.warn_is_low()).is_false()
+
+
+func test_speed_limit_is_range_less_and_unflavored_so_it_never_becomes_a_bar() -> void:
+	# The road-speed governor (J1939 SPN 74) is the file's one CONFIGURED out signal, shaped on
+	# engine_hours rather than on a bar: a value that cannot change for the whole session has no
+	# meaningful full scale. Both halves of the bar predicate are pinned, since either alone
+	# generates it.
+	var lim := _real_contract().get_signal_def("speed_limit", "out")
+	assert_object(lim).is_not_null()
+	assert_array(lim.range).is_empty()
+	assert_bool(lim.has_warn()).is_false()
+	assert_str(lim.flavor).is_equal("")
+	# u8 IS SPN 74's wire form -- 1 byte, 1 km/h per bit, 0..250 -- so the contract type and the
+	# signal it borrows its name from cannot drift apart.
+	assert_str(lim.type).is_equal("u8")
+	assert_str(lim.unit).is_equal("km/h")
+	# Keyed on the FAMILY: every family whose specs carry a limiter declares it (so an ungoverned
+	# sedan publishes a real 0 rather than changing the cluster's shape), and no family that never
+	# runs Drivetrain.governor_scale does. Unflavored on purpose — the SPN is a naming reference.
+	for family in ["car", "truck", "tractor"]:
+		assert_bool(lim.vehicles.has(family)) 			.override_failure_message("speed_limit must be declared for '%s'" % family).is_true()
+	for family in ["boat", "plane", "drone", "train"]:
+		assert_bool(lim.vehicles.has(family)) 			.override_failure_message("speed_limit must NOT be declared for '%s'" % family).is_false()
 
 
 # --- train family (flavor "train": rail practice, not a real train CAN standard) ---
@@ -529,3 +638,296 @@ func test_train_wired_into_shared_signals_and_flavored_rail_signals() -> void:
 	assert_bool(data.get_signal_def("catenary_volts", "out").warn_is_low()).is_true()
 	assert_bool(data.get_signal_def("brake_pipe", "out").warn_is_low()).is_true()
 	assert_bool(data.get_signal_def("motor_current", "out").warn_is_low()).is_false()
+
+
+# --- the DroneCAN node bus (v23) ----------------------------------------------
+# The roster-shaped assertions (count == DroneBus.count(), the router's mirrored copy, the no-enum
+# rule) live in tests/test_drone_bus.gd, beside the roster they pin. What is here belongs to the
+# CONTRACT: that the three signals exist, are scoped and flavored, and that node_fail is the first
+# inbound bitfield rather than a fourth drone bool.
+
+func test_the_drone_declares_the_node_bus() -> void:
+	var data := _real_contract()
+	var ins := data.signals_for_vehicle("drone", "in").map(func(s: ContractScript.SignalDef) -> String:
+		return s.name)
+	var outs := data.signals_for_vehicle("drone", "out").map(func(s: ContractScript.SignalDef) -> String:
+		return s.name)
+	assert_array(ins).contains(["node_fail"])
+	assert_array(outs).contains(["node_health", "node_online"])
+	for pair in [["node_fail", "in"], ["node_health", "out"], ["node_online", "out"]]:
+		var sig := data.get_signal_def(pair[0], pair[1])
+		assert_object(sig).override_failure_message("missing '%s'" % pair[0]).is_not_null()
+		assert_str(sig.flavor).is_equal("dronecan")
+		assert_array(sig.vehicles).is_equal(["drone"])
+
+
+func test_no_other_vehicle_sees_the_node_bus() -> void:
+	# It is airframe-specific in a way `battery` and `pitch` are not: a truck has no roster.
+	var data := _real_contract()
+	for vehicle in ["car", "truck", "tractor", "boat", "plane", "train"]:
+		for dir in ["in", "out"]:
+			var names := data.signals_for_vehicle(vehicle, dir).map(
+				func(s: ContractScript.SignalDef) -> String: return s.name)
+			assert_array(names) \
+				.override_failure_message("%s/%s leaked a node signal" % [vehicle, dir]) \
+				.not_contains(["node_fail", "node_health", "node_online"])
+
+
+func test_node_fail_is_the_first_inbound_bitfield() -> void:
+	# Every other 'in' bit in this file is its own bool signal (turnL, red_stop, ...) because each is
+	# an independent lamp. This one is packed because it is ONE field with an index, the same reason
+	# node_health is instanced — and it is the only one, so the next inbound bitfield is a decision
+	# and not a habit.
+	var packed := _real_contract().signals.filter(func(s: ContractScript.SignalDef) -> bool:
+		return s.dir == "in" and s.unit == "bitfield")
+	assert_int(packed.size()).is_equal(1)
+	assert_str(packed[0].name).is_equal("node_fail")
+
+
+# --- the drone's sensors (v25) -------------------------------------------------
+# The laws behind these (the sky pattern, the fix thresholds, the HDOP spread model, the landed
+# predicate) live in tests/test_drone_sensors.gd beside the code they pin, including the pins that
+# tie SKY_RAYS / HDOP_MAX / RANGE_MAX / RANGE_INVALID to the ranges declared here.
+
+func test_the_drone_declares_the_gnss_and_rangefinder_block() -> void:
+	var data := _real_contract()
+	var outs := data.signals_for_vehicle("drone", "out").map(
+			func(s: ContractScript.SignalDef) -> String: return s.name)
+	assert_array(outs).contains(["sats", "fix_type", "hdop", "agl"])
+	for sig_name in ["sats", "fix_type", "hdop", "agl"]:
+		var sig := data.get_signal_def(sig_name, "out")
+		assert_object(sig).override_failure_message("missing '%s'" % sig_name).is_not_null()
+		assert_str(sig.flavor).is_equal("dronecan")
+		assert_array(sig.vehicles).is_equal(["drone"])
+	# No other family sees them: a truck has no sky mask and no beam.
+	for vehicle in ["car", "truck", "tractor", "boat", "plane", "train"]:
+		var names := data.signals_for_vehicle(vehicle, "out").map(
+				func(s: ContractScript.SignalDef) -> String: return s.name)
+		assert_array(names) 			.override_failure_message("%s leaked a drone sensor signal" % vehicle) 			.not_contains(["sats", "fix_type", "hdop", "agl"])
+
+
+## The three display assignments in this block, each a decision: `sats` warns LOW (the count a 3D
+## fix needs), `hdop` warns HIGH (the wheel_slip rule), and `fix_type` carries an enum with NO
+## range so it renders as a state chip rather than as an ordinal on a 0-3 bar.
+func test_the_gnss_block_reads_the_right_way_round_on_the_dashboard() -> void:
+	var data := _real_contract()
+	var sats := data.get_signal_def("sats", "out")
+	assert_bool(sats.has_warn()).is_true()
+	assert_bool(sats.warn_is_low()) 		.override_failure_message("sats warn must be low-side (too FEW satellites)").is_true()
+	assert_float(sats.warn).is_equal(4.0)
+	var hdop := data.get_signal_def("hdop", "out")
+	assert_bool(hdop.has_warn()).is_true()
+	assert_bool(hdop.warn_is_low()) 		.override_failure_message("hdop warn must be high-side (dilution is bad)").is_false()
+	var fix := data.get_signal_def("fix_type", "out")
+	assert_bool(fix.has_enum()).is_true()
+	assert_int(fix.range.size()) 		.override_failure_message("fix_type must carry no range or it becomes a bar").is_equal(0)
+	# The enum is the DroneCAN Fix2.status ordinals, verbatim and complete.
+	for pair in [[0, "NO FIX"], [1, "TIME"], [2, "2D"], [3, "3D"]]:
+		assert_str(fix.enum_label(pair[0])).is_equal(pair[1])
+
+
+## `agl`'s range BOTTOM is the invalid sentinel, not a floor on a real reading — the one place in
+## the contract where a range endpoint carries meaning. A zero there would be a plausible reading
+## and exactly the value a landing detector would act on.
+func test_agl_reserves_its_range_floor_for_the_invalid_reading() -> void:
+	var agl := _real_contract().get_signal_def("agl", "out")
+	assert_array(agl.range).is_equal([-1.0, 100.0])
+	assert_bool(agl.has_warn()) 		.override_failure_message("agl has no danger threshold - it is a measurement").is_false()
+
+
+## The IMU triples are complete and deliberately UNFLAVORED: honest body motion, not a DroneCAN
+## concept, so another airframe can declare them without inheriting a protocol. Unflavored and
+## warn-less also means they render on no dashboard, exactly as yaw / accLong / accLat do —
+## asserted, because "it draws nothing" is the claim a generic dashboard change breaks silently.
+func test_the_imu_axes_complete_two_triples_and_stay_unflavored() -> void:
+	var data := _real_contract()
+	for sig_name in ["roll_rate", "pitch_rate", "acc_vert"]:
+		var sig := data.get_signal_def(sig_name, "out")
+		assert_object(sig).override_failure_message("missing '%s'" % sig_name).is_not_null()
+		assert_str(sig.type).is_equal("f32")
+		assert_str(sig.flavor) 			.override_failure_message("'%s' must stay unflavored" % sig_name).is_equal("")
+		assert_bool(sig.has_warn()) 			.override_failure_message("'%s' must not warn" % sig_name).is_false()
+		# The plane declares all three (v30) at the cost of three list entries and no code: BaseVehicle
+		# has always computed the triple off the rigid body for every vehicle.
+		assert_array(sig.vehicles) \
+			.override_failure_message("'%s' must be declared for the plane too" % sig_name) \
+			.contains(["plane", "drone"])
+	# Same scale as the axis each one joins, so a triple reads on one set of units.
+	assert_array(data.get_signal_def("roll_rate", "out").range) 		.is_equal(data.get_signal_def("yaw", "out").range)
+	assert_array(data.get_signal_def("pitch_rate", "out").range) 		.is_equal(data.get_signal_def("yaw", "out").range)
+	assert_array(data.get_signal_def("acc_vert", "out").range) 		.is_equal(data.get_signal_def("accLong", "out").range)
+
+
+# --- the drone's flight modes (v26) ---------------------------------------------
+# The ladder and every law behind it (resolve_mode's refusals, the altitude cascade, the position
+# controller, RTL's legs, the geofence, and the pins tying the two enum tables and home_dist's
+# range to DroneModes) live in tests/test_drone_modes.gd beside the code. What is here belongs to
+# the CONTRACT: the three signals exist, are scoped and flavored, and the request/readback pair is
+# the shape it has to be to render at all.
+
+func test_the_drone_declares_the_mode_ladder() -> void:
+	var data := _real_contract()
+	var ins := data.signals_for_vehicle("drone", "in").map(func(s: ContractScript.SignalDef) -> String:
+		return s.name)
+	var outs := data.signals_for_vehicle("drone", "out").map(func(s: ContractScript.SignalDef) -> String:
+		return s.name)
+	assert_array(ins).contains(["flight_mode"])
+	assert_array(outs).contains(["mode_actual", "home_dist"])
+	for pair in [["flight_mode", "in"], ["mode_actual", "out"], ["home_dist", "out"]]:
+		var sig := data.get_signal_def(pair[0], pair[1])
+		assert_object(sig).override_failure_message("missing '%s'" % pair[0]).is_not_null()
+		assert_str(sig.flavor).is_equal("dronecan")
+		assert_array(sig.vehicles).is_equal(["drone"])
+
+
+func test_no_other_vehicle_sees_the_mode_ladder() -> void:
+	# Airframe-specific in the way the node bus is: a boat has no flight controller to be in a
+	# mode, and `guidance_curvature` is the tractor's own answer to the same idea.
+	var data := _real_contract()
+	for vehicle in ["car", "truck", "tractor", "boat", "plane", "train"]:
+		for dir in ["in", "out"]:
+			var names := data.signals_for_vehicle(vehicle, dir).map(
+				func(s: ContractScript.SignalDef) -> String: return s.name)
+			assert_array(names) 				.override_failure_message("%s/%s leaked a flight-mode signal" % [vehicle, dir]) 				.not_contains(["flight_mode", "mode_actual", "home_dist"])
+
+
+## The request and the readback are a PAIR, and it only works if both decode the same table. Typed
+## twice is the drift that leaves the MODE chip naming a different mode from the one sent.
+func test_the_mode_request_and_readback_share_one_table() -> void:
+	var data := _real_contract()
+	var request := data.get_signal_def("flight_mode", "in")
+	var actual := data.get_signal_def("mode_actual", "out")
+	assert_str(request.type).is_equal("u8")
+	assert_str(actual.type).is_equal("u8")
+	assert_bool(request.has_enum()).is_true()
+	assert_bool(actual.has_enum()).is_true()
+	for mode in 5:
+		assert_str(actual.enum_label(mode)) 			.override_failure_message("the two mode tables disagree at %d" % mode) 			.is_equal(request.enum_label(mode))
+	# Five modes and no sixth: a label past the ladder means an entry nothing can request.
+	assert_str(request.enum_label(5)).is_equal("")
+	assert_str(actual.enum_label(5)).is_equal("")
+
+
+## An enum out signal renders as a state chip ONLY without a range; with one it also lands on the
+## generated-bar path as a 0-4 bar with no meaningful full scale. That is the node_health decision,
+## and this keeps mode_actual on the right side of it.
+func test_mode_actual_is_a_chip_and_not_a_bar() -> void:
+	var actual := _real_contract().get_signal_def("mode_actual", "out")
+	assert_int(actual.range.size()) 		.override_failure_message("mode_actual grew a range and would render as a 0-4 bar") 		.is_equal(0)
+	assert_bool(actual.has_warn()).is_false()
+	assert_int(actual.count).is_equal(1)
+
+
+
+# --- contract v30: the hardpoint, the gimbal, the barometer and the lamp bits -----
+# The laws behind these live beside their code (tests/test_drone_payload.gd, test_drone_gimbal.gd,
+# test_drone_air_data.gd). What is here belongs to the CONTRACT: the signals exist, are scoped and
+# flavored, and land on the dashboard path they were chosen for — which is no path at all.
+
+
+## The drone's cluster has no rows left. Dashboard.BAR_ROWS_MAX says so in prose; this is the
+## assertion, and it fails if a future drone signal is given a range without re-deriving that
+## budget. The generated-bar gate is `a range PLUS (a warn or a flavor)`, and every drone signal
+## v30 added is flavored, so a range on any of them is a new bar row.
+func test_the_new_drone_readings_carry_no_range_and_generate_no_bars() -> void:
+	var data := _real_contract()
+	for sig_name in ["payload_weight", "gimbal_pitch_actual", "gimbal_yaw_actual",
+			"baro_alt", "static_press", "oat"]:
+		var sig := data.get_signal_def(sig_name, "out")
+		assert_object(sig).override_failure_message("missing '%s'" % sig_name).is_not_null()
+		assert_str(sig.flavor).is_equal("dronecan")
+		assert_array(sig.vehicles).is_equal(["drone"])
+		assert_int(sig.range.size()) \
+			.override_failure_message("'%s' grew a range and takes the drone cluster to three columns" % sig_name) \
+			.is_equal(0)
+
+
+## The hook is a REQUEST and a STATE, and the pair is the reading: commanding HOLD over open ground
+## leaves the two disagreeing. Same shape as arm/armed and hitch_pos/hitch_pos_actual, both bools,
+## so both generate tell-tales with no dashboard code.
+func test_the_hardpoint_is_a_request_and_a_state() -> void:
+	var data := _real_contract()
+	var cmd := data.get_signal_def("hardpoint_cmd", "in")
+	var state := data.get_signal_def("hardpoint_state", "out")
+	assert_object(cmd).is_not_null()
+	assert_object(state).is_not_null()
+	assert_str(cmd.type).is_equal("bool")
+	assert_str(state.type).is_equal("bool")
+	assert_str(cmd.flavor).is_equal("dronecan")
+	assert_str(state.flavor).is_equal("dronecan")
+	assert_array(cmd.vehicles).is_equal(["drone"])
+	assert_array(state.vehicles).is_equal(["drone"])
+	# The force the latch reports is in NEWTON, the unit hardpoint.Status specifies: a latch measures a
+	# force on itself, and a kilogram here would be the wrong signal under the right name.
+	assert_str(data.get_signal_def("payload_weight", "out").unit).is_equal("N")
+
+
+## The gimbal commands are in DEGREES with the mount's own stops as their range — no percent
+## fiction between the number and where the camera points. DroneVehicle reads those two ranges at
+## _ready as its travel limits, so a contract edit cannot let the mount travel out of reach.
+func test_the_gimbal_commands_carry_the_mounts_stops_in_degrees() -> void:
+	var data := _real_contract()
+	for sig_name in ["gimbal_pitch", "gimbal_yaw"]:
+		var sig := data.get_signal_def(sig_name, "in")
+		assert_object(sig).override_failure_message("missing '%s'" % sig_name).is_not_null()
+		assert_str(sig.type).is_equal("i8")
+		assert_str(sig.unit).is_equal("deg")
+		assert_int(sig.range.size()) \
+			.override_failure_message("'%s' needs a range: it IS the mount's travel" % sig_name) \
+			.is_equal(2)
+		# The stops have to fit i8 in whole degrees, which is the whole reason the contract
+		# carries degrees here rather than a percent of travel.
+		assert_float(float(sig.range[0])).is_greater_equal(-128.0)
+		assert_float(float(sig.range[1])).is_less_equal(127.0)
+	# Pitch reaches further DOWN than up: a belly mount looks at the ground.
+	var pitch := data.get_signal_def("gimbal_pitch", "in")
+	assert_float(absf(float(pitch.range[0]))).is_greater(absf(float(pitch.range[1])))
+
+
+## The plane's two flashing lamps. They exist SO THAT nothing in the game blinks — see
+## tests/test_lamps.gd, which asserts the absence LampSet used to be the exception to.
+func test_the_aircraft_flash_bits_are_two_separate_plane_signals() -> void:
+	var data := _real_contract()
+	for sig_name in ["beacon", "strobe"]:
+		var sig := data.get_signal_def(sig_name, "in")
+		assert_object(sig).override_failure_message("missing '%s'" % sig_name).is_not_null()
+		assert_str(sig.type).is_equal("bool")
+		assert_str(sig.flavor).is_equal("canaerospace")
+		assert_array(sig.vehicles).is_equal(["plane"])
+	# No vehicle but the plane sees them, and there is no "out" counterpart: a mirrored lamp
+	# bit has nothing to read back — what the lamp is doing IS what the bus said.
+	assert_object(data.get_signal_def("beacon", "out")).is_null()
+	assert_object(data.get_signal_def("strobe", "out")).is_null()
+
+
+## The per-axle slip split (v30). `slip` was one mean and is now two elements, the first use of the
+## instanced-signal mechanism outside the drone and the first on an UNFLAVORED signal. Zero-based,
+## matching the wire, like every other `count`.
+func test_slip_is_instanced_per_axle_and_stays_off_the_dashboard() -> void:
+	var slip := _real_contract().get_signal_def("slip", "out")
+	assert_object(slip).is_not_null()
+	assert_int(slip.count).is_equal(2)
+	assert_bool(slip.is_instanced()).is_true()
+	# Unflavored and warn-less, so it generates NO bars: the split is for the bus, where a per-axle
+	# reading was asked for. A warn would put three rows on the car, the truck and the tractor at once.
+	assert_str(slip.flavor).is_equal("")
+	assert_bool(slip.has_warn()).is_false()
+	# Still the wheeled families only — a boat has no axle to slip.
+	assert_array(slip.vehicles).is_equal(["car", "truck", "tractor"])
+
+
+## The instanced-signal parse rules the ESCs introduced still hold for the new consumer: an
+## array-valued signal is "out"-only, and carries neither an enum nor type bool.
+func test_the_instanced_rules_still_hold_across_every_count_signal() -> void:
+	for sig in _real_contract().signals:
+		if not sig.is_instanced():
+			continue
+		assert_str(sig.dir) \
+			.override_failure_message("instanced '%s' must be an out signal" % sig.name) \
+			.is_equal("out")
+		assert_bool(sig.has_enum()) \
+			.override_failure_message("instanced '%s' may not carry an enum" % sig.name) \
+			.is_false()
+		assert_str(sig.type) \
+			.override_failure_message("instanced '%s' may not be a bool" % sig.name) \
+			.is_not_equal("bool")

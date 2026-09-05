@@ -1,26 +1,23 @@
 extends GdUnitTestSuite
-## RayWheel's spin integration — the 60 Hz guardrail in `_integrate_spin`.
-##
-## Pure enough to test without a physics body: `_integrate_spin` touches only `omega`, the
-## torques it is handed and the spec. The invariants below are the ones a "clamp the road
-## reaction" implementation silently breaks, which is how it shipped a ~40 % free traction
-## gain on the tractor before anyone measured it.
+## RayWheel spin: 60 Hz guardrail in _integrate_spin. Clamped road reaction breaks it.
 
 const WheelScript := preload("res://src/vehicles/base/wheel.gd")
-const VehicleSpecScript := preload("res://src/vehicles/base/vehicle_spec.gd")
+const GroundDriveSpecScript := preload("res://src/vehicles/base/ground_drive_spec.gd")
 
 const TICK := 1.0 / 60.0
 
 
-func _spec() -> VehicleSpecScript:
-	var spec: VehicleSpecScript = VehicleSpecScript.new()
+func _spec() -> GroundDriveSpecScript:
+	var spec: GroundDriveSpecScript = GroundDriveSpecScript.new()
 	spec.wheel_radius = 0.36
 	spec.wheel_inertia = 4.0
 	return spec
 
 
+## corner_mass is irrelevant to _integrate_spin (it sizes the CONTACT clamps, which live in
+## tick()), so any positive value does; it is passed only because the constructor demands one.
 func _wheel() -> WheelScript:
-	return WheelScript.new(Vector3(0.0, 0.0, 1.0), false, true, null)
+	return WheelScript.new(Vector3(0.0, 0.0, 1.0), false, true, null, 300.0)
 
 
 # --- the equilibrium invariant ------------------------------------------------

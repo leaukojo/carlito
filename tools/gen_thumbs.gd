@@ -1,22 +1,11 @@
 extends Node
-## Kit thumbnail generator: renders a 128x128
-## preview PNG for every prefab/palette asset a recipe emits, to kit/thumbs/<kit>/<name>.png.
-## gen_kit_assets.gd then embeds them as MeshLibrary item previews (the built-in GridMap
-## palette shows pictures) and the palette dock loads them from disk.
-##
-## MUST run WINDOWED (a real GPU context) — headless has no renderer, so the SubViewport
-## captures come back blank. It is a GAME-MODE tool scene, not --script, for the same reason
-## bake_levels is: it never touches level scenes, but running as a scene gives a live
-## SceneTree whose frames actually render.
-##   godot --path . res://tools/gen_thumbs.tscn            # all kits
-##   godot --path . res://tools/gen_thumbs.tscn -- racing  # one kit (faster iteration)
-##
-## Asset selection reuses the SAME classification as the generator (KitRecipe, single source
-## of truth): every accounted, non-excluded GLB gets a thumb. The raw GLB scene is rendered
-## (faithful materials), framed to fit its AABB from a fixed 3/4 angle over a neutral backdrop.
-## Thumbs regenerate ONLY with this tool (local, like palette regen — never CI).
+## Kit thumbnail generator: renders a 128x128 preview PNG for every prefab/palette asset a
+## recipe emits, to kit/thumbs/<kit>/<name>.png (gen_kit_assets.gd embeds them as
+## MeshLibrary previews). Must run WINDOWED. Regenerates only locally, never CI.
 
 const Recipe := preload("res://kit/helpers/kit_recipe.gd")
+const ShotStage := preload("res://tools/shot_stage.gd")
+const SceneBounds := preload("res://src/ui/scene_bounds.gd")
 const RECIPE_DIR := "res://kit/import"
 const THUMB_DIR := "res://kit/thumbs"
 const SIZE := 128
@@ -51,11 +40,7 @@ func _ready() -> void:
 ## One neutral stage reused across every asset: isolated world, backdrop env, key light,
 ## and a perspective camera repositioned per-asset to frame its AABB.
 func _build_stage() -> void:
-	_viewport = SubViewport.new()
-	_viewport.size = Vector2i(SIZE, SIZE)
-	_viewport.own_world_3d = true
-	_viewport.transparent_bg = false
-	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_viewport = ShotStage.build_viewport(Vector2i(SIZE, SIZE))
 	add_child(_viewport)
 
 	var env := Environment.new()
@@ -127,7 +112,7 @@ func _render_one(glb_path: String, out_path: String) -> bool:
 		return false
 	_viewport.add_child(inst)
 
-	var aabb := _world_aabb(inst)
+	var aabb := SceneBounds.world_aabb([inst])
 	if aabb.size == Vector3.ZERO:
 		_viewport.remove_child(inst)
 		inst.free()
@@ -135,19 +120,14 @@ func _render_one(glb_path: String, out_path: String) -> bool:
 		return false
 	_frame(aabb)
 
-	# UPDATE_ALWAYS renders each frame; a couple of ticks let the added mesh + moved
-	# camera land in the captured texture before read-back.
-	await get_tree().process_frame
-	await get_tree().process_frame
-	var img := _viewport.get_texture().get_image()
+	# A couple of ticks let the added mesh + moved camera land in the captured texture.
+	await ShotStage.settle(get_tree(), 2)
+	var ok := ShotStage.save_capture(_viewport, out_path)
 
 	_viewport.remove_child(inst)
 	inst.free()
 
-	if img == null:
-		push_error("blank capture for " + glb_path)
-		return false
-	return img.save_png(out_path) == OK
+	return ok
 
 
 ## Point the camera down VIEW_DIR at the AABB centre, far enough that the bounding
@@ -162,31 +142,3 @@ func _frame(aabb: AABB) -> void:
 	_camera.near = maxf(0.01, dist - radius * 2.0)
 	_camera.far = dist + radius * 2.0 + 1.0
 
-
-func _world_aabb(root: Node3D) -> AABB:
-	var out := AABB()
-	var first := true
-	for vi in _visuals(root):
-		var local := vi.get_aabb()
-		var g := vi.global_transform
-		for i in 8:
-			var corner := local.position + Vector3(
-					local.size.x if (i & 1) else 0.0,
-					local.size.y if (i & 2) else 0.0,
-					local.size.z if (i & 4) else 0.0)
-			var w := g * corner
-			if first:
-				out = AABB(w, Vector3.ZERO)
-				first = false
-			else:
-				out = out.expand(w)
-	return out
-
-
-func _visuals(node: Node) -> Array[VisualInstance3D]:
-	var found: Array[VisualInstance3D] = []
-	if node is VisualInstance3D:
-		found.append(node)
-	for child in node.get_children():
-		found.append_array(_visuals(child))
-	return found

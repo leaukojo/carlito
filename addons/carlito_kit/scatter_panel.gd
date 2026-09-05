@@ -1,11 +1,8 @@
 @tool
 extends VBoxContainer
-## Scatter-brush panel: the inspector-side controls for the
-## paint/erase scatter brush. Mode buttons (Off/Paint/Erase) and a Radius spinner. UI only — the
-## viewport/edit logic lives in scatter_brush.gd (the editor/runtime split). Density, spacing,
-## and the yaw/scale/slope jitter knobs live on the selected ScatterCanvas node itself (its
-## inspector), matching where a ScatterRegion keeps them. Modes are index-matched to
-## scatter_brush.gd's enum (0 = Off, 1 = Paint, 2 = Erase).
+## Inspector-side controls for the paint/erase scatter brush: mode buttons + Radius. UI only;
+## edit logic lives in scatter_brush.gd, whose enum the modes are index-matched to
+## (0 = Off, 1 = Paint, 2 = Erase). Density/spacing/jitter live on the ScatterCanvas node itself.
 
 signal mode_changed(mode: int)
 signal radius_changed(radius: float)
@@ -82,7 +79,6 @@ func _build() -> void:
 
 # ------------------------------------------------------------------ plugin API
 
-## Reflect a bracket-key radius change without re-emitting radius_changed.
 func set_radius_display(r: float) -> void:
 	_radius.set_block_signals(true)
 	_radius.value = r
@@ -98,8 +94,7 @@ func set_has_canvas(has: bool) -> void:
 	else:
 		_status.text = "No ScatterCanvas selected."
 		_status.add_theme_color_override("font_color", Color(0.9, 0.7, 0.4))
-		# Snap back to Off so a stale mode can't act on the next selected canvas (mirrors the
-		# terrain brush panel: programmatic button_pressed doesn't emit `pressed`, so emit).
+		# Programmatic button_pressed doesn't emit `pressed`, so emit mode_changed here.
 		if not _mode_buttons.is_empty() and not _mode_buttons[0].button_pressed:
 			_mode_buttons[0].button_pressed = true
 			mode_changed.emit(0)

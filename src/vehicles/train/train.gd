@@ -1,19 +1,9 @@
 class_name TrainVehicle
 extends BaseVehicle
-## Electric multiple-unit consist. A real BaseVehicle subclass, like the boat and tractor:
-## empty wheel_positions, the 6 gear_ratios kept (the reverser rides the gear byte, N/D/R),
-## only the two seams (_make_telemetry, _tick_extras) — it never forks _physics_process.
-##
-## Locomotion is a 1D consist sim on the level's rail spline (TrainSim): the loco is driven
-## KINEMATICALLY — gravity off, global_transform + linear/angular velocity written from the
-## sim each tick so BaseVehicle._update_telemetry keeps reading honest motion (speed, yaw,
-## accel, impact). A collision perturbs the body for one tick, then the sim reasserts the pose;
-## the train plows small props, which is correct for its mass. Wagons are AnimatableBody3D
-## followers posed by TrainPlacement.
-##
-## The rail Curve3D is discovered duck-typed (get_rail_curve()), so the same code drives the
-## baked RailTrack and the unbaked authoring RoadPath. No steer channel — the rail guides it.
-## Clamp discipline for the couplers/brakes lives in TrainSim; DO NOT weaken it.
+## Electric consist on a rail spline. Loco is kinematic (gravity off); wagons are AnimatableBody3D
+## followers. TrainSim handles consist forces; coupler/brake clamps are 60 Hz stable — don't
+## weaken them. Reverser rides the gear byte (N/D/R). Rail Curve3D is duck-typed so the same
+## code drives RailTrack and authoring RoadPath.
 
 ## Rail ribs stand this far above the centreline the curve traces (rail_profile rail_height),
 ## so the consist is lifted by it to rest the modelled wheels on the railhead.
@@ -54,8 +44,8 @@ func _make_telemetry() -> VehicleTelemetry:
 	return TrainTelemetry.new()
 
 
-## The whole consist (loco + wagons) is excluded from the chase camera's occlusion ray, so a
-## rear/overhead view is not yanked into the wagons trailing behind the loco.
+## Whole consist excluded from the chase camera's occlusion ray, so a rear/overhead view
+## isn't yanked into the trailing wagons.
 func get_camera_exclude_bodies() -> Array[RID]:
 	var out: Array[RID] = [get_rid()]
 	for w in _wagons:
@@ -64,8 +54,8 @@ func get_camera_exclude_bodies() -> Array[RID]:
 	return out
 
 
-## The loco is 6.7 m long and 3.9 m tall with four wagons behind it: pull the chase view well
-## back and up so it clears the consist, and widen the overhead/iso frames to fit the length.
+## Loco is 6.7 m long, 3.9 m tall, with four wagons behind it: pull the chase view back and
+## up to clear the consist, widen the overhead/iso frames.
 func get_camera_framing() -> Dictionary:
 	return {"distance": 16.0, "height": 9.0, "look_height": 2.5, "top_height": 60.0, "iso_size": 64.0}
 
@@ -88,8 +78,7 @@ func _ready() -> void:
 		_place_consist()
 
 
-## Reset the consist onto its loop at s = 0 with zeroed motion. Base respawn already clears the
-## accel/impact history so the teleport is not read as an impact.
+## Reset the consist onto its loop at s = 0 with zeroed motion.
 func respawn() -> void:
 	super.respawn()
 	_brake_pipe = TrainTelemetry.BRAKE_PIPE_CHARGED
@@ -97,17 +86,16 @@ func respawn() -> void:
 		_place_consist()
 
 
-func _tick_extras(input: InputRouter.VehicleInput, delta: float) -> void:
+func _tick_extras(input: VehicleInput, delta: float) -> void:
 	if not _has_rail:
 		return
 	var t := telemetry as TrainTelemetry
 
-	# Traction is live only with the key in Ignition AND the pantograph raised (input.throttle
-	# is already gated by the key + signed by the reverser in InputRouter arbitration).
+	# Traction is live only with the key in Ignition and the pantograph raised.
 	var powered := input.key == InputRouter.KEY_IGNITION and input.pantograph
 	var throttle := input.throttle if powered else 0.0
 
-	# Per-car grade from the curve tangent, then advance the 1D consist.
+	# Per-car grade from the curve tangent, then advance the consist.
 	var grades := PackedFloat64Array()
 	grades.resize(_sim.s.size())
 	for i in _sim.s.size():
@@ -125,8 +113,8 @@ func _tick_extras(input: InputRouter.VehicleInput, delta: float) -> void:
 	_prev_heading = heading
 	_pose_wagons()
 
-	# Honest aux models (all modeled, labelled): current from traction, line sag from current,
-	# brake pipe venting on application, grade/coupler read straight from the sim.
+	# Aux models, honest and labelled: current from traction, line sag from current, brake
+	# pipe venting on application; grade/coupler read straight from the sim.
 	var traction := TrainSim.tractive_effort(_sim.v[0], throttle, _sim.base_speed,
 			_sim.max_tractive, _sim.max_power)
 	t.motor_current = TrainTelemetry.motor_current_amps(traction, AMPS_PER_NEWTON, MAX_MOTOR_CURRENT)
@@ -158,8 +146,8 @@ func _build_sim() -> void:
 
 
 ## Re-lay the consist at s = 0 with zeroed motion, then snap every car onto its arc position
-## (spawn / respawn). Re-runs the sim layout so a respawn returns the train to the loop start
-## rather than just halting it wherever it had drifted to.
+## (spawn / respawn). Re-runs the sim layout so respawn returns to the loop start rather
+## than halting where it had drifted to.
 func _place_consist() -> void:
 	_sim.setup(_sim.masses, _sim.rest_gaps, _rail_length, _rail_closed, 0.0)
 	var pose := TrainPlacement.car_pose(_curve, _rail_xform, _sim.s[0], BOGIE_HALF[0],
@@ -204,11 +192,4 @@ func _wrap(s: float) -> float:
 ## walk); an open rail is never accepted, so the two code paths can't disagree. Works on the
 ## baked RailTrack and the unbaked authoring RoadPath alike.
 func _find_rail() -> Node:
-	var root := get_parent()
-	while root != null and not root.has_method("set_vehicle"):
-		root = root.get_parent()
-	if root == null:
-		root = self
-		while root.get_parent() != null and root.get_parent() != get_tree().root:
-			root = root.get_parent()
-	return RailTrack.find_closed_rail(root)
+	return RailTrack.find_closed_rail(_level_root())

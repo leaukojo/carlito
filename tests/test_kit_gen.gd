@@ -1,9 +1,7 @@
 # GdUnit generated TestSuite
 extends GdUnitTestSuite
-## Unit tests for the kit generator's pure logic:
-## families-driven classification (ordered first-match), the coverage gate (unaccounted +
-## reasonless-exclude failures), catch-all detection, and meshlib id preservation — the
-## rules that keep a mis-classified or silently-dropped asset from baking into every level.
+## Kit generator pure logic: families-driven classification, coverage gate, catch-all,
+## meshlib id preservation. Rules that prevent misclassified/dropped assets baking into levels.
 
 const Recipe := preload("res://kit/helpers/kit_recipe.gd")
 

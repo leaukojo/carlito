@@ -1,12 +1,6 @@
 extends GdUnitTestSuite
-## HitchLinkage — the tractor's three-point hitch four-bar solve.
-##
-## The load-bearing test is `test_whole_sweep_is_reachable`: the shipped geometry lives in
-## HitchLinkage's defaults, so tweaking a pivot or a link length until the linkage can no
-## longer close fails HERE rather than shipping a hitch that snaps to a clamped pose.
-##
-## Float note (kit/CLAUDE.md): Vector2 math is float32, so every comparison against a
-## float64 literal uses is_equal_approx / a tolerance, never is_equal.
+## HitchLinkage: tractor three-point hitch four-bar solve. Load-bearing: geometry in defaults.
+## Float32 math: comparisons against float64 literals use is_equal_approx (not is_equal).
 
 const LinkageScript := preload("res://src/vehicles/tractor/hitch_linkage.gd")
 
@@ -15,7 +9,6 @@ const EPS := 1e-4
 
 func _linkage() -> HitchLinkage:
 	return LinkageScript.new()
-
 
 # --- circle-circle primitive --------------------------------------------------
 
@@ -128,7 +121,11 @@ func test_every_catalog_implement_frame_closes_the_linkage() -> void:
 	# `reachable`, so every A-frame the tractor can actually carry is checked here.
 	var link := _linkage()
 	for path in ImplementCatalog.IMPLEMENTS:
-		if not ImplementCatalog.is_attached(path):
+		# Towed entries are skipped, and skipped for a reason rather than for convenience: a drawbar
+		# trailer has no A-frame at all — it hangs off a pin, not off the four-bar — so there is no
+		# mast_offset for the linkage to close on. tests/test_drawbar_trailer.gd asserts that every
+		# towed entry really does declare DRAWBAR and not THREE_POINT, so nothing gets past both.
+		if not ImplementCatalog.is_attached(path) or ImplementCatalog.is_towed(path):
 			continue
 		var node: ImplementBase = (load(path) as PackedScene).instantiate()
 		link.mast_offset = node.mast_offset()

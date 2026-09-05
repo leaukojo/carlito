@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://src/vehicles/drone/drone.gd" id="1_drone"]
 [ext_resource type="Resource" path="res://src/vehicles/drone/drone_spec.tres" id="2_spec"]
@@ -47,6 +47,13 @@ height = 0.1
 
 [sub_resource type="BoxMesh" id="RotorMesh"]
 size = Vector3(0.44, 0.02, 0.05)
+
+[sub_resource type="StandardMaterial3D" id="LedMat"]
+albedo_color = Color(0.05, 0.05, 0.05, 1)
+roughness = 0.35
+
+[sub_resource type="BoxMesh" id="LedMesh"]
+size = Vector3(0.1, 0.02, 0.1)
 
 [sub_resource type="BoxMesh" id="SkidMesh"]
 size = Vector3(0.04, 0.12, 0.5)
@@ -120,6 +127,26 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.407, 0.15, 0.407)
 mesh = SubResource("RotorMesh")
 surface_material_override/0 = SubResource("RotorRearMat")
 
+[node name="LedFL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.407, 0.028, -0.407)
+mesh = SubResource("LedMesh")
+surface_material_override/0 = SubResource("LedMat")
+
+[node name="LedFR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.407, 0.028, -0.407)
+mesh = SubResource("LedMesh")
+surface_material_override/0 = SubResource("LedMat")
+
+[node name="LedRL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.407, 0.028, 0.407)
+mesh = SubResource("LedMesh")
+surface_material_override/0 = SubResource("LedMat")
+
+[node name="LedRR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.407, 0.028, 0.407)
+mesh = SubResource("LedMesh")
+surface_material_override/0 = SubResource("LedMat")
+
 [node name="SkidL" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.22, -0.06, 0)
 mesh = SubResource("SkidMesh")
@@ -129,6 +156,11 @@ surface_material_override/0 = SubResource("FrameMat")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.22, -0.06, 0)
 mesh = SubResource("SkidMesh")
 surface_material_override/0 = SubResource("FrameMat")
+
+; The cargo hook: under the body, above the skid feet, on the centreline. DroneVehicle casts
+; the capture ray straight down from here and hangs the payload off it.
+[node name="Hardpoint" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
 
 [node name="HoodCam" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, -0.32)

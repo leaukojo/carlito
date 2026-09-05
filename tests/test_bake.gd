@@ -14,7 +14,7 @@ func test_chunk_key_quadrants() -> void:
 	assert_that(Baker.chunk_key(Vector3(0, 0, 0), 48.0)).is_equal(Vector2i(0, 0))
 	assert_that(Baker.chunk_key(Vector3(47.9, 5, 47.9), 48.0)).is_equal(Vector2i(0, 0))
 	assert_that(Baker.chunk_key(Vector3(48.0, 0, 0), 48.0)).is_equal(Vector2i(1, 0))
-	# floor semantics, not truncation: -0.1 belongs to chunk -1
+	# Floor semantics: -0.1 belongs to chunk -1.
 	assert_that(Baker.chunk_key(Vector3(-0.1, 0, -48.1), 48.0)).is_equal(Vector2i(-1, -2))
 
 
@@ -50,10 +50,7 @@ func test_weld_drops_degenerate_triangles() -> void:
 	assert_int(Baker.weld_faces(soup).size()).is_equal(0)
 
 
-## Welding is an epsilon MERGE, not a snap-to-grid. Two verts a fraction of the epsilon
-## apart but astride a grid cell boundary rounded to different cells and stayed distinct —
-## the exact crack the weld exists to close, and position-dependent, so it passed every
-## fixture and would have surfaced on one authored level as a wheel catching at one joint.
+## Epsilon merge (1 mm), not snap-to-grid. Closes cracks astride grid boundaries.
 func test_weld_unifies_vertices_astride_a_grid_boundary() -> void:
 	# 12.0004999 and 12.0005001 straddle the cell boundary at 12.0005 (epsilon 1 mm):
 	# 0.2 micrometres apart, formerly two different vertices.
@@ -168,9 +165,7 @@ func test_hash_missing_file_flagged_not_crashing() -> void:
 
 
 ## Bake-adjacent CODE must be hashed explicitly. GDScript files report no dependencies at
-## all, so road_builder.gd / scatter_base.gd / the baker itself are reachable from no
-## resource edge: without this, editing the extruder's fold clamp and forgetting to bump
-## BAKER_VERSION left every level "fresh" in CI while shipping the old geometry.
+## Bake-adjacent code (no resource edge): BAKER_VERSION bump required on semantic change.
 func test_bake_code_files_are_in_the_input_hash() -> void:
 	var inputs := Baker.gather_bake_inputs("res://src/levels/island/level_1/level_1.tscn")
 	for code in Baker.BAKE_CODE_INPUTS:
@@ -178,10 +173,7 @@ func test_bake_code_files_are_in_the_input_hash() -> void:
 				"%s missing from the bake input hash" % code).is_true()
 
 
-## The hash net covers resources ANYWHERE, not just res://kit/: a prop sub-scene or a
-## LevelInfo .tres under res://src/ shapes the bake (or its gates) and used to escape.
-## Runtime scripts stay out — they cannot change baker output, and hashing them would
-## re-stale every level on unrelated gameplay edits.
+## Hash covers resources anywhere (not just kit/); runtime scripts excluded.
 func test_is_bake_input_keeps_resources_outside_kit_but_not_runtime_scripts() -> void:
 	assert_bool(Baker.is_bake_input("res://src/levels/harbor/dock_props.tscn")).is_true()
 	assert_bool(Baker.is_bake_input("res://src/levels/harbor/harbor_info.tres")).is_true()
@@ -219,6 +211,58 @@ func test_manifest_is_timestamp_free_idempotent() -> void:
 	var first := FileAccess.get_file_as_string(Baker.manifest_path(level))
 	Baker.write_manifest(level, "h", 32.0, {"chunks": 1})
 	assert_str(FileAccess.get_file_as_string(Baker.manifest_path(level))).is_equal(first)
+
+
+# ----------------------------------------------------------------- freshness
+
+## A fresh manifest with the artifact beside it, which is what a developer who just baked has.
+func test_freshness_is_fresh_when_manifest_and_artifact_agree() -> void:
+	assert_str(String(Baker.freshness(_manifest("in", "out"), "in", true, "out",
+			PackedStringArray()).status)).is_equal("fresh")
+
+
+## .baked.scn is untracked build output. Missing artifact with manifest means
+## unbuilt (build step outstanding, not stale).
+func test_freshness_is_unbuilt_when_only_the_artifact_is_missing() -> void:
+	var r := Baker.freshness(_manifest("in", "out"), "in", false, "", PackedStringArray())
+	assert_str(String(r.status)).is_equal("unbuilt")
+	assert_str(String(r.detail)).contains(".baked.scn")
+
+
+## No manifest at all is a level nobody has ever baked — still "missing".
+func test_freshness_is_missing_without_a_manifest() -> void:
+	var r := Baker.freshness({}, "in", false, "", PackedStringArray())
+	assert_str(String(r.status)).is_equal("missing")
+
+
+## The two checks that survive an absent artifact, and the one that does not.
+func test_freshness_still_catches_a_stale_manifest_with_no_artifact() -> void:
+	var m := _manifest("in", "out")
+	m["baker_version"] = Baker.BAKER_VERSION - 1
+	assert_str(String(Baker.freshness(m, "in", false, "",
+			PackedStringArray()).status)).is_equal("stale")
+	assert_str(String(Baker.freshness(_manifest("in", "out"), "MOVED", false, "",
+			PackedStringArray()).status)).is_equal("stale")
+	# Scatter snapped against since-sculpted ground is reported on an unbuilt clone too.
+	assert_str(String(Baker.freshness(_manifest("in", "out"), "in", false, "",
+			PackedStringArray(["region X was snapped to older ground"])).status)).is_equal("stale")
+
+
+## The output-hash comparison is skipped when there is no artifact, and only then: a
+## truncated or hand-edited file ON DISK is still caught.
+func test_freshness_compares_the_output_hash_only_when_the_artifact_exists() -> void:
+	assert_str(String(Baker.freshness(_manifest("in", "out"), "in", true, "TRUNCATED",
+			PackedStringArray()).status)).is_equal("stale")
+	assert_str(String(Baker.freshness(_manifest("in", "out"), "in", false, "TRUNCATED",
+			PackedStringArray()).status)).is_equal("unbuilt")
+
+
+func _manifest(input_hash: String, output_hash: String) -> Dictionary:
+	return {
+		"baker_version": Baker.BAKER_VERSION,
+		"input_hash": input_hash,
+		"output_hash": output_hash,
+	}
 
 
 # ------------------------------------------------------------ material keys
@@ -340,7 +384,7 @@ func _tri_cross(pos: PackedVector3Array, idx: PackedInt32Array, t: int) -> Vecto
 ## A mirroring transform (scale (-1, 1, 1) — the standard left-hand-variant trick) flips
 ## triangle handedness. The inverse-transpose keeps normals outward, but copying the index
 ## order verbatim left the winding reversed: the chunk mesh rendered inside-out under
-## cull_back, so a mirrored pier was visible only from inside it.
+## Mirroring flips winding (cull_back made inside-out pier visible only from inside).
 func test_accumulator_preserves_winding_under_mirroring() -> void:
 	var mirror := Transform3D(Basis.IDENTITY.scaled(Vector3(-1, 1, 1)), Vector3.ZERO)
 	var acc := Baker.SurfaceAccumulator.new()
@@ -352,8 +396,7 @@ func test_accumulator_preserves_winding_under_mirroring() -> void:
 				.is_less(0.0)
 
 
-## The same trap on the collision side: mirrored triangles entered the welded Drivable body
-## back-to-front, making the deck one-way so the car fell through it.
+## Mirrored triangles back-to-front in drivable body (one-way deck, car falls through).
 func test_weld_pool_preserves_winding_under_mirroring() -> void:
 	var tri := _tri(Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 0, 1))
 	var ctx := Baker.BakeContext.new()
@@ -547,11 +590,7 @@ func _piece_level(outer_mode: String, inner_mode: String) -> Node3D:
 	return root
 
 
-## A nested KitPiece keeps its OWN collision mode. Inheriting the ancestor's broke the
-## drivable invariant both ways: a "hull" railing grouped under a "weld" bridge had its
-## triangles welded into the level-wide drivable body (drive up the handrail) while its
-## hull shape was dropped; a "weld" ramp under a "box" warehouse never reached the
-## drivable body at all, so the car fell through a ramp dev-play rendered solid.
+## Nested KitPiece keeps its own collision mode (not inherited; broke drivable invariant).
 func test_nested_kit_piece_keeps_its_own_collision_mode() -> void:
 	# weld outer + hull inner: exactly one box welds (12 tris), the inner's shape is kept
 	var outer_weld: Node3D = auto_free(_piece_level("weld", "hull"))
@@ -591,9 +630,7 @@ func test_collision_only_authoring_is_bakeable() -> void:
 	root.free()
 
 
-## One duplicate per SOURCE shape, shared by every instance. Duplicating per instance gave
-## a 3000-tree forest 3000 identical BoxShape3Ds in the packed scene and 3000 shapes in the
-## physics server — the render side already stores scattered geometry once.
+## One duplicate per source shape (not per instance; per-instance gave 3000-shape forests).
 func test_baked_bodies_share_one_duplicate_per_source_shape() -> void:
 	var level: Dictionary = _scatter_level(_scatter_prefab("hull"),
 			[Vector3(0, 0, 0), Vector3(2, 0, 0), Vector3(4, 0, 0)], true, -1)

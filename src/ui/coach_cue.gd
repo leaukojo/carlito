@@ -1,22 +1,19 @@
 class_name CoachCue
 extends Control
-## The one-line "you can drive this" cue, shown over the first frames of a first visit.
+## The one-line "you can drive this" cue, shown over the first frames of a first visit — the
+## game opens straight into a level with no menu in front of it, so this teaches it once.
+## One line, dismissed by the first input of any kind or a short timeout, never shown again
+## on this machine (ShellPrefs.coach_seen).
 ##
-## The game now opens in a level with a car sitting in it and no menu in front of it, which is
-## the point — but someone who arrived not knowing this is a playable game still needs to be
-## told once. So: one line, dismissed by the FIRST input of any kind (you already knew) or by
-## a short timeout, and never shown again on this machine (ShellPrefs.coach_seen).
-##
-## It listens on `_input`, which sees events without consuming them: the press that dismisses
-## the cue is also the press that drives the car. No emoji; colour and type from the theme.
+## Listens on `_input`, which sees events without consuming them, so the press that dismisses
+## the cue is also the press that drives the car. No emoji; colour/type from the theme.
 
 ## How long it stays if nobody touches anything, and how long it takes to go.
 const DWELL_S := 8.0
 const FADE_S := 0.6
 
-## The vehicle family this cue is for, or "" for the first-visit "you can drive this" line. The
-## AIRCRAFT get one of their own because climb/descend is a whole axis the ground vehicles do not
-## have, and nothing on screen says which keys work it — see _text().
+## Vehicle family this cue is for, or "" for the first-visit line. Aircraft get their own
+## because climb/descend has no ground-vehicle equivalent and nothing else names its keys.
 var family := ""
 
 var _dismissed := false
@@ -24,7 +21,7 @@ var _dismissed := false
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_IGNORE  # never in the way of the touch pads
+	mouse_filter = Control.MOUSE_FILTER_IGNORE  # never blocks the touch pads
 
 	var panel := PanelContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
@@ -43,14 +40,10 @@ func _ready() -> void:
 	_dismiss()
 
 
-## What to say depends on what they are holding AND on what they are in. The touch overlay only
-## shows on touch/web (TouchControls._should_show), so this asks the same question.
-##
-## The two aircraft lines lead with the thing that is otherwise undiscoverable: R / F, the climb
-## axis, which no ground vehicle has and which no other piece of UI names. The drone's leads with
-## ARM instead, because a disarmed quad answers NOTHING and reads as broken rather than as off.
-## Keys are named here rather than pulled from ActionRegistry on purpose: the registry's labels are
-## the settings sheet's sentences, and this line is one short sentence of its own.
+## What to say depends on input mode and family. Aircraft lines lead with R/F (climb), the
+## otherwise-undiscoverable axis; the drone leads with ARM, since a disarmed quad answers
+## nothing and reads as broken. Keys are named here, not pulled from ActionRegistry: that
+## registry's labels are the settings sheet's sentences, this is its own short line.
 func _text() -> String:
 	var touch := UiScale.is_touch_display()
 	match family:
@@ -60,8 +53,8 @@ func _text() -> String:
 			return "W for throttle  -  R to climb, F to descend  -  A / D to steer  -  Esc for the menu"
 		"drone":
 			if touch:
-				return "ARM the motors first  -  UP / DOWN to rise and sink  -  drag the stick to fly"
-			return "T to arm the motors  -  R to go up, F to go down  -  W / S / A / D to fly"
+				return "ARM the motors first  -  UP / DOWN to rise and sink  -  MODE for alt hold"
+			return "T to arm  -  R / F to go up and down  -  W A S D to fly  -  Z for flight mode"
 	if touch:
 		return "Hold GAS to drive  -  drag the stick to steer  -  MENU for everything else"
 	return "W to drive  -  A / D to steer  -  Esc for the menu"

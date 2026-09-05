@@ -1,11 +1,5 @@
 extends GdUnitTestSuite
-## Shell menu overlays: level-select reads the registry, the vehicle selector reads the catalog
-## against the level's allow-list, and both emit their pick. Pure Control scenes, so they build
-## and fire headless without a 3D level.
-##
-## The selector's PREVIEW is not exercised here: it instantiates a real vehicle body into a
-## SubViewport, which needs a renderer the CI runner does not have. What is pinned here is the
-## part that decides — the roster, the refusals, and what reaches the shell.
+## Shell menus: level-select, vehicle selector. PREVIEW not tested (needs renderer).
 
 func _buttons(node: Node) -> Array:
 	var out := []
@@ -14,8 +8,7 @@ func _buttons(node: Node) -> Array:
 	return out
 
 
-## The level cards, told apart from the screen's own BACK button by the thing that makes them
-## cards: a card IS the screenshot, so its name rides a child Label and its `text` is empty.
+## Cards: name on child Label, text empty (picture card convention).
 func _cards(sel: LevelSelect) -> Array:
 	var out := []
 	for b in _buttons(sel):
@@ -24,8 +17,7 @@ func _cards(sel: LevelSelect) -> Array:
 	return out
 
 
-## The registry entries level-select is expected to show: shipped content only. `dev: true`
-## entries are test assets — the bake/check tools still walk the full list, so CI covers them.
+## Shipped registry entries only (dev: true are test assets).
 func _shipped() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for entry in LevelRegistry.LEVELS:
@@ -47,8 +39,7 @@ func test_level_select_lists_registry_and_emits_scene() -> void:
 	assert_str(chosen[0]).is_equal(String(shipped[0]["scene"]))
 
 
-## It is a pause-menu section now, not the front door, so leaving it without picking has to
-## be possible — the shell wires BACK (and Esc) to this.
+## Pause-menu section: can leave without picking (shell wires BACK and Esc).
 func test_level_select_back_emits_closed() -> void:
 	var sel: LevelSelect = auto_free(LevelSelect.new())
 	add_child(sel)
@@ -78,8 +69,6 @@ func test_level_select_cards_carry_the_registry_description() -> void:
 	var shipped := _shipped()
 	for i in shipped.size():
 		var entry: Dictionary = shipped[i]
-		# Cards are pictures: the name rides a Label on the card, the description is the
-		# tooltip (and the line under the grid, fed by the same string).
 		assert_str(String(entry.get("desc", ""))).is_not_empty()
 		assert_str(cards[i].tooltip_text).is_equal(String(entry["desc"]))
 		var texts := []
@@ -88,8 +77,7 @@ func test_level_select_cards_carry_the_registry_description() -> void:
 		assert_array(texts).contains([String(entry["name"])])
 
 
-## What a level costs to load, on the card you decide from. Measured off the .baked.scn, so a
-## level with no bake (the garage is indoor) must show nothing rather than "0.0 MB".
+## Bake weight on card (empty if no bake, like garage).
 func test_level_select_cards_show_the_bake_weight() -> void:
 	var sel: LevelSelect = auto_free(LevelSelect.new())
 	add_child(sel)
@@ -107,19 +95,15 @@ func test_level_select_cards_show_the_bake_weight() -> void:
 			assert_array(texts).contains([weight])
 
 
-## The baked island levels are the ones with a weight to report, and it has to read as a size
-## rather than a byte count — the number exists to answer "how long am I about to wait".
+## Weight reads as MB (answer "how long will this wait?"), empty if no bake.
 func test_weight_text_reads_as_megabytes() -> void:
 	assert_str(LevelRegistry.weight_text(LevelRegistry.scene_of("level_2"))).ends_with(" MB")
 	assert_int(LevelRegistry.weight_bytes(LevelRegistry.scene_of("level_2"))).is_greater(0)
-	# No bake, nothing to measure, nothing said.
 	assert_str(LevelRegistry.weight_text(LevelRegistry.scene_of("garage"))).is_empty()
 	assert_str(LevelRegistry.weight_text("res://nope/nope.tscn")).is_empty()
 
 
-## A selector built on a level that allows one family. EVERY family is still listed — the ones this
-## level refuses are browsable and carry the reason (see the class comment on VehicleSelect) — and
-## picking emits the VARIANT, not the family the old garage menu emitted.
+## Selector on level with allowed families; emits VARIANT not family.
 func _selector(allowed: PackedStringArray, variant: String,
 		rail := false, attachment := "") -> VehicleSelect:
 	var sel: VehicleSelect = auto_free(VehicleSelect.new())
@@ -141,8 +125,7 @@ func _press(node: Node, label: String) -> void:
 			(b as Button).pressed.emit()
 
 
-## Cards carry their name on a child Label and leave `text` empty (the level-select convention),
-## so this tells a picture card from the family column and the footer buttons.
+## Picture cards only: name on child Label, text empty (level-select convention).
 func _card_names(sel: VehicleSelect) -> Array:
 	var out := []
 	for b in _buttons(sel):
@@ -156,16 +139,12 @@ func _card_names(sel: VehicleSelect) -> Array:
 func test_vehicle_select_lists_every_family_and_emits_the_variant() -> void:
 	var sel := _selector(PackedStringArray(["car"]), "sedan-sports")
 	var labels := _labels(sel)
-	# The whole catalog, not just what this level spawns. The caption carries the selector's own
-	# "(beta)" marker, so it is built the same way the screen builds it rather than re-typed here.
 	for variant: String in VehicleCatalog.VARIANTS:
 		var fam: String = VehicleCatalog.family_of(variant)
 		var caption := fam.to_upper() + (" (beta)" if VehicleSelect.BETA_FAMILIES.has(fam) else "")
 		assert_array(labels).contains([caption])
 	assert_array(labels).contains(["DRIVE", "BACK"])
 
-	# The car family's variants are on screen as cards, and DRIVE emits the selected VARIANT —
-	# the old garage emitted a family and threw the body choice away.
 	assert_array(_card_names(sel)).contains(["TAXI", "POLICE"])
 	var picked := [""]
 	sel.vehicle_chosen.connect(func(v: String) -> void: picked[0] = v)
@@ -173,17 +152,15 @@ func test_vehicle_select_lists_every_family_and_emits_the_variant() -> void:
 	assert_str(picked[0]).is_equal("sedan-sports")
 
 
-## Nothing is hidden: a family this level will not spawn opens, previews, and says why — and only
-## DRIVE is refused. Both refusals are derived (the allow-list, and the runtime rail answer).
+## Refused families browsable with reason; DRIVE refused per allow-list and runtime checks.
 func test_vehicle_select_shows_a_refused_family_with_its_reason() -> void:
 	var sel := _selector(PackedStringArray(["car", "train"]), "sedan-sports")
-	_press(sel, "TRUCK")  # not in the allow-list at all
+	_press(sel, "TRUCK")
 	var refused := [""]
 	sel.vehicle_chosen.connect(func(v: String) -> void: refused[0] = v)
 	_press(sel, "DRIVE")
-	assert_str(refused[0]).is_empty()  # the button is disabled, so pressing it does nothing
+	assert_str(refused[0]).is_empty()
 
-	# Allowed by the level, refused at runtime: a rail family with no closed loop to run on.
 	_press(sel, "TRAIN (beta)")
 	var texts := []
 	for l in sel.find_children("*", "Label", true, false):
@@ -195,8 +172,7 @@ func test_vehicle_select_shows_a_refused_family_with_its_reason() -> void:
 	assert_bool(said_why).is_true()
 
 
-## The second row is the PREVIEWED machine's own answer (duck-typed attachment_ids), so it appears
-## for a semi and not for a garbage truck — without this screen learning what a trailer is.
+## Attachment row appears only for towing machines (semi yes, garbage truck no).
 func test_vehicle_select_offers_the_attachment_row_only_where_the_machine_tows() -> void:
 	var towing := _selector(PackedStringArray(["truck"]), "semi")
 	var names := _card_names(towing)
@@ -206,8 +182,7 @@ func test_vehicle_select_offers_the_attachment_row_only_where_the_machine_tows()
 	assert_array(_card_names(solo)).not_contains(["TIPPER"])
 
 
-## DRIVE hands the attachment over as a second signal right behind the body, so the shell can
-## apply both — and so "no attachment" needs no sentinel (DETACHED and BOBTAIL are both "").
+## Attachment emitted as second signal after body (shell applies both).
 func test_vehicle_select_emits_the_attachment_behind_the_body() -> void:
 	var sel := _selector(PackedStringArray(["truck"]), "semi", false, TrailerCatalog.TRAILERS[1])
 	var order := []
@@ -217,8 +192,7 @@ func test_vehicle_select_emits_the_attachment_behind_the_body() -> void:
 	assert_array(order).is_equal(["semi", TrailerCatalog.TRAILERS[1]])
 
 
-## The pause overlay is the one place everything is reachable from, so the entries have to be
-## there and each has to reach the shell.
+## Pause overlay: all entries reachable, each reaches shell.
 func test_pause_menu_offers_the_shell_sections() -> void:
 	var pause: PauseMenu = auto_free(PauseMenu.new())
 	add_child(pause)

@@ -1,18 +1,13 @@
 extends GdUnitTestSuite
-## Boat buoyancy/thrust/rudder math. Pure static fns exercised
-## without the physics body — the same testing discipline as Drivetrain and RayWheel's
-## telemetry derivations. What matters most here is the 60 Hz one-tick clamp (the
-## RayWheel discipline): the probe damper may never reverse a velocity within one tick,
-## and buoyancy is hard-capped. The hull drag and attitude math the boat shares with the
-## drone and plane lives in `VehicleMath` — see `test_vehicle_math.gd`.
+## Boat buoyancy/thrust/rudder. 60 Hz one-tick clamp: probe damper never reverses velocity,
+## buoyancy hard-capped. Hull drag/attitude shared with drone/plane (test_vehicle_math.gd).
 
 const B := preload("res://src/vehicles/boat/boat.gd")
 const BoatT := preload("res://src/vehicles/boat/boat_telemetry.gd")
 
 const DELTA := 1.0 / 60.0
 
-## Round numbers so expected values are hand-checkable: an 800 kg boat on 4 probes
-## floating 0.4 m deep at g = 10 -> k = 800*10 / (4*0.4) = 5000 N/m per probe.
+# 800 kg boat, 4 probes, 0.4 m deep at g=10 -> k = 5000 N/m per probe.
 const MASS := 800.0
 const G := 10.0
 const PROBES := 4.0
@@ -64,6 +59,51 @@ func test_probe_force_hard_capped_on_deep_penetration() -> void:
 	# Slammed 3 m deep (a drop from the crane): raw spring would be 15000 N; the cap
 	# holds it at MAX_F so the boat never catapults (max_suspension_force analogue).
 	assert_float(B.probe_force(3.0, 0.0, K, 500.0, PROBE_MASS, DELTA, MAX_F)).is_equal(MAX_F)
+
+
+# --- aground predicate (contract status bit ST_GROUND) --------------------------
+
+func test_aground_floating_at_rest_depth_is_not_aground() -> void:
+	# A genuinely floating hull settles to ~float_depth per probe by construction.
+	assert_bool(B.aground_now(true, FLOAT_DEPTH, 0.0, FLOAT_DEPTH,
+			B.AGROUND_SHALLOW_FRAC, B.AGROUND_VSPEED)).is_false()
+
+
+func test_aground_shallow_depth_while_settled_is_aground() -> void:
+	# The bed is holding the hull up: probes can't reach rest submersion, and it's not
+	# still falling/bouncing.
+	var shallow := FLOAT_DEPTH * B.AGROUND_SHALLOW_FRAC * 0.5
+	assert_bool(B.aground_now(true, shallow, 0.0, FLOAT_DEPTH,
+			B.AGROUND_SHALLOW_FRAC, B.AGROUND_VSPEED)).is_true()
+
+
+func test_aground_shallow_but_still_moving_vertically_is_not_aground() -> void:
+	# Same shallow reading, but the hull is still settling (a splashdown, a wave) —
+	# not a stable "resting on the bed" reading yet.
+	var shallow := FLOAT_DEPTH * B.AGROUND_SHALLOW_FRAC * 0.5
+	assert_bool(B.aground_now(true, shallow, 5.0, FLOAT_DEPTH,
+			B.AGROUND_SHALLOW_FRAC, B.AGROUND_VSPEED)).is_false()
+
+
+func test_aground_no_water_and_settled_is_aground() -> void:
+	# Beached past any WaterSurface region entirely: no buoyancy at all, and settled.
+	assert_bool(B.aground_now(false, -10.0, 0.0, FLOAT_DEPTH,
+			B.AGROUND_SHALLOW_FRAC, B.AGROUND_VSPEED)).is_true()
+
+
+func test_aground_no_water_but_falling_is_not_aground() -> void:
+	# Launched clear of the water polygon mid-air: not settled yet.
+	assert_bool(B.aground_now(false, -10.0, 5.0, FLOAT_DEPTH,
+			B.AGROUND_SHALLOW_FRAC, B.AGROUND_VSPEED)).is_false()
+
+
+func test_aground_hold_accumulates_while_true_and_resets_on_false() -> void:
+	var s := B.aground_hold(0.0, true, DELTA)
+	assert_float(s).is_equal_approx(DELTA, 1e-9)
+	s = B.aground_hold(s, true, DELTA)
+	assert_float(s).is_equal_approx(2.0 * DELTA, 1e-9)
+	s = B.aground_hold(s, false, DELTA)
+	assert_float(s).is_equal(0.0)
 
 
 # --- thrust + rudder ------------------------------------------------------------

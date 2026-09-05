@@ -1,27 +1,11 @@
 @tool
 extends SceneTree
-## One-shot scaffolding tool that owns LEVEL 5 end to end: heightmap, rail loop curve,
-## terrain conform, splatmap, LevelInfo and the level scene. Level 5 is the rail
-## verification level — it was a blank canvas (empty AuthoringRoot, no bake), and it is
-## registered, so putting the loop there keeps it under CI instead of an unregistered dev
-## scene.
-##
-##   godot --headless --path . --script res://tools/gen_rail_level.gd
-##   godot --headless --path . --import          # then re-import the fresh PNGs
-##   godot --headless --path . res://tools/bake_levels.tscn
-##
-## Re-running OVERWRITES everything under src/levels/island/level_5/ — hand edits made in
-## the editor afterwards are lost. Same contract as tools/gen_islands.gd, which no longer
-## covers level 5 (and must NOT be re-run: levels 2/3/5 have since gained hand-added
-## PlaneSpawn nodes and drifted allow-lists that its template would clobber).
-##
-## Order is the mandated authoring order: terrain -> road + conform -> splat. Conform
-## carves the corridor into the heightmap BEFORE the splat is classified, so the cuttings
-## and embankments the loop makes get their own slope-correct paint.
-##
-## No splat paint under the ballast: channel 7 (Gravel, grip 0.85) needs a second weight
-## map this level does not have, and against unpainted grass (0.8) the grip delta is
-## nothing. Deliberate omission, not an oversight.
+## One-shot scaffolding tool that owns level 5 end to end: heightmap, rail loop curve,
+## terrain conform, splatmap, LevelInfo, scene. Chain recorded in level_5_gen.json (replay
+## with tools/rebuild_level.ps1). Re-running OVERWRITES everything under
+## src/levels/island/level_5/; hand edits are lost. tools/gen_islands.gd no longer covers
+## level 5. Order is terrain -> road + conform -> splat, so earthworks get slope-correct
+## paint; no splat under the ballast (channel 7 needs a weight map this level lacks).
 
 const DIR := "res://src/levels/island/level_5"
 const SIZE := 512.0            ## world extent (X and Z), matching the other islands
@@ -31,8 +15,7 @@ const CHANNEL_GRIP := "0.8, 0.7, 0.6, 0.7, 0.75, 0.5, 1, 0.85"
 const TITLE := "Level 5 - Railway"
 const RAIL_PROFILE := "res://kit/roads/rail_profile.tres"
 
-# --- terrain: broad forms and a two-step terrace, so the loop climbs from a coastal
-# shelf onto a plateau instead of rolling over noise.
+# --- terrain: the loop climbs from a coastal shelf onto a terraced plateau.
 const GEN_SEED := 50807
 const FEATURE_SCALE := 300.0
 const OCTAVES := 3
@@ -41,9 +24,8 @@ const FALLOFF_END := 0.92
 const COAST_ROUGHNESS := 0.35
 const TERRACE_LEVELS := 4      ## 12 m steps: a proper mesa for the loop to sit on
 
-# --- the loop. A perturbed ellipse: r_mul below keeps it from reading as a drawn-compass
-# circle while staying C-infinity, so the min turn radius never approaches the ~2.4 m
-# ribbon half-width the extruder's fold clamp cares about.
+# --- the loop: a perturbed ellipse (r_mul below), C-infinity so min turn radius stays
+# clear of the ~2.4 m ribbon half-width the extruder's fold clamp cares about.
 const LOOP_POINTS := 12
 const LOOP_A := 118.0          ## semi-axis along X (m)
 const LOOP_B := 92.0           ## semi-axis along Z (m)
@@ -95,9 +77,7 @@ func _init() -> void:
 	_write_png(splat, "%s/level_5_island_splat.png" % DIR)
 
 	var curve_path := "%s/level_5_rail_curve.tres" % DIR
-	# Saved as a resource rather than emitted as .tscn text: Curve3D's `_data` packing is
-	# an engine detail, and this way the curve is also an editable, hash-tracked
-	# dependency of the level scene.
+	# Saved as a resource, not emitted as .tscn text, so the curve is an editable, hash-tracked dependency.
 	var err := ResourceSaver.save(curve, curve_path)
 	if err != OK:
 		printerr("[gen-rail] cannot save %s (error %d)" % [curve_path, err])
@@ -115,12 +95,8 @@ func _init() -> void:
 # ------------------------------------------------------------------- the loop
 
 
-## Slide each control point radially until it sits near the ring's own median elevation,
-## then smooth the radii around the ring. This is how a mountain railway is actually
-## surveyed — you route along the contour and pay for the residual in earthworks, rather
-## than driving a fixed line across the hill and paying for all of it. Without it a plain
-## ellipse on this island wanted 20 m cuttings; with it the corridor barely leaves the
-## ground. Deterministic: a fixed radial scan, no RNG anywhere.
+## Slides each control point radially to the ring's median elevation, then smooths the
+## radii (plain ellipse wanted 20 m cuttings; this barely leaves the ground). Deterministic.
 func _follow_contour(heights: Image, base: Array[Vector2]) -> Array[Vector2]:
 	var sampled: Array[float] = []
 	for p in base:
@@ -143,9 +119,7 @@ func _follow_contour(heights: Image, base: Array[Vector2]) -> Array[Vector2]:
 			t += CONTOUR_SCALE_STEP
 		scales.append(best)
 
-	# The scan is per point and independent, so neighbours can land far apart and kink the
-	# plan view. Smoothing the radii (wrap-around) trades a little contour accuracy for a
-	# curve the extruder is happy with — the min-turn-radius report is the check.
+	# Per-point scan can kink the plan view; smoothing trades accuracy for a workable curve.
 	for _pass in CONTOUR_SMOOTH_PASSES:
 		var smoothed := scales.duplicate()
 		for i in scales.size():
@@ -162,22 +136,10 @@ func _follow_contour(heights: Image, base: Array[Vector2]) -> Array[Vector2]:
 	return out
 
 
-## Control-point positions for the loop: a wobbled ellipse draped onto the terrain, then
-## given a surveyed gradient profile, then shifted so the whole loop clears the sea and
-## stays inside the terrain's height range.
-##
-## The gradient profile is the interesting part. A raw drape follows every bump — 36 m of
-## relief in 868 m on this island — which no railway would be built on, and simply
-## relaxing it against the grade limit diffuses the whole ring flat (the constraint's
-## flattest solution wins). So instead the draped profile is reduced to its first two
-## harmonics around the loop: one long climb and one long descent per lap, plus a second-
-## order undulation, following the terrain's actual tilt rather than inventing one. That
-## AC part is then scaled until the steepest edge sits exactly on the grade budget, which
-## keeps as much relief as the budget allows instead of throwing it away. Conform turns
-## the difference into cuttings and embankments — which is what earthworks ARE.
+## Control-point positions: a wobbled ellipse draped onto the terrain, gradient reduced to
+## its first two harmonics, scaled to the grade budget, then shifted to clear the sea.
 func _loop_positions(heights: Image) -> PackedVector3Array:
-	# Plain Arrays while the profile is worked on: writing through an element's member
-	# (pts[i].y = ...) is not a thing on a PackedVector3Array.
+	# Plain Arrays while worked on: writing through an element's member is not a thing on a PackedVector3Array.
 	var base: Array[Vector2] = []
 	for i in LOOP_POINTS:
 		var ang := TAU * float(i) / float(LOOP_POINTS)
@@ -189,8 +151,7 @@ func _loop_positions(heights: Image) -> PackedVector3Array:
 		ys.append(_height_at(heights, p.x, p.y))
 	print("[gen-rail] draped relief before shaping: %.1f m" % (ys.max() - ys.min()))
 
-	# Phase by ARC position, not by index: the points are evenly spaced in ellipse angle,
-	# which is not evenly spaced along the ellipse.
+	# Phase by arc position, not index: points are evenly spaced in ellipse angle, not arc.
 	var runs: Array[float] = []
 	var total := 0.0
 	for i in LOOP_POINTS:
@@ -203,9 +164,7 @@ func _loop_positions(heights: Image) -> PackedVector3Array:
 		phase.append(TAU * walked / total)
 		walked += runs[i]
 
-	# Harmonic fit. Equally-spaced-sample coefficients on arc phase is an approximation
-	# (the ellipse's angle/arc mismatch), which is fine — this is a shaping filter, not a
-	# transform anyone reads back.
+	# Equally-spaced-sample coefficients on arc phase: an approximation, fine for a shaping filter.
 	var mean := 0.0
 	for y in ys:
 		mean += y
@@ -224,9 +183,7 @@ func _loop_positions(heights: Image) -> PackedVector3Array:
 		for i in LOOP_POINTS:
 			ac[i] += a * cos(float(k) * phase[i]) + b * sin(float(k) * phase[i])
 
-	# Scale the AC part onto the grade budget — DOWN only. Scaling a gentle profile up to
-	# the budget would invent relief the ground does not have, and conform would build
-	# that invention out of ten-metre embankments on flat plateau.
+	# Scale down only: scaling up would invent relief the ground does not have.
 	var steepest := 0.0
 	for i in LOOP_POINTS:
 		if runs[i] > 0.001:
@@ -235,9 +192,7 @@ func _loop_positions(heights: Image) -> PackedVector3Array:
 	for i in LOOP_POINTS:
 		ys[i] = mean + ac[i] * scale
 
-	# Safety net only: after the fit the budget is met by construction, but a degenerate
-	# spacing could still leave one edge over. Per edge, pull both ends toward each other
-	# by half the excess; swept because fixing one edge can break its neighbour.
+	# Safety net for a degenerate spacing left over budget: pull edge ends together by half the excess, swept.
 	for _pass in GRADE_PASSES:
 		var worst := 0.0
 		for i in LOOP_POINTS:
@@ -264,9 +219,7 @@ func _loop_positions(heights: Image) -> PackedVector3Array:
 	# One rigid shift, so the grade clamp above survives it untouched.
 	var lift := maxf(SEA_Y + SEA_CLEARANCE - lo, 0.0)
 	lift -= maxf(hi + lift - (HEIGHT - CREST_MARGIN), 0.0)
-	# The two constraints can only both be met if the profile fits the band. When it does
-	# not, the ceiling wins above and the loop silently drops back toward the water — say
-	# so rather than shipping a rail the sea eats.
+	# Warns rather than shipping a rail the sea eats when the profile does not fit the band.
 	if lo + lift < SEA_Y + SEA_CLEARANCE - 0.001:
 		printerr(("[gen-rail] relief %.1f m does not fit the %.1f m band between sea " +
 				"clearance and the crest margin — lowest rail lands at %.1f m") % [
@@ -278,10 +231,7 @@ func _loop_positions(heights: Image) -> PackedVector3Array:
 	return pts
 
 
-## The closed Curve3D: Catmull-Rom handles everywhere, and the seam handled exactly the
-## way the editor's "Close loop" button does it (road_draw_tool.close_loop) — the last
-## point sits ON the first, which is what RoadBuilder.is_closed_loop asks and what makes
-## extrude give both end rings one shared bisector frame.
+## The closed Curve3D: Catmull-Rom handles, seam closed like road_draw_tool.close_loop (last point sits on the first).
 func _build_curve(positions: PackedVector3Array) -> Curve3D:
 	var curve := Curve3D.new()
 	for p in positions:
@@ -300,9 +250,7 @@ func _build_curve(positions: PackedVector3Array) -> Curve3D:
 	return curve
 
 
-## Acceptance numbers for the run: the loop must stay above the fold limit, keep its
-## grades real but bounded, never dip toward the sea, and not demand an earthwork the
-## conform falloff cannot slope out.
+## Acceptance numbers: loop above the fold limit, grades bounded, clears the sea, earthworks within the conform falloff.
 func _report(curve: Curve3D, positions: PackedVector3Array, heights: Image) -> void:
 	var length := curve.get_baked_length()
 	var radius := RoadBuilder.min_turn_radius(curve, MAX_SEG_LEN, MAX_SEG_ANGLE)
@@ -321,8 +269,7 @@ func _report(curve: Curve3D, positions: PackedVector3Array, heights: Image) -> v
 			length, curve.point_count, RoadBuilder.is_closed_loop(curve)])
 	print("[gen-rail] min turn radius %.1f m, steepest grade %.1f%%, y %.1f..%.1f m" % [
 			radius, steepest * 100.0, lo, hi])
-	# Earthworks: how far the surveyed profile sits off the untouched ground, sampled
-	# densely along the centreline (the control points alone miss the extremes).
+	# Earthworks: how far the surveyed profile sits off the untouched ground, sampled densely along the centreline.
 	var cut := 0.0
 	var fill := 0.0
 	var step := 4.0
@@ -340,11 +287,7 @@ func _report(curve: Curve3D, positions: PackedVector3Array, heights: Image) -> v
 # ---------------------------------------------------------------- conform
 
 
-## RoadPath._conform_terrain's math, headless: that one is is_editor_hint-guarded and
-## routes its write through EditorUndoRedoManager, but the geometry it feeds
-## RoadBuilder.conform_heights is reproduced here exactly — centreline samples AT the
-## extrusion's ring offsets plus a full-width deck strip on the ribbon's own frames.
-## Everything in this level sits at the origin, so world == terrain-local.
+## RoadPath._conform_terrain's math, headless: centreline samples at the ring offsets plus a full-width deck strip.
 func _conform(heights: Image, curve: Curve3D, profile: Resource) -> void:
 	var offsets := RoadBuilder.adaptive_offsets(curve, MAX_SEG_LEN, MAX_SEG_ANGLE)
 	var fw: float = profile.call("full_half_width")
@@ -365,9 +308,7 @@ func _conform(heights: Image, curve: Curve3D, profile: Resource) -> void:
 		printerr("[gen-rail] conform changed nothing — the loop missed the terrain")
 
 
-## World Y -> the heightmap's 0..1 storage, minus the z-fight epsilon (the ribbon rides
-## on top). Clamped exactly like RoadPath does, which is why _loop_positions keeps the
-## loop inside the range in the first place.
+## World Y -> heightmap's 0..1 storage, minus the z-fight epsilon (the ribbon rides on top).
 func _norm_height(y: float) -> float:
 	return clampf((y - CONFORM_EPSILON) / HEIGHT, 0.0, 1.0)
 
@@ -375,8 +316,7 @@ func _norm_height(y: float) -> float:
 # ---------------------------------------------------------------- sampling
 
 
-## Bilinear terrain height at world XZ, mirroring HeightmapTerrain.height_at (terrain
-## centred on the origin, one cell per world unit).
+## Bilinear terrain height at world XZ, mirroring HeightmapTerrain.height_at.
 func _height_at(img: Image, x: float, z: float) -> float:
 	var w := img.get_width()
 	var h := img.get_height()
@@ -393,12 +333,7 @@ func _height_at(img: Image, x: float, z: float) -> float:
 	return lerpf(top, bot, ty) * HEIGHT
 
 
-## Car spawn: the flattest dry spot on a ring INSIDE the loop, so the player faces the
-## rails the moment the level loads. Candidates must sit on the same shelf as the track
-## they were measured from (SPAWN_SHELF_TOLERANCE) — this island is terraced in 12 m
-## steps, and the flattest ground near the line is otherwise happily on top of a cliff
-## you cannot drive down. Deterministic: fixed insets, no RNG. Reads the CONFORMED
-## heights, so the corridor's own earthworks are accounted for.
+## Car spawn: flattest dry spot on a ring inside the loop, on the same terrace as the track.
 func _find_spawn(heights: Image, positions: PackedVector3Array) -> Vector3:
 	var best := Vector3(0, HEIGHT * 0.5, 0)
 	var best_slope := INF
@@ -449,15 +384,12 @@ func _info_text() -> String:
 [resource]
 script = ExtResource("1_info")
 display_name = "%s"
-allowed_vehicles = PackedStringArray("train", "car", "truck", "tractor", "boat", "bike", "drone", "plane")
+allowed_vehicles = PackedStringArray("train", "car", "truck", "tractor", "boat", "drone", "plane")
 default_vehicle = "car"
 """ % TITLE
 
 
-## The level scene. Node set matches what level 5 already had (including the hand-added
-## PlaneSpawn) plus the rail loop under AuthoringRoot. The terrain's generation
-## parameters are written back so a future in-editor Generate reproduces the same base
-## island — the conform on top of it is this tool's, and re-running Generate would undo it.
+## The level scene: existing node set plus the rail loop; terrain params written back so an in-editor Generate reproduces it.
 func _scene_text(spawn: Vector3) -> String:
 	return """[gd_scene load_steps=17 format=3]
 
@@ -470,6 +402,7 @@ func _scene_text(spawn: Vector3) -> String:
 [ext_resource type="Texture2D" path="res://src/levels/island/level_5/level_5_island_splat.png" id="7_splat"]
 [ext_resource type="Shader" path="res://kit/terrain/terrain_splat.gdshader" id="8_shader"]
 [ext_resource type="Script" path="res://src/water/water_surface.gd" id="9_water"]
+[ext_resource type="Script" path="res://src/levels/base/world_bounds.gd" id="30_bounds"]
 [ext_resource type="Script" path="res://kit/helpers/authoring_root.gd" id="10_authoring"]
 [ext_resource type="Environment" path="res://src/levels/base/default_env.tres" id="11_env"]
 [ext_resource type="Script" path="res://kit/helpers/road_path.gd" id="12_road"]
@@ -517,7 +450,7 @@ script = ExtResource("3_cam")
 [node name="Spawn" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, {sx}, {sy}, {sz})
 script = ExtResource("4_spawn")
-vehicle_types = PackedStringArray("car", "truck", "tractor", "bike", "drone")
+vehicle_types = PackedStringArray("car", "truck", "tractor", "drone")
 
 [node name="WaterSpawn" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, {wx}, 1.3, 0)
@@ -536,6 +469,10 @@ script = ExtResource("9_water")
 size = Vector2({size_plus}, {size_plus})
 depth = 3.0
 far_sea_extent = 1900.0
+
+[node name="Bounds" type="StaticBody3D" parent="."]
+script = ExtResource("30_bounds")
+extent = Vector2({size_plus}, {size_plus})
 
 [node name="SeaBed" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.01, 0)

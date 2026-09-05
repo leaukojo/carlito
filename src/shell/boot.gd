@@ -1,29 +1,13 @@
 extends Node3D
-## Shell: boot -> load level -> play, with a pause overlay over the top of it. Composes
-## independent level/UI scenes — there is no giant main.tscn. The persistent HUD (dashboard,
-## debug overlay, touch controls) lives in boot.tscn; the pause, level-select and vehicle-selector
-## screens are transient overlays created here.
-##
-## DRIVE FIRST, IN EVERY MODE. There is no front door: the page loads and you are already in a
-## level with a car. What level and what car is decided in _boot() — a deep link wins, then the
-## session saved in user://, then DEFAULT_LEVEL. Level select is a section of the pause menu
-## now, not a gate in front of the game, because a visitor who does not yet know this is a
-## playable game has no basis on which to choose a level.
-##
-## PAUSE. This node is PROCESS_MODE_ALWAYS (set in boot.tscn) so the shell and its menus keep
-## running while `get_tree().paused` is true; the level is explicitly put back to PAUSABLE when
-## it is added, since it is a child of this node and would otherwise inherit ALWAYS and never
-## pause. The autoloads pause with the world — a paused sandbox publishing telemetry it is no
-## longer simulating would be a fiction.
+## Shell composing independent level/UI scenes (no main.tscn). Deep link → saved session →
+## DEFAULT_LEVEL. PROCESS_MODE_ALWAYS (set in boot.tscn) keeps menus running while paused.
 
-## Where a first visit starts (see docs/plans/ui_improvements.md): the dressed island, so the
-## first frame has farm fields, coast roads and open water rather than bare terrain. It is the
-## second-lightest bake at 1.8 MB — heavier than the mountain's 0.7, still nowhere near
-## level_3 (13.9 MB), which a first visit must never wait on.
+## First-visit default: the dressed island (farm, coast roads, water). 1.8 MB bake, well
+## under level_3's 13.9 MB, which a first visit must never wait on.
 const DEFAULT_LEVEL := "level_1"
 
-## Every screen is parented to the UiScale Control, not the CanvasLayer: that is where the
-## scaled theme lives, and a Control only inherits a theme from its Control ancestors.
+## Every screen parents to the UiScale Control (not the CanvasLayer): that's where the
+## scaled theme lives, and a Control only inherits a theme from Control ancestors.
 @onready var _ui: UiScale = $UI/UiScale
 @onready var _notice: Label = $UI/UiScale/Notice
 @onready var _dashboard: Dashboard = $UI/UiScale/Dashboard
@@ -33,14 +17,10 @@ const DEFAULT_LEVEL := "level_1"
 ## Seconds a GameState.notice stays on screen. Long enough to read while still driving.
 const NOTICE_DWELL_S := 3.0
 
-## Frames the loading screen is held up AFTER the level has entered the tree. The load is
-## done by then, but under gl_compatibility every material compiles its shader on its FIRST
-## DRAW, and the whole level draws for the first time on the frame after add_child — so
-## freeing the screen when the load finished put the compile stall on the first frame the
-## player could see. A CanvasLayer does not stop the 3D world rendering underneath it, so
-## those frames are real draws and the stall happens behind the overlay instead. This only
-## covers what is on screen at the spawn; geometry that scrolls into view later still
-## compiles when it arrives (see the perf notes in docs/TODO.md).
+## Frames the loading screen stays up after the level enters the tree: gl_compatibility
+## compiles each material's shader on its first draw, which happens the frame after
+## add_child. Holding the overlay a few frames keeps that stall off-screen. Only covers
+## what's visible at spawn; geometry scrolled into view later still compiles on arrival.
 const HOLD_FRAMES := 3
 
 var _level: Node3D = null
@@ -49,22 +29,17 @@ var _vehicles: VehicleSelect = null
 var _pause: PauseMenu = null
 var _loading: LoadingScreen = null
 var _loading_path := ""  # non-empty while a threaded level load is in flight
-## Frames the loading screen stays up AFTER the level is in the tree — see HOLD_FRAMES.
-var _hold_frames := 0
+var _hold_frames := 0  # see HOLD_FRAMES
 var _next_variant := ""  # variant the level now loading should spawn ("" = its own default)
-## Whether this session writes itself back to user://. False when a deep link chose the
-## configuration (an explicit link is somebody else's intent, and must not overwrite yours)
-## and under headless, where CI must not inherit whatever was last driven locally.
+## Whether this session writes itself to user://. False for a deep link (must not overwrite
+## an explicit link's intent) and under headless (CI must not inherit a local session).
 var _persist := true
 var _coach_shown := false
-## Families already coached in THIS session (see _maybe_coach). Not a ShellPrefs key on purpose:
-## the first-visit cue is once per machine because it teaches that the game is playable at all,
-## while the aircraft line teaches a control set you only need while you are in one — so it comes
-## back for each new flight of a session, and getting into a plane after an hour in a truck says
-## R / F again.
+## Families coached this session (see _maybe_coach). Not persisted: the aircraft cue teaches
+## a control set only relevant while flying, so it reappears each new flight of a session.
 var _coached_families := {}
 ## Density to restore when F2 un-hides the cluster (a session that boots at OFF comes back to AUTO).
-var _density_before_hide := Dashboard.Density.AUTO
+var _density_before_hide: int = Dashboard.Density.AUTO
 
 
 func _ready() -> void:
@@ -82,21 +57,17 @@ func _ready() -> void:
 	GameState.attachment_changed.connect(_refresh_attachment_controls)
 	GameState.notice.connect(_show_notice)
 	GameState.notice_cleared.connect(_clear_notice)
-	# How dense the cluster is, as last chosen (AUTO by default, which decides from screen size
-	# and whether the bridge is live). Set before the first bind so nothing builds twice.
+	# Set before the first bind so nothing builds twice.
 	_dashboard.set_density_setting(ShellPrefs.dashboard_density())
-	# The player's UI-size multiplier, likewise before anything lays itself out.
 	_ui.set_user_scale(ShellPrefs.ui_scale())
 	_set_hud_visible(false)  # nothing to bind to until the level is up
 	_boot()
 
 
-## Decide what to boot into and load it. Three authorities, in order: a deep link
-## (`?level=&vehicle=` on web, `--level=`/`--vehicle=` or CARLITO_LEVEL locally), the session
-## saved in user://, then DEFAULT_LEVEL. Every id is validated on the way in (BootParams), so
-## a link or a save naming a level that no longer exists falls back instead of booting into
-## nothing. This is also the headless CI path — the smoke no longer needs a special case,
-## because clicking a menu is no longer how anyone reaches a level.
+## Three authorities in order: deep link (`?level=&vehicle=` web, `--level=`/`--vehicle=`/
+## CARLITO_LEVEL local), saved session, then DEFAULT_LEVEL. BootParams validates every id, so
+## an unknown level/save falls back instead of booting into nothing. Also the headless CI
+## path: reaching a level never requires a menu.
 func _boot() -> void:
 	var params := BootParams.resolve()
 	var level_id := String(params["level"])
@@ -126,59 +97,50 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 ## Swap to the next variant in the current family (V key / touch NEXT). Reuses the
-## level's spawn/respawn path; a family with one variant is a no-op.
-##
-## ONE KEY, ONE AXIS. V always changes the BODY and never anything hanging off it — the two used
-## to share this key, with the vehicle whose subsystem cycle had run out handing the press back so
-## V could carry on to the next body. That worked, but it made V mean different things on different
-## vehicles and left the tractor (one body, so it could never hand back) a dead end you could only
-## leave through the garage. E is now the attachment axis, and the two never interact.
+## level's spawn/respawn path; a family with one variant is a no-op. V always changes the
+## body only, never an attachment — that's E's axis, and the two never interact.
 func _cycle_vehicle() -> void:
 	if _level == null or _level.vehicle == null:
 		return
 	_level.set_vehicle(VehicleCatalog.next_in_family(GameState.current_variant))
 
 
-## Cycle what is hanging off the back of the current vehicle (E key / touch ATTACH): the tractor's
-## implement, the semi's trailer. Vehicles that tow nothing ignore it.
-##
-## Duck-typed, like every other cross-layer hook in this codebase (set_vehicle, grip_at,
-## is_carlito_authoring), so neither this file nor VehicleCatalog learns what an implement or a
-## trailer is — only that some vehicles carry one and that cycling it never changes the body.
+## Cycle what's hanging off the back of the current vehicle (E key / touch ATTACH): tractor
+## implement, semi trailer. Vehicles that tow nothing ignore it. Duck-typed like every other
+## capability hook, so neither this file nor VehicleCatalog learns what an implement or
+## trailer is.
 func _cycle_attachment() -> void:
 	if _level == null or _level.vehicle == null:
 		return
 	if _level.vehicle.has_method("cycle_implement"):
 		_level.vehicle.cycle_implement()
-		# The new attachment may be driven where the old one was not (a tipper for a box), so the
-		# overlay's PTO/TIP buttons are re-offered here as well as on a vehicle bind. Nothing else
-		# about the HUD changes — the body did not.
+		# New attachment may be driven where the old one wasn't (tipper vs. box).
 		_touch.set_capabilities(_capabilities())
 
 
-## The same refresh, for an attachment the SIM changed on its own (GameState.attachment_changed —
-## a coupling that did not fit and was taken away again). Without it the overlay keeps offering the
-## PTO/TIP buttons of a trailer that is no longer there.
+## Refresh for an attachment the sim changed on its own (GameState.attachment_changed — a
+## coupling that didn't fit and was taken away). Otherwise the overlay keeps offering PTO/TIP
+## buttons for a trailer that's no longer there.
 func _refresh_attachment_controls() -> void:
 	_touch.set_capabilities(_capabilities())
 
 
-## What the active vehicle can do, for the control gating ActionRegistry drives (the touch buttons
-## and the pause menu's CONTROLS sheet). Every read is DUCK-TYPED, so neither this file nor the
-## overlay learns what a trailer, an implement or a refuse body is — only that some machines tow,
-## some have something driven or liftable on the back, and some have a lockable diff.
+## What the active vehicle can do, driving the touch buttons and the pause menu's CONTROLS
+## sheet. Duck-typed throughout, so neither this file nor the overlay learns what a trailer,
+## implement or refuse body is.
 ##
-## The two sources are OR'd rather than merged, and that is load-bearing: a semi's `pto` comes from
-## its trailer and a garbage truck's from its own body, so neither may cancel the other out.
+## The two sources are OR'd, not merged: a semi's `pto` comes from its trailer and a garbage
+## truck's from its own body, and neither may cancel the other out.
 func _capabilities() -> Dictionary:
 	var caps := {"tows": false, "pto": false, "lift": false,
 			"diff_lock": false, "fwd_drive": false, "body_cmd": false}
 	if _level == null or _level.vehicle == null:
 		return caps
-	var v: Node3D = _level.vehicle
+	var v: BaseVehicle = _level.vehicle
+	# `tows`/`attachment_controls` stay duck-typed: method absence means "does not tow"
+	# (src/vehicles/CLAUDE.md). `vehicle_capabilities` is defined on BaseVehicle itself.
 	caps["tows"] = v.has_method("cycle_implement")
-	if v.has_method("vehicle_capabilities"):
-		_or_into(caps, v.vehicle_capabilities())
+	_or_into(caps, v.vehicle_capabilities())
 	if v.has_method("attachment_controls"):
 		_or_into(caps, v.attachment_controls())
 	return caps
@@ -191,10 +153,8 @@ static func _or_into(caps: Dictionary, extra: Dictionary) -> void:
 
 # --- pause overlay -----------------------------------------------------------
 
-## Esc (or the touch MENU button). Walks the overlay stack out the way it came in: a screen
-## opened on top of the pause menu closes back to it, the pause menu's own second page closes
-## back to its first, and only then does Esc resume. Esc used to free the level outright with
-## no confirmation, which is the bug this replaces.
+## Esc (or touch MENU) walks the overlay stack out the way it came in, and only then resumes.
+## Never frees the level outright — that stays a deliberate action, not one keypress.
 func _on_menu_key() -> void:
 	if _vehicles != null:
 		_close_vehicle_select()
@@ -210,8 +170,7 @@ func _open_pause() -> void:
 	if _level == null or _loading_path != "" or _pause != null:
 		return  # nothing to pause, or a level load is in flight
 	_pause = PauseMenu.new()
-	# Before add_child (the VehicleSelect.setup pattern): the CONTROLS sheet greys what this
-	# machine does not have, off the same capability read the touch buttons gate on.
+	# Before add_child: CONTROLS sheet greys what the machine lacks, off the same capability read.
 	_pause.setup(_capabilities(), _dashboard.density_setting(), _ui.user_scale())
 	_pause.resume_requested.connect(_close_pause)
 	_pause.vehicle_requested.connect(_open_vehicle_select)
@@ -219,8 +178,7 @@ func _open_pause() -> void:
 	_pause.dashboard_density_changed.connect(_on_density_changed)
 	_pause.ui_scale_changed.connect(_on_ui_scale_changed)
 	_ui.add_child(_pause)
-	# The driving pads sit behind the scrim and are not reachable; hiding them also releases
-	# anything held (Pad drops its pointer when it loses visibility) so nothing sticks.
+	# Hiding the pads also releases anything held (Pad drops its pointer when invisible).
 	_touch.set_active(false)
 	get_tree().paused = true
 
@@ -235,28 +193,22 @@ func _close_pause() -> void:
 	_touch.set_active(_level != null)
 
 
-## SETTINGS picked a new instrument-cluster density. The menu owns nothing, so applying it and
-## remembering it are both this file's job — and it is remembered even for a deep-linked session
-## (unlike the level and the vehicle, which an explicit link chose for you): how much dashboard
-## you want to look at is yours, not the link's.
+## SETTINGS picked a new cluster density. The menu owns nothing, so applying and remembering
+## it is this file's job — remembered even for a deep-linked session, unlike level/vehicle.
 func _on_density_changed(setting: int) -> void:
 	_dashboard.set_density_setting(setting)
 	ShellPrefs.set_dashboard_density(setting)
 
 
-## SETTINGS picked a new UI size. Applying it means handing it to the UiScale root, which rebuilds
-## the theme — every Control below relayouts from that one assignment, the pause menu included.
-## Remembered for the same reason the density is: how big you need the type is yours, not the
-## link's, and it is the setting most likely to differ between two people's screens.
+## SETTINGS picked a new UI size. Handed to UiScale, which rebuilds the theme so every
+## Control relayouts. Remembered, same reasoning as density.
 func _on_ui_scale_changed(factor: float) -> void:
 	_ui.set_user_scale(factor)
 	ShellPrefs.set_ui_scale(factor)
 
 
-## F2: hide the instrument cluster, and bring it back the way it was. It moves the SAME density
-## setting the SETTINGS page cycles rather than adding a second reason to be hidden — one state,
-## so the menu and the key can never disagree about whether there is a dashboard, and (like the
-## menu) the choice is remembered.
+## F2: hide the instrument cluster and restore it after. Moves the same density setting the
+## SETTINGS page cycles, so the menu and the key can never disagree about dashboard state.
 func _toggle_dashboard() -> void:
 	if _dashboard.density_setting() == Dashboard.Density.OFF:
 		_on_density_changed(_density_before_hide)
@@ -267,9 +219,8 @@ func _toggle_dashboard() -> void:
 
 # --- level select ------------------------------------------------------------
 
-## The LEVEL section of the pause menu (G-key garage aside, this is only ever reached from
-## there). Opening it does not tear the current level down — that only happens once a
-## different level is actually chosen.
+## The LEVEL section of the pause menu. Opening it does not tear the current level down —
+## that only happens once a different level is actually chosen.
 func _show_level_select() -> void:
 	if _select != null:
 		return
@@ -292,12 +243,11 @@ func _on_level_chosen(scene_path: String) -> void:
 
 
 ## Kick off a threaded level load behind a loading screen; _process polls progress.
-## `variant` is the body to spawn instead of the level's default ("" = the default).
-## Headless (CI smoke) keeps the synchronous path — nobody is watching a bar there.
+## `variant` is the body to spawn instead of the level's default ("" = default).
+## Headless (CI smoke) keeps the synchronous path — nobody watches a bar there.
 func _load_level(scene_path: String, variant := "") -> void:
 	if _level != null:
-		# Unbind BEFORE the free: a threaded load takes frames, and the dashboard, the debug
-		# overlay and the bridge would each be holding a freed level for all of them.
+		# Unbind before free: a threaded load takes frames, else HUD/bridge hold a freed level.
 		_unbind_hud()
 		_level.queue_free()
 		_level = null
@@ -308,10 +258,10 @@ func _load_level(scene_path: String, variant := "") -> void:
 		return
 	_drop_loading_screen()  # a screen still up from the previous load's HOLD_FRAMES
 	_loading = LoadingScreen.new()
-	_ui.add_child(_loading)  # in the tree first: it dresses itself with theme-scaled metrics
+	_ui.add_child(_loading)  # in the tree first: dresses itself with theme-scaled metrics
 	_loading.set_level(scene_path)
 	_loading_path = scene_path
-	ResourceLoader.load_threaded_request(scene_path, "", true)  # sub-threads: parallel sub-resource loads
+	ResourceLoader.load_threaded_request(scene_path, "", true)  # parallel sub-resource loads
 
 
 func _process(_delta: float) -> void:
@@ -331,9 +281,8 @@ func _process(_delta: float) -> void:
 			var scene := ResourceLoader.load_threaded_get(_loading_path) as PackedScene
 			_loading_path = ""
 			_loading.set_progress(1.0)
-			# Instantiate blocks this frame (level._ready spawns the vehicle
-			# synchronously); the loading screen stays up over the freeze, and for
-			# HOLD_FRAMES more so the first-draw shader compile is behind it too.
+			# Instantiate blocks this frame (level._ready spawns synchronously); the loading
+			# screen stays up over the freeze and for HOLD_FRAMES more for the shader compile.
 			_finish_load(scene)
 			_hold_frames = HOLD_FRAMES
 		_:
@@ -341,17 +290,15 @@ func _process(_delta: float) -> void:
 			push_error("Level load failed: %s" % failed)
 			_loading_path = ""
 			_drop_loading_screen()
-			# There is no menu to fall back to any more, so fall back to the level a first
-			# visit gets — unless that is the one that just failed, in which case something
-			# is wrong with the build and another attempt would only loop.
+			# Fall back to the default level, unless that's the one that just failed —
+			# another attempt would only loop.
 			var default_scene := LevelRegistry.scene_of(DEFAULT_LEVEL)
 			if failed != default_scene:
 				_load_level(default_scene)
 
 
-## Take the loading overlay down. Safe to call with nothing up (the failure path and the
-## HOLD_FRAMES countdown both reach it), and it also clears the countdown so a level chosen
-## during the hold cannot leave a stale timer pointing at a freed screen.
+## Take the loading overlay down. Safe with nothing up; clears the countdown so a level
+## chosen during the hold can't leave a stale timer pointing at a freed screen.
 func _drop_loading_screen() -> void:
 	_hold_frames = 0
 	if _loading != null:
@@ -361,22 +308,18 @@ func _drop_loading_screen() -> void:
 
 func _finish_load(scene: PackedScene) -> void:
 	_level = scene.instantiate()
-	# Set BEFORE the level enters the tree: it spawns its vehicle in _ready, and this is how
-	# a deep link or the saved session gets a body other than the level's default without
-	# spawning the default first and immediately throwing it away.
+	# Set before the level enters the tree: _ready spawns the vehicle, so this is how a deep
+	# link or saved session gets a body other than the level's default.
 	_level.initial_variant = _next_variant
 	_next_variant = ""
-	# This node is PROCESS_MODE_ALWAYS so the pause menu keeps running; the level is a child
-	# of it and would inherit that, so the world is put back to pausable explicitly.
+	# This node is PROCESS_MODE_ALWAYS; the level would inherit that, so put back explicitly.
 	_level.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(_level)  # level._ready() spawns the vehicle synchronously here
 	_level.vehicle_changed.connect(_on_vehicle_changed)
 	_bind_hud()
 	_set_hud_visible(true)
-	# The initial spawn already happened above, before the signal was connected, so the
-	# session is saved here rather than only in _on_vehicle_changed.
+	# Initial spawn already happened above, before the signal connected, so save here too.
 	_save_session()
-	# GameState.current_vehicle is the FAMILY, and the initial spawn already set it above.
 	_maybe_coach(GameState.current_vehicle)
 
 
@@ -388,22 +331,15 @@ func _save_session() -> void:
 	ShellPrefs.save_boot(LevelRegistry.id_of(_level.scene_file_path), GameState.current_variant)
 
 
-## Families that get a cue of their own every time you climb into one this session, because their
-## controls include an axis the ground vehicles have no equivalent of.
+## Families with a control axis ground vehicles don't have; get a cue every time you climb
+## into one this session.
 const COACH_FAMILIES := ["plane", "drone"]
 
 
-## The coaching line, for the vehicle just spawned. Two cues live here and they have different
-## lifetimes, which is the whole of the logic:
-##
-##   - the FIRST-VISIT line, once per machine and only for the first level of a session — it
-##     teaches how to start, and by the second level you have started;
-##   - the AIRCRAFT line, once per family per SESSION, because climb/descend is undiscoverable and
-##     you meet it again every time you leave the ground.
-##
-## The aircraft case takes precedence on a brand-new machine: it is the more useful sentence for
-## somebody sitting in a plane, and the first-visit line is left unseen (and unmarked) for the next
-## ground vehicle.
+## Two cues, different lifetimes: the first-visit line (once per machine, first level of a
+## session only) and the aircraft line (once per family per session, since climb/descend is
+## undiscoverable). Aircraft takes precedence on a brand-new machine; the first-visit line is
+## left unseen for the next ground vehicle.
 func _maybe_coach(family: String) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
@@ -426,17 +362,16 @@ func _show_coach(family: String) -> void:
 	_ui.add_child(cue)
 
 
-## (Re)bind the HUD + bridge to the active level/vehicle. Called at load and whenever the
+## (Re)bind HUD + bridge to the active level/vehicle. Called at load and whenever the
 ## garage swaps the vehicle (its type drives which dashboard cluster is built).
 func _bind_hud() -> void:
 	_dashboard.bind(_level)
-	_debug.set_level(_level)  # F3 overlay reads the active vehicle's per-wheel surface grip
-	_touch.set_capabilities(_capabilities())  # each control offered only where it does something
-	Bridge.bind(_level)  # telemetry source for the ~20 Hz outbound publish (web only)
+	_debug.set_level(_level)
+	_touch.set_capabilities(_capabilities())
+	Bridge.bind(_level)
 
 
-## Drop every reference to the level about to be freed. The mirror of _bind_hud, and the
-## reason it exists separately: nothing may outlive the level it points at.
+## Drop every reference to the level about to be freed: nothing may outlive it.
 func _unbind_hud() -> void:
 	_dashboard.bind(null)
 	_debug.set_level(null)
@@ -447,27 +382,21 @@ func _unbind_hud() -> void:
 func _on_vehicle_changed(type: String) -> void:
 	_bind_hud()
 	_save_session()
-	# Level.vehicle_changed carries the FAMILY, so getting into an aircraft mid-session is coached
-	# the same way arriving in one is.
-	_maybe_coach(type)
+	_maybe_coach(type)  # vehicle_changed carries the family
 
 
 # --- vehicle selector --------------------------------------------------------
 
-## The garage, replaced: body, variant and attachment on one screen with a preview, instead of a
-## family menu plus two invisible key cycles.
-##
-## IT PAUSES THE WORLD, whether it was opened from the pause menu or straight off G. Two reasons,
-## and the first is not cosmetic: the selector's preview is a REAL vehicle body in a SubViewport,
-## and a second live body while you are driving is a class of hazard this shell does not need. The
-## second is that a screen you read is a screen you are not driving through.
+## The garage: body, variant and attachment on one screen with a preview. Pauses the world
+## whether opened from the pause menu or G: the preview is a real vehicle body in a
+## SubViewport, so a second live body while driving is a hazard, and it's a screen to read
+## rather than drive through.
 func _open_vehicle_select() -> void:
 	if _level == null or _loading_path != "" or _vehicles != null:
 		return
 	_vehicles = VehicleSelect.new()
-	# Before add_child (the setup pattern every shell screen uses). The level's RAW allow-list plus
-	# its runtime rail answer, never a pre-filtered roster: the screen shows what it cannot spawn
-	# and has to be able to say why. Level.has_closed_rail() is still the one closed-loop walk.
+	# Before add_child. The level's raw allow-list plus its runtime rail answer, never a
+	# pre-filtered roster, so the screen can say why it can't spawn something.
 	_vehicles.setup(_level.info.allowed_vehicles, String(_level.info.display_name),
 			_level.has_closed_rail(), GameState.current_variant, _current_attachment())
 	_vehicles.vehicle_chosen.connect(_on_vehicle_picked)
@@ -490,9 +419,8 @@ func _close_vehicle_select() -> void:
 		_touch.set_active(_level != null)
 
 
-## What is on the back of the machine being driven, so the selector opens showing the trailer you
-## actually have rather than the catalog's first. Duck-typed like every other cross-layer hook, so
-## the shell still does not learn what a trailer or an implement is.
+## What's on the back of the machine being driven, so the selector opens showing the trailer
+## you actually have. Duck-typed like every other cross-layer hook.
 func _current_attachment() -> String:
 	if _level == null or _level.vehicle == null \
 			or not _level.vehicle.has_method("current_attachment"):
@@ -500,17 +428,16 @@ func _current_attachment() -> String:
 	return String(_level.vehicle.current_attachment())
 
 
-## Picked a body: respawn as it — but only if it is a different one. Re-picking what you are
-## already driving to change its trailer must not teleport you back to the spawn marker.
+## Picked a body: respawn as it, only if different — re-picking to change a trailer must not
+## teleport back to the spawn marker.
 func _on_vehicle_picked(variant: String) -> void:
 	_close_vehicle_select()
-	_close_pause()  # picked a vehicle: back to driving it, not back to the menu
+	_close_pause()  # back to driving, not back to the menu
 	if variant != GameState.current_variant:
 		_level.set_vehicle(variant)
 
 
-## Emitted straight after _on_vehicle_picked, and only for a machine that tows — so `_level.vehicle`
-## is already the body that was picked. Same setter E goes through.
+## Fires straight after _on_vehicle_picked, only for a machine that tows.
 func _on_attachment_picked(id: String) -> void:
 	if _level == null or _level.vehicle == null \
 			or not _level.vehicle.has_method("set_attachment"):
@@ -518,7 +445,7 @@ func _on_attachment_picked(id: String) -> void:
 	if String(_level.vehicle.current_attachment()) == id:
 		return
 	_level.vehicle.set_attachment(id)
-	_touch.set_capabilities(_capabilities())  # the new attachment may be driven where the old was not
+	_touch.set_capabilities(_capabilities())  # new attachment may be driven where the old wasn't
 
 
 func _cycle_camera() -> void:
@@ -526,8 +453,7 @@ func _cycle_camera() -> void:
 		_level.cycle_camera()
 
 
-## The touch NIGHT button. Day/night is a Level concern (the N key reaches it directly), so this
-## is a relay and nothing more — same shape as _cycle_camera.
+## Touch NIGHT button. Day/night is a Level concern (N key reaches it directly); pure relay.
 func _toggle_day_night() -> void:
 	if _level != null:
 		_level.toggle_day_night()
@@ -541,7 +467,7 @@ func _respawn() -> void:
 # --- helpers -----------------------------------------------------------------
 
 func _set_hud_visible(v: bool) -> void:
-	# set_shown, not `.visible`: the dashboard also hides itself at density OFF, and neither
+	# set_shown, not .visible: the dashboard also hides itself at density OFF, and neither
 	# reason to be hidden may overwrite the other.
 	_dashboard.set_shown(v)
 	_touch.set_active(v)
@@ -549,10 +475,8 @@ func _set_hud_visible(v: bool) -> void:
 		_notice.visible = false
 
 
-## Show a transient message from the sim (GameState.notice). Re-showing restarts the dwell rather
-## than queueing, so holding E against a wall reads as one steady message instead of a stutter, and
-## the timer is a SceneTreeTimer rather than per-frame state — there is nothing to reset on a level
-## change beyond hiding the label, which _set_hud_visible already does.
+## Show a transient message from the sim (GameState.notice). Re-showing restarts the dwell
+## instead of queueing, so holding E against a wall reads as one steady message.
 func _show_notice(text: String, dwell_s: float) -> void:
 	_notice.text = text
 	_notice.visible = true
@@ -564,9 +488,8 @@ func _show_notice(text: String, dwell_s: float) -> void:
 		_notice.visible = false
 
 
-## Take a notice down early (GameState.notice_cleared) once what it warned about is fixed. Matches
-## on the text so it can only ever hide its OWN message — a later notice that replaced it keeps the
-## rest of its dwell. The pending timer above is harmless afterwards: it re-checks the token.
+## Take a notice down early once what it warned about is fixed. Matches on text so it only
+## ever hides its own message; a later notice keeps the rest of its dwell.
 func _clear_notice(text: String) -> void:
 	if _notice.visible and _notice.text == text:
 		_notice.visible = false

@@ -1,0 +1,35 @@
+{
+  "//": "How level 5 is generated. Run it with: powershell -File tools/rebuild_level.ps1 -Level level_5",
+  "level": "level_5",
+  "scene": "res://src/levels/island/level_5/level_5.tscn",
+  "replayable": true,
+  "sources": [
+    "level_5_island_height.png",
+    "level_5_island_splat.png",
+    "level_5_rail_curve.tres"
+  ],
+  "notes": [
+    "gen_rail_level.gd owns this level end to end and OVERWRITES every byte of it, so the",
+    "chain has a defined start and nothing here is read-modify-write. Any editor work done",
+    "on level 5 is lost on the next replay -- that is the deal, not a bug.",
+    "There is deliberately no splatmap2: nothing paints channels 4..7 here (no ballast paint,",
+    "see the tool header), so this level has three sources, not four.",
+    "The order inside the tool is the mandated authoring order -- terrain, then road plus",
+    "conform, then splat -- so the cuttings and embankments the loop carves get slope-correct",
+    "paint. Do not reorder it."
+  ],
+  "steps": [
+    {
+      "kind": "script",
+      "path": "res://tools/gen_rail_level.gd",
+      "why": "Heightmap, rail loop curve, terrain conform, splatmap, LevelInfo and the level .tscn, all deterministic from GEN_SEED and the loop constants in the tool."
+    },
+    {
+      "kind": "import",
+      "why": "The bake reads the terrain textures, so the fresh PNGs must be reimported first."
+    },
+    {
+      "kind": "bake"
+    }
+  ]
+}

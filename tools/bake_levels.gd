@@ -1,13 +1,9 @@
 extends Node
-## CLI bake runner. Bakes registered levels headless — the
-## same LevelBaker the editor Bake button uses. Runs as a GAME-MODE tool scene, not
-## --script: level scenes type against BaseVehicle, whose scripts reference the
-## InputRouter autoload, and autoload identifiers only compile when autoloads are
-## registered. Run after --import:
-##   godot --headless --path . res://tools/bake_levels.tscn
-##       bakes every LevelRegistry level that has an AuthoringRoot
-##   godot --headless --path . res://tools/bake_levels.tscn -- src/levels/<level>.tscn
-##       bakes exactly the given level(s); missing AuthoringRoot is an error here
+## CLI bake runner: bakes registered levels headless with the same LevelBaker the editor
+## Bake button uses. Game-mode tool scene, not --script (level scenes type against
+## BaseVehicle, which needs the InputRouter autoload registered to compile). With no args,
+## bakes every LevelRegistry level with an AuthoringRoot; with explicit paths, a missing
+## AuthoringRoot is an error.
 
 const Baker := preload("res://kit/bake/level_baker.gd")
 const Registry := preload("res://src/shell/level_registry.gd")

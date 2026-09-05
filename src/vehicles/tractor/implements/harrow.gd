@@ -1,30 +1,18 @@
 extends ImplementBase
-## Mounted power harrow — powered SECONDARY tillage, and the only machine here whose rotor
-## turns about a horizontal axis.
-##
-## It is the counterpart to the plough on the same connection: both are tillage, but the
-## plough is dragged through the soil and this one is DRIVEN through it. That is why it
-## reports a different ISO device class (3, secondary tillage, against the plough's 2) — the
-## bus has to be able to tell "something is breaking up what I just ploughed" from "something
-## is ploughing".
-##
-## The tine rotor works IN the soil, so unlike the mower and the spreader this machine really
-## does resist being pulled: draft_relevant() is true, alongside the plough.
-##
-## The telescoping driveshaft from the tractor's PTO stub to the input gearbox is NOT modelled
-## (the one mechanical part left out on every implement); the gearbox and the input shaft
-## running forward out of it are.
+## Mounted power harrow — powered secondary tillage, the only implement whose rotor turns about
+## a horizontal axis. Counterpart to the plough on the same connection: the plough is dragged
+## through soil, this one is driven through it, hence a different ISO device class (3 vs. the
+## plough's 2). The tine rotor works in the soil, so draft_relevant() is true, like the plough.
+## The telescoping driveshaft (PTO stub to input gearbox) is not modelled, like every implement;
+## the gearbox and input shaft are.
 
-## Rotor turns per PTO shaft turn — cosmetic legibility gearing, see spin_from_pto. Power
-## harrows really do gear DOWN hard from the PTO, so this one is honest about its direction as
-## well as being readable.
+## Rotor turns per PTO shaft turn, cosmetic legibility gearing (see spin_from_pto). Power harrows
+## gear down hard from the PTO, so this stays honest about direction as well as readable.
 const ROTOR_RATIO := 0.35
 
-## Working depth (m below the ground line at full lower) — MEASURED off harrow.tscn, where the
-## tines reach y = -0.23 against a ground line of y = -0.21. Shallower than the plough's shares
-## by design (a harrow works the ploughed layer, it does not cut it), which is why the depth is
-## the implement's own number: shared, the harrow would still be reporting draft with its tines
-## 35 mm in the air.
+## Working depth (m below ground at full lower), measured off harrow.tscn (tines at y=-0.23,
+## ground at y=-0.21). Shallower than the plough by design; own number, not shared with it, since
+## a shared depth would report draft with the tines 35 mm in the air.
 const TINE_DEPTH_M := 0.02
 
 @onready var _rotor: Node3D = $Rotor
@@ -47,6 +35,6 @@ func tool_depth() -> float:
 
 
 func _process(delta: float) -> void:
-	# TRANSVERSE axis: the tine shaft runs across the machine, so this rotor turns about local
-	# X — not the vertical axis the mower's and spreader's discs use.
+	# Transverse axis (local X): the tine shaft runs across the machine, unlike the mower/spreader's
+	# vertical discs.
 	spin_from_pto(_rotor, delta, ROTOR_RATIO, Vector3.RIGHT)

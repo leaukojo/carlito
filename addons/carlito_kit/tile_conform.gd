@@ -1,50 +1,35 @@
 @tool
 extends RefCounted
-## "Conform terrain under tiles" (palette toolbar button): flattens every overlapping
-## HeightmapTerrain to the painted GridMap cells' BASE plane — the tiles' resting
-## height — so a tile city sits on terrain without hand-stroking 12 m flatten pads.
-## The RoadPath Conform discipline throughout: destructive-by-button, the pure pixel
-## work is RoadBuilder.conform_rects (tested), one undoable _commit_generated action
-## per terrain. Tile targets FLOOR-quantize to the 8-bit grid with an adjustable lift
-## (terrain meets the highest step at or below base + lift — never above, so a tall
-## island's coarse quantization can't poke terrain through a thin road deck); prefab
-## targets keep the round-quantize closest meet. Editor-only (addons/), so editor API
-## types are fine here.
+## "Conform terrain under tiles" (palette toolbar button): flattens every
+## overlapping HeightmapTerrain to the painted GridMap cells' base plane.
+## Destructive-by-button, one undoable action per terrain. Tile targets
+## floor-quantize (terrain never rises past base + lift); prefab targets
+## round-quantize to the closest meet.
+
+const Groups := preload("res://src/levels/base/carlito_groups.gd")
 
 const Recipe := preload("res://kit/helpers/kit_recipe.gd")
 const BrushOps := preload("res://kit/helpers/brush_ops.gd")
 const SplatPaint := preload("res://kit/helpers/splat_paint.gd")
 const RECIPE_DIR := "res://kit/import"
 
-## Flatten fade-out (m) beyond the tile footprint union — the RoadPath default.
-const FALLOFF := 4.0
+const FALLOFF := 4.0  # flatten fade-out (m) beyond the tile footprint union
 
-## Default tile lift (m): how far above the tile base plane the terrain may rise.
-## Floor-quantized, so terrain lands on the highest 8-bit step at or below
-## base + lift. Road decks are 0.24 m tall — keep the lift under that.
+## Road decks are 0.24 m tall — keep the tile lift under that.
 const DEFAULT_TILE_LIFT := 0.2
 
-## Default flat apron (m) grown around each prefab building's footprint before the
-## falloff drop starts — keeps the building off a "pedestal" edge.
-const DEFAULT_PREFAB_APRON := 2.0
+const DEFAULT_PREFAB_APRON := 2.0  # flat apron (m) grown before the falloff drop
 
-## Prefab families whose placed pieces flatten a terrain pad under themselves on Conform.
-## Add/remove family names (from kit/import/*.json) to change behavior.
+## Prefab families that flatten a terrain pad under themselves on Conform.
 const CONFORM_PREFAB_FAMILIES: Array[String] = [
 	"commercial-buildings", "industrial-buildings", "suburban-buildings",
 	"racing-grandstands", "racing-pits", "racing-tents",
 ]
-## Tile GridMaps excluded from Conform, by meshlib basename (all conform by default).
 const CONFORM_EXCLUDE_MESHLIBS: Array[String] = []
 
 
-## Per painted cell (sorted — deterministic first-wins rect order downstream):
-## world-space XZ footprint rect + base-plane world height, as
-## {rects: Array[Rect2], base_ys: PackedFloat32Array}. The footprint is the item
-## mesh's AABB in the painted orientation — multi-cell tiles like the 2x2 road-curve
-## / 3x3 roundabout overhang their anchor cell, so occupancy alone would leave their
-## overhung cells unconformed — cached per (item, orientation). No editor APIs
-## (tested in tests/test_road.gd against the real roads meshlib).
+## Per painted cell: world-space XZ footprint rect (item mesh AABB in the
+## painted orientation, cached per item/orientation) + base-plane height.
 static func footprint_rects(grid: GridMap) -> Dictionary:
 	var rects: Array[Rect2] = []
 	var base_ys := PackedFloat32Array()
@@ -64,8 +49,6 @@ static func footprint_rects(grid: GridMap) -> Dictionary:
 			if mesh == null:
 				footprints[key] = Rect2()
 			else:
-				# full mesh transform (its origin carries palette alignment offsets),
-				# then the painted orientation, then the grid's world basis
 				var mt := lib.get_item_mesh_transform(item)
 				var cell_basis := grid.get_basis_with_orthogonal_index(orient)
 				var aabb := mesh.get_aabb()
@@ -84,17 +67,14 @@ static func footprint_rects(grid: GridMap) -> Dictionary:
 	return {"rects": rects, "base_ys": base_ys}
 
 
-## Conform every terrain under ALL painted tile GridMaps (any meshlib not excluded) plus
-## every placed prefab building whose family is in CONFORM_PREFAB_FAMILIES, in one pass.
-## Entry point for the palette dock's Conform button. tile_lift raises the tile targets
-## (floor-quantized — see the class doc); prefab_apron grows each building footprint so
-## flat ground extends past the walls before the falloff drop.
+## Entry point for the palette dock's Conform button: every terrain under
+## every painted tile GridMap plus every listed prefab building.
 static func conform_all(scene_root: Node, tile_lift := DEFAULT_TILE_LIFT,
 		prefab_apron := DEFAULT_PREFAB_APRON) -> void:
 	if scene_root == null:
 		push_warning("Kit: no scene open to conform.")
 		return
-	var authoring := _find_authoring(scene_root)
+	var authoring := Groups.find_authoring(scene_root)
 	if authoring == null:
 		push_warning("Kit: no AuthoringRoot in the scene to conform under.")
 		return
@@ -103,7 +83,6 @@ static func conform_all(scene_root: Node, tile_lift := DEFAULT_TILE_LIFT,
 	var base_ys := PackedFloat32Array()
 	var is_tile := PackedByteArray()
 
-	# Every painted tile GridMap (skip excluded meshlibs); reuse footprint_rects verbatim.
 	for node in authoring.find_children("*", "GridMap", true, false):
 		var grid := node as GridMap
 		if _meshlib_excluded(grid):
@@ -116,12 +95,9 @@ static func conform_all(scene_root: Node, tile_lift := DEFAULT_TILE_LIFT,
 			base_ys.append(g_base[i])
 			is_tile.append(1)
 
-	# Every placed KitPiece (duck-typed) whose family is listed: footprint = merged
-	# world-space AABB of its mesh descendants + the flat apron, target = the piece's
-	# world origin Y.
 	var recipe_cache := {}
 	for node in authoring.find_children("*", "Node3D", true, false):
-		if not node.has_method("is_carlito_kit_piece"):
+		if not node.is_in_group(Groups.KIT_PIECE):
 			continue
 		if not CONFORM_PREFAB_FAMILIES.has(piece_family(node, recipe_cache)):
 			continue
@@ -138,12 +114,10 @@ static func conform_all(scene_root: Node, tile_lift := DEFAULT_TILE_LIFT,
 	_conform_terrains(scene_root, rects, base_ys, is_tile, tile_lift)
 
 
-## Flatten every overlapping terrain to the given world-space XZ footprint rects + target
-## base-plane world heights (paired arrays; is_tile flags tile entries). Tile targets get
-## tile_lift added, then FLOOR-quantize to the terrain's 8-bit grid here (a per-rect
-## constant, so pre-quantizing is exact; conform_rects' round downstream is then an
-## identity) — terrain never rises past base + lift. Prefab targets stay unquantized and
-## take conform_rects' round (closest meet). One undoable _commit_generated per terrain.
+## Flatten every overlapping terrain to the given footprint rects + target
+## heights. Tile targets floor-quantize to the terrain's 8-bit grid here so
+## terrain never rises past base + lift; prefab targets take conform_rects'
+## round (closest meet).
 static func _conform_terrains(scene_root: Node, rects: Array[Rect2],
 		base_ys: PackedFloat32Array, is_tile: PackedByteArray, tile_lift: float) -> void:
 	var terrains: Array[Node] = []
@@ -195,11 +169,8 @@ static func _conform_terrains(scene_root: Node, rects: Array[Rect2],
 		print("Kit: conformed %d terrain(s) under tiles & buildings." % touched)
 
 
-## World-space XZ triangles (3 verts each) of every painted cell's ACTUAL item mesh —
-## the paint footprint. Unlike footprint_rects' AABB rects (conform wants the full base
-## pad), paint must not spill past the visible mesh: a 2x2 road-curve covers only part of
-## its footprint, and only the curve itself may be painted. Faces cached per item
-## (get_faces is not cheap); cells sorted (deterministic).
+## World-space XZ triangles of every painted cell's actual item mesh — unlike
+## footprint_rects' AABB, paint must not spill past the visible mesh.
 static func footprint_tris(grid: GridMap) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	var lib := grid.mesh_library
@@ -235,24 +206,17 @@ static func footprint_tris(grid: GridMap) -> PackedVector2Array:
 	return out
 
 
-## Default channel for "Paint splat under tiles" (6 = Asphalt in the stock channel names).
-## Tile roads/tracks sit within RayWheel.SURFACE_GRIP_REACH of the conformed terrain, so
-## the wheels read the ground splat through the deck — unpainted, a tile city street grips
-## like the grass under it.
+## 6 = Asphalt. Wheels read ground splat through the deck within grip reach,
+## so an unpainted tile street grips like the grass under it.
 const DEFAULT_PAINT_CHANNEL := 6
 
 
-## Paint every terrain's splat under the ACTUAL mesh of every painted tile
-## (footprint_tris — a curve paints only the curve; prefab buildings are left alone —
-## nothing drives through a wall, and grass up to it looks right). SplatPaint erodes the
-## coverage by one splat pixel, so the paint stays hidden under the tile. Entry point for
-## the palette dock's Paint-splat button. Destructive-by-button, pure pixel work in
-## SplatPaint (tested), one undoable _commit_generated per terrain.
+## Entry point for the palette dock's Paint-splat button. Destructive-by-button.
 static func paint_all(scene_root: Node, channel := DEFAULT_PAINT_CHANNEL) -> void:
 	if scene_root == null:
 		push_warning("Kit: no scene open to paint under.")
 		return
-	var authoring := _find_authoring(scene_root)
+	var authoring := Groups.find_authoring(scene_root)
 	if authoring == null:
 		push_warning("Kit: no AuthoringRoot in the scene to paint under.")
 		return
@@ -283,8 +247,6 @@ static func paint_all(scene_root: Node, channel := DEFAULT_PAINT_CHANNEL) -> voi
 			continue
 		var img2: Image = SplatPaint.decode(t.get("splatmap2"))
 		if img2 == null and channel >= 4:
-			# The brush's convention: the second weight map appears on the first
-			# stroke of a channel >= 4.
 			img2 = Image.create(img.get_width(), img.get_height(), false,
 					Image.FORMAT_RGBA8)
 			img2.fill(Color(0, 0, 0, 0))
@@ -314,14 +276,12 @@ static func paint_all(scene_root: Node, channel := DEFAULT_PAINT_CHANNEL) -> voi
 		print("Kit: painted splat channel %d under tiles on %d terrain(s)." % [channel, touched])
 
 
-## Whether a GridMap's meshlib basename is in CONFORM_EXCLUDE_MESHLIBS (or it has no lib).
 static func _meshlib_excluded(grid: GridMap) -> bool:
 	if grid.mesh_library == null:
 		return true
 	return CONFORM_EXCLUDE_MESHLIBS.has(grid.mesh_library.resource_path.get_file().get_basename())
 
 
-## Merged world-space XZ AABB of a placed piece's MeshInstance3D descendants, as a Rect2.
 static func _piece_footprint(piece: Node3D) -> Rect2:
 	var rect := Rect2()
 	var has := false
@@ -342,9 +302,8 @@ static func _piece_footprint(piece: Node3D) -> Rect2:
 	return rect if has else Rect2()
 
 
-## Recipe family of a placed prefab, from its scene_file_path
-## (res://kit/prefabs/<kit>/<name>.tscn) classified through the kit recipe; "" if unknown.
-## recipe_cache maps kit -> families Array so each recipe JSON parses once per conform pass.
+## Recipe family of a placed prefab; "" if unknown. recipe_cache memoizes the
+## parsed JSON per kit for the conform pass.
 static func piece_family(piece: Node, recipe_cache: Dictionary) -> String:
 	var path := piece.scene_file_path
 	if path.is_empty():
@@ -367,15 +326,3 @@ static func _load_recipe_families(kit: String) -> Array:
 	if parsed is Dictionary:
 		return (parsed as Dictionary).get("families", [])
 	return []
-
-
-static func _find_authoring(node: Node) -> Node:
-	if node == null:
-		return null
-	if node.has_method("is_carlito_authoring"):
-		return node
-	for child in node.get_children():
-		var found := _find_authoring(child)
-		if found != null:
-			return found
-	return null

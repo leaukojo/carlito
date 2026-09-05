@@ -1,25 +1,9 @@
 class_name HitchLinkage
 extends RefCounted
-## Three-point hitch kinematics — pure math, no nodes, no tree (rule 8: testable logic).
-##
-## A real three-point hitch is a four-bar linkage seen from the side. Only ONE thing is
-## free: how far the rockshaft has swung the lower links. Everything else follows from the
-## parts being rigid:
-##   - the lower links swing about their pivots, carrying the ball ends;
-##   - the implement's A-frame top pin must stay `top_len` from the mast pivot AND
-##     |mast_offset| from the ball ends, so the implement's PITCH is *solved*, not authored
-##     — which is why implements visibly tip back as they lift;
-##   - the lift rods are rigid too, so the rockshaft arm angle is solved the same way.
-## Both solves are the same circle-circle intersection.
-##
-## All geometry is in the tractor's side plane as Vector2(z, y) in BODY space, measured
-## against the Kenney tractor body (rear body face z ~ +0.99 at the centreline, ground at
-## y ~ 0, rear tyre inner faces at |x| = 0.253). Angles are PLANAR — atan2(y, z), so 0
-## points straight back. A Node3D rotating about local X needs the NEGATED planar angle
-## (a positive rotation.x tips +Z toward -Y); ThreePointHitch does that conversion.
-##
-## The defaults below ARE the shipped tractor geometry, so tests exercise the real numbers
-## (test_hitch_linkage asserts the whole sweep stays reachable).
+## Four-bar linkage kinematics (pure math, testable). Geometry is Vector2(z, y) in the tractor's
+## side plane; angles are planar (atan2(y, z), 0 = straight back). ThreePointHitch negates for
+## `rotation.x`. Circle-circle intersects solve the top pin and lift-rod angles. Defaults are
+## the shipped tractor geometry.
 
 # --- lower links (the rockshaft-driven draft arms) ---
 var lower_pivot := Vector2(0.92, 0.42)   ## forward pivot, under the rear axle housing
@@ -29,17 +13,14 @@ var lower_angle_hi_deg := 25.8           ## fully raised (transport): ball at y 
 
 # --- top link ---
 var top_pivot := Vector2(1.00, 0.78)     ## mast pin, 0.36 above the lower pivots
-var top_len := 0.661                     ## = |(ball_lowered + mast_offset) - top_pivot|,
-                                         ## i.e. chosen so pitch reads 0 at fully lowered
+var top_len := 0.661                     ## |(ball_lowered + mast_offset) - top_pivot|, so pitch = 0 lowered
 
-## The standard A-frame the hitch geometry was tuned around. ImplementBase returns this as its
-## default mast_offset, so the frame lives in ONE place — a second copy would let the detached
-## solve and an implement's own frame drift apart silently.
+## Standard A-frame the hitch geometry was tuned around. ImplementBase returns this as its default
+## mast_offset, the one copy, so the detached solve and an implement's own frame cannot drift.
 const DEFAULT_MAST_OFFSET := Vector2(-0.06, 0.533)
 
-## Attached implement's A-frame: top pin relative to the lower pins, in the implement's own
-## frame. Set from ImplementBase.mast_offset() on attach; the default is the standard frame
-## (also used while DETACHED so the solve stays well-conditioned).
+## Attached implement's A-frame (top pin relative to lower pins, implement's own frame). Set from
+## ImplementBase.mast_offset() on attach; default is used while detached too.
 var mast_offset := DEFAULT_MAST_OFFSET
 
 # --- rockshaft + lift rods ---
@@ -63,14 +44,13 @@ func solve(pos01: float) -> Dictionary:
 	var along := Vector2(cos(lower_angle), sin(lower_angle))
 	var ball := lower_pivot + along * lower_len
 
-	# Top link: the pin is on the implement's A-frame circle around the ball AND on the top
-	# link's circle around the mast pin. Prefer the upper root — the lower one folds the
-	# implement under the tractor.
+	# Top pin: on both the A-frame's circle around the ball and the top link's circle around the
+	# mast pin. Prefer the upper root — the lower one folds the implement under the tractor.
 	var top := circle_intersect(ball, mast_offset.length(), top_pivot, top_len, Vector2(0.0, 1.0))
 	var top_pin: Vector2 = top["point"]
 
-	# Lift rods: same solve one link down. Prefer the rearward root (the forward one points
-	# the rockshaft arm into the transmission).
+	# Lift rods: same solve one link down. Prefer the rearward root (forward points the rockshaft
+	# arm into the transmission).
 	var rod_attach := lower_pivot + along * (lower_len * rod_attach_frac)
 	var rock := circle_intersect(rock_pivot, rock_arm_len, rod_attach, lift_rod_len, Vector2(1.0, 0.0))
 	var rod_end: Vector2 = rock["point"]

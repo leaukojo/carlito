@@ -1,22 +1,13 @@
 class_name UiTheme
 extends RefCounted
-## The project's one set of UI design tokens, and the Theme built from them.
+## The project's one set of UI design tokens, and the Theme built from them. `build(scale)`
+## returns a Theme UiScale assigns to the root window; screens ask for a role
+## (`theme_type_variation = &"Title"`), never a pixel size. Only semantic overrides survive
+## in screens (a lamp's lit colour, a bar's warn red).
 ##
-## Every screen used to carry its own `add_theme_font_size_override` / hand-built StyleBoxFlat
-## calls, so "the font is too small" was a dozen separate edits and no two screens agreed on a
-## colour. Those live here now: `build(scale)` returns a Theme that `UiScale` assigns to the
-## root window, from which every Control inherits it. Screens ask for a ROLE
-## (`theme_type_variation = &"Title"`), never a pixel size.
-##
-## Overrides that survive in the screens are the SEMANTIC ones — a lamp's lit colour, a bar's
-## warn red. Those are signal data wearing a colour, not styling, and they do not belong here.
-##
-## Scaling: this is a Theme built at a given scale rather than a `.tres` asset, because the UI
-## scale changes with the window (see ui_scale.gd) and a saved Theme would need every size
-## rewritten on every resize anyway. Nothing here touches viewport or render settings —
-## measured, `content_scale_factor` and `CONTENT_SCALE_MODE_CANVAS_ITEMS` BOTH resize the 3D
-## render target (factor 2.0 turned a 1152x648 window into a 2304x1296 render), which the web
-## perf budget cannot pay. See docs/plans/ui_improvements.md.
+## Built fresh per scale (not a `.tres` asset) since UI scale changes with the window. Touches
+## no viewport/render setting — the engine's content-scale options resize the 3D render
+## target, which the web perf budget cannot pay.
 
 const FONT := preload("res://src/ui/theme/font/Barlow-Regular.ttf")
 
@@ -54,9 +45,8 @@ const GAP := 14          ## default separation inside a container
 const MARGIN := 32       ## full-screen menu edge margin
 const TOUCH_MIN := 46    ## minimum touch target edge; below this a finger misses
 
-## Theme type carrying the scale itself, so any Control can recover it from the theme it
-## already inherits (`UiTheme.scale_of(self)`) instead of reaching for a global. Rebuilding
-## the theme fires NOTIFICATION_THEME_CHANGED, which is how persistent screens learn to relayout.
+## Theme type carrying the scale itself, so a Control can recover it via `UiTheme.scale_of(self)`
+## instead of a global. Rebuilding fires NOTIFICATION_THEME_CHANGED, how screens learn to relayout.
 const SCALE_TYPE := &"Carlito"
 const SCALE_CONST := &"scale_pct"
 
@@ -102,9 +92,7 @@ static func _build_label(t: Theme, scale: float) -> void:
 		["Title", FS_TITLE, TEXT],
 		["Dim", FS_LABEL, TEXT_DIM],
 		["Small", FS_SMALL, TEXT_DIM],
-		# A row that does not apply right now — the CONTROLS sheet's greyed-out controls. Same
-		# TEXT_MUTED the theme already uses for a disabled Button, so "unavailable" reads the same
-		# whether it is a button or a line of text.
+		# Same TEXT_MUTED as a disabled Button, so "unavailable" reads the same either way.
 		["Muted", FS_BODY, TEXT_MUTED],
 		["MutedSmall", FS_LABEL, TEXT_MUTED],
 	]:
@@ -125,16 +113,15 @@ static func _build_button(t: Theme, scale: float) -> void:
 	t.set_stylebox("hover", "Button", _box(SURFACE_HI, scale))
 	t.set_stylebox("pressed", "Button", _box(SURFACE_LO, scale))
 	t.set_stylebox("disabled", "Button", _box(SURFACE_LO, scale))
-	# The focus ring is the keyboard/gamepad affordance the old menus had no visible sign of.
+	# The focus ring is the keyboard/gamepad affordance: without it nothing shows where focus is.
 	var focus := _box(SURFACE_HI, scale)
 	focus.border_color = ACCENT
 	focus.set_border_width_all(maxi(2, int(roundf(2.0 * scale))))
 	t.set_stylebox("focus", "Button", focus)
 
-	# `Choice`: a toggle button standing in a RADIO GROUP (the vehicle selector's family column).
-	# The base `pressed` box is a press — darker, recessed — and a selection that reads as
-	# recessed reads as unavailable. Selected gets the accent border the picture cards already
-	# mark their selection with, so the screen speaks one selection language.
+	# `Choice`: a toggle standing in a radio group (vehicle selector's family column). Selected
+	# gets the accent border, not the darker recessed `pressed` box, so selection never reads as
+	# a press.
 	t.set_type_variation(&"Choice", "Button")
 	var chosen := _box(SURFACE_LO, scale)
 	chosen.border_color = ACCENT
@@ -144,10 +131,9 @@ static func _build_button(t: Theme, scale: float) -> void:
 	t.set_color("font_pressed_color", &"Choice", ACCENT)
 	t.set_color("font_hover_pressed_color", &"Choice", ACCENT)
 
-	# `Primary`: the one button on a screen that IS the screen's purpose (the selector's DRIVE).
-	# Accent-filled with dark text rather than another dark box among dark boxes — a player was
-	# picking a vehicle and never finding the way out of the menu. Disabled keeps the plain recessed
-	# box, so a refused DRIVE cannot look like the thing to press.
+	# `Primary`: the button that IS the screen's purpose (the selector's DRIVE). Accent-filled
+	# with dark text so it stands out among dark boxes. Disabled keeps the plain recessed box, so
+	# a refused DRIVE cannot look like the thing to press.
 	t.set_type_variation(&"Primary", "Button")
 	t.set_font_size("font_size", &"Primary", _fs(FS_TITLE, scale))
 	t.set_stylebox("normal", &"Primary", _box(ACCENT, scale))

@@ -467,6 +467,13 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.3, 0, -0.72)
 mesh = SubResource("NavLensMesh")
 surface_material_override/0 = SubResource("NavGreenMat")
 
+; Wing-tip strobe, starboard. White, aft of the green nav light so the pair reads as two
+; lamps rather than one, and proud of the tip cap face (shared face planes z-fight).
+[node name="StrobeR" type="MeshInstance3D" parent="WingR"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.3, 0, 0.74)
+mesh = SubResource("NavLensMesh")
+surface_material_override/0 = SubResource("NavWhiteMat")
+
 [node name="WingL" type="Node3D" parent="." unique_id=1854654287]
 transform = Transform3D(0.99905, 0.04362, 0, -0.04362, 0.99905, 0, 0, 0, 1, 0, 1.36, -0.2)
 
@@ -505,6 +512,12 @@ surface_material_override/0 = SubResource("AccentMat")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.3, 0, -0.72)
 mesh = SubResource("NavLensMesh")
 surface_material_override/0 = SubResource("NavRedMat")
+
+; Wing-tip strobe, port. Same lamp as StrobeR — they flash together off one `strobe` bit.
+[node name="StrobeL" type="MeshInstance3D" parent="WingL"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.3, 0, 0.74)
+mesh = SubResource("NavLensMesh")
+surface_material_override/0 = SubResource("NavWhiteMat")
 
 [node name="LandingLens" type="MeshInstance3D" parent="WingL" unique_id=1844056109]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.6, 0, -0.755)

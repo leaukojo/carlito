@@ -1,34 +1,17 @@
 @tool
 class_name ScatterBase
 extends Node3D
-## Shared core for the two scatter front-ends: the seeded
-## footprint region (ScatterRegion) and the hand-painted canvas (ScatterCanvas). Both store
-## their result the same way — one compact stride-5 packed array per item, region-local — so
-## the baker and dev-play consume STORED transforms only and can never diverge from the editor
-## (the stored-transform non-negotiable). This base owns everything that is identical between the two:
-##
-##   - the item table + stored transforms + stored ground hash (@export state),
-##   - the unowned MultiMesh preview / dev-collision subtree (never serialized),
-##   - the pure item-mesh / shape-harvest / stored-decode / ground-hash statics the baker
-##     duck-calls (build_item_mesh, shape_entries, stored_transform, stored_count, ground_hash),
-##   - the stale-scatter guard (heightmap hash + editor configuration warning),
-##   - the jitter / spacing / slope knobs both front-ends apply per instance,
-##   - ground snapping (physics ray -> terrain sample -> drop).
-##
-## Subclasses add only HOW the stored transforms are produced: ScatterRegion regenerates them
-## from a footprint; ScatterCanvas has them painted in. The pure logic here is static and
-## unit-tested in tests/test_scatter.gd, and every method runs editor-free so the baker (a
-## game-mode tool, never the editor) can call it on an untreed level.
-##
-## Bake-hash note: build_item_mesh / shape_entries (run BY the baker at bake time) are
-## bake-adjacent CODE, the same category as level_baker.gd. No resource dependency edge can
-## reach this file — Godot reports resource deps, not script->script edges, so a base script
-## is invisible to the dependency walk regardless of how it is extended — so it is named
-## explicitly in LevelBaker.BAKE_CODE_INPUTS and hashed there. Editing it re-stales every
-## level on its own; BAKER_VERSION remains the knob for semantic changes that must re-stale
-## even when no file here moved.
+## Shared core for the two scatter front-ends: the seeded footprint region (ScatterRegion)
+## and the hand-painted canvas (ScatterCanvas). Both store one stride-5 packed array per
+## item, region-local, so the baker and dev-play consume stored transforms only and can
+## never diverge from the editor. Owns the item table, stored transforms/ground hash, the
+## unowned preview/dev-collision subtree, the stale-scatter guard, jitter/spacing/slope
+## knobs, and ground snapping; subclasses add only how the transforms are produced.
+## Bake-adjacent code (LevelBaker.BAKE_CODE_INPUTS): invisible to the dependency walk as a
+## base script, so it's hashed explicitly; bump BAKER_VERSION on semantic changes.
 
 ## Stored-transform layout: 5 floats per instance (x, y, z, yaw, uniform scale), region-local.
+const Groups := preload("res://src/levels/base/carlito_groups.gd")
 const STRIDE := 5
 const RAY_UP := 1000.0
 
@@ -50,31 +33,23 @@ const RAY_UP := 1000.0
 @export_range(0.0, 89.0) var max_slope_deg := 30.0
 @export_group("")
 
-## The ONLY thing dev-play and the baker read. Index-matched to `items`; each entry is STRIDE
-## floats per instance, region-local. Serialized (that is the point) but hidden from the
-## inspector — regenerated (region) or painted (canvas), never hand-edited.
+## The only thing dev-play and the baker read; STRIDE floats/instance, region-local. Hidden
+## from the inspector — regenerated or painted, never hand-edited.
 @export_storage var stored_transforms: Array[PackedFloat32Array] = []:
 	set(value):
 		stored_transforms = value
 		_rebuild_preview_if_ready()
-		# _live_editing gates the per-assignment stale recompute: a brush stroke reassigns this
-		# every dab, and _refresh_stale hashes every terrain image (O(heightmap)) — pure waste
-		# mid-stroke since the terrain isn't changing. The brush wraps the stroke in
-		# begin/end_live_edit() and sets the correct stored_ground_hash once at the end.
 		if Engine.is_editor_hint() and not _live_editing:
 			_refresh_stale()
-## ground_hash() of the level at the moment the transforms were snapped — the stale guard.
+## ground_hash() when the transforms were snapped — the stale guard.
 @export_storage var stored_ground_hash := "":
 	set(value):
 		stored_ground_hash = value
 		if Engine.is_editor_hint():
 			_refresh_stale()
 
-## The stale-guard recovery path when terrain changed UNDER existing instances (a road
-## Conform, a sculpt): re-snap every stored instance's Y to the current ground and
-## refresh the hash — without re-rolling (region) or re-painting (canvas) the layout.
-## XZ, yaw and scale are kept; only instances whose ground is gone are dropped (the
-## no-Y=0 rule). Editor-only, one undoable action.
+## Stale-guard recovery: re-snap every Y to current ground without re-rolling/re-painting.
+## Instances with no ground under them are dropped. Editor-only, undoable.
 @warning_ignore("unused_private_class_variable")
 @export_tool_button("Re-snap to ground") var _resnap_action := _resnap_to_ground
 
@@ -83,15 +58,11 @@ var _stale_accum := 0.0
 var _live_editing := false
 
 
-## Duck-typing marker: the baker/gizmo detect scatter nodes via has_method() so CLI runs
-## never depend on class_name cache state (same contract as is_carlito_kit_piece).
-func is_carlito_scatter() -> bool:
-	return true
+func _init() -> void:
+	add_to_group(Groups.SCATTER)
 
 
-## Bracket a live brush stroke: while live-editing, the per-assignment stale recompute (a full
-## terrain-image hash) is skipped, so the brush can update the canvas repeatedly for free.
-## end_live_edit un-suppresses and does the single stale recompute for the whole stroke.
+## Bracket a live brush stroke: skips the per-assignment stale recompute until end_live_edit.
 func begin_live_edit() -> void:
 	_live_editing = true
 
@@ -113,9 +84,6 @@ func _ready() -> void:
 
 # --------------------------------------------------------------- stored decode
 
-## Decode one stored stride-5 instance into a region-local Transform3D (yaw around Y, uniform
-## scale). The single source of truth for the stored layout — preview, dev collision, and the
-## baker all go through it.
 static func stored_transform(flat: PackedFloat32Array, index: int) -> Transform3D:
 	var o := index * STRIDE
 	var xf_basis := Basis(Vector3.UP, flat[o + 3]).scaled(Vector3.ONE * flat[o + 4])
@@ -127,9 +95,6 @@ static func stored_count(flat: PackedFloat32Array) -> int:
 	return flat.size() / STRIDE
 
 
-## Min-spacing test against a spatial hash keyed by `spacing`-sized XZ cells: a point closer
-## than `spacing` to an accepted one must sit in a 3x3 neighbouring cell, so the check is O(1).
-## Shared by ScatterRegion's per-region sampler and ScatterCanvas's cross-dab brush grid.
 static func spacing_ok(p: Vector2, spacing: float, grid: Dictionary) -> bool:
 	var cell := Vector2i(floori(p.x / spacing), floori(p.y / spacing))
 	for dz in range(-1, 2):
@@ -145,10 +110,8 @@ static func spacing_ok(p: Vector2, spacing: float, grid: Dictionary) -> bool:
 
 # ------------------------------------------------------------- ground hashing
 
-## Hash of every terrain heightmap under `root` (walk order, so deterministic per scene):
-## image dims + bytes, plus the node's name/position/size/height amplitude — anything that
-## moves the ground an instance was snapped to. Off-tree safe (no global transforms), so the
-## baker can call it on an instantiated, untreed level. Empty string when there is no terrain.
+## Hash of every terrain heightmap under `root`: image bytes plus name/position/size/
+## height amplitude. Off-tree safe, so the baker can call it on an untreed level.
 static func ground_hash(root: Node) -> String:
 	var terrains: Array[Node] = []
 	find_terrains_under(root, terrains)
@@ -173,8 +136,6 @@ static func ground_hash(root: Node) -> String:
 	return ctx.finish().hex_encode()
 
 
-## HeightmapTerrain nodes by duck type (height_at + contains_xz), never class_name (the
-## CLI-robustness rule the whole kit follows).
 static func find_terrains_under(node: Node, out: Array[Node]) -> void:
 	if node is Node3D and node.has_method("height_at") and node.has_method("contains_xz"):
 		out.append(node)
@@ -182,11 +143,8 @@ static func find_terrains_under(node: Node, out: Array[Node]) -> void:
 		find_terrains_under(child, out)
 
 
-## Ground snap, fallback-chain style: physics ray straight down (editor space may be
-## unpopulated) -> HeightmapTerrain bilinear sample (normal by finite difference) -> empty
-## (the point is dropped; scatter has no Y=0 fallback on purpose — a floating instance is
-## worse than a missing one). Shared by ScatterRegion's Regenerate and ScatterCanvas's brush.
-## Returns {position, normal} or {}.
+## Ground snap fallback chain: physics ray straight down -> HeightmapTerrain bilinear
+## sample -> empty (no Y=0 fallback). Returns {position, normal} or {}.
 static func snap_ground(space: PhysicsDirectSpaceState3D, terrains: Array[Node],
 		world: Vector3) -> Dictionary:
 	if space != null:
@@ -210,11 +168,9 @@ static func snap_ground(space: PhysicsDirectSpaceState3D, terrains: Array[Node],
 
 # ----------------------------------------------------------- item mesh building
 
-## Merge a prefab's render meshes (prefab-local space) into one ArrayMesh, one surface per
-## distinct material — the mesh a MultiMesh stores ONCE per item. Used by the editor/dev
-## preview and duck-called by the baker, so both render the identical mesh. Surfaces keep the
-## prefab's original materials; the baker swaps in its deduplicated copies so the baked scene
-## never references kit resources.
+## Merge a prefab's render meshes into one ArrayMesh, one surface per material. Duck-
+## called by the baker, which swaps in deduplicated materials so the baked scene never
+## references kit resources.
 static func build_item_mesh(prefab_root: Node) -> ArrayMesh:
 	var groups := {}   # material_key -> SurfaceAccumulator
 	var mats := {}     # material_key -> Material
@@ -245,9 +201,6 @@ static func _accumulate_item_meshes(node: Node, xform: Transform3D, groups: Dict
 		_accumulate_item_meshes(child, cxform, groups, mats, order)
 
 
-## Every CollisionShape3D under a prefab as [Shape3D, prefab-local Transform3D] pairs — the
-## shared harvest for dev collision here and the baked chunk bodies (duck-called by LevelBaker
-## so collision is identical either way).
 static func shape_entries(prefab_root: Node) -> Array:
 	var out: Array = []
 	_gather_shapes(prefab_root, Transform3D.IDENTITY, out)
@@ -271,11 +224,8 @@ func _rebuild_preview_if_ready() -> void:
 		_rebuild_preview()
 
 
-## Rebuild the unowned preview subtree from the STORED transforms (never serialized — the
-## HeightmapTerrain Chunks discipline): one MultiMeshInstance3D per item; in dev-play (not the
-## editor) also one StaticBody3D per collision-on item holding the prefab's shapes per instance,
-## so unbaked levels are drivable. The editor gets visuals only, which keeps the region's
-## Regenerate raycasts (and the canvas brush's) from hitting our own instances.
+## Rebuild the unowned preview: one MultiMeshInstance3D per item; dev-play also gets a
+## StaticBody3D per collision-on item. Editor gets visuals only, so its raycasts miss us.
 func _rebuild_preview() -> void:
 	var old := get_node_or_null(^"Preview")
 	if old != null:
@@ -303,11 +253,9 @@ func _rebuild_preview() -> void:
 		mmi.multimesh = mm
 		preview.add_child(mmi)
 
-		# Mirror the baker's use_collision rule (LevelBaker._collect_scatter) exactly so
-		# dev-play and the bake can never diverge: only box/footprint/hull/multiconvex prefabs get dev
-		# collision (weld is a bake error, none has no shapes).
+		# Mirrors LevelBaker._collect_scatter: only box/footprint/hull/multiconvex get dev collision.
 		var mode := "none"
-		if template.has_method("is_carlito_kit_piece"):
+		if template.is_in_group(Groups.KIT_PIECE):
 			mode = String(template.get("collision_mode"))
 		if not Engine.is_editor_hint() and item.collision and mode in ["box", "footprint", "hull", "multiconvex"]:
 			var entries := shape_entries(template)
@@ -326,12 +274,7 @@ func _rebuild_preview() -> void:
 
 
 func _find_authoring_ancestor() -> Node:
-	var node := get_parent()
-	while node != null:
-		if node.has_method("is_carlito_authoring"):
-			return node
-		node = node.get_parent()
-	return null
+	return Groups.authoring_ancestor(self)
 
 
 # ------------------------------------------------------------------ re-snap
@@ -345,9 +288,7 @@ func _resnap_to_ground() -> void:
 	var space := get_world_3d().direct_space_state
 	var to_world := global_transform
 	var world_to_local := to_world.affine_inverse()
-	# Snapshot by reference: nothing below mutates the stored packed arrays in place
-	# (kept rows are rebuilt), so the old Array is a valid undo value.
-	var before := stored_transforms
+	var before := stored_transforms   # kept rows rebuilt below, so this stays a valid undo value
 	var after: Array[PackedFloat32Array] = []
 	var dropped := 0
 	for flat in stored_transforms:
@@ -372,8 +313,6 @@ func _resnap_to_ground() -> void:
 	if after == before and new_hash == stored_ground_hash:
 		print("%s: already snapped to the current ground." % name)
 		return
-	# Untyped singleton fetch — the HeightmapTerrain._commit_generated rule: an
-	# editor-only type annotation would break this @tool script's parse in exports.
 	var undo_redo = Engine.get_singleton(&"EditorInterface").get_editor_undo_redo()
 	undo_redo.create_action("Re-snap scatter '%s' to ground" % name)
 	undo_redo.add_do_property(self, &"stored_transforms", after)
@@ -385,9 +324,8 @@ func _resnap_to_ground() -> void:
 
 # ----------------------------------------------------------- stale-scatter guard
 
-## Editor-only slow poll: recompute the ground hash every few seconds and refresh the
-## configuration warning when staleness flips (sculpting happens outside this node, so there
-## is no signal to react to).
+## Editor-only slow poll: recompute the ground hash every few seconds (sculpting has no
+## signal to react to).
 func _process(delta: float) -> void:
 	if not Engine.is_editor_hint():
 		set_process(false)
@@ -425,6 +363,5 @@ func _get_configuration_warnings() -> PackedStringArray:
 	return warnings
 
 
-## Subclass hook for front-end-specific warnings (empty by default).
 func _extra_warnings() -> PackedStringArray:
 	return PackedStringArray()

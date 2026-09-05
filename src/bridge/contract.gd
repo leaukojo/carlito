@@ -1,18 +1,18 @@
 extends Node
 ## Contract autoload — loads and validates the shared signal contract at startup.
 ##
-## The contract (contract/carlito_contract.json) is the single definition of every
-## signal crossing the sloppyCAN bridge. The bridge marshals messages from
-## it and the dashboard builds its tell-tales/gauges from it; code must never
-## hand-duplicate signal names.
+## `contract/carlito_contract.json` is the single definition of every signal crossing the
+## sloppyCAN bridge; the bridge and dashboard both build off it, never a hand-duplicated list.
 ##
-## All parsing/validation logic lives in the static inner classes so unit tests can
-## exercise it without the autoload lifecycle. Consumers read `Contract.data`.
+## Parsing/validation lives in the static inner classes so tests exercise it without the
+## autoload lifecycle. Consumers read `Contract.data`.
 
 const CONTRACT_PATH := "res://contract/carlito_contract.json"
 
 const DIRS: PackedStringArray = ["in", "out"]
 const TYPES: PackedStringArray = ["bool", "u8", "i8", "u16", "i16", "u32", "i32", "f32", "f64"]
+## Which side of warn threshold is dangerous: declared per signal, never inferred from range.
+const WARN_SIDES: PackedStringArray = ["low", "high"]
 
 
 ## One validated signal definition.
@@ -23,32 +23,31 @@ class SignalDef:
 	var unit := ""
 	@warning_ignore("shadowed_global_identifier")
 	var range := []                    ## [] or [min: float, max: float]
-	var warn := NAN                    ## optional danger threshold the dashboard highlights; NAN = none
-	var enum_entries := []             ## Array of [lo: int, hi: int, label: String, interp_prefix]
-									   ## interp_prefix: String when a "D1-D6"-style range label
-									   ## interpolates ("D" + value), null otherwise (resolved at parse)
+	var warn := NAN                    ## optional danger threshold; NAN = none
+	var warn_side := ""                ## "low" or "high", required whenever warn is set
+	var enum_entries := []             ## [lo, hi, label, interp_prefix]; interp_prefix null or "D"
 	var vehicles: PackedStringArray = []
 	var flavor := ""                   ## e.g. "isobus"
+	var count := 1                     ## 1 = scalar; > 1 = array of count elements
 	var todo := false                  ## declared but not implemented on either side yet
 	var desc := ""
 
 	func has_enum() -> bool:
 		return not enum_entries.is_empty()
 
+	## True when the value is an Array of `count` elements rather than a scalar.
+	func is_instanced() -> bool:
+		return count > 1
+
 	func has_warn() -> bool:
 		return not is_nan(warn)
 
-	## True when 'warn' marks a low-side danger (near range min, e.g. low fuel) vs a
-	## high-side one (near range max, e.g. redline / overheat). Meaningless without
-	## both a range and a warn; guard with has_warn().
+	## True when warn marks low-side danger (low fuel, flat battery) vs high-side (redline, overheat).
 	func warn_is_low() -> bool:
-		if range.size() != 2:
-			return false
-		return warn < (float(range[0]) + float(range[1])) * 0.5
+		return warn_side == "low"
 
-	## Decode a raw value against the enum table ("" when unmapped).
-	## Range entries with a "D1-D6"-style label interpolate the index
-	## (e.g. "1-6": "D1-D6" decodes 3 -> "D3"); other labels return as-is.
+	## Decode a raw value against the enum table ("" if unmapped). "D1-D6"-style labels
+	## interpolate the index (e.g. "1-6" → "D3" for value 3).
 	func enum_label(value: int) -> String:
 		for entry: Array in enum_entries:
 			if value < entry[0] or value > entry[1]:
@@ -97,8 +96,7 @@ class ContractData:
 		var s := get_signal_def(name, dir)
 		return s != null and s.todo
 
-	## Parse + validate contract JSON text. Never throws; collects every problem
-	## into .errors so a broken contract reports all its faults at once.
+	## Parse + validate contract JSON. Never throws; collects all problems in .errors.
 	static func parse(json_text: String) -> ContractData:
 		var data := ContractData.new()
 		var json := JSON.new()
@@ -185,6 +183,45 @@ class ContractData:
 				errors.append("%s: 'warn' must be a number" % where)
 				return null
 			sig.warn = float(warn_v)
+
+		# Required with 'warn' and rejected without it, so the pair can't drift apart.
+		var side_v: Variant = entry.get("warn_side")
+		if side_v != null and (typeof(side_v) != TYPE_STRING or side_v not in WARN_SIDES):
+			errors.append("%s: 'warn_side' must be one of %s" % [where, WARN_SIDES])
+			return null
+		if sig.has_warn() and side_v == null:
+			errors.append("%s: 'warn' requires a 'warn_side' of %s" % [where, WARN_SIDES])
+			return null
+		if not sig.has_warn() and side_v != null:
+			errors.append("%s: 'warn_side' without a 'warn'" % where)
+			return null
+		sig.warn_side = str(side_v) if side_v != null else ""
+
+		# Godot's JSON parser hands every number back as TYPE_FLOAT, so integer-ness is
+		# checked the same way 'version' is above.
+		var count_v: Variant = entry.get("count")
+		if count_v != null:
+			if typeof(count_v) != TYPE_FLOAT or count_v != floorf(count_v) or count_v < 1:
+				errors.append("%s: 'count' must be an integer >= 1" % where)
+				return null
+			sig.count = int(count_v)
+		# Refused wherever a reader cannot express an array — each would otherwise decode to
+		# something plausible and wrong rather than failing:
+		#   dir "in"  - bridge_source normalizes per name; float(Array)/int(Array) is a
+		#               silent bad cast, so the craft would fly on a default.
+		#   "bool"    - dashboard tell-tale is bool(value); any non-empty array is true.
+		#   "enum"    - chip path is int(value), which throws on an Array.
+		# Rejecting at parse fails loudly at boot instead of at whichever reader runs first.
+		if sig.count > 1:
+			if sig.dir != "out":
+				errors.append("%s: 'count' > 1 is only valid on an 'out' signal" % where)
+				return null
+			if sig.type == "bool":
+				errors.append("%s: 'count' > 1 cannot be type 'bool'" % where)
+				return null
+			if entry.get("enum") != null:
+				errors.append("%s: 'count' > 1 cannot carry an 'enum'" % where)
+				return null
 
 		var vehicles_v: Variant = entry.get("vehicles")
 		if vehicles_v != null:

@@ -1,263 +1,278 @@
 # CLAUDE.md
 
-Guidance for Claude Code sessions in this repository.
-
 ## What this is
 
 **Carlito** — a browser-based CAN-bus driving sandbox: drive vehicles (car / truck /
-tractor / boat / bike / drone / plane / train) while exchanging live CAN signals with the
-sloppyCAN/RAMN simulator over a postMessage bridge. Godot 4.7, web-first. Levels are
-**signal playgrounds** — no missions; content exists to make contract signals visibly
-perform (grades for `engine_load`, hairpins for slip, fields for hitch/PTO, water for
-pitch/roll).
+tractor / boat / drone / plane / train) while exchanging live CAN signals with the
+sloppyCAN/RAMN simulator over a postMessage bridge. Web-first. Levels are **signal
+playgrounds** — no missions; content exists to make contract signals visibly perform
+(grades for `engine_load`, fields for hitch/PTO, water for pitch/roll).
 
-Docs: `overview.md` (architecture map) · `HUMAN_EXPLANATIONS.md` (plain-language intro) ·
-`systems.md` (runtime systems detail) · `level_kit.md` (authoring kit, terrain/scatter/
-roads, bake pipeline) · `making_a_level.md` (author walkthrough) · `deploying.md` (the two
-channels, the promote ritual) · `TODO.md` (remaining work).
+Docs: `overview.md` (architecture map) · `HUMAN_EXPLANATIONS.md` · `systems.md` (contract,
+input, telemetry/dashboard, bridge, lamps, shell, levels) · `vehicles.md` (framework, boat /
+plane / drone / train) · `heavy_vehicles.md` (truck, trailer, tractor — J1939, ISO 11992,
+ISOBUS) · `level_kit.md` (authoring kit, bake pipeline) · `making_a_level.md` ·
+`deploying.md` (the two channels, the promote ritual) · `TODO.md`.
 
-The previous generation (Godot 3-era layout) survives only as a backup outside the project,
-at `../CARLITO_SLOPPYCAN_V1_BACKUP/carlito/`. **Never read or copy v1 code** — it is a
-behavior/layout reference only.
+Autoloads (the whole set): `Contract`, `Bridge`, `InputRouter`, `GameState`. ALL input
+arbitration lives in `src/input/`. The Godot 3-era generation is a backup outside the
+project — a behavior/layout reference, never a source; a Godot 3 idiom arriving here is a
+bug, not a shortcut.
 
-## Working style (learned the hard way — global CLAUDE.md covers the rest)
+## Working style (global CLAUDE.md covers the rest)
 
 - **Act as a senior Godot dev, no workarounds.** Use the engine's real tools (GridMap/
-  palette for tiling, never hand-placed piles of nodes; if headless blocks the right
-  approach, script it correctly). Measure asset footprints against the 1.8 m car before
-  placing — never guess scale/orientation.
+  palette for tiling, never hand-placed piles of nodes). Measure asset footprints against
+  the 1.8 m car before placing — never guess scale/orientation.
 - The user verifies **by driving**: any demo/verification scene must be a real Level with
   a VehicleSpawn (F6-runnable, unregistered), never camera-only. Visual bar: crisp
   high-contrast splat borders (low-poly style), plateaued buildable terrain, coasts made
   circular by water at sea level — never the square map edge.
 - "Quickly / do not verify" = skip ceremony, make the small change, stop.
-- **Before ending any authoring/kit/level change: re-bake + `check_bakes`** — stale bakes
-  are the #1 repeat CI failure. After contract edits: `node tools/gen_js_contract.mjs`.
-  Always sweep new GDScript warnings (shadowed identifiers like `load`/`basis`/`range`,
-  integer division).
-- Keep docs/memory present-state only (no phase history).
+- **Before ending any authoring/kit/level change: re-bake + `check_bakes`.** After contract
+  edits: `node tools/gen_js_contract.mjs`. Sweep new GDScript warnings (shadowed
+  `load`/`basis`/`range`, integer division).
+- Keep docs/memory present-state only (no phase history). **A finished plan is DELETED, not
+  filed** — so distil its durable conclusions into the relevant `CLAUDE.md` first, or they are
+  lost outside git history. The same goes for a finished TODO item, and for a COMPROMISE:
+  `docs/` is rationale-first, so a knowingly-imperfect decision described only where it is
+  justified reads as settled — state what is true and what undoing it would cost, beside the
+  code it constrains.
+- **The same rule binds CODE COMMENTS.** A comment states the live constraint, never the
+  edit that produced it: no "used to", no "this replaces", no "Phase 4 adds" — a plan that no
+  longer exists cannot be looked up, and its promises go stale silently. Rewrite the history
+  as the constraint it explains ("the damper clamp is sized for a 1/60 s step"); delete it if
+  it explains only a past decision, since git has that. "The old X" describing a RUNTIME value
+  (the previous pads, last tick's fix, a trailer that is no longer there) is present-state and
+  stays.
 
-## Layout
-
-Autoloads (keep this the whole set): `Contract`, `Bridge`, `InputRouter`, `GameState`.
-ALL input arbitration lives in `src/input/`.
-
-## Standing rules (permanent — numbering is referenced from `docs/` and `plans/`)
+## Standing rules (permanent — numbering is referenced from `docs/`)
 
 1. Static world geometry ships **baked per chunk** (merged meshes, one collision body per
    chunk); GridMaps are authoring-only. A drivable structure is never split across chunks —
    all drivable geometry welds into one level-wide body. Bakes are hash-stamped; CI fails
-   on stale bakes.
-2. Ground = heightmap/plane collision; drivable structures get dedicated welded collision
-   meshes; props get boxes/hulls. **Trimesh is the exception, never the default.**
-3. Telemetry is read out of the sim that produced the motion — no derived fictions (RPM
-   comes from the drivetrain). Aux systems (fuel/coolant/battery, engine_load, trim) are
-   simple *honest models*, clearly labelled.
-4. One contract file; everything else generated from or validated against it. Never
-   hand-duplicate signal lists.
+   on stale bakes. The `.baked.scn` is **gitignored build output that CI bakes**; the
+   `.bake.json` manifest beside it is the committed hash record — so **run
+   `tools/bake_levels.tscn` once after cloning** (unbaked levels play on dev collision,
+   `Level._setup_baked` warns, and the suite's bake-weight assertion needs a real file).
+2. Ground = heightmap/plane collision; drivable structures get welded collision meshes;
+   props get boxes/hulls. **Trimesh is the exception, never the default.**
+3. Telemetry is read out of the sim that produced the motion — no derived fictions. Aux
+   systems (fuel/coolant/battery, engine_load, trim) are simple *honest models*, labelled.
+4. One contract file; everything else generated from or validated against it.
 5. Vehicles consume one normalized `VehicleInput` from `InputRouter`; arbitration
    (bridge-active/gear-owns-direction, brake > accel > handbrake) lives **only** there.
-6. Levels, vehicles, and UI are independent scenes composed by the shell — no giant
-   main.tscn.
+6. Levels, vehicles, and UI are independent scenes composed by the shell.
 7. CI does the export; deploys are cache-busted. No manual deploy.
 8. Pure logic (drivetrain math, contract encode/decode, arbitration, GPS/odometer,
    buoyancy, terrain/scatter/road/bake math) gets gdUnit4 tests.
-9. `.web` project-setting overrides + perf budget: msaa_3d.web=0, soft shadows off on web;
-   do **not** set `scaling_3d/scale.web` below 1 (it adds an upscale pass on
-   gl_compatibility and measures worse). Physics: **60 Hz + interpolation, locked** — the
-   suspension tuning is rate-dependent; changing the tick means re-tuning every vehicle.
+9. `.web` overrides + perf budget: msaa_3d.web=0, soft shadows off on web; do **not** set
+   `scaling_3d/scale.web` below 1 (adds an upscale pass on gl_compatibility, measures
+   worse). Physics: **60 Hz + interpolation, locked** — suspension tuning is rate-dependent;
+   pinned in `project.godot` and asserted by `tests/test_project_settings.gd`, because the
+   editor drops a setting equal to its default on any UI save.
 10. **No emoji anywhere in UI** — the web font has no emoji glyphs; plain text + color only.
 
-Perf guardrail: < ~500 draw calls in the worst view (F3 overlay). Editor UX lives in
+Perf target: 60 fps in the worst view, measured on the DEPLOYED web build (F3 overlay); draw
+calls are the first diagnostic to read there, not a budget to design against (nothing is
+profiled on a real target device yet — `TODO.md` § Perf pass). Editor UX lives in
 `addons/carlito_kit/` only; data + runtime-safe logic in `kit/` — nothing the baker touches
 may use editor APIs (CI bakes headless). Authoring tools are deterministic (seeded) and
-destructive-by-button, never per-frame. Third-party level sharing is out of scope: a
-`.tscn` can embed scripts, so loading a stranger's level is arbitrary code execution.
+destructive-by-button, never per-frame.
 
 Non-goals: multiplayer, in-game level editor, walk-around character, crop/farm simulation,
 real wave physics, mobile app stores, world streaming, texture-layer terrain, LOD, road
-junctions, lane markings, traffic.
+junctions, lane markings, traffic, third-party level sharing (a `.tscn` can embed scripts).
 
 ## Gotchas & hard-won rules
 
-**Physics & vehicles** — detail in `src/vehicles/CLAUDE.md` (loads when you open a vehicle
-file). Always-on: subclasses use only the two seams — never fork `_physics_process`.
+**Physics & vehicles** — shared rules in `src/vehicles/CLAUDE.md`, family rules nested beside
+the code: `truck/` (trailers), `tractor/` (implements), `drone/`, `train/`, `kenney/` (the
+generated bodies).
+
+**Scene tags** — `src/levels/base/carlito_groups.gd` declares the six SceneTree groups that say
+what a node IS (`carlito_authoring`, `carlito_kit_piece`, `carlito_road`, `carlito_scatter`,
+`carlito_level`, `carlito_payload`) and owns the one copy of each authoring walk. `preload`ed,
+never `class_name`d. **Every class joins its group in `_init`, not `_enter_tree`** — the baker
+walks level scenes that never enter a tree and instantiates scatter templates loose, so only
+`is_in_group()` works there. `get_tree().get_nodes_in_group()` is correct ONLY in the running
+game (in the editor `get_tree()` holds every open scene); discovery in kit/addons/tools code
+stays a walk scoped to a named root. `has_method()` is still right for genuine CAPABILITY
+probes (`set_vehicle`, `grip_at`, `cycle_implement`, `set_attachment`, `accepts`).
 
 **Input, lamps, bridge**
 
 - Lamp and ISOBUS state ride `VehicleInput`, never a side channel. Bridge lamp/warning
   bits are mirrored **verbatim** (sloppyCAN is the sole authority; absent bit = off);
-  **there is no local blink timer** — turn lamps blink because the source toggles the bit.
-- Toggle owners (`_lights`, `_hitch_up`, `_pto`) live in InputRouter; sources report
-  per-frame edges — so keyboard and touch share one owner.
-- The `rudder` in-signal overrides `steer` when present; the boat's rudder IS the steer
-  channel (no new VehicleInput field).
+  **no local blink timer ANYWHERE** — a lamp flashes because the source toggles its bit,
+  J1939-73 DM1 flash-1Hz / flash-2Hz included. `tests/test_lamps.gd` reads
+  `src/vehicles/base/lamp_set.gd` and fails if a clock comes back.
+- **`LampSet` binds its groups two ways and the accessor differs.** Head/brake/turn/LED share ONE
+  canonical material per group on `mesh.material_override` (`_bind`); markers, flash and strobe get
+  a PRIVATE duplicate of the mesh's own scene material on `set_surface_override_material(0, …)`
+  (`_bind_scene_colored`), which is what lets red, green and white sit in one group. Read a marker
+  back through `material_override` and you get `null` for a lens that is lit correctly — both
+  `test_tow_host` and `test_trailer` go through a `_marker_mat()` helper that says so.
+- **`VehicleInput` is a `class_name` in `src/input/vehicle_input.gd`, not an inner class of
+  the autoload** — an inner class makes every vehicle's static types depend on the autoload's
+  registered *name*. Its fields are **flat except `lamps`**: the router deliberately knows no
+  vehicle family (rule 5), so every group is allocated for every machine. `input.lamps` earns
+  its nesting on ONE RULE (the fourteen verbatim-mirrored bits above), not on one family, and
+  has exactly two read sites (`BaseVehicle` → LampSet, `Dashboard._update_telltales`).
+  `lights` is a level the router cycles, so it stays flat.
+- **`get_vehicle_input()` returns the router's own struct, read-only by convention** — there
+  is no defensive `copy()`, because a hand-written field mirror is a field that goes missing
+  silently. `arbitrate_*` build a fresh struct each tick, so a stashed reference reads stale,
+  never live; a caller that needs to keep or change one copies it itself.
+- **The raw-intent wire is `Dictionary[StringName, Variant]`** across all four producers
+  (`LocalSource`, `TouchControls`, `BridgeSource`, `measure_drone`'s `StickSource`) and
+  `merge_local`. **StringName keys catch no typo at parse time** — the guard is two tests:
+  `test_every_touch_poll_key_is_merged` (registry `poll_key` ⊆ merge) and
+  `test_local_source_and_merge_local_carry_the_same_keys` (set equality). `merge_local` builds
+  its dict explicitly, so a key on one side only silently drops the keyboard's edge while a
+  touch source is registered. `arbitrate_local` / `arbitrate_bridge` stay plain `Dictionary`
+  on purpose: they are the wire's consumers and `test_input_arbitration.gd` is their spec. An
+  **untyped dict literal is rejected at the call**, not converted — a test passing one inline
+  needs `_intent({...})` or a typed declaration.
+- Toggle owners (`_lights`, `_hitch_up`, `_pto`) live in InputRouter so keyboard and touch
+  share one owner; sources only report per-frame edges.
+- **Cycled-control lengths are declared once in `src/input/subsystem_counts.gd`** (leaf, no
+  dependencies, `preload`ed by both the router and the drone) — the router must not depend on a
+  vehicle class, so it cannot read `RefuseBody.Cmd` / `DroneBus.NODES` / `DroneModes`. Where the
+  length is intrinsic to a structure (an enum, the roster array) that structure stays the thing
+  you edit and a test pins it against the constant; grow one without the other and the local key
+  silently stops reaching the new position while the bridge can still command it.
+- The `rudder` in-signal overrides `steer` when present (no new VehicleInput field).
+- Bridge publish walks `Contract.data.signals_for_vehicle(...)` × `to_bridge_dict()`, and
+  `to_bridge_dict` walks the telemetry's own property list — every member var of a telemetry
+  class IS a wire signal (only the `WIRE_*` tables and the synthesised `slip` are not identity),
+  pinned by `test_to_bridge_dict_invents_no_signal`.
 - The bridge shim rides the web export's **Head Include**, and the export uses a **custom
-  HTML shell** (`src/bridge/web/head_include.html`, `src/bridge/web/shell.html`). Both are
-  vendored copies that must be kept in sync with `export_presets.cfg` / the Godot export
-  template — **read `docs/deploying.md` § The web export before touching either, or before
-  a Godot upgrade.**
-- Bridge publish walks `Contract.signals_for_vehicle(...)` × `to_bridge_dict()` — never a
-  hand-written field list. A `test_telemetry` case fails if `to_bridge_dict()` stops
-  covering a ground "out" signal.
-- `status` bitfield layout is provisional (named `ST_*` bits) until CAN frame packing is
-  finalized with sloppyCAN.
+  HTML shell** (`src/bridge/web/head_include.html`, `shell.html`). Both are vendored copies
+  that must stay in sync with `export_presets.cfg` / the Godot export template — **read
+  `docs/deploying.md` § The web export before touching either, or before a Godot upgrade.**
+- `status` bitfield layout (`ST_*` in `src/vehicles/base/vehicle_telemetry.gd`) is the wire
+  assignment and is **FROZEN**: a new flag APPENDS at bit 7 or above (nine free in the u16),
+  an existing bit is **never** renumbered. Adding one bumps `version` and ships as a paired
+  promote.
 - Respawn zeroes the telemetry accel history so a teleport isn't read as an impact.
 
-**Dashboard & UI**
+**Dashboard & UI** — detail in `src/ui/CLAUDE.md`.
 
-- The dashboard is contract-informed, not a UI generator: lamps/bars are **generated**
-  from contract metadata (bars = range + warn, or `flavor == "isobus"`); the two radial
-  gauges are **hand-built** and only read scale/redline from the contract. Do not build a
-  from-JSON gauge framework. Gauges are built only when the vehicle declares their signal
-  (the boat gets a speedo, no tacho). Gauge text sits in the arc's bottom 90° gap.
+**Contract** — `contract/carlito_contract.json` defines every bridge signal. Authoring rules
+in `contract/CLAUDE.md`; full protocol in `docs/systems.md`.
 
-**Contract** — `contract/carlito_contract.json` (v19) defines every bridge signal; the
-`Contract` autoload loads + validates it at startup and everything (bridge marshaling,
-dashboard generation) is driven by it. Full protocol in `docs/systems.md`.
+**Collision layers** — `src/physics/collision_layers.gd` is the declaration, `preload`ed (never
+`class_name`d: the baker and the measure tools run headless). The seven bits are **FROZEN** like
+the `status` bitfield — they are written into `project.godot`'s `[layer_names]`, into every
+`.baked.scn`, and into `cargo_payload.tscn`; a new layer APPENDS at bit 8+, none is renumbered.
 
-- Signals are unique by **(name, dir)** — `battery` exists in both directions. `warn` is
-  the dashboard danger threshold; `SignalDef.warn_is_low()` infers the side **from the
-  range midpoint**, so a high-side threshold must sit ABOVE it or the dashboard highlights
-  the safe end (`wheel_slip` warns at 60 of 0–100, not 30).
-- A flavored "out" signal with a `range` becomes a generated dashboard bar. **Omit the
-  range** for one with no meaningful full scale (`engine_hours` — an hour meter is a running
-  total) and it lands on the readout line beside ODO instead.
-- Edits bump `version` and **must be followed by `node tools/gen_js_contract.mjs`** (the
-  synced sloppyCAN copy; the runtime version-mismatch warning — **not CI** — is the drift
-  guard).
-  **A contract edit is a paired change across two repos** — the bump lands on the `dev`
-  branch of both `carlito` and `sloppycan`, and both are promoted to stable together, or a
-  live stable pair sits on mismatched versions and signals are misread.
+- `SOLID` (everything but `Containment`) is the mask for EVERY gameplay ray. `Containment` is
+  `WorldBounds` — invisible walls a few tens of metres off the coast reaching 1500 m up, so a ray
+  that sees them measures the game's boundary instead of the world: the drone loses half its
+  satellites over open water, and the chase camera pulls itself in at the beach. Widening a ray
+  mask to include `Containment` brings both straight back.
+- Moving bodies mask `WORLD`; static bodies mask `DYNAMIC`. Masks are deliberately generous — a
+  too-narrow mask drops a body through geometry **silently**. Widen first, diagnose second.
+- **The water kill volume is a layer pairing across two files**: `WaterSurface`'s mask names
+  `VEHICLE` and `BaseVehicle`'s layer is `VEHICLE`. Break either and drowning stops with nothing
+  to see; `tests/test_collision_layers.gd` is the only thing that catches it.
+- Bodies take their layer in `_ready`, not in scenes — no `.tscn` hard-codes one. `CargoPayload`
+  is the exception, authored in `cargo_payload.tscn`, because `_ready` is where it *remembers*
+  the layer to restore on release.
+- The authoring/editor ground-snap rays (`scatter_base`, `scatter_brush`, `ground_snap`,
+  `flying_check`) stay unmasked on purpose: snapping to whatever is actually there is correct.
 
-**Levels & water**
+**Levels & water** — detail in `src/levels/CLAUDE.md`.
 
-- `HeightmapTerrain`: one cell = one world unit so mesh/collision coincide; heightmap +
-  splat PNGs must import **lossless / no mipmaps** so runtime `get_image()` works.
-  Generated PNGs additionally need `detect_3d/compress_to=0` (else silent VRAM
-  recompression breaks `get_image()`) and `process/fix_alpha_border=false` (it corrupts
-  splat weights where rock == 0) — `TerrainGen.ensure_import_settings` writes these.
-- **A copy of an imported asset anywhere inside the project hijacks the original.** The
-  copied `.import` sidecar carries the same `uid://`, so the import scan can resolve a
-  level's texture to the copy — a tool then sculpts the copy while the real level is
-  untouched and every downstream step still reports success. Keep backups outside the repo
-  or drop a `.gdignore` in the folder (`tmp/` has one).
-- **Level 1's splat channel 4 is "Field"** — the ploughable soil of the ISOBUS farm, and
-  the *only* honest "in soil" predicate for the tractor's `draft_force`. Not Dirt (ch 1):
-  Auto-splat paints Dirt on every slope on the island, so a draft test keyed on it would
-  fire on hillsides. Channel 4 lives in `splatmap2`, which Auto-splat only ever zeroes, so
-  it can never appear by accident. Re-running Auto-splat on level 1 wipes Field/Mud/Gravel
-  AND the road asphalt — re-run `tools/gen_farm_playground.tscn` + `paint_road_asphalt.tscn`
-  after, or don't.
-- Water: `get_height()` is flat; shader waves are visual-only and **must never feed
-  physics**. The kill volume is an axis-aligned rect — don't rotate the node. Water and
-  terrain are direct children of the level, never under `Authoring`.
-- Day/night is a Level concern (N key), not a bridge signal.
-- **Level-select cards**: the screenshot camera is a side-car `<level>_shot.tres`
-  (`LevelShot`), never a node — the level `.tscn` is a bake input, so a camera node would
-  re-stale the bake on every re-frame. Cards are shot from the Polish tab (or
-  `tools/gen_level_thumbs.tscn`, **windowed only**) and land in `src/ui/level_thumbs/` —
-  they must stay under `src/`, since `kit/thumbs/*` and `tools/*` are export-excluded and
-  level-select needs them at runtime. The shot runs the BAKED level: bake first or you ship
-  stale geometry on the card.
-- Under `--headless` the shell auto-loads the first registry level (CI smoke can't click).
+- **A copy of an imported asset anywhere inside the project hijacks the original** (the
+  `.import` sidecar carries the same `uid://`) — a tool then sculpts the copy while every
+  step reports success. Keep backups outside the repo or drop a `.gdignore` (`docs/img/`).
 
-**Kit, bake & editor tools** — detail in `kit/CLAUDE.md` (also imported by
-`addons/carlito_kit/` and `tools/`); authoring walkthrough in `docs/level_kit.md`.
-Always-on: bake-adjacent CODE reaches no resource dependency edge — GDScript reports none —
-so it is hashed explicitly via `LevelBaker.BAKE_CODE_INPUTS`. Editing one file on that list
-re-stales every level on its own; still bump `BAKER_VERSION` for semantic changes, and
-re-bake either way. A new bake-adjacent file means a new entry in that list.
+**Kit, bake & editor tools** — detail in `kit/CLAUDE.md`; walkthrough in
+`docs/level_kit.md`. Always-on: bake-adjacent CODE reaches no resource dependency edge, so
+it is hashed explicitly via `LevelBaker.BAKE_CODE_INPUTS` — editing one file on that list
+re-stales every level, a new bake-adjacent file means a new entry, and a semantic change
+still bumps `BAKER_VERSION`.
 
 ## Running / testing / exporting
 
-Godot **4.7.1-stable**. The binary is never hardcoded — the tooling resolves
-`$env:GODOT_BIN` → `git config carlito.godotbin` → `godot` on `PATH` → a clear error.
-**Set the git-config one once per clone**; it is the only form the pre-commit hook can see
-(git runs hooks with a bare environment, so a `$env:GODOT_BIN` from your shell is invisible
-there — that is what "Godot not found" on commit means):
+Godot **4.7.1-stable**, resolved `$env:GODOT_BIN` → `git config carlito.godotbin` → `godot`
+on `PATH`. **Set the git-config one once per clone** — it is the only form the pre-commit
+hook can see ("Godot not found" on commit means this). Use the **`_console.exe`** build for
+ALL CLI/headless runs (it streams print/push_error back); the plain exe is for visually
+running the game.
 
 ```powershell
 git config carlito.godotbin 'C:\path\to\Godot_v4.7.1-stable_win64_console.exe'
-```
+$GODOT = $env:GODOT_BIN
 
-**Use `Godot_v4.7.1-stable_win64_console.exe` for ALL CLI/headless runs** — the console
-build streams print/push_error back; the plain exe is for visually running the game.
-
-```powershell
-$GODOT = $env:GODOT_BIN   # e.g. setx GODOT_BIN "<...>\Godot_v4.7.1-stable_win64_console.exe"
-
-# one-time / after adding assets: build the .godot import cache
+# import cache (one-time / after adding assets)
 & $GODOT --headless --path . --import
 
-# run the gdUnit4 suite (CI can't use runtest.sh — it launches Godot without
-# --headless and dies on the display-less runner; ci.yml calls GdUnitCmdTool
-# directly with --headless --ignoreHeadlessMode, safe for pure-logic suites)
+# gdUnit4 suite (CI calls GdUnitCmdTool directly; runtest.sh omits --headless and dies on
+# the display-less runner)
 $env:GODOT_BIN = $GODOT; .\addons\gdUnit4\runtest.cmd -a tests
 
 # headless smoke (boots boot.tscn; --quit-after counts frames)
 & $GODOT --headless --path . --quit-after 120
 
-# level kit: regenerate palettes/prefabs (after kit/import recipe edits only)
+# palettes/prefabs (after kit/import recipe edits only)
 & $GODOT --headless --path . --script res://tools/gen_kit_assets.gd
-# vehicle selector cards (WINDOWED; every variant + every implement/trailer, then re-import)
+# vehicle selector cards (WINDOWED; every variant + implement/trailer, then re-import)
 & $GODOT --path . res://tools/gen_vehicle_thumbs.tscn ; & $GODOT --headless --path . --import
-# kit thumbnails (WINDOWED — no --headless; then re-import + regen to embed palette previews)
+# kit thumbnails (WINDOWED; re-import, then regen to embed palette previews)
 & $GODOT --path . res://tools/gen_thumbs.tscn ; & $GODOT --headless --path . --import
 & $GODOT --headless --path . --script res://tools/gen_kit_assets.gd
-# bake all registered levels / CI stale-bake check (game-mode tool scenes, NOT --script)
+
+# bake all registered levels / stale-bake check (game-mode tool scenes, NOT --script)
+# the .baked.scn is gitignored; check_bakes reads "unbuilt" (passes) when it is absent
 & $GODOT --headless --path . res://tools/bake_levels.tscn
 & $GODOT --headless --path . res://tools/check_bakes.tscn
 
-# vehicle acceleration / top speed / straight-line tracking on a flat full-grip strip
-# (dev tool, never CI, always exits 0; `all` is minutes of wall clock — background it)
-& $GODOT --headless --path . res://tools/measure_vehicles.tscn -- sedan-sports
-& $GODOT --headless --path . res://tools/measure_vehicles.tscn -- all 45
+# accel + top speed on a flat full-grip strip: a dev report, exits 0, `all` takes minutes
+& $GODOT --headless --path . res://tools/measure_vehicles.tscn -- sedan-sports 45
+# the tracking half IS the CI `tracking` gate: skips the accel pass, exits 1 on a FAIL
+& $GODOT --headless --path . res://tools/measure_vehicles.tscn -- all 45 track strict
+# drone hover / climb / lean / endurance / one-motor-out (no args, ~1 min)
+& $GODOT --headless --path . res://tools/measure_drone.tscn
 
-# regen the sloppyCAN contract copy (after ANY contract edit)
-node tools/gen_js_contract.mjs
-
-# local web export (CI does the real one)
-& $GODOT --headless --path . --export-release "Web" build/web/index.html
-
-# "am I safe to push?" — all CI gates locally (editor-type gate, import, tests,
-# stale-bake check, smoke, head-include sync, contract sync)
-powershell -File tools/preflight.ps1
+node tools/gen_js_contract.mjs                    # after ANY contract edit
+& $GODOT --headless --path . --export-release "Web" build/web/index.html   # CI does the real one
+powershell -File tools/preflight.ps1              # "am I safe to push?" — all CI gates
 ```
 
-A pre-commit hook (`tools/git-hooks/`, installed via `core.hooksPath`) blocks editor-type
-annotations, stale contract copies, head-include drift, and stale bakes at commit time. The
-recurring GDScript warning classes (shadowing, integer division) are escalated to **errors**
-in project.godot — intentional integer division needs `@warning_ignore("integer_division")`.
+A pre-commit hook (`tools/git-hooks/`, via `core.hooksPath`) blocks editor-type
+annotations, stale contract copies, head-include drift, and stale bakes. The recurring
+GDScript warning classes are **errors** in project.godot — intentional integer division
+needs `@warning_ignore("integer_division")`.
 
-- A headless run ending with only `ERROR: N resources still in use at exit` is **clean** —
-  harmless leak-at-exit noise, not a failure.
+- Headless with no `--level=` / `CARLITO_LEVEL` boots `boot.gd`'s `DEFAULT_LEVEL`
+  (`level_1`), not the first registry entry (the garage).
+- A headless run ending with only `ERROR: N resources still in use at exit` is **clean**.
 - `--headless --script` only runs `extends SceneTree` scripts; EditorScripts need
   File ▸ Run in the editor.
 - **Parse-checking `addons/` code**: `& $GODOT --headless --path . --editor --quit-after 30`
-  loads the enabled plugins and prints real `SCRIPT ERROR: Parse Error` lines — the only
-  cheap gate for editor-only scripts (`--script` mode can't load them, `--import` doesn't
-  compile them). Caveat: it does **not** catch integer division between two *constants*
-  (`48 / 4` is folded silently), so still eyeball division on variables.
+  loads enabled plugins and prints real `SCRIPT ERROR: Parse Error` lines. It does **not**
+  catch integer division between two *constants* (`48 / 4` folds silently) — eyeball
+  division on variables.
+- **`ProjectSettings` in tests is not a presence check**: `get_setting(name, default)` falls back
+  to the engine's built-in default, and `has_setting()` is true for every built-in setting even
+  when `project.godot` never mentions it. A setting whose invariant *equals* its engine default
+  (60 Hz *is* Godot's default tick) therefore reads identically pinned and missing, so rule 9
+  reads enforced when it is not. `tests/test_project_settings.gd` asserts against the text of
+  `res://project.godot`; pin any future settings invariant the same way.
 - **gdUnit4 float asserts vs. image formats**: `assert_float(img.get_pixel(..).r).is_equal(0.2)`
-  FAILS ("Expecting 0.200000 but was 0.200000") — `FORMAT_RF`/`RGBAF` store float32, the
-  literal is float64. Only binary-exact values (0.0, 0.25, 0.5, 0.75) compare with
-  `is_equal`; anything else needs `is_equal_approx`.
-- **`export_presets.cfg` is full of traps that only fail in an exported build** — the
-  editor rewrites it on any UI export, `variant/thread_support` must stay `false` and PWA
-  enabled, and excluding a whole `kit/raw/<pack>/` folder ships untextured levels. Nothing
-  local reproduces any of it. **Editing that file means reading `docs/deploying.md` § The
-  web export first.** Debug web-only breakage on the real build, in devtools.
+  FAILS — `FORMAT_RF`/`RGBAF` store float32, the literal float64. Only binary-exact values
+  (0.0, 0.25, 0.5, 0.75) compare with `is_equal`; else `is_equal_approx`.
+- **`export_presets.cfg` traps only fail in an exported build, and nothing local reproduces
+  them** — the editor rewrites it on any UI export, `variant/thread_support` must stay
+  `false`, PWA enabled, and excluding a whole `kit/raw/<pack>/` folder ships untextured
+  levels. **Editing it means reading `docs/deploying.md` § The web export first.**
 
 ## CI / deploy
-
-`.github/workflows/ci.yml`: every push runs import → gdUnit4 → stale-bake check → headless
-smoke (default boot + a baked-level run with `CARLITO_LEVEL: level_1`) → web export.
 
 Two channels: **dev** (<https://leaukojo.github.io/carlito/dev/>, republished by CI on every
 push to `dev`, the default branch) and **stable** (<https://leaukojo.github.io/carlito/>,
 moved only by the manual *Promote dev → stable* workflow, which copies the approved dev
-bytes rather than rebuilding). Never deploy by hand.
-
-The whole ritual — why the two channels are `gh-pages` siblings, cache-busting, a bad
-promote, the paired contract deploy, the web export preset — is `docs/deploying.md`.
+bytes rather than rebuilding). Never deploy by hand. Full ritual: `docs/deploying.md`.

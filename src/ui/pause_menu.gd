@@ -1,46 +1,30 @@
 class_name PauseMenu
 extends Control
-## The pause overlay — the one place everything is reachable from, now that the game boots
-## straight into a level instead of asking you to pick one first.
-##
-## Esc used to tear the level down and drop you back at level select with no warning. It now
-## opens this: RESUME / VEHICLE / LEVEL / CONTROLS / SETTINGS. VEHICLE and LEVEL are SIGNALS,
-## not screens built here — the garage and level-select overlays are the shell's to create and
-## free (standing rule 6), and this menu never learns what a level or a vehicle is. CONTROLS and
-## SETTINGS are the exception: they are text and one toggle, they own nothing, so they live here
-## as further pages of this same overlay. CONTROLS is GENERATED from ActionRegistry, which the
-## touch overlay's buttons come from too, so the help and what is on screen cannot disagree.
-##
-## SETTINGS does not APPLY anything either — it emits the new value and the shell applies and
-## persists it, the same way VEHICLE and LEVEL work.
-##
-## Built in code like every other shell screen, colour and type from the inherited theme.
-## No emoji.
+## The pause overlay: RESUME / VEHICLE / LEVEL / CONTROLS / SETTINGS. Never tears the level
+## down on its own. VEHICLE and LEVEL are signals — the garage and level-select overlays are
+## the shell's to create/free (rule 6); this menu never learns what a level or vehicle is.
+## CONTROLS and SETTINGS own nothing either: CONTROLS is generated from ActionRegistry (same
+## source the touch overlay reads), SETTINGS emits new values for the shell to apply/persist.
+## Built in code, colour/type from the inherited theme. No emoji.
 
 signal resume_requested
 signal vehicle_requested
 signal level_requested
-## A new Dashboard.Density SETTING was picked. The shell owns applying it and writing it to
-## user:// — this menu only knows it is an int with a name.
+## New Dashboard.Density setting picked; the shell applies it and writes it to user://.
 signal dashboard_density_changed(setting: int)
-## A new UI-size multiplier was picked. Same deal: the shell applies it to the UiScale root and
-## writes it to user://.
+## New UI-size multiplier picked; the shell applies it to UiScale and writes it to user://.
 signal ui_scale_changed(factor: float)
 
 ## Widest sensible button in logical px (scaled through UiTheme), matching the garage.
 const BUTTON_W := 260.0
 
-## The one thing the arrow-key and gamepad aliases are said in. Everything else on the sheet is
-## read out of InputMap, but a row shows one key per action or "W / Up / S / Down" becomes the
-## widest thing on the page for the least useful reason.
+## Row shows one key per action, else "W / Up / S / Down" becomes the widest thing on the page.
 const DRIVE_FOOTNOTE := "Arrow keys and a gamepad also drive."
 
-## One line under the density button saying what the modes are, because "COMPACT" alone does not
-## tell you what you would lose.
+## "COMPACT" alone doesn't say what you'd lose.
 const DENSITY_HELP := "AUTO uses the compact cluster on a small screen or while the bridge is live."
 
-## Same, for UI SIZE — the automatic scale aims at one physical size on every screen, which is the
-## right default and still the wrong size for somebody sitting closer or on a smaller monitor.
+## The automatic scale is the right default but still wrong for some screens/seating.
 const UI_SCALE_HELP := "Scales all on-screen controls and text. 100% is the automatic size."
 
 ## How far Up/Down move the CONTROLS sheet, in logical px (scaled). About two rows.
@@ -49,23 +33,18 @@ const SHEET_STEP := 64.0
 var _root: VBoxContainer
 var _controls: VBoxContainer
 var _settings: VBoxContainer
-var _sheet: ScrollContainer  ## the CONTROLS sheet's scroll area, driven by Up/Down (see _unhandled_input)
+var _sheet: ScrollContainer  ## CONTROLS sheet's scroll area, driven by Up/Down (_unhandled_input)
 var _resume_btn: Button
 var _density_btn: Button
 var _ui_scale_btn: Button
-## The active vehicle's capabilities, from the shell (boot.gd _capabilities) — the same read the
-## touch buttons gate on, so a control greyed here is a button that is not on screen.
+## Active vehicle's capabilities from the shell — same read the touch buttons gate on.
 var _caps := {}
-## The dashboard density SETTING as the shell has it (Dashboard.Density, AUTO included).
-var _density := Dashboard.Density.AUTO
-## The UI-size multiplier as the shell has it (UiScale.USER_STEPS).
+var _density: int = Dashboard.Density.AUTO
 var _ui_scale := UiScale.USER_DEFAULT
 
 
-## What the active vehicle can do (so the CONTROLS sheet greys what it does not have), what the
-## dashboard density is currently set to and how big the UI is. Called by the shell BEFORE
-## add_child (the VehicleSelect pattern) — the pages are built in _ready. Optional: with nothing
-## handed over, capability-gated rows simply read as unavailable and both settings read default.
+## Called by the shell before add_child; pages build in _ready. Optional: with nothing handed
+## over, capability-gated rows read unavailable and both settings read default.
 func setup(caps: Dictionary, density_setting := Dashboard.Density.AUTO,
 		ui_scale_factor := UiScale.USER_DEFAULT) -> void:
 	_caps = caps
@@ -76,9 +55,9 @@ func setup(caps: Dictionary, density_setting := Dashboard.Density.AUTO,
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
-	bg.color = UiTheme.SCRIM  # over a live (paused) scene, so a scrim rather than a backdrop
+	bg.color = UiTheme.SCRIM  # over a live paused scene, so a scrim rather than a backdrop
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_STOP  # swallow anything aimed at the world behind
+	bg.mouse_filter = Control.MOUSE_FILTER_STOP  # swallow clicks aimed at the world behind
 	add_child(bg)
 
 	_root = _page()
@@ -90,7 +69,7 @@ func _ready() -> void:
 	_settings.visible = false
 	_build_settings()
 
-	_resume_btn.grab_focus()  # keyboard/gamepad start point, like every other shell screen
+	_resume_btn.grab_focus()  # keyboard/gamepad start point
 
 
 ## A centred column filling the overlay. Both pages are one of these; only one is visible.
@@ -113,19 +92,15 @@ func _build_root() -> void:
 	_root.add_child(_menu_button("SETTINGS", func() -> void: _show_page(_settings)))
 
 
-## GENERATED FROM ActionRegistry — the whole point of the page. Every row, its grouping and its
-## gating come from that one table, and every key string is read live out of InputMap, so a
-## control cannot exist without appearing here and a rebinding cannot go stale. This replaces a
-## hand-typed list that had drifted to ten missing actions.
-##
-## Three columns: what it does, the key, and — when the control does not apply to what you are
-## driving right now — why not. Greying rather than hiding, because "the boat has no diff lock"
-## teaches something and a missing row does not.
+## Generated from ActionRegistry: every row, grouping and gate comes from that table, and key
+## strings are read live from InputMap, so a control can't exist without appearing here and a
+## rebinding can't go stale. Three columns: what it does, the key, and why not if it doesn't
+## apply — greyed rather than hidden, since "the boat has no diff lock" teaches something.
 func _build_controls() -> void:
 	_controls.add_child(_title("CONTROLS"))
 
 	var ctx := ActionRegistry.context(GameState.current_vehicle, Bridge.is_active(), _caps)
-	# Scrolls: the sheet is every bound action now, which does not fit a phone.
+	# Scrolls: every bound action doesn't fit a phone.
 	_sheet = ScrollContainer.new()
 	_sheet.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_sheet.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -144,7 +119,7 @@ func _build_controls() -> void:
 		heading.theme_type_variation = &"Title"
 		body.add_child(heading)
 
-		# Centred as a block so the pairs line up instead of drifting apart on a wide window.
+		# Centred as a block so pairs line up instead of drifting apart on a wide window.
 		var grid := GridContainer.new()
 		grid.columns = 3
 		grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -174,11 +149,8 @@ func _build_controls() -> void:
 	_controls.add_child(_menu_button("BACK", func() -> void: _show_page(_root)))
 
 
-## Two settings, one button each, cycling their steps. Neither value is applied here — both are
-## emitted, and the shell applies and persists them, so this screen still owns nothing (standing
-## rule 6). Each button relabels in place, and what is behind the scrim changes as you press it,
-## which is the whole demonstration of what it does — UI SIZE most of all, since this menu is
-## itself one of the things it resizes.
+## Two settings, one button each, cycling their steps. Neither value is applied here — both
+## are emitted and the shell applies/persists them (rule 6). Each button relabels in place.
 func _build_settings() -> void:
 	_settings.add_child(_title("SETTINGS"))
 
@@ -213,9 +185,8 @@ func _relabel_density() -> void:
 	_density_btn.text = "DASHBOARD: %s" % Dashboard.key_of(_density).to_upper()
 
 
-## The press rebuilds the theme, which re-lays-out this menu underneath the finger that pressed it
-## — so the button is re-labelled BEFORE the signal goes out, and focus is put back afterwards, or
-## a keyboard player loses the button they were cycling.
+## The press rebuilds the theme, relayouting this menu under the finger that pressed it, so
+## the button is relabelled before the signal goes out and focus is restored after.
 func _on_ui_scale_pressed() -> void:
 	_ui_scale = UiScale.next_user_scale(_ui_scale)
 	_relabel_ui_scale()
@@ -227,11 +198,9 @@ func _relabel_ui_scale() -> void:
 	_ui_scale_btn.text = "UI SIZE: %d%%" % int(roundf(_ui_scale * 100.0))
 
 
-## The CONTROLS sheet is taller than a phone and every row on it is a LABEL, so there is nothing
-## inside it for the focus ring to walk down — without this a keyboard or gamepad player cannot
-## scroll it at all (only a wheel or a finger could). BACK is the one focusable Control on that
-## page and it has no focus neighbour, so Up/Down are never consumed by focus navigation and
-## arrive here unhandled. Found in the Phase 7 navigation sweep.
+## Every row on the CONTROLS sheet is a Label, so there's nothing for the focus ring to walk —
+## without this a keyboard/gamepad player couldn't scroll it. BACK has no focus neighbour, so
+## Up/Down are never consumed by focus navigation and arrive here.
 func _unhandled_input(event: InputEvent) -> void:
 	if _sheet == null or _controls == null or not _controls.visible:
 		return
@@ -245,11 +214,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 
 
-## The menu used to be built at a scale that could not change while it was open, so its
-## pixel-laid-out parts (button min sizes, page margins) were set once in _build_*. UI SIZE changes
-## the scale from INSIDE the menu, so they are re-applied here — the Controls' own theme-driven
-## parts (type, padding, separation) relayout on their own. Same NOTIFICATION_THEME_CHANGED seam
-## the touch overlay and the dashboard use.
+## Pixel-laid-out parts (button min sizes, page margins) are computed once in _build_* and
+## must be re-applied when UI SIZE changes the scale from inside this menu, else the open
+## menu keeps stale sizes. Theme-driven parts relayout on their own.
 func _notification(what: int) -> void:
 	if what != NOTIFICATION_THEME_CHANGED or _root == null:
 		return
@@ -262,8 +229,8 @@ func _notification(what: int) -> void:
 				_size_button(child as Button)
 
 
-## Step back one page; true if there was one to step back to. The shell calls this on Esc
-## before it decides to resume, so Esc walks the overlay out the way it walked in.
+## Step back one page; true if there was one. Called on Esc before deciding to resume, so
+## Esc walks the overlay out the way it walked in.
 func back() -> bool:
 	if not _root.visible:
 		_show_page(_root)
@@ -275,7 +242,7 @@ func _show_page(page: VBoxContainer) -> void:
 	_root.visible = page == _root
 	_controls.visible = page == _controls
 	_settings.visible = page == _settings
-	# Focus follows the page, or a keyboard player is left driving an invisible button.
+	# Focus follows the page, else a keyboard player is left driving an invisible button.
 	for child in page.get_children():
 		if child is Button:
 			(child as Button).grab_focus()

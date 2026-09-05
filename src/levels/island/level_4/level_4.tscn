@@ -8,7 +8,6 @@
 [ext_resource type="Texture2D" uid="uid://4jp08544bbgp" path="res://src/levels/island/level_4/level_4_island_height.png" id="6_height"]
 [ext_resource type="Texture2D" uid="uid://bbk4a14jol186" path="res://src/levels/island/level_4/level_4_island_splat.png" id="7_splat"]
 [ext_resource type="Shader" uid="uid://bcdkfxw2svriw" path="res://kit/terrain/terrain_splat.gdshader" id="8_shader"]
-[ext_resource type="Script" uid="uid://1gxlnkadilor" path="res://src/levels/base/skyline_ring.gd" id="9_skyline"]
 [ext_resource type="Script" uid="uid://bqwd2fww3l5yg" path="res://src/water/water_surface.gd" id="9_water"]
 [ext_resource type="Script" uid="uid://t88htpmwukbg" path="res://kit/helpers/authoring_root.gd" id="10_authoring"]
 [ext_resource type="Environment" uid="uid://bjh6g6yntyvh1" path="res://src/levels/base/default_env.tres" id="11_env"]
@@ -31,6 +30,7 @@
 [ext_resource type="PackedScene" path="res://kit/prefabs/watercraft/boat-speed-g.tscn" id="30_ixaku"]
 [ext_resource type="PackedScene" path="res://kit/prefabs/watercraft/boat-speed-c.tscn" id="31_htery"]
 [ext_resource type="PackedScene" path="res://kit/prefabs/watercraft/arrow-standing.tscn" id="32_ixaku"]
+[ext_resource type="Script" path="res://src/levels/base/world_bounds.gd" id="wb_4"]
 
 [sub_resource type="PlaneMesh" id="SeaBedMesh"]
 size = Vector2(560, 560)
@@ -97,16 +97,14 @@ size = Vector2(560, 560)
 depth = 3.0
 far_sea_extent = 1900.0
 
+[node name="Bounds" type="StaticBody3D" parent="."]
+script = ExtResource("wb_4")
+extent = Vector2(560, 560)
+
 [node name="SeaBed" type="MeshInstance3D" parent="." unique_id=167908362]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.01, 0)
 mesh = SubResource("SeaBedMesh")
 surface_material_override/0 = SubResource("SeaBedMat")
-
-[node name="Skyline" type="Node3D" parent="." unique_id=1147330504]
-script = ExtResource("9_skyline")
-height = 75.0
-band_depth = 200.0
-gen_seed = 404
 
 [node name="Island" type="StaticBody3D" parent="." unique_id=1703291961]
 script = ExtResource("5_terrain")

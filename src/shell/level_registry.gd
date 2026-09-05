@@ -1,19 +1,8 @@
 class_name LevelRegistry
 extends Object
-## The shell's list of playable levels. The level-select screen reads this;
-## levels are self-contained scenes, so adding one is a new entry here
-## plus its `.tscn`. `name` is a plain-text menu label (LevelInfo.display_name is the
-## in-level authority; kept here too so select needn't load every scene to build a list).
-## `desc` is menu-only flavor text, shown while a card is hovered or focused; `id` also
-## names the card screenshot (`LevelShot.thumb_path`).
-##
-## `dev: true` entries are test assets, not shipped content: level-select hides them, but
-## the bake/check tools and the CARLITO_LEVEL smoke still iterate the full list, so CI
-## covers them.
-##
-## The five island levels are independent playgrounds: level_1 is dressed; 2-5 ship
-## generated terrain + auto-splat and an empty AuthoringRoot, ready to author
-## (see tools/gen_islands.gd).
+## Shell's playable-levels list: add a new entry + .tscn. `name` is menu label, `desc` is
+## flavor text, `id` names the scene and screenshot. `dev: true` entries hidden from
+## level-select but included in bake/check/smoke tests.
 
 const LEVELS: Array[Dictionary] = [
 	{ "id": "garage", "name": "Garage", "scene": "res://src/levels/garage/garage.tscn",
@@ -28,12 +17,13 @@ const LEVELS: Array[Dictionary] = [
 		"desc": "Racing island: a circuit with pits and grandstands. Top speed, brakes and slip." },
 	{ "id": "level_5", "name": "Level 5 - Railway", "scene": "res://src/levels/island/level_5/level_5.tscn",
 		"desc": "Railway island: a closed loop for the train, with road and water alongside." },
+	{ "id": "level_6", "name": "Level 6 - Skyport", "scene": "res://src/levels/island/level_6/level_6.tscn",
+		"desc": "Drone bench: pads at altitude, a mast slalom, and a canyon that takes the satellites away." },
 ]
 
 
-## Scene path for a level id, "" if unknown. The id is the stable name: it is what a deep
-## link (`?level=`), the saved session and CARLITO_LEVEL all carry, so nothing outside this
-## file has to know where a level scene lives.
+## Scene path for a level id, "" if unknown. The id is the stable name a deep link
+## (`?level=`), saved session, and CARLITO_LEVEL all carry.
 static func scene_of(id: String) -> String:
 	for entry in LEVELS:
 		if String(entry["id"]) == id:
@@ -41,8 +31,7 @@ static func scene_of(id: String) -> String:
 	return ""
 
 
-## The id of a loaded level, from its scene path; "" if it is not a registered level.
-## The inverse of scene_of, so the shell can save "where you were" as an id.
+## Inverse of scene_of, so the shell can save "where you were" as an id.
 static func id_of(scene_path: String) -> String:
 	for entry in LEVELS:
 		if String(entry["scene"]) == scene_path:
@@ -50,8 +39,7 @@ static func id_of(scene_path: String) -> String:
 	return ""
 
 
-## The whole registry row for a scene path, empty when unregistered. The loading screen
-## dresses itself from this (name + card picture) knowing only what it was asked to load.
+## Whole registry row for a scene path, empty when unregistered.
 static func entry_of(scene_path: String) -> Dictionary:
 	for entry in LEVELS:
 		if String(entry["scene"]) == scene_path:
@@ -59,14 +47,10 @@ static func entry_of(scene_path: String) -> Dictionary:
 	return {}
 
 
-## Bytes of a level's baked scene — the artifact that dominates how long you wait for it
-## (the city is ~14 MB, the mountain 0.7). 0 when there is no bake to measure: the garage is
-## an indoor scene and ships none.
-##
-## Only the .baked.scn is counted, and that is a deliberate limit: it is the one level file
-## that survives export as itself, so this number reads the same locally and in the shipped
-## build. The terrain heightmap/splat PNGs become .ctex on export and cannot be measured at
-## runtime at all. Same path convention as Level._setup_baked / LevelBaker.baked_scene_path.
+## Bytes of a level's baked scene, the artifact that dominates load wait. 0 when there is no
+## bake (the garage ships none). Only .baked.scn is counted: the one level file that survives
+## export as itself, so the number reads the same locally and shipped — the terrain PNGs
+## become .ctex on export and can't be measured at runtime.
 static func weight_bytes(scene_path: String) -> int:
 	var f := FileAccess.open(scene_path.get_basename() + ".baked.scn", FileAccess.READ)
 	if f == null:

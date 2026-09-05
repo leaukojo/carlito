@@ -1,76 +1,57 @@
 extends Node
-## One-shot generator for the Watercraft Pack boat variants (CC0). For each variant it
-## writes src/vehicles/watercraft/<variant>.tscn + <variant>_spec.tres:
-##   - a BoatVehicle RigidBody3D root,
-##   - the GLB body instanced + centred at the kit-wide scale, a convex hull from the HULL
-##     meshes only (rigging is visual — see EXCLUDE_COLLISION),
-##   - a Lamps/Headlight spotlight at the bow (same node path boat_spec.tres uses, so
-##     LampSet needs no change),
-##   - a spec whose feel starts from the boat baseline + per-variant overrides, and the
-##     BoatVehicle node knobs (probes, prop, drag) DERIVED from the measured hull.
-##
-## The model origin is placed at the RESTING WATERLINE (hull bottom sits `draft` below it),
-## like the hand-built boat — so a boat spawn marker works for every variant and the probes
-## are simply float_depth below y = 0.
-##
-## Sibling of tools/gen_kenney_vehicles.gd; kept separate because that one is wheel-shaped
-## throughout (wheel positions, derived brakes, 8-lamp subtree) and a boat has none of it.
-##
-## GAME-MODE tool scene, NOT --script: boat.gd -> base_vehicle.gd references the
-## InputRouter / Bridge autoloads, which only resolve with autoloads registered. Run:
-##   godot --headless --path . res://tools/gen_boat_variants.tscn
-## Deterministic + destructive-by-run: this is the regen path after a scale/feel change.
+## One-shot generator for the Watercraft Pack boat variants: writes
+## src/vehicles/watercraft/<variant>.tscn + <variant>_spec.tres. Deterministic and
+## destructive-by-run, the regen path after a scale/feel change. Model origin sits at the
+## resting waterline. Game-mode tool scene, not --script: boat.gd needs the InputRouter/
+## Bridge autoloads to compile.
 
 const OUT_DIR := "res://src/vehicles/watercraft"
-const MODELS := "res://kit/raw/watercraft"   ## the raw glbs; the packed .tscn embeds the
-## meshes, so the glb itself is not needed at runtime (it is export-excluded).
+const MODELS := "res://kit/raw/watercraft"   ## raw glbs; the packed .tscn embeds the
+## meshes, so the glb is export-excluded and not needed at runtime.
 const BOAT_SCRIPT := "res://src/vehicles/boat/boat.gd"
-## The direct children this generator writes itself, i.e. the ONLY ones a regen may replace.
-## Anything else the scene carries is hand-authored and is transplanted — see _existing_extras.
+## The direct children this generator writes and may replace; everything else is hand-authored and transplanted.
 const GENERATED_CHILDREN := ["CollisionShape3D", "Model", "Lamps"]
 
-const BOAT_SCALE := 1.2  ## matches the Kenney kit scale: speed-a lands at 2.1 m beam x
-## 4.0 m LOA against the 1.8 m car. NOT the recipe's prop scale of 2.0.
-## GLB node names (lowercase) that are visual rigging: kept in the model, excluded from the
-## hull measurement and the collision shape (a mast would inflate it into a tall wedge).
+const BOAT_SCALE := 1.2  ## Kenney kit scale: speed-a lands at 2.1 m beam x 4.0 m LOA
+## against the 1.8 m car. Not the recipe's prop scale of 2.0.
+## GLB node names (lowercase) excluded from hull measurement and collision shape.
 const EXCLUDE_COLLISION := ["sail"]
 
-# Baseline spec, from src/vehicles/boat/boat_spec.tres. wheel_positions stays empty
-# (BaseVehicle is zero-wheel-safe) and all 6 gear_ratios are kept — auto_shift indexes up
-# to byte 6. Brakes stay at 0: no wheels, so the force hierarchy does not apply.
+# Baseline spec (src/vehicles/boat/boat_spec.tres). Ground drive declared empty; all 6
+# gear_ratios kept since auto_shift indexes up to byte 6 regardless.
 const BOAT_BASE := {
 	"torque_curve": [800, 120, 2500, 200, 4200, 210, 5200, 90],
 	"idle_rpm": 800.0, "redline_rpm": 5200.0,
 	"gear_ratios": [2.6, 1.9, 1.4, 1.05, 0.8, 0.62], "reverse_ratio": 2.0,
 	"final_drive": 2.1, "efficiency": 0.9, "shift_up_rpm": 4400.0, "shift_down_rpm": 1800.0,
-	"max_steer_deg": 30.0, "steer_speed": 2.2,
+	"steer_speed": 2.2,
 }
 
-## variant id -> overrides. draft_frac is the share of hull height that sits below the
-## waterline; keel_extra deepens the lateral-drag point below the hull (more heel in turns).
-## Top speed is roughly thrust_force / drag_long m/s (hand-built boat: 5200/380 = 13.7).
+## Hull drag numbers include each hull's own `mass * 0.1` folded into drag_long/drag_lat; drop it and top speed gains ~20%.
+##
+## variant id -> overrides. draft_frac is share of hull height below the waterline. Top
+## speed is roughly thrust_force / drag_long m/s (hand-built boat: 5200/380 = 13.7).
 const VARIANTS := {
 	# light and quick: least mass, eager rudder, modest power
 	"boat-speed-a": {
 		"mass": 600.0, "torque_mul": 1.0, "draft_frac": 0.22, "float_depth": 0.30,
-		"thrust_force": 5200.0, "drag_long": 300.0, "drag_lat": 2000.0, "drag_yaw": 3800.0,
+		"thrust_force": 5200.0, "drag_long": 360.0, "drag_lat": 2060.0, "drag_yaw": 3800.0,
 		"rudder_torque": 6500.0, "keel_extra": 0.15, "com_frac": 0.8,
-		"max_steer_deg": 32.0, "steer_speed": 2.8,
+		"steer_speed": 2.8,
 	},
 	# heavy and powerful: faster flat out, but slow to spin up and slow to turn
 	"boat-speed-j": {
 		"mass": 1400.0, "torque_mul": 1.6, "draft_frac": 0.26, "float_depth": 0.34,
-		"thrust_force": 11000.0, "drag_long": 520.0, "drag_lat": 4200.0, "drag_yaw": 12000.0,
+		"thrust_force": 11000.0, "drag_long": 660.0, "drag_lat": 4340.0, "drag_yaw": 12000.0,
 		"rudder_torque": 11000.0, "keel_extra": 0.25, "com_frac": 0.8,
-		"max_steer_deg": 26.0, "steer_speed": 1.6,
+		"steer_speed": 1.6,
 	},
-	# sailboat: the sail is DECORATION (there is no wind model) — a light, slow hull with a
-	# deep keel and slippery flanks, so it heels hard and carries speed through turns.
+	# sailboat: the sail is decoration (no wind model); light hull, deep keel, slippery flanks.
 	"boat-sail-a": {
 		"mass": 500.0, "torque_mul": 0.55, "draft_frac": 0.20, "float_depth": 0.28,
-		"thrust_force": 2200.0, "drag_long": 330.0, "drag_lat": 1200.0, "drag_yaw": 3200.0,
+		"thrust_force": 2200.0, "drag_long": 380.0, "drag_lat": 1250.0, "drag_yaw": 3200.0,
 		"rudder_torque": 4200.0, "keel_extra": 0.60, "com_frac": 0.3,
-		"max_steer_deg": 34.0, "steer_speed": 2.0,
+		"steer_speed": 2.0,
 	},
 }
 
@@ -108,9 +89,7 @@ func _build_spec(ov: Dictionary, geo: Dictionary) -> VehicleSpec:
 	spec.mass = float(ov["mass"])
 	# COM below the waterline (origin), as a share of the draft: the boats' righting moment.
 	spec.center_of_mass = Vector3(0, -float(geo["draft"]) * float(ov["com_frac"]), 0)
-	spec.wheel_positions = PackedVector3Array()
-	spec.driven_front = false
-	spec.driven_rear = false
+	# No ground drive: the gear byte it still publishes is scaled by Drivetrain.DEFAULT_ROAD_RADIUS.
 	spec.torque_curve = _scaled_curve(BOAT_BASE["torque_curve"], float(ov["torque_mul"]))
 	spec.idle_rpm = float(BOAT_BASE["idle_rpm"])
 	spec.redline_rpm = float(BOAT_BASE["redline_rpm"])
@@ -120,10 +99,8 @@ func _build_spec(ov: Dictionary, geo: Dictionary) -> VehicleSpec:
 	spec.efficiency = float(BOAT_BASE["efficiency"])
 	spec.shift_up_rpm = float(BOAT_BASE["shift_up_rpm"])
 	spec.shift_down_rpm = float(BOAT_BASE["shift_down_rpm"])
-	spec.max_steer_deg = float(ov.get("max_steer_deg", BOAT_BASE["max_steer_deg"]))
+	# No max_steer_deg; `rudder_torque` turns the hull, `steer_speed` slews the rudder axis.
 	spec.steer_speed = float(ov.get("steer_speed", BOAT_BASE["steer_speed"]))
-	spec.brake_torque = 0.0
-	spec.handbrake_torque = 0.0
 	spec.headlight_paths.assign([NodePath("Lamps/Headlight")])
 	return spec
 
@@ -151,8 +128,7 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec,
 	root.set_script(scene_script)
 	root.set("spec", spec)
 
-	# Buoyancy: four probes at the hull quarters, float_depth below the waterline, so the
-	# derived spring rate (boat.gd) floats the boat with y = 0 at the surface.
+	# Buoyancy: four probes at the hull quarters, float_depth below the waterline.
 	root.set("probe_points", PackedVector3Array([
 		Vector3(-beam * 0.42, -float_depth, -loa * 0.40),
 		Vector3(beam * 0.42, -float_depth, -loa * 0.40),
@@ -160,8 +136,7 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec,
 		Vector3(beam * 0.42, -float_depth, loa * 0.40),
 	]))
 	root.set("float_depth", float_depth)
-	# Outdrive at the stern (+Z after the 180 deg flip), below the waterline: the bow rises
-	# under throttle.
+	# Outdrive at the stern (+Z after the 180 deg flip), below the waterline.
 	root.set("prop_offset", Vector3(0, -draft * 0.6, loa * 0.45))
 	root.set("thrust_force", float(ov["thrust_force"]))
 	root.set("rudder_torque", float(ov["rudder_torque"]))
@@ -177,9 +152,7 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec,
 	cs.position = col["pos"]
 	_add(root, root, cs)
 
-	# Body model: instance the GLB and steal its children into a Model node under the body
-	# transform (180 deg Y flip so the pack's +Z bow faces this project's -Z, + kit scale,
-	# x/z centring and the waterline drop). Rigging comes along — it is visual only.
+	# Body model: GLB children stolen into a Model node (180 deg Y flip, kit scale, centring, waterline drop).
 	var glb := (load(MODELS.path_join(variant + ".glb")) as PackedScene).instantiate()
 	var model := Node3D.new()
 	model.name = "Model"
@@ -204,8 +177,7 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec,
 	spot.spot_angle = 38.0
 	_add(root, lamps, spot)
 
-	# Hand-authored children (the "HoodCam" bonnet-cam marker), transplanted and added LAST so
-	# the child order matches what the editor wrote. See _existing_extras.
+	# Hand-authored children (e.g. "HoodCam"), transplanted last to match editor child order.
 	for extra: Node in _existing_extras(variant):
 		_add(root, root, extra)
 
@@ -215,16 +187,7 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec,
 	return packed
 
 
-## Everything in the existing scene this generator does NOT rebuild — the seam that keeps
-## hand-authored anatomy from being regenerated away, and a WHITELIST of what the generator
-## writes (GENERATED_CHILDREN), never a list of what to save, so a hand-added node survives by
-## default rather than vanishing by omission. Today that is the "HoodCam" marker: ChaseCamera's
-## HOOD view falls back to a one-size offset without it, so losing it reads as the bonnet cam
-## drifting rather than as a missing node (test_vehicle_catalog sweeps every variant for it).
-## Empty when the scene doesn't exist yet (a new variant). Nodes are REPARENTED out of an
-## instance loaded with GEN_EDIT_STATE_INSTANCE rather than duplicated, so an instanced child
-## is re-serialised as a one-line instance instead of having every property written back out
-## (the same rule gen_kenney_vehicles.gd records for the tractor's hitch).
+## Everything in the existing scene not in GENERATED_CHILDREN. Reparented, not duplicated, so an instanced child re-serialises as a one-line instance.
 func _existing_extras(variant: String) -> Array:
 	var extras: Array = []
 	var path := OUT_DIR.path_join(variant + ".tscn")
@@ -250,8 +213,7 @@ func _own(node: Node, scene_owner: Node) -> void:
 		_own(c, scene_owner)
 
 
-## Convex hull of the HULL meshes (rigging excluded), simplified by QuickHull. Box fallback
-## if degenerate. Verts already sit in body space, so pos is the origin for a hull.
+## Convex hull of the HULL meshes (rigging excluded); box fallback if degenerate.
 func _body_shape(variant: String, geo: Dictionary) -> Dictionary:
 	var xform: Transform3D = geo["xform"]
 	var st := SurfaceTool.new()
@@ -322,8 +284,7 @@ func _analyze(path: String, draft_frac: float) -> Dictionary:
 			"hull": _xform_aabb(native, xform)}
 
 
-## Collect hull mesh pairs; rigging subtrees (EXCLUDE_COLLISION) are skipped so masts and
-## sails stay out of the measurement and the collision shape.
+## Collect hull mesh pairs; EXCLUDE_COLLISION subtrees are skipped.
 func _collect_hull(node: Node, xform: Transform3D, hull_pairs: Array) -> void:
 	if String(node.name).to_lower() in EXCLUDE_COLLISION:
 		return

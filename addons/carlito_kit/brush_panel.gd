@@ -1,11 +1,7 @@
 @tool
 extends VBoxContainer
-## Terrain-brush panel: the inspector-side controls for the
-## sculpt/paint brush. Mode buttons, radius/strength/falloff spinners, a brush shape picker,
-## and mode-specific rows that appear only in the mode they serve (the flatten target, the
-## ramp hint, the paint channel + fill bucket) — so the panel stays scannable. UI only: the
-## viewport/edit logic lives in terrain_brush.gd (the editor/runtime split). Modes are
-## index-matched to terrain_brush.gd's enum (0 = Off .. 6 = Paint).
+## Inspector-side controls for the sculpt/paint brush. UI only; edit logic lives in
+## terrain_brush.gd, whose enum the mode buttons are index-matched to (0 = Off .. 6 = Paint).
 
 signal mode_changed(mode: int)
 signal channel_changed(channel: int)
@@ -31,16 +27,13 @@ const MODE_TOOLTIPS := [
 			+ "the way onto a plateau. The brush size sets how wide it is.",
 	"Colors the ground with the selected channel instead of changing its shape.",
 ]
-# Named because the buttons are index-matched to the brush enum: adding a mode shifts every
-# index after it, and these are the places that care.
 const MODE_OFF := 0
 const MODE_FLATTEN := 4
 const MODE_RAMP := 5
 const MODE_PAINT := 6
 const CHANNEL_COUNT := 8
 const SWATCH_PX := 14
-## The roads palette cell is 12 x 3 x 12 m, so a 12 m square brush stamps exactly one cell
-## and a 3 m snap step matches its vertical spacing.
+## Roads palette cell is 12 x 3 x 12 m: a 12 m square brush stamps one cell.
 const GRIDMAP_CELL_M := 12.0
 
 var _status: Label
@@ -148,8 +141,7 @@ func _build() -> void:
 	_show_rows(MODE_OFF)
 
 
-## Flatten's target controls: level to a height you type (or eyedrop off the ground) instead
-## of wherever the drag happened to start, optionally quantized.
+## Flatten's target height controls: typed, eyedropped, or drag-start; optionally quantized.
 func _build_flatten_box() -> void:
 	_flatten_box = VBoxContainer.new()
 	add_child(_flatten_box)
@@ -200,7 +192,7 @@ func _build_flatten_box() -> void:
 	snap_row.add_child(_snap_step)
 
 
-## Brush footprint + the one-click GridMap-cell preset.
+## Brush footprint plus the one-click GridMap-cell preset.
 func _build_shape_row() -> void:
 	_shape_row = HBoxContainer.new()
 	add_child(_shape_row)
@@ -225,8 +217,7 @@ func _build_shape_row() -> void:
 	_shape_row.add_child(preset)
 
 
-## Snap the brush onto the road GridMap's cell lattice — so you don't have to aim each stamp
-## onto a cell. Applies to every editing mode.
+## Snaps the brush onto the road GridMap's cell lattice. Applies to every editing mode.
 func _build_snap_grid_row() -> void:
 	_snap_grid_row = HBoxContainer.new()
 	add_child(_snap_grid_row)
@@ -240,9 +231,7 @@ func _build_snap_grid_row() -> void:
 	_snap_grid_row.add_child(_snap_grid_check)
 
 
-## The GridMap-cell preset: a square, hard-edged brush whose footprint is exactly one 12 m
-## cell, snapped to the lattice — the align-to-GridMap workflow in one click. Edge softness
-## goes to 0 so abutting cells tile flush (a soft rim fades to nothing and leaves a seam).
+## Square, hard-edged brush covering one 12 m GridMap cell; falloff forced to 0 so cells tile flush.
 func _use_gridmap_cell() -> void:
 	_shape_box.select(1)
 	shape_changed.emit(true)
@@ -289,9 +278,7 @@ func _emit_flatten() -> void:
 	flatten_changed.emit(_fixed_check.button_pressed, _fixed_height.value, _snap_step.value)
 
 
-## Show only the rows that belong to `mode` — the panel's whole scannability trick. Shape is
-## the exception: it applies to every stamping mode, so it hides only for Off and Ramp (whose
-## width comes from the radius but whose shape is its own swept form).
+## Shows only the rows for `mode`. Shape stays visible for every stamping mode except Off/Ramp.
 func _show_rows(mode: int) -> void:
 	_flatten_box.visible = mode == MODE_FLATTEN
 	_ramp_hint.visible = mode == MODE_RAMP
@@ -303,14 +290,11 @@ func _show_rows(mode: int) -> void:
 
 # ------------------------------------------------------------------ plugin API
 
-## Called by the plugin when a mode button is pressed, so the panel can reveal that mode's
-## controls (the flatten target, the ramp hint, the channel picker + fill).
 func on_mode(mode: int) -> void:
 	_show_rows(mode)
 
 
-## The eyedropper landed: show the sampled height and switch Flatten onto it, since picking a
-## height you then don't use would be a no-op the author has to chase.
+## Eyedropper landed: shows the sampled height and switches Flatten onto it.
 func set_picked_height(y: float) -> void:
 	_fixed_height.set_block_signals(true)
 	_fixed_height.value = y
@@ -319,10 +303,7 @@ func set_picked_height(y: float) -> void:
 	_emit_flatten()
 
 
-## Fill the channel picker from the selected terrain: its eight display names, each with a
-## swatch of that channel's color (both are per-level data — see HeightmapTerrain). Pass an
-## empty `colors` for a plain, iconless list. The selection survives the refill, so
-## re-selecting a terrain never silently switches which channel the brush paints.
+## Fills the channel picker from the terrain's names/colors; empty `colors` gives an iconless list.
 func set_channels(names: PackedStringArray, colors: PackedColorArray) -> void:
 	var selected := maxi(_channel_box.selected, 0)
 	_channel_box.clear()
@@ -337,20 +318,17 @@ func set_channels(names: PackedStringArray, colors: PackedColorArray) -> void:
 	_channel_box.select(mini(selected, CHANNEL_COUNT - 1))
 
 
-## A flat color chip, used as a channel's icon in the picker.
 func _swatch(color: Color) -> ImageTexture:
 	var img := Image.create(SWATCH_PX, SWATCH_PX, false, Image.FORMAT_RGBA8)
 	img.fill(color)
 	return ImageTexture.create_from_image(img)
 
 
-## Set the flatten vertical snap step (metres) and push it to the brush — called when snap-to-
-## grid turns on, so pads also land on the GridMap's height cells. Stays editable afterward.
 func set_snap_step(m: float) -> void:
 	_snap_step.value = m  # value_changed re-emits flatten_changed
 
 
-## Reflect a bracket-key radius change without re-emitting params_changed.
+## Reflects a bracket-key radius change without re-emitting params_changed.
 func set_radius_display(r: float) -> void:
 	_radius.set_block_signals(true)
 	_radius.value = r
@@ -367,10 +345,8 @@ func set_has_terrain(has: bool) -> void:
 	else:
 		_status.text = "No HeightmapTerrain selected."
 		_status.add_theme_color_override("font_color", Color(0.9, 0.7, 0.4))
-		# Snap back to Off so a stale mode can't act on the next selected terrain.
-		# Setting button_pressed programmatically does NOT emit `pressed`, so emit
-		# mode_changed ourselves — otherwise the brush keeps its old mode and would
-		# sculpt the next selected terrain even though the panel reads "Off".
+		# Setting button_pressed programmatically doesn't emit `pressed`; emit mode_changed
+		# here so the brush doesn't keep sculpting the next terrain in a stale mode.
 		if not _mode_buttons.is_empty() and not _mode_buttons[0].button_pressed:
 			_mode_buttons[0].button_pressed = true
 			_show_rows(MODE_OFF)

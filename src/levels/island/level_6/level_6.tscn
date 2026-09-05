@@ -1,0 +1,353 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/levels/base/level.gd" id="1_level"]
+[ext_resource type="Resource" path="res://src/levels/island/level_6/level_6_info.tres" id="2_info"]
+[ext_resource type="Script" path="res://src/vehicles/base/chase_camera.gd" id="3_cam"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="4_spawn"]
+[ext_resource type="Script" path="res://src/levels/base/heightmap_terrain.gd" id="5_terrain"]
+[ext_resource type="Texture2D" path="res://src/levels/island/level_6/level_6_island_height.png" id="6_height"]
+[ext_resource type="Texture2D" path="res://src/levels/island/level_6/level_6_island_splat.png" id="7_splat"]
+[ext_resource type="Shader" path="res://kit/terrain/terrain_splat.gdshader" id="8_shader"]
+[ext_resource type="Script" path="res://src/water/water_surface.gd" id="9_water"]
+[ext_resource type="Script" path="res://kit/helpers/authoring_root.gd" id="10_authoring"]
+[ext_resource type="Environment" path="res://src/levels/base/default_env.tres" id="11_env"]
+[ext_resource type="Script" path="res://kit/helpers/road_path.gd" id="12_road"]
+[ext_resource type="Resource" path="res://kit/roads/asphalt_profile.tres" id="13_asphalt"]
+[ext_resource type="Resource" path="res://kit/roads/bridge_profile.tres" id="14_bridge"]
+[ext_resource type="Curve3D" path="res://src/levels/island/level_6/level_6_loop_curve.tres" id="15_loop"]
+[ext_resource type="Curve3D" path="res://src/levels/island/level_6/level_6_viaduct_curve.tres" id="16_viaduct"]
+[ext_resource type="Curve3D" path="res://src/levels/island/level_6/level_6_rim_curve.tres" id="17_rim"]
+[ext_resource type="Texture2D" path="res://src/levels/island/level_6/level_6_island_splat2.png" id="18_splat2"]
+[ext_resource type="Script" path="res://src/levels/base/world_bounds.gd" id="19_bounds"]
+[ext_resource type="Resource" path="res://src/levels/island/level_6/level_6_wind.tres" id="20_wind"]
+[ext_resource type="MeshLibrary" path="res://kit/palettes/roads.meshlib" id="21_t1tyr"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/racing/flagCheckers.tscn" id="22_xyffy"]
+[ext_resource type="Script" path="res://kit/helpers/kit_piece.gd" id="23_j3168"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/racing/overhead.tscn" id="24_qgbyj"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/racing/pitsGarage.tscn" id="25_bk2rg"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/racing/flagCheckersSmall.tscn" id="26_3xnox"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/commercial/building-skyscraper-a.tscn" id="27_6jpn5"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/watercraft/ramp-wide.tscn" id="28_wjoa2"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/watercraft/cargo-container-a.tscn" id="29_ggnm2"]
+[ext_resource type="PackedScene" path="res://src/levels/base/cargo_payload.tscn" id="30_j3168"]
+[ext_resource type="Script" path="res://src/levels/base/cargo_payload.gd" id="31_qgbyj"]
+
+[sub_resource type="PlaneMesh" id="SeaBedMesh"]
+size = Vector2(560, 560)
+
+[sub_resource type="StandardMaterial3D" id="SeaBedMat"]
+albedo_color = Color(0.83, 0.76, 0.55, 1)
+
+[sub_resource type="ShaderMaterial" id="SplatMat"]
+render_priority = 0
+shader = ExtResource("8_shader")
+shader_parameter/grass_color = Color(0.35, 0.55, 0.25, 1)
+shader_parameter/dirt_color = Color(0.52, 0.4, 0.26, 1)
+shader_parameter/sand_color = Color(0.83, 0.76, 0.55, 1)
+shader_parameter/rock_color = Color(0.45, 0.44, 0.42, 1)
+shader_parameter/color5 = Color(0.95, 0.78, 0.12, 1)
+shader_parameter/color6 = Color(0.92, 0.94, 0.97, 1)
+shader_parameter/color7 = Color(0.22, 0.22, 0.24, 1)
+shader_parameter/color8 = Color(0.62, 0.6, 0.56, 1)
+shader_parameter/splatmap = ExtResource("7_splat")
+shader_parameter/splatmap2 = ExtResource("18_splat2")
+shader_parameter/blend_sharpness = 8.0
+shader_parameter/roughness_value = 1.0
+
+[node name="Level6" type="Node3D" unique_id=1140676205]
+script = ExtResource("1_level")
+info = ExtResource("2_info")
+wind = ExtResource("20_wind")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1751263915]
+environment = ExtResource("11_env")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1917210167]
+transform = Transform3D(0.866, 0.354, -0.354, 0, 0.707, 0.707, 0.5, -0.612, 0.612, 0, 40, 0)
+light_color = Color(1, 0.96, 0.88, 1)
+shadow_enabled = true
+directional_shadow_mode = 0
+directional_shadow_max_distance = 150.0
+
+[node name="ChaseCamera" type="Camera3D" parent="." unique_id=1532344683]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 6)
+script = ExtResource("3_cam")
+
+[node name="Spawn" type="Marker3D" parent="." unique_id=1309660080]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 18.6, 126)
+script = ExtResource("4_spawn")
+vehicle_types = PackedStringArray("car", "truck", "tractor", "drone")
+
+[node name="PlaneSpawn" type="Marker3D" parent="." unique_id=1440908501]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -110, 18.6, 104)
+script = ExtResource("4_spawn")
+vehicle_types = PackedStringArray("plane")
+
+[node name="WaterSpawn" type="Marker3D" parent="." unique_id=880503575]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 212, 1.3, 132)
+script = ExtResource("4_spawn")
+vehicle_types = PackedStringArray("boat")
+is_water = true
+
+[node name="Sea" type="Area3D" parent="." unique_id=1356931969]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+script = ExtResource("9_water")
+size = Vector2(560, 560)
+depth = 3.0
+far_sea_extent = 1900.0
+
+[node name="Bounds" type="StaticBody3D" parent="." unique_id=1759711574]
+script = ExtResource("19_bounds")
+extent = Vector2(560, 560)
+
+[node name="SeaBed" type="MeshInstance3D" parent="." unique_id=551803581]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.01, 0)
+mesh = SubResource("SeaBedMesh")
+surface_material_override/0 = SubResource("SeaBedMat")
+
+[node name="Island" type="StaticBody3D" parent="." unique_id=1986949251]
+script = ExtResource("5_terrain")
+heightmap = ExtResource("6_height")
+terrain_size = Vector2(512, 512)
+height = 51.0
+material = SubResource("SplatMat")
+gen_seed = 60613
+feature_scale = 260.0
+falloff_start = 0.72
+falloff_end = 0.94
+coast_roughness = 0.45
+splatmap = ExtResource("7_splat")
+splatmap2 = ExtResource("18_splat2")
+channel_names = PackedStringArray("Grass", "Dirt", "Sand", "Rock", "Pad", "Snow", "Asphalt", "Gravel")
+channel_grip = PackedFloat32Array(0.8, 0.7, 0.6, 0.7, 0.95, 0.75, 1, 0.85)
+sand_height = 3.0
+dirt_slope_deg = 24.0
+rock_slope_deg = 40.0
+
+[node name="AuthoringRoot" type="Node3D" parent="." unique_id=280865488]
+script = ExtResource("10_authoring")
+chunk_size = 64.0
+metadata/_custom_type_script = "uid://t88htpmwukbg"
+
+[node name="RoadLoop" type="Node3D" parent="AuthoringRoot" unique_id=1636769737]
+script = ExtResource("12_road")
+profile = ExtResource("13_asphalt")
+conform_falloff = 8.0
+metadata/_custom_type_script = "uid://cpl5vh8pdc04w"
+
+[node name="Path" type="Path3D" parent="AuthoringRoot/RoadLoop" unique_id=694806962]
+curve = ExtResource("15_loop")
+
+[node name="Viaduct" type="Node3D" parent="AuthoringRoot" unique_id=1074520858]
+script = ExtResource("12_road")
+profile = ExtResource("14_bridge")
+conform_falloff = 8.0
+metadata/_custom_type_script = "uid://cpl5vh8pdc04w"
+
+[node name="Path" type="Path3D" parent="AuthoringRoot/Viaduct" unique_id=487366738]
+curve = ExtResource("16_viaduct")
+
+[node name="RimRoad" type="Node3D" parent="AuthoringRoot" unique_id=432959053]
+script = ExtResource("12_road")
+profile = ExtResource("13_asphalt")
+conform_falloff = 8.0
+metadata/_custom_type_script = "uid://cpl5vh8pdc04w"
+
+[node name="Path" type="Path3D" parent="AuthoringRoot/RimRoad" unique_id=1823960810]
+curve = ExtResource("17_rim")
+
+[node name="RoadsTiles" type="GridMap" parent="AuthoringRoot" unique_id=178699725]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.22, 0)
+mesh_library = ExtResource("21_t1tyr")
+cell_size = Vector3(12, 3, 12)
+cell_center_y = false
+data = {
+"cells": PackedInt32Array(458749, 9, 55, 458749, 10, 55, 458749, 11, 55, 458750, 9, 55, 458750, 10, 55, 458750, 11, 55, 458751, 9, 55, 458751, 10, 55, 458751, 11, 55, 393216, 9, 55, 393216, 10, 55, 393216, 11, 55)
+}
+
+[node name="RacingProps" type="Node3D" parent="AuthoringRoot" unique_id=1315473226]
+
+[node name="Mast0" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=57075247 instance=ExtResource("22_xyffy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.0040741e-05, 42, -40)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="Mast1" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=440425439 instance=ExtResource("22_xyffy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10.9999695, 42, -56)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="Mast2" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=936645483 instance=ExtResource("22_xyffy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 21.99997, 42, -40)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="Mast3" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=233987134 instance=ExtResource("22_xyffy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32.99997, 42, -56)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="Mast4" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=823301554 instance=ExtResource("22_xyffy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 43.99997, 42, -40)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="Mast5" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=516444992 instance=ExtResource("22_xyffy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 54.99997, 42, -56)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="Mast6" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=784420106 instance=ExtResource("22_xyffy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 65.99997, 42, -40)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="Mast7" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=802400679 instance=ExtResource("22_xyffy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 76.99997, 42, -56)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="Mast8" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=49670851 instance=ExtResource("22_xyffy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 87.99997, 42, -40)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="Mast9" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=2144511037 instance=ExtResource("22_xyffy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 98.99997, 42, -56)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="Mast10" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=254965916 instance=ExtResource("22_xyffy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 109.99997, 42, -40)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="Mast11" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=996049265 instance=ExtResource("22_xyffy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 120.99997, 42, -56)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="Gate0" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=498840709 instance=ExtResource("24_qgbyj")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 27.5, 42, -48)
+script = ExtResource("23_j3168")
+collision_mode = "multiconvex"
+
+[node name="Gate1" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=1233706433 instance=ExtResource("24_qgbyj")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 71.5, 42, -48)
+script = ExtResource("23_j3168")
+collision_mode = "multiconvex"
+
+[node name="Gate2" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=1185824760 instance=ExtResource("24_qgbyj")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 115.5, 42, -48)
+script = ExtResource("23_j3168")
+collision_mode = "multiconvex"
+
+[node name="PadGarage" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=1551129900 instance=ExtResource("25_bk2rg")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -70, 18, 126.00006)
+script = ExtResource("23_j3168")
+
+[node name="PadFlag0" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=1354939769 instance=ExtResource("26_3xnox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24, 18, 120)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="PadFlag1" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=425353336 instance=ExtResource("26_3xnox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 36, 18, 120)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="PadFlag2" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=1698745141 instance=ExtResource("26_3xnox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 36, 18, 132)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="PadFlag3" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=859733900 instance=ExtResource("26_3xnox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24, 18, 132)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="PadFlag4" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=29013764 instance=ExtResource("26_3xnox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 59, 24, 32)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="PadFlag5" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=877742299 instance=ExtResource("26_3xnox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 71, 24, 32)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="PadFlag6" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=706366651 instance=ExtResource("26_3xnox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 71, 24, 44)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="PadFlag7" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=546546066 instance=ExtResource("26_3xnox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 59, 24, 44)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="PadFlag8" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=494540615 instance=ExtResource("26_3xnox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 124, 18, 126)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="PadFlag9" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=2145310963 instance=ExtResource("26_3xnox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 136, 18, 126)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="PadFlag10" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=360742916 instance=ExtResource("26_3xnox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 136, 18, 138)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="PadFlag11" type="Node3D" parent="AuthoringRoot/RacingProps" unique_id=1906984688 instance=ExtResource("26_3xnox")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 124, 18, 138)
+script = ExtResource("23_j3168")
+collision_mode = "footprint"
+
+[node name="CommercialProps" type="Node3D" parent="AuthoringRoot" unique_id=46553158]
+
+[node name="PadTower" type="Node3D" parent="AuthoringRoot/CommercialProps" unique_id=1361330481 instance=ExtResource("27_6jpn5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -95, 30, 30)
+script = ExtResource("23_j3168")
+
+[node name="WatercraftProps" type="Node3D" parent="AuthoringRoot" unique_id=1946615421]
+
+[node name="Slipway" type="Node3D" parent="AuthoringRoot/WatercraftProps" unique_id=892537525 instance=ExtResource("28_wjoa2")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 192.00005, 0.6, 132)
+script = ExtResource("23_j3168")
+collision_mode = "weld"
+
+[node name="Cargo0" type="Node3D" parent="AuthoringRoot/WatercraftProps" unique_id=1084387133 instance=ExtResource("29_ggnm2")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 46, 18.02, 120)
+script = ExtResource("23_j3168")
+
+[node name="Cargo1" type="Node3D" parent="AuthoringRoot/WatercraftProps" unique_id=1810090064 instance=ExtResource("29_ggnm2")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 46, 18.02, 123.2)
+script = ExtResource("23_j3168")
+
+[node name="Cargo2" type="Node3D" parent="AuthoringRoot/WatercraftProps" unique_id=39710383 instance=ExtResource("29_ggnm2")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 46, 18.02, 126.4)
+script = ExtResource("23_j3168")
+
+[node name="Cargo3" type="Node3D" parent="AuthoringRoot/WatercraftProps" unique_id=476778572 instance=ExtResource("29_ggnm2")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 46, 18.02, 129.6)
+script = ExtResource("23_j3168")
+
+[node name="Payloads" type="Node3D" parent="." unique_id=812302444]
+
+[node name="Payload0" type="RigidBody3D" parent="Payloads" unique_id=1445133186 instance=ExtResource("30_j3168")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 18, 123)
+mass = 2.0
+script = ExtResource("31_qgbyj")
+
+[node name="Payload1" type="RigidBody3D" parent="Payloads" unique_id=274583100 instance=ExtResource("30_j3168")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 18, 126)
+mass = 2.0
+script = ExtResource("31_qgbyj")
+
+[node name="Payload2" type="RigidBody3D" parent="Payloads" unique_id=1600606128 instance=ExtResource("30_j3168")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 18, 129)
+mass = 2.0
+script = ExtResource("31_qgbyj")

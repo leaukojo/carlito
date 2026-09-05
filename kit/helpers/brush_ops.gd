@@ -1,41 +1,24 @@
 extends RefCounted
-## Pure, unit-tested brush math. The terrain sculpt/paint brush
-## (addons/carlito_kit/terrain_brush.gd) is editor-only, but the per-pixel stamp math is
-## plain Image arithmetic with no editor API, so it gets the same test discipline as
-## TerrainGen/Drivetrain (tests/test_brush_ops.gd). Lives in kit/ (data +
-## runtime-safe logic here, editor UX in addons/carlito_kit).
-##
-## Everything is deterministic and works in PIXEL space with separate x/z pixel radii, so a
-## world-circular brush on a non-square terrain stamps as an ellipse in image space. The
-## height image is greyscale (red channel = normalized height [0,1]); the splat weights are
-## an 8-vector split across two RGBA images — channels 0..3 in the splatmap (R=grass, G=dirt,
-## B=sand, A=rock — TerrainGen's channel order), 4..7 in the optional splatmap2.
+## Pure, unit-tested brush math for the editor-only terrain sculpt/paint brush
+## (addons/carlito_kit/terrain_brush.gd). Deterministic, works in pixel space with
+## separate x/z pixel radii (a world-circular brush stamps as an ellipse on a non-square
+## terrain). Height image is greyscale (red = normalized height); splat weights are an
+## 8-vector split across two RGBA images — 0..3 in splatmap, 4..7 in splatmap2.
 
-# Sculpt modes (raise/lower shift the normalized height; smooth blurs; flatten pulls toward
-# a captured target). Paint is a separate stamp (stamp_splat), not a sculpt mode.
 enum { RAISE, LOWER, SMOOTH, FLATTEN }
 
-## Normalized height change per full-strength, full-weight sample for raise/lower. Small so a
-## drag ramps smoothly (samples are throttled by spacing in the brush) and 8-bit height PNGs
-## still accumulate visibly (0.05 * 255 ~ 13 levels at full strength).
+## Normalized height change per full-strength, full-weight sample.
 const RATE := 0.05
 
 
-## Normalized distance from the brush centre for a pixel offset already divided by the
-## per-axis pixel radii (so 1 = the rim on either axis). Euclidean gives the round brush;
-## Chebyshev (the larger of the two) gives the square one — axis-aligned in image space,
-## which is world-axis-aligned for our unrotated terrains.
+## Distance from brush centre; Euclidean = round brush, Chebyshev = square.
 static func brush_dist(dx: float, dz: float, square: bool) -> float:
 	if square:
 		return maxf(absf(dx), absf(dz))
 	return sqrt(dx * dx + dz * dz)
 
 
-## Snap a world X/Z to the nearest point of a lattice with pitch `size` anchored at `origin`
-## (result = origin + size*round((v-origin)/size)). The caller bakes any half-cell offset into
-## `origin` — the road GridMap's `cell_center_x/z = true` puts cell centres at
-## `grid_origin + size*0.5 + size*k`, so passing `origin = grid_origin + size*0.5` lands on
-## them. Axis-aligned, matching our unrotated terrains and GridMaps.
+## Snap a world X/Z to the nearest lattice point (pitch `size`, anchored at `origin`).
 static func snap_to_grid(x: float, z: float, size_x: float, size_z: float,
 		origin_x: float, origin_z: float) -> Vector2:
 	var sx := roundi((x - origin_x) / maxf(size_x, 1e-3)) * size_x + origin_x
@@ -43,16 +26,8 @@ static func snap_to_grid(x: float, z: float, size_x: float, size_z: float,
 	return Vector2(sx, sz)
 
 
-## Radial brush weight for a normalized distance t (0 at centre, 1 at the rim). `falloff`
-## in [0,1] is the softness: 0 = a hard disk (weight 1 out to the rim), 1 = a smooth dome
-## from the centre. The solid inner fraction is (1 - falloff); beyond it the weight
-## smoothsteps down to 0 at t = 1.
-##
-## `inclusive` decides the EXACT rim (t == 1.0): normally excluded (weight 0), which keeps
-## round-brush and ramp edges from double-covering. The square brush passes `inclusive = true`
-## so a hard 12 m pad covers its full footprint and abutting cells tile with no seam — the
-## rim then follows the falloff curve like any other point (so a soft square still fades, only
-## a hard one — edge softness 0 — reaches the rim). See `stamp_height` / `stamp_splat`.
+## Radial brush weight for t (0 at centre, 1 at rim). `falloff` 0 = hard disk, 1 = smooth
+## dome. `inclusive` includes the exact rim; the square brush needs it so abutting cells tile.
 static func weight(t: float, falloff: float, inclusive := false) -> float:
 	if t <= 0.0:
 		return 1.0
@@ -67,9 +42,6 @@ static func weight(t: float, falloff: float, inclusive := false) -> float:
 	return 1.0 - x * x * (3.0 - 2.0 * x)
 
 
-## One sculpt op on a normalized height value. `amount` is strength * weight (0..1): raise/
-## lower add/subtract amount*RATE, smooth lerps toward the local average, flatten lerps
-## toward the stroke's captured target. Result clamped to [0,1].
 static func sculpt_value(mode: int, value: float, avg: float, target: float,
 		amount: float) -> float:
 	match mode:
@@ -84,12 +56,8 @@ static func sculpt_value(mode: int, value: float, avg: float, target: float,
 	return value
 
 
-## Stamp a sculpt op into the greyscale height image, centred on pixel (cx, cy) with pixel
-## radii (rx, rz). `square` swaps the round footprint for an axis-aligned square one. Reads
-## base + neighbour heights from a snapshot of the touched region (so smooth is unbiased by
-## the write order) and writes new heights back. Returns the tight dirty Rect2i in pixels
-## (empty when nothing changed), which the brush unions for the undo snapshot and the
-## incremental remesh.
+## Stamp a sculpt op into the greyscale height image. Reads from a snapshot of the touched
+## region (so smooth is unbiased by write order). Returns the tight dirty Rect2i.
 static func stamp_height(img: Image, cx: int, cy: int, rx: float, rz: float,
 		mode: int, strength: float, falloff: float, target: float, square := false) -> Rect2i:
 	var iw := img.get_width()
@@ -129,11 +97,8 @@ static func stamp_height(img: Image, cx: int, cy: int, rx: float, rz: float,
 	return Rect2i(minx, miny, maxx - minx + 1, maxy - miny + 1)
 
 
-## The RGBA slice of the 8-channel unit vector for `channel` (0..7) that belongs to splat
-## image `image_index` (0 = splatmap holds channels 0..3, 1 = splatmap2 holds 4..7). All-zero
-## when the channel lives in the OTHER image — and that is the whole trick: stamping both
-## images with their slice lerps the far image's weights toward zero, so painting one channel
-## fades the seven others no matter which image each lives in, with no cross-image bookkeeping.
+## RGBA slice of the 8-channel unit vector for `channel` in splat image `image_index` (0 =
+## splatmap holds 0..3, 1 = splatmap2 holds 4..7). All-zero in the other image.
 static func unit_slice(channel: int, image_index: int) -> Color:
 	var unit := Color(0, 0, 0, 0)
 	match clampi(channel, 0, 7) - image_index * 4:
@@ -144,11 +109,9 @@ static func unit_slice(channel: int, image_index: int) -> Color:
 	return unit
 
 
-## Stamp a splat-channel paint into an RGBA weight image: pulls each touched pixel toward
-## `unit` (a unit_slice) by strength*weight. The splat shader renormalizes, so lerping toward
-## the unit colour reads as "painting grass over dirt". `square` swaps the round footprint for
-## an axis-aligned square one. Returns the dirty Rect2i in pixels — geometry depends only on
-## the kernel, so the two images of a paint stroke always report the same rect.
+## Stamp a splat-channel paint into an RGBA weight image: pulls each pixel toward `unit`
+## (a unit_slice) by strength*weight. The splat shader renormalizes, so this reads as
+## "painting grass over dirt".
 static func stamp_splat(img: Image, cx: int, cy: int, rx: float, rz: float,
 		unit: Color, strength: float, falloff: float, square := false) -> Rect2i:
 	var iw := img.get_width()
@@ -180,18 +143,10 @@ static func stamp_splat(img: Image, cx: int, cy: int, rx: float, rz: float,
 	return Rect2i(minx, miny, maxx - minx + 1, maxy - miny + 1)
 
 
-## Lay a straight ramp between two points: every pixel within half-width of the SEGMENT a->b
-## is pulled toward the height linearly interpolated along that segment, so the result is a
-## constant-grade surface a vehicle can drive. `a_h`/`b_h` are normalized heights; the pixel
-## half-widths (rx, rz) are the brush radius mapped to each image axis.
-##
-## All the geometry is done in "brush units" — the pixel offset divided by the per-axis half-
-## width. That is the world metric scaled uniformly by 1/radius (rx = radius/metres_per_px_x
-## and likewise for z), so projecting and measuring across in those units is metrically
-## honest even on a non-square terrain, where a world-circular brush is an image-space
-## ellipse. Clamping the projection to [0,1] rounds the ends into caps instead of letting the
-## ramp run to infinity. Unlike a sculpt stamp there are no neighbour reads, so no region
-## snapshot is needed. Returns the tight dirty Rect2i (empty when nothing changed).
+## Lay a straight ramp between two points: pixels within half-width of segment a->b are
+## pulled toward the height lerped along it, giving a constant-grade drivable surface.
+## Geometry runs in "brush units" (pixel offset / half-width) so measuring stays metrically
+## honest on a non-square terrain.
 static func stamp_ramp(img: Image, a_px: Vector2i, a_h: float, b_px: Vector2i, b_h: float,
 		rx: float, rz: float, strength: float, falloff: float) -> Rect2i:
 	var iw := img.get_width()
@@ -203,11 +158,9 @@ static func stamp_ramp(img: Image, a_px: Vector2i, a_h: float, b_px: Vector2i, b
 	var y0 := clampi(mini(a_px.y, b_px.y) - pad_z, 0, ih - 1)
 	var y1 := clampi(maxi(a_px.y, b_px.y) + pad_z, 0, ih - 1)
 
-	# The segment vector in brush units, and its squared length (0 for a degenerate A == B
-	# ramp, which then behaves as a flatten disk at a_h rather than dividing by zero).
 	var bx := float(b_px.x - a_px.x) / maxf(rx, 1e-4)
 	var bz := float(b_px.y - a_px.y) / maxf(rz, 1e-4)
-	var len2 := bx * bx + bz * bz
+	var len2 := bx * bx + bz * bz   # degenerate A == B behaves as a flatten disk at a_h
 
 	var minx := iw
 	var miny := ih
@@ -237,16 +190,12 @@ static func stamp_ramp(img: Image, a_px: Vector2i, a_h: float, b_px: Vector2i, b
 	return Rect2i(minx, miny, maxx - minx + 1, maxy - miny + 1)
 
 
-## Flood a whole weight image with one unit_slice — the bucket fill. Strength and falloff
-## have no say (a fill is a fill), so this is just Image.fill with the stamp's dirty-rect
-## contract, which lets the brush push it through the same region-undo path as a stroke.
+## Flood a whole weight image with one unit_slice, with the stamp's dirty-rect contract.
 static func fill_splat(img: Image, unit: Color) -> Rect2i:
 	img.fill(unit)
 	return Rect2i(0, 0, img.get_width(), img.get_height())
 
 
-## Average of a pixel and its 4 clamped neighbours (the smooth kernel), read from the region
-## snapshot so the blur is independent of write order.
 static func _avg(src: Image, x: int, y: int, w: int, h: int) -> float:
 	var acc := src.get_pixel(x, y).r
 	var n := 1.0

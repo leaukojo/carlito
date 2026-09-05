@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
-## Project input-map sanity: no two game actions may share a physical key — a duplicate
-## silently fires both actions on one press (regression: `hitch` and `next_vehicle` were
-## both on V, so V on the tractor cycled the variant AND toggled the hitch).
+## Project input-map sanity: no two game actions may share a physical key — a duplicate fires
+## both actions on one press (regression: `hitch` and `next_vehicle` were both on V, so V on the
+## tractor cycled the variant and toggled the hitch).
 
 
 func test_no_two_actions_share_a_physical_key() -> void:

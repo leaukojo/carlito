@@ -1,8 +1,6 @@
 extends GdUnitTestSuite
-## TerrainGen pure fns: island falloff, noise remap, splat
-## classification, chunk lattice, normals — hand-checkable numbers throughout, same
-## discipline as Drivetrain. Generation must be deterministic from the seed (bake
-## hashing and git diffs depend on it).
+## TerrainGen: island falloff, noise remap, splat classification, chunk lattice, normals.
+## Generation deterministic from seed (bake hashing, git diffs depend on it).
 
 const Gen := preload("res://kit/terrain/terrain_gen.gd")
 

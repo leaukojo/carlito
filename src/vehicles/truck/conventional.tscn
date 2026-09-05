@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://bi50w45500g7w" path="res://src/vehicles/truck/semi.gd" id="1_semi"]
 [ext_resource type="Resource" path="res://src/vehicles/truck/conventional_spec.tres" id="2_spec"]
+[ext_resource type="Script" uid="uid://cnxxnd6o64d3d" path="res://src/vehicles/truck/fifth_wheel.gd" id="3_fifthwheel"]
 
 [sub_resource type="BoxShape3D" id="BoxLower"]
 size = Vector3(1.92, 0.64, 4.7)
@@ -182,7 +183,16 @@ shape = SubResource("BoxCab")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, -2.28)
 shape = SubResource("BoxHood")
 
-[node name="Kingpin" type="Marker3D" parent="." unique_id=316532720]
+; THE COUPLING, at identity with the kingpin marker as its child -- semi.tscn's shape exactly.
+[node name="FifthWheel" type="Node3D" parent="." unique_id=2145000102]
+script = ExtResource("3_fifthwheel")
+
+; A LONGER UNIT MAY MOVE THE KINGPIN BACK BUT NEVER UP OR DOWN: y = 1.05 is the coupling plane
+; every trailer is authored against, and z 0.85 (against the cab-over's 0.75) is the bonneted
+; silhouette paying for its hood. The sleeper then has to keep the SAME gap ahead of the pin, or
+; the trailers' 1.015 m swing radius no longer fits -- test_truck pins that against semi.tscn's
+; gap rather than against a literal.
+[node name="Kingpin" type="Marker3D" parent="FifthWheel" unique_id=316532720]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.05, 0.85)
 
 [node name="Body" type="Node3D" parent="." unique_id=1396708153]

@@ -1,20 +1,9 @@
 class_name TrainSim
 extends RefCounted
-## 1D consist simulation on the rail spline (plan §Phase 3.2). Each car is a point mass at
-## an arc position s[i] on a curve of length L; the loco (index 0, the head) pulls the rake
-## through spring-damper couplers. Cars are ordered head -> tail; forward travel is +s, so
-## the head holds the LARGEST arc position and each following car sits one rest-gap behind.
-##
-## The instance holds only the evolving state (s, v) plus the tuning; every force is a static
-## pure function below, unit-tested in tests/test_train.gd exactly like Drivetrain's math and
-## the boat's buoyancy — nothing here touches a Curve3D or a physics body, so the whole sim
-## runs headless in a test. TrainVehicle samples the curve tangent for the per-car grades and
-## feeds them in.
-##
-## 60 Hz clamp discipline (the RayWheel / boat rule, DO NOT weaken): a damper term may never
-## exceed the impulse that reverses the velocity it acts on within one tick, and the total
-## coupler force is hard-capped. Removing a clamp reintroduces the one-tick jitter the whole
-## project is tuned to avoid.
+## 1D consist sim: each car is a point mass on a curve arc; loco (index 0) pulls the rake via
+## spring-damper couplers. Cars ordered head->tail; +s is forward. Forces are static pure
+## functions so the sim runs headless. 60 Hz clamp discipline: damper never exceeds one-tick
+## velocity reversal impulse; coupler force is hard-capped. Don't weaken either.
 
 const GRAVITY := 9.8  ## m/s^2; matches the project default_gravity
 
@@ -64,9 +53,8 @@ func setup(car_masses: PackedFloat64Array, gaps: PackedFloat64Array, curve_lengt
 			pos -= rest_gaps[i]
 
 
-## Advance the consist one tick. `throttle` is the signed reverser demand (-1..1, from the
-## gear-owns-direction arbitration); `brake` and `parking` are 0..1; `grades[i]` is the signed
-## track slope (rise/run) at car i, sampled from the curve tangent by TrainVehicle.
+## Advance the consist one tick. `throttle` is the signed reverser demand (-1..1); `brake`
+## and `parking` are 0..1; `grades[i]` is the signed track slope (rise/run) at car i.
 func step(delta: float, throttle: float, brake: float, parking: float,
 		grades: PackedFloat64Array) -> void:
 	var n := s.size()
@@ -100,8 +88,8 @@ func step(delta: float, throttle: float, brake: float, parking: float,
 		s[i] = _wrap(s[i] + v[i] * delta)
 
 
-## Signed centre-to-centre gap between adjacent cars, wrapped onto the loop so a coupler that
-## straddles the s=0 seam still reads its true ~rest_gap separation (never L minus that).
+## Signed centre-to-centre gap between adjacent cars, wrapped onto the loop so a coupler
+## straddling the s=0 seam still reads its true rest_gap separation.
 func _wrapped_gap(s_lead: float, s_follow: float) -> float:
 	var d := s_lead - s_follow
 	if not closed or length <= 0.0:
@@ -139,9 +127,8 @@ static func davis_resistance(speed: float, a: float, b: float, c: float) -> floa
 	return -signf(speed) * (a + b * spd + c * spd * spd)
 
 
-## Train + parking brake force (N), opposing velocity, clamped so one tick can at most ZERO
-## the car's speed, never reverse it (the boat's damped_force rule — a stopped brake holds at
-## zero instead of dragging the car backwards).
+## Train + parking brake force (N), opposing velocity, clamped so one tick can at most zero
+## the car's speed, never reverse it.
 static func brake_force(speed: float, brake: float, parking: float, brake_max: float,
 		mass: float, delta: float) -> float:
 	var demand := clampf(brake + parking, 0.0, 1.0) * brake_max
@@ -158,10 +145,9 @@ static func grade_force(mass: float, grade: float, gravity: float) -> float:
 
 
 ## Coupler force (N) between two cars: spring on the stretch beyond the slack deadband plus a
-## damper on the closing rate. + = tension (draw), - = buff. The damper is clamped to the
-## one-tick reversal of the RELATIVE velocity (reduced mass), and the total is hard-capped —
-## both clamps are load-bearing at 60 Hz, do not weaken. Inside the slack band the coupler is
-## free (returns 0), which is what gives a real consist its visible slack action.
+## damper on the closing rate. + = tension (draw), - = buff. Damper clamped to the one-tick
+## reversal of the relative velocity (reduced mass); total hard-capped — don't weaken either.
+## Inside the slack band the coupler is free (returns 0).
 static func coupler_force(gap: float, rest: float, slack: float, rel_vel: float,
 		k: float, damp: float, reduced_mass: float, delta: float, max_force: float) -> float:
 	var stretch := gap - rest

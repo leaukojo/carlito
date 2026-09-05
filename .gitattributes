@@ -5,6 +5,10 @@
 # Shell scripts must stay LF for the Linux CI runner
 *.sh text eol=lf
 
+# Godot rewrites .import sidecars with LF; force LF here too so autocrlf on
+# Windows doesn't flip them to CRLF and create noise on every re-import.
+*.import text eol=lf
+
 # Binary assets: never eol-convert, never diff as text.
 *.png binary
 *.jpg binary

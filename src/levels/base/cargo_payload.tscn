@@ -1,0 +1,28 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://src/levels/base/cargo_payload.gd" id="1_payload"]
+[ext_resource type="PackedScene" path="res://kit/prefabs/garage/box.tscn" id="2_box"]
+
+[sub_resource type="BoxShape3D" id="CrateShape"]
+size = Vector3(0.858, 0.858, 0.858)
+
+; A 0.858 m crate at 2 kg, and both numbers are measured against the aircraft rather than picked:
+; the drone is a 1.2 m airframe massing 5 kg, so this is a crate it can straddle and a load that
+; is 40 % of its own weight. A shipping container (the kit's other cargo piece, and what stands on
+; the slipway as scenery) is 5.5 m long and would be a lie at any mass.
+; Origin at the crate's BASE, matching the kit piece it wraps, so placing one on a pad is a plain
+; ground-height Y and the hook's hang offset is one crate height.
+; The layer is AUTHORED HERE rather than written in _ready, because _ready is where the crate
+; REMEMBERS it: `_layer = collision_layer` is what a released crate is restored to after being
+; carried out of the collision world. Payload = bit 5, mask = WORLD (see collision_layers.gd).
+[node name="CargoPayload" type="RigidBody3D"]
+collision_layer = 16
+collision_mask = 63
+mass = 2.0
+script = ExtResource("1_payload")
+
+[node name="Shape" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.429, 0)
+shape = SubResource("CrateShape")
+
+[node name="Box" parent="." instance=ExtResource("2_box")]

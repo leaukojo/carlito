@@ -1,0 +1,60 @@
+{
+  "//": "How level 6 is generated. Run it with: powershell -File tools/rebuild_level.ps1 -Level level_6",
+  "level": "level_6",
+  "scene": "res://src/levels/island/level_6/level_6.tscn",
+  "replayable": true,
+  "sources": [
+    "level_6_island_height.png",
+    "level_6_island_splat.png",
+    "level_6_island_splat2.png",
+    "level_6_loop_curve.tres",
+    "level_6_rim_curve.tres",
+    "level_6_viaduct_curve.tres",
+    "level_6_wind.tres"
+  ],
+  "notes": [
+    "gen_skyport.gd owns this level end to end. 'scaffold' REWRITES the .tscn from nothing,",
+    "so 'props' is not optional after it -- a scaffold run left alone ships an empty level.",
+    "The import between them is load bearing: 'props' instances real nodes (a GridMap needs",
+    "its MeshLibrary, KitPiece prefabs need loading) into the scene 'scaffold' just wrote.",
+    "'probe' runs AFTER the bake and only reports: it flies DroneSensors.sweep_sky against the",
+    "baked level's real collision. It writes nothing, and its numbers deliberately disagree",
+    "with scaffold's analytic ladder (see the tool header).",
+    "No scatter here on purpose, so there is no ground-hash stage and no resnap."
+  ],
+  "steps": [
+    {
+      "kind": "scene",
+      "path": "res://tools/gen_skyport.tscn",
+      "args": [
+        "scaffold"
+      ],
+      "why": "Writes the island heightmap and splat, the three curves, the wind field, the LevelInfo and the level .tscn text, and prints the analytic sats ladder."
+    },
+    {
+      "kind": "import"
+    },
+    {
+      "kind": "scene",
+      "path": "res://tools/gen_skyport.tscn",
+      "args": [
+        "props"
+      ],
+      "why": "Opens the scaffolded scene, hangs the GridMap decks and the kit pieces off its AuthoringRoot, and saves."
+    },
+    {
+      "kind": "import"
+    },
+    {
+      "kind": "bake"
+    },
+    {
+      "kind": "scene",
+      "path": "res://tools/gen_skyport.tscn",
+      "args": [
+        "probe"
+      ],
+      "why": "Read-only acceptance report against the BAKED level. Needs the bake above."
+    }
+  ]
+}

@@ -1,38 +1,32 @@
 class_name Level
 extends Node3D
-## Base script for every playable level. A level scene is
-## self-contained: static geometry, VehicleSpawn markers, a WorldEnvironment, a
-## ChaseCamera, and a LevelInfo resource. This script composes them at load time —
-## it instances the default vehicle at a matching spawn, points the camera at it,
-## and handles respawn. Vehicles/levels/UI stay independent scenes.
+## Base script for every playable level: composes static geometry, VehicleSpawn markers,
+## a WorldEnvironment, a ChaseCamera, and a LevelInfo — spawns the default vehicle, aims the camera, handles respawn.
 
-## Emitted after the active vehicle is (re)spawned — at load and on a garage/cycle swap —
-## so the shell can rebind the dashboard/bridge to the new vehicle FAMILY.
+## Emitted after the active vehicle is (re)spawned, so the shell rebinds dashboard/bridge.
 signal vehicle_changed(type: String)
 
 @export var info: LevelInfo
-## The chase camera to follow the active vehicle. Optional; a level may omit it.
+## The chase camera to follow the active vehicle; optional.
 @export var camera: ChaseCamera
+## World wind (see WindField); null is dead calm. Only flight bodies read it.
+@export var wind: WindField
 
-## Night preset: a dim bluish sun + low
-## ambient. The 'day_night' action toggles between the scene-authored day values
-## (captured at load) and these — a level convenience, not a bridge signal.
+## Night preset: dim bluish sun + low ambient, toggled against the authored day values — a level convenience, not a bridge signal.
 const NIGHT_SUN_ENERGY := 0.12
 const NIGHT_SUN_COLOR := Color(0.55, 0.62, 0.85)
 const NIGHT_AMBIENT_ENERGY := 0.12
 const NIGHT_FOG_COLOR := Color(0.05, 0.07, 0.13)
 const NIGHT_SKY_ENERGY := 0.05
 
-## Fullscreen color-grade + vignette (see vignette.gdshader). Built in code so every level
-## gets it with no per-scene edit and no re-bake — same pattern BaseVehicle uses for dust.
+## Fullscreen color-grade + vignette, built in code so every level gets it with no re-bake.
 const VIGNETTE_SHADER := preload("res://src/levels/base/vignette.gdshader")
+const Groups := preload("res://src/levels/base/carlito_groups.gd")
 
 var vehicle: BaseVehicle
 
-## Variant to spawn INSTEAD of the level's own default — the shell sets it from a deep link
-## or the saved session before the level enters the tree. Empty, unknown, not allowed here, or
-## a train with no loop to run on: the level's default wins, so a stale link lands you in a
-## playable level rather than an empty one.
+## Variant to spawn instead of the level's default (set by the shell from a deep link or
+## saved session). Falls back to default if empty, unknown, disallowed, or a loopless train.
 var initial_variant := ""
 
 var _sun: DirectionalLight3D
@@ -44,40 +38,42 @@ var _day_ambient_energy := 1.0
 var _day_fog_color := Color.WHITE
 var _day_sky_energy := 1.0
 
-## Warm cache for the current family's other variants — see _warm_family(). Holding the
-## Resources here is what keeps them in the ResourceLoader cache; drop the array and the
-## next V press pays the full blocking load again.
+## Warm cache for the current family's other variants (see _warm_family); holding the
+## Resources here keeps them in the ResourceLoader cache.
 var _warm: Array[Resource] = []
 var _warming: PackedStringArray = []
+
+## Seconds of level time, accumulated from the physics delta so wind is a function of ticks flown, not frame-rate jitter.
+var _wind_time := 0.0
+
+
+## Tagged in `_init`, not `_enter_tree`: bake tools load level scenes that never enter a tree.
+func _init() -> void:
+	add_to_group(Groups.LEVEL)
 
 
 func _ready() -> void:
 	if info == null:
 		info = LevelInfo.new()
 	if camera == null:
-		# Fall back to the first ChaseCamera in the level so a scene that only has
-		# the node (no explicit `camera` wire) still follows the vehicle.
+		# Fall back to the first ChaseCamera so a scene with no explicit `camera` wire still follows.
 		for node in find_children("*", "ChaseCamera", true, false):
 			camera = node as ChaseCamera
 			break
-	# GameState is fetched by path, not by autoload identifier: the CLI bake tools
-	# (--script mode) load level scenes headless, where autoload
-	# globals don't resolve at compile time. Runtime behaviour is identical.
+	# GameState fetched by path, not autoload identifier: CLI bake tools load headless, where autoload globals don't resolve at compile time.
 	_game_state().current_level = scene_file_path
 	_setup_baked()
 	_capture_day_night()
 	_build_vignette()
-	# default_vehicle names a FAMILY (see LevelInfo); resolve it to that family's first
-	# variant, the same body the garage spawns via boot.gd's first_in_family.
+	# default_vehicle names a family; resolve to its first variant (boot.gd's first_in_family).
 	var wanted := VehicleCatalog.first_in_family(info.default_vehicle)
 	if initial_variant != "" and _can_spawn(initial_variant):
 		wanted = initial_variant
 	_spawn_vehicle(wanted)
+	set_physics_process(wind != null)
 
 
-## Whether `variant` could actually spawn here — allowed by LevelInfo, and for the rail-guided
-## train, a closed loop to place it on. The same two gates _spawn_vehicle would fail on, asked
-## in advance so a requested variant can fall back instead of erroring.
+## Whether `variant` could spawn here: allowed by LevelInfo, and for the train, a closed rail loop.
 func _can_spawn(variant: String) -> bool:
 	if not info.allows(variant):
 		return false
@@ -92,8 +88,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("camera_view"):
 		cycle_camera()
 	elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
-		# Raw wheel rather than an InputMap action: this is a view control with no bridge or
-		# touch twin, so it never reaches VehicleInput and needs no arbitration.
+		# Raw wheel, not an InputMap action: a view control with no bridge/touch twin, no arbitration needed.
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
 			zoom_camera(1.0)
@@ -101,57 +96,41 @@ func _unhandled_input(event: InputEvent) -> void:
 			zoom_camera(-1.0)
 
 
-## Advance the chase camera to its next view (C key / touch VIEW button).
+## Advances the chase camera to its next view (C key / touch VIEW button).
 func cycle_camera() -> void:
 	if camera != null:
 		camera.cycle()
 
 
-## Zoom the chase camera's current view (mouse wheel; ISO and TOP only).
+## Zooms the chase camera's current view (mouse wheel; ISO and TOP only).
 func zoom_camera(steps: float) -> void:
 	if camera != null:
 		camera.zoom(steps)
 
 
-## Swap kit authoring content for the baked scene when one exists.
-## The AuthoringRoot subtree (GridMap palettes + KitPiece prefabs) is the bake
-## tool's INPUT: with a bake present it is freed at load (and export strips it from
-## shipped builds entirely); without one the level plays the authoring content
-## directly — fine for dev iteration, but per-piece collision means seams are
-## possible until the level is baked. Bake output sits next to the level scene by
-## convention: <level>.baked.scn (see kit/bake/level_baker.gd).
+## Swaps kit authoring content for the baked scene when one exists (<level>.baked.scn); without one, per-piece collision can seam.
 func _setup_baked() -> void:
 	if scene_file_path.is_empty():
 		return
 	var baked_path := scene_file_path.get_basename() + ".baked.scn"
 	if not ResourceLoader.exists(baked_path):
+		# .baked.scn is untracked build output, so a fresh clone lands here until it bakes once.
+		push_warning(("%s is running UNBAKED authoring content — per-piece dev collision and "
+				+ "unmerged meshes; perf here does not resemble the shipped build. "
+				+ "Run tools/bake_levels.tscn.") % scene_file_path.get_file())
 		return
-	var authoring := _find_authoring(self)
+	var authoring := Groups.find_authoring(self)
 	add_child((load(baked_path) as PackedScene).instantiate())
 	if authoring != null:
 		authoring.queue_free()
 
 
-## See the note in _ready: bare `GameState` would fail to compile under the CLI
-## bake tools. Only called from inside the tree, where the autoload exists.
+## Bare `GameState` would fail to compile under the CLI bake tools; only called in-tree.
 func _game_state() -> Node:
 	return get_node("/root/GameState")
 
 
-## AuthoringRoot is detected by its duck-typing marker (same contract the baker and
-## the export-strip plugin use), so this file never depends on kit/ scripts.
-static func _find_authoring(node: Node) -> Node:
-	if node.has_method("is_carlito_authoring"):
-		return node
-	for child in node.get_children():
-		var found := _find_authoring(child)
-		if found != null:
-			return found
-	return null
-
-
-## Grab the level's sun + environment and remember the authored (day) lighting so the
-## night toggle is reversible. Both are optional — a level may omit either.
+## Grabs the sun + environment and remembers the authored (day) lighting so night is reversible.
 func _capture_day_night() -> void:
 	for node in find_children("*", "DirectionalLight3D", true, false):
 		_sun = node as DirectionalLight3D
@@ -159,8 +138,7 @@ func _capture_day_night() -> void:
 	for node in find_children("*", "WorldEnvironment", true, false):
 		var we := node as WorldEnvironment
 		if we.environment != null:
-			# Levels share one saved Environment resource; night-mode mutations must
-			# stay per-level, so work on a runtime copy.
+			# Levels share one saved Environment resource; night mutations must stay per-level.
 			we.environment = we.environment.duplicate(true)
 		_env = we.environment
 		break
@@ -171,14 +149,11 @@ func _capture_day_night() -> void:
 		_day_ambient_energy = _env.ambient_light_energy
 		_day_fog_color = _env.fog_light_color
 		_day_sky_energy = _env.background_energy_multiplier
-	# A level always starts at its authored day lighting; say so, so a HUD carrying the state
-	# (the touch overlay's caption) is right from the first frame of a new level too.
+	# A level always starts at authored day lighting; emit so the HUD is right from frame one.
 	GameState.night_changed.emit(_is_night)
 
 
-## Flip the level between its authored day lighting and night (N key / touch NIGHT button).
-## Public for the same reason cycle_camera is: the shell relays the touch overlay's button here,
-## and day/night is a LEVEL concern rather than a bridge signal.
+## Flips between authored day lighting and night (N key / touch NIGHT button).
 func toggle_day_night() -> void:
 	_is_night = not _is_night
 	if _sun != null:
@@ -191,10 +166,16 @@ func toggle_day_night() -> void:
 	GameState.night_changed.emit(_is_night)
 
 
-## Add the fullscreen color-grade + vignette overlay. It lives on its own CanvasLayer at
-## layer 0 so it draws over the 3D world but UNDER the shell's HUD CanvasLayer (default
-## layer 1) — the dashboard gauges stay undimmed. A full-rect ColorRect carries the shader;
-## it ignores mouse input so it never eats touches meant for the touch controls.
+func _physics_process(delta: float) -> void:
+	_wind_time += delta
+
+
+## World wind vector (m/s, world space, y=0); zero on a level with no WindField.
+func wind_vector() -> Vector3:
+	return Vector3.ZERO if wind == null else wind.vector_at(_wind_time)
+
+
+## Adds the color-grade + vignette overlay on layer 0 (under the shell's HUD layer 1); ignores mouse input.
 func _build_vignette() -> void:
 	var layer := CanvasLayer.new()
 	layer.name = "Vignette"
@@ -209,8 +190,7 @@ func _build_vignette() -> void:
 	add_child(layer)
 
 
-## Respawn the player as `variant` at a matching spawn marker (garage / V-cycle).
-## Ignores unknown/disallowed variants so a bad choice can't break the level.
+## Respawns the player as `variant` at a matching spawn marker; ignores disallowed variants.
 func set_vehicle(variant: String) -> void:
 	if not info.allows(variant):
 		push_error("Level: vehicle variant '%s' not allowed here" % variant)
@@ -218,17 +198,14 @@ func set_vehicle(variant: String) -> void:
 	_spawn_vehicle(variant)
 
 
-## Instance `variant` at a spawn that accepts its FAMILY, replacing any current vehicle,
-## and re-aim the camera. Used at load and by set_vehicle. The family (not the variant) is
-## what the bridge/dashboard/spawn filters key off, so it goes into GameState.current_vehicle.
+## Instances `variant` at a spawn accepting its family, replacing any current vehicle, and re-aims the camera.
 func _spawn_vehicle(variant: String) -> void:
 	var scene_path := VehicleCatalog.scene_of(variant)
 	if scene_path.is_empty():
 		push_error("Level: no scene registered for vehicle variant '%s'" % variant)
 		return
 	var family := VehicleCatalog.family_of(variant)
-	# The train is rail-guided: it ignores VehicleSpawn markers and self-places on a closed
-	# rail loop in its own _ready (Phase 4 adds random-loop choice + garage gating on top).
+	# The train is rail-guided: ignores VehicleSpawn markers, self-places on a closed rail loop.
 	var is_train := family == "train"
 	var spawn: VehicleSpawn = null
 	if is_train:
@@ -245,7 +222,7 @@ func _spawn_vehicle(variant: String) -> void:
 		vehicle.queue_free()
 
 	vehicle = (load(scene_path) as PackedScene).instantiate()
-	add_child(vehicle)  # triggers the vehicle's _ready — the train places its consist here
+	add_child(vehicle)  # triggers _ready — the train places its consist here
 	if spawn != null:
 		vehicle.global_transform = spawn.global_transform
 		vehicle.spawn_transform = spawn.global_transform
@@ -263,12 +240,7 @@ func _spawn_vehicle(variant: String) -> void:
 	_warm_family(family, variant)
 
 
-## Pull the family's OTHER variants in on background threads once the spawn has settled.
-## `_spawn_vehicle` uses a blocking load(), so without this the first V press into a
-## never-seen body hitches the main thread on mobile. Fire-and-forget: the poll in
-## _process just moves finished loads into `_warm` so the cache keeps them, and a variant
-## that lands after the player already pressed V costs nothing (the blocking load simply
-## joins the in-flight request).
+## Pulls the family's other variants in on background threads so the first V press into a new body doesn't hitch.
 func _warm_family(family: String, spawned: String) -> void:
 	_warm.clear()  # switching families: stop holding the old one's bodies in memory
 	for variant in VehicleCatalog.VARIANTS:
@@ -296,7 +268,7 @@ func _process(_delta: float) -> void:
 		set_process(false)
 
 
-## First VehicleSpawn under this level that accepts `family`; null if none.
+## First VehicleSpawn accepting `family`; null if none.
 func _pick_spawn(family: String) -> VehicleSpawn:
 	for node in find_children("*", "VehicleSpawn", true, false):
 		var spawn := node as VehicleSpawn
@@ -305,15 +277,11 @@ func _pick_spawn(family: String) -> VehicleSpawn:
 	return null
 
 
-## First closed rail loop under this level (RailTrack.find_closed_rail is the one shared walk,
-## used by TrainVehicle too so the spawn gate and the train agree on what a rail is); null if
-## none.
+## First closed rail loop here (RailTrack.find_closed_rail is the one shared walk); null if none.
 func _find_closed_rail() -> Node:
 	return RailTrack.find_closed_rail(self)
 
 
-## Whether a closed rail loop exists here — the shell's roster gate: the "train" family is
-## dropped from the garage menu on a level with no loop (so a stray allow-list entry can't
-## offer a train that _spawn_vehicle would then refuse). Same one walk the spawn gate uses.
+## Whether a closed rail loop exists — the shell's roster gate drops "train" from the garage menu when it doesn't.
 func has_closed_rail() -> bool:
 	return _find_closed_rail() != null

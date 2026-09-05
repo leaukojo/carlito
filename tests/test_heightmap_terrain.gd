@@ -1,7 +1,5 @@
 extends GdUnitTestSuite
-## HeightmapTerrain world-space height query: the ground-sample fallback the palette
-## dock uses when a placement raycast misses. Pure image math — built inline with round
-## numbers so every expected value is hand-checkable.
+## HeightmapTerrain: world-space height query (raycast fallback). Pure image math.
 
 const TerrainScript := preload("res://src/levels/base/heightmap_terrain.gd")
 
@@ -10,7 +8,6 @@ func _tex(img: Image) -> ImageTexture:
 	return ImageTexture.create_from_image(img)
 
 
-# Float format so fractional red values are exact (RGB8 would quantize 0.5 -> 0.498).
 func _flat(red: float) -> ImageTexture:
 	var img := Image.create(4, 4, false, Image.FORMAT_RGBF)
 	img.fill(Color(red, red, red))

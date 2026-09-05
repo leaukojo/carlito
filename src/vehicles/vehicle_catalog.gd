@@ -1,15 +1,9 @@
 class_name VehicleCatalog
 extends RefCounted
-## Static registry of vehicle VARIANTS. A *variant* is one concrete body scene; a
-## *family* is the contract type id (car / truck / tractor / boat / bike / drone / plane) that
-## drives the bridge marshaling, dashboard cluster and spawn filter. Many variants share
-## one family — the selector shows the variants as cards and V cycles them in place.
-##
-## The hand-built vehicles are variants of their own family (listed first, so a family
-## resolves to its legacy body). The rest are the Kenney car kit and Watercraft pack (CC0),
-## each generated with its own feel (tools/gen_kenney_vehicles, tools/gen_boat_variants).
-## Pure static data + helpers, unit-tested in tests/test_vehicle_catalog.gd. The contract file is NOT touched:
-## every variant maps to a family the contract already declares.
+## Static registry of vehicle variants and their families. A variant is a concrete body scene;
+## a family is the contract type (car/truck/tractor/boat/drone/plane) for bridge/dashboard/spawn.
+## Hand-built vehicles are listed first per family. The rest are Kenney and Watercraft packs
+## (CC0), generated with individual feel. Every variant maps to a pre-declared contract family.
 
 const KENNEY := "res://src/vehicles/kenney/"
 const WATERCRAFT := "res://src/vehicles/watercraft/"
@@ -19,13 +13,9 @@ const VARIANTS := {
 	# -- hand-built bodies, first in their family. The car / truck / boat / tractor families
 	# have no hand-built body: they default to their first kit / watercraft variant below
 	# (sedan-sports / garbage-truck / boat-speed-a / tractor-kenney). --
-	"bike": {"scene": "res://src/vehicles/bike/bike.tscn", "family": "bike"},
 	"drone": {"scene": "res://src/vehicles/drone/drone.tscn", "family": "drone"},
 	"plane": {"scene": "res://src/vehicles/plane/plane.tscn", "family": "plane"},
 	"bullet": {"scene": "res://src/vehicles/train/train.tscn", "family": "train"},
-	# -- bike family: recolors of the one hand-built body (variant == body colour) --
-	"bike-motocross": {"scene": "res://src/vehicles/bike/bike-motocross.tscn", "family": "bike"},
-	"bike-scooter": {"scene": "res://src/vehicles/bike/bike-scooter.tscn", "family": "bike"},
 	# -- Watercraft pack: boat family --
 	"boat-speed-a": {"scene": WATERCRAFT + "boat-speed-a.tscn", "family": "boat"},
 	"boat-speed-j": {"scene": WATERCRAFT + "boat-speed-j.tscn", "family": "boat"},
@@ -43,9 +33,9 @@ const VARIANTS := {
 	"van": {"scene": KENNEY + "van.tscn", "family": "car"},
 	"pickup": {"scene": KENNEY + "pickup.tscn", "family": "car"},
 	"pickup-flat": {"scene": KENNEY + "pickup-flat.tscn", "family": "car"},
-	# Heavy vans: `car` family because the FAMILY IS THE CHASSIS CLASS, not the job — these are
-	# ordinary chassis on proprietary CAN, not J1939 vehicles (their honest standards home is
-	# CiA 447, the special-purpose car add-on profile). They keep the truck chassis FEEL: see
+	# Heavy vans: `car` family — family is the chassis class, not the job. Proprietary CAN, not
+	# J1939 (standards home: CiA 447 special-purpose car profile). Keep the truck chassis feel:
+	# see
 	# gen_kenney_vehicles.gd's VAN_BASE.
 	"delivery": {"scene": KENNEY + "delivery.tscn", "family": "car"},
 	"delivery-flat": {"scene": KENNEY + "delivery-flat.tscn", "family": "car"},

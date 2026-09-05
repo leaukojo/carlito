@@ -1,9 +1,7 @@
 # GdUnit generated TestSuite
 extends GdUnitTestSuite
-## Unit tests for the scatter core: deterministic seeded
-## placement (same seed = identical forest, forever), min-spacing guarantees,
-## footprint containment, weighted item picks, the stored stride-5 layout, the
-## stale-guard ground hash, and the shared item-mesh/shape harvesting.
+## Scatter core: deterministic seeded placement, min-spacing, footprint containment,
+## weighted picks, stride-5 layout, ground hash, item-mesh/shape harvesting.
 
 const Scatter := preload("res://kit/helpers/scatter_region.gd")
 const Canvas := preload("res://kit/helpers/scatter_canvas.gd")

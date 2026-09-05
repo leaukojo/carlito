@@ -1,33 +1,27 @@
 class_name LevelSelect
 extends Control
-## Level-select screen: the LEVEL section of the pause menu (it was the shell's front door
-## until the game started booting straight into a level). Walks LevelRegistry and
-## emits the chosen scene path. One card per level — its screenshot
-## (src/ui/level_thumbs/<id>.png, shot from the kit's Polish tab) with the name on a strip
-## across the bottom, and the registry `desc` shown below the grid while a card is hovered
-## or focused. No emoji.
-## Built in code (like the dashboard) — it is a transient overlay the shell frees on pick.
+## Level-select: the LEVEL section of the pause menu, not the shell's front door. Walks
+## LevelRegistry and emits the chosen scene path. One card per level — its screenshot
+## (src/ui/level_thumbs/<id>.png) with the name on a bottom strip, and the registry `desc`
+## shown below the grid while a card is hovered/focused. No emoji. Built in code, a transient
+## overlay the shell frees on pick.
 ##
-## Sizing and colour come from the inherited theme (UiTheme); the only pixel numbers left here
-## are the card's aspect and the grid's breakpoints, and both are scaled through UiTheme.px.
-## The grid reflows to the window: the column count is derived from the width available, so the
-## screen works on a phone and on a 4K monitor instead of assuming a 3-wide desktop.
+## Sizing/colour come from UiTheme; the grid reflows column count to available width, so it
+## works on a phone and a 4K monitor.
 
 signal level_chosen(scene_path: String)
-## Left without picking anything (BACK / Esc). It is no longer the first screen — the game
-## boots into a level and this opens from the pause menu — so leaving it has to be possible.
-signal closed
+signal closed  # BACK / Esc
+
+const CardGrid := preload("res://src/ui/card_grid.gd")
 
 ## Card width in logical px (scaled). Height follows the 16:9.5 screenshot aspect.
 const CARD_W := 320.0
 const CARD_ASPECT := 0.594  ## 190/320, the shape gen_level_thumbs shoots
 const STRIP_H := 34.0
-## A card's frame, and the amount its picture is inset by so the frame is visible at all.
+## Card frame width, and the inset the screenshot needs so the frame stays visible.
 const BORDER_W := 3.0
-## Never fewer than one column, never so many that cards shrink below legibility.
 const MAX_COLUMNS := 4
-## Above this the weight reads as a warning rather than a footnote: the city bake is 14 MB and
-## on a phone connection that is a wait worth being told about before you commit to it.
+## Above this the weight reads as a warning: worth flagging before a phone connection commits.
 const HEAVY_MB := 8.0
 
 var _desc: Label
@@ -54,14 +48,11 @@ func _ready() -> void:
 	title.theme_type_variation = &"Display"
 	col.add_child(title)
 
-	# The grid scrolls: the cards do not fit a small window, and a level added later must not
-	# push the description off screen.
+	# Grid scrolls: cards don't fit a small window.
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	# Arrowing onto a card below the fold has to bring it INTO view — without this the focus
-	# ring walks off the bottom of the scroll area and a keyboard or gamepad player is moving a
-	# selection they cannot see.
+	# Without this, arrowing onto a card below the fold moves a selection you can't see.
 	scroll.follow_focus = true
 	col.add_child(scroll)
 
@@ -73,8 +64,7 @@ func _ready() -> void:
 
 	var first: Button = null
 	for entry in LevelRegistry.LEVELS:
-		# Dev fixtures are test assets, not shipped content (LevelRegistry's own rule); the
-		# bake/check tools still walk the full list, so CI keeps covering them.
+		# Dev fixtures are test assets, not shipped content; bake/check tools still walk them.
 		if bool(entry.get("dev", false)):
 			continue
 		var card := _make_card(entry)
@@ -91,8 +81,8 @@ func _ready() -> void:
 	_desc.theme_type_variation = &"Dim"
 	col.add_child(_desc)
 
-	# The only Button here that is not a card (the shell menu tests tell them apart by that:
-	# a card carries its name on a child Label, never in `text`).
+	# The only Button here that is not a card (tests tell them apart: a card's name is a
+	# child Label, never `text`).
 	var back := Button.new()
 	back.text = "BACK"
 	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -105,8 +95,7 @@ func _ready() -> void:
 		first.grab_focus()  # keyboard/gamepad start point; also fills the description line
 
 
-## Fit as many cards across as the window allows. Called on every resize of the scroll area,
-## which is also what a theme rebuild (UiScale) triggers.
+## Fit as many cards across as the window allows. Runs on scroll-area resize (incl. theme rebuild).
 func _reflow() -> void:
 	if _grid == null or _grid.get_child_count() == 0:
 		return
@@ -117,8 +106,7 @@ func _reflow() -> void:
 	_grid.columns = clampi(fits, 1, mini(MAX_COLUMNS, _grid.get_child_count()))
 
 
-## One level card: the screenshot behind, the name on a strip across the bottom. The whole
-## card is the Button (exactly one per shipped registry entry — the shell menu test counts them).
+## One level card: screenshot behind, name on a bottom strip. The whole card is the Button.
 func _make_card(entry: Dictionary) -> Button:
 	var level_name := String(entry["name"])
 	var desc := String(entry.get("desc", ""))
@@ -129,19 +117,17 @@ func _make_card(entry: Dictionary) -> Button:
 	card.clip_contents = true
 	card.tooltip_text = desc
 	# The card IS the picture: the theme's button padding would inset the screenshot.
-	card.add_theme_stylebox_override("normal", _card_box(false))
-	card.add_theme_stylebox_override("hover", _card_box(true))
-	card.add_theme_stylebox_override("pressed", _card_box(true))
-	card.add_theme_stylebox_override("focus", _card_box(true))
+	card.add_theme_stylebox_override("normal", CardGrid.card_box(self, BORDER_W, false))
+	card.add_theme_stylebox_override("hover", CardGrid.card_box(self, BORDER_W, true))
+	card.add_theme_stylebox_override("pressed", CardGrid.card_box(self, BORDER_W, true))
+	card.add_theme_stylebox_override("focus", CardGrid.card_box(self, BORDER_W, true))
 	card.pressed.connect(_on_level_pressed.bind(String(entry["scene"])))
 	card.mouse_entered.connect(_show_desc.bind(desc))
 	card.focus_entered.connect(_show_desc.bind(desc))
 
-	# THE PICTURE IS INSET BY THE BORDER: a StyleBox is the button's BACKGROUND, so a full-rect
-	# child paints straight over it and the hover/focus border does not exist at all on a card
-	# carrying a screenshot (the same bug the vehicle selector's cards were measured with). It is
-	# also why the border WIDTH is fixed rather than growing when lit — a growing width would have
-	# to move the inset with it.
+	# The picture is inset by the border: a StyleBox is the button's background, so a full-rect
+	# child paints straight over it and the hover/focus border would be invisible otherwise.
+	# Border width stays fixed rather than growing when lit, so the inset never has to move.
 	var inset := UiTheme.px(self, BORDER_W)
 
 	var thumb_path := LevelShot.thumb_path(String(entry["id"]))
@@ -158,8 +144,7 @@ func _make_card(entry: Dictionary) -> Button:
 		thumb.offset_bottom = -inset
 		card.add_child(thumb)
 	else:
-		# Never shot (or shot after export excluded it): a flat plate, so the card still
-		# reads as a card instead of collapsing to a bare label.
+		# Never shot (or excluded from export): flat plate so it still reads as a card.
 		var missing := Label.new()
 		missing.text = "no screenshot"
 		missing.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -188,8 +173,7 @@ func _make_card(entry: Dictionary) -> Button:
 	label.offset_left = UiTheme.px(self, 10.0)
 	strip.add_child(label)
 
-	# What this level costs to load, on the card you decide from rather than after the wait
-	# has started. Blank for a level with no bake (the garage) — there is nothing honest to say.
+	# Cost to load, shown before the wait starts. Blank for a level with no bake (the garage).
 	var weight := LevelRegistry.weight_text(String(entry["scene"]))
 	if not weight.is_empty():
 		var w := Label.new()
@@ -205,17 +189,6 @@ func _make_card(entry: Dictionary) -> Button:
 		strip.add_child(w)
 
 	return card
-
-
-## A card's frame: no fill and no padding (the screenshot is the fill), just the border that
-## marks hover/focus. The theme's Button box cannot do this — it exists to pad text.
-func _card_box(lit: bool) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = UiTheme.SURFACE_LO
-	s.set_corner_radius_all(int(UiTheme.px(self, UiTheme.RADIUS)))
-	s.border_color = UiTheme.ACCENT if lit else UiTheme.BORDER
-	s.set_border_width_all(int(UiTheme.px(self, BORDER_W)))
-	return s
 
 
 func _show_desc(text: String) -> void:

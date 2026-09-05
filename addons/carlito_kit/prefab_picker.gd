@@ -1,15 +1,9 @@
 @tool
 extends EditorProperty
-## Kit-prefab picker for ScatterItem.prefab: a kit dropdown plus a prefab dropdown built by
-## scanning kit/prefabs/<kit>/*.tscn. Assigns `load(path)` — a plain PackedScene reference,
-## exactly what the generic resource slot produced — so the level's stale-bake input hash
-## still tracks the choice through ordinary scene dependencies.
-##
-## Why this exists: the generated kit prefabs carry no `uid://` (gen_kit_assets writes them
-## headless, and ResourceSaver mints no id for a file that has none), and Godot's resource
-## picker lists only uid-indexed resources. So the only pickable "tree-large" was the raw
-## kit/raw/suburban/tree-large.glb — un-scaled, no KitPiece, no dev collision, and it bakes
-## to nothing. Listing prefabs only makes that mistake unreachable.
+## Kit-prefab picker for ScatterItem.prefab: kit dropdown + prefab dropdown, scanning
+## kit/prefabs/<kit>/*.tscn. Assigns `load(path)`. Needed because generated prefabs carry
+## no `uid://` (headless ResourceSaver mints none), so the default resource picker can't
+## list them and would otherwise let you pick the raw, un-scaled kit/raw .glb instead.
 
 const PREFAB_DIR := "res://kit/prefabs"
 const THUMB_DIR := "res://kit/thumbs"
@@ -21,8 +15,7 @@ var _kits: Array[String] = []
 var _kit_pick: OptionButton
 var _prefab_pick: OptionButton
 var _thumb: TextureRect
-## Set while the UI is being written from the edited value, so the resulting item_selected
-## signals don't echo back as property writes.
+## True while the UI is written from the edited value, so item_selected doesn't echo back.
 var _syncing := false
 
 
@@ -35,9 +28,6 @@ func _init() -> void:
 	_prefab_pick.size_flags_stretch_ratio = 2.0
 	_prefab_pick.tooltip_text = "Prefab scene to scatter"
 
-	# The kit thumbs (rendered windowed by tools/gen_thumbs.tscn, same PNGs the palette dock
-	# shows) double as the picked prefab's preview — kept small so the item table stays a
-	# table, and left blank rather than padded when a prefab has no thumb yet.
 	_thumb = TextureRect.new()
 	_thumb.custom_minimum_size = Vector2(THUMB_PX, THUMB_PX)
 	_thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -59,8 +49,7 @@ func _init() -> void:
 	_prefab_pick.item_selected.connect(_on_prefab_selected)
 
 
-## Inspector -> UI. Follows the edited value's own kit so selecting a region's items walks
-## the dropdowns to whatever each one already holds.
+## Inspector -> UI. Walks the dropdowns to whatever the edited value already holds.
 func _update_property() -> void:
 	var path := _edited_path()
 	_syncing = true
@@ -73,8 +62,7 @@ func _update_property() -> void:
 	_syncing = false
 
 
-## Browsing kits never touches the value — the prefab dropdown just shows <none> until a
-## prefab in that kit is picked.
+## Browsing kits never touches the value; the prefab dropdown shows <none> until picked.
 func _on_kit_selected(_index: int) -> void:
 	if _syncing:
 		return
@@ -111,9 +99,7 @@ func _fill_prefabs(kit: String, selected: String) -> void:
 				_paths.append(path)
 				if path == selected:
 					chosen = _paths.size() - 1
-	# A value assigned outside kit/prefabs (a raw .glb picked before this editor existed)
-	# stays visible and selected rather than reading as empty — clearing it is the author's
-	# call, not a side effect of opening the inspector.
+	# A value assigned outside kit/prefabs stays visible/selected rather than reading empty.
 	if chosen == 0 and selected != "" and not selected.begins_with(PREFAB_DIR + "/"):
 		_prefab_pick.add_item("%s (outside kit/prefabs)" % selected.get_file())
 		_paths.append(selected)
@@ -122,8 +108,7 @@ func _fill_prefabs(kit: String, selected: String) -> void:
 	_show_thumb(_paths[chosen])
 
 
-## Preview for a picked prefab, from kit/thumbs/<kit>/<name>.png (blank when absent, and for
-## anything outside kit/prefabs — a raw .glb has no thumb of its own).
+## Preview from kit/thumbs/<kit>/<name>.png; blank when absent or outside kit/prefabs.
 func _show_thumb(path: String) -> void:
 	var kit := _kit_of(path)
 	if kit == "":

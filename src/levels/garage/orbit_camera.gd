@@ -1,10 +1,5 @@
 extends ChaseCamera
-## Orbit camera for the Garage showroom. Extends ChaseCamera so Level's typed
-## `camera` export and its target/snap wiring work unchanged, but replaces the chase
-## behaviour with a mouse/touch orbit around a stationary (physics-frozen) vehicle.
-##
-## The target never moves, so plain global_position math is correct here — no
-## interpolation (unlike ChaseCamera, which follows a moving body per rendered frame).
+## Orbit camera for the Garage showroom; replaces ChaseCamera's chase behaviour with a mouse/touch orbit around a stationary (frozen) vehicle.
 
 @export var min_pitch_deg := -70.0  ## look up at the underside
 @export var max_pitch_deg := 75.0   ## look down from above (avoid the gimbal pole)
@@ -25,13 +20,12 @@ func _process(_delta: float) -> void:
 	_apply()
 
 
-## Level calls this on spawn/respawn. Orbit has no smoothing, so it is the same as
-## the per-frame update.
+## Called by Level on spawn/respawn.
 func snap() -> void:
 	_apply()
 
 
-## Place the camera on the orbit sphere around the target and look at the pivot.
+## Places the camera on the orbit sphere and looks at the pivot.
 func _apply() -> void:
 	if target == null:
 		return
@@ -81,7 +75,7 @@ func _orbit(relative: Vector2) -> void:
 	_pitch -= relative.y * orbit_speed
 
 
-## Screen-space distance between the first two active touches (0 if fewer than two).
+## 0 if fewer than two touches active.
 func _pinch_gap() -> float:
 	if _touches.size() < 2:
 		return 0.0

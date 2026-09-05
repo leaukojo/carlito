@@ -1,22 +1,17 @@
 class_name ShellPrefs
 extends RefCounted
-## The handful of things the shell remembers between visits, in one `user://` file.
+## The handful of things the shell remembers between visits, in one `user://` file: last
+## level+variant, first-run coach cue seen, cluster density, UI scale.
 ##
-## Today: where you were driving (level + variant) so a reload resumes it, whether the
-## first-run coaching cue has been shown, and how dense the instrument cluster is.
-##
-## Everything read back is VALIDATED through BootParams before it is handed out — a saved id
-## is just as stale-able as a link, and the shell must fall back to its default rather than
-## boot into nothing. Writes are whole-file and rare (a level load, a vehicle swap), so there
-## is no flush/dirty bookkeeping.
+## Everything read back is validated (through BootParams etc.) before being handed out — a
+## saved id is as stale-able as a link, so the shell must fall back rather than boot into
+## nothing. Writes are whole-file and rare, so no flush/dirty bookkeeping.
 
 const PATH := "user://shell.cfg"
 const SECTION := "shell"
 
-## Persistence is OFF during development: a remembered level/vehicle/density is confusing when
-## the thing you are testing is the boot path itself. The logic below is intact — flip this back
-## to true to re-enable. While false, nothing is read from or written to `user://`, so every
-## visit boots from defaults (and a leftover shell.cfg is simply ignored).
+## Persistence is off: remembered state is confusing during boot path testing. _config() and
+## setters skip the load/save while false. Flip to true to re-enable all four keys at once.
 const ENABLED := false
 
 static var _cfg: ConfigFile = null
@@ -55,10 +50,7 @@ static func mark_coach_seen() -> void:
 	cfg.save(PATH)
 
 
-## How much of the instrument cluster is on screen, as a Dashboard.Density SETTING (AUTO
-## included — "let the rules decide" is a choice the player can go back to). Stored as
-## Dashboard's own string key, and validated through it on the way out, so a stale or
-## hand-edited cfg falls back to AUTO rather than to a blank dashboard.
+## Cluster density (Dashboard.Density), stored/validated as Dashboard's string key.
 static func dashboard_density() -> int:
 	return Dashboard.setting_from_key(String(_config().get_value(SECTION, "dashboard", "auto")))
 
@@ -71,8 +63,7 @@ static func set_dashboard_density(setting: int) -> void:
 	cfg.save(PATH)
 
 
-## The player's UI-size multiplier (SETTINGS ▸ UI SIZE), clamped to the range UiScale offers so a
-## stale or hand-edited cfg cannot leave the UI unreadably small or off the screen.
+## UI-size multiplier, clamped to UiScale's range.
 static func ui_scale() -> float:
 	var f := float(_config().get_value(SECTION, "ui_scale", UiScale.USER_DEFAULT))
 	return clampf(f, UiScale.USER_STEPS[0], UiScale.USER_STEPS[UiScale.USER_STEPS.size() - 1])
@@ -86,8 +77,7 @@ static func set_ui_scale(factor: float) -> void:
 	cfg.save(PATH)
 
 
-## The parsed file, loaded once per run. A missing or corrupt file is simply an empty one:
-## nothing here is worth failing a boot over.
+## Parsed file, loaded once. Missing/corrupt file is treated as empty.
 static func _config() -> ConfigFile:
 	if _cfg == null:
 		_cfg = ConfigFile.new()

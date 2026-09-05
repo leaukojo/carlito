@@ -1,91 +1,56 @@
 class_name LevelBaker
 extends RefCounted
-## The level bake tool. Reads a level's AuthoringRoot subtree
-## (GridMap road palettes + KitPiece prefabs + ScatterRegion stored transforms), and
-## produces the shipping form:
-##  - render: static meshes merged per chunk (tunable chunk_size), one MeshInstance3D
-##    per chunk with one surface per distinct material (batching), verts chunk-local;
-##  - collision: one StaticBody3D per chunk holding the prefab-authored box/hull
-##    shapes, plus ONE level-wide "Drivable" body whose ConcavePolygonShape3D is the
-##    vertex-welded union of every drivable surface (road tiles, ramps, bridges,
-##    piers) — a drivable structure is never split across bodies, so there are no
-##    body-seam ghost collisions;
-##  - a manifest JSON stamped with a hash of the authoring inputs so CI can fail on
-##    stale bakes.
-##
-## Everything that can be pure is a static fn (weld, chunking, hashing, spawn
-## validation) — unit-tested in tests/test_bake.gd, same discipline as Drivetrain.
-## The baker never touches the scene tree: transforms are accumulated manually, so
-## it runs identically from the editor Bake button and headless CLI scripts.
+## Level bake tool. Walks a level's AuthoringRoot into the shipping form: render meshes
+## merged per chunk, one StaticBody3D per chunk plus one level-wide welded Drivable body,
+## and a manifest hash so CI fails on stale bakes. Pure helpers are static fns, unit-tested
+## in tests/test_bake.gd. Never touches the scene tree, so editor and headless CLI agree.
 
-## Bump when bake semantics change: stale-bake checks treat old-version manifests
-## as stale, forcing a re-bake after tool upgrades.
-## v4: road extrusion anchors a ring at every interior curve control point (corner miters).
-## v5: road extrusion fold-clamps the inside edge below the local turn radius and gives
-## closed loops one shared bisector frame at the seam.
-## v6: open-end rings use the exact endpoint handle tangent (finite difference yawed
-## port-snapped ends against the tile face).
-## v7: correctness pass — true epsilon welding (was grid snapping), nested KitPieces keep
-## their own collision mode, mirrored transforms keep their winding, finer material keys,
-## chunk keys from mesh AABB centres, bridge-base end caps, bounded end tangents.
-## v10: rail roads additionally emit a RailTrack node (curve + gauge + closed flag) so the
-## curve survives into the baked scene — AuthoringRoot is freed at load and stripped on
-## export, and the train's consist sim rides that curve.
-## v11: surfaces commit with ARRAY_FLAG_COMPRESS_ATTRIBUTES (see SurfaceAccumulator.commit).
-const BAKER_VERSION := 11
+## Bump on any bake-semantics change; stale-bake checks reject old-version manifests.
+const BAKER_VERSION := 12
 
-## The runtime node rail roads bake into. A plain Node3D subclass with no editor API and
-## no autoload dependency, so it loads in every mode the baker runs in.
+## The runtime node rail roads bake into; preloaded (not class_name'd) so it loads headless.
+const Groups := preload("res://src/levels/base/carlito_groups.gd")
 const RailTrackScript := preload("res://src/levels/base/rail_track.gd")
 
-## Bake-adjacent CODE that no resource dependency edge can reach: GDScript files report
-## NO dependencies (verified — `ResourceLoader.get_dependencies` on a .gd returns an empty
-## list), so a script is only in the net when a .tscn/.tres names it as an ext_resource.
-## These shape bake OUTPUT and are named by nothing, so they are hashed explicitly —
-## BAKER_VERSION stays the knob for semantic changes, but forgetting to bump it can no
-## longer ship a silently-stale bake. rail_track.gd is here for the same reason: only this
-## file preloads it, and its property names ARE part of every baked scene's node data.
+## Preloaded, not class_name'd: the baker runs headless from the CLI.
+const Layers := preload("res://src/physics/collision_layers.gd")
+
+## Bake-adjacent code no resource-dependency edge can reach; hashed explicitly. A new
+## bake-adjacent file needs an entry; a semantic change bumps BAKER_VERSION instead.
 const BAKE_CODE_INPUTS: PackedStringArray = [
 	"res://kit/bake/level_baker.gd",
+	"res://src/levels/base/carlito_groups.gd",
 	"res://kit/helpers/road_builder.gd",
 	"res://kit/helpers/scatter_base.gd",
 	"res://src/levels/base/rail_track.gd",
+	"res://src/physics/collision_layers.gd",
 ]
 
-## Scatter: items with at least this many stored instances bake as one
-## MultiMeshInstance3D per chunk x item (geometry stored once) instead of merging
-## their verts into the chunk meshes. ScatterItem.bake_threshold_override overrides
-## per item.
+## Items with at least this many stored instances bake as one MultiMeshInstance3D per
+## chunk x item instead of merging verts into chunk meshes; overridable per item.
 const SCATTER_MULTIMESH_THRESHOLD := 64
 
 ## Weld snap distance (1 mm): vertices this close become bit-identical, so shared
-## tile/ramp edges read as internal edges to Jolt instead of body seams.
+## edges read as internal to Jolt instead of body seams.
 const WELD_EPSILON := 0.001
 
-## Extensions hashed as CRLF-normalized text (git/editor line-ending drift must not
-## flag a bake stale); everything else is hashed as raw bytes.
+## Text formats are hashed CRLF-normalized so line-ending drift doesn't flag a stale bake.
 const TEXT_EXTS: PackedStringArray = ["tscn", "tres", "json", "gd", "import", "cfg", "md", "txt"]
 
 
 # ---------------------------------------------------------------- pure helpers
 
-## XZ chunk cell for a piece origin. Pieces are assigned whole by their origin —
-## a piece is never split across chunks.
+## XZ chunk cell for a piece origin; a piece is never split across chunks.
 static func chunk_key(origin: Vector3, chunk_size: float) -> Vector2i:
 	return Vector2i(floori(origin.x / chunk_size), floori(origin.z / chunk_size))
 
 
-## World-space origin of a chunk (its MeshInstance3D position; verts are stored
-## relative to it for float precision and per-chunk culling AABBs).
+## World-space origin of a chunk (its MeshInstance3D position; verts are chunk-local).
 static func chunk_origin(key: Vector2i, chunk_size: float) -> Vector3:
 	return Vector3(key.x * chunk_size, 0.0, key.y * chunk_size)
 
 
-## World scatter transforms -> chunk-local (their MultiMeshInstance3D sits at the
-## chunk origin, so instance transforms drop the chunk offset — same convention as
-## chunk render meshes). Extracted as a pure fn because MultiMesh instance data does
-## not read back through the headless RenderingServer, so this is the only way the
-## bake's chunk-local placement can be unit-tested (tests/test_bake.gd).
+## World scatter transforms -> chunk-local; pure so it stays unit-testable headless.
 static func chunk_local_multimesh_transforms(world_xforms: Array, key: Vector2i,
 		chunk_size: float) -> Array[Transform3D]:
 	var to_local := Transform3D(Basis.IDENTITY, -chunk_origin(key, chunk_size))
@@ -95,18 +60,10 @@ static func chunk_local_multimesh_transforms(world_xforms: Array, key: Vector2i,
 	return out
 
 
-## Weld a triangle soup: every vertex within `epsilon` of an already-seen vertex becomes
-## bit-identical to it, and triangles that degenerate are dropped. The result is what the
-## Drivable body's ConcavePolygonShape3D gets (§2 rule 2: welded, no interior seams).
-##
-## This is a true epsilon MERGE, not a snap-to-grid: rounding each vertex to a grid cell
-## unifies verts that share a cell but leaves verts astride a cell boundary distinct, so
-## two vertices microns apart could still weld into a crack — position-dependent, so it
-## passes every fixture and shows up on exactly one authored level as a wheel that catches
-## at one joint. Instead each vertex probes the 27 cells around it (a match must be within
-## one cell per axis when the cell size IS epsilon) and adopts the first canonical vertex
-## it finds, scanning cells and per-cell lists in a fixed order — so the output stays
-## deterministic for a given input order, which the collect walk guarantees.
+## Welds a triangle soup: vertices within `epsilon` become bit-identical; degenerate
+## triangles drop. True epsilon merge, not grid-snap (a grid-snap leaves verts astride a
+## cell boundary distinct, welding into a crack) — each vertex probes the surrounding 27
+## cells in a fixed order, so output stays deterministic.
 static func weld_faces(faces: PackedVector3Array, epsilon := WELD_EPSILON) -> PackedVector3Array:
 	var out := PackedVector3Array()
 	var cells := {}   # Vector3i cell -> Array[Vector3] canonical verts registered in it
@@ -134,8 +91,7 @@ static func weld_faces(faces: PackedVector3Array, epsilon := WELD_EPSILON) -> Pa
 	return out
 
 
-## First registered vertex within epsilon of `v`, searching `key`'s cell and its 26
-## neighbours in a fixed order; null when there is none.
+## First registered vertex within epsilon of `v` in `key`'s cell + 26 neighbours; null if none.
 static func _find_canonical(cells: Dictionary, key: Vector3i, v: Vector3,
 		eps2: float) -> Variant:
 	for dx in [0, -1, 1]:
@@ -150,12 +106,12 @@ static func _find_canonical(cells: Dictionary, key: Vector3i, v: Vector3,
 	return null
 
 
-## Normalize line endings so the same file hashes the same on Windows and CI.
+## Normalizes line endings so the same file hashes identically on Windows and CI.
 static func normalize_text(s: String) -> String:
 	return s.replace("\r\n", "\n").replace("\r", "\n")
 
 
-## Hash one file: text formats as normalized text, binaries as raw bytes.
+## Text formats hash as normalized text, binaries as raw bytes.
 static func hash_file(path: String) -> String:
 	if TEXT_EXTS.has(path.get_extension().to_lower()):
 		var f := FileAccess.open(path, FileAccess.READ)
@@ -166,8 +122,7 @@ static func hash_file(path: String) -> String:
 	return h if h != "" else "MISSING"
 
 
-## Combined input hash: order-independent over `paths` (sorted internally) plus
-## extra tokens (baker version, chunk size). This is the manifest stamp.
+## Combined input hash, order-independent over `paths` plus extra tokens; the manifest stamp.
 static func hash_inputs(paths: PackedStringArray, extra := PackedStringArray()) -> String:
 	var sorted := paths.duplicate()
 	sorted.sort()
@@ -179,17 +134,14 @@ static func hash_inputs(paths: PackedStringArray, extra := PackedStringArray()) 
 	return ("\n".join(lines)).sha256_text()
 
 
-## Validate the level's spawn coverage (bake gate). `spawns` is a list of
-## {types: PackedStringArray, is_water: bool}; empty types = accepts any. Boats need
-## a water spawn, land vehicles a land spawn. Returns human-readable errors.
+## Bake gate: validates spawn coverage. `spawns` items are {types, is_water}; empty types = any.
 static func validate_spawns(allowed: PackedStringArray, default_vehicle: String,
 		spawns: Array) -> PackedStringArray:
 	var errors := PackedStringArray()
 	if spawns.is_empty():
 		errors.append("level has no VehicleSpawn markers")
 		return errors
-	# allowed_vehicles lists FAMILIES; default_vehicle is a VARIANT (legacy families spell them
-	# the same, e.g. "car", so this only bites once a variant id differs — "bullet"/"train").
+	# allowed_vehicles lists families; default_vehicle is a variant, which can differ (e.g. "train").
 	var default_family := VehicleCatalog.family_of(default_vehicle)
 	if default_family == "":
 		default_family = default_vehicle
@@ -200,8 +152,7 @@ static func validate_spawns(allowed: PackedStringArray, default_vehicle: String,
 	if default_family != "" and not types.has(default_family):
 		types.append(default_family)
 	for t in types:
-		# The train is rail-guided: it is placed on a closed rail loop, not at a VehicleSpawn
-		# marker, so it is exempt from the per-type marker-coverage gate.
+		# Train is rail-guided (placed on a closed rail loop, not a VehicleSpawn marker).
 		if t == "train":
 			continue
 		var wants_water := t == "boat"
@@ -217,20 +168,13 @@ static func validate_spawns(allowed: PackedStringArray, default_vehicle: String,
 	return errors
 
 
-## Split one indexed triangle surface into per-chunk sub-surfaces, keyed by the WORLD
-## triangle centroid's chunk (road ribbons: a road is long, so its render mesh is
-## bucketed for frustum culling; `world_xform` is applied for KEYING ONLY — the output
-## arrays stay in the source space, vertices remapped/deduped per chunk). Render-only:
-## collision never splits (the ribbon welds into the single level-wide Drivable body,
-## §2 rule 1a). Handles VERTEX/NORMAL/TEX_UV/COLOR channels — the same set
-## SurfaceAccumulator merges, so a channel can never survive one path and vanish in the
-## other; triangle count is conserved.
+## Splits one indexed triangle surface into per-chunk sub-surfaces by world centroid.
+## Render-only — collision never splits (welds into the level-wide Drivable body).
 static func split_arrays_by_chunk(arrays: Array, world_xform: Transform3D,
 		chunk_size: float) -> Dictionary:
 	var pos: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var idx: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
-	# regular Arrays (by-reference) during accumulation: Packed*Arrays stored in a
-	# Dictionary are value types, so appending through the dict would mutate a copy
+	# Regular Arrays (by-reference): Packed*Arrays in a Dictionary are value types.
 	var tri_lists := {}   # Vector2i -> Array of source vertex indices (3 per triangle)
 	for i in range(0, idx.size() - 2, 3):
 		var centroid := (pos[idx[i]] + pos[idx[i + 1]] + pos[idx[i + 2]]) / 3.0
@@ -285,15 +229,9 @@ static func split_arrays_by_chunk(arrays: Array, world_xform: Transform3D,
 	return out
 
 
-## Semantic material key so identical Kenney materials re-imported per GLB merge
-## into one surface instead of one surface per source file.
-##
-## Every field that changes how the surface RENDERS belongs here. The whole kit shares one
-## colormap.png atlas, so albedo alone is nowhere near enough to tell materials apart: an
-## emissive lit-window material and a matte wall material differ in nothing else, and
-## keying on albedo merged them into one surface whose material was whichever the merge
-## happened to see first — windows going matte on one chunk and walls glowing on the next,
-## from identical authoring.
+## Semantic material key so identical materials merge into one surface instead of one
+## per source file. Every field that changes rendering belongs here — albedo alone
+## can't distinguish e.g. an emissive window material from a matte wall.
 static func material_key(mat: Material) -> String:
 	if mat == null:
 		return "null"
@@ -322,8 +260,7 @@ static func material_key(mat: Material) -> String:
 	]))
 
 
-## Stable identity for a material's texture slot: the resource path when it has one
-## (the imported-per-GLB atlas case these keys exist to merge), else the instance.
+## Stable identity for a material's texture slot: resource path if it has one, else instance.
 static func _texture_key(tex: Texture2D) -> String:
 	if tex == null:
 		return "-"
@@ -333,9 +270,7 @@ static func _texture_key(tex: Texture2D) -> String:
 
 # ------------------------------------------------------------ dependency walk
 
-## Every file whose change must flag a bake stale: the level scene itself, its transitive
-## resource dependencies that can shape bake output (wherever they live), the explicit
-## BAKE_CODE_INPUTS, and their .import sidecars. Sorted + deduped for a stable hash.
+## Files whose change flags a bake stale: level scene, transitive deps, BAKE_CODE_INPUTS, .import sidecars.
 static func gather_bake_inputs(level_path: String) -> PackedStringArray:
 	var seen := {level_path: true}
 	var kept := {level_path: true}
@@ -361,18 +296,9 @@ static func gather_bake_inputs(level_path: String) -> PackedStringArray:
 	return out
 
 
-## Whether a dependency can change what the baker emits. The old rule — keep res://kit/
-## only — was too narrow: an Authoring subtree that instances a prop sub-scene from
-## res://src/, or a mesh/material saved outside the kit, is walked by _collect and merged
-## into the bake, yet edits to it left the hash untouched and CI green. LevelInfo (a .tres
-## under src/levels/) escaped the same way, so the spawn gate's verdict was cached.
-##
-## So: keep every resource, anywhere, EXCEPT plugin code and scripts outside the kit.
-## Runtime scripts (level.gd, vehicles, water) cannot change baker output — the baker
-## reads transforms, meshes and shapes, plus the duck-typed kit APIs — and hashing them
-## would re-stale every level on unrelated gameplay edits. Kit scripts stay in (they ARE
-## the duck-typed APIs), as do heightmap/splat PNGs: sculpting terrain moves scattered
-## props, which is exactly what scatter_ground_errors also guards.
+## Whether a dependency can change baker output: every resource except plugin code and
+## scripts outside the kit. Runtime scripts can't change output, so hashing them would
+## re-stale levels on unrelated edits.
 static func is_bake_input(path: String) -> bool:
 	if path.begins_with("res://kit/"):
 		return true
@@ -382,8 +308,7 @@ static func is_bake_input(path: String) -> bool:
 	return ext != "gd" and ext != "cs"
 
 
-## get_dependencies entries look like "uid://xx::type::res://path" (or subsets);
-## pull out the res:// path, resolving a bare uid:// if that's all there is.
+## Pulls the res:// path out of a get_dependencies entry, resolving a bare uid:// if needed.
 static func _dep_path(dep: String) -> String:
 	var best := ""
 	for part in dep.split("::"):
@@ -406,10 +331,7 @@ static func manifest_path(level_path: String) -> String:
 	return level_path.get_basename() + ".bake.json"
 
 
-## Manifest is deliberately timestamp-free: re-baking unchanged inputs produces a
-## byte-identical file (clean git diffs, deterministic CI). `output_hash` is the sha256 of
-## the .baked.scn: without it the freshness check only asked whether the OUTPUT file
-## exists, so a truncated, hand-edited or half-written bake read fresh forever.
+## Timestamp-free so unchanged inputs re-bake byte-identical; output_hash catches a truncated/hand-edited bake.
 static func write_manifest(level_path: String, input_hash: String, chunk_size: float,
 		stats: Dictionary, output_hash := "") -> Error:
 	var doc := {
@@ -435,28 +357,19 @@ static func read_manifest(level_path: String) -> Dictionary:
 	return parsed if parsed is Dictionary else {}
 
 
-## The extra hash tokens stamped alongside the file hashes. chunk_size is included
-## so turning the knob flags the bake stale until re-baked.
+## Extra hash tokens stamped alongside the file hashes; chunk_size so tuning it re-stales.
 static func hash_extra(chunk_size: float) -> PackedStringArray:
 	return PackedStringArray(["baker_version:%d" % BAKER_VERSION, "chunk_size:%s" % var_to_str(chunk_size)])
 
 
 # ------------------------------------------------------------ scene discovery
 
-## First AuthoringRoot under `root` (duck-typed marker, see AuthoringRoot); null
-## if the level has no kit authoring content.
+## First AuthoringRoot under `root`; a walk, not a group lookup — level may be outside any tree.
 static func find_authoring(root: Node) -> Node:
-	if root.has_method("is_carlito_authoring"):
-		return root
-	for child in root.get_children():
-		var found := find_authoring(child)
-		if found != null:
-			return found
-	return null
+	return Groups.find_authoring(root)
 
 
-## Spawn descriptors for validate_spawns, pulled off VehicleSpawn markers anywhere
-## in the level (duck-typed on accepts()).
+## Spawn descriptors for validate_spawns, from VehicleSpawn markers (duck-typed on accepts()).
 static func collect_spawn_descriptors(root: Node) -> Array:
 	var out := []
 	for node in root.find_children("*", "Marker3D", true, false):
@@ -468,12 +381,9 @@ static func collect_spawn_descriptors(root: Node) -> Array:
 	return out
 
 
-## Stale-scatter guard (shared by the bake gate and check_level_file): a region
-## with stored instances whose stored_ground_hash no longer matches the level's
-## terrain heightmaps was snapped against ground that has since been sculpted — the
-## author must Regenerate in the editor (only that re-snaps), then re-bake. The
-## terrain PNGs live beside the level scene, outside gather_bake_inputs' res://kit/
-## net, so without this check a sculpt would ship floating/buried props CI-green.
+## Stale-scatter guard: a region whose stored_ground_hash no longer matches the terrain
+## was snapped before a later sculpt. Terrain PNGs sit outside the input-hash net, so
+## without this a sculpt ships floating/buried props CI-green; recovery is Regenerate.
 static func scatter_ground_errors(level_root: Node) -> PackedStringArray:
 	var errors := PackedStringArray()
 	var regions: Array[Node] = []
@@ -493,7 +403,7 @@ static func scatter_ground_errors(level_root: Node) -> PackedStringArray:
 
 
 static func _find_scatter_nodes(node: Node, out: Array[Node]) -> void:
-	if node.has_method("is_carlito_scatter"):
+	if node.is_in_group(Groups.SCATTER):
 		out.append(node)
 	for child in node.get_children():
 		_find_scatter_nodes(child, out)
@@ -501,10 +411,8 @@ static func _find_scatter_nodes(node: Node, out: Array[Node]) -> void:
 
 # ----------------------------------------------------------------- bake proper
 
-## Bake the level rooted at `level_root` (an instantiated level scene; it does NOT
-## need to be inside a tree). Returns:
-##   { ok: bool, errors: PackedStringArray, root: Node3D or null, stats: Dictionary }
-## On ok, `root` is the assembled Baked scene root (caller packs + frees it).
+## Bakes the level rooted at `level_root` (need not be in a tree). Returns { ok, errors,
+## root: Node3D or null, stats }; on ok, root is the assembled scene (caller packs+frees it).
 static func bake(level_root: Node) -> Dictionary:
 	var errors := PackedStringArray()
 	var authoring := find_authoring(level_root)
@@ -514,21 +422,16 @@ static func bake(level_root: Node) -> Dictionary:
 	if chunk_size <= 0.0:
 		return _fail(["AuthoringRoot.chunk_size must be > 0 (got %s)" % chunk_size])
 
-	# Spawn validation is a bake gate: a level that can't spawn its vehicles must
-	# not produce a shippable bake.
 	var info: Resource = level_root.get("info")
 	var allowed: PackedStringArray = info.get("allowed_vehicles") if info != null else PackedStringArray()
 	var default_vehicle := String(info.get("default_vehicle")) if info != null else "car"
 	errors.append_array(validate_spawns(allowed, default_vehicle, collect_spawn_descriptors(level_root)))
-	# Stale-scatter is a bake gate too: sculpt-after-scatter must never
-	# silently bake floating or buried props.
 	errors.append_array(scatter_ground_errors(level_root))
 
 	var ctx := BakeContext.new()
 	ctx.chunk_size = chunk_size
 	_collect(authoring, _authoring_xform(level_root, authoring), ctx, errors)
-	# Collision-only authoring (pieces that carry shapes but no mesh) is legitimate, so
-	# the gate is "nothing at all was collected", not "no vertices".
+	# Collision-only authoring is legitimate, so the gate is "nothing collected", not "no vertices".
 	if ctx.total_vertices == 0 and ctx.body_shapes.is_empty() and ctx.weld_pool.is_empty():
 		errors.append("AuthoringRoot has no bakeable content (GridMaps / KitPiece prefabs)")
 	if not errors.is_empty():
@@ -536,8 +439,7 @@ static func bake(level_root: Node) -> Dictionary:
 	return {"ok": true, "errors": errors, "root": _assemble(ctx), "stats": ctx.stats()}
 
 
-## Authoring transform relative to the level root, accumulated manually (the level
-## instance may not be in a tree, so global_transform is off-limits).
+## Authoring transform relative to the level root, accumulated manually (may be untreed).
 static func _authoring_xform(level_root: Node, authoring: Node) -> Transform3D:
 	var xform := Transform3D.IDENTITY
 	var node := authoring
@@ -552,11 +454,7 @@ static func _fail(errors: PackedStringArray) -> Dictionary:
 	return {"ok": false, "errors": errors, "root": null, "stats": {}}
 
 
-## Recursive gather. GridMap cells are all drivable — every generated palette is a set of
-## road/ground TILES by construction (the recipes' "palette" pipeline; the wall and
-## barrier meshlibs are road tiles that carry a wall along one edge, not free-standing
-## walls, so welding them is right). KitPiece prefabs contribute render meshes plus
-## collision per their mode.
+## Recursive gather. GridMap cells are all drivable; KitPiece prefabs contribute render meshes plus collision per mode.
 static func _collect(node: Node, xform: Transform3D, ctx: BakeContext,
 		errors: PackedStringArray) -> void:
 	for child in node.get_children():
@@ -565,11 +463,11 @@ static func _collect(node: Node, xform: Transform3D, ctx: BakeContext,
 			cxform = xform * (child as Node3D).transform
 		if child is GridMap:
 			_collect_gridmap(child as GridMap, cxform, ctx, errors)
-		elif child.has_method("is_carlito_kit_piece"):
+		elif child.is_in_group(Groups.KIT_PIECE):
 			_collect_piece(child, cxform, ctx, errors)
-		elif child.has_method("is_carlito_scatter"):
+		elif child.is_in_group(Groups.SCATTER):
 			_collect_scatter(child, cxform, ctx, errors)
-		elif child.has_method("is_carlito_road"):
+		elif child.is_in_group(Groups.ROAD):
 			_collect_road(child, cxform, ctx, errors)
 		else:
 			_collect(child, cxform, ctx, errors)
@@ -582,7 +480,7 @@ static func _collect_gridmap(gm: GridMap, xform: Transform3D, ctx: BakeContext,
 		errors.append("GridMap '%s' has no MeshLibrary" % gm.name)
 		return
 	var cells := gm.get_used_cells()
-	cells.sort()  # deterministic bake output
+	cells.sort()  # deterministic output
 	for cell: Vector3i in cells:
 		var item := gm.get_cell_item(cell)
 		var mesh := ml.get_item_mesh(item)
@@ -591,10 +489,7 @@ static func _collect_gridmap(gm: GridMap, xform: Transform3D, ctx: BakeContext,
 		var basis := gm.get_basis_with_orthogonal_index(gm.get_cell_item_orientation(cell))
 		var cell_xform := xform * Transform3D(basis, gm.map_to_local(cell))
 		var mesh_xform := cell_xform * ml.get_item_mesh_transform(item)
-		# Key by where the GEOMETRY actually sits, not the anchor cell: the roads
-		# palette's road-curve is a corner-anchored 2x2 sweep, so keying on the cell
-		# origin filed up to three quarters of it under a chunk it does not overlap and
-		# stretched that chunk's culling AABB by a full 24 m. The piece still moves whole.
+		# Key by where the geometry sits, not the anchor cell — a corner-anchored piece would else stretch the wrong chunk's AABB.
 		var key := chunk_key(mesh_xform * mesh.get_aabb().get_center(), ctx.chunk_size)
 		ctx.add_render_mesh(key, mesh, mesh_xform)
 		ctx.add_weld_mesh(mesh, mesh_xform)
@@ -607,17 +502,9 @@ static func _collect_piece(piece: Node, xform: Transform3D, ctx: BakeContext,
 	_collect_piece_content(piece, xform, key, mode, ctx, errors)
 
 
-## Walk one piece's subtree under `mode`. A nested KitPiece re-enters _collect_piece so it
-## keeps its OWN collision mode: inheriting the ancestor's silently broke the drivable
-## invariant both ways — a "hull" railing grouped under a "weld" bridge had its triangles
-## welded into the level-wide drivable body (drive up the handrail, phantom wheel contacts)
-## while its hull shape was dropped, and a "weld" ramp grouped under a "box" warehouse
-## never reached the drivable body at all, so the car fell through a ramp that dev-play
-## rendered solid.
-##
-## `nested` is false only for scatter, whose template subtree is validated as a whole
-## before this runs (a scattered weld prefab is a bake error, and collision-off must stay
-## off for every descendant) — generated scatter prefabs are flat anyway.
+## Walks one piece's subtree under `mode`. A nested KitPiece re-enters _collect_piece to
+## keep its own collision mode — inheriting the ancestor's broke the drivable invariant.
+## `nested` is false only for scatter, whose template is pre-validated as a whole.
 static func _collect_piece_content(node: Node, xform: Transform3D, key: Vector2i,
 		mode: String, ctx: BakeContext, errors: PackedStringArray,
 		nested := true) -> void:
@@ -635,22 +522,15 @@ static func _collect_piece_content(node: Node, xform: Transform3D, key: Vector2i
 		var cxform := xform
 		if child is Node3D:
 			cxform = xform * (child as Node3D).transform
-		if nested and child.has_method("is_carlito_kit_piece"):
+		if nested and child.is_in_group(Groups.KIT_PIECE):
 			_collect_piece(child, cxform, ctx, errors)
 		else:
 			_collect_piece_content(child, cxform, key, mode, ctx, errors, nested)
 
 
-## Scatter: consume the region's STORED transforms only — no
-## expansion, no raycast, no physics here, so editor and bake can never diverge.
-## Per item: at or above the MultiMesh threshold the render side becomes chunked
-## MultiMeshes over ONE merged item mesh (an island forest never duplicates its
-## verts into chunk meshes); below it every instance routes through the existing
-## prefab merge path. Collision harvest is identical either way: the prefab's
-## shapes per instance into the per-chunk bodies (collision-off items add zero
-## physics). All prefab-shaped logic is duck-called on the region's script
-## (stored_transform / build_item_mesh / shape_entries) so the stored layout has
-## one owner.
+## Scatter: consumes the region's stored transforms only, so editor and bake can't
+## diverge. At/above the MultiMesh threshold the render side chunks into MultiMeshes
+## over one merged item mesh; below it, instances route through the prefab merge path.
 static func _collect_scatter(region: Node, xform: Transform3D, ctx: BakeContext,
 		errors: PackedStringArray) -> void:
 	var items: Array = region.get("items")
@@ -665,7 +545,7 @@ static func _collect_scatter(region: Node, xform: Transform3D, ctx: BakeContext,
 			continue
 		var template: Node = (item.get("prefab") as PackedScene).instantiate()
 		var mode := "none"
-		if template.has_method("is_carlito_kit_piece"):
+		if template.is_in_group(Groups.KIT_PIECE):
 			mode = String(template.get("collision_mode"))
 		if mode == "weld":
 			errors.append("scatter region '%s' item %d: weld-mode prefabs cannot be scattered (drivable structures are placed, never scattered)" % [region.name, i])
@@ -683,8 +563,7 @@ static func _collect_scatter(region: Node, xform: Transform3D, ctx: BakeContext,
 
 		if count >= threshold:
 			var mesh: ArrayMesh = region.call("build_item_mesh", template)
-			# Swap the prefab's materials for the bake's deduplicated copies, so the
-			# baked scene never references kit resources (same rule as chunk merges).
+			# Swaps prefab materials for the bake's deduplicated copies, same as chunk merges.
 			for si in mesh.get_surface_count():
 				var mat := mesh.surface_get_material(si)
 				var mk := material_key(mat)
@@ -707,16 +586,9 @@ static func _collect_scatter(region: Node, xform: Transform3D, ctx: BakeContext,
 		template.free()
 
 
-## Spline road: duck-call the RoadPath's geometry API (ribbon_surfaces — the stored layout
-## has one owner, and it depends only on the serialized Path child + profile, so it works
-## on the baker's untreed instance). The weld soup is flattened from those same surfaces
-## rather than from a second ribbon_faces() call, which re-ran adaptive sampling and the
-## whole extrusion a second time per road for a byte-identical result.
-## Render surfaces are chunk-bucketed by triangle centroid for frustum culling;
-## collision is NOT split — every ribbon triangle joins the level-wide welded
-## Drivable body through the same 1 mm snap as weld prefabs. No
-## recursion into the road: Preview/DevCollision never exist off-tree, and the
-## Path child carries no bakeable content of its own.
+## Spline road: duck-calls RoadPath's ribbon_surfaces() (works untreed). Render surfaces
+## are chunk-bucketed for frustum culling; collision is never split — joins the
+## level-wide Drivable body through the same weld as weld prefabs.
 static func _collect_road(road: Node, xform: Transform3D, ctx: BakeContext,
 		errors: PackedStringArray) -> void:
 	if road.get("profile") == null:
@@ -731,17 +603,12 @@ static func _collect_road(road: Node, xform: Transform3D, ctx: BakeContext,
 		var buckets := split_arrays_by_chunk(e.arrays, xform, ctx.chunk_size)
 		for key: Vector2i in buckets:
 			ctx.add_render_arrays(key, e.material, buckets[key], xform)
-		# entries arrive slot-sorted (ribbon_surfaces sorts its keys), the same order
-		# faces_from_surfaces walks, so the soup is byte-identical to ribbon_faces()
 		var pos: PackedVector3Array = e.arrays[Mesh.ARRAY_VERTEX]
 		for i: int in (e.arrays[Mesh.ARRAY_INDEX] as PackedInt32Array):
 			faces.append(pos[i])
 	ctx.add_weld_faces(faces, xform)
 	ctx.roads += 1
-	# Rails: the ribbon above is only what you SEE and drive over — the train rides the
-	# curve, which dies with AuthoringRoot unless it is copied into the baked scene. Duck
-	# API (get_rail_curve() != null), never a class_name check; rail_local_xform() rather
-	# than global_transform because this instance is untreed.
+	# The train rides the curve, which dies with AuthoringRoot unless copied into the baked scene.
 	if road.has_method("get_rail_curve"):
 		var rail_curve: Curve3D = road.call("get_rail_curve")
 		if rail_curve != null:
@@ -753,10 +620,8 @@ static func _collect_road(road: Node, xform: Transform3D, ctx: BakeContext,
 			})
 
 
-## Assemble the Baked scene: Chunks/ (merged render meshes), Bodies/ (one
-## StaticBody3D per chunk with the harvested shapes), Drivable (the single welded
-## body). Everything the scene stores is duplicated so the bake has zero
-## dependencies on kit prefabs, palettes, or GLBs (they're export-stripped).
+## Assembles Chunks/ (merged render meshes), Bodies/ (per-chunk StaticBody3D), Drivable
+## (welded body). Everything is duplicated so the bake has zero kit dependencies.
 static func _assemble(ctx: BakeContext) -> Node3D:
 	var root := Node3D.new()
 	root.name = "Baked"
@@ -786,14 +651,14 @@ static func _assemble(ctx: BakeContext) -> Node3D:
 		root.add_child(bodies)
 		var body_keys := ctx.body_shapes.keys()
 		body_keys.sort()
-		# One duplicate per SOURCE shape, shared by every instance that harvested it.
-		# Duplicating per instance gave a 3000-tree forest 3000 identical BoxShape3Ds in
-		# the packed scene and 3000 shapes in the physics server — the render side stores
-		# scattered geometry once, and the collision side has no reason not to.
+		# One duplicate per source shape, shared by every instance — per-instance gave a 3000-tree forest 3000 identical BoxShape3Ds.
 		var shared := {}
 		for key: Vector2i in body_keys:
 			var body := StaticBody3D.new()
 			body.name = "body_%d_%d" % [key.x, key.y]
+			# Scenery; static, so its mask is only the two families that move.
+			body.collision_layer = Layers.PROPS
+			body.collision_mask = Layers.DYNAMIC
 			bodies.add_child(body)
 			for entry: Array in ctx.body_shapes[key]:
 				var src_id := (entry[0] as Shape3D).get_instance_id()
@@ -834,6 +699,9 @@ static func _assemble(ctx: BakeContext) -> Node3D:
 	if not ctx.weld_pool.is_empty():
 		var drivable := StaticBody3D.new()
 		drivable.name = "Drivable"
+		# The one level-wide welded body (standing rule 1).
+		drivable.collision_layer = Layers.DRIVABLE
+		drivable.collision_mask = Layers.DYNAMIC
 		root.add_child(drivable)
 		var shape := ConcavePolygonShape3D.new()
 		shape.set_faces(weld_faces(ctx.weld_pool))
@@ -842,8 +710,7 @@ static func _assemble(ctx: BakeContext) -> Node3D:
 		cs.shape = shape
 		drivable.add_child(cs)
 
-	# Rails carry no geometry of their own (the ribbon is already in Chunks + Drivable) —
-	# just the curve the train needs. Collected in walk order, so the names are stable.
+	# Rails carry no geometry (the ribbon is already in Chunks + Drivable), just the curve.
 	if not ctx.rail_tracks.is_empty():
 		var rails := Node3D.new()
 		rails.name = "Rails"
@@ -870,10 +737,8 @@ static func _own_recursive(node: Node, owner_node: Node) -> void:
 
 # ------------------------------------------------------------------ save + check
 
-## Full bake for a level scene file: load, bake, save the .scn, stamp the manifest,
-## and verify the saved bake leaked no kit dependencies. Returns
-## {ok, errors, stats}. This is the one entry point the editor button and the CLI
-## tools share.
+## Full bake for a level scene file: load, bake, save, stamp manifest, verify no leaked
+## kit deps. Returns {ok, errors, stats}. Entry point shared by editor button and CLI.
 static func bake_level_file(level_path: String) -> Dictionary:
 	var packed := load(level_path) as PackedScene
 	if packed == null:
@@ -915,18 +780,38 @@ static func bake_level_file(level_path: String) -> Dictionary:
 	return {"ok": true, "errors": errors, "stats": result.stats}
 
 
-## Freshness check for CI: "fresh" | "stale" | "missing" for a level that has
-## kit authoring content, "no_authoring" for levels the bake doesn't apply to.
+## Freshness verdict, pure: "fresh" | "unbuilt" | "stale" | "missing". `disk_output_hash`
+## is only compared when `baked_exists` — .baked.scn is untracked build output, so a
+## fresh clone has the manifest without the artifact ("unbuilt", not stale).
+static func freshness(manifest: Dictionary, current_input_hash: String, baked_exists: bool,
+		disk_output_hash: String, scatter_errors: PackedStringArray) -> Dictionary:
+	if manifest.is_empty():
+		return {"status": "missing", "detail": "no bake manifest — run the bake tool"}
+	if int(manifest.get("baker_version", -1)) != BAKER_VERSION:
+		return {"status": "stale", "detail": "baked with baker v%s, current v%d" %
+				[manifest.get("baker_version"), BAKER_VERSION]}
+	if String(manifest.get("input_hash", "")) != current_input_hash:
+		return {"status": "stale", "detail": "authoring inputs changed since last bake"}
+	if baked_exists and String(manifest.get("output_hash", "")) != disk_output_hash:
+		return {"status": "stale", "detail": "baked scene does not match its manifest — re-bake"}
+	# Terrain PNGs sit outside the input hash's net, so stale scatter needs its own check.
+	if not scatter_errors.is_empty():
+		return {"status": "stale", "detail": scatter_errors[0]}
+	if not baked_exists:
+		return {"status": "unbuilt", "detail": "manifest fresh, no local .baked.scn"}
+	return {"status": "fresh", "detail": ""}
+
+
+## Freshness check for CI, per level: reads the manifest, authoring inputs and disk bake
+## output, then defers to freshness() above. "no_authoring" for levels bake doesn't apply to.
 static func check_level_file(level_path: String) -> Dictionary:
 	var packed := load(level_path) as PackedScene
 	if packed == null:
 		return {"status": "error", "detail": "cannot load level scene '%s'" % level_path}
 	var level_root := packed.instantiate()
 	var authoring := find_authoring(level_root)
-	# read everything BEFORE freeing the tree: a freed node compares equal to null
-	# An AuthoringRoot with no children is an empty canvas (a freshly scaffolded level):
-	# the baker produces nothing for it, so demanding a bake output would fail CI on a
-	# level nobody has authored yet. Anything painted into it re-arms the check.
+	# Read everything before freeing the tree: a freed node compares equal to null.
+	# An empty AuthoringRoot is a freshly scaffolded level; bake output isn't required yet.
 	var has_authoring := authoring != null and authoring.get_child_count() > 0
 	var chunk_size := float(authoring.get("chunk_size")) if has_authoring else 0.0
 	var scatter_errors := scatter_ground_errors(level_root)
@@ -934,25 +819,12 @@ static func check_level_file(level_path: String) -> Dictionary:
 	if not has_authoring:
 		return {"status": "no_authoring", "detail": ""}
 
-	var manifest := read_manifest(level_path)
-	if manifest.is_empty() or not FileAccess.file_exists(baked_scene_path(level_path)):
-		return {"status": "missing", "detail": "no bake output — run the bake tool"}
-	if int(manifest.get("baker_version", -1)) != BAKER_VERSION:
-		return {"status": "stale", "detail": "baked with baker v%s, current v%d" %
-				[manifest.get("baker_version"), BAKER_VERSION]}
-	var current := hash_inputs(gather_bake_inputs(level_path), hash_extra(chunk_size))
-	if String(manifest.get("input_hash", "")) != current:
-		return {"status": "stale", "detail": "authoring inputs changed since last bake"}
-	# The output itself, not just its existence: a truncated or hand-edited .baked.scn
-	# used to pass forever on a matching input hash.
-	var stamped := String(manifest.get("output_hash", ""))
-	if stamped != FileAccess.get_sha256(baked_scene_path(level_path)):
-		return {"status": "stale", "detail": "baked scene does not match its manifest — re-bake"}
-	# Terrain PNGs sit outside the input hash's res://kit/ net, so stale scatter needs
-	# its own check (and Regenerate — not just a re-bake — clears it).
-	if not scatter_errors.is_empty():
-		return {"status": "stale", "detail": scatter_errors[0]}
-	return {"status": "fresh", "detail": ""}
+	var scn := baked_scene_path(level_path)
+	var baked_exists := FileAccess.file_exists(scn)
+	return freshness(read_manifest(level_path),
+			hash_inputs(gather_bake_inputs(level_path), hash_extra(chunk_size)),
+			baked_exists, FileAccess.get_sha256(scn) if baked_exists else "",
+			scatter_errors)
 
 
 # --------------------------------------------------------------- inner classes
@@ -960,36 +832,24 @@ static func check_level_file(level_path: String) -> Dictionary:
 ## Accumulates everything one bake collects before assembly.
 class BakeContext:
 	var chunk_size := 48.0
-	## Vector2i chunk key -> { material_key: SurfaceAccumulator }
-	var render := {}
-	## material_key -> duplicated Material stored in the baked scene
-	var materials := {}
-	## Vector2i chunk key -> Array of [Shape3D, Transform3D]
-	var body_shapes := {}
-	## world-space triangle soup for the single welded drivable body
-	var weld_pool := PackedVector3Array()
+	var render := {}          ## Vector2i chunk key -> { material_key: SurfaceAccumulator }
+	var materials := {}       ## material_key -> duplicated Material
+	var body_shapes := {}     ## Vector2i chunk key -> Array of [Shape3D, Transform3D]
+	var weld_pool := PackedVector3Array()   ## world-space triangle soup for the drivable body
 	var total_vertices := 0
-	## Scatter: merged item meshes, geometry stored ONCE (shared across chunks)
-	var scatter_meshes: Array[ArrayMesh] = []
-	## Parallel to scatter_meshes: whether that item's MultiMeshes cast shadows.
-	var scatter_shadows: Array[bool] = []
-	## Vector2i chunk key -> { mesh index -> Array of world Transform3D }
-	var multimesh := {}
+	var scatter_meshes: Array[ArrayMesh] = []   ## merged item meshes, stored once
+	var scatter_shadows: Array[bool] = []       ## parallel to scatter_meshes
+	var multimesh := {}       ## Vector2i chunk key -> { mesh index -> Array of world Transform3D }
 	var scatter_instances := 0
-	## Spline roads collected
 	var roads := 0
-	## Rail roads: {curve: Curve3D, xform: Transform3D, gauge: float, closed: bool} per
-	## entry -> one RailTrack each in the baked scene.
-	var rail_tracks := []
+	var rail_tracks := []     ## {curve, xform, gauge, closed} per entry -> one RailTrack each
 
 	func add_render_mesh(key: Vector2i, mesh: Mesh, world_xform: Transform3D) -> void:
 		for si in mesh.get_surface_count():
 			add_render_arrays(key, mesh.surface_get_material(si),
 					mesh.surface_get_arrays(si), world_xform)
 
-	## One raw surface into a chunk's per-material accumulator — the shared dedup/merge
-	## path add_render_mesh loops through, and what road ribbons (already split into
-	## per-chunk arrays) feed directly.
+	## One raw surface into a chunk's per-material accumulator; road ribbons feed this directly.
 	func add_render_arrays(key: Vector2i, mat: Material, arrays: Array,
 			world_xform: Transform3D) -> void:
 		var local := Transform3D(Basis.IDENTITY, -LevelBaker.chunk_origin(key, chunk_size)) * world_xform
@@ -1007,9 +867,8 @@ class BakeContext:
 	func add_weld_mesh(mesh: Mesh, world_xform: Transform3D) -> void:
 		add_weld_faces(mesh.get_faces(), world_xform)
 
-	## A pre-built triangle soup into the level-wide weld pool (road ribbons).
-	## A mirroring transform reverses each triangle so the welded body keeps its outward
-	## winding — see SurfaceAccumulator.append for why that matters.
+	## A pre-built triangle soup into the level-wide weld pool. A mirroring transform
+	## reverses each triangle so the welded body keeps its outward winding.
 	func add_weld_faces(faces: PackedVector3Array, world_xform: Transform3D) -> void:
 		if world_xform.basis.determinant() < 0.0:
 			for i in range(0, faces.size() - 2, 3):
@@ -1062,15 +921,12 @@ class BakeContext:
 		}
 
 
-## Merges mesh surfaces that share a material into one surface, applying transforms
-## at array level: positions by the full transform, normals rotated by the
-## inverse-transpose basis and re-normalized (correct under ANY invertible basis, not
-## just the uniform scales the kit uses — SurfaceTool.append_from leaves scaled normals
-## unnormalized), and triangles reversed when the transform mirrors.
+## Merges mesh surfaces sharing a material into one surface, applying transforms at
+## array level: positions by the full transform, normals by the inverse-transpose basis
+## re-normalized, triangles reversed when the transform mirrors.
 ##
-## ARRAY_TANGENT is deliberately dropped: the kit is flat-colour with no normal maps, and
-## the bake is the only consumer. If a piece ever ships a normal map, tangents need the
-## same per-vertex treatment as normals here — they will not appear by themselves.
+## ARRAY_TANGENT is dropped: the kit is flat-colour with no normal maps. A future normal
+## map needs tangents given the same per-vertex treatment as normals here.
 class SurfaceAccumulator:
 	var positions := PackedVector3Array()
 	var normals := PackedVector3Array()
@@ -1100,7 +956,7 @@ class SurfaceAccumulator:
 				and (src_uv as PackedVector2Array).size() == src_pos.size()
 		if uv_ok and not has_uv:
 			has_uv = true
-			uvs.resize(base)  # zero-fill vertices appended before UVs appeared
+			uvs.resize(base)  # zero-fill earlier vertices
 		if has_uv:
 			if uv_ok:
 				uvs.append_array(src_uv)
@@ -1121,13 +977,9 @@ class SurfaceAccumulator:
 				for i in src_pos.size():
 					colors.push_back(Color.WHITE)
 
-		# A mirroring transform (negative determinant — scale (-1, 1, 1), the standard
-		# left-hand-variant trick) flips triangle handedness. The inverse-transpose keeps
-		# normals pointing outward, but copying the index order verbatim left the winding
-		# reversed: the chunk mesh rendered inside-out under cull_back (a mirrored pier
-		# visible only from within), and the same triangles entered the welded body
-		# back-to-front, making the deck one-way so the car fell through it. Only the bake
-		# saw this — dev-play uses the prefab's own shapes.
+		# A mirroring transform (negative determinant) flips triangle handedness; copying
+		# the index order verbatim left rendering inside-out under cull_back and let the
+		# welded body's triangles enter back-to-front (the car fell through the deck).
 		var flip := xform.basis.determinant() < 0.0
 		var src_idx: Variant = arrays[Mesh.ARRAY_INDEX]
 		var src: PackedInt32Array
@@ -1158,12 +1010,8 @@ class SurfaceAccumulator:
 			arrays[Mesh.ARRAY_COLOR] = colors
 		arrays[Mesh.ARRAY_INDEX] = indices
 		# COMPRESS_ATTRIBUTES: normals octahedral-packed, UVs half-float, positions
-		# quantized to 16 bits across the surface AABB. ~38% off the stored mesh (the
-		# baked scenes are 71% of the .pck) and the same cut again on per-frame vertex
-		# fetch, which is what the web build is short of. Precision is the reason it is
-		# safe HERE and nowhere else: a surface spans one 64 m chunk, so a position step
-		# is ~1 mm. Collision is untouched — the welded drivable body and the per-chunk
-		# shapes are Shape3D, not meshes, so nothing the car stands on is quantized.
+		# quantized to 16 bits per chunk AABB (~1 mm step per 64 m chunk). Render only —
+		# collision shapes are Shape3D, never quantized.
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {},
 				Mesh.ARRAY_FLAG_COMPRESS_ATTRIBUTES)
 		var si := mesh.get_surface_count() - 1

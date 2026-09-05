@@ -21,14 +21,9 @@ Ultra-lightweight, general-purpose vehicle simulator that runs in a web browser.
 
 ## Why
 
-There are already many great open-source vehicle simulations ( [CARLA](https://carla.org/), [AWSIM](https://github.com/tier4/AWSIM), etc.), but they usually require installing heavy software on a PC with good specs.
-In many scenarios, you just want a quick simulator you can run in a web browser: classrooms, workshops, competitions, etc.
-Carlito targets 60 fps performance on a smartphone's web browser, with no install necessary.
+Open-source vehicle simulations like [CARLA](https://carla.org/) and [AWSIM](https://github.com/tier4/AWSIM) require installing heavy software on a PC with good specs. Sometimes you just want a quick simulator in a web browser: classrooms, workshops, competitions. Carlito targets 60 fps on a smartphone's web browser, with no install necessary.
 
-Carlito is built with the open-source game engine Godot, using CC0 assets.
-You can easily modify the game and create new levels/vehicles.
-
-It features five levels (island, mountain, city, racing circuit, railway) plus a garage for inspecting the vehicles.
+It is built with the open-source game engine Godot using CC0 assets, so levels and vehicles are easy to add. Six levels ship (island, mountain, city, racing circuit, railway, skyport) plus a garage for inspecting the vehicles.
 
 ## Instrumentation
 
@@ -42,7 +37,7 @@ You can interact with simulated CAN buses using [sloppyCAN](https://github.com/l
 |---|---|
 | Stable | [leaukojo.github.io/carlito](https://leaukojo.github.io/carlito/) |
 | Dev | [leaukojo.github.io/carlito/dev](https://leaukojo.github.io/carlito/dev/) |
-| SloppyCAN (no hardware required) | [leaukojo.github.io/sloppycan/](leaukojo.github.io/sloppycan/) |
+| SloppyCAN (no hardware required) | [leaukojo.github.io/sloppycan](https://leaukojo.github.io/sloppycan/) |
 | RAMN Bridge (hardware required) | [leaukojo.github.io/sloppycan/carlito-bridge.html](https://leaukojo.github.io/sloppycan/carlito-bridge.html) |
 
 
@@ -57,7 +52,6 @@ You can interact with simulated CAN buses using [sloppyCAN](https://github.com/l
 | Drone | In development (Self-levelling quadcopter) | DroneCAN |
 | Plane | In development (Throttle, elevator and flaps, airframe) |  CANaerospace |
 | Train | In development (Rail-guided on a closed loop) | CiA 421 |
-| Bike | In development (currently terrible) | RAMN |
 
 
 
@@ -78,8 +72,8 @@ If you want to contribute, see `docs/TODO.md` for a list of current issues. If y
 ## Credits
 
 - [**Kenney**](https://kenney.nl) (CC0) for almost all of the art: City Kit (Roads,
-  Suburban, Commercial, Industrial), Racing Kit, Watercraft Pack, Nature Kit props, and the
-  Car Kit.
+  Suburban, Commercial, Industrial), Racing Kit, Watercraft Pack, Nature Kit props, Train
+  Kit, and the Car Kit.
 - [**Godot Engine**](https://godotengine.org) (MIT), including the web export template that
   makes the no-install part possible at all.
 - [**gdUnit4**](https://github.com/MikeSchulze/gdUnit4) (MIT), vendored at

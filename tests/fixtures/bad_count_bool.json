@@ -1,0 +1,6 @@
+{
+	"version": 3,
+	"signals": [
+		{ "name": "esc_flag", "dir": "out", "type": "bool", "unit": "flag", "count": 4 }
+	]
+}

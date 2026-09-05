@@ -1,0 +1,8 @@
+{
+	"version": 3,
+	"signals": [
+		{ "name": "esc_zero", "dir": "out", "type": "u16", "unit": "rev/min", "range": [0, 12000], "count": 0 },
+		{ "name": "esc_fractional", "dir": "out", "type": "u16", "unit": "rev/min", "range": [0, 12000], "count": 2.5 },
+		{ "name": "esc_not_a_number", "dir": "out", "type": "u16", "unit": "rev/min", "range": [0, 12000], "count": "four" }
+	]
+}

@@ -1,63 +1,42 @@
 extends TowedBody
-## Tipper / dump semi-trailer — the trailer with a FUNCTION, and the only one in the catalog that
-## plugs anything into the towing unit.
+## Dump semi-trailer. It consumes PTO, which turns the pump, and HYDRAULIC, the proportional
+## valve; losing PTO mid-lift freezes the body where it stands, like RefuseBody's arm. The raise
+## interlock lives in `TowedBody.body_raise_allowed` and is gated by SemiTractor before flow
+## reaches this class, never policed here.
 ##
-## It consumes two things, declared in `consumers()` and gated at the coupling by SemiTractor:
-##
-##   - THE CHASSIS PTO, which turns the tipping pump. No pump, no movement — and losing the PTO
-##     part way up FREEZES the body where it stands rather than driving it home, which is what
-##     really happens and is the same choice RefuseBody's interlock makes for the refuse arm.
-##   - A PROPORTIONAL HYDRAULIC VALVE, non-visual plumbing exactly like the tractor's SCV: no hoses
-##     are modelled, the spool position is logical state, and the only visible thing on this end is
-##     the pair of rams it feeds.
-##
-## NAMING REFERENCE, DECLARED AND NOT IMPLEMENTED: ISO 25200 is where tipping-body command and
-## status naming lives, and CiA 408 is the CANopen device profile for proportional fluid-power
-## valves — which is what this valve would be, on a rig that ran one. NEITHER IS BUILT HERE. There
-## is no CiA 408 profile, no object dictionary, no tipper message and, above all, no new signal:
-## this phase adds nothing to the ISO 11992 bus, because ISO 11992 carries nothing about the body.
-## The reference is here so the model can be recognised for what it is a sketch of.
-##
-## THE INTERLOCK IS REAL AND IT IS NOT HERE. `TowedBody.body_raise_allowed` takes TOWING-UNIT state
-## (parking brake, road speed) and SemiTractor is what evaluates it and clamps the spool before the
-## flow ever reaches this class. That is deliberate: a trailer that policed its own interlock could
-## be replaced by one that did not, and the whole point of gating at the coupling is that it cannot.
-##
-## THE LOAD SHIFT IS A CONSEQUENCE, NEVER A TERM. Tipping slides the payload down the body toward
-## the tailgate, so `set_load_offset_z` walks this body's real centre of mass rearward: at full tip
-## the fifth wheel's share falls from ~21 % to ~5 %, which the bogie's springs pick up. So
-## trailer_axle_load climbs, the tractor's axle_load drops, and neither signal has a tipper term in
-## it. Watch axle_load rather than engine_load for it — the same asymmetry the refuse hopper has
-## (see the hopper_load note in src/vehicles/CLAUDE.md).
+## The load shift is a consequence, not a term: `set_load_offset_z` moves the real centre of mass
+## rearward as the body tips, so trailer_axle_load and the tractor's axle_load move on their own.
 
-## Full tip angle, degrees about the rear hinge. 42 deg is a real dump angle (a bulk tipper runs
-## 45-50); it puts the front of the 6.2 m body 4.1 m above the hinge, so the raised rig is about
-## 5.2 m tall — which is why the interlock demands a genuine standstill.
+## Full tip angle, degrees about the rear hinge. 42 deg puts the raised rig ~5.2 m tall, which is
+## why the interlock demands a genuine standstill.
 const TIP_MAX_DEG := 42.0
 
-## Seconds from down to fully up. Slow, like the refuse arm and for the same reason: the interlock
-## has to be something you can drive INTO, and a body that snapped up would make the whole gate
-## invisible.
+## Seconds down to fully up. Slow on purpose: the interlock must be something you can drive into.
 const TIP_TRAVEL_S := 6.0
 
-## Metres the payload's centre of mass slides REARWARD at full tip. Measured off the body rather
-## than picked: the floor is 6.20 m long and tilts 42 deg, so a load that ends up heaped against
-## the tailgate has moved roughly a seventh of the body's length back along the trailer.
+## Metres the payload's centre of mass slides rearward at full tip (measured off the 6.20 m floor
+## at 42 deg).
 const TIP_COM_SHIFT_Z := 0.90
 
-## The tailgate is TOP-HINGED, so it swings open under the load's own weight once the body has
-## lifted far enough for the load to press on it — it is not a separately commanded door.
+## Top-hinged: swings open under the load's own weight once the body has lifted enough.
 const TAILGATE_OPEN_DEG := 62.0
 const TAILGATE_START := 0.12  ## tip fraction at which the gate starts to swing
 
-## Metres of rod that stay inside the barrel at full extension. Enough that the ram never reads as
-## two separated cylinders, which is the one way a telescopic ram can look broken.
+## Collision swap thresholds. Two values rather than one, so a spool parked on the boundary
+## cannot dither the compound rebuild between the two authored poses.
+const RAISED_ON := 0.55
+const RAISED_OFF := 0.45
+
+## Metres of rod that stay inside the barrel at full extension, so it never reads as two
+## separated cylinders.
 const ROD_OVERLAP := 0.20
 
 var _tip := 0.0  ## 0..1 body position; the rams and the tailgate are posed from it
 
 var _tip_body: Node3D = null
 var _tailgate: Node3D = null
+var _col_down: CollisionShape3D = null  ## lowered-pose box, the one enabled at rest
+var _col_up: CollisionShape3D = null    ## same box swept to full tip; enabled only above the swap
 var _rams: Array[Node3D] = []          ## the two ram pivots, L then R
 var _ram_anchors: Array[Vector3] = []  ## frame-end eye of each ram, in trailer space
 var _ram_heads: Array[Node3D] = []     ## body-end eye markers, children of the tipping body
@@ -72,9 +51,12 @@ func _ready() -> void:
 		push_error("%s: no TipBody — the tipping body cannot be posed" % name)
 		return
 	_tailgate = _tip_body.get_node_or_null(^"Tailgate")
-	# Geometry lives in the .tscn and is MEASURED off it (the implements' rule): the ram eyes are
-	# markers, and the barrel's length is the mesh's own height, so re-authoring the ram moves the
-	# pose with it instead of leaving a constant behind.
+	_col_down = get_node_or_null(^"CollisionTipBody") as CollisionShape3D
+	_col_up = get_node_or_null(^"CollisionTipBodyRaised") as CollisionShape3D
+	if _col_down == null or _col_up == null:
+		push_error("%s: the tipping body needs both authored collision poses" % name)
+	# Geometry is measured off the .tscn, the ram eyes being markers and the barrel length the
+	# mesh's own height, so re-authoring the ram moves the pose with it.
 	var sides := PackedStringArray(["L", "R"])
 	for side in sides:
 		var pivot := get_node_or_null(NodePath("Ram" + side)) as Node3D
@@ -100,12 +82,10 @@ func consumers() -> int:
 
 
 func tick_body(delta: float) -> void:
-	# NO PUMP, NO MOVEMENT. This is the freeze, not a retraction: the flow stops where it is, so a
-	# body half way up when the PTO drops stays half way up. Driving it back down on a lost drive
-	# would be inventing an accumulator nothing here models.
+	# No pump, no movement: losing PTO freezes the body where it is, not a retraction.
 	if pto_on:
 		_tip = move_toward(_tip, clampf(valve_flow, 0.0, 1.0), delta / TIP_TRAVEL_S)
-	# The load walks with the body, and this is the ONLY thing the tip does to the physics.
+	# The load walks with the body; this is the only physics effect of the tip.
 	set_load_offset_z(_tip * TIP_COM_SHIFT_Z)
 	_pose_body()
 
@@ -115,31 +95,41 @@ func reset_body() -> void:
 	_pose_body()
 
 
-## 0..1 body position. SemiTractor reads this to clamp the raise interlock: refusing the raise on a
-## body that is already up must hold it there rather than commanding it down into traffic.
+## Body position, 0..1. SemiTractor reads it to clamp the raise interlock, holding a body already
+## up rather than commanding it down into traffic.
 func body_pos01() -> float:
 	return _tip
 
 
-## Pose the body, the tailgate and both rams from `_tip`. Everything visible is driven from the one
-## number, so the picture and the load shift cannot disagree.
+## Pose the body, tailgate and both rams from `_tip`.
 func _pose_body() -> void:
 	if _tip_body == null:
 		return
 	_tip_body.rotation.x = deg_to_rad(TIP_MAX_DEG) * _tip
 	if _tailgate != null:
-		# Top-hinged: the bottom edge swings REARWARD, which is a negative rotation about the local
-		# X in this frame. It only starts once the body is up far enough for the load to reach it.
+		# Top-hinged, so the bottom edge swings rearward once the load can reach it.
 		var gate01 := clampf((_tip - TAILGATE_START) / (1.0 - TAILGATE_START), 0.0, 1.0)
 		_tailgate.rotation.x = -deg_to_rad(TAILGATE_OPEN_DEG) * gate01
 	for i in _rams.size():
 		_pose_ram(_rams[i], _ram_anchors[i], _tip_body.transform * _ram_heads[i].position)
+	_swap_collision()
 
 
-## Lay one telescopic ram between its two eyes, both in TRAILER space. The pivot aims its own +Y at
-## the head (a cylinder's axis is +Y), the barrel is fixed at the frame end, and the rod slides out
-## of it — so the ram lengthens by extending rather than by stretching, which is the difference
-## between a hydraulic ram and a rubber band.
+## Enables whichever authored collision pose is nearer, only touching the compound when the
+## answer changes.
+func _swap_collision() -> void:
+	if _col_down == null or _col_up == null:
+		return
+	var is_up := not _col_up.disabled
+	var want_up := _tip > (RAISED_OFF if is_up else RAISED_ON)
+	if want_up == is_up:
+		return
+	_col_up.disabled = not want_up
+	_col_down.disabled = want_up
+
+
+## Lays one telescopic ram between its two eyes, in trailer space. The pivot's +Y aims at the
+## head along the cylinder's axis; the barrel stays at the frame end and the rod extends out.
 func _pose_ram(pivot: Node3D, anchor: Vector3, head: Vector3) -> void:
 	var axis := head - anchor
 	var span := axis.length()
@@ -150,15 +140,14 @@ func _pose_ram(pivot: Node3D, anchor: Vector3, head: Vector3) -> void:
 	var rod := pivot.get_node_or_null(^"Rod") as Node3D
 	if rod == null:
 		return
-	# The exposed rod is whatever the barrel does not cover, plus the overlap that stays inside it.
+	# Exposed rod is what the barrel doesn't cover, plus the overlap kept inside it.
 	var out := maxf(span - _barrel_len + ROD_OVERLAP, ROD_OVERLAP)
 	rod.scale.y = out / _rod_len
 	rod.position.y = span - out * 0.5
 
 
-## An orthonormal basis whose +Y points along `dir` (already unit). The roll about that axis is
-## arbitrary for a cylinder, so any stable perpendicular will do — RIGHT, unless the ram happens to
-## be pointing along it, which no tipping ram does but a guard costs one branch.
+## Orthonormal basis with +Y along the unit vector `dir`. Roll about that axis is arbitrary for a
+## cylinder, and the fallback goes from RIGHT to FORWARD if `dir` is nearly parallel to RIGHT.
 static func _aim_y(dir: Vector3) -> Basis:
 	var side := Vector3.RIGHT
 	if absf(dir.dot(side)) > 0.99:

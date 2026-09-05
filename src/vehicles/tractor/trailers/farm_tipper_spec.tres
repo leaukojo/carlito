@@ -1,0 +1,83 @@
+[gd_resource type="Resource" script_class="VehicleSpec" load_steps=4 format=3]
+
+; Drawbar tipping trailer running gear. A VehicleSpec because that is what RayWheel consumes; the
+; drivetrain / steering fields are meaningless on a towed body and stay at their defaults.
+;
+; Everything below is measured off farm_tipper.tscn (ORIGIN AT THE DRAWBAR EYE, ground at
+; y = -0.40). That datum is NOT the semi-trailers' y = -1.05 and must never be copied from them:
+; -1.05 is the height of a fifth-wheel PLATE, and this trailer hangs off a pin 0.40 m above the road
+; on the tractor's own drawbar (Drawbar.PIN_LOCAL, read off drawbar.tscn's Pin marker).
+;
+;   - the tandem bogie sits at z 3.30 / 3.95, so the bogie centre is 3.625 m behind the eye, and the
+;     anchors are at y = 0.424 - 0.40 = 0.024 (the same 0.424 hub height the truck family's wheels
+;     use, because it is the same 0.36 m wheel).
+;   - center_of_mass z 3.19 puts 12.0 % of the trailer's weight on the drawbar
+;     ((3.625 - 3.19) / 3.625), i.e. 1200 kg onto the tractor. THAT IS THE CONTRAST WITH THE SEMI,
+;     which puts 27 % on its plate: a drawbar carries a nose weight, not a share. A tandem farm
+;     trailer really does run 10-15 %, and the tractor gets correspondingly less help gripping —
+;     which is why it slips pulling this where the semi's drive axle was being fed by its trailer.
+;   - center_of_mass y 0.35 is 0.75 m above the road: the body sits OVER the wheels on this trailer
+;     (a farm tipper is not a low-deck semi), so the mass rides higher than the flatbed's 0.50.
+;   - spring_rate 187000 is sized off the load the bogie ACTUALLY carries, 8800 kg: 21 582 N per
+;     wheel compresses it 0.115 m of its 0.32 m travel (36 %), which is where every trailer in the
+;     project sits parked. A spring sized for the FULL mass would ride on its stops.
+;   - brake_torque 7374 is load-apportioned against the TRACTOR that pulls it, not copied from the
+;     semi-trailers (whose reference is the 10 500 Nm tractor unit): 21.58 kN per trailer wheel
+;     against 9.81 kN per tractor wheel, so 3352 * 21.58 / 9.81. A trailer braking harder per tonne
+;     than the machine pulling it is how a rig jackknifes under braking.
+;     It is also inside its own tyres: mu_long * N * r = 1.0 * 21 582 * 0.36 = 7770 Nm, so full
+;     pedal asks for 95 % of what the road can hand back rather than locking the bogie.
+;   - handbrake_torque 1844 is a quarter of this trailer's own service brake, the family rule. The
+;     tractor's two braked axles cannot hold 14 t of combination on a farm ramp on their own, and
+;     the tip interlock wants the parking brake set before the body will move at all — so this is
+;     the brake that actually holds the rig while it tips.
+
+[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
+[ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="2_grounddrive"]
+
+; DRAG AREA 0.45 m^2 — a MARGINAL, in-the-wake figure like every trailer's, never the silhouette.
+; The real frontal area of a 1.9 x 1.8 m body is over 3 m^2; what it adds behind a tractor that is
+; already punching that hole is the body sides standing above the tractor's own roofline and the
+; open top catching air. Set to the silhouette instead and the combination is over-braked by drag.
+;
+; ROLLING RESISTANCE 0.014 — deliberately NOT the semi-trailers' 0.007. This runs implement tyres,
+; which sit between a truck's ribbed trailer tyre and the tractor's own 0.02 agricultural tread.
+; Both terms are declared: nothing in this project rides physics/3d/default_linear_damp, and a
+; towed body is the one that proved why (see TowedBody._ready).
+
+[sub_resource type="Resource" id="Resource_grounddrive"]
+script = ExtResource("2_grounddrive")
+drag_area = 0.45
+rolling_resistance = 0.014
+wheel_positions = PackedVector3Array(-0.78, 0.024, 3.3, 0.78, 0.024, 3.3, -0.78, 0.024, 3.95, 0.78, 0.024, 3.95)
+wheel_radius = 0.36
+wheel_inertia = 3.0
+driven_front = false
+driven_rear = false
+rest_length = 0.32
+spring_rate = 187000.0
+damper_bump = 9900.0
+damper_rebound = 13400.0
+max_suspension_force = 90000.0
+grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
+mu_long = 1.0
+mu_lat = 0.95
+brake_torque = 7374.0
+handbrake_torque = 1844.0
+
+[resource]
+script = ExtResource("1_spec")
+mass = 10000.0
+center_of_mass = Vector3(0, 0.35, 3.19)
+ground_drive = SubResource("Resource_grounddrive")
+
+; LAMPS — the one group of lamp fields a towed body DOES use, resolved by the trailer's own LampSet
+; against its own root. No headlamps and no beam, so head_lamp_paths stays empty and `lights` only
+; ever picks the rear tier and the markers.
+; The bits arrive on the tractor's VehicleInput and are handed down each tick, so a braking or
+; indicating combination lights at BOTH ends off one authoritative source — no second signal, no
+; side channel, and no blink timer of its own.
+brake_lamp_paths = Array[NodePath]([NodePath("TailLensL"), NodePath("TailLensR")])
+turn_left_paths = Array[NodePath]([NodePath("TurnLensL")])
+turn_right_paths = Array[NodePath]([NodePath("TurnLensR")])
+steady_lamp_paths = Array[NodePath]([NodePath("MarkerLensL"), NodePath("MarkerLensR")])

@@ -1,17 +1,8 @@
 class_name BootParams
 extends RefCounted
-## What the shell was ASKED to boot into — the deep link, if there is one.
-##
-## The game now drives first in every mode (there is no level-select front door), so the one
-## way an embedder can say "start in the city, in a semi" is a parameter. On web that is the
-## page's query string (`?level=level_3&vehicle=semi`), which is what sloppyCAN sets; locally
-## it is `--level=`/`--vehicle=` after a `--` on the command line, plus the CARLITO_LEVEL
-## environment variable CI already uses for its baked-level smoke.
-##
-## Parsing and VALIDATION live together here, and both sides of the shell use them: a stale
-## link (or a saved session naming a level that has since been renamed) must fall back to the
-## default rather than boot into nothing. Unknown ids are dropped, not clamped — `{}` means
-## "no opinion", which is exactly what the caller needs to know to consult its next authority.
+## Deep link boot params: web reads page query string; local reads --level/--vehicle or
+## CARLITO_LEVEL env. Parsing and validation together; unknown ids dropped (not clamped) —
+## {} means "no opinion" for the caller's next authority.
 
 ## Empty result, i.e. no deep link. Both fields are always present so callers never guess.
 const NONE := {"level": "", "vehicle": ""}

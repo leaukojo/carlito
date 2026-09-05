@@ -1,14 +1,12 @@
 @tool
 extends RefCounted
-## Shared editor ground resolution — the ground-snap fallback chain, extracted from
-## placement_tool.gd so the road draw tool reuses it verbatim: physics raycast
-## first, then each HeightmapTerrain's height sample, then the Y=0 plane. A click
-## never dead-drops; every branch yields a point. Editor-only (addons never ship).
+## Shared editor ground-snap fallback chain: physics raycast, then each HeightmapTerrain's
+## height sample, then the Y=0 plane. A click never dead-drops; every branch yields a point.
+## The ray mask is unmasked on purpose — snapping to whatever is actually there is correct.
 
 const RAY_LEN := 100000.0
 
 
-## Fallback chain: physics hit -> HeightmapTerrain sample -> Y=0 plane.
 ## `excludes` keeps caller-owned collision (the placement ghost) out of the ray.
 static func ground_point(camera: Camera3D, mouse_pos: Vector2,
 		excludes: Array[RID]) -> Vector3:
@@ -25,8 +23,7 @@ static func ground_point(camera: Camera3D, mouse_pos: Vector2,
 			if not hit.is_empty():
 				return hit.position
 
-	# Physics missed (editor space not always populated). Try each terrain by sampling
-	# its height at where the ray crosses the terrain's base plane.
+	# Physics missed (editor space not always populated): sample each terrain instead.
 	if scene_root != null:
 		for terrain in scene_root.find_children("*", "HeightmapTerrain", true, false):
 			var xz := ray_plane(origin, dir, terrain.global_position.y)
@@ -37,7 +34,7 @@ static func ground_point(camera: Camera3D, mouse_pos: Vector2,
 	return flat if flat != null else origin + dir * 10.0
 
 
-## Ray vs. the horizontal plane Y=plane_y. Null when the ray is parallel / points away.
+## Null when the ray is parallel to the plane or points away from it.
 static func ray_plane(origin: Vector3, dir: Vector3, plane_y: float) -> Variant:
 	if absf(dir.y) < 1e-6:
 		return null

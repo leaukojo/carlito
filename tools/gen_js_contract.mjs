@@ -1,14 +1,12 @@
 #!/usr/bin/env node
-// Generates sloppycan/carlito_contract.js from the canonical contract JSON.
-//
-// Contract sharing = synced copy: the canonical carlito_contract.json lives here in the
-// carlito repo; sloppyCAN consumes a committed JS-global copy so it loads from file://
-// (Web Serial forces that) with no build step to run. Run this after editing the contract:
+// Generates sloppycan/carlito_contract.js from the canonical contract JSON: sloppyCAN
+// consumes a committed JS-global copy so it loads from file:// (Web Serial forces that)
+// with no build step. Run after editing the contract:
 //     node tools/gen_js_contract.mjs
-// The runtime version-mismatch console warning is the primary drift guard. A contract bump
-// is a PAIRED change: commit both repos' dev branches together, promote them together.
+// The runtime version-mismatch console warning is the drift guard. A contract bump is a
+// paired change across both repos' dev branches, promoted together.
 //
-// The sloppycan checkout is expected as a SIBLING of this repo (both under EXPORTABLE/).
+// The sloppycan checkout is expected as a sibling of this repo (both under EXPORTABLE/).
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';

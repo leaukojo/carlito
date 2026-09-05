@@ -1,20 +1,16 @@
 class_name Horn
 extends RefCounted
-## Procedural car-horn tone. No audio asset: the sample is
-## synthesized once as a looping AudioStreamWAV so the horn honks for as long as
-## the button is held. BaseVehicle plays it on the horn rising edge (source-agnostic
-## — local key or bridge bit, whichever set VehicleInput.horn).
+## Procedural car-horn tone: synthesized once as a looping AudioStreamWAV, no audio asset.
+## BaseVehicle plays it on the horn rising edge.
 
 const RATE := 22050        ## Hz sample rate
 const LOOP_SECONDS := 0.2  ## one loop of the sustained tone
-## Two sine partials a major-third-ish apart give the classic dual-tone honk; a
-## quiet third harmonic adds the buzzy edge.
+## Two sine partials give the dual-tone honk; a quiet third harmonic adds buzz.
 const F1 := 440.0
 const F2 := 554.37
 
 
-## Build the looping horn stream. Pure (no scene): a test can assert it produces
-## non-empty 16-bit data with a forward loop.
+## Pure (no scene) so a test can assert it produces non-empty 16-bit data with a forward loop.
 static func make_stream() -> AudioStreamWAV:
 	var frames := int(RATE * LOOP_SECONDS)
 	var data := PackedByteArray()

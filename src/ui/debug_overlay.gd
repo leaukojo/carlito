@@ -1,9 +1,8 @@
 class_name DebugOverlay
 extends Label
-## Always-available perf overlay ("the FPS/draw-call overlay is always
-## available"). Toggle with F3 (the "debug_overlay" action). Reads the engine's own
-## Performance monitors — FPS, frame time, draw calls, primitives, VRAM, node count —
-## so the §5.4 web budget (60 fps, < ~500 draw calls) can be checked while driving.
+## Perf overlay, toggled with F3. Reads engine Performance monitors (FPS, frame time, draw
+## calls, primitives, VRAM, node count) so the 60 fps target can be checked while driving.
+## Read on the deployed web build: draw calls are the first diagnostic, not a design budget.
 ## Plain text only.
 
 const REFRESH := 0.25  ## s between text rebuilds (per-frame churn is pointless and noisy)
@@ -24,8 +23,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	# Green is SEMANTIC here (this is the dev readout, deliberately unlike the game UI), so it
-	# stays an override; the size and footprint follow the theme scale.
+	# Green is semantic (a dev readout, deliberately unlike game UI), so it stays an override.
 	add_theme_color_override("font_color", Color(0.55, 1.0, 0.65))
 	theme_type_variation = &"Small"
 	_apply_metrics()
@@ -73,6 +71,7 @@ func _refresh() -> void:
 		Engine.get_frames_per_second(), frame_ms, draw_calls, prims, vram, nodes]
 	text += _grip_line()
 	text += _articulation_line()
+	text += _wind_line()
 	text += _ui_scale_line()
 
 
@@ -90,9 +89,8 @@ func _grip_line() -> String:
 	return "\ngrip " + " ".join(parts)
 
 
-## Fifth-wheel articulation angle of a towing vehicle (degrees, + = trailer to the right), or ""
-## for anything that tows nothing. Duck-typed like every other cross-layer hook here, so this file
-## learns nothing about trailers. How jackknifed a rig is cannot be read off the chase camera.
+## Fifth-wheel articulation angle (degrees, + = trailer right), or "" for anything that tows
+## nothing. Duck-typed, so this file learns nothing about trailers.
 func _articulation_line() -> String:
 	if _level == null:
 		return ""
@@ -102,9 +100,20 @@ func _articulation_line() -> String:
 	return "\nartic %+.1f deg" % rad_to_deg(vehicle.call("articulation"))
 
 
-## TEMP diagnostic for the cross-device UI-scale bug: every number UiScale's formula touches,
-## so a report from a friend's browser (F3, screenshot) tells us which one is lying instead of
-## guessing blind. Remove once the touch-UI sizing is confirmed consistent across browsers.
+## World wind the flight bodies fly relative to: magnitude and the heading it blows toward
+## (WindField's convention). Shown on any level exposing a wind vector, calm included.
+func _wind_line() -> String:
+	if _level == null or not _level.has_method("wind_vector"):
+		return ""
+	var w: Vector3 = _level.call("wind_vector")
+	var speed := Vector2(w.x, w.z).length()
+	# atan2(x, -z): the inverse of WindField.base_vector, so 0 deg is -Z and 90 deg is +X.
+	var heading := fposmod(rad_to_deg(atan2(w.x, -w.z)), 360.0)
+	return "\nwind %.1f m/s @ %03d deg" % [speed, int(round(heading))]
+
+
+## Diagnostic: every number UiScale's formula touches, so a screenshot from another browser
+## shows which one disagrees. Remove once touch-UI sizing is confirmed consistent cross-browser.
 func _ui_scale_line() -> String:
 	var win := get_window()
 	var w := 0.0

@@ -1,17 +1,8 @@
 @tool
 extends "res://addons/carlito_kit/brush_chassis.gd"
-## Scatter brush. Rides the shared brush chassis; adds the
-## scatter-specific half: PAINT lays instances into a selected ScatterCanvas density-per-stroke,
-## ERASE removes them within the brush radius. The second front-end on the scatter core —
-## it reuses the seeded sampler (ScatterRegion.generate_placements), the jitter knobs and ground
-## snapping (ScatterBase), and the canvas's pure erase, so painted and regenerated scatter share
-## one placement philosophy and one bake path.
-##
-## Editor-only by construction (editor/runtime split): the brush mutates the canvas's
-## stored transforms (authored, serialized content) live during a stroke for feedback, and
-## commits ONE undoable stored_transforms swap at stroke end (whole-array, like Regenerate — the
-## arrays are small). No new runtime or baker code: the canvas is a ScatterBase, so it renders
-## and bakes exactly as a ScatterRegion does.
+## Scatter brush on the shared brush chassis. PAINT lays instances into a selected
+## ScatterCanvas; ERASE removes them within the brush radius. Mutates stored transforms
+## live during a stroke, then commits one undoable swap at stroke end.
 
 const ScatterBaseScript := preload("res://kit/helpers/scatter_base.gd")
 
@@ -25,20 +16,17 @@ var _canvas: ScatterCanvas = null
 # Active-stroke state.
 var _before: Array[PackedFloat32Array] = []   # snapshot for undo
 var _before_hash := ""
-var _work: Array[PackedFloat32Array] = []      # the array we mutate; pushed to the canvas at end
+var _work: Array[PackedFloat32Array] = []      # mutated array; pushed to canvas at end
 var _spacing_grid := {}                        # world XZ spatial hash (paint spacing)
 var _cell_taken := {}                          # grid pattern: occupied lattice cells (Vector2i)
 var _dab_seed := 0
 var _dirty := false
 
-# Two-click rect fill state, live between the first and second click (mirrors the terrain
-# brush's ramp): the stored first corner.
+# Two-click rect fill: stored first corner, live between the two clicks.
 var _rect_armed := false
 var _rect_a := Vector3.ZERO
 
-# Stroke-scoped live preview: the merged per-item mesh is built ONCE at stroke begin and reused
-# every dab (index-matched to the canvas's items; null where an item has no prefab). Each dab
-# only rewrites the MultiMesh instance transforms/count — no prefab re-instantiate, no re-merge.
+# Live preview, built once at stroke begin (index-matched to canvas items).
 var _live_mms: Array[MultiMesh] = []
 
 
@@ -54,7 +42,7 @@ func set_target(canvas: ScatterCanvas) -> void:
 	_free_cursor()  # cursor lives under the canvas; a new target needs a new one
 	_rect_armed = false  # a stored corner belongs to the canvas it was clicked on
 	if is_instance_valid(_canvas):
-		_canvas.end_live_edit()  # clear the flag if we swap targets mid-stroke
+		_canvas.end_live_edit()
 	_reset_stroke()
 	_canvas = canvas
 
@@ -77,9 +65,7 @@ func _target_valid() -> bool:
 	return Engine.is_editor_hint() and mode != OFF and is_instance_valid(_canvas)
 
 
-## Rect cancel rides on top of the chassis loop, exactly like the terrain brush's ramp: Esc
-## drops the stored corner and is consumed; right-click cancels too but is NOT consumed, so the
-## editor still gets it for freelook.
+## Esc drops the stored rect corner and is consumed; right-click cancels but is not.
 func handle_input(camera: Camera3D, event: InputEvent) -> bool:
 	if _rect_armed and _target_valid():
 		if event is InputEventKey and event.pressed \
@@ -103,9 +89,7 @@ func _cursor_color() -> Color:
 		_: return Color(1.0, 0.45, 0.4)
 
 
-## In RECT mode the cursor is the pending rectangle (first corner -> cursor) plus a small
-## marker ring at the stored corner; before the first click it is just the marker-less ring.
-## Separate strips: one LINE_STRIP would join them with a stray chord.
+## RECT mode: pending rectangle plus a marker ring, as separate strips.
 func _cursor_strips(center: Vector3) -> Array[PackedVector3Array]:
 	if mode != RECT:
 		return super(center)
@@ -118,8 +102,7 @@ func _cursor_strips(center: Vector3) -> Array[PackedVector3Array]:
 	return strips
 
 
-## Closed XZ rectangle spanned by two world points, drawn flat at the higher of the two Ys so
-## it stays readable when a corner sinks into a slope.
+## Closed XZ rectangle drawn flat at the higher of the two Ys.
 static func _rect_outline(a: Vector3, b: Vector3) -> PackedVector3Array:
 	var y := maxf(a.y, b.y) + 0.25
 	var x0 := minf(a.x, b.x)
@@ -139,8 +122,7 @@ static func _small_ring(center: Vector3, r := 0.5) -> PackedVector3Array:
 	return pts
 
 
-## Ground point under the cursor: edited-scene physics ray -> terrain sample -> Y=0 plane (the
-## shared fallback chain — a click never dead-drops). Returns a world Vector3.
+## Ground point under the cursor: physics ray -> terrain sample -> Y=0 plane.
 func _project(camera: Camera3D, mouse: Vector2) -> Variant:
 	if not is_instance_valid(_canvas):
 		return null
@@ -159,8 +141,6 @@ func _project(camera: Camera3D, mouse: Vector2) -> Variant:
 	return _ray_plane(origin, dir, 0.0)
 
 
-# ------------------------------------------------------------------ rect fill (two clicks)
-
 func _click_mode() -> bool:
 	return mode == RECT
 
@@ -174,8 +154,7 @@ func _click(center: Vector3) -> void:
 	_fill_rect(_rect_a, center)
 
 
-## Lay the whole rectangle as ONE undoable action by running the normal stroke path once:
-## begin (snapshot + live preview) -> a single polygon fill -> end (commit).
+## Lays the whole rectangle as one undoable action via the normal stroke path.
 func _fill_rect(a: Vector3, b: Vector3) -> void:
 	if not is_instance_valid(_canvas):
 		return
@@ -188,16 +167,12 @@ func _fill_rect(a: Vector3, b: Vector3) -> void:
 	var rect := PackedVector2Array([
 		Vector2(x0, z0), Vector2(x1, z0), Vector2(x1, z1), Vector2(x0, z1)])
 	_stroke_begin(a)
-	# Ray origin Y: above both corners, so the down-ray finds ground at any height under the
-	# rectangle (the rect selects an XZ area, never a height band).
-	var probe_y := maxf(a.y, b.y)
+	var probe_y := maxf(a.y, b.y)  # above both corners: rect selects an XZ area
 	if _fill_polygon(rect, probe_y, func(_px: float, _pz: float): return true) > 0:
 		_update_live_preview()
 		_dirty = true
 	_stroke_end()
 
-
-# ------------------------------------------------------------------ stroke
 
 func _stroke_begin(_center: Vector3) -> void:
 	_dirty = false
@@ -206,19 +181,16 @@ func _stroke_begin(_center: Vector3) -> void:
 	_before = _snapshot(_canvas.stored_transforms)
 	_before_hash = _canvas.stored_ground_hash
 	_work = _snapshot(_canvas.stored_transforms)
-	# Pad to one array per item so a fresh canvas (empty stored_transforms) can be painted.
 	while _work.size() < _canvas.items.size():
 		_work.append(PackedFloat32Array())
 	_rebuild_occupancy()
-	_canvas.begin_live_edit()  # suppress the per-assignment stale recompute for the whole stroke
+	_canvas.begin_live_edit()  # suppress per-assignment stale recompute for the whole stroke
 	_setup_live_preview()
 
 
 func _stroke_apply(center: Vector3) -> void:
 	if not is_instance_valid(_canvas):
 		return
-	# Only touch anything when a dab actually changes content — a paint dab that snaps nothing,
-	# or an erase over empty ground, must not commit a no-op undo.
 	var changed := false
 	if mode == PAINT:
 		changed = _paint_dab(center) > 0
@@ -227,7 +199,7 @@ func _stroke_apply(center: Vector3) -> void:
 		_work = ScatterCanvas.erase_within(_work, _canvas.global_transform, center, radius)
 		changed = _total(_work) < before_total
 	if changed:
-		_update_live_preview()  # cheap: rewrite MultiMesh transforms/count, no re-merge
+		_update_live_preview()
 		_dirty = true
 
 
@@ -236,12 +208,9 @@ func _stroke_end() -> void:
 		_reset_stroke()
 		return
 	if not _dirty:
-		_canvas.end_live_edit()  # nothing changed; the live preview already matches the canvas
+		_canvas.end_live_edit()
 		_reset_stroke()
 		return
-	# Commit the accumulated work to the canvas ONCE: the stored_transforms setter rebuilds the
-	# authoritative preview (freeing our stroke-scoped one) with stale still suppressed, then
-	# end_live_edit does the single stale recompute for the whole stroke.
 	var final := _work
 	var level_root: Node = _canvas.owner if _canvas.owner != null else _canvas
 	var new_hash := ScatterBaseScript.ground_hash(level_root)
@@ -260,7 +229,7 @@ func _stroke_end() -> void:
 	_undo.add_undo_property(_canvas, &"stored_transforms", _before)
 	_undo.add_do_property(_canvas, &"stored_ground_hash", new_hash)
 	_undo.add_undo_property(_canvas, &"stored_ground_hash", _before_hash)
-	_undo.commit_action(false)  # edits are already live — don't re-run the do now
+	_undo.commit_action(false)  # edits already live — don't re-run the do now
 	_reset_stroke()
 
 
@@ -270,18 +239,14 @@ func _reset_stroke() -> void:
 	_live_mms = []
 
 
-# --------------------------------------------------------- stroke-scoped live preview
-
-## Build the stroke's preview once: one MultiMesh per item over its merged mesh, under the
-## canvas's "Preview" node (named to match ScatterBase._rebuild_preview, so the stroke-end
-## stored_transforms assignment cleanly frees this and rebuilds the authoritative version).
+## One MultiMesh per item, under a "Preview" node matching ScatterBase._rebuild_preview.
 func _setup_live_preview() -> void:
 	var old := _canvas.get_node_or_null(^"Preview")
 	if old != null:
 		old.free()
 	var preview := Node3D.new()
 	preview.name = "Preview"
-	_canvas.add_child(preview)  # unowned on purpose -> never serialized
+	_canvas.add_child(preview)  # unowned -> never serialized
 	_live_mms = []
 	for i in _canvas.items.size():
 		var item: Resource = _canvas.items[i]
@@ -301,8 +266,6 @@ func _setup_live_preview() -> void:
 	_update_live_preview()
 
 
-## Per-dab update: rewrite each item's MultiMesh instance count + transforms from `_work`. No
-## prefab instancing or mesh merging — the meshes were built once in _setup_live_preview.
 func _update_live_preview() -> void:
 	for i in _live_mms.size():
 		var mm: MultiMesh = _live_mms[i]
@@ -315,11 +278,7 @@ func _update_live_preview() -> void:
 			mm.set_instance_transform(j, ScatterBaseScript.stored_transform(flat, j))
 
 
-# ------------------------------------------------------------------ painting
-
-## Lay one dab: fill the world-XZ square bounding the brush disc, keeping only the candidates
-## inside the disc. Region-local transforms are appended to `_work`. Returns the number of
-## instances actually placed (0 = nothing snapped, so the caller skips a no-op commit).
+## Fills the world-XZ square bounding the brush disc, keeping candidates inside the disc.
 func _paint_dab(center: Vector3) -> int:
 	var cx := center.x
 	var cz := center.z
@@ -331,13 +290,9 @@ func _paint_dab(center: Vector3) -> int:
 			func(px: float, pz: float): return (px - cx) * (px - cx) + (pz - cz) * (pz - cz) <= r2)
 
 
-## The one placement path, shared by the disc dab and the rect fill, in both patterns: sample
-## candidates over `poly` (random rejection sampler or world-anchored lattice, per the canvas's
-## paint_pattern), drop the ones `keep` rejects, enforce the min-spacing hash / lattice-cell
-## occupancy (both carry prior dabs AND existing instances, so density is even regardless of
-## stroke speed and strokes never double up a cell), ground-snap, slope-filter, and append the
-## region-local transform to `_work`. `probe_y` is only the ray start height — snapping is a
-## straight-down ray, so the area is filled at whatever height the ground is.
+## Shared placement path for disc dabs and rect fill: sample, filter, spacing/lattice
+## check, ground-snap, slope-filter, append to `_work`. `probe_y` is only the ray start
+## height; snapping is straight down.
 func _fill_polygon(poly: PackedVector2Array, probe_y: float, keep: Callable) -> int:
 	var weights := PackedFloat32Array()
 	var any := false
@@ -413,10 +368,7 @@ func _fill_polygon(poly: PackedVector2Array, probe_y: float, keep: Callable) -> 
 	return placed
 
 
-# ------------------------------------------------------------------ occupancy
-
-## Seed both rejection structures from the instances already stored on the canvas: the
-## min-spacing hash (random pattern) and the taken-lattice-cell set (grid pattern).
+## Seeds the min-spacing hash and taken-lattice-cell set from instances already on the canvas.
 func _rebuild_occupancy() -> void:
 	_spacing_grid = {}
 	_cell_taken = {}
@@ -445,8 +397,6 @@ func _grid_add(p: Vector2, spacing: float) -> void:
 		_spacing_grid[key] = PackedVector2Array()
 	_spacing_grid[key].append(p)
 
-
-# ------------------------------------------------------------------ helpers
 
 func _terrains() -> Array[Node]:
 	var out: Array[Node] = []

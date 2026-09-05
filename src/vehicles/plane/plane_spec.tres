@@ -1,11 +1,10 @@
-[gd_resource type="Resource" script_class="VehicleSpec" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="VehicleSpec" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
+[ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="2_grounddrive"]
 
-[resource]
-script = ExtResource("1_spec")
-mass = 800.0
-center_of_mass = Vector3(0, -0.2, 0)
+[sub_resource type="Resource" id="Resource_grounddrive"]
+script = ExtResource("2_grounddrive")
 wheel_positions = PackedVector3Array(0, 0, -2, -1.1, 0, 0.6, 1.1, 0, 0.6)
 wheel_radius = 0.22
 wheel_inertia = 0.8
@@ -16,22 +15,32 @@ spring_rate = 18000.0
 damper_bump = 1500.0
 damper_rebound = 2000.0
 max_suspension_force = 30000.0
+brake_torque = 900.0
+handbrake_torque = 100.0
+max_steer_deg = 40.0
+min_steer_frac = 0.35
+steer_falloff_speed = 22.0
+
+[resource]
+script = ExtResource("1_spec")
+mass = 800.0
+center_of_mass = Vector3(0, -0.2, 0)
+ground_drive = SubResource("Resource_grounddrive")
 torque_curve = PackedVector2Array(700, 140, 2500, 230, 4500, 250, 5400, 190)
 idle_rpm = 700.0
 redline_rpm = 5400.0
 gear_ratios = PackedFloat32Array(2.8, 2, 1.5, 1.2, 1, 0.85)
 reverse_ratio = 2.0
 final_drive = 2.0
+; single-speed BY CONSTRUCTION: shift_up_rpm sits ABOVE redline_rpm, and auto_shift judges the
+; redline-clamped rpm_from_wheel, so gear 1 is the only gear this aircraft ever selects and the
+; contract's `gear` publishes a constant 1 in D. Do not "fix" it below the redline — see plane.gd.
 shift_up_rpm = 6000.0
 shift_down_rpm = 1800.0
-brake_torque = 900.0
-handbrake_torque = 100.0
-max_steer_deg = 40.0
 steer_speed = 2.5
-min_steer_frac = 0.35
-steer_falloff_speed = 22.0
 lamp_style = 1
 headlight_paths = [NodePath("WingL/LandingLight")]
 head_lamp_paths = [NodePath("WingL/LandingLens")]
 steady_lamp_paths = [NodePath("WingL/NavRedL"), NodePath("WingR/NavGreenR"), NodePath("Lamps/NavTailWhite")]
 flash_lamp_paths = [NodePath("Lamps/BeaconTop")]
+strobe_lamp_paths = [NodePath("WingL/StrobeL"), NodePath("WingR/StrobeR")]

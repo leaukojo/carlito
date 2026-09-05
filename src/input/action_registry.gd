@@ -1,22 +1,8 @@
 class_name ActionRegistry
 extends RefCounted
-## The one description of what every bound input action IS, who it applies to, and what its
-## on-screen button looks like. Two consumers read it and nothing else describes controls:
-## the pause menu's CONTROLS sheet (`src/ui/pause_menu.gd`) and the touch overlay's button
-## stack (`src/ui/touch_controls.gd`).
-##
-## It exists because the same list used to be written three times — a hand-typed hint label, a
-## hand-written stack of touch buttons, and the project's [input] map — and only the last one was
-## ever true. Ten bound actions had drifted out of the label entirely and six had no touch button
-## at all. A test (tests/test_action_registry.gd) now asserts every bound action appears here, so
-## a new binding cannot ship undocumented.
-##
-## IT IS A REGISTRY, NOT A SECOND COPY OF THE INPUT MAP (standing rule 4). No key name is typed
-## here: `keys_for()` reads the live binding out of InputMap. The table carries only prose and
-## GATING — which vehicles have the control, whether sloppyCAN owns it, and what its button says.
-##
-## Pure static data + pure functions, no autoload and no nodes, so the gate predicate every
-## consumer shares is unit-tested directly (standing rule 8). Plain text, no emoji (rule 10).
+## Registry of every bound input action: who uses it and its on-screen button. A registry, not
+## a copy of InputMap (no key names typed here); `keys_for()` reads the live binding. Pure
+## static data + functions; tests assert every bound action appears here. No emoji.
 
 ## Where a row sits on the CONTROLS sheet. Ordering here is the sheet's section order.
 enum Group { DRIVE, VEHICLE, WORLD, SHELL }
@@ -36,6 +22,7 @@ const CAP_NOTE := {
 	"tows": "nothing to tow",
 	"pto": "no PTO on this machine",
 	"lift": "nothing to raise",
+	"scv": "no hydraulic remote plumbed in",
 	"diff_lock": "no lockable diff",
 	"fwd_drive": "no engageable front axle",
 	"body_cmd": "no refuse body",
@@ -43,33 +30,13 @@ const CAP_NOTE := {
 
 const BRIDGE_NOTE := "sloppyCAN is driving"
 
-## Every bound action, one row each — except the four pairs that are one control on two keys
-## (drive/reverse, steer, climb/descend), which are one row so the sheet reads the way a person
-## thinks about them. `id` is the row's name; for a single-action row it is the action name.
+## Every bound action, one row each — one control on two keys (drive/reverse, steer, climb)
+## becomes one row. Gating fields: families (empty = all), excludes, capability
+## (shell-read bool), bridge_owned (VehicleInput-only, inert when bridge active; shell signals
+## are always local). signals: contract IN signal(s), cross-checked vs contract's vehicles list.
 ##
-## Gating vocabulary, and it covers every shape the touch overlay used to hand-write:
-##   families     - only these vehicle families have it (empty = all of them)
-##   excludes     - every family EXCEPT these (steer: the train is rail-guided; handbrake: the
-##                  boat and the drone have no wheels and read the field nowhere)
-##   capability   - a bool the shell reads off the vehicle; see boot.gd _capabilities().
-##                  Capability rather than family wherever one family disagrees with itself:
-##                  within `truck` the semi tows and the garbage truck does not, and cycling a
-##                  semi's trailer changes the answer without changing the body.
-##   bridge_owned - the control rides VehicleInput, so it is INERT while sloppyCAN drives:
-##                  InputRouter takes the bridge branch and never polls a local source at all.
-##                  Hidden on touch, greyed on the sheet. Not set on the shell conveniences
-##                  (ATTACH, VIEW, GARAGE, NEXT, RESPAWN, MENU), which are overlay signals that
-##                  never reach VehicleInput and so keep working with the bridge live.
-##                  KNOWN INCONSISTENCY, deliberate: the pedals and the joystick ride VehicleInput
-##                  too and are equally inert, but are NOT flagged. They are the identity of the
-##                  overlay, `Bridge.is_active()` follows data freshness, and having the gas pedal
-##                  vanish and reappear as sloppyCAN stutters reads as the app breaking. This
-##                  matches what shipped before the registry; revisit it as a design question, not
-##                  by quietly flipping the flag.
-##   signals      - the contract IN signal(s) this control rides, when it has one. NOT used at
-##                  runtime: tests/test_action_registry.gd cross-checks the family gate above
-##                  against the contract's own `vehicles` list, so the two cannot drift (rule 4 —
-##                  validated against the contract rather than hand-duplicating it).
+## Pedals/joystick are equally inert under bridge but deliberately NOT flagged — they're the
+## overlay's identity and flickering them with bridge freshness reads as broken.
 const ENTRIES: Array[Dictionary] = [
 	# --- drive ---------------------------------------------------------------
 	{
@@ -81,15 +48,13 @@ const ENTRIES: Array[Dictionary] = [
 		"label": "Steer", "signals": ["steer"], "excludes": ["train"], "touch": Touch.WIDGET,
 	},
 	{
-		# Excluded where there is nothing to hold: the boat and the drone have no wheels for the
-		# brake torque to reach and read the field nowhere. The plane's tricycle gear DOES take it
-		# (handbrake_torque on three RayWheels) and the train's is read by TrainSim rather than by
-		# wheels, so both keep it.
+		# Excluded where there's nothing to hold: boat/drone have no wheels for brake torque.
+		# Plane's tricycle gear takes it; train's is read by TrainSim rather than wheels.
 		"id": &"handbrake", "actions": ["handbrake"], "group": Group.DRIVE,
 		"label": "Handbrake", "signals": ["handbrake"], "excludes": ["boat", "drone"],
 		"bridge_owned": true,
-		# WIDGET: it sits beside the steering joystick, and on touch it LATCHES (a parking brake
-		# you hold with a finger is not one). The key stays momentary.
+		# WIDGET: sits beside the steering joystick; on touch it latches (a parking brake
+		# held with a finger is not one). Key stays momentary.
 		"touch": Touch.WIDGET,
 	},
 	{
@@ -101,86 +66,117 @@ const ENTRIES: Array[Dictionary] = [
 	# --- the vehicle's own controls ------------------------------------------
 	{
 		"id": &"horn", "actions": ["horn"], "group": Group.VEHICLE,
-		# WIDGET, not a stack button: it sits in the pedal cluster beside GAS/BRAKE, where the hand
-		# already is, rather than up in the stack of settings.
+		# WIDGET: sits in the pedal cluster beside GAS/BRAKE, not up in the settings stack.
 		"label": "Horn", "signals": ["horn"], "bridge_owned": true, "touch": Touch.WIDGET,
 	},
 	{
 		"id": &"headlights", "actions": ["headlights"], "group": Group.VEHICLE,
-		# WIDGET for the same reason as the horn: it lives in the pedal cluster, built by hand.
+		# WIDGET, same reason as horn: lives in the pedal cluster.
 		"label": "Lights (off / clearance / low / high)", "signals": ["lights"],
 		"bridge_owned": true, "touch": Touch.WIDGET,
 	},
 	{
-		# THE ONE ROW WITH NO `signals`, and deliberately so. On a tractor this is `hitch_pos`; on a
-		# semi it is the tipper's valve, which reads the SAME local toggle in its transport sense and
-		# has NO contract signal of its own — `hitch_pos` is flavored isobus and a bulk tipper is a
-		# J1939 truck (the decision is recorded in src/vehicles/CLAUDE.md, same reason `scv_flow` was
-		# not reused there). Naming hitch_pos here would fail the family cross-check for the right
-		# reason and be silenced for the wrong one, so the row states the exception instead.
+		# No `signals`, deliberately: on a semi this reads the same local toggle as a tipper
+		# valve with no contract signal of its own (see src/vehicles/CLAUDE.md). Naming
+		# hitch_pos here would fail the family cross-check for the right reason.
 		"id": &"hitch", "actions": ["hitch"], "group": Group.VEHICLE,
 		"label": "Raise / lower the hitch (tip the body)",
 		"capability": "lift", "bridge_owned": true,
-		"touch": Touch.TAP, "touch_label": "TIP", "poll_key": "hitch_toggle",
+		"touch": Touch.TAP, "touch_label": "TIP", "poll_key": &"hitch_toggle",
 	},
 	{
 		"id": &"pto", "actions": ["pto"], "group": Group.VEHICLE,
 		"label": "PTO drive", "signals": ["pto"], "families": ["tractor", "truck"],
 		"capability": "pto", "bridge_owned": true,
-		"touch": Touch.TAP, "touch_label": "PTO", "poll_key": "pto_toggle",
+		"touch": Touch.TAP, "touch_label": "PTO", "poll_key": &"pto_toggle",
 	},
 	{
 		"id": &"pto_mode", "actions": ["pto_mode"], "group": Group.VEHICLE,
 		"label": "PTO speed (540 / 1000)", "signals": ["pto_mode"], "families": ["tractor"],
 		"bridge_owned": true,
-		"touch": Touch.TAP, "touch_label": "PTO SPD", "poll_key": "pto_mode_toggle",
+		"touch": Touch.TAP, "touch_label": "PTO SPD", "poll_key": &"pto_mode_toggle",
+	},
+	{
+		# Has a local key where the truck's `retarder` does not — see input_router.gd's
+		# _scv declaration. Capability-gated, not family-gated: a bare tractor has no remote
+		# plumbed in, so the button appears with the machine that answers it, like PTO.
+		"id": &"scv", "actions": ["scv"], "group": Group.VEHICLE,
+		"label": "Hydraulic remote (SCV) spool", "signals": ["scv_flow"], "families": ["tractor"],
+		"capability": "scv", "bridge_owned": true,
+		"touch": Touch.TAP, "touch_label": "SCV", "poll_key": &"scv_toggle",
 	},
 	{
 		"id": &"diff_lock", "actions": ["diff_lock"], "group": Group.VEHICLE,
 		"label": "Rear diff lock", "signals": ["diff_lock"], "families": ["tractor"],
 		"capability": "diff_lock", "bridge_owned": true,
-		"touch": Touch.TAP, "touch_label": "DIFF", "poll_key": "diff_lock_toggle",
+		"touch": Touch.TAP, "touch_label": "DIFF", "poll_key": &"diff_lock_toggle",
 	},
 	{
 		"id": &"fwd_drive", "actions": ["fwd_drive"], "group": Group.VEHICLE,
 		"label": "Front-wheel drive (MFWD)", "signals": ["fwd_drive"], "families": ["tractor"],
 		"capability": "fwd_drive", "bridge_owned": true,
-		"touch": Touch.TAP, "touch_label": "MFWD", "poll_key": "fwd_drive_toggle",
+		"touch": Touch.TAP, "touch_label": "MFWD", "poll_key": &"fwd_drive_toggle",
 	},
 	{
 		"id": &"arm", "actions": ["arm"], "group": Group.VEHICLE,
 		"label": "Arm the motors", "signals": ["arm"], "families": ["drone"], "bridge_owned": true,
-		# WIDGET: built by hand above the UP/DOWN flight pads, where the aircraft controls already are.
-		"touch": Touch.WIDGET, "poll_key": "arm_toggle",
+		# WIDGET: built above the UP/DOWN flight pads, where the aircraft controls already are.
+		"touch": Touch.WIDGET, "poll_key": &"arm_toggle",
+	},
+	{
+		# Key is Z: Q (the letter originally assumed free) has been the tractor's SCV spool
+		# since that control got a key; Z is the only unbound letter left.
+		"id": &"flight_mode", "actions": ["flight_mode"], "group": Group.VEHICLE,
+		"label": "Flight mode (stabilize / alt hold / loiter / RTL / land)",
+		"signals": ["flight_mode"], "families": ["drone"], "bridge_owned": true,
+		# WIDGET like ARM, not TAP like FAIL below: reached for while flying, so it sits above
+		# the UP/DOWN pads rather than in the settings stack.
+		"touch": Touch.WIDGET, "poll_key": &"flight_mode_cycle",
+	},
+	{
+		"id": &"node_fail", "actions": ["node_fail"], "group": Group.VEHICLE,
+		"label": "Fail a bus node (cycle)", "signals": ["node_fail"], "families": ["drone"],
+		"bridge_owned": true,
+		# TAP, not WIDGET like ARM: a bench switch, not a flight control, so it belongs in the
+		# settings stack where a mis-tap while flying costs nothing.
+		"touch": Touch.TAP, "touch_label": "FAIL", "poll_key": &"node_fail_cycle",
+	},
+	{
+		# First control on a digit (1): every letter is bound. TAP, matching PTO/TIP — a load
+		# control used from a steady hover, not a stick flown with.
+		"id": &"hardpoint", "actions": ["hardpoint"], "group": Group.VEHICLE,
+		"label": "Cargo hook (hold / release)", "signals": ["hardpoint_cmd"],
+		"families": ["drone"], "bridge_owned": true,
+		"touch": Touch.TAP, "touch_label": "HOOK", "poll_key": &"hardpoint_toggle",
 	},
 	{
 		"id": &"flaps", "actions": ["flaps"], "group": Group.VEHICLE,
 		"label": "Flaps", "signals": ["flaps"], "families": ["plane"], "bridge_owned": true,
-		# WIDGET, same reason as ARM: it belongs above the UP/DOWN pads, not in the settings stack.
-		"touch": Touch.WIDGET, "poll_key": "flaps_toggle",
+		# WIDGET, same reason as ARM: above the UP/DOWN pads, not the settings stack.
+		"touch": Touch.WIDGET, "poll_key": &"flaps_toggle",
 	},
 	{
 		"id": &"pantograph", "actions": ["pantograph"], "group": Group.VEHICLE,
 		"label": "Pantograph up / down", "signals": ["pantograph"], "families": ["train"],
 		"bridge_owned": true,
-		# WIDGET: built by hand in the pedal cluster beside BRAKE, where the driving hand is.
-		"touch": Touch.WIDGET, "poll_key": "pantograph_toggle",
+		# WIDGET: built in the pedal cluster beside BRAKE, where the driving hand is.
+		"touch": Touch.WIDGET, "poll_key": &"pantograph_toggle",
 	},
 	{
 		"id": &"doors", "actions": ["doors"], "group": Group.VEHICLE,
 		"label": "Doors", "signals": ["doors"], "families": ["train"], "bridge_owned": true,
-		# WIDGET, same reason as PANTO: it sits in the pedal cluster beside LIGHTS.
-		"touch": Touch.WIDGET, "poll_key": "doors_toggle",
+		# WIDGET, same reason as PANTO: sits in the pedal cluster beside LIGHTS.
+		"touch": Touch.WIDGET, "poll_key": &"doors_toggle",
 	},
 	{
 		"id": &"body_cmd", "actions": ["body_cmd"], "group": Group.VEHICLE,
 		"label": "Refuse body (idle / lift / dump / lower)", "signals": ["body_cmd"],
 		"families": ["truck"], "capability": "body_cmd", "bridge_owned": true,
-		"touch": Touch.TAP, "touch_label": "BODY", "poll_key": "body_cmd_toggle",
+		"touch": Touch.TAP, "touch_label": "BODY", "poll_key": &"body_cmd_toggle",
 	},
 	{
-		# Not bridge_owned, unlike the two above it: the attachment CYCLE is a local authoring
-		# convenience with no contract signal behind it, so sloppyCAN driving does not take it away.
+		# Not bridge_owned: the attachment cycle is a local authoring convenience with no
+		# contract signal, so sloppyCAN driving does not take it away.
 		"id": &"next_attachment", "actions": ["next_attachment"], "group": Group.VEHICLE,
 		"label": "Next implement / trailer", "capability": "tows",
 		"touch": Touch.SHELL_SIGNAL, "touch_label": "ATTACH",
@@ -195,9 +191,8 @@ const ENTRIES: Array[Dictionary] = [
 		"label": "Respawn", "touch": Touch.SHELL_SIGNAL, "touch_label": "RESPAWN",
 	},
 	{
-		# On the stack, not keyboard-only: it is player-facing content (every level dresses itself
-		# for night) and the Phase 7 sweep found it was the one such control a phone could not
-		# reach at all. The two rows below it stay keyboard-only on purpose — they are dev keys.
+		# On the stack, not keyboard-only, so it reaches a phone. The two rows below it stay
+		# keyboard-only on purpose — dev keys.
 		"id": &"day_night", "actions": ["day_night"], "group": Group.WORLD,
 		"label": "Day / night", "touch": Touch.SHELL_SIGNAL, "touch_label": "NIGHT",
 	},
@@ -217,9 +212,8 @@ const ENTRIES: Array[Dictionary] = [
 		"label": "Menu / back", "touch": Touch.SHELL_SIGNAL, "touch_label": "MENU",
 	},
 	{
-		# The same setting the SETTINGS page cycles, reached in one key: F2 drops the cluster to
-		# OFF and back to whatever density you had. Keyboard-only — on touch the pause menu is
-		# already one tap away and the stack is for controls you use while driving.
+		# Same setting the SETTINGS page cycles; F2 drops the cluster to OFF and back.
+		# Keyboard-only — the pause menu is one tap away on touch.
 		"id": &"toggle_dashboard", "actions": ["toggle_dashboard"], "group": Group.SHELL,
 		"label": "Dashboard on / off",
 	},
@@ -263,9 +257,8 @@ static func context(family: String, bridge_active: bool, caps: Dictionary) -> Di
 	return {"family": family, "bridge": bridge_active, "caps": caps}
 
 
-## Does this control do something right now? THE one gate predicate — the touch overlay hides
-## what it says no to and the CONTROLS sheet greys it, so a button and its help can never
-## disagree about whether a control exists.
+## Does this control do something right now? The one gate predicate — touch overlay and
+## CONTROLS sheet both read it, so a button and its help can never disagree.
 static func applies(id: StringName, ctx: Dictionary) -> bool:
 	return applies_entry(find(id), ctx)
 
@@ -287,8 +280,8 @@ static func applies_entry(entry: Dictionary, ctx: Dictionary) -> bool:
 	return true
 
 
-## Why `entry` does not apply, for the sheet's third column ("" when it does apply). The bridge
-## is reported first because it is the reason that is about to go away again.
+## Why `entry` does not apply, for the sheet's third column ("" when it does apply). Bridge is
+## reported first since it's the reason most likely to go away again.
 static func gate_note(entry: Dictionary, ctx: Dictionary) -> String:
 	if applies_entry(entry, ctx):
 		return ""
@@ -303,12 +296,10 @@ static func gate_note(entry: Dictionary, ctx: Dictionary) -> String:
 	return String(CAP_NOTE.get(cap, "unavailable"))
 
 
-## The families this row applies to, with the shorthand forms expanded: an empty `families` means
-## every family, and `excludes` means every family but those. `all_families` is passed in so this
-## file stays free of a VehicleCatalog dependency (it is data about input, not about vehicles).
-##
-## Not used by the runtime gate — `applies()` answers that directly. This is for the contract
-## cross-check in tests/test_action_registry.gd, which is what keeps the family lists above honest.
+## Families this row applies to, with shorthand expanded (empty `families` = every family,
+## `excludes` = every family but those). `all_families` is passed in to keep this file free
+## of a VehicleCatalog dependency. Not used by the runtime gate — for the contract cross-check
+## in tests/test_action_registry.gd.
 static func families_of(entry: Dictionary, all_families: PackedStringArray) -> PackedStringArray:
 	var declared: Array = entry.get("families", [])
 	if not declared.is_empty():
@@ -324,18 +315,17 @@ static func families_of(entry: Dictionary, all_families: PackedStringArray) -> P
 	return rest
 
 
-## Whether every vehicle has this control. It is what splits the touch stack into its two
-## columns — universal controls in the outer one, the current machine's own beside it — so a
-## button's column cannot disagree with whether it is vehicle-specific.
+## Whether every vehicle has this control. Splits the touch stack into two columns: universal
+## controls outer, the current machine's own beside them.
 static func is_universal(entry: Dictionary) -> bool:
 	return entry.get("families", []).is_empty() \
 			and entry.get("excludes", []).is_empty() \
 			and String(entry.get("capability", "")) == ""
 
 
-## The row's binding, READ LIVE out of InputMap — never a typed-in string, which is the drift
-## that made this file necessary. One key per action, joined: a two-action row reads "W / S".
-## Joypad bindings are skipped (the sheet footnotes them once for the drive group).
+## The row's binding, read live out of InputMap — never a typed-in string. One key per action,
+## joined: a two-action row reads "W / S". Joypad bindings are skipped (the sheet footnotes
+## them once for the drive group).
 static func keys_for(entry: Dictionary) -> String:
 	var parts := PackedStringArray()
 	for action in entry.get("actions", []):

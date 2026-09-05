@@ -1,64 +1,62 @@
 extends Node
-## One-shot generator for the Kenney car-kit vehicle variants (CC0). For each variant it
-## writes src/vehicles/kenney/<variant>.tscn + <variant>_spec.tres:
-##   - a RigidBody3D root carrying the family's vehicle script (FAMILY_SCRIPTS: TruckVehicle for
-##     the truck family, TractorVehicle for the tractor, plain BaseVehicle for cars/vans),
-##   - the GLB body instanced + centred at the kit-wide scale, a BoxShape3D from its AABB,
-##   - a shared Lamps subtree (same node names/paths as car.tscn) sized to the body,
-##   - a spec whose feel starts from the family baseline + per-variant overrides; wheels
-##     come from spec.wheel_scene (the shared Kenney wheel wrapper) at runtime.
-##
-## brake_torque / handbrake_torque are DERIVED from each variant's drivetrain so the §6
-## force hierarchy (brake > peak drive per wheel > handbrake, handbrake capped low) holds
-## by construction for every generated spec — never hand-tuned.
-##
-## GAME-MODE tool scene, NOT --script: base_vehicle.gd / tractor.gd reference the
-## InputRouter / Bridge autoloads, which only resolve with autoloads registered. Run:
-##   godot --headless --path . res://tools/gen_kenney_vehicles.tscn
-## Deterministic + destructive-by-run. Delete tools/measure_kenney.gd after; this stays as
-## the regen path (rerun after a scale/feel change, then re-bake).
+## One-shot generator for the Kenney car-kit vehicle variants (CC0). For each variant writes
+## src/vehicles/kenney/<variant>.tscn + <variant>_spec.tres from a family baseline + per-variant
+## overrides (chassis, GLB body, lamps, wheels). brake_torque / handbrake_torque are always
+## derived from the tyre (BRAKE_GRIP_FRAC / _derive_brakes), never hand-tuned.
+## Game-mode tool scene (not --script): base_vehicle.gd / tractor.gd need the InputRouter/Bridge
+## autoloads. Run `godot --headless --path . res://tools/gen_kenney_vehicles.tscn`.
+## Deterministic and destructive-by-run: a hand-tune driven into a shipped .tres must be folded
+## back into the recipe here before the next run, or the rerun silently discards it.
 
 const OUT_DIR := "res://src/vehicles/kenney"
 const MODELS := OUT_DIR + "/models"
 const BASE_SCRIPT := "res://src/vehicles/base/base_vehicle.gd"
 const TRACTOR_SCRIPT := "res://src/vehicles/tractor/tractor.gd"
 const TRUCK_SCRIPT := "res://src/vehicles/truck/truck.gd"
-## Vehicle script per CONTRACT family; anything unlisted gets plain BaseVehicle. Keying on the
-## family is what makes this correct rather than a per-variant flag: garbage-truck and firetruck
-## are family "truck" and both need the J1939 chassis, while the heavy vans DRIVE like trucks but
-## are family "car" (ordinary chassis, proprietary CAN) and must keep base_vehicle.gd.
+## Vehicle script per CONTRACT family; unlisted gets plain BaseVehicle. Garbage-truck/firetruck
+## are family "truck" (J1939 chassis); the heavy vans drive like trucks but are family "car"
+## (ordinary chassis, proprietary CAN) and keep base_vehicle.gd.
 const FAMILY_SCRIPTS := {"tractor": TRACTOR_SCRIPT, "truck": TRUCK_SCRIPT}
 
 const KIT_SCALE := 1.2
-## The direct children this generator writes itself, i.e. the ONLY ones a regen may replace.
-## Anything else the scene carries is hand-authored and is transplanted — see _existing_children.
-## That covers the collision box pair, the tractor's ThreePointHitch, and the hand-placed
-## "HoodCam" marker (the bonnet-cam seat; ChaseCamera falls back silently without it, so its
-## loss reads as drift rather than as a missing node — test_vehicle_catalog sweeps for it).
+## Direct children this generator writes and may replace on regen. Everything else in the scene
+## is hand-authored and transplanted (see _existing_children): the collision box pair, the
+## tractor's ThreePointHitch, and the hand-placed "HoodCam" marker.
 const GENERATED_CHILDREN := ["Model", "Lamps"]
 const COLORMAP := OUT_DIR + "/models/Textures/colormap.png"
 
 ## --- lamp-lens detection (see _find_lenses) -------------------------------------------
 const LENS_WELD := 0.001       ## m, vertex weld tolerance for the triangle union-find
 const LENS_MERGE_GAP := 0.02   ## m two lens fragments may be apart and still be one lens
-## The lamp mesh does not sit ON the model's lens, it ENCLOSES it: every outward face is
-## held this far outside the corresponding lens face. Two problems, one fix — see _split.
+## The lamp mesh encloses the model's lens rather than sitting on it: every outward face is
+## held this far outside the lens face (see _split).
 const LENS_CLEAR := 0.006
 const LENS_MIN_DEPTH := 0.04   ## m depth floor for a lens the model draws as a flat quad
 const LENS_MIN_H := 0.06       ## m floor on lens height (some are a single flat quad)
 const TURN_FRAC := 0.35        ## outboard share of a lens' width that becomes the indicator
 const DISC_MIN_TRIS := 12      ## a lens this dense with square extents is a disc, not a box
 const WHEEL_RADIUS := 0.36  ## physics radius, all four corners (RayWheel is single-radius)
+
+## --- resistance (see VehicleMath's road-resistance header) ----------------------------
+## Frontal area is derived from each body's own AABB (not listed per variant) at FRONTAL_FILL,
+## the standard A ~ 0.8 * width * height rule of thumb for a non-rectangular silhouette. Wheels
+## are outside the AABB and not added; they're already inside the Cd this multiplies.
+const FRONTAL_FILL := 0.82
 const GRAVITY := 9.8
+## Share of the tyre's own longitudinal grip full pedal asks for; every baseline derives its foot
+## brake from the tyre through this (see _derive_brakes): deceleration at full pedal is
+## `frac * mu_long * g` on every body, whatever it weighs. Just under 1 because RayWheel's slip
+## tyre saturates at the ceiling; past it the pedal becomes an on/off lock with no steering.
+const BRAKE_GRIP_FRAC := 0.95
 const MIN_CLEARANCE := 0.12  ## m the collision hull floor is held above the wheel-contact plane
 const WHEEL_BAND := 0.4   ## m z-window (body space) the body half-width is measured over per axle
 
 ## Wheel visuals per model: the radius-normalized scene, the rendered radius, and the tread
-## half-width AT that radius (native half-width / native radius * rendered radius) — the flush-X
-## rule below places the wheel's outer face at the body side, so it must match the model.
+## half-width at that radius. The flush-X rule below places the wheel's outer face at the body
+## side, so this must match the model.
 const WHEEL_DEFAULT := {"scene": OUT_DIR + "/wheel.tscn", "radius": WHEEL_RADIUS, "half": 0.240}
 const WHEEL_TRUCK := {"scene": OUT_DIR + "/wheel-truck.tscn", "radius": WHEEL_RADIUS, "half": 0.210}
-## Tractor axles differ VISUALLY only (0.30 / 0.45 straddling the 0.36 physics radius).
+## Tractor axles differ visually only (0.30 / 0.45 straddling the 0.36 physics radius).
 const WHEEL_TRACTOR_FRONT := {
 	"scene": OUT_DIR + "/wheel-tractor-front.tscn", "radius": 0.30, "half": 0.206}
 const WHEEL_TRACTOR_REAR := {
@@ -74,24 +72,16 @@ var _lamp_paths := {
 	"turn_left_paths": [NodePath("Lamps/TurnLF"), NodePath("Lamps/TurnLR")],
 	"turn_right_paths": [NodePath("Lamps/TurnRF"), NodePath("Lamps/TurnRR")],
 }
-## Hand-measured lens boxes [centre, size] for the few models where the atlas swatch is too
-## close to the body colour for detection to find the edge — the taxi's amber lamp sits on
-## amber bodywork, so the cluster over-reaches downward and must be cropped to the real lens.
-## Replaces whatever _find_lenses returned for that end.
+## Hand-measured lens boxes [centre, size] for models where the atlas swatch is too close to the
+## body colour for detection to find the edge. Replaces whatever _find_lenses returned there.
 var _lens_overrides := {
-	# Detection returns the whole 0.36-tall yellow region (y 0.60..0.96); the real lamp is
-	# the strip at the TOP of it, so the top edge stays pinned at 0.96 and the height was
-	# set by eye against the model.
+	# taxi: amber lamp on amber bodywork over-reaches downward; top pinned at the real lens top.
 	"taxi": {"front": [Vector3(0.495, 0.90, -1.53), Vector3(0.33, 0.12, 0.0)]},
-	# The tail lamp is a thin VERTICAL red stripe on the back face, outboard (x=0.72) at door
-	# height (y~0.72). Detection kept picking the centred cross livery instead; measured off
-	# the model's back-face red band. Tall -> indicator splits off at the bottom.
+	# ambulance: thin vertical red tail stripe; detection picked the centred cross livery instead.
 	"ambulance": {"rear": [Vector3(0.72, 0.72, 1.84), Vector3(0.12, 0.44, 0.10)]},
-	# The open-wheelers paint NO lamp swatch, so detection returns nothing and the body-box
-	# fallback floated the lamps well above/outside the slim nose+tail (the box is dominated by
-	# the wide rear wing and tall roll hoop). These boxes are measured off the model's own nose
-	# cone and tail bodywork (see tools/measure_race.gd), so _split lands the lamps on real
-	# geometry. Wide -> head/brake inboard, indicator outboard.
+	# race / race-future: open-wheelers paint no lamp swatch, so detection returns nothing and the
+	# body-box fallback floats off the slim nose/tail; measured off the model's own nose/tail
+	# bodywork (see tools/measure_race.gd) instead.
 	"race": {
 		"front": [Vector3(0.20, 0.22, -1.38), Vector3(0.26, 0.13, 0.12)],
 		"rear": [Vector3(0.16, 0.40, 1.30), Vector3(0.22, 0.14, 0.12)],
@@ -101,110 +91,178 @@ var _lens_overrides := {
 		"rear": [Vector3(0.34, 0.50, 1.42), Vector3(0.34, 0.16, 0.14)],
 	},
 }
-## Lamp height for an end with NO painted lens, where the body-box centre the fallback formula
-## uses is not where the lamp belongs. variant -> {front?: y, rear?: y}, body space.
-## The tractor's rear box centre lands the lamps too low (verified by driving); 1.22 is the
-## shipped height, kept here so a regen reproduces it instead of re-deriving the wrong one — the
-## box centre is a guess for a body whose rear end is mostly open frame between the big wheels.
+## Lamp height for an end with no painted lens (the body-box fallback centre is wrong there).
+## variant -> {front?: y, rear?: y}, body space. Tractor rear: box centre lands too low
+## (verified driving); 1.22 is the shipped height.
 var _fallback_lamp_y := {"tractor-kenney": {"rear": 1.22}}
+var _drag_report: Array = []  ## per-variant measured frontal area + derived drag area
 var _shape_report: Array = []  ## per-variant collision shape kind + hull vertex count
 var _lens_report: Array = []   ## per-variant lens detection, so a bad lamp is diagnosable
+var _brake_report: Array = []  ## per-variant grip-derived brake, so a fictional one is visible
 
 # --- family baselines (spec fields; brake/handbrake are derived, not listed) -----------
 const CAR_BASE := {
+	# cd 0.32 is a modern saloon; crr 0.012 is a passenger radial on asphalt.
+	"cd": 0.32, "crr": 0.012,
 	"mass": 1150.0, "com_y": 0.20, "spring_rate": 22000.0, "damper_bump": 1800.0,
 	"damper_rebound": 2400.0, "max_suspension_force": 30000.0, "rest_length": 0.28,
-	"wheel_inertia": 1.2, "driven_front": true, "driven_rear": true,
+	# FWD default; per-variant override in VARIANTS (rwd/awd where the body says so).
+	"wheel_inertia": 1.2, "driven_front": true, "driven_rear": false,
 	"mu_long": 1.05, "mu_lat": 1.1, "handbrake_grip": 0.45,
-	"torque_curve": [900, 150, 2000, 235, 3200, 285, 4800, 290, 6000, 255, 6800, 100],
+	# 185 Nm peak / ~156 hp at 6000 on the base saloon, anchored on a 1150 kg saloon hitting
+	# 220 km/h and 8.5 s to 100 (measured 219.8 / 8.35 via `measure_vehicles -- sedan`).
+	# Keep the shape when re-scaling: idle fraction 98/185=0.53 lets the car pull away on a grade;
+	# 6600/6800 is the plateau coming down then a soft limiter keeping the sports bodies off the
+	# rev limiter in sixth.
+	"torque_curve": [900, 98, 2000, 154, 3200, 184, 4800, 185, 6000, 185, 6600, 170, 6800, 61],
 	"idle_rpm": 900.0, "redline_rpm": 6800.0,
-	"gear_ratios": [3.5, 2.2, 1.55, 1.18, 0.88, 0.66], "reverse_ratio": 2.2,
-	"final_drive": 3.9, "efficiency": 0.9, "shift_up_rpm": 5600.0, "shift_down_rpm": 2200.0,
+	# Brakes derive from the tyre on every baseline (BRAKE_GRIP_FRAC / _derive_brakes).
+	# Sixth is the top-speed control: 0.925 settles the sedan at 6012 rpm / 219.8 km/h.
+	# Gears 2-5 re-spread: 1.550 / 1.470 / 1.380 / 1.290 / 1.199.
+	"gear_ratios": [4.5, 2.903, 1.975, 1.431, 1.109, 0.925],
+	# Reverse stays 2.2, sized against sliding grip not gear 1: 185x2.2x3.9x0.9 = 1429 Nm at the
+	# tyres against 2556 Nm of front-axle grip, no sustained reverse burnout.
+	"reverse_ratio": 2.2,
+	# shift_up 5900, bound by the weak bodies reaching sixth; governed bodies (van/pickup) reach
+	# it via `Drivetrain.governed_upshift`.
+	"final_drive": 3.9, "efficiency": 0.9, "shift_up_rpm": 5900.0, "shift_down_rpm": 2200.0,
 	"max_steer_deg": 38.0, "steer_speed": 7.0,
+	# Steering falloff: BaseVehicle lerps lock from full to min_steer_frac near
+	# steer_falloff_speed, so the pair states an absolute lock at motorway speed — divide by the
+	# variant's own max_steer_deg. Car family: ~10 deg (0.26x38) at 42 m/s = 151 km/h; mu_lat 1.1
+	# needs ~2.5x less lock at that speed.
+	"min_steer_frac": 0.26, "steer_falloff_speed": 42.0,
 }
+## Diesel curves end at zero at the redline: the governor droops to nothing above rated speed,
+## so top gear is governed (never drag-limited), top speed = `redline x gear 6`.
 const TRUCK_BASE := {
-	"mass": 4000.0, "com_y": 0.30, "spring_rate": 65000.0, "damper_bump": 5000.0,
-	"damper_rebound": 7000.0, "max_suspension_force": 90000.0, "rest_length": 0.32,
+	# Flat-fronted working truck: cd 0.70, crr 0.007 for low-resistance commercial radials.
+	"cd": 0.70, "crr": 0.007,
+	# Spring/damper/force hand-tuned by driving both trucks.
+	"mass": 4000.0, "com_y": 0.30, "spring_rate": 240000.0, "damper_bump": 12000.0,
+	"damper_rebound": 15800.0, "max_suspension_force": 120000.0, "rest_length": 0.32,
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
-	# J1939 driveline: the truck is the only family carrying an auxiliary retarder on the driven
-	# axle. Regenerating a spec without this would silently kill the retarder, so it lives in the
-	# recipe and not only in the .tres — the same rule the tractor's two flags follow.
+	# J1939: only family with an auxiliary retarder on the driven axle.
 	"retarder_equipped": true,
 	"mu_long": 1.0, "mu_lat": 0.95, "handbrake_grip": 1.0,
-	"torque_curve": [700, 400, 1200, 650, 1800, 800, 2400, 780, 2800, 600, 3200, 200],
+	"torque_curve": [700, 400, 1200, 650, 1800, 800, 2400, 780, 2800, 600, 3200, 0],
 	"idle_rpm": 700.0, "redline_rpm": 3200.0,
-	"gear_ratios": [6.5, 3.7, 2.4, 1.6, 1.2, 1], "reverse_ratio": 6.0,
+	# 6th 1.0 -> 0.92: overdrive top, governed speed ~102 km/h vs 96.5 direct-drive.
+	"gear_ratios": [6.5, 3.7, 2.4, 1.6, 1.2, 0.92], "reverse_ratio": 6.0,
 	"final_drive": 4.5, "efficiency": 0.9, "shift_up_rpm": 2600.0, "shift_down_rpm": 1200.0,
 	"max_steer_deg": 26.0, "steer_speed": 2.0,
+	# ~4.8 deg floor (0.22x22) at 26 m/s, under both governed cruise speeds (85/110 km/h);
+	# 16.5 deg at 30 km/h, tighter than mu_lat 0.95 allows.
+	"min_steer_frac": 0.22, "steer_falloff_speed": 26.0,
 }
-## Heavy vans (delivery / delivery-flat / ambulance). They are `car`-FAMILY — ordinary chassis on
-## proprietary CAN, not J1939 — but they DRIVE like the trucks they used to be, so they keep the
-## truck chassis feel: this is TRUCK_BASE's numbers as of the family move, snapshotted rather than
-## aliased ON PURPOSE. TRUCK_BASE is where J1939-only driveline flags land (a retarder is not van
-## equipment), so the two baselines have to be free to diverge.
+## Heavy vans (delivery / delivery-flat / ambulance): car-family, proprietary CAN, but drive
+## like trucks, so a deliberate snapshot of TRUCK_BASE's numbers rather than an alias — TRUCK_BASE
+## also carries J1939-only flags, so the two must be free to diverge.
 const VAN_BASE := {
+	# A box van is a smoothed truck front: cd 0.45 on commercial tires.
+	"cd": 0.45, "crr": 0.009,
+	# 4-5 t vans; 240000 N/m is TRUCK_BASE's rate, measured on 8 t, and does not apply here.
 	"mass": 4000.0, "com_y": 0.30, "spring_rate": 65000.0, "damper_bump": 5000.0,
 	"damper_rebound": 7000.0, "max_suspension_force": 90000.0, "rest_length": 0.32,
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
 	"mu_long": 1.0, "mu_lat": 0.95, "handbrake_grip": 1.0,
-	"torque_curve": [700, 400, 1200, 650, 1800, 800, 2400, 780, 2800, 600, 3200, 200],
+	"torque_curve": [700, 400, 1200, 650, 1800, 800, 2400, 780, 2800, 600, 3200, 0],
 	"idle_rpm": 700.0, "redline_rpm": 3200.0,
-	"gear_ratios": [6.5, 3.7, 2.4, 1.6, 1.2, 1], "reverse_ratio": 6.0,
+	# 6th 1.0 -> 0.78: governed top ~120 km/h.
+	"gear_ratios": [6.5, 3.7, 2.4, 1.6, 1.2, 0.78], "reverse_ratio": 6.0,
 	"final_drive": 4.5, "efficiency": 0.9, "shift_up_rpm": 2600.0, "shift_down_rpm": 1200.0,
 	"max_steer_deg": 26.0, "steer_speed": 2.0,
+	# ~6 deg floor (0.23x26) at 28 m/s, between the cars' 10 deg and trucks' 4.8. Ambulance keeps
+	# the fraction on its narrower 24 deg rack (5.5 deg).
+	"min_steer_frac": 0.23, "steer_falloff_speed": 28.0,
 }
 const TRACTOR_BASE := {
+	# cd 0.90 (nothing streamlined), crr 0.020 (worst in the project, lugged tires).
+	"cd": 0.90, "crr": 0.020,
 	"mass": 4200.0, "com_y": 0.35, "spring_rate": 70000.0, "damper_bump": 6000.0,
 	"damper_rebound": 8000.0, "max_suspension_force": 110000.0, "rest_length": 0.35,
 	"wheel_inertia": 4.0, "driven_front": false, "driven_rear": true,
-	# ISOBUS driveline: the tractor is the only family whose diff locks and whose front axle
-	# engages at runtime. Regenerating a spec without these would silently kill diff_lock /
-	# fwd_drive, so they live in the recipe, not only in the .tres.
+	# ISOBUS: only family with lockable diff / engageable front axle at runtime.
 	"rear_diff_lockable": true, "front_axle_engageable": true,
 	"mu_long": 1.0, "mu_lat": 0.95, "handbrake_grip": 1.0,
-	"torque_curve": [800, 550, 1200, 680, 1600, 700, 2000, 640, 2400, 480, 2600, 300],
+	# Rated 2000, governed to nothing by 2600 (high idle).
+	"torque_curve": [800, 550, 1200, 680, 1600, 700, 2000, 640, 2200, 560, 2600, 0],
 	"idle_rpm": 800.0, "redline_rpm": 2600.0,
-	"gear_ratios": [7, 4.2, 2.8, 1.9, 1.4, 1.1], "reverse_ratio": 7.0,
+	# ~4.4:1 spread, 9 km/h first to a 40 km/h road gear. First is free of the foot brake
+	# (tyre-derived), so a crawler gear costs only a bigger handbrake.
+	"gear_ratios": [7.0, 5.2, 3.9, 2.9, 2.15, 1.6], "reverse_ratio": 7.0,
 	"final_drive": 5.5, "efficiency": 0.9, "shift_up_rpm": 2200.0, "shift_down_rpm": 1000.0,
 	"max_steer_deg": 38.0, "steer_speed": 1.8,
+	# steer_falloff_speed 11 m/s = 39.6 km/h is the tractor's own top speed, so the floor lock
+	# arrives exactly at type-approval road speed. 0.55 keeps field-work cost (8-12 km/h headland
+	# turns, a quarter of road speed) to ~11% while cutting 45% of road dartiness.
+	"min_steer_frac": 0.55, "steer_falloff_speed": 11.0,
 }
 
 # variant id -> { family, base?, torque_mul?, <spec field overrides...> }
-# `family` is the CONTRACT family (must match VehicleCatalog) and picks both the feel baseline
-# and the vehicle script (FAMILY_SCRIPTS); `base` names the feel BASELINE when it differs from
-# the family — the heavy vans are car-family but keep the van chassis feel. A driveline flag
-# (rear_diff_lockable / front_axle_engageable / retarder_equipped) may be overridden PER VARIANT
-# here as well as declared in the baseline.
+# `family` is the CONTRACT family (VehicleCatalog) and picks the feel baseline + vehicle script
+# (FAMILY_SCRIPTS); `base` names the feel baseline when it differs (heavy vans are car-family,
+# van chassis feel). Driveline flags (rear_diff_lockable / front_axle_engageable /
+# retarder_equipped), `gear_ratios` and `com_z` may all be overridden per variant over the
+# baseline.
 const VARIANTS := {
 	# car family
-	"sedan": {"family": "car"},
-	"sedan-sports": {"family": "car", "mass": 1050.0, "torque_mul": 1.12, "final_drive": 4.1, "max_steer_deg": 40.0},
-	"hatchback-sports": {"family": "car", "mass": 1000.0, "torque_mul": 1.10, "final_drive": 4.2, "max_steer_deg": 42.0},
-	"suv": {"family": "car", "mass": 1500.0, "torque_mul": 1.05, "mu_lat": 1.0, "max_steer_deg": 34.0},
-	"suv-luxury": {"family": "car", "mass": 1600.0, "torque_mul": 1.10, "mu_lat": 1.0, "max_steer_deg": 33.0},
-	"taxi": {"family": "car", "mass": 1250.0},
-	"police": {"family": "car", "mass": 1300.0, "torque_mul": 1.18, "final_drive": 4.0, "max_steer_deg": 40.0},
-	# Open-wheelers keep the default rim and stand proud of the slim body (F1 track width).
-	# `wheel_x_out` is MEASURED against each body's own half-width at the wheel stations, not
-	# shared: the wheel is 0.24 half-thick, and at the kit's authored 0.42 half-track it sank
-	# 0.36 into race-future's 0.66-wide bodywork (0.12 into race's 0.42) with only the outer rim
-	# showing. These leave ~0.03 of rim still overlapping, so the wheel reads as exposed without
-	# the full 1.86 m F1 track. Widening the track also steadies the car in corners — re-drive
-	# after a change rather than treating it as a cosmetic number.
-	"race": {"family": "car", "mass": 900.0, "torque_mul": 1.35, "final_drive": 4.2, "mu_long": 1.2, "mu_lat": 1.3, "max_steer_deg": 40.0, "handbrake_grip": 0.5, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21},
-	"race-future": {"family": "car", "mass": 850.0, "torque_mul": 1.42, "final_drive": 4.2, "mu_long": 1.25, "mu_lat": 1.35, "max_steer_deg": 42.0, "handbrake_grip": 0.5, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36},
-	"van": {"family": "car", "mass": 1600.0, "max_steer_deg": 32.0},
-	"pickup": {"family": "car", "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0},
-	"pickup-flat": {"family": "car", "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0},
-	# heavy vans: car family, van feel (see VAN_BASE) — NOT CAR_BASE, they are 4-5 t vehicles
+	# Driven layout per body: FWD is the CAR_BASE default, `driven_rear` alone is RWD, both is
+	# AWD — the axis that gives each car its own handling (FWD hatch scrabbles, RWD interceptor
+	# steps out, SUVs hook up). `front_weight` on the front-drivers puts the transverse engine
+	# over the driven axle (measured 48/52 rear-biased at the body origin, unusable for FWD).
+	"sedan": {"family": "car", "front_weight": 0.60},
+	"sedan-sports": {"family": "car", "mass": 1050.0, "torque_mul": 1.12, "final_drive": 4.1, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true},
+	"hatchback-sports": {"family": "car", "mass": 1000.0, "torque_mul": 1.10, "final_drive": 4.2, "max_steer_deg": 42.0, "front_weight": 0.60},
+	# Lever for SUV power is their own `torque_mul`, not the shared CAR_BASE curve: measured
+	# 0-100 goes as peak^-0.6 on the sedan, peak^-1.4 on the suv.
+	"suv": {"family": "car", "mass": 1500.0, "torque_mul": 1.05, "mu_lat": 1.0, "max_steer_deg": 34.0, "driven_rear": true},
+	# 1.54 is the biggest multiplier in the family: 285 Nm through an AWD 1600 kg body.
+	"suv-luxury": {"family": "car", "mass": 1600.0, "torque_mul": 1.54, "mu_lat": 1.0, "max_steer_deg": 33.0, "driven_rear": true},
+	"taxi": {"family": "car", "mass": 1250.0, "front_weight": 0.60},
+	"police": {"family": "car", "mass": 1300.0, "torque_mul": 1.18, "final_drive": 4.0, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true},
+	# Open-wheelers: `wheel_x_out` measured per body against its own half-width at the wheel
+	# stations (re-drive after changing, it also steadies cornering). `cd` 0.70: exposed wheels +
+	# wing really do run ~2x a saloon's drag. `front_weight` 0.42: engine sits behind the driver;
+	# at the body origin they measured 58/42 and 61/39, backwards for the layout. `race` is
+	# rear-drive (classic formula car), `race-future` is AWD.
+	# Steering falloff exists because of these two: `race` let go at ~140 km/h with full lock
+	# live. They keep ~7 deg at the floor, reached at 35 m/s = 126 km/h (family: 151) — still ~6x
+	# what mu_lat holds there.
+	# `cl` 2.5 is the only wing in the project: same measured area as `cd`, Cl*A 2.24 against
+	# Cd*A 0.63 (lift/drag 3.6). 2.1 kN at 140 km/h rising to 8.8 kN at 288 km/h top end; a spring
+	# force (GroundDriveSpec.downforce_area) worth ~0.10 m of squat — raising `cl` past this
+	# bottoms the suspension.
+	# The two gear boxes differ on gear 1: `race` is rear-drive so 3.2 first clears the
+	# transmissible-drive hierarchy free. `race-future` is AWD (all four tyres saturate), capped
+	# by `max_drive / 4 * 1.02 <= grip_ceiling` at this body's 409 Nm peak -> gear1 <= 2.377,
+	# giving 2.375 with 2-5 re-spread (1.33/1.31/1.29/1.27/1.26). Re-derive per body on any
+	# torque change. Both keep a long top gear (0.66 vs CAR_BASE's 0.925), reaching 288.0 /
+	# 295.8 km/h.
+	# `torque_mul` tracks CAR_BASE so absolute torque stays fixed (2.10x185=389 Nm,
+	# 2.21x185=409 Nm) — re-derive on any CAR_BASE torque edit.
+	"race": {"family": "car", "cd": 0.70, "cl": 2.50, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "max_steer_deg": 40.0, "handbrake_grip": 0.5, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.18, "steer_falloff_speed": 35.0},
+	"race-future": {"family": "car", "cd": 0.70, "cl": 2.50, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "max_steer_deg": 42.0, "handbrake_grip": 0.5, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.17, "steer_falloff_speed": 35.0},
+	# Commercial bodies: RWD, governed at 180 like the real things (measured 198-200 ungoverned).
+	"van": {"family": "car", "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
+	"pickup": {"family": "car", "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
+	"pickup-flat": {"family": "car", "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
+	# heavy vans: car family, van feel (VAN_BASE, not CAR_BASE) — these are 4-5 t vehicles
 	"delivery": {"family": "car", "base": "van", "mass": 4200.0},
 	"delivery-flat": {"family": "car", "base": "van", "mass": 4000.0},
-	"ambulance": {"family": "car", "base": "van", "mass": 4800.0, "torque_mul": 1.1, "max_steer_deg": 24.0},
-	# truck family (J1939) — garbage-truck first, matching VehicleCatalog's cycle order
-	"garbage-truck": {"family": "truck", "mass": 8000.0, "torque_mul": 1.3, "max_steer_deg": 22.0, "steer_speed": 1.6},
-	"firetruck": {"family": "truck", "mass": 7500.0, "torque_mul": 1.3, "max_steer_deg": 22.0, "steer_speed": 1.6},
-	# tractor family (ISOBUS) — one drivable body
-	"tractor-kenney": {"family": "tractor", "mass": 4000.0},
+	"ambulance": {"family": "car", "base": "van", "mass": 4800.0, "torque_mul": 1.1, "max_steer_deg": 24.0, "speed_limit_kmh": 150.0},
+	# truck family (J1939) — garbage-truck first, matching VehicleCatalog's cycle order.
+	# com_z -0.14 = 0.14 m forward (front = -Z), hand-tuned by driving: the hopper body pulls
+	# mass back off the rear axle. 90 km/h is the EU heavy-truck limiter (a refuse collector
+	# usually runs lower); this is the one body the governor visibly bites (measured 99.5).
+	"garbage-truck": {"family": "truck", "mass": 8000.0, "torque_mul": 1.3, "com_z": -0.14, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 85.0},
+	# Emergency vehicles are exempt from the goods-vehicle limiter; 110 is the appliance's own
+	# rating, just above what this body reaches.
+	"firetruck": {"family": "truck", "mass": 7500.0, "torque_mul": 1.3, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 110.0},
+	# tractor family (ISOBUS) — one drivable body.
+	# 40 km/h is type approval; gearing already lands on 39.6, so this limit never acts, but
+	# catches a future gearing change that would make the body road-illegal.
+	"tractor-kenney": {"family": "tractor", "mass": 4000.0, "speed_limit_kmh": 40.0},
 }
 
 ## Feel baselines, keyed by a variant's `base` (defaulting to its `family`). "van" is a feel
@@ -229,9 +287,11 @@ func _ready() -> void:
 		var geo := _analyze(MODELS.path_join(variant + ".glb"), wheels)
 		if geo.is_empty():
 			continue
-		var spec := _build_spec(String(ov.get("base", family)), ov, geo, wheels)
+		var recipe := ov.duplicate()
+		recipe["_id"] = variant
+		var spec := _build_spec(String(ov.get("base", family)), recipe, geo, wheels)
 		var spec_path := OUT_DIR.path_join(variant + "_spec.tres")
-		if ResourceSaver.save(spec, spec_path) != OK:
+		if _save_spec_stable(spec, spec_path) != OK:
 			push_error("failed to save " + spec_path)
 			continue
 		var scene_script: Variant = load(String(FAMILY_SCRIPTS.get(family, BASE_SCRIPT)))
@@ -243,6 +303,12 @@ func _ready() -> void:
 		ok += 1
 	print("gen_kenney_vehicles: wrote %d/%d variants" % [ok, VARIANTS.size()])
 	print("collision shapes: ", ", ".join(_shape_report))
+	print("resistance (frontal area measured off the body AABB, see FRONTAL_FILL):")
+	for line: String in _drag_report:
+		print("   ", line)
+	print("brakes (per wheel; see BRAKE_GRIP_FRAC / _derive_brakes):")
+	for line: String in _brake_report:
+		print("   ", line)
 	print("lamp lenses (right side; 'fallback' = no lamp painted on that end):")
 	for line: String in _lens_report:
 		print("   ", line)
@@ -259,60 +325,95 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	var get_flag := func(key: String) -> bool: return bool(ov.get(key, b.get(key, false)))
 
 	var spec := VehicleSpec.new()
+	# The wheeled ground drive: every body has one, embedded in the saved .tres (no separate
+	# resource_path).
+	var gd := GroundDriveSpec.new()
+	spec.ground_drive = gd
 	spec.mass = get_f.call("mass")
-	spec.center_of_mass = Vector3(0, float(b["com_y"]), 0)
-	spec.wheel_radius = WHEEL_RADIUS
-	spec.wheel_inertia = float(b["wheel_inertia"])
-	# Wheel visuals: one scene per axle when they differ (tractor), plus the rendered radii.
-	# Physics stays single-radius — spec.wheel_radius above is the only radius RayWheel uses.
+	# com_y is a family figure; com_z is per body, preferring `front_weight` (fraction of static
+	# weight on the front axle) over a raw `com_z` offset. com_z 0 is wherever Kenney put the
+	# body origin, which spans 36/64 to 61/39 across these bodies — invisible under AWD (four
+	# driven wheels carry any split), but decisive the moment a variant drives one axle: the
+	# open-wheeler launched badly as a rear-driver because its origin was 58% front-heavy.
+	spec.center_of_mass = Vector3(0, float(b["com_y"]), _com_z(geo, ov))
+	# Resistance: Cd + crr from the family recipe, frontal area measured off this body's own
+	# AABB (FRONTAL_FILL). Snapped to 0.01 m^2 so a regen writes a stable file.
+	var body_box: AABB = geo["box"]
+	gd.drag_area = float(roundi(
+			get_f.call("cd") * FRONTAL_FILL * body_box.size.x * body_box.size.y * 100.0)) / 100.0
+	gd.rolling_resistance = get_f.call("crr")
+	# Downforce is a per-variant opt-in (`cl`), no baseline — a wing belongs to the individual
+	# body. Measures the same area as drag so the two never disagree about size.
+	var cl := float(ov.get("cl", 0.0))
+	gd.downforce_area = float(roundi(
+			cl * FRONTAL_FILL * body_box.size.x * body_box.size.y * 100.0)) / 100.0
+	_drag_report.append("%-16s box %.2f w x %.2f h = %.2f m^2, cd %.2f -> Cd*A %.2f, crr %.3f%s" % [
+			ov.get("_id", ""), body_box.size.x, body_box.size.y,
+			FRONTAL_FILL * body_box.size.x * body_box.size.y, get_f.call("cd"),
+			gd.drag_area, gd.rolling_resistance,
+			"" if cl <= 0.0 else ", cl %.2f -> Cl*A %.2f" % [cl, gd.downforce_area]])
+	gd.wheel_radius = WHEEL_RADIUS
+	gd.wheel_inertia = float(b["wheel_inertia"])
+	# Wheel visuals: one scene per axle when they differ (tractor); physics stays single-radius
+	# (gd.wheel_radius is the only radius RayWheel uses).
 	var front_wheel: Dictionary = wheels[0]
 	var rear_wheel: Dictionary = wheels[1]
-	spec.wheel_scene = load(String(front_wheel["scene"])) as PackedScene
+	gd.wheel_scene = load(String(front_wheel["scene"])) as PackedScene
 	if String(rear_wheel["scene"]) != String(front_wheel["scene"]):
-		spec.wheel_scene_rear = load(String(rear_wheel["scene"])) as PackedScene
+		gd.wheel_scene_rear = load(String(rear_wheel["scene"])) as PackedScene
 	var front_r := float(front_wheel["radius"])
 	var rear_r := float(rear_wheel["radius"])
-	# Left at 0 (= wheel_radius) only when both axles render at the physics radius; otherwise
-	# both are set explicitly, since the rear field falls back to the front one when unset.
+	# Left at 0 (= wheel_radius) only when both axles render at the physics radius.
 	if front_r != WHEEL_RADIUS or rear_r != WHEEL_RADIUS:
-		spec.wheel_visual_radius = front_r
-		spec.wheel_visual_radius_rear = rear_r
-	spec.driven_front = bool(b["driven_front"])
-	spec.driven_rear = bool(b["driven_rear"])
-	# Driveline capability flags, off unless something declares them. The per-variant override is
-	# consulted FIRST and the baseline is the fallback. Reading the baseline alone — which is what
-	# this did — makes a per-variant flag silently impossible: a VARIANTS entry could set one and
-	# the generator would drop it without a word. Every variant shipping today happens to take its
-	# flags from the baseline, so nothing here exercises the override yet; it is fixed now because
-	# a flag that is quietly ignored is the kind of gap found the hard way.
-	spec.rear_diff_lockable = get_flag.call("rear_diff_lockable")
-	spec.front_axle_engageable = get_flag.call("front_axle_engageable")
-	spec.retarder_equipped = get_flag.call("retarder_equipped")
-	spec.rest_length = float(b["rest_length"])
-	spec.spring_rate = float(b["spring_rate"])
-	spec.damper_bump = float(b["damper_bump"])
-	spec.damper_rebound = float(b["damper_rebound"])
-	spec.max_suspension_force = float(b["max_suspension_force"])
-	spec.grip_curve = _grip_curve.duplicate()
-	spec.mu_long = get_f.call("mu_long")
-	spec.mu_lat = get_f.call("mu_lat")
-	spec.handbrake_grip = get_f.call("handbrake_grip")
+		gd.wheel_visual_radius = front_r
+		gd.wheel_visual_radius_rear = rear_r
+	# Driven layout is per variant with the baseline as fallback. `get_flag` would be wrong here
+	# (defaults a missing key to false, silently undriving an axle the baseline drives).
+	gd.driven_front = bool(ov.get("driven_front", b["driven_front"]))
+	gd.driven_rear = bool(ov.get("driven_rear", b["driven_rear"]))
+	# Driveline capability flags, off unless declared: per-variant override consulted first,
+	# baseline as fallback (reading only the baseline would make a per-variant override
+	# silently impossible).
+	gd.rear_diff_lockable = get_flag.call("rear_diff_lockable")
+	gd.front_axle_engageable = get_flag.call("front_axle_engageable")
+	gd.retarder_equipped = get_flag.call("retarder_equipped")
+	gd.rest_length = float(b["rest_length"])
+	gd.spring_rate = float(b["spring_rate"])
+	gd.damper_bump = float(b["damper_bump"])
+	gd.damper_rebound = float(b["damper_rebound"])
+	gd.max_suspension_force = float(b["max_suspension_force"])
+	gd.grip_curve = _grip_curve.duplicate()
+	gd.mu_long = get_f.call("mu_long")
+	gd.mu_lat = get_f.call("mu_lat")
+	gd.handbrake_grip = get_f.call("handbrake_grip")
 
 	var torque_mul := float(ov.get("torque_mul", 1.0))
 	spec.torque_curve = _scaled_curve(b["torque_curve"], torque_mul)
 	spec.idle_rpm = float(b["idle_rpm"])
 	spec.redline_rpm = float(b["redline_rpm"])
-	spec.gear_ratios = PackedFloat32Array(b["gear_ratios"])
+	# A whole array, so it takes the same per-variant override path as the scalars: the two
+	# open-wheelers run a close-ratio box the rest of the car family does not.
+	spec.gear_ratios = PackedFloat32Array(ov.get("gear_ratios", b["gear_ratios"]))
 	spec.reverse_ratio = float(b["reverse_ratio"])
 	spec.final_drive = get_f.call("final_drive")
 	spec.efficiency = float(b["efficiency"])
 	spec.shift_up_rpm = float(b["shift_up_rpm"])
 	spec.shift_down_rpm = float(b["shift_down_rpm"])
-	spec.max_steer_deg = get_f.call("max_steer_deg")
+	# Road-speed governor (0 = ungoverned). Per variant with a baseline fallback: what a body is
+	# limited to is a regulatory/class fact about that body, not a family feel knob.
+	spec.speed_limit_kmh = float(ov.get("speed_limit_kmh", b.get("speed_limit_kmh", 0.0)))
 	spec.steer_speed = get_f.call("steer_speed")
+	# The LOCK is a ground-drive figure (a lock means nothing without a steered wheel); the slew
+	# rate above stays on the core spec. High-speed falloff is per variant with a baseline
+	# fallback: the fraction is keyed to the body's own max_steer_deg (see CAR_BASE's header),
+	# so a variant that overrides the rack usually wants to override this too rather than
+	# inherit the family number.
+	gd.max_steer_deg = get_f.call("max_steer_deg")
+	gd.min_steer_frac = get_f.call("min_steer_frac")
+	gd.steer_falloff_speed = get_f.call("steer_falloff_speed")
 
-	spec.wheel_positions = _wheel_positions(geo, spec, float(ov.get("wheel_x_out", 0.0)))
-	_derive_brakes(spec)
+	gd.wheel_positions = _wheel_positions(geo, spec, gd, float(ov.get("wheel_x_out", 0.0)))
+	_derive_brakes(spec, gd, String(ov.get("_id", "")))
 
 	spec.headlight_paths.assign(_lamp_paths["headlight_paths"])
 	spec.head_lamp_paths.assign(_lamp_paths["head_lamp_paths"])
@@ -322,17 +423,15 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	return spec
 
 
-## FL, FR, RL, RR hub anchors placed at the Kenney model's own wheel positions (x/z from
-## each `wheel-*` node, transformed into body space), so the RayWheel visuals sit exactly in
-## the wheel wells. Anchor Y is uniform across the four so the body rests level: at spring
-## equilibrium the visual wheel centre lands at WHEEL_RADIUS above ground (ground at body
-## y = 0, the Kenney wheel-contact plane), i.e. wheels flush with the chassis as designed.
-## `x_out` pushes each corner further outboard (open-wheelers): it widens the real track, so
-## suspension and visual move together.
-func _wheel_positions(geo: Dictionary, spec: VehicleSpec, x_out: float) -> PackedVector3Array:
+## FL, FR, RL, RR hub anchors at the Kenney model's own wheel positions (body space), so RayWheel
+## visuals sit in the wheel wells. Anchor Y is uniform so the body rests level: at spring
+## equilibrium the visual wheel centre lands at WHEEL_RADIUS above ground. `x_out` pushes a
+## corner further outboard (open-wheelers), widening suspension and visual track together.
+func _wheel_positions(geo: Dictionary, spec: VehicleSpec, gd: GroundDriveSpec,
+		x_out: float) -> PackedVector3Array:
 	var corner_mass := spec.mass / 4.0
-	var comp := clampf(corner_mass * GRAVITY / spec.spring_rate, 0.0, spec.rest_length * 0.8)
-	var y := WHEEL_RADIUS + spec.rest_length - comp
+	var comp := clampf(corner_mass * GRAVITY / gd.spring_rate, 0.0, gd.rest_length * 0.8)
+	var y := WHEEL_RADIUS + gd.rest_length - comp
 	var fl := Vector3.ZERO
 	var fr := Vector3.ZERO
 	var rl := Vector3.ZERO
@@ -348,10 +447,21 @@ func _wheel_positions(geo: Dictionary, spec: VehicleSpec, x_out: float) -> Packe
 	return PackedVector3Array([fl, fr, rl, rr])
 
 
-## Derive brake/handbrake from the drivetrain so the §6 hierarchy always holds:
-## total_brake (x4) = 1.4 * peak drive torque; total_handbrake (x2) = 1.5 * launch torque
-## at idle+25% throttle (strictly between the 25% and 50% launch brackets the test checks).
-func _derive_brakes(spec: VehicleSpec) -> void:
+## Derive brake/handbrake from the tyre on every baseline — one derivation, no per-baseline
+## brake knob. `brake_torque = BRAKE_GRIP_FRAC * the tyre's own per-wheel ceiling`, so full pedal
+## asks for `BRAKE_GRIP_FRAC * mu_long * g` of deceleration regardless of body mass or gearing.
+## `handbrake_torque` (x2) = 1.5 * launch torque at idle+25% throttle (strictly between the
+## 25%/50% brackets `test_vehicle_catalog` checks; `wheel_torque` is linear in throttle so this
+## holds at any gear-1 ratio).
+##
+## The floor is the force hierarchy stated against transmissible drive: the brake must beat
+## `min(peak drive, driven * per-wheel grip)`, since it never needs to out-muscle torque a
+## spinning tyre can't hand the road. Free on a 2-driven-wheel body (1.9x margin); on AWD it's
+## 3.8 against 4.0, so an engine that saturates all four tyres can land 2% over its own tyre —
+## the only shape that can't clear the rule, fixed on `race-future` by lengthening gear 1 (see
+## VARIANTS) until it stopped saturating. `_brake_report` flags anything still over its tyre;
+## `test_vehicle_catalog.test_kenney_specs_keep_force_hierarchy` is the authoritative check.
+func _derive_brakes(spec: VehicleSpec, gd: GroundDriveSpec, id: String) -> void:
 	var peak_engine := 0.0
 	var idle_engine := VehicleSpec.sample_curve(spec.torque_curve, spec.idle_rpm)
 	for i in spec.torque_curve.size():
@@ -359,8 +469,23 @@ func _derive_brakes(spec: VehicleSpec) -> void:
 	var ratio1 := spec.gear_ratios[0] * spec.final_drive
 	var max_drive := peak_engine * ratio1 * spec.efficiency
 	var launch_25 := idle_engine * 0.25 * ratio1 * spec.efficiency
-	spec.brake_torque = ceilf(max_drive * 0.35)
-	spec.handbrake_torque = maxf(1.0, roundf(launch_25 * 0.75))
+	var wheels := maxi(gd.wheel_positions.size(), 1)
+	var grip_ceiling := spec.mass * GRAVITY / wheels * gd.mu_long * gd.wheel_radius
+	# Driven corners off the spec's own geometry + layout (front = -Z, same convention
+	# BaseVehicle reads), so an FWD/RWD/AWD override moves this with no second list to keep.
+	var driven := 0
+	for p in gd.wheel_positions:
+		if (p.z < 0.0 and gd.driven_front) or (p.z > 0.0 and gd.driven_rear):
+			driven += 1
+	# 2% over the bare minimum, so `ceilf` rounding can never land on the assertion.
+	var transmissible := minf(max_drive, float(driven) * grip_ceiling)
+	var hierarchy_floor := transmissible / wheels * 1.02
+	gd.brake_torque = ceilf(maxf(grip_ceiling * BRAKE_GRIP_FRAC, hierarchy_floor))
+	_brake_report.append("%-16s %6.0f Nm/wheel = %.2f g (tyre holds %.2f g, %d driven)%s" % [
+			id, gd.brake_torque,
+			gd.brake_torque * wheels / gd.wheel_radius / spec.mass / GRAVITY, gd.mu_long,
+			driven, "  <-- OVER THE TYRE" if gd.brake_torque > grip_ceiling else ""])
+	gd.handbrake_torque = maxf(1.0, roundf(launch_25 * 0.75))
 
 
 func _scaled_curve(flat: Array, mul: float) -> PackedVector2Array:
@@ -381,11 +506,9 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec, geo
 	root.set_script(scene_script)
 	root.set("spec", spec)
 
-	# Collision is HAND-AUTHORED and preserved across regens: the collision nodes live in the
-	# existing scene (tuned by hand — see the CollisionLower/CollisionUpper box pairs), so a
-	# regen transplants them verbatim rather than overwriting them. Only a brand-new variant
-	# with no scene yet gets the generated convex hull as a starting point. This is why a
-	# rerun no longer clobbers hand-placed collision boxes.
+	# Collision is hand-authored (CollisionLower/CollisionUpper box pairs) and transplanted
+	# verbatim on regen rather than overwritten; only a brand-new variant gets the generated
+	# convex hull as a starting point.
 	var kept := _existing_children(variant)
 	var kept_collision: Array = kept["collision"]
 	if kept_collision.is_empty():
@@ -400,9 +523,8 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec, geo
 			_add(root, root, cs)
 		_shape_report.append("%s=kept(%d)" % [variant, kept_collision.size()])
 
-	# Body model: instance the GLB, then steal its non-wheel children into a Model node under
-	# the body transform (180deg Y flip so Kenney's +Z front faces this project's -Z, + kit
-	# scale + x/z centring). The GLB's own wheel-* meshes are dropped with the freed instance.
+	# Body model: instance the GLB, steal its non-wheel children into a Model node under the body
+	# transform (180deg Y flip: Kenney +Z front -> project -Z, + kit scale + x/z centring).
 	var glb := (load(MODELS.path_join(variant + ".glb")) as PackedScene).instantiate()
 	var model := Node3D.new()
 	model.name = "Model"
@@ -421,8 +543,7 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec, geo
 
 	_add_lamps(root, variant, box_aabb, geo["lenses"])
 
-	# Hand-authored subsystem nodes (the tractor's ThreePointHitch instance), transplanted like
-	# the collision boxes and added LAST so the child order matches what the editor wrote.
+	# Hand-authored subsystem nodes (tractor's ThreePointHitch), added last to match editor order.
 	for extra: Node in kept["extras"]:
 		_add(root, root, extra)
 
@@ -432,11 +553,10 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec, geo
 	return packed
 
 
-## Subtle painted-body finish, regen-owned via material_override (survives pack(), a hand-edit
-## to the GLB-baked material would be clobbered on regen). One shared material for every
-## MeshInstance3D under Model: keeps the colormap atlas + double-sided look but adds a
-## semi-gloss sheen (specular, not metal) and a soft rim edge-catch so bodies lift off the
-## matte terrain. NO clearcoat — it is a silent no-op under gl_compatibility.
+## Painted-body finish via material_override (survives pack(), regen-owned). One shared material
+## for every MeshInstance3D under Model: colormap atlas + double-sided, semi-gloss sheen
+## (specular, not metal), soft rim edge-catch. No clearcoat — silent no-op under
+## gl_compatibility.
 func _apply_body_material(model: Node3D) -> void:
 	var mat := StandardMaterial3D.new()
 	mat.resource_name = "body_finish"
@@ -465,24 +585,16 @@ func _own(node: Node, scene_owner: Node) -> void:
 		_own(c, scene_owner)
 
 
-## Everything in the existing scene the generator does NOT rebuild, duplicated so it survives
-## the old instance being freed. This is the seam that keeps hand-authored anatomy from being
-## regenerated away — and it is a WHITELIST of what the generator writes (GENERATED_CHILDREN
-## plus the collision shapes), never a list of what to save, so a hand-added node is preserved
-## by default rather than dropped by omission. Silently dropping one is exactly the bug this
-## replaced: the tractor's whole ThreePointHitch (and every implement with it) disappeared on
-## a regen while the run still reported success.
+## Everything in the existing scene the generator does not rebuild, kept so it survives the old
+## instance being freed. A whitelist of what the generator writes (GENERATED_CHILDREN plus
+## collision), not a list of what to save, so a hand-added node is preserved by default.
 ##
-## Returns {collision, extras} because the two go back in at different points: collision first
-## (before Model), extras last (after Lamps), matching the authored child order so a no-op
-## regen stays byte-identical. Both empty when the scene doesn't exist yet (a new variant).
-## Extras are REPARENTED out of the old instance rather than duplicated, and the old scene is
-## instantiated with GEN_EDIT_STATE_INSTANCE (editor-build only — this tool always runs from the
-## editor binary): both are needed for an instanced child to be re-serialised as a one-line
-## instance. `duplicate()` loses the node's scene-instance state, so `pack()` no longer knows
-## which properties came from the instanced scene and writes them all back out — the tractor's
-## hitch came out carrying an explicit `type=` and `script=` that would pin the vehicle scene to
-## today's hitch script forever. Collision shapes are plain nodes, so they stay a plain duplicate.
+## Returns {collision, extras}: collision goes back in first (before Model), extras last (after
+## Lamps), matching authored child order so a no-op regen stays byte-identical. Extras are
+## reparented (not duplicated) out of an instance loaded with GEN_EDIT_STATE_INSTANCE — plain
+## `duplicate()` loses scene-instance state, so `pack()` would write the hitch's properties back
+## out explicitly (including `script=`), pinning the vehicle scene to today's hitch script.
+## Collision shapes are plain nodes and stay a plain duplicate.
 func _existing_children(variant: String) -> Dictionary:
 	var kept := {"collision": [], "extras": []}
 	var path := OUT_DIR.path_join(variant + ".tscn")
@@ -538,13 +650,11 @@ func _box_shape(geo: Dictionary) -> Dictionary:
 	return {"shape": box, "pos": Vector3(ctr.x, box_min_y + box_h * 0.5, ctr.z)}
 
 
-## Lamps subtree matching car.tscn's names/paths (LampSet needs zero changes beyond the head
-## lens). Each end's lens rectangle comes from _find_lenses — i.e. from the model's own
-## painted lamp face, not from the body box. The lens is SPLIT along its width: the inboard
-## (1 - TURN_FRAC) carries the head/brake lamp, the outboard TURN_FRAC becomes the turn
-## indicator, so an indicator always sits on real lens geometry (the Kenney kit paints no
-## indicator of its own). Ends with no painted lamp (race, race-future, the tractors) fall
-## back to the body-box formula below — whose height a variant may override via _fallback_lamp_y.
+## Lamps subtree matching car.tscn's names/paths. Each end's lens rectangle comes from
+## _find_lenses (the model's own painted lamp face), split along its width — inboard
+## (1 - TURN_FRAC) is head/brake, outboard TURN_FRAC is the turn indicator (the Kenney kit paints
+## no indicator of its own). Ends with no painted lamp fall back to the body-box formula below,
+## whose height a variant may override via _fallback_lamp_y.
 func _add_lamps(root: RigidBody3D, variant: String, box: AABB, lenses: Dictionary) -> void:
 	var lamps := Node3D.new()
 	lamps.name = "Lamps"
@@ -585,35 +695,23 @@ func _add_lamps(root: RigidBody3D, variant: String, box: AABB, lenses: Dictionar
 		_pair(root, lamps, "TurnLR", rs["turn_pos"], rs["turn_mesh"], "TurnRR")
 
 
-## Split one end's RIGHT-side lens box into an inboard main lamp and an outboard indicator.
-## `facing` is -1 front / +1 rear: the outward normal along Z, which decides which way the
-## meshes grow and which way the beam looks.
+## Split one end's right-side lens box into an inboard main lamp and an outboard indicator.
+## `facing` is -1 front / +1 rear (outward normal along Z).
 ##
-## The lamp mesh ENCLOSES the model's lens rather than resting on it, which is what fixes
-## both of the artifacts a thin proud-of-the-face slab produced:
-##   * Kenney lenses often WRAP around the corner onto the flank, so a slab covering only
-##     the end face left the painted lens showing in profile. Depth therefore spans the
-##     lens' full z extent, not a fixed thickness.
-##   * A mesh whose side face landed exactly on the painted lens' side plane gave two
-##     coincident coplanar surfaces, and the depth buffer cannot order those — hence the
-##     shimmering seen from the side. Growing every outward face LENS_CLEAR beyond the
-##     model's makes our surface unambiguously nearer the camera from every angle, so the
-##     ordinary depth test resolves it. That is why this is geometry and not a
-##     render_priority / depth-bias hack: a bias would win the tie on the end face but not
-##     on the flank, and biasing risks punching through neighbouring bodywork instead.
-## Growth on the INBOARD side is free — it just buries the mesh deeper inside the chassis.
+## The lamp mesh encloses the model's lens rather than resting on it: depth spans the lens' full
+## z extent (Kenney lenses often wrap onto the flank, so a fixed-thickness slab left the painted
+## lens showing in profile), and every outward face grows LENS_CLEAR beyond the model's so our
+## surface wins the depth test unambiguously from every angle (a coincident face there
+## z-fights; a render-priority/depth-bias hack would win on the end face but not the flank).
+## Growth on the inboard side is free, it just buries the mesh in the chassis.
 ##
-## The cut follows the lens' shape: a WIDE lens (the usual case) splits along its width —
-## main lamp inboard, indicator outboard — while a TALL lens (vertical clusters like the
-## ambulance's rear corner light) splits along its height, main on top and indicator below,
-## so the indicator still lands on real lens area instead of hanging off the side.
+## The cut follows the lens shape: a wide lens splits along width (main inboard, indicator
+## outboard); a tall lens (vertical clusters like the ambulance's rear corner light) splits along
+## height (main on top) so the indicator still lands on real lens area. A disc lens (SUV
+## headlamp) keeps its full circle as the main lamp with the indicator as a small box outboard.
 ##
-## A disc lens (the SUV's round headlamp) cannot be cut in half and still read as a disc, so
-## it keeps its full circle as the main lamp and the indicator becomes a small box just
-## outboard of it.
-##
-## Returns Vector3 positions (right/+X side) for the main lamp, the indicator, and the spot:
-## main_pos, turn_pos, spot_pos, plus main_mesh / turn_mesh.
+## Returns Vector3 positions (right/+X side): main_pos, turn_pos, spot_pos, plus main_mesh /
+## turn_mesh.
 func _split(lens: Dictionary, facing: float) -> Dictionary:
 	var b: AABB = lens["box"]
 	var c := b.get_center()
@@ -809,20 +907,16 @@ func _lens_line(lens: Dictionary) -> String:
 			"disc" if lens["disc"] else "box ", c.x, c.y, c.z, b.size.x, b.size.y]
 
 
-## Locate each end's lamp lens by reading the model's own texturing.
+## Locate each end's lamp lens by reading the model's own texturing. The Kenney kit is one
+## merged mesh per vehicle from a single colormap atlas, so a lens is the run of triangles whose
+## UV lands on the lamp swatches (amber front, red rear): sample the atlas per triangle
+## centroid, union triangles sharing a welded vertex and atlas shade, keep lens-shaped clusters
+## (small, off centreline, at an end face), then merge survivors that touch (one lens spans
+## several shades). Filtering before merging stops a lens fusing into a same-hue body panel
+## (firetruck is red all over) while still rejoining a lens split by its own gradient.
 ##
-## The Kenney kit is one merged mesh per vehicle drawn from a single colormap atlas, so a
-## lamp lens is not a named node — it is the run of triangles whose UV lands on the atlas'
-## lamp swatches (amber at the front, red at the rear). This samples the atlas at every
-## triangle's UV centroid, unions triangles that share a welded vertex AND an atlas shade,
-## keeps the clusters that are lens-SHAPED (small, off the centreline, at an end face), then
-## merges the survivors that touch — one lens spans several shades of its swatch.
-##
-## Filtering before merging is deliberate: it stops a lens fusing into a same-hue body panel
-## (the firetruck is red all over) while still re-joining a lens split by its own gradient.
-##
-## Returns {front: {box, disc}, rear: {box, disc}} — box is the RIGHT-side (+X) lens; a
-## missing key means that end has no painted lamp and the caller falls back to the body box.
+## Returns {front: {box, disc}, rear: {box, disc}} — box is the right-side (+X) lens; a missing
+## key means that end has no painted lamp.
 func _find_lenses(body_pairs: Array, xform: Transform3D, box: AABB) -> Dictionary:
 	var img := Image.new()
 	if img.load(ProjectSettings.globalize_path(COLORMAP)) != OK:
@@ -1009,6 +1103,21 @@ func _collect_body_wheels(node: Node, xform: Transform3D, body_pairs: Array, whe
 		_collect_body_wheels(child, nx, body_pairs, wheels)
 
 
+## Body-space z of the centre of mass, from the recipe's `front_weight` where it declares one
+## (`com_z` where it states the offset directly, 0 where it says nothing). Measured off THIS
+## body's own axle line, so the same declared split means the same handling on every wheelbase.
+func _com_z(geo: Dictionary, ov: Dictionary) -> float:
+	if not ov.has("front_weight"):
+		return float(ov.get("com_z", 0.0))
+	var front_z := INF
+	var rear_z := -INF
+	for xz: Vector2 in geo["wheel_xz"]:
+		front_z = minf(front_z, xz.y)   # front = -Z
+		rear_z = maxf(rear_z, xz.y)
+	var front := clampf(float(ov["front_weight"]), 0.05, 0.95)
+	return front_z + (1.0 - front) * (rear_z - front_z)
+
+
 ## AABB of `aabb` after `xform` (8 corners; xform is rotation+uniform-scale+translation).
 func _xform_aabb(aabb: AABB, xform: Transform3D) -> AABB:
 	var out := AABB(xform * aabb.position, Vector3.ZERO)
@@ -1023,6 +1132,104 @@ func _xform_aabb(aabb: AABB, xform: Transform3D) -> AABB:
 # --- stable save (strip churny per-node unique_id, like gen_kit_assets) ----------------
 
 var _unique_id_re := RegEx.create_from_string(" unique_id=\\d+")
+## Godot re-rolls the 5-character suffix of every generated sub-resource id on each save
+## (`StandardMaterial3D_l7l2h` -> `StandardMaterial3D_lei3o`).
+var _subres_id_re := RegEx.create_from_string("\\b([A-Za-z0-9]+)_([a-z0-9]{5})\\b")
+
+
+## A scene's content minus the three things a re-save churns for free: per-node `unique_id`,
+## sub-resource ID suffixes, and line endings (git checks out CRLF, ResourceSaver writes LF, so
+## a raw byte compare calls every file changed). Sub-resource IDs are renumbered by order of
+## first appearance rather than blanked, so a genuine edit that repoints a node at a different
+## sub-resource of the same type still reads as a change (a real insertion shifts every later
+## number — errs toward reporting a difference, the safe direction).
+func _churn_key(text: String) -> String:
+	var flat := _unique_id_re.sub(text.replace("\r\n", "\n"), "", true)
+	var seen := {}
+	var out := ""
+	var cursor := 0
+	for m in _subres_id_re.search_all(flat):
+		out += flat.substr(cursor, m.get_start() - cursor)
+		cursor = m.get_end()
+		var token := m.get_string()
+		if not seen.has(token):
+			seen[token] = "%s_ID%d" % [m.get_string(1), seen.size()]
+		out += String(seen[token])
+	return out + flat.substr(cursor)
+
+
+## The ` uid="uid://..."` attribute of a .tres/.tscn header line, "" if it carries none.
+func _header_uid(text: String) -> String:
+	var head_end := text.find("]")
+	var at := text.find(" uid=\"uid://")
+	if head_end < 0 or at < 0 or at > head_end:
+		return ""
+	var close := text.find("\"", at + 6)
+	if close < 0 or close > head_end:
+		return ""
+	return text.substr(at, close - at + 1)
+
+
+var _ext_res_re := RegEx.create_from_string("\\[ext_resource [^\\]]*\\]")
+var _uid_attr_re := RegEx.create_from_string(" uid=\"uid://[^\"]*\"")
+var _path_attr_re := RegEx.create_from_string(" path=\"([^\"]*)\"")
+
+
+## `res://…` -> ` uid="uid://…"` for every `[ext_resource]` line in `text` that carries both.
+func _ext_resource_uids(text: String) -> Dictionary:
+	var out := {}
+	for m in _ext_res_re.search_all(text):
+		var line := m.get_string()
+		var u := _uid_attr_re.search(line)
+		var pa := _path_attr_re.search(line)
+		if u != null and pa != null:
+			out[pa.get_string(1)] = u.get_string()
+	return out
+
+
+## Re-inject the UIDs `after` lost relative to `before` (header + every `[ext_resource]`,
+## matched by resource path). ResourceSaver only writes a `uid=` it can see, so a plain save
+## silently strips one whenever the source resource carries none in memory — a broken reference
+## the moment a path moves, and a no-op regen turned into an 18-file diff.
+func _restore_uids(before: String, after: String) -> String:
+	if before.is_empty():
+		return after
+	var out := after
+	var head_uid := _header_uid(before)
+	if not head_uid.is_empty() and _header_uid(out).is_empty():
+		var head_end := out.find("]")
+		if head_end >= 0:
+			out = out.insert(head_end, head_uid)
+	var want := _ext_resource_uids(before)
+	if want.is_empty():
+		return out
+	var rebuilt := ""
+	var cursor := 0
+	for m in _ext_res_re.search_all(out):
+		var line := m.get_string()
+		rebuilt += out.substr(cursor, m.get_start() - cursor)
+		cursor = m.get_end()
+		if _uid_attr_re.search(line) == null:
+			var pa := _path_attr_re.search(line)
+			if pa != null and want.has(pa.get_string(1)):
+				line = line.insert(pa.get_start(), String(want[pa.get_string(1)]))
+		rebuilt += line
+	return rebuilt + out.substr(cursor)
+
+
+## Save a spec, keeping the UIDs the file already had (see `_restore_uids`).
+func _save_spec_stable(spec: Resource, path: String) -> Error:
+	var before := FileAccess.get_file_as_string(path) if FileAccess.file_exists(path) else ""
+	var err := ResourceSaver.save(spec, path)
+	if err != OK or before.is_empty():
+		return err
+	var after := _restore_uids(before, FileAccess.get_file_as_string(path))
+	if _churn_key(after) == _churn_key(before):
+		after = before   # unchanged: keep the on-disk line endings too
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f != null:
+		f.store_string(after)
+	return OK
 
 
 func _save_scene_stable(packed: PackedScene, path: String) -> Error:
@@ -1030,9 +1237,10 @@ func _save_scene_stable(packed: PackedScene, path: String) -> Error:
 	var err := ResourceSaver.save(packed, path)
 	if err != OK or before.is_empty():
 		return err
-	var after := FileAccess.get_file_as_string(path)
-	if after != before and _unique_id_re.sub(after, "", true) == _unique_id_re.sub(before, "", true):
-		var f := FileAccess.open(path, FileAccess.WRITE)
-		if f != null:
-			f.store_string(before)
+	var after := _restore_uids(before, FileAccess.get_file_as_string(path))
+	if _churn_key(after) == _churn_key(before):
+		after = before
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f != null:
+		f.store_string(after)
 	return OK

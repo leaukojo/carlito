@@ -1,17 +1,13 @@
 extends GdUnitTestSuite
-## Plane flight math. Pure static fns exercised without the physics body — the same
-## testing discipline as the boat/drone. What is covered here is what belongs to the plane
-## alone: the lift/stall curve, control authority scaling with airspeed, the pitch/roll
-## torques, gear-owns-direction thrust, and the flap slew. The dampers, yaw torque and
-## attitude extraction it shares with the boat and drone live in `VehicleMath` — see
-## `test_vehicle_math.gd`.
+## Plane flight math: lift/stall, control authority, torques, thrust, flap slew.
+## Shared systems (dampers, yaw, attitude) in VehicleMath via test_vehicle_math.gd.
 
 const P := preload("res://src/vehicles/plane/plane.gd")
+const PlaneSpec := preload("res://src/vehicles/plane/plane_spec.tres")
 const PlaneT := preload("res://src/vehicles/plane/plane_telemetry.gd")
 
 const DELTA := 1.0 / 60.0
 
-# Round numbers so expected values are hand-checkable.
 const IDLE := 1000.0
 const REDLINE := 5000.0
 const MAX_THRUST := 4000.0
@@ -41,9 +37,9 @@ func test_prop_rpm_step_never_overshoots() -> void:
 func test_thrust_frac_zero_at_idle_full_at_redline() -> void:
 	assert_float(P.thrust_frac(IDLE, IDLE, REDLINE)).is_equal(0.0)
 	assert_float(P.thrust_frac(REDLINE, IDLE, REDLINE)).is_equal(1.0)
-	# Engine stopped (below idle) still reads 0 — no negative thrust from a dead prop.
+	# Engine stopped (below idle) still reads 0; no negative thrust from dead prop.
 	assert_float(P.thrust_frac(0.0, IDLE, REDLINE)).is_equal(0.0)
-	# Halfway up the band: (3000 - 1000) / 4000 = 0.5.
+	# Halfway up: (3000 - 1000) / 4000 = 0.5.
 	assert_float(P.thrust_frac(3000.0, IDLE, REDLINE)).is_equal_approx(0.5, 1e-6)
 
 
@@ -57,7 +53,6 @@ func test_prop_thrust_signed_by_gear() -> void:
 
 
 func test_prop_thrust_capped_by_construction() -> void:
-	# rpm beyond redline clamps the fraction at 1 — thrust can never exceed the cap.
 	assert_float(P.prop_thrust(1e6, IDLE, REDLINE, MAX_THRUST, GEAR_D1, 0.25)) \
 			.is_equal(MAX_THRUST)
 
@@ -68,7 +63,6 @@ func test_flap_slew_moves_at_rate_and_clamps_target() -> void:
 	# 0.6/s for one tick = 0.01 of travel.
 	assert_float(P.flap_slew(0.0, 1.0, 0.6, DELTA)).is_equal_approx(0.01, 1e-6)
 	assert_float(P.flap_slew(1.0, 0.0, 0.6, DELTA)).is_equal_approx(0.99, 1e-6)
-	# An out-of-range request is clamped before slewing.
 	assert_float(P.flap_slew(1.0, 5.0, 0.6, DELTA)).is_equal(1.0)
 
 
@@ -82,7 +76,6 @@ func test_deflect_rad_scales_command_and_is_signed() -> void:
 
 
 func test_deflect_rad_clamps_to_authored_travel() -> void:
-	# An out-of-range command can never hinge a surface past its authored limit.
 	assert_float(P.deflect_rad(5.0, 20.0)).is_equal_approx(deg_to_rad(20.0), 1e-6)
 	assert_float(P.deflect_rad(-5.0, 20.0)).is_equal_approx(deg_to_rad(-20.0), 1e-6)
 
@@ -197,3 +190,33 @@ func test_plane_telemetry_bridge_dict_adds_flight_fields() -> void:
 	assert_bool(d.has("fuel")).is_true()
 	assert_bool(d.has("coolant")).is_true()
 	assert_bool(d.has("ground")).is_true()
+# --- the gearbox that never shifts ------------------------------------------------
+
+## The plane is single-speed by construction, and only because two numbers happen to sit the
+## right way round: shift_up_rpm (6000) is ABOVE redline_rpm (5400), and auto_shift decides on
+## `rpm_from_wheel`, which is clamped at the redline. So gear 1 is the only gear, and the
+## contract's `gear` publishes a constant 1 in D. Nothing else holds that — someone "fixing" the
+## shift point to 5000 would give a fixed-pitch light aircraft a working gearbox, change a
+## published wire signal and change no physics at all. It fails HERE instead.
+func test_the_plane_never_leaves_gear_one() -> void:
+	var spec: VehicleSpec = PlaneSpec
+	assert_float(spec.shift_up_rpm).override_failure_message(
+			"the plane's shift point (%.0f) is at or below its redline (%.0f) — it would now shift"
+			% [spec.shift_up_rpm, spec.redline_rpm]).is_greater(spec.redline_rpm)
+	# Sweep the whole usable band, endpoints included: gear 1 in, gear 1 out.
+	for step in 41:
+		var at_rpm: float = lerpf(spec.idle_rpm, spec.redline_rpm, float(step) / 40.0)
+		assert_int(Drivetrain.auto_shift(spec, 1, at_rpm)).override_failure_message(
+				"the plane upshifted at %.0f rpm" % at_rpm).is_equal(1)
+
+
+func test_the_planes_published_rpm_cannot_reach_its_shift_point() -> void:
+	# The other half: it is the CLAMP that makes the sweep above exhaustive. However fast the
+	# wheels turn, the value auto_shift is handed tops out at the redline.
+	var spec: VehicleSpec = PlaneSpec
+	for omega in [0.0, 50.0, 500.0, 20000.0]:
+		var at_rpm := Drivetrain.rpm_from_wheel(spec, omega, 1)
+		assert_float(at_rpm).override_failure_message(
+				"wheel omega %.0f rad/s reads %.0f rpm, past the %.0f redline"
+				% [omega, at_rpm, spec.redline_rpm]).is_less_equal(spec.redline_rpm)
+		assert_float(at_rpm).is_less(spec.shift_up_rpm)

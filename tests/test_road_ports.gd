@@ -1,10 +1,6 @@
 extends GdUnitTestSuite
-## RoadPorts (kit/helpers/road_ports.gd): port discovery on a roads GridMap.
-## Pure math + headless-constructible fixtures (GridMap/MeshLibrary need no meshes for
-## cell/orientation queries; world transforms are passed explicitly, so nothing is ever
-## added to a tree). Hand-checked numbers use the roads lattice: cell_size (12,3,12),
-## centre-true X/Z (cell 0 centred at local 6), bottom-true Y, deck painted at
-## y-index 1 (cell base y=3), asphalt surface 0.12 above the base.
+## RoadPorts: port discovery on roads GridMap. Roads lattice: cell_size (12,3,12),
+## deck at y=3, asphalt surface 0.12 above base. No tree needed (transforms explicit).
 
 const Ports := preload("res://kit/helpers/road_ports.gd")
 

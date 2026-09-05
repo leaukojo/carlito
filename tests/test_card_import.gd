@@ -1,9 +1,5 @@
 extends GdUnitTestSuite
-## Selector-card import settings (`CardImport`). The generators only ever write the `.png`,
-## so without this stamp Godot imports a NEW card with its lossless defaults and it quietly
-## costs ~20 KB more than the 43 already in the tree. Same discipline as
-## `TerrainGen.ensure_import_settings`, stamping the opposite way (cards want lossy;
-## heightmaps must stay lossless because the terrain reads them back).
+## Selector-card import settings: cards want lossy (save ~20 KB). Stamps .png.import.
 
 const Card := preload("res://src/ui/card_import.gd")
 

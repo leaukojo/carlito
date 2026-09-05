@@ -1,10 +1,7 @@
 extends GdUnitTestSuite
-## RoadBuilder / RoadProfile pure fns + the baker's road integration:
-## curvature-adaptive sampling, ribbon extrusion (winding must stay up-facing
-## for BOTH curve directions — a flipped ribbon is drive-through), banking from tilt,
-## the conform flatten mask (floor-quantized so the 8-bit PNG never sits above the
-## road), and split_arrays_by_chunk. Hand-checkable numbers throughout, same discipline
-## as Drivetrain. Curve3D and Image are headless-constructible, so everything runs in CI.
+## RoadBuilder / RoadProfile pure fns: curvature-adaptive sampling, ribbon extrusion,
+## banking, conform mask, chunk splits. Winding must stay up-facing for both curve
+## directions. Hand-checkable numbers throughout.
 
 const Builder := preload("res://kit/helpers/road_builder.gd")
 const Profile := preload("res://kit/helpers/road_profile.gd")
@@ -38,7 +35,6 @@ func test_min_turn_radius_straight_is_infinite() -> void:
 
 
 func test_min_turn_radius_arc_matches_radius() -> void:
-	# quarter arc of radius 20: every local radius is ~20
 	assert_float(Builder.min_turn_radius(_quarter_arc(), 6.0, 6.0)) \
 			.is_equal_approx(20.0, 1.5)
 
@@ -100,9 +96,8 @@ func test_adaptive_is_deterministic() -> void:
 			.is_equal(Builder.adaptive_offsets(arc, 6.0, 6.0))
 
 
-## Zero-handle corner: an offset must land exactly on the interior control point (the
-## miter ring — its central-difference tangent is the corner's angle bisector), and
-## the list stays strictly increasing.
+## Zero-handle corner: offset lands on interior control point (miter ring angle bisector);
+## list stays strictly increasing.
 func test_adaptive_offsets_anchor_interior_control_points() -> void:
 	var c := Curve3D.new()
 	c.add_point(Vector3.ZERO)
@@ -127,7 +122,6 @@ func test_smooth_handles_catmull_rom() -> void:
 	var dir := Vector3(10, 0, 10).normalized()
 	assert_vector(h["in"]).is_equal_approx(-dir * (10.0 / 3.0), Vector3.ONE * 0.001)
 	assert_vector(h["out"]).is_equal_approx(dir * (10.0 / 3.0), Vector3.ONE * 0.001)
-	# coincident neighbours degenerate to zero handles
 	var d: Dictionary = Builder.smooth_handles(Vector3.ONE, Vector3(5, 0, 0), Vector3.ONE)
 	assert_vector(d["in"]).is_equal(Vector3.ZERO)
 	assert_vector(d["out"]).is_equal(Vector3.ZERO)
@@ -284,7 +278,6 @@ func test_asphalt_cross_section() -> void:
 	var mats: PackedInt32Array = cs.mats
 	assert_int(points.size()).is_equal(8)
 	assert_that(mats).is_equal(PackedInt32Array([2, 2, 1, 0, 1, 2, 2]))
-	# mirror-symmetric laterals from the width exports
 	var expect := PackedFloat32Array([-4.75, -4.25, -3.65, -3.5, 3.5, 3.65, 4.25, 4.75])
 	for i in points.size():
 		assert_float(points[i].x).is_equal_approx(expect[i], 0.0001)
@@ -404,10 +397,8 @@ func test_extrude_winding_up_facing_both_directions() -> void:
 	_assert_up_facing(_extrude_straight(false, Vector3(0, 0, 12), Vector3.ZERO))
 
 
-## Every triangle's Godot front face (= -geometric cross) must align with its authored
-## outward vertex normal (cross . normal < 0). Generalizes _assert_up_facing to the bridge
-## base, whose walls face sideways and bottom faces down — so a single-sided material can
-## never render the box inside-out.
+## Godot front face (= -geometric cross) aligns with authored normal (cross . normal < 0);
+## single-sided material never renders inside-out.
 func _assert_faces_outward(surfaces: Dictionary) -> void:
 	for slot in surfaces:
 		var pos: PackedVector3Array = surfaces[slot][Mesh.ARRAY_VERTEX]
@@ -435,11 +426,8 @@ func test_extrude_bridge_base_all_faces_outward() -> void:
 	assert_bool(found_down).is_true()
 
 
-## A closed cross-section (RoadProfile's base_depth box) encloses a solid volume, so both
-## ends must be capped. Sweeping it alone produced an open tube: you looked straight down
-## a bridge's open end into its hollow interior, and since the box's walls and floor are
-## welded into the drivable body, a vehicle entering through an open end sat inside it and
-## dropped out through the back faces of the floor.
+## Closed cross-section (RoadProfile's base_depth box) encloses solid volume; both ends
+## must be capped or vehicles fall through.
 func test_extrude_bridge_base_is_capped_at_both_ends() -> void:
 	var p: Resource = Profile.new()
 	p.set("base_depth", 2.0)
@@ -495,8 +483,7 @@ func test_faces_from_surfaces_flattens_all_triangles() -> void:
 # ------------------------------------------------------- extrusion: fold clamp / seam
 
 
-## Quarter arc of radius 3 in the XZ plane — tighter than the 4.75 m asphalt
-## half-width, so the inside-edge fold clamp must engage.
+## Quarter arc of radius 3: tighter than the 4.75 m asphalt half-width, so the fold clamp engages.
 func _tight_arc() -> Curve3D:
 	var c := Curve3D.new()
 	var h := 3.0 * 0.5523
@@ -505,15 +492,13 @@ func _tight_arc() -> Curve3D:
 	return c
 
 
-## Single full-width strip: surfaces[0] verts come in rings of (left, right) pairs, so
-## edge progression is directly checkable.
+## Single full-width strip: surfaces[0] verts in (left, right) pair rings; edge checkable.
 func _edge_cross_section() -> Dictionary:
 	return {"points": PackedVector2Array([Vector2(-4.75, 0), Vector2(4.75, 0)]),
 			"mats": PackedInt32Array([0])}
 
 
-## The fold clamp: on a turn tighter than the half-width, neither ribbon edge may
-## sweep backwards between adjacent rings (unclamped, the inside edge folds).
+## Fold clamp: ribbon edge never sweeps backwards (inside edge folds if unclamped).
 func test_extrude_tight_arc_inside_edge_never_reverses() -> void:
 	var arc := _tight_arc()
 	var length := arc.get_baked_length()
@@ -539,8 +524,7 @@ func test_extrude_tight_arc_inside_edge_never_reverses() -> void:
 		assert_float(absf(v.x)).is_equal_approx(4.75, 0.0001)
 
 
-## A wide arc (radius 20 >> half-width) is untouched by the clamp: every ring keeps
-## the full profile width. (Straights are covered by the exact-width tests above.)
+## Wide arc (radius 20 >> half-width): clamp untouched, full profile width preserved.
 func test_extrude_wide_arc_is_not_clamped() -> void:
 	var arc := _quarter_arc()
 	var cs := _edge_cross_section()
@@ -1066,10 +1050,10 @@ func test_conform_rects_nearest_rect_wins_and_rounds_up() -> void:
 	assert_bool(img.get_pixel(8, 8).r < 0.5).is_true()    # lx = +0.5, nearer B (0.2)
 
 
-# --------------------------------------------------- tile conform footprints
-
-
 const TileConform := preload("res://addons/carlito_kit/tile_conform.gd")
+
+
+# --------------------------------------------------- tile conform footprints
 
 
 ## footprint_rects against the real roads meshlib: a 1x1 tile covers its 12 m cell

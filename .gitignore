@@ -6,12 +6,20 @@ build/
 
 *.tmp
 
-# Scratch copies (e.g. tmp/level_1_original/ — the pre-farm level 1 backup)
-tmp/
+# Scratch copies (rebuild_level.ps1 snapshots land in tmp/<level>_before/).
+# .gdignore is COMMITTED: without it Godot imports the backup PNGs, whose .import
+# sidecars claim the originals' uid:// and hijack them (root CLAUDE.md § Levels & water).
+tmp/*
+!tmp/.gdignore
 
 # gdUnit4 output
 reports/
-/docs/plans
 
 # scratch measurement scenes (not shipped)
 tools/claude/
+
+# Bake output: CI bakes every registered level (.github/workflows/ci.yml) before the
+# tests, the baked smoke and the export. The *.bake.json manifest beside it IS committed —
+# it is the input-hash record the stale-bake gate reads. Run tools/bake_levels.tscn once
+# after cloning.
+*.baked.scn

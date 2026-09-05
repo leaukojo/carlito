@@ -9,17 +9,11 @@ extends GdUnitTestSuite
 
 const TractorT := preload("res://src/vehicles/tractor/tractor_telemetry.gd")
 const CatalogScript := preload("res://src/vehicles/vehicle_catalog.gd")
-## The deeper of the two draft machines: its measured share depth is the working span the depth
-## cases below sweep. Working depth belongs to the IMPLEMENT (ImplementBase.tool_depth), so the
-## test reads the machine's own figure rather than a constant on the draft model.
+## Plough is deeper draft machine; working depth is on implement, not draft model.
 const PloughScript := preload("res://src/vehicles/tractor/implements/plough.gd")
 
 
-## The spec the DRIVABLE tractor actually loads, read out of its scene rather than named
-## here. Phase 1 left `src/vehicles/tractor/tractor_spec.tres` behind as an orphan when the
-## hand-built body was deleted, and the driveline flags were later added to the orphan while
-## the shipped tractor got none — a bug this suite could not see while it preloaded a path by
-## hand. Following the catalog -> scene -> spec chain means the test moves with the game.
+## Spec read via scene (not path), follows catalog->scene->spec chain (orphan-spec lesson).
 func _tractor_spec() -> VehicleSpec:
 	var variant := CatalogScript.first_in_family("tractor")
 	var scene: PackedScene = load(CatalogScript.scene_of(variant))
@@ -30,8 +24,7 @@ func _tractor_spec() -> VehicleSpec:
 	return null
 
 
-## Rated draft of the DRIVABLE tractor, down the same catalog -> scene chain: the scene's own
-## override when it sets one, else the script's default (which is where it lives today).
+## Draft max via catalog->scene chain (scene override or script default).
 func _tractor_draft_max() -> float:
 	var variant := CatalogScript.first_in_family("tractor")
 	var scene: PackedScene = load(CatalogScript.scene_of(variant))
@@ -105,10 +98,8 @@ func test_slip_is_unsigned_and_quiet_at_standstill() -> void:
 
 
 # --- draft force (the pure model) ---------------------------------------------
-## The force itself is applied by TractorVehicle._apply_draft at the hitch point; what is testable
-## without a body is the model that sizes it — depth out of the linkage's lift, the soil and speed
-## factors, the sign (it is a RESISTANCE), the 60 Hz damper margin the ramp gives, the one-tick
-## backstop behind it, and the published percentage.
+## Model sizes draft force: depth from linkage lift, soil/speed factors, RESISTANCE,
+## 60 Hz damper margin, one-tick backstop, published percentage.
 
 func test_draft_depth_comes_out_of_the_linkage_lift() -> void:
 	var full := PloughScript.SHARE_DEPTH_M
@@ -227,7 +218,7 @@ func test_the_shipped_tractor_can_actually_pull_its_rated_draft() -> void:
 	var spec := _tractor_spec()
 	var rated := _tractor_draft_max()
 	assert_float(rated).is_greater(0.0)
-	assert_float(rated).is_less(0.5 * spec.mass * 9.8 * spec.mu_long)
+	assert_float(rated).is_less(0.5 * spec.mass * 9.8 * spec.ground_drive.mu_long)
 
 
 # The hour meter moved to test_telemetry with VehicleTelemetry.hours_step: engine_hours is a
@@ -251,20 +242,22 @@ func test_only_the_tractor_declares_a_lockable_diff_and_an_engageable_front_axle
 	var tractor_spec := _tractor_spec()
 	assert_object(tractor_spec) \
 		.override_failure_message("the drivable tractor scene declares no spec").is_not_null()
-	assert_bool(tractor_spec.rear_diff_lockable).is_true()
-	assert_bool(tractor_spec.front_axle_engageable).is_true()
+	assert_bool(tractor_spec.ground_drive.rear_diff_lockable).is_true()
+	assert_bool(tractor_spec.ground_drive.front_axle_engageable).is_true()
 	# Spawn state is 2WD: engaging MFWD has to be a thing you do, or it proves nothing.
-	assert_bool(tractor_spec.driven_front).is_false()
+	assert_bool(tractor_spec.ground_drive.driven_front).is_false()
 	# Every other shipped spec leaves both off, so no car's driveline can move under these bits.
 	var checked := 0
 	for path in _spec_paths("res://src/vehicles"):
 		if path == tractor_spec.resource_path:
 			continue
 		var spec: VehicleSpec = load(path)
+		if spec.ground_drive == null:
+			continue  # no running gear at all — the stronger form of "declares neither flag"
 		checked += 1
-		assert_bool(spec.rear_diff_lockable) \
+		assert_bool(spec.ground_drive.rear_diff_lockable) \
 			.override_failure_message("%s must not declare a lockable diff" % path).is_false()
-		assert_bool(spec.front_axle_engageable) \
+		assert_bool(spec.ground_drive.front_axle_engageable) \
 			.override_failure_message("%s must not declare an engageable front axle" % path).is_false()
 	assert_int(checked).is_greater(0)
 
@@ -284,8 +277,11 @@ func test_the_attachment_controls_are_the_implements_own_declaration() -> void:
 	tractor.set("_hitch", hitch)
 
 	for path in ImplementCatalog.IMPLEMENTS:
-		if not ImplementCatalog.is_attached(path):
-			continue  # DETACHED is a real entry in the cycle; it is the bare case below
+		# DETACHED is a real entry in the cycle and it is the bare case below. TOWED entries are real
+		# entries too, but they hang off the DRAWBAR rather than the linkage and are not
+		# ImplementBases at all — tests/test_drawbar_trailer.gd covers what they offer.
+		if not ImplementCatalog.is_attached(path) or ImplementCatalog.is_towed(path):
+			continue
 		var implement := (load(path) as PackedScene).instantiate() as ImplementBase
 		hitch.implement = implement
 		var controls: Dictionary = tractor.call("attachment_controls")

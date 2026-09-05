@@ -1,26 +1,35 @@
 [gd_resource type="Resource" script_class="VehicleSpec" format=3]
 
-[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_2kgot"]
-[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="2_fkgc0"]
+[ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="1_fkgc0"]
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="2_lv4ug"]
+[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="3_ac4ng"]
 
-[resource]
-script = ExtResource("1_2kgot")
-mass = 1050.0
-center_of_mass = Vector3(0, 0.2, 0)
+[sub_resource type="Resource" id="Resource_3x851"]
+script = ExtResource("1_fkgc0")
 wheel_positions = PackedVector3Array(-0.5700002, 0.5230682, -0.8219999, 0.5700002, 0.5230682, -0.822, -0.5700002, 0.5230682, 0.7620001, 0.5700002, 0.5230682, 0.76199996)
 wheel_radius = 0.36
-wheel_scene = ExtResource("2_fkgc0")
-driven_front = true
+wheel_scene = ExtResource("2_lv4ug")
 rest_length = 0.28
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_lat = 1.1
 handbrake_grip = 0.45
-torque_curve = PackedVector2Array(900, 168, 2000, 263.2, 3200, 319.2, 4800, 324.8, 6000, 285.6, 6800, 112)
-gear_ratios = PackedFloat32Array(3.5, 2.2, 1.55, 1.18, 0.88, 0.66)
-final_drive = 4.1
-brake_torque = 1469.0
-handbrake_torque = 407.0
+brake_torque = 924.0
+handbrake_torque = 342.0
+drag_area = 0.47
+rolling_resistance = 0.012
 max_steer_deg = 40.0
+min_steer_frac = 0.26
+steer_falloff_speed = 42.0
+
+[resource]
+script = ExtResource("3_ac4ng")
+ground_drive = SubResource("Resource_3x851")
+mass = 1050.0
+center_of_mass = Vector3(0, 0.2, 0)
+torque_curve = PackedVector2Array(900, 109.76, 2000, 172.48, 3200, 206.08, 4800, 207.2, 6000, 207.2, 6600, 190.4, 6800, 68.32)
+gear_ratios = PackedFloat32Array(4.5, 2.903, 1.975, 1.431, 1.109, 0.925)
+final_drive = 4.1
+shift_up_rpm = 5900.0
 steer_speed = 7.0
 headlight_paths = Array[NodePath]([NodePath("Lamps/HeadlightL"), NodePath("Lamps/HeadlightR")])
 head_lamp_paths = Array[NodePath]([NodePath("Lamps/HeadLensL"), NodePath("Lamps/HeadLensR")])

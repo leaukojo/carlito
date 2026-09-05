@@ -1,8 +1,8 @@
 # Kit, bake & editor tools — gotchas & hard-won rules
 
-Loaded when working under `kit/` (companion file: `addons/carlito_kit/CLAUDE.md`).
-Full authoring detail: `docs/level_kit.md`. The bake-freshness rule and the
-`BAKE_CODE_INPUTS` rule stay in the root `CLAUDE.md` — they apply everywhere.
+Loaded when working under `kit/` (companion: `addons/carlito_kit/CLAUDE.md`; full authoring
+detail: `docs/level_kit.md`). Bake freshness and `BAKE_CODE_INPUTS` stay in the root
+`CLAUDE.md` — they apply everywhere.
 
 - Regenerate palettes/prefabs (`gen_kit_assets.gd`) only after recipe/kit edits; meshlib
   item ids are preserved across regens so painted GridMaps never break. Every GLB must
@@ -14,25 +14,29 @@ Full authoring detail: `docs/level_kit.md`. The bake-freshness rule and the
 - Thumbnails render **windowed only** (headless can't render); never CI. Embedding a new
   thumb re-stales dependent bakes.
 - **`--script`-mode tools cannot load level scenes** — autoload identifiers (InputRouter
-  via BaseVehicle) don't compile there; bake/check run as **game-mode tool scenes**
-  (`godot --headless res://tools/bake_levels.tscn`), and `level.gd` fetches GameState via
+  via BaseVehicle) don't compile there. Bake/check run as **game-mode tool scenes**
+  (`godot --headless res://tools/bake_levels.tscn`), and `level.gd` reaches GameState via
   `get_node("/root/GameState")` for the same reason.
 - A **freed node compares equal to null** — read results before `free()`.
 - Vector2/3 component math is **float32**: `Vector2.angle()` carries ~1e-7 noise against
   float64 `PI`, so exact-boundary tests (`ceil(sweep / (PI/2))` etc.) need a ~1e-5
-  tolerance — 1e-9 is not enough (bit the road-arc segment count).
-- The convex-decomposition helper is `create_multiple_convex_collisions` (plural; renamed
-  in 4.6).
+  tolerance — 1e-9 is not enough.
+- The convex-decomposition helper is `create_multiple_convex_collisions` (plural).
 - SurfaceTool.append_from leaves scaled normals unnormalized — the baker's
   SurfaceAccumulator merges at array level instead.
-- A runtime-loaded `@tool` script must never use an editor-only class
-  (`EditorUndoRedoManager`, `EditorFileSystem`, …) as a **type annotation** — annotations
-  resolve at parse time regardless of `Engine.is_editor_hint()` guards, so the script
-  silently fails to load in exported builds (the node does nothing). Fetch editor
-  singletons via `Engine.get_singleton(&"EditorInterface")` into **untyped** vars.
-  Scripts under `addons/carlito_kit/` are editor-only and may type editor APIs freely.
-- Duck-typed markers (`is_carlito_authoring` / `is_carlito_kit_piece` /
-  `is_carlito_scatter` / `is_carlito_road`) everywhere, never class_name checks.
+- A runtime-loaded `@tool` script must never use an editor-only class as a **type
+  annotation**: annotations resolve at parse time regardless of `Engine.is_editor_hint()`,
+  so the script silently fails to load in exported builds. Fetch editor singletons via
+  `Engine.get_singleton(&"EditorInterface")` into **untyped** vars. Scripts under
+  `addons/carlito_kit/` are editor-only and may type editor APIs freely.
+- **Scene tags are GROUPS** (`carlito_authoring` / `carlito_kit_piece` / `carlito_scatter` /
+  `carlito_road`), declared once in `src/levels/base/carlito_groups.gd` and joined in each
+  class's **`_init`** — never class_name checks, and never `_enter_tree`: the baker walks a
+  level scene that was never added to a tree and instantiates scatter templates loose, so
+  `is_in_group()` is the only test that works there. `get_tree().get_nodes_in_group()` is NOT
+  a substitute in editor or baker code — out of the tree it finds nothing, and in the editor
+  `get_tree()` holds every open scene. Discovery there stays a walk scoped to a named root
+  (`CarlitoGroups.find_authoring` / `.authoring_ancestor`, the one copy of each).
 - Terrain render mesh is chunked for frustum culling (not LOD); collision stays ONE
   `HeightMapShape3D`. Normals are analytic (per-chunk `generate_normals()` seams
   borders); UVs global. Splatmap sampled raw (no `source_color` — sRGB bends weights).
@@ -53,26 +57,36 @@ Full authoring detail: `docs/level_kit.md`. The bake-freshness rule and the
   = the Kenney train kit at scale 2.4) — Draw/Drape/Smooth/Conform/bake all apply
   unchanged; the Roads panel's **Rail** checkbox swaps the profile. Its rib walls are
   vertical, so its cross-section drops degenerate strips on **both** axes, never the
-  parent's lateral-only test. The train needs the CURVE at runtime, but a baked level
-  frees `AuthoringRoot` at load and export strips it — so the baker emits a `RailTrack`
-  (`src/levels/base/rail_track.gd`) per rail road into the baked scene. Rail discovery is
-  `has_method("get_rail_curve") and get_rail_curve() != null` (never a marker method —
-  `has_method` is static and a road with a city profile must be able to say "not a rail");
-  the baker composes `rail_local_xform()`, runtime consumers use `rail_to_world()`.
-  `RoadBuilder.is_closed_loop` stays the ONE closed-loop predicate. The train runs ONLY on a
-  **closed** loop, and `RailTrack.find_closed_rail(root)` is the ONE walk that finds it —
-  `Level._spawn_vehicle` (spawn gate), `TrainVehicle._find_rail` (self-placement) and the
-  vehicle selector's gate (`Level.has_closed_rail()`) all call it, so they can't disagree on
-  what a rail is (an open-rail fallback in one and not the other is the exact split that let
-  the train run on track the level refused to spawn it on). The selector shows the train
-  family REFUSED with "no closed rail loop here" rather than dropping it, so a level may list
-  "train" in `allowed_vehicles`, play as an ordinary island where the loop is absent, and say
-  so. The gate is runtime, not in `LevelInfo`. A level with two closed loops is out of scope
-  (see TODO Rail follow-ups).
-  Touch: the train hides the steering joystick (rail-guided) and shows PANTO/DOORS toggle
-  taps (family-gated + bridge-hidden like ARM/FLAPS).
+  parent's lateral-only test. A baked level frees `AuthoringRoot` and export strips it, so
+  the baker emits a `RailTrack` (`src/levels/base/rail_track.gd`) per rail road carrying
+  the curve the train needs at runtime; the baker composes `rail_local_xform()`, consumers
+  use `rail_to_world()`. Rail discovery is `has_method("get_rail_curve") and
+  get_rail_curve() != null`, never a marker method — `has_method` is static, and a
+  city-profile road must be able to say "not a rail". `RoadBuilder.is_closed_loop` is the
+  ONE closed-loop predicate, `RailTrack.find_closed_rail(root)` the ONE walk that finds a
+  loop; `Level._spawn_vehicle`, `TrainVehicle._find_rail` and `Level.has_closed_rail()` all
+  call it, so no open-rail fallback can let the train run where the level refuses to spawn
+  it. The selector shows the train family REFUSED ("no closed rail loop here") rather than
+  dropping it; that gate is runtime, not `LevelInfo`. **Decided, don't re-open:** two closed
+  loops in one level is out of scope, and `rail_track.gd` stays in `src/levels/base/` beside
+  its runtime consumers — which is why a `src/` path sits in `BAKE_CODE_INPUTS` and a
+  comment-only edit to it re-stales every level. Touch: the train hides the steering joystick
+  and shows PANTO/DOORS taps (family-gated + bridge-hidden like ARM/FLAPS).
 - `tools/gen_rail_level.gd` owns level 5 end to end (terrain, loop curve, conform, splat,
-  scene) and overwrites it on every run; `tools/gen_islands.gd` covers only levels 2-4 and
-  **must not be re-run** (levels 2/3 have hand-added PlaneSpawns its template would drop).
+  scene) and overwrites it on every run; `tools/gen_skyport.gd` owns level 6 the same way
+  (three stages: `scaffold` → `--import` → `props` → `--import` → bake → `probe`, and
+  `scaffold` REWRITES the .tscn, so a re-run always needs `props` after it);
+  `tools/gen_islands.gd` covers only levels 2-4 and **must not be re-run** (levels 2/3 have
+  hand-added PlaneSpawns its template would drop).
 - Authoring order: terrain → roads + conform → splat → scatter (conform trips the scatter
   stale guard by design).
+- **The `.baked.scn` is gitignored build output; the `.bake.json` beside it is committed.**
+  CI bakes every registered level right after the stale-bake check, so a full bake costs git
+  nothing — only the six manifests move, and on a no-op re-bake only their hashes do.
+  `bake_levels` rewrites EVERY level's `.baked.scn` with different bytes even when nothing
+  changed (same `input_hash`, new `output_hash`; the pack is not byte-deterministic), which
+  is why the manifest `stats` block, not the output bytes, is the comparand that proves a
+  refactor changed no output. Bake a single level with `-- src/levels/<level>.tscn`; a full
+  run takes minutes. **Run `bake_levels.tscn` once after cloning** — until then levels play
+  unbaked (a `push_warning` from `Level._setup_baked` says so), local perf reads nothing like
+  the shipped build, and the suite's bake-weight assertion fails.

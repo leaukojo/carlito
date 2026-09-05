@@ -1,10 +1,7 @@
-# Stop-hook freshness gate — mirrors the cheap pre-commit gates so Claude doesn't
-# have to remember (and spend tokens) running them by hand. Exits 0 silently when
-# nothing relevant is dirty; exits 2 (blocks the stop, feeds stderr back to Claude)
-# only when a bake / contract copy / head-include is actually stale.
-#
-# Deliberately NOT the full preflight (tests/import/smoke/export) — that is minutes
-# long and would waste time + tokens on every turn. Freshness only.
+# Stop-hook freshness gate, mirroring the cheap pre-commit gates. Exits 0 silently when
+# nothing relevant is dirty; exits 2 (blocks the stop, feeds stderr back to Claude) only
+# when a bake / contract copy / head-include is actually stale. Not the full preflight
+# (tests/import/smoke/export) — that is minutes long.
 $ErrorActionPreference = 'Continue'
 $repo  = Split-Path -Parent $PSScriptRoot
 Set-Location $repo
@@ -49,8 +46,14 @@ if ($touchHead) {
 # Godot is resolved only here, so a machine without GODOT_BIN set still gets gates 1-2.
 if ($touchBake) {
     $GODOT = Resolve-GodotBin
-    & $GODOT --headless --path . res://tools/check_bakes.tscn | Out-Null
-    if ($LASTEXITCODE -ne 0) {
+    # Read the completion sentinel, not $LASTEXITCODE: headless Godot intermittently segfaults during teardown after a clean run.
+    $out = (& $GODOT --headless --path . res://tools/check_bakes.tscn 2>&1) | Out-String
+    # `unbuilt` (manifest verifies, no local .baked.scn) is not a failure; only stale blocks.
+    $done = [regex]::Match($out, '\[check-bakes\] complete: \d+ fresh, \d+ unbuilt, (\d+) stale')
+    if (-not $done.Success) {
+        Block "check_bakes did not finish, so bake freshness is unknown. Re-run it:  & `$GODOT --headless --path . res://tools/check_bakes.tscn`n$out"
+    }
+    if ([int]$done.Groups[1].Value -ne 0) {
         Block 'Stale bakes. Re-bake:  & $GODOT --headless --path . res://tools/bake_levels.tscn'
     }
 }

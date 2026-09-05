@@ -1,22 +1,11 @@
 class_name TrainTelemetry
 extends VehicleTelemetry
-## Train telemetry (flavor "train" — rail practice / CiA 421 semantics, not a real train
-## CAN standard). Adds the rail "out" fields on top of the shared VehicleTelemetry. Field
-## names are EXACTLY the contract names (pantograph_state / doors_state / catenary_volts /
-## motor_current / brake_pipe / grade / coupler_force) so the Bridge's name-keyed
-## marshaling and the dashboard's t.get(name) reads work unchanged.
-##
-## grade and coupler_force are real reads out of the consist sim (curve tangent, coupler
-## spring); pantograph_state / doors_state are gate reads. catenary_volts, motor_current
-## and brake_pipe are modeled honest values (same latitude as the boat's trim / the
-## tractor's engine_load) — the train has no simulated electrical or pneumatic circuit.
-##
-## Phase 2 ships the struct only: every field holds its resting value until Phase 3's
-## TrainVehicle drives them. Declaring them now keeps the bridge-coverage test honest the
-## moment the contract lists the train "out" signals.
-##
-## The base to_bridge_dict still carries rpm/fuel/coolant/ground/slip; the train declares
-## none of those, so the Bridge (which walks the contract, not this dict) never reads them.
+## Train telemetry (flavor "train": rail practice / CiA 421 semantics, not a real train CAN
+## standard). Adds the rail fields; names match the contract signals exactly.
+## grade and coupler_force are real reads from the consist sim; pantograph_state/
+## doors_state are gate reads. catenary_volts, motor_current and brake_pipe are modeled
+## honest values (same latitude as the boat's trim/tractor's engine_load) — the train has
+## no simulated electrical or pneumatic circuit.
 
 const BRAKE_PIPE_CHARGED := 5.0  ## bar, fully released train brake pipe pressure
 const NOMINAL_CATENARY := 25000.0  ## V, 25 kV AC nominal line voltage (rail practice)
@@ -30,10 +19,7 @@ var grade := 0                 ## %, contract 'grade' i8 (track slope at the loc
 var coupler_force := 0.0       ## kN, contract 'coupler_force' (+ = tension, - = buff)
 
 
-# --- honest aux models (modeled values, like the boat's trim / tractor's engine_load) ------
-# Pure -> unit-tested. The train has no simulated electrical or pneumatic circuit; these turn
-# the sim's traction/brake reads into plausible line-voltage / motor-current / pipe-pressure
-# gauges, clearly labelled as modeled.
+# --- honest aux models (modeled, like the boat's trim / tractor's engine_load) -------------
 
 ## Traction motor current (A) from the loco's tractive force: linear, clamped to the rating.
 static func motor_current_amps(traction_force: float, amps_per_newton: float,
@@ -55,15 +41,3 @@ static func brake_pipe_step(current: float, brake: float, delta: float,
 	var target := BRAKE_PIPE_CHARGED - clampf(brake, 0.0, 1.0) * apply_range
 	var rate := drop_rate if target < current else charge_rate
 	return move_toward(current, target, rate * delta)
-
-
-func to_bridge_dict() -> Dictionary:
-	var d := super()
-	d["pantograph_state"] = pantograph_state
-	d["doors_state"] = doors_state
-	d["catenary_volts"] = catenary_volts
-	d["motor_current"] = motor_current
-	d["brake_pipe"] = brake_pipe
-	d["grade"] = grade
-	d["coupler_force"] = coupler_force
-	return d

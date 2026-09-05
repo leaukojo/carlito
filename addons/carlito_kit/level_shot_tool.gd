@@ -1,19 +1,14 @@
 @tool
 extends RefCounted
-## The Polish tab's level-card tools: save the current 3D viewport framing as the level's
-## screenshot camera, and shoot the card PNG from it.
-##
-## The shot framing is a side-car resource next to the level scene (LevelShot,
-## `<level>_shot.tres`) — no node in the level, so re-framing never re-stales the bake.
-##
-## Shooting spawns a SECOND Godot process running `tools/gen_level_thumbs.tscn`, because the
-## picture must show the BAKED, running level (baked swap + real lighting + water) and the
-## editor's own world cannot provide that. It blocks the editor for a few seconds.
+## Polish tab's level-card tools: save the current 3D viewport framing as the level's
+## screenshot camera, and shoot the card PNG from it. The framing is a side-car resource
+## (`<level>_shot.tres`, LevelShot), never a node in the level, so re-framing never re-stales
+## the bake. Shooting spawns a second Godot process running `tools/gen_level_thumbs.tscn` to
+## render the baked, running level; it blocks the editor for a few seconds.
 
 const CAPTURE_SCENE := "res://tools/gen_level_thumbs.tscn"
 
 
-## Write the editor viewport's current camera framing to `<level>_shot.tres`.
 static func save_view(scene_root: Node) -> void:
 	var level_path := _level_path(scene_root)
 	if level_path.is_empty():
@@ -34,7 +29,6 @@ static func save_view(scene_root: Node) -> void:
 			% [level_path.get_file(), shot.fov, out])
 
 
-## Render the level's card PNG (src/ui/level_thumbs/<id>.png) from its saved view.
 static func shoot(scene_root: Node) -> void:
 	var level_path := _level_path(scene_root)
 	if level_path.is_empty():

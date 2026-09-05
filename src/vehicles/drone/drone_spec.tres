@@ -6,9 +6,7 @@
 script = ExtResource("1_spec")
 mass = 5.0
 center_of_mass = Vector3(0, 0, 0)
-wheel_positions = PackedVector3Array()
-driven_front = false
-driven_rear = false
+has_engine = false
 torque_curve = PackedVector2Array(1000, 20, 4000, 40, 8000, 45, 12000, 20)
 idle_rpm = 2600.0
 redline_rpm = 12000.0
@@ -17,5 +15,5 @@ reverse_ratio = 1.0
 final_drive = 1.0
 shift_up_rpm = 11000.0
 shift_down_rpm = 3000.0
-max_steer_deg = 30.0
+led_lamp_paths = [NodePath("LedFL"), NodePath("LedFR"), NodePath("LedRL"), NodePath("LedRR")]
 steer_speed = 3.0

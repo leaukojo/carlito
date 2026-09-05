@@ -1,32 +1,21 @@
 @tool
 class_name ScatterRegion
 extends ScatterBase
-## Seeded procedural fill region. Placed under the level's
-## AuthoringRoot; fills a box/polygon footprint with weighted kit prefabs. The front-end that
-## PRODUCES stored transforms by regeneration; everything downstream (preview, dev collision,
-## bake, stale guard) lives in ScatterBase and is shared with the hand-painted ScatterCanvas.
-##
-## The stored-transform contract (non-negotiable): expansion happens exactly once, in
-## the editor Regenerate button — it runs the pure seeded placement, ground-snaps every
-## instance against the live edited scene, and STORES the final region-local transforms in the
-## scene. The baker and dev-play only ever consume the stored transforms — no raycast, no
-## expansion, no physics outside this file's editor path — so editor and bake can never
-## diverge, and the CI hash story is just "transforms live in the .tscn".
-##
-## Pure placement logic (rejection sampling, area) is static and unit-tested in
-## tests/test_scatter.gd; the shared mesh/shape/hash statics live on ScatterBase.
+## Seeded procedural fill region: fills a box/polygon footprint with weighted kit
+## prefabs. Produces stored transforms by regeneration; preview/collision/bake/stale
+## guard live in ScatterBase. Expansion happens exactly once, in the editor Regenerate
+## button, which ground-snaps every instance and stores the final region-local
+## transforms — the baker and dev-play only ever consume them.
 
-## Rejection-sampling budget: attempts per requested instance before giving up (dense + tightly
-## spaced regions fill to less than the density target).
+## Rejection-sampling budget: attempts per requested instance before giving up.
 const ATTEMPTS_PER_TARGET := 8
 
-# Footprint setters poke the editor gizmo (addons/carlito_kit/scatter_gizmo.gd draws the border
-# while the node is selected); update_gizmos is a no-op in game.
+# Footprint setters poke the editor gizmo (addons/carlito_kit/scatter_gizmo.gd); a no-op in game.
 @export_enum("box", "polygon") var footprint_kind := "box":
 	set(value):
 		footprint_kind = value
 		update_gizmos()
-## Box footprint: full X/Z extent, centred on the node origin (region-local).
+## Box footprint (m): full X/Z extent, centred on the node origin.
 @export var box_size := Vector2(32, 32):
 	set(value):
 		box_size = value
@@ -49,12 +38,9 @@ const ATTEMPTS_PER_TARGET := 8
 
 # --------------------------------------------------------------- pure placement
 
-## Deterministic seeded placement (pure static, unit-tested): rejection-sample points into the
-## polygon with a min-spacing guarantee, assigning each accepted point a weighted item, a yaw
-## and a uniform scale. Same params = bit-identical output.
-## params: polygon (PackedVector2Array), density, min_spacing, seed,
-##         weights (PackedFloat32Array, one per item), yaw_jitter_deg, scale_min, scale_max.
-## Returns one PackedFloat32Array per item, 4 floats per instance (x, z, yaw, scale).
+## Deterministic seeded placement: rejection-sample points into the polygon with a
+## min-spacing guarantee. Returns one PackedFloat32Array per item, 4 floats/instance
+## (x, z, yaw, scale).
 static func generate_placements(params: Dictionary) -> Array[PackedFloat32Array]:
 	var weights: PackedFloat32Array = params.get("weights", PackedFloat32Array())
 	var out: Array[PackedFloat32Array] = []
@@ -86,8 +72,6 @@ static func generate_placements(params: Dictionary) -> Array[PackedFloat32Array]
 
 	var target := int(round(area * density_v))
 	var accepted := 0
-	# Spatial hash with cell = spacing: any point closer than `spacing` must sit in one of the
-	# 3x3 neighbouring cells, so the check is O(1) per attempt.
 	var grid := {}
 	for _attempt in target * ATTEMPTS_PER_TARGET:
 		if accepted >= target:
@@ -116,15 +100,9 @@ static func generate_placements(params: Dictionary) -> Array[PackedFloat32Array]
 	return out
 
 
-## Deterministic world-anchored lattice fill (pure static, unit-tested): one candidate per
-## lattice cell whose centre falls inside `polygon`. The lattice is anchored to the world
-## origin, so two overlapping or abutting fills produce ONE continuous grid — no seam, no
-## double row. Item pick / yaw / scale are seeded per cell (integer cell coords + seed), so
-## re-filling the same ground is idempotent.
-## params: polygon (PackedVector2Array), step (Vector2), seed,
-##         weights (PackedFloat32Array, one per item), yaw_jitter_deg, scale_min, scale_max.
-## Returns one PackedFloat32Array per item, 4 floats per instance (x, z, yaw, scale) —
-## same shape as generate_placements.
+## World-anchored lattice fill: one candidate per lattice cell whose centre falls inside
+## `polygon`, so overlapping fills produce one continuous grid. Idempotent (seeded per
+## cell coords). Same param/return shape as generate_placements (step: Vector2).
 static func generate_grid_placements(params: Dictionary) -> Array[PackedFloat32Array]:
 	var weights: PackedFloat32Array = params.get("weights", PackedFloat32Array())
 	var out: Array[PackedFloat32Array] = []
@@ -150,8 +128,6 @@ static func generate_grid_placements(params: Dictionary) -> Array[PackedFloat32A
 	for p in poly:
 		bmin = bmin.min(p)
 		bmax = bmax.max(p)
-	# Cell i has its centre at (i + 0.5) * step: walk every cell index whose centre can land
-	# inside the AABB.
 	var i0 := floori(bmin.x / step.x)
 	var i1 := ceili(bmax.x / step.x)
 	var j0 := floori(bmin.y / step.y)
@@ -177,13 +153,10 @@ static func generate_grid_placements(params: Dictionary) -> Array[PackedFloat32A
 	return out
 
 
-## Stable per-cell RNG seed for the grid sampler (order-independent, so a cell rolls the same
-## item/yaw/scale no matter which fill visits it first).
 static func cell_seed(ci: int, cj: int, base_seed: int) -> int:
 	return hash(Vector3i(ci, cj, base_seed))
 
 
-## Shoelace area of a simple polygon (absolute; winding-agnostic).
 static func polygon_area(points: PackedVector2Array) -> float:
 	if points.size() < 3:
 		return 0.0
@@ -197,9 +170,7 @@ static func polygon_area(points: PackedVector2Array) -> float:
 
 # ------------------------------------------------------- Regenerate (editor only)
 
-## The one expansion site: pure placement -> ground snap against the live edited
-## scene -> slope filter -> store region-local transforms + the ground hash, all as one
-## undoable action.
+## Pure placement -> ground snap -> slope filter -> store, all as one undoable action.
 func _regenerate() -> void:
 	if not Engine.is_editor_hint():
 		return
@@ -237,9 +208,6 @@ func _regenerate() -> void:
 		new_stored.append(stored)
 
 	var new_hash := ground_hash(level_root)
-	# Untyped: EditorUndoRedoManager is editor-only, and a type annotation would make this
-	# @tool script fail to parse in exported builds. It is stripped from exports today (always
-	# under AuthoringRoot), but keep it export-safe so it never becomes a runtime landmine.
 	var undo_redo = Engine.get_singleton(&"EditorInterface").get_editor_undo_redo()
 	undo_redo.create_action("Regenerate scatter '%s'" % name)
 	undo_redo.add_do_property(self, &"stored_transforms", new_stored)
@@ -255,8 +223,7 @@ func _regenerate() -> void:
 			[name, total, dropped])
 
 
-## Footprint + knobs -> generate_placements params. Public so the fixture builder can expand a
-## region programmatically (flat ground, no editor).
+## Footprint + knobs -> generate_placements params. Public for the fixture builder.
 func build_params() -> Dictionary:
 	var weights := PackedFloat32Array()
 	for item in items:
@@ -273,8 +240,7 @@ func build_params() -> Dictionary:
 	}
 
 
-## The footprint as a region-local XZ polygon (box unifies into the polygon path). The gizmo
-## keys on this method's presence, so only ScatterRegion (not ScatterCanvas) draws a border.
+## The footprint as a region-local XZ polygon. The gizmo keys on this method's presence.
 func footprint_polygon() -> PackedVector2Array:
 	if footprint_kind == "polygon":
 		return polygon

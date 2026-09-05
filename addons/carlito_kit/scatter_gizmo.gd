@@ -1,11 +1,8 @@
 @tool
 extends EditorNode3DGizmoPlugin
-## Viewport gizmo for ScatterRegion: draws the footprint border — box or
-## polygon — in the region's local space while the node is selected, so an author
-## can see the area Regenerate will fill. Corner posts keep the border readable
-## when it sinks into sloped ground (the loop is drawn flat at the node's Y).
-## Editor-only, so it lives in the addon (the editor/runtime split); the
-## region is detected by its duck-typed marker like everywhere else.
+## Viewport gizmo for ScatterRegion: draws the footprint border (box or polygon) in the
+## region's local space while selected, so the author can see the area Regenerate will fill.
+## Corner posts keep the border readable when it sinks into sloped ground.
 
 const POST_HEIGHT := 2.0
 
@@ -18,8 +15,7 @@ func _get_gizmo_name() -> String:
 	return "ScatterRegion"
 
 
-# Keyed on footprint_polygon, not is_carlito_scatter: only ScatterRegion has a footprint to
-# draw — the hand-painted ScatterCanvas (also a scatter node) has none.
+# has_method probe, not carlito_scatter: only ScatterRegion has a footprint; ScatterCanvas has none.
 func _has_gizmo(node: Node3D) -> bool:
 	return node.has_method("footprint_polygon")
 

@@ -1,25 +1,16 @@
 extends GdUnitTestSuite
-## The action registry: the one description of what every bound control is, who has it, and what
-## its on-screen button says. Two consumers read it (the pause menu's CONTROLS sheet and the touch
-## overlay's button stack), so these tests protect the property that made it worth building:
-##
-##   AN ACTION CANNOT EXIST WITHOUT BEING DOCUMENTED. The hand-typed help this replaced had drifted
-##   to ten missing actions and six with no touch button, silently, over months. test_every_bound
-##   _action_is_registered is what makes that a CI failure instead of a discovery.
-##
-## Pure static data + pure functions, so the whole suite runs off preloads with no autoload and no
-## scene tree (standing rule 8), exactly like test_input_arbitration.
+## Action registry: one source for every bound control. Two consumers (CONTROLS sheet,
+## touch overlay). Actions must be documented or CI fails. Pure static (no autoload).
 
 const Registry := preload("res://src/input/action_registry.gd")
 const RouterScript := preload("res://src/input/input_router.gd")
 const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
 const ContractScript := preload("res://src/bridge/contract.gd")
 const TouchScript := preload("res://src/ui/touch_controls.gd")
+const LocalSourceScript := preload("res://src/input/sources/local_source.gd")
 
 
-## Every action bound in project.godot appears in exactly one registry row. Enumerated from
-## ProjectSettings rather than a hand list, the same read test_input_map uses — a list here would
-## be one more thing to forget to update, which is the bug this whole file exists to prevent.
+## Actions enumerated from ProjectSettings (hand list gets forgotten, hence this bug).
 func test_every_bound_action_is_registered() -> void:
 	var registered := {}  # action -> row id
 	for entry in Registry.ENTRIES:
@@ -64,6 +55,32 @@ func test_every_touch_poll_key_is_merged() -> void:
 			.is_true()
 
 
+## The other half of the guard above, and the half nothing covered: the keyboard source and
+## merge_local must carry EXACTLY the same key set. Both dicts are written out by hand, so a key
+## on one side and not the other is silent in both directions — a key only the source emits is
+## dropped the moment a touch source registers (the keyboard control just stops working), and a
+## key only the merge carries is a control no key can ever reach. StringName keys do not make
+## either a parse error; this test is the guard.
+func test_local_source_and_merge_local_carry_the_same_keys() -> void:
+	var polled := LocalSourceScript.new().poll(0.0).keys()
+	var merged := RouterScript.merge_local({}, {}).keys()
+	polled.sort()
+	merged.sort()
+	assert_array(polled) 		.override_failure_message("LocalSource.poll and InputRouter.merge_local disagree on the "
+				+ "raw-intent key set:
+  only in poll():       %s
+  only in merge_local(): %s" % [
+				_missing(polled, merged), _missing(merged, polled)]) 		.is_equal(merged)
+
+
+static func _missing(from: Array, other: Array) -> Array:
+	var out := []
+	for k in from:
+		if not other.has(k):
+			out.append(k)
+	return out
+
+
 ## A typo in a family name is a control that is never offered on any vehicle, and nothing else
 ## would notice: the gate just returns false forever.
 func test_gate_families_are_real_vehicle_families() -> void:
@@ -76,7 +93,7 @@ func test_gate_families_are_real_vehicle_families() -> void:
 				.is_true()
 
 
-## THE FAMILY GATES ARE VALIDATED AGAINST THE CONTRACT, not hand-copied from it (rule 4). A row
+## The family gates are validated against the contract, not hand-copied from it (rule 4). A row
 ## that rides contract IN signals names them in `signals`, and the families it is offered to must
 ## be exactly the union of those signals' own `vehicles` lists.
 ##

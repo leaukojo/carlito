@@ -25,12 +25,19 @@
 ;     swings under the load's own weight once the body is up. It is not separately commanded, so
 ;     there is no second control and no second signal.
 ;
-; COLLISION IS AUTHORED FOR THE LOWERED POSE and does NOT follow the tip. That is deliberate rather
-; than missed: a CollisionShape3D re-transformed every tick inside a RigidBody3D rebuilds the
-; compound and re-derives the inertia tensor at 60 Hz, on the one body that is also writing its own
-; centre of mass — two churning physics properties on a jointed body is exactly how a rig starts
-; buzzing. The body only ever rises with the parking brake set and the rig stopped (the interlock),
-; so the raised pose is a pose nothing is driving into.
+; COLLISION DOES NOT FOLLOW THE TIP — IT IS TWO AUTHORED POSES AND ONE SWAP. A CollisionShape3D
+; re-transformed every tick inside a RigidBody3D rebuilds the compound and re-derives the inertia
+; tensor at 60 Hz, on the one body that is also writing its own centre of mass — two churning
+; physics properties on a jointed body is exactly how a rig starts buzzing. So CollisionTipBody is
+; the LOWERED pose and CollisionTipBodyRaised is the SAME BoxShape3D placed at the full-tip pose
+; (the lowered box swept 42 deg about the hinge at (0, -0.06, 6.25), which is where the arithmetic
+; in its transform comes from), and tipper.gd enables exactly one of them, switching at mid-travel.
+; Two rebuilds a tip instead of sixty a second. Nothing interpolates: between the two poses the
+; collision is whichever end the body is nearer, which is wrong by at most half a tip and only
+; while the rams are actually moving — and the interlock means that is a rig standing still.
+; The raised box exists because the interlock refuses the RAISE DIRECTION ONLY (rolling away with
+; the body up must hold it, not command it down onto whatever is under it), so 5.2 m of body in the
+; air is a pose you really can drive, and it has to hit the bridge it looks like it should hit.
 ;
 ; MEASURED against the tractor unit: 1.92 over the frame, body 1.80 wide x 0.95 deep x 5.15 long,
 ; sides topping out at y 0.99 = 2.04 m above the road parked, and about 5.4 m at full tip.
@@ -255,6 +262,11 @@ shape = SubResource("ShapeNeck")
 [node name="CollisionTipBody" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.465, 3.675)
 shape = SubResource("ShapeTipBody")
+
+[node name="CollisionTipBodyRaised" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.743145, -0.669131, 0, 0.669131, 0.743145, 0, 2.053163, 4.687696)
+shape = SubResource("ShapeTipBody")
+disabled = true
 
 [node name="CollisionBogie" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.52, 5.45)
@@ -542,6 +554,19 @@ mesh = SubResource("MeshLensRed")
 [node name="TailLensR" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.66, -0.56, 6.53)
 mesh = SubResource("MeshLensRed")
+
+; The turn indicator is a lens of its own, stacked UNDER the tail lamp on the same stay rather
+; than beside it: the outboard slot at 0.81 is the marker's, and red-over-amber is what a real
+; trailer rear cluster is. Splitting the tail lens (the Kenney bodies' TURN_FRAC trick) was the
+; other way in and is wrong here — these lenses are hand-authored, so a split costs the same four
+; scene edits and leaves the brake lamp narrower for it.
+[node name="TurnLensL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.66, -0.68, 6.53)
+mesh = SubResource("MeshLensAmber")
+
+[node name="TurnLensR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.66, -0.68, 6.53)
+mesh = SubResource("MeshLensAmber")
 
 [node name="MarkerLensL" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.81, -0.56, 6.53)

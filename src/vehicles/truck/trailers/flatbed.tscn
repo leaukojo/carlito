@@ -35,7 +35,7 @@
 ; flatbed_spec.tres, wheels are the kit's own truck wheel scaled on the INSTANCE (RayWheel
 ; overwrites each Wheels/* root transform every tick, so the scale must ride the child).
 
-[ext_resource type="Script" path="res://src/vehicles/truck/towed_body.gd" id="1_towed"]
+[ext_resource type="Script" path="res://src/vehicles/base/towed_body.gd" id="1_towed"]
 [ext_resource type="Resource" path="res://src/vehicles/truck/trailers/flatbed_spec.tres" id="2_spec"]
 [ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="3_wheel"]
 
@@ -379,6 +379,19 @@ mesh = SubResource("MeshLensRed")
 ; the tail lamp's 0.66 puts it at 0.81, so the two lenses share the plane at x +-0.75. Touching is
 ; safe HERE where stacking was not, and the difference is the rule: these two faces point at each
 ; other, so back-face culling drops one of them, while the mudguard/rave pair pointed the same way.
+; The turn indicator is a lens of its own, stacked UNDER the tail lamp on the same stay rather
+; than beside it: the outboard slot at 0.81 is the marker's, and red-over-amber is what a real
+; trailer rear cluster is. Splitting the tail lens (the Kenney bodies' TURN_FRAC trick) was the
+; other way in and is wrong here — these lenses are hand-authored, so a split costs the same four
+; scene edits and leaves the brake lamp narrower for it.
+[node name="TurnLensL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.66, -0.68, 6.53)
+mesh = SubResource("MeshLensAmber")
+
+[node name="TurnLensR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.66, -0.68, 6.53)
+mesh = SubResource("MeshLensAmber")
+
 [node name="MarkerLensL" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.81, -0.56, 6.53)
 mesh = SubResource("MeshLensAmber")

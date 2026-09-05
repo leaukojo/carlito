@@ -1,10 +1,9 @@
 @tool
 extends VBoxContainer
-## Palette dock: the bottom-panel browser over the kit
-## assets. Kit tabs -> family sections (the recipe taxonomy) -> thumbnail grid, plus a
-## global text search across every kit. Clicking a prefab arms the placement tool; clicking
-## a palette tile routes to the built-in GridMap workflow. UI only — no viewport/editor
-## logic (that lives in placement_tool.gd), matching the editor/runtime split.
+## Bottom-panel browser over the kit assets: kit tabs -> family sections -> thumbnail grid,
+## plus a text search across every kit. Clicking a prefab arms the placement tool; clicking
+## a palette tile routes to the GridMap workflow. UI only; viewport logic lives in
+## placement_tool.gd.
 
 const Recipe := preload("res://kit/helpers/kit_recipe.gd")
 const RECIPE_DIR := "res://kit/import"
@@ -67,14 +66,12 @@ func _ingest_recipe(path: String) -> void:
 	if families.is_empty():
 		return
 
-	# Palette kits carry a cell_size; it's the meaningful grid for aligning their tiles.
 	var pal: Dictionary = recipe.get("palette", {})
 	var cell: Array = pal.get("cell_size", [])
 	if cell.size() >= 1:
 		_kit_cells[kit] = float(cell[0])
 
-	# Per-family palette meshlib: a family may route to its own overlay meshlib (barriers,
-	# walls, sand) so it paints onto a separate GridMap; default is the kit meshlib.
+	# A family may route to its own overlay meshlib; default is the kit meshlib.
 	var default_meshlib := "%s/%s.meshlib" % [PALETTE_DIR, kit]
 	var fam_meshlib := {}  # family name -> meshlib path
 	var meshlibs := {}     # meshlib path -> true (distinct outputs to scan for tile names)
@@ -84,7 +81,6 @@ func _ingest_recipe(path: String) -> void:
 			fam_meshlib[String(fam.get("name", ""))] = out
 			meshlibs[out] = true
 
-	# Available basenames: emitted prefab .tscn files + palette meshlib item names.
 	var names: Array[String] = []
 	var kinds := {}  # name -> "prefab" | "tile"
 	for n in _prefab_names(kit):
@@ -99,7 +95,6 @@ func _ingest_recipe(path: String) -> void:
 		return
 
 	var assigned: Dictionary = Recipe.classify(names, families).assignments
-	# Group by family, preserving recipe order; skip exclude families.
 	var by_family := {}
 	for fam: Dictionary in families:
 		if String(fam.get("pipeline", "")) == "exclude":
@@ -157,9 +152,7 @@ func _thumb_path(kit: String, name: String) -> String:
 # ------------------------------------------------------------------ ui
 
 func _build_ui() -> void:
-	# Two toolbar rows: kit tabs + search on the first, placement options on the second —
-	# one row overflows the dock width with this many kits. The scene-wide cleanup passes
-	# (conform, splat, tidy, flying props) live in the Polish tab, not here.
+	# Kit tabs + search on one row, placement options on the next; too many kits for one row.
 	var tabs_row := HBoxContainer.new()
 	add_child(tabs_row)
 
@@ -252,23 +245,19 @@ func _on_random_toggled(on: bool) -> void:
 	_emit_settings()
 
 
-## Reflect the placement tool's live ghost angle in the Yaw field (without re-emitting).
 func set_yaw_display(degrees: float) -> void:
 	_yaw_field.set_block_signals(true)
 	_yaw_field.value = fposmod(roundf(degrees), 360.0)  # 360 -> 0, stays within max_value
 	_yaw_field.set_block_signals(false)
 
 
-## Reflect a tool-driven auto-floor exit (RMB/Escape) back on the toggle without
-## re-emitting autofloor_changed (the plugin already knows).
+## Reflects a tool-driven auto-floor exit (RMB/Escape) without re-emitting autofloor_changed.
 func set_autofloor(on: bool) -> void:
 	if _autofloor_btn.button_pressed != on:
 		_autofloor_btn.set_pressed_no_signal(on)
 
 
-## Snap step follows the active kit's tile grid (palette cell_size), or 1 m for prop-only
-## kits — so the value is always meaningful instead of an arbitrary number the author must
-## remember to set.
+## Snap step follows the active kit's tile grid (palette cell_size), or 1 m for prop-only kits.
 func _apply_kit_snap() -> void:
 	if _kits.is_empty():
 		return
@@ -338,9 +327,7 @@ func _make_tile(item: Dictionary, show_kit: bool) -> Button:
 			tile_selected.emit(kit, name, String(item.get("meshlib", "")))
 	)
 
-	# Overlay the thumbnail + caption inside the button, filling it. Children ignore the
-	# mouse so the button still receives the click. A Button isn't a container, so the box
-	# is anchored to fill with a small inset (expand_icon leaves the icon tiny — this fills).
+	# Children ignore the mouse so the button still receives the click.
 	var box := VBoxContainer.new()
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)

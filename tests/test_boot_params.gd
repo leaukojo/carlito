@@ -1,8 +1,6 @@
 extends GdUnitTestSuite
-## Deep links: `?level=&vehicle=` is how sloppyCAN (or anyone) asks for a specific
-## configuration now that the game boots straight into a level. Pure string work, so it tests
-## without a tree. The validation half matters most: a stale link must fall back to the
-## shell's default rather than boot into nothing.
+## Deep links: ?level=&vehicle= asks for configuration on boot. Validation: stale links
+## fall back to shell default, not boot into nothing.
 
 
 func test_parses_both_keys() -> void:

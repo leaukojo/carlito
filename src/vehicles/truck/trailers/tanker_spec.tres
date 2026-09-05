@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="VehicleSpec" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="VehicleSpec" load_steps=4 format=3]
 
 ; Tanker semi-trailer running gear. A VehicleSpec because that is what RayWheel consumes; the
-; drivetrain / steering / lamp fields are meaningless on a towed body and stay at their defaults.
+; drivetrain / steering fields are meaningless on a towed body and stay at their defaults.
 ;
 ; Everything below is measured off tanker.tscn (origin AT THE KINGPIN, ground at y = -1.05):
 ;   - the tri-axle bogie is the family's: z 4.90 / 5.45 / 6.00, anchors at y = 0.424 - 1.05.
@@ -26,11 +26,16 @@
 ;     it the rig parked on two tractor wheels and rolled away on any real grade.
 
 [ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
+[ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="2_grounddrive"]
 
-[resource]
-script = ExtResource("1_spec")
-mass = 21000.0
-center_of_mass = Vector3(0, -0.25, 3.98)
+; DRAG AREA 0.45 m^2 — a marginal, in-the-wake figure like every trailer's (see box_spec.tres).
+; The lowest of the three enclosed bodies because a 1.7 m barrel is round: a cylinder trailing a
+; cab sheds far better than a square-edged van of the same height.
+
+[sub_resource type="Resource" id="Resource_grounddrive"]
+script = ExtResource("2_grounddrive")
+drag_area = 0.45
+rolling_resistance = 0.007
 wheel_positions = PackedVector3Array(-0.72, -0.626, 4.9, 0.72, -0.626, 4.9, -0.72, -0.626, 5.45, 0.72, -0.626, 5.45, -0.72, -0.626, 6, 0.72, -0.626, 6)
 wheel_radius = 0.36
 wheel_inertia = 3.0
@@ -46,3 +51,20 @@ mu_long = 1.0
 mu_lat = 0.95
 brake_torque = 9935.0
 handbrake_torque = 2484.0
+
+[resource]
+script = ExtResource("1_spec")
+mass = 21000.0
+center_of_mass = Vector3(0, -0.25, 3.98)
+ground_drive = SubResource("Resource_grounddrive")
+
+; LAMPS — the one group of lamp fields a towed body DOES use. A trailer runs no headlamps and
+; no beam, so head_lamp_paths stays empty and `lights` only ever picks the rear tier (TAIL) and
+; the markers.
+; The bits arrive on the tractor's VehicleInput and are handed down each tick (SemiTractor), so a
+; braking or indicating rig lights at BOTH ends off one authoritative source, with no second
+; signal and no blink timer of its own.
+brake_lamp_paths = Array[NodePath]([NodePath("TailLensL"), NodePath("TailLensR")])
+turn_left_paths = Array[NodePath]([NodePath("TurnLensL")])
+turn_right_paths = Array[NodePath]([NodePath("TurnLensR")])
+steady_lamp_paths = Array[NodePath]([NodePath("MarkerLensL"), NodePath("MarkerLensR")])

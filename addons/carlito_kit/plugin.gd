@@ -1,11 +1,9 @@
 @tool
 extends EditorPlugin
-## Kit editor surface: the export-time authoring stripper (always), the palette dock +
-## click-to-place tool, and the terrain sculpt/paint brush. The dock browses the kit
-## assets; viewport clicks are forwarded here to whichever tool is active — the brush when a
-## HeightmapTerrain is selected with a mode picked, else the placement tool. All editor API
-## stays in this addon (the editor/runtime split). One inspector override rides along:
-## ScatterItem.prefab gets kit-prefab dropdowns (see prefab_picker.gd).
+## Kit editor surface: export-time authoring stripper, palette dock + click-to-place tool,
+## and the terrain sculpt/paint brush. Viewport clicks forward to whichever tool is active.
+## One inspector override rides along: ScatterItem.prefab gets kit-prefab dropdowns
+## (see prefab_picker.gd).
 
 const StripExport := preload("res://addons/carlito_kit/strip_export.gd")
 const PaletteDock := preload("res://addons/carlito_kit/palette_dock.gd")
@@ -133,15 +131,12 @@ func _enter_tree() -> void:
 			func(txt, warn): _road_panel.set_radius_display(txt, warn))
 	_road_tool.deactivated.connect(func(): _road_panel.show_off())
 
-	# One "Kit" bottom panel hosts the palette browser and the four tool panels as tabs,
-	# so tile-city work (Palette tab -> roads kit) and spline work (Roads tab) are one
-	# click apart instead of a switch-panel-and-reselect dance. add_control_to_dock is a
-	# deprecated compatibility path in 4.6 whose EditorDock wrapper breaks 3D viewport
-	# navigation (WASD freelook, F focus, wheel speed), so this rides the bottom panel.
+	# add_control_to_dock's EditorDock wrapper breaks 3D viewport navigation (WASD
+	# freelook, F focus, wheel speed) in 4.6, so this rides the bottom panel instead.
 	_root = TabContainer.new()
 	_root.name = "Kit"
 	_root.custom_minimum_size = Vector2(0, 260)
-	_root.add_child(_dock)  # tab title = child node name: Palette / Terrain / Scatter / Roads / Polish
+	_root.add_child(_dock)  # tab title = child node name
 	for panel in [_panel, _scatter_panel, _road_panel, _polish_panel]:
 		var scroll := ScrollContainer.new()
 		scroll.name = panel.name
@@ -152,9 +147,7 @@ func _enter_tree() -> void:
 	add_control_to_bottom_panel(_root, "Kit")
 
 	EditorInterface.get_selection().selection_changed.connect(_on_selection_changed)
-	# Placement works regardless of selection, so we need every viewport event (docs:
-	# "especially usable if your plugin will want to use raycast in the scene").
-	set_input_event_forwarding_always_enabled()
+	set_input_event_forwarding_always_enabled()  # placement needs every viewport event
 
 
 func _exit_tree() -> void:
@@ -198,12 +191,11 @@ func _exit_tree() -> void:
 
 	if _root != null:
 		remove_control_from_bottom_panel(_root)
-		_root.free()  # frees the palette dock + the four tool panels with it
+		_root.free()
 	_root = null
 
 
-## Save hook: brush edits accumulate in memory and are written to the heightmap /
-## splat PNGs only when the scene is saved — never reimported per stroke.
+## Brush edits are written to the heightmap/splat PNGs only when the scene is saved.
 func _save_external_data() -> void:
 	if _brush != null:
 		_brush.flush_all()
@@ -226,14 +218,12 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 func _on_brush_mode(mode: int) -> void:
 	_brush.set_mode(mode)
 	_panel.on_mode(mode)
-	if mode != 0:  # a brush mode owns the viewport — drop any armed placement ghost
+	if mode != 0:  # a brush mode owns the viewport
 		_tool.disarm()
 		_drop_road_draw()
 		_drop_autofloor()
 
 
-## Scatter brush mode picked: a non-Off mode owns the viewport, so drop the placement ghost
-## (same rule as the terrain brush).
 func _on_scatter_mode(mode: int) -> void:
 	_scatter_brush.set_mode(mode)
 	if mode != 0:
@@ -242,7 +232,6 @@ func _on_scatter_mode(mode: int) -> void:
 		_drop_autofloor()
 
 
-## Road Draw mode picked: same viewport-ownership rule as the brushes.
 func _on_road_mode(mode: int) -> void:
 	_road_tool.set_active(mode == 1)
 	if mode != 0:
@@ -250,10 +239,8 @@ func _on_road_mode(mode: int) -> void:
 		_drop_autofloor()
 
 
-## Palette tile picked: open the built-in GridMap workflow, and — when Auto-floor is on —
-## also arm the terrain-aware paint tool on that GridMap (mode-exclusive: it owns the
-## viewport, so drop the road draw). select_tile selects/creates the GridMap, so it is the
-## tool's target.
+## Opens the built-in GridMap workflow; with Auto-floor on, also arms the terrain-aware
+## paint tool on that GridMap.
 func _on_tile_selected(kit: String, tile_name: String, meshlib: String) -> void:
 	_tool.select_tile(kit, tile_name, meshlib)
 	if not _autofloor:
@@ -288,16 +275,10 @@ func _drop_road_draw() -> void:
 	_road_panel.show_off()
 
 
-## Rail checkbox: swap the selected road's profile in ONE undoable action. Nothing else
-## changes — a rail is a RoadPath with a different cross-section, so Draw/Drape/Smooth/
-## Conform and the bake carry over.
-##
-## Ticking ON remembers the profile it replaced, so unticking puts a gravel or bridge road
-## back rather than silently converting it to the city default — previewing a road as rail
-## used to be a one-way trip for anything that wasn't already a city road. The memory is
-## per editor session and per node (a road selected fresh after a reload falls back to the
-## city default, i.e. the old behaviour); it deliberately does NOT live on the node, where
-## it would serialize into the .tscn and land in the bake input hash.
+## Rail checkbox: swaps the selected road's profile in one undoable action (a rail is just
+## a RoadPath with a different cross-section). Ticking on remembers the replaced profile so
+## unticking restores it; the memory is per session/node only, never serialized, so it can't
+## land in the bake input hash.
 func _on_rail_toggled(on: bool) -> void:
 	if _selected_road == null:
 		return
@@ -337,8 +318,6 @@ func _on_selection_changed() -> void:
 	_brush.set_grid(road_grid)
 	_panel.set_has_terrain(terrain != null)
 	if terrain != null:
-		# Channel names and colors are the terrain's own data, so the picker is rebuilt per
-		# selection rather than hard-coded in the panel.
 		var colors := PackedColorArray()
 		for i in 8:
 			colors.append(terrain.channel_color(i))
@@ -351,8 +330,7 @@ func _on_selection_changed() -> void:
 	_road_panel.set_has_road(road != null)
 	_road_panel.set_rail(road != null and road.profile != null
 			and road.profile.has_method("is_carlito_rail_profile"))
-	# Auto-floor paint follows its GridMap: selecting away from it drops the tool (mode
-	# exclusivity — the same way the brushes release on deselect).
+	# Auto-floor paint follows its GridMap: selecting away from it drops the tool.
 	if _gridmap_tool.is_active():
 		var keeps := false
 		for node in EditorInterface.get_selection().get_selected_nodes():
@@ -361,7 +339,6 @@ func _on_selection_changed() -> void:
 				break
 		if not keeps:
 			_drop_autofloor()
-	# Pop the dock and jump to the matching tool tab when exactly one tool node is picked.
 	var tab := -1
 	if terrain != null:
 		tab = 1
@@ -374,9 +351,8 @@ func _on_selection_changed() -> void:
 		make_bottom_panel_item_visible(_root)
 
 
-## The road GridMap the brush snaps to (null if the level has none yet — the brush then falls
-## back to a 12 m lattice at origin). Prefers the conventional "RoadsTiles" node; else the
-## first GridMap found in the edited scene.
+## The road GridMap the brush snaps to (null falls back to a 12 m lattice at origin).
+## Prefers "RoadsTiles"; else the first GridMap found in the edited scene.
 func _find_road_gridmap() -> GridMap:
 	var root := EditorInterface.get_edited_scene_root()
 	if root == null:

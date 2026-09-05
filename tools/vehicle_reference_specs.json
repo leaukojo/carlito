@@ -1,0 +1,119 @@
+{
+	"_comment": "Reference/comparison figures only — NOT measured. Real-world figures for a vehicle of similar type/class to each catalog variant, used by measure_vehicles.gd to put a plausible real-world number beside each measured one in the sweep report. `marks_s` keys match the km/h marks the tool times (50, 96.56 = 0-60 mph, 100, 150, 200); a missing key means that speed is not realistic for the class and prints as 'not reached'.",
+
+	"sedan-sports": {
+		"label": "typical mid-size sports sedan (e.g. BMW M340i class)",
+		"marks_s": {"50": 2.3, "96.56": 4.8, "100": 5.1, "150": 12.5, "200": 24.0},
+		"quarter_mile_s": 13.3, "quarter_mile_kmh": 170.0,
+		"top_speed_kmh": 250.0
+	},
+	"sedan": {
+		"label": "typical mid-size family sedan (e.g. Toyota Camry class)",
+		"marks_s": {"50": 3.4, "96.56": 7.5, "100": 8.0},
+		"quarter_mile_s": 15.8, "quarter_mile_kmh": 140.0,
+		"top_speed_kmh": 210.0
+	},
+	"hatchback-sports": {
+		"label": "typical hot hatch (e.g. VW Golf GTI class)",
+		"marks_s": {"50": 2.7, "96.56": 5.9, "100": 6.3, "150": 15.0},
+		"quarter_mile_s": 14.5, "quarter_mile_kmh": 154.0,
+		"top_speed_kmh": 250.0
+	},
+	"suv": {
+		"label": "typical mid-size crossover SUV (e.g. Toyota RAV4 class)",
+		"marks_s": {"50": 3.6, "96.56": 8.0, "100": 8.5},
+		"quarter_mile_s": 16.2, "quarter_mile_kmh": 136.0,
+		"top_speed_kmh": 180.0
+	},
+	"suv-luxury": {
+		"label": "typical performance luxury SUV (e.g. Porsche Cayenne class)",
+		"marks_s": {"50": 2.6, "96.56": 5.6, "100": 6.0, "150": 14.5},
+		"quarter_mile_s": 14.0, "quarter_mile_kmh": 160.0,
+		"top_speed_kmh": 245.0
+	},
+	"taxi": {
+		"label": "typical taxi-duty sedan (e.g. Toyota Camry/Prius class)",
+		"marks_s": {"50": 3.8, "96.56": 8.5, "100": 9.0},
+		"quarter_mile_s": 16.5, "quarter_mile_kmh": 132.0,
+		"top_speed_kmh": 180.0
+	},
+	"police": {
+		"label": "typical police pursuit-rated SUV/sedan (e.g. Ford Police Interceptor / Dodge Charger Pursuit class)",
+		"marks_s": {"50": 2.6, "96.56": 5.8, "100": 6.2, "150": 14.8},
+		"quarter_mile_s": 14.3, "quarter_mile_kmh": 156.0,
+		"top_speed_kmh": 240.0
+	},
+	"race": {
+		"label": "typical track-day sports/race car (e.g. Radical/Ariel Atom class)",
+		"marks_s": {"50": 1.6, "96.56": 3.5, "100": 3.7, "150": 8.9, "200": 15.5},
+		"quarter_mile_s": 11.5, "quarter_mile_kmh": 200.0,
+		"top_speed_kmh": 300.0
+	},
+	"race-future": {
+		"label": "typical modern electric hypercar (e.g. Rimac Nevera class)",
+		"marks_s": {"50": 1.1, "96.56": 2.5, "100": 2.6, "150": 6.0, "200": 10.5},
+		"quarter_mile_s": 10.0, "quarter_mile_kmh": 225.0,
+		"top_speed_kmh": 350.0
+	},
+	"van": {
+		"label": "typical full-size cargo van (e.g. Ford Transit class)",
+		"marks_s": {"50": 4.3, "96.56": 9.5, "100": 10.2},
+		"quarter_mile_s": 17.5, "quarter_mile_kmh": 122.0,
+		"top_speed_kmh": 160.0
+	},
+	"pickup": {
+		"label": "typical full-size pickup (e.g. Ford F-150 class)",
+		"marks_s": {"50": 3.0, "96.56": 6.5, "100": 7.0},
+		"quarter_mile_s": 15.4, "quarter_mile_kmh": 145.0,
+		"top_speed_kmh": 180.0
+	},
+	"pickup-flat": {
+		"label": "typical full-size pickup with flatbed/utility body (e.g. Ford F-250 class)",
+		"marks_s": {"50": 3.5, "96.56": 7.5, "100": 8.1},
+		"quarter_mile_s": 16.1, "quarter_mile_kmh": 138.0,
+		"top_speed_kmh": 170.0
+	},
+	"delivery": {
+		"label": "typical light delivery van (e.g. Mercedes Sprinter class)",
+		"marks_s": {"50": 5.0, "96.56": 11.0, "100": 11.8},
+		"quarter_mile_s": 18.5, "quarter_mile_kmh": 112.0,
+		"top_speed_kmh": 150.0
+	},
+	"delivery-flat": {
+		"label": "typical light delivery/box van, laden (e.g. Mercedes Sprinter box class)",
+		"marks_s": {"50": 5.3, "96.56": 11.5, "100": 12.3},
+		"quarter_mile_s": 19.0, "quarter_mile_kmh": 108.0,
+		"top_speed_kmh": 145.0
+	},
+	"ambulance": {
+		"label": "typical Type III ambulance (heavy van chassis, e.g. Mercedes Sprinter/Ford E-450 class)",
+		"marks_s": {"50": 5.5, "96.56": 12.0, "100": 12.9},
+		"quarter_mile_s": 19.5, "quarter_mile_kmh": 105.0,
+		"top_speed_kmh": 150.0
+	},
+	"garbage-truck": {
+		"label": "typical rear-loader refuse truck, laden (e.g. Mack LR class)",
+		"marks_s": {"50": 8.0},
+		"top_speed_kmh": 90.0
+	},
+	"firetruck": {
+		"label": "typical Type I structural fire engine (e.g. Pierce Enforcer class)",
+		"marks_s": {"50": 6.0, "96.56": 14.0, "100": 15.0},
+		"top_speed_kmh": 110.0
+	},
+	"semi": {
+		"label": "typical Class 8 semi tractor-trailer, loaded to ~36 t (e.g. Freightliner Cascadia + van trailer)",
+		"marks_s": {"50": 8.5, "96.56": 20.0, "100": 22.0},
+		"top_speed_kmh": 105.0
+	},
+	"semi-conventional": {
+		"label": "typical North American conventional semi tractor-trailer, loaded to ~36 t (e.g. Peterbilt 579 + van trailer)",
+		"marks_s": {"50": 9.0, "96.56": 21.0, "100": 23.0},
+		"top_speed_kmh": 105.0
+	},
+	"tractor-kenney": {
+		"label": "typical mid-size farm tractor (e.g. John Deere 6R class, road gear)",
+		"marks_s": {"50": 12.0},
+		"top_speed_kmh": 40.0
+	}
+}

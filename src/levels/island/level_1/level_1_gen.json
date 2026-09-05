@@ -1,0 +1,100 @@
+{
+  "//": "How level 1 is generated. Run it with: powershell -File tools/rebuild_level.ps1 -Level level_1",
+  "level": "level_1",
+  "scene": "res://src/levels/island/level_1/level_1.tscn",
+  "replayable": true,
+  "sources": [
+    "level_1_island_height.png",
+    "level_1_island_splat.png",
+    "level_1_island_splat2.png"
+  ],
+  "notes": [
+    "This is the only level whose .tscn is both input and output of a tool chain:",
+    "gen_farm_playground.gd loads the committed scene, mutates it and saves back over it.",
+    "",
+    "MEASURED 2026-09-02 by replaying this chain twice from the committed state:",
+    "  - The PAINT half is a fixed point. Both splat PNGs came back byte-identical on the",
+    "    second pass. The first pass was not identical because the COMMITTED paint was stale:",
+    "    it gained 2073 px of asphalt (0 lost), a ~1 px rim along the whole ring road. City",
+    "    roads are lane_width 4.8 (kit/roads/city_profile.tres, over a 3.5 default), and the",
+    "    asphalt paint had never been re-run after that widening -- so ~2000 m2 of paved road",
+    "    edge was carrying grass/dirt grip instead of asphalt. That is the drift this manifest",
+    "    exists to catch, and it was invisible until the chain became runnable.",
+    "  - The SCULPT half does NOT converge exactly. Each replay moves ~150-250 heightmap px",
+    "    by 1-3 of the 8-bit height steps (0.2-0.6 m), always in the farm's blend rims, never",
+    "    in a flat. _flatten re-lerps its rim on already-flat ground and _smooth runs 4 passes",
+    "    over an already-smoothed rim; neither is idempotent, and the tool header says so.",
+    "    It is not material: the farm's own acceptance report is byte-identical across replays",
+    "    (ramp grades 8.1 / 13.7 / 24.2 deg, wallow floor 26.00..26.60, worst exit facet",
+    "    0.20 m, 0 backward steps). A replay is safe; it is just not bit-reproducible.",
+    "    That is why the heightmap carries a \"sculpt_drift\" tolerance below instead of being",
+    "    held to byte equality: the replay driver decodes the two copies and judges the pixel",
+    "    count and step delta, so a real change still reads as drift while the rim churn does",
+    "    not. Widen the tolerance only with a reason; do not delete it to silence a report.",
+    "",
+    "ORDER: the farm runs before the asphalt paint. Measured, the two are spatially disjoint",
+    "today -- 0 of the 12045 asphalt px fall inside any farm rect -- so the order changes",
+    "nothing right now. It is recorded this way because it is the order that stays correct if",
+    "the farm ever grows toward a road: the farm's first act is to repaint GRASS over every",
+    "rect it flattened, which would erase asphalt underneath it, while asphalt painted last",
+    "simply wins on the road. Do not flip it.",
+    "",
+    "The --import steps are not decoration. gen_farm_playground's `build` stage leaves every",
+    "scatter canvas's stored_ground_hash EMPTY so that a skipped `resnap` fails the bake",
+    "loudly, and `resnap` cannot compute the real hash until the sculpted heightmap has been",
+    "back through the importer.",
+    "",
+    "If you press Auto-splat on this terrain it reclassifies channels 0..3 from the heightmap",
+    "and ZEROES splatmap2 -- which is correct (a surviving 4..7 weight would double-count",
+    "against the fresh base), and which destroys Field, Mud, Gravel and the road asphalt.",
+    "Recovering means replaying this chain, not undoing the button."
+  ],
+  "//sculpt_drift": "Per-source PNG allowance for a sculpt whose ops cannot be idempotent. A file with no entry is held to byte equality. Measured over repeated replays: 150-250 px, 1-3 of the 8-bit steps, always in the farm's blend rims.",
+  "sculpt_drift": {
+    "level_1_island_height.png": { "max_px": 400, "max_step": 3 }
+  },
+  "steps": [
+    {
+      "kind": "manual",
+      "what": "Terrain Generate (island preset) + hand brush sculpt + Auto-splat + hand paint, then RoadPath Draw + Conform, prop dressing and scatter painting -- all in the editor.",
+      "why": "Hand work. It lives in the committed heightmap/splat PNGs and in the .tscn's road curves, prop transforms and stored scatter transforms; no tool reproduces it. This is what a replay starts FROM, not something a replay runs."
+    },
+    {
+      "kind": "scene",
+      "path": "res://tools/gen_farm_playground.tscn",
+      "args": [
+        "build"
+      ],
+      "why": "Sculpts the field / paddock / yard / wallow / haul ramp into the heightmap, paints Field, Mud and Gravel, rebuilds the farm nodes and the tractor spawn, and saves the .tscn. Leaves stored_ground_hash empty on purpose."
+    },
+    {
+      "kind": "import",
+      "why": "ScatterBase.ground_hash reads the heightmap TEXTURE, so resnap cannot run until the sculpted PNG is back through the importer."
+    },
+    {
+      "kind": "scene",
+      "path": "res://tools/gen_farm_playground.tscn",
+      "args": [
+        "resnap"
+      ],
+      "why": "Re-snaps scatter Ys onto the new ground and stamps the real ground hash. A clean replay prints '0 instances moved' -- that is the PNG round-tripping byte-exactly."
+    },
+    {
+      "kind": "import"
+    },
+    {
+      "kind": "scene",
+      "path": "res://tools/paint_road_asphalt.tscn",
+      "args": [
+        "src/levels/island/level_1/level_1.tscn"
+      ],
+      "why": "Stamps channel 6 (Asphalt) under every RoadPath corridor at the profile's paved_half_width, so grip_at reads road on-road and terrain off-road. Writes the splat PNGs only -- it never saves the .tscn. Re-run it after ANY road or road-profile edit; nothing else notices that the paint went stale."
+    },
+    {
+      "kind": "import"
+    },
+    {
+      "kind": "bake"
+    }
+  ]
+}

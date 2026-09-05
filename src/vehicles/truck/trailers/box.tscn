@@ -516,6 +516,19 @@ mesh = SubResource("MeshLensRed")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.66, -0.56, 6.53)
 mesh = SubResource("MeshLensRed")
 
+; The turn indicator is a lens of its own, stacked UNDER the tail lamp on the same stay rather
+; than beside it: the outboard slot at 0.81 is the marker's, and red-over-amber is what a real
+; trailer rear cluster is. Splitting the tail lens (the Kenney bodies' TURN_FRAC trick) was the
+; other way in and is wrong here — these lenses are hand-authored, so a split costs the same four
+; scene edits and leaves the brake lamp narrower for it.
+[node name="TurnLensL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.66, -0.68, 6.53)
+mesh = SubResource("MeshLensAmber")
+
+[node name="TurnLensR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.66, -0.68, 6.53)
+mesh = SubResource("MeshLensAmber")
+
 [node name="MarkerLensL" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.81, -0.56, 6.53)
 mesh = SubResource("MeshLensAmber")

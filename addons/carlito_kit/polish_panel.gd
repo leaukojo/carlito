@@ -1,11 +1,9 @@
 @tool
 extends VBoxContainer
-## Polish panel: the scene-wide cleanup passes an author runs AFTER placing things —
-## conform terrain under tiles and buildings, paint splat under tiles, tidy loose props into
-## per-kit folders, find props left hovering above the ground, and shoot the level-select
-## card. They used to crowd the Palette toolbar, which is for options that steer the NEXT
-## click; these act on the whole level. UI only: the work lives in tile_conform.gd /
-## placement_tool.gd / flying_check.gd / level_shot_tool.gd.
+## Scene-wide cleanup passes an author runs after placing things: conform terrain under
+## tiles/buildings, paint splat under tiles, tidy loose props, find flying props, and shoot
+## the level-select card. UI only; the work lives in tile_conform.gd / placement_tool.gd /
+## flying_check.gd / level_shot_tool.gd.
 
 const TileConform := preload("res://addons/carlito_kit/tile_conform.gd")
 const FlyingCheck := preload("res://addons/carlito_kit/flying_check.gd")

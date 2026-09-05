@@ -1,23 +1,16 @@
 @tool
 class_name VehicleSpawn
 extends Marker3D
-## A place a vehicle can start. Its transform is the spawn pose; the
-## filter says which vehicle types belong here. Water spawns (is_water) are where a
-## boat starts and where a drowned car respawns from — land vehicles never pick one.
-##
-## @tool only for the editor gizmo: a car-footprint box + forward (-Z) arrow so
-## level authors see pose and facing at a glance — orange = land, cyan = water.
-## Gizmo children are created unowned (HeightmapTerrain pattern) so they never
-## serialize into the scene; there is no runtime logic here.
+## A place a vehicle can start; transform is the spawn pose, filter says which vehicle
+## types belong here. @tool only for the editor gizmo (unowned, never serializes).
 
 const _LAND_COLOR := Color(1.0, 0.55, 0.1, 0.35)
 const _WATER_COLOR := Color(0.2, 0.7, 1.0, 0.35)
-## Roughly the car's footprint (1.8 m wide, 4.2 m long).
-const _FOOTPRINT := Vector3(1.9, 1.0, 4.4)
+const _FOOTPRINT := Vector3(1.9, 1.0, 4.4)  ## roughly the car's footprint
 
-## Vehicle type ids this spawn accepts (e.g. "car", "boat"). Empty = any type.
+## Vehicle type ids this spawn accepts (e.g. "car", "boat"); empty = any type.
 @export var vehicle_types := PackedStringArray()
-## Water spawn: chosen for boats and as the safe respawn after a car falls in.
+## Chosen for boats and as the safe respawn after a car falls in.
 @export var is_water := false:
 	set(value):
 		is_water = value
@@ -51,8 +44,7 @@ func _ready() -> void:
 	arrow_mesh.size = Vector3(1.2, 1.2, 0.4)
 	arrow.mesh = arrow_mesh
 	arrow.material_override = _gizmo_material
-	# PrismMesh peaks toward +Y; pitch it to point along -Z (vehicle forward).
-	arrow.rotation_degrees = Vector3(-90, 0, 0)
+	arrow.rotation_degrees = Vector3(-90, 0, 0)  ## PrismMesh peaks +Y; pitch to -Z (forward)
 	arrow.position = Vector3(0, 0.5, -_FOOTPRINT.z * 0.5 - 0.7)
 	add_child(arrow, false, Node.INTERNAL_MODE_BACK)
 

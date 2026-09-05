@@ -1,13 +1,11 @@
 class_name LoadingScreen
 extends Control
-## Loading overlay shown while a level scene streams in (threaded load in boot.gd).
-## Plain text + a progress bar over the level's own card screenshot, no emoji. Built in code
-## (like LevelSelect) — a transient overlay the shell frees once the level is up. Colour and
-## type come from the inherited theme (UiTheme).
+## Loading overlay shown while a level scene streams in (threaded load in boot.gd). Plain
+## text + progress bar over the level's own card screenshot, no emoji. Built in code, a
+## transient overlay the shell frees once the level is up.
 ##
-## `set_level()` is what dresses it: the shell calls it with the path it is loading and the
-## screen looks the rest up itself (LevelRegistry), so nothing here has to be told twice. A
-## level with no card (or an unregistered scene) just falls back to the plain dark screen.
+## `set_level()` dresses it: the shell hands over the path, the screen looks the rest up
+## itself (LevelRegistry). A level with no card or an unregistered scene falls back to plain dark.
 
 ## Progress-bar footprint in logical px (scaled through UiTheme).
 const BAR_SIZE := Vector2(340, 16)
@@ -30,8 +28,7 @@ func _ready() -> void:
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP  # swallow clicks while loading
 	add_child(bg)
 
-	# Created empty and kept behind everything: set_level only has to hand it a texture, and a
-	# level without a card leaves it blank rather than rearranging the screen.
+	# Created empty; a level without a card leaves it blank rather than rearranging the screen.
 	_backdrop = TextureRect.new()
 	_backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
@@ -53,8 +50,7 @@ func _ready() -> void:
 	_name.visible = false
 	col.add_child(_name)
 
-	# Second billing once a level name is up: what you are waiting for is the more useful of
-	# the two, and two Display lines stacked would fight each other.
+	# Second billing once a level name is up, else two Display lines stacked fight each other.
 	_title = Label.new()
 	_title.text = "LOADING"
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -76,9 +72,8 @@ func _ready() -> void:
 	col.add_child(_weight)
 
 
-## Dress the screen for the level being loaded: its name, its card picture as the backdrop, and
-## the weight the level-select card already promised — so the wait is attached to a number you
-## were shown before you chose. Safe with an unregistered path (dev fixtures, CARLITO_LEVEL).
+## Dress the screen for the level loading: name, card picture as backdrop, and the same
+## weight the level-select card promised. Safe with an unregistered path (dev fixtures).
 func set_level(scene_path: String) -> void:
 	var entry := LevelRegistry.entry_of(scene_path)
 	if entry.is_empty():

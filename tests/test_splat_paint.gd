@@ -1,8 +1,6 @@
 extends GdUnitTestSuite
-## SplatPaint pure fns: the strip and rect rasterizers behind the "Paint splat under
-## road / tiles" buttons. 17x17 RGBA8 images over a 16 m span, so pixel centers sit at
-## whole meters (-8..8) and painted weights are binary-exact (0 or 1) — assert_float
-## is_equal is safe (see the CLAUDE.md float-assert gotcha).
+## SplatPaint pure fns: strip/rect rasterizers. 17x17 RGBA8 over 16 m span;
+## pixel centers at whole meters, painted weights binary-exact (0 or 1).
 
 const SplatPaint := preload("res://kit/helpers/splat_paint.gd")
 const BrushOps := preload("res://kit/helpers/brush_ops.gd")

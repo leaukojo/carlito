@@ -1,9 +1,6 @@
 extends Level
-## Garage showroom. The spawned vehicle is physics-frozen and hovers above the floor so
-## the orbit camera can inspect it from any angle, including underneath. Freezing is
-## KINEMATIC, so _physics_process still runs — wheels steer/spin, the engine revs, lamps
-## toggle — the body just never moves. A wall screen shows the active vehicle's spec.
-## Input, lamps, dashboard and bridge all flow through Level unchanged.
+## Garage showroom: spawned vehicle is kinematic-frozen and hovers so the orbit camera can
+## inspect it from any angle; _physics_process still runs (wheels steer, lamps toggle).
 
 @onready var _title: Label3D = $Screen/Title
 @onready var _stats_left: Label3D = $Screen/StatsLeft
@@ -16,13 +13,8 @@ func _ready() -> void:
 	super._ready()
 
 
-## Runs on every (re)spawn/swap: pin the new body in place and refresh the wall stats.
-##
-## A vehicle that owns OTHER bodies has to pin those too, and it is asked to rather than reached
-## into — the same duck-type the shell uses for `cycle_implement`, so this file never learns what a
-## trailer is. Without it the semi's trailer is the one thing in the room still obeying gravity: a
-## separate 24 t RigidBody3D hanging off the fifth wheel with no floor under its wheels, swinging on
-## the joint until it settles.
+## Runs on every (re)spawn/swap: pins the body and refreshes the wall stats. Duck-typed
+## (set_display_frozen) so e.g. a semi's trailer gets pinned too without this file knowing what a trailer is.
 func _on_vehicle_changed(_family: String) -> void:
 	if vehicle == null:
 		return
@@ -33,8 +25,7 @@ func _on_vehicle_changed(_family: String) -> void:
 	_refresh_stats()
 
 
-## Centred name headline, then two equal-length stat columns under it. The name gets its own
-## line because variant names are long enough to reach the second column when inlined.
+## Centred name headline, then two equal-length stat columns (variant names run too long to inline).
 func _refresh_stats() -> void:
 	var spec: VehicleSpec = vehicle.spec
 	_title.text = _game_state().current_variant
@@ -42,27 +33,34 @@ func _refresh_stats() -> void:
 		_stats_left.text = "No spec"
 		_stats_right.text = ""
 		return
-	_stats_left.text = "\n".join([
+	var left: PackedStringArray = [
 		"Family: %s" % _game_state().current_vehicle,
 		"Mass: %d kg" % roundi(spec.mass),
 		"Drive: %s" % _drive_text(spec),
-		"Gears: %d" % spec.gear_ratios.size(),
-	])
-	_stats_right.text = "\n".join([
-		"Redline: %d rpm" % roundi(spec.redline_rpm),
-		"Peak torque: %d Nm" % roundi(Drivetrain.peak_torque(spec)),
-		"Max steer: %.0f deg" % spec.max_steer_deg,
-		"Brake: %d Nm" % roundi(spec.brake_torque),
-	])
+	]
+	var right := PackedStringArray()
+	# has_engine gates engine figures (the gearbox runs on every family, but a quadcopter has no crank).
+	if spec.has_engine:
+		left.append("Gears: %d" % spec.gear_ratios.size())
+		right.append("Redline: %d rpm" % roundi(spec.redline_rpm))
+		right.append("Peak torque: %d Nm" % roundi(Drivetrain.peak_torque(spec)))
+	_stats_left.text = "\n".join(left)
+	# Steering lock and foot brake are ground-drive figures; a boat/drone/train gets no line rather than 0 Nm/0 deg.
+	if spec.ground_drive != null:
+		right.append("Max steer: %.0f deg" % spec.ground_drive.max_steer_deg)
+		right.append("Brake: %d Nm" % roundi(spec.ground_drive.brake_torque))
+	_stats_right.text = "\n".join(right)
 
 
 func _drive_text(spec: VehicleSpec) -> String:
-	if spec.driven_front and spec.driven_rear:
+	var gd := spec.ground_drive
+	if gd == null:
+		return "none"
+	if gd.driven_front and gd.driven_rear:
 		return "AWD"
-	if spec.driven_front:
+	if gd.driven_front:
 		return "FWD"
-	if spec.driven_rear:
-		# The tractor spawns rear-drive but its front axle engages at runtime, so calling it
-		# plain RWD would hide half the driveline.
-		return "RWD/MFWD" if spec.front_axle_engageable else "RWD"
+	if gd.driven_rear:
+		# The tractor's front axle engages at runtime; plain RWD would hide half the driveline.
+		return "RWD/MFWD" if gd.front_axle_engageable else "RWD"
 	return "none"

@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "& \"$PWD\\tools\\stop_freshness_hook.ps1\"",
+            "command": "$d = if ($env:CLAUDE_PROJECT_DIR) { $env:CLAUDE_PROJECT_DIR } else { $PWD }; & \"$d\\tools\\stop_freshness_hook.ps1\"; exit $LASTEXITCODE",
             "shell": "powershell",
             "timeout": 180,
             "statusMessage": "Checking bake/contract freshness..."

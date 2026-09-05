@@ -1,0 +1,35 @@
+{
+  "//": "How level 2 is generated. See tools/rebuild_level.ps1; this manifest is NOT replayable.",
+  "level": "level_2",
+  "scene": "res://src/levels/island/level_2/level_2.tscn",
+  "replayable": false,
+  "blocked": "gen_islands.gd is a one-shot scaffolding template that WRITES the level scene from nothing. Re-running it silently deletes everything added since. Level 2 carries a hand-added PlaneSpawn node and a widened allowed_vehicles list (drone, plane) that gen_islands.gd does not write. It builds all three levels in one pass, so it cannot be run for one of them alone. And it writes no splatmap2, so the committed level_2_island_splat2.png would be orphaned.",
+  "sources": [
+    "level_2_island_height.png",
+    "level_2_island_splat.png",
+    "level_2_island_splat2.png"
+  ],
+  "notes": [
+    "Levels 2-4 share one generator and one seed table (tools/gen_islands.gd LEVELS).",
+    "To change a level's terrain you edit its seed row there and accept losing the hand work,",
+    "or you sculpt in the editor and the 'manual' step below is the whole story."
+  ],
+  "steps": [
+    {
+      "kind": "script",
+      "path": "res://tools/gen_islands.gd",
+      "why": "Writes the heightmap PNG, the auto-splat PNG, the LevelInfo .tres and the level .tscn for levels 2, 3 and 4 from the seeds in its LEVELS table. Deterministic from those seeds."
+    },
+    {
+      "kind": "import"
+    },
+    {
+      "kind": "manual",
+      "what": "Everything since: hand paint into splatmap2, spawns and allow-list edits, roads, prop dressing, scatter.",
+      "why": "This is what the script step above would destroy. It is why replayable is false."
+    },
+    {
+      "kind": "bake"
+    }
+  ]
+}

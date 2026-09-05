@@ -16,8 +16,7 @@ $bad = git grep -nE '^[^#]*(:|->)[[:space:]]*Editor[A-Z][A-Za-z0-9]*' -- 'src/*.
 if ($bad) { $bad; Write-Host 'editor-only type annotation outside addons/ (breaks exported builds)'; Fail 'editor-type gate' }
 
 Announce 'Import'
-# Godot's --import exit code is unreliable on the pass right after new files appear
-# (leak-at-exit noise) — judge by output instead.
+# --import's exit code is unreliable right after new files appear (leak-at-exit noise).
 $imp = & $GODOT --headless --path . --import 2>&1 | Out-String
 $impErrors = ($imp -split "`n") | Select-String -Pattern 'SCRIPT ERROR|Failed to load|Compile Error'
 if ($impErrors) { $impErrors; Fail 'import' }
@@ -28,10 +27,7 @@ $env:GODOT_BIN = $GODOT
 if ($LASTEXITCODE -ne 0) { Fail 'unit tests' }
 
 Announce 'Stale-bake check'
-# check_bakes.gd quit()s 0 when every bake is fresh, but Godot's leak-at-exit can still
-# hand back a nonzero PROCESS code on an otherwise clean run (the same unreliability the
-# import step above works around) — so judge by output: a stale/missing/error line is the
-# only real failure.
+# Same leak-at-exit unreliability as import above — judge by output, not process code.
 $bakes = & $GODOT --headless --path . res://tools/check_bakes.tscn 2>&1 | Out-String
 Write-Host $bakes
 $staleBakes = ($bakes -split "`n") | Select-String -Pattern '\[check-bakes\].*: (stale|missing|error)'

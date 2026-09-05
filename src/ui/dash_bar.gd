@@ -1,12 +1,11 @@
 class_name DashBar
 extends Control
-## Labeled horizontal bar for one ranged signal on the dashboard. The dashboard
-## *generates* one of these per contract "out" signal that carries both a range and a
-## 'warn' threshold ("the bars are generated from contract signal metadata —
-## name, range, warn thresholds"). Everything here is driven by that metadata; there is
-## no per-signal special-casing.
+## Labeled horizontal bar for one ranged value on the dashboard. The dashboard generates one
+## per contract "out" signal with a range that's warn'd or flavored, and one per instance of a
+## signal declaring 'count' N (N bars sharing one set of metadata). Driven entirely by that
+## metadata; no per-signal special-casing here.
 ##
-## Plain text + color only — no emoji.
+## Plain text + color only, no emoji.
 
 const TRACK_COLOR := Color(0.20, 0.22, 0.26)
 const FILL_COLOR := Color(0.42, 0.68, 0.55)

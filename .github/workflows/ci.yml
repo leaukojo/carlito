@@ -48,6 +48,33 @@ jobs:
       - name: Import project
         run: godot --headless --import
 
+      # Stale-bake check: recompute each registered level's authoring-input hash and
+      # compare against its committed bake manifest. Runs BEFORE the bake, which is the
+      # only order that means anything — baking first rewrites the manifests it would be
+      # checking. The .baked.scn is untracked, so every level reads "unbuilt" here (the
+      # manifest verifies, the artifact is not built yet) and that passes; "stale" fails.
+      # Game-mode tool scene (not --script): level scripts only compile with autoloads
+      # registered.
+      - name: Stale-bake check
+        run: godot --headless res://tools/check_bakes.tscn
+
+      # The .baked.scn is build output, not a committed artifact (root CLAUDE.md § Levels
+      # & water). Bake all six registered levels here, before the tests: the unit suite's
+      # bake-weight assertion, the baked-level smoke and the web export all read the real
+      # file. Judged by output, not exit code — leak-at-exit makes the code meaningless.
+      - name: Bake levels
+        shell: bash
+        run: |
+          godot --headless res://tools/bake_levels.tscn 2>&1 | tee bake.log
+          if grep -E "^\[bake\] " bake.log | grep -vE ": OK — |: no AuthoringRoot, skipped"; then
+            echo "bake failed: lines above"
+            exit 1
+          fi
+          if ! grep -q ": OK — " bake.log; then
+            echo "bake produced no output — the run did not finish"
+            exit 1
+          fi
+
       # Invokes the gdUnit4 command tool directly instead of runtest.sh: the script
       # launches Godot without --headless, which dies on a display-less runner.
       # --ignoreHeadlessMode is safe here — it only guards InputEvent-driven UI tests,
@@ -68,13 +95,6 @@ jobs:
             echo "smoke failed: errors above"
             exit 1
           fi
-
-      # Stale-bake check: recompute each registered level's
-      # authoring-input hash and compare against its committed bake manifest.
-      # Game-mode tool scene (not --script): level scripts only compile with
-      # autoloads registered.
-      - name: Stale-bake check
-        run: godot --headless res://tools/check_bakes.tscn
 
       # Baked-level smoke (load -> baked-scene swap -> spawn -> play) against the
       # dressed level_1 island. CARLITO_LEVEL
@@ -127,12 +147,39 @@ jobs:
           include-hidden-files: true
           retention-days: 7
 
+  # Straight-line tracking gate. Runs beside `build` rather than inside it: it needs a
+  # minute of real-time physics per vehicle and no export templates, so serializing it
+  # behind the export would add that to every push for nothing.
+  #
+  # Every shipped vehicle tracks 0.000 m / 0.000 deg over 200 m with zero steer input, and
+  # the detector was falsified against a deliberate 400 N side force — so this is a tight,
+  # deterministic check on exactly the class of bug unit tests cannot see: a mistyped
+  # wheel_positions x, a one-sided drive split, uneven brake torque. `track` skips the
+  # acceleration pass (a dev report, not a gate); `strict` makes a FAIL exit nonzero.
+  tracking:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No export templates — this job never exports.
+      - name: Install Godot
+        run: |
+          curl -sSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          sudo mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+
+      - name: Import project
+        run: godot --headless --import
+
+      - name: Straight-line tracking (every wheel-driven variant)
+        run: godot --headless res://tools/measure_vehicles.tscn -- all 45 track strict
+
   # Publishes the just-built site into gh-pages:/dev/. Pushes to main run the gate
   # stack above but publish nothing: main only ever moves via a promote, and those
   # bytes are already live on dev.
   publish-dev:
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
-    needs: build
+    needs: [build, tracking]
     runs-on: ubuntu-latest
     permissions:
       contents: write

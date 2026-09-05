@@ -1,8 +1,6 @@
 @tool
 extends EditorInspectorPlugin
-## Swaps ScatterItem's `prefab` resource slot for the kit-prefab dropdowns in
-## prefab_picker.gd (which carries the why). Everything else on the resource keeps the
-## default inspector.
+## Swaps ScatterItem's `prefab` resource slot for the kit-prefab dropdowns in prefab_picker.gd.
 
 const PrefabPicker := preload("res://addons/carlito_kit/prefab_picker.gd")
 

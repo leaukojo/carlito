@@ -1,43 +1,27 @@
 class_name NoticeLine
 extends Label
-## The sim's transient message line across the top of the screen ("no room to couple"), raised
-## by GameState.notice and dwelled/hidden by the shell. Red on a dark panel, centred, plain text,
-## no emoji — the colour is SEMANTIC (this is a warning), which is why it stays an override on the
-## node rather than moving into the theme. It sits above the middle of the screen rather than at
-## the top edge: a line in the top margin was being missed while the driver watched the road.
+## The sim's transient message line ("no room to couple"), raised by GameState.notice and
+## dwelled/hidden by the shell. Red on a dark panel, centred, plain text, no emoji — colour
+## is semantic, so it's a node override rather than theme. Sits above screen middle, not the
+## top edge, so it isn't missed while watching the road.
 ##
-## IT LAYS ITSELF OUT rather than carrying fixed offsets in boot.tscn, and both reasons were
-## found in the Phase 7 sweep:
-##
-## - Its offsets were RAW pixels while everything around them scaled with UiTheme. The box was
-##   40 px tall for a Title-sized font that is 22 px at scale 1.0 and 44 px at the scale a phone
-##   gets — so the message clipped exactly where it matters most.
-## - It ran the full width of the screen, straight under the touch overlay's button columns (then
-##   on the right edge, now on the left). The inset that fixes it is SYMMETRIC because the line is
-##   centred: insetting only
-##   the side the buttons are on would knock the text off-centre on every screen to buy clearance
-##   on one.
+## Lays itself out rather than fixed boot.tscn offsets: those clipped against the Title
+## font's theme-scaled height, and a full-width line ran under the touch overlay's buttons.
+## The inset stays symmetric (line is centred) — insetting only the button side would knock
+## text off-centre everywhere to buy clearance on one edge.
 
-## Where the box's top edge sits, as a share of the screen height. Above the middle, so the
-## message is in the eye's centre without covering the vehicle itself.
+## Top edge, as a share of screen height. Above the middle so it doesn't cover the vehicle.
 const TOP_RATIO := 0.34
-## Logical px (scaled through the inherited theme). Padding inside the box; also the floor the
-## line height is measured against.
+## Logical px (scaled). Padding inside the box; also the floor the line height is measured against.
 const TOP := 14.0
-## Box padding, logical px (scaled). Horizontal is wider so short messages still read as a box.
 const PAD_X := 22.0
 const PAD_Y := 10.0
-## The width the notice must not reach into: the touch stack is two columns of
-## TouchControls.BTN_SIZE.x plus its gap and edge inset. Named here rather than imported because
-## this is a CLEARANCE, not the stack's own metric — the notice must clear that region whether or
-## not the overlay is currently on screen (it appears and disappears with F4 and with the device).
+## Clearance for the touch stack (two BTN_SIZE.x columns + gap + inset). A clearance, not the
+## stack's own metric, so it holds whether or not the overlay is on screen right now.
 const RESERVE := 220.0
-## Never give more than this share of the width away to the reserve. On a narrow screen the
-## buttons and the message cannot both have what they want, and the message is the one you have
-## to be able to read.
+## Cap on how much width the reserve may take — the message must stay readable on a narrow screen.
 const MAX_INSET_RATIO := 0.22
-## Lines the box is tall enough for. Two: long notices autowrap, and a box sized to one line
-## clips the second rather than growing.
+## Lines the box fits; 2 so long notices autowrap instead of clipping.
 const LINES := 2
 
 
@@ -68,8 +52,6 @@ func _layout() -> void:
 	offset_left = inset
 	offset_right = -inset
 	offset_top = roundf(area.y * TOP_RATIO)
-	# Padding scales with the theme like everything else here, so the box grows with the text
-	# instead of clipping it on a phone.
 	var pad_y := roundf(PAD_Y * ui_scale)
 	var box := StyleBoxFlat.new()
 	box.bg_color = Color(0.05, 0.04, 0.05, 0.82)

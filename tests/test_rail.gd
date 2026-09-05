@@ -1,11 +1,6 @@
 extends GdUnitTestSuite
-## RailProfile's cross-section, the duck-typed rail node API shared by RoadPath and
-## RailTrack, and the baker's RailTrack emission. Same discipline as test_road.gd:
-## hand-checkable numbers, everything headless-constructible, no scene tree needed.
-##
-## The load-bearing case is the last one: a baked level FREES its AuthoringRoot at load
-## and export strips it, so if the baker stops emitting the RailTrack the curve is gone
-## from shipped builds and the train has nothing to ride — with no other symptom.
+## RailProfile cross-section, duck-typed rail node API, baker's RailTrack emission.
+## Baker MUST emit RailTrack or train has no curve to ride (no other symptom if missing).
 
 const RailProfileScript := preload("res://kit/helpers/rail_profile.gd")
 const Builder := preload("res://kit/helpers/road_builder.gd")
@@ -15,8 +10,6 @@ const RAIL_PRESET := "res://kit/roads/rail_profile.tres"
 const CITY_PRESET := "res://kit/roads/city_profile.tres"
 
 
-## Hand-set numbers rather than the preset's, so the assertions below stay readable and
-## a preset tweak never fails a geometry test.
 func _profile() -> RailProfile:
 	var p := RailProfileScript.new() as RailProfile
 	p.gauge = 1.44

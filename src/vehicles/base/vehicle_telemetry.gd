@@ -1,16 +1,9 @@
 class_name VehicleTelemetry
 extends RefCounted
-## Per-tick telemetry published by BaseVehicle. Covers every contract
-## "out" signal for ground vehicles (car/truck/tractor).
-##
-## Motion values (speed, rpm, gear, slip, accel, yaw, heading, position) are read out
-## of the sim that produced the motion — never derived fictions. The
-## auxiliary systems (fuel, coolant, battery) are simple *honest models*,
-## clearly labelled as modeled, not measured.
-##
-## Every non-trivial derivation is a static pure function down below and is unit-tested
-## in tests/test_telemetry.gd, exactly like Drivetrain's math — BaseVehicle only holds
-## the per-tick state (previous velocity, accumulators) and calls these.
+## Per-tick telemetry published by BaseVehicle, covering every contract "out" signal for ground
+## vehicles (car/truck/tractor). Motion is read out of the sim, never derived; fuel, coolant and
+## battery are simple honest models, labelled as modeled rather than measured. Non-trivial
+## derivations are the static pure functions below.
 
 # --- GPS mapping (world XZ -> lat/lon around the Paris origin) ---
 const GPS_ORIGIN_LAT := 48.8566
@@ -27,10 +20,12 @@ const BATTERY_RESTING := 12.6    ## V engine off
 const BATTERY_CHARGING := 14.2   ## V engine running (alternator), before load droop
 
 # --- status bitfield (contract 'status', u16) ---
-## Provisional layout: the final bit assignment is fixed with sloppyCAN frame packing
-## (contract note). Kept here as named bits so nothing hand-codes magic numbers.
+## FROZEN wire layout. A new flag appends at bit 7 or above (nine free in the u16); an existing
+## bit is never renumbered, and adding one bumps `version` and ships as a paired promote.
 const ST_IGNITION := 1 << 0    ## engine running (key in Ignition)
-const ST_GROUND := 1 << 1      ## all wheels on the ground
+## Wheels in contact, or the wheel-less body's own landed predicate (drone and boat overwrite
+## this in `_tick_extras` via `with_status_bit`).
+const ST_GROUND := 1 << 1
 const ST_MOVING := 1 << 2      ## |speed| above the standstill epsilon
 const ST_REVERSE := 1 << 3     ## engaged gear is R
 const ST_NEUTRAL := 1 << 4     ## engaged gear is N
@@ -44,13 +39,28 @@ var rpm := 0.0          ## real engine RPM out of the drivetrain (contract 'rpm'
 var gear_byte := 0      ## RAMN byte: 0=N, 1..6=D1-D6, 255=R (contract 'gear')
 var throttle := 0.0     ## -1..1 as applied, signed by direction (contract 'throttle')
 var steer := 0.0        ## -1..1 as applied (contract 'steer')
+## Body angular rates and accelerations (DroneCAN's `angular_velocity` / `linear_acceleration`),
+## on the base since every chassis has body motion.
 var yaw := 0.0          ## yaw rate rad/s about the body up axis (contract 'yaw')
+var roll_rate := 0.0    ## roll rate rad/s about the body forward axis, + = right side down (contract 'roll_rate')
+var pitch_rate := 0.0   ## pitch rate rad/s about the body right axis, + = nose up (contract 'pitch_rate')
 var acc_long := 0.0     ## longitudinal accel m/s^2, smoothed (contract 'accLong')
 var acc_lat := 0.0      ## lateral accel m/s^2, smoothed (contract 'accLat')
-var slip_front := 0.0   ## mean |slip ratio| per axle (contract 'slip'; per-axle split is an open option)
-var slip_rear := 0.0
+var acc_vert := 0.0     ## vertical accel m/s^2 along body up, smoothed (contract 'acc_vert')
+## Attitude/height, on the base for the same reason (one copy, not three).
+var pitch := 0.0        ## deg, + = nose/bow up (contract 'pitch')
+var roll := 0.0         ## deg, + = starboard/right side down (contract 'roll')
+var altitude := 0.0     ## m above sea level (contract 'altitude'; world Y, water is y=0)
+var vspeed := 0.0       ## m/s variometer, + = climbing (contract 'vspeed')
+## Instanced signal 'slip' (count 2), kept per-axle so understeer and oversteer differ.
+var slip_front := 0.0   ## mean |slip ratio|, front axle (contract 'slip' element 0)
+var slip_rear := 0.0    ## mean |slip ratio|, rear axle (contract 'slip' element 1)
 var ground := false     ## all wheels in contact (contract 'ground')
 var impact := 0.0       ## impact event magnitude m/s^2, peak-held (contract 'impact')
+
+# --- configuration (DECLARED, not measured) ---
+## Copied off the spec once in BaseVehicle._ready.
+var speed_limit := 0    ## road-speed governor km/h, 0 = ungoverned (contract 'speed_limit')
 
 # --- navigation ---
 var pos_x := 0.0        ## world X (contract 'posX')
@@ -59,6 +69,9 @@ var heading := 0.0      ## compass heading deg, [0,360) (contract 'heading')
 var lat := GPS_ORIGIN_LAT   ## GPS latitude, Paris origin (contract 'lat')
 var lon := GPS_ORIGIN_LON   ## GPS longitude, Paris origin (contract 'lon')
 var odo := 0.0          ## odometer km, persists across respawn (contract 'odo')
+## The odometer's twin: climbs only, survives respawn. Only truck and tractor declare it;
+## elsewhere it counts quietly, and the dashboard gates HRS on the contract.
+var engine_hours := 0.0 ## h, contract 'engine_hours' (J1939 SPN 247; survives respawn)
 
 # --- auxiliary systems (modeled, not measured) ---
 var fuel := 100.0                ## % remaining (contract 'fuel')
@@ -69,9 +82,8 @@ var status := 0                  ## u16 bitfield (contract 'status')
 
 # --- pure derivations (unit-tested) -----------------------------------------
 
-## Latitude for a world Z, mapping -Z to north around the Paris origin. GDScript
-## floats are 64-bit so the small-offset precision the contract's f64 lat/lon want
-## survives (returning a Vector2 would truncate it to 32-bit).
+## Latitude for a world Z, mapping -Z to north. Returns a float (64-bit) rather than a Vector2,
+## so the contract's f64 lat/lon precision survives.
 static func gps_lat(world_z: float) -> float:
 	return GPS_ORIGIN_LAT + (-world_z) / METERS_PER_DEG_LAT
 
@@ -81,8 +93,7 @@ static func gps_lon(world_x: float) -> float:
 	return GPS_ORIGIN_LON + world_x / (METERS_PER_DEG_LAT * cos(deg_to_rad(GPS_ORIGIN_LAT)))
 
 
-## Compass heading in degrees [0,360) from a forward vector. 0 = north (-Z),
-## 90 = east (+X); matches the GPS axis convention above.
+## Compass heading [0,360) from a forward vector. 0 = north (-Z), 90 = east (+X).
 static func heading_from_forward(forward: Vector3) -> float:
 	return fposmod(rad_to_deg(atan2(forward.x, -forward.z)), 360.0)
 
@@ -92,19 +103,19 @@ static func odo_step(prev_km: float, speed_ms: float, delta: float) -> float:
 	return prev_km + absf(speed_ms) * delta / 1000.0
 
 
-## Body-frame acceleration (long, lat) in m/s^2 from the velocity change over the
-## tick, projected onto the given forward/right axes. Kinematic (no gravity term):
-## it reports the g felt from actual changes in motion. Caller smooths it.
+## Body-frame acceleration (long, lat, vert) m/s^2 from the velocity change over the tick,
+## projected onto forward/right/up. Kinematic, with no gravity term, so a body at rest and one in
+## free fall both read zero. The caller smooths.
 static func body_accel(v_now: Vector3, v_prev: Vector3, delta: float,
-		forward: Vector3, right: Vector3) -> Vector2:
+		forward: Vector3, right: Vector3, up: Vector3) -> Vector3:
 	if delta <= 0.0:
-		return Vector2.ZERO
+		return Vector3.ZERO
 	var a := (v_now - v_prev) / delta
-	return Vector2(a.dot(forward), a.dot(right))
+	return Vector3(a.dot(forward), a.dot(right), a.dot(up))
 
 
-## Impact magnitude gate: the acceleration spike is only an "event" once it clears
-## the threshold, otherwise 0 (caller peak-holds it so a one-tick spike stays visible).
+## Impact magnitude gate: the acceleration spike is only an event once it clears the threshold,
+## otherwise 0. The caller peak-holds it so a one-tick spike stays visible.
 static func impact_gate(accel_mag: float, threshold: float) -> float:
 	return accel_mag if accel_mag >= threshold else 0.0
 
@@ -129,30 +140,17 @@ static func coolant_step(prev_c: float, target_c: float, rate: float, delta: flo
 	return move_toward(prev_c, target_c, rate * delta)
 
 
-## Battery terminal voltage: resting when off, alternator-charged (drooping under
-## load) when running.
+## Battery terminal voltage: resting when off, alternator-charged and drooping under load when
+## running.
 static func battery_volts(running: bool, load_frac: float) -> float:
 	if not running:
 		return BATTERY_RESTING
 	return BATTERY_CHARGING - 0.6 * clampf(load_frac, 0.0, 1.0)
 
 
-## Engine load, J1939 flavor (SPN 92): the torque the engine is actually delivering as a
-## fraction of the most it can ever make, plus a parasitic term while the PTO is engaged.
-##
-## Lives on the shared base because it is a shared signal: the tractor reads it as ISOBUS and
-## the truck as J1939, and ISO 11783 is built on J1939 — one model, never two.
-##
-## The denominator is the PEAK of the torque curve, deliberately — NOT the torque available at
-## the current rpm. Normalising against the current rpm cancels exactly to throttle
-## (delivered = engine_torque(rpm) * throttle, over engine_torque(rpm)), and the signal
-## degenerates into a second pedal-position readout that nothing but the pedal can move.
-##
-## Against the peak it is rpm-aware, which is what makes a REAL load visible here: rpm sags
-## honestly under load, so lugging in too tall a gear, a PTO implement, or a plough's
-## draft all pull the engine into a different part of its curve and this follows. Modeled, with
-## the same honest-model latitude as fuel/coolant — but built out of the drivetrain's own
-## torque curve, not invented. Pure -> unit-tested.
+## Engine load, J1939 SPN 92: delivered torque over peak torque, plus a parasitic PTO term.
+## Shared by the tractor (ISOBUS) and the truck (J1939). The denominator is the peak, not the
+## torque at the current rpm, which would cancel to throttle.
 static func engine_load_pct(engine_rpm: float, throttle_in: float, spec: VehicleSpec,
 		pto_on: bool, pto_load: float) -> float:
 	var peak := Drivetrain.peak_torque(spec)
@@ -166,9 +164,8 @@ static func engine_load_pct(engine_rpm: float, throttle_in: float, spec: Vehicle
 	return clampf(load_frac, 0.0, 1.0) * 100.0
 
 
-## Hour meter step, in hours: real time under the key. Like the odometer it only ever climbs
-## and it survives respawn — a meter records the machine's life, not the current drive. Shared
-## for the same reason as engine_load_pct: J1939 SPN 247, which ISOBUS inherits.
+## Hour meter step: real time under the key. Only climbs, survives respawn. Shared for the same
+## reason as engine_load_pct (J1939 SPN 247, which ISOBUS inherits).
 static func hours_step(prev_h: float, running: bool, delta: float) -> float:
 	return prev_h + delta / 3600.0 if running else prev_h
 
@@ -194,36 +191,53 @@ static func pack_status(ignition: bool, ground_contact: bool, moving: bool,
 	return s
 
 
+## Set or clear one already-packed status bit, so a subclass can override from `_tick_extras` a
+## bit `pack_status` cannot compute from shared state (the drone and boat ST_GROUND is a landed
+## predicate, not a wheel count) without a third BaseVehicle seam.
+static func with_status_bit(packed: int, bit: int, on: bool) -> int:
+	return (packed | bit) if on else (packed & ~bit)
+
+
 # --- bridge marshaling -------------------------------------------------------
 
-## Every non-todo ground "out" signal keyed by its contract name, in the units the
-## contract declares. The Bridge walks Contract.signals_out() and pulls
-## each name from here, so the field-name list lives once, in the contract — the
-## bridge never hand-writes it. throttle/steer are reported as
-## percent (contract i8 %) and slip as the mean per-axle ratio; the fixed-point CAN
-## byte scaling is the sloppyCAN side's job, not ours.
+## Contract name for a telemetry field spelled differently. The wire names are the contract's
+## and are frozen; the field names are GDScript's.
+const WIRE_NAMES := {
+	"gear_byte": "gear",
+	"acc_long": "accLong",
+	"acc_lat": "accLat",
+	"pos_x": "posX",
+	"pos_z": "posZ",
+}
+## Fields the wire carries as whole units off a float accumulator.
+const WIRE_ROUNDED := ["rpm", "fuel", "coolant", "soc",
+		"gimbal_pitch_actual", "gimbal_yaw_actual"]
+## Fields the wire carries as a percent (i8) of a -1..1 fraction.
+const WIRE_PERCENT := ["throttle", "steer"]
+## Fields that reach the wire only through a synthesised signal, never under their own name.
+const WIRE_PRIVATE := ["slip_front", "slip_rear"]
+
+## Every "out" signal this vehicle declares, keyed by contract name, in contract units; the
+## bridge walks Contract.signals_for_vehicle() and pulls each name from here. The dict IS this
+## telemetry's own property list, subclass fields included, so every member var of a telemetry
+## class is a wire signal — anything that is not one belongs on the vehicle, not here. Only the
+## four tables above and the synthesised 'slip' are not identity. CAN byte scaling is
+## sloppyCAN's job.
 func to_bridge_dict() -> Dictionary:
-	return {
-		"speed": speed,
-		"kmh": kmh,
-		"rpm": roundi(rpm),
-		"gear": gear_byte,
-		"throttle": roundi(throttle * 100.0),
-		"steer": roundi(steer * 100.0),
-		"yaw": yaw,
-		"accLong": acc_long,
-		"accLat": acc_lat,
-		"slip": (slip_front + slip_rear) * 0.5,
-		"ground": ground,
-		"posX": pos_x,
-		"posZ": pos_z,
-		"heading": heading,
-		"lat": lat,
-		"lon": lon,
-		"odo": odo,
-		"status": status,
-		"impact": impact,
-		"fuel": roundi(fuel),
-		"coolant": roundi(coolant),
-		"battery": battery,
-	}
+	var d := {}
+	for prop in get_property_list():
+		if not (prop.usage & PROPERTY_USAGE_SCRIPT_VARIABLE):
+			continue
+		var field: String = prop.name
+		if field in WIRE_PRIVATE:
+			continue
+		var value: Variant = get(field)
+		if field in WIRE_ROUNDED:
+			value = roundi(value)
+		elif field in WIRE_PERCENT:
+			value = roundi(value * 100.0)
+		d[WIRE_NAMES.get(field, field)] = value
+	# 'slip' is instanced (count 2) and kept per-axle so understeer and oversteer differ. A plain
+	# Array, not Packed, since JSON.stringify puts it on the wire.
+	d["slip"] = [slip_front, slip_rear]
+	return d

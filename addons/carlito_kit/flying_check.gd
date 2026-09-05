@@ -1,40 +1,25 @@
 @tool
 extends RefCounted
-## "Find flying props" (palette toolbar): scans every placed kit piece under AuthoringRoot
-## and flags the ones whose lowest point hovers above the ground — pieces placed without
-## checking their height, or left behind when the terrain under them moved.
-##
-## The markers are plain Node3Ds added to the edited scene UNOWNED (the placement-ghost
-## trick), so they are never serialized into the .tscn and never reach the bake input hash;
-## they also vanish on scene reload. Clear removes them; Drop is the one-action fix.
-##
-## Support height under a piece is the ground-snap fallback chain: a downward physics ray
-## from just under the piece (its own collider sits above that, so no exclusion bookkeeping
-## is needed — and a prop standing on a road deck or a tile reads the deck, not the terrain
-## beneath it), then each HeightmapTerrain's height sample. A piece over neither is reported
-## as "no ground" rather than guessed at. Editor-only (addons/), so editor API is fine here.
+## "Find flying props": scans placed kit pieces under AuthoringRoot and flags ones whose
+## lowest point hovers above the ground. Markers are unowned, never serialized, and vanish
+## on scene reload. Support height: physics ray from under the piece, then terrain sample;
+## no hit under either reports "no ground".
 
-## Parent node holding all markers. Named so a stale one is obvious, and skipped by scans.
+const Groups := preload("res://src/levels/base/carlito_groups.gd")
+
 const MARKER_ROOT := "__KitFlyingMarkers"
 
-## Default hover (m) a piece may have before it counts as flying. Kit prefab origins are not
-## all exactly at the mesh bottom, so a small tolerance keeps honest placements quiet.
+## Default hover (m) before a piece counts as flying.
 const DEFAULT_TOLERANCE := 0.3
 
-## How far below a piece the support ray looks. Past this the piece is "no ground".
-const RAY_DOWN := 500.0
+const RAY_DOWN := 500.0  # past this, the piece is "no ground"
 
 const MARKER_COLOR := Color(1.0, 0.25, 0.15)
 
-## Marker sizing (m): a post spanning ground -> piece bottom, plus a beacon column above it
-## so a prop hovering 20 cm is still findable from across the level.
 const POST_THICKNESS := 0.6
 const BEACON_HEIGHT := 25.0
 const BEACON_THICKNESS := 0.3
 
-## The markers pulse so they read against a busy level. Driven by the shader's TIME (the
-## editor viewport animates it) — NOT by a per-frame tool tick, which the kit's authoring
-## tools never use.
 const BLINK_SHADER := """
 shader_type spatial;
 render_mode unshaded, cull_disabled, depth_draw_never, shadows_disabled;
@@ -48,16 +33,14 @@ void fragment() {
 const BLINK_HZ := 1.5
 
 
-## Every flying piece under the scene's AuthoringRoot, as
-## [{piece: Node3D, gap: float, bottom: float, ground: float}], plus the pieces with no
-## ground under them at all in `unsupported`. Returns {flying: Array, unsupported: Array}.
+## Returns {flying: Array, unsupported: Array} of {piece, gap, bottom, ground}.
 static func scan(scene_root: Node, tolerance := DEFAULT_TOLERANCE) -> Dictionary:
 	var flying: Array = []
 	var unsupported: Array = []
 	if scene_root == null:
 		push_warning("Kit: no scene open to check.")
 		return {"flying": flying, "unsupported": unsupported}
-	var authoring := _find_authoring(scene_root)
+	var authoring := Groups.find_authoring(scene_root)
 	if authoring == null:
 		push_warning("Kit: no AuthoringRoot in the scene to check.")
 		return {"flying": flying, "unsupported": unsupported}
@@ -69,7 +52,7 @@ static func scan(scene_root: Node, tolerance := DEFAULT_TOLERANCE) -> Dictionary
 		space = (scene_root as Node3D).get_world_3d().direct_space_state
 
 	for node in authoring.find_children("*", "Node3D", true, false):
-		if not node.has_method("is_carlito_kit_piece"):
+		if not node.is_in_group(Groups.KIT_PIECE):
 			continue
 		var piece := node as Node3D
 		var bottom := _piece_bottom(piece)
@@ -87,9 +70,7 @@ static func scan(scene_root: Node, tolerance := DEFAULT_TOLERANCE) -> Dictionary
 	return {"flying": flying, "unsupported": unsupported}
 
 
-## Scan and drop a red marker post on each flying piece (ground -> piece bottom), with its
-## hover printed beside it. Replaces any previous markers, so re-running after a fix is the
-## way to re-check. Nothing is written to the scene (markers are unowned).
+## Scans and drops a red marker post on each flying piece. Replaces any previous markers.
 static func flag(scene_root: Node, tolerance := DEFAULT_TOLERANCE) -> void:
 	clear(scene_root)
 	var result := scan(scene_root, tolerance)
@@ -101,7 +82,7 @@ static func flag(scene_root: Node, tolerance := DEFAULT_TOLERANCE) -> void:
 
 	var root := Node3D.new()
 	root.name = MARKER_ROOT
-	(scene_root as Node3D).add_child(root)  # unowned on purpose -> never serialized
+	(scene_root as Node3D).add_child(root)  # unowned -> never serialized
 
 	for entry in flying:
 		var piece: Node3D = entry["piece"]
@@ -118,7 +99,6 @@ static func flag(scene_root: Node, tolerance := DEFAULT_TOLERANCE) -> void:
 			+ "Markers are editor-only and are not saved with the scene.")
 
 
-## Remove the markers (also happens on its own when the scene is reloaded).
 static func clear(scene_root: Node) -> void:
 	if scene_root == null:
 		return
@@ -128,10 +108,7 @@ static func clear(scene_root: Node) -> void:
 			child.queue_free()
 
 
-## Move every flagged piece straight down so its lowest point rests on the ground, in ONE
-## undoable action, then re-flag (so what is left is what the drop could not fix). Only the
-## Y of each piece changes — X/Z/rotation are the author's. Pieces with no ground under
-## them are left alone.
+## Moves every flagged piece straight down onto the ground, then re-flags. Only Y changes.
 static func drop(scene_root: Node, undo: EditorUndoRedoManager,
 		tolerance := DEFAULT_TOLERANCE) -> void:
 	var flying: Array = scan(scene_root, tolerance)["flying"]
@@ -149,7 +126,7 @@ static func drop(scene_root: Node, undo: EditorUndoRedoManager,
 	flag(scene_root, tolerance)
 
 
-## Lowest world-space Y of a piece's MeshInstance3D descendants; NAN when it has none.
+## Lowest world-space Y of a piece's mesh descendants; NAN when it has none.
 static func _piece_bottom(piece: Node3D) -> float:
 	var low := INF
 	for node in piece.find_children("*", "MeshInstance3D", true, false):
@@ -163,8 +140,7 @@ static func _piece_bottom(piece: Node3D) -> float:
 	return low if is_finite(low) else NAN
 
 
-## Support height under `xz`, starting just below the piece so its own collider is missed:
-## physics ray -> terrain sample -> NAN (no ground).
+## Support height starting just below the piece, so its own collider is missed.
 static func _support_y(space: PhysicsDirectSpaceState3D, terrains: Array[Node],
 		origin: Vector3, bottom: float) -> float:
 	var from := Vector3(origin.x, bottom - 0.01, origin.z)
@@ -179,9 +155,7 @@ static func _support_y(space: PhysicsDirectSpaceState3D, terrains: Array[Node],
 	return NAN
 
 
-## One marker (positioned by the caller once it is in the tree): a fat post filling the gap
-## between the ground and the piece's bottom, a tall beacon column above it so the marker is
-## visible from a distance, and the hover distance in text. Both columns blink.
+## One marker: post filling the ground-to-bottom gap, beacon column, hover distance text.
 static func _marker(gap: float, label: String) -> Node3D:
 	var holder := Node3D.new()
 	var mat := _material()
@@ -199,14 +173,13 @@ static func _marker(gap: float, label: String) -> Node3D:
 	text.outline_size = 16
 	text.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	text.no_depth_test = true
-	text.fixed_size = true  # stays legible from any distance — it is a locator, not signage
+	text.fixed_size = true  # legible from any distance
 	text.pixel_size = 0.0015
 	text.position = Vector3(0.0, height + BEACON_HEIGHT + 2.0, 0.0)
 	holder.add_child(text)
 	return holder
 
 
-## A blinking box column centred at `center_y` above the marker's ground point.
 static func _column(size: Vector3, center_y: float, mat: Material) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
@@ -226,15 +199,3 @@ static func _material() -> ShaderMaterial:
 			MARKER_COLOR.b))
 	mat.set_shader_parameter("hz", BLINK_HZ)
 	return mat
-
-
-static func _find_authoring(node: Node) -> Node:
-	if node == null:
-		return null
-	if node.has_method("is_carlito_authoring"):
-		return node
-	for child in node.get_children():
-		var found := _find_authoring(child)
-		if found != null:
-			return found
-	return null

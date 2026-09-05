@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="VehicleSpec" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="VehicleSpec" load_steps=5 format=3]
 
 ; North American conventional (bonneted) tractor unit. HAND-AUTHORED like semi_spec.tres, and a
 ; VARIANT of it rather than a fresh tune: the drivetrain, brake, handbrake, wheel, suspension and
@@ -35,11 +35,17 @@
 
 [ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
 [ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="2_wheel"]
+[ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="3_grounddrive"]
 
-[resource]
-script = ExtResource("1_spec")
-mass = 8000.0
-center_of_mass = Vector3(0, 0.35, -0.55)
+; DRAG AREA 2.43 m^2 = 0.75 x 0.82 x the cab's 1.92 x 2.055 box. Both factors are worse than the
+; cab-over's on purpose and for the same reason the silhouette is: a bonneted conventional is
+; taller here AND blunter (0.75 against 0.70), so it is the draggier of the two units pulling the
+; identical trailer. Derived the same way as every other spec's — see semi_spec.tres.
+
+[sub_resource type="Resource" id="Resource_grounddrive"]
+script = ExtResource("3_grounddrive")
+drag_area = 2.43
+rolling_resistance = 0.007
 wheel_positions = PackedVector3Array(-0.72, 0.424, -1.95, 0.72, 0.424, -1.95, -0.62, 0.424, 1.05, 0.62, 0.424, 1.05)
 wheel_radius = 0.36
 wheel_inertia = 3.0
@@ -47,7 +53,6 @@ wheel_scene = ExtResource("2_wheel")
 driven_front = false
 driven_rear = true
 retarder_equipped = true
-trailer_bus_equipped = false
 rest_length = 0.32
 spring_rate = 240000.0
 damper_bump = 12000.0
@@ -57,6 +62,18 @@ grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 1.0
 mu_lat = 0.95
 handbrake_grip = 1.0
+brake_torque = 10500.0
+handbrake_torque = 4800.0
+max_steer_deg = 24.0
+min_steer_frac = 0.21
+steer_falloff_speed = 29.0
+
+[resource]
+script = ExtResource("1_spec")
+mass = 8000.0
+center_of_mass = Vector3(0, 0.35, -0.55)
+ground_drive = SubResource("Resource_grounddrive")
+trailer_bus_equipped = false
 torque_curve = PackedVector2Array(700, 975, 1200, 1290, 1800, 1500, 2400, 1440, 2800, 1120, 3200, 375)
 idle_rpm = 700.0
 redline_rpm = 3200.0
@@ -66,9 +83,16 @@ final_drive = 4.5
 efficiency = 0.9
 shift_up_rpm = 2600.0
 shift_down_rpm = 1200.0
-brake_torque = 10500.0
-handbrake_torque = 4800.0
-max_steer_deg = 24.0
+; ROAD-SPEED GOVERNOR 105 km/h: North American practice — no federal limiter mandate, and
+; fleets that fit one set it around 65 mph. HIGHER THAN THE EUROPEAN UNIT BY DESIGN: this pair
+; already differs on the ISO 7638 data pair, and the same regional split shows up here in the
+; driveline. Inert as geared (this unit settles at 89.0 km/h).
+speed_limit_kmh = 105.0
+; HIGH-SPEED STEERING FALLOFF, same 0.21 x 24 = 5.0 deg floor as the cab-over — the two share a
+; rack and a mass, so they share the absolute lock. Only the floor SPEED differs: 29 m/s tracks
+; this one's higher 105 km/h limiter, so neither truck reaches its floor before its own cruise.
+; The 3.0 m wheelbase (against the cab-over's 2.1) already makes this the wider-turning body;
+; the taper does not change that at manoeuvring speed, where it is worth under 15%.
 steer_speed = 1.8
 headlight_paths = Array[NodePath]([NodePath("Lamps/HeadlightL"), NodePath("Lamps/HeadlightR")])
 head_lamp_paths = Array[NodePath]([NodePath("Lamps/HeadLensL"), NodePath("Lamps/HeadLensR")])

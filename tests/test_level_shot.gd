@@ -1,7 +1,5 @@
 extends GdUnitTestSuite
-## LevelShot: the side-car paths the kit tools and the capture tool must agree on, and the
-## overview framing used when a level has no saved view. Pure statics, so this runs headless.
-
+## LevelShot: side-car paths, overview framing. Pure statics, headless.
 
 func test_side_car_and_thumb_paths() -> void:
 	assert_str(LevelShot.path_for("res://src/levels/island/level_1/level_1.tscn")) \

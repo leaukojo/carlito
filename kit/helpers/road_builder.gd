@@ -1,65 +1,30 @@
 class_name RoadBuilder
 extends RefCounted
-## Pure road-geometry math for RoadPath: curvature-adaptive
-## curve sampling, ribbon extrusion from a RoadProfile cross-section, and the destructive
-## conform-terrain flatten mask. Everything is static, deterministic, and editor-free so
-## the baker (a game-mode tool, never the editor) can call it on an untreed level, and it
-## all gets the Drivetrain test discipline (tests/test_road.gd).
-##
-## Bake-hash note (the ScatterBase precedent): extrusion runs BY the baker at bake time, so
-## this file is bake-adjacent CODE. No resource dependency edge reaches it (Godot reports
-## resource deps, not script->script edges), so it is named in LevelBaker.BAKE_CODE_INPUTS
-## and hashed explicitly — editing it re-stales every level by itself. Still bump
-## BAKER_VERSION for semantic changes, so the intent is recorded and old manifests are
-## rejected on version alone.
-##
-## Frames: the road frame is built from the tangent + world UP (right vector always
-## horizontal, pitch follows slope, roll ONLY from explicit curve tilt) — deliberately
-## NOT Curve3D.sample_baked_with_rotation, whose parallel-transported up vector
-## accumulates roll on climbing turns. Because the right vector flips WITH the tangent,
-## reversing a curve's direction preserves the winding (still up-facing).
-##
-## Closed loops (first control position == last): the two end rings share an origin, so
-## extrude gives BOTH the bisector of the two end tangents — a smooth seam loses its
-## residual crease, an angled seam gets a proper miter — and the duplicated ring welds
-## at bake (1 mm snap).
+## Pure road-geometry math for RoadPath: curve sampling, ribbon extrusion from a
+## RoadProfile cross-section, and the destructive conform-terrain flatten mask. Static,
+## deterministic, editor-free so the headless baker can call it on an untreed level.
+## Bake-adjacent code (LevelBaker.BAKE_CODE_INPUTS): bump BAKER_VERSION on semantic changes.
+## Frame = tangent x world UP (never parallel-transported, so roll never accumulates on
+## climbing turns). Closed loops (first control == last) share one bisector end frame.
 
-## Subdivision floor (m): a segment this short is never bisected, so a hard kink in the
-## curve terminates the recursion instead of recursing forever.
+## Subdivision floor (m): shorter segments are never bisected further.
 const MIN_SEG := 0.5
 ## Finite-difference half-step (m) for tangents.
 const TANGENT_H := 0.1
-## Inside-edge fold clamp: between two rings, a cross-section point at |x| beyond the
-## local turn radius (ds / tangent swing) sweeps BACKWARDS and the ribbon self-overlaps.
-## Extrude clamps the inside lateral to this fraction of the local radius, so any curve
-## — hairpins, zero-handle corners — renders fold-free (the inner edge pinches instead).
+## Fold clamp: beyond the local turn radius (ds / tangent swing) a cross-section point
+## sweeps backwards and self-overlaps; extrude clamps the inside lateral to this fraction
+## of the local radius so hairpins render fold-free.
 const FOLD_MARGIN := 0.95
-## Largest angle (degrees) an endpoint handle may deviate from the curve's own end tangent
-## before extrude falls back to the finite difference. The handle is the better end frame
-## for a port-snapped road (see extrude), but it is authored freely — the built-in Path3D
-## gizmo will happily leave an out-handle near-perpendicular to the first chord. An end
-## ring yawed that far makes the first segment's tangent swing enormous, the fold clamp
-## then pinches ring 0 to nothing, and the road starts as a bowtie instead of a ring.
-## Past this the handle is no longer describing the road's direction.
+## Max deviation (deg) of an end handle from the curve's own end tangent before extrude
+## falls back to the finite difference (past this a handle would bowtie the first ring).
 const END_TANGENT_MAX_DEV_DEG := 60.0
 
 
 # ------------------------------------------------------------ adaptive sampling
 
-## Baked-length offsets along the curve: strictly increasing, first 0.0, last ==
-## get_baked_length(). Every interior control point's arc offset is an anchor, then
-## each anchor span is cut into uniform segments of at most max_seg_len and each is
-## recursively bisected while tangents across it disagree by more than max_angle_deg
-## — checked end-to-end AND against the midpoint tangent, so an S-inflection whose
-## end tangents happen to be parallel still subdivides.
-##
-## The control-point anchors are the corner miter: a zero-handle kink gets a ring
-## exactly AT the corner, whose central-difference tangent is the angle bisector —
-## without it the nearest rings sit up to MIN_SEG away on either side and the edge
-## notches/overlaps even at small angles. (When the local turn radius drops below the
-## ribbon half-width, extrude's FOLD_MARGIN clamp pinches the inside edge instead of
-## letting it self-overlap.)
-## Empty for a null / <2-point / ~zero-length curve.
+## Baked-length offsets along the curve, strictly increasing. Each control point anchors
+## a ring (the corner miter); each span subdivides while tangents disagree by more than
+## max_angle_deg. Empty for a null / <2-point / ~zero-length curve.
 static func adaptive_offsets(curve: Curve3D, max_seg_len: float,
 		max_angle_deg: float) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
@@ -72,8 +37,6 @@ static func adaptive_offsets(curve: Curve3D, max_seg_len: float,
 	var anchors := PackedFloat32Array([0.0])
 	for i in range(1, curve.point_count - 1):
 		var o := curve.get_closest_offset(curve.get_point_position(i))
-		# Strictly ascending with breathing room, so a self-near curve's bogus
-		# closest-offset match degrades to the plain split instead of misordering.
 		if o - anchors[anchors.size() - 1] > MIN_SEG * 0.5 and length - o > MIN_SEG * 0.5:
 			anchors.append(o)
 	anchors.append(length)
@@ -89,13 +52,8 @@ static func adaptive_offsets(curve: Curve3D, max_seg_len: float,
 	return out
 
 
-## Catmull-Rom-style auto-handles for a curve point from its two neighbours: both
-## handles share the neighbour-chord direction; each is a third of the distance to
-## its own neighbour, so closely spaced points stay tight and long spans arc wide.
-## The draw tool applies this to the previous point per click and RoadPath's Smooth
-## button to every interior point — hand-clicked polylines become C1 curves. (C1 does
-## NOT guarantee a minimum turn radius; extrude's fold clamp covers what remains.)
-## Coincident neighbours degenerate to zero handles.
+## Catmull-Rom-style auto-handles: each handle is a third of the distance to its own
+## neighbour along the shared chord direction. Coincident neighbours -> zero handles.
 static func smooth_handles(prev: Vector3, point: Vector3, next: Vector3) -> Dictionary:
 	var chord := next - prev
 	if chord.length_squared() < 1e-12:
@@ -106,13 +64,8 @@ static func smooth_handles(prev: Vector3, point: Vector3, next: Vector3) -> Dict
 
 
 # ------------------------------------------------------------ draw-mode primitives
-# Pure helpers for the addon's Straight/Arc draw sub-modes. Additive only — nothing
-# below feeds extrusion or conform, so bake output is untouched (no BAKER_VERSION bump).
+# Additive only — none of these feed extrusion or conform.
 
-
-## Snap `dir`'s XZ heading to the nearest multiple of step_deg, preserving XZ length
-## and Y (the draw tool's angle-snap toggle). step_deg <= 0 or a ~vertical dir returns
-## dir unchanged.
 static func snap_direction(dir: Vector3, step_deg: float) -> Vector3:
 	if step_deg <= 0.0:
 		return dir
@@ -124,11 +77,7 @@ static func snap_direction(dir: Vector3, step_deg: float) -> Vector3:
 	return Vector3(cos(heading) * len_xz, dir.y, sin(heading) * len_xz)
 
 
-## First curve point index that coincides with its predecessor (a zero-length segment),
-## or -1 when the curve is clean. Coincident control points make Curve3D's bake spam
-## "Zero length interval." / "The target vector can't be zero." (verified), so the draw
-## tool refuses clicks that would create one and RoadPath warns when the gizmo already did.
-## Pure — additive, no bake output.
+## First curve point index coinciding with its predecessor, or -1 when clean.
 static func first_coincident_index(curve: Curve3D) -> int:
 	if curve == null:
 		return -1
@@ -138,10 +87,7 @@ static func first_coincident_index(curve: Curve3D) -> int:
 	return -1
 
 
-## Distance between a curve's first and last control positions — the gap a "closed" loop
-## fails to close. INF for a curve too short to be a loop. Single owner of the closed-loop
-## question: extrude's seam handling asks is_closed_loop, and RoadPath warns when this is
-## small but nonzero (a loop closed by eye rather than by snapping).
+## Gap between a curve's first and last control positions. INF if too short to be a loop.
 static func endpoint_gap(curve: Curve3D) -> float:
 	if curve == null or curve.point_count < 3:
 		return INF
@@ -149,8 +95,7 @@ static func endpoint_gap(curve: Curve3D) -> float:
 			curve.get_point_position(curve.point_count - 1))
 
 
-## Whether the two end control points coincide, so extrude gives both end rings the
-## bisector of the end tangents and the duplicated ring welds at bake.
+## Whether the two end control points coincide.
 static func is_closed_loop(curve: Curve3D) -> bool:
 	if curve == null or curve.point_count < 3:
 		return false
@@ -158,13 +103,8 @@ static func is_closed_loop(curve: Curve3D) -> bool:
 			curve.get_point_position(curve.point_count - 1))
 
 
-## Outward end tangent of an open curve at one end (curve-local, unit): the direction a
-## road CONTINUES past that end — used by the draw tool's road-to-road snapping to lock a
-## joined road's handle collinear with this one (a seamless deck join). Reads the endpoint
-## handle (get_point_in at the last point / get_point_out at the first, negated to point
-## AWAY from the road), falling back to the chord toward the adjacent point when the handle
-## is zero (polyline / Straight ends). Vector3.ZERO for a < 2-point curve. Additive — no
-## bake output, no BAKER_VERSION bump.
+## Outward end tangent (curve-local, unit) used by road-to-road snapping. Falls back to
+## the chord toward the adjacent point when the handle is zero.
 static func end_tangent_out(curve: Curve3D, at_last: bool) -> Vector3:
 	if curve == null or curve.point_count < 2:
 		return Vector3.ZERO
@@ -182,16 +122,10 @@ static func end_tangent_out(curve: Curve3D, at_last: bool) -> Vector3:
 	return chord0.normalized() if chord0.length_squared() > 1e-12 else Vector3.ZERO
 
 
-## 3-click circular arc (start point, tangent direction, end point — the
-## Cities: Skylines pattern) as Curve3D point data:
-## {start_out: Vector3, points: [{pos, in, out}, ...], radius: float}.
-## The circle is solved in XZ from the start tangent + chord; the sweep (reflex
-## supported) is split into equal sub-arcs of <= 90 deg, each emitted as one cubic via
-## the standard approximation (handle length 4/3 * tan(sub/4) * r), so `points` holds
-## the interior split points plus the end. Height lerps linearly along arc length and
-## the slope rides in every handle, keeping 3D tangent continuity at the joins
-## (in == -out by construction). A ~collinear end or degenerate input falls back to a
-## straight zero-handle segment with radius INF.
+## 3-click circular arc (start point, tangent, end point) as Curve3D point data:
+## {start_out: Vector3, points: [{pos, in, out}, ...], radius: float}. Split into
+## <= 90 deg cubic sub-arcs. Degenerate input falls back to a straight zero-handle
+## segment, radius INF.
 static func arc_points(start: Vector3, start_dir: Vector3, end: Vector3) -> Dictionary:
 	var straight := {"start_out": Vector3.ZERO,
 			"points": [{"pos": end, "in": Vector3.ZERO, "out": Vector3.ZERO}],
@@ -202,7 +136,7 @@ static func arc_points(start: Vector3, start_dir: Vector3, end: Vector3) -> Dict
 		return straight
 	t2 = t2.normalized()
 	var side := t2.x * d2.y - t2.y * d2.x
-	# chord nearly along the tangent: the radius explodes — a straight reads the same
+	# chord nearly along the tangent: radius explodes, fall back to straight
 	if absf(side) < d2.length() * 0.001:
 		return straight
 	var r_signed := d2.length_squared() / (2.0 * side)
@@ -214,8 +148,6 @@ static func arc_points(start: Vector3, start_dir: Vector3, end: Vector3) -> Dict
 	var sweep := fposmod(turn * (u1.angle() - u0.angle()), TAU)
 	if sweep < 1e-4:
 		return straight
-	# tolerance so an exact 90/180/270-degree sweep doesn't ceil into an extra segment
-	# (Vector2.angle() is float32 — the sweep carries ~1e-7 noise against float64 PI)
 	var segs := maxi(1, int(ceil(sweep / (PI * 0.5) - 1e-5)))
 	var sub := sweep / float(segs)
 	var k := 4.0 / 3.0 * tan(sub * 0.25) * radius
@@ -235,7 +167,6 @@ static func arc_points(start: Vector3, start_dir: Vector3, end: Vector3) -> Dict
 	return {"start_out": start_out, "points": pts, "radius": radius}
 
 
-## Append the offsets of (a, b] to out, bisecting while curvature demands it.
 static func _subdivide(curve: Curve3D, a: float, b: float, max_angle: float,
 		length: float, out: PackedFloat32Array) -> void:
 	if b - a > MIN_SEG:
@@ -251,7 +182,6 @@ static func _subdivide(curve: Curve3D, a: float, b: float, max_angle: float,
 	out.append(b)
 
 
-## Central-difference tangent at a baked offset, clamped at the curve ends.
 static func tangent_at(curve: Curve3D, offset: float, length: float) -> Vector3:
 	var a := curve.sample_baked(maxf(offset - TANGENT_H, 0.0))
 	var b := curve.sample_baked(minf(offset + TANGENT_H, length))
@@ -259,12 +189,8 @@ static func tangent_at(curve: Curve3D, offset: float, length: float) -> Vector3:
 	return d.normalized() if d.length_squared() > 1e-12 else Vector3.FORWARD
 
 
-## Smallest local turn radius extrude's fold clamp will see over the curve: per
-## adjacent ring pair, ds / tangent swing — skipping pure pitch kinks (crest/dip, no
-## lateral component), exactly like the clamp. INF for straights/degenerate curves.
-## The draw tool refuses clicks that would drop this below the ribbon half-width: below
-## that floor the inside edge pinches to the fold point and the corner reads as a slit
-## — geometric, not fixable by frames (adding this helper changes no bake output).
+## Smallest local turn radius extrude's fold clamp will see. INF for straights.
+## The draw tool refuses clicks that drop this below the ribbon half-width.
 static func min_turn_radius(curve: Curve3D, max_seg_len: float,
 		max_angle_deg: float) -> float:
 	var offsets := adaptive_offsets(curve, max_seg_len, max_angle_deg)
@@ -284,18 +210,14 @@ static func min_turn_radius(curve: Curve3D, max_seg_len: float,
 	return best
 
 
-## Road frame at a baked offset: basis.x = right (horizontal unless tilted), basis.y =
-## up, origin = the curve point. A near-vertical tangent (authoring pathology — roads
-## are never vertical) degenerates T x UP, so the caller threads the previous ring's
-## right vector through as the fallback (Vector3.RIGHT for the first ring).
+## Road frame: basis.x = right, basis.y = up. A near-vertical tangent degenerates T x UP,
+## so `prev_right` is the fallback (Vector3.RIGHT for the first ring).
 static func frame_at(curve: Curve3D, offset: float, length: float, tilt: float,
 		prev_right: Vector3) -> Transform3D:
 	return frame_from_tangent(tangent_at(curve, offset, length),
 			curve.sample_baked(offset), tilt, prev_right)
 
 
-## frame_at with an explicit tangent — extrude overrides the two end tangents of a
-## closed loop with their bisector so the seam rings coincide exactly.
 static func frame_from_tangent(t: Vector3, origin: Vector3, tilt: float,
 		prev_right: Vector3) -> Transform3D:
 	var r := t.cross(Vector3.UP)
@@ -311,9 +233,6 @@ static func frame_from_tangent(t: Vector3, origin: Vector3, tilt: float,
 
 # ------------------------------------------------------------------ banking LUT
 
-## Tilt lookup from the baked point/tilt parallel arrays: [cumulative chord lengths,
-## tilts]. Chord length tracks baked length closely (baked points are dense). Built
-## only when banking is on.
 static func tilt_lut(curve: Curve3D) -> Array:
 	var pts := curve.get_baked_points()
 	var tilts := curve.get_baked_tilts()
@@ -324,7 +243,6 @@ static func tilt_lut(curve: Curve3D) -> Array:
 	return [cum, tilts]
 
 
-## Lerped tilt at a baked offset (binary search over the cumulative lengths).
 static func tilt_at(lut: Array, offset: float) -> float:
 	var cum: PackedFloat32Array = lut[0]
 	var tilts: PackedFloat32Array = lut[1]
@@ -342,16 +260,13 @@ static func tilt_at(lut: Array, offset: float) -> float:
 
 # ---------------------------------------------------------------------- extrusion
 
-## Extrude the cross-section along the curve, in curve-local space. Returns
-## {material slot (int): Mesh.ARRAY_MAX-sized arrays} — one indexed triangle surface
-## per slot that has strips. Strips do NOT share verts across breakpoints (crisp
-## low-poly hard edges at material changes and the drop crease). Per vertex:
+## Extrude the cross-section along the curve. Returns {material slot: Mesh.ARRAY_MAX-sized
+## arrays} — one indexed triangle surface per slot. Strips do not share verts across
+## breakpoints (hard edges at material changes). Per vertex:
 ##   position = origin + R * x' + U * p.y, x' = p.x fold-clamped (see FOLD_MARGIN)
-##   normal   = R * n2.x + U * n2.y, n2 = perp of the 2D strip edge (flat strip -> +U)
+##   normal   = R * n2.x + U * n2.y, n2 = perp of the 2D strip edge
 ##   uv       = (lateral meters, arc-length meters)
-## Winding per quad is clockwise seen from above (Godot's front-face order, same as
-## heightmap_terrain._build_chunk) and stays up-facing when the curve is reversed,
-## because R flips with T.
+## Winding stays up-facing when the curve is reversed, because R flips with T.
 static func extrude(curve: Curve3D, points: PackedVector2Array, mats: PackedInt32Array,
 		offsets: PackedFloat32Array, banked: bool) -> Dictionary:
 	var result := {}
@@ -361,20 +276,16 @@ static func extrude(curve: Curve3D, points: PackedVector2Array, mats: PackedInt3
 	var length := curve.get_baked_length()
 	var lut: Array = tilt_lut(curve) if banked else []
 
-	# Closed loop: the two end rings share an origin, so both get the bisector of the
-	# two end tangents — one shared frame instead of a crease/wedge at the seam.
+	# Closed loop: both end rings get the bisector of the two end tangents.
 	var seam_tangent := Vector3.ZERO
 	if is_closed_loop(curve):
 		var bis := tangent_at(curve, 0.0, length) + tangent_at(curve, length, length)
 		if bis.length_squared() > 1e-12:
 			seam_tangent = bis.normalized()
 
-	# Open ends use the EXACT endpoint tangent — the handle direction — instead of the
-	# finite difference, which bends with any immediate curvature and yaws the end ring
-	# (a port-snapped end then buries one edge in the tile and gaps the other). Zero
-	# handles (polyline) keep the finite-difference fallback: the first chord is the
-	# exact tangent there anyway, and so does a handle that has been dragged more than
-	# END_TANGENT_MAX_DEV_DEG off the curve's own end direction (see the const).
+	# Open ends use the exact endpoint handle instead of the finite difference, which
+	# bends with curvature and yaws a port-snapped end. Zero handles and handles beyond
+	# END_TANGENT_MAX_DEV_DEG keep the finite-difference fallback.
 	var start_tangent := Vector3.ZERO
 	var end_tangent := Vector3.ZERO
 	if seam_tangent == Vector3.ZERO and curve.point_count >= 2:
@@ -406,13 +317,8 @@ static func extrude(curve: Curve3D, points: PackedVector2Array, mats: PackedInt3
 		prev_right = f.basis.x
 		frames.append(f)
 
-	# Inside-edge fold clamp, once per ring (strips share frames): per adjacent ring
-	# pair the local turn radius is ds / tangent swing, and the INSIDE of the turn is
-	# the side the tangent rotates toward — (t_a x t_b).UP > 0 turns toward the
-	# negative-lateral side (r = t x UP). A ring's clamp is the min over its adjacent
-	# pairs of FOLD_MARGIN * radius; straights and the outside stay INF (unclamped),
-	# a zero-handle corner's miter ring clamps to ~0 (the inside edge meets AT the
-	# corner and fans — the clean angled connection).
+	# Inside-edge fold clamp per ring: (t_a x t_b).UP > 0 marks the negative-lateral
+	# side as inside; the clamp is min FOLD_MARGIN * radius over adjacent pairs.
 	var clamp_neg := PackedFloat32Array()   # lateral p.x < 0 side
 	var clamp_pos := PackedFloat32Array()   # lateral p.x > 0 side
 	clamp_neg.resize(frames.size())
@@ -436,17 +342,12 @@ static func extrude(curve: Curve3D, points: PackedVector2Array, mats: PackedInt3
 			clamp_pos[i] = minf(clamp_pos[i], limit)
 			clamp_pos[i + 1] = minf(clamp_pos[i + 1], limit)
 
-	# A cross-section whose polyline CLOSES (last point == first) encloses a solid volume —
-	# exactly what RoadProfile emits when base_depth > 0. Sweeping it alone produced an
-	# open tube: you looked straight down a bridge's open end into its hollow interior,
-	# and because the box's walls and floor are welded into the drivable body, a vehicle
-	# that entered through an open end sat inside it and dropped out through the back
-	# faces of the floor. Cap both ends with the section's own triangulation.
+	# A closed cross-section polyline (base_depth > 0) encloses a volume; without end
+	# caps a vehicle could enter the open end and fall through the floor.
 	var closed_section := points.size() >= 4 \
 			and points[0].is_equal_approx(points[points.size() - 1])
 	var cap_slot: int = mats[mats.size() - 1] if closed_section else -1
 
-	# insertion-ordered slot list (deterministic: strip order)
 	var slots: Array[int] = []
 	for m in mats:
 		if not slots.has(m):
@@ -468,8 +369,7 @@ static func extrude(curve: Curve3D, points: PackedVector2Array, mats: PackedInt3
 				var f := frames[ri]
 				var r := f.basis.x
 				var u := f.basis.y
-				# fold clamp collapses the inside lateral toward the fold point; the UV
-				# keeps the profile p.x so material mapping is untouched, y unchanged
+				# fold clamp collapses lateral position; UV keeps the original profile p.x
 				var x0 := _clamp_lateral(p0.x, clamp_neg[ri], clamp_pos[ri])
 				var x1 := _clamp_lateral(p1.x, clamp_neg[ri], clamp_pos[ri])
 				pos.append(f.origin + r * x0 + u * p0.y)
@@ -496,13 +396,9 @@ static func extrude(curve: Curve3D, points: PackedVector2Array, mats: PackedInt3
 
 
 ## Triangulate the closed cross-section at the first and last ring and append both caps,
-## using each ring's OWN fold-clamped laterals so a cap always meets the strips it closes.
-##
-## Facing: a cap vertex is origin + R*x + U*y, and R x U == -T, so a triangle whose 2D
-## signed area is positive has its Godot front face along +T. The last ring's cap must
-## face +T (forward, out of the road) and the first ring's -T, so each triangle is emitted
-## in whichever order gives its side the sign it needs. Degenerate rings (a fold clamp
-## tight enough to collapse the section) simply get no cap rather than a fan of slivers.
+## using each ring's own fold-clamped laterals. Facing: R x U == -T, so the last ring's
+## cap needs +T-facing triangles and the first ring's -T; winding is chosen per triangle
+## to match. A degenerate (fold-clamped) ring gets no cap.
 static func _append_end_caps(pos: PackedVector3Array, nrm: PackedVector3Array,
 		uv: PackedVector2Array, idx: PackedInt32Array, frames: Array[Transform3D],
 		points: PackedVector2Array, offsets: PackedFloat32Array,
@@ -538,16 +434,14 @@ static func _append_end_caps(pos: PackedVector3Array, nrm: PackedVector3Array,
 				idx.append_array(PackedInt32Array([base + a, base + c, base + b]))
 
 
-## Signed lateral clamped to its side's fold limit (INF = untouched).
 static func _clamp_lateral(x: float, c_neg: float, c_pos: float) -> float:
 	if x < 0.0:
 		return -minf(-x, c_neg)
 	return minf(x, c_pos)
 
 
-## Flatten extruded surfaces into an unindexed triangle soup (same verts, same winding,
-## so render and collision coincide) — the weld-pool / dev-trimesh input. Slots are
-## visited sorted so the soup is deterministic.
+## Flatten extruded surfaces into an unindexed triangle soup (same verts/winding as
+## render, for collision) — the weld-pool / dev-trimesh input.
 static func faces_from_surfaces(surfaces: Dictionary) -> PackedVector3Array:
 	var out := PackedVector3Array()
 	var keys := surfaces.keys()
@@ -562,10 +456,8 @@ static func faces_from_surfaces(surfaces: Dictionary) -> PackedVector3Array:
 
 
 ## Transform surface arrays: positions by the full transform, normals by the
-## inverse-transpose basis re-normalized (for a non-identity Path3D child transform), and
-## triangles reversed when the transform mirrors — a Path3D child scaled negatively on one
-## axis would otherwise hand the baker a ribbon wound inside-out (same trap as
-## LevelBaker.SurfaceAccumulator.append).
+## inverse-transpose basis re-normalized, and triangles reversed when the transform
+## mirrors (a negatively-scaled Path3D child would otherwise wind the ribbon inside-out).
 static func transform_surface_arrays(arrays: Array, xform: Transform3D) -> Array:
 	var out := arrays.duplicate()
 	var pos: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
@@ -595,8 +487,8 @@ static func transform_surface_arrays(arrays: Array, xform: Transform3D) -> Array
 
 # ------------------------------------------------------------------ conform math
 
-## Flatten blend weight for a centerline distance: 1 inside half_width, smoothstep down
-## to 0 at half_width + falloff.
+## Blend weight for a centerline distance: 1 inside half_width, smoothstep to 0 at
+## half_width + falloff.
 static func flatten_weight(dist: float, half_width: float, falloff: float) -> float:
 	if dist <= half_width:
 		return 1.0
@@ -607,32 +499,17 @@ static func flatten_weight(dist: float, half_width: float, falloff: float) -> fl
 	return 1.0 - t * t * (3.0 - 2.0 * t)
 
 
-## Flatten the greyscale height image under a road. `samples` are
-## (local_x, local_z, target_norm) triples — terrain-LOCAL, node-origin-relative XZ
-## (the height_at convention) packed as Vector3(x, z, target); target_norm is the
-## normalized [0,1] road height. Callers sample AT the extrusion's adaptive_offsets
-## rings: the lerp between consecutive samples then IS the ribbon's chordal surface,
-## so the flatten can never target the analytic curve where it rides above the
-## chords over a crest. `deck` (optional, same packing per vertex, 3 verts per
-## triangle) is the actual full-width deck strip extruded on the ribbon's frames;
-## where a pixel lands inside a deck triangle its plane height replaces the
-## centerline projection (see the raster pass below — the projection is wrong at the
-## edges of steep yawing segments). Pixel mapping mirrors HeightmapTerrain.height_at
-## exactly: px = (lx + span_x*0.5) / span_x * (iw-1), separate x/z pixel scales (the
-## brush_ops anisotropy convention). Per pixel the strictly-nearest centerline SEGMENT
-## wins (first segment wins ties — deterministic) and the target is LERPED at the
-## pixel's projection onto it — never the nearest point sample: a point target is off
-## by up to half the sample spacing x the grade, which at ε = 0.05 pokes terrain
-## through the ribbon on any grade over ~20%. One apply
-## pass then blends toward the target:
-##   new = lerp(old, quantize(target), flatten_weight(dist, half_width, falloff))
-## half_width is the flatten plateau — callers pass the FULL ribbon half-width
-## (skirt included) so terrain under the drop skirt sits at a predictable road - ε
-## and always crosses the skirt on its slope. quantize is floor(t*255)/255 — FLOOR,
-## not round, so the 8-bit PNG can never store terrain ABOVE the analytic road height
-## (the z-fight guard; any epsilon > 0 suffices, but the skirt must absorb
-## epsilon + one height step). Returns the tight dirty Rect2i in pixels (empty if
-## unchanged). Same inputs -> identical bytes.
+## Flatten the greyscale height image under a road. `samples` are terrain-local
+## (local_x, local_z, target_norm) triples at the extrusion's adaptive_offsets rings, so
+## the lerp between samples is the ribbon's own chordal surface, not the analytic curve
+## (which rides above the chords over a crest). `deck` (optional, same packing, 3
+## verts/triangle) is the full-width deck strip; a pixel inside a deck triangle takes its
+## plane height instead of the centerline projection, which is wrong on steep + yawing
+## segments. Per pixel the nearest centerline segment wins and the target is lerped at
+## the projection onto it, not the nearest sample point. quantize floors (never rounds)
+## so the 8-bit PNG never stores terrain above the analytic road height; the skirt must
+## absorb epsilon + one height step. Returns the tight dirty Rect2i (empty if unchanged).
+## Same inputs -> identical bytes.
 static func conform_heights(img: Image, samples: PackedVector3Array, half_width: float,
 		falloff: float, span_x: float, span_z: float,
 		deck := PackedVector3Array()) -> Rect2i:
@@ -648,7 +525,6 @@ static func conform_heights(img: Image, samples: PackedVector3Array, half_width:
 	var rx := reach * sx
 	var rz := reach * sz
 
-	# padded bounding pixel rect over all samples
 	var min_px := iw
 	var max_px := -1
 	var min_pz := ih
@@ -669,8 +545,6 @@ static func conform_heights(img: Image, samples: PackedVector3Array, half_width:
 	var rw := max_px - min_px + 1
 	var rh := max_pz - min_pz + 1
 
-	# nearest-segment pass: per pixel, keep the smallest squared distance to any
-	# centerline segment + the target lerped at the projection onto it
 	var dist2 := PackedFloat32Array()
 	dist2.resize(rw * rh)
 	dist2.fill(INF)
@@ -705,19 +579,8 @@ static func conform_heights(img: Image, samples: PackedVector3Array, half_width:
 					dist2[bi] = d2
 					target[bi] = lerpf(a.z, b.z, t)
 
-	# Deck raster pass: where the pixel center lies inside an actual ribbon-deck
-	# triangle (`deck`: terrain-local (x, z, target_norm) verts, 3 per triangle —
-	# the caller extrudes a flat full-width strip on the SAME frames as the ribbon),
-	# override the projected target with the triangle's plane height and pin the
-	# distance to 0 (plateau). The centerline projection above assumes the deck's
-	# lateral axis is perpendicular to the chord; on a segment that is both steep
-	# and yawing, the real ruled surface between rings shifts along-slope by up to
-	# half_width * sin(swing/2) * grade — tens of centimetres at authoring extremes,
-	# way past conform_epsilon, poking terrain through the ribbon edges of steep
-	# bends. Only the rasterized triangles are trustworthy where the ribbon actually
-	# is; the projection remains for the falloff ring beyond the deck (where the
-	# blend back to original terrain makes its error invisible). Raster order is the
-	# triangle order (deterministic); shared edges agree by plane continuity.
+	# Deck raster pass: a pixel inside a ribbon-deck triangle takes its plane height
+	# and pins distance to 0; the projection above still covers the falloff ring beyond it.
 	for ti in range(0, deck.size() - 2, 3):
 		var ta := deck[ti]
 		var tb := deck[ti + 1]
@@ -755,17 +618,11 @@ static func conform_heights(img: Image, samples: PackedVector3Array, half_width:
 			half_width, falloff, false)
 
 
-## Flatten under a set of axis-aligned XZ rects (GridMap tile footprints), each with
-## its own normalized [0,1] target height. Same terrain-local conventions and pixel
-## mapping as conform_heights; the plateau is the rect interior (distance 0 — callers
-## pass the tile's actual XZ footprint), the strictly-nearest rect wins per pixel
-## (first wins ties — pass rects in sorted-cell order, deterministic) and
-## flatten_weight smoothsteps out over `falloff` beyond the union. Targets are
-## ROUND-quantized, not floor: tiles sit ON the terrain, so the closest 8-bit height
-## either side of the cell base is the best meet — the deck (surface_y above the
-## base) hides the residual, unlike a road ribbon where storing above the surface
-## would poke through. Returns the tight dirty Rect2i in pixels (empty if unchanged).
-## Same inputs -> identical bytes.
+## Flatten under a set of axis-aligned XZ rects (GridMap tile footprints), each with its
+## own normalized [0,1] target height. Same conventions as conform_heights; nearest rect
+## wins per pixel (pass rects in sorted-cell order for determinism). Targets
+## round-quantize (not floor): tiles sit on the terrain, so the nearest 8-bit height
+## either side is the best meet (the deck hides the residual). Same inputs -> identical bytes.
 static func conform_rects(img: Image, rects: Array[Rect2], targets: PackedFloat32Array,
 		falloff: float, span_x: float, span_z: float) -> Rect2i:
 	var iw := img.get_width()
@@ -776,7 +633,6 @@ static func conform_rects(img: Image, rects: Array[Rect2], targets: PackedFloat3
 	var sz := float(ih - 1) / maxf(span_z, 0.001)
 	var reach := maxf(falloff, 0.0)
 
-	# padded bounding pixel rect over all rects
 	var min_px := iw
 	var max_px := -1
 	var min_pz := ih
@@ -795,8 +651,6 @@ static func conform_rects(img: Image, rects: Array[Rect2], targets: PackedFloat3
 	var rw := max_px - min_px + 1
 	var rh := max_pz - min_pz + 1
 
-	# nearest-rect pass: per pixel, keep the smallest squared distance to any rect
-	# (0 inside it) + that rect's target
 	var dist2 := PackedFloat32Array()
 	dist2.resize(rw * rh)
 	dist2.fill(INF)
@@ -824,10 +678,9 @@ static func conform_rects(img: Image, rects: Array[Rect2], targets: PackedFloat3
 			0.0, falloff, true)
 
 
-## Shared apply pass for conform_heights / conform_rects: blend each pixel toward its
-## quantized target by flatten_weight(nearest distance), tracking the dirty rect.
-## round_quantize: floor for road ribbons (never store above the surface), round for
-## tile bases (closest meet either side; the deck hides the residual).
+## Shared apply pass: blend each pixel toward its quantized target by
+## flatten_weight(nearest distance), tracking the dirty rect. round_quantize: floor for
+## road ribbons, round for tile bases.
 static func _apply_targets(img: Image, dist2: PackedFloat32Array,
 		target: PackedFloat32Array, min_px: int, min_pz: int, max_px: int,
 		max_pz: int, rw: int, half_width: float, falloff: float,

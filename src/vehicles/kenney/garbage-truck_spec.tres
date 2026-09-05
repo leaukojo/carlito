@@ -1,16 +1,15 @@
 [gd_resource type="Resource" script_class="VehicleSpec" format=3 uid="uid://djj8cm46wlt0t"]
 
-[ext_resource type="Script" uid="uid://dfx5igkkufs6j" path="res://src/vehicles/base/vehicle_spec.gd" id="1_jld4v"]
-[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="2_p1exh"]
+[ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="1_p1exh"]
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="2_iy4vk"]
+[ext_resource type="Script" uid="uid://dfx5igkkufs6j" path="res://src/vehicles/base/vehicle_spec.gd" id="3_nqva0"]
 
-[resource]
-script = ExtResource("1_jld4v")
-mass = 8000.0
-center_of_mass = Vector3(0, 0.3, -0.14)
-wheel_positions = PackedVector3Array(-0.7500001, 0.424, -1.302, 0.7500001, 0.424, -1.302, -0.5700001, 0.424, 0.642, 0.5700001, 0.424, 0.6419999)
+[sub_resource type="Resource" id="Resource_1ureh"]
+script = ExtResource("1_p1exh")
+wheel_positions = PackedVector3Array(-0.7500001, 0.59833336, -1.302, 0.7500001, 0.59833336, -1.302, -0.5700001, 0.59833336, 0.642, 0.5700001, 0.59833336, 0.6419999)
 wheel_radius = 0.36
 wheel_inertia = 3.0
-wheel_scene = ExtResource("2_p1exh")
+wheel_scene = ExtResource("2_iy4vk")
 retarder_equipped = true
 rest_length = 0.32
 spring_rate = 240000.0
@@ -19,17 +18,28 @@ damper_rebound = 15800.0
 max_suspension_force = 120000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 1.0
-torque_curve = PackedVector2Array(700, 520, 1200, 845, 1800, 1040, 2400, 1014, 2800, 780, 3200, 260)
+brake_torque = 6704.0
+handbrake_torque = 2567.0
+drag_area = 1.95
+rolling_resistance = 0.007
+max_steer_deg = 22.0
+min_steer_frac = 0.22
+steer_falloff_speed = 26.0
+
+[resource]
+script = ExtResource("3_nqva0")
+ground_drive = SubResource("Resource_1ureh")
+mass = 8000.0
+center_of_mass = Vector3(0, 0.3, -0.14)
+torque_curve = PackedVector2Array(700, 520, 1200, 845, 1800, 1040, 2400, 1014, 2800, 780, 3200, 0)
 idle_rpm = 700.0
 redline_rpm = 3200.0
-gear_ratios = PackedFloat32Array(6.5, 3.7, 2.4, 1.6, 1.2, 1)
+gear_ratios = PackedFloat32Array(6.5, 3.7, 2.4, 1.6, 1.2, 0.92)
 reverse_ratio = 6.0
 final_drive = 4.5
 shift_up_rpm = 2600.0
 shift_down_rpm = 1200.0
-brake_torque = 9583.0
-handbrake_torque = 2567.0
-max_steer_deg = 22.0
+speed_limit_kmh = 85.0
 steer_speed = 1.6
 headlight_paths = Array[NodePath]([NodePath("Lamps/HeadlightL"), NodePath("Lamps/HeadlightR")])
 head_lamp_paths = Array[NodePath]([NodePath("Lamps/HeadLensL"), NodePath("Lamps/HeadLensR")])

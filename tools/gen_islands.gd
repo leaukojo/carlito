@@ -1,19 +1,10 @@
 @tool
 extends SceneTree
-## Generates the blank-canvas island levels (level_2 .. level_4): heightmap PNG,
-## auto-splat PNG, LevelInfo and the level scene, all deterministic from the seeds
-## below. Re-running overwrites them — hand-authored content added afterwards
-## (AuthoringRoot children) would be lost, so this is a one-shot scaffolding tool,
-## not part of the bake pipeline.
-##
-## DO NOT RE-RUN AS IT STANDS. Levels 2 and 3 have since gained hand-added PlaneSpawn
-## nodes and allow-lists this template does not write, so a re-run silently deletes them.
-## Level 5 has left this tool entirely: tools/gen_rail_level.gd owns it now — it is the
-## rail level, and its terrain has to be conformed to the loop, which this template has
-## no notion of.
-##
-##   godot --headless --path . --script res://tools/gen_islands.gd
-##   godot --headless --path . --import      # then re-import the fresh PNGs
+## Generates the blank-canvas island levels (level_2 .. level_4): heightmap PNG, auto-splat
+## PNG, LevelInfo, level scene, deterministic from the seeds below. Do not re-run as it
+## stands: levels 2 and 3 have since gained hand-added PlaneSpawn nodes and allow-lists
+## this template does not write. Manifests are marked "replayable": false;
+## tools/rebuild_level.ps1 refuses them without -Force.
 
 const SIZE := 512.0          ## world extent (X and Z) — matches level_1
 const HEIGHT := 51.0         ## white-pixel amplitude; stores the 3 m road levels exactly
@@ -133,6 +124,7 @@ func _scene_text(cfg: Dictionary, spawn: Vector3) -> String:
 [ext_resource type="Texture2D" path="res://src/levels/island/{id}/{id}_island_splat.png" id="7_splat"]
 [ext_resource type="Shader" path="res://kit/terrain/terrain_splat.gdshader" id="8_shader"]
 [ext_resource type="Script" path="res://src/water/water_surface.gd" id="9_water"]
+[ext_resource type="Script" path="res://src/levels/base/world_bounds.gd" id="30_bounds"]
 [ext_resource type="Script" path="res://kit/helpers/authoring_root.gd" id="10_authoring"]
 [ext_resource type="Environment" path="res://src/levels/base/default_env.tres" id="11_env"]
 
@@ -191,6 +183,10 @@ script = ExtResource("9_water")
 size = Vector2({size_plus}, {size_plus})
 depth = 3.0
 far_sea_extent = 1900.0
+
+[node name="Bounds" type="StaticBody3D" parent="."]
+script = ExtResource("30_bounds")
+extent = Vector2({size_plus}, {size_plus})
 
 [node name="SeaBed" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.01, 0)

@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="VehicleSpec" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="VehicleSpec" load_steps=5 format=3]
 
-; Cab-over tractor unit. HAND-AUTHORED, like train_spec.tres and the bikes — this variant is not
+; Cab-over tractor unit. HAND-AUTHORED, like train_spec.tres — this variant is not
 ; in gen_kenney_vehicles.gd's VARIANTS (Kenney ships no semi), so there is no generator baseline
 ; behind it and every flag has to be right here or it is simply absent.
 ;
@@ -61,11 +61,22 @@
 
 [ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
 [ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="2_wheel"]
+[ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="3_grounddrive"]
 
-[resource]
-script = ExtResource("1_spec")
-mass = 8000.0
-center_of_mass = Vector3(0, 0.35, -0.15)
+; DRAG AREA 2.18 m^2 = 0.70 (a flat-fronted cab-over) x 0.82 x the cab's own 1.92 x 1.98 box, i.e.
+; the same Cd x 0.82 x w x h recipe gen_kenney_vehicles derives every generated spec from — the
+; number is measured off semi.tscn's collision boxes rather than chosen, so a re-authored cab
+; changes it for a reason. rolling_resistance 0.007 is a commercial radial.
+;
+; WHAT MAKES THIS A COMBINATION AND NOT A PENALTY: the trailer declares its OWN small drag area
+; (box_spec 0.60 — see there for the wake argument) and BOTH bodies apply their own aero, so a
+; coupled rig resists tractor + trailer = 2.78 m^2, about 1.27x a bobtail. The old per-mass engine
+; damp made it 4x instead, because it read the 24 t rather than the shape.
+
+[sub_resource type="Resource" id="Resource_grounddrive"]
+script = ExtResource("3_grounddrive")
+drag_area = 2.18
+rolling_resistance = 0.007
 wheel_positions = PackedVector3Array(-0.72, 0.424, -1.15, 0.72, 0.424, -1.15, -0.62, 0.424, 0.95, 0.62, 0.424, 0.95)
 wheel_radius = 0.36
 wheel_inertia = 3.0
@@ -73,7 +84,6 @@ wheel_scene = ExtResource("2_wheel")
 driven_front = false
 driven_rear = true
 retarder_equipped = true
-trailer_bus_equipped = true
 rest_length = 0.32
 spring_rate = 240000.0
 damper_bump = 12000.0
@@ -83,6 +93,18 @@ grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 1.0
 mu_lat = 0.95
 handbrake_grip = 1.0
+brake_torque = 10500.0
+handbrake_torque = 4800.0
+max_steer_deg = 24.0
+min_steer_frac = 0.21
+steer_falloff_speed = 25.0
+
+[resource]
+script = ExtResource("1_spec")
+mass = 8000.0
+center_of_mass = Vector3(0, 0.35, -0.15)
+ground_drive = SubResource("Resource_grounddrive")
+trailer_bus_equipped = true
 torque_curve = PackedVector2Array(700, 975, 1200, 1290, 1800, 1500, 2400, 1440, 2800, 1120, 3200, 375)
 idle_rpm = 700.0
 redline_rpm = 3200.0
@@ -92,9 +114,17 @@ final_drive = 4.5
 efficiency = 0.9
 shift_up_rpm = 2600.0
 shift_down_rpm = 1200.0
-brake_torque = 10500.0
-handbrake_torque = 4800.0
-max_steer_deg = 24.0
+; ROAD-SPEED GOVERNOR 90 km/h: the EU goods-vehicle limiter (Directive 92/6/EEC). INERT AS
+; GEARED — the 32 t rig settles at 82.7 km/h against drag, so it never acts — and declared
+; anyway, because it is the honest spec for a European artic and it is what catches a later
+; gearing change that would quietly put this unit over the legal figure.
+speed_limit_kmh = 90.0
+; HIGH-SPEED STEERING FALLOFF. 0.21 x 24 = 5.0 deg of usable lock at the floor, and the floor
+; is set at 25 m/s = the 90 km/h limiter above, so the whole governed cruise sits on it. A
+; coupled rig is the project's worst case for lock it cannot use: 5 deg at 90 km/h still asks
+; ~2.8x the lateral force mu_lat 0.95 can supply, so the tyres (and the trailer) let go long
+; before the rack runs out. Yard and junction work is untouched — 17.7 deg at 30 km/h, 20.8 at
+; 15, and effectively the full 24 below walking pace, where the taper is single digits.
 steer_speed = 1.8
 headlight_paths = Array[NodePath]([NodePath("Lamps/HeadlightL"), NodePath("Lamps/HeadlightR")])
 head_lamp_paths = Array[NodePath]([NodePath("Lamps/HeadLensL"), NodePath("Lamps/HeadLensR")])
