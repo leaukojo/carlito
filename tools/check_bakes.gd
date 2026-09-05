@@ -19,6 +19,10 @@ func _ready() -> void:
 	for entry: Dictionary in Registry.LEVELS:
 		var path := String(entry["scene"])
 		var result: Dictionary = Baker.check_level_file(path)
+		if path == "res://src/levels/island/level_1/level_1.tscn":
+			print("[check-bakes][DEBUG] per-file hashes for level_1:")
+			for f in Baker.gather_bake_inputs(path):
+				print("[check-bakes][DEBUG] %s : %s" % [f, Baker.hash_file(f)])
 		match String(result.status):
 			"no_authoring":
 				skipped += 1
