@@ -35,7 +35,7 @@ const SCATTER_MULTIMESH_THRESHOLD := 64
 const WELD_EPSILON := 0.001
 
 ## Text formats are hashed CRLF-normalized so line-ending drift doesn't flag a stale bake.
-const TEXT_EXTS: PackedStringArray = ["tscn", "tres", "json", "gd", "import", "cfg", "md", "txt"]
+const TEXT_EXTS: PackedStringArray = ["tscn", "tres", "json", "gd", "gdshader", "import", "cfg", "md", "txt"]
 
 
 # ---------------------------------------------------------------- pure helpers

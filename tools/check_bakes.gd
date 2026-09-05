@@ -19,10 +19,6 @@ func _ready() -> void:
 	for entry: Dictionary in Registry.LEVELS:
 		var path := String(entry["scene"])
 		var result: Dictionary = Baker.check_level_file(path)
-		if path == "res://src/levels/island/level_1/level_1.tscn":
-			print("[check-bakes][DEBUG] per-file hashes for level_1:")
-			for f in Baker.gather_bake_inputs(path):
-				print("[check-bakes][DEBUG] %s : %s" % [f, Baker.hash_file(f)])
 		match String(result.status):
 			"no_authoring":
 				skipped += 1
@@ -41,6 +37,13 @@ func _ready() -> void:
 				stale += 1
 				printerr("[check-bakes] %s: %s — %s (re-bake: tools/bake_levels.tscn or the AuthoringRoot Bake button, then commit %s)" %
 						[path, result.status, result.detail, Baker.manifest_path(path)])
+				# Per-file hash dump: a stale verdict this run has always been a cross-platform
+				# text-hash mismatch (a text format missing from Baker.TEXT_EXTS hashed as raw
+				# bytes, which differ Windows CRLF vs Linux LF checkout) rather than a genuine
+				# content change. Printed here so CI itself names the offending file instead of
+				# a re-run with an ad hoc debug patch.
+				for f in Baker.gather_bake_inputs(path):
+					print("[check-bakes][hash] %s : %s" % [f, Baker.hash_file(f)])
 	# Completion sentinel, printed only once every level has been checked. Callers must
 	# read this rather than the process exit code: headless Godot can finish the whole
 	# check and still die during teardown (intermittent SIGSEGV), turning a clean run into
