@@ -15,6 +15,9 @@ const DEFAULT_FOV := 60.0
 
 @export var camera_transform: Transform3D = Transform3D.IDENTITY
 @export_range(20.0, 110.0, 0.5) var fov: float = DEFAULT_FOV
+## Keeps the spawned default vehicle in frame instead of freeing it (endless levels with no
+## other landmark need the vehicle to read as anything but an empty rectangle).
+@export var keep_vehicle := false
 
 
 static func path_for(level_scene_path: String) -> String:

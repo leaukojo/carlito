@@ -1,0 +1,33 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://src/levels/base/level.gd" id="1_level"]
+[ext_resource type="Resource" path="res://src/levels/flatland/flatland_info.tres" id="2_info"]
+[ext_resource type="Script" path="res://src/vehicles/base/chase_camera.gd" id="3_cam"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="4_spawn"]
+[ext_resource type="Environment" path="res://src/levels/base/default_env.tres" id="5_env"]
+[ext_resource type="Script" path="res://src/levels/base/infinite_ground.gd" id="6_ground"]
+
+[node name="Flatland" type="Node3D"]
+script = ExtResource("1_level")
+info = ExtResource("2_info")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("5_env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, 0.353553, -0.353553, 0, 0.707107, 0.707107, 0.5, -0.612372, 0.612372, 0, 40, 0)
+light_color = Color(1, 0.96, 0.88, 1)
+shadow_enabled = true
+directional_shadow_blend_splits = true
+directional_shadow_max_distance = 150.0
+
+[node name="ChaseCamera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 6)
+script = ExtResource("3_cam")
+
+[node name="Spawn" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+script = ExtResource("4_spawn")
+
+[node name="Ground" type="StaticBody3D" parent="."]
+script = ExtResource("6_ground")

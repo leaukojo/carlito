@@ -27,10 +27,10 @@ func _real_contract() -> ContractScript.ContractData:
 	return _parse_file(ContractScript.CONTRACT_PATH)
 
 
-func test_real_contract_is_valid_v33() -> void:
+func test_real_contract_is_valid_v42() -> void:
 	var data := _real_contract()
 	assert_array(data.errors).is_empty()
-	assert_int(data.version).is_equal(33)
+	assert_int(data.version).is_equal(42)
 
 
 func _assert_core_signals_present(names: PackedStringArray, dir: String) -> void:
@@ -82,7 +82,7 @@ func test_count_defaults_to_one_and_an_ordinary_signal_is_not_instanced() -> voi
 	var data := _real_contract()
 	# Instanced signals NAMED rather than pattern-matched, so a fifth one is a deliberate edit here
 	# as well as in the contract. An `esc_` prefix test once let `slip` through when it grew a count.
-	var instanced := ["esc_rpm", "esc_current", "esc_temp", "node_health", "slip"]
+	var instanced := ["esc_rpm", "esc_current", "esc_temp", "node_health", "slip", "tank_level"]
 	for sig in data.signals:
 		if not (sig.name in instanced):
 			assert_int(sig.count) \
@@ -325,12 +325,11 @@ func test_tier1_isobus_signals_are_tractor_only_and_flavored() -> void:
 
 
 func test_shared_engine_signals_are_reused_by_the_truck_not_duplicated() -> void:
-	# Rule 4: engine_load / engine_hours / pto / pto_state are one signal each, listing both families.
-	# They keep the isobus flavor because ISO 11783 is built on J1939 — engine_load is SPN 92 whoever
-	# reads it. If a truck-flavored copy ever appears beside these, this fails.
+	# Rule 4: engine_load / pto / pto_state are one signal each, listing both families. They keep
+	# the isobus flavor because ISO 11783 is built on J1939 — engine_load is SPN 92 whoever reads
+	# it. If a truck-flavored copy ever appears beside these, this fails.
 	var data := _real_contract()
-	for entry: Array in [["engine_load", "out"], ["engine_hours", "out"],
-			["pto", "in"], ["pto_state", "out"]]:
+	for entry: Array in [["engine_load", "out"], ["pto", "in"], ["pto_state", "out"]]:
 		var sig := data.get_signal_def(entry[0], entry[1])
 		assert_object(sig).override_failure_message("missing %s/%s" % entry).is_not_null()
 		assert_array(sig.vehicles) \
@@ -338,6 +337,13 @@ func test_shared_engine_signals_are_reused_by_the_truck_not_duplicated() -> void
 			.is_equal(["tractor", "truck"])
 		assert_str(sig.flavor) \
 			.override_failure_message("%s/%s must stay isobus-flavored" % entry).is_equal("isobus")
+	# engine_hours is shared too, but Phase 5 widened it to the boat and dropped the isobus
+	# flavor: a boat does not speak J1939/ISOBUS, so the flavor would misstate the wire the
+	# reading travels for that family (the speed_limit/wheel_slip precedent).
+	var hours := data.get_signal_def("engine_hours", "out")
+	assert_object(hours).override_failure_message("missing engine_hours/out").is_not_null()
+	assert_array(hours.vehicles).is_equal(["tractor", "truck", "boat"])
+	assert_str(hours.flavor).is_equal("")
 	# The J1939 block must not re-declare any of them under a second flavor.
 	for sig in data.signals:
 		if sig.flavor != "j1939":
@@ -372,6 +378,75 @@ func test_j1939_chassis_signals_are_truck_only_and_flavored() -> void:
 			.override_failure_message("%s/%s must be j1939-flavored" % entry).is_equal("j1939")
 		assert_array(sig.vehicles) \
 			.override_failure_message("%s/%s must be truck-only" % entry).is_equal(["truck"])
+
+
+# --- boat NMEA 2000 ---
+
+func test_nmea2000_signals_are_boat_only_and_flavored() -> void:
+	var data := _real_contract()
+	for entry: Array in [["rudder", "in"], ["rudder_actual", "out"], ["trim", "out"],
+			["awa", "out"], ["aws", "out"], ["twd", "out"], ["tws", "out"],
+			["stw", "out"], ["sog", "out"], ["cog", "out"],
+			["current_set", "out"], ["current_drift", "out"], ["depth", "out"],
+			["nav_mode", "in"], ["heading_cmd", "in"],
+			["nav_mode_actual", "out"], ["heading_target", "out"]]:
+		var sig := data.get_signal_def(entry[0], entry[1])
+		assert_object(sig).override_failure_message("missing %s/%s" % entry).is_not_null()
+		assert_str(sig.flavor) \
+			.override_failure_message("%s/%s must be nmea2000-flavored" % entry).is_equal("nmea2000")
+		assert_array(sig.vehicles) \
+			.override_failure_message("%s/%s must be boat-only" % entry).is_equal(["boat"])
+
+
+func test_nmea2000_engine_room_signals_are_boat_only_and_flavored() -> void:
+	var data := _real_contract()
+	for entry: Array in [["fuel_rate", "out"], ["oil_press", "out"], ["tank_level", "out"]]:
+		var sig := data.get_signal_def(entry[0], entry[1])
+		assert_object(sig).override_failure_message("missing %s/%s" % entry).is_not_null()
+		assert_str(sig.flavor) \
+			.override_failure_message("%s/%s must be nmea2000-flavored" % entry).is_equal("nmea2000")
+		assert_array(sig.vehicles) \
+			.override_failure_message("%s/%s must be boat-only" % entry).is_equal(["boat"])
+	# tank_level is instanced (fresh/waste/live-well) and carries no warn: the three tanks have
+	# opposite dangerous directions, so no single threshold applies array-wide (the node_health
+	# reasoning). fuel stays the shared scalar signal and is deliberately not in this array.
+	var tank := data.get_signal_def("tank_level", "out")
+	assert_int(tank.count).is_equal(3)
+	assert_bool(tank.is_instanced()).is_true()
+	assert_bool(tank.has_warn()).is_false()
+	var fuel := data.get_signal_def("fuel", "out")
+	assert_int(fuel.count).is_equal(1)
+
+
+## The autopilot pair follows the drone's flight_mode/mode_actual shape exactly: both ends carry
+## an enum and NO range, so nav_mode_actual lands on the state-chip path rather than becoming a
+## 0-1 bar with no meaningful full scale. heading_target DOES carry one, like the other bearings.
+func test_the_autopilot_pair_is_enum_and_range_less_while_the_course_is_a_bearing() -> void:
+	var data := _real_contract()
+	for entry: Array in [["nav_mode", "in"], ["nav_mode_actual", "out"]]:
+		var sig := data.get_signal_def(entry[0], entry[1])
+		assert_bool(sig.has_enum()) \
+			.override_failure_message("%s/%s must carry an enum" % entry).is_true()
+		assert_array(sig.range) \
+			.override_failure_message("%s/%s must stay range-less (the mode_actual rule)" % entry) \
+			.is_empty()
+	for entry: Array in [["heading_cmd", "in"], ["heading_target", "out"]]:
+		var sig := data.get_signal_def(entry[0], entry[1])
+		assert_array(sig.range) \
+			.override_failure_message("%s/%s must be a [0,360] bearing" % entry) \
+			.is_equal([0.0, 360.0])
+
+
+func test_depth_warns_low_and_carries_its_no_bottom_sentinel_inside_the_range() -> void:
+	# Shallow is the dangerous side. The -1 sentinel lives INSIDE the range so the bar and the
+	# bridge agree on it, and it must stay below the warn rather than being confused with 0.
+	var data := _real_contract()
+	var sig := data.get_signal_def("depth", "out")
+	assert_str(sig.warn_side).is_equal("low")
+	assert_float(sig.warn).is_greater(0.0)
+	assert_int(sig.range.size()).is_equal(2)
+	assert_float(sig.range[0]).is_equal(-1.0)
+	assert_float(sig.range[1]).is_greater(sig.warn)
 
 
 func test_dm1_lamps_are_bools_and_add_nothing_for_the_mil() -> void:

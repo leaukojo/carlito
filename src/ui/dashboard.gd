@@ -2,16 +2,34 @@ class_name Dashboard
 extends Control
 ## Instrument cluster. Tell-tale row and bars are GENERATED from contract signal metadata
 ## (name, range, warn, flavor, instance count) — a bool "in" or warn'd/flavored "out" signal
-## appears here with no code change. The two radial gauges, the attitude indicator and the
-## node health strip are HAND-BUILT, reading only scale/redline/warn from the contract.
-## Density (AUTO/FULL/COMPACT/OFF) drops whole sections only, never individual signals:
-## COMPACT keeps the tell-tale row and gauges; AUTO picks COMPACT on a phone screen or while
-## the bridge is live, FULL otherwise, never OFF on its own. Plain text + color only.
+## appears here with no code change. The two radial gauges, the attitude indicator, the wind
+## rose, the depth readout and the node health strip are HAND-BUILT, reading only
+## scale/redline/warn/sentinel from the contract; the signals they draw leave the generated bar
+## column through WIDGET_SIGNALS.
+## Density (FULL/COMPACT/OFF) drops whole sections only, never individual signals: COMPACT
+## (the default) keeps the tell-tale row and gauges; FULL adds the bars, readout, wind rose and
+## echo sounder; OFF hides the cluster. Plain text + color only.
 
 ## Signals rendered as bespoke radial gauges (never as generated bars).
 const GAUGE_SIGNALS: PackedStringArray = ["kmh", "rpm"]
 ## Declaring both builds the hand-built attitude indicator (boat/plane/drone).
 const HORIZON_SIGNALS: PackedStringArray = ["pitch", "roll"]
+## Declaring all of these builds the hand-built wind rose (boat). The two SPEEDS are in the set
+## because the two ANGLES are undefined without them and both publish 0, which is a legal
+## bearing on either scale — the rose needs `aws` to know there is a wind and `sog` to know
+## there is a course before it draws a needle for one.
+const WIND_ROSE_SIGNALS: PackedStringArray = ["awa", "aws", "twd", "tws", "cog", "sog"]
+## Declaring it builds the hand-built echo sounder (boat).
+const DEPTH_SIGNAL := "depth"
+## Signals a hand-built instrument already draws, so they leave the generated bar column — the
+## sibling of GAUGE_SIGNALS. Without it the boat's ranged NMEA 2000 signals alone overflow one
+## column, and 'pitch'/'roll' render twice on every family that declares them: the attitude
+## indicator prints both numbers and they also satisfy the bar predicate.
+##
+## A NAME GOES HERE ONLY WITH A WIDGET THAT DRAWS IT ON EVERY FAMILY DECLARING IT — otherwise
+## this list is a way to make a signal vanish silently. Pinned by
+## test_every_widget_signal_keeps_a_display.
+const WIDGET_SIGNALS: PackedStringArray = ["pitch", "roll", "awa", "twd", "cog", "depth"]
 ## Instanced signal the node strip is generated from (drone's DroneCAN roster). Count decides
 ## how many squares there are.
 const NODE_HEALTH_SIGNAL := "node_health"
@@ -22,19 +40,26 @@ const BARO_FIELD := &"baro_alt"
 const GIMBAL_PITCH_FIELD := &"gimbal_pitch_actual"
 const GIMBAL_YAW_FIELD := &"gimbal_yaw_actual"
 const PAYLOAD_FIELD := &"payload_weight"
-
-## What is on screen. AUTO is a setting value only — `density()` never returns it.
-enum Density {AUTO, FULL, COMPACT, OFF}
-## Persisted setting ids (cfg file a human may open) and the SETTINGS page cycle order.
-const DENSITY_KEYS := {
-	Density.AUTO: "auto", Density.FULL: "full",
-	Density.COMPACT: "compact", Density.OFF: "off",
+## Range-less "out" signals that ride the readout line as plain numbers: contract name ->
+## [caption, format]. Contract-gated at build like HRS/LIM below, never duck-typed. The three
+## marine speeds carry no unit tag for the reason DashBar shows none — the cluster is an
+## instrument, not a spec sheet; SOG/STW/DRIFT are m/s and SAIL is degrees off the centreline,
+## signed to starboard (docs/systems.md). HRS/LIM/BARO/GMB/PAY stay bespoke below: none of them is
+## a plain number. SAIL is here because `sail_angle` is BOTH range-less and unflavored, so nothing
+## on the generated path would draw it at all — a boat with no rig still declares it and reads 0.
+const READOUT_EXTRAS := {
+	"sog": ["SOG", "%.1f"], "stw": ["STW", "%.1f"], "current_drift": ["DRIFT", "%.1f"],
+	"fuel_rate": ["BURN", "%.1f L/h"], "oil_press": ["OIL", "%.0f kPa"],
+	"sail_angle": ["SAIL", "%+.0f"],
 }
-## Window short edge (logical px) at or below which AUTO picks COMPACT.
-const COMPACT_SHORT_EDGE := 520.0
-## How long a change in Bridge.is_active() must hold before AUTO rebuilds (freshness flips on
-## a 300 ms window, Bridge.FRESHNESS_MS).
-const BRIDGE_DWELL_S := 2.0
+
+## What is on screen.
+enum Density {FULL, COMPACT, OFF}
+## Persisted setting ids (cfg file a human may open) and the SETTINGS page cycle order:
+## COMPACT -> FULL -> OFF -> COMPACT.
+const DENSITY_KEYS := {
+	Density.COMPACT: "compact", Density.FULL: "full", Density.OFF: "off",
+}
 
 # --- layout metrics (logical px at scale 1.0, scaled through UiTheme.px) -------
 
@@ -47,6 +72,12 @@ const MID_W := 280.0       ## middle column (bars + readout) minimum width
 const MID_GAP := 8.0       ## between the bars stacked in it
 const GAUGE_W := 150.0
 const GAUGE_W_COMPACT := 112.0
+## The sounder is a column of water, not a dial, so it takes a fraction of a gauge's width —
+## the boat carries the most cluster elements (speedo, bars, horizon, rose, sounder) and this is
+## where the slack came from. Measured at scale 1: 150 + 280 + 150 + 150 + 90 + four 24 px gaps
+## + the panel's own padding = 944 logical px, against the drone's shipped two-bar-column 984.
+## The boat is not the widest thing here; a THIRD bar column (~1236, see BAR_ROWS_MAX) is.
+const SOUNDER_W_FRAC := 0.6
 const BAR_H := 18.0
 ## Max bar rows (bars + group captions) per column before spilling into a second column. The
 ## cluster is full-width (280 px middle between two 150 px gauges), so a third column pushes
@@ -60,9 +91,9 @@ const BAR_H := 18.0
 ## truck's, currently 12) or a family with no instanced signal splits into two columns for no
 ## reason. `test_dashboard` pins both ends.
 ##
-## The drone is at 28 of the 28 rows two columns hold (`home_dist` used the last row). Give a
-## drone signal a range only if it has a meaningful full scale and you've re-derived this
-## budget — `esc_fault`, `node_health`, `node_online` stay range-less for that reason.
+## The drone is the tallest cluster at 26 of the 28 rows two columns hold. Give a drone signal
+## a range only if it has a meaningful full scale and you've re-derived this budget —
+## `esc_fault`, `node_health`, `node_online` stay range-less for that reason.
 ##
 ## Cost is panel height: 14 rows is ~356 px against 11 rows' ~278; the panel has no other bound.
 const BAR_ROWS_MAX := 14
@@ -145,11 +176,16 @@ const BAR_LABEL := {
 	"agl": "AGL", "sats": "SATS", "hdop": "HDOP", "home_dist": "HOME",
 	"catenary_volts": "LINE", "motor_current": "AMPS", "brake_pipe": "PIPE",
 	"grade": "GRADE", "coupler_force": "COUPL",
+	"rudder_actual": "RUDDER", "current_set": "SET", "heading_target": "TARGET",
+	"tank_level": "TANKS",
 }
 ## Cosmetic short captions for the generated enum "out" chips (like BAR_LABEL for bars). ARMING
 ## and FS avoid colliding with the ARM/ARMED tell-tale lamps above.
 const OUT_CHIP_TEXT := {"implement_type": "TOOL", "body_state": "BODY", "fix_type": "FIX",
-		"mode_actual": "MODE", "arming_state": "ARMING", "failsafe": "FS"}
+		"mode_actual": "MODE", "arming_state": "ARMING", "failsafe": "FS",
+		# The boat's autopilot readback. PILOT rather than MODE: the drone already has MODE, and
+		# the boat's requested `nav_mode` gets no chip of its own, exactly as `flight_mode` doesn't.
+		"nav_mode_actual": "PILOT"}
 ## uavcan.protocol.NodeStatus health -> square colour, indexed by the health value (0 OK,
 ## 1 WARNING, 2 ERROR, 3 CRITICAL, DroneBus's wire enum). Out-of-range falls back to CRITICAL,
 ## never to "looks fine".
@@ -167,6 +203,8 @@ var _gear_def: RefCounted = null  ## contract "gear" out SignalDef, for gear-byt
 var _speedo: Gauge
 var _tach: Gauge
 var _horizon: AttitudeIndicator = null  ## artificial horizon (flight families) — see HORIZON_SIGNALS
+var _rose: WindRose = null              ## wind/track rose (boat) — see WIND_ROSE_SIGNALS
+var _sounder: DepthReadout = null       ## echo sounder (boat) — see DEPTH_SIGNAL
 var _node_squares: Array[ColorRect] = []  ## one per bus node, roster order; empty with no node_health
 ## signal name -> Array[DashBar], always an array (a scalar has one entry) so the update loop
 ## needs no count branch: DashBar.value is typed float and would throw on an instanced Array.
@@ -178,6 +216,8 @@ var _out_chips := {} ## signal name -> [Label, SignalDef] (flavored enum "out" r
 var _readout: Label = null
 var _has_speed_limit := false  ## this family declares the 'speed_limit' out signal (SPN 74)
 var _has_engine_hours := false ## this family declares the 'engine_hours' out signal (SPN 247)
+## READOUT_EXTRAS entries this family declares, in table order: [[name, caption, format], ...].
+var _readout_extras: Array[Array] = []
 
 ## Bound vehicle's telemetry, resolved at bind rather than walked every frame; the shell rebinds
 ## on every Level.vehicle_changed. Null between levels.
@@ -190,19 +230,19 @@ var _bar_fields: Array[Array] = []       ## [[StringName, Array[DashBar]], ...]
 var _out_lamp_fields: Array[Array] = []  ## [[StringName, Label, lit Color], ...]
 var _out_chip_fields: Array[Array] = []  ## [[StringName, Label, SignalDef, caption], ...]
 var _node_health_field := &""  ## resolved 'node_health', or &"" where this cluster has no strip
+var _rose_fields: Array[StringName] = []   ## WIND_ROSE_SIGNALS in order, empty unless all resolved
+var _depth_field := &""                    ## resolved 'depth', or &"" where there is no sounder
+var _extra_fields: Array[Array] = []       ## [[StringName, caption, format], ...] for the readout
 var _has_baro := false         ## bound telemetry carries 'baro_alt' (drone) — readout line
 var _has_gimbal := false       ## ...'gimbal_pitch_actual' + 'gimbal_yaw_actual'
 var _has_payload := false      ## ...'payload_weight'
 var _field_warned := {}        ## field names already reported unresolved, so the warning is once
 var _reverser: Label = null  ## reverser (N/D/R) readout for a gear-out vehicle with no tacho (train)
 
-var _setting: int = Density.AUTO   ## what the player asked for (AUTO = let the rules decide)
-var _density: int = Density.FULL   ## what that resolves to right now
+var _density: int = Density.COMPACT  ## what the player asked for; always shown as given
 var _vehicle_type := ""        ## the family the current cluster was built for
 var _built := false            ## bind() has run at least once
 var _shown := false            ## the shell's HUD visibility, ANDed with the density
-var _bridge_seen := false      ## bridge freshness as the density last saw it (see BRIDGE_DWELL_S)
-var _bridge_changed_ms := 0
 
 
 ## Attach to a running Level and build the cluster for its active vehicle type.
@@ -215,14 +255,12 @@ func bind(level: Node) -> void:
 		# default_vehicle is a VARIANT ("bullet"); the contract keys signals by FAMILY ("train").
 		vtype = VehicleCatalog.family_of(level.info.default_vehicle)
 	_built = true
-	_bridge_seen = Bridge.is_active()
 	# Resolve telemetry before building: _build ends by binding every widget to a field on it.
 	_telem = null
 	if level != null:
 		var vehicle: Node = level.get("vehicle")
 		if vehicle != null:
 			_telem = vehicle.get("telemetry")
-	_density = _resolve()
 	_build(vtype)
 
 
@@ -230,41 +268,38 @@ func bind(level: Node) -> void:
 
 ## Setting -> the key it persists as (ShellPrefs stores a string; a cfg file may be hand-edited).
 static func key_of(setting: int) -> String:
-	return String(DENSITY_KEYS.get(setting, DENSITY_KEYS[Density.AUTO]))
+	return String(DENSITY_KEYS.get(setting, DENSITY_KEYS[Density.COMPACT]))
 
 
-## Inverse; an unknown key (older or hand-edited cfg) falls back to AUTO.
+## Inverse; an unknown key (older or hand-edited cfg, including a stale "auto") falls back to
+## COMPACT.
 static func setting_from_key(key: String) -> int:
 	for setting: int in DENSITY_KEYS:
 		if DENSITY_KEYS[setting] == key:
 			return setting
-	return Density.AUTO
+	return Density.COMPACT
 
 
-## Next setting in the cycle, for the SETTINGS page's one button.
+## Next setting in the cycle, for the SETTINGS page's one button (and F2).
 static func next_setting(setting: int) -> int:
 	var order: Array = DENSITY_KEYS.keys()
 	return int(order[(maxi(order.find(setting), 0) + 1) % order.size()])
 
 
-## What the player picked, AUTO included. The pause menu's SETTINGS page shows this.
+## What the player picked, which is exactly what is on screen.
 func density_setting() -> int:
-	return _setting
-
-
-## What is actually on screen (never AUTO).
-func density() -> int:
 	return _density
 
 
-## Set the setting (from the pause menu / saved prefs) and rebuild if the result differs.
+## Set the setting (from the pause menu / F2 / saved prefs) and rebuild if it differs.
 func set_density_setting(setting: int) -> void:
-	_setting = setting if setting in DENSITY_KEYS else Density.AUTO
-	if _setting == Density.AUTO:
-		# Re-read the bridge rather than let AUTO resolve from a stale answer nothing watched.
-		_bridge_seen = Bridge.is_active()
-		_bridge_changed_ms = 0
-	_apply_density()
+	var next := setting if setting in DENSITY_KEYS else Density.COMPACT
+	if next == _density and _built:
+		return
+	_density = next
+	if _built:
+		_build(_vehicle_type)
+	_apply_visible()
 
 
 ## Shell's HUD visibility, kept separate from density: neither may clobber the other, since
@@ -274,36 +309,14 @@ func set_shown(shown: bool) -> void:
 	_apply_visible()
 
 
-## Resolve the setting against the world; only AUTO consults anything.
-func _resolve() -> int:
-	if _setting != Density.AUTO:
-		return _setting
-	# AUTO never resolves to OFF — a dashboard that vanished on its own reads as a bug.
-	if UiScale.logical_short_edge(get_window()) <= COMPACT_SHORT_EDGE:
-		return Density.COMPACT
-	return Density.COMPACT if _bridge_seen else Density.FULL
-
-
-## Re-resolve and rebuild only if the answer changed. Every input to _resolve() routes here.
-func _apply_density() -> void:
-	var next := _resolve()
-	if next == _density and _built:
-		return
-	_density = next
-	if _built:
-		_build(_vehicle_type)
-	_apply_visible()
-
-
 func _apply_visible() -> void:
 	visible = _shown and _density != Density.OFF
 
 
-## A window resize rebuilds the theme (UiScale), which changes every metric below and can move
-## the screen across the phone-sized threshold, so the cluster is rebuilt here too.
+## A window resize rebuilds the theme (UiScale), which changes every metric below, so the
+## cluster is rebuilt here too.
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_THEME_CHANGED and _built:
-		_density = _resolve()
 		_build(_vehicle_type)
 		_apply_visible()
 
@@ -375,6 +388,11 @@ func _build(vehicle_type: String) -> void:
 	_readout = null
 	_has_speed_limit = out_names.has("speed_limit")
 	_has_engine_hours = out_names.has("engine_hours")
+	_readout_extras.clear()
+	for extra_name: String in READOUT_EXTRAS:
+		if out_names.has(extra_name):
+			var entry: Array = READOUT_EXTRAS[extra_name]
+			_readout_extras.append([extra_name, entry[0], entry[1]])
 	var wants_reverser := out_names.has("gear") and not out_names.has("rpm")
 	# The middle column (bars + readout) is what COMPACT drops, so on a train it holds only the
 	# reverser and on everything else in COMPACT it isn't built at all.
@@ -393,6 +411,11 @@ func _build(vehicle_type: String) -> void:
 			_build_bars(vehicle_type, mid)
 			_readout = Label.new()
 			_readout.theme_type_variation = &"Small"
+			# Wraps inside the middle column: the boat's line carries five marine readings on top
+			# of HDG/ODO/GPS, and an unwrapped Label would widen the whole cluster past the panel
+			# instead of growing it downward. A shorter line never wraps.
+			_readout.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			_readout.custom_minimum_size = Vector2(UiTheme.px(self, MID_W), 0)
 			mid.add_child(_readout)
 
 	_tach = null
@@ -406,6 +429,22 @@ func _build(vehicle_type: String) -> void:
 	if declares_horizon(out_names):
 		_horizon = _make_horizon()
 		cluster.add_child(_horizon)
+
+	# Wind/track rose and echo sounder: same contract gate, and FULL ONLY. The horizon survives
+	# COMPACT because it occupies the tacho SLOT of a vehicle that declares no 'rpm'; these two
+	# are ADDED beside the gauges, so keeping them would put the boat's phone-sized cluster ~200
+	# logical px past every other family's. They drop with the bars, which is the section their
+	# signals belong to: WIDGET_SIGNALS is the only reason those readings are not bars, and a
+	# density that drops bars has no room for their replacements either.
+	_rose = null
+	_sounder = null
+	if _density == Density.FULL:
+		if declares_wind_rose(out_names):
+			_rose = _make_wind_rose()
+			cluster.add_child(_rose)
+		if out_names.has(DEPTH_SIGNAL):
+			_sounder = _make_sounder()
+			cluster.add_child(_sounder)
 
 	# Every widget above is new, so field bindings are stale; a density change or theme rebuild
 	# comes back through here too.
@@ -483,7 +522,7 @@ func _build_bars(vehicle_type: String, into: Node) -> void:
 	var col: VBoxContainer = null
 	var col_rows := 0
 	for sig in Contract.data.signals_for_vehicle(vehicle_type, "out"):
-		if sig.name in GAUGE_SIGNALS or sig.range.size() != 2:
+		if sig.name in GAUGE_SIGNALS or sig.name in WIDGET_SIGNALS or sig.range.size() != 2:
 			continue
 		if not sig.has_warn() and sig.flavor == "":
 			continue
@@ -574,6 +613,15 @@ static func declares_horizon(out_names: Array) -> bool:
 	return true
 
 
+## Does this set of "out" signal names carry the whole wind/track set? Static for the same
+## reason declares_horizon is: the test pins the predicate the cluster builds from.
+static func declares_wind_rose(out_names: Array) -> bool:
+	for n in WIND_ROSE_SIGNALS:
+		if not out_names.has(n):
+			return false
+	return true
+
+
 ## Hand-built like the two gauges: only the two warn thresholds are read from the contract.
 func _make_horizon() -> AttitudeIndicator:
 	var h := AttitudeIndicator.new()
@@ -587,6 +635,34 @@ func _make_horizon() -> AttitudeIndicator:
 	if roll_def != null and roll_def.has_warn():
 		h.roll_warn = roll_def.warn
 	return h
+
+
+## Hand-built; the contract decides only that it exists. No scale to read — a rose is angles,
+## and aws/tws are the range-less readings the contract says have no honest full scale.
+func _make_wind_rose() -> WindRose:
+	var w := WindRose.new()
+	var edge := UiTheme.px(self, GAUGE_W)  # FULL only, so there is no COMPACT size to pick
+	w.custom_minimum_size = Vector2(edge, edge)
+	w.caption = "WIND"
+	return w
+
+
+## Hand-built; scale, shoal threshold and the no-bottom sentinel all come off 'depth'. The
+## sentinel is the contract's range FLOOR rather than a typed -1: the contract puts it inside
+## the range on purpose, and re-declaring it here is how the two drift apart.
+func _make_sounder() -> DepthReadout:
+	var d := DepthReadout.new()
+	var edge := UiTheme.px(self, GAUGE_W)  # FULL only, like the rose
+	d.custom_minimum_size = Vector2(edge * SOUNDER_W_FRAC, edge)
+	d.caption = "DEPTH"
+	var sig := Contract.data.get_signal_def(DEPTH_SIGNAL, "out")
+	if sig != null and sig.range.size() == 2:
+		d.invalid = float(sig.range[0])
+		d.max_value = float(sig.range[1])
+	if sig != null and sig.has_warn():
+		d.warn = sig.warn
+		d.warn_is_low = sig.warn_is_low()
+	return d
 
 
 func _make_gauge(signal_name: String, caption: String, ticks: int) -> Gauge:
@@ -613,26 +689,6 @@ func _short_unit(unit: String) -> String:
 		_: return ""
 
 
-## Watch bridge freshness for the AUTO density, with a dwell: Bridge.is_active() toggles on a
-## 300 ms freshness window, and rebuilding on every toggle would be visible thrash. State must
-## hold for BRIDGE_DWELL_S before the density acts on it.
-func _poll_bridge() -> void:
-	if _setting != Density.AUTO:
-		return  # an explicit pick does not consult the bridge
-	var live := Bridge.is_active()
-	if live == _bridge_seen:
-		_bridge_changed_ms = 0
-		return
-	if _bridge_changed_ms == 0:
-		_bridge_changed_ms = Time.get_ticks_msec()
-		return
-	if Time.get_ticks_msec() - _bridge_changed_ms < int(BRIDGE_DWELL_S * 1000.0):
-		return
-	_bridge_seen = live
-	_bridge_changed_ms = 0
-	_apply_density()
-
-
 ## Bind the built widgets to the telemetry fields they read, once per build.
 ##
 ## A widget knows only its contract signal name; the telemetry field may be spelled differently.
@@ -643,7 +699,10 @@ func _resolve_fields() -> void:
 	_bar_fields.clear()
 	_out_lamp_fields.clear()
 	_out_chip_fields.clear()
+	_rose_fields.clear()
+	_extra_fields.clear()
 	_node_health_field = &""
+	_depth_field = &""
 	_has_baro = false
 	_has_gimbal = false
 	_has_payload = false
@@ -669,6 +728,21 @@ func _resolve_fields() -> void:
 					String(OUT_CHIP_TEXT.get(sig_name, sig_name.to_upper()))])
 	if not _node_squares.is_empty():
 		_node_health_field = _field(fields, NODE_HEALTH_SIGNAL)
+	# The rose reads six fields or none: a partly-resolved instrument would draw some needles
+	# against a stale zero, which is worse than not being there.
+	if _rose != null:
+		for rose_name in WIND_ROSE_SIGNALS:
+			var rose_field := _field(fields, rose_name)
+			if rose_field == &"":
+				_rose_fields.clear()
+				break
+			_rose_fields.append(rose_field)
+	if _sounder != null:
+		_depth_field = _field(fields, DEPTH_SIGNAL)
+	for extra: Array in _readout_extras:
+		var extra_field := _field(fields, extra[0])
+		if extra_field != &"":
+			_extra_fields.append([extra_field, extra[1], extra[2]])
 	# The readout's three range-less drone readings live on DroneTelemetry alone; their presence
 	# is the gate, unlike the contract-gated HRS/LIM below.
 	_has_baro = fields.has(BARO_FIELD)
@@ -689,7 +763,6 @@ func _field(fields: Dictionary, sig_name: String) -> StringName:
 
 
 func _process(_dt: float) -> void:
-	_poll_bridge()
 	if not visible or _telem == null:
 		return
 	var t := _telem
@@ -706,6 +779,12 @@ func _process(_dt: float) -> void:
 		# declares_horizon above, so no duck-typed lookup is needed here.
 		_horizon.pitch = t.pitch
 		_horizon.roll = t.roll
+	if _rose != null and _rose_fields.size() == WIND_ROSE_SIGNALS.size():
+		# 'heading' is a shared base field; the other six are resolved above.
+		_rose.set_reading(t.get(_rose_fields[0]), t.get(_rose_fields[1]), t.get(_rose_fields[2]),
+				t.get(_rose_fields[3]), t.get(_rose_fields[4]), t.get(_rose_fields[5]), t.heading)
+	if _sounder != null and _depth_field != &"":
+		_sounder.value = t.get(_depth_field)
 
 	# Length-guarded like the instanced bars below; the bridge is where a wrong shape is
 	# reported loudly, not here.
@@ -780,6 +859,11 @@ func _process(_dt: float) -> void:
 		# "carrying nothing" rather than a gap.
 		if _has_payload:
 			_readout.text += "  PAY %.1f N" % t.get(PAYLOAD_FIELD)
+		# The boat's five range-less engine-room and track readings (READOUT_EXTRAS): the same
+		# "a running number has no full scale" rule as HRS, table-driven because there are five
+		# of them and each is a plain number.
+		for extra: Array in _extra_fields:
+			_readout.text += "  %s %s" % [extra[1], extra[2] % t.get(extra[0])]
 
 
 func _update_telltales() -> void:

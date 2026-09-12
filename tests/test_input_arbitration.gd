@@ -673,3 +673,119 @@ func test_a_new_body_clears_the_node_failure_but_not_the_other_toggles() -> void
 	assert_bool(router._pto).is_true()
 	assert_bool(router._armed).is_true()
 	assert_int(router._lights).is_equal(3)
+
+
+# --- the boat's autopilot ------------------------------------------------------
+
+func test_local_nav_mode_rides_the_vehicle_input() -> void:
+	var raw := _raw()
+	raw["nav_mode"] = 1
+	var engaged: VehicleInput = RouterScript.arbitrate_local(raw, 0.0, GEAR_D1)
+	assert_int(engaged.nav_mode).is_equal(1)
+	# There is no local `heading_cmd` and there must not be: no keyboard types a bearing, so a
+	# locally-engaged pilot holds the heading it captured. NONE is what says "nothing commanded".
+	assert_float(engaged.heading_cmd).is_equal(VehicleInput.HEADING_CMD_NONE)
+	assert_int(RouterScript.arbitrate_local(_raw(), 0.0, GEAR_D1).nav_mode).is_equal(0)
+
+
+func test_bridge_mirrors_the_autopilot_and_leaves_an_uncommanded_course_alone() -> void:
+	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
+	vals["nav_mode"] = 1
+	vals["heading_cmd"] = 275.0
+	var out: VehicleInput = RouterScript.arbitrate_bridge(vals)
+	assert_int(out.nav_mode).is_equal(1)
+	assert_float(out.heading_cmd).is_equal_approx(275.0, 1e-6)
+	# Absent: standing by, with NO course commanded — 0 would be a bearing (due north), and the
+	# pilot would silently steer to it. This is the `rudder` presence rule, and it is the whole
+	# reason bridge_source writes the key only when sloppyCAN sends it.
+	var quiet: VehicleInput = RouterScript.arbitrate_bridge(_bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1))
+	assert_int(quiet.nav_mode).is_equal(0)
+	assert_float(quiet.heading_cmd).is_equal(VehicleInput.HEADING_CMD_NONE)
+
+
+func test_the_autopilot_edge_survives_merge_local() -> void:
+	assert_bool(RouterScript.merge_local(_intent({"nav_mode_cycle": true}), {})["nav_mode_cycle"]).is_true()
+	assert_bool(RouterScript.merge_local({}, _intent({"nav_mode_cycle": true}))["nav_mode_cycle"]).is_true()
+	assert_bool(RouterScript.merge_local({}, {})["nav_mode_cycle"]).is_false()
+
+
+func test_a_new_body_clears_the_autopilot() -> void:
+	# A new hull must not spawn with an engaged pilot steering to the last boat's course.
+	var router: Node = auto_free(RouterScript.new())
+	add_child(router)
+	router._nav_mode = 1
+	router.register_vehicle(null)
+	assert_int(router._nav_mode).is_equal(0)
+
+
+# --- the bridge-only lock (challenges) --------------------------------------------
+
+## A touch stand-in that counts its polls and always asks for full throttle.
+class _CountingTouch extends RefCounted:
+	var polls := 0
+
+	func poll() -> Dictionary[StringName, Variant]:
+		polls += 1
+		return {&"accel": 1.0}
+
+
+## A bridge that is live and sending full throttle in D1.
+class _LiveBridge extends BridgeSourceScript:
+	func poll() -> Dictionary[StringName, Variant]:
+		return {&"active": true, &"accel": 1.0, &"gear": GEAR_D1, &"key": RouterScript.KEY_IGNITION}
+
+
+## Kept out of the tree so no real physics tick runs between the steps a test makes by hand.
+func _locked_router(touch: _CountingTouch) -> Node:
+	var router: Node = auto_free(RouterScript.new())
+	router._dev_keys = false
+	router.set_touch_source(touch)
+	router.set_bridge_only(true)
+	return router
+
+
+func test_the_locked_idle_is_key_lock_with_the_handbrake_on() -> void:
+	var out: VehicleInput = RouterScript.locked_idle()
+	assert_int(out.key).is_equal(RouterScript.KEY_LOCK)
+	assert_float(out.handbrake).is_equal(1.0)
+	assert_float(out.throttle).is_equal(0.0)
+	assert_float(out.brake).is_equal(0.0)
+	assert_float(out.steer).is_equal(0.0)
+	assert_int(out.gear_request).is_equal(GEAR_N)
+
+
+func test_bridge_only_never_polls_local_or_touch() -> void:
+	var touch := _CountingTouch.new()
+	var router := _locked_router(touch)
+	router._physics_process(1.0 / 60.0)
+	assert_int(touch.polls).is_equal(0)
+	var out: VehicleInput = router.get_vehicle_input()
+	assert_int(out.key).is_equal(RouterScript.KEY_LOCK)
+	assert_float(out.handbrake).is_equal(1.0)
+	assert_float(out.throttle).is_equal(0.0)
+	# Lifting the lock hands driving straight back to the local sources.
+	router.set_bridge_only(false)
+	router._physics_process(1.0 / 60.0)
+	assert_int(touch.polls).is_equal(1)
+	assert_float(router.get_vehicle_input().throttle).is_equal(1.0)
+
+
+func test_a_live_bridge_drives_under_the_lock() -> void:
+	var touch := _CountingTouch.new()
+	var router := _locked_router(touch)
+	router._bridge_source = _LiveBridge.new()
+	router._physics_process(1.0 / 60.0)
+	var out: VehicleInput = router.get_vehicle_input()
+	assert_int(out.key).is_equal(RouterScript.KEY_IGNITION)
+	assert_float(out.throttle).is_equal(1.0)
+	assert_int(out.gear_request).is_equal(GEAR_D1)
+	assert_int(touch.polls).is_equal(0)
+
+
+func test_the_dev_override_lets_local_drive_under_the_lock() -> void:
+	var touch := _CountingTouch.new()
+	var router := _locked_router(touch)
+	router._dev_keys = true
+	router._physics_process(1.0 / 60.0)
+	assert_int(touch.polls).is_equal(1)
+	assert_float(router.get_vehicle_input().throttle).is_equal(1.0)

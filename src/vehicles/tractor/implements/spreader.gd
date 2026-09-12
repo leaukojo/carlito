@@ -40,6 +40,13 @@ func device_class() -> int:
 	return CLASS_FERTILIZER
 
 
+## The gate plate and the rod that pushes it both slide on their own position.x every tick —
+## StaticMeshMerge must leave them out of the root's merge group or the slide would drag the
+## whole machine's merged mesh along with it.
+func static_merge_skip() -> Array[Node]:
+	return [_gate, _ram_rod]
+
+
 func _process(delta: float) -> void:
 	# Vertical axis, like the mower's rotor: a broadcast disc throws sideways.
 	spin_from_pto(_spinner, delta, DISC_RATIO)

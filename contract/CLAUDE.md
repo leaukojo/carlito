@@ -1,6 +1,6 @@
 # Contract — authoring rules
 
-`contract/carlito_contract.json` (v33) defines every bridge signal; full protocol in
+`contract/carlito_contract.json` defines every bridge signal; full protocol in
 `docs/systems.md`.
 
 - **`count` — an instanced signal** (default 1) is ARRAY-valued: `count` elements, `range`/
@@ -12,6 +12,8 @@
   parse-rejected apart, never inferred from the range.
 - **Omit the `range`** on an "out" signal with no meaningful full scale (`engine_hours`) and
   it lands on the readout line beside ODO instead of becoming a bar.
+- The bump also moves `tests/test_contract.gd`'s `test_real_contract_is_valid_v<N>` — the
+  number is in the assert AND in the test's name, and nothing else pins it.
 - Edits bump `version` and **must be followed by `node tools/gen_js_contract.mjs`** (the
   runtime version-mismatch warning — **not CI** — is the drift guard). **A contract edit is
   a paired change across two repos**: the bump lands on `dev` in both `carlito` and

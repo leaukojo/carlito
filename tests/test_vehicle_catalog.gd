@@ -40,6 +40,12 @@ func test_variants_in_family_grouping() -> void:
 	assert_int(VehicleCatalog.variants_in_family("boat").size()).is_equal(3)  # 3 watercraft
 
 
+func test_the_modelled_drone_is_the_drone_family_default() -> void:
+	# Levels and the garage name a FAMILY and spawn its first variant, so this order IS the default.
+	assert_str(VehicleCatalog.first_in_family("drone")).is_equal("drone-mk2")
+	assert_array(Array(VehicleCatalog.variants_in_family("drone"))).is_equal(["drone-mk2", "drone"])
+
+
 func test_next_in_family_wraps() -> void:
 	var car := VehicleCatalog.variants_in_family("car")
 	# cycling from the last variant returns to the first.

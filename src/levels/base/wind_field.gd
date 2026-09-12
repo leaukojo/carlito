@@ -3,7 +3,8 @@ extends Resource
 ## The world's wind: a steady base flow plus a deterministic gust term, sampled as one
 ## horizontal vector (y=0). `Level.wind` defaults to null (dead calm). `gust()` is pure
 ## (seed, time), so flights are reproducible; gust magnitude is bounded by `gust_speed`.
-## DroneVehicle/PlaneVehicle fly drag relative to it; ground vehicles ignore it.
+## DroneVehicle/PlaneVehicle fly drag relative to it and BoatVehicle takes windage from it;
+## ground vehicles ignore it.
 
 ## Gust octaves; each half the period and amplitude of the one before (one slow surge with a little chop).
 const OCTAVES := 3

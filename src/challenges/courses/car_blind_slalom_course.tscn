@@ -1,0 +1,52 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/challenges/arena_preview.gd" id="1_prev"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="2_spawn"]
+[ext_resource type="Script" path="res://src/challenges/challenge_zone.gd" id="3_zone"]
+
+[node name="CarBlindSlalomCourse" type="Node3D"]
+
+[node name="ArenaPreview" type="Node3D" parent="."]
+script = ExtResource("1_prev")
+arena = "flatland"
+
+[node name="Spawn" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+script = ExtResource("2_spawn")
+vehicle_types = PackedStringArray("car")
+
+[node name="Cone1" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0, -30)
+script = ExtResource("3_zone")
+kind = 1
+outer_r = 2.5
+
+[node name="Cone2" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, -60)
+script = ExtResource("3_zone")
+kind = 1
+outer_r = 2.5
+
+[node name="Cone3" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0, -90)
+script = ExtResource("3_zone")
+kind = 1
+outer_r = 2.5
+
+[node name="Cone4" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, -120)
+script = ExtResource("3_zone")
+kind = 1
+outer_r = 2.5
+
+[node name="Cone5" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0, -150)
+script = ExtResource("3_zone")
+kind = 1
+outer_r = 2.5
+
+[node name="Cone6" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, -180)
+script = ExtResource("3_zone")
+kind = 1
+outer_r = 2.5

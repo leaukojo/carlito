@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="CurrentField" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/levels/base/current_field.gd" id="1_current"]
+
+[resource]
+script = ExtResource("1_current")
+set_deg = 110.0
+drift = 1.5
+tide_period_s = 240.0
+tide_offset_s = 60.0

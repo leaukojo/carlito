@@ -124,12 +124,26 @@ jobs:
       # export after a cold import — which is CI's state on every run — and not on
       # subsequent exports in the same clone. The export completes and the .pck is
       # correct; it is headless editor-UI noise, not an export failure.
+      #
+      # Level packs: one per "Web <id>" preset, each a delta patch against THIS build's main
+      # pack, so it mounts over that pack only — hence the same c2-<sha> stem, which
+      # src/shell/level_packs.gd derives the pack's URL from (docs/deploying.md § Level packs).
+      # Judged by output, not exit code: 4.7.1 occasionally segfaults on exit AFTER the pack
+      # is written (about 1 run in 16 locally), and the savepack DONE line only prints once
+      # the pack is complete.
       - name: Web export (cache-busted)
         shell: bash
         run: |
           SHORT_SHA="${GITHUB_SHA:0:8}"
           mkdir -p build/web
           godot --headless --export-release "Web" "build/web/c2-${SHORT_SHA}.html" 2>&1 | tee export.log
+          for id in $(tr -d '\r' < export_presets.cfg | sed -n 's/^name="Web \(.*\)"$/\1/p'); do
+            godot --headless --export-patch "Web ${id}" "build/web/c2-${SHORT_SHA}.${id}.pck" \
+              --patches "build/web/c2-${SHORT_SHA}.pck" > "patch-${id}.log" 2>&1 || true
+            cat "patch-${id}.log" | tee -a export.log
+            grep -qE "DONE.*savepack" "patch-${id}.log" && [ -f "build/web/c2-${SHORT_SHA}.${id}.pck" ] \
+              || { echo "level pack ${id} was not written"; exit 1; }
+          done
           if grep -E "ERROR:" export.log | grep -vE "still in use at exit|leaked at exit|Pages in use exist at exit|Attempting to parent and popup a dialog"; then
             echo "export failed: errors above"
             exit 1

@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="1_goal"]
+[ext_resource type="Script" path="res://src/challenges/goals/ring_lap_goal.gd" id="2_lap"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="3_def"]
+
+[sub_resource type="Resource" id="Resource_lap"]
+script = ExtResource("2_lap")
+zone = &"Circle"
+
+[resource]
+script = ExtResource("3_def")
+id = "car_blind_circle"
+title = "Blind circle"
+variant = "sedan-sports"
+arena = "flatland"
+course = "res://src/challenges/courses/car_blind_circle_course.tscn"
+briefing = "Heavy fog on flat, empty ground. Drive one full lap of a circle centred at lat 48.8571390, lon 2.3530192, radius 20 m. You start on the circle, on its east side, facing north. Stay within 3 m of the line (17 to 23 m from the centre) the whole way round: leaving that band fails. Either direction counts. No par."
+hint = "lat, lon (1e-7 deg, about 1 cm), heading (0.1 deg), steer. Around here 0.00001 deg of latitude is 1.113 m and 0.00001 deg of longitude is 0.732 m (lon shrinks by cos(latitude)). Distance from the centre minus 20 m is your error; steer on it."
+visibility = 2
+fog_density = 0.12
+goals = Array[ExtResource("1_goal")]([SubResource("Resource_lap")])

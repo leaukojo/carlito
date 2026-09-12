@@ -1,0 +1,19 @@
+{
+	"baker_version": 12,
+	"chunk_size": 64.0,
+	"input_hash": "a27704132189cf9e326d61c0da15dc2a700a0d1a970e177de17d56f75113f29b",
+	"level": "res://src/levels/island/car_arena/car_arena.tscn",
+	"output_hash": "1ebc044a6d3d0928719d0b28d9af1f0c8a709ba220e667cff4644510576bc429",
+	"stats": {
+		"bodies": 0,
+		"chunks": 22,
+		"drivable_triangles": 3864,
+		"rail_tracks": 0,
+		"roads": 3,
+		"scatter_instances": 0,
+		"scatter_multimeshes": 0,
+		"shapes": 0,
+		"surfaces": 62,
+		"vertices": 4282
+	}
+}

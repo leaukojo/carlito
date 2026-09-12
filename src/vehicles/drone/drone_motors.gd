@@ -12,6 +12,13 @@ var _rotors: Array[Node3D] = []             ## blade visuals, MOTORS (esc_index)
 var _offsets := PackedVector3Array()        ## body-local positions, same order
 var _omega := PackedFloat32Array()          ## normalized motor speed [0, 1], same order
 var _esc_temp := PackedFloat32Array()       ## per-ESC temperature (degC), same order
+## Each rotor's optional `Blur` disc material, same order, null where the airframe has none.
+var _blurs: Array[StandardMaterial3D] = []
+
+## Rotor-wash disc opacity at full motor speed. The disc is what a turning prop looks like to the
+## eye; the blades themselves turn at a cosmetic rate (DroneVehicle.ROTOR_VISUAL_SPIN).
+const BLUR_ALPHA_MAX := 0.35
+const BLUR_COLOR := Color(0.75, 0.77, 0.8, 0.0)
 
 ## Mean |x|/|z| levers of the four rotors (m), roll/pitch torque arms, MEASURED off the scene
 ## in `_init`. Defaults are what `drone.tscn` ships, for a craft whose rotors failed to bind.
@@ -48,6 +55,7 @@ func _init(body: Node3D) -> void:
 			push_error("DroneMotors: rotor '%s' at %s disagrees with its MOTORS mix signs — the mixer would fly it backwards."
 					% [m["node"], rotor.position])
 		_rotors.append(rotor)
+		_blurs.append(_bind_blur(rotor))
 		_offsets.append(rotor.position)
 		sum_x += absf(rotor.position.x)
 		sum_z += absf(rotor.position.z)
@@ -123,6 +131,25 @@ func spin_visuals(delta: float) -> void:
 		var step := float(DroneProp.MOTORS[i]["spin"]) * _omega[i] * DroneProp.ROTOR_MAX_RPM \
 				* DroneVehicle.ROTOR_VISUAL_SPIN * delta
 		_rotors[i].rotate_y(step)
+		# The wash reads the same true speed, so an offline ESC's disc fades as its prop stops.
+		if _blurs[i] != null:
+			var wash := BLUR_COLOR
+			wash.a = BLUR_ALPHA_MAX * _omega[i]
+			_blurs[i].albedo_color = wash
+
+
+## A rotor's optional `Blur` disc, on a private material so each motor's wash fades on its own.
+static func _bind_blur(rotor: Node) -> StandardMaterial3D:
+	var disc := rotor.get_node_or_null(^"Blur") as MeshInstance3D
+	if disc == null:
+		return null
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.albedo_color = BLUR_COLOR
+	disc.material_override = mat
+	return mat
 
 
 ## A teleport must not carry spun-up motors across — the accel-history reset's discipline.

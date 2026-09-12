@@ -89,6 +89,20 @@ var hardpoint_cmd := false ## true = HOLD the load, false = RELEASE it
 # (drone_gimbal.gd), so a step command is never a teleport.
 var gimbal_pitch := 0.0   ## deg, + = up (contract 'gimbal_pitch')
 var gimbal_yaw := 0.0     ## deg, + = right (contract 'gimbal_yaw')
+# Boat autopilot (flavor "nmea2000"); only BoatVehicle reads them. Default: standing by, with no
+# course commanded. HEADING_CMD_NONE is an INTERNAL "the bus sent nothing" marker and never
+# reaches the wire: every value in the contract's [0,360] is a legal bearing, so the wire uses the
+# `rudder` / `guidance_curvature` PRESENCE rule instead and bridge_source only writes the key when
+# sloppyCAN sends it. With nothing commanded the pilot steers the heading it captured on engage,
+# which is also the only thing the local key can ask for (no keyboard types a bearing).
+const HEADING_CMD_NONE := -1.0
+## The sheet (boat only, and only `boat-sail-a` answers it — a rig is anatomy, gated by
+## BoatVehicle.vehicle_capabilities, the `body_cmd` shape). 0 = hauled in hard, 1 = fully eased. A
+## LIMIT on the boom's travel rather than a position, so what the boom did comes back on
+## `sail_angle` rather than being echoed here. Flat, not nested: it is one field on one rule.
+var sheet := 0.0
+var nav_mode := 0         ## BoatAutopilot ladder: 0 STANDBY, 1 HEADING_HOLD (contract 'nav_mode')
+var heading_cmd := HEADING_CMD_NONE  ## deg [0,360] commanded course, or HEADING_CMD_NONE
 # Train controls (flavor "train"); only TrainVehicle reads them. Default: pantograph down,
 # doors shut.
 var pantograph := false   ## pantograph raise request (traction is cut while lowered)

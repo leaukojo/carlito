@@ -94,6 +94,16 @@ func test_lamp_set_has_no_local_blink_clock() -> void:
 	assert_bool(src.contains("Time.get_unix_time")).is_false()
 
 
+func test_the_drone_status_lights_keep_no_clock_either() -> void:
+	# DroneIndicators lights the airframe's node LEDs from sim state rather than off the bus, and the
+	# same rule binds it: a steady colour per state, never a pattern timed here.
+	var src := FileAccess.get_file_as_string("res://src/vehicles/drone/drone_indicators.gd")
+	assert_str(src).is_not_empty()
+	assert_bool(src.contains("Time.get_ticks_msec")).is_false()
+	assert_bool(src.contains("Time.get_unix_time")).is_false()
+	assert_bool(src.contains("Timer")).is_false()
+
+
 func test_the_beacon_and_the_strobes_are_separate_contract_bits() -> void:
 	# Two bits rather than one, because they are two switches on a real aircraft. Both "in", both
 	# the plane's, both bool - the turnL/turnR shape exactly.

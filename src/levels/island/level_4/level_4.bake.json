@@ -3,7 +3,7 @@
 	"chunk_size": 64.0,
 	"input_hash": "00c0d1b91e882dbff7412c900872dae5ebc068ca8746ba1db5b1e7ae2c8a0a43",
 	"level": "res://src/levels/island/level_4/level_4.tscn",
-	"output_hash": "5a55d8c107c4168b367acc5b3582dea4502821e32476ef185493eccb00794f67",
+	"output_hash": "3c54652b1600626de60e268ace0e6d0f80d62efabe731462e0abd80304435124",
 	"stats": {
 		"bodies": 8,
 		"chunks": 19,

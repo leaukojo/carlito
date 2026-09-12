@@ -1,0 +1,66 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="1_goal"]
+[ext_resource type="Script" path="res://src/challenges/goals/lamp_window_goal.gd" id="2_lamp"]
+[ext_resource type="Script" path="res://src/challenges/goals/reach_zone_goal.gd" id="3_reach"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="4_def"]
+[ext_resource type="Script" path="res://src/challenges/goals/lamp_frequency_goal.gd" id="5_freq"]
+
+[sub_resource type="Resource" id="Resource_signal1"]
+script = ExtResource("5_freq")
+lamp = &"turn_left"
+zone = &"Signal1"
+
+[sub_resource type="Resource" id="Resource_clear1"]
+script = ExtResource("2_lamp")
+lamp = &"turn_left"
+expect_on = false
+zone = &"Clear1"
+
+[sub_resource type="Resource" id="Resource_signal2"]
+script = ExtResource("5_freq")
+lamp = &"turn_right"
+zone = &"Signal2"
+
+[sub_resource type="Resource" id="Resource_clear2"]
+script = ExtResource("2_lamp")
+lamp = &"turn_right"
+expect_on = false
+zone = &"Clear2"
+
+[sub_resource type="Resource" id="Resource_signal3"]
+script = ExtResource("5_freq")
+lamp = &"turn_right"
+zone = &"Signal3"
+
+[sub_resource type="Resource" id="Resource_clear3"]
+script = ExtResource("2_lamp")
+lamp = &"turn_right"
+expect_on = false
+zone = &"Clear3"
+
+[sub_resource type="Resource" id="Resource_signal4"]
+script = ExtResource("5_freq")
+lamp = &"turn_left"
+zone = &"Signal4"
+
+[sub_resource type="Resource" id="Resource_clear4"]
+script = ExtResource("2_lamp")
+lamp = &"turn_left"
+expect_on = false
+zone = &"Clear4"
+
+[sub_resource type="Resource" id="Resource_finish"]
+script = ExtResource("3_reach")
+zone = &"Finish"
+
+[resource]
+script = ExtResource("4_def")
+id = "car_turn_blink"
+title = "Signal your turns (blinking)"
+variant = "sedan-sports"
+arena = "car_arena"
+course = "res://src/levels/island/car_arena/courses/car_turn_signals_course.tscn"
+briefing = "The corner course again: left, right, right, left. This time a steady signal fails. Nothing in the car blinks a lamp for you, so be the indicator relay: through each 30 m window before a corner, toggle that side's signal (turnL or turnR) on and off at 1.0 to 2.0 Hz, 60 to 120 flashes a minute. Every period between two switch-ons must be in that band, measured to 50 ms. After the corner the same signal must be off through the window past the white line. No par."
+hint = "turnL, turnR (bools, mirrored verbatim: the lamp is lit exactly while the bit is set). Timed from rising edges, so the on/off split is free: 0.35 s on, 0.35 s off is 1.43 Hz. A frame sent once is not enough: the bridge forgets a value it has not heard for 300 ms."
+goals = Array[ExtResource("1_goal")]([SubResource("Resource_signal1"), SubResource("Resource_clear1"), SubResource("Resource_signal2"), SubResource("Resource_clear2"), SubResource("Resource_signal3"), SubResource("Resource_clear3"), SubResource("Resource_signal4"), SubResource("Resource_clear4"), SubResource("Resource_finish")])

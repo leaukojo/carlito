@@ -11,6 +11,10 @@ extends RefCounted
 ## The scene's HoodCam marker, or null on an airframe that has none — everything here still runs
 ## and simply aims nothing.
 var _cam: Node3D = null
+## The visible mount's two joints, or null on an airframe that draws none: the yoke turns about y,
+## the camera on it about x.
+var _yaw_joint: Node3D = null
+var _pitch_joint: Node3D = null
 
 ## Where the mount HAS reached — what gets published, never what was asked for.
 var pitch := DroneGimbal.REST_PITCH
@@ -25,6 +29,8 @@ var _yaw_hi := 120.0
 
 func _init(body: Node) -> void:
 	_cam = body.get_node_or_null(^"HoodCam") as Node3D
+	_yaw_joint = body.get_node_or_null(^"GimbalYaw") as Node3D
+	_pitch_joint = body.get_node_or_null(^"GimbalYaw/GimbalPitch") as Node3D
 	_read_stops()
 	aim()
 
@@ -53,6 +59,11 @@ func tick(pitch_cmd: float, yaw_cmd: float, delta: float) -> void:
 func aim() -> void:
 	if _cam != null:
 		_cam.transform.basis = DroneGimbal.basis_of(pitch, yaw)
+	# The drawn mount, one factor per joint: yaw then pitch composes to the camera's basis above.
+	if _yaw_joint != null:
+		_yaw_joint.transform.basis = DroneGimbal.basis_of(0.0, yaw)
+	if _pitch_joint != null:
+		_pitch_joint.transform.basis = DroneGimbal.basis_of(pitch, 0.0)
 
 
 ## Back to the rest pose, like every other sensor on a respawn.

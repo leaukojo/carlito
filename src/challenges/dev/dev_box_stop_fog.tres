@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_constraint.gd" id="1_ffa31"]
+[ext_resource type="Script" path="res://src/challenges/goals/fail_zone_constraint.gd" id="2_kwfvn"]
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="3_ehteu"]
+[ext_resource type="Script" path="res://src/challenges/goals/reach_zone_goal.gd" id="4_yrd43"]
+[ext_resource type="Script" path="res://src/challenges/goals/stop_in_zone_goal.gd" id="5_gglvy"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="6_rf4m6"]
+
+[sub_resource type="Resource" id="Resource_5oivn"]
+script = ExtResource("2_kwfvn")
+zone = &"Ditch"
+warning = "Into the ditch"
+
+[sub_resource type="Resource" id="Resource_npu70"]
+script = ExtResource("4_yrd43")
+zone = &"Gate"
+
+[sub_resource type="Resource" id="Resource_ohswp"]
+script = ExtResource("5_gglvy")
+zone = &"Box"
+
+[resource]
+script = ExtResource("6_rf4m6")
+id = "dev_box_stop_fog"
+title = "DEV: Stop in the box (fog)"
+variant = "sedan-sports"
+arena = "flatland"
+course = "res://src/challenges/dev/dev_box_stop_course.tscn"
+spawn_jitter_m = 1.0
+spawn_jitter_deg = 5.0
+briefing = "Development course on flatland. Drive through the white gate line 30 m ahead, then stop with all four wheels inside the yellow box 60 m ahead and hold still for 1 s. The red strip on the right is a ditch: entering it respawns you and starts the attempt over. Par 60 s. Heavy fog: the box is straight ahead of the start."
+hint = "speed and brake. Stopped means the body's velocity under 0.1 m/s, held for 1 s; speed is 0.01 m/s on the wire."
+par_s = 60.0
+visibility = 2
+fog_density = 0.12
+goals = Array[ExtResource("3_ehteu")]([SubResource("Resource_npu70"), SubResource("Resource_ohswp")])
+constraints = Array[ExtResource("1_ffa31")]([SubResource("Resource_5oivn")])

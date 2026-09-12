@@ -19,8 +19,7 @@ func after_test() -> void:
 	GameState.current_vehicle = _saved_vehicle
 
 
-## A dashboard bound to `family` with no level, at an explicit density (never AUTO, so the
-## result does not depend on the runner's window size).
+## A dashboard bound to `family` with no level, at an explicit density.
 func _dash(family: String, setting: int) -> Dashboard:
 	var dash: Dashboard = auto_free(Dashboard.new())
 	add_child(dash)
@@ -162,7 +161,7 @@ func test_the_speed_limit_rides_the_readout_and_only_where_the_contract_declares
 ## twin for a reason: `engine_hours` used to be declared on TruckTelemetry and TractorTelemetry,
 ## so the duck-typed `t.get(...)` gate it had was safe. It now lives on the base beside the
 ## odometer — every vehicle carries it and counts it — so the gate had to become the contract
-## one. Driving a truck cannot catch the regression; a boat printing HRS 0.0 is what it looks like.
+## one. Driving a truck cannot catch the regression; a drone printing HRS 0.0 is what it looks like.
 func test_the_hour_meter_rides_the_readout_and_only_where_the_contract_declares_it() -> void:
 	for family in FAMILIES:
 		var declares: bool = Contract.data.signals_for_vehicle(family, "out") \
@@ -176,7 +175,9 @@ func test_the_hour_meter_rides_the_readout_and_only_where_the_contract_declares_
 			.is_false()
 	# Swept in both directions, or a contract edit either way would pass unnoticed.
 	assert_bool(_dash("tractor", Dashboard.Density.FULL)._has_engine_hours).is_true()
-	assert_bool(_dash("boat", Dashboard.Density.FULL)._has_engine_hours).is_false()
+	# Phase 5 widened engine_hours to the boat, so this flips from false to true.
+	assert_bool(_dash("boat", Dashboard.Density.FULL)._has_engine_hours).is_true()
+	assert_bool(_dash("drone", Dashboard.Density.FULL)._has_engine_hours).is_false()
 
 
 ## COMPACT is "two gauges and the lamp row": the bars and the GPS/odometer readout are what it
@@ -205,39 +206,33 @@ func test_off_hides_the_cluster_even_when_the_shell_shows_the_hud() -> void:
 	assert_bool(dash.visible).is_false()
 
 
-## AUTO decides from the screen and the bridge, and the one thing it must never decide is OFF:
-## a dashboard that vanished on its own reads as a broken build, not as a setting.
-func test_auto_never_resolves_to_off() -> void:
-	var dash := _dash("car", Dashboard.Density.AUTO)
-	assert_int(dash.density_setting()).is_equal(Dashboard.Density.AUTO)
-	assert_bool(dash.density() == Dashboard.Density.OFF).is_false()
-
-
-## An explicit pick is honoured as given — AUTO's rules do not get a second say.
+## An explicit pick is honoured as given.
 func test_an_explicit_setting_is_what_is_shown() -> void:
 	for setting in [Dashboard.Density.FULL, Dashboard.Density.COMPACT, Dashboard.Density.OFF]:
-		assert_int(_dash("car", setting).density()).is_equal(setting)
+		assert_int(_dash("car", setting).density_setting()).is_equal(setting)
 
 
 ## The setting round-trips through the string ShellPrefs stores, and an unknown key (an older or
-## hand-edited user://shell.cfg) falls back to AUTO rather than to a blank dashboard.
+## hand-edited user://shell.cfg, including a stale "auto") falls back to COMPACT rather than to a
+## blank dashboard.
 func test_density_keys_round_trip_and_reject_junk() -> void:
 	for setting: int in Dashboard.DENSITY_KEYS:
 		assert_int(Dashboard.setting_from_key(Dashboard.key_of(setting))).is_equal(setting)
-	assert_int(Dashboard.setting_from_key("gauges-only")).is_equal(Dashboard.Density.AUTO)
-	assert_int(Dashboard.setting_from_key("")).is_equal(Dashboard.Density.AUTO)
+	assert_int(Dashboard.setting_from_key("gauges-only")).is_equal(Dashboard.Density.COMPACT)
+	assert_int(Dashboard.setting_from_key("")).is_equal(Dashboard.Density.COMPACT)
+	assert_int(Dashboard.setting_from_key("auto")).is_equal(Dashboard.Density.COMPACT)
 
 
-## The SETTINGS page is one button, so every mode has to be reachable by pressing it repeatedly
-## and the cycle has to come back round.
+## The SETTINGS page (and F2) is one button, cycling COMPACT -> FULL -> OFF -> COMPACT, so every
+## mode has to be reachable by pressing it repeatedly and the cycle has to come back round.
 func test_next_setting_cycles_every_mode() -> void:
 	var seen := []
-	var setting: int = Dashboard.Density.AUTO
+	var setting: int = Dashboard.Density.COMPACT
 	for _i in Dashboard.DENSITY_KEYS.size():
 		seen.append(setting)
 		setting = Dashboard.next_setting(setting)
-	assert_int(setting).is_equal(Dashboard.Density.AUTO)  # back to the start
-	assert_array(seen).contains(Dashboard.DENSITY_KEYS.keys())
+	assert_int(setting).is_equal(Dashboard.Density.COMPACT)  # back to the start
+	assert_array(seen).is_equal([Dashboard.Density.COMPACT, Dashboard.Density.FULL, Dashboard.Density.OFF])
 
 
 ## The whole node bus renders nowhere, and that is a decision rather than an omission, so it is
@@ -359,6 +354,232 @@ func test_the_ground_polygon_covers_all_or_none_of_the_disc_at_the_extremes() ->
 	# A NAN warn (a signal with no threshold) never reads as past it.
 	assert_bool(AttitudeIndicator.past_warn(999.0, NAN)).is_false()
 	assert_bool(AttitudeIndicator.past_warn(-46.0, 45.0)).is_true()
+
+
+# --- WIDGET_SIGNALS: what leaves the bar column ------------------------------
+
+## THE EXCLUSION LIST IS A WAY TO MAKE A SIGNAL VANISH. A name in WIDGET_SIGNALS is dropped from
+## the generated bars on EVERY family, so if one of them declares the signal without also
+## building the widget that draws it, the reading disappears from the cluster with nothing to
+## see. Swept off the contract, so widening a signal to a new family is covered the day it
+## happens rather than the day someone notices it went missing.
+func test_every_widget_signal_keeps_a_display() -> void:
+	var checked := 0
+	for family in FAMILIES:
+		var out_names: Array = Contract.data.signals_for_vehicle(family, "out") \
+				.map(func(sig: RefCounted) -> String: return sig.name)
+		var dash := _dash(family, Dashboard.Density.FULL)
+		for sig_name in Dashboard.WIDGET_SIGNALS:
+			if not out_names.has(sig_name):
+				continue
+			checked += 1
+			# It really did leave the bars...
+			assert_bool(dash._bars.has(sig_name)).override_failure_message(
+					"'%s': '%s' is in WIDGET_SIGNALS but still generated a bar"
+					% [family, sig_name]).is_false()
+			# ...and something hand-built draws it instead.
+			var drawn: bool = (sig_name in Dashboard.HORIZON_SIGNALS and dash._horizon != null) \
+					or (sig_name in Dashboard.WIND_ROSE_SIGNALS and dash._rose != null) \
+					or (sig_name == Dashboard.DEPTH_SIGNAL and dash._sounder != null)
+			assert_bool(drawn).override_failure_message(
+					"'%s' declares '%s', which WIDGET_SIGNALS drops from the bars, and no "
+					% [family, sig_name] + "hand-built widget draws it").is_true()
+	# ...and the sweep is sweeping something: the boat declares all of them.
+	assert_int(checked).is_greater_equal(Dashboard.WIDGET_SIGNALS.size())
+
+
+## ...and the number the exclusion list exists for: the boat's cluster fits ONE bar column. It
+## is the family with the most ranged flavored "out" signals and the only one close to the cap,
+## so it is pinned here rather than left to the generic column cases.
+func test_the_boat_bars_fit_one_column() -> void:
+	assert_int(_bar_columns("boat")).is_equal(1)
+
+
+# --- the wind/track rose (hand-built, contract-gated) -------------------------
+
+## Built exactly where the vehicle declares the whole wind/track set, and nowhere else — the
+## artificial horizon's rule, swept the same way so a signal spreading to another family is
+## covered.
+func test_the_rose_is_built_only_where_the_wind_set_is_declared() -> void:
+	var built := 0
+	for family in FAMILIES:
+		var out_names: Array = Contract.data.signals_for_vehicle(family, "out") \
+				.map(func(sig: RefCounted) -> String: return sig.name)
+		var declares := Dashboard.declares_wind_rose(out_names)
+		var dash := _dash(family, Dashboard.Density.FULL)
+		assert_bool(dash._rose != null).override_failure_message(
+				"'%s': rose presence disagrees with the contract" % family).is_equal(declares)
+		if declares:
+			built += 1
+	assert_int(built).is_equal(1)  # the boat, and nothing else
+
+
+## ...and BOTH of these instruments are FULL-only. The horizon survives COMPACT because it sits
+## in the tacho slot of a vehicle with no tacho; these two are added BESIDE the gauges, so
+## keeping them would make the boat's phone-sized cluster ~200 logical px wider than every other
+## family's. They drop with the bars because that is the section their signals belong to —
+## WIDGET_SIGNALS is the only reason those readings are not bars.
+func test_compact_keeps_the_horizon_but_not_the_rose_or_the_sounder() -> void:
+	var compact := _dash("boat", Dashboard.Density.COMPACT)
+	assert_object(compact._horizon).is_not_null()
+	assert_object(compact._rose).is_null()
+	assert_object(compact._sounder).is_null()
+	# ...and at FULL the boat really does have all three, so this is not vacuous.
+	var full := _dash("boat", Dashboard.Density.FULL)
+	assert_object(full._horizon).is_not_null()
+	assert_object(full._rose).is_not_null()
+	assert_object(full._sounder).is_not_null()
+
+
+## THE SIGNS, pinned as arithmetic for the reason the horizon's are: a rose that puts the wind
+## on the wrong bow is worse than no rose, and driving one family cannot tell you the
+## conventions still agree with the contract's.
+func test_the_rose_signs_follow_the_contract_conventions() -> void:
+	# Heading-up on a y-down canvas: dead ahead is straight up, starboard is screen-right.
+	assert_vector(WindRose.needle_dir(0.0)).is_equal_approx(Vector2(0.0, -1.0), Vector2.ONE * 1e-5)
+	assert_vector(WindRose.needle_dir(90.0)).is_equal_approx(Vector2(1.0, 0.0), Vector2.ONE * 1e-5)
+	assert_vector(WindRose.needle_dir(-90.0)).is_equal_approx(Vector2(-1.0, 0.0), Vector2.ONE * 1e-5)
+	# An absolute bearing becomes a relative one, the short way round the compass.
+	assert_float(WindRose.relative_bearing(10.0, 350.0)).is_equal_approx(20.0, 1e-4)
+	assert_float(WindRose.relative_bearing(350.0, 10.0)).is_equal_approx(-20.0, 1e-4)
+	assert_float(WindRose.relative_bearing(45.0, 45.0)).is_equal_approx(0.0, 1e-4)
+	# The crab angle IS that gap: making ground to starboard of the bow reads positive.
+	assert_float(WindRose.crab(100.0, 90.0)).is_equal_approx(10.0, 1e-4)
+	assert_float(WindRose.crab(80.0, 90.0)).is_equal_approx(-10.0, 1e-4)
+	# ...and NEITHER ANGLE IS DRAWN AT ZERO SPEED. Both read 0 when they are undefined, and 0 is
+	# a perfectly good bearing on both scales: 'cog' is due north with no way on, 'awa' is dead
+	# ahead in a calm. Drawing a needle for either is the trap 'depth' answers with its -1.
+	assert_bool(WindRose.has_track(0.0)).is_false()
+	assert_bool(WindRose.has_track(5.0)).is_true()
+	assert_bool(WindRose.has_wind(0.0)).is_false()
+	assert_bool(WindRose.has_wind(5.0)).is_true()
+	# Both blank to the sounder's own string, so one convention covers every undefined reading.
+	assert_str(WindRose.BLANK).is_equal(DepthReadout.BLANK)
+
+
+## THE FIELDS REACH THE WIDGETS THEY NAME. Everything else in this suite stops at `bind(null)`,
+## which leaves `_telem` null and `_process` a no-op — so the per-frame feed, the one place the
+## contract names and the widget's own arguments have to line up, runs nowhere in the harness.
+##
+## The rose is the case that needs it: `_rose_fields` is resolved in WIND_ROSE_SIGNALS order and
+## spread POSITIONALLY into `set_reading(awa, aws, twd, tws, cog, sog, heading)`. Reorder either
+## list without the other and every needle reads a different signal's number — silently, with
+## nothing out of range to notice. Distinct values per field are what catch a transposition.
+func test_the_rose_and_the_sounder_are_fed_the_fields_they_name() -> void:
+	var dash := _dash("boat", Dashboard.Density.FULL)
+	var telem := BoatTelemetry.new()
+	telem.awa = 11.0
+	telem.aws = 22.0
+	telem.twd = 33.0
+	telem.tws = 44.0
+	telem.cog = 55.0
+	telem.sog = 66.0
+	telem.heading = 77.0
+	telem.depth = 3.5
+	dash._telem = telem
+	dash._resolve_fields()
+	dash.set_shown(true)
+	dash._process(0.0)
+
+	assert_float(dash._rose.awa).is_equal(11.0)
+	assert_float(dash._rose.aws).is_equal(22.0)
+	assert_float(dash._rose.twd).is_equal(33.0)
+	assert_float(dash._rose.tws).is_equal(44.0)
+	assert_float(dash._rose.cog).is_equal(55.0)
+	assert_float(dash._rose.sog).is_equal(66.0)
+	# 'heading' is the shared base field, not one of the six resolved ones.
+	assert_float(dash._rose.heading).is_equal(77.0)
+	assert_float(dash._sounder.value).is_equal(3.5)
+	# ...and the resolution really did go through the contract names, in their declared order.
+	assert_array(dash._rose_fields).is_equal(Array(Dashboard.WIND_ROSE_SIGNALS).map(
+			func(n: String) -> StringName: return StringName(n)))
+
+
+## The readout line's range-less extras reach it the same way, and each lands under its own
+## caption — a table whose captions and formats drifted off their signals would still print.
+func test_the_readout_extras_print_their_own_signals() -> void:
+	var dash := _dash("boat", Dashboard.Density.FULL)
+	var telem := BoatTelemetry.new()
+	telem.sog = 6.1
+	telem.stw = 5.2
+	telem.current_drift = 1.3
+	telem.fuel_rate = 7.4
+	telem.oil_press = 315.0
+	dash._telem = telem
+	dash._resolve_fields()
+	dash.set_shown(true)
+	dash._process(0.0)
+
+	assert_str(dash._readout.text).contains("SOG 6.1")
+	assert_str(dash._readout.text).contains("STW 5.2")
+	assert_str(dash._readout.text).contains("DRIFT 1.3")
+	assert_str(dash._readout.text).contains("BURN 7.4 L/h")
+	assert_str(dash._readout.text).contains("OIL 315 kPa")
+
+
+# --- the echo sounder (hand-built, contract-gated) ----------------------------
+
+## Built where 'depth' is declared, and its scale, threshold and SENTINEL all come off the
+## contract — the sentinel especially, because the contract deliberately puts -1 inside the
+## range and a second copy of that number here is how the two drift apart.
+func test_the_sounder_is_built_from_the_contract() -> void:
+	for family in FAMILIES:
+		var out_names: Array = Contract.data.signals_for_vehicle(family, "out") \
+				.map(func(sig: RefCounted) -> String: return sig.name)
+		var dash := _dash(family, Dashboard.Density.FULL)
+		assert_bool(dash._sounder != null).override_failure_message(
+				"'%s': sounder presence disagrees with the contract" % family) \
+			.is_equal(out_names.has(Dashboard.DEPTH_SIGNAL))
+	var sig := Contract.data.get_signal_def(Dashboard.DEPTH_SIGNAL, "out")
+	var boat := _dash("boat", Dashboard.Density.FULL)
+	assert_float(boat._sounder.invalid).is_equal(float(sig.range[0]))
+	assert_float(boat._sounder.max_value).is_equal(float(sig.range[1]))
+	assert_float(boat._sounder.warn).is_equal(sig.warn)
+	assert_bool(boat._sounder.warn_is_low).is_equal(sig.warn_is_low())
+
+
+## THE SENTINEL IS NOT A SHOAL. -1 sits below a LOW-side warn, so every comparison that treats
+## it as a number reads open water as a permanent alarm — which is what the generated bar did,
+## and the reason this widget exists at all.
+func test_the_sounder_blanks_the_sentinel_instead_of_alarming_on_it() -> void:
+	var sig := Contract.data.get_signal_def(Dashboard.DEPTH_SIGNAL, "out")
+	var sentinel := float(sig.range[0])
+	assert_bool(DepthReadout.is_invalid(sentinel, sentinel)).is_true()
+	assert_bool(DepthReadout.is_invalid(sentinel - 5.0, sentinel)).is_true()
+	assert_bool(DepthReadout.is_invalid(0.0, sentinel)).is_false()
+	# No bottom is never an alarm...
+	assert_bool(DepthReadout.in_warn(sentinel, sig.warn, true, sentinel)).is_false()
+	# ...but a metre of water is, 0 (the bed at the hull) is, and deep water is not.
+	assert_bool(DepthReadout.in_warn(sig.warn, sig.warn, true, sentinel)).is_true()
+	assert_bool(DepthReadout.in_warn(0.0, sig.warn, true, sentinel)).is_true()
+	assert_bool(DepthReadout.in_warn(5.6, sig.warn, true, sentinel)).is_false()
+	# A signal with no threshold never reads as past one.
+	assert_bool(DepthReadout.in_warn(0.0, NAN, true, sentinel)).is_false()
+
+
+# --- the readout line's range-less extras -------------------------------------
+
+## The range-less marine readings ride the readout line under the HRS rule — gated on the
+## CONTRACT, never on the telemetry field — and none of them may become a bar. Swept in both
+## directions like the LIM/HRS cases above.
+func test_the_range_less_marine_readings_ride_the_readout() -> void:
+	for family in FAMILIES:
+		var out_names: Array = Contract.data.signals_for_vehicle(family, "out") \
+				.map(func(sig: RefCounted) -> String: return sig.name)
+		var dash := _dash(family, Dashboard.Density.FULL)
+		var wanted := 0
+		for extra_name: String in Dashboard.READOUT_EXTRAS:
+			if not out_names.has(extra_name):
+				continue
+			wanted += 1
+			assert_bool(dash._bars.has(extra_name)).override_failure_message(
+					"'%s': '%s' generated a bar — it is a readout, not a full scale"
+					% [family, extra_name]).is_false()
+		assert_int(dash._readout_extras.size()).override_failure_message(
+				"'%s': readout extras disagree with the contract" % family).is_equal(wanted)
+	assert_int(_dash("boat", Dashboard.Density.FULL)._readout_extras.size()) \
+		.is_equal(Dashboard.READOUT_EXTRAS.size())
+	assert_int(_dash("car", Dashboard.Density.FULL)._readout_extras.size()).is_equal(0)
 
 
 # --- the node health strip (the bus made visible) -----------------------------

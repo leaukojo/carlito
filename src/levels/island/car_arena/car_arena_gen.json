@@ -1,0 +1,50 @@
+{
+  "//": "How the car arena is generated. Run it with: powershell -File tools/rebuild_level.ps1 -Level car_arena",
+  "level": "car_arena",
+  "scene": "res://src/levels/island/car_arena/car_arena.tscn",
+  "replayable": true,
+  "sources": [
+    "car_arena_island_height.png",
+    "car_arena_island_splat.png",
+    "car_arena_island_splat2.png",
+    "car_arena_strip_curve.tres",
+    "car_arena_corners_curve.tres",
+    "car_arena_winding_curve.tres",
+    "courses/car_start_up_course.tscn",
+    "courses/car_easy_turns_course.tscn",
+    "courses/car_box_stop_course.tscn",
+    "courses/car_turn_signals_course.tscn"
+  ],
+  "notes": [
+    "gen_car_arena.gd owns this level AND its challenge courses end to end, and overwrites",
+    "every byte of both. 'courses' reads the curves 'scaffold' saved, so it runs after it; it",
+    "writes no bake input (a course is a runtime overlay), so re-running it alone never",
+    "re-stales the bake. Hand edits to a course .tscn are lost on the next 'courses' run.",
+    "No props and no scatter, so there is no ground-hash stage and no resnap."
+  ],
+  "steps": [
+    {
+      "kind": "scene",
+      "path": "res://tools/gen_car_arena.tscn",
+      "args": [
+        "scaffold"
+      ],
+      "why": "Writes the island heightmap and splats, the three road curves, the LevelInfo and the level .tscn text."
+    },
+    {
+      "kind": "import",
+      "why": "The bake reads the terrain textures, so the fresh PNGs must be reimported first."
+    },
+    {
+      "kind": "scene",
+      "path": "res://tools/gen_car_arena.tscn",
+      "args": [
+        "courses"
+      ],
+      "why": "Packs the four car course scenes from the saved curves."
+    },
+    {
+      "kind": "bake"
+    }
+  ]
+}

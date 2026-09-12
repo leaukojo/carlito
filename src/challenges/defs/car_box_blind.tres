@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_constraint.gd" id="1_cons"]
+[ext_resource type="Script" path="res://src/challenges/goals/fail_zone_constraint.gd" id="2_fail"]
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="3_goal"]
+[ext_resource type="Script" path="res://src/challenges/goals/signal_band_goal.gd" id="4_band"]
+[ext_resource type="Script" path="res://src/challenges/goals/stop_in_zone_goal.gd" id="5_stop"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="6_def"]
+
+[sub_resource type="Resource" id="Resource_gate"]
+script = ExtResource("4_band")
+signal_name = "kmh"
+low = 50.0
+zone = &"Gate"
+
+[sub_resource type="Resource" id="Resource_box"]
+script = ExtResource("5_stop")
+zone = &"Box"
+
+[sub_resource type="Resource" id="Resource_overrun"]
+script = ExtResource("2_fail")
+zone = &"Overrun"
+warning = "Ran past the box"
+
+[resource]
+script = ExtResource("6_def")
+id = "car_box_blind"
+title = "Stop in the box (blind)"
+variant = "sedan-sports"
+arena = "car_arena"
+course = "res://src/levels/island/car_arena/courses/car_box_blind_course.tscn"
+briefing = "Stop in the box again, in heavy fog, and this time the box is not painted. Cross the white gate line, 170 m straight ahead of the start, at 50 km/h or more (kmh). The box begins 178 m from the start and ends 196 m from it, 6 m wide on the road's centre: stop with all four wheels inside it and hold still for 1 s. Crossing the gate slower fails; running on past the box starts the attempt over."
+hint = "odo (the distance driven, in km; it resolves 1 m on the wire, so the box is long enough to stop on it). It is an odometer, not a trip meter: a restart does not zero it, so read it at the start and count from there. kmh, speed (0.01 m/s), brake (0-100 %). lat/lon resolve about 1 cm if you want better than odo. Full braking from 50 km/h takes about 13 m on this asphalt."
+visibility = 2
+fog_density = 0.12
+goals = Array[ExtResource("3_goal")]([SubResource("Resource_gate"), SubResource("Resource_box")])
+constraints = Array[ExtResource("1_cons")]([SubResource("Resource_overrun")])

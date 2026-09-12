@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_constraint.gd" id="1_g7a21"]
+[ext_resource type="Script" path="res://src/challenges/goals/fail_zone_constraint.gd" id="2_n0d7j"]
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="3_q0m28"]
+[ext_resource type="Script" path="res://src/challenges/goals/reach_zone_goal.gd" id="4_0kqd6"]
+[ext_resource type="Script" path="res://src/challenges/goals/stop_in_zone_goal.gd" id="5_5mayw"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="6_rn56b"]
+
+[sub_resource type="Resource" id="Resource_7nnwb"]
+script = ExtResource("2_n0d7j")
+zone = &"Ditch"
+warning = "Into the ditch"
+
+[sub_resource type="Resource" id="Resource_hxrkq"]
+script = ExtResource("4_0kqd6")
+zone = &"Gate"
+
+[sub_resource type="Resource" id="Resource_q1wgf"]
+script = ExtResource("5_5mayw")
+zone = &"Box"
+
+[resource]
+script = ExtResource("6_rn56b")
+id = "dev_box_stop"
+title = "DEV: Stop in the box"
+variant = "sedan-sports"
+arena = "flatland"
+course = "res://src/challenges/dev/dev_box_stop_course.tscn"
+spawn_jitter_m = 1.0
+spawn_jitter_deg = 5.0
+briefing = "Development course on flatland. Drive through the white gate line 30 m ahead, then stop with all four wheels inside the yellow box 60 m ahead and hold still for 1 s. The red strip on the right is a ditch: entering it respawns you and starts the attempt over. Par 60 s."
+hint = "speed and brake. Stopped means the body's velocity under 0.1 m/s, held for 1 s; speed is 0.01 m/s on the wire."
+par_s = 60.0
+goals = Array[ExtResource("3_q0m28")]([SubResource("Resource_hxrkq"), SubResource("Resource_q1wgf")])
+constraints = Array[ExtResource("1_g7a21")]([SubResource("Resource_7nnwb")])

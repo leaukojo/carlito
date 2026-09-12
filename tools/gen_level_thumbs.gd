@@ -9,6 +9,7 @@ const SceneBounds := preload("res://src/ui/scene_bounds.gd")
 
 const SIZE := Vector2i(640, 360)  # 16:9, 2x the card so it stays crisp
 const SETTLE_FRAMES := 40  # terrain mesh build + sky/water shader compile before read-back
+const SETTLE_FRAMES_VEHICLE := 90  # a kept vehicle also needs to drop/float onto ground or water
 const NEAR := 0.25
 const FAR := 6000.0  # islands sit inside a 1900 m far-sea ring
 const FOG_HAZE := 0.25  # fog_density * shot distance — see _thin_fog
@@ -48,9 +49,12 @@ func _shoot(id: String, scene_path: String) -> bool:
 	var level := packed.instantiate() as Node3D
 	_viewport.add_child(level)  # runs Level._ready: baked swap + default vehicle
 
+	var shot := LevelShot.load_for(scene_path)
+	var keep_vehicle := shot != null and shot.keep_vehicle
+
 	var lvl := level as Level
 	if lvl != null:
-		if lvl.vehicle != null:
+		if lvl.vehicle != null and not keep_vehicle:
 			lvl.vehicle.queue_free()  # landscape only
 			lvl.vehicle = null
 		if lvl.camera != null:
@@ -60,7 +64,6 @@ func _shoot(id: String, scene_path: String) -> bool:
 	_camera = Camera3D.new()
 	_camera.near = NEAR
 	_camera.far = FAR
-	var shot := LevelShot.load_for(scene_path)
 	if shot != null:
 		_camera.fov = shot.fov
 		_camera.global_transform = shot.camera_transform
@@ -72,7 +75,7 @@ func _shoot(id: String, scene_path: String) -> bool:
 	_camera.current = true  # set after the level, so it wins over the ChaseCamera
 	_thin_fog(level, _camera.global_position.distance_to(subject.get_center()))
 
-	await ShotStage.settle(get_tree(), SETTLE_FRAMES)
+	await ShotStage.settle(get_tree(), SETTLE_FRAMES_VEHICLE if keep_vehicle else SETTLE_FRAMES)
 	var out := LevelShot.thumb_path(id)
 	var ok := ShotStage.save_capture(_viewport, out)
 

@@ -95,6 +95,8 @@ var _strobe_mats: Array[BaseMaterial3D] = []
 var _led_mat: StandardMaterial3D = null
 ## True when the spec asks for the aircraft beam ladder instead of the road-car one.
 var _aircraft := false
+## Every lens mesh _bind / _bind_scene_colored touched (see bound_meshes).
+var _bound: Array[Node] = []
 
 
 # --- pure decision (unit-tested) --------------------------------------------
@@ -130,6 +132,13 @@ static func beam_splay(aircraft: bool, headlights: int, side: float) -> Vector2:
 
 
 # --- setup + application (scene) --------------------------------------------
+
+## Every lens mesh setup() bound, as a copy. StaticMeshMerge callers pass it as a skip list: a lens
+## folded into a merged sibling would be hidden, and its material with it. Recorded at bind time
+## rather than re-read off the spec, so a new lamp group cannot be merged away unnoticed.
+func bound_meshes() -> Array[Node]:
+	return _bound.duplicate()
+
 
 ## Resolve the spec's lamp NodePaths against the vehicle and give the mesh lamps a private
 ## emissive material so runtime energy changes never touch a shared resource.
@@ -172,6 +181,7 @@ func _bind(vehicle: Node, paths: Array[NodePath], color: Color, energy: float) -
 				mat.emission = color
 				mat.emission_energy_multiplier = energy
 			(n as MeshInstance3D).material_override = mat
+			_bound.append(n)
 	return mat
 
 
@@ -193,6 +203,7 @@ func _bind_scene_colored(vehicle: Node, paths: Array[NodePath], energy: float) -
 				mat.emission_energy_multiplier = energy
 				mesh.set_surface_override_material(0, mat)
 				mats.append(mat)
+				_bound.append(mesh)
 	return mats
 
 

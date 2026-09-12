@@ -22,6 +22,8 @@ const Counts := preload("res://src/input/subsystem_counts.gd")
 const BODY_CMD_COUNT := Counts.BODY_CMD
 const NODE_FAIL_COUNT := Counts.DRONE_NODES
 const FLIGHT_MODE_COUNT := Counts.FLIGHT_MODES
+const NAV_MODE_COUNT := Counts.NAV_MODES
+const SHEET_DETENT_COUNT := Counts.SHEET_DETENTS
 
 const LocalSource := preload("res://src/input/sources/local_source.gd")
 const BridgeSource := preload("res://src/input/sources/bridge_source.gd")
@@ -55,6 +57,14 @@ var _node_fail := 0       ## bit i = DroneBus roster index i is off the bus
 ## Local flight-mode request, cycled (five positions). Contract 'flight_mode'; 0 = STABILIZE, the
 ## hand-flown default. Bridge path ignores it.
 var _flight_mode := 0     ## DroneModes ladder position, cycled by the local flight-mode key (Z)
+## Local autopilot request, cycled (two positions). Contract 'nav_mode'; 0 = STANDBY, the
+## hand-steered default. Bridge path ignores it. There is no local `heading_cmd` beside it — no
+## keyboard types a bearing, so a locally-engaged pilot holds the heading it captured on engage.
+var _nav_mode := 0        ## BoatAutopilot ladder position, cycled by the local autopilot key (2)
+## Local sheet request, cycled (SHEET_DETENT_COUNT detents). Contract 'sheet'; 0 = hauled in hard.
+## Owned here like _lights and _pto so keyboard and touch share one switch. Bridge path ignores it
+## and may send any value in the range — the detents exist only because a keyboard has no axis.
+var _sheet := 0           ## detent index, walked by the local sheet key (3)
 ## Raised by default so a locally-driven train spawns able to move; lowering it cuts traction.
 var _pantograph := true   ## local train pantograph raised, toggled by the local pantograph key
 var _doors := false       ## local train door open request, toggled by the local doors key
@@ -69,14 +79,36 @@ const IGNITION_NOTICE_TEXT := "IGNITION OFF - MOVE THE ENGINE KEY"
 ## Edge latch for the "ignition off" notice — see _warn_if_ignition_off.
 var _ignition_warned := false
 
+## Set by the shell for a challenge attempt: local and touch are never merged, and with no live
+## bridge the vehicle gets `locked_idle()`. A live bridge drives exactly as it does in free play.
+var _bridge_only := false
+## Debug-build override that lets the keyboard drive a challenge anyway (BootParams.challenge_keys),
+## so a course can be authored and checked without sloppyCAN. Never true in a release export.
+var _dev_keys := false
+const DEV_KEYS_NOTICE_TEXT := "DEV: KEYBOARD DRIVES THIS CHALLENGE"
 
-## Vehicles register on _ready to read speed/gear. A new body clears _node_fail/_flight_mode
-## (avoiding inherited drone settings) but keeps other toggles (_lights, _pto, _armed) as
-## driver state. Respawn doesn't re-register, so node_fail stays a bench switch.
+
+func _ready() -> void:
+	_dev_keys = BootParams.challenge_keys()
+
+
+func set_bridge_only(on: bool) -> void:
+	_bridge_only = on
+	if on and _dev_keys:
+		GameState.notice.emit(DEV_KEYS_NOTICE_TEXT, 0.0)
+
+
+## Vehicles register on _ready to read speed/gear. A new body clears _node_fail/_flight_mode/
+## _nav_mode (avoiding inherited drone and boat settings) but keeps other toggles (_lights, _pto,
+## _armed) as driver state. Respawn doesn't re-register, so node_fail stays a bench switch.
 func register_vehicle(vehicle: Node3D) -> void:
 	_vehicle = vehicle
 	_node_fail = 0
 	_flight_mode = 0
+	# A new hull must not spawn with an engaged autopilot steering to the last boat's course.
+	_nav_mode = 0
+	# Nor with the last boat's trim: on a hull with no rig the sheet is inert but still latched.
+	_sheet = 0
 	# Cargo hook clears for the same reason: global key, no local indication.
 	_hardpoint = false
 
@@ -106,6 +138,10 @@ func _physics_process(delta: float) -> void:
 		_warn_if_ignition_off(bridge_raw)
 		return
 	_clear_ignition_notice()
+	if _bridge_only and not _dev_keys:
+		# Neither local source is polled, so no router toggle advances under the lock either.
+		_current = locked_idle()
+		return
 	var raw := _local_source.poll(delta)
 	if _touch_source != null:
 		raw = merge_local(raw, _touch_source.poll())
@@ -136,6 +172,10 @@ func _physics_process(delta: float) -> void:
 		_node_fail = cycle_node_fail(_node_fail)
 	if bool(raw.get(&"flight_mode_cycle", false)):
 		_flight_mode = cycle_flight_mode(_flight_mode)
+	if bool(raw.get(&"nav_mode_cycle", false)):
+		_nav_mode = cycle_nav_mode(_nav_mode)
+	if bool(raw.get(&"sheet_cycle", false)):
+		_sheet = cycle_sheet(_sheet)
 	if bool(raw.get(&"pantograph_toggle", false)):
 		_pantograph = not _pantograph
 	if bool(raw.get(&"doors_toggle", false)):
@@ -154,6 +194,8 @@ func _physics_process(delta: float) -> void:
 	raw[&"hardpoint_cmd"] = _hardpoint
 	raw[&"node_fail"] = _node_fail
 	raw[&"flight_mode"] = _flight_mode
+	raw[&"nav_mode"] = _nav_mode
+	raw[&"sheet"] = sheet_fraction(_sheet)
 	raw[&"pantograph"] = _pantograph
 	raw[&"doors"] = _doors
 	raw[&"body_cmd"] = _body_cmd
@@ -214,6 +256,24 @@ static func cycle_flight_mode(mode: int) -> int:
 	return posmod(mode + 1, FLIGHT_MODE_COUNT)
 
 
+## Local autopilot walk behind the 2 key: STANDBY -> HEADING HOLD -> STANDBY. Named static fn for
+## the same reason as cycle_flight_mode: BoatAutopilot.cycle mirrors this, and
+## tests/test_boat_autopilot.gd pins the two equal by calling both.
+static func cycle_nav_mode(mode: int) -> int:
+	return posmod(mode + 1, NAV_MODE_COUNT)
+
+
+## Local sheet walk behind the 3 key: hauled in -> ... -> fully eased -> hauled in.
+static func cycle_sheet(detent: int) -> int:
+	return posmod(detent + 1, SHEET_DETENT_COUNT)
+
+
+## The detent as the 0..1 the wire and VehicleInput carry. Spread across the whole range so the
+## ends are reachable, which is why the divisor is COUNT - 1 and not COUNT.
+static func sheet_fraction(detent: int) -> float:
+	return float(posmod(detent, SHEET_DETENT_COUNT)) / float(maxi(1, SHEET_DETENT_COUNT - 1))
+
+
 ## Merge the keyboard and touch raw intents into one before arbitration:
 ## analog axes take the stronger request, steer sums (clamped), momentary bits OR
 ## together. Pure/static so it is unit-tested without the autoload. `lights` is not
@@ -239,6 +299,8 @@ static func merge_local(a: Dictionary[StringName, Variant],
 		&"arm_toggle": bool(a.get(&"arm_toggle", false)) or bool(b.get(&"arm_toggle", false)),
 		&"node_fail_cycle": bool(a.get(&"node_fail_cycle", false)) or bool(b.get(&"node_fail_cycle", false)),
 		&"flight_mode_cycle": bool(a.get(&"flight_mode_cycle", false)) or bool(b.get(&"flight_mode_cycle", false)),
+		&"nav_mode_cycle": bool(a.get(&"nav_mode_cycle", false)) or bool(b.get(&"nav_mode_cycle", false)),
+		&"sheet_cycle": bool(a.get(&"sheet_cycle", false)) or bool(b.get(&"sheet_cycle", false)),
 		&"flaps_toggle": bool(a.get(&"flaps_toggle", false)) or bool(b.get(&"flaps_toggle", false)),
 		&"hardpoint_toggle": bool(a.get(&"hardpoint_toggle", false)) or bool(b.get(&"hardpoint_toggle", false)),
 		# Train toggles edge the same way; InputRouter owns the latched state.
@@ -248,6 +310,16 @@ static func merge_local(a: Dictionary[StringName, Variant],
 		# missing key silently drops the keyboard's edge whenever a touch source is registered.
 		&"body_cmd_toggle": bool(a.get(&"body_cmd_toggle", false)) or bool(b.get(&"body_cmd_toggle", false)),
 	}
+	return out
+
+
+## What a bridge-only vehicle gets with no live bridge: key at Lock, handbrake on, every other
+## field at its struct default. Also what the rig falls back to when the bridge goes stale
+## mid-attempt, so a lost connection parks it rather than coasting.
+static func locked_idle() -> VehicleInput:
+	var out := VehicleInput.new()
+	out.key = KEY_LOCK
+	out.handbrake = 1.0
 	return out
 
 
@@ -282,6 +354,12 @@ static func arbitrate_local(raw: Dictionary, speed: float, gear_byte: int,
 	out.arm = bool(raw.get(&"arm", false))
 	out.node_fail = int(raw.get(&"node_fail", 0))
 	out.flight_mode = int(raw.get(&"flight_mode", 0))
+	# Boat autopilot request (boat only; ignored elsewhere). `heading_cmd` stays at
+	# HEADING_CMD_NONE: no keyboard types a bearing, and holding the heading captured on engage is
+	# what the local path is FOR — see BoatVehicle.
+	out.nav_mode = int(raw.get(&"nav_mode", 0))
+	# The sheet, from the InputRouter-owned detent (sailboat only; inert on a hull with no rig).
+	out.sheet = clampf(float(raw.get(&"sheet", 0.0)), 0.0, 1.0)
 	# `led`/`beep` are indication, not control: no local source, stay at 0/false (arm tips dark).
 	out.flaps = clampf(float(raw.get(&"flaps", 0.0)), 0.0, 1.0)
 	# Cargo hook, from the InputRouter-owned local toggle (drone only; ignored elsewhere).
@@ -366,6 +444,14 @@ static func arbitrate_bridge(vals: Dictionary) -> VehicleInput:
 	out.node_fail = int(vals.get("node_fail", 0))
 	# Mirrored verbatim; local Z latch not read for the same reason as node_fail.
 	out.flight_mode = int(vals.get("flight_mode", 0))
+	# Boat autopilot, mirrored verbatim; local 2 latch not read for the same reason. `heading_cmd`
+	# follows the `rudder` PRESENCE rule instead of a default: bridge_source writes the key only
+	# when sloppyCAN sends it, and absent means "no course commanded", not a bearing of 0.
+	out.nav_mode = int(vals.get("nav_mode", 0))
+	out.heading_cmd = float(vals.get("heading_cmd", VehicleInput.HEADING_CMD_NONE))
+	# The sheet, already %→fraction normalized in bridge_source; local 3 detent not read, for the
+	# same reason as nav_mode. Absent → 0 → hauled in hard, which is a real trim, not a sentinel.
+	out.sheet = clampf(float(vals.get("sheet", 0.0)), 0.0, 1.0)
 	# DroneCAN indication, mirrored verbatim, no local timer — LEDs pulse only if sloppyCAN
 	# toggles the colour.
 	out.lamps.led = int(vals.get("led", 0))

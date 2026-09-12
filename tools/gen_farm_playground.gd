@@ -542,7 +542,7 @@ func _build_furrows(authoring: Node, root: Node, img: Image) -> void:
 
 
 ## A tractor spawn on the apron, "tractor" removed from the island's road-side spawn.
-## Level._pick_spawn takes the first marker that accepts the family, so the filters must be
+## Level.pick_spawn takes the first marker that accepts the family, so the filters must be
 ## disjoint or the farm spawn would never be reached.
 func _build_spawns(root: Node, apron: Rect2, deck_y: float) -> void:
 	var stale := root.get_node_or_null(NodePath(SPAWN_NODE))

@@ -91,6 +91,17 @@ func set_level(scene_path: String) -> void:
 	_weight.visible = not weight.is_empty()
 
 
+## A level pack is downloading (LevelPacks): how much has arrived, over a moving bar. The
+## transfer is gzipped, so there is no total the arriving bytes could fill a bar toward.
+func set_download(bytes: int) -> void:
+	if _bar != null:
+		_title.text = "DOWNLOADING %.1f MB" % (float(bytes) / 1048576.0)
+		_bar.indeterminate = true
+
+
 func set_progress(p: float) -> void:
 	if _bar != null:
+		if _bar.indeterminate:
+			_title.text = "LOADING"
+			_bar.indeterminate = false
 		_bar.value = clampf(p, 0.0, 1.0)

@@ -1,0 +1,108 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/challenges/arena_preview.gd" id="1_howc4"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="2_o57ih"]
+[ext_resource type="Script" path="res://src/challenges/challenge_zone.gd" id="3_h1uf1"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_jutjb"]
+albedo_color = Color(0.95, 0.95, 0.95, 1)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_vb3cu"]
+material = SubResource("StandardMaterial3D_jutjb")
+size = Vector2(11.1, 0.4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_eecc3"]
+albedo_color = Color(0.12, 0.12, 0.12, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="BoxMesh_icjn0"]
+material = SubResource("StandardMaterial3D_eecc3")
+size = Vector3(0.25, 2.5, 0.25)
+
+[sub_resource type="BoxMesh" id="BoxMesh_765vp"]
+material = SubResource("StandardMaterial3D_eecc3")
+size = Vector3(0.25, 2.5, 0.25)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_q6l8b"]
+albedo_color = Color(1, 0.8, 0.1, 1)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_s2psk"]
+material = SubResource("StandardMaterial3D_q6l8b")
+size = Vector2(6, 0.4)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_u0e70"]
+material = SubResource("StandardMaterial3D_q6l8b")
+size = Vector2(6, 0.4)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_r8v8y"]
+material = SubResource("StandardMaterial3D_q6l8b")
+size = Vector2(0.4, 18)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_3evfl"]
+material = SubResource("StandardMaterial3D_q6l8b")
+size = Vector2(0.4, 18)
+
+[node name="CarBoxStopCourse" type="Node3D" unique_id=2085481412]
+
+[node name="ArenaPreview" type="Node3D" parent="." unique_id=976133156]
+script = ExtResource("1_howc4")
+arena = "car_arena"
+
+[node name="Spawn" type="Marker3D" parent="." unique_id=817789973]
+transform = Transform3D(6.123032e-17, 0, -1, 0, 1, 0, 1, 0, 6.123032e-17, -150, 6.6, -6.123032e-16)
+script = ExtResource("2_o57ih")
+vehicle_types = PackedStringArray("car")
+
+[node name="Gate" type="Node3D" parent="." unique_id=837728045]
+transform = Transform3D(-6.12297e-17, 0, 1, 0, 1, 0, -1, 0, -6.12297e-17, 19.999998, 8, -1.1021457e-14)
+script = ExtResource("3_h1uf1")
+size = Vector3(60, 6, 0.5)
+
+[node name="Box" type="Node3D" parent="." unique_id=657729344]
+transform = Transform3D(-6.1231165e-17, 0, 1, 0, 1, 0, -1, 0, -6.1231165e-17, 37, 8, -1.2062373e-14)
+script = ExtResource("3_h1uf1")
+size = Vector3(6, 6, 18)
+
+[node name="Overrun" type="Node3D" parent="." unique_id=18474202]
+transform = Transform3D(-6.123032e-17, 0, 1, 0, 1, 0, -1, 0, -6.123032e-17, 104, 8, -1.6164802e-14)
+script = ExtResource("3_h1uf1")
+size = Vector3(60, 6, 112)
+
+[node name="Markers" type="Node3D" parent="." unique_id=671521695]
+
+[node name="GateLine" type="MeshInstance3D" parent="Markers" unique_id=431233625]
+transform = Transform3D(-6.12297e-17, 0, 1, 0, 1, 0, -1, 0, -6.12297e-17, 19.999998, 6.03, -1.1021457e-14)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_vb3cu")
+
+[node name="GatePostL" type="MeshInstance3D" parent="Markers" unique_id=700618587]
+transform = Transform3D(-6.12297e-17, 0, 1, 0, 1, 0, -1, 0, -6.12297e-17, 19.999998, 7.25, 7.05)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_icjn0")
+
+[node name="GatePostR" type="MeshInstance3D" parent="Markers" unique_id=1175766927]
+transform = Transform3D(-6.12297e-17, 0, 1, 0, 1, 0, -1, 0, -6.12297e-17, 19.999998, 7.25, -7.05)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_765vp")
+
+[node name="BoxNear" type="MeshInstance3D" parent="Markers" unique_id=232799416]
+transform = Transform3D(-6.1231165e-17, 0, 1, 0, 1, 0, -1, 0, -6.1231165e-17, 28.2, 6.03, -1.15235385e-14)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_s2psk")
+
+[node name="BoxFar" type="MeshInstance3D" parent="Markers" unique_id=638638553]
+transform = Transform3D(-6.1231165e-17, 0, 1, 0, 1, 0, -1, 0, -6.1231165e-17, 45.8, 6.03, -1.2601207e-14)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_u0e70")
+
+[node name="BoxLeft" type="MeshInstance3D" parent="Markers" unique_id=1880702627]
+transform = Transform3D(-6.1231165e-17, 0, 1, 0, 1, 0, -1, 0, -6.1231165e-17, 37, 6.03, 2.8)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_r8v8y")
+
+[node name="BoxRight" type="MeshInstance3D" parent="Markers" unique_id=1835041701]
+transform = Transform3D(-6.1231165e-17, 0, 1, 0, 1, 0, -1, 0, -6.1231165e-17, 37, 6.03, -2.8)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_3evfl")

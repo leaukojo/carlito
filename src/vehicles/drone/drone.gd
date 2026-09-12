@@ -86,6 +86,9 @@ var _base_com := Vector3.ZERO
 ## HoodCam marker, chasing angles, contract-read stops (drone_gimbal_mount.gd, laws in
 ## drone_gimbal.gd). Built in _ready.
 var _gimbal: DroneGimbalMount
+## The airframe's own status LEDs and the rangefinder beam (drone_indicators.gd), ticked last on
+## this tick's published state. Built in _ready.
+var _indicators: DroneIndicators
 ## Barometer's only state: elapsed seconds against which sea-level pressure drifts. NOT
 ## cleared by respawn — the drift is the level's weather.
 var _air_time := 0.0
@@ -142,6 +145,7 @@ func _ready() -> void:
 	_gimbal = DroneGimbalMount.new(self)
 	_sensors = DroneSensorSuite.new(self)
 	_motors = DroneMotors.new(self)
+	_indicators = DroneIndicators.new(self)
 	_ahrs_node = DroneBus.index_of("AHRS")
 	_apply_carried_mass()
 	_home = global_position
@@ -531,6 +535,9 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	# Held for LAND to cut motors NEXT tick — can't read this tick, since the predicate needs
 	# the collective demand the mode branch already produced (16 ms after a 0.5 s debounce).
 	_landed = t.ground
+
+	# The airframe's own lights and the rangefinder beam, LAST: they show what this tick published.
+	_indicators.tick(t, power_ok, self)
 
 
 # --- the body's own flight math (unit-tested; the motors are DroneProp's) ------

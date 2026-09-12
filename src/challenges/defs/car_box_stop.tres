@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_constraint.gd" id="1_cons"]
+[ext_resource type="Script" path="res://src/challenges/goals/fail_zone_constraint.gd" id="2_fail"]
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="3_goal"]
+[ext_resource type="Script" path="res://src/challenges/goals/signal_band_goal.gd" id="4_band"]
+[ext_resource type="Script" path="res://src/challenges/goals/stop_in_zone_goal.gd" id="5_stop"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="6_def"]
+
+[sub_resource type="Resource" id="Resource_gate"]
+script = ExtResource("4_band")
+signal_name = "kmh"
+low = 50.0
+zone = &"Gate"
+
+[sub_resource type="Resource" id="Resource_box"]
+script = ExtResource("5_stop")
+zone = &"Box"
+
+[sub_resource type="Resource" id="Resource_overrun"]
+script = ExtResource("2_fail")
+zone = &"Overrun"
+warning = "Ran past the box"
+
+[resource]
+script = ExtResource("6_def")
+id = "car_box_stop"
+title = "Stop in the box"
+variant = "sedan-sports"
+arena = "car_arena"
+course = "res://src/levels/island/car_arena/courses/car_box_stop_course.tscn"
+briefing = "Cross the white gate line, 170 m down the straight, at 50 km/h or more (kmh). Then stop with all four wheels inside the yellow box and hold still for 1 s. The box starts 8 m past the gate and is 18 m long and 6 m wide. Crossing the gate slower fails; running on past the box starts the attempt over."
+hint = "kmh, speed (0.01 m/s on the wire), brake (0-100 %). Full braking from 50 km/h takes about 13 m on this asphalt, and the distance grows with the square of the speed. odo is 1 m on the wire; lat/lon resolve about 1 cm."
+goals = Array[ExtResource("3_goal")]([SubResource("Resource_gate"), SubResource("Resource_box")])
+constraints = Array[ExtResource("1_cons")]([SubResource("Resource_overrun")])

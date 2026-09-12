@@ -34,27 +34,29 @@ uniform float normal_fade_dist = 60.0;
 
 uniform sampler2D depth_tex : hint_depth_texture, repeat_disable, filter_nearest;
 
-// Model-space XZ passed to the fragment stage so the foam breakup is anchored to the water
-// body (VERTEX is view-space in fragment(), which would swim with the camera).
+// World-space XZ: the waves and the foam breakup are anchored to the world, not the water
+// body, so an `infinite` WaterSurface can re-centre on the camera without its waves moving.
+// (VERTEX is view-space in fragment(), which would swim with the camera.)
 varying vec2 v_wave_pos;
 
 // Same displacement the vertex uses, plus its analytic slope so lighting reacts to the
 // waves. A second, faster/finer octave rides on the normals only (no extra displacement)
 // to add sparkle without more vertex motion. All ALU — no texture reads.
 void vertex() {
-	v_wave_pos = VERTEX.xz;
+	vec2 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz;
+	v_wave_pos = wp;
 	float t = TIME * wave_speed;
-	float sx = sin(t + VERTEX.x * 0.55);
-	float sz = sin(t * 0.8 + VERTEX.z * 0.47);
+	float sx = sin(t + wp.x * 0.55);
+	float sz = sin(t * 0.8 + wp.y * 0.47);
 	VERTEX.y += sx * sz * wave_height;
 
 	// d/dx and d/dz of the wave surface -> tangent-space slope.
-	float dx = 0.55 * cos(t + VERTEX.x * 0.55) * sz * wave_height;
-	float dz = 0.47 * sx * cos(t * 0.8 + VERTEX.z * 0.47) * wave_height;
+	float dx = 0.55 * cos(t + wp.x * 0.55) * sz * wave_height;
+	float dz = 0.47 * sx * cos(t * 0.8 + wp.y * 0.47) * wave_height;
 	// Finer ripple octave (normal only).
 	float t2 = TIME * wave_speed * 1.7;
-	dx += 0.9 * cos(t2 + VERTEX.x * 1.9) * wave_height * 0.5;
-	dz += 0.9 * cos(t2 * 0.9 + VERTEX.z * 2.1) * wave_height * 0.5;
+	dx += 0.9 * cos(t2 + wp.x * 1.9) * wave_height * 0.5;
+	dz += 0.9 * cos(t2 * 0.9 + wp.y * 2.1) * wave_height * 0.5;
 
 	// Settle the ripple to flat with distance: near water stays wavy, far water goes
 	// glassy so the reflected sky/clouds aren't distorted.

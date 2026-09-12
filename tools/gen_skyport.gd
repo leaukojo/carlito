@@ -1,9 +1,16 @@
 extends Node
 ## Author level 6, "Skyport" (the quadcopter playground): terrain, splat, roads and scene all
 ## come from here, and a re-run overwrites all of it. `sats`/`agl` are the only two contract
-## signals a level can move; this is also the first level with a WindField. Canyon walls are
-## sized off the drone's own sky-ray cone (W/D, see REACHES) — never make the canyon a trigger
-## volume. Chain recorded in src/levels/island/level_6/level_6_gen.json (tools/CLAUDE.md).
+## signals a level can move; it also carries the WindField, the CurrentField and the game's one
+## real water column (SEA_Y), which the boat's depth instrument has nowhere else to read. Canyon
+## walls are sized off the drone's own sky-ray cone (W/D, see REACHES) — never make the canyon a
+## trigger volume. Chain recorded in src/levels/island/level_6/level_6_gen.json (tools/CLAUDE.md).
+##
+## EVERYTHING IN THE WATER DERIVES FROM SEA_Y, never a literal waterline: the slipway apron
+## (_ramp_x_at_y), the shoal crest, the channel marks and the measured leg all move when the sea
+## does. `-- scaffold` runs _report_water(), which CHECKS the boat playground rather than
+## claiming it: the corridors below were measured off the heightmap, and a sculpt that moves
+## them fails the stage instead of shipping a channel that runs over the bar.
 ## No scatter in this level, so no stale-ground bake gate applies.
 
 const Groups := preload("res://src/levels/base/carlito_groups.gd")
@@ -18,7 +25,15 @@ const SplatPaint := preload("res://kit/helpers/splat_paint.gd")
 # --- the island ------------------------------------------------------------------------
 const SIZE := 512.0            ## world extent (X and Z), matching the other islands
 const HEIGHT := 51.0           ## white-pixel amplitude; 765/15, so 3 m levels store exactly
-const SEA_Y := 1.0
+## A sample is [0,1] over the terrain's Y and _norm clamps, so the seabed floors at 0 whatever
+## _floor_y asks for: this IS the basin depth. Ceiling 6.6 — _repaint walks from REACHES[0].x,
+## where _floor_y is 6.6, and skips columns under the sea, so a higher sea drops the westernmost
+## reach's paint; Y_FLOOR (9) is where it floods the gorge outright.
+const SEA_Y := 6.0
+const SEA_DEPTH := SEA_Y + 3.0   ## kill box, measured DOWN: it must reach the basin floor at 0
+## classify_splat's sand weight crosses 0.5 — the line you SEE — at 1.25x sand_height. 7.0 puts it
+## at 8.75: 2.75 m of dry beach, and under the canyon bowl and coastal shelf at 9.
+const SAND_HEIGHT := (SEA_Y + 2.75) / 1.25
 const GEN_SEED := 60613
 const FEATURE_SCALE := 260.0
 const OCTAVES := 4
@@ -76,6 +91,43 @@ const INLET_Y := -3.0
 const SLIP_RAMP_A := Vector3(148.0, Y_APRON, 132.0)
 const SLIP_RAMP_B := Vector3(198.0, -1.0, 132.0)
 const RAMP_HALF_WIDTH := 8.0
+
+# --- the boat playground ---------------------------------------------------------------
+## The seabed is the flat pan `island_falloff` clamps to 0, so over the whole basin the sounder
+## reads one number and the shoal warn can never fire. THE BAR IS WHAT MAKES 'depth' A READING:
+## a drying sandbar off the slipway, west of the buoyed channel, so a boat that holds the marks
+## stays in 5.6 m and one that cuts inside them watches the number fall through the shoal alarm
+## and then ground. Crest 0.4 m proud of the sea, so the bar is VISIBLE as well as audible —
+## and it needs no splat work, because classify_splat calls anything under 1.25 * SAND_HEIGHT
+## sand already.
+const SHOAL_CENTRE := Vector2(204.0, 190.0)   ## world XZ
+const SHOAL_HALF := Vector2(10.0, 14.0)       ## the flat crest's half-extents
+## The shoaling ring outside the crest: 20 m of blend takes the sounding from 5.6 m to aground
+## over about four seconds at hull speed. A tighter ring reads as a cliff, not a shoal.
+const SHOAL_MARGIN := 20.0
+const SHOAL_CREST := SEA_Y + 0.4
+## The buoyed channel: a straight north-south fairway down the east basin, measured flat at the
+## pan depth over its whole length. Its west marks stand where the shoal's blend ring begins,
+## which is the whole point of marking a channel.
+const CHANNEL_X := 234.0
+const CHANNEL_Z0 := 140.0    ## off the slipway
+const CHANNEL_Z1 := 240.0    ## onto the measured leg below
+const CHANNEL_HALF := 8.0    ## marks either side of the centreline
+const CHANNEL_SPACING := 25.0
+## The measured leg. NOT a measured mile — that is 1852 m and this map is 512 m across — but the
+## same instrument: two marks a known distance apart, so STW against SOG is a stopwatch instead
+## of a claim. It runs east-west, within 20 degrees of the tide's own set, so the whole drift
+## lands along the track rather than across it: the log reads the same both ways and the clock
+## does not.
+const MILE_Z := 246.0
+const MILE_X0 := 40.0
+const MILE_X1 := 240.0
+const MILE_HALF := 8.0
+## The least water a fairway or a mark may stand in. The channel runs 30 m off a bar that dries,
+## so a nudge to SHOAL_CENTRE or CHANNEL_X puts a mark on the sand or the fairway over it — and
+## that is a level which reads as authored and sails as a trap. _report_water FAILS the scaffold
+## on it rather than printing a number nobody re-reads.
+const NAVIGABLE_MIN := 1.5
 
 # --- roads --------------------------------------------------------------------------------
 const ASPHALT_PROFILE := "res://kit/roads/asphalt_profile.tres"
@@ -158,7 +210,7 @@ const SPAWN_LAND := Vector3(-24.0, Y_APRON, 126.0)
 ## The plane wants a run, so it gets the shelf's whole southern strip: 260 m of flat at
 ## z = 104, south of the apron deck and north of nothing.
 const SPAWN_PLANE := Vector3(-110.0, Y_APRON, 104.0)
-const SPAWN_WATER := Vector3(212.0, 1.3, 132.0)
+const SPAWN_WATER := Vector3(212.0, SEA_Y + 0.3, 132.0)   ## the 0.3 is spawn clearance
 
 # --- props -----------------------------------------------------------------------------------
 ## Nodes the `props` stage OWNS: a re-run replaces exactly these. The three RoadPaths belong
@@ -180,6 +232,12 @@ const CARGO_PREFAB := "res://kit/prefabs/watercraft/cargo-container-a.tscn"
 ## containers: a 0.858 m / 2 kg box is a load the 1.2 m / 5 kg drone visibly sags under.
 const PAYLOAD_SCENE := "res://src/levels/base/cargo_payload.tscn"
 const SLIP_PREFAB := "res://kit/prefabs/watercraft/ramp-wide.tscn"
+## Channel marks. Both are `collision_mode: "none"`, so they add no baked body and a boat that
+## hits one is told by the depth, not by a crash. Their recipe aligns them "raw" — the artist's
+## own waterline is the origin — which is why they are placed by _place_afloat rather than by
+## _place, whose whole job is standing a piece's measured BASE on the ground.
+const BUOY_PREFAB := "res://kit/prefabs/watercraft/buoy.tscn"
+const MILE_PREFAB := "res://kit/prefabs/watercraft/buoy-flag.tscn"
 
 const APRON_DECK_CENTER := Vector2(-24.0, 126.0)
 const APRON_CELLS_X := 4
@@ -211,6 +269,14 @@ const WIND_DIRECTION_DEG := 200.0
 const WIND_SPEED := 5.0
 const WIND_GUST := 3.0
 const WIND_SEED := 60613
+
+# --- current --------------------------------------------------------------------------------
+## Sets across the mouth of the fjord, so leaving the slipway puts a crab angle between COG and
+## HDG straight away; the tide reverses over four minutes.
+const CURRENT_SET_DEG := 110.0
+const CURRENT_DRIFT := 1.5
+const CURRENT_PERIOD_S := 240.0
+const CURRENT_OFFSET_S := 60.0
 
 # --- working state (world <-> pixel) ---------------------------------------------------------
 var _iw := 0
@@ -258,6 +324,8 @@ func _scaffold() -> int:
 	_flatten(heights, APRON_SHELF, Y_APRON)
 	_carve_canyon(heights)
 	_carve_ramp(heights, SLIP_RAMP_A, SLIP_RAMP_B)
+	# Before the splat pass, so the bar is classified sand by height like any other beach.
+	_shoal(heights)
 
 	var loop_curve := _curve(LOOP_POINTS)
 	var viaduct_curve := _curve(VIADUCT_POINTS)
@@ -271,7 +339,7 @@ func _scaffold() -> int:
 
 	# --- splat: auto-classify, then repaint what this level's own surfaces need ----------
 	var px := SIZE / float(cells - 1)
-	var splat := TerrainGen.build_splatmap(heights, HEIGHT, px, px, 3.0, 24.0, 40.0)
+	var splat := TerrainGen.build_splatmap(heights, HEIGHT, px, px, SAND_HEIGHT, 24.0, 40.0)
 	var splat2 := Image.create(cells, cells, false, Image.FORMAT_RGBA8)
 	splat2.fill(Color(0, 0, 0, 0))
 	_repaint(splat, splat2)
@@ -297,12 +365,15 @@ func _scaffold() -> int:
 			return 1
 	_write_text("%s/level_6_info.tres" % DIR, _info_text())
 	_write_text("%s/level_6_wind.tres" % DIR, _wind_text())
+	_write_text("%s/level_6_current.tres" % DIR, _current_text())
 	_write_text(LEVEL_PATH, _scene_text())
 
 	_report_road(loop_curve, "RoadLoop")
 	_report_road(viaduct_curve, "Viaduct")
 	_report_road(rim_curve, "RimRoad")
 	_report_sats()
+	if not _report_water(heights):
+		return 1
 	print("[skyport] scaffold done. Run --import, then `-- props`.")
 	return 0
 
@@ -320,6 +391,23 @@ func _flatten(img: Image, rect: Rect2, target_y: float, margin := FLATTEN_MARGIN
 	var c := rect.get_center()
 	BrushOps.stamp_height(img, _px_x(c.x), _px_z(c.y), half_x * _sx, half_z * _sz,
 			BrushOps.FLATTEN, 1.0, falloff, _norm(target_y), true)
+
+
+## The sandbar off the slipway: the round brush's FLATTEN, exactly as the flats above use it and
+## for the same reason — FLATTEN lerps toward a target and RAISE accumulates, so this one is the
+## op a scaffold replay lands on the same bytes.
+##
+## FLATTEN LOWERS AS WELL AS RAISES, so the ellipse has to stay off the shore: every heightmap
+## sample the round brush reaches is seabed well under SHOAL_CREST (the highest anywhere in its
+## bounding box is a 7.0 m terrain sample at world x 175, z 160, and that one is outside the
+## ellipse). Move SHOAL_CENTRE toward the coast and this stamp cuts the beach down to the crest.
+func _shoal(img: Image) -> void:
+	var half_x := SHOAL_HALF.x + SHOAL_MARGIN
+	var half_z := SHOAL_HALF.y + SHOAL_MARGIN
+	var falloff := SHOAL_MARGIN / maxf(half_x, half_z)
+	BrushOps.stamp_height(img, _px_x(SHOAL_CENTRE.x), _px_z(SHOAL_CENTRE.y),
+			half_x * _sx, half_z * _sz,
+			BrushOps.FLATTEN, 1.0, falloff, _norm(SHOAL_CREST), false)
 
 
 ## The canyon, written straight into the working image (no "cut a tapering slot" brush exists,
@@ -345,6 +433,13 @@ func _carve_ramp(img: Image, a: Vector3, b: Vector3) -> void:
 			Vector2i(_px_x(a.x), _px_z(a.z)), _norm(a.y),
 			Vector2i(_px_x(b.x), _px_z(b.z)), _norm(b.y),
 			RAMP_HALF_WIDTH * _sx, RAMP_HALF_WIDTH * _sz, 1.0, 0.4)
+
+
+## Where the slipway ramp crosses world height `y`. The apron piece belongs at the waterline, and
+## a literal X stops meaning that the first time SEA_Y moves.
+func _ramp_x_at_y(y: float) -> float:
+	var t := (SLIP_RAMP_A.y - y) / (SLIP_RAMP_A.y - SLIP_RAMP_B.y)
+	return lerpf(SLIP_RAMP_A.x, SLIP_RAMP_B.x, clampf(t, 0.0, 1.0))
 
 
 ## Canyon half-width at world x: the REACHES table, smoothstepped between control points so
@@ -517,6 +612,79 @@ func pad_rect(centre: Vector2) -> Rect2:
 # --------------------------------------------------------------------------------- reports
 
 
+## Seabed elevation at a world XZ, straight off the working image — the same sample
+## HeightmapTerrain.height_at will return once this is written.
+func _seabed(img: Image, wx: float, wz: float) -> float:
+	return img.get_pixel(_px_x(wx), _px_z(wz)).r * HEIGHT
+
+
+## The boat playground's numbers, MEASURED off the sculpted image rather than asserted from the
+## constants above, and a GATE rather than a report: false fails the scaffold. Water depths are
+## below the SURFACE; the sounder reads under-keel clearance, which is this less the hull's own
+## float_depth, so the shoal alarm bites a little sooner than these figures read. A dry bar is
+## reported as a negative depth on purpose — it is the one that has to be visible.
+func _report_water(img: Image) -> bool:
+	var ok := true
+	print("[skyport] sea y %.1f, shoal crest y %.1f (%.1f m proud)" % [
+			SEA_Y, SHOAL_CREST, SHOAL_CREST - SEA_Y])
+	var dry := 0
+	for wx in range(int(SHOAL_CENTRE.x - 40.0), int(SHOAL_CENTRE.x + 40.0) + 1):
+		if _seabed(img, float(wx), SHOAL_CENTRE.y) >= SEA_Y:
+			dry += 1
+	print("[skyport] sandbar at x %.0f, z %.0f: %d m of dry crest across its centreline" % [
+			SHOAL_CENTRE.x, SHOAL_CENTRE.y, dry])
+	if dry <= 0:
+		printerr("[skyport] the sandbar never breaks the surface — nothing to see and no ground to hit")
+		ok = false
+	print("[skyport]   across the bar, water below the surface (x, m):")
+	var across := ""
+	for wx in range(int(SHOAL_CENTRE.x - 40.0), int(SHOAL_CENTRE.x + 41.0), 8):
+		across += "  %d:%+.1f" % [wx, SEA_Y - _seabed(img, float(wx), SHOAL_CENTRE.y)]
+	print("[skyport]  %s" % across)
+
+	var worst := INF
+	var worst_mark := INF
+	var down := ""
+	for wz in range(int(CHANNEL_Z0), int(CHANNEL_Z1) + 1):
+		worst = minf(worst, SEA_Y - _seabed(img, CHANNEL_X, float(wz)))
+		worst_mark = minf(worst_mark, SEA_Y - _seabed(img, CHANNEL_X - CHANNEL_HALF, float(wz)))
+		worst_mark = minf(worst_mark, SEA_Y - _seabed(img, CHANNEL_X + CHANNEL_HALF, float(wz)))
+	for wz in range(int(CHANNEL_Z0), int(CHANNEL_Z1) + 1, 20):
+		down += "  %d:%+.1f" % [wz, SEA_Y - _seabed(img, CHANNEL_X - CHANNEL_HALF - 14.0, float(wz))]
+	print("[skyport] channel x %.0f, z %.0f..%.0f (%.0f m): least depth %.2f m, at the marks %.2f m" % [
+			CHANNEL_X, CHANNEL_Z0, CHANNEL_Z1, CHANNEL_Z1 - CHANNEL_Z0, worst, worst_mark])
+	print("[skyport]   14 m INSIDE the west marks (z, m): %s" % down)
+	if minf(worst, worst_mark) < NAVIGABLE_MIN:
+		printerr("[skyport] the channel or a mark stands in %.2f m — under NAVIGABLE_MIN %.1f" % [
+				minf(worst, worst_mark), NAVIGABLE_MIN])
+		ok = false
+
+	var leg := INF
+	for wx in range(int(MILE_X0), int(MILE_X1) + 1):
+		leg = minf(leg, SEA_Y - _seabed(img, float(wx), MILE_Z))
+	print("[skyport] measured leg z %.0f, x %.0f..%.0f (%.0f m): least depth %.2f m" % [
+			MILE_Z, MILE_X0, MILE_X1, MILE_X1 - MILE_X0, leg])
+	print("[skyport]   set %.0f deg at %.1f m/s peak, %.0f deg off the leg — the drift is along it" % [
+			CURRENT_SET_DEG, CURRENT_DRIFT, absf(CURRENT_SET_DEG - 90.0)])
+	if leg < NAVIGABLE_MIN:
+		printerr("[skyport] the measured leg crosses %.2f m — under NAVIGABLE_MIN %.1f" % [
+				leg, NAVIGABLE_MIN])
+		ok = false
+	# The gates stand off the leg, and the whole leg has to stay ON the terrain: outside it the
+	# sounder publishes its -1 and a timed run would read as no bottom rather than as deep water.
+	for gate_x: float in [MILE_X0, MILE_X1]:
+		for gate_z: float in [MILE_Z - MILE_HALF, MILE_Z + MILE_HALF]:
+			if absf(gate_x) > SIZE * 0.5 or absf(gate_z) > SIZE * 0.5:
+				printerr("[skyport] a measured-leg gate at %.0f,%.0f is off the terrain — no sounding there" % [
+						gate_x, gate_z])
+				ok = false
+			elif SEA_Y - _seabed(img, gate_x, gate_z) < NAVIGABLE_MIN:
+				printerr("[skyport] a measured-leg gate at %.0f,%.0f stands in %.2f m" % [
+						gate_x, gate_z, SEA_Y - _seabed(img, gate_x, gate_z)])
+				ok = false
+	return ok
+
+
 ## The canyon's design numbers, evaluated against the drone's own sky-ray pattern (not
 ## remembered), so a change to SKY_RAYS/SKY_MASK_DEG moves this table with it. A lower bound;
 ## `-- probe` measures the real thing.
@@ -645,8 +813,34 @@ func _build_props(root: Node) -> int:
 
 	_build_tower_course(authoring, root)
 	_build_pads(authoring, root, built["deck_y"])
+	var water := authoring.get_node_or_null(^"WatercraftProps")
+	if water != null:
+		_build_channel(water, root)
 	_build_payloads(root)
 	return 0
+
+
+## The buoyed channel and the measured leg. Holding a line of marks with the tide on the beam is
+## what turns COG against HDG into a visible crab angle.
+func _build_channel(water: Node, root: Node) -> void:
+	var pairs := int((CHANNEL_Z1 - CHANNEL_Z0) / CHANNEL_SPACING) + 1
+	for i in pairs:
+		var z := CHANNEL_Z0 + CHANNEL_SPACING * float(i)
+		_place_afloat(water, root, BUOY_PREFAB, "ChannelW%d" % i,
+				Vector2(CHANNEL_X - CHANNEL_HALF, z))
+		_place_afloat(water, root, BUOY_PREFAB, "ChannelE%d" % i,
+				Vector2(CHANNEL_X + CHANNEL_HALF, z))
+	print("[skyport] channel: %d mark pairs, x %.0f +/- %.0f, z %.0f..%.0f" % [
+			pairs, CHANNEL_X, CHANNEL_HALF, CHANNEL_Z0, CHANNEL_Z1])
+	# The leg's ends are gates rather than single marks, so the stopwatch has an instant to
+	# start on: you time crossing BETWEEN a pair, not passing one.
+	var ends := [MILE_X0, MILE_X1]
+	for i in ends.size():
+		var x: float = ends[i]
+		_place_afloat(water, root, MILE_PREFAB, "MileN%d" % i, Vector2(x, MILE_Z - MILE_HALF))
+		_place_afloat(water, root, MILE_PREFAB, "MileS%d" % i, Vector2(x, MILE_Z + MILE_HALF))
+	print("[skyport] measured leg: %.0f m between the gates, z %.0f" % [
+			MILE_X1 - MILE_X0, MILE_Z])
 
 
 ## The crates the drone's hardpoint picks up, on the pickup pad. A direct child of the level
@@ -775,7 +969,7 @@ func _build_pads(authoring: Node, root: Node, deck_y: float) -> void:
 	# The slipway's own apron at the waterline. `ramp-wide` is a weld-mode piece, so it joins
 	# the level-wide drivable body and the car really can drive onto it.
 	_place(water, root, SLIP_PREFAB, "Slipway",
-			Vector3(SLIP_RAMP_B.x - 6.0, SEA_Y - 0.4, SLIP_RAMP_B.z), PI * 0.5)
+			Vector3(_ramp_x_at_y(SEA_Y), SEA_Y - 0.4, SLIP_RAMP_B.z), PI * 0.5)
 	# Slipway scenery. These are shipping containers at their own honest scale — the drone's
 	# liftable payloads are the crates in _build_payloads, and are not kit pieces at all.
 	for i in CARGO_COUNT:
@@ -809,6 +1003,27 @@ func _place(parent: Node, root: Node, path: String, node_name: String, at: Vecto
 	if not (node_name.begins_with("Mast") or node_name.begins_with("PadFlag")):
 		print("[skyport]   %s: %.1f x %.1f x %.1f m, base y %.2f, top y %.2f" % [
 				node_name, aabb.size.x, aabb.size.y, aabb.size.z, at.y, at.y + aabb.size.y])
+
+
+## Instance a kit prefab and float it at `xz`, ORIGIN ON THE WATERLINE. The counterpart of
+## _place, and not a variant of it: _place stands a piece's measured base on a ground Y, which
+## is exactly wrong for a mark whose recipe keeps the authored waterline as its origin (the
+## `align: "raw"` entry in kit/import/watercraft.json). Measured all the same, because a mark
+## the boat cannot see is not a mark.
+func _place_afloat(parent: Node, root: Node, path: String, node_name: String,
+		xz: Vector2) -> void:
+	var scene := ResourceLoader.load(path) as PackedScene
+	if scene == null:
+		printerr("[skyport] cannot load %s" % path)
+		return
+	var piece := scene.instantiate() as Node3D
+	piece.name = node_name
+	piece.position = Vector3(xz.x, SEA_Y, xz.y)
+	_add(parent, piece, root)
+	if node_name.ends_with("0"):
+		var aabb := _merged_aabb(piece, Transform3D.IDENTITY)
+		print("[skyport]   %s: %.1f x %.1f x %.1f m, %.1f m of it above the water" % [
+				node_name, aabb.size.x, aabb.size.y, aabb.size.z, aabb.end.y])
 
 
 func _merged_aabb(node: Node, xform: Transform3D) -> AABB:
@@ -929,8 +1144,23 @@ gust_seed = %d
 """ % [WIND_DIRECTION_DEG, WIND_SPEED, WIND_GUST, WIND_SEED]
 
 
+## The level's tide, likewise a resource, since that is what Level.current is.
+func _current_text() -> String:
+	return """[gd_resource type="Resource" script_class="CurrentField" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/levels/base/current_field.gd" id="1_current"]
+
+[resource]
+script = ExtResource("1_current")
+set_deg = %s
+drift = %s
+tide_period_s = %s
+tide_offset_s = %s
+""" % [CURRENT_SET_DEG, CURRENT_DRIFT, CURRENT_PERIOD_S, CURRENT_OFFSET_S]
+
+
 func _scene_text() -> String:
-	return """[gd_scene load_steps=23 format=3]
+	return """[gd_scene load_steps=24 format=3]
 
 [ext_resource type="Script" path="res://src/levels/base/level.gd" id="1_level"]
 [ext_resource type="Resource" path="res://src/levels/island/level_6/level_6_info.tres" id="2_info"]
@@ -952,6 +1182,7 @@ func _scene_text() -> String:
 [ext_resource type="Texture2D" path="res://src/levels/island/level_6/level_6_island_splat2.png" id="18_splat2"]
 [ext_resource type="Script" path="res://src/levels/base/world_bounds.gd" id="19_bounds"]
 [ext_resource type="Resource" path="res://src/levels/island/level_6/level_6_wind.tres" id="20_wind"]
+[ext_resource type="Resource" path="res://src/levels/island/level_6/level_6_current.tres" id="21_current"]
 
 [sub_resource type="PlaneMesh" id="SeaBedMesh"]
 size = Vector2({size_plus}, {size_plus})
@@ -978,6 +1209,7 @@ shader_parameter/roughness_value = 1.0
 script = ExtResource("1_level")
 info = ExtResource("2_info")
 wind = ExtResource("20_wind")
+current = ExtResource("21_current")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = ExtResource("11_env")
@@ -1013,7 +1245,7 @@ is_water = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, {sea_y}, 0)
 script = ExtResource("9_water")
 size = Vector2({size_plus}, {size_plus})
-depth = 3.0
+depth = {sea_depth}
 far_sea_extent = 1900.0
 
 [node name="Bounds" type="StaticBody3D" parent="."]
@@ -1043,7 +1275,7 @@ splatmap = ExtResource("7_splat")
 splatmap2 = ExtResource("18_splat2")
 channel_names = PackedStringArray({channel_names})
 channel_grip = PackedFloat32Array({channel_grip})
-sand_height = 3.0
+sand_height = {sand_height}
 dirt_slope_deg = 24.0
 rock_slope_deg = 40.0
 
@@ -1083,6 +1315,7 @@ metadata/_custom_type_script = "uid://cpl5vh8pdc04w"
 curve = ExtResource("17_rim")
 """.format({
 		"size": SIZE, "size_plus": SIZE + 48.0, "height": HEIGHT, "sea_y": SEA_Y,
+		"sea_depth": SEA_DEPTH, "sand_height": SAND_HEIGHT,
 		"seed": GEN_SEED, "feature_scale": FEATURE_SCALE, "octaves": OCTAVES,
 		"falloff_start": FALLOFF_START, "falloff_end": FALLOFF_END,
 		"coast_roughness": COAST_ROUGHNESS, "terrace_levels": TERRACE_LEVELS,

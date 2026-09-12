@@ -257,7 +257,8 @@ enter a tree.
   with a
   tapering canyon cut into the highland so GPS fix degrades as walls close in; only level with
   a
-  `WindField` and with `Payloads` (three `CargoPayload` crates as direct children of the LEVEL
+  `WindField`, only level with a `CurrentField`, and only one with `Payloads` (three
+  `CargoPayload` crates as direct children of the LEVEL
   ROOT, not `AuthoringRoot` — that's a bake input, welded into static geometry, so a baked
   crate
   could not be lifted).

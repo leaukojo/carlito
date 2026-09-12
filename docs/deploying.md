@@ -48,10 +48,74 @@ settings:
 - **Never exclude a whole `kit/raw/<pack>/` folder.** Baked levels inline materials that
   point at the pack's source textures. Excluding the folder drops those from the `.pck`;
   symptom: `ERROR: No loader found for resource: res://kit/raw/.../colormap.png (expected
-  type: Texture2D)`. The exclude filter must only drop source meshes (`kit/raw/*.glb`);
-  textures always ship. `kit/prefabs/*` is safe to exclude (verify with
-  `grep -ao "kit/[A-Za-z0-9_/.-]*" src/levels/**/*.baked.scn | sort -u`, after
-  `tools/bake_levels.tscn`).
+  type: Texture2D)`. The exclude filter drops source meshes (`kit/raw/*.glb`) and names
+  individual textures no baked level reaches (six `kit/raw/racing/` ones, ~255 KB — the
+  export's `all_resources` mode ships every texture regardless of reachability).
+  `kit/prefabs/*` is safe to exclude. `tests/test_export_filter.gd` walks every baked
+  level's dependencies against the filter and fails naming the level and file, so placing
+  one of the excluded pieces fails CI instead of the deployed build — drop its texture
+  from the list then.
+
+### Level packs
+
+Every island (`src/levels/island/`, `LevelPacks.PACK_ROOT`) ships in its own
+`c2-<sha>.<id>.pck` beside the main pack, so the boot download carries none of them (the boot
+default, `flatland`, has no bake). The first time one opens, `src/shell/level_packs.gd`
+downloads it behind the loading screen, keeps it in `user://level_packs/` (IndexedDB: it survives
+reloads and plays offline afterwards) and mounts it with `ProjectSettings.load_resource_pack`;
+packs of any other build are deleted on the next fetch (dev and stable share one origin, so
+while they run different builds a visit to one deletes the other's). They are not in the service
+worker's cache list: that list is Godot-generated, and any entry missing from its cache sends an
+offline navigation to the offline page. Off the web every island is on disk and nothing is fetched.
+
+CI exports one per `Web <id>` preset right after the main export:
+`--export-patch "Web <id>" c2-<sha>.<id>.pck --patches c2-<sha>.pck`. Load-bearing, and pinned
+by `tests/test_export_filter.gd` unless noted:
+
+- **A level preset exports everything the main one does**: `all_resources`, the main filters,
+  only the *other* islands excluded. A patch records every base-pack file its own preset would
+  not export as deleted, so a preset listing just the level's files built a pack that took ~700
+  files out of the running game when mounted.
+- **`patch_delta_encoding=true`.** ~30 scenes (vehicles, `boot`, `level`) get freshly generated
+  node ids on every export, so their bytes never match the main pack's; delta encoding carries
+  them at a few bytes each (~5 KB a pack) instead of as full copies (~365 KB). Godot's own
+  `uid_cache.bin` and `global_script_class_cache.cfg` stay out of it
+  (`patch_delta_exclude_filters`): delta-encoded, their read comes up short on mount ("Reading
+  less data than requested"); whole, they cost ~33 KB raw a pack.
+- **A pack mounts only over the main pack of the same run**, since its deltas apply to that
+  pack's bytes. Hence the shared `c2-<sha>` stem, which the game reads from
+  `GODOT_CONFIG.executable`. (Not a test: the CI loop names them.)
+- **`HTTPRequest.accept_gzip = false`.** GitHub Pages gzips `.pck` in transit; the browser has
+  already decompressed it, but `Content-Encoding` stays visible and HTTPRequest gunzips it a
+  second time (`RESULT_BODY_DECOMPRESS_FAILED`). A plain local server doesn't gzip, so this
+  fails only deployed. And no `download_file`: on the web it reports success and writes
+  nothing, so the body is written to `user://` on completion. (Neither is a test.)
+- **An island's level-select size** comes from `res://src/shell/level_weights.json`, which the
+  kit's export plugin writes into every pack (`LevelRegistry.SHIPPED_WEIGHTS`): the bake itself
+  is not on disk until its pack is mounted.
+- 4.7.1 occasionally segfaults on exit after writing a patch, so CI judges each run by its
+  `savepack` DONE line, not its exit code.
+
+A new island needs a `Web <id>` preset: copy a sibling's two sections and let the test name the
+exclude list. To reproduce locally (the stem is `index` there), export as below and serve
+`build/web/`; a server that gzips `.pck` the way Pages does is the faithful test.
+
+```powershell
+& $GODOT --headless --path . --export-release "Web" build/web/index.html
+foreach ($id in 'level_1','level_2','level_3','level_4','level_5','level_6','car_arena') {
+  & $GODOT --headless --path . --export-patch "Web $id" "build/web/index.$id.pck" --patches build/web/index.pck }
+```
+
+### Download size
+
+Measure what the player downloads: gzipped, on the deployed build. Raw and transferred size can
+move opposite ways (compressing baked-mesh attributes cut the pck 6.2 MB raw but grew it 0.24 MB
+gzipped, because quantized attributes carry more entropy than gzip was exploiting; kept for parse
+and vertex bandwidth), so compare gzipped before and after, one change at a time. First load
+(2026-09-11, local export): wasm 10.1 MB + main pck 3.5 MB + js 0.07 MB gzipped, and later visits
+come from the service worker. Level packs (2026-09-12): 0.1-0.6 MB each, `level_3` 3.3 MB, 5.1 MB
+for all seven.
+The wasm is now most of it (`TODO.md` § Custom web export template).
 
 ### Head Include
 
@@ -80,14 +144,14 @@ class used as a type annotation in a runtime-loaded `@tool` script (see `kit/CLA
 ## Publishing to dev
 
 Push to `dev`. `.github/workflows/ci.yml` runs `build` (editor-type gate → import → gdUnit4
-→ headless smoke → stale-bake check → baked-level smoke → web export) beside a parallel
+→ headless smoke → stale-bake check → baked-level smoke → web export + level packs) beside a parallel
 `tracking` job, then `publish-dev` copies `build/web/` into `gh-pages:/dev/`. Head-include and
 contract sync are pre-commit/preflight gates, not CI.
 
 Pushes to `main` run the same gates but publish nothing.
 
 Export basename embeds the commit SHA (`c2-<sha>.html`), so every deploy gets unique
-`.pck`/`.wasm`/`.js`/service-worker filenames.
+`.pck`/`.wasm`/`.js`/service-worker filenames, level packs (`c2-<sha>.<id>.pck`) included.
 
 ## Promoting dev → stable
 

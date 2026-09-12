@@ -27,6 +27,8 @@ func poll(_delta: float) -> Dictionary[StringName, Variant]:
 		&"arm_toggle": Input.is_action_just_pressed("arm"),
 		&"node_fail_cycle": Input.is_action_just_pressed("node_fail"),
 		&"flight_mode_cycle": Input.is_action_just_pressed("flight_mode"),
+		&"nav_mode_cycle": Input.is_action_just_pressed("nav_mode"),
+		&"sheet_cycle": Input.is_action_just_pressed("sheet"),
 		&"flaps_toggle": Input.is_action_just_pressed("flaps"),
 		&"hardpoint_toggle": Input.is_action_just_pressed("hardpoint"),
 		&"pantograph_toggle": Input.is_action_just_pressed("pantograph"),

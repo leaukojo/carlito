@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="LevelInfo" format=3]
+
+[ext_resource type="Script" path="res://src/levels/base/level_info.gd" id="1_info"]
+
+[resource]
+script = ExtResource("1_info")
+display_name = "Car Arena"
+allowed_vehicles = PackedStringArray("car")
+default_vehicle = "car"

@@ -8,8 +8,14 @@ extends RefCounted
 const Layers := preload("res://src/physics/collision_layers.gd")
 const Groups := preload("res://src/levels/base/carlito_groups.gd")
 
+## How far each jaw swings out from shut, degrees. Drawn only: the latch is `latched`.
+const JAW_OPEN_DEG := 40.0
+
 ## The scene's Hardpoint marker, or null on an airframe with none — the hook simply never catches.
 var _marker: Node3D = null
+## The optional jaws under the marker, and each one's shut pose as the scene authors it.
+var _jaws: Array[Node3D] = []
+var _jaw_rest: Array[Basis] = []
 ## The CargoPayload riding the hook, or null.
 var _payload: Node = null
 ## The latch, published as contract `hardpoint_state`.
@@ -18,6 +24,12 @@ var latched := false
 
 func _init(body: Node) -> void:
 	_marker = body.get_node_or_null(^"Hardpoint") as Node3D
+	for path: NodePath in [^"Hardpoint/JawL", ^"Hardpoint/JawR"]:
+		var jaw := body.get_node_or_null(path) as Node3D
+		if jaw != null:
+			_jaws.append(jaw)
+			_jaw_rest.append(jaw.transform.basis)
+	_pose_jaws()
 
 
 ## One tick. Returns true if the latch changed, which is the vehicle's cue to re-derive the mass.
@@ -31,6 +43,7 @@ func tick(cmd: bool, space: PhysicsDirectSpaceState3D, body: RigidBody3D) -> boo
 	latched = DronePayload.latched(cmd, was, found != null)
 	if latched == was:
 		return false
+	_pose_jaws()
 	if latched and found != null:
 		_payload = found
 		# Hung by its top face: the crate's own height is the whole offset, so a taller payload
@@ -58,6 +71,15 @@ func reset(body: RigidBody3D) -> void:
 	if _payload != null:
 		_drop(body, Vector3.ZERO)
 	latched = false
+	_pose_jaws()
+
+
+## Jaws shut on a closed latch and swung open otherwise, each about its own hinge (z). The right jaw
+## is the left one turned half round, so one angle opens both outward.
+func _pose_jaws() -> void:
+	var swing := Basis(Vector3.BACK, 0.0 if latched else -deg_to_rad(JAW_OPEN_DEG))
+	for i in _jaws.size():
+		_jaws[i].transform.basis = _jaw_rest[i] * swing
 
 
 ## Hand the crate back to the level (the body's own parent) with a velocity, and forget it.

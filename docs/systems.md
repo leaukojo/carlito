@@ -7,11 +7,11 @@ gotchas are in `CLAUDE.md`.
 
 ## Signal contract
 
-`contract/carlito_contract.json` (v33) defines every bridge signal: name, dir, type, unit,
+`contract/carlito_contract.json` (v35) defines every bridge signal: name, dir, type, unit,
 range, optional `warn` + `warn_side`, optional `count`, enum, vehicles, optional `flavor`
-(`isobus`, `j1939`, `iso11992`, `j2497`, `cleanopen`, `canaerospace`, `dronecan`, `train` —
-names/semantics borrowed, frame layout stays on the sloppyCAN side). `Contract`
-(`src/bridge/contract.gd`) parses and validates it at startup into `Contract.data`,
+(`isobus`, `j1939`, `iso11992`, `j2497`, `cleanopen`, `canaerospace`, `dronecan`, `train`,
+`nmea2000` — names/semantics borrowed, frame layout stays on the sloppyCAN side).
+`Contract` (`src/bridge/contract.gd`) parses and validates it at startup into `Contract.data`,
 collecting every fault. `tests/test_contract.gd` fails if a required signal is missing.
 
 - Signals are unique by (name, dir) — `battery` exists in both directions (in = warning LED,
@@ -108,7 +108,7 @@ shapes:
   does not). Sources are duck-typed and ORed: `cycle_implement`, `vehicle_capabilities()`,
   `attachment_controls()`.
 - **bridge_owned** — the control rides `VehicleInput`, inert while sloppyCAN drives. Not set
-  on shell conveniences (ATTACH, VIEW, GARAGE, NEXT, RESPAWN, MENU). Exception: pedals/
+  on shell conveniences (ATTACH, VIEW, GARAGE, LEVEL, MENU). Exception: pedals/
   joystick stay visible though inert, since hiding them would make the pedal blink as
   sloppyCAN stutters.
 
@@ -152,29 +152,36 @@ families equal the union of those signals' own `vehicles` lists. The one row wit
     groups). Bars flow into `BAR_ROWS_MAX`-row columns; a group never splits across a break;
     the panel pins to the bottom edge. Widget is `dash_bar.gd`.
   - Generated readout line: an "out" signal with no `range` lands here beside HDG/ODO/GPS
-    (tractor HRS hour meter, truck LIM road-speed limit, drone BARO/GMB/PAY), gated on the
-    contract declaring it for that family, never on the telemetry field being present.
-  - Hand-built, reading only scale/redline/warn from the contract, built only where the
+    (tractor HRS hour meter, truck LIM road-speed limit, drone BARO/GMB/PAY, the boat's
+    SOG/STW/DRIFT in m/s, BURN, OIL and the sailboat's SAIL boom angle from
+    `READOUT_EXTRAS`), gated on the contract
+    declaring it for that family, never on the telemetry field being present. The Label wraps
+    inside the middle column: the boat's line is long enough that an unwrapped one would widen
+    the whole cluster instead of growing it downward.
+  - Hand-built, reading only scale/redline/warn/sentinel from the contract, built only where the
     vehicle declares the signals: the two radial gauges (`gauge.gd`, one widget instanced
     twice — speedo on `kmh`, tacho on `rpm`, so the boat gets a speedo and no tacho), the
-    attitude indicator (`pitch` and `roll`, in the tacho's slot) and the node-health strip
-    (`node_health`, above the tell-tales). Gauge text sits in the arc's bottom 90° gap; gear
+    attitude indicator (`pitch` and `roll`, in the tacho's slot), the wind/track rose
+    (`wind_rose.gd`, the boat's `awa`/`aws`/`twd`/`tws`/`cog`/`sog`, heading-up so the crab
+    angle is an angle), the echo sounder (`depth_readout.gd`, `depth`, blanking the -1 no-bottom
+    sentinel to `---` rather than colouring it) and the node-health strip
+    (`node_health`, above the tell-tales). A signal one of these draws leaves the generated bar
+    column through `WIDGET_SIGNALS`. Gauge text sits in the arc's bottom 90° gap; gear
     shows in the tacho gap. The train declares `gear` out but not `rpm`, so it gets a bespoke
     `REVERSER N/D/R` centre readout. Short captions (`BAR_LABEL`, `LAMP_TEXT`) are
     hand-picked.
-  - Density (`Dashboard.Density`): FULL is everything above; COMPACT keeps the tell-tale row,
-    node strip and instruments (smaller), drops bars and readout; OFF hides the cluster.
-    COMPACT drops only whole sections, so no signal can go missing in one mode
-    (`tests/test_dashboard.gd`). AUTO by default: COMPACT on a phone-sized screen (short edge
-    <= `COMPACT_SHORT_EDGE` logical px) or while `Bridge.is_active()`, FULL otherwise; AUTO
-    never resolves to OFF, and waits `BRIDGE_DWELL_S` for a freshness flip to hold before
-    rebuilding. Overridden from pause menu SETTINGS, persisted in `user://shell.cfg`. Every
-    metric is logical px through `UiTheme.px`, so the cluster rebuilds on
-    `NOTIFICATION_THEME_CHANGED`.
+  - Density (`Dashboard.Density`): FULL is everything above; COMPACT (the default) keeps the
+    tell-tale row, node strip and the gauge-slot instruments (speedo/tacho/horizon, smaller),
+    drops bars, the readout and the two instruments beside the gauges rather than in a slot
+    (rose, sounder — their signals were bars until `WIDGET_SIGNALS`, so this drops nothing new);
+    OFF hides the cluster. COMPACT drops only whole sections, so no signal can go missing in one
+    mode (`tests/test_dashboard.gd`). The SETTINGS page's one button (and F2, `toggle_dashboard`)
+    cycles COMPACT -> FULL -> OFF -> COMPACT; persisted in `user://shell.cfg`, an unknown or
+    stale key (an old "auto") falling back to COMPACT. Every metric is logical px through
+    `UiTheme.px`, so the cluster rebuilds on `NOTIFICATION_THEME_CHANGED`.
 - Debug overlay (`debug_overlay.gd`): FPS/frame ms/draw calls/primitives/VRAM/node count
   from `Performance` monitors, toggled with F3. Target is 60 fps in the worst view of the
-  deployed build; draw calls are the first diagnostic there, not a budget
-  (`docs/TODO.md` § Perf pass).
+  deployed build; draw calls are the first diagnostic there, not a budget.
 
 ## Bridge
 
@@ -208,10 +215,19 @@ families equal the union of those signals' own `vehicles` lists. The one row wit
   `LampSet` in `_ready` and calls `apply()` each tick. A semi-trailer builds a second one off
   its own spec (`TowedBody`), driven by the tractor from the same `VehicleInput` bits — the
   resolve root is an argument, so a coupled rig lights at both ends with no new signal.
-- Horn is procedural (`horn.gd`: a looping two-partial `AudioStreamWAV` synthesized at
-  `_ready`, no asset). Plays on the horn rising edge, holds while pressed.
-- Day/night is a `Level` concern (not a bridge signal): N toggles the level's sun + ambient
-  between scene-authored day values (captured at load) and a dim night preset (`level.gd`).
+- Horn is procedural (`horn.gd`: a dual-tone buzz — two harmonic series a minor third apart,
+  formant-lifted and soft-clipped — synthesized once into a shared looping `AudioStreamWAV`, no
+  asset). Plays on the horn rising edge, holds while pressed.
+- Day/night is a `Level` concern (not a bridge signal): N (`toggle_day_night`) flips, the pause
+  menu's CONDITIONS page sets it directly (`set_night(on)`), both between scene-authored day
+  values (captured at load) and a dim night preset (`level.gd`); `is_night()` reads it back.
+  Either path emits `GameState.night_changed`, which the shell tracks for the session so the
+  key and the menu can never disagree.
+- Wind/current overrides are the same shape (`src/levels/base/world_conditions.gd`,
+  `Level.set_conditions`): a LEVEL/CALM/LIGHT/STRONG preset per field plus one shared FROM
+  compass direction, replacing the level's authored `wind`/`current` side-cars at runtime
+  (LEVEL restores them). Only families in `WorldConditions.WIND_FAMILIES`/`CURRENT_FAMILIES`
+  read the corresponding field at all (drone/plane/boat for wind; boat alone for current).
 
 ## Shell, touch controls & garage
 
@@ -222,8 +238,8 @@ families equal the union of those signals' own `vehicles` lists. The one row wit
   `PauseMenu`/`LevelSelect`/`VehicleSelect` are transient Control overlays the shell creates
   and frees.
 - Boot target is decided by `_boot()` from three authorities in order: deep link, saved
-  session, `boot.gd`'s `DEFAULT_LEVEL` (`level_1` — smallest dressed bake; the city is an
-  order of magnitude heavier and must never boot).
+  session, `boot.gd`'s `DEFAULT_LEVEL` (`flatland` — no bake at all; the city's is 13.9 MB
+  and must never boot).
   - Deep link: `?level=<id>&vehicle=<variant>` on the page URL, `--level=`/`--vehicle=`
     after `--` locally, or `CARLITO_LEVEL` env var (CI). Parsed and validated in
     `src/shell/boot_params.gd`: unknown ids are dropped, not clamped. `vehicle` names a
@@ -254,15 +270,25 @@ families equal the union of those signals' own `vehicles` lists. The one row wit
 - Notice line (`src/ui/notice_line.gd`, the `Notice` Label in `boot.tscn`): transient message
   from `GameState.notice` ("NO ROOM FOR A TRAILER"), dwelled for `Boot.NOTICE_DWELL_S`,
   re-shown rather than queued.
-- Pause overlay (`src/ui/pause_menu.gd`, Esc or touch MENU): RESUME / VEHICLE / LEVEL /
-  CONTROLS / SETTINGS. Esc walks back the way it came in, only then resumes. VEHICLE and
-  LEVEL are signals — overlays stay the shell's to create/free. CONTROLS is generated from
-  the action registry: grouped rows read live from `InputMap`, anything the current vehicle
-  lacks greyed with the reason ("tractor only", "nothing to tow", "sloppyCAN is driving").
-  The shell hands it the same capability dict the touch buttons gate on
-  (`setup(caps, density, ui_scale)`, before `add_child`). SETTINGS is two cycling buttons —
-  dashboard density and UI scale — emitting the new value; the shell applies it and writes
-  `user://shell.cfg`.
+- Pause overlay (`src/ui/pause_menu.gd`, Esc or touch MENU): RESUME / RESPAWN / CONDITIONS /
+  CONTROLS / SETTINGS. Esc walks back the way it came in, only then resumes. RESPAWN is a
+  signal — respawning stays the shell's to do. GARAGE and LEVEL are not here: they are the
+  touch overlay's important buttons (hidden only by F5, never by F4) and G / 4. CONTROLS is generated
+  from the action registry: grouped rows read live from `InputMap`; a row the current
+  vehicle/attachment can never use (family/capability gate fails, `ActionRegistry.relevant_entry`)
+  is hidden outright, and a group whose rows are all hidden loses its heading, while a row
+  blocked only because the bridge owns it right now stays, greyed, with its reason
+  ("sloppyCAN is driving") — that one goes away on its own. The shell hands it the same
+  capability dict the touch buttons gate on (`setup(caps, density, ui_scale, wind_preset,
+  current_preset, wind_from_deg, night_on)`, before `add_child`). SETTINGS is two cycling
+  buttons — dashboard density and UI scale — emitting the new value; the shell applies it and
+  writes `user://shell.cfg`. CONDITIONS is four more cycling buttons — WIND/WATER CURRENT preset
+  (`WorldConditions.Preset` LEVEL/CALM/LIGHT/STRONG), the shared FROM compass direction, and
+  TIME (day/night) — emitting `conditions_changed`/`night_toggled`; WIND/CURRENT grey out (with
+  a reason) on a family `WorldConditions.WIND_FAMILIES`/`CURRENT_FAMILIES` doesn't name. The
+  shell keeps all four for the session (`ShellPrefs` stays disabled), applies them to the
+  current level and re-applies them to every level it loads next (`Boot._finish_load`); the
+  night value tracks `GameState.night_changed` so the N key and the menu can never disagree.
   Pausing: `Boot` is `PROCESS_MODE_ALWAYS` so shell and menus keep running under
   `get_tree().paused`; the level is a child of it, so `_finish_load` puts it back to
   `PAUSABLE` explicitly. Autoloads pause with the world.
@@ -270,7 +296,7 @@ families equal the union of those signals' own `vehicles` lists. The one row wit
   dismissed by the first input or a short timeout, never shown again
   (`ShellPrefs.coach_seen`).
   Listens on `_input`, which does not consume — the dismissing press also drives the car.
-- Level select (`src/ui/level_select.gd`) is the pause menu's LEVEL section, carrying a BACK
+- Level select (`src/ui/level_select.gd`), opened by touch LEVEL or 4, carrying a BACK
   button and a `closed` signal. Reads `LevelRegistry.LEVELS` (`src/shell/level_registry.gd`)
   — `{id, name, scene, desc}` entries; a `dev: true` entry (none today) is a test fixture
   level-select hides but bake/check/smoke still cover. A card grid: one Button per entry with
@@ -278,8 +304,8 @@ families equal the union of those signals' own `vehicles` lists. The one row wit
   falling back to a "no screenshot" plate. Cards are shot from the kit's Polish tab
   (`docs/level_kit.md`); framing lives in a side-car `<level>_shot.tres`, not the level
   scene, so re-framing never re-stales a bake.
-- Vehicle selector (`src/ui/vehicle_select.gd`), opened with G, touch GARAGE, or pause menu
-  VEHICLE, pauses the world from either. Three axes: family column, variant picture cards,
+- Vehicle selector (`src/ui/vehicle_select.gd`), opened with G or touch GARAGE, pauses the
+  world from either. Three axes: family column, variant picture cards,
   and (when towing) what it can pull.
   - One live preview, never one per card: pre-baked stills on cards, one long-lived
     SubViewport holds the selected machine on a turntable (camera orbits — rotating a frozen
@@ -313,22 +339,40 @@ families equal the union of those signals' own `vehicles` lists. The one row wit
   dashboard and bridge flow through Level unchanged.
 - Touch controls (`src/ui/touch_controls.gd`) are a second local `InputSource`: steering
   joystick (bottom-left), gas/brake pedals (bottom-right, with UP/DOWN flight pads extending
-  the row leftward for aircraft), a right-edge button stack. Widgets take touch and mouse.
-  Visible only on touch/web (`_should_show()`); F4 force-toggles for desktop tests.
-  - Stack is generated from the action registry — buttons, captions, order, when shown, which
-    raw-intent key each writes. Split by `ActionRegistry.is_universal`: outer column is what
-    every vehicle has (VIEW, NIGHT, GARAGE, RESPAWN, MENU), inner only what the current
-    machine has (HAND, tractor implement/driveline buttons, ATTACH, garbage truck BODY).
-    LIGHTS/HORN plus ARM (drone), FLAPS (plane), DOORS (train) are hand-built in a row above
-    the pedals; PANTO sits beside BRAKE. Widgets are hand-built, but the registry decides
-    whether each is shown — the rail-guided train loses its steering joystick, only flying
-    families get the UP/DOWN pads.
-  - Either group wraps into a further column when the band between `STACK_TOP` and the
-    pedals can't hold it (`_columns_for`), sized for every pad being visible.
-  - Four bound actions have no touch button: `next_vehicle` (garage is how touch changes
-    vehicle), `toggle_dashboard` (F2), dev keys `debug_overlay` (F3), `toggle_touch` (F4).
-    `day_night` IS in the stack as NIGHT, relayed by `boot.gd` to `Level.toggle_day_night()`.
-    `_shell_signals()` is checked against the registry by `tests/test_action_registry.gd`.
+  the row leftward for aircraft), and generated buttons. Widgets take touch and mouse. On by
+  default everywhere (`_should_show()`), in two layers hidden independently: IMPORTANT (F5,
+  `toggle_important`) and DRIVING (F4, `toggle_touch`). `poll()` contributes nothing while the
+  driving layer is hidden; the important layer writes no intent.
+  - Buttons are generated from the action registry — captions, order, when shown, which
+    raw-intent key each writes. Split by `ActionRegistry.is_universal`: what every vehicle has
+    is the top-left important column (MENU, GARAGE, LEVEL on top in that order — `STACK_HEAD`
+    — then VIEW); what only the current machine has (tractor implement/driveline buttons,
+    ATTACH, garbage truck BODY...) goes in the EQUIP drawer on the driving layer, closed by
+    default, opening leftward beside the pedals. The bottom-right cluster is three tiers: the
+    pedal row (GAS green, BRAKE red, PANTO beside BRAKE, UP/DOWN for aircraft), a QUICK row
+    spanning exactly the pedal row's width (LIGHTS, HORN, the family's MODE/FLAPS/DOORS, then
+    the safety latch HAND/ARM above GAS), and the EQUIP button above it. Widgets are hand-built,
+    but the registry decides whether each is shown — the rail-guided train loses its steering
+    joystick, only flying families get the UP/DOWN pads.
+  - The important column wraps into a further column when its band (`STACK_TOP` to the
+    joystick) can't hold it, sized for every pad being visible (`_columns_for`). The drawer is
+    a GridContainer, which lays out only visible children, so it packs what THIS machine has;
+    `_fit_equip_drawer` widens it leftward past the rows its band holds.
+  - A switch whose row names a `touch_state` (a VehicleInput field) reads "<label> ON" in amber
+    while engaged, like the latching HAND.
+  - On a pointer display the driving pads are drawn at `DESKTOP_PAD_SCALE` of the theme scale:
+    the keyboard carries every control there, so the pads give the 3D view back. The top-left
+    column is exempt (`MENU_BTN_SIZE`, theme scale only) — the way out stays easy to hit.
+  - The bottom-right is one lattice of `CELL_SIZE`: a pedal is two cells tall plus the gap, so
+    the drawer's rows line up with DOWN, UP, the QUICK row and EQUIP.
+  - Seven bound actions have no touch button, keyboard-only and documented on the CONTROLS
+    sheet: `next_vehicle` (garage is how touch changes vehicle), `toggle_dashboard` (F2),
+    `respawn` (R; the pause menu's RESPAWN row reaches touch) and `day_night` (N; the
+    CONDITIONS page's TIME row reaches touch), dev keys `debug_overlay` (F3), `toggle_touch`
+    (F4) and `toggle_important` (F5). `LEVEL` opens the level selector directly (pauses the
+    world and hides the pads itself, mirroring GARAGE) and also has a keyboard action
+    (`level_select`, key 4). `_shell_signals()` is checked against the registry by
+    `tests/test_action_registry.gd`.
   - Raw intent lives in two dicts keyed by the registry's `poll_key` — `_held` for levels,
     `_edges` for one-shot toggle edges — drained by `poll()`. A pad hidden mid-press emits
     its own release (`Pad._notification`), so held state can't stick when the bridge goes
@@ -359,6 +403,13 @@ families equal the union of those signals' own `vehicles` lists. The one row wit
   (skyport — drone bench: pads at altitude, mast slalom, a canyon that takes satellites
   away) are each owned end to end by their generator (`tools/gen_rail_level.gd`,
   `tools/gen_skyport.gd`); re-running one overwrites the level.
+- `src/levels/island/car_arena/` is the car challenge arena (`arena: true` in the registry, so not
+  in LEVEL select): a car-only plateau with three roads, owned with its challenge courses by
+  `tools/gen_car_arena.gd`.
+- `flatland` and `open_sea` are endless, unbounded levels with no kit content (nothing to
+  bake): an `InfiniteGround` (`src/levels/base/infinite_ground.gd`) or an `infinite`
+  `WaterSurface` that re-centres on the active camera, with the grid and the waves laid in
+  world space so the re-centre is invisible. No `WorldBounds`; float precision is the limit.
 - `src/levels/dev/flat.tscn` is a bare test plane for isolated wheel checks.
 - Loading a stranger's level is arbitrary code execution (a `.tscn` can embed scripts) —
   third-party level sharing stays out of scope.

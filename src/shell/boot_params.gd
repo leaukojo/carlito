@@ -2,7 +2,8 @@ class_name BootParams
 extends RefCounted
 ## Deep link boot params: web reads page query string; local reads --level/--vehicle or
 ## CARLITO_LEVEL env. Parsing and validation together; unknown ids dropped (not clamped) —
-## {} means "no opinion" for the caller's next authority.
+## {} means "no opinion" for the caller's next authority. Also the debug-only challenge-keys flag
+## and challenge boot.
 
 ## Empty result, i.e. no deep link. Both fields are always present so callers never guess.
 const NONE := {"level": "", "vehicle": ""}
@@ -47,6 +48,38 @@ static func resolve() -> Dictionary:
 		var raw: Variant = JavaScriptBridge.eval("window.location.search", true)
 		return parse_query(raw) if typeof(raw) == TYPE_STRING else NONE.duplicate()
 	return parse_query(_local_query())
+
+
+## Whether the keyboard may drive a challenge (InputRouter's dev override). Debug builds only —
+## CI exports the web build as release, so it is never honoured there. The env var exists because
+## an F6 run has no user args without editing project.godot.
+static func challenge_keys() -> bool:
+	return OS.is_debug_build() and wants_challenge_keys(OS.get_cmdline_user_args(),
+			OS.get_environment("CARLITO_CHALLENGE_KEYS"))
+
+
+static func wants_challenge_keys(args: PackedStringArray, env: String) -> bool:
+	return env != "" or args.has("--challenge-keys")
+
+
+## The challenge a debug build boots straight into, or "": `--challenge=<id>` or CARLITO_CHALLENGE,
+## dev fixtures included, validated against the registry. Debug builds only, like the keys above.
+static func challenge() -> String:
+	if not OS.is_debug_build():
+		return ""
+	var id := parse_challenge(OS.get_cmdline_user_args(), OS.get_environment("CARLITO_CHALLENGE"))
+	if id == "" or ChallengeRegistry.def_of(id, true) == null:
+		return ""
+	return id
+
+
+## The id asked for, unvalidated. The command line overrides the environment, as `--level=` does.
+static func parse_challenge(args: PackedStringArray, env: String) -> String:
+	var id := env
+	for arg in args:
+		if arg.begins_with("--challenge="):
+			id = arg.trim_prefix("--challenge=")
+	return id
 
 
 ## The local stand-in for a query string. CARLITO_LEVEL comes first so an explicit

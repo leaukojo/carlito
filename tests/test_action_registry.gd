@@ -281,6 +281,108 @@ func test_every_shell_signal_row_has_a_handler() -> void:
 			.is_true()
 
 
+## ...and the case above CANNOT reach: a car is refused by every capability row's FAMILY first, so
+## `gate_note` returns the family phrase and CAP_NOTE is never consulted. A capability with no
+## entry there falls through to the generic "unavailable", which is a greyed row that teaches
+## nothing — and nothing else would have caught it. Sweep each row in ITS OWN family with no
+## capabilities granted, which is the state a machine that lacks the hardware is actually in.
+func test_every_capability_row_names_the_hardware_it_wants() -> void:
+	for entry in Registry.ENTRIES:
+		var cap := String(entry.get("capability", ""))
+		if cap == "":
+			continue
+		var families: Array = entry.get("families", [])
+		var family := String(families[0]) if not families.is_empty() else "car"
+		var note := Registry.gate_note(entry, _ctx(family))
+		var msg := "row '%s' (capability '%s') has no CAP_NOTE" % [entry["id"], cap]
+		assert_str(note).override_failure_message(msg).is_not_equal("unavailable")
+		assert_str(note).override_failure_message(msg).is_not_empty()
+
+
+# --- relevant_entry: the CONTROLS sheet's hide-vs-grey rule -------------------
+
+## `relevant_entry` is `applies_entry` with the bridge gate forced open: a row that fits the
+## vehicle stays relevant however sloppyCAN is driving, so the sheet greys it instead of hiding
+## it, and that reason (BRIDGE_NOTE) can still surface from `gate_note`.
+func test_relevant_entry_ignores_only_the_bridge_gate() -> void:
+	var live := Registry.context("car", true, {})
+	# handbrake is bridge_owned and fits a car (excludes only boat/drone), so it disagrees with
+	# applies_entry only because the bridge is live right now.
+	var handbrake := Registry.find(&"handbrake")
+	assert_bool(Registry.applies_entry(handbrake, live)).is_false()
+	assert_bool(Registry.relevant_entry(handbrake, live)).is_true()
+	assert_str(Registry.gate_note(handbrake, live)).is_equal(Registry.BRIDGE_NOTE)
+
+
+## Family and capability gates still hide the row under `relevant_entry` — only the bridge gate
+## is forced open, or a car would show every tractor-only control, greyed forever.
+func test_relevant_entry_still_hides_family_and_capability_gates() -> void:
+	var car := Registry.context("car", true, {})
+	assert_bool(Registry.relevant_entry(Registry.find(&"flaps"), car)).is_false()
+	assert_bool(Registry.relevant_entry(Registry.find(&"pto"), car)).is_false()
+	var bobtail := Registry.context("truck", true, {"tows": true})
+	assert_bool(Registry.relevant_entry(Registry.find(&"pto"), bobtail)).is_false()
+
+
+# --- the on-screen rail --------------------------------------------------------
+
+## The rail carries MENU/GARAGE/LEVEL/VIEW plus ATTACH (a vehicle control, not a shell one) —
+## RESPAWN and NIGHT are keyboard-only, reached on touch through the pause menu.
+func test_the_touch_rail_is_exactly_menu_garage_level_challenges_view_and_attach() -> void:
+	var labels := {}
+	for entry in Registry.ENTRIES:
+		if int(entry.get("touch", Registry.Touch.NONE)) == Registry.Touch.SHELL_SIGNAL:
+			labels[String(entry.get("touch_label", ""))] = true
+	assert_array(labels.keys()).contains_exactly_in_any_order(
+			["MENU", "VEHICLE", "LEVEL", "CHALLENGE", "VIEW", "ATTACH"])
+	assert_bool(Registry.applies(&"respawn", _ctx("car"))).is_true()
+	assert_int(Registry.find(&"respawn").get("touch", Registry.Touch.NONE)).is_equal(Registry.Touch.NONE)
+	assert_int(Registry.find(&"day_night").get("touch", Registry.Touch.NONE)).is_equal(Registry.Touch.NONE)
+
+
+## The overlay's STACK_HEAD names real SHELL_SIGNAL rows, so MENU/GARAGE/LEVEL can't silently
+## fall out of the head of the stack after a registry edit.
+func test_stack_head_names_shell_signal_rows() -> void:
+	for id: StringName in TouchControls.STACK_HEAD:
+		assert_int(int(Registry.find(id).get("touch", Registry.Touch.NONE))) \
+				.is_equal(Registry.Touch.SHELL_SIGNAL)
+	assert_that(TouchControls.STACK_HEAD[0]).is_equal(&"to_menu")
+
+
+## A `touch_state` names the VehicleInput field the overlay reads back each frame; a typo reads
+## null, and the button just never shows ON.
+func test_every_touch_state_is_a_vehicle_input_field() -> void:
+	var fields := {}
+	for p in VehicleInput.new().get_property_list():
+		fields[String(p["name"])] = true
+	for entry in Registry.ENTRIES:
+		var field := String(entry.get("touch_state", ""))
+		if field == "":
+			continue
+		assert_bool(fields.has(field)) \
+			.override_failure_message("row '%s' touch_state '%s' is not a VehicleInput field"
+					% [entry["id"], field]) \
+			.is_true()
+
+
+## The important column and the driving pads hide on two different keys, so putting the pads
+## away never takes MENU with them.
+func test_important_and_driving_layers_toggle_on_separate_keys() -> void:
+	assert_bool(InputMap.has_action("toggle_important")).is_true()
+	assert_bool(InputMap.has_action("toggle_touch")).is_true()
+	assert_str(Registry.keys_for(Registry.find(&"toggle_important"))) \
+			.is_not_equal(Registry.keys_for(Registry.find(&"toggle_touch")))
+
+
+## LEVEL reaches the keyboard too (L is already headlights; the free key here is 4), same as
+## every other rail button.
+func test_level_select_is_bound_and_registered() -> void:
+	assert_bool(InputMap.has_action("level_select")).is_true()
+	var entry := Registry.find(&"level_select")
+	assert_str(String(entry.get("touch_label", ""))).is_equal("LEVEL")
+	assert_str(Registry.keys_for(entry)).is_not_empty()
+
+
 # --- helpers -----------------------------------------------------------------
 
 func _ctx(family: String, caps := {}) -> Dictionary:

@@ -1,0 +1,65 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="1_goal"]
+[ext_resource type="Script" path="res://src/challenges/goals/lamp_window_goal.gd" id="2_lamp"]
+[ext_resource type="Script" path="res://src/challenges/goals/reach_zone_goal.gd" id="3_reach"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="4_def"]
+
+[sub_resource type="Resource" id="Resource_signal1"]
+script = ExtResource("2_lamp")
+lamp = &"turn_left"
+zone = &"Signal1"
+
+[sub_resource type="Resource" id="Resource_clear1"]
+script = ExtResource("2_lamp")
+lamp = &"turn_left"
+expect_on = false
+zone = &"Clear1"
+
+[sub_resource type="Resource" id="Resource_signal2"]
+script = ExtResource("2_lamp")
+lamp = &"turn_right"
+zone = &"Signal2"
+
+[sub_resource type="Resource" id="Resource_clear2"]
+script = ExtResource("2_lamp")
+lamp = &"turn_right"
+expect_on = false
+zone = &"Clear2"
+
+[sub_resource type="Resource" id="Resource_signal3"]
+script = ExtResource("2_lamp")
+lamp = &"turn_right"
+zone = &"Signal3"
+
+[sub_resource type="Resource" id="Resource_clear3"]
+script = ExtResource("2_lamp")
+lamp = &"turn_right"
+expect_on = false
+zone = &"Clear3"
+
+[sub_resource type="Resource" id="Resource_signal4"]
+script = ExtResource("2_lamp")
+lamp = &"turn_left"
+zone = &"Signal4"
+
+[sub_resource type="Resource" id="Resource_clear4"]
+script = ExtResource("2_lamp")
+lamp = &"turn_left"
+expect_on = false
+zone = &"Clear4"
+
+[sub_resource type="Resource" id="Resource_finish"]
+script = ExtResource("3_reach")
+zone = &"Finish"
+
+[resource]
+script = ExtResource("4_def")
+id = "car_turn_signals"
+title = "Signal your turns"
+variant = "sedan-sports"
+arena = "car_arena"
+course = "res://src/levels/island/car_arena/courses/car_turn_signals_course.tscn"
+briefing = "Four marked corners: left, right, right, left. Before each one an amber line starts a 30 m window: have that side's turn signal (turnL or turnR) on all the way to the corner. After the corner a white line starts a window where the same signal must be off. A blinking signal passes too: it may go dark for up to 1.05 s at a time. No par."
+hint = "turnL, turnR (bools: a lamp is lit only while its bit is set, and nothing blinks it for you), steer, speed."
+goals = Array[ExtResource("1_goal")]([SubResource("Resource_signal1"), SubResource("Resource_clear1"), SubResource("Resource_signal2"), SubResource("Resource_clear2"), SubResource("Resource_signal3"), SubResource("Resource_clear3"), SubResource("Resource_signal4"), SubResource("Resource_clear4"), SubResource("Resource_finish")])

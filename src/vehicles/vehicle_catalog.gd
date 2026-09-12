@@ -13,6 +13,8 @@ const VARIANTS := {
 	# -- hand-built bodies, first in their family. The car / truck / boat / tractor families
 	# have no hand-built body: they default to their first kit / watercraft variant below
 	# (sedan-sports / garbage-truck / boat-speed-a / tractor-kenney). --
+	# The modelled airframe, first so it is the drone family's default; same flight numbers as "drone".
+	"drone-mk2": {"scene": "res://src/vehicles/drone/drone_mk2.tscn", "family": "drone"},
 	"drone": {"scene": "res://src/vehicles/drone/drone.tscn", "family": "drone"},
 	"plane": {"scene": "res://src/vehicles/plane/plane.tscn", "family": "plane"},
 	"bullet": {"scene": "res://src/vehicles/train/train.tscn", "family": "train"},

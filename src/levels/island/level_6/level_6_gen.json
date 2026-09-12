@@ -10,7 +10,8 @@
     "level_6_loop_curve.tres",
     "level_6_rim_curve.tres",
     "level_6_viaduct_curve.tres",
-    "level_6_wind.tres"
+    "level_6_wind.tres",
+    "level_6_current.tres"
   ],
   "notes": [
     "gen_skyport.gd owns this level end to end. 'scaffold' REWRITES the .tscn from nothing,",

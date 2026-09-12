@@ -77,9 +77,8 @@ func _compute() -> float:
 	return clampf(logical_short_edge(get_window()) / REF_SHORT, floor_scale, MAX_SCALE) * _user
 
 
-## The window's short edge in logical (density-independent) px. Static: also how the dashboard
-## decides "phone-sized" for its automatic density, so there's one definition, not two that
-## can disagree.
+## The window's short edge in logical (density-independent) px. Static: the touch pads and the
+## debug overlay read it too, so there's one definition, not two that can disagree.
 ##
 ## On web this reads the browser's CSS viewport (innerWidth/innerHeight) rather than
 ## `win.size / screen_get_scale()`: with `html/canvas_resize_policy=Adaptive`, Godot's JS shim

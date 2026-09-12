@@ -88,13 +88,17 @@ shadow_mesh = SubResource("ArrayMesh_ek7yk")
 script = ExtResource("1_c3efg")
 probe_points = PackedVector3Array(-0.8996402, -0.28, -1.8096001, 0.8996402, -0.28, -1.8096001, -0.8996402, -0.28, 1.8096001, 0.8996402, -0.28, 1.8096001)
 float_depth = 0.28
-thrust_force = 2200.0
+thrust_force = 500.0
 prop_offset = Vector3(0, -0.24084, 2.0358)
 rudder_torque = 4200.0
-drag_long = 380.0
+drag_long = 150.0
 drag_lat = 1250.0
 drag_yaw = 3200.0
 keel_offset = -1.0014000034332275
+sail_area = 14.0
+sail_center = Vector3(0, 2, 0.25)
+sheet_max_deg = 90.0
+sail_pivot = NodePath("Model/boat-sail-a/sail")
 spec = ExtResource("2_uak7i")
 
 [node name="CollisionLower" type="CollisionShape3D" parent="." unique_id=1906153052]

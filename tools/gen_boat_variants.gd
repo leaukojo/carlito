@@ -38,6 +38,7 @@ const VARIANTS := {
 		"thrust_force": 5200.0, "drag_long": 360.0, "drag_lat": 2060.0, "drag_yaw": 3800.0,
 		"rudder_torque": 6500.0, "keel_extra": 0.15, "com_frac": 0.8,
 		"steer_speed": 2.8,
+		"sail_area": 0.0, "sail_center": Vector3.ZERO, "sheet_max_deg": 0.0,
 	},
 	# heavy and powerful: faster flat out, but slow to spin up and slow to turn
 	"boat-speed-j": {
@@ -45,13 +46,25 @@ const VARIANTS := {
 		"thrust_force": 11000.0, "drag_long": 660.0, "drag_lat": 4340.0, "drag_yaw": 12000.0,
 		"rudder_torque": 11000.0, "keel_extra": 0.25, "com_frac": 0.8,
 		"steer_speed": 1.6,
+		"sail_area": 0.0, "sail_center": Vector3.ZERO, "sheet_max_deg": 0.0,
 	},
-	# sailboat: the sail is decoration (no wind model); light hull, deep keel, slippery flanks.
+	# sailboat: the RIG is the drive (BoatSail) and the outboard is auxiliary. `thrust_force` and
+	# `drag_long` are sized TOGETHER and cannot be moved apart: 500 N is a ~5 hp outboard on a
+	# 4.5 m, 500 kg hull, and 150 N per m/s puts its top speed at 3.3 m/s (6.5 kt), which is what
+	# that outboard does. The old 2200 / 380 pair was a 40 hp outdrive against a hull three times
+	# too draggy to sail — a plausible rig made 0.5 m/s against it. Deep keel and slippery flanks
+	# are what turn the rig's side force into leeway rather than a slide.
 	"boat-sail-a": {
 		"mass": 500.0, "torque_mul": 0.55, "draft_frac": 0.20, "float_depth": 0.28,
-		"thrust_force": 2200.0, "drag_long": 380.0, "drag_lat": 1250.0, "drag_yaw": 3200.0,
+		"thrust_force": 500.0, "drag_long": 150.0, "drag_lat": 1250.0, "drag_yaw": 3200.0,
 		"rudder_torque": 4200.0, "keel_extra": 0.60, "com_frac": 0.3,
 		"steer_speed": 2.0,
+		# 14 m^2 on a 4.52 m LOA / 2.14 m beam hull, the centre of effort 2.0 m above the
+		# waterline (the COM sits 0.12 below it, so that is the heeling lever) and 0.25 m abaft
+		# the mast. 90 deg of boom travel is what makes a dead run pure drag.
+		"sail_area": 14.0, "sail_center": Vector3(0.0, 2.0, 0.25), "sheet_max_deg": 90.0,
+		# The GLB's own sail mesh, the node EXCLUDE_COLLISION already keeps out of the hull.
+		"sail_pivot": "Model/boat-sail-a/sail",
 	},
 }
 
@@ -144,6 +157,12 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec,
 	root.set("drag_lat", float(ov["drag_lat"]))
 	root.set("drag_yaw", float(ov["drag_yaw"]))
 	root.set("keel_offset", -(draft + float(ov["keel_extra"])))
+	# The rig, declared rather than derived: a sail plan is a designer's choice, not something the
+	# hull AABB implies, and `sail_area` 0 is how the two powerboats say they have none.
+	root.set("sail_area", float(ov["sail_area"]))
+	root.set("sail_center", ov["sail_center"] as Vector3)
+	root.set("sheet_max_deg", float(ov["sheet_max_deg"]))
+	root.set("sail_pivot", NodePath(String(ov.get("sail_pivot", ""))))
 
 	var col := _body_shape(variant, geo)
 	var cs := CollisionShape3D.new()

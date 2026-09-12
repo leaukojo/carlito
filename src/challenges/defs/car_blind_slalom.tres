@@ -1,0 +1,42 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="1_goal"]
+[ext_resource type="Script" path="res://src/challenges/goals/reach_zone_goal.gd" id="2_reach"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="3_def"]
+
+[sub_resource type="Resource" id="Resource_c1"]
+script = ExtResource("2_reach")
+zone = &"Cone1"
+
+[sub_resource type="Resource" id="Resource_c2"]
+script = ExtResource("2_reach")
+zone = &"Cone2"
+
+[sub_resource type="Resource" id="Resource_c3"]
+script = ExtResource("2_reach")
+zone = &"Cone3"
+
+[sub_resource type="Resource" id="Resource_c4"]
+script = ExtResource("2_reach")
+zone = &"Cone4"
+
+[sub_resource type="Resource" id="Resource_c5"]
+script = ExtResource("2_reach")
+zone = &"Cone5"
+
+[sub_resource type="Resource" id="Resource_c6"]
+script = ExtResource("2_reach")
+zone = &"Cone6"
+
+[resource]
+script = ExtResource("3_def")
+id = "car_blind_slalom"
+title = "Blind slalom"
+variant = "sedan-sports"
+arena = "flatland"
+course = "res://src/challenges/courses/car_blind_slalom_course.tscn"
+briefing = "Heavy fog again, and six invisible cones. Pass within 2.5 m of each, in order (a cone reached out of turn does not count). You start facing north. 1: lat 48.8568695, lon 2.3521317. 2: lat 48.8571390, lon 2.3522683. 3: lat 48.8574085, lon 2.3521317. 4: lat 48.8576780, lon 2.3522683. 5: lat 48.8579475, lon 2.3521317. 6: lat 48.8582170, lon 2.3522683. No par."
+hint = "lat, lon (1e-7 deg, about 1 cm), heading (0.1 deg, 0 = north), steer. Around here 0.00001 deg of latitude is 1.113 m and 0.00001 deg of longitude is 0.732 m. The bearing to the next cone minus your heading is the steering error."
+visibility = 2
+fog_density = 0.12
+goals = Array[ExtResource("1_goal")]([SubResource("Resource_c1"), SubResource("Resource_c2"), SubResource("Resource_c3"), SubResource("Resource_c4"), SubResource("Resource_c5"), SubResource("Resource_c6")])

@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="LevelShot" format=3]
+
+[ext_resource type="Script" path="res://kit/helpers/level_shot.gd" id="1_hr4ye"]
+
+[resource]
+script = ExtResource("1_hr4ye")
+camera_transform = Transform3D(0.87621587514877, -0.08318532258272, 0.47468504309654, 0.0, 0.98498976230621, 0.17261275649071, -0.48191875219345, -0.15124604105949, 0.86306369304657, 2.2, 1.2, 3.6)
+keep_vehicle = true

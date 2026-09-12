@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="1_goal"]
+[ext_resource type="Script" path="res://src/challenges/goals/reach_zone_goal.gd" id="2_reach"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="3_def"]
+
+[sub_resource type="Resource" id="Resource_finish"]
+script = ExtResource("2_reach")
+zone = &"Finish"
+
+[resource]
+script = ExtResource("3_def")
+id = "car_easy_turns"
+title = "Easy turns"
+variant = "sedan-sports"
+arena = "car_arena"
+course = "res://src/levels/island/car_arena/courses/car_easy_turns_course.tscn"
+briefing = "Follow the winding road to the finish line. steer is a percentage, -100 full left to 100 full right, and the same steer draws a wider circle as the speed rises. yaw (rad/s) divided by speed (m/s) is 1 over the radius you are turning on: watch it shrink for a fixed steer as you go faster. The grass either side is flat and safe: there is no way to lose, and no par."
+hint = "steer (-100..100 %), yaw (rad/s), speed (m/s), key, accel, brake. Gear 0 with accel drives on the automatic box."
+goals = Array[ExtResource("1_goal")]([SubResource("Resource_finish")])

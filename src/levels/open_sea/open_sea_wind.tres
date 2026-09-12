@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="WindField" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/levels/base/wind_field.gd" id="1_wind"]
+
+[resource]
+script = ExtResource("1_wind")
+direction_deg = 200.0
+speed = 6.0
+gust_speed = 2.0
+gust_seed = 4417

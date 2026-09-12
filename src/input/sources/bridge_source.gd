@@ -51,6 +51,11 @@ func poll() -> Dictionary[StringName, Variant]:
 		&"node_fail": int(v.get("node_fail", 0)),
 		# Flight-mode (enum): absent → 0 STABILIZE. What the FC does comes back as mode_actual.
 		&"flight_mode": int(v.get("flight_mode", 0)),
+		# Boat autopilot mode (enum): absent → 0 STANDBY. What the pilot does comes back as
+		# nav_mode_actual. `heading_cmd` beside it is presence-gated, at the bottom.
+		&"nav_mode": int(v.get("nav_mode", 0)),
+		# The sheet is a percentage on the wire like `scv_flow`; absent = hauled in hard.
+		&"sheet": clampf(float(v.get("sheet", 0.0)) / 100.0, 0.0, 1.0),
 		# DroneCAN indication: led RGB565, beep bool, both mirrored; absent → off.
 		&"led": int(v.get("led", 0)),
 		&"beep": bool(v.get("beep", false)),
@@ -80,6 +85,11 @@ func poll() -> Dictionary[StringName, Variant]:
 	# Tractor guidance: same presence rule as rudder, curvature 1/km→steer unit.
 	if v.has("guidance_curvature"):
 		out[&"guidance"] = steer_from_curvature(float(v.get("guidance_curvature", 0.0)))
+	# Boat autopilot course: same presence rule again, and here it is load-bearing rather than an
+	# override — every bearing in [0,360] is legal, so there is no "no command" value to send.
+	# Absent means the pilot holds the heading it captured; wrapped, so 360 arrives as 0.
+	if v.has("heading_cmd"):
+		out[&"heading_cmd"] = fposmod(float(v.get("heading_cmd", 0.0)), 360.0)
 	return out
 
 

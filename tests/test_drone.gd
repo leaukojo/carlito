@@ -517,27 +517,31 @@ func test_saturation_only_ever_attenuates_the_commanded_torque() -> void:
 # --- the airframe: MOTORS is the scene, not a guess ------------------------------
 
 func test_motors_table_matches_the_scene_geometry() -> void:
-	# The mix signs ARE drone.tscn's geometry (roll = sign(x), pitch = -sign(z)), so a
-	# rotor moved in the scene must fail here rather than silently invert a control axis.
-	var drone: Node = (load("res://src/vehicles/drone/drone.tscn") as PackedScene).instantiate()
-	auto_free(drone)
+	# The mix signs ARE each drone scene's geometry (roll = sign(x), pitch = -sign(z)), so a
+	# rotor moved in any of them must fail here rather than silently invert a control axis.
+	var variants := VehicleCatalog.variants_in_family("drone")
+	assert_int(variants.size()).is_greater(0)
 	assert_int(Prop.MOTORS.size()).is_equal(4)
-	for i in Prop.MOTORS.size():
-		var m: Dictionary = Prop.MOTORS[i]
-		var rotor := drone.get_node_or_null(NodePath(m["node"])) as Node3D
-		assert_object(rotor).is_not_null()
-		assert_float(signf(rotor.position.x)).is_equal(float(m["roll"]))
-		assert_float(signf(-rotor.position.z)).is_equal(float(m["pitch"]))
-		# ...and the MAGNITUDE, not just the sign. drone.gd's closed-form torque constants
-		# use the MEAN lever (_arm_x / _arm_z), which only represents the airframe while all
-		# four levers are equal. A rotor dragged inward keeps its sign, so a sign-only check
-		# would pass it while every attitude constant silently rescaled — and an ASYMMETRIC
-		# airframe would start coupling roll into yaw. This is also what ties the ARM
-		# constant this suite computes torques with to the scene that authors it.
-		assert_float(absf(rotor.position.x)).is_equal_approx(ARM, 1e-4)
-		assert_float(absf(rotor.position.z)).is_equal_approx(ARM, 1e-4)
-		# A rotor reacts on the body opposite its own spin — that is the whole of yaw.
-		assert_int(int(m["yaw"])).is_equal(-int(m["spin"]))
+	for variant in variants:
+		var drone: Node = (load(VehicleCatalog.scene_of(variant)) as PackedScene).instantiate()
+		auto_free(drone)
+		for i in Prop.MOTORS.size():
+			var m: Dictionary = Prop.MOTORS[i]
+			var rotor := drone.get_node_or_null(NodePath(m["node"])) as Node3D
+			assert_object(rotor).override_failure_message(
+					"%s has no %s" % [variant, m["node"]]).is_not_null()
+			assert_float(signf(rotor.position.x)).is_equal(float(m["roll"]))
+			assert_float(signf(-rotor.position.z)).is_equal(float(m["pitch"]))
+			# ...and the MAGNITUDE, not just the sign. drone.gd's closed-form torque constants
+			# use the MEAN lever (_arm_x / _arm_z), which only represents the airframe while all
+			# four levers are equal. A rotor dragged inward keeps its sign, so a sign-only check
+			# would pass it while every attitude constant silently rescaled — and an ASYMMETRIC
+			# airframe would start coupling roll into yaw. This is also what ties the ARM
+			# constant this suite computes torques with to the scenes that author it.
+			assert_float(absf(rotor.position.x)).is_equal_approx(ARM, 1e-4)
+			assert_float(absf(rotor.position.z)).is_equal_approx(ARM, 1e-4)
+			# A rotor reacts on the body opposite its own spin — that is the whole of yaw.
+			assert_int(int(m["yaw"])).is_equal(-int(m["spin"]))
 
 
 func test_motors_order_is_esc_index_and_the_pairs_are_diagonal() -> void:

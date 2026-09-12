@@ -146,7 +146,7 @@ level whose allowed vehicles have no matching spawn fails the bake.
 Check the F3 overlay in the worst view (usually flying, nothing frustum-culled). What
 matters is frame rate on the deployed web build, not the editor's; draw calls are the first
 thing to read when it's low, but there's no draw-call budget yet — nothing is profiled on a
-real target device (`TODO.md` § Perf pass). Bake stats predict the base count: chunk
+real target device. Bake stats predict the base count: chunk
 surfaces + scatter multimeshes + terrain chunks. The multiplier is the shadow pass — every
 caster is re-drawn per cascade, and `Sun` defaults to 4-split PSSM, overkill for a 150 m
 `directional_shadow_max_distance`. Cheap levers, in order:
@@ -159,7 +159,7 @@ caster is re-drawn per cascade, and `Sun` defaults to 4-split PSSM, overkill for
    only: below-threshold items merge into chunk meshes, which always cast.
 
 If a level is heavy on the base count, suspect its bake (chunk count/material dedup) before
-touching renderer settings — see the perf-pass notes in `TODO.md`.
+touching renderer settings.
 
 ## Before you finish
 

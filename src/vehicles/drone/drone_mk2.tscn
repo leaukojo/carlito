@@ -1,0 +1,226 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/vehicles/drone/drone.gd" id="1_drone"]
+[ext_resource type="Resource" path="res://src/vehicles/drone/drone_spec.tres" id="2_spec"]
+[ext_resource type="PackedScene" path="res://src/vehicles/drone/models/drone_mk2_body.glb" id="3_body"]
+[ext_resource type="PackedScene" path="res://src/vehicles/drone/models/drone_mk2_prop_ccw.glb" id="4_ccw"]
+[ext_resource type="PackedScene" path="res://src/vehicles/drone/models/drone_mk2_prop_cw.glb" id="5_cw"]
+[ext_resource type="PackedScene" path="res://src/vehicles/drone/models/drone_mk2_gimbal_yaw.glb" id="6_yoke"]
+[ext_resource type="PackedScene" path="res://src/vehicles/drone/models/drone_mk2_gimbal_pitch.glb" id="7_camera"]
+[ext_resource type="PackedScene" path="res://src/vehicles/drone/models/drone_mk2_hook_jaw.glb" id="8_jaw"]
+
+[sub_resource type="BoxShape3D" id="HullShape"]
+size = Vector3(1, 0.24, 1)
+
+[sub_resource type="PhysicsMaterial" id="HullPhysMat"]
+bounce = 0.35
+
+[sub_resource type="CylinderMesh" id="BlurMesh"]
+top_radius = 0.22
+bottom_radius = 0.22
+height = 0.002
+radial_segments = 24
+rings = 1
+
+[sub_resource type="SphereMesh" id="ArmLedMesh"]
+radius = 0.012
+height = 0.024
+radial_segments = 8
+rings = 4
+
+[sub_resource type="SphereMesh" id="FcLedMesh"]
+radius = 0.008
+height = 0.016
+radial_segments = 8
+rings = 4
+
+[sub_resource type="SphereMesh" id="GpsLedMesh"]
+radius = 0.005
+height = 0.01
+radial_segments = 8
+rings = 4
+
+[sub_resource type="BoxMesh" id="BarMesh"]
+size = Vector3(0.018, 0.012, 0.004)
+
+[sub_resource type="BoxMesh" id="EscLedMesh"]
+size = Vector3(0.012, 0.005, 0.012)
+
+[sub_resource type="CylinderMesh" id="HeadLensMesh"]
+top_radius = 0.009
+bottom_radius = 0.009
+height = 0.003
+radial_segments = 14
+rings = 1
+
+[sub_resource type="CylinderMesh" id="BeamMesh"]
+top_radius = 0.003
+bottom_radius = 0.003
+height = 1.0
+radial_segments = 6
+rings = 1
+
+[sub_resource type="StandardMaterial3D" id="BeamMat"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0.12, 0.08, 0.55)
+
+; drone.tscn's airframe numbers exactly (same script, spec, exports and collision box), so every
+; pinned flight figure holds; only the body differs. tools/gen_drone_model.py builds the parts, and
+; every rig node below sits on the Body's Pivot_<name> empty (test_drone_indicators pins them).
+[node name="DroneMk2" type="RigidBody3D"]
+physics_material_override = SubResource("HullPhysMat")
+script = ExtResource("1_drone")
+spec = ExtResource("2_spec")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, 0)
+shape = SubResource("HullShape")
+
+[node name="Body" parent="." instance=ExtResource("3_body")]
+
+; The four rotors, MOTORS order. The prop's hand follows MOTORS' spin: +1 is counter-clockwise
+; seen from above. `Blur` is the rotor-wash disc DroneMotors fades in with that motor's speed.
+[node name="RotorFL" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.407, 0.15, -0.407)
+
+[node name="Prop" parent="RotorFL" instance=ExtResource("4_ccw")]
+
+[node name="Blur" type="MeshInstance3D" parent="RotorFL"]
+cast_shadow = 0
+mesh = SubResource("BlurMesh")
+
+[node name="RotorFR" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.407, 0.15, -0.407)
+
+[node name="Prop" parent="RotorFR" instance=ExtResource("5_cw")]
+
+[node name="Blur" type="MeshInstance3D" parent="RotorFR"]
+cast_shadow = 0
+mesh = SubResource("BlurMesh")
+
+[node name="RotorRL" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.407, 0.15, 0.407)
+
+[node name="Prop" parent="RotorRL" instance=ExtResource("5_cw")]
+
+[node name="Blur" type="MeshInstance3D" parent="RotorRL"]
+cast_shadow = 0
+mesh = SubResource("BlurMesh")
+
+[node name="RotorRR" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.407, 0.15, 0.407)
+
+[node name="Prop" parent="RotorRR" instance=ExtResource("4_ccw")]
+
+[node name="Blur" type="MeshInstance3D" parent="RotorRR"]
+cast_shadow = 0
+mesh = SubResource("BlurMesh")
+
+; Arm-tip indication LEDs: the bus `led` colour, via drone_spec.tres's led_lamp_paths.
+[node name="LedFL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4325, 0.06, -0.4325)
+mesh = SubResource("ArmLedMesh")
+
+[node name="LedFR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.4325, 0.06, -0.4325)
+mesh = SubResource("ArmLedMesh")
+
+[node name="LedRL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4325, 0.06, 0.4325)
+mesh = SubResource("ArmLedMesh")
+
+[node name="LedRR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.4325, 0.06, 0.4325)
+mesh = SubResource("ArmLedMesh")
+
+; The camera gimbal: DroneGimbalMount turns the yoke about y and the camera about x, the same two
+; factors it writes onto HoodCam, which sits on the crossing of the two axes.
+[node name="GimbalYaw" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.012, -0.31)
+
+[node name="Yoke" parent="GimbalYaw" instance=ExtResource("6_yoke")]
+
+[node name="GimbalPitch" type="Node3D" parent="GimbalYaw"]
+
+[node name="Camera" parent="GimbalYaw/GimbalPitch" instance=ExtResource("7_camera")]
+
+[node name="HoodCam" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.012, -0.31)
+
+; The cargo hook: DroneVehicle casts the capture ray straight down from here and hangs the payload
+; off it. The jaws are drawn shut on a closed latch (DroneHook); the right one is the left turned
+; half round.
+[node name="Hardpoint" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.059, 0)
+
+[node name="JawL" parent="Hardpoint" instance=ExtResource("8_jaw")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.012, 0.019, 0)
+
+[node name="JawR" parent="Hardpoint" instance=ExtResource("8_jaw")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0.012, 0.019, 0)
+
+; The forward spotlight on the `lights` ladder, aircraft style (LampSet via drone_spec.tres).
+[node name="HeadLight" type="SpotLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.064, -0.285)
+visible = false
+light_energy = 0.0
+spot_range = 30.0
+spot_angle = 38.0
+
+[node name="HeadLens" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0.064, -0.2775)
+mesh = SubResource("HeadLensMesh")
+
+; The nodes' own status lights (DroneIndicators): flight controller, GNSS puck, battery gauge (bar
+; 0 on the left seen from behind), and one per ESC in esc_index order.
+[node name="FcLed" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.121, -0.13)
+mesh = SubResource("FcLedMesh")
+
+[node name="GpsLed" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.178, 0.172)
+mesh = SubResource("GpsLedMesh")
+
+[node name="BattBar0" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.033, 0.125, 0.1535)
+mesh = SubResource("BarMesh")
+
+[node name="BattBar1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.011, 0.125, 0.1535)
+mesh = SubResource("BarMesh")
+
+[node name="BattBar2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.011, 0.125, 0.1535)
+mesh = SubResource("BarMesh")
+
+[node name="BattBar3" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.033, 0.125, 0.1535)
+mesh = SubResource("BarMesh")
+
+[node name="EscLed0" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.7071, 0, -0.7071, 0, 1, 0, 0.7071, 0, 0.7071, -0.26, 0.0905, -0.26)
+mesh = SubResource("EscLedMesh")
+
+[node name="EscLed1" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.7071, 0, -0.7071, 0, 1, 0, 0.7071, 0, 0.7071, 0.26, 0.0905, -0.26)
+mesh = SubResource("EscLedMesh")
+
+[node name="EscLed2" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.7071, 0, -0.7071, 0, 1, 0, 0.7071, 0, 0.7071, -0.26, 0.0905, 0.26)
+mesh = SubResource("EscLedMesh")
+
+[node name="EscLed3" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.7071, 0, -0.7071, 0, 1, 0, 0.7071, 0, 0.7071, 0.26, 0.0905, 0.26)
+mesh = SubResource("EscLedMesh")
+
+; The rangefinder beam leaves the lens here; DroneIndicators poses it in world space to the ground
+; the sensor measured. Authored as a 1 cm stub: hidden, it still counts toward the card framing's
+; bounds, and a unit-length beam there would shrink the drone on its card.
+[node name="RangeBeam" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.01, 0, 0, 0, 1, 0, -0.034, 0.11)
+visible = false
+cast_shadow = 0
+material_override = SubResource("BeamMat")
+mesh = SubResource("BeamMesh")

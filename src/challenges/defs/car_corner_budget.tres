@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_constraint.gd" id="1_cons"]
+[ext_resource type="Script" path="res://src/challenges/goals/signal_limit_constraint.gd" id="2_limit"]
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="3_goal"]
+[ext_resource type="Script" path="res://src/challenges/goals/reach_zone_goal.gd" id="4_reach"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="5_def"]
+
+[sub_resource type="Resource" id="Resource_finish"]
+script = ExtResource("4_reach")
+zone = &"Finish"
+
+[sub_resource type="Resource" id="Resource_lat"]
+script = ExtResource("2_limit")
+signal_name = "accLat"
+high = 4.0
+absolute = true
+
+[resource]
+script = ExtResource("5_def")
+id = "car_corner_budget"
+title = "Cornering budget"
+variant = "sedan-sports"
+arena = "car_arena"
+course = "res://src/levels/island/car_arena/courses/car_easy_turns_course.tscn"
+briefing = "The winding road from Easy turns, against the clock, with a passenger who hates being thrown about. Reach the finish line inside the 26 s par without the sideways acceleration (accLat) ever passing 4.0 m/s^2 either way. Too slow fails the clock, too fast fails the limit."
+hint = "accLat (m/s^2), speed (m/s), steer, accel, brake. On a bend of radius r, accLat is speed squared over r: every bend here is 35 m, so about 11.8 m/s (42 km/h) sits right on the limit. Brake before the bend, not in it, and watch the S-bends: the load swaps sides."
+par_s = 26.0
+goals = Array[ExtResource("3_goal")]([SubResource("Resource_finish")])
+constraints = Array[ExtResource("1_cons")]([SubResource("Resource_lat")])

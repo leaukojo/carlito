@@ -202,14 +202,212 @@ The water it floats on is a LEVEL node, not a vehicle one: `WaterSurface`/`World
   impulse, total clamped `[0, max_probe_force_factor × weight share]`; hull drag/yaw damping use
   `damped_force` (may at most zero the velocity it opposes in one tick). Pure statics, tested in
   `tests/test_boat.gd`. Feel comes from the levers: thrust at `prop_offset` below COM = bow-up
-  under throttle; lateral drag at `keel_offset` below COM = heel in turns.
+  under throttle; lateral drag at `keel_offset` below COM = heel in turns; windage at
+  `windage_offset` — a body-space POINT, not a scalar — above the COM = heel in a beam wind and
+  aft of it = the bow weathercocking up into the wind.
+- The boat is the third body to fly relative to `WindField` (`WindField.at(self)`, sampled once
+  a tick like the drone's and the plane's). The above-waterline hull takes an anisotropic drag
+  from the air-relative velocity (`windage_long`/`windage_lat`), the same shape as the hull drag
+  with the wind subtracted — deliberately not `VehicleMath.air_damper`, whose `axis` masks
+  WORLD space while fore-aft against athwartships is a body-frame split on a hull that yaws.
+  Air is 1/800 the density of water, so the force is small and honest rather than dramatic; the
+  visible payoff is the instruments. Level 6 is the only level with a `WindField`.
+- **`boat-sail-a` sails.** `BoatSail` (`src/vehicles/boat/`) is a vehicle-level system in the
+  `BoatAutopilot` shape — pure statics, the per-tick state on `BoatVehicle` — applying a lift/drag
+  force at `sail_center` above the COM, resisted by the deep keel the hull already has
+  (`keel_extra` 0.60). The polar is a **labelled honest model and it is the FLAT-PLATE pair**
+  (`Cl = CL_MAX·sin 2a`, `Cd = CD_MIN + CD_STALL·(1 − cos 2a)/2`): a soft sail is a thin cambered
+  plate rather than an airfoil, so that shape is right at the three points that matter (0 no lift,
+  45 deg peak lift, 90 deg pure drag) and needs no stall branch. **Luffing is the one thing the
+  model imposes**: below `LUFF_DEG` the lift term is zero, because a soft sail cannot hold camber
+  at a small angle of attack — and that is what makes irons a real state rather than a slow one.
+  - **The no-go zone is EMERGENT, not clamped.** Close to the wind the rig's side force runs
+    several times its drive, and against `drag_lat` that is a leeway angle wide enough that the
+    course made good stays well off the wind however high the bow points. Leeway is part of
+    `linear_velocity`, so `apparent_wind` sees it and the loop closes on itself; the crab it
+    leaves between `cog` and `heading` is the same one the tide makes, read on the same rose. A
+    hull that points unrealistically high wants its `drag_lat` looked at, never a cutoff.
+  - **The sheet is a LIMIT, not a position** (contract `sheet`, the **3** key or sloppyCAN, 0..1).
+    A boom is a free-swinging spar: the wind lays it to leeward until either the sheet stops it or
+    it lines up with the airflow, so travel is `min(sheet · sheet_max_deg, |awa|)` and hauling in
+    is not the mirror of easing out — easing PAST the apparent wind angle luffs the sail rather
+    than easing it further, which is why over-easing slows the boat. What the boom did comes back
+    on `sail_angle` (out), the `nav_mode`/`nav_mode_actual` pair's shape. `sail_angle` is signed in
+    the same rotational sense as `awa`, which is what makes `aoa = awa − sail_angle` true; a boom
+    being an aft-pointing spar, a positive angle in that sense lays its far end to port, and since
+    the boom is always to leeward the sign simply follows the wind's side. The GLB's own sail
+    mesh swings with it (`sail_pivot`), so the boom on screen is the boom the force came from.
+    Both the reading and the mesh are **ungated by the buoyancy**, like the wind instruments they
+    are read from — a boom swings on the trailer, and one frozen at its last angle would be stale
+    rather than still. Only the FORCE is gated, because a beached hull has no drag to oppose it.
+  - `sheet` / `sail_angle` are **UNFLAVORED**, and for a reason neither `engine_hours` nor
+    `pitch` has: **NMEA 2000 defines no sail PGN at all**, so any flavor would name a wire that
+    does not exist. The `train` flavor is not the precedent — that one borrows practice and is
+    still a flavor. `sail_angle` is also range-less, so nothing on the generated path draws it:
+    it rides the readout line as SAIL because `Dashboard.READOUT_EXTRAS` names it.
+  - **A rig is anatomy, not a family trait.** Contract signals key on the family, so all three
+    boats declare both signals and the two powerboats publish a resting 0; what gates the SHEET
+    button is `BoatVehicle.vehicle_capabilities()["sail"]`, i.e. `sail_area > 0`, the same shape
+    as the garbage truck's `body_cmd`. `sail_area` 0 also skips the whole force block.
+  - The re-tune this needed: `thrust_force` 500 N and `drag_long` 150 are **one pair** — 500 N is
+    a ~5 hp auxiliary outboard on a 4.5 m, 500 kg hull and 150 N per m/s puts its top speed at the
+    3.3 m/s that outboard makes. The old 2200 / 380 was a 40 hp outdrive against a hull three
+    times too draggy to sail. `drag_lat`, `drag_yaw`, `rudder_torque`, mass and probe span did not
+    move, so `boat_autopilot.gd`'s zeta table is untouched. The engine stayed rather than going to
+    zero: it is how you leave the slipway and get out of irons, and it keeps BURN / OIL / TRIM /
+    `engine_hours` / the gear byte honest on this hull instead of publishing dead numbers.
+- **Level 6 is also the only level with water under the boat rather than beside it**: every
+  other island's `Sea` at y=1 over a pan clamped to 0 is a 1 m column, so `depth` would read a
+  constant. Level 6's is at y=6 (`gen_skyport.gd`'s `SEA_Y`, ceiling 6.6), and since the level
+  is generated end to end the beach band, kill box, boat spawn and slipway derive from it.
+- Below the waterline the boat swims in a second field: `CurrentField` (`src/levels/base/`), a
+  SIBLING of `WindField` and not a subclass — same `Resource` shape, same flows-TOWARD compass
+  convention, same duck-typed `at(node)` walk, sharing only `base_vector`, because a tide and a
+  gust have no arithmetic in common. `set_deg`/`drift`/`tide_period_s`/`tide_offset_s` ride a
+  **signed** sinusoid, so the stream floods, goes slack and ebbs back through the same
+  `base_vector` with no branch. `Level` carries it beside `wind` (`current`, `current_vector()`,
+  both off one `_env_time`), and F3 prints it on the line below the wind. **Hull drag is measured
+  against the WATER, not the ground**: `through_water = linear_velocity - current` feeds the
+  fore-aft and lateral terms and, through `v_long`, the rudder authority — so a boat stemming the
+  tide at drift rate sits still over the bed with full steerage way, and one lying stopped is
+  swept downstream. Yaw damping stays on the raw angular velocity: a uniform stream has no
+  gradient across the hull and exerts no yaw moment. Still water (no `CurrentField`) leaves every
+  term bit-identical to the pre-tide one, the regression `tests/test_current.gd` pins.
+- `stw`/`sog`/`cog`/`current_set`/`current_drift` (PGNs 128259, 129026, 130577) all come out of
+  one static, `BoatTelemetry.flow_toward`, which reads any horizontal flow as (speed, bearing it
+  flows TOWARD) — `sog`/`cog` off the ground velocity, `stw` off `through_water`,
+  `current_set`/`current_drift` off the tide itself. **`sog` is not a second name for
+  `speed`/`kmh`**, which are the signed LONGITUDINAL component along the bow: a crabbing hull
+  makes ground the bow is not pointing at, and the `cog`-minus-`heading` gap IS that crab angle.
+  The set of a current is NOT inverted the way `twd` is — practice names a wind by where it comes
+  from and a current by where it goes, so `true_wind` is `flow_toward` plus 180 and
+  `current_set` is `flow_toward` bare. A zero-length flow has no bearing and reads 0, the
+  sentinel `twd`/`awa` already use. `stw`/`sog`/`current_drift` carry no `range` like
+  `aws`/`tws`; `cog`/`current_set` are ranged like `twd`, so they are bars.
+- `depth` (PGN 128267 Water Depth) is the same seabed the hull collides with, read a second way:
+  `HeightmapTerrain.height_at` under the transducer against the `WaterSurface` plane, through the
+  terrain list `BaseVehicle` already collects for the wheels — no raycast and no world walk of its
+  own. `contains_xz` is the gate, because `height_at` clamps its UV outside the extent and would
+  otherwise hand back the edge height as a fabricated bottom. **The transducer's depth is derived, not
+  authored**: it rides `-float_depth`, the probe plane, which is both the bottom the buoyancy model
+  gives the hull and the exact plane the aground predicate measures — so the sounding passes 0 as
+  the bed reaches the probes and the ground bit sets once the bed lifts the hull off its rest
+  depth, and the shoal alarm (contract `warn` 1.0, low side) leads both with a metre still under
+  her. Only the fore-aft station (`transducer_station`) is a knob; a hand-typed Y would drift per
+  variant, each hull having its own `float_depth`. **-1 is the invalid
+  reading and the only one** — off every terrain's extent, or out of the water — never 0, which is
+  the value an alarm acts on; the `agl` rule, sentinel inside the `range` so the bar and the bridge
+  agree on it. It is the one instrument gated on the water: an anemometer reads on the trailer, a
+  sounder does not. "Off the terrain" is not the open sea — level 6 is 560 m of water over 512 m of
+  terrain, a 24 m ring you have to go looking for.
+- `awa`/`aws`/`twd`/`tws` (NMEA 2000 PGN 130306 Wind Data) come from two pure statics on
+  `BoatTelemetry`, read out of the same wind vector and hull velocity — measured, not modeled.
+  `awa` is 0 dead ahead, positive to starboard, and 0 again when the apparent wind is genuinely
+  calm (running dead downwind at wind speed), where the angle is undefined. **`twd` is the
+  comes-FROM bearing every marine instrument reads while `WindField.direction_deg` is the
+  heading the wind blows TOWARD**; that 180-degree inversion happens in `true_wind` and nowhere
+  else. `aws`/`tws` carry no contract `range` on purpose, so they stay off the bar column.
 - `BoatTelemetry extends VehicleTelemetry` adds `rudder_actual` (slewed `_steer` as %) and `trim`
   (modeled honest value, like engine_load: `trim_step` chases forward throttle). `pitch`/`roll`
   aren't its own: attitude and height (`pitch`, `roll`, `altitude`, `vspeed`) are shared
   `VehicleTelemetry` fields written by `BaseVehicle._update_telemetry` off the body basis (+ = bow
   up / starboard down), beside the `roll_rate`/`acc_vert` triples; a family publishes them by
-  declaring them in the contract, no code. Boat's PITCH/ROLL bars are pure contract metadata;
-  `rudder_actual`/`trim` are bridge-only (no honest warn).
+  declaring them in the contract, no code. Boat's PITCH/ROLL bars are pure contract metadata.
+  `rudder`/`rudder_actual`/`trim` carry the `nmea2000` flavor (PGN 127245 Rudder, 127488 Engine
+  Parameters Rapid), and a flavor is half of what earns a bar — `rudder_actual`/`trim` carry no
+  `warn` but are ranged, so they are RUDDER and TRIM on the cluster. `pitch`/`roll` stay
+  unflavored since they're shared with plane/drone.
+- The engine room: `fuel_rate` and `oil_press` (PGN 127489 Engine Parameters, Dynamic) and
+  `tank_level` (PGN 127505 Fluid Level) are labelled honest models on `BoatTelemetry`, computed in
+  `_tick_extras` ungated by submersion (the gauges read whether the key is at Ignition, not
+  whether the hull is swimming). `fuel_rate` keys off `Drivetrain.applied_throttle`, the same
+  governed value `fuel`/`coolant` already read, and doesn't reconcile against the abstract `fuel`
+  percent, which drains on its own clock. `tank_level`'s fresh/waste ramp and `engine_hours` are
+  simpler still — load-independent, gated only on whether the key is at Ignition, the same
+  `running` predicate every one of these reads off `BaseVehicle`'s own computation of it.
+  `oil_press` is the one place the boat's own `Drivetrain.rpm` is read at all — it drives no
+  gearbox limiter here and reaches no other contract signal. `tank_level` is instanced (`count`
+  3: fresh water / waste / live-well); the live-well is held rather than modeled, since nothing in
+  the sim drives it, and fuel is deliberately not a fourth element — it's already the shared
+  `fuel` signal. `engine_hours` (J1939 SPN 247 / N2K PGN 127489) now covers the boat too, and
+  dropped its `isobus` flavor to do it — a boat doesn't speak J1939/ISOBUS, so the flavor would
+  misstate the wire the reading travels for that family (the `speed_limit`/`wheel_slip`
+  precedent); the SPN/PGN pair is a naming reference, not a protocol claim.
+- The autopilot (`BoatAutopilot`, PGN 127237 Heading/Track Control) is a **vehicle-level
+  controller** in the `DroneModes` shape — pure statics, with `BoatVehicle._autopilot` holding the
+  per-tick state — and nothing about it reaches `InputRouter`'s arbitration. Heading hold and
+  nothing more: a route would be a whole waypoint system, and this is the teaching object.
+  - `nav_mode` (in, STANDBY / HEADING HOLD, the **2** key or sloppyCAN) is a REQUEST;
+    `nav_mode_actual` is what the pilot is doing, and the pair is the drone's
+    `flight_mode`/`mode_actual` shape. One thing makes them differ: **a hand on the helm.**
+    Deflecting `steer` past `HELM_DEADBAND` hands the rudder back for as long as it is held, and
+    releasing it re-engages on the NEW heading — so nudging the helm is how you change course
+    under the pilot. Not latched, deliberately: a latch needs a release rule of its own, and this
+    is what makes the pilot drivable from a keyboard.
+  - `heading_cmd` (in) follows the **`rudder`/`guidance_curvature` PRESENCE rule** and it is
+    load-bearing here rather than an override: every bearing in [0,360] is legal, so there is no
+    "nothing commanded" value to send. Absent means the pilot steers the heading it CAPTURED on
+    engage, and only the engage EDGE captures — a bus that commands a course then goes quiet
+    leaves the pilot holding it. `heading_target` (out) is that captured course read back, which
+    is the only way to see what a locally-engaged pilot settled on; in STANDBY it tracks
+    `heading`, the course an engage would take, rather than 0, which is a real bearing.
+  - **The pilot steers through the same helm slew the hand does**, and `BoatVehicle` re-runs it
+    from its own `_helm` rather than adding a second one. `BaseVehicle` has already slewed
+    `_steer` toward the hand by the time `_tick_extras` runs, and re-slewing that value cancels
+    exactly — `move_toward(move_toward(x, 0, r), c, r)` is `x` below `c` — so the rudder would
+    drift to centre and never advance. Same `spec.steer_speed`, so the autopilot cannot move the
+    rudder faster than a helmsman can; `_autopilot` also rewrites `telemetry.steer`, which
+    `_update_telemetry` published pre-empted.
+  - `KP`/`KD` are derived rather than felt: against each shipped hull's own `rudder_torque` /
+    `drag_yaw` / `VehicleMath.inertia_of`, the closed loop lands at zeta 1.6-1.9 on all three
+    boats over the whole authority range — overdamped, so there is nothing to limit-cycle at
+    60 Hz, and the hulls' own `drag_yaw` already carries most of it. The full derivation is in
+    `boat_autopilot.gd`'s header; a hull whose `drag_yaw` is cut needs it re-checked.
+- **The playground is level 6's east basin**, generated by `gen_skyport.gd` like the rest of that
+  level — a hand edit or a kit-brush stroke there is deleted by the next `scaffold` replay, so all
+  three features are generator constants that derive from `SEA_Y`.
+  - A **sandbar** (`SHOAL_*`, a round `BrushOps.FLATTEN` stamp in `scaffold`, before the splat
+    pass so `classify_splat` paints it sand by height like any beach) crests 0.4 m proud of the
+    sea: 31 m of dry crest, and a 20 m blend ring around it that takes the sounding from the
+    basin's 5.65 m through the 1.0 m shoal warn to aground over about four seconds at hull speed.
+    It is the only thing on the map that makes `depth` a reading rather than a constant — the
+    seabed elsewhere is the pan `island_falloff` clamps to 0.
+  - A **buoyed channel** (`CHANNEL_*`, `props`) runs 100 m north-south past it at the basin depth,
+    its west marks standing where the bar's ring begins. Holding a line of marks with the tide on
+    the beam makes `cog` against `heading` a visible crab angle. Cut 14 m inside the west marks and
+    you are on the bar.
+  - A **measured leg** (`MILE_*`, `props`): 200 m between two gates, east-west, within 20 degrees
+    of the tide's own set so the whole drift lands ALONG the track — `stw` against `sog`. Not a
+    measured mile — 1852 m does not fit on a 512 m map — but the same instrument.
+  - Marks are `buoy` / `buoy-flag` from the watercraft kit, `collision_mode: "none"`, so they add
+    no baked body and a boat that hits one is told by the depth rather than by a crash. Their
+    recipe aligns them `raw` (the artist's waterline IS the origin), so they are placed by
+    `_place_afloat` at `SEA_Y` — `_place`, which stands a measured BASE on a ground Y, is wrong
+    for them. Every number above is MEASURED off the sculpted image by `_report_water()`, which
+    is a gate rather than a report: it fails the `scaffold` if the bar stops drying, or if the
+    fairway, a channel mark or a leg gate ends up in less than `NAVIGABLE_MIN` of water. The
+    channel runs 30 m off a bar that dries, so a nudge to either constant would otherwise put a
+    mark on the sand and the level would read as authored and sail as a trap.
+- **The cluster is chosen, not generated.** The boat declares more ranged flavored "out" signals
+  than any other family, and every one of them is a generated bar by default — enough to overflow
+  a bar column and spill the cluster into a second one. The hand-built instruments claim their own
+  signals through `Dashboard.WIDGET_SIGNALS` (the sibling of `GAUGE_SIGNALS`), which is what keeps
+  the boat at eleven rows in one column.
+  - A **wind/track rose** (`src/ui/wind_rose.gd`, gated on `awa`/`aws`/`twd`/`tws`/`cog`/`sog`)
+    is heading-up: the bow index is fixed at the top and the card turns under it, so the gap
+    between the track needle and the bow IS the crab angle. Both speeds gate their angle (`cog`
+    reads due north with no way on, `awa` dead ahead in a calm), so each needle is gated on its
+    own speed and blanks to `---` at zero.
+  - An **echo sounder** (`src/ui/depth_readout.gd`, gated on `depth`) exists for the sentinel: -1
+    sits inside a range whose warn is low-side, so the generated bar pinned at the alarm end over
+    open water. It blanks to `---` instead, reading the sentinel off the contract's `range[0]`
+    rather than a copy.
+  - `pitch`/`roll` are in that list too, so the rule reaches the plane and the drone: the
+    attitude indicator prints both numbers, and without the exclusion they are also bars.
+  - `aws`/`tws` ride the rose; `sog`/`stw`/`current_drift`/`fuel_rate`/`oil_press` ride the
+    readout line under the `engine_hours` rule (a running number has no full scale), contract-
+    gated like HRS and never duck-typed. `nav_mode_actual` is the PILOT state chip. What is left
+    on bars: fuel, coolant, VOLTS, RUDDER, TRIM, SET, TARGET and the three TANKS.
 - Every island level's sea is a `WaterSurface`; drive the car in to drown-respawn. The boat is in
   every island roster.
 
@@ -222,8 +420,13 @@ The water it floats on is a LEVEL node, not a vehicle one: `WaterSurface`/`World
   block, node bus, GNSS/rangefinder block, mode/arming block, hardpoint pair, gimbal actuals, air
   data out). Both share the boat's `pitch`/`roll` outs, and both declare the IMU triple
   (`roll_rate`/`pitch_rate`/`acc_vert`) at the cost of three list entries and no code:
-  `BaseVehicle` has always computed all three off the rigid body. Bodies are primitive low-poly
-  builds, no external assets.
+  `BaseVehicle` has always computed all three off the rigid body. The plane and the plain `drone`
+  are primitive low-poly builds; `drone-mk2`, the drone family's default, is modelled by
+  `tools/gen_drone_model.py` (Blender) into GLB parts on the same flight numbers, and draws every
+  drone feature on the airframe: per-motor props and wash discs, a gimbal that slews with the
+  `gimbal_*_actual` pair, hook jaws on the latch, a spotlight on the `lights` ladder, a
+  rangefinder beam to the measured ground, and steady status LEDs — FC (arming state / failsafe),
+  GNSS fix, one per ESC (node health) and a four-bar pack gauge.
 
 ### Drone: airframe, cargo hook, gimbal
 
@@ -357,7 +560,8 @@ The water it floats on is a LEVEL node, not a vehicle one: `WaterSurface`/`World
 - Two hand-built widgets are instanced only where the vehicle declares their signals. The attitude
   indicator (`src/ui/attitude_indicator.gd`) builds wherever both `pitch` and `roll` are declared
   (boat and plane get it too); conventions are the contract's verbatim and both signs are pinned
-  by test. The node strip generates from the instanced `node_health` signal, one square per
+  by test, and it OWNS those two signals — `Dashboard.WIDGET_SIGNALS` keeps them off the
+  generated bars, which they would otherwise duplicate as a pair beside it. The node strip generates from the instanced `node_health` signal, one square per
   roster entry. Beside them: ESC groups, pack block, SATS/HDOP/AGL. Arm-tip LEDs ride the `led`
   in-signal (packed u32, not a bool — generates no lamp, read off the bridge directly); the buzzer
   is `BeepCommand`.

@@ -2,10 +2,16 @@
 
 Contract-informed, not a UI generator. Lamps and bars are **generated** from contract
 metadata (a bar = an "out" signal with a `range` that is warn'd **or** flavored — any
-flavor); the two radial gauges, the attitude indicator and the node-health strip are
-**hand-built** and only read scale/redline/warn from the contract. A gauge exists only when
-the vehicle declares its signal (boat: speedo, no tacho); its text sits in the arc's bottom
-90° gap.
+flavor); the two radial gauges, the attitude indicator, the wind rose, the echo sounder and
+the node-health strip are **hand-built** and only read scale/redline/warn/sentinel from the
+contract. A gauge exists only when the vehicle declares its signal (boat: speedo, no tacho);
+its text sits in the arc's bottom 90° gap.
+
+- **A signal a hand-built widget draws leaves the bar column**, through `WIDGET_SIGNALS` — the
+  sibling of `GAUGE_SIGNALS`, and what keeps the bar budget a choice rather than a side effect of
+  the contract. A name goes there ONLY with a widget that draws it on EVERY family declaring it,
+  since the list is otherwise a way to make a reading vanish with nothing to see;
+  `test_every_widget_signal_keeps_a_display` is the guard.
 
 - **Telemetry is bound, never polled.** `Dashboard.bind()` / `Bridge.bind()` resolve
   `level.vehicle.telemetry` ONCE — the shell rebinds both on `Level.vehicle_changed`, which every

@@ -78,6 +78,17 @@ func _ready() -> void:
 	_rod_len = (rod.mesh as CylinderMesh).height
 	_pose_body()
 
+	# Fold the static running gear/body/tailgate groups to one draw call per material each. Skipped:
+	# the ram's own Rod (scaled + repositioned every tick by _pose_ram), every lamp lens LampSet
+	# bound above (a merged sibling would leave the lens with no node of its own to light), and the
+	# Wheels visuals (re-based per side by the trailer's own spawn code).
+	var skip: Array[Node] = _lamps.bound_meshes()
+	skip.append(rod)
+	var wheels_root := get_node_or_null(wheel_root)
+	if wheels_root != null:
+		skip.append(wheels_root)
+	StaticMeshMerge.merge_subtree(self, skip)
+
 
 ## What it plugs into on the towing unit. HYDRAULIC alone — the pump is the tractor's.
 func consumers() -> int:

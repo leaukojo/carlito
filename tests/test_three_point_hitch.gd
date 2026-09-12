@@ -196,6 +196,8 @@ func test_nothing_sweeps_into_the_rear_tyres() -> void:
 		for i in 21:
 			hitch.set_hitch(float(i) / 20.0)
 			for node in hitch.find_children("*", "MeshInstance3D", true, false):
+				if StaticMeshMerge.is_merged(node):
+					continue  # a merged node's AABB is a union, not a real part; read the hidden originals
 				var mi := node as MeshInstance3D
 				var box := mi.get_aabb()
 				for c in 8:
@@ -218,6 +220,8 @@ func test_pto_stub_spins_and_stays_inside_its_guard() -> void:
 
 	var envelope := 0.0  # max radius any spun part reaches from the shaft axis
 	for child in stub.find_children("*", "MeshInstance3D", true, false):
+		if StaticMeshMerge.is_merged(child):
+			continue  # a merged node's AABB is a union, not a real part; read the hidden originals
 		var mi := child as MeshInstance3D
 		var box := mi.get_aabb()
 		for c in 8:
@@ -226,6 +230,8 @@ func test_pto_stub_spins_and_stays_inside_its_guard() -> void:
 	assert_float(envelope).is_greater(0.06)  # splines really do stand proud of the shaft
 
 	for guard in hitch.get_node("PtoGuard").find_children("*", "MeshInstance3D", true, false):
+		if StaticMeshMerge.is_merged(guard):
+			continue  # a merged node's AABB is a union, not a real part; read the hidden originals
 		var mi := guard as MeshInstance3D
 		var box := mi.get_aabb()
 		for c in 8:
@@ -368,6 +374,8 @@ func test_the_hitch_sits_at_the_body_origin_on_the_tractor() -> void:
 func _lowest_y(node: Node) -> float:
 	var low := 99.0
 	for child in node.find_children("*", "MeshInstance3D", true, false):
+		if StaticMeshMerge.is_merged(child):
+			continue  # a merged node's AABB is a union, not a real part; read the hidden originals
 		var mi := child as MeshInstance3D
 		var box := mi.get_aabb()
 		for c in 8:

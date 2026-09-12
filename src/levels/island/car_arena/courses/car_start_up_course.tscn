@@ -1,0 +1,58 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/challenges/arena_preview.gd" id="1_pmopg"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="2_fl8bs"]
+[ext_resource type="Script" path="res://src/challenges/challenge_zone.gd" id="3_gf5v0"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_3l0bp"]
+albedo_color = Color(0.95, 0.95, 0.95, 1)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_4g6mh"]
+material = SubResource("StandardMaterial3D_3l0bp")
+size = Vector2(11.1, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_0kqfy"]
+albedo_color = Color(0.12, 0.12, 0.12, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="BoxMesh_4x3o6"]
+material = SubResource("StandardMaterial3D_0kqfy")
+size = Vector3(0.25, 2.5, 0.25)
+
+[sub_resource type="BoxMesh" id="BoxMesh_op786"]
+material = SubResource("StandardMaterial3D_0kqfy")
+size = Vector3(0.25, 2.5, 0.25)
+
+[node name="CarStartUpCourse" type="Node3D" unique_id=1174024857]
+
+[node name="ArenaPreview" type="Node3D" parent="." unique_id=1485770211]
+script = ExtResource("1_pmopg")
+arena = "car_arena"
+
+[node name="Spawn" type="Marker3D" parent="." unique_id=153619723]
+transform = Transform3D(6.123032e-17, 0, -1, 0, 1, 0, 1, 0, 6.123032e-17, -150, 6.6, -6.123032e-16)
+script = ExtResource("2_fl8bs")
+vehicle_types = PackedStringArray("car")
+
+[node name="Finish" type="Node3D" parent="." unique_id=1626647505]
+transform = Transform3D(-6.123032e-17, 0, 1, 0, 1, 0, -1, 0, -6.123032e-17, 50, 8, -1.2858367e-14)
+script = ExtResource("3_gf5v0")
+size = Vector3(60, 6, 1)
+
+[node name="Markers" type="Node3D" parent="." unique_id=1669676077]
+
+[node name="FinishLine" type="MeshInstance3D" parent="Markers" unique_id=467220274]
+transform = Transform3D(-6.123032e-17, 0, 1, 0, 1, 0, -1, 0, -6.123032e-17, 50, 6.03, -1.2858367e-14)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_4g6mh")
+
+[node name="FinishPostL" type="MeshInstance3D" parent="Markers" unique_id=1271600610]
+transform = Transform3D(-6.123032e-17, 0, 1, 0, 1, 0, -1, 0, -6.123032e-17, 50, 7.25, 7.05)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_4x3o6")
+
+[node name="FinishPostR" type="MeshInstance3D" parent="Markers" unique_id=1968962430]
+transform = Transform3D(-6.123032e-17, 0, 1, 0, 1, 0, -1, 0, -6.123032e-17, 50, 7.25, -7.05)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_op786")

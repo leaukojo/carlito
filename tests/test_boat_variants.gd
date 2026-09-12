@@ -11,6 +11,7 @@ const BoatScript := preload("res://src/vehicles/boat/boat.gd")
 ## what it writes is derived (see the header).
 const SCENE_KNOBS := [
 	"float_depth", "thrust_force", "rudder_torque", "drag_long", "drag_lat", "drag_yaw",
+	"sail_area", "sheet_max_deg",
 ]
 ## `VehicleSpec` fields `_build_spec` copies straight out of `BOAT_BASE`, same for every variant.
 const SHARED_SPEC_FIELDS := [
@@ -46,6 +47,18 @@ func test_scene_knobs_match_the_recipe() -> void:
 			var how := "override" if props.has(knob) else "boat.gd default, no override"
 			var msg := "%s.tscn %s (%s)" % [variant, knob, how]
 			assert_float(actual).override_failure_message(msg).is_equal_approx(float(ov[knob]), 1e-4)
+
+
+## `sail_center` is a declared knob like the two above and not a derived one like `prop_offset`,
+## but it is a Vector3, so it cannot ride the float sweep. A rig with an area and no centre of
+## effort would apply its whole force at the origin and never heel the hull.
+func test_sail_center_matches_the_recipe() -> void:
+	var defaults := _boat_defaults()
+	for variant: String in Gen.VARIANTS:
+		var ov: Dictionary = Gen.VARIANTS[variant]
+		var props := _root_overrides(Gen.OUT_DIR.path_join(variant + ".tscn"))
+		var actual: Vector3 = props["sail_center"] if props.has("sail_center") 				else defaults["sail_center"]
+		assert_vector(actual) 			.override_failure_message("%s.tscn sail_center" % variant) 			.is_equal_approx(ov["sail_center"] as Vector3, Vector3.ONE * 1e-4)
 
 
 # --- spec fields --------------------------------------------------------------
@@ -128,6 +141,7 @@ func _boat_defaults() -> Dictionary:
 	var out := {}
 	for knob: String in SCENE_KNOBS:
 		out[knob] = boat.get(knob)
+	out["sail_center"] = boat.get("sail_center")
 	boat.free()
 	return out
 

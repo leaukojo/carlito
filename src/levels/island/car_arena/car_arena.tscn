@@ -1,0 +1,137 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/levels/base/level.gd" id="1_level"]
+[ext_resource type="Resource" path="res://src/levels/island/car_arena/car_arena_info.tres" id="2_info"]
+[ext_resource type="Script" path="res://src/vehicles/base/chase_camera.gd" id="3_cam"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="4_spawn"]
+[ext_resource type="Script" path="res://src/levels/base/heightmap_terrain.gd" id="5_terrain"]
+[ext_resource type="Texture2D" path="res://src/levels/island/car_arena/car_arena_island_height.png" id="6_height"]
+[ext_resource type="Texture2D" path="res://src/levels/island/car_arena/car_arena_island_splat.png" id="7_splat"]
+[ext_resource type="Shader" path="res://kit/terrain/terrain_splat.gdshader" id="8_shader"]
+[ext_resource type="Script" path="res://src/water/water_surface.gd" id="9_water"]
+[ext_resource type="Script" path="res://kit/helpers/authoring_root.gd" id="10_authoring"]
+[ext_resource type="Environment" path="res://src/levels/base/default_env.tres" id="11_env"]
+[ext_resource type="Script" path="res://kit/helpers/road_path.gd" id="12_road"]
+[ext_resource type="Resource" path="res://kit/roads/asphalt_profile.tres" id="13_asphalt"]
+[ext_resource type="Resource" path="res://src/levels/island/car_arena/car_arena_strip_curve.tres" id="14_strip"]
+[ext_resource type="Resource" path="res://src/levels/island/car_arena/car_arena_corners_curve.tres" id="15_corners"]
+[ext_resource type="Resource" path="res://src/levels/island/car_arena/car_arena_winding_curve.tres" id="16_winding"]
+[ext_resource type="Texture2D" path="res://src/levels/island/car_arena/car_arena_island_splat2.png" id="17_splat2"]
+[ext_resource type="Script" path="res://src/levels/base/world_bounds.gd" id="18_bounds"]
+
+[sub_resource type="PlaneMesh" id="SeaBedMesh"]
+size = Vector2(560.0, 560.0)
+
+[sub_resource type="StandardMaterial3D" id="SeaBedMat"]
+albedo_color = Color(0.83, 0.76, 0.55, 1)
+
+[sub_resource type="ShaderMaterial" id="SplatMat"]
+shader = ExtResource("8_shader")
+shader_parameter/grass_color = Color(0.35, 0.55, 0.25, 1)
+shader_parameter/dirt_color = Color(0.52, 0.4, 0.26, 1)
+shader_parameter/sand_color = Color(0.83, 0.76, 0.55, 1)
+shader_parameter/rock_color = Color(0.45, 0.44, 0.42, 1)
+shader_parameter/color5 = Color(0.92, 0.94, 0.97, 1)
+shader_parameter/color6 = Color(0.3, 0.24, 0.17, 1)
+shader_parameter/color7 = Color(0.22, 0.22, 0.24, 1)
+shader_parameter/color8 = Color(0.62, 0.6, 0.56, 1)
+shader_parameter/splatmap = ExtResource("7_splat")
+shader_parameter/splatmap2 = ExtResource("17_splat2")
+shader_parameter/blend_sharpness = 8.0
+shader_parameter/roughness_value = 1.0
+
+[node name="CarArena" type="Node3D"]
+script = ExtResource("1_level")
+info = ExtResource("2_info")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("11_env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, 0.354, -0.354, 0, 0.707, 0.707, 0.5, -0.612, 0.612, 0, 40, 0)
+light_color = Color(1, 0.96, 0.88, 1)
+shadow_enabled = true
+directional_shadow_mode = 0
+directional_shadow_max_distance = 150.0
+
+[node name="ChaseCamera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 6)
+script = ExtResource("3_cam")
+
+[node name="Spawn" type="Marker3D" parent="."]
+transform = Transform3D(6.123032e-17, 0, -1, 0, 1, 0, 1, 0, 6.123032e-17, -150, 6.6, -6.123032e-16)
+script = ExtResource("4_spawn")
+vehicle_types = PackedStringArray("car")
+
+[node name="Sea" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0, 0)
+script = ExtResource("9_water")
+size = Vector2(560.0, 560.0)
+depth = 3.0
+far_sea_extent = 1900.0
+
+[node name="Bounds" type="StaticBody3D" parent="."]
+script = ExtResource("18_bounds")
+extent = Vector2(560.0, 560.0)
+
+[node name="SeaBed" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.01, 0)
+mesh = SubResource("SeaBedMesh")
+surface_material_override/0 = SubResource("SeaBedMat")
+
+[node name="Island" type="StaticBody3D" parent="."]
+script = ExtResource("5_terrain")
+heightmap = ExtResource("6_height")
+terrain_size = Vector2(512.0, 512.0)
+height = 51.0
+material = SubResource("SplatMat")
+preset = 0
+gen_seed = 70715
+feature_scale = 260.0
+gen_octaves = 4
+falloff_start = 0.7
+falloff_end = 0.92
+coast_roughness = 0.35
+terrace_levels = 2
+splatmap = ExtResource("7_splat")
+splatmap2 = ExtResource("17_splat2")
+channel_names = PackedStringArray("Grass", "Dirt", "Sand", "Rock", "Snow", "Mud", "Asphalt", "Gravel")
+channel_grip = PackedFloat32Array(0.8, 0.7, 0.6, 0.7, 0.75, 0.5, 1.0, 0.85)
+sand_height = 2.0
+dirt_slope_deg = 22.0
+rock_slope_deg = 38.0
+
+[node name="AuthoringRoot" type="Node3D" parent="."]
+script = ExtResource("10_authoring")
+chunk_size = 64.0
+metadata/_custom_type_script = "uid://t88htpmwukbg"
+
+[node name="Strip" type="Node3D" parent="AuthoringRoot"]
+script = ExtResource("12_road")
+profile = ExtResource("13_asphalt")
+conform_falloff = 8.0
+conform_epsilon = 0.05
+metadata/_custom_type_script = "uid://cpl5vh8pdc04w"
+
+[node name="Path" type="Path3D" parent="AuthoringRoot/Strip"]
+curve = ExtResource("14_strip")
+
+[node name="Corners" type="Node3D" parent="AuthoringRoot"]
+script = ExtResource("12_road")
+profile = ExtResource("13_asphalt")
+conform_falloff = 8.0
+conform_epsilon = 0.05
+metadata/_custom_type_script = "uid://cpl5vh8pdc04w"
+
+[node name="Path" type="Path3D" parent="AuthoringRoot/Corners"]
+curve = ExtResource("15_corners")
+
+[node name="Winding" type="Node3D" parent="AuthoringRoot"]
+script = ExtResource("12_road")
+profile = ExtResource("13_asphalt")
+conform_falloff = 8.0
+conform_epsilon = 0.05
+metadata/_custom_type_script = "uid://cpl5vh8pdc04w"
+
+[node name="Path" type="Path3D" parent="AuthoringRoot/Winding"]
+curve = ExtResource("16_winding")

@@ -50,6 +50,11 @@ const MESH_SUBDIV_MAX := 192
 	set(v):
 		far_sea_color = v
 		_rebuild()
+## Endless sea: the region re-centres on the active camera every tick and `contains_xz` is
+## true everywhere, so `size` only sets how far out the visible surface reaches. The step is
+## the wave mesh's quad, so vertices land back on the same world lattice and never resample
+## the (world-anchored) waves. Runtime only; the editor shows the authored square.
+@export var infinite := false
 
 ## How far the far-sea quad sits below the surface (must clear the wave troughs).
 const FAR_SEA_DROP := 0.25
@@ -67,6 +72,7 @@ func _ready() -> void:
 	collision_mask = Layers.VEHICLE
 	add_to_group(WATER_GROUP)
 	_rebuild()
+	set_physics_process(infinite and not Engine.is_editor_hint())
 	if not Engine.is_editor_hint():
 		monitoring = true
 		body_entered.connect(_on_body_entered)
@@ -80,8 +86,27 @@ func get_height(_pos: Vector3) -> float:
 
 ## Whether `pos` is over this water region (axis-aligned rect around the origin).
 func contains_xz(pos: Vector3) -> bool:
+	if infinite:
+		return true
 	var d := pos - global_position
 	return absf(d.x) <= size.x * 0.5 and absf(d.z) <= size.y * 0.5
+
+
+## `infinite` only: follow the camera on the wave-quad lattice (moves the kill volume too).
+func _physics_process(_delta: float) -> void:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var step := follow_step(size)
+	var xz := Vector2(cam.global_position.x, cam.global_position.z).snapped(step)
+	if not xz.is_equal_approx(Vector2(global_position.x, global_position.z)):
+		global_position = Vector3(xz.x, global_position.y, xz.y)
+		reset_physics_interpolation()
+
+
+## One wave-mesh quad per axis: PlaneMesh cuts `subdivide_*` + 1 quads along an edge.
+static func follow_step(region: Vector2) -> Vector2:
+	return Vector2(region.x / (_wave_subdiv(region.x) + 1), region.y / (_wave_subdiv(region.y) + 1))
 
 
 ## Build the visual plane + kill-volume shape as internal children (never serialized,
@@ -111,7 +136,7 @@ func _rebuild() -> void:
 
 ## Subdivisions along an edge of `length` metres, holding the quad size near
 ## WAVE_QUAD_M so the wave field samples the same on any size of water body.
-func _wave_subdiv(length: float) -> int:
+static func _wave_subdiv(length: float) -> int:
 	var n := int(roundf(length / WAVE_QUAD_M))
 	return clampi(n, MESH_SUBDIV_MIN, MESH_SUBDIV_MAX)
 

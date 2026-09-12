@@ -178,10 +178,12 @@ car. True standalone and inside sloppyCAN alike — one boot path. A link can as
 something specific (`?level=…&vehicle=…`); otherwise the game remembers where you were last
 time.
 
-Everything else hangs off **Esc** (or touch MENU): RESUME, VEHICLE, LEVEL, CONTROLS,
-SETTINGS.
+Four buttons stay in the top-left corner whatever you drive — MENU, GARAGE, LEVEL, VIEW —
+and only F5 hides them; F4 hides the driving pads, and any buttons only this machine has
+(PTO, ATTACH, BODY...) sit above the pedals. **Esc** (or MENU) opens RESUME, RESPAWN,
+CONDITIONS, CONTROLS, SETTINGS.
 
-- **VEHICLE**: families down the left, that family's bodies as pictures in the middle, what
+- **GARAGE**: families down the left, that family's bodies as pictures in the middle, what
   it can tow underneath, and a single live 3D preview on a turntable with the machine's
   specs (including what it speaks on the bus, read out of the contract). Machines this level
   won't spawn are still browsable and preview, carrying the reason on the card.
@@ -190,11 +192,12 @@ SETTINGS.
 - **CONTROLS** is generated, never typed. One table (`ActionRegistry`) describes every bound
   key; this sheet and the touchscreen buttons are both built from it, key names read live
   from the input map. A control can't exist without being documented, or be documented
-  without being reachable. Controls the current vehicle doesn't have are greyed with the
-  reason rather than hidden.
-- **SETTINGS**: currently one thing, how much instrument cluster you want (FULL, COMPACT,
-  OFF, or AUTO — quietly goes compact on a phone or when sloppyCAN is already showing the
-  numbers).
+  without being reachable. Controls the current vehicle doesn't have are hidden; ones
+  sloppyCAN is driving right now stay, greyed with the reason.
+- **CONDITIONS**: wind, water current, the direction they come from, and day/night — kept
+  for the session and carried into every level you load.
+- **SETTINGS**: how much instrument cluster you want (COMPACT by default, FULL, or OFF — F2
+  cycles the same three) and the UI size.
 
 **It has to work at any size.** No fixed layout: one theme is rebuilt at a scale derived
 from the window's short edge, and every screen sizes itself from that — card grids reflow

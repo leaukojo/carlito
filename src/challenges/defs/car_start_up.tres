@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_constraint.gd" id="1_cons"]
+[ext_resource type="Script" path="res://src/challenges/goals/manual_gear_constraint.gd" id="2_gear"]
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="3_goal"]
+[ext_resource type="Script" path="res://src/challenges/goals/reach_zone_goal.gd" id="4_reach"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="5_def"]
+
+[sub_resource type="Resource" id="Resource_finish"]
+script = ExtResource("4_reach")
+zone = &"Finish"
+
+[sub_resource type="Resource" id="Resource_gear"]
+script = ExtResource("2_gear")
+
+[resource]
+script = ExtResource("5_def")
+id = "car_start_up"
+title = "Start up"
+variant = "sedan-sports"
+arena = "car_arena"
+course = "res://src/levels/island/car_arena/courses/car_start_up_course.tscn"
+briefing = "Drive the straight to the finish line, 200 m ahead. The key comes first: accel does nothing until key is 3 (Ignition), and pressing accel before then shows IGNITION OFF. Then send a real gear: gear 1 is D1. Moving on gear 0, which means no gear opinion and drives the automatic box, fails the attempt."
+hint = "key (1 Lock, 2 On, 3 Ignition), gear (0 no opinion, 1-6 D1-D6, 255 R), accel (0-100 %), handbrake. An absent handbrake is off; one left on holds the car."
+goals = Array[ExtResource("3_goal")]([SubResource("Resource_finish")])
+constraints = Array[ExtResource("1_cons")]([SubResource("Resource_gear")])

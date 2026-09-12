@@ -1,19 +1,27 @@
 class_name PauseMenu
 extends Control
-## The pause overlay: RESUME / VEHICLE / LEVEL / CONTROLS / SETTINGS. Never tears the level
-## down on its own. VEHICLE and LEVEL are signals — the garage and level-select overlays are
-## the shell's to create/free (rule 6); this menu never learns what a level or vehicle is.
-## CONTROLS and SETTINGS own nothing either: CONTROLS is generated from ActionRegistry (same
-## source the touch overlay reads), SETTINGS emits new values for the shell to apply/persist.
-## Built in code, colour/type from the inherited theme. No emoji.
+## The pause overlay: RESUME / RESPAWN / CONDITIONS / CONTROLS / SETTINGS. GARAGE, LEVEL and
+## CHALLENGES live on the on-screen important buttons (and G / 4 / 5), not here. Never tears the
+## level down on its own. RESPAWN is a signal — respawning is the shell's to do (rule 6); this
+## menu never learns what a level or vehicle is. CONTROLS, SETTINGS and CONDITIONS own nothing either:
+## CONTROLS is generated from ActionRegistry (same source the touch overlay reads), SETTINGS and
+## CONDITIONS emit new values for the shell to apply/persist. Built in code, colour/type from the
+## inherited theme. No emoji.
+
+const WorldConditions := preload("res://src/levels/base/world_conditions.gd")
 
 signal resume_requested
-signal vehicle_requested
-signal level_requested
+signal respawn_requested
 ## New Dashboard.Density setting picked; the shell applies it and writes it to user://.
 signal dashboard_density_changed(setting: int)
 ## New UI-size multiplier picked; the shell applies it to UiScale and writes it to user://.
 signal ui_scale_changed(factor: float)
+## New wind/current preset or shared compass direction picked; the shell applies it to the
+## current level and keeps it for the session.
+signal conditions_changed(wind_preset: int, current_preset: int, from_deg: float)
+## Day/night picked directly (as opposed to the N key, which flips it). Named apart from
+## GameState.night_changed, which is the level's own broadcast of the result.
+signal night_toggled(on: bool)
 
 ## Widest sensible button in logical px (scaled through UiTheme), matching the garage.
 const BUTTON_W := 260.0
@@ -21,11 +29,17 @@ const BUTTON_W := 260.0
 ## Row shows one key per action, else "W / Up / S / Down" becomes the widest thing on the page.
 const DRIVE_FOOTNOTE := "Arrow keys and a gamepad also drive."
 
-## "COMPACT" alone doesn't say what you'd lose.
-const DENSITY_HELP := "AUTO uses the compact cluster on a small screen or while the bridge is live."
+## COMPACT is the default; this says what FULL buys back.
+const DENSITY_HELP := "COMPACT keeps the gauges and tell-tales; FULL adds the bars, wind rose and echo sounder."
 
 ## The automatic scale is the right default but still wrong for some screens/seating.
 const UI_SCALE_HELP := "Scales all on-screen controls and text. 100% is the automatic size."
+
+const WIND_HELP := "Overrides the level's wind for this session."
+const CURRENT_HELP := "Overrides the level's water current for this session."
+const FROM_HELP := "Where the wind and water current come from. Applies to LIGHT and STRONG."
+const NIGHT_HELP := "Day/night, same as the N key."
+const LOCKED_HELP := "Locked during a challenge."
 
 ## How far Up/Down move the CONTROLS sheet, in logical px (scaled). About two rows.
 const SHEET_STEP := 64.0
@@ -33,23 +47,40 @@ const SHEET_STEP := 64.0
 var _root: VBoxContainer
 var _controls: VBoxContainer
 var _settings: VBoxContainer
+var _conditions: VBoxContainer
 var _sheet: ScrollContainer  ## CONTROLS sheet's scroll area, driven by Up/Down (_unhandled_input)
 var _resume_btn: Button
 var _density_btn: Button
 var _ui_scale_btn: Button
+var _wind_btn: Button
+var _current_btn: Button
+var _from_btn: Button
+var _night_btn: Button
 ## Active vehicle's capabilities from the shell — same read the touch buttons gate on.
 var _caps := {}
-var _density: int = Dashboard.Density.AUTO
+var _density: int = Dashboard.Density.COMPACT
 var _ui_scale := UiScale.USER_DEFAULT
+var _wind_preset: int = WorldConditions.Preset.LEVEL
+var _current_preset: int = WorldConditions.Preset.LEVEL
+var _wind_from_deg := 0.0
+var _night := false
+var _conditions_locked := false  ## a challenge owns wind, current and lighting: CONDITIONS greys out
 
 
 ## Called by the shell before add_child; pages build in _ready. Optional: with nothing handed
-## over, capability-gated rows read unavailable and both settings read default.
-func setup(caps: Dictionary, density_setting := Dashboard.Density.AUTO,
-		ui_scale_factor := UiScale.USER_DEFAULT) -> void:
+## over, capability-gated rows read unavailable and every setting reads its default.
+func setup(caps: Dictionary, density_setting := Dashboard.Density.COMPACT,
+		ui_scale_factor := UiScale.USER_DEFAULT,
+		wind_preset := WorldConditions.Preset.LEVEL, current_preset := WorldConditions.Preset.LEVEL,
+		wind_from_deg := 0.0, night_on := false, conditions_locked := false) -> void:
+	_conditions_locked = conditions_locked
 	_caps = caps
 	_density = density_setting
 	_ui_scale = ui_scale_factor
+	_wind_preset = wind_preset
+	_current_preset = current_preset
+	_wind_from_deg = wind_from_deg
+	_night = night_on
 
 
 func _ready() -> void:
@@ -68,11 +99,14 @@ func _ready() -> void:
 	_settings = _page()
 	_settings.visible = false
 	_build_settings()
+	_conditions = _page()
+	_conditions.visible = false
+	_build_conditions()
 
 	_resume_btn.grab_focus()  # keyboard/gamepad start point
 
 
-## A centred column filling the overlay. Both pages are one of these; only one is visible.
+## A centred column filling the overlay. Every page is one of these; only one is visible.
 func _page() -> VBoxContainer:
 	var col := VBoxContainer.new()
 	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE,
@@ -86,8 +120,8 @@ func _build_root() -> void:
 	_root.add_child(_title("PAUSED"))
 	_resume_btn = _menu_button("RESUME", func() -> void: resume_requested.emit())
 	_root.add_child(_resume_btn)
-	_root.add_child(_menu_button("VEHICLE", func() -> void: vehicle_requested.emit()))
-	_root.add_child(_menu_button("LEVEL", func() -> void: level_requested.emit()))
+	_root.add_child(_menu_button("RESPAWN", func() -> void: respawn_requested.emit()))
+	_root.add_child(_menu_button("CONDITIONS", func() -> void: _show_page(_conditions)))
 	_root.add_child(_menu_button("CONTROLS", func() -> void: _show_page(_controls)))
 	_root.add_child(_menu_button("SETTINGS", func() -> void: _show_page(_settings)))
 
@@ -95,7 +129,10 @@ func _build_root() -> void:
 ## Generated from ActionRegistry: every row, grouping and gate comes from that table, and key
 ## strings are read live from InputMap, so a control can't exist without appearing here and a
 ## rebinding can't go stale. Three columns: what it does, the key, and why not if it doesn't
-## apply — greyed rather than hidden, since "the boat has no diff lock" teaches something.
+## apply. A row the current vehicle/attachment can never use (family/capability gate fails) is
+## HIDDEN outright — `ActionRegistry.relevant_entry` — and a group whose rows are all hidden
+## loses its heading; a row blocked only because the bridge owns it right now still shows,
+## greyed, with its gate note, since that reason goes away on its own.
 func _build_controls() -> void:
 	_controls.add_child(_title("CONTROLS"))
 
@@ -110,7 +147,10 @@ func _build_controls() -> void:
 	_controls.add_child(_sheet)
 
 	for group in ActionRegistry.Group.values():
-		var rows := ActionRegistry.in_group(group)
+		var rows: Array[Dictionary] = []
+		for entry in ActionRegistry.in_group(group):
+			if ActionRegistry.relevant_entry(entry, ctx):
+				rows.append(entry)
 		if rows.is_empty():
 			continue
 		var heading := Label.new()
@@ -167,6 +207,53 @@ func _build_settings() -> void:
 	_settings.add_child(_menu_button("BACK", func() -> void: _show_page(_root)))
 
 
+## Wind/current/direction/time-of-day, each a cycling button + short help, like SETTINGS. Wind
+## and current are disabled (with a reason) on a family whose physics never reads the
+## `WindField`/`CurrentField`. Nothing is applied here (rule 6): values are emitted and the
+## shell keeps them for the session and applies them to the current (and every future) level.
+func _build_conditions() -> void:
+	_conditions.add_child(_title("CONDITIONS"))
+	var family := GameState.current_vehicle
+
+	_wind_btn = _menu_button("", _on_wind_pressed)
+	_relabel_wind()
+	_conditions.add_child(_wind_btn)
+	var wind_help := _help(WIND_HELP)
+	if not WorldConditions.WIND_FAMILIES.has(family):
+		_wind_btn.disabled = true
+		wind_help.text = "no effect on the %s" % family
+	_conditions.add_child(wind_help)
+
+	_current_btn = _menu_button("", _on_current_pressed)
+	_relabel_current()
+	_conditions.add_child(_current_btn)
+	var current_help := _help(CURRENT_HELP)
+	if not WorldConditions.CURRENT_FAMILIES.has(family):
+		_current_btn.disabled = true
+		current_help.text = "no effect on the %s" % family
+	_conditions.add_child(current_help)
+
+	_from_btn = _menu_button("", _on_from_pressed)
+	_relabel_from()
+	_conditions.add_child(_from_btn)
+	var from_help := _help(FROM_HELP)
+	_conditions.add_child(from_help)
+
+	_night_btn = _menu_button("", _on_night_pressed)
+	_relabel_night()
+	_conditions.add_child(_night_btn)
+	var night_help := _help(NIGHT_HELP)
+	_conditions.add_child(night_help)
+
+	if _conditions_locked:
+		for btn: Button in [_wind_btn, _current_btn, _from_btn, _night_btn]:
+			btn.disabled = true
+		for help: Label in [wind_help, current_help, from_help, night_help]:
+			help.text = LOCKED_HELP
+
+	_conditions.add_child(_menu_button("BACK", func() -> void: _show_page(_root)))
+
+
 func _help(text: String) -> Label:
 	var label := Label.new()
 	label.text = text
@@ -198,6 +285,46 @@ func _relabel_ui_scale() -> void:
 	_ui_scale_btn.text = "UI SIZE: %d%%" % int(roundf(_ui_scale * 100.0))
 
 
+func _on_wind_pressed() -> void:
+	_wind_preset = WorldConditions.next_preset(_wind_preset)
+	_relabel_wind()
+	conditions_changed.emit(_wind_preset, _current_preset, _wind_from_deg)
+
+
+func _relabel_wind() -> void:
+	_wind_btn.text = "WIND: %s" % WorldConditions.PRESET_LABELS[_wind_preset]
+
+
+func _on_current_pressed() -> void:
+	_current_preset = WorldConditions.next_preset(_current_preset)
+	_relabel_current()
+	conditions_changed.emit(_wind_preset, _current_preset, _wind_from_deg)
+
+
+func _relabel_current() -> void:
+	_current_btn.text = "WATER CURRENT: %s" % WorldConditions.PRESET_LABELS[_current_preset]
+
+
+func _on_from_pressed() -> void:
+	_wind_from_deg = fposmod(_wind_from_deg + WorldConditions.DIRECTION_STEP_DEG, 360.0)
+	_relabel_from()
+	conditions_changed.emit(_wind_preset, _current_preset, _wind_from_deg)
+
+
+func _relabel_from() -> void:
+	_from_btn.text = "FROM: %s" % WorldConditions.compass_label(_wind_from_deg)
+
+
+func _on_night_pressed() -> void:
+	_night = not _night
+	_relabel_night()
+	night_toggled.emit(_night)
+
+
+func _relabel_night() -> void:
+	_night_btn.text = "TIME: %s" % ("NIGHT" if _night else "DAY")
+
+
 ## Every row on the CONTROLS sheet is a Label, so there's nothing for the focus ring to walk —
 ## without this a keyboard/gamepad player couldn't scroll it. BACK has no focus neighbour, so
 ## Up/Down are never consumed by focus navigation and arrive here.
@@ -221,7 +348,7 @@ func _notification(what: int) -> void:
 	if what != NOTIFICATION_THEME_CHANGED or _root == null:
 		return
 	var margin := int(UiTheme.px(self, UiTheme.MARGIN))
-	for page: VBoxContainer in [_root, _controls, _settings]:
+	for page: VBoxContainer in [_root, _controls, _settings, _conditions]:
 		page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT,
 				Control.PRESET_MODE_MINSIZE, margin)
 		for child in page.get_children():
@@ -242,6 +369,7 @@ func _show_page(page: VBoxContainer) -> void:
 	_root.visible = page == _root
 	_controls.visible = page == _controls
 	_settings.visible = page == _settings
+	_conditions.visible = page == _conditions
 	# Focus follows the page, else a keyboard player is left driving an invisible button.
 	for child in page.get_children():
 		if child is Button:

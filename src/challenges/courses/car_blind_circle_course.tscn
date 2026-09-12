@@ -1,0 +1,23 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/challenges/arena_preview.gd" id="1_prev"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="2_spawn"]
+[ext_resource type="Script" path="res://src/challenges/challenge_zone.gd" id="3_zone"]
+
+[node name="CarBlindCircleCourse" type="Node3D"]
+
+[node name="ArenaPreview" type="Node3D" parent="."]
+script = ExtResource("1_prev")
+arena = "flatland"
+
+[node name="Spawn" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 0.8, -60)
+script = ExtResource("2_spawn")
+vehicle_types = PackedStringArray("car")
+
+[node name="Circle" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 60, 0, -60)
+script = ExtResource("3_zone")
+kind = 1
+inner_r = 17.0
+outer_r = 23.0

@@ -5,8 +5,9 @@
 **Carlito** — a browser-based CAN-bus driving sandbox: drive vehicles (car / truck /
 tractor / boat / drone / plane / train) while exchanging live CAN signals with the
 sloppyCAN/RAMN simulator over a postMessage bridge. Web-first. Levels are **signal
-playgrounds** — no missions; content exists to make contract signals visibly perform
-(grades for `engine_load`, fields for hitch/PTO, water for pitch/roll).
+playgrounds**: content exists to make contract signals visibly perform
+(grades for `engine_load`, fields for hitch/PTO, water for pitch/roll). **Challenges** are the
+goal-driven, bridge-only exception that teaches CAN — list in `docs/challenge_ideas.md`.
 
 Docs: `overview.md` (architecture map) · `HUMAN_EXPLANATIONS.md` · `systems.md` (contract,
 input, telemetry/dashboard, bridge, lamps, shell, levels) · `vehicles.md` (framework, boat /
@@ -75,7 +76,8 @@ bug, not a shortcut.
 
 Perf target: 60 fps in the worst view, measured on the DEPLOYED web build (F3 overlay); draw
 calls are the first diagnostic to read there, not a budget to design against (nothing is
-profiled on a real target device yet — `TODO.md` § Perf pass). Editor UX lives in
+profiled on a real target device yet; download size: `docs/deploying.md` § Download size).
+Editor UX lives in
 `addons/carlito_kit/` only; data + runtime-safe logic in `kit/` — nothing the baker touches
 may use editor APIs (CI bakes headless). Authoring tools are deterministic (seeded) and
 destructive-by-button, never per-frame.
@@ -136,13 +138,20 @@ probes (`set_vehicle`, `grip_at`, `cycle_implement`, `set_attachment`, `accepts`
   needs `_intent({...})` or a typed declaration.
 - Toggle owners (`_lights`, `_hitch_up`, `_pto`) live in InputRouter so keyboard and touch
   share one owner; sources only report per-frame edges.
+- **The challenge bridge-only lock is `InputRouter.set_bridge_only`**: local and touch are never
+  polled, and with no live bridge the input is `locked_idle()`. Its keyboard override
+  (`--challenge-keys` / `CARLITO_CHALLENGE_KEYS`) is honoured in debug builds only.
 - **Cycled-control lengths are declared once in `src/input/subsystem_counts.gd`** (leaf, no
-  dependencies, `preload`ed by both the router and the drone) — the router must not depend on a
-  vehicle class, so it cannot read `RefuseBody.Cmd` / `DroneBus.NODES` / `DroneModes`. Where the
+  dependencies, `preload`ed by the router and by each vehicle class that cycles one) — the router
+  must not depend on a vehicle class, so it cannot read `RefuseBody.Cmd` / `DroneBus.NODES` /
+  `DroneModes` / `BoatAutopilot`. Where the
   length is intrinsic to a structure (an enum, the roster array) that structure stays the thing
   you edit and a test pins it against the constant; grow one without the other and the local key
   silently stops reaching the new position while the bridge can still command it.
-- The `rudder` in-signal overrides `steer` when present (no new VehicleInput field).
+- The `rudder` in-signal overrides `steer` when present (no new VehicleInput field). The boat's
+  `heading_cmd` follows the same PRESENCE rule and DOES take a field: it overrides nothing, and
+  every value in its [0,360] is a legal bearing, so absent cannot be a sentinel on the wire —
+  `VehicleInput.HEADING_CMD_NONE` is internal and `bridge_source` writes the key only when sent.
 - Bridge publish walks `Contract.data.signals_for_vehicle(...)` × `to_bridge_dict()`, and
   `to_bridge_dict` walks the telemetry's own property list — every member var of a telemetry
   class IS a wire signal (only the `WIRE_*` tables and the synthesised `slip` are not identity),
@@ -216,11 +225,15 @@ $env:GODOT_BIN = $GODOT; .\addons\gdUnit4\runtest.cmd -a tests
 
 # headless smoke (boots boot.tscn; --quit-after counts frames)
 & $GODOT --headless --path . --quit-after 120
+# ...straight into a challenge (debug builds; CARLITO_CHALLENGE for F6; add --challenge-keys to drive it)
+& $GODOT --headless --path . --quit-after 300 -- --challenge=dev_box_stop
 
 # palettes/prefabs (after kit/import recipe edits only)
 & $GODOT --headless --path . --script res://tools/gen_kit_assets.gd
 # vehicle selector cards (WINDOWED; every variant + implement/trailer, then re-import)
 & $GODOT --path . res://tools/gen_vehicle_thumbs.tscn ; & $GODOT --headless --path . --import
+# drone-mk2 model (Blender 5.1, only to REGENERATE — the GLBs are committed), then re-import
+& "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --factory-startup --python tools/gen_drone_model.py
 # kit thumbnails (WINDOWED; re-import, then regen to embed palette previews)
 & $GODOT --path . res://tools/gen_thumbs.tscn ; & $GODOT --headless --path . --import
 & $GODOT --headless --path . --script res://tools/gen_kit_assets.gd
@@ -239,6 +252,7 @@ $env:GODOT_BIN = $GODOT; .\addons\gdUnit4\runtest.cmd -a tests
 
 node tools/gen_js_contract.mjs                    # after ANY contract edit
 & $GODOT --headless --path . --export-release "Web" build/web/index.html   # CI does the real one
+# ...plus one --export-patch per island, or islands fall back to flatland: docs/deploying.md § Level packs
 powershell -File tools/preflight.ps1              # "am I safe to push?" — all CI gates
 ```
 
@@ -248,14 +262,16 @@ GDScript warning classes are **errors** in project.godot — intentional integer
 needs `@warning_ignore("integer_division")`.
 
 - Headless with no `--level=` / `CARLITO_LEVEL` boots `boot.gd`'s `DEFAULT_LEVEL`
-  (`level_1`), not the first registry entry (the garage).
-- A headless run ending with only `ERROR: N resources still in use at exit` is **clean**.
+  (`flatland`), not the first registry entry (the garage).
+- A headless run ending with only `ERROR: N resources still in use at exit` is **clean**, as is
+  `~130 ObjectDB instances leaked at exit` in any run that `load()`s an island level scene.
 - `--headless --script` only runs `extends SceneTree` scripts; EditorScripts need
   File ▸ Run in the editor.
 - **Parse-checking `addons/` code**: `& $GODOT --headless --path . --editor --quit-after 30`
   loads enabled plugins and prints real `SCRIPT ERROR: Parse Error` lines. It does **not**
   catch integer division between two *constants* (`48 / 4` folds silently) — eyeball
-  division on variables.
+  division on variables. It — and any headless `--import` that actually re-imports an asset —
+  re-saves `project.godot` and drops the 60 Hz pin (rule 9): `git checkout -- project.godot` after.
 - **`ProjectSettings` in tests is not a presence check**: `get_setting(name, default)` falls back
   to the engine's built-in default, and `has_setting()` is true for every built-in setting even
   when `project.godot` never mentions it. A setting whose invariant *equals* its engine default

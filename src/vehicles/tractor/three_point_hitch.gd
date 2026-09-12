@@ -41,6 +41,10 @@ func _ready() -> void:
 	# is a constant of the tractor, solved once.
 	_ball_y_lowered = (_linkage.solve(0.0)["ball"] as Vector2).y
 	set_hitch(1.0)  # spawn raised (transport), matching TractorVehicle.SPAWN_HITCH
+	# Housing/PtoGuard/PtoStub/LowerLinkL/R/RockArmL/R/LiftRodL/R/TopLink each fold to one draw call
+	# per material. Mount is excluded: it carries nothing yet, and attach() merges whatever lands
+	# there in its own call, against that implement's own skip list.
+	StaticMeshMerge.merge_subtree(self, [_mount])
 
 
 ## Instance `scene` on the linkage. Replaces whatever was attached; an unloadable scene leaves the
@@ -58,6 +62,8 @@ func attach(scene: PackedScene) -> void:
 	implement = node
 	_linkage.mast_offset = node.mast_offset()
 	_mount.add_child(node)
+	# Node scripts (Spreader's Gate/RamRod) declare what StaticMeshMerge must leave individual.
+	StaticMeshMerge.merge_subtree(node, node.static_merge_skip())
 	set_hitch(_pos01)  # re-solve against the new A-frame before it is drawn
 
 

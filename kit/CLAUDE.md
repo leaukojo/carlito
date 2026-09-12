@@ -76,13 +76,16 @@ detail: `docs/level_kit.md`). Bake freshness and `BAKE_CODE_INPUTS` stay in the 
   scene) and overwrites it on every run; `tools/gen_skyport.gd` owns level 6 the same way
   (three stages: `scaffold` → `--import` → `props` → `--import` → bake → `probe`, and
   `scaffold` REWRITES the .tscn, so a re-run always needs `props` after it);
+  `tools/gen_car_arena.gd` owns the car challenge arena AND its course scenes (`scaffold` →
+  `--import` → `courses` → bake; `courses` rewrites every course `.tscn`, hand edits included);
   `tools/gen_islands.gd` covers only levels 2-4 and **must not be re-run** (levels 2/3 have
   hand-added PlaneSpawns its template would drop).
 - Authoring order: terrain → roads + conform → splat → scatter (conform trips the scatter
   stale guard by design).
 - **The `.baked.scn` is gitignored build output; the `.bake.json` beside it is committed.**
   CI bakes every registered level right after the stale-bake check, so a full bake costs git
-  nothing — only the six manifests move, and on a no-op re-bake only their hashes do.
+  nothing — only the seven manifests move, and on a no-op re-bake only their hashes do. It costs
+  CI ~2 s of a ~95 s build job (measured 2026-09-05), which is why the step is not cached.
   `bake_levels` rewrites EVERY level's `.baked.scn` with different bytes even when nothing
   changed (same `input_hash`, new `output_hash`; the pack is not byte-deterministic), which
   is why the manifest `stats` block, not the output bytes, is the comparand that proves a
@@ -90,3 +93,6 @@ detail: `docs/level_kit.md`). Bake freshness and `BAKE_CODE_INPUTS` stay in the 
   run takes minutes. **Run `bake_levels.tscn` once after cloning** — until then levels play
   unbaked (a `push_warning` from `Level._setup_baked` says so), local perf reads nothing like
   the shipped build, and the suite's bake-weight assertion fails.
+- COMPROMISE: colormap `451b163d` ships three byte-identical times (garage, parked, kenney
+  vehicles; ~700 KB raw). Deleting a copy silently reverts (each `.glb` re-resolves its sibling
+  `Textures/` on every bake); undoing it costs GLB surgery or content-hash dedup in the baker.

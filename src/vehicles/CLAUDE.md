@@ -8,6 +8,14 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
 
 - Subclasses use ONLY the two seams (`_make_telemetry()`, `_tick_extras()` — run last so
   drivetrain RPM + telemetry motion are current). Never fork `_physics_process`.
+  - A subclass that STEERS ITSELF re-runs the base's helm slew instead of adding a second one:
+    `BaseVehicle` has already done `move_toward(_steer, input.steer, …)` by the time
+    `_tick_extras` runs, and re-slewing that value toward the controller's demand cancels
+    (`move_toward(move_toward(x, 0, r), c, r) == x` below `c`), so the surface drifts to centre
+    and never advances. `BoatVehicle._autopilot` remembers the rudder it applied (`_helm`) and
+    re-runs the SAME `spec.steer_speed` slew from it — an autopilot must not move the rudder
+    faster than a hand can — and rewrites `telemetry.steer`, which `_update_telemetry` published
+    pre-empted.
 - Every family earns its `BaseVehicle` subclass, because a method's ABSENCE on the base is
   behaviour. `boot.gd` sets `caps["tows"] = v.has_method("cycle_implement")`,
   `debug_overlay.gd` gates `artic` on `has_method("articulation")`, and
@@ -31,7 +39,12 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
     only when it is family-agnostic body state (rule 4: `pitch`/`roll`/`altitude`/`vspeed`).
 - There is no `FreeBodyDrive` and must not be. The three drag models share no shape: the boat
   is body-axis anisotropic (`drag_long` / `drag_lat` / `drag_yaw`, the lateral term at
-  `keel_offset` so the hull heels), the plane isotropic on one coefficient plus a flap bonus,
+  `keel_offset` so the hull heels) against the WATER, `linear_velocity - CurrentField.at(self)`
+  — `drag_yaw` alone stays raw, a uniform stream having no gradient to yaw against — and carries
+  a SECOND such pair against the air
+  (`windage_long` / `windage_lat` at `windage_offset`) rather than `air_damper`, whose `axis`
+  masks WORLD space and cannot express a body-frame split on a hull that yaws; the plane
+  isotropic on one coefficient plus a flap bonus,
   the drone WORLD-horizontal split from WORLD-vertical with the vertical gated on the motors
   turning — a common model is the rule-3 fiction. Force application differs too (four hull
   probes / a capped lift-stall curve / four per-rotor `apply_force`), the `@export` blocks are
@@ -39,6 +52,13 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
   buoyancy loop, stall curve or rotor mixer for anybody. Shared instead: `VehicleMath`,
   `BaseVehicle._gravity`, and the attitude/height telemetry `BaseVehicle._update_telemetry`
   writes off the body basis.
+- The boat's rig (`BoatSail`) is a **THIRD body-frame air term** beside the windage pair, and like
+  them it takes neither `VehicleMath.air_damper` (whose `axis` masks WORLD space) nor
+  `damped_force`: a sail force is an EXTERNAL force like `thrust_force`, not a damper, so it gets
+  no one-tick clamp — `aws^2` bounds it and `drag_long` terminates it. Its **no-go zone is
+  emergent** (side force against `drag_lat` is the leeway) and must not be clamped; the only thing
+  imposed is the luff band, which is a real fact about cloth. `sail_area == 0` is what keeps the
+  two powerboats free of all of it.
 - Extract only where two sites are IDENTICAL, never merely analogous. The truck/train/drone/
   fuel "reservoir" bars look like one system and share no arithmetic.
   `VehicleTelemetry.engine_load_pct(..., pto_on, pto_load)` is the counterexample: one
@@ -49,7 +69,8 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
   and `TrainVehicle._find_rail` call it; a third world query calls it rather than copying it,
   and do not build a `LevelEnvironment` seam over them. Before adding a walk, check whether a
   collision layer already answers the question — `Layers.SOLID` omits `Containment`, which
-  retired the drone's sensor-exclusion walk. `WindField.at` keeps its own lookup: static,
+  retired the drone's sensor-exclusion walk. `WindField.at` and `CurrentField.at` each keep their
+  own copy of the same lookup — siblings, not a shared base: static,
   standalone-tested, and returning `ZERO` for a node not under a level is its contract.
   - `_grip_terrains` is collected on the first physics tick and reused (`tractor._soil_at` is
     the second consumer). `BoatVehicle` collects its `WaterSurface` list the same one-shot way
@@ -434,8 +455,10 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
   re-measure trigger the strand-the-gearbox note describes, and the value must be a whole km/h
   in [0, 250] — `test_vehicle_catalog` fails it, because SPN 74 is one byte at 1 km/h per bit.
 - `engine_load_pct` and `hours_step` live on **VehicleTelemetry**, not TractorTelemetry:
-  `engine_load` (SPN 92) and `engine_hours` (SPN 247) are shared tractor/truck signals, so the
-  model is one, not two.
+  `engine_load` (SPN 92) is a shared tractor/truck signal, so the model is one, not two.
+  `engine_hours` (SPN 247 / N2K PGN 127489) is shared further still, with the boat — and stays
+  UNFLAVORED for it, like `speed_limit`/`wheel_slip`: a family that doesn't speak the flavor's
+  protocol still declares the reading, so the SPN/PGN is a naming reference, not a wire claim.
   - `pto_load` is the one term ADDED to a signal rather than emerging from the sim — literally
     `load_frac += pto_load` while the PTO is engaged. The PTO costs no real engine torque, so
     the rpm does not sag and nothing else moves with it: a knowingly-cheap parasitic model,

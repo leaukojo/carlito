@@ -36,7 +36,24 @@
 - Water: `get_height()` is flat; shader waves are visual-only and **must never feed
   physics**. The kill volume is an axis-aligned rect — don't rotate the node. Water and
   terrain are direct children of the level, never under `Authoring`.
+- **The water column is `Sea.y` over a pan `island_falloff` clamps to 0**, so the shared y=1
+  makes every level 1 m deep and a depth reading a constant. Level 6's sea is at y=6 (ceiling
+  6.6, where `gen_skyport.gd`'s canyon repaint walk starts); `depth` and `sand_height` move with
+  it or they read wrong silently. Level 6's boat playground — the sandbar, the buoyed channel and
+  the measured leg — is likewise stated as offsets from `SEA_Y`, and the marks are floated at it
+  by `_place_afloat` because the watercraft kit aligns buoys `raw` (their origin IS the
+  waterline), not on a measured base like every other piece.
+- `Level` owns **two** environment fields — `wind` (`WindField`) and `current` (`CurrentField`) —
+  both null-by-default `.tres` side-cars, both sampled off one `_env_time`, both naming the
+  heading the flow goes **TOWARD**. `CurrentField` is a SIBLING of `WindField`, not a subclass:
+  they share `base_vector` and the convention, and nothing else. The pause-menu CONDITIONS page's
+  override (`Level.set_conditions`, `src/levels/base/world_conditions.gd`) replaces `wind`/
+  `current` at runtime; its LEVEL preset restores the authored side-cars captured in `_ready`.
+- **The endless levels' surfaces follow the camera**, so `water.gdshader` and
+  `ground_grid.gdshader` must stay WORLD-space: a model-space pattern slides with every re-centre.
 - Day/night is a Level concern (N key), not a bridge signal.
+- **Everything under `island/` ships in a level pack, not the main `.pck`** (`LevelPacks`): a new
+  island needs a `Web <id>` export preset, and `tests/test_export_filter.gd` names the exact one.
 - **Level-select cards**: the screenshot camera is a side-car `<level>_shot.tres`
   (`LevelShot`), never a node (the level `.tscn` is a bake input). Shot from the Polish tab
   or `tools/gen_level_thumbs.tscn` (**windowed only**) into `src/ui/level_thumbs/` — it must

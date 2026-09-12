@@ -56,6 +56,7 @@ var _impact_hold := 0.0             ## decaying peak of the impact magnitude
 var _lamps := LampSet.new()         ## drives the scene-authored lamps from input
 var _horn_player: AudioStreamPlayer ## procedural horn, played on the horn rising edge
 var _prev_horn := false
+var _horn_fade: Tween  ## the release fade; killed if the horn is pressed again mid-fade
 
 
 func _ready() -> void:
@@ -124,9 +125,14 @@ func _physics_process(delta: float) -> void:
 	_lamps.apply(lamp_bits.brake_lamp, input.lights, lamp_bits.turn_left, lamp_bits.turn_right,
 			lamp_bits.led, lamp_bits.beacon, lamp_bits.strobe)
 	if input.horn and not _prev_horn:  # honks on rising edge, holds while pressed
+		if _horn_fade != null:
+			_horn_fade.kill()
+		_horn_player.volume_db = 0.0
 		_horn_player.play()
 	elif not input.horn and _prev_horn:
-		_horn_player.stop()
+		_horn_fade = create_tween()
+		_horn_fade.tween_property(_horn_player, "volume_db", -40.0, Horn.RELEASE_SECONDS)
+		_horn_fade.tween_callback(_horn_player.stop)
 	_prev_horn = input.horn
 	if drive != null:
 		drive.update_dust(telemetry)

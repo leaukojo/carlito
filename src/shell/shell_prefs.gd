@@ -52,7 +52,7 @@ static func mark_coach_seen() -> void:
 
 ## Cluster density (Dashboard.Density), stored/validated as Dashboard's string key.
 static func dashboard_density() -> int:
-	return Dashboard.setting_from_key(String(_config().get_value(SECTION, "dashboard", "auto")))
+	return Dashboard.setting_from_key(String(_config().get_value(SECTION, "dashboard", "compact")))
 
 
 static func set_dashboard_density(setting: int) -> void:

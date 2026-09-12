@@ -1,0 +1,246 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/challenges/arena_preview.gd" id="1_r3c3n"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="2_i5dr0"]
+[ext_resource type="Script" path="res://src/challenges/challenge_zone.gd" id="3_5ensw"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_q1ep0"]
+albedo_color = Color(1, 0.5, 0.05, 1)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_wx74i"]
+material = SubResource("StandardMaterial3D_q1ep0")
+size = Vector2(11.1, 0.4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gik2o"]
+albedo_color = Color(0.95, 0.95, 0.95, 1)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_1iulk"]
+material = SubResource("StandardMaterial3D_gik2o")
+size = Vector2(11.1, 0.4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_5qfan"]
+albedo_color = Color(0.12, 0.12, 0.12, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="BoxMesh_ec3hg"]
+material = SubResource("StandardMaterial3D_5qfan")
+size = Vector3(0.2, 1.8, 0.2)
+
+[sub_resource type="BoxMesh" id="BoxMesh_1wxw4"]
+material = SubResource("StandardMaterial3D_q1ep0")
+size = Vector3(3, 0.9, 0.12)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_eeamc"]
+material = SubResource("StandardMaterial3D_q1ep0")
+size = Vector2(11.1, 0.4)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_aobtm"]
+material = SubResource("StandardMaterial3D_gik2o")
+size = Vector2(11.1, 0.4)
+
+[sub_resource type="BoxMesh" id="BoxMesh_usrrt"]
+material = SubResource("StandardMaterial3D_5qfan")
+size = Vector3(0.2, 1.8, 0.2)
+
+[sub_resource type="BoxMesh" id="BoxMesh_41nqb"]
+material = SubResource("StandardMaterial3D_q1ep0")
+size = Vector3(3, 0.9, 0.12)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ox8ak"]
+material = SubResource("StandardMaterial3D_q1ep0")
+size = Vector2(11.1, 0.4)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_jjaa8"]
+material = SubResource("StandardMaterial3D_gik2o")
+size = Vector2(11.1, 0.4)
+
+[sub_resource type="BoxMesh" id="BoxMesh_1ccwd"]
+material = SubResource("StandardMaterial3D_5qfan")
+size = Vector3(0.2, 1.8, 0.2)
+
+[sub_resource type="BoxMesh" id="BoxMesh_556f6"]
+material = SubResource("StandardMaterial3D_q1ep0")
+size = Vector3(3, 0.9, 0.12)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_cv0oc"]
+material = SubResource("StandardMaterial3D_q1ep0")
+size = Vector2(11.1, 0.4)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_26j5h"]
+material = SubResource("StandardMaterial3D_gik2o")
+size = Vector2(11.1, 0.4)
+
+[sub_resource type="BoxMesh" id="BoxMesh_pyv6s"]
+material = SubResource("StandardMaterial3D_5qfan")
+size = Vector3(0.2, 1.8, 0.2)
+
+[sub_resource type="BoxMesh" id="BoxMesh_4t5dw"]
+material = SubResource("StandardMaterial3D_q1ep0")
+size = Vector3(3, 0.9, 0.12)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_pfpno"]
+material = SubResource("StandardMaterial3D_gik2o")
+size = Vector2(11.1, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_l65f3"]
+material = SubResource("StandardMaterial3D_5qfan")
+size = Vector3(0.25, 2.5, 0.25)
+
+[sub_resource type="BoxMesh" id="BoxMesh_rvirv"]
+material = SubResource("StandardMaterial3D_5qfan")
+size = Vector3(0.25, 2.5, 0.25)
+
+[node name="CarTurnSignalsCourse" type="Node3D" unique_id=138295068]
+
+[node name="ArenaPreview" type="Node3D" parent="." unique_id=287180495]
+script = ExtResource("1_r3c3n")
+arena = "car_arena"
+
+[node name="Markers" type="Node3D" parent="." unique_id=1004008981]
+
+[node name="SignalLine1" type="MeshInstance3D" parent="Markers" unique_id=976300131]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -115, 6.03, -35)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_wx74i")
+
+[node name="ClearLine1" type="MeshInstance3D" parent="Markers" unique_id=892694066]
+transform = Transform3D(-1, 0, 7.6293945e-06, 0, 1, 0, -7.6293945e-06, 0, -1, -70, 6.03, -55.000008)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_1iulk")
+
+[node name="Chevron1Post" type="MeshInstance3D" parent="Markers" unique_id=219448412]
+transform = Transform3D(0.7071069, 0, 0.70710665, 0, 1, 0, -0.70710665, 0, 0.7071069, -67.64053, 6.9, -32.640526)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_ec3hg")
+
+[node name="Chevron1" type="MeshInstance3D" parent="Markers" unique_id=1252971893]
+transform = Transform3D(0.7071069, 0, 0.70710665, 0, 1, 0, -0.70710665, 0, 0.7071069, -67.64053, 7.8, -32.640526)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_1wxw4")
+
+[node name="SignalLine2" type="MeshInstance3D" parent="Markers" unique_id=322835552]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -70, 6.03, -80)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_eeamc")
+
+[node name="ClearLine2" type="MeshInstance3D" parent="Markers" unique_id=1633168516]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -50.000015, 6.03, -124.99999)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_aobtm")
+
+[node name="Chevron2Post" type="MeshInstance3D" parent="Markers" unique_id=1933298313]
+transform = Transform3D(-0.70710677, 0, -0.70710677, 0, 1, 0, 0.70710677, 0, -0.70710677, -72.35947, 6.9, -127.35947)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_usrrt")
+
+[node name="Chevron2" type="MeshInstance3D" parent="Markers" unique_id=880703408]
+transform = Transform3D(-0.70710677, 0, -0.70710677, 0, 1, 0, 0.70710677, 0, -0.70710677, -72.35947, 7.8, -127.35947)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_41nqb")
+
+[node name="SignalLine3" type="MeshInstance3D" parent="Markers" unique_id=270794381]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -25, 6.03, -125)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_ox8ak")
+
+[node name="ClearLine3" type="MeshInstance3D" parent="Markers" unique_id=1299424674]
+transform = Transform3D(1, 0, -1.9073341e-06, 0, 1, 0, 1.9073341e-06, 0, 1, 20.000002, 6.03, -104.99998)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_jjaa8")
+
+[node name="Chevron3Post" type="MeshInstance3D" parent="Markers" unique_id=1839417527]
+transform = Transform3D(-0.70710665, 0, 0.7071069, 0, 1, 0, -0.7071069, 0, -0.70710665, 22.359472, 6.9, -127.35947)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_1ccwd")
+
+[node name="Chevron3" type="MeshInstance3D" parent="Markers" unique_id=101252171]
+transform = Transform3D(-0.70710665, 0, 0.7071069, 0, 1, 0, -0.7071069, 0, -0.70710665, 22.359472, 7.8, -127.35947)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_556f6")
+
+[node name="SignalLine4" type="MeshInstance3D" parent="Markers" unique_id=1540333978]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 6.03, -80)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_cv0oc")
+
+[node name="ClearLine4" type="MeshInstance3D" parent="Markers" unique_id=1915973374]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 40, 6.03, -35)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_26j5h")
+
+[node name="Chevron4Post" type="MeshInstance3D" parent="Markers" unique_id=133348633]
+transform = Transform3D(0.70710677, 0, -0.70710677, 0, 1, 0, 0.70710677, 0, 0.70710677, 17.64053, 6.9, -32.64053)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_pyv6s")
+
+[node name="Chevron4" type="MeshInstance3D" parent="Markers" unique_id=635668933]
+transform = Transform3D(0.70710677, 0, -0.70710677, 0, 1, 0, 0.70710677, 0, 0.70710677, 17.64053, 7.8, -32.64053)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_4t5dw")
+
+[node name="FinishLine" type="MeshInstance3D" parent="Markers" unique_id=164650696]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 90, 6.03, -35)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_pfpno")
+
+[node name="FinishPostL" type="MeshInstance3D" parent="Markers" unique_id=290902436]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 90, 7.25, -27.95)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_l65f3")
+
+[node name="FinishPostR" type="MeshInstance3D" parent="Markers" unique_id=2033593293]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 90, 7.25, -42.05)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_rvirv")
+
+[node name="Spawn" type="Marker3D" parent="." unique_id=1315128417]
+transform = Transform3D(3.8146973e-06, 0, -1, 0, 1, 0, 1, 0, 3.8146973e-06, -152, 6.6, -35)
+script = ExtResource("2_i5dr0")
+vehicle_types = PackedStringArray("car")
+
+[node name="Signal1" type="Node3D" parent="." unique_id=36539428]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -100, 8, -35)
+script = ExtResource("3_5ensw")
+size = Vector3(24, 6, 30)
+
+[node name="Clear1" type="Node3D" parent="." unique_id=1534419334]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -70, 8, -63.500008)
+script = ExtResource("3_5ensw")
+size = Vector3(24, 6, 17)
+
+[node name="Signal2" type="Node3D" parent="." unique_id=1411531975]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -70, 8, -95)
+script = ExtResource("3_5ensw")
+size = Vector3(24, 6, 30)
+
+[node name="Clear2" type="Node3D" parent="." unique_id=547502766]
+transform = Transform3D(-7.6293945e-06, 0, 1, 0, 1, 0, -1, 0, -7.6293945e-06, -41.500015, 8, -125)
+script = ExtResource("3_5ensw")
+size = Vector3(24, 6, 17)
+
+[node name="Signal3" type="Node3D" parent="." unique_id=1533927160]
+transform = Transform3D(-7.6293945e-06, 0, 1, 0, 1, 0, -1, 0, -7.6293945e-06, -10, 8, -125)
+script = ExtResource("3_5ensw")
+size = Vector3(24, 6, 30)
+
+[node name="Clear3" type="Node3D" parent="." unique_id=123283946]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19.999998, 8, -96.49997)
+script = ExtResource("3_5ensw")
+size = Vector3(24, 6, 17)
+
+[node name="Signal4" type="Node3D" parent="." unique_id=1493838842]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 8, -65)
+script = ExtResource("3_5ensw")
+size = Vector3(24, 6, 30)
+
+[node name="Clear4" type="Node3D" parent="." unique_id=967495008]
+transform = Transform3D(3.814712e-06, 0, 1, 0, 1, 0, -1, 0, 3.814712e-06, 48.500004, 8, -35)
+script = ExtResource("3_5ensw")
+size = Vector3(24, 6, 17)
+
+[node name="Finish" type="Node3D" parent="." unique_id=1068769467]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 90, 8, -35)
+script = ExtResource("3_5ensw")
+size = Vector3(24, 6, 1)

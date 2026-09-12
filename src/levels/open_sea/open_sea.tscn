@@ -1,0 +1,40 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://src/levels/base/level.gd" id="1_level"]
+[ext_resource type="Resource" path="res://src/levels/open_sea/open_sea_info.tres" id="2_info"]
+[ext_resource type="Resource" path="res://src/levels/open_sea/open_sea_wind.tres" id="3_wind"]
+[ext_resource type="Script" path="res://src/vehicles/base/chase_camera.gd" id="4_cam"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="5_spawn"]
+[ext_resource type="Environment" path="res://src/levels/base/default_env.tres" id="6_env"]
+[ext_resource type="Script" path="res://src/water/water_surface.gd" id="7_water"]
+
+[node name="OpenSea" type="Node3D"]
+script = ExtResource("1_level")
+info = ExtResource("2_info")
+wind = ExtResource("3_wind")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("6_env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, 0.353553, -0.353553, 0, 0.707107, 0.707107, 0.5, -0.612372, 0.612372, 0, 40, 0)
+light_color = Color(1, 0.96, 0.88, 1)
+shadow_enabled = true
+directional_shadow_blend_splits = true
+directional_shadow_max_distance = 150.0
+
+[node name="ChaseCamera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 6)
+script = ExtResource("4_cam")
+
+[node name="WaterSpawn" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
+script = ExtResource("5_spawn")
+vehicle_types = PackedStringArray("boat")
+is_water = true
+
+[node name="Sea" type="Area3D" parent="."]
+script = ExtResource("7_water")
+size = Vector2(4000, 4000)
+depth = 10.0
+infinite = true

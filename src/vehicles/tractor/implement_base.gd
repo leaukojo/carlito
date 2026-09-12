@@ -74,6 +74,14 @@ func mast_offset() -> Vector2:
 	return HitchLinkage.DEFAULT_MAST_OFFSET
 
 
+## Nodes ThreePointHitch.attach() must hand to StaticMeshMerge as a skip list — anything THIS
+## implement moves, scales or re-materials individually every tick (Spreader's Gate/RamRod).
+## Empty by default: most implements only rotate whole pivots (Rotor, DepthWheel), which
+## StaticMeshMerge folds freely since the pivot itself still carries the merged children along.
+func static_merge_skip() -> Array[Node]:
+	return []
+
+
 ## True when this implement uses `conn` (readability helper over the bitmask).
 func uses(conn: Connection) -> bool:
 	return (connections() & int(conn)) != 0

@@ -1,0 +1,94 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/challenges/arena_preview.gd" id="1_brdtw"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="2_3ejii"]
+[ext_resource type="Script" path="res://src/challenges/challenge_zone.gd" id="3_0savx"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_5tpci"]
+albedo_color = Color(1, 0.5, 0.05, 1)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_myxrt"]
+material = SubResource("StandardMaterial3D_5tpci")
+size = Vector2(11.1, 0.4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hq1vy"]
+albedo_color = Color(0.12, 0.12, 0.12, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="BoxMesh_heajw"]
+material = SubResource("StandardMaterial3D_hq1vy")
+size = Vector3(0.25, 2.5, 0.25)
+
+[sub_resource type="BoxMesh" id="BoxMesh_s4eu1"]
+material = SubResource("StandardMaterial3D_hq1vy")
+size = Vector3(0.25, 2.5, 0.25)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ooc1i"]
+albedo_color = Color(0.95, 0.95, 0.95, 1)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_jvqxo"]
+material = SubResource("StandardMaterial3D_ooc1i")
+size = Vector2(11.1, 0.4)
+
+[sub_resource type="BoxMesh" id="BoxMesh_808g3"]
+material = SubResource("StandardMaterial3D_hq1vy")
+size = Vector3(0.25, 2.5, 0.25)
+
+[sub_resource type="BoxMesh" id="BoxMesh_i75db"]
+material = SubResource("StandardMaterial3D_hq1vy")
+size = Vector3(0.25, 2.5, 0.25)
+
+[node name="CarSpeedTrapCourse" type="Node3D" unique_id=706805156]
+
+[node name="ArenaPreview" type="Node3D" parent="." unique_id=1218846827]
+script = ExtResource("1_brdtw")
+arena = "car_arena"
+
+[node name="Spawn" type="Marker3D" parent="." unique_id=1825244259]
+transform = Transform3D(6.123032e-17, 0, -1, 0, 1, 0, 1, 0, 6.123032e-17, -150, 6.6, -6.123032e-16)
+script = ExtResource("2_3ejii")
+vehicle_types = PackedStringArray("car")
+
+[node name="Trap" type="Node3D" parent="." unique_id=486752307]
+transform = Transform3D(-6.123055e-17, 0, 1, 0, 1, 0, -1, 0, -6.123055e-17, 40, 8, -1.22460635e-14)
+script = ExtResource("3_0savx")
+size = Vector3(11.1, 6, 160)
+
+[node name="TrapExit" type="Node3D" parent="." unique_id=1197464374]
+transform = Transform3D(-6.1229093e-17, 0, 1, 0, 1, 0, -1, 0, -6.1229093e-17, 120.5, 8, -1.7175104e-14)
+script = ExtResource("3_0savx")
+size = Vector3(11.1, 6, 1)
+
+[node name="Markers" type="Node3D" parent="." unique_id=1539062350]
+
+[node name="TrapStartLine" type="MeshInstance3D" parent="Markers" unique_id=563326813]
+transform = Transform3D(-6.123032e-17, 0, 1, 0, 1, 0, -1, 0, -6.123032e-17, -40, 6.03, -7.347638e-15)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_myxrt")
+
+[node name="TrapStartPostL" type="MeshInstance3D" parent="Markers" unique_id=878779831]
+transform = Transform3D(-6.123032e-17, 0, 1, 0, 1, 0, -1, 0, -6.123032e-17, -40, 7.25, 7.05)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_heajw")
+
+[node name="TrapStartPostR" type="MeshInstance3D" parent="Markers" unique_id=398788401]
+transform = Transform3D(-6.123032e-17, 0, 1, 0, 1, 0, -1, 0, -6.123032e-17, -40, 7.25, -7.05)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_s4eu1")
+
+[node name="TrapEndLine" type="MeshInstance3D" parent="Markers" unique_id=923576479]
+transform = Transform3D(-6.123032e-17, 0, 1, 0, 1, 0, -1, 0, -6.123032e-17, 120, 6.03, -1.7144489e-14)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_jvqxo")
+
+[node name="TrapEndPostL" type="MeshInstance3D" parent="Markers" unique_id=1501725592]
+transform = Transform3D(-6.123032e-17, 0, 1, 0, 1, 0, -1, 0, -6.123032e-17, 120, 7.25, 7.05)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_808g3")
+
+[node name="TrapEndPostR" type="MeshInstance3D" parent="Markers" unique_id=1501329300]
+transform = Transform3D(-6.123032e-17, 0, 1, 0, 1, 0, -1, 0, -6.123032e-17, 120, 7.25, -7.05)
+cast_shadow = 0
+mesh = SubResource("BoxMesh_i75db")

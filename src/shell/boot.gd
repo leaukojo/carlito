@@ -2,9 +2,11 @@ extends Node3D
 ## Shell composing independent level/UI scenes (no main.tscn). Deep link → saved session →
 ## DEFAULT_LEVEL. PROCESS_MODE_ALWAYS (set in boot.tscn) keeps menus running while paused.
 
-## First-visit default: the dressed island (farm, coast roads, water). 1.8 MB bake, well
-## under level_3's 13.9 MB, which a first visit must never wait on.
-const DEFAULT_LEVEL := "level_1"
+const WorldConditions := preload("res://src/levels/base/world_conditions.gd")
+
+## First-visit default: the endless flat ground. No bake to download, so a first visit never
+## waits on one (level_3's is 13.9 MB).
+const DEFAULT_LEVEL := "flatland"
 
 ## Every screen parents to the UiScale Control (not the CanvasLayer): that's where the
 ## scaled theme lives, and a Control only inherits a theme from Control ancestors.
@@ -18,18 +20,22 @@ const DEFAULT_LEVEL := "level_1"
 const NOTICE_DWELL_S := 3.0
 
 ## Frames the loading screen stays up after the level enters the tree: gl_compatibility
-## compiles each material's shader on its first draw, which happens the frame after
-## add_child. Holding the overlay a few frames keeps that stall off-screen. Only covers
-## what's visible at spawn; geometry scrolled into view later still compiles on arrival.
+## compiles each material's shader on its first draw, and ShaderWarmup makes that first draw
+## the whole level's, the frame after add_child. Holding the overlay a few frames keeps the
+## stall off-screen.
 const HOLD_FRAMES := 3
 
 var _level: Node3D = null
 var _select: LevelSelect = null
 var _vehicles: VehicleSelect = null
+var _challenges: ChallengeSelect = null
 var _pause: PauseMenu = null
 var _loading: LoadingScreen = null
 var _loading_path := ""  # non-empty while a threaded level load is in flight
+var _packs: LevelPacks = null
+var _fetching := false  # _loading_path's level pack is downloading; the load starts after
 var _hold_frames := 0  # see HOLD_FRAMES
+var _warmup: ShaderWarmup = null  # in effect for exactly the HOLD_FRAMES
 var _next_variant := ""  # variant the level now loading should spawn ("" = its own default)
 ## Whether this session writes itself to user://. False for a deep link (must not overwrite
 ## an explicit link's intent) and under headless (CI must not inherit a local session).
@@ -38,8 +44,32 @@ var _coach_shown := false
 ## Families coached this session (see _maybe_coach). Not persisted: the aircraft cue teaches
 ## a control set only relevant while flying, so it reappears each new flight of a session.
 var _coached_families := {}
-## Density to restore when F2 un-hides the cluster (a session that boots at OFF comes back to AUTO).
-var _density_before_hide: int = Dashboard.Density.AUTO
+## CONDITIONS page state, kept for the session only (ShellPrefs stays disabled) and re-applied to
+## every level this loads (`_finish_load`) and on change (`_on_conditions_changed`).
+var _wind_preset: int = WorldConditions.Preset.LEVEL
+var _current_preset: int = WorldConditions.Preset.LEVEL
+var _wind_from_deg := 0.0
+## Tracks GameState.night_changed rather than being written independently, so the N key and the
+## CONDITIONS page can never disagree about which one is true.
+var _night := false
+## The attempt in progress, or null for free play. While set, driving is bridge-only and nothing
+## that would undo the attempt (vehicle swap, attachment cycle, day/night, CONDITIONS) is honoured.
+var _challenge: ChallengeDef = null
+## The session's night choice, held while a challenge forces the level's own day lighting.
+var _night_before_challenge := false
+const CHALLENGE_LOCKED_TEXT := "LOCKED DURING A CHALLENGE"
+## Runs the attempt in progress, under the level; null in free play.
+var _runner: ChallengeRunner = null
+## The objective/timer readout while `_runner` is running; null in free play.
+var _challenge_hud: ChallengeHud = null
+## The pass/fail result panel (RETRY / NEXT / MENU); null once dismissed.
+var _result: ChallengeResult = null
+## The challenge to begin once the level now loading is up (`_start_challenge`).
+var _pending_challenge: ChallengeDef = null
+var _progress: ChallengeProgress = null
+## The running challenge's briefing, reopened read-only from the touch INFO button; null once
+## dismissed.
+var _briefing: ChallengeBriefing = null
 
 
 func _ready() -> void:
@@ -50,13 +80,20 @@ func _ready() -> void:
 
 	_touch.menu_pressed.connect(_open_pause)
 	_touch.garage_pressed.connect(_open_vehicle_select)
-	_touch.respawn_pressed.connect(_respawn)
+	_touch.level_pressed.connect(_show_level_select)
+	_touch.challenge_pressed.connect(_show_challenge_select)
 	_touch.next_attachment_pressed.connect(_cycle_attachment)
 	_touch.camera_pressed.connect(_cycle_camera)
-	_touch.day_night_pressed.connect(_toggle_day_night)
+	_touch.retry_pressed.connect(_on_touch_retry)
+	_touch.info_pressed.connect(_show_challenge_info)
 	GameState.attachment_changed.connect(_refresh_attachment_controls)
+	GameState.night_changed.connect(_on_level_night_changed)
 	GameState.notice.connect(_show_notice)
 	GameState.notice_cleared.connect(_clear_notice)
+	_packs = LevelPacks.new()
+	_packs.finished.connect(_on_pack_finished)
+	add_child(_packs)
+	_progress = ChallengeProgress.open()
 	# Set before the first bind so nothing builds twice.
 	_dashboard.set_density_setting(ShellPrefs.dashboard_density())
 	_ui.set_user_scale(ShellPrefs.ui_scale())
@@ -69,6 +106,13 @@ func _ready() -> void:
 ## an unknown level/save falls back instead of booting into nothing. Also the headless CI
 ## path: reaching a level never requires a menu.
 func _boot() -> void:
+	# A debug build's `--challenge=` goes straight into an attempt, and like a deep link is never
+	# remembered as the session.
+	var challenge_id := BootParams.challenge()
+	if challenge_id != "":
+		_persist = false
+		_start_challenge(ChallengeRegistry.def_of(challenge_id, true))
+		return
 	var params := BootParams.resolve()
 	var level_id := String(params["level"])
 	var variant := String(params["vehicle"])
@@ -94,6 +138,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_cycle_attachment()
 	elif event.is_action_pressed("toggle_dashboard"):
 		_toggle_dashboard()
+	elif event.is_action_pressed("level_select"):
+		_show_level_select()
+	elif event.is_action_pressed("challenge_select"):
+		_show_challenge_select()
 
 
 ## Swap to the next variant in the current family (V key / touch NEXT). Reuses the
@@ -101,6 +149,8 @@ func _unhandled_input(event: InputEvent) -> void:
 ## body only, never an attachment — that's E's axis, and the two never interact.
 func _cycle_vehicle() -> void:
 	if _level == null or _level.vehicle == null:
+		return
+	if _refused_in_challenge():
 		return
 	_level.set_vehicle(VehicleCatalog.next_in_family(GameState.current_variant))
 
@@ -111,6 +161,8 @@ func _cycle_vehicle() -> void:
 ## trailer is.
 func _cycle_attachment() -> void:
 	if _level == null or _level.vehicle == null:
+		return
+	if not (_challenge != null and _challenge.allow_attach_key) and _refused_in_challenge():
 		return
 	if _level.vehicle.has_method("cycle_implement"):
 		_level.vehicle.cycle_implement()
@@ -151,6 +203,162 @@ static func _or_into(caps: Dictionary, extra: Dictionary) -> void:
 		caps[k] = bool(caps.get(k, false)) or bool(extra[k])
 
 
+# --- challenge lock ------------------------------------------------------------
+
+## Load the def's arena with its body, and begin the attempt once the level is up
+## (`_finish_load`).
+func _start_challenge(def: ChallengeDef) -> void:
+	_end_challenge()
+	_pending_challenge = def
+	_load_level(LevelRegistry.scene_of(def.arena), def.variant)
+
+
+## Enter an attempt on the level already loaded: bridge-only driving, the touch driving pads
+## down, and the session's CONDITIONS suspended so the level runs its own authored wind, current
+## and day. Camera, respawn, the menu and LEVEL stay live. A ChallengeRunner under the level runs
+## the attempt itself.
+func _begin_challenge(def: ChallengeDef) -> void:
+	_challenge = def
+	InputRouter.set_bridge_only(true)
+	_touch.set_driving_locked(true)
+	_touch.set_challenge_mode(true)
+	if _level != null:
+		_level.day_night_locked = true
+		# Read before set_night: GameState.night_changed overwrites _night.
+		_night_before_challenge = _night
+		_level.set_conditions(WorldConditions.Preset.LEVEL, WorldConditions.Preset.LEVEL, 0.0)
+		_level.set_night(false)
+		# After set_night: the runner lays the def's visibility over the day lighting and restores
+		# that.
+		_runner = ChallengeRunner.new()
+		_runner.setup(def)
+		_runner.finished.connect(_on_challenge_finished)
+		_level.add_child(_runner)
+		_challenge_hud = ChallengeHud.new()
+		_challenge_hud.set_runner(_runner)
+		_ui.add_child(_challenge_hud)
+		print("Challenge '%s' on %s (%s)" % [def.id, def.arena, def.variant])
+
+
+## Leave the attempt: free play again, with the session's CONDITIONS put back.
+func _end_challenge() -> void:
+	if _challenge == null:
+		return
+	_challenge = null
+	InputRouter.set_bridge_only(false)
+	_touch.set_driving_locked(false)
+	_touch.set_challenge_mode(false)
+	_close_challenge_info()
+	_close_result()
+	if is_instance_valid(_challenge_hud):
+		_challenge_hud.queue_free()
+	_challenge_hud = null
+	if is_instance_valid(_runner):
+		# Before set_night below: the runner puts back the day lighting it found.
+		_runner.end()
+		_runner.queue_free()
+	_runner = null
+	if _level != null:
+		_level.day_night_locked = false
+		_level.set_conditions(_wind_preset, _current_preset, _wind_from_deg)
+		_level.set_night(_night_before_challenge)
+
+
+## The attempt passed or failed: a result panel (RETRY / NEXT / MENU), and a pass is recorded (a
+## dev fixture's id is unknown to the store, so it never is).
+func _on_challenge_finished(passed: bool, elapsed_s: float, message: String) -> void:
+	if _challenge == null:
+		return
+	_touch.set_challenge_mode(false)  # the result panel takes over; RETRY/INFO reappear on retry
+	_close_challenge_info()
+	var def := _challenge
+	var is_new_best := passed and _progress.record_pass(def.id, elapsed_s)
+	_close_result()
+	_result = ChallengeResult.new()
+	_result.setup(def, passed, elapsed_s, message, _progress.best_time(def.id), is_new_best,
+			_next_challenge_after(def) != null)
+	_result.retry_requested.connect(_on_result_retry)
+	_result.next_requested.connect(_on_result_next)
+	_result.menu_requested.connect(_on_result_menu)
+	_ui.add_child(_result)
+
+
+func _close_result() -> void:
+	if _result != null:
+		_result.queue_free()
+		_result = null
+
+
+## Same respawn the R key performs mid-attempt — the runner resets the attempt on any respawn.
+func _on_result_retry() -> void:
+	_close_result()
+	_touch.set_challenge_mode(true)
+	_respawn()
+
+
+## The touch RETRY button, live only while an attempt is running (no result panel to close).
+func _on_touch_retry() -> void:
+	if _challenge != null:
+		_respawn()
+
+
+## The touch INFO button: the running def's briefing again, read-only. Pauses like every other
+## overlay so reading it costs nothing off the attempt's own timer.
+func _show_challenge_info() -> void:
+	if _challenge == null or _loading_path != "" or _briefing != null:
+		return
+	_briefing = ChallengeBriefing.new()
+	_briefing.setup(_challenge)
+	_briefing.closed.connect(_close_challenge_info)
+	_ui.add_child(_briefing)
+	_touch.set_active(false)
+	get_tree().paused = true
+
+
+func _close_challenge_info() -> void:
+	if _briefing == null:
+		return
+	_briefing.queue_free()
+	_briefing = null
+	if _pause == null:
+		get_tree().paused = false
+		_touch.set_active(_level != null)
+
+
+## Not straight into the next attempt: the CHALLENGES screen on its briefing, so the player reads
+## what to do before START. The finished attempt ends here, so BACK lands in free play like MENU.
+func _on_result_next() -> void:
+	var next := _next_challenge_after(_challenge)
+	_close_result()
+	_end_challenge()
+	if next != null:
+		_show_challenge_select(next.id)
+
+
+func _on_result_menu() -> void:
+	_close_result()
+	_end_challenge()
+
+
+## The next challenge sharing `def`'s family, in registry order, or null past the last one.
+func _next_challenge_after(def: ChallengeDef) -> ChallengeDef:
+	if def == null:
+		return null
+	var siblings := ChallengeRegistry.in_family(def.family())
+	for i in siblings.size():
+		if siblings[i].id == def.id:
+			return siblings[i + 1] if i + 1 < siblings.size() else null
+	return null
+
+
+## True (and says why) when an attempt is in progress, for the controls that would undo it.
+func _refused_in_challenge() -> bool:
+	if _challenge == null:
+		return false
+	GameState.notice.emit(CHALLENGE_LOCKED_TEXT, 0.0)
+	return true
+
+
 # --- pause overlay -----------------------------------------------------------
 
 ## Esc (or touch MENU) walks the overlay stack out the way it came in, and only then resumes.
@@ -160,6 +368,10 @@ func _on_menu_key() -> void:
 		_close_vehicle_select()
 	elif _select != null:
 		_close_level_select()
+	elif _challenges != null:
+		_close_challenge_select()
+	elif _briefing != null:
+		_close_challenge_info()
 	elif _pause == null:
 		_open_pause()
 	elif not _pause.back():
@@ -171,12 +383,14 @@ func _open_pause() -> void:
 		return  # nothing to pause, or a level load is in flight
 	_pause = PauseMenu.new()
 	# Before add_child: CONTROLS sheet greys what the machine lacks, off the same capability read.
-	_pause.setup(_capabilities(), _dashboard.density_setting(), _ui.user_scale())
+	_pause.setup(_capabilities(), _dashboard.density_setting(), _ui.user_scale(),
+			_wind_preset, _current_preset, _wind_from_deg, _night, _challenge != null)
 	_pause.resume_requested.connect(_close_pause)
-	_pause.vehicle_requested.connect(_open_vehicle_select)
-	_pause.level_requested.connect(_show_level_select)
+	_pause.respawn_requested.connect(_on_pause_respawn)
 	_pause.dashboard_density_changed.connect(_on_density_changed)
 	_pause.ui_scale_changed.connect(_on_ui_scale_changed)
+	_pause.conditions_changed.connect(_on_conditions_changed)
+	_pause.night_toggled.connect(_on_night_toggled)
 	_ui.add_child(_pause)
 	# Hiding the pads also releases anything held (Pad drops its pointer when invisible).
 	_touch.set_active(false)
@@ -186,6 +400,7 @@ func _open_pause() -> void:
 func _close_pause() -> void:
 	_close_vehicle_select()
 	_close_level_select()
+	_close_challenge_select()
 	if _pause != null:
 		_pause.queue_free()
 		_pause = null
@@ -207,39 +422,112 @@ func _on_ui_scale_changed(factor: float) -> void:
 	ShellPrefs.set_ui_scale(factor)
 
 
-## F2: hide the instrument cluster and restore it after. Moves the same density setting the
-## SETTINGS page cycles, so the menu and the key can never disagree about dashboard state.
+## F2: cycles the same density setting the SETTINGS page's button does, so the menu and the key
+## can never disagree about dashboard state.
 func _toggle_dashboard() -> void:
-	if _dashboard.density_setting() == Dashboard.Density.OFF:
-		_on_density_changed(_density_before_hide)
-	else:
-		_density_before_hide = _dashboard.density_setting()
-		_on_density_changed(Dashboard.Density.OFF)
+	_on_density_changed(Dashboard.next_setting(_dashboard.density_setting()))
+
+
+## RESPAWN on the pause menu: close the overlay first, or the respawn happens under a paused tree.
+func _on_pause_respawn() -> void:
+	_close_pause()
+	_respawn()
+
+
+## CONDITIONS picked a new wind/current preset or compass direction. Kept for the session
+## (ShellPrefs stays disabled) and applied to the current level; `_finish_load` re-applies it to
+## whatever loads next.
+func _on_conditions_changed(wind_preset: int, current_preset: int, from_deg: float) -> void:
+	_wind_preset = wind_preset
+	_current_preset = current_preset
+	_wind_from_deg = from_deg
+	if _level != null:
+		_level.set_conditions(_wind_preset, _current_preset, _wind_from_deg)
+
+
+## CONDITIONS picked day/night directly (as opposed to the N key, which flips it). `_night`
+## itself is written from GameState.night_changed (`_on_level_night_changed`), not here, so it
+## can never disagree with what the level actually did.
+func _on_night_toggled(on: bool) -> void:
+	if _level != null:
+		_level.set_night(on)
+
+
+## Keeps the shell's remembered night state in lock-step with the level's, whether it changed
+## from the N key, the CONDITIONS page, or a freshly loaded level's first-frame capture.
+func _on_level_night_changed(is_night: bool) -> void:
+	_night = is_night
 
 
 # --- level select ------------------------------------------------------------
 
-## The LEVEL section of the pause menu. Opening it does not tear the current level down —
-## that only happens once a different level is actually chosen.
+## LEVEL: reachable from the pause menu or the on-screen rail with no pause menu underneath, so
+## this pauses the world and hides the pads itself, mirroring _open_vehicle_select. Opening it
+## does not tear the current level down — that only happens once a different level is chosen.
 func _show_level_select() -> void:
-	if _select != null:
+	if _level == null or _loading_path != "" or _select != null:
 		return
 	_select = LevelSelect.new()
 	_select.level_chosen.connect(_on_level_chosen)
 	_select.closed.connect(_close_level_select)
 	_ui.add_child(_select)
+	_touch.set_active(false)
+	get_tree().paused = true
 
 
 func _close_level_select() -> void:
-	if _select != null:
-		_select.queue_free()
-		_select = null
+	if _select == null:
+		return
+	_select.queue_free()
+	_select = null
+	# The pause menu may be underneath (the 4 key works while paused), in which case the world
+	# stays paused and the driving pads stay down until RESUME.
+	if _pause == null:
+		get_tree().paused = false
+		_touch.set_active(_level != null)
 
 
 func _on_level_chosen(scene_path: String) -> void:
+	_end_challenge()  # picking a level leaves the attempt; the lock must not follow into free play
 	_close_level_select()
 	_close_pause()  # unpauses: the level about to load must not spawn into a paused tree
 	_load_level(scene_path)
+
+
+# --- challenge selector --------------------------------------------------------
+
+## CHALLENGES: reachable from the pause menu or the on-screen rail with no pause menu underneath,
+## mirroring _show_level_select. Reachable during an attempt too (like LEVEL) — picking a
+## challenge there ends the one in progress the same way picking a level does.
+## `open_id` opens the screen on that challenge's briefing instead of the grid.
+func _show_challenge_select(open_id := "") -> void:
+	if _level == null or _loading_path != "" or _challenges != null:
+		return
+	_challenges = ChallengeSelect.new()
+	_challenges.setup(_progress, open_id)
+	_challenges.challenge_chosen.connect(_on_challenge_picked)
+	_challenges.closed.connect(_close_challenge_select)
+	_ui.add_child(_challenges)
+	_touch.set_active(false)
+	get_tree().paused = true
+
+
+func _close_challenge_select() -> void:
+	if _challenges == null:
+		return
+	_challenges.queue_free()
+	_challenges = null
+	# The pause menu may be underneath (5 works while paused), in which case the world stays
+	# paused and the driving pads stay down until RESUME.
+	if _pause == null:
+		get_tree().paused = false
+		_touch.set_active(_level != null)
+
+
+func _on_challenge_picked(id: String) -> void:
+	_close_challenge_select()
+	_close_pause()
+	_start_challenge(ChallengeRegistry.def_of(id))
 
 
 ## Kick off a threaded level load behind a loading screen; _process polls progress.
@@ -260,8 +548,25 @@ func _load_level(scene_path: String, variant := "") -> void:
 	_loading = LoadingScreen.new()
 	_ui.add_child(_loading)  # in the tree first: dresses itself with theme-scaled metrics
 	_loading.set_level(scene_path)
+	# The web export is single-threaded, so the "threaded" request below runs the whole load
+	# inside the call. Draw the loading screen first, or the boot load happens before the first
+	# frame, under the HTML shell's stalled progress bar.
+	await RenderingServer.frame_post_draw
 	_loading_path = scene_path
+	if LevelPacks.needs_fetch(scene_path):
+		_fetching = true
+		_packs.fetch(LevelRegistry.id_of(scene_path))  # _on_pack_finished starts the load
+		return
 	ResourceLoader.load_threaded_request(scene_path, "", true)  # parallel sub-resource loads
+
+
+## The level's pack is mounted, or could not be fetched.
+func _on_pack_finished(ok: bool) -> void:
+	_fetching = false
+	if ok:
+		ResourceLoader.load_threaded_request(_loading_path, "", true)
+	else:
+		_load_failed()
 
 
 func _process(_delta: float) -> void:
@@ -271,6 +576,9 @@ func _process(_delta: float) -> void:
 			_drop_loading_screen()
 		return
 	if _loading_path == "":
+		return
+	if _fetching:
+		_loading.set_download(_packs.downloaded_bytes())
 		return
 	var progress: Array = []
 	var status := ResourceLoader.load_threaded_get_status(_loading_path, progress)
@@ -284,23 +592,32 @@ func _process(_delta: float) -> void:
 			# Instantiate blocks this frame (level._ready spawns synchronously); the loading
 			# screen stays up over the freeze and for HOLD_FRAMES more for the shader compile.
 			_finish_load(scene)
+			_warmup = ShaderWarmup.begin(_level)
 			_hold_frames = HOLD_FRAMES
 		_:
-			var failed := _loading_path
-			push_error("Level load failed: %s" % failed)
-			_loading_path = ""
-			_drop_loading_screen()
-			# Fall back to the default level, unless that's the one that just failed —
-			# another attempt would only loop.
-			var default_scene := LevelRegistry.scene_of(DEFAULT_LEVEL)
-			if failed != default_scene:
-				_load_level(default_scene)
+			_load_failed()
+
+
+func _load_failed() -> void:
+	_pending_challenge = null  # its arena is what failed; the fallback level is free play
+	var failed := _loading_path
+	push_error("Level load failed: %s" % failed)
+	_loading_path = ""
+	_drop_loading_screen()
+	# Fall back to the default level, unless that's the one that just failed —
+	# another attempt would only loop.
+	var default_scene := LevelRegistry.scene_of(DEFAULT_LEVEL)
+	if failed != default_scene:
+		_load_level(default_scene)
 
 
 ## Take the loading overlay down. Safe with nothing up; clears the countdown so a level
 ## chosen during the hold can't leave a stale timer pointing at a freed screen.
 func _drop_loading_screen() -> void:
 	_hold_frames = 0
+	if _warmup != null:
+		_warmup.end()
+		_warmup = null
 	if _loading != null:
 		_loading.queue_free()
 		_loading = null
@@ -314,19 +631,32 @@ func _finish_load(scene: PackedScene) -> void:
 	_next_variant = ""
 	# This node is PROCESS_MODE_ALWAYS; the level would inherit that, so put back explicitly.
 	_level.process_mode = Node.PROCESS_MODE_PAUSABLE
+	# Read before add_child: the level's _ready broadcasts its authored day through
+	# GameState.night_changed, which overwrites _night.
+	var night := _night
 	add_child(_level)  # level._ready() spawns the vehicle synchronously here
+	# CONDITIONS is a session setting (ShellPrefs stays disabled), so every level this loads gets
+	# the same wind/current/night the player picked, not the level's own authored defaults.
+	_level.set_conditions(_wind_preset, _current_preset, _wind_from_deg)
+	_level.set_night(night)
 	_level.vehicle_changed.connect(_on_vehicle_changed)
 	_bind_hud()
 	_set_hud_visible(true)
 	# Initial spawn already happened above, before the signal connected, so save here too.
 	_save_session()
 	_maybe_coach(GameState.current_vehicle)
+	if _pending_challenge != null:
+		var def := _pending_challenge
+		_pending_challenge = null
+		_begin_challenge(def)
 
 
 ## Remember where the player is, so a reload resumes it. No-op for a deep-linked or headless
-## run (see _persist).
+## run (see _persist), during an attempt, and anywhere on a challenge arena: an arena is reached
+## through a challenge, never the place to resume.
 func _save_session() -> void:
-	if not _persist or _level == null:
+	if not _persist or _level == null or _challenge != null \
+			or bool(LevelRegistry.entry_of(_level.scene_file_path).get("arena", false)):
 		return
 	ShellPrefs.save_boot(LevelRegistry.id_of(_level.scene_file_path), GameState.current_variant)
 
@@ -388,11 +718,13 @@ func _on_vehicle_changed(type: String) -> void:
 # --- vehicle selector --------------------------------------------------------
 
 ## The garage: body, variant and attachment on one screen with a preview. Pauses the world
-## whether opened from the pause menu or G: the preview is a real vehicle body in a
+## whether opened from the touch GARAGE button or G: the preview is a real vehicle body in a
 ## SubViewport, so a second live body while driving is a hazard, and it's a screen to read
 ## rather than drive through.
 func _open_vehicle_select() -> void:
 	if _level == null or _loading_path != "" or _vehicles != null:
+		return
+	if _refused_in_challenge():
 		return
 	_vehicles = VehicleSelect.new()
 	# Before add_child. The level's raw allow-list plus its runtime rail answer, never a
@@ -412,7 +744,7 @@ func _close_vehicle_select() -> void:
 		return
 	_vehicles.queue_free()
 	_vehicles = null
-	# The pause menu may be underneath (VEHICLE was opened from it), in which case the world stays
+	# The pause menu may be underneath (G works while paused), in which case the world stays
 	# paused and the driving pads stay down until RESUME.
 	if _pause == null:
 		get_tree().paused = false
@@ -451,12 +783,6 @@ func _on_attachment_picked(id: String) -> void:
 func _cycle_camera() -> void:
 	if _level != null:
 		_level.cycle_camera()
-
-
-## Touch NIGHT button. Day/night is a Level concern (N key reaches it directly); pure relay.
-func _toggle_day_night() -> void:
-	if _level != null:
-		_level.toggle_day_night()
 
 
 func _respawn() -> void:

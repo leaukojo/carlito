@@ -45,6 +45,14 @@ const TIP_INTERLOCK_NOTICE := "SET THE HANDBRAKE FIRST"
 static var _profile: CouplingProfile = null
 
 
+func _ready() -> void:
+	super._ready()
+	# Hanger/Bar/StayL/StayR/PinShank/PinHead: nothing here moves on its own, so one merged mesh
+	# replaces all six. Pin (the coupling datum TowHost._ready just read) is a Marker3D, never a
+	# merge candidate.
+	StaticMeshMerge.merge_subtree(self)
+
+
 func profile() -> CouplingProfile:
 	if _profile == null:
 		_profile = CouplingProfile.new()

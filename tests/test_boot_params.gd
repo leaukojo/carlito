@@ -28,6 +28,22 @@ func test_vehicle_is_the_variant_axis() -> void:
 	assert_bool(BootParams.is_vehicle("truck")).is_false()
 
 
+## The keyboard-drives-a-challenge override: either the user arg or the env var asks for it.
+func test_challenge_keys_come_from_the_arg_or_the_env() -> void:
+	assert_bool(BootParams.wants_challenge_keys(PackedStringArray(["--challenge-keys"]), "")).is_true()
+	assert_bool(BootParams.wants_challenge_keys(PackedStringArray(), "1")).is_true()
+	assert_bool(BootParams.wants_challenge_keys(PackedStringArray(["--level=flatland"]), "")).is_false()
+
+
+## The debug challenge boot: the arg overrides the env var, and `--challenge-keys` is not it.
+func test_challenge_comes_from_the_arg_or_the_env() -> void:
+	assert_str(BootParams.parse_challenge(PackedStringArray(["--challenge=dev_box_stop"]), "")) \
+			.is_equal("dev_box_stop")
+	assert_str(BootParams.parse_challenge(PackedStringArray(), "dev_box_stop")).is_equal("dev_box_stop")
+	assert_str(BootParams.parse_challenge(PackedStringArray(["--challenge=a"]), "b")).is_equal("a")
+	assert_str(BootParams.parse_challenge(PackedStringArray(["--challenge-keys"]), "")).is_equal("")
+
+
 ## Dev fixtures are hidden from level select but reachable by link — that is how CARLITO_LEVEL
 ## smokes them in CI.
 func test_level_ids_cover_the_whole_registry() -> void:

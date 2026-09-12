@@ -20,6 +20,7 @@ const SURFACE := Color(0.11, 0.13, 0.16, 0.94)   ## panels, cards, buttons
 const SURFACE_HI := Color(0.17, 0.20, 0.25, 0.96) ## hovered surface
 const SURFACE_LO := Color(0.08, 0.09, 0.11, 0.90) ## pressed / recessed
 const BORDER := Color(0.26, 0.30, 0.36, 0.85)
+const RIM := Color(0.27, 0.47, 0.65)             ## a button's keycap rim (ACCENT, darkened)
 const TEXT := Color(0.90, 0.93, 0.98)
 const TEXT_DIM := Color(0.62, 0.67, 0.74)
 const TEXT_MUTED := Color(0.42, 0.46, 0.52)      ## disabled
@@ -109,23 +110,19 @@ static func _build_button(t: Theme, scale: float) -> void:
 	t.set_color("font_pressed_color", "Button", TEXT)
 	t.set_color("font_focus_color", "Button", TEXT)
 	t.set_color("font_disabled_color", "Button", TEXT_MUTED)
-	t.set_stylebox("normal", "Button", _box(SURFACE, scale))
-	t.set_stylebox("hover", "Button", _box(SURFACE_HI, scale))
-	t.set_stylebox("pressed", "Button", _box(SURFACE_LO, scale))
-	t.set_stylebox("disabled", "Button", _box(SURFACE_LO, scale))
+	t.set_stylebox("normal", "Button", keycap(SURFACE, RIM, scale))
+	t.set_stylebox("hover", "Button", keycap(SURFACE_HI, ACCENT, scale))
+	t.set_stylebox("pressed", "Button", _pushed(keycap(SURFACE_LO, RIM, scale)))
+	# Flat, grey rim: a refused button must not look like a key waiting to be pressed.
+	t.set_stylebox("disabled", "Button", _pushed(keycap(SURFACE_LO, BORDER, scale)))
 	# The focus ring is the keyboard/gamepad affordance: without it nothing shows where focus is.
-	var focus := _box(SURFACE_HI, scale)
-	focus.border_color = ACCENT
-	focus.set_border_width_all(maxi(2, int(roundf(2.0 * scale))))
-	t.set_stylebox("focus", "Button", focus)
+	t.set_stylebox("focus", "Button", _ringed(keycap(SURFACE_HI, ACCENT, scale), scale))
 
 	# `Choice`: a toggle standing in a radio group (vehicle selector's family column). Selected
 	# gets the accent border, not the darker recessed `pressed` box, so selection never reads as
 	# a press.
 	t.set_type_variation(&"Choice", "Button")
-	var chosen := _box(SURFACE_LO, scale)
-	chosen.border_color = ACCENT
-	chosen.set_border_width_all(maxi(2, int(roundf(2.0 * scale))))
+	var chosen := _ringed(keycap(SURFACE_LO, ACCENT, scale), scale)
 	t.set_stylebox("pressed", &"Choice", chosen)
 	t.set_stylebox("hover_pressed", &"Choice", chosen)
 	t.set_color("font_pressed_color", &"Choice", ACCENT)
@@ -136,14 +133,13 @@ static func _build_button(t: Theme, scale: float) -> void:
 	# a refused DRIVE cannot look like the thing to press.
 	t.set_type_variation(&"Primary", "Button")
 	t.set_font_size("font_size", &"Primary", _fs(FS_TITLE, scale))
-	t.set_stylebox("normal", &"Primary", _box(ACCENT, scale))
-	t.set_stylebox("hover", &"Primary", _box(ACCENT.lightened(0.18), scale))
-	t.set_stylebox("pressed", &"Primary", _box(ACCENT.darkened(0.22), scale))
-	t.set_stylebox("disabled", &"Primary", _box(SURFACE_LO, scale))
-	var primary_focus := _box(ACCENT.lightened(0.18), scale)
-	primary_focus.border_color = TEXT
-	primary_focus.set_border_width_all(maxi(2, int(roundf(2.0 * scale))))
-	t.set_stylebox("focus", &"Primary", primary_focus)
+	var primary_rim := ACCENT.darkened(0.45)
+	t.set_stylebox("normal", &"Primary", keycap(ACCENT, primary_rim, scale))
+	t.set_stylebox("hover", &"Primary", keycap(ACCENT.lightened(0.18), primary_rim, scale))
+	t.set_stylebox("pressed", &"Primary", _pushed(keycap(ACCENT.darkened(0.22), primary_rim, scale)))
+	t.set_stylebox("disabled", &"Primary", _pushed(keycap(SURFACE_LO, BORDER, scale)))
+	t.set_stylebox("focus", &"Primary",
+			_ringed(keycap(ACCENT.lightened(0.18), TEXT, scale), scale))
 	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		t.set_color(state, &"Primary", BG)
 	t.set_color("font_disabled_color", &"Primary", TEXT_MUTED)
@@ -170,6 +166,35 @@ static func _build_containers(t: Theme, scale: float) -> void:
 	t.set_constant("separation", "HBoxContainer", gap)
 	t.set_constant("h_separation", "GridContainer", gap)
 	t.set_constant("v_separation", "GridContainer", gap)
+
+
+## The one button look: a raised key — thin rim, deeper bottom lip, light drop shadow. Theme
+## Buttons and the touch overlay's pads both take it, so a pad and a menu row read as one kind.
+static func keycap(bg: Color, rim: Color, scale: float) -> StyleBoxFlat:
+	var s := _box(bg, scale)
+	s.set_corner_radius_all(maxi(2, int(roundf(float(RADIUS + 2) * scale))))
+	s.border_color = rim
+	s.border_width_bottom = maxi(2, int(roundf(3.0 * scale)))
+	s.shadow_color = Color(0.0, 0.0, 0.0, 0.22)
+	s.shadow_size = maxi(1, int(roundf(2.0 * scale)))
+	s.shadow_offset = Vector2(0.0, roundf(scale))
+	return s
+
+
+## A keycap with a 2 px rim all round (focus, selection), keeping its bottom lip.
+static func _ringed(s: StyleBoxFlat, scale: float) -> StyleBoxFlat:
+	var w := maxi(2, int(roundf(2.0 * scale)))
+	var lip := s.border_width_bottom
+	s.set_border_width_all(w)
+	s.border_width_bottom = maxi(w, lip)
+	return s
+
+
+## A keycap held down: the lip and the shadow go, so it sits flush.
+static func _pushed(s: StyleBoxFlat) -> StyleBoxFlat:
+	s.border_width_bottom = 1
+	s.shadow_size = 0
+	return s
 
 
 static func _box(bg: Color, scale: float) -> StyleBoxFlat:

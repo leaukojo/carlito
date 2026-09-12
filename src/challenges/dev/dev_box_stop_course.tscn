@@ -1,0 +1,66 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/challenges/arena_preview.gd" id="1_sgbq4"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="2_flno4"]
+[ext_resource type="Script" path="res://src/challenges/challenge_zone.gd" id="3_j8d5m"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_oppna"]
+albedo_color = Color(0.95, 0.95, 0.95, 1)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_l24v2"]
+material = SubResource("StandardMaterial3D_oppna")
+size = Vector2(8, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7b4cn"]
+albedo_color = Color(1, 0.8, 0.1, 1)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ijmau"]
+material = SubResource("StandardMaterial3D_7b4cn")
+size = Vector2(4, 7)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_lyo2c"]
+albedo_color = Color(0.6, 0.1, 0.1, 1)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_0r73k"]
+material = SubResource("StandardMaterial3D_lyo2c")
+size = Vector2(10, 80)
+
+[node name="DevBoxStopCourse" type="Node3D" unique_id=613220806]
+
+[node name="ArenaPreview" type="Node3D" parent="." unique_id=167407532]
+script = ExtResource("1_sgbq4")
+arena = "flatland"
+
+[node name="Spawn" type="Marker3D" parent="." unique_id=27901577]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0.8, 0)
+script = ExtResource("2_flno4")
+vehicle_types = PackedStringArray("car")
+
+[node name="Gate" type="Node3D" parent="." unique_id=233325221]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 1, -30)
+script = ExtResource("3_j8d5m")
+size = Vector3(8, 4, 0.5)
+
+[node name="Box" type="Node3D" parent="." unique_id=507945931]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 1, -60)
+script = ExtResource("3_j8d5m")
+size = Vector3(4, 4, 7)
+
+[node name="Ditch" type="Node3D" parent="." unique_id=449975522]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 1, -40)
+script = ExtResource("3_j8d5m")
+size = Vector3(10, 4, 80)
+
+[node name="Markers" type="Node3D" parent="." unique_id=1989980337]
+
+[node name="GateLine" type="MeshInstance3D" parent="Markers" unique_id=1022561131]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0.02, -30)
+mesh = SubResource("PlaneMesh_l24v2")
+
+[node name="BoxPaint" type="MeshInstance3D" parent="Markers" unique_id=1925924068]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0.02, -60)
+mesh = SubResource("PlaneMesh_ijmau")
+
+[node name="DitchPaint" type="MeshInstance3D" parent="Markers" unique_id=2085601506]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 0.02, -40)
+mesh = SubResource("PlaneMesh_0r73k")

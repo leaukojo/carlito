@@ -2,7 +2,8 @@ class_name LevelRegistry
 extends Object
 ## Shell's playable-levels list: add a new entry + .tscn. `name` is menu label, `desc` is
 ## flavor text, `id` names the scene and screenshot. `dev: true` entries hidden from
-## level-select but included in bake/check/smoke tests.
+## level-select but included in bake/check/smoke tests. `arena: true` is a shipped challenge
+## arena: hidden from level-select too, reached through a challenge (ChallengeDef.arena).
 
 const LEVELS: Array[Dictionary] = [
 	{ "id": "garage", "name": "Garage", "scene": "res://src/levels/garage/garage.tscn",
@@ -19,6 +20,13 @@ const LEVELS: Array[Dictionary] = [
 		"desc": "Railway island: a closed loop for the train, with road and water alongside." },
 	{ "id": "level_6", "name": "Level 6 - Skyport", "scene": "res://src/levels/island/level_6/level_6.tscn",
 		"desc": "Drone bench: pads at altitude, a mast slalom, and a canyon that takes the satellites away." },
+	{ "id": "flatland", "name": "Flatland", "scene": "res://src/levels/flatland/flatland.tscn",
+		"desc": "Endless flat ground and nothing else. Top speed, braking and slip with no terrain in the way." },
+	{ "id": "open_sea", "name": "Open Sea", "scene": "res://src/levels/open_sea/open_sea.tscn",
+		"desc": "Endless open water under a steady wind. Boats only: no shore, no bottom." },
+	{ "id": "car_arena", "name": "Car Arena", "scene": "res://src/levels/island/car_arena/car_arena.tscn",
+		"desc": "Car challenge arena: a flat plateau with a straight, a corner course and a winding road.",
+		"arena": true },
 ]
 
 
@@ -47,17 +55,53 @@ static func entry_of(scene_path: String) -> Dictionary:
 	return {}
 
 
+## Every level's bake weight as the export saw it, written into the main pack by the kit's
+## export plugin (addons/carlito_kit/strip_export.gd). An island's .baked.scn travels in its
+## own level pack (LevelPacks), so until that pack is mounted this table is the only place its
+## size can be read. Never on disk: the editor and a desktop run read the bakes themselves.
+const SHIPPED_WEIGHTS := "res://src/shell/level_weights.json"
+
+static var _shipped: Variant = null  # SHIPPED_WEIGHTS parsed on first use
+
+
 ## Bytes of a level's baked scene, the artifact that dominates load wait. 0 when there is no
 ## bake (the garage ships none). Only .baked.scn is counted: the one level file that survives
 ## export as itself, so the number reads the same locally and shipped — the terrain PNGs
 ## become .ctex on export and can't be measured at runtime.
 static func weight_bytes(scene_path: String) -> int:
+	var n := _bake_file_bytes(scene_path)
+	if n > 0:
+		return n
+	return int(_shipped_weights().get(scene_path, 0))
+
+
+## What the export ships as SHIPPED_WEIGHTS: scene path -> bake bytes, read from disk, for
+## every registered level that has a bake.
+static func bake_weights() -> Dictionary:
+	var out := {}
+	for entry in LEVELS:
+		var n := _bake_file_bytes(String(entry["scene"]))
+		if n > 0:
+			out[String(entry["scene"])] = n
+	return out
+
+
+static func _bake_file_bytes(scene_path: String) -> int:
 	var f := FileAccess.open(scene_path.get_basename() + ".baked.scn", FileAccess.READ)
 	if f == null:
 		return 0
 	var n := int(f.get_length())
 	f.close()
 	return n
+
+
+static func _shipped_weights() -> Dictionary:
+	if _shipped == null:
+		var parsed: Variant = null
+		if FileAccess.file_exists(SHIPPED_WEIGHTS):
+			parsed = JSON.parse_string(FileAccess.get_file_as_string(SHIPPED_WEIGHTS))
+		_shipped = parsed if parsed is Dictionary else {}
+	return _shipped
 
 
 ## That weight as menu text ("0.7 MB", "14 MB"); "" when there is no bake to report.

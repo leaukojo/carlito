@@ -95,6 +95,8 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
   the LOWERED pose with the origin on the lower pin line, where ground is y = −0.21; geometry lives
   in the `.tscn` and is *measured* off it (depths, gate strokes, shut poses), never duplicated as
   constants. New implement = instance `implements/headstock.tscn` rather than redrawing pins.
+  Every pivot's meshes fold into one `MergedMesh` (`StaticMeshMerge`, originals hidden): a script
+  that moves one leaf MESH must list it in `static_merge_skip()`, and geometry sweeps skip merged nodes.
 - `spin_from_pto`'s `ratio` is COSMETIC and deliberately « 1. 540 rev/min is nine turns a second,
   which at 60 fps aliases into a slow backwards crawl — the exact failure for a part whose whole
   job is making `pto_rpm` legible. Gear the *rendering* down; the published rpm stays the honest

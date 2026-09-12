@@ -26,6 +26,7 @@ const CAP_NOTE := {
 	"diff_lock": "no lockable diff",
 	"fwd_drive": "no engageable front axle",
 	"body_cmd": "no refuse body",
+	"sail": "no rig on this hull",
 }
 
 const BRIDGE_NOTE := "sloppyCAN is driving"
@@ -34,6 +35,8 @@ const BRIDGE_NOTE := "sloppyCAN is driving"
 ## becomes one row. Gating fields: families (empty = all), excludes, capability
 ## (shell-read bool), bridge_owned (VehicleInput-only, inert when bridge active; shell signals
 ## are always local). signals: contract IN signal(s), cross-checked vs contract's vehicles list.
+## touch_state: a VehicleInput field that is truthy while the switch is engaged — the button
+## then reads "<label> ON" in amber. Only for on/off switches; a cycled ladder has no ON.
 ##
 ## Pedals/joystick are equally inert under bridge but deliberately NOT flagged — they're the
 ## overlay's identity and flickering them with bridge freshness reads as broken.
@@ -66,12 +69,12 @@ const ENTRIES: Array[Dictionary] = [
 	# --- the vehicle's own controls ------------------------------------------
 	{
 		"id": &"horn", "actions": ["horn"], "group": Group.VEHICLE,
-		# WIDGET: sits in the pedal cluster beside GAS/BRAKE, not up in the settings stack.
+		# WIDGET: sits in the QUICK row on the pedals, not in the EQUIP drawer.
 		"label": "Horn", "signals": ["horn"], "bridge_owned": true, "touch": Touch.WIDGET,
 	},
 	{
 		"id": &"headlights", "actions": ["headlights"], "group": Group.VEHICLE,
-		# WIDGET, same reason as horn: lives in the pedal cluster.
+		# WIDGET, same reason as horn: lives in the QUICK row.
 		"label": "Lights (off / clearance / low / high)", "signals": ["lights"],
 		"bridge_owned": true, "touch": Touch.WIDGET,
 	},
@@ -88,7 +91,7 @@ const ENTRIES: Array[Dictionary] = [
 		"id": &"pto", "actions": ["pto"], "group": Group.VEHICLE,
 		"label": "PTO drive", "signals": ["pto"], "families": ["tractor", "truck"],
 		"capability": "pto", "bridge_owned": true,
-		"touch": Touch.TAP, "touch_label": "PTO", "poll_key": &"pto_toggle",
+		"touch": Touch.TAP, "touch_label": "PTO", "poll_key": &"pto_toggle", "touch_state": "pto",
 	},
 	{
 		"id": &"pto_mode", "actions": ["pto_mode"], "group": Group.VEHICLE,
@@ -104,24 +107,27 @@ const ENTRIES: Array[Dictionary] = [
 		"label": "Hydraulic remote (SCV) spool", "signals": ["scv_flow"], "families": ["tractor"],
 		"capability": "scv", "bridge_owned": true,
 		"touch": Touch.TAP, "touch_label": "SCV", "poll_key": &"scv_toggle",
+		"touch_state": "scv_flow",
 	},
 	{
 		"id": &"diff_lock", "actions": ["diff_lock"], "group": Group.VEHICLE,
 		"label": "Rear diff lock", "signals": ["diff_lock"], "families": ["tractor"],
 		"capability": "diff_lock", "bridge_owned": true,
 		"touch": Touch.TAP, "touch_label": "DIFF", "poll_key": &"diff_lock_toggle",
+		"touch_state": "diff_lock",
 	},
 	{
 		"id": &"fwd_drive", "actions": ["fwd_drive"], "group": Group.VEHICLE,
 		"label": "Front-wheel drive (MFWD)", "signals": ["fwd_drive"], "families": ["tractor"],
 		"capability": "fwd_drive", "bridge_owned": true,
 		"touch": Touch.TAP, "touch_label": "MFWD", "poll_key": &"fwd_drive_toggle",
+		"touch_state": "fwd_drive",
 	},
 	{
 		"id": &"arm", "actions": ["arm"], "group": Group.VEHICLE,
 		"label": "Arm the motors", "signals": ["arm"], "families": ["drone"], "bridge_owned": true,
-		# WIDGET: built above the UP/DOWN flight pads, where the aircraft controls already are.
-		"touch": Touch.WIDGET, "poll_key": &"arm_toggle",
+		# WIDGET: the QUICK row's latch slot above GAS, where HAND sits on wheeled machines.
+		"touch": Touch.WIDGET, "poll_key": &"arm_toggle", "touch_state": "arm",
 	},
 	{
 		# Key is Z: Q (the letter originally assumed free) has been the tractor's SCV spool
@@ -129,8 +135,8 @@ const ENTRIES: Array[Dictionary] = [
 		"id": &"flight_mode", "actions": ["flight_mode"], "group": Group.VEHICLE,
 		"label": "Flight mode (stabilize / alt hold / loiter / RTL / land)",
 		"signals": ["flight_mode"], "families": ["drone"], "bridge_owned": true,
-		# WIDGET like ARM, not TAP like FAIL below: reached for while flying, so it sits above
-		# the UP/DOWN pads rather than in the settings stack.
+		# WIDGET like ARM, not TAP like FAIL below: reached for while flying, so it sits in the
+		# QUICK row rather than in the EQUIP drawer.
 		"touch": Touch.WIDGET, "poll_key": &"flight_mode_cycle",
 	},
 	{
@@ -138,7 +144,7 @@ const ENTRIES: Array[Dictionary] = [
 		"label": "Fail a bus node (cycle)", "signals": ["node_fail"], "families": ["drone"],
 		"bridge_owned": true,
 		# TAP, not WIDGET like ARM: a bench switch, not a flight control, so it belongs in the
-		# settings stack where a mis-tap while flying costs nothing.
+		# EQUIP drawer where a mis-tap while flying costs nothing.
 		"touch": Touch.TAP, "touch_label": "FAIL", "poll_key": &"node_fail_cycle",
 	},
 	{
@@ -148,25 +154,46 @@ const ENTRIES: Array[Dictionary] = [
 		"label": "Cargo hook (hold / release)", "signals": ["hardpoint_cmd"],
 		"families": ["drone"], "bridge_owned": true,
 		"touch": Touch.TAP, "touch_label": "HOOK", "poll_key": &"hardpoint_toggle",
+		"touch_state": "hardpoint_cmd",
+	},
+	{
+		# Second control on a digit (2), after HOOK on 1: every letter is bound. TAP rather than
+		# WIDGET — engaging a pilot is a tap, not an axis steered with, and the EQUIP drawer has
+		# room where the QUICK row does not.
+		"id": &"nav_mode", "actions": ["nav_mode"], "group": Group.VEHICLE,
+		"label": "Autopilot (standby / heading hold)", "signals": ["nav_mode"],
+		"families": ["boat"], "bridge_owned": true,
+		"touch": Touch.TAP, "touch_label": "AUTO", "poll_key": &"nav_mode_cycle",
+	},
+	{
+		# Third control on a digit (3), after HOOK on 1 and AUTO on 2: every letter is bound. TAP
+		# rather than WIDGET for the same reason AUTO is — trimming is a tap between manoeuvres,
+		# not an axis steered with, and the EQUIP drawer has room the QUICK row does not.
+		# Capability-gated, not family-gated: a rig is anatomy, and only `boat-sail-a` has one, so
+		# the button appears with the machine that answers it (the BODY / PTO precedent).
+		"id": &"sheet", "actions": ["sheet"], "group": Group.VEHICLE,
+		"label": "Sheet (haul in / ease the sail)", "signals": ["sheet"], "families": ["boat"],
+		"capability": "sail", "bridge_owned": true,
+		"touch": Touch.TAP, "touch_label": "SHEET", "poll_key": &"sheet_cycle",
 	},
 	{
 		"id": &"flaps", "actions": ["flaps"], "group": Group.VEHICLE,
 		"label": "Flaps", "signals": ["flaps"], "families": ["plane"], "bridge_owned": true,
-		# WIDGET, same reason as ARM: above the UP/DOWN pads, not the settings stack.
-		"touch": Touch.WIDGET, "poll_key": &"flaps_toggle",
+		# WIDGET, same reason as ARM: in the QUICK row, not the EQUIP drawer.
+		"touch": Touch.WIDGET, "poll_key": &"flaps_toggle", "touch_state": "flaps",
 	},
 	{
 		"id": &"pantograph", "actions": ["pantograph"], "group": Group.VEHICLE,
 		"label": "Pantograph up / down", "signals": ["pantograph"], "families": ["train"],
 		"bridge_owned": true,
-		# WIDGET: built in the pedal cluster beside BRAKE, where the driving hand is.
-		"touch": Touch.WIDGET, "poll_key": &"pantograph_toggle",
+		# WIDGET: built in the pedal row beside BRAKE, where the driving hand is.
+		"touch": Touch.WIDGET, "poll_key": &"pantograph_toggle", "touch_state": "pantograph",
 	},
 	{
 		"id": &"doors", "actions": ["doors"], "group": Group.VEHICLE,
 		"label": "Doors", "signals": ["doors"], "families": ["train"], "bridge_owned": true,
-		# WIDGET, same reason as PANTO: sits in the pedal cluster beside LIGHTS.
-		"touch": Touch.WIDGET, "poll_key": &"doors_toggle",
+		# WIDGET, same reason as PANTO: sits in the QUICK row beside LIGHTS.
+		"touch": Touch.WIDGET, "poll_key": &"doors_toggle", "touch_state": "doors",
 	},
 	{
 		"id": &"body_cmd", "actions": ["body_cmd"], "group": Group.VEHICLE,
@@ -187,25 +214,36 @@ const ENTRIES: Array[Dictionary] = [
 		"label": "Camera view", "touch": Touch.SHELL_SIGNAL, "touch_label": "VIEW",
 	},
 	{
+		# Keyboard-only: the pause menu's RESPAWN row reaches touch.
 		"id": &"respawn", "actions": ["respawn"], "group": Group.WORLD,
-		"label": "Respawn", "touch": Touch.SHELL_SIGNAL, "touch_label": "RESPAWN",
+		"label": "Respawn",
 	},
 	{
-		# On the stack, not keyboard-only, so it reaches a phone. The two rows below it stay
-		# keyboard-only on purpose — dev keys.
+		# Keyboard-only, same reason as RESPAWN — the CONDITIONS page carries the day/night
+		# toggle for touch.
 		"id": &"day_night", "actions": ["day_night"], "group": Group.WORLD,
-		"label": "Day / night", "touch": Touch.SHELL_SIGNAL, "touch_label": "NIGHT",
+		"label": "Day / night",
 	},
 	# --- the shell -----------------------------------------------------------
 	{
 		"id": &"garage", "actions": ["garage"], "group": Group.SHELL,
-		"label": "Garage", "touch": Touch.SHELL_SIGNAL, "touch_label": "GARAGE",
+		"label": "Garage", "touch": Touch.SHELL_SIGNAL, "touch_label": "VEHICLE",
 	},
 	{
 		# Keyboard-only: the garage is the way to change vehicle on touch, so the stack does not
 		# also carry a blind "next body" button.
 		"id": &"next_vehicle", "actions": ["next_vehicle"], "group": Group.SHELL,
 		"label": "Next vehicle body",
+	},
+	{
+		"id": &"level_select", "actions": ["level_select"], "group": Group.SHELL,
+		"label": "Level select", "touch": Touch.SHELL_SIGNAL, "touch_label": "LEVEL",
+	},
+	{
+		# Every letter is bound (see FLIGHT_MODE's note); 5 is the next free digit after
+		# HOOK/AUTO/SHEET/LEVEL claimed 1-4.
+		"id": &"challenge_select", "actions": ["challenge_select"], "group": Group.SHELL,
+		"label": "Challenges", "touch": Touch.SHELL_SIGNAL, "touch_label": "CHALLENGE",
 	},
 	{
 		"id": &"to_menu", "actions": ["to_menu"], "group": Group.SHELL,
@@ -223,7 +261,13 @@ const ENTRIES: Array[Dictionary] = [
 	},
 	{
 		"id": &"toggle_touch", "actions": ["toggle_touch"], "group": Group.SHELL,
-		"label": "Touch controls on / off",
+		"label": "Touch driving controls on / off",
+	},
+	{
+		# The top-left MENU/GARAGE/LEVEL/VIEW column, apart from F4 so hiding the pads never
+		# takes the way back to the menu with them.
+		"id": &"toggle_important", "actions": ["toggle_important"], "group": Group.SHELL,
+		"label": "Touch menu buttons on / off",
 	},
 ]
 
@@ -278,6 +322,16 @@ static func applies_entry(entry: Dictionary, ctx: Dictionary) -> bool:
 	if cap != "" and not bool((ctx.get("caps", {}) as Dictionary).get(cap, false)):
 		return false
 	return true
+
+
+## Does `entry` fit the current vehicle/attachment at all, ignoring whether the bridge happens
+## to own it right now? The CONTROLS sheet's one predicate for whether a row is worth SHOWING
+## (hidden if not: the boat has no diff lock, ever) — a row that fits but is bridge-owned while
+## sloppyCAN drives still shows, greyed, since that reason goes away on its own.
+static func relevant_entry(entry: Dictionary, ctx: Dictionary) -> bool:
+	var without_bridge := ctx.duplicate()
+	without_bridge["bridge"] = false
+	return applies_entry(entry, without_bridge)
 
 
 ## Why `entry` does not apply, for the sheet's third column ("" when it does apply). Bridge is

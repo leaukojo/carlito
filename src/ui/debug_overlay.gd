@@ -71,7 +71,8 @@ func _refresh() -> void:
 		Engine.get_frames_per_second(), frame_ms, draw_calls, prims, vram, nodes]
 	text += _grip_line()
 	text += _articulation_line()
-	text += _wind_line()
+	text += _flow_line("wind", "wind_vector")
+	text += _flow_line("current", "current_vector")
 	text += _ui_scale_line()
 
 
@@ -100,16 +101,18 @@ func _articulation_line() -> String:
 	return "\nartic %+.1f deg" % rad_to_deg(vehicle.call("articulation"))
 
 
-## World wind the flight bodies fly relative to: magnitude and the heading it blows toward
-## (WindField's convention). Shown on any level exposing a wind vector, calm included.
-func _wind_line() -> String:
-	if _level == null or not _level.has_method("wind_vector"):
+## One of the level's environment fields — the wind the flight bodies fly relative to, or the
+## tidal stream the boat swims in: magnitude and the heading it flows TOWARD. WindField and
+## CurrentField share that convention, so one line reads both. Shown on any level exposing the
+## vector, calm/slack included.
+func _flow_line(label: String, method: String) -> String:
+	if _level == null or not _level.has_method(method):
 		return ""
-	var w: Vector3 = _level.call("wind_vector")
-	var speed := Vector2(w.x, w.z).length()
+	var v: Vector3 = _level.call(method)
+	var speed := Vector2(v.x, v.z).length()
 	# atan2(x, -z): the inverse of WindField.base_vector, so 0 deg is -Z and 90 deg is +X.
-	var heading := fposmod(rad_to_deg(atan2(w.x, -w.z)), 360.0)
-	return "\nwind %.1f m/s @ %03d deg" % [speed, int(round(heading))]
+	var heading := fposmod(rad_to_deg(atan2(v.x, -v.z)), 360.0)
+	return "\n%s %.1f m/s @ %03d deg" % [label, speed, int(round(heading))]
 
 
 ## Diagnostic: every number UiScale's formula touches, so a screenshot from another browser

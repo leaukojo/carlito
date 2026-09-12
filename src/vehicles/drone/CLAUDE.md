@@ -8,16 +8,20 @@ Descriptive tour: `docs/vehicles.md` § Plane & drone (flight).
 `heading_frame`, `level_target_up`, `align_torque`), the `@export` tuning, `_apply_carried_mass`,
 and the `_tick_extras` ORDERING that four headers call load-bearing. Everything else is either a
 pure-static module (`DroneProp`, `DroneModes`, `DroneArming`, `DroneSensors`, `DronePower`,
-`DronePayload`, `DroneGimbal`, `DroneBus`, `DroneAirData`) or one of five stateful sub-objects —
+`DronePayload`, `DroneGimbal`, `DroneBus`, `DroneAirData`) or one of six stateful sub-objects —
 plain `RefCounted`s owned and ticked by the vehicle, the `WheelDrive` pattern:
 
 | object | owns | calls |
 | --- | --- | --- |
-| `DroneMotors` | rotors, offsets, the two measured arms, `_omega`, ESC temps, the contract warn | `DroneProp`, `DroneBus` |
+| `DroneMotors` | rotors, offsets, the two measured arms, `_omega`, ESC temps, the contract warn, the wash discs | `DroneProp`, `DroneBus` |
 | `DroneSensorSuite` | sky pattern + mask + cursor, `agl`, the shared ray query, GNSS/RANGE indices | `DroneSensors`, `DroneBus` |
-| `DroneHook` | the Hardpoint marker, the crate, the latch | `DronePayload` |
-| `DroneGimbalMount` | the HoodCam marker, both angles, the contract-read stops | `DroneGimbal` |
+| `DroneHook` | the Hardpoint marker, the crate, the latch, the drawn jaws | `DronePayload` |
+| `DroneGimbalMount` | the HoodCam marker, both angles, the contract-read stops, the drawn joints | `DroneGimbal` |
 | `DronePack` | `soc`, pack temperature | `DronePower` |
+| `DroneIndicators` | the node-local status LEDs, the rangefinder beam (ticked last, on published state) | `DroneArming`, `DroneSensors`, `DroneBus` |
+
+A drawn part hangs off the object owning its state and is an optional node: `drone.tscn` has none
+of `drone-mk2`'s and runs the same code. No drawn part may carry a timer (`test_lamps` scans).
 
 Four boundaries that must not move:
 
