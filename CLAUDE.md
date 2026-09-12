@@ -271,7 +271,8 @@ needs `@warning_ignore("integer_division")`.
   loads enabled plugins and prints real `SCRIPT ERROR: Parse Error` lines. It does **not**
   catch integer division between two *constants* (`48 / 4` folds silently) — eyeball
   division on variables. It — and any headless `--import` that actually re-imports an asset —
-  re-saves `project.godot` and drops the 60 Hz pin (rule 9): `git checkout -- project.godot` after.
+  re-saves `project.godot` and drops the 60 Hz pin (rule 9): `git checkout -- project.godot` after
+  (the pre-commit hook also restores it automatically if it slips into a staged commit).
 - **`ProjectSettings` in tests is not a presence check**: `get_setting(name, default)` falls back
   to the engine's built-in default, and `has_setting()` is true for every built-in setting even
   when `project.godot` never mentions it. A setting whose invariant *equals* its engine default

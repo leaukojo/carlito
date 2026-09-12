@@ -67,4 +67,22 @@ if echo "$staged" | grep -qE '^(src/levels/|kit/)'; then
     exit 1
   }
 fi
+
+# 5. project.godot touched -> restore the frozen 60 Hz physics pin (rule 9) if the
+#    editor's UI-save dropped a value equal to its own built-in default.
+if echo "$staged" | grep -q '^project\.godot$'; then
+  fixed=0
+  if ! grep -q '^common/physics_ticks_per_second=60$' project.godot; then
+    sed -i '/^\[physics\]$/a common/physics_ticks_per_second=60' project.godot
+    fixed=1
+  fi
+  if ! grep -q '^common/physics_interpolation=true$' project.godot; then
+    sed -i '/^\[physics\]$/a common/physics_interpolation=true' project.godot
+    fixed=1
+  fi
+  if [ "$fixed" = 1 ]; then
+    git add project.godot
+    echo "pre-commit: restored the 60 Hz physics pin in project.godot (rule 9)."
+  fi
+fi
 exit 0

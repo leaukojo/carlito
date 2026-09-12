@@ -249,6 +249,7 @@ toggle_important={
 [physics]
 
 3d/physics_engine="Jolt Physics"
+common/physics_ticks_per_second=60
 common/physics_interpolation=true
 
 [rendering]
