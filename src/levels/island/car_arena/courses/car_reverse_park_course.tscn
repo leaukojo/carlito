@@ -24,45 +24,45 @@ size = Vector2(0.4, 4.6)
 material = SubResource("StandardMaterial3D_m7rx7")
 size = Vector2(0.4, 4.6)
 
-[node name="CarReverseParkCourse" type="Node3D" unique_id=215322668]
+[node name="CarReverseParkCourse" type="Node3D" unique_id=1076977221]
 
-[node name="ArenaPreview" type="Node3D" parent="." unique_id=975669649]
+[node name="ArenaPreview" type="Node3D" parent="." unique_id=30015214]
 script = ExtResource("1_7w2eb")
 arena = "car_arena"
 
-[node name="Bay" type="Node3D" parent="." unique_id=1805996146]
+[node name="Bay" type="Node3D" parent="." unique_id=1450847802]
 transform = Transform3D(-1, 0, -2.4492127e-16, 0, 1, 0, 2.4492127e-16, 0, -1, -125, 8, -83.7)
 script = ExtResource("2_vwi0w")
 size = Vector3(1.98, 6, 3.12)
 
-[node name="Markers" type="Node3D" parent="." unique_id=1721076858]
+[node name="Markers" type="Node3D" parent="." unique_id=125049428]
 
-[node name="BayNear" type="MeshInstance3D" parent="Markers" unique_id=1492165109]
+[node name="BayNear" type="MeshInstance3D" parent="Markers" unique_id=765848778]
 transform = Transform3D(-1, 0, -2.4492127e-16, 0, 1, 0, 2.4492127e-16, 0, -1, -125, 6.03, -81.6)
 cast_shadow = 0
 mesh = SubResource("PlaneMesh_mgt52")
 
-[node name="BayFar" type="MeshInstance3D" parent="Markers" unique_id=1650835328]
+[node name="BayFar" type="MeshInstance3D" parent="Markers" unique_id=1545701316]
 transform = Transform3D(-1, 0, -2.4492127e-16, 0, 1, 0, 2.4492127e-16, 0, -1, -125, 6.03, -85.799995)
 cast_shadow = 0
 mesh = SubResource("PlaneMesh_cfhpy")
 
-[node name="BayLeft" type="MeshInstance3D" parent="Markers" unique_id=367345616]
+[node name="BayLeft" type="MeshInstance3D" parent="Markers" unique_id=1022318695]
 transform = Transform3D(-1, 0, -2.4492127e-16, 0, 1, 0, 2.4492127e-16, 0, -1, -124, 6.03, -83.7)
 cast_shadow = 0
 mesh = SubResource("PlaneMesh_crhq8")
 
-[node name="BayRight" type="MeshInstance3D" parent="Markers" unique_id=1849614712]
+[node name="BayRight" type="MeshInstance3D" parent="Markers" unique_id=702918971]
 transform = Transform3D(-1, 0, -2.4492127e-16, 0, 1, 0, 2.4492127e-16, 0, -1, -126, 6.03, -83.7)
 cast_shadow = 0
 mesh = SubResource("PlaneMesh_m2mq7")
 
-[node name="Behind" type="Node3D" parent="." unique_id=942818384]
+[node name="Behind" type="Node3D" parent="." unique_id=416736096]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -125, 7, -91)
 script = ExtResource("2_vwi0w")
 size = Vector3(12, 4, 10)
 
-[node name="Spawn" type="Marker3D" parent="." unique_id=1618900201]
+[node name="Spawn" type="Marker3D" parent="." unique_id=89295426]
 transform = Transform3D(6.123032e-17, 0, -1, 0, 1, 0, 1, 0, 6.123032e-17, -140, 6.6, -76.399994)
 script = ExtResource("3_s5ftn")
 vehicle_types = PackedStringArray("car")

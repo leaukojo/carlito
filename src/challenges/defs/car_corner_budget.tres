@@ -5,6 +5,7 @@
 [ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="3_goal"]
 [ext_resource type="Script" path="res://src/challenges/goals/reach_zone_goal.gd" id="4_reach"]
 [ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="5_def"]
+[ext_resource type="Script" path="res://src/challenges/goals/fail_zone_constraint.gd" id="6_fail"]
 
 [sub_resource type="Resource" id="Resource_finish"]
 script = ExtResource("4_reach")
@@ -16,6 +17,26 @@ signal_name = "accLat"
 high = 4.0
 absolute = true
 
+[sub_resource type="Resource" id="Resource_cut0"]
+script = ExtResource("6_fail")
+zone = &"Cut0"
+warning = "Off the course"
+
+[sub_resource type="Resource" id="Resource_cut1"]
+script = ExtResource("6_fail")
+zone = &"Cut1"
+warning = "Off the course"
+
+[sub_resource type="Resource" id="Resource_cut2"]
+script = ExtResource("6_fail")
+zone = &"Cut2"
+warning = "Off the course"
+
+[sub_resource type="Resource" id="Resource_cut3"]
+script = ExtResource("6_fail")
+zone = &"Cut3"
+warning = "Off the course"
+
 [resource]
 script = ExtResource("5_def")
 id = "car_corner_budget"
@@ -23,8 +44,8 @@ title = "Perfect turns"
 variant = "sedan-sports"
 arena = "car_arena"
 course = "res://src/levels/island/car_arena/courses/car_easy_turns_course.tscn"
-briefing = "Same challenge as earlier, but you'll need to drive well and limit your lateral acceleration below 4.0 m/s^2. The winding road from Easy turns, against the clock. There is a time limit, so driving slow won't be enough."
+briefing = "Same challenge as earlier, but you'll need to drive well and limit your lateral acceleration below 4.0 m/s^2. The winding road from Easy turns, against the clock. There is a time limit, so driving slow won't be enough. Cut a bend across the grass and you'll be sent back."
 hint = "Every bend here is 35 m, so 42 km/h sits right on the limit. Brake before the bend, not in it."
 par_s = 30.0
 goals = Array[ExtResource("3_goal")]([SubResource("Resource_finish")])
-constraints = Array[ExtResource("1_cons")]([SubResource("Resource_lat")])
+constraints = Array[ExtResource("1_cons")]([SubResource("Resource_lat"), SubResource("Resource_cut0"), SubResource("Resource_cut1"), SubResource("Resource_cut2"), SubResource("Resource_cut3")])

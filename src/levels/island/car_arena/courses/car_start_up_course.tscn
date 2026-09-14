@@ -24,35 +24,35 @@ size = Vector3(0.25, 2.5, 0.25)
 material = SubResource("StandardMaterial3D_0kqfy")
 size = Vector3(0.25, 2.5, 0.25)
 
-[node name="CarStartUpCourse" type="Node3D" unique_id=1174024857]
+[node name="CarStartUpCourse" type="Node3D" unique_id=57401491]
 
-[node name="ArenaPreview" type="Node3D" parent="." unique_id=1485770211]
+[node name="ArenaPreview" type="Node3D" parent="." unique_id=64507814]
 script = ExtResource("1_pmopg")
 arena = "car_arena"
 
-[node name="Spawn" type="Marker3D" parent="." unique_id=153619723]
+[node name="Spawn" type="Marker3D" parent="." unique_id=381117122]
 transform = Transform3D(6.123032e-17, 0, -1, 0, 1, 0, 1, 0, 6.123032e-17, -150, 6.6, -6.123032e-16)
 script = ExtResource("2_fl8bs")
 vehicle_types = PackedStringArray("car")
 
-[node name="Finish" type="Node3D" parent="." unique_id=1626647505]
+[node name="Finish" type="Node3D" parent="." unique_id=310532336]
 transform = Transform3D(-6.123032e-17, 0, 1, 0, 1, 0, -1, 0, -6.123032e-17, 50, 8, -1.2858367e-14)
 script = ExtResource("3_gf5v0")
 size = Vector3(60, 6, 1)
 
-[node name="Markers" type="Node3D" parent="." unique_id=1669676077]
+[node name="Markers" type="Node3D" parent="." unique_id=158817399]
 
-[node name="FinishLine" type="MeshInstance3D" parent="Markers" unique_id=467220274]
+[node name="FinishLine" type="MeshInstance3D" parent="Markers" unique_id=1389846714]
 transform = Transform3D(-6.123032e-17, 0, 1, 0, 1, 0, -1, 0, -6.123032e-17, 50, 6.03, -1.2858367e-14)
 cast_shadow = 0
 mesh = SubResource("PlaneMesh_4g6mh")
 
-[node name="FinishPostL" type="MeshInstance3D" parent="Markers" unique_id=1271600610]
+[node name="FinishPostL" type="MeshInstance3D" parent="Markers" unique_id=860585280]
 transform = Transform3D(-6.123032e-17, 0, 1, 0, 1, 0, -1, 0, -6.123032e-17, 50, 7.25, 7.05)
 cast_shadow = 0
 mesh = SubResource("BoxMesh_4x3o6")
 
-[node name="FinishPostR" type="MeshInstance3D" parent="Markers" unique_id=1968962430]
+[node name="FinishPostR" type="MeshInstance3D" parent="Markers" unique_id=546338154]
 transform = Transform3D(-6.123032e-17, 0, 1, 0, 1, 0, -1, 0, -6.123032e-17, 50, 7.25, -7.05)
 cast_shadow = 0
 mesh = SubResource("BoxMesh_op786")

@@ -4,28 +4,28 @@
 [ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="2_icx2t"]
 [ext_resource type="Script" path="res://src/challenges/challenge_zone.gd" id="3_nqhae"]
 
-[node name="CarBoxBlindCourse" type="Node3D" unique_id=730769673]
+[node name="CarBoxBlindCourse" type="Node3D" unique_id=702918608]
 
-[node name="ArenaPreview" type="Node3D" parent="." unique_id=1305613937]
+[node name="ArenaPreview" type="Node3D" parent="." unique_id=779825940]
 script = ExtResource("1_afnof")
 arena = "car_arena"
 
-[node name="Spawn" type="Marker3D" parent="." unique_id=1963902269]
+[node name="Spawn" type="Marker3D" parent="." unique_id=552441047]
 transform = Transform3D(6.123032e-17, 0, -1, 0, 1, 0, 1, 0, 6.123032e-17, -150, 6.6, -6.123032e-16)
 script = ExtResource("2_icx2t")
 vehicle_types = PackedStringArray("car")
 
-[node name="Gate" type="Node3D" parent="." unique_id=1461755878]
+[node name="Gate" type="Node3D" parent="." unique_id=1478638988]
 transform = Transform3D(-6.12297e-17, 0, 1, 0, 1, 0, -1, 0, -6.12297e-17, 19.999998, 8, -1.1021457e-14)
 script = ExtResource("3_nqhae")
 size = Vector3(60, 6, 0.5)
 
-[node name="Box" type="Node3D" parent="." unique_id=1592518161]
+[node name="Box" type="Node3D" parent="." unique_id=11781541]
 transform = Transform3D(-6.1231165e-17, 0, 1, 0, 1, 0, -1, 0, -6.1231165e-17, 37, 8, -1.2062373e-14)
 script = ExtResource("3_nqhae")
 size = Vector3(6, 6, 18)
 
-[node name="Overrun" type="Node3D" parent="." unique_id=139986504]
+[node name="Overrun" type="Node3D" parent="." unique_id=2119244318]
 transform = Transform3D(-6.123032e-17, 0, 1, 0, 1, 0, -1, 0, -6.123032e-17, 104, 8, -1.6164802e-14)
 script = ExtResource("3_nqhae")
 size = Vector3(60, 6, 112)

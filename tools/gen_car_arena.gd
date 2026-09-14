@@ -85,6 +85,9 @@ const WINDING_START := Vector2(-150.0, 55.0)
 const WINDING_R := 35.0
 const WINDING_SWEEPS: Array[float] = [70.0, -140.0, 140.0, -70.0]
 const WINDING_END_LEG := 15.0
+## Car 14's grass islands, one on the inside of each S-bend: kept this far in from the paved edge,
+## so cutting the corner straight through one always crosses grass, never the road itself.
+const WINDING_ISLAND_MARGIN := 4.0
 
 ## The ridge road: a flat run-up north, the ramp, then the corners on top of the ridge.
 const RIDGE_START := Vector2(118.0, -50.0)
@@ -316,11 +319,12 @@ func _corners() -> Turtle:
 	return t
 
 
+## Marks `w<i>_c` at each S-bend's centre: the grass pocket on its inside, which Car 14 fences off.
 func _winding() -> Turtle:
 	var t := Turtle.new(Vector3(WINDING_START.x, Y_PLATEAU, WINDING_START.y), 90.0)
 	t.straight(WINDING_END_LEG)
-	for sweep in WINDING_SWEEPS:
-		t.arc(WINDING_R, sweep)
+	for i in WINDING_SWEEPS.size():
+		t.arc(WINDING_R, WINDING_SWEEPS[i], "w%d" % i)
 	t.straight(WINDING_END_LEG)
 	return t
 
@@ -738,10 +742,11 @@ func _courses() -> int:
 	var corners := curves["car_arena_corners_curve.tres"]
 	var winding := curves["car_arena_winding_curve.tres"]
 	var turtle := roads["car_arena_corners_curve.tres"]
+	var winding_turtle := roads["car_arena_winding_curve.tres"]
 
 	var built := {
 		"car_start_up": _start_up(strip),
-		"car_easy_turns": _easy_turns(winding),
+		"car_easy_turns": _easy_turns(winding, winding_turtle),
 		"car_box_stop": _box_stop(strip, true),
 		"car_box_blind": _box_stop(strip, false),
 		"car_turn_signals": _turn_signals(corners, turtle),
@@ -776,13 +781,19 @@ func _start_up(strip: Curve3D) -> Node3D:
 	return root
 
 
-## Car 2: the whole winding road, start to finish.
-func _easy_turns(winding: Curve3D) -> Node3D:
+## Car 2: the whole winding road, start to finish. Also carries Car 14's "Cut<i>" grass-island
+## zones, one per S-bend, for `car_corner_budget`'s fail-zone constraints — Car 2 itself has none
+## bound to them.
+func _easy_turns(winding: Curve3D, turtle: Turtle) -> Node3D:
 	var root := _course_root("CarEasyTurnsCourse")
 	var mats := _materials()
 	_spawn(root, winding, 8.0)
 	var at := winding.get_baked_length() - FINISH_BEFORE_END
 	_zone(root, "Finish", winding, at - 0.5, at + 0.5, STRIP_ZONE_WIDTH)
+	var island_r := WINDING_R - _paved_width() * 0.5 - WINDING_ISLAND_MARGIN
+	for i in WINDING_SWEEPS.size():
+		var centre: Vector3 = turtle.marks["w%d_c" % i]
+		_island(root, "Cut%d" % i, centre, island_r)
 	var markers := _markers(root)
 	_line(markers, winding, at, 1.0, mats["white"], "FinishLine")
 	_posts(markers, winding, at, mats["dark"], "Finish")
@@ -986,6 +997,18 @@ func _zone_in(root: Node3D, zone_name: String, f: Transform3D, size: Vector2) ->
 	zone.size = Vector3(size.x, ZONE_HEIGHT, size.y)
 	zone.transform = Transform3D(f.basis,
 			f.origin + f.basis.y * (ZONE_BASE + ZONE_HEIGHT * 0.5))
+	root.add_child(zone)
+
+
+## A solid-cylinder RING zone of radius `r` centred on `centre` (world XZ), ZONE_HEIGHT tall from
+## ZONE_BASE under it, matching the box zones' vertical span.
+func _island(root: Node3D, zone_name: String, centre: Vector3, r: float) -> void:
+	var zone := ChallengeZone.new()
+	zone.name = zone_name
+	zone.kind = ZoneShape.Kind.RING
+	zone.outer_r = r
+	zone.height = ZONE_HEIGHT
+	zone.position = Vector3(centre.x, Y_PLATEAU + ZONE_BASE + ZONE_HEIGHT * 0.5, centre.z)
 	root.add_child(zone)
 
 
