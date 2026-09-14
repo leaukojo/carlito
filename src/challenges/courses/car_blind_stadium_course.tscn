@@ -4,20 +4,21 @@
 [ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="2_spawn"]
 [ext_resource type="Script" path="res://src/challenges/challenge_zone.gd" id="3_zone"]
 
-[node name="CarBlindCircleCourse" type="Node3D"]
+[node name="CarBlindStadiumCourse" type="Node3D"]
 
 [node name="ArenaPreview" type="Node3D" parent="."]
 script = ExtResource("1_prev")
 arena = "flatland"
 
 [node name="Spawn" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 0.8, -60)
+transform = Transform3D(0.8660254, 0, -0.5, 0, 1, 0, 0.5, 0, 0.8660254, 72.990381, 0.8, -52.5)
 script = ExtResource("2_spawn")
 vehicle_types = PackedStringArray("car")
 
-[node name="Circle" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 60, 0, -60)
+[node name="Stadium" type="Node3D" parent="."]
+transform = Transform3D(0.5, 0, 0.8660254, 0, 1, 0, -0.8660254, 0, 0.5, 60, 0, -60)
 script = ExtResource("3_zone")
 kind = 1
-inner_r = 17.0
-outer_r = 23.0
+inner_r = 12.0
+outer_r = 18.0
+half_length = 20.0

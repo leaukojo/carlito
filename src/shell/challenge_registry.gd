@@ -11,14 +11,16 @@ const ContractScript := preload("res://src/bridge/contract.gd")
 const DEFS: PackedStringArray = [
 	"res://src/challenges/defs/car_start_up.tres",
 	"res://src/challenges/defs/car_easy_turns.tres",
-	"res://src/challenges/defs/car_box_stop.tres",
-	"res://src/challenges/defs/car_box_blind.tres",
+	"res://src/challenges/defs/car_lights.tres",
+	"res://src/challenges/defs/car_manual_gearbox.tres",
+	"res://src/challenges/defs/car_reverse_park.tres",
 	"res://src/challenges/defs/car_turn_signals.tres",
-	"res://src/challenges/defs/car_turn_blink.tres",
+	"res://src/challenges/defs/car_hazards.tres",
 	"res://src/challenges/defs/car_speed_trap.tres",
 	"res://src/challenges/defs/car_corner_budget.tres",
-	"res://src/challenges/defs/car_blind_circle.tres",
-	"res://src/challenges/defs/car_blind_slalom.tres",
+	"res://src/challenges/defs/car_box_stop.tres",
+	"res://src/challenges/defs/car_box_blind.tres",
+	"res://src/challenges/defs/car_blind_stadium.tres",
 ]
 
 ## Dev fixtures: challenges to drive the runner on, reached only through a debug build's
@@ -140,6 +142,7 @@ static func checks_of(d: ChallengeDef) -> Array[ChallengeCheck]:
 ## - Every check's parameters are sane.
 ## - Every signal is a scalar "out" signal of the family, and every input field exists.
 ## - The attachment is in the family's catalog.
+## - A manual gearbox only on a family whose contract takes a gear byte.
 static func problems(d: ChallengeDef) -> PackedStringArray:
 	var out := PackedStringArray()
 	if RegEx.create_from_string(ID_PATTERN).search(d.id) == null:
@@ -157,6 +160,8 @@ static func problems(d: ChallengeDef) -> PackedStringArray:
 	if family == "":
 		out.append("unknown variant '%s'" % d.variant)
 		return out
+	if d.transmission == ChallengeDef.Transmission.MANUAL and not VehicleSelect.has_gearbox(family):
+		out.append("a manual gearbox on the %s family, which takes no gear byte" % family)
 	out.append_array(_arena_problems(d))
 	out.append_array(_placement_problems(d))
 	out.append_array(_attachment_problems(d, family))

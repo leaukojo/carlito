@@ -40,22 +40,30 @@ func _ready() -> void:
 	briefing.text = _def.briefing
 	briefing.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	briefing.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	briefing.theme_type_variation = &"Lead"
 	briefing.custom_minimum_size.x = UiTheme.px(self, 480.0)
 	col.add_child(briefing)
 
 	if _def.par_s > 0.0:
 		var par := Label.new()
-		par.text = "PAR: %s S" % String.num(_def.par_s, 1)
+		par.text = "TIME LIMIT: %s S" % String.num(_def.par_s, 1)
 		par.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		par.theme_type_variation = &"Small"
+		par.theme_type_variation = &"Dim"
 		col.add_child(par)
+
+	if not _def.gearbox_text().is_empty():
+		var gearbox := Label.new()
+		gearbox.text = _def.gearbox_text()
+		gearbox.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		gearbox.theme_type_variation = &"Lead"
+		col.add_child(gearbox)
 
 	_hint_label = Label.new()
 	_hint_label.text = _def.hint
 	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint_label.custom_minimum_size.x = UiTheme.px(self, 480.0)
-	_hint_label.theme_type_variation = &"Dim"
+	_hint_label.theme_type_variation = &"LeadDim"
 	_hint_label.visible = false
 	col.add_child(_hint_label)
 

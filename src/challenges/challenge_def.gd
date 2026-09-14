@@ -7,11 +7,16 @@ extends Resource
 ## How the level is lit for the attempt, applied to its duplicated Environment: DARK is no sun,
 ## zero ambient and a black sky; FOG is heavy fog at `fog_density`.
 enum Visibility { DAY, DARK, FOG }
+## How the bridge gear byte is read for the attempt (InputRouter.set_manual_gearbox). AUTOMATIC
+## is a PRND lever with Carlito picking the gear; MANUAL takes the byte exactly (0 = N) and belongs
+## only where choosing the gear is the lesson.
+enum Transmission { AUTOMATIC, MANUAL }
 
 @export var id := ""
 @export var title := ""
 ## A VehicleCatalog variant. The family is derived from it (`family()`), never stored beside it.
 @export var variant := "sedan-sports"
+@export var transmission: Transmission = Transmission.AUTOMATIC
 ## A scene from the family's attachment catalog (TrailerCatalog / ImplementCatalog), laid at spawn
 ## because E is locked. "" is the catalog's own NONE — bobtail or detached — and the only legal
 ## value for a family with no catalog.
@@ -35,3 +40,10 @@ enum Visibility { DAY, DARK, FOG }
 
 func family() -> String:
 	return VehicleCatalog.family_of(variant)
+
+
+## The line both briefing screens show, or "" for a family with no gear byte to read.
+func gearbox_text() -> String:
+	if not VehicleSelect.has_gearbox(family()):
+		return ""
+	return "GEARBOX: MANUAL" if transmission == Transmission.MANUAL else "GEARBOX: AUTOMATIC"

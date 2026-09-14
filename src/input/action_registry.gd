@@ -30,11 +30,15 @@ const CAP_NOTE := {
 }
 
 const BRIDGE_NOTE := "sloppyCAN is driving"
+## A live bridge that carries no driving control: the keyboard drives, sloppyCAN still sets this.
+const BRIDGE_SETS_NOTE := "set by sloppyCAN"
 
 ## Every bound action, one row each — one control on two keys (drive/reverse, steer, climb)
 ## becomes one row. Gating fields: families (empty = all), excludes, capability
 ## (shell-read bool), bridge_owned (VehicleInput-only, inert when bridge active; shell signals
-## are always local). signals: contract IN signal(s), cross-checked vs contract's vehicles list.
+## are always local), driving (bridge-owned only while the bridge DRIVES — the rows
+## InputRouter.blend_local_driving hands to the keyboard when a live bridge carries no driving
+## control). signals: contract IN signal(s), cross-checked vs contract's vehicles list.
 ## touch_state: a VehicleInput field that is truthy while the switch is engaged — the button
 ## then reads "<label> ON" in amber. Only for on/off switches; a cycled ladder has no ON.
 ##
@@ -55,7 +59,7 @@ const ENTRIES: Array[Dictionary] = [
 		# Plane's tricycle gear takes it; train's is read by TrainSim rather than wheels.
 		"id": &"handbrake", "actions": ["handbrake"], "group": Group.DRIVE,
 		"label": "Handbrake", "signals": ["handbrake"], "excludes": ["boat", "drone"],
-		"bridge_owned": true,
+		"bridge_owned": true, "driving": true,
 		# WIDGET: sits beside the steering joystick; on touch it latches (a parking brake
 		# held with a finger is not one). Key stays momentary.
 		"touch": Touch.WIDGET,
@@ -63,20 +67,21 @@ const ENTRIES: Array[Dictionary] = [
 	{
 		"id": &"climb", "actions": ["aircraft_up", "aircraft_down"], "group": Group.DRIVE,
 		"label": "Climb / descend", "signals": ["elevator", "climb"],
-		"families": ["plane", "drone"], "bridge_owned": true,
+		"families": ["plane", "drone"], "bridge_owned": true, "driving": true,
 		"touch": Touch.WIDGET,
 	},
 	# --- the vehicle's own controls ------------------------------------------
 	{
 		"id": &"horn", "actions": ["horn"], "group": Group.VEHICLE,
 		# WIDGET: sits in the QUICK row on the pedals, not in the EQUIP drawer.
-		"label": "Horn", "signals": ["horn"], "bridge_owned": true, "touch": Touch.WIDGET,
+		"label": "Horn", "signals": ["horn"], "bridge_owned": true, "driving": true,
+		"touch": Touch.WIDGET,
 	},
 	{
 		"id": &"headlights", "actions": ["headlights"], "group": Group.VEHICLE,
 		# WIDGET, same reason as horn: lives in the QUICK row.
 		"label": "Lights (off / clearance / low / high)", "signals": ["lights"],
-		"bridge_owned": true, "touch": Touch.WIDGET,
+		"bridge_owned": true, "driving": true, "touch": Touch.WIDGET,
 	},
 	{
 		# No `signals`, deliberately: on a semi this reads the same local toggle as a tipper
@@ -126,6 +131,7 @@ const ENTRIES: Array[Dictionary] = [
 	{
 		"id": &"arm", "actions": ["arm"], "group": Group.VEHICLE,
 		"label": "Arm the motors", "signals": ["arm"], "families": ["drone"], "bridge_owned": true,
+		"driving": true,
 		# WIDGET: the QUICK row's latch slot above GAS, where HAND sits on wheeled machines.
 		"touch": Touch.WIDGET, "poll_key": &"arm_toggle", "touch_state": "arm",
 	},
@@ -211,7 +217,7 @@ const ENTRIES: Array[Dictionary] = [
 	# --- the world -----------------------------------------------------------
 	{
 		"id": &"camera_view", "actions": ["camera_view"], "group": Group.WORLD,
-		"label": "Camera view", "touch": Touch.SHELL_SIGNAL, "touch_label": "VIEW",
+		"label": "Camera view", "touch": Touch.SHELL_SIGNAL, "touch_label": "CAMERA",
 	},
 	{
 		# Keyboard-only: the pause menu's RESPAWN row reaches touch.
@@ -264,7 +270,7 @@ const ENTRIES: Array[Dictionary] = [
 		"label": "Touch driving controls on / off",
 	},
 	{
-		# The top-left MENU/GARAGE/LEVEL/VIEW column, apart from F4 so hiding the pads never
+		# The top-left MENU/GARAGE/LEVEL/CAMERA column, apart from F4 so hiding the pads never
 		# takes the way back to the menu with them.
 		"id": &"toggle_important", "actions": ["toggle_important"], "group": Group.SHELL,
 		"label": "Touch menu buttons on / off",
@@ -297,8 +303,20 @@ static func in_group(group: Group) -> Array[Dictionary]:
 ## The state every gate is evaluated against. `caps` is the shell's capability dict (see
 ## boot.gd _capabilities); a missing key reads false, so a caller with nothing to say about
 ## capabilities still gets sensible family-only gating.
-static func context(family: String, bridge_active: bool, caps: Dictionary) -> Dictionary:
-	return {"family": family, "bridge": bridge_active, "caps": caps}
+## `bridge_drives` is `InputRouter.bridge_drives()`: false in fallback, where a `driving` row is
+## the local driver's while the rest of the bridge-owned rows stay sloppyCAN's.
+static func context(family: String, bridge_active: bool, caps: Dictionary,
+		bridge_drives := bridge_active) -> Dictionary:
+	return {"family": family, "bridge": bridge_active, "drives": bridge_drives, "caps": caps}
+
+
+## Is this row inert because sloppyCAN owns it right now? A `driving` row follows whoever
+## drives; any other bridge-owned row is the bridge's whenever one is live.
+static func _bridge_holds(entry: Dictionary, ctx: Dictionary) -> bool:
+	if not bool(entry.get("bridge_owned", false)):
+		return false
+	var key := "drives" if bool(entry.get("driving", false)) else "bridge"
+	return bool(ctx.get(key, false))
 
 
 ## Does this control do something right now? The one gate predicate — touch overlay and
@@ -310,7 +328,7 @@ static func applies(id: StringName, ctx: Dictionary) -> bool:
 static func applies_entry(entry: Dictionary, ctx: Dictionary) -> bool:
 	if entry.is_empty():
 		return false
-	if bool(entry.get("bridge_owned", false)) and bool(ctx.get("bridge", false)):
+	if _bridge_holds(entry, ctx):
 		return false
 	var family := String(ctx.get("family", ""))
 	var families: Array = entry.get("families", [])
@@ -331,6 +349,7 @@ static func applies_entry(entry: Dictionary, ctx: Dictionary) -> bool:
 static func relevant_entry(entry: Dictionary, ctx: Dictionary) -> bool:
 	var without_bridge := ctx.duplicate()
 	without_bridge["bridge"] = false
+	without_bridge["drives"] = false
 	return applies_entry(entry, without_bridge)
 
 
@@ -339,8 +358,8 @@ static func relevant_entry(entry: Dictionary, ctx: Dictionary) -> bool:
 static func gate_note(entry: Dictionary, ctx: Dictionary) -> String:
 	if applies_entry(entry, ctx):
 		return ""
-	if bool(entry.get("bridge_owned", false)) and bool(ctx.get("bridge", false)):
-		return BRIDGE_NOTE
+	if _bridge_holds(entry, ctx):
+		return BRIDGE_NOTE if bool(ctx.get("drives", false)) else BRIDGE_SETS_NOTE
 	var families: Array = entry.get("families", [])
 	if not families.is_empty() and not families.has(String(ctx.get("family", ""))):
 		return _join_families(families) + " only"

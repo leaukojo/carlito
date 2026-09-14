@@ -57,6 +57,9 @@ var _night := false
 var _challenge: ChallengeDef = null
 ## The session's night choice, held while a challenge forces the level's own day lighting.
 var _night_before_challenge := false
+## The free-play gearbox picked in the vehicle selector; a challenge sets its own and this is
+## put back when it ends. Session-only, like CONDITIONS.
+var _manual_gearbox := false
 const CHALLENGE_LOCKED_TEXT := "LOCKED DURING A CHALLENGE"
 ## Runs the attempt in progress, under the level; null in free play.
 var _runner: ChallengeRunner = null
@@ -97,6 +100,7 @@ func _ready() -> void:
 	# Set before the first bind so nothing builds twice.
 	_dashboard.set_density_setting(ShellPrefs.dashboard_density())
 	_ui.set_user_scale(ShellPrefs.ui_scale())
+	_debug.set_extended(ShellPrefs.extended_debug())
 	_set_hud_visible(false)  # nothing to bind to until the level is up
 	_boot()
 
@@ -220,6 +224,8 @@ func _start_challenge(def: ChallengeDef) -> void:
 func _begin_challenge(def: ChallengeDef) -> void:
 	_challenge = def
 	InputRouter.set_bridge_only(true)
+	Bridge.set_challenge(true)
+	InputRouter.set_manual_gearbox(def.transmission == ChallengeDef.Transmission.MANUAL)
 	_touch.set_driving_locked(true)
 	_touch.set_challenge_mode(true)
 	if _level != null:
@@ -246,6 +252,8 @@ func _end_challenge() -> void:
 		return
 	_challenge = null
 	InputRouter.set_bridge_only(false)
+	Bridge.set_challenge(false)
+	InputRouter.set_manual_gearbox(_manual_gearbox)
 	_touch.set_driving_locked(false)
 	_touch.set_challenge_mode(false)
 	_close_challenge_info()
@@ -264,8 +272,8 @@ func _end_challenge() -> void:
 		_level.set_night(_night_before_challenge)
 
 
-## The attempt passed or failed: a result panel (RETRY / NEXT / MENU), and a pass is recorded (a
-## dev fixture's id is unknown to the store, so it never is).
+## The attempt passed or failed: a result panel (RETRY, plus NEXT on a pass), and a pass is
+## recorded (a dev fixture's id is unknown to the store, so it never is).
 func _on_challenge_finished(passed: bool, elapsed_s: float, message: String) -> void:
 	if _challenge == null:
 		return
@@ -279,7 +287,7 @@ func _on_challenge_finished(passed: bool, elapsed_s: float, message: String) -> 
 			_next_challenge_after(def) != null)
 	_result.retry_requested.connect(_on_result_retry)
 	_result.next_requested.connect(_on_result_next)
-	_result.menu_requested.connect(_on_result_menu)
+	_result.challenges_requested.connect(_on_result_challenges)
 	_ui.add_child(_result)
 
 
@@ -290,10 +298,15 @@ func _close_result() -> void:
 
 
 ## Same respawn the R key performs mid-attempt — the runner resets the attempt on any respawn.
+## A def whose course never started has no vehicle of the runner's own to respawn, so it is
+## restarted directly and fails again, visibly, rather than sitting on a stale result panel.
 func _on_result_retry() -> void:
 	_close_result()
 	_touch.set_challenge_mode(true)
-	_respawn()
+	if is_instance_valid(_runner) and _runner.attempt == null:
+		_runner.restart()
+	else:
+		_respawn()
 
 
 ## The touch RETRY button, live only while an attempt is running (no result panel to close).
@@ -335,9 +348,12 @@ func _on_result_next() -> void:
 		_show_challenge_select(next.id)
 
 
-func _on_result_menu() -> void:
+## CHALLENGES on the result panel: same as NEXT but back to the grid instead of the next
+## challenge's briefing.
+func _on_result_challenges() -> void:
 	_close_result()
 	_end_challenge()
+	_show_challenge_select()
 
 
 ## The next challenge sharing `def`'s family, in registry order, or null past the last one.
@@ -384,11 +400,13 @@ func _open_pause() -> void:
 	_pause = PauseMenu.new()
 	# Before add_child: CONTROLS sheet greys what the machine lacks, off the same capability read.
 	_pause.setup(_capabilities(), _dashboard.density_setting(), _ui.user_scale(),
-			_wind_preset, _current_preset, _wind_from_deg, _night, _challenge != null)
+			_wind_preset, _current_preset, _wind_from_deg, _night, _challenge != null,
+			_debug.is_extended())
 	_pause.resume_requested.connect(_close_pause)
 	_pause.respawn_requested.connect(_on_pause_respawn)
 	_pause.dashboard_density_changed.connect(_on_density_changed)
 	_pause.ui_scale_changed.connect(_on_ui_scale_changed)
+	_pause.extended_debug_changed.connect(_on_extended_debug_changed)
 	_pause.conditions_changed.connect(_on_conditions_changed)
 	_pause.night_toggled.connect(_on_night_toggled)
 	_ui.add_child(_pause)
@@ -420,6 +438,12 @@ func _on_density_changed(setting: int) -> void:
 func _on_ui_scale_changed(factor: float) -> void:
 	_ui.set_user_scale(factor)
 	ShellPrefs.set_ui_scale(factor)
+
+
+## SETTINGS picked "Extended debug labels". Remembered, same reasoning as density/UI size.
+func _on_extended_debug_changed(on: bool) -> void:
+	_debug.set_extended(on)
+	ShellPrefs.set_extended_debug(on)
 
 
 ## F2: cycles the same density setting the SETTINGS page's button does, so the menu and the key
@@ -730,9 +754,11 @@ func _open_vehicle_select() -> void:
 	# Before add_child. The level's raw allow-list plus its runtime rail answer, never a
 	# pre-filtered roster, so the screen can say why it can't spawn something.
 	_vehicles.setup(_level.info.allowed_vehicles, String(_level.info.display_name),
-			_level.has_closed_rail(), GameState.current_variant, _current_attachment())
+			_level.has_closed_rail(), GameState.current_variant, _current_attachment(),
+			_manual_gearbox)
 	_vehicles.vehicle_chosen.connect(_on_vehicle_picked)
 	_vehicles.attachment_chosen.connect(_on_attachment_picked)
+	_vehicles.gearbox_chosen.connect(_on_gearbox_picked)
 	_vehicles.closed.connect(_close_vehicle_select)
 	_ui.add_child(_vehicles)
 	_touch.set_active(false)
@@ -778,6 +804,13 @@ func _on_attachment_picked(id: String) -> void:
 		return
 	_level.vehicle.set_attachment(id)
 	_touch.set_capabilities(_capabilities())  # new attachment may be driven where the old wasn't
+
+
+## Fires on DRIVE for a family whose contract takes a gear byte. The selector is refused during
+## an attempt, so this never overrides a challenge's own gearbox.
+func _on_gearbox_picked(manual: bool) -> void:
+	_manual_gearbox = manual
+	InputRouter.set_manual_gearbox(manual)
 
 
 func _cycle_camera() -> void:

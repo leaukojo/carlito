@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="3_goal"]
+[ext_resource type="Script" path="res://src/challenges/goals/reach_zone_goal.gd" id="4_reach"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="5_def"]
+
+[sub_resource type="Resource" id="Resource_finish"]
+script = ExtResource("4_reach")
+zone = &"Finish"
+
+[resource]
+script = ExtResource("5_def")
+id = "car_manual_gearbox"
+title = "Manual gearbox"
+variant = "sedan-sports"
+transmission = 1
+arena = "car_arena"
+course = "res://src/levels/island/car_arena/courses/car_start_up_course.tscn"
+briefing = "Reach the finish line within the time limit. It's a manual car, so you'll need to shift gears manually!"
+hint = "Remember to keep the ignition on. Just override the gear selection signal."
+par_s = 11.5
+goals = Array[ExtResource("3_goal")]([SubResource("Resource_finish")])

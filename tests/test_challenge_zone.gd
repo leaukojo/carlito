@@ -45,6 +45,49 @@ func test_ring_with_no_inner_radius_is_an_unbounded_cylinder() -> void:
 	assert_bool(z.contains(Vector3(3.01, 0, 0))).is_false()
 
 
+## `half_length` > 0 stretches the ring into a stadium: the radius is measured to the segment
+## [-half_length, +half_length] on local X, not to the centre point.
+func test_stadium_straights_and_caps_are_inclusive() -> void:
+	var z := ZoneShape.ring(Transform3D.IDENTITY, 12.0, 18.0, 0.0, 20.0)
+	# On a straight: inner and outer edges, at the segment's midpoint and near an end.
+	assert_bool(z.contains(Vector3(0, 0, 12))).is_true()
+	assert_bool(z.contains(Vector3(0, 0, 18))).is_true()
+	assert_bool(z.contains(Vector3(19, 0, 15))).is_true()
+	assert_bool(z.contains(Vector3(0, 0, 11.99))).is_false()
+	assert_bool(z.contains(Vector3(0, 0, 18.01))).is_false()
+	# On a cap, past the straight's end: measured to the nearest end of the segment.
+	assert_bool(z.contains(Vector3(20 + 12, 0, 0))).is_true()
+	assert_bool(z.contains(Vector3(20 + 18, 0, 0))).is_true()
+	assert_bool(z.contains(Vector3(-20 - 15, 0, 0))).is_true()
+	assert_bool(z.contains(Vector3(20 + 11.99, 0, 0))).is_false()
+	assert_bool(z.contains(Vector3(20 + 18.01, 0, 0))).is_false()
+	# Inside the hole, or outside the band entirely.
+	assert_bool(z.contains(Vector3.ZERO)).is_false()
+	assert_bool(z.contains(Vector3(0, 0, 5))).is_false()
+	assert_bool(z.contains(Vector3(100, 0, 100))).is_false()
+
+
+## `half_length` 0 is exactly today's circle: distance is measured to the centre point.
+func test_stadium_with_zero_half_length_is_the_old_circle() -> void:
+	var z := ZoneShape.ring(Transform3D.IDENTITY, 10.0, 20.0, 0.0, 0.0)
+	assert_bool(z.contains(Vector3(15, 0, 0))).is_true()
+	assert_bool(z.contains(Vector3(0, 0, 20))).is_true()
+	assert_bool(z.contains(Vector3(0, 0, 9.99))).is_false()
+	assert_bool(z.contains(Vector3(20.01, 0, 0))).is_false()
+
+
+## A path clipping through the band between two ticks is caught the same way a circular ring's is.
+func test_a_path_crosses_the_stadium_band() -> void:
+	var z := ZoneShape.ring(Transform3D.IDENTITY, 12.0, 18.0, 0.0, 20.0)
+	assert_bool(z.crosses(Vector3(0, 0, 25), Vector3(0, 0, 5))).is_true()
+	assert_bool(z.crosses(Vector3(0, 0, 5), Vector3(0, 0, 5))).is_false()
+
+
+func test_stadium_needs_a_non_negative_half_length() -> void:
+	var z := ZoneShape.ring(Transform3D.IDENTITY, 10.0, 20.0, 0.0, -1.0)
+	assert_str(z.problem()).is_not_equal("")
+
+
 func test_zones_of_composes_transforms_outside_the_tree() -> void:
 	var course: Node3D = auto_free(Node3D.new())
 	course.position = Vector3(100, 0, 0)

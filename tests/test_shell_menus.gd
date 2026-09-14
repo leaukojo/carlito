@@ -203,6 +203,26 @@ func test_vehicle_select_emits_the_attachment_behind_the_body() -> void:
 	assert_array(order).is_equal(["semi", TrailerCatalog.TRAILERS[1]])
 
 
+## The gearbox choice exists only where the contract takes a gear byte, defaults to automatic, and
+## rides DRIVE as its own signal.
+func test_vehicle_select_offers_the_gearbox_only_where_the_family_takes_a_gear() -> void:
+	var car := _selector(PackedStringArray(["car"]), "sedan-sports")
+	assert_array(_labels(car)).contains(["AUTOMATIC", "MANUAL"])
+	var chosen := []
+	car.gearbox_chosen.connect(func(m: bool) -> void: chosen.append(m))
+	_press(car, "DRIVE")
+	_press(car, "MANUAL")
+	_press(car, "DRIVE")
+	assert_array(chosen).is_equal([false, true])
+
+	var boat := _selector(PackedStringArray(["boat"]), "boat-speed-a")
+	assert_array(_labels(boat)).not_contains(["AUTOMATIC", "MANUAL"])
+	var boat_chosen := []
+	boat.gearbox_chosen.connect(func(m: bool) -> void: boat_chosen.append(m))
+	_press(boat, "DRIVE")
+	assert_array(boat_chosen).is_empty()
+
+
 ## Pause overlay: all entries reachable, each reaches shell.
 func test_pause_menu_offers_the_shell_sections() -> void:
 	var pause: PauseMenu = auto_free(PauseMenu.new())

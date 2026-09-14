@@ -5,20 +5,22 @@ keyboard and touch are locked out — and is assumed to bring their own tooling 
 frames to sloppyCAN (a script, a replay tool, or frames by hand). A good challenge is one
 where the answer is in a signal, not in driving skill: a par time, an entry-speed gate or an
 invisible hazard usually stops "just drive slowly" from being a solution. **A par goes only where
-time is the point** — where a crawl would otherwise solve it (7, 9, 14, 15). Everywhere else the
-geometry or a gate closes the crawl and the challenge carries no par: a failing timer the lesson
-does not need only punishes a player reading signals slowly.
+time is the point** — where a crawl or a lazy gear would otherwise solve it (7, 14, 15).
+Everywhere else the geometry or a gate closes the crawl and the challenge carries no par: a failing
+timer the lesson does not need only punishes a player reading signals slowly.
 
-Numbered per vehicle, easiest first. Boat is provisional. § Wire facts says which signals a frame
-can drive and which only a sloppyCAN panel can.
+Numbered per vehicle. A number is an id that code comments quote, not the play order
+(`ChallengeRegistry.DEFS` is that), and a parked idea leaves its number unused. Boat is
+provisional. § Wire facts says which signals a frame can drive and which only a sloppyCAN panel
+can.
 
 ## Wire facts the catalogue depends on
 
-- **Gear byte 0 is "no gear opinion"**, not neutral: with accel above 0 the gearbox engages D1 and
-  auto-shifts (`InputRouter.arbitrate_bridge`). Only an exact byte (1-6, 255) is a manual gearbox.
-  A challenge that teaches gears carries the manual-gear constraint, which fails the attempt while
-  `VehicleInput.gear_auto` is set and the vehicle is moving. The same rule means the engine cannot
-  be revved standing still over the bridge.
+- **Every challenge declares its gearbox** (`ChallengeDef.transmission`, shown on the briefing).
+  AUTOMATIC, the default, reads the gear byte as a PRND lever: 255 reverses, 1-6 and 0 drive
+  forward and the gearbox picks the gear, so the engine cannot be revved standing still. MANUAL
+  takes the byte exactly and 0 is neutral; it belongs only where choosing the gear is the lesson
+  (Car 7 manual gearbox).
 - **The handbrake does not hold a car against the throttle**: it holds only below ~25-30 % accel,
   and an absent `handbrake` is off. Above that it drags, which a par time catches. **This is true
   only of the design invariant checked by the spec-level hierarchy test, not of a genuinely locked
@@ -74,8 +76,8 @@ can drive and which only a sloppyCAN panel can.
 
 1. **Start up.** Drive a straight road to the finish line. Accel alone does nothing: throttle is
    forced to 0 unless `key` is Ignition (the game says so with an IGNITION OFF notice). The
-   manual-gear constraint means the player also sends a real gear byte (D1) rather than relying on
-   byte 0. No par: a handbrake left on holds the car outright (§ Wire facts), so nothing drags.
+   gearbox is AUTOMATIC, so the key and accel are the whole lesson; gears are Car 7's. No par: a
+   handbrake left on holds the car outright (§ Wire facts), so nothing drags.
 2. **Easy turns.** A wide, winding road to the finish. Wide shoulders forgive a wrong `steer`
    value, so the player can tune left/right on the way and learn that `steer` is a percentage
    whose effect tapers with speed (watch `yaw`). No way to lose: it is the tutorial.
@@ -88,50 +90,81 @@ can drive and which only a sloppyCAN panel can.
    through a window before each corner and off after it. Easy, and introduces the lamp bits.
 5. **Lights.** A pitch-black level (no sun, zero ambient, black sky — the headlights are the only
    light source). The player finds the lamp frame, brings `lights` to LOW or HIGH, then drives a
-   narrow causeway. Falling off the edge respawns with a warning.
-6. **Stop in the box (blind).** Listed straight after 3: lit, 3 is easy by eye, so it only earns
-   its place as the setup for this one. Heavy fog, not dark. Challenge 3 with the box **unmarked** —
-   headlights would reveal a painted one. The distance from the start is given, so the player
-   stops on `odo`. `odo` is 1 m on the wire, so the box is at least a car length plus 2 m; lat/lon
-   is the precise alternative for a player who finds it.
-7. **Hard turns.** Same idea as 2, but the outside of every corner is a drop. The steering angle
-   has to be right before the turn, so the player plans `steer` against speed. A par time closes
-   the crawl, which would otherwise work because the steering keeps the most lock at low speed.
-8. **Signal your turns (blinking).** Challenge 4, but a steady bit fails. There is no blink timer
-   in the game — a lamp flashes only because its bit is toggled — so the player toggles `turnL` /
-   `turnR` like an indicator relay. Anything from 1.0 to 2.0 Hz passes (90 ± 30 flashes a minute,
-   the UN R6/R48 band), counted from the lamp edges. Trivial with a script, fiddly by hand.
-9. **Steep ramp.** With a gear byte the gearbox takes the exact gear and never shifts on its own.
-   The ramp is tuned so D6 lugs to a crawl and D1 sits on the rev limiter: the player shifts on
-   `rpm` (the manual-mode / AMT idea). Manual-gear constraint (byte 0 would auto-shift up the
-   ramp) and a par time (D1 on the limiter still climbs, slowly). Measured (`sedan-sports`): D6
-   starts losing the climb around 5-6° (peaks ~2.4 m/s at 4°, stalls/rolls back by 6°); D1 climbs
-   solidly through at least 15° and is still net-positive around 20° (readings above 20° got noisy
-   from launch-transient wheelspin and need a cleaner method). Tune the ramp around 5-8° for the
-   "D6 stalls, D1 still climbs" contrast — not much past ~15° or D1 stalls too.
-10. **Speed trap.** Hold 50 ±2 km/h through a long zone. The player builds their own cruise
-    control from `speed` — a first taste of a feedback loop. Uses an ungoverned car: the van,
-    pickup, pickup-flat and ambulance carry a `speed_limit`.
+   narrow causeway. Falling off the edge respawns with a warning. Estimated, not measured by eye
+   (headless has no renderer): with Godot's inverse-square SpotLight3D falloff, HIGH (energy 14.0)
+   matches LOW's (7.5) brightness at LOW's own 32 m range out to `32 * sqrt(14/7.5)` ≈ 44 m, then
+   fades to black by its 90 m cutoff — HIGH throws usefully to ~40-45 m, not the full 90 m. LOW's
+   wide 44° half-angle cone (11° pitch down) floods the near foreground; HIGH's narrower 38° cone
+   (1.5° pitch, nearly level) throws further and lights less of the shoulder up close. A ~5-6 m
+   causeway sits inside LOW's cone at the distances that matter (10-20 m ahead) and a ~120-150 m
+   length keeps the whole run within HIGH's ~40-45 m usable reach one rolling window at a time on
+   LOW, or mostly in view at once on HIGH — either beam suffices, per the catalogue's "LOW or
+   HIGH". This still needs the user's eye on a real deployed build to confirm the cones actually
+   read as bright enough against the black sky. Authored as `car_lights` on the arena's gravel
+   causeway (6 m paved): lights LOW or HIGH first, then a finish where the S ends, still over the
+   water, and a `Water` fall box over the lagoon under the deck. A detour round the lagoon onto
+   the causeway's far end is left open, since it is longer and just as dark. Measured with the
+   scripted-bridge driver: PASS on LOW at 30 km/h (19.0 s); with lights OFF the attempt never
+   passes; swerving off the deck RESETs.
+6. **Stop in the box (blind).** Listed straight after 3, the pair just before the blind stadium:
+   lit, 3 is easy by eye, so it only earns its place as the setup for this one. Fog at
+   0.2, thicker than the other FOG challenges' 0.12, not dark. Challenge 3 with **no markers at
+   all** — headlights would reveal a painted box, and a gate line or post seen through the fog
+   says where to brake, which made it trivial. The distance from the start is given, so the
+   player stops on `odo`. `odo` is 1 m on the wire, so the box is at least a car length plus 2 m;
+   lat/lon is the precise alternative for a player who finds it.
+7. **Manual gearbox.** Car 1's road and finish again, on a MANUAL gearbox with a par, so the
+   player shifts on `rpm`. Authored as `car_manual_gearbox` on Car 1's course. Measured with a
+   scripted-bridge driver (full throttle from the first tick, `--fixed-fps 60`): D1 alone 16.2 s
+   (on its ~50 km/h limiter from 4 s), D2 alone from rest 12.6 s, D1 then D2 12.0 s; shifting up
+   at 6700 rpm (reaching D4 by the line) with 0 / 0.5 / 1.0 s in neutral per shift, 10.4 / 11.0 /
+   11.4 s. **Par 11.5 s**: every one-gear run and the D1-D2 run fail, a full upshift sequence
+   passes with up to about 1 s per shift.
+8. **Hazard lights.** Flash the hazards for 5 s; anything from 1.0 to 2.0 Hz passes (90 ± 30
+   flashes a minute, the UN R6/R48 band). There is no hazard signal of its own: a hazard is
+   `turnL` and `turnR` toggled together, in phase, the same as RAMN 0x1BB carries them, so the
+   player is really building an indicator relay for both sides at once — a lamp lights only
+   while its bit is set, and `LampFlashHoldGoal` fails a lamp flashing alone as readily as a
+   steady one. Measured (`sedan-sports`): PASS flashing both sides in phase at 1.5 Hz (5.67 s to
+   the 5 s hold), FAIL flashing the left side alone ("no synced flash for 1.07 s").
+10. **Speed trap.** Hold 58 to 62 km/h through a 160 m zone. The player builds their own cruise
+    control from `speed` — a first taste of a feedback loop. The sedan's own gear limiters sit
+    either side of the band, so pinning a gear cannot pass it: measured (`sedan-sports`,
+    full throttle) D1 settles at 50.1 km/h and D2 at 77.5 km/h, both FAIL in the trap. A feedback
+    controller (`accel = k * (60 - kmh)`) PASSes at 60 km/h, 18.3 s through the trap.
 11. **Reverse park.** Gear R (255), then reverse into a bay and stop with the heading inside a
     tolerance, which is what forces a reverse entry. `lat` / `lon` / `heading` tell the player
     where the car sits relative to the bay; `posX` / `posZ` are whole metres and too coarse.
+    Measured footprint (`sedan-sports`, visual AABB in body-local space, chassis + wheel meshes
+    only — GPUParticles3D dust carries its own oversized travel AABB and is excluded): 1.56 m
+    wide x 3.06 m long x 1.53 m tall; wheelbase 1.58 m, track 1.14 m. Proposed bay: an interior
+    clear ~2.4 m wide x ~4.6 m long (about 0.4-0.8 m of margin per side/end over the footprint),
+    with a heading tolerance of ±20° around the bearing that points back out toward the aisle —
+    both `heading` (0.1°) and `lat`/`lon` (~1 cm) resolve that easily. A forward (nose-in) entry
+    ends up facing the opposite way, ~180° off the required "nose out" bearing — far outside any
+    tolerance narrower than 90°, so it cannot pass from the aisle. Paint has no collision, so a
+    car could still loop round and drive in nose first through the bay's back line; a `Behind`
+    fail zone over the ground behind the bay closes that. Authored as `car_reverse_park`: the bay
+    is painted 2.4 x 4.6 m on the apron's north edge, and its zone is that bay inset by the body's
+    overhang past the wheel contacts (the goal tests contacts), heading 180 ± 20°. Measured:
+    reversing in along an arc PASSes (17.4 s); nosing in from the aisle stops in the bay facing
+    north and never passes.
 12. **Rock out of a ditch.** The car starts in a pit too steep to drive out of directly. The
     player alternates D1 and R in time with the sign of `speed` to build momentum. Physics-model
     check: nothing clamps momentum between D1/R transitions (wheel spin is semi-implicit, not a
     hard clamp on road reaction — `src/vehicles/CLAUDE.md`), so momentum-rocking should work; the
-    actual pit grade still needs a real geometry pass in the authoring phase.
-13. **Hill start.** Stop on a ramp for a few seconds, then pull away with less than 10 cm of
-    rollback, measured by the game. On the wire the player watches the sign of `speed` and
-    `accLong` (posX/posZ cannot show 10 cm). Holding the brake and releasing once `accLong` goes
-    positive is the scripted solution; holding the handbrake while raising accel past its ~25 %
-    hold is the real-world one, and both pass. Measured handbrake-only rollback (`sedan-sports`):
-    11 cm @5°, 21 cm @10°, 32 cm @15°, 43 cm @20° — already past the 10 cm bar at the shallowest
-    grade tested. **The handbrake-then-accel method does not work at all as designed**: a genuinely
-    locked wheel never revs past idle regardless of throttle, so the handbrake never actually
-    releases under power (see the wire-fact note above and `docs/TODO.md`). Only the brake-pedal
-    method is real today, so the challenge is authored for it alone (the rollback goal cannot tell
-    the two apart; only the hint changes) until the drivetrain is fixed.
-14. **Cornering budget.** Take a curve under a par time without `accLat` exceeding a comfort
+    actual pit grade still needs a real geometry pass in the authoring phase. **No grade found
+    where rocking clearly beats a single D1 run**, on a symmetric V pit (HeightmapTerrain, flat
+    floor a few metres each side of the apex, walls climbing at a constant grade beyond it).
+    Two findings stood in the way: (1) D1 in gear holds position via the no-clutch idle-creep
+    floor (`src/vehicles/CLAUDE.md`) rather than rolling back when a climb stalls, so triggering a
+    D1/R alternation off the sign of `speed` (as a player watching the wire would) never fires —
+    the car just sits. (2) Timing the alternation instead (a fixed 1.4 s D1/R square wave, like
+    pumping the pedal) did no better than a single D1 run at the same grade, and often worse: a
+    single D1 run with a short flat run-up already climbs most of a 30-50° wall (2.4-3.5 m of a
+    3.5-8.6 m wall at 30-55°) in one attempt, so there is little room left for rocking to add.
+    Car 12 is parked rather than forced, per the catalogue's own allowance for "no grade found".
+14. **Perfect turns** (`car_corner_budget`). Take a curve under a par time without `accLat` exceeding a comfort
     limit. Too slow fails the clock, too fast fails the limit: a closed loop on `accLat`.
 15. **Ice patch.** An invisible low-grip patch on a course with a par time. It is a low-grip splat
     channel painted **under the road deck**: a conformed road reads the splat beneath it, so the
@@ -140,18 +173,37 @@ can drive and which only a sloppyCAN panel can.
     clean grip threshold: full-throttle launches read `slip` 10-13 regardless of grip (launch
     wheelspin dominates), and a gentler cruise-then-steer pass still gave noisy, non-monotonic
     readings across grip 0.2-1.0 (0.85-10.1). Needs a steady-speed, moderate-steer, no-launch
-    methodology before a threshold can be tuned.
-16. **Open loop vs closed loop.** The player records their frames on a course, then replays them.
-    Each attempt starts from a slightly shifted spawn (a seeded offset), so the replay drifts off
-    the road. Finishing requires steering from `lat` / `lon` / `heading` feedback instead of a
-    fixed frame sequence.
-17. **Blind circle.** Heavy fog on flat featureless ground. The player drives a given circle
-    (centre in lat/lon, radius in metres) and passes by completing one lap — 360 deg swept about
-    the centre — without leaving an invisible ring. Teaches lat/lon-to-metres conversion and
-    steering on a position error.
-18. **Blind slalom.** Heavy fog. Cone coordinates are given as a list; the player passes within a
-    set distance of each, in order, on GPS alone. The follow-up to 17: a sequence of targets
-    instead of one shape.
+    methodology before a threshold can be tuned. That methodology (`sedan-sports`, D1, full
+    throttle in a straight line to ~45 km/h, THEN a held moderate steer at reduced throttle
+    through a bend, `slip` sampled only during the bend) gives a clean, monotonic sweep: grip 1.0
+    (asphalt) baseline `slip` max 0.14 / mean 0.04; grip 0.6 spikes to max 2.54 / mean 0.75 (about
+    18x baseline) while the car stays controllable and in the 40-50 km/h band; grip <= 0.5 spins
+    the car out (`speed` goes negative mid-bend) with `slip` maxing past 9.7. Grip ~0.5-0.6 reads
+    as the patch value: a clear multi-x spike over baseline without a guaranteed spin-out.
+    **Built but unregistered: no par window at grip 0.55.** `car_ice_patch` (the arena's ice
+    road, R 35 m over 70°, Ice under the bend only) was measured with a pure-pursuit driver and
+    `slip` read only on the bend. Held speeds of 30 / 40 / 50 km/h PASS in 11.3 / 9.3 / 8.4 s
+    with bend `slip` 0.01 / 0.03 / 0.06, which is never a spike. 55 km/h reads 0.34 and runs wide
+    off the paved finish, and auto gear at full throttle enters at about 70 km/h, reads 0.58 and
+    leaves the road. D1 flat out (about 50 km/h) PASSes in 8.5 s at 0.20. So the fastest run
+    that passes never needs to read `slip`, and no par can fail a driver who ignores it. The spike
+    comes only a few km/h before the car is lost, and launch wheelspin reads 0.6-4 up to about
+    45 km/h, which drowns a player's slip-triggered lift before the bend. Re-gripping the channel
+    is a scaffold edit and a re-bake; whether that, or a different lesson on the same road, is
+    worth it is open.
+17. **Blind stadium.** Heavy fog on flat featureless ground. The player drives a stadium track —
+    two straights joined by two semicircles, given as the two end centres A and B in lat/lon plus
+    a radius — and passes by completing one lap without leaving an invisible band around segment
+    AB. A circle is solved by holding one steering angle; the stadium's curvature changes along
+    the way, so the error term stays one formula (`distance(P, segment AB) - R`) but a constant
+    steering angle can no longer hold it. `ZoneShape`'s RING gained `half_length`, stretching the
+    annulus into a stadium (0 keeps the circle); `RingLapGoal` needed no change, since the band
+    still never contains the centre and a single loop around it still nets exactly 360 deg
+    regardless of the loop's shape. Measured (`sedan-sports`, straights 40 m, R 15 m, band 12-18 m):
+    a driver steering on the lat/lon error (a pure-pursuit target on the ideal R-radius offset
+    curve, one heading gain) PASSes in 32.4 s; one constant steering angle picked to fit the 15 m
+    caps (about -16 deg, the closest a spawn-facing survives) FAILs by leaving the band in 7.8 s,
+    on the straight right after the spawn.
 
 ## Truck
 
@@ -191,7 +243,7 @@ can drive and which only a sloppyCAN panel can.
    `pto`, and hold `pto_rpm` inside 950-1050 while working. There is no engagement-order
    interlock (`pto_state` is the request with the key at Ignition, and `pto_mode` only picks the
    gearbox ratio), so the lesson is the ratio: the shaft turns 1000 only near the rated 2200 engine
-   rpm, which the player holds with gear and ground speed under the manual-gear constraint.
+   rpm, which the player holds with gear and ground speed on a MANUAL gearbox.
 2. **Mud.** The tractor is stuck in a mud patch with one side firmer than the other. The player
    reads `wheel_slip` and engages `diff_lock` and/or `fwd_drive` to drive out. The split grip is
    deliberate: on uniform mud both rear wheels slip alike and the diff lock does nothing, while
@@ -264,8 +316,9 @@ can drive and which only a sloppyCAN panel can.
 
 - **CAN-only lock.** Keyboard and touch ignored, including the N key and the pause menu's TIME
   button (either would undo a dark level). The attachment key E is locked too, except in Truck 1.
-- **Constraints beside goals**: par times and entry-speed gates as fail conditions, the
-  manual-gear constraint, a flag that must never be set, a mode that must never be entered.
+- **Constraints beside goals**: par times and entry-speed gates as fail conditions, a flag that
+  must never be set, a mode that must never be entered.
+- **A gearbox per challenge**: AUTOMATIC unless choosing the gear is the lesson.
 - **Finish / fail zones** with a message, and respawn with a warning.
 - **A short briefing** per challenge, quoting wire resolution where a goal depends on it.
 - **Visibility** needs no new rendering: pitch black is level lighting with no sun, zero ambient
@@ -279,6 +332,29 @@ can drive and which only a sloppyCAN panel can.
 
 ## Parked
 
+- **Blind slalom (car).** Removed from the set (debfbbb); kept as an idea. It was the follow-up
+  to the blind circle: cone coordinates given as a list, passed in order on GPS alone. Car 17's
+  slot became the blind stadium instead.
+- **Hard turns (car).** Removed from the set; its slot 7 became the manual gearbox. The ridge road
+  it drove (L L R at R 18 / 15 / 20 m, cliffs both sides) is still in `car_arena`, used by no
+  course; bringing it back is a def plus its course and fall-volume builder from
+  git history. What it measured: on a 7 m road corners want R >= 15 m (at R 12 m the sedan runs
+  wide at any speed); a steep edge of a few metres already reads as a fall; a pure-pursuit driver
+  passed at 20-45 km/h (29.1-15.3 s) and ran off the R 20 m corner from 50 km/h, so its par was
+  22 s.
+- **Hill start (car).** Removed from the set, along with its rollback goal (git history). Only
+  the brake-pedal method works: a locked handbrake wheel never revs past idle, so the
+  handbrake never releases under power (§ Wire facts). Measured: brake held, then brake off and
+  full throttle in the same tick rolls back 0.1-0.3 cm at 10-20 deg; the handbrake alone rolls
+  back 11 cm at 5 deg, over a 10 cm bar at every grade tried.
+- **Steep ramp (car).** Removed from the set; Car 7 carries the gear lesson. It drove the ridge
+  road's 8 deg ramp on a MANUAL gearbox with a 10 s par. Measured (`sedan-sports`, full throttle,
+  exact gear): D1 5.5 s, D2 5.9 s, D3 8.6 s; D4-D6 ran past the par. At 7-8 deg D6 settles to a
+  ~9 km/h crawl at idle rpm (the no-clutch idle-creep floor) while D1 climbs on its ~49 km/h
+  limiter; D6 loses the climb from about 5-6 deg, D1 still climbs at 15-20 deg.
+- **Open loop vs closed loop (car).** Removed from the set. A seeded spawn jitter was meant to
+  make a replayed frame log drift off the hard-turns road; at 2.5 m / 12 deg, 3 of 10 replays
+  still passed, short of the 8-of-10 aim.
 - **Long descent (truck).** Keeping speed with `retarder` to save the air does not work as a
   lesson. The reservoirs charge at 0.45 bar/s and draw 1.10 bar/s times the pedal, so any pedal
   up to about 41 % never drains them, and 40 % pedal out-brakes any drivable grade. Without a

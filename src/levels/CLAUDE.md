@@ -33,6 +33,9 @@
 - **Re-run `paint_road_asphalt` after any road or road-profile edit.** A stale paint is
   invisible — nothing in the bake, the tests or CI notices that the committed splat2 has
   stopped matching the road profile.
+- **Never run `paint_road_asphalt` on `car_arena`**: its scaffold paints its own roads at the inset
+  paved width, then splat channel 4, **Ice**, under the ice road's bend only. The tool's full-width
+  stamp would bury the ice, and nothing would notice.
 - Water: `get_height()` is flat; shader waves are visual-only and **must never feed
   physics**. The kill volume is an axis-aligned rect — don't rotate the node. Water and
   terrain are direct children of the level, never under `Authoring`.

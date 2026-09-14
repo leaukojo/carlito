@@ -78,6 +78,13 @@ const IGNITION_NOTICE_TEXT := "IGNITION OFF - MOVE THE ENGINE KEY"
 
 ## Edge latch for the "ignition off" notice — see _warn_if_ignition_off.
 var _ignition_warned := false
+## Raised and cleared by text match, like the ignition notice; dwell is the shell default.
+const FALLBACK_NOTICE_TEXT := "NO DRIVING CONTROLS FROM SLOPPYCAN - KEYBOARD DRIVES"
+## Edge latch for the fallback notice — see _set_fallback_notice.
+var _fallback_warned := false
+## This tick's answer to "who drives": true while the bridge's values drive the vehicle outright.
+## False with no bridge and in fallback (a live bridge carrying no driving control).
+var _bridge_drives := false
 
 ## Set by the shell for a challenge attempt: local and touch are never merged, and with no live
 ## bridge the vehicle gets `locked_idle()`. A live bridge drives exactly as it does in free play.
@@ -86,6 +93,10 @@ var _bridge_only := false
 ## so a course can be authored and checked without sloppyCAN. Never true in a release export.
 var _dev_keys := false
 const DEV_KEYS_NOTICE_TEXT := "DEV: KEYBOARD DRIVES THIS CHALLENGE"
+## Gearbox mode, set by the shell (vehicle selector in free play, ChallengeDef.transmission in an
+## attempt). Bridge-only: it decides how `arbitrate_bridge` reads the gear byte; local input has no
+## shift keys and always drives automatic.
+var _manual_gearbox := false
 
 
 func _ready() -> void:
@@ -96,6 +107,10 @@ func set_bridge_only(on: bool) -> void:
 	_bridge_only = on
 	if on and _dev_keys:
 		GameState.notice.emit(DEV_KEYS_NOTICE_TEXT, 0.0)
+
+
+func set_manual_gearbox(on: bool) -> void:
+	_manual_gearbox = on
 
 
 ## Vehicles register on _ready to read speed/gear. A new body clears _node_fail/_flight_mode/
@@ -131,20 +146,36 @@ func unregister_vehicle(vehicle: Node3D) -> void:
 
 func _physics_process(delta: float) -> void:
 	# Autoloads tick before scene nodes, ahead of every vehicle's frame.
-	# Bridge wins while it has fresh data; otherwise local input works untouched.
+	# A fresh bridge carrying a driving control drives outright. A fresh bridge carrying none
+	# (non-RAMN traffic) keeps every field it owns but hands the driving group to local input —
+	# except under the challenge lock, where it drives as sent. No bridge: local, untouched.
 	var bridge_raw := _bridge_source.poll()
-	if bridge_raw.get(&"active", false):
-		_current = arbitrate_bridge(bridge_raw)
+	var live := bool(bridge_raw.get(&"active", false))
+	_bridge_drives = live and (bool(bridge_raw.get(&"drive_sourced", false)) or _bridge_only)
+	if _bridge_drives:
+		_set_fallback_notice(false)
+		_current = arbitrate_bridge(bridge_raw, _manual_gearbox)
 		_warn_if_ignition_off(bridge_raw)
 		return
 	_clear_ignition_notice()
-	if _bridge_only and not _dev_keys:
+	_set_fallback_notice(live)
+	if not live and _bridge_only and not _dev_keys:
 		# Neither local source is polled, so no router toggle advances under the lock either.
 		_current = locked_idle()
 		return
+	var local := _local_tick(delta, live)
+	_current = blend_local_driving(bridge_raw, local, _manual_gearbox) if live else local
+
+
+## The local path: poll keyboard + touch, advance the router-owned toggles, arbitrate. In
+## fallback (`driving_only`) only the driving group's own edges advance: a toggle whose field the
+## bridge still owns would otherwise latch unseen and take effect the moment the bridge goes away.
+func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 	var raw := _local_source.poll(delta)
 	if _touch_source != null:
 		raw = merge_local(raw, _touch_source.poll())
+	if driving_only:
+		raw = driving_edges_only(raw)
 	# Single headlight owner: either source's cycle edge advances the shared level.
 	if bool(raw.get(&"lights_cycle", false)):
 		_lights = _lights % 4 + 1
@@ -204,7 +235,7 @@ func _physics_process(delta: float) -> void:
 	if _vehicle != null:
 		speed = _vehicle.get_speed()
 		gear = _vehicle.get_gear_byte()
-	_current = arbitrate_local(raw, speed, gear)
+	return arbitrate_local(raw, speed, gear)
 
 
 ## Tell the driver why throttle does nothing: `arbitrate_bridge` zeroes it silently whenever
@@ -226,6 +257,25 @@ func _clear_ignition_notice() -> void:
 	if _ignition_warned:
 		_ignition_warned = false
 		GameState.notice_cleared.emit(IGNITION_NOTICE_TEXT)
+
+
+## Say why the keyboard drives while sloppyCAN is connected. Edge-triggered like the ignition
+## notice, and dropped the moment the bridge sends a driving control or goes away.
+func _set_fallback_notice(on: bool) -> void:
+	if on == _fallback_warned:
+		return
+	_fallback_warned = on
+	if on:
+		GameState.notice.emit(FALLBACK_NOTICE_TEXT, 0.0)
+	else:
+		GameState.notice_cleared.emit(FALLBACK_NOTICE_TEXT)
+
+
+## Whether the bridge drives the vehicle outright this tick — the "who drives" question, where
+## `Bridge.is_active()` only says a peer is connected. False in fallback, where the driving
+## group (see `blend_local_driving`) is local and every other bridge-owned field is not.
+func bridge_drives() -> bool:
+	return _bridge_drives
 
 
 ## The merged input for this tick. Returns the router's own struct, read-only by convention —
@@ -401,12 +451,56 @@ static func arbitrate_local(raw: Dictionary, speed: float, gear_byte: int,
 	return out
 
 
-## Bridge (sloppyCAN) arbitration, pure for tests. While the bridge is active and sending a
-## real gear byte, the byte owns direction — throttle is `accel` signed by it (+D1-D6, -R),
-## local reverse UX ignored (gear_auto = false). Byte 0 means "no gear opinion", handing the
-## gearbox back to auto. Brake is never throttle; key gates throttle; steer/handbrake/lights/
-## horn pass through. Values arrive pre-normalized to VehicleInput ranges from bridge_source.
-static func arbitrate_bridge(vals: Dictionary) -> VehicleInput:
+## The toggle/cycle edges whose latched field `blend_local_driving` takes from local.
+const DRIVING_EDGES: Array[StringName] = [&"lights_cycle", &"arm_toggle"]
+
+
+## Drop every toggle/cycle edge outside DRIVING_EDGES. Keyed on the edge naming (`*_toggle`,
+## `*_cycle`), so a toggle added later is dropped in fallback by default — the safe direction.
+static func driving_edges_only(raw: Dictionary[StringName, Variant]) -> Dictionary[StringName, Variant]:
+	var out: Dictionary[StringName, Variant] = {}
+	for k: StringName in raw:
+		var edge := String(k).ends_with("_toggle") or String(k).ends_with("_cycle")
+		if not edge or DRIVING_EDGES.has(k):
+			out[k] = raw[k]
+	return out
+
+
+## Fallback arbitration, pure for tests: a live bridge that carries no driving control. Every
+## field is the bridge's except the driving group, which is `local`'s: pedals, steer, handbrake,
+## key, gear (so local drives automatic — throttle is signed by it and cannot split from it), the
+## foot-brake STOP lamp, and the controls RAMN is the only bridge source of and a key exists for
+## (lights level, horn). The drone's arm and vertical axis and the plane's elevator join it: the
+## drone's DroneCAN arm is always sourced, off while nobody flies from sloppyCAN, so without them
+## a drone could never leave the ground. `steer` stays the bridge's when it sends `guidance` or
+## `rudder` — an auto-steer holding the wheel is a command the bridge actually makes.
+static func blend_local_driving(vals: Dictionary, local: VehicleInput,
+		manual := false) -> VehicleInput:
+	var out := arbitrate_bridge(vals, manual)
+	out.throttle = local.throttle
+	out.brake = local.brake
+	if not (vals.has("guidance") or vals.has("rudder")):
+		out.steer = local.steer
+	out.handbrake = local.handbrake
+	out.key = local.key
+	out.gear_request = local.gear_request
+	out.gear_auto = local.gear_auto
+	out.lights = local.lights
+	out.horn = local.horn
+	out.lamps.brake_lamp = local.lamps.brake_lamp
+	out.arm = local.arm
+	out.climb = local.climb
+	out.elevator = local.elevator
+	return out
+
+
+## Bridge (sloppyCAN) arbitration, pure for tests. The gear byte owns direction — throttle is
+## `accel` signed by it (-R, + otherwise), local reverse UX ignored. How much more it owns is the
+## gearbox mode: `manual` takes the byte exactly (0 = N, 1-6, R; gear_auto = false); automatic
+## reads it as a PRND lever (R reverses, 1-6 is D and the gearbox picks the gear; byte 0 is
+## "no gear opinion", also D). Brake is never throttle; key gates throttle; steer/handbrake/
+## lights/horn pass through. Values arrive pre-normalized to VehicleInput ranges from bridge_source.
+static func arbitrate_bridge(vals: Dictionary, manual := false) -> VehicleInput:
 	var out := VehicleInput.new()
 	# Steer overrides, both pre-normalized to -1..1 from bridge_source: 'guidance' (tractor
 	# auto-steer) wins as an external computer holding the wheel; 'rudder' (boat) IS steer.
@@ -483,21 +577,21 @@ static func arbitrate_bridge(vals: Dictionary) -> VehicleInput:
 	out.body_cmd = int(vals.get("body_cmd", 0))
 	var gear := int(vals.get("gear", GEAR_N))
 	var accel := clampf(float(vals.get("accel", 0.0)), 0.0, 1.0)
-	if gear == GEAR_R:
-		out.gear_auto = false  # bridge byte is exact and owns direction
-		out.gear_request = gear
-		out.throttle = -accel
+	out.gear_auto = not manual
+	out.throttle = -accel if gear == GEAR_R else accel
+	if manual:
+		# Exact byte: 0 is a real N (free revs), and nothing ever shifts on its own.
+		out.gear_request = gear if gear == GEAR_R or (gear >= GEAR_D1 and gear <= 6) else GEAR_N
+	elif gear == GEAR_R:
+		out.gear_request = GEAR_R
 	elif gear >= GEAR_D1 and gear <= 6:
-		out.gear_auto = false
-		out.gear_request = gear
-		out.throttle = accel
+		# A D intent: the drivetrain keeps the drive gear it is in and auto-shifts from there.
+		out.gear_request = GEAR_D1
 	else:
 		# Byte 0 means "no gear opinion" (not park): hardware that never sends 0x077 would
 		# otherwise leave the accelerator dead with no explanation. Gearbox drives itself as
 		# with no bridge: forward, auto-shifting. Reverse still needs the explicit R byte.
-		out.gear_auto = true
 		out.gear_request = GEAR_D1 if accel > 0.0 else GEAR_N
-		out.throttle = accel
 
 	if out.key != KEY_IGNITION:
 		out.throttle = 0.0

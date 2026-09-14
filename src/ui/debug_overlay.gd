@@ -1,7 +1,8 @@
 class_name DebugOverlay
 extends Label
-## Perf overlay, toggled with F3. Reads engine Performance monitors (FPS, frame time, draw
-## calls, primitives, VRAM, node count) so the 60 fps target can be checked while driving.
+## Perf overlay, toggled with F3. Shows only FPS by default; SETTINGS' "Extended debug labels"
+## adds frame time, draw calls, primitives, VRAM, node count and the grip/artic/flow/UI-scale
+## lines, read off engine Performance monitors so the 60 fps target can be checked while driving.
 ## Read on the deployed web build: draw calls are the first diagnostic, not a design budget.
 ## Plain text only.
 
@@ -11,11 +12,24 @@ const WIDTH := 260.0
 
 var _accum := 0.0
 var _level: Node  ## active level, for the per-wheel surface-grip readout (set by the shell)
+## SETTINGS' "Extended debug labels": grip/artic/flow/UI-scale lines beyond the FPS one.
+var _extended := false
 
 
 ## The shell rebinds this whenever it swaps the level/vehicle (mirrors Dashboard.bind).
 func set_level(level: Node) -> void:
 	_level = level
+
+
+## SETTINGS applies this (mirrors Dashboard.set_density_setting); persisted through ShellPrefs.
+func set_extended(on: bool) -> void:
+	_extended = on
+	if visible:
+		_refresh()
+
+
+func is_extended() -> bool:
+	return _extended
 
 
 func _ready() -> void:
@@ -67,8 +81,11 @@ func _refresh() -> void:
 	var nodes := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
 	var frame_ms := (Performance.get_monitor(Performance.TIME_PROCESS)
 			+ Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0
-	text = "FPS %d  (%.1f ms)\ndraw calls %d\nprimitives %d\nVRAM %.1f MB\nnodes %d" % [
-		Engine.get_frames_per_second(), frame_ms, draw_calls, prims, vram, nodes]
+	text = "FPS %d" % Engine.get_frames_per_second()
+	if not _extended:
+		return
+	text += "  (%.1f ms)\ndraw calls %d\nprimitives %d\nVRAM %.1f MB\nnodes %d" % [
+		frame_ms, draw_calls, prims, vram, nodes]
 	text += _grip_line()
 	text += _articulation_line()
 	text += _flow_line("wind", "wind_vector")

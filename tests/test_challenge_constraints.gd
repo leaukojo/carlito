@@ -13,25 +13,6 @@ func _frame(signals: Dictionary, pos := Vector3.ZERO) -> ChallengeFrame:
 	return f
 
 
-func _gear_frame(gear_auto: bool, status: int) -> ChallengeFrame:
-	var f := _frame({"status": status})
-	f.input.gear_auto = gear_auto
-	return f
-
-
-## Byte 0 has driven nothing while the car stands still, so it is allowed there; the same byte
-## while moving is an automatic gearbox doing the work and fails.
-func test_manual_gear_allows_auto_at_standstill_and_fails_it_while_moving() -> void:
-	var c := ManualGearConstraint.new()
-	var parked := VehicleTelemetry.ST_IGNITION | VehicleTelemetry.ST_GROUND
-	assert_int(c.step(_gear_frame(true, parked), DT)).is_equal(S.RUNNING)
-	assert_int(c.step(_gear_frame(false, parked | VehicleTelemetry.ST_MOVING), DT)) \
-			.is_equal(S.RUNNING)
-	assert_int(c.step(_gear_frame(true, parked | VehicleTelemetry.ST_MOVING), DT)) \
-			.is_equal(S.FAIL)
-	assert_str(c.message).is_not_empty()
-
-
 func test_signal_limit_absolute_bounds_both_directions_inclusively() -> void:
 	var c := SignalLimitConstraint.new()
 	c.signal_name = "accLat"

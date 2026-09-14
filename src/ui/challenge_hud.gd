@@ -6,6 +6,7 @@ extends Control
 ## No emoji; colour/type from the theme.
 
 var _runner: ChallengeRunner
+var _panel: PanelContainer
 var _label: Label
 
 
@@ -13,19 +14,20 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	var panel := PanelContainer.new()
-	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_panel = PanelContainer.new()
+	_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	# Below both the top-edge Notice line (RESET's warning included) and CoachCue's banner
 	# (offset_top 90) — an attempt can show either at the same time as this.
-	panel.offset_top = UiTheme.px(self, 150.0)
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(panel)
+	_panel.offset_top = UiTheme.px(self, 150.0)
+	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_panel.visible = false
+	add_child(_panel)
 
 	_label = Label.new()
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_label.theme_type_variation = &"Title"
-	panel.add_child(_label)
+	_panel.add_child(_label)
 
 
 func set_runner(runner: ChallengeRunner) -> void:
@@ -34,7 +36,9 @@ func set_runner(runner: ChallengeRunner) -> void:
 
 func _process(_dt: float) -> void:
 	if _runner == null or _runner.attempt == null:
+		_panel.visible = false
 		return
+	_panel.visible = true
 	var a := _runner.attempt
 	var text := "GOAL %d / %d   %s S" % [
 		mini(a.goal_index + 1, a.goal_count()), a.goal_count(), String.num(a.elapsed, 1)]

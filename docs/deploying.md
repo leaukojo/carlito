@@ -68,6 +68,11 @@ while they run different builds a visit to one deletes the other's). They are no
 worker's cache list: that list is Godot-generated, and any entry missing from its cache sends an
 offline navigation to the offline page. Off the web every island is on disk and nothing is fetched.
 
+A local export's build name is always `index`, never unique the way CI's `c2-<sha>` is, so
+`LevelPacks` never reuses a cached pack under that name (`may_reuse_cache`) — a local re-export
+must re-export EVERY pack, not only the main one, or the islands stay on the old content while
+the main pack looks current.
+
 CI exports one per `Web <id>` preset right after the main export:
 `--export-patch "Web <id>" c2-<sha>.<id>.pck --patches c2-<sha>.pck`. Load-bearing, and pinned
 by `tests/test_export_filter.gd` unless noted:

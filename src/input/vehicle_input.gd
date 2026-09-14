@@ -48,7 +48,7 @@ var steer := 0.0       ## -1..1, negative = left
 var handbrake := 0.0   ## 0..1
 var gear_request := 0  ## RAMN gear byte: 0=N, 1..6=D1-D6, 255=R
 var gear_auto := true  ## true: byte is a direction intent, gearbox auto-shifts in D;
-                       ## false (bridge): byte is exact and owns direction
+                       ## false (bridge, manual gearbox): byte is exact and owns direction
 var key := 1           ## 1=Lock, 2=On, 3=Ignition
 var horn := false
 var lights := 1        ## 1=OFF, 2=CLEARANCE, 3=LOW, 4=HIGH

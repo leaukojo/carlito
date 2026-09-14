@@ -10,10 +10,18 @@
     "car_arena_strip_curve.tres",
     "car_arena_corners_curve.tres",
     "car_arena_winding_curve.tres",
+    "car_arena_ridge_curve.tres",
+    "car_arena_causeway_curve.tres",
+    "car_arena_ice_curve.tres",
     "courses/car_start_up_course.tscn",
     "courses/car_easy_turns_course.tscn",
     "courses/car_box_stop_course.tscn",
-    "courses/car_turn_signals_course.tscn"
+    "courses/car_box_blind_course.tscn",
+    "courses/car_turn_signals_course.tscn",
+    "courses/car_speed_trap_course.tscn",
+    "courses/car_lights_course.tscn",
+    "courses/car_reverse_park_course.tscn",
+    "courses/car_ice_patch_course.tscn"
   ],
   "notes": [
     "gen_car_arena.gd owns this level AND its challenge courses end to end, and overwrites",
@@ -29,7 +37,7 @@
       "args": [
         "scaffold"
       ],
-      "why": "Writes the island heightmap and splats, the three road curves, the LevelInfo and the level .tscn text."
+      "why": "Writes the island heightmap (plateau, lagoon, ridge) and splats (road paint, the ice bend, the apron), the six road curves, the LevelInfo and the level .tscn text."
     },
     {
       "kind": "import",
@@ -41,7 +49,7 @@
       "args": [
         "courses"
       ],
-      "why": "Packs the four car course scenes from the saved curves."
+      "why": "Packs the nine car course scenes from the saved curves."
     },
     {
       "kind": "bake"

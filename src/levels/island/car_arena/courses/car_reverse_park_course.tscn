@@ -1,0 +1,68 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/challenges/arena_preview.gd" id="1_7w2eb"]
+[ext_resource type="Script" path="res://src/challenges/challenge_zone.gd" id="2_vwi0w"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="3_s5ftn"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_m7rx7"]
+albedo_color = Color(1, 0.8, 0.1, 1)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_mgt52"]
+material = SubResource("StandardMaterial3D_m7rx7")
+size = Vector2(2.4, 0.4)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_cfhpy"]
+material = SubResource("StandardMaterial3D_m7rx7")
+size = Vector2(2.4, 0.4)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_crhq8"]
+material = SubResource("StandardMaterial3D_m7rx7")
+size = Vector2(0.4, 4.6)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_m2mq7"]
+material = SubResource("StandardMaterial3D_m7rx7")
+size = Vector2(0.4, 4.6)
+
+[node name="CarReverseParkCourse" type="Node3D" unique_id=215322668]
+
+[node name="ArenaPreview" type="Node3D" parent="." unique_id=975669649]
+script = ExtResource("1_7w2eb")
+arena = "car_arena"
+
+[node name="Bay" type="Node3D" parent="." unique_id=1805996146]
+transform = Transform3D(-1, 0, -2.4492127e-16, 0, 1, 0, 2.4492127e-16, 0, -1, -125, 8, -83.7)
+script = ExtResource("2_vwi0w")
+size = Vector3(1.98, 6, 3.12)
+
+[node name="Markers" type="Node3D" parent="." unique_id=1721076858]
+
+[node name="BayNear" type="MeshInstance3D" parent="Markers" unique_id=1492165109]
+transform = Transform3D(-1, 0, -2.4492127e-16, 0, 1, 0, 2.4492127e-16, 0, -1, -125, 6.03, -81.6)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_mgt52")
+
+[node name="BayFar" type="MeshInstance3D" parent="Markers" unique_id=1650835328]
+transform = Transform3D(-1, 0, -2.4492127e-16, 0, 1, 0, 2.4492127e-16, 0, -1, -125, 6.03, -85.799995)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_cfhpy")
+
+[node name="BayLeft" type="MeshInstance3D" parent="Markers" unique_id=367345616]
+transform = Transform3D(-1, 0, -2.4492127e-16, 0, 1, 0, 2.4492127e-16, 0, -1, -124, 6.03, -83.7)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_crhq8")
+
+[node name="BayRight" type="MeshInstance3D" parent="Markers" unique_id=1849614712]
+transform = Transform3D(-1, 0, -2.4492127e-16, 0, 1, 0, 2.4492127e-16, 0, -1, -126, 6.03, -83.7)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_m2mq7")
+
+[node name="Behind" type="Node3D" parent="." unique_id=942818384]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -125, 7, -91)
+script = ExtResource("2_vwi0w")
+size = Vector3(12, 4, 10)
+
+[node name="Spawn" type="Marker3D" parent="." unique_id=1618900201]
+transform = Transform3D(6.123032e-17, 0, -1, 0, 1, 0, 1, 0, 6.123032e-17, -140, 6.6, -76.399994)
+script = ExtResource("3_s5ftn")
+vehicle_types = PackedStringArray("car")

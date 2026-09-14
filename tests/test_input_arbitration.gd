@@ -114,15 +114,41 @@ func _bridge(accel := 0.0, brake := 0.0, steer := 0.0, handbrake := 0.0,
 	}
 
 
-func test_bridge_gear_owns_direction() -> void:
-	var d1: VehicleInput = RouterScript.arbitrate_bridge(_bridge(1.0, 0.0, 0.0, 0.0, GEAR_D1))
+func test_manual_bridge_gear_is_exact_and_owns_direction() -> void:
+	var d1: VehicleInput = RouterScript.arbitrate_bridge(_bridge(1.0, 0.0, 0.0, 0.0, GEAR_D1), true)
 	assert_int(d1.gear_request).is_equal(GEAR_D1)
 	assert_float(d1.throttle).is_equal(1.0)
 	assert_bool(d1.gear_auto).is_false()
+	var rev: VehicleInput = RouterScript.arbitrate_bridge(_bridge(1.0, 0.0, 0.0, 0.0, GEAR_R), true)
+	assert_int(rev.gear_request).is_equal(GEAR_R)
+	assert_float(rev.throttle).is_equal(-1.0)
+	assert_bool(rev.gear_auto).is_false()
+	# Byte 0 is a real N in manual: accel still passes (the engine free-revs), nothing engages.
+	var neu: VehicleInput = RouterScript.arbitrate_bridge(_bridge(1.0, 0.0, 0.0, 0.0, GEAR_N), true)
+	assert_int(neu.gear_request).is_equal(GEAR_N)
+	assert_float(neu.throttle).is_equal(1.0)
+	assert_bool(neu.gear_auto).is_false()
+
+
+func test_manual_bridge_all_forward_gears_drive_forward() -> void:
+	for g in [2, 3, 4, 5, 6]:
+		var out: VehicleInput = RouterScript.arbitrate_bridge(_bridge(0.5, 0.0, 0.0, 0.0, g), true)
+		assert_int(out.gear_request).is_equal(g)
+		assert_float(out.throttle).is_equal(0.5)
+
+
+## Automatic is the default: the byte is a PRND lever, and the gearbox picks the gear.
+func test_automatic_bridge_reads_the_gear_as_a_direction() -> void:
+	for g in [1, 2, 3, 4, 5, 6]:
+		var out: VehicleInput = RouterScript.arbitrate_bridge(_bridge(0.5, 0.0, 0.0, 0.0, g))
+		assert_int(out.gear_request).is_equal(GEAR_D1)
+		assert_bool(out.gear_auto).is_true()
+		assert_float(out.throttle).is_equal(0.5)
 	var rev: VehicleInput = RouterScript.arbitrate_bridge(_bridge(1.0, 0.0, 0.0, 0.0, GEAR_R))
 	assert_int(rev.gear_request).is_equal(GEAR_R)
 	assert_float(rev.throttle).is_equal(-1.0)
-	# N (byte 0) = no gear opinion, NOT park: gearbox auto-drives forward with no bridge.
+	assert_bool(rev.gear_auto).is_true()
+	# Byte 0 = no gear opinion, NOT park: gearbox auto-drives forward as with no bridge.
 	var neu: VehicleInput = RouterScript.arbitrate_bridge(_bridge(1.0, 0.0, 0.0, 0.0, GEAR_N))
 	assert_int(neu.gear_request).is_equal(GEAR_D1)
 	assert_float(neu.throttle).is_equal(1.0)
@@ -132,11 +158,14 @@ func test_bridge_gear_owns_direction() -> void:
 	assert_float(idle.throttle).is_equal(0.0)
 
 
-func test_bridge_all_forward_gears_drive_forward() -> void:
-	for g in [2, 3, 4, 5, 6]:
-		var out: VehicleInput = RouterScript.arbitrate_bridge(_bridge(0.5, 0.0, 0.0, 0.0, g))
-		assert_int(out.gear_request).is_equal(g)
-		assert_float(out.throttle).is_equal(0.5)
+func test_the_router_gearbox_mode_reaches_bridge_arbitration() -> void:
+	var router: Node = auto_free(RouterScript.new())
+	router._bridge_source = _LiveBridge.new()
+	router._physics_process(1.0 / 60.0)
+	assert_bool(router.get_vehicle_input().gear_auto).is_true()
+	router.set_manual_gearbox(true)
+	router._physics_process(1.0 / 60.0)
+	assert_bool(router.get_vehicle_input().gear_auto).is_false()
 
 
 func test_bridge_key_gates_throttle() -> void:
@@ -732,7 +761,16 @@ class _CountingTouch extends RefCounted:
 ## A bridge that is live and sending full throttle in D1.
 class _LiveBridge extends BridgeSourceScript:
 	func poll() -> Dictionary[StringName, Variant]:
-		return {&"active": true, &"accel": 1.0, &"gear": GEAR_D1, &"key": RouterScript.KEY_IGNITION}
+		return {&"active": true, &"drive_sourced": true, &"accel": 1.0, &"gear": GEAR_D1,
+				&"key": RouterScript.KEY_IGNITION}
+
+
+## A bridge that is live but carries no driving control (non-RAMN traffic). It sends key Lock so
+## a test can see fallback ignore the bridge's key, and it commands the refuse body.
+class _QuietBridge extends BridgeSourceScript:
+	func poll() -> Dictionary[StringName, Variant]:
+		return {&"active": true, &"drive_sourced": false, &"key": RouterScript.KEY_LOCK,
+				&"body_cmd": 2}
 
 
 ## Kept out of the tree so no real physics tick runs between the steps a test makes by hand.
@@ -780,6 +818,110 @@ func test_a_live_bridge_drives_under_the_lock() -> void:
 	assert_float(out.throttle).is_equal(1.0)
 	assert_int(out.gear_request).is_equal(GEAR_D1)
 	assert_int(touch.polls).is_equal(0)
+
+
+func test_a_quiet_bridge_under_the_lock_still_owns_the_vehicle() -> void:
+	# A challenge: no driving controls until the player sends them is the expected state (S8).
+	var touch := _CountingTouch.new()
+	var router := _locked_router(touch)
+	router._bridge_source = _QuietBridge.new()
+	router._physics_process(1.0 / 60.0)
+	assert_int(touch.polls).is_equal(0)
+	assert_bool(router.bridge_drives()).is_true()
+	assert_float(router.get_vehicle_input().throttle).is_equal(0.0)
+	assert_int(router.get_vehicle_input().key).is_equal(RouterScript.KEY_LOCK)
+
+
+# --- fallback: a live bridge with no driving controls -------------------------------
+
+func test_drive_sourced_is_the_presence_of_a_driving_control() -> void:
+	assert_bool(BridgeSourceScript.drive_sourced({})).is_false()
+	assert_bool(BridgeSourceScript.drive_sourced({"beacon": 1, "strobe": 0, "key": 3})).is_false()
+	for control in ["accel", "brake", "steer"]:
+		assert_bool(BridgeSourceScript.drive_sourced({control: 0})).is_true()
+
+
+func test_a_quiet_bridge_hands_the_driving_group_to_local() -> void:
+	var touch := _CountingTouch.new()
+	var router: Node = auto_free(RouterScript.new())
+	router.set_touch_source(touch)
+	router._bridge_source = _QuietBridge.new()
+	router._physics_process(1.0 / 60.0)
+	assert_int(touch.polls).is_equal(1)
+	assert_bool(router.bridge_drives()).is_false()
+	var out: VehicleInput = router.get_vehicle_input()
+	assert_int(out.key).is_equal(RouterScript.KEY_IGNITION)
+	assert_float(out.throttle).is_equal(1.0)
+	assert_int(out.body_cmd).is_equal(2)
+	# A driving control arriving hands the vehicle straight back to the bridge.
+	router._bridge_source = _LiveBridge.new()
+	router._physics_process(1.0 / 60.0)
+	assert_bool(router.bridge_drives()).is_true()
+	assert_int(router.get_vehicle_input().body_cmd).is_equal(0)
+
+
+func test_the_blend_takes_the_driving_group_from_local_and_the_rest_from_the_bridge() -> void:
+	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_N, RouterScript.KEY_LOCK)
+	vals["body_cmd"] = 1
+	vals["hitch_pos"] = 20.0
+	vals["red_stop"] = true
+	vals["pto"] = true
+	var raw := _raw(0.8, 0.0, -0.5, 1.0)
+	raw["lights"] = 3
+	raw["horn"] = true
+	raw["arm"] = true
+	raw["climb"] = 0.4
+	raw["elevator"] = -0.3
+	var local: VehicleInput = RouterScript.arbitrate_local(raw, 0.0, GEAR_N)
+	var out: VehicleInput = RouterScript.blend_local_driving(vals, local, true)
+	assert_float(out.throttle).is_equal_approx(0.8, 1e-6)
+	assert_float(out.steer).is_equal(-0.5)
+	assert_float(out.handbrake).is_equal(1.0)
+	assert_int(out.key).is_equal(RouterScript.KEY_IGNITION)
+	assert_int(out.gear_request).is_equal(GEAR_D1)
+	# Local always drives automatic, even with the manual gearbox selected.
+	assert_bool(out.gear_auto).is_true()
+	assert_int(out.lights).is_equal(3)
+	assert_bool(out.horn).is_true()
+	assert_bool(out.arm).is_true()
+	assert_float(out.climb).is_equal_approx(0.4, 1e-6)
+	assert_float(out.elevator).is_equal_approx(-0.3, 1e-6)
+	# Everything outside the group stays the bridge's.
+	assert_int(out.body_cmd).is_equal(1)
+	assert_float(out.hitch_request).is_equal_approx(0.2, 1e-6)
+	assert_bool(out.lamps.red_stop).is_true()
+	assert_bool(out.pto).is_true()
+
+
+## A touch stand-in pressing every edge on one tick.
+class _EveryEdgeTouch extends RefCounted:
+	func poll() -> Dictionary[StringName, Variant]:
+		return {&"lights_cycle": true, &"arm_toggle": true, &"pto_toggle": true,
+				&"flight_mode_cycle": true, &"node_fail_cycle": true}
+
+
+func test_fallback_advances_only_the_driving_toggles() -> void:
+	# A PTO or flight-mode edge the bridge still owns must not latch unseen and apply the moment
+	# the bridge goes away.
+	var router: Node = auto_free(RouterScript.new())
+	router.set_touch_source(_EveryEdgeTouch.new())
+	router._bridge_source = _QuietBridge.new()
+	router._physics_process(1.0 / 60.0)
+	assert_int(router._lights).is_equal(2)
+	assert_bool(router._armed).is_true()
+	assert_bool(router._pto).is_false()
+	assert_int(router._flight_mode).is_equal(0)
+	assert_int(router._node_fail).is_equal(0)
+
+
+func test_the_blend_leaves_a_bridge_steer_override_on_the_wheel() -> void:
+	var local: VehicleInput = RouterScript.arbitrate_local(_raw(0.5, 0.0, -1.0), 0.0, GEAR_N)
+	var vals := _bridge()
+	vals["guidance"] = 0.25
+	assert_float(RouterScript.blend_local_driving(vals, local).steer).is_equal(0.25)
+	vals = _bridge()
+	vals["rudder"] = -0.75
+	assert_float(RouterScript.blend_local_driving(vals, local).steer).is_equal(-0.75)
 
 
 func test_the_dev_override_lets_local_drive_under_the_lock() -> void:

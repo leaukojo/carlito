@@ -372,6 +372,101 @@ func test_period_band_limits() -> void:
 	assert_bool(LampFrequencyGoal.period_in_band(64 * DT, 1.0, 2.0, tol)).is_false()
 
 
+# --- lamp flash hold (hazards) ------------------------------------------------------------
+
+func _hazard_goal(hold_s := 1.0) -> LampFlashHoldGoal:
+	var g := LampFlashHoldGoal.new()
+	g.lamps = [&"turn_left", &"turn_right"]
+	g.hold_s = hold_s
+	_bind(g, {})
+	return g
+
+
+func _hazard_frame(left: bool, right: bool) -> ChallengeFrame:
+	var f := _frame()
+	f.input.lamps.turn_left = left
+	f.input.lamps.turn_right = right
+	return f
+
+
+## Drives left/right off a list of [left, right] pairs, one tick each; returns the first
+## non-RUNNING status.
+func _drive_hazards(g: LampFlashHoldGoal, states: Array) -> int:
+	for pair in states:
+		var s := g.step(_hazard_frame(pair[0], pair[1]), DT)
+		if s != S.RUNNING:
+			return s
+	return S.RUNNING
+
+
+## A seed tick (both off, establishing the baseline) then `cycles` periods of `period` ticks
+## (half on, half off), both lamps together.
+func _synced_states(period: int, cycles: int) -> Array:
+	var out := [[false, false]]
+	for _c in cycles:
+		for t in period:
+			var lit: bool = t < period / 2.0
+			out.append([lit, lit])
+	return out
+
+
+func test_hazards_pass_flashing_together_at_one_point_five_hertz() -> void:
+	var g := _hazard_goal(2.0)
+	assert_int(_drive_hazards(g, _synced_states(40, 6))).is_equal(S.PASS)   # 40 ticks = 1.5 Hz
+
+
+## hold_s must clear the timeout window (1.05 s) here: a one-off coincidental edge must not
+## outlast it and pass on wall-clock time alone, the way the real def's 5 s hold never does.
+func test_hazards_fail_one_side_only() -> void:
+	var g := _hazard_goal(2.0)
+	var states := [[false, false]]
+	for _c in 4:
+		for t in 40:
+			states.append([t < 20, false])
+	assert_int(_drive_hazards(g, states)).is_equal(S.FAIL)
+
+
+func test_hazards_fail_a_steady_bit() -> void:
+	var g := _hazard_goal(2.0)
+	var states := [[false, false]]
+	for _c in 4:
+		for t in 40:
+			states.append([t < 20, true])
+	assert_int(_drive_hazards(g, states)).is_equal(S.FAIL)
+
+
+## One good 1.5 Hz cycle to start timing, then two 6 Hz cycles: the second common edge is still
+## in band (it closes the first cycle), the third measures the fast period and fails.
+func test_hazards_fail_a_period_out_of_band() -> void:
+	var g := _hazard_goal(2.0)
+	var states := _synced_states(40, 1)
+	states.append_array(_synced_states(10, 2).slice(1))
+	assert_int(_drive_hazards(g, states)).is_equal(S.FAIL)
+
+
+func test_hazards_fail_out_of_phase_edges() -> void:
+	var g := _hazard_goal(2.0)
+	var states := [[false, false]]
+	for _c in 4:
+		for t in 40:
+			states.append([t < 20, ((t + 6) % 40) < 20])   # right trails by 0.1 s, past tolerance
+	assert_int(_drive_hazards(g, states)).is_equal(S.FAIL)
+
+
+func test_hazards_pass_lands_on_exactly_its_hold_tick() -> void:
+	var g := _hazard_goal(2.0)
+	var states := _synced_states(40, 4)
+	# The first common edge is states[1]; a 2 s hold passes 120 ticks after it, not one sooner.
+	var passed_at := -1
+	for i in states.size():
+		var s := g.step(_hazard_frame(states[i][0], states[i][1]), DT)
+		if s != S.RUNNING:
+			assert_int(s).is_equal(S.PASS)
+			passed_at = i
+			break
+	assert_int(passed_at).is_equal(121)
+
+
 # --- ring lap ----------------------------------------------------------------------
 
 func _ring_goal() -> RingLapGoal:
@@ -427,6 +522,49 @@ func test_ring_lap_needs_a_ring_with_an_inner_radius() -> void:
 	var solid: Dictionary[StringName, ZoneShape] = {&"Z": ZoneShape.ring(Transform3D.IDENTITY, 0.0, 5.0)}
 	assert_array(g.bind(boxed)).has_size(1)
 	assert_array(g.bind(solid)).has_size(1)
+
+
+## A `half_length` > 0 ring is a stadium band: the hole never reaches the centre (inner_r > 0)
+## and the band is a single convex loop around it, so the net 360 deg sweep about the centre
+## still counts exactly one lap with no change to the goal itself.
+func _stadium_point(hl: float, r: float, t: float) -> Vector3:
+	var cap := PI * r
+	var straight := 2.0 * hl
+	var s := t * (2.0 * cap + 2.0 * straight)
+	if s < cap:
+		var a := -PI / 2.0 + (s / cap) * PI
+		return Vector3(hl + r * cos(a), 0, r * sin(a))
+	s -= cap
+	if s < straight:
+		return Vector3(hl - s, 0, r)
+	s -= straight
+	if s < cap:
+		var a := PI / 2.0 + ((s) / cap) * PI
+		return Vector3(-hl + r * cos(a), 0, r * sin(a))
+	s -= cap
+	return Vector3(-hl + s, 0, -r)
+
+
+func test_ring_lap_passes_once_around_a_stadium_track() -> void:
+	var g := RingLapGoal.new()
+	g.zone = &"Ring"
+	_bind(g, {&"Ring": ZoneShape.ring(Transform3D.IDENTITY, 12.0, 18.0, 0.0, 20.0)})
+	var status := S.RUNNING
+	var steps := 400
+	for i in steps + 1:
+		status = g.step(_frame(_stadium_point(20.0, 15.0, float(i) / steps)), DT)
+		if status != S.RUNNING:
+			break
+	assert_int(status).is_equal(S.PASS)
+
+
+func test_ring_lap_fails_leaving_the_stadium_band() -> void:
+	var g := RingLapGoal.new()
+	g.zone = &"Ring"
+	_bind(g, {&"Ring": ZoneShape.ring(Transform3D.IDENTITY, 12.0, 18.0, 0.0, 20.0)})
+	for i in 50:
+		g.step(_frame(_stadium_point(20.0, 15.0, float(i) / 400.0)), DT)
+	assert_int(g.step(_frame(Vector3.ZERO), DT)).is_equal(S.FAIL)
 
 
 # --- payload -------------------------------------------------------------------------
@@ -512,45 +650,3 @@ func test_input_equals_takes_any_of_its_values() -> void:
 	f.input.lights = 4
 	assert_int(g.step(f, DT)).is_equal(S.PASS)
 	assert_array(InputEqualsGoal.new().problems()).is_not_empty()
-
-
-# --- rollback ------------------------------------------------------------------------------
-
-func _hill_goal() -> RollbackGoal:
-	var g := RollbackGoal.new()
-	g.zone = &"Ramp"
-	g.hold_s = 1.0
-	_bind(g, {&"Ramp": _box()})
-	return g
-
-
-## Forward is -Z, so rolling back is +Z.
-func _hill(z: float, speed := 0.0) -> ChallengeFrame:
-	var f := _frame(Vector3(0, 0, z))
-	f.velocity = Vector3(0, 0, -speed)
-	return f
-
-
-func test_hill_start_within_the_rollback_passes() -> void:
-	var g := _hill_goal()
-	assert_that(_run(g, _hill(0.0), 60).x).is_equal(S.RUNNING)
-	assert_int(g.step(_hill(0.09, -0.2), DT)).is_equal(S.RUNNING)
-	assert_int(g.step(_hill(-1.0, 1.0), DT)).is_equal(S.RUNNING)
-	assert_int(g.step(_hill(-2.0, 1.0), DT)).is_equal(S.PASS)
-
-
-func test_hill_start_past_the_rollback_fails() -> void:
-	var g := _hill_goal()
-	_run(g, _hill(0.0), 60)
-	assert_int(g.step(_hill(0.11, -0.2), DT)).is_equal(S.FAIL)
-	assert_str(g.message).contains("11 cm")
-
-
-## Movement before the stop has been held is not rollback: nothing has been anchored yet.
-func test_hill_start_only_measures_after_the_held_stop() -> void:
-	var g := _hill_goal()
-	_run(g, _hill(0.0), 30)
-	assert_int(g.step(_hill(0.5, -1.0), DT)).is_equal(S.RUNNING)
-	assert_that(_run(g, _hill(0.5), 60).x).is_equal(S.RUNNING)
-	assert_int(g.step(_hill(0.55, -0.2), DT)).is_equal(S.RUNNING)
-	assert_int(g.step(_hill(0.62, -0.2), DT)).is_equal(S.FAIL)

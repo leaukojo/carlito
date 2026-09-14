@@ -19,6 +19,9 @@ signal finished(ok: bool)
 ## "Web <id>" preset per such level (tests/test_export_filter.gd pins both).
 const PACK_ROOT := "res://src/levels/island/"
 const CACHE_DIR := "user://level_packs/"
+## Every local export shares this build name (`_build_name`'s doc), so it is never unique per
+## export: a cached pack under it can be an older export's, indistinguishable from a fresh one.
+const LOCAL_BUILD := "index"
 
 var _http: HTTPRequest = null
 var _path := ""  # where the pack being fetched lives once complete
@@ -49,6 +52,13 @@ static func stale(files: PackedStringArray, build: String) -> PackedStringArray:
 	return out
 
 
+## Whether a pack cached under `build`'s name may be reused across page loads. False for
+## `LOCAL_BUILD`: every local export shares that name, so a cached copy could be a stale
+## export's, and `stale()` above never evicts it because it belongs to THIS build's name.
+static func may_reuse_cache(build: String) -> bool:
+	return build != LOCAL_BUILD
+
+
 ## Bytes of the download in flight; 0 when nothing is downloading.
 func downloaded_bytes() -> int:
 	return _http.get_downloaded_bytes() if _http != null else 0
@@ -67,8 +77,10 @@ func fetch(level_id: String) -> void:
 		DirAccess.remove_absolute(CACHE_DIR + f)
 	_path = CACHE_DIR + pack_name(build, level_id)
 	if FileAccess.file_exists(_path):
-		_mount()
-		return
+		if may_reuse_cache(build):
+			_mount()
+			return
+		DirAccess.remove_absolute(_path)
 	_http = HTTPRequest.new()
 	# No `download_file`: on the web 4.7.1 reports success and writes nothing. The body is written
 	# in one go on completion instead, so no half pack is ever left in the cache.

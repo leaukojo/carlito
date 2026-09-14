@@ -2,8 +2,8 @@ class_name ChallengeFrame
 extends RefCounted
 ## One physics tick as a challenge sees it: the only input every goal and constraint reads. Goals
 ## judge the PUBLISHED wire value under its contract name (`accLat`, not `acc_lat`), because that
-## is what the player's tooling receives and what a briefing quotes. Lamp bits, `gear_auto` and
-## `led` come from the `VehicleInput` (rule 5's struct, never a side channel). Geometry comes from
+## is what the player's tooling receives and what a briefing quotes. Lamp bits and `led` come
+## from the `VehicleInput` (rule 5's struct, never a side channel). Geometry comes from
 ## the body itself: pose, velocity, wheel contacts. The game judges those, as it judges a finish
 ## line.
 

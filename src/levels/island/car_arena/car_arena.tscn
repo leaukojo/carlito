@@ -18,6 +18,10 @@
 [ext_resource type="Resource" path="res://src/levels/island/car_arena/car_arena_winding_curve.tres" id="16_winding"]
 [ext_resource type="Texture2D" path="res://src/levels/island/car_arena/car_arena_island_splat2.png" id="17_splat2"]
 [ext_resource type="Script" path="res://src/levels/base/world_bounds.gd" id="18_bounds"]
+[ext_resource type="Resource" path="res://src/levels/island/car_arena/car_arena_ridge_curve.tres" id="19_ridge"]
+[ext_resource type="Resource" path="res://src/levels/island/car_arena/car_arena_causeway_curve.tres" id="20_causeway"]
+[ext_resource type="Resource" path="res://src/levels/island/car_arena/car_arena_ice_curve.tres" id="21_ice"]
+[ext_resource type="Resource" path="res://kit/roads/gravel_profile.tres" id="22_gravel"]
 
 [sub_resource type="PlaneMesh" id="SeaBedMesh"]
 size = Vector2(560.0, 560.0)
@@ -95,8 +99,8 @@ coast_roughness = 0.35
 terrace_levels = 2
 splatmap = ExtResource("7_splat")
 splatmap2 = ExtResource("17_splat2")
-channel_names = PackedStringArray("Grass", "Dirt", "Sand", "Rock", "Snow", "Mud", "Asphalt", "Gravel")
-channel_grip = PackedFloat32Array(0.8, 0.7, 0.6, 0.7, 0.75, 0.5, 1.0, 0.85)
+channel_names = PackedStringArray("Grass", "Dirt", "Sand", "Rock", "Ice", "Mud", "Asphalt", "Gravel")
+channel_grip = PackedFloat32Array(0.8, 0.7, 0.6, 0.7, 0.55, 0.5, 1.0, 0.85)
 sand_height = 2.0
 dirt_slope_deg = 22.0
 rock_slope_deg = 38.0
@@ -135,3 +139,33 @@ metadata/_custom_type_script = "uid://cpl5vh8pdc04w"
 
 [node name="Path" type="Path3D" parent="AuthoringRoot/Winding"]
 curve = ExtResource("16_winding")
+
+[node name="Ridge" type="Node3D" parent="AuthoringRoot"]
+script = ExtResource("12_road")
+profile = ExtResource("13_asphalt")
+conform_falloff = 2.0
+conform_epsilon = 0.05
+metadata/_custom_type_script = "uid://cpl5vh8pdc04w"
+
+[node name="Path" type="Path3D" parent="AuthoringRoot/Ridge"]
+curve = ExtResource("19_ridge")
+
+[node name="Causeway" type="Node3D" parent="AuthoringRoot"]
+script = ExtResource("12_road")
+profile = ExtResource("22_gravel")
+conform_falloff = 4.0
+conform_epsilon = 0.05
+metadata/_custom_type_script = "uid://cpl5vh8pdc04w"
+
+[node name="Path" type="Path3D" parent="AuthoringRoot/Causeway"]
+curve = ExtResource("20_causeway")
+
+[node name="IceRoad" type="Node3D" parent="AuthoringRoot"]
+script = ExtResource("12_road")
+profile = ExtResource("13_asphalt")
+conform_falloff = 8.0
+conform_epsilon = 0.05
+metadata/_custom_type_script = "uid://cpl5vh8pdc04w"
+
+[node name="Path" type="Path3D" parent="AuthoringRoot/IceRoad"]
+curve = ExtResource("21_ice")

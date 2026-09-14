@@ -12,6 +12,8 @@ extends Control
 ## both the empty string, and both are real choices).
 signal vehicle_chosen(variant: String)
 signal attachment_chosen(id: String)
+## Also follows DRIVE, and only for a family whose contract takes a gear byte (`has_gearbox`).
+signal gearbox_chosen(manual: bool)
 signal closed
 
 const CardGrid := preload("res://src/ui/card_grid.gd")
@@ -41,6 +43,7 @@ var _attachment := ""                  ## seeded from the driven machine, then o
 ## Variant `_attachment` was seeded from. "" is not "nothing handed over" — it's BOBTAIL and
 ## DETACHED, both real choices; without this a car's "" browsed to the semi would show bobtail.
 var _attachment_of := ""
+var _manual_gearbox := false  ## seeded from the shell's free-play choice
 
 var _pulse_t := 0.0  ## phase of the DRIVE button's attention pulse, in turns
 
@@ -63,13 +66,14 @@ var _settle := 0
 ## `allowed` is the level's raw allow-list, `rail` its runtime closed-loop answer — both rather
 ## than a pre-filtered roster, since the screen shows what it cannot spawn and must say why.
 func setup(allowed: PackedStringArray, level_name: String, rail: bool,
-		variant: String, attachment: String) -> void:
+		variant: String, attachment: String, manual_gearbox := false) -> void:
 	_allowed = allowed
 	_level_name = level_name
 	_has_rail = rail
 	_variant = variant if VehicleCatalog.VARIANTS.has(variant) else ""
 	_attachment = attachment
 	_attachment_of = _variant
+	_manual_gearbox = manual_gearbox
 
 
 func _ready() -> void:
@@ -265,10 +269,43 @@ func _on_family_pressed(family: String) -> void:
 func _refresh_cards() -> void:
 	_clear(_cards)
 	var reason := _refusal(_family)
+	if VehicleSelect.has_gearbox(_family):
+		_cards.add_child(_gearbox_row())
 	_cards.add_child(_heading("BODY", reason))
 	_cards.add_child(_card_grid(VehicleCatalog.variants_in_family(_family), _variant,
 			reason, _on_variant_pressed))
 	_refresh_attachments()
+
+
+## AUTOMATIC | MANUAL as one ButtonGroup. The choice only changes how the bridge gear byte is
+## read (InputRouter.set_manual_gearbox); the keyboard has no shift keys, so the note says so.
+func _gearbox_row() -> Control:
+	var box := VBoxContainer.new()
+	box.add_child(_heading("GEARBOX"))
+	var row := HBoxContainer.new()
+	var group := ButtonGroup.new()
+	for manual: bool in [false, true]:
+		var b := Button.new()
+		b.text = "MANUAL" if manual else "AUTOMATIC"
+		b.custom_minimum_size.y = UiTheme.px(self, UiTheme.TOUCH_MIN)
+		b.toggle_mode = true
+		b.button_group = group
+		b.theme_type_variation = &"Choice"
+		b.button_pressed = manual == _manual_gearbox
+		b.pressed.connect(_on_gearbox_pressed.bind(manual))
+		row.add_child(b)
+	box.add_child(row)
+	var note := Label.new()
+	note.text = "Manual: the bridge gear byte is exact and 0 is neutral. " \
+			+ "The keyboard always drives automatic."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.theme_type_variation = &"MutedSmall"
+	box.add_child(note)
+	return box
+
+
+func _on_gearbox_pressed(manual: bool) -> void:
+	_manual_gearbox = manual
 
 
 func _heading(text: String, reason := "") -> Label:
@@ -480,6 +517,15 @@ static func protocols_for(family: String) -> String:
 	return ", ".join(upper)
 
 
+## Whether the family's contract takes a gear byte, the only thing a gearbox mode acts on (rule 4:
+## read, not listed here).
+static func has_gearbox(family: String) -> bool:
+	if Contract.data == null or not Contract.data.is_valid():
+		return false
+	var gear := Contract.data.get_signal_def("gear", "in")
+	return gear != null and gear.vehicles.has(family)
+
+
 func _spec_text(variant: String) -> String:
 	var family := VehicleCatalog.family_of(variant)
 	var lines := PackedStringArray([
@@ -535,6 +581,8 @@ func _on_drive() -> void:
 	vehicle_chosen.emit(_variant)
 	if _preview != null and _preview.has_method("set_attachment"):
 		attachment_chosen.emit(_attachment)
+	if VehicleSelect.has_gearbox(VehicleCatalog.family_of(_variant)):
+		gearbox_chosen.emit(_manual_gearbox)
 
 
 func _reflow() -> void:

@@ -33,3 +33,10 @@ func test_stale_keeps_only_this_builds_packs() -> void:
 			"c2-bbbb.level_3.pck", "c2-aaaa.level_3.pck"])
 	assert_array(Array(LevelPacks.stale(files, "c2-bbbb"))).contains_exactly(
 			["c2-aaaa.level_1.pck", "c2-aaaa.level_3.pck"])
+
+
+## The local export's build name is not unique across exports, so its cache is never trusted:
+## every fetch downloads fresh. A CI build's unique name may be reused.
+func test_local_builds_never_reuse_the_cache() -> void:
+	assert_bool(LevelPacks.may_reuse_cache(LevelPacks.LOCAL_BUILD)).is_false()
+	assert_bool(LevelPacks.may_reuse_cache("c2-1a2b3c4d")).is_true()

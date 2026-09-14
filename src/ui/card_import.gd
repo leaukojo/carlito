@@ -2,11 +2,11 @@ class_name CardImport
 extends RefCounted
 
 ## Import settings for the selector card thumbnails (`src/ui/level_thumbs/`,
-## `src/ui/vehicle_thumbs/`). Cards are photographs shown at one size, never sampled in 3D,
-## so they import lossy with no mipmaps — a real download saving.
+## `src/ui/vehicle_thumbs/`, `src/ui/challenge_thumbs/`). Cards are photographs shown at one
+## size, never sampled in 3D, so they import lossy with no mipmaps — a real download saving.
 ##
 ## Godot's `.import` sidecar defaults to lossless, so a freshly shot card silently costs more
-## than its neighbours unless the generator stamps it itself; both thumb generators call this
+## than its neighbours unless the generator stamps it itself; every thumb generator calls this
 ## right after `save_png` (mirrors `TerrainGen.ensure_import_settings`, which stamps the
 ## opposite way for heightmaps/splatmaps, since terrain reads those back with `get_image()`).
 
@@ -17,6 +17,11 @@ const LOSSY_QUALITY := 0.9
 ## these PNGs at runtime.
 const VEHICLE_THUMB_DIR := "res://src/ui/vehicle_thumbs"
 const LEVEL_THUMB_DIR := "res://src/ui/level_thumbs"
+const CHALLENGE_THUMB_DIR := "res://src/ui/challenge_thumbs"
+
+
+static func challenge_thumb_path(id: String) -> String:
+	return "%s/%s.png" % [CHALLENGE_THUMB_DIR, id]
 
 
 ## Stamp `png_path`'s `.import` sidecar so the card imports lossy and mipmap-free.

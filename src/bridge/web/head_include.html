@@ -6,7 +6,9 @@
 
   Contract with sloppyCAN's carlito.js:
     IN  : parent posts {type:'carlitoInput',  version, values:{…}}  -> stashed here
-    OUT : game calls __carlito.publish(values) -> posts {type:'carlitoOutput', version, values}
+    OUT : game calls __carlito.publish(values, challenge)
+          -> posts {type:'carlitoOutput', version, values, challenge}
+          (`challenge` is envelope, not a contract signal: true while an attempt runs)
 
   Inbound is intentionally not origin-gated on the game side: it only drives the local
   car (no sensitive sink). The dangerous direction — telemetry reaching a live CAN bus —
@@ -21,7 +23,7 @@
     window.__carlito.inT = Date.now();
     if (typeof d.version === 'number') window.__carlito.ver = d.version;
   });
-  window.__carlito.publish = function (values) {
-    parent.postMessage({ type: 'carlitoOutput', version: window.__carlito.outVer, values: values }, '*');
+  window.__carlito.publish = function (values, challenge) {
+    parent.postMessage({ type: 'carlitoOutput', version: window.__carlito.outVer, values: values, challenge: !!challenge }, '*');
   };
 </script>

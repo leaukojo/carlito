@@ -70,7 +70,7 @@ func _pack(root: Node, path: String) -> void:
 	root.free()
 
 
-## A car on flatland: stop in the box with the indicator on, a comfort limit and a manual box.
+## A car on flatland: stop in the box with the indicator on, under a comfort limit.
 func _good(variant := "sedan-sports") -> ChallengeDef:
 	var d := ChallengeDef.new()
 	d.id = "box_stop"
@@ -91,7 +91,6 @@ func _good(variant := "sedan-sports") -> ChallengeDef:
 	limit.high = 4.0
 	limit.absolute = true
 	d.constraints.append(limit)
-	d.constraints.append(ManualGearConstraint.new())
 	return d
 
 
@@ -130,6 +129,18 @@ func test_def_fields_are_checked() -> void:
 	d.fog_density = 0.05
 	assert_array(ChallengeRegistry.problems(d)).is_empty()
 	_assert_problem(_good("hovercraft"), "unknown variant")
+
+
+## The gearbox mode only means something where the contract takes a gear byte.
+func test_a_manual_gearbox_needs_a_family_that_takes_a_gear() -> void:
+	var d := _good()
+	d.transmission = ChallengeDef.Transmission.MANUAL
+	assert_array(ChallengeRegistry.problems(d)).is_empty()
+	assert_str(d.gearbox_text()).is_equal("GEARBOX: MANUAL")
+	var drone := _good("drone-mk2")
+	assert_str(drone.gearbox_text()).is_empty()
+	drone.transmission = ChallengeDef.Transmission.MANUAL
+	_assert_problem(drone, "manual gearbox on the drone family")
 
 
 ## Rule 10: the web font has no emoji glyphs.
@@ -234,7 +245,7 @@ func test_check_parameters_are_checked() -> void:
 	(d.goals[0] as LampWindowGoal).lamp = &"lights"
 	_assert_problem(d, "not an on/off LampInput bit")
 	d = _good()
-	(d.constraints[1] as ManualGearConstraint).from_goal = 2
+	(d.constraints[0] as SignalLimitConstraint).from_goal = 2
 	_assert_problem(d, "from_goal 2 names no goal")
 
 

@@ -5,7 +5,7 @@ extends Control
 ## emoji.
 ##
 ## Two layers, hidden independently: IMPORTANT (the top-left column every vehicle has — MENU,
-## GARAGE, LEVEL, VIEW, CHALLENGE; F5) and DRIVING (joystick and the bottom-right cluster; F4). The cluster
+## GARAGE, LEVEL, CAMERA, CHALLENGE; F5) and DRIVING (joystick and the bottom-right cluster; F4). The cluster
 ## is three tiers, most-used nearest the thumb: the pedal row (GAS, BRAKE, UP/DOWN, PANTO), one
 ## QUICK row of short buttons spanning exactly the pedal row's width (LIGHTS, HORN, the family's
 ## extra, then its safety latch HAND/ARM always above GAS), and the machine's equipment in an
@@ -108,6 +108,7 @@ var _caps := {}  ## vehicle capabilities from the shell (boot.gd _capabilities)
 var _ctx := {}            ## cached ActionRegistry context; rebuilt only when its inputs move
 var _ctx_family := ""
 var _ctx_bridge := false
+var _ctx_drives := false
 
 
 ## Tracks which pointer is holding it (finger index, or MOUSE) so several pads can be held at
@@ -320,10 +321,16 @@ func _fit_equip_drawer() -> void:
 func _gate_context() -> Dictionary:
 	var family: String = GameState.current_vehicle
 	var bridge := Bridge.is_active()
-	if _ctx.is_empty() or family != _ctx_family or bridge != _ctx_bridge:
+	var drives := InputRouter.bridge_drives()
+	if drives != _ctx_drives:
+		# Driving pads default to hidden while sloppyCAN drives; F4 still toggles from there.
+		_driving_shown = not drives
+		_driving.visible = _driving_shown and not _driving_locked
+	if _ctx.is_empty() or family != _ctx_family or bridge != _ctx_bridge or drives != _ctx_drives:
 		_ctx_family = family
 		_ctx_bridge = bridge
-		_ctx = ActionRegistry.context(family, bridge, _caps)
+		_ctx_drives = drives
+		_ctx = ActionRegistry.context(family, bridge, _caps, drives)
 	return _ctx
 
 

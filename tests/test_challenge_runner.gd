@@ -19,6 +19,9 @@ const SPAWN_AT := Vector3(0, 0.8, 40)
 const MARK_AT := Vector3(40, 1, 40)
 const PIT_AT := Vector3(40, 1, -40)
 const FINISH_AT := Vector3(20, 1, 0)
+const RING_AT := Vector3(-30, 1, 30)
+const RING_INNER := 10.0
+const RING_OUTER := 16.0
 
 var _notices := PackedStringArray()
 var _results: Array = []
@@ -42,6 +45,7 @@ func before() -> void:
 	_add_zone(course, "Finish", FINISH_AT, Vector3(6, 4, 2))
 	_add_zone(course, "Mark", MARK_AT, Vector3(4, 4, 4))
 	_add_zone(course, "Pit", PIT_AT, Vector3(6, 4, 6))
+	_add_ring_zone(course, "Ring", RING_AT, RING_INNER, RING_OUTER)
 	for n in course.find_children("*", "", true, false):
 		n.owner = course
 	var packed := PackedScene.new()
@@ -76,8 +80,25 @@ func _add_zone(course: Node3D, zone_name: String, pos: Vector3, size: Vector3) -
 	course.add_child(z)
 
 
+func _add_ring_zone(course: Node3D, zone_name: String, pos: Vector3, inner_r: float,
+		outer_r: float) -> void:
+	var z := ChallengeZone.new()
+	z.name = zone_name
+	z.position = pos
+	z.kind = ZoneShape.Kind.RING
+	z.inner_r = inner_r
+	z.outer_r = outer_r
+	course.add_child(z)
+
+
 func _reach(zone: StringName) -> ReachZoneGoal:
 	var g := ReachZoneGoal.new()
+	g.zone = zone
+	return g
+
+
+func _ring(zone: StringName) -> RingLapGoal:
+	var g := RingLapGoal.new()
 	g.zone = zone
 	return g
 
@@ -154,6 +175,29 @@ func test_a_broken_def_fails_at_the_start() -> void:
 	assert_str(_results[0][2]).contains("broken")
 
 
+## A stale pack (docs/plans/car_challenges_review.md) leaves the course unloadable: no fog, no
+## markers, no attempt — but still a named FAIL, not silence.
+func test_a_missing_course_fails_at_the_start_with_no_attempt() -> void:
+	var d := _def([_reach(&"Finish")])
+	d.course = "user://challenge_runner_course_missing.tscn"
+	var r := _rig(d)
+	assert_object(r.runner.attempt).is_null()
+	assert_int(_results.size()).is_equal(1)
+	assert_bool(_results[0][0]).is_false()
+	assert_str(_results[0][2]).contains(d.course)
+
+
+## A RETRY on a def that cannot start restarts it directly (boot._on_result_retry) rather than
+## respawning a vehicle the runner never spawned, and fails again, visibly.
+func test_retrying_a_missing_course_fails_again() -> void:
+	var d := _def([_reach(&"Finish")])
+	d.course = "user://challenge_runner_course_missing.tscn"
+	var r := _rig(d)
+	r.runner.restart()
+	assert_int(_results.size()).is_equal(2)
+	assert_bool(_results[1][0]).is_false()
+
+
 ## The countdown lays whatever id the body remembers, and the runner sets it before the first tick:
 ## a bobtail def spawns bobtail though the semi's own `_ready` picks the box.
 func test_a_bobtail_def_spawns_bobtail() -> void:
@@ -228,6 +272,29 @@ func test_any_respawn_starts_the_attempt_over() -> void:
 	assert_int(r.runner.attempt.goal_index).is_equal(0)
 	assert_float(r.runner.attempt.elapsed).is_equal_approx(DT, 1e-6)
 	assert_bool(v.spawn_transform.is_equal_approx(landed)).is_false()
+
+
+## Car 17 (car_blind_circle/car_blind_stadium): the user saw a FAIL only once and never after a
+## RETRY. Leave the ring, respawn (RETRY's own path), leave it again: a second FAIL and a second
+## `finished` are expected.
+func test_a_ring_lap_fails_again_after_a_retry() -> void:
+	var r := _rig(_def([_ring(&"Ring")]))
+	var v := r.level.vehicle
+	_put(v, RING_AT + Vector3(0, 0, (RING_INNER + RING_OUTER) * 0.5))
+	r.runner.tick(DT)  # enters the ring
+	_put(v, RING_AT + Vector3(0, 0, RING_OUTER + 5.0))
+	r.runner.tick(DT)  # leaves it: FAIL
+	assert_int(_results.size()).is_equal(1)
+	assert_bool(_results[0][0]).is_false()
+	v.respawn()
+	r.runner.tick(DT)  # the retry: the attempt resets
+	assert_int(r.runner.attempt.status).is_equal(S.RUNNING)
+	_put(v, RING_AT + Vector3(0, 0, (RING_INNER + RING_OUTER) * 0.5))
+	r.runner.tick(DT)  # enters the ring again
+	_put(v, RING_AT + Vector3(0, 0, RING_OUTER + 5.0))
+	r.runner.tick(DT)  # leaves it again: a second FAIL
+	assert_int(_results.size()).is_equal(2)
+	assert_bool(_results[1][0]).is_false()
 
 
 func test_the_frame_holds_the_body_and_only_the_free_payloads() -> void:

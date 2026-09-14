@@ -10,10 +10,6 @@ Written 2026-09-11. Status: **Phases 1-7 done** (1-4 on 2026-09-11, 5-7 on 2026-
 checkpoint played clean; **Phase 8a done** (2026-09-12), its play checkpoint open, and 8b waits on it;
 **Phase 9 done** (2026-09-12).
 
-**Car 13 is authored for the brake-pedal method only.** A locked handbrake wheel never releases at
-any throttle (`docs/TODO.md` § A locked handbrake never releases, at any throttle — a drivetrain
-model gap, not a tuning number). `RollbackGoal` cannot tell brake from handbrake, so the pass
-condition stands; only the hint teaches just the brake method until the drivetrain is fixed.
 Delete this file when the last phase ships, after distilling its conclusions into the relevant
 `CLAUDE.md` files and `docs/systems.md`.
 
@@ -41,8 +37,9 @@ Delete this file when the last phase ships, after distilling its conclusions int
   environment for the length of the attempt.
 - **E is the one local key a challenge may allow**, and only Truck 1 does: coupling has no
   signal.
-- **Gear byte 0 stays "no gear opinion"** in arbitration. A gear-teaching challenge instead
-  carries the manual-gear constraint (fail while `VehicleInput.gear_auto` is set and moving).
+- **The def picks the gearbox** (`transmission`, AUTOMATIC by default). A gear-teaching challenge
+  is MANUAL, where the byte is exact and 0 is neutral, so no constraint is needed to stop the
+  gearbox doing the work.
 
 ## Architecture
 
@@ -72,7 +69,7 @@ geometry the car drives on (ramps, pits, the causeway, drops) stays in the arena
 (rule 1).
 
 **Goals read three things**: the telemetry (what the wire carries), `VehicleInput` (lamp bits,
-`gear_auto`, `led` — the rule-5 struct, never a side channel), and course geometry. A briefing
+`led` — the rule-5 struct, never a side channel), and course geometry. A briefing
 quotes the wire resolution wherever a goal depends on it (§ Wire facts in the catalogue).
 
 **Arenas are `LevelRegistry` entries** with `arena: true`, which hides them from LEVEL select like
@@ -106,7 +103,6 @@ Goals, one class each in `src/challenges/goals/`:
 - `PayloadInZoneGoal`.
 - `GimbalAimGoal`: on the `_actual` readbacks, through `DroneGimbal.basis_of`.
 - `InputEqualsGoal`: any of a list of values, under a mask (`led`; `lights` at LOW or HIGH).
-- `RollbackGoal`: rollback distance after a held stop, measured along the latched forward axis.
 
 Constraints, each of which fails the attempt. Each is judged from its `from_goal` on, so goal 0
 can engage something (Boat 1's HEADING HOLD) that a constraint then forbids leaving:
@@ -114,7 +110,6 @@ can engage something (Boat 1's HEADING HOLD) that a constraint then forbids leav
 - `SignalLimitConstraint`: `accLat`.
 - `ForbiddenValueConstraint`: a flag set (`trailer_abs`) or a forbidden mode (`mode_actual`,
   `nav_mode_actual`).
-- `ManualGearConstraint`: `gear_auto` while `ST_MOVING`.
 - `FailZoneConstraint`: RESET, meaning respawn with a warning and reset the attempt.
 
 Every boundary is inclusive, and every hold (and the par) is met on exactly its tick. Zone entry
@@ -252,7 +247,8 @@ FOG, Car 3's course without the box paint — `_box_stop(strip, marked)`), Car 8
 through a paved-width `Trap` left only into `TrapExit`), Car 14 `car_corner_budget` (Car 2's
 course, |accLat| <= 4.0, par 26 s), Car 17 `car_blind_circle` and Car 18 `car_blind_slalom`
 (flatland, FOG, hand-authored courses in `src/challenges/courses/`, positions quoted as lat/lon
-in the briefing — move a zone, recompute them). Every FOG def is at `fog_density` 0.12.
+in the briefing — move a zone, recompute them). Every FOG def is at `fog_density` 0.12 except
+Car 6, at 0.2.
 
 Measured with a throwaway scripted-bridge driver (writes `Bridge._inbound`, `--fixed-fps 60`):
 Car 6 PASS at 60 km/h braking at the gate (15.3 s), FAIL at 45; Car 8 PASS blinking at 1.43 Hz
@@ -264,21 +260,8 @@ driving straight; Car 18 PASS at 25 km/h (26.7 s).
 - **Checkpoint: the user plays 6, 8, 10, 14, 17, 18 over sloppyCAN** and judges the fog density
   by eye.
 
-**8b — the geometry batch** (Car 5, 7, 9, 11, 12, 13, 15, 16), in the plateau's empty north-east
-block (x 30..170, z -50..-170) and the south band past the winding road. Roads with grades are the
-Turtle plus a rise on `straight()` (RoadBuilder already handles grades and pitch kinks); conform
-builds embankments and pits from the curve alone.
-- RAMP to a mesa, ~7-8 deg: Car 9 (manual gear, measured par), Car 13 (a hold zone on the ramp).
-- EMBANKMENT road with tight corners: Car 7 (par) with a low `FailZone` box under deck height;
-  Car 16 on the same road with spawn jitter.
-- LAGOON carved below sea level, crossed by a narrow causeway road: Car 5 (DARK, `InputEqualsGoal`
-  lights [3, 4], then the far end; a fail zone over the water).
-- PIT (a V road): Car 12, wall grade measured so D1 cannot climb out but rocking can. Two failed
-  geometry passes means stop and hand off.
-- ICE road: splat channel 4 renamed Ice (grip measured), painted under the deck on a bend: Car 15.
-- Parking APRON painted asphalt: Car 11 (`StopInZoneGoal` with a heading tolerance).
-- Re-scaffold → `--import` → `courses` → bake → `check_bakes`; the DARK challenge needs the user's
-  eye on headlight legibility.
+**8b — superseded** by `docs/plans/car_challenges_review.md`, which also carries the fixes from the
+user's review of 8a (2026-09-13).
 
 ### 9. sloppyCAN uplink sources — done
 

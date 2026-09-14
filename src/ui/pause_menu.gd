@@ -16,6 +16,8 @@ signal respawn_requested
 signal dashboard_density_changed(setting: int)
 ## New UI-size multiplier picked; the shell applies it to UiScale and writes it to user://.
 signal ui_scale_changed(factor: float)
+## New "Extended debug labels" pick; the shell applies it to the F3 overlay and writes it to user://.
+signal extended_debug_changed(on: bool)
 ## New wind/current preset or shared compass direction picked; the shell applies it to the
 ## current level and keeps it for the session.
 signal conditions_changed(wind_preset: int, current_preset: int, from_deg: float)
@@ -35,6 +37,9 @@ const DENSITY_HELP := "COMPACT keeps the gauges and tell-tales; FULL adds the ba
 ## The automatic scale is the right default but still wrong for some screens/seating.
 const UI_SCALE_HELP := "Scales all on-screen controls and text. 100% is the automatic size."
 
+## F3 shows only FPS by default; this is what turning it on buys back.
+const EXTENDED_DEBUG_HELP := "Adds frame time, draw calls, VRAM, grip and wind/current to the F3 overlay."
+
 const WIND_HELP := "Overrides the level's wind for this session."
 const CURRENT_HELP := "Overrides the level's water current for this session."
 const FROM_HELP := "Where the wind and water current come from. Applies to LIGHT and STRONG."
@@ -52,6 +57,7 @@ var _sheet: ScrollContainer  ## CONTROLS sheet's scroll area, driven by Up/Down 
 var _resume_btn: Button
 var _density_btn: Button
 var _ui_scale_btn: Button
+var _extended_debug_btn: Button
 var _wind_btn: Button
 var _current_btn: Button
 var _from_btn: Button
@@ -60,6 +66,7 @@ var _night_btn: Button
 var _caps := {}
 var _density: int = Dashboard.Density.COMPACT
 var _ui_scale := UiScale.USER_DEFAULT
+var _extended_debug := false
 var _wind_preset: int = WorldConditions.Preset.LEVEL
 var _current_preset: int = WorldConditions.Preset.LEVEL
 var _wind_from_deg := 0.0
@@ -72,11 +79,13 @@ var _conditions_locked := false  ## a challenge owns wind, current and lighting:
 func setup(caps: Dictionary, density_setting := Dashboard.Density.COMPACT,
 		ui_scale_factor := UiScale.USER_DEFAULT,
 		wind_preset := WorldConditions.Preset.LEVEL, current_preset := WorldConditions.Preset.LEVEL,
-		wind_from_deg := 0.0, night_on := false, conditions_locked := false) -> void:
+		wind_from_deg := 0.0, night_on := false, conditions_locked := false,
+		extended_debug := false) -> void:
 	_conditions_locked = conditions_locked
 	_caps = caps
 	_density = density_setting
 	_ui_scale = ui_scale_factor
+	_extended_debug = extended_debug
 	_wind_preset = wind_preset
 	_current_preset = current_preset
 	_wind_from_deg = wind_from_deg
@@ -136,7 +145,8 @@ func _build_root() -> void:
 func _build_controls() -> void:
 	_controls.add_child(_title("CONTROLS"))
 
-	var ctx := ActionRegistry.context(GameState.current_vehicle, Bridge.is_active(), _caps)
+	var ctx := ActionRegistry.context(GameState.current_vehicle, Bridge.is_active(), _caps,
+			InputRouter.bridge_drives())
 	# Scrolls: every bound action doesn't fit a phone.
 	_sheet = ScrollContainer.new()
 	_sheet.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -203,6 +213,11 @@ func _build_settings() -> void:
 	_relabel_ui_scale()
 	_settings.add_child(_ui_scale_btn)
 	_settings.add_child(_help(UI_SCALE_HELP))
+
+	_extended_debug_btn = _menu_button("", _on_extended_debug_pressed)
+	_relabel_extended_debug()
+	_settings.add_child(_extended_debug_btn)
+	_settings.add_child(_help(EXTENDED_DEBUG_HELP))
 
 	_settings.add_child(_menu_button("BACK", func() -> void: _show_page(_root)))
 
@@ -283,6 +298,16 @@ func _on_ui_scale_pressed() -> void:
 
 func _relabel_ui_scale() -> void:
 	_ui_scale_btn.text = "UI SIZE: %d%%" % int(roundf(_ui_scale * 100.0))
+
+
+func _on_extended_debug_pressed() -> void:
+	_extended_debug = not _extended_debug
+	_relabel_extended_debug()
+	extended_debug_changed.emit(_extended_debug)
+
+
+func _relabel_extended_debug() -> void:
+	_extended_debug_btn.text = "EXTENDED DEBUG LABELS: %s" % ("ON" if _extended_debug else "OFF")
 
 
 func _on_wind_pressed() -> void:

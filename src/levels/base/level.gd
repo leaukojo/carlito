@@ -108,7 +108,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			zoom_camera(-1.0)
 
 
-## Advances the chase camera to its next view (C key / touch VIEW button).
+## Advances the chase camera to its next view (C key / touch CAMERA button).
 func cycle_camera() -> void:
 	if camera != null:
 		camera.cycle()

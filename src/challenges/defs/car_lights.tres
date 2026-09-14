@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_constraint.gd" id="1_cons"]
+[ext_resource type="Script" path="res://src/challenges/goals/fail_zone_constraint.gd" id="2_fail"]
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="3_goal"]
+[ext_resource type="Script" path="res://src/challenges/goals/input_equals_goal.gd" id="4_input"]
+[ext_resource type="Script" path="res://src/challenges/goals/reach_zone_goal.gd" id="5_reach"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="6_def"]
+
+[sub_resource type="Resource" id="Resource_lights"]
+script = ExtResource("4_input")
+field = &"lights"
+values = PackedInt32Array(3, 4)
+
+[sub_resource type="Resource" id="Resource_finish"]
+script = ExtResource("5_reach")
+zone = &"Finish"
+
+[sub_resource type="Resource" id="Resource_water"]
+script = ExtResource("2_fail")
+zone = &"Water"
+warning = "Fell off the causeway"
+
+[resource]
+script = ExtResource("6_def")
+id = "car_lights"
+title = "Lights"
+variant = "sedan-sports"
+arena = "car_arena"
+course = "res://src/levels/island/car_arena/courses/car_lights_course.tscn"
+briefing = "Reach the finish line. It's dark, so you'll probably want to turn on the lights first."
+hint = "Find out lights control on a regular level, just turn them on and drive."
+visibility = 1
+goals = Array[ExtResource("3_goal")]([SubResource("Resource_lights"), SubResource("Resource_finish")])
+constraints = Array[ExtResource("1_cons")]([SubResource("Resource_water")])

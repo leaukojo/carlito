@@ -16,6 +16,7 @@ const CardGrid := preload("res://src/ui/card_grid.gd")
 const CARD_W := 280.0
 const CARD_ASPECT := 0.594  ## matches LevelSelect: the arena screenshot's shape
 const STRIP_H := 34.0
+const STATUS_W := 120.0  ## top-left DONE badge width, over the screenshot
 const BORDER_W := 3.0
 const MAX_COLUMNS := 4
 
@@ -71,10 +72,38 @@ func _build_grid_page() -> void:
 		c.free()
 
 	var title := Label.new()
-	title.text = "CARLITO 2  -  CHALLENGES"
+	title.text = "CHALLENGES"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.theme_type_variation = &"Display"
 	_grid_page.add_child(title)
+
+	var intro := Label.new()
+	intro.text = "Small challenges to prove your mastery of the CAN bus. Solve with your own scripts."
+	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	intro.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	intro.custom_minimum_size.x = UiTheme.px(self, 480.0)
+	intro.theme_type_variation = &"LeadDim"
+	_grid_page.add_child(intro)
+
+	var intro_full := Label.new()
+	intro_full.text = ("Connect an external CAN adapter to RAMN, or use sloppyCAN's scripting " +
+			"feature (top-right button).\n\nHints:\n" +
+			"- Load a vehicle on a regular level, and find out which signals you need to override.\n" +
+			"- You may need to disable RAMN's own communications for those signals first " +
+			"(in the simulator, they'll go off automatically).\n\n" +
+			"Some of them can be solved by driving manually - but the game is to solve them using only the CAN bus.")
+	intro_full.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	intro_full.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	intro_full.custom_minimum_size.x = UiTheme.px(self, 480.0)
+	intro_full.theme_type_variation = &"LeadDim"
+	intro_full.visible = false
+	_grid_page.add_child(intro_full)
+
+	var intro_btn: Button
+	intro_btn = _btn("MORE INFO", func() -> void:
+		intro_full.visible = not intro_full.visible
+		intro_btn.text = "LESS INFO" if intro_full.visible else "MORE INFO")
+	_grid_page.add_child(intro_btn)
 
 	var families := ChallengeRegistry.families()
 	if families.is_empty():
@@ -138,8 +167,9 @@ func _reflow_all() -> void:
 		grid.columns = clampi(fits, 1, mini(MAX_COLUMNS, grid.get_child_count()))
 
 
-## One challenge card: the arena's screenshot behind, title on a bottom strip, done/best in the
-## corner. The whole card is the Button; pressing it opens the briefing.
+## One challenge card: the arena's screenshot behind, title on a bottom strip, DONE/best time
+## top-left over the screenshot (nothing shown until done). The whole card is the Button;
+## pressing it opens the briefing.
 func _make_card(d: ChallengeDef) -> Button:
 	var card_w := UiTheme.px(self, CARD_W)
 	var done := _progress.is_done(d.id)
@@ -155,7 +185,11 @@ func _make_card(d: ChallengeDef) -> Button:
 	card.pressed.connect(_show_briefing.bind(d))
 
 	var inset := UiTheme.px(self, BORDER_W)
-	var thumb_path := LevelShot.thumb_path(d.arena)
+	# The challenge's own spawn shot (gen_challenge_thumbs.gd) if generated, else the arena's
+	# shared landscape shot — never neither, so an ungenerated challenge still shows something.
+	var thumb_path := CardImport.challenge_thumb_path(d.id)
+	if not ResourceLoader.exists(thumb_path):
+		thumb_path = LevelShot.thumb_path(d.arena)
 	if ResourceLoader.exists(thumb_path):
 		var thumb := TextureRect.new()
 		thumb.texture = load(thumb_path)
@@ -178,6 +212,29 @@ func _make_card(d: ChallengeDef) -> Button:
 		missing.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		card.add_child(missing)
 
+	if done:
+		# Top-left, over the screenshot: the bottom strip is title-only, and a long title
+		# would otherwise run under a status label sharing that strip.
+		var status_scrim := ColorRect.new()
+		status_scrim.color = UiTheme.SCRIM
+		status_scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		status_scrim.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		status_scrim.offset_left = inset
+		status_scrim.offset_top = inset
+		status_scrim.offset_right = inset + UiTheme.px(self, STATUS_W)
+		status_scrim.offset_bottom = inset + UiTheme.px(self, STRIP_H)
+		card.add_child(status_scrim)
+
+		var status := Label.new()
+		status.text = "DONE: %s S" % String.num(_progress.best_time(d.id), 1)
+		status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		status.theme_type_variation = &"Dim"
+		status.add_theme_color_override("font_color", UiTheme.OK)
+		status.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		status_scrim.add_child(status)
+
 	var strip := ColorRect.new()
 	strip.color = UiTheme.SCRIM
 	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -197,16 +254,6 @@ func _make_card(d: ChallengeDef) -> Button:
 	label.offset_left = UiTheme.px(self, 10.0)
 	strip.add_child(label)
 
-	var status := Label.new()
-	status.text = "BEST %s S" % String.num(_progress.best_time(d.id), 1) if done else "NOT DONE"
-	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	status.theme_type_variation = &"Dim"
-	status.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	status.offset_right = -UiTheme.px(self, 10.0)
-	strip.add_child(status)
-
 	return card
 
 
@@ -224,29 +271,37 @@ func _show_briefing(d: ChallengeDef) -> void:
 	status.text = "BEST: %s S" % String.num(_progress.best_time(d.id), 1) \
 			if _progress.is_done(d.id) else "NOT DONE YET"
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	status.theme_type_variation = &"Dim"
+	status.theme_type_variation = &"LeadDim"
 	_briefing_page.add_child(status)
 
 	var briefing := Label.new()
 	briefing.text = d.briefing
 	briefing.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	briefing.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	briefing.theme_type_variation = &"Lead"
 	briefing.custom_minimum_size.x = UiTheme.px(self, 480.0)
 	_briefing_page.add_child(briefing)
 
 	if d.par_s > 0.0:
 		var par := Label.new()
-		par.text = "PAR: %s S" % String.num(d.par_s, 1)
+		par.text = "TIME LIMIT: %s S" % String.num(d.par_s, 1)
 		par.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		par.theme_type_variation = &"Small"
+		par.theme_type_variation = &"Dim"
 		_briefing_page.add_child(par)
+
+	if not d.gearbox_text().is_empty():
+		var gearbox := Label.new()
+		gearbox.text = d.gearbox_text()
+		gearbox.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		gearbox.theme_type_variation = &"Lead"
+		_briefing_page.add_child(gearbox)
 
 	_hint_label = Label.new()
 	_hint_label.text = d.hint
 	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint_label.custom_minimum_size.x = UiTheme.px(self, 480.0)
-	_hint_label.theme_type_variation = &"Dim"
+	_hint_label.theme_type_variation = &"LeadDim"
 	_hint_label.visible = false
 	_briefing_page.add_child(_hint_label)
 

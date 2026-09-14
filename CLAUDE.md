@@ -141,6 +141,12 @@ probes (`set_vehicle`, `grip_at`, `cycle_implement`, `set_attachment`, `accepts`
 - **The challenge bridge-only lock is `InputRouter.set_bridge_only`**: local and touch are never
   polled, and with no live bridge the input is `locked_idle()`. Its keyboard override
   (`--challenge-keys` / `CARLITO_CHALLENGE_KEYS`) is honoured in debug builds only.
+- **A live bridge without `accel`/`brake`/`steer` does not drive**: `InputRouter.bridge_drives()`
+  is false, `blend_local_driving` takes the driving group from local and the rest from the bridge
+  (never under `set_bridge_only`). Ask `bridge_drives()`, not `Bridge.is_active()`, "who drives".
+- **The gearbox mode is `InputRouter.set_manual_gearbox`**, set by the shell (selector in free play,
+  `ChallengeDef.transmission` in an attempt). It is bridge-only: automatic reads the gear byte as
+  PRND, manual takes it exactly (0 = N). Local input always drives automatic.
 - **Cycled-control lengths are declared once in `src/input/subsystem_counts.gd`** (leaf, no
   dependencies, `preload`ed by the router and by each vehicle class that cycles one) — the router
   must not depend on a vehicle class, so it cannot read `RefuseBody.Cmd` / `DroneBus.NODES` /

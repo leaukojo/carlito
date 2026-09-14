@@ -33,6 +33,10 @@ const _RING_SEGMENTS := 48
 	set(value):
 		height = value
 		_refresh_gizmo()
+@export var half_length := 0.0:              ## RING: m, straights either side of centre; 0 = a circle
+	set(value):
+		half_length = value
+		_refresh_gizmo()
 
 var _gizmo: MeshInstance3D
 
@@ -44,7 +48,7 @@ func _ready() -> void:
 ## This zone's geometry in `xform`'s space.
 func shape_at(xform: Transform3D) -> ZoneShape:
 	if kind == ZoneShape.Kind.RING:
-		return ZoneShape.ring(xform, inner_r, outer_r, height)
+		return ZoneShape.ring(xform, inner_r, outer_r, height, half_length)
 	return ZoneShape.box(xform, size)
 
 
@@ -116,31 +120,46 @@ func _gizmo_mesh() -> Mesh:
 		return box
 	var h := height if height > 0.0 else _GIZMO_UNBOUNDED_H
 	var r_out := maxf(outer_r, 0.01)
-	if inner_r <= 0.0:
+	if inner_r <= 0.0 and half_length <= 0.0:
 		var cyl := CylinderMesh.new()
 		cyl.top_radius = r_out
 		cyl.bottom_radius = r_out
 		cyl.height = h
 		return cyl
-	return _annulus(minf(inner_r, r_out), r_out, h)
+	return _annulus(minf(inner_r, r_out), r_out, half_length, h)
 
 
-## An annular prism about local Y: top, bottom, outer and inner walls. Drawn double-sided, so
-## winding does not matter.
-static func _annulus(r_in: float, r_out: float, h: float) -> Mesh:
+## An annular prism about local Y, stretched into a stadium band when `hl` > 0 (0 draws the
+## circle): top, bottom, outer and inner walls. Drawn double-sided, so winding does not matter.
+static func _annulus(r_in: float, r_out: float, hl: float, h: float) -> Mesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var up := Vector3(0.0, h * 0.5, 0.0)
-	for i in _RING_SEGMENTS:
-		var a0 := TAU * float(i) / _RING_SEGMENTS
-		var a1 := TAU * float(i + 1) / _RING_SEGMENTS
-		var d0 := Vector3(cos(a0), 0.0, sin(a0))
-		var d1 := Vector3(cos(a1), 0.0, sin(a1))
-		_quad(st, d0 * r_out + up, d1 * r_out + up, d1 * r_in + up, d0 * r_in + up)
-		_quad(st, d0 * r_out - up, d1 * r_out - up, d1 * r_in - up, d0 * r_in - up)
-		_quad(st, d0 * r_out - up, d1 * r_out - up, d1 * r_out + up, d0 * r_out + up)
-		_quad(st, d0 * r_in - up, d1 * r_in - up, d1 * r_in + up, d0 * r_in + up)
+	var outer := _stadium_loop(hl, r_out)
+	var inner := _stadium_loop(hl, r_in)
+	var n := outer.size()
+	for i in n:
+		var j := (i + 1) % n
+		_quad(st, outer[i] + up, outer[j] + up, inner[j] + up, inner[i] + up)
+		_quad(st, outer[i] - up, outer[j] - up, inner[j] - up, inner[i] - up)
+		_quad(st, outer[i] - up, outer[j] - up, outer[j] + up, outer[i] + up)
+		_quad(st, inner[i] - up, inner[j] - up, inner[j] + up, inner[i] + up)
 	return st.commit()
+
+
+## The boundary of a stadium of radius `r` about the segment [-hl, hl] on local X, at y = 0, as a
+## closed loop (right cap, then left cap; `hl` 0 degenerates to a circle).
+static func _stadium_loop(hl: float, r: float) -> PackedVector3Array:
+	var pts := PackedVector3Array()
+	@warning_ignore("integer_division")
+	var arc := _RING_SEGMENTS / 2
+	for cap in 2:
+		var cx := hl if cap == 0 else -hl
+		var base := -PI / 2.0 if cap == 0 else PI / 2.0
+		for i in arc + 1:
+			var a := base + PI * float(i) / arc
+			pts.append(Vector3(cx + r * cos(a), 0.0, r * sin(a)))
+	return pts
 
 
 static func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> void:

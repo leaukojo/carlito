@@ -25,7 +25,7 @@ const LEVELS: Array[Dictionary] = [
 	{ "id": "open_sea", "name": "Open Sea", "scene": "res://src/levels/open_sea/open_sea.tscn",
 		"desc": "Endless open water under a steady wind. Boats only: no shore, no bottom." },
 	{ "id": "car_arena", "name": "Car Arena", "scene": "res://src/levels/island/car_arena/car_arena.tscn",
-		"desc": "Car challenge arena: a flat plateau with a straight, a corner course and a winding road.",
+		"desc": "Car challenge arena: a plateau with a straight, corners, a winding road, a cliff-edged ridge road, a lagoon causeway, an ice bend and a parking apron.",
 		"arena": true },
 ]
 

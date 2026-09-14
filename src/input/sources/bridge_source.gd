@@ -18,6 +18,7 @@ func poll() -> Dictionary[StringName, Variant]:
 		return {&"active": false}
 	var out: Dictionary[StringName, Variant] = {
 		&"active": true,
+		&"drive_sourced": drive_sourced(v),
 		&"accel": clampf(float(v.get("accel", 0.0)) / 100.0, 0.0, 1.0),
 		&"brake": clampf(float(v.get("brake", 0.0)) / 100.0, 0.0, 1.0),
 		&"steer": clampf(float(v.get("steer", 0.0)) / 100.0, -1.0, 1.0),
@@ -91,6 +92,14 @@ func poll() -> Dictionary[StringName, Variant]:
 	if v.has("heading_cmd"):
 		out[&"heading_cmd"] = fposmod(float(v.get("heading_cmd", 0.0)), 360.0)
 	return out
+
+
+## Does the uplink carry a driving control at all? Read off the RAW values, since `poll()`
+## defaults all three: sloppyCAN omits a control it has no source for, so a live bridge under
+## non-RAMN traffic carries none. Any one is enough (a hand-sent pedal frame; the drone panel's
+## sticks claim all three).
+static func drive_sourced(v: Dictionary) -> bool:
+	return v.has("accel") or v.has("brake") or v.has("steer")
 
 
 ## Guidance curvature 1/km → steer unit. Saturates at full lock.

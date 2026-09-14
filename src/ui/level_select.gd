@@ -25,7 +25,7 @@ const MAX_COLUMNS := 4
 const HEAVY_MB := 8.0
 
 var _desc: Label
-var _grid: GridContainer
+var _grid: HFlowContainer
 
 
 func _ready() -> void:
@@ -56,10 +56,16 @@ func _ready() -> void:
 	scroll.follow_focus = true
 	col.add_child(scroll)
 
-	_grid = GridContainer.new()
-	_grid.columns = 1  # real value set by _reflow once the scroll container has a width
+	# ScrollContainer ignores its child's size flags and pins content top-left, so a shrink-sized
+	# grid needs a full-width wrapper to center against.
+	var grid_wrap := VBoxContainer.new()
+	grid_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(grid_wrap)
+
+	_grid = HFlowContainer.new()
+	_grid.alignment = FlowContainer.ALIGNMENT_CENTER  # centers a short last row instead of packing it left
 	_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	scroll.add_child(_grid)
+	grid_wrap.add_child(_grid)
 	scroll.resized.connect(_reflow)
 
 	var first: Button = null
@@ -79,7 +85,7 @@ func _ready() -> void:
 	_desc.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	# Fixed, so hovering never reflows the grid.
 	_desc.custom_minimum_size.y = UiTheme.px(self, 48.0)
-	_desc.theme_type_variation = &"Dim"
+	_desc.theme_type_variation = &"LeadDim"
 	col.add_child(_desc)
 
 	# The only Button here that is not a card (tests tell them apart: a card's name is a
@@ -101,10 +107,14 @@ func _reflow() -> void:
 	if _grid == null or _grid.get_child_count() == 0:
 		return
 	var card_w := UiTheme.px(self, CARD_W)
-	var gap := float(_grid.get_theme_constant("h_separation", "GridContainer"))
+	var gap := float(_grid.get_theme_constant("h_separation"))
 	var avail := size.x - UiTheme.px(self, UiTheme.MARGIN) * 2.0
 	var fits := int(floorf((avail + gap) / (card_w + gap)))
-	_grid.columns = clampi(fits, 1, mini(MAX_COLUMNS, _grid.get_child_count()))
+	var cols := clampi(fits, 1, mini(MAX_COLUMNS, _grid.get_child_count()))
+	# HFlowContainer wraps by width, not a column count, so constrain its width to fit exactly
+	# `cols` cards per line — ALIGNMENT_CENTER then centers a short last line instead of packing
+	# it against the left edge the way GridContainer's fixed column grid did.
+	_grid.custom_minimum_size.x = cols * card_w + maxf(cols - 1, 0) * gap
 
 
 ## One level card: screenshot behind, name on a bottom strip. The whole card is the Button.

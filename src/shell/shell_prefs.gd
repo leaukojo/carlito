@@ -1,7 +1,7 @@
 class_name ShellPrefs
 extends RefCounted
 ## The handful of things the shell remembers between visits, in one `user://` file: last
-## level+variant, first-run coach cue seen, cluster density, UI scale.
+## level+variant, first-run coach cue seen, cluster density, UI scale, extended debug labels.
 ##
 ## Everything read back is validated (through BootParams etc.) before being handed out — a
 ## saved id is as stale-able as a link, so the shell must fall back rather than boot into
@@ -74,6 +74,19 @@ static func set_ui_scale(factor: float) -> void:
 		return
 	var cfg := _config()
 	cfg.set_value(SECTION, "ui_scale", factor)
+	cfg.save(PATH)
+
+
+## F3 overlay's extra lines beyond FPS ("Extended debug labels"). Off by default.
+static func extended_debug() -> bool:
+	return bool(_config().get_value(SECTION, "extended_debug", false))
+
+
+static func set_extended_debug(on: bool) -> void:
+	if not ENABLED:
+		return
+	var cfg := _config()
+	cfg.set_value(SECTION, "extended_debug", on)
 	cfg.save(PATH)
 
 

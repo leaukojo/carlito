@@ -42,11 +42,15 @@ here as static/pure functions, unit-tested in `tests/test_input_arbitration.gd`:
   `arbitrate_local`.
 - `arbitrate_local`: key gating (ignition required for throttle), brake-never-throttle, S =
   brake-then-reverse at standstill, foot brake drives `brake_lamp`.
-- `arbitrate_bridge`: while the bridge is active and the gear byte is a real gear (D1-D6 or
-  R), the gear owns direction (`throttle = accel` signed by the byte, `gear_auto = false`).
-  Byte 0 falls back to auto-shifting forward, so a CAN source that never sends gear (RAMN
-  `0x077`) still drives. Reverse always needs the explicit R byte. The "ignition off" notice
-  clears the moment the key reaches Ignition (`GameState.notice_cleared`), not after its
+- `arbitrate_bridge`: the gear byte owns direction (`throttle = accel`, negative in R); how it
+  is read is the gearbox mode (`InputRouter.set_manual_gearbox`, picked in the vehicle selector
+  or by `ChallengeDef.transmission`). **Automatic** (default) reads it as a PRND lever: R
+  reverses, D1-D6 is D and the gearbox shifts itself, byte 0 is "no gear opinion" and also
+  drives forward, so a CAN source that never sends gear (RAMN `0x077`) still drives.
+  **Manual** takes it exactly (`gear_auto = false`): 0 is a real N, and nothing shifts on its
+  own. Local input has no shift keys and always drives automatic. Reverse always needs the
+  explicit R byte. The engaged gear goes back out on the `gear` out-signal. The "ignition off"
+  notice clears the moment the key reaches Ignition (`GameState.notice_cleared`), not after its
   20 s dwell.
 
   Every other bridge-owned field is mirrored verbatim from sloppyCAN; an absent key falls to
@@ -57,10 +61,26 @@ here as static/pure functions, unit-tested in `tests/test_input_arbitration.gd`:
   `guidance` (from `guidance_curvature`). `bridge_source.gd` includes the key only when
   sloppyCAN actually sent it, since a commanded 0 is a real command, not an absence.
 
-`_physics_process` prefers the bridge source when fresh (< 300 ms, `Bridge.FRESHNESS_MS`),
-else falls back to `arbitrate_local`. `bridge_source.gd` normalizes contract-in fields
-(%->unit); `local_source.gd` reads the keyboard; the touch overlay registers via
-`InputRouter.set_touch_source()`.
+`_physics_process` picks one of three paths each tick:
+
+- **Bridge drives** — fresh (< 300 ms, `Bridge.FRESHNESS_MS`) and carrying a driving control
+  (`accel`, `brake` or `steer` present: `BridgeSource.drive_sourced`): `arbitrate_bridge` alone.
+- **Fallback** — fresh but carrying none, which is what sloppyCAN sends under non-RAMN traffic
+  (it omits every control it has no source for). `blend_local_driving` takes the **driving
+  group** from the local path — pedals, steer, handbrake, key, gear (so automatic), foot-brake
+  STOP lamp, lights level, horn, and the drone's arm/climb and plane's elevator — and every
+  other field from `arbitrate_bridge`, so bus commands the traffic does carry (ISOBUS hitch/PTO,
+  CiA 422 body, N2K nav mode) still command. A bridge `guidance`/`rudder` keeps the wheel. The
+  notice `NO DRIVING CONTROLS FROM SLOPPYCAN - KEYBOARD DRIVES` is raised on entry and cleared
+  by text on exit. Only the group's own toggles (lights, arm) advance in fallback, so a key for a
+  field the bridge owns cannot latch unseen and apply on disconnect. Never under
+  `set_bridge_only`: a challenge's live bridge drives as sent.
+- **Local** — no fresh bridge: `arbitrate_local`.
+
+`InputRouter.bridge_drives()` is the "who drives" predicate (the touch driving layer and the
+action-registry context read it); `Bridge.is_active()` only says a peer is connected.
+`bridge_source.gd` normalizes contract-in fields (%->unit); `local_source.gd` reads the
+keyboard; the touch overlay registers via `InputRouter.set_touch_source()`.
 
 Toggle state is owned by the router, never a source: headlight level `_lights`
 (OFF->CLEARANCE->LOW->HIGH), tractor hitch/PTO/PTO-speed/diff-lock/MFWD, drone arm/cargo
@@ -110,7 +130,9 @@ shapes:
 - **bridge_owned** — the control rides `VehicleInput`, inert while sloppyCAN drives. Not set
   on shell conveniences (ATTACH, VIEW, GARAGE, LEVEL, MENU). Exception: pedals/
   joystick stay visible though inert, since hiding them would make the pedal blink as
-  sloppyCAN stutters.
+  sloppyCAN stutters. A row also flagged **driving** (handbrake, lights, horn, arm,
+  climb) is inert only while the bridge *drives* (`context`'s `bridge_drives`): in fallback it
+  is the keyboard's, and the other bridge-owned rows read "set by sloppyCAN".
 
 Family gates are validated against the contract, not copied: a row that rides contract IN
 signals names them in `signals`, and `tests/test_action_registry.gd` asserts the offered
@@ -197,6 +219,10 @@ families equal the union of those signals' own `vehicles` lists. The one row wit
   `telemetry.to_bridge_dict()` — vehicle-aware, so a car emits car signals and the tractor
   adds its thirteen ISOBUS "out" signals. Both sides stamp their contract version on outgoing
   messages and warn once on mismatch.
+- The `carlitoOutput` envelope also carries `challenge` (bool, `Bridge.set_challenge` from
+  `boot.gd`). It is not a contract signal because it is no CAN value: sloppyCAN turns its RAMN
+  demo traffic off on the rising edge and back on on the falling one, so frames the player sends
+  are not overwritten. An older peer on either side just never toggles.
 - `boot.gd` calls `Bridge.bind(level)` (mirrors `Dashboard.bind`); both rebind on
   `Level.vehicle_changed`.
 
@@ -404,8 +430,8 @@ families equal the union of those signals' own `vehicles` lists. The one row wit
   away) are each owned end to end by their generator (`tools/gen_rail_level.gd`,
   `tools/gen_skyport.gd`); re-running one overwrites the level.
 - `src/levels/island/car_arena/` is the car challenge arena (`arena: true` in the registry, so not
-  in LEVEL select): a car-only plateau with three roads, owned with its challenge courses by
-  `tools/gen_car_arena.gd`.
+  in LEVEL select): a car-only plateau with six roads, a ridge, a lagoon, an ice bend and a
+  parking apron, owned with its challenge courses by `tools/gen_car_arena.gd`.
 - `flatland` and `open_sea` are endless, unbounded levels with no kit content (nothing to
   bake): an `InfiniteGround` (`src/levels/base/infinite_ground.gd`) or an `infinite`
   `WaterSurface` that re-centres on the active camera, with the grid and the waves laid in

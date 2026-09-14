@@ -32,6 +32,7 @@ const OK := Color(0.35, 0.85, 0.45)
 # --- type scale (logical px at scale 1.0) -------------------------------------
 
 const FS_DISPLAY := 34   ## the one big title on a full-screen menu
+const FS_LEAD := 24      ## prominent body copy read from a distance (a briefing, a hint)
 const FS_TITLE := 22     ## section headings, card names
 const FS_BODY := 17      ## buttons, descriptions — the default
 const FS_LABEL := 15     ## dense secondary text
@@ -90,6 +91,8 @@ static func _build_label(t: Theme, scale: float) -> void:
 	# Roles, addressed by `theme_type_variation`. A screen says what a label IS, not how big.
 	for role in [
 		["Display", FS_DISPLAY, TEXT],
+		["Lead", FS_LEAD, TEXT],
+		["LeadDim", FS_LEAD, TEXT_DIM],
 		["Title", FS_TITLE, TEXT],
 		["Dim", FS_LABEL, TEXT_DIM],
 		["Small", FS_SMALL, TEXT_DIM],

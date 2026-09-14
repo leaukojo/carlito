@@ -13,12 +13,10 @@ ran (6 s), at full throttle the whole time. In a real car, full throttle against
 eventually spins the tires or stalls the engine against the resistance; here it just holds
 forever once the wheel re-locks; nothing breaks it free again short of releasing the handbrake.
 
-This blocks the "handbrake + throttle" hill-start technique in `docs/challenge_ideas.md` (Car 13)
-exactly as designed — see the warning in `docs/plans/challenges.md`. Fixing it properly likely
-means giving the engine some way to rev independent of a truly stalled wheel (a slip/clutch
-model, or a floor on transmissible torque that isn't purely rpm-curve-driven) — a drivetrain
-model change, not a one-line fix. Scope it before Phase 3 of the challenges plan touches Car 13,
-or drop the handbrake-hold pass condition for that challenge.
+This blocks the "handbrake + throttle" hill-start technique, one reason the hill start is parked
+(`docs/challenge_ideas.md` § Parked). Fixing it properly likely means giving the engine some way
+to rev independent of a truly stalled wheel (a slip/clutch model, or a floor on transmissible
+torque that isn't purely rpm-curve-driven) — a drivetrain model change, not a one-line fix.
 
 ## No sloppyCAN dashboard for the train or the plane
 

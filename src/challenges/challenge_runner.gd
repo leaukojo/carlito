@@ -37,6 +37,7 @@ var _respawned := false                ## see _on_respawned
 var _vehicle: BaseVehicle              ## the body this runner spawned, whose respawns it hears
 var _lighting := {}                    ## the ChallengeVisibility snapshot end() restores
 var _ended := false
+var _course_error := ""                ## set by _build_course() on failure, read by start()
 
 
 ## Before `add_child`. A negative seed takes a random one; a test passes its own.
@@ -71,6 +72,7 @@ func start() -> void:
 	if _course == null:
 		_build_course()
 	if _spawn == null:
+		finished.emit(false, 0.0, _course_error)
 		return
 	_place_spawn()
 	var before := _level.vehicle
@@ -150,15 +152,16 @@ func tick(delta: float) -> void:
 
 
 ## Instance the course under the level root, find its marker and zones, and lay the visibility.
-## Leaves `_spawn` null when the course cannot host the def (registry validation keeps a shipped
-## def from getting here).
+## Leaves `_spawn` null and `_course_error` set when the course cannot host the def (registry
+## validation keeps a shipped def from getting here; a broken local pack does not).
 func _build_course() -> void:
 	var packed := load(def.course) as PackedScene
 	var node: Node = packed.instantiate() if packed != null else null
 	if not node is Node3D:
 		if node != null:
 			node.free()
-		push_error("ChallengeRunner: course '%s' is not a scene with a Node3D root" % def.course)
+		_course_error = "course '%s' would not load" % def.course
+		push_error("ChallengeRunner: %s" % _course_error)
 		return
 	_course = node as Node3D
 	_level.add_child(_course)
@@ -168,7 +171,8 @@ func _build_course() -> void:
 			_spawn = n as VehicleSpawn
 			break
 	if _spawn == null:
-		push_error("ChallengeRunner: course '%s' has no spawn for the %s family" % [def.course, family])
+		_course_error = "course '%s' has no spawn for the %s family" % [def.course, family]
+		push_error("ChallengeRunner: %s" % _course_error)
 		return
 	_spawn_base = _spawn.transform
 	# The course's parent is the level root, which sits at the world origin: these are world space.

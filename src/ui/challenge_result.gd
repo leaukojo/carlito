@@ -1,15 +1,16 @@
 class_name ChallengeResult
 extends Control
-## The pass/fail result overlay: RETRY / NEXT / MENU, replacing the plain pass/fail notice.
-## `setup()` stashes what to show; `_ready()` builds it once in the tree (theme scale needs a
-## Control ancestor). RETRY is the same respawn the R key already performs mid-attempt — a
-## challenge's runner resets the attempt on ANY respawn, so this button owns no logic of its
-## own. NEXT walks the def's family list; MENU ends the attempt. Built in code, a transient
+## The pass/fail result overlay: RETRY, plus NEXT and CHALLENGES on a pass, replacing the plain
+## pass/fail notice. `setup()` stashes what to show; `_ready()` builds it once in the tree (theme
+## scale needs a Control ancestor). RETRY is the same respawn the R key already performs
+## mid-attempt — a challenge's runner resets the attempt on ANY respawn, so this button owns no
+## logic of its own. NEXT walks the def's family list; CHALLENGES opens the grid instead. Leaving
+## to the menu happens from the resumed attempt, not from here. Built in code, a transient
 ## overlay the shell frees. No emoji.
 
 signal retry_requested
 signal next_requested
-signal menu_requested
+signal challenges_requested
 
 var _def: ChallengeDef
 var _passed := false
@@ -74,10 +75,11 @@ func _ready() -> void:
 
 	var retry := _btn("RETRY", func() -> void: retry_requested.emit())
 	row.add_child(retry)
-	var next_btn := _btn("NEXT", func() -> void: next_requested.emit())
-	next_btn.disabled = not _has_next
-	row.add_child(next_btn)
-	row.add_child(_btn("MENU", func() -> void: menu_requested.emit()))
+	if _passed:
+		var next_btn := _btn("NEXT", func() -> void: next_requested.emit())
+		next_btn.disabled = not _has_next
+		row.add_child(next_btn)
+		row.add_child(_btn("CHALLENGES", func() -> void: challenges_requested.emit()))
 
 	retry.grab_focus()
 

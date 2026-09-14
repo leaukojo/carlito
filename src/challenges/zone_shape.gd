@@ -1,9 +1,12 @@
 class_name ZoneShape
 extends RefCounted
 ## Pure geometry of one course zone: an oriented BOX, or a vertical RING (an annulus about the
-## zone's local Y; `inner_r` 0 makes it a solid cylinder, which is what a waypoint is). Every
-## boundary is INCLUSIVE, so a wheel contact exactly on a box edge is inside. Built from a
-## ChallengeZone node by `ChallengeZone.zones_of`, or directly by the tests.
+## zone's local Y; `inner_r` 0 makes it a solid cylinder, which is what a waypoint is). A RING's
+## `half_length` stretches the annulus into a stadium: the radius is then measured to the segment
+## from local (-half_length, 0, 0) to (+half_length, 0, 0) instead of to the centre point, so the
+## band becomes a capsule; 0 keeps the circle. Every boundary is INCLUSIVE, so a wheel contact
+## exactly on a box edge is inside. Built from a ChallengeZone node by `ChallengeZone.zones_of`, or
+## directly by the tests.
 
 enum Kind { BOX, RING }
 
@@ -21,6 +24,7 @@ var size := Vector3.ONE   ## BOX: full extents along the zone's local axes
 var inner_r := 0.0        ## RING: m, 0 = solid cylinder
 var outer_r := 1.0        ## RING: m
 var height := 0.0         ## RING: full vertical extent about the centre, 0 = unbounded
+var half_length := 0.0    ## RING: m, straights either side of centre along local X; 0 = a circle
 
 
 static func box(p_xform: Transform3D, p_size: Vector3) -> ZoneShape:
@@ -31,13 +35,15 @@ static func box(p_xform: Transform3D, p_size: Vector3) -> ZoneShape:
 	return z
 
 
-static func ring(p_xform: Transform3D, p_inner: float, p_outer: float, p_height := 0.0) -> ZoneShape:
+static func ring(p_xform: Transform3D, p_inner: float, p_outer: float, p_height := 0.0,
+		p_half_length := 0.0) -> ZoneShape:
 	var z := ZoneShape.new()
 	z.kind = Kind.RING
 	z.xform = p_xform.orthonormalized()
 	z.inner_r = p_inner
 	z.outer_r = p_outer
 	z.height = p_height
+	z.half_length = p_half_length
 	return z
 
 
@@ -49,7 +55,9 @@ func contains(p: Vector3) -> bool:
 				and absf(local.z) <= half.z + EPS
 	if height > 0.0 and absf(local.y) > height * 0.5 + EPS:
 		return false
-	var r := Vector2(local.x, local.z).length()
+	# half_length 0 collapses this to the centre point, i.e. today's circle.
+	var dx := local.x - clampf(local.x, -half_length, half_length)
+	var r := Vector2(dx, local.z).length()
 	return r >= inner_r - EPS and r <= outer_r + EPS
 
 
@@ -101,4 +109,6 @@ func problem() -> String:
 		return "a ring needs 0 <= inner_r < outer_r"
 	if height < 0.0:
 		return "a ring height is negative"
+	if half_length < 0.0:
+		return "a ring half_length is negative"
 	return ""

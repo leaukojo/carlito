@@ -20,6 +20,10 @@ var _telem: VehicleTelemetry = null ## that level's active vehicle telemetry, re
 var _version_warned := false
 var _missing_warned := {}           ## out-signal names already warned as absent from telemetry
 var _shape_warned := {}             ## out-signal names already warned as the wrong VALUE SHAPE
+## A challenge attempt is running. Rides the carlitoOutput ENVELOPE, not the contract: it is no
+## CAN value, and sloppyCAN turns its RAMN demo traffic off on the rising edge so hand-sent frames
+## are not overwritten.
+var _challenge := false
 
 
 func _ready() -> void:
@@ -48,6 +52,11 @@ func is_active() -> bool:
 ## Last fresh inbound values keyed by contract "in" name ({} when inactive).
 func get_input_values() -> Dictionary:
 	return _inbound if _active else {}
+
+
+## Set by the shell on entering / leaving a challenge attempt.
+func set_challenge(on: bool) -> void:
+	_challenge = on
 
 
 ## Register Level's telemetry source. Resolved once per vehicle change, not per publish.
@@ -108,7 +117,8 @@ func _publish() -> void:
 			continue
 		values[sig.name] = value
 	# JSON valid in JS object-literal syntax, embeds directly to publish() with no escaping.
-	JavaScriptBridge.eval("if(window.__carlito&&window.__carlito.publish)window.__carlito.publish(%s);" % JSON.stringify(values), true)
+	JavaScriptBridge.eval("if(window.__carlito&&window.__carlito.publish)window.__carlito.publish(%s,%s);" % [
+		JSON.stringify(values), "true" if _challenge else "false"], true)
 
 
 func _warn_shape(sig_name: String, expected: String, got: Variant) -> void:

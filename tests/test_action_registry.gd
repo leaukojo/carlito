@@ -314,6 +314,24 @@ func test_relevant_entry_ignores_only_the_bridge_gate() -> void:
 	assert_str(Registry.gate_note(handbrake, live)).is_equal(Registry.BRIDGE_NOTE)
 
 
+## Fallback (a live bridge carrying no driving control): a `driving` row is the keyboard's again,
+## while every other bridge-owned row stays sloppyCAN's and says so without claiming it drives.
+func test_fallback_frees_only_the_driving_rows() -> void:
+	var fallback := Registry.context("car", true, {}, false)
+	assert_bool(Registry.applies(&"handbrake", fallback)).is_true()
+	assert_bool(Registry.applies(&"headlights", fallback)).is_true()
+	assert_bool(Registry.applies(&"horn", fallback)).is_true()
+	var tractor := Registry.context("tractor", true, {"pto": true}, false)
+	var pto := Registry.find(&"pto")
+	assert_bool(Registry.applies_entry(pto, tractor)).is_false()
+	assert_str(Registry.gate_note(pto, tractor)).is_equal(Registry.BRIDGE_SETS_NOTE)
+	# The drone's arm and vertical axis are driving rows: fallback flies it from the keyboard.
+	var drone := Registry.context("drone", true, {}, false)
+	assert_bool(Registry.applies(&"arm", drone)).is_true()
+	assert_bool(Registry.applies(&"climb", drone)).is_true()
+	assert_bool(Registry.applies(&"flight_mode", drone)).is_false()
+
+
 ## Family and capability gates still hide the row under `relevant_entry` — only the bridge gate
 ## is forced open, or a car would show every tractor-only control, greyed forever.
 func test_relevant_entry_still_hides_family_and_capability_gates() -> void:
@@ -326,15 +344,15 @@ func test_relevant_entry_still_hides_family_and_capability_gates() -> void:
 
 # --- the on-screen rail --------------------------------------------------------
 
-## The rail carries MENU/GARAGE/LEVEL/VIEW plus ATTACH (a vehicle control, not a shell one) —
+## The rail carries MENU/GARAGE/LEVEL/CAMERA plus ATTACH (a vehicle control, not a shell one) —
 ## RESPAWN and NIGHT are keyboard-only, reached on touch through the pause menu.
-func test_the_touch_rail_is_exactly_menu_garage_level_challenges_view_and_attach() -> void:
+func test_the_touch_rail_is_exactly_menu_garage_level_challenges_camera_and_attach() -> void:
 	var labels := {}
 	for entry in Registry.ENTRIES:
 		if int(entry.get("touch", Registry.Touch.NONE)) == Registry.Touch.SHELL_SIGNAL:
 			labels[String(entry.get("touch_label", ""))] = true
 	assert_array(labels.keys()).contains_exactly_in_any_order(
-			["MENU", "VEHICLE", "LEVEL", "CHALLENGE", "VIEW", "ATTACH"])
+			["MENU", "VEHICLE", "LEVEL", "CHALLENGE", "CAMERA", "ATTACH"])
 	assert_bool(Registry.applies(&"respawn", _ctx("car"))).is_true()
 	assert_int(Registry.find(&"respawn").get("touch", Registry.Touch.NONE)).is_equal(Registry.Touch.NONE)
 	assert_int(Registry.find(&"day_night").get("touch", Registry.Touch.NONE)).is_equal(Registry.Touch.NONE)

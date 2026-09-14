@@ -19,12 +19,12 @@ absolute = true
 [resource]
 script = ExtResource("5_def")
 id = "car_corner_budget"
-title = "Cornering budget"
+title = "Perfect turns"
 variant = "sedan-sports"
 arena = "car_arena"
 course = "res://src/levels/island/car_arena/courses/car_easy_turns_course.tscn"
-briefing = "The winding road from Easy turns, against the clock, with a passenger who hates being thrown about. Reach the finish line inside the 26 s par without the sideways acceleration (accLat) ever passing 4.0 m/s^2 either way. Too slow fails the clock, too fast fails the limit."
-hint = "accLat (m/s^2), speed (m/s), steer, accel, brake. On a bend of radius r, accLat is speed squared over r: every bend here is 35 m, so about 11.8 m/s (42 km/h) sits right on the limit. Brake before the bend, not in it, and watch the S-bends: the load swaps sides."
-par_s = 26.0
+briefing = "Same challenge as earlier, but you'll need to drive well and limit your lateral acceleration below 4.0 m/s^2. The winding road from Easy turns, against the clock. There is a time limit, so driving slow won't be enough."
+hint = "Every bend here is 35 m, so 42 km/h sits right on the limit. Brake before the bend, not in it."
+par_s = 30.0
 goals = Array[ExtResource("3_goal")]([SubResource("Resource_finish")])
 constraints = Array[ExtResource("1_cons")]([SubResource("Resource_lat")])

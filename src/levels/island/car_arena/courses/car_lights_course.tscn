@@ -1,0 +1,41 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/challenges/arena_preview.gd" id="1_aostk"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="2_0u2tw"]
+[ext_resource type="Script" path="res://src/challenges/challenge_zone.gd" id="3_i3oh4"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_bj36o"]
+albedo_color = Color(0.95, 0.95, 0.95, 1)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_54w5r"]
+material = SubResource("StandardMaterial3D_bj36o")
+size = Vector2(6, 1)
+
+[node name="CarLightsCourse" type="Node3D" unique_id=280764942]
+
+[node name="ArenaPreview" type="Node3D" parent="." unique_id=575794264]
+script = ExtResource("1_aostk")
+arena = "car_arena"
+
+[node name="Spawn" type="Marker3D" parent="." unique_id=2125151919]
+transform = Transform3D(-1.5258789e-05, 0, -1, 0, 1, 0, 1, 0, -1.5258789e-05, -92, 6.6, 143)
+script = ExtResource("2_0u2tw")
+vehicle_types = PackedStringArray("car")
+
+[node name="Finish" type="Node3D" parent="." unique_id=1617232142]
+transform = Transform3D(-0.0018005411, 0, 0.9999984, 0, 1, 0, -0.9999984, 0, -0.0018005411, 59.333115, 8, 143)
+script = ExtResource("3_i3oh4")
+size = Vector3(6, 6, 1)
+
+[node name="Water" type="Node3D" parent="." unique_id=1779089678]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 143)
+script = ExtResource("3_i3oh4")
+size = Vector3(148, 5, 60)
+
+[node name="Markers" type="Node3D" parent="." unique_id=25032704]
+
+[node name="FinishLine" type="MeshInstance3D" parent="Markers" unique_id=1824051773]
+transform = Transform3D(-0.0018005411, 0, 0.9999984, 0, 1, 0, -0.9999984, 0, -0.0018005411, 59.333115, 6.03, 143)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_54w5r")
