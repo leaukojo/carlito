@@ -29,7 +29,7 @@ It is built with the open-source game engine Godot using CC0 assets, so levels a
 
 Carlito can interact with external tools using a javascript bridge.
 The main use case of Carlito is to facilitate the learning of standard CAN (Controller Area Network) protocols (J1939, ISOBUS, NMEA2000, etc.).
-You can interact with simulated CAN buses using [sloppyCAN](https://github.com/leaukojo/sloppycan) or [RAMN](https://github.com/ToyotaInfoTech/RAMN), directly from your web browser (see below).
+You can interact with simulated CAN buses using [sloppyCAN](https://github.com/leaukojo/sloppycan) or [RAMN](https://github.com/ToyotaInfoTech/RAMN), directly from your web browser (see below). Carlito features some simple CAN challenges (e.g., accelerate to reach the finish line, maintain a fixed speed, follow a GPS route, etc.)
 
 ## Deployed builds
 
