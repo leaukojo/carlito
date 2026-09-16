@@ -8,7 +8,7 @@ facts it depends on, is `docs/challenge_ideas.md`.
 
 Written 2026-09-11. Status: **Phases 1-7 done** (1-4 on 2026-09-11, 5-7 on 2026-09-12), Phase 7's
 checkpoint played clean; **Phase 8a done** (2026-09-12), its play checkpoint open, and 8b waits on it;
-**Phase 9 done** (2026-09-12).
+**Phase 9 done** (2026-09-12); **Phases 10-11 done** (2026-09-16), their play checkpoints open; Phase 12 not started.
 
 Delete this file when the last phase ships, after distilling its conclusions into the relevant
 `CLAUDE.md` files and `docs/systems.md`.
@@ -122,8 +122,7 @@ briefing quotes needs margin past that resolution at its edges.
 | arena | ships in | challenges |
 | --- | --- | --- |
 | car island (new, small) | level pack | Car 1-16 |
-| flatland (existing, no bake) | main `.pck` | Car 17-18, Drone 6 |
-| truck-yard island (new, small) | level pack | Truck 1-4 |
+| flatland (existing, no bake) | main `.pck` | Car 17-18, Drone 6, Truck 1-4 |
 | farm: level_1's fields, or a small new island if Phase 2 finds no usable split-grip patch and curved row there | level pack | Tractor 1-4 |
 | level_6 Skyport (existing) | level pack | Drone 1-5 |
 | level_6's boat playground (existing) | level pack | Boat 1-4 |
@@ -276,23 +275,46 @@ DM1 selectors. The drone's LED / hook / gimbal and the boat's autopilot also dec
 and the local copy is a scan the Read tool can only render with poppler installed. Installing it
 is what would unblock both decoders.
 
-### 10. Truck yard (Truck 1-4)
-**Model:** Sonnet 5 · **Effort:** medium · **Mode:** accept-edits
+### 10. Truck yard (Truck 1-4) — done, checkpoint open
 
-- Couple-and-deliver (the E exception), the refuse-truck pair (Tipping refused, then
-  Weighbridge), and Trailer ABS. Truck 1 and 4 need only RAMN signals.
+Course-only overlays on flatland (the user's choice over a new island): `truck_couple_deliver`,
+`truck_tipping_refused`, `truck_weighbridge`, `truck_trailer_abs`, titles prefixed `[NOT-TESTED]`
+until played. Truck 1 needs no trailer prop: E couples the next `TrailerCatalog` entry at the
+kingpin wherever the semi stands (`TowHost.couple()`). Truck 2 passes on `hopper_load` >= 12.5
+(one completed dump); Truck 3 on rear `axle_load` 5900-6700 kg held 1 s on the `Scale`.
 
-### 11. Farm (Tractor 1-4)
-**Model:** Sonnet 5 · **Effort:** medium · **Mode:** accept-edits
+Measured with a throwaway scripted-bridge driver (E as a synthesized key): Truck 1 PASS 18.0 s
+(par 35), FAIL never coupling; Truck 2 PASS 4.4 s, FAIL without PTO/handbrake; Truck 3 PASS 21.0 s
+at 6142 kg, FAIL on the scale empty (4802 kg); Truck 4 PASS 92.5 s, FAIL braking hard (trip at
+18.0 s).
 
-- **Prerequisite:** if Phase 2 shows the driven radius does not follow `guidance_curvature`, fix
-  the mapping in Carlito first — the contract calls it the reciprocal of the turn radius.
-- The mud patch uses a splat channel with split grip; the plough field needs channel 4 soil
-  with a varying weight (see `src/levels/CLAUDE.md`).
-- Auto-steer needs a curved row the player can see.
-- **Open:** `bridge_source.gd` folds `guidance_curvature` into `steer`, so no goal can tell
-  auto-steer from a hand on the wheel. Either `VehicleInput` carries the fact (a field, and a
-  rule-5 change), or Tractor 4's briefing accepts both.
+- **Open: Truck 4 is barely playable.** Any stepped brake, even a light one, trips `trailer_abs`
+  at 40-50 km/h; only a brake ramped from 0 over ~8 s and released to a coast under ~12 km/h
+  passed, so the `Box` is 240 m long. Investigation is `docs/TODO.md` § A light, stepped brake
+  trips `trailer_abs`; re-tune the course after it.
+- **Checkpoint: the user plays Truck 1-4 over sloppyCAN.**
+
+### 11. Farm (Tractor 1-4) — done, checkpoint open
+
+`tractor_pto_speed`, `tractor_mud`, `tractor_plough`, `tractor_auto_steer`, titles prefixed
+`[NOT-TESTED]`, courses in `src/levels/island/level_1/courses/` (level_1's pack), on its farm
+playground. `VehicleInput.guidance_curvature` carries the auto-steer command (root `CLAUDE.md`
+§ Input); `WheelDrive` turns it into a wheel angle off the wheelbase with no speed taper, and
+`InputPresentConstraint` fails Tractor 4 from its second goal on while the field is absent.
+
+Driven radius at a commanded 50 m, at 2 / 8 / 15 km/h: 18.6 / 17.1 / 18.6 m through `steer`
+(the fixed 127 1/km full-lock scale was the error, not the taper), 50.1 / 50.2 / 50.4 m through
+the wheelbase. Under guidance `_steer` slews at `steer_speed` toward
+`WheelDrive.guidance_steer_unit`, so `telemetry.steer` is the applied, untapered command.
+
+Measured with a throwaway scripted-bridge driver: Tractor 1 PASS 3.4 s, FAIL without throttle;
+Tractor 2 PASS 14.1 s with `fwd_drive`, **and 13.9 s in plain 2WD**; Tractor 3 PASS 11.6 s,
+FAIL with the plough raised; Tractor 4 PASS 6.4 s, FAIL steering by hand.
+
+- **Tractor 2 and 3 ship as warm-ups** (the user's choice): the WALLOW's mud and the FIELD's soil
+  are uniform, so neither the diff lock / MFWD nor a varying draft is needed. The terrain work is
+  `docs/TODO.md` § The farm has no split-grip mud and no varying soil.
+- **Checkpoint: the user plays Tractor 1-4 over sloppyCAN.**
 
 ### 12. Drone range (Drone 1-6)
 **Model:** Sonnet 5 · **Effort:** medium · **Mode:** accept-edits

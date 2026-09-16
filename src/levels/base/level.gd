@@ -124,19 +124,20 @@ func zoom_camera(steps: float) -> void:
 func _setup_baked() -> void:
 	if scene_file_path.is_empty():
 		return
-	# No kit content means nothing was baked and nothing to swap.
+	# Exported scenes have AuthoringRoot stripped (strip_export.gd), so a missing one does not
+	# mean "nothing baked" — the baked scene is the only geometry there.
 	var authoring := Groups.find_authoring(self)
-	if authoring == null:
-		return
 	var baked_path := scene_file_path.get_basename() + ".baked.scn"
 	if not ResourceLoader.exists(baked_path):
-		# .baked.scn is untracked build output, so a fresh clone lands here until it bakes once.
-		push_warning(("%s is running UNBAKED authoring content — per-piece dev collision and "
-				+ "unmerged meshes; perf here does not resemble the shipped build. "
-				+ "Run tools/bake_levels.tscn.") % scene_file_path.get_file())
+		if authoring != null:
+			# .baked.scn is untracked build output, so a fresh clone lands here until it bakes once.
+			push_warning(("%s is running UNBAKED authoring content — per-piece dev collision and "
+					+ "unmerged meshes; perf here does not resemble the shipped build. "
+					+ "Run tools/bake_levels.tscn.") % scene_file_path.get_file())
 		return
 	add_child((load(baked_path) as PackedScene).instantiate())
-	authoring.queue_free()
+	if authoring != null:
+		authoring.queue_free()
 
 
 ## Bare `GameState` would fail to compile under the CLI bake tools; only called in-tree.

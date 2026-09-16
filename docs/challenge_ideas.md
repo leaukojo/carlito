@@ -213,12 +213,17 @@ can.
    `trailer_connected`, then stops the full rig in the box under a par time. The catch is the air:
    coupling costs AIR1 about 3 bar and a trailer coupled by driving starts with empty reservoirs
    (8 s to charge), so braking hard before `air_primary` recovers reaches the 3 bar spring-brake
-   gate and locks the rear axle.
+   gate and locks the rear axle. Authored as `truck_couple_deliver` on flatland (no separate
+   island — courses are runtime overlays and need no bake); measured PASS coupling then stopping
+   in the box at 17.97 s (par 35 s), FAIL never coupling (times out on par, `trailer_connected`
+   stays 0 the whole run).
 2. **Tipping refused.** On the garbage truck, `body_cmd` does nothing. The player reads
    `body_bus` / `body_inhibit` to find the interlock — the body network needs the engine running
    and the chassis PTO on, speed at or below walking pace (1.4 m/s), and the handbrake applied —
    then completes a lift/dump cycle. `body_inhibit` is one bit for all three, so `body_bus` is the
    clue to the PTO term. A frame-sent lift holds only while its RPDO keeps arriving (§ Wire facts).
+   Authored as `truck_tipping_refused` (`garbage-truck`, flatland); measured PASS completing one
+   cycle at 4.40 s, FAIL never engaging PTO/handbrake (the interlock refuses; hopper never rises).
 3. **Weighbridge.** Follow-up to 2 on the same truck. Each completed DUMP cycle adds 12.5 % to
    `hopper_load` (625 kg of real mass, confirmed in `refuse_body.gd:25-27`). The player counts
    cycles while watching `axle_load` (the rear axle), landing inside a target band under the
@@ -227,7 +232,10 @@ can.
    then per completed cycle 5177 / 5556 / 5932 / 6307 / 6683 / 7058 / 7435 / 7812 kg at 8/8 full —
    only ~60 % of each 625 kg lands on the rear axle (~377 kg/cycle). **The 11.5 t limit is never
    actually reached** even at a full hopper, so the target band has to sit well below full (e.g.
-   5.9-6.7 t, cycles 3-5) rather than being framed as "don't blow through 11.5 t."
+   5.9-6.7 t, cycles 3-5) rather than being framed as "don't blow through 11.5 t." Authored as
+   `truck_weighbridge` (`garbage-truck`, flatland, `SignalReachGoal(axle_load, 5900..6700,
+   zone=Scale)`); measured PASS landing at 6142 kg after four cycles then holding on the scale at
+   20.98 s, FAIL driving onto the scale empty (~4802 kg, under the band, indefinitely).
 4. **Trailer ABS.** On the `semi` with a laden trailer, pass an entry gate above a set speed, then
    stop in the box. `trailer_abs` must never come on — it fires when a trailer wheel really slips
    past the ABS threshold (`TRAILER_ABS_SLIP = 0.30`, the trailer's own worst wheel slip,
@@ -235,7 +243,17 @@ can.
    stop from 40/60/80 km/h (8.1 m / 1.70 s, 18.0 m / 2.40 s, 31.8 m / 3.12 s) trips `trailer_abs`
    at **every** speed tested — a hard stop always fires it. The entry gate's real job is forcing a
    real speed rather than a crawl; passing needs a modulated brake application, not any particular
-   entry speed.
+   entry speed. Authored as `truck_trailer_abs` (`semi` + the laden box trailer attached from
+   spawn, `SignalBandGoal(kmh, low=50, zone=Gate)` then `StopInZoneGoal(Box)`,
+   `ForbiddenValueConstraint(trailer_abs, [1])`). Measuring the pass found the SHAPE of the brake
+   input matters as much as its magnitude: a stepped brake percentage — even a light one, even
+   well after a launch's own transient has settled — trips `trailer_abs` almost immediately at any
+   speed from ~40 to ~50 km/h; only a brake ramped smoothly from 0 over several seconds avoided the
+   trip, and even that loses the last few km/h to the same lock unless released to a coast under
+   about 12 km/h. Measured PASS crossing the gate at ~51 km/h and creeping to a stop with a ramped-
+   then-coasted brake at 92.50 s (no par: the gate and the constraint close the crawl), FAIL
+   crossing the gate then braking hard, tripping `trailer_abs` at 18.03 s. The box is 240 m long to
+   leave room for this, well past the plan's own estimate.
 
 ## Tractor
 
@@ -263,15 +281,21 @@ can.
    `draft_newtons` (`tractor_telemetry.gd:91-96`) is rated draft (12 kN) × depth01 × soil01 (from
    `channel_weight_at` on splat channel 4) × a speed ramp to 2 m/s.
 4. **Auto-steer.** Follow a curved crop row by sending `guidance_curvature` instead of `steer` —
-   commanding curvature, not wheel angle, the way ISOBUS guidance does. Confirmed the mapping is
-   `steer = clampf(curvature / 127.0, -1, 1)` (`bridge_source.gd:97-98`, so 127 1/km full lock =
-   7.9 m radius), a **fixed** mapping independent of speed — but `steer` then goes through the
-   tractor's speed-tapered rack (`min_steer_frac = 0.55`, linear taper from standstill), so
-   commanded curvature only matches driven radius near zero speed; at any working speed the taper
-   shrinks the actual wheel angle, so driven radius grows past the commanded one as speed rises.
-   This is analytic, not yet confirmed with a runtime circle-drive at 2/8/15 km/h — still needs
-   that measurement (and a fix if it's off) before this challenge is authored, per the prerequisite
-   already noted in the plan.
+   commanding curvature, not wheel angle, the way ISOBUS guidance does. **Fixed in Phase 11**:
+   `VehicleInput.guidance_curvature` now carries the raw signed curvature (1/km) through
+   arbitration (presence-gated like `heading_cmd`/`rudder`, `GUIDANCE_CURVATURE_NONE` the
+   sentinel — 0 is dead-straight and a real command), and `WheelDrive.tick` derives the wheel
+   angle directly off the tractor's own wheelbase (`angle = atan(wheelbase * curvature / 1000)`,
+   clamped to `max_steer_deg` only) instead of going through `steer` and the speed-tapered rack.
+   `steer` itself is unchanged (still `clampf(curvature / 127.0, -1, 1)` for dashboard/telemetry
+   and every other consumer) — only the tractor's own wheel angle now bypasses the taper.
+   Measured (a scripted-bridge driver holding a fixed curvature of 20 1/km — 50 m radius — at
+   2/8/15 km/h on flatland, reading `|telemetry.speed / telemetry.yaw|` once settled): **before**
+   the fix, radius sat at 18.6 / 17.1 / 18.6 m at 2/8/15 km/h (the wire's 127 1/km "full lock"
+   badly under-states the tractor's real ~4 m minimum radius, so any curvature under it steers
+   tighter than commanded); **after**, 60.7 / 51.9 / 51.6 m — accurate to within a few percent at
+   8 and 15 km/h, noisier (about 20% high) at 2 km/h where the yaw signal is small. Tractor 4
+   (`tractor_auto_steer`) is authored on this fix.
 
 ## Drone
 

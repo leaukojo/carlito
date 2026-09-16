@@ -21,6 +21,14 @@ const DEFS: PackedStringArray = [
 	"res://src/challenges/defs/car_box_stop.tres",
 	"res://src/challenges/defs/car_box_blind.tres",
 	"res://src/challenges/defs/car_blind_stadium.tres",
+	"res://src/challenges/defs/truck_couple_deliver.tres",
+	"res://src/challenges/defs/truck_tipping_refused.tres",
+	"res://src/challenges/defs/truck_weighbridge.tres",
+	"res://src/challenges/defs/truck_trailer_abs.tres",
+	"res://src/challenges/defs/tractor_pto_speed.tres",
+	"res://src/challenges/defs/tractor_mud.tres",
+	"res://src/challenges/defs/tractor_plough.tres",
+	"res://src/challenges/defs/tractor_auto_steer.tres",
 ]
 
 ## Dev fixtures: challenges to drive the runner on, reached only through a debug build's

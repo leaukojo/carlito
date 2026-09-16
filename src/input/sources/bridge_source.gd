@@ -83,9 +83,14 @@ func poll() -> Dictionary[StringName, Variant]:
 	# Boat rudder: presence overrides steer in arbitrate_bridge, normalized %→unit.
 	if v.has("rudder"):
 		out[&"rudder"] = clampf(float(v.get("rudder", 0.0)) / 100.0, -1.0, 1.0)
-	# Tractor guidance: same presence rule as rudder, curvature 1/km→steer unit.
+	# Tractor guidance: same presence rule as rudder, curvature 1/km→steer unit for `steer`
+	# (dashboard/telemetry keep reading that as before). The raw curvature also rides through
+	# under its own key, clamped to the wire's +-127 1/km i8, for WheelDrive to derive the wheel
+	# angle from the tractor's own wheelbase rather than through the speed-tapered rack.
 	if v.has("guidance_curvature"):
-		out[&"guidance"] = steer_from_curvature(float(v.get("guidance_curvature", 0.0)))
+		var curvature := clampf(float(v.get("guidance_curvature", 0.0)), -FULL_LOCK_CURVATURE, FULL_LOCK_CURVATURE)
+		out[&"guidance"] = steer_from_curvature(curvature)
+		out[&"guidance_curvature"] = curvature
 	# Boat autopilot course: same presence rule again, and here it is load-bearing rather than an
 	# override — every bearing in [0,360] is legal, so there is no "no command" value to send.
 	# Absent means the pilot holds the heading it captured; wrapped, so 360 arrives as 0.
@@ -96,7 +101,7 @@ func poll() -> Dictionary[StringName, Variant]:
 
 ## Does the uplink carry a driving control at all? Read off the RAW values, since `poll()`
 ## defaults all three: sloppyCAN omits a control it has no source for, so a live bridge under
-## non-RAMN traffic carries none. Any one is enough (a hand-sent pedal frame; the drone panel's
+## traffic with no driver demand (anything but RAMN, J1939 and ISO 11783) carries none. Any one is enough (a hand-sent pedal frame; the drone panel's
 ## sticks claim all three).
 static func drive_sourced(v: Dictionary) -> bool:
 	return v.has("accel") or v.has("brake") or v.has("steer")

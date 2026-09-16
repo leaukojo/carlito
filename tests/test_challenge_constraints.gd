@@ -68,3 +68,26 @@ func test_fail_zone_reports_a_missing_zone() -> void:
 	c.zone = &"Nope"
 	var none: Dictionary[StringName, ZoneShape] = {}
 	assert_array(c.bind(none)).has_size(1)
+
+
+## Built for Tractor 4 (tractor_auto_steer): hand steering never sets guidance_curvature, so
+## the presence rule (0 is a legal curvature, absent is the sentinel) is what fails it.
+func test_input_present_fails_while_the_field_sits_on_its_sentinel() -> void:
+	var c := InputPresentConstraint.new()
+	c.field = &"guidance_curvature"
+	var f := ChallengeFrame.new()
+	f.pose = Transform3D.IDENTITY
+	assert_int(c.step(f, DT)).is_equal(S.FAIL)
+	assert_str(c.message).contains("guidance_curvature")
+
+
+func test_input_present_holds_once_a_real_command_arrives() -> void:
+	var c := InputPresentConstraint.new()
+	c.field = &"guidance_curvature"
+	var f := ChallengeFrame.new()
+	f.pose = Transform3D.IDENTITY
+	# Dead straight (0) is a real command, same presence rule as heading_cmd.
+	f.input.guidance_curvature = 0.0
+	assert_int(c.step(f, DT)).is_equal(S.RUNNING)
+	f.input.guidance_curvature = -40.0
+	assert_int(c.step(f, DT)).is_equal(S.RUNNING)

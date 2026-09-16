@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="1_goal"]
+[ext_resource type="Script" path="res://src/challenges/goals/signal_reach_goal.gd" id="2_reach"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="3_def"]
+
+[sub_resource type="Resource" id="Resource_scale"]
+script = ExtResource("2_reach")
+signal_name = "axle_load"
+low = 5900.0
+high = 6700.0
+zone = &"Scale"
+hold_s = 1.0
+
+[resource]
+script = ExtResource("3_def")
+id = "truck_weighbridge"
+title = "[NOT-TESTED] Weighbridge"
+variant = "garbage-truck"
+arena = "flatland"
+course = "res://src/challenges/courses/truck_weighbridge_course.tscn"
+briefing = "Run lift/dump cycles until the rear axle_load sits inside the target band, then drive onto the scale and hold."
+hint = "Each completed dump adds 12.5% to hopper_load, but only about 60% of that lands on the rear axle. axle_load reads out of the sim in kg, 0.5 kg per bit on the wire; target 5900-6700 kg. Only a respawn empties the hopper, so overshooting costs the run."
+goals = Array[ExtResource("1_goal")]([SubResource("Resource_scale")])

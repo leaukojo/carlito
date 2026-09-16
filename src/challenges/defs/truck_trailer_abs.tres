@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_constraint.gd" id="1_cons"]
+[ext_resource type="Script" path="res://src/challenges/goals/forbidden_value_constraint.gd" id="2_forbid"]
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="3_goal"]
+[ext_resource type="Script" path="res://src/challenges/goals/signal_band_goal.gd" id="4_band"]
+[ext_resource type="Script" path="res://src/challenges/goals/stop_in_zone_goal.gd" id="5_stop"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="6_def"]
+
+[sub_resource type="Resource" id="Resource_gate"]
+script = ExtResource("4_band")
+signal_name = "kmh"
+low = 50.0
+zone = &"Gate"
+
+[sub_resource type="Resource" id="Resource_box"]
+script = ExtResource("5_stop")
+zone = &"Box"
+
+[sub_resource type="Resource" id="Resource_noabs"]
+script = ExtResource("2_forbid")
+signal_name = "trailer_abs"
+values = PackedInt32Array(1)
+from_goal = 0
+
+[resource]
+script = ExtResource("6_def")
+id = "truck_trailer_abs"
+title = "[NOT-TESTED] Trailer ABS"
+variant = "semi"
+attachment = "res://src/vehicles/truck/trailers/box.tscn"
+arena = "flatland"
+course = "res://src/challenges/courses/truck_trailer_abs_course.tscn"
+briefing = "Cross the gate over 50 km/h with the laden trailer, then stop in the box. trailer_abs must never come on."
+hint = "trailer_abs fires on the trailer's own worst wheel slip past its ABS threshold -- a full-brake stop trips it at every speed tested. The gate forces a real entry speed; passing needs the brake modulated, not any particular speed."
+goals = Array[ExtResource("3_goal")]([SubResource("Resource_gate"), SubResource("Resource_box")])
+constraints = Array[ExtResource("1_cons")]([SubResource("Resource_noabs")])

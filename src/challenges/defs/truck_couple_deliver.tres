@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="1_goal"]
+[ext_resource type="Script" path="res://src/challenges/goals/signal_reach_goal.gd" id="2_reach"]
+[ext_resource type="Script" path="res://src/challenges/goals/stop_in_zone_goal.gd" id="3_stop"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="4_def"]
+
+[sub_resource type="Resource" id="Resource_connected"]
+script = ExtResource("2_reach")
+signal_name = "trailer_connected"
+low = 1.0
+high = 1.0
+
+[sub_resource type="Resource" id="Resource_box"]
+script = ExtResource("3_stop")
+zone = &"Box"
+
+[resource]
+script = ExtResource("4_def")
+id = "truck_couple_deliver"
+title = "[NOT-TESTED] Couple and deliver"
+variant = "semi"
+attachment = ""
+allow_attach_key = true
+arena = "flatland"
+course = "res://src/challenges/courses/truck_couple_deliver_course.tscn"
+briefing = "The rig spawns bobtail. Couple the trailer with E, confirm trailer_connected, then stop the full rig in the box before the par time runs out."
+hint = "trailer_connected needs the ISO 7638 data pair, which this cab-over carries. Coupling costs AIR1 about 3 bars, and a trailer coupled by driving starts with empty reservoirs (8 s to charge) -- braking hard too soon can reach the 3 bar spring-brake gate and lock the rear axle."
+par_s = 35.0
+goals = Array[ExtResource("1_goal")]([SubResource("Resource_connected"), SubResource("Resource_box")])

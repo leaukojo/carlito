@@ -62,7 +62,9 @@ Every island (`src/levels/island/`, `LevelPacks.PACK_ROOT`) ships in its own
 `c2-<sha>.<id>.pck` beside the main pack, so the boot download carries none of them (the boot
 default, `flatland`, has no bake). The first time one opens, `src/shell/level_packs.gd`
 downloads it behind the loading screen, keeps it in `user://level_packs/` (IndexedDB: it survives
-reloads and plays offline afterwards) and mounts it with `ProjectSettings.load_resource_pack`;
+reloads and plays offline afterwards) and mounts it with `ProjectSettings.load_resource_pack`
+(the editor's Run in Browser uses the runnable `Run in Browser` preset, which keeps the islands
+in the main pack, so nothing is fetched and the pack path goes untested there);
 packs of any other build are deleted on the next fetch (dev and stable share one origin, so
 while they run different builds a visit to one deletes the other's). They are not in the service
 worker's cache list: that list is Godot-generated, and any entry missing from its cache sends an

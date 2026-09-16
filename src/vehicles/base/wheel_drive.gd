@@ -21,6 +21,9 @@ var retarder_torque_applied := 0.0
 var _applied_steer := 0.0  ## steer angle applied to steered wheels this tick (rad)
 var _driven_count := 0     ## driven wheels as drive_omega() counted them THIS tick
 var _dust: GPUParticles3D  ## rear-slip dust; null until build_dust(), and on a drive with no wheels
+## Front-to-rear anchor distance (m), body space; 0 if the spec declares no front/rear pair
+## (never happens for a real wheeled body). Cached once in _init since wheel_positions is data.
+var _wheelbase := 0.0
 
 
 ## Build the wheels and their visuals.
@@ -60,6 +63,7 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 		var wheel := RayWheel.new(pos, front, driven, visual, corner_mass)
 		wheel.visual_lift = vis_radius - gd.wheel_radius
 		wheels.append(wheel)
+	_wheelbase = _compute_wheelbase()
 
 
 ## Wheel-slip dust, built separately so the emitter keeps its place in the body's child order.
@@ -89,18 +93,67 @@ func drive_omega(gd: GroundDriveSpec, input: VehicleInput) -> float:
 	return omega / maxf(1.0, _driven_count)
 
 
+## Front axle to rear axle distance (m), from the built wheels' own anchors — the same fact
+## `Articulation.wheelbase` measures off a spec, cached here since `wheels` is fixed at _init.
+## 0.0 with no front or no rear wheel (never a real wheeled body).
+func _compute_wheelbase() -> float:
+	var front_z := INF
+	var rear_z := -INF
+	for w in wheels:
+		if w.is_rear:
+			rear_z = maxf(rear_z, w.anchor.z)
+		else:
+			front_z = minf(front_z, w.anchor.z)
+	if is_inf(front_z) or is_inf(rear_z):
+		return 0.0
+	return rear_z - front_z
+
+
+## Pure: ISOBUS curvature (1/km, signed like `steer` — + = right) to wheel angle (rad, same
+## sign as the curvature; the caller negates it to match `_applied_steer`'s sign convention,
+## same as the plain `steer` path does). Ackermann-thin (one angle for both steered wheels,
+## the same simplification the speed-tapered rack already makes).
+## `curvature = tan(angle) / wheelbase`, so `angle = atan(wheelbase * curvature)`; clamped to
+## the mechanical lock, never the speed-tapered one.
+static func steer_angle_from_curvature(curvature_per_km: float, wheelbase: float,
+		max_steer_deg: float) -> float:
+	var max_rad := deg_to_rad(max_steer_deg)
+	var angle := atan(wheelbase * (curvature_per_km / 1000.0))
+	return clampf(angle, -max_rad, max_rad)
+
+
+## The guidance path's slew TARGET, in the same unit as `input.steer` ([-1, 1], + = right): the
+## untapered mechanical-lock angle for the commanded curvature, divided back down by that lock —
+## so `BaseVehicle` can run guidance through the SAME `move_toward(_steer, ..., spec.steer_speed)`
+## slew as hand-steering instead of jumping the wheels to the commanded angle in one tick. NAN
+## with no guidance command or no measured wheelbase, so the caller falls back to `input.steer`.
+func guidance_steer_unit(input: VehicleInput, gd: GroundDriveSpec) -> float:
+	if input.guidance_curvature == VehicleInput.GUIDANCE_CURVATURE_NONE or _wheelbase <= 0.0:
+		return NAN
+	var max_rad := deg_to_rad(gd.max_steer_deg)
+	return steer_angle_from_curvature(input.guidance_curvature, _wheelbase, gd.max_steer_deg) \
+			/ max_rad
+
+
 ## Statement order is load-bearing: resistance reads this tick's spring load so it must follow
 ## the wheel loop; the diff lock writes omega so it must follow spin integration.
 func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: float,
 		axle_torque: float, ground_speed: float, delta: float,
 		grip_terrains: Array[Node]) -> void:
 	var gd := spec.ground_drive
-	# High-speed steering falloff (min_steer_frac == 1.0 disables it).
-	var steer_falloff := 1.0
-	if gd.steer_falloff_speed > 0.0:
-		steer_falloff = lerpf(1.0, gd.min_steer_frac,
-				clampf(absf(ground_speed) / gd.steer_falloff_speed, 0.0, 1.0))
-	_applied_steer = -steer * deg_to_rad(gd.max_steer_deg * steer_falloff)
+	if input.guidance_curvature != VehicleInput.GUIDANCE_CURVATURE_NONE and _wheelbase > 0.0:
+		# `steer` (the slewed _steer BaseVehicle already ran through guidance_steer_unit) IS the
+		# mechanical-lock unit here, so apply it straight to the lock — no speed taper, so the
+		# driven radius tracks the command at any speed instead of drifting wider as the taper
+		# shrinks the rack.
+		_applied_steer = -steer * deg_to_rad(gd.max_steer_deg)
+	else:
+		# High-speed steering falloff (min_steer_frac == 1.0 disables it).
+		var steer_falloff := 1.0
+		if gd.steer_falloff_speed > 0.0:
+			steer_falloff = lerpf(1.0, gd.min_steer_frac,
+					clampf(absf(ground_speed) / gd.steer_falloff_speed, 0.0, 1.0))
+		_applied_steer = -steer * deg_to_rad(gd.max_steer_deg * steer_falloff)
 
 	var space := body.get_world_3d().direct_space_state
 	retarder_torque_applied = 0.0

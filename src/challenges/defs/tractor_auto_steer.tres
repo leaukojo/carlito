@@ -1,0 +1,40 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="1_goal"]
+[ext_resource type="Script" path="res://src/challenges/goals/reach_zone_goal.gd" id="2_reach"]
+[ext_resource type="Script" path="res://src/challenges/goals/input_present_constraint.gd" id="3_present"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="4_def"]
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_constraint.gd" id="5_cons"]
+
+[sub_resource type="Resource" id="Resource_w1"]
+script = ExtResource("2_reach")
+zone = &"W1"
+
+[sub_resource type="Resource" id="Resource_w2"]
+script = ExtResource("2_reach")
+zone = &"W2"
+
+[sub_resource type="Resource" id="Resource_w3"]
+script = ExtResource("2_reach")
+zone = &"W3"
+
+[sub_resource type="Resource" id="Resource_w4"]
+script = ExtResource("2_reach")
+zone = &"W4"
+
+[sub_resource type="Resource" id="Resource_guidance"]
+script = ExtResource("3_present")
+field = &"guidance_curvature"
+from_goal = 1
+
+[resource]
+script = ExtResource("4_def")
+id = "tractor_auto_steer"
+title = "[NOT-TESTED] Auto-steer"
+variant = "tractor-kenney"
+arena = "level_1"
+course = "res://src/levels/island/level_1/courses/tractor_auto_steer_course.tscn"
+briefing = "Follow the curved crop row by commanding guidance_curvature, not steer -- an auto-steer system holds a curvature, not a wheel angle. Hand-steering this one does not pass."
+hint = "guidance_curvature is 1/km on the wire, byte 3.1 must read 01 'intended to steer' for it to count, and it only counts while sloppyCAN keeps sending it. The reciprocal of the command is the radius: this row curves at 1000/33.3 = 30 m."
+goals = Array[ExtResource("1_goal")]([SubResource("Resource_w1"), SubResource("Resource_w2"), SubResource("Resource_w3"), SubResource("Resource_w4")])
+constraints = Array[ExtResource("5_cons")]([SubResource("Resource_guidance")])

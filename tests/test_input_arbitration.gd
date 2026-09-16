@@ -514,6 +514,43 @@ func test_bridge_guidance_beats_a_stale_rudder_key() -> void:
 	assert_float(RouterScript.arbitrate_bridge(vals).steer).is_equal_approx(-0.2, 1e-6)
 
 
+func test_bridge_guidance_curvature_absent_is_sentinel() -> void:
+	# No guidance command → VehicleInput carries the "nobody's holding the auto-steer wheel"
+	# sentinel, not a legal curvature (0 is dead-straight and a real command).
+	var out: VehicleInput = RouterScript.arbitrate_bridge(
+			_bridge(0.0, 0.0, 0.9, 0.0, GEAR_D1))
+	assert_float(out.guidance_curvature).is_equal(VehicleInput.GUIDANCE_CURVATURE_NONE)
+
+
+func test_bridge_guidance_curvature_carries_through_when_present() -> void:
+	# bridge_source writes the raw curvature (1/km) alongside the steer-unit 'guidance' key;
+	# arbitrate_bridge carries it onto VehicleInput verbatim for WheelDrive to use.
+	var vals := _bridge(0.0, 0.0, 0.9, 0.0, GEAR_D1)
+	vals["guidance"] = -0.4
+	vals["guidance_curvature"] = -50.8
+	var out: VehicleInput = RouterScript.arbitrate_bridge(vals)
+	assert_float(out.guidance_curvature).is_equal_approx(-50.8, 1e-6)
+	# Dead straight (0) is a real command and must not read as the sentinel.
+	vals["guidance_curvature"] = 0.0
+	assert_float(RouterScript.arbitrate_bridge(vals).guidance_curvature).is_equal(0.0)
+
+
+func test_bridge_source_clamps_guidance_curvature_to_full_lock() -> void:
+	# The raw curvature key is clamped to the wire's +-127 1/km i8, same ceiling as the
+	# steer-unit conversion, so WheelDrive never asks for more angle than sloppyCAN could
+	# legally have sent.
+	var src := BridgeSourceScript.new()
+	Bridge.set("_active", true)
+	Bridge.set("_inbound", {"guidance_curvature": 500.0})
+	var out := src.poll()
+	assert_float(float(out["guidance_curvature"])).is_equal(BridgeSourceScript.FULL_LOCK_CURVATURE)
+	Bridge.set("_inbound", {"guidance_curvature": -500.0})
+	out = src.poll()
+	assert_float(float(out["guidance_curvature"])).is_equal(-BridgeSourceScript.FULL_LOCK_CURVATURE)
+	Bridge.set("_active", false)
+	Bridge.set("_inbound", {})
+
+
 func test_bridge_mirrors_scv_flow_absent_is_closed() -> void:
 	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
 	vals["scv_flow"] = 0.6   # bridge_source already did the %→unit

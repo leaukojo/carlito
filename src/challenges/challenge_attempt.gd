@@ -72,7 +72,7 @@ func step(frame: ChallengeFrame, delta: float) -> ChallengeCheck.Status:
 			message = why
 			return s
 	if def.par_s > 0.0 and elapsed > def.par_s + ChallengeCheck.HOLD_EPS:
-		return _finish(ChallengeCheck.Status.FAIL, "over par (%s s)" % String.num(def.par_s, 1))
+		return _finish(ChallengeCheck.Status.FAIL, "over time limit (%s s)" % String.num(def.par_s, 1))
 	var g := _goals[goal_index]
 	var gs := g.step(frame, delta)
 	if gs == ChallengeCheck.Status.FAIL:

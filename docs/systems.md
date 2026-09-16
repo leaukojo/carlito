@@ -65,9 +65,13 @@ here as static/pure functions, unit-tested in `tests/test_input_arbitration.gd`:
 
 - **Bridge drives** — fresh (< 300 ms, `Bridge.FRESHNESS_MS`) and carrying a driving control
   (`accel`, `brake` or `steer` present: `BridgeSource.drive_sourced`): `arbitrate_bridge` alone.
-- **Fallback** — fresh but carrying none, which is what sloppyCAN sends under non-RAMN traffic
-  (it omits every control it has no source for). `blend_local_driving` takes the **driving
-  group** from the local path — pedals, steer, handbrake, key, gear (so automatic), foot-brake
+- **Fallback** — fresh but carrying none, which is what sloppyCAN sends under traffic with no
+  driver demand (it omits every control it has no source for): CHAdeMO, CANopen, DroneCAN with
+  Drone Control closed, and NMEA 2000 (which sources only the boat's `rudder`, from PGN 127245's
+  rudder order). J1939 / ISO 11783 traffic *does* drive: sloppyCAN decodes EEC2 / EBC1 / VDC2 /
+  TC1 / CCVS into accel / brake / steer / gear / handbrake / brakeLamp, and does not send the
+  demo's pedals while a drone is connected. `blend_local_driving` takes the **driving group**
+  from the local path — pedals, steer, handbrake, key, gear (so automatic), foot-brake
   STOP lamp, lights level, horn, and the drone's arm/climb and plane's elevator — and every
   other field from `arbitrate_bridge`, so bus commands the traffic does carry (ISOBUS hitch/PTO,
   CiA 422 body, N2K nav mode) still command. A bridge `guidance`/`rudder` keeps the wheel. The

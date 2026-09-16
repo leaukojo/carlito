@@ -93,6 +93,9 @@ var _bridge_only := false
 ## so a course can be authored and checked without sloppyCAN. Never true in a release export.
 var _dev_keys := false
 const DEV_KEYS_NOTICE_TEXT := "DEV: KEYBOARD DRIVES THIS CHALLENGE"
+const KEYS_LOCKED_NOTICE_TEXT := "KEYBOARD DISABLED IN CHALLENGES - DRIVE OVER SLOPPYCAN"
+## The keyboard driving actions whose press raises KEYS_LOCKED_NOTICE_TEXT under the lock.
+const DRIVING_ACTIONS: Array[StringName] = [&"accel", &"brake_reverse", &"steer_left", &"steer_right"]
 ## Gearbox mode, set by the shell (vehicle selector in free play, ChallengeDef.transmission in an
 ## attempt). Bridge-only: it decides how `arbitrate_bridge` reads the gear byte; local input has no
 ## shift keys and always drives automatic.
@@ -147,11 +150,13 @@ func unregister_vehicle(vehicle: Node3D) -> void:
 func _physics_process(delta: float) -> void:
 	# Autoloads tick before scene nodes, ahead of every vehicle's frame.
 	# A fresh bridge carrying a driving control drives outright. A fresh bridge carrying none
-	# (non-RAMN traffic) keeps every field it owns but hands the driving group to local input —
+	# (traffic with no driver demand) keeps every field it owns but hands the driving group to local input —
 	# except under the challenge lock, where it drives as sent. No bridge: local, untouched.
 	var bridge_raw := _bridge_source.poll()
 	var live := bool(bridge_raw.get(&"active", false))
 	_bridge_drives = live and (bool(bridge_raw.get(&"drive_sourced", false)) or _bridge_only)
+	if _bridge_only and not _dev_keys:
+		_warn_if_keys_locked()
 	if _bridge_drives:
 		_set_fallback_notice(false)
 		_current = arbitrate_bridge(bridge_raw, _manual_gearbox)
@@ -257,6 +262,15 @@ func _clear_ignition_notice() -> void:
 	if _ignition_warned:
 		_ignition_warned = false
 		GameState.notice_cleared.emit(IGNITION_NOTICE_TEXT)
+
+
+## Say why a driving key does nothing under the challenge lock. Raised on each press, not held,
+## so the notice's dwell restarts per press without being pinned up while a key stays down.
+func _warn_if_keys_locked() -> void:
+	for action in DRIVING_ACTIONS:
+		if Input.is_action_just_pressed(action):
+			GameState.notice.emit(KEYS_LOCKED_NOTICE_TEXT, 0.0)
+			return
 
 
 ## Say why the keyboard drives while sloppyCAN is connected. Edge-triggered like the ignition
@@ -543,6 +557,9 @@ static func arbitrate_bridge(vals: Dictionary, manual := false) -> VehicleInput:
 	# when sloppyCAN sends it, and absent means "no course commanded", not a bearing of 0.
 	out.nav_mode = int(vals.get("nav_mode", 0))
 	out.heading_cmd = float(vals.get("heading_cmd", VehicleInput.HEADING_CMD_NONE))
+	# Tractor guidance curvature, same presence rule: bridge_source writes the key only while
+	# sloppyCAN sends it. Read by WheelDrive, not by any vehicle family check (rule 5).
+	out.guidance_curvature = float(vals.get("guidance_curvature", VehicleInput.GUIDANCE_CURVATURE_NONE))
 	# The sheet, already %→fraction normalized in bridge_source; local 3 detent not read, for the
 	# same reason as nav_mode. Absent → 0 → hauled in hard, which is a real trim, not a sentinel.
 	out.sheet = clampf(float(vals.get("sheet", 0.0)), 0.0, 1.0)

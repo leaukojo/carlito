@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="ChallengeDef" format=3]
+
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="1_goal"]
+[ext_resource type="Script" path="res://src/challenges/goals/signal_reach_goal.gd" id="2_reach"]
+[ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="3_def"]
+
+[sub_resource type="Resource" id="Resource_rated"]
+script = ExtResource("2_reach")
+signal_name = "pto_rpm"
+low = 950.0
+high = 1050.0
+hold_s = 3.0
+
+[resource]
+script = ExtResource("3_def")
+id = "tractor_pto_speed"
+title = "[NOT-TESTED] PTO speed"
+variant = "tractor-kenney"
+transmission = 1
+attachment = "res://src/vehicles/tractor/implements/mower.tscn"
+arena = "level_1"
+course = "res://src/levels/island/level_1/courses/tractor_pto_speed_course.tscn"
+briefing = "Select the 1000 PTO gear, engage the shaft, then hold it in its rated speed band while the mower works."
+hint = "pto_mode picks the gearbox ratio (00 = 540, 01 = 1000); pto_rpm reads 0.125 rev/min per bit on the wire and only moves once pto is engaged with the key at Ignition. 1000 rev/min is rated near the engine's own 2200 rpm, so gear and ground speed on this MANUAL box are what put the shaft there -- neutral with the throttle up gets you there without moving at all."
+goals = Array[ExtResource("1_goal")]([SubResource("Resource_rated")])

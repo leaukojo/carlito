@@ -14,7 +14,10 @@ uncommitted; demo-verified in a browser), awaiting the user's play check. **Phas
 the plane) from the keyboard; the group also gained `gear_request`/`gear_auto` and `horn`.
 **Phase 3 implemented** (2026-09-14, sloppycan working tree, uncommitted), awaiting the user's check.
 **Phase 4 implemented** (2026-09-14, sloppycan working tree, uncommitted): train.js/plane.js
-controls-only panels, pantograph starts raised.
+controls-only panels, pantograph starts raised. **Phase 5 implemented** (2026-09-16, sloppycan
+working tree + `docs/systems.md`, uncommitted; self-tests pass): J1939 driver demand in
+j1939-flavor.js, N2K rudder order in nmea2000.js. It also fixed a Phase 3 bug (`demoBaseTrafficLabel`
+recursed forever under any non-RAMN traffic). After the play check: distil and delete this file.
 
 Delete this file when the last phase ships, after distilling its conclusions into
 `docs/systems.md` (§ Input pipeline, § Bridge), the root `CLAUDE.md` § Input, lamps, bridge, and

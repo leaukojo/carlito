@@ -11,6 +11,7 @@ const TractorT := preload("res://src/vehicles/tractor/tractor_telemetry.gd")
 const CatalogScript := preload("res://src/vehicles/vehicle_catalog.gd")
 ## Plough is deeper draft machine; working depth is on implement, not draft model.
 const PloughScript := preload("res://src/vehicles/tractor/implements/plough.gd")
+const WheelDriveScript := preload("res://src/vehicles/base/wheel_drive.gd")
 
 
 ## Spec read via scene (not path), follows catalog->scene->spec chain (orphan-spec lesson).
@@ -95,6 +96,182 @@ func test_slip_is_unsigned_and_quiet_at_standstill() -> void:
 	assert_float(TractorT.slip_pct(0.0, 0.0)).is_equal(0.0)
 	assert_float(TractorT.slip_pct(TractorT.SLIP_FLOOR_KMH, 0.0)).is_equal(0.0)
 	assert_float(TractorT.slip_pct(TractorT.SLIP_FLOOR_KMH + 0.5, 0.0)).is_equal(100.0)
+
+
+# --- ISOBUS guidance curvature -> wheel angle (bypasses the speed-tapered rack) -----------
+
+func test_guidance_curvature_zero_is_dead_straight() -> void:
+	assert_float(WheelDriveScript.steer_angle_from_curvature(0.0, 2.5, 32.0)).is_equal(0.0)
+
+
+func test_guidance_curvature_matches_the_ackermann_reciprocal_at_small_angles() -> void:
+	# 1000/curvature = radius; angle ~= wheelbase / radius for a small angle, so a modest
+	# curvature on a real wheelbase should land close to that small-angle approximation.
+	var wheelbase := 2.5
+	var curvature := 20.0  # 1/km -> 50 m radius
+	var angle := WheelDriveScript.steer_angle_from_curvature(curvature, wheelbase, 32.0)
+	assert_float(angle).is_equal_approx(atan(wheelbase / 50.0), 1e-9)
+	assert_float(rad_to_deg(angle)).is_between(2.5, 3.1)
+
+
+func test_guidance_curvature_sign_matches_steer_convention() -> void:
+	# + curvature = right, same as VehicleInput.steer; the caller (WheelDrive.tick) negates
+	# this to build _applied_steer, exactly as the plain `steer` path does.
+	assert_float(WheelDriveScript.steer_angle_from_curvature(20.0, 2.5, 32.0)).is_greater(0.0)
+	assert_float(WheelDriveScript.steer_angle_from_curvature(-20.0, 2.5, 32.0)).is_less(0.0)
+
+
+func test_guidance_curvature_clamps_to_the_mechanical_lock_not_the_taper() -> void:
+	# A long wheelbase against a shallow rack asks for more angle than the wheel can turn to;
+	# the clamp is the bare mechanical max_steer_deg, with no taper factor at all.
+	var wheelbase := 10.0
+	var max_deg := 5.0
+	var angle := WheelDriveScript.steer_angle_from_curvature(127.0, wheelbase, max_deg)
+	assert_float(rad_to_deg(angle)).is_equal_approx(max_deg, 1e-6)
+	# A curvature past the wire's own ceiling still just sits on the same lock.
+	var over := WheelDriveScript.steer_angle_from_curvature(500.0, wheelbase, max_deg)
+	assert_float(angle).is_equal_approx(over, 1e-9)
+
+
+## The unit BaseVehicle slews `_steer` toward under guidance (same [-1, 1] range as `input.steer`,
+## + = right), so the wheels move at `spec.steer_speed` instead of jumping to the commanded angle.
+func _guidance_wheelbase(gd: GroundDriveSpec) -> float:
+	var front_z := INF
+	var rear_z := -INF
+	for pos in gd.wheel_positions:
+		if pos.z < 0.0:
+			front_z = minf(front_z, pos.z)
+		else:
+			rear_z = maxf(rear_z, pos.z)
+	return rear_z - front_z
+
+
+func test_guidance_steer_unit_is_nan_with_no_guidance_command() -> void:
+	var spec := _tractor_spec()
+	var drive := WheelDriveScript.new(auto_free(Node3D.new()), spec)
+	var input := VehicleInput.new()
+	assert_bool(is_nan(drive.guidance_steer_unit(input, spec.ground_drive))).is_true()
+
+
+func test_guidance_steer_unit_maps_back_to_the_same_angle_the_wire_would_apply() -> void:
+	var spec := _tractor_spec()
+	var gd := spec.ground_drive
+	var drive := WheelDriveScript.new(auto_free(Node3D.new()), spec)
+	var wheelbase := _guidance_wheelbase(gd)
+	var input := VehicleInput.new()
+	input.guidance_curvature = 20.0
+	var unit := drive.guidance_steer_unit(input, gd)
+	var expected_angle := WheelDriveScript.steer_angle_from_curvature(20.0, wheelbase, gd.max_steer_deg)
+	assert_float(unit * deg_to_rad(gd.max_steer_deg)).is_equal_approx(expected_angle, 1e-9)
+	# Same sign convention as `input.steer` (+ = right); WheelDrive.tick negates it exactly as it
+	# negates the plain steer path.
+	assert_float(unit).is_greater(0.0)
+	input.guidance_curvature = -20.0
+	assert_float(drive.guidance_steer_unit(input, gd)).is_less(0.0)
+
+
+func test_guidance_steer_unit_clamps_to_the_mechanical_lock_as_plus_minus_one() -> void:
+	var spec := _tractor_spec()
+	var gd := spec.ground_drive
+	var drive := WheelDriveScript.new(auto_free(Node3D.new()), spec)
+	var input := VehicleInput.new()
+	input.guidance_curvature = 500.0  # past the wire's own +-127 1/km ceiling
+	assert_float(drive.guidance_steer_unit(input, gd)).is_equal_approx(1.0, 1e-6)
+	input.guidance_curvature = -500.0
+	assert_float(drive.guidance_steer_unit(input, gd)).is_equal_approx(-1.0, 1e-6)
+
+
+func test_guidance_target_needs_several_ticks_at_steer_speed_not_a_jump() -> void:
+	# BaseVehicle runs guidance through the SAME move_toward(_steer, target, spec.steer_speed)
+	# slew as hand-steering; a curvature saturating the mechanical lock must not reach the unit
+	# target (1.0) in a single 60 Hz tick.
+	var spec := _tractor_spec()
+	var gd := spec.ground_drive
+	var drive := WheelDriveScript.new(auto_free(Node3D.new()), spec)
+	var input := VehicleInput.new()
+	input.guidance_curvature = 500.0
+	var target := drive.guidance_steer_unit(input, gd)
+	var dt := 1.0 / 60.0
+	var steer := move_toward(0.0, target, spec.steer_speed * dt)
+	assert_float(steer).is_equal_approx(spec.steer_speed * dt, 1e-6)
+	assert_float(steer).is_less(target)
+	# ...and reaches it after enough ticks at that same rate, never overshooting.
+	var ticks := int(ceil(target / (spec.steer_speed * dt))) + 1
+	for i in ticks:
+		steer = move_toward(steer, target, spec.steer_speed * dt)
+	assert_float(steer).is_equal_approx(target, 1e-6)
+
+
+## The one exception to this suite's "no physics body" discipline: BaseVehicle's target
+## selection (guidance vs. plain `input.steer`) is three lines inline in `_physics_process`, so
+## exercising it for real means a real tractor scene. `InputRouter._current` is set directly,
+## bypassing registration/arbitration, since only the target-selection and slew are under test.
+func _guidance_test_tractor() -> Node3D:
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	var tractor: Node3D = auto_free(
+			(load(CatalogScript.scene_of("tractor-kenney")) as PackedScene).instantiate() as Node3D)
+	tractor.set("display_only", true)  # skip InputRouter registration; _current is set by hand
+	root.add_child(tractor)
+	return tractor
+
+
+func test_guidance_wheel_angle_matches_the_slewed_steer_with_no_taper() -> void:
+	var tractor := _guidance_test_tractor()
+	var spec: VehicleSpec = tractor.get("spec")
+	var gd := spec.ground_drive
+	var drive: WheelDrive = tractor.get("drive")
+	var input := VehicleInput.new()
+	input.guidance_curvature = 20.0
+	InputRouter.set("_current", input)
+	var dt := 1.0 / 60.0
+	var target := drive.guidance_steer_unit(input, gd)
+	var ticks := int(ceil(absf(target) / (spec.steer_speed * dt))) + 2
+	for i in ticks:
+		tractor._physics_process(dt)
+	var telemetry: VehicleTelemetry = tractor.get("telemetry")
+	assert_float(tractor.get("_steer")).is_equal_approx(target, 1e-5)
+	assert_float(telemetry.steer).is_equal_approx(target, 1e-5)
+	var wheels: Array = tractor.get("wheels")
+	var checked := 0
+	for w in wheels:
+		if w.steered:
+			checked += 1
+			assert_float(w.steer_angle).is_equal_approx(-target * deg_to_rad(gd.max_steer_deg), 1e-4)
+	assert_int(checked).is_greater(0)
+
+
+func test_guidance_absent_still_slews_toward_plain_input_steer() -> void:
+	var tractor := _guidance_test_tractor()
+	var spec: VehicleSpec = tractor.get("spec")
+	var input := VehicleInput.new()
+	input.steer = 0.4
+	InputRouter.set("_current", input)
+	var dt := 1.0 / 60.0
+	var ticks := int(ceil(0.4 / (spec.steer_speed * dt))) + 2
+	for i in ticks:
+		tractor._physics_process(dt)
+	assert_float(tractor.get("_steer")).is_equal_approx(0.4, 1e-5)
+
+
+func test_wheelbase_is_measured_off_the_shipped_tractor_wheels() -> void:
+	# Sanity check against the real spec, not a hand-typed number: front z is negative, rear
+	# positive (base_vehicle.gd convention), so the wheelbase is their difference.
+	var spec := _tractor_spec()
+	var gd := spec.ground_drive
+	var front_z := INF
+	var rear_z := -INF
+	for pos in gd.wheel_positions:
+		if pos.z < 0.0:
+			front_z = minf(front_z, pos.z)
+		else:
+			rear_z = maxf(rear_z, pos.z)
+	var wheelbase: float = rear_z - front_z
+	assert_float(wheelbase).is_greater(1.5)  # a real tractor, not a go-kart
+	# At a modest working-speed curvature the commanded angle is now well under the mechanical
+	# lock — the taper is what used to eat it, and this path no longer applies one.
+	var angle := WheelDriveScript.steer_angle_from_curvature(20.0, wheelbase, gd.max_steer_deg)
+	assert_float(rad_to_deg(angle)).is_less(gd.max_steer_deg)
 
 
 # --- draft force (the pure model) ---------------------------------------------

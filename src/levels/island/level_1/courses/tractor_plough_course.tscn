@@ -1,0 +1,26 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/challenges/arena_preview.gd" id="1_prev"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="2_spawn"]
+[ext_resource type="Script" path="res://src/challenges/challenge_zone.gd" id="3_zone"]
+
+[node name="TractorPloughCourse" type="Node3D"]
+
+[node name="ArenaPreview" type="Node3D" parent="."]
+script = ExtResource("1_prev")
+arena = "level_1"
+
+[node name="Spawn" type="Marker3D" parent="."]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 8, 27.5, 35)
+script = ExtResource("2_spawn")
+vehicle_types = PackedStringArray("tractor")
+
+[node name="Row" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 27.5, 69)
+script = ExtResource("3_zone")
+size = Vector3(10, 4, 54)
+
+[node name="Exit" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 27.5, 99)
+script = ExtResource("3_zone")
+size = Vector3(10, 4, 6)

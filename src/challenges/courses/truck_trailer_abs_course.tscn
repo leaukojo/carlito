@@ -1,0 +1,54 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/challenges/arena_preview.gd" id="1_prev"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="2_spawn"]
+[ext_resource type="Script" path="res://src/challenges/challenge_zone.gd" id="3_zone"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gate"]
+albedo_color = Color(1, 0.3, 0.2, 0.35)
+roughness = 0.9
+transparency = 1
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_gate"]
+material = SubResource("StandardMaterial3D_gate")
+size = Vector2(8, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_box"]
+albedo_color = Color(1, 0.8, 0.1, 0.35)
+roughness = 0.9
+transparency = 1
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_box"]
+material = SubResource("StandardMaterial3D_box")
+size = Vector2(6, 240)
+
+[node name="TruckTrailerAbsCourse" type="Node3D"]
+
+[node name="ArenaPreview" type="Node3D" parent="."]
+script = ExtResource("1_prev")
+arena = "flatland"
+
+[node name="Spawn" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -600, 0.8, 0)
+script = ExtResource("2_spawn")
+vehicle_types = PackedStringArray("truck")
+
+[node name="Gate" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -600, 0, -140)
+script = ExtResource("3_zone")
+size = Vector3(8, 6, 0.5)
+
+[node name="GateMark" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -600, 0.03, -140)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_gate")
+
+[node name="Box" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -600, 0, -270)
+script = ExtResource("3_zone")
+size = Vector3(6, 6, 240)
+
+[node name="BoxMark" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -600, 0.03, -270)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_box")

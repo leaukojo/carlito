@@ -1,7 +1,7 @@
 class_name ChallengeHud
 extends Control
 ## The objective + timer readout while a challenge attempt is running: "GOAL 2 / 4  0:07.3",
-## with "PAR 12.0" appended when the def has one. boot.gd owns its lifetime — built in
+## with "TIME LIMIT 12.0 S" appended when the def has one. boot.gd owns its lifetime — built in
 ## `_begin_challenge`, freed in `_end_challenge` — and hands it the runner to read each frame.
 ## No emoji; colour/type from the theme.
 
@@ -43,5 +43,5 @@ func _process(_dt: float) -> void:
 	var text := "GOAL %d / %d   %s S" % [
 		mini(a.goal_index + 1, a.goal_count()), a.goal_count(), String.num(a.elapsed, 1)]
 	if _runner.def.par_s > 0.0:
-		text += "   PAR %s S" % String.num(_runner.def.par_s, 1)
+		text += "   TIME LIMIT %s S" % String.num(_runner.def.par_s, 1)
 	_label.text = text

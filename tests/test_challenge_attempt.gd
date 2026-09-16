@@ -95,7 +95,7 @@ func test_over_par_fails_on_the_tick_after_par() -> void:
 	for _i in 60:
 		assert_int(a.step(_frame(NOWHERE), DT)).is_equal(S.RUNNING)
 	assert_int(a.step(_frame(NOWHERE), DT)).is_equal(S.FAIL)
-	assert_str(a.message).contains("par")
+	assert_str(a.message).contains("time limit")
 
 
 func test_a_goal_met_on_the_par_tick_passes() -> void:

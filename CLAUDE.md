@@ -158,6 +158,8 @@ probes (`set_vehicle`, `grip_at`, `cycle_implement`, `set_attachment`, `accepts`
   `heading_cmd` follows the same PRESENCE rule and DOES take a field: it overrides nothing, and
   every value in its [0,360] is a legal bearing, so absent cannot be a sentinel on the wire —
   `VehicleInput.HEADING_CMD_NONE` is internal and `bridge_source` writes the key only when sent.
+  `guidance_curvature` follows the same rule with its own field (`GUIDANCE_CURVATURE_NONE`): it
+  still overrides `steer`, and `WheelDrive` turns it into a wheel angle off the wheelbase, untapered.
 - Bridge publish walks `Contract.data.signals_for_vehicle(...)` × `to_bridge_dict()`, and
   `to_bridge_dict` walks the telemetry's own property list — every member var of a telemetry
   class IS a wire signal (only the `WIRE_*` tables and the synthesised `slip` are not identity),

@@ -1,0 +1,35 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/challenges/arena_preview.gd" id="1_prev"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="2_spawn"]
+[ext_resource type="Script" path="res://src/challenges/challenge_zone.gd" id="3_zone"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_scale"]
+albedo_color = Color(0.2, 0.7, 1, 0.35)
+roughness = 0.9
+transparency = 1
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_scale"]
+material = SubResource("StandardMaterial3D_scale")
+size = Vector2(4, 8)
+
+[node name="TruckWeighbridgeCourse" type="Node3D"]
+
+[node name="ArenaPreview" type="Node3D" parent="."]
+script = ExtResource("1_prev")
+arena = "flatland"
+
+[node name="Spawn" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -500, 0.8, 0)
+script = ExtResource("2_spawn")
+vehicle_types = PackedStringArray("truck")
+
+[node name="Scale" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -500, 0, -30)
+script = ExtResource("3_zone")
+size = Vector3(4, 3, 8)
+
+[node name="ScaleMark" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -500, 0.03, -30)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_scale")

@@ -96,6 +96,16 @@ var gimbal_yaw := 0.0     ## deg, + = right (contract 'gimbal_yaw')
 # sloppyCAN sends it. With nothing commanded the pilot steers the heading it captured on engage,
 # which is also the only thing the local key can ask for (no keyboard types a bearing).
 const HEADING_CMD_NONE := -1.0
+# Tractor ISOBUS guidance (PGN 44288), same presence rule as `rudder`/`heading_cmd`: 0 is a
+# legal curvature (dead straight), so absent can't be 0. `bridge_source` writes the key only
+# while sloppyCAN sends it (byte 3.1 reads "intended to steer"); `arbitrate_bridge` still folds
+# it into `steer` too (unit -1..1, the existing `guidance` override, unchanged — dashboard/
+# telemetry and every other consumer read `steer`/`telemetry.steer` as before). This field is
+# ADDITIONALLY the raw signed curvature in 1/km, read only by the tractor's WheelDrive, which
+# derives the wheel angle from its own wheelbase instead of the speed-tapered rack — the
+# contract calls the signal the reciprocal of the turn radius, so the driven radius should
+# track the command at any speed, not just near standstill.
+const GUIDANCE_CURVATURE_NONE := 1000.0  ## not a legal curvature (wire max +-127 1/km)
 ## The sheet (boat only, and only `boat-sail-a` answers it — a rig is anatomy, gated by
 ## BoatVehicle.vehicle_capabilities, the `body_cmd` shape). 0 = hauled in hard, 1 = fully eased. A
 ## LIMIT on the boom's travel rather than a position, so what the boom did comes back on
@@ -103,6 +113,9 @@ const HEADING_CMD_NONE := -1.0
 var sheet := 0.0
 var nav_mode := 0         ## BoatAutopilot ladder: 0 STANDBY, 1 HEADING_HOLD (contract 'nav_mode')
 var heading_cmd := HEADING_CMD_NONE  ## deg [0,360] commanded course, or HEADING_CMD_NONE
+## 1/km, signed like `steer` (+ = right), or GUIDANCE_CURVATURE_NONE with no hand on the ISOBUS
+## guidance wheel this tick. Tractor-only in practice (see the const comment above).
+var guidance_curvature := GUIDANCE_CURVATURE_NONE
 # Train controls (flavor "train"); only TrainVehicle reads them. Default: pantograph down,
 # doors shut.
 var pantograph := false   ## pantograph raise request (traction is cut while lowered)

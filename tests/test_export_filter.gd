@@ -135,6 +135,25 @@ func test_every_packed_level_has_a_preset_that_exports_the_main_pack_too() -> vo
 		assert_str(no_delta).contains("global_script_class_cache.cfg")
 
 
+## The editor's Run in Browser exports the runnable preset alone, with no level packs; islands
+## load from its main pack instead (`LevelPacks.needs_fetch` is false for them). It must
+## otherwise BE the Web preset, or the one-click run tests a different build than CI ships.
+func test_run_in_browser_is_the_web_preset_with_the_islands_in() -> void:
+	var main := _preset("Web")
+	var run := _preset("Run in Browser")
+	assert_dict(run).is_not_empty()
+	assert_bool(bool(main["runnable"])).is_false()
+	assert_bool(bool(run["runnable"])).is_true()
+	var expected := Array(_filters(main))
+	expected.erase(LevelPacks.PACK_ROOT.trim_prefix("res://") + "*")
+	assert_array(Array(_filters(run))).contains_exactly_in_any_order(expected)
+	for key in main:
+		if key not in ["name", "runnable", "exclude_filter", "export_path"]:
+			assert_str(str(run.get(key))).override_failure_message(
+					"Run in Browser: %s differs from Web" % key).is_equal(str(main[key]))
+	assert_dict(_preset("Run in Browser", true)).is_equal(_preset("Web", true))
+
+
 ## CI exports one pack per "Web <id>" preset: each must still name a packed level.
 func test_no_level_preset_outlives_its_level() -> void:
 	for preset_name in _preset_names():

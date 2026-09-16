@@ -104,7 +104,12 @@ func _exit_tree() -> void:
 
 func _physics_process(delta: float) -> void:
 	var input := InputRouter.get_vehicle_input()
-	_steer = move_toward(_steer, input.steer, spec.steer_speed * delta)
+	# ISOBUS guidance (tractor) picks its own slew target, in `_steer`'s unit but off the
+	# commanded curvature rather than `input.steer` — same slew rate as hand-steering, so the
+	# wheels move at `spec.steer_speed` under guidance too instead of jumping to the angle.
+	var guidance_unit := drive.guidance_steer_unit(input, spec.ground_drive) if drive != null else NAN
+	var steer_target := input.steer if is_nan(guidance_unit) else guidance_unit
+	_steer = move_toward(_steer, steer_target, spec.steer_speed * delta)
 
 	var drive_omega := drive.drive_omega(spec.ground_drive, input) if drive != null else 0.0
 	var ground_speed := linear_velocity.dot(-global_transform.basis.z)
