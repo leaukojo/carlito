@@ -300,8 +300,12 @@ func _spawn_vehicle(variant: String, at: VehicleSpawn = null) -> void:
 
 
 ## Pulls the family's other variants in on background threads so the first V press into a new body doesn't hitch.
+## Not on the web: that export is single-threaded, so every "threaded" request would run to
+## completion inside this call, and the whole family would load synchronously under the spawn.
 func _warm_family(family: String, spawned: String) -> void:
 	_warm.clear()  # switching families: stop holding the old one's bodies in memory
+	if OS.has_feature("web"):
+		return
 	for variant in VehicleCatalog.VARIANTS:
 		var entry: Dictionary = VehicleCatalog.VARIANTS[variant]
 		if String(entry["family"]) != family or variant == spawned:
