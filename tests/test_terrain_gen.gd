@@ -23,6 +23,17 @@ func test_falloff_midpoint_is_half() -> void:
 	assert_float(Gen.island_falloff(0.75, 0.55, 0.95)).is_equal_approx(0.5, 0.001)
 
 
+func test_falloff_decreases_from_center_to_edge() -> void:
+	# Off-midpoint shape check (midpoint alone is symmetric under 1-x and can't tell falloff
+	# from its inverse): t=0.25 must read high (near center), t=0.75 low (near edge), and the
+	# near-center value must exceed the near-edge one.
+	var near_center := Gen.island_falloff(0.65, 0.55, 0.95)   # t = 0.25
+	var near_edge := Gen.island_falloff(0.85, 0.55, 0.95)     # t = 0.75
+	assert_float(near_center).is_equal_approx(0.84375, 0.001)
+	assert_float(near_edge).is_equal_approx(0.15625, 0.001)
+	assert_float(near_center).is_greater(near_edge)
+
+
 func test_falloff_degenerate_band_is_step() -> void:
 	assert_float(Gen.island_falloff(0.4, 0.5, 0.5)).is_equal(1.0)
 	assert_float(Gen.island_falloff(0.5, 0.5, 0.5)).is_equal(1.0)   # <= start wins

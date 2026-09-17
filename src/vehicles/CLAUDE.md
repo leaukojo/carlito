@@ -180,6 +180,10 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
   point sits just below the target, so `>= redline_rpm` against it is dead code.
   `wheel_engine_rpm` (raw, what the wheels impose on a clutch-less crank) drives
   `limiter_cut`; `rpm_from_wheel` (its clamp) drives the needle and the `rpm` bridge signal.
+- **A wheel the handbrake has locked never breaks free at any throttle.** The crank is clutch-less,
+  so a locked driven wheel pins `target_rpm` at idle and the torque curve is sampled there forever
+  (measured: 100% throttle against a full handbrake, 6 s, no motion). Handbrake+throttle
+  hill starts are therefore not a technique here; changing that is a slip/clutch model, not a tune.
   - The cut rides `applied_throttle` beside the governor's, so engine_load / fuel / coolant
     see it for free. `engine_torque` is the curve and nothing else.
 - Engine braking is `Drivetrain.overrun_torque`: `engine_brake_frac` of peak torque, linear

@@ -19,3 +19,6 @@
   runtime version-mismatch warning — **not CI** — is the drift guard). **A contract edit is
   a paired change across two repos**: the bump lands on `dev` in both `carlito` and
   `sloppycan`, and both are promoted to stable together.
+- sloppyCAN has no train or plane panel (its per-family panels hang off a protocol tab, and
+  neither family has one). Adding either is sloppyCAN-side only: both families already have
+  exclusive `dir:'out'` signals, so detection needs no contract change.

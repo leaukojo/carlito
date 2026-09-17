@@ -7,7 +7,7 @@ tractor / boat / drone / plane / train) while exchanging live CAN signals with t
 sloppyCAN/RAMN simulator over a postMessage bridge. Web-first. Levels are **signal
 playgrounds**: content exists to make contract signals visibly perform
 (grades for `engine_load`, fields for hitch/PTO, water for pitch/roll). **Challenges** are the
-goal-driven, bridge-only exception that teaches CAN — list in `docs/challenge_ideas.md`.
+goal-driven, bridge-only exception that teaches CAN — the defs in `src/challenges/defs/` are the list.
 
 Docs: `overview.md` (architecture map) · `HUMAN_EXPLANATIONS.md` · `systems.md` (contract,
 input, telemetry/dashboard, bridge, lamps, shell, levels) · `vehicles.md` (framework, boat /

@@ -70,6 +70,21 @@ func test_reverse_engages_at_standstill_only() -> void:
 		assert_float(stopped.brake).is_equal(0.0)
 
 
+func test_reverse_engages_exactly_at_the_boundary_speed() -> void:
+	# near_standstill is `absf(speed) <= REVERSE_ENGAGE_SPEED`: the boundary speed itself must
+	# still read as standstill, not "still rolling" (<= vs <).
+	var at_boundary: VehicleInput = RouterScript.arbitrate_local(
+			_raw(0.0, 1.0), RouterScript.REVERSE_ENGAGE_SPEED, GEAR_D1)
+	assert_int(at_boundary.gear_request).is_equal(GEAR_R)
+	assert_float(at_boundary.throttle).is_equal(-1.0)
+	assert_float(at_boundary.brake).is_equal(0.0)
+	# Same boundary re-engaging drive from reverse.
+	var from_reverse: VehicleInput = RouterScript.arbitrate_local(
+			_raw(1.0, 0.0), -RouterScript.REVERSE_ENGAGE_SPEED, GEAR_R)
+	assert_int(from_reverse.gear_request).is_equal(GEAR_D1)
+	assert_float(from_reverse.throttle).is_equal(1.0)
+
+
 func test_accel_while_reversing_brakes_then_reengages_drive() -> void:
 	var rolling: VehicleInput = RouterScript.arbitrate_local(
 			_raw(1.0, 0.0), -3.0, GEAR_R)
