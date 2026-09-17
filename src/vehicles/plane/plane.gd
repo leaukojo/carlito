@@ -201,8 +201,8 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	t.flaps_actual = roundi(_flap_pos * 100.0)
 
 
-func respawn() -> void:
-	super.respawn()
+func reset_session_state() -> void:
+	super.reset_session_state()
 	_prop_rpm = 0.0
 	_flap_pos = 0.0
 	_elevator_cmd = 0.0

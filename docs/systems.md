@@ -113,7 +113,9 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   Derivations are static pure fns (GPS `gps_lat`/`gps_lon` around Paris 48.8566/2.3522,
   `heading_from_forward`, `odo_step`, `body_accel`, `impact_gate`, `pack_status`), tested in
   `tests/test_telemetry.gd`. `BaseVehicle._update_telemetry(input, delta)` holds the only
-  per-tick state; respawn zeroes accel history. `status` bits (`ST_*`) are FROZEN: new flags
+  per-tick state; a respawn reseeds the whole object in place from a fresh
+  `_make_telemetry()` (`BaseVehicle._reseed_telemetry`), odometer and hour meter included —
+  R hands back a machine as new. `status` bits (`ST_*`) are FROZEN: new flags
   append at bit 7+ (nine free in the u16), never renumbered. `to_bridge_dict()` maps fields
   to contract "out" names in contract units (throttle/steer as %, slip as ratio);
   `test_telemetry` fails if it drops a non-todo "out" signal — `WIRE_*` tables hold the

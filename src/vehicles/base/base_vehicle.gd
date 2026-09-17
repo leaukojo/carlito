@@ -264,20 +264,53 @@ func _update_telemetry(input: VehicleInput, delta: float) -> void:
 
 
 ## Reset to the last spawn transform with zeroed motion; also fired on a fall off the world.
+## The teleport, then the reset seam, so `respawned` listeners see a finished machine at its
+## final pose — a subclass that re-lays a second body does it in the seam, not after the signal.
 func respawn() -> void:
 	global_transform = spawn_transform
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
+	reset_session_state()
+	reset_physics_interpolation()
+	respawned.emit()
+
+
+## Everything `_ready` built, built again: a respawned machine is indistinguishable from a freshly
+## instanced one, down to the odometer and the hour meter. A family reseeds its own subsystems by
+## overriding this rather than `respawn()`, so a new stateful subsystem is one line in one place.
+##
+## What survives is what survives a NEW BODY too: the InputRouter toggles it keeps as driver state
+## (lights, PTO, the arm switch), and anything the bridge is sending, which is sloppyCAN's to say.
+func reset_session_state() -> void:
+	_reseed_telemetry()
+	drivetrain = Drivetrain.new(spec)  # gear byte, rpm and the direction latch all start over
 	_steer = 0.0
 	_prev_velocity = Vector3.ZERO  # zero accel/impact history so the teleport isn't read as an impact
 	_impact_hold = 0.0
-	telemetry.acc_long = 0.0
-	telemetry.acc_lat = 0.0
-	telemetry.acc_vert = 0.0
+	# A body that rewrites `mass` at runtime (the refuse truck's hopper) is back to its spec mass,
+	# and the wheels' 60 Hz clamps are sized for it again.
+	mass = spec.mass
 	if drive != null:
+		drive.set_corner_mass_from(mass)
 		drive.respawn()
-	reset_physics_interpolation()
-	respawned.emit()
+	if _horn_fade != null:
+		_horn_fade.kill()
+		_horn_fade = null
+	_horn_player.stop()
+	_prev_horn = false
+	InputRouter.reset_vehicle_cycles()
+
+
+## Copy a fresh telemetry's every field onto the live one. IN PLACE, never a new object: the
+## dashboard and the bridge each resolve `telemetry` once per vehicle change and cache it, so a
+## replacement would leave both publishing a detached instance with nothing logged. The walk is
+## `to_bridge_dict`'s, so it covers every subclass field — and every field added after this.
+func _reseed_telemetry() -> void:
+	var fresh := _make_telemetry()
+	for prop in fresh.get_property_list():
+		if prop.usage & PROPERTY_USAGE_SCRIPT_VARIABLE:
+			telemetry.set(prop.name, fresh.get(prop.name))
+	telemetry.speed_limit = roundi(spec.speed_limit_kmh)  # configured, not measured; as in _ready
 
 
 func get_camera_target() -> Node3D:

@@ -85,8 +85,8 @@ Water & world bounds.
 
 - `BoatVehicle extends BaseVehicle` (`src/vehicles/boat/`): two seams only
   (`_make_telemetry()` → `BoatTelemetry`, `_tick_extras` = buoyancy/drag/thrust/rudder),
-  `respawn()` = `super()` + trim reset. Its spec declares no ground drive, so `axle_torque`
-  off `Drivetrain` is discarded.
+  `reset_session_state()` = `super()` + trim/autopilot reset. Its spec declares no ground drive,
+  so `axle_torque` off `Drivetrain` is discarded.
 - Boat, drone and train never reference `drivetrain` in their own files: they run the whole
   engine model at 60 Hz for the gear byte alone (`auto_shift` on the kept 6 `gear_ratios`,
   scale `DEFAULT_ROAD_RADIUS`) — accepted compromise, `src/vehicles/CLAUDE.md` § What a

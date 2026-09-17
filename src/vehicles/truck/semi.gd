@@ -144,10 +144,9 @@ func _aux_air_draw(delta: float) -> float:
 	return draw
 
 
-## Re-lay the whole combination: the base handles this chassis, the host re-lays the trailer, and
-## air is this vehicle's own state.
-func respawn() -> void:
-	super.respawn()
+## Re-lay the whole combination: the base handles this chassis, the host re-lays the trailer.
+func reset_session_state() -> void:
+	super.reset_session_state()
 	if _fifth_wheel == null:
 		return
 	_fifth_wheel.respawn_relay(spawn_transform)

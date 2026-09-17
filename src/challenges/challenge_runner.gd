@@ -12,9 +12,8 @@ extends Node
 ## - Any respawn, whatever caused it (R, a fall, a RESET), starts the attempt over from the next
 ##   tick, and the start pose for the respawn after it is rolled then.
 ##
-## Every START is a fresh body (`start`, and `restart` for a retry), so the TowHost spawn countdown
-## lays exactly the def's attachment at the course pose and every attempt begins with the same aux
-## state (fuel, air, battery). A respawn within an attempt is the vehicle's own `respawn()`.
+## Every START is a fresh body (`start`, and `restart` for a retry) — see `restart`. A respawn
+## within an attempt is the vehicle's own `respawn()`, which resets the machine just as far.
 
 signal finished(passed: bool, elapsed_s: float, message: String)
 
@@ -94,7 +93,10 @@ func start() -> void:
 		finished.emit(false, 0.0, attempt.message)
 
 
-## A retry: the same as the first start.
+## A retry: the same as the first start, and a NEW MACHINE rather than a reset one. `respawn()`
+## would hand back the same aux state, but only a rebuild re-runs the TowHost spawn countdown so
+## the def's attachment is laid at the course pose, re-snaps the camera and re-emits
+## `vehicle_changed` for the shell to rebind the dashboard and the bridge against.
 func restart() -> void:
 	start()
 
@@ -202,9 +204,9 @@ func _apply_attachment() -> void:
 		_vehicle.call(&"set_attachment", def.attachment)
 
 
-## Only flags it. BaseVehicle emits `respawned` partway through a respawn, and the semi and the
-## tractor go on to read `spawn_transform` to re-lay their trailer; rolling the next start here
-## would lay the trailer there while the chassis stands at this one. The next tick handles it.
+## Only flags it. `respawned` fires with the machine already re-laid at `spawn_transform`, trailer
+## included, so rolling the NEXT start here would move the mark out from under a rig that has just
+## been put on it. The next tick handles it.
 func _on_respawned() -> void:
 	_respawned = true
 

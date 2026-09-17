@@ -206,20 +206,13 @@ func _rear_suspension_force() -> float:
 	return total
 
 
-## Recharge the reservoirs to spawn pressure: air is physical state, re-laid like the tractor's
-## hitch. engine_hours and the odometer survive — they record the machine's life, not this drive.
-## The refuse body is re-laid too, stowed with the hopper empty, which is also the only way to
-## empty it, since the rig has no in-place tip.
-func respawn() -> void:
-	super.respawn()
-	var t := telemetry as TruckTelemetry
-	t.air_primary = TruckTelemetry.AIR_SPAWN_BAR
-	t.air_secondary = TruckTelemetry.AIR_SPAWN_BAR
-	t.retarder_state = 0
+## The refuse body is re-laid, stowed with the hopper empty, which is also the only way to empty
+## it since the rig has no in-place tip. The air reservoirs come back charged with the rest of the
+## telemetry; `mass` and the corner mass the base has already put back on the spec figure.
+func reset_session_state() -> void:
+	super.reset_session_state()
+	_last_body_cmd = RefuseBody.Cmd.IDLE
 	if _body != null:
 		_body.reset()
 		_pose_rig()
 		_mass_applied = 0.0
-		mass = spec.mass
-		if drive != null:
-			drive.set_corner_mass_from(mass)

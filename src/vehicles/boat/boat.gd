@@ -329,8 +329,8 @@ func vehicle_capabilities() -> Dictionary:
 	return caps
 
 
-func respawn() -> void:
-	super.respawn()
+func reset_session_state() -> void:
+	super.reset_session_state()
 	_trim = 0.0
 	_aground_hold = 0.0
 	# The base zeroed `_steer`; `_helm` mirrors it. Dropping to STANDBY makes the next tick a fresh

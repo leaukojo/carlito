@@ -16,6 +16,12 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
     re-runs the SAME `spec.steer_speed` slew from it — an autopilot must not move the rudder
     faster than a hand can — and rewrites `telemetry.steer`, which `_update_telemetry` published
     pre-empted.
+- **A respawn is a reset**, and `reset_session_state()` is where it happens — a respawned machine
+  is indistinguishable from a freshly instanced one (telemetry reseeded in place, fresh gearbox,
+  spec mass, `InputRouter.reset_vehicle_cycles`), so a family reseeds its subsystems by overriding
+  THAT, not `respawn()`. What survives is what survives a new body too: the InputRouter toggles
+  kept as driver state, and anything the bridge is sending. Only a hard ordering constraint earns
+  a `respawn()` override — `DroneVehicle` has the one, dropping its crate before the teleport.
 - Every family earns its `BaseVehicle` subclass, because a method's ABSENCE on the base is
   behaviour. `boot.gd` sets `caps["tows"] = v.has_method("cycle_implement")`,
   `debug_overlay.gd` gates `artic` on `has_method("articulation")`, and
@@ -470,7 +476,8 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
     same reason a capability is: a machine's anatomy is declared beside the machine.
 - `speed_limit` is the one telemetry field that is CONFIGURED rather than measured, and the
   only one set outside the tick: `BaseVehicle._ready` copies `spec.speed_limit_kmh` into it
-  once (respawn never rebuilds telemetry) and the base `to_bridge_dict` carries it. It sits on
+  once, and `_reseed_telemetry` re-copies it (the reseed puts every field back to its declaration
+  default, and this one's is 0); the base `to_bridge_dict` carries it. It sits on
   the base, since the car family has no telemetry subclass to put it on — so every vehicle has
   the field, and the dashboard gates the LIM readout on the CONTRACT (`_has_speed_limit`), not
   on an `engine_hours`-style `t.get(...)` duck-type that would have printed LIM on the boat.
@@ -493,8 +500,11 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
   the variant `"bullet"`): any pre-spawn fallback that has only a variant name must map it
   through `VehicleCatalog.family_of(...)` first, or the dashboard/bridge get an empty cluster.
   `dashboard.bind()` and `level_baker.validate_spawns` are the two that must.
-- Respawn zeroes the telemetry accel history so a teleport isn't read as an impact; a trailer's
-  wheels and the drone's per-ESC arrays follow the same rule.
+- `_reseed_telemetry` copies a throwaway `_make_telemetry()` field-by-field onto the LIVE object,
+  never a replacement: `Dashboard._telem` and `Bridge._telem` each resolve it once per vehicle
+  change and cache it, so a new instance leaves both publishing a detached object with nothing
+  logged. It walks the property list `to_bridge_dict` does, so every subclass field — and every
+  field added later — is covered without a second list to maintain.
 
 ## Lamps
 

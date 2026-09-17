@@ -614,10 +614,11 @@ func test_lands_touchdown_cut_stops_all_four_motors() -> void:
 # --- respawn ---------------------------------------------------------------------------------
 
 ## A respawn hands you a FRESH AIRCRAFT: full pack, cleared held telemetry, a reacquiring
-## receiver, home here, and disarmed. What it deliberately does NOT clear is `node_fail` — that is
-## an INPUT, a bench switch someone flipped, and clearing it here would be a side channel writing
-## over what sloppyCAN is saying.
-func test_respawn_hands_back_a_fresh_aircraft_but_not_the_bench_switch() -> void:
+## receiver, home here, and disarmed. What it deliberately does NOT clear is a `node_fail` arriving
+## as an INPUT, as it does here — clearing that would be a side channel writing over what sloppyCAN
+## is saying. (The LOCAL Y latch behind it does clear, with the other airframe cycles:
+## `tests/test_respawn_reset.gd`.)
+func test_respawn_hands_back_a_fresh_aircraft_but_not_a_sent_node_fail() -> void:
 	var r: Rig = await _flying()
 	r.input.node_fail = 1 << 0                       # ESC1 off the bus, with held telemetry
 	r.seconds(3.0)
@@ -633,6 +634,6 @@ func test_respawn_hands_back_a_fresh_aircraft_but_not_the_bench_switch() -> void
 	assert_int(int(r.t.esc_rpm[0])).is_equal(0)
 	assert_bool(r.t.armed).is_false()
 	assert_int(r.t.failsafe).is_equal(Arming.FS_MOTOR)   # still true: the node is still off the bus
-	assert_int(r.t.node_online & 1).is_equal(0)          # the switch survived, exactly as designed
+	assert_int(r.t.node_online & 1).is_equal(0)          # what was SENT survived, exactly as designed
 	# The receiver REACQUIRES rather than arriving with a fix it earned somewhere else.
 	assert_int(r.t.sats).is_less(Sensors.SKY_RAYS)

@@ -3,7 +3,9 @@ extends RefCounted
 ## Per-tick telemetry published by BaseVehicle, covering every contract "out" signal for ground
 ## vehicles (car/truck/tractor). Motion is read out of the sim, never derived; fuel, coolant and
 ## battery are simple honest models, labelled as modeled rather than measured. Non-trivial
-## derivations are the static pure functions below.
+## derivations are the static pure functions below. Every field here starts over on a respawn,
+## which reseeds this object IN PLACE (`BaseVehicle._reseed_telemetry`) — so a declaration default
+## is the spawn value, and a new field needs nothing said about it anywhere else.
 
 # --- GPS mapping (world XZ -> lat/lon around the Paris origin) ---
 const GPS_ORIGIN_LAT := 48.8566
@@ -68,10 +70,10 @@ var pos_z := 0.0        ## world Z (contract 'posZ')
 var heading := 0.0      ## compass heading deg, [0,360) (contract 'heading')
 var lat := GPS_ORIGIN_LAT   ## GPS latitude, Paris origin (contract 'lat')
 var lon := GPS_ORIGIN_LON   ## GPS longitude, Paris origin (contract 'lon')
-var odo := 0.0          ## odometer km, persists across respawn (contract 'odo')
-## The odometer's twin: climbs only, survives respawn. Only truck and tractor declare it;
-## elsewhere it counts quietly, and the dashboard gates HRS on the contract.
-var engine_hours := 0.0 ## h, contract 'engine_hours' (J1939 SPN 247; survives respawn)
+var odo := 0.0          ## odometer km (contract 'odo')
+## The odometer's twin: climbs only, for as long as the machine lasts. Only truck and tractor
+## declare it; elsewhere it counts quietly, and the dashboard gates HRS on the contract.
+var engine_hours := 0.0 ## h, contract 'engine_hours' (J1939 SPN 247)
 
 # --- auxiliary systems (modeled, not measured) ---
 var fuel := 100.0                ## % remaining (contract 'fuel')
@@ -164,8 +166,9 @@ static func engine_load_pct(engine_rpm: float, throttle_in: float, spec: Vehicle
 	return clampf(load_frac, 0.0, 1.0) * 100.0
 
 
-## Hour meter step: real time under the key. Only climbs, survives respawn. Shared for the same
-## reason as engine_load_pct (J1939 SPN 247, which ISOBUS inherits).
+## Hour meter step: real time under the key. Only climbs, for the life of the machine — and a
+## respawn is a new machine. Shared for the same reason as engine_load_pct (J1939 SPN 247, which
+## ISOBUS inherits).
 static func hours_step(prev_h: float, running: bool, delta: float) -> float:
 	return prev_h + delta / 3600.0 if running else prev_h
 

@@ -121,9 +121,10 @@ exits 0.
   roster is one edit here and three CI failures telling you where the others are.
   - `node_fail` is an INPUT and rides `VehicleInput`, mirrored verbatim from sloppyCAN like the
     lamp bits (absent = 0 = healthy). The Y key is an InputRouter-owned cycle (the `_pto` pattern).
-    It is a bench SWITCH rather than damage, so respawn does not clear it — press Y again. A new
-    body does (`InputRouter.register_vehicle`): the roster belongs to the airframe, and Y is bound
-    globally, so a press on a car would otherwise follow you into a drone.
+    The local Y latch is cleared by `InputRouter.reset_vehicle_cycles`, so a respawn and a new body
+    both hand back a healthy roster — press Y again. The roster belongs to the airframe, and Y is
+    bound globally, so a press on a car would otherwise follow you into a drone. A `node_fail` a
+    BRIDGE is sending survives both: it is an input, and clearing it would fight sloppyCAN.
   - An offline ESC is zeroed AFTER the mix (`DroneBus.gate_commands`), never compensated: the
     controllers still ask for the roll/pitch/yaw they wanted and one motor does not answer, so the
     loss is asymmetric. Zeroing the COMMAND rather than `_omega` is deliberate — the prop spools

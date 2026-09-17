@@ -188,17 +188,22 @@ func _apply_carried_mass() -> void:
 			/ maxf(max_thrust, 1e-6), 0.0, 1.0)
 
 
-## A teleport must not carry spun-up motors or hot ESCs across. The pack is replaced, not
-## just cooled — unlike fuel (a gauge nothing else reads), an empty pack stops the motors,
-## so a flat pack surviving respawn would leave the craft permanently unflyable. `node_fail`
-## is not reset — it's an input, and clearing it here would fight what sloppyCAN is saying.
+## The one thing that cannot wait for the reset seam. The hook opens and the crate is left BEHIND
+## at its carried pose — a payload teleporting with the aircraft would be cargo delivered by
+## respawning, which this level must not allow. The crate is a child of the Hardpoint marker, so
+## it must drop BEFORE the body teleports, or it reads its global transform already at the new
+## spawn pose.
 func respawn() -> void:
-	# Hook opens, crate left BEHIND at its carried pose — a payload teleporting with the
-	# aircraft would be cargo delivered by respawning, which this level must not allow. The
-	# crate is a child of the Hardpoint marker, so it must drop BEFORE the body teleports, or
-	# it reads its global transform already at the new spawn pose.
 	_hook.reset(self)
 	super.respawn()
+
+
+## A teleport must not carry spun-up motors or hot ESCs across. The pack is replaced, not
+## just cooled — unlike fuel (a gauge nothing else reads), an empty pack stops the motors,
+## so a flat pack surviving would leave the craft permanently unflyable. The `node_fail` a BRIDGE
+## is sending survives: it's an input, and clearing it here would fight what sloppyCAN is saying.
+func reset_session_state() -> void:
+	super.reset_session_state()
 	_motors.reset()
 	_apply_carried_mass()
 	_gimbal.reset()
@@ -229,18 +234,12 @@ func respawn() -> void:
 	_pos_fix = false
 	_fix_hold = 0.0
 	_reset_controllers()
+	# The base reseeded the published pack readings to VehicleTelemetry's 12.6 V resting default,
+	# which is a car's battery and not this one's: a drone flies on ~25 V, and `_held_battery` is
+	# what an offline POWER node keeps publishing. Both take the fresh pack's own open-circuit
+	# voltage instead. The per-ESC arrays need nothing — the base gave them fresh ones.
 	var t := telemetry as DroneTelemetry
 	if t != null:
-		for i in t.esc_rpm.size():
-			t.esc_rpm[i] = 0
-			t.esc_current[i] = 0.0
-			t.esc_temp[i] = DroneProp.ESC_AMBIENT
-		# Pack telemetry the same way: a still-offline POWER node would otherwise leave the
-		# PUBLISHED soc/current/temp/battery at whatever they held before the respawn, even
-		# though `_pack.reset()` above just gave the airframe a fresh pack underneath.
-		t.pack_current = 0.0
-		t.soc = _pack.soc
-		t.pack_temp = _pack.temp
 		t.battery = _pack.volts(0.0)
 		_held_battery = t.battery
 

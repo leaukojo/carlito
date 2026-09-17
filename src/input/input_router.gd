@@ -116,16 +116,23 @@ func set_manual_gearbox(on: bool) -> void:
 	_manual_gearbox = on
 
 
-## Vehicles register on _ready to read speed/gear. A new body clears _node_fail/_flight_mode/
-## _nav_mode (avoiding inherited drone and boat settings) but keeps other toggles (_lights, _pto,
-## _armed) as driver state. Respawn doesn't re-register, so node_fail stays a bench switch.
+## Vehicles register on _ready to read speed/gear.
 func register_vehicle(vehicle: Node3D) -> void:
 	_vehicle = vehicle
+	reset_vehicle_cycles()
+
+
+## The cycles that belong to the AIRFRAME rather than the driver, cleared whenever a machine
+## starts over — a new body (`register_vehicle`) and a respawn (`BaseVehicle.reset_session_state`)
+## alike. The keys are bound globally, so a press in a car must not follow you into a drone. The
+## other toggles (_lights, _pto, _armed, _hitch_up, _pantograph, …) are driver state and stay put
+## through both. Local latches only: what the bridge sends is sloppyCAN's to say.
+func reset_vehicle_cycles() -> void:
 	_node_fail = 0
 	_flight_mode = 0
-	# A new hull must not spawn with an engaged autopilot steering to the last boat's course.
+	# A hull must not start with an engaged autopilot steering to the course it held before.
 	_nav_mode = 0
-	# Nor with the last boat's trim: on a hull with no rig the sheet is inert but still latched.
+	# Nor with the last trim: on a hull with no rig the sheet is inert but still latched.
 	_sheet = 0
 	# Cargo hook clears for the same reason: global key, no local indication.
 	_hardpoint = false

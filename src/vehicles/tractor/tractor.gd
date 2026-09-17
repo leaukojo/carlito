@@ -259,10 +259,10 @@ func _front_axle_driven() -> bool:
 	return false
 
 
-## Re-raise the implement on respawn. A respawn moves the tractor rather than rebuilding it, so
-## whatever is attached survives.
-func respawn() -> void:
-	super.respawn()
+## Re-raise the implement. A respawn moves the tractor rather than rebuilding it, so whatever is
+## attached survives — the drawbar re-lays it at the coupled pose instead of dropping it.
+func reset_session_state() -> void:
+	super.reset_session_state()
 	_hitch_actual = SPAWN_HITCH
 	if _drawbar != null:
 		_drawbar.respawn_relay(spawn_transform)

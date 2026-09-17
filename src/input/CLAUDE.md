@@ -27,8 +27,10 @@ ALL input arbitration lives here (standing rule 5). Protocol tour: `docs/systems
   or a typed declaration.
 - Toggle owners (`_lights`, `_hitch_up`, `_pto`, `_scv`, `_body_cmd`, …) live in InputRouter so
   keyboard and touch share one owner; sources only report per-frame edges. Cycles that belong to
-  the airframe (`_node_fail`, the drone mode key) are cleared by `register_vehicle` — the keys are
-  bound globally, so a press in a car must not follow you into a drone.
+  the airframe (`_node_fail`, the drone mode key) are `reset_vehicle_cycles()`, called by
+  `register_vehicle` AND by `BaseVehicle.reset_session_state` — the keys are bound globally, so a
+  press in a car must not follow you into a drone, and a respawn is a reset. Local latches only:
+  what a bridge sends is sloppyCAN's to say.
 - **The challenge bridge-only lock is `set_bridge_only`**: local and touch are never polled, and
   with no live bridge the input is `locked_idle()`. Its keyboard override (`--challenge-keys` /
   `CARLITO_CHALLENGE_KEYS`) is honoured in debug builds only.

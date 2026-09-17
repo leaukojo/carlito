@@ -87,8 +87,8 @@ func _ready() -> void:
 
 
 ## Reset the consist onto its loop at s = 0 with zeroed motion.
-func respawn() -> void:
-	super.respawn()
+func reset_session_state() -> void:
+	super.reset_session_state()
 	_brake_pipe = TrainTelemetry.BRAKE_PIPE_CHARGED
 	if _has_rail:
 		_place_consist()
