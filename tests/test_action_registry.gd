@@ -55,6 +55,20 @@ func test_every_touch_poll_key_is_merged() -> void:
 			.is_true()
 
 
+## The half neither guard above covers: TouchControls.poll() also writes WIDGET_KEYS straight
+## into `_held`/`_edges` for the hand-built widgets (joystick, pedals, HAND, climb pads, HORN,
+## LIGHTS) — Touch.WIDGET registry rows with no `poll_key` of their own, so
+## test_every_touch_poll_key_is_merged (which only walks rows that HAVE one) never sees them. A
+## typo in one of those literals would silently drop the touch control with nothing to catch it.
+func test_every_widget_key_is_merged() -> void:
+	var merged := RouterScript.merge_local({}, {})
+	for key in TouchScript.WIDGET_KEYS:
+		assert_bool(merged.has(key)) \
+			.override_failure_message(("TouchControls.WIDGET_KEYS has '%s', which InputRouter." \
+					% key) + "merge_local does not merge — the touch control would be dropped") \
+			.is_true()
+
+
 ## The other half of the guard above, and the half nothing covered: the keyboard source and
 ## merge_local must carry EXACTLY the same key set. Both dicts are written out by hand, so a key
 ## on one side and not the other is silent in both directions — a key only the source emits is

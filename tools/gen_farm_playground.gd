@@ -42,6 +42,9 @@ const CHANNEL_NAMES: Array[String] = [
 	"Grass", "Dirt", "Sand", "Rock", "Field", "Mud", "Asphalt", "Gravel",
 ]
 const CHANNEL_GRIP: Array[float] = [0.8, 0.7, 0.6, 0.7, 0.7, 0.5, 1.0, 0.85]
+## Added rolling resistance (HeightmapTerrain.channel_drag); tilled Field is soft, so the
+## tractor's tyres pay in the soil as well as the implement's draft.
+const CHANNEL_DRAG: Array[float] = [0.06, 0.03, 0.1, 0.01, 0.08, 0.2, 0.0, 0.02]
 ## Fresh tilled loam: lighter than Mud (0.30/0.24/0.17), darker than Dirt (0.52/0.40/0.26),
 ## so the field reads as its own surface against both.
 const FIELD_COLOR := Color(0.44, 0.29, 0.17)
@@ -219,6 +222,7 @@ func _build(root: Node) -> int:
 	# --- level data the new surfaces need ----------------------------------------------
 	_terrain.set("channel_names", PackedStringArray(CHANNEL_NAMES))
 	_terrain.set("channel_grip", PackedFloat32Array(CHANNEL_GRIP))
+	_terrain.set("channel_drag", PackedFloat32Array(CHANNEL_DRAG))
 	var mat := _terrain.get("material") as ShaderMaterial
 	if mat == null:
 		printerr("[farm] terrain material is not a ShaderMaterial — cannot recolour channel 4")

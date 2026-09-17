@@ -20,6 +20,11 @@ var _jaw_rest: Array[Basis] = []
 var _payload: Node = null
 ## The latch, published as contract `hardpoint_state`.
 var latched := false
+## Blocks a capture until `cmd` is seen low at least once. Set on `reset()`: InputRouter's
+## hardpoint toggle is a bench switch that survives a respawn (like `node_fail`'s), and the
+## dropped crate lands right back under the hook — without this the very next tick recaptures
+## the payload the respawn was supposed to leave behind.
+var _await_release := false
 
 
 func _init(body: Node) -> void:
@@ -38,6 +43,17 @@ func _init(body: Node) -> void:
 func tick(cmd: bool, space: PhysicsDirectSpaceState3D, body: RigidBody3D) -> bool:
 	if _marker == null:
 		return false
+	if _payload != null and not is_instance_valid(_payload):
+		# Freed out from under the hook rather than through _drop/reset — forget it rather
+		# than deref a dead reference below.
+		_payload = null
+		latched = false
+		_pose_jaws()
+		return true
+	if _await_release:
+		if cmd:
+			return false
+		_await_release = false
 	var found: Node = _find(space, body) if (cmd and not latched) else null
 	var was := latched
 	latched = DronePayload.latched(cmd, was, found != null)
@@ -54,8 +70,11 @@ func tick(cmd: bool, space: PhysicsDirectSpaceState3D, body: RigidBody3D) -> boo
 	return true
 
 
-## The mass on the hook (kg), or 0 with nothing on it.
+## The mass on the hook (kg), or 0 with nothing on it (also 0 for a payload freed out from
+## under the hook, rather than through _drop/reset).
 func payload_mass() -> float:
+	if _payload != null and not is_instance_valid(_payload):
+		_payload = null
 	return float(_payload.mass) if _payload != null else 0.0
 
 
@@ -68,9 +87,13 @@ func hook_local() -> Vector3:
 ## A respawn opens the hook and leaves the crate behind at its carried pose with no velocity: a
 ## payload teleporting with the aircraft would be cargo delivered by respawning.
 func reset(body: RigidBody3D) -> void:
+	if _payload != null and not is_instance_valid(_payload):
+		_payload = null
 	if _payload != null:
 		_drop(body, Vector3.ZERO)
 	latched = false
+	# A held HOLD command must be released before it can capture again — see _await_release.
+	_await_release = true
 	_pose_jaws()
 
 
@@ -102,7 +125,13 @@ func _find(space: PhysicsDirectSpaceState3D, body: RigidBody3D) -> Node:
 	var hit := space.intersect_ray(query)
 	var collider: Variant = hit.get("collider")
 	if collider is Node and (collider as Node).is_in_group(Groups.PAYLOAD):
-		return collider as Node
+		var found := collider as Node
+		# The ceiling is a CAPTURE refusal, not a mass truncation: a crate over MAX_PAYLOAD_KG
+		# must never reach the hook, or the felt mass silently disagrees with what's really
+		# hanging there.
+		if float(found.mass) > DronePayload.MAX_PAYLOAD_KG:
+			return null
+		return found
 	return null
 
 

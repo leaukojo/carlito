@@ -156,7 +156,7 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	if water != null:
 		var probe_count := maxf(1.0, probe_points.size())
 		var probe_mass := spec.mass / probe_count
-		var k := spec.mass * _gravity / (probe_count * float_depth)
+		var k := spec.mass * _gravity / (probe_count * maxf(float_depth, 0.01))
 		var damp := buoyancy_damp * 2.0 * sqrt(k * probe_mass)
 		var max_f := max_probe_force_factor * probe_mass * _gravity
 		var water_y := water.get_height(global_position)
@@ -166,10 +166,13 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 			depth_sum += depth
 			var vert_vel := (linear_velocity + angular_velocity.cross(p - global_position)).y
 			var f := probe_force(depth, vert_vel, k, damp, probe_mass, delta, max_f)
-			if f > 0.0:
+			# Immersion is read off DEPTH, not the force: probe_force caps at max_f, so a probe
+			# rising fast enough to hit that cap would otherwise read as dry the instant it did.
+			if depth > 0.0:
 				submerged += 1
 				if p_local.z > 0.0:
 					stern_wet = true
+			if f > 0.0:
 				apply_force(Vector3.UP * f, p - global_position)
 
 	if submerged > 0:
@@ -203,9 +206,13 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 
 		# The rig, the third body-frame air term and the only one that DRIVES. The FORCE is gated
 		# with the hull's, not with the instruments above: out of the water this hull has no drag
-		# either, so an ungated sail would push a beached boat unopposed.
+		# either, so an ungated sail would push a beached boat unopposed. `aw` is already flattened
+		# to the water plane (BoatTelemetry.apparent_wind), so the axes it is measured against must
+		# be too, or a heeled hull loses horizontal drive to cos(heel) and gains a vertical force
+		# nothing opposes.
 		if sail_area > 0.0:
-			apply_force(BoatSail.force(aw, boom, sail_area, fwd, right),
+			var sail_axes := BoatSail.flatten_hull_axes(fwd, right)
+			apply_force(BoatSail.force(aw, boom, sail_area, sail_axes[0], sail_axes[1]),
 					global_transform.basis * sail_center)
 
 		if stern_wet:
@@ -338,6 +345,8 @@ func respawn() -> void:
 ## once, but `contains_xz` stays per tick, since that changes as the boat moves.
 func _find_water() -> WaterSurface:
 	for w in _waters:
+		if not is_instance_valid(w):
+			continue
 		if w.contains_xz(global_position):
 			return w
 	return null

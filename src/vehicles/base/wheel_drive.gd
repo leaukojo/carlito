@@ -29,11 +29,12 @@ var _wheelbase := 0.0
 ## Build the wheels and their visuals.
 func _init(body: Node3D, spec: VehicleSpec) -> void:
 	var gd := spec.ground_drive
-	# Static per-corner mass share, from the spec's mass rather than the body's laden mass.
+	# Per-corner mass share. Built from the spec's mass; a body that rewrites `mass` at runtime
+	# calls set_corner_mass_from so the wheels' 60 Hz clamps follow the laden weight.
 	var corner_mass := spec.mass / maxf(1.0, gd.wheel_positions.size())
 	for i in gd.wheel_positions.size():
 		var pos := gd.wheel_positions[i]
-		var front := pos.z < 0.0
+		var front := not RayWheel.is_rear_z(pos.z)
 		var driven := (front and gd.driven_front) or (not front and gd.driven_rear)
 		var visual: Node3D = null
 		# Rendered radius for this corner; physics always uses gd.wheel_radius.
@@ -64,6 +65,16 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 		wheel.visual_lift = vis_radius - gd.wheel_radius
 		wheels.append(wheel)
 	_wheelbase = _compute_wheelbase()
+
+
+## Re-share the body's LIVE mass over the corners. The three one-tick RayWheel clamps are sized
+## off `corner_mass`, so a body whose `mass` grows at runtime (the refuse truck's hopper) must call
+## this from wherever it writes `mass`, or the clamps stay sized for the empty vehicle and bite
+## forces the laden body legitimately makes. It only re-sizes the clamps; none of them is weakened.
+func set_corner_mass_from(live_mass: float) -> void:
+	var corner_mass := live_mass / maxf(1.0, wheels.size())
+	for w in wheels:
+		w.corner_mass = corner_mass
 
 
 ## Wheel-slip dust, built separately so the emitter keeps its place in the body's child order.
@@ -266,7 +277,7 @@ func _build_dust(gd: GroundDriveSpec) -> GPUParticles3D:
 	var pm := ParticleProcessMaterial.new()
 	var half_track := 0.6  ## spans rear track width so dust reads as coming from both wheels
 	for pos in gd.wheel_positions:
-		if pos.z > 0.0:
+		if RayWheel.is_rear_z(pos.z):
 			half_track = maxf(half_track, absf(pos.x))
 	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
 	pm.emission_box_extents = Vector3(half_track, 0.1, 0.25)

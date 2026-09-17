@@ -17,7 +17,9 @@ const DRIVE_OVERRIDABLE := {
 ## Baseline-only fields: overrides silently dropped (test_no_variant_overrides catches this).
 const SPEC_BASELINE_ONLY := {
 	"idle_rpm": "idle_rpm", "redline_rpm": "redline_rpm", "reverse_ratio": "reverse_ratio",
-	"efficiency": "efficiency", "shift_up_rpm": "shift_up_rpm",
+	"efficiency": "efficiency", "engine_brake_frac": "engine_brake_frac",
+	"shift_cut_s": "shift_cut_s",
+	"shift_up_rpm": "shift_up_rpm",
 	"shift_down_rpm": "shift_down_rpm",
 }
 const DRIVE_BASELINE_ONLY := {

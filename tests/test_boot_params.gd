@@ -35,6 +35,14 @@ func test_challenge_keys_come_from_the_arg_or_the_env() -> void:
 	assert_bool(BootParams.wants_challenge_keys(PackedStringArray(["--level=flatland"]), "")).is_false()
 
 
+## CARLITO_CHALLENGE_KEYS=0 (or false/off/no) means "unset", not "on" — only a non-empty,
+## non-falsy value turns the override on.
+func test_challenge_keys_env_falsy_values_stay_off() -> void:
+	for env in ["0", "false", "False", "off", "no", ""]:
+		assert_bool(BootParams.wants_challenge_keys(PackedStringArray(), env)) \
+				.override_failure_message(env).is_false()
+
+
 ## The debug challenge boot: the arg overrides the env var, and `--challenge-keys` is not it.
 func test_challenge_comes_from_the_arg_or_the_env() -> void:
 	assert_str(BootParams.parse_challenge(PackedStringArray(["--challenge=dev_box_stop"]), "")) \

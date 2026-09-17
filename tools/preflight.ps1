@@ -32,6 +32,7 @@ $bakes = & $GODOT --headless --path . res://tools/check_bakes.tscn 2>&1 | Out-St
 Write-Host $bakes
 $staleBakes = ($bakes -split "`n") | Select-String -Pattern '\[check-bakes\].*: (stale|missing|error)'
 if ($staleBakes) { Fail 'stale-bake check (run: & $GODOT --headless --path . res://tools/bake_levels.tscn)' }
+if ($bakes -notmatch '\[check-bakes\] complete:') { Fail 'stale-bake check (no completion sentinel — the run did not finish)' }
 
 Announce 'Headless smoke'
 $smoke = & $GODOT --headless --path . --quit-after 120 2>&1 | Out-String

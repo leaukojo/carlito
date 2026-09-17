@@ -28,7 +28,9 @@ static func latched(cmd: bool, prev: bool, capture_ok: bool) -> bool:
 
 
 ## The body mass with the payload on it (kg). A named function so the flight path, the published
-## `payload_weight` and the test all read the same line.
+## `payload_weight` and the test all read the same line. The real refusal is at CAPTURE
+## (`DroneHook._find` never returns a crate over `MAX_PAYLOAD_KG`), so `payload_kg` reaching here
+## is always already at or under the ceiling; the clamp is a degenerate-input guard, not the gate.
 static func carried_mass(base_mass: float, payload_kg: float) -> float:
 	return maxf(base_mass, 0.0) + clampf(payload_kg, 0.0, MAX_PAYLOAD_KG)
 

@@ -173,6 +173,17 @@ func test_bake_code_files_are_in_the_input_hash() -> void:
 				"%s missing from the bake input hash" % code).is_true()
 
 
+## Membership in BAKE_CODE_INPUTS alone is a tautology: gather_bake_inputs seeds `kept` with
+## every entry unconditionally, so a typo'd or deleted path would still "pass" the test above.
+## Each entry must also resolve to a real file whose hash actually reflects its content.
+func test_bake_code_inputs_resolve_to_real_files() -> void:
+	for code: String in Baker.BAKE_CODE_INPUTS:
+		assert_bool(FileAccess.file_exists(code)).override_failure_message(
+				"%s does not exist on disk" % code).is_true()
+		assert_str(Baker.hash_file(code)).override_failure_message(
+				"%s hashed as MISSING" % code).is_not_equal("MISSING")
+
+
 ## Hash covers resources anywhere (not just kit/); runtime scripts excluded.
 func test_is_bake_input_keeps_resources_outside_kit_but_not_runtime_scripts() -> void:
 	assert_bool(Baker.is_bake_input("res://src/levels/harbor/dock_props.tscn")).is_true()
@@ -607,6 +618,38 @@ func test_nested_kit_piece_keeps_its_own_collision_mode() -> void:
 	assert_int(int((b.stats as Dictionary).drivable_triangles)).is_equal(12)
 	assert_int(int((b.stats as Dictionary).shapes)).is_equal(1)
 	(b.root as Node).free()
+
+
+## A KitPiece MeshInstance3D recoloured via material_override in the editor must bake with
+## that material, not revert to the mesh's own — get_active_material resolves it.
+func test_piece_mesh_material_override_survives_bake() -> void:
+	var root := Node3D.new()
+	root.name = "L"
+	var spawn := Marker3D.new()
+	spawn.name = "Spawn"
+	spawn.set_script(load("res://src/levels/base/vehicle_spawn.gd"))
+	root.add_child(spawn)
+	var authoring := Node3D.new()
+	authoring.name = "Authoring"
+	authoring.set_script(preload("res://kit/helpers/authoring_root.gd"))
+	root.add_child(authoring)
+	var piece := _scatter_prefab("box").instantiate()
+	authoring.add_child(piece)
+	var mesh_node := piece.get_node("Mesh") as MeshInstance3D
+	var override := StandardMaterial3D.new()
+	override.albedo_color = Color.RED
+	mesh_node.material_override = override
+
+	auto_free(root)
+	var result: Dictionary = Baker.bake(root)
+	assert_bool(result.ok).is_true()
+	var baked: Node3D = result.root
+	var chunks := baked.get_node("Chunks") as Node3D
+	var mesh := (chunks.get_child(0) as MeshInstance3D).mesh as ArrayMesh
+	var baked_material := mesh.surface_get_material(0) as StandardMaterial3D
+	assert_object(baked_material).is_not_null()
+	assert_that(baked_material.albedo_color).is_equal(Color.RED)
+	baked.free()
 
 
 ## Pieces that carry shapes but no mesh are legitimate authoring — the "nothing was

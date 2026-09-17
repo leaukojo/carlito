@@ -25,11 +25,10 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
   — whatever `TractorVehicle` and `SemiTractor` share must be a plain owned object they each
   forward to.
   - Before deleting a `has_method` guard, check the RECEIVER's static type, not just whether
-    `BaseVehicle` defines the method. Of ~30 sites only `boot.gd:_capabilities`'
-    `has_method("vehicle_capabilities")` was removable. `chase_camera.gd`'s two look dead and
-    are not (`@export var target: Node3D`, plus a live `elif target is PhysicsBody3D`
-    fallback), nor does `tow_host.gd`'s `has_method(&"respawn")`, which reaches a
-    statically-`RigidBody3D` `_chassis()` by a `get_parent()` walk.
+    `BaseVehicle` defines the method: `chase_camera.gd`'s guards look dead and are not
+    (`@export var target: Node3D`, plus a live `elif target is PhysicsBody3D` fallback), nor is
+    `tow_host.gd`'s `has_method(&"respawn")`, which reaches a statically-`RigidBody3D`
+    `_chassis()` by a `get_parent()` walk.
   - The other three subclasses stand on their own terms. The boat's buoyancy has one consumer
     (`WaterSurface` is named by no vehicle but `boat.gd`), so a `HullBuoyancy` would retire
     nothing — `BoatTelemetry`, the trim slew, the aground debounce and the `respawn` override
@@ -44,7 +43,8 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
   a SECOND such pair against the air
   (`windage_long` / `windage_lat` at `windage_offset`) rather than `air_damper`, whose `axis`
   masks WORLD space and cannot express a body-frame split on a hull that yaws; the plane
-  isotropic on one coefficient plus a flap bonus,
+  the same body-frame split (`drag_coeff` forward plus a flap bonus, `drag_lat` / `drag_vert`
+  far stiffer so velocity follows the nose),
   the drone WORLD-horizontal split from WORLD-vertical with the vertical gated on the motors
   turning — a common model is the rule-3 fiction. Force application differs too (four hull
   probes / a capped lift-stall curve / four per-rotor `apply_force`), the `@export` blocks are
@@ -93,10 +93,8 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
     so a split needs a context object that does not exist or ~25 more member fields, and a
     `DroneFlightController` / `DroneArmingState` pair does not escape it — `armed` alone is
     read by the vertical-damper gate, the mode resolve, the demand block and the telemetry
-    block. What DID extract is the five leaf subsystems (`DroneMotors`, `DroneSensorSuite`,
-    `DroneHook`, `DroneGimbalMount`, `DronePack`): 51 private fields to 30, no ordering moved.
-    See `drone/CLAUDE.md`.
-  - Merging `TowedBody.Consumer` with `ImplementBase.Connection` — refused twice on the terms
+    block. The leaf subsystems are the extraction that exists (`drone/CLAUDE.md`).
+  - Merging `TowedBody.Consumer` with `ImplementBase.Connection` — the term-by-term reasons are
     under Towing; both vocabularies cost ~10 lines in `farm_tipper.gd` and one test.
 
 ## What a `VehicleSpec` declares
@@ -127,6 +125,9 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
   - The rack never limits a corner on any body: at each vehicle's own limiter the floor still
     asks 2.6-19x more lateral force than its `mu_lat` can hold. A falloff failing this check
     is too aggressive.
+- The boat scenes' collision (`CollisionLower`/`CollisionUpper`) is hand-tuned and survives a
+  `gen_boat_variants.gd` re-run by the same whitelist rule as the Kenney bodies
+  (`src/vehicles/kenney/CLAUDE.md`); a feel change goes into `VARIANTS` and a regen, never the `.tscn`.
 - Vehicle-specific DRIVELINE behaviour is gated by a `VehicleSpec` flag defaulting off, never
   by a third seam: `rear_diff_lockable` / `front_axle_engageable` are true only on the
   tractor's spec, so `VehicleInput.diff_lock` / `fwd_drive` are inert everywhere else — the
@@ -153,17 +154,15 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
     lands in. The GEARBOX is not. Undoing it is the `Drivetrain` split rejected above;
     `has_engine` keeps the inert half off the garage wall and the selector card.
 - A feel change edited into a generated scene must be edited into its recipe in the same
-  commit — the generator is the source, the scene is output. `ef5b043` folded the removed
-  `physics/3d/default_linear_damp` into the three boats' `.tscn` drag coefficients and left
-  `tools/gen_boat_variants.gd` short by each hull's own `mass * 0.1`, so the documented regen
-  path silently gave every boat ~20 % more top speed and a slacker keel.
+  commit — the generator is the source, the scene is output. A scene-only edit leaves the
+  documented regen path shipping a different vehicle (a boat drag coefficient short by
+  `mass * 0.1` is ~20 % more top speed and a slacker keel).
   - `tests/test_boat_variants.gd` (the three watercraft) and `tests/test_kenney_variants.gd`
     (the eighteen Kenney bodies) hold both generators. A failure there is never fixed in the
     `.tres`: fold the driven value into the recipe and re-run the generator, because the
-    derivations downstream move too and until they do the shipped spec is internally
-    inconsistent. From one hand-edit (`91509c2`): `race`'s grip went to mu 1.35/1.40 while
-    `brake_torque` stayed sized for 1.2 (905 against the derivation's 1019), and
-    `suv-luxury`'s `torque_mul` went to 1.54 while `handbrake_torque` stayed sized for 1.10.
+    derivations downstream move too (a hand-raised `mu` leaves `brake_torque` sized for the
+    old grip; a hand-raised `torque_mul` leaves `handbrake_torque` behind) and until they do
+    the shipped spec is internally inconsistent.
   - The Kenney suite re-derives rather than transcribes, so it tests the recipe and not the
     output: the brakes via `_derive_brakes` on a copy of the shipped spec, the torque curve by
     scaling the baseline, and `drag_area` / `com_z` / the four wheel stations by re-running
@@ -183,6 +182,17 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
   `limiter_cut`; `rpm_from_wheel` (its clamp) drives the needle and the `rpm` bridge signal.
   - The cut rides `applied_throttle` beside the governor's, so engine_load / fuel / coolant
     see it for free. `engine_torque` is the curve and nothing else.
+- Engine braking is `Drivetrain.overrun_torque`: `engine_brake_frac` of peak torque, linear
+  idle→redline, through the ratio, only with the PEDAL at exactly 0 (a hard edge — a fade band
+  would eat drive torque and move top speeds). It stacks with the truck's retarder, which
+  stays its own signal; `applied_throttle` reads 0 on overrun so no telemetry sees a load. The
+  plane declares 0 and must (undriven wheels, single-speed by construction).
+- The shift cut (`shift_cut_s`, `Drivetrain._shift_cut_ticks`) is a THROTTLE cut for whole ticks
+  after any engaged-to-engaged byte change (auto or bridge-exact; N↔D is a selection, not a
+  shift), latched once per tick however many gears the governor walked. It rides
+  `applied_throttle` like the limiter, so fuel / engine_load / the dash read it, and the axle sees
+  overrun only. Cars 0.15 s, trucks 0.4 s, the tractor 0 (powershift). It moves 0-100 figures,
+  never top speed or the tracking gate.
   - A curve may end nonzero, and 20 of the 26 shipped specs do — the limiter is what stops the
     engine. The six ending at `(redline, 0)` (the five 3200-rpm heavies and `tractor-kenney`)
     are belt-and-braces and the right shape for a governed diesel, whose top gear is governed
@@ -256,6 +266,16 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
   cap, low-speed slip floors + one-tick lateral force cap) plus the semi-implicit **spin** step
   in `_integrate_spin`, and the boat's probe clamps (derived spring k, one-tick damper, total
   force cap, `damped_force` for drag). Don't remove or weaken any clamp; don't raise the tick.
+- Surface drag (`HeightmapTerrain.channel_drag` → `RayWheel.surface_drag_force`) is a body force
+  at the contact off this tick's normal load, OUTSIDE the friction circle (it is the ground
+  deforming, not the tyre) and never through the spin step (the wheel keeps rolling at road speed,
+  the body slows). One-tick capped so it stops a wheel and never reverses it. Airborne = 0.
+  - The clamps are sized by `corner_mass`, the spec mass shared per wheel. A vehicle that
+    rewrites `mass` at runtime (the refuse truck's hopper) must call
+    `WheelDrive.set_corner_mass_from(mass)` beside the write, or the caps stay unladen; nothing
+    enforces this. The semi's plate load is deliberately NOT folded in (`truck/CLAUDE.md`).
+  - `RayWheel.is_rear_z` is the ONE front/rear predicate (ties go front); no shipped station sits
+    on z = 0 and `test_vehicle_catalog` sweeps for it.
 - Suspension force acts along the CONTACT NORMAL (`hit.normal`), never the chassis' up axis.
   Pushing along the body's own up tips part of the vertical load into the direction of travel
   whenever the chassis sits nose-up or nose-down, so a body thrusts itself along (or drags
@@ -384,8 +404,7 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
 - The E cycle's refusal is `TowHost.may_cycle_to`, static and taking `is_coupled` / `is_towed` as a
   Callable — the attachment axis cannot hoist onto `BaseVehicle`; a null coupler never refuses.
 - `TowedBody.Consumer` and `ImplementBase.Connection` are two different sets, not two names for
-  one; the merge has been proposed and refused three times, and the cross-reference now sits at
-  both enum declarations. Checked term by term:
+  one (the cross-reference sits at both enum declarations). Term by term:
   - `Consumer` is `{PTO, HYDRAULIC}` and has no data-bus member on purpose: ISO 11992 belongs
     to the TOWING unit's ISO 7638 pair (`VehicleSpec.trailer_bus_equipped`) and carries nothing
     about the body. One enum hands a semi-trailer an `ISOBUS_DATA` and a `THREE_POINT` it
@@ -470,6 +489,19 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
   the variant `"bullet"`): any pre-spawn fallback that has only a variant name must map it
   through `VehicleCatalog.family_of(...)` first, or the dashboard/bridge get an empty cluster.
   `dashboard.bind()` and `level_baker.validate_spawns` are the two that must.
+- Respawn zeroes the telemetry accel history so a teleport isn't read as an impact; a trailer's
+  wheels and the drone's per-ESC arrays follow the same rule.
+
+## Lamps
+
+- **`LampSet` binds its groups two ways and the accessor differs.** Head/brake/turn/LED share ONE
+  canonical material per group on `mesh.material_override` (`_bind`); markers, flash and strobe get
+  a PRIVATE duplicate of the mesh's own scene material on `set_surface_override_material(0, …)`
+  (`_bind_scene_colored`), which is what lets red, green and white sit in one group. Read a marker
+  back through `material_override` and you get `null` for a lens that is lit correctly — both
+  `test_tow_host` and `test_trailer` go through a `_marker_mat()` helper that says so.
+- `LampSet` tolerates a missing lamp path silently (a dark lens with nothing to say so), which is
+  why the family suites pin every declared path resolving to a `MeshInstance3D`.
 
 ## Kenney bodies
 

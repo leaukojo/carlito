@@ -10,8 +10,16 @@
 ; THE BARREL STARTS AT z 1.05, NOT AT THE KINGPIN, and that is the gooseneck rule rather than a
 ; styling choice: a 0.85 m barrel centred at y 0.66 has its underside at y -0.19, which is BELOW
 ; the coupling plane. Run it forward over the tractor and it passes through the fifth wheel, the
-; frame rails and the mudguards. So it stops behind the tractor's tail (z 0.96 in this frame) and
-; the gooseneck carries a PUMP CABINET instead — which is what real tankers put there.
+; frame rails and the mudguards. So it stops near the tractor's tail (z 1.26 in this frame) and the
+; gooseneck carries a PUMP CABINET instead — which is what real tankers put there.
+;
+; COMPROMISE, stated where it constrains the geometry: the barrel's front 0.21 m does now sit over
+; the tractor's tail, and it is the one part of the family that breaks the "nothing below the
+; coupling plane over the tractor" rule as written. It passes because of WHAT is under it — the
+; lowest point of a cylinder is a narrow strip on the centreline, where the tractor has only its
+; air tank (0.18 m of clearance) and its rear bumper (0.25 m); over the frame rails, where the
+; barrel is already 1.13 high, it is 0.38 m clear. Moving the barrel back instead costs 0.55 m of
+; tank and re-derives the saddles, the caps and the ring spacing.
 ;
 ; MEASURED against the tractor unit: barrel 1.70 across (narrower than the 1.92 frame, as a tank
 ; is), 5.10 m long, top at y 1.51 and the handrail at 1.84 = 2.89 m above the road. Ground
@@ -27,9 +35,10 @@
 ; Nothing here is a load model. The surge lives in tanker.gd, is LABELLED as a model rather than
 ; fluid dynamics, and reaches the world only by moving this body's centre of mass.
 ;
-; Swing clearance: the frontmost part is the gooseneck at 0.33 m ahead of the kingpin and 0.96
-; half-width, swinging on 1.02 m inside the 1.15 m to the cab's rear face. The pump cabinet is
-; narrower and shorter, so it never becomes the frontmost part. test_trailer sweeps it.
+; Swing clearance: the frontmost part is the gooseneck at 1.15 m ahead of the kingpin and 0.96
+; half-width, swinging on 1.50 m inside the 1.85 m to the cab's rear face. The pump cabinet is
+; narrower and stops 0.10 m short of the nose, so it never becomes the frontmost part (it swings on
+; 1.32). test_trailer sweeps it.
 
 [ext_resource type="Script" path="res://src/vehicles/truck/trailers/tanker.gd" id="1_tanker"]
 [ext_resource type="Resource" path="res://src/vehicles/truck/trailers/tanker_spec.tres" id="2_spec"]
@@ -69,7 +78,7 @@ roughness = 0.4
 
 [sub_resource type="BoxMesh" id="MeshRail"]
 material = SubResource("MatFrame")
-size = Vector3(0.14, 0.26, 5.4)
+size = Vector3(0.14, 0.26, 4.85)
 
 [sub_resource type="BoxMesh" id="MeshCross"]
 material = SubResource("MatFrame")
@@ -91,15 +100,15 @@ rings = 1
 
 [sub_resource type="BoxMesh" id="MeshNeck"]
 material = SubResource("MatFrame")
-size = Vector3(1.92, 0.16, 1.38)
+size = Vector3(1.92, 0.16, 2.75)
 
 [sub_resource type="BoxMesh" id="MeshCabinet"]
 material = SubResource("MatCabinet")
-size = Vector3(1.6, 0.68, 1.25)
+size = Vector3(1.6, 0.68, 2.035)
 
 [sub_resource type="BoxMesh" id="MeshCabinetDoor"]
 material = SubResource("MatSteel")
-size = Vector3(0.04, 0.52, 1)
+size = Vector3(0.04, 0.52, 1.785)
 
 [sub_resource type="CylinderMesh" id="MeshBarrel"]
 material = SubResource("MatBarrel")
@@ -238,10 +247,10 @@ material = SubResource("MatLensAmber")
 size = Vector3(0.12, 0.1, 0.04)
 
 [sub_resource type="BoxShape3D" id="ShapeNeck"]
-size = Vector3(1.92, 0.2, 1.35)
+size = Vector3(1.92, 0.2, 2.75)
 
 [sub_resource type="BoxShape3D" id="ShapeCabinet"]
-size = Vector3(1.6, 0.7, 1.25)
+size = Vector3(1.6, 0.7, 2.035)
 
 ; A box hull around the barrel. Trimesh is the exception and never the default, and a 12-segment
 ; cylinder's own hull would buy nothing a rig this size can feel.
@@ -256,11 +265,11 @@ script = ExtResource("1_tanker")
 spec = ExtResource("2_spec")
 
 [node name="CollisionNeck" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0.375)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0.225)
 shape = SubResource("ShapeNeck")
 
 [node name="CollisionCabinet" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.56, 0.36)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.56, -0.0325)
 shape = SubResource("ShapeCabinet")
 
 [node name="CollisionBarrel" type="CollisionShape3D" parent="."]
@@ -272,11 +281,11 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.52, 5.45)
 shape = SubResource("ShapeBogie")
 
 [node name="RailL" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, -0.33, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, -0.33, 4.025)
 mesh = SubResource("MeshRail")
 
 [node name="RailR" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, -0.33, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, -0.33, 4.025)
 mesh = SubResource("MeshRail")
 
 [node name="Cross1" type="MeshInstance3D" parent="."]
@@ -296,20 +305,20 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.07, 0)
 mesh = SubResource("MeshKingpin")
 
 [node name="Neck" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.14, 0.36)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.14, 0.225)
 mesh = SubResource("MeshNeck")
 
 ; The pump cabinet: what a tanker carries on the gooseneck, where the barrel cannot go.
 [node name="PumpCabinet" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.56, 0.36)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.56, -0.0325)
 mesh = SubResource("MeshCabinet")
 
 [node name="CabinetDoorL" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.81, 0.56, 0.36)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.81, 0.56, -0.0325)
 mesh = SubResource("MeshCabinetDoor")
 
 [node name="CabinetDoorR" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.81, 0.56, 0.36)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.81, 0.56, -0.0325)
 mesh = SubResource("MeshCabinetDoor")
 
 ; The barrel and its fittings all lie along Z: a CylinderMesh's axis is its local +Y, so the basis

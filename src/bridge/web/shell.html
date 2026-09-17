@@ -160,6 +160,31 @@ const engine = new Engine(GODOT_CONFIG);
 		initializing = false;
 	}
 
+	// sessionStorage throws SecurityError in a partitioned/sandboxed iframe; default to 0/no-op
+	// rather than let that exception reach startGame and black-screen the page.
+	const RELOAD_KEY = 'carlitoCoiReloads';
+	function readReloads() {
+		try {
+			return parseInt(window.sessionStorage.getItem(RELOAD_KEY) || '0', 10);
+		} catch (err) {
+			return 0;
+		}
+	}
+	function writeReloads(n) {
+		try {
+			window.sessionStorage.setItem(RELOAD_KEY, String(n));
+		} catch (err) {
+			// nothing to persist here; the reload budget just resets every load.
+		}
+	}
+	function clearReloads() {
+		try {
+			window.sessionStorage.removeItem(RELOAD_KEY);
+		} catch (err) {
+			// see writeReloads
+		}
+	}
+
 	const missing = Engine.getMissingFeatures({
 		threads: GODOT_THREADS_ENABLED,
 	});
@@ -175,8 +200,7 @@ const engine = new Engine(GODOT_CONFIG);
 			// point the isolation headers are present and `missing` is empty on that load.
 			// We only surface the real failure once the worker already controls the page yet
 			// the features are still missing, or we exhaust the reload budget (loop guard).
-			const reloadKey = 'carlitoCoiReloads';
-			const reloads = parseInt(window.sessionStorage.getItem(reloadKey) || '0', 10);
+			const reloads = readReloads();
 			const missingMsg = 'Error\nThe following features required to run Godot projects on the Web are missing:\n';
 			if (navigator.serviceWorker.controller != null || reloads >= 3) {
 				// Controlled by our worker yet still not isolated (or out of retries) —
@@ -203,7 +227,7 @@ const engine = new Engine(GODOT_CONFIG);
 						setTimeout(() => resolve(), 2000);
 					}),
 				]).then(() => {
-					window.sessionStorage.setItem(reloadKey, String(reloads + 1));
+					writeReloads(reloads + 1);
 					window.location.reload();
 				}).catch((err) => {
 					console.error('Error while registering service worker:', err);
@@ -216,7 +240,7 @@ const engine = new Engine(GODOT_CONFIG);
 		}
 	} else {
 		// Isolated and ready — clear the reload counter for a clean next session.
-		window.sessionStorage.removeItem('carlitoCoiReloads');
+		clearReloads();
 		setStatusMode('progress');
 		engine.startGame({
 			'onProgress': function (current, total) {

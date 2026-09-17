@@ -67,6 +67,10 @@ func downloaded_bytes() -> int:
 ## Mount `level_id`'s pack, downloading it first unless this build's copy is already cached.
 ## Answers through `finished`, synchronously when there was nothing to download.
 func fetch(level_id: String) -> void:
+	if _http != null:
+		push_error("Level pack %s: a fetch is already in flight" % level_id)
+		finished.emit(false)
+		return
 	var build := _build_name()
 	if build.is_empty():
 		push_error("Level pack %s: no web build to fetch it from" % level_id)
@@ -88,6 +92,7 @@ func fetch(level_id: String) -> void:
 	# same bytes again off the still-visible Content-Encoding and fail
 	# (RESULT_BODY_DECOMPRESS_FAILED).
 	_http.accept_gzip = false
+	_http.timeout = 30.0
 	_http.request_completed.connect(_on_downloaded)
 	add_child(_http)
 	var err := _http.request(_url(pack_name(build, level_id)))

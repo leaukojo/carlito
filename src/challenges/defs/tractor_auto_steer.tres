@@ -34,7 +34,7 @@ title = "[NOT-TESTED] Auto-steer"
 variant = "tractor-kenney"
 arena = "level_1"
 course = "res://src/levels/island/level_1/courses/tractor_auto_steer_course.tscn"
-briefing = "Follow the curved crop row by commanding guidance_curvature, not steer -- an auto-steer system holds a curvature, not a wheel angle. Hand-steering this one does not pass."
-hint = "guidance_curvature is 1/km on the wire, byte 3.1 must read 01 'intended to steer' for it to count, and it only counts while sloppyCAN keeps sending it. The reciprocal of the command is the radius: this row curves at 1000/33.3 = 30 m."
+briefing = "Follow the curved crop row by commanding guidance_curvature, not steer. Hand-steering does not pass."
+hint = "Byte 3.1 must read 01, and the command must keep arriving. This row curves at a 30 m radius."
 goals = Array[ExtResource("1_goal")]([SubResource("Resource_w1"), SubResource("Resource_w2"), SubResource("Resource_w3"), SubResource("Resource_w4")])
 constraints = Array[ExtResource("5_cons")]([SubResource("Resource_guidance")])

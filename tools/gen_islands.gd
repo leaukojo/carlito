@@ -10,6 +10,9 @@ const SIZE := 512.0          ## world extent (X and Z) — matches level_1
 const HEIGHT := 51.0         ## white-pixel amplitude; stores the 3 m road levels exactly
 const CHANNEL_NAMES := '"Grass", "Dirt", "Sand", "Rock", "Snow", "Mud", "Asphalt", "Gravel"'
 const CHANNEL_GRIP := "0.8, 0.7, 0.6, 0.7, 0.75, 0.5, 1, 0.85"
+## Added rolling resistance per channel (HeightmapTerrain.channel_drag): grass drags, mud bogs,
+## asphalt and rock are free, snow is a soft crust.
+const CHANNEL_DRAG := "0.06, 0.03, 0.1, 0.01, 0.05, 0.2, 0, 0.02"
 
 const LEVELS := [
 	{
@@ -209,6 +212,7 @@ terrace_levels = {terrace_levels}
 splatmap = ExtResource("7_splat")
 channel_names = PackedStringArray({channel_names})
 channel_grip = PackedFloat32Array({channel_grip})
+channel_drag = PackedFloat32Array({channel_drag})
 
 [node name="AuthoringRoot" type="Node3D" parent="."]
 script = ExtResource("10_authoring")
@@ -220,7 +224,7 @@ metadata/_custom_type_script = "uid://t88htpmwukbg"
 		"seed": cfg["seed"], "feature_scale": cfg["feature_scale"],
 		"falloff_start": cfg["falloff_start"], "falloff_end": cfg["falloff_end"],
 		"coast_roughness": cfg["coast_roughness"], "terrace_levels": cfg["terrace_levels"],
-		"channel_names": CHANNEL_NAMES, "channel_grip": CHANNEL_GRIP,
+		"channel_names": CHANNEL_NAMES, "channel_grip": CHANNEL_GRIP, "channel_drag": CHANNEL_DRAG,
 		"sx": spawn.x, "sy": spawn.y, "sz": spawn.z,
 		"wx": SIZE * 0.5 + 14.0,
 	})

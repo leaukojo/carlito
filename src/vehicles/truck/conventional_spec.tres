@@ -14,15 +14,19 @@
 ; steel and bus silence. The default is false, but it is written out below anyway: a flag this
 ; load-bearing being ABSENT and a flag being MISSING must not look the same in a diff.
 ;
-; Geometry is measured off conventional.tscn: 4.70 m long (z -2.90 .. 1.80 — 1.38x the cab-over's
-; 3.40, which is what a hood and a sleeper cost), wheelbase 3.00 (steer axle -1.95 behind the hood,
-; drive axle +1.05), 1.92 wide like the rest of the family, kingpin (0, 1.05, 0.85). The COUPLING
-; PLANE stays at y 1.05: every trailer in TrailerCatalog is authored against that height, so it is
-; the one number a tractor-unit variant may not move.
+; Geometry is measured off conventional.tscn: 6.10 m long (z -4.30 .. 1.80 — 1.12x the cab-over's
+; 5.45, which is what a hood and a full sleeper cost), wheelbase 4.40 (steer axle -3.35 behind the
+; hood, drive axle +1.05), 1.92 wide like the rest of the family, kingpin (0, 1.05, 0.55). The
+; COUPLING PLANE stays at y 1.05: every trailer in TrailerCatalog is authored against that height,
+; so it is the one number a tractor-unit variant may not move. The wheelbase is sized the way the
+; cab-over's is — long enough that the trailer's pull at the kingpin cannot unload the steer axle
+; through a gear-1 launch; see semi_spec.tres.
 ;
-; CENTRE OF MASS z -0.55 keeps the cab-over's front bias for the cab-over's reason, arrived at by
-; the same arithmetic. Bobtail it puts 53 % on the steer axle (com sits 0.10 m ahead of the
-; wheelbase midpoint); coupled, the plate's load lands at z 0.85 and the steer axle keeps a bigger
+; CENTRE OF MASS z -1.30 keeps the cab-over's front bias for the cab-over's reason, arrived at by
+; the same arithmetic. Bobtail it puts 53 % on the steer axle ((1.05 - -1.30) / 4.40, com sitting
+; 0.15 m ahead of the wheelbase midpoint); coupled, the plate's load lands at z 0.55, 88.6 % of it
+; on the drive axle ((0.55 - -3.35) / 4.40), and the steer
+; axle keeps a bigger
 ; share than the cab-over's does, because the longer wheelbase gives that load a shorter lever on
 ; the front. That is the honest upside of the silhouette, and it is why this unit is the forgiving
 ; one to reverse — and the flip side, now that the plate carries a realistic 27 % of the trailer,
@@ -46,7 +50,7 @@
 script = ExtResource("3_grounddrive")
 drag_area = 2.43
 rolling_resistance = 0.007
-wheel_positions = PackedVector3Array(-0.72, 0.424, -1.95, 0.72, 0.424, -1.95, -0.62, 0.424, 1.05, 0.62, 0.424, 1.05)
+wheel_positions = PackedVector3Array(-0.72, 0.424, -3.35, 0.72, 0.424, -3.35, -0.62, 0.424, 1.05, 0.62, 0.424, 1.05)
 wheel_radius = 0.36
 wheel_inertia = 3.0
 wheel_scene = ExtResource("2_wheel")
@@ -71,7 +75,7 @@ steer_falloff_speed = 29.0
 [resource]
 script = ExtResource("1_spec")
 mass = 8000.0
-center_of_mass = Vector3(0, 0.35, -0.55)
+center_of_mass = Vector3(0, 0.35, -1.30)
 ground_drive = SubResource("Resource_grounddrive")
 trailer_bus_equipped = false
 torque_curve = PackedVector2Array(700, 975, 1200, 1290, 1800, 1500, 2400, 1440, 2800, 1120, 3200, 375)
@@ -81,6 +85,8 @@ gear_ratios = PackedFloat32Array(6.5, 3.7, 2.4, 1.6, 1.2, 1)
 reverse_ratio = 6.0
 final_drive = 4.5
 efficiency = 0.9
+engine_brake_frac = 0.15
+shift_cut_s = 0.4
 shift_up_rpm = 2600.0
 shift_down_rpm = 1200.0
 ; ROAD-SPEED GOVERNOR 105 km/h: North American practice — no federal limiter mandate, and
@@ -91,7 +97,7 @@ speed_limit_kmh = 105.0
 ; HIGH-SPEED STEERING FALLOFF, same 0.21 x 24 = 5.0 deg floor as the cab-over — the two share a
 ; rack and a mass, so they share the absolute lock. Only the floor SPEED differs: 29 m/s tracks
 ; this one's higher 105 km/h limiter, so neither truck reaches its floor before its own cruise.
-; The 3.0 m wheelbase (against the cab-over's 2.1) already makes this the wider-turning body;
+; The 4.4 m wheelbase (against the cab-over's 3.6) already makes this the wider-turning body;
 ; the taper does not change that at manoeuvring speed, where it is worth under 15%.
 steer_speed = 1.8
 headlight_paths = Array[NodePath]([NodePath("Lamps/HeadlightL"), NodePath("Lamps/HeadlightR")])

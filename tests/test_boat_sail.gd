@@ -161,3 +161,52 @@ func test_the_force_stays_in_the_water_plane() -> void:
 		var f := S.force(Vector2(6.0, awa), S.boom_angle(0.5, awa, MAX_DEG), AREA, BOW, STBD)
 		assert_float(f.y).override_failure_message("awa %s lifted the hull" % awa) \
 			.is_equal_approx(0.0, 1e-6)
+
+
+# --- flattening the hull's axes onto the water plane (what boat.gd feeds `force`) -----------
+
+func test_flatten_hull_axes_is_a_no_op_when_already_level() -> void:
+	var axes := S.flatten_hull_axes(BOW, STBD)
+	assert_vector(axes[0]).is_equal_approx(BOW, Vector3.ONE * 1e-6)
+	assert_vector(axes[1]).is_equal_approx(STBD, Vector3.ONE * 1e-6)
+
+
+func test_flatten_hull_axes_drops_the_heel() -> void:
+	# A hull heeled 25 deg about its own bow: `right` picks up a vertical component that must not
+	# survive flattening, or the rig would gain lift/press from heel and lose drive to cos(heel).
+	var heeled := Basis(Vector3(0.0, 0.0, -1.0), deg_to_rad(25.0))
+	var fwd := -heeled.z
+	var right := heeled.x
+	assert_float(right.y).override_failure_message("test setup: right should be tilted") \
+		.is_not_equal(0.0)
+	var axes := S.flatten_hull_axes(fwd, right)
+	assert_float(axes[0].y).is_equal_approx(0.0, 1e-6)
+	assert_float(axes[1].y).is_equal_approx(0.0, 1e-6)
+	assert_float(axes[0].length()).is_equal_approx(1.0, 1e-6)
+	assert_float(axes[1].length()).is_equal_approx(1.0, 1e-6)
+	# Still the hull's own heading, not some other bearing.
+	assert_vector(axes[0]).is_equal_approx(BOW, Vector3.ONE * 1e-6)
+
+
+func test_flatten_hull_axes_keeps_the_force_out_of_a_heeled_hulls_lift_or_press() -> void:
+	# The regression this whole fix is for: feeding S.force the RAW (heeled) axes gives the rig a
+	# vertical component; flattening them first (as boat.gd now does) must not.
+	var heeled := Basis(Vector3(0.0, 0.0, -1.0), deg_to_rad(25.0))
+	var fwd := -heeled.z
+	var right := heeled.x
+	var raw_f := S.force(Vector2(6.0, 90.0), 45.0, AREA, fwd, right)
+	assert_float(absf(raw_f.y)).override_failure_message("test setup: raw axes should leak lift") \
+		.is_greater(1.0)
+	var axes := S.flatten_hull_axes(fwd, right)
+	var flat_f := S.force(Vector2(6.0, 90.0), 45.0, AREA, axes[0], axes[1])
+	assert_float(flat_f.y).is_equal_approx(0.0, 1e-6)
+
+
+func test_flatten_hull_axes_guards_the_degenerate_bow_straight_up() -> void:
+	# Mirrors BoatTelemetry.apparent_wind's own guard: no horizontal component left to normalize,
+	# so the raw axes pass through rather than a divide-by-zero.
+	var fwd := Vector3.UP
+	var right := Vector3.RIGHT
+	var axes := S.flatten_hull_axes(fwd, right)
+	assert_vector(axes[0]).is_equal(fwd)
+	assert_vector(axes[1]).is_equal(right)

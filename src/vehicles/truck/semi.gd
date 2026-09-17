@@ -165,11 +165,11 @@ func get_camera_exclude_bodies() -> Array[RID]:
 	return out
 
 
-## The combination is ~8.9 m long and 2.1 m tall, so the chase view is pulled back and up to clear
+## The combination is ~10.4 m long and 2.1 m tall, so the chase view is pulled back and up to clear
 ## the trailer with wider overhead and iso frames. One frame serves both coupled and bobtail, since
 ## cycling the trailer does not change the camera target.
 func get_camera_framing() -> Dictionary:
-	return {"distance": 12.0, "height": 6.0, "look_height": 2.0, "top_height": 42.0, "iso_size": 44.0}
+	return {"distance": 13.5, "height": 6.0, "look_height": 2.0, "top_height": 42.0, "iso_size": 44.0}
 
 
 ## Articulation angle (rad, + = trailer to the right); 0 while bobtail. Read by the F3 overlay.

@@ -13,13 +13,17 @@ const Layers := preload("res://src/physics/collision_layers.gd")
 const WATER_GROUP := "water"
 const SHADER := preload("res://src/water/water.gdshader")
 ## Target width of one visual plane quad, in metres. Subdivisions are derived from
-## `size` so a bigger water body keeps the same wave sampling density instead of
-## stretching the quads past the ~11 m wave wavelength (which turns the waves to noise).
-const WAVE_QUAD_M := 17.5
+## `size` so a bigger water body keeps the same wave sampling density. The shader's
+## vertex waves are ~11-13 m long and do real work (they move the depth reconstruction, so
+## foam and translucency undulate with them over a 1 m pan); 5 m samples them 2-3 times
+## per wavelength. Below ~2 they alias to noise, which is where 17.5 m sat.
+const WAVE_QUAD_M := 5.0
 ## Clamp on the derived subdivision count: enough detail on a small pond, and a ceiling
 ## so a very large sea can't explode the vertex count. Still one draw call either way.
+## 320 puts the 4000 m open sea at 12.5 m quads (~200k triangles), the coarse end for
+## the 11 m waves; an island sea (560 m) is 112 x 112.
 const MESH_SUBDIV_MIN := 32
-const MESH_SUBDIV_MAX := 192
+const MESH_SUBDIV_MAX := 320
 
 @export var size := Vector2(24.0, 24.0):
 	set(v):
@@ -56,8 +60,10 @@ const MESH_SUBDIV_MAX := 192
 ## the (world-anchored) waves. Runtime only; the editor shows the authored square.
 @export var infinite := false
 
-## How far the far-sea quad sits below the surface (must clear the wave troughs).
-const FAR_SEA_DROP := 0.25
+## How far the far-sea quad sits below the surface: past the wave troughs (wave_height) AND
+## the depth buffer's resolution at the wave mesh's far edge (~0.1 m at 300 m with the chase
+## camera's 0.2 m near plane), or the two z-fight into a horizon shimmer.
+const FAR_SEA_DROP := 0.6
 
 var _mesh: MeshInstance3D
 var _shape: CollisionShape3D

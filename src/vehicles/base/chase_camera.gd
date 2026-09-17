@@ -49,6 +49,11 @@ var _framing_target: Node3D = null
 func _ready() -> void:
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF  ## moves per rendered frame
 	_fov_perspective = fov
+	# Depth precision scales with the near plane: at the engine's 0.05 m a 24-bit buffer
+	# resolves ~0.1 m at 300 m, which z-fights the far-sea quad under the wave mesh and
+	# breaks the water's depth reconstruction. 0.2 m keeps clear of the pull-in floor
+	# (MIN_PIVOT_DIST, collision_margin) and quadruples the far resolution.
+	near = 0.2
 
 
 ## Advance to the next view and snap into it (blending views reads as flying through the world).

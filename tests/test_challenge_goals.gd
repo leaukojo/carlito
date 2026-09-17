@@ -590,8 +590,8 @@ func test_aim_error_follows_the_gimbal_basis() -> void:
 			.is_equal_approx(0.0, 1e-3)
 	assert_float(GimbalAimGoal.aim_error_deg(level, 0.0, 0.0, Vector3(10, 0, 0))) \
 			.is_equal_approx(90.0, 1e-3)
-	# DroneGimbal's own convention: yaw -90 pans the camera to +X.
-	assert_float(GimbalAimGoal.aim_error_deg(level, 0.0, -90.0, Vector3(10, 0, 0))) \
+	# The contract sign: yaw +90 (right, seen from above) pans the camera to +X.
+	assert_float(GimbalAimGoal.aim_error_deg(level, 0.0, 90.0, Vector3(10, 0, 0))) \
 			.is_equal_approx(0.0, 1e-3)
 	assert_float(GimbalAimGoal.aim_error_deg(level, -45.0, 0.0, Vector3(0, -10, -10))) \
 			.is_equal_approx(0.0, 1e-3)

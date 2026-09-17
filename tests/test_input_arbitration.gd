@@ -968,3 +968,16 @@ func test_the_dev_override_lets_local_drive_under_the_lock() -> void:
 	router._physics_process(1.0 / 60.0)
 	assert_int(touch.polls).is_equal(1)
 	assert_float(router.get_vehicle_input().throttle).is_equal(1.0)
+
+
+func test_the_dev_override_lets_local_drive_under_the_lock_with_a_merely_connected_bridge() -> void:
+	# A bridge that is live but sends no accel/brake/steer (only lamps/DM1) must not force
+	# bridge_drives just because bridge_only is on — the dev override still wins.
+	var touch := _CountingTouch.new()
+	var router := _locked_router(touch)
+	router._dev_keys = true
+	router._bridge_source = _QuietBridge.new()
+	router._physics_process(1.0 / 60.0)
+	assert_bool(router.bridge_drives()).is_false()
+	assert_int(touch.polls).is_equal(1)
+	assert_float(router.get_vehicle_input().throttle).is_equal(1.0)

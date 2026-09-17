@@ -67,7 +67,8 @@ bug, not a shortcut.
 7. CI does the export; deploys are cache-busted. No manual deploy.
 8. Pure logic (drivetrain math, contract encode/decode, arbitration, GPS/odometer,
    buoyancy, terrain/scatter/road/bake math) gets gdUnit4 tests.
-9. `.web` overrides + perf budget: msaa_3d.web=0, soft shadows off on web; do **not** set
+9. `.web` overrides + perf budget: msaa_3d.web=0, positional shadows hard on web, the sun at
+   soft quality 1 (hard = one tap, edges shimmer as the camera moves); do **not** set
    `scaling_3d/scale.web` below 1 (adds an upscale pass on gl_compatibility, measures
    worse). Physics: **60 Hz + interpolation, locked** — suspension tuning is rate-dependent;
    pinned in `project.godot` and asserted by `tests/test_project_settings.gd`, because the
@@ -102,64 +103,16 @@ game (in the editor `get_tree()` holds every open scene); discovery in kit/addon
 stays a walk scoped to a named root. `has_method()` is still right for genuine CAPABILITY
 probes (`set_vehicle`, `grip_at`, `cycle_implement`, `set_attachment`, `accepts`).
 
-**Input, lamps, bridge**
+**Input** — detail in `src/input/CLAUDE.md`. Ask `InputRouter.bridge_drives()`, not
+`Bridge.is_active()`, "who drives".
+
+**Lamps & bridge**
 
 - Lamp and ISOBUS state ride `VehicleInput`, never a side channel. Bridge lamp/warning
   bits are mirrored **verbatim** (sloppyCAN is the sole authority; absent bit = off);
   **no local blink timer ANYWHERE** — a lamp flashes because the source toggles its bit,
   J1939-73 DM1 flash-1Hz / flash-2Hz included. `tests/test_lamps.gd` reads
   `src/vehicles/base/lamp_set.gd` and fails if a clock comes back.
-- **`LampSet` binds its groups two ways and the accessor differs.** Head/brake/turn/LED share ONE
-  canonical material per group on `mesh.material_override` (`_bind`); markers, flash and strobe get
-  a PRIVATE duplicate of the mesh's own scene material on `set_surface_override_material(0, …)`
-  (`_bind_scene_colored`), which is what lets red, green and white sit in one group. Read a marker
-  back through `material_override` and you get `null` for a lens that is lit correctly — both
-  `test_tow_host` and `test_trailer` go through a `_marker_mat()` helper that says so.
-- **`VehicleInput` is a `class_name` in `src/input/vehicle_input.gd`, not an inner class of
-  the autoload** — an inner class makes every vehicle's static types depend on the autoload's
-  registered *name*. Its fields are **flat except `lamps`**: the router deliberately knows no
-  vehicle family (rule 5), so every group is allocated for every machine. `input.lamps` earns
-  its nesting on ONE RULE (the fourteen verbatim-mirrored bits above), not on one family, and
-  has exactly two read sites (`BaseVehicle` → LampSet, `Dashboard._update_telltales`).
-  `lights` is a level the router cycles, so it stays flat.
-- **`get_vehicle_input()` returns the router's own struct, read-only by convention** — there
-  is no defensive `copy()`, because a hand-written field mirror is a field that goes missing
-  silently. `arbitrate_*` build a fresh struct each tick, so a stashed reference reads stale,
-  never live; a caller that needs to keep or change one copies it itself.
-- **The raw-intent wire is `Dictionary[StringName, Variant]`** across all four producers
-  (`LocalSource`, `TouchControls`, `BridgeSource`, `measure_drone`'s `StickSource`) and
-  `merge_local`. **StringName keys catch no typo at parse time** — the guard is two tests:
-  `test_every_touch_poll_key_is_merged` (registry `poll_key` ⊆ merge) and
-  `test_local_source_and_merge_local_carry_the_same_keys` (set equality). `merge_local` builds
-  its dict explicitly, so a key on one side only silently drops the keyboard's edge while a
-  touch source is registered. `arbitrate_local` / `arbitrate_bridge` stay plain `Dictionary`
-  on purpose: they are the wire's consumers and `test_input_arbitration.gd` is their spec. An
-  **untyped dict literal is rejected at the call**, not converted — a test passing one inline
-  needs `_intent({...})` or a typed declaration.
-- Toggle owners (`_lights`, `_hitch_up`, `_pto`) live in InputRouter so keyboard and touch
-  share one owner; sources only report per-frame edges.
-- **The challenge bridge-only lock is `InputRouter.set_bridge_only`**: local and touch are never
-  polled, and with no live bridge the input is `locked_idle()`. Its keyboard override
-  (`--challenge-keys` / `CARLITO_CHALLENGE_KEYS`) is honoured in debug builds only.
-- **A live bridge without `accel`/`brake`/`steer` does not drive**: `InputRouter.bridge_drives()`
-  is false, `blend_local_driving` takes the driving group from local and the rest from the bridge
-  (never under `set_bridge_only`). Ask `bridge_drives()`, not `Bridge.is_active()`, "who drives".
-- **The gearbox mode is `InputRouter.set_manual_gearbox`**, set by the shell (selector in free play,
-  `ChallengeDef.transmission` in an attempt). It is bridge-only: automatic reads the gear byte as
-  PRND, manual takes it exactly (0 = N). Local input always drives automatic.
-- **Cycled-control lengths are declared once in `src/input/subsystem_counts.gd`** (leaf, no
-  dependencies, `preload`ed by the router and by each vehicle class that cycles one) — the router
-  must not depend on a vehicle class, so it cannot read `RefuseBody.Cmd` / `DroneBus.NODES` /
-  `DroneModes` / `BoatAutopilot`. Where the
-  length is intrinsic to a structure (an enum, the roster array) that structure stays the thing
-  you edit and a test pins it against the constant; grow one without the other and the local key
-  silently stops reaching the new position while the bridge can still command it.
-- The `rudder` in-signal overrides `steer` when present (no new VehicleInput field). The boat's
-  `heading_cmd` follows the same PRESENCE rule and DOES take a field: it overrides nothing, and
-  every value in its [0,360] is a legal bearing, so absent cannot be a sentinel on the wire —
-  `VehicleInput.HEADING_CMD_NONE` is internal and `bridge_source` writes the key only when sent.
-  `guidance_curvature` follows the same rule with its own field (`GUIDANCE_CURVATURE_NONE`): it
-  still overrides `steer`, and `WheelDrive` turns it into a wheel angle off the wheelbase, untapered.
 - Bridge publish walks `Contract.data.signals_for_vehicle(...)` × `to_bridge_dict()`, and
   `to_bridge_dict` walks the telemetry's own property list — every member var of a telemetry
   class IS a wire signal (only the `WIRE_*` tables and the synthesised `slip` are not identity),
@@ -172,7 +125,6 @@ probes (`set_vehicle`, `grip_at`, `cycle_implement`, `set_attachment`, `accepts`
   assignment and is **FROZEN**: a new flag APPENDS at bit 7 or above (nine free in the u16),
   an existing bit is **never** renumbered. Adding one bumps `version` and ships as a paired
   promote.
-- Respawn zeroes the telemetry accel history so a teleport isn't read as an impact.
 
 **Dashboard & UI** — detail in `src/ui/CLAUDE.md`.
 
@@ -257,6 +209,8 @@ $env:GODOT_BIN = $GODOT; .\addons\gdUnit4\runtest.cmd -a tests
 & $GODOT --headless --path . res://tools/measure_vehicles.tscn -- all 45 track strict
 # drone hover / climb / lean / endurance / one-motor-out (no args, ~1 min)
 & $GODOT --headless --path . res://tools/measure_drone.tscn
+# coupled launch: steer-axle load, pitch, air gate (~30 s; front_z=/com_z= what-ifs)
+& $GODOT --headless --path . res://tools/measure_semi_launch.tscn -- semi
 
 node tools/gen_js_contract.mjs                    # after ANY contract edit
 & $GODOT --headless --path . --export-release "Web" build/web/index.html   # CI does the real one

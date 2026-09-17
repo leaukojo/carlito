@@ -146,6 +146,8 @@ func _tick_body(t: TruckTelemetry, input: VehicleInput, pto_on: bool, running: b
 	if not is_equal_approx(payload, _mass_applied):
 		_mass_applied = payload
 		mass = spec.mass + payload
+		if drive != null:
+			drive.set_corner_mass_from(mass)
 
 
 ## Say WHY the body stalk did nothing, on the press that did nothing. Covers only the two
@@ -219,3 +221,5 @@ func respawn() -> void:
 		_pose_rig()
 		_mass_applied = 0.0
 		mass = spec.mass
+		if drive != null:
+			drive.set_corner_mass_from(mass)

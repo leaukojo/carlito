@@ -118,3 +118,17 @@ static func force(aw: Vector2, boom_deg: float, area: float,
 ## the hull's, and `bow`/`stbd` are already flattened by the caller.
 static func _turn_to_starboard(v: Vector3, bow: Vector3, stbd: Vector3) -> Vector3:
 	return v.dot(bow) * stbd - v.dot(stbd) * bow
+
+
+## The hull's own `fwd`/`right` flattened onto the water plane, normalized, for `force`'s `bow` /
+## `stbd` — required because `aw` is already flattened there (BoatTelemetry.apparent_wind), so on a
+## heeled hull the raw body axes would give the rig a vertical component and shrink its horizontal
+## drive by cos(heel). Guards the same degenerate case apparent_wind does (bow pointing straight up
+## or down): with no horizontal component left to normalize, the raw axes pass through unchanged
+## rather than dividing by zero.
+static func flatten_hull_axes(fwd: Vector3, right: Vector3) -> Array[Vector3]:
+	var flat_fwd := Vector3(fwd.x, 0.0, fwd.z)
+	if flat_fwd.length_squared() <= 1e-12:
+		return [fwd, right]
+	flat_fwd = flat_fwd.normalized()
+	return [flat_fwd, Vector3(-flat_fwd.z, 0.0, flat_fwd.x)]

@@ -85,3 +85,21 @@ func test_cargo_payload_scene_authors_the_payload_layer() -> void:
 	assert_int(crate.collision_layer).is_equal(Layers.PAYLOAD)
 	assert_int(crate.collision_mask).is_equal(Layers.WORLD)
 	crate.free()
+
+
+## The wagons are AnimatableBody3D with no `.tscn`-authored layer, unlike the loco (BaseVehicle's
+## own `_ready`): TrainVehicle._ready must put every wagon on VEHICLE itself, or they sit on the
+## AnimatableBody3D default of layer 1 (TERRAIN) instead.
+func test_train_wagons_are_on_the_vehicle_layer() -> void:
+	var scene := load("res://src/vehicles/train/train.tscn") as PackedScene
+	var train := scene.instantiate()
+	add_child(train)
+	var wagons := 0
+	for child in train.get_children():
+		if String(child.name).begins_with("Wagon") and child is PhysicsBody3D:
+			wagons += 1
+			var body := child as PhysicsBody3D
+			assert_int(body.collision_layer).is_equal(Layers.VEHICLE)
+			assert_int(body.collision_mask).is_equal(Layers.DYNAMIC)
+	assert_int(wagons).is_greater(0)
+	train.free()

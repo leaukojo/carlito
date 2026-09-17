@@ -65,12 +65,35 @@ const RIM_GAS := Color(0.30, 0.68, 0.40)
 const RIM_BRAKE := Color(0.80, 0.30, 0.26)
 const RIM_ON := Color(0.90, 0.60, 0.15)
 
+## Raw-intent keys the hand-built widgets (joystick, pedals, HAND, the UP/DOWN climb pads, HORN,
+## LIGHTS) write straight into `_held`/`_edges` — the registry's `poll_key` rows cover every OTHER
+## key `poll()` can emit, but these carry no row of their own (Touch.WIDGET with no `poll_key`), so
+## nothing pins them against `InputRouter.merge_local`'s key set. One source both the widget
+## builders below and `test_action_registry.gd` read, so a typo on either side is caught.
+const KEY_ACCEL := &"accel"
+const KEY_BRAKE_REVERSE := &"brake_reverse"
+const KEY_STEER := &"steer"
+const KEY_HANDBRAKE := &"handbrake"
+const KEY_CLIMB := &"climb"
+const KEY_ELEVATOR := &"elevator"
+const KEY_HORN := &"horn"
+const KEY_LIGHTS_CYCLE := &"lights_cycle"
+const WIDGET_KEYS: Array[StringName] = [
+	KEY_ACCEL, KEY_BRAKE_REVERSE, KEY_STEER, KEY_HANDBRAKE, KEY_CLIMB, KEY_ELEVATOR, KEY_HORN,
+	KEY_LIGHTS_CYCLE,
+]
+## Keys of every `_latch_button` (a switch that stays set until tapped again, unlike a held
+## pedal): `_build_widgets` snapshots these around its `_held.clear()` so a rebuild (resize, UI
+## scale change) cannot release one.
+const LATCH_KEYS: Array[StringName] = [KEY_HANDBRAKE]
+
 var _scale := 1.0  ## cached UI scale; a change to it rebuilds the widgets
 var _pad_scale := 1.0  ## cached desktop pad multiplier (see DESKTOP_PAD_SCALE); rebuilds the widgets
 var _capacity := 0  ## buttons one important column holds at the size last built for
 var _equip_rows := 0  ## ...and rows the EQUIP drawer holds above the cluster before it widens
 ## The two layers (see the header), rebuilt with the widgets. Their shown flags outlive a
-## rebuild, so a resize never brings back a layer F4/F5 put away; the drawer's open flag too.
+## rebuild, so a resize never brings back a layer F4/F5 put away; the drawer's open flag and
+## the handbrake latch (LATCH_KEYS) survive one too.
 var _important: Control
 var _driving: Control
 var _important_shown := true
@@ -88,6 +111,7 @@ var _drive_block: VBoxContainer  ## EQUIP button, QUICK row, pedal row
 var _equip_grid: GridContainer
 var _equip_toggle: Pad
 var _equip_pads: Array[Pad] = []
+var _handbrake_pad: Pad  ## see LATCH_KEYS
 ## {pad, text, field, on}: switches whose caption shows the router's state (registry `touch_state`)
 var _stateful: Array[Dictionary] = []
 
@@ -130,7 +154,7 @@ class Pad extends Panel:
 		var pressed := false
 		if event is InputEventScreenTouch:
 			id = event.index
-			pressed = event.pressed
+			pressed = event.pressed and not event.canceled
 		elif event is InputEventMouseButton:
 			if event.button_index != MOUSE_BUTTON_LEFT:
 				return
@@ -156,9 +180,13 @@ class Pad extends Panel:
 			_pointer = NONE
 			held.emit(false)
 
-	## A pad hidden or removed mid-press never gets its release event; drop the hold.
+	## A pad hidden, removed, or left holding a pointer through an Alt-Tab / app-switch never gets
+	## its release event; drop the hold.
 	func _notification(what: int) -> void:
-		if what == NOTIFICATION_VISIBILITY_CHANGED and not is_visible_in_tree() and _pointer != NONE:
+		if _pointer != NONE and (
+				(what == NOTIFICATION_VISIBILITY_CHANGED and not is_visible_in_tree())
+				or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT
+				or what == NOTIFICATION_APPLICATION_FOCUS_OUT):
 			_pointer = NONE
 			held.emit(false)
 
@@ -204,6 +232,9 @@ func _build_widgets() -> void:
 	_equip_pads.clear()
 	_challenge_pads.clear()
 	_stateful.clear()
+	var latched := {}
+	for k in LATCH_KEYS:
+		latched[k] = float(_held.get(k, 0.0)) > 0.0
 	_held.clear()
 	_edges.clear()
 	_joy_y = 0.0
@@ -213,6 +244,8 @@ func _build_widgets() -> void:
 	_driving = _layer(_driving_shown and not _driving_locked)
 	_build_joystick()
 	_build_pedals()
+	if latched.get(KEY_HANDBRAKE, false):
+		_set_latch(_handbrake_pad, "HAND", KEY_HANDBRAKE, true)
 	_build_button_stack()
 
 
@@ -263,6 +296,10 @@ func set_capabilities(caps: Dictionary) -> void:
 ## signals — so hiding only that one changes nothing here.
 func poll() -> Dictionary[StringName, Variant]:
 	if not visible or not _driving.visible:
+		# Drain rather than skip: a tap latched into _edges before the hide must not fire minutes
+		# later on re-show.
+		for k in _edges:
+			_edges[k] = false
 		return {}
 	var out := _held.duplicate()
 	for k in _edges:
@@ -282,13 +319,13 @@ func _joy_pitch_into(out: Dictionary[StringName, Variant]) -> void:
 		return
 	if _ctx_family == "drone":
 		if _joy_y > 0.0:
-			out[&"accel"] = maxf(float(out.get(&"accel", 0.0)), _joy_y)
+			out[KEY_ACCEL] = maxf(float(out.get(KEY_ACCEL, 0.0)), _joy_y)
 		else:
-			out[&"brake_reverse"] = maxf(float(out.get(&"brake_reverse", 0.0)), -_joy_y)
+			out[KEY_BRAKE_REVERSE] = maxf(float(out.get(KEY_BRAKE_REVERSE, 0.0)), -_joy_y)
 		return
-	var v := clampf(float(out.get(&"climb", 0.0)) - _joy_y, -1.0, 1.0)
-	out[&"climb"] = v
-	out[&"elevator"] = v
+	var v := clampf(float(out.get(KEY_CLIMB, 0.0)) - _joy_y, -1.0, 1.0)
+	out[KEY_CLIMB] = v
+	out[KEY_ELEVATOR] = v
 
 
 func _process(_dt: float) -> void:
@@ -354,7 +391,8 @@ func _should_show() -> bool:
 ## Latches (a parking brake stays set). Sits at the QUICK row's GAS end, so the left side
 ## holds only the joystick.
 func _build_handbrake() -> Pad:
-	var pad := _latch_button("HAND", &"handbrake")
+	var pad := _latch_button("HAND", KEY_HANDBRAKE)
+	_handbrake_pad = pad
 	_gated.append({"node": pad, "id": &"handbrake"})
 	return pad
 
@@ -376,13 +414,13 @@ func _build_joystick() -> void:
 	base.moved.connect(_move_knob)
 	base.held.connect(func(down: bool) -> void:
 		if not down:
-			_held[&"steer"] = 0.0
+			_held[KEY_STEER] = 0.0
 			_joy_y = 0.0
 			_reset_knob()
 	)
 	_driving.add_child(base)
 	_joy_center = Vector2(radius, radius)
-	_held[&"steer"] = 0.0
+	_held[KEY_STEER] = 0.0
 	_gated.append({"node": base, "id": &"steer"})
 
 	_joy_knob = Panel.new()
@@ -399,7 +437,7 @@ func _move_knob(local_pos: Vector2) -> void:
 	var knob := _px(KNOB_SIZE)
 	var offset := (local_pos - _joy_center).limit_length(radius)
 	_joy_knob.position = _joy_center + offset - Vector2(knob, knob) * 0.5
-	_held[&"steer"] = clampf(offset.x / radius, -1.0, 1.0)  # steering is the horizontal axis
+	_held[KEY_STEER] = clampf(offset.x / radius, -1.0, 1.0)  # steering is the horizontal axis
 	# Screen-up positive; what an aircraft DOES with it is decided in poll() (see _joy_pitch_into).
 	_joy_y = clampf(-offset.y / radius, -1.0, 1.0)
 
@@ -448,12 +486,12 @@ func _build_pedals() -> void:
 	_gated.append({"node": panto, "id": &"pantograph"})
 	_track_state(panto, "PANTO", &"pantograph")
 
-	var brake := _hold_button("BRAKE\nREV", &"brake_reverse")
+	var brake := _hold_button("BRAKE\nREV", KEY_BRAKE_REVERSE)
 	brake.custom_minimum_size = pedal
 	brake.add_theme_stylebox_override("panel", _pad_style(COL_BRAKE, RIM_BRAKE))
 	row.add_child(brake)
 
-	var gas := _hold_button("GAS", &"accel")
+	var gas := _hold_button("GAS", KEY_ACCEL)
 	gas.custom_minimum_size = pedal
 	gas.add_theme_stylebox_override("panel", _pad_style(COL_GAS, RIM_GAS))
 	row.add_child(gas)
@@ -463,9 +501,9 @@ func _build_pedals() -> void:
 	# safety latch (HAND / ARM) above GAS. The families make each slot hold at most one button.
 	var quick := HBoxContainer.new()
 	quick.add_theme_constant_override("separation", gap)
-	var lights := _tap_button("LIGHTS", &"lights_cycle")
+	var lights := _tap_button("LIGHTS", KEY_LIGHTS_CYCLE)
 	_gated.append({"node": lights, "id": &"headlights"})
-	var horn := _hold_button("HORN", &"horn")
+	var horn := _hold_button("HORN", KEY_HORN)
 	_gated.append({"node": horn, "id": &"horn"})
 	# Cycles the ladder rather than latching; the cluster's MODE chip is the FC's own answer.
 	var mode := _tap_button("MODE", &"flight_mode_cycle")
@@ -503,12 +541,12 @@ func _build_pedals() -> void:
 
 
 func _vert() -> float:
-	return float(_held.get(&"climb", 0.0))
+	return float(_held.get(KEY_CLIMB, 0.0))
 
 
 func _set_vert(v: float) -> void:
-	_held[&"climb"] = v
-	_held[&"elevator"] = v
+	_held[KEY_CLIMB] = v
+	_held[KEY_ELEVATOR] = v
 
 
 # --- button stacks -------------------------------------------------------------

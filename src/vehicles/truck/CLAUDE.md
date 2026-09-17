@@ -118,11 +118,19 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
     trailer up a slope" and is neither power nor grip. Sized by measurement: a sharp break onto the
     25 % grade the drivetrain can climb swings the joint −9.0° to +12.8°, so 15° clears it (and
     matches a real plate's ±12-15°). Check the articulation before touching a spec.
-  - The rig rests ~5.9° nose-up on flat ground, an open bug and not the joint's doing: the
-    tractor's kingpin rides 1.306 m over the road on its springs while every trailer is authored
-    against a 1.05 m plate, so it permanently spends a fifth of the pitch travel. Fixing it means
-    moving the shared coupling datum (`FifthWheel.KINGPIN_LOCAL.y` and every trailer's authored
-    ground), so it is deliberately a separate change.
+  - The rig rests ~1.5° tractor nose-up / ~0.7° trailer nose-down on the flat, kingpin ~1.1 m over
+    the road (`measure_semi_launch`'s P5 standstill; its P1 "static pose" is sampled 2 s after the
+    spawn drop, still settling, and reads ~0.4° and 10 % of travel high). That is the rear axle at
+    60 % travel against the steer axle's 32 % on
+    one spring rate, so the coupling datum (`KINGPIN_LOCAL.y`, the trailers' −1.05 ground) cannot
+    level the tractor — it only sets the trailer's own pitch.
+  - **Both wheelbases are sized by the LAUNCH, not by the silhouette.** The trailer's inertial
+    pull at the ~1.05 m kingpin is a lever on the steer axle, and a short unit loses it: measured,
+    a 2.1 m wheelbase lifted BOTH steer wheels clear of the road (0 N) through gear 1's
+    peak-torque window (~1 s), bottomed the rear springs solid and put the joint on its 15° stop,
+    which drives as "it drags on its rear wheels". The shipped 3.6 m (cab-over) and 4.4 m
+    (conventional) hold ≥ 8.6 kN on the steer axle and under 4° of pitch. Shortening either is a
+    re-measure with `tools/measure_semi_launch.tscn`, never a styling edit.
   - The YAW limit is a labelled model of trailer-against-cab contact, not a property of the plate,
     and it cannot be collision: the plate and the trailer's nose overlap while coupled, so
     `exclude_nodes_from_collision` must stay at its default true or the two bodies fight for the
@@ -155,9 +163,9 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
   the load each axle actually carries, which for the semi's rear is its own weight PLUS the plate
   load. `RayWheel` has one spring rate per vehicle, so this is a compromise between a light steer
   axle and a heavy drive axle.
-- A cab-over tractor unit is front-heavy bobtail (`center_of_mass.z = -0.15`, 52 % on the steer
+- A cab-over tractor unit is front-heavy bobtail (`center_of_mass.z = -0.92`, 52 % on the steer
   axle) — cab and engine both sit over it, which is why real bobtails lock up so easily. Coupled,
-  the plate's load lands 90 % on the drive axle. Driving found this: further back, the coupled
+  the plate's load lands 86 % on the drive axle. Driving found this: further back, the coupled
   steer axle carried 20 % and both front wheels left the road under throttle in a corner.
 
 ## Trailer authoring, pulling away
@@ -169,7 +177,7 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
   trailer's `spec` is a plain `VehicleSpec` because that is what RayWheel consumes; its
   drivetrain/steering fields are unused, but its LAMP paths are live.
   - A semi-trailer is a GOOSENECK, structural rather than decorative: nothing of it may hang below
-    the coupling plane over the tractor. The front 1.35 m is a raised neck whose underside is the
+    the coupling plane over the tractor. The front 2.75 m is a raised neck whose underside is the
     bolster plate, and the frame and deck step down behind the tractor's tail. Authored flat, the
     deck and both frame rails run straight through the tractor's frame rails, mudguards and fifth
     wheel.
@@ -186,14 +194,16 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
     because one flat floor ran through the fifth wheel; the tanker's barrel starts behind the neck
     with a pump cabinet on it, because a barrel high enough to clear the bogie wheels still has its
     underside below the coupling plane; the tipper's body starts further back and leaves the
-    gooseneck exposed.
+    gooseneck exposed, and its neck stops at that bulkhead rather than running on to the step-down,
+    because a neck carried under a body whose floor is below the coupling plane stands up through
+    it. The tanker's barrel is the family's one stated compromise (tanker.tscn's header).
   - The swing-clearance rule is geometry, not taste: every point ahead of the kingpin sweeps a
-    circle of radius `sqrt(x² + z²)` that must fit inside the kingpin-to-cab distance (1.15 m), or
+    circle of radius `sqrt(x² + z²)` that must fit inside the kingpin-to-cab distance (1.85 m), or
     the rig cannot turn. `test_trailer` sweeps every BoxMesh CORNER of every trailer, recursively
     and through nested transforms, rather than trusting a node name or an axis-aligned formula —
-    the frontmost part has changed once already, and the tipper's body lives under a rotating
-    pivot. All four land on the gooseneck at 1.015 m; tipping only moves the body further from the
-    cab.
+    which part is frontmost is not stable, and the tipper's body lives under a rotating pivot.
+    All four land on the gooseneck at 1.50 m (1.49 on the box, whose neck is 1.88 wide); tipping
+    only moves the body further from the cab.
 - A rig pulls away on IDLE torque, and that is the drivetrain, not the joint. There is no clutch or
   converter model, so torque at rest is `torque_curve(idle) * throttle` and nothing about peak
   torque or gearing helps until it is already rolling. Fix startability at the LOW END of the
@@ -226,6 +236,10 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
     costs AIR1 3 bar, past the low-pressure warn but not past the spring-brake gate — a brake
     application while it charges is what reaches the gate, and that is the designed catch-out.
     Spawn and respawn start the trailer CHARGED; every coupling made by driving starts empty.
+    Measured: the draw runs the full 8 s whatever the pedal does, so after a 3 s application the
+    gate fires SECONDS after the brake is released, mid-throttle — the conventional locked its rear
+    axle for 0.15 s at 4.7 m/s (AIR1 2.97 bar); the semi bottomed at 3.06 on the same sequence. It
+    never fires from spawn pressure without a recouple. Kept as designed; there is no lamp for it.
 
 ## Tractor-unit variants, coupled lamps
 
@@ -247,8 +261,9 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
     authored with its ground at y = −1.05 against a plate top at y = 1.05, so the `Kingpin`
     marker's Y is shared geometry — change it and every trailer floats or buries. Its Z is free,
     but the kingpin-to-rearmost-cab-structure gap is not: the trailers' gooseneck swings on
-    1.015 m, so the conventional's sleeper sits at exactly the cab-over's 1.15 m and `test_truck`
-    pins it against that gap rather than a literal. A sleeper moved back is a rig that cannot turn.
+    1.50 m, so the conventional's sleeper leaves 1.90 m against the cab-over's 1.85 m and
+    `test_truck` pins the pair against each other rather than a literal. A sleeper moved back is a
+    rig that cannot turn.
   - A longer wheelbase gives the plate load a shorter lever on the steer axle, so the coupled
     conventional keeps more front axle load than the cab-over and is the forgiving one to reverse.
 - A coupled rig lights at both ends, and it takes a second `LampSet`, not a second resolve root.
@@ -262,8 +277,7 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
     bit shown at the other end of the vehicle. No signal, no side channel, no local timer.
   - The trailers' `head_lamp_paths` stay EMPTY (no headlamps, no beam), so `lights` only ever picks
     the rear tier and the markers. `test_trailer` pins that, pins every declared path resolving to
-    a `MeshInstance3D` in its own scene — `LampSet` tolerates a missing node silently, which is a
-    dark trailer with nothing to say so — and pins one indicator lighting without the other.
+    a `MeshInstance3D` in its own scene, and pins one indicator lighting without the other.
   - The indicator is a lens of its own (`TurnLensL/R`, amber, stacked under the tail lamp on the
     same stay), because these lenses are hand-authored: the Kenney bodies' `TURN_FRAC` split costs
     the same four scene edits and only makes the stop lamp narrower. All four trailers share the
@@ -360,7 +374,7 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
   real entry in it, not a special case wrapped around it, and bobtail is LAST so one press drops
   the trailer and the next picks it back up (`test_trailer` pins that, and that only the last entry
   wraps). The box is FIRST, so the rig spawns on the 3:1 mass ratio.
-  - E and V are separate axes. They shared V once, and V then meant different things on different
-    vehicles — and the tractor, one body so it could never hand back, was a dead end you could only
-    leave through the garage. With E owning attachments, `cycle_implement()` is an unconditional
-    `-> void` on both vehicles and nothing arbitrates.
+  - E and V are separate axes: V is always the body cycle, E always the attachment. One key for
+    both means a key that does different things on different vehicles, and on a one-body machine
+    a dead end you can only leave through the garage. With E owning attachments,
+    `cycle_implement()` is an unconditional `-> void` on both vehicles and nothing arbitrates.

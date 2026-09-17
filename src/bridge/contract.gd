@@ -76,25 +76,20 @@ class ContractData:
 	func has_signal_def(name: String, dir: String) -> bool:
 		return get_signal_def(name, dir) != null
 
-	func signals_in() -> Array[SignalDef]:
-		var out: Array[SignalDef] = []
-		out.assign(signals.filter(func(s: SignalDef) -> bool: return s.dir == "in"))
-		return out
-
-	func signals_out() -> Array[SignalDef]:
-		var out: Array[SignalDef] = []
-		out.assign(signals.filter(func(s: SignalDef) -> bool: return s.dir == "out"))
-		return out
+	## Signal count by direction ("in" / "out"), for the boot summary print — a loop rather than
+	## two filtered array allocations, since nothing needs the SignalDef lists themselves.
+	func count_by_dir(dir: String) -> int:
+		var n := 0
+		for s in signals:
+			if s.dir == dir:
+				n += 1
+		return n
 
 	func signals_for_vehicle(vehicle: String, dir: String) -> Array[SignalDef]:
 		var out: Array[SignalDef] = []
 		out.assign(signals.filter(func(s: SignalDef) -> bool:
 			return s.dir == dir and vehicle in s.vehicles))
 		return out
-
-	func is_todo(name: String, dir: String) -> bool:
-		var s := get_signal_def(name, dir)
-		return s != null and s.todo
 
 	## Parse + validate contract JSON. Never throws; collects all problems in .errors.
 	static func parse(json_text: String) -> ContractData:
@@ -197,6 +192,12 @@ class ContractData:
 			return null
 		sig.warn_side = str(side_v) if side_v != null else ""
 
+		# Required with 'warn': the dashboard bar builder skips any range-less signal before it
+		# ever checks warn, so a warn with no range would render nothing.
+		if sig.has_warn() and sig.range.size() != 2:
+			errors.append("%s: 'warn' requires a 2-element 'range'" % where)
+			return null
+
 		# Godot's JSON parser hands every number back as TYPE_FLOAT, so integer-ness is
 		# checked the same way 'version' is above.
 		var count_v: Variant = entry.get("count")
@@ -279,4 +280,4 @@ func _ready() -> void:
 		push_error("Contract: %s" % err)
 	if data.is_valid():
 		print("Contract: loaded v%d, %d signals (%d in / %d out)" % [
-			data.version, data.signals.size(), data.signals_in().size(), data.signals_out().size()])
+			data.version, data.signals.size(), data.count_by_dir("in"), data.count_by_dir("out")])

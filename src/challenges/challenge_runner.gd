@@ -78,7 +78,9 @@ func start() -> void:
 	var before := _level.vehicle
 	_level.set_vehicle(def.variant, _spawn)
 	if _level.vehicle == null or _level.vehicle == before:
-		push_error("ChallengeRunner: %s: '%s' did not spawn on this level" % [def.id, def.variant])
+		_course_error = "'%s' did not spawn on this level" % def.variant
+		push_error("ChallengeRunner: %s: %s" % [def.id, _course_error])
+		finished.emit(false, 0.0, _course_error)
 		return
 	_vehicle = _level.vehicle
 	_vehicle.respawned.connect(_on_respawned)

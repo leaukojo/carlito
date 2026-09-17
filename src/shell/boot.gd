@@ -297,21 +297,27 @@ func _close_result() -> void:
 		_result = null
 
 
-## Same respawn the R key performs mid-attempt — the runner resets the attempt on any respawn.
-## A def whose course never started has no vehicle of the runner's own to respawn, so it is
-## restarted directly and fails again, visibly, rather than sitting on a stale result panel.
+## RETRY: the runner gives a fresh body per attempt (challenge_runner.gd's promise — fuel, air,
+## battery all reset), so `restart()` runs whenever a runner exists; a def whose course never
+## started leaves no runner action of its own, so it falls back to a plain respawn and fails
+## again, visibly, rather than sitting on a stale result panel.
 func _on_result_retry() -> void:
 	_close_result()
 	_touch.set_challenge_mode(true)
-	if is_instance_valid(_runner) and _runner.attempt == null:
+	if is_instance_valid(_runner):
 		_runner.restart()
 	else:
 		_respawn()
 
 
 ## The touch RETRY button, live only while an attempt is running (no result panel to close).
+## Same fresh-body reasoning as `_on_result_retry`.
 func _on_touch_retry() -> void:
-	if _challenge != null:
+	if _challenge == null:
+		return
+	if is_instance_valid(_runner):
+		_runner.restart()
+	else:
 		_respawn()
 
 
@@ -333,9 +339,7 @@ func _close_challenge_info() -> void:
 		return
 	_briefing.queue_free()
 	_briefing = null
-	if _pause == null:
-		get_tree().paused = false
-		_touch.set_active(_level != null)
+	_sync_overlay_state()
 
 
 ## Not straight into the next attempt: the CHALLENGES screen on its briefing, so the player reads
@@ -394,6 +398,22 @@ func _on_menu_key() -> void:
 		_close_pause()
 
 
+## Whether any modal overlay is up — pause menu, level/vehicle/challenge selector, or the
+## challenge briefing. Overlays nest (LEVEL then CHALLENGES, INFO then LEVEL, ...), so closing
+## one must not resume the world out from under another still open.
+func _any_overlay_open() -> bool:
+	return _pause != null or _select != null or _challenges != null or _vehicles != null \
+			or _briefing != null
+
+
+## Derives pause/touch state from `_any_overlay_open()`. Every overlay close calls this instead
+## of assuming it was the last one up.
+func _sync_overlay_state() -> void:
+	var open := _any_overlay_open()
+	get_tree().paused = open
+	_touch.set_active(not open and _level != null)
+
+
 func _open_pause() -> void:
 	if _level == null or _loading_path != "" or _pause != null:
 		return  # nothing to pause, or a level load is in flight
@@ -422,12 +442,12 @@ func _close_pause() -> void:
 	if _pause != null:
 		_pause.queue_free()
 		_pause = null
-	get_tree().paused = false
-	_touch.set_active(_level != null)
+	_sync_overlay_state()
 
 
 ## SETTINGS picked a new cluster density. The menu owns nothing, so applying and remembering
-## it is this file's job — remembered even for a deep-linked session, unlike level/vehicle.
+## it is this file's job — session-only while `ShellPrefs.ENABLED` stays false, like CONDITIONS,
+## not carried across visits even for a deep-linked session.
 func _on_density_changed(setting: int) -> void:
 	_dashboard.set_density_setting(setting)
 	ShellPrefs.set_dashboard_density(setting)
@@ -504,11 +524,9 @@ func _close_level_select() -> void:
 		return
 	_select.queue_free()
 	_select = null
-	# The pause menu may be underneath (the 4 key works while paused), in which case the world
-	# stays paused and the driving pads stay down until RESUME.
-	if _pause == null:
-		get_tree().paused = false
-		_touch.set_active(_level != null)
+	# The pause menu (or another overlay) may be underneath — _sync_overlay_state keeps the
+	# world paused and the driving pads down until every overlay is gone.
+	_sync_overlay_state()
 
 
 func _on_level_chosen(scene_path: String) -> void:
@@ -541,11 +559,9 @@ func _close_challenge_select() -> void:
 		return
 	_challenges.queue_free()
 	_challenges = null
-	# The pause menu may be underneath (5 works while paused), in which case the world stays
-	# paused and the driving pads stay down until RESUME.
-	if _pause == null:
-		get_tree().paused = false
-		_touch.set_active(_level != null)
+	# The pause menu (or another overlay) may be underneath — _sync_overlay_state keeps the
+	# world paused and the driving pads down until every overlay is gone.
+	_sync_overlay_state()
 
 
 func _on_challenge_picked(id: String) -> void:
@@ -566,7 +582,12 @@ func _load_level(scene_path: String, variant := "") -> void:
 	_set_hud_visible(false)
 	_next_variant = variant
 	if DisplayServer.get_name() == "headless":
-		_finish_load(load(scene_path) as PackedScene)
+		var packed := load(scene_path) as PackedScene
+		if packed == null:
+			_loading_path = scene_path
+			_load_failed()
+		else:
+			_finish_load(packed)
 		return
 	_drop_loading_screen()  # a screen still up from the previous load's HOLD_FRAMES
 	_loading = LoadingScreen.new()
@@ -755,7 +776,7 @@ func _open_vehicle_select() -> void:
 	# pre-filtered roster, so the screen can say why it can't spawn something.
 	_vehicles.setup(_level.info.allowed_vehicles, String(_level.info.display_name),
 			_level.has_closed_rail(), GameState.current_variant, _current_attachment(),
-			_manual_gearbox)
+			_manual_gearbox, _level.has_spawn_for)
 	_vehicles.vehicle_chosen.connect(_on_vehicle_picked)
 	_vehicles.attachment_chosen.connect(_on_attachment_picked)
 	_vehicles.gearbox_chosen.connect(_on_gearbox_picked)
@@ -770,11 +791,9 @@ func _close_vehicle_select() -> void:
 		return
 	_vehicles.queue_free()
 	_vehicles = null
-	# The pause menu may be underneath (G works while paused), in which case the world stays
-	# paused and the driving pads stay down until RESUME.
-	if _pause == null:
-		get_tree().paused = false
-		_touch.set_active(_level != null)
+	# The pause menu (or another overlay) may be underneath — _sync_overlay_state keeps the
+	# world paused and the driving pads down until every overlay is gone.
+	_sync_overlay_state()
 
 
 ## What's on the back of the machine being driven, so the selector opens showing the trailer

@@ -19,5 +19,5 @@ variant = "garbage-truck"
 arena = "flatland"
 course = "res://src/challenges/courses/truck_tipping_refused_course.tscn"
 briefing = "body_cmd does nothing yet. Find the interlock and complete one lift/dump cycle."
-hint = "body_inhibit is one bit for engine running, chassis PTO on, road speed at or below walking pace, and the handbrake applied. body_bus says whether the PTO term is the one still missing. A frame-sent lift holds only while its command keeps arriving. hopper_load rises 12.5% per completed dump."
+hint = "body_inhibit needs engine on, PTO on, low speed and handbrake set. body_bus shows what's missing."
 goals = Array[ExtResource("1_goal")]([SubResource("Resource_dumped")])

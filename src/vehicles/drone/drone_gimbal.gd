@@ -33,4 +33,6 @@ static func slew(actual: float, commanded: float, rate: float, delta: float,
 ## pitch about the yawed right axis. The reverse order tilts the pan axis with the camera and the
 ## horizon rolls.
 static func basis_of(pitch_deg: float, yaw_deg: float) -> Basis:
-	return Basis(Vector3.UP, deg_to_rad(yaw_deg)) * Basis(Vector3.RIGHT, deg_to_rad(pitch_deg))
+	# Negated: +Y rotation swings -Z (forward) toward -X (left), but the contract says
+	# + = right seen from above (DroneVehicle's own body-yaw negation does the same).
+	return Basis(Vector3.UP, -deg_to_rad(yaw_deg)) * Basis(Vector3.RIGHT, deg_to_rad(pitch_deg))

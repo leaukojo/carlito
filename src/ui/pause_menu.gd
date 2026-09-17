@@ -397,7 +397,7 @@ func _show_page(page: VBoxContainer) -> void:
 	_conditions.visible = page == _conditions
 	# Focus follows the page, else a keyboard player is left driving an invisible button.
 	for child in page.get_children():
-		if child is Button:
+		if child is Button and not (child as Button).disabled:
 			(child as Button).grab_focus()
 			break
 

@@ -114,6 +114,33 @@ func test_lift_force_capped_and_no_backward_lift() -> void:
 	assert_float(P.lift_force(-30.0, 10.0, 16000.0, 1.0)).is_equal(0.0)
 
 
+# --- flow angles, AoA lift factor, weathervane ---------------------------------
+
+func test_flow_angle_zero_without_forward_flow() -> void:
+	assert_float(P.flow_angle(5.0, 0.0)).is_equal(0.0)
+	assert_float(P.flow_angle(5.0, -20.0)).is_equal(0.0)
+	# 45 deg: cross equals forward.
+	assert_float(P.flow_angle(20.0, 20.0)).is_equal_approx(PI / 4.0, 1e-6)
+	assert_float(P.flow_angle(-20.0, 20.0)).is_equal_approx(-PI / 4.0, 1e-6)
+
+
+func test_aoa_factor_unity_at_zero_linear_and_clamped() -> void:
+	assert_float(P.aoa_factor(0.0, 5.7, 1.8)).is_equal(1.0)
+	assert_float(P.aoa_factor(0.1, 5.0, 1.8)).is_equal_approx(1.5, 1e-6)
+	assert_float(P.aoa_factor(1.0, 5.0, 1.8)).is_equal(1.8)
+	# Nose well below the velocity vector: lift goes to zero, never negative.
+	assert_float(P.aoa_factor(-1.0, 5.0, 1.8)).is_equal(0.0)
+
+
+func test_weathervane_torque_restores_and_grows_with_speed_squared() -> void:
+	# + angle -> - torque (restoring); 0.1 rad * 100 * 20^2 = 4000.
+	assert_float(P.weathervane_torque(0.1, 20.0, 100.0, 1e6)).is_equal_approx(-4000.0, 1e-3)
+	assert_float(P.weathervane_torque(-0.1, 20.0, 100.0, 1e6)).is_equal_approx(4000.0, 1e-3)
+	assert_float(P.weathervane_torque(0.1, 40.0, 100.0, 1e6)).is_equal_approx(-16000.0, 1e-3)
+	assert_float(P.weathervane_torque(0.1, 0.0, 100.0, 1e6)).is_equal(0.0)
+	assert_float(P.weathervane_torque(1.0, 100.0, 100.0, 7000.0)).is_equal(-7000.0)
+
+
 # --- control_authority: no airflow = no control ---------------------------------
 
 func test_control_authority_scales_with_airspeed() -> void:

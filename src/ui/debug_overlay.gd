@@ -75,15 +75,15 @@ func _process(delta: float) -> void:
 
 
 func _refresh() -> void:
+	text = "FPS %d" % Engine.get_frames_per_second()
+	if not _extended:
+		return
 	var draw_calls := int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 	var prims := int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
 	var vram := Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0
 	var nodes := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
 	var frame_ms := (Performance.get_monitor(Performance.TIME_PROCESS)
 			+ Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0
-	text = "FPS %d" % Engine.get_frames_per_second()
-	if not _extended:
-		return
 	text += "  (%.1f ms)\ndraw calls %d\nprimitives %d\nVRAM %.1f MB\nnodes %d" % [
 		frame_ms, draw_calls, prims, vram, nodes]
 	text += _grip_line()
@@ -102,9 +102,11 @@ func _grip_line() -> String:
 	if vehicle == null or vehicle.wheels.is_empty():
 		return ""
 	var parts := PackedStringArray()
+	var drags := PackedStringArray()
 	for w in vehicle.wheels:
 		parts.append("%.2f" % w.surface_grip)
-	return "\ngrip " + " ".join(parts)
+		drags.append("%.2f" % w.surface_drag)
+	return "\ngrip " + " ".join(parts) + "\ndrag " + " ".join(drags)
 
 
 ## Fifth-wheel articulation angle (degrees, + = trailer right), or "" for anything that tows

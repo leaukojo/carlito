@@ -70,6 +70,12 @@ var _landed_hold := 0.0           ## s the landing conditions have held continuo
 ## Resolved once from DroneBus.NODES. GNSS/RANGE moved onto the suite; AHRS stays here since
 ## the arming snapshot reads it.
 var _ahrs_node := -1
+## Resolved once from DroneBus.NODES, like `_ahrs_node` — gates the pack telemetry hold below.
+var _power_node := -1
+## The last drone-published `battery`, held here rather than read back off `telemetry.battery`:
+## BaseVehicle's alternator write touches that shared field every tick regardless of the POWER
+## node, so the field itself cannot be its own hold the way the ESC arrays are.
+var _held_battery := 0.0
 ## Hover collective, m*g/max_thrust — the landing predicate's ceiling. Via `lift_thrust` at
 ## _ready, the same call the flight path makes (no second formula).
 var _hover_collective := 0.0
@@ -147,11 +153,19 @@ func _ready() -> void:
 	_motors = DroneMotors.new(self)
 	_indicators = DroneIndicators.new(self)
 	_ahrs_node = DroneBus.index_of("AHRS")
+	_power_node = DroneBus.index_of("POWER")
 	_apply_carried_mass()
 	_home = global_position
 	_alt_target = global_position.y
 	_loiter_pos = global_position
 
+
+## A carried crate is a child of the Hardpoint marker, so a vehicle swap's
+## `remove_child(vehicle); vehicle.queue_free()` (Level._spawn_vehicle) would free it too — the
+## TowHost precedent. Hand it back to the level before teardown.
+func _exit_tree() -> void:
+	if _hook != null:
+		_hook.reset(self)
 
 
 ## Write the current mass/COM onto the body and re-derive everything sized against them.
@@ -179,11 +193,13 @@ func _apply_carried_mass() -> void:
 ## so a flat pack surviving respawn would leave the craft permanently unflyable. `node_fail`
 ## is not reset — it's an input, and clearing it here would fight what sloppyCAN is saying.
 func respawn() -> void:
+	# Hook opens, crate left BEHIND at its carried pose — a payload teleporting with the
+	# aircraft would be cargo delivered by respawning, which this level must not allow. The
+	# crate is a child of the Hardpoint marker, so it must drop BEFORE the body teleports, or
+	# it reads its global transform already at the new spawn pose.
+	_hook.reset(self)
 	super.respawn()
 	_motors.reset()
-	# Hook opens, crate left BEHIND at its carried pose — a payload teleporting with the
-	# aircraft would be cargo delivered by respawning, which this level must not allow.
-	_hook.reset(self)
 	_apply_carried_mass()
 	_gimbal.reset()
 	_pack.reset()
@@ -204,6 +220,9 @@ func respawn() -> void:
 	# is up and checks pass — a way OUT of a stuck aircraft.
 	_armed = false
 	_arm_prev = false
+	# Without this the disarmed->armed edge below already reads true (carried over from before
+	# the respawn), so the first arm after landing skips `_reset_controllers()`.
+	_armed_prev = false
 	_disarm_hold = 0.0
 	_failsafe = DroneArming.FS_NONE
 	_prearm_fail = 0
@@ -216,6 +235,14 @@ func respawn() -> void:
 			t.esc_rpm[i] = 0
 			t.esc_current[i] = 0.0
 			t.esc_temp[i] = DroneProp.ESC_AMBIENT
+		# Pack telemetry the same way: a still-offline POWER node would otherwise leave the
+		# PUBLISHED soc/current/temp/battery at whatever they held before the respawn, even
+		# though `_pack.reset()` above just gave the airframe a fresh pack underneath.
+		t.pack_current = 0.0
+		t.soc = _pack.soc
+		t.pack_temp = _pack.temp
+		t.battery = _pack.volts(0.0)
+		_held_battery = t.battery
 
 
 ## Re-seats every controller on the craft's CURRENT state. Called on a mode change, on the
@@ -337,7 +364,10 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	# a fresh pack).
 	if input.flight_mode != _mode_request:
 		_mode_request = input.flight_mode
-		_fence_answered = _fence_rtl   # cancelled OUT beyond the fence: it may not re-command
+		# OR, not assign: a second mode change while still outside must not spend an
+		# already-held cancel — `_fence_rtl` is already false by then, and assigning would
+		# re-arm the fence a mode change early.
+		_fence_answered = _fence_answered or _fence_rtl
 		_fence_rtl = false
 		_rtl_landing = false
 	# SOFT: commands a return, doesn't stop the aircraft (WorldBounds is still the hard wall).
@@ -503,12 +533,21 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 
 	# Pack downstream of the ESCs: pack_current sums the four amps plus a constant avionics
 	# draw, soc coulomb-counts that sum, terminal voltage is the OCV curve minus IR drop.
-	# `battery` overwrites the base's alternator write — the drone has no alternator.
+	# `battery` overwrites the base's alternator write — the drone has no alternator. The
+	# INTERNAL state always integrates (arming's has_charge() reads the true pack regardless of
+	# whether anyone's listening); only the PUBLISHED four hold at their last value while the
+	# POWER node is off the bus, the same element-wise-skip rule the ESC arrays follow.
 	var pack_a := _pack.step(amps, delta)
-	t.pack_current = pack_a
-	t.soc = _pack.soc
-	t.pack_temp = _pack.temp
-	t.battery = _pack.volts(pack_a)
+	if DroneBus.is_online(input.node_fail, _power_node):
+		t.pack_current = pack_a
+		t.soc = _pack.soc
+		t.pack_temp = _pack.temp
+		t.battery = _pack.volts(pack_a)
+		_held_battery = t.battery
+	else:
+		# The other three are their own hold (nothing else writes them); `battery` is shared
+		# with the base's alternator model, which already overwrote it earlier this tick.
+		t.battery = _held_battery
 
 	# `mode_actual` is what the FC is in after every refusal/override, so it disagreeing with
 	# the `flight_mode` request is the reading (e.g. LOITER dropped to ALT_HOLD on GNSS loss).

@@ -12,6 +12,7 @@ const Bus := preload("res://src/vehicles/drone/drone_bus.gd")
 const Prop := preload("res://src/vehicles/drone/drone_propulsion.gd")
 const Gimbal := preload("res://src/vehicles/drone/drone_gimbal.gd")
 const Power := preload("res://src/vehicles/drone/drone_power.gd")
+const Payload := preload("res://src/vehicles/drone/drone_payload.gd")
 
 const DRONE := "res://src/vehicles/drone/drone.tscn"
 const CRATE := "res://src/levels/base/cargo_payload.tscn"
@@ -304,13 +305,20 @@ func test_the_geofence_commands_rtl_and_the_mode_key_cancels_it_from_outside() -
 	r.tick(2)
 	assert_int(r.t.failsafe).is_equal(Arming.FS_NONE)
 	assert_int(r.t.mode_actual).is_equal(Modes.ALT_HOLD)
+	# A SECOND mode change while still outside must not spend an already-held cancel: the
+	# cancel must OR with the held answer, never overwrite it, or this re-latches RTL a mode
+	# change early.
+	r.input.flight_mode = Modes.LOITER
+	r.tick(2)
+	assert_int(r.t.failsafe).is_equal(Arming.FS_NONE)
+	assert_int(r.t.mode_actual).is_equal(Modes.LOITER)
 	r.drone.global_position = Vector3(Modes.GEOFENCE_RADIUS + 400.0, 50.0, 0.0)
 	r.tick(2)
-	assert_int(r.t.mode_actual).is_equal(Modes.ALT_HOLD)
+	assert_int(r.t.mode_actual).is_equal(Modes.LOITER)
 	# Back inside, and the cancel is spent: the fence is armed again and the NEXT breach commands.
 	r.drone.global_position = Vector3(10.0, 50.0, 0.0)
 	r.tick(2)
-	assert_int(r.t.mode_actual).is_equal(Modes.ALT_HOLD)
+	assert_int(r.t.mode_actual).is_equal(Modes.LOITER)
 	r.drone.global_position = Vector3(Modes.GEOFENCE_RADIUS + 100.0, 50.0, 0.0)
 	r.tick(2)
 	assert_int(r.t.failsafe).is_equal(Arming.FS_GEOFENCE)
@@ -321,11 +329,12 @@ func test_the_geofence_commands_rtl_and_the_mode_key_cancels_it_from_outside() -
 	r.tick(2)
 	assert_int(r.t.failsafe).is_equal(Arming.FS_GEOFENCE)
 	assert_int(r.t.mode_actual).is_equal(Modes.RTL)
-	# ...and the mode key hands control back from in here too.
-	r.input.flight_mode = Modes.LOITER
+	# ...and the mode key hands control back from in here too. A different mode than the one
+	# already requested, so this is a genuine change edge and not a no-op re-assignment.
+	r.input.flight_mode = Modes.ALT_HOLD
 	r.tick(2)
 	assert_int(r.t.failsafe).is_equal(Arming.FS_NONE)
-	assert_int(r.t.mode_actual).is_equal(Modes.LOITER)
+	assert_int(r.t.mode_actual).is_equal(Modes.ALT_HOLD)
 
 
 ## A failsafe is not a latch, and the mode key cannot dismiss one. An ESC off the bus commands
@@ -475,6 +484,32 @@ func test_the_pack_drains_monotonically_and_the_volts_sag_under_load() -> void:
 	assert_float(r.t.pack_temp).is_greater(Power.PACK_AMBIENT)
 
 
+## POWER is the one roster entry that gated nothing before: its own four signals must hold at
+## their last published values while it is off the bus, the same element-wise rule the ESC
+## arrays follow — and the coulomb count underneath must keep moving so they jump to the true
+## state the instant the node returns, rather than the craft getting a free non-draining flight.
+func test_an_offline_power_node_holds_the_pack_telemetry_while_soc_keeps_draining() -> void:
+	var r: Rig = await _flying()
+	r.seconds(1.0)
+	var held_current := r.t.pack_current
+	var held_soc := r.t.soc
+	var held_temp := r.t.pack_temp
+	var held_battery := r.t.battery
+	assert_float(held_current).is_greater(0.0)
+	r.input.node_fail = 1 << Bus.index_of("POWER")
+	r.seconds(2.0)
+	assert_float(r.t.pack_current).is_equal_approx(held_current, 1e-4)
+	assert_float(r.t.soc).is_equal_approx(held_soc, 1e-4)
+	assert_float(r.t.pack_temp).is_equal_approx(held_temp, 1e-4)
+	assert_float(r.t.battery).is_equal_approx(held_battery, 1e-4)
+	assert_int(r.t.node_online & (1 << Bus.index_of("POWER"))).is_equal(0)
+	# Restore it: the frozen readings jump to the pack's true state, which kept draining
+	# underneath the whole time it was off the bus.
+	r.input.node_fail = 0
+	r.tick()
+	assert_float(r.t.soc).is_less(held_soc)
+
+
 # --- the cargo hook --------------------------------------------------------------------------
 
 ## The hook is a real mass change, and this is the case that says the crate's mass reaches the
@@ -502,6 +537,22 @@ func test_the_hook_latches_only_over_a_payload_and_the_craft_really_gets_heavier
 	assert_float(r.drone.center_of_mass.y).is_less(empty_com.y)
 	# Release: no condition, no timer, and the aircraft is its own weight again.
 	r.input.hardpoint_cmd = false
+	r.tick(2)
+	assert_bool(r.t.hardpoint_state).is_false()
+	assert_float(r.drone.mass).is_equal_approx(empty_mass, 1e-4)
+	assert_float(r.t.payload_weight).is_equal_approx(0.0, 1e-4)
+
+
+## The ceiling is a CAPTURE refusal, not a mass truncation: a crate over MAX_PAYLOAD_KG must
+## never reach the hook at all, or the felt mass would silently disagree with what's really
+## hanging there (carried_mass's own clamp is a degenerate-input guard, never reached this way).
+func test_the_hook_refuses_a_crate_over_the_mass_ceiling() -> void:
+	var r: Rig = await _rig(Vector3(0.0, 1.5, 0.0), 0.0)
+	r.tick(4)
+	var empty_mass := r.drone.mass
+	var crate: CargoPayload = await _crate(r, Vector3(0.0, 0.0, 0.0))
+	crate.mass = Payload.MAX_PAYLOAD_KG + 1.0
+	r.input.hardpoint_cmd = true
 	r.tick(2)
 	assert_bool(r.t.hardpoint_state).is_false()
 	assert_float(r.drone.mass).is_equal_approx(empty_mass, 1e-4)

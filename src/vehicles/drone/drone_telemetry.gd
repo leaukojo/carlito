@@ -13,7 +13,8 @@ var armed := false      ## contract 'armed' (latched arm state — see drone_arm
 ## has the right shape.
 var esc_rpm: Array = [0, 0, 0, 0]         ## rev/min per ESC, contract 'esc_rpm' (esc_index order)
 var esc_current: Array = [0.0, 0.0, 0.0, 0.0]  ## A per ESC, contract 'esc_current' (modeled)
-var esc_temp: Array = [0.0, 0.0, 0.0, 0.0]     ## degC per ESC, contract 'esc_temp' (modeled)
+var esc_temp: Array = [DroneProp.ESC_AMBIENT, DroneProp.ESC_AMBIENT, DroneProp.ESC_AMBIENT,
+		DroneProp.ESC_AMBIENT]     ## degC per ESC, contract 'esc_temp' (modeled; ambient at rest)
 var esc_fault := 0           ## contract 'esc_fault' bitfield, bit i = esc_index i faulted
 ## Bus arrays: sized/seeded from roster (not literals) so grown NODES don't break pre-tick shape.
 var node_health: Array = DroneBus.all_ok()      ## per-node health, DroneBus.NODES order

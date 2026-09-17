@@ -47,8 +47,8 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
     thing `ball_lift()` and `body_pos` are both written to avoid.
   - Roll is the axis that makes it a drawbar: ±25°, against the fifth wheel's ±1.5°. A plate under
     a locked kingpin holds the trailer's roll to the tractor's; an eye on a pin does not, so a rut
-    under one trailer wheel does not lever the tractor over. Pitch is ±20° under the same
-    cover-the-grade rule the semi's ±8° failure taught. Yaw is `Drawbar.SWING_MAX_DEG` (90°) and
+    under one trailer wheel does not lever the tractor over. Pitch is ±20° under the fifth
+    wheel's cover-the-grade rule. Yaw is `Drawbar.SWING_MAX_DEG` (90°) and
     **not** `Articulation.JACKKNIFE_MAX_DEG` — that 75° is a model of a semi against a CAB. 90 is
     derived: up to it nothing behind the eye reaches forward of the pin's own z-plane.
     `test_drawbar_trailer` sweeps every BoxMesh corner against the tyres and the chassis boxes.
@@ -73,7 +73,7 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
     demand, the spool source, the catalog, its dual-vocabulary bridge and the camera framing.
   - The `Drawbar` instance is a direct child of the tractor scene ROOT, never under `Model`:
     `gen_kenney_vehicles.gd` rebuilds `Model`/`Lamps` from the GLB every run while still printing
-    success. This already ate the three-point hitch once.
+    success (the `kenney/CLAUDE.md` whitelist rule).
   - Level 1's tractor spawn has scenery close behind it, so the first E there is refused by the
     reactive fit check with a notice. Pull forward a length; that is the check working.
   - A towed body that is never TICKED keeps its authored wheel-root transforms — a frozen display
@@ -121,11 +121,8 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
   silently measure a 14 t combination against a 4 t number — the `-- semi` trap. The touch
   overlay's ATTACH button is the same hook. It cannot be family-gated like PANTO or FLAPS: within
   `truck`, the semi tows and the garbage truck does not.
-- `guidance_curvature` overrides `steer`, and the arbitration lives ONLY in
-  `InputRouter.arbitrate_bridge` — same precedent as the boat's `rudder`, with the same presence
-  rule: `bridge_source.gd` includes the key only when sloppyCAN actually sent it, because a
-  commanded dead-straight 0 is a real auto-steer command and not an absence. No vehicle code knows
-  it was steered externally. **`scv_flow` has a local key (Q)**, reversing its bridge-only start:
+- `guidance_curvature` overrides `steer` in `InputRouter.arbitrate_bridge` only (presence rule:
+  `src/input/CLAUDE.md`). **`scv_flow` has a local key (Q)**:
   it is the drawbar trailer's ONLY control, and with no key that is ten tonnes you can tow and
   brake but never tip. Owner is `InputRouter._scv`, the `_pto` pattern, and it is binary — both
   consumers slew internally, so a toggle gives the bridge's visible ramp without inventing a

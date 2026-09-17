@@ -154,7 +154,7 @@ func _physics_process(delta: float) -> void:
 	# except under the challenge lock, where it drives as sent. No bridge: local, untouched.
 	var bridge_raw := _bridge_source.poll()
 	var live := bool(bridge_raw.get(&"active", false))
-	_bridge_drives = live and (bool(bridge_raw.get(&"drive_sourced", false)) or _bridge_only)
+	_bridge_drives = live and (bool(bridge_raw.get(&"drive_sourced", false)) or (_bridge_only and not _dev_keys))
 	if _bridge_only and not _dev_keys:
 		_warn_if_keys_locked()
 	if _bridge_drives:
@@ -312,24 +312,29 @@ static func cycle_node_fail(bits: int) -> int:
 	return 0 if next_fail > (1 << (NODE_FAIL_COUNT - 1)) else next_fail
 
 
+## One step of a wrap-around ladder: 0 -> 1 -> ... -> n-1 -> 0. `posmod` (not `%`) so a negative
+## starting value still lands inside the ladder.
+static func _cycle(x: int, n: int) -> int:
+	return posmod(x + 1, n)
+
+
 ## Local flight-mode walk behind the Z key: STABILIZE -> ALT_HOLD -> LOITER -> RTL -> LAND ->
-## STABILIZE. `posmod` (not `%`) so a negative starting mode still lands inside the ladder.
-## Named static fn for the same reason as cycle_node_fail: DroneModes.cycle mirrors this, and
-## tests/test_drone_modes.gd pins the two equal by calling both.
+## STABILIZE. Named static fn for the same reason as cycle_node_fail: DroneModes.cycle mirrors
+## this, and tests/test_drone_modes.gd pins the two equal by calling both.
 static func cycle_flight_mode(mode: int) -> int:
-	return posmod(mode + 1, FLIGHT_MODE_COUNT)
+	return _cycle(mode, FLIGHT_MODE_COUNT)
 
 
 ## Local autopilot walk behind the 2 key: STANDBY -> HEADING HOLD -> STANDBY. Named static fn for
 ## the same reason as cycle_flight_mode: BoatAutopilot.cycle mirrors this, and
 ## tests/test_boat_autopilot.gd pins the two equal by calling both.
 static func cycle_nav_mode(mode: int) -> int:
-	return posmod(mode + 1, NAV_MODE_COUNT)
+	return _cycle(mode, NAV_MODE_COUNT)
 
 
 ## Local sheet walk behind the 3 key: hauled in -> ... -> fully eased -> hauled in.
 static func cycle_sheet(detent: int) -> int:
-	return posmod(detent + 1, SHEET_DETENT_COUNT)
+	return _cycle(detent, SHEET_DETENT_COUNT)
 
 
 ## The detent as the 0..1 the wire and VehicleInput carry. Spread across the whole range so the

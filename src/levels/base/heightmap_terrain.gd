@@ -19,6 +19,8 @@ const CHANNEL_PARAMS: Array[StringName] = [
 const DEFAULT_BLEND_SHARPNESS := 8.0
 ## Sharpened-weight total below which a pixel counts as unpainted (matches the shader).
 const MIN_SPLAT_TOTAL := 0.001
+## Ceiling on a channel's added rolling resistance (deep mud is ~0.3).
+const MAX_CHANNEL_DRAG := 0.5
 const DEFAULT_CHANNEL_NAMES := [
 	"Grass", "Dirt", "Sand", "Rock", "Snow", "Mud", "Asphalt", "Gravel",
 ]
@@ -112,6 +114,11 @@ const GRID_LEVEL_M := 3.0
 ## Tire grip multiplier per paint channel 0..7 (1.0 = spec grip, lower = slippery).
 ## Clamped to [0, 1] on read: above 1 breaks the brake > drive hierarchy, below 0 inverts friction.
 @export var channel_grip := PackedFloat32Array([1, 1, 1, 1, 1, 1, 1, 1])
+## Rolling-resistance coefficient ADDED per paint channel 0..7 (0 = a hard road, mud ~0.2): the
+## ground deforming under the tyre, a body force at the contact off the wheel's normal load. Grip
+## and drag are the two numbers a surface has — ice is low grip / no drag, mud is low grip / high
+## drag, grass is mostly drag. Clamped to [0, 0.5] on read.
+@export var channel_drag := PackedFloat32Array([0, 0, 0, 0, 0, 0, 0, 0])
 ## Beaches appear below this world height, fading out over another half of it.
 @export var sand_height := 2.0
 ## Ground steeper than this becomes dirt.
@@ -131,6 +138,7 @@ var _splat2_img: Image
 var _splat_dirty := true
 var _sharpness := DEFAULT_BLEND_SHARPNESS  ## cached with the splat images (material param)
 var _decode_warned := false                ## one-shot guard for the decode-failure warning
+var _weight_buf := PackedFloat32Array([0, 0, 0, 0, 0, 0, 0, 0])  ## reused by _sharpened_weights
 
 # Same deal for the heightmap; runtime only (editor height_at reads the texture directly).
 var _height_img: Image
@@ -156,6 +164,11 @@ func _get_configuration_warnings() -> PackedStringArray:
 			warnings.append(("channel_grip[%d] = %.2f is outside [0, 1] and will be clamped: "
 					+ "above 1 breaks the vehicle's tuned brake > drive hierarchy, below 0 "
 					+ "inverts tire friction.") % [i, channel_grip[i]])
+	for i in channel_drag.size():
+		if channel_drag[i] < 0.0 or channel_drag[i] > MAX_CHANNEL_DRAG:
+			warnings.append(("channel_drag[%d] = %.2f is outside [0, %.1f] and will be clamped: "
+					+ "below 0 pushes the vehicle along, above it the one-tick cap is all that "
+					+ "stops a wheel.") % [i, channel_drag[i], MAX_CHANNEL_DRAG])
 	return warnings
 
 
@@ -308,26 +321,42 @@ func get_splat_weights(world_pos: Vector3) -> PackedFloat32Array:
 ## brush-falloff pixel doesn't leak an invisible slick apron. Diverges from the shader
 ## below MIN_SPLAT_TOTAL: falls back to neutral 1.0, never channel 0 (which can be ice).
 func grip_at(world_pos: Vector3) -> float:
-	if splatmap == null:
+	var total := _weights_at(world_pos)
+	if total < MIN_SPLAT_TOTAL:
 		return 1.0
+	var grip := 0.0
+	for i in 8:
+		grip += _weight_buf[i] * channel_grip_at(i)
+	return grip / total
+
+
+## Added rolling-resistance coefficient under `world_pos`: paint-weight-blended channel_drag,
+## 0.0 when unpainted. Same blend as grip_at, neutral is "no drag" rather than "full grip".
+func drag_at(world_pos: Vector3) -> float:
+	var total := _weights_at(world_pos)
+	if total < MIN_SPLAT_TOTAL:
+		return 0.0
+	var drag := 0.0
+	for i in 8:
+		drag += _weight_buf[i] * channel_drag_at(i)
+	return drag / total
+
+
+## Fills `_weight_buf` with the sharpened splat weights under `world_pos` and returns their
+## total; 0.0 (below MIN_SPLAT_TOTAL) with no splatmap or no cache, so callers fall back to
+## their neutral value.
+func _weights_at(world_pos: Vector3) -> float:
+	if splatmap == null:
+		return 0.0
 	_ensure_splat_cache()
 	if _splat_img == null:
-		return 1.0
+		return 0.0
 	var uv := _terrain_uv(world_pos)
 	var c0 := _sample_rgba_bilinear(_splat_img, uv.x, uv.y)
 	var c1 := Color(0, 0, 0, 0)
 	if _splat2_img != null:
 		c1 = _sample_rgba_bilinear(_splat2_img, uv.x, uv.y)
-	var total := 0.0
-	var grip := 0.0
-	for i in 8:
-		var raw: float = (c0 if i < 4 else c1)[i & 3]
-		var w := pow(raw, _sharpness)
-		total += w
-		grip += w * channel_grip_at(i)
-	if total < MIN_SPLAT_TOTAL:
-		return 1.0
-	return grip / total
+	return _sharpened_weights(c0, c1)
 
 
 ## How strongly channel `ch` covers `world_pos`, 0..1. Same sharpening as grip_at, but no neutral fallback — "not painted" is 0.
@@ -344,17 +373,23 @@ func channel_weight_at(world_pos: Vector3, ch: int) -> float:
 	var c1 := Color(0, 0, 0, 0)
 	if _splat2_img != null:
 		c1 = _sample_rgba_bilinear(_splat2_img, uv.x, uv.y)
+	var total := _sharpened_weights(c0, c1)
+	if total < MIN_SPLAT_TOTAL:
+		return 0.0
+	return _weight_buf[ch] / total
+
+
+## Pow-sharpens the 8 raw splat channels (c0=RGBA, c1=RGBA) into `_weight_buf`, same exponent
+## as the splat shader. Reuses the member buffer — no per-call allocation on this per-contact
+## hot path. Returns the summed total; callers compare it against MIN_SPLAT_TOTAL themselves.
+func _sharpened_weights(c0: Color, c1: Color) -> float:
 	var total := 0.0
-	var want := 0.0
 	for i in 8:
 		var raw: float = (c0 if i < 4 else c1)[i & 3]
 		var w := pow(raw, _sharpness)
+		_weight_buf[i] = w
 		total += w
-		if i == ch:
-			want = w
-	if total < MIN_SPLAT_TOTAL:
-		return 0.0
-	return want / total
+	return total
 
 
 ## Grip multiplier of channel `ch`, clamped to [0, 1], defaulting to 1.0 for a short array.
@@ -362,6 +397,13 @@ func channel_grip_at(ch: int) -> float:
 	if ch < 0 or ch >= channel_grip.size():
 		return 1.0
 	return clampf(channel_grip[ch], 0.0, 1.0)
+
+
+## Added rolling resistance of channel `ch`, clamped to [0, MAX_CHANNEL_DRAG], 0 for a short array.
+func channel_drag_at(ch: int) -> float:
+	if ch < 0 or ch >= channel_drag.size():
+		return 0.0
+	return clampf(channel_drag[ch], 0.0, MAX_CHANNEL_DRAG)
 
 
 ## Decodes both splatmaps into uncompressed working Images, re-running only on _splat_dirty.
@@ -450,15 +492,7 @@ func _sample_red_bilinear(img: Image, u: float, v: float) -> float:
 
 ## Decoded, uncompressed copy of the heightmap image, or null.
 func _read_image() -> Image:
-	if heightmap == null:
-		return null
-	var img := heightmap.get_image()
-	if img == null:
-		return null
-	if img.is_compressed():
-		img = img.duplicate()
-		img.decompress()
-	return img
+	return _decode_texture(heightmap)
 
 
 ## Row-major (z*cols + x) height grid: red channel * height, all-zero without an image.

@@ -209,6 +209,7 @@ func set_load_offset_z(offset_z: float) -> void:
 
 
 ## Metres the payload is displaced rearward (negative = forward), 0 where the load cannot move.
+## Test accessor, no runtime caller.
 func load_shift_z() -> float:
 	return _load_offset_z
 

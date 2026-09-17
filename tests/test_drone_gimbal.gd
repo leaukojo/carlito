@@ -57,7 +57,7 @@ func test_pitch_is_up_and_yaw_is_right() -> void:
 	# panning right must swing it toward +X.
 	var up := G.basis_of(45.0, 0.0) * Vector3.FORWARD
 	assert_float(up.y).is_greater(0.0)
-	var right := G.basis_of(0.0, -90.0) * Vector3.FORWARD
+	var right := G.basis_of(0.0, 90.0) * Vector3.FORWARD
 	assert_float(right.x).is_greater(0.0)
 
 

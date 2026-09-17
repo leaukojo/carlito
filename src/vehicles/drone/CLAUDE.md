@@ -41,11 +41,8 @@ Four boundaries that must not move:
   the bottom once the currents are known — 16 ms on a ten-minute discharge, against deciding on a
   number the tick has not produced.
 
-The flight controller and the arming state machine were not extracted; see the rejected list in
-`../CLAUDE.md`.
-
-Judge `drone.gd` by its CODE line count, not its file length: ~58 % of it is comment, leaving
-~300 code lines and 30 private fields.
+The flight controller and the arming state machine are not extractable; see the rejected list in
+`../CLAUDE.md`. Most of `drone.gd`'s length is comment, so judge it by code lines.
 
 ## The fence: `tests/test_drone_vehicle.gd`
 
@@ -55,9 +52,9 @@ exits 0.
 
 - It ticks a REAL `DroneVehicle`: scripted pose/velocity, then `_update_telemetry` followed by
   `_tick_extras`, the two calls `BaseVehicle._physics_process` makes, at 1/60.
-- It asserts on PUBLISHED TELEMETRY and PUBLIC body properties, never a private field. That is
-  what let the five sub-objects come out from under it without a test edit — a suite that reached
-  for `_soc` would have to be rewritten by the refactor it is fencing.
+- It asserts on PUBLISHED TELEMETRY and PUBLIC body properties, never a private field, so a
+  refactor of the private state needs no test edit — a suite that reached for `_soc` would have
+  to be rewritten by the refactor it is fencing.
 - The rig awaits exactly ONE physics frame, at setup. A body added to the tree is not in the SPACE
   STATE until the space has stepped once, so a rig that queried immediately gets an empty raycast
   from every sensor — `agl` of -1 over a floor that is plainly there, with the landed predicate,
@@ -94,8 +91,8 @@ exits 0.
   `drone_propulsion.gd` (`DroneProp`) — a sibling file, not shared cross-family, since nothing in
   it reads back into `DroneVehicle`; keep it that way. `DroneVehicle` keeps only the body's own
   math (`lift_thrust`, `heading_frame`, `level_target_up`, `align_torque`) that the mode ladder is
-  built on. A prior attempt to extract just "the ESC laws" was abandoned: `esc_current_a` sits on
-  `motor_thrust`, which sits on `MOTORS` — the chain doesn't cut smaller than this.
+  built on. The chain doesn't cut smaller than this ("the ESC laws" alone is not a seam):
+  `esc_current_a` sits on `motor_thrust`, which sits on `MOTORS`.
 - `MOTORS` is the DroneCAN `esc_index` mapping AND
   the sign table, derived from where `drone.tscn` puts each rotor; `test_drone` pins the two
   against each other — signs AND lever magnitudes, so a rotor moved in the scene fails CI whether
@@ -134,7 +131,10 @@ exits 0.
   - A dropped node HOLDS its last telemetry and must never be zeroed. The three per-ESC arrays on
     `DroneTelemetry` ARE the last-published store, so `DroneVehicle` writes them ELEMENT-WISE and
     skips an offline ESC; reassigning a whole fresh array silently zeroes it. `respawn()` clears
-    them explicitly, the accel-history rule.
+    them explicitly, the accel-history rule. POWER follows the same rule for `pack_current`/`soc`/
+    `pack_temp`/`battery`: `DroneVehicle` gates the four writes on `DroneBus.is_online(...,
+    _power_node)` while `_pack.step` keeps integrating underneath regardless, so the readings jump
+    to truth the instant the node returns rather than the craft flying a free, non-draining flight.
   - `rotor_rpm` and `pack_current` deliberately DISAGREE once a node drops, and neither is a bug.
     `rotor_rpm` averages the PUBLISHED `esc_rpm`, so a stale element keeps counting toward it —
     what a listener reading four messages computes, and what the contract defines it as;
@@ -232,6 +232,12 @@ exits 0.
   commanding HOLD over open ground leaves `hardpoint_state` false — the `arm`/`armed` relationship
   again. Releasing needs no condition and no timer: the failure you must never have is a load you
   cannot drop.
+  - `DroneHook._await_release` requires `hardpoint_cmd` LOW at least once after a `reset()` before
+    it may capture again — the local toggle survives a respawn like `node_fail`'s, and the dropped
+    crate lands right back in the capture ray.
+  - `MAX_PAYLOAD_KG` is a CAPTURE refusal in `DroneHook._find`, not a mass truncation: a crate over
+    it never reaches the hook, so `DronePayload.carried_mass`'s clamp is a degenerate-input guard
+    that normal flight never reaches, not the gate itself.
   - `_apply_carried_mass` is where a payload is FELT, called on the two latch edges only. It writes
     `mass` and `center_of_mass` onto the RigidBody3D and re-derives `_inertia`,
     `_hover_collective` and `_auto_collective_max` through the same `lift_thrust` calls the empty

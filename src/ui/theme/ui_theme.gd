@@ -32,6 +32,7 @@ const OK := Color(0.35, 0.85, 0.45)
 # --- type scale (logical px at scale 1.0) -------------------------------------
 
 const FS_DISPLAY := 34   ## the one big title on a full-screen menu
+const FS_HEADING := 28   ## a bold group heading (e.g. challenge family), above Title
 const FS_LEAD := 24      ## prominent body copy read from a distance (a briefing, a hint)
 const FS_TITLE := 22     ## section headings, card names
 const FS_BODY := 17      ## buttons, descriptions — the default
@@ -104,6 +105,16 @@ static func _build_label(t: Theme, scale: float) -> void:
 		t.set_type_variation(role_name, "Label")
 		t.set_font_size("font_size", role_name, _fs(int(role[1]), scale))
 		t.set_color("font_color", role_name, role[2])
+
+	# A bold group heading (e.g. a challenge family name) — no bold TTF is shipped, so the
+	# weight comes from the base font's synthetic embolden, not a second font file.
+	var bold := FontVariation.new()
+	bold.base_font = FONT
+	bold.variation_embolden = 0.6
+	t.set_type_variation(&"Heading", "Label")
+	t.set_font(&"font", &"Heading", bold)
+	t.set_font_size("font_size", &"Heading", _fs(FS_HEADING, scale))
+	t.set_color("font_color", &"Heading", TEXT)
 
 
 static func _build_button(t: Theme, scale: float) -> void:

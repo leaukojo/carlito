@@ -38,12 +38,17 @@ const SETTLE_FRAMES := 20
 var _allowed: PackedStringArray = []   ## the level's LevelInfo.allowed_vehicles, unfiltered
 var _level_name := "this level"
 var _has_rail := false
+## `Level.has_spawn_for`, bound by the shell; invalid (unset) reads as "assume a spawn exists" so
+## a caller that doesn't pass it keeps the old behaviour rather than refusing everything.
+var _has_spawn := Callable()
 var _variant := ""
 var _attachment := ""                  ## seeded from the driven machine, then owned by the preview
 ## Variant `_attachment` was seeded from. "" is not "nothing handed over" — it's BOBTAIL and
 ## DETACHED, both real choices; without this a car's "" browsed to the semi would show bobtail.
 var _attachment_of := ""
 var _manual_gearbox := false  ## seeded from the shell's free-play choice
+var _manual_gearbox_btn: Button      ## disabled live when the bridge drops (null with no gearbox row)
+var _automatic_gearbox_btn: Button   ## pressed live when the bridge drops and forces AUTOMATIC
 
 var _pulse_t := 0.0  ## phase of the DRIVE button's attention pulse, in turns
 
@@ -65,8 +70,10 @@ var _settle := 0
 
 ## `allowed` is the level's raw allow-list, `rail` its runtime closed-loop answer — both rather
 ## than a pre-filtered roster, since the screen shows what it cannot spawn and must say why.
+## `has_spawn` is `Level.has_spawn_for`, invalid (default) when the caller has none to offer.
 func setup(allowed: PackedStringArray, level_name: String, rail: bool,
-		variant: String, attachment: String, manual_gearbox := false) -> void:
+		variant: String, attachment: String, manual_gearbox := false,
+		has_spawn := Callable()) -> void:
 	_allowed = allowed
 	_level_name = level_name
 	_has_rail = rail
@@ -74,6 +81,7 @@ func setup(allowed: PackedStringArray, level_name: String, rail: bool,
 	_attachment = attachment
 	_attachment_of = _variant
 	_manual_gearbox = manual_gearbox
+	_has_spawn = has_spawn
 
 
 func _ready() -> void:
@@ -233,8 +241,10 @@ func _all_families() -> PackedStringArray:
 func _refusal(family: String) -> String:
 	if not _allowed.is_empty() and not _allowed.has(family):
 		return "no spawn for it in %s" % _level_name
-	if family == "train" and not _has_rail:
-		return "no closed rail loop here"
+	if family == "train":
+		return "" if _has_rail else "no closed rail loop here"
+	if _has_spawn.is_valid() and not bool(_has_spawn.call(family)):
+		return "no spawn for it here"
 	return ""
 
 
@@ -268,6 +278,8 @@ func _on_family_pressed(family: String) -> void:
 
 func _refresh_cards() -> void:
 	_clear(_cards)
+	_manual_gearbox_btn = null
+	_automatic_gearbox_btn = null
 	var reason := _refusal(_family)
 	if VehicleSelect.has_gearbox(_family):
 		_cards.add_child(_gearbox_row())
@@ -278,8 +290,11 @@ func _refresh_cards() -> void:
 
 
 ## AUTOMATIC | MANUAL as one ButtonGroup. The choice only changes how the bridge gear byte is
-## read (InputRouter.set_manual_gearbox); the keyboard has no shift keys, so the note says so.
+## read (InputRouter.set_manual_gearbox); with no bridge connected there is no gear byte to
+## read, so MANUAL is disabled and the choice is forced to AUTOMATIC.
 func _gearbox_row() -> Control:
+	if not Bridge.is_active():
+		_manual_gearbox = false
 	var box := VBoxContainer.new()
 	box.add_child(_heading("GEARBOX"))
 	var row := HBoxContainer.new()
@@ -293,14 +308,13 @@ func _gearbox_row() -> Control:
 		b.theme_type_variation = &"Choice"
 		b.button_pressed = manual == _manual_gearbox
 		b.pressed.connect(_on_gearbox_pressed.bind(manual))
+		if manual:
+			b.disabled = not Bridge.is_active()
+			_manual_gearbox_btn = b
+		else:
+			_automatic_gearbox_btn = b
 		row.add_child(b)
 	box.add_child(row)
-	var note := Label.new()
-	note.text = "Manual: the bridge gear byte is exact and 0 is neutral. " \
-			+ "The keyboard always drives automatic."
-	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	note.theme_type_variation = &"MutedSmall"
-	box.add_child(note)
 	return box
 
 
@@ -471,6 +485,12 @@ func _free_preview() -> void:
 ## clock here.
 func _process(delta: float) -> void:
 	_pulse_drive(delta)
+	if is_instance_valid(_manual_gearbox_btn):
+		var active := Bridge.is_active()
+		_manual_gearbox_btn.disabled = not active
+		if not active and _manual_gearbox:
+			_manual_gearbox = false
+			_automatic_gearbox_btn.button_pressed = true
 	if _preview == null or not is_instance_valid(_preview) or not _preview_panel.visible:
 		return
 	_yaw = fmod(_yaw + TURNTABLE_DEG_PER_S * delta, 360.0)
@@ -518,8 +538,14 @@ static func protocols_for(family: String) -> String:
 
 
 ## Whether the family's contract takes a gear byte, the only thing a gearbox mode acts on (rule 4:
-## read, not listed here).
+## read, not listed here). Plane and train still carry that byte on the wire (reverser N/D/R),
+## but their own code only ever reads it through Drivetrain.is_drive/is_reverse, which collapse
+## every D1-D6 alike — so manual vs. automatic (literal byte vs. auto-shifted) changes nothing
+## either can feel, and the picker would offer a choice with no effect (src/vehicles/CLAUDE.md
+## § Drivetrain and brakes, the plane's single-speed-by-construction note).
 static func has_gearbox(family: String) -> bool:
+	if family == "plane" or family == "train":
+		return false
 	if Contract.data == null or not Contract.data.is_valid():
 		return false
 	var gear := Contract.data.get_signal_def("gear", "in")

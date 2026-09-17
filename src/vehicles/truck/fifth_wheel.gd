@@ -11,16 +11,18 @@ extends TowHost
 ## Fifth-wheel plate top in body space (y=1.05 up). Runtime value read off the scene's Kingpin
 ## marker in TowHost._ready and pinned against the marker by test_trailer. Every trailer authored
 ## for this Y; moving it floats or buries them.
-const KINGPIN_LOCAL := Vector3(0.0, 1.05, 0.75)
+const KINGPIN_LOCAL := Vector3(0.0, 1.05, 0.45)
 
 ## Yaw is free to the jackknife stop and roll is a hair of compliance, which lets the solver
 ## settle. Pitch travel must cover a grade break rather than bound it: once on its stop the two
 ## bodies are rigid, so a level trailer levers the climbing tractor's drive axle off the road. A
 ## sharp break onto the climbable 25% grade swings the joint -9.0 to +12.8 deg, so 15 clears it.
 ##
-## Known compromise: the rig rests ~5.9 deg nose-up on flat ground, because the kingpin rides
-## 1.306 m over the road on springs while trailers are authored for a 1.05 m plate. That is a
-## coupling-datum mismatch, not a joint setting, and fixing it means moving one of the two datums.
+## Measured at a quiet standstill on the flat: the coupled rig rests ~1.5 deg tractor nose-up and
+## ~0.7 deg trailer nose-down (joint 2.1 of 15), kingpin ~1.1 m over the road. That is the rear axle
+## at 60 % travel against the steer axle's 32 % on ONE spring rate, so KINGPIN_LOCAL.y cannot level
+## the tractor; it only sets the trailer's own pitch. The wheelbases that keep the steer axle loaded
+## through a launch are truck/CLAUDE.md § The fifth wheel.
 const PITCH_LIMIT_DEG := 15.0
 const ROLL_LIMIT_DEG := 1.5
 

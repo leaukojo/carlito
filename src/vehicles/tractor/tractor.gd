@@ -163,7 +163,7 @@ func attachment_refused() -> void:
 func _tick_extras(input: VehicleInput, delta: float) -> void:
 	var t := telemetry as TractorTelemetry
 	var running := input.key == InputRouter.KEY_IGNITION
-	_hitch_actual = move_toward(_hitch_actual, input.hitch_request, delta / hitch_travel_time)
+	_hitch_actual = move_toward(_hitch_actual, input.hitch_request, delta / maxf(hitch_travel_time, 0.01))
 	var pto_on := input.pto and running
 	t.hitch_pos_actual = roundi(_hitch_actual * 100.0)
 	t.pto_state = pto_on

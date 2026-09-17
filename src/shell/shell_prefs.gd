@@ -11,7 +11,7 @@ const PATH := "user://shell.cfg"
 const SECTION := "shell"
 
 ## Persistence is off: remembered state is confusing during boot path testing. _config() and
-## setters skip the load/save while false. Flip to true to re-enable all four keys at once.
+## setters skip the load/save while false. Flip to true to re-enable all five keys at once.
 const ENABLED := false
 
 static var _cfg: ConfigFile = null

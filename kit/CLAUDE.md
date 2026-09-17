@@ -15,8 +15,8 @@ detail: `docs/level_kit.md`). Bake freshness and `BAKE_CODE_INPUTS` stay in the 
   thumb re-stales dependent bakes.
 - **`--script`-mode tools cannot load level scenes** — autoload identifiers (InputRouter
   via BaseVehicle) don't compile there. Bake/check run as **game-mode tool scenes**
-  (`godot --headless res://tools/bake_levels.tscn`), and `level.gd` reaches GameState via
-  `get_node("/root/GameState")` for the same reason.
+  (`godot --headless res://tools/bake_levels.tscn`), where autoloads are registered and bare
+  `GameState` compiles.
 - A **freed node compares equal to null** — read results before `free()`.
 - Vector2/3 component math is **float32**: `Vector2.angle()` carries ~1e-7 noise against
   float64 `PI`, so exact-boundary tests (`ceil(sweep / (PI/2))` etc.) need a ~1e-5
@@ -29,14 +29,9 @@ detail: `docs/level_kit.md`). Bake freshness and `BAKE_CODE_INPUTS` stay in the 
   so the script silently fails to load in exported builds. Fetch editor singletons via
   `Engine.get_singleton(&"EditorInterface")` into **untyped** vars. Scripts under
   `addons/carlito_kit/` are editor-only and may type editor APIs freely.
-- **Scene tags are GROUPS** (`carlito_authoring` / `carlito_kit_piece` / `carlito_scatter` /
-  `carlito_road`), declared once in `src/levels/base/carlito_groups.gd` and joined in each
-  class's **`_init`** — never class_name checks, and never `_enter_tree`: the baker walks a
-  level scene that was never added to a tree and instantiates scatter templates loose, so
-  `is_in_group()` is the only test that works there. `get_tree().get_nodes_in_group()` is NOT
-  a substitute in editor or baker code — out of the tree it finds nothing, and in the editor
-  `get_tree()` holds every open scene. Discovery there stays a walk scoped to a named root
-  (`CarlitoGroups.find_authoring` / `.authoring_ancestor`, the one copy of each).
+- Scene tags are GROUPS joined in `_init` (root `CLAUDE.md` § Scene tags). Discovery in kit /
+  addons / tools code is a walk scoped to a named root (`CarlitoGroups.find_authoring` /
+  `.authoring_ancestor`, the one copy of each) — never `get_tree().get_nodes_in_group()`.
 - Terrain render mesh is chunked for frustum culling (not LOD); collision stays ONE
   `HeightMapShape3D`. Normals are analytic (per-chunk `generate_normals()` seams
   borders); UVs global. Splatmap sampled raw (no `source_color` — sRGB bends weights).

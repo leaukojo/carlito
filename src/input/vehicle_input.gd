@@ -12,7 +12,8 @@ extends RefCounted
 ## timer anywhere — J1939-73 DM1 flash-1Hz/2Hz included. `tests/test_lamps.gd` fails if a clock
 ## comes back.
 ##
-## Two read sites: `BaseVehicle._physics_process` (into LampSet) and `Dashboard._update_telltales`.
+## Read sites: `BaseVehicle._physics_process` (into LampSet), `TowHost` (the trailer's LampSet),
+## `Dashboard._update_telltales` and the challenge frame's lamp checks.
 ## `lights` is not here — it's a headlight level InputRouter owns and cycles.
 class LampInput extends RefCounted:
 	var turn_left := false

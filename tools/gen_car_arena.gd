@@ -150,6 +150,8 @@ const CHANNEL_NAMES: Array[String] = [
 	"Grass", "Dirt", "Sand", "Rock", "Ice", "Mud", "Asphalt", "Gravel",
 ]
 const CHANNEL_GRIP: Array[float] = [0.8, 0.7, 0.6, 0.7, ICE_GRIP, 0.5, 1.0, 0.85]
+## Added rolling resistance (HeightmapTerrain.channel_drag); ice is slick AND free-rolling.
+const CHANNEL_DRAG: Array[float] = [0.06, 0.03, 0.1, 0.01, 0.0, 0.2, 0.0, 0.02]
 
 # --- courses -----------------------------------------------------------------------------------------
 ## Every course zone is a box this tall, its base 1 m under the deck: it holds the body origin and
@@ -1260,6 +1262,7 @@ splatmap = ExtResource("7_splat")
 splatmap2 = ExtResource("17_splat2")
 channel_names = PackedStringArray({channel_names})
 channel_grip = PackedFloat32Array({channel_grip})
+channel_drag = PackedFloat32Array({channel_drag})
 sand_height = {sand_height}
 dirt_slope_deg = 22.0
 rock_slope_deg = 38.0
@@ -1277,6 +1280,8 @@ metadata/_custom_type_script = "uid://t88htpmwukbg"
 		"channel_names": '"%s"' % '", "'.join(CHANNEL_NAMES),
 		"channel_grip": ", ".join(PackedStringArray(
 				CHANNEL_GRIP.map(func(g: float) -> String: return str(g)))),
+		"channel_drag": ", ".join(PackedStringArray(
+				CHANNEL_DRAG.map(func(g: float) -> String: return str(g)))),
 		"spawn": var_to_str(spawn),
 	}) + _road_nodes_text()
 

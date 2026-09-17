@@ -142,6 +142,36 @@ func test_splat_weights_blend() -> void:
 	assert_float(w[1]).is_equal(0.5)
 
 
+func test_drag_default_table_is_zero() -> void:
+	var t := _terrain(Vector2(4, 4), 10.0)
+	t.splatmap = _splat(Color(1, 0, 0, 0))
+	assert_float(t.drag_at(Vector3.ZERO)).is_equal(0.0)
+
+
+func test_drag_single_channel_and_blend() -> void:
+	var t := _terrain(Vector2(4, 4), 10.0)
+	t.splatmap = _splat(Color(1, 0, 0, 0))
+	t.channel_drag = PackedFloat32Array([0.25, 0, 0, 0, 0, 0, 0, 0])
+	assert_float(t.drag_at(Vector3.ZERO)).is_equal(0.25)
+	# Half channel 0 (0.5) and half channel 1 (0): weights 0.5/0.5 -> 0.25.
+	t.splatmap = _splat(Color(0.5, 0.5, 0, 0))
+	t.channel_drag = PackedFloat32Array([0.5, 0, 0, 0, 0, 0, 0, 0])
+	assert_float(t.drag_at(Vector3.ZERO)).is_equal(0.25)
+
+
+func test_drag_unpainted_and_missing_splat_is_zero_and_clamped() -> void:
+	var t := _terrain(Vector2(4, 4), 10.0)
+	t.channel_drag = PackedFloat32Array([0.5, 0, 0, 0, 0, 0, 0, 0])
+	assert_float(t.drag_at(Vector3.ZERO)).is_equal(0.0)   # no splatmap
+	t.splatmap = _splat(Color(0, 0, 0, 0))
+	assert_float(t.drag_at(Vector3.ZERO)).is_equal(0.0)   # painted nothing
+	t.splatmap = _splat(Color(1, 0, 0, 0))
+	t.channel_drag = PackedFloat32Array([9.0, 0, 0, 0, 0, 0, 0, 0])
+	assert_float(t.drag_at(Vector3.ZERO)).is_equal(0.5)   # MAX_CHANNEL_DRAG
+	t.channel_drag = PackedFloat32Array([-1.0, 0, 0, 0, 0, 0, 0, 0])
+	assert_float(t.drag_at(Vector3.ZERO)).is_equal(0.0)
+
+
 func test_grip_default_table_is_neutral() -> void:
 	var t := _terrain(Vector2(4, 4), 10.0)
 	t.splatmap = _splat(Color(1, 0, 0, 0))   # painted, but default channel_grip is all 1.0

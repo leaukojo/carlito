@@ -31,8 +31,9 @@ func test_carried_mass_adds_the_payload_and_an_open_hook_adds_nothing() -> void:
 
 
 func test_carried_mass_clamps_at_the_declared_ceiling() -> void:
-	# Not a strength model — the point past which the airframe cannot hold a hover, so a heavier
-	# crate is refused as MASS rather than making the aircraft unflyable.
+	# A degenerate-input guard, not the refusal itself: the real gate is at CAPTURE
+	# (`DroneHook._find` never returns a crate over this ceiling), so `payload_kg` past it here
+	# is a caller that skipped the gate, not a heavier crate reaching the hook.
 	assert_float(P.carried_mass(5.0, 99.0)).is_equal(5.0 + P.MAX_PAYLOAD_KG)
 	# ...and a negative payload can never make the craft lighter than its own airframe.
 	assert_float(P.carried_mass(5.0, -3.0)).is_equal(5.0)

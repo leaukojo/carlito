@@ -6,7 +6,9 @@ Descriptive tour: `docs/vehicles.md` § Train & rail.
   `wheel_positions`, the 6 `gear_ratios` kept (the reverser N/D/R rides the gear byte). It never
   forks `_physics_process`. Locomotion is a 1D consist sim (`TrainSim`) on the level's rail curve;
   the loco is driven **kinematically** (`gravity_scale = 0`, the sim writes `global_transform` +
-  linear/angular velocity each tick so `_update_telemetry` still reads honest motion). Wagons are
+  linear/angular velocity each tick so `_update_telemetry` still reads honest motion) **only when
+  `_has_rail`** — with no closed rail under it the loco keeps gravity and falls rather than
+  levitating inert, and `_ready` says so with a `push_warning`. Wagons are
   `AnimatableBody3D` followers posed by `TrainPlacement`. Aux systems are honest labelled models in
   `TrainTelemetry`, not circuits. `TrainSim`'s coupler/brake clamps are 60 Hz stability — **don't
   weaken them**. Respawn re-lays the consist at `s = 0` via `_sim.setup(...)` (velocity-zeroing

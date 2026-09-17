@@ -20,6 +20,25 @@ func _wheel() -> WheelScript:
 	return WheelScript.new(Vector3(0.0, 0.0, 1.0), false, true, null, 300.0)
 
 
+# --- surface drag: a body force at the contact, outside the circle ----------------
+
+func test_surface_drag_opposes_motion_scales_with_load_and_is_zero_at_rest() -> void:
+	# crr 0.2 on 5000 N = 1000 N against a forward-rolling contact.
+	assert_float(WheelScript.surface_drag_force(10.0, 0.2, 5000.0, 300.0, TICK)) \
+			.is_equal_approx(-1000.0, 1e-6)
+	assert_float(WheelScript.surface_drag_force(-10.0, 0.2, 5000.0, 300.0, TICK)) \
+			.is_equal_approx(1000.0, 1e-6)
+	assert_float(WheelScript.surface_drag_force(0.0, 0.2, 5000.0, 300.0, TICK)).is_equal(0.0)
+	assert_float(WheelScript.surface_drag_force(10.0, 0.0, 5000.0, 300.0, TICK)).is_equal(0.0)
+	assert_float(WheelScript.surface_drag_force(10.0, 0.2, 0.0, 300.0, TICK)).is_equal(0.0)
+
+
+func test_surface_drag_never_exceeds_the_one_tick_stop() -> void:
+	# 300 kg at 0.1 m/s can lose at most 300 * 0.1 / TICK = 1800 N this tick; crr asks 5000.
+	assert_float(WheelScript.surface_drag_force(0.1, 1.0, 5000.0, 300.0, TICK)) \
+			.is_equal_approx(-1800.0, 1e-6)
+
+
 # --- the equilibrium invariant ------------------------------------------------
 
 func test_a_wheel_in_equilibrium_does_not_move() -> void:
@@ -107,3 +126,75 @@ func test_airborne_spin_is_pure_drive_and_brake() -> void:
 	var w := _wheel()
 	w._integrate_spin(400.0, 0.0, 0.0, spec, TICK, 0.0)
 	assert_float(w.omega).is_equal_approx(400.0 / spec.wheel_inertia * TICK, 1e-9)
+
+
+# --- corner_mass sizes the one-tick contact clamps ----------------------------
+
+const CatalogScript := preload("res://src/vehicles/vehicle_catalog.gd")
+const RefuseBodyScript := preload("res://src/vehicles/truck/refuse_body.gd")
+
+
+## WheelDrive only reads `get_node_or_null` / `add_child` off its body, so a bare Node3D builds a
+## real wheel set with no physics server and no scene.
+func _drive_for(spec: VehicleSpec) -> WheelDrive:
+	var body: Node3D = auto_free(Node3D.new())
+	return WheelDrive.new(body, spec)
+
+
+func _bench_spec(mass: float) -> VehicleSpec:
+	var gd := GroundDriveSpec.new()
+	gd.wheel_positions = [
+		Vector3(-0.8, 0.0, -1.3), Vector3(0.8, 0.0, -1.3),
+		Vector3(-0.8, 0.0, 1.3), Vector3(0.8, 0.0, 1.3),
+	]
+	var spec := VehicleSpec.new()
+	spec.mass = mass
+	spec.ground_drive = gd
+	return spec
+
+
+func test_corner_mass_starts_as_the_specs_share_per_wheel() -> void:
+	var drive := _drive_for(_bench_spec(2000.0))
+	assert_int(drive.wheels.size()).is_equal(4)
+	for w in drive.wheels:
+		assert_float(w.corner_mass).is_equal_approx(500.0, 1e-9)
+
+
+func test_the_one_tick_caps_scale_with_a_rewritten_mass() -> void:
+	# All three RayWheel caps are `corner_mass * |v| / delta`, so re-sharing the LIVE mass is the
+	# whole of "the clamp follows what the body weighs". Nothing here weakens a clamp: the cap is
+	# recomputed from a bigger number, it is not widened by a factor.
+	var drive := _drive_for(_bench_spec(2000.0))
+	var cap_empty: float = drive.wheels[0].corner_mass * 3.0 / TICK   ## cap at 3 m/s of slip
+	drive.set_corner_mass_from(3000.0)
+	for w in drive.wheels:
+		assert_float(w.corner_mass).is_equal_approx(750.0, 1e-9)
+	var cap_laden: float = drive.wheels[0].corner_mass * 3.0 / TICK
+	assert_float(cap_laden / cap_empty).override_failure_message(
+			"the one-tick cap did not follow the laden mass").is_equal_approx(1.5, 1e-9)
+	# And it comes back down again, so a dumped hopper is not left over-clamped.
+	drive.set_corner_mass_from(2000.0)
+	assert_float(drive.wheels[0].corner_mass * 3.0 / TICK).is_equal_approx(cap_empty, 1e-9)
+
+
+func test_a_full_refuse_hopper_moves_the_shipped_trucks_caps() -> void:
+	# The real path: TruckVehicle writes `mass = spec.mass + payload` and calls
+	# set_corner_mass_from beside it. Pinned on the shipped spec so a payload change is visible.
+	var scene: PackedScene = load(CatalogScript.scene_of("garbage-truck"))
+	var state := scene.get_state()
+	var spec: VehicleSpec = null
+	for i in state.get_node_property_count(0):
+		if state.get_node_property_name(0, i) == &"spec":
+			spec = state.get_node_property_value(0, i) as VehicleSpec
+			break
+	assert_object(spec).is_not_null()
+	var drive := _drive_for(spec)
+	var empty: float = drive.wheels[0].corner_mass
+	assert_float(empty).is_equal_approx(
+			spec.mass / float(spec.ground_drive.wheel_positions.size()), 1e-6)
+	var laden: float = spec.mass + RefuseBodyScript.hopper_mass_kg(100.0)
+	drive.set_corner_mass_from(laden)
+	assert_float(drive.wheels[0].corner_mass).override_failure_message(
+			"a full hopper left the caps sized for the empty truck") \
+			.is_equal_approx(laden / float(spec.ground_drive.wheel_positions.size()), 1e-6)
+	assert_float(drive.wheels[0].corner_mass).is_greater(empty)

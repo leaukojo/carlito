@@ -24,7 +24,9 @@ func poll() -> Dictionary[StringName, Variant]:
 		&"steer": clampf(float(v.get("steer", 0.0)) / 100.0, -1.0, 1.0),
 		&"handbrake": clampf(float(v.get("handbrake", 0.0)), 0.0, 1.0),
 		&"gear": int(v.get("gear", 0)),
-		&"key": int(v.get("key", 1)),
+		# absent → Ignition: `arbitrate_bridge`'s own KEY_IGNITION default never fires once this
+		# normalizes the key, and traffic with no key/ignition signal must still let a car drive.
+		&"key": int(v.get("key", 3)),
 		&"lights": int(v.get("lights", 1)),
 		&"horn": bool(v.get("horn", 0)),
 		&"turnL": bool(v.get("turnL", 0)),

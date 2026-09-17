@@ -20,6 +20,6 @@ transmission = 1
 attachment = "res://src/vehicles/tractor/implements/mower.tscn"
 arena = "level_1"
 course = "res://src/levels/island/level_1/courses/tractor_pto_speed_course.tscn"
-briefing = "Select the 1000 PTO gear, engage the shaft, then hold it in its rated speed band while the mower works."
-hint = "pto_mode picks the gearbox ratio (00 = 540, 01 = 1000); pto_rpm reads 0.125 rev/min per bit on the wire and only moves once pto is engaged with the key at Ignition. 1000 rev/min is rated near the engine's own 2200 rpm, so gear and ground speed on this MANUAL box are what put the shaft there -- neutral with the throttle up gets you there without moving at all."
+briefing = "Select the 1000 PTO gear, engage the shaft, then hold it in its rated speed band."
+hint = "pto_mode picks 540 or 1000. Neutral with the throttle up gets the shaft there without moving."
 goals = Array[ExtResource("1_goal")]([SubResource("Resource_rated")])

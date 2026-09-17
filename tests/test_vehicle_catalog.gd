@@ -91,6 +91,10 @@ func test_kenney_specs_keep_force_hierarchy() -> void:
 		assert_object(spec).override_failure_message("no spec for " + variant).is_not_null()
 		var gd := spec.ground_drive
 
+		assert_float(spec.engine_brake_frac).override_failure_message(
+				variant + ": engine_brake_frac outside [0, 0.3]").is_between(0.0, 0.3)
+		assert_float(spec.shift_cut_s).override_failure_message(
+				variant + ": shift_cut_s outside [0, 1]").is_between(0.0, 1.0)
 		var peak_engine := 0.0
 		for p in spec.torque_curve:
 			peak_engine = maxf(peak_engine, p.y)
@@ -487,3 +491,25 @@ func _spec_of(variant: String) -> VehicleSpecScript:
 		if state.get_node_property_name(0, i) == &"spec":
 			return state.get_node_property_value(0, i) as VehicleSpecScript
 	return null
+
+
+# --- the front/rear split -----------------------------------------------------
+
+func test_no_wheel_station_sits_on_the_front_rear_boundary() -> void:
+	# `RayWheel.is_rear_z` is the one predicate splitting the wheels by axle (handbrake, retarder,
+	# diff lock, MFWD, wheelbase, dust, the driven/steered split). It breaks the z == 0 tie toward
+	# FRONT; a spec with a station there would ship a wheel whose axle depends on which caller
+	# asked, so no spec may have one.
+	var specs: Array[VehicleSpecScript] = []
+	for variant in VehicleCatalog.VARIANTS:
+		var spec := _spec_of(variant)
+		if spec != null and spec.ground_drive != null:
+			specs.append(spec)
+	for path: String in TRAILER_SPECS:
+		specs.append(load(path) as VehicleSpecScript)
+	assert_int(specs.size()).is_greater(20)
+	for spec in specs:
+		for station: Vector3 in spec.ground_drive.wheel_positions:
+			assert_bool(absf(station.z) < 1e-6).override_failure_message(
+					"a wheel station sits at z == 0 (%s) — it is front to one caller and rear" \
+					% str(station) + " to another").is_false()

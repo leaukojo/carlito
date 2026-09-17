@@ -16,6 +16,6 @@ variant = "tractor-kenney"
 arena = "level_1"
 course = "res://src/levels/island/level_1/courses/tractor_mud_course.tscn"
 briefing = "Drive north through the wallow and clear the far side before the par time runs out."
-hint = "wheel_slip (ISO wheel-based speed against ground speed) says how much a wheel is spinning uselessly. diff_lock and fwd_drive are both request bits with no keyboard key -- send them from sloppyCAN's tractor dashboard panel and watch wheel_slip fall when they bite."
+hint = "Send diff_lock and fwd_drive from sloppyCAN's tractor panel and watch wheel_slip fall."
 par_s = 30.0
 goals = Array[ExtResource("1_goal")]([SubResource("Resource_far")])

@@ -42,6 +42,14 @@ extends Resource
 @export var reverse_ratio := 2.2  ## short enough that reverse wheel torque stays under sliding grip
 @export var final_drive := 3.9
 @export var efficiency := 0.9
+## Overrun (engine-braking) torque at the crank with the pedal released, as a fraction of the
+## torque curve's peak, linear from 0 at idle to the full fraction at redline. 0 = the engine
+## absorbs nothing off throttle (the plane, whose wheels are undriven, stays 0).
+@export var engine_brake_frac := 0.0
+## Seconds of throttle cut after a gear change (an automated manual's torque interruption;
+## 0 = seamless, a powershift). Bridge-exact byte writes count as shifts too. During the cut
+## the axle sees overrun only, and `applied_throttle` reads 0 so telemetry sees the cut.
+@export var shift_cut_s := 0.0
 @export var shift_up_rpm := 5600.0
 @export var shift_down_rpm := 2200.0
 @export var speed_limit_kmh := 0.0  ## road-speed governor, km/h; 0 = ungoverned (J1939 SPN 74). Fades throttle over `Drivetrain.GOVERNOR_BAND` so it settles instead of hunting

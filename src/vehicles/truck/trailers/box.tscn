@@ -11,20 +11,21 @@
 ; THE HEAVIEST TRAILER AND NOTHING ELSE — no PTO, no valve, no interlock, no load model. That is
 ; the phase's lesson rather than an unfinished trailer, and box.gd states it in full.
 ;
-; MEASURED against the tractor unit, never guessed: 1.92 wide (the truck family's width), a 6.50 m
-; body on the family's 5.40 m frame behind the same 1.35 m gooseneck, roof at y 1.48 = 2.53 m above
+; MEASURED against the tractor unit, never guessed: 1.92 wide (the truck family's width), a 7.32 m
+; body on the family's 4.85 m frame behind a 2.73 m gooseneck, roof at y 1.48 = 2.53 m above
 ; the road. The cab's roof is 2.12, so the box stands taller than the unit pulling it, which is
 ; what makes an artic read as an artic from behind.
 ;
 ; IT IS A GOOSENECK, and that is structural: NOTHING may hang below the coupling plane (y = 0) over
-; the tractor. So the FLOOR IS IN TWO PANELS — the neck-top panel at y 0.25 forward of z 1.05 and
+; the tractor. So the FLOOR IS IN TWO PANELS — the neck-top panel at y 0.25 forward of z 1.60 and
 ; the deck panel at y -0.16 behind it — and the side walls step with them. Authored as one flat
 ; floor the panel ran straight through the tractor's fifth wheel and frame rails.
 ;
-; Swing clearance is geometry, not taste: the frontmost parts are the neck and the side walls above
-; it, 0.33 m ahead of the kingpin at 0.96 half-width, so they swing on sqrt(0.96^2 + 0.33^2) =
-; 1.02 m — inside the 1.15 m from the kingpin to the cab's rear face. test_trailer sweeps every
-; part of every trailer for this rather than trusting a node name.
+; Swing clearance is geometry, not taste: the frontmost part is the neck, 1.15 m ahead of the
+; kingpin at 0.94 half-width, so it swings on sqrt(0.94^2 + 1.15^2) = 1.49 m — inside the 1.85 m
+; from the kingpin to the cab's rear face. The side walls and roof stop 0.13 m short of it at
+; 0.96 half-width, so they swing on 1.40. test_trailer sweeps every part of every trailer for this
+; rather than trusting a node name.
 ;
 ; The curtain side is authored as its steel: top rail, bottom rave and five tensioning straps a
 ; side. A curtainsider's body IS the same trailer as a box van with a sheet where the panel is,
@@ -69,7 +70,7 @@ roughness = 0.4
 
 [sub_resource type="BoxMesh" id="MeshRail"]
 material = SubResource("MatFrame")
-size = Vector3(0.14, 0.26, 5.4)
+size = Vector3(0.14, 0.26, 4.85)
 
 [sub_resource type="BoxMesh" id="MeshCross"]
 material = SubResource("MatFrame")
@@ -77,17 +78,18 @@ size = Vector3(1.1, 0.1, 0.12)
 
 [sub_resource type="BoxMesh" id="MeshFloor"]
 material = SubResource("MatFrame")
-size = Vector3(1.86, 0.08, 5.38)
+size = Vector3(1.86, 0.08, 4.83)
 
-; The floor over the gooseneck, a step up onto the neck's top face. Authored as one panel end to
-; end it hung below the coupling plane and ran through the tractor.
+; The floor over the gooseneck, a step up onto the neck's top face and running almost the whole
+; 2.73 m of it. Authored as one panel end to end with the deck it hung below the coupling plane and
+; ran through the tractor.
 [sub_resource type="BoxMesh" id="MeshNeckFloor"]
 material = SubResource("MatFrame")
-size = Vector3(1.82, 0.06, 1.21)
+size = Vector3(1.82, 0.06, 2.58)
 
 [sub_resource type="BoxMesh" id="MeshRave"]
 material = SubResource("MatSteel")
-size = Vector3(0.12, 0.16, 5.3)
+size = Vector3(0.12, 0.16, 4.75)
 
 ; The bolster plate: the trailer's own steel face, resting ON TOP of the tractor's fifth wheel with
 ; a 2 cm gap (y 0.02 .. 0.10 against the plate's 0.95 .. 1.05 in world). Authored coplanar the two
@@ -106,7 +108,7 @@ rings = 1
 
 [sub_resource type="BoxMesh" id="MeshNeck"]
 material = SubResource("MatFrame")
-size = Vector3(1.88, 0.16, 1.36)
+size = Vector3(1.88, 0.16, 2.73)
 
 [sub_resource type="BoxMesh" id="MeshNeckStep"]
 material = SubResource("MatFrame")
@@ -114,11 +116,11 @@ size = Vector3(1.9, 0.38, 0.08)
 
 [sub_resource type="BoxMesh" id="MeshSideMain"]
 material = SubResource("MatPanel")
-size = Vector3(0.06, 1.59, 5.25)
+size = Vector3(0.06, 1.59, 4.7)
 
 [sub_resource type="BoxMesh" id="MeshSideNeck"]
 material = SubResource("MatPanel")
-size = Vector3(0.06, 1.25, 1.25)
+size = Vector3(0.06, 1.25, 2.62)
 
 [sub_resource type="BoxMesh" id="MeshFront"]
 material = SubResource("MatPanel")
@@ -126,11 +128,11 @@ size = Vector3(1.84, 1.21, 0.08)
 
 [sub_resource type="BoxMesh" id="MeshRoof"]
 material = SubResource("MatPanel")
-size = Vector3(1.92, 0.06, 6.5)
+size = Vector3(1.92, 0.06, 7.32)
 
 [sub_resource type="BoxMesh" id="MeshTopRail"]
 material = SubResource("MatSteel")
-size = Vector3(0.05, 0.1, 6.44)
+size = Vector3(0.05, 0.1, 7.26)
 
 [sub_resource type="BoxMesh" id="MeshStrap"]
 material = SubResource("MatSteel")
@@ -223,13 +225,13 @@ material = SubResource("MatLensAmber")
 size = Vector3(0.12, 0.1, 0.04)
 
 [sub_resource type="BoxShape3D" id="ShapeNeck"]
-size = Vector3(1.92, 0.2, 1.35)
+size = Vector3(1.92, 0.2, 2.75)
 
 [sub_resource type="BoxShape3D" id="ShapeBody"]
 size = Vector3(1.92, 1.62, 5.45)
 
 [sub_resource type="BoxShape3D" id="ShapeFront"]
-size = Vector3(1.92, 1.24, 1.35)
+size = Vector3(1.92, 1.24, 2.7)
 
 [sub_resource type="BoxShape3D" id="ShapeBogie"]
 size = Vector3(1.7, 0.4, 1.9)
@@ -239,11 +241,11 @@ script = ExtResource("1_box")
 spec = ExtResource("2_spec")
 
 [node name="CollisionNeck" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0.375)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0.225)
 shape = SubResource("ShapeNeck")
 
 [node name="CollisionFront" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.82, 0.36)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.82, 0.25)
 shape = SubResource("ShapeFront")
 
 [node name="CollisionBody" type="CollisionShape3D" parent="."]
@@ -255,15 +257,15 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.52, 5.45)
 shape = SubResource("ShapeBogie")
 
 [node name="RailL" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, -0.33, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, -0.33, 4.025)
 mesh = SubResource("MeshRail")
 
 [node name="RailR" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, -0.33, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, -0.33, 4.025)
 mesh = SubResource("MeshRail")
 
 [node name="Cross1" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.38, 1.4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.38, 1.9)
 mesh = SubResource("MeshCross")
 
 [node name="Cross2" type="MeshInstance3D" parent="."]
@@ -275,19 +277,19 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.38, 3.9)
 mesh = SubResource("MeshCross")
 
 [node name="Floor" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.16, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.16, 4.025)
 mesh = SubResource("MeshFloor")
 
 [node name="NeckFloor" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.27, 0.425)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.27, 0.29)
 mesh = SubResource("MeshNeckFloor")
 
 [node name="RaveL" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.94, -0.16, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.94, -0.16, 4.025)
 mesh = SubResource("MeshRave")
 
 [node name="RaveR" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.94, -0.16, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.94, -0.16, 4.025)
 mesh = SubResource("MeshRave")
 
 [node name="KingpinPlate" type="MeshInstance3D" parent="."]
@@ -299,59 +301,59 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.07, 0)
 mesh = SubResource("MeshKingpin")
 
 [node name="Neck" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.14, 0.35)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.14, 0.215)
 mesh = SubResource("MeshNeck")
 
 [node name="NeckStep" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 1.05)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 1.6)
 mesh = SubResource("MeshNeckStep")
 
 [node name="SideL" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.93, 0.635, 3.675)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.93, 0.635, 3.95)
 mesh = SubResource("MeshSideMain")
 
 [node name="SideR" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.93, 0.635, 3.675)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.93, 0.635, 3.95)
 mesh = SubResource("MeshSideMain")
 
 [node name="SideNeckL" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.93, 0.805, 0.425)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.93, 0.805, 0.29)
 mesh = SubResource("MeshSideNeck")
 
 [node name="SideNeckR" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.93, 0.805, 0.425)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.93, 0.805, 0.29)
 mesh = SubResource("MeshSideNeck")
 
 [node name="FrontWall" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.805, -0.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.805, -1.02)
 mesh = SubResource("MeshFront")
 
 [node name="Roof" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.46, 3.05)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.46, 2.64)
 mesh = SubResource("MeshRoof")
 
 [node name="TopRailL" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.955, 1.36, 3.04)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.955, 1.36, 2.63)
 mesh = SubResource("MeshTopRail")
 
 [node name="TopRailR" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.955, 1.36, 3.04)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.955, 1.36, 2.63)
 mesh = SubResource("MeshTopRail")
 
 [node name="StrapL1" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.975, 0.66, 1.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.975, 0.66, 1.9)
 mesh = SubResource("MeshStrap")
 
 [node name="StrapL2" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.975, 0.66, 2.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.975, 0.66, 2.9)
 mesh = SubResource("MeshStrap")
 
 [node name="StrapL3" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.975, 0.66, 3.7)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.975, 0.66, 3.9)
 mesh = SubResource("MeshStrap")
 
 [node name="StrapL4" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.975, 0.66, 4.8)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.975, 0.66, 4.9)
 mesh = SubResource("MeshStrap")
 
 [node name="StrapL5" type="MeshInstance3D" parent="."]
@@ -359,19 +361,19 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.975, 0.66, 5.9)
 mesh = SubResource("MeshStrap")
 
 [node name="StrapR1" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.975, 0.66, 1.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.975, 0.66, 1.9)
 mesh = SubResource("MeshStrap")
 
 [node name="StrapR2" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.975, 0.66, 2.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.975, 0.66, 2.9)
 mesh = SubResource("MeshStrap")
 
 [node name="StrapR3" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.975, 0.66, 3.7)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.975, 0.66, 3.9)
 mesh = SubResource("MeshStrap")
 
 [node name="StrapR4" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.975, 0.66, 4.8)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.975, 0.66, 4.9)
 mesh = SubResource("MeshStrap")
 
 [node name="StrapR5" type="MeshInstance3D" parent="."]

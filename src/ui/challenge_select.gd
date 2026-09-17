@@ -129,7 +129,7 @@ func _build_grid_page() -> void:
 			var heading := Label.new()
 			heading.text = family.to_upper()
 			heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			heading.theme_type_variation = &"Title"
+			heading.theme_type_variation = &"Heading"
 			body.add_child(heading)
 
 			var grid := GridContainer.new()

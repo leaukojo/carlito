@@ -9,7 +9,8 @@
   Indices are **zero-based**, matching the wire.
 - Signals are unique by **(name, dir)** — `battery` exists in both directions. `warn` is the
   dashboard danger threshold and **requires a `warn_side`** (`"low"` | `"high"`); the two are
-  parse-rejected apart, never inferred from the range.
+  parse-rejected apart, never inferred from the range. `warn` also **requires a `range`**: the
+  dashboard skips a range-less signal before it looks at `warn`, so the bar would render nothing.
 - **Omit the `range`** on an "out" signal with no meaningful full scale (`engine_hours`) and
   it lands on the readout line beside ODO instead of becoming a bar.
 - The bump also moves `tests/test_contract.gd`'s `test_real_contract_is_valid_v<N>` — the

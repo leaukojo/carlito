@@ -71,8 +71,7 @@ func _ready() -> void:
 		for node in find_children("*", "ChaseCamera", true, false):
 			camera = node as ChaseCamera
 			break
-	# GameState fetched by path, not autoload identifier: CLI bake tools load headless, where autoload globals don't resolve at compile time.
-	_game_state().current_level = scene_file_path
+	GameState.current_level = scene_file_path
 	_setup_baked()
 	_capture_day_night()
 	_capture_conditions()
@@ -138,11 +137,6 @@ func _setup_baked() -> void:
 	add_child((load(baked_path) as PackedScene).instantiate())
 	if authoring != null:
 		authoring.queue_free()
-
-
-## Bare `GameState` would fail to compile under the CLI bake tools; only called in-tree.
-func _game_state() -> Node:
-	return get_node("/root/GameState")
 
 
 ## Grabs the sun + environment and remembers the authored (day) lighting so night is reversible.
@@ -281,6 +275,9 @@ func _spawn_vehicle(variant: String, at: VehicleSpawn = null) -> void:
 			return
 
 	if vehicle != null:
+		# Detach before freeing: queue_free() defers to end of frame, else the outgoing body
+		# stays in the tree (and collidable, sharing layer VEHICLE) for a physics tick under the new one.
+		remove_child(vehicle)
 		vehicle.queue_free()
 
 	vehicle = (load(scene_path) as PackedScene).instantiate()
@@ -289,8 +286,8 @@ func _spawn_vehicle(variant: String, at: VehicleSpawn = null) -> void:
 		vehicle.global_transform = spawn.global_transform
 		vehicle.spawn_transform = spawn.global_transform
 		vehicle.reset_physics_interpolation()
-	_game_state().current_vehicle = family
-	_game_state().current_variant = variant
+	GameState.current_vehicle = family
+	GameState.current_variant = variant
 
 	if camera != null:
 		camera.target = vehicle.get_camera_target()
@@ -347,3 +344,12 @@ func _find_closed_rail() -> Node:
 ## Whether a closed rail loop exists — the shell's roster gate drops "train" from the garage menu when it doesn't.
 func has_closed_rail() -> bool:
 	return _find_closed_rail() != null
+
+
+## Whether `_spawn_vehicle` could actually place `family` here — the same rail check for "train",
+## the same `pick_spawn` walk otherwise — so the vehicle selector can refuse DRIVE with a reason
+## instead of `_spawn_vehicle` silently `push_error`-ing and leaving the old vehicle in place.
+func has_spawn_for(family: StringName) -> bool:
+	if family == "train":
+		return has_closed_rail()
+	return pick_spawn(String(family)) != null

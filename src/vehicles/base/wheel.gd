@@ -33,12 +33,19 @@ var force_long := 0.0   ## last tick's longitudinal tire force (N, +=forward); d
 var contact_point := Vector3.ZERO  ## world-space hit position while in_contact (read by the dust emitter)
 var contact_normal := Vector3.UP  ## world-space contact normal while in_contact; diagnostic only
 var surface_grip := 1.0  ## grip multiplier from the painted terrain under the contact (F3 readout)
+var surface_drag := 0.0  ## added rolling-resistance coefficient of the painted terrain under the contact (F3 readout)
 ## Visual radius minus wheel_radius, which keeps an over- or undersized wheel visual meeting the
 ## ground while physics stays single-radius. Rides the root transform, not the visual's children.
 var visual_lift := 0.0
-## Body mass share this corner carries (kg): `mass / wheel count`, a static build-time quantity
-## that sizes the three 60 Hz clamps below. Constructor-required, since a wheel built with zero
-## applies no damping or tire force and just slides.
+## Body mass share this corner carries (kg): `mass / wheel count`, sizing the three 60 Hz clamps
+## below. Constructor-required, since a wheel built with zero applies no damping or tire force and
+## just slides. It tracks the body's LIVE mass — `WheelDrive.set_corner_mass_from` is called
+## wherever a vehicle rewrites `mass` (the refuse hopper), so the clamps scale with what the body
+## weighs.
+## A semi tractor's plate load is deliberately NOT folded in: the trailer's kingpin share rides the
+## tractor's rear axle without touching `mass`, so this corner mass is understated there — the safe
+## way round, since a clamp sized under the true load can only be tighter (truck/CLAUDE.md § the
+## fifth wheel). Never widen a clamp to chase it; the lever is the spec's own numbers.
 var corner_mass: float
 
 var _prev_compression := 0.0
@@ -53,7 +60,7 @@ func _init(p_anchor: Vector3, p_steered: bool, p_driven: bool, p_visual: Node3D,
 	anchor = p_anchor
 	steered = p_steered
 	driven = p_driven
-	is_rear = p_anchor.z > 0.0
+	is_rear = is_rear_z(p_anchor.z)
 	_visual = p_visual
 	corner_mass = p_corner_mass
 	_query.collision_mask = Layers.SOLID  ## Containment left out — see collision_layers.gd
@@ -67,6 +74,15 @@ func reset() -> void:
 	suspension_force = 0.0
 	slip = 0.0
 	surface_grip = 1.0
+	surface_drag = 0.0
+
+
+## The one front/rear predicate: +Z is rearward in body space, so a station at exactly z == 0 is
+## FRONT. Every site that splits the wheels by axle goes through this, or a z == 0 station is a
+## front wheel to one of them and a rear wheel to another. No shipped spec has one
+## (`test_vehicle_catalog` sweeps for it), so the tie-break costs nothing today.
+static func is_rear_z(z: float) -> bool:
+	return z > 0.0
 
 
 ## Which of the level's painted terrains `point` is on, or null. XZ plus height, not XZ alone, so
@@ -109,6 +125,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		force_long = 0.0
 		contact_normal = Vector3.UP
 		surface_grip = 1.0
+		surface_drag = 0.0
 		_integrate_spin(drive_torque, 0.0, brake_torque, drive_spec, delta, 0.0)  ## airborne
 		_update_visual(drive_spec, delta)
 		return
@@ -118,6 +135,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	contact_normal = normal
 	var terrain := terrain_at(contact_point, grip_terrains)
 	surface_grip = terrain.grip_at(contact_point) if terrain != null else 1.0
+	surface_drag = terrain.drag_at(contact_point) if terrain != null else 0.0
 
 	# Applied along the contact normal, never the chassis up axis, which tips part of the
 	# vertical load into the direction of travel whenever the body pitches.
@@ -171,9 +189,26 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	body.apply_force(forward * f_long + side * f_lat, contact_point - body.global_position)
 	force_long = f_long
 
+	# Surface drag: the ground deforming, not the tyre, so it sits outside the friction circle
+	# and never reaches the spin step (a wheel in mud keeps rolling at road speed; the body is
+	# what slows). Off this tick's normal load like the spec's own rolling resistance.
+	body.apply_force(forward * surface_drag_force(v_long, surface_drag, suspension_force,
+			corner_mass, delta), contact_point - body.global_position)
+
 	_integrate_spin(drive_torque, -f_long * drive_spec.wheel_radius, brake_torque, drive_spec,
 			delta, slip_vel)
 	_update_visual(drive_spec, delta)
+
+
+## Rolling-resistance force (N, along the wheel's forward) from a painted surface: `crr * load`
+## opposing the contact's longitudinal velocity, capped at the force that would zero that
+## velocity in one tick so it can stop the wheel and never push it backward. 0 at rest.
+static func surface_drag_force(v_long: float, crr: float, normal_load: float, moment: float,
+		delta: float) -> float:
+	if crr <= 0.0 or normal_load <= 0.0:
+		return 0.0
+	var tick_cap := moment * absf(v_long) / delta
+	return clampf(-signf(v_long) * crr * normal_load, -tick_cap, tick_cap)
 
 
 ## Wheel spin from drive plus road-reaction torque; brakes decelerate toward zero and never

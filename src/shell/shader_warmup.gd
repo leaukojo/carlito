@@ -14,6 +14,10 @@ extends RefCounted
 ## process and draw materials; the original is left alone (WheelDrive.update_dust rewrites its
 ## `emitting` every tick).
 ##
+## Hidden instances (the plane's prop disc, a lamp lens) are never submitted however wide their
+## box, so each is shown for the warmup frames and hidden again in end(); an instance under a
+## hidden ANCESTOR still isn't drawn and compiles on its first reveal.
+##
 ## Not covered: materials first seen after the load (a V / garage body swap, an E attachment)
 ## and light-count variants (headlights, night) still compile on the frame they first draw.
 
@@ -21,6 +25,7 @@ extends RefCounted
 const CULL_MARGIN := 16384.0
 
 var _margins: Array = []  ## [GeometryInstance3D, float] pairs, the margins to restore
+var _hidden: Array[GeometryInstance3D] = []  ## instances shown for the warmup, to re-hide
 var _twins: Array[GPUParticles3D] = []
 
 
@@ -35,6 +40,9 @@ static func begin(root: Node) -> ShaderWarmup:
 		var gi := node as GeometryInstance3D
 		warmup._margins.append([gi, gi.extra_cull_margin])
 		gi.extra_cull_margin = CULL_MARGIN
+		if not gi.visible:
+			warmup._hidden.append(gi)
+			gi.visible = true
 	return warmup
 
 
@@ -44,6 +52,10 @@ func end() -> void:
 		if is_instance_valid(entry[0]):
 			(entry[0] as GeometryInstance3D).extra_cull_margin = entry[1]
 	_margins.clear()
+	for gi in _hidden:
+		if is_instance_valid(gi):
+			gi.visible = false
+	_hidden.clear()
 	for twin in _twins:
 		if is_instance_valid(twin):
 			twin.queue_free()

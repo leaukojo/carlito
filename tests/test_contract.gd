@@ -27,10 +27,10 @@ func _real_contract() -> ContractScript.ContractData:
 	return _parse_file(ContractScript.CONTRACT_PATH)
 
 
-func test_real_contract_is_valid_v42() -> void:
+func test_real_contract_is_valid_v43() -> void:
 	var data := _real_contract()
 	assert_array(data.errors).is_empty()
-	assert_int(data.version).is_equal(42)
+	assert_int(data.version).is_equal(43)
 
 
 func _assert_core_signals_present(names: PackedStringArray, dir: String) -> void:
@@ -38,7 +38,7 @@ func _assert_core_signals_present(names: PackedStringArray, dir: String) -> void
 	for sig_name in names:
 		assert_bool(data.has_signal_def(sig_name, dir)) \
 			.override_failure_message("missing core '%s' signal: %s" % [dir, sig_name]).is_true()
-		assert_bool(data.is_todo(sig_name, dir)) \
+		assert_bool(data.get_signal_def(sig_name, dir).todo) \
 			.override_failure_message("core '%s' signal must not be todo: %s" % [dir, sig_name]).is_false()
 
 
@@ -154,6 +154,17 @@ func test_fixture_bad_warn_fails() -> void:
 	assert_str("\n".join(data.errors)).contains("'warn'")
 
 
+## A 'warn' with no 'range' is a threshold the dashboard bar builder can never draw: it skips any
+## range-less signal before it ever checks warn (dashboard.gd:_build_bars), so such a signal would
+## render nothing. Refused at parse instead.
+func test_fixture_bad_warn_no_range_fails() -> void:
+	var data := _parse_file("res://tests/fixtures/bad_warn_no_range.json")
+	assert_bool(data.is_valid()).is_false()
+	var joined := "\n".join(data.errors)
+	assert_str(joined).contains("'warn'")
+	assert_str(joined).contains("'range'")
+
+
 ## A threshold with no declared side is half a threshold: the dashboard would not know whether to
 ## highlight above or below it. So 'warn' and 'warn_side' are required together and refused apart,
 ## and the side is never guessed from where the threshold sits in 'range'.
@@ -206,11 +217,11 @@ func test_battery_resolves_distinctly_per_dir() -> void:
 func test_contract_is_fully_implemented() -> void:
 	var data := _real_contract()
 	# Tractor ISOBUS signals: implemented (not todo), flavored isobus.
-	assert_bool(data.is_todo("hitch_pos", "in")).is_false()
 	var hitch := data.get_signal_def("hitch_pos", "in")
+	assert_bool(hitch.todo).is_false()
 	assert_str(hitch.flavor).is_equal("isobus")
 	# Boat signals: implemented — as of v5 NO signal is todo anymore.
-	assert_bool(data.is_todo("pitch", "out")).is_false()
+	assert_bool(data.get_signal_def("pitch", "out").todo).is_false()
 	for sig in data.signals:
 		assert_bool(sig.todo) \
 			.override_failure_message("signal still marked todo: %s/%s" % [sig.dir, sig.name]) \

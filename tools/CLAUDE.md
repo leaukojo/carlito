@@ -4,12 +4,11 @@ Editor/CI scripts. The kit/bake/editor-tool gotchas apply here too:
 commit** — the generator is the source, the `.tscn`/`.tres` is output. Worked example and the
 family-baseline form: `src/vehicles/CLAUDE.md`.
 
-**`gen_boat_variants.gd` cannot be re-run as it stands.** All three shipped
-`src/vehicles/watercraft/*.tscn` carry hand-authored `CollisionLower` + `CollisionUpper` boxes,
-which its `GENERATED_CHILDREN` does not name — so `_existing_extras` preserves them and the run
-adds a convex `CollisionShape3D` beside them, giving every boat three collision shapes. Until the
-recipe emits those boxes, a boat feel change is edited into `VARIANTS` **and** hand-applied to the
-`.tscn`, with `tests/test_boat_variants.gd` proving the two agree.
+**Boat collision is hand-authored, like Kenney's.** `gen_boat_variants.gd` owns only `Model`
++ `Lamps` (`GENERATED_CHILDREN`) and transplants every `CollisionShape3D` child (the tuned
+`CollisionLower`/`CollisionUpper` pair) plus any other hand-added node; only a variant with no
+scene yet gets a generated convex hull. A no-op re-run is byte-stable, so the regen path is the
+same as the Kenney one: edit `VARIANTS`, re-run, diff.
 
 **A level generator's CHAIN lives in that level's manifest, not in a header comment** —
 `src/levels/**/<id>_gen.json`, described in the root `CLAUDE.md`. These headers point at it;

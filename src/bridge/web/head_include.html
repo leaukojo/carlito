@@ -18,7 +18,8 @@
   window.__carlito = { in: {}, inT: 0, ver: 0, outVer: 0, publish: null };
   window.addEventListener('message', function (e) {
     var d = e.data;
-    if (!d || d.type !== 'carlitoInput' || !d.values) return;
+    if (!d || d.type !== 'carlitoInput') return;
+    if (typeof d.values !== 'object' || d.values === null || Array.isArray(d.values)) return;
     window.__carlito.in = d.values;
     window.__carlito.inT = Date.now();
     if (typeof d.version === 'number') window.__carlito.ver = d.version;

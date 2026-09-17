@@ -59,6 +59,11 @@ if [ "$MODE" = dev ]; then
   MSG="deploy dev @ ${SITE_SHA}"
 else
   [ -f "$GHP/dev/index.html" ] || { echo "gh-pages:/dev/ is empty - push to dev and let CI publish before promoting"; exit 1; }
+  # dev's build basename embeds the SHA it was built from (c2-<sha8>.html); require it
+  # to match SITE_SHA so a promote can't copy bytes built from a different commit than
+  # the one it labels.
+  SHA8="${SITE_SHA:0:8}"
+  [ -f "$GHP/dev/c2-${SHA8}.html" ] || { echo "gh-pages:/dev/ has no c2-${SHA8}.html - CI for ${SITE_SHA} has not published yet"; exit 1; }
   rm -rf "$GHP/stable"
   mkdir -p "$GHP/stable"
   cp -r "$GHP/dev/." "$GHP/stable/"

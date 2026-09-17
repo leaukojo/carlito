@@ -62,20 +62,28 @@ func get_camera_framing() -> Dictionary:
 
 func _ready() -> void:
 	super._ready()
-	gravity_scale = 0.0  # the sim owns vertical position; no free fall
 	for child in get_children():
 		if String(child.name).begins_with("Wagon") and child is Node3D:
 			_wagons.append(child as Node3D)
+			if child is PhysicsBody3D:
+				# Every wagon is on VEHICLE like the towing unit (collision_layers.gd), not the
+				# AnimatableBody3D default of layer 1 (TERRAIN).
+				(child as PhysicsBody3D).collision_layer = Layers.VEHICLE
+				(child as PhysicsBody3D).collision_mask = Layers.DYNAMIC
 	var rail := _find_rail()
 	if rail != null:
 		_curve = rail.call("get_rail_curve")
 		_rail_xform = rail.call("rail_to_world")
 		_rail_closed = bool(rail.call("is_rail_closed"))
-		_rail_length = _curve.get_baked_length()
-		_has_rail = _curve != null and _rail_length > 0.0
+		if _curve != null:
+			_rail_length = _curve.get_baked_length()
+			_has_rail = _rail_length > 0.0
 	if _has_rail:
+		gravity_scale = 0.0  # the sim owns vertical position; no free fall
 		_build_sim()
 		_place_consist()
+	else:
+		push_warning("TrainVehicle: no closed rail under this level; consist inert")
 
 
 ## Reset the consist onto its loop at s = 0 with zeroed motion.

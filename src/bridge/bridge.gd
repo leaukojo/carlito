@@ -20,6 +20,7 @@ var _telem: VehicleTelemetry = null ## that level's active vehicle telemetry, re
 var _version_warned := false
 var _missing_warned := {}           ## out-signal names already warned as absent from telemetry
 var _shape_warned := {}             ## out-signal names already warned as the wrong VALUE SHAPE
+var _nonfinite_warned := {}         ## out-signal names already warned as a non-finite value
 ## A challenge attempt is running. Rides the carlitoOutput ENVELOPE, not the contract: it is no
 ## CAN value, and sloppyCAN turns its RAMN demo traffic off on the rising edge so hand-sent frames
 ## are not overwritten.
@@ -62,6 +63,11 @@ func set_challenge(on: bool) -> void:
 ## Register Level's telemetry source. Resolved once per vehicle change, not per publish.
 func bind(level: Node) -> void:
 	_telem = null
+	# A new vehicle family's telemetry starts with a clean warning slate: a signal that was
+	# missing/wrong-shaped on the last family must not silence the same bug on this one.
+	_missing_warned.clear()
+	_shape_warned.clear()
+	_nonfinite_warned.clear()
 	if level != null:
 		var vehicle: Node = level.get("vehicle")
 		if vehicle != null:
@@ -83,13 +89,15 @@ func _poll_inbound() -> void:
 		_active = false
 		_inbound = {}
 		return
-	_active = true
 	_inbound = parsed.get("d", {})
+	# Agrees with bridge_source.poll(), which reports inactive on an empty value dict.
+	_active = not _inbound.is_empty()
 	_inbound_version = int(parsed.get("v", 0))
 	if _inbound_version != 0 and _inbound_version != Contract.data.version and not _version_warned:
 		_version_warned = true
 		push_warning("Bridge: contract version mismatch — sloppyCAN v%d vs game v%d" % [
 			_inbound_version, Contract.data.version])
+		GameState.notice.emit("SLOPPYCAN CONTRACT VERSION MISMATCH", 0.0)
 
 
 func _publish() -> void:
@@ -115,6 +123,9 @@ func _publish() -> void:
 		elif typeof(value) == TYPE_ARRAY:
 			_warn_shape(sig.name, "a scalar (contract declares no 'count')", value)
 			continue
+		if not _all_finite(value):
+			_warn_nonfinite(sig.name)
+			continue
 		values[sig.name] = value
 	# JSON valid in JS object-literal syntax, embeds directly to publish() with no escaping.
 	JavaScriptBridge.eval("if(window.__carlito&&window.__carlito.publish)window.__carlito.publish(%s,%s);" % [
@@ -126,6 +137,25 @@ func _warn_shape(sig_name: String, expected: String, got: Variant) -> void:
 		return
 	_shape_warned[sig_name] = true
 	push_warning("Bridge: out signal '%s' must be %s, got %s" % [sig_name, expected, got])
+
+
+func _warn_nonfinite(sig_name: String) -> void:
+	if _nonfinite_warned.has(sig_name):
+		return
+	_nonfinite_warned[sig_name] = true
+	push_warning("Bridge: out signal '%s' has a non-finite value, skipped" % sig_name)
+
+
+## Whether `value` (a scalar or an Array, per the shape check above) is safe to
+## JSON.stringify into the JavaScriptBridge.eval string — a non-finite float serialises as
+## bare `nan`/`inf`, which is not valid JS and throws inside eval, killing every publish.
+static func _all_finite(value: Variant) -> bool:
+	if typeof(value) == TYPE_ARRAY:
+		for v: Variant in (value as Array):
+			if typeof(v) == TYPE_FLOAT and not is_finite(v):
+				return false
+		return true
+	return not (typeof(value) == TYPE_FLOAT and not is_finite(value))
 
 
 ## An instanced signal's value: an Array of exactly `count` numbers.

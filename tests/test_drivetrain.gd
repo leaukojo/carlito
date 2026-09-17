@@ -309,6 +309,104 @@ func test_a_governed_engine_still_turns_with_the_wheels() -> void:
 	assert_float(dt.rpm).is_greater(spec.idle_rpm)
 
 
+# --- overrun (engine braking) ----------------------------------------------
+
+func test_overrun_is_absent_unless_declared() -> void:
+	var spec := _spec()
+	assert_float(DrivetrainScript.overrun_torque(spec, 4000.0, 0.0, 1)).is_equal(0.0)
+
+
+func test_overrun_is_zero_with_any_throttle_in_neutral_and_at_idle() -> void:
+	var spec := _spec()
+	spec.engine_brake_frac = 0.1
+	assert_float(DrivetrainScript.overrun_torque(spec, 4000.0, 0.01, 1)).is_equal(0.0)
+	assert_float(DrivetrainScript.overrun_torque(spec, 4000.0, 0.0, GEAR_N)).is_equal(0.0)
+	assert_float(DrivetrainScript.overrun_torque(spec, 800.0, 0.0, 1)).is_equal(0.0)
+
+
+func test_overrun_signed_against_the_gear_and_scaled_by_ratio_and_rpm() -> void:
+	var spec := _spec()
+	spec.engine_brake_frac = 0.1
+	# Peak 300, frac 0.1 = 30 Nm at the crank at redline; gear 1 ratio 3*4 = 12, / eff 0.9.
+	assert_float(DrivetrainScript.overrun_torque(spec, 4000.0, 0.0, 1)) \
+			.is_equal_approx(-30.0 * 12.0 / 0.9, 1e-6)
+	# Halfway idle->redline (2400) is half the torque.
+	assert_float(DrivetrainScript.overrun_torque(spec, 2400.0, 0.0, 1)) \
+			.is_equal_approx(-15.0 * 12.0 / 0.9, 1e-6)
+	# Reverse rolls the other way, so overrun there is positive.
+	assert_float(DrivetrainScript.overrun_torque(spec, 4000.0, 0.0, GEAR_R)) \
+			.is_equal_approx(30.0 * 3.2 * 4.0 / 0.9, 1e-6)
+
+
+func test_process_on_overrun_returns_negative_torque_with_no_load() -> void:
+	var spec := _spec()
+	spec.engine_brake_frac = 0.1
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	# Enter D at speed (wheel omega 60 rad/s -> ~6900 rpm raw, clamped to redline), lift off.
+	var torque := 0.0
+	for i in 120:
+		torque = dt.process(1.0 / 60.0, 0.0, 60.0, 20.0, 1, true)
+	assert_float(torque).is_less(0.0)
+	assert_float(dt.applied_throttle).is_equal(0.0)
+	# Any pedal at all ends it, and the full-throttle torque is what it was.
+	var driven: float = dt.process(1.0 / 60.0, 1.0, 60.0, 20.0, 1, true)
+	assert_float(driven).is_equal(DrivetrainScript.wheel_torque(spec, dt.rpm, 1.0, dt.gear_byte))
+
+
+# --- shift cut ---------------------------------------------------------------
+
+func test_shift_cut_ticks_rounds_up_and_is_zero_without_a_cut() -> void:
+	assert_int(DrivetrainScript.shift_cut_ticks(0.0, 1.0 / 60.0)).is_equal(0)
+	assert_int(DrivetrainScript.shift_cut_ticks(0.1, 1.0 / 60.0)).is_equal(6)
+	assert_int(DrivetrainScript.shift_cut_ticks(0.15, 1.0 / 60.0)).is_equal(9)
+
+
+func test_is_shift_needs_both_sides_engaged() -> void:
+	assert_bool(DrivetrainScript.is_shift(1, 2)).is_true()
+	assert_bool(DrivetrainScript.is_shift(1, GEAR_R)).is_true()
+	assert_bool(DrivetrainScript.is_shift(GEAR_N, 1)).is_false()
+	assert_bool(DrivetrainScript.is_shift(1, GEAR_N)).is_false()
+	assert_bool(DrivetrainScript.is_shift(3, 3)).is_false()
+
+
+func test_exact_byte_change_cuts_throttle_for_the_declared_ticks() -> void:
+	var spec := _spec()
+	spec.shift_cut_s = 0.1  # 6 ticks at 60 Hz
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	dt.process(1.0 / 60.0, 1.0, 30.0, 10.0, 1, false)
+	assert_float(dt.applied_throttle).is_equal(1.0)  # N->D is a selection, not a shift
+	for i in 6:
+		var torque: float = dt.process(1.0 / 60.0, 1.0, 30.0, 10.0, 2, false)
+		assert_bool(dt.shift_cut_active() or i == 5) \
+				.override_failure_message("cut ended early at tick %d" % i).is_true()
+		assert_float(dt.applied_throttle).is_equal(0.0)
+		assert_float(torque).is_less_equal(0.0)  # overrun only (0 here: engine_brake_frac 0)
+	dt.process(1.0 / 60.0, 1.0, 30.0, 10.0, 2, false)
+	assert_bool(dt.shift_cut_active()).is_false()
+	assert_float(dt.applied_throttle).is_equal(1.0)
+
+
+func test_no_cut_declared_means_no_interruption() -> void:
+	var spec := _spec()
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	dt.process(1.0 / 60.0, 1.0, 30.0, 10.0, 1, false)
+	dt.process(1.0 / 60.0, 1.0, 30.0, 10.0, 2, false)
+	assert_float(dt.applied_throttle).is_equal(1.0)
+
+
+func test_auto_upshift_latches_the_cut_once() -> void:
+	var spec := _spec()
+	spec.shift_cut_s = 0.1
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	dt.process(1.0 / 60.0, 1.0, 0.0, 0.0, 1, true)
+	assert_int(dt.gear_byte).is_equal(1)
+	# Fast enough in gear 1 that road rpm is past shift_up: it upshifts this tick and cuts.
+	dt.process(1.0 / 60.0, 1.0, 60.0, 20.0, 1, true)
+	assert_int(dt.gear_byte).is_equal(2)
+	assert_bool(dt.shift_cut_active()).is_true()
+	assert_float(dt.applied_throttle).is_equal(0.0)
+
+
 func test_governed_upshift_takes_the_tallest_gear_that_still_pulls() -> void:
 	# The van case: a limit that lands just below the rpm-based upshift point used to strand
 	# the box a gear short, and the measure tool reported it as an unreachable ratio.

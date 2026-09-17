@@ -45,6 +45,12 @@ jobs:
             exit 1
           fi
 
+      # export_presets.cfg's pasted Head Include must match its source file verbatim
+      # (root CLAUDE.md: "The bridge shim rides the web export's Head Include... Both are
+      # vendored copies that must stay in sync"). GitHub-hosted ubuntu runners ship node.
+      - name: Head-include sync check
+        run: node tools/check_head_include.mjs
+
       - name: Import project
         run: godot --headless --import
 
@@ -54,9 +60,23 @@ jobs:
       # checking. The .baked.scn is untracked, so every level reads "unbuilt" here (the
       # manifest verifies, the artifact is not built yet) and that passes; "stale" fails.
       # Game-mode tool scene (not --script): level scripts only compile with autoloads
-      # registered.
+      # registered. Judged by output, not exit code — check_bakes.gd's own sentinel
+      # comment notes headless Godot can finish the check and still die during teardown,
+      # turning a clean run into a non-zero exit; absence of the sentinel is the failure.
       - name: Stale-bake check
-        run: godot --headless res://tools/check_bakes.tscn
+        shell: bash
+        run: |
+          set +e
+          godot --headless res://tools/check_bakes.tscn 2>&1 | tee check_bakes.log
+          set -e
+          if grep -qE '\[check-bakes\].*: (stale|missing|error)' check_bakes.log; then
+            echo "stale bakes: lines above"
+            exit 1
+          fi
+          if ! grep -q '\[check-bakes\] complete:' check_bakes.log; then
+            echo "check-bakes produced no completion sentinel — the run did not finish"
+            exit 1
+          fi
 
       # The .baked.scn is build output, not a committed artifact (root CLAUDE.md § Levels
       # & water). Bake all six registered levels here, before the tests: the unit suite's
@@ -65,7 +85,9 @@ jobs:
       - name: Bake levels
         shell: bash
         run: |
+          set +e
           godot --headless res://tools/bake_levels.tscn 2>&1 | tee bake.log
+          set -e
           if grep -E "^\[bake\] " bake.log | grep -vE ": OK — |: no AuthoringRoot, skipped"; then
             echo "bake failed: lines above"
             exit 1
@@ -90,7 +112,9 @@ jobs:
       - name: Headless smoke
         shell: bash
         run: |
+          set +e
           godot --headless --quit-after 120 2>&1 | tee smoke.log
+          set -e
           if grep -E "SCRIPT ERROR|ERROR:" smoke.log | grep -vE "still in use at exit|leaked at exit|Pages in use exist at exit"; then
             echo "smoke failed: errors above"
             exit 1
@@ -106,7 +130,9 @@ jobs:
         env:
           CARLITO_LEVEL: level_1
         run: |
+          set +e
           godot --headless --quit-after 120 2>&1 | tee baked.log
+          set -e
           if grep -E "SCRIPT ERROR|ERROR:" baked.log | grep -vE "still in use at exit|leaked at exit|Pages in use exist at exit"; then
             echo "baked smoke failed: errors above"
             exit 1
@@ -136,7 +162,9 @@ jobs:
         run: |
           SHORT_SHA="${GITHUB_SHA:0:8}"
           mkdir -p build/web
+          set +e
           godot --headless --export-release "Web" "build/web/c2-${SHORT_SHA}.html" 2>&1 | tee export.log
+          set -e
           for id in $(tr -d '\r' < export_presets.cfg | sed -n 's/^name="Web \(.*\)"$/\1/p'); do
             godot --headless --export-patch "Web ${id}" "build/web/c2-${SHORT_SHA}.${id}.pck" \
               --patches "build/web/c2-${SHORT_SHA}.pck" > "patch-${id}.log" 2>&1 || true

@@ -23,6 +23,10 @@ const GOVERNOR_BAND := 1.5
 ## Gear-selection radius (m) for a body with no ground drive, which still walks a gearbox and
 ## publishes the gear byte without owning a wheel.
 const DEFAULT_ROAD_RADIUS := 0.32
+## Floor under any declared `wheel_radius` (m): it is a divisor below (gear selection,
+## governed_upshift), and no real wheel is this small, so a misconfigured 0 cannot reach the
+## division.
+const MIN_ROAD_RADIUS := 0.05
 
 var spec: VehicleSpec
 ## Radius the gear-selection scale (`ground_speed / road_radius`) is measured against, declared
@@ -34,12 +38,14 @@ var rpm: float
 ## reads this, not `input.throttle` (rule 3): a governed vehicle holds the pedal down while fuel
 ## is cut.
 var applied_throttle := 0.0
+## Ticks left in the post-shift throttle cut (`spec.shift_cut_s`), 0 when driving through.
+var _shift_cut_ticks := 0
 
 
 func _init(p_spec: VehicleSpec) -> void:
 	spec = p_spec
-	road_radius = p_spec.ground_drive.wheel_radius if p_spec.ground_drive != null \
-			else DEFAULT_ROAD_RADIUS
+	road_radius = maxf(p_spec.ground_drive.wheel_radius, MIN_ROAD_RADIUS) \
+			if p_spec.ground_drive != null else DEFAULT_ROAD_RADIUS
 	rpm = spec.idle_rpm
 
 
@@ -132,6 +138,25 @@ static func wheel_torque(p_spec: VehicleSpec, at_rpm: float, throttle: float, by
 			* ratio_for_byte(p_spec, byte) * p_spec.efficiency
 
 
+## Overrun torque at the drive axle (Nm) with the pedal released: the engine absorbing
+## `engine_brake_frac` of its peak, scaled linearly from 0 at idle to full at redline, through
+## the gear ratio and DIVIDED by efficiency (a load the engine absorbs pays the driveline loss
+## the other way). Signed AGAINST the gear's rolling direction, so reverse overrun is +.
+## Hard edge at throttle 0 on purpose: any fade across low throttle eats real drive torque
+## and moves shipped top speeds. 0 in N, at idle, or with any throttle at all.
+static func overrun_torque(p_spec: VehicleSpec, at_rpm: float, throttle: float,
+		byte: int) -> float:
+	if throttle > 0.0 or p_spec.engine_brake_frac <= 0.0:
+		return 0.0
+	var ratio := ratio_for_byte(p_spec, byte)
+	if ratio == 0.0:
+		return 0.0
+	var rpm01 := clampf((at_rpm - p_spec.idle_rpm)
+			/ maxf(1.0, p_spec.redline_rpm - p_spec.idle_rpm), 0.0, 1.0)
+	return -p_spec.engine_brake_frac * peak_torque(p_spec) * rpm01 * ratio \
+			/ maxf(p_spec.efficiency, 0.05)
+
+
 ## Common spin speed of a rigidly locked axle: one shaft, so the mean is the momentum-conserving
 ## result. It only shrinks the spread between the two wheels, so it adds no energy and needs no
 ## clamp. Unlocked, equal torque to both half-shafts is the open-differential law.
@@ -217,6 +242,24 @@ static func retarder_pct(applied_nm: float, rated_nm: float) -> float:
 	return clampf(absf(applied_nm) / rated_nm * 100.0, 0.0, 100.0)
 
 
+## True while the post-shift throttle cut is running (telemetry/dash read-back).
+func shift_cut_active() -> bool:
+	return _shift_cut_ticks > 0
+
+
+## Ticks a shift cut lasts at this tick length: whole ticks, rounded up, 0 for no cut.
+static func shift_cut_ticks(cut_s: float, delta: float) -> int:
+	if cut_s <= 0.0 or delta <= 0.0:
+		return 0
+	return ceili(cut_s / delta)
+
+
+## A byte change that is a SHIFT: both sides engaged (D or R), so N<->D is a selection, not a
+## shift, and D1->D2 or a bridge D->R write are.
+static func is_shift(from_byte: int, to_byte: int) -> bool:
+	return from_byte != to_byte and from_byte != GEAR_N and to_byte != GEAR_N
+
+
 ## One clutch-less shift step within D1-D6 on rpm thresholds; N/R never auto-shift.
 static func auto_shift(p_spec: VehicleSpec, byte: int, at_rpm: float) -> int:
 	if not is_drive(byte):
@@ -237,6 +280,7 @@ static func auto_shift(p_spec: VehicleSpec, byte: int, at_rpm: float) -> int:
 func process(delta: float, throttle: float, drive_wheel_omega: float,
 		ground_speed: float, requested_byte: int, auto: bool) -> float:
 	var req := normalize_byte(requested_byte)
+	var prev_byte := gear_byte
 	if auto:
 		if req == GEAR_R or req == GEAR_N:
 			gear_byte = req
@@ -252,6 +296,10 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 				gear_byte = governed_upshift(spec, gear_byte, ground_speed, road_radius)
 	else:
 		gear_byte = req
+	# One latch per tick however many gears governed_upshift walked: the comparison is against
+	# the byte this tick STARTED with.
+	if is_shift(prev_byte, gear_byte):
+		_shift_cut_ticks = shift_cut_ticks(spec.shift_cut_s, delta)
 
 	# In N the wheels say nothing about crank speed, so a free-rev model stands in, built off the
 	# redline so it can never trip the limiter.
@@ -269,4 +317,15 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 	applied_throttle = clampf(throttle, 0.0, 1.0) * governor_scale(spec, ground_speed)
 	if limiter_cut(spec, limiter_rpm):
 		applied_throttle = 0.0
-	return wheel_torque(spec, rpm, applied_throttle, gear_byte)
+	# Overrun reads the PEDAL, not applied_throttle: a governed or limited engine with the
+	# pedal down is not on overrun, and applied_throttle stays 0 on overrun so fuel / coolant /
+	# engine_load see no load (J1939 negative percent-torque is deliberately not modelled).
+	var pedal := clampf(throttle, 0.0, 1.0)
+	# The shift cut is a lift: no drive, overrun as if the pedal were up, and the cut rides
+	# applied_throttle like the limiter's so telemetry reads it.
+	if _shift_cut_ticks > 0:
+		_shift_cut_ticks -= 1
+		applied_throttle = 0.0
+		pedal = 0.0
+	return wheel_torque(spec, rpm, applied_throttle, gear_byte) \
+			+ overrun_torque(spec, rpm, pedal, gear_byte)

@@ -126,6 +126,7 @@ const CAR_BASE := {
 	# shift_up 5900, bound by the weak bodies reaching sixth; governed bodies (van/pickup) reach
 	# it via `Drivetrain.governed_upshift`.
 	"final_drive": 3.9, "efficiency": 0.9, "shift_up_rpm": 5900.0, "shift_down_rpm": 2200.0,
+	"engine_brake_frac": 0.12, "shift_cut_s": 0.15,
 	"max_steer_deg": 38.0, "steer_speed": 7.0,
 	# Steering falloff: BaseVehicle lerps lock from full to min_steer_frac near
 	# steer_falloff_speed, so the pair states an absolute lock at motorway speed — divide by the
@@ -150,6 +151,7 @@ const TRUCK_BASE := {
 	# 6th 1.0 -> 0.92: overdrive top, governed speed ~102 km/h vs 96.5 direct-drive.
 	"gear_ratios": [6.5, 3.7, 2.4, 1.6, 1.2, 0.92], "reverse_ratio": 6.0,
 	"final_drive": 4.5, "efficiency": 0.9, "shift_up_rpm": 2600.0, "shift_down_rpm": 1200.0,
+	"engine_brake_frac": 0.15, "shift_cut_s": 0.4,
 	"max_steer_deg": 26.0, "steer_speed": 2.0,
 	# ~4.8 deg floor (0.22x22) at 26 m/s, under both governed cruise speeds (85/110 km/h);
 	# 16.5 deg at 30 km/h, tighter than mu_lat 0.95 allows.
@@ -171,6 +173,7 @@ const VAN_BASE := {
 	# 6th 1.0 -> 0.78: governed top ~120 km/h.
 	"gear_ratios": [6.5, 3.7, 2.4, 1.6, 1.2, 0.78], "reverse_ratio": 6.0,
 	"final_drive": 4.5, "efficiency": 0.9, "shift_up_rpm": 2600.0, "shift_down_rpm": 1200.0,
+	"engine_brake_frac": 0.12, "shift_cut_s": 0.15,
 	"max_steer_deg": 26.0, "steer_speed": 2.0,
 	# ~6 deg floor (0.23x26) at 28 m/s, between the cars' 10 deg and trucks' 4.8. Ambulance keeps
 	# the fraction on its narrower 24 deg rack (5.5 deg).
@@ -192,6 +195,7 @@ const TRACTOR_BASE := {
 	# (tyre-derived), so a crawler gear costs only a bigger handbrake.
 	"gear_ratios": [7.0, 5.2, 3.9, 2.9, 2.15, 1.6], "reverse_ratio": 7.0,
 	"final_drive": 5.5, "efficiency": 0.9, "shift_up_rpm": 2200.0, "shift_down_rpm": 1000.0,
+	"engine_brake_frac": 0.20, "shift_cut_s": 0.0,  ## powershift: no interruption
 	"max_steer_deg": 38.0, "steer_speed": 1.8,
 	# steer_falloff_speed 11 m/s = 39.6 km/h is the tractor's own top speed, so the floor lock
 	# arrives exactly at type-approval road speed. 0.55 keeps field-work cost (8-12 km/h headland
@@ -397,6 +401,8 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	spec.reverse_ratio = float(b["reverse_ratio"])
 	spec.final_drive = get_f.call("final_drive")
 	spec.efficiency = float(b["efficiency"])
+	spec.engine_brake_frac = float(b["engine_brake_frac"])
+	spec.shift_cut_s = float(b["shift_cut_s"])
 	spec.shift_up_rpm = float(b["shift_up_rpm"])
 	spec.shift_down_rpm = float(b["shift_down_rpm"])
 	# Road-speed governor (0 = ungoverned). Per variant with a baseline fallback: what a body is

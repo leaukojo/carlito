@@ -2,10 +2,9 @@
 
 ## A locked handbrake never releases, at any throttle
 
-`Drivetrain.wheel_engine_rpm` (`src/vehicles/base/drivetrain.gd:87-91`) derives engine rpm
-directly from driven-wheel omega — no clutch, no torque converter. Once the handbrake locks a
-wheel (omega settles to 0), `process()`'s `target_rpm` clamps to `idle_rpm`
-(`drivetrain.gd:264`) regardless of throttle, so the torque curve is sampled near idle forever.
+`Drivetrain.wheel_engine_rpm` derives engine rpm directly from driven-wheel omega — no clutch,
+no torque converter. Once the handbrake locks a wheel (omega settles to 0), `process()`'s
+`target_rpm` clamps to `idle_rpm` regardless of throttle, so the torque curve is sampled near idle forever.
 Confirmed with a scratch test (flat ground, handbrake full on, 100% throttle held): a ~0.1 s
 launch transient lets the wheel slip a few cm (rpm briefly spikes to ~2500), then it re-settles
 to zero, rpm collapses back to idle, and the car sits completely still — for as long as the test
@@ -60,3 +59,24 @@ sloppyCAN has a vehicle panel per family (`drone.js`, `truck.js`, `tractor.js`, 
 tab or mode — DroneCAN, J1939, ISO 11783, NMEA 2000 — and there is none for either. Detection
 needs no contract change: both families already have exclusive `dir:'out'` signals.
 
+## Truck model hygiene (per-axle springs, spring-brake notice, honest tests/tools)
+
+Five phases, each measured before the next, in `docs/plans/truck_model_hygiene.md`. Biggest
+payoff is the per-axle spring rate: every truck rides nose-up (the Kenney ones on their rear
+stops) because one rate serves a rear axle carrying 2-3x the front's load.
+
+## Shader warmup misses post-load materials
+
+`ShaderWarmup` compiles every material the level holds at load (hidden instances included),
+but gl_compatibility still compiles synchronously on the first draw of anything that arrives
+later: a V / garage body swap, an E attachment or trailer, and the light-count variants when
+headlights or night first light a material. Each shows as a one-frame hitch on web. A fix is a
+warmup pass per swap (instantiate the body off-screen for a frame with grown cull margins) and
+a load-time frame with headlights on; not a one-liner, needs a hitch measurement first.
+
+## Bake output is not byte-deterministic
+
+A full `bake_levels` run rewrites the `output_hash` of levels whose `input_hash` did not change
+(seen on level_1/2/4/5 after touching only the sun in three other levels). Every re-bake therefore
+dirties every manifest. Something in the bake serialises in varying order (dictionary iteration,
+sub-resource ids or generated uids are the usual suspects). Find it, or hash a canonical form.

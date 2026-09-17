@@ -28,13 +28,13 @@ func _on_vehicle_changed(_family: String) -> void:
 ## Centred name headline, then two equal-length stat columns (variant names run too long to inline).
 func _refresh_stats() -> void:
 	var spec: VehicleSpec = vehicle.spec
-	_title.text = _game_state().current_variant
+	_title.text = GameState.current_variant
 	if spec == null:
 		_stats_left.text = "No spec"
 		_stats_right.text = ""
 		return
 	var left: PackedStringArray = [
-		"Family: %s" % _game_state().current_vehicle,
+		"Family: %s" % GameState.current_vehicle,
 		"Mass: %d kg" % roundi(spec.mass),
 		"Drive: %s" % _drive_text(spec),
 	]

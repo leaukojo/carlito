@@ -12,22 +12,24 @@
 ;
 ; Sizes are measured against the shipped kit, not against real trucks: the sedan is 1.80 m wide
 ; and 2.88 long, the garbage truck 1.92 x 3.85 x 1.72. So this is 1.92 wide (truck-family width)
-; with a 5.40 m deck behind a 1.35 m neck, and the whole rig behind the 3.40 m tractor unit comes
-; to ~8.9 m.
+; with a 4.85 m deck behind a 2.75 m neck, and the whole rig behind the 5.45 m tractor unit comes
+; to ~10.8 m.
 ;
 ; IT IS A GOOSENECK, AND THAT IS STRUCTURAL RATHER THAN DECORATIVE. NOTHING of the trailer may hang
-; below the coupling plane (y = 0) over the tractor: the front 1.35 m is a raised NECK whose
+; below the coupling plane (y = 0) over the tractor: the front 2.75 m is a raised NECK whose
 ; underside is the bolster plate, and the frame + deck step DOWN behind the tractor's tail (from
-; z 1.05, which clears its rear bumper at z 0.96 in this frame). Authored flat instead — one deck
-; height end to end, 0.46 m BELOW the plate — the deck and both frame rails ran straight through
-; the tractor's own frame rails, mudguards and fifth wheel. A real semi-trailer has this shape for
-; exactly this reason.
+; z 1.60, which clears its rearmost structure at z 1.26 in this frame). Authored flat instead — one
+; deck height end to end, 0.46 m BELOW the plate — the deck and both frame rails ran straight
+; through the tractor's own frame rails, mudguards and fifth wheel. A real semi-trailer has this
+; shape for exactly this reason.
 ;
 ; The clearances that are geometry rather than taste:
-;   - the front overhang is 0.33 m (the neck, which is the frontmost part), so the front corners
-;     swing on sqrt(0.96^2 + 0.33^2) = 1.02 m, INSIDE the 1.15 m from the kingpin to the cab's rear
+;   - the front overhang is 1.15 m (the neck, which is the frontmost part), so the front corners
+;     swing on sqrt(0.96^2 + 1.15^2) = 1.50 m, INSIDE the 1.85 m from the kingpin to the cab's rear
 ;     face. A real artic is built to exactly this rule, and it is what lets the rig fold right round
-;     without the trailer reaching the cab. test_trailer measures it off this scene.
+;     without the trailer reaching the cab. test_trailer measures it off this scene. The overhang is
+;     what makes the rig read as an artic: a nose that stops short of the cab leaves the tractor's
+;     frame bare and a metre of daylight where a trailer's front wall belongs.
 ;   - the landing legs are authored RETRACTED, feet 0.14 m clear of the road, because the trailer
 ;     spawns coupled. There is nothing to lower them with and they are not collision.
 ;
@@ -67,7 +69,7 @@ roughness = 0.4
 
 [sub_resource type="BoxMesh" id="MeshRail"]
 material = SubResource("MatFrame")
-size = Vector3(0.14, 0.26, 5.4)
+size = Vector3(0.14, 0.26, 4.85)
 
 [sub_resource type="BoxMesh" id="MeshCross"]
 material = SubResource("MatFrame")
@@ -75,11 +77,11 @@ size = Vector3(1.1, 0.1, 0.12)
 
 [sub_resource type="BoxMesh" id="MeshPlank"]
 material = SubResource("MatDeck")
-size = Vector3(0.34, 0.08, 5.36)
+size = Vector3(0.34, 0.08, 4.81)
 
 [sub_resource type="BoxMesh" id="MeshRave"]
 material = SubResource("MatSteel")
-size = Vector3(0.08, 0.16, 5.4)
+size = Vector3(0.08, 0.16, 4.85)
 
 [sub_resource type="BoxMesh" id="MeshPocket"]
 material = SubResource("MatSteel")
@@ -109,7 +111,7 @@ rings = 1
 ; nothing here reaches below the coupling plane.
 [sub_resource type="BoxMesh" id="MeshNeck"]
 material = SubResource("MatFrame")
-size = Vector3(1.92, 0.16, 1.38)
+size = Vector3(1.92, 0.16, 2.75)
 
 ; The step face closing the drop from the neck down to the deck.
 [sub_resource type="BoxMesh" id="MeshNeckStep"]
@@ -181,10 +183,10 @@ material = SubResource("MatLensAmber")
 size = Vector3(0.12, 0.1, 0.04)
 
 [sub_resource type="BoxShape3D" id="ShapeFrame"]
-size = Vector3(1.92, 0.55, 5.4)
+size = Vector3(1.92, 0.55, 4.85)
 
 [sub_resource type="BoxShape3D" id="ShapeNeck"]
-size = Vector3(1.92, 0.2, 1.35)
+size = Vector3(1.92, 0.2, 2.75)
 
 [sub_resource type="BoxShape3D" id="ShapeHeadboard"]
 size = Vector3(1.92, 0.6, 0.12)
@@ -197,15 +199,15 @@ script = ExtResource("1_towed")
 spec = ExtResource("2_spec")
 
 [node name="CollisionFrame" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 4.025)
 shape = SubResource("ShapeFrame")
 
 [node name="CollisionNeck" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0.375)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0.225)
 shape = SubResource("ShapeNeck")
 
 [node name="CollisionHeadboard" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.49, -0.15)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.49, -0.97)
 shape = SubResource("ShapeHeadboard")
 
 [node name="CollisionBogie" type="CollisionShape3D" parent="."]
@@ -213,15 +215,15 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.52, 5.45)
 shape = SubResource("ShapeBogie")
 
 [node name="RailL" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, -0.33, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, -0.33, 4.025)
 mesh = SubResource("MeshRail")
 
 [node name="RailR" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, -0.33, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, -0.33, 4.025)
 mesh = SubResource("MeshRail")
 
 [node name="Cross1" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.38, 1.4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.38, 1.9)
 mesh = SubResource("MeshCross")
 
 [node name="Cross2" type="MeshInstance3D" parent="."]
@@ -233,35 +235,35 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.38, 3.9)
 mesh = SubResource("MeshCross")
 
 [node name="Plank1" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.76, -0.16, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.76, -0.16, 4.025)
 mesh = SubResource("MeshPlank")
 
 [node name="Plank2" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.38, -0.16, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.38, -0.16, 4.025)
 mesh = SubResource("MeshPlank")
 
 [node name="Plank3" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.16, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.16, 4.025)
 mesh = SubResource("MeshPlank")
 
 [node name="Plank4" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.38, -0.16, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.38, -0.16, 4.025)
 mesh = SubResource("MeshPlank")
 
 [node name="Plank5" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.76, -0.16, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.76, -0.16, 4.025)
 mesh = SubResource("MeshPlank")
 
 [node name="RaveL" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.92, -0.16, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.92, -0.16, 4.025)
 mesh = SubResource("MeshRave")
 
 [node name="RaveR" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.92, -0.16, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.92, -0.16, 4.025)
 mesh = SubResource("MeshRave")
 
 [node name="PocketL1" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.955, -0.18, 1.4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.955, -0.18, 2)
 mesh = SubResource("MeshPocket")
 
 [node name="PocketL2" type="MeshInstance3D" parent="."]
@@ -269,7 +271,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.955, -0.18, 4.2)
 mesh = SubResource("MeshPocket")
 
 [node name="PocketR1" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.955, -0.18, 1.4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.955, -0.18, 2)
 mesh = SubResource("MeshPocket")
 
 [node name="PocketR2" type="MeshInstance3D" parent="."]
@@ -285,15 +287,15 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.07, 0)
 mesh = SubResource("MeshKingpin")
 
 [node name="Neck" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.14, 0.36)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.14, 0.225)
 mesh = SubResource("MeshNeck")
 
 [node name="NeckStep" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.99)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.54)
 mesh = SubResource("MeshNeckStep")
 
 [node name="Headboard" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.49, -0.15)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.49, -0.97)
 mesh = SubResource("MeshHeadboard")
 
 [node name="LegL" type="MeshInstance3D" parent="."]

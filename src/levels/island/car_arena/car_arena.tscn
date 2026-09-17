@@ -101,6 +101,7 @@ splatmap = ExtResource("7_splat")
 splatmap2 = ExtResource("17_splat2")
 channel_names = PackedStringArray("Grass", "Dirt", "Sand", "Rock", "Ice", "Mud", "Asphalt", "Gravel")
 channel_grip = PackedFloat32Array(0.8, 0.7, 0.6, 0.7, 0.55, 0.5, 1.0, 0.85)
+channel_drag = PackedFloat32Array(0.06, 0.03, 0.1, 0.01, 0, 0.2, 0, 0.02)
 sand_height = 2.0
 dirt_slope_deg = 22.0
 rock_slope_deg = 38.0

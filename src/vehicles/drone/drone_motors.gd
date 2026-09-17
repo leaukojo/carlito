@@ -50,6 +50,8 @@ func _init(body: Node3D) -> void:
 		if rotor == null:
 			push_error("DroneMotors: rotor '%s' (esc_index %d) is missing from the scene." % [m["node"], i])
 			_rotors.clear()
+			_offsets.clear()
+			_blurs.clear()
 			return
 		if signf(rotor.position.x) != float(m["roll"]) or signf(-rotor.position.z) != float(m["pitch"]):
 			push_error("DroneMotors: rotor '%s' at %s disagrees with its MOTORS mix signs — the mixer would fly it backwards."
@@ -116,9 +118,11 @@ func publish(t: DroneTelemetry, node_fail: int, max_thrust: float, torque_ratio:
 
 
 ## Are the props still turning? Rotor-borne effects gate on THIS, not `armed` — `armed` flips
-## in one tick, the props spool down over ~5*tau.
+## in one tick, the props spool down over ~5*tau. Threshold at the point `esc_rpm`'s
+## `roundi(omega * ROTOR_MAX_RPM)` rounds to 0, not at a bare 0.0 — a decaying `_omega` keeps this
+## true for seconds after the published rpm already reads 0.
 func turning() -> bool:
-	return DroneProp.mean_omega(_omega) > 0.0
+	return DroneProp.mean_omega(_omega) > 0.5 / float(DroneProp.ROTOR_MAX_RPM)
 
 
 ## Cosmetic only: spin each blade at ITS OWN motor speed (called from `_process`, physics

@@ -1,16 +1,19 @@
 extends Node
-## One-shot generator for the Watercraft Pack boat variants: writes
+## Generator for the Watercraft Pack boat variants: writes
 ## src/vehicles/watercraft/<variant>.tscn + <variant>_spec.tres. Deterministic and
-## destructive-by-run, the regen path after a scale/feel change. Model origin sits at the
-## resting waterline. Game-mode tool scene, not --script: boat.gd needs the InputRouter/
+## re-runnable, the regen path after a scale/feel change. Model origin sits at the
+## resting waterline. Collision is hand-authored (CollisionLower/CollisionUpper box pairs)
+## and transplanted verbatim on regen; only a variant with no scene yet gets a generated
+## convex hull. Game-mode tool scene, not --script: boat.gd needs the InputRouter/
 ## Bridge autoloads to compile.
 
 const OUT_DIR := "res://src/vehicles/watercraft"
 const MODELS := "res://kit/raw/watercraft"   ## raw glbs; the packed .tscn embeds the
 ## meshes, so the glb is export-excluded and not needed at runtime.
 const BOAT_SCRIPT := "res://src/vehicles/boat/boat.gd"
-## The direct children this generator writes and may replace; everything else is hand-authored and transplanted.
-const GENERATED_CHILDREN := ["CollisionShape3D", "Model", "Lamps"]
+## Direct children this generator writes and may replace on regen. Everything else in the scene
+## is hand-authored and transplanted (see _existing_children): the collision box pair.
+const GENERATED_CHILDREN := ["Model", "Lamps"]
 
 const BOAT_SCALE := 1.2  ## Kenney kit scale: speed-a lands at 2.1 m beam x 4.0 m LOA
 ## against the 1.8 m car. Not the recipe's prop scale of 2.0.
@@ -81,7 +84,7 @@ func _ready() -> void:
 			continue
 		var spec := _build_spec(ov, geo)
 		var spec_path := OUT_DIR.path_join(variant + "_spec.tres")
-		if ResourceSaver.save(spec, spec_path) != OK:
+		if _save_spec_stable(spec, spec_path) != OK:
 			push_error("failed to save " + spec_path)
 			continue
 		var scene := _build_scene(variant, boat_script, load(spec_path), ov, geo)
@@ -164,12 +167,22 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec,
 	root.set("sheet_max_deg", float(ov["sheet_max_deg"]))
 	root.set("sail_pivot", NodePath(String(ov.get("sail_pivot", ""))))
 
-	var col := _body_shape(variant, geo)
-	var cs := CollisionShape3D.new()
-	cs.name = "CollisionShape3D"
-	cs.shape = col["shape"]
-	cs.position = col["pos"]
-	_add(root, root, cs)
+	# Collision is hand-authored (CollisionLower/CollisionUpper box pairs) and transplanted
+	# verbatim on regen rather than overwritten; only a brand-new variant gets the generated
+	# convex hull as a starting point.
+	var kept := _existing_children(variant)
+	var kept_collision: Array = kept["collision"]
+	if kept_collision.is_empty():
+		var col := _body_shape(variant, geo)
+		var cs := CollisionShape3D.new()
+		cs.name = "CollisionShape3D"
+		cs.shape = col["shape"]
+		cs.position = col["pos"]
+		_add(root, root, cs)
+	else:
+		for cs in kept_collision:
+			_add(root, root, cs)
+		_shape_report.append("%s=kept(%d)" % [variant, kept_collision.size()])
 
 	# Body model: GLB children stolen into a Model node (180 deg Y flip, kit scale, centring, waterline drop).
 	var glb := (load(MODELS.path_join(variant + ".glb")) as PackedScene).instantiate()
@@ -197,7 +210,7 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec,
 	_add(root, lamps, spot)
 
 	# Hand-authored children (e.g. "HoodCam"), transplanted last to match editor child order.
-	for extra: Node in _existing_extras(variant):
+	for extra: Node in kept["extras"]:
 		_add(root, root, extra)
 
 	var packed := PackedScene.new()
@@ -206,23 +219,32 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec,
 	return packed
 
 
-## Everything in the existing scene not in GENERATED_CHILDREN. Reparented, not duplicated, so an instanced child re-serialises as a one-line instance.
-func _existing_extras(variant: String) -> Array:
-	var extras: Array = []
+## Everything in the existing scene the generator does not rebuild: collision boxes plus any
+## other hand-added node. Returns {collision, extras}: collision goes back in first (before
+## Model), extras last (after Lamps), matching authored child order so a no-op regen stays
+## byte-identical. Extras are reparented (not duplicated) out of an instance loaded with
+## GEN_EDIT_STATE_INSTANCE — plain `duplicate()` loses scene-instance state, so `pack()` would
+## write an instanced child's properties back out explicitly, pinning the vehicle scene to
+## today's version of that child's script. Collision shapes are plain nodes and stay a plain
+## duplicate.
+func _existing_children(variant: String) -> Dictionary:
+	var kept := {"collision": [], "extras": []}
 	var path := OUT_DIR.path_join(variant + ".tscn")
 	if not ResourceLoader.exists(path):
-		return extras
+		return kept
 	var scene := load(path) as PackedScene
 	if scene == null:
-		return extras
+		return kept
 	var inst := scene.instantiate(PackedScene.GEN_EDIT_STATE_INSTANCE)
 	for child in inst.get_children():
-		if not (String(child.name) in GENERATED_CHILDREN):
-			extras.append(child)
-	for extra: Node in extras:
+		if child is CollisionShape3D:
+			(kept["collision"] as Array).append(child.duplicate())
+		elif not (String(child.name) in GENERATED_CHILDREN):
+			(kept["extras"] as Array).append(child)
+	for extra: Node in kept["extras"]:
 		inst.remove_child(extra)
 	inst.free()
-	return extras
+	return kept
 
 
 ## Set owner recursively so pack() serialises the stolen GLB subtree into the vehicle scene.
@@ -327,9 +349,107 @@ func _xform_aabb(aabb: AABB, xform: Transform3D) -> AABB:
 	return out
 
 
-# --- stable save (strip churny per-node unique_id, like gen_kenney_vehicles) -----------
+# --- stable save (strip churny per-node unique_id, same helpers as gen_kenney_vehicles) --
 
 var _unique_id_re := RegEx.create_from_string(" unique_id=\\d+")
+## Godot re-rolls the 5-character suffix of every generated sub-resource id on each save
+## (`StandardMaterial3D_l7l2h` -> `StandardMaterial3D_lei3o`).
+var _subres_id_re := RegEx.create_from_string("\\b([A-Za-z0-9]+)_([a-z0-9]{5})\\b")
+
+
+## A scene's content minus the three things a re-save churns for free: per-node `unique_id`,
+## sub-resource ID suffixes, and line endings (git checks out CRLF, ResourceSaver writes LF, so
+## a raw byte compare calls every file changed). Sub-resource IDs are renumbered by order of
+## first appearance rather than blanked, so a genuine edit that repoints a node at a different
+## sub-resource of the same type still reads as a change (a real insertion shifts every later
+## number — errs toward reporting a difference, the safe direction).
+func _churn_key(text: String) -> String:
+	var flat := _unique_id_re.sub(text.replace("\r\n", "\n"), "", true)
+	var seen := {}
+	var out := ""
+	var cursor := 0
+	for m in _subres_id_re.search_all(flat):
+		out += flat.substr(cursor, m.get_start() - cursor)
+		cursor = m.get_end()
+		var token := m.get_string()
+		if not seen.has(token):
+			seen[token] = "%s_ID%d" % [m.get_string(1), seen.size()]
+		out += String(seen[token])
+	return out + flat.substr(cursor)
+
+
+## The ` uid="uid://..."` attribute of a .tres/.tscn header line, "" if it carries none.
+func _header_uid(text: String) -> String:
+	var head_end := text.find("]")
+	var at := text.find(" uid=\"uid://")
+	if head_end < 0 or at < 0 or at > head_end:
+		return ""
+	var close := text.find("\"", at + 6)
+	if close < 0 or close > head_end:
+		return ""
+	return text.substr(at, close - at + 1)
+
+
+var _ext_res_re := RegEx.create_from_string("\\[ext_resource [^\\]]*\\]")
+var _uid_attr_re := RegEx.create_from_string(" uid=\"uid://[^\"]*\"")
+var _path_attr_re := RegEx.create_from_string(" path=\"([^\"]*)\"")
+
+
+## `res://…` -> ` uid="uid://…"` for every `[ext_resource]` line in `text` that carries both.
+func _ext_resource_uids(text: String) -> Dictionary:
+	var out := {}
+	for m in _ext_res_re.search_all(text):
+		var line := m.get_string()
+		var u := _uid_attr_re.search(line)
+		var pa := _path_attr_re.search(line)
+		if u != null and pa != null:
+			out[pa.get_string(1)] = u.get_string()
+	return out
+
+
+## Re-inject the UIDs `after` lost relative to `before` (header + every `[ext_resource]`,
+## matched by resource path). ResourceSaver only writes a `uid=` it can see, so a plain save
+## silently strips one whenever the source resource carries none in memory — a broken reference
+## the moment a path moves, and a no-op regen turned into a diff on every scene.
+func _restore_uids(before: String, after: String) -> String:
+	if before.is_empty():
+		return after
+	var out := after
+	var head_uid := _header_uid(before)
+	if not head_uid.is_empty() and _header_uid(out).is_empty():
+		var head_end := out.find("]")
+		if head_end >= 0:
+			out = out.insert(head_end, head_uid)
+	var want := _ext_resource_uids(before)
+	if want.is_empty():
+		return out
+	var rebuilt := ""
+	var cursor := 0
+	for m in _ext_res_re.search_all(out):
+		var line := m.get_string()
+		rebuilt += out.substr(cursor, m.get_start() - cursor)
+		cursor = m.get_end()
+		if _uid_attr_re.search(line) == null:
+			var pa := _path_attr_re.search(line)
+			if pa != null and want.has(pa.get_string(1)):
+				line = line.insert(pa.get_start(), String(want[pa.get_string(1)]))
+		rebuilt += line
+	return rebuilt + out.substr(cursor)
+
+
+## Save a spec, keeping the UIDs the file already had (see `_restore_uids`).
+func _save_spec_stable(spec: Resource, path: String) -> Error:
+	var before := FileAccess.get_file_as_string(path) if FileAccess.file_exists(path) else ""
+	var err := ResourceSaver.save(spec, path)
+	if err != OK or before.is_empty():
+		return err
+	var after := _restore_uids(before, FileAccess.get_file_as_string(path))
+	if _churn_key(after) == _churn_key(before):
+		after = before   # unchanged: keep the on-disk line endings too
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f != null:
+		f.store_string(after)
+	return OK
 
 
 func _save_scene_stable(packed: PackedScene, path: String) -> Error:
@@ -337,9 +457,10 @@ func _save_scene_stable(packed: PackedScene, path: String) -> Error:
 	var err := ResourceSaver.save(packed, path)
 	if err != OK or before.is_empty():
 		return err
-	var after := FileAccess.get_file_as_string(path)
-	if after != before and _unique_id_re.sub(after, "", true) == _unique_id_re.sub(before, "", true):
-		var f := FileAccess.open(path, FileAccess.WRITE)
-		if f != null:
-			f.store_string(before)
+	var after := _restore_uids(before, FileAccess.get_file_as_string(path))
+	if _churn_key(after) == _churn_key(before):
+		after = before
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f != null:
+		f.store_string(after)
 	return OK

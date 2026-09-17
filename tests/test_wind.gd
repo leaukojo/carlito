@@ -24,9 +24,11 @@ func test_a_fresh_wind_field_is_calm() -> void:
 
 func test_a_calm_field_matches_a_level_with_no_field_at_all() -> void:
 	# The null default and an all-zero WindField must agree, or "no wind" would mean two
-	# different things depending on whether a level happened to declare one.
+	# different things depending on whether a level happened to declare one. Compared against
+	# the no-level path itself, not against a ZERO literal, which passes either way.
+	var no_level: Node3D = auto_free(Node3D.new())
 	var wind: Resource = W.new()
-	assert_vector(wind.vector_at(9.0)).is_equal(Vector3.ZERO)
+	assert_vector(wind.vector_at(9.0)).is_equal(W.at(no_level))
 
 
 # --- heading convention --------------------------------------------------------

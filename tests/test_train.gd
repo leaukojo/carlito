@@ -5,6 +5,7 @@ extends GdUnitTestSuite
 const Sim := preload("res://src/vehicles/train/train_sim.gd")
 const Place := preload("res://src/vehicles/train/train_placement.gd")
 const TrainT := preload("res://src/vehicles/train/train_telemetry.gd")
+const TrainVeh := preload("res://src/vehicles/train/train.gd")
 
 const DELTA := 1.0 / 60.0
 
@@ -111,9 +112,22 @@ func _consist_sim() -> RefCounted:
 
 
 func test_full_service_brake_capacity_exceeds_traction() -> void:
-	# Brake > traction per hierarchy.
-	var sim := _consist_sim()
-	assert_bool(float(sim.masses.size()) * sim.max_brake > sim.max_tractive).is_true()
+	# The real consist numbers (loco_mass, wagon_mass, CAR_LENGTHS.size()), not sim literals, so
+	# an edit to any of them moves this test with it — TrainSim's tuning is its own defaults,
+	# never set by TrainVehicle (train_sim.gd header). max_brake/max_tractive are read off a
+	# fresh TrainSim rather than retyped here for the same reason.
+	var loco := TrainVeh.new()
+	var n := TrainVeh.CAR_LENGTHS.size()
+	var total_mass := loco.loco_mass + float(n - 1) * loco.wagon_mass
+	loco.free()
+	var sim := Sim.new()
+	assert_bool(float(n) * sim.max_brake > sim.max_tractive).is_true()
+	# ...and by a real margin: full service braking must hold back a meaningful fraction of a g,
+	# not an arithmetic coincidence that a heavier wagon could erase.
+	var decel_g := (float(n) * sim.max_brake) / total_mass / Sim.GRAVITY
+	assert_float(decel_g).override_failure_message(
+			"full service brake only holds back %.3f g of the consist" % decel_g) \
+		.is_greater(0.05)
 
 
 func test_full_brake_beats_full_traction() -> void:

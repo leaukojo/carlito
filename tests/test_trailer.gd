@@ -233,12 +233,12 @@ func test_every_trailer_puts_a_realistic_load_on_the_fifth_wheel() -> void:
 
 
 func test_a_load_ahead_of_the_drive_axle_is_shared_with_the_steer_axle() -> void:
-	# The semi's authored geometry: steer -1.15, drive +0.95, kingpin +0.75.
-	assert_float(Artic.rear_axle_share(0.95, -1.15, 0.95)).is_equal_approx(1.0, 1e-9)
-	assert_float(Artic.rear_axle_share(-1.15, -1.15, 0.95)).is_equal_approx(0.0, 1e-9)
-	assert_float(Artic.rear_axle_share(-0.1, -1.15, 0.95)).is_equal_approx(0.5, 1e-9)
-	# The kingpin sits 0.20 m ahead of the drive axle, so ~90 % of the plate load lands there.
-	assert_float(Artic.rear_axle_share(0.75, -1.15, 0.95)).is_between(0.88, 0.93)
+	# The semi's authored geometry: steer -2.65, drive +0.95, kingpin +0.45.
+	assert_float(Artic.rear_axle_share(0.95, -2.65, 0.95)).is_equal_approx(1.0, 1e-9)
+	assert_float(Artic.rear_axle_share(-2.65, -2.65, 0.95)).is_equal_approx(0.0, 1e-9)
+	assert_float(Artic.rear_axle_share(-0.85, -2.65, 0.95)).is_equal_approx(0.5, 1e-9)
+	# The kingpin sits 0.50 m ahead of the drive axle, so ~86 % of the plate load lands there.
+	assert_float(Artic.rear_axle_share(0.45, -2.65, 0.95)).is_between(0.84, 0.88)
 
 
 # --- the does-not-sink invariant ----------------------------------------------
@@ -1020,6 +1020,11 @@ func test_the_probes_sit_where_the_trailer_does_and_clear_the_road() -> void:
 	# Per-shape rather than one bounding box: the authored shapes already clear the ground, so a modest
 	# slope 5 m behind the cab is not a collision. One box around the whole trailer would refuse every
 	# hill.
+	var semi := _semi()
+	var cab: MeshInstance3D = semi.get_node("Body/Cab")
+	var kingpin_to_cab: float = FifthWheelScript.KINGPIN_LOCAL.z \
+			- (cab.position.z + (cab.mesh as BoxMesh).size.z * 0.5)
+	semi.free()
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
@@ -1037,10 +1042,12 @@ func test_the_probes_sit_where_the_trailer_does_and_clear_the_road() -> void:
 			.override_failure_message("%s: lowest collision shape is %.2f m over the road"
 				% [path, lowest + 1.05]) \
 			.is_between(0.15, 0.8)
-		# ...and nothing reaches so far forward that the coupled pose starts inside the tractor.
+		# ...and nothing reaches so far forward that the coupled pose starts inside the tractor. The
+		# bound is the cab-over's own kingpin-to-cab gap rather than a literal: a trailer's nose is
+		# authored as long as that gap allows, so the two move together.
 		assert_float(frontmost) \
 			.override_failure_message("%s: collision reaches %.2f m ahead of the kingpin" % [path, frontmost]) \
-			.is_greater(-0.8)
+			.is_greater(-kingpin_to_cab)
 		node.free()
 
 

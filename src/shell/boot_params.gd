@@ -59,7 +59,8 @@ static func challenge_keys() -> bool:
 
 
 static func wants_challenge_keys(args: PackedStringArray, env: String) -> bool:
-	return env != "" or args.has("--challenge-keys")
+	return args.has("--challenge-keys") \
+			or not (env.strip_edges().to_lower() in ["", "0", "false", "off", "no"])
 
 
 ## The challenge a debug build boots straight into, or "": `--challenge=<id>` or CARLITO_CHALLENGE,

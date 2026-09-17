@@ -15,6 +15,12 @@ uniform vec4 cloud_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
 uniform vec4 cloud_shadow_color : source_color = vec4(0.62, 0.68, 0.78, 1.0);
 uniform float cloud_coverage : hint_range(0.0, 1.0) = 0.55;
 uniform float cloud_speed = 0.006;
+// Cloud self-shadowing: the noise is re-read a little toward the sun, and where the cloud
+// thins in that direction the edge is lit. One extra texture tap, sky pixels only.
+uniform float cloud_light = 0.7;
+// Warm haze around the sun near the horizon (sun-side horizon glow), all ALU.
+uniform vec4 haze_color : source_color = vec4(1.0, 0.85, 0.65, 1.0);
+uniform float haze_strength = 0.35;
 uniform sampler2D cloud_noise : hint_default_black, filter_linear_mipmap, repeat_enable;
 
 void sky() {
@@ -35,21 +41,29 @@ void sky() {
 	float sun = dot(EYEDIR, LIGHT0_DIRECTION);
 	col += LIGHT0_COLOR * LIGHT0_ENERGY * smoothstep(0.9995, 0.9999, sun);
 	col += LIGHT0_COLOR * LIGHT0_ENERGY * 0.15 * smoothstep(0.995, 1.0, sun);
+	// Sun-side haze: strongest low on the sky, in the sun's direction.
+	float haze = pow(max(sun, 0.0), 6.0) * (1.0 - smoothstep(0.0, 0.45, abs(horizon)));
+	col = mix(col, haze_color.rgb, haze * haze_strength);
 
 	// Clouds: project the view onto a plane above the horizon so they read as a
 	// dome. Only draw them in the upper hemisphere, fading in from the horizon.
 	if (horizon > 0.0) {
 		vec2 uv = EYEDIR.xz / (horizon + 0.15);
 		vec2 flow = vec2(TIME * cloud_speed, TIME * cloud_speed * 0.4);
-		float n = texture(cloud_noise, uv * 0.15 + flow).r;
-		n += 0.5 * texture(cloud_noise, uv * 0.35 - flow * 1.7).r;
+		float n_coarse = texture(cloud_noise, uv * 0.15 + flow).r;
+		float n = n_coarse + 0.5 * texture(cloud_noise, uv * 0.35 - flow * 1.7).r;
 		n /= 1.5;
 
 		float density = smoothstep(cloud_coverage, cloud_coverage + 0.25, n);
 		float band = smoothstep(0.02, 0.35, horizon) * smoothstep(1.0, 0.6, horizon);
 		density *= band;
 
-		vec3 cloud = mix(cloud_shadow_color.rgb, cloud_color.rgb, smoothstep(0.4, 0.9, n));
+		// Lit edge: the same coarse octave sampled a step toward the sun.
+		vec2 sun_dir = normalize(LIGHT0_DIRECTION.xz + vec2(1e-4));
+		float n_sun = texture(cloud_noise, (uv + sun_dir * 0.12) * 0.15 + flow).r;
+		float lit = clamp((n_coarse - n_sun) * 4.0, -1.0, 1.0);
+		float shade = smoothstep(0.4, 0.9, n) + lit * cloud_light * 0.5;
+		vec3 cloud = mix(cloud_shadow_color.rgb, cloud_color.rgb, clamp(shade, 0.0, 1.0));
 		col = mix(col, cloud, density);
 	}
 

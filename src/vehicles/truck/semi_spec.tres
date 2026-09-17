@@ -35,25 +35,35 @@
 ; same trailer, brakes it exactly the same way through the pneumatic lines, and publishes
 ; trailer_connected FALSE with honest zeros behind it.
 ;
-; Geometry is measured off semi.tscn: 3.40 m long (shorter than the 3.85 m garbage truck — a
-; tractor unit's silhouette is a tall flat-fronted cab and almost nothing behind the drive axle),
-; wheelbase 2.10 (front axle -1.15 under the cab, drive axle +0.95), 1.92 wide like the rest of the
-; family.
+; Geometry is measured off semi.tscn: 5.45 m long (front bumper z -3.74 to rear bumper +1.71),
+; wheelbase 3.60 (steer axle -2.65 under the cab, drive axle +0.95), 1.92 wide like
+; the rest of the family. THE CAB SITS OVER THE STEER AXLE (it spans -3.60 .. -1.40) AND THE PLATE
+; 0.50 m AHEAD OF THE DRIVE AXLE, both for the silhouette: a cab-over's cab is the front axle's
+; housing, and a fifth wheel that far back leaves a bare frame behind the cab and a metre of
+; daylight between cab and trailer. Neither number is free of the launch tune below — the axles
+; did not move.
+;
+; THE WHEELBASE IS SIZED BY THE LAUNCH, not by the silhouette: the trailer
+; pulls at the 1.05 m kingpin, and on a short unit that lever beats the steer axle's share of the
+; weight — measured, a 2.10 m wheelbase lifted BOTH front wheels clear of the road for ~1 s of
+; every full-throttle gear-1 launch, while 3.60 keeps the axle loaded throughout. Shortening it
+; again is a re-measure, not a styling choice.
 ;
 ; CENTRE OF MASS IS FORWARD OF CENTRE, WHICH LOOKS WRONG UNTIL YOU COUPLE IT. A cab-over's own mass
-; is cab and engine, both over the steer axle, so a BOBTAIL tractor unit is front-heavy (z -0.15
-; puts 52 % on the steer axle) — which is why real bobtails are notoriously easy to lock up. Coupled
-; to the box the plate's 6473 kg lands 90 % on the drive axle. Driving found this: at z +0.10 the
-; coupled steer axle carried only 20 % and BOTH front wheels left the road under throttle in a
-; corner, i.e. the rig lost its steering exactly when it needed it.
+; is cab and engine, both over the steer axle, so a BOBTAIL tractor unit is front-heavy (z -0.92
+; puts 52 % on the steer axle: (0.95 - -0.92) / 3.60) — which is why real bobtails are notoriously
+; easy to lock up. Coupled to the box the plate's 6473 kg lands 86 % on the drive axle
+; ((0.45 - -2.65) / 3.60, the kingpin sitting 0.50 m ahead of it). Driving found the bias:
+; further back, the coupled steer axle carried only 20 % and BOTH front wheels left the road under
+; throttle in a corner, i.e. the rig lost its steering exactly when it needed it.
 ;
 ; SPRING RATE IS THE OTHER NUMBER THAT IS NOT THE GARBAGE TRUCK'S, because the rear carries the
 ; fifth-wheel load as well as its own — and it went 190000 -> 240000 N/m when the trailers' plate
 ; share was corrected to a realistic 27 %. That correction is what makes this a 4x2 that can pull:
 ; the drive axle is the ONLY driven axle, so what the plate puts on it IS the rig's traction budget,
-; and at the old 19 % share it was starved. Coupled to the box the drive axle now carries 9636 kg
-; against 7979 before. 240000 N/m lands every case inside the 0.32 m travel: rear 62 % coupled to
-; the box, 63 % behind a 25 t trailer, 24 % solo, front 27 %. The shipped Kenney trucks ride on
+; and at the old 19 % share it was starved. Coupled to the box the drive axle now carries 9418 kg
+; against 7979 before. 240000 N/m lands every case inside the 0.32 m travel: rear 60 % coupled to
+; the box, 62 % behind a 25 t trailer, 25 % solo, front 27 %. The shipped Kenney trucks ride on
 ; their rear bump stops (26.3 kN/wheel against a spring that maxes at 20.8 kN); a trailer on top of
 ; that is what "the rig sinks" looks like. It is one rate for all four corners, so it is a
 ; compromise between a light steer axle and a heavily loaded drive axle — the front-biased centre of
@@ -77,7 +87,7 @@
 script = ExtResource("3_grounddrive")
 drag_area = 2.18
 rolling_resistance = 0.007
-wheel_positions = PackedVector3Array(-0.72, 0.424, -1.15, 0.72, 0.424, -1.15, -0.62, 0.424, 0.95, 0.62, 0.424, 0.95)
+wheel_positions = PackedVector3Array(-0.72, 0.424, -2.65, 0.72, 0.424, -2.65, -0.62, 0.424, 0.95, 0.62, 0.424, 0.95)
 wheel_radius = 0.36
 wheel_inertia = 3.0
 wheel_scene = ExtResource("2_wheel")
@@ -102,7 +112,7 @@ steer_falloff_speed = 25.0
 [resource]
 script = ExtResource("1_spec")
 mass = 8000.0
-center_of_mass = Vector3(0, 0.35, -0.15)
+center_of_mass = Vector3(0, 0.35, -0.92)
 ground_drive = SubResource("Resource_grounddrive")
 trailer_bus_equipped = true
 torque_curve = PackedVector2Array(700, 975, 1200, 1290, 1800, 1500, 2400, 1440, 2800, 1120, 3200, 375)
@@ -112,6 +122,8 @@ gear_ratios = PackedFloat32Array(6.5, 3.7, 2.4, 1.6, 1.2, 1)
 reverse_ratio = 6.0
 final_drive = 4.5
 efficiency = 0.9
+engine_brake_frac = 0.15
+shift_cut_s = 0.4
 shift_up_rpm = 2600.0
 shift_down_rpm = 1200.0
 ; ROAD-SPEED GOVERNOR 90 km/h: the EU goods-vehicle limiter (Directive 92/6/EEC). INERT AS

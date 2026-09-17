@@ -12,10 +12,15 @@
 ;   - TipBody is a PIVOT AT THE REAR HINGE, at (0, -0.06, 6.25), and everything that tips is a
 ;     child of it. So the hinge line is the node's own origin and the pose is one rotation about
 ;     local X — the same "the datum IS the origin" discipline the kingpin gets.
-;   - The body is 5.15 m long and starts at z 1.10, BEHIND the tractor's tail (z 0.96 in this
-;     frame). The gooseneck ahead of it stays exposed, which is what a real bulk tipper looks like
-;     and is also what keeps the gooseneck rule: nothing hangs below the coupling plane (y = 0)
-;     over the tractor.
+;   - The body is 5.15 m long and starts at z 1.10, at the tractor's tail (z 1.26 in this frame).
+;     The gooseneck ahead of it stays exposed, which is what a real bulk tipper looks like and is
+;     nearly what keeps the gooseneck rule: the body's floor is 0.06 below the coupling plane
+;     (y = 0), so its front 0.16 m passes over the tractor's frame rails with 0.24 m to spare
+;     rather than clearing the tail altogether.
+;   - THE NECK STOPS AT z 1.08, where the bulkhead closes it, and does NOT run back to the
+;     step-down at 1.60 the way the other three trailers' necks do. The neck's top face is 0.16
+;     above the coupling plane and the body's floor is 0.06 below it, so a neck carried under the
+;     body would stand up through the floor and be visible in the load space on every tip.
 ;   - THE RAMS ARE POSED FROM MARKERS, not from constants: RamAnchorL/R are the frame eyes and
 ;     TipBody/RamHeadL/R the body eyes, and tipper.gd lays each ram between its pair and slides the
 ;     rod out of the barrel. Re-author either marker and the ram follows. They span 1.12 m closed
@@ -42,8 +47,8 @@
 ; MEASURED against the tractor unit: 1.92 over the frame, body 1.80 wide x 0.95 deep x 5.15 long,
 ; sides topping out at y 0.99 = 2.04 m above the road parked, and about 5.4 m at full tip.
 ;
-; Swing clearance: the frontmost part is the gooseneck at 0.33 m ahead of the kingpin and 0.96
-; half-width, swinging on 1.02 m inside the 1.15 m to the cab's rear face. The tipping body starts
+; Swing clearance: the frontmost part is the gooseneck at 1.15 m ahead of the kingpin and 0.96
+; half-width, swinging on 1.50 m inside the 1.85 m to the cab's rear face. The tipping body starts
 ; well behind the kingpin, so tipping only ever moves it further away. test_trailer sweeps it.
 
 [ext_resource type="Script" path="res://src/vehicles/truck/trailers/tipper.gd" id="1_tipper"]
@@ -78,7 +83,7 @@ roughness = 0.4
 
 [sub_resource type="BoxMesh" id="MeshRail"]
 material = SubResource("MatFrame")
-size = Vector3(0.14, 0.26, 5.4)
+size = Vector3(0.14, 0.26, 4.85)
 
 [sub_resource type="BoxMesh" id="MeshCross"]
 material = SubResource("MatFrame")
@@ -100,7 +105,7 @@ rings = 1
 
 [sub_resource type="BoxMesh" id="MeshNeck"]
 material = SubResource("MatFrame")
-size = Vector3(1.92, 0.16, 1.38)
+size = Vector3(1.92, 0.16, 2.23)
 
 ; The front bulkhead the body shuts against — visible only when the body is up, which is the point
 ; of authoring it: a tipped body that showed bare frame underneath would read as hollow.
@@ -243,7 +248,7 @@ material = SubResource("MatLensAmber")
 size = Vector3(0.12, 0.1, 0.04)
 
 [sub_resource type="BoxShape3D" id="ShapeNeck"]
-size = Vector3(1.92, 0.2, 1.35)
+size = Vector3(1.92, 0.2, 2.23)
 
 [sub_resource type="BoxShape3D" id="ShapeTipBody"]
 size = Vector3(1.8, 1.05, 5.15)
@@ -256,7 +261,7 @@ script = ExtResource("1_tipper")
 spec = ExtResource("2_spec")
 
 [node name="CollisionNeck" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0.375)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, -0.035)
 shape = SubResource("ShapeNeck")
 
 [node name="CollisionTipBody" type="CollisionShape3D" parent="."]
@@ -273,15 +278,15 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.52, 5.45)
 shape = SubResource("ShapeBogie")
 
 [node name="RailL" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, -0.33, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, -0.33, 4.025)
 mesh = SubResource("MeshRail")
 
 [node name="RailR" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, -0.33, 3.75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, -0.33, 4.025)
 mesh = SubResource("MeshRail")
 
 [node name="Cross1" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.38, 1.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.38, 1.7)
 mesh = SubResource("MeshCross")
 
 [node name="Cross2" type="MeshInstance3D" parent="."]
@@ -301,7 +306,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.07, 0)
 mesh = SubResource("MeshKingpin")
 
 [node name="Neck" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.14, 0.36)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.14, -0.035)
 mesh = SubResource("MeshNeck")
 
 [node name="Bulkhead" type="MeshInstance3D" parent="."]

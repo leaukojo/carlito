@@ -6,7 +6,7 @@ extends RefCounted
 ## in tests/test_bake.gd. Never touches the scene tree, so editor and headless CLI agree.
 
 ## Bump on any bake-semantics change; stale-bake checks reject old-version manifests.
-const BAKER_VERSION := 12
+const BAKER_VERSION := 13
 
 ## The runtime node rail roads bake into; preloaded (not class_name'd) so it loads headless.
 const Groups := preload("res://src/levels/base/carlito_groups.gd")
@@ -382,8 +382,10 @@ static func collect_spawn_descriptors(root: Node) -> Array:
 
 
 ## Stale-scatter guard: a region whose stored_ground_hash no longer matches the terrain
-## was snapped before a later sculpt. Terrain PNGs sit outside the input-hash net, so
-## without this a sculpt ships floating/buried props CI-green; recovery is Regenerate.
+## was snapped before a later sculpt. Baking never re-snaps scatter (the stored transforms
+## are the only artifact — kit/CLAUDE.md), so a re-bake clears the input-hash staleness a
+## sculpt causes without touching this; without this guard that re-bake ships floating/buried
+## props CI-green. Recovery is Regenerate.
 static func scatter_ground_errors(level_root: Node) -> PackedStringArray:
 	var errors := PackedStringArray()
 	var regions: Array[Node] = []
@@ -511,7 +513,11 @@ static func _collect_piece_content(node: Node, xform: Transform3D, key: Vector2i
 	if node is MeshInstance3D:
 		var mi := node as MeshInstance3D
 		if mi.mesh != null:
-			ctx.add_render_mesh(key, mi.mesh, xform)
+			# get_active_material resolves override > surface override > mesh material, so a
+			# KitPiece MeshInstance3D recoloured in the editor bakes with the same material.
+			for si in mi.mesh.get_surface_count():
+				ctx.add_render_arrays(key, mi.get_active_material(si),
+						mi.mesh.surface_get_arrays(si), xform)
 			if mode == "weld":
 				ctx.add_weld_mesh(mi.mesh, xform)
 	elif node is CollisionShape3D and mode in ["box", "footprint", "hull", "multiconvex"]:
@@ -794,7 +800,8 @@ static func freshness(manifest: Dictionary, current_input_hash: String, baked_ex
 		return {"status": "stale", "detail": "authoring inputs changed since last bake"}
 	if baked_exists and String(manifest.get("output_hash", "")) != disk_output_hash:
 		return {"status": "stale", "detail": "baked scene does not match its manifest — re-bake"}
-	# Terrain PNGs sit outside the input hash's net, so stale scatter needs its own check.
+	# A re-bake clears input-hash staleness without re-snapping scatter, so stale scatter
+	# needs its own check independent of the hash above.
 	if not scatter_errors.is_empty():
 		return {"status": "stale", "detail": scatter_errors[0]}
 	if not baked_exists:

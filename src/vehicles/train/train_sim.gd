@@ -15,7 +15,7 @@ var rest_gaps := PackedFloat64Array()  ## rest centre-to-centre spacing per adja
 var length := 0.0                  ## curve length (m); wrap modulus on closed loops
 var closed := false
 
-# --- tuning (set by TrainVehicle; honest EMU-inspired defaults, all clearly tunable) ---
+# --- tuning (TrainVehicle never touches these; honest EMU-inspired defaults, all clearly tunable) ---
 var max_tractive := 320000.0   ## N, starting tractive effort (constant to base_speed)
 var base_speed := 14.0         ## m/s, corner speed where traction goes power-limited
 var max_power := 4480000.0     ## W, = max_tractive * base_speed above base_speed
@@ -64,8 +64,15 @@ func step(delta: float, throttle: float, brake: float, parking: float,
 		var f := 0.0
 		if i == 0:
 			f += tractive_effort(v[i], throttle, base_speed, max_tractive, max_power)
-		f += davis_resistance(v[i], davis_a, davis_b, davis_c)
-		f += brake_force(v[i], brake, parking, max_brake, masses[i], delta)
+		# Davis and the brake are both resistive (opposing v), and brake_force alone already
+		# clamps to one tick's zeroing — but summed with Davis, unclamped, the pair can still
+		# overshoot past zero and sign-chatter forever. Clamp the SUM, not each term alone.
+		var resistive := davis_resistance(v[i], davis_a, davis_b, davis_c) \
+				+ brake_force(v[i], brake, parking, max_brake, masses[i], delta)
+		if v[i] != 0.0:
+			var tick_cap := masses[i] * absf(v[i]) / delta
+			resistive = clampf(resistive, -tick_cap, tick_cap)
+		f += resistive
 		f += grade_force(masses[i], grades[i] if i < grades.size() else 0.0, GRAVITY)
 		forces[i] = f
 

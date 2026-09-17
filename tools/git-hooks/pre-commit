@@ -58,8 +58,10 @@ if echo "$staged" | grep -qE '^(src/bridge/web/head_include\.html|export_presets
   node tools/check_head_include.mjs || exit 1
 fi
 
-# 4. Bake inputs touched -> stale-bake check (same gate CI runs, ~30s).
-if echo "$staged" | grep -qE '^(src/levels/|kit/)'; then
+# 4. Bake inputs touched -> stale-bake check (same gate CI runs, ~30s). The alternation
+#    covers src/levels/ and kit/ plus every out-of-tree entry in level_baker.gd's
+#    BAKE_CODE_INPUTS (the source of truth for what a bake reads besides the level itself).
+if echo "$staged" | grep -qE '^(src/levels/|kit/|src/physics/collision_layers\.gd)'; then
   echo "pre-commit: level/kit files staged — running stale-bake check..."
   resolve_godot
   "$GODOT" --headless --path . res://tools/check_bakes.tscn || {
