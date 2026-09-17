@@ -41,6 +41,10 @@
 ;     27 kN, holds a laden rig on a 24 % grade. That is deliberately above the 18 % a combination
 ;     must hold under UNECE R13 and far below a locked-wheel skid (the bogie has ~190 kN of grip
 ;     under it), so the parking brake is brake-limited like a real one rather than grip-limited.
+;
+; load_sensitivity 0.08 matches the towing unit. A trailer's axles carry LESS than their even
+; static share once the plate/drawbar takes its cut, so they sit below the reference and gain a
+; few per cent of mu — the mirror image of what the drive axle loses.
 
 [ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
 [ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="2_grounddrive"]
@@ -68,6 +72,7 @@ max_suspension_force = 110000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 1.0
 mu_lat = 0.95
+load_sensitivity = 0.08
 brake_torque = 11355.0
 handbrake_torque = 2839.0
 

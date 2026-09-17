@@ -36,6 +36,9 @@
 ; SPRING RATE, DAMPING AND TRAVEL ARE THE SEMI'S 240000 N/m over 0.32 m, and they land the same
 ; band on this geometry. The rear carries the fifth-wheel load here as well, so the compromise the
 ; cab-over documents is the same one.
+;
+; load_sensitivity 0.08: commercial radials lose ~8 % of mu per doubling of load past the
+; corner's static share, so weight transfer moves the balance. Family number, matching the semi.
 
 [ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
 [ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="2_wheel"]
@@ -65,6 +68,7 @@ max_suspension_force = 120000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 1.0
 mu_lat = 0.95
+load_sensitivity = 0.08
 handbrake_grip = 1.0
 brake_torque = 10500.0
 handbrake_torque = 4800.0

@@ -30,6 +30,7 @@ var in_contact := false
 var suspension_force := 0.0
 var slip := 0.0         ## |longitudinal slip ratio|, for telemetry
 var force_long := 0.0   ## last tick's longitudinal tire force (N, +=forward); diagnostic only
+var force_lat := 0.0    ## last tick's lateral tire force (N, post friction circle); diagnostic only
 var contact_point := Vector3.ZERO  ## world-space hit position while in_contact (read by the dust emitter)
 var contact_normal := Vector3.UP  ## world-space contact normal while in_contact; diagnostic only
 var surface_grip := 1.0  ## grip multiplier from the painted terrain under the contact (F3 readout)
@@ -73,6 +74,8 @@ func reset() -> void:
 	in_contact = false
 	suspension_force = 0.0
 	slip = 0.0
+	force_long = 0.0
+	force_lat = 0.0
 	surface_grip = 1.0
 	surface_drag = 0.0
 
@@ -123,6 +126,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		suspension_force = 0.0
 		slip = 0.0
 		force_long = 0.0
+		force_lat = 0.0
 		contact_normal = Vector3.UP
 		surface_grip = 1.0
 		surface_drag = 0.0
@@ -159,8 +163,13 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	var v_long := vel.dot(forward)
 	var v_lat := vel.dot(side)
 
-	var mu_long := drive_spec.mu_long * surface_grip
-	var mu_lat := drive_spec.mu_lat * lat_grip_scale * surface_grip
+	# Load-scaled BEFORE the friction circle below, never after: the circle has to be drawn on
+	# the budget the tyre actually has at this tick's normal load.
+	var ref_load := corner_mass * 9.81
+	var mu_long := load_scaled_mu(drive_spec.mu_long * surface_grip,
+			suspension_force, ref_load, drive_spec.load_sensitivity)
+	var mu_lat := load_scaled_mu(drive_spec.mu_lat * lat_grip_scale * surface_grip,
+			suspension_force, ref_load, drive_spec.load_sensitivity)
 
 	# Capped by the force that would cancel slip velocity in one tick.
 	var slip_vel := omega * drive_spec.wheel_radius - v_long
@@ -188,6 +197,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 
 	body.apply_force(forward * f_long + side * f_lat, contact_point - body.global_position)
 	force_long = f_long
+	force_lat = f_lat
 
 	# Surface drag: the ground deforming, not the tyre, so it sits outside the friction circle
 	# and never reaches the spin step (a wheel in mud keeps rolling at road speed; the body is
@@ -198,6 +208,24 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	_integrate_spin(drive_torque, -f_long * drive_spec.wheel_radius, brake_torque, drive_spec,
 			delta, slip_vel)
 	_update_visual(drive_spec, delta)
+
+
+## Tyre mu at a load off the corner's static reference: `mu * (1 - sensitivity * log2(load / ref))`,
+## so grip grows SLOWER than load above the reference and faster below it. Identity at the
+## reference and at sensitivity 0, which is why every brake number derived at the even static load
+## (`gen_kenney_vehicles._derive_brakes`, `test_vehicle_catalog`) still means what it says.
+## Absolute capacity `mu(L) * L` still RISES with load, so a heavier-loaded wheel never brakes
+## worse in newtons — what it loses is its share per newton, which is what lets transfer move the
+## balance.
+## The [0.5, 1.25] clamp and the ref*0.25 load floor bind on nothing shipped (0.12 at the floor
+## reaches 1.24); they bound a suspension spike or a runtime mass rewrite that leaves a corner far
+## off its reference.
+static func load_scaled_mu(mu: float, normal_load: float, ref_load: float,
+		sensitivity: float) -> float:
+	if sensitivity <= 0.0 or ref_load <= 0.0 or mu <= 0.0:
+		return mu
+	var ratio := maxf(normal_load, ref_load * 0.25) / ref_load
+	return clampf(mu * (1.0 - sensitivity * log(ratio) / log(2.0)), mu * 0.5, mu * 1.25)
 
 
 ## Rolling-resistance force (N, along the wheel's forward) from a painted surface: `crr * load`

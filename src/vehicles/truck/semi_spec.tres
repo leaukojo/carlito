@@ -68,6 +68,13 @@
 ; that is what "the rig sinks" looks like. It is one rate for all four corners, so it is a
 ; compromise between a light steer axle and a heavily loaded drive axle — the front-biased centre of
 ; mass above is what makes the compromise a comfortable one.
+;
+; LOAD SENSITIVITY 0.08 IS WHERE THE PLATE LOAD SHOWS UP. RayWheel scales mu by
+; `1 - 0.08 * log2(load / corner_mass*g)`, and corner_mass deliberately excludes the fifth-wheel
+; share (truck/CLAUDE.md), so coupled to the box each drive wheel sits ~2.35x its reference and
+; holds ~90 % of mu_long while the steer axle is untouched. That is the laden drive axle really
+; losing grip, and it is the conservative direction — the understated reference can only make the
+; tyre read MORE overloaded, never less. Re-measure with tools/measure_semi_launch.tscn.
 
 [ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
 [ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="2_wheel"]
@@ -102,6 +109,7 @@ max_suspension_force = 120000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 1.0
 mu_lat = 0.95
+load_sensitivity = 0.08
 handbrake_grip = 1.0
 brake_torque = 10500.0
 handbrake_torque = 4800.0

@@ -14,6 +14,7 @@ driven_rear = false
 rest_length = 0.28
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_lat = 1.1
+load_sensitivity = 0.1
 handbrake_grip = 0.45
 brake_torque = 1012.0
 handbrake_torque = 290.0

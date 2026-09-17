@@ -39,6 +39,78 @@ func test_surface_drag_never_exceeds_the_one_tick_stop() -> void:
 			.is_equal_approx(-1800.0, 1e-6)
 
 
+# --- tyre load sensitivity: mu against the corner's static reference -------------
+
+## Reference per-wheel load, in newtons; any value does, the law is a ratio.
+const REF_LOAD := 3000.0
+
+
+func test_load_scaled_mu_is_the_identity_at_the_reference_and_at_zero_sensitivity() -> void:
+	# Sensitivity 0 is today's exactly-linear law: mu comes back untouched at ANY load, which is
+	# what lets a family opt in without moving anybody else's numbers.
+	for n: float in [0.0, REF_LOAD * 0.1, REF_LOAD, REF_LOAD * 8.0]:
+		assert_float(WheelScript.load_scaled_mu(1.05, n, REF_LOAD, 0.0)).is_equal(1.05)
+	# At the reference load it is the identity for any sensitivity — the reason every brake number
+	# derived at the even static load still means what it said.
+	for sens: float in [0.08, 0.10, 0.12]:
+		assert_float(WheelScript.load_scaled_mu(1.05, REF_LOAD, REF_LOAD, sens)) 				.is_equal_approx(1.05, 1e-6)
+	# A degenerate reference cannot divide: fall back to the flat mu rather than to infinity.
+	assert_float(WheelScript.load_scaled_mu(1.05, REF_LOAD, 0.0, 0.10)).is_equal(1.05)
+
+
+func test_load_scaled_mu_falls_by_the_declared_fraction_per_doubling() -> void:
+	# The declaration is "0.10 of mu lost per doubling of load", so a 2x load reads 0.90 * mu and a
+	# half load reads 1.10 * mu. Below the reference grip is worth MORE per newton, not less.
+	assert_float(WheelScript.load_scaled_mu(1.0, REF_LOAD * 2.0, REF_LOAD, 0.10)) 			.is_equal_approx(0.90, 1e-6)
+	assert_float(WheelScript.load_scaled_mu(1.0, REF_LOAD * 4.0, REF_LOAD, 0.10)) 			.is_equal_approx(0.80, 1e-6)
+	assert_float(WheelScript.load_scaled_mu(1.0, REF_LOAD * 0.5, REF_LOAD, 0.10)) 			.is_equal_approx(1.10, 1e-6)
+	# Monotone decreasing in load across the whole shipped range.
+	var prev := 2.0
+	for k: float in [0.3, 0.5, 1.0, 1.5, 2.0, 3.0, 6.0]:
+		var mu := WheelScript.load_scaled_mu(1.0, REF_LOAD * k, REF_LOAD, 0.10)
+		assert_float(mu).override_failure_message("mu rose with load at %.1fx" % k).is_less(prev)
+		prev = mu
+
+
+func test_load_scaled_mu_is_clamped_at_both_ends() -> void:
+	# Neither bound binds on anything shipped (0.12 at the load floor reaches 1.24); they bound a
+	# suspension spike or a runtime mass rewrite that leaves a corner far off its reference.
+	assert_float(WheelScript.load_scaled_mu(1.0, REF_LOAD * 100.0, REF_LOAD, 0.10)).is_equal(0.5)
+	# Below the ref*0.25 load floor the answer stops moving instead of running away.
+	var at_floor := WheelScript.load_scaled_mu(1.0, REF_LOAD * 0.25, REF_LOAD, 0.10)
+	assert_float(WheelScript.load_scaled_mu(1.0, REF_LOAD * 0.01, REF_LOAD, 0.10)) 			.is_equal_approx(at_floor, 1e-6)
+	assert_float(WheelScript.load_scaled_mu(1.0, 0.0, REF_LOAD, 0.10)).is_equal_approx(at_floor, 1e-6)
+
+
+func test_weight_transfer_costs_the_pair_its_total_grip() -> void:
+	# THE POINT OF THE WHOLE LAW. Capacity per wheel is `load_scaled_mu(..) * load`, which is
+	# strictly concave in load, so a pair sharing a fixed total makes LESS force the further the
+	# load is transferred toward one of them. Under the old linear law the two sums were equal and
+	# transfer could not move a body's balance at all.
+	var even := 2.0 * WheelScript.load_scaled_mu(1.0, REF_LOAD, REF_LOAD, 0.10) * REF_LOAD
+	var prev := even
+	for frac: float in [0.2, 0.4, 0.6, 0.8]:
+		var hi := REF_LOAD * (1.0 + frac)
+		var lo := REF_LOAD * (1.0 - frac)
+		var transferred := WheelScript.load_scaled_mu(1.0, hi, REF_LOAD, 0.10) * hi 				+ WheelScript.load_scaled_mu(1.0, lo, REF_LOAD, 0.10) * lo
+		assert_float(transferred) 				.override_failure_message("transfer of %.0f%% did not cost the pair grip" % (frac * 100.0)) 				.is_less(prev)
+		prev = transferred
+	# Sensitivity 0 is the control: the same transfer costs exactly nothing.
+	var flat := WheelScript.load_scaled_mu(1.0, REF_LOAD * 1.8, REF_LOAD, 0.0) * REF_LOAD * 1.8 			+ WheelScript.load_scaled_mu(1.0, REF_LOAD * 0.2, REF_LOAD, 0.0) * REF_LOAD * 0.2
+	assert_float(flat).is_equal_approx(2.0 * REF_LOAD, 1e-6)
+
+
+func test_a_loaded_wheel_still_brakes_harder_in_newtons_than_the_reference_one() -> void:
+	# Why BRAKE_GRIP_FRAC stayed at 0.95: `brake_torque` is sized at 0.95 of the capacity at the
+	# EVEN STATIC load, and absolute capacity still rises with load, so the axle that gains weight
+	# under braking never drops under what the pedal asks. Locking stays a property of the
+	# UNLOADED axle, exactly as it was.
+	for k: float in [1.1, 1.5, 2.0, 2.6]:
+		var n := REF_LOAD * k
+		var capacity := WheelScript.load_scaled_mu(1.0, n, REF_LOAD, 0.10) * n
+		assert_float(capacity) 				.override_failure_message("a wheel at %.1fx load fell under the 0.95 brake" % k) 				.is_greater(0.95 * REF_LOAD)
+
+
 # --- the equilibrium invariant ------------------------------------------------
 
 func test_a_wheel_in_equilibrium_does_not_move() -> void:

@@ -1,6 +1,7 @@
 extends Node3D
 ## Drives a vehicle down a flat full-grip strip and reports acceleration, top speed and
-## straight-line tracking. Game-mode tool scene (needs autoloads + a physics step).
+## straight-line tracking, plus an opt-in cornering pass on a skid pad. Game-mode tool scene
+## (needs autoloads + a physics step).
 ## `track strict` is the CI gate and exits nonzero on a FAIL; the accel/top-speed report
 ## always exits 0.
 
@@ -35,10 +36,24 @@ const MAX_HEADING_DRIFT := 1.0    ## deg of heading change over the same stretch
 ## Also reports chassis contacts: RayWheel is a raycast, so any contact is the hull scraping.
 const COAST_SECONDS := 5.0
 
+# --- cornering pass (opt-in: pass the `corner` flag) ----------------------
+## The only lateral measurement there is — the tracking pass runs at zero steer, so nothing else
+## can see a grip change that only shows up in a corner. Holds a speed, then winds the lock on
+## until the tyres give up, and reports the peak lateral acceleration with the axle that
+## saturated first. Off by default: CI needs only the tracking gate.
+const CORNER_SPEED := 11.11        ## m/s (~40 km/h) held through the pass
+const CORNER_RAMP_S := 10.0        ## s from zero steer to full lock
+const CORNER_SMOOTH_S := 0.25      ## exponential smoothing on the lateral-g reading
+## Past this slip angle the body is sliding, not cornering: `v * yaw_rate` there measures a spin,
+## not a grip limit, so the peak stops being sampled and the report says the gate tripped.
+const CORNER_MAX_SLIP_ANGLE := 0.5  ## |v_lat| / |v|
+const PAD_SIZE := 300.0
+const PAD_X := -400.0              ## well clear of the strip's +/- 20 m
+
 const REFERENCE_SPECS_PATH := "res://tools/vehicle_reference_specs.json"
 const REPORT_DIR := "res://reports/specs_sweep/"
 
-enum Phase { ACCEL, COAST, TRACKING, DONE }
+enum Phase { ACCEL, COAST, TRACKING, CORNERING, DONE }
 
 var _queue: Array[String] = []
 var _seconds := DEFAULT_SECONDS
@@ -47,6 +62,9 @@ var _variant := ""
 var _phase := Phase.ACCEL
 var _failures := 0
 var _coast := false
+## `corner`: run the skid-pad pass after tracking. Off by default so the CI invocation and the
+## default dev report are unchanged.
+var _corner := false
 ## `track`: skip the accel/top-speed pass — CI only needs the tracking gate.
 var _track_only := false
 ## `strict`: exit nonzero on a tracking FAIL. Off by default so dev invocation stays a report.
@@ -79,6 +97,15 @@ var _drift_peak := 0.0
 var _drift_final := 0.0
 var _heading_peak := 0.0
 
+# cornering pass
+var _corner_ramping := false   ## false while still getting up to CORNER_SPEED
+var _corner_ramp_t := 0.0
+var _corner_lat := 0.0         ## smoothed lateral acceleration, m/s^2
+var _corner_peak := 0.0
+var _corner_front := 0.0       ## front-axle saturation at the peak
+var _corner_rear := 0.0
+var _corner_slid := false      ## the slip-angle gate tripped at some point
+
 # sweep report: per-vehicle measured figures, buffered as each pass reports, plus the
 # real-world comparison figures loaded once from REFERENCE_SPECS_PATH.
 var _reference := {}
@@ -93,6 +120,7 @@ func _ready() -> void:
 		_seconds = maxf(5.0, float(args[1]))
 	var flags := args.slice(2)
 	_coast = flags.has("coast")
+	_corner = flags.has("corner")
 	_track_only = flags.has("track")
 	_strict = flags.has("strict")
 	var ref_file := FileAccess.open(REFERENCE_SPECS_PATH, FileAccess.READ)
@@ -100,6 +128,8 @@ func _ready() -> void:
 	# Do not speed up with Engine.time_scale: it enlarges the physics step and breaks the
 	# locked-60-Hz tuning (default car's 0-100 went 5.30 s -> 6.40 s at time_scale 8).
 	_build_strip()
+	if _corner:
+		_build_pad()
 	if which == "all":
 		_queue.assign(_wheel_driven_variants())
 	elif Catalog.VARIANTS.has(which):
@@ -150,6 +180,28 @@ func _build_strip() -> void:
 	add_child(ground)
 
 
+## Skid pad for the cornering pass: a wide square well off to the side, since a body at full lock
+## circles in a few tens of metres and the strip is only 40 m wide.
+func _build_pad() -> void:
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(PAD_SIZE, 2.0, PAD_SIZE)
+	var collision := CollisionShape3D.new()
+	collision.shape = shape
+	var mesh := BoxMesh.new()
+	mesh.size = shape.size
+	var visual := MeshInstance3D.new()
+	visual.mesh = mesh
+	var ground := StaticBody3D.new()
+	ground.name = "Pad"
+	# Same pairing as the strip: every gameplay ray masks Layers.SOLID.
+	ground.collision_layer = Layers.TERRAIN
+	ground.collision_mask = Layers.DYNAMIC
+	ground.position = Vector3(PAD_X, -1.0, 0.0)  # top face at y = 0
+	ground.add_child(collision)
+	ground.add_child(visual)
+	add_child(ground)
+
+
 func _next_vehicle() -> void:
 	if _car != null:
 		remove_child(_car)
@@ -195,6 +247,13 @@ func _reset_pass(phase: Phase) -> void:
 	_drift_peak = 0.0
 	_drift_final = 0.0
 	_heading_peak = 0.0
+	_corner_ramping = false
+	_corner_ramp_t = 0.0
+	_corner_lat = 0.0
+	_corner_peak = 0.0
+	_corner_front = 0.0
+	_corner_rear = 0.0
+	_corner_slid = false
 
 
 func _physics_process(delta: float) -> void:
@@ -213,6 +272,8 @@ func _physics_process(delta: float) -> void:
 		_tick_accel(delta)
 	elif _phase == Phase.COAST:
 		_tick_coast()
+	elif _phase == Phase.CORNERING:
+		_tick_cornering(delta)
 	else:
 		_tick_tracking()
 
@@ -263,6 +324,80 @@ func _tick_tracking() -> void:
 	_heading_peak = maxf(_heading_peak, dh)
 	if _track_dist >= TRACK_DISTANCE or _t >= _seconds:
 		_report_tracking(false)
+
+
+## Hold CORNER_SPEED on the pad, then wind the lock on from zero over CORNER_RAMP_S and watch what
+## the tyres will hold. Throttle is bang-bang around the target: a governed or slow body simply
+## sits on the pedal, which is the same steady speed by a duller route.
+func _tick_cornering(delta: float) -> void:
+	var vel: Vector3 = _car.linear_velocity
+	var speed := vel.length()
+	if speed < CORNER_SPEED:
+		Input.action_press("accel")
+	else:
+		Input.action_release("accel")
+	if not _corner_ramping:
+		# Wait for the speed, but never past the budget — a body that cannot reach 40 km/h says so
+		# rather than silently reporting the transient.
+		if speed >= CORNER_SPEED:
+			_corner_ramping = true
+		elif _t >= _seconds:
+			print("  %-13s : never reached %.0f km/h, skipped"
+					% ["cornering", CORNER_SPEED * 3.6])
+			_report_cornering(true)
+		return
+	_corner_ramp_t += delta
+	Input.action_press("steer_right", minf(_corner_ramp_t / CORNER_RAMP_S, 1.0))
+	# Lateral acceleration of the motion that actually happened: `v * yaw_rate` is the centripetal
+	# term of the body's own velocity and angular velocity, both read out of the sim (rule 3).
+	var lat := speed * absf(_car.angular_velocity.y)
+	_corner_lat += (lat - _corner_lat) * clampf(delta / CORNER_SMOOTH_S, 0.0, 1.0)
+	var slip_angle := absf(vel.dot(_car.global_transform.basis.x)) / maxf(speed, 1.0)
+	if slip_angle > CORNER_MAX_SLIP_ANGLE:
+		_corner_slid = true
+	elif _corner_lat > _corner_peak:
+		_corner_peak = _corner_lat
+		_corner_front = _axle_saturation(false)
+		_corner_rear = _axle_saturation(true)
+	if _corner_ramp_t >= CORNER_RAMP_S or _t >= _seconds:
+		_report_cornering(false)
+
+
+## Mean `|lateral force| / (lateral grip budget)` over one axle's contacts, 1.0 being a saturated
+## tyre. The budget is rebuilt through `RayWheel.load_scaled_mu` rather than stored on the wheel,
+## so the reading cannot drift away from the law the sim actually applied.
+func _axle_saturation(rear: bool) -> float:
+	var gd: GroundDriveSpec = _car.spec.ground_drive
+	var total := 0.0
+	var n := 0
+	for w in _car.wheels:
+		if w.is_rear != rear or not w.in_contact:
+			continue
+		var budget: float = RayWheel.load_scaled_mu(gd.mu_lat * w.lat_grip_scale * w.surface_grip,
+				w.suspension_force, w.corner_mass * 9.81, gd.load_sensitivity) * w.suspension_force
+		total += absf(w.force_lat) / maxf(budget, 1.0)
+		n += 1
+	return total / maxf(float(n), 1.0)
+
+
+func _report_cornering(skipped: bool) -> void:
+	# Release the lock before anything else: a held steer input would ride into the next vehicle's
+	# passes and read there as a chassis that pulls.
+	Input.action_release("steer_right")
+	Input.action_press("accel")
+	if skipped:
+		_current["cornering"] = {"skipped": true}
+		_finish_vehicle()
+		return
+	var axle := "front" if _corner_front >= _corner_rear else "rear"
+	var note := "  <-- SLID: peak is the last reading before the body let go" if _corner_slid else ""
+	print("  %-13s : peak %.2f m/s^2 (%.2f g) at %.0f km/h; %s saturates first"
+			% ["cornering", _corner_peak, _corner_peak / 9.81, CORNER_SPEED * 3.6, axle]
+			+ " (front %.2f, rear %.2f)%s" % [_corner_front, _corner_rear, note])
+	_current["cornering"] = {"skipped": false, "peak": _corner_peak,
+			"peak_g": _corner_peak / 9.81, "front": _corner_front, "rear": _corner_rear,
+			"axle": axle, "slid": _corner_slid}
+	_finish_vehicle()
 
 
 ## Mass of everything this run accelerates (chassis + coupled sub-bodies), in kg. Not
@@ -404,6 +539,16 @@ func _report_tracking(skipped: bool) -> void:
 			print("                 a one-sided drive split, or uneven brake torque")
 		_current["tracking"] = {"skipped": false, "pass": ok, "drift_peak": _drift_peak,
 				"drift_final": _drift_final, "track_dist": _track_dist, "heading_peak": _heading_peak}
+	if _corner:
+		# Onto the pad: spawn_transform is what respawn() re-lays the body (and any trailer) on.
+		_car.spawn_transform = Transform3D(Basis.IDENTITY, Vector3(PAD_X, 0.6, 0.0))
+		_car.respawn()
+		_reset_pass(Phase.CORNERING)
+		return
+	_finish_vehicle()
+
+
+func _finish_vehicle() -> void:
 	print("")
 	_sweep.append(_current)
 	_next_vehicle()
@@ -489,6 +634,14 @@ func _report_lines(e: Dictionary) -> Array[String]:
 			lines.append("| tracking | %s, drift %.3f m peak / %.3f m final over %.0f m, heading %.3f deg | — |"
 					% ["PASS" if t["pass"] else "FAIL", t["drift_peak"], t["drift_final"],
 					t["track_dist"], t["heading_peak"]])
+	if e.has("cornering"):
+		var c: Dictionary = e["cornering"]
+		if c.get("skipped", false):
+			lines.append("| cornering | never reached %.0f km/h, skipped | — |" % (CORNER_SPEED * 3.6))
+		else:
+			lines.append("| cornering | peak %.2f m/s^2 (%.2f g) at %.0f km/h, %s saturates first (front %.2f, rear %.2f)%s | — |"
+					% [c["peak"], c["peak_g"], CORNER_SPEED * 3.6, c["axle"], c["front"],
+					c["rear"], "  (SLID)" if c["slid"] else ""])
 	if e.has("coast"):
 		var c: Dictionary = e["coast"]
 		lines.append("| coast-down | %.1f -> %.1f km/h in %.1f s = %.3f m/s^2 (%.3f g), %.0f N on %.0f kg | — |"

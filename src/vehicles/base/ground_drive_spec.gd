@@ -44,6 +44,10 @@ extends Resource
 ])
 @export var mu_long := 1.05
 @export var mu_lat := 0.95
+## Fractional mu lost per DOUBLING of load past the corner's static share
+## (`RayWheel.corner_mass * g`); 0 = grip exactly linear in load, so weight transfer cannot move
+## the balance. Car 0.10, truck/van/trailers 0.08, tractor 0.12 (soft flotation tyres), plane 0.
+@export_range(0.0, 0.5) var load_sensitivity := 0.0
 @export_range(0.0, 1.0) var handbrake_grip := 1.0  ## rear lateral grip while handbrake is pulled (1 = no effect); arcade drift knob since handbrake_torque alone can't lock the rears
 
 @export_group("Brakes")

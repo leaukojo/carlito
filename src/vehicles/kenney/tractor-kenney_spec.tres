@@ -23,6 +23,7 @@ damper_rebound = 8000.0
 max_suspension_force = 110000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 1.0
+load_sensitivity = 0.12
 brake_torque = 3352.0
 handbrake_torque = 3573.0
 drag_area = 2.02

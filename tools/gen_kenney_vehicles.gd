@@ -109,6 +109,8 @@ const CAR_BASE := {
 	# FWD default; per-variant override in VARIANTS (rwd/awd where the body says so).
 	"wheel_inertia": 1.2, "driven_front": true, "driven_rear": false,
 	"mu_long": 1.05, "mu_lat": 1.1, "handbrake_grip": 0.45,
+	# Passenger radials: ~10% of mu per doubling of load past the corner's static share.
+	"load_sensitivity": 0.10,
 	# 185 Nm peak / ~156 hp at 6000 on the base saloon, anchored on a 1150 kg saloon hitting
 	# 220 km/h and 8.5 s to 100 (measured 219.8 / 8.35 via `measure_vehicles -- sedan`).
 	# Keep the shape when re-scaling: idle fraction 98/185=0.53 lets the car pull away on a grade;
@@ -146,6 +148,8 @@ const TRUCK_BASE := {
 	# J1939: only family with an auxiliary retarder on the driven axle.
 	"retarder_equipped": true,
 	"mu_long": 1.0, "mu_lat": 0.95, "handbrake_grip": 1.0,
+	# Commercial radials, a touch less load-sensitive than a passenger tyre.
+	"load_sensitivity": 0.08,
 	"torque_curve": [700, 400, 1200, 650, 1800, 800, 2400, 780, 2800, 600, 3200, 0],
 	"idle_rpm": 700.0, "redline_rpm": 3200.0,
 	# 6th 1.0 -> 0.92: overdrive top, governed speed ~102 km/h vs 96.5 direct-drive.
@@ -168,6 +172,8 @@ const VAN_BASE := {
 	"damper_rebound": 7000.0, "max_suspension_force": 90000.0, "rest_length": 0.32,
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
 	"mu_long": 1.0, "mu_lat": 0.95, "handbrake_grip": 1.0,
+	# Commercial radials, as TRUCK_BASE.
+	"load_sensitivity": 0.08,
 	"torque_curve": [700, 400, 1200, 650, 1800, 800, 2400, 780, 2800, 600, 3200, 0],
 	"idle_rpm": 700.0, "redline_rpm": 3200.0,
 	# 6th 1.0 -> 0.78: governed top ~120 km/h.
@@ -188,6 +194,8 @@ const TRACTOR_BASE := {
 	# ISOBUS: only family with lockable diff / engageable front axle at runtime.
 	"rear_diff_lockable": true, "front_axle_engageable": true,
 	"mu_long": 1.0, "mu_lat": 0.95, "handbrake_grip": 1.0,
+	# Big soft flotation tyres lose more mu per doubling of load than a road tyre.
+	"load_sensitivity": 0.12,
 	# Rated 2000, governed to nothing by 2600 (high idle).
 	"torque_curve": [800, 550, 1200, 680, 1600, 700, 2000, 640, 2200, 560, 2600, 0],
 	"idle_rpm": 800.0, "redline_rpm": 2600.0,
@@ -390,6 +398,8 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	gd.mu_long = get_f.call("mu_long")
 	gd.mu_lat = get_f.call("mu_lat")
 	gd.handbrake_grip = get_f.call("handbrake_grip")
+	# Family number, not a per-variant knob: baseline only, pinned by test_kenney_variants.
+	gd.load_sensitivity = float(b["load_sensitivity"])
 
 	var torque_mul := float(ov.get("torque_mul", 1.0))
 	spec.torque_curve = _scaled_curve(b["torque_curve"], torque_mul)
