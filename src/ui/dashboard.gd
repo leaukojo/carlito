@@ -84,7 +84,7 @@ const BAR_H := 18.0
 ## the gauges off a 1280-wide window — that bound sets this number.
 ##
 ## Packing is greedy first-fit over unsplittable groups, so column count is not
-## `ceil(rows / cap)`. The drone's 27 rows are three unsplittable 5-row ESC groups that land in
+## `ceil(rows / cap)`. The drone's 26 rows are three unsplittable 5-row ESC groups that land in
 ## three columns at any cap below 14; 14 is the smallest value holding the two-column bound.
 ##
 ## Re-derive rather than assume: must also stay at or above the tallest scalar cluster (the
@@ -100,7 +100,7 @@ const BAR_ROWS_MAX := 14
 ## Enum "in" signals shown as small state chips rather than a lamp or a bar (gear rides the tacho
 ## instead).
 ##
-## Known cosmetic wart: `lights` (OFF/CLEARANCE/LOW/HIGH, shared by all eight vehicles) drives an
+## Known cosmetic wart: `lights` (OFF/CLEARANCE/LOW/HIGH, shared by all seven vehicles) drives an
 ## aircraft ladder on the plane (VehicleSpec.LampStyle.AIRCRAFT) and has no headlamp meaning on
 ## the drone (whose real indication is the `led` in-signal, a packed colour read off the airframe
 ## arm tips instead). The level numbers are the protocol and are right; only the display name is
@@ -411,7 +411,7 @@ func _build(vehicle_type: String) -> void:
 			_build_bars(vehicle_type, mid)
 			_readout = Label.new()
 			_readout.theme_type_variation = &"Small"
-			# Wraps inside the middle column: the boat's line carries five marine readings on top
+			# Wraps inside the middle column: the boat's line carries six marine readings on top
 			# of HDG/ODO/GPS, and an unwrapped Label would widen the whole cluster past the panel
 			# instead of growing it downward. A shorter line never wraps.
 			_readout.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -859,8 +859,8 @@ func _process(_dt: float) -> void:
 		# "carrying nothing" rather than a gap.
 		if _has_payload:
 			_readout.text += "  PAY %.1f N" % t.get(PAYLOAD_FIELD)
-		# The boat's five range-less engine-room and track readings (READOUT_EXTRAS): the same
-		# "a running number has no full scale" rule as HRS, table-driven because there are five
+		# The boat's six range-less engine-room and track readings (READOUT_EXTRAS): the same
+		# "a running number has no full scale" rule as HRS, table-driven because there are six
 		# of them and each is a plain number.
 		for extra: Array in _extra_fields:
 			_readout.text += "  %s %s" % [extra[1], extra[2] % t.get(extra[0])]

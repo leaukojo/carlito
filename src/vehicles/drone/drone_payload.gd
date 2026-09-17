@@ -14,7 +14,7 @@ const CAPTURE_RANGE := 1.2
 
 ## The heaviest payload the hook will take (kg). Not a strength model, but the point past which
 ## the airframe cannot hold a hover: the shipped quad is 5 kg with 150 N of thrust, so it sits at
-## 0.33 collective empty and 0.62 at this limit, still flyable and unmistakably heavy.
+## 0.33 collective empty and 0.59 at this limit, still flyable and unmistakably heavy.
 const MAX_PAYLOAD_KG := 4.0
 
 

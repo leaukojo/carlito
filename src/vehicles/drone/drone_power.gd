@@ -69,7 +69,7 @@ static func pack_current_a(esc_amps: PackedFloat32Array, avionics_a: float) -> f
 
 ## State of charge (%) after one tick: plain coulomb counting off `pack_current`,
 ## `dsoc = -100 * I * dt / (3600 * capacity_Ah)`. Clamped to [0,100], monotonically falling
-## (no regen). Non-positive capacity returns the input untouched instead of dividing by zero.
+## (no regen). Non-positive capacity returns the clamped input instead of dividing by zero.
 static func soc_step(soc_pct: float, current_a: float, capacity_ah: float, delta: float) -> float:
 	if capacity_ah <= 0.0 or delta <= 0.0:
 		return clampf(soc_pct, 0.0, 100.0)

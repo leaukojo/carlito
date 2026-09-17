@@ -27,7 +27,7 @@ enum Transmission { AUTOMATIC, MANUAL }
 ## A path, never a PackedScene: an island course ships in its arena's level pack, which is not
 ## mounted when the registry loads its defs.
 @export_file("*.tscn") var course := ""
-@export var spawn_jitter_m := 0.0     ## seeded per attempt, so a replayed frame log drifts
+@export var spawn_jitter_m := 0.0     ## re-rolled each attempt, so a replayed frame log drifts
 @export var spawn_jitter_deg := 0.0
 @export_multiline var briefing := ""
 @export_multiline var hint := ""      ## the signals involved, revealed by HINT

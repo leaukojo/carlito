@@ -10,7 +10,7 @@ extends RefCounted
 ## right after `save_png` (mirrors `TerrainGen.ensure_import_settings`, which stamps the
 ## opposite way for heightmaps/splatmaps, since terrain reads those back with `get_image()`).
 
-## Quality of the lossy WebP. 0.9 is what the shipped 43 sidecars carry.
+## Quality of the lossy WebP. 0.9 is what the shipped sidecars carry.
 const LOSSY_QUALITY := 0.9
 
 ## Under src/ because tools/* and kit/thumbs/* are export-excluded and the selectors need
