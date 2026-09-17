@@ -259,14 +259,6 @@ func channel_color(ch: int) -> Color:
 	return Color.GRAY
 
 
-## Display name of paint channel `ch`, falling back to the default when `channel_names` is short.
-func channel_name(ch: int) -> String:
-	var i := clampi(ch, 0, 7)
-	if i < channel_names.size() and not channel_names[i].is_empty():
-		return channel_names[i]
-	return DEFAULT_CHANNEL_NAMES[i]  # a level may store fewer than eight
-
-
 ## Vertex grid dimensions: one cell = one world unit, so verts = extent + 1 (min 2).
 func _grid_dims() -> Vector2i:
 	return Vector2i(maxi(2, int(terrain_size.x) + 1), maxi(2, int(terrain_size.y) + 1))

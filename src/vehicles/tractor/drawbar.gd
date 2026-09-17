@@ -69,9 +69,3 @@ func profile() -> CouplingProfile:
 
 func default_marker_local() -> Vector3:
 	return PIN_LOCAL
-
-
-## The pin in the chassis frame: the coupling datum, and where a trailer's origin is laid.
-## TowHost.marker_local() under this machine's own name for it.
-func pin_local() -> Vector3:
-	return marker_local()

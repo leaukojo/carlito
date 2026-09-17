@@ -1,3 +1,4 @@
+class_name Boot
 extends Node3D
 ## Shell composing independent level/UI scenes (no main.tscn). Deep link → saved session →
 ## DEFAULT_LEVEL. PROCESS_MODE_ALWAYS (set in boot.tscn) keeps menus running while paused.
@@ -26,10 +27,9 @@ const NOTICE_DWELL_S := 3.0
 const HOLD_FRAMES := 3
 
 var _level: Node3D = null
-var _select: LevelSelect = null
-var _vehicles: VehicleSelect = null
-var _challenges: ChallengeSelect = null
-var _pause: PauseMenu = null
+## Modal UI in the order opened (LIFO): PauseMenu, LevelSelect, VehicleSelect, ChallengeSelect,
+## ChallengeBriefing. Esc/touch MENU pops the top; pause/touch state derives from emptiness.
+var _overlays: Array[Control] = []
 var _loading: LoadingScreen = null
 var _loading_path := ""  # non-empty while a threaded level load is in flight
 var _packs: LevelPacks = null
@@ -70,9 +70,6 @@ var _result: ChallengeResult = null
 ## The challenge to begin once the level now loading is up (`_start_challenge`).
 var _pending_challenge: ChallengeDef = null
 var _progress: ChallengeProgress = null
-## The running challenge's briefing, reopened read-only from the touch INFO button; null once
-## dismissed.
-var _briefing: ChallengeBriefing = null
 
 
 func _ready() -> void:
@@ -321,25 +318,29 @@ func _on_touch_retry() -> void:
 		_respawn()
 
 
+func _briefing_overlay() -> ChallengeBriefing:
+	for o in _overlays:
+		if o is ChallengeBriefing:
+			return o
+	return null
+
+
 ## The touch INFO button: the running def's briefing again, read-only. Pauses like every other
 ## overlay so reading it costs nothing off the attempt's own timer.
 func _show_challenge_info() -> void:
-	if _challenge == null or _loading_path != "" or _briefing != null:
+	if _challenge == null or _loading_path != "" or _briefing_overlay() != null:
 		return
-	_briefing = ChallengeBriefing.new()
-	_briefing.setup(_challenge)
-	_briefing.closed.connect(_close_challenge_info)
-	_ui.add_child(_briefing)
-	_touch.set_active(false)
-	get_tree().paused = true
+	var briefing := ChallengeBriefing.new()
+	briefing.setup(_challenge)
+	briefing.closed.connect(_close_overlay.bind(briefing))
+	_push_overlay(briefing)
 
 
+## Idempotent: called from `_end_challenge`/`_on_challenge_finished` whether or not INFO is open.
 func _close_challenge_info() -> void:
-	if _briefing == null:
-		return
-	_briefing.queue_free()
-	_briefing = null
-	_sync_overlay_state()
+	var briefing := _briefing_overlay()
+	if briefing != null:
+		_close_overlay(briefing)
 
 
 ## Not straight into the next attempt: the CHALLENGES screen on its briefing, so the player reads
@@ -381,68 +382,88 @@ func _refused_in_challenge() -> bool:
 
 # --- pause overlay -----------------------------------------------------------
 
-## Esc (or touch MENU) walks the overlay stack out the way it came in, and only then resumes.
-## Never frees the level outright — that stays a deliberate action, not one keypress.
+## Esc (or touch MENU) pops the top of the overlay stack, and only then resumes. Never frees the
+## level outright — that stays a deliberate action, not one keypress.
 func _on_menu_key() -> void:
-	if _vehicles != null:
-		_close_vehicle_select()
-	elif _select != null:
-		_close_level_select()
-	elif _challenges != null:
-		_close_challenge_select()
-	elif _briefing != null:
-		_close_challenge_info()
-	elif _pause == null:
+	if _overlays.is_empty():
 		_open_pause()
-	elif not _pause.back():
-		_close_pause()
+		return
+	var top: Control = _overlays.back()
+	if top is PauseMenu and (top as PauseMenu).back():
+		return  # paged back within the pause menu itself, not a stack pop
+	_pop_overlay()
 
 
-## Whether any modal overlay is up — pause menu, level/vehicle/challenge selector, or the
-## challenge briefing. Overlays nest (LEVEL then CHALLENGES, INFO then LEVEL, ...), so closing
-## one must not resume the world out from under another still open.
-func _any_overlay_open() -> bool:
-	return _pause != null or _select != null or _challenges != null or _vehicles != null \
-			or _briefing != null
+func _find_pause() -> PauseMenu:
+	for o in _overlays:
+		if o is PauseMenu:
+			return o
+	return null
 
 
-## Derives pause/touch state from `_any_overlay_open()`. Every overlay close calls this instead
+## Push a modal onto the stack: pauses the world and drops the touch pads. Every `_show_*`/
+## `_open_*` overlay opener ends here.
+func _push_overlay(node: Control) -> void:
+	_overlays.append(node)
+	_ui.add_child(node)
+	_touch.set_active(false)
+	get_tree().paused = true
+
+
+## Remove a specific overlay wherever it sits in the stack. Every overlay's own close signal
+## (`closed`, `resume_requested`, ...) binds here, so closing is idempotent from the caller's
+## side — a node not in the stack is silently ignored.
+func _close_overlay(node: Control) -> void:
+	if not _overlays.has(node):
+		return
+	_overlays.erase(node)
+	node.queue_free()
+	_sync_overlay_state()
+
+
+func _pop_overlay() -> void:
+	if not _overlays.is_empty():
+		_close_overlay(_overlays.back())
+
+
+## Picking a level/vehicle/challenge (or RESPAWN/RESUME from pause) means "back to driving",
+## whatever else is stacked above or below the overlay that fired it.
+func _close_all_overlays() -> void:
+	while not _overlays.is_empty():
+		_pop_overlay()
+
+
+## Close overlays stacked above `node`, leaving it the visible top again — a menu key for an
+## overlay already open elsewhere in the stack pops down to it instead of stacking a duplicate.
+func _reveal_overlay(node: Control) -> void:
+	while not _overlays.is_empty() and _overlays.back() != node:
+		_pop_overlay()
+
+
+## Derives pause/touch state from the stack's emptiness. Every overlay close calls this instead
 ## of assuming it was the last one up.
 func _sync_overlay_state() -> void:
-	var open := _any_overlay_open()
+	var open := not _overlays.is_empty()
 	get_tree().paused = open
 	_touch.set_active(not open and _level != null)
 
 
 func _open_pause() -> void:
-	if _level == null or _loading_path != "" or _pause != null:
+	if _level == null or _loading_path != "" or _find_pause() != null:
 		return  # nothing to pause, or a level load is in flight
-	_pause = PauseMenu.new()
+	var pause := PauseMenu.new()
 	# Before add_child: CONTROLS sheet greys what the machine lacks, off the same capability read.
-	_pause.setup(_capabilities(), _dashboard.density_setting(), _ui.user_scale(),
+	pause.setup(_capabilities(), _dashboard.density_setting(), _ui.user_scale(),
 			_wind_preset, _current_preset, _wind_from_deg, _night, _challenge != null,
 			_debug.is_extended())
-	_pause.resume_requested.connect(_close_pause)
-	_pause.respawn_requested.connect(_on_pause_respawn)
-	_pause.dashboard_density_changed.connect(_on_density_changed)
-	_pause.ui_scale_changed.connect(_on_ui_scale_changed)
-	_pause.extended_debug_changed.connect(_on_extended_debug_changed)
-	_pause.conditions_changed.connect(_on_conditions_changed)
-	_pause.night_toggled.connect(_on_night_toggled)
-	_ui.add_child(_pause)
-	# Hiding the pads also releases anything held (Pad drops its pointer when invisible).
-	_touch.set_active(false)
-	get_tree().paused = true
-
-
-func _close_pause() -> void:
-	_close_vehicle_select()
-	_close_level_select()
-	_close_challenge_select()
-	if _pause != null:
-		_pause.queue_free()
-		_pause = null
-	_sync_overlay_state()
+	pause.resume_requested.connect(_close_all_overlays)
+	pause.respawn_requested.connect(_on_pause_respawn)
+	pause.dashboard_density_changed.connect(_on_density_changed)
+	pause.ui_scale_changed.connect(_on_ui_scale_changed)
+	pause.extended_debug_changed.connect(_on_extended_debug_changed)
+	pause.conditions_changed.connect(_on_conditions_changed)
+	pause.night_toggled.connect(_on_night_toggled)
+	_push_overlay(pause)
 
 
 ## SETTINGS picked a new cluster density. The menu owns nothing, so applying and remembering
@@ -474,7 +495,7 @@ func _toggle_dashboard() -> void:
 
 ## RESPAWN on the pause menu: close the overlay first, or the respawn happens under a paused tree.
 func _on_pause_respawn() -> void:
-	_close_pause()
+	_close_all_overlays()
 	_respawn()
 
 
@@ -509,30 +530,21 @@ func _on_level_night_changed(is_night: bool) -> void:
 ## this pauses the world and hides the pads itself, mirroring _open_vehicle_select. Opening it
 ## does not tear the current level down — that only happens once a different level is chosen.
 func _show_level_select() -> void:
-	if _level == null or _loading_path != "" or _select != null:
+	if _level == null or _loading_path != "":
 		return
-	_select = LevelSelect.new()
-	_select.level_chosen.connect(_on_level_chosen)
-	_select.closed.connect(_close_level_select)
-	_ui.add_child(_select)
-	_touch.set_active(false)
-	get_tree().paused = true
-
-
-func _close_level_select() -> void:
-	if _select == null:
-		return
-	_select.queue_free()
-	_select = null
-	# The pause menu (or another overlay) may be underneath — _sync_overlay_state keeps the
-	# world paused and the driving pads down until every overlay is gone.
-	_sync_overlay_state()
+	for o in _overlays:
+		if o is LevelSelect:
+			_reveal_overlay(o)
+			return
+	var select := LevelSelect.new()
+	select.level_chosen.connect(_on_level_chosen)
+	select.closed.connect(_close_overlay.bind(select))
+	_push_overlay(select)
 
 
 func _on_level_chosen(scene_path: String) -> void:
 	_end_challenge()  # picking a level leaves the attempt; the lock must not follow into free play
-	_close_level_select()
-	_close_pause()  # unpauses: the level about to load must not spawn into a paused tree
+	_close_all_overlays()  # unpauses: the level about to load must not spawn into a paused tree
 	_load_level(scene_path)
 
 
@@ -543,30 +555,21 @@ func _on_level_chosen(scene_path: String) -> void:
 ## challenge there ends the one in progress the same way picking a level does.
 ## `open_id` opens the screen on that challenge's briefing instead of the grid.
 func _show_challenge_select(open_id := "") -> void:
-	if _level == null or _loading_path != "" or _challenges != null:
+	if _level == null or _loading_path != "":
 		return
-	_challenges = ChallengeSelect.new()
-	_challenges.setup(_progress, open_id)
-	_challenges.challenge_chosen.connect(_on_challenge_picked)
-	_challenges.closed.connect(_close_challenge_select)
-	_ui.add_child(_challenges)
-	_touch.set_active(false)
-	get_tree().paused = true
-
-
-func _close_challenge_select() -> void:
-	if _challenges == null:
-		return
-	_challenges.queue_free()
-	_challenges = null
-	# The pause menu (or another overlay) may be underneath — _sync_overlay_state keeps the
-	# world paused and the driving pads down until every overlay is gone.
-	_sync_overlay_state()
+	for o in _overlays:
+		if o is ChallengeSelect:
+			_reveal_overlay(o)
+			return
+	var challenges := ChallengeSelect.new()
+	challenges.setup(_progress, open_id)
+	challenges.challenge_chosen.connect(_on_challenge_picked)
+	challenges.closed.connect(_close_overlay.bind(challenges))
+	_push_overlay(challenges)
 
 
 func _on_challenge_picked(id: String) -> void:
-	_close_challenge_select()
-	_close_pause()
+	_close_all_overlays()
 	_start_challenge(ChallengeRegistry.def_of(id))
 
 
@@ -767,33 +770,25 @@ func _on_vehicle_changed(type: String) -> void:
 ## SubViewport, so a second live body while driving is a hazard, and it's a screen to read
 ## rather than drive through.
 func _open_vehicle_select() -> void:
-	if _level == null or _loading_path != "" or _vehicles != null:
+	if _level == null or _loading_path != "":
 		return
 	if _refused_in_challenge():
 		return
-	_vehicles = VehicleSelect.new()
+	for o in _overlays:
+		if o is VehicleSelect:
+			_reveal_overlay(o)
+			return
+	var vehicles := VehicleSelect.new()
 	# Before add_child. The level's raw allow-list plus its runtime rail answer, never a
 	# pre-filtered roster, so the screen can say why it can't spawn something.
-	_vehicles.setup(_level.info.allowed_vehicles, String(_level.info.display_name),
+	vehicles.setup(_level.info.allowed_vehicles, String(_level.info.display_name),
 			_level.has_closed_rail(), GameState.current_variant, _current_attachment(),
 			_manual_gearbox, _level.has_spawn_for)
-	_vehicles.vehicle_chosen.connect(_on_vehicle_picked)
-	_vehicles.attachment_chosen.connect(_on_attachment_picked)
-	_vehicles.gearbox_chosen.connect(_on_gearbox_picked)
-	_vehicles.closed.connect(_close_vehicle_select)
-	_ui.add_child(_vehicles)
-	_touch.set_active(false)
-	get_tree().paused = true
-
-
-func _close_vehicle_select() -> void:
-	if _vehicles == null:
-		return
-	_vehicles.queue_free()
-	_vehicles = null
-	# The pause menu (or another overlay) may be underneath — _sync_overlay_state keeps the
-	# world paused and the driving pads down until every overlay is gone.
-	_sync_overlay_state()
+	vehicles.vehicle_chosen.connect(_on_vehicle_picked)
+	vehicles.attachment_chosen.connect(_on_attachment_picked)
+	vehicles.gearbox_chosen.connect(_on_gearbox_picked)
+	vehicles.closed.connect(_close_overlay.bind(vehicles))
+	_push_overlay(vehicles)
 
 
 ## What's on the back of the machine being driven, so the selector opens showing the trailer
@@ -808,8 +803,7 @@ func _current_attachment() -> String:
 ## Picked a body: respawn as it, only if different — re-picking to change a trailer must not
 ## teleport back to the spawn marker.
 func _on_vehicle_picked(variant: String) -> void:
-	_close_vehicle_select()
-	_close_pause()  # back to driving, not back to the menu
+	_close_all_overlays()  # back to driving, not back to the menu
 	if variant != GameState.current_variant:
 		_level.set_vehicle(variant)
 

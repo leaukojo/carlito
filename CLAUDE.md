@@ -212,6 +212,7 @@ $env:GODOT_BIN = $GODOT; .\addons\gdUnit4\runtest.cmd -a tests
 # coupled launch: steer-axle load, pitch, air gate (~30 s; front_z=/com_z= what-ifs)
 & $GODOT --headless --path . res://tools/measure_semi_launch.tscn -- semi
 
+node tools/check_orphans.mjs                      # public src/kit functions with no caller (preflight gate)
 node tools/gen_js_contract.mjs                    # after ANY contract edit
 & $GODOT --headless --path . --export-release "Web" build/web/index.html   # CI does the real one
 # ...plus one --export-patch per island, or islands fall back to flatland: docs/deploying.md § Level packs

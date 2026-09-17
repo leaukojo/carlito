@@ -40,6 +40,10 @@ $errors = ($smoke -split "`n") | Select-String -Pattern 'SCRIPT ERROR|ERROR:' |
     Where-Object { $_ -notmatch 'still in use at exit|leaked at exit|Pages in use exist at exit' }
 if ($LASTEXITCODE -ne 0 -or $errors) { $errors; Fail 'headless smoke' }
 
+Announce 'Orphan check'
+node tools/check_orphans.mjs
+if ($LASTEXITCODE -ne 0) { Fail 'orphan check (wire it up, delete it, or add it to tools/orphans_allow.txt)' }
+
 Announce 'Head-include sync check'
 node tools/check_head_include.mjs
 if ($LASTEXITCODE -ne 0) { Fail 'head-include sync (export_presets.cfg vs src/bridge/web/head_include.html)' }

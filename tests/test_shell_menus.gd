@@ -381,3 +381,89 @@ func test_vehicle_select_back_emits_closed() -> void:
 	sel.closed.connect(func() -> void: closed[0] = true)
 	_press(sel, "BACK")
 	assert_bool(closed[0]).is_true()
+
+
+# --- boot's overlay stack -----------------------------------------------------
+
+## A live Boot on flatland. `_ready()`'s own `_boot()` kicks off a threaded load that awaits
+## `RenderingServer.frame_post_draw` — a frame this CLI test runner never presents, so that
+## coroutine sits stuck at the await forever, harmlessly. Force the level in directly instead,
+## the same scene the headless path would have loaded synchronously.
+func _booted() -> Boot:
+	var boot := (load("res://src/shell/boot.tscn") as PackedScene).instantiate() as Boot
+	add_child(boot)
+	boot._next_variant = ""
+	boot._finish_load(load(LevelRegistry.scene_of(Boot.DEFAULT_LEVEL)) as PackedScene)
+	auto_free(boot)
+	return boot
+
+
+## Mirrors `Boot._start_challenge` (end any attempt, queue the def, load its arena) with the
+## same direct `_finish_load` in place of the stuck-await threaded load.
+func _run_challenge(boot: Boot, id: String) -> void:
+	var def := ChallengeRegistry.def_of(id)
+	boot._end_challenge()
+	boot._pending_challenge = def
+	boot._next_variant = def.variant
+	boot._finish_load(load(LevelRegistry.scene_of(def.arena)) as PackedScene)
+
+
+func after_test() -> void:
+	get_tree().paused = false
+
+
+## LEVEL then CHALLENGES: Esc closes the top of the stack (CHALLENGES) only, and the world
+## stays paused underneath since LEVEL is still open.
+func test_boot_esc_closes_the_top_overlay_only() -> void:
+	var boot := _booted()
+	boot._show_level_select()
+	boot._show_challenge_select()
+	assert_int(boot._overlays.size()).is_equal(2)
+
+	boot._on_menu_key()
+	assert_int(boot._overlays.size()).is_equal(1)
+	assert_bool(boot._overlays[0] is LevelSelect).is_true()
+	assert_bool(get_tree().paused).is_true()
+
+	boot._on_menu_key()
+	assert_int(boot._overlays.size()).is_equal(0)
+	assert_bool(get_tree().paused).is_false()
+
+
+## INFO during an attempt, then LEVEL on top of it: two Esc presses walk back out in the order
+## they were opened and land back in the running attempt, not free play.
+func test_boot_briefing_then_level_esc_twice_returns_to_the_attempt() -> void:
+	var boot := _booted()
+	_run_challenge(boot, "car_blind_stadium")
+	assert_object(boot._challenge).is_not_null()
+	assert_object(boot._runner).is_not_null()
+
+	boot._show_challenge_info()
+	boot._show_level_select()
+	assert_int(boot._overlays.size()).is_equal(2)
+
+	boot._on_menu_key()
+	assert_int(boot._overlays.size()).is_equal(1)
+	assert_bool(boot._overlays[0] is ChallengeBriefing).is_true()
+	assert_bool(get_tree().paused).is_true()
+
+	boot._on_menu_key()
+	assert_int(boot._overlays.size()).is_equal(0)
+	assert_bool(get_tree().paused).is_false()
+	# Still the same attempt: neither Esc undid it, unlike picking a level/vehicle/challenge would.
+	assert_object(boot._challenge).is_not_null()
+	assert_object(boot._runner).is_not_null()
+
+
+## A menu key for an overlay already open elsewhere in the stack reveals it (closes whatever is
+## stacked above) instead of stacking a duplicate instance.
+func test_boot_menu_key_reveals_an_already_open_overlay() -> void:
+	var boot := _booted()
+	boot._show_level_select()
+	var first: LevelSelect = boot._overlays[0]
+	boot._open_vehicle_select()
+	assert_int(boot._overlays.size()).is_equal(2)
+
+	boot._show_level_select()
+	assert_int(boot._overlays.size()).is_equal(1)
+	assert_object(boot._overlays[0]).is_same(first)

@@ -1,0 +1,12 @@
+# check_orphans.mjs allow-list: public functions with no caller outside tests/, kept public on
+# purpose so gdUnit4 can assert them directly (rule 8) rather than reaching through private
+# state. One entry per "<path relative to repo root>:<function>", reason after the "#".
+
+src/bridge/contract.gd:has_signal_def          # query accessor mirroring get_signal_def(), asserted directly in tests/test_contract.gd
+src/challenges/challenge_attempt.gd:current_goal # test accessor mirroring goal_count(); ChallengeHud reads goal_index/goal_count instead
+src/input/action_registry.gd:families_of        # doc comment: for the contract cross-check in tests/test_action_registry.gd, not the runtime gate
+src/levels/base/heightmap_terrain.gd:get_splat_weights # test accessor for the splat-paint friction path; production grip/drag reads the internal weight cache
+src/shell/challenge_registry.gd:duplicate_ids   # registry integrity check exercised by tests/test_challenge_registry.gd's ship gate; nothing at runtime needs it
+src/vehicles/base/drivetrain.gd:shift_cut_active # test accessor for _shift_cut_ticks; no dashboard/telemetry consumer
+src/vehicles/base/towed_body.gd:load_shift_z    # documented test accessor, no runtime caller
+src/vehicles/base/towed_body.gd:collision_probes # documented test accessor; test_trailer is its consumer

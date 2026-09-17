@@ -13,11 +13,6 @@ extends Node3D
 @export var closed := false
 
 
-## Duck-typing marker: this node is a baked rail track.
-func is_carlito_rail_track() -> bool:
-	return true
-
-
 # ---------------------------------------------------------------- rail node API
 # Shared verbatim with RoadPath. Discovery is has_method("get_rail_curve") and
 # get_rail_curve() != null, not a marker method (a city-profile RoadPath must answer "no").

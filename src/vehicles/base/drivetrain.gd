@@ -242,7 +242,8 @@ static func retarder_pct(applied_nm: float, rated_nm: float) -> float:
 	return clampf(absf(applied_nm) / rated_nm * 100.0, 0.0, 100.0)
 
 
-## True while the post-shift throttle cut is running (telemetry/dash read-back).
+## True while the post-shift throttle cut is running. Test accessor for `_shift_cut_ticks`;
+## no dashboard or telemetry reads it.
 func shift_cut_active() -> bool:
 	return _shift_cut_ticks > 0
 

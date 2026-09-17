@@ -251,7 +251,6 @@ func test_bake_emits_a_rail_track_carrying_the_curve() -> void:
 	var baked: Node3D = result.root
 	var track := baked.get_node_or_null("Rails/rail_0")
 	assert_object(track).is_not_null()
-	assert_bool(track.has_method("is_carlito_rail_track")).is_true()
 	assert_float(track.call("rail_gauge")).is_equal_approx(1.44, 1e-5)
 	assert_bool(track.call("is_rail_closed")).is_true()
 	# road transform * Path child transform, so a consumer can sample straight through it
