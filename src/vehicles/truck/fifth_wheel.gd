@@ -20,9 +20,9 @@ const KINGPIN_LOCAL := Vector3(0.0, 1.05, 0.45)
 ##
 ## Measured at a quiet standstill on the flat: the coupled rig rests ~1.5 deg tractor nose-up and
 ## ~0.7 deg trailer nose-down (joint 2.1 of 15), kingpin ~1.1 m over the road. That is the rear axle
-## at 60 % travel against the steer axle's 32 % on ONE spring rate, so KINGPIN_LOCAL.y cannot level
-## the tractor; it only sets the trailer's own pitch. The wheelbases that keep the steer axle loaded
-## through a launch are truck/CLAUDE.md § The fifth wheel.
+## at 40 % travel against the steer axle's 32 %, on the rear's own spring_rate_rear, so
+## KINGPIN_LOCAL.y cannot level the tractor; it only sets the trailer's own pitch. The wheelbases
+## that keep the steer axle loaded through a launch are truck/CLAUDE.md § The fifth wheel.
 const PITCH_LIMIT_DEG := 15.0
 const ROLL_LIMIT_DEG := 1.5
 

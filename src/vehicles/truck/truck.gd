@@ -21,11 +21,17 @@ var _trash_full_y := 0.0             ## authored pile pose = full hopper
 var _trash_empty_y := 0.0            ## measured off the pile's own mesh
 var _mass_applied := 0.0             ## payload currently written into `mass`
 var _last_body_cmd := 0              ## previous tick's body_cmd, so the notice fires on the edge
+var _spring_brakes_were_applied := false  ## last tick's gate, so the notice fires on the edge
 
 ## Told to the driver when the body stalk is worked with the PTO out or the parking brake off.
 ## Fires on the press, not while inhibited, so it explains rather than nags.
 const BODY_INTERLOCK_NOTICE := "ENGAGE THE PTO AND HANDBRAKE FIRST"
 const BODY_INTERLOCK_NOTICE_DWELL_S := 5.0
+
+## Told to the driver the tick the spring-brake gate applies. Fires once per application, not
+## while held, and not for the gap between spawn and running.
+const SPRING_BRAKE_NOTICE := "SPRING BRAKES APPLIED - AIR LOW"
+const SPRING_BRAKE_NOTICE_DWELL_S := 5.0
 
 
 func _make_telemetry() -> VehicleTelemetry:
@@ -100,8 +106,12 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	# Spring brakes go on LAST, after retarder_state is read, and do NOT zero it: the retarder
 	# torque ran earlier this tick and RayWheel integrated it, so the pin supersedes rather than
 	# retracts it. (Narrow overlap: demand already fades to 0 below RETARDER_CUTOUT_MS.)
-	if TruckTelemetry.spring_brakes_applied(t.air_primary, t.air_secondary):
+	var gate_applied := TruckTelemetry.spring_brakes_applied(t.air_primary, t.air_secondary)
+	if gate_applied:
 		_apply_spring_brakes()
+	if TruckTelemetry.spring_brake_notice_edge(gate_applied, _spring_brakes_were_applied):
+		GameState.notice.emit(SPRING_BRAKE_NOTICE, SPRING_BRAKE_NOTICE_DWELL_S)
+	_spring_brakes_were_applied = gate_applied
 
 
 ## What else is drawing on the air reservoirs this tick (air_step's `aux01`). Nothing on a truck
@@ -212,6 +222,7 @@ func _rear_suspension_force() -> float:
 func reset_session_state() -> void:
 	super.reset_session_state()
 	_last_body_cmd = RefuseBody.Cmd.IDLE
+	_spring_brakes_were_applied = false
 	if _body != null:
 		_body.reset()
 		_pose_rig()

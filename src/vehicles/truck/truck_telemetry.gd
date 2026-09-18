@@ -94,6 +94,12 @@ static func spring_brakes_applied(primary: float, secondary: float) -> bool:
 	return minf(primary, secondary) < AIR_SPRING_BRAKE_BAR
 
 
+## True on the tick the gate transitions false -> true: fires the driver notice once per
+## application, silent while it's held, re-armed only once the gate releases.
+static func spring_brake_notice_edge(applied: bool, was_applied: bool) -> bool:
+	return applied and not was_applied
+
+
 ## Axle load in kilograms from the summed suspension force (N) carrying that axle. A weight, not
 ## a mass lookup: the number is whatever the springs were actually holding up this tick.
 static func axle_load_kg(suspension_force_n: float) -> float:

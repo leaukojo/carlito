@@ -63,6 +63,7 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 				body.add_child(visual)
 		var wheel := RayWheel.new(pos, front, driven, visual, corner_mass)
 		wheel.visual_lift = vis_radius - gd.wheel_radius
+		wheel.apply_suspension(gd)
 		wheels.append(wheel)
 	_wheelbase = _compute_wheelbase()
 

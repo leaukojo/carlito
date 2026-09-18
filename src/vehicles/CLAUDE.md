@@ -286,6 +286,10 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
     enforces this. The semi's plate load is deliberately NOT folded in (`truck/CLAUDE.md`).
   - `RayWheel.is_rear_z` is the ONE front/rear predicate (ties go front); no shipped station sits
     on z = 0 and `test_vehicle_catalog` sweeps for it.
+  - `GroundDriveSpec.spring_rate_rear`/`damper_bump_rear`/`damper_rebound_rear` are per-axle, 0 =
+    the front value (`RayWheel.apply_suspension` picks per corner off `is_rear`). A rear damper
+    left at 0 scales the front's by sqrt(rear rate / front rate), which keeps the front's damping
+    ratio on the stiffer axle; an explicit rear damper overrides the scaling.
 - Suspension force acts along the CONTACT NORMAL (`hit.normal`), never the chassis' up axis.
   Pushing along the body's own up tips part of the vertical load into the direction of travel
   whenever the chassis sits nose-up or nose-down, so a body thrusts itself along (or drags
@@ -549,3 +553,10 @@ Detail in `src/vehicles/kenney/CLAUDE.md`.
     left, so the launch transient is not bit-reproducible across run contexts (top speed, gear
     and rpm are stable; 0-50 / quarter / `tyres` / `rake` move in the third digit). A
     regression diff has to compare runs of the SAME SHAPE.
+  - A static reading is a standstill phase, never the spawn settle: `measure_semi_launch`'s
+    static pose is sampled off the last tick of P5 (standstill, brakes applied), not P1 (which
+    is still settling and reads pitch and travel high).
+  - Every spawn (`Level._spawn_vehicle`, the three measure tools) places the origin at
+    `BaseVehicle.rest_ride_height()` over the ground under the marker, wheels just touching and
+    springs unloaded, never dropped onto them — so a chassis contact at t=0 is a real problem,
+    not "the spawn drop".

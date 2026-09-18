@@ -270,3 +270,88 @@ func test_a_full_refuse_hopper_moves_the_shipped_trucks_caps() -> void:
 			"a full hopper left the caps sized for the empty truck") \
 			.is_equal_approx(laden / float(spec.ground_drive.wheel_positions.size()), 1e-6)
 	assert_float(drive.wheels[0].corner_mass).is_greater(empty)
+
+
+# --- rear-axle spring/damper accessors: 0 falls back, dampers track the rate --------------
+
+func test_rear_accessors_fall_back_to_the_front_values_at_zero() -> void:
+	var gd := _spec()
+	gd.spring_rate = 240000.0
+	gd.damper_bump = 12000.0
+	gd.damper_rebound = 15800.0
+	assert_float(gd.rear_spring_rate()).is_equal_approx(240000.0, 1e-6)
+	assert_float(gd.rear_damper_bump()).is_equal_approx(12000.0, 1e-6)
+	assert_float(gd.rear_damper_rebound()).is_equal_approx(15800.0, 1e-6)
+
+
+func test_rear_dampers_scale_by_sqrt_of_the_rate_ratio_when_only_the_rate_is_set() -> void:
+	var gd := _spec()
+	gd.spring_rate = 240000.0
+	gd.damper_bump = 12000.0
+	gd.damper_rebound = 15800.0
+	gd.spring_rate_rear = 360000.0
+	# sqrt(360000/240000) = sqrt(1.5) ~= 1.224745, keeping the front's damping ratio at 1.5x the rate.
+	assert_float(gd.rear_spring_rate()).is_equal_approx(360000.0, 1e-6)
+	assert_float(gd.rear_damper_bump()).is_equal_approx(14696.9, 0.1)
+	assert_float(gd.rear_damper_rebound()).is_equal_approx(19351.0, 0.1)
+
+
+func test_an_explicit_rear_damper_wins_over_the_rate_scaling() -> void:
+	var gd := _spec()
+	gd.spring_rate = 240000.0
+	gd.damper_bump = 12000.0
+	gd.damper_rebound = 15800.0
+	gd.spring_rate_rear = 360000.0
+	gd.damper_bump_rear = 13000.0
+	gd.damper_rebound_rear = 17000.0
+	assert_float(gd.rear_damper_bump()).is_equal_approx(13000.0, 1e-6)
+	assert_float(gd.rear_damper_rebound()).is_equal_approx(17000.0, 1e-6)
+
+
+# --- rest ride height: the spawn placer's ground-clearance figure ------------------
+
+func test_rest_ride_height_is_radius_plus_rest_length_above_the_lowest_anchor() -> void:
+	var gd := GroundDriveSpecScript.new()
+	gd.wheel_radius = 0.32
+	gd.rest_length = 0.25
+	gd.wheel_positions = PackedVector3Array([
+		Vector3(-0.78, -0.1, -1.25), Vector3(0.78, -0.1, -1.25),
+		Vector3(-0.78, -0.1, 1.25), Vector3(0.78, -0.1, 1.25),
+	])
+	# All four anchors share y = -0.1, so the height is 0.32 + 0.25 - (-0.1).
+	assert_float(gd.rest_ride_height()).is_equal_approx(0.67, 1e-6)
+
+
+func test_rest_ride_height_is_set_by_the_lowest_anchor_when_they_differ() -> void:
+	var gd := GroundDriveSpecScript.new()
+	gd.wheel_radius = 0.5
+	gd.rest_length = 0.3
+	gd.wheel_positions = PackedVector3Array([
+		Vector3(-0.8, -0.05, -1.3), Vector3(0.8, -0.2, -1.3),
+	])
+	# The lower anchor (-0.2) reaches the ground first, so it sets the origin height.
+	assert_float(gd.rest_ride_height()).is_equal_approx(0.5 + 0.3 + 0.2, 1e-6)
+
+
+func test_rest_ride_height_is_zero_with_no_wheel_positions() -> void:
+	var gd := GroundDriveSpecScript.new()
+	gd.wheel_positions = PackedVector3Array()
+	assert_float(gd.rest_ride_height()).is_equal(0.0)
+
+
+## BaseVehicle.rest_ride_height() forwards to the spec's ground drive, or 0.0 with none — built
+## with no tree, since the method reads only `spec`.
+func test_base_vehicle_forwards_rest_ride_height_and_is_zero_with_no_ground_drive() -> void:
+	var gd := GroundDriveSpecScript.new()
+	gd.wheel_radius = 0.32
+	gd.rest_length = 0.25
+	gd.wheel_positions = PackedVector3Array([Vector3(0.0, -0.1, -1.0)])
+	var wheeled_spec := VehicleSpec.new()
+	wheeled_spec.ground_drive = gd
+	var wheeled: BaseVehicle = auto_free(BaseVehicle.new())
+	wheeled.spec = wheeled_spec
+	assert_float(wheeled.rest_ride_height()).is_equal_approx(gd.rest_ride_height(), 1e-6)
+
+	var free_body: BaseVehicle = auto_free(BaseVehicle.new())
+	free_body.spec = VehicleSpec.new()  # ground_drive left null, like the boat/drone/train
+	assert_float(free_body.rest_ride_height()).is_equal(0.0)

@@ -329,6 +329,13 @@ func get_camera_framing() -> Dictionary:
 	return {}
 
 
+## Origin height (m) above flat ground with the wheels just touching and the springs unloaded, so
+## a spawn can place the body there instead of dropping it onto its springs. 0.0 on a body with no
+## ground drive (boat/drone/train), which is placed exactly as the marker says.
+func rest_ride_height() -> float:
+	return spec.ground_drive.rest_ride_height() if spec.ground_drive != null else 0.0
+
+
 ## Read by InputRouter for local brake-vs-reverse arbitration.
 func get_speed() -> float:
 	return telemetry.speed

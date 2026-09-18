@@ -34,6 +34,13 @@ extends Resource
 @export var spring_rate := 22000.0  ## N/m (~1.3 Hz natural frequency at 300 kg/corner — 60 Hz-safe)
 @export var damper_bump := 1800.0   ## N*s/m
 @export var damper_rebound := 2400.0
+## Rear-axle rate; 0 = spring_rate (the wheel_visual_radius_rear precedent). A body whose rear
+## carries a multiple of the front's load (a coupled tractor unit) is sized per axle here.
+@export var spring_rate_rear := 0.0
+## Rear-axle dampers; 0 = the front value x sqrt(rear_spring_rate() / spring_rate), which keeps
+## the front's damping ratio on the stiffer axle at the same corner mass.
+@export var damper_bump_rear := 0.0
+@export var damper_rebound_rear := 0.0
 @export var max_suspension_force := 30000.0  ## N; clamp against deep-penetration catapults
 
 @export_group("Tires")
@@ -80,3 +87,35 @@ extends Resource
 ## then divide.
 @export_range(0.0, 1.0) var min_steer_frac := 1.0
 @export var steer_falloff_speed := 30.0  ## m/s at which min_steer_frac is fully reached
+
+
+## Rear-axle spring rate, N/m: `spring_rate_rear`, or the front rate when it is 0.
+func rear_spring_rate() -> float:
+	return spring_rate_rear if spring_rate_rear > 0.0 else spring_rate
+
+
+## Rear-axle bump damper, N*s/m: explicit, or the front damper scaled by sqrt(rate ratio) so the
+## damping ratio c / (2 sqrt(k m)) is what the front has at the same corner mass.
+func rear_damper_bump() -> float:
+	return damper_bump_rear if damper_bump_rear > 0.0 else damper_bump * _rear_damper_scale()
+
+
+## Rear-axle rebound damper, N*s/m; same rule as rear_damper_bump.
+func rear_damper_rebound() -> float:
+	return damper_rebound_rear if damper_rebound_rear > 0.0 			else damper_rebound * _rear_damper_scale()
+
+
+func _rear_damper_scale() -> float:
+	return sqrt(rear_spring_rate() / spring_rate) if spring_rate > 0.0 else 1.0
+
+
+## Origin height (m) above flat ground with every wheel just touching and the springs unloaded:
+## `wheel_radius + rest_length` above the LOWEST wheel anchor (least y), the one that reaches the
+## ground first. 0.0 with no wheel positions, so a spawn placer can call it on any spec unguarded.
+func rest_ride_height() -> float:
+	if wheel_positions.is_empty():
+		return 0.0
+	var lowest_y := INF
+	for p in wheel_positions:
+		lowest_y = minf(lowest_y, p.y)
+	return wheel_radius + rest_length - lowest_y

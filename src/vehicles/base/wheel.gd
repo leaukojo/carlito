@@ -48,6 +48,12 @@ var visual_lift := 0.0
 ## way round, since a clamp sized under the true load can only be tighter (truck/CLAUDE.md § the
 ## fifth wheel). Never widen a clamp to chase it; the lever is the spec's own numbers.
 var corner_mass: float
+## This corner's spring and dampers, picked per axle from the spec by `apply_suspension`
+## (`GroundDriveSpec.rear_spring_rate` and friends). Every builder calls it; a wheel left at 0
+## carries nothing.
+var spring_rate := 0.0
+var damper_bump := 0.0
+var damper_rebound := 0.0
 
 var _prev_compression := 0.0
 var _spin_angle := 0.0
@@ -65,6 +71,14 @@ func _init(p_anchor: Vector3, p_steered: bool, p_driven: bool, p_visual: Node3D,
 	_visual = p_visual
 	corner_mass = p_corner_mass
 	_query.collision_mask = Layers.SOLID  ## Containment left out — see collision_layers.gd
+
+
+## Pick this axle's spring and dampers off the spec: the rear accessors fall back to the front
+## values at 0, so a spec with no rear fields is one rate for every corner.
+func apply_suspension(gd: GroundDriveSpec) -> void:
+	spring_rate = gd.rear_spring_rate() if is_rear else gd.spring_rate
+	damper_bump = gd.rear_damper_bump() if is_rear else gd.damper_bump
+	damper_rebound = gd.rear_damper_rebound() if is_rear else gd.damper_rebound
 
 
 func reset() -> void:
@@ -146,11 +160,11 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	compression = clampf(ray_len - ray_from.distance_to(contact_point), 0.0, drive_spec.rest_length)
 	var comp_vel := (compression - _prev_compression) / delta
 	_prev_compression = compression
-	var damper := drive_spec.damper_bump if comp_vel > 0.0 else drive_spec.damper_rebound
+	var damper := damper_bump if comp_vel > 0.0 else damper_rebound
 	# 60 Hz clamp: never exceed the force that reverses compression velocity in one tick.
 	var damper_force := clampf(damper * comp_vel,
 			-corner_mass * absf(comp_vel) / delta, corner_mass * absf(comp_vel) / delta)
-	suspension_force = clampf(drive_spec.spring_rate * compression + damper_force,
+	suspension_force = clampf(spring_rate * compression + damper_force,
 			0.0, drive_spec.max_suspension_force)
 	body.apply_force(normal * suspension_force, contact_point - body.global_position)
 

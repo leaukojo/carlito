@@ -106,6 +106,8 @@ const CAR_BASE := {
 	"cd": 0.32, "crr": 0.012,
 	"mass": 1150.0, "com_y": 0.20, "spring_rate": 22000.0, "damper_bump": 1800.0,
 	"damper_rebound": 2400.0, "max_suspension_force": 30000.0, "rest_length": 0.28,
+	# One rate for every corner; no Kenney body declares a rear axle share of its own.
+	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
 	# FWD default; per-variant override in VARIANTS (rwd/awd where the body says so).
 	"wheel_inertia": 1.2, "driven_front": true, "driven_rear": false,
 	"mu_long": 1.05, "mu_lat": 1.1, "handbrake_grip": 0.45,
@@ -144,6 +146,8 @@ const TRUCK_BASE := {
 	# Spring/damper/force hand-tuned by driving both trucks.
 	"mass": 4000.0, "com_y": 0.30, "spring_rate": 240000.0, "damper_bump": 12000.0,
 	"damper_rebound": 15800.0, "max_suspension_force": 120000.0, "rest_length": 0.32,
+	# One rate for every corner; no Kenney body declares a rear axle share of its own.
+	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
 	# J1939: only family with an auxiliary retarder on the driven axle.
 	"retarder_equipped": true,
@@ -170,6 +174,8 @@ const VAN_BASE := {
 	# 4-5 t vans; 240000 N/m is TRUCK_BASE's rate, measured on 8 t, and does not apply here.
 	"mass": 4000.0, "com_y": 0.30, "spring_rate": 65000.0, "damper_bump": 5000.0,
 	"damper_rebound": 7000.0, "max_suspension_force": 90000.0, "rest_length": 0.32,
+	# One rate for every corner; no Kenney body declares a rear axle share of its own.
+	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
 	"mu_long": 1.0, "mu_lat": 0.95, "handbrake_grip": 1.0,
 	# Commercial radials, as TRUCK_BASE.
@@ -190,6 +196,8 @@ const TRACTOR_BASE := {
 	"cd": 0.90, "crr": 0.020,
 	"mass": 4200.0, "com_y": 0.35, "spring_rate": 70000.0, "damper_bump": 6000.0,
 	"damper_rebound": 8000.0, "max_suspension_force": 110000.0, "rest_length": 0.35,
+	# One rate for every corner; no Kenney body declares a rear axle share of its own.
+	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
 	"wheel_inertia": 4.0, "driven_front": false, "driven_rear": true,
 	# ISOBUS: only family with lockable diff / engageable front axle at runtime.
 	"rear_diff_lockable": true, "front_axle_engageable": true,
@@ -393,6 +401,9 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	gd.spring_rate = float(b["spring_rate"])
 	gd.damper_bump = float(b["damper_bump"])
 	gd.damper_rebound = float(b["damper_rebound"])
+	gd.spring_rate_rear = float(b["spring_rate_rear"])
+	gd.damper_bump_rear = float(b["damper_bump_rear"])
+	gd.damper_rebound_rear = float(b["damper_rebound_rear"])
 	gd.max_suspension_force = float(b["max_suspension_force"])
 	gd.grip_curve = _grip_curve.duplicate()
 	gd.mu_long = get_f.call("mu_long")

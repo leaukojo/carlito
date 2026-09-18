@@ -219,7 +219,8 @@ func _next_vehicle() -> void:
 	_current = {"variant": _variant, "family": String(Catalog.VARIANTS[_variant]["family"])}
 	_car = load(Catalog.VARIANTS[_variant]["scene"]).instantiate()
 	add_child(_car)
-	_car.global_transform = Transform3D(Basis.IDENTITY, Vector3(0.0, 0.6, START_Z))
+	# Strip top is y=0; wheels just touching, no spawn drop onto the springs.
+	_car.global_transform = Transform3D(Basis.IDENTITY, Vector3(0.0, _car.rest_ride_height(), START_Z))
 	_car.spawn_transform = _car.global_transform
 	_car.reset_physics_interpolation()
 	if _coast:
@@ -541,7 +542,8 @@ func _report_tracking(skipped: bool) -> void:
 				"drift_final": _drift_final, "track_dist": _track_dist, "heading_peak": _heading_peak}
 	if _corner:
 		# Onto the pad: spawn_transform is what respawn() re-lays the body (and any trailer) on.
-		_car.spawn_transform = Transform3D(Basis.IDENTITY, Vector3(PAD_X, 0.6, 0.0))
+		# Pad top is y=0, same as the strip.
+		_car.spawn_transform = Transform3D(Basis.IDENTITY, Vector3(PAD_X, _car.rest_ride_height(), 0.0))
 		_car.respawn()
 		_reset_pass(Phase.CORNERING)
 		return
@@ -557,7 +559,7 @@ func _finish_vehicle() -> void:
 func _contact_label(pass_name: String) -> String:
 	if _contact_peak == 0:
 		return "none during %s (wheels are raycasts, so any contact is the chassis)" % pass_name
-	return "x%d during %s, t=%.2f..%.2f s — a window at the very start is the spawn drop" \
+	return "x%d during %s, t=%.2f..%.2f s — a real problem, not a spawn drop" \
 			% [_contact_peak, pass_name, _contact_t0, _contact_t1]
 
 

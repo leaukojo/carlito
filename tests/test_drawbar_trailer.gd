@@ -225,7 +225,7 @@ func test_the_trailer_rides_on_its_springs_and_not_on_its_stops() -> void:
 	var spec := _spec_of(trailer)
 	var bogie_kg: float = spec.mass * (1.0 - float(trailer.call(&"kingpin_share")))
 	var per_wheel := bogie_kg * G / float(spec.ground_drive.wheel_positions.size())
-	var used := (per_wheel / spec.ground_drive.spring_rate) / spec.ground_drive.rest_length
+	var used := (per_wheel / spec.ground_drive.rear_spring_rate()) / spec.ground_drive.rest_length
 	assert_float(used) \
 		.override_failure_message("it sits at %.0f%% of its suspension travel at rest" % (used * 100.0)) \
 		.is_between(0.25, 0.5)

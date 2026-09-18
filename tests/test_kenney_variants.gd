@@ -27,6 +27,8 @@ const DRIVE_BASELINE_ONLY := {
 	"spring_rate": "spring_rate", "damper_bump": "damper_bump",
 	"damper_rebound": "damper_rebound", "max_suspension_force": "max_suspension_force",
 	"load_sensitivity": "load_sensitivity",
+	"spring_rate_rear": "spring_rate_rear", "damper_bump_rear": "damper_bump_rear",
+	"damper_rebound_rear": "damper_rebound_rear",
 }
 ## Driveline flags: had gone missing once (now pinned).
 const DRIVELINE_FLAGS := ["rear_diff_lockable", "front_axle_engageable", "retarder_equipped"]

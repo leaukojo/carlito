@@ -302,7 +302,8 @@ func test_downforce_fits_inside_the_suspension_travel_it_acts_through() -> void:
 		var corners := maxf(1.0, float(gd.wheel_positions.size()))
 		var load_per_corner := (spec.mass * 9.8
 				+ VehicleMath.aero_downforce(TOP_SPEED, gd.downforce_area)) / corners
-		var spring_ceiling := gd.spring_rate * gd.rest_length
+		# The softer of the two axle rates: the ceiling every corner is guaranteed to have.
+		var spring_ceiling := minf(gd.spring_rate, gd.rear_spring_rate()) * gd.rest_length
 		assert_float(load_per_corner).override_failure_message(
 				("%s bottoms out at %.0f km/h: %.0f N/corner against %.0f N of spring travel"
 				+ " — cut cl, not the springs") % [variant, TOP_SPEED * 3.6, load_per_corner,

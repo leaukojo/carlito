@@ -19,6 +19,7 @@ const ContractScript := preload("res://src/bridge/contract.gd")
 const TowedBodyScript := preload("res://src/vehicles/base/towed_body.gd")
 const TipperScript := preload("res://src/vehicles/truck/trailers/tipper.gd")
 const TankerScript := preload("res://src/vehicles/truck/trailers/tanker.gd")
+const TrailerSwing := preload("res://tests/trailer_swing.gd")
 
 const DELTA := 1.0 / 60.0
 const G := 9.8
@@ -233,20 +234,111 @@ func test_every_trailer_puts_a_realistic_load_on_the_fifth_wheel() -> void:
 
 
 func test_a_load_ahead_of_the_drive_axle_is_shared_with_the_steer_axle() -> void:
-	# The semi's authored geometry: steer -2.65, drive +0.95, kingpin +0.45.
-	assert_float(Artic.rear_axle_share(0.95, -2.65, 0.95)).is_equal_approx(1.0, 1e-9)
-	assert_float(Artic.rear_axle_share(-2.65, -2.65, 0.95)).is_equal_approx(0.0, 1e-9)
-	assert_float(Artic.rear_axle_share(-0.85, -2.65, 0.95)).is_equal_approx(0.5, 1e-9)
-	# The kingpin sits 0.50 m ahead of the drive axle, so ~86 % of the plate load lands there.
-	assert_float(Artic.rear_axle_share(0.45, -2.65, 0.95)).is_between(0.84, 0.88)
+	# Read the semi's own authored geometry off its spec rather than restating it, so a wheelbase
+	# or plate change re-derives this test instead of quietly drifting from it.
+	var spec: VehicleSpec = load("res://src/vehicles/truck/semi_spec.tres")
+	var steer_z := 0.0
+	var drive_z := 0.0
+	for p in spec.ground_drive.wheel_positions:
+		steer_z = minf(steer_z, p.z)
+		drive_z = maxf(drive_z, p.z)
+	var kingpin_z: float = FifthWheelScript.KINGPIN_LOCAL.z
+	assert_float(Artic.rear_axle_share(drive_z, steer_z, drive_z)).is_equal_approx(1.0, 1e-9)
+	assert_float(Artic.rear_axle_share(steer_z, steer_z, drive_z)).is_equal_approx(0.0, 1e-9)
+	assert_float(Artic.rear_axle_share((steer_z + drive_z) * 0.5, steer_z, drive_z)) \
+			.is_equal_approx(0.5, 1e-9)
+	# The kingpin sits ahead of the drive axle, so most of the plate load lands there.
+	assert_float(Artic.rear_axle_share(kingpin_z, steer_z, drive_z)).is_between(0.84, 0.88)
+
+
+## Front/rear axle anchors off a tractor unit's own spec, the shape both new tests below share.
+func _tractor_axles(spec: VehicleSpec) -> Vector2:
+	var steer_z := 0.0
+	var drive_z := 0.0
+	for p in spec.ground_drive.wheel_positions:
+		steer_z = minf(steer_z, p.z)
+		drive_z = maxf(drive_z, p.z)
+	return Vector2(steer_z, drive_z)
+
+
+func test_both_tractor_units_are_front_heavy_bobtail_by_design() -> void:
+	# Cab and engine sit ahead of the drive axle on both units, so a bobtail rig is meant to carry
+	# more than half its own weight on the steer axle -- why a real bobtail locks up so easily.
+	# Both land 50-55 %: front-heavy on purpose, not by drift.
+	for scene_path in [CatalogScript.scene_of("semi"), CatalogScript.scene_of("semi-conventional")]:
+		var unit := (load(scene_path) as PackedScene).instantiate() as Node3D
+		var spec: VehicleSpec = unit.get("spec")
+		var axles := _tractor_axles(spec)
+		var steer_share := 1.0 - Artic.rear_axle_share(spec.center_of_mass.z, axles.x, axles.y)
+		assert_float(steer_share) \
+			.override_failure_message("%s: bobtail puts %.1f%% on the steer axle" \
+				% [scene_path, steer_share * 100.0]) \
+			.is_between(0.50, 0.55)
+		unit.free()
+
+
+func test_the_plate_lands_mostly_on_the_drive_axle_on_both_units() -> void:
+	# The kingpin sits ~0.50 m ahead of the drive axle on both units (semi_spec.tres,
+	# conventional_spec.tres), so most of the box's plate load lands there on either one -- but the
+	# band differs per unit, because that fixed 0.50 m offset is a bigger fraction of the semi's
+	# shorter wheelbase, so relatively more of it reaches the semi's steer axle.
+	var box := _trailer(BOX)
+	var plate_share: float = box.call("kingpin_share")
+	box.free()
+	var bands := {
+		CatalogScript.scene_of("semi"): Vector2(0.84, 0.88),
+		CatalogScript.scene_of("semi-conventional"): Vector2(0.87, 0.90),
+	}
+	for scene_path in bands:
+		var unit := (load(scene_path) as PackedScene).instantiate() as Node3D
+		var spec: VehicleSpec = unit.get("spec")
+		var axles := _tractor_axles(spec)
+		var kingpin_z: float = (unit.get_node("FifthWheel/Kingpin") as Node3D).position.z
+		var drive_share := Artic.rear_axle_share(kingpin_z, axles.x, axles.y)
+		var band: Vector2 = bands[scene_path]
+		assert_float(drive_share) \
+			.override_failure_message("%s: the plate (%.1f%% of the box) puts %.1f%% of that on the "
+				% [scene_path, plate_share * 100.0, drive_share * 100.0]
+				+ "drive axle") \
+			.is_between(band.x, band.y)
+		unit.free()
+
+
+func test_a_coupled_tractor_keeps_enough_steer_load_to_steer() -> void:
+	# The failure this protects against was driven, not derived (truck/CLAUDE.md § The fifth
+	# wheel): with the kingpin further back the coupled steer axle carried about a fifth of the
+	# rig's weight and both front wheels left the road under throttle in a corner. 0.25 sits well
+	# under both units' ~33-35 % today, with room below that to catch a regression heading back
+	# toward that fifth before it gets there.
+	var box := _trailer(BOX)
+	var box_spec: VehicleSpec = box.get("spec")
+	var plate_kg: float = box_spec.mass * float(box.call("kingpin_share"))
+	box.free()
+	for scene_path in [CatalogScript.scene_of("semi"), CatalogScript.scene_of("semi-conventional")]:
+		var unit := (load(scene_path) as PackedScene).instantiate() as Node3D
+		var spec: VehicleSpec = unit.get("spec")
+		var axles := _tractor_axles(spec)
+		var kingpin_z: float = (unit.get_node("FifthWheel/Kingpin") as Node3D).position.z
+
+		var own_steer_kg: float = spec.mass \
+				* (1.0 - Artic.rear_axle_share(spec.center_of_mass.z, axles.x, axles.y))
+		var plate_steer_kg: float = plate_kg * (1.0 - Artic.rear_axle_share(kingpin_z, axles.x, axles.y))
+		var coupled_steer_share := (own_steer_kg + plate_steer_kg) / (spec.mass + plate_kg)
+		assert_float(coupled_steer_share) \
+			.override_failure_message("%s: the coupled steer axle carries only %.1f%% of the rig" \
+				% [scene_path, coupled_steer_share * 100.0]) \
+			.is_greater(0.25)
+		unit.free()
 
 
 # --- the does-not-sink invariant ----------------------------------------------
 
-## Static compression of one bogie wheel, as a fraction of the available travel.
-func _travel_used(spec: VehicleSpec, load_kg: float, wheel_count: int) -> float:
+## Static compression of one wheel, as a fraction of the available travel. `rear` picks the axle's
+## own rate (`rear_spring_rate()`, front `spring_rate` when it is not the rear).
+func _travel_used(spec: VehicleSpec, load_kg: float, wheel_count: int, rear: bool = true) -> float:
 	var per_wheel := load_kg * G / float(wheel_count)
-	return (per_wheel / spec.ground_drive.spring_rate) / spec.ground_drive.rest_length
+	var rate: float = spec.ground_drive.rear_spring_rate() if rear else spec.ground_drive.spring_rate
+	return (per_wheel / rate) / spec.ground_drive.rest_length
 
 
 func test_the_flatbed_rides_on_its_springs_and_not_on_its_stops() -> void:
@@ -283,23 +375,38 @@ func test_the_semis_drive_axle_carries_the_fifth_wheel_load_without_bottoming() 
 	var front_z := 0.0
 	var rear_z := 0.0
 	var rear_wheels := 0
+	var front_wheels := 0
 	for p in spec.ground_drive.wheel_positions:
 		front_z = minf(front_z, p.z)
 		rear_z = maxf(rear_z, p.z)
 		if p.z > 0.0:
 			rear_wheels += 1
-	var own_kg: float = spec.mass * Artic.rear_axle_share(spec.center_of_mass.z, front_z, rear_z)
-	var plate_kg: float = t_spec.mass * float(trailer.call("kingpin_share")) \
-			* Artic.rear_axle_share(FifthWheelScript.KINGPIN_LOCAL.z, front_z, rear_z)
+		else:
+			front_wheels += 1
+	var kingpin_rear_share := Artic.rear_axle_share(FifthWheelScript.KINGPIN_LOCAL.z, front_z, rear_z)
+	var own_rear_kg: float = spec.mass * Artic.rear_axle_share(spec.center_of_mass.z, front_z, rear_z)
+	var own_front_kg: float = spec.mass - own_rear_kg
+	var kingpin_kg: float = t_spec.mass * float(trailer.call("kingpin_share"))
+	var plate_rear_kg: float = kingpin_kg * kingpin_rear_share
+	var plate_front_kg: float = kingpin_kg - plate_rear_kg
 
-	var solo := _travel_used(spec, own_kg, rear_wheels)
-	var coupled := _travel_used(spec, own_kg + plate_kg, rear_wheels)
+	var solo := _travel_used(spec, own_rear_kg, rear_wheels)
+	var coupled := _travel_used(spec, own_rear_kg + plate_rear_kg, rear_wheels)
+	# Neither on the stops (coupled) nor stiff enough to skate over bumps unladen (solo).
 	assert_float(solo).override_failure_message(
-			"bobtail rear sits at %.0f%% of travel" % (solo * 100.0)).is_between(0.2, 0.45)
+			"bobtail rear sits at %.0f%% of travel" % (solo * 100.0)).is_between(0.10, 0.30)
 	assert_float(coupled).override_failure_message(
-			"coupled rear sits at %.0f%% of travel" % (coupled * 100.0)).is_between(0.3, 0.7)
-	assert_float((own_kg + plate_kg) * G / float(rear_wheels)) \
+			"coupled rear sits at %.0f%% of travel" % (coupled * 100.0)).is_between(0.30, 0.50)
+	assert_float((own_rear_kg + plate_rear_kg) * G / float(rear_wheels)) \
 		.is_less(spec.ground_drive.max_suspension_force)
+
+	# The steer axle, pinned beside the rear so the front/rear split is caught if either moves.
+	var solo_front := _travel_used(spec, own_front_kg, front_wheels, false)
+	var coupled_front := _travel_used(spec, own_front_kg + plate_front_kg, front_wheels, false)
+	assert_float(solo_front).override_failure_message(
+			"bobtail steer axle sits at %.0f%% of travel" % (solo_front * 100.0)).is_between(0.2, 0.45)
+	assert_float(coupled_front).override_failure_message(
+			"coupled steer axle sits at %.0f%% of travel" % (coupled_front * 100.0)).is_between(0.2, 0.45)
 	trailer.free()
 	semi.free()
 
@@ -405,34 +512,6 @@ func test_the_kingpin_marker_and_the_code_agree() -> void:
 	semi.free()
 
 
-## Worst swing radius about the kingpin over every BoxMesh corner ahead of it, walked recursively
-## with the transforms accumulated by hand (an instantiated scene is not in a tree). Corners rather
-## than a half-width-plus-overhang formula, because the tipper's body lives under a rotating pivot.
-## Returns [radius, name].
-func _worst_forward_swing(node: Node, xf: Transform3D, worst: Array) -> void:
-	for child in node.get_children():
-		var n3 := child as Node3D
-		if n3 == null:
-			continue
-		var here := xf * n3.transform
-		var mesh_node := n3 as MeshInstance3D
-		if mesh_node != null and mesh_node.mesh is BoxMesh:
-			var half: Vector3 = (mesh_node.mesh as BoxMesh).size * 0.5
-			var signs: Array[float] = [-1.0, 1.0]
-			for sx in signs:
-				for sy in signs:
-					for sz in signs:
-						var p: Vector3 = here * Vector3(sx * half.x, sy * half.y, sz * half.z)
-						# Behind the kingpin it swings away from the cab; only what is ahead can reach it.
-						if p.z >= 0.0:
-							continue
-						var r := Vector2(p.x, p.z).length()
-						if r > float(worst[0]):
-							worst[0] = r
-							worst[1] = String(n3.name)
-		_worst_forward_swing(n3, here, worst)
-
-
 func test_every_trailer_clears_the_cab_all_the_way_round() -> void:
 	# A trailer's front corners swing on sqrt(x^2 + z^2) about the kingpin, and that radius has to fit
 	# between the kingpin and the cab's rear face. Both figures are read off the authored scenes.
@@ -449,7 +528,7 @@ func test_every_trailer_clears_the_cab_all_the_way_round() -> void:
 			continue
 		var trailer := _trailer(path)
 		var worst: Array = [0.0, ""]
-		_worst_forward_swing(trailer, Transform3D.IDENTITY, worst)
+		TrailerSwing.worst_forward_swing(trailer, Transform3D.IDENTITY, worst)
 		assert_float(worst[0]) \
 			.override_failure_message("%s: nothing projects ahead of the kingpin" % path) \
 			.is_greater(0.0)

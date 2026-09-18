@@ -25,6 +25,7 @@ const NIGHT_SKY_ENERGY := 0.05
 const VIGNETTE_SHADER := preload("res://src/levels/base/vignette.gdshader")
 const Groups := preload("res://src/levels/base/carlito_groups.gd")
 const WorldConditions := preload("res://src/levels/base/world_conditions.gd")
+const Layers := preload("res://src/physics/collision_layers.gd")
 
 var vehicle: BaseVehicle
 
@@ -283,8 +284,9 @@ func _spawn_vehicle(variant: String, at: VehicleSpawn = null) -> void:
 	vehicle = (load(scene_path) as PackedScene).instantiate()
 	add_child(vehicle)  # triggers _ready — the train places its consist here
 	if spawn != null:
-		vehicle.global_transform = spawn.global_transform
-		vehicle.spawn_transform = spawn.global_transform
+		var placed := _rest_transform(vehicle, spawn.global_transform)
+		vehicle.global_transform = placed
+		vehicle.spawn_transform = placed
 		vehicle.reset_physics_interpolation()
 	GameState.current_vehicle = family
 	GameState.current_variant = variant
@@ -297,6 +299,25 @@ func _spawn_vehicle(variant: String, at: VehicleSpawn = null) -> void:
 
 	vehicle_changed.emit(family)
 	_warm_family(family, variant)
+
+
+## The marker's transform with the origin raised to `vehicle.rest_ride_height()` above the ground
+## below it (basis and x/z unchanged), so a wheeled body spawns with its wheels just touching
+## instead of dropping onto its springs. 0.0 height (boat/drone/train) or no ground under the
+## marker leaves the marker transform exactly as authored — a boat's marker must never be pulled
+## down to the seabed.
+func _rest_transform(body: BaseVehicle, marker_xf: Transform3D) -> Transform3D:
+	var rest := body.rest_ride_height()
+	if rest <= 0.0:
+		return marker_xf
+	var origin := marker_xf.origin
+	var query := PhysicsRayQueryParameters3D.create(
+			origin + Vector3.UP * 5.0, origin + Vector3.DOWN * 50.0, Layers.SOLID)
+	query.exclude = [body.get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return marker_xf
+	return Transform3D(marker_xf.basis, Vector3(origin.x, hit.position.y + rest, origin.z))
 
 
 ## Pulls the family's other variants in on background threads so the first V press into a new body doesn't hitch.

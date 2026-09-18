@@ -98,7 +98,9 @@ func _ready() -> void:
 	for i in gd.wheel_positions.size():
 		var visual: Node3D = visuals[i] if i < visuals.size() else null
 		# Undriven and unsteered: a semi-trailer axle only ever brakes.
-		wheels.append(RayWheel.new(gd.wheel_positions[i], false, false, visual, corner_mass))
+		var wheel := RayWheel.new(gd.wheel_positions[i], false, false, visual, corner_mass)
+		wheel.apply_suspension(gd)
+		wheels.append(wheel)
 	# LampSet tolerates every path missing, so a lampless trailer binds nothing and apply_lamps
 	# is a no-op rather than a crash.
 	_lamps.setup(self, spec)

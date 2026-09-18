@@ -118,12 +118,12 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
     trailer up a slope" and is neither power nor grip. Sized by measurement: a sharp break onto the
     25 % grade the drivetrain can climb swings the joint −9.0° to +12.8°, so 15° clears it (and
     matches a real plate's ±12-15°). Check the articulation before touching a spec.
-  - The rig rests ~1.5° tractor nose-up / ~0.7° trailer nose-down on the flat, kingpin ~1.1 m over
+  - The rig rests ~0.4° tractor nose-up / ~0.1° trailer nose-down on the flat, kingpin ~1.18 m over
     the road (`measure_semi_launch`'s P5 standstill; its P1 "static pose" is sampled 2 s after the
-    spawn drop, still settling, and reads ~0.4° and 10 % of travel high). That is the rear axle at
-    60 % travel against the steer axle's 32 % on
-    one spring rate, so the coupling datum (`KINGPIN_LOCAL.y`, the trailers' −1.05 ground) cannot
-    level the tractor — it only sets the trailer's own pitch.
+    spawn drop, still settling). That is the rear axle at 40 % travel against the steer axle's 32 %,
+    on the rear's own `spring_rate_rear` (sized for the coupled drive corner, so a bobtail rides
+    a few tenths nose-DOWN). The coupling datum (`KINGPIN_LOCAL.y`, the trailers' −1.05 ground)
+    cannot level the tractor on its own — it only sets the trailer's own pitch.
   - **Both wheelbases are sized by the LAUNCH, not by the silhouette.** The trailer's inertial
     pull at the ~1.05 m kingpin is a lever on the steer axle, and a short unit loses it: measured,
     a 2.1 m wheelbase lifted BOTH steer wheels clear of the road (0 N) through gear 1's
@@ -139,8 +139,9 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
 - Tested mass ratio: 8 t tractor : 24 t box (3:1) shipped, 8 t : 25 t verified. Raising a trailer's
   mass past 3:1 is a re-tune needing re-verification, not a free number — `test_trailer` pins the
   ratio and the travel fraction, so it fails instead of shipping a rig on its bump stops.
-  - The plate share is 27 % on every trailer, and on a 4x2 it is the traction budget. A real van
-    semi-trailer puts 25-30 % of its weight on the fifth wheel; below that a fifth of the trailer
+  - The plate share (`kingpin_share`, pinned to a 25-30 % band in `test_trailer`) is the same on
+    every trailer, and on a 4x2 it is the traction budget. A real van semi-trailer puts 25-30 % of
+    its weight on the fifth wheel; below that a fifth of the trailer
     is not helping the one driven axle grip, and the symptom is "it still struggles to climb" — the
     rig is grip-limited, not power-limited. Set by `center_of_mass.z` against the bogie centre.
     Moving it means re-deriving the bogie load, THAT trailer's `spring_rate` (weight onto the plate
@@ -161,12 +162,15 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
 - Neither new spec may ride its bump stops, and the shipped Kenney trucks DO (rear static
   26.3 kN/wheel against a spring that maxes at 20.8 kN). So the semi and the flatbed are sized from
   the load each axle actually carries, which for the semi's rear is its own weight PLUS the plate
-  load. `RayWheel` has one spring rate per vehicle, so this is a compromise between a light steer
-  axle and a heavy drive axle.
-- A cab-over tractor unit is front-heavy bobtail (`center_of_mass.z = -0.92`, 52 % on the steer
-  axle) — cab and engine both sit over it, which is why real bobtails lock up so easily. Coupled,
-  the plate's load lands 86 % on the drive axle. Driving found this: further back, the coupled
-  steer axle carried 20 % and both front wheels left the road under throttle in a corner.
+  load, at the rear's own `spring_rate_rear` (`GroundDriveSpec`) rather than the steer axle's rate.
+- A cab-over tractor unit is front-heavy bobtail (`center_of_mass.z = -0.92`, cab and engine both
+  sitting over the steer axle, which is why real bobtails lock up so easily) and its coupled plate
+  load lands mostly on the drive axle; the conventional shares the same shape on its own geometry.
+  Both units' bobtail and coupled shares, and the coupled steer axle's own floor, are pinned in
+  `test_trailer` (semi_spec.tres / conventional_spec.tres headers carry the formulas). Driving
+  found the bias: further back, the coupled steer axle carried about a fifth of the rig's weight
+  and both front wheels left the road under throttle in a corner — the floor `test_trailer` holds
+  today is well clear of that fifth.
 
 ## Trailer authoring, pulling away
 
@@ -236,10 +240,15 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
     costs AIR1 3 bar, past the low-pressure warn but not past the spring-brake gate — a brake
     application while it charges is what reaches the gate, and that is the designed catch-out.
     Spawn and respawn start the trailer CHARGED; every coupling made by driving starts empty.
-    Measured: the draw runs the full 8 s whatever the pedal does, so after a 3 s application the
-    gate fires SECONDS after the brake is released, mid-throttle — the conventional locked its rear
-    axle for 0.15 s at 4.7 m/s (AIR1 2.97 bar); the semi bottomed at 3.06 on the same sequence. It
-    never fires from spawn pressure without a recouple. Kept as designed; there is no lamp for it.
+    Measured (`measure_semi_launch`, both units): the draw runs the full 8 s whatever the pedal
+    does, and a 3 s application while it charges bottoms AIR1 at 3.10 bar — 0.1 bar SHORT of the
+    gate, so the scripted sequence does not trip it (a heavier application while charging is what
+    would, seconds after release, mid-throttle). It never fires from spawn pressure without a
+    recouple. Kept as designed; there is no lamp for it.
+    The gate announces itself once per application through `GameState.notice`
+    (`TruckVehicle.SPRING_BRAKE_NOTICE`), latched on the edge (`TruckTelemetry.spring_brake_notice_edge`)
+    so it fires once and re-arms only once the gate releases — no lamp, no timer beyond the notice's
+    own dwell.
 
 ## Tractor-unit variants, coupled lamps
 
@@ -261,9 +270,8 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
     authored with its ground at y = −1.05 against a plate top at y = 1.05, so the `Kingpin`
     marker's Y is shared geometry — change it and every trailer floats or buries. Its Z is free,
     but the kingpin-to-rearmost-cab-structure gap is not: the trailers' gooseneck swings on
-    1.50 m, so the conventional's sleeper leaves 1.90 m against the cab-over's 1.85 m and
-    `test_truck` pins the pair against each other rather than a literal. A sleeper moved back is a
-    rig that cannot turn.
+    1.50 m, and `test_truck` pins EACH unit's own gap against that computed worst swing plus a
+    margin, not one unit against the other's. A sleeper moved back is a rig that cannot turn.
   - A longer wheelbase gives the plate load a shorter lever on the steer axle, so the coupled
     conventional keeps more front axle load than the cab-over and is the forgiving one to reverse.
 - A coupled rig lights at both ends, and it takes a second `LampSet`, not a second resolve root.

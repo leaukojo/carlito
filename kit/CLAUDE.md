@@ -79,12 +79,16 @@ detail: `docs/level_kit.md`). Bake freshness and `BAKE_CODE_INPUTS` stay in the 
   stale guard by design).
 - **The `.baked.scn` is gitignored build output; the `.bake.json` beside it is committed.**
   CI bakes every registered level right after the stale-bake check, so a full bake costs git
-  nothing — only the seven manifests move, and on a no-op re-bake only their hashes do. It costs
-  CI ~2 s of a ~95 s build job (measured 2026-09-05), which is why the step is not cached.
-  `bake_levels` rewrites EVERY level's `.baked.scn` with different bytes even when nothing
-  changed (same `input_hash`, new `output_hash`; the pack is not byte-deterministic), which
-  is why the manifest `stats` block, not the output bytes, is the comparand that proves a
-  refactor changed no output. Bake a single level with `-- src/levels/<level>.tscn`; a full
+  nothing — a no-op re-bake leaves every manifest byte-identical, so only content changes ever
+  move one. It costs CI ~2 s of a ~95 s build job (measured 2026-09-05), which is why the step
+  is not cached.
+  `bake_levels` rewrites EVERY level's raw `.baked.scn` bytes on every save — Godot's
+  `PackedScene.pack()` stamps a fresh random per-node id and ext-resource id suffix each time
+  (write-only editor-merge metadata, never read back, no engine flag to disable it) — so the
+  manifest's `output_hash` is a canonicalized re-serialization that blanks those two fields
+  (`LevelBaker.canonical_output_hash`): a no-op re-bake leaves the whole manifest unchanged
+  while the on-disk `.baked.scn` bytes move. Bake a
+  single level with `-- src/levels/<level>.tscn`; a full
   run takes minutes. **Run `bake_levels.tscn` once after cloning** — until then levels play
   unbaked (a `push_warning` from `Level._setup_baked` says so), local perf reads nothing like
   the shipped build, and the suite's bake-weight assertion fails.

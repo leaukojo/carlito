@@ -155,7 +155,9 @@ func test_start_spawns_a_fresh_body_at_the_jittered_course_marker() -> void:
 	assert_bool(r.first_body.is_queued_for_deletion()).is_true()
 	var off := Vector2(v.global_position.x - SPAWN_AT.x, v.global_position.z - SPAWN_AT.z)
 	assert_float(off.length()).is_less_equal(2.0 + 1e-4)
-	assert_float(v.global_position.y).is_equal_approx(SPAWN_AT.y, 1e-4)
+	# Level._spawn_vehicle places the origin at rest_ride_height() over flatland's ground (y=0),
+	# not the marker's own authored y — the marker's height is just where a course author left it.
+	assert_float(v.global_position.y).is_equal_approx(v.rest_ride_height(), 1e-3)
 	assert_str(GameState.current_variant).is_equal("sedan-sports")
 	assert_object(r.runner._course.get_parent()).is_same(r.level)
 	assert_int(r.runner.attempt.status).is_equal(S.RUNNING)

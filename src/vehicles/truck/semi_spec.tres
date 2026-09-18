@@ -50,24 +50,27 @@
 ; again is a re-measure, not a styling choice.
 ;
 ; CENTRE OF MASS IS FORWARD OF CENTRE, WHICH LOOKS WRONG UNTIL YOU COUPLE IT. A cab-over's own mass
-; is cab and engine, both over the steer axle, so a BOBTAIL tractor unit is front-heavy (z -0.92
-; puts 52 % on the steer axle: (0.95 - -0.92) / 3.60) — which is why real bobtails are notoriously
-; easy to lock up. Coupled to the box the plate's 6473 kg lands 86 % on the drive axle
-; ((0.45 - -2.65) / 3.60, the kingpin sitting 0.50 m ahead of it). Driving found the bias:
-; further back, the coupled steer axle carried only 20 % and BOTH front wheels left the road under
-; throttle in a corner, i.e. the rig lost its steering exactly when it needed it.
+; is cab and engine, both over the steer axle, so a BOBTAIL tractor unit is front-heavy — steer
+; share = (drive_z - com_z) / wheelbase — which is why real bobtails are notoriously easy to lock
+; up. Coupled to the box the plate's weight lands mostly on the drive axle —
+; Articulation.rear_axle_share(kingpin_z, steer_z, drive_z), the kingpin sitting 0.50 m ahead of it.
+; Both bands, plus the coupled steer axle's own floor, are pinned per tractor unit in
+; tests/test_trailer.gd. Driving found the bias: further back, the coupled steer axle carried about
+; a fifth of the rig's weight and BOTH front wheels left the road under throttle in a corner, i.e.
+; the rig lost its steering exactly when it needed it — the floor tests/test_trailer.gd holds today
+; is well clear of that fifth.
 ;
-; SPRING RATE IS THE OTHER NUMBER THAT IS NOT THE GARBAGE TRUCK'S, because the rear carries the
-; fifth-wheel load as well as its own — and it went 190000 -> 240000 N/m when the trailers' plate
-; share was corrected to a realistic 27 %. That correction is what makes this a 4x2 that can pull:
-; the drive axle is the ONLY driven axle, so what the plate puts on it IS the rig's traction budget,
-; and at the old 19 % share it was starved. Coupled to the box the drive axle now carries 9418 kg
-; against 7979 before. 240000 N/m lands every case inside the 0.32 m travel: rear 60 % coupled to
-; the box, 62 % behind a 25 t trailer, 25 % solo, front 27 %. The shipped Kenney trucks ride on
-; their rear bump stops (26.3 kN/wheel against a spring that maxes at 20.8 kN); a trailer on top of
-; that is what "the rig sinks" looks like. It is one rate for all four corners, so it is a
-; compromise between a light steer axle and a heavily loaded drive axle — the front-biased centre of
-; mass above is what makes the compromise a comfortable one.
+; THE SPRINGS ARE SIZED PER AXLE, because the rear carries the fifth-wheel load as well as its own:
+; the drive axle is the ONLY driven axle, so what the plate puts on it (a realistic share of the
+; trailer — kingpin_share, 25-30 % band pinned in tests/test_trailer.gd — mostly landing on this
+; axle) IS the rig's traction budget, and it is also the load the rear
+; spring has to carry inside the 0.32 m travel. Front rate 240000 N/m is the truck family's; the
+; rear is spring_rate_rear = 360000, 1.5x, from rear_load / (target_travel * rest_length) with the
+; coupled-to-the-box drive corner as the load and ~40 % as the target, which splits the error between
+; laden (a few tenths nose-up) and bobtail (a few tenths nose-down) the way a real unit does. The
+; rear dampers follow by sqrt(rate ratio) so the damping ratio is the front's (GroundDriveSpec).
+; tests/test_trailer.gd computes the travel fractions from these numbers; measure_semi_launch
+; reports the pose.
 ;
 ; LOAD SENSITIVITY 0.08 IS WHERE THE PLATE LOAD SHOWS UP. RayWheel scales mu by
 ; `1 - 0.08 * log2(load / corner_mass*g)`, and corner_mass deliberately excludes the fifth-wheel
@@ -105,6 +108,7 @@ rest_length = 0.32
 spring_rate = 240000.0
 damper_bump = 12000.0
 damper_rebound = 15800.0
+spring_rate_rear = 360000.0
 max_suspension_force = 120000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 1.0

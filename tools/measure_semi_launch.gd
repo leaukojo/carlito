@@ -68,7 +68,8 @@ func _ready() -> void:
 		return
 	_apply_geometry_override(args)
 	add_child(_car)
-	_car.global_transform = Transform3D(Basis.IDENTITY, Vector3(0.0, 0.6, START_Z))
+	# Strip top is y=0; wheels just touching, no spawn drop onto the springs.
+	_car.global_transform = Transform3D(Basis.IDENTITY, Vector3(0.0, _car.rest_ride_height(), START_Z))
 	_car.spawn_transform = _car.global_transform
 	_car.reset_physics_interpolation()
 	_car.contact_monitor = true
@@ -180,8 +181,7 @@ func _physics_process(delta: float) -> void:
 	var s := _sample(delta)
 	_rows.append(_row(s))
 	_accumulate(_stats[_phase], s)
-	if _phase == Ph.P1 and _static.is_empty() \
-			and _ticks > TowHost.SPAWN_COUPLE_TICKS + 30 and _pt >= SETTLE_S - 0.2:
+	if _phase == Ph.P5:
 		_static = s.duplicate(true)
 	_advance(s)
 
@@ -392,18 +392,21 @@ func _f(v: float) -> String:
 
 func _print_summary() -> void:
 	var gd: GroundDriveSpec = _car.spec.ground_drive
-	var spring_max := gd.spring_rate * gd.rest_length
+	# The rear bottoming line is against the REAR axle's own rate — it may differ from the front's.
+	var spring_max := gd.rear_spring_rate() * gd.rest_length
 	print("\n===== SUMMARY: %s =====" % _variant)
 	print("spec: mass %.0f kg, com %s, wheelbase %.2f m, rest_length %.3f m,"
 			% [_car.spec.mass, _car.spec.center_of_mass,
 			absf(gd.wheel_positions[2].z - gd.wheel_positions[0].z), gd.rest_length]
-			+ " spring_rate %.0f N/m" % gd.spring_rate)
-	print("       spring_rate*rest_length = %.0f N/wheel, max_suspension_force = %.0f N"
+			+ " spring_rate %.0f N/m (front), %.0f N/m (rear)" % [gd.spring_rate, gd.rear_spring_rate()])
+	print("       rear dampers: bump %.0f, rebound %.0f N*s/m"
+			% [gd.rear_damper_bump(), gd.rear_damper_rebound()])
+	print("       spring_rate_rear*rest_length = %.0f N/wheel, max_suspension_force = %.0f N"
 			% [spring_max, gd.max_suspension_force])
 	print("       joint pitch limit = %.1f deg (FifthWheel.PITCH_LIMIT_DEG)"
 			% FifthWheel.PITCH_LIMIT_DEG)
 
-	print("\n-- P1 static pose (end of settle, coupled, no input) --")
+	print("\n-- P5 static pose (standstill, coupled, brakes applied) --")
 	if _static.is_empty():
 		print("   not captured")
 	else:

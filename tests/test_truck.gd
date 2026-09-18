@@ -14,8 +14,13 @@ const DrivetrainScript := preload("res://src/vehicles/base/drivetrain.gd")
 const ContractScript := preload("res://src/bridge/contract.gd")
 const SemiScript := preload("res://src/vehicles/truck/semi.gd")
 const FifthWheelScript := preload("res://src/vehicles/truck/fifth_wheel.gd")
+const TrailerCatalogScript := preload("res://src/vehicles/truck/trailer_catalog.gd")
+const TrailerSwing := preload("res://tests/trailer_swing.gd")
 ## The North American conventional — the variant whose whole content is a trailer bus it lacks.
 const CONVENTIONAL := "semi-conventional"
+## Below the ~0.35 m the cab-over (the tighter of the two shipped units) clears today, so a
+## real regression trips it before the rig is actually unable to turn.
+const SWING_MARGIN := 0.30
 
 
 ## Every spec the shipped TRUCK scenes actually load, walked catalog -> scene -> spec rather than
@@ -99,6 +104,16 @@ func test_spring_brakes_apply_below_the_cut_in() -> void:
 	assert_bool(TruckT.spring_brakes_applied(gate - 0.1, gate - 0.1)).is_true()
 	assert_bool(TruckT.spring_brakes_applied(0.0, 0.0)).is_true()
 	assert_bool(TruckT.spring_brakes_applied(TruckT.AIR_MAX_BAR, TruckT.AIR_MAX_BAR)).is_false()
+
+
+func test_spring_brake_notice_fires_once_per_application() -> void:
+	# Edge only: false -> true fires, held true is silent, and releasing re-arms it.
+	assert_bool(TruckT.spring_brake_notice_edge(true, false)).is_true()
+	assert_bool(TruckT.spring_brake_notice_edge(true, true)).is_false()
+	assert_bool(TruckT.spring_brake_notice_edge(false, true)).is_false()
+	assert_bool(TruckT.spring_brake_notice_edge(false, false)).is_false()
+	# Release then re-apply fires again.
+	assert_bool(TruckT.spring_brake_notice_edge(true, false)).is_true()
 
 
 func test_one_healthy_circuit_never_masks_a_failing_one() -> void:
@@ -799,16 +814,36 @@ func test_the_j2497_lamp_is_one_mirrored_bit_and_nothing_else() -> void:
 	assert_str(sig.desc).contains("bus silence")
 
 
-func test_the_conventional_leaves_the_trailers_the_same_room_to_swing() -> void:
-	# Every trailer's forward corners swing about the kingpin on a radius that has to fit between the
-	# kingpin and the rearmost cab structure. test_trailer pins the trailers against the cab-over's
-	# gap, so this pins the conventional against the same gap rather than against a literal: the
-	# sleeper is what a bonneted unit spends that clearance on.
+## Worst forward-swing radius across every coupled trailer in the catalog, the same walk
+## test_trailer.gd checks each trailer against the cab-over with — computed once here so a
+## unit's gap is checked against the trailers' actual worst swing, not against the other unit.
+func _worst_trailer_swing() -> float:
+	var worst: Array = [0.0, ""]
+	for path in TrailerCatalogScript.TRAILERS:
+		if not TrailerCatalogScript.is_coupled(path):
+			continue
+		var trailer := (load(path) as PackedScene).instantiate() as Node3D
+		TrailerSwing.worst_forward_swing(trailer, Transform3D.IDENTITY, worst)
+		trailer.free()
+	return worst[0]
+
+
+func test_each_tractor_unit_clears_the_trailers_worst_swing() -> void:
+	# Every trailer's forward corners swing about the kingpin on a radius that has to fit between
+	# the kingpin and the rearmost cab structure. The requirement is physical per unit — its own
+	# gap against the trailers' worst actual swing — not one unit pinned against the other's.
+	var worst := _worst_trailer_swing()
+
 	var semi := _truck_scene("semi")
 	var cab: MeshInstance3D = semi.get_node("Body/Cab")
 	var cabover_gap: float = FifthWheelScript.KINGPIN_LOCAL.z \
 			- (cab.position.z + (cab.mesh as BoxMesh).size.z * 0.5)
 	semi.free()
+	assert_float(cabover_gap) \
+		.override_failure_message(
+			("the cab-over leaves %.3f m from kingpin to cab, which does not clear the trailers' "
+			+ "%.3f m worst swing plus the %.2f m margin") % [cabover_gap, worst, SWING_MARGIN]) \
+		.is_greater_equal(worst + SWING_MARGIN)
 
 	var unit := _truck_scene(CONVENTIONAL)
 	# Under the `FifthWheel` node, which sits at identity, so this position is still the datum in
@@ -830,9 +865,10 @@ func test_the_conventional_leaves_the_trailers_the_same_room_to_swing() -> void:
 	unit.free()
 	assert_float(gap) \
 		.override_failure_message(
-			"the conventional leaves %.3f m from kingpin to sleeper, less than the cab-over's %.3f"
-			% [gap, cabover_gap]) \
-		.is_greater_equal(cabover_gap - 1e-6)
+			("the conventional leaves %.3f m from kingpin to sleeper, which does not clear the "
+			+ "trailers' %.3f m worst swing plus the %.2f m margin") % [gap, worst, SWING_MARGIN]) \
+		.is_greater_equal(worst + SWING_MARGIN)
+
 	var conv_spec: VehicleSpec = load("res://src/vehicles/truck/conventional_spec.tres")
 	var semi_spec: VehicleSpec = load("res://src/vehicles/truck/semi_spec.tres")
 	assert_float(_wheelbase(conv_spec)) \

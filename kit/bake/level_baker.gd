@@ -6,7 +6,7 @@ extends RefCounted
 ## in tests/test_bake.gd. Never touches the scene tree, so editor and headless CLI agree.
 
 ## Bump on any bake-semantics change; stale-bake checks reject old-version manifests.
-const BAKER_VERSION := 13
+const BAKER_VERSION := 14
 
 ## The runtime node rail roads bake into; preloaded (not class_name'd) so it loads headless.
 const Groups := preload("res://src/levels/base/carlito_groups.gd")
@@ -329,6 +329,38 @@ static func baked_scene_path(level_path: String) -> String:
 
 static func manifest_path(level_path: String) -> String:
 	return level_path.get_basename() + ".bake.json"
+
+
+## PackedScene.pack() stamps a fresh random per-node id and ext-resource id suffix on every
+## save (write-only editor-merge metadata Godot itself never reads back, no engine flag to
+## disable it) — these two patterns match them so the raw file hash below can blank them out.
+static var _RE_NODE_ID := RegEx.create_from_string("unique_id=\\d+")
+static var _RE_EXT_ID := RegEx.create_from_string("id=\"(\\d+)_[A-Za-z0-9]+\"")
+static var _RE_EXT_REF := RegEx.create_from_string("ExtResource\\(\"(\\d+)_[A-Za-z0-9]+\"\\)")
+
+
+## The manifest's output_hash: a re-saved-as-text, canonicalized form of the baked scene at
+## `scn_path`, blind to the random ids above, so a no-op re-bake reproduces the same hash even
+## though the raw `.baked.scn` bytes on disk still differ. Falls back to the raw file hash if
+## the scene fails to load or re-save, so a missing/truncated/hand-edited bake still hashes to
+## something (necessarily different from a good manifest's stamp).
+static func canonical_output_hash(scn_path: String) -> String:
+	var packed := load(scn_path) as PackedScene
+	if packed == null:
+		return FileAccess.get_sha256(scn_path)
+	var tmp := "user://_bake_canon_%s.tscn" % scn_path.get_file().get_basename()
+	if ResourceSaver.save(packed, tmp) != OK:
+		return FileAccess.get_sha256(scn_path)
+	var f := FileAccess.open(tmp, FileAccess.READ)
+	if f == null:
+		return FileAccess.get_sha256(scn_path)
+	var text := f.get_as_text()
+	f = null
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp))
+	text = _RE_NODE_ID.sub(text, "unique_id=0", true)
+	text = _RE_EXT_ID.sub(text, "id=\"$1\"", true)
+	text = _RE_EXT_REF.sub(text, "ExtResource(\"$1\")", true)
+	return normalize_text(text).sha256_text()
 
 
 ## Timestamp-free so unchanged inputs re-bake byte-identical; output_hash catches a truncated/hand-edited bake.
@@ -777,7 +809,7 @@ static func bake_level_file(level_path: String) -> Dictionary:
 	baked_root.free()
 	if errors.is_empty():
 		var input_hash := hash_inputs(gather_bake_inputs(level_path), hash_extra(chunk_size))
-		var output_hash := FileAccess.get_sha256(baked_scene_path(level_path))
+		var output_hash := canonical_output_hash(baked_scene_path(level_path))
 		if write_manifest(level_path, input_hash, chunk_size, result.stats,
 				output_hash) != OK:
 			errors.append("failed to write manifest '%s'" % manifest_path(level_path))
@@ -830,7 +862,7 @@ static func check_level_file(level_path: String) -> Dictionary:
 	var baked_exists := FileAccess.file_exists(scn)
 	return freshness(read_manifest(level_path),
 			hash_inputs(gather_bake_inputs(level_path), hash_extra(chunk_size)),
-			baked_exists, FileAccess.get_sha256(scn) if baked_exists else "",
+			baked_exists, canonical_output_hash(scn) if baked_exists else "",
 			scatter_errors)
 
 
