@@ -68,6 +68,9 @@ func test_world_bounds_is_containment() -> void:
 	var bounds := WorldBounds.new()
 	add_child(bounds)
 	assert_int(bounds.collision_layer).is_equal(Layers.CONTAINMENT)
+	# Mask stays 0: pairing is symmetric, so any mask here re-walls the aircraft that
+	# dropped CONTAINMENT from their own mask.
+	assert_int(bounds.collision_mask).is_equal(0)
 	bounds.free()
 
 

@@ -29,7 +29,11 @@ const THICKNESS := 4.0
 func _ready() -> void:
 	# CONTAINMENT is its own layer so a sensor can exclude it with a bit, not a subtree walk.
 	collision_layer = Layers.CONTAINMENT
-	collision_mask = Layers.DYNAMIC
+	# Mask 0, not DYNAMIC: a static body never queries, and Godot pairs bodies symmetrically
+	# (A.layer & B.mask OR B.layer & A.mask), so a mask here would collide with the aircraft
+	# that deliberately dropped CONTAINMENT from theirs. Ground vehicles still hit the box
+	# through their own mask.
+	collision_mask = 0
 	_rebuild()
 
 
