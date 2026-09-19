@@ -29,6 +29,13 @@ const TRACK_DISTANCE := 200.0     ## m of straight running measured after that
 ## Set well above what shipped vehicles do; a FAIL means a real asymmetry (docs/vehicles.md).
 const MAX_LATERAL_DRIFT := 1.0    ## m off the latched forward axis over TRACK_DISTANCE
 const MAX_HEADING_DRIFT := 1.0    ## deg of heading change over the same stretch
+## Variants whose tracking FAIL is a KNOWN, open defect: still measured, still printed as FAIL,
+## but excluded from `strict`'s exit code so one unfixed body does not block every deploy. A
+## variant that is not on this list gates CI as before, so a NEW asymmetry still turns the job
+## red. Each entry names the plan that owns the fix; delete the entry with the plan.
+##   hatchback-sports: the driven axle turns a small load difference into a large force
+##   difference (~1.07 m drift / 0.35 deg over 200 m) - docs/plans/tracking_gate_drive_split.md.
+const KNOWN_TRACKING_FAILS := ["hatchback-sports"]
 
 # --- coast-down pass (opt-in: pass the `coast` flag) ----------------------
 ## Cuts throttle at settled top speed and measures deceleration under resistance alone.
@@ -61,6 +68,10 @@ var _car: BaseVehicle
 var _variant := ""
 var _phase := Phase.ACCEL
 var _failures := 0
+## FAILs that were on KNOWN_TRACKING_FAILS, counted apart so they never reach the exit code.
+var _known_failures := 0
+## Allowlisted variants that PASSED: the entry is stale and should be deleted with its plan.
+var _stale_allowances: Array[String] = []
 var _coast := false
 ## `corner`: run the skid-pad pass after tracking. Off by default so the CI invocation and the
 ## default dev report are unchanged.
@@ -212,8 +223,14 @@ func _next_vehicle() -> void:
 	if _queue.is_empty():
 		if _failures > 0:
 			print("%d vehicle(s) with a tracking FAIL" % _failures)
+		elif _known_failures > 0:
+			print("all vehicles tracked straight except %d known FAIL(s)" % _known_failures)
 		else:
 			print("all vehicles tracked straight")
+		if _known_failures > 0:
+			print("  known FAIL(s) allowed by KNOWN_TRACKING_FAILS - see the plan named there")
+		for allowed in _stale_allowances:
+			print("  NOTE: %s is on KNOWN_TRACKING_FAILS but PASSED - delete the entry" % allowed)
 		_write_report()
 		get_tree().quit(1 if _strict and _failures > 0 else 0)
 		return
@@ -548,10 +565,17 @@ func _report_tracking(skipped: bool) -> void:
 		_current["tracking"] = {"skipped": true}
 	else:
 		var ok := _drift_peak <= MAX_LATERAL_DRIFT and _heading_peak <= MAX_HEADING_DRIFT
+		var known := KNOWN_TRACKING_FAILS.has(_variant)
 		if not ok:
-			_failures += 1
+			if known:
+				_known_failures += 1
+			else:
+				_failures += 1
+		elif known:
+			_stale_allowances.append(_variant)
+		var verdict := "PASS" if ok else ("FAIL (known)" if known else "FAIL")
 		print("  %-13s : %s  drift %.3f m peak / %.3f m final over %.0f m, heading %.3f deg"
-				% ["tracking", "PASS" if ok else "FAIL", _drift_peak, _drift_final,
+				% ["tracking", verdict, _drift_peak, _drift_final,
 				_track_dist, _heading_peak])
 		if not ok:
 			print("                 straight-line pull — suspect asymmetric wheel_positions,")

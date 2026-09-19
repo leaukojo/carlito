@@ -198,6 +198,11 @@ jobs:
   # deterministic check on exactly the class of bug unit tests cannot see: a mistyped
   # wheel_positions x, a one-sided drive split, uneven brake torque. `track` skips the
   # acceleration pass (a dev report, not a gate); `strict` makes a FAIL exit nonzero.
+  #
+  # One body is exempt: `measure_vehicles.gd`'s KNOWN_TRACKING_FAILS list keeps an open,
+  # already-diagnosed defect from blocking every deploy. Those variants still print FAIL;
+  # any variant NOT on the list still turns this job red. Grep that constant to see what is
+  # currently excused and which plan owns the fix.
   tracking:
     runs-on: ubuntu-latest
     steps:

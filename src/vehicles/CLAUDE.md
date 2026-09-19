@@ -332,7 +332,9 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
   **A bar also costs straight-line tracking**, because it multiplies a launch-transient load
   difference into a much larger longitudinal one on the driven axle and the body keeps the
   heading it gains: `race` gives its bar up for that reason (`gen_kenney_vehicles` says why) and
-  `hatchback-sports` fails the tracking gate on one it cannot give up. Raising a rate means
+  `hatchback-sports` fails the tracking gate on one it cannot give up — it is excused there by
+  `measure_vehicles.gd`'s `KNOWN_TRACKING_FAILS`, which keeps that one open defect from blocking
+  every deploy while still printing FAIL. Raising a rate means
   re-running `measure_vehicles -- <variant> 45 track` as well as the corner pass.
   An SUV at the limit lifts wheels and does not overturn; that is intended.
 - 60 Hz stability lives in `RayWheel`'s clamps (damper ≤ one-tick reversal, suspension force

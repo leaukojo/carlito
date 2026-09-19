@@ -4,12 +4,15 @@ Effort **high**, mode: **plan-mode first**, then accept-edits. Opus. Delete this
 distil into `src/vehicles/CLAUDE.md` § Wheels (and delete the stopgap note in
 `gen_kenney_vehicles.gd`'s `race` entry).
 
-## CI is red on this right now
+## CI is green, on an explicit excuse
 
 `.github/workflows/ci.yml`'s `tracking` job runs `measure_vehicles -- all 45 track strict`, which
-exits 1 on any FAIL, and `deploy` is `needs: [build, tracking]`. `hatchback-sports` FAILS
-(1.071 m drift / 0.348 deg heading over 200 m), so **dev does not deploy until this is fixed or
-the body is given a workaround**. That is the reason this plan is not "nice to have".
+exits 1 on any FAIL, and `deploy` is `needs: [build, tracking]`. `hatchback-sports` still FAILS
+(1.071 m drift / 0.348 deg heading over 200 m), but it sits on `measure_vehicles.gd`'s
+`KNOWN_TRACKING_FAILS`, so the FAIL prints and does not reach the exit code — dev deploys.
+**Delete that entry as part of this fix**; the sweep prints a NOTE if the variant starts passing
+while the entry is still there. Every other variant gates as before, so a new asymmetry is still
+caught.
 
 ## Problem
 
