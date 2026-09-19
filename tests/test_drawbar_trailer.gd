@@ -153,13 +153,16 @@ func test_the_trailer_is_attached_steel_and_bus_silence() -> void:
 
 func test_the_pin_marker_and_the_code_agree() -> void:
 	# Drawbar reads the marker at runtime, so the constant is only a documented default. Pinning them
-	# together is what stops the two drifting into a joint anchored where no steel is.
-	var drawbar := _drawbar()
+	# together is what stops the two drifting into a joint anchored where no steel is. Composed the
+	# way TowHost._ready composes it (`transform * marker.position`), since drawbar.tscn is authored
+	# in its own frame and the tractor hangs it aft of the body origin.
+	var tractor := _tractor()
+	var drawbar: Node3D = tractor.get_node("Drawbar")
 	var pin: Node3D = drawbar.get_node("Pin")
-	assert_vector(pin.position) \
+	assert_vector(drawbar.transform * pin.position) \
 		.override_failure_message("the Pin marker and Drawbar.PIN_LOCAL disagree") \
 		.is_equal_approx(DrawbarScript.PIN_LOCAL, Vector3.ONE * 1e-4)
-	drawbar.free()
+	tractor.free()
 
 
 func test_the_trailer_is_authored_against_the_pin_and_not_against_a_fifth_wheel() -> void:
@@ -419,7 +422,7 @@ func test_the_body_rises_and_lowers_in_its_stated_time() -> void:
 
 
 func test_tipping_walks_the_load_off_the_drawbar_and_onto_the_bogie() -> void:
-	# The load shift is a consequence, never a term. set_load_offset_z moves a real centre of mass,
+	# The load shift is a consequence, never a term. set_load_offset moves a real centre of mass,
 	# so the bogie's springs genuinely carry more and the tractor genuinely carries less. Nothing is
 	# added to any signal — the draft-force discipline.
 	var trailer := _trailer()
@@ -443,7 +446,7 @@ func test_tipping_walks_the_load_off_the_drawbar_and_onto_the_bogie() -> void:
 	# A respawn brings the body AND its load home: leaving a shifted load behind would make respawn
 	# a way to keep weight where the driver never put it.
 	trailer.call(&"reset_body")
-	trailer.call(&"set_load_offset_z", 0.0)
+	trailer.call(&"set_load_offset", 0.0)
 	assert_float(trailer.call(&"body_pos01")).is_equal(0.0)
 	assert_float(trailer.call(&"live_kingpin_share")).is_equal_approx(parked, 1e-6)
 	trailer.free()

@@ -4,16 +4,23 @@
 ; the centreline under the PTO stub, and the pin the trailer's eye drops over. Hand-built low-poly
 ; to match the kit's flat-shaded look, like every implement and trailer in the project.
 ;
-; AUTHORED IN THE CHASSIS' OWN FRAME (the scene is instanced at identity on the tractor body), so
-; every position below is a chassis coordinate and `Pin`'s position IS the coupling datum that
-; Drawbar reads. Measured against the Kenney tractor body and three_point_hitch.tscn:
-;   - ground is y ~ 0 at ride height and the body ends near the centreline at z ~ 0.99;
+; AUTHORED IN THE MOUNT'S OWN FRAME, shared with three_point_hitch.tscn: the tractor scene hangs
+; both at z = +0.3935, the offset that lands the hitch housing's back face on the hull's rear
+; face (chassis z 1.518). So a CHASSIS coordinate is a position below PLUS 0.3935 -- which is why
+; Drawbar.PIN_LOCAL reads 1.9935 against `Pin`'s 1.60, and TowHost composes the two
+; (`transform * marker.position`) rather than trusting either alone. Everything here is measured
+; against the hitch scene and the tractor body:
+;   - ground is y ~ 0 at ride height and the body ends near the centreline at z ~ 0.99 (mount
+;     frame; 1.38 chassis, which is inside the hull's 1.518 rear face);
 ;   - the hitch housing case occupies x +-0.20, y 0.335 .. 0.755, z 0.88 .. 1.12, so the bar starts
 ;     at z 1.15 rather than running through it;
 ;   - the PTO stub is on the centreline at y 0.60 out to z ~ 1.22, so the bar's top at y 0.45
 ;     passes 0.10 m beneath it;
 ;   - the lower draft links splay to their ball ends at |x| 0.37, and lowered they sit at y 0.21,
 ;     z 1.72 -- below and behind the bar, which is why the linkage can work with a trailer hitched.
+;
+; The pin HEIGHT (y 0.40) is a datum, not a consequence of the body: farm_tipper is authored with
+; its ground at y = -0.40 against it, so the two move together or not at all.
 ;
 ; NO CollisionShape, and no RigidBody: this is tractor anatomy on the chassis body, exactly like
 ; ThreePointHitch. The joint Drawbar builds is what holds a trailer on, and it is built in code at

@@ -14,13 +14,16 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
   axle to slip 1.0 at 8 m/s².
   - Quote the retarder's strength as arithmetic, never as a remembered measurement: flat-road
     retardation is `frac * brake_torque * rear_wheels / (wheel_radius * mass)`. `test_truck`
-    asserts a 0.9–1.6 m/s² band per shipped spec.
-  - The floor is 0.9 and not 1.0 because on a grip-derived truck the arithmetic collapses:
-    substituting `brake_torque = BRAKE_GRIP_FRAC * mu_long * m * g * r / 4` cancels mass and
-    radius, so a two-driven-wheel truck retards at
-    `RETARDER_MAX_FRAC * BRAKE_GRIP_FRAC * mu_long * g / 2` = 0.93 m/s² whatever it weighs. Only a
-    0.215–0.219 fraction would reach 1.0, and above that the hand-built units (1.46 m/s² at 0.20)
-    break the 1.6 ceiling. So the floor moved and `RETARDER_MAX_FRAC` 0.20 did not.
+    asserts a 0.7–1.6 m/s² band per shipped spec.
+  - **The band's floor tracks the TYRE, because the retarder is a fraction of a grip-derived
+    brake.** Substituting `brake_torque = BRAKE_GRIP_FRAC * mu_long * m * g * r / 4` cancels mass
+    and radius, so a two-driven-wheel truck retards at
+    `RETARDER_MAX_FRAC * BRAKE_GRIP_FRAC * mu_long * g / 2` = 0.745 m/s² at the family's truck tyre
+    (mu_long 0.80), whatever it weighs — hence the 0.7 floor. Raising `RETARDER_MAX_FRAC` to hold a
+    higher figure is the wrong lever: it decouples an auxiliary brake from the grip it acts
+    through, and the 1.6 ceiling then forces the hand-built units' `brake_torque` down, which
+    re-derives all four trailers. The CEILING is unmoved for the mirror reason — those units'
+    10500 Nm brake is fixed rather than grip-derived, so they sit at 1.46 m/s² at any mu.
   - The band's 1.6 m/s² top caps `brake_torque`, which is why the tractor units peak well below
     what a real 32 t artic makes. It no longer caps peak ENGINE torque: that hierarchy runs against
     transmissible drive.
@@ -124,13 +127,32 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
     on the rear's own `spring_rate_rear` (sized for the coupled drive corner, so a bobtail rides
     a few tenths nose-DOWN). The coupling datum (`KINGPIN_LOCAL.y`, the trailers' −1.05 ground)
     cannot level the tractor on its own — it only sets the trailer's own pitch.
+  - The rear DAMPER follows the same per-axle logic as the spring: `damper_bump_rear` /
+    `damper_rebound_rear` are set explicitly (24700 / 28800 on both tractor units) rather than left
+    at `GroundDriveSpec`'s sqrt(rate-ratio) fallback, because that fallback preserves the FRONT's
+    damping ratio at the BOBTAIL corner mass, not the coupled one. Sized for the coupled rear
+    corner (~3.5-4.7 t depending which trailer is on the back) they hold zeta 0.30-0.40 laden and
+    read ~0.5 (over-damped) bobtail — an unladen truck skating over bumps rather than pitch-rocking
+    is the honest bobtail feel. `tests/test_trailer.gd` pins the laden band against the flatbed.
   - **Both wheelbases are sized by the LAUNCH, not by the silhouette.** The trailer's inertial
     pull at the ~1.05 m kingpin is a lever on the steer axle, and a short unit loses it: measured,
     a 2.1 m wheelbase lifted BOTH steer wheels clear of the road (0 N) through gear 1's
     peak-torque window (~1 s), bottomed the rear springs solid and put the joint on its 15° stop,
     which drives as "it drags on its rear wheels". The shipped 3.6 m (cab-over) and 4.4 m
-    (conventional) hold ≥ 8.6 kN on the steer axle and under 4° of pitch. Shortening either is a
-    re-measure with `tools/measure_semi_launch.tscn`, never a styling edit.
+    (conventional) hold ≥ 8.5 kN on the steer axle and under 4° of pitch — the floor across all
+    four trailers and both units, worst on the cab-over pulling the flatbed (8512 N). It came down
+    from 8.6 kN when the COM went up: a higher centre of mass is more launch transfer off the
+    front, which is the point of the height and the reason this is the number to re-read after
+    one moves. Shortening either wheelbase is a re-measure with `tools/measure_semi_launch.tscn`,
+    never a styling edit.
+  - The plate carries **Coulomb yaw friction** (`CouplingProfile.yaw_friction_nm`, 2000 N*m on the
+    fifth wheel, 0 on the drawbar — a pin in an eye is nearly free), applied by
+    `TowHost._apply_yaw_friction` as a torque pair about the chassis' up axis against the RELATIVE
+    yaw rate. Besides tyre lateral grip it is the only thing damping trailer sway. Never a spring
+    toward zero angle (that is a plate that steers), and never the joint's own angular motor:
+    Jolt's 6DOF motor is a velocity TARGET, not friction, and it fights the yaw limit. One-tick
+    clamped against a box-footprint yaw inertia proxy (`TowedBody.yaw_inertia`), which on any
+    shipped trailer binds only below ~1e-4 rad/s — the anti-buzz floor, not part of the feel.
   - The YAW limit is a labelled model of trailer-against-cab contact, not a property of the plate,
     and it cannot be collision: the plate and the trailer's nose overlap while coupled, so
     `exclude_nodes_from_collision` must stay at its default true or the two bodies fight for the
@@ -171,6 +193,43 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
   found the bias: further back, the coupled steer axle carried about a fifth of the rig's weight
   and both front wheels left the road under throttle in a corner — the floor `test_trailer` holds
   today is well clear of that fifth.
+- **COM HEIGHTS AND ROLLOVER.** Every body in the family carries its centre of mass at roughly its
+  real height, and that is the whole point: a laden rig leans, transfers load onto the steer axle
+  under launch, and rolls over if you take a roundabout too fast.
+  - Tractor units `center_of_mass.y` 0.90 = ~1.03 m over the road (the chassis origin rides 0.13 m
+    up coupled; `measure_semi_launch`'s P5 prints `kingpin over road`, minus `KINGPIN_LOCAL.y`
+    1.05, is how to read it back). Kenney `truck` family `com_y` 0.75. Trailers, over the road:
+    box 1.60, tanker 1.50, tipper 1.30 parked, flatbed 0.90 — each derived in its own spec header.
+  - `rollover_g = half_track / com_height` is the static tip-over threshold on a flat road, and a
+    body ROLLS BEFORE IT SLIDES when that sits below its tyre mu (`mu_lat` 0.75 across the family):
+    box 0.45, tanker 0.48, tipper 0.55, flatbed 0.80, bobtail unit 0.66. So everything but the
+    flatbed and the bobtail is roll-first laden, which is the real machine and is lethal in real
+    life. `BaseVehicle.is_overturned()` and the F3 overlay are how the driver finds out, and
+    there is no auto-reset — they press R.
+  - `measure_semi_launch`'s P7 (`trailer=` picks which one) PROVES the rollover but does not rank
+    the trailers: a full-lock step at 40 km/h is past every threshold in the list, so all four roll
+    at 0.84-0.94 g of measured lateral with the trailer through 71° and the tractor dragged to 68°
+    — under the 70° latch, so the report reads "tractor no, trailer YES". Ranking them wants a
+    lower entry speed or a ramped lock, which P7 does not have.
+  - **THE NARROW TRACK IS THE COMPROMISE, NOT THE HEIGHT.** The wheel stations are x ±0.72 (steer
+    axle and trailer bogie) and ±0.62 (drive axle) — a 1.44 m track where a real artic runs ~2.0 m
+    — so every threshold above reads ~25 % lower than the real vehicle's. Widening it means moving
+    every wheel station AND the visual wheels authored beside them (`Wheels` in each trailer
+    `.tscn`, counted by `test_trailer`) on two tractor units and four trailers: a model change, not
+    a number. **Never buy the threshold back by lowering a COM** — the levers are
+    `GroundDriveSpec.anti_roll_rate` (0 on both units today) and `mu_lat`, the same order phase 3
+    settled for the car family.
+  - The joint's ±1.5° roll stop now carries a real overturning moment: a laden box past its 0.45 g
+    takes the tractor over with it. The stop's solver overshoot went from ~0.08° to ~0.6° (2.09°
+    measured mid-rollover) with it — expected while tonnes of trailer hang off the plate, and the
+    number to re-read when a trailer's height or mass moves again.
+  - **The speed taper was checked and deliberately NOT tightened.** `min_steer_frac` 0.21 x 24 deg
+    leaves 5.0° of lock at the 25 m/s floor, and at 80 km/h that is ~1.2 g of steady-state demand
+    against a 0.45 g laden threshold — so yes, a driver who asks for full lock at motorway speed
+    rolls the rig. Tapering that away needs ~1.7° (`min_steer_frac` ~0.07), a rack that will not
+    steer, and the tyre saturates at ~2.4° there anyway: the rollover comes from asking for more
+    than the tyre can hold, which is the real failure mode. The notice and R are the answer, not a
+    nannying rack.
 
 ## Trailer authoring, pulling away
 
@@ -208,12 +267,13 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
     which part is frontmost is not stable, and the tipper's body lives under a rotating pivot.
     All four land on the gooseneck at 1.50 m (1.49 on the box, whose neck is 1.88 wide); tipping
     only moves the body further from the cab.
-- A rig pulls away on IDLE torque, and that is the drivetrain, not the joint. There is no clutch or
-  converter model, so torque at rest is `torque_curve(idle) * throttle` and nothing about peak
-  torque or gearing helps until it is already rolling. Fix startability at the LOW END of the
-  torque curve, never by reaching for the peak (which the retarder/brake chain caps anyway). The
-  tractor units hold 975 Nm at idle, 65 % of their 1500 peak. Part throttle still only creeps —
-  correct for a laden artic, not a missing launch model.
+- A rig pulls away on LOW-END torque, and that is the drivetrain, not the joint. Torque at rest is
+  `torque_curve(converter_free_rpm) * throttle`, and the converter only revs to 1325 (a quarter of
+  the way up the band), so nothing about peak torque or gearing helps until it is already rolling.
+  Fix startability at the LOW END of the torque curve, never by reaching for the peak (which the
+  retarder/brake chain caps anyway). The tractor units hold 975 Nm at idle and 1337 at stall,
+  65-89 % of their 1500 peak. Part throttle still only creeps — correct for a laden artic, not a
+  missing launch model.
 
 ## The ISO 11992 trailer bus
 
@@ -234,6 +294,12 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
   - `trailer_brake_demand` reports the blend the trailer really brakes with. It takes
     `retarder_state` (what ran) not the request, so it inherits the speed fade; the retarder's
     share is `Drivetrain.RETARDER_MAX_FRAC`.
+    - And it reports the LAGGED application, not the tractor's blend: the trailer's chambers
+      travel their whole stroke in `TowedBody.BRAKE_APPLY_S` (0.35 s) and vent in
+      `BRAKE_RELEASE_S` (0.5 s), a rate limit so the blend stays the ceiling. That lag is what
+      makes a rig push on the first application — the tractor dips, the trailer catches up a beat
+      later. The HANDBRAKE is deliberately not lagged: spring brakes are a mechanical lock applied
+      BY the loss of air, not a chamber being filled.
   - A coupled trailer draws air through the chassis' own reservoir model rather than beside it:
     `air_step` has an `aux01` second consumer (clamped separately from the pedal, then summed) and
     `SemiTractor._aux_air_draw` fills the trailer's reservoirs over `TRAILER_CHARGE_S`. Coupling
@@ -241,10 +307,15 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
     application while it charges is what reaches the gate, and that is the designed catch-out.
     Spawn and respawn start the trailer CHARGED; every coupling made by driving starts empty.
     Measured (`measure_semi_launch`, both units): the draw runs the full 8 s whatever the pedal
-    does, and a 3 s application while it charges bottoms AIR1 at 3.10 bar — 0.1 bar SHORT of the
-    gate, so the scripted sequence does not trip it (a heavier application while charging is what
-    would, seconds after release, mid-throttle). It never fires from spawn pressure without a
-    recouple. Kept as designed; there is no lamp for it.
+    does, and the scripted stop-then-recouple sequence DOES reach the gate — AIR1 bottoms at
+    2.92 bar in P6 and the rears pin for ~0.4 s (25 ticks on the cab-over, 21 on the
+    conventional), seconds after the brake release, mid-throttle. The whole margin here is a TENTH
+    OF A BAR, so a few hundred ms of extra pedal spends it — which is exactly what a truck tyre
+    costs, mu_long 0.80 making that stop 0.3 s longer than a car tyre would. So a heavy stop
+    followed straight away by a recouple really cannot be driven away from until the reservoir
+    recovers, and any future change to stopping distance lands back here. Kept as designed — it is
+    the catch-out the 2 bar band between `warn` and the gate exists to telegraph — and it never
+    fires from spawn pressure without a recouple. No lamp for it — the notice below is the tell.
     The gate announces itself once per application through `GameState.notice`
     (`TruckVehicle.SPRING_BRAKE_NOTICE`), latched on the edge (`TruckTelemetry.spring_brake_notice_edge`)
     so it fires once and re-arms only once the gate releases — no lamp, no timer beyond the notice's
@@ -306,13 +377,19 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
     is indistinguishable from the flatbed, on the tractor's signals it is a different vehicle. A
     test asserts the two declare identical consumers, so a future edit that tells them apart on the
     bus fails.
-  - Both load models move a real `center_of_mass` (`set_load_offset_z`) and nothing else;
+  - Both load models move a real `center_of_mass` (`set_load_offset`) and nothing else;
     `trailer_axle_load` and `axle_load` move as consequences. Never add a tipper or tanker term to
     either. `kingpin_share()` stays SPEC-based (it sizes the springs); `live_kingpin_share()` is
-    the one that moves.
-    - `set_load_offset_z` forces `CENTER_OF_MASS_MODE_CUSTOM` itself. RigidBody3D rejects the write
+    the one that moves, and it is a Z question — the height term below leaves it alone.
+    - `set_load_offset` forces `CENTER_OF_MASS_MODE_CUSTOM` itself. RigidBody3D rejects the write
       in any other mode with an engine error rather than a wrong number, and the tests step these
       bodies without ever running `_ready`.
+    - The tipper moves Y as well as Z, because a load cannot stay at parked height under a floor
+      that has lifted 42°: `TIP_COM_RISE_Y` 1.50 is derived from the same rotation about the rear
+      hinge that `TIP_COM_SHIFT_Z` 0.90 implies (the derivation is in `tipper.gd`). It puts the
+      raised body's load 2.80 m over the road, a 0.26 g rollover threshold — so driving away with
+      the body up, which the interlock deliberately allows, now rolls the rig. The tanker's surge
+      stays Z-only; a lateral slosh term is out of scope.
   - The tanker's surge is a labelled model, not fluid dynamics — one number chasing the trailer's
     own longitudinal acceleration with a lag, and the lag is the whole model. It declares no
     consumers: a surge is the payload, not a function.

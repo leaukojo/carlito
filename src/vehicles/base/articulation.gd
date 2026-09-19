@@ -74,6 +74,24 @@ static func jackknife_step(phi: float, v_fwd: float, yaw_rate: float, delta: flo
 	return clampf(phi + phi_dot * delta, -limit, limit)
 
 
+## Coulomb friction torque (N*m) a coupling plate puts on the towed body about the articulation
+## axis, given the RELATIVE yaw rate across the joint. Signed to oppose the rate; the caller
+## applies the equal and opposite on the chassis.
+##
+## Coulomb, not viscous: the magnitude is `friction_nm` at any rate, which is what a steel plate
+## under tens of kilonewtons does and why it damps trailer sway without ever re-centring the
+## trailer. `yaw_inertia * |rate| / delta` is RayWheel's one-tick rule in torque form (the same
+## shape as `VehicleMath.damped_force`): one tick may at most stop the relative yaw, never reverse
+## it, so a rig at a standstill cannot buzz across zero. On a 24 t semi-trailer that cap only binds
+## below ~1e-4 rad/s, so the inertia figure may be a proxy.
+static func yaw_friction_torque(rel_yaw_rate: float, friction_nm: float, yaw_inertia: float,
+		delta: float) -> float:
+	if friction_nm <= 0.0 or delta <= 0.0:
+		return 0.0
+	var cap := maxf(yaw_inertia, 0.0) * absf(rel_yaw_rate) / delta
+	return -signf(rel_yaw_rate) * minf(friction_nm, cap)
+
+
 ## Fraction of a semi-trailer's weight resting on the fifth wheel rather than its own bogie:
 ## moments about the bogie centre, kingpin at trailer-space z = 0. This sizes both spring rates,
 ## since the trailer's own springs carry only (1 - share) of its mass and that share lands on the

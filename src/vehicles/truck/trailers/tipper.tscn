@@ -213,7 +213,7 @@ rings = 1
 
 [sub_resource type="BoxMesh" id="MeshBogie"]
 material = SubResource("MatFrame")
-size = Vector3(1.5, 0.16, 1.55)
+size = Vector3(1.5, 0.16, 2.05)
 
 [sub_resource type="CylinderMesh" id="MeshAxle"]
 material = SubResource("MatSteel")
@@ -225,11 +225,11 @@ rings = 1
 
 [sub_resource type="BoxMesh" id="MeshSpringBeam"]
 material = SubResource("MatSteel")
-size = Vector3(0.14, 0.18, 1.45)
+size = Vector3(0.14, 0.18, 1.95)
 
 [sub_resource type="BoxMesh" id="MeshMudguard"]
 material = SubResource("MatFrame")
-size = Vector3(0.32, 0.06, 1.8)
+size = Vector3(0.32, 0.06, 2.3)
 
 [sub_resource type="BoxMesh" id="MeshRearBar"]
 material = SubResource("MatSteel")
@@ -254,7 +254,7 @@ size = Vector3(1.92, 0.2, 2.23)
 size = Vector3(1.8, 1.05, 5.15)
 
 [sub_resource type="BoxShape3D" id="ShapeBogie"]
-size = Vector3(1.7, 0.4, 1.9)
+size = Vector3(1.7, 0.4, 2.4)
 
 [node name="Tipper" type="RigidBody3D"]
 script = ExtResource("1_tipper")
@@ -274,7 +274,7 @@ shape = SubResource("ShapeTipBody")
 disabled = true
 
 [node name="CollisionBogie" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.52, 5.45)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.52, 5.2)
 shape = SubResource("ShapeBogie")
 
 [node name="RailL" type="MeshInstance3D" parent="."]
@@ -507,15 +507,15 @@ transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0.78, -0.5, 1.6)
 mesh = SubResource("MeshCrank")
 
 [node name="BogieFrame" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.52, 5.45)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.52, 5.2)
 mesh = SubResource("MeshBogie")
 
 [node name="Axle1" type="MeshInstance3D" parent="."]
-transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0, -0.626, 4.9)
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0, -0.626, 4.4)
 mesh = SubResource("MeshAxle")
 
 [node name="Axle2" type="MeshInstance3D" parent="."]
-transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0, -0.626, 5.45)
+transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0, -0.626, 5.2)
 mesh = SubResource("MeshAxle")
 
 [node name="Axle3" type="MeshInstance3D" parent="."]
@@ -523,19 +523,19 @@ transform = Transform3D(0, 1, 0, -1, 0, 0, 0, 0, 1, 0, -0.626, 6)
 mesh = SubResource("MeshAxle")
 
 [node name="SpringBeamL" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, -0.55, 5.45)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, -0.55, 5.2)
 mesh = SubResource("MeshSpringBeam")
 
 [node name="SpringBeamR" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, -0.55, 5.45)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, -0.55, 5.2)
 mesh = SubResource("MeshSpringBeam")
 
 [node name="MudguardL" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.78, -0.2, 5.45)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.78, -0.2, 5.2)
 mesh = SubResource("MeshMudguard")
 
 [node name="MudguardR" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.78, -0.2, 5.45)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.78, -0.2, 5.2)
 mesh = SubResource("MeshMudguard")
 
 [node name="RearBar" type="MeshInstance3D" parent="."]

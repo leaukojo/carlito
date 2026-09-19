@@ -6,7 +6,8 @@ extends Camera3D
 ##
 ## Four views, cycled by [method cycle]: CHASE (yaw-only follow, default), HOOD (rigid to the
 ## body), ISO (fixed 3/4 angle, orthogonal) and TOP (overhead yaw-follow). Every view but HOOD
-## pulls in when geometry blocks the line back to the vehicle, and ISO and TOP zoom on the wheel.
+## pulls in when geometry blocks the line back to the vehicle, and zooms on the wheel and orbits on
+## a right-drag — HOOD is rigid to the body, so it has none of the three.
 
 enum Mode {CHASE, HOOD, ISO, TOP}
 
@@ -33,10 +34,20 @@ const MIN_PIVOT_DIST := 0.35  ## look_at() errors if origin and target coincide
 const ZOOM_STEP := 1.12
 const ZOOM_MIN := 0.12
 const ZOOM_MAX := 3.0
+## CHASE zooms the follow offset itself, so its floor keeps the camera outside the body.
+const CHASE_ZOOM_MIN := 0.45
+
+## Orbit elevation is clamped, not wrapped: under the floor the camera looks up from inside the
+## ground, and at 90 deg the offset is straight up, where look_at() has no valid up vector.
+const ORBIT_PITCH_MIN := 3.0
+const ORBIT_PITCH_MAX := 85.0
 
 var mode := Mode.CHASE
 
-var _zoom := {Mode.ISO: 1.0, Mode.TOP: 1.0}  ## per-view, so switching views keeps its own framing
+## Per-view, so switching views keeps its own framing. No HOOD key: it is rigid to the body.
+var _zoom := {Mode.CHASE: 1.0, Mode.ISO: 1.0, Mode.TOP: 1.0}
+## Per-view orbit offset in degrees off the authored angle: x around the vehicle, y elevation.
+var _orbit_deg := {Mode.CHASE: Vector2.ZERO, Mode.ISO: Vector2.ZERO, Mode.TOP: Vector2.ZERO}
 
 var _fov_perspective := 75.0
 var _free_position := Vector3.ZERO  ## smoothed follow pos before occlusion pull-in (avoids wall shake)
@@ -63,13 +74,30 @@ func cycle() -> void:
 	snap()
 
 
-## Step the current view's zoom (+1 = in, -1 = out). No-op outside ISO/TOP.
+## Step the current view's zoom (+1 = in, -1 = out). No-op in HOOD.
 func zoom(steps: float) -> void:
 	if not _zoom.has(mode):
 		return
-	_zoom[mode] = clampf(float(_zoom[mode]) * pow(ZOOM_STEP, -steps), ZOOM_MIN, ZOOM_MAX)
+	var low := CHASE_ZOOM_MIN if mode == Mode.CHASE else ZOOM_MIN
+	_zoom[mode] = clampf(float(_zoom[mode]) * pow(ZOOM_STEP, -steps), low, ZOOM_MAX)
 	if mode == Mode.ISO:  ## orthogonal: zoom is the frustum size, lands at once
 		_apply_projection()
+
+
+## Turn the current view around the vehicle by [param degrees] (x = around, y = elevation).
+## No-op in HOOD. The follow smoothing carries the move, so a drag never snaps.
+func orbit(degrees: Vector2) -> void:
+	if not _orbit_deg.has(mode):
+		return
+	var o: Vector2 = _orbit_deg[mode]
+	_orbit_deg[mode] = Vector2(wrapf(o.x + degrees.x, -180.0, 180.0),
+			clampf(o.y + degrees.y, -ORBIT_PITCH_MAX, ORBIT_PITCH_MAX))
+
+
+## Drop the current view's orbit back to the authored angle. No-op in HOOD.
+func recenter() -> void:
+	if _orbit_deg.has(mode):
+		_orbit_deg[mode] = Vector2.ZERO
 
 
 func _process(delta: float) -> void:
@@ -140,16 +168,36 @@ func _framing() -> Dictionary:
 
 
 func _desired_position(tt: Transform3D, f: Dictionary) -> Vector3:
+	return tt.origin + _orbited(_follow_offset(tt, f))
+
+
+## The authored offset from the vehicle to the camera, before the orbit turns it.
+func _follow_offset(tt: Transform3D, f: Dictionary) -> Vector3:
 	match mode:
 		Mode.ISO:
-			return tt.origin + iso_offset  ## fixed world angle, ignores yaw
+			return iso_offset  ## fixed world angle, ignores yaw
 		Mode.TOP:
-			return tt.origin \
-					+ Vector3.UP * float(f.get("top_height", top_height)) * float(_zoom[Mode.TOP]) \
+			return Vector3.UP * float(f.get("top_height", top_height)) * float(_zoom[Mode.TOP]) \
 					+ _back(tt) * top_back
 		_:
-			return tt.origin + _back(tt) * float(f.get("distance", distance)) \
-					+ Vector3.UP * float(f.get("height", height))
+			# Distance and height scale together, so zooming keeps the view angle.
+			var z := float(_zoom[Mode.CHASE])
+			return _back(tt) * float(f.get("distance", distance)) * z \
+					+ Vector3.UP * float(f.get("height", height)) * z
+
+
+## Turn [param offset] by the current view's orbit, keeping its length (the zoom) intact.
+func _orbited(offset: Vector3) -> Vector3:
+	var o: Vector2 = _orbit_deg[mode]
+	var radius := offset.length()
+	if o == Vector2.ZERO or radius < MIN_PIVOT_DIST:
+		return offset
+	var yaw := atan2(offset.x, offset.z) + deg_to_rad(o.x)
+	var elevation := deg_to_rad(clampf(
+			rad_to_deg(atan2(offset.y, Vector2(offset.x, offset.z).length())) + o.y,
+			ORBIT_PITCH_MIN, ORBIT_PITCH_MAX))
+	var flat := radius * cos(elevation)
+	return Vector3(sin(yaw) * flat, radius * sin(elevation), cos(yaw) * flat)
 
 
 ## The target's flattened backwards direction (yaw only).

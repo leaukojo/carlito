@@ -6,7 +6,7 @@
 
 [sub_resource type="Resource" id="Resource_icyla"]
 script = ExtResource("1_7iqsd")
-wheel_positions = PackedVector3Array(-0.63000005, 0.53977275, -0.7678634, 0.62999994, 0.53977275, -0.7678635, -0.62999994, 0.53977275, 1.0561365, 0.6300001, 0.53977275, 1.0561365)
+wheel_positions = PackedVector3Array(-0.63, 0.53977275, -0.7678634, 0.63, 0.53977275, -0.7678635, -0.63, 0.53977275, 1.0561365, 0.63, 0.53977275, 1.0561365)
 wheel_radius = 0.36
 wheel_scene = ExtResource("2_63asi")
 rest_length = 0.28
@@ -28,7 +28,7 @@ steer_falloff_speed = 35.0
 script = ExtResource("3_1tc8y")
 ground_drive = SubResource("Resource_icyla")
 mass = 900.0
-center_of_mass = Vector3(0, 0.2, 0.2900565)
+center_of_mass = Vector3(0, 0.3, 0.2900565)
 torque_curve = PackedVector2Array(900, 205.8, 2000, 323.4, 3200, 386.4, 4800, 388.5, 6000, 388.5, 6600, 357, 6800, 128.1)
 gear_ratios = PackedFloat32Array(3.2, 2.3, 1.72, 1.32, 0.98, 0.66)
 final_drive = 4.2

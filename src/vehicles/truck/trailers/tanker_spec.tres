@@ -4,17 +4,21 @@
 ; drivetrain / steering fields are meaningless on a towed body and stay at their defaults.
 ;
 ; Everything below is measured off tanker.tscn (origin AT THE KINGPIN, ground at y = -1.05):
-;   - the tri-axle bogie is the family's: z 4.90 / 5.45 / 6.00, anchors at y = 0.424 - 1.05.
-;   - center_of_mass z 4.25 puts 22.0 % on the fifth wheel ((5.45 - 4.25) / 5.45) = 4623 kg. The
+;   - the tri-axle bogie is the family's: z 4.40 / 5.20 / 6.00, anchors at y = 0.424 - 1.05.
+;   - center_of_mass z 3.798 puts 27.0 % on the fifth wheel ((5.20 - 3.798) / 5.20) = 5665 kg. The
 ;     barrel runs z 0.30 - 6.10 and its saddles carry it evenly, so the rest position is close to
 ;     the barrel's own middle, pulled forward by the gooseneck.
-;   - center_of_mass y -0.25 is 0.80 m above the road — THE HIGHEST IN THE CATALOG, and that is the
-;     shape of the vehicle rather than a tuning choice: the barrel's own centre is at y 0.66 and a
-;     part-filled tank puts its load well up inside it. It is why a tanker feels tall in a corner.
+;   - center_of_mass y 0.45 is 1.50 m above the road, and that is the shape of the vehicle rather
+;     than a tuning choice: the barrel's own centre is at y 0.66 (1.71 m over the road) and a
+;     part-filled tank carries its load well up inside it. Half-track 0.72 over 1.50 m tips it at
+;     0.48 g against mu_lat 0.75, so a laden tanker ROLLS BEFORE IT SLIDES — which is why the real
+;     ones take a roundabout at a crawl.
 ;   - THE SURGE MOVES IT, +-0.55 m along z. tanker.gd is a LABELLED HONEST MODEL of a shifting
 ;     centre of mass, NOT fluid dynamics — read its header before changing anything here. The two
 ;     ends of the travel are covered by the spring below: the load fully rearward (z 4.80) sits the
-;     bogie at 41 % of travel, fully forward (z 3.70) at 31 %, against 36 % at rest.
+;     bogie at 41 % of travel, fully forward (z 3.70) at 31 %, against 36 % at rest. Z IS THE ONLY
+;     AXIS IT MOVES: a LATERAL slosh term is deliberately out of scope — it would be a second
+;     labelled model feeding roll, and the height above is what makes the tanker feel tall already.
 ;   - spring_rate 232000 is sized off the load the bogie ACTUALLY carries at rest, 16 376 kg:
 ;     26 748 N per wheel compresses it 0.115 m of its 0.32 m travel (36 %), the flatbed's fraction.
 ;   - brake_torque 10595 is load-apportioned by the family's one formula, never copied:
@@ -40,7 +44,7 @@
 script = ExtResource("2_grounddrive")
 drag_area = 0.45
 rolling_resistance = 0.007
-wheel_positions = PackedVector3Array(-0.72, -0.626, 4.9, 0.72, -0.626, 4.9, -0.72, -0.626, 5.45, 0.72, -0.626, 5.45, -0.72, -0.626, 6, 0.72, -0.626, 6)
+wheel_positions = PackedVector3Array(-0.72, -0.626, 4.4, 0.72, -0.626, 4.4, -0.72, -0.626, 5.2, 0.72, -0.626, 5.2, -0.72, -0.626, 6, 0.72, -0.626, 6)
 wheel_radius = 0.36
 wheel_inertia = 3.0
 driven_front = false
@@ -51,8 +55,8 @@ damper_bump = 11750.0
 damper_rebound = 16000.0
 max_suspension_force = 90000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
-mu_long = 1.0
-mu_lat = 0.95
+mu_long = 0.8
+mu_lat = 0.75
 load_sensitivity = 0.08
 brake_torque = 9935.0
 handbrake_torque = 2484.0
@@ -60,7 +64,7 @@ handbrake_torque = 2484.0
 [resource]
 script = ExtResource("1_spec")
 mass = 21000.0
-center_of_mass = Vector3(0, -0.25, 3.98)
+center_of_mass = Vector3(0, 0.45, 3.798)
 ground_drive = SubResource("Resource_grounddrive")
 
 ; LAMPS — the one group of lamp fields a towed body DOES use. A trailer runs no headlamps and

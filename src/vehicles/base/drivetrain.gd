@@ -1,8 +1,10 @@
 class_name Drivetrain
 extends RefCounted
-## Clutch-less, diff-less drivetrain: torque curve -> gearbox (RAMN gear byte) -> drive axle.
-## RPM follows wheel speed through the ratio, clamped [idle, redline]. Static pure functions; the
-## instance holds only the current gear and smoothed RPM. Approach informed by
+## Diff-less drivetrain: torque curve -> fluid coupling -> gearbox (RAMN gear byte) -> drive axle.
+## RPM follows wheel speed through the ratio, clamped [idle, redline], and on a wheel-driving
+## engine never falls below what the converter lets it reach (`converter_free_rpm`, which is the
+## only thing between crank and gearbox: no clutch, no bite point, no stall). Static pure
+## functions; the instance holds only the current gear and smoothed RPM. Approach informed by
 ## Dechode/Godot-Advanced-Vehicle and Tobalation/GDCustomRaycastVehicle (MIT, credited in README);
 ## no code copied.
 
@@ -164,6 +166,41 @@ static func locked_axle_omega(omega_a: float, omega_b: float) -> float:
 	return (omega_a + omega_b) * 0.5
 
 
+# --- torque converter (the crank against a held wheel) -------------------------------------
+## The one element between engine and gearbox, and a rev model only: it multiplies NO torque
+## where a real converter makes 1.8-2.2x at stall, which keeps every launch figure conservative
+## and leaves the brake > drive > handbrake hierarchy alone (src/vehicles/CLAUDE.md).
+
+## Converter stall speed as a fraction of the engine's own usable band (idle -> redline). One
+## derivation for every machine rather than a per-spec knob, like the tyre-derived brakes: 0.25
+## is 2375 rpm on the car family, 1325 on the trucks, 1250 on the tractor — all plausible stall
+## speeds, and all below their torque peaks, which is what keeps the foot brake winning. It
+## cannot reach the limiter at any value: that judges `wheel_engine_rpm`, the raw wheel side.
+const STALL_RPM_FRAC := 0.25
+
+
+## Whether this machine has a fluid coupling between engine and gearbox: an engine that drives
+## wheels does. Boat, drone and train carry no `ground_drive` at all and the plane's wheels are
+## undriven, so all four keep the rigid crank, where wheel speed alone sets rpm.
+static func has_converter(p_spec: VehicleSpec) -> bool:
+	var gd := p_spec.ground_drive
+	return gd != null and (gd.driven_front or gd.driven_rear)
+
+
+## Crank speed the converter alone will let the engine reach with the turbine held (rpm): idle
+## at a closed throttle rising to the stall speed at full. This is what makes a held vehicle rev
+## instead of sitting at idle — brake or handbrake on, the engine climbs here and the torque
+## curve is sampled there. LINEAR in throttle, where a real converter's capacity torque goes as
+## N^2 and would rev harder at a small pedal; the handbrake break-away figures quoted in
+## `src/vehicles/CLAUDE.md` are read off this straight line. `idle_rpm` with no converter, so a
+## rigid crank is unchanged.
+static func converter_free_rpm(p_spec: VehicleSpec, throttle: float) -> float:
+	if not has_converter(p_spec):
+		return p_spec.idle_rpm
+	var stall := p_spec.idle_rpm + STALL_RPM_FRAC * (p_spec.redline_rpm - p_spec.idle_rpm)
+	return lerpf(p_spec.idle_rpm, stall, clampf(throttle, 0.0, 1.0))
+
+
 # --- auxiliary driveline retarder (truck, J1939 SPN 520) ------------------------------------
 ## Driveline behaviour, gated by GroundDriveSpec.retarder_equipped and applied by WheelDrive, not
 ## a vehicle subclass. It joins the other brake torques on the driven wheels so RayWheel
@@ -172,13 +209,15 @@ static func locked_axle_omega(omega_a: float, omega_b: float) -> float:
 ## The spring brake is a post-tick kinematic zero-lock, which can only remove energy.
 
 ## Retarder rating per driven wheel, as a fraction of brake_torque (the 'retarder_state' 100%
-## point). Derived: mass and radius cancel to `frac * BRAKE_GRIP_FRAC * mu_long * g / 2`, so 0.20
-## is 0.93 m/s^2 on both Kenney trucks and 1.46 on the hand-built units with a fixed 10500 Nm
-## brake. `test_truck` pins a 0.9-1.6 band per spec.
+## point). On a grip-derived brake mass and radius cancel, so the flat-road retardation is
+## `frac * BRAKE_GRIP_FRAC * mu_long * g / 2` — 0.20 is 0.745 m/s^2 on both Kenney trucks at the
+## family's truck tyre, and 1.46 on the hand-built units, whose 10500 Nm brake is fixed rather
+## than grip-derived and so does not move with mu. `test_truck` pins a 0.7-1.6 band per spec.
 ##
 ## It stays auxiliary by construction: 0.20 of per-wheel brake torque is ~10% of the four-wheel
-## service brake and ~14% of tyre grip, so brake > transmissible drive > handbrake holds. Raising
-## it means re-checking the settled slip below.
+## service brake and, on a grip-derived brake, exactly `0.20 * BRAKE_GRIP_FRAC` = 0.19 of that
+## wheel's own grip torque whatever mu is — so brake > transmissible drive > handbrake holds at any
+## tyre. Raising it means re-checking the settled slip below.
 const RETARDER_MAX_FRAC := 0.20
 const RETARDER_CUTOUT_MS := 1.5  ## m/s below which a driveline brake does nothing at all
 const RETARDER_FULL_MS := 8.0    ## m/s (~29 km/h) at which it reaches its rating
@@ -310,7 +349,12 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 		target_rpm = lerpf(spec.idle_rpm, spec.redline_rpm, clampf(throttle, 0.0, 1.0))
 	else:
 		limiter_rpm = wheel_engine_rpm(spec, drive_wheel_omega, gear_byte)
-		target_rpm = clampf(limiter_rpm, spec.idle_rpm, spec.redline_rpm)
+		# The converter is a floor under the wheels, never a ceiling: whichever side spins the
+		# crank faster wins, so a held vehicle revs to stall while a rolling one is coupled and
+		# reads exactly what the wheels impose. The limiter keeps judging `limiter_rpm` (the raw
+		# wheel side) — a converter cannot over-rev an engine it only spins to stall.
+		target_rpm = maxf(clampf(limiter_rpm, spec.idle_rpm, spec.redline_rpm),
+				converter_free_rpm(spec, throttle))
 	rpm = lerpf(rpm, target_rpm, 1.0 - exp(-RPM_SMOOTH * delta))
 
 	# Both cuts sit between the pedal and the engine: rpm above still follows the wheels, torque

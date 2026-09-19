@@ -11,12 +11,19 @@ const TractorScene := preload("res://src/vehicles/kenney/tractor-kenney.tscn")
 
 ## Joint slop we accept. The parts are rigid, so this is float noise, not a fudge factor.
 const JOINT_EPS := 0.002
-## Rear tyre inner (half-width 0.276, gap between tyres).
-const TYRE_INNER_X := 0.253
-## Rearmost tyre contact (wheel centre 0.822 + radius 0.45).
-const TYRE_REAR_Z := 1.272
-## Tyre crown (wheel centre + radius; above this clears the wheel).
-const TYRE_TOP_Y := 0.9
+## Where tractor-kenney.tscn hangs this scene: the hitch is authored in its own frame and mounted
+## this far aft, so the tyre figures below are body coordinates MINUS this. Pinned by
+## test_the_hitch_sits_where_these_clearances_assume.
+const MOUNT_Z := 0.3935
+## The rear tyre as it is DRAWN, in body space: a cylinder on the axle line, standing on the road
+## (so the axle height IS the visual radius). A box around it was close enough at the old 0.45 m
+## tyre and is not at 0.66: the corner region a box claims is where the spreader's hopper skirt
+## passes, half a metre above the tread.
+const TYRE_AXLE_Y := 0.66
+const TYRE_AXLE_Z := 1.10922
+const TYRE_RADIUS := 0.66
+## Rear tyre inner face (station 0.74622 - tread half-width 0.4048), the gap between the tyres.
+const TYRE_INNER_X := 0.3418
 
 
 func _hitch() -> ThreePointHitch:
@@ -202,11 +209,14 @@ func test_nothing_sweeps_into_the_rear_tyres() -> void:
 				var box := mi.get_aabb()
 				for c in 8:
 					var p: Vector3 = mi.global_transform * box.get_endpoint(c)
-					if p.z >= TYRE_REAR_Z or p.y >= TYRE_TOP_Y:
-						continue  # behind or above the tyres: free to splay
-					assert_bool(absf(p.x) <= TYRE_INNER_X) \
-						.override_failure_message("%s reaches x = %.3f at z = %.3f, inside the rear tyre"
-							% [mi.name, p.x, p.z]) \
+					if absf(p.x) <= TYRE_INNER_X:
+						continue  # inboard of the tread: free to run the whole length
+					var dz := p.z + MOUNT_Z - TYRE_AXLE_Z
+					var dy := p.y - TYRE_AXLE_Y
+					assert_bool(dz * dz + dy * dy >= TYRE_RADIUS * TYRE_RADIUS) \
+						.override_failure_message(
+							"%s reaches x = %.3f at (z, y) = (%.3f, %.3f), inside the rear tyre"
+							% [mi.name, p.x, p.z + MOUNT_Z, p.y]) \
 						.is_true()
 
 
@@ -359,15 +369,16 @@ func test_an_implement_off_the_bus_is_attached_but_claims_no_address() -> void:
 	assert_bool(d["pto_state"]).is_true()
 
 
-func test_the_hitch_sits_at_the_body_origin_on_the_tractor() -> void:
-	# The clearance test above measures the STANDALONE hitch against body-space constants, so
-	# it is only valid while the instance on the tractor is at identity. Assert that, or
-	# nudging the node in the editor walks the linkage into the tyres with the suite green.
+func test_the_hitch_sits_where_these_clearances_assume() -> void:
+	# The clearance test above measures the STANDALONE hitch, so it is only valid while the
+	# instance on the tractor sits exactly MOUNT_Z aft. Assert that, or nudging the node in the
+	# editor walks the linkage into the tyres with the suite green.
 	var tractor := _tractor()
 	var hitch: Node3D = tractor.get_node("ThreePointHitch")
-	assert_bool(hitch.transform.is_equal_approx(Transform3D.IDENTITY)) \
-		.override_failure_message("ThreePointHitch is offset on the tractor; this suite's " \
-			+ "clearance constants are measured in BODY space and no longer apply") \
+	assert_bool(hitch.transform.is_equal_approx(
+			Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, MOUNT_Z)))) \
+		.override_failure_message("ThreePointHitch is not at z = %.4f on the tractor; this " \
+			% MOUNT_Z + "suite's tyre clearances are measured against that mount") \
 		.is_true()
 
 

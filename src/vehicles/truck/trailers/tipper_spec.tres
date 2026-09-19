@@ -5,12 +5,15 @@
 ; defaults.
 ;
 ; Everything below is measured off tipper.tscn (origin AT THE KINGPIN, ground at y = -1.05):
-;   - the tri-axle bogie is the family's: z 4.90 / 5.45 / 6.00, anchors at y = 0.424 - 1.05.
-;   - center_of_mass z 3.98 puts 27.0 % on the fifth wheel ((5.45 - 3.98) / 5.45) = 5125 kg — the
+;   - the tri-axle bogie is the family's: z 4.40 / 5.20 / 6.00, anchors at y = 0.424 - 1.05.
+;   - center_of_mass z 3.798 puts 27.0 % on the fifth wheel ((5.20 - 3.798) / 5.20) = 5123 kg — the
 ;     catalog-wide realistic plate share (see box_spec.tres), which is what feeds the 4x2's single
 ;     driven axle.
-;   - center_of_mass y -0.30 is 0.75 m above the road: the payload rides IN a body whose floor is
-;     at y -0.10, so it sits higher than a flat deck's and lower than a tank's.
+;   - center_of_mass y 0.25 is 1.30 m above the road: the payload rides IN a body whose floor is at
+;     y -0.10 (0.95 m over the road) and whose sides top out at 2.04 m, so it sits higher than a
+;     flat deck's and lower than a tank's. Half-track 0.72 over 1.30 m tips it at 0.55 g against
+;     mu_lat 0.75 — roll-first laden, like the box and the tanker. THE RAISED BODY TAKES IT HIGHER
+;     STILL; see tipper.gd's TIP_COM_RISE_Y.
 ;   - THE TIP MOVES IT. tipper.gd walks the centre of mass 0.90 m rearward at full tip, which takes
 ;     the fifth wheel's share from 27.0 % down to 10.5 % — 3135 kg off the tractor's drive axle and
 ;     onto the trailer's bogie. That is the whole point of the trailer, and it is a real centre of
@@ -40,7 +43,7 @@
 script = ExtResource("2_grounddrive")
 drag_area = 0.55
 rolling_resistance = 0.007
-wheel_positions = PackedVector3Array(-0.72, -0.626, 4.9, 0.72, -0.626, 4.9, -0.72, -0.626, 5.45, 0.72, -0.626, 5.45, -0.72, -0.626, 6, 0.72, -0.626, 6)
+wheel_positions = PackedVector3Array(-0.72, -0.626, 4.4, 0.72, -0.626, 4.4, -0.72, -0.626, 5.2, 0.72, -0.626, 5.2, -0.72, -0.626, 6, 0.72, -0.626, 6)
 wheel_radius = 0.36
 wheel_inertia = 3.0
 driven_front = false
@@ -51,8 +54,8 @@ damper_bump = 10700.0
 damper_rebound = 14400.0
 max_suspension_force = 90000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
-mu_long = 1.0
-mu_lat = 0.95
+mu_long = 0.8
+mu_lat = 0.75
 load_sensitivity = 0.08
 brake_torque = 8990.0
 handbrake_torque = 2247.0
@@ -60,7 +63,7 @@ handbrake_torque = 2247.0
 [resource]
 script = ExtResource("1_spec")
 mass = 19000.0
-center_of_mass = Vector3(0, -0.3, 3.98)
+center_of_mass = Vector3(0, 0.25, 3.798)
 ground_drive = SubResource("Resource_grounddrive")
 
 ; LAMPS — the one group of lamp fields a towed body DOES use. A trailer runs no headlamps and

@@ -104,7 +104,9 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 		var trailer := _fifth_wheel.trailer
 		t.trailer_connected = true
 		t.trailer_axle_load = TruckTelemetry.axle_load_kg(trailer.bogie_suspension_force())
-		t.trailer_brake_demand = roundi(demand01 * 100.0)
+		# The LAGGED application, not the blend: the chambers are still filling for the first
+		# third of a second, and EBS11 reports what the trailer brakes with.
+		t.trailer_brake_demand = roundi(trailer.brake_applied() * 100.0)
 		t.trailer_abs = TruckTelemetry.trailer_abs_active(trailer.max_wheel_slip())
 
 

@@ -21,6 +21,10 @@ const NIGHT_AMBIENT_ENERGY := 0.12
 const NIGHT_FOG_COLOR := Color(0.05, 0.07, 0.13)
 const NIGHT_SKY_ENERGY := 0.05
 
+## Camera orbit per pixel of a right-button drag. Negative on both axes so the drag carries the
+## world with it (drag right and the vehicle swings right); flip a sign to invert that axis.
+const ORBIT_DEG_PER_PIXEL := Vector2(-0.3, -0.3)
+
 ## Fullscreen color-grade + vignette, built in code so every level gets it with no re-bake.
 const VIGNETTE_SHADER := preload("res://src/levels/base/vignette.gdshader")
 const Groups := preload("res://src/levels/base/carlito_groups.gd")
@@ -32,6 +36,10 @@ var vehicle: BaseVehicle
 ## Variant to spawn instead of the level's default (set by the shell from a deep link or
 ## saved session). Falls back to default if empty, unknown, disallowed, or a loopless train.
 var initial_variant := ""
+
+## Right button held, and whether it has moved since — a press that never moved is a recenter.
+var _orbiting := false
+var _orbit_dragged := false
 
 var _sun: DirectionalLight3D
 var _env: Environment
@@ -99,13 +107,25 @@ func _unhandled_input(event: InputEvent) -> void:
 		toggle_day_night()
 	elif event.is_action_pressed("camera_view"):
 		cycle_camera()
-	elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
-		# Raw wheel, not an InputMap action: a view control with no bridge/touch twin, no arbitration needed.
+	elif event is InputEventMouseButton:
+		# Raw wheel/button, not an InputMap action: view controls with no bridge/touch twin, no
+		# arbitration needed.
 		var mb := event as InputEventMouseButton
-		if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
+		if mb.button_index == MOUSE_BUTTON_RIGHT:
+			_orbiting = mb.pressed
+			if mb.pressed:
+				_orbit_dragged = false
+			elif not _orbit_dragged:
+				recenter_camera()  ## a right-CLICK (no drag) puts the view back
+		elif mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_UP:
 			zoom_camera(1.0)
-		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		elif mb.pressed and mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			zoom_camera(-1.0)
+	elif _orbiting and event is InputEventMouseMotion:
+		var rel := (event as InputEventMouseMotion).relative
+		if rel != Vector2.ZERO:
+			_orbit_dragged = true
+			orbit_camera(rel * ORBIT_DEG_PER_PIXEL)
 
 
 ## Advances the chase camera to its next view (C key / touch CAMERA button).
@@ -114,10 +134,22 @@ func cycle_camera() -> void:
 		camera.cycle()
 
 
-## Zooms the chase camera's current view (mouse wheel; ISO and TOP only).
+## Zooms the chase camera's current view (mouse wheel; every view but HOOD).
 func zoom_camera(steps: float) -> void:
 	if camera != null:
 		camera.zoom(steps)
+
+
+## Turns the chase camera's current view around the vehicle (right-drag; every view but HOOD).
+func orbit_camera(degrees: Vector2) -> void:
+	if camera != null:
+		camera.orbit(degrees)
+
+
+## Puts the current view back to its authored angle (right-click without a drag).
+func recenter_camera() -> void:
+	if camera != null:
+		camera.recenter()
 
 
 ## Swaps kit authoring content for the baked scene when one exists (<level>.baked.scn); without one, per-piece collision can seam.

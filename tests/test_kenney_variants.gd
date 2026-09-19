@@ -13,6 +13,7 @@ const DRIVE_OVERRIDABLE := {
 	"rolling_resistance": "crr", "mu_long": "mu_long", "mu_lat": "mu_lat",
 	"handbrake_grip": "handbrake_grip", "max_steer_deg": "max_steer_deg",
 	"min_steer_frac": "min_steer_frac", "steer_falloff_speed": "steer_falloff_speed",
+	"anti_roll_rate": "anti_roll_rate",
 }
 ## Baseline-only fields: overrides silently dropped (test_no_variant_overrides catches this).
 const SPEC_BASELINE_ONLY := {
@@ -41,10 +42,14 @@ const META_KEYS := [
 	"base",           # feel baseline when it differs from the family (the heavy vans)
 	"torque_mul",     # scales the baseline curve
 	"cd", "cl",       # aero coefficients, applied to the MEASURED frontal box
+	"com_y",          # body-space height of the COM over the road, overriding the family figure
+	"com_y_frac",     # the same height as a fraction of the body's AABB top (a rescale)
 	"com_z", "front_weight",  # the two ways a recipe may state the longitudinal balance
 	"gear_ratios",    # a whole array, overridable
 	"speed_limit_kmh",
 	"wheels", "wheel_x_out",  # wheel models and the outboard push
+	"ride_lift",      # chassis raised over the wheels (shallow arches)
+	"scale",          # per-variant body scale, multiplied into KIT_SCALE by _analyze
 	"_id",            # stamped in by `_ready`, never authored
 ]
 
@@ -175,12 +180,17 @@ func test_gear_ratios_match_the_recipe() -> void:
 					.is_equal_approx(float(expected[i]), 1e-4)
 
 
-## COM.y is verbatim (family figure); COM.z is measured (geometry case).
-func test_com_y_matches_the_baseline() -> void:
+## COM.y is verbatim (the recipe's own figure, else the family's) unless the recipe states it
+## as `com_y_frac`, which is measured off the body's AABB and checked with COM.z in the
+## geometry case. COM.z is always measured.
+func test_com_y_matches_the_recipe() -> void:
 	for variant: String in Gen.VARIANTS:
+		var ov: Dictionary = Gen.VARIANTS[variant]
+		if ov.has("com_y_frac"):
+			continue
 		assert_float(_spec_of(variant).center_of_mass.y) \
 				.override_failure_message("%s_spec.tres center_of_mass.y" % variant) \
-				.is_equal_approx(float(_baseline(variant)["com_y"]), 1e-4)
+				.is_equal_approx(float(ov.get("com_y", _baseline(variant)["com_y"])), 1e-4)
 
 
 ## Single radius across kit (tractor's big wheel is VISUAL only).
@@ -261,7 +271,8 @@ func test_measured_geometry_still_matches_the_models() -> void:
 		var b := _baseline(variant)
 		var wheels: Array = ov.get("wheels", Gen.FAMILY_WHEELS[String(ov["family"])])
 		var geo: Dictionary = gen._analyze(
-				Gen.MODELS.path_join(variant + ".glb"), wheels)
+				Gen.MODELS.path_join(variant + ".glb"), wheels,
+				float(ov.get("scale", 1.0)))
 		assert_bool(geo.is_empty()) \
 				.override_failure_message("%s.glb could not be analyzed" % variant).is_false()
 		var spec := _spec_of(variant)
@@ -276,8 +287,17 @@ func test_measured_geometry_still_matches_the_models() -> void:
 		assert_float(spec.center_of_mass.z) \
 				.override_failure_message("%s_spec.tres center_of_mass.z" % variant) \
 				.is_equal_approx(gen._com_z(geo, ov), 1e-4)
+		# `com_y_frac` makes COM.y a measured figure too, so it is checked here beside COM.z
+		# rather than in test_com_y_matches_the_recipe, which owns the verbatim case.
+		if ov.has("com_y_frac"):
+			var get_f := func(key: String) -> float: return float(ov.get(key, b[key]))
+			assert_float(spec.center_of_mass.y) \
+					.override_failure_message("%s_spec.tres center_of_mass.y (%.2f of AABB top)"
+						% [variant, float(ov["com_y_frac"])]) \
+					.is_equal_approx(gen._com_y(get_f, geo, ov), 1e-4)
 		var stations: PackedVector3Array = gen._wheel_positions(
-				geo, spec, gd, float(ov.get("wheel_x_out", 0.0)))
+				geo, spec, gd, float(ov.get("wheel_x_out", 0.0)),
+				float(ov.get("ride_lift", 0.0)))
 		assert_int(gd.wheel_positions.size()) \
 				.override_failure_message("%s_spec.tres wheel_positions length" % variant) \
 				.is_equal(stations.size())

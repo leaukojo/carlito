@@ -9,4 +9,5 @@ src/levels/base/heightmap_terrain.gd:get_splat_weights # test accessor for the s
 src/shell/challenge_registry.gd:duplicate_ids   # registry integrity check exercised by tests/test_challenge_registry.gd's ship gate; nothing at runtime needs it
 src/vehicles/base/drivetrain.gd:shift_cut_active # test accessor for _shift_cut_ticks; no dashboard/telemetry consumer
 src/vehicles/base/towed_body.gd:load_shift_z    # documented test accessor, no runtime caller
+src/vehicles/base/towed_body.gd:load_shift_y    # documented test accessor, no runtime caller
 src/vehicles/base/towed_body.gd:collision_probes # documented test accessor; test_trailer is its consumer

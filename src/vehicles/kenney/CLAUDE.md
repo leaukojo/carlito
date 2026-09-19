@@ -29,3 +29,7 @@
     when the two files are otherwise identical, so the whole scene re-churns its `unique_id`s
     on every run. Put that kind of note in this file or in the generator, never in generated
     output.
+- Kenney wheel stations use **one track for the whole body**: the flush-X rule alone follows the
+  flared front fender and the tucked rear arch, standing the front wheels out and sinking the rear
+  ones in, so `_analyze` averages the four half-widths. A body whose axles wear different wheel
+  models (the tractor) keeps its per-axle stations.

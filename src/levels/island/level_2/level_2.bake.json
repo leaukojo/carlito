@@ -1,7 +1,7 @@
 {
 	"baker_version": 14,
 	"chunk_size": 64.0,
-	"input_hash": "3ac0ce10f746c0603258aada2b7a2d68750f5d19a745ac54d1cb2cf46228e863",
+	"input_hash": "75e8885aed73145cf9792fec3d058ea6867a8720a156453979c81414e4026895",
 	"level": "res://src/levels/island/level_2/level_2.tscn",
 	"output_hash": "cb48185e8836251ec0a6129cb74438d467173d9d06448d312b0fd24eda0ce12d",
 	"stats": {

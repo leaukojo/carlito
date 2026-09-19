@@ -255,6 +255,90 @@ func test_process_rpm_rests_at_idle() -> void:
 	assert_float(dt.rpm).is_equal_approx(spec.idle_rpm, 1.0)
 
 
+# --- converter (the crank against a held wheel) -------------------------------------
+# Fixture band is idle 800 -> redline 4000, so stall is 800 + 0.25 * 3200 = 1600 rpm.
+
+func test_converter_free_rpm_runs_idle_to_stall_across_the_pedal() -> void:
+	var spec := _spec()
+	assert_float(DrivetrainScript.converter_free_rpm(spec, 0.0)).is_equal(spec.idle_rpm)
+	assert_float(DrivetrainScript.converter_free_rpm(spec, 1.0)).is_equal_approx(1600.0, 0.001)
+	assert_float(DrivetrainScript.converter_free_rpm(spec, 0.5)).is_equal_approx(1200.0, 0.001)
+	# Throttle is a 0..1 magnitude here as everywhere else.
+	assert_float(DrivetrainScript.converter_free_rpm(spec, -1.0)).is_equal(spec.idle_rpm)
+	assert_float(DrivetrainScript.converter_free_rpm(spec, 2.0)).is_equal_approx(1600.0, 0.001)
+
+
+func test_a_held_wheel_revs_the_engine_to_stall_and_makes_more_torque_for_it() -> void:
+	# The point of the whole model: brake or handbrake holding the wheels, pedal down, and the
+	# engine climbs to stall instead of sitting at idle.
+	var spec := _spec()
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	var torque := 0.0
+	for i in 120:
+		torque = dt.process(1.0 / 60.0, 1.0, 0.0, 0.0, 1, false)
+	assert_float(dt.rpm).is_equal_approx(1600.0, 1.0)
+	# 1600 rpm on the curve is 160 Nm against idle's 100; D1 ratio 12, efficiency 0.9.
+	assert_float(torque).is_equal_approx(160.0 * 12.0 * 0.9, 1.0)
+	assert_float(torque).is_greater(DrivetrainScript.wheel_torque(spec, spec.idle_rpm, 1.0, 1))
+
+
+func test_a_held_wheel_off_the_pedal_still_rests_at_idle() -> void:
+	# The converter is not a creep model: no pedal, no rev.
+	var spec := _spec()
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	for i in 120:
+		dt.process(1.0 / 60.0, 0.0, 0.0, 0.0, 1, false)
+	assert_float(dt.rpm).is_equal_approx(spec.idle_rpm, 0.001)
+
+
+func test_the_wheels_still_own_the_crank_once_they_outrun_the_converter() -> void:
+	# A floor, never a ceiling: 20 rad/s in D1 is ~2292 rpm, well past the 1600 stall, so the
+	# coupled side wins and rpm reads exactly what the wheels impose.
+	var spec := _spec()
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	for i in 120:
+		dt.process(1.0 / 60.0, 1.0, 20.0, 20.0 * spec.ground_drive.wheel_radius, 1, false)
+	assert_float(dt.rpm).is_equal_approx(
+			DrivetrainScript.rpm_from_wheel(spec, 20.0, 1), 1.0)
+
+
+func test_a_held_vehicle_does_not_upshift_however_long_it_is_revved() -> void:
+	# Auto-shift judges rpm computed from ROAD speed, never `dt.rpm`, so a stall rev cannot walk
+	# the box up the gears while the vehicle stands still on the brake.
+	var spec := _spec()
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	for i in 120:
+		dt.process(1.0 / 60.0, 1.0, 0.0, 0.0, 1, true)
+	assert_int(dt.gear_byte).is_equal(1)
+
+
+func test_a_stall_rev_never_trips_the_limiter() -> void:
+	# The limiter judges the raw wheel side, which the converter never touches: full pedal
+	# against a held wheel is fuel the engine actually gets.
+	var spec := _spec()
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	for i in 120:
+		dt.process(1.0 / 60.0, 1.0, 0.0, 0.0, 1, false)
+	assert_float(dt.applied_throttle).is_equal(1.0)
+
+
+func test_a_machine_that_drives_no_wheels_keeps_the_rigid_crank() -> void:
+	# Boat and drone carry no ground_drive; the plane's wheels are undriven. All three keep
+	# the crank the wheels alone turn, so a held one sits at idle however hard it is revved.
+	var no_gd := _spec()
+	no_gd.ground_drive = null
+	var undriven := _spec()
+	undriven.ground_drive.driven_front = false
+	undriven.ground_drive.driven_rear = false
+	for spec: VehicleSpecScript in [no_gd, undriven]:
+		assert_bool(DrivetrainScript.has_converter(spec)).is_false()
+		assert_float(DrivetrainScript.converter_free_rpm(spec, 1.0)).is_equal(spec.idle_rpm)
+		var dt: DrivetrainScript = DrivetrainScript.new(spec)
+		for i in 120:
+			dt.process(1.0 / 60.0, 1.0, 0.0, 0.0, 1, false)
+		assert_float(dt.rpm).is_equal_approx(spec.idle_rpm, 0.001)
+
+
 # --- road-speed governor ------------------------------------------------------------
 
 func test_governor_is_absent_unless_a_limit_is_declared() -> void:

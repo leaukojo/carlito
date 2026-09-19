@@ -30,6 +30,8 @@ const TRIGGER := 1 << 6
 ## ray. Deliberately WITHOUT `CONTAINMENT` — see that constant.
 const SOLID := TERRAIN | DRIVABLE | PROPS | VEHICLE | PAYLOAD
 ## What a MOVING body must collide with: the solid world plus the box that keeps it inside it.
+## Aircraft (drone, plane) deliberately mask SOLID instead and fly straight out through the box:
+## an invisible wall in mid-air is worse than an empty horizon.
 const WORLD := SOLID | CONTAINMENT
 ## What a STATIC body needs in its mask — the only bodies in the game that move under physics.
 const DYNAMIC := VEHICLE | PAYLOAD

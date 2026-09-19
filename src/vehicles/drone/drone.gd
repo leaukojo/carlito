@@ -145,6 +145,10 @@ func _make_telemetry() -> VehicleTelemetry:
 
 func _ready() -> void:
 	super._ready()
+	# Aircraft fly out over the containment box instead of hitting an invisible wall: an
+	# unannounced stop in mid-air reads as a bug. The geofence (drone_modes.gd) is the soft
+	# boundary that matters here.
+	collision_mask = Layers.SOLID
 	_base_mass = spec.mass
 	_base_com = spec.center_of_mass
 	_hook = DroneHook.new(self)

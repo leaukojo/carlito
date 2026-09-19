@@ -33,6 +33,14 @@
 - **Re-run `paint_road_asphalt` after any road or road-profile edit.** A stale paint is
   invisible — nothing in the bake, the tests or CI notices that the committed splat2 has
   stopped matching the road profile.
+- **LEVEL 2'S MOUNTAIN ROAD IS STEEPER THAN ANYTHING CAN CLIMB, AND SHIPS THAT WAY.** Measured
+  2026-09-18 with `measure_grade.tscn -- level=level_2`: 2033 m long, mean grade 16.4 %, worst
+  86.9 % (41 deg), 512 m of it above 25 %. The paint is fine (mean grip 1.00, crr 0.000 — real
+  asphalt); the curve's Y values are the problem. The loaded 32 t semi pulls away on 16.7 % and an
+  empty SUV on 56.6 % (`docs/vehicles.md` § Gradeability), so the upper road is undrivable by
+  design, not by tuning. Level 1's road is clear of this (mean 4.6 %, worst 17.5 %, 72 m above
+  15 %). Nothing gates road grade — `level=<id>` is the only thing that reads it, and it is a dev
+  report, not CI.
 - **Never run `paint_road_asphalt` on `car_arena`**: its scaffold paints its own roads at the inset
   paved width, then splat channel 4, **Ice**, under the ice road's bend only. The tool's full-width
   stamp would bury the ice, and nothing would notice.

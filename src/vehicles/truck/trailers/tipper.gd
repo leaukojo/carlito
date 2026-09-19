@@ -4,8 +4,9 @@ extends TowedBody
 ## interlock lives in `TowedBody.body_raise_allowed` and is gated by SemiTractor before flow
 ## reaches this class, never policed here.
 ##
-## The load shift is a consequence, not a term: `set_load_offset_z` moves the real centre of mass
-## rearward as the body tips, so trailer_axle_load and the tractor's axle_load move on their own.
+## The load shift is a consequence, not a term: `set_load_offset` moves the real centre of mass
+## rearward AND UP as the body tips, so trailer_axle_load and the tractor's axle_load move on their
+## own — and so does what the rig will survive in a corner with the body in the air.
 
 ## Full tip angle, degrees about the rear hinge. 42 deg puts the raised rig ~5.2 m tall, which is
 ## why the interlock demands a genuine standstill.
@@ -17,6 +18,18 @@ const TIP_TRAVEL_S := 6.0
 ## Metres the payload's centre of mass slides rearward at full tip (measured off the 6.20 m floor
 ## at 42 deg).
 const TIP_COM_SHIFT_Z := 0.90
+
+## Metres it RISES over the same travel, derived from the same rotation rather than chosen: the
+## hinge is at (y -0.06, z 6.25) and the parked payload at (y 0.25, z 3.798), so a rigid 42 deg
+## nose-up rotation about the hinge lands it at y 1.811 / z 4.635 — a z shift of 0.837. The shipped
+## 0.90 means the load also slid 0.085 m down-slope, which costs 0.085 * sin 42 = 0.057 m of
+## height. 1.811 - 0.057 - 0.25 = 1.50.
+##
+## THE CONSEQUENCE IS THE POINT: the raised body puts the load 2.80 m over the road, and on the
+## family's 0.72 m half-track that is a 0.26 g rollover threshold against mu_lat 0.75. The
+## interlock refuses the RAISE direction only, so driving away with the body up is a real pose —
+## and it now rolls the rig in a gentle turn, which is what happens to the real machine.
+const TIP_COM_RISE_Y := 1.50
 
 ## Top-hinged: swings open under the load's own weight once the body has lifted enough.
 const TAILGATE_OPEN_DEG := 62.0
@@ -86,7 +99,7 @@ func tick_body(delta: float) -> void:
 	if pto_on:
 		_tip = move_toward(_tip, clampf(valve_flow, 0.0, 1.0), delta / TIP_TRAVEL_S)
 	# The load walks with the body; this is the only physics effect of the tip.
-	set_load_offset_z(_tip * TIP_COM_SHIFT_Z)
+	set_load_offset(_tip * TIP_COM_SHIFT_Z, _tip * TIP_COM_RISE_Y)
 	_pose_body()
 
 

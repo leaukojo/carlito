@@ -3,7 +3,7 @@
 ; North American conventional (bonneted) tractor unit. HAND-AUTHORED like semi_spec.tres, and a
 ; VARIANT of it rather than a fresh tune: the drivetrain, brake, handbrake, wheel, suspension and
 ; tyre blocks are semi_spec.tres's VERBATIM, so everything tests/test_truck.gd walks across the
-; truck family (the retarder band, the brake > peak drive > handbrake hierarchy, the retarder's
+; truck family (the retarder band, the brake > transmissible drive > handbrake hierarchy, the retarder's
 ; slip-cap backstop margin) holds here by construction. What differs is GEOMETRY and one flag.
 ;
 ; trailer_bus_equipped IS DELIBERATELY ABSENT, and that absence is the whole variant. Europe puts
@@ -32,9 +32,16 @@
 ; the flip side of the longer wheelbase being the forgiving one to reverse. A long wheelbase trades
 ; traction for manners; on a real 4x2 that is exactly the trade.
 ;
-; SPRING RATES, DAMPING AND TRAVEL ARE THE SEMI'S (240000 front / 360000 rear over 0.32 m), and
-; they land the same band on this geometry: the rear carries the fifth-wheel load here as well, and
-; the per-axle reasoning in semi_spec.tres is the same one.
+; CENTRE OF MASS HEIGHT 0.90 IS THE CAB-OVER'S NUMBER for the cab-over's reasons, and it lands the
+; same place on this geometry: ~1.03 m over the road, 0.66 g of bobtail rollover threshold against
+; mu_lat 0.75. Only z separates the two units. See semi_spec.tres.
+;
+; SPRING RATES, DAMPING AND TRAVEL ARE THE SEMI'S (240000 front / 360000 rear over 0.32 m, rear
+; dampers 24700 / 28800), and they land the same band on this geometry: the coupled rear corner
+; works out to about the same range as the cab-over's (own axle share plus a coupled trailer's
+; kingpin load lands 3.5-4.7 t depending on the trailer) despite the longer wheelbase, because the
+; fixed 0.50 m kingpin-ahead-of-drive-axle offset is what sets the split, not the wheelbase — see
+; semi_spec.tres for the derivation and the damping-ratio numbers.
 ;
 ; load_sensitivity 0.08: commercial radials lose ~8 % of mu per doubling of load past the
 ; corner's static share, so weight transfer moves the balance. Family number, matching the semi.
@@ -64,10 +71,12 @@ spring_rate = 240000.0
 damper_bump = 12000.0
 damper_rebound = 15800.0
 spring_rate_rear = 360000.0
+damper_bump_rear = 24700.0
+damper_rebound_rear = 28800.0
 max_suspension_force = 120000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
-mu_long = 1.0
-mu_lat = 0.95
+mu_long = 0.8
+mu_lat = 0.75
 load_sensitivity = 0.08
 handbrake_grip = 1.0
 brake_torque = 10500.0
@@ -79,7 +88,7 @@ steer_falloff_speed = 29.0
 [resource]
 script = ExtResource("1_spec")
 mass = 8000.0
-center_of_mass = Vector3(0, 0.35, -1.30)
+center_of_mass = Vector3(0, 0.9, -1.30)
 ground_drive = SubResource("Resource_grounddrive")
 trailer_bus_equipped = false
 torque_curve = PackedVector2Array(700, 975, 1200, 1290, 1800, 1500, 2400, 1440, 2800, 1120, 3200, 375)

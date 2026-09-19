@@ -184,12 +184,32 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
 - The rev limiter judges `wheel_engine_rpm` (unclamped), never `Drivetrain.rpm`: the published
   rpm lerps toward an already-redline-clamped target, and in IEEE double that lerp's fixed
   point sits just below the target, so `>= redline_rpm` against it is dead code.
-  `wheel_engine_rpm` (raw, what the wheels impose on a clutch-less crank) drives
+  `wheel_engine_rpm` (raw, what the wheels impose on the crank) drives
   `limiter_cut`; `rpm_from_wheel` (its clamp) drives the needle and the `rpm` bridge signal.
-- **A wheel the handbrake has locked never breaks free at any throttle.** The crank is clutch-less,
-  so a locked driven wheel pins `target_rpm` at idle and the torque curve is sampled there forever
-  (measured: 100% throttle against a full handbrake, 6 s, no motion). Handbrake+throttle
-  hill starts are therefore not a technique here; changing that is a slip/clutch model, not a tune.
+- **`converter_free_rpm` is a FLOOR under the wheels, never a ceiling.** A held vehicle with the
+  pedal down revs to the converter's stall speed (`STALL_RPM_FRAC` of the engine's own
+  idle→redline band, one derivation for every machine) and the torque curve is sampled there, so
+  brake-and-throttle and handbrake hill starts work; a rolling one is coupled and `rpm` reads
+  exactly what the wheels impose, which is why cruise, top speed and the limiter are untouched.
+  Only a machine whose engine drives wheels has one (`has_converter`) — boat, drone and train
+  carry no `ground_drive` and the plane's wheels are undriven, so all four keep the rigid crank.
+  There is no clutch and no stall, and **no torque multiplication**: a real converter makes
+  1.8-2.2x at stall and this one makes 1.0, so every launch figure is conservative and the
+  `brake > transmissible drive > handbrake` hierarchy is untouched. Adding the multiplier would
+  re-open both — every shipped accel number and the brake derivation with them.
+  The free rev is LINEAR in throttle (a real converter's capacity torque goes as N², which would
+  rev harder at small pedal), and the whole gain at a standstill is the curve's own slope across
+  the stall rise: 1.67x on the car family, 1.70x on the Kenney trucks, 1.37x on the hand-built
+  semis, only 1.24x on the tractor, whose curve is nearly flat there. So the foot brake still
+  wins at any pedal (it beats what the driven wheels can transmit), and the handbrake, derived at
+  idle rpm, slips at ~30% throttle on the car and truck families, ~33% on the semis and ~34% on
+  the tractor, rather than the 37.5% its own arithmetic says.
+- **`engine_load` moves with the converter, `fuel`/`coolant`/`battery` do not.**
+  `VehicleTelemetry.engine_load_pct` samples the curve at `Drivetrain.rpm` (delivered torque over
+  peak), so a held truck at full pedal publishes SPN 92 at 85% where it read 50% at idle — the
+  engine really is making that torque. The other three read `applied_throttle` alone, which the
+  converter never touches. The tractor's `pto_rpm` follows the rev at a standstill for the same
+  reason: it is a stub shaft off the crank.
   - The cut rides `applied_throttle` beside the governor's, so engine_load / fuel / coolant
     see it for free. `engine_torque` is the curve and nothing else.
 - Engine braking is `Drivetrain.overrun_torque`: `engine_brake_frac` of peak torque, linear
@@ -272,10 +292,80 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
 
 ## Wheels, suspension and the 60 Hz tick
 
+- **Overturned is a detected state, never an auto-reset.** `BaseVehicle._tick_overturned` latches
+  when `VehicleMath.is_inverted` holds past `OVERTURNED_DEG` for `OVERTURNED_S`, raises
+  `OVERTURNED_NOTICE` sticky (dwell 0) on the rising edge and clears it by exact text match on the
+  falling one — the driver presses R. An automatic respawn would hide the rollover the COM heights
+  exist to create. Deliberately NOT a telemetry field: the frozen `status` bitfield and the
+  contract stay put, so nothing is owed sloppyCAN.
+- **No vehicle sets `RigidBody3D.inertia`, and none needs to.** Jolt computes the tensor off the
+  collision shapes ABOUT THE DECLARED `center_of_mass` — measured, not assumed: move a sedan's
+  `com_y` and the roll and pitch moments trace a parabola with its minimum at the hull's own mass
+  centroid while the yaw moment barely stirs, which is the parallel-axis shift and nothing else.
+  It also scales exactly with a runtime `mass` rewrite, so the refuse truck's hopper is covered
+  too. **So a COM height is a pure data change**; an explicit tensor would be a second source of
+  truth for the same fact. `tests/test_body_inertia.gd` is the guard, because an engine upgrade
+  that moved the tensor back to the shape centroid would leave every raised body rolling about a
+  point below its own mass with nothing to see.
+  - Read the tensor through `PhysicsDirectBodyState3D.inverse_inertia` and nothing else.
+    `RigidBody3D.inertia` and `PhysicsServer3D.body_get_param(..., BODY_PARAM_INERTIA)` are the
+    OVERRIDE and both read back `Vector3.ZERO` on a computed body — "inertia is zero" is the
+    reading, not the tensor. Every other `*inertia*` name in `src/vehicles/` is something else
+    again (`wheel_inertia`, the free bodies' `VehicleMath.inertia_of` damper moments).
+- **Car-family COM heights are body-space y over the road** (`com_y` in `gen_kenney_vehicles`, the
+  anchors put y = 0 at the ground): saloons 0.48 (~0.35 of the body's AABB height), SUV 0.62, vans
+  0.55-0.65 (~0.36-0.42), open-wheelers 0.30, never above ~45 % of the AABB. A body whose track is
+  narrow for its height (the vans: half-track 0.63) tips before it slides at COM 0.65 and mu ~1 —
+  the levers are the anti-roll bar and `mu_lat`, never the COM back down. The truck family's
+  own heights, and the rollover threshold each buys, are in `truck/CLAUDE.md` § The fifth wheel.
+- **Anti-roll bar**: `GroundDriveSpec.anti_roll_rate` (N per m of left/right compression
+  difference, 0 = none) through `VehicleMath.anti_roll_force`, equal and opposite on the two wheels
+  of an axle so it adds no net vertical force; skipped while either wheel is off the ground.
+  Equal and opposite only holds because both wheels read `RayWheel._bar_compression`, a snapshot
+  latched at the top of `tick`: wheels tick in array order, so reading the live `compression`
+  gives one of the pair this tick's partner value and the other last tick's, and the two forces
+  then miss each other by that step.
+  Size it from `measure_vehicles -- <variant> 45 corner`, which reports roll at the grip peak and
+  wheels lifted: aim at 4-8 deg. The recipe carries 7000 (saloons), 14000 (pickups, the one rate
+  placed by that pass: 6.7 deg, down from 12.5 at 7000), 18000 (SUV, van) and 80000 (delivery
+  vans, on 65 kN/m springs) — the rest are still by eye.
+  **A bar also costs straight-line tracking**, because it multiplies a launch-transient load
+  difference into a much larger longitudinal one on the driven axle and the body keeps the
+  heading it gains: `race` gives its bar up for that reason (`gen_kenney_vehicles` says why) and
+  `hatchback-sports` fails the tracking gate on one it cannot give up. Raising a rate means
+  re-running `measure_vehicles -- <variant> 45 track` as well as the corner pass.
+  An SUV at the limit lifts wheels and does not overturn; that is intended.
 - 60 Hz stability lives in `RayWheel`'s clamps (damper ≤ one-tick reversal, suspension force
   cap, low-speed slip floors + one-tick lateral force cap) plus the semi-implicit **spin** step
   in `_integrate_spin`, and the boat's probe clamps (derived spring k, one-tick damper, total
   force cap, `damped_force` for drag). Don't remove or weaken any clamp; don't raise the tick.
+- **The TYRE CLASS sets `mu_long`/`mu_lat`, and everything brake-shaped is derived from it.**
+  Shipped classes: car 1.05/1.1, heavy van 1.0/0.95, truck 0.80/0.75, tractor lug 1.0/0.95 (soil
+  — a real one is ~0.8 on asphalt, which this does not model), open-wheeler 1.25-1.35/1.35-1.4.
+  Downstream of that pair: `brake_torque` (`BRAKE_GRIP_FRAC * mu_long * N * r`), the retarder's
+  rating (a fraction of that brake, so it tracks grip — `truck/CLAUDE.md` § Brakes), the brake >
+  transmissible-drive hierarchy floor, and the steering taper's grip margin
+  (`test_a_steering_taper_never_out_limits_the_tyres`, which a LOWER `mu_lat` only makes easier to
+  clear — check the direction before tightening a taper "to match"). So a mu edit is a
+  re-derivation, never a number edit, and on a generated body it is a recipe edit plus a regen or
+  `brake_torque` is left sized for the old grip.
+- **DRIVE TORQUE IS SPLIT EVENLY PER DRIVEN WHEEL** (`WheelDrive.tick`, `axle_torque /
+  _driven_count`), which is an open differential between every driven wheel, ACROSS axles
+  included. Total tractive force is therefore `driven count x the weakest driven wheel's grip`,
+  not the sum of what the wheels could hold: the tractor at 8 deg in mud runs its front pair at
+  slip 3.1 and its rears at 0.06, all four making an identical 4.0 kN, 16.1 kN total where the
+  tyres hold ~25 kN. So **MFWD buys almost nothing** (measured 6.8 % against 8.0 % for
+  slip-limited two-wheel drive) and a real MFWD tractor, whose front axle is geared to the rear
+  with no centre differential, is the case this cannot express. `_lock_rear_diff` shares omega
+  across ONE axle after spin integration and does not change the split. Undoing it is a
+  load-proportional (or axle-locked) split in that one line, and it moves every shipped
+  acceleration figure — a re-measure with `measure_vehicles`, not a number edit.
+- **Surface grip is tyre-blind**: `channel_grip` multiplies every body's `mu_long`/`mu_lat` by
+  the same factor, so a tractor's lug tyres and a sedan's road tyres both lose exactly half
+  their grip in mud and both pay the same `crr`. There is no summer/winter/ag axis and nothing
+  reads one. The honest ceiling on a surface is `tan a <= mu * grip - crr` (mud: 0.5 - 0.2, i.e.
+  16.7 deg) for a perfect all-wheel drive — the drag term is half the mud budget and is the term
+  a "grip 0.5, so 26.6 deg" estimate drops.
 - Surface drag (`HeightmapTerrain.channel_drag` → `RayWheel.surface_drag_force`) is a body force
   at the contact off this tick's normal load, OUTSIDE the friction circle (it is the ground
   deforming, not the tyre) and never through the spin step (the wheel keeps rolling at road speed,
@@ -290,6 +380,14 @@ True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE
     the front value (`RayWheel.apply_suspension` picks per corner off `is_rear`). A rear damper
     left at 0 scales the front's by sqrt(rear rate / front rate), which keeps the front's damping
     ratio on the stiffer axle; an explicit rear damper overrides the scaling.
+- **A wheel out of contact decays its spin** (`RayWheel.FREE_SPIN_DECAY`, applied in the
+  no-contact branch only, so nothing in contact moves). Without it a free wheel has no resisting
+  torque at all: the rev limiter cuts on the spun-up wheel, and drive, reaction, brake and overrun
+  are then all zero (`Drivetrain.overrun_torque` reads the PEDAL, still down), so `omega` freezes
+  at the tripping value and the cut never clears — a lifted wheel kills the engine until the
+  driver lifts off. The limiter is still what BOUNDS the spin; the decay is what makes its cut
+  self-clearing.
+
 - Suspension force acts along the CONTACT NORMAL (`hit.normal`), never the chassis' up axis.
   Pushing along the body's own up tips part of the vertical load into the direction of travel
   whenever the chassis sits nose-up or nose-down, so a body thrusts itself along (or drags
@@ -541,6 +639,10 @@ Detail in `src/vehicles/kenney/CLAUDE.md`.
     ones at a longer cap. A change that improves ACCELERATION raises the reported top speed of
     a capped vehicle without touching anything that sets top speed, which reads as a physics
     mystery.
+  - **Hill-climb is its own tool**, `tools/measure_grade.tscn`: it bisects the steepest grade a
+    body pulls away on from rest over a chosen painted surface, and `level=<id>` reports what a
+    level's roads actually ask for. Shipped figures, the two textbook ceilings it prints beside
+    them and the real-world comparison: `docs/vehicles.md` § Gradeability.
   - `tractor-kenney` gets no tracking pass and that is correct: the pass latches its ideal line
     at 60 km/h to skip the launch transient, and a 40 km/h farm tractor never gets there. It
     prints `never reached 60 km/h, skipped`. Any vehicle geared below 60 is in the same
@@ -553,6 +655,14 @@ Detail in `src/vehicles/kenney/CLAUDE.md`.
     left, so the launch transient is not bit-reproducible across run contexts (top speed, gear
     and rpm are stable; 0-50 / quarter / `tyres` / `rake` move in the third digit). A
     regression diff has to compare runs of the SAME SHAPE.
+  - **`measure_semi_launch`'s P7 is the rollover instrument**: it re-lays the rig on its own skid
+    pad (the 40 m strip is too narrow for a rig at lock), steps to full lock in one tick at
+    40 km/h off the throttle, and reports chassis/trailer roll, joint roll off the RELATIVE basis
+    (a difference of two world rolls measures the articulation too), peak lateral g from
+    `v * yaw rate`, and wheels off the ground. Its longitudinal columns mean nothing in that phase
+    and say so. Baseline at today's COM heights, both units: ~1.06 g, ~16 deg chassis lean, the
+    inside pair airborne ~6 s, joint roll holding at ~1.58 deg of its 1.5 deg stop, and NO
+    rollover — the rig slides first, as the numbers predict.
   - A static reading is a standstill phase, never the spawn settle: `measure_semi_launch`'s
     static pose is sampled off the last tick of P5 (standstill, brakes applied), not P1 (which
     is still settling and reads pitch and travel high).

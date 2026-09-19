@@ -15,14 +15,25 @@
 ; where it used to stall on 11 %. The rpm range is untouched, so every rpm-dependent tune (shift
 ; points, engine_load's peak-torque denominator, the retarder fade) still means what it meant.
 ;
-; 1500 Nm IS THE CEILING THE HIERARCHY ALLOWS, NOT A CHOICE, and the chain is worth knowing before
-; anyone reaches for more. tests/test_truck.gd requires brake > peak drive, so peak engine torque is
-; bounded by 4 * brake_torque / (gear1 * final * efficiency); brake_torque is itself bounded above by
-; the retarder band, because retarder_rating is a FRACTION of it (0.20 * B * 2 / 0.36 / 8000 must
-; stay under 1.6 m/s^2, so B < 11520). Shipped: B = 10500 gives a 1.46 m/s^2 retarder and 42000 Nm of
-; service brake against 39488 Nm of peak drive. A real 32 t artic makes 2300-2800 Nm, and reaching it
-; means raising the service brake, which means the retarder can no longer be quoted as a fraction of
-; it — a bigger change than a number.
+; WHAT BOUNDS 1500 Nm IS TRACTION, NOT THE BRAKE CHAIN. tests/test_truck.gd requires brake >
+; TRANSMISSIBLE drive, i.e. against min(peak drive, driven wheels x per-wheel grip), and on a truck
+; tyre the tyre is the smaller: 2 x 0.80 x 19600 N x 0.36 = 11290 Nm against 42000 Nm of service
+; brake, so nothing in the suite bounds peak engine torque any more. The real limit is the road —
+; gear 1 puts 1500 x 6.5 x 4.5 x 0.9 / 0.36 = 110 kN at the tyres against ~66 kN of coupled
+; drive-axle grip (92 kN of axle load x mu 0.80 x the 0.90 load-sensitivity factor), so the rig is
+; 1.65x traction-limited off the line and a bigger engine buys wheelspin. A real 32 t artic makes
+; 2300-2800 Nm; getting there is ballast and plate share, not torque.
+;
+; brake_torque 10500 IS NOT GRIP-DERIVED (unlike every Kenney body), and what bounds it is the
+; retarder band above and the tyre below. Above: retarder_rating is a FRACTION of it, so
+; 0.20 * B * 2 / 0.36 / 8000 must stay under 1.6 m/s^2 and B < 11520; shipped B = 10500 gives a
+; 1.46 m/s^2 retarder. Below: at mu 0.80 the coupled rig's per-wheel static load is 3618 kg, whose
+; own grip ceiling is 10213 Nm — so 10500 sits AT the coupled tyre, which is the point of it.
+; ACCEPTED COMPROMISE: one brake_torque serves all four corners while the coupled axle loads split
+; about 1:1.9 (steer 2527 kg, drive 4709 kg), so the steer axle's own ceiling is 7132 Nm and a
+; FLOORED pedal locks the front before the rear — the wrong way round for a real rig, which fits a
+; load-sensing valve. Undoing it is brake apportioning, a new mechanism, not a number here; part
+; pedal is unaffected because RayWheel's slip tyre saturates rather than stepping.
 ;
 ; handbrake_torque 4800 is likewise pinned by construction, not tuned: the same test holds the total
 ; handbrake inside (25 %, 50 %) of the drive torque at idle, and that window MOVED with the engine
@@ -60,6 +71,16 @@
 ; the rig lost its steering exactly when it needed it — the floor tests/test_trailer.gd holds today
 ; is well clear of that fifth.
 ;
+; CENTRE OF MASS HEIGHT 0.90 IS ~1.03 m OVER THE ROAD — the body origin rides ~0.13 m up coupled,
+; which is how measure_semi_launch's P5 reads it back (kingpin_y 1.18 minus KINGPIN_LOCAL.y 1.05).
+; A real tractor unit carries its mass about a metre up: engine, gearbox and frame, with a cab over
+; all of it. At the old 0.35 (half that) the unit could not lean, could not transfer load and could
+; not roll, which is the flat "video game" feel the whole family had. What the height costs is
+; real: the steer axle sheds weight under a gear-1 launch (the >= 8.5 kN floor is measured, not
+; assumed), and bobtail the unit tips at half-track 0.72 / 1.09 m = 0.66 g against mu_lat 0.75 —
+; still slide-first, but only just. If it ever stops being, the lever is anti_roll_rate or mu_lat,
+; never the height back down. truck/CLAUDE.md § The fifth wheel carries the per-trailer thresholds.
+;
 ; THE SPRINGS ARE SIZED PER AXLE, because the rear carries the fifth-wheel load as well as its own:
 ; the drive axle is the ONLY driven axle, so what the plate puts on it (a realistic share of the
 ; trailer — kingpin_share, 25-30 % band pinned in tests/test_trailer.gd — mostly landing on this
@@ -67,10 +88,21 @@
 ; spring has to carry inside the 0.32 m travel. Front rate 240000 N/m is the truck family's; the
 ; rear is spring_rate_rear = 360000, 1.5x, from rear_load / (target_travel * rest_length) with the
 ; coupled-to-the-box drive corner as the load and ~40 % as the target, which splits the error between
-; laden (a few tenths nose-up) and bobtail (a few tenths nose-down) the way a real unit does. The
-; rear dampers follow by sqrt(rate ratio) so the damping ratio is the front's (GroundDriveSpec).
+; laden (a few tenths nose-up) and bobtail (a few tenths nose-down) the way a real unit does.
 ; tests/test_trailer.gd computes the travel fractions from these numbers; measure_semi_launch
 ; reports the pose.
+;
+; REAR DAMPERS ARE SIZED FOR THE COUPLED CORNER, NOT THE SPRING-SCALE RULE. The rear axle's own
+; load (own_rear_kg, ~1922 kg/corner bobtail) plus its share of a coupled trailer's kingpin load
+; (kingpin_kg x rear_axle_share(kingpin_z, steer_z, drive_z)) puts ~3.5-4.7 t on each coupled rear
+; corner depending on which of the four trailers is on the back (flatbed 14 t up to the box's
+; 24 t). damper_bump_rear 24700 / damper_rebound_rear 28800 hold zeta = c / (2 sqrt(k_rear * m))
+; between 0.30 (the box, heaviest) and 0.40 (the flatbed, lightest) across that range —
+; tests/test_trailer.gd pins the band against the flatbed. The same numbers read as zeta 0.47/0.55
+; at the bobtail corner mass (1922 kg), over-damped on purpose: an unladen truck skating over
+; bumps rather than pitch-rocking is the honest bobtail feel. GroundDriveSpec's sqrt(rate ratio)
+; fallback is what an UNSPECIFIED rear damper would get; this axle carries a load the front-axle
+; scale rule was never sized for, so it is overridden explicitly instead.
 ;
 ; LOAD SENSITIVITY 0.08 IS WHERE THE PLATE LOAD SHOWS UP. RayWheel scales mu by
 ; `1 - 0.08 * log2(load / corner_mass*g)`, and corner_mass deliberately excludes the fifth-wheel
@@ -109,10 +141,12 @@ spring_rate = 240000.0
 damper_bump = 12000.0
 damper_rebound = 15800.0
 spring_rate_rear = 360000.0
+damper_bump_rear = 24700.0
+damper_rebound_rear = 28800.0
 max_suspension_force = 120000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
-mu_long = 1.0
-mu_lat = 0.95
+mu_long = 0.8
+mu_lat = 0.75
 load_sensitivity = 0.08
 handbrake_grip = 1.0
 brake_torque = 10500.0
@@ -124,7 +158,7 @@ steer_falloff_speed = 25.0
 [resource]
 script = ExtResource("1_spec")
 mass = 8000.0
-center_of_mass = Vector3(0, 0.35, -0.92)
+center_of_mass = Vector3(0, 0.9, -0.92)
 ground_drive = SubResource("Resource_grounddrive")
 trailer_bus_equipped = true
 torque_curve = PackedVector2Array(700, 975, 1200, 1290, 1800, 1500, 2400, 1440, 2800, 1120, 3200, 375)
@@ -145,10 +179,13 @@ shift_down_rpm = 1200.0
 speed_limit_kmh = 90.0
 ; HIGH-SPEED STEERING FALLOFF. 0.21 x 24 = 5.0 deg of usable lock at the floor, and the floor
 ; is set at 25 m/s = the 90 km/h limiter above, so the whole governed cruise sits on it. A
-; coupled rig is the project's worst case for lock it cannot use: 5 deg at 90 km/h still asks
-; ~2.8x the lateral force mu_lat 0.95 can supply, so the tyres (and the trailer) let go long
-; before the rack runs out. Yard and junction work is untouched — 17.7 deg at 30 km/h, 20.8 at
-; 15, and effectively the full 24 below walking pace, where the taper is single digits.
+; coupled rig is the project's worst case for lock it cannot use: at 25 m/s mu_lat 0.75 holds
+; only 2.4 deg of steady-state Ackermann on this 3.60 m wheelbase, so the 5.0 deg floor is 2.1x
+; more lock than the tyre can use and the tyres (and the trailer) let go long before the rack
+; runs out — tests/test_vehicle_catalog.gd's test_a_steering_taper_never_out_limits_the_tyres is
+; where that ratio is pinned, and a lower mu_lat only widens it. Yard and junction work is
+; untouched — 17.7 deg at 30 km/h, 20.8 at 15, and effectively the full 24 below walking pace,
+; where the taper is single digits.
 steer_speed = 1.8
 headlight_paths = Array[NodePath]([NodePath("Lamps/HeadlightL"), NodePath("Lamps/HeadlightR")])
 head_lamp_paths = Array[NodePath]([NodePath("Lamps/HeadLensL"), NodePath("Lamps/HeadLensR")])

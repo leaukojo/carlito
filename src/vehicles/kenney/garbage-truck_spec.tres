@@ -6,7 +6,7 @@
 
 [sub_resource type="Resource" id="Resource_1ureh"]
 script = ExtResource("1_p1exh")
-wheel_positions = PackedVector3Array(-0.7500001, 0.59833336, -1.302, 0.7500001, 0.59833336, -1.302, -0.5700001, 0.59833336, 0.642, 0.5700001, 0.59833336, 0.6419999)
+wheel_positions = PackedVector3Array(-0.6600001, 0.59833336, -1.302, 0.6600001, 0.59833336, -1.302, -0.6600001, 0.59833336, 0.642, 0.6600001, 0.59833336, 0.6419999)
 wheel_radius = 0.36
 wheel_inertia = 3.0
 wheel_scene = ExtResource("2_iy4vk")
@@ -17,9 +17,10 @@ damper_bump = 12000.0
 damper_rebound = 15800.0
 max_suspension_force = 120000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
-mu_long = 1.0
+mu_long = 0.8
+mu_lat = 0.75
 load_sensitivity = 0.08
-brake_torque = 6704.0
+brake_torque = 5363.0
 handbrake_torque = 2567.0
 drag_area = 1.95
 rolling_resistance = 0.007
@@ -31,7 +32,7 @@ steer_falloff_speed = 26.0
 script = ExtResource("3_nqva0")
 ground_drive = SubResource("Resource_1ureh")
 mass = 8000.0
-center_of_mass = Vector3(0, 0.3, -0.14)
+center_of_mass = Vector3(0, 0.75, -0.14)
 torque_curve = PackedVector2Array(700, 520, 1200, 845, 1800, 1040, 2400, 1014, 2800, 780, 3200, 0)
 idle_rpm = 700.0
 redline_rpm = 3200.0

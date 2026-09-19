@@ -78,6 +78,59 @@ First arg: variant id (default `sedan-sports`) or `all`. Second: cap (s). Flags:
 - Do not use `Engine.time_scale`: it enlarges the physics step (rather than running more
   iterations at the same `time_scale`), breaking the locked-60-Hz rule.
 
+### Gradeability: `tools/measure_grade.tscn`
+
+The other question unit tests cannot answer: how steep a hill a body pulls away on, and how
+steep a hill a level asks for. Same game-mode tool-scene shape as `measure_vehicles`.
+
+```powershell
+& $GODOT --headless --path . res://tools/measure_grade.tscn -- tractor-kenney mud mfwd tc
+& $GODOT --headless --path . res://tools/measure_grade.tscn -- semi asphalt
+& $GODOT --headless --path . res://tools/measure_grade.tscn -- level=level_2
+```
+
+First arg: variant id (default `suv`), `all`, or `level=<id|res path>`. Surface names after it
+(`asphalt gravel grass dirt field mud`, the shipped `HeightmapTerrain.channel_grip` /
+`channel_drag` pairs) pick which surfaces to run; none means all five. Flags: `mfwd` / `diff`
+(tractor toggles), `tc` (hold the driven slip at the grip curve's peak instead of flooring the
+pedal), `verbose` (per-trial trace), `hold=<deg> pedal=<0..1>` (one diagnostic trial with a
+per-wheel force / slip / omega dump).
+
+Ramp mode bisects the steepest angle the body climbs FROM REST — no run-up, which is the
+question a driver asks halfway up a hill. Each trial is a fresh body on a fresh inclined
+`StaticBody3D` over a synthetic grip patch answering the same duck-typed contract
+`HeightmapTerrain` does. Beside each measurement it prints two static textbook ceilings —
+traction (`tan a <= (mu * driven_share - crr) / (1 - mu * h / L)`, or `mu - crr` all-wheel) and
+first-gear-at-idle torque — so a disagreement says which one bit. Both are single-body and
+ignore `load_sensitivity`; a coupled rig is outside what they describe and the report says so.
+
+Measured 2026-09-18, standing start, full throttle unless noted:
+
+| Variant | asphalt (grip 1.0) | mud (grip 0.5, crr 0.2) |
+| --- | --- | --- |
+| `sedan` (FWD, 1.15 t) | 43.6 % | 2.5 % |
+| `suv` (AWD, 1.5 t) | 56.6 % | 13.6 % |
+| `pickup` (RWD, 1.55 t) | 53.5 % | 1.2 % |
+| `garbage-truck` (RWD, 8 t) | 33.0 % | 0 % |
+| `tractor-kenney` (2WD) | 44.3 % | 0 % |
+| `tractor-kenney` (`mfwd diff tc`) | 48.0 % | ~7 % |
+| `semi` + 24 t box (32 t rig) | 16.7 % | — |
+
+Real-world reference for the same question: a laden 32-40 t artic restarts on 15-20 % (EU
+type-approval asks only for 12 %), a laden rigid truck on 20-25 %, a FWD car on 25-30 %, an
+AWD car on 45 % and up, a 4WD farm tractor on 35-45 % firm / 15-25 % in a wet field. Road
+design: motorway 6-8 %, mountain road 10-12 %, extreme public street 20-30 %. So the semi's
+16.7 % is the figure a real artic makes; the cars sit ~10 points optimistic (`mu_long` 1.05,
+no FWD-specific penalty); the mud column is where the model diverges — `src/vehicles/CLAUDE.md`
+§ Wheels, suspension and the 60 Hz tick has the two reasons and what they cost.
+
+`level=` mode instead walks every road curve in a level (the `carlito_road` group, so an
+untreed instance works) at 4 m steps and reports mean and worst grade, metres above the 10 /
+15 / 25 % bands, and the mean painted grip and added crr under the ribbon — which is both "is
+this drivable" and "did `paint_road_asphalt` go stale". Level 1's road reads mean 4.6 %, worst
+17.5 %; level 2's reads mean 16.4 %, worst 86.9 %, with 512 m above 25 %
+(`src/levels/CLAUDE.md`).
+
 ## Boat
 
 The water it floats on is a LEVEL node: `WaterSurface`/`WorldBounds` in `docs/systems.md` §

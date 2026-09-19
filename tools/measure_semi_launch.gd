@@ -1,9 +1,11 @@
 extends Node3D
 ## Dev utility: measures a coupled tractor unit's launch on a flat full-grip strip — steer-axle
 ## load, rear travel, pitch, joint pitch, chassis contacts, and the air gate — through
-## spawn -> full throttle -> brake -> E-recouple -> brake-while-charging -> full throttle.
+## spawn -> full throttle -> brake -> E-recouple -> brake-while-charging -> full throttle,
+## then a step-steer on a skid pad that asks whether the rig rolls over (P7).
 ## Optional `front_z=<float>` / `com_z=<float>` args (variant name is args[0]) apply an
-## in-memory geometry override for what-if runs, without touching the shipped spec.
+## in-memory geometry override for what-if runs, without touching the shipped spec;
+## `trailer=<box|tipper|tanker|flatbed|bobtail>` picks what is on the back.
 ##
 ## Driven through the BRIDGE rather than the keyboard: InputRouter.arbitrate_local latches
 ## GEAR_R the moment `brake_reverse` is held under REVERSE_ENGAGE_SPEED, which turns a
@@ -33,10 +35,23 @@ const CHARGE_RELEASE_S := 1.0
 const STOP_SPEED := 0.05
 const STOP_TIMEOUT_S := 40.0
 
-enum Ph { P1, P2, P3, P4, P5, P6, DONE }
+# P7, the rollover probe. Full lock in one tick at road speed, coasting, on a pad wide enough for
+# the rig to describe its own circle (~22 m radius at this speed, plus the trailer's swing).
+# It is a STEP at the driver's hand only: `spec.steer_speed` still slews the rack, as it does for
+# a real wheel. Throttle is released at the step so the manoeuvre is a lateral one and not a
+# launch, which is why the entry speed is reported beside the peak.
+const PAD_SIZE := 400.0
+const PAD_X := -700.0        ## far enough off the strip that the two never share collision
+const TIP_SPEED_MS := 11.11  ## 40 km/h
+const TIP_SPINUP_TIMEOUT_S := 30.0
+const TIP_HOLD_S := 8.0
+## Tilt counted as overturned, the same figure BaseVehicle announces to the driver.
+const TIP_ROLL_DEG := BaseVehicle.OVERTURNED_DEG
+
+enum Ph { P1, P2, P3, P4, P5, P6, P7, DONE }
 
 const PH_NAMES := ["P1_settle", "P2_throttle", "P3_brake_stop", "P4_recouple",
-		"P5_charge_brake", "P6_throttle", "DONE"]
+		"P5_charge_brake", "P6_throttle", "P7_step_steer", "DONE"]
 
 var _variant := "semi"
 var _car: SemiTractor = null
@@ -49,7 +64,10 @@ var _sub := 0            ## sub-step counter inside a phase (P3 hold, P4 recoupl
 var _rows: PackedStringArray = []
 var _stats: Array[Dictionary] = []
 var _static := {}
-var _csv_suffix := ""   ## set by _apply_geometry_override; keeps override runs' CSVs distinct
+var _csv_suffix := ""   ## set by the override args; keeps override runs' CSVs distinct
+var _trailer_want := ""     ## trailer= id; "" is a valid value (bobtail), hence the flag below
+var _trailer_requested := false  ## an arg named a trailer (stays true for the whole run)
+var _trailer_pending := false    ## ...and it has not been coupled yet
 
 
 func _ready() -> void:
@@ -61,12 +79,14 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 	_build_strip()
+	_build_pad()
 	_car = load(Catalog.VARIANTS[_variant]["scene"]).instantiate() as SemiTractor
 	if _car == null:
 		printerr("'%s' is not a SemiTractor" % _variant)
 		get_tree().quit(1)
 		return
 	_apply_geometry_override(args)
+	_parse_trailer_arg(args)
 	add_child(_car)
 	# Strip top is y=0; wheels just touching, no spawn drop onto the springs.
 	_car.global_transform = Transform3D(Basis.IDENTITY, Vector3(0.0, _car.rest_ride_height(), START_Z))
@@ -80,18 +100,22 @@ func _ready() -> void:
 			+ "omegaRL,omegaRR,compRL_frac,compRR_frac,suspRL,suspRR,"
 			+ "compFL_frac,compFR_frac,suspFL,suspFR,front_contact,"
 			+ "pitch_deg,trailer_pitch_deg,joint_pitch_deg,chassis_contacts,trailer_air,"
-			+ "bogie_comp_frac,rear_axle_kg,trailer_axle_kg")
+			+ "bogie_comp_frac,rear_axle_kg,trailer_axle_kg,"
+			+ "roll_deg,trailer_roll_deg,joint_roll_deg,lat_g,wheels_up")
 	var gd: GroundDriveSpec = _car.spec.ground_drive
 	print("=== semi rear-drag probe: %s ===" % _variant)
 	print("  mass %.0f kg, com %s, wheelbase %.2f m" % [_car.spec.mass, _car.spec.center_of_mass,
 			absf(gd.wheel_positions[2].z - gd.wheel_positions[0].z)])
 	print("  wheel_positions %s" % [gd.wheel_positions])
 	if _csv_suffix != "":
-		print("  geometry override applied:%s" % _csv_suffix)
+		print("  run overrides applied:%s" % _csv_suffix)
 	print("  rest_length %.3f m, spring_rate %.0f N/m -> spring_rate*rest_length = %.0f N,"
 			% [gd.rest_length, gd.spring_rate, gd.spring_rate * gd.rest_length]
 			+ " max_suspension_force %.0f N" % gd.max_suspension_force)
 	print("  kingpin local (FifthWheel.KINGPIN_LOCAL) %s" % FifthWheel.KINGPIN_LOCAL)
+	if _trailer_requested:
+		print("  trailer= %s" % ("bobtail" if _trailer_want == TrailerCatalog.BOBTAIL
+			else _trailer_want.get_file().get_basename()))
 	print("  driving over the BRIDGE (gear byte 1, key 3) — see the script header")
 	print("  phase P1_settle at t=0.000")
 	_drive(0.0, 0.0)
@@ -114,6 +138,27 @@ func _build_strip() -> void:
 	ground.add_child(collision)
 	ground.add_child(visual)
 	add_child(ground)
+
+
+## The P7 skid pad, beside the strip rather than part of it: the launch strip is 40 m wide and a
+## rig at full lock leaves it in under a second. Same surface, same layers — only the size differs.
+func _build_pad() -> void:
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(PAD_SIZE, 2.0, PAD_SIZE)
+	var collision := CollisionShape3D.new()
+	collision.shape = shape
+	var mesh := BoxMesh.new()
+	mesh.size = shape.size
+	var visual := MeshInstance3D.new()
+	visual.mesh = mesh
+	var pad := StaticBody3D.new()
+	pad.name = "Pad"
+	pad.collision_layer = Layers.TERRAIN
+	pad.collision_mask = Layers.DYNAMIC
+	pad.position = Vector3(PAD_X, -1.0, 0.0)  # top face at y = 0, level with the strip
+	pad.add_child(collision)
+	pad.add_child(visual)
+	add_child(pad)
 
 
 ## Optional in-memory geometry override, driven by extra command-line args of the form
@@ -147,13 +192,44 @@ func _apply_geometry_override(args: PackedStringArray) -> void:
 		_csv_suffix += "_comz%.2f" % com_z
 
 
+## Optional `trailer=<box|tipper|tanker|flatbed|bobtail>`: what the run couples. Without it the rig
+## spawns on TrailerCatalog.first() (the box), so P7 would only ever see the heaviest one. The name
+## is resolved against the catalog rather than a second list, and it is APPLIED in P1 once the
+## host's spawn countdown has run — SemiTractor.attachment_spawn_ready re-couples the remembered
+## id, so anything written before that is overwritten.
+func _parse_trailer_arg(args: PackedStringArray) -> void:
+	for i in range(1, args.size()):
+		var a := String(args[i])
+		if not a.begins_with("trailer="):
+			continue
+		var want := a.substr(8).to_lower()
+		if want == "bobtail":
+			_trailer_want = TrailerCatalog.BOBTAIL
+			_trailer_requested = true
+			_trailer_pending = true
+			_csv_suffix += "_bobtail"
+			return
+		for id in TrailerCatalog.TRAILERS:
+			if TrailerCatalog.is_coupled(id) and id.get_file().get_basename() == want:
+				_trailer_want = id
+				_trailer_requested = true
+				_trailer_pending = true
+				_csv_suffix += "_" + want
+				return
+		printerr("unknown trailer '%s'" % want)
+		get_tree().quit(1)
+		return
+
+
 ## sloppyCAN's inbound stash, written straight into the (desktop-inert) Bridge autoload.
 ## Percentages are the contract's "in" ranges; bridge_source normalizes them.
-func _drive(accel_pct: float, brake_pct: float) -> void:
+## `steer_pct` is the contract's -100..100, + = right; it defaults to straight, so every launch
+## phase reads as it always did.
+func _drive(accel_pct: float, brake_pct: float, steer_pct := 0.0) -> void:
 	Bridge.set("_active", true)
 	Bridge.set("_inbound", {
 		"key": 3, "gear": 1, "accel": accel_pct, "brake": brake_pct,
-		"steer": 0.0, "handbrake": 0.0,
+		"steer": steer_pct, "handbrake": 0.0,
 	})
 
 
@@ -169,6 +245,9 @@ func _new_stats() -> Dictionary:
 		"peak_accel": -INF, "max_speed": 0.0,
 		"t_2ms": -1.0, "t_5ms": -1.0,
 		"max_rear_axle_kg": 0.0, "min_rear_axle_kg": INF,
+		"max_roll": -INF, "min_roll": INF, "max_trailer_roll": -INF, "min_trailer_roll": INF,
+		"max_joint_roll": 0.0, "peak_lat_g": 0.0, "max_wheels_up": 0, "wheels_up_ticks": 0,
+		"rolled_tractor": false, "rolled_trailer": false, "entry_speed": -1.0,
 	}
 
 
@@ -213,9 +292,18 @@ func _sample(delta: float) -> Dictionary:
 
 	var trailer: TowedBody = _car._fifth_wheel.trailer if _car._fifth_wheel != null else null
 	var trailer_pitch := 0.0
+	var trailer_roll := 0.0
+	# Roll ACROSS the joint, off the relative basis rather than the difference of the two world
+	# rolls: once the rig is articulated the trailer's roll axis is not the tractor's, so the
+	# difference measures the articulation as well as the twist. This is the angle the joint's
+	# own +-FifthWheel.ROLL_LIMIT_DEG stop constrains.
+	var joint_roll := 0.0
 	var bogie_frac := 0.0
 	if trailer != null and is_instance_valid(trailer):
 		trailer_pitch = VehicleMath.pitch_deg(trailer.global_transform.basis)
+		trailer_roll = VehicleMath.roll_deg(trailer.global_transform.basis)
+		joint_roll = VehicleMath.roll_deg(
+				_car.global_transform.basis.inverse() * trailer.global_transform.basis)
 		var tgd: GroundDriveSpec = trailer.spec.ground_drive
 		var n := 0
 		for w in trailer.wheels:
@@ -225,6 +313,9 @@ func _sample(delta: float) -> Dictionary:
 			bogie_frac /= float(n)
 
 	var kingpin_y: float = (_car.global_transform * FifthWheel.KINGPIN_LOCAL).y
+	# Lateral acceleration read out of the sim's own motion (v * yaw rate), not from the steer
+	# angle or a bicycle model — standing rule 3.
+	var lat_g := absf(speed) * absf(_car.angular_velocity.y) / 9.81
 	return {
 		"t": _t,
 		"phase": PH_NAMES[_phase],
@@ -246,6 +337,12 @@ func _sample(delta: float) -> Dictionary:
 		"pitch": t.pitch,
 		"trailer_pitch": trailer_pitch,
 		"joint_pitch": t.pitch - trailer_pitch,
+		"roll": t.roll,
+		"trailer_roll": trailer_roll,
+		"joint_roll": joint_roll,
+		"lat_g": lat_g,
+		"wheels_up": ((0 if fl.in_contact else 1) + (0 if fr.in_contact else 1)
+				+ (0 if rl.in_contact else 1) + (0 if rr.in_contact else 1)),
 		"contacts": _car.get_contact_count(),
 		"trailer_air": _car._trailer_air,
 		"bogie_comp": bogie_frac,
@@ -260,13 +357,15 @@ func _sample(delta: float) -> Dictionary:
 
 func _row(s: Dictionary) -> String:
 	return ("%.4f,%s,%.4f,%d,%.1f,%.4f,%.4f,%.4f,%d,%.4f,%.4f,%.5f,%.5f,%.1f,%.1f,"
-			+ "%.5f,%.5f,%.1f,%.1f,%d,%.4f,%.4f,%.4f,%d,%.4f,%.5f,%.1f,%.1f") % [
+			+ "%.5f,%.5f,%.1f,%.1f,%d,%.4f,%.4f,%.4f,%d,%.4f,%.5f,%.1f,%.1f,"
+			+ "%.4f,%.4f,%.4f,%.4f,%d") % [
 		s["t"], s["phase"], s["speed"], s["gear"], s["rpm"], s["applied_throttle"],
 		s["air1"], s["air2"], 1 if s["gate"] else 0,
 		s["omegaRL"], s["omegaRR"], s["compRL"], s["compRR"], s["suspRL"], s["suspRR"],
 		s["compFL"], s["compFR"], s["suspFL"], s["suspFR"], 1 if s["front_contact"] else 0,
 		s["pitch"], s["trailer_pitch"], s["joint_pitch"], s["contacts"], s["trailer_air"],
 		s["bogie_comp"], s["rear_axle_kg"], s["trailer_axle_kg"],
+		s["roll"], s["trailer_roll"], s["joint_roll"], s["lat_g"], s["wheels_up"],
 	]
 
 
@@ -311,6 +410,21 @@ func _accumulate(st: Dictionary, s: Dictionary) -> void:
 		st["t_5ms"] = float(s["t"]) - float(st["t0"])
 	st["max_rear_axle_kg"] = maxf(st["max_rear_axle_kg"], s["rear_axle_kg"])
 	st["min_rear_axle_kg"] = minf(st["min_rear_axle_kg"], s["rear_axle_kg"])
+	st["max_roll"] = maxf(st["max_roll"], s["roll"])
+	st["min_roll"] = minf(st["min_roll"], s["roll"])
+	st["peak_lat_g"] = maxf(st["peak_lat_g"], s["lat_g"])
+	var up := int(s["wheels_up"])
+	st["max_wheels_up"] = maxi(int(st["max_wheels_up"]), up)
+	if up > 0:
+		st["wheels_up_ticks"] = int(st["wheels_up_ticks"]) + 1
+	if absf(float(s["roll"])) >= TIP_ROLL_DEG:
+		st["rolled_tractor"] = true
+	if bool(s["coupled"]):
+		st["max_trailer_roll"] = maxf(st["max_trailer_roll"], s["trailer_roll"])
+		st["min_trailer_roll"] = minf(st["min_trailer_roll"], s["trailer_roll"])
+		st["max_joint_roll"] = maxf(st["max_joint_roll"], absf(float(s["joint_roll"])))
+		if absf(float(s["trailer_roll"])) >= TIP_ROLL_DEG:
+			st["rolled_trailer"] = true
 
 
 func _to_phase(next: int) -> void:
@@ -323,6 +437,13 @@ func _to_phase(next: int) -> void:
 func _advance(s: Dictionary) -> void:
 	match _phase:
 		Ph.P1:
+			# The countdown has run, so the swap sticks; restart the settle so the run always
+			# reports a static pose the trailer it is measuring actually made.
+			if _trailer_pending and _ticks >= TowHost.SPAWN_COUPLE_TICKS:
+				_trailer_pending = false
+				_car.set_attachment(_trailer_want)
+				_pt = 0.0
+				return
 			if _ticks >= TowHost.SPAWN_COUPLE_TICKS and _pt >= SETTLE_S:
 				_to_phase(Ph.P2)
 				_drive(100.0, 0.0)
@@ -364,6 +485,30 @@ func _advance(s: Dictionary) -> void:
 				_drive(100.0, 0.0)
 		Ph.P6:
 			if _pt >= THROTTLE_S:
+				# Re-laid on the skid pad, because a rig at full lock leaves the 40 m strip at
+				# once. The respawn is the only correct way to move a jointed rig: it re-lays
+				# the trailer at its coupled pose and resets both sets of wheels.
+				_car.spawn_transform = Transform3D(Basis.IDENTITY,
+						Vector3(PAD_X, _car.rest_ride_height(), PAD_SIZE * 0.5 - 20.0))
+				_car.respawn()
+				_prev_speed = 0.0  # or the teleport reads as an acceleration spike in P7
+				_to_phase(Ph.P7)
+				_drive(100.0, 0.0)
+				print("    moved to the skid pad, accelerating to %.1f km/h"
+						% (TIP_SPEED_MS * 3.6))
+		Ph.P7:
+			if _sub == 0:
+				if absf(s["speed"]) >= TIP_SPEED_MS or _pt >= TIP_SPINUP_TIMEOUT_S:
+					_sub = 1
+					_pt = 0.0
+					_stats[Ph.P7]["entry_speed"] = s["speed"]
+					# Throttle released with the step, so what follows is a lateral manoeuvre
+					# and not a launch.
+					_drive(0.0, 0.0, 100.0)
+					print("    step to full lock at t=%.3f (entry %.2f m/s, %.1f km/h)"
+							% [_t, s["speed"], float(s["speed"]) * 3.6])
+			elif _pt >= TIP_HOLD_S or absf(float(s["roll"])) >= TIP_ROLL_DEG 					or (bool(s["coupled"]) and absf(float(s["trailer_roll"])) >= TIP_ROLL_DEG):
+				_drive(0.0, 0.0)
 				_finish()
 
 
@@ -403,8 +548,9 @@ func _print_summary() -> void:
 			% [gd.rear_damper_bump(), gd.rear_damper_rebound()])
 	print("       spring_rate_rear*rest_length = %.0f N/wheel, max_suspension_force = %.0f N"
 			% [spring_max, gd.max_suspension_force])
-	print("       joint pitch limit = %.1f deg (FifthWheel.PITCH_LIMIT_DEG)"
-			% FifthWheel.PITCH_LIMIT_DEG)
+	print("       joint pitch limit = %.1f deg (FifthWheel.PITCH_LIMIT_DEG),"
+			% FifthWheel.PITCH_LIMIT_DEG
+			+ " roll limit = %.1f deg (FifthWheel.ROLL_LIMIT_DEG)" % FifthWheel.ROLL_LIMIT_DEG)
 
 	print("\n-- P5 static pose (standstill, coupled, brakes applied) --")
 	if _static.is_empty():
@@ -432,6 +578,11 @@ func _print_phase(i: int, spring_max: float, susp_cap: float) -> void:
 	if int(st["ticks"]) == 0:
 		return
 	print("\n-- %s  (t %.3f .. %.3f, %d ticks) --" % [PH_NAMES[i], st["t0"], st["t1"], st["ticks"]])
+	if i == Ph.P7:
+		# `speed` is the velocity's component along the NOSE, so in a hard turn it moves as the
+		# body yaws and not only as the rig accelerates. The longitudinal lines below are launch
+		# instruments and say nothing here; roll, lateral and wheels-up are what this phase is.
+		print("   (cornering: the speed/accel lines below are longitudinal, not meaningful here)")
 	print("   rear comp frac max : %.4f   ticks >= 0.99: %d"
 			% [st["max_rear_comp"], st["bottom_ticks"]])
 	print("   rear susp force max: %.0f N  (%.1f%% of spring_rate*rest_length %.0f N,"
@@ -457,3 +608,16 @@ func _print_phase(i: int, spring_max: float, susp_cap: float) -> void:
 			% [_f(st["t_2ms"]) if float(st["t_2ms"]) >= 0.0 else "not reached",
 			_f(st["t_5ms"]) if float(st["t_5ms"]) >= 0.0 else "not reached"])
 	print("   rear axle load     : %.0f .. %.0f kg" % [st["min_rear_axle_kg"], st["max_rear_axle_kg"]])
+	print("   tractor roll       : %s .. %s deg   trailer roll %s .. %s deg"
+			% [_f(st["min_roll"]), _f(st["max_roll"]),
+			_f(st["min_trailer_roll"]), _f(st["max_trailer_roll"])])
+	print("   joint roll max     : %.3f deg  (limit +-%.1f)"
+			% [st["max_joint_roll"], FifthWheel.ROLL_LIMIT_DEG])
+	print("   peak lateral       : %.3f g   wheels off the ground: peak %d, %d ticks"
+			% [st["peak_lat_g"], st["max_wheels_up"], st["wheels_up_ticks"]])
+	if float(st["entry_speed"]) >= 0.0:
+		print("   step entry speed   : %.2f m/s (%.1f km/h)"
+				% [st["entry_speed"], float(st["entry_speed"]) * 3.6])
+	print("   OVERTURNED (>= %.0f deg): tractor %s, trailer %s"
+			% [TIP_ROLL_DEG, "YES" if st["rolled_tractor"] else "no",
+			"YES" if st["rolled_trailer"] else "no"])

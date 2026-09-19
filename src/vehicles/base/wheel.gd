@@ -17,6 +17,15 @@ const LOW_SPEED_FLOOR := 1.5
 ## (m). Keeps a bridge or ramp over a painted patch from inheriting that grip.
 const SURFACE_GRIP_REACH := 1.0
 
+## Rate (1/s) at which a wheel off the ground sheds spin to bearing, tyre and driveline losses.
+## An honest model, not a measured one. Without it a free wheel has NO resisting torque at all:
+## once the rev limiter cuts the throttle, drive, reaction, brake and overrun are all zero
+## (`Drivetrain.overrun_torque` reads the pedal, which is still down), so `omega` freezes at the
+## value that tripped the limiter and the cut never clears — a lifted wheel kills the engine for
+## as long as the driver holds the pedal down. The decay makes the cut self-clearing, the way a
+## real limiter blips. Sized well under a jump's air time, so landing spin-up is unaffected.
+const FREE_SPIN_DECAY := 0.25
+
 var anchor: Vector3     ## hub anchor, body space
 var steered: bool
 var driven: bool
@@ -38,6 +47,15 @@ var surface_drag := 0.0  ## added rolling-resistance coefficient of the painted 
 ## Visual radius minus wheel_radius, which keeps an over- or undersized wheel visual meeting the
 ## ground while physics stays single-radius. Rides the root transform, not the visual's children.
 var visual_lift := 0.0
+## The other wheel of this axle, paired by `WheelDrive._link_anti_roll_pairs` when the spec asks
+## for a bar; null means no bar on this body. The bar reads `_bar_compression`, never the live
+## `compression`: wheels tick in array order, so a live read gives one wheel of the pair this
+## tick's partner value and the other last tick's, and the two bar forces then differ by that
+## step instead of cancelling, leaving a one-sided residue on the axle (measured +28.1 / -22.3 N
+## on a `race` axle mid-launch). Both wheels read the SAME one-tick-old pair, so the forces
+## cancel exactly. This is not what fails the tracking gate — that is the drive-torque split
+## multiplying an honest load difference — but a bar that does not cancel is its own bug.
+var anti_roll_partner: RayWheel = null
 ## Body mass share this corner carries (kg): `mass / wheel count`, sizing the three 60 Hz clamps
 ## below. Constructor-required, since a wheel built with zero applies no damping or tire force and
 ## just slides. It tracks the body's LIVE mass — `WheelDrive.set_corner_mass_from` is called
@@ -56,6 +74,9 @@ var damper_bump := 0.0
 var damper_rebound := 0.0
 
 var _prev_compression := 0.0
+## Last tick's `compression`, latched at the top of `tick` before this tick overwrites it, so the
+## anti-roll bar sees an order-independent snapshot of the axle. See `anti_roll_partner`.
+var _bar_compression := 0.0
 var _spin_angle := 0.0
 var _visual: Node3D
 var _query := PhysicsRayQueryParameters3D.new()  ## built once, refilled per tick (hot allocation)
@@ -85,6 +106,7 @@ func reset() -> void:
 	omega = 0.0
 	compression = 0.0
 	_prev_compression = 0.0
+	_bar_compression = 0.0
 	in_contact = false
 	suspension_force = 0.0
 	slip = 0.0
@@ -121,6 +143,7 @@ static func terrain_at(point: Vector3, terrains: Array[Node]) -> Node:
 func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSpaceState3D,
 		drive_torque: float, brake_torque: float, delta: float,
 		grip_terrains: Array[Node]) -> void:
+	_bar_compression = compression
 	var xform := body.global_transform
 	var up := xform.basis.y
 	var ray_from := xform * anchor
@@ -145,6 +168,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		surface_grip = 1.0
 		surface_drag = 0.0
 		_integrate_spin(drive_torque, 0.0, brake_torque, drive_spec, delta, 0.0)  ## airborne
+		omega = free_spin_omega(omega, delta)
 		_update_visual(drive_spec, delta)
 		return
 
@@ -164,7 +188,15 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	# 60 Hz clamp: never exceed the force that reverses compression velocity in one tick.
 	var damper_force := clampf(damper * comp_vel,
 			-corner_mass * absf(comp_vel) / delta, corner_mass * absf(comp_vel) / delta)
-	suspension_force = clampf(spring_rate * compression + damper_force,
+	# Anti-roll bar: load moved to whichever wheel of the axle is the more compressed, inside the
+	# same clamp as spring and damper so it can never fight the force cap. Skipped while the
+	# partner is airborne, where its zero compression would read as full droop and shove this
+	# corner up on a bar that is really just hanging.
+	var bar_force := 0.0
+	if anti_roll_partner != null and anti_roll_partner.in_contact:
+		bar_force = VehicleMath.anti_roll_force(_bar_compression,
+				anti_roll_partner._bar_compression, drive_spec.anti_roll_rate)
+	suspension_force = clampf(spring_rate * compression + damper_force + bar_force,
 			0.0, drive_spec.max_suspension_force)
 	body.apply_force(normal * suspension_force, contact_point - body.global_position)
 
@@ -240,6 +272,13 @@ static func load_scaled_mu(mu: float, normal_load: float, ref_load: float,
 		return mu
 	var ratio := maxf(normal_load, ref_load * 0.25) / ref_load
 	return clampf(mu * (1.0 - sensitivity * log(ratio) / log(2.0)), mu * 0.5, mu * 1.25)
+
+
+## Spin a wheel off the ground keeps after one tick of `FREE_SPIN_DECAY` (rad/s): exponential
+## toward zero, so it only ever shrinks the spin and never reverses or adds to it. The one torque
+## on a wheel out of contact, and the reason a rev-limiter cut clears itself.
+static func free_spin_omega(omega_in: float, delta: float) -> float:
+	return move_toward(omega_in, 0.0, absf(omega_in) * FREE_SPIN_DECAY * delta)
 
 
 ## Rolling-resistance force (N, along the wheel's forward) from a painted surface: `crr * load`

@@ -200,6 +200,31 @@ func test_airborne_spin_is_pure_drive_and_brake() -> void:
 	assert_float(w.omega).is_equal_approx(400.0 / spec.wheel_inertia * TICK, 1e-9)
 
 
+func test_a_free_wheel_sheds_spin_and_never_reverses_or_gains() -> void:
+	# Exponential toward zero at FREE_SPIN_DECAY: one tick off 80 rad/s.
+	var decayed := WheelScript.free_spin_omega(80.0, TICK)
+	assert_float(decayed).is_equal_approx(
+			80.0 - 80.0 * WheelScript.FREE_SPIN_DECAY * TICK, 1e-9)
+	assert_bool(decayed < 80.0).is_true()
+	# Symmetric on a reversing wheel, and it stops at zero rather than crossing it.
+	assert_float(WheelScript.free_spin_omega(-80.0, TICK)).is_equal_approx(-decayed, 1e-9)
+	assert_float(WheelScript.free_spin_omega(0.0, TICK)).is_equal(0.0)
+	# Even an absurd step lands on zero, never past it.
+	assert_float(WheelScript.free_spin_omega(80.0, 1000.0)).is_equal(0.0)
+
+
+func test_a_free_wheel_falls_below_a_tripped_rev_limiter_within_a_few_ticks() -> void:
+	# The bug this exists for: with the pedal down and the limiter cutting, drive, reaction,
+	# brake and overrun are all zero, so any wheel that does not decay pins rpm at redline
+	# forever. A cut must clear on its own.
+	var omega := 82.3
+	var ticks := 0
+	while omega >= 81.2 and ticks < 600:
+		omega = WheelScript.free_spin_omega(omega, TICK)
+		ticks += 1
+	assert_int(ticks).is_less(30)
+
+
 # --- corner_mass sizes the one-tick contact clamps ----------------------------
 
 const CatalogScript := preload("res://src/vehicles/vehicle_catalog.gd")
@@ -223,6 +248,28 @@ func _bench_spec(mass: float) -> VehicleSpec:
 	spec.mass = mass
 	spec.ground_drive = gd
 	return spec
+
+
+# --- anti-roll bar: the pairing, not the force -------------------------------
+
+## The force itself is `VehicleMath.anti_roll_force` (tests/test_vehicle_math.gd). What is asserted
+## here is the WIRING — a bar whose partners never got set is silently inert, and the pure function
+## passes either way.
+
+func test_the_bar_pairs_every_wheel_with_the_one_across_its_axle() -> void:
+	var spec := _bench_spec(2000.0)
+	spec.ground_drive.anti_roll_rate = 7000.0
+	var drive := _drive_for(spec)
+	for w in drive.wheels:
+		assert_object(w.anti_roll_partner).is_not_null()
+		assert_object(w.anti_roll_partner).is_not_same(w)
+		assert_float(w.anti_roll_partner.anchor.z).is_equal_approx(w.anchor.z, 1e-9)
+		assert_float(signf(w.anti_roll_partner.anchor.x)).is_equal(-signf(w.anchor.x))
+
+
+func test_no_bar_rate_leaves_every_partner_null() -> void:
+	for w in _drive_for(_bench_spec(2000.0)).wheels:
+		assert_object(w.anti_roll_partner).is_null()
 
 
 func test_corner_mass_starts_as_the_specs_share_per_wheel() -> void:

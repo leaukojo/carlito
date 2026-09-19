@@ -65,7 +65,19 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 		wheel.visual_lift = vis_radius - gd.wheel_radius
 		wheel.apply_suspension(gd)
 		wheels.append(wheel)
+	if gd.anti_roll_rate > 0.0:
+		_link_anti_roll_pairs()
 	_wheelbase = _compute_wheelbase()
+
+
+## Pair each wheel with the one across its axle (same z, opposite side) for the anti-roll bar.
+func _link_anti_roll_pairs() -> void:
+	for w in wheels:
+		for other in wheels:
+			if other != w and is_equal_approx(other.anchor.z, w.anchor.z) \
+					and signf(other.anchor.x) != signf(w.anchor.x):
+				w.anti_roll_partner = other
+				break
 
 
 ## Re-share the body's LIVE mass over the corners. The three one-tick RayWheel clamps are sized
@@ -171,6 +183,11 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 	retarder_torque_applied = 0.0
 	for w in wheels:
 		w.steer_angle = _applied_steer if w.steered else 0.0
+		# An even split IS an open differential between every driven wheel, across axles too, so
+		# the whole body's tractive force is `driven count x the weakest driven wheel's grip` —
+		# a spinning front pair starves loaded rears that could take more. Measured cost and the
+		# load-proportional alternative: src/vehicles/CLAUDE.md § Wheels, suspension and the 60
+		# Hz tick.
 		var drive_t := axle_torque / _driven_count if w.driven else 0.0
 		var brake_t := input.brake * gd.brake_torque
 		if w.is_rear:

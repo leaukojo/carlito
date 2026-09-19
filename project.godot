@@ -247,9 +247,9 @@ toggle_important={
 3d_physics/layer_7="Trigger"
 
 [physics]
+common/physics_ticks_per_second=60
 
 3d/physics_engine="Jolt Physics"
-common/physics_ticks_per_second=60
 common/physics_interpolation=true
 
 [rendering]

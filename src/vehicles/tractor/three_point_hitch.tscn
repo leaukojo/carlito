@@ -1,9 +1,15 @@
 [gd_scene load_steps=30 format=3]
 
-; Rear three-point linkage + PTO stub for the Kenney tractor body. Measured against that
-; body: near the centreline it ends at z ~ +0.99, ground is y ~ 0 at ride height, and the
-; rear tyre inner faces are at |x| = 0.253 -- so the draft arms run inboard at |x| = 0.19
-; until they are clear of the tyres (z > 1.27), then splay to the ball ends at |x| = 0.37.
+; Rear three-point linkage + PTO stub for the Kenney tractor body. Authored in the MOUNT's
+; own frame, which the tractor scene hangs at z = +0.3935 -- the offset that lands this
+; housing's back face on the hull's rear face -- so a CHASSIS coordinate is a z below plus
+; 0.3935, and drawbar.tscn shares the same mount. HitchLinkage carries this scene's geometry
+; and stays in this frame; the linkage is sized to the IMPLEMENTS, which are authored against
+; the lower-pin height over the road, not to the body.
+; Measured against the body: near the centreline the hull ends at z ~ +0.99 here (1.38 chassis,
+; inside the 1.518 rear face), ground is y ~ 0 at ride height, and the rear tyre inner faces are
+; at |x| = 0.341 -- so the draft arms run inboard at |x| = 0.19 until they are clear of the
+; tyres, then splay to the ball ends at |x| = 0.37.
 ;
 ; Every pivot node is authored with its geometry along local +Z and posed by
 ; ThreePointHitch as rotation.x = -planar_angle; the poses below are the RAISED state, so

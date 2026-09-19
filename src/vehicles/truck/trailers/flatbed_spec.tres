@@ -4,12 +4,16 @@
 ; drivetrain / steering fields are meaningless on a towed body and stay at their defaults.
 ;
 ; Everything below is measured off flatbed.tscn (origin AT THE KINGPIN, ground at y = -1.05):
-;   - the tri-axle bogie sits at z 4.90 / 5.45 / 6.00, so the bogie centre is 5.45 m behind the
+;   - the tri-axle bogie sits at z 4.40 / 5.20 / 6.00, so the bogie centre is 5.20 m behind the
 ;     coupling and the anchors are at y = 0.424 - 1.05 = -0.626 (the truck family's hub height).
-;   - center_of_mass z 3.98 puts 27.0 % of the trailer's weight on the fifth wheel
-;     ((5.45 - 3.98) / 5.45), i.e. 3776 kg onto the tractor's drive axle — the catalog-wide
+;   - center_of_mass z 3.798 puts 27.0 % of the trailer's weight on the fifth wheel
+;     ((5.20 - 3.798) / 5.20), i.e. 3775 kg onto the tractor's drive axle — the catalog-wide
 ;     realistic plate share (see box_spec.tres), and the reason axle_load rises the moment you
 ;     couple. On a 4x2 that load IS the traction budget.
+;   - center_of_mass y -0.15 is 0.90 m above the road, the LOWEST in the catalog and the only
+;     trailer here that still slides before it rolls (half-track 0.72 over 0.90 m tips at 0.80 g,
+;     clear of mu_lat 0.75). A flatbed's load is steel or plant sitting ON the 1.05 m deck, not
+;     stacked inside a body — which is what the box, the tanker and the tipper all do instead.
 ;   - spring_rate 145000 is sized so the 10 224 kg the bogie actually carries compresses it
 ;     0.115 m of its 0.32 m travel (36 %), and a 25 t trailer 64 %. A spring sized for
 ;     the FULL mass would ride on its stops, which is the "trailer sinks" failure — and is what
@@ -37,7 +41,7 @@
 script = ExtResource("2_grounddrive")
 drag_area = 0.25
 rolling_resistance = 0.007
-wheel_positions = PackedVector3Array(-0.72, -0.626, 4.9, 0.72, -0.626, 4.9, -0.72, -0.626, 5.45, 0.72, -0.626, 5.45, -0.72, -0.626, 6, 0.72, -0.626, 6)
+wheel_positions = PackedVector3Array(-0.72, -0.626, 4.4, 0.72, -0.626, 4.4, -0.72, -0.626, 5.2, 0.72, -0.626, 5.2, -0.72, -0.626, 6, 0.72, -0.626, 6)
 wheel_radius = 0.36
 wheel_inertia = 3.0
 driven_front = false
@@ -48,8 +52,8 @@ damper_bump = 7700.0
 damper_rebound = 10400.0
 max_suspension_force = 70000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
-mu_long = 1.0
-mu_lat = 0.95
+mu_long = 0.8
+mu_lat = 0.75
 load_sensitivity = 0.08
 brake_torque = 6623.0
 handbrake_torque = 1656.0
@@ -57,7 +61,7 @@ handbrake_torque = 1656.0
 [resource]
 script = ExtResource("1_spec")
 mass = 14000.0
-center_of_mass = Vector3(0, -0.55, 3.98)
+center_of_mass = Vector3(0, -0.15, 3.798)
 ground_drive = SubResource("Resource_grounddrive")
 
 ; LAMPS — the one group of lamp fields a towed body DOES use. A trailer runs no headlamps and

@@ -56,11 +56,17 @@ const WHEEL_BAND := 0.4   ## m z-window (body space) the body half-width is meas
 ## side, so this must match the model.
 const WHEEL_DEFAULT := {"scene": OUT_DIR + "/wheel.tscn", "radius": WHEEL_RADIUS, "half": 0.240}
 const WHEEL_TRUCK := {"scene": OUT_DIR + "/wheel-truck.tscn", "radius": WHEEL_RADIUS, "half": 0.210}
-## Tractor axles differ visually only (0.30 / 0.45 straddling the 0.36 physics radius).
+## Tractor axles differ visually only, and both sit on the tractor's own `scale` 1.35 body: these
+## are the model's 0.30 / 0.45 radii scaled with it AND by a further 1.086, taking the rear tyre's
+## diameter to 0.62 of the wheelbase (the bare body scale left it at 0.57, reading as a small
+## wheel under a big machine; a real field tractor is nearer 0.64, which is where the spreader's
+## hopper corner starts sweeping the tread -- `test_three_point_hitch` is the ceiling). Both straddle
+## the 0.36 physics radius. Scaling `half` with the radius is what keeps the flush-X rule landing
+## on the scaled authored station; the tyre growing inboard is what `wheel_x_out` pays back.
 const WHEEL_TRACTOR_FRONT := {
-	"scene": OUT_DIR + "/wheel-tractor-front.tscn", "radius": 0.30, "half": 0.206}
+	"scene": OUT_DIR + "/wheel-tractor-front.tscn", "radius": 0.44, "half": 0.3021}
 const WHEEL_TRACTOR_REAR := {
-	"scene": OUT_DIR + "/wheel-tractor-rear.tscn", "radius": 0.45, "half": 0.276}
+	"scene": OUT_DIR + "/wheel-tractor-rear.tscn", "radius": 0.66, "half": 0.4048}
 
 # Not const: Vector2 / NodePath / Array literals aren't constant expressions in GDScript.
 var _grip_curve := PackedVector2Array([
@@ -92,9 +98,10 @@ var _lens_overrides := {
 	},
 }
 ## Lamp height for an end with no painted lens (the body-box fallback centre is wrong there).
-## variant -> {front?: y, rear?: y}, body space. Tractor rear: box centre lands too low
-## (verified driving); 1.22 is the shipped height.
-var _fallback_lamp_y := {"tractor-kenney": {"rear": 1.22}}
+## variant -> {front?: y, rear?: y}, BODY space — a figure on the SCALED body, so a `scale` edit
+## has to bring it along. Tractor rear: the box centre lands too low there (verified driving);
+## 1.647 is the shipped height.
+var _fallback_lamp_y := {"tractor-kenney": {"rear": 1.647}}
 var _drag_report: Array = []  ## per-variant measured frontal area + derived drag area
 var _shape_report: Array = []  ## per-variant collision shape kind + hull vertex count
 var _lens_report: Array = []   ## per-variant lens detection, so a bad lamp is diagnosable
@@ -104,10 +111,13 @@ var _brake_report: Array = []  ## per-variant grip-derived brake, so a fictional
 const CAR_BASE := {
 	# cd 0.32 is a modern saloon; crr 0.012 is a passenger radial on asphalt.
 	"cd": 0.32, "crr": 0.012,
-	"mass": 1150.0, "com_y": 0.20, "spring_rate": 22000.0, "damper_bump": 1800.0,
+	# com_y is body-space height over the road: ~0.35 of the body's height for a saloon (a real one is
+	# ~0.5 m), raised per body for SUVs/vans and dropped for the open-wheelers.
+	"mass": 1150.0, "com_y": 0.48, "spring_rate": 22000.0, "damper_bump": 1800.0,
 	"damper_rebound": 2400.0, "max_suspension_force": 30000.0, "rest_length": 0.28,
 	# One rate for every corner; no Kenney body declares a rear axle share of its own.
 	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
+	"anti_roll_rate": 7000.0,
 	# FWD default; per-variant override in VARIANTS (rwd/awd where the body says so).
 	"wheel_inertia": 1.2, "driven_front": true, "driven_rear": false,
 	"mu_long": 1.05, "mu_lat": 1.1, "handbrake_grip": 0.45,
@@ -144,14 +154,21 @@ const TRUCK_BASE := {
 	# Flat-fronted working truck: cd 0.70, crr 0.007 for low-resistance commercial radials.
 	"cd": 0.70, "crr": 0.007,
 	# Spring/damper/force hand-tuned by driving both trucks.
-	"mass": 4000.0, "com_y": 0.30, "spring_rate": 240000.0, "damper_bump": 12000.0,
+	# com_y 0.75 is a working truck's real height, ~0.30 of the AABB on these bodies: a hopper or a
+	# pump deck sits high and the cab above it. Half-track 0.66-0.69 over 0.75 m tips at ~0.88 g,
+	# clear of mu_lat 0.75, so both bodies still slide before they roll.
+	"mass": 4000.0, "com_y": 0.75, "spring_rate": 240000.0, "damper_bump": 12000.0,
 	"damper_rebound": 15800.0, "max_suspension_force": 120000.0, "rest_length": 0.32,
 	# One rate for every corner; no Kenney body declares a rear axle share of its own.
 	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
+	"anti_roll_rate": 0.0,
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
 	# J1939: only family with an auxiliary retarder on the driven axle.
 	"retarder_equipped": true,
-	"mu_long": 1.0, "mu_lat": 0.95, "handbrake_grip": 1.0,
+	# A truck tyre on dry asphalt, and the family's whole brake chain hangs off it: brake_torque,
+	# the retarder's rating and the steering-taper margin are all derived from mu_long/mu_lat
+	# (src/vehicles/CLAUDE.md, tyre class sets mu).
+	"mu_long": 0.80, "mu_lat": 0.75, "handbrake_grip": 1.0,
 	# Commercial radials, a touch less load-sensitive than a passenger tyre.
 	"load_sensitivity": 0.08,
 	"torque_curve": [700, 400, 1200, 650, 1800, 800, 2400, 780, 2800, 600, 3200, 0],
@@ -161,8 +178,8 @@ const TRUCK_BASE := {
 	"final_drive": 4.5, "efficiency": 0.9, "shift_up_rpm": 2600.0, "shift_down_rpm": 1200.0,
 	"engine_brake_frac": 0.15, "shift_cut_s": 0.4,
 	"max_steer_deg": 26.0, "steer_speed": 2.0,
-	# ~4.8 deg floor (0.22x22) at 26 m/s, under both governed cruise speeds (85/110 km/h);
-	# 16.5 deg at 30 km/h, tighter than mu_lat 0.95 allows.
+	# ~5.7 deg floor (0.22x26) at 26 m/s, under both governed cruise speeds (85/110 km/h);
+	# 19.5 deg at 30 km/h, still wider than the ~17.6 deg mu_lat 0.75 can hold there.
 	"min_steer_frac": 0.22, "steer_falloff_speed": 26.0,
 }
 ## Heavy vans (delivery / delivery-flat / ambulance): car-family, proprietary CAN, but drive
@@ -172,10 +189,11 @@ const VAN_BASE := {
 	# A box van is a smoothed truck front: cd 0.45 on commercial tires.
 	"cd": 0.45, "crr": 0.009,
 	# 4-5 t vans; 240000 N/m is TRUCK_BASE's rate, measured on 8 t, and does not apply here.
-	"mass": 4000.0, "com_y": 0.30, "spring_rate": 65000.0, "damper_bump": 5000.0,
+	"mass": 4000.0, "com_y": 0.65, "spring_rate": 65000.0, "damper_bump": 5000.0,
 	"damper_rebound": 7000.0, "max_suspension_force": 90000.0, "rest_length": 0.32,
 	# One rate for every corner; no Kenney body declares a rear axle share of its own.
 	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
+	"anti_roll_rate": 80000.0,
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
 	"mu_long": 1.0, "mu_lat": 0.95, "handbrake_grip": 1.0,
 	# Commercial radials, as TRUCK_BASE.
@@ -194,11 +212,21 @@ const VAN_BASE := {
 const TRACTOR_BASE := {
 	# cd 0.90 (nothing streamlined), crr 0.020 (worst in the project, lugged tires).
 	"cd": 0.90, "crr": 0.020,
-	"mass": 4200.0, "com_y": 0.35, "spring_rate": 70000.0, "damper_bump": 6000.0,
-	"damper_rebound": 8000.0, "max_suspension_force": 110000.0, "rest_length": 0.35,
-	# One rate for every corner; no Kenney body declares a rear axle share of its own.
-	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
-	"wheel_inertia": 4.0, "driven_front": false, "driven_rear": true,
+	"mass": 4200.0, "com_y": 0.35,
+	# A tractor's "suspension" is its tyres: 260 kN/m is 2.57 Hz on a 1 t corner (a sedan is
+	# ~1.3 Hz), static sag 1000*9.8/260000 = 3.8 cm, 31% of the 0.12 m rest_length — the same
+	# sag/travel fraction band the truck family targets. Damping ratio 0.40-0.50 (a tyre has
+	# little hysteresis, but this models the whole axle, not just the rubber).
+	"spring_rate": 260000.0, "damper_bump": 13000.0,
+	"damper_rebound": 16000.0, "max_suspension_force": 110000.0, "rest_length": 0.12,
+	# Rear carries the drawbar nose weight and the implement, and the 0.66 m rear tyre is
+	# stiffer than the 0.44 m front (both share the one 0.36 physics radius).
+	"spring_rate_rear": 300000.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
+	"anti_roll_rate": 0.0,
+	# 6.0 is the 0.66 m rear tyre's share: I goes as r^2, and the baseline serves one variant.
+	# The spin step divides NET torque by 1 + reaction_stiffness, so a bigger inertia only slows
+	# spin-up.
+	"wheel_inertia": 6.0, "driven_front": false, "driven_rear": true,
 	# ISOBUS: only family with lockable diff / engageable front axle at runtime.
 	"rear_diff_lockable": true, "front_axle_engageable": true,
 	"mu_long": 1.0, "mu_lat": 0.95, "handbrake_grip": 1.0,
@@ -236,9 +264,9 @@ const VARIANTS := {
 	"hatchback-sports": {"family": "car", "mass": 1000.0, "torque_mul": 1.10, "final_drive": 4.2, "max_steer_deg": 42.0, "front_weight": 0.60},
 	# Lever for SUV power is their own `torque_mul`, not the shared CAR_BASE curve: measured
 	# 0-100 goes as peak^-0.6 on the sedan, peak^-1.4 on the suv.
-	"suv": {"family": "car", "mass": 1500.0, "torque_mul": 1.05, "mu_lat": 1.0, "max_steer_deg": 34.0, "driven_rear": true},
+	"suv": {"family": "car", "com_y": 0.62, "anti_roll_rate": 18000.0, "mass": 1500.0, "torque_mul": 1.05, "mu_lat": 1.0, "max_steer_deg": 34.0, "driven_rear": true},
 	# 1.54 is the biggest multiplier in the family: 285 Nm through an AWD 1600 kg body.
-	"suv-luxury": {"family": "car", "mass": 1600.0, "torque_mul": 1.54, "mu_lat": 1.0, "max_steer_deg": 33.0, "driven_rear": true},
+	"suv-luxury": {"family": "car", "com_y": 0.62, "anti_roll_rate": 18000.0, "mass": 1600.0, "torque_mul": 1.54, "mu_lat": 1.0, "max_steer_deg": 33.0, "driven_rear": true},
 	"taxi": {"family": "car", "mass": 1250.0, "front_weight": 0.60},
 	"police": {"family": "car", "mass": 1300.0, "torque_mul": 1.18, "final_drive": 4.0, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true},
 	# Open-wheelers: `wheel_x_out` measured per body against its own half-width at the wheel
@@ -261,15 +289,26 @@ const VARIANTS := {
 	# 295.8 km/h.
 	# `torque_mul` tracks CAR_BASE so absolute torque stays fixed (2.10x185=389 Nm,
 	# 2.21x185=409 Nm) — re-derive on any CAR_BASE torque edit.
-	"race": {"family": "car", "cd": 0.70, "cl": 2.50, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "max_steer_deg": 40.0, "handbrake_grip": 0.5, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.18, "steer_falloff_speed": 35.0},
-	"race-future": {"family": "car", "cd": 0.70, "cl": 2.50, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "max_steer_deg": 42.0, "handbrake_grip": 0.5, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.17, "steer_falloff_speed": 35.0},
+	# `race` carries NO anti-roll bar, and that is a stopgap, not a tune: with CAR_BASE's 7000 it
+	# fails the tracking gate by 1.18 m over 200 m, because a bar turns a launch-transient load
+	# difference into a far larger longitudinal one on the driven axle (0.8 % of compression came
+	# out as 18 % of force) and the body keeps the heading it picks up. Costs nothing measurable
+	# here — roll at the grip peak is 5.6 deg with the bar off against 3.3 with it, both inside
+	# the 4-8 target — so `race` is the one body that can give the bar up. It does NOT fix the
+	# amplifier: `hatchback-sports` still fails with a bar it cannot give up (12.2 deg without),
+	# and `race-future` drifts 25x the fleet norm just under the gate. Restore the bar when the
+	# drive-torque split stops multiplying load differences.
+	"race": {"family": "car", "anti_roll_rate": 0.0, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "max_steer_deg": 40.0, "handbrake_grip": 0.5, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.18, "steer_falloff_speed": 35.0},
+	"race-future": {"family": "car", "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "max_steer_deg": 42.0, "handbrake_grip": 0.5, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.17, "steer_falloff_speed": 35.0},
 	# Commercial bodies: RWD, governed at 180 like the real things (measured 198-200 ungoverned).
-	"van": {"family": "car", "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
-	"pickup": {"family": "car", "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
-	"pickup-flat": {"family": "car", "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
+	"van": {"family": "car", "com_y": 0.58, "anti_roll_rate": 18000.0, "mu_lat": 1.0, "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
+	# `ride_lift` 0.08 on the flatbeds: their arches are drawn shallower than the tyre, so at the
+	# flush ride height the rear wheels broke through the bed floor.
+	"pickup": {"family": "car", "anti_roll_rate": 14000.0, "ride_lift": 0.08, "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
+	"pickup-flat": {"family": "car", "anti_roll_rate": 14000.0, "ride_lift": 0.08, "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
 	# heavy vans: car family, van feel (VAN_BASE, not CAR_BASE) — these are 4-5 t vehicles
 	"delivery": {"family": "car", "base": "van", "mass": 4200.0},
-	"delivery-flat": {"family": "car", "base": "van", "mass": 4000.0},
+	"delivery-flat": {"family": "car", "base": "van", "com_y": 0.55, "ride_lift": 0.08, "mass": 4000.0},
 	"ambulance": {"family": "car", "base": "van", "mass": 4800.0, "torque_mul": 1.1, "max_steer_deg": 24.0, "speed_limit_kmh": 150.0},
 	# truck family (J1939) — garbage-truck first, matching VehicleCatalog's cycle order.
 	# com_z -0.14 = 0.14 m forward (front = -Z), hand-tuned by driving: the hopper body pulls
@@ -282,7 +321,25 @@ const VARIANTS := {
 	# tractor family (ISOBUS) — one drivable body.
 	# 40 km/h is type approval; gearing already lands on 39.6, so this limit never acts, but
 	# catches a future gearing change that would make the body road-illegal.
-	"tractor-kenney": {"family": "tractor", "mass": 4000.0, "speed_limit_kmh": 40.0},
+	# `scale` 1.35 on the Kenney compact body: 2.99 x 2.17 m on a 2.12 m wheelbase, so the 5.5 t
+	# spec sits on something the size of a tractor. What bounds it is not any gate (the field
+	# fence leaves 13 m) but what does NOT scale with it: the three-point linkage, the four
+	# implements and the 1.90 m farm tipper.
+	# `mass` 5500 / `front_weight` 0.38 is ballast, not torque: gear-1 wheel force against rear
+	# axle grip was 3.4x at 4000 kg; at 5500 kg with 62% on the rear (3.4 t, 33 kN at mu 1.0) it
+	# is ~2.0x, and the added mass lands where the draft reaction wants it. The torque curve and
+	# `final_drive` stay untouched — idle torque is what pulls a drawbar trailer away.
+	# `com_y_frac` 0.35 of the body's AABB top (2.60 m on the scaled body) = 0.91 m over the
+	# road, a real tractor's COM height. A fraction, not a metre figure, because `scale` above
+	# may still move and the fraction survives it. Against the 0.70 m half-track that is a
+	# rollover threshold of 0.78 g under lug mu 1.0: roll-first, which is the real machine.
+	# `wheel_x_out` 0.064: the flush rule measures the outer face against the body side, so the
+	# wider tyre above would have swallowed its own growth inboard and narrowed the gap between
+	# the rears. This pushes both axles back out until that inner face is where it was, leaving
+	# the track ~5% wider than the flush fit alone — a tractor's tyres stand proud of its body.
+	"tractor-kenney": {
+		"family": "tractor", "mass": 5500.0, "front_weight": 0.38, "speed_limit_kmh": 40.0,
+		"com_y_frac": 0.35, "scale": 1.35, "wheel_x_out": 0.064},
 }
 
 ## Feel baselines, keyed by a variant's `base` (defaulting to its `family`). "van" is a feel
@@ -304,7 +361,8 @@ func _ready() -> void:
 		var ov: Dictionary = VARIANTS[variant]
 		var family := String(ov["family"])
 		var wheels: Array = ov.get("wheels", FAMILY_WHEELS[family])
-		var geo := _analyze(MODELS.path_join(variant + ".glb"), wheels)
+		var geo := _analyze(MODELS.path_join(variant + ".glb"), wheels,
+				float(ov.get("scale", 1.0)))
 		if geo.is_empty():
 			continue
 		var recipe := ov.duplicate()
@@ -350,12 +408,12 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	var gd := GroundDriveSpec.new()
 	spec.ground_drive = gd
 	spec.mass = get_f.call("mass")
-	# com_y is a family figure; com_z is per body, preferring `front_weight` (fraction of static
-	# weight on the front axle) over a raw `com_z` offset. com_z 0 is wherever Kenney put the
+	# com_y is a family figure a body may override; com_z is per body, preferring `front_weight`
+	# (fraction of static weight on the front axle) over a raw `com_z` offset. com_z 0 is wherever Kenney put the
 	# body origin, which spans 36/64 to 61/39 across these bodies — invisible under AWD (four
 	# driven wheels carry any split), but decisive the moment a variant drives one axle: the
 	# open-wheeler launched badly as a rear-driver because its origin was 58% front-heavy.
-	spec.center_of_mass = Vector3(0, float(b["com_y"]), _com_z(geo, ov))
+	spec.center_of_mass = Vector3(0, _com_y(get_f, geo, ov), _com_z(geo, ov))
 	# Resistance: Cd + crr from the family recipe, frontal area measured off this body's own
 	# AABB (FRONTAL_FILL). Snapped to 0.01 m^2 so a regen writes a stable file.
 	var body_box: AABB = geo["box"]
@@ -402,6 +460,7 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	gd.damper_bump = float(b["damper_bump"])
 	gd.damper_rebound = float(b["damper_rebound"])
 	gd.spring_rate_rear = float(b["spring_rate_rear"])
+	gd.anti_roll_rate = get_f.call("anti_roll_rate")
 	gd.damper_bump_rear = float(b["damper_bump_rear"])
 	gd.damper_rebound_rear = float(b["damper_rebound_rear"])
 	gd.max_suspension_force = float(b["max_suspension_force"])
@@ -439,7 +498,8 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	gd.min_steer_frac = get_f.call("min_steer_frac")
 	gd.steer_falloff_speed = get_f.call("steer_falloff_speed")
 
-	gd.wheel_positions = _wheel_positions(geo, spec, gd, float(ov.get("wheel_x_out", 0.0)))
+	gd.wheel_positions = _wheel_positions(geo, spec, gd, float(ov.get("wheel_x_out", 0.0)),
+			float(ov.get("ride_lift", 0.0)))
 	_derive_brakes(spec, gd, String(ov.get("_id", "")))
 
 	spec.headlight_paths.assign(_lamp_paths["headlight_paths"])
@@ -454,11 +514,13 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 ## visuals sit in the wheel wells. Anchor Y is uniform so the body rests level: at spring
 ## equilibrium the visual wheel centre lands at WHEEL_RADIUS above ground. `x_out` pushes a
 ## corner further outboard (open-wheelers), widening suspension and visual track together.
+## `ride_lift` drops the anchors, which raises the chassis that far over the wheels at
+## equilibrium: purely a fit knob for a body whose arches are drawn too shallow for the tyre.
 func _wheel_positions(geo: Dictionary, spec: VehicleSpec, gd: GroundDriveSpec,
-		x_out: float) -> PackedVector3Array:
+		x_out: float, ride_lift := 0.0) -> PackedVector3Array:
 	var corner_mass := spec.mass / 4.0
 	var comp := clampf(corner_mass * GRAVITY / gd.spring_rate, 0.0, gd.rest_length * 0.8)
-	var y := WHEEL_RADIUS + gd.rest_length - comp
+	var y := WHEEL_RADIUS + gd.rest_length - comp - ride_lift
 	var fl := Vector3.ZERO
 	var fr := Vector3.ZERO
 	var rl := Vector3.ZERO
@@ -479,7 +541,12 @@ func _wheel_positions(geo: Dictionary, spec: VehicleSpec, gd: GroundDriveSpec,
 ## asks for `BRAKE_GRIP_FRAC * mu_long * g` of deceleration regardless of body mass or gearing.
 ## `handbrake_torque` (x2) = 1.5 * launch torque at idle+25% throttle (strictly between the
 ## 25%/50% brackets `test_vehicle_catalog` checks; `wheel_torque` is linear in throttle so this
-## holds at any gear-1 ratio).
+## holds at any gear-1 ratio). Sampled at IDLE while a real launch happens at the converter's
+## throttle-proportional rev (`Drivetrain.converter_free_rpm`), which is the stronger end of the
+## curve: break-away lands at ~30% throttle on the car and truck families and ~34% on the
+## tractor, whose curve is nearly flat over the stall rise — inside the bracket either way, but
+## under the 37.5% the idle arithmetic states. Deriving it at the converter rpm instead would be
+## a 1.19x bigger handbrake on the cars and trucks and 1.07x on the tractor.
 ##
 ## The floor is the force hierarchy stated against transmissible drive: the brake must beat
 ## `min(peak drive, driven * per-wheel grip)`, since it never needs to out-muscle torque a
@@ -855,12 +922,16 @@ func _add(scene_owner: Node, parent: Node, child: Node) -> void:
 
 ## Analyse a Kenney vehicle GLB into geometry the spec/scene builders share:
 ##   xform:     body-model transform — 180deg Y flip (Kenney +Z front -> project -Z) + kit
-##              scale + x/z centring on the body, native y = 0 kept (the wheel-contact plane)
+##              scale * the variant's own `scale` + x/z centring on the body, native y = 0 kept
+##              (the wheel-contact plane). Everything downstream measures the body through this
+##              transform — drag_area, com_z and the wheel stations all follow a `scale` for free,
+##              and so does the ride height, since _wheel_positions derives anchor Y from
+##              WHEEL_RADIUS and rest_length rather than off the model.
 ##   wheel_xz:  the four wheels' body-space (x, z). z is the Kenney wheel z; x is the flush
 ##              rule below (never inset from the authored position).
 ##   body_pairs: [Mesh, native transform] for the wheel-less body (collision hull source)
 ##   box:       body_aabb transformed by xform (lamp placement + hull fallback)
-func _analyze(path: String, wheel_models: Array) -> Dictionary:
+func _analyze(path: String, wheel_models: Array, scale := 1.0) -> Dictionary:
 	var scene := load(path) as PackedScene
 	if scene == null:
 		push_error("cannot load " + path)
@@ -890,8 +961,9 @@ func _analyze(path: String, wheel_models: Array) -> Dictionary:
 				body_aabb = body_aabb.expand(wpt)
 
 	var c := body_aabb.get_center()
-	var basis := Basis(Vector3.UP, PI).scaled(Vector3.ONE * KIT_SCALE)
-	var xform := Transform3D(basis, Vector3(KIT_SCALE * c.x, 0.0, KIT_SCALE * c.z))
+	var body_scale := KIT_SCALE * scale
+	var basis := Basis(Vector3.UP, PI).scaled(Vector3.ONE * body_scale)
+	var xform := Transform3D(basis, Vector3(body_scale * c.x, 0.0, body_scale * c.z))
 
 	# Per-wheel flush X: place the wheel's OUTER face at the body side measured in a z-band
 	# around that wheel (fenders differ front/rear), i.e. |x| = body_half - wheel_half. The
@@ -910,6 +982,19 @@ func _analyze(path: String, wheel_models: Array) -> Dictionary:
 		var flush := body_half - half
 		var x := signf(tw.x) * maxf(flush, absf(tw.x))
 		wheel_xz.append(Vector2(x, tw.z))
+	# One track for the whole body: a Kenney body flares its front fender and tucks the rear
+	# arch, so the flush rule alone stands the front wheels out and sinks the rear ones in --
+	# visibly mismatched on a road vehicle. Average the four into a single half-width. A body
+	# whose axles wear DIFFERENT wheel models (the tractor) is deliberately narrow at the front
+	# and keeps its per-axle stations.
+	if wheel_models[0]["scene"] == wheel_models[1]["scene"]:
+		var mean_x := 0.0
+		for xz: Vector2 in wheel_xz:
+			mean_x += absf(xz.x)
+		mean_x /= maxf(float(wheel_xz.size()), 1.0)
+		for i in wheel_xz.size():
+			var xz: Vector2 = wheel_xz[i]
+			wheel_xz[i] = Vector2(signf(xz.x) * mean_x, xz.y)
 
 	var box := _xform_aabb(body_aabb, xform)
 	var variant := path.get_file().get_basename()
@@ -1133,6 +1218,16 @@ func _collect_body_wheels(node: Node, xform: Transform3D, body_pairs: Array, whe
 ## Body-space z of the centre of mass, from the recipe's `front_weight` where it declares one
 ## (`com_z` where it states the offset directly, 0 where it says nothing). Measured off THIS
 ## body's own axle line, so the same declared split means the same handling on every wheelbase.
+## COM height over the road. `com_y_frac` is the same figure expressed as a fraction of the
+## body's own AABB top, for a body whose `scale` may still move (the tractor): the fraction is
+## what stays true across a rescale, the metre figure is not.
+func _com_y(get_f: Callable, geo: Dictionary, ov: Dictionary) -> float:
+	if not ov.has("com_y_frac"):
+		return float(get_f.call("com_y"))
+	var box: AABB = geo["box"]
+	return float(ov["com_y_frac"]) * box.end.y
+
+
 func _com_z(geo: Dictionary, ov: Dictionary) -> float:
 	if not ov.has("front_weight"):
 		return float(ov.get("com_z", 0.0))

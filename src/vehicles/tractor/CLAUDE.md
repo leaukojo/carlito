@@ -10,7 +10,8 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
   draft term to any of them (the rule-3 fiction the force exists to avoid).
   - The 60 Hz margin is the SPEED RAMP, not the one-tick cap. Below `DRAFT_SPEED_REF` the model is
     exactly a linear damper (`F = -k*v`, `k = rated / DRAFT_SPEED_REF`), stable while
-    `k*dt/m < 2` — at 12 kN on 4 t that is 0.025, and the feedback is negative so it cannot ring.
+    `k*dt/m < 2` — at 12 kN on the ballasted 5.5 t body that is 0.018 (was 0.025 at 4 t; R2's
+    added mass only widens the margin), and the feedback is negative so it cannot ring.
     The `damped_force`-shaped cap behind it is unreachable until the rating passes ~480 kN and
     bounds only the LINEAR impulse. `test_tractor` pins the damper margin against the shipped
     rating, so raising `draft_max_force` into the regime that needs an angular bound fails CI.
@@ -31,6 +32,74 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
     level. Don't "correct" the offset to chase the pitch.
   - `_tick_extras` poses the linkage BEFORE reading it for draft. Sizing the force from
     `ball_lift()` after `set_hitch` would be a tick stale; the ordering is load-bearing.
+- **Suspension IS the tyres, on purpose.** Shipped 260 kN/m front / 300 kN/m rear (2.57 Hz on
+  the 1 t front corner, against a sedan's ~1.3 Hz), `rest_length` 0.12 m, `damper_bump`/
+  `damper_rebound` 13/16 kN·s/m (ratio ~0.40-0.50 — a tyre has little hysteresis, but this
+  models the whole axle). Static sag 3.8 cm sits at 31% of the 0.12 m travel, the same
+  sag/travel fraction band the truck family targets. A real tractor rides on tyre compliance
+  alone and jolts; stiff numbers and short travel are the picture, not a softening target.
+  `_wheel_positions` re-derives the anchor Y (`WHEEL_RADIUS + rest_length - static_comp`), so
+  the chassis origin still sits at ground level at equilibrium — only the wheel anchor moved
+  (0.57 m -> 0.44 m). The implement/hitch geometry (`tool_depth()`, `ball_lift()`) is measured
+  off its own scene, never off ride height, so it did not move with it.
+- **Traction is ballast, never the torque curve.** Gear-1 wheel force outran rear-axle grip
+  3.4x at the original 4 t / 50-50 split. Shipped `mass` 5500 / `front_weight` 0.38 (rear axle
+  3.4 t, 33 kN at mu 1.0) drops the ratio to ~2.0 — real tractors solve exactly this with ballast
+  weights and liquid-filled tyres, not a smaller first gear. The torque curve and `final_drive`
+  stay untouched: idle torque is what pulls a drawbar trailer away from a standstill
+  (`truck/CLAUDE.md` § Pulling away, the same law), so trimming it to match grip would break that.
+  `brake_torque` / `handbrake_torque` / the draft 60 Hz margin are all recipe-derived from
+  `mass`, so the regen re-derives them for free; the drawbar trailer's nose-weight fraction (12%
+  of the TRAILER) is untouched. Top speed in 6th is rpm-bound, so ballast doesn't move it — only
+  acceleration and the governor-droop grade climb do. MFWD still shares the one physics radius
+  (a lead-ratio model would be wind-up, not feel); engaging the front axle now adds 38% of
+  static weight's worth of grip at the moment draft calls for it, the honest reason the button
+  exists.
+- **The COM rides at 0.91 m over the road**, written as `com_y_frac` 0.35 of the body's own AABB
+  top (2.60 m on the scaled body) rather than as a metre figure, so the `scale` above can move
+  without silently flattening the machine again. Against the 0.70 m mean half-track that is a
+  rollover threshold of ~0.78 g under lug mu 1.0 — the tractor TIPS before it slides on a side
+  slope, which is the real machine and what a field edge teaches. The drawbar's +/-25 deg roll
+  limit is what keeps a rutted trailer from levering it over; do not narrow it toward the fifth
+  wheel's 1.5 deg.
+  - **The COM height does not enter the steady-draft pitch balance.** At rated draft the body is
+    in equilibrium: the drag at the hitch and the tyre reaction at ground level form a couple of
+    F x h_hitch, so the transfer off the front axle is 12 kN x ~0.35 m / 2.115 m wheelbase =
+    ~2.0 kN against a 20.5 kN static front (0.38 of 5.5 t) — the front keeps ~90 %, nowhere near
+    a wheelie. What the raised COM changes is the TRANSIENT: the same 12 kN arriving as
+    acceleration now has a 0.91 m arm. If a future rating unloads the front past ~70 %, the lever
+    is the ballast split (`front_weight`), never the height back down.
+
+- **The body ships at `scale` 1.35** (`gen_kenney_vehicles.VARIANTS`, multiplied into `KIT_SCALE`
+  inside `_analyze`): 2.99 x 2.17 m on a 2.12 m wheelbase, so the 5.5 t spec (R2's ballast) sits
+  on something the size of a tractor. Nothing about the level bounds that factor — the field fence leaves a 13 m
+  gap — what bounds it is everything the scale does NOT reach: the linkage, the four implements
+  and the 1.90 m farm tipper, which read one size class small behind it. Taking them up too is
+  a separate job (`HitchLinkage`'s constants, six scenes, and the quoted 0.57 m stroke /
+  0.055 m plough depth), not a follow-up this one left half done.
+  - The **physics** radius stays 0.36 on both axles and must: RayWheel is single-radius, and
+    `wheel_radius` is also `Drivetrain.road_radius`, so gear selection and the 40 km/h road gear
+    ride on it. Only the VISUAL radii followed the body (0.66 rear / 0.44 front, with the tread
+    half-widths, or the flush-X rule stops landing on the scaled station). The honest cost: the
+    rear visual stands 0.30 m proud of its contact, so on a kerb the drawn tyre clips before
+    the physics one does. Acceptable on a field machine.
+  - The rear tyre is at its **ceiling** at 0.66 m: the tread is the surface `test_three_point_hitch`
+    measures every implement against, and the spreader's hopper corner starts sweeping it just
+    past 0.67 m. Growing it further means moving that hopper. A wider tyre eats its own growth
+    inboard under the flush-X rule, so `wheel_x_out` 0.064 pushes both axles back out until the gap
+    between the rears is where it was — the track came out ~5% wider, roll stiffness a tractor can
+    have and nothing else.
+  - Ride height needs no compensation at any scale, rate or `rest_length`: `_wheel_positions`
+    derives the anchor Y from `WHEEL_RADIUS + rest_length - static_comp`, never off the model, so
+    the chassis origin sits at ground level at spring equilibrium by construction.
+  - The datum that holds the implements is the **lower-pin height over the road**, so the linkage
+    keeps it whatever the body does. `ThreePointHitch` and `Drawbar` hang at **z = +0.3935** on
+    the tractor scene — the offset that lands the hitch housing's back face on the hull's rear
+    face — each still authored in its own frame. So a chassis coordinate is a scene coordinate
+    plus 0.3935 (`Drawbar.PIN_LOCAL` 1.9935 against `Pin`'s 1.60), and `test_drawbar_trailer` /
+    `test_three_point_hitch` compose the two rather than trusting either alone.
+  - `test_three_point_hitch` models the rear tyre as the CYLINDER it is drawn as, not a box: at
+    0.6075 m the box's corner region is where the spreader's hopper skirt legitimately passes.
 - The tractor tows, and the towed thing is not an implement — `src/vehicles/tractor/drawbar.gd`
   + `trailers/farm_tipper.{gd,tscn}`. An implement is a VISUAL Node3D riding the chassis; the
   trailer is a second RigidBody3D on a real `Generic6DOFJoint3D`, and `ImplementCatalog` carries
@@ -118,7 +187,7 @@ two-body housekeeping are shared and live in `src/vehicles/base/` — rules in
   is why `is_towed()` exists. **`first()` must stay a three-point implement**: the tractor spawns
   on it,
   and `measure_vehicles` reports its force figures against `spec.mass`, so a towed `first()` would
-  silently measure a 14 t combination against a 4 t number — the `-- semi` trap. The touch
+  silently measure a ~15.5 t combination against the 5.5 t tractor number — the `-- semi` trap. The touch
   overlay's ATTACH button is the same hook. It cannot be family-gated like PANTO or FLAPS: within
   `truck`, the semi tows and the garbage truck does not.
 - `guidance_curvature` overrides `steer` in `InputRouter.arbitrate_bridge` only (presence rule:

@@ -42,8 +42,9 @@ VehicleTelemetry` adds chassis, body-network and trailer-bus "out" fields.
   `GroundDriveSpec.retarder_equipped` gates it to truck specs only. Can't skid the axle
   (`RETARDER_SLIP_TARGET` caps the one-tick spin change at 0.10 slip). Rated at
   `RETARDER_MAX_FRAC` **0.20** of per-wheel `brake_torque`. `test_truck` asserts brake >
-  retarder and a **0.9-1.6 m/s²** band per shipped spec. `retarder_state` reports torque
-  applied, not the request (J1939 SPN 520 is negative; the contract publishes the
+  retarder and a **0.7-1.6 m/s²** band per shipped spec — the floor tracks the tyre, a retarder
+  that is a fraction of a grip-derived brake being worth what the grip is worth. `retarder_state`
+  reports torque applied, not the request (J1939 SPN 520 is negative; the contract publishes the
   magnitude).
 - `axle_load` is read out of the sim: summed `RayWheel.suspension_force` on the rear axle in
   kg (SPN 582), never a mass lookup. `warn` **11500** is the EU 11.5 t drive-axle limit,
@@ -206,8 +207,10 @@ them apart.
   `TowedBody.body_raise_allowed(speed, parking_brake)` wants parking brake set and
   standstill, refuses the raise direction only. Naming reference, not implemented: ISO 25200
   / CiA 408.
-- Both load models move a real centre of mass and nothing else. `set_load_offset_z` slides
-  the body's `center_of_mass`; `trailer_axle_load`/`axle_load` move as consequences.
+- Both load models move a real centre of mass and nothing else. `set_load_offset` moves
+  the body's `center_of_mass`; `trailer_axle_load`/`axle_load` move as consequences. The
+  tipper moves it UP as well as back (the load rides the floor it is sitting on), which is
+  what makes driving off with the body raised roll the rig.
   Tanker's surge is a labelled model chasing longitudinal acceleration with a lag — real
   fluid physics is a non-goal, the rule that governs the boat's water too. Rationale for all
   of § Coupling and § Four trailers: `truck/CLAUDE.md` §§ The ISO 11992 trailer bus / The

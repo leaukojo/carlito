@@ -41,6 +41,11 @@ extends Resource
 ## the front's damping ratio on the stiffer axle at the same corner mass.
 @export var damper_bump_rear := 0.0
 @export var damper_rebound_rear := 0.0
+## Anti-roll bar, N per metre of left/right compression difference on an axle (0 = none). Moves
+## spring load between the two wheels of an axle without adding net vertical force, so it stiffens
+## roll and leaves ride and pitch alone. Roll stiffness gained per axle is 2 x rate / spring_rate
+## times what that axle's springs give.
+@export var anti_roll_rate := 0.0
 @export var max_suspension_force := 30000.0  ## N; clamp against deep-penetration catapults
 
 @export_group("Tires")

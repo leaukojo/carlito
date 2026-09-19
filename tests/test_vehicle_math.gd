@@ -203,6 +203,26 @@ func test_roll_deg_starboard_down_positive() -> void:
 	assert_float(absf(M.roll_deg(Basis(Vector3(0, 0, -1), PI)))) \
 			.is_equal_approx(180.0, 1e-4)
 
+
+func test_is_inverted_reads_the_up_axis_not_roll_alone() -> void:
+	assert_bool(M.is_inverted(Basis.IDENTITY, 70.0)).is_false()
+	# On its side and on its roof, about either axis: both are past 70 deg of tilt.
+	assert_bool(M.is_inverted(Basis(Vector3(0, 0, -1), deg_to_rad(90.0)), 70.0)).is_true()
+	assert_bool(M.is_inverted(Basis(Vector3(0, 0, -1), PI), 70.0)).is_true()
+	assert_bool(M.is_inverted(Basis(Vector3.RIGHT, deg_to_rad(100.0)), 70.0)).is_true()
+	# A steep grade or a hard lean is not overturned.
+	assert_bool(M.is_inverted(Basis(Vector3(0, 0, -1), deg_to_rad(45.0)), 70.0)).is_false()
+	assert_bool(M.is_inverted(Basis(Vector3.RIGHT, deg_to_rad(30.0)), 70.0)).is_false()
+	# Yaw is not tilt: a body spun about its own up axis stays upright at any heading.
+	assert_bool(M.is_inverted(Basis(Vector3.UP, deg_to_rad(170.0)), 70.0)).is_false()
+
+
+func test_is_inverted_threshold_is_the_angle_from_world_up() -> void:
+	var tilt := Basis(Vector3(0, 0, -1), deg_to_rad(60.0))
+	assert_bool(M.is_inverted(tilt, 59.0)).is_true()
+	assert_bool(M.is_inverted(tilt, 61.0)).is_false()
+
+
 # --- road resistance: aero + rolling, the wheeled vehicles' whole drag model ----
 
 func test_aero_drag_is_the_textbook_formula() -> void:
@@ -294,3 +314,16 @@ func test_road_resistance_is_off_at_a_standstill() -> void:
 	assert_vector(M.road_resistance(Vector3(0.0, 0.0, -0.01), 0.6, 0.012, 10000.0, MASS, DELTA)) 			.is_equal(Vector3.ZERO)
 	# A zero delta is a divide-by-zero in the clamp, not a physical case.
 	assert_vector(M.road_resistance(Vector3(0.0, 0.0, -20.0), 0.6, 0.012, 1e4, MASS, 0.0)) 			.is_equal(Vector3.ZERO)
+
+
+func test_anti_roll_force_is_equal_and_opposite_across_the_axle() -> void:
+	var left := M.anti_roll_force(0.10, 0.02, 10000.0)
+	var right := M.anti_roll_force(0.02, 0.10, 10000.0)
+	assert_float(left).is_equal_approx(800.0, 1e-3)
+	assert_float(left + right).is_equal_approx(0.0, 1e-3)
+
+
+func test_anti_roll_force_is_zero_when_the_axle_is_level_or_the_bar_is_off() -> void:
+	assert_float(M.anti_roll_force(0.07, 0.07, 10000.0)).is_equal(0.0)
+	assert_float(M.anti_roll_force(0.10, 0.02, 0.0)).is_equal(0.0)
+	assert_float(M.anti_roll_force(0.10, 0.02, -5000.0)).is_equal(0.0)

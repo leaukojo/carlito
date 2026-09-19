@@ -114,7 +114,7 @@ func draft_relevant() -> bool:
 func tick_body(delta: float) -> void:
 	# No PTO gate: the SCV flow reaching here already passed TractorVehicle's running/raise gates.
 	_tip = move_toward(_tip, clampf(valve_flow, 0.0, 1.0), delta / TIP_TRAVEL_S)
-	set_load_offset_z(_tip * TIP_COM_SHIFT_Z)
+	set_load_offset(_tip * TIP_COM_SHIFT_Z)
 	_pose_body()
 
 

@@ -20,6 +20,13 @@ extends RefCounted
 ##
 ## Not covered: materials first seen after the load (a V / garage body swap, an E attachment)
 ## and light-count variants (headlights, night) still compile on the frame they first draw.
+## Hiding that hitch needs the reveal delayed a few frames behind an off-screen compile pass,
+## and `Level._spawn_vehicle` is called synchronously today — `ChallengeRunner.start()` and
+## `boot.gd`'s `_on_vehicle_picked` -> `_on_attachment_picked` both read `Level.vehicle` on the
+## line right after calling it. Covering the swap means either threading `await` through those
+## call sites or a synchronous mid-frame flush (`RenderingServer.force_draw`, unused and
+## unverified elsewhere in this codebase) — a real architecture change, not a bolt-on. Left
+## uncovered on purpose until one of those is worth doing.
 
 ## GeometryInstance3D.extra_cull_margin's range maximum: metres, wider than any level.
 const CULL_MARGIN := 16384.0

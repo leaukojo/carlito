@@ -8,13 +8,16 @@ extends TowHost
 ## geometry and the numbers that make a drawbar a drawbar rather than a fifth wheel.
 
 ## Where the pin sits in the chassis frame. The documented default only: TowHost._ready reads the
-## `Pin` marker off the scene, so this cannot disagree with the modeled hole.
+## `Pin` marker off the scene, so this cannot disagree with the modeled hole. test_drawbar_trailer
+## DOES sweep the trailer corners about it, though, so it has to be kept in step: 1.9935 is the
+## composite of the Drawbar node's +0.3935 mount on tractor-kenney.tscn and `Pin`'s own 1.60,
+## which is exactly what TowHost._ready computes.
 ##
-## Measured against the Kenney tractor body, the pin sits at 0.40 m, a real drawbar height, clear
-## of the lowered lower-link balls at y 0.21. It must never be the semi's -1.05, a fifth-wheel
-## plate height, because the trailer is authored with its origin at the drawbar eye and ground at
-## y = -0.40 against this.
-const PIN_LOCAL := Vector3(0.0, 0.40, 1.60)
+## The pin sits 0.40 m over the road, a real drawbar height, clear of the lowered lower-link balls
+## at y 0.21. That height is a DATUM and independent of the body: it must never be the semi's
+## -1.05, a fifth-wheel plate height, because farm_tipper is authored with its origin at the
+## drawbar eye and ground at y = -0.40 against it.
+const PIN_LOCAL := Vector3(0.0, 0.40, 1.9935)
 
 ## Yaw stop, degrees each side. Not Articulation.JACKKNIFE_MAX_DEG, whose 75 deg models a
 ## semi-trailer against a cab, a different shape. 90 deg is derived: up to it nothing behind the

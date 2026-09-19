@@ -26,8 +26,8 @@ const G := 9.8
 
 ## The trailer family's shared bogie geometry and centre of mass. Every trailer runs the same
 ## tri-axle bogie and they all sit at the same COM_Z.
-const BOGIE_Z := 5.45
-const COM_Z := 3.98
+const BOGIE_Z := 5.20
+const COM_Z := 3.798
 
 const FLATBED := "res://src/vehicles/truck/trailers/flatbed.tscn"
 const BOX := "res://src/vehicles/truck/trailers/box.tscn"
@@ -400,6 +400,17 @@ func test_the_semis_drive_axle_carries_the_fifth_wheel_load_without_bottoming() 
 	assert_float((own_rear_kg + plate_rear_kg) * G / float(rear_wheels)) \
 		.is_less(spec.ground_drive.max_suspension_force)
 
+	# The rear dampers are sized for this same coupled corner, not the bobtail one.
+	var coupled_corner_kg: float = (own_rear_kg + plate_rear_kg) / float(rear_wheels)
+	var k_rear := spec.ground_drive.rear_spring_rate()
+	var critical := 2.0 * sqrt(k_rear * coupled_corner_kg)
+	var zeta_bump := spec.ground_drive.rear_damper_bump() / critical
+	var zeta_rebound := spec.ground_drive.rear_damper_rebound() / critical
+	assert_float(zeta_bump).override_failure_message(
+			"coupled rear bump damping ratio %.2f" % zeta_bump).is_between(0.28, 0.40)
+	assert_float(zeta_rebound).override_failure_message(
+			"coupled rear rebound damping ratio %.2f" % zeta_rebound).is_between(0.30, 0.45)
+
 	# The steer axle, pinned beside the rear so the front/rear split is caught if either moves.
 	var solo_front := _travel_used(spec, own_front_kg, front_wheels, false)
 	var coupled_front := _travel_used(spec, own_front_kg + plate_front_kg, front_wheels, false)
@@ -590,6 +601,57 @@ func test_the_demand_inherits_the_retarders_speed_fade_for_free() -> void:
 	assert_int(rolling).is_equal(100)
 	assert_float(TruckT.trailer_brake_blend(0.0, rolling)).is_greater(0.0)
 	semi.free()
+
+
+# --- the trailer brake lag: chambers behind the pedal -------------------------
+
+func test_the_chambers_fill_and_vent_at_their_two_stated_rates() -> void:
+	# Air reaches a trailer's chambers behind the tractor's, and venting is the slower of the two:
+	# a full application takes BRAKE_APPLY_S and a full release BRAKE_RELEASE_S. Asserted against
+	# the constants, so re-rating either moves the test with it.
+	var dt := 1.0 / 60.0
+	var applied := 0.0
+	var apply_ticks := 0
+	while applied < 1.0 and apply_ticks < 600:
+		applied = TowedBodyScript.lagged_brake(applied, 1.0, dt)
+		apply_ticks += 1
+	var apply_s: float = TowedBodyScript.BRAKE_APPLY_S
+	var release_s: float = TowedBodyScript.BRAKE_RELEASE_S
+	assert_float(float(apply_ticks) * dt).is_equal_approx(apply_s, dt)
+	var release_ticks := 0
+	while applied > 0.0 and release_ticks < 600:
+		applied = TowedBodyScript.lagged_brake(applied, 0.0, dt)
+		release_ticks += 1
+	assert_float(float(release_ticks) * dt).is_equal_approx(release_s, dt)
+	assert_int(release_ticks).override_failure_message(
+			"chambers vent slower than they fill").is_greater(apply_ticks)
+
+
+func test_the_lag_never_leads_or_exceeds_the_command() -> void:
+	# A rate limit, not a filter with overshoot in it: the tractor's blend stays the ceiling on what
+	# the trailer brakes with, and a part application settles exactly there.
+	var dt := 1.0 / 60.0
+	var applied := 0.0
+	for _i in 120:
+		applied = TowedBodyScript.lagged_brake(applied, 0.4, dt)
+		assert_float(applied).is_less_equal(0.4)
+	assert_float(applied).override_failure_message(
+			"a held part application must settle on the command").is_equal_approx(0.4, 1e-9)
+	# Saturates at a full application and goes no further; garbage on the wire is sanitized.
+	for _i in 120:
+		applied = TowedBodyScript.lagged_brake(applied, 9.0, dt)
+	assert_float(applied).is_equal(1.0)
+	for _i in 120:
+		applied = TowedBodyScript.lagged_brake(applied, -9.0, dt)
+	assert_float(applied).is_equal(0.0)
+
+
+func test_the_first_tick_of_an_application_is_still_almost_nothing() -> void:
+	# The whole point of the lag: the tractor dips first and the trailer catches up a beat later,
+	# which is what makes a rig push on the first brake application.
+	var first := TowedBodyScript.lagged_brake(0.0, 1.0, 1.0 / 60.0)
+	assert_float(first).is_less(0.06)
+	assert_float(first).is_greater(0.0)
 
 
 # --- ISO 11992: the EBS21 ABS predicate ---------------------------------------
@@ -1418,9 +1480,16 @@ func test_tipping_walks_the_load_off_the_fifth_wheel_and_onto_the_bogie() -> voi
 		prev = now
 
 	assert_float(tipper.call("load_shift_z")).is_equal_approx(TipperScript.TIP_COM_SHIFT_Z, 1e-6)
+	# The load RISES with the body it is still sitting in, which is what makes a raised tipper a
+	# rollover waiting to happen; y is a real axis of the same one centre-of-mass move, not a term.
+	assert_float(tipper.call("load_shift_y")).is_equal_approx(TipperScript.TIP_COM_RISE_Y, 1e-6)
 	assert_vector(tipper.get("center_of_mass")) \
-		.is_equal_approx(spec.center_of_mass + Vector3(0, 0, TipperScript.TIP_COM_SHIFT_Z),
-			Vector3.ONE * 1e-5)
+		.is_equal_approx(spec.center_of_mass + Vector3(0, TipperScript.TIP_COM_RISE_Y,
+			TipperScript.TIP_COM_SHIFT_Z), Vector3.ONE * 1e-5)
+	# The rise moves the centre of mass and NOTHING else: the plate share is a z question.
+	assert_float(tipper.call("live_kingpin_share")) \
+		.is_equal_approx(Artic.kingpin_share(spec.center_of_mass.z + TipperScript.TIP_COM_SHIFT_Z,
+			tipper.call("bogie_z")), 1e-6)
 
 	var tipped_share: float = tipper.call("live_kingpin_share")
 	assert_float(tipped_share) \
@@ -1449,6 +1518,7 @@ func test_a_respawn_brings_the_body_and_its_load_home() -> void:
 	tipper.call("reset_at", Transform3D(Basis.IDENTITY, Vector3(4, 1, -7)))
 	assert_float(tipper.call("body_pos01")).is_equal(0.0)
 	assert_float(tipper.call("load_shift_z")).is_equal(0.0)
+	assert_float(tipper.call("load_shift_y")).is_equal(0.0)
 	assert_float(tipper.call("live_kingpin_share")).is_equal_approx(tipper.call("kingpin_share"), 1e-9)
 	tipper.free()
 

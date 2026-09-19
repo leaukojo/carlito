@@ -25,6 +25,15 @@ const IMPACT_THRESHOLD := 25.0  ## m/s^2 acceleration spike that counts as an im
 const IMPACT_DECAY := 40.0      ## m/s^2 per s the held impact value bleeds off
 const MOVING_SPEED := 0.3       ## m/s standstill epsilon for the status 'moving' bit
 
+## Overturned: tilt past which the wheels cannot reach the ground again whatever the driver does,
+## held long enough that a jump, a kerb strike or a bank does not read as a rollover. Detected
+## and announced, never auto-reset — an automatic respawn hides the thing that just happened.
+const OVERTURNED_DEG := 70.0
+const OVERTURNED_S := 1.5
+## Raised sticky (dwell 0) and cleared by exact text match, so it stays up until the body is back
+## on its wheels. Names the way out, since nothing else will move the machine.
+const OVERTURNED_NOTICE := "OVERTURNED - PRESS R TO RESPAWN"
+
 @export var spec: VehicleSpec
 
 ## Preview-only body (vehicle selector, thumbnail tool). Set before entering the tree, so _ready
@@ -56,6 +65,8 @@ var _impact_hold := 0.0             ## decaying peak of the impact magnitude
 var _lamps := LampSet.new()         ## drives the scene-authored lamps from input
 var _horn_player: AudioStreamPlayer ## procedural horn, played on the horn rising edge
 var _prev_horn := false
+var _overturned_t := 0.0   ## seconds the body has been tilted past OVERTURNED_DEG, 0 when upright
+var _overturned := false   ## edge latch for the notice; the public read is `is_overturned()`
 var _horn_fade: Tween  ## the release fade; killed if the horn is pressed again mid-fade
 
 
@@ -98,6 +109,8 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	InputRouter.unregister_vehicle(self)
+	# A sticky notice outlives the body that raised it, so a variant swap on the roof would pin it.
+	_clear_overturned()
 	if drive != null:  # stop dust emission before a garage/cycle swap frees the subtree
 		drive.respawn()
 
@@ -143,6 +156,8 @@ func _physics_process(delta: float) -> void:
 		drive.update_dust(telemetry)
 
 	_tick_extras(input, delta)  # last, so drivetrain rpm/telemetry motion are current
+
+	_tick_overturned(delta)
 
 	if global_position.y < FALL_RESPAWN_Y:
 		respawn()
@@ -263,6 +278,39 @@ func _update_telemetry(input: VehicleInput, delta: float) -> void:
 	_prev_velocity = linear_velocity
 
 
+## A body on its roof or its side, announced to the driver and nothing more. Family-agnostic body
+## state like the fall check beside it, so it lives here and not on a family. Deliberately NOT a
+## telemetry field: sloppyCAN is not told, so the `status` bitfield and the contract stay put.
+func _tick_overturned(delta: float) -> void:
+	if display_only:  # a selector/thumbnail body is posed, not driven, and must not shout
+		return
+	if VehicleMath.is_inverted(global_transform.basis, OVERTURNED_DEG):
+		_overturned_t += delta
+	else:
+		_overturned_t = 0.0
+	var now := _overturned_t >= OVERTURNED_S
+	if now == _overturned:
+		return
+	_overturned = now
+	if now:
+		GameState.notice.emit(OVERTURNED_NOTICE, 0.0)
+	else:
+		GameState.notice_cleared.emit(OVERTURNED_NOTICE)
+
+
+## True once the body has been past OVERTURNED_DEG for OVERTURNED_S. Read by the debug overlay.
+func is_overturned() -> bool:
+	return _overturned
+
+
+## Take the notice down and unlatch, wherever the body ends up next.
+func _clear_overturned() -> void:
+	_overturned_t = 0.0
+	if _overturned:
+		_overturned = false
+		GameState.notice_cleared.emit(OVERTURNED_NOTICE)
+
+
 ## Reset to the last spawn transform with zeroed motion; also fired on a fall off the world.
 ## The teleport, then the reset seam, so `respawned` listeners see a finished machine at its
 ## final pose — a subclass that re-lays a second body does it in the seam, not after the signal.
@@ -298,6 +346,7 @@ func reset_session_state() -> void:
 		_horn_fade = null
 	_horn_player.stop()
 	_prev_horn = false
+	_clear_overturned()
 	InputRouter.reset_vehicle_cycles()
 
 

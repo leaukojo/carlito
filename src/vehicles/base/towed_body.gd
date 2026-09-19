@@ -7,7 +7,7 @@ extends RigidBody3D
 ## Geometry: origin at the kingpin, ground at y = -1.05, trailer-space z is distance back from
 ## the kingpin, wheel anchors at negative y. `consumers()` is declared in code, never exported
 ## data, so a scene edit cannot claim a connection the machine lacks. Payload load models reach
-## the world only through `set_load_offset_z`, so axle loads follow as consequences.
+## the world only through `set_load_offset`, so axle loads follow as consequences.
 
 ## What a towed body can plug into on the towing unit, gated by SemiTractor. No data-bus entry:
 ## ISO 11992 belongs to the towing unit's ISO 7638 connector (VehicleSpec.trailer_bus_equipped).
@@ -31,6 +31,14 @@ const RAISE_PARK_BRAKE_MIN := 0.5
 ## Contacts reported at once. `body_is_colliding` only checks emptiness, so one would do.
 const MAX_CONTACTS_REPORTED := 4
 
+## Seconds the service brake takes to travel its whole stroke, filling and venting. Air reaches a
+## towed body's chambers behind the towing unit's, and that lag is what makes a rig "push" on the
+## first application; venting is the slower of the two. A rate limit, so a part application
+## arrives proportionally sooner. The HANDBRAKE is deliberately not lagged: spring brakes are a
+## mechanical lock applied BY the loss of air, not a chamber being filled.
+const BRAKE_APPLY_S := 0.35
+const BRAKE_RELEASE_S := 0.5
+
 ## Scene node whose Node3D children are the wheel visuals, in the ground drive's wheel_positions
 ## order. A count mismatch is an authoring error and says so.
 @export var wheel_root: NodePath = ^"Wheels"
@@ -53,7 +61,9 @@ var valve_flow := 0.0
 var accel_fwd := 0.0
 
 var _last_fwd_speed := 0.0
-var _load_offset_z := 0.0  ## metres the payload has slid back from the spec's centre of mass
+var _load_offset := Vector3.ZERO  ## metres the payload has moved from the spec's centre of mass
+## Service-brake application the chambers have actually reached, 0..1, behind the commanded one.
+var _brake_actual := 0.0
 
 
 func _ready() -> void:
@@ -130,13 +140,49 @@ func tick_towed(brake01: float, handbrake01: float, delta: float,
 	tick_body(delta)
 	var space := get_world_3d().direct_space_state
 	var gd := spec.ground_drive
-	var brake_t := clampf(brake01, 0.0, 1.0) * gd.brake_torque \
+	_brake_actual = lagged_brake(_brake_actual, brake01, delta)
+	var brake_t := _brake_actual * gd.brake_torque \
 			+ clampf(handbrake01, 0.0, 1.0) * gd.handbrake_torque
 	for w in wheels:
 		w.tick(self, gd, space, 0.0, brake_t, delta, grip_terrains)
 	# Resistance is a sum, not a multiple: this trailer's own drag area plus its bogie load.
 	apply_central_force(VehicleMath.road_resistance(linear_velocity, gd.drag_area,
 			gd.rolling_resistance, bogie_suspension_force(), mass, delta))
+
+
+## One step of the brake chambers toward `cmd`, at whichever of the two rates this direction
+## takes. A rate limit rather than a first-order lag: it saturates at the command exactly and
+## never overshoots it, so the towing unit's blend stays the ceiling on what the trailer brakes
+## with. Pure, so the two rates are testable without a physics world.
+static func lagged_brake(actual: float, cmd: float, delta: float) -> float:
+	var target := clampf(cmd, 0.0, 1.0)
+	var span := BRAKE_APPLY_S if target > actual else BRAKE_RELEASE_S
+	return move_toward(actual, target, delta / span)
+
+
+## What the trailer's service brakes are really applying, 0..1 — the lagged value, which is what
+## `trailer_brake_demand` reports (ISO 11992 EBS11 is a report of the application, not the pedal).
+func brake_applied() -> float:
+	return _brake_actual
+
+
+## Yaw inertia proxy (kg*m^2) about this body's own up axis: `VehicleMath.inertia_of`'s box
+## footprint over the span the spec's own wheel anchors describe against the coupling datum at
+## z = 0 — the rearmost anchor plus a tyre radius is where the deck ends, the outermost pair is
+## the track. A labelled proxy, not the solver's tensor: its only consumer is the coupling's
+## Coulomb one-tick clamp, which binds only within a hair of zero relative yaw rate.
+func yaw_inertia() -> float:
+	if spec == null or spec.ground_drive == null:
+		return 0.0
+	var gd := spec.ground_drive
+	var length := 0.0
+	var half_track := 0.0
+	for pos in gd.wheel_positions:
+		length = maxf(length, absf(pos.z) + gd.wheel_radius)
+		half_track = maxf(half_track, absf(pos.x))
+	# spec.mass, not the body's: a scene instanced for a test has not run _ready yet, and this is
+	# the same figure _ready writes there and the corner masses are shared out of.
+	return VehicleMath.inertia_of(spec.mass, 2.0 * half_track, length)
 
 
 ## Re-lay the trailer at `pose`, stopped. Zeroing velocity alone leaves it wherever it drifted,
@@ -150,8 +196,11 @@ func reset_at(pose: Transform3D) -> void:
 	# A teleport differentiates into a colossal acceleration otherwise.
 	accel_fwd = 0.0
 	_last_fwd_speed = 0.0
+	# The chambers vent with the wheels, or a respawn inherits the stop it was re-laid out of
+	# and drags its trailer brakes away from the marker.
+	_brake_actual = 0.0
 	# Payload comes home too, or respawn becomes a way to keep weight the driver never put.
-	set_load_offset_z(0.0)
+	set_load_offset(0.0)
 	reset_body()
 	reset_physics_interpolation()
 
@@ -197,23 +246,32 @@ func body_pos01() -> float:
 	return 0.0
 
 
-## Slide this trailer's centre of mass `offset_z` metres rearward. The one mechanism both load
-## models use: gravity acts at the centre of mass, so the springs really feel it.
-func set_load_offset_z(offset_z: float) -> void:
-	if spec == null or is_equal_approx(offset_z, _load_offset_z):
+## Move this trailer's centre of mass `offset_z` metres rearward and `offset_y` metres up. The one
+## mechanism every load model uses: gravity acts at the centre of mass, so the springs really feel
+## it. Z alone is the common case (a surge, a load sliding down a deck); y is what a body tipping
+## about its own hinge does to the load it is still carrying.
+func set_load_offset(offset_z: float, offset_y := 0.0) -> void:
+	var offset := Vector3(0.0, offset_y, offset_z)
+	if spec == null or offset.is_equal_approx(_load_offset):
 		return
-	_load_offset_z = offset_z
+	_load_offset = offset
 	# A load model must not depend on _ready having run first; RigidBody3D rejects this write in
 	# any other mode.
 	if center_of_mass_mode != RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM:
 		center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
-	center_of_mass = spec.center_of_mass + Vector3(0.0, 0.0, offset_z)
+	center_of_mass = spec.center_of_mass + offset
 
 
 ## Metres the payload is displaced rearward (negative = forward), 0 where the load cannot move.
 ## Test accessor, no runtime caller.
 func load_shift_z() -> float:
-	return _load_offset_z
+	return _load_offset.z
+
+
+## Metres the payload is displaced upward, 0 on every load model but the tipping bodies.
+## Test accessor, no runtime caller.
+func load_shift_y() -> float:
+	return _load_offset.y
 
 
 ## Is this trailer's body touching anything? It normally touches nothing (RayWheels are raycasts,
@@ -271,7 +329,7 @@ func kingpin_share() -> float:
 ## The share right now, with the load model's centre-of-mass shift folded in. Tipping a body
 ## rearward drops it toward zero: the bogie takes the payload back off the drive axle.
 func live_kingpin_share() -> float:
-	return Articulation.kingpin_share(spec.center_of_mass.z + _load_offset_z, bogie_z())
+	return Articulation.kingpin_share(spec.center_of_mass.z + _load_offset.z, bogie_z())
 
 
 ## Total suspension force the bogie carries this tick (N), straight off the wheels; this is what

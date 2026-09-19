@@ -105,6 +105,8 @@ var _corner_peak := 0.0
 var _corner_front := 0.0       ## front-axle saturation at the peak
 var _corner_rear := 0.0
 var _corner_slid := false      ## the slip-angle gate tripped at some point
+var _corner_roll := 0.0        ## chassis roll (deg) at the lateral-g peak
+var _corner_lifted := 0        ## most wheels off the ground in any one tick of the pass
 
 # sweep report: per-vehicle measured figures, buffered as each pass reports, plus the
 # real-world comparison figures loaded once from REFERENCE_SPECS_PATH.
@@ -255,6 +257,8 @@ func _reset_pass(phase: Phase) -> void:
 	_corner_front = 0.0
 	_corner_rear = 0.0
 	_corner_slid = false
+	_corner_roll = 0.0
+	_corner_lifted = 0
 
 
 func _physics_process(delta: float) -> void:
@@ -353,6 +357,11 @@ func _tick_cornering(delta: float) -> void:
 	# term of the body's own velocity and angular velocity, both read out of the sim (rule 3).
 	var lat := speed * absf(_car.angular_velocity.y)
 	_corner_lat += (lat - _corner_lat) * clampf(delta / CORNER_SMOOTH_S, 0.0, 1.0)
+	var airborne := 0
+	for w in _car.wheels:
+		if not w.in_contact:
+			airborne += 1
+	_corner_lifted = maxi(_corner_lifted, airborne)
 	var slip_angle := absf(vel.dot(_car.global_transform.basis.x)) / maxf(speed, 1.0)
 	if slip_angle > CORNER_MAX_SLIP_ANGLE:
 		_corner_slid = true
@@ -360,6 +369,7 @@ func _tick_cornering(delta: float) -> void:
 		_corner_peak = _corner_lat
 		_corner_front = _axle_saturation(false)
 		_corner_rear = _axle_saturation(true)
+		_corner_roll = absf(VehicleMath.roll_deg(_car.global_transform.basis))
 	if _corner_ramp_t >= CORNER_RAMP_S or _t >= _seconds:
 		_report_cornering(false)
 
@@ -395,9 +405,13 @@ func _report_cornering(skipped: bool) -> void:
 	print("  %-13s : peak %.2f m/s^2 (%.2f g) at %.0f km/h; %s saturates first"
 			% ["cornering", _corner_peak, _corner_peak / 9.81, CORNER_SPEED * 3.6, axle]
 			+ " (front %.2f, rear %.2f)%s" % [_corner_front, _corner_rear, note])
+	print("  %-13s : roll %.1f deg at the peak, up to %d wheel(s) off the ground%s"
+			% ["", _corner_roll, _corner_lifted,
+			"  <-- OVERTURNED" if _car.is_overturned() else ""])
 	_current["cornering"] = {"skipped": false, "peak": _corner_peak,
 			"peak_g": _corner_peak / 9.81, "front": _corner_front, "rear": _corner_rear,
-			"axle": axle, "slid": _corner_slid}
+			"axle": axle, "slid": _corner_slid, "roll_deg": _corner_roll,
+			"wheels_lifted": _corner_lifted}
 	_finish_vehicle()
 
 
@@ -526,6 +540,10 @@ func _tick_coast() -> void:
 
 
 func _report_tracking(skipped: bool) -> void:
+	# In track-only mode nothing else prints the variant name (the `===` header belongs to the
+	# accel report), so a FAIL in an `all` sweep would be anonymous.
+	if _track_only:
+		print("=== %s ===" % _variant)
 	if skipped:
 		_current["tracking"] = {"skipped": true}
 	else:

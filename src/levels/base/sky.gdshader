@@ -14,7 +14,7 @@ uniform float sky_curve : hint_range(0.0, 1.0) = 0.12;
 uniform vec4 cloud_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
 uniform vec4 cloud_shadow_color : source_color = vec4(0.62, 0.68, 0.78, 1.0);
 uniform float cloud_coverage : hint_range(0.0, 1.0) = 0.55;
-uniform float cloud_speed = 0.006;
+uniform float cloud_speed = 0.0035;
 // Cloud self-shadowing: the noise is re-read a little toward the sun, and where the cloud
 // thins in that direction the edge is lit. One extra texture tap, sky pixels only.
 uniform float cloud_light = 0.7;
@@ -50,8 +50,8 @@ void sky() {
 	if (horizon > 0.0) {
 		vec2 uv = EYEDIR.xz / (horizon + 0.15);
 		vec2 flow = vec2(TIME * cloud_speed, TIME * cloud_speed * 0.4);
-		float n_coarse = texture(cloud_noise, uv * 0.15 + flow).r;
-		float n = n_coarse + 0.5 * texture(cloud_noise, uv * 0.35 - flow * 1.7).r;
+		float n_coarse = texture(cloud_noise, uv * 0.10 + flow).r;
+		float n = n_coarse + 0.5 * texture(cloud_noise, uv * 0.23 - flow * 1.7).r;
 		n /= 1.5;
 
 		float density = smoothstep(cloud_coverage, cloud_coverage + 0.25, n);
@@ -60,7 +60,7 @@ void sky() {
 
 		// Lit edge: the same coarse octave sampled a step toward the sun.
 		vec2 sun_dir = normalize(LIGHT0_DIRECTION.xz + vec2(1e-4));
-		float n_sun = texture(cloud_noise, (uv + sun_dir * 0.12) * 0.15 + flow).r;
+		float n_sun = texture(cloud_noise, (uv + sun_dir * 0.18) * 0.10 + flow).r;
 		float lit = clamp((n_coarse - n_sun) * 4.0, -1.0, 1.0);
 		float shade = smoothstep(0.4, 0.9, n) + lit * cloud_light * 0.5;
 		vec3 cloud = mix(cloud_shadow_color.rgb, cloud_color.rgb, clamp(shade, 0.0, 1.0));

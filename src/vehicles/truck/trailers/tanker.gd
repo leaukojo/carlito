@@ -2,7 +2,7 @@ extends TowedBody
 ## Tanker semi-trailer. `_surge` is a labelled honest model of a shifting centre of mass, not
 ## fluid dynamics: one number chasing longitudinal acceleration with a first-order lag, no free
 ## surface, no baffles, no waves (same non-goal as the boat's visual-only water).
-## `set_load_offset_z` moves the real centre of mass, so trailer_axle_load / axle_load report the
+## `set_load_offset` moves the real centre of mass, so trailer_axle_load / axle_load report the
 ## surge as a consequence — never add a tanker term to either signal directly.
 ## Braking throws the load forward (nosing the tractor down); accelerating slumps it onto the
 ## bogie; the lag means it's still arriving after the rig has stopped.
@@ -29,7 +29,7 @@ func consumers() -> int:
 
 func tick_body(delta: float) -> void:
 	_surge = surge_step(_surge, surge_target(accel_fwd), delta)
-	set_load_offset_z(_surge)
+	set_load_offset(_surge)
 
 
 func reset_body() -> void:

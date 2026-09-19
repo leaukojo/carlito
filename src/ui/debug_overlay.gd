@@ -87,6 +87,7 @@ func _refresh() -> void:
 	text += "  (%.1f ms)\ndraw calls %d\nprimitives %d\nVRAM %.1f MB\nnodes %d" % [
 		frame_ms, draw_calls, prims, vram, nodes]
 	text += _grip_line()
+	text += _attitude_line()
 	text += _articulation_line()
 	text += _flow_line("wind", "wind_vector")
 	text += _flow_line("current", "current_vector")
@@ -107,6 +108,20 @@ func _grip_line() -> String:
 		parts.append("%.2f" % w.surface_grip)
 		drags.append("%.2f" % w.surface_drag)
 	return "\ngrip " + " ".join(parts) + "\ndrag " + " ".join(drags)
+
+
+## Body attitude of the active vehicle, and whether it is past the overturn threshold. Every
+## family publishes pitch/roll, but only the boat/plane/drone get the attitude indicator on the
+## dash — this is where a car or a truck's lean can be read while driving.
+func _attitude_line() -> String:
+	if _level == null:
+		return ""
+	var vehicle: BaseVehicle = _level.get("vehicle")
+	if vehicle == null:
+		return ""
+	var line := "
+pitch %+.1f roll %+.1f deg" % [vehicle.telemetry.pitch, vehicle.telemetry.roll]
+	return line + "  OVERTURNED" if vehicle.is_overturned() else line
 
 
 ## Fifth-wheel articulation angle (degrees, + = trailer right), or "" for anything that tows

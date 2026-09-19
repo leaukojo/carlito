@@ -16,8 +16,10 @@
 ; Authored low instead, like a semi's drop deck, the axles come straight up through the floor.
 ;
 ; Sizes are measured against the shipped kit, not against real machinery: the sedan is 1.80 m wide
-; and 2.88 long, the tractor 1.60 wide on a 1.57 m wheelbase. So this is 1.90 wide over the body
-; with a 3.90 m box, and the whole combination behind the tractor comes to about 7.0 m.
+; and 2.88 long, the tractor 2.17 wide on a 2.12 m wheelbase. So this is 1.90 wide over the body
+; with a 3.90 m box, and the whole combination behind the tractor comes to about 7.4 m. Narrower
+; than the tractor on purpose -- a farm tipper follows the machine's wheel tracks -- and the
+; 0.40 m ground datum below is the tractor's pin height, which is what really ties the two.
 ;
 ; The clearances that are geometry rather than taste:
 ;   - the frontmost part is the eye at z = -0.05 on the centreline, so nothing swings on more than

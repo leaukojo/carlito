@@ -191,6 +191,78 @@ func test_both_pitch_stops_clear_the_steepest_grade_their_machine_can_climb() ->
 			_angular_stops(plate)["pitch"] as float)
 
 
+# --- the plate's own friction ---------------------------------------------------------------------
+
+func test_the_plate_carries_friction_and_the_pin_does_not() -> void:
+	# A greased fifth wheel is two steel faces rubbing under several tonnes, not a free hinge; a pin
+	# through an eye is nearly free. This is the fourth number that makes a drawbar a drawbar.
+	var plate := _profile_of(FifthWheelScript).yaw_friction_nm
+	var pin := _profile_of(DrawbarScript).yaw_friction_nm
+	var shipped: float = FifthWheelScript.YAW_FRICTION_NM
+	assert_float(plate).override_failure_message(
+			"the plate became a free hinge").is_equal(shipped)
+	# The order a real plate carries, so a decimal point cannot slip unnoticed.
+	assert_float(plate).is_between(1000.0, 3000.0)
+	assert_float(pin).override_failure_message("a pin in an eye does not rub").is_equal(0.0)
+
+
+func test_the_friction_opposes_the_relative_rate_and_never_re_centres() -> void:
+	# Coulomb, so the magnitude is the same at any rate and the SIGN is the whole model: it damps
+	# the swing, it never pulls the trailer back toward straight. A spring would be a plate that
+	# steers, which is not a plate.
+	var friction: float = FifthWheelScript.YAW_FRICTION_NM
+	# Plenty of inertia, so the one-tick cap is nowhere near binding.
+	var big := 1.0e6
+	var right := Articulation.yaw_friction_torque(0.5, friction, big, DELTA)
+	var left := Articulation.yaw_friction_torque(-0.5, friction, big, DELTA)
+	assert_float(right).is_equal_approx(-friction, 1e-9)
+	assert_float(left).is_equal_approx(friction, 1e-9)
+	# Same magnitude at a tenth the rate: no velocity term anywhere in it.
+	var gentle := Articulation.yaw_friction_torque(0.05, friction, big, DELTA)
+	assert_float(absf(gentle)).is_equal_approx(friction, 1e-9)
+
+
+func test_the_friction_is_zero_at_zero_relative_rate() -> void:
+	# Nothing to rub against: a rig tracking straight, and a trailer already yawing WITH its
+	# tractor, both read a dead plate. Otherwise the pair would be a torque out of nowhere.
+	var friction: float = FifthWheelScript.YAW_FRICTION_NM
+	assert_float(Articulation.yaw_friction_torque(0.0, friction, 1.0e6, DELTA)).is_equal(0.0)
+	# ...and a coupling that declares none is dead at any rate, which is what keeps the pin free.
+	assert_float(Articulation.yaw_friction_torque(1.0, 0.0, 1.0e6, DELTA)).is_equal(0.0)
+
+
+func test_one_tick_may_at_most_stop_the_relative_yaw() -> void:
+	# RayWheel's 60 Hz rule in torque form. Below the crossing rate the cap binds and the torque is
+	# exactly what zeroes the relative rate this tick — never more, or the rig buzzes across zero.
+	var friction: float = FifthWheelScript.YAW_FRICTION_NM
+	var inertia := 5.0e4
+	var crossing := friction * DELTA / inertia
+	var slow := crossing * 0.25
+	var capped := absf(Articulation.yaw_friction_torque(slow, friction, inertia, DELTA))
+	assert_float(capped).is_equal_approx(inertia * slow / DELTA, 1e-6)
+	assert_float(capped).override_failure_message(
+			"the clamp let one tick reverse the relative yaw").is_less(friction)
+	# Above it the Coulomb magnitude is what is applied, so the clamp is a floor-side device only.
+	var fast := absf(Articulation.yaw_friction_torque(crossing * 4.0, friction, inertia, DELTA))
+	assert_float(fast).is_equal_approx(friction, 1e-9)
+
+
+func test_the_shipped_trailers_clamp_only_within_a_hair_of_straight() -> void:
+	# The cap has to be inert in real driving or the plate stops being Coulomb. Read against each
+	# shipped trailer's own yaw inertia proxy: the crossing rate must be far below anything a rig
+	# ever articulates at.
+	var friction: float = FifthWheelScript.YAW_FRICTION_NM
+	for id: String in TrailerCat.TRAILERS:
+		if not TrailerCat.is_coupled(id):
+			continue
+		var trailer: TowedBody = auto_free((load(id) as PackedScene).instantiate())
+		var inertia := trailer.yaw_inertia()
+		assert_float(inertia).override_failure_message(
+				"%s reports no yaw inertia to clamp against" % id).is_greater(1.0e4)
+		assert_float(friction * DELTA / inertia).override_failure_message(
+				"%s: the one-tick cap binds at real articulation rates" % id).is_less(1.0e-3)
+
+
 # --- the coupling timings ------------------------------------------------------------------------
 
 func test_the_coupling_timings_stay_inside_their_bands() -> void:
@@ -598,10 +670,11 @@ const DELTA := 1.0 / 60.0
 const TIPPER := "res://src/vehicles/truck/trailers/tipper.tscn"
 
 ## Which fields of a `CouplingProfile` the two couplings are allowed to disagree about: the three
-## joint angles, the scene wiring, and the two notices a machine words for itself.
-## `no_room_notice` is deliberately absent — both say the same sentence.
+## joint angles, the plate friction, the scene wiring, and the two notices a machine words for
+## itself. `no_room_notice` is deliberately absent — both say the same sentence.
 const LICENSED_DIFFERENCES: Array[String] = [
-	"pitch_deg", "yaw_deg", "roll_deg", "joint_name", "marker_path", "speed_notice", "tip_notice",
+	"pitch_deg", "yaw_deg", "roll_deg", "yaw_friction_nm",
+	"joint_name", "marker_path", "speed_notice", "tip_notice",
 ]
 
 

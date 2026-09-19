@@ -66,6 +66,13 @@ static func roll_deg(b: Basis) -> float:
 	return rad_to_deg(atan2(-b.x.y, b.y.y))
 
 
+## True when the body's own up axis has fallen more than `threshold_deg` away from world up.
+## The tilt half of "overturned" and nothing else: the dwell that separates a kerb strike from a
+## rollover belongs to the caller. Combined pitch and roll, so a body on its nose counts too.
+static func is_inverted(b: Basis, threshold_deg: float) -> bool:
+	return b.y.dot(Vector3.UP) < cos(deg_to_rad(threshold_deg))
+
+
 # --- road resistance (wheeled vehicles) --------------------------------------------------
 ## Replaces Godot's default `physics/3d/default_linear_damp`, which is linear in v where real
 ## aero is quadratic, and an acceleration that scales with load: a 24 t trailer on an 8 t tractor
@@ -87,6 +94,13 @@ static func aero_drag(speed: float, cda: float, rho := AIR_DENSITY) -> float:
 ## the suspension and pays ride height and rolling resistance.
 static func aero_downforce(speed: float, cla: float, rho := AIR_DENSITY) -> float:
 	return aero_drag(speed, cla, rho)
+
+
+## Anti-roll bar force (N, + = up) on the LEFT wheel of an axle; the right wheel takes the negative.
+## Equal and opposite, so the bar moves load between the two corners without adding vertical force
+## to the body. `rate` is N per metre of compression difference; 0 is no bar.
+static func anti_roll_force(comp_l: float, comp_r: float, rate: float) -> float:
+	return maxf(rate, 0.0) * (comp_l - comp_r)
 
 
 ## Rolling-resistance magnitude (N): `crr * N`. Pass the suspension force the springs reported

@@ -33,6 +33,13 @@ const ROLL_LIMIT_DEG := 1.5
 ## Articulation.JACKKNIFE_MAX_DEG is the one constant the joint AND the kinematic fallback use.
 const YAW_LIMIT_DEG := Articulation.JACKKNIFE_MAX_DEG
 
+## Dry friction about the kingpin (N*m). A greased plate is not a free hinge: two steel faces
+## carrying ~6 t rub, and 2000 N*m is the middle of the 1-3 kN*m such a plate really carries. It
+## is the only thing besides tyre lateral grip that damps trailer sway, and it is Coulomb — see
+## TowHost._apply_yaw_friction for why it can never be a spring toward zero angle. The drawbar
+## leaves the profile default 0: a pin in an eye is nearly free.
+const YAW_FRICTION_NM := 2000.0
+
 ## Told to the driver when E is pressed with the rig rolling: coupling at speed lays the trailer at
 ## a pose the tractor has already left, so the fit check then finds it inside whatever was driven
 ## past.
@@ -48,6 +55,7 @@ func profile() -> CouplingProfile:
 		_profile.pitch_deg = PITCH_LIMIT_DEG
 		_profile.yaw_deg = YAW_LIMIT_DEG
 		_profile.roll_deg = ROLL_LIMIT_DEG
+		_profile.yaw_friction_nm = YAW_FRICTION_NM
 		# Not "FifthWheel": that name clashes with this coupler node (both children of the
 		# chassis), which would have Godot silently rename the joint.
 		_profile.joint_name = &"KingpinLock"

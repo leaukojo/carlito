@@ -126,6 +126,8 @@ func _make_telemetry() -> VehicleTelemetry:
 
 func _ready() -> void:
 	super._ready()
+	# See drone.gd: aircraft pass through the containment box rather than hit an invisible wall.
+	collision_mask = Layers.SOLID
 	_prop_rpm = 0.0
 	_inertia = VehicleMath.inertia_of(spec.mass, body_extents.x, body_extents.z)
 	_inertia_pitch = VehicleMath.inertia_of(spec.mass, body_extents.y, body_extents.z)

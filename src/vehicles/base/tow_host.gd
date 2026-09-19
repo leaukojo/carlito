@@ -297,6 +297,7 @@ func tick_towing(input: VehicleInput, demand01: float, spool: float,
 	# Ticked here, not from the towed body's own _physics_process: one tick per physics frame,
 	# always after the chassis' own wheels. The handbrake applies the spring brakes at both ends.
 	trailer.tick_towed(demand01, input.handbrake, delta, grip_terrains)
+	_apply_yaw_friction(delta)
 
 	# The base only watches the chassis fall off the world; a towed body left behind would
 	# otherwise hang there on the joint. Guarded on is_inside_tree(): a body outside the tree has
@@ -308,6 +309,32 @@ func tick_towing(input: VehicleInput, demand01: float, spool: float,
 			fallen_chassis.call(&"respawn")
 		return
 	_watch_fresh_coupling()
+
+
+## The coupling's own Coulomb friction about the articulation axis, as a torque pair: the plate's
+## share on the trailer and the equal and opposite on the chassis. A greased fifth wheel is not a
+## free hinge, and without this only tyre lateral grip damps trailer sway.
+##
+## Against the RELATIVE yaw rate, never toward zero angle — a spring would re-centre the trailer,
+## which is not what a plate does. Not the joint's own angular motor or spring parameters either:
+## Jolt's 6DOF motor is a velocity TARGET rather than friction, and it fights the yaw limit.
+## The axis is the chassis' up, which is the joint's Y because _build_joint leaves the joint
+## unrotated in the chassis frame.
+func _apply_yaw_friction(delta: float) -> void:
+	var friction := profile().yaw_friction_nm
+	if friction <= 0.0:
+		return
+	var chassis := _chassis()
+	if chassis == null:
+		return
+	var axis := chassis.global_transform.basis.y.normalized()
+	var rel_rate := (trailer.angular_velocity - chassis.angular_velocity).dot(axis)
+	var torque := Articulation.yaw_friction_torque(
+			rel_rate, friction, trailer.yaw_inertia(), delta)
+	if is_zero_approx(torque):
+		return
+	trailer.apply_torque(axis * torque)
+	chassis.apply_torque(axis * -torque)
 
 
 ## Did what we just coupled actually fit? A towed body rides RayWheels, so a contact right after

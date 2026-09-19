@@ -68,7 +68,8 @@ changing.
 - **VehicleSpec** (`.tres`, wheeled half — wheels, suspension, tires, brakes, road
   resistance — in an embedded **GroundDriveSpec**) holds all the driving-feel numbers. A new
   vehicle is a new spec plus a scene, no new code.
-- **Drivetrain** is pure math (torque, gears, real RPM computed back from wheel speed).
+- **Drivetrain** is pure math (torque, gears, and RPM computed back from wheel speed — or from
+  the torque converter, whichever is spinning the engine faster).
 - **RayWheel** is a one-raycast-per-wheel suspension and tire model, clamps tuned to keep
   physics stable at exactly 60 Hz — the tick rate is locked because of this.
 - **BaseVehicle** ties it together: reads input, runs wheels and drivetrain, publishes

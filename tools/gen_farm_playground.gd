@@ -71,9 +71,15 @@ const RIDGE_PITCH := 5.0                          ## m between crests, measured 
 const RIDGE_TAPER := 3.0                          ## m of fade to nothing at the wallow rim
 const RIM_SMOOTH_PASSES := 4                      ## evens the exit ramp's 8-bit staircase
 
-## Haul ramp: three straight segments along z = RAMP_Z, grades 8.1 / 14.0 / 23.6 degrees. Sized
-## against mu 0.5 (mud), rear static share 0.476: rear-drive alone tops out ~16.7 deg, all-wheel
-## ~26.6 deg. Progressive so the crossover is a place on the hill, not a knife-edge threshold.
+## Haul ramp: three straight segments along z = RAMP_Z, grades 8.1 / 14.0 / 23.6 degrees,
+## progressive so the crossover is a place on the hill, not a knife-edge threshold.
+## THE TOP SEGMENT IS ABOVE THE CEILING AND NOTHING CLIMBS IT. Mud is grip 0.5 AND crr 0.2, and
+## the drag term is half the budget: a perfect all-wheel drive tops out at
+## atan(0.5 - 0.2) = 16.7 deg, not the atan(0.5) = 26.6 deg this was sized against. Measured, the
+## shipped tractor manages ~3.9 deg in mud on MFWD and 0 deg flat out in two-wheel drive, because
+## drive torque splits evenly per wheel (src/vehicles/CLAUDE.md § Wheels, suspension and the 60 Hz
+## tick). Re-profiling the three segments is a level change; measure first with
+## tools/measure_grade.tscn.
 const RAMP_Z := -18.0
 const RAMP_HALF_WIDTH := 8.0
 const RAMP_PROFILE: Array[Vector2] = [   ## (world x, world y) along the climb
@@ -94,9 +100,10 @@ const APRON_MARGIN := 6.0                    ## flattened + gravelled ring aroun
 ## Apron-local layout, metres from its south-west corner (the apron is 36 x 24 m).
 const BUILDING_ROW_Z := 6.0                  ## shed + tank
 ## The parking row sits this far north so the tractor spawn has a trailer-length of clear
-## concrete behind it: drawbar pin 1.6 m aft of chassis origin + tipper reaching 5.3 m aft of
-## the pin needs ~6.9 m at -Z. 18.0 left only 6.1 m clear of the shed wall and the first E
-## press at spawn was refused by the fit check; 22.0 leaves 3.2 m of slack.
+## concrete behind it: drawbar pin 1.99 m aft of chassis origin + tipper reaching 5.3 m aft of
+## the pin needs ~7.3 m at -Z. 18.0 left only 6.1 m clear of the shed wall and the first E
+## press at spawn was refused by the fit check; 22.0 leaves 2.8 m of slack (3.2 before the
+## tractor's R0 scale pushed the pin 0.39 m further aft).
 const PARKING_ROW_Z := 22.0                  ## implements + tractor spawn
 const SHED_X := 9.0
 const SHED_YAW := PI                         ## frontage faces +Z, into the yard

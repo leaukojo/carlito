@@ -11,8 +11,8 @@
 ; needing re-verification, not a free number, and test_trailer fails instead of shipping one.
 ;
 ; Everything below is measured off box.tscn (origin AT THE KINGPIN, ground at y = -1.05):
-;   - the tri-axle bogie is the family's: z 4.90 / 5.45 / 6.00, anchors at y = 0.424 - 1.05.
-;   - center_of_mass z 3.98 puts 27.0 % on the fifth wheel ((5.45 - 3.98) / 5.45) = 6473 kg, of
+;   - the tri-axle bogie is the family's: z 4.40 / 5.20 / 6.00, anchors at y = 0.424 - 1.05.
+;   - center_of_mass z 3.798 puts 27.0 % on the fifth wheel ((5.20 - 3.798) / 5.20) = 6471 kg, of
 ;     which ~90 % lands on the tractor's drive axle. THE SHARE IS THE SAME 27 % ON ALL FOUR TRAILERS
 ;     AND IT IS NOT A STYLING CHOICE: a real van semi-trailer puts 25-30 % of its weight on the
 ;     plate, and the plate is sitting on the tractor's SINGLE DRIVEN AXLE. This shipped at 19.3 %,
@@ -20,8 +20,12 @@
 ;     as "it still struggles to climb" once the fifth-wheel pitch limit was fixed, and correctly so:
 ;     a 4x2's whole traction budget is what the plate hands it. Moving it forward is worth more than
 ;     any engine number, because the rig is grip-limited and not power-limited.
-;   - center_of_mass y -0.40 is 0.65 m above the road — palletised freight sits on the floor, so a
-;     box is not the high-centred load a tanker is.
+;   - center_of_mass y 0.55 is 1.60 m above the road, and it is the shape of a LOADED van trailer
+;     rather than of its floor: palletised freight stacks toward the roof, so the load's own centre
+;     sits about halfway up the interior. That makes this the catalog's worst roller — half-track
+;     0.72 over 1.60 m tips it at 0.45 g against mu_lat 0.75, so a laden box ROLLS BEFORE IT SLIDES
+;     and takes the tractor with it over the ±1.5 deg plate. truck/CLAUDE.md § The fifth wheel
+;     carries the formula and the reason the family's narrow track reads every threshold low.
 ;   - spring_rate 249000 is sized off the load the bogie ACTUALLY carries, 17 527 kg: 28 656 N per
 ;     wheel compresses it 0.115 m of its 0.32 m travel (36 %), the same fraction every trailer sits
 ;     at. It came DOWN with the share, because weight moved onto the plate is weight off the bogie —
@@ -59,7 +63,7 @@
 script = ExtResource("2_grounddrive")
 drag_area = 0.6
 rolling_resistance = 0.007
-wheel_positions = PackedVector3Array(-0.72, -0.626, 4.9, 0.72, -0.626, 4.9, -0.72, -0.626, 5.45, 0.72, -0.626, 5.45, -0.72, -0.626, 6, 0.72, -0.626, 6)
+wheel_positions = PackedVector3Array(-0.72, -0.626, 4.4, 0.72, -0.626, 4.4, -0.72, -0.626, 5.2, 0.72, -0.626, 5.2, -0.72, -0.626, 6, 0.72, -0.626, 6)
 wheel_radius = 0.36
 wheel_inertia = 3.0
 driven_front = false
@@ -70,8 +74,8 @@ damper_bump = 13100.0
 damper_rebound = 17650.0
 max_suspension_force = 110000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
-mu_long = 1.0
-mu_lat = 0.95
+mu_long = 0.8
+mu_lat = 0.75
 load_sensitivity = 0.08
 brake_torque = 11355.0
 handbrake_torque = 2839.0
@@ -79,7 +83,7 @@ handbrake_torque = 2839.0
 [resource]
 script = ExtResource("1_spec")
 mass = 24000.0
-center_of_mass = Vector3(0, -0.4, 3.98)
+center_of_mass = Vector3(0, 0.55, 3.798)
 ground_drive = SubResource("Resource_grounddrive")
 
 ; LAMPS — the one group of lamp fields a towed body DOES use. A trailer runs no headlamps and

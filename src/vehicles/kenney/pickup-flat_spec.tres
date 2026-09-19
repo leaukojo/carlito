@@ -6,10 +6,11 @@
 
 [sub_resource type="Resource" id="Resource_15xln"]
 script = ExtResource("1_twtdu")
-wheel_positions = PackedVector3Array(-0.6900002, 0.47295454, -0.9390686, 0.6900002, 0.47295454, -0.93906873, -0.5700002, 0.47295454, 0.7649315, 0.5700002, 0.47295454, 0.7649314)
+wheel_positions = PackedVector3Array(-0.6300002, 0.39295456, -0.9390686, 0.6300002, 0.39295456, -0.93906873, -0.6300002, 0.39295456, 0.7649315, 0.6300002, 0.39295456, 0.7649314)
 wheel_radius = 0.36
 wheel_scene = ExtResource("2_5hv01")
 rest_length = 0.28
+anti_roll_rate = 14000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_lat = 1.1
 load_sensitivity = 0.1
@@ -26,7 +27,7 @@ steer_falloff_speed = 42.0
 script = ExtResource("3_n8jpt")
 ground_drive = SubResource("Resource_15xln")
 mass = 1500.0
-center_of_mass = Vector3(0, 0.2, 0)
+center_of_mass = Vector3(0, 0.48, 0)
 torque_curve = PackedVector2Array(900, 102.9, 2000, 161.7, 3200, 193.2, 4800, 194.25, 6000, 194.25, 6600, 178.5, 6800, 64.05)
 gear_ratios = PackedFloat32Array(4.5, 2.903, 1.975, 1.431, 1.109, 0.925)
 engine_brake_frac = 0.12

@@ -241,24 +241,28 @@ func test_the_retarder_can_never_skid_the_driven_axle() -> void:
 func test_the_retarder_is_worth_feeling_on_every_shipped_truck() -> void:
 	# The rating is only defensible if the number the docs quote is the number the constants make.
 	# Fully faded in, the driven axle's torque over the wheel radius is a force and over the mass a
-	# deceleration — flat road, no drag, the same arithmetic drivetrain.gd states. Below ~0.9 m/s^2 a
-	# retarder is indistinguishable from coasting; above ~1.6 it stands in for the foot brake.
+	# deceleration — flat road, no drag, the same arithmetic drivetrain.gd states. The band's two ends
+	# are set by different things: the FLOOR is wherever the tyre puts a grip-derived retarder (see
+	# below), and the CEILING is a design limit — past ~1.6 an auxiliary brake stands in for the foot
+	# brake instead of supplementing it.
 	#
-	# The floor is 0.9 as a closed form: a grip-derived brake is `BRAKE_GRIP_FRAC * mu_long * m * g *
-	# r / 4` per wheel, so a two-driven-wheel truck retards at `RETARDER_MAX_FRAC * BRAKE_GRIP_FRAC *
-	# mu_long * g / 2` = 0.20 * 0.95 * 1.0 * 9.8 / 2 = 0.93 m/s^2; mass and wheel radius both cancel,
-	# which is why both Kenney trucks land on the same number whatever they weigh. The hand-built
-	# units keep their 10500 Nm brake and sit at 1.46, and raising RETARDER_MAX_FRAC to reach 1.0 only
-	# works in a 0.2148-0.2195 window before those units break the ceiling — so the floor moved, not
-	# the fraction.
+	# The floor is 0.7 as a closed form, and it tracks the TYRE: a grip-derived brake is
+	# `BRAKE_GRIP_FRAC * mu_long * m * g * r / 4` per wheel, so a two-driven-wheel truck retards at
+	# `RETARDER_MAX_FRAC * BRAKE_GRIP_FRAC * mu_long * g / 2` = 0.20 * 0.95 * 0.80 * 9.8 / 2 =
+	# 0.745 m/s^2; mass and wheel radius both cancel, which is why both Kenney trucks land on the same
+	# number whatever they weigh. A retarder that is a FRACTION of a grip-derived brake is worth what
+	# the tyre is worth, so the floor sits under the truck tyre rather than the fraction being raised
+	# to hold a feel number the grip no longer supports. The ceiling is unmoved at the other end: the
+	# hand-built units' 10500 Nm brake is fixed rather than grip-derived, so they sit at 1.46 whatever
+	# mu_long is.
 	for spec in _truck_specs():
 		var total: float = DrivetrainScript.retarder_rating(spec.ground_drive.brake_torque) * _rear_count(spec)
 		var decel: float = total / spec.ground_drive.wheel_radius / spec.mass
 		assert_float(decel) \
 			.override_failure_message(
-				"%s retards at only %.2f m/s^2 — the docs claim 0.9-1.6" % [
+				"%s retards at only %.2f m/s^2 — the docs claim 0.7-1.6" % [
 					spec.resource_path, decel]) \
-			.is_between(0.9, 1.6)
+			.is_between(0.7, 1.6)
 
 
 func test_the_slip_cap_stays_a_backstop_and_not_the_operating_point() -> void:
@@ -337,8 +341,9 @@ func test_every_truck_spec_keeps_the_force_hierarchy_with_the_retarder_added() -
 
 		# Full accel + full brake must stop, against the drive the DRIVEN wheels can transmit — the form
 		# test_vehicle_catalog states and the only form a grip-derived brake on a 6.5:1 first gear can
-		# satisfy. The two Kenney trucks brake at 4 x 0.95 of `mu_long * N * r` against 2 x 1.0 of
-		# transmissible drive; the hand-built units are far clear of both.
+		# satisfy. The two Kenney trucks brake at 4 x BRAKE_GRIP_FRAC of the per-wheel `mu_long * N * r`
+		# against the 2 driven wheels' worth of it; the hand-built units are far clear of both, their
+		# brake being fixed rather than grip-derived.
 		var driven := 0
 		for p in gd.wheel_positions:
 			if (p.z < 0.0 and gd.driven_front) or (p.z > 0.0 and gd.driven_rear):
