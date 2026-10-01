@@ -19,9 +19,6 @@
 ;   - the lower draft links splay to their ball ends at |x| 0.37, and lowered they sit at y 0.21,
 ;     z 1.72 -- below and behind the bar, which is why the linkage can work with a trailer hitched.
 ;
-; The pin HEIGHT (y 0.40) is a datum, not a consequence of the body: farm_tipper is authored with
-; its ground at y = -0.40 against it, so the two move together or not at all.
-;
 ; NO CollisionShape, and no RigidBody: this is tractor anatomy on the chassis body, exactly like
 ; ThreePointHitch. The joint Drawbar builds is what holds a trailer on, and it is built in code at
 ; `Pin` so the steel and the anchor cannot disagree.
@@ -41,7 +38,7 @@ roughness = 0.55
 
 ; The hanger casting under the housing. It overlaps the housing case rather than butting onto it —
 ; parts of one machine may interpenetrate freely, it is COPLANAR faces with a shared facing that
-; z-fight (see src/vehicles/CLAUDE.md).
+; z-fight (see src/vehicles/truck/CLAUDE.md § Trailer authoring).
 [sub_resource type="BoxMesh" id="MeshHanger"]
 material = SubResource("MatCast")
 size = Vector3(0.3, 0.16, 0.16)

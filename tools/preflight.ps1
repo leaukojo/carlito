@@ -44,6 +44,10 @@ Announce 'Orphan check'
 node tools/check_orphans.mjs
 if ($LASTEXITCODE -ne 0) { Fail 'orphan check (wire it up, delete it, or add it to tools/orphans_allow.txt)' }
 
+Announce 'Doc reference check'
+node tools/check_docs.mjs
+if ($LASTEXITCODE -ne 0) { Fail 'doc references (fix the doc, or add it to tools/docs_allow.txt)' }
+
 Announce 'Head-include sync check'
 node tools/check_head_include.mjs
 if ($LASTEXITCODE -ne 0) { Fail 'head-include sync (export_presets.cfg vs src/bridge/web/head_include.html)' }

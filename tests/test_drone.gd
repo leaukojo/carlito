@@ -435,8 +435,8 @@ const PROP := 0.02                       ## prop_torque_ratio (m), drone.gd's de
 
 
 # --- the closed form: demand -> mixer -> motors -> N*m round-trips ----------------
-# `max_attitude_torque = 20` and `max_yaw_torque = 1.0` are not taste values — drone.gd and
-# src/vehicles/CLAUDE.md both derive them from tau_roll = arm_x * max_thrust * roll and
+# `max_attitude_torque = 20` and `max_yaw_torque = 1.0` are not taste values — drone.gd's
+# @export comments derive them from tau_roll = arm_x * max_thrust * roll and
 # tau_yaw = prop_torque_ratio * max_thrust * yaw. Nothing used to exercise those identities
 # end to end, so the tuning rested on arithmetic in a comment. These do.
 

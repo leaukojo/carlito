@@ -6,8 +6,8 @@ extends Resource
 ## Boat, drone and train declare none, so no WheelDrive is built; the plane has one but is not
 ## driven by it, since three undriven, braked, steered wheels are still a ground drive.
 ##
-## Embedded per `<variant>_spec.tres` as a `[sub_resource]`, never standalone: an external
-## resource would re-stale bakes on every tuning change.
+## Embedded per `<variant>_spec.tres` as a `[sub_resource]`, never standalone: an external resource
+## would re-stale bakes on every tuning change.
 
 @export_group("Wheels")
 ## Hub anchors in body space, order FL, FR, RL, RR (front = -Z, right = +X).
@@ -28,6 +28,20 @@ extends Resource
 @export var rear_diff_lockable := false  ## rear axle can rigidly lock at runtime (tractor); off elsewhere so diff_lock affects nothing else
 @export var front_axle_engageable := false  ## front axle engages at runtime (tractor MFWD) instead of fixed by driven_front; off elsewhere
 @export var retarder_equipped := false  ## driveline carries an auxiliary retarder (truck J1939 SPN 520); off elsewhere
+## Torque bias ratio of the front axle's differential (`Differential.bias_capacity`): the slower
+## wheel may take up to this many times the faster one's torque. 1 = open; a helical or plate LSD
+## sits around 2-3. Only read while the axle is driven.
+@export_range(1.0, 10.0) var diff_bias_front := 1.0
+## The rear axle's, as `diff_bias_front`. The diff lock (`rear_diff_lockable`) overrides it with an
+## unbounded coupling while held.
+@export_range(1.0, 10.0) var diff_bias_rear := 1.0
+## Torque bias ratio between the axles, read whenever both are driven: 1 = an open centre, where
+## the lighter axle caps the whole body; a Torsen-type centre sits around 3.
+@export_range(1.0, 10.0) var centre_diff_bias := 1.0
+## The axles are geared rigidly together with no centre diff (a tractor's MFWD): overrides
+## `centre_diff_bias`. It winds the driveline up in tight turns, so only a body whose front axle
+## can be disengaged carries it (`test_vehicle_catalog`).
+@export var centre_diff_rigid := false
 
 @export_group("Suspension")
 @export var rest_length := 0.25     ## m of free ray travel below the hub anchor
@@ -67,29 +81,25 @@ extends Resource
 @export var handbrake_torque := 160.0  ## Nm per rear wheel — magnitudes encode the tested hierarchy: foot brake > drive force > handbrake (holds only below ~30% throttle)
 
 @export_group("Resistance")
-## Aerodynamic drag area in m^2 (Cd x frontal area), fed to `VehicleMath.aero_drag` as
-## `0.5 * rho * Cd*A * v^2`. It never scales with mass, so a coupled rig's drag is the sum of both
-## bodies' areas: a 32 t artic resists ~1.2x a rigid truck, not 4x. 0 means the plane, which runs
-## its own drag through VehicleMath.
+## Aerodynamic drag area in m^2 (Cd x frontal area), fed to `VehicleMath.aero_drag`. It never
+## scales with mass, so a coupled rig's drag is the sum of both bodies' areas: a 32 t artic resists
+## ~1.2x a rigid truck, not 4x. 0 means the plane, which runs its own drag through VehicleMath.
 @export var drag_area := 0.0
 @export var rolling_resistance := 0.0  ## `F = crr * N`; asphalt ~0.010-0.015 car, ~0.006-0.008 truck, ~0.020 lugged. N is read off the suspension each tick, not mass, so an airborne wheel resists nothing
 ## Aerodynamic downforce area in m^2 (Cl x frontal area), pushed down the body's own up axis via
 ## `VehicleMath.aero_downforce`; 0 means no wing. A force through the suspension, never a grip
-## multiplier: it compresses the springs and RayWheel turns the bigger normal load into grip, so
-## it costs ride height and gives a cornering limit that climbs with v^2. It must pair with
-## `drag_area`, checked by `test_vehicle_catalog`, and is clamped only by `max_suspension_force`
-## and `rest_length`.
+## multiplier. Must pair with `drag_area` (`test_vehicle_catalog`); bounded only by
+## `max_suspension_force` and `rest_length`.
 @export var downforce_area := 0.0
 
 
 @export_group("Steering lock")
-## Maximum steered-wheel angle in degrees. Here rather than on VehicleSpec, since a lock means
-## nothing without a wheel; `steer_speed` stays on the core spec, as it also slews a rudder.
+## Maximum steered-wheel angle in degrees. `steer_speed` stays on VehicleSpec, as it also slews a
+## rudder.
 @export var max_steer_deg := 32.0
 ## At or above steer_falloff_speed the usable lock shrinks linearly to this fraction of
-## max_steer_deg; 1.0 is a constant lock. The fraction is not the setting, the absolute lock it
-## leaves is, since it multiplies each body's own max_steer_deg. Pick the degrees wanted at speed,
-## then divide.
+## max_steer_deg; 1.0 is a constant lock. It multiplies each body's own max_steer_deg: pick the
+## degrees wanted at speed, then divide.
 @export_range(0.0, 1.0) var min_steer_frac := 1.0
 @export var steer_falloff_speed := 30.0  ## m/s at which min_steer_frac is fully reached
 
@@ -115,8 +125,8 @@ func _rear_damper_scale() -> float:
 
 
 ## Origin height (m) above flat ground with every wheel just touching and the springs unloaded:
-## `wheel_radius + rest_length` above the LOWEST wheel anchor (least y), the one that reaches the
-## ground first. 0.0 with no wheel positions, so a spawn placer can call it on any spec unguarded.
+## `wheel_radius + rest_length` above the LOWEST wheel anchor (least y). 0.0 with no wheel
+## positions, so a spawn placer can call it on any spec unguarded.
 func rest_ride_height() -> float:
 	if wheel_positions.is_empty():
 		return 0.0

@@ -62,9 +62,9 @@ func test_the_cycle_carries_the_trailer_and_still_ends_on_detached() -> void:
 
 func test_the_tractor_does_not_spawn_towing() -> void:
 	# NOT A PREFERENCE — A MEASUREMENT TRAP. tools/measure_vehicles reports its force figures against
-	# `spec.mass`, which is the TRACTOR's 4000 kg, so a towed first() would silently have it measuring
-	# a 14 t combination against a 4 t number. That is exactly the `-- semi` trap on the truck side,
-	# and it cost two sessions there.
+	# `spec.mass`, which is the TRACTOR's alone, so a towed first() would silently have it measuring
+	# the whole combination against the bare tractor. That is exactly the `-- semi` trap on the truck
+	# side.
 	assert_bool(Catalog.is_towed(Catalog.first())) \
 		.override_failure_message("first() is towed: measure_vehicles would report a coupled rig") \
 		.is_false()

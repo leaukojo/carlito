@@ -1,17 +1,16 @@
 class_name TowedBody
 extends RigidBody3D
-## A semi-trailer: a RigidBody3D on a joint carrying unmodified RayWheels, undriven and braked.
-## Not a BaseVehicle and never registers with InputRouter; brake demand arrives as a number, and
-## the tractor ticks it (SemiTractor._tick_extras) to fix integration order.
+## A towed trailer (semi or drawbar): a RigidBody3D on a joint carrying unmodified RayWheels,
+## undriven and braked. Not a BaseVehicle and never registers with InputRouter; brake demand
+## arrives as a number, and `TowHost.tick_towing` ticks it to fix integration order.
 ##
 ## Geometry: origin at the kingpin, ground at y = -1.05, trailer-space z is distance back from
 ## the kingpin, wheel anchors at negative y. `consumers()` is declared in code, never exported
 ## data, so a scene edit cannot claim a connection the machine lacks. Payload load models reach
 ## the world only through `set_load_offset`, so axle loads follow as consequences.
 
-## What a towed body can plug into on the towing unit, gated by SemiTractor. No data-bus entry:
-## ISO 11992 belongs to the towing unit's ISO 7638 connector (VehicleSpec.trailer_bus_equipped).
-## Which trailer is on the back shows through mass and moved signals, never a trailer_type.
+## What a towed body can plug into on the towing unit, gated by TowHost. No data-bus entry: ISO
+## 11992 belongs to the towing unit's ISO 7638 connector (VehicleSpec.trailer_bus_equipped).
 ## NOT ImplementBase.Connection, whose bits deliberately differ (PTO is 1 here, 4 there) and whose
 ## PTO and SCV are a different shaft and different plumbing. The only fact stated in both is the
 ## hose (HYDRAULIC here <-> Connection.SCV there), on FarmTipper alone, pinned by
@@ -21,21 +20,19 @@ enum Consumer {
 	HYDRAULIC = 2,  ## fed by a proportional hydraulic valve on the towing unit
 }
 
-## Road speed (m/s) below which a body raise is permitted: a genuine standstill, stricter than
-## RefuseBody's walking-pace arm, because a raised body is several metres of leverage.
 const Layers := preload("res://src/physics/collision_layers.gd")
-const RAISE_SPEED_MS := 0.15
-## Parking-brake application the raise interlock demands (RefuseBody.PARK_BRAKE_MIN's rule).
+const RAISE_SPEED_MS := 0.15  ## m/s; a genuine standstill, stricter than RefuseBody's arm
+## Parking-brake application the raise interlock demands (`RefuseBody.PARK_BRAKE_MIN`'s rule).
 const RAISE_PARK_BRAKE_MIN := 0.5
 
-## Contacts reported at once. `body_is_colliding` only checks emptiness, so one would do.
+## Contacts reported at once; `body_is_colliding` only checks emptiness.
 const MAX_CONTACTS_REPORTED := 4
 
 ## Seconds the service brake takes to travel its whole stroke, filling and venting. Air reaches a
-## towed body's chambers behind the towing unit's, and that lag is what makes a rig "push" on the
-## first application; venting is the slower of the two. A rate limit, so a part application
-## arrives proportionally sooner. The HANDBRAKE is deliberately not lagged: spring brakes are a
-## mechanical lock applied BY the loss of air, not a chamber being filled.
+## towed body's chambers behind the towing unit's, and that lag makes a rig "push" on the first
+## application; venting is the slower. A rate limit, so a part application arrives proportionally
+## sooner. The HANDBRAKE is not lagged: spring brakes are a mechanical lock applied BY the loss of
+## air.
 const BRAKE_APPLY_S := 0.35
 const BRAKE_RELEASE_S := 0.5
 
@@ -46,8 +43,8 @@ const BRAKE_RELEASE_S := 0.5
 
 var wheels: Array[RayWheel] = []
 
-## The trailer's own lamps, resolved off its own spec and root, driven by the tractor off lamp
-## bits already riding VehicleInput. No side channel, no local blink timer.
+## The trailer's own lamps, resolved off its own spec and root, driven off the lamp bits already
+## riding VehicleInput.
 var _lamps := LampSet.new()
 
 ## PTO drive as the towing unit last handed it down; a trailer declaring no PTO reads a dead shaft.
@@ -67,11 +64,11 @@ var _brake_actual := 0.0
 
 
 func _ready() -> void:
-	# Same layer as the towing vehicle, and set above the spec guards below, which return early
-	# even though a trailer with an authoring error still has to collide.
+	# Same layer as the towing vehicle; set above the spec guards, which return early, so an
+	# authoring-error trailer still collides.
 	collision_layer = Layers.VEHICLE
 	collision_mask = Layers.WORLD
-	# Everything below reads the spec, so say what is missing rather than null-deref two lines in.
+	# Say what is missing rather than null-deref below.
 	if spec == null:
 		push_error("%s: no VehicleSpec — the trailer has no mass, wheels or brakes" % name)
 		return
@@ -84,11 +81,11 @@ func _ready() -> void:
 	# Where it sits between kingpin and bogie is the load split (Articulation.kingpin_share).
 	center_of_mass = spec.center_of_mass
 	can_sleep = false
-	# Not a BaseVehicle, so nothing else clears the per-mass `physics/3d/default_linear_damp`;
-	# at 0.1 on 24 t it plateaus the semi at 32.7 km/h.
+	# Drag is declared, never the engine default (src/vehicles/CLAUDE.md § Drag and downforce); not
+	# a BaseVehicle, so nothing else clears it here.
 	linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
 	linear_damp = 0.0
-	# 14 t off a kerb can cross thin terrain collision in one tick.
+	# A heavy body off a kerb can cross thin terrain collision in one tick.
 	continuous_cd = true
 	# What SemiTractor's fit check reads (body_is_colliding). Cheap: normally no contacts at all.
 	contact_monitor = true
@@ -103,7 +100,7 @@ func _ready() -> void:
 	if visuals.size() != gd.wheel_positions.size():
 		push_error("%s: %d wheel visuals for %d spec wheel positions" % [
 				name, visuals.size(), gd.wheel_positions.size()])
-	# Static per-corner share of this trailer's own mass — see RayWheel.corner_mass.
+	# Static per-corner share of this trailer's own mass (`RayWheel.corner_mass`).
 	var corner_mass := spec.mass / maxf(1.0, gd.wheel_positions.size())
 	for i in gd.wheel_positions.size():
 		var visual: Node3D = visuals[i] if i < visuals.size() else null
@@ -111,21 +108,20 @@ func _ready() -> void:
 		var wheel := RayWheel.new(gd.wheel_positions[i], false, false, visual, corner_mass)
 		wheel.apply_suspension(gd)
 		wheels.append(wheel)
-	# LampSet tolerates every path missing, so a lampless trailer binds nothing and apply_lamps
-	# is a no-op rather than a crash.
+	# LampSet tolerates every path missing: a lampless trailer binds nothing.
 	_lamps.setup(self, spec)
 
 
-## Mirror the rig's lamp state onto this trailer, called by the tractor. Not physics, so it runs
-## even on a frozen showroom trailer. The contract has no trailer lamp signal: brake_lamp is one
-## bit shown at both ends of the combination.
+## Mirror the rig's lamp state onto this trailer, called by TowHost. Not physics, so it runs even
+## on a frozen showroom trailer. The contract has no trailer lamp signal: brake_lamp is one bit
+## shown at both ends of the combination.
 func apply_lamps(brake_on: bool, headlights: int, turn_left: bool, turn_right: bool) -> void:
 	_lamps.apply(brake_on, headlights, turn_left, turn_right)
 
 
-## One physics tick of the trailer's running gear. `brake01` and `handbrake01` are computed by
-## the tractor and applied through RayWheel's own brake path. The parking brake is on every axle
-## of the bogie, not a rear pair: the tractor's two driven wheels cannot hold 32 t on a grade.
+## One physics tick of the trailer's running gear. `brake01` and `handbrake01` are computed by the
+## towing unit. The parking brake is on every axle of the bogie, not a rear pair: the tractor's two
+## driven wheels cannot hold 32 t on a grade.
 func tick_towed(brake01: float, handbrake01: float, delta: float,
 		grip_terrains: Array[Node]) -> void:
 	# Empty means _ready found no spec, so roll along as dead weight rather than erroring at 60 Hz.
@@ -151,9 +147,8 @@ func tick_towed(brake01: float, handbrake01: float, delta: float,
 
 
 ## One step of the brake chambers toward `cmd`, at whichever of the two rates this direction
-## takes. A rate limit rather than a first-order lag: it saturates at the command exactly and
-## never overshoots it, so the towing unit's blend stays the ceiling on what the trailer brakes
-## with. Pure, so the two rates are testable without a physics world.
+## takes. A rate limit, not a first-order lag: it never overshoots, so the towing unit's blend
+## stays the ceiling on what the trailer brakes with.
 static func lagged_brake(actual: float, cmd: float, delta: float) -> float:
 	var target := clampf(cmd, 0.0, 1.0)
 	var span := BRAKE_APPLY_S if target > actual else BRAKE_RELEASE_S
@@ -167,10 +162,9 @@ func brake_applied() -> float:
 
 
 ## Yaw inertia proxy (kg*m^2) about this body's own up axis: `VehicleMath.inertia_of`'s box
-## footprint over the span the spec's own wheel anchors describe against the coupling datum at
-## z = 0 — the rearmost anchor plus a tyre radius is where the deck ends, the outermost pair is
-## the track. A labelled proxy, not the solver's tensor: its only consumer is the coupling's
-## Coulomb one-tick clamp, which binds only within a hair of zero relative yaw rate.
+## footprint off the wheel anchors (the rearmost plus a tyre radius is where the deck ends, the
+## outermost pair is the track). A labelled proxy, not the solver's tensor: its only consumer is
+## the coupling's Coulomb one-tick clamp, which binds only near zero relative yaw rate.
 func yaw_inertia() -> float:
 	if spec == null or spec.ground_drive == null:
 		return 0.0
@@ -180,13 +174,12 @@ func yaw_inertia() -> float:
 	for pos in gd.wheel_positions:
 		length = maxf(length, absf(pos.z) + gd.wheel_radius)
 		half_track = maxf(half_track, absf(pos.x))
-	# spec.mass, not the body's: a scene instanced for a test has not run _ready yet, and this is
-	# the same figure _ready writes there and the corner masses are shared out of.
+	# spec.mass, not the body's: a scene instanced for a test has not run _ready yet.
 	return VehicleMath.inertia_of(spec.mass, 2.0 * half_track, length)
 
 
-## Re-lay the trailer at `pose`, stopped. Zeroing velocity alone leaves it wherever it drifted,
-## and stale wheel compression or spin reads as a suspension spike.
+## Re-lay the trailer at `pose`, stopped; stale wheel compression or spin would read as a
+## suspension spike.
 func reset_at(pose: Transform3D) -> void:
 	global_transform = pose
 	linear_velocity = Vector3.ZERO
@@ -196,17 +189,16 @@ func reset_at(pose: Transform3D) -> void:
 	# A teleport differentiates into a colossal acceleration otherwise.
 	accel_fwd = 0.0
 	_last_fwd_speed = 0.0
-	# The chambers vent with the wheels, or a respawn inherits the stop it was re-laid out of
-	# and drags its trailer brakes away from the marker.
+	# Vent the chambers, or a respawn inherits the stop it was re-laid out of.
 	_brake_actual = 0.0
-	# Payload comes home too, or respawn becomes a way to keep weight the driver never put.
+	# Payload comes home too.
 	set_load_offset(0.0)
 	reset_body()
 	reset_physics_interpolation()
 
 
 ## Which of the towing unit's connections this trailer plugs into, a bitwise OR of Consumer.
-## SemiTractor gates real drive and flow on it.
+## TowHost gates real drive and flow on it.
 func consumers() -> int:
 	return 0
 
@@ -217,7 +209,7 @@ func uses(c: Consumer) -> bool:
 
 
 ## PTO seam: `on` is engaged state, `rpm` the shaft speed. A trailer not declaring Consumer.PTO
-## never sees drive, since SemiTractor gates it off at the coupling.
+## never sees drive, since TowHost gates it off at the coupling.
 func set_pto(on: bool, rpm: int) -> void:
 	pto_on = on
 	pto_rpm = rpm
@@ -240,16 +232,15 @@ func reset_body() -> void:
 	pass
 
 
-## How far the payload has slid back from the spec's centre of mass, 0..1. SemiTractor reads it
-## to clamp the raise interlock.
+## How far the payload has slid back from the spec's centre of mass, 0..1. TowHost reads it to
+## clamp the raise interlock.
 func body_pos01() -> float:
 	return 0.0
 
 
-## Move this trailer's centre of mass `offset_z` metres rearward and `offset_y` metres up. The one
-## mechanism every load model uses: gravity acts at the centre of mass, so the springs really feel
-## it. Z alone is the common case (a surge, a load sliding down a deck); y is what a body tipping
-## about its own hinge does to the load it is still carrying.
+## Move this trailer's centre of mass `offset_z` metres rearward and `offset_y` metres up: the one
+## mechanism every load model uses, so the springs feel it. Y is what a body tipping about its own
+## hinge does to the load it is still carrying.
 func set_load_offset(offset_z: float, offset_y := 0.0) -> void:
 	var offset := Vector3(0.0, offset_y, offset_z)
 	if spec == null or offset.is_equal_approx(_load_offset):
@@ -274,9 +265,8 @@ func load_shift_y() -> float:
 	return _load_offset.y
 
 
-## Is this trailer's body touching anything? It normally touches nothing (RayWheels are raycasts,
-## the tractor is excluded by the joint), so `true` right after coupling means the trailer was
-## laid inside the world.
+## Is this trailer's body touching anything? Normally nothing (RayWheels are raycasts, the tractor
+## is excluded by the joint), so `true` right after coupling means it was laid inside the world.
 func body_is_colliding() -> bool:
 	return not get_colliding_bodies().is_empty()
 
@@ -302,9 +292,8 @@ func _gather_probes(node: Node, xf: Transform3D, out: Array[Dictionary]) -> void
 		_gather_probes(n3, here, out)
 
 
-## The body-raise interlock. Every argument is towing-unit state, evaluated by SemiTractor: a
-## trailer is never asked whether it may lift itself. Raising a tipping body on the move is how a
-## trailer ends up on its side or through a bridge.
+## The body-raise interlock. Every argument is towing-unit state, evaluated by TowHost: a trailer is
+## never asked whether it may lift itself. Raising a tipping body on the move ends on its side.
 static func body_raise_allowed(speed_ms: float, parking_brake: float) -> bool:
 	return parking_brake >= RAISE_PARK_BRAKE_MIN and absf(speed_ms) <= RAISE_SPEED_MS
 
@@ -319,9 +308,9 @@ func bogie_z() -> float:
 	return total / float(spec.ground_drive.wheel_positions.size())
 
 
-## Static share of this trailer's weight resting on the fifth wheel (0..1): the load the drive
-## axle picks up on coupling. Read off the spec, so it is the parked figure the spring rates are
-## sized from and does not move when a load model does.
+## Static share of this trailer's weight resting on the fifth wheel (0..1): the load the drive axle
+## picks up on coupling. Read off the spec, so it is the parked figure the spring rates are sized
+## from and does not move with the load model.
 func kingpin_share() -> float:
 	return Articulation.kingpin_share(spec.center_of_mass.z, bogie_z())
 
@@ -341,9 +330,8 @@ func bogie_suspension_force() -> float:
 	return total
 
 
-## Worst |longitudinal slip| across the bogie this tick, which trailer_abs (EBS21) reads. These
-## wheels are undriven, so slip only means braking toward a lock. Max, not mean: ABS is a
-## per-wheel device, so one locking wheel is the event.
+## Worst |longitudinal slip| across the bogie this tick, which trailer_abs (EBS21) reads. Max, not
+## mean: ABS is per-wheel, so one locking wheel is the event.
 func max_wheel_slip() -> float:
 	var worst := 0.0
 	for w in wheels:

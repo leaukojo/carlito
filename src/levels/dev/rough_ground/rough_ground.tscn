@@ -1,0 +1,86 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://src/levels/base/level.gd" id="1_level"]
+[ext_resource type="Resource" path="res://src/levels/dev/rough_ground/rough_ground_info.tres" id="2_info"]
+[ext_resource type="Script" path="res://src/vehicles/base/chase_camera.gd" id="3_cam"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="4_spawn"]
+[ext_resource type="Script" path="res://src/levels/base/heightmap_terrain.gd" id="5_terrain"]
+[ext_resource type="Texture2D" path="res://src/levels/dev/rough_ground/rough_ground_height.png" id="6_height"]
+[ext_resource type="Texture2D" path="res://src/levels/dev/rough_ground/rough_ground_splat.png" id="7_splat"]
+[ext_resource type="Texture2D" path="res://src/levels/dev/rough_ground/rough_ground_splat2.png" id="8_splat2"]
+[ext_resource type="Shader" path="res://kit/terrain/terrain_splat.gdshader" id="9_shader"]
+[ext_resource type="Script" path="res://src/water/water_surface.gd" id="10_water"]
+[ext_resource type="Script" path="res://src/levels/base/world_bounds.gd" id="11_bounds"]
+[ext_resource type="Environment" path="res://src/levels/base/default_env.tres" id="12_env"]
+
+[sub_resource type="PlaneMesh" id="SeaBedMesh"]
+size = Vector2(400.0, 400.0)
+
+[sub_resource type="StandardMaterial3D" id="SeaBedMat"]
+albedo_color = Color(0.83, 0.76, 0.55, 1)
+
+[sub_resource type="ShaderMaterial" id="SplatMat"]
+shader = ExtResource("9_shader")
+shader_parameter/grass_color = Color(0.35, 0.55, 0.25, 1)
+shader_parameter/dirt_color = Color(0.52, 0.4, 0.26, 1)
+shader_parameter/sand_color = Color(0.83, 0.76, 0.55, 1)
+shader_parameter/rock_color = Color(0.45, 0.44, 0.42, 1)
+shader_parameter/color5 = Color(0.44, 0.29, 0.17, 1)
+shader_parameter/color6 = Color(0.3, 0.24, 0.17, 1)
+shader_parameter/color7 = Color(0.22, 0.22, 0.24, 1)
+shader_parameter/color8 = Color(0.62, 0.6, 0.56, 1)
+shader_parameter/splatmap = ExtResource("7_splat")
+shader_parameter/splatmap2 = ExtResource("8_splat2")
+shader_parameter/blend_sharpness = 8.0
+shader_parameter/roughness_value = 1.0
+
+[node name="RoughGround" type="Node3D"]
+script = ExtResource("1_level")
+info = ExtResource("2_info")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("12_env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, 0.354, -0.354, 0, 0.707, 0.707, 0.5, -0.612, 0.612, 0, 40, 0)
+light_color = Color(1, 0.96, 0.88, 1)
+shadow_enabled = true
+directional_shadow_mode = 0
+directional_shadow_max_distance = 150.0
+
+[node name="ChaseCamera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 6)
+script = ExtResource("3_cam")
+
+[node name="Spawn" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 3, 120)
+script = ExtResource("4_spawn")
+
+[node name="Sea" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0, 0)
+script = ExtResource("10_water")
+size = Vector2(400.0, 400.0)
+depth = 1.0
+far_sea_extent = 1900.0
+
+[node name="Bounds" type="StaticBody3D" parent="."]
+script = ExtResource("11_bounds")
+extent = Vector2(400.0, 400.0)
+
+[node name="SeaBed" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.01, 0)
+mesh = SubResource("SeaBedMesh")
+surface_material_override/0 = SubResource("SeaBedMat")
+
+[node name="Island" type="StaticBody3D" parent="."]
+script = ExtResource("5_terrain")
+heightmap = ExtResource("6_height")
+terrain_size = Vector2(352.0, 352.0)
+height = 3.06
+material = SubResource("SplatMat")
+splatmap = ExtResource("7_splat")
+splatmap2 = ExtResource("8_splat2")
+channel_names = PackedStringArray("Grass", "Dirt", "Sand", "Rock", "Field", "Mud", "Asphalt", "Gravel")
+channel_grip = PackedFloat32Array(0.8, 0.7, 0.6, 0.7, 0.7, 0.5, 1.0, 0.85)
+channel_drag = PackedFloat32Array(0.06, 0.03, 0.1, 0.01, 0.08, 0.2, 0.0, 0.02)
+sand_height = 1.6

@@ -1,29 +1,57 @@
-Editor/CI scripts. The kit/bake/editor-tool gotchas apply here too:
+# Tools — rules and run lines
 
-**A feel change edited into a GENERATED scene must be edited into its recipe here in the same
-commit** — the generator is the source, the `.tscn`/`.tres` is output. Worked example and the
-family-baseline form: `src/vehicles/CLAUDE.md`.
+Editor/CI scripts. Kit/bake rules: `kit/CLAUDE.md` (read it before touching a bake or level
+generator). Headless gotchas (`--script` mode, float32, freed nodes): root `CLAUDE.md` § Running.
 
-**Boat collision is hand-authored, like Kenney's.** `gen_boat_variants.gd` owns only `Model`
-+ `Lamps` (`GENERATED_CHILDREN`) and transplants every `CollisionShape3D` child (the tuned
-`CollisionLower`/`CollisionUpper` pair) plus any other hand-added node; only a variant with no
-scene yet gets a generated convex hull. A no-op re-run is byte-stable, so the regen path is the
-same as the Kenney one: edit `VARIANTS`, re-run, diff.
+- **A level generator's chain lives in its manifest**, `src/levels/**/<id>_gen.json`
+  (`src/levels/CLAUDE.md`); a generator edit moves the manifest in the same commit.
+  `powershell -File tools/rebuild_level.ps1 -Level <id>` replays it (`-DryRun` prints the chain).
+- **Boat collision survives a regen by the same whitelist as Kenney's** (`kenney/CLAUDE.md`):
+  `gen_boat_variants.gd` owns only `GENERATED_CHILDREN`.
+- **Thumbnail generators run WINDOWED** (a headless capture is blank) and never in CI. The four
+  (`gen_thumbs`, `gen_level_thumbs`, `gen_vehicle_thumbs`, `gen_challenge_thumbs`) share
+  `shot_stage.gd`. Their PNGs are not byte-deterministic: compare a re-run with `png_drift.gd`,
+  not a byte diff.
+- **Never speed a measure tool up with `Engine.time_scale`**: it enlarges the physics step
+  (`measure_vehicles.gd`). `measure_rough` takes `--fixed-fps 60` before `--` instead.
 
-**A level generator's CHAIN lives in that level's manifest, not in a header comment** —
-`src/levels/**/<id>_gen.json`, described in the root `CLAUDE.md`. These headers point at it;
-edit a generator's stages or ordering and the manifest moves in the same commit. Run one with
-`powershell -File tools/rebuild_level.ps1 -Level <id>` (`-DryRun` prints the chain and stops).
-The driver judges each Godot step by OUTPUT rather than exit code — leak-at-exit makes the code
-meaningless, and `preflight.ps1` does the same.
+## Rare generators
 
-**`tools/shot_stage.gd`** (`preload`ed, not `class_name`d) is the offscreen-capture sequence
-shared by the three PNG-writing thumbnail generators (`gen_thumbs.gd`, `gen_level_thumbs.gd`,
-`gen_vehicle_thumbs.gd`): build the capture `SubViewport`, settle N frames, read back and
-write the PNG. Framing, lighting and subject setup are genuinely per-generator and stay there;
-`src/ui/scene_bounds.gd` is the matching shared AABB walk (detail: `src/ui/CLAUDE.md`). All
-three generators must run WINDOWED — a headless capture comes back blank — and their PNG
-output is not byte-deterministic run to run, so a re-run is verified with `png_drift.gd`, not
-a byte diff.
+```powershell
+# palettes/prefabs (after kit/import recipe edits only)
+& $GODOT --headless --path . --script res://tools/gen_kit_assets.gd
+# kit thumbnails (windowed), re-import, then regen to embed the previews
+& $GODOT --path . res://tools/gen_thumbs.tscn ; & $GODOT --headless --path . --import
+& $GODOT --headless --path . --script res://tools/gen_kit_assets.gd
+# vehicle selector cards (windowed; every variant + implement/trailer), then re-import
+& $GODOT --path . res://tools/gen_vehicle_thumbs.tscn ; & $GODOT --headless --path . --import
+# Kenney / watercraft bodies (after a recipe edit)
+& $GODOT --headless --path . res://tools/gen_kenney_vehicles.tscn
+& $GODOT --headless --path . res://tools/gen_boat_variants.tscn
+# drone-mk2 model (Blender 5.1; only to regenerate, the GLBs are committed), then re-import
+& "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --factory-startup --python tools/gen_drone_model.py
+```
 
-@../kit/CLAUDE.md
+## Measure tools
+
+Dev reports, not tests; reading guide and figures: `docs/vehicles.md` § Measuring a vehicle.
+Long sweeps (`all`, `baseline`) take minutes.
+
+```powershell
+# accel / top speed / tracking on a flat full-grip strip. Arg 1: variant or `all` (default
+# sedan-sports); arg 2: time cap in s. Flags: coast, track, strict, corner.
+& $GODOT --headless --path . res://tools/measure_vehicles.tscn -- sedan-sports 45
+# the CI `tracking` gate: skips the accel pass, exits 1 on a FAIL
+& $GODOT --headless --path . res://tools/measure_vehicles.tscn -- all 45 track strict
+# drone: hover / climb / lean / endurance / one-motor-out (no args, ~1 min)
+& $GODOT --headless --path . res://tools/measure_drone.tscn
+# coupled semi launch: steer-axle load, pitch, air gate (~30 s; front_z= / com_z= what-ifs)
+& $GODOT --headless --path . res://tools/measure_semi_launch.tscn -- semi
+# steepest standing-start grade. Arg 1: variant, `all` or `level=<id>`; then surfaces
+# (asphalt gravel grass dirt field mud; none = all); flags mfwd diff tc verbose hold=<deg> pedal=<0..1>
+& $GODOT --headless --path . res://tools/measure_grade.tscn -- tractor-kenney mud mfwd tc
+& $GODOT --headless --path . res://tools/measure_grade.tscn -- level=level_2
+# bumps and ditches, asphalt and mud. Arg 1: variant or `baseline`; flags mfwd diff tc
+# speed=<m/s> lane= patch= verbose
+& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_rough.tscn -- baseline
+```

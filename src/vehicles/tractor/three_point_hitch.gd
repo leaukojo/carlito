@@ -5,12 +5,10 @@ extends Node3D
 ## planar Vector2(z, y); every pivot on local +Z. Pose: `rotation.x = -planar_angle`. Draft at
 ## chassis hitch point, not via colliders.
 
-## Top-link angle (degrees) while detached: parks instead of tracking a missing pin; lower
-## links/rockshaft articulate.
+## Top-link angle (degrees) while detached: parks instead of tracking a missing pin.
 const DETACHED_TOP_ANGLE_DEG := 4.0
 
-## Lower-link / rockshaft-arm pivot spacing (m), applied in _ready so widening it moves the whole
-## linkage rather than pulling the lift rods off their arms.
+## Lower-link / rockshaft-arm pivot spacing (m), applied in _ready to both together.
 @export var lower_link_x := 0.19
 
 @onready var _lower_links: Array[Node3D] = [$LowerLinkL, $LowerLinkR]
@@ -37,18 +35,16 @@ func _ready() -> void:
 		var side := -1.0 if i == 0 else 1.0
 		_lower_links[i].position.x = side * lower_link_x
 		_rock_arms[i].position.x = side * lower_link_x
-	# Ball ends ride the lower links alone (A-frame only enters the top-link solve), so this datum
-	# is a constant of the tractor, solved once.
+	# Ball ends ride the lower links alone (the A-frame only enters the top-link solve), so this
+	# datum is a constant of the tractor.
 	_ball_y_lowered = (_linkage.solve(0.0)["ball"] as Vector2).y
 	set_hitch(1.0)  # spawn raised (transport), matching TractorVehicle.SPAWN_HITCH
-	# Housing/PtoGuard/PtoStub/LowerLinkL/R/RockArmL/R/LiftRodL/R/TopLink each fold to one draw call
-	# per material. Mount is excluded: it carries nothing yet, and attach() merges whatever lands
-	# there in its own call, against that implement's own skip list.
+	# Mount is excluded: attach() merges whatever lands there against that implement's own skip list.
 	StaticMeshMerge.merge_subtree(self, [_mount])
 
 
-## Instance `scene` on the linkage. Replaces whatever was attached; an unloadable scene leaves the
-## hitch detached rather than half-attached.
+## Instance `scene` on the linkage, replacing whatever was attached; an unloadable scene leaves
+## the hitch detached.
 func attach(scene: PackedScene) -> void:
 	detach()
 	if scene == null:
@@ -57,20 +53,19 @@ func attach(scene: PackedScene) -> void:
 	var node := instanced as ImplementBase
 	if node == null:
 		push_error("ThreePointHitch: '%s' is not an ImplementBase" % scene.resource_path)
-		instanced.queue_free()  # nothing else references it — don't leak the orphan
+		instanced.queue_free()  # nothing else references it
 		return
 	implement = node
 	_linkage.mast_offset = node.mast_offset()
 	_mount.add_child(node)
-	# Node scripts (Spreader's Gate/RamRod) declare what StaticMeshMerge must leave individual.
+	# static_merge_skip() names the nodes StaticMeshMerge must leave individual.
 	StaticMeshMerge.merge_subtree(node, node.static_merge_skip())
 	set_hitch(_pos01)  # re-solve against the new A-frame before it is drawn
 
 
 func detach() -> void:
 	if implement != null:
-		# Unparent before queue_free (lands end-of-frame): an attach() right after detach() would
-		# otherwise stack the new implement on the outgoing one.
+		# Unparent before queue_free (end-of-frame), or an attach() right after would stack on it.
 		_mount.remove_child(implement)
 		implement.queue_free()
 		implement = null
@@ -78,8 +73,7 @@ func detach() -> void:
 	set_hitch(_pos01)
 
 
-## pos01 in [0, 1]: 1 = fully raised (transport), 0 = fully lowered (working). Solves the
-## whole linkage and poses every part from it.
+## pos01 in [0, 1]: 1 = fully raised (transport), 0 = fully lowered (working). Poses every part.
 func set_hitch(pos01: float) -> void:
 	_pos01 = pos01
 	var s := _linkage.solve(pos01)
@@ -98,8 +92,8 @@ func set_hitch(pos01: float) -> void:
 	_top_link.rotation.x = -float(s["top_angle"]) if implement != null \
 			else -deg_to_rad(DETACHED_TOP_ANGLE_DEG)
 
-	# Mount rides the ball ends and carries the solved pitch; the implement is authored in its
-	# lowered pose about the lower pin line, exactly this node's origin.
+	# Mount rides the ball ends and carries the solved pitch; the implement is authored lowered,
+	# about the lower pin line (this node's origin).
 	var ball: Vector2 = s["ball"]
 	_ball_y = ball.y
 	_mount.position = Vector3(0.0, ball.y, ball.x)
@@ -109,33 +103,32 @@ func set_hitch(pos01: float) -> void:
 		implement.set_hitch(pos01)
 
 
-## Metres the lower-link balls sit above their fully-lowered height — the implement's lift, i.e.
-## how deep its tools still are. Balls rise 0.57 m over the stroke while a plough share reaches
-## only 55 mm below ground, so shares clear the soil after the first tenth of the stroke.
+## Metres the lower-link balls sit above their fully-lowered height: the implement's lift. Balls
+## rise 0.57 m over the stroke while a plough share reaches 55 mm, so shares clear the soil after
+## the first tenth of the stroke.
 func ball_lift() -> float:
 	return _ball_y - _ball_y_lowered
 
 
-## World-space ball line: where the implement hangs and where draft force is applied to the
-## chassis (never on the implement — that subtree has no collision).
+## World-space ball line: where the implement hangs and where draft force is applied to the chassis
+## (the implement subtree has no collision).
 func hitch_point() -> Vector3:
 	return _mount.global_position
 
 
-## Store PTO state; the stub shaft spins in _process at the tractor's real shaft rpm.
+## Store PTO state; the stub shaft spins in _process at the real shaft rpm.
 func set_pto(on: bool, rpm: int) -> void:
 	_pto_on = on
 	_pto_rpm = rpm
 	if implement == null:
 		return
-	# Only an implement that declares a PTO connection is actually driven; gating here (not
-	# trusting each subclass) is what makes Connection.PTO real.
+	# Gated here, not per subclass: only an implement declaring Connection.PTO is driven.
 	var driven := implement.uses(ImplementBase.Connection.PTO)
 	implement.set_pto(on and driven, rpm if driven else 0)
 
 
-## Hand the tractor's remote hydraulic flow (0..1) down the linkage. Gated like the PTO: an
-## implement without Connection.SCV reads a shut valve regardless of spool position.
+## Hand the remote hydraulic flow (0..1) down the linkage. Gated like the PTO: no Connection.SCV
+## reads a shut valve.
 func set_scv(flow01: float) -> void:
 	if implement == null:
 		return
@@ -144,6 +137,6 @@ func set_scv(flow01: float) -> void:
 
 
 func _process(delta: float) -> void:
-	# The stub's axis is the tractor's local Z (it points straight back), so this is rotate_z.
+	# The stub points straight back along the tractor's local Z.
 	if _pto_on and _pto_stub != null:
 		_pto_stub.rotate_z(float(_pto_rpm) / 60.0 * TAU * delta)

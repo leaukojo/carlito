@@ -61,22 +61,21 @@ The editor rewrites this file on any UI export; CLI export reads it as-is.
 - CI exports one per `Web <id>` preset right after the main export: `--export-patch "Web
   <id>" c2-<sha>.<id>.pck --patches c2-<sha>.pck`. Pinned by `tests/test_export_filter.gd`
   unless noted:
-- A level preset exports everything the main one does (`all_resources`, the main filters,
-    only the *other* islands excluded) — else a preset built a pack that took ~700 files out
-    of the running game when mounted.
-- `patch_delta_encoding=true` — ~30 scenes (vehicles, `boot`, `level`) get fresh node ids
+  - A level preset exports everything the main one does (`all_resources`, the main filters,
+    only the *other* islands excluded): a narrower preset's pack, once mounted, takes ~700
+    files out of the running game.
+  - `patch_delta_encoding=true`: ~30 scenes (vehicles, `boot`, `level`) get fresh node ids
     every export; delta encoding carries them at ~5 KB a pack instead of ~365 KB.
     `uid_cache.bin`/`global_script_class_cache.cfg` stay out of it
-    (`patch_delta_exclude_filters`) — delta-encoded their read comes up short on mount;
-    whole, they cost ~33 KB raw a pack.
-- A pack mounts only over the main pack of the same run — shared `c2-<sha>` stem, read from
-    `GODOT_CONFIG.executable`.
-- `HTTPRequest.accept_gzip = false` — GitHub Pages gzips `.pck`; HTTPRequest would gunzip an
-    already-decompressed body (`RESULT_BODY_DECOMPRESS_FAILED`). No `download_file` either —
+    (`patch_delta_exclude_filters`): delta-encoded, their read comes up short on mount.
+  - A pack mounts only over the main pack of the same run (shared `c2-<sha>` stem, read from
+    `GODOT_CONFIG.executable`).
+  - `HTTPRequest.accept_gzip = false`: GitHub Pages gzips `.pck`, and HTTPRequest would gunzip
+    an already-decompressed body (`RESULT_BODY_DECOMPRESS_FAILED`). No `download_file` either:
     on web it reports success and writes nothing.
-- An island's level-select size comes from `res://src/shell/level_weights.json`
+  - An island's level-select size comes from `res://src/shell/level_weights.json`
     (`LevelRegistry.SHIPPED_WEIGHTS`).
-- 4.7.1 occasionally segfaults on exit after writing a patch, so CI judges by the `savepack`
+  - 4.7.1 occasionally segfaults on exit after writing a patch, so CI judges by the `savepack`
     DONE line, not exit code.
 - A new island needs a `Web <id>` preset: copy a sibling's two sections, let the test name
   the exclude list. Reproduce locally (stem is `index` there) and serve `build/web/`; a
@@ -164,8 +163,8 @@ both [`carlito`](https://github.com/leaukojo/carlito) and
 [`sloppycan`](https://github.com/leaukojo/sloppycan) and both promote together. Promoting
 one alone puts a live stable pair on mismatched versions.
 
-Run `node tools/gen_js_contract.mjs` before pushing — the pre-commit hook blocks a stale
-sloppyCAN copy.
+The pre-commit hook regenerates the sloppyCAN copy and fails the commit until that copy is
+committed in `sloppycan` (`contract/CLAUDE.md`).
 
 sloppyCAN mirrors this (`main` + `dev`, `gh-pages`, a matching promote workflow) but ships
 no service worker: stable is `https://leaukojo.github.io/sloppycan/`, dev is
@@ -173,5 +172,6 @@ no service worker: stable is `https://leaukojo.github.io/sloppycan/`, dev is
 
 ## Before you push
 
-`powershell -File tools/preflight.ps1` runs every CI gate locally; the pre-commit hook
+`powershell -File tools/preflight.ps1` runs the CI gates locally except tracking, bake and
+export (and adds `check_orphans` / `check_docs`, which CI does not run); the pre-commit hook
 covers the cheap ones. Stale bakes are the most common failure.

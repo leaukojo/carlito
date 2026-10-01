@@ -25,8 +25,13 @@ static func settle(tree: SceneTree, frames: int) -> void:
 
 
 ## Read back `vp`'s render target and write it to `out_path`. Returns false (with a
-## push_error) on a blank capture or a failed write; the caller frees its subject either way.
+## push_error) on a headless run, a blank capture or a failed write; the caller frees its subject
+## either way. A headless run renders nothing, so writing would overwrite a committed card with a
+## blank one.
 static func save_capture(vp: SubViewport, out_path: String) -> bool:
+	if DisplayServer.get_name() == "headless":
+		push_error("headless run renders nothing; not writing " + out_path + " (run windowed)")
+		return false
 	var img := vp.get_texture().get_image()
 	if img == null:
 		push_error("blank capture for " + out_path)

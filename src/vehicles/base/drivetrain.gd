@@ -5,39 +5,37 @@ extends RefCounted
 ## engine never falls below what the converter lets it reach (`converter_free_rpm`, which is the
 ## only thing between crank and gearbox: no clutch, no bite point, no stall). Static pure
 ## functions; the instance holds only the current gear and smoothed RPM. Approach informed by
-## Dechode/Godot-Advanced-Vehicle and Tobalation/GDCustomRaycastVehicle (MIT, credited in README);
-## no code copied.
+## Dechode/Godot-Advanced-Vehicle and Tobalation/GDCustomRaycastVehicle (credited in README).
 
 ## RAMN gear byte: 0x00 = N, 0x01..0x06 = D1-D6, 0xFF = R.
 const GEAR_N := 0x00
 const GEAR_R := 0xFF
-## Tallest drive byte RAMN can express. Bus-defined, not spec-defined: do not replace with
-## `gear_ratios.size()`. The shift functions take `mini()` of both, since a short array counts too.
+## Tallest drive byte RAMN can express. Bus-defined, not spec-defined (never `gear_ratios.size()`);
+## the shift functions take `mini()` of both, since a short array counts too.
 const TOP_GEAR := 6
 
 const RADS_TO_RPM := 60.0 / TAU
 const RPM_SMOOTH := 8.0  ## 1/s exponential rate the displayed/torque RPM tracks the target
 
 ## m/s below speed_limit_kmh over which the governor fades throttle out, so the vehicle settles
-## on the limit instead of hunting (hard cut -> decelerate -> uncut -> accelerate).
+## on the limit instead of hunting.
 const GOVERNOR_BAND := 1.5
 
 ## Gear-selection radius (m) for a body with no ground drive, which still walks a gearbox and
 ## publishes the gear byte without owning a wheel.
 const DEFAULT_ROAD_RADIUS := 0.32
-## Floor under any declared `wheel_radius` (m): it is a divisor below (gear selection,
-## governed_upshift), and no real wheel is this small, so a misconfigured 0 cannot reach the
-## division.
+## Floor under any declared `wheel_radius` (m): a divisor in gear selection and `governed_upshift`,
+## so a misconfigured 0 cannot reach the division.
 const MIN_ROAD_RADIUS := 0.05
 
 var spec: VehicleSpec
-## Radius the gear-selection scale (`ground_speed / road_radius`) is measured against, declared
-## here rather than read off the spec because a wheel-less body still needs it.
+## Radius the gear-selection scale (`ground_speed / road_radius`) is measured against; here rather
+## than on the spec because a wheel-less body still needs it.
 var road_radius: float
 var gear_byte := GEAR_N
 var rpm: float
-## Throttle actually delivered this tick, 0..1, after the governor and rev limiter. Telemetry
-## reads this, not `input.throttle` (rule 3): a governed vehicle holds the pedal down while fuel
+## Throttle actually delivered this tick, 0..1, after the governor, rev limiter and shift cut.
+## Telemetry reads this, not `input.throttle`: a governed vehicle holds the pedal down while fuel
 ## is cut.
 var applied_throttle := 0.0
 ## Ticks left in the post-shift throttle cut (`spec.shift_cut_s`), 0 when driving through.
@@ -66,17 +64,21 @@ static func normalize_byte(byte: int) -> int:
 	return GEAR_N
 
 
-## Total engine->wheel ratio, signed by direction (forward +, reverse -), 0 in N.
+## Total engine->wheel ratio, signed by direction (forward +, reverse -), 0 in N. A drive byte
+## past a short gearbox (a bridge-exact D6 on a 3-speed) selects its top ratio; no ratios, 0.
 static func ratio_for_byte(p_spec: VehicleSpec, byte: int) -> float:
 	if is_drive(byte):
-		return p_spec.gear_ratios[byte - 1] * p_spec.final_drive
+		var n := p_spec.gear_ratios.size()
+		if n == 0:
+			return 0.0
+		return p_spec.gear_ratios[mini(byte, n) - 1] * p_spec.final_drive
 	if is_reverse(byte):
 		return -p_spec.reverse_ratio * p_spec.final_drive
 	return 0.0
 
 
-## Peak of the torque curve, at any rpm. The denominator for engine_load, since the current-rpm
-## torque would cancel to plain throttle.
+## Peak of the torque curve, at any rpm. The engine_load denominator (the current-rpm torque would
+## cancel to plain throttle).
 static func peak_torque(p_spec: VehicleSpec) -> float:
 	var peak := 0.0
 	for p in p_spec.torque_curve:
@@ -84,14 +86,14 @@ static func peak_torque(p_spec: VehicleSpec) -> float:
 	return peak
 
 
-## Full-throttle torque at rpm, off the curve. Redline is not handled here: the limiter is a
-## fuel cut (`limiter_cut`, applied via `applied_throttle`), so the curve stays honest past it.
+## Full-throttle torque at rpm, off the curve. Redline is not handled here: the limiter is a fuel
+## cut (`limiter_cut`, via `applied_throttle`).
 static func engine_torque(p_spec: VehicleSpec, at_rpm: float) -> float:
 	return VehicleSpec.sample_curve(p_spec.torque_curve, at_rpm)
 
 
-## Engine speed the wheels impose through the ratio (rpm), unclamped; idle in N. This is what
-## the limiter judges — clutch-less, so the engine really can be driven past redline.
+## Engine speed the wheels impose through the ratio (rpm), unclamped; idle in N. This is what the
+## limiter judges: the engine can be driven past redline.
 static func wheel_engine_rpm(p_spec: VehicleSpec, wheel_omega: float, byte: int) -> float:
 	var ratio := ratio_for_byte(p_spec, byte)
 	if ratio == 0.0:
@@ -105,9 +107,8 @@ static func rpm_from_wheel(p_spec: VehicleSpec, wheel_omega: float, byte: int) -
 	return clampf(wheel_engine_rpm(p_spec, wheel_omega, byte), p_spec.idle_rpm, p_spec.redline_rpm)
 
 
-## Rev limiter: does the engine get fuel at this crank speed? Feed it `wheel_engine_rpm`, never
-## the clamped `rpm`. A hard cut on purpose: any visible fade band would eat real torque below
-## redline and move shipped top speeds.
+## Rev limiter: does the engine get fuel at this crank speed? Feed it `wheel_engine_rpm`, never the
+## clamped `rpm`. A hard cut on purpose (a fade band moves top speeds).
 static func limiter_cut(p_spec: VehicleSpec, engine_rpm: float) -> bool:
 	return engine_rpm >= p_spec.redline_rpm
 
@@ -121,9 +122,9 @@ static func governor_scale(p_spec: VehicleSpec, ground_speed: float) -> float:
 	return clampf((limit - absf(ground_speed)) / GOVERNOR_BAND, 0.0, 1.0)
 
 
-## Gear a governed vehicle belongs in: the tallest one still above its downshift point.
-## Auto-shift alone cannot get there, since it upshifts on rpm and a limit can sit just below the
-## next upshift's road speed. The `shift_down_rpm` guard stops this lugging a slow-governed body.
+## Gear a governed vehicle belongs in: the tallest one still above its downshift point. Auto-shift
+## alone cannot get there: it upshifts on rpm, and a limit can sit just below the next upshift's
+## road speed. The `shift_down_rpm` guard stops it lugging a slow-governed body.
 static func governed_upshift(p_spec: VehicleSpec, gear: int, ground_speed: float,
 		p_road_radius: float) -> int:
 	var g := gear
@@ -144,8 +145,8 @@ static func wheel_torque(p_spec: VehicleSpec, at_rpm: float, throttle: float, by
 ## `engine_brake_frac` of its peak, scaled linearly from 0 at idle to full at redline, through
 ## the gear ratio and DIVIDED by efficiency (a load the engine absorbs pays the driveline loss
 ## the other way). Signed AGAINST the gear's rolling direction, so reverse overrun is +.
-## Hard edge at throttle 0 on purpose: any fade across low throttle eats real drive torque
-## and moves shipped top speeds. 0 in N, at idle, or with any throttle at all.
+## Hard edge at throttle 0 on purpose (a fade moves top speeds). 0 in N, at idle, or with any
+## throttle at all.
 static func overrun_torque(p_spec: VehicleSpec, at_rpm: float, throttle: float,
 		byte: int) -> float:
 	if throttle > 0.0 or p_spec.engine_brake_frac <= 0.0:
@@ -159,41 +160,31 @@ static func overrun_torque(p_spec: VehicleSpec, at_rpm: float, throttle: float,
 			/ maxf(p_spec.efficiency, 0.05)
 
 
-## Common spin speed of a rigidly locked axle: one shaft, so the mean is the momentum-conserving
-## result. It only shrinks the spread between the two wheels, so it adds no energy and needs no
-## clamp. Unlocked, equal torque to both half-shafts is the open-differential law.
-static func locked_axle_omega(omega_a: float, omega_b: float) -> float:
-	return (omega_a + omega_b) * 0.5
-
-
 # --- torque converter (the crank against a held wheel) -------------------------------------
 ## The one element between engine and gearbox, and a rev model only: it multiplies NO torque
 ## where a real converter makes 1.8-2.2x at stall, which keeps every launch figure conservative
 ## and leaves the brake > drive > handbrake hierarchy alone (src/vehicles/CLAUDE.md).
 
-## Converter stall speed as a fraction of the engine's own usable band (idle -> redline). One
-## derivation for every machine rather than a per-spec knob, like the tyre-derived brakes: 0.25
-## is 2375 rpm on the car family, 1325 on the trucks, 1250 on the tractor — all plausible stall
-## speeds, and all below their torque peaks, which is what keeps the foot brake winning. It
-## cannot reach the limiter at any value: that judges `wheel_engine_rpm`, the raw wheel side.
+## Converter stall speed as a fraction of the engine's own usable band (idle -> redline): one
+## derivation for every machine, not a per-spec knob. 0.25 puts every shipped stall below its
+## torque peak, which keeps the foot brake winning. It cannot reach the limiter at any value: that
+## judges `wheel_engine_rpm`, the raw wheel side.
 const STALL_RPM_FRAC := 0.25
 
 
 ## Whether this machine has a fluid coupling between engine and gearbox: an engine that drives
-## wheels does. Boat, drone and train carry no `ground_drive` at all and the plane's wheels are
-## undriven, so all four keep the rigid crank, where wheel speed alone sets rpm.
+## wheels does. Boat, drone, train (no `ground_drive`) and plane (undriven wheels) keep the rigid
+## crank, where wheel speed alone sets rpm.
 static func has_converter(p_spec: VehicleSpec) -> bool:
 	var gd := p_spec.ground_drive
 	return gd != null and (gd.driven_front or gd.driven_rear)
 
 
-## Crank speed the converter alone will let the engine reach with the turbine held (rpm): idle
-## at a closed throttle rising to the stall speed at full. This is what makes a held vehicle rev
-## instead of sitting at idle — brake or handbrake on, the engine climbs here and the torque
-## curve is sampled there. LINEAR in throttle, where a real converter's capacity torque goes as
-## N^2 and would rev harder at a small pedal; the handbrake break-away figures quoted in
-## `src/vehicles/CLAUDE.md` are read off this straight line. `idle_rpm` with no converter, so a
-## rigid crank is unchanged.
+## Crank speed the converter alone will let the engine reach with the turbine held (rpm): idle at
+## a closed throttle rising to the stall speed at full, so a held vehicle revs and the torque curve
+## is sampled there. LINEAR in throttle (a real converter's capacity goes as N^2 and would rev
+## harder at a small pedal); the handbrake break-away figures in `docs/vehicles.md` § Physics
+## derivations and figures are read off this line. `idle_rpm` with no converter.
 static func converter_free_rpm(p_spec: VehicleSpec, throttle: float) -> float:
 	if not has_converter(p_spec):
 		return p_spec.idle_rpm
@@ -202,29 +193,21 @@ static func converter_free_rpm(p_spec: VehicleSpec, throttle: float) -> float:
 
 
 # --- auxiliary driveline retarder (truck, J1939 SPN 520) ------------------------------------
-## Driveline behaviour, gated by GroundDriveSpec.retarder_equipped and applied by WheelDrive, not
-## a vehicle subclass. It joins the other brake torques on the driven wheels so RayWheel
-## integrates it with the same semi-implicit step, and must stay inside that integrator: a
-## separate move_toward after the wheels tick over-corrects on the first tick (slip 1.0, 8 m/s^2).
-## The spring brake is a post-tick kinematic zero-lock, which can only remove energy.
+## Gated by GroundDriveSpec.retarder_equipped and applied by WheelDrive. It joins the other brake
+## torques so RayWheel integrates it in the same semi-implicit step, and must stay inside that
+## integrator: a separate move_toward after the wheels tick over-corrects on the first tick.
 
 ## Retarder rating per driven wheel, as a fraction of brake_torque (the 'retarder_state' 100%
-## point). On a grip-derived brake mass and radius cancel, so the flat-road retardation is
-## `frac * BRAKE_GRIP_FRAC * mu_long * g / 2` — 0.20 is 0.745 m/s^2 on both Kenney trucks at the
-## family's truck tyre, and 1.46 on the hand-built units, whose 10500 Nm brake is fixed rather
-## than grip-derived and so does not move with mu. `test_truck` pins a 0.7-1.6 band per spec.
-##
-## It stays auxiliary by construction: 0.20 of per-wheel brake torque is ~10% of the four-wheel
-## service brake and, on a grip-derived brake, exactly `0.20 * BRAKE_GRIP_FRAC` = 0.19 of that
-## wheel's own grip torque whatever mu is — so brake > transmissible drive > handbrake holds at any
-## tyre. Raising it means re-checking the settled slip below.
+## point); retardation figures: docs/heavy_vehicles.md. `test_truck` pins a band per spec. It stays
+## auxiliary by construction: on a grip-derived brake it is `0.20 * BRAKE_GRIP_FRAC` of the wheel's
+## own grip torque whatever mu is, so brake > transmissible drive > handbrake holds at any tyre.
+## Raising it means re-checking `RETARDER_SLIP_TARGET`.
 const RETARDER_MAX_FRAC := 0.20
 const RETARDER_CUTOUT_MS := 1.5  ## m/s below which a driveline brake does nothing at all
 const RETARDER_FULL_MS := 8.0    ## m/s (~29 km/h) at which it reaches its rating
 ## Slip ratio the retarder will not drive the driven axle past. A backstop, not the operating
-## point (measured settled slip is 0.024-0.029), so a rating edit fails visibly instead of quietly
-## skidding the axle. Slip, not force: a locked wheel is already making the saturated road torque,
-## so a force cap at mu*N*r permits a full skid.
+## point, so a rating edit fails visibly instead of quietly skidding the axle. Slip, not force: a
+## locked wheel already makes the saturated road torque, so a force cap at mu*N*r permits a skid.
 const RETARDER_SLIP_TARGET := 0.10
 
 
@@ -247,20 +230,17 @@ static func retarder_demand(request01: float, speed_ms: float, brake_torque: flo
 
 
 ## Anti-lock backstop (Nm): the most spin this wheel may lose in one tick without exceeding
-## RETARDER_SLIP_TARGET, and 0 once the axle is already at or past the target. Worked in slip
-## velocity against RayWheel's own denominator (LOW_SPEED_FLOOR), the same ratio RayWheel computes.
-##
-## `road_speed` is the signed chassis forward velocity (negative in reverse), needed for the
-## headroom sign below, so never pass a magnitude.
+## RETARDER_SLIP_TARGET, and 0 once the axle is already at or past it. Uses RayWheel's own slip
+## denominator (LOW_SPEED_FLOOR). `road_speed` is the signed chassis forward velocity (negative in
+## reverse), never a magnitude.
 static func retarder_slip_cap(omega: float, road_speed: float, radius: float, inertia: float,
 		delta: float) -> float:
 	if radius <= 0.0 or delta <= 0.0:
 		return 0.0
 	var denom := maxf(absf(road_speed), RayWheel.LOW_SPEED_FLOOR)
 	var slip_vel := omega * radius - road_speed
-	# Headroom toward the braking side, in m/s of slip velocity; the sign of road_speed picks the
-	# braking direction. At a standstill this degenerates to a nonzero cap, which is harmless: the
-	# demand it is minned against is already 0 below RETARDER_CUTOUT_MS.
+	# Headroom toward the braking side (m/s of slip velocity); the sign of road_speed picks the
+	# direction. Nonzero at a standstill, harmless: demand is 0 below RETARDER_CUTOUT_MS.
 	var headroom := signf(road_speed) * slip_vel + RETARDER_SLIP_TARGET * denom
 	return maxf(headroom, 0.0) * maxf(inertia, 0.0) / (radius * delta)
 
@@ -281,8 +261,7 @@ static func retarder_pct(applied_nm: float, rated_nm: float) -> float:
 	return clampf(absf(applied_nm) / rated_nm * 100.0, 0.0, 100.0)
 
 
-## True while the post-shift throttle cut is running. Test accessor for `_shift_cut_ticks`;
-## no dashboard or telemetry reads it.
+## True while the post-shift throttle cut is running. Test accessor for `_shift_cut_ticks`.
 func shift_cut_active() -> bool:
 	return _shift_cut_ticks > 0
 
@@ -295,7 +274,7 @@ static func shift_cut_ticks(cut_s: float, delta: float) -> int:
 
 
 ## A byte change that is a SHIFT: both sides engaged (D or R), so N<->D is a selection, not a
-## shift, and D1->D2 or a bridge D->R write are.
+## shift.
 static func is_shift(from_byte: int, to_byte: int) -> bool:
 	return from_byte != to_byte and from_byte != GEAR_N and to_byte != GEAR_N
 
@@ -304,8 +283,7 @@ static func is_shift(from_byte: int, to_byte: int) -> bool:
 static func auto_shift(p_spec: VehicleSpec, byte: int, at_rpm: float) -> int:
 	if not is_drive(byte):
 		return normalize_byte(byte)
-	# mini(TOP_GEAR, gear_ratios.size()): ratio_for_byte indexes gear_ratios[byte-1], so
-	# upshifting past a short array is an out-of-range read.
+	# mini(TOP_GEAR, gear_ratios.size()): never upshift past the last real ratio.
 	if at_rpm >= p_spec.shift_up_rpm and byte < mini(TOP_GEAR, p_spec.gear_ratios.size()):
 		return byte + 1
 	if at_rpm <= p_spec.shift_down_rpm and byte > 1:
@@ -327,8 +305,7 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 		elif not is_drive(gear_byte):
 			gear_byte = req
 		if is_drive(gear_byte):
-			# Shift on road speed, not the spinning drive wheel: wheelspin over-reads rpm,
-			# causing an early upshift that then bogs and hunts.
+			# Road speed, not the drive wheel: wheelspin over-reads rpm and upshifts early.
 			var road_omega := ground_speed / road_radius
 			gear_byte = auto_shift(spec, gear_byte, rpm_from_wheel(spec, road_omega, gear_byte))
 			# Against the limiter, take the tallest gear that will hold.
@@ -349,16 +326,14 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 		target_rpm = lerpf(spec.idle_rpm, spec.redline_rpm, clampf(throttle, 0.0, 1.0))
 	else:
 		limiter_rpm = wheel_engine_rpm(spec, drive_wheel_omega, gear_byte)
-		# The converter is a floor under the wheels, never a ceiling: whichever side spins the
-		# crank faster wins, so a held vehicle revs to stall while a rolling one is coupled and
-		# reads exactly what the wheels impose. The limiter keeps judging `limiter_rpm` (the raw
-		# wheel side) — a converter cannot over-rev an engine it only spins to stall.
+		# A floor under the wheels, never a ceiling: the faster side wins, so a held vehicle revs to
+		# stall and a rolling one reads what the wheels impose. The limiter keeps judging
+		# `limiter_rpm` (a converter only spins to stall).
 		target_rpm = maxf(clampf(limiter_rpm, spec.idle_rpm, spec.redline_rpm),
 				converter_free_rpm(spec, throttle))
 	rpm = lerpf(rpm, target_rpm, 1.0 - exp(-RPM_SMOOTH * delta))
 
-	# Both cuts sit between the pedal and the engine: rpm above still follows the wheels, torque
-	# below is what was actually allowed.
+	# The limiter and governor cut between pedal and engine: rpm still follows the wheels.
 	applied_throttle = clampf(throttle, 0.0, 1.0) * governor_scale(spec, ground_speed)
 	if limiter_cut(spec, limiter_rpm):
 		applied_throttle = 0.0
@@ -366,8 +341,8 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 	# pedal down is not on overrun, and applied_throttle stays 0 on overrun so fuel / coolant /
 	# engine_load see no load (J1939 negative percent-torque is deliberately not modelled).
 	var pedal := clampf(throttle, 0.0, 1.0)
-	# The shift cut is a lift: no drive, overrun as if the pedal were up, and the cut rides
-	# applied_throttle like the limiter's so telemetry reads it.
+	# The shift cut is a lift: no drive, overrun as if the pedal were up, and it rides
+	# applied_throttle so telemetry reads it.
 	if _shift_cut_ticks > 0:
 		_shift_cut_ticks -= 1
 		applied_throttle = 0.0

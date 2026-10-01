@@ -1,9 +1,9 @@
 class_name TrainSim
 extends RefCounted
-## 1D consist sim: each car is a point mass on a curve arc; loco (index 0) pulls the rake via
-## spring-damper couplers. Cars ordered head->tail; +s is forward. Forces are static pure
-## functions so the sim runs headless. 60 Hz clamp discipline: damper never exceeds one-tick
-## velocity reversal impulse; coupler force is hard-capped. Don't weaken either.
+## 1D consist sim: each car is a point mass on a curve arc; the loco (index 0) pulls the rake via
+## spring-damper couplers. Cars run head -> tail; +s is forward. Forces are static pure functions,
+## so the sim runs headless. The coupler damper and the brake are one-tick clamped and the coupler
+## force is hard-capped (the 60 Hz tick: `src/vehicles/CLAUDE.md`).
 
 const GRAVITY := 9.8  ## m/s^2; matches the project default_gravity
 
@@ -15,7 +15,7 @@ var rest_gaps := PackedFloat64Array()  ## rest centre-to-centre spacing per adja
 var length := 0.0                  ## curve length (m); wrap modulus on closed loops
 var closed := false
 
-# --- tuning (TrainVehicle never touches these; honest EMU-inspired defaults, all clearly tunable) ---
+# --- tuning (TrainVehicle never touches these; EMU-inspired honest defaults) ---
 var max_tractive := 320000.0   ## N, starting tractive effort (constant to base_speed)
 var base_speed := 14.0         ## m/s, corner speed where traction goes power-limited
 var max_power := 4480000.0     ## W, = max_tractive * base_speed above base_speed
@@ -26,14 +26,14 @@ var davis_c := 0.8             ## N*s^2/m^2, aero term (per car)
 var coupler_k := 3.0e6         ## N/m, drawbar stiffness
 var coupler_damp := 2.0e5      ## N*s/m, coupler damping
 var coupler_slack := 0.05      ## m, free travel each side of rest before a coupler bites
-var max_coupler := 500000.0    ## N, coupler force hard cap (matches contract coupler_force range)
+var max_coupler := 500000.0    ## N, coupler force hard cap (the contract `coupler_force` range)
 
 # --- outputs, refreshed each step() ---
 var head_coupler_force := 0.0  ## N, coupler between loco and first wagon (+ = tension/draw, - = buff)
 var loco_accel := 0.0          ## m/s^2, net along-track acceleration of the loco
 
 
-## Lay the consist out with the head at `head_s`, each following car one rest-gap behind.
+## Lays the consist out with the head at `head_s`, each following car one rest-gap behind.
 func setup(car_masses: PackedFloat64Array, gaps: PackedFloat64Array, curve_length: float,
 		is_closed: bool, head_s := 0.0) -> void:
 	masses = car_masses
@@ -53,8 +53,8 @@ func setup(car_masses: PackedFloat64Array, gaps: PackedFloat64Array, curve_lengt
 			pos -= rest_gaps[i]
 
 
-## Advance the consist one tick. `throttle` is the signed reverser demand (-1..1); `brake`
-## and `parking` are 0..1; `grades[i]` is the signed track slope (rise/run) at car i.
+## Advances the consist one tick. `throttle` is the signed reverser demand (-1..1); `brake` and
+## `parking` are 0..1; `grades[i]` is the signed track slope (rise/run) at car i.
 func step(delta: float, throttle: float, brake: float, parking: float,
 		grades: PackedFloat64Array) -> void:
 	var n := s.size()
@@ -64,9 +64,8 @@ func step(delta: float, throttle: float, brake: float, parking: float,
 		var f := 0.0
 		if i == 0:
 			f += tractive_effort(v[i], throttle, base_speed, max_tractive, max_power)
-		# Davis and the brake are both resistive (opposing v), and brake_force alone already
-		# clamps to one tick's zeroing — but summed with Davis, unclamped, the pair can still
-		# overshoot past zero and sign-chatter forever. Clamp the SUM, not each term alone.
+		# Davis and the brake both oppose v. brake_force alone clamps to one tick's zeroing, but the
+		# unclamped sum with Davis can overshoot zero and sign-chatter, so clamp the SUM.
 		var resistive := davis_resistance(v[i], davis_a, davis_b, davis_c) \
 				+ brake_force(v[i], brake, parking, max_brake, masses[i], delta)
 		if v[i] != 0.0:
@@ -95,8 +94,8 @@ func step(delta: float, throttle: float, brake: float, parking: float,
 		s[i] = _wrap(s[i] + v[i] * delta)
 
 
-## Signed centre-to-centre gap between adjacent cars, wrapped onto the loop so a coupler
-## straddling the s=0 seam still reads its true rest_gap separation.
+## Signed centre-to-centre gap between adjacent cars, wrapped so a coupler straddling the s = 0
+## seam still reads its true separation.
 func _wrapped_gap(s_lead: float, s_follow: float) -> float:
 	var d := s_lead - s_follow
 	if not closed or length <= 0.0:
@@ -110,11 +109,10 @@ func _wrap(arc: float) -> float:
 	return arc
 
 
-# --- pure force math (unit-tested; one-tick clamped like RayWheel / the boat) ---------------
+# --- pure force math ---
 
-## Tractive effort (N), signed by the reverser throttle. Constant `max_force` up to
-## `base_speed`, then power-limited (P/v) above it — the standard traction hyperbola. Zero
-## demand -> zero force; direction follows the throttle sign (the reverser), never the speed.
+## Tractive effort (N), signed by the reverser throttle: constant `max_force` up to `corner_speed`,
+## then power-limited (P/v). Direction follows the throttle sign (the reverser), never the speed.
 static func tractive_effort(speed: float, throttle: float, corner_speed: float,
 		max_force: float, power_cap: float) -> float:
 	var mag := clampf(absf(throttle), 0.0, 1.0)
@@ -127,15 +125,15 @@ static func tractive_effort(speed: float, throttle: float, corner_speed: float,
 	return signf(throttle) * mag * f
 
 
-## Davis running resistance (N), opposing motion: a + b|v| + c v^2. Zero at rest (nothing to
-## oppose), so it never induces standstill jitter.
+## Davis running resistance (N), opposing motion: a + b|v| + c v^2. Zero at rest, so it cannot
+## induce standstill jitter.
 static func davis_resistance(speed: float, a: float, b: float, c: float) -> float:
 	var spd := absf(speed)
 	return -signf(speed) * (a + b * spd + c * spd * spd)
 
 
-## Train + parking brake force (N), opposing velocity, clamped so one tick can at most zero
-## the car's speed, never reverse it.
+## Train + parking brake force (N), opposing velocity, clamped so one tick at most zeroes the
+## car's speed, never reverses it.
 static func brake_force(speed: float, brake: float, parking: float, brake_max: float,
 		mass: float, delta: float) -> float:
 	var demand := clampf(brake + parking, 0.0, 1.0) * brake_max
@@ -145,16 +143,15 @@ static func brake_force(speed: float, brake: float, parking: float, brake_max: f
 	return clampf(-signf(speed) * demand, -tick_cap, tick_cap)
 
 
-## Gravity holdback along the track (N): negative (retarding +s travel) on a climb, positive
-## on a descent. `grade` is rise/run; sin(atan(grade)) keeps it exact for steep slopes.
+## Gravity along the track (N): negative (retarding +s travel) on a climb, positive on a descent.
+## `grade` is rise/run; sin(atan(grade)) stays exact on steep slopes.
 static func grade_force(mass: float, grade: float, gravity: float) -> float:
 	return -mass * gravity * sin(atan(grade))
 
 
-## Coupler force (N) between two cars: spring on the stretch beyond the slack deadband plus a
-## damper on the closing rate. + = tension (draw), - = buff. Damper clamped to the one-tick
-## reversal of the relative velocity (reduced mass); total hard-capped — don't weaken either.
-## Inside the slack band the coupler is free (returns 0).
+## Coupler force (N) between two cars: spring on the stretch beyond the slack deadband plus a damper
+## on the closing rate; + = tension (draw), - = buff. The damper is clamped to the one-tick reversal
+## of the relative velocity (reduced mass) and the total hard-capped. Zero inside the slack band.
 static func coupler_force(gap: float, rest: float, slack: float, rel_vel: float,
 		k: float, damp: float, reduced_mass: float, delta: float, max_force: float) -> float:
 	var stretch := gap - rest

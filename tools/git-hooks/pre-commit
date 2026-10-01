@@ -5,8 +5,8 @@
 set -e
 # Godot binary: $GODOT_BIN -> `git config carlito.godotbin` -> `godot` on PATH.
 # Resolved lazily in gate 4 (the only one that needs it), so a machine without it still
-# gets the cheap gates. The git-config fallback exists because hooks run with a bare
-# environment — they do NOT inherit the $GODOT_BIN you set in your shell.
+# gets the cheap gates. The git-config fallback exists because a commit from an IDE, a GUI or a
+# fresh shell carries no session $GODOT_BIN (a hook inherits only its caller's environment).
 resolve_godot() {
   GODOT="$GODOT_BIN"
   [ -n "$GODOT" ] || GODOT=$(git config --get carlito.godotbin || true)

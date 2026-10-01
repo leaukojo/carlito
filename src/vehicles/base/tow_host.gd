@@ -9,7 +9,7 @@ extends Node3D
 ## `attachment_refused()`.
 
 ## Ticks after spawn before a remembered attachment is coupled. A plain countdown, not a
-## condition, so it always finishes; coupling on tick one lays the body 0.16 m into the terrain.
+## condition, so it always finishes; coupling on tick one lays the body into the terrain.
 const SPAWN_COUPLE_TICKS := 12
 
 ## Ticks a freshly coupled body is watched for a body contact, which means it does not fit: a
@@ -20,7 +20,7 @@ const COUPLE_WATCH_TICKS := 8
 ## TowedBody.RAISE_SPEED_MS on purpose — both mean "the rig is stopped".
 const COUPLE_SPEED_MS := TowedBody.RAISE_SPEED_MS
 
-## How long the interlock notice stays up.
+## Seconds the interlock notice stays up.
 const TIP_NOTICE_DWELL_S := 5.0
 
 var trailer: TowedBody = null  ## null while nothing is coupled
@@ -28,7 +28,7 @@ var trailer: TowedBody = null  ## null while nothing is coupled
 var _marker_local := Vector3.ZERO
 var _joint: Generic6DOFJoint3D = null
 ## Has the spawn coupling been made? Level._spawn_vehicle assigns global_transform after
-## add_child, so _ready (and set_attachment, same frame) is too early to lay a body anywhere.
+## add_child, so _ready (and set_attachment, same frame) is too early to lay a body.
 var _coupled_once := false
 var _spawn_ticks := 0    ## ticks since spawn, against SPAWN_COUPLE_TICKS — counted unconditionally
 var _couple_watch := 0   ## ticks left in which a fresh coupling is watched for a body contact
@@ -123,8 +123,8 @@ func may_couple(speed_ms: float) -> bool:
 
 
 ## Couple `scene` on this coupling. Returns true if something is now on the back. The body becomes
-## a child of the chassis' parent (the level), never the chassis: a RigidBody3D under another body
-## gets the parent's transform double-applied. Fit is decided afterward by _watch_fresh_coupling.
+## a child of the chassis' parent (the level), never the chassis (transform applied twice). Fit is
+## decided afterward by _watch_fresh_coupling.
 func couple(scene: PackedScene) -> bool:
 	var chassis := _chassis()
 	var host := chassis.get_parent() if chassis != null else null
@@ -165,9 +165,9 @@ func couple(scene: PackedScene) -> bool:
 	return true
 
 
-## Uncouple: joint first, then the towed body, both leaving the tree synchronously — `queue_free`
-## alone defers to end of frame and a swap in the meantime leaves two jointed bodies at one pose.
-## `unparent` false is the teardown path, since `remove_child` fails mid-`_exit_tree`.
+## Uncouple: joint first, then the towed body, both leaving the tree synchronously (`queue_free`
+## alone defers, and a swap in the meantime leaves two jointed bodies at one pose). `unparent`
+## false is the teardown path, since `remove_child` fails mid-`_exit_tree`.
 func uncouple(unparent := true) -> void:
 	if is_instance_valid(_joint):
 		if unparent:
@@ -239,9 +239,8 @@ func _apply_display_freeze() -> void:
 	trailer.freeze = _display_frozen
 
 
-## Re-lay the towed half of a respawn: the body goes back to its coupled pose and stops, since
-## zeroing velocity alone leaves it wherever it drifted to. TowedBody.reset_at also clears its
-## wheel state, which a RayWheel would otherwise report as a suspension spike after the teleport.
+## Re-lay the towed half of a respawn: back to its coupled pose, not just stopped.
+## TowedBody.reset_at also clears its wheel state (else a suspension spike after the teleport).
 func respawn_relay(pose: Transform3D) -> void:
 	# A re-laid body isn't a fresh coupling; the fit check must not fire on the teleport.
 	_couple_watch = 0
@@ -249,8 +248,7 @@ func respawn_relay(pose: Transform3D) -> void:
 		trailer.reset_at(coupled_pose(pose))
 
 
-## The chase camera must not see through the combination: the towed body's RID goes in beside the
-## chassis', or the pull-in slams the camera into the trailer's headboard.
+## The towed body's RID goes in beside the chassis' in the chase camera's occlusion exclude list.
 func camera_exclude_into(out: Array[RID]) -> void:
 	if is_instance_valid(trailer):
 		out.append(trailer.get_rid())
@@ -299,10 +297,8 @@ func tick_towing(input: VehicleInput, demand01: float, spool: float,
 	trailer.tick_towed(demand01, input.handbrake, delta, grip_terrains)
 	_apply_yaw_friction(delta)
 
-	# The base only watches the chassis fall off the world; a towed body left behind would
-	# otherwise hang there on the joint. Guarded on is_inside_tree(): a body outside the tree has
-	# no global transform, so the engine hands back Transform3D(), an origin that reads here as
-	# "at y=0" rather than "no answer".
+	# The base only watches the chassis fall off the world. is_inside_tree() guards: outside the
+	# tree the engine hands back Transform3D(), an origin that reads as "at y=0".
 	if trailer.is_inside_tree() and trailer.global_position.y < BaseVehicle.FALL_RESPAWN_Y:
 		var fallen_chassis := _chassis()
 		if fallen_chassis != null and fallen_chassis.has_method(&"respawn"):
@@ -311,15 +307,13 @@ func tick_towing(input: VehicleInput, demand01: float, spool: float,
 	_watch_fresh_coupling()
 
 
-## The coupling's own Coulomb friction about the articulation axis, as a torque pair: the plate's
-## share on the trailer and the equal and opposite on the chassis. A greased fifth wheel is not a
-## free hinge, and without this only tyre lateral grip damps trailer sway.
+## The coupling's Coulomb friction about the articulation axis, as a torque pair (trailer and the
+## equal and opposite on the chassis). Without it only tyre lateral grip damps trailer sway.
 ##
-## Against the RELATIVE yaw rate, never toward zero angle — a spring would re-centre the trailer,
-## which is not what a plate does. Not the joint's own angular motor or spring parameters either:
-## Jolt's 6DOF motor is a velocity TARGET rather than friction, and it fights the yaw limit.
-## The axis is the chassis' up, which is the joint's Y because _build_joint leaves the joint
-## unrotated in the chassis frame.
+## Against the RELATIVE yaw rate, never toward zero angle (a spring would re-centre the trailer).
+## Not the joint's angular motor either: Jolt's 6DOF motor is a velocity TARGET, not friction, and
+## it fights the yaw limit. The axis is the chassis' up, the joint's Y since _build_joint leaves it
+## unrotated.
 func _apply_yaw_friction(delta: float) -> void:
 	var friction := profile().yaw_friction_nm
 	if friction <= 0.0:
@@ -357,7 +351,7 @@ func _watch_fresh_coupling() -> void:
 
 
 ## Say why the tip command did nothing: only on a press asking the body up, on a plumbed body.
-## Road speed is left out of the reason since the driver already has to be stopped.
+## Road speed is left out of the reason.
 func _warn_if_tip_interlocked(cmd: float, plumbed: bool, handbrake: float, pto_on: bool) -> void:
 	var edge := not is_equal_approx(cmd, _last_tip_cmd) and _last_tip_cmd >= 0.0
 	_last_tip_cmd = cmd

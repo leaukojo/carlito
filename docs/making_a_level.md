@@ -2,8 +2,8 @@
 
 Tool reference (every button, every gotcha): `docs/level_kit.md`. Runtime systems a level
 plugs into: `docs/systems.md`. Worked example: `src/levels/island/level_1/`; levels 2-4 are
-the same scaffolding with different seeds; levels 5-6 (railway, drone skyport) are each owned
-end to end by their own generator (`tools/gen_rail_level.gd`, `tools/gen_skyport.gd`).
+hand-dressed on a one-shot `tools/gen_islands.gd` scaffold; levels 5-6 (railway, drone skyport) are
+each owned end to end by their own generator (`tools/gen_rail_level.gd`, `tools/gen_skyport.gd`).
 
 A level is a **signal playground**, not a mission — grades for `engine_load`, hairpins for
 slip. Everything below happens in the Godot editor's **"Kit" bottom panel** (Palette /
@@ -95,16 +95,14 @@ Drop a `VehicleSpawn` marker for every allowed vehicle. Set its `vehicle_types` 
 2. **Playtest unbaked** — F6 the scene; authoring content plays on dev collision
    (RoadPath/scatter trimesh + prefab `DevCollision`). The user verifies by driving.
 3. **Bake** (button on the AuthoringRoot): writes `<level>.baked.scn` + `<level>.bake.json`;
-   commit the manifest, `.baked.scn` is gitignored build output CI rebuilds.
+   commit the manifest (rule 1).
 4. **Record the chain** in `src/levels/<yourlevel>/<id>_gen.json` if any CLI tool touched the
    level: tools, args, `--import` passes, and a `manual` step for editor work no tool
    reproduces. Set `"replayable": false` with a `blocked` reason if a re-run would delete
    hand work. Replay: `powershell -File tools/rebuild_level.ps1 -Level <id>`
-   (`level_1_gen.json` is the worked example). A non-idempotent sculpt step moves a few
-   pixels per replay, so a changed PNG is classified, not flagged: `tools/png_drift.gd`
-   reports e.g. "187 px moved of 263169, max 2 step(s)" against an optional
-   `"sculpt_drift"` map (`{"<source>.png": {"max_px": N, "max_step": N}}`); no entry = byte
-   equality.
+   (`level_1_gen.json` is the worked example). A non-idempotent sculpt step gets a
+   `"sculpt_drift"` entry (`{"<source>.png": {"max_px": N, "max_step": N}}`;
+   `src/levels/CLAUDE.md`).
 
 ## 9. Perf check
 
@@ -112,10 +110,11 @@ Check the F3 overlay in the worst view — deployed web build's frame rate, not 
 draw calls are the first thing to read when it's low. Bake stats predict the base count
 (chunk surfaces + scatter multimeshes + terrain chunks); the multiplier is the shadow pass —
 `Sun` defaults to 4-split PSSM, overkill for a 150 m `directional_shadow_max_distance`. Cheap
-levers: Sun `directional_shadow_mode = ORTHOGONAL` (single cascade, the islands; ~7 cm texels
-over 150 m, which is why rule 9 keeps the web sun at soft quality 1 rather than hard).
-`PARALLEL_2_SPLITS` looked finer but dropped building shadows while driving through a city —
-unexplained, do not reuse without a repro. `ScatterItem.cast_shadow = false` on small vegetation (baked MultiMeshes
+levers: Sun `directional_shadow_mode = ORTHOGONAL` (single cascade; level_3, level_6,
+car_arena and rough_ground use it; ~7 cm texels over 150 m, which is why rule 9 keeps the web sun
+at soft quality 1 rather than hard).
+`PARALLEL_2_SPLITS` drops building shadows while driving through a city (unexplained; do not
+reuse without a repro). `ScatterItem.cast_shadow = false` on small vegetation (baked MultiMeshes
 skip the shadow pass entirely, MultiMesh path only). If a level is heavy on the base count,
 suspect its bake before touching renderer settings.
 
@@ -124,11 +123,4 @@ suspect its bake before touching renderer settings.
 - **Shoot the level-select card** (after baking): fly the 3D viewport to a flattering view,
   then Polish tab ▸ Set thumbnail view ▸ Shoot thumbnail. Commit `<level>_shot.tres` +
   `src/ui/level_thumbs/<id>.png`.
-- **Re-bake + `check_bakes`** — stale bakes are the #1 repeat CI failure:
-  ```
-  & $GODOT --headless --path . res://tools/bake_levels.tscn
-  & $GODOT --headless --path . res://tools/check_bakes.tscn
-  ```
-- Sweep new GDScript warnings; run `powershell -File tools/preflight.ps1` for the full local
-  CI gate.
-- Never commit or push unless explicitly asked.
+- Run the `level-edit` skill (re-bake + `check_bakes`, preflight).

@@ -3,9 +3,8 @@
 Truck, trailer and tractor each publish a second machine's state on a second network: J1939
 (truck chassis + CANopen body network across a gateway), ISO 11992 (trailer bus), ISOBUS/ISO
 11783 (implement bus). The other four families: `docs/vehicles.md`; shared
-framework/plumbing: `docs/systems.md`. Rationale and gotchas:
-`src/vehicles/truck/CLAUDE.md`, `src/vehicles/tractor/CLAUDE.md` — this doc is the
-descriptive tour.
+framework/plumbing: `docs/systems.md`. Rules: `src/vehicles/truck/CLAUDE.md`,
+`src/vehicles/tractor/CLAUDE.md` — this doc is the tour and the derivations.
 
 ## Truck & J1939
 
@@ -43,7 +42,11 @@ VehicleTelemetry` adds chassis, body-network and trailer-bus "out" fields.
   (`RETARDER_SLIP_TARGET` caps the one-tick spin change at 0.10 slip). Rated at
   `RETARDER_MAX_FRAC` **0.20** of per-wheel `brake_torque`. `test_truck` asserts brake >
   retarder and a **0.7-1.6 m/s²** band per shipped spec — the floor tracks the tyre, a retarder
-  that is a fraction of a grip-derived brake being worth what the grip is worth. `retarder_state`
+  that is a fraction of a grip-derived brake being worth what the grip is worth: on a
+  grip-derived brake mass and radius cancel, so flat-road retardation is
+  `RETARDER_MAX_FRAC * BRAKE_GRIP_FRAC * mu_long * g / 2` = 0.745 m/s² at truck-tyre `mu_long`
+  0.80. The hand-built units' fixed 10500 Nm brake retards at 1.46 m/s² whatever the mu; the
+  1.6 ceiling is what caps their `brake_torque`. `retarder_state`
   reports torque applied, not the request (J1939 SPN 520 is negative; the contract publishes the
   magnitude).
 - `axle_load` is read out of the sim: summed `RayWheel.suspension_force` on the rear axle in
@@ -73,7 +76,7 @@ umbrella over this and the tipper trailer, named as a reference only.
 
 Six signals, all `flavor: "cleanopen"`. In (1): `body_cmd` (Idle/Lift/Dump/Lower, `X` key).
 Out (5): `body_state`, `body_pos`, `body_inhibit`, `body_bus`, `hopper_load`. Rationale:
-`truck/CLAUDE.md` § The refuse body.
+`truck/CLAUDE.md` § Refuse body.
 
 - The gateway is the content: `body_inhibit` is computed chassis-side (road speed, PTO
   state, parking brake), published on the body network; `body_bus` goes down when the body
@@ -102,11 +105,39 @@ the conventional carries none. No trailer of the four adds a signal to either.
   taken — deaf to trailer-side forces.
 - Yaw limit models trailer-against-cab contact, not a fifth-wheel property (plate and nose
   overlap while coupled, so collision can't arbitrate it). `Articulation.JACKKNIFE_MAX_DEG`
-  (**75°**) serves both joint and fallback. Rationale for both: `truck/CLAUDE.md` § The
-  fifth wheel, mass ratios, axle loads.
+  (**75°**) serves both joint and fallback. Rules: `truck/CLAUDE.md` § Fifth wheel, mass,
+  axle loads; sizing: § Truck sizing.
 - Trailer carries its own unmodified `RayWheel`s — undriven, braked, six on a tri-axle
   bogie, making `trailer_axle_load`/`trailer_abs` real numbers, ticked from
   `TowHost.tick_towing`.
+
+### Truck sizing (derivations)
+
+- Wheelbase is sized by the launch: the trailer pulls at the 1.05 m kingpin, a lever on the steer
+  axle. A 2.10 m wheelbase lifts both steer wheels for ~1 s of a gear-1 launch; the shipped
+  3.60 m (cab-over) and 4.40 m (conventional) keep >= 8.5 kN on the steer
+  axle (`tools/measure_semi_launch.tscn`, re-read after any wheelbase or COM move).
+- Plate share: `center_of_mass.z` 3.798 puts 27 % of each trailer on the fifth wheel (a real van
+  trailer: 25-30 %), ~90 % of it on the single driven axle: the 4x2's traction budget. Below the
+  band the rig is grip-limited, not power-limited.
+- Rear damper: `damper_bump_rear` / `damper_rebound_rear` 24700 / 28800 hold
+  zeta = c / (2 sqrt(k_rear * m)) at 0.30 (box) to 0.40 (flatbed) on the coupled rear corner
+  (3.5-4.7 t) and 0.47-0.55 at the bobtail corner (1.9 t); the `GroundDriveSpec` fallback preserves
+  the front's ratio at the bobtail mass instead. Laden band pinned in `test_trailer`.
+- Rollover: `rollover_g = half_track / com_height_over_road`, half-track 0.72 m; a body rolls
+  before it slides when that is under `mu_lat` 0.75:
+
+  | Body | COM over road | rollover_g |
+  | --- | --- | --- |
+  | Box | 1.60 m | 0.45 |
+  | Tanker | 1.50 m | 0.48 |
+  | Tipper | 1.30 m (parked); 2.80 m raised | 0.55; 0.26 |
+  | Flatbed | 0.90 m | 0.80 |
+  | Tractor unit (bobtail) | 1.09 m (spec header also says ~1.03; contested, `docs/to_investigate.md`) | 0.66 |
+
+  The 1.44 m track is the compromise (a real artic runs ~2.0 m, so every threshold reads ~25 %
+  low); widening it moves every wheel station and authored wheel visual. `BaseVehicle.is_overturned()`
+  and the F3 overlay report a rollover; there is no auto-reset.
 
 ### TowHost, cycling and mass
 
@@ -213,8 +244,8 @@ them apart.
   what makes driving off with the body raised roll the rig.
   Tanker's surge is a labelled model chasing longitudinal acceleration with a lag — real
   fluid physics is a non-goal, the rule that governs the boat's water too. Rationale for all
-  of § Coupling and § Four trailers: `truck/CLAUDE.md` §§ The ISO 11992 trailer bus / The
-  four trailers.
+  of § Coupling and § Four trailers: `truck/CLAUDE.md` §§ ISO 11992 trailer bus / Four
+  trailers.
 
 ## Tractor, implement & ISOBUS
 
@@ -237,10 +268,13 @@ them apart.
 
 ### The signals that change how it drives
 
-- `diff_lock` locks the rear pair onto one shaft speed (`WheelDrive._lock_rear_diff` pulls
-  them onto `Drivetrain.locked_axle_omega`); `fwd_drive` is MFWD, rewriting the front
-  wheels' `driven` flag each tick. Both gate on `GroundDriveSpec` flags
-  (`rear_diff_lockable`, `front_axle_engageable`), true only on the tractor's spec.
+- `diff_lock` locks the rear pair onto one shaft speed: an unbounded `Differential` coupling in
+  `WheelDrive._couple_differentials`. `fwd_drive` is MFWD: it rewrites the front wheels'
+  `driven` flag each tick, and while engaged the spec's `centre_diff_rigid` ties the front axle's
+  mean speed to the rear's, a geared transfer with no centre diff. Both requests gate on
+  `GroundDriveSpec` flags (`rear_diff_lockable`, `front_axle_engageable`), which are true only on
+  the tractor's spec. Both axles stay open inside, so 2WD with the lock off is still the open
+  rear diff.
 - `wheel_speed`/`ground_speed`/`wheel_slip` are the signature ISO pair and its difference:
   wheel-based is the mean spin of the rear axle × tire radius; ground-based is chassis
   forward velocity; `wheel_slip` is how far the first runs ahead of the second (unsigned,
@@ -268,7 +302,21 @@ them apart.
 - `ThreePointHitch` (`src/vehicles/tractor/three_point_hitch.{gd,tscn}`) is tractor anatomy,
   whole with nothing attached. `HitchLinkage` (pure math, tested) solves the side view as a
   four-bar — implement pitch and rockshaft arm angle fall out of a circle-circle
-  intersection, why implements tip back as they lift. Rationale: `tractor/CLAUDE.md`.
+  intersection, why implements tip back as they lift.
+- Draft 60 Hz margin: below `DRAFT_SPEED_REF` the draft is a linear damper, `k = rated /
+  DRAFT_SPEED_REF`, stable while `k*dt/m < 2`; 12 kN on 5.5 t gives 0.018
+  (`test_the_shipped_rating_keeps_the_60hz_damper_margin` holds it under 0.5). The one-tick
+  `damped_force` cap behind it is unreachable below ~480 kN and bounds only the linear impulse.
+- Ballast: gear-1 wheel force at `converter_free_rpm` (1250 rpm, ~682 Nm) is ~65.7 kN against
+  33 kN of rear grip at 5.5 t / `front_weight` 0.38 (~2.0x; 3.4x at the unballasted 4 t 50/50).
+  Top speed in 6th is rpm-bound, so ballast moves only acceleration and grade climb.
+- Steady draft does not involve COM height: drag at the hitch and tyre reaction at ground form a
+  couple of `F × h_hitch`, a few kN off a ~20 kN static front. The 0.91 m COM (`com_y_frac` 0.35)
+  matters for transients and for the ~0.78 g side-slope rollover (0.70 m mean half-track, lug mu
+  1.0): the tractor tips before it slides.
+- Body scale 1.35 (2.99 × 2.17 m, 2.12 m wheelbase). Visual radii 0.44 front / 0.66 rear over a
+  0.36 physics radius, so the rear tyre stands 0.30 m proud of its contact and clips a kerb first.
+  Suspension is the tyres: 260 / 300 kN/m, `rest_length` 0.12 m, ~31 % static sag.
 
 ### What an implement declares
 
@@ -303,8 +351,9 @@ Each is authored lowered with the origin on the lower pin line (ground y = −0.
 A-frame: `implements/headstock.tscn`. PTO-driven visuals go through
 `ImplementBase.spin_from_pto`, whose `ratio` is cosmetic (540 rev/min would alias at 60
 fps); the published `pto_rpm` stays honest. Level 1's centre is the ISOBUS farm playground:
-painted field (soil for `draft_force`), mud wallow (`diff_lock`), haul ramp (`fwd_drive`),
-implement yard. See `docs/level_kit.md`.
+painted field (soil for `draft_force`, with two light sandy-loam bands at half soil so
+`engine_load` moves along a pass), mud wallow (`diff_lock`), haul ramp (`fwd_drive`), implement
+yard. See `docs/level_kit.md`.
 
 ## The drawbar: the connection that only pulls
 

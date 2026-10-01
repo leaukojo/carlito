@@ -190,9 +190,9 @@ script = ExtResource("3_fifthwheel")
 ; A LONGER UNIT MAY MOVE THE KINGPIN BACK BUT NEVER UP OR DOWN: y = 1.05 is the coupling plane
 ; every trailer is authored against, and z 0.55 (against the cab-over's 0.45) is the bonneted
 ; silhouette paying for its hood. The sleeper then has to keep the SAME gap ahead of the pin, or
-; the trailers' 1.50 m swing radius no longer fits -- test_truck pins that against semi.tscn's
-; gap rather than against a literal. Here the sleeper's rear face at -1.35 leaves 1.90 m against
-; the cab-over's 1.85.
+; the trailers' 1.50 m swing radius no longer fits -- test_truck pins each unit's gap against the
+; trailers' worst computed swing plus margin, not against the other unit. Here the sleeper's rear
+; face at -1.35 leaves 1.90 m against the cab-over's 1.85.
 [node name="Kingpin" type="Marker3D" parent="FifthWheel" unique_id=316532720]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.05, 0.55)
 

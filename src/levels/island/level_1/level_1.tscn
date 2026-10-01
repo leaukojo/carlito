@@ -185,7 +185,7 @@ paint_density = 0.002
 items = Array[ExtResource("21_kyk1v")]([SubResource("Resource_sqvdh"), SubResource("Resource_dyqui")])
 max_slope_deg = 15.0
 stored_transforms = Array[PackedFloat32Array]([PackedFloat32Array(91.36255, 18, -83.84441, 1.3347082, 1.0997953, 59.214844, 18, 50.108612, 2.4354181, 1.0921257, 113.26854, 18, 69.99144, -1.2106388, 0.8962946, 31.77945, 36, 135.83038, 2.842063, 1.1188725, -98.3725, 44.363678, 105.18161, 1.126446, 0.88872, -88.23506, 36, -65.1792, -0.3226715, 1.0284231, -37.081223, 36, 108.771805, 3.058262, 0.9293614, -64.679695, 36, 123.76514, -2.6434145, 1.10113, -23.766945, 27.000002, -127.68193, -0.015547285, 1.0866313, -26.085228, 27.000002, -27.025002, 3.1056745, 0.97064805, 115.675095, 18, -14.606636, 0.41336963, 0.88801163, -59.463493, 36, -100.9264, -1.8342774, 1.0361638, 64.58353, 27.000002, 105.92825, 3.0192273, 0.9640881, 80.38075, 27.000002, 87.38953, -2.766858, 0.89084923, -71.09247, 36, 125.788025, 1.6928988, 1.0951133, 148.2548, 18, 64.94479, 2.6118681, 1.0879676, -35.571487, 36, 154.48404, -3.0809457, 1.10263, -38.34973, 36, 118.12189, 1.3640972, 1.0809946, -24.293854, 36, 144.39624, -2.8238072, 1.0833255, -40.661964, 36, 110.61063, 2.7510395, 1.0332893, -63.786926, 36, -79.2097, 0.63172555, 1.1024044, 123.311966, 18, -4.113083, 1.2499154, 1.0862391, 59.39029, 18, -91.12463, 2.7687953, 0.9951414, -63.93154, 36, 61.84854, -2.7558131, 1.1122091, -77.22934, 36, -84.112946, 0.28017658, 0.87305516, -38.871727, 27.000002, -0.41563416, 0.2715895, 0.88474566, -51.668213, 35.761047, -41.70852, -0.7058967, 0.9232831, 68.30609, 18, -68.44574, 2.1206105, 0.97632605, -152.85759, 27.000002, 60.849525, 0.48712018, 0.92581224, -181.37946, 27.000002, 17.953669, 2.3553002, 1.0081944, -171.25421, 27.000002, 32.30332, 0.7525809, 0.90757793, -132.81711, 36, 108.112335, 2.1071503, 1.0828378, 58.52734, 36, 161.061, 0.21805672, 1.0653863, 192.37805, 18, 60.639328, -1.6696737, 0.866385, 97.04413, 18, -161.0933, 1.2124563, 1.0550469, 87.722275, 18, -175.63539, -2.7863388, 0.9564147, 71.280975, 18, -165.21533, 0.21051414, 1.132712, 21.074862, 18, -169.1817, 0.6555749, 1.0970378, 8.294784, 18, -187.16191, 3.0015125, 1.0300453, -26.647234, 27.000002, -176.7733, -3.0142536, 0.9181092, -56.369156, 36, -150.30362, 0.6440442, 0.9605586, -147.71317, 27.000002, -117.19208, -2.5108566, 0.9165823, -157.98009, 27.000002, -114.08213, -0.8971355, 0.89219624), PackedFloat32Array(45.97943, 17.800001, -98.97069, 1.8660008, 0.96436995, -113.13097, 36, -42.82892, -0.8772524, 1.0816157, -30.155762, 27.000002, -2.1906433, 2.4571435, 0.8639332, 132.5851, 18, 94.856064, -1.3324007, 0.89409775, -54.271835, 36, 126.630646, -1.2706374, 0.88500553, 31.354889, 18, -75.26072, 0.96547085, 1.1128173, 60.795303, 18, -55.600723, -1.2861594, 1.0646868, 64.533844, 18, 60.28267, -2.8220139, 0.87265635, 70.44003, 27.000002, 114.882126, 0.011074922, 0.9857292, -41.35253, 27.038816, 8.550522, -1.7200137, 1.1434318, -3.8406677, 18, -131.24788, 0.19784644, 0.95557535, 61.472717, 18, -78.56296, -1.6462404, 0.86451197, 58.59294, 18, -86.374176, 0.38843194, 1.0661238, -25.117592, 27.000002, -5.383545, -0.38769847, 1.0605004, 59.380707, 18, 56.16687, 1.2469548, 1.1106148, -4.2181396, 27.000002, -48.211227, 1.6434889, 1.1084996, -59.462906, 36, 142.11139, 1.5211903, 0.8807652, -115.16753, 36, -20.637253, -2.4804347, 1.10123, 120.16225, 18, -14.2356415, -3.1093361, 1.0793881, -12.913963, 27.000002, -50.7733, -2.9737196, 0.85492253, 83.40668, 36, 142.37253, -0.26433548, 0.9935215, 8.925964, 18, -132.97362, -2.8837075, 0.93860275, -69.71459, 36, -85.32693, 0.8999344, 1.1382092, -71.914825, 36, 79.74892, 2.476585, 0.9363272, -31.962303, 27.000002, -24.28025, 1.8306409, 0.85289353, -109.96715, 36, 8.778641, 2.5954487, 1.1234984, 104.911835, 27.000002, 128.2351, -1.7858714, 0.9011756, 105.83856, 18, -87.00648, -0.07444544, 1.090642, 145.3774, 18, 42.088196, -2.2551548, 0.918035, -97.785706, 45, 60.968704, -2.7603335, 1.050296, 93.13249, 18, -88.31334, -2.1634653, 1.1015148, 80.07469, 18, -119.34036, -0.52402556, 0.98030037, 55.12805, 18, 48.330933, 2.9184647, 0.87989646, 61.168762, 27.000002, 117.52368, 0.798931, 1.01431, 55.126038, 26.814552, 15.916748, -1.9955953, 1.0508506, -171.57436, 27.000002, -14.051994, 0.6356515, 1.0622841, -166.00076, 27.000002, -9.62924, 2.229272, 0.8894895, -164.1572, 27.000002, 59.914906, 1.5221951, 0.9490839, -150.00818, 27.000002, -73.58921, -1.9192271, 0.9022104, -143.97728, 27.000002, -84.38686, 0.9027762, 1.0518041, -92.75586, 36, -111.93529, -1.2589871, 0.94274235, 46.463123, 36, 169.2662, -0.35413235, 0.921059, -4.7689595, 36, 167.80815, -0.55981946, 0.9555795, 186.66676, 18, 94.62129, -3.0595248, 0.98648155, 158.62921, 18, -88.70132, 1.0366482, 0.9537457, 164.577, 18, -101.68362, 2.7292814, 0.93093175, -85.39006, 36, -174.10977, 1.2567744, 0.85803735, -48.07438, 36, -155.23004, -2.2189114, 0.97343254)])
-stored_ground_hash = "3b13d90c6dd81730a5510639d6521fec440914ceba0cc7116b4cb582af3ccef0"
+stored_ground_hash = "fc5bb2bf090d6b4294fd6321fbdffbb44095338c082a44be49c3dc8b6533af14"
 metadata/_custom_type_script = "uid://bwvw8p2jvnjnw"
 
 [node name="SuburbanProps" type="Node3D" parent="AuthoringRoot" unique_id=2133036259]
@@ -280,10 +280,10 @@ paint_pattern = "grid"
 grid_step = Vector2(2, 2)
 items = Array[ExtResource("21_kyk1v")]([SubResource("Resource_c5myr")])
 stored_transforms = Array[PackedFloat32Array]([PackedFloat32Array()])
-stored_ground_hash = "3b13d90c6dd81730a5510639d6521fec440914ceba0cc7116b4cb582af3ccef0"
+stored_ground_hash = "fc5bb2bf090d6b4294fd6321fbdffbb44095338c082a44be49c3dc8b6533af14"
 metadata/_custom_type_script = "uid://bwvw8p2jvnjnw"
 
-[node name="RoadsTiles" type="GridMap" parent="AuthoringRoot" unique_id=528512740]
+[node name="RoadsTiles" type="GridMap" parent="AuthoringRoot" unique_id=1128161029]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.22, 0)
 mesh_library = ExtResource("35_8ignm")
 cell_size = Vector3(12, 3, 12)
@@ -292,7 +292,7 @@ data = {
 "cells": PackedInt32Array(655359, 65534, 55, 655359, 65535, 55, 589824, 65534, 55, 589824, 65535, 55, 589825, 65534, 55, 589825, 65535, 55)
 }
 
-[node name="FarmProps" type="Node3D" parent="AuthoringRoot" unique_id=1520630431]
+[node name="FarmProps" type="Node3D" parent="AuthoringRoot" unique_id=1483157544]
 
 [node name="Shed" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=597377258 instance=ExtResource("36_u6hpc")]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -2.9998307, 27.02, -18)
@@ -307,77 +307,77 @@ collision_mode = "hull"
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -21.5, 27.000002, 26.5)
 script = ExtResource("10_8ignm")
 
-[node name="Fence1" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=1246139971 instance=ExtResource("38_idewa")]
+[node name="Fence1" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=796469798 instance=ExtResource("38_idewa")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16.5, 27.000002, 26.5)
 script = ExtResource("10_8ignm")
 
-[node name="Fence2" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=842064954 instance=ExtResource("38_idewa")]
+[node name="Fence2" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=2101634984 instance=ExtResource("38_idewa")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11.5, 27.000002, 26.5)
 script = ExtResource("10_8ignm")
 
-[node name="Fence3" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=451078133 instance=ExtResource("38_idewa")]
+[node name="Fence3" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=940359670 instance=ExtResource("38_idewa")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.5, 26.600002, 26.5)
 script = ExtResource("10_8ignm")
 
-[node name="Fence4" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=264752359 instance=ExtResource("38_idewa")]
+[node name="Fence4" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=1608468519 instance=ExtResource("38_idewa")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 26.600002, 26.5)
 script = ExtResource("10_8ignm")
 
-[node name="Fence5" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=2096369113 instance=ExtResource("38_idewa")]
+[node name="Fence5" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=1271030453 instance=ExtResource("38_idewa")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16.5, 26.600002, 26.5)
 script = ExtResource("10_8ignm")
 
-[node name="Fence6" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=72874834 instance=ExtResource("38_idewa")]
+[node name="Fence6" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=459020575 instance=ExtResource("38_idewa")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 21.5, 26.600002, 26.5)
 script = ExtResource("10_8ignm")
 
-[node name="Fence7" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=1260967420 instance=ExtResource("38_idewa")]
+[node name="Fence7" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=923656927 instance=ExtResource("38_idewa")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 26.5, 26.600002, 26.5)
 script = ExtResource("10_8ignm")
 
-[node name="Fence8" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=539263747 instance=ExtResource("38_idewa")]
+[node name="Fence8" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=756318881 instance=ExtResource("38_idewa")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 31.5, 27.000002, 26.5)
 script = ExtResource("10_8ignm")
 
-[node name="Fence9" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=1857564815 instance=ExtResource("38_idewa")]
+[node name="Fence9" type="Node3D" parent="AuthoringRoot/FarmProps" unique_id=538451591 instance=ExtResource("38_idewa")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 36.5, 27.000002, 26.5)
 script = ExtResource("10_8ignm")
 
-[node name="FarmImplements" type="Node3D" parent="AuthoringRoot" unique_id=716275793]
+[node name="FarmImplements" type="Node3D" parent="AuthoringRoot" unique_id=1378131959]
 
-[node name="ParkedPlough" type="Node3D" parent="AuthoringRoot/FarmImplements" unique_id=1174145493]
+[node name="ParkedPlough" type="Node3D" parent="AuthoringRoot/FarmImplements" unique_id=841301858]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 27.23, -2)
 script = ExtResource("10_8ignm")
 collision_mode = "none"
 
-[node name="Plough" type="Node3D" parent="AuthoringRoot/FarmImplements/ParkedPlough" unique_id=1930543845 instance=ExtResource("39_47a2k")]
+[node name="Plough" type="Node3D" parent="AuthoringRoot/FarmImplements/ParkedPlough" unique_id=556466188 instance=ExtResource("39_47a2k")]
 script = ExtResource("40_37jhm")
 
-[node name="ParkedHarrow" type="Node3D" parent="AuthoringRoot/FarmImplements" unique_id=566953915]
+[node name="ParkedHarrow" type="Node3D" parent="AuthoringRoot/FarmImplements" unique_id=819343994]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 27.23, -2)
 script = ExtResource("10_8ignm")
 collision_mode = "none"
 
-[node name="Harrow" type="Node3D" parent="AuthoringRoot/FarmImplements/ParkedHarrow" unique_id=1247142357 instance=ExtResource("41_gexs1")]
+[node name="Harrow" type="Node3D" parent="AuthoringRoot/FarmImplements/ParkedHarrow" unique_id=1795911545 instance=ExtResource("41_gexs1")]
 script = ExtResource("42_u6hpc")
 
-[node name="ParkedMower" type="Node3D" parent="AuthoringRoot/FarmImplements" unique_id=208896623]
+[node name="ParkedMower" type="Node3D" parent="AuthoringRoot/FarmImplements" unique_id=816578307]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 27.23, -2)
 script = ExtResource("10_8ignm")
 collision_mode = "none"
 
-[node name="Mower" type="Node3D" parent="AuthoringRoot/FarmImplements/ParkedMower" unique_id=617317153 instance=ExtResource("43_4k2kl")]
+[node name="Mower" type="Node3D" parent="AuthoringRoot/FarmImplements/ParkedMower" unique_id=1232047347 instance=ExtResource("43_4k2kl")]
 script = ExtResource("44_xuj16")
 
-[node name="ParkedSpreader" type="Node3D" parent="AuthoringRoot/FarmImplements" unique_id=687000614]
+[node name="ParkedSpreader" type="Node3D" parent="AuthoringRoot/FarmImplements" unique_id=577734000]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19, 27.23, -2)
 script = ExtResource("10_8ignm")
 collision_mode = "none"
 
-[node name="Spreader" type="Node3D" parent="AuthoringRoot/FarmImplements/ParkedSpreader" unique_id=1566548026 instance=ExtResource("45_vjyq0")]
+[node name="Spreader" type="Node3D" parent="AuthoringRoot/FarmImplements/ParkedSpreader" unique_id=946952407 instance=ExtResource("45_vjyq0")]
 script = ExtResource("46_idewa")
 
-[node name="ScatterCanvasFurrows" type="Node3D" parent="AuthoringRoot" unique_id=603103601]
+[node name="ScatterCanvasFurrows" type="Node3D" parent="AuthoringRoot" unique_id=1204025794]
 script = ExtResource("20_116nn")
 paint_pattern = "grid"
 grid_step = Vector2(2.5, 2.34)
@@ -387,7 +387,7 @@ yaw_jitter_deg = 0.0
 scale_range = Vector2(1, 1)
 max_slope_deg = 20.0
 stored_transforms = Array[PackedFloat32Array]([PackedFloat32Array()])
-stored_ground_hash = "3b13d90c6dd81730a5510639d6521fec440914ceba0cc7116b4cb582af3ccef0"
+stored_ground_hash = "fc5bb2bf090d6b4294fd6321fbdffbb44095338c082a44be49c3dc8b6533af14"
 
 [node name="Island" type="StaticBody3D" parent="." unique_id=1504712988]
 script = ExtResource("5_terrain")
@@ -408,7 +408,7 @@ channel_drag = PackedFloat32Array(0.06, 0.03, 0.1, 0.01, 0.08, 0.2, 0, 0.02)
 sand_height = 10.0
 dirt_slope_deg = 50.0
 
-[node name="FarmSpawn" type="Marker3D" parent="." unique_id=1955460562]
+[node name="FarmSpawn" type="Marker3D" parent="." unique_id=1229368056]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -9, 28.02, -2)
 script = ExtResource("4_spawn")
 vehicle_types = PackedStringArray("tractor")

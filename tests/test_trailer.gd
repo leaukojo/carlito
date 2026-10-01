@@ -305,11 +305,11 @@ func test_the_plate_lands_mostly_on_the_drive_axle_on_both_units() -> void:
 
 
 func test_a_coupled_tractor_keeps_enough_steer_load_to_steer() -> void:
-	# The failure this protects against was driven, not derived (truck/CLAUDE.md § The fifth
-	# wheel): with the kingpin further back the coupled steer axle carried about a fifth of the
-	# rig's weight and both front wheels left the road under throttle in a corner. 0.25 sits well
-	# under both units' ~33-35 % today, with room below that to catch a regression heading back
-	# toward that fifth before it gets there.
+	# The failure this protects against was driven, not derived (semi_spec.tres header): with the
+	# kingpin further back the coupled steer axle carried about a fifth of the rig's weight and both
+	# front wheels left the road under throttle in a corner. 0.25 sits well under both units' ~33-35 %
+	# today, with room below that to catch a regression heading back toward that fifth before it gets
+	# there.
 	var box := _trailer(BOX)
 	var box_spec: VehicleSpec = box.get("spec")
 	var plate_kg: float = box_spec.mass * float(box.call("kingpin_share"))
@@ -1072,11 +1072,11 @@ func _axis_boxes(node: Node, xf: Transform3D, out: Array) -> void:
 
 
 func test_no_two_boxes_share_a_face_plane_and_a_facing() -> void:
-	# The z-fight rule, asserted instead of remembered. src/vehicles/CLAUDE.md states it: two boxes
-	# that TOUCH on a face plane flicker, two that OVERLAP never do, and the safe pairs are the ones
-	# whose faces point at each other, because back-face culling drops one of them. So what is
-	# forbidden is a shared plane with a shared facing (both minima or both maxima on the same axis)
-	# over a patch big enough to see.
+	# The z-fight rule, asserted instead of remembered. src/vehicles/truck/CLAUDE.md § Trailer
+	# authoring states it: two boxes that TOUCH on a face plane flicker, two that OVERLAP never do,
+	# and the safe pairs are the ones whose faces point at each other, because back-face culling
+	# drops one of them. So what is forbidden is a shared plane with a shared facing (both minima or
+	# both maxima on the same axis) over a patch big enough to see.
 	#
 	# This shipped as a real bug: the box trailer had its bottom rave and its side wall both ending at
 	# x = +-0.96, which flickered as a 5.4 m stripe down each side.

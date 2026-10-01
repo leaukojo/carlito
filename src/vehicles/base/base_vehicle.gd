@@ -1,10 +1,8 @@
 class_name BaseVehicle
 extends RigidBody3D
 ## Vehicle base, family-agnostic: consumes one normalized VehicleInput from InputRouter, slews
-## the steer axis, runs the drivetrain, and publishes VehicleTelemetry each tick. Spawn/respawn
-## and the camera target are part of this base contract. `spec` is not the whole of a vehicle's
-## tuning: a free body (boat/drone/plane) declares hull, airframe and aero `@export`s on its own
-## node.
+## the steer axis, runs the drivetrain, and publishes VehicleTelemetry each tick. A free body
+## (boat/drone/plane) declares hull, airframe and aero `@export`s on its own node, not in `spec`.
 ##
 ## The wheeled ground drive is a composed sibling (`drive`, a WheelDrive). Drivetrain stays here
 ## because every family consumes its gear byte and applied_throttle.
@@ -15,29 +13,29 @@ const Groups := preload("res://src/levels/base/carlito_groups.gd")
 const Layers := preload("res://src/physics/collision_layers.gd")
 const FALL_RESPAWN_Y := -20.0
 
-## Returned by `wheels` when there is no ground drive, so callers avoid a null check.
+## Returned by `wheels` when there is no ground drive.
 const EMPTY_WHEELS: Array[RayWheel] = []
 
-## Telemetry derivation tuning, the same for every vehicle. Not feel knobs, so off VehicleSpec.
+## Telemetry derivation tuning, the same for every vehicle (not feel knobs, so off VehicleSpec).
 const ACCEL_SMOOTH := 10.0      ## 1/s exp rate the reported long/lat accel tracks raw
 const COOLANT_RATE := 2.0       ## degC/s the coolant chases its steady-state target
 const IMPACT_THRESHOLD := 25.0  ## m/s^2 acceleration spike that counts as an impact
 const IMPACT_DECAY := 40.0      ## m/s^2 per s the held impact value bleeds off
 const MOVING_SPEED := 0.3       ## m/s standstill epsilon for the status 'moving' bit
 
-## Overturned: tilt past which the wheels cannot reach the ground again whatever the driver does,
-## held long enough that a jump, a kerb strike or a bank does not read as a rollover. Detected
-## and announced, never auto-reset — an automatic respawn hides the thing that just happened.
+## Overturned: tilt past which the wheels cannot reach the ground again, held long enough that a
+## jump, kerb strike or bank does not read as a rollover. Announced, never auto-reset: an automatic
+## respawn hides what just happened.
 const OVERTURNED_DEG := 70.0
 const OVERTURNED_S := 1.5
 ## Raised sticky (dwell 0) and cleared by exact text match, so it stays up until the body is back
-## on its wheels. Names the way out, since nothing else will move the machine.
+## on its wheels.
 const OVERTURNED_NOTICE := "OVERTURNED - PRESS R TO RESPAWN"
 
 @export var spec: VehicleSpec
 
-## Preview-only body (vehicle selector, thumbnail tool). Set before entering the tree, so _ready
-## skips InputRouter registration; otherwise a preview steals the driven body's slot.
+## Preview-only body (vehicle selector, thumbnail tool). Set before entering the tree: _ready then
+## skips InputRouter registration, which a preview would use to steal the driven body's slot.
 var display_only := false
 
 var drivetrain: Drivetrain
@@ -55,8 +53,8 @@ var retarder_torque_applied: float:
 	get: return drive.retarder_torque_applied if drive != null else 0.0
 
 var _steer := 0.0
-## World gravity, read once at _ready. On the base like pitch/roll/altitude/vspeed: a fact about
-## the world, not the family. Unread on a wheeled body, where weight arrives via the springs.
+## World gravity, read once at _ready. Read by the free bodies (boat, drone); a wheeled body gets
+## weight via the springs.
 var _gravity := 9.8
 var _grip_terrains: Array[Node] = []  ## painted terrains the wheels sample for surface grip
 var _terrains_found := false           ## one-shot guard for the terrain scan below
@@ -84,9 +82,8 @@ func _ready() -> void:
 	can_sleep = false
 	# A hard fall can tunnel through thin terrain collision in one 60 Hz tick otherwise.
 	continuous_cd = true
-	# Nothing rides the engine's default_linear_damp (0.1), which would set every wheeled
-	# vehicle's top speed. Resistance comes from WheelDrive._apply_resistance or the vehicle's
-	# own declared drag, never a project setting.
+	# Drag is declared, never the engine's default_linear_damp (src/vehicles/CLAUDE.md § Drag and
+	# downforce).
 	linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
 	linear_damp = 0.0
 	if spec.angular_damping > 0.0:  # stability-assist yaw/roll bleed
@@ -117,9 +114,8 @@ func _exit_tree() -> void:
 
 func _physics_process(delta: float) -> void:
 	var input := InputRouter.get_vehicle_input()
-	# ISOBUS guidance (tractor) picks its own slew target, in `_steer`'s unit but off the
-	# commanded curvature rather than `input.steer` — same slew rate as hand-steering, so the
-	# wheels move at `spec.steer_speed` under guidance too instead of jumping to the angle.
+	# ISOBUS guidance (tractor) picks its own slew target, in `_steer`'s unit, off the commanded
+	# curvature rather than `input.steer`.
 	var guidance_unit := drive.guidance_steer_unit(input, spec.ground_drive) if drive != null else NAN
 	var steer_target := input.steer if is_nan(guidance_unit) else guidance_unit
 	_steer = move_toward(_steer, steer_target, spec.steer_speed * delta)
@@ -133,8 +129,6 @@ func _physics_process(delta: float) -> void:
 		_grip_terrains = _find_grip_terrains()
 		_terrains_found = true
 
-	# Order is load-bearing: resistance reads this tick's spring loads; diff lock's omega
-	# write must follow spin integration.
 	if drive != null:
 		drive.tick(self, spec, input, _steer, axle_torque, ground_speed, delta, _grip_terrains)
 
@@ -175,8 +169,8 @@ func _tick_extras(_input: VehicleInput, _delta: float) -> void:
 	pass
 
 
-## What this machine can do, for the shell's control gating. Duck-typed, and reading the same
-## spec flags that gate the behaviour in _physics_process.
+## What this machine can do, for the shell's control gating. Duck-typed; reads the spec flags that
+## gate the behaviour.
 func vehicle_capabilities() -> Dictionary:
 	var gd: GroundDriveSpec = spec.ground_drive if spec != null else null
 	return {
@@ -185,8 +179,8 @@ func vehicle_capabilities() -> Dictionary:
 	}
 
 
-## The level this vehicle is under: a group lookup, not a Level type dependency, since a running
-## game holds exactly one level. Every "what is in my world" scan starts here.
+## The level this vehicle is under, by group lookup (no Level type dependency). Every "what is in
+## my world" scan starts here.
 func _level_root() -> Node:
 	for level in get_tree().get_nodes_in_group(Groups.LEVEL):
 		if level.is_ancestor_of(self):
@@ -198,8 +192,8 @@ func _level_root() -> Node:
 	return root
 
 
-## Painted terrains under the owning level for the wheels' grip query. Scans for the terrain
-## contract (grip_at + contains_xz + height_at), with no HeightmapTerrain type dependency.
+## Painted terrains under the owning level for the wheels' grip query: duck-typed on grip_at +
+## contains_xz + height_at.
 func _find_grip_terrains() -> Array[Node]:
 	var out: Array[Node] = []
 	_collect_grip_terrains(_level_root(), out)
@@ -278,8 +272,7 @@ func _update_telemetry(input: VehicleInput, delta: float) -> void:
 	_prev_velocity = linear_velocity
 
 
-## A body on its roof or its side, announced to the driver and nothing more. Family-agnostic body
-## state like the fall check beside it, so it lives here and not on a family. Deliberately NOT a
+## A body on its roof or its side, announced to the driver and nothing more. Deliberately NOT a
 ## telemetry field: sloppyCAN is not told, so the `status` bitfield and the contract stay put.
 func _tick_overturned(delta: float) -> void:
 	if display_only:  # a selector/thumbnail body is posed, not driven, and must not shout
@@ -311,9 +304,9 @@ func _clear_overturned() -> void:
 		GameState.notice_cleared.emit(OVERTURNED_NOTICE)
 
 
-## Reset to the last spawn transform with zeroed motion; also fired on a fall off the world.
-## The teleport, then the reset seam, so `respawned` listeners see a finished machine at its
-## final pose — a subclass that re-lays a second body does it in the seam, not after the signal.
+## Reset to the last spawn transform with zeroed motion; also fired on a fall off the world. The
+## teleport, then the reset seam, so `respawned` listeners see a finished machine at its final
+## pose (a subclass that re-lays a second body does it in the seam).
 func respawn() -> void:
 	global_transform = spawn_transform
 	linear_velocity = Vector3.ZERO
@@ -324,19 +317,16 @@ func respawn() -> void:
 
 
 ## Everything `_ready` built, built again: a respawned machine is indistinguishable from a freshly
-## instanced one, down to the odometer and the hour meter. A family reseeds its own subsystems by
-## overriding this rather than `respawn()`, so a new stateful subsystem is one line in one place.
-##
-## What survives is what survives a NEW BODY too: the InputRouter toggles it keeps as driver state
-## (lights, PTO, the arm switch), and anything the bridge is sending, which is sloppyCAN's to say.
+## instanced one, down to the odometer and hour meter. A family overrides this, not `respawn()`.
+## What survives is what survives a NEW BODY too: the InputRouter toggles kept as driver state
+## (lights, PTO, the arm switch) and anything the bridge is sending.
 func reset_session_state() -> void:
 	_reseed_telemetry()
 	drivetrain = Drivetrain.new(spec)  # gear byte, rpm and the direction latch all start over
 	_steer = 0.0
 	_prev_velocity = Vector3.ZERO  # zero accel/impact history so the teleport isn't read as an impact
 	_impact_hold = 0.0
-	# A body that rewrites `mass` at runtime (the refuse truck's hopper) is back to its spec mass,
-	# and the wheels' 60 Hz clamps are sized for it again.
+	# A body that rewrites `mass` at runtime (the refuse truck's hopper) is back to spec mass.
 	mass = spec.mass
 	if drive != null:
 		drive.set_corner_mass_from(mass)
@@ -351,9 +341,8 @@ func reset_session_state() -> void:
 
 
 ## Copy a fresh telemetry's every field onto the live one. IN PLACE, never a new object: the
-## dashboard and the bridge each resolve `telemetry` once per vehicle change and cache it, so a
-## replacement would leave both publishing a detached instance with nothing logged. The walk is
-## `to_bridge_dict`'s, so it covers every subclass field — and every field added after this.
+## dashboard and the bridge cache the instance. The walk is `to_bridge_dict`'s, so it covers every
+## subclass field.
 func _reseed_telemetry() -> void:
 	var fresh := _make_telemetry()
 	for prop in fresh.get_property_list():
@@ -366,8 +355,8 @@ func get_camera_target() -> Node3D:
 	return self
 
 
-## Physics bodies the chase camera's occlusion ray must ignore: self, plus any sub-bodies. A
-## train's wagons trail the loco, and without this the pull-in slams the camera into the first.
+## Physics bodies the chase camera's occlusion ray must ignore: self, plus any sub-bodies (a
+## train's wagons).
 func get_camera_exclude_bodies() -> Array[RID]:
 	return [get_rid()]
 
@@ -379,8 +368,8 @@ func get_camera_framing() -> Dictionary:
 
 
 ## Origin height (m) above flat ground with the wheels just touching and the springs unloaded, so
-## a spawn can place the body there instead of dropping it onto its springs. 0.0 on a body with no
-## ground drive (boat/drone/train), which is placed exactly as the marker says.
+## a spawn places the body there. 0.0 with no ground drive (boat/drone/train): placed as the marker
+## says.
 func rest_ride_height() -> float:
 	return spec.ground_drive.rest_ride_height() if spec.ground_drive != null else 0.0
 

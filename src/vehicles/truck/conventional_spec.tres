@@ -1,59 +1,51 @@
 [gd_resource type="Resource" script_class="VehicleSpec" load_steps=5 format=3]
 
 ; North American conventional (bonneted) tractor unit. HAND-AUTHORED like semi_spec.tres, and a
-; VARIANT of it rather than a fresh tune: the drivetrain, brake, handbrake, wheel, suspension and
-; tyre blocks are semi_spec.tres's VERBATIM, so everything tests/test_truck.gd walks across the
-; truck family (the retarder band, the brake > transmissible drive > handbrake hierarchy, the retarder's
-; slip-cap backstop margin) holds here by construction. What differs is GEOMETRY and one flag.
+; VARIANT of it: the drivetrain, brake, handbrake, wheel, suspension and tyre blocks are
+; semi_spec.tres's VERBATIM, so everything tests/test_truck.gd walks across the truck family (the
+; retarder band, the brake > transmissible drive > handbrake hierarchy, the retarder's slip-cap
+; backstop margin) holds here by construction. What differs is GEOMETRY and one flag.
 ;
-; trailer_bus_equipped IS DELIBERATELY ABSENT, and that absence is the whole variant. Europe puts
-; a CAN pair on pins 6 and 7 of the ISO 7638 connector; North America has no data pair there at
-; all, so trailer ABS status rides the POWER line (SAE J2497 / PLC4TRUCKS) as one lamp bit. This
-; unit therefore tows the same trailers, brakes them exactly the same way through the same
-; pneumatic lines, and publishes trailer_connected FALSE with honest zeros behind it — attached
-; steel and bus silence. The default is false, but it is written out below anyway: a flag this
-; load-bearing being ABSENT and a flag being MISSING must not look the same in a diff.
+; trailer_bus_equipped IS DELIBERATELY ABSENT, and that absence is the whole variant. Europe puts a
+; CAN pair on pins 6 and 7 of the ISO 7638 connector; North America has none, so trailer ABS status
+; rides the POWER line (SAE J2497 / PLC4TRUCKS) as one lamp bit. This unit tows and brakes the same
+; trailers through the same pneumatic lines and publishes trailer_connected FALSE with zeros behind
+; it. The default is false, so an editor save drops the line below; the tests read the effective
+; value, so that is harmless.
 ;
-; Geometry is measured off conventional.tscn: 6.10 m long (z -4.30 .. 1.80 — 1.12x the cab-over's
-; 5.45, which is what a hood and a full sleeper cost), wheelbase 4.40 (steer axle -3.35 behind the
-; hood, drive axle +1.05), 1.92 wide like the rest of the family, kingpin (0, 1.05, 0.55). The
-; COUPLING PLANE stays at y 1.05: every trailer in TrailerCatalog is authored against that height,
-; so it is the one number a tractor-unit variant may not move. The wheelbase is sized the way the
-; cab-over's is — long enough that the trailer's pull at the kingpin cannot unload the steer axle
-; through a gear-1 launch; see semi_spec.tres.
+; GEOMETRY is measured off conventional.tscn: 6.10 m long (z -4.30 .. 1.80), wheelbase 4.40 (steer
+; axle -3.35 behind the hood, drive axle +1.05), 1.92 wide like the rest of the family, kingpin
+; (0, 1.05, 0.55). The COUPLING PLANE stays at y 1.05: every trailer in TrailerCatalog is authored
+; against that height, so it is the one number a tractor-unit variant may not move. The wheelbase
+; is sized like the cab-over's: long enough that the trailer's pull at the kingpin cannot unload
+; the steer axle through a gear-1 launch (see semi_spec.tres).
 ;
-; CENTRE OF MASS z -1.30 keeps the cab-over's front bias for the cab-over's reason, arrived at by
-; the same arithmetic (steer share = (drive_z - com_z) / wheelbase, com sitting ahead of the
-; wheelbase midpoint); the resulting bobtail and coupled bands are pinned alongside the cab-over's
-; in tests/test_trailer.gd. Coupled, the plate's load lands at kingpin z 0.55 — like the cab-over,
-; 0.50 m ahead of the drive axle — and Articulation.rear_axle_share(kingpin_z, steer_z, drive_z)
-; sends most of it there too; because that fixed 0.50 m offset is a smaller fraction of this
-; unit's longer wheelbase, relatively LESS of the plate reaches this steer axle than the cab-over's,
-; the flip side of the longer wheelbase being the forgiving one to reverse. A long wheelbase trades
-; traction for manners; on a real 4x2 that is exactly the trade.
+; CENTRE OF MASS z -1.30 keeps the cab-over's front bias by the same arithmetic (steer share =
+; (drive_z - com_z) / wheelbase); the bobtail and coupled bands are pinned alongside the
+; cab-over's in tests/test_trailer.gd. The plate's load lands at kingpin z 0.55, 0.50 m ahead of
+; the drive axle like the cab-over, and Articulation.rear_axle_share(kingpin_z, steer_z, drive_z)
+; sends most of it there too. That fixed 0.50 m offset is a smaller fraction of the longer
+; wheelbase, so relatively LESS of the plate reaches this steer axle: a long wheelbase trades
+; traction for manners.
 ;
-; CENTRE OF MASS HEIGHT 0.90 IS THE CAB-OVER'S NUMBER for the cab-over's reasons, and it lands the
-; same place on this geometry: ~1.03 m over the road, 0.66 g of bobtail rollover threshold against
-; mu_lat 0.75. Only z separates the two units. See semi_spec.tres.
+; CENTRE OF MASS HEIGHT 0.90 IS THE CAB-OVER'S NUMBER for the same reasons and lands the same place
+; on this geometry (~1.03 m over the road). Only z separates the two units; see semi_spec.tres.
 ;
 ; SPRING RATES, DAMPING AND TRAVEL ARE THE SEMI'S (240000 front / 360000 rear over 0.32 m, rear
-; dampers 24700 / 28800), and they land the same band on this geometry: the coupled rear corner
-; works out to about the same range as the cab-over's (own axle share plus a coupled trailer's
-; kingpin load lands 3.5-4.7 t depending on the trailer) despite the longer wheelbase, because the
-; fixed 0.50 m kingpin-ahead-of-drive-axle offset is what sets the split, not the wheelbase — see
-; semi_spec.tres for the derivation and the damping-ratio numbers.
+; dampers 24700 / 28800), and they land the same band here: the fixed 0.50 m kingpin offset, not
+; the wheelbase, sets the split, so the coupled rear corner carries about 3.5-4.7 t depending on the
+; trailer. See semi_spec.tres for the derivation and damping ratios.
 ;
 ; load_sensitivity 0.08: commercial radials lose ~8 % of mu per doubling of load past the
-; corner's static share, so weight transfer moves the balance. Family number, matching the semi.
+; corner's static share. Family number, matching the semi.
 
 [ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
 [ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="2_wheel"]
 [ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="3_grounddrive"]
 
-; DRAG AREA 2.43 m^2 = 0.75 x 0.82 x the cab's 1.92 x 2.055 box. Both factors are worse than the
-; cab-over's on purpose and for the same reason the silhouette is: a bonneted conventional is
-; taller here AND blunter (0.75 against 0.70), so it is the draggier of the two units pulling the
-; identical trailer. Derived the same way as every other spec's — see semi_spec.tres.
+; DRAG AREA 2.43 m^2 = 0.75 x 0.82 x the cab's 1.92 x 2.055 box (derived like semi_spec.tres): a
+; bonneted conventional is taller AND blunter (0.75 against 0.70) than the cab-over, so it is the
+; draggier unit pulling the identical trailer.
 
 [sub_resource type="Resource" id="Resource_grounddrive"]
 script = ExtResource("3_grounddrive")
@@ -102,16 +94,13 @@ engine_brake_frac = 0.15
 shift_cut_s = 0.4
 shift_up_rpm = 2600.0
 shift_down_rpm = 1200.0
-; ROAD-SPEED GOVERNOR 105 km/h: North American practice — no federal limiter mandate, and
-; fleets that fit one set it around 65 mph. HIGHER THAN THE EUROPEAN UNIT BY DESIGN: this pair
-; already differs on the ISO 7638 data pair, and the same regional split shows up here in the
-; driveline. Inert as geared (this unit settles at 89.0 km/h).
+; ROAD-SPEED GOVERNOR 105 km/h: North American practice (no federal limiter mandate; fleets that
+; fit one set it around 65 mph). Higher than the European unit by design, like the ISO 7638 split.
+; Inert as geared (the unit's drag-limited top speed is below it).
 speed_limit_kmh = 105.0
-; HIGH-SPEED STEERING FALLOFF, same 0.21 x 24 = 5.0 deg floor as the cab-over — the two share a
-; rack and a mass, so they share the absolute lock. Only the floor SPEED differs: 29 m/s tracks
-; this one's higher 105 km/h limiter, so neither truck reaches its floor before its own cruise.
-; The 4.4 m wheelbase (against the cab-over's 3.6) already makes this the wider-turning body;
-; the taper does not change that at manoeuvring speed, where it is worth under 15%.
+; HIGH-SPEED STEERING FALLOFF, the same 0.21 x 24 = 5.0 deg floor as the cab-over (same rack and
+; mass). Only the floor SPEED differs: 29 m/s tracks this unit's higher 105 km/h limiter, so
+; neither truck reaches its floor before its own cruise.
 steer_speed = 1.8
 headlight_paths = Array[NodePath]([NodePath("Lamps/HeadlightL"), NodePath("Lamps/HeadlightR")])
 head_lamp_paths = Array[NodePath]([NodePath("Lamps/HeadLensL"), NodePath("Lamps/HeadLensR")])

@@ -267,6 +267,40 @@ func test_the_bar_pairs_every_wheel_with_the_one_across_its_axle() -> void:
 		assert_float(signf(w.anti_roll_partner.anchor.x)).is_equal(-signf(w.anchor.x))
 
 
+## The snapshot, not the pairing: after one shared latch, the first wheel of a pair updating its
+## live compression (what its `tick` does before its partner's runs) must not move either bar
+## force. A latch inside `tick` fails this — the partner's reading goes one tick stale for the
+## first wheel only, a phantom left-side damper that the open split turns into ~1 m of drift.
+func test_the_bar_reads_one_shared_snapshot_whatever_the_tick_order() -> void:
+	var spec := _bench_spec(2000.0)
+	spec.ground_drive.anti_roll_rate = 7000.0
+	var drive := _drive_for(spec)
+	var left: RayWheel = drive.wheels[0]
+	var right: RayWheel = left.anti_roll_partner
+	for w in [left, right]:
+		w.in_contact = true
+	left.compression = 0.050
+	right.compression = 0.040
+	for w in drive.wheels:
+		w.latch_bar()
+	left.compression = 0.058  # left ticks first and writes this tick's compression
+	var f_left := left.bar_force(7000.0)
+	right.compression = 0.047
+	var f_right := right.bar_force(7000.0)
+	assert_float(f_left).is_equal_approx(VehicleMath.anti_roll_force(0.050, 0.040, 7000.0), 1e-9)
+	assert_float(f_left + f_right).is_equal_approx(0.0, 1e-9)
+
+
+func test_the_bar_hangs_free_while_the_partner_is_airborne() -> void:
+	var spec := _bench_spec(2000.0)
+	spec.ground_drive.anti_roll_rate = 7000.0
+	var left: RayWheel = _drive_for(spec).wheels[0]
+	left.compression = 0.05
+	left.latch_bar()
+	left.anti_roll_partner.in_contact = false
+	assert_float(left.bar_force(7000.0)).is_equal(0.0)
+
+
 func test_no_bar_rate_leaves_every_partner_null() -> void:
 	for w in _drive_for(_bench_spec(2000.0)).wheels:
 		assert_object(w.anti_roll_partner).is_null()
@@ -402,3 +436,125 @@ func test_base_vehicle_forwards_rest_ride_height_and_is_zero_with_no_ground_driv
 	var free_body: BaseVehicle = auto_free(BaseVehicle.new())
 	free_body.spec = VehicleSpec.new()  # ground_drive left null, like the boat/drone/train
 	assert_float(free_body.rest_ride_height()).is_equal(0.0)
+
+
+# --- spin compliance: how a differential reaches the spin step ------------------
+
+func test_a_torque_applied_through_the_compliance_is_the_one_inside_the_step() -> void:
+	# The semi-implicit step is linear in the applied torque, so a coupling torque applied after it
+	# through `spin_compliance` IS the same torque added to drive_t, at any reaction. That is what
+	# lets `Differential` couple wheels after they tick without the explicit over-correction.
+	var spec := _spec()
+	for reaction: float in [0.0, -400.0, -3600.0, -20000.0]:
+		var inside := _wheel()
+		inside.omega = 20.0
+		inside._integrate_spin(800.0 - 150.0, reaction, 0.0, spec, TICK, 0.4)
+		var outside := _wheel()
+		outside.omega = 20.0
+		outside._integrate_spin(800.0, reaction, 0.0, spec, TICK, 0.4)
+		outside.omega -= 150.0 * outside.spin_compliance
+		assert_float(outside.omega) \
+				.override_failure_message("reaction %.0f: post-tick torque diverged" % reaction) \
+				.is_equal_approx(inside.omega, 1e-9)
+
+
+func test_a_gripping_wheel_is_stiffer_than_a_free_one() -> void:
+	var spec := _spec()
+	var free_wheel := _wheel()
+	free_wheel._integrate_spin(400.0, 0.0, 0.0, spec, TICK, 0.0)
+	assert_float(free_wheel.spin_compliance).is_equal_approx(TICK / spec.wheel_inertia, 1e-12)
+	var gripping := _wheel()
+	gripping._integrate_spin(400.0, -3600.0, 0.0, spec, TICK, 0.4)
+	assert_float(gripping.spin_compliance).is_less(free_wheel.spin_compliance)
+
+
+# --- the differential passes in WheelDrive ---------------------------------------
+
+## Hand-set spin and compliance on every wheel, as if they had just ticked: FL, FR, RL, RR.
+func _set_spin(drive: WheelDrive, omegas: Array, compliances: Array) -> void:
+	for i in drive.wheels.size():
+		drive.wheels[i].omega = omegas[i]
+		drive.wheels[i].spin_compliance = compliances[i]
+
+
+func _mfwd_spec() -> VehicleSpec:
+	var spec := _bench_spec(5500.0)
+	spec.ground_drive.front_axle_engageable = true
+	spec.ground_drive.rear_diff_lockable = true
+	spec.ground_drive.centre_diff_rigid = true
+	return spec
+
+
+const SPREAD_OMEGAS := [10.0, 12.0, 30.0, 20.0]
+const SPREAD_COMPLIANCE := [0.004, 0.002, 0.003, 0.0005]
+
+
+func test_open_differentials_leave_every_wheel_exactly_as_it_ticked() -> void:
+	# All open is today's equal split, bit for bit: the passes must not touch a single omega.
+	var spec := _bench_spec(1500.0)
+	spec.ground_drive.driven_front = true  # AWD, open centre and axles
+	var drive := _drive_for(spec)
+	var input := VehicleInput.new()
+	drive.drive_omega(spec.ground_drive, input)
+	_set_spin(drive, SPREAD_OMEGAS, SPREAD_COMPLIANCE)
+	drive._couple_differentials(spec.ground_drive, input, 2000.0)
+	for i in drive.wheels.size():
+		assert_float(drive.wheels[i].omega).is_equal(SPREAD_OMEGAS[i])
+	assert_bool(drive.rear_diff_locked).is_false()
+
+
+func test_engaged_mfwd_ties_the_front_axle_to_the_rear() -> void:
+	var spec := _mfwd_spec()
+	var drive := _drive_for(spec)
+	var input := VehicleInput.new()
+	input.fwd_drive = true
+	drive.drive_omega(spec.ground_drive, input)
+	_set_spin(drive, SPREAD_OMEGAS, SPREAD_COMPLIANCE)
+	drive._couple_differentials(spec.ground_drive, input, 4000.0)
+	var w := drive.wheels
+	assert_float((w[0].omega + w[1].omega) * 0.5) \
+			.is_equal_approx((w[2].omega + w[3].omega) * 0.5, 1e-9)
+	# Both axles stay open inside: the rear pair keeps a spread, only the axle means are tied.
+	assert_float(w[2].omega - w[3].omega).is_greater(0.0)
+
+
+func test_disengaged_mfwd_couples_nothing_across_the_axles() -> void:
+	var spec := _mfwd_spec()
+	var drive := _drive_for(spec)
+	var input := VehicleInput.new()
+	drive.drive_omega(spec.ground_drive, input)
+	_set_spin(drive, SPREAD_OMEGAS, SPREAD_COMPLIANCE)
+	drive._couple_differentials(spec.ground_drive, input, 4000.0)
+	for i in drive.wheels.size():
+		assert_float(drive.wheels[i].omega).is_equal(SPREAD_OMEGAS[i])
+
+
+func test_the_diff_lock_puts_the_rear_pair_on_one_shaft() -> void:
+	var spec := _mfwd_spec()
+	var drive := _drive_for(spec)
+	var input := VehicleInput.new()
+	input.diff_lock = true
+	drive.drive_omega(spec.ground_drive, input)
+	_set_spin(drive, SPREAD_OMEGAS, SPREAD_COMPLIANCE)
+	drive._couple_differentials(spec.ground_drive, input, 4000.0)
+	var w := drive.wheels
+	assert_float(w[2].omega).is_equal_approx(w[3].omega, 1e-9)
+	# The stiff (gripping) RR moves less than the soft RL: the compliance-weighted mean.
+	assert_float(w[2].omega).is_equal_approx((0.0005 * 30.0 + 0.003 * 20.0) / 0.0035, 1e-9)
+	assert_bool(drive.rear_diff_locked).is_true()
+	# Undriven front, untouched.
+	assert_float(w[0].omega).is_equal(10.0)
+
+
+func test_a_limited_slip_axle_moves_no_more_than_its_capacity() -> void:
+	var spec := _bench_spec(1500.0)
+	spec.ground_drive.diff_bias_rear = 2.5
+	var drive := _drive_for(spec)
+	var input := VehicleInput.new()
+	drive.drive_omega(spec.ground_drive, input)
+	# A wide spread on stiff wheels asks far more torque than a 2.5 bias carries at 1000 N·m in.
+	_set_spin(drive, [0.0, 0.0, 60.0, 5.0], [0.001, 0.001, 0.0001, 0.0001])
+	drive._couple_differentials(spec.ground_drive, input, 1000.0)
+	var moved := (60.0 - drive.wheels[2].omega) / 0.0001
+	assert_float(moved).is_equal_approx(Differential.bias_capacity(1000.0, 2.5), 1e-6)
+	assert_float((drive.wheels[3].omega - 5.0) / 0.0001).is_equal_approx(moved, 1e-6)

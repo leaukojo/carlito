@@ -155,7 +155,7 @@ vehicles.
 ## What you see on screen
 
 **The game drives first.** No front door, no menu asking you to choose before you know what
-you're choosing between: the page loads, a mountain level comes up, you're already in a car —
+you're choosing between: the page loads, an endless flat plain comes up, you're already in a car —
 true standalone and inside sloppyCAN alike, one boot path. A link can ask for something
 specific (`?level=…&vehicle=…`); otherwise it is the default level.
 
@@ -165,8 +165,8 @@ only F5 hides them. **Esc** (or MENU) opens RESUME, RESPAWN, CONDITIONS, CONTROL
 - **GARAGE**: families down the left, that family's bodies as pictures in the middle, and a
   live 3D preview with the machine's specs (including what it speaks on the bus). Machines
   this level won't spawn are still browsable, carrying the reason on the card.
-- **LEVEL**: a grid of screenshots with a description and a download weight on each — the
-  city level is a 14 MB bake, and you find that out before you wait for it.
+- **LEVEL**: a grid of screenshots with a description and a download weight on each — every
+  island is a separate download, and you see its size before you wait for it.
 - **CONTROLS** is generated, never typed. One table (`ActionRegistry`) describes every bound
   key; the sheet and the touchscreen buttons are both built from it. A control can't exist
   without being documented, or be documented without being reachable.
@@ -190,7 +190,7 @@ don't need a running game.
 Every push runs CI: editor-type and head-include gates → import → stale-bake check → bake →
 tests → two headless boot smokes → web export. `dev` auto-publishes with cache-busted
 filenames; `stable` moves only on the manual promote button (`docs/deploying.md`).
-`tools/preflight.ps1` runs the same gates locally.
+`tools/preflight.ps1` runs most of the same gates locally.
 
 ## House rules worth knowing (and why)
 
@@ -209,5 +209,5 @@ A digest for orientation — `CLAUDE.md`'s standing rules are the authoritative 
 - **Loading a stranger's level file is code execution** (Godot scenes embed scripts), so
   level sharing is out of scope.
 
-More sharp edges: `CLAUDE.md`'s gotchas section, before touching wheels, bakes, or the web
-export.
+More sharp edges: the `CLAUDE.md` files (root, and one beside the code they bind), before
+touching wheels, bakes, or the web export.

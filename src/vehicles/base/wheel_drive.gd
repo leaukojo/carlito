@@ -7,7 +7,7 @@ extends RefCounted
 
 const WHEEL_VISUAL_NAMES: PackedStringArray = ["WheelFL", "WheelFR", "WheelRL", "WheelRR"]
 
-## Wheel-slip dust emitter, built in code (no scene, no re-bake).
+## Wheel-slip dust emitter, built in code.
 const DUST_SLIP_MIN := 0.2      ## rear slip ratio where dust starts
 const DUST_SLIP_FULL := 0.6     ## rear slip ratio for full emission
 const DUST_MOVING := 1.0        ## m/s below which dust is suppressed (idle burnout stays clean)
@@ -21,6 +21,10 @@ var retarder_torque_applied := 0.0
 var _applied_steer := 0.0  ## steer angle applied to steered wheels this tick (rad)
 var _driven_count := 0     ## driven wheels as drive_omega() counted them THIS tick
 var _dust: GPUParticles3D  ## rear-slip dust; null until build_dust(), and on a drive with no wheels
+## The wheels of each axle, split once by `RayWheel.is_rear`: the differentials couple within and
+## between these. Whether an axle is DRIVEN is read per tick (MFWD engages at runtime).
+var _front: Array[RayWheel] = []
+var _rear: Array[RayWheel] = []
 ## Front-to-rear anchor distance (m), body space; 0 if the spec declares no front/rear pair
 ## (never happens for a real wheeled body). Cached once in _init since wheel_positions is data.
 var _wheelbase := 0.0
@@ -29,8 +33,7 @@ var _wheelbase := 0.0
 ## Build the wheels and their visuals.
 func _init(body: Node3D, spec: VehicleSpec) -> void:
 	var gd := spec.ground_drive
-	# Per-corner mass share. Built from the spec's mass; a body that rewrites `mass` at runtime
-	# calls set_corner_mass_from so the wheels' 60 Hz clamps follow the laden weight.
+	# Per-corner mass share; a runtime `mass` write calls set_corner_mass_from.
 	var corner_mass := spec.mass / maxf(1.0, gd.wheel_positions.size())
 	for i in gd.wheel_positions.size():
 		var pos := gd.wheel_positions[i]
@@ -52,10 +55,9 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 			if visual == null and scene != null:
 				visual = scene.instantiate()
 				visual.name = WHEEL_VISUAL_NAMES[i]
-				# Radius-normalized model, scaled to vis_radius; right wheels flip to face out,
-				# since the rim is on one face. The flip is Vector3.RIGHT, not UP: local Y is the
-				# axle in RayWheel's root basis, so a yaw there just spins the wheel about it.
-				# Flip and scale ride the child; RayWheel overwrites the root transform each tick.
+				# Radius-normalized model, scaled to vis_radius; right wheels flip to face out
+				# (rim on one face). The flip is Vector3.RIGHT, not UP: local Y is the axle in
+				# RayWheel's root basis. Flip and scale ride the child; RayWheel overwrites the root.
 				for child in visual.get_children():
 					if child is Node3D:
 						var b := (child as Node3D).basis.scaled(Vector3.ONE * vis_radius)
@@ -65,6 +67,10 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 		wheel.visual_lift = vis_radius - gd.wheel_radius
 		wheel.apply_suspension(gd)
 		wheels.append(wheel)
+		if wheel.is_rear:
+			_rear.append(wheel)
+		else:
+			_front.append(wheel)
 	if gd.anti_roll_rate > 0.0:
 		_link_anti_roll_pairs()
 	_wheelbase = _compute_wheelbase()
@@ -81,9 +87,8 @@ func _link_anti_roll_pairs() -> void:
 
 
 ## Re-share the body's LIVE mass over the corners. The three one-tick RayWheel clamps are sized
-## off `corner_mass`, so a body whose `mass` grows at runtime (the refuse truck's hopper) must call
-## this from wherever it writes `mass`, or the clamps stay sized for the empty vehicle and bite
-## forces the laden body legitimately makes. It only re-sizes the clamps; none of them is weakened.
+## off `corner_mass`, so every runtime `mass` write (the refuse truck's hopper) calls this, or the
+## clamps stay sized for the empty vehicle and bite on forces the laden body legitimately makes.
 func set_corner_mass_from(live_mass: float) -> void:
 	var corner_mass := live_mass / maxf(1.0, wheels.size())
 	for w in wheels:
@@ -117,9 +122,8 @@ func drive_omega(gd: GroundDriveSpec, input: VehicleInput) -> float:
 	return omega / maxf(1.0, _driven_count)
 
 
-## Front axle to rear axle distance (m), from the built wheels' own anchors — the same fact
-## `Articulation.wheelbase` measures off a spec, cached here since `wheels` is fixed at _init.
-## 0.0 with no front or no rear wheel (never a real wheeled body).
+## Front axle to rear axle distance (m), from the built wheels' anchors. 0.0 with no front or no
+## rear wheel (never a real wheeled body).
 func _compute_wheelbase() -> float:
 	var front_z := INF
 	var rear_z := -INF
@@ -133,12 +137,10 @@ func _compute_wheelbase() -> float:
 	return rear_z - front_z
 
 
-## Pure: ISOBUS curvature (1/km, signed like `steer` — + = right) to wheel angle (rad, same
-## sign as the curvature; the caller negates it to match `_applied_steer`'s sign convention,
-## same as the plain `steer` path does). Ackermann-thin (one angle for both steered wheels,
-## the same simplification the speed-tapered rack already makes).
-## `curvature = tan(angle) / wheelbase`, so `angle = atan(wheelbase * curvature)`; clamped to
-## the mechanical lock, never the speed-tapered one.
+## Pure: ISOBUS curvature (1/km, + = right) to wheel angle (rad, same sign; the caller negates it
+## for `_applied_steer`'s convention, as the plain `steer` path does). One angle for both steered
+## wheels (no Ackermann). `angle = atan(wheelbase * curvature)`, clamped to the mechanical lock,
+## never the speed-tapered one.
 static func steer_angle_from_curvature(curvature_per_km: float, wheelbase: float,
 		max_steer_deg: float) -> float:
 	var max_rad := deg_to_rad(max_steer_deg)
@@ -146,11 +148,10 @@ static func steer_angle_from_curvature(curvature_per_km: float, wheelbase: float
 	return clampf(angle, -max_rad, max_rad)
 
 
-## The guidance path's slew TARGET, in the same unit as `input.steer` ([-1, 1], + = right): the
-## untapered mechanical-lock angle for the commanded curvature, divided back down by that lock —
-## so `BaseVehicle` can run guidance through the SAME `move_toward(_steer, ..., spec.steer_speed)`
-## slew as hand-steering instead of jumping the wheels to the commanded angle in one tick. NAN
-## with no guidance command or no measured wheelbase, so the caller falls back to `input.steer`.
+## The guidance path's slew TARGET, in the unit of `input.steer` ([-1, 1], + = right): the
+## untapered lock angle for the commanded curvature over that lock, so `BaseVehicle` slews it at
+## `spec.steer_speed` like hand-steering. NAN with no guidance command or no wheelbase, so the
+## caller falls back to `input.steer`.
 func guidance_steer_unit(input: VehicleInput, gd: GroundDriveSpec) -> float:
 	if input.guidance_curvature == VehicleInput.GUIDANCE_CURVATURE_NONE or _wheelbase <= 0.0:
 		return NAN
@@ -160,16 +161,15 @@ func guidance_steer_unit(input: VehicleInput, gd: GroundDriveSpec) -> float:
 
 
 ## Statement order is load-bearing: resistance reads this tick's spring load so it must follow
-## the wheel loop; the diff lock writes omega so it must follow spin integration.
+## the wheel loop; the differentials write omega off each wheel's step, so they must follow spin
+## integration.
 func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: float,
 		axle_torque: float, ground_speed: float, delta: float,
 		grip_terrains: Array[Node]) -> void:
 	var gd := spec.ground_drive
 	if input.guidance_curvature != VehicleInput.GUIDANCE_CURVATURE_NONE and _wheelbase > 0.0:
-		# `steer` (the slewed _steer BaseVehicle already ran through guidance_steer_unit) IS the
-		# mechanical-lock unit here, so apply it straight to the lock — no speed taper, so the
-		# driven radius tracks the command at any speed instead of drifting wider as the taper
-		# shrinks the rack.
+		# `steer` (already slewed from guidance_steer_unit) is in mechanical-lock units: no speed
+		# taper, so the driven radius tracks the command at any speed.
 		_applied_steer = -steer * deg_to_rad(gd.max_steer_deg)
 	else:
 		# High-speed steering falloff (min_steer_frac == 1.0 disables it).
@@ -181,13 +181,13 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 
 	var space := body.get_world_3d().direct_space_state
 	retarder_torque_applied = 0.0
+	# One anti-roll snapshot for the whole body before any wheel ticks (`RayWheel.anti_roll_partner`).
+	for w in wheels:
+		w.latch_bar()
 	for w in wheels:
 		w.steer_angle = _applied_steer if w.steered else 0.0
-		# An even split IS an open differential between every driven wheel, across axles too, so
-		# the whole body's tractive force is `driven count x the weakest driven wheel's grip` —
-		# a spinning front pair starves loaded rears that could take more. Measured cost and the
-		# load-proportional alternative: src/vehicles/CLAUDE.md § Wheels, suspension and the 60
-		# Hz tick.
+		# The nominal equal split (open-diff law); `_couple_differentials` adds what a biasing,
+		# locked or rigid diff moves on top, once every wheel has integrated.
 		var drive_t := axle_torque / _driven_count if w.driven else 0.0
 		var brake_t := input.brake * gd.brake_torque
 		if w.is_rear:
@@ -201,33 +201,90 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 				retarder_torque_applied += ret
 		w.tick(body, gd, space, drive_t, brake_t, delta, grip_terrains)
 
-	_lock_rear_diff(gd, input)
+	_couple_differentials(gd, input, axle_torque)
 	_apply_resistance(body, gd, delta)
 	_apply_downforce(body, gd)
 
 
-## Rear diff lock (tractor only): a locked diff is one rigid shaft, so pull the rear pair onto a
-## common omega after spin integration. Sharing a slip ratio, the grippy wheel pulls.
-func _lock_rear_diff(gd: GroundDriveSpec, input: VehicleInput) -> void:
-	rear_diff_locked = false
-	if not (gd.rear_diff_lockable and input.diff_lock):
+## The declared differentials, as coupling torques solved off each wheel's own spin step
+## (`Differential`, `RayWheel.spin_compliance`). One pass: the centre first, whenever both axles are
+## driven (rigid for MFWD, else `centre_diff_bias`), its torque reaching an axle's wheels equally;
+## then each axle, capacity sized off the torque it actually received, unbounded on the rear while
+## the diff lock is held. All open is a no-op.
+func _couple_differentials(gd: GroundDriveSpec, input: VehicleInput, axle_torque: float) -> void:
+	var front_driven := _axle_driven(_front)
+	var rear_driven := _axle_driven(_rear)
+	var per_wheel := axle_torque / maxf(1.0, _driven_count)
+	var front_in := per_wheel * _front.size() if front_driven else 0.0
+	var rear_in := per_wheel * _rear.size() if rear_driven else 0.0
+	if front_driven and rear_driven:
+		var centre_cap := INF if gd.centre_diff_rigid \
+				else Differential.bias_capacity(axle_torque, gd.centre_diff_bias)
+		# Positive moves torque from the rear axle to the front one.
+		var t := Differential.coupling_torque(_mean_omega(_rear), _mean_omega(_front),
+				_axle_compliance(_rear), _axle_compliance(_front), centre_cap)
+		if t != 0.0:
+			_apply_axle_torque(_rear, -t)
+			_apply_axle_torque(_front, t)
+			rear_in -= t
+			front_in += t
+	if front_driven:
+		_couple_axle(_front, Differential.bias_capacity(front_in, gd.diff_bias_front))
+	# A lock is one rigid shaft whether or not the axle is driven this tick.
+	rear_diff_locked = gd.rear_diff_lockable and input.diff_lock and _rear.size() == 2
+	if rear_diff_locked:
+		_couple_axle(_rear, INF)
+	elif rear_driven:
+		_couple_axle(_rear, Differential.bias_capacity(rear_in, gd.diff_bias_rear))
+
+
+## Couple the two wheels of one axle through a diff of `capacity`; only a two-wheel axle is a
+## differential.
+static func _couple_axle(axle: Array[RayWheel], capacity: float) -> void:
+	if axle.size() != 2 or capacity <= 0.0:
 		return
-	var rear: Array[RayWheel] = []
-	for w in wheels:
-		if w.is_rear:
-			rear.append(w)
-	if rear.size() != 2:  ## only a two-wheel axle is a differential
-		return
-	var shared := Drivetrain.locked_axle_omega(rear[0].omega, rear[1].omega)
-	rear[0].omega = shared
-	rear[1].omega = shared
-	rear_diff_locked = true
+	var a := axle[0]
+	var b := axle[1]
+	var t := Differential.coupling_torque(a.omega, b.omega, a.spin_compliance,
+			b.spin_compliance, capacity)
+	a.omega -= t * a.spin_compliance
+	b.omega += t * b.spin_compliance
+
+
+static func _axle_driven(axle: Array[RayWheel]) -> bool:
+	for w in axle:
+		if w.driven:
+			return true
+	return false
+
+
+static func _mean_omega(axle: Array[RayWheel]) -> float:
+	var sum := 0.0
+	for w in axle:
+		sum += w.omega
+	return sum / maxf(1.0, axle.size())
+
+
+## Change in the axle's MEAN spin per N·m into the axle: the torque splits equally over its wheels
+## (`torque / n` each), so the mean moves by `torque * sum(compliance) / n^2`.
+static func _axle_compliance(axle: Array[RayWheel]) -> float:
+	var sum := 0.0
+	for w in axle:
+		sum += w.spin_compliance
+	var n := maxf(1.0, axle.size())
+	return sum / (n * n)
+
+
+## Torque into an axle, split equally over its wheels and applied off each wheel's own step.
+static func _apply_axle_torque(axle: Array[RayWheel], torque: float) -> void:
+	var share := torque / maxf(1.0, axle.size())
+	for w in axle:
+		w.omega += share * w.spin_compliance
 
 
 ## Aero plus rolling resistance, which sets top speed. Runs after the wheels tick so the normal
-## load is this tick's spring reading. Rolling resistance reads off the springs, not `mass * g`,
-## so a jumped car resists nothing airborne and a laden truck resists more for free. Aero ignores
-## mass, so a towed body's own drag area is what a 32 t rig pays. Inert when neither is declared.
+## load is this tick's spring reading, not `mass * g`: an airborne car resists nothing and a laden
+## truck resists more for free. Inert when neither is declared.
 func _apply_resistance(body: RigidBody3D, gd: GroundDriveSpec, delta: float) -> void:
 	if gd.drag_area <= 0.0 and gd.rolling_resistance <= 0.0:
 		return
@@ -238,10 +295,8 @@ func _apply_resistance(body: RigidBody3D, gd: GroundDriveSpec, delta: float) -> 
 			gd.rolling_resistance, normal_load, body.mass, delta))
 
 
-## Downforce, applied down the body's own up axis so it follows roll and pitch, and never a grip
-## multiplier: it compresses the springs and grip follows, at the cost of ride height and
-## resistance. Applied centrally so it keeps the body's existing weight split. Not gated on ground
-## contact, since a wing pushes down in the air too.
+## Downforce down the body's own up axis so it follows roll and pitch; applied centrally to keep
+## the body's weight split. Not gated on ground contact.
 func _apply_downforce(body: RigidBody3D, gd: GroundDriveSpec) -> void:
 	if gd.downforce_area <= 0.0:
 		return

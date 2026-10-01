@@ -120,6 +120,9 @@ const CAR_BASE := {
 	"anti_roll_rate": 7000.0,
 	# FWD default; per-variant override in VARIANTS (rwd/awd where the body says so).
 	"wheel_inertia": 1.2, "driven_front": true, "driven_rear": false,
+	# Differentials: 1.0 is open (Differential.bias_capacity). Road cars keep open axles and an
+	# open centre unless the body really carries an LSD or a biasing centre (VARIANTS).
+	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
 	"mu_long": 1.05, "mu_lat": 1.1, "handbrake_grip": 0.45,
 	# Passenger radials: ~10% of mu per doubling of load past the corner's static share.
 	"load_sensitivity": 0.10,
@@ -163,6 +166,7 @@ const TRUCK_BASE := {
 	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
 	"anti_roll_rate": 0.0,
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
+	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
 	# J1939: only family with an auxiliary retarder on the driven axle.
 	"retarder_equipped": true,
 	# A truck tyre on dry asphalt, and the family's whole brake chain hangs off it: brake_torque,
@@ -195,6 +199,7 @@ const VAN_BASE := {
 	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
 	"anti_roll_rate": 80000.0,
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
+	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
 	"mu_long": 1.0, "mu_lat": 0.95, "handbrake_grip": 1.0,
 	# Commercial radials, as TRUCK_BASE.
 	"load_sensitivity": 0.08,
@@ -229,6 +234,10 @@ const TRACTOR_BASE := {
 	"wheel_inertia": 6.0, "driven_front": false, "driven_rear": true,
 	# ISOBUS: only family with lockable diff / engageable front axle at runtime.
 	"rear_diff_lockable": true, "front_axle_engageable": true,
+	# Open rear with a lock; MFWD is a clutch into a rigid transfer to the front axle, no centre
+	# diff, so engaged it ties the two axles' mean speeds together (and winds up in tight turns).
+	"centre_diff_rigid": true,
+	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
 	"mu_long": 1.0, "mu_lat": 0.95, "handbrake_grip": 1.0,
 	# Big soft flotation tyres lose more mu per doubling of load than a road tyre.
 	"load_sensitivity": 0.12,
@@ -251,8 +260,8 @@ const TRACTOR_BASE := {
 # `family` is the CONTRACT family (VehicleCatalog) and picks the feel baseline + vehicle script
 # (FAMILY_SCRIPTS); `base` names the feel baseline when it differs (heavy vans are car-family,
 # van chassis feel). Driveline flags (rear_diff_lockable / front_axle_engageable /
-# retarder_equipped), `gear_ratios` and `com_z` may all be overridden per variant over the
-# baseline.
+# retarder_equipped / centre_diff_rigid), the differential bias ratios, `gear_ratios` and `com_z`
+# may all be overridden per variant over the baseline.
 const VARIANTS := {
 	# car family
 	# Driven layout per body: FWD is the CAR_BASE default, `driven_rear` alone is RWD, both is
@@ -261,12 +270,16 @@ const VARIANTS := {
 	# over the driven axle (measured 48/52 rear-biased at the body origin, unusable for FWD).
 	"sedan": {"family": "car", "front_weight": 0.60},
 	"sedan-sports": {"family": "car", "mass": 1050.0, "torque_mul": 1.12, "final_drive": 4.1, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true},
-	"hatchback-sports": {"family": "car", "mass": 1000.0, "torque_mul": 1.10, "final_drive": 4.2, "max_steer_deg": 42.0, "front_weight": 0.60},
+	# Hot hatch: a helical front LSD (Quaife-class, ~2.5:1), so a front wheel a bump or a steer input
+	# peels still leaves its partner up to 2.5x its torque rather than an equal share.
+	"hatchback-sports": {"family": "car", "mass": 1000.0, "torque_mul": 1.10, "final_drive": 4.2, "max_steer_deg": 42.0, "front_weight": 0.60, "diff_bias_front": 2.5},
 	# Lever for SUV power is their own `torque_mul`, not the shared CAR_BASE curve: measured
 	# 0-100 goes as peak^-0.6 on the sedan, peak^-1.4 on the suv.
-	"suv": {"family": "car", "com_y": 0.62, "anti_roll_rate": 18000.0, "mass": 1500.0, "torque_mul": 1.05, "mu_lat": 1.0, "max_steer_deg": 34.0, "driven_rear": true},
+	# Both SUVs: a Torsen-type centre (~3:1). Under launch squat the rear axle carries ~2x the
+	# front (2412 / 4956 N measured), inside 3:1, so the heavy axle is no longer capped by the light one.
+	"suv": {"family": "car", "com_y": 0.62, "anti_roll_rate": 18000.0, "mass": 1500.0, "torque_mul": 1.05, "mu_lat": 1.0, "max_steer_deg": 34.0, "driven_rear": true, "centre_diff_bias": 3.0},
 	# 1.54 is the biggest multiplier in the family: 285 Nm through an AWD 1600 kg body.
-	"suv-luxury": {"family": "car", "com_y": 0.62, "anti_roll_rate": 18000.0, "mass": 1600.0, "torque_mul": 1.54, "mu_lat": 1.0, "max_steer_deg": 33.0, "driven_rear": true},
+	"suv-luxury": {"family": "car", "com_y": 0.62, "anti_roll_rate": 18000.0, "mass": 1600.0, "torque_mul": 1.54, "mu_lat": 1.0, "max_steer_deg": 33.0, "driven_rear": true, "centre_diff_bias": 3.0},
 	"taxi": {"family": "car", "mass": 1250.0, "front_weight": 0.60},
 	"police": {"family": "car", "mass": 1300.0, "torque_mul": 1.18, "final_drive": 4.0, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true},
 	# Open-wheelers: `wheel_x_out` measured per body against its own half-width at the wheel
@@ -287,19 +300,12 @@ const VARIANTS := {
 	# giving 2.375 with 2-5 re-spread (1.33/1.31/1.29/1.27/1.26). Re-derive per body on any
 	# torque change. Both keep a long top gear (0.66 vs CAR_BASE's 0.925), reaching 288.0 /
 	# 295.8 km/h.
+	# Differentials: `race` carries a plate LSD on its driven rear (2.5); `race-future` the same
+	# rear plus a Torsen-type centre (3.0).
 	# `torque_mul` tracks CAR_BASE so absolute torque stays fixed (2.10x185=389 Nm,
 	# 2.21x185=409 Nm) — re-derive on any CAR_BASE torque edit.
-	# `race` carries NO anti-roll bar, and that is a stopgap, not a tune: with CAR_BASE's 7000 it
-	# fails the tracking gate by 1.18 m over 200 m, because a bar turns a launch-transient load
-	# difference into a far larger longitudinal one on the driven axle (0.8 % of compression came
-	# out as 18 % of force) and the body keeps the heading it picks up. Costs nothing measurable
-	# here — roll at the grip peak is 5.6 deg with the bar off against 3.3 with it, both inside
-	# the 4-8 target — so `race` is the one body that can give the bar up. It does NOT fix the
-	# amplifier: `hatchback-sports` still fails with a bar it cannot give up (12.2 deg without),
-	# and `race-future` drifts 25x the fleet norm just under the gate. Restore the bar when the
-	# drive-torque split stops multiplying load differences.
-	"race": {"family": "car", "anti_roll_rate": 0.0, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "max_steer_deg": 40.0, "handbrake_grip": 0.5, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.18, "steer_falloff_speed": 35.0},
-	"race-future": {"family": "car", "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "max_steer_deg": 42.0, "handbrake_grip": 0.5, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.17, "steer_falloff_speed": 35.0},
+	"race": {"family": "car", "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "max_steer_deg": 40.0, "handbrake_grip": 0.5, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.18, "steer_falloff_speed": 35.0, "diff_bias_rear": 2.5},
+	"race-future": {"family": "car", "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "max_steer_deg": 42.0, "handbrake_grip": 0.5, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.17, "steer_falloff_speed": 35.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0},
 	# Commercial bodies: RWD, governed at 180 like the real things (measured 198-200 ungoverned).
 	"van": {"family": "car", "com_y": 0.58, "anti_roll_rate": 18000.0, "mu_lat": 1.0, "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
 	# `ride_lift` 0.08 on the flatbeds: their arches are drawn shallower than the tyre, so at the
@@ -328,7 +334,7 @@ const VARIANTS := {
 	# `mass` 5500 / `front_weight` 0.38 is ballast, not torque: gear-1 wheel force against rear
 	# axle grip was 3.4x at 4000 kg; at 5500 kg with 62% on the rear (3.4 t, 33 kN at mu 1.0) it
 	# is ~2.0x, and the added mass lands where the draft reaction wants it. The torque curve and
-	# `final_drive` stay untouched — idle torque is what pulls a drawbar trailer away.
+	# `final_drive` stay untouched — low-end torque is what pulls a drawbar trailer away.
 	# `com_y_frac` 0.35 of the body's AABB top (2.60 m on the scaled body) = 0.91 m over the
 	# road, a real tractor's COM height. A fraction, not a metre figure, because `scale` above
 	# may still move and the fraction survives it. Against the 0.70 m half-track that is a
@@ -455,6 +461,12 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	gd.rear_diff_lockable = get_flag.call("rear_diff_lockable")
 	gd.front_axle_engageable = get_flag.call("front_axle_engageable")
 	gd.retarder_equipped = get_flag.call("retarder_equipped")
+	# Differentials (Differential): per variant over a baseline of open (1.0) everywhere, and the
+	# rigid centre is a driveline flag like the two above.
+	gd.diff_bias_front = get_f.call("diff_bias_front")
+	gd.diff_bias_rear = get_f.call("diff_bias_rear")
+	gd.centre_diff_bias = get_f.call("centre_diff_bias")
+	gd.centre_diff_rigid = get_flag.call("centre_diff_rigid")
 	gd.rest_length = float(b["rest_length"])
 	gd.spring_rate = float(b["spring_rate"])
 	gd.damper_bump = float(b["damper_bump"])

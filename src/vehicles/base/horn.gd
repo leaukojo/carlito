@@ -1,12 +1,11 @@
 class_name Horn
 extends RefCounted
-## Procedural car-horn tone: synthesized once as a looping AudioStreamWAV, no audio asset.
-## BaseVehicle plays it on the horn rising edge and fades it over RELEASE_SECONDS on release.
+## Procedural car-horn tone: one looping AudioStreamWAV, no audio asset. BaseVehicle plays it on the
+## horn rising edge and fades it over RELEASE_SECONDS on release.
 
 const RATE := 22050            ## Hz sample rate
 ## One loop of the sustained tone. Every periodic term below (pitches, wobbles, flutter) is a
-## multiple of 1 / LOOP_SECONDS (2 Hz), so it completes whole cycles in the loop and the seam
-## is silent.
+## multiple of 1 / LOOP_SECONDS (2 Hz), so the loop seam is silent.
 const LOOP_SECONDS := 0.5
 const ATTACK_SECONDS := 0.04   ## played once before the loop: the diaphragm kicking into pitch
 const ONSET_SECONDS := 0.006   ## amplitude ramp at the very start, so play() never clicks
@@ -19,9 +18,9 @@ const FORMANT_HZ := 2400.0
 const FORMANT_WIDTH_HZ := 900.0
 const DRIVE := 1.8             ## tanh soft-clip: the growl of a diaphragm hitting its stop
 const PEAK := 0.4              ## output peak, full scale = 1
-## The dual-tone pair a minor third apart, each a separate unit with its own slight pitch wobble
-## and loudness flutter — two identical, perfectly steady tones is what reads as synthetic.
-## `wobble` is [rate Hz, depth Hz] pairs, `flutter` is [rate Hz, depth fraction].
+## The dual-tone pair a minor third apart, each with its own pitch wobble and loudness flutter
+## (steady tones read as synthetic). `wobble` is [rate Hz, depth Hz] pairs, `flutter` is
+## [rate Hz, depth fraction].
 const HORNS := [
 	{f = 420.0, gain = 1.0, wobble = [[2.0, 0.9], [6.0, 0.5]], flutter = [8.0, 0.03], phase = 0.0},
 	{f = 500.0, gain = 0.8, wobble = [[4.0, 1.1], [10.0, 0.5]], flutter = [14.0, 0.03], phase = 1.7},
@@ -30,8 +29,7 @@ const HORNS := [
 static var _cached: AudioStreamWAV
 
 
-## Pure (no scene) so a test can assert it produces non-empty 16-bit data with a forward loop.
-## Every vehicle shares the one stream: it is read-only once built.
+## Built once and cached: every vehicle shares the one read-only stream.
 static func make_stream() -> AudioStreamWAV:
 	if _cached != null:
 		return _cached

@@ -514,3 +514,32 @@ func test_no_wheel_station_sits_on_the_front_rear_boundary() -> void:
 			assert_bool(absf(station.z) < 1e-6).override_failure_message(
 					"a wheel station sits at z == 0 (%s) — it is front to one caller and rear" \
 					% str(station) + " to another").is_false()
+
+
+# --- the declared differentials ------------------------------------------------
+
+func test_every_differential_bias_is_open_or_biasing() -> void:
+	# 1.0 is open and a bias ratio below it is no diff anyone builds; `Differential.bias_capacity`
+	# would read it as open, so a typo there would ship an open diff with nothing to show for it.
+	for variant in VehicleCatalog.VARIANTS:
+		var spec := _spec_of(variant)
+		if spec == null or spec.ground_drive == null:
+			continue
+		var gd := spec.ground_drive
+		for bias: float in [gd.diff_bias_front, gd.diff_bias_rear, gd.centre_diff_bias]:
+			assert_float(bias).override_failure_message(
+					"%s declares a differential bias under 1 (open)" % variant).is_greater_equal(1.0)
+
+
+func test_a_rigid_centre_only_on_a_front_axle_the_driver_can_disengage() -> void:
+	# A rigid centre forces both axles to one mean speed, but the front runs a wider arc in a turn,
+	# so the driveline winds up and scrubs. A tractor's MFWD is real because the driver engages it
+	# for field work; a permanently driven front axle geared rigidly to the rear would scrub every
+	# road corner.
+	for variant in VehicleCatalog.VARIANTS:
+		var spec := _spec_of(variant)
+		if spec == null or spec.ground_drive == null or not spec.ground_drive.centre_diff_rigid:
+			continue
+		assert_bool(spec.ground_drive.front_axle_engageable and not spec.ground_drive.driven_front) \
+				.override_failure_message("%s: a rigid centre on a front axle that is always driven"
+					% variant).is_true()

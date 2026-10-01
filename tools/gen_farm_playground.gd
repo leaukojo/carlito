@@ -33,6 +33,7 @@ const IMPLEMENT_GROUND_OFFSET := 0.21
 
 # --- splat channels -------------------------------------------------------------------
 const CH_GRASS := 0
+const CH_SAND := 2      ## splatmap.B — mixed into the field's light bands
 const CH_FIELD := 4     ## splatmap2.R — the ploughable soil, phase 6's "in soil" predicate
 const CH_MUD := 5       ## splatmap2.G — wallow + haul ramp, grip 0.5
 const CH_GRAVEL := 7    ## splatmap2.A — yard surround and farm tracks
@@ -57,16 +58,32 @@ const TERRACE_Y := 36.0
 
 const FIELD_RECT := Rect2(-24, 26, 64, 90)        ## 64 x 90 m — ~90 m plough passes
 const FURROW_RECT := Rect2(-24, 34, 18, 70)       ## the already-ploughed western strip
+## Light sandy-loam bands across the field, so a plough pass meets varying soil: each is Field
+## and Sand at half weight, which reads soil 0.5 (`TractorVehicle._soil_at`), so draft halves and
+## engine_load drops on a band and climbs again past it. A mix, not a feathered edge: the band's
+## own border stays hard. Both sit inside tractor_plough's Row zone (z 42..96).
+const LIGHT_SOIL_BANDS: Array[Vector2] = [Vector2(52, 60), Vector2(76, 84)]   ## world z ranges
+const LIGHT_SOIL_MIX := 0.5
 const PADDOCK_RECT := Rect2(-100, -16, 20, 44)    ## the haul ramp's destination, at 36 m
 
 ## The wallow sits between the yard pad (ends at z = 0) and the fence line, so leaving the yard
 ## for the field goes through it, though its west/east edges stay open to drive around.
+## Its split traction is by LOAD, not paint: the ridges lift one rear wheel at a time, and the
+## open rear diff spins it. A painted grip split cannot do this job. At level 1's 1 px/m splat,
+## blended and sharpened, a split line only puts the tractor's wheels (1.06 m apart) on
+## different surfaces while it holds a 1 m window of lateral position.
+## Measured through the bridge on tractor_mud's line: floored, 2WD sticks, while the lock alone,
+## MFWD alone, and both together all cross. At a 2 m/s crawl, 2WD and MFWD alone stick (both
+## axles open), and the lock crosses.
 const WALLOW_RECT := Rect2(-2, 4, 24, 14)
 ## The blend ring is the wallow's entry/exit ramp, so its width sets their grade: 8 m gives
 ## ~7.5% (half of a 4 m ring) so climbing out is a gentle roll, not a step.
 const WALLOW_MARGIN := 8.0
 const WALLOW_Y := 26.4                            ## 0.6 m below the plateau (3 height steps)
-const RIDGE_AMPLITUDE := 0.4                      ## m; 2 steps of the 8-bit 0.2 m grid
+## m; 1 step of the 8-bit 0.2 m grid. Along the drive a crest climbs 2*pi*A / (pitch * sqrt 2),
+## 17.8 % at this amplitude. Mud tops out at 16.7 deg (30 %) for a perfect all-wheel drive, and
+## 2 steps (35 %) stops every tractor, MFWD with the lock included.
+const RIDGE_AMPLITUDE := 0.2
 const RIDGE_PITCH := 5.0                          ## m between crests, measured perpendicular
 const RIDGE_TAPER := 3.0                          ## m of fade to nothing at the wallow rim
 const RIM_SMOOTH_PASSES := 4                      ## evens the exit ramp's 8-bit staircase
@@ -77,8 +94,8 @@ const RIM_SMOOTH_PASSES := 4                      ## evens the exit ramp's 8-bit
 ## the drag term is half the budget: a perfect all-wheel drive tops out at
 ## atan(0.5 - 0.2) = 16.7 deg, not the atan(0.5) = 26.6 deg this was sized against. Measured, the
 ## shipped tractor manages ~3.9 deg in mud on MFWD and 0 deg flat out in two-wheel drive, because
-## drive torque splits evenly per wheel (src/vehicles/CLAUDE.md § Wheels, suspension and the 60 Hz
-## tick). Re-profiling the three segments is a level change; measure first with
+## drive torque splits evenly per wheel (docs/vehicles.md § Physics derivations and figures,
+## open-diff peel). Re-profiling the three segments is a level change; measure first with
 ## tools/measure_grade.tscn.
 const RAMP_Z := -18.0
 const RAMP_HALF_WIDTH := 8.0
@@ -222,6 +239,9 @@ func _build(root: Node) -> int:
 	_paint(splat, splat2, _gate_track_rect(), CH_GRAVEL)
 	_paint(splat, splat2, _ramp_track_rect(apron), CH_GRAVEL)
 	_paint(splat, splat2, FIELD_RECT, CH_FIELD)
+	for band in LIGHT_SOIL_BANDS:
+		_paint(splat, splat2, Rect2(FIELD_RECT.position.x, band.x, FIELD_RECT.size.x,
+				band.y - band.x), CH_SAND, LIGHT_SOIL_MIX)
 	_paint(splat, splat2, PADDOCK_RECT, CH_FIELD)
 	_paint(splat, splat2, _ramp_rect(), CH_MUD)
 	_paint(splat, splat2, WALLOW_RECT, CH_MUD)
@@ -345,18 +365,21 @@ func _ridges(img: Image) -> void:
 # --------------------------------------------------------------------------- painting
 
 
-## Paint `rect` with `channel` at full strength and a hard edge into both weight images (each
-## takes its own BrushOps.unit_slice). Full strength + hard edge is the kit's rule for a
-## destructive paint: shader pow-sharpen and grip_at sharpen identically, giving a crisp
-## low-poly border and full grip with no feathered low-grip apron.
-func _paint(splat: Image, splat2: Image, rect: Rect2, channel: int) -> void:
+## Paint `rect` with `channel` and a hard edge into both weight images (each takes its own
+## BrushOps.unit_slice). Full strength + hard edge is the kit's rule for a destructive paint:
+## shader pow-sharpen and grip_at sharpen identically, giving a crisp low-poly border and full
+## grip with no feathered low-grip apron. A partial `strength` mixes the channel evenly into
+## what is already there across the whole rect, still inside a hard border.
+func _paint(splat: Image, splat2: Image, rect: Rect2, channel: int, strength := 1.0) -> void:
 	var c := rect.get_center()
 	var cx := _px_x(c.x)
 	var cz := _px_z(c.y)
 	var rx := rect.size.x * 0.5 * _sx
 	var rz := rect.size.y * 0.5 * _sz
-	BrushOps.stamp_splat(splat, cx, cz, rx, rz, BrushOps.unit_slice(channel, 0), 1.0, 0.0, true)
-	BrushOps.stamp_splat(splat2, cx, cz, rx, rz, BrushOps.unit_slice(channel, 1), 1.0, 0.0, true)
+	BrushOps.stamp_splat(splat, cx, cz, rx, rz, BrushOps.unit_slice(channel, 0), strength, 0.0,
+			true)
+	BrushOps.stamp_splat(splat2, cx, cz, rx, rz, BrushOps.unit_slice(channel, 1), strength, 0.0,
+			true)
 
 
 func _ramp_rect() -> Rect2:

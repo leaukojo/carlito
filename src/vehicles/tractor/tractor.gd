@@ -7,16 +7,15 @@ extends BaseVehicle
 
 const SPAWN_HITCH := 1.0                ## spawn default: raised (transport), PTO off
 
-## Splat channel 4 ("Field") is the only honest "in soil" predicate for draft force, not Dirt
-## (channel 1), which auto-splat paints on every slope. It lives in splatmap2, which auto-splat
-## only zeroes, so an unpainted level reads "no soil" everywhere.
+## Splat channel 4 ("Field") is the "in soil" predicate for draft, not Dirt (channel 1), which
+## auto-splat paints on every slope. Auto-splat only zeroes splatmap2, so an unpainted level reads
+## "no soil" everywhere.
 const SOIL_CHANNEL := 4
 
 @export var hitch_travel_time := 1.5   ## s for a full raise or lower
 @export var pto_load := 0.35           ## engine_load added while PTO engaged
 ## Rated draft (N): the pull of a draft-relevant implement at full depth at DRAFT_SPEED_REF, and
-## the 100% end of 'draft_force'. 12 kN is a real 3-furrow plough figure, which the tractor lugs
-## and slips against rather than stalling.
+## the 100% end of 'draft_force'. 12 kN is a real 3-furrow plough figure.
 @export var draft_max_force := 12000.0
 @export var hitch_path: NodePath = ^"ThreePointHitch"
 @export var drawbar_path: NodePath = ^"Drawbar"
@@ -35,20 +34,20 @@ func _ready() -> void:
 	super._ready()
 	_hitch = get_node_or_null(hitch_path) as ThreePointHitch
 	_drawbar = get_node_or_null(drawbar_path) as TowHost
-	# Spawn with an implement on the linkage so hitch/PTO are visible from frame one.
+	# Spawn with an implement on the linkage.
 	_set_implement(ImplementCatalog.first())
 
 
-## Advance to the next E-cycle entry, DETACHED included. Refuses only for a towed entry while
-## moving, since a trailer must be laid at a pose the tractor has not already left.
+## Advance to the next E-cycle entry, DETACHED included. Refuses a towed entry while moving: a
+## trailer must be laid at a pose the tractor has not already left.
 func cycle_implement() -> void:
 	var next_id := ImplementCatalog.next(_implement_id)
 	if TowHost.may_cycle_to(_drawbar, next_id, ImplementCatalog.is_towed, telemetry.speed):
 		set_attachment(next_id)
 
 
-## The attachment axis as data, mirroring SemiTractor's trailer answers, for the selector UI.
-## DETACHED is a real entry, as in the cycle.
+## The attachment axis as data for the selector UI, mirroring SemiTractor's trailer answers.
+## DETACHED is a real entry.
 func attachment_ids() -> PackedStringArray:
 	return ImplementCatalog.IMPLEMENTS
 
@@ -61,9 +60,8 @@ func set_attachment(id: String) -> void:
 	_set_implement(id)
 
 
-## Which attachment controls are live right now, for the touch overlay. PTO and SCV read the
-## attached machine's own declaration, the same one the coupling gates real drive and flow on;
-## LIFT is always true, since the three-point linkage is tractor anatomy and works empty.
+## Which attachment controls are live right now, for the touch overlay. PTO and SCV follow the
+## attached machine's own declaration; LIFT is always true (the linkage works empty).
 func attachment_controls() -> Dictionary:
 	var conn := _attachment_connections()
 	return {
@@ -73,8 +71,7 @@ func attachment_controls() -> Dictionary:
 	}
 
 
-## Garage showroom hook, forwarded to the coupling, which owns the freeze and its fit-check
-## exemption.
+## Garage showroom hook; the coupling owns the freeze and its fit-check exemption.
 func set_display_frozen(frozen: bool) -> void:
 	if _drawbar != null:
 		_drawbar.set_display_frozen(frozen)
@@ -89,10 +86,9 @@ func _attachment() -> Node:
 	return null
 
 
-## What the attached machine declares, 0 or CLASS_NONE with nothing attached. Duck-typed, since
-## an ImplementBase and a TowedBody share no base class on purpose. The `has_method` guards are
-## there because TowedBody defines neither method by default, so a second towed entry without them
-## would silently read zero instead of erroring; _verify_towed_declares catches that at hitch time.
+## What the attached machine declares, 0 or CLASS_NONE with nothing attached. Duck-typed: an
+## ImplementBase and a TowedBody share no base class on purpose. TowedBody defines neither method
+## by default, so a towed entry that omits one reads zero; _verify_towed_declares catches that.
 func _attachment_connections() -> int:
 	var node := _attachment()
 	if node == null or not node.has_method(&"connections"):
@@ -107,8 +103,7 @@ func _attachment_device_class() -> int:
 	return int(node.call(&"device_class"))
 
 
-## A towed attachment must be able to answer what it declares, checked once here while it is
-## still nameable.
+## A towed attachment must answer `connections` and `device_class`; checked once at attach.
 func _verify_towed_declares(node: Node) -> void:
 	for method: StringName in [&"connections", &"device_class"]:
 		if not node.has_method(method):
@@ -117,8 +112,7 @@ func _verify_towed_declares(node: Node) -> void:
 
 
 ## Put `id` on the linkage or the drawbar, whichever ImplementCatalog routes it to, or clear both
-## for DETACHED. An implement attach is a logical ISOBUS address claim with no cable, while a
-## trailer is a real coupling. The other end is always emptied first.
+## for DETACHED. The other end is always emptied first.
 func _set_implement(id: String) -> void:
 	_implement_id = id
 	var towed := ImplementCatalog.is_towed(id)
@@ -127,7 +121,7 @@ func _set_implement(id: String) -> void:
 			_hitch.attach(load(id) as PackedScene)
 		else:
 			_hitch.detach()
-		# Re-pose either way: the linkage is tractor anatomy and works empty.
+		# Re-pose either way: the linkage works empty.
 		_hitch.set_hitch(_hitch_actual)
 	if _drawbar == null:
 		return
@@ -146,16 +140,15 @@ func _set_implement(id: String) -> void:
 	_verify_towed_declares(_drawbar.trailer)
 
 
-## Called by TowHost once the spawn countdown finishes and a real transform exists, so a
-## remembered towed id can be laid. Only a towed id matters: re-running the setter for an implement
-## would detach and re-instance one already attached since _ready.
+## Called by TowHost once the spawn countdown finishes, so a remembered towed id can be laid. Only
+## a towed id matters: re-running the setter for an implement would re-instance it.
 func attachment_spawn_ready() -> void:
 	if ImplementCatalog.is_towed(_implement_id):
 		_set_implement(_implement_id)
 
 
-## The fit check took the trailer away, having laid it inside the world. The id must follow, or
-## current_attachment() reports a trailer no longer on the pin.
+## The fit check took the trailer away; the id follows, or current_attachment() reports a trailer
+## no longer on the pin.
 func attachment_refused() -> void:
 	_set_implement(ImplementCatalog.DETACHED)
 
@@ -167,41 +160,40 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	var pto_on := input.pto and running
 	t.hitch_pos_actual = roundi(_hitch_actual * 100.0)
 	t.pto_state = pto_on
-	# 540/1000 select a gearbox ratio off the engine; the engine itself is never re-targeted.
+	# 540/1000 select a gearbox ratio off the engine; the engine is never re-targeted.
 	t.pto_rpm = TractorTelemetry.pto_shaft_rpm(drivetrain.rpm, input.pto_mode) if pto_on else 0
-	# Governed throttle, not the pedal (see Drivetrain.applied_throttle).
+	# Governed throttle, not the pedal.
 	t.engine_load = roundi(VehicleTelemetry.engine_load_pct(
 			drivetrain.rpm, drivetrain.applied_throttle, spec, pto_on, pto_load))
-	# Driveline state read out of the sim, not echoed from request bits.
+	# Driveline state read out of the sim, not the request bits.
 	t.diff_lock_state = rear_diff_locked
 	t.fwd_drive_state = _front_axle_driven()
-	# ISOBUS wheel-based and ground-based speed pair, both this tick's; the difference is slip.
+	# ISOBUS wheel-based / ground-based speed pair; the difference is slip.
 	t.wheel_speed = TractorTelemetry.wheel_kmh(
 			_drive_axle_omega(), spec.ground_drive.wheel_radius)
 	t.ground_speed = absf(t.speed) * 3.6
 	t.wheel_slip = roundi(TractorTelemetry.slip_pct(t.wheel_speed, t.ground_speed))
-	# implement_connected and type report the address claim (ISOBUS_DATA), not the steel: a
-	# machine attached while declaring no bus address is mechanically attached and electronically
-	# silent, which the shipped drawbar trailer is. Reads whichever end is loaded.
+	# implement_connected and type report the address claim (ISOBUS_DATA), not the steel: the
+	# shipped drawbar trailer is attached and electronically silent. Reads whichever end is loaded.
 	var implement: ImplementBase = _hitch.implement if _hitch != null else null
 	var on_bus := (_attachment_connections() & int(ImplementBase.Connection.ISOBUS_DATA)) != 0
 	t.implement_connected = on_bus
 	t.implement_type = _attachment_device_class() if on_bus else ImplementBase.CLASS_NONE
-	# Hydraulic remote for both ends; pump is engine-driven so a stopped engine gives no flow.
+	# Hydraulic remote for both ends; the pump is engine-driven, so no flow with the engine off.
 	var spool := clampf(input.scv_flow, 0.0, 1.0) if running else 0.0
-	# Pose the linkage before the draft force reads it, since ball_lift() and hitch_point() come
-	# from the same four-bar solve set_hitch runs; posing after would use last tick's geometry.
+	# Pose the linkage before the draft force reads ball_lift() / hitch_point(), which come from
+	# the same solve; posing after would use last tick's geometry.
 	if _hitch != null:
 		_hitch.set_hitch(_hitch_actual)
 		_hitch.set_pto(pto_on, t.pto_rpm)
 		_hitch.set_scv(spool)
-	# Towing: brake demand is the plain foot brake, with no retarder blend since a tractor has
-	# none. The trailer brakes regardless, because hoses are not a data bus.
+	# Towing: brake demand is the plain foot brake (no retarder). The trailer brakes regardless of
+	# the bus: hoses are not a data bus.
 	if _drawbar != null:
 		_drawbar.tick_towing(input, input.brake, spool, pto_on, t.pto_rpm,
 				telemetry.speed, delta, _grip_terrains)
-	# Draft force on the chassis while the linkage works in soil. Nothing above reacts to it, since
-	# engine_load and wheel_slip already reflect the sag and pull from prior ticks.
+	# Draft force on the chassis while the linkage works in soil. Nothing above reads it:
+	# engine_load and wheel_slip are its consequences from prior ticks.
 	t.draft_force = roundi(TractorTelemetry.draft_pct(
 			_apply_draft(implement, t.speed, delta), draft_max_force))
 
@@ -211,8 +203,7 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 func _apply_draft(implement: ImplementBase, v_fwd: float, delta: float) -> float:
 	if _hitch == null or implement == null or not implement.draft_relevant():
 		return 0.0
-	# Working depth is the implement's own declared reach (plough 0.055 m, harrow tines 0.02 m); a
-	# shared constant had the harrow reporting draft with its tines visibly in the air.
+	# Working depth is the implement's own declared reach (plough 0.055 m, harrow tines 0.02 m).
 	var depth01 := TractorTelemetry.draft_depth01(
 			_hitch.ball_lift(), implement.tool_depth())
 	if depth01 <= 0.0:
@@ -223,15 +214,13 @@ func _apply_draft(implement: ImplementBase, v_fwd: float, delta: float) -> float
 		return 0.0
 	var force := TractorTelemetry.draft_newtons(
 			v_fwd, depth01, soil01, draft_max_force, mass, delta)
-	# Applied at the hitch point (y ~0.21), below the centre of mass (y = 0.35), so this force's
-	# own moment is nose-down. The net nose-up transfer comes from the tires' answering drive
-	# force at ground level, a longer arm below the same centre of mass.
+	# Applied at the hitch point, below the centre of mass, so its own moment is nose-down; the net
+	# nose-up transfer comes from the tyres' answering drive force at ground level, a longer arm.
 	apply_force(-global_transform.basis.z * force, point - global_position)
 	return force
 
 
-## Ploughable-soil weight under `point`, 0..1. Reuses the wheels' terrain pick and the cached
-## splat Images; no terrain painted means no soil.
+## Ploughable-soil weight under `point`, 0..1, off the wheels' terrain pick; unpainted means no soil.
 func _soil_at(point: Vector3) -> float:
 	var terrain := RayWheel.terrain_at(point, _grip_terrains)
 	if terrain == null or not terrain.has_method("channel_weight_at"):
@@ -239,8 +228,8 @@ func _soil_at(point: Vector3) -> float:
 	return terrain.channel_weight_at(point, SOIL_CHANNEL)
 
 
-## Mean spin of the rear axle (rad/s). Always driven, unlike the front, which changes with MFWD,
-## and the axle that digs in, so it is what wheel_slip measures.
+## Mean spin of the rear axle (rad/s): always driven (the front changes with MFWD), and it digs in,
+## so it is what wheel_slip measures.
 func _drive_axle_omega() -> float:
 	var total := 0.0
 	var count := 0
@@ -259,8 +248,8 @@ func _front_axle_driven() -> bool:
 	return false
 
 
-## Re-raise the implement. A respawn moves the tractor rather than rebuilding it, so whatever is
-## attached survives — the drawbar re-lays it at the coupled pose instead of dropping it.
+## Re-raise the implement. Whatever is attached survives a respawn: the drawbar re-lays it at the
+## coupled pose.
 func reset_session_state() -> void:
 	super.reset_session_state()
 	_hitch_actual = SPAWN_HITCH
@@ -268,8 +257,7 @@ func reset_session_state() -> void:
 		_drawbar.respawn_relay(spawn_transform)
 
 
-## The trailer is a separate body, so its RID goes in beside this one's or the camera sees
-## through the combination.
+## The trailer is a separate body; its RID goes in beside this one's or the camera sees through it.
 func get_camera_exclude_bodies() -> Array[RID]:
 	var out := super.get_camera_exclude_bodies()
 	if _drawbar != null:
@@ -277,13 +265,12 @@ func get_camera_exclude_bodies() -> Array[RID]:
 	return out
 
 
-## Framed like the seven-and-a-half-metre combination even with the trailer dropped, so the
-## camera never jumps on an E press. look_height clears the 2.6 m cab roof the scaled body has.
+## Framed for the tractor-plus-trailer combination even with the trailer dropped, so the camera
+## never jumps on an E press. look_height clears the scaled body's cab roof.
 func get_camera_framing() -> Dictionary:
 	return {"distance": 11.0, "height": 5.5, "look_height": 2.4, "top_height": 36.0, "iso_size": 38.0}
 
 
-## Articulation angle (rad, + = trailer to the right); 0 with nothing towed. Read by the F3
-## overlay, as on SemiTractor.
+## Articulation angle (rad, + = trailer to the right); 0 with nothing towed. Read by the F3 overlay.
 func articulation() -> float:
 	return _drawbar.articulation() if _drawbar != null else 0.0

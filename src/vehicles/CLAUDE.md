@@ -1,674 +1,217 @@
-# Vehicles — gotchas & hard-won rules
+# Vehicles — rules
 
-True of EVERY vehicle. Family rules are nested: `drone/CLAUDE.md`, `train/CLAUDE.md`,
-`truck/CLAUDE.md` (trailers), `tractor/CLAUDE.md` (implements). Descriptive tour:
-`docs/vehicles.md`, and `docs/heavy_vehicles.md` for truck / trailer / tractor.
+True of every vehicle; family rules nest beside the code (`drone/`, `train/`, `truck/`, `tractor/`,
+`kenney/`). Tour, derivations, measured figures: `docs/vehicles.md` (`docs/heavy_vehicles.md` for
+truck / trailer / tractor).
 
-## The two seams, and what `BaseVehicle` does not do
+## Subclassing `BaseVehicle`
 
-- Subclasses use ONLY the two seams (`_make_telemetry()`, `_tick_extras()` — run last so
-  drivetrain RPM + telemetry motion are current). Never fork `_physics_process`.
-  - A subclass that STEERS ITSELF re-runs the base's helm slew instead of adding a second one:
-    `BaseVehicle` has already done `move_toward(_steer, input.steer, …)` by the time
-    `_tick_extras` runs, and re-slewing that value toward the controller's demand cancels
-    (`move_toward(move_toward(x, 0, r), c, r) == x` below `c`), so the surface drifts to centre
-    and never advances. `BoatVehicle._autopilot` remembers the rudder it applied (`_helm`) and
-    re-runs the SAME `spec.steer_speed` slew from it — an autopilot must not move the rudder
-    faster than a hand can — and rewrites `telemetry.steer`, which `_update_telemetry` published
-    pre-empted.
-- **A respawn is a reset**, and `reset_session_state()` is where it happens — a respawned machine
-  is indistinguishable from a freshly instanced one (telemetry reseeded in place, fresh gearbox,
-  spec mass, `InputRouter.reset_vehicle_cycles`), so a family reseeds its subsystems by overriding
-  THAT, not `respawn()`. What survives is what survives a new body too: the InputRouter toggles
-  kept as driver state, and anything the bridge is sending. Only a hard ordering constraint earns
-  a `respawn()` override — `DroneVehicle` has the one, dropping its crate before the teleport.
-- Every family earns its `BaseVehicle` subclass, because a method's ABSENCE on the base is
-  behaviour. `boot.gd` sets `caps["tows"] = v.has_method("cycle_implement")`,
-  `debug_overlay.gd` gates `artic` on `has_method("articulation")`, and
-  `vehicle_select.gd:_show_preview` guards on `set_attachment` then reads `attachment_ids()`
-  / `current_attachment()` unguarded. Hoisting the attachment axis onto the base gives every
-  car an ATTACH button, an `artic` readout and a preview that wipes the remembered implement
-  — whatever `TractorVehicle` and `SemiTractor` share must be a plain owned object they each
-  forward to.
-  - Before deleting a `has_method` guard, check the RECEIVER's static type, not just whether
-    `BaseVehicle` defines the method: `chase_camera.gd`'s guards look dead and are not
-    (`@export var target: Node3D`, plus a live `elif target is PhysicsBody3D` fallback), nor is
-    `tow_host.gd`'s `has_method(&"respawn")`, which reaches a statically-`RigidBody3D`
-    `_chassis()` by a `get_parent()` walk.
-  - The other three subclasses stand on their own terms. The boat's buoyancy has one consumer
-    (`WaterSurface` is named by no vehicle but `boat.gd`), so a `HullBuoyancy` would retire
-    nothing — `BoatTelemetry`, the trim slew, the aground debounce and the `respawn` override
-    stay. The tractor's `_tick_extras` ORDER is its content: pose the linkage, read it back,
-    tow, draft, each step reading what the last wrote this tick. Every telemetry subclass
-    keeps fields of its own, down to `PlaneTelemetry.flaps_actual`; a field hoists to the base
-    only when it is family-agnostic body state (rule 4: `pitch`/`roll`/`altitude`/`vspeed`).
-- There is no `FreeBodyDrive` and must not be. The three drag models share no shape: the boat
-  is body-axis anisotropic (`drag_long` / `drag_lat` / `drag_yaw`, the lateral term at
-  `keel_offset` so the hull heels) against the WATER, `linear_velocity - CurrentField.at(self)`
-  — `drag_yaw` alone stays raw, a uniform stream having no gradient to yaw against — and carries
-  a SECOND such pair against the air
-  (`windage_long` / `windage_lat` at `windage_offset`) rather than `air_damper`, whose `axis`
-  masks WORLD space and cannot express a body-frame split on a hull that yaws; the plane
-  the same body-frame split (`drag_coeff` forward plus a flap bonus, `drag_lat` / `drag_vert`
-  far stiffer so velocity follows the nose),
-  the drone WORLD-horizontal split from WORLD-vertical with the vertical gated on the motors
-  turning — a common model is the rule-3 fiction. Force application differs too (four hull
-  probes / a capped lift-stall curve / four per-rotor `apply_force`), the `@export` blocks are
-  anatomy already beside their machine and overridden per scene, and `BaseVehicle` runs no
-  buoyancy loop, stall curve or rotor mixer for anybody. Shared instead: `VehicleMath`,
-  `BaseVehicle._gravity`, and the attitude/height telemetry `BaseVehicle._update_telemetry`
-  writes off the body basis.
-- The boat's rig (`BoatSail`) is a **THIRD body-frame air term** beside the windage pair, and like
-  them it takes neither `VehicleMath.air_damper` (whose `axis` masks WORLD space) nor
-  `damped_force`: a sail force is an EXTERNAL force like `thrust_force`, not a damper, so it gets
-  no one-tick clamp — `aws^2` bounds it and `drag_long` terminates it. Its **no-go zone is
-  emergent** (side force against `drag_lat` is the leeway) and must not be clamped; the only thing
-  imposed is the luff band, which is a real fact about cloth. `sail_area == 0` is what keeps the
-  two powerboats free of all of it.
-- Extract only where two sites are IDENTICAL, never merely analogous. The truck/train/drone/
-  fuel "reservoir" bars look like one system and share no arithmetic.
-  `VehicleTelemetry.engine_load_pct(..., pto_on, pto_load)` is the counterexample: one
-  implementation tractor and truck call identically.
-- `BaseVehicle._level_root()` is the one level lookup — a `carlito_level` group lookup
-  filtered by `is_ancestor_of`, falling back to the outermost ancestor below the tree root so
-  a test rig finds a terrain that is a SIBLING of the vehicle's parent. `_find_grip_terrains`
-  and `TrainVehicle._find_rail` call it; a third world query calls it rather than copying it,
-  and do not build a `LevelEnvironment` seam over them. Before adding a walk, check whether a
-  collision layer already answers the question — `Layers.SOLID` omits `Containment`, which
-  retired the drone's sensor-exclusion walk. `WindField.at` and `CurrentField.at` each keep their
-  own copy of the same lookup — siblings, not a shared base: static,
-  standalone-tested, and returning `ZERO` for a node not under a level is its contract.
-  - `_grip_terrains` is collected on the first physics tick and reused (`tractor._soil_at` is
-    the second consumer). `BoatVehicle` collects its `WaterSurface` list the same one-shot way
-    but keeps `contains_xz` per tick — that is what changes as the boat moves.
-- Rejected, so they stop being re-proposed (beside the aux-model one under the four
-  reservoirs):
-  - `VehicleSpec.air_drive` / `.water_drive` sub-resources. `plane.tscn` and `drone.tscn`
-    override none of their node `@export`s, so the node is already the single home; the boat's
-    second home is `gen_boat_variants.gd`'s `VARIANTS` / `BOAT_BASE`, and a generated
-    sub-resource is that home renamed. The multi-home problem needed a test instead:
-    `tests/test_boat_variants.gd` pins the three shipped `.tscn`/`.tres` against the recipe
-    (the `ef5b043` class of bug). An omitted `.tscn` line is not drift — Godot drops a property
-    equal to its script default, so the suite compares effective values.
-  - A polymorphic `spec.drive`: retires none of the ~11 null guards, adds a downcast to each,
-    and renames a property across 31 `.tres` and ~30 read sites.
-  - Splitting `Drivetrain` into gear selection + wheel-derived rpm. The gearbox is
-    load-bearing on every family (direction latch, status bits, the train's `gear`); only the
-    engine half is inert.
-  - Extracting `DroneVehicle._tick_extras`, in either form: ~18 values cross stage boundaries,
-    so a split needs a context object that does not exist or ~25 more member fields, and a
-    `DroneFlightController` / `DroneArmingState` pair does not escape it — `armed` alone is
-    read by the vertical-damper gate, the mode resolve, the demand block and the telemetry
-    block. The leaf subsystems are the extraction that exists (`drone/CLAUDE.md`).
-  - Merging `TowedBody.Consumer` with `ImplementBase.Connection` — the term-by-term reasons are
-    under Towing; both vocabularies cost ~10 lines in `farm_tipper.gd` and one test.
+- Subclasses use only the two seams, `_make_telemetry()` and `_tick_extras()` (runs last, so rpm and
+  telemetry motion are current). Never fork `_physics_process`.
+- A subclass that steers itself slews from the surface it last applied, never from `_steer`:
+  re-slewing the base's already-slewed value cancels (`boat.gd` `_autopilot`).
+- A respawn is a reset. A family reseeds its subsystems in `reset_session_state()`, not `respawn()`
+  (`tests/test_respawn_reset.gd`). Only a hard ordering constraint overrides `respawn()` (the drone
+  drops its crate first).
+- A method's ABSENCE is behaviour. The attachment axis (`ATTACHMENT_AXIS` in
+  `tests/test_vehicle_catalog.gd`) never goes on `BaseVehicle`, or every car grows an ATTACH button
+  and an `artic` readout; what the tractor and semi share is an owned object both forward to.
+  - Before deleting a `has_method` guard, check the receiver's static type: the guards in
+    `chase_camera.gd` and `tow_host.gd` look dead and are not.
+- A telemetry field moves up to `VehicleTelemetry` only when it is family-agnostic body state
+  (`pitch`, `roll`, `altitude`, `vspeed`).
+- Extract only where two sites are identical, not merely analogous: `engine_load_pct` is shared,
+  the four reservoirs are not (see Rejected).
+- `BaseVehicle._level_root()` is the one level lookup; a new world query calls it. Before adding a
+  walk, check whether a collision layer answers it (`Layers.SOLID` omits `Containment`).
 
-## What a `VehicleSpec` declares
+## Specs and generated vehicles
 
-- The ground drive is OPTIONAL and the boat / drone / train declare none, so `BaseVehicle`
-  builds them no `WheelDrive` and everything outside the wheeled path reads it through
-  `drive != null` or the forwarding getters. Keep their 6 `gear_ratios`: `auto_shift` walks
-  toward byte 6 and `ratio_for_byte` INDEXES the array, so a short gearbox is an out-of-range
-  read (both shift fns guard with `mini(TOP_GEAR, gear_ratios.size())`, but the boat still
-  walks its box on road speed and publishes the gear byte in `status`).
-- `com_z = 0` is not 50/50 — it is wherever Kenney put the body origin, which across the
-  eighteen generated bodies lands anywhere from 36/64 to 61/39. Invisible while a car is
-  all-wheel drive, decisive the moment a variant drives ONE axle. Declare `front_weight` (the
-  fraction on the front axle) in the recipe and let `_com_z` measure it against that body's
-  own axle line; reach for a raw `com_z` only where the body was hand-tuned by driving (the
-  garbage truck). A spec with neither is not balanced, it is unexamined.
-- `min_steer_frac` is not the setting; the degrees it leaves are. It multiplies each body's
-  OWN `max_steer_deg`, so the same fraction on a truck's 22 deg rack and an open-wheeler's 40
-  is two different cars — decide the absolute lock, then divide. Every wheeled vehicle
-  declares a pair. The whole lock (`max_steer_deg`, `min_steer_frac`, `steer_falloff_speed`)
-  lives on `GroundDriveSpec` and bodies with no steered wheel (train, boats, drone) omit it;
-  `steer_speed` stays on `VehicleSpec` because it slews a rudder and a drone's yaw too.
-  `WheelDrive` is the only reader of the three.
-  - The taper is linear from a STANDSTILL, so lock lost at any two speeds is in the ratio of
-    those speeds: halving it at road speed takes an eighth of it at a quarter of that. Hence
-    the tractor's 0.55 rather than the 0.35 the road end alone would want — its working life is
-    8-12 km/h headland turns. Check a slow body's WORKING speed.
-  - The rack never limits a corner on any body: at each vehicle's own limiter the floor still
-    asks 2.6-19x more lateral force than its `mu_lat` can hold. A falloff failing this check
-    is too aggressive.
-- The boat scenes' collision (`CollisionLower`/`CollisionUpper`) is hand-tuned and survives a
-  `gen_boat_variants.gd` re-run by the same whitelist rule as the Kenney bodies
-  (`src/vehicles/kenney/CLAUDE.md`); a feel change goes into `VARIANTS` and a regen, never the `.tscn`.
-- Vehicle-specific DRIVELINE behaviour is gated by a `VehicleSpec` flag defaulting off, never
-  by a third seam: `rear_diff_lockable` / `front_axle_engageable` are true only on the
-  tractor's spec, so `VehicleInput.diff_lock` / `fwd_drive` are inert everywhere else — the
-  same "other vehicles ignore it" contract the hitch/PTO fields have. Consequence: `w.driven`
-  is not fixed at `_ready` for the tractor; MFWD rewrites the front wheels each tick, ahead of
-  the driven-count loop, so the split and `drive_omega` both see this tick's axles.
-- A spec flag is only real on the spec the shipped SCENE loads — `kenney/tractor-kenney.tscn`
-  → `kenney/tractor-kenney_spec.tres`. An orphan spec once took the driveline flags, so diff
-  lock and MFWD were dead in-game while the suite stayed green against that same orphan.
-  `test_tractor` now walks catalog → scene → spec instead of naming a file, and every
-  Kenney-generated flag must ALSO live in `gen_kenney_vehicles.gd`'s family baseline or the
-  next regen wipes it.
-- `has_engine` is decoration and only decoration: it gates the `Gears` / `Redline` /
-  `Peak torque` readouts on the garage wall (`garage.gd`) and the `Gears / Redline` line on
-  the selector card (`vehicle_select.gd:_spec_text`), and no physics. `Drivetrain` runs for
-  every family, because the gear byte is the direction latch `InputRouter.arbitrate_local`
-  reads and the source of `ST_REVERSE` / `ST_NEUTRAL`. False on `drone_spec.tres` and
-  `train_spec.tres` only; the boat keeps the default, since an outdrive really does have
-  forward, neutral and reverse. Declared rather than inferred from `ground_drive == null`.
-  - Accepted compromise: the wheel-less bodies run an engine model nothing can observe. With
-    no `WheelDrive` the drive omega is 0, so the limiter can never fire, `applied_throttle`
-    collapses to `|throttle|` and the smoothed `rpm` reaches no contract. Inert: the TORQUE
-    CURVE, the redline, and (boat and drone, which publish no `gear`) which of D1–D6 the box
-    lands in. The GEARBOX is not. Undoing it is the `Drivetrain` split rejected above;
-    `has_engine` keeps the inert half off the garage wall and the selector card.
-- A feel change edited into a generated scene must be edited into its recipe in the same
-  commit — the generator is the source, the scene is output. A scene-only edit leaves the
-  documented regen path shipping a different vehicle (a boat drag coefficient short by
-  `mass * 0.1` is ~20 % more top speed and a slacker keel).
-  - `tests/test_boat_variants.gd` (the three watercraft) and `tests/test_kenney_variants.gd`
-    (the eighteen Kenney bodies) hold both generators. A failure there is never fixed in the
-    `.tres`: fold the driven value into the recipe and re-run the generator, because the
-    derivations downstream move too (a hand-raised `mu` leaves `brake_torque` sized for the
-    old grip; a hand-raised `torque_mul` leaves `handbrake_torque` behind) and until they do
-    the shipped spec is internally inconsistent.
-  - The Kenney suite re-derives rather than transcribes, so it tests the recipe and not the
-    output: the brakes via `_derive_brakes` on a copy of the shipped spec, the torque curve by
-    scaling the baseline, and `drag_area` / `com_z` / the four wheel stations by re-running
-    `_analyze` over the variant's own GLB (~0.3 s for all eighteen). That catches a model
-    re-import nobody re-ran the generator for.
-- Feel tuning is data-only (`*_spec.tres`); keep the hierarchy test green (brake >
-  transmissible drive > handbrake; handbrake holds only below ~30% throttle). Drift comes from
-  `handbrake_grip` (rear grip cut), not brake torque — the hierarchy test caps
-  `handbrake_torque` too low to lock the rears.
+- The ground drive is optional (boat, drone and train have none); code outside the wheeled path
+  reads it through `drive != null`.
+- Driveline behaviour unique to one machine is a spec flag defaulting off (`rear_diff_lockable`,
+  `front_axle_engageable`), never a third seam.
+- `has_engine` gates garage and selector readouts, never physics: `Drivetrain` runs for every family
+  because the gear byte is the direction latch and the source of `ST_REVERSE` / `ST_NEUTRAL`.
+- Weight split: declare `front_weight` in the recipe. A raw `com_z` is only for a body tuned by
+  driving (garbage truck). `com_z = 0` is wherever Kenney put the origin, not 50/50.
+- Steering lock: pick the lock in degrees, then divide (`min_steer_frac` scales the body's own
+  `max_steer_deg`). The taper is linear from a standstill, so check a slow body at its working
+  speed. Guard: `test_a_steering_taper_never_out_limits_the_tyres`.
+- Generated bodies: `kenney/*` (`tools/gen_kenney_vehicles.gd`) and `watercraft/*`
+  (`tools/gen_boat_variants.gd`). A feel change goes into the recipe and a regen in the same
+  commit, never into the `.tscn` / `.tres`. A failing `test_kenney_variants` / `test_boat_variants`
+  is fixed the same way, because the derived values (brakes, handbrake, Cd*A) move with it.
+  Hand-authored collision survives a regen by whitelist (`kenney/CLAUDE.md`, `tools/CLAUDE.md`).
+  - A Kenney spec flag must also be in the generator's family baseline, or the next regen wipes it.
+    Edit the spec the shipped SCENE loads (`test_tractor` walks catalog → scene → spec).
 
 ## Drivetrain and brakes
 
-- The rev limiter judges `wheel_engine_rpm` (unclamped), never `Drivetrain.rpm`: the published
-  rpm lerps toward an already-redline-clamped target, and in IEEE double that lerp's fixed
-  point sits just below the target, so `>= redline_rpm` against it is dead code.
-  `wheel_engine_rpm` (raw, what the wheels impose on the crank) drives
-  `limiter_cut`; `rpm_from_wheel` (its clamp) drives the needle and the `rpm` bridge signal.
-- **`converter_free_rpm` is a FLOOR under the wheels, never a ceiling.** A held vehicle with the
-  pedal down revs to the converter's stall speed (`STALL_RPM_FRAC` of the engine's own
-  idle→redline band, one derivation for every machine) and the torque curve is sampled there, so
-  brake-and-throttle and handbrake hill starts work; a rolling one is coupled and `rpm` reads
-  exactly what the wheels impose, which is why cruise, top speed and the limiter are untouched.
-  Only a machine whose engine drives wheels has one (`has_converter`) — boat, drone and train
-  carry no `ground_drive` and the plane's wheels are undriven, so all four keep the rigid crank.
-  There is no clutch and no stall, and **no torque multiplication**: a real converter makes
-  1.8-2.2x at stall and this one makes 1.0, so every launch figure is conservative and the
-  `brake > transmissible drive > handbrake` hierarchy is untouched. Adding the multiplier would
-  re-open both — every shipped accel number and the brake derivation with them.
-  The free rev is LINEAR in throttle (a real converter's capacity torque goes as N², which would
-  rev harder at small pedal), and the whole gain at a standstill is the curve's own slope across
-  the stall rise: 1.67x on the car family, 1.70x on the Kenney trucks, 1.37x on the hand-built
-  semis, only 1.24x on the tractor, whose curve is nearly flat there. So the foot brake still
-  wins at any pedal (it beats what the driven wheels can transmit), and the handbrake, derived at
-  idle rpm, slips at ~30% throttle on the car and truck families, ~33% on the semis and ~34% on
-  the tractor, rather than the 37.5% its own arithmetic says.
-- **`engine_load` moves with the converter, `fuel`/`coolant`/`battery` do not.**
-  `VehicleTelemetry.engine_load_pct` samples the curve at `Drivetrain.rpm` (delivered torque over
-  peak), so a held truck at full pedal publishes SPN 92 at 85% where it read 50% at idle — the
-  engine really is making that torque. The other three read `applied_throttle` alone, which the
-  converter never touches. The tractor's `pto_rpm` follows the rev at a standstill for the same
-  reason: it is a stub shaft off the crank.
-  - The cut rides `applied_throttle` beside the governor's, so engine_load / fuel / coolant
-    see it for free. `engine_torque` is the curve and nothing else.
-- Engine braking is `Drivetrain.overrun_torque`: `engine_brake_frac` of peak torque, linear
-  idle→redline, through the ratio, only with the PEDAL at exactly 0 (a hard edge — a fade band
-  would eat drive torque and move top speeds). It stacks with the truck's retarder, which
-  stays its own signal; `applied_throttle` reads 0 on overrun so no telemetry sees a load. The
-  plane declares 0 and must (undriven wheels, single-speed by construction).
-- The shift cut (`shift_cut_s`, `Drivetrain._shift_cut_ticks`) is a THROTTLE cut for whole ticks
-  after any engaged-to-engaged byte change (auto or bridge-exact; N↔D is a selection, not a
-  shift), latched once per tick however many gears the governor walked. It rides
-  `applied_throttle` like the limiter, so fuel / engine_load / the dash read it, and the axle sees
-  overrun only. Cars 0.15 s, trucks 0.4 s, the tractor 0 (powershift). It moves 0-100 figures,
-  never top speed or the tracking gate.
-  - A curve may end nonzero, and 20 of the 26 shipped specs do — the limiter is what stops the
-    engine. The six ending at `(redline, 0)` (the five 3200-rpm heavies and `tractor-kenney`)
-    are belt-and-braces and the right shape for a governed diesel, whose top gear is governed
-    rather than drag-limited. Restoring tails there would move shipped, driven-and-tuned top
-    speeds for nothing; settled, not open.
-  - A hard cut, deliberately. Any fade band wide enough to see would eat real torque below the
-    redline, and `sedan-sports` settles only ~110 rpm under its.
-  - The limiter shows up at the launch, not only at the top end: `process` reads the SPINNING
-    drive wheels' mean omega while auto-shift decides on ROAD speed, so a car spinning its
-    wheels in first holds gear 1 with the crank past the redline and the fuel cut — about a
-    second to 100 on the heavy, wheel-spinning bodies, all of it in the 0-50 split. If a launch
-    feels lazy, the lever is the LAUNCH (grip, gear 1, `shift_up_rpm`), not the limiter.
-- The plane is single-speed by construction, true by accident of two numbers:
-  `plane_spec.tres` ships `shift_up_rpm` 6000 against `redline_rpm` 5400, and `auto_shift`
-  judges the redline-clamped `rpm_from_wheel`, so the box never leaves gear 1. The published
-  `gear` byte is a constant 1 in D, honest for a fixed-pitch light aircraft; dropping the shift
-  point to 5000 would hand it a working gearbox and change a published wire signal for nothing
-  physical. `tests/test_plane.gd` pins both halves; the six `gear_ratios` stay.
-- A road-speed governor can strand the gearbox, and auto-shift cannot fix itself:
-  `spec.speed_limit_kmh` cuts fuel while auto-shift decides on RPM, so a limit below the road
-  speed of the next upshift means the taller gear never engages. `Drivetrain.governed_upshift`
-  is the fix — against the limiter, take the tallest gear that still turns the engine above
-  `shift_down_rpm`, and that guard is what stops it lugging a slow-governed vehicle. Declaring
-  a new limit means re-measuring that variant and checking for the gear-N-of-6 note.
-  - The gear-selection scale is `Drivetrain.road_radius`, DECLARED — not a wheel field reached
-    for. Auto-shift and `governed_upshift` both decide on `ground_speed / road_radius`, the one
-    wheel number a wheel-less body needs: the boat and the train walk a gearbox and publish the
-    gear byte in `status`. `_init` copies it off the ground drive's `wheel_radius` or takes
-    `DEFAULT_ROAD_RADIUS`, which let the wheel fields leave `VehicleSpec` without moving
-    anyone's shift points. `governed_upshift` is static, so it takes the radius as
-    `p_road_radius` — a parameter named `road_radius` shadows the field, and shadows are errors
-    here.
-- The equal `axle_torque / driven_count` split IS an open differential, and the low-grip wheel
-  spinning up is what the sim already does (the drivetrain reads the MEAN driven omega, so a
-  spinning wheel drags rpm up and engine torque off the curve). Do not "fix" it into a
-  per-wheel traction cap. The LOCK is the part that needed code: a locked diff is one rigid
-  shaft, so `WheelDrive._lock_rear_diff` pulls the rear pair onto
-  `Drivetrain.locked_axle_omega` AFTER they integrate — a shared spin speed means a shared slip
-  ratio, so the wheel with grip makes the bigger force. Averaging only shrinks the spread, so
-  it needs no clamp of its own.
-  - Consequence: an open diff caps an AWD car at its LIGHTEST driven wheel, so an AWD body
-    wants a ~50/50 weight split in this model — a rear bias measured a full second of 0-100 on
-    `race-future`. A torque-biasing centre diff would be a real feature, not a fix. Re-measure
-    the PAIR before quoting any gap.
-- Every Kenney `brake_torque` comes from the TYRE, not the gearbox:
-  `gen_kenney_vehicles.BRAKE_GRIP_FRAC` (0.95) times the static per-wheel grip torque on all
-  four baselines, one derivation with no per-family knob. It collapses to "full pedal asks for
-  `0.95 * mu_long * g`" whatever the body weighs. Past the tyre ceiling RayWheel's slip tyre is
-  saturated, so an over-sized brake buys nothing but a wheel lock with no steering under
-  braking.
-  - The hierarchy is `brake > TRANSMISSIBLE drive`, i.e. against
-    `min(peak drive, driven_wheels * mu_long * N * r)` and not raw gearbox output —
-    `brake > peak drive` and `brake <= grip` cannot both hold on a body geared deeper than its
-    tyres. Authoritative statement:
-    `test_vehicle_catalog.test_kenney_specs_keep_force_hierarchy` (the "§6" name older comments
-    use is inherited from a spec document, not a live rule). Two-driven-wheel bodies clear it
-    by 1.9x; an AWD body whose engine saturates all four is the only shape that cannot.
-  - `OVER_BRAKED` is empty, but keep the shape in mind — four driven wheels on a close-ratio
-    first put the hierarchy floor over the tyre by construction, unfixable with any brake
-    number. The lever is gear 1 or torque, and shortening gear 1 costs nothing measurable,
-    since a deep first on a traction-limited body is spun away rather than delivered.
-    Re-derive the ceiling per body. It sweeps only the generated Kenney specs: the hand-built
-    semis are not grip-derived, since grip-deriving them would drop `brake_torque` far enough
-    to take the retarder with it.
-  - This decoupling is what makes the car gearbox's deep first and the tractor's crawler free:
-    a deep first costs a bigger HANDBRAKE (`launch_25`) and nothing else.
+- Hierarchy: brake > TRANSMISSIBLE drive (`min(peak drive, driven wheels * mu_long * N * r)`) >
+  handbrake. Guard: `test_vehicle_catalog.test_kenney_specs_keep_force_hierarchy`. Drift comes from
+  `handbrake_grip`, never handbrake torque.
+- Kenney `brake_torque` derives from the tyre (`BRAKE_GRIP_FRAC * mu_long * N * r`), with no
+  per-family knob. With AWD and a close-ratio first, the hierarchy floor can exceed the tyre: fix
+  gear 1 or torque, never the brake. The hand-built semis are not grip-derived (their retarder
+  hangs off `brake_torque`).
+- The tyre class (`mu_long` / `mu_lat`) is the root of everything brake-shaped: brake, retarder
+  rating, hierarchy floor, taper margin. A mu edit is a re-derivation (recipe + regen), never a
+  number edit.
+- The rev limiter judges `wheel_engine_rpm` (raw), never `Drivetrain.rpm` (its lerp never reaches
+  redline). The limiter, the governor and the shift cut all ride `applied_throttle`.
+- The limiter and engine braking are hard edges: a fade band eats drive torque below redline and
+  moves top speeds. A lazy launch is fixed at the launch (grip, gear 1, `shift_up_rpm`), not at the
+  limiter.
+- `converter_free_rpm` is a floor under the wheels, never a ceiling, and the converter multiplies
+  no torque (COMPROMISE at `drivetrain.gd`).
+- Declaring `speed_limit_kmh`: re-measure the variant (a governor below the next upshift strands
+  the gearbox; `governed_upshift` handles it). The value is contract-visible: whole km/h, 0-250
+  (`test_vehicle_catalog`).
+- Every differential is declared: a friction coupling between its outputs, solved INSIDE the spin
+  step through `RayWheel.spin_compliance`, never applied as a post-tick torque (that is `1 + k`
+  times too strong and makes every LSD a spool). It is never a traction cap or a grip-aware split
+  (rule 3).
+  - `centre_diff_rigid` is allowed only where the driver can disengage the axle
+    (`test_vehicle_catalog`). An open centre caps AWD at its lightest axle.
+  - Changing a diff moves accel and grade figures: re-measure with `measure_vehicles` /
+    `measure_grade` / `measure_rough`.
 
-## Wheels, suspension and the 60 Hz tick
+## The 60 Hz tick
 
-- **Overturned is a detected state, never an auto-reset.** `BaseVehicle._tick_overturned` latches
-  when `VehicleMath.is_inverted` holds past `OVERTURNED_DEG` for `OVERTURNED_S`, raises
-  `OVERTURNED_NOTICE` sticky (dwell 0) on the rising edge and clears it by exact text match on the
-  falling one — the driver presses R. An automatic respawn would hide the rollover the COM heights
-  exist to create. Deliberately NOT a telemetry field: the frozen `status` bitfield and the
-  contract stay put, so nothing is owed sloppyCAN.
-- **No vehicle sets `RigidBody3D.inertia`, and none needs to.** Jolt computes the tensor off the
-  collision shapes ABOUT THE DECLARED `center_of_mass` — measured, not assumed: move a sedan's
-  `com_y` and the roll and pitch moments trace a parabola with its minimum at the hull's own mass
-  centroid while the yaw moment barely stirs, which is the parallel-axis shift and nothing else.
-  It also scales exactly with a runtime `mass` rewrite, so the refuse truck's hopper is covered
-  too. **So a COM height is a pure data change**; an explicit tensor would be a second source of
-  truth for the same fact. `tests/test_body_inertia.gd` is the guard, because an engine upgrade
-  that moved the tensor back to the shape centroid would leave every raised body rolling about a
-  point below its own mass with nothing to see.
-  - Read the tensor through `PhysicsDirectBodyState3D.inverse_inertia` and nothing else.
-    `RigidBody3D.inertia` and `PhysicsServer3D.body_get_param(..., BODY_PARAM_INERTIA)` are the
-    OVERRIDE and both read back `Vector3.ZERO` on a computed body — "inertia is zero" is the
-    reading, not the tensor. Every other `*inertia*` name in `src/vehicles/` is something else
-    again (`wheel_inertia`, the free bodies' `VehicleMath.inertia_of` damper moments).
-- **Car-family COM heights are body-space y over the road** (`com_y` in `gen_kenney_vehicles`, the
-  anchors put y = 0 at the ground): saloons 0.48 (~0.35 of the body's AABB height), SUV 0.62, vans
-  0.55-0.65 (~0.36-0.42), open-wheelers 0.30, never above ~45 % of the AABB. A body whose track is
-  narrow for its height (the vans: half-track 0.63) tips before it slides at COM 0.65 and mu ~1 —
-  the levers are the anti-roll bar and `mu_lat`, never the COM back down. The truck family's
-  own heights, and the rollover threshold each buys, are in `truck/CLAUDE.md` § The fifth wheel.
-- **Anti-roll bar**: `GroundDriveSpec.anti_roll_rate` (N per m of left/right compression
-  difference, 0 = none) through `VehicleMath.anti_roll_force`, equal and opposite on the two wheels
-  of an axle so it adds no net vertical force; skipped while either wheel is off the ground.
-  Equal and opposite only holds because both wheels read `RayWheel._bar_compression`, a snapshot
-  latched at the top of `tick`: wheels tick in array order, so reading the live `compression`
-  gives one of the pair this tick's partner value and the other last tick's, and the two forces
-  then miss each other by that step.
-  Size it from `measure_vehicles -- <variant> 45 corner`, which reports roll at the grip peak and
-  wheels lifted: aim at 4-8 deg. The recipe carries 7000 (saloons), 14000 (pickups, the one rate
-  placed by that pass: 6.7 deg, down from 12.5 at 7000), 18000 (SUV, van) and 80000 (delivery
-  vans, on 65 kN/m springs) — the rest are still by eye.
-  **A bar also costs straight-line tracking**, because it multiplies a launch-transient load
-  difference into a much larger longitudinal one on the driven axle and the body keeps the
-  heading it gains: `race` gives its bar up for that reason (`gen_kenney_vehicles` says why) and
-  `hatchback-sports` fails the tracking gate on one it cannot give up — it is excused there by
-  `measure_vehicles.gd`'s `KNOWN_TRACKING_FAILS`, which keeps that one open defect from blocking
-  every deploy while still printing FAIL. Raising a rate means
-  re-running `measure_vehicles -- <variant> 45 track` as well as the corner pass.
-  An SUV at the limit lifts wheels and does not overturn; that is intended.
-- 60 Hz stability lives in `RayWheel`'s clamps (damper ≤ one-tick reversal, suspension force
-  cap, low-speed slip floors + one-tick lateral force cap) plus the semi-implicit **spin** step
-  in `_integrate_spin`, and the boat's probe clamps (derived spring k, one-tick damper, total
-  force cap, `damped_force` for drag). Don't remove or weaken any clamp; don't raise the tick.
-- **The TYRE CLASS sets `mu_long`/`mu_lat`, and everything brake-shaped is derived from it.**
-  Shipped classes: car 1.05/1.1, heavy van 1.0/0.95, truck 0.80/0.75, tractor lug 1.0/0.95 (soil
-  — a real one is ~0.8 on asphalt, which this does not model), open-wheeler 1.25-1.35/1.35-1.4.
-  Downstream of that pair: `brake_torque` (`BRAKE_GRIP_FRAC * mu_long * N * r`), the retarder's
-  rating (a fraction of that brake, so it tracks grip — `truck/CLAUDE.md` § Brakes), the brake >
-  transmissible-drive hierarchy floor, and the steering taper's grip margin
-  (`test_a_steering_taper_never_out_limits_the_tyres`, which a LOWER `mu_lat` only makes easier to
-  clear — check the direction before tightening a taper "to match"). So a mu edit is a
-  re-derivation, never a number edit, and on a generated body it is a recipe edit plus a regen or
-  `brake_torque` is left sized for the old grip.
-- **DRIVE TORQUE IS SPLIT EVENLY PER DRIVEN WHEEL** (`WheelDrive.tick`, `axle_torque /
-  _driven_count`), which is an open differential between every driven wheel, ACROSS axles
-  included. Total tractive force is therefore `driven count x the weakest driven wheel's grip`,
-  not the sum of what the wheels could hold: the tractor at 8 deg in mud runs its front pair at
-  slip 3.1 and its rears at 0.06, all four making an identical 4.0 kN, 16.1 kN total where the
-  tyres hold ~25 kN. So **MFWD buys almost nothing** (measured 6.8 % against 8.0 % for
-  slip-limited two-wheel drive) and a real MFWD tractor, whose front axle is geared to the rear
-  with no centre differential, is the case this cannot express. `_lock_rear_diff` shares omega
-  across ONE axle after spin integration and does not change the split. Undoing it is a
-  load-proportional (or axle-locked) split in that one line, and it moves every shipped
-  acceleration figure — a re-measure with `measure_vehicles`, not a number edit.
-- **Surface grip is tyre-blind**: `channel_grip` multiplies every body's `mu_long`/`mu_lat` by
-  the same factor, so a tractor's lug tyres and a sedan's road tyres both lose exactly half
-  their grip in mud and both pay the same `crr`. There is no summer/winter/ag axis and nothing
-  reads one. The honest ceiling on a surface is `tan a <= mu * grip - crr` (mud: 0.5 - 0.2, i.e.
-  16.7 deg) for a perfect all-wheel drive — the drag term is half the mud budget and is the term
-  a "grip 0.5, so 26.6 deg" estimate drops.
-- Surface drag (`HeightmapTerrain.channel_drag` → `RayWheel.surface_drag_force`) is a body force
-  at the contact off this tick's normal load, OUTSIDE the friction circle (it is the ground
-  deforming, not the tyre) and never through the spin step (the wheel keeps rolling at road speed,
-  the body slows). One-tick capped so it stops a wheel and never reverses it. Airborne = 0.
-  - The clamps are sized by `corner_mass`, the spec mass shared per wheel. A vehicle that
-    rewrites `mass` at runtime (the refuse truck's hopper) must call
-    `WheelDrive.set_corner_mass_from(mass)` beside the write, or the caps stay unladen; nothing
-    enforces this. The semi's plate load is deliberately NOT folded in (`truck/CLAUDE.md`).
-  - `RayWheel.is_rear_z` is the ONE front/rear predicate (ties go front); no shipped station sits
-    on z = 0 and `test_vehicle_catalog` sweeps for it.
-  - `GroundDriveSpec.spring_rate_rear`/`damper_bump_rear`/`damper_rebound_rear` are per-axle, 0 =
-    the front value (`RayWheel.apply_suspension` picks per corner off `is_rear`). A rear damper
-    left at 0 scales the front's by sqrt(rear rate / front rate), which keeps the front's damping
-    ratio on the stiffer axle; an explicit rear damper overrides the scaling.
-- **A wheel out of contact decays its spin** (`RayWheel.FREE_SPIN_DECAY`, applied in the
-  no-contact branch only, so nothing in contact moves). Without it a free wheel has no resisting
-  torque at all: the rev limiter cuts on the spun-up wheel, and drive, reaction, brake and overrun
-  are then all zero (`Drivetrain.overrun_torque` reads the PEDAL, still down), so `omega` freezes
-  at the tripping value and the cut never clears — a lifted wheel kills the engine until the
-  driver lifts off. The limiter is still what BOUNDS the spin; the decay is what makes its cut
-  self-clearing.
+- Stability at the locked 60 Hz (root rule 9) lives in:
+  - `RayWheel`: damper ≤ one-tick reversal, suspension force cap, low-speed slip floors, one-tick
+    lateral cap;
+  - the semi-implicit spin step;
+  - the boat's probe clamps;
+  - `VehicleMath.damped_force`.
 
-- Suspension force acts along the CONTACT NORMAL (`hit.normal`), never the chassis' up axis.
-  Pushing along the body's own up tips part of the vertical load into the direction of travel
-  whenever the chassis sits nose-up or nose-down, so a body thrusts itself along (or drags
-  itself back) with its own springs — hundreds of newtons. The term vanishes on flat ground.
-  - Resistance and the drivetrain are both measured innocent; stop re-suspecting them.
-    Resistance applies what the spec's `0.5*rho*Cd*A*v^2 + crr*N` owes to within a newton, and
-    summed tire force matches `axle_torque / r` to within two.
-  - `measure_vehicles`' `balance` line is the regression check: `tyres - resistance + rake`
-    closes on the body's own measured acceleration to a newton or two; if it stops closing
-    there is a NEW force unaccounted for. `Wheel.force_long` and `Wheel.contact_normal` are
-    diagnostic fields the tool sums — nothing in the sim reads either. `rake` is not an
-    artefact term: on a grade the contact normal genuinely tilts with the slope, so it should
-    read ~0 N only on the flat.
-  - Trailers get this for free: `towed_body.gd` never repeated the force, since
-    `bogie_suspension_force()` sums the same `Wheel` objects.
-- Wheel spin is integrated semi-implicitly, and must NOT become a clamp on the road reaction.
-  Tire force is huge next to the wheel's own inertia (`I / r²` ≈ 31 kg-equivalent on the
-  tractor against 1000 kg of corner mass), so an explicit step over-corrects and `omega` rings
-  at the tick rate, invisible until `wheel_speed` / `wheel_slip` publish it. Divide the NET
-  torque by `1 + reaction_stiffness` (the linearized backward-Euler step); do not cap the
-  reaction term, which leaves `drive_torque − cap` pushing at equilibrium and walks the wheel
-  to a steady slip the driveline never paid for. Against a 480 Hz reference a cap gave +20 %
-  top speed on the car and +41 % on the tractor, while the semi-implicit step lands within
-  ~2 % at 60 Hz, erring slightly SLOW in the transient — the correct direction for a stability
-  device. `test_wheel_spin` pins the equilibrium invariant, the no-overshoot rule and the
-  relax-as-delta-shrinks property.
-- RayWheel is single-radius: the tractor's big-rear/small-front wheels are visual only
-  (`wheel_visual_radius`/`_rear` + `RayWheel.visual_lift`, which keeps an over/undersized
-  visual meeting the ground). Wheel scenes are radius-NORMALIZED (model scaled to radius 1);
-  BaseVehicle scales each instance. Per-instance tweaks (scale, the right-side flip) ride the
-  visual's CHILDREN — RayWheel overwrites the root transform every tick.
-- Turning a right-side wheel around is `Basis(Vector3.RIGHT, PI)`, **not** `Basis(UP, PI)`: in
-  the wheel-root frame RayWheel builds, local Y is the AXLE, so a yaw just spins the wheel
-  about its own axis and changes nothing visible. Verify rim direction by rendering both sides,
-  never by reasoning about the basis.
-- `ChaseCamera` follows `get_global_transform_interpolated()` — never `global_transform` in
-  `_process`; it stutters at the locked 60 Hz tick.
-- Splat-channel grip (`HeightmapTerrain.channel_grip` → `grip_at()`, sampled by RayWheel per
-  contact) reads cached decoded splat Images — never `get_image()`/decompress per tick
-  (in-editor it still decodes per call so an external PNG edit shows up). The multiplier rides
-  `mu_long`/`mu_lat`; the 60 Hz clamps stay untouched. Three rules that are easy to undo by
-  accident: `grip_at` pow-sharpens weights with the material's `blend_sharpness` exactly like
-  the splat shader (raw weights give every painted patch an invisible low-grip apron, and
-  normalization alone makes a faint trace read as full effect); `channel_grip` is clamped to
-  [0, 1] on read (>1 breaks the tuned brake > drive hierarchy, <0 inverts friction and skips
-  the friction circle); and the wheel picks the terrain whose surface is nearest the contact
-  within `RayWheel.SURFACE_GRIP_REACH`, never XZ alone, or a bridge inherits the ice painted
-  under it.
-- Corollary: roads/tiles conformed onto terrain DO read the splat under the deck, so an
-  unpainted road grips like grass (0.8), not asphalt (1.0). Fix is authoring, not code:
-  RoadPath's **Paint splat under road** button and the palette dock's **Paint splat under
-  tiles** button (`kit/helpers/splat_paint.gd`, tested) paint under the deck (roads: the
-  PROFILE's `splat_channel` — asphalt/city 6, gravel 7; tiles: 6; paint is destructive AND
-  additive — profile swaps don't repaint, repaints don't erase), biased to UNDERCOVER so the
-  paint never peeks past the deck — don't "fix" the inset/erosion to widen coverage. Bridges
-  need nothing and are skipped on purpose: out of grip reach = neutral 1.0 = asphalt.
+  Never remove or weaken a clamp; never raise the tick. A damper or drag term takes a clamp; an
+  external force (thrust, sail) does not.
+- Wheel spin is semi-implicit: divide the NET torque by `1 + reaction_stiffness`. Never cap the
+  reaction term instead, which walks the wheel to a steady slip nothing paid for
+  (`test_wheel_spin`).
+- `RayWheel.FREE_SPIN_DECAY` lets a lifted wheel's limiter cut clear itself. Without it the cut
+  latches until the driver lifts off.
+- The clamps are sized by `corner_mass`. Any runtime `mass` write calls
+  `WheelDrive.set_corner_mass_from(mass)` beside it (unguarded: `docs/to_investigate.md`).
+- `ChaseCamera` follows `get_global_transform_interpolated()`, never `global_transform` in
+  `_process`.
+
+## Wheels and ground
+
+- Never set `RigidBody3D.inertia`: Jolt computes the tensor about the declared `center_of_mass`, so
+  a COM height is pure data. Read the tensor only through
+  `PhysicsDirectBodyState3D.inverse_inertia`; `inertia` reads `ZERO` on a computed body. Guard:
+  `tests/test_body_inertia.gd`.
+- A car-family COM height (`com_y`) stays below ~45 % of the body's AABB height. If a narrow body
+  tips before it slides, the levers are the anti-roll bar or `mu_lat`, never a lower COM.
+- Anti-roll bar: both wheels of an axle read the snapshot `WheelDrive.tick` latches for every
+  wheel before any wheel ticks (`latch_bar`). A live read is a phantom left-only damper that steers
+  the car (`test_wheel_spin.test_the_bar_reads_one_shared_snapshot_whatever_the_tick_order`). Size
+  a rate with `measure_vehicles -- <variant> 45 corner` (4-8 deg roll), then re-run `track`.
+- Suspension force acts along the contact normal, never the chassis up axis, which would push a
+  pitched body along. Regression check: `measure_vehicles`' `balance` line.
+- Surface drag (`RayWheel.surface_drag_force`) is a body force outside the friction circle and the
+  spin step, capped per tick.
+- Surface grip multiplies mu and leaves the clamps alone. `channel_grip` is clamped to [0, 1].
+  `grip_at` pow-sharpens weights exactly like the splat shader. The wheel takes the nearest surface
+  within `SURFACE_GRIP_REACH`, never XZ alone (a bridge would grip like the ice painted under it).
+  Use cached decoded images, never `get_image()` per tick.
+- `RayWheel.is_rear_z` is the one front/rear predicate (ties go front; `test_vehicle_catalog`
+  asserts no wheel station sits at z = 0).
+- RayWheel is single-radius; bigger visual wheels are visual only (`wheel_visual_radius`,
+  `visual_lift`). Wheel scenes are radius-normalized. Per-instance tweaks ride the visual's
+  children (RayWheel overwrites the root). The right-side flip is `Basis(Vector3.RIGHT, PI)`,
+  never `UP` (local Y is the axle): `wheel_drive.gd` applies it, trailer scenes author it.
 
 ## Drag and downforce
 
-- Drag is DECLARED, never inherited. Every chassis sits on `DAMP_MODE_REPLACE` at 0, so
-  nothing rides `physics/3d/default_linear_damp` — a wheeled vehicle's resistance is its GROUND
-  DRIVE's `drag_area` (aero) plus its `rolling_resistance` (`crr * N`, with N read off the
-  SPRINGS, not `mass * g`), applied by `WheelDrive._apply_resistance` and by
-  `TowedBody.tick_towed`. Neither term reads the mass: the engine default was an acceleration,
-  so a 24 t trailer on an 8 t tractor quadrupled the rig's drag. Consequences —
-  - A towed body is not a `BaseVehicle`, so a new towed/attached rigid body means a new
-    resistance call.
-  - A trailer's `drag_area` is a MARGINAL, in-the-wake figure (0.25-0.60 m² against 2.4 m² of
-    real frontal area), not its own silhouette. Set it to the silhouette and a coupled rig is
-    over-braked again, just more politely.
-  - The Kenney bodies' Cd*A is derived, not typed: `gen_kenney_vehicles` takes
-    `cd * FRONTAL_FILL * w * h` off each body's measured AABB, so a per-variant edit belongs in
-    that recipe. Hand-authored specs (semi, conventional, trailers) carry the number inline
-    with the reasoning in the `.tres` header.
-  - The free bodies declare NEITHER term and must not: the boat/drone/plane run their own drag,
-    each having absorbed its exact `mass * 0.1` share of the removed engine default into its
-    own coefficient. `test_vehicle_catalog` sweeps both directions.
-- Downforce is a FORCE through the springs, never a grip multiplier. The ground drive's
-  `downforce_area` (Cl*A, applied down the body's own up axis by `WheelDrive._apply_downforce`)
-  is declared by the two open-wheelers and nothing else. It compresses the suspension, RayWheel
-  reads the bigger normal load, and grip follows on its own — so it pays ride height and
-  rolling resistance, which a `mu_lat` multiplier would not. Two rules ride on that: a body
-  declaring it must declare `drag_area` too (a wing with no drag is grip for free), and `cl` is
-  budgeted by the SUSPENSION TRAVEL — static load plus the wing at top speed has to stay under
-  `spring_rate * rest_length`, or the ray bottoms and the chassis is dragged through the
-  ground. `test_vehicle_catalog` fails both. A wing moves top speed as well as cornering, so
-  re-measure after changing it.
+- Drag is declared, never inherited. Every chassis runs `DAMP_MODE_REPLACE` at 0, so a wheeled
+  body's resistance is its ground drive's `drag_area` + `rolling_resistance` (N read off the
+  springs). A new towed or attached rigid body needs its own resistance call. Free bodies declare
+  neither (`test_vehicle_catalog` checks both directions).
+- Downforce is a force through the springs, never a grip multiplier. A wing must declare
+  `drag_area`, and its `cl` must fit inside the suspension travel at top speed
+  (`test_vehicle_catalog` checks both). Re-measure after any change.
 
-## `VehicleMath` and the free-body vehicles
+## Free bodies (boat, drone, plane)
 
-- The free-body vehicles (boat, drone, plane) share `VehicleMath` — `damped_force` /
-  `clamped_damper` (the one-tick clamp in 1D and 3D), `air_damper`, `flow_authority`,
-  `yaw_torque`, `inertia_of`, `pitch_deg`, `roll_deg`. Put a new shared free-body helper there
-  rather than in a fourth copy.
-  - `air_damper` is the DRAG path and never an angular one: `clamped_damper` on `vel - wind`,
-    with an optional axis mask for a body whose axes carry different coefficients (the drone's
-    horizontal against its vertical). In still air the relative velocity IS the velocity, the
-    equivalence `test_wind.gd` pins and why every coefficient kept its meaning when wind
-    arrived. An angular velocity has no air to be relative to, so the drone's attitude damper
-    and the boat's `drag_yaw` stay raw `clamped_damper` / `damped_force`.
-  - `flow_authority` is one curve, and the prop wash is the only thing that tells the two
-    apart. No flow over a surface = no control; hull/air speed gives flow, and a propeller
-    gives some from a standstill so a boat can turn out of a dock.
-    `BoatVehicle.rudder_authority` and `PlaneVehicle.control_authority` are one-line forwards
-    keeping their own names and figures (the tail sits outside the prop stream, so the plane
-    declares no wash).
+- Shared helpers live in `VehicleMath`. Add new ones there, not as a fourth copy.
+- `air_damper` is a drag path on `vel - wind`, never an angular damper: attitude dampers and the
+  boat's `drag_yaw` stay raw `clamped_damper` / `damped_force`. Its `axis` masks WORLD space, so a
+  body-frame split (boat windage) cannot use it.
+- `flow_authority` is the one control-authority curve. Prop wash is the only difference between
+  the boat rudder and the plane surfaces.
+- The sail (`BoatSail`) is an external force with no clamp. Its no-go zone emerges from `drag_lat`
+  and must never be clamped. `sail_area == 0` keeps the powerboats out of it.
 
 ## Towing
 
-- All three shared coupling classes live in `base/` and none of them is a truck thing:
-  `tow_host.gd`, `towed_body.gd`, `articulation.gd` and `coupling_profile.gd`, beside each
-  other. `base/tow_host.gd` itself depends on `TowedBody` and `Articulation`
-  (`var trailer: TowedBody`, `COUPLE_SPEED_MS := TowedBody.RAISE_SPEED_MS`), as do
-  `tractor/drawbar.gd` and `tractor/trailers/farm_tipper.gd`, so keeping them in `truck/` had
-  `base/` depending on a family folder. What stays in `truck/` is what only the truck has:
-  `fifth_wheel.gd` (a profile) and the four semi-trailers. `flatbed.tscn` names `towed_body.gd`
-  by PATH with no `uid=`, so a future move has to hand-edit it or the scene silently fails to
-  load.
-- The towing side is `TowHost` and the tractor's drawbar is the same class: a coupler node on
-  the chassis (`src/vehicles/base/tow_host.gd`) owning the datum, the joint, the gates and
-  every item of two-body housekeeping below, with `FifthWheel` and `Drawbar` each a
-  `CouplingProfile` and nothing more. Do not fix a towing bug on one machine — there is one
-  implementation, and the list of what legitimately stays on the vehicle is in
-  `docs/heavy_vehicles.md` § The drawbar. Do not let `TowHost` grow a `trailer_type`-shaped
-  accessor either: which body is on the back shows through mass and through what it declares.
-- The E cycle's refusal is `TowHost.may_cycle_to`, static and taking `is_coupled` / `is_towed` as a
-  Callable — the attachment axis cannot hoist onto `BaseVehicle`; a null coupler never refuses.
-- `TowedBody.Consumer` and `ImplementBase.Connection` are two different sets, not two names for
-  one (the cross-reference sits at both enum declarations). Term by term:
-  - `Consumer` is `{PTO, HYDRAULIC}` and has no data-bus member on purpose: ISO 11992 belongs
-    to the TOWING unit's ISO 7638 pair (`VehicleSpec.trailer_bus_equipped`) and carries nothing
-    about the body. One enum hands a semi-trailer an `ISOBUS_DATA` and a `THREE_POINT` it
-    cannot have — the exact claim `truck/CLAUDE.md` § The four trailers exists to make visible.
-  - The two `PTO`s are different shafts (a truck's chassis PTO turning a pump ON the trailer
-    vs. a tractor's stub shaft driving an implement), and `HYDRAULIC` / `SCV` are different
-    plumbing (a valve on the towing unit vs. a spool on the tractor's own pump). `FarmTipper`
-    declaring `HYDRAULIC` without `Consumer.PTO` is that difference stated.
-  - The bridge is ~10 lines (`FarmTipper.connections()` + `device_class()`) and merging the
-    enum would not remove it. `TractorVehicle`'s `has_method` guard survives either way,
-    because `ImplementBase` (a visual `Node3D`) and `TowedBody` (a `RigidBody3D`) share no base
-    class and must not.
-  - One catalog does not survive either: `ImplementCatalog.TOWED` is a routing table read
-    before anything is instanced, and `TrailerCatalog` has nothing to route.
-  - Nor are the two `attachment_controls()` two copies: the semi's `lift` is
-    `Consumer.HYDRAULIC` (the tipping body), the tractor's is unconditionally true (the linkage
-    is anatomy and works empty). Two answers, one hook.
-- Two-body housekeeping, all of it load-bearing:
-  - The trailer is a child of the towing unit's **parent** (the level), never of the unit — a
-    dynamic RigidBody3D under another body gets the parent transform applied on top of the one
-    the physics server writes. `TowHost._exit_tree` frees it, or a variant swap leaves it in
-    the road.
-  - It couples on the **first physics tick**, not in `_ready`: `Level._spawn_vehicle` assigns
-    `global_transform` / `spawn_transform` AFTER `add_child`, so `_ready` has nowhere to put it.
-  - Coupling **matches the trailer's velocity at the kingpin before the joint exists**,
-    treating the rig as one body for that instant. Without it the solver is handed 14 t with
-    the whole road speed as relative velocity.
-  - Respawn **re-lays and stops** the trailer (the train's lesson) and resets its wheels — a
-    RayWheel keeping last tick's compression across a teleport reports the jump as a suspension
-    spike, this body's equivalent of the accel history the base clears.
-  - `get_camera_exclude_bodies` includes the trailer's RID (the train precedent) and
-    `get_camera_framing` returns a longer, higher frame for the combination.
+- Shared coupling lives in `base/` (`tow_host.gd`, `towed_body.gd`, `articulation.gd`,
+  `coupling_profile.gd`); `FifthWheel` and `Drawbar` are only `CouplingProfile`s. Fix a towing bug
+  in `TowHost`, never on one machine. No `trailer_type`-shaped accessor: what is on the back shows
+  through mass and through what it declares.
+- E (`next_attachment`) always cycles the attachment, V (`next_vehicle`) always the body: one key
+  for both would do different things per vehicle. `cycle_implement()` is an unconditional `-> void`.
+- The trailer is a child of the towing unit's PARENT, never the unit, which would apply the parent
+  transform twice.
+- `flatbed.tscn` names `towed_body.gd` by path with no `uid=`, so moving the script means
+  hand-editing the scene (`docs/to_investigate.md`).
 
-## Telemetry and the bridge cluster
+## Telemetry
 
-- Telemetry reads `Drivetrain.applied_throttle`, never `input.throttle`. A governed or
-  rev-limited vehicle is holding the pedal flat while the engine is being cut (that field
-  carries BOTH cuts), so `engine_load` and the fuel / coolant / battery `load_frac` off the
-  driver's request would report a load the engine is not making — standing rule 3. The one
-  deliberate exception is the contract's own `throttle` signal, which IS the pedal.
-- `engine_load` is normalized against `Drivetrain.peak_torque(spec)` — the peak of the whole
-  curve — never against the torque available at the current rpm, which cancels exactly to
-  throttle and turns the signal into a second pedal-position readout. Against the peak it is
-  rpm-aware, the only reason a real load (lugging, a PTO implement, a plough's draft) can show
-  up in it.
-- The four "reservoirs" are four different models and must not be unified, however alike the
-  bars look. `TruckTelemetry.air_step` integrates a DEMAND FRACTION against fixed charge/draw
-  rates and charges and drains in the same tick; `TrainTelemetry.brake_pipe_step` is a
-  `move_toward` toward a TARGET the brake lever picks, with asymmetric rates;
-  `DronePower.soc_step` coulomb-counts a MEASURED current against a rated capacity and feeds an
-  OCV curve and a thermal lag; `fuel_step` is a monotonic drain off a load fraction. A target
-  chaser cannot express "charging while being drawn down" and an integrator cannot express
-  "settles where the lever puts it". Two of them also GATE (the truck's spring brakes pin the
-  rear `omega`, the drone refuses to arm) and two gate nothing.
-  - The PTO is the mirror image and is already shared: `VehicleTelemetry.engine_load_pct`'s
-    parasitic term is one implementation the tractor and the truck call identically, because
-    ISO 11783 is built on J1939 and SPN 92 is the same signal on both. What stays per family is
-    what the shaft DRIVES. `pto_load` is exported on each vehicle rather than hoisted for the
-    same reason a capability is: a machine's anatomy is declared beside the machine.
-- `speed_limit` is the one telemetry field that is CONFIGURED rather than measured, and the
-  only one set outside the tick: `BaseVehicle._ready` copies `spec.speed_limit_kmh` into it
-  once, and `_reseed_telemetry` re-copies it (the reseed puts every field back to its declaration
-  default, and this one's is 0); the base `to_bridge_dict` carries it. It sits on
-  the base, since the car family has no telemetry subclass to put it on — so every vehicle has
-  the field, and the dashboard gates the LIM readout on the CONTRACT (`_has_speed_limit`), not
-  on an `engine_hours`-style `t.get(...)` duck-type that would have printed LIM on the boat.
-  Consequence: declaring a new `speed_limit_kmh` is a contract-visible fact as well as the
-  re-measure trigger the strand-the-gearbox note describes, and the value must be a whole km/h
-  in [0, 250] — `test_vehicle_catalog` fails it, because SPN 74 is one byte at 1 km/h per bit.
-- `engine_load_pct` and `hours_step` live on **VehicleTelemetry**, not TractorTelemetry:
-  `engine_load` (SPN 92) is a shared tractor/truck signal, so the model is one, not two.
-  `engine_hours` (SPN 247 / N2K PGN 127489) is shared further still, with the boat — and stays
-  UNFLAVORED for it, like `speed_limit`/`wheel_slip`: a family that doesn't speak the flavor's
-  protocol still declares the reading, so the SPN/PGN is a naming reference, not a wire claim.
-  - `pto_load` is the one term ADDED to a signal rather than emerging from the sim — literally
-    `load_frac += pto_load` while the PTO is engaged. The PTO costs no real engine torque, so
-    the rpm does not sag and nothing else moves with it: a knowingly-cheap parasitic model,
-    kept because one model beats two. Know the shape before reading anything into `engine_load`
-    on a PTO machine; if it is ever promoted to a real driveline drag, this is the term that
-    GOES, not a second one added beside it. Contrast `hopper_load` (mass only, consequences
-    downstream).
-- Contract signals key on the vehicle **family** (`signals_for_vehicle` looks up `"train"`, not
-  the variant `"bullet"`): any pre-spawn fallback that has only a variant name must map it
-  through `VehicleCatalog.family_of(...)` first, or the dashboard/bridge get an empty cluster.
-  `dashboard.bind()` and `level_baker.validate_spawns` are the two that must.
-- `_reseed_telemetry` copies a throwaway `_make_telemetry()` field-by-field onto the LIVE object,
-  never a replacement: `Dashboard._telem` and `Bridge._telem` each resolve it once per vehicle
-  change and cache it, so a new instance leaves both publishing a detached object with nothing
-  logged. It walks the property list `to_bridge_dict` does, so every subclass field — and every
-  field added later — is covered without a second list to maintain.
+- Read `Drivetrain.applied_throttle`, never `input.throttle`: it carries the limiter, governor and
+  shift cuts. Only the contract's `throttle` signal is the pedal.
+- `engine_load` is divided by `Drivetrain.peak_torque(spec)`, never by the torque at the current
+  rpm, which cancels to throttle.
+- Contract signals key on the FAMILY: a pre-spawn path holding a variant name maps it through
+  `VehicleCatalog.family_of` first (`dashboard.bind()`, `level_baker.validate_spawns`).
+- `_reseed_telemetry` copies onto the LIVE object, never a replacement: Dashboard and Bridge cache
+  the instance.
+- Every member var of a telemetry class IS a wire signal: `to_bridge_dict` walks the property
+  list (only the `WIRE_*` tables and the synthesised `slip` are not identity). Guard:
+  `test_to_bridge_dict_invents_no_signal`.
+- `pto_load` is a parasitic term added to `engine_load`, not real torque. If a real driveline drag
+  replaces it, this term goes.
 
 ## Lamps
 
-- **`LampSet` binds its groups two ways and the accessor differs.** Head/brake/turn/LED share ONE
-  canonical material per group on `mesh.material_override` (`_bind`); markers, flash and strobe get
-  a PRIVATE duplicate of the mesh's own scene material on `set_surface_override_material(0, …)`
-  (`_bind_scene_colored`), which is what lets red, green and white sit in one group. Read a marker
-  back through `material_override` and you get `null` for a lens that is lit correctly — both
-  `test_tow_host` and `test_trailer` go through a `_marker_mat()` helper that says so.
-- `LampSet` tolerates a missing lamp path silently (a dark lens with nothing to say so), which is
-  why the family suites pin every declared path resolving to a `MeshInstance3D`.
+- Lamp and warning bits ride `VehicleInput` and are mirrored verbatim: sloppyCAN is the sole
+  authority, an absent bit is off, and there is **no local blink timer** (a lamp flashes because
+  the source toggles its bit, J1939-73 DM1 flash rates included). Guard: `tests/test_lamps.gd`
+  scans `lamp_set.gd` and `drone_indicators.gd` only.
+- Head/brake/turn/LED share one material per group on `material_override`. Markers, flash and
+  strobe get a private copy on surface override 0, so `material_override` reads `null` on a
+  correctly lit marker (tests use a `_marker_mat()` helper).
+- `LampSet` tolerates a missing lamp path silently; only the trailer, drone and Kenney suites pin
+  the paths.
 
-## Kenney bodies
+## Measuring
 
-Detail in `src/vehicles/kenney/CLAUDE.md`.
+- Changed gearing, mass, tyres, wheel positions, a diff, a wing or a governor? Re-measure with
+  `tools/measure_vehicles.tscn` (run lines: `tools/CLAUDE.md`; reading guide: `docs/vehicles.md`).
+  "top (settled)" can be the time cap, so check it against the power balance.
+- Spawns put the body at `BaseVehicle.rest_ride_height()` with the wheels just touching, so chassis
+  contact at t = 0 is a real problem.
 
-## Measuring and the tracking gate
+## Rejected — do not re-propose
 
-- **Changed a spec's gearing, mass, tires or wheel positions? Re-measure it** with
-  `godot --headless --path . res://tools/measure_vehicles.tscn -- <variant>` (or `all`,
-  which is minutes — background it). It reports 0-100 / quarter / settled top speed with the
-  gear it lands in, flags ratios the vehicle can never reach, and runs a zero-steer
-  straight-line tracking pass that catches a chassis that pulls. Dev tool, never CI, always
-  exits 0 (`track strict` is the CI gate). Flags after the seconds cap: `coast`, `track`,
-  `strict`. Details and the `Engine.time_scale` trap: `docs/vehicles.md` § Measuring a vehicle.
-  - "top (settled)" can be the TIME CAP: the tool stops a pass at the cap and prints whatever
-    it had reached, in the wording it uses for a real settle, so a slow vehicle reports a
-    number that is simply too low. Sanity-check any top speed against the power balance —
-    engine kW at the reported rpm versus `0.5*rho*Cd*A*v^3 + crr*m*g*v` — and re-run the slow
-    ones at a longer cap. A change that improves ACCELERATION raises the reported top speed of
-    a capped vehicle without touching anything that sets top speed, which reads as a physics
-    mystery.
-  - **Hill-climb is its own tool**, `tools/measure_grade.tscn`: it bisects the steepest grade a
-    body pulls away on from rest over a chosen painted surface, and `level=<id>` reports what a
-    level's roads actually ask for. Shipped figures, the two textbook ceilings it prints beside
-    them and the real-world comparison: `docs/vehicles.md` § Gradeability.
-  - `tractor-kenney` gets no tracking pass and that is correct: the pass latches its ideal line
-    at 60 km/h to skip the launch transient, and a 40 km/h farm tractor never gets there. It
-    prints `never reached 60 km/h, skipped`. Any vehicle geared below 60 is in the same
-    position — check its steering by driving.
-  - `-- semi` measures the coupled 32 t rig, not a bobtail tractor: `TowHost`'s spawn countdown
-    couples `TrailerCatalog.first()` unconditionally, so there is no way to measure a solo
-    tractor unit from the command line. Two consequences: the force column reads against all-up
-    mass where the two differ, and a towing variant measured solo does not reproduce its figure
-    from an `all` sweep — the countdown couples against whatever state the previous vehicle
-    left, so the launch transient is not bit-reproducible across run contexts (top speed, gear
-    and rpm are stable; 0-50 / quarter / `tyres` / `rake` move in the third digit). A
-    regression diff has to compare runs of the SAME SHAPE.
-  - **`measure_semi_launch`'s P7 is the rollover instrument**: it re-lays the rig on its own skid
-    pad (the 40 m strip is too narrow for a rig at lock), steps to full lock in one tick at
-    40 km/h off the throttle, and reports chassis/trailer roll, joint roll off the RELATIVE basis
-    (a difference of two world rolls measures the articulation too), peak lateral g from
-    `v * yaw rate`, and wheels off the ground. Its longitudinal columns mean nothing in that phase
-    and say so. Baseline at today's COM heights, both units: ~1.06 g, ~16 deg chassis lean, the
-    inside pair airborne ~6 s, joint roll holding at ~1.58 deg of its 1.5 deg stop, and NO
-    rollover — the rig slides first, as the numbers predict.
-  - A static reading is a standstill phase, never the spawn settle: `measure_semi_launch`'s
-    static pose is sampled off the last tick of P5 (standstill, brakes applied), not P1 (which
-    is still settling and reads pitch and travel high).
-  - Every spawn (`Level._spawn_vehicle`, the three measure tools) places the origin at
-    `BaseVehicle.rest_ride_height()` over the ground under the marker, wheels just touching and
-    springs unloaded, never dropped onto them — so a chassis contact at t=0 is a real problem,
-    not "the spawn drop".
+- `FreeBodyDrive` / `HullBuoyancy`: boat, plane and drone drag share no shape, and buoyancy has one
+  consumer.
+- `VehicleSpec.air_drive` / `.water_drive`: the vehicle node is already the single home
+  (`test_boat_variants` guards the boat's recipe copy).
+- A polymorphic `spec.drive`: retires no `null` guard and adds a downcast to each.
+- Splitting `Drivetrain` into gearbox and rpm: the gearbox is load-bearing on every family.
+  COMPROMISE: the wheel-less bodies run an engine model nothing observes.
+- Unifying the four reservoirs (truck air, train brake pipe, drone pack, fuel): four different
+  models, two of which gate.
+- Merging `TowedBody.Consumer` with `ImplementBase.Connection`: different sets (see the enum
+  headers).
+- Torque-curve tails on the six curves ending at `(redline, 0)` (the 3200-rpm heavies,
+  `tractor-kenney`): they would move tuned top speeds for nothing.
+- Open-diff friction (the open diff is an ideal 1.0): bodies that should fight one-wheel peel
+  declare an LSD.
+- Fixing the floored 2WD tractor in mud through the diff: the lever is a clutch or a softer
+  low-throttle map.
+- Auto-respawn on overturn (`base_vehicle.gd`).

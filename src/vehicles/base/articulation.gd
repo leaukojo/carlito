@@ -9,11 +9,10 @@ extends RefCounted
 ## trailer to the tractor's right. The trailer's origin is the kingpin, so trailer-space z is
 ## measured back from the coupling.
 
-## The rig's articulation stop, degrees: a labelled model of trailer-against-cab contact, not a
-## measurement of this geometry, where nothing would touch until ~140 deg. A real artic folds to
-## 70-90 deg before steel meets steel. Shared by the shipped joint's yaw limit and the fallback's
-## clamp so there is one number; the two bodies must not collide regardless, since the gooseneck
-## sweeps through the tractor's frame.
+## The rig's articulation stop, degrees: a labelled model of trailer-against-cab contact (a real
+## artic folds to 70-90 deg), not this geometry's, where nothing touches until ~140 deg. One number
+## for the joint's yaw limit and the fallback's clamp; the bodies must not collide regardless, since
+## the gooseneck sweeps through the tractor's frame.
 const JACKKNIFE_MAX_DEG := 75.0
 
 
@@ -30,10 +29,9 @@ static func articulation_angle(tractor: Transform3D, trailer: Transform3D) -> fl
 
 
 ## Where a coupled trailer belongs right now: origin on the tractor's kingpin, aligned with the
-## tractor. Spawn, coupling and respawn all re-lay it rather than merely stopping it, since
-## zeroing velocity alone leaves it halted wherever it drifted. It inherits the tractor's whole
-## basis, pitch included, so on a slope the bogie sits briefly off the ground until its own
-## RayWheels settle it, which the joint's pitch limit allows.
+## tractor. Spawn, coupling and respawn re-lay it rather than just zeroing its velocity. It
+## inherits the tractor's whole basis, pitch included, so on a slope the bogie sits briefly off the
+## ground until its own RayWheels settle it, which the joint's pitch limit allows.
 static func coupled_pose(tractor: Transform3D, kingpin_local: Vector3) -> Transform3D:
 	return Transform3D(tractor.basis, tractor * kingpin_local)
 
@@ -78,12 +76,11 @@ static func jackknife_step(phi: float, v_fwd: float, yaw_rate: float, delta: flo
 ## axis, given the RELATIVE yaw rate across the joint. Signed to oppose the rate; the caller
 ## applies the equal and opposite on the chassis.
 ##
-## Coulomb, not viscous: the magnitude is `friction_nm` at any rate, which is what a steel plate
-## under tens of kilonewtons does and why it damps trailer sway without ever re-centring the
-## trailer. `yaw_inertia * |rate| / delta` is RayWheel's one-tick rule in torque form (the same
-## shape as `VehicleMath.damped_force`): one tick may at most stop the relative yaw, never reverse
-## it, so a rig at a standstill cannot buzz across zero. On a 24 t semi-trailer that cap only binds
-## below ~1e-4 rad/s, so the inertia figure may be a proxy.
+## Coulomb, not viscous: the magnitude is `friction_nm` at any rate, so it damps trailer sway
+## without re-centring the trailer. `yaw_inertia * |rate| / delta` is the one-tick rule in torque
+## form (60 Hz clamp: src/vehicles/CLAUDE.md § The 60 Hz tick): one tick may at most stop the
+## relative yaw, so a rig at a standstill cannot buzz across zero. The cap only binds at tiny rates
+## on a semi-trailer, so the inertia figure may be a proxy.
 static func yaw_friction_torque(rel_yaw_rate: float, friction_nm: float, yaw_inertia: float,
 		delta: float) -> float:
 	if friction_nm <= 0.0 or delta <= 0.0:

@@ -32,10 +32,8 @@ const MAX_HEADING_DRIFT := 1.0    ## deg of heading change over the same stretch
 ## Variants whose tracking FAIL is a KNOWN, open defect: still measured, still printed as FAIL,
 ## but excluded from `strict`'s exit code so one unfixed body does not block every deploy. A
 ## variant that is not on this list gates CI as before, so a NEW asymmetry still turns the job
-## red. Each entry names the plan that owns the fix; delete the entry with the plan.
-##   hatchback-sports: the driven axle turns a small load difference into a large force
-##   difference (~1.07 m drift / 0.35 deg over 200 m) - docs/plans/tracking_gate_drive_split.md.
-const KNOWN_TRACKING_FAILS := ["hatchback-sports"]
+## red. Each entry names the plan that owns the fix; delete the entry with the plan. Empty today.
+const KNOWN_TRACKING_FAILS: Array[String] = []
 
 # --- coast-down pass (opt-in: pass the `coast` flag) ----------------------
 ## Cuts throttle at settled top speed and measures deceleration under resistance alone.
@@ -54,6 +52,12 @@ const CORNER_SMOOTH_S := 0.25      ## exponential smoothing on the lateral-g rea
 ## Past this slip angle the body is sliding, not cornering: `v * yaw_rate` there measures a spin,
 ## not a grip limit, so the peak stops being sampled and the report says the gate tripped.
 const CORNER_MAX_SLIP_ANGLE := 0.5  ## |v_lat| / |v|
+## The speed hold is a PI pedal, never bang-bang: full-pedal pulses through a torque-biasing diff
+## send the whole engine to the slower wheel or axle, and the pass then reads power-on oversteer
+## instead of grip (`race` spun at a reported 1.62 g; the SUV's rear saturated first).
+const CORNER_PEDAL_KP := 0.8       ## pedal per m/s of speed error
+const CORNER_PEDAL_KI := 0.5       ## pedal per second per m/s of speed error
+const CORNER_PEDAL_START := 0.35   ## integral seed when the ramp begins, roughly a car's cruise
 const PAD_SIZE := 300.0
 const PAD_X := -400.0              ## well clear of the strip's +/- 20 m
 
@@ -118,6 +122,7 @@ var _corner_rear := 0.0
 var _corner_slid := false      ## the slip-angle gate tripped at some point
 var _corner_roll := 0.0        ## chassis roll (deg) at the lateral-g peak
 var _corner_lifted := 0        ## most wheels off the ground in any one tick of the pass
+var _corner_pedal_i := 0.0     ## integral half of the PI speed hold
 
 # sweep report: per-vehicle measured figures, buffered as each pass reports, plus the
 # real-world comparison figures loaded once from REFERENCE_SPECS_PATH.
@@ -276,6 +281,7 @@ func _reset_pass(phase: Phase) -> void:
 	_corner_slid = false
 	_corner_roll = 0.0
 	_corner_lifted = 0
+	_corner_pedal_i = 0.0
 
 
 func _physics_process(delta: float) -> void:
@@ -349,13 +355,17 @@ func _tick_tracking() -> void:
 
 
 ## Hold CORNER_SPEED on the pad, then wind the lock on from zero over CORNER_RAMP_S and watch what
-## the tyres will hold. Throttle is bang-bang around the target: a governed or slow body simply
-## sits on the pedal, which is the same steady speed by a duller route.
+## the tyres will hold. Full pedal up to the speed, then a PI hold (CORNER_PEDAL_KP / _KI) through
+## the ramp; a governed or slow body simply sits on the pedal.
 func _tick_cornering(delta: float) -> void:
 	var vel: Vector3 = _car.linear_velocity
 	var speed := vel.length()
-	if speed < CORNER_SPEED:
-		Input.action_press("accel")
+	var err := CORNER_SPEED - speed
+	if _corner_ramping:
+		_corner_pedal_i = clampf(_corner_pedal_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
+	var pedal := clampf(_corner_pedal_i + err * CORNER_PEDAL_KP, 0.0, 1.0) if _corner_ramping 			else 1.0
+	if pedal > 0.0:
+		Input.action_press("accel", pedal)
 	else:
 		Input.action_release("accel")
 	if not _corner_ramping:
@@ -363,6 +373,7 @@ func _tick_cornering(delta: float) -> void:
 		# rather than silently reporting the transient.
 		if speed >= CORNER_SPEED:
 			_corner_ramping = true
+			_corner_pedal_i = CORNER_PEDAL_START
 		elif _t >= _seconds:
 			print("  %-13s : never reached %.0f km/h, skipped"
 					% ["cornering", CORNER_SPEED * 3.6])
@@ -607,9 +618,25 @@ func _contact_label(pass_name: String) -> String:
 
 func _drive_label(spec: VehicleSpec) -> String:
 	var gd := spec.ground_drive
-	if gd.driven_front and gd.driven_rear:
-		return "AWD"
-	return "FWD" if gd.driven_front else "RWD"
+	var layout := "AWD"
+	if not (gd.driven_front and gd.driven_rear):
+		layout = "FWD" if gd.driven_front else "RWD"
+	return layout + _diff_label(gd)
+
+
+## The declared differentials that are not open (`GroundDriveSpec` § Driveline), e.g.
+## ", centre 3.0:1, rear LSD 2.5:1"; empty when every diff is open.
+static func _diff_label(gd: GroundDriveSpec) -> String:
+	var label := ""
+	if gd.centre_diff_rigid:
+		label += ", centre rigid"
+	elif gd.centre_diff_bias > 1.0:
+		label += ", centre %.1f:1" % gd.centre_diff_bias
+	if gd.diff_bias_front > 1.0:
+		label += ", front LSD %.1f:1" % gd.diff_bias_front
+	if gd.diff_bias_rear > 1.0:
+		label += ", rear LSD %.1f:1" % gd.diff_bias_rear
+	return label
 
 
 ## One markdown file per sweep, measured figures beside REFERENCE_SPECS_PATH's real-world

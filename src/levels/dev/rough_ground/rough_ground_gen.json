@@ -1,0 +1,32 @@
+{
+  "//": "How the rough-ground dev level is generated. Run it with: powershell -File tools/rebuild_level.ps1 -Level rough_ground",
+  "level": "rough_ground",
+  "scene": "res://src/levels/dev/rough_ground/rough_ground.tscn",
+  "replayable": true,
+  "sources": [
+    "rough_ground_height.png",
+    "rough_ground_splat.png",
+    "rough_ground_splat2.png"
+  ],
+  "notes": [
+    "gen_rough_ground.gd owns this level end to end and overwrites every byte of it: heightmap,",
+    "both splats, the LevelInfo and the .tscn text. Every position (lanes, patches, bump seed,",
+    "ditch depths) lives in tools/rough_ground_layout.gd, which tools/measure_rough.gd reads",
+    "too, so moving a patch there moves the measurement with it; re-run this chain after any",
+    "edit to that file.",
+    "Unregistered (not in LevelRegistry): F6 it, or drive it through measure_rough. It has no",
+    "AuthoringRoot, so there is nothing to bake and no .bake.json."
+  ],
+  "steps": [
+    {
+      "kind": "scene",
+      "path": "res://tools/gen_rough_ground.tscn",
+      "args": [],
+      "why": "Writes the island heightmap (plateau, lanes' bump fields and V-ditches), both splats (grass/sand, asphalt and mud lanes), the LevelInfo and the level .tscn text."
+    },
+    {
+      "kind": "import",
+      "why": "The terrain reads the fresh PNGs through their imports."
+    }
+  ]
+}

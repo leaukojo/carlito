@@ -124,6 +124,18 @@ func test_battery_charges_when_running_droops_under_load() -> void:
 
 # --- status bitfield ---
 
+## The wire layout is FROZEN, so it is pinned as literals: every other status test compares
+## against the `ST_*` constants and would pass a renumbering.
+func test_status_bits_are_frozen() -> void:
+	assert_int(T.ST_IGNITION).is_equal(1)
+	assert_int(T.ST_GROUND).is_equal(2)
+	assert_int(T.ST_MOVING).is_equal(4)
+	assert_int(T.ST_REVERSE).is_equal(8)
+	assert_int(T.ST_NEUTRAL).is_equal(16)
+	assert_int(T.ST_HANDBRAKE).is_equal(32)
+	assert_int(T.ST_HEADLIGHTS).is_equal(64)
+
+
 func test_pack_status_sets_expected_bits() -> void:
 	# Running, grounded, moving, in D3: ignition + ground + moving, no gear/aux bits.
 	assert_int(T.pack_status(true, true, true, 3, false, false)) \

@@ -11,6 +11,7 @@ wheel_radius = 0.36
 wheel_scene = ExtResource("2_n4tsi")
 driven_front = true
 driven_rear = false
+diff_bias_front = 2.5
 rest_length = 0.28
 anti_roll_rate = 7000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)

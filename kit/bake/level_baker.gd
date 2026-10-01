@@ -8,7 +8,7 @@ extends RefCounted
 ## Bump on any bake-semantics change; stale-bake checks reject old-version manifests.
 const BAKER_VERSION := 14
 
-## The runtime node rail roads bake into; preloaded (not class_name'd) so it loads headless.
+## The runtime node rail roads bake into.
 const Groups := preload("res://src/levels/base/carlito_groups.gd")
 const RailTrackScript := preload("res://src/levels/base/rail_track.gd")
 

@@ -1,24 +1,9 @@
 # Carlito — Architecture Overview
 
-A browser-based CAN-bus driving sandbox: drive vehicles (car / truck / tractor / boat /
-drone / plane / train) while exchanging live CAN signals with the sloppyCAN/RAMN simulator.
-Godot 4.7, web-first, physics locked at 60 Hz + interpolation.
-
-`CLAUDE.md` is the working reference (commands, rules, gotchas), with directory-scoped
-gotchas in nested `CLAUDE.md` files beside the code they constrain (`src/input/`,
-`src/vehicles/`, `src/levels/`, `src/ui/`, `contract/`, `kit/`); `docs/systems.md`,
-`docs/vehicles.md`, `docs/heavy_vehicles.md` and `docs/level_kit.md` hold per-system detail;
-`TODO.md` lists remaining work.
-
-## How to read these docs
-
-Written for a human looking something up: the fact first, in as few words as it takes, and
-a `why:` tail only where a reader would otherwise undo the decision. Tables and bullets over
-paragraphs; no narration, no history. The reasoning that stops an agent re-proposing a
-rejected idea lives in the nested `CLAUDE.md` files, not here. "ALL"/"every"/"never" states
-intent, not a verified invariant — check before quoting one. A knowingly-imperfect decision
-is recorded beside the code it constrains, in the nested `CLAUDE.md` files, with what undoing
-it would cost.
+Architecture map for agents. Product summary and standing rules: root `CLAUDE.md`; directory
+rules: the nested `CLAUDE.md` files; per-system detail: `docs/systems.md`, `docs/vehicles.md`,
+`docs/heavy_vehicles.md`, `docs/level_kit.md`. Open work: `docs/plans/`; backlog: `TODO.md`; suspected defects: `to_investigate.md`.
+What goes where (CLAUDE.md / code comment / `docs/`): root `CLAUDE.md` § Working style.
 
 ## The big idea: one contract, everything flows through it
 
@@ -85,8 +70,6 @@ J1939/ISOBUS/ISO 11992, four truck variants, four semi-trailers — in `docs/hea
 - The bake tool merges render meshes per chunk and welds drivable geometry into one
   level-wide collision body, input-hash-stamped; CI fails on stale bakes. `Level` loads
   `<level>.baked.scn` at runtime; an export plugin strips authoring content.
-- Levels are signal playgrounds: grades for `engine_load`, hairpins for slip, fields for
-  hitch/PTO, water courses for pitch/roll.
 
 ## Testing & CI
 
@@ -97,5 +80,5 @@ J1939/ISOBUS/ISO 11992, four truck variants, four semi-trailers — in `docs/hea
   level packs, plus a parallel tracking gate.
 - `dev` auto-publishes on every push (cache-busted); `stable` moves only on the manual
   promote workflow — `docs/deploying.md`.
-- Code is MIT, assets CC0. `../CARLITO_SLOPPYCAN_V1_BACKUP/carlito/` is a behavior/layout
+- Code is MIT, assets CC0. `../_old/CARLITO_SLOPPYCAN_V1_BACKUP/carlito/` is a behavior/layout
   reference only; nothing is ported from it.

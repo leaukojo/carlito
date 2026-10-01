@@ -1,35 +1,23 @@
-# Kenney bodies — gotchas & hard-won rules
+# Kenney bodies — rules
 
-- Kenney lamp placement is **measured, never guessed**: a lens is not a named node (each
-  vehicle is one merged mesh on a shared colormap atlas), so `gen_kenney_vehicles.gd` samples
-  the atlas at every triangle's UV centroid and unions welded same-shade triangles into lens
-  clusters (amber = front, red = rear). Each end's lens is then SPLIT along its width — inboard
-  65% = head/brake lamp, outboard 35% = turn indicator, since the kit paints no indicator of
-  its own. The run prints a per-variant lens report; `fallback` means that end has no painted
-  lamp and the body-box formula placed it — a guess, so `_fallback_lamp_y` overrides its HEIGHT
-  per variant where driving showed the box centre wrong. Correct a fallback lamp THERE, never
-  in the `.tscn`: `Lamps` is generator-owned. Filter candidates BEFORE merging or a lens fuses
-  into a same-hue body panel (the firetruck is red all over).
-- Kenney vehicle **hand-authored anatomy is preserved across regens, by whitelist**:
-  `gen_kenney_vehicles.gd` writes only `Model` + `Lamps` (`GENERATED_CHILDREN`) and transplants
-  every other direct child of the existing scene — the hand-tuned
-  `CollisionLower`/`CollisionUpper` box pair, and the tractor's `ThreePointHitch` instance. A
-  whitelist of what the generator OWNS, never a list of what to save, so a hand-added node
-  survives by default. Only a brand-new variant with no scene yet gets a generated convex hull.
-  Extras are **reparented** out of an instance loaded with `GEN_EDIT_STATE_INSTANCE`, not
-  duplicated: `duplicate()` loses the scene-instance state, so `pack()` writes the instanced
-  scene's own properties back out and the hitch lands carrying a `script=` pinning the vehicle
-  scene to today's hitch script. Adding a new generated child means adding its name to
-  `GENERATED_CHILDREN`, or the old one is transplanted alongside the new one. To reset a
-  variant's collision to the auto hull, delete its collision nodes from the .tscn first, then
-  regen.
-  - A NODE survives a regen; a hand-written `;` COMMENT in the `.tscn` does not. `pack()`
-    writes a scene graph, so there is nowhere for a comment to live, and while one is in the
-    file the generator is not idempotent either — `_save_scene_stable` only keeps the old bytes
-    when the two files are otherwise identical, so the whole scene re-churns its `unique_id`s
-    on every run. Put that kind of note in this file or in the generator, never in generated
-    output.
-- Kenney wheel stations use **one track for the whole body**: the flush-X rule alone follows the
-  flared front fender and the tucked rear arch, standing the front wheels out and sinking the rear
-  ones in, so `_analyze` averages the four half-widths. A body whose axles wear different wheel
-  models (the tractor) keeps its per-axle stations.
+`tools/gen_kenney_vehicles.gd` writes every scene and spec here; a change goes into its recipe
+(`vehicle-feel` skill).
+
+- **Lamps are measured, never guessed**: the generator samples the colormap atlas per triangle
+  and unions same-shade triangles into lens clusters (amber = front, red = rear), filtering
+  candidates BEFORE merging (or a lens fuses into a same-hue panel: the firetruck). Each lens
+  splits inboard 65 % head/brake, outboard 35 % indicator. A `fallback` in the lens report is a
+  body-box guess; correct its height in `_fallback_lamp_y`, never in the `.tscn` (`Lamps` is
+  generator-owned).
+- **Hand-authored anatomy survives a regen by whitelist**: the generator owns only
+  `GENERATED_CHILDREN` (`Model`, `Lamps`) and transplants every other direct child (the
+  collision box pair, the tractor's `ThreePointHitch`, `HoodCam`). Only a variant with no scene
+  yet gets a generated convex hull; to reset one, delete its collision nodes, then regen. A new
+  generated child joins `GENERATED_CHILDREN`, or the old one is transplanted beside it.
+  - Extras are **reparented** out of a `GEN_EDIT_STATE_INSTANCE` load, never duplicated:
+    `duplicate()` loses instance state, so the hitch would land pinned to today's hitch script.
+  - A `;` comment in a generated `.tscn` does not survive, and while one is there the regen
+    re-churns every `unique_id`. Notes go here or in the generator.
+- **Wheel stations use one track for the whole body** (`_analyze` averages the four
+  half-widths); flush-X alone would follow the flared fender and tucked arch. A body whose axles
+  wear different wheel models (the tractor) keeps per-axle stations.

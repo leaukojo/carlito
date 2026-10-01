@@ -2,8 +2,8 @@
 # Dot-source it, then call Resolve-GodotBin.
 #
 # Order: $env:GODOT_BIN -> `git config carlito.godotbin` -> `godot` on PATH -> hard error.
-# The git-config fallback is the one that works from hooks: git runs them with a bare
-# environment, so a $GODOT_BIN set in your shell is NOT visible there.
+# The git-config fallback is the one that works from every commit path: a hook inherits only its
+# caller's environment, so a commit from an IDE, a GUI or a fresh shell has no $GODOT_BIN.
 # Use the *console* build on Windows (Godot_v<ver>-stable_win64_console.exe) — the plain
 # exe swallows print/push_error, so headless runs come back silent.
 

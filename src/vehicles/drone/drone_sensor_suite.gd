@@ -1,28 +1,25 @@
 class_name DroneSensorSuite
 extends RefCounted
-## The two raycast sensors: sky pattern, visibility mask, cursor, last rangefinder reading,
-## shared query object, and the roster indices publication gates through. Owned and ticked
-## by `DroneVehicle`; `DroneSensors` stays the law, this class carries state across ticks.
+## The two raycast sensors' state across ticks (sky pattern, visibility mask, cursor, last
+## rangefinder reading, query, roster indices); `DroneSensors` holds the law.
 ##
-## GNSS offline -> published sky is EMPTY (0), so `sats`/`fix_type`/`hdop` fall out as
-## no-fix. RANGE offline -> `agl` publishes RANGE_INVALID (-1), never 0 — zero is exactly
-## what a landing detector would act on.
+## The two node gates fail in OPPOSITE directions. GNSS offline -> published sky is EMPTY (0), so
+## `sats`/`fix_type`/`hdop` read no-fix. RANGE offline -> `agl` publishes RANGE_INVALID (-1), never
+## 0: zero is exactly what a landing detector would act on.
 
 ## The fixed sky pattern, built once and only swept afterwards.
 var _sky := PackedVector3Array()
-## Bit i = sky ray i reached the sky on its LAST cast. Starts EMPTY — no fix until the
-## round-robin has gone round once (a respawn triggers the same acquisition).
+## Bit i = sky ray i reached the sky on its LAST cast. Starts EMPTY: no fix until the round-robin
+## has gone round once (a respawn does the same).
 var _visible := 0
 ## Next ray in the round-robin sweep.
 var _cursor := 0
 ## The craft's OWN rangefinder reading, ungated by the bus.
 var _agl := DroneSensors.RANGE_INVALID
-## Query object, built once and refilled per cast (avoids 5 throwaway RefCounteds/tick).
-## Excludes this airframe; mask is SOLID — must omit Containment, or WorldBounds' walls eat
-## satellites over open water.
+## Built once, refilled per cast. Excludes this airframe; the mask must stay SOLID (omits
+## Containment) or WorldBounds' walls eat satellites over open water.
 var _query: PhysicsRayQueryParameters3D
-## Resolved once from the roster (`DroneBus.NODES`), not hardcoded — a reordered roster
-## must not silently gate the wrong sensor.
+## Resolved from the roster (`DroneBus.NODES`): a reordered roster must not gate the wrong sensor.
 var _gnss_node := -1
 var _range_node := -1
 
@@ -34,8 +31,8 @@ func _init(body: RigidBody3D) -> void:
 	_range_node = DroneBus.index_of("RANGE")
 
 
-## Measure before anything decides anything. Both raycasts hit real level collision, never a
-## scripted volume. Five rays/tick between the two (see DroneSensors.SKY_RAYS_PER_TICK).
+## Both raycasts hit real level collision, never a scripted volume. Five rays/tick between the two
+## (DroneSensors.SKY_RAYS_PER_TICK plus the rangefinder).
 func measure(space: PhysicsDirectSpaceState3D, pos: Vector3) -> void:
 	_visible = DroneSensors.sweep_sky(space, pos, _sky, _visible, _cursor,
 			DroneSensors.SKY_RAYS_PER_TICK, _query)
@@ -43,7 +40,7 @@ func measure(space: PhysicsDirectSpaceState3D, pos: Vector3) -> void:
 	_agl = DroneSensors.measure_agl(space, pos, _query)
 
 
-## The four published readings, both node gates applied (opposite directions, see header).
+## The four published readings, both node gates applied.
 func publish(t: DroneTelemetry, node_fail: int) -> void:
 	var sky := _visible if DroneBus.is_online(node_fail, _gnss_node) else 0
 	t.sats = DroneSensors.sats(sky, _sky.size())
@@ -52,14 +49,13 @@ func publish(t: DroneTelemetry, node_fail: int) -> void:
 	t.agl = _agl if DroneBus.is_online(node_fail, _range_node) else DroneSensors.RANGE_INVALID
 
 
-## The craft's own AGL — what the landed predicate reads, ungated by the bus.
+## The craft's own AGL: what the landed predicate reads, ungated by the bus.
 func agl() -> float:
 	return _agl
 
 
-## A teleport invalidates every measurement (the accel-history rule). Clearing the sky mask
-## makes the receiver reacquire over the next few ticks instead of keeping a fix earned
-## somewhere else.
+## A teleport invalidates every measurement: the receiver reacquires over the next few ticks
+## instead of keeping a fix earned somewhere else.
 func reset() -> void:
 	_visible = 0
 	_cursor = 0

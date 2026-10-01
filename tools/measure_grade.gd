@@ -13,6 +13,9 @@ extends Node3D
 ## which one bit:
 ##   traction  tan(a) <= (mu * rear_share - crr) / (1 - mu * h / L)   [driven rear only]
 ##             tan(a) <= mu - crr                                     [all wheels driven]
+## "All wheels driven" includes the tractor with `mfwd` engaged. It is the perfect all-wheel
+## figure, which a rigid or biasing centre can approach; an OPEN centre stays capped by its
+## lighter axle, under it.
 ##   torque    F_gear1_at_idle >= m*g*(sin a + crr * cos a)
 ## Both are static, single-body and ignore `load_sensitivity`, so they are a reference, not a
 ## gate: a coupled rig (the semi tows 24 t the moment it spawns) is outside what they describe
@@ -378,7 +381,8 @@ func _record() -> void:
 func _traction_limit_deg(spec: VehicleSpec, gd: GroundDriveSpec, grip: float,
 		crr: float) -> float:
 	var mu := gd.mu_long * grip
-	if gd.driven_front and gd.driven_rear:
+	var front_driven := gd.driven_front or (_mfwd and gd.front_axle_engageable)
+	if front_driven and gd.driven_rear:
 		return rad_to_deg(atan(maxf(mu - crr, 0.0)))
 	var front_z := INF
 	var rear_z := -INF
@@ -409,13 +413,14 @@ func _traction_limit_deg(spec: VehicleSpec, gd: GroundDriveSpec, grip: float,
 	return rad_to_deg(atan(num / den))
 
 
-## Steepest grade first gear at idle rpm can push the body's own weight up, in degrees. No
-## clutch or converter is modelled, so idle torque IS what pulls away (semi_spec.tres § the
-## drivetrain block).
+## Steepest grade first gear at full throttle can push the body's own weight up from rest, in
+## degrees. Sampled where a held body's crank sits: `Drivetrain.converter_free_rpm` (idle with
+## no converter).
 func _torque_limit_deg(spec: VehicleSpec, gd: GroundDriveSpec, crr: float) -> float:
 	if spec.gear_ratios.is_empty():
 		return NAN
-	var force := Drivetrain.wheel_torque(spec, spec.idle_rpm, 1.0, 1) / gd.wheel_radius
+	var launch_rpm := Drivetrain.converter_free_rpm(spec, 1.0)
+	var force := Drivetrain.wheel_torque(spec, launch_rpm, 1.0, 1) / gd.wheel_radius
 	var ratio := force / (spec.mass * 9.81)
 	if ratio <= crr:
 		return 0.0

@@ -4,9 +4,8 @@ extends RefCounted
 ## Pure math shared by the free-body vehicles (boat, drone, plane), which carry their own damping
 ## and attitude terms instead of leaning on RayWheel.
 ##
-## The one-tick clamps are RayWheel's 60 Hz stability rule in free-body form: a damper may at most
-## zero the motion it opposes within one tick, never reverse it. Do not weaken them or raise the
-## tick.
+## The one-tick clamps (damper force <= moment * |vel| / delta) are the 60 Hz clamp rule in
+## free-body form: src/vehicles/CLAUDE.md § The 60 Hz tick.
 
 
 ## Linear damping force (or torque) against `vel`, clamped so one tick can at most zero it.
@@ -74,10 +73,9 @@ static func is_inverted(b: Basis, threshold_deg: float) -> bool:
 
 
 # --- road resistance (wheeled vehicles) --------------------------------------------------
-## Replaces Godot's default `physics/3d/default_linear_damp`, which is linear in v where real
-## aero is quadratic, and an acceleration that scales with load: a 24 t trailer on an 8 t tractor
-## would quadruple the rig's resistance instead of the ~1.2x a real artic makes. Both terms below
-## are mass-free, so an airborne wheel resists nothing.
+## Declared resistance, not Godot's `default_linear_damp` (linear in v and an acceleration, so a
+## 24 t trailer on an 8 t tractor would quadruple the rig's resistance instead of ~1.2x). Both
+## terms below are mass-free, so an airborne wheel resists nothing.
 
 const AIR_DENSITY := 1.225  ## kg/m^3, sea level, no altitude/temperature term
 const RESIST_EPS := 0.05    ## m/s floor below which resistance isn't applied (stops jitter)

@@ -66,6 +66,16 @@ func test_ratio_for_byte_signed_by_direction() -> void:
 	assert_float(DrivetrainScript.ratio_for_byte(spec, 200)).is_equal(0.0)
 
 
+## A drive byte past a short gearbox reads the top ratio rather than indexing out of range, so a
+## wheel-less spec need not carry six ratios to survive a bridge-exact gear byte.
+func test_ratio_for_byte_clamps_to_a_short_gearbox() -> void:
+	var spec := _spec()
+	spec.gear_ratios = PackedFloat32Array([3.0, 2.0, 1.5])
+	assert_float(DrivetrainScript.ratio_for_byte(spec, 6)) 			.is_equal_approx(1.5 * spec.final_drive, 0.001)
+	spec.gear_ratios = PackedFloat32Array()
+	assert_float(DrivetrainScript.ratio_for_byte(spec, 1)).is_equal(0.0)
+
+
 # --- engine torque ------------------------------------------------------------
 
 func test_engine_torque_is_the_curve_and_nothing_else() -> void:
@@ -193,9 +203,8 @@ func test_auto_shift_stays_within_gearbox() -> void:
 
 
 func test_auto_shift_stays_inside_a_short_gearbox() -> void:
-	# `ratio_for_byte` INDEXES `gear_ratios[byte - 1]`, so a spec with fewer than TOP_GEAR
-	# ratios must not be upshifted to TOP_GEAR — that is an out-of-range read. governed_upshift
-	# has guarded this since it was written; auto_shift did not, and this is that hole closed.
+	# A spec with fewer than TOP_GEAR ratios is never upshifted past its last real ratio
+	# (governed_upshift guards the same).
 	var spec := _spec()
 	spec.gear_ratios = PackedFloat32Array([3.0, 2.0, 1.5])
 	assert_int(DrivetrainScript.auto_shift(spec, 3, 4000.0)).is_equal(3)
@@ -592,35 +601,6 @@ func test_peak_torque_is_the_highest_point_on_the_curve() -> void:
 	var empty: VehicleSpecScript = VehicleSpecScript.new()
 	empty.torque_curve = PackedVector2Array()
 	assert_float(DrivetrainScript.peak_torque(empty)).is_equal(0.0)
-
-
-# --- locked differential ----------------------------------------------------------
-## Unlocked there is nothing to test: equal torque to both half-shafts IS the open diff's
-## torque law, and BaseVehicle already splits that way. Locking is the part the driveline
-## could not previously express — one rigid shaft, so one spin speed.
-
-func test_locked_axle_shares_one_spin_speed() -> void:
-	# A wheel spinning in mud and a wheel gripping come out on the same shaft speed.
-	assert_float(DrivetrainScript.locked_axle_omega(40.0, 10.0)).is_equal_approx(25.0, 1e-6)
-	# Symmetric — which wheel is which cannot matter.
-	assert_float(DrivetrainScript.locked_axle_omega(10.0, 40.0)) \
-			.is_equal(DrivetrainScript.locked_axle_omega(40.0, 10.0))
-	# Already matched: a no-op, so an unstuck axle is untouched tick after tick.
-	assert_float(DrivetrainScript.locked_axle_omega(12.5, 12.5)).is_equal(12.5)
-	# Reverse (both negative) behaves the same way.
-	assert_float(DrivetrainScript.locked_axle_omega(-40.0, -10.0)).is_equal_approx(-25.0, 1e-6)
-
-
-func test_locked_axle_conserves_momentum_and_never_grows_the_spread() -> void:
-	# RayWheel is single-inertia, so equal-weight averaging conserves the pair's angular
-	# momentum: no energy is injected, which is why this needs no 60 Hz clamp of its own.
-	for pair: Array in [[40.0, 10.0], [-5.0, 30.0], [0.0, 0.0], [100.0, -100.0]]:
-		var a: float = pair[0]
-		var b: float = pair[1]
-		var shared := DrivetrainScript.locked_axle_omega(a, b)
-		assert_float(shared * 2.0).is_equal_approx(a + b, 1e-6)
-		# The coupled speed can never sit outside the pair it came from.
-		assert_float(shared).is_between(minf(a, b), maxf(a, b))
 
 
 # --- §6 force hierarchy on the shipped car spec -----------------------------------

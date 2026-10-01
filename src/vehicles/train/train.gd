@@ -1,24 +1,24 @@
 class_name TrainVehicle
 extends BaseVehicle
-## Electric consist on a rail spline. Loco is kinematic (gravity off); wagons are AnimatableBody3D
-## followers. TrainSim handles consist forces; coupler/brake clamps are 60 Hz stable — don't
-## weaken them. Reverser rides the gear byte (N/D/R). Rail Curve3D is duck-typed so the same
-## code drives RailTrack and authoring RoadPath.
+## Electric consist on a rail spline. The loco is kinematic with a rail (`_has_rail`); wagons are
+## AnimatableBody3D followers; TrainSim owns the consist forces (rules: `src/vehicles/train/CLAUDE.md`).
+## The reverser rides the gear byte (N/D/R). The rail Curve3D is duck-typed, so the same code drives
+## RailTrack and the authoring RoadPath.
 
-## Rail ribs stand this far above the centreline the curve traces (rail_profile rail_height),
-## so the consist is lifted by it to rest the modelled wheels on the railhead.
+## m the consist is lifted so the modelled wheels rest on the railhead: the rail ribs stand this far
+## above the centreline the curve traces (rail_profile rail_height).
 const RAIL_TOP_LIFT := 0.12
 
-# Per-car geometry, measured from the Kenney bullet GLBs at world scale 2.4 (index 0 = loco).
-# Plain Array consts (a PackedFloat64Array literal is not a constant expression in GDScript).
+# Per-car geometry (m), measured from the Kenney bullet GLBs at world scale 2.4; index 0 = loco.
+# Plain Arrays: a PackedFloat64Array literal is not a constant expression in GDScript.
 const CAR_LENGTHS := [6.72, 6.24, 6.24, 6.24, 6.24]
 const BOGIE_HALF := [1.2, 1.32, 1.32, 1.32, 1.32]
-const COUPLER_GAP := 0.3   ## m of slack air between adjacent car bodies at rest
+const COUPLER_GAP := 0.3   ## m between adjacent car bodies at rest
 
 const GRADE_EPS := 1.0      ## m along the curve for the finite-difference grade sample
 const DOOR_SPEED_EPS := 0.3 ## m/s below which a door-open request is honored
 
-# Aux-model tuning (honest models, clearly labelled — no real electrical/pneumatic circuit).
+# Aux-model tuning (labelled honest models; no real electrical or pneumatic circuit).
 const AMPS_PER_NEWTON := 1.0 / 320.0  ## 320 kN tractive -> ~1000 A
 const MAX_MOTOR_CURRENT := 1500.0
 const CATENARY_SAG_PER_AMP := 2.0     ## V of line sag per amp (1000 A -> 2 kV droop)
@@ -44,8 +44,8 @@ func _make_telemetry() -> VehicleTelemetry:
 	return TrainTelemetry.new()
 
 
-## Whole consist excluded from the chase camera's occlusion ray, so a rear/overhead view
-## isn't yanked into the trailing wagons.
+## The whole consist is excluded from the chase camera's occlusion ray, so a rear or overhead view
+## is not yanked into the trailing wagons.
 func get_camera_exclude_bodies() -> Array[RID]:
 	var out: Array[RID] = [get_rid()]
 	for w in _wagons:
@@ -54,8 +54,8 @@ func get_camera_exclude_bodies() -> Array[RID]:
 	return out
 
 
-## Loco is 6.7 m long, 3.9 m tall, with four wagons behind it: pull the chase view back and
-## up to clear the consist, widen the overhead/iso frames.
+## The consist is a 6.7 m loco plus four wagons: the chase view pulls back and up to clear it and
+## the overhead/iso frames widen.
 func get_camera_framing() -> Dictionary:
 	return {"distance": 16.0, "height": 9.0, "look_height": 2.5, "top_height": 60.0, "iso_size": 64.0}
 
@@ -66,8 +66,8 @@ func _ready() -> void:
 		if String(child.name).begins_with("Wagon") and child is Node3D:
 			_wagons.append(child as Node3D)
 			if child is PhysicsBody3D:
-				# Every wagon is on VEHICLE like the towing unit (collision_layers.gd), not the
-				# AnimatableBody3D default of layer 1 (TERRAIN).
+				# VEHICLE like the towing unit (`collision_layers.gd`), not the AnimatableBody3D
+				# default of layer 1 (TERRAIN).
 				(child as PhysicsBody3D).collision_layer = Layers.VEHICLE
 				(child as PhysicsBody3D).collision_mask = Layers.DYNAMIC
 	var rail := _find_rail()
@@ -79,14 +79,13 @@ func _ready() -> void:
 			_rail_length = _curve.get_baked_length()
 			_has_rail = _rail_length > 0.0
 	if _has_rail:
-		gravity_scale = 0.0  # the sim owns vertical position; no free fall
+		gravity_scale = 0.0  # the sim owns vertical position
 		_build_sim()
 		_place_consist()
 	else:
 		push_warning("TrainVehicle: no closed rail under this level; consist inert")
 
 
-## Reset the consist onto its loop at s = 0 with zeroed motion.
 func reset_session_state() -> void:
 	super.reset_session_state()
 	_brake_pipe = TrainTelemetry.BRAKE_PIPE_CHARGED
@@ -99,18 +98,18 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 		return
 	var t := telemetry as TrainTelemetry
 
-	# Traction is live only with the key in Ignition and the pantograph raised.
+	# Traction needs the key in Ignition and the pantograph raised.
 	var powered := input.key == InputRouter.KEY_IGNITION and input.pantograph
 	var throttle := input.throttle if powered else 0.0
 
-	# Per-car grade from the curve tangent, then advance the consist.
+	# Per-car grade from the curve, then advance the consist.
 	var grades := PackedFloat64Array()
 	grades.resize(_sim.s.size())
 	for i in _sim.s.size():
 		grades[i] = _grade_at(_sim.s[i])
 	_sim.step(delta, throttle, input.brake, input.handbrake, grades)
 
-	# Drive the loco body kinematically from the sim, then pose the wagons.
+	# The loco body follows the sim kinematically; velocities keep `_update_telemetry` honest.
 	var pose := TrainPlacement.car_pose(_curve, _rail_xform, _sim.s[0], BOGIE_HALF[0],
 			_rail_closed, _rail_length, RAIL_TOP_LIFT)
 	global_transform = pose
@@ -121,8 +120,7 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	_prev_heading = heading
 	_pose_wagons()
 
-	# Aux models, honest and labelled: current from traction, line sag from current, brake
-	# pipe venting on application; grade/coupler read straight from the sim.
+	# Aux models are labelled honest models; grade and coupler read straight from the sim.
 	var traction := TrainSim.tractive_effort(_sim.v[0], throttle, _sim.base_speed,
 			_sim.max_tractive, _sim.max_power)
 	t.motor_current = TrainTelemetry.motor_current_amps(traction, AMPS_PER_NEWTON, MAX_MOTOR_CURRENT)
@@ -137,7 +135,7 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	t.doors_state = input.doors and absf(telemetry.speed) < DOOR_SPEED_EPS
 
 
-# --- consist setup / placement ---------------------------------------------------------------
+# --- consist setup / placement ---
 
 
 func _build_sim() -> void:
@@ -153,9 +151,9 @@ func _build_sim() -> void:
 	_sim.setup(m, gaps, _rail_length, _rail_closed, 0.0)
 
 
-## Re-lay the consist at s = 0 with zeroed motion, then snap every car onto its arc position
-## (spawn / respawn). Re-runs the sim layout so respawn returns to the loop start rather
-## than halting where it had drifted to.
+## Re-lays the consist at s = 0 with zeroed motion and snaps every car onto its arc position
+## (spawn and respawn). Re-running `_sim.setup` is what returns it to the loop start; zeroing
+## velocity alone would leave it halted where it drifted.
 func _place_consist() -> void:
 	_sim.setup(_sim.masses, _sim.rest_gaps, _rail_length, _rail_closed, 0.0)
 	var pose := TrainPlacement.car_pose(_curve, _rail_xform, _sim.s[0], BOGIE_HALF[0],
@@ -178,7 +176,7 @@ func _pose_wagons() -> void:
 				_sim.s[car], BOGIE_HALF[car], _rail_closed, _rail_length, RAIL_TOP_LIFT)
 
 
-## Track slope (rise/run) at arc position `s`, finite-differenced along the curve.
+## Track slope (rise/run) at arc position `s`, finite-differenced along the curve over GRADE_EPS.
 func _grade_at(s: float) -> float:
 	var a := _rail_xform * _curve.sample_baked(_wrap(s - GRADE_EPS))
 	var b := _rail_xform * _curve.sample_baked(_wrap(s + GRADE_EPS))
@@ -192,12 +190,11 @@ func _wrap(s: float) -> float:
 	return s
 
 
-# --- rail discovery (duck-typed, per the kit contract — never a class_name check) -----------
+# --- rail discovery (duck-typed, never a class_name check) ---
 
 
-## The closed rail loop under this vehicle's level, or null. Requires a CLOSED loop — the same
-## rule Level enforces before it spawns the train (RailTrack.find_closed_rail is that one shared
-## walk); an open rail is never accepted, so the two code paths can't disagree. Works on the
-## baked RailTrack and the unbaked authoring RoadPath alike.
+## The closed rail loop under this vehicle's level, or null. `RailTrack.find_closed_rail` is the one
+## walk shared with Level's spawn rule, so the two cannot disagree; an open rail is never accepted.
+## Works on the baked RailTrack and the unbaked authoring RoadPath alike.
 func _find_rail() -> Node:
 	return RailTrack.find_closed_rail(_level_root())

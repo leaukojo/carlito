@@ -16,6 +16,7 @@ wheel_visual_radius = 0.44
 wheel_visual_radius_rear = 0.66
 rear_diff_lockable = true
 front_axle_engageable = true
+centre_diff_rigid = true
 rest_length = 0.12
 spring_rate = 260000.0
 damper_bump = 13000.0

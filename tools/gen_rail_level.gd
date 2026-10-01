@@ -3,9 +3,8 @@ extends SceneTree
 ## One-shot scaffolding tool that owns level 5 end to end: heightmap, rail loop curve,
 ## terrain conform, splatmap, LevelInfo, scene. Chain recorded in level_5_gen.json (replay
 ## with tools/rebuild_level.ps1). Re-running OVERWRITES everything under
-## src/levels/island/level_5/; hand edits are lost. tools/gen_islands.gd no longer covers
-## level 5. Order is terrain -> road + conform -> splat, so earthworks get slope-correct
-## paint; no splat under the ballast (channel 7 needs a weight map this level lacks).
+## src/levels/island/level_5/; hand edits are lost. Order is terrain -> road + conform ->
+## splat, so earthworks get slope-correct paint; no splat under the ballast (channel 7 needs a weight map this level lacks).
 
 const DIR := "res://src/levels/island/level_5"
 const SIZE := 512.0            ## world extent (X and Z), matching the other islands

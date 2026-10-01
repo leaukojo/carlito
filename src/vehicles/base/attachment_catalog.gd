@@ -1,10 +1,8 @@
 class_name AttachmentCatalog
 extends RefCounted
 ## The shape every attachment registry the E cycle walks has in common (TrailerCatalog,
-## ImplementCatalog): an ordered list of scene ids that ends on an empty-string sentinel, plus the
-## three questions the cycle asks of it. The list itself and the reasoning for its ORDER stay with
-## the family's own catalog — only the structure is shared, so nothing here learns that trailers or
-## implements exist.
+## ImplementCatalog): an ordered list of scene ids ending on an empty-string sentinel, plus the
+## three questions the cycle asks of it. The list and its order stay with the family's catalog.
 
 const NONE := ""  ## detached / bobtail: a real cycle entry, never a special case
 

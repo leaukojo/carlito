@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="VehicleSpec" load_steps=4 format=3]
 
-; Flatbed semi-trailer running gear. A VehicleSpec because that is what RayWheel consumes; the
-; drivetrain / steering fields are meaningless on a towed body and stay at their defaults.
+; Flatbed semi-trailer running gear. A VehicleSpec because RayWheel consumes one; the drivetrain /
+; steering fields are meaningless on a towed body and stay at their defaults.
 ;
 ; Everything below is measured off flatbed.tscn (origin AT THE KINGPIN, ground at y = -1.05):
 ;   - the tri-axle bogie sits at z 4.40 / 5.20 / 6.00, so the bogie centre is 5.20 m behind the
@@ -11,31 +11,27 @@
 ;     realistic plate share (see box_spec.tres), and the reason axle_load rises the moment you
 ;     couple. On a 4x2 that load IS the traction budget.
 ;   - center_of_mass y -0.15 is 0.90 m above the road, the LOWEST in the catalog and the only
-;     trailer here that still slides before it rolls (half-track 0.72 over 0.90 m tips at 0.80 g,
-;     clear of mu_lat 0.75). A flatbed's load is steel or plant sitting ON the 1.05 m deck, not
-;     stacked inside a body — which is what the box, the tanker and the tipper all do instead.
-;   - spring_rate 145000 is sized so the 10 224 kg the bogie actually carries compresses it
-;     0.115 m of its 0.32 m travel (36 %), and a 25 t trailer 64 %. A spring sized for
-;     the FULL mass would ride on its stops, which is the "trailer sinks" failure — and is what
-;     the shipped Kenney trucks do (their rear static load exceeds what their springs can make).
-;   - brake_torque 6623 is load-apportioned, not copied: 16.72 kN per trailer wheel against
-;     26.5 kN per tractor wheel, so 10500 * 16.72 / 26.5. A trailer braking harder per tonne than
-;     the unit pulling it is how a rig jackknifes under braking.
+;     trailer that still slides before it rolls (half-track 0.72 over 0.90 m tips at 0.80 g, clear
+;     of mu_lat 0.75): a flatbed's load sits ON the 1.05 m deck, not stacked inside a body.
+;   - spring_rate 145000 is sized so the 10 224 kg the bogie actually carries compresses it 0.115 m
+;     of its 0.32 m travel (36 %). A spring sized for the FULL mass rides on its stops.
+;   - brake_torque 6623 is load-apportioned, not copied: 16.72 kN per trailer wheel against 26.5 kN
+;     per tractor wheel, so 10500 * 16.72 / 26.5. A trailer braking harder per tonne than the unit
+;     pulling it jackknifes the rig under braking.
 ;   - handbrake_torque 1656 is the bogie's SPRING PARKING BRAKE, a quarter of this trailer's own
-;     service brake like every trailer here — see box_spec.tres for the whole derivation. The
-;     lightest trailer gets the weakest one, and because both scale with what the bogie carries,
-;     all four rigs hold the same ~24 % grade rather than the empty one holding best.
+;     service brake like every trailer here (derivation: box_spec.tres). Both scale with what the
+;     bogie carries, so all four rigs hold the same ~24 % grade.
 ;
-; load_sensitivity 0.08 matches the towing unit. A trailer's axles carry LESS than their even
-; static share once the plate/drawbar takes its cut, so they sit below the reference and gain a
-; few per cent of mu — the mirror image of what the drive axle loses.
+; load_sensitivity 0.08 matches the towing unit. A trailer's axles carry LESS than their even static
+; share once the plate takes its cut, so they sit below the reference and gain a few per cent of
+; mu, the mirror image of what the drive axle loses.
 
 [ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
 [ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="2_grounddrive"]
 
-; DRAG AREA 0.25 m^2 — a marginal, in-the-wake figure like every trailer's (see box_spec.tres),
-; and the smallest in the catalog because an EMPTY deck has almost nothing standing in the air.
-; It is the deck and its headboard only; this project does not model a load's own aero.
+; DRAG AREA 0.25 m^2: a marginal, in-the-wake figure like every trailer's (see box_spec.tres), the
+; smallest in the catalog because an EMPTY deck has almost nothing standing in the air. It is the
+; deck and its headboard only; a load's own aero is not modeled.
 
 [sub_resource type="Resource" id="Resource_grounddrive"]
 script = ExtResource("2_grounddrive")
@@ -64,12 +60,9 @@ mass = 14000.0
 center_of_mass = Vector3(0, -0.15, 3.798)
 ground_drive = SubResource("Resource_grounddrive")
 
-; LAMPS — the one group of lamp fields a towed body DOES use. A trailer runs no headlamps and
-; no beam, so head_lamp_paths stays empty and `lights` only ever picks the rear tier (TAIL) and
-; the markers.
-; The bits arrive on the tractor's VehicleInput and are handed down each tick (SemiTractor), so a
-; braking or indicating rig lights at BOTH ends off one authoritative source, with no second
-; signal and no blink timer of its own.
+; LAMPS: a towed body uses only the rear tier (TAIL) and the markers, so head_lamp_paths stays
+; empty. The bits ride the tractor's VehicleInput and SemiTractor hands them down each tick, so
+; both ends light off one source with no blink timer here.
 brake_lamp_paths = Array[NodePath]([NodePath("TailLensL"), NodePath("TailLensR")])
 turn_left_paths = Array[NodePath]([NodePath("TurnLensL")])
 turn_right_paths = Array[NodePath]([NodePath("TurnLensR")])

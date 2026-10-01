@@ -6,8 +6,8 @@ extends RigidBody3D
 ## drone_payload.gd). Carried, it stops colliding: a frozen kinematic body accepts no force
 ## back, so a clipped crate would otherwise shove a wall instead of passing through it.
 
-## Freed at _ready: a static collider inside a rigid body is a body that cannot move.
 const Groups := preload("res://src/levels/base/carlito_groups.gd")
+## Freed at _ready: a static collider inside a rigid body is a body that cannot move.
 const DEV_COLLISION := ^"Box/DevCollision"
 
 ## Set by the drone's hook; the crate itself never decides anything.

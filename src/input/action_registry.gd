@@ -85,8 +85,8 @@ const ENTRIES: Array[Dictionary] = [
 	},
 	{
 		# No `signals`, deliberately: on a semi this reads the same local toggle as a tipper
-		# valve with no contract signal of its own (see src/vehicles/CLAUDE.md). Naming
-		# hitch_pos here would fail the family cross-check for the right reason.
+		# valve with no contract signal of its own (see src/vehicles/truck/CLAUDE.md § Four
+		# trailers). Naming hitch_pos here would fail the family cross-check for the right reason.
 		"id": &"hitch", "actions": ["hitch"], "group": Group.VEHICLE,
 		"label": "Raise / lower the hitch (tip the body)",
 		"capability": "lift", "bridge_owned": true,

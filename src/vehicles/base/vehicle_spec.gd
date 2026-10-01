@@ -6,8 +6,8 @@ extends Resource
 ##
 ## The wheeled ground drive is the `ground_drive` sub-resource, so a boat or drone spec carries no
 ## wheel field; free bodies tune hull, airframe and aero as `@export`s on the vehicle node. The
-## boat is tuned twice over: `boat-*.tscn` overrides ~9 fields `tools/gen_boat_variants.gd` also
-## writes, and changing one without the other is undone by the next regen.
+## boat is tuned twice over: `watercraft/boat-*.tscn` overrides fields `tools/gen_boat_variants.gd`
+## also writes, and changing one without the other is undone by the next regen.
 
 ## Wheeled ground drive, or null with no running gear (boat, drone, train). Embedded per spec as
 ## a `[sub_resource]`, never external.
@@ -44,7 +44,7 @@ extends Resource
 @export var efficiency := 0.9
 ## Overrun (engine-braking) torque at the crank with the pedal released, as a fraction of the
 ## torque curve's peak, linear from 0 at idle to the full fraction at redline. 0 = the engine
-## absorbs nothing off throttle (the plane, whose wheels are undriven, stays 0).
+## absorbs nothing off throttle.
 @export var engine_brake_frac := 0.0
 ## Seconds of throttle cut after a gear change (an automated manual's torque interruption;
 ## 0 = seamless, a powershift). Bridge-exact byte writes count as shifts too. During the cut

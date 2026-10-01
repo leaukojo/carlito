@@ -1,12 +1,9 @@
 class_name BoatTelemetry
 extends VehicleTelemetry
-## Boat telemetry. Adds the boat-only fields; names match the contract signals exactly
-## (rudder_actual/trim, awa/aws/twd/tws, stw/sog/cog/current_set/current_drift, depth, sail_angle,
-## nav_mode_actual/heading_target). pitch/roll are shared VehicleTelemetry fields written by the
-## base. rudder_actual, the four wind readings, the five track/tide readings, the sounding, the
-## boom angle and the two autopilot readbacks are read straight from the sim; trim is a modeled
-## honest value (same latitude as fuel/coolant/engine_load). A hull with no rig publishes
-## sail_angle 0 and never writes it, which is what the two powerboats do.
+## Boat telemetry. Adds the boat-only fields; names match the contract signals exactly. pitch/roll
+## are shared VehicleTelemetry fields written by the base. Everything is read from the sim except
+## trim and the engine-room gauges, which are modeled honest values (same latitude as
+## fuel/coolant/engine_load). A hull with no rig publishes sail_angle 0 and never writes it.
 
 const TRIM_RATE := 40.0            ## %/s the trim chases its target
 const DEPTH_INVALID := -1.0        ## no bottom under the transducer; never 0 (see `sounding`)
@@ -40,17 +37,17 @@ var nav_mode_actual := 0           ## contract 'nav_mode_actual' (BoatAutopilot 
 var heading_target := 0.0          ## deg, contract 'heading_target' (tracks heading in STANDBY)
 
 
-## Modeled engine trim: trims up with forward throttle demand, returns to zero
-## off-throttle/in reverse, slewing at `rate` %/s.
+## Modeled engine trim: follows forward throttle demand, zero off-throttle or in reverse, slewing
+## at `rate` %/s.
 static func trim_step(current: float, throttle_demand: float, rate: float, delta: float) -> float:
 	var target := clampf(throttle_demand, 0.0, 1.0) * 100.0
 	return move_toward(current, target, rate * delta)
 
 
-## Apparent wind as (speed m/s, angle deg from the bow, + to starboard). Measured entirely in
-## the water plane — WindField is horizontal, and the heading axes are flattened too, or a
-## heeling hull would read a lateral component shortened by the cosine of its own heel. Zero
-## relative air (running dead downwind at exactly wind speed) leaves the angle undefined; 0.
+## Apparent wind as (speed m/s, angle deg from the bow, + to starboard), measured in the water
+## plane: WindField is horizontal and the heading axes are flattened too, or a heeling hull would
+## read a lateral component shortened by the cosine of its heel. Zero relative air leaves the
+## angle undefined; it reads 0.
 static func apparent_wind(velocity: Vector3, wind: Vector3, basis: Basis) -> Vector2:
 	var rel := velocity - wind          # points where the air comes FROM, in world space
 	var flat := Vector3(rel.x, 0.0, rel.z)
@@ -65,11 +62,9 @@ static func apparent_wind(velocity: Vector3, wind: Vector3, basis: Basis) -> Vec
 	return Vector2(flow, rad_to_deg(atan2(flat.dot(stbd), flat.dot(bow))))
 
 
-## Any horizontal flow as (speed m/s, compass bearing deg it flows TOWARD). Flattened to the
-## water plane because these are speeds ACROSS the water: a hull riding a wave must not read its
-## own heave as speed made good. A zero-length flow has no bearing and reads (0, 0). This is the
-## reading a CURRENT wants as-is — marine practice names a current by where it goes, so
-## `current_set` calls this directly and only `true_wind` below inverts.
+## Any horizontal flow as (speed m/s, compass bearing deg it flows TOWARD). Flattened so a hull
+## riding a wave does not read its heave as speed made good. Zero-length flow reads (0, 0).
+## `current_set` uses it as-is (a current is named by where it goes); only `true_wind` inverts.
 static func flow_toward(v: Vector3) -> Vector2:
 	var flat := Vector3(v.x, 0.0, v.z)
 	var flow := flat.length()
@@ -78,11 +73,9 @@ static func flow_toward(v: Vector3) -> Vector2:
 	return Vector2(flow, VehicleTelemetry.heading_from_forward(flat))
 
 
-## Water depth below the transducer, which rides the keel line, so this is under-keel clearance
-## and 0 means the bed is against the hull. DEPTH_INVALID (-1) when there is no bottom to report —
-## never 0, which is precisely the value a shoal alarm acts on; the `agl` rule. The clamp at 0 is
-## honest rather than cosmetic: a bed at or above the keel leaves no water under it, and a
-## negative depth is a number no sounder produces.
+## Water depth below the transducer (on the probe plane, `BoatVehicle.float_depth`), so 0 means
+## the bed is against the hull. DEPTH_INVALID (-1) when there is no bottom, never 0, which is the
+## value a shoal alarm acts on (the `agl` rule). A bed above the transducer clamps to 0.
 static func sounding(has_bottom: bool, transducer_y: float, seabed_y: float) -> float:
 	if not has_bottom:
 		return DEPTH_INVALID
@@ -90,9 +83,8 @@ static func sounding(has_bottom: bool, transducer_y: float, seabed_y: float) -> 
 
 
 ## True wind as (speed m/s, bearing deg it comes FROM). `WindField.direction_deg` is the heading
-## the wind blows TOWARD, so this is the one place the marine inversion happens — a wind is named
-## by where it comes from and a current by where it goes, and that asymmetry is the convention,
-## not an oversight. Dead calm reads (0, 0).
+## the wind blows TOWARD, so the marine inversion happens here (a wind is named by where it comes
+## from, a current by where it goes). Dead calm reads (0, 0).
 static func true_wind(wind: Vector3) -> Vector2:
 	var f := flow_toward(wind)
 	if f.x <= 0.0:
@@ -100,9 +92,8 @@ static func true_wind(wind: Vector3) -> Vector2:
 	return Vector2(f.x, fposmod(f.y + 180.0, 360.0))
 
 
-## Modeled fuel burn rate, contract 'fuel_rate': idle burn plus a load term, zero with the key
-## not at Ignition. A labelled honest model, like fuel/coolant/engine_load — it does not
-## reconcile against the 'fuel' percent-of-tank drain, which is a separate abstraction.
+## Modeled fuel burn rate, contract 'fuel_rate': idle burn plus a load term, zero with the key not
+## at Ignition. A labelled honest model; it does not reconcile with the 'fuel' tank drain.
 static func fuel_rate_model(load_frac: float, running: bool) -> float:
 	if not running:
 		return 0.0
@@ -110,13 +101,8 @@ static func fuel_rate_model(load_frac: float, running: bool) -> float:
 
 
 ## Modeled oil pressure, contract 'oil_press': zero with the key not at Ignition, otherwise a
-## low-idle droop rising to a nominal plateau by OIL_PRESS_PLATEAU_FRAC * idle_rpm. Gated on
-## `running` rather than `engine_rpm <= 0`: the boat's inert engine model never actually zeros
-## Drivetrain.rpm off-ignition (throttle is forced 0, so rpm just lerps down to idle_rpm and
-## holds there), the same reason fuel_step/coolant_target/battery_volts all take `running`
-## explicitly rather than reading it off rpm. `engine_rpm` here is the boat's own
-## Drivetrain.rpm, which reaches no contract signal of its own — the boat drives no gearbox
-## limiter, so this is the one place it is read.
+## low-idle droop rising to a plateau by OIL_PRESS_PLATEAU_FRAC * idle_rpm. Gated on `running`,
+## not `engine_rpm <= 0`: off-ignition Drivetrain.rpm settles at idle_rpm, never zero.
 static func oil_press_model(engine_rpm: float, idle_rpm: float, running: bool) -> float:
 	if not running:
 		return 0.0
@@ -125,9 +111,8 @@ static func oil_press_model(engine_rpm: float, idle_rpm: float, running: bool) -
 	return lerpf(OIL_PRESS_IDLE, OIL_PRESS_NOMINAL, t)
 
 
-## Modeled tank levels, contract 'tank_level' (fresh/waste/live-well). While running, fresh
-## water drains and waste rises at the same rate, both clamped to [0, 100]; the live-well is
-## held, since nothing in the sim fills or drains it — an honest omission, not a fiction.
+## Modeled tank levels, contract 'tank_level' (fresh/waste/live-well). While running, fresh drains
+## and waste rises at the same rate, clamped to [0, 100]; the live-well is held (nothing fills it).
 static func tank_step(current: Array, running: bool, delta: float) -> Array:
 	if not running:
 		return current.duplicate()

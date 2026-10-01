@@ -541,8 +541,8 @@ static func protocols_for(family: String) -> String:
 ## read, not listed here). Plane and train still carry that byte on the wire (reverser N/D/R),
 ## but their own code only ever reads it through Drivetrain.is_drive/is_reverse, which collapse
 ## every D1-D6 alike — so manual vs. automatic (literal byte vs. auto-shifted) changes nothing
-## either can feel, and the picker would offer a choice with no effect (src/vehicles/CLAUDE.md
-## § Drivetrain and brakes, the plane's single-speed-by-construction note).
+## either can feel, and the picker would offer a choice with no effect (the plane is single-speed
+## by construction: plane_spec.tres, test_plane).
 static func has_gearbox(family: String) -> bool:
 	if family == "plane" or family == "train":
 		return false

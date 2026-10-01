@@ -1,24 +1,24 @@
 # Contract — authoring rules
 
-`contract/carlito_contract.json` defines every bridge signal; full protocol in
-`docs/systems.md`.
+`carlito_contract.json` defines every bridge signal; protocol tour: `docs/systems.md`. To make
+an edit, run the `contract-edit` skill.
 
-- **`count` — an instanced signal** (default 1) is ARRAY-valued: `count` elements, `range`/
-  `warn` per element (the drone's four ESCs; `slip` is per-axle, 0 = front). Parse-rejected
-  on `"in"`, on `bool` and with an `enum`; the bridge enforces the shape in BOTH directions.
-  Indices are **zero-based**, matching the wire.
-- Signals are unique by **(name, dir)** — `battery` exists in both directions. `warn` is the
-  dashboard danger threshold and **requires a `warn_side`** (`"low"` | `"high"`); the two are
-  parse-rejected apart, never inferred from the range. `warn` also **requires a `range`**: the
-  dashboard skips a range-less signal before it looks at `warn`, so the bar would render nothing.
-- **Omit the `range`** on an "out" signal with no meaningful full scale (`engine_hours`) and
-  it lands on the readout line beside ODO instead of becoming a bar.
-- The bump also moves `tests/test_contract.gd`'s `test_real_contract_is_valid_v<N>` — the
-  number is in the assert AND in the test's name, and nothing else pins it.
-- Edits bump `version` and **must be followed by `node tools/gen_js_contract.mjs`** (the
-  runtime version-mismatch warning — **not CI** — is the drift guard). **A contract edit is
-  a paired change across two repos**: the bump lands on `dev` in both `carlito` and
-  `sloppycan`, and both are promoted to stable together.
-- sloppyCAN has no train or plane panel (its per-family panels hang off a protocol tab, and
-  neither family has one). Adding either is sloppyCAN-side only: both families already have
-  exclusive `dir:'out'` signals, so detection needs no contract change.
+- **Every edit bumps `version`**, and with it `tests/test_contract.gd`'s
+  `test_real_contract_is_valid_v<N>`: the number is in the assert AND the test name, and nothing
+  else pins it.
+- **An edit is a paired change across two repos**: the pre-commit hook regenerates
+  `../sloppycan/carlito_contract.js` (`node tools/gen_js_contract.mjs`) and fails the commit until
+  that copy is committed in `sloppycan`; both land on `dev` and are promoted together.
+- **`status` bits (`ST_*` in `src/vehicles/base/vehicle_telemetry.gd`) are FROZEN**: a new flag
+  appends at bit 7+ (nine free in the u16), an existing bit is never renumbered. A new bit is a
+  version bump.
+- Signals are unique by **(name, dir)** (`battery` exists both ways).
+- **`count`** (default 1) makes a signal ARRAY-valued, `range`/`warn` per element, zero-based like
+  the wire. Rejected on `"in"`, on `bool` and with an `enum`; the bridge enforces the shape both
+  ways.
+- **`warn` requires `warn_side`** (`"low"` | `"high"`) **and a `range`**: never inferred, and the
+  dashboard skips a range-less signal before it reads `warn`.
+- **Omit `range`** on an "out" signal with no meaningful full scale (`engine_hours`): it becomes a
+  readout beside ODO instead of a bar.
+- sloppyCAN has no train or plane panel. Adding one is sloppyCAN-side only: both families already
+  have exclusive `dir:'out'` signals.

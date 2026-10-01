@@ -1,10 +1,10 @@
 @tool
 extends SceneTree
 ## Generates the blank-canvas island levels (level_2 .. level_4): heightmap PNG, auto-splat
-## PNG, LevelInfo, level scene, deterministic from the seeds below. Do not re-run as it
-## stands: levels 2 and 3 have since gained hand-added PlaneSpawn nodes and allow-lists
-## this template does not write. Manifests are marked "replayable": false;
-## tools/rebuild_level.ps1 refuses them without -Force.
+## PNG, LevelInfo, level scene, deterministic from the seeds below. Do not re-run: levels 2
+## and 3 carry hand-added PlaneSpawn nodes and allow-lists this template does not write. Manifests are marked "replayable": false;
+## tools/rebuild_level.ps1 refuses them without -Force, and this script refuses without
+## `-- --force` (which `-Force` passes through).
 
 const SIZE := 512.0          ## world extent (X and Z) — matches level_1
 const HEIGHT := 51.0         ## white-pixel amplitude; stores the 3 m road levels exactly
@@ -37,6 +37,10 @@ const LEVELS := [
 
 
 func _init() -> void:
+	if not OS.get_cmdline_user_args().has("--force"):
+		push_error("gen_islands: refusing — it overwrites the hand-dressed levels 2-4. Pass -- --force.")
+		quit(1)
+		return
 	for cfg: Dictionary in LEVELS:
 		_build(cfg)
 	print("gen_islands: done. Run --import next.")

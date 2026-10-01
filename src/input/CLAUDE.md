@@ -15,13 +15,11 @@ ALL input arbitration lives here (standing rule 5). Protocol tour: `docs/systems
   caller that needs to keep or change one copies it itself.
 - **The raw-intent wire is `Dictionary[StringName, Variant]`** across all four producers
   (`LocalSource`, `TouchControls`, `BridgeSource`, `measure_drone`'s `StickSource`) and
-  `merge_local`. **StringName keys catch no typo at parse time** — the guard is two tests:
-  `test_every_touch_poll_key_is_merged` (registry `poll_key` ⊆ merge) and
-  `test_local_source_and_merge_local_carry_the_same_keys` (set equality), plus
-  `test_every_widget_key_is_merged` for the hand-built touch widgets, which write
-  `TouchControls.WIDGET_KEYS` directly with no `poll_key` row. `merge_local` builds its
-  dict explicitly, so a key on one side only silently drops the keyboard's edge while a touch
-  source is registered. `arbitrate_local` / `arbitrate_bridge` stay plain `Dictionary` on purpose:
+  `merge_local`, which builds its dict explicitly: a key on one side only silently drops the
+  keyboard's edge while touch is registered. StringName keys catch no typo at parse time; guards:
+  `test_every_touch_poll_key_is_merged`, `test_local_source_and_merge_local_carry_the_same_keys`,
+  `test_every_widget_key_is_merged`. `arbitrate_local` / `arbitrate_bridge` stay plain
+  `Dictionary` on purpose:
   they are the wire's consumers and `test_input_arbitration.gd` is their spec. An **untyped dict
   literal is rejected at the call**, not converted — a test passing one inline needs `_intent({...})`
   or a typed declaration.
@@ -36,17 +34,14 @@ ALL input arbitration lives here (standing rule 5). Protocol tour: `docs/systems
   `CARLITO_CHALLENGE_KEYS`) is honoured in debug builds only.
 - **A live bridge without `accel`/`brake`/`steer` does not drive**: `bridge_drives()` is false,
   `blend_local_driving` takes the driving group from local and the rest from the bridge (never
-  under `set_bridge_only`). Ask `bridge_drives()`, not `Bridge.is_active()`, "who drives".
+  under `set_bridge_only`).
 - **The gearbox mode is `set_manual_gearbox`**, set by the shell (selector in free play,
   `ChallengeDef.transmission` in an attempt). It is bridge-only: automatic reads the gear byte as
   PRND, manual takes it exactly (0 = N). Local input always drives automatic.
-- **Cycled-control lengths are declared once in `subsystem_counts.gd`** (leaf, no dependencies,
-  `preload`ed by the router and by each vehicle class that cycles one) — the router must not depend
-  on a vehicle class, so it cannot read `RefuseBody.Cmd` / `DroneBus.NODES` / `DroneModes` /
-  `BoatAutopilot`. Where the length is intrinsic to a structure (an enum, the roster array) that
-  structure stays the thing you edit and a test pins it against the constant; grow one without the
-  other and the local key silently stops reaching the new position while the bridge can still
-  command it.
+- **Cycled-control lengths are declared once in `subsystem_counts.gd`** (a leaf: the router
+  must not depend on a vehicle class). Where the length is intrinsic to a structure (an enum, a
+  roster array), edit that structure; a test pins it against the constant, because a mismatch
+  silently stops the local key short of the new position.
 - **Presence-ruled in-signals.** `rudder` overrides `steer` when present (no VehicleInput field).
   `heading_cmd` DOES take a field: it overrides nothing, and every value in its [0,360] is a legal
   bearing, so absent cannot be a sentinel on the wire — `VehicleInput.HEADING_CMD_NONE` is internal

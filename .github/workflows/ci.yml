@@ -46,8 +46,7 @@ jobs:
           fi
 
       # export_presets.cfg's pasted Head Include must match its source file verbatim
-      # (root CLAUDE.md: "The bridge shim rides the web export's Head Include... Both are
-      # vendored copies that must stay in sync"). GitHub-hosted ubuntu runners ship node.
+      # (src/bridge/CLAUDE.md). GitHub-hosted ubuntu runners ship node.
       - name: Head-include sync check
         run: node tools/check_head_include.mjs
 
@@ -78,8 +77,8 @@ jobs:
             exit 1
           fi
 
-      # The .baked.scn is build output, not a committed artifact (root CLAUDE.md § Levels
-      # & water). Bake all six registered levels here, before the tests: the unit suite's
+      # The .baked.scn is build output, not a committed artifact (root CLAUDE.md
+      # rule 1). Bake all six registered levels here, before the tests: the unit suite's
       # bake-weight assertion, the baked-level smoke and the web export all read the real
       # file. Judged by output, not exit code — leak-at-exit makes the code meaningless.
       - name: Bake levels
@@ -199,10 +198,10 @@ jobs:
   # wheel_positions x, a one-sided drive split, uneven brake torque. `track` skips the
   # acceleration pass (a dev report, not a gate); `strict` makes a FAIL exit nonzero.
   #
-  # One body is exempt: `measure_vehicles.gd`'s KNOWN_TRACKING_FAILS list keeps an open,
-  # already-diagnosed defect from blocking every deploy. Those variants still print FAIL;
-  # any variant NOT on the list still turns this job red. Grep that constant to see what is
-  # currently excused and which plan owns the fix.
+  # `measure_vehicles.gd`'s KNOWN_TRACKING_FAILS (empty today) can excuse an open,
+  # already-diagnosed defect so it does not block every deploy. Listed variants still print
+  # FAIL; any variant NOT on the list still turns this job red. Grep that constant to see what
+  # is currently excused and which plan owns the fix.
   tracking:
     runs-on: ubuntu-latest
     steps:

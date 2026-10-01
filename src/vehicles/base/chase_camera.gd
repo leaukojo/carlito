@@ -1,8 +1,7 @@
 class_name ChaseCamera
 extends Camera3D
 ## Chase camera on the BaseVehicle camera-target contract. It follows in _process via
-## get_global_transform_interpolated(), since reading global_transform would sample the raw 60 Hz
-## physics tick and stutter.
+## get_global_transform_interpolated() (src/vehicles/CLAUDE.md § The 60 Hz tick).
 ##
 ## Four views, cycled by [method cycle]: CHASE (yaw-only follow, default), HOOD (rigid to the
 ## body), ISO (fixed 3/4 angle, orthogonal) and TOP (overhead yaw-follow). Every view but HOOD
@@ -20,8 +19,8 @@ const MIN_PIVOT_DIST := 0.35  ## look_at() errors if origin and target coincide
 @export var height := 2.5
 @export var look_height := 1.2
 @export var smoothing := 5.0  ## 1/s exponential position catch-up rate
-## SOLID, not every layer: including Containment, the map wall off the coast, as an occluder
-## pulls the camera into the vehicle at the beach.
+## SOLID, not every layer: Containment (the map wall off the coast) as an occluder pulls the
+## camera into the vehicle at the beach.
 @export_flags_3d_physics var collision_mask := Layers.SOLID
 @export var collision_margin := 0.3  ## keep-out distance from a hit surface
 ## Bonnet-cam offset in body space (-Z forward); overridden by a "HoodCam" Marker3D child.
@@ -60,14 +59,13 @@ var _framing_target: Node3D = null
 func _ready() -> void:
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF  ## moves per rendered frame
 	_fov_perspective = fov
-	# Depth precision scales with the near plane: at the engine's 0.05 m a 24-bit buffer
-	# resolves ~0.1 m at 300 m, which z-fights the far-sea quad under the wave mesh and
-	# breaks the water's depth reconstruction. 0.2 m keeps clear of the pull-in floor
-	# (MIN_PIVOT_DIST, collision_margin) and quadruples the far resolution.
+	# At the engine's 0.05 m near plane a 24-bit buffer resolves ~0.1 m at 300 m, which z-fights the
+	# far-sea quad under the wave mesh and breaks the water's depth reconstruction. 0.2 m
+	# quadruples the far resolution and stays clear of the pull-in floor.
 	near = 0.2
 
 
-## Advance to the next view and snap into it (blending views reads as flying through the world).
+## Advance to the next view and snap into it (a blend reads as flying through the world).
 func cycle() -> void:
 	mode = ((mode + 1) % Mode.size()) as Mode
 	_apply_projection()
@@ -114,8 +112,8 @@ func _follow(weight: float) -> void:
 		return
 	var tt := target.get_global_transform_interpolated()
 	if mode == Mode.HOOD:
-		# A "HoodCam" marker wins over hood_offset, and the whole transform is composed, so a
-		# vehicle that aims its marker (the drone's gimbal) gets that aim.
+		# A "HoodCam" marker wins over hood_offset; its whole transform is used, so a vehicle that
+		# aims it (the drone's gimbal) gets that aim.
 		var xf := Transform3D(Basis.IDENTITY, hood_offset)
 		var marker := target.get_node_or_null(^"HoodCam") as Node3D
 		if marker != null:
@@ -138,8 +136,8 @@ func _unblocked(pos: Vector3, pivot: Vector3) -> Vector3:
 	_query.from = pivot
 	_query.to = pos
 	_query.collision_mask = collision_mask
-	# Exclude the whole vehicle (a train's loco plus every wagon) so the pull-in never treats its
-	# own trailing bodies as occluders. Rebuilt per frame, since a consist can couple or uncouple.
+	# Exclude the whole vehicle (a train's loco plus every wagon), rebuilt per frame since a consist
+	# can couple or uncouple.
 	if target.has_method("get_camera_exclude_bodies"):
 		_query.exclude = target.get_camera_exclude_bodies()
 	elif target is PhysicsBody3D:

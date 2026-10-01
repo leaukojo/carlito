@@ -5,8 +5,7 @@
 ; flat-shaded look, exactly like the four semi-trailers and the four three-point implements.
 ;
 ; AUTHORED WITH THE ORIGIN AT THE DRAWBAR EYE, ground at y = -0.40 -- measured off the tractor's own
-; drawbar pin, which drawbar.tscn puts 0.40 m above the road. THAT DATUM IS NOT THE SEMI-TRAILERS'
-; y = -1.05 AND MUST NEVER BE COPIED FROM THEM: -1.05 is a fifth-wheel PLATE height. Making the eye
+; drawbar pin, 0.40 m above the road (datum rule: tractor/CLAUDE.md). Making the eye
 ; the origin is what keeps Articulation.coupled_pose a single transform multiply, and it is the
 ; implements' convention in the same shape ("origin on the lower pin line, ground at y = -0.21").
 ;
@@ -495,11 +494,10 @@ mesh = SubResource("MeshLensAmber")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.71, 0.14, 5.26)
 mesh = SubResource("MeshLensAmber")
 
-; Wheel visual roots, IN THE SAME ORDER as farm_tipper_spec.tres's wheel_positions (L/R per axle,
-; front axle first) -- TowedBody pairs them by index and errors on a count mismatch. RayWheel
-; overwrites each root's transform every tick, so the radius scale and the right-side flip ride the
-; INSTANCED CHILD. The flip is about Vector3.RIGHT, never UP: in the frame RayWheel builds, the
-; wheel's local Y is the AXLE, so a yaw would just spin it about its own axis.
+; Wheel visual roots, in farm_tipper_spec.tres's wheel_positions order (L/R per axle, front axle
+; first) — TowedBody pairs them by index. RayWheel overwrites each root every tick, so the radius
+; scale and the right-side flip are authored on the INSTANCED CHILD. The flip is about
+; Vector3.RIGHT, never UP (local Y is the axle).
 ;
 ; The roots ARE authored at their hubs (0.36 m above this trailer's ground, i.e. y -0.04) even
 ; though RayWheel overwrites them on the first tick. It costs nothing at runtime and it is what the

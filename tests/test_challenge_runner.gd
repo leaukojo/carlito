@@ -177,7 +177,7 @@ func test_a_broken_def_fails_at_the_start() -> void:
 	assert_str(_results[0][2]).contains("broken")
 
 
-## A stale pack (docs/plans/car_challenges_review.md) leaves the course unloadable: no fog, no
+## A stale level pack leaves the course unloadable: no fog, no
 ## markers, no attempt — but still a named FAIL, not silence.
 func test_a_missing_course_fails_at_the_start_with_no_attempt() -> void:
 	var d := _def([_reach(&"Finish")])

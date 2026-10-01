@@ -15,10 +15,9 @@ extends Resource
 ## Roll stop, degrees each side (local Z).
 @export var roll_deg := 0.0
 
-## Coulomb friction about the articulation axis (N*m), 0 = a free hinge. A greased fifth-wheel
-## plate still carries dry friction of the order of 1-3 kN*m between two steel faces under tens
-## of kilonewtons; a pin in an eye carries almost none, so the drawbar leaves this at 0. Applied
-## by TowHost as a torque pair against the RELATIVE yaw rate, never as a spring to zero angle.
+## Coulomb friction about the articulation axis (N*m), 0 = a free hinge. A fifth-wheel plate
+## carries of the order of 1-3 kN*m; a drawbar pin almost none, so it leaves 0. Applied by TowHost
+## as a torque pair against the RELATIVE yaw rate, never as a spring to zero angle.
 @export var yaw_friction_nm := 0.0
 
 ## Name of the Generic6DOFJoint3D in the tree.

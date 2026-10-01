@@ -8,7 +8,7 @@ build/
 
 # Scratch copies (rebuild_level.ps1 snapshots land in tmp/<level>_before/).
 # .gdignore is COMMITTED: without it Godot imports the backup PNGs, whose .import
-# sidecars claim the originals' uid:// and hijack them (root CLAUDE.md § Levels & water).
+# sidecars claim the originals' uid:// and hijack them (root CLAUDE.md § Gotchas, "copy of an imported asset").
 tmp/*
 !tmp/.gdignore
 

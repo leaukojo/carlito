@@ -10,6 +10,7 @@ wheel_positions = PackedVector3Array(-0.6300001, 0.47295454, -0.91199964, 0.6300
 wheel_radius = 0.36
 wheel_scene = ExtResource("2_mravm")
 driven_front = true
+centre_diff_bias = 3.0
 rest_length = 0.28
 anti_roll_rate = 18000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)

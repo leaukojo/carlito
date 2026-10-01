@@ -3,8 +3,8 @@ extends GdUnitTestSuite
 ## and its slip, and the hour meter. Pure statics, exercised without a physics body — the same
 ## discipline as Drivetrain and the other per-vehicle suites.
 ##
-## The differential lock and MFWD are DRIVELINE behaviour, not tractor math: the lock's shared-
-## omega step is tested as Drivetrain.locked_axle_omega in test_drivetrain.gd, and both are
+## The differential lock and MFWD are DRIVELINE behaviour, not tractor math: both are
+## `Differential` couplings (test_differential.gd; the WheelDrive passes in test_wheel_spin.gd),
 ## gated by spec flags asserted below.
 
 const TractorT := preload("res://src/vehicles/tractor/tractor_telemetry.gd")

@@ -4,9 +4,8 @@
 ; drivetrain / steering fields are meaningless on a towed body and stay at their defaults.
 ;
 ; Everything below is measured off farm_tipper.tscn (ORIGIN AT THE DRAWBAR EYE, ground at
-; y = -0.40). That datum is NOT the semi-trailers' y = -1.05 and must never be copied from them:
-; -1.05 is the height of a fifth-wheel PLATE, and this trailer hangs off a pin 0.40 m above the road
-; on the tractor's own drawbar (Drawbar.PIN_LOCAL, read off drawbar.tscn's Pin marker).
+; y = -0.40; datum rule: tractor/CLAUDE.md). The trailer hangs off the tractor's own drawbar
+; (Drawbar.PIN_LOCAL, read off drawbar.tscn's Pin marker).
 ;
 ;   - the tandem bogie sits at z 3.30 / 3.95, so the bogie centre is 3.625 m behind the eye, and the
 ;     anchors are at y = 0.424 - 0.40 = 0.024 (the same 0.424 hub height the truck family's wheels

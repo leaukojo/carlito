@@ -101,7 +101,11 @@ foreach ($step in $m.steps) {
         'manual' { Announce "step $i - manual, skipped: $($step.what)" }
         'import' { Invoke-Godot "step $i - import" @('--headless', '--path', '.', '--import') }
         'bake'   { Invoke-Godot "step $i - bake $sceneRel" @('--headless', '--path', '.', 'res://tools/bake_levels.tscn', '--', $sceneRel) }
-        'script' { Invoke-Godot "step $i - --script $($step.path)" @('--headless', '--path', '.', '--script', $step.path) }
+        'script' {
+            $a = @('--headless', '--path', '.', '--script', $step.path)
+            if ($Force) { $a += @('--', '--force') }  # a one-shot generator refuses without it
+            Invoke-Godot "step $i - --script $($step.path)" $a
+        }
         'scene'  {
             $a = @('--headless', '--path', '.', [string]$step.path)
             if ($step.args) { $a += '--'; $a += ($step.args | ForEach-Object { [string]$_ }) }

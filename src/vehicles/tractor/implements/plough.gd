@@ -1,13 +1,10 @@
 extends ImplementBase
-## Three-furrow mounted mouldboard plough — the implement that teaches the three-point linkage
-## on its own. The only one of the four with nothing on the PTO (connections() omits
-## Connection.PTO): a plough is pulled, not driven. Draft-relevant, like the power harrow — the
-## shares are in the ground, so draft is real here and a clean zero for the mower/spreader.
-## Lowered, shares straddle the ground line (balls at 0.21 m up fully lowered, shares 0.055 m
-## below that); raised, the machine is half a metre clear.
+## Three-furrow mounted mouldboard plough: the implement that uses the three-point linkage alone
+## (no Connection.PTO; it is pulled, not driven). Draft-relevant: the shares are in the ground.
+## Lowered, the shares reach 0.055 m below the ground line (balls 0.21 m up); raised, the machine
+## is half a metre clear.
 
-## Degrees the gauge wheel's arm swings down as the plough is lifted. Trails on a hinged arm:
-## held up by the soil on the ground, hanging on its stop in the air.
+## Degrees the gauge wheel's arm swings down as the plough is lifted (it hangs on its stop in the air).
 const GAUGE_ARM_DROP_DEG := -11.0
 
 ## Working depth (m below ground at full lower), measured off plough.tscn (share at y=-0.22,

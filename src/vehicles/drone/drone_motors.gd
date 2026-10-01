@@ -1,12 +1,9 @@
 class_name DroneMotors
 extends RefCounted
-## The four rotors: visuals, positions, torque arms read from scene, spooled speeds, temps.
-## This RefCounted is owned by DroneVehicle. DroneProp holds the propulsion chain; this holds
-## the state that makes that chain pure static. Tuning knobs arrive as arguments, not copied to
-## a second home (which breaks sync). A moved rotor inverts a control axis; test_drone.gd's
-## test_motors_table_matches_the_scene_geometry is the CI gate. The gate lands after the mix,
-## uncompensated; zeroing the command rather than speed lets the prop spool down and make
-## decaying lift. ESC telemetry is written element-wise, skipping offline nodes to hold values.
+## The four rotors: visuals, positions, torque arms read from the scene, spooled speeds, temps.
+## DroneProp holds the propulsion chain; this holds the state that keeps it pure static. A moved
+## rotor inverts a control axis: `tests/test_drone.gd` `test_motors_table_matches_the_scene_geometry`
+## is the CI gate.
 
 var _rotors: Array[Node3D] = []             ## blade visuals, MOTORS (esc_index) order
 var _offsets := PackedVector3Array()        ## body-local positions, same order
@@ -20,20 +17,18 @@ var _blurs: Array[StandardMaterial3D] = []
 const BLUR_ALPHA_MAX := 0.35
 const BLUR_COLOR := Color(0.75, 0.77, 0.8, 0.0)
 
-## Mean |x|/|z| levers of the four rotors (m), roll/pitch torque arms, MEASURED off the scene
-## in `_init`. Defaults are what `drone.tscn` ships, for a craft whose rotors failed to bind.
+## Mean |x|/|z| levers of the four rotors (m): the roll/pitch torque arms, MEASURED off the scene in
+## `_init`. Defaults are what `drone.tscn` ships.
 var arm_x := 0.407
 var arm_z := 0.407
 
-## Over-temperature fault threshold, read from the contract rather than typed twice — must
-## match the dashboard's `esc_temp` highlight. INF until read, so a contract without the signal
-## never faults.
+## Over-temperature fault threshold, read from the contract (it must match the dashboard's
+## `esc_temp` highlight). INF until read, so a contract without the signal never faults.
 var _temp_warn := INF
 
 
-## Cache the four rotors in esc_index order and measure the torque arms off the scene. A geometry
-## mismatch only pushes an error and flies on; a missing rotor bails, since there is nothing to
-## fly with either way.
+## Caches the four rotors in esc_index order and measures the torque arms. A geometry mismatch
+## pushes an error and flies on; a missing rotor bails (nothing to fly with).
 func _init(body: Node3D) -> void:
 	_omega.resize(DroneProp.MOTORS.size())
 	_omega.fill(0.0)
@@ -65,11 +60,10 @@ func _init(body: Node3D) -> void:
 	arm_z = sum_z / float(DroneProp.MOTORS.size())
 
 
-## Mix, gate, spool, and apply each rotor's thrust at its own scene position — roll/pitch
-## torque come from the arm geometry, yaw from the summed prop reaction; a clamped motor
-## simply loses its share. Body origin is the centre of mass (`spec.center_of_mass` zero
-## here), so a body-up force at (x, y, z) makes torque (-z*T, 0, x*T) — the rotor's authored
-## position is the lever.
+## Mix, gate, spool, and apply each rotor's thrust at its own scene position: roll/pitch torque are
+## the arm geometry, yaw the summed prop reaction, and a clamped motor simply loses its share. The
+## node-failure gate lands AFTER the mix, uncompensated. The arm math assumes the COM at the body
+## origin (a payload shifts it: `DroneVehicle._apply_carried_mass`).
 func apply(body: RigidBody3D, collective: float, roll: float, pitch: float, yaw: float,
 		node_fail: int, max_thrust: float, spool_tau: float, torque_ratio: float,
 		delta: float) -> void:
@@ -86,10 +80,9 @@ func apply(body: RigidBody3D, collective: float, roll: float, pitch: float, yaw:
 	body.apply_torque(up * reaction)
 
 
-## The ESC bus, read out of the motors (rule 3). `esc_rpm` is the four spooled speeds; current
-## and temperature are labelled models on top (`drone_propulsion.gd`). `rotor_rpm` reads the
-## published array, so a dropped ESC's stale rpm keeps counting toward it, what a listener
-## seeing only the four messages would compute.
+## The ESC bus, read out of the motors (rule 3): `esc_rpm` is the four spooled speeds, current and
+## temperature are labelled models on top (`drone_propulsion.gd`). `rotor_rpm` reads the published
+## array, so a dropped ESC's held rpm keeps counting toward it, as it would for a listener.
 func publish(t: DroneTelemetry, node_fail: int, max_thrust: float, torque_ratio: float,
 		delta: float) -> PackedFloat32Array:
 	var rpms := DroneProp.esc_rpm(_omega, DroneProp.ROTOR_MAX_RPM)
@@ -100,34 +93,32 @@ func publish(t: DroneTelemetry, node_fail: int, max_thrust: float, torque_ratio:
 				torque_ratio, DroneProp.ESC_PACK_VOLTS, DroneProp.ESC_ETA, DroneProp.ESC_I_NOLOAD)
 		_esc_temp[i] = DroneProp.esc_temp_step(_esc_temp[i], amps[i], DroneProp.ESC_AMBIENT,
 				DroneProp.ESC_TEMP_K, DroneProp.ESC_TEMP_TAU, delta)
-	# ELEMENT-WISE, skipping an offline ESC so its entry HOLDS — see the header.
+	# ELEMENT-WISE, skipping an offline ESC so its entry HOLDS (a fresh array would zero it).
 	for i in _omega.size():
 		if i >= t.esc_rpm.size() or not DroneBus.esc_is_online(node_fail, i):
 			continue
 		t.esc_rpm[i] = rpms[i]
 		t.esc_current[i] = amps[i]
 		t.esc_temp[i] = _esc_temp[i]
-	# esc_fault ORs an ESC over its warn with an ESC whose node is gone; the second is computed
-	# since a silent node can't file its own fault.
+	# The offline term is computed: a silent node cannot file its own fault.
 	t.esc_fault = DroneProp.esc_fault_bits(_esc_temp, _temp_warn) | DroneBus.offline_esc_bits(node_fail)
-	# Health is DERIVED (drone_bus.gd), never injected; presence is the mask's complement.
+	# Health is DERIVED (`drone_bus.gd`); presence is the mask's complement.
 	t.node_health = DroneBus.health_all(node_fail, _esc_temp, _temp_warn)
 	t.node_online = DroneBus.online_bits(node_fail)
 	t.rotor_rpm = DroneProp.rotor_rpm(PackedInt32Array(t.esc_rpm))
 	return amps
 
 
-## Are the props still turning? Rotor-borne effects gate on THIS, not `armed` — `armed` flips
-## in one tick, the props spool down over ~5*tau. Threshold at the point `esc_rpm`'s
-## `roundi(omega * ROTOR_MAX_RPM)` rounds to 0, not at a bare 0.0 — a decaying `_omega` keeps this
-## true for seconds after the published rpm already reads 0.
+## Are the props still turning? Rotor-borne effects gate on THIS, not `armed`: `armed` flips in
+## one tick, the props spool down over ~5*tau. The threshold is where `esc_rpm`'s
+## `roundi(omega * ROTOR_MAX_RPM)` rounds to 0, not a bare 0.0 (a decaying `_omega` stays above
+## zero for seconds after the published rpm reads 0).
 func turning() -> bool:
 	return DroneProp.mean_omega(_omega) > 0.5 / float(DroneProp.ROTOR_MAX_RPM)
 
 
-## Cosmetic only: spin each blade at ITS OWN motor speed (called from `_process`, physics
-## untouched). Direction is the same `MOTORS["spin"]` the reaction torque uses; rate is
-## `_omega * ROTOR_MAX_RPM`, the same mapping `rotor_rpm` averages — no second rpm curve.
+## Cosmetic only (from `_process`): spins each blade at ITS OWN motor speed, in the `MOTORS["spin"]`
+## direction the reaction torque uses, at `_omega * ROTOR_MAX_RPM` (the mapping `rotor_rpm` averages).
 func spin_visuals(delta: float) -> void:
 	if _rotors.size() != DroneProp.MOTORS.size():
 		return
@@ -156,9 +147,8 @@ static func _bind_blur(rotor: Node) -> StandardMaterial3D:
 	return mat
 
 
-## A teleport must not carry spun-up motors across — the accel-history reset's discipline.
-## The HELD telemetry on `DroneTelemetry` is cleared by the vehicle, since those arrays are
-## the bus's store, not this object's state.
+## A teleport must not carry spun-up motors across. The HELD telemetry arrays on `DroneTelemetry`
+## are the bus's store, not this object's state; the base reseeds them.
 func reset() -> void:
 	_omega.fill(0.0)
 	_esc_temp.fill(DroneProp.ESC_AMBIENT)

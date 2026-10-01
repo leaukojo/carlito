@@ -1,78 +1,69 @@
 class_name DroneArming
 extends RefCounted
-## The drone's arming state machine: pre-arm checks, failsafes, and latching logic. Pure static
-## logic; DroneVehicle holds cross-tick state (armed latch, arm request edge, auto-disarm timer).
-## `armed` is the ESC gate. `arming_state` is DISARMED/BLOCKED/ARMED (BLOCKED = asked and refused).
-## `prearm_fail` is one bit per check. `failsafe` is the most severe active failure, or FS_NONE.
-## The key and empty pack unconditionally cut arming (absent → DISARMED, not BLOCKED).
-## Arming is a rising edge; disarming is a level, since a held switch is a standing instruction.
+## The drone's arming state machine: pre-arm checks, failsafes, latching. Pure static logic;
+## DroneVehicle holds the cross-tick state. `armed` is the ESC gate. `arming_state` is
+## DISARMED/BLOCKED/ARMED (BLOCKED = asked and refused). `prearm_fail` is one bit per check.
+## `failsafe` is the most severe active failure, or FS_NONE. The key and an empty pack cut arming
+## unconditionally (reads DISARMED, not BLOCKED). Arming is a rising edge, disarming a level.
 
-## uavcan.equipment.safety.ArmingStatus plus BLOCKED, the contract's `arming_state` enum
-## verbatim;
-## pinned by test.
+## uavcan.equipment.safety.ArmingStatus plus BLOCKED: the contract's `arming_state` enum, pinned by test.
 enum { DISARMED = 0, BLOCKED = 1, ARMED = 2 }
 
-## The failsafe ladder — contract's `failsafe` enum verbatim, also pinned by test. Ordinals are a
-## stable wire enum, NOT priority; severity order is stated in `failsafe_of`.
+## The contract's `failsafe` enum, pinned by test. Ordinals are a stable wire enum, NOT priority;
+## severity order is in `failsafe_of`.
 enum { FS_NONE = 0, FS_BATT_LOW = 1, FS_BATT_CRIT = 2, FS_GPS_LOST = 3, FS_GEOFENCE = 4,
 		FS_MOTOR = 5 }
 
-# --- the pre-arm checks, one bit each (contract `prearm_fail`) -------------------
-#
-# A set bit is a failed check (0 = all pass), opposite polarity to `node_online`. Bits are frozen
-# like `status`: a new check appends at bit 7, never renumbers.
+# --- pre-arm checks, one bit each (contract `prearm_fail`) ---
+# A set bit is a failed check (opposite polarity to `node_online`). Bits are frozen like `status`:
+# a new check appends at bit 7.
 
 ## Airframe not level enough to spin up: |pitch| or |roll| over ARM_TILT_DEG.
 const PA_ATTITUDE := 1 << 0
 ## Pack too low to fly: below ARM_SOC_MIN.
 const PA_BATTERY := 1 << 1
-## At least one ESC node off the bus (DroneBus) — mixer has fewer than four motors.
+## At least one ESC node off the bus (DroneBus): fewer than four motors.
 const PA_ESC := 1 << 2
-## AHRS node off the bus — nothing self-levels without an attitude solution.
+## AHRS node off the bus: nothing self-levels without an attitude solution.
 const PA_AHRS := 1 << 3
-## Climb axis not centred — a deflected stick would leap the craft on arming.
+## Climb axis not centred: a deflected stick would leap the craft on arming.
 const PA_STICK := 1 << 4
-## A failsafe is already active — `failsafe` names which.
+## A failsafe is already active (`failsafe` names which).
 const PA_FAILSAFE := 1 << 5
-## Selected mode needs a 3D fix and there isn't one. Gated on the mode, like ArduPilot's own GPS
-## pre-arm check — STABILIZE/ALT_HOLD need no receiver at all.
+## Selected mode needs a 3D fix and there is none. Gated on the mode, like ArduPilot's: STABILIZE
+## and ALT_HOLD need no receiver.
 const PA_GPS := 1 << 6
 
-## Every bit this airframe can set — the value of an aircraft that fails everything; a new const
-## must be added here too or the sweep test misses it.
+## Every bit this airframe can set; a new check must be added here or the sweep test misses it.
 const PA_ALL := PA_ATTITUDE | PA_BATTERY | PA_ESC | PA_AHRS | PA_STICK | PA_FAILSAFE | PA_GPS
 
-# --- the thresholds -------------------------------------------------------------
+# --- thresholds ---
 
-## Degrees of pitch/roll past which arming is refused. ~1/3 of the 32 deg tilt limit — a slope you
-## can see, well inside normal flight; lets a hill parking spot demonstrate the check.
+## Degrees of pitch/roll past which arming is refused: ~1/3 of the 32 deg tilt limit, a visible
+## slope well inside normal flight, so a hill parking spot demonstrates the check.
 const ARM_TILT_DEG := 10.0
 
-## % SoC below which the pack won't launch. Deliberately above SOC_LOW: arming at the low-battery
-## threshold would mean taking off already inside a failsafe. Five points ≈ a minute of hover.
+## % SoC below which the pack will not launch. Above SOC_LOW on purpose: arming at the low-battery
+## threshold would take off already inside a failsafe.
 const ARM_SOC_MIN := 25.0
 
-## % at which the low-battery failsafe commands RTL. This is the contract's `soc` warn, pinned by
-## a test,
-## since JSON can't read GDScript — so the dashboard bar turns danger exactly when it comes home.
+## % at which the low-battery failsafe commands RTL. Equals the contract's `soc` warn (pinned by
+## test, JSON cannot read GDScript), so the dashboard bar turns danger exactly when it comes home.
 const SOC_LOW := 20.0
 
-## % at which the critical-battery failsafe lands where it stands. 10% of the shipped 10 Ah pack ≈
-## a minute of hover, about what an RTL from the fence radius costs.
+## % at which the critical-battery failsafe lands where it stands (10% of the shipped 10 Ah pack).
 const SOC_CRIT := 10.0
 
-## Seconds the landed predicate must hold before auto-disarm. Shorter than ArduPilot's 10 s default
-## because the landed predicate has already spent its own 0.5 s debounce in DroneSensors. This is a
-## deliberate pause on top of a fact, not the detection.
+## Seconds the landed predicate must hold before auto-disarm: a pause on top of the 0.5 s
+## `DroneSensors` debounce, not the detection (ArduPilot's default is 10 s).
 const AUTO_DISARM_S := 3.0
 
 
-## Everything arming logic reads, as one struct so fns take a state and the vehicle fills it once.
+## Everything arming logic reads, filled once by the vehicle.
 ##
-## `mode_want` is the pilot's request after the fence, before any failsafe forcing
-## (DroneModes.wanted_mode) — reading the resolved mode would close a loop (a GPS_LOST-forced
-## ALT_HOLD would clear itself and toggle).
-## `pos_fix` is the debounced predicate, never raw `fix_type` — a failsafe is a decision.
+## `mode_want` is the pilot's request after the fence, before failsafe forcing
+## (DroneModes.wanted_mode): the resolved mode would close a loop (a GPS_LOST-forced ALT_HOLD
+## would clear itself and toggle). `pos_fix` is the debounced predicate, never raw `fix_type`.
 class Snapshot extends RefCounted:
 	var pitch := 0.0        ## deg, + = nose up (VehicleTelemetry.pitch)
 	var roll := 0.0         ## deg, + = starboard down (VehicleTelemetry.roll)
@@ -88,8 +79,7 @@ class Snapshot extends RefCounted:
 
 ## Which failsafe the aircraft is reacting to. Priority by action forced, not enum ordinal:
 ## MOTOR (lost yaw authority) > BATT_CRIT (land) > BATT_LOW (RTL) > GEOFENCE (latch RTL) >
-## GPS_LOST (mode fallback). PA_BATTERY (too low to launch) and BATT_LOW (too low to stay up)
-## are separate thresholds — not redundant, but complementary.
+## GPS_LOST (mode fallback).
 static func failsafe_of(s: Snapshot) -> int:
 	if DroneBus.offline_esc_bits(s.node_fail) != 0:
 		return FS_MOTOR
@@ -104,9 +94,9 @@ static func failsafe_of(s: Snapshot) -> int:
 	return FS_NONE
 
 
-## The mode this failsafe demands, or -1 for none. Fed through DroneModes.resolve_mode so the
-## one place a mode is decided knows the reason. GEOFENCE and GPS_LOST return -1 (their logic
-## is already in resolve_mode). This only escalates: RTL for low pack, LAND for critical/dead motor.
+## The mode this failsafe demands (fed to DroneModes.resolve_mode as `forced`), or -1 for none.
+## GEOFENCE and GPS_LOST return -1: resolve_mode already handles them. RTL for a low pack, LAND for
+## a critical pack or dead motor.
 static func failsafe_mode(fs: int) -> int:
 	match fs:
 		FS_MOTOR, FS_BATT_CRIT:
@@ -116,14 +106,9 @@ static func failsafe_mode(fs: int) -> int:
 	return -1
 
 
-## Every pre-arm check, as a bitfield. Pure, exhaustive, the ONE place a refusal is decided —
-## `arm_step` arms on `fails == 0` without re-testing anything.
-##
-## `s.failsafe` must already be filled (call failsafe_of first) — ordered rather than folded
-## together because PA_FAILSAFE is a check about the failsafe.
-##
-## GPS check is gated on the mode (ArduPilot's rule, not a shortcut): STABILIZE/ALT_HOLD need no
-## receiver. Calls DroneModes.needs_pos_fix rather than restating it.
+## Every pre-arm check, as a bitfield: the ONE place a refusal is decided (`arm_step` arms on
+## `fails == 0`). `s.failsafe` must already be filled (call failsafe_of first), since PA_FAILSAFE
+## checks it.
 static func prearm_fail(s: Snapshot) -> int:
 	var bits := 0
 	if absf(s.pitch) > ARM_TILT_DEG or absf(s.roll) > ARM_TILT_DEG:
@@ -143,19 +128,15 @@ static func prearm_fail(s: Snapshot) -> int:
 	return bits
 
 
-## The published `prearm_fail`: live checks while gating, 0 once armed. A flying craft deflects its
-## stick and leans past 10 deg constantly, so live bits in flight would light PA_STICK/PA_ATTITUDE
-## through every manoeuvre. A real FC stops running pre-arm checks the moment it arms.
+## The published `prearm_fail`: live checks while gating, 0 once armed (live bits would light
+## PA_STICK/PA_ATTITUDE through every manoeuvre; a real FC stops pre-arm checks on arming).
 static func published_fail(armed: bool, fails: int) -> int:
 	return 0 if armed else fails
 
 
-## The arming state the bus sees. ARMED is a fact; the other two are the difference between nobody
-## asking and the FC saying no.
-##
-## BLOCKED needs a powered aircraft and a raised switch: a refusal needs a request to refuse.
-## A craft that auto-disarmed with the switch still up reads DISARMED, not BLOCKED: nothing is
-## blocking it, it's waiting for the switch to be cycled (see arm_step).
+## The arming state the bus sees. BLOCKED needs a powered aircraft, a raised switch and a failed
+## check. A craft that auto-disarmed with the switch still up reads DISARMED: it waits for the
+## switch to be cycled (see arm_step).
 static func state_of(armed: bool, arm_req: bool, power_ok: bool, fails: int) -> int:
 	if armed:
 		return ARMED
@@ -164,9 +145,8 @@ static func state_of(armed: bool, arm_req: bool, power_ok: bool, fails: int) -> 
 	return DISARMED
 
 
-## One step of the state machine: last tick's armed, this tick's inputs, this tick's armed.
-## Power_ok (key + pack charge) cuts unconditionally. Disarming is refused in flight (gated on
-## landed predicate). Arming is a rising edge; every check must pass.
+## One step: last tick's `armed` and this tick's inputs give this tick's `armed`. `power_ok` (key +
+## pack charge) cuts unconditionally; a disarm request is refused in flight (`landed`).
 static func arm_step(armed: bool, arm_req: bool, arm_req_prev: bool, power_ok: bool,
 		fails: int, landed: bool, auto_now: bool) -> bool:
 	if not power_ok:
@@ -178,14 +158,13 @@ static func arm_step(armed: bool, arm_req: bool, arm_req_prev: bool, power_ok: b
 	return arm_req and not arm_req_prev and fails == 0
 
 
-## Post-landing timer: how long armed and landed continuously. Zeroed on takeoff or disarm.
-## Shape matches DroneSensors.landed_hold and DroneModes.fix_hold_step.
+## Seconds armed and landed continuously; zeroed on takeoff or disarm.
 static func disarm_hold_step(hold: float, armed: bool, landed: bool, delta: float) -> float:
 	if not armed or not landed:
 		return 0.0
 	return hold + maxf(delta, 0.0)
 
 
-## Has that timer run out? Split from the step so the threshold lives in one place.
+## Has that timer run out?
 static func auto_disarm_due(hold: float) -> bool:
 	return hold >= AUTO_DISARM_S

@@ -9,8 +9,8 @@ game-mode tool scenes bake in CI.
 
 ## Kit assets & recipes
 
-`kit/raw/<kit>/` (7 kits: racing / roads / suburban / commercial / industrial / watercraft /
-nature) + `kit/import/<kit>.json` recipes generate `kit/palettes/*.meshlib` +
+`kit/raw/<kit>/` (racing / roads / suburban / commercial / industrial / watercraft / nature /
+garage / parked) + `kit/import/<kit>.json` recipes generate `kit/palettes/*.meshlib` +
 `kit/prefabs/<kit>/*.tscn` via `tools/gen_kit_assets.gd` (`--script`; re-run after
 recipe/kit edits). Logic: `kit/helpers/kit_recipe.gd` (`tests/test_kit_gen.gd`), one ordered
 `families` list per recipe. Coverage gate: every GLB must match a family or the generator
@@ -32,7 +32,7 @@ their existing `uid://` (`gen_kit_assets._keep_uid`).
 **Scales and thumbnails.** Lane-fit rule and palette cell sizes: `kit/CLAUDE.md`. Racing:
 cubic `(12, 12, 12)`, corner-anchor, bridge y-offset **0.393**. `road-curve` is the 2×2
 sweeping curve; `road-bend` the tight 1×1 corner. All palette GridMaps need `cell_center_y =
-false`. Thumbnails (windowed-only, never CI: `kit/CLAUDE.md`): `tools/gen_thumbs.tscn`
+false`. Thumbnails (windowed-only, never CI: `tools/CLAUDE.md`): `tools/gen_thumbs.tscn`
 writes `kit/thumbs/<kit>/<name>.png` (128², lossless, export-excluded as `kit/thumbs/*`);
 `gen_kit_assets.gd` embeds each as a MeshLibrary preview. Flow: `gen_thumbs.tscn` →
 `--import` → `gen_kit_assets.gd`.
@@ -57,22 +57,22 @@ All authoring lives under one **`AuthoringRoot`** (`kit/helpers/authoring_root.g
 children. **Tidy authoring** (palette toolbar → `placement_tool.tidy_authoring`) sorts a
 flat AuthoringRoot into those folders in one undo step. Detection is SceneTree groups
 (`src/levels/base/carlito_groups.gd`), never `class_name`, joined in `_init` not
-`_enter_tree` (the baker walks scenes that never enter a tree); scene-tag rules:
-`kit/CLAUDE.md` § Scene tags.
+`_enter_tree` (the baker walks scenes that never enter a tree); scene-tag rules: root
+`CLAUDE.md` § Gotchas.
 
 ## Bake (`kit/bake/level_baker.gd`)
 
 Merges render meshes per XZ chunk into one StaticBody3D per chunk; welds ALL drivable
 geometry into **one level-wide ConcavePolygonShape3D body**, vertices snapped to **1 mm**.
 Outputs `<level>.baked.scn` + `<level>.bake.json`; pure fns tested in `tests/test_bake.gd`.
-`.baked.scn`/`.bake.json` split and the run-once-after-clone rule: `kit/CLAUDE.md`.
+`.baked.scn`/`.bake.json` split and the run-once-after-clone rule: root `CLAUDE.md` rule 1.
 
 - **Scatter:** items ≥ `SCATTER_MULTIMESH_THRESHOLD` (**64**, per-item override) bake as one
   MultiMeshInstance3D per chunk × item under `Scatter/`; below threshold merges into chunk
   meshes. **Weld-mode prefabs in scatter are a bake error.**
 - **Roads:** the baker calls `ribbon_surfaces()` once; collision never splits across chunks.
-- **Bake-adjacent CODE** (`level_baker.gd`, `road_builder.gd`, `scatter_base.gd`) is hashed
-  via `LevelBaker.BAKE_CODE_INPUTS`; `BAKER_VERSION` bumps for a change with no file moved.
+- **Bake-adjacent CODE** is hashed via `LevelBaker.BAKE_CODE_INPUTS` (the list); `BAKER_VERSION`
+  bumps for a change no hashed file carries.
 - **Runtime seam:** `Level._setup_baked()` loads `<level>.baked.scn` by convention.
 - **Export never ships authoring:** `addons/carlito_kit/` strips AuthoringRoot;
   `export_presets.cfg` excludes kit glbs/palettes/prefabs/thumbs/tools.
@@ -90,8 +90,8 @@ breaks 3D nav in 4.6): Palette / Terrain / Scatter / Roads / Polish; selecting a
 `HeightmapTerrain` / `ScatterCanvas` / `RoadPath` jumps to its tool tab. **Level card
 (Polish tab):** **Set thumbnail view** writes `<level>_shot.tres`; **Shoot thumbnail**
 writes `src/ui/level_thumbs/<registry id>.png` via `tools/gen_level_thumbs.tscn` against the
-**baked** level (side-car rationale: `src/levels/CLAUDE.md`); all levels at once: `godot
---path . res://tools/gen_level_thumbs.tscn` (windowed only).
+**baked** level (side-car rationale: `src/levels/CLAUDE.md`); all levels at once:
+`tools/gen_level_thumbs.tscn` (windowed).
 
 - **`palette_dock.gd`:** reads `kit/import/*.json`, buckets by family
   (`KitRecipe.classify`).
@@ -150,16 +150,18 @@ the Auto-splat-zeroes-`splatmap2` rule: `src/levels/CLAUDE.md`.
 RoadPath's **Paint splat under road** (paved half-width minus 1 m) and the palette toolbar's
 **Paint splat under tiles** are destructive-by-button: RoadPath writes `splat_channel`
 (asphalt/city 6, gravel 7), tiles write channel 6 undercover (`kit/helpers/splat_paint.gd`,
-tested).
+tested). A conformed road reads the splat under its deck, so unpainted it grips like the terrain
+beneath. Paint is additive and biased undercover on purpose (never widen the inset); bridges sit
+out of grip reach and need none.
 
 Generated-PNG import settings (`detect_3d/compress_to=0`, `process/fix_alpha_border=false`),
 written by `TerrainGen.ensure_import_settings`; rationale: `src/levels/CLAUDE.md`. Demo:
 `src/levels/island/level_1/level_1.tscn`, 512 m terraced island, seed **499399**, ISOBUS
-farm playground (`tools/gen_farm_playground.tscn`). Levels 2-4: `tools/gen_islands.gd`.
-Level 5: railway (`tools/gen_rail_level.gd`). Level 6: drone playground
-(`tools/gen_skyport.gd`), only level with a `WindField`, a `CurrentField`, and `Payloads`
-(`CargoPayload` crates as children of the LEVEL ROOT, not `AuthoringRoot` — a bake input
-would weld them). Generator stages: `kit/CLAUDE.md`.
+farm playground (`tools/gen_farm_playground.tscn`). Levels 2-4: hand-dressed on a one-shot
+`tools/gen_islands.gd` scaffold (never re-run). Level 5: railway (`tools/gen_rail_level.gd`).
+Level 6: drone playground (`tools/gen_skyport.gd`), only level with a `WindField`, a
+`CurrentField`, and `Payloads` (`CargoPayload` crates as children of the LEVEL ROOT, not
+`AuthoringRoot` — a bake input would weld them). Generator stages: each level's `<id>_gen.json`.
 
 ## Terrain brushes
 
@@ -271,10 +273,7 @@ and prefab in `CONFORM_PREFAB_FAMILIES`. Tile deck runs curb-to-curb ±4.8 (9.6 
 first/last ring so a bridge is solid, not an open tube. Near-closed loops leave a real
 collision hole past the 1 mm weld; `RoadPath` flags a gap smaller than the ribbon's
 half-width. Conform samples the curve at `adaptive_offsets` rings, flattens to road height
-minus `conform_epsilon`. Conform-terrain mechanics (full half-width flatten incl. skirt,
-floor-quantize to 8-bit, `edge_drop` must absorb `ε + height/255`, `conform_falloff`
-smoothsteps beyond the plateau): `kit/CLAUDE.md`. Authoring order: terrain → roads + conform
-→ splat → scatter (conform trips the scatter stale guard by design).
+minus `conform_epsilon`; `conform_falloff` smoothsteps beyond the plateau. Conform rules and
+authoring order: `kit/CLAUDE.md`.
 
-**Non-goals:** see root CLAUDE.md non-goals (junctions, lane markings, traffic, world
-streaming, in-game level editor, texture-layer terrain, LOD).
+**Non-goals:** root `CLAUDE.md`.

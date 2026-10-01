@@ -1,11 +1,10 @@
 class_name TrainTelemetry
 extends VehicleTelemetry
 ## Train telemetry (flavor "train": rail practice / CiA 421 semantics, not a real train CAN
-## standard). Adds the rail fields; names match the contract signals exactly.
-## grade and coupler_force are real reads from the consist sim; pantograph_state/
-## doors_state are gate reads. catenary_volts, motor_current and brake_pipe are modeled
-## honest values (same latitude as the boat's trim/tractor's engine_load) — the train has
-## no simulated electrical or pneumatic circuit.
+## standard); names match the contract signals. `grade` and `coupler_force` are real reads from the
+## consist sim; `pantograph_state` / `doors_state` are gate reads. `catenary_volts`, `motor_current`
+## and `brake_pipe` are labelled honest models (the train has no simulated electrical or pneumatic
+## circuit).
 
 const BRAKE_PIPE_CHARGED := 5.0  ## bar, fully released train brake pipe pressure
 const NOMINAL_CATENARY := 25000.0  ## V, 25 kV AC nominal line voltage (rail practice)
@@ -19,7 +18,7 @@ var grade := 0                 ## %, contract 'grade' i8 (track slope at the loc
 var coupler_force := 0.0       ## kN, contract 'coupler_force' (+ = tension, - = buff)
 
 
-# --- honest aux models (modeled, like the boat's trim / tractor's engine_load) -------------
+# --- honest aux models ---
 
 ## Traction motor current (A) from the loco's tractive force: linear, clamped to the rating.
 static func motor_current_amps(traction_force: float, amps_per_newton: float,
@@ -27,15 +26,14 @@ static func motor_current_amps(traction_force: float, amps_per_newton: float,
 	return clampf(absf(traction_force) * amps_per_newton, 0.0, max_current)
 
 
-## Catenary voltage (V): nominal line voltage minus a sag proportional to current draw
-## (the more the train pulls, the more the line droops), clamped non-negative.
+## Catenary voltage (V): nominal line voltage minus a sag proportional to current draw, never negative.
 static func catenary_volts_model(current: float, nominal: float, sag_per_amp: float) -> float:
 	return maxf(nominal - current * sag_per_amp, 0.0)
 
 
-## Brake pipe pressure (bar) chasing its target: full release sits at BRAKE_PIPE_CHARGED,
-## brake application vents the pipe down (drop_rate), release recharges it (charge_rate).
-## `apply_range` is how far full application pulls the target below charged.
+## Brake pipe pressure (bar) chasing its target: release sits at BRAKE_PIPE_CHARGED, application
+## vents it down (drop_rate), release recharges it (charge_rate). `apply_range` is how far full
+## application pulls the target below charged.
 static func brake_pipe_step(current: float, brake: float, delta: float,
 		drop_rate: float, charge_rate: float, apply_range: float) -> float:
 	var target := BRAKE_PIPE_CHARGED - clampf(brake, 0.0, 1.0) * apply_range

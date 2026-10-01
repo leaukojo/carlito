@@ -402,11 +402,10 @@ mesh = SubResource("MeshLensAmber")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.81, -0.56, 6.53)
 mesh = SubResource("MeshLensAmber")
 
-; Wheel visual roots, IN THE SAME ORDER as flatbed_spec.tres's wheel_positions (L/R per axle,
-; front bogie axle first) — TowedBody pairs them by index and errors on a count mismatch.
-; RayWheel overwrites each root's transform every tick, so the radius scale and the right-side
-; flip ride the INSTANCED CHILD. The flip is about Vector3.RIGHT, never UP: in the frame RayWheel
-; builds, the wheel's local Y is the AXLE, so a yaw would just spin it about its own axis.
+; Wheel visual roots, in flatbed_spec.tres's wheel_positions order (L/R per axle, front bogie axle
+; first) — TowedBody pairs them by index. RayWheel overwrites each root every tick, so the radius
+; scale and the right-side flip are authored on the INSTANCED CHILD. The flip is about
+; Vector3.RIGHT, never UP (local Y is the axle).
 [node name="Wheels" type="Node3D" parent="."]
 
 [node name="WheelL1" type="Node3D" parent="Wheels"]

@@ -5,8 +5,8 @@ extends RefCounted
 ## at the contact, and integrating spin from drive, brake and road-reaction torque.
 ##
 ## Tuned for the locked 60 Hz tick: the clamps below plus the semi-implicit spin step in
-## _integrate_spin keep it stable. Do not remove or weaken a clamp or raise the tick to fix
-## instability; retune GroundDriveSpec instead.
+## _integrate_spin keep it stable (src/vehicles/CLAUDE.md § The 60 Hz tick). Retune
+## GroundDriveSpec, never a clamp.
 
 const Layers := preload("res://src/physics/collision_layers.gd")
 
@@ -17,13 +17,11 @@ const LOW_SPEED_FLOOR := 1.5
 ## (m). Keeps a bridge or ramp over a painted patch from inheriting that grip.
 const SURFACE_GRIP_REACH := 1.0
 
-## Rate (1/s) at which a wheel off the ground sheds spin to bearing, tyre and driveline losses.
-## An honest model, not a measured one. Without it a free wheel has NO resisting torque at all:
-## once the rev limiter cuts the throttle, drive, reaction, brake and overrun are all zero
-## (`Drivetrain.overrun_torque` reads the pedal, which is still down), so `omega` freezes at the
-## value that tripped the limiter and the cut never clears — a lifted wheel kills the engine for
-## as long as the driver holds the pedal down. The decay makes the cut self-clearing, the way a
-## real limiter blips. Sized well under a jump's air time, so landing spin-up is unaffected.
+## Rate (1/s) at which a wheel off the ground sheds spin to bearing, tyre and driveline losses (an
+## honest model). Without it a lifted wheel has no resisting torque once the limiter cuts the
+## throttle (`Drivetrain.overrun_torque` reads the still-down pedal), so `omega` freezes at the
+## tripping value and the cut never clears. Well under a jump's air time, so landing spin-up is
+## unaffected.
 const FREE_SPIN_DECAY := 0.25
 
 var anchor: Vector3     ## hub anchor, body space
@@ -44,27 +42,30 @@ var contact_point := Vector3.ZERO  ## world-space hit position while in_contact 
 var contact_normal := Vector3.UP  ## world-space contact normal while in_contact; diagnostic only
 var surface_grip := 1.0  ## grip multiplier from the painted terrain under the contact (F3 readout)
 var surface_drag := 0.0  ## added rolling-resistance coefficient of the painted terrain under the contact (F3 readout)
+## Spin change per N·m of extra torque in this tick's step, `delta / (I * (1 + reaction_stiffness))`
+## (rad/s per N·m), latched by `_integrate_spin`. The step is linear in the applied torque, so a
+## coupling torque `T` applied after it as `omega -= T * spin_compliance` equals adding `T` to
+## `drive_torque` inside it: how `Differential` couples wheels. A gripping wheel is stiff (small), a
+## spinning or airborne one soft (`delta / I`).
+var spin_compliance := 0.0
 ## Visual radius minus wheel_radius, which keeps an over- or undersized wheel visual meeting the
 ## ground while physics stays single-radius. Rides the root transform, not the visual's children.
 var visual_lift := 0.0
 ## The other wheel of this axle, paired by `WheelDrive._link_anti_roll_pairs` when the spec asks
-## for a bar; null means no bar on this body. The bar reads `_bar_compression`, never the live
-## `compression`: wheels tick in array order, so a live read gives one wheel of the pair this
-## tick's partner value and the other last tick's, and the two bar forces then differ by that
-## step instead of cancelling, leaving a one-sided residue on the axle (measured +28.1 / -22.3 N
-## on a `race` axle mid-launch). Both wheels read the SAME one-tick-old pair, so the forces
-## cancel exactly. This is not what fails the tracking gate — that is the drive-torque split
-## multiplying an honest load difference — but a bar that does not cancel is its own bug.
+## for a bar; null means no bar on this body. The bar reads the snapshot `_bar_compression`, never
+## the live `compression`, and `WheelDrive.tick` latches it for EVERY wheel before any wheel ticks.
+## Wheels tick in array order, so a latch inside `tick` gives the first wheel of a pair a partner
+## value one tick staler than the second's: a phantom damper on the left wheels only
+## (docs/vehicles.md has the figures).
 var anti_roll_partner: RayWheel = null
 ## Body mass share this corner carries (kg): `mass / wheel count`, sizing the three 60 Hz clamps
-## below. Constructor-required, since a wheel built with zero applies no damping or tire force and
-## just slides. It tracks the body's LIVE mass — `WheelDrive.set_corner_mass_from` is called
-## wherever a vehicle rewrites `mass` (the refuse hopper), so the clamps scale with what the body
-## weighs.
-## A semi tractor's plate load is deliberately NOT folded in: the trailer's kingpin share rides the
-## tractor's rear axle without touching `mass`, so this corner mass is understated there — the safe
-## way round, since a clamp sized under the true load can only be tighter (truck/CLAUDE.md § the
-## fifth wheel). Never widen a clamp to chase it; the lever is the spec's own numbers.
+## below. Constructor-required: a wheel built with zero applies no damping or tire force and just
+## slides. It tracks the body's LIVE mass (`WheelDrive.set_corner_mass_from` beside every runtime
+## `mass` write).
+## COMPROMISE: a semi tractor's kingpin load is NOT folded in (it rides the rear axle without
+## touching `mass`), so this corner mass is understated there. That is the safe way round, since a
+## clamp sized under the true load can only be tighter; widening it to chase the load undoes the
+## stability (src/vehicles/truck/CLAUDE.md § Fifth wheel, mass, axle loads).
 var corner_mass: float
 ## This corner's spring and dampers, picked per axle from the spec by `apply_suspension`
 ## (`GroundDriveSpec.rear_spring_rate` and friends). Every builder calls it; a wheel left at 0
@@ -74,8 +75,8 @@ var damper_bump := 0.0
 var damper_rebound := 0.0
 
 var _prev_compression := 0.0
-## Last tick's `compression`, latched at the top of `tick` before this tick overwrites it, so the
-## anti-roll bar sees an order-independent snapshot of the axle. See `anti_roll_partner`.
+## Last tick's `compression`, latched by `latch_bar` for the whole body before any wheel ticks, so
+## both wheels of an axle read the same snapshot. See `anti_roll_partner`.
 var _bar_compression := 0.0
 var _spin_angle := 0.0
 var _visual: Node3D
@@ -114,19 +115,19 @@ func reset() -> void:
 	force_lat = 0.0
 	surface_grip = 1.0
 	surface_drag = 0.0
+	spin_compliance = 0.0
 
 
 ## The one front/rear predicate: +Z is rearward in body space, so a station at exactly z == 0 is
-## FRONT. Every site that splits the wheels by axle goes through this, or a z == 0 station is a
-## front wheel to one of them and a rear wheel to another. No shipped spec has one
-## (`test_vehicle_catalog` sweeps for it), so the tie-break costs nothing today.
+## FRONT. Every axle split goes through this so no station is front to one site and rear to
+## another. No shipped spec has one (`test_vehicle_catalog` sweeps for it).
 static func is_rear_z(z: float) -> bool:
 	return z > 0.0
 
 
-## Which of the level's painted terrains `point` is on, or null. XZ plus height, not XZ alone, so
-## a road welded over terrain works but a bridge above a painted patch does not inherit it. The
-## nearest surface wins when several are in reach. Duck-typed on contains_xz / height_at.
+## Which of the level's painted terrains `point` is on, or null. XZ plus height within
+## SURFACE_GRIP_REACH, so a bridge above a painted patch does not inherit it; the nearest surface
+## wins. Duck-typed on contains_xz / height_at.
 static func terrain_at(point: Vector3, terrains: Array[Node]) -> Node:
 	var found: Node = null
 	var nearest := SURFACE_GRIP_REACH
@@ -143,12 +144,11 @@ static func terrain_at(point: Vector3, terrains: Array[Node]) -> Node:
 func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSpaceState3D,
 		drive_torque: float, brake_torque: float, delta: float,
 		grip_terrains: Array[Node]) -> void:
-	_bar_compression = compression
 	var xform := body.global_transform
 	var up := xform.basis.y
 	var ray_from := xform * anchor
 	var ray_len := drive_spec.rest_length + drive_spec.wheel_radius
-	# Self-exclusion still needed: this body is on VEHICLE, which SOLID includes.
+	# Self-exclusion: this body is on VEHICLE, which SOLID includes.
 	if _query_body != body.get_rid():
 		_query_body = body.get_rid()
 		_query.exclude = [_query_body]
@@ -179,8 +179,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	surface_grip = terrain.grip_at(contact_point) if terrain != null else 1.0
 	surface_drag = terrain.drag_at(contact_point) if terrain != null else 0.0
 
-	# Applied along the contact normal, never the chassis up axis, which tips part of the
-	# vertical load into the direction of travel whenever the body pitches.
+	# Along the contact normal, never the chassis up axis, which would push a pitched body along.
 	compression = clampf(ray_len - ray_from.distance_to(contact_point), 0.0, drive_spec.rest_length)
 	var comp_vel := (compression - _prev_compression) / delta
 	_prev_compression = compression
@@ -188,15 +187,9 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	# 60 Hz clamp: never exceed the force that reverses compression velocity in one tick.
 	var damper_force := clampf(damper * comp_vel,
 			-corner_mass * absf(comp_vel) / delta, corner_mass * absf(comp_vel) / delta)
-	# Anti-roll bar: load moved to whichever wheel of the axle is the more compressed, inside the
-	# same clamp as spring and damper so it can never fight the force cap. Skipped while the
-	# partner is airborne, where its zero compression would read as full droop and shove this
-	# corner up on a bar that is really just hanging.
-	var bar_force := 0.0
-	if anti_roll_partner != null and anti_roll_partner.in_contact:
-		bar_force = VehicleMath.anti_roll_force(_bar_compression,
-				anti_roll_partner._bar_compression, drive_spec.anti_roll_rate)
-	suspension_force = clampf(spring_rate * compression + damper_force + bar_force,
+	# The bar sits inside the same force cap as spring and damper.
+	suspension_force = clampf(spring_rate * compression + damper_force
+			+ bar_force(drive_spec.anti_roll_rate),
 			0.0, drive_spec.max_suspension_force)
 	body.apply_force(normal * suspension_force, contact_point - body.global_position)
 
@@ -209,8 +202,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	var v_long := vel.dot(forward)
 	var v_lat := vel.dot(side)
 
-	# Load-scaled BEFORE the friction circle below, never after: the circle has to be drawn on
-	# the budget the tyre actually has at this tick's normal load.
+	# Load-scaled BEFORE the friction circle below: the circle is drawn on this tick's budget.
 	var ref_load := corner_mass * 9.81
 	var mu_long := load_scaled_mu(drive_spec.mu_long * surface_grip,
 			suspension_force, ref_load, drive_spec.load_sensitivity)
@@ -245,9 +237,8 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	force_long = f_long
 	force_lat = f_lat
 
-	# Surface drag: the ground deforming, not the tyre, so it sits outside the friction circle
-	# and never reaches the spin step (a wheel in mud keeps rolling at road speed; the body is
-	# what slows). Off this tick's normal load like the spec's own rolling resistance.
+	# Surface drag is the ground deforming, not the tyre: outside the friction circle and the spin
+	# step (a wheel in mud keeps rolling at road speed; the body slows).
 	body.apply_force(forward * surface_drag_force(v_long, surface_drag, suspension_force,
 			corner_mass, delta), contact_point - body.global_position)
 
@@ -256,16 +247,29 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	_update_visual(drive_spec, delta)
 
 
+## Snapshot this wheel's compression for the anti-roll bar. `WheelDrive.tick` calls it on every
+## wheel BEFORE any of them ticks (see `anti_roll_partner`).
+func latch_bar() -> void:
+	_bar_compression = compression
+
+
+## This wheel's anti-roll bar force off the shared snapshot (N, + = pushes this corner up): equal
+## and opposite to the partner's while both snapshots come from the same latch. 0 with no bar, or
+## while the partner is airborne, where its zero compression would read as full droop and shove
+## this corner up on a bar that is really just hanging.
+func bar_force(rate: float) -> float:
+	if anti_roll_partner == null or not anti_roll_partner.in_contact:
+		return 0.0
+	return VehicleMath.anti_roll_force(_bar_compression, anti_roll_partner._bar_compression, rate)
+
+
 ## Tyre mu at a load off the corner's static reference: `mu * (1 - sensitivity * log2(load / ref))`,
-## so grip grows SLOWER than load above the reference and faster below it. Identity at the
-## reference and at sensitivity 0, which is why every brake number derived at the even static load
-## (`gen_kenney_vehicles._derive_brakes`, `test_vehicle_catalog`) still means what it says.
-## Absolute capacity `mu(L) * L` still RISES with load, so a heavier-loaded wheel never brakes
-## worse in newtons — what it loses is its share per newton, which is what lets transfer move the
-## balance.
-## The [0.5, 1.25] clamp and the ref*0.25 load floor bind on nothing shipped (0.12 at the floor
-## reaches 1.24); they bound a suspension spike or a runtime mass rewrite that leaves a corner far
-## off its reference.
+## so grip grows SLOWER than load above the reference. Identity at the reference and at
+## sensitivity 0, so every brake number derived at the even static load (`_derive_brakes` in
+## tools/gen_kenney_vehicles.gd, `test_vehicle_catalog`) holds. Capacity `mu(L) * L` still RISES
+## with load; what a heavier wheel loses is its share per newton, which lets transfer move the
+## balance. The [0.5, 1.25] clamp and the ref*0.25 load floor bind on nothing shipped (0.12 at the
+## floor reaches 1.24); they bound a suspension spike or a runtime mass rewrite.
 static func load_scaled_mu(mu: float, normal_load: float, ref_load: float,
 		sensitivity: float) -> float:
 	if sensitivity <= 0.0 or ref_load <= 0.0 or mu <= 0.0:
@@ -275,8 +279,7 @@ static func load_scaled_mu(mu: float, normal_load: float, ref_load: float,
 
 
 ## Spin a wheel off the ground keeps after one tick of `FREE_SPIN_DECAY` (rad/s): exponential
-## toward zero, so it only ever shrinks the spin and never reverses or adds to it. The one torque
-## on a wheel out of contact, and the reason a rev-limiter cut clears itself.
+## toward zero, never reversing it. The one torque on a wheel out of contact.
 static func free_spin_omega(omega_in: float, delta: float) -> float:
 	return move_toward(omega_in, 0.0, absf(omega_in) * FREE_SPIN_DECAY * delta)
 
@@ -294,17 +297,16 @@ static func surface_drag_force(v_long: float, crr: float, normal_load: float, mo
 
 ## Wheel spin from drive plus road-reaction torque; brakes decelerate toward zero and never
 ## reverse it. Semi-implicit on purpose: tire force is huge next to the wheel's own inertia, so an
-## explicit step over-corrects and `omega` rings at the tick rate. `reaction_stiffness` is the
-## secant slope of tire reaction against contact slip, and dividing the net torque by (1 + that)
-## is the linearized implicit update, a divisor >= 1 that only shrinks a correction and relaxes to
-## the explicit step as delta -> 0. Clamping the reaction alone leaves the wheel pushing at
-## equilibrium and walking to a steady slip the driveline never paid for (+20% top speed on the
-## car, +41% on the tractor against a 480 Hz reference). Do not go back to a clamp.
+## explicit step makes `omega` ring at the tick rate. `reaction_stiffness` is the secant slope of
+## tire reaction against contact slip; dividing the net torque by (1 + that) is the linearized
+## implicit update (divisor >= 1, so it only shrinks a correction). Clamping the reaction instead
+## leaves a steady slip the driveline never paid for (figures: docs/vehicles.md).
 func _integrate_spin(drive_torque: float, reaction_torque: float, brake_torque: float,
 		drive_spec: GroundDriveSpec, delta: float, slip_vel: float) -> void:
 	var null_slip_torque := drive_spec.wheel_inertia * absf(slip_vel) \
 			/ (delta * drive_spec.wheel_radius)
 	var reaction_stiffness := absf(reaction_torque) / maxf(null_slip_torque, 1e-6)
+	spin_compliance = delta / (drive_spec.wheel_inertia * (1.0 + reaction_stiffness))
 	omega += (drive_torque + reaction_torque) / (1.0 + reaction_stiffness) \
 			/ drive_spec.wheel_inertia * delta
 	omega = move_toward(omega, 0.0, brake_torque / drive_spec.wheel_inertia * delta)

@@ -1,7 +1,6 @@
 ## Player-selectable overrides for a level's authored `wind`/`current`, applied at runtime by
-## `Level.set_conditions`. Pure static logic, preload-only (not `class_name`'d) so the baker's
-## headless walk never depends on it. The shell holds the chosen preset/direction for the
-## session and re-applies it to every level it loads.
+## `Level.set_conditions`. Pure static logic, preload-only (not `class_name`'d). The shell holds
+## the chosen preset/direction for the session and re-applies it to every level it loads.
 ##
 ## The UI enters direction as meteorological "FROM" degrees (0 = wind/current coming out of the
 ## north); `WindField`/`CurrentField` store the heading the flow goes TOWARD, so the one
@@ -16,7 +15,7 @@ const COMPASS := ["NORTH", "NORTHEAST", "EAST", "SOUTHEAST", "SOUTH", "SOUTHWEST
 		"NORTHWEST"]
 
 ## Families whose physics reads the level's wind (drone/plane drag, BoatVehicle windage —
-## src/vehicles/CLAUDE.md's drag block); ground vehicles and the train ignore it.
+## src/vehicles/CLAUDE.md § Free bodies); ground vehicles and the train ignore it.
 const WIND_FAMILIES := ["drone", "plane", "boat"]
 ## Families whose physics reads the level's current (BoatVehicle hull drag, `boat.gd`); nothing
 ## else names `CurrentField`.
@@ -37,7 +36,8 @@ const WIND_STRONG_GUST := 4.0
 const GUST_SEED := 1
 
 ## LIGHT/STRONG current: sized against `BoatVehicle`'s hull drag so a boat can still make way
-## against either preset (`src/vehicles/CLAUDE.md`'s drag block; boats are the only current reader).
+## against either preset (`src/vehicles/CLAUDE.md` § Free bodies; boats are the only current
+## reader).
 const CURRENT_LIGHT_DRIFT := 0.5
 const CURRENT_STRONG_DRIFT := 1.5
 ## A player-picked current is one steady push for the session, not an authored tide cycle: period

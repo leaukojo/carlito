@@ -3,11 +3,11 @@
 The plumbing every vehicle rides: signal contract, input pipeline, telemetry/dashboard,
 bridge, lamps, shell, level framework. Per-family vehicle detail is in `docs/vehicles.md`
 and `docs/heavy_vehicles.md`. Editor/authoring tooling is in `docs/level_kit.md`; rules and
-gotchas are in `CLAUDE.md`.
+rules are in the nested `CLAUDE.md` files.
 
 ## Signal contract
 
-`contract/carlito_contract.json` (v42) defines every bridge signal: name, dir, type, unit,
+`contract/carlito_contract.json` defines every bridge signal: name, dir, type, unit,
 range, `warn`/`warn_side`, `count`, enum, vehicles, `flavor` (`isobus`, `j1939`, `iso11992`,
 `j2497`, `cleanopen`, `canaerospace`, `dronecan`, `train`, `nmea2000`). `Contract`
 (`src/bridge/contract.gd`) parses/validates it into `Contract.data`;
@@ -19,10 +19,10 @@ signal makes a readout line, not a bar. `count` (>= 1, default 1) makes an Array
 `node_health` (8), `slip` (2); rejected on `"in"`, `bool`, or with an `enum` —
 `Bridge._publish` drops a wrong-shaped value with one warning.
 
-Edits bump `version`; a mismatch warns at runtime and raises a sticky notice (`push_warning`
-is invisible in a web release). `tools/gen_js_contract.mjs` regenerates
-`../sloppycan/carlito_contract.js` (`window.CARLITO_CONTRACT`) — run after any edit, landing
-on `dev` in both `carlito` and `sloppycan`, promoted together.
+A version mismatch with sloppyCAN warns at runtime and raises a sticky notice (`push_warning`
+is invisible in a web release). sloppyCAN reads a generated copy,
+`../sloppycan/carlito_contract.js` (`window.CARLITO_CONTRACT`). Edit ritual:
+`contract/CLAUDE.md`.
 
 ## Input pipeline
 
@@ -64,20 +64,9 @@ Three paths, chosen per tick:
   command. Train pantograph defaults raised so a locally-driven train spawns able to move.
   Sources report per-frame edges only, ORed by `merge_local`; the `var _*` block at top of
   `input_router.gd` is the list.
-- `VehicleInput` (`src/input/vehicle_input.gd`) is a `class_name`, not an inner class of the
-  autoload — a vehicle's static types don't depend on the autoload's registered name. Fields
-  are flat except `lamps` (the fourteen verbatim-mirrored lamp/warning bits — one rule, not
-  one family). `lights` stays flat: a level the router cycles, not a mirrored bit.
-  `get_vehicle_input()` returns the router's own struct, read-only by convention —
-  `arbitrate_*` build a fresh struct each tick, so a stashed reference reads stale; no
-  defensive `copy()`.
-- Raw-intent wire is `Dictionary[StringName, Variant]` across all four producers
-  (`local_source.gd`, `touch_controls.gd`, `bridge_source.gd`, `tools/measure_drone.gd`'s
-  `StickSource`) and `merge_local`. Three tests guard the untyped keys: the registry's
-  `poll_key` values against `LocalSource`/`merge_local` key sets, and touch's
-  `TouchControls.WIDGET_KEYS` against `merge_local` — `merge_local` builds its dict
-  explicitly, so a key on one side only drops the keyboard's edge silently.
-  `arbitrate_local`/`arbitrate_bridge` take a plain `Dictionary`.
+- `VehicleInput` (`src/input/vehicle_input.gd`) fields are flat except `lamps` (the fourteen
+  verbatim-mirrored lamp/warning bits). The raw-intent wire is `Dictionary[StringName,
+  Variant]`. Rules for both: `src/input/CLAUDE.md`.
 - Bindings live in `project.godot`'s InputMap, shown by the CONTROLS sheet generated from
   the action registry. `tests/test_input_map.gd` asserts no two actions share a physical
   key.
@@ -115,8 +104,8 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   `tests/test_telemetry.gd`. `BaseVehicle._update_telemetry(input, delta)` holds the only
   per-tick state; a respawn reseeds the whole object in place from a fresh
   `_make_telemetry()` (`BaseVehicle._reseed_telemetry`), odometer and hour meter included —
-  R hands back a machine as new. `status` bits (`ST_*`) are FROZEN: new flags
-  append at bit 7+ (nine free in the u16), never renumbered. `to_bridge_dict()` maps fields
+  R hands back a machine as new. `status` bits (`ST_*`) are FROZEN (`contract/CLAUDE.md`).
+  `to_bridge_dict()` maps fields
   to contract "out" names in contract units (throttle/steer as %, slip as ratio);
   `test_telemetry` fails if it drops a non-todo "out" signal — `WIRE_*` tables hold the
   renames, rounding rules, and the synthesised `slip`.
@@ -151,8 +140,8 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
 
 ## Lamps, horn & day/night
 
-- Lamp state rides `VehicleInput`, mirrored verbatim, no local blink timer (`CLAUDE.md` §
-  Lamps & bridge); locally only `brake_lamp` is driven, from the foot brake
+- Lamp state rides `VehicleInput`, mirrored verbatim, no local blink timer (`src/vehicles/CLAUDE.md` §
+  Lamps); locally only `brake_lamp` is driven, from the foot brake
   (`tests/test_lamps.gd` asserts no clock in `lamp_set.gd`). `LampSet`
   (`src/vehicles/base/lamp_set.gd`) applies lamp state to nodes the `VehicleSpec` names by
   NodePath (`headlight_paths`, `brake_lamp_paths`/`turn_*_paths`); rear lamps tri-state via
@@ -178,7 +167,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   |---|---|---|
   | Deep link | `?level=<id>&vehicle=<variant>`, `--level=`/`--vehicle=`, or `CARLITO_LEVEL` | `src/shell/boot_params.gd`: unknown ids dropped; `vehicle` names a VARIANT |
   | Saved session | `src/shell/shell_prefs.gd` -> `user://shell.cfg` | Skipped on deep link/`--headless`; `ShellPrefs.ENABLED` is `false` today |
-  | `boot.gd`'s `DEFAULT_LEVEL` | `flatland` (no bake) | city bake is 13.9 MB, must never boot |
+  | `boot.gd`'s `DEFAULT_LEVEL` | `flatland` (no bake) | keeps every island pack out of the boot download |
 
   Variant reaches the level via `Level.initial_variant`, read before `_ready` spawns it.
 - One theme (`src/ui/theme/ui_theme.gd`+`src/ui/ui_scale.gd`): `UiTheme` tokens,
@@ -220,7 +209,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
 - Garage level (`src/levels/garage/`, id `garage`): frozen KINEMATIC vehicle,
   `_physics_process` still runs (wheels steer, engine revs, lamps toggle), `orbit_camera.gd`
   inspects freely.
-- Touch controls (`src/ui/touch_controls.gd`), a second `InputSource`: joystick, pedals,
+- Touch controls (`src/ui/touch_controls.gd`), a second input source: joystick, pedals,
   UP/DOWN flight pads, buttons generated from the registry (`ActionRegistry.is_universal`,
   `STACK_HEAD`; per-machine ones in the EQUIP drawer, `_fit_equip_drawer`). IMPORTANT (F5,
   `toggle_important`) / DRIVING (F4, `toggle_touch`) layers; `poll()` empty while hidden. A
@@ -248,25 +237,25 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   Ice is low grip and no drag; mud is low grip and high drag; grass is mostly drag.
 - `src/levels/island/level_1/` .. `level_6/`: six islands, terraced terrain + auto-splat +
   sea, each rostering at least car/truck/tractor/boat. `level_1` is the CI baked-level smoke
-  target; 2-4 are blank (`AuthoringRoot`). `level_5` (rail loop) and `level_6` (skyport) are
+  target; 2-4 (Mountain, City, Racing) are hand-dressed on a one-shot `tools/gen_islands.gd`
+  scaffold. `level_5` (rail loop) and `level_6` (skyport) are
   owned by their generator (`tools/gen_rail_level.gd`, `tools/gen_skyport.gd`).
   `src/levels/island/car_arena/` (`arena: true`, not in LEVEL select) is a car-only plateau
   owned by `tools/gen_car_arena.gd`. `flatland`/`open_sea` are endless, unbounded, no kit
   content: `InfiniteGround` (`src/levels/base/infinite_ground.gd`) or an `infinite`
   `WaterSurface` re-centres on the camera; no `WorldBounds`. `src/levels/dev/flat.tscn` is a
-  bare test plane for wheel checks. A `.tscn` can embed scripts — loading a stranger's level
-  is arbitrary code execution.
+  bare test plane for wheel checks; `src/levels/dev/rough_ground/` is the unregistered traction
+  island `tools/measure_rough.tscn` drives, owned by `tools/gen_rough_ground.gd`.
 
 ### Water & world bounds
 
 - `WaterSurface` (`src/water/water_surface.gd`, `@tool Area3D`, group `"water"`):
   `get_height(pos)`, optional `far_sea_extent` skirt, non-boat kill/respawn volume
   (`kill_margin` below the surface, `body_entered` -> `call_deferred("respawn")` on any
-  non-boat `BaseVehicle`, region via `contains_xz`); does not own the map boundary
-  (`CLAUDE.md` § Levels & water). `WorldBounds` (`src/levels/base/world_bounds.gd`, `@tool
-  StaticBody3D`): four walls on `extent` plus a ceiling at `ceiling_height`, down to
+  non-boat `BaseVehicle`, region via `contains_xz`); does not own the map boundary.
+  `WorldBounds` (`src/levels/base/world_bounds.gd`, `@tool StaticBody3D`): four walls on `extent` plus a ceiling at `ceiling_height`, down to
   `floor_depth`, axis-aligned. Set `extent` to the water `size` so sea wall and map wall
-  match (`tests/test_world_bounds.gd`); default `ceiling_height` is 1500 m, clear of the
+  match (nothing tests that per level); default `ceiling_height` is 1500 m, clear of the
   contract's 0-500 m `altitude` scale.
 - Depth-fade shading (`water.gdshader`): samples `hint_depth_texture`, fades
   `shallow_alpha`->`deep_alpha` / `water_color`->`deep_color` over `depth_fade_m`; `depth *

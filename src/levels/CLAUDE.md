@@ -11,36 +11,22 @@
   the fresh base — `heightmap_terrain.gd:_auto_splat`). So pressing it on level 1 wipes
   Field/Mud/Gravel AND the road asphalt, and the recovery is to replay the level's chain.
 - **A level's generator chain is a committed manifest**, `src/levels/**/<id>_gen.json`: the
-  ordered tools, their args, and where the `--import` passes go. It is the ONE copy —
-  generator headers point at it instead of restating it, and a generator edit means editing
-  the manifest in the same commit. Replay one with
-  `powershell -File tools/rebuild_level.ps1 -Level <id>`; it snapshots into `tmp/<id>_before/`
-  (which is why `tmp/.gdignore` is committed — the uid-hijack rule in the root `CLAUDE.md`)
-  and ends with a per-file identical/CHANGED diff. A manifest marked `"replayable": false` is
-  REFUSED without `-Force` — that is levels 2-4, whose `gen_islands.gd` template would delete
-  hand-added spawns and dressing. Not a CI gate: a replay takes minutes and rewrites
-  committed content.
-- **Level 1's paint chain is a fixed point; its sculpt is not, and that is accepted.**
-  Replaying reproduces both splat PNGs byte-exactly, but moves ~150-250 heightmap pixels by
-  1-3 of the 8-bit height steps every run, always in the farm's blend rims — `_flatten`
-  re-lerps its rim on already-flat ground and `_smooth` is 4 passes over an already-smoothed
-  one, and neither can be made idempotent. **So the diff CLASSIFIES a changed PNG instead of
-  being made bit-exact**: `tools/png_drift.gd` decodes both copies and `rebuild_level.ps1`
-  judges pixels-moved / max-step against the manifest's `sculpt_drift` map (no entry = byte
-  equality). COMPROMISE: bit-equality would cost ~184 KB of committed baseline PNG and a
-  re-zeroed drift baseline (the pre-farm heightmap is gone), to buy a guarantee nothing
-  consumes.
+  ordered tools, args, stages and `--import` passes. It is the ONE copy; a generator edit moves
+  it in the same commit. Replay: `powershell -File tools/rebuild_level.ps1 -Level <id>`
+  (snapshots into `tmp/<id>_before/`, hence the committed `tmp/.gdignore`, then diffs per file).
+  `"replayable": false` (levels 2-4: `gen_islands.gd` would delete hand-added spawns) refuses
+  without `-Force`. Not a CI gate: a replay takes minutes and rewrites committed content.
+- **Level 1's replay is not bit-exact, and that is accepted**: its splats reproduce byte-exactly,
+  but `_flatten`/`_smooth` move ~150-250 heightmap pixels by 1-3 steps each run. So
+  `rebuild_level.ps1` CLASSIFIES a changed PNG (`tools/png_drift.gd` against the manifest's
+  `sculpt_drift` map; no entry = byte equality). COMPROMISE: bit-equality would cost ~184 KB of
+  baseline PNG to buy a guarantee nothing consumes.
 - **Re-run `paint_road_asphalt` after any road or road-profile edit.** A stale paint is
   invisible — nothing in the bake, the tests or CI notices that the committed splat2 has
   stopped matching the road profile.
-- **LEVEL 2'S MOUNTAIN ROAD IS STEEPER THAN ANYTHING CAN CLIMB, AND SHIPS THAT WAY.** Measured
-  2026-09-18 with `measure_grade.tscn -- level=level_2`: 2033 m long, mean grade 16.4 %, worst
-  86.9 % (41 deg), 512 m of it above 25 %. The paint is fine (mean grip 1.00, crr 0.000 — real
-  asphalt); the curve's Y values are the problem. The loaded 32 t semi pulls away on 16.7 % and an
-  empty SUV on 56.6 % (`docs/vehicles.md` § Gradeability), so the upper road is undrivable by
-  design, not by tuning. Level 1's road is clear of this (mean 4.6 %, worst 17.5 %, 72 m above
-  15 %). Nothing gates road grade — `level=<id>` is the only thing that reads it, and it is a dev
-  report, not CI.
+- **Level 2's mountain road is steeper than most bodies pull away on** (the curve's Y values,
+  not the paint; figures: `docs/vehicles.md` § Gradeability). Nothing gates road grade:
+  `measure_grade -- level=<id>` is a dev report. Reopened: `docs/to_investigate.md`.
 - **Never run `paint_road_asphalt` on `car_arena`**: its scaffold paints its own roads at the inset
   paved width, then splat channel 4, **Ice**, under the ice road's bend only. The tool's full-width
   stamp would bury the ice, and nothing would notice.
@@ -66,7 +52,6 @@
 - **Everything under `island/` ships in a level pack, not the main `.pck`** (`LevelPacks`): a new
   island needs a `Web <id>` export preset, and `tests/test_export_filter.gd` names the exact one.
 - **Level-select cards**: the screenshot camera is a side-car `<level>_shot.tres`
-  (`LevelShot`), never a node (the level `.tscn` is a bake input). Shot from the Polish tab
-  or `tools/gen_level_thumbs.tscn` (**windowed only**) into `src/ui/level_thumbs/` — it must
-  stay under `src/`, since `kit/thumbs/*` and `tools/*` are export-excluded. The shot runs
-  the BAKED level: bake first.
+  (`LevelShot`), never a node (the level `.tscn` is a bake input). The PNG goes to
+  `src/ui/level_thumbs/` (`kit/thumbs/*` and `tools/*` are export-excluded). The shot runs the
+  BAKED level: bake first.

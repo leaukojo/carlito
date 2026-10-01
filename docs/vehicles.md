@@ -1,7 +1,7 @@
 # Vehicles
 
 The vehicle framework and the four families that carry one bus each. Truck/trailer/tractor:
-`docs/heavy_vehicles.md`; shared plumbing: `docs/systems.md`. Rationale/gotchas:
+`docs/heavy_vehicles.md`; shared plumbing: `docs/systems.md`. Rules:
 `src/vehicles/CLAUDE.md`, `drone/CLAUDE.md`, `train/CLAUDE.md` — this doc is the descriptive
 tour.
 
@@ -30,8 +30,7 @@ tour.
 
 ### Drivetrain, wheels, drag — the identifiers
 
-Rationale: `src/vehicles/CLAUDE.md` §§ Drivetrain and brakes / Wheels, suspension and the 60
-Hz tick / Drag and downforce.
+Rules: `src/vehicles/CLAUDE.md`; derivations and figures: § Physics derivations and figures below.
 
 | System | Key facts |
 | --- | --- |
@@ -47,89 +46,253 @@ Hz tick / Drag and downforce.
 `ChaseCamera` follows `get_global_transform_interpolated()`. `LampSet`/`Horn`:
 `docs/systems.md` § Lamps, horn & day/night.
 
+### Physics derivations and figures
+
+Figures here moved from `src/vehicles/CLAUDE.md` on 2026-10-01 and have not been re-measured.
+
+**Converter.** At a standstill the whole gain is the torque curve's slope across the stall rise
+(the free rev is linear in throttle, where a real converter's goes as N²). That is 1.67x on the
+car family, 1.70x on the Kenney trucks, 1.37x on the hand-built semis and 1.24x on the tractor,
+whose curve is nearly flat there. Because of that gain the handbrake, derived at idle rpm, slips
+at ~30 % throttle on the cars and trucks, ~33 % on the semis and ~34 % on the tractor, rather
+than the 37.5 % its own arithmetic says. What moves with the converter:
+- `engine_load` samples the curve at `Drivetrain.rpm`, so a held truck at full pedal reads 85 %
+  where it read 50 % at idle;
+- `pto_rpm` follows the rev, being a stub shaft off the crank;
+- fuel, coolant and battery read `applied_throttle` alone and do not move.
+
+**Limiter at launch.** `Drivetrain.process` reads the spinning drive wheels' mean omega, while
+auto-shift decides on road speed. So a car spinning its wheels in first holds gear 1 past
+redline, inside the fuel cut. On the heavy, wheel-spinning bodies that costs about a second to
+100, all of it in the 0-50 split.
+
+**Differentials.** Declared in `gen_kenney_vehicles.gd`:
+
+| Body | Declaration |
+| --- | --- |
+| `suv`, `suv-luxury` | 3:1 Torsen-type centre |
+| `race-future` | the same centre, plus a 2.5 rear LSD |
+| `race` | 2.5 rear LSD |
+| `hatchback-sports` | 2.5 helical front LSD |
+| `tractor-kenney` | open rear with a lock; rigid MFWD |
+| everything else, semis and trailers included | open |
+
+A biasing diff caps the transfer at `|T_in|/2 · (b−1)/(b+1)`, so the slow side takes at most `b`×
+the fast. Against the all-open model:
+- the biasing centres launch faster (0-100 `race-future` 4.63 → 3.42 s, `suv-luxury` 7.55 → 6.92,
+  `suv` 9.98 → 9.83);
+- the axle LSDs change nothing in a straight launch (both wheels turn at one speed);
+- top speeds do not move.
+
+A biasing diff shows up as power oversteer, so the corner pass holds speed with a PI pedal
+(`measure_vehicles.gd`). Under bang-bang pulses `race` spun at a reported 1.62 g; with the PI
+pedal the diffs move peak lateral g by 0.01-0.08 g.
+
+**Open-diff peel.** Each `RayWheel` integrates its own spin, and the grip curve falls past 0.12
+slip. Under an equal split, the wheel that slips further grips less and spins further still, so
+the pair delivers 2× the weaker wheel's grip. That is real open-diff behaviour, and it is why an
+open body sticks floored on bumps while a feathered pedal crosses. The tractor's MFWD is rigid,
+as a real one is. Engaged, it lifts mud gradeability from ~7 % on an open centre to 26.4 %
+(`mfwd diff tc`), at the cost of real driveline wind-up in tight turns. The 2WD tractor floored
+in mud never pulls away: a quarter pedal in gear 1 is already past the mud grip peak.
+
+**Spin step.** Tyre force is huge next to the wheel's own inertia (`I / r²` is about 31 kg on the
+tractor, against 1000 kg of corner mass), so an explicit step rings at the tick rate. Against a
+480 Hz reference, capping the reaction term gave +20 % top speed on the car and +41 % on the
+tractor. The semi-implicit step lands within ~2 % of the reference, erring slow.
+
+**Anti-roll latch.** Wheels tick in array order. With a live read, the first wheel of each pair
+saw a partner one tick staler than the second wheel did: a phantom damper of `rate / 60` N·s/m
+on the left wheels only. Past the grip peak the open split turned that into drift: 1.07 m over
+200 m on `hatchback-sports` and 1.18 m on `race`. With the shared latch every bar-carrying body
+tracks 0.000 m. Measured and ruled out as tracking causes:
+- the COM heights, `mu_lat` and the axle pairing;
+- body asymmetry;
+- `load_scaled_mu` (drift got worse at sensitivity 0);
+- a bar-driven load-transfer loop.
+
+**Inertia.** Moving a sedan's `com_y` traces a parabola in the roll and pitch moments, with its
+minimum at the hull's own mass centroid, while yaw barely stirs: the parallel-axis shift. The
+tensor also scales exactly with a runtime `mass` write.
+
+**Resistance balance.** Resistance applies what `0.5*rho*Cd*A*v^2 + crr*N` owes to within a
+newton, and summed tyre force matches `axle_torque / r` to within two. The `balance` line in
+`measure_vehicles` (`tyres - resistance + rake`) closes on the measured acceleration to a newton
+or two; a gap means a new force is unaccounted for. `Wheel.force_long` and `Wheel.contact_normal`
+are diagnostic only: nothing in the sim reads them. `rake` reads ~0 only on the flat.
+
 ### Measuring a vehicle: `tools/measure_vehicles.tscn`
 
-For questions unit tests can't answer: how fast, does it track straight. Game-mode tool
-scene (needs a live physics step, unlike `--script`):
-
-```powershell
-& $GODOT --headless --path . res://tools/measure_vehicles.tscn -- sedan-sports
-& $GODOT --headless --path . res://tools/measure_vehicles.tscn -- all 45
-& $GODOT --headless --path . res://tools/measure_vehicles.tscn -- all 45 track strict
-```
-
-First arg: variant id (default `sedan-sports`) or `all`. Second: cap (s). Flags: `coast`,
-`track`, `strict`. Strip: a bare 40 × 6000 m `StaticBody3D`, `surface_grip` 1.0.
+For questions unit tests can't answer: how fast, does it track straight. Run lines and flags
+for every measure tool: `tools/CLAUDE.md` § Measure tools. Strip: a bare 40 × 6000 m
+`StaticBody3D`, `surface_grip` 1.0.
 
 | Pass | Measures | Note |
 | --- | --- | --- |
 | Acceleration / top speed | 0-50/100/150/200 km/h, 0-60 mph, quarter mile, settled top speed + gear/rpm | a capped run (`sedan` ~38 s for 200 km/h; `all 60` cuts it short) reports low with no flag — check the power balance `0.5*rho*Cd*A*v^3 + crr*m*g*v` |
 | Tracking | 60 km/h launch, 200 m zero-steer, lateral offset / heading change | thresholds 1.0 m / 1.0° (`wheel_positions` x is a common cause); CI gate `tracking` (`-- all 45 track strict`), parallel to `build`, `publish-dev` needs both |
 | Coast-down (`coast`) | throttle cut at top speed, deceleration from resistance alone | vs `0.5*rho*Cd*A*v^2 + crr*m*g`; force column vs `spec.mass` alone understates a coupled rig (`8000 kg chassis, 32000 kg all up`) |
+| Cornering (`corner`) | skid pad at 40 km/h held by a PI pedal, lock wound on over 10 s: peak lateral g, axle saturating first, roll at the peak, wheels lifted | the anti-roll bar's sizing pass (4-8 deg target); a bang-bang pedal reads a biasing diff's power oversteer instead of grip |
 
-- `-- semi` always measures the coupled 32 t rig (`SemiTractor` auto-couples its trailer);
-  `test_vehicle_catalog` sweeps every variant's declared drag/downforce pair the same way.
-- Drone has its own tool, `tools/measure_drone.tscn` (`_wheel_driven_variants` skips chassis
-  with no driven axle): no args, five passes on a flat strip in still air (~55 s) — hover,
-  climb/descent, lean/translate (a `residual` line prints speed still being gained),
-  endurance, one-motor-out. A divergence from `DroneVehicle`/`DronePower` arithmetic is a
-  finding. Flies via `InputRouter` source registration, not `Input` actions (autoloads tick
-  before scene nodes).
-- Do not use `Engine.time_scale`: it enlarges the physics step (rather than running more
-  iterations at the same `time_scale`), breaking the locked-60-Hz rule.
+Cornering baseline, measured 2026-09-23 (peak g / first axle to saturate / roll at peak / wheels
+lifted):
+- **Saloons:**
+  - `sedan` 0.95 g / front / 5.6 deg / 0;
+  - `sedan-sports` 0.93 g / front / 6.2 / 0;
+  - `taxi` 0.95 g / rear / 6.1 / 0;
+  - `police` 0.96 g / front / 6.5 / 0.
+- **Hot hatch:** `hatchback-sports` 0.96 g / front / 6.8 / 1.
+- **SUVs:**
+  - `suv` 0.89 g / front / 6.9 / 1;
+  - `suv-luxury` 0.84 g / front / 5.6 / 0.
+- **Open-wheelers:**
+  - `race` 1.23 g / front / 3.4 / 0;
+  - `race-future` 1.25 g / front / 2.1 / 0.
+- **Van and pickups:**
+  - `van` 0.85 g / front / 5.3 / 0;
+  - `pickup` and `pickup-flat` 0.92 g / rear / 6.5 / 0.
+- **Heavy vans:**
+  - `delivery-flat` 0.83 g / front / 4.2 / 1;
+  - `ambulance` 0.82 g / rear / 4.5 / 0;
+  - `delivery` 0.93 g / front / **13.0 / 4: it rolls over**, a tall box van tipping at the limit
+    (reopened: `docs/to_investigate.md`).
+
+- `-- semi` always measures the coupled 32 t rig (`SemiTractor` auto-couples its trailer), so
+  there is no bobtail case. Its launch transient is not bit-reproducible across run contexts (the
+  coupling countdown starts from whatever the previous vehicle left): top speed, gear and rpm are
+  stable, while 0-50 / quarter / `tyres` / `rake` move in the third digit. Compare runs of the same
+  shape.
+- `tractor-kenney` gets no tracking pass: the pass latches its line at 60 km/h and a 40 km/h
+  tractor never gets there (`never reached 60 km/h, skipped`). Check such a body by driving.
+- `tools/measure_semi_launch.tscn` reads its static pose off P5 (standstill, brakes on), not P1
+  (still settling). P7 is the rollover skid pad: full lock in one tick at 40 km/h, reporting
+  chassis/trailer roll, joint roll off the relative basis, peak lateral g and wheels lifted.
+- `tools/measure_drone.tscn` flies five passes on a flat strip in still air: hover,
+  climb/descent, lean/translate (a `residual` line prints speed still being gained), endurance,
+  one-motor-out. A divergence from `DroneVehicle`/`DronePower` arithmetic is a finding. It flies
+  via `InputRouter` source registration, not `Input` actions (autoloads tick before scene nodes).
 
 ### Gradeability: `tools/measure_grade.tscn`
 
 The other question unit tests cannot answer: how steep a hill a body pulls away on, and how
-steep a hill a level asks for. Same game-mode tool-scene shape as `measure_vehicles`.
-
-```powershell
-& $GODOT --headless --path . res://tools/measure_grade.tscn -- tractor-kenney mud mfwd tc
-& $GODOT --headless --path . res://tools/measure_grade.tscn -- semi asphalt
-& $GODOT --headless --path . res://tools/measure_grade.tscn -- level=level_2
-```
-
-First arg: variant id (default `suv`), `all`, or `level=<id|res path>`. Surface names after it
-(`asphalt gravel grass dirt field mud`, the shipped `HeightmapTerrain.channel_grip` /
-`channel_drag` pairs) pick which surfaces to run; none means all five. Flags: `mfwd` / `diff`
-(tractor toggles), `tc` (hold the driven slip at the grip curve's peak instead of flooring the
-pedal), `verbose` (per-trial trace), `hold=<deg> pedal=<0..1>` (one diagnostic trial with a
-per-wheel force / slip / omega dump).
+steep a hill a level asks for. Surfaces are the shipped `HeightmapTerrain.channel_grip` /
+`channel_drag` pairs. `tc` holds the driven slip at the grip curve's peak instead of flooring
+the pedal; `hold=<deg> pedal=<0..1>` runs one diagnostic trial with a per-wheel force / slip /
+omega dump.
 
 Ramp mode bisects the steepest angle the body climbs FROM REST — no run-up, which is the
 question a driver asks halfway up a hill. Each trial is a fresh body on a fresh inclined
 `StaticBody3D` over a synthetic grip patch answering the same duck-typed contract
 `HeightmapTerrain` does. Beside each measurement it prints two static textbook ceilings —
 traction (`tan a <= (mu * driven_share - crr) / (1 - mu * h / L)`, or `mu - crr` all-wheel) and
-first-gear-at-idle torque — so a disagreement says which one bit. Both are single-body and
-ignore `load_sensitivity`; a coupled rig is outside what they describe and the report says so.
+first-gear torque at the converter's full-throttle rpm — so a disagreement says which one bit.
+Both are single-body and ignore `load_sensitivity`; a coupled rig is outside what they describe
+and the report says so.
 
-Measured 2026-09-18, standing start, full throttle unless noted:
+Measured 2026-09-23, standing start, full throttle unless noted:
 
 | Variant | asphalt (grip 1.0) | mud (grip 0.5, crr 0.2) |
 | --- | --- | --- |
-| `sedan` (FWD, 1.15 t) | 43.6 % | 2.5 % |
-| `suv` (AWD, 1.5 t) | 56.6 % | 13.6 % |
-| `pickup` (RWD, 1.55 t) | 53.5 % | 1.2 % |
-| `garbage-truck` (RWD, 8 t) | 33.0 % | 0 % |
-| `tractor-kenney` (2WD) | 44.3 % | 0 % |
-| `tractor-kenney` (`mfwd diff tc`) | 48.0 % | ~7 % |
-| `semi` + 24 t box (32 t rig) | 16.7 % | — |
+| `sedan` (FWD, 1.15 t) | 38.6 % | 2.5 % |
+| `suv` (AWD, 3:1 centre, 1.5 t) | 56.6 % | 27.7 % |
+| `suv-luxury` (AWD, 3:1 centre, 1.6 t) | 72.3 % | 19.9 % |
+| `race-future` (AWD, 3:1 centre, rear LSD, 0.85 t) | 98.8 % | 28.3 % |
+| `pickup` (RWD, 1.55 t) | 54.2 % | 1.2 % |
+| `garbage-truck` (RWD, 8 t) | 40.7 % | 0 % |
+| `tractor-kenney` (2WD) | 59.1 % | 0 % |
+| `tractor-kenney` (`mfwd`) | 67.7 % | 13.6 % |
+| `tractor-kenney` (`mfwd diff tc`) | 69.5 % | 26.4 % |
+| `semi` + 24 t box (32 t rig) | 16.1 % | — |
 
 Real-world reference for the same question: a laden 32-40 t artic restarts on 15-20 % (EU
 type-approval asks only for 12 %), a laden rigid truck on 20-25 %, a FWD car on 25-30 %, an
 AWD car on 45 % and up, a 4WD farm tractor on 35-45 % firm / 15-25 % in a wet field. Road
 design: motorway 6-8 %, mountain road 10-12 %, extreme public street 20-30 %. So the semi's
-16.7 % is the figure a real artic makes; the cars sit ~10 points optimistic (`mu_long` 1.05,
-no FWD-specific penalty); the mud column is where the model diverges — `src/vehicles/CLAUDE.md`
-§ Wheels, suspension and the 60 Hz tick has the two reasons and what they cost.
+16.1 % is the figure a real artic makes, and the cars sit within ~10 points of theirs (`mu_long`
+1.05, no FWD-specific penalty).
+
+In mud the bodies split by driveline:
+- A biasing or rigid centre gets close to the all-wheel ceiling the tool prints (SUV 15.5 against
+  18.0 deg; tractor `mfwd diff tc` 14.8 against 16.7).
+- One driven axle on an open diff barely leaves the flat, because one wheel peels past the grip
+  peak (§ Physics derivations and figures, open-diff peel).
+- The surface is also tyre-blind: a lug tyre loses the same half of its grip in mud as a road
+  tyre.
 
 `level=` mode instead walks every road curve in a level (the `carlito_road` group, so an
 untreed instance works) at 4 m steps and reports mean and worst grade, metres above the 10 /
 15 / 25 % bands, and the mean painted grip and added crr under the ribbon — which is both "is
 this drivable" and "did `paint_road_asphalt` go stale". Level 1's road reads mean 4.6 %, worst
-17.5 %; level 2's reads mean 16.4 %, worst 86.9 %, with 512 m above 25 %
-(`src/levels/CLAUDE.md`).
+17.5 %; level 2's reads mean 16.4 %, worst 86.9 % (41 deg) over
+2033 m, with 512 m above 25 %: past the semi's 16.1 % for at least a quarter of its length and past
+the SUV's 56.6 % at its worst, because of the curve, not the tuning.
+
+### Rough and soft ground: `tools/measure_rough.tscn`
+
+What the flat strip and the ramp cannot show: whether drive torque reaches the wheels that can
+use it once the ground stops being even. It drives the real `src/levels/dev/rough_ground/` level
+(unregistered, F6-runnable), two parallel lanes, asphalt and mud, each carrying the same patches
+in the same order: a flat control, random bumps of +-5 / 10 / 20 cm on a 3 m lattice, then
+V-ditches 20 / 35 / 50 cm deep. The 50 cm ditch's inner wall is 18.4 deg, above the 16.7 deg a
+perfect all-wheel drive holds in mud on a uniform grade, but only 1 m long: shorter than any
+wheelbase, so the rear axle pushes while the front climbs, and a body arrives rolling. A
+traction-capable 4x4 crosses it at the 2 m/s crawl and stalls on it at 0.5 m/s. It is not a
+fake-traction detector; `measure_grade` against its printed ceiling is. Every position is
+in `tools/rough_ground_layout.gd`, which the level's generator (`tools/gen_rough_ground.gd`,
+chain in `rough_ground_gen.json`) and this tool both read.
+
+`baseline` runs `suv`, `tractor-kenney` in 2WD / MFWD / MFWD + diff lock, `sedan` and
+`pickup`. `--fixed-fps 60` runs one 1/60 s tick per frame with the step unchanged, so a baseline
+takes ~1.5 min instead of ~30 and matches a real-time run exactly.
+
+Each trial is a standing start 10 m before a patch. A driver holds the crawl with the pedal and
+the lane's centre line with the wheel, through the bridge. Without `tc` the pedal floors whenever
+the body falls short of the crawl, which is what a player holding the key gets. With `tc` the
+driver also feathers to hold the WORST driven wheel at the 0.12 grip peak, which removes throttle
+sensitivity and leaves the differentials' own ceiling.
+
+It reports crossed / stuck / off lane per patch, with:
+- per wheel, mean and peak slip and time in the air;
+- seconds of chassis contact (`b` in the summary; a grounded body is geometry, not traction);
+- `use`: the driven wheels' force over their static `mu x grip x load`, averaged over the
+  DEMANDING ticks: short of the crawl with the pedal floored (or `tc` holding it back). `-` means
+  traction never limited that patch.
+
+An open diff's peel reads as low `use` (~0.6 floored on bumps) with one wheel's slip far above
+its partner's.
+
+Measured 2026-09-23, mud lane. A cell is the time over the patch and `use`:
+- `stuck+N` is stopped N m into the patch; `stuck-N` never reached it;
+- `b` is 1 s or more of chassis contact.
+
+Every asphalt cell crosses, except the sedan's `ditch_50` (`b`).
+
+```
+floored                   flat       bumps_5        bumps_10       bumps_20       ditch_20   ditch_35       ditch_50
+suv                       18.3s .76  18.2s .78      18.3s .78      17.8s .77      3.8s .83   3.9sb .89      6.2sb .80
+tractor-kenney            stuck-8.5  stuck-8.5      stuck-8.5      stuck-8.3      stuck-8.5  stuck-8.5      stuck-8.5
+tractor-kenney mfwd       13.4s      13.4s          13.4s          13.8s          3.1s       3.3s           3.6s
+tractor-kenney mfwd diff  13.4s      13.4s          13.4s          14.2s          3.1s       3.3s           3.6s
+sedan                     15.4s .78  stuck+16.8 .64 stuck+12.9 .61 stuck+23.8 .63 7.0s .78   stuck+1.3b .81 stuck+1.0b .80
+pickup                    15.4s .79  stuck+14.0 .64 stuck+13.2 .66 stuck+12.3 .64 2.9s .79   stuck+3.2 .78  stuck+1.0b .80
+hatchback-sports          14.7s      14.9s          14.0s          15.1s          4.5s       stuck+3.8      stuck+1.0b
+tc
+suv                       18.3s .76  18.2s .78      18.3s .78      17.9s .73      3.8s .83   3.9sb .89      stuck+2.7b .91
+tractor-kenney            14.1s .81  15.2s .76      14.4s .75      16.0s .79      3.6s .65   4.0s .86       stuck+1.4 .92
+tractor-kenney mfwd       13.3s      13.4s          13.4s          14.6s .47      3.2s       3.3s           5.2s .80
+sedan                     18.0s .81  19.1s .82      18.8s .82      19.5s .85      7.0s .88   stuck+1.5b .90 stuck+1.0b .92
+pickup                    20.4s .83  21.6s .84      17.6s .82      26.0s .85      3.4s .83   stuck+3.1b .90 stuck+1.0b .89
+```
+
+What the matrix shows:
+- **Open diffs, floored, stick on the bump fields** (sedan, pickup): one wheel peels, `use` ~0.6.
+  Feathered, they cross.
+- **The limited-slip `hatchback-sports` crosses them floored.**
+- **The 2WD tractor floored never reaches the first patch.** The open rear peels at a quarter
+  pedal in gear 1, which is throttle sensitivity with no clutch; feathered, it crosses.
+- **MFWD crosses everything** and is rarely short of traction (`-`).
+- `hatchback-sports` has no `use` column: it is not re-measured since `use` counts only
+  demanding ticks.
 
 ## Boat
 
@@ -140,10 +303,10 @@ Water & world bounds.
   (`_make_telemetry()` → `BoatTelemetry`, `_tick_extras` = buoyancy/drag/thrust/rudder),
   `reset_session_state()` = `super()` + trim/autopilot reset. Its spec declares no ground drive,
   so `axle_torque` off `Drivetrain` is discarded.
-- Boat, drone and train never reference `drivetrain` in their own files: they run the whole
-  engine model at 60 Hz for the gear byte alone (`auto_shift` on the kept 6 `gear_ratios`,
-  scale `DEFAULT_ROAD_RADIUS`) — accepted compromise, `src/vehicles/CLAUDE.md` § What a
-  `VehicleSpec` declares.
+- Boat, drone and train run the whole engine model at 60 Hz for the gear byte (`auto_shift` on
+  the kept 6 `gear_ratios`, scale `DEFAULT_ROAD_RADIUS`); only the boat reads `drivetrain` in its
+  own file, for telemetry (`applied_throttle`, `rpm`) — accepted compromise,
+  `src/vehicles/CLAUDE.md` § Rejected.
 
 ### Buoyancy and knobs
 
@@ -308,6 +471,15 @@ on the vehicle: `lift_thrust`, `heading_frame`, `level_target_up`, `align_torque
 | `drone_payload.gd` | cargo hook mass/COM change; `hardpoint_cmd` closes only with a `CargoPayload` in reach else `hardpoint_state` false; `payload_weight` = mass×gravity N (`uavcan.equipment.hardpoint.Status`'s unit) |
 | `drone_gimbal.gd` | writes the `HoodCam` marker transform, no camera code; bridge-only (`retarder`/`led` precedent), degrees; `gimbal_*_actual` chases at a finite slew |
 | `drone_air_data.gd` | `altitude`/`agl`/`baro_alt` deliberately disagree (no fusion): standard-day subscale vs drifting sea-level pressure, position error ∝ airspeed² |
+
+Six stateful sub-objects (plain `RefCounted`s the vehicle owns and ticks, the `WheelDrive`
+pattern) hold what the static files cannot: `DroneMotors` (rotors, `_omega`, ESC temps, wash
+discs), `DroneSensorSuite` (sky pattern, `agl`, the shared ray query), `DroneHook` (Hardpoint
+marker, crate, latch, jaws), `DroneGimbalMount` (HoodCam marker, angles, stops), `DronePack`
+(`soc`, pack temperature), `DroneIndicators` (status LEDs, rangefinder beam). A drawn part hangs
+off the object owning its state and is optional (`drone.tscn` has none of `drone-mk2`'s). The
+flight controller and arming state machine are not extractable: ~18 values cross stage
+boundaries.
 
 Payloads are level nodes at the level root, never under `AuthoringRoot`. Wind
 (`src/levels/base/wind_field.gd`): base flow + seeded gusts, horizontal only, `test_wind.gd`

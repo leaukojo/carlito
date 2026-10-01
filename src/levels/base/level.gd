@@ -398,7 +398,7 @@ func _find_closed_rail() -> Node:
 	return RailTrack.find_closed_rail(self)
 
 
-## Whether a closed rail loop exists — the shell's roster gate drops "train" from the garage menu when it doesn't.
+## Whether a closed rail loop exists — without one the vehicle selector shows the train refused, with the reason.
 func has_closed_rail() -> bool:
 	return _find_closed_rail() != null
 

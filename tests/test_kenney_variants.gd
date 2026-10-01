@@ -14,6 +14,8 @@ const DRIVE_OVERRIDABLE := {
 	"handbrake_grip": "handbrake_grip", "max_steer_deg": "max_steer_deg",
 	"min_steer_frac": "min_steer_frac", "steer_falloff_speed": "steer_falloff_speed",
 	"anti_roll_rate": "anti_roll_rate",
+	"diff_bias_front": "diff_bias_front", "diff_bias_rear": "diff_bias_rear",
+	"centre_diff_bias": "centre_diff_bias",
 }
 ## Baseline-only fields: overrides silently dropped (test_no_variant_overrides catches this).
 const SPEC_BASELINE_ONLY := {
@@ -32,7 +34,8 @@ const DRIVE_BASELINE_ONLY := {
 	"damper_rebound_rear": "damper_rebound_rear",
 }
 ## Driveline flags: had gone missing once (now pinned).
-const DRIVELINE_FLAGS := ["rear_diff_lockable", "front_axle_engageable", "retarder_equipped"]
+const DRIVELINE_FLAGS := ["rear_diff_lockable", "front_axle_engageable", "retarder_equipped",
+		"centre_diff_rigid"]
 ## Driven flags: must not default to false (missing key means baseline's answer).
 const DRIVEN_FLAGS := ["driven_front", "driven_rear"]
 

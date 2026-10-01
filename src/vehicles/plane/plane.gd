@@ -1,17 +1,15 @@
 class_name PlaneVehicle
 extends BaseVehicle
-## Light aircraft (CANaerospace flavor). Propulsion is prop thrust with rpm chasing throttle;
-## lift rides forward speed squared times an angle-of-attack factor and fades below stall
-## speed; a weathervane moment on angle of attack and sideslip keeps the nose on the velocity
-## vector so the aircraft trims itself; drag is body-frame anisotropic (lateral/vertical far
-## stiffer than forward) so the velocity follows the nose; control authority scales with
-## airspeed. Force terms are
-## one-tick clamped; don't weaken any clamp or raise the tick. Single-speed by construction
-## (shift_up_rpm 6000 above redline 5400) — don't "fix" the shift point. Wheel visuals: 0=nose,
-## 1=left main, 2=right main.
+## Light aircraft (CANaerospace flavor). Prop thrust with rpm chasing throttle; lift ~ forward speed
+## squared times an angle-of-attack factor, fading below stall speed; a weathervane moment on
+## AoA and sideslip keeps the nose on the velocity vector; drag is body-frame anisotropic (lateral
+## and vertical far stiffer than forward) so the velocity follows the nose; control authority
+## scales with airspeed. Force terms are one-tick clamped (the 60 Hz tick: `src/vehicles/CLAUDE.md`).
+## Single-speed by construction (shift_up_rpm 6000 above redline 5400): do not "fix" the shift
+## point. Wheel stations (`plane_spec.tres`): 0 = nose, 1 = left main, 2 = right main.
 
 @export_group("Propulsion")
-@export var max_thrust := 9000.0        ## N at redline prop rpm (hard cap by construction)
+@export var max_thrust := 9000.0        ## N at redline prop rpm
 @export var reverse_thrust_frac := 0.25 ## reverse (beta) thrust fraction for taxiing back
 @export var prop_spool_rate := 3500.0   ## rpm/s the prop chases the throttle target (spool lag)
 
@@ -24,12 +22,12 @@ extends BaseVehicle
 @export var aoa_lift_max := 1.8         ## cap on the angle-of-attack lift factor (the stall fade is separate)
 @export var stall_speed := 13.0         ## m/s below which lift is fully gone
 @export var full_lift_speed := 20.0     ## m/s at which the lift fraction reaches 1
-## N per m/s of forward speed. Includes the removed default_linear_damp (mass * 0.1 = 80 N/m/s)
-## folded in so the number is declared. With max_thrust it sets top speed (~26 m/s), sized to sit
-## just above the zero-AoA trim speed (~25 m/s) so full throttle does not balloon.
+## N per m/s of forward speed, including the removed default_linear_damp (mass * 0.1 = 80 N/m/s).
+## With max_thrust it sets top speed (~26 m/s), sized just above the zero-AoA trim speed (~25 m/s)
+## so full throttle does not balloon.
 @export var drag_coeff := 350.0
-## N per m/s sideways / vertical through the air (fuselage side area, wing planform): far stiffer
-## than forward, so the velocity vector follows the nose within a fraction of a second.
+## N per m/s sideways / vertical through the air: far stiffer than forward, so the velocity vector
+## follows the nose within a fraction of a second.
 @export var drag_lat := 1600.0
 @export var drag_vert := 1600.0
 @export var flap_lift_bonus := 4.0      ## extra lift_coeff at full flaps
@@ -89,11 +87,10 @@ var _elevator_pos := 0.0 ## slewed elevator deflection the surface is drawn at
 @onready var _flap_r: Node3D = $WingR/FlapR
 
 
-## Cosmetic only: mirrors the flight model's already-computed rpm and commands into prop
-## spin and surface deflection; never feeds back into a force or torque.
-## Each pivot is a bare Node3D on the hinge line, mesh child offset behind it. Local -Z is
-## forward: +X rotation drives the trailing edge down, +Y drives it right. Assignment is
-## absolute — rotate_* would accumulate and drift.
+## Cosmetic only: mirrors the already-computed rpm and commands into prop spin and surface
+## deflection; never feeds back into a force or torque. Each pivot is a bare Node3D on the hinge
+## line, mesh child offset behind it; local -Z is forward, +X rotation drives the trailing edge
+## down, +Y drives it right. Deflections are assigned absolutely (rotate_* would drift).
 func _process(delta: float) -> void:
 	_prop.rotate_z(_prop_rpm * PROP_VISUAL_SPIN * delta)
 	# Past disc rpm the blades swap for the disc; the spinner keeps turning either way.
@@ -101,8 +98,8 @@ func _process(delta: float) -> void:
 	_prop_blades.visible = not disc
 	_prop_disc.visible = disc
 
-	# The elevator is the one command with no upstream rate limit (_steer is slewed by
-	# spec.steer_speed, _flap_pos by flap_slew), so it eases here or it snaps.
+	# The elevator has no upstream rate limit (_steer is slewed by spec.steer_speed, _flap_pos by
+	# flap_slew), so it eases here.
 	_elevator_pos = move_toward(_elevator_pos, _elevator_cmd, elevator_slew_rate * delta)
 
 	# Nose up = trailing edge up.
@@ -126,7 +123,7 @@ func _make_telemetry() -> VehicleTelemetry:
 
 func _ready() -> void:
 	super._ready()
-	# See drone.gd: aircraft pass through the containment box rather than hit an invisible wall.
+	# Omits WorldBounds: an aircraft flies out over the containment box (as drone.gd).
 	collision_mask = Layers.SOLID
 	_prop_rpm = 0.0
 	_inertia = VehicleMath.inertia_of(spec.mass, body_extents.x, body_extents.z)
@@ -141,7 +138,7 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	var right := body.x
 	var up := body.y
 
-	# Prop rpm chases the throttle target (0 with the key off); thrust derives from that rpm.
+	# Target rpm is 0 with the key off.
 	var running := input.key == InputRouter.KEY_IGNITION
 	var target_rpm := 0.0
 	if running:
@@ -151,14 +148,12 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 			drivetrain.gear_byte, reverse_thrust_frac)
 	apply_central_force(fwd * thrust)
 
-	# Flaps: actual position slews toward the request (contract flaps_actual).
+	# Contract `flaps_actual` is the slewed position, not the request.
 	_flap_pos = flap_slew(_flap_pos, clampf(input.flaps, 0.0, 1.0), flap_slew_rate, delta)
 
-	# Lift rides forward airspeed squared times the angle-of-attack factor, fades below stall
-	# speed. Drag opposes velocity relative to WindField, split in the BODY frame (not
-	# VehicleMath.air_damper, whose axis mask is world-space), each term one-tick clamped. Lift
-	# and the flow angles stay on absolute velocity, not relative flow: wind is here to be flown
-	# against, not to change the stall speed.
+	# Drag opposes velocity relative to WindField, split in the BODY frame (not
+	# VehicleMath.air_damper, whose axis mask is world-space). Lift and the flow angles stay on
+	# absolute velocity: wind is here to be flown against, not to change the stall speed.
 	var wind := WindField.at(self)
 	var v_fwd := linear_velocity.dot(fwd)
 	var aoa := flow_angle(-linear_velocity.dot(up), v_fwd)
@@ -173,32 +168,31 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	apply_central_force(right * VehicleMath.damped_force(air.dot(right), drag_lat, spec.mass, delta))
 	apply_central_force(up * VehicleMath.damped_force(air.dot(up), drag_vert, spec.mass, delta))
 
-	# Weathervane: the tail turns the nose onto the velocity vector (pitch on angle of attack,
-	# yaw on sideslip), stiffness rising with speed squared like every aero moment.
+	# Weathervane: pitch on angle of attack, yaw on sideslip.
 	apply_torque(right * weathervane_torque(aoa, v_fwd, aoa_stiffness, max_pitch_torque))
 	# + sideslip = air from the right = nose should yaw right = -Y torque.
 	apply_torque(up * weathervane_torque(sideslip, v_fwd, sideslip_stiffness, max_yaw_torque))
 
-	# Control authority scales with airflow (none at standstill).
+	# Control authority: none at standstill.
 	var auth := control_authority(v_fwd, authority_speed_ref)
 	# Visual-only mirror; the torque below reads the raw input directly.
 	_elevator_cmd = clampf(input.elevator, -1.0, 1.0)
 	# Elevator: + = nose up = +torque about body right.
 	apply_torque(right * pitch_torque(clampf(input.elevator, -1.0, 1.0), pitch_gain, auth,
 			angular_velocity.dot(right), pitch_damping, _inertia_pitch, delta, max_pitch_torque))
-	# Steer -> coordinated bank + yaw. steer + = right; +torque about body forward rolls
-	# right-side-down, matching the spring sign. Spring always acts, so wings self-level.
+	# Steer + = right; +torque about body forward rolls right-side-down. The spring always acts, so
+	# the wings self-level.
 	apply_torque(fwd * roll_torque(_steer * max_bank_deg, VehicleMath.roll_deg(body), roll_stiffness,
 			auth, angular_velocity.dot(fwd), roll_damping, _inertia_roll, delta, max_roll_torque))
-	# steer negative = left; +Y torque yaws left, so the sign flips.
+	# Steer negative = left but +Y torque yaws left, so the sign flips.
 	apply_torque(up * VehicleMath.yaw_torque(-_steer * max_yaw_rate * auth, angular_velocity.dot(up),
 			yaw_gain, _inertia, delta, max_yaw_torque))
 
-	# Airborne only: as lift fades the nose is pushed down (recover by diving, never a spin).
+	# Airborne only: the nose drops as lift fades (recover by diving, never a spin).
 	if _airborne():
 		apply_torque(right * stall_torque(frac, stall_pitch_gain))
 
-	# rpm is the prop model (honest-model, labelled in PlaneTelemetry).
+	# rpm is the prop model (see PlaneTelemetry).
 	t.rpm = _prop_rpm
 	t.flaps_actual = roundi(_flap_pos * 100.0)
 
@@ -219,7 +213,7 @@ func _airborne() -> bool:
 	return true
 
 
-# --- pure flight math (unit-tested, one-tick clamped like RayWheel/boat) -------
+# --- pure flight math (torque terms one-tick clamped) ---
 
 ## Prop rpm chasing its target at a fixed spool rate (rpm/s).
 static func prop_rpm_step(current: float, target: float, rate: float, delta: float) -> float:
@@ -231,8 +225,8 @@ static func thrust_frac(rpm: float, idle_rpm: float, redline_rpm: float) -> floa
 	return clampf((rpm - idle_rpm) / maxf(1.0, redline_rpm - idle_rpm), 0.0, 1.0)
 
 
-## Signed prop thrust (N) along body forward, magnitude from the modeled rpm. Gear byte
-## owns direction: D forward, R a weak reverse/beta fraction, N none.
+## Signed prop thrust (N) along body forward, magnitude from the modeled rpm. The gear byte owns
+## direction: D forward, R a weak reverse (beta) fraction, N none.
 static func prop_thrust(rpm: float, idle_rpm: float, redline_rpm: float, thrust_cap: float,
 		gear_byte: int, reverse_frac: float) -> float:
 	var mag := thrust_frac(rpm, idle_rpm, redline_rpm) * thrust_cap
@@ -254,15 +248,13 @@ static func deflect_rad(cmd: float, max_deg: float) -> float:
 	return deg_to_rad(clampf(cmd, -1.0, 1.0) * max_deg)
 
 
-## 0..1 lift fraction vs forward airspeed: 0 at/below stall, 1 at/above full_lift_speed,
-## smoothstep between.
+## 0..1 lift fraction vs forward airspeed: 0 at/below stall, 1 at/above full_speed, smoothstep between.
 static func lift_frac(airspeed: float, stall: float, full_speed: float) -> float:
 	var t := clampf((airspeed - stall) / maxf(0.1, full_speed - stall), 0.0, 1.0)
 	return t * t * (3.0 - 2.0 * t)
 
 
-## Lift (N) along body up: speed-squared on forward airspeed only, scaled by stall
-## fraction and hard-capped.
+## Lift (N) along body up: forward airspeed squared, capped, scaled by the stall fraction.
 static func lift_force(airspeed: float, coeff: float, cap: float, fraction: float) -> float:
 	var v := maxf(airspeed, 0.0)
 	return minf(coeff * v * v, cap) * clampf(fraction, 0.0, 1.0)
@@ -277,29 +269,28 @@ static func flow_angle(cross: float, forward: float) -> float:
 	return atan2(cross, forward)
 
 
-## Angle-of-attack lift factor: 1 at zero AoA, linear in the angle, clamped to [0, max]. Negative
-## AoA can take the lift to zero, never below (no inverted lift).
+## Angle-of-attack lift factor: 1 at zero AoA, linear in the angle, clamped to [0, max]; negative
+## AoA takes lift to zero, never below (no inverted lift).
 static func aoa_factor(aoa: float, slope: float, max_factor: float) -> float:
 	return clampf(1.0 + slope * aoa, 0.0, max_factor)
 
 
 ## Weathervane torque (N*m) restoring a flow angle toward zero: -angle * stiffness * speed^2,
-## hard-capped. Sign is the restoring one for a torque about the axis the angle is measured
-## against (body right for AoA, body up for sideslip).
+## capped. Signed for a torque about body right (AoA) or body up (sideslip).
 static func weathervane_torque(angle: float, airspeed: float, stiffness: float,
 		max_torque: float) -> float:
 	var v := maxf(airspeed, 0.0)
 	return clampf(-angle * stiffness * v * v, -max_torque, max_torque)
 
 
-## Control authority 0..1: no airflow = no control. No prop wash term (tail sits outside
-## the prop stream), unlike the boat's rudder_authority.
+## Control authority 0..1: no airflow = no control. No prop-wash term (the tail sits outside the
+## prop stream), unlike the boat's rudder.
 static func control_authority(airspeed: float, speed_ref: float) -> float:
 	return VehicleMath.flow_authority(airspeed, speed_ref)
 
 
-## Pitch torque: elevator command scaled by authority plus a damper on pitch rate,
-## hard-capped. + = nose up (about body right).
+## Pitch torque: elevator command scaled by authority plus a pitch-rate damper, capped.
+## + = nose up (about body right).
 static func pitch_torque(elevator: float, gain: float, authority: float, pitch_rate: float,
 		damping: float, moment: float, delta: float, max_torque: float) -> float:
 	var torque := elevator * gain * clampf(authority, 0.0, 1.0) \
@@ -307,9 +298,8 @@ static func pitch_torque(elevator: float, gain: float, authority: float, pitch_r
 	return clampf(torque, -max_torque, max_torque)
 
 
-## Roll torque: spring toward the commanded bank angle (degrees, + = right side down)
-## scaled by authority, plus a damper on roll rate, hard-capped. Applied about body
-## forward, where + rolls the right side down.
+## Roll torque: spring toward the commanded bank angle (degrees, + = right side down) scaled by
+## authority, plus a roll-rate damper, capped. About body forward, + rolls the right side down.
 static func roll_torque(target_deg: float, current_deg: float, stiffness: float,
 		authority: float, roll_rate: float, damping: float, moment: float, delta: float,
 		max_torque: float) -> float:

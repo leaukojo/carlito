@@ -13,7 +13,7 @@ coast under ~12 km/h. Truck 4 is barely playable (its course box is 240 m long,
 
 ## Prompt
 
-Read `src/vehicles/truck/CLAUDE.md` § Brakes first. Log per-tick trailer wheel slip around a
+Read `src/vehicles/truck/CLAUDE.md` § Brakes, retarder, air first. Log per-tick trailer wheel slip around a
 light brake step (scripted-bridge driver, `--fixed-fps 60`) and rank these hypotheses with data:
 1. A one-tick slip spike: `trailer_abs` is the worst trailer wheel's slip > 0.30 on ANY tick
    (`truck_telemetry.gd` `trailer_abs_active`, `towed_body.gd` `max_wheel_slip`), and

@@ -8,13 +8,22 @@ Set-Location $repo
 . (Join-Path $PSScriptRoot 'godot_bin.ps1')
 
 # Loop guard: if Claude was already re-woken once by this hook, don't block again.
-try { $stdin = [Console]::In.ReadToEnd() | ConvertFrom-Json } catch { $stdin = $null }
-if ($stdin -and $stdin.stop_hook_active) { exit 0 }
+$raw = try { [Console]::In.ReadToEnd() } catch { '' }
+try { $stdin = $raw | ConvertFrom-Json } catch { $stdin = $null }
+
+# Allowing the stop: hand off to the user's optional notifier (it skips Stop events here,
+# because hooks run in parallel and only this one knows whether Claude really stopped).
+function Allow {
+    $notify = Join-Path $env:USERPROFILE '.claude\claude-notify.ps1'
+    if (Test-Path $notify) { $env:CLAUDE_NOTIFY_FROM_GATE = '1'; $raw | & $notify }
+    exit 0
+}
+if ($stdin -and $stdin.stop_hook_active) { Allow }
 
 # Cheap gate: only proceed if working-tree/staged files touch authoring surfaces.
 $dirty = (git status --porcelain 2>$null) -split "`n" |
     ForEach-Object { ($_ -replace '^..\s+', '').Trim() } | Where-Object { $_ }
-if (-not $dirty) { exit 0 }
+if (-not $dirty) { Allow }
 
 $touchContract = $dirty | Where-Object { $_ -eq 'contract/carlito_contract.json' }
 $touchHead     = $dirty | Where-Object { $_ -match '^(src/bridge/web/head_include\.html|export_presets\.cfg)$' }
@@ -58,4 +67,4 @@ if ($touchBake) {
     }
 }
 
-exit 0
+Allow
