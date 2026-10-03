@@ -103,11 +103,10 @@ the conventional carries none. No trailer of the four adds a signal to either.
   (`TowHost._build_joint`, `FifthWheel` profile): linear axes locked, yaw free to **75°**
   jackknife stop, pitch **±15°**, roll **±1.5°**. A 25% grade break swings it -9.0° to
   +12.8° (15° clears it); the rig meets one rolling or with speed, since from rest the box rig
-  pulls away on 16 % at most (`docs/vehicles.md` § Gradeability). Kinematic fallback
-  (`Articulation`) is written/tested but not taken — deaf to trailer-side forces.
+  pulls away on 16 % at most (`docs/vehicles.md` § Gradeability).
 - Yaw limit models trailer-against-cab contact, not a fifth-wheel property (plate and nose
   overlap while coupled, so collision can't arbitrate it). `Articulation.JACKKNIFE_MAX_DEG`
-  (**75°**) serves both joint and fallback. Rules: `truck/CLAUDE.md` § Fifth wheel, mass,
+  (**75°**) is the joint's stop. Rules: `truck/CLAUDE.md` § Fifth wheel, mass,
   axle loads; sizing: § Truck sizing.
 - Trailer carries its own unmodified `RayWheel`s — undriven, braked, six on a tri-axle
   bogie, making `trailer_axle_load`/`trailer_abs` real numbers, ticked from
@@ -171,9 +170,8 @@ the conventional carries none. No trailer of the four adds a signal to either.
   check, raise interlock, lamps, respawn, showroom freeze, camera exclusion, teardown. A
   `CouplingProfile` (joint angles, marker path, joint name, driver notices) distinguishes
   fifth wheel (`FifthWheel`) from drawbar (`Drawbar`, § below). Towed half is shared too:
-  `TowedBody` (RigidBody3D on the joint's end) and `Articulation` (coupled pose, load split,
-  kinematic fallback) — neither truck-specific; the tractor's drawbar and `FarmTipper` use
-  them directly.
+  `TowedBody` (RigidBody3D on the joint's end) and `Articulation` (coupled pose, load split) —
+  neither truck-specific; the tractor's drawbar and `FarmTipper` use them directly.
 - `E` cycles the combination, `V` the body: box → tipper → tanker → flatbed → bobtail via
   the same duck-typed `cycle_implement()` the tractor uses (`TrailerCatalog`, `BOBTAIL` a
   real entry).

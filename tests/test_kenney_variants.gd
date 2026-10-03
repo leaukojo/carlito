@@ -12,6 +12,7 @@ const SPEC_OVERRIDABLE := {
 }
 const DRIVE_OVERRIDABLE := {
 	"rolling_resistance": "crr", "mu_long": "mu_long", "mu_lat": "mu_lat",
+	"rear_lat_grip": "rear_lat_grip",
 	"handbrake_grip": "handbrake_grip", "max_steer_deg": "max_steer_deg",
 	"min_steer_frac": "min_steer_frac", "steer_falloff_speed": "steer_falloff_speed",
 	"anti_roll_rate": "anti_roll_rate",
@@ -28,12 +29,13 @@ const SPEC_BASELINE_ONLY := {
 }
 const DRIVE_BASELINE_ONLY := {
 	"wheel_inertia": "wheel_inertia", "rest_length": "rest_length",
-	"spring_rate": "spring_rate", "damper_bump": "damper_bump",
-	"damper_rebound": "damper_rebound", "max_suspension_force": "max_suspension_force",
+	"max_suspension_force": "max_suspension_force",
 	"load_sensitivity": "load_sensitivity",
-	"spring_rate_rear": "spring_rate_rear", "damper_bump_rear": "damper_bump_rear",
-	"damper_rebound_rear": "damper_rebound_rear",
 }
+## Springs and dampers: verbatim from a baseline that states them, re-derived on one that states a
+## `ride_hz` (test_springs_are_what_the_generator_derives).
+const SUSPENSION := ["spring_rate", "damper_bump", "damper_rebound", "spring_rate_rear",
+		"damper_bump_rear", "damper_rebound_rear"]
 ## Driveline flags: had gone missing once (now pinned).
 const DRIVELINE_FLAGS := ["rear_diff_lockable", "front_axle_engageable", "retarder_equipped",
 		"centre_diff_rigid", "abs_equipped", "tcs_equipped", "brake_engages_front_axle"]
@@ -54,6 +56,7 @@ const META_KEYS := [
 	"wheels", "wheel_x_out",  # wheel models and the outboard push
 	"ride_lift",      # chassis raised over the wheels (shallow arches)
 	"scale",          # per-variant body scale, multiplied into KIT_SCALE by _analyze
+	"ride_hz",        # spring derivation input over the baseline's (_suspension_recipe)
 	"_id",            # stamped in by `_ready`, never authored
 ]
 
@@ -242,7 +245,8 @@ func test_brakes_are_what_the_generator_derives_from_the_tyre() -> void:
 		scratch.ground_drive.brake_torque = 0.0
 		scratch.ground_drive.handbrake_torque = 0.0
 		scratch.ground_drive.brake_bias_front = -1.0
-		gen._derive_brakes(scratch, scratch.ground_drive, variant)
+		gen._derive_brakes(scratch, scratch.ground_drive, variant,
+				gen._static_sag(_suspension(gen, variant), shipped, shipped.ground_drive))
 		assert_float(shipped.ground_drive.brake_torque) \
 				.override_failure_message("%s_spec.tres brake_torque" % variant) \
 				.is_equal_approx(scratch.ground_drive.brake_torque, 1e-3)
@@ -252,6 +256,32 @@ func test_brakes_are_what_the_generator_derives_from_the_tyre() -> void:
 		assert_float(shipped.ground_drive.handbrake_torque) \
 				.override_failure_message("%s_spec.tres handbrake_torque" % variant) \
 				.is_equal_approx(scratch.ground_drive.handbrake_torque, 1e-3)
+
+
+## Springs, dampers and link slopes are the generator's derivation on a copy of the shipped spec, as
+## the brakes are: a hand-edited rate or slope fails whatever value it carries. A baseline with no
+## `ride_hz` states its springs, which ship verbatim.
+func test_springs_are_what_the_generator_derives() -> void:
+	var gen := _gen()
+	for variant: String in Gen.VARIANTS:
+		var b := _suspension(gen, variant)
+		var shipped := _spec_of(variant)
+		var scratch := shipped.duplicate(true) as VehicleSpec
+		var gd := scratch.ground_drive
+		for field: String in SUSPENSION:
+			gd.set(field, 0.0)
+		gd.anti_dive_slope = 0.0
+		gd.anti_squat_slope = 0.0
+		if b.has("ride_hz"):
+			gen._derive_springs(scratch, gd, b)
+		else:
+			for field: String in SUSPENSION:
+				gd.set(field, float(b[field]))
+		gen._derive_link_slopes(scratch, gd, b, gen._static_sag(b, scratch, gd))
+		for field: String in SUSPENSION + ["anti_dive_slope", "anti_squat_slope"]:
+			assert_float(float(shipped.ground_drive.get(field))) \
+					.override_failure_message("%s_spec.tres %s" % [variant, field]) \
+					.is_equal_approx(float(gd.get(field)), 1e-4)
 
 
 ## Drag and downforce areas measure the same box (invariant: cl/cd ratio via snap).
@@ -304,7 +334,8 @@ func test_measured_geometry_still_matches_the_models() -> void:
 						% [variant, float(ov["com_y_frac"])]) \
 					.is_equal_approx(gen._com_y(get_f, geo, ov), 1e-4)
 		var stations: PackedVector3Array = gen._wheel_positions(
-				geo, spec, gd, float(ov.get("wheel_x_out", 0.0)),
+				geo, gd, gen._static_sag(_suspension(gen, variant), spec, gd),
+				float(ov.get("wheel_x_out", 0.0)),
 				float(ov.get("ride_lift", 0.0)))
 		assert_int(gd.wheel_positions.size()) \
 				.override_failure_message("%s_spec.tres wheel_positions length" % variant) \
@@ -358,6 +389,11 @@ func _gen() -> Node:
 func _baseline(variant: String) -> Dictionary:
 	var ov: Dictionary = Gen.VARIANTS[variant]
 	return Gen.BASELINES[String(ov.get("base", ov["family"]))]
+
+
+## The suspension recipe `_build_spec` derives from: the baseline plus the variant's `ride_hz`.
+func _suspension(gen: Node, variant: String) -> Dictionary:
+	return gen._suspension_recipe(_baseline(variant), Gen.VARIANTS[variant])
 
 
 ## Spec via scene state (not instantiation, to avoid orphan sub-scenes).

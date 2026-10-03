@@ -80,7 +80,7 @@ const AGROUND_DEBOUNCE := 1.0     ## seconds the shallow reading must hold — f
 
 var _trim := 0.0        ## %, chases forward throttle (BoatTelemetry.trim_step)
 var _aground_hold := 0.0  ## seconds the aground condition has held continuously
-var _nav_mode := BoatAutopilot.STANDBY  ## what the pilot is DOING (contract 'nav_mode_actual')
+var _nav_mode: int = BoatAutopilot.STANDBY  ## what the pilot is DOING (contract 'nav_mode_actual')
 var _heading_target := 0.0              ## deg the pilot steers to (contract 'heading_target')
 ## The rudder this hull applied last tick, which the autopilot re-slews from. See _autopilot.
 var _helm := 0.0

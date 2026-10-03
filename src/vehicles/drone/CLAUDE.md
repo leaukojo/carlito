@@ -47,8 +47,8 @@ Tour, split table, sub-objects: `docs/vehicles.md` § Drone subsystems. Shared v
 - `max_attitude_torque` / `max_yaw_torque` are pinned arithmetic (`drone.gd`); never inflate
   `prop_torque_ratio` for yaw snap (rule 3). A yaw demand past the hover ceiling climbs.
 - `drone_bus.gd` declares the roster once; the array index is the bit index, not the node id. Its
-  three copies (contract `node_health` count, `InputRouter.NODE_FAIL_COUNT`, `cycle_node_fail`) are
-  pinned by `test_drone_bus`.
+  two copies (contract `node_health` count, `DRONE_NODES` in `src/input/subsystem_counts.gd`, which
+  the router's Y walk in `cycles.gd` reads) are pinned by `test_drone_bus`.
 - `node_fail` is an input mirrored verbatim; the local Y latch clears via
   `InputRouter.reset_vehicle_cycles`, a bridge-sent mask survives.
 - An offline ESC's command is zeroed after the mix, never `_omega` and never compensated.

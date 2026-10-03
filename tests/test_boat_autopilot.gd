@@ -1,10 +1,9 @@
 extends GdUnitTestSuite
 ## The boat's autopilot: mode resolution, the wrapped heading error, the PD, and the closed loop
-## it makes with the hull. Pins the contract enum against the ladder and BoatAutopilot.cycle
-## against InputRouter's own copy — the router carries a second cycle, so both must stay in sync.
+## it makes with the hull. Pins the contract enum against the ladder and the 2-key walk.
 
 const AP := preload("res://src/vehicles/boat/boat_autopilot.gd")
-const Router := preload("res://src/input/input_router.gd")
+const Cycles := preload("res://src/input/cycles.gd")
 const Counts := preload("res://src/input/subsystem_counts.gd")
 const ContractScript := preload("res://src/bridge/contract.gd")
 
@@ -33,21 +32,11 @@ func test_the_ladder_is_the_contract_enum() -> void:
 		assert_bool(AP.is_valid(mode)).is_false()
 
 
-## The router must not learn a vehicle class, so it carries its own copy of the walk. Grow one
-## without the other and the local key silently stops reaching the new position while the bridge
-## can still command it.
-func test_cycle_matches_the_routers_own_copy() -> void:
-	assert_int(Router.NAV_MODE_COUNT) \
-		.override_failure_message("InputRouter.NAV_MODE_COUNT has not followed BoatAutopilot.COUNT") \
-		.is_equal(AP.COUNT)
-	for mode in AP.COUNT:
-		assert_int(AP.cycle(mode)) \
-			.override_failure_message("BoatAutopilot.cycle and InputRouter.cycle_nav_mode disagree at %d" % mode) \
-			.is_equal(Router.cycle_nav_mode(mode))
-	# The walk closes, and a negative starting mode still lands inside the ladder.
-	assert_int(AP.cycle(AP.STANDBY)).is_equal(AP.HEADING_HOLD)
-	assert_int(AP.cycle(AP.HEADING_HOLD)).is_equal(AP.STANDBY)
-	assert_int(AP.cycle(-1)).is_between(0, AP.COUNT - 1)
+## The walk closes, and a negative starting mode still lands inside the ladder.
+func test_the_two_key_walk_closes_the_ladder() -> void:
+	assert_int(Cycles.nav_mode(AP.STANDBY)).is_equal(AP.HEADING_HOLD)
+	assert_int(Cycles.nav_mode(AP.HEADING_HOLD)).is_equal(AP.STANDBY)
+	assert_int(Cycles.nav_mode(-1)).is_between(0, AP.COUNT - 1)
 
 
 # --- resolve_mode -------------------------------------------------------------

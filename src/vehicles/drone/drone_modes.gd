@@ -189,13 +189,6 @@ static func resolve_mode(requested: int, pos_fix: bool, fence_rtl: bool, armed: 
 	return want
 
 
-## Z-key walk: STABILIZE -> ALT_HOLD -> LOITER -> RTL -> LAND -> STABILIZE. `posmod` so a negative
-## mode still lands inside the ladder. InputRouter.cycle_flight_mode mirrors this rule;
-## `tests/test_drone_modes.gd` pins the two equal.
-static func cycle(mode: int) -> int:
-	return posmod(mode + 1, COUNT)
-
-
 # --- the altitude cascade ---
 
 ## Desired climb rate (m/s): stick feedforward plus P on altitude error, clamped to ALT_RATE_MAX.

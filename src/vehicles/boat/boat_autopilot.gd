@@ -64,12 +64,6 @@ static func resolve_mode(requested: int, helm: float) -> int:
 	return requested
 
 
-## 2-key walk: STANDBY -> HEADING HOLD -> STANDBY. Mirrors InputRouter.cycle_nav_mode;
-## tests/test_boat_autopilot.gd pins the two equal.
-static func cycle(mode: int) -> int:
-	return posmod(mode + 1, COUNT)
-
-
 # --- the loop ------------------------------------------------------------------
 
 ## Heading error in degrees, wrapped to +-180 (359 -> 1 is +2). Positive means "come right".

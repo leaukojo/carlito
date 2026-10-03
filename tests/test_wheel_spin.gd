@@ -631,6 +631,21 @@ func test_an_explicit_rear_damper_wins_over_the_rate_scaling() -> void:
 	assert_float(gd.rear_damper_rebound()).is_equal_approx(17000.0, 1e-6)
 
 
+## `link_slope * force_long` is the link force along the contact normal: drive lifts the rear
+## (anti-squat) and pulls the front down (anti-lift); braking lifts the front (anti-dive).
+func test_link_slopes_are_signed_per_axle() -> void:
+	var gd := _spec()
+	gd.anti_dive_slope = 0.12
+	gd.anti_squat_slope = 0.15
+	var front := WheelScript.new(Vector3(0.0, 0.0, -1.0), true, true, null, 300.0)
+	var rear := WheelScript.new(Vector3(0.0, 0.0, 1.0), false, true, null, 300.0)
+	front.apply_suspension(gd)
+	rear.apply_suspension(gd)
+	assert_float(rear.link_slope * 1000.0).is_equal_approx(150.0, 1e-4)    # drive: tail up
+	assert_float(front.link_slope * 1000.0).is_equal_approx(-120.0, 1e-4)  # drive: nose down
+	assert_float(front.link_slope * -1000.0).is_equal_approx(120.0, 1e-4)  # brake: nose up
+
+
 # --- lateral_mass_at: what a sideways contact force really moves -------------------
 
 func test_a_contact_at_the_centre_of_mass_moves_the_whole_body() -> void:

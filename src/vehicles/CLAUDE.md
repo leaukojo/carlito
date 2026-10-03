@@ -33,6 +33,8 @@ truck / trailer / tractor).
   `front_axle_engageable`), never a third seam.
 - `has_engine` gates garage and selector readouts, never physics: `Drivetrain` runs for every family
   because the gear byte is the direction latch and the source of `ST_REVERSE` / `ST_NEUTRAL`.
+- Car/van springs derive per axle from `ride_hz`; launch/brake pitch is the link slopes'
+  (`anti_dive` / `anti_squat`), never a hand spring rate (`test_springs_are_what_the_generator_derives`).
 - Weight split: declare `front_weight` in the recipe. A raw `com_z` is only for a body tuned by
   driving (garbage truck). `com_z = 0` is wherever Kenney put the origin, not 50/50.
 - Steering lock: pick the lock in degrees, then divide (`min_steer_frac` scales the body's own
@@ -65,8 +67,9 @@ truck / trailer / tractor).
 - ABS (`abs_equipped`, road vehicles; not the tractor, the race cars or the plane) caps the foot
   brake and retarder at `RayWheel.ABS_SLIP`, the grip peak. A handbrake or spring brake is a
   mechanical hold no ABS modulates: a wheel under one brakes without it.
-- TC (`tcs_equipped`, the car family minus the race cars) caps drive at `RayWheel.TCS_SLIP`, per
-  wheel and drive-only (never brakes); the bridge's `tcs_off` disables it.
+- TC (`tcs_equipped`, the car family minus `race-future`) caps drive at `RayWheel.TCS_SLIP`, per
+  wheel and drive-only (never brakes); `tcs_off` disables it (the bridge's, or the local
+  TRACTION CONTROL setting).
 - The tyre class (`mu_long` / `mu_lat`) is the root of everything brake-shaped: brake, retarder
   rating, hierarchy floor, taper margin. A mu edit is a re-derivation (recipe + regen), never a
   number edit.
@@ -118,6 +121,8 @@ truck / trailer / tractor).
   (`ZERO` on a computed body): `inverse_inertia` for body-local axes, `inverse_inertia_tensor` for
   world-axis maths (the tow code). Guard:
   `tests/test_body_inertia.gd`.
+- Grip scales with load, so equal tyres steer near neutral: a body's understeer margin is
+  `rear_lat_grip` (`docs/vehicles.md` § Balance), never a slower steer or a detuned lock.
 - A car-family COM height (`com_y`) stays below ~45 % of the body's AABB height. If a narrow body
   tips before it slides, the levers are the anti-roll bar or `mu_lat`, never a lower COM.
 - Anti-roll bar: both wheels of an axle read the snapshot the body's tick (`WheelDrive.tick`,

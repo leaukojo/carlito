@@ -9,9 +9,9 @@ extends Node3D
 ## the vehicle.
 
 const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
+const MeasureRig := preload("res://tools/measure_rig.gd")
 
 const STRIP_LENGTH := 6000.0
-const Layers := preload("res://src/physics/collision_layers.gd")
 
 ## A body that reaches an edge is flagged, never measured silently.
 const STRIP_WIDTH := 40.0
@@ -236,9 +236,11 @@ func _ready() -> void:
 	_reference = JSON.parse_string(ref_file.get_as_text())
 	# Do not speed up with Engine.time_scale: it enlarges the physics step and breaks the
 	# locked-60-Hz tuning (default car's 0-100 went 5.30 s -> 6.40 s at time_scale 8).
-	_build_strip()
+	MeasureRig.add_slab(self, "Strip", Vector3(STRIP_WIDTH, 2.0, STRIP_LENGTH))
 	if _corner:
-		_build_pad()
+		# Skid pad: a wide square well off to the side, since a body at full lock circles in a few
+		# tens of metres and the strip is only 40 m wide.
+		MeasureRig.add_slab(self, "Pad", Vector3(PAD_SIZE, 2.0, PAD_SIZE), PAD_X)
 	if which == "all" or _doc == "cornering" or _doc == "accel":
 		_queue.assign(_wheel_driven_variants())
 	elif _doc == "braking":
@@ -252,18 +254,8 @@ func _ready() -> void:
 		return
 	print("strip: %.0f x %.0f m flat, surface_grip 1.0, zero steer input, %.0f s cap per pass\n" %
 			[STRIP_WIDTH, STRIP_LENGTH, _seconds])
-	_drive(100.0, 0.0)
+	MeasureRig.drive(100.0, 0.0)
 	_next_vehicle()
-
-
-## sloppyCAN's inbound stash, written straight into the (desktop-inert) Bridge autoload. Percentages
-## are the contract's "in" ranges (`steer` -100..100, + = right); bridge_source normalizes them.
-func _drive(accel_pct: float, brake_pct: float, steer_pct := 0.0) -> void:
-	Bridge.set("_active", true)
-	Bridge.set("_inbound", {
-		"key": 3, "gear": 1, "accel": accel_pct, "brake": brake_pct,
-		"steer": steer_pct, "handbrake": 0.0,
-	})
 
 
 ## Every catalog variant with a driven axle; boat/drone/plane/train declare none.
@@ -279,48 +271,6 @@ func _wheel_driven_variants() -> Array[String]:
 				out.append(id)
 		body.free()
 	return out
-
-
-func _build_strip() -> void:
-	var shape := BoxShape3D.new()
-	shape.size = Vector3(STRIP_WIDTH, 2.0, STRIP_LENGTH)
-	var collision := CollisionShape3D.new()
-	collision.shape = shape
-	var mesh := BoxMesh.new()
-	mesh.size = shape.size
-	var visual := MeshInstance3D.new()
-	visual.mesh = mesh
-	var ground := StaticBody3D.new()
-	ground.name = "Strip"
-	# TERRAIN: every gameplay ray masks Layers.SOLID; engine-default would drop the vehicle through.
-	ground.collision_layer = Layers.TERRAIN
-	ground.collision_mask = Layers.DYNAMIC
-	ground.position = Vector3(0.0, -1.0, 0.0)  # top face at y = 0
-	ground.add_child(collision)
-	ground.add_child(visual)
-	add_child(ground)
-
-
-## Skid pad for the cornering pass: a wide square well off to the side, since a body at full lock
-## circles in a few tens of metres and the strip is only 40 m wide.
-func _build_pad() -> void:
-	var shape := BoxShape3D.new()
-	shape.size = Vector3(PAD_SIZE, 2.0, PAD_SIZE)
-	var collision := CollisionShape3D.new()
-	collision.shape = shape
-	var mesh := BoxMesh.new()
-	mesh.size = shape.size
-	var visual := MeshInstance3D.new()
-	visual.mesh = mesh
-	var ground := StaticBody3D.new()
-	ground.name = "Pad"
-	# Same pairing as the strip: every gameplay ray masks Layers.SOLID.
-	ground.collision_layer = Layers.TERRAIN
-	ground.collision_mask = Layers.DYNAMIC
-	ground.position = Vector3(PAD_X, -1.0, 0.0)  # top face at y = 0
-	ground.add_child(collision)
-	ground.add_child(visual)
-	add_child(ground)
 
 
 func _next_vehicle() -> void:
@@ -466,7 +416,7 @@ func _tick_accel(delta: float) -> void:
 		# Held through a shift cut: the wheels unload there, and the integral would wind up.
 		if not _car.drivetrain.shift_cut_active():
 			_tc_pedal = TcPedal.step(_tc_pedal, _car.wheels, delta)
-		_drive(_tc_pedal * 100.0, 0.0)
+		MeasureRig.drive(_tc_pedal * 100.0, 0.0)
 	var v: float = _car.telemetry.speed  # signed m/s, read out of the sim
 	_inst_a = (v - _prev_v) / delta
 	_prev_v = v
@@ -567,7 +517,8 @@ func _split_deficit(w: RayWheel, gd: GroundDriveSpec, budget: float, delta: floa
 			+ _car.angular_velocity.cross(w.contact_point - _car.global_position)
 	var slip_denom := maxf(absf(vel.dot(forward)), RayWheel.LOW_SPEED_FLOOR)
 	var slip_long := w.slip * signf(w.force_long)
-	var budget_lat: float = RayWheel.load_scaled_mu(gd.mu_lat * w.lat_grip_scale * w.surface_grip,
+	var budget_lat: float = RayWheel.load_scaled_mu(
+			gd.mu_lat * w.axle_lat_grip * w.lat_grip_scale * w.surface_grip,
 			w.suspension_force, w.corner_mass * 9.81, gd.load_sensitivity) * w.suspension_force
 	var curve := RayWheel.combined_slip_force(slip_long,
 			-vel.dot(forward.cross(w.contact_normal)) / slip_denom, budget, budget_lat,
@@ -629,7 +580,7 @@ func _end_launch_run() -> void:
 	_current["launch_tc" if _tc_run else "launch"] = {"tc": _tc_run, "marks": marks,
 			"loss": _launch.duplicate(true)}
 	_current["towed_kg"] = _combination_mass() - _car.spec.mass
-	_drive(100.0, 0.0)
+	MeasureRig.drive(100.0, 0.0)
 	if _tc_run:
 		_tc_run = false
 		_finish_vehicle()
@@ -675,7 +626,7 @@ func _tick_cornering(delta: float) -> void:
 		_corner_pedal_i = clampf(_corner_pedal_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
 	var pedal := clampf(_corner_pedal_i + err * CORNER_PEDAL_KP, 0.0, 1.0) if _corner_ramping 			else 1.0
 	if not _corner_ramping:
-		_drive(pedal * 100.0, 0.0)
+		MeasureRig.drive(pedal * 100.0, 0.0)
 		# Wait for the speed, but never past the budget — a body that cannot reach 40 km/h says so
 		# rather than silently reporting the transient.
 		if speed >= CORNER_SPEED:
@@ -687,7 +638,7 @@ func _tick_cornering(delta: float) -> void:
 			_report_cornering(true)
 		return
 	_corner_ramp_t += delta
-	_drive(pedal * 100.0, 0.0, minf(_corner_ramp_t / CORNER_RAMP_S, 1.0) * 100.0)
+	MeasureRig.drive(pedal * 100.0, 0.0, minf(_corner_ramp_t / CORNER_RAMP_S, 1.0) * 100.0)
 	# Lateral acceleration of the motion that actually happened: `v * yaw_rate` is the centripetal
 	# term of the body's own velocity and angular velocity, both read out of the sim (rule 3).
 	var lat := speed * absf(_car.angular_velocity.y)
@@ -724,7 +675,7 @@ func _axle_saturation(rear: bool) -> float:
 		var ref_load: float = w.corner_mass * 9.81
 		var budget_long := _long_budget(w, gd)
 		var budget_lat: float = RayWheel.load_scaled_mu(
-				gd.mu_lat * w.lat_grip_scale * w.surface_grip,
+				gd.mu_lat * w.axle_lat_grip * w.lat_grip_scale * w.surface_grip,
 				w.suspension_force, ref_load, gd.load_sensitivity) * w.suspension_force
 		total += Vector2(w.force_long / maxf(budget_long, 1.0),
 				w.force_lat / maxf(budget_lat, 1.0)).length()
@@ -741,7 +692,7 @@ static func _long_budget(w: RayWheel, gd: GroundDriveSpec) -> float:
 func _report_cornering(skipped: bool) -> void:
 	# Release the lock before anything else: a held steer input would ride into the next vehicle's
 	# passes and read there as a chassis that pulls.
-	_drive(100.0, 0.0)
+	MeasureRig.drive(100.0, 0.0)
 	if skipped:
 		_current["cornering"] = {"skipped": true}
 		_after_lateral_passes()
@@ -811,7 +762,7 @@ func _report_accel(capped: bool) -> void:
 	_current["launch"] = {"tc": _tc_run, "loss": _launch.duplicate(true)}
 	# The passes after this one run floored.
 	_tc_run = false
-	_drive(100.0, 0.0)
+	MeasureRig.drive(100.0, 0.0)
 	# Settled, capped, or a peak the body then lost: three different claims, never one label.
 	var v_now: float = _car.telemetry.speed
 	var top_label := "top (settled)"
@@ -890,7 +841,7 @@ func _report_accel(capped: bool) -> void:
 		var v0 := v
 		_reset_pass(Phase.COAST)
 		_coast_v0 = v0
-		_drive(0.0, 0.0)
+		MeasureRig.drive(0.0, 0.0)
 		return
 	_car.respawn()
 	_reset_pass(Phase.TRACKING)
@@ -929,7 +880,7 @@ func _tick_coast() -> void:
 			"decel": decel, "decel_g": decel / 9.81, "force_n": decel * all_up, "mass": all_up,
 			"declared_n": declared, "overrun_n": overrun, "tyres_n": tyres}
 	_current["coast_contacts"] = _contact_label("coast")
-	_drive(100.0, 0.0)
+	MeasureRig.drive(100.0, 0.0)
 	_car.respawn()
 	_reset_pass(Phase.TRACKING)
 
@@ -987,7 +938,7 @@ func _start_brake_run() -> void:
 	_car.respawn()
 	_reset_pass(Phase.BRAKING)
 	_brake_target = BRAKE_SPEED if _top_seen <= 0.0 else minf(BRAKE_SPEED, 0.9 * _top_seen)
-	_drive(100.0, 0.0)
+	MeasureRig.drive(100.0, 0.0)
 
 
 func _tick_braking(delta: float) -> void:
@@ -998,7 +949,7 @@ func _tick_braking(delta: float) -> void:
 			_brake_on = true
 			_brake_v0 = v
 			_brake_x0 = _car.global_position
-			_drive(0.0, BRAKE_PEDALS[_brake_i] * 100.0)
+			MeasureRig.drive(0.0, BRAKE_PEDALS[_brake_i] * 100.0)
 		return
 	_brake_t += delta
 	var skidding := false
@@ -1028,7 +979,7 @@ func _tick_braking(delta: float) -> void:
 		_start_brake_run()
 		return
 	_current["braking"] = _brake_rows.duplicate(true)
-	_drive(100.0, 0.0)
+	MeasureRig.drive(100.0, 0.0)
 	_finish_vehicle()
 
 

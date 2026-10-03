@@ -6,20 +6,30 @@
 
 [sub_resource type="Resource" id="Resource_icyla"]
 script = ExtResource("1_7iqsd")
-wheel_positions = PackedVector3Array(-0.63, 0.53977275, -0.7678634, 0.63, 0.53977275, -0.7678635, -0.63, 0.53977275, 1.0561365, 0.63, 0.53977275, 1.0561365)
+wheel_positions = PackedVector3Array(-0.63, 0.54303247, -0.7678634, 0.63, 0.54303247, -0.7678635, -0.63, 0.54303247, 1.0561365, 0.63, 0.54303247, 1.0561365)
 wheel_radius = 0.36
 wheel_scene = ExtResource("2_63asi")
 diff_bias_rear = 2.5
 rest_length = 0.28
+spring_rate = 19101.0
+damper_bump = 1368.0
+damper_rebound = 1824.0
+spring_rate_rear = 26378.0
+damper_bump_rear = 1889.0
+damper_rebound_rear = 2519.0
 anti_roll_rate = 10000.0
+anti_dive_slope = 0.066
+anti_squat_slope = 0.082
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 1.35
 mu_lat = 1.4
+rear_lat_grip = 1.15
 load_sensitivity = 0.1
 handbrake_grip = 0.5
 brake_torque = 1019.0
 handbrake_torque = 467.0
 brake_bias_front = 0.613
+tcs_equipped = true
 drag_area = 0.63
 rolling_resistance = 0.012
 downforce_area = 2.24

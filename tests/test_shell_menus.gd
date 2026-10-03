@@ -295,7 +295,7 @@ func test_pause_menu_controls_page_hides_rows_the_vehicle_can_never_use() -> voi
 ## nothing itself (standing rule 6), so what is asserted is what reaches the shell.
 func test_pause_menu_settings_cycles_the_dashboard_density() -> void:
 	var pause: PauseMenu = auto_free(PauseMenu.new())
-	pause.setup({}, Dashboard.Density.COMPACT)
+	pause.setup({})
 	add_child(pause)
 	_press(pause, "SETTINGS")
 
@@ -356,8 +356,9 @@ func test_pause_menu_conditions_page_greys_wind_and_current_off_family() -> void
 ## A challenge owns wind, current and lighting: every CONDITIONS button greys out and says so.
 func test_pause_menu_conditions_page_locks_during_a_challenge() -> void:
 	var pause: PauseMenu = auto_free(PauseMenu.new())
-	pause.setup({}, Dashboard.Density.COMPACT, UiScale.USER_DEFAULT,
-			WorldConditions.Preset.LEVEL, WorldConditions.Preset.LEVEL, 0.0, false, true)
+	var state := PauseMenu.State.new()
+	state.conditions_locked = true
+	pause.setup({}, state)
 	add_child(pause)
 	_press(pause, "CONDITIONS")
 	var locked := 0
@@ -453,7 +454,7 @@ func test_boot_sticky_notice_outlasts_a_transient_one() -> void:
 	assert_bool(boot._notice.visible).is_true()
 	assert_str(boot._notice.text).is_equal("STICKY")
 	# No timer runs for it at all: the default dwell passes and it is still up.
-	await get_tree().create_timer(Boot.NOTICE_DWELL_S + 0.2).timeout
+	await get_tree().create_timer(NoticeLine.NOTICE_DWELL_S + 0.2).timeout
 	assert_bool(boot._notice.visible).is_true()
 	assert_str(boot._notice.text).is_equal("STICKY")
 

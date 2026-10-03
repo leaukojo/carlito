@@ -92,21 +92,21 @@ off.
 
 | Body | 0-50 floored / tc / ref | 0-100 floored / tc / ref | 0-50 spin / limiter / shift / tcs / torque-bound (stall) | 0-50 grip use (under peak / past peak / tick cap) |
 | --- | --- | --- | --- | --- |
-| `sedan-sports` | 2.77 / 2.75 / 2.3 | 6.55 / 6.53 / 5.1 | 0.00 / 0.00 / 0.13 / 2.25 / 0.37 (0.00) | 0.83 (0.14 / 0.00 / 0.03) / 0.83 (0.14 / 0.00 / 0.03) |
-| `sedan` | 3.72 / 3.70 / 3.4 | 8.28 / 8.28 / 8.0 | 0.00 / 0.00 / 0.13 / 3.22 / 0.35 (0.00) | 0.85 (0.13 / 0.00 / 0.02) / 0.86 (0.13 / 0.00 / 0.02) |
-| `hatchback-sports` | 3.55 / 3.55 / 2.7 | 7.47 / 7.47 / 6.3 | 0.00 / 0.00 / 0.13 / 3.32 / 0.08 (0.00) | 0.87 (0.12 / 0.00 / 0.02) / 0.87 (0.11 / 0.00 / 0.02) |
-| `suv` | 3.55 / 3.55 / 3.6 | 9.18 / 9.18 / 8.5 | 0.00 / 0.00 / 0.13 / 1.58 / 1.82 (1.37) | 0.41 (0.58 / 0.00 / 0.01) / 0.41 (0.58 / 0.00 / 0.01) |
-| `suv-luxury` | 2.78 / 2.78 / 2.6 | 6.82 / 6.82 / 6.0 | 0.00 / 0.00 / 0.13 / 1.85 / 0.78 (0.52) | 0.51 (0.48 / 0.00 / 0.01) / 0.51 (0.48 / 0.00 / 0.01) |
-| `taxi` | 3.65 / 3.65 / 3.8 | 8.67 / 8.67 / 9.0 | 0.00 / 0.00 / 0.13 / 3.08 / 0.42 (0.05) | 0.84 (0.14 / 0.00 / 0.02) / 0.84 (0.14 / 0.00 / 0.02) |
-| `police` | 2.98 / 2.98 / 2.6 | 7.25 / 7.25 / 6.2 | 0.00 / 0.00 / 0.13 / 2.07 / 0.77 (0.23) | 0.83 (0.14 / 0.00 / 0.03) / 0.83 (0.14 / 0.00 / 0.03) |
-| `race` | 2.18 / 2.17 / 1.6 | 4.28 / 4.30 / 3.7 | 2.15 / 0.93 / 0.00 / 0.00 / 0.02 (0.00) | 0.82 (0.00 / 0.18 / 0.00) / 0.82 (0.13 / 0.02 / 0.02) |
-| `race-future` | 1.43 / 1.72 / 1.1 | 3.03 / 3.32 / 2.6 | 0.27 / 0.00 / 0.00 / 0.00 / 1.12 (0.53) | 0.83 (0.14 / 0.03 / 0.00) / 0.69 (0.28 / 0.01 / 0.01) |
-| `van` | 3.92 / 3.92 / 4.3 | 10.27 / 10.27 / 10.2 | 0.00 / 0.00 / 0.13 / 0.10 / 3.67 (1.50) | 0.61 (0.36 / 0.00 / 0.02) / 0.61 (0.36 / 0.00 / 0.02) |
-| `pickup` | 3.63 / 3.63 / 3.0 | 9.45 / 9.45 / 7.0 | 0.00 / 0.00 / 0.13 / 0.10 / 3.38 (1.38) | 0.64 (0.33 / 0.00 / 0.03) / 0.64 (0.33 / 0.00 / 0.03) |
-| `pickup-flat` | 3.52 / 3.52 / 3.5 | 9.15 / 9.15 / 8.1 | 0.00 / 0.00 / 0.13 / 0.12 / 3.25 (1.32) | 0.63 (0.33 / 0.00 / 0.03) / 0.63 (0.33 / 0.00 / 0.03) |
-| `delivery` | 4.22 / 4.22 / 5.0 | 13.22 / 13.22 / 11.8 | 0.00 / 0.00 / 0.53 / 1.20 / 2.47 (0.00) | 0.49 (0.47 / 0.00 / 0.04) / 0.49 (0.47 / 0.00 / 0.04) |
-| `delivery-flat` | 4.12 / 4.12 / 5.3 | 12.57 / 12.58 / 12.3 | 0.00 / 0.00 / 0.53 / 1.23 / 2.33 (0.00) | 0.51 (0.45 / 0.00 / 0.04) / 0.51 (0.45 / 0.00 / 0.04) |
-| `ambulance` | 4.48 / 4.47 / 5.5 | 13.78 / 13.78 / 12.9 | 0.00 / 0.00 / 0.53 / 1.43 / 2.50 (0.00) | 0.56 (0.41 / 0.00 / 0.03) / 0.56 (0.41 / 0.00 / 0.03) |
+| `sedan-sports` | 2.75 / 2.73 / 2.3 | 6.53 / 6.52 / 5.1 | 0.00 / 0.00 / 0.13 / 2.15 / 0.45 (0.02) | 0.83 (0.14 / 0.00 / 0.03) / 0.83 (0.14 / 0.00 / 0.03) |
+| `sedan` | 3.73 / 3.73 / 3.4 | 8.32 / 8.32 / 8.0 | 0.00 / 0.00 / 0.13 / 3.23 / 0.35 (0.00) | 0.86 (0.12 / 0.00 / 0.01) / 0.86 (0.12 / 0.00 / 0.01) |
+| `hatchback-sports` | 3.57 / 3.57 / 2.7 | 7.50 / 7.48 / 6.3 | 0.00 / 0.00 / 0.13 / 3.37 / 0.05 (0.00) | 0.87 (0.12 / 0.00 / 0.02) / 0.87 (0.12 / 0.00 / 0.02) |
+| `suv` | 3.52 / 3.52 / 3.6 | 9.13 / 9.13 / 8.5 | 0.00 / 0.00 / 0.13 / 1.33 / 2.03 (1.32) | 0.41 (0.58 / 0.00 / 0.01) / 0.41 (0.58 / 0.00 / 0.01) |
+| `suv-luxury` | 2.77 / 2.75 / 2.6 | 6.78 / 6.78 / 6.0 | 0.00 / 0.00 / 0.13 / 1.77 / 0.85 (0.55) | 0.51 (0.47 / -0.00 / 0.01) / 0.52 (0.47 / 0.00 / 0.01) |
+| `taxi` | 3.67 / 3.67 / 3.8 | 8.68 / 8.67 / 9.0 | 0.00 / 0.00 / 0.13 / 3.08 / 0.43 (0.07) | 0.85 (0.13 / 0.00 / 0.02) / 0.85 (0.13 / 0.00 / 0.02) |
+| `police` | 2.97 / 2.97 / 2.6 | 7.23 / 7.23 / 6.2 | 0.00 / 0.00 / 0.13 / 2.03 / 0.78 (0.27) | 0.84 (0.14 / 0.00 / 0.02) / 0.83 (0.14 / 0.00 / 0.02) |
+| `race` | 2.15 / 2.15 / 1.6 | 4.17 / 4.15 / 3.7 | 0.00 / 0.00 / 0.00 / 2.13 / 0.00 (0.00) | 0.82 (0.09 / 0.00 / 0.08) / 0.83 (0.09 / 0.00 / 0.08) |
+| `race-future` | 1.43 / 1.75 / 1.1 | 3.03 / 3.33 / 2.6 | 0.25 / 0.00 / 0.00 / 0.00 / 1.17 (0.58) | 0.83 (0.14 / 0.03 / 0.00) / 0.68 (0.29 / 0.01 / 0.01) |
+| `van` | 3.92 / 3.92 / 4.3 | 10.27 / 10.25 / 10.2 | 0.00 / 0.00 / 0.13 / 0.07 / 3.70 (1.53) | 0.62 (0.36 / -0.00 / 0.02) / 0.62 (0.36 / 0.00 / 0.02) |
+| `pickup` | 3.63 / 3.62 / 3.0 | 9.43 / 9.43 / 7.0 | 0.00 / 0.00 / 0.13 / 0.07 / 3.42 (1.42) | 0.64 (0.33 / 0.00 / 0.02) / 0.64 (0.33 / 0.00 / 0.02) |
+| `pickup-flat` | 3.52 / 3.50 / 3.5 | 9.15 / 9.13 / 8.1 | 0.00 / 0.00 / 0.13 / 0.07 / 3.30 (1.35) | 0.64 (0.34 / -0.00 / 0.03) / 0.64 (0.33 / 0.00 / 0.03) |
+| `delivery` | 4.18 / 4.18 / 5.0 | 13.15 / 13.13 / 11.8 | 0.00 / 0.00 / 0.53 / 0.97 / 2.67 (0.00) | 0.50 (0.46 / 0.00 / 0.03) / 0.50 (0.46 / 0.00 / 0.03) |
+| `delivery-flat` | 4.07 / 4.07 / 5.3 | 12.50 / 12.50 / 12.3 | 0.00 / 0.00 / 0.53 / 1.02 / 2.50 (0.00) | 0.52 (0.45 / 0.00 / 0.03) / 0.52 (0.45 / 0.00 / 0.03) |
+| `ambulance` | 4.43 / 4.42 / 5.5 | 13.73 / 13.73 / 12.9 | 0.00 / 0.00 / 0.53 / 1.38 / 2.50 (0.00) | 0.57 (0.41 / 0.00 / 0.02) / 0.57 (0.41 / 0.00 / 0.02) |
 | `garbage-truck` | 6.33 / 6.53 / 8.0 | - / - / - | 0.67 / 0.17 / 1.53 / 0.00 / 3.77 (0.00) | 0.43 (0.56 / 0.01 / 0.00) / 0.42 (0.57 / 0.00 / 0.01) |
 | `firetruck` | 6.15 / 6.43 / 6.0 | 21.97 / 22.25 / 15.0 | 0.78 / 0.27 / 1.53 / 0.00 / 3.65 (0.00) | 0.46 (0.52 / 0.02 / 0.00) / 0.45 (0.54 / 0.01 / 0.00) |
 | `semi` + 24 t towed | 15.07 / 16.13 / 16.0 | - / - / - | 1.70 / 0.40 / 1.53 / 0.00 / 11.58 (0.02) | 0.46 (0.52 / 0.02 / 0.00) / 0.45 (0.49 / 0.00 / 0.06) |
@@ -115,10 +115,11 @@ off.
 <!-- /measure:accel -->
 
 Torque under converter stall is not where the gaps are (§ Converter). The car family carries an
-ideal per-wheel traction control (`tcs_equipped`; not the race cars), so floored and `tc` match:
+ideal per-wheel traction control (`tcs_equipped`; not `race-future`), so floored and `tc` match:
 the grip-bound cars spend 2-3 s of the 0-50 held at the peak at ~85 % of `mu_long * N`, with no
 spin and no limiter. The rest of the budget is under the peak: the shift cut and gear 2's
-torque-bound stretch. `race` and `race-future` still spin into the limiter. The semis are torque-bound for 11.6 s with grip to spare, nearly all of it
+torque-bound stretch. `race` holds the peak on TC for 2.1 s; `race-future` still spins into the
+limiter. The semis are torque-bound for 11.6 s with grip to spare, nearly all of it
 above stall, and land on a loaded diesel rig's ~16 s 0-50. Energy bounds it at 9.5 s (½mv² of 32 t
 at 362 kW peak, 90 % efficient, no shifts); a loaded diesel needs ~45-60 s to 60 mph.
 
@@ -184,21 +185,21 @@ launches' remaining 1-3 %.
 **Braking.**
 
 <!-- measure:braking (generated by `measure_vehicles -- doc=braking`; edits inside are overwritten) -->
-Measured 2026-10-02 (`measure_vehicles -- doc=braking`; per body `-- <variant> 60 brake`): stops
+Measured 2026-10-03 (`measure_vehicles -- doc=braking`; per body `-- <variant> 60 brake`): stops
 from 100 km/h, or 90 % of the top where that is lower (`from`).
 
 | Body | 30 % pedal | 60 % | 100 % |
 | --- | --- | --- | --- |
-| `sedan` | 0.31 g, 118.8 m | 0.59 g, 64.0 m | 0.89 g, 42.5 m, ABS |
-| `pickup` | 0.31 g, 120.5 m | 0.59 g, 64.3 m | 0.91 g, 41.9 m, ABS |
-| `delivery` | 0.29 g, 129.9 m | 0.56 g, 68.4 m, ABS | 0.87 g, 44.5 m, ABS |
+| `sedan` | 0.31 g, 119.0 m | 0.59 g, 64.1 m | 0.89 g, 42.4 m, ABS |
+| `pickup` | 0.31 g, 120.4 m | 0.59 g, 64.3 m | 0.92 g, 41.3 m, ABS |
+| `delivery` | 0.29 g, 129.4 m | 0.56 g, 68.1 m | 0.88 g, 43.8 m, ABS |
 | `garbage-truck` (from 76) | 0.24 g, 92.7 m | 0.45 g, 48.8 m, ABS | 0.69 g, 32.4 m, ABS |
 | `semi` + 24 t towed (from 80) | 0.29 g, 84.0 m | 0.55 g, 44.9 m, ABS | 0.68 g, 36.1 m, ABS |
-| `race` (no ABS) | 0.40 g, 90.9 m | 0.75 g, 49.9 m | 1.21 g, 31.9 m, skids 0.85 s |
+| `race` (no ABS) | 0.41 g, 90.7 m | 0.75 g, 50.0 m | 1.24 g, 31.4 m, skids 0.40 s |
 <!-- /measure:braking -->
 
 Mean g is speed over time, so it reads under the peak (the sedan holds ~1.0 g mid-stop, the 0.95
-x mu_long the brake asks). Only `race` skids: at full pedal its light rear locks for 0.85 s (the
+x mu_long the brake asks). Only `race` skids: at full pedal its light rear locks for 0.40 s (the
 480 Hz run locks it too); a non-ABS body at full pedal is a body that can lock. The tractor (no
 ABS; rear brakes, the pedal engages MFWD) stops from 34 km/h at 0.82 g in 5.4 m, skidding 0.3 s.
 ABS at full pedal acts on the axle the split asks too much of: the derivation's load transfer runs
@@ -228,8 +229,36 @@ tensor also scales exactly with a runtime `mass` write.
 **Resistance balance.** Resistance applies what `0.5*rho*Cd*A*v^2 + crr*N` owes to within a
 newton, and summed tyre force matches `axle_torque / r` to within two. The `balance` line in
 `measure_vehicles` (`tyres - resistance + rake`) closes on the measured acceleration to a newton
-or two; a gap means a new force is unaccounted for. `Wheel.force_long` and `Wheel.contact_normal`
-are diagnostic only: nothing in the sim reads them. `rake` reads ~0 only on the flat.
+or two; a gap means a new force is unaccounted for. `Wheel.contact_normal` is diagnostic only;
+`Wheel.force_long` feeds only the next tick's link force (§ Pitch). `rake` reads ~0 only on the
+flat.
+
+**Pitch.** The Kenney wheelbases are toy-scale (1.58 m on `suv`, ~2.8 m on a real one) under real
+masses and COM heights, and pitch goes as `m a h / (k L²)`: with every newton of transfer through
+the springs a launch pitches the body ~3x a real car. Two honest models carry it:
+- springs sized to a ride frequency per axle (`ride_hz`, `_derive_springs`), so every car and van
+  stands level at one sag (0.128 m car, 0.152 m van) instead of a heavy axle sitting in its bump
+  travel;
+- link geometry (`anti_dive_slope` / `anti_squat_slope`, 40 % / 50 % of `h / L`), a force along the
+  contact normal proportional to the tyre's own drive or brake force. The tyre still carries the
+  whole transfer, so grip and the brake split do not move; only the springs deflect less.
+
+What stays is front lift: the front links push down only in proportion to the FRONT drive force, so
+a rear-driven or rear-biased body lifts its nose on springs alone. Peak launch pitch, floored after a
+0.4 s keyboard ramp on the strip, measured 2026-10-03 with a one-off probe: one 22 kN/m spring on
+every corner with no links, against the shipped model.
+
+| Body | Peak pitch, 22 kN/m / shipped | Front axle load at the low, % of static |
+| --- | --- | --- |
+| `suv` | 6.0 / 3.7 deg | 41 / 43 |
+| `suv-luxury` | 5.9 / 3.2 deg | 47 / 47 |
+| `delivery` (65 kN/m) | 5.0 / 4.0 deg | 12 / 14 |
+| `sedan-sports` | 4.7 / 4.1 deg | 41 / 40 |
+| `police` / `van` / `pickup` | 3.2-4.2 / 2.1-2.2 deg | ~62 |
+| `sedan` / `taxi` / `hatchback-sports` | 1.8-2.7 / 2.0-2.7 deg | ~75 |
+| `race` | 2.1 / 1.7 deg | 65 / 58 |
+
+On 22 kN/m, `suv`'s rear sits at 0.187 of its 0.28 m travel parked and reaches 0.278 at launch.
 
 ### Measuring a vehicle: `tools/measure_vehicles.tscn`
 
@@ -252,21 +281,21 @@ peak, most wheels lifted at once.
 
 | Body | Peak | Saturates first | Roll | Lifted |
 | --- | --- | --- | --- | --- |
-| `sedan-sports` | 0.85 g | front | 4.8 deg | 0 |
-| `sedan` | 0.87 g | front | 4.3 deg | 0 |
-| `hatchback-sports` | 0.84 g | front | 4.4 deg | 0 |
-| `suv` | 0.76 g | rear | 5.0 deg | 0 |
-| `suv-luxury` | 0.76 g | front | 5.1 deg | 0 |
-| `taxi` | 0.87 g | front | 4.7 deg | 0 |
-| `police` | 0.87 g | front | 4.9 deg | 0 |
-| `race` | 1.25 g | front | 2.9 deg | 0 |
-| `race-future` | 1.25 g | front | 1.8 deg | 0 |
-| `van` | 0.77 g | front | 4.8 deg | 0 |
-| `pickup` | 0.83 g | front | 5.6 deg | 0 |
-| `pickup-flat` | 0.82 g | front | 5.3 deg | 0 |
-| `delivery` | 0.75 g | front | 3.4 deg | 1 |
-| `delivery-flat` | 0.74 g | rear | 3.0 deg | 0 |
-| `ambulance` | 0.75 g | front | 3.1 deg | 0 |
+| `sedan-sports` | 0.84 g | front | 5.1 deg | 0 |
+| `sedan` | 0.85 g | front | 4.3 deg | 0 |
+| `hatchback-sports` | 0.84 g | front | 4.9 deg | 0 |
+| `suv` | 0.75 g | front | 4.2 deg | 0 |
+| `suv-luxury` | 0.76 g | front | 4.4 deg | 0 |
+| `taxi` | 0.85 g | front | 4.5 deg | 0 |
+| `police` | 0.86 g | front | 4.6 deg | 0 |
+| `race` | 1.26 g | front | 2.9 deg | 0 |
+| `race-future` | 1.26 g | front | 1.8 deg | 0 |
+| `van` | 0.77 g | front | 4.2 deg | 0 |
+| `pickup` | 0.84 g | front | 4.9 deg | 0 |
+| `pickup-flat` | 0.83 g | front | 4.8 deg | 0 |
+| `delivery` | 0.75 g | rear | 3.0 deg | 0 |
+| `delivery-flat` | 0.74 g | rear | 2.7 deg | 0 |
+| `ambulance` | 0.75 g | front | 3.0 deg | 0 |
 | `garbage-truck` | 0.60 g | front | 64.2 deg | 4, overturned |
 | `firetruck` | 0.64 g | front | 5.1 deg | 1 |
 | `semi` | 0.50 g | rear | 31.4 deg | 4, overturned |
@@ -275,6 +304,23 @@ peak, most wheels lifted at once.
 <!-- /measure:cornering -->
 
 The tall box `delivery` slides on commercial-tyre side grip (`mu_lat` 0.85) before it rolls.
+
+**Balance.** A tyre's force here is `mu * N` times the grip curve, so an axle's cornering
+stiffness is proportional to its load and the understeer gradient `Wf/Cf - Wr/Cr` is zero
+whatever the weight split, bar the small tilt `load_sensitivity` adds (toward understeer on a
+front-heavy body, oversteer on a rear-heavy one): on equal tyres every body steers near neutral,
+front and rear saturate together, and the curve's fall past its 0.12 peak tips a rear excursion
+into a spin. The skid pad above cannot see this (a 10 s wind-on is a steady state).
+`rear_lat_grip` buys the margin: 1.08 on `CAR_BASE`, 1.15 on the open-wheelers (rear-heavy, so
+load sensitivity also leaves their rear mu under the front's), 1.0 on the heavy-van
+(`VAN_BASE`), truck and tractor baselines (not probed). Step-steer probe, 2026-10-03 (bridge
+steer stepped in one tick, held 3 s, at 30-100 km/h, speed held, lifted or floored; a spin is
+body slip past 20 deg): at 1.0 a 20 % step at 100 km/h spun `race` held or lifted,
+`sedan-sports` held or lifted, and even the FWD `sedan` lifted; at the shipped values no held or
+lifted step spins `race`, `race-future`, `sedan-sports` or `police`, and `sedan` only on a 40 %
+lift at 100 km/h (20.2 deg). Floored, `race` without TC spun 13 of 20 steps at 30-100 km/h (389
+Nm through gears 1-3 outpulls its rears) and with it none (worst 12 deg), so it carries TC;
+`race-future` (AWD) spun 1 of 20 without, and carries none.
 
 - `-- semi` measures the coupled 32 t box rig; `trailer=<box|tanker|tipper|flatbed|bobtail>`
   picks another (any attachment by file name, so `tractor-kenney trailer=farm_tipper` too). Its

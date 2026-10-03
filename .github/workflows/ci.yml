@@ -50,6 +50,14 @@ jobs:
       - name: Head-include sync check
         run: node tools/check_head_include.mjs
 
+      # The same two node gates preflight.ps1 runs: public src/kit functions with no caller, and
+      # dangling paths/tests/members in docs.
+      - name: Orphan check
+        run: node tools/check_orphans.mjs
+
+      - name: Doc reference check
+        run: node tools/check_docs.mjs
+
       - name: Import project
         run: godot --headless --import
 

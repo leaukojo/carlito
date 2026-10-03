@@ -14,6 +14,7 @@ const CHANNEL_GRIP := "0.8, 0.7, 0.6, 0.7, 0.75, 0.5, 1, 0.85"
 const CHANNEL_DRAG := "0.06, 0.03, 0.1, 0.01, 0.05, 0.2, 0, 0.02"  ## gen_islands' table
 const TITLE := "Level 5 - Railway"
 const RAIL_PROFILE := "res://kit/roads/rail_profile.tres"
+const GenIO := preload("res://tools/level_gen_io.gd")
 
 # --- terrain: the loop climbs from a coastal shelf onto a terraced plateau.
 const GEN_SEED := 50807
@@ -73,8 +74,8 @@ func _init() -> void:
 
 	var px := SIZE / float(cells - 1)
 	var splat := TerrainGen.build_splatmap(heights, HEIGHT, px, px, 2.0, 22.0, 38.0)
-	_write_png(heights, "%s/level_5_island_height.png" % DIR)
-	_write_png(splat, "%s/level_5_island_splat.png" % DIR)
+	GenIO.save_png(heights, "%s/level_5_island_height.png" % DIR)
+	GenIO.save_png(splat, "%s/level_5_island_splat.png" % DIR)
 
 	var curve_path := "%s/level_5_rail_curve.tres" % DIR
 	# Saved as a resource, not emitted as .tscn text, so the curve is an editable, hash-tracked dependency.
@@ -85,8 +86,9 @@ func _init() -> void:
 		return
 
 	var spawn := _find_spawn(heights, positions)
-	_write_text("%s/level_5_info.tres" % DIR, _info_text())
-	_write_text("%s/level_5.tscn" % DIR, _scene_text(spawn))
+	GenIO.save_text("%s/level_5_info.tres" % DIR, GenIO.info_text(TITLE,
+			["train", "car", "truck", "tractor", "boat", "drone", "plane"], "car", true))
+	GenIO.save_text("%s/level_5.tscn" % DIR, _scene_text(spawn))
 	print("[gen-rail] car spawn at %v" % spawn)
 	print("[gen-rail] done. Run --import, then bake_levels.")
 	quit()
@@ -362,31 +364,6 @@ func _find_spawn(heights: Image, positions: PackedVector3Array) -> Vector3:
 
 
 # ---------------------------------------------------------------- file output
-
-
-func _write_png(img: Image, path: String) -> void:
-	var err := img.save_png(path)
-	assert(err == OK, "save_png failed for %s" % path)
-	TerrainGen.ensure_import_settings(path)
-
-
-func _write_text(path: String, text: String) -> void:
-	var f := FileAccess.open(path, FileAccess.WRITE)
-	assert(f != null, "cannot write %s" % path)
-	f.store_string(text)
-
-
-func _info_text() -> String:
-	return """[gd_resource type="Resource" script_class="LevelInfo" load_steps=2 format=3]
-
-[ext_resource type="Script" path="res://src/levels/base/level_info.gd" id="1_info"]
-
-[resource]
-script = ExtResource("1_info")
-display_name = "%s"
-allowed_vehicles = PackedStringArray("train", "car", "truck", "tractor", "boat", "drone", "plane")
-default_vehicle = "car"
-""" % TITLE
 
 
 ## The level scene: existing node set plus the rail loop; terrain params written back so an in-editor Generate reproduces it.

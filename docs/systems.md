@@ -35,8 +35,11 @@ static/pure, tested in `tests/test_input_arbitration.gd`.
   `BaseVehicle.key_steer_speed`, 0 for a flying plane, drone and boat) and returns faster; pedals
   ramp in over 0.25-0.4 s and off in 0.1 s. Order: keyboard steer shaped, touch merged, pedals
   shaped, gamepad merged. Local keys only: the touch stick, the gamepad and the bridge are analog.
+  Those timings are the full model (SETTINGS ▸ KEY RESPONSE: REALISTIC); the player's softening
+  scales every one of them, from RAW (0, the key as pressed) up, and defaults to ARCADE (0.15).
 - `arbitrate_local`: ignition gates throttle; brake never throttles; S = brake, then reverse
-  at standstill; foot brake drives `brake_lamp`.
+  at standstill; foot brake drives `brake_lamp`; `tcs_off` is the player's SETTINGS ▸ TRACTION
+  CONTROL (a live bridge's own `tcs_off` wins, fallback included).
 - `arbitrate_bridge`: the gear byte owns direction. Mode = `InputRouter.set_manual_gearbox`
   (vehicle selector, or `ChallengeDef.transmission`).
 - Automatic (default): PRND lever. R reverses, D1-D6 = D with auto-shift, 0 = D. why: RAMN
@@ -182,8 +185,8 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   are unused (also resize the 3D target on 4.7.1, rule 9); `focus`/`Choice`/`follow_focus`
   cover keyboard/gamepad, CONTROLS scrolls on Up/Down instead. Notice line
   (`src/ui/notice_line.gd`, `Notice` Label): `GameState.notice` text, dwelled
-  `Boot.NOTICE_DWELL_S`. First-run cue (`src/ui/coach_cue.gd`): dismissed by input or
-  timeout, once per session (`Boot._maybe_coach`), via non-consuming `_input`.
+  `NoticeLine.NOTICE_DWELL_S`. First-run cue (`src/ui/coach_cue.gd`): dismissed by input or
+  timeout, once per session (`CoachCue.maybe_coach`), via non-consuming `_input`.
 - Pause overlay (`src/ui/pause_menu.gd`, Esc or touch MENU):
   RESUME/RESPAWN/CONDITIONS/CONTROLS/SETTINGS; GARAGE/LEVEL live on touch (hidden only by
   F5, never F4) and G / 4.

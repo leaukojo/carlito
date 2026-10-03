@@ -26,10 +26,8 @@ const BRAKE_OVERRIDE_SPEED := 1.0
 ## Cycle lengths, declared once in a leaf module (router must not depend on a vehicle
 ## class, so these can't be read off RefuseBody.Cmd / DroneBus.NODES / DroneModes directly).
 const Counts := preload("res://src/input/subsystem_counts.gd")
+const Cycles := preload("res://src/input/cycles.gd")
 const BODY_CMD_COUNT := Counts.BODY_CMD
-const NODE_FAIL_COUNT := Counts.DRONE_NODES
-const FLIGHT_MODE_COUNT := Counts.FLIGHT_MODES
-const NAV_MODE_COUNT := Counts.NAV_MODES
 const SHEET_DETENT_COUNT := Counts.SHEET_DETENTS
 
 const LocalSource := preload("res://src/input/sources/local_source.gd")
@@ -49,6 +47,11 @@ var _current := VehicleInput.new()
 var _key_steer := 0.0
 var _pedal_accel := 0.0
 var _pedal_brake := 0.0
+## How much of KeyShaper's timing applies (the KEY RESPONSE setting), set by the shell.
+var _key_softening := KeyShaper.DEFAULT_SOFTENING
+## The player's TRACTION CONTROL setting, set by the shell: local driving only (the bridge sends
+## its own `tcs_off`).
+var _local_tcs_off := false
 var _brake_override := false  ## latched by `brake_override`, both sources alike
 var _lights := 1  ## headlight level owned here so keyboard + touch share one state
 # Local tractor implement state, owned here so keyboard + touch share it; bridge path ignores these.
@@ -130,6 +133,22 @@ func set_bridge_only(on: bool) -> void:
 
 func set_manual_gearbox(on: bool) -> void:
 	_manual_gearbox = on
+
+
+func set_key_softening(amount: float) -> void:
+	_key_softening = clampf(amount, 0.0, 1.0)
+
+
+func key_softening() -> float:
+	return _key_softening
+
+
+func set_local_tcs_off(off: bool) -> void:
+	_local_tcs_off = off
+
+
+func local_tcs_off() -> bool:
+	return _local_tcs_off
 
 
 ## Vehicles register on _ready to read speed/gear.
@@ -247,14 +266,14 @@ func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 	# touch stick is analog and passes through; both pedals after it, since every key and touch pedal
 	# is on/off. The gamepad is analog throughout, so it merges last, unshaped.
 	_key_steer = KeyShaper.steer_step(_key_steer, float(raw.get(&"steer", 0.0)), steer_speed,
-			delta)
+			delta, _key_softening)
 	raw[&"steer"] = _key_steer
 	if _touch_source != null:
 		raw = merge_local(raw, _touch_source.poll())
 	_pedal_accel = KeyShaper.pedal_step(_pedal_accel, float(raw.get(&"accel", 0.0)),
-			KeyShaper.ACCEL_APPLY_S, delta)
+			KeyShaper.ACCEL_APPLY_S, delta, _key_softening)
 	_pedal_brake = KeyShaper.pedal_step(_pedal_brake, float(raw.get(&"brake_reverse", 0.0)),
-			brake_apply_s, delta)
+			brake_apply_s, delta, _key_softening)
 	raw[&"accel"] = _pedal_accel
 	raw[&"brake_reverse"] = _pedal_brake
 	raw = merge_local(raw, _pad_source.poll())
@@ -284,13 +303,13 @@ func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 	if bool(raw.get(&"hardpoint_toggle", false)):
 		_hardpoint = not _hardpoint
 	if bool(raw.get(&"node_fail_cycle", false)):
-		_node_fail = cycle_node_fail(_node_fail)
+		_node_fail = Cycles.node_fail(_node_fail)
 	if bool(raw.get(&"flight_mode_cycle", false)):
-		_flight_mode = cycle_flight_mode(_flight_mode)
+		_flight_mode = Cycles.flight_mode(_flight_mode)
 	if bool(raw.get(&"nav_mode_cycle", false)):
-		_nav_mode = cycle_nav_mode(_nav_mode)
+		_nav_mode = Cycles.nav_mode(_nav_mode)
 	if bool(raw.get(&"sheet_cycle", false)):
-		_sheet = cycle_sheet(_sheet)
+		_sheet = Cycles.sheet(_sheet)
 	if bool(raw.get(&"pantograph_toggle", false)):
 		_pantograph = not _pantograph
 	if bool(raw.get(&"doors_toggle", false)):
@@ -314,6 +333,7 @@ func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 	raw[&"pantograph"] = _pantograph
 	raw[&"doors"] = _doors
 	raw[&"body_cmd"] = _body_cmd
+	raw[&"tcs_off"] = _local_tcs_off
 	return arbitrate_local(raw, speed, gear)
 
 
@@ -372,43 +392,6 @@ func bridge_drives() -> bool:
 ## reads stale, never live. A caller that needs to keep or change one copies it itself.
 func get_vehicle_input() -> VehicleInput:
 	return _current
-
-
-## Local node-failure walk behind the Y key: none -> node 0 -> node 1 -> ... -> last -> none.
-## Shifts the mask one bit left, wrapping past the last back to none; handles any starting
-## int (not just the normal NODE_FAIL_COUNT states) so a multi-bit bus-commanded mask still
-## terminates instead of sticking or shifting silently off the end.
-##
-## Named static fn (not inlined) because DroneBus.cycle_fail mirrors this exact copy and
-## tests/test_drone_bus.gd pins the two equal by calling both.
-static func cycle_node_fail(bits: int) -> int:
-	var next_fail := maxi(bits << 1, 1)
-	return 0 if next_fail > (1 << (NODE_FAIL_COUNT - 1)) else next_fail
-
-
-## One step of a wrap-around ladder: 0 -> 1 -> ... -> n-1 -> 0. `posmod` (not `%`) so a negative
-## starting value still lands inside the ladder.
-static func _cycle(x: int, n: int) -> int:
-	return posmod(x + 1, n)
-
-
-## Local flight-mode walk behind the Z key: STABILIZE -> ALT_HOLD -> LOITER -> RTL -> LAND ->
-## STABILIZE. Named static fn for the same reason as cycle_node_fail: DroneModes.cycle mirrors
-## this, and tests/test_drone_modes.gd pins the two equal by calling both.
-static func cycle_flight_mode(mode: int) -> int:
-	return _cycle(mode, FLIGHT_MODE_COUNT)
-
-
-## Local autopilot walk behind the 2 key: STANDBY -> HEADING HOLD -> STANDBY. Named static fn for
-## the same reason as cycle_flight_mode: BoatAutopilot.cycle mirrors this, and
-## tests/test_boat_autopilot.gd pins the two equal by calling both.
-static func cycle_nav_mode(mode: int) -> int:
-	return _cycle(mode, NAV_MODE_COUNT)
-
-
-## Local sheet walk behind the 3 key: hauled in -> ... -> fully eased -> hauled in.
-static func cycle_sheet(detent: int) -> int:
-	return _cycle(detent, SHEET_DETENT_COUNT)
 
 
 ## The detent as the 0..1 the wire and VehicleInput carry. Spread across the whole range so the
@@ -485,6 +468,8 @@ static func arbitrate_local(raw: Dictionary, speed: float, gear_byte: int,
 	out.pto_mode = int(raw.get(&"pto_mode", 0))
 	out.diff_lock = bool(raw.get(&"diff_lock", false))
 	out.fwd_drive = bool(raw.get(&"fwd_drive", false))
+	# Traction control, from the player's TRACTION CONTROL setting (cars fitted with TC only).
+	out.tcs_off = bool(raw.get(&"tcs_off", false))
 	# Refuse body command (garbage truck only). Has a key: a real stalk with four positions.
 	out.body_cmd = int(raw.get(&"body_cmd", 0))
 	# Hydraulic remote spool (tractor only). See _scv declaration for why it earns a key.
@@ -619,7 +604,8 @@ static func arbitrate_bridge(vals: Dictionary, manual := false) -> VehicleInput:
 	out.pto_mode = int(vals.get("pto_mode", 0))
 	out.diff_lock = bool(vals.get("diff_lock", false))
 	out.fwd_drive = bool(vals.get("fwd_drive", false))
-	# Car traction control: bridge-only, absent → on (the fitted system's rest state).
+	# Car traction control: absent → on (the fitted system's rest state); the local setting never
+	# reaches a live bridge.
 	out.tcs_off = bool(vals.get("tcs_off", false))
 	# Hydraulic remote: bridge-only, absent → valve closed.
 	out.scv_flow = clampf(float(vals.get("scv_flow", 0.0)), 0.0, 1.0)

@@ -3,7 +3,7 @@ extends Control
 ## The one-line "you can drive this" cue, shown over the first frames of a session — the
 ## game opens straight into a level with no menu in front of it, so this teaches it once.
 ## One line, dismissed by the first input of any kind or a short timeout, never shown again
-## within a session (Boot._maybe_coach).
+## within a session (`maybe_coach`).
 ##
 ## Listens on `_input`, which sees events without consuming them, so the press that dismisses
 ## the cue is also the press that drives the car. No emoji; colour/type from the theme.
@@ -12,11 +12,45 @@ extends Control
 const DWELL_S := 8.0
 const FADE_S := 0.6
 
+## Families with a control axis ground vehicles don't have; get a cue every time you climb
+## into one this session.
+const COACH_FAMILIES := ["plane", "drone"]
+
+## Session state: static, since a run boots one shell and it lives as long as the run does.
+static var _coach_shown := false
+## Families coached this session (see maybe_coach): the aircraft cue teaches a control set only
+## relevant while flying, so it reappears each new flight of a session.
+static var _coached_families := {}
+
 ## Vehicle family this cue is for, or "" for the first-visit line. Aircraft get their own
 ## because climb/descend has no ground-vehicle equivalent and nothing else names its keys.
 var family := ""
 
 var _dismissed := false
+
+
+## Two cues: the first-visit line (first level of a session only) and the aircraft line (once per
+## family per session, since climb/descend is undiscoverable). Aircraft takes precedence on a
+## session's first body; the first-visit line is left unseen for the next ground vehicle.
+static func maybe_coach(for_family: String, parent: Control) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if for_family in COACH_FAMILIES:
+		if _coached_families.has(for_family):
+			return
+		_coached_families[for_family] = true
+		_show_coach(for_family, parent)
+		return
+	if _coach_shown:
+		return
+	_coach_shown = true
+	_show_coach("", parent)
+
+
+static func _show_coach(for_family: String, parent: Control) -> void:
+	var cue := CoachCue.new()
+	cue.family = for_family  # before add_child: _ready() builds the label from it
+	parent.add_child(cue)
 
 
 func _ready() -> void:

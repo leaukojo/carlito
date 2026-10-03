@@ -18,7 +18,9 @@ const Groups := preload("res://src/levels/base/carlito_groups.gd")
 const DIR := "res://src/levels/island/level_6"
 const LEVEL_PATH := DIR + "/level_6.tscn"
 const TITLE := "Level 6 - Skyport"
+const LOG_TAG := "skyport"
 
+const GenIO := preload("res://tools/level_gen_io.gd")
 const BrushOps := preload("res://kit/helpers/brush_ops.gd")
 const SplatPaint := preload("res://kit/helpers/splat_paint.gd")
 
@@ -347,11 +349,11 @@ func _scaffold() -> int:
 	_paint_road_splat(splat, splat2, rim_curve, asphalt)
 
 	# --- write -----------------------------------------------------------------------------
-	if not _write_png(heights, "%s/level_6_island_height.png" % DIR):
+	if not GenIO.write_png(heights, "%s/level_6_island_height.png" % DIR, LOG_TAG):
 		return 1
-	if not _write_png(splat, "%s/level_6_island_splat.png" % DIR):
+	if not GenIO.write_png(splat, "%s/level_6_island_splat.png" % DIR, LOG_TAG):
 		return 1
-	if not _write_png(splat2, "%s/level_6_island_splat2.png" % DIR):
+	if not GenIO.write_png(splat2, "%s/level_6_island_splat2.png" % DIR, LOG_TAG):
 		return 1
 	var curves := {
 		"level_6_loop_curve.tres": loop_curve,
@@ -363,10 +365,11 @@ func _scaffold() -> int:
 		if ResourceSaver.save(curves[file_name] as Curve3D, path) != OK:
 			printerr("[skyport] cannot save %s" % path)
 			return 1
-	_write_text("%s/level_6_info.tres" % DIR, _info_text())
-	_write_text("%s/level_6_wind.tres" % DIR, _wind_text())
-	_write_text("%s/level_6_current.tres" % DIR, _current_text())
-	_write_text(LEVEL_PATH, _scene_text())
+	GenIO.write_text("%s/level_6_info.tres" % DIR, GenIO.info_text(TITLE,
+			["drone", "plane", "car", "truck", "tractor", "boat"], "drone", true), LOG_TAG)
+	GenIO.write_text("%s/level_6_wind.tres" % DIR, _wind_text(), LOG_TAG)
+	GenIO.write_text("%s/level_6_current.tres" % DIR, _current_text(), LOG_TAG)
+	GenIO.write_text(LEVEL_PATH, _scene_text(), LOG_TAG)
 
 	_report_road(loop_curve, "RoadLoop")
 	_report_road(viaduct_curve, "Viaduct")
@@ -1116,19 +1119,6 @@ func _probe() -> int:
 # ============================================================================ text artifacts
 
 
-func _info_text() -> String:
-	return """[gd_resource type="Resource" script_class="LevelInfo" load_steps=2 format=3]
-
-[ext_resource type="Script" path="res://src/levels/base/level_info.gd" id="1_info"]
-
-[resource]
-script = ExtResource("1_info")
-display_name = "%s"
-allowed_vehicles = PackedStringArray("drone", "plane", "car", "truck", "tractor", "boat")
-default_vehicle = "drone"
-""" % TITLE
-
-
 ## The level's weather: a resource, since that is what Level.wind is.
 func _wind_text() -> String:
 	return """[gd_resource type="Resource" script_class="WindField" load_steps=2 format=3]
@@ -1331,24 +1321,6 @@ curve = ExtResource("17_rim")
 
 
 # ==================================================================================== helpers
-
-
-func _write_png(img: Image, path: String) -> bool:
-	if img.save_png(path) != OK:
-		printerr("[skyport] failed to write %s" % path)
-		return false
-	TerrainGen.ensure_import_settings(path)
-	print("[skyport] wrote %s" % path)
-	return true
-
-
-func _write_text(path: String, text: String) -> void:
-	var f := FileAccess.open(path, FileAccess.WRITE)
-	if f == null:
-		printerr("[skyport] cannot write %s" % path)
-		return
-	f.store_string(text)
-	print("[skyport] wrote %s" % path)
 
 
 # World <-> pixel, HeightmapTerrain's own convention: the grid spans [-span/2, +span/2] in

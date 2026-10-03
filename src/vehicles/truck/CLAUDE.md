@@ -47,8 +47,7 @@ are shared in `src/vehicles/base/` (`src/vehicles/CLAUDE.md` § Towing); only tr
 
 - Joint limits: roll ±1.5° not 0 (compliance lets the solver settle); pitch must COVER the steepest
   break of slope, never bound it (on its stop the bodies are rigid and the drive axle lifts);
-  `exclude_nodes_from_collision` stays true; yaw stop is `Articulation.JACKKNIFE_MAX_DEG`, one
-  constant for joint and fallback.
+  `exclude_nodes_from_collision` stays true; yaw stop is `Articulation.JACKKNIFE_MAX_DEG`.
 - Yaw friction is Coulomb (`TowHost._apply_yaw_friction`), never a spring toward zero or the joint's
   angular motor (a velocity target, it fights the stop). Its one-tick cap is `YAW_CAP_SHARE` of the
   PAIR's moment (`TowHost.yaw_pair_moment`), never one body's, never the whole stop (the tyres take

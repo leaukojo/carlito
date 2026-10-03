@@ -1,5 +1,5 @@
 {
-	"version": 46,
+	"version": 47,
 	"notes": [
 		"Carlito signal contract. Defines every signal crossing the sloppyCAN<->game bridge.",
 		"Signals are unique by (name, dir). 'battery' exists in both directions on purpose: in = warning LED, out = battery voltage.",
@@ -34,7 +34,7 @@
 		{ "name": "checkEngine", "dir": "in", "type": "bool", "unit": "flag", "vehicles": ["car", "truck", "tractor", "boat", "plane", "drone", "train"], "desc": "Check-engine warning LED. Defaults off when the bridge does not send it." },
 		{ "name": "battery", "dir": "in", "type": "bool", "unit": "flag", "vehicles": ["car", "truck", "tractor", "boat", "plane", "drone", "train"], "desc": "Battery warning LED (dash tell-tale). Defaults off when not sent. Distinct from the 'out' battery voltage signal." },
 		{ "name": "brakeLamp", "dir": "in", "type": "bool", "unit": "flag", "vehicles": ["car", "truck", "tractor"], "desc": "Rear stop-lamp state, from the RAMN 0x1BB brake bit. Drives STOP in the tri-state rear lamps." },
-		{ "name": "tcs_off", "dir": "in", "type": "bool", "unit": "flag", "vehicles": ["car"], "desc": "Traction control off request. Absent or false, a car fitted with TC holds each driven wheel's drive slip at the grip peak (an ideal TC: it only ever removes drive); true, the drive spins the tyres as far as the pedal asks. The race cars carry no TC either way." },
+		{ "name": "tcs_off", "dir": "in", "type": "bool", "unit": "flag", "vehicles": ["car"], "desc": "Traction control off request. Absent or false, a car fitted with TC holds each driven wheel's drive slip at the grip peak (an ideal TC: it only ever removes drive); true, the drive spins the tyres as far as the pedal asks. Every car but race-future carries TC." },
 
 		{ "name": "speed", "dir": "out", "type": "f32", "unit": "m/s", "range": [-30, 100], "vehicles": ["car", "truck", "tractor", "boat", "plane", "drone", "train"], "desc": "Signed longitudinal speed." },
 		{ "name": "kmh", "dir": "out", "type": "f32", "unit": "km/h", "range": [0, 300], "vehicles": ["car", "truck", "tractor", "boat", "plane", "drone", "train"], "desc": "Absolute speed for the speedometer." },

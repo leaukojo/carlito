@@ -12,13 +12,10 @@ const DEFAULT_LEVEL := "flatland"
 ## Every screen parents to the UiScale Control (not the CanvasLayer): that's where the
 ## scaled theme lives, and a Control only inherits a theme from Control ancestors.
 @onready var _ui: UiScale = $UI/UiScale
-@onready var _notice: Label = $UI/UiScale/Notice
+@onready var _notice: NoticeLine = $UI/UiScale/Notice
 @onready var _dashboard: Dashboard = $UI/UiScale/Dashboard
 @onready var _touch: TouchControls = $UI/UiScale/TouchControls
 @onready var _debug: DebugOverlay = $UI/UiScale/DebugOverlay
-
-## Seconds a GameState.notice stays on screen. Long enough to read while still driving.
-const NOTICE_DWELL_S := 3.0
 
 ## Frames the loading screen stays up after the level enters the tree: gl_compatibility
 ## compiles each material's shader on its first draw, and ShaderWarmup makes that first draw
@@ -37,12 +34,6 @@ var _fetching := false  # _loading_path's level pack is downloading; the load st
 var _hold_frames := 0  # see HOLD_FRAMES
 var _warmup: ShaderWarmup = null  # in effect for exactly the HOLD_FRAMES
 var _next_variant := ""  # variant the level now loading should spawn ("" = its own default)
-## Sticky notice texts still up, oldest first; the newest shows whenever no transient one does.
-var _sticky_notices: Array[String] = []
-var _coach_shown := false
-## Families coached this session (see _maybe_coach): the aircraft cue teaches a control set only
-## relevant while flying, so it reappears each new flight of a session.
-var _coached_families := {}
 ## CONDITIONS page state, kept for the session only and re-applied to
 ## every level this loads (`_finish_load`) and on change (`_on_conditions_changed`).
 var _wind_preset: int = WorldConditions.Preset.LEVEL
@@ -69,6 +60,7 @@ var _result: ChallengeResult = null
 ## The challenge to begin once the level now loading is up (`_start_challenge`).
 var _pending_challenge: ChallengeDef = null
 var _progress: ChallengeProgress = null
+var _settings: UserSettings = null
 
 
 func _ready() -> void:
@@ -87,12 +79,12 @@ func _ready() -> void:
 	_touch.info_pressed.connect(_show_challenge_info)
 	GameState.attachment_changed.connect(_refresh_attachment_controls)
 	GameState.night_changed.connect(_on_level_night_changed)
-	GameState.notice.connect(_show_notice)
-	GameState.notice_cleared.connect(_clear_notice)
 	_packs = LevelPacks.new()
 	_packs.finished.connect(_on_pack_finished)
 	add_child(_packs)
 	_progress = ChallengeProgress.open()
+	_settings = UserSettings.open()
+	_apply_saved_settings()
 	_set_hud_visible(false)  # nothing to bind to until the level is up
 	_boot()
 
@@ -268,7 +260,7 @@ func _on_challenge_finished(passed: bool, elapsed_s: float, message: String) -> 
 	_close_result()
 	_result = ChallengeResult.new()
 	_result.setup(def, passed, elapsed_s, message, _progress.best_time(def.id), is_new_best,
-			_next_challenge_after(def) != null)
+			ChallengeRegistry.next_after(def) != null)
 	_result.retry_requested.connect(_on_result_retry)
 	_result.next_requested.connect(_on_result_next)
 	_result.challenges_requested.connect(_on_result_challenges)
@@ -333,7 +325,7 @@ func _close_challenge_info() -> void:
 ## Not straight into the next attempt: the CHALLENGES screen on its briefing, so the player reads
 ## what to do before START. The finished attempt ends here, so BACK lands in free play like MENU.
 func _on_result_next() -> void:
-	var next := _next_challenge_after(_challenge)
+	var next := ChallengeRegistry.next_after(_challenge)
 	_close_result()
 	_end_challenge()
 	if next != null:
@@ -346,17 +338,6 @@ func _on_result_challenges() -> void:
 	_close_result()
 	_end_challenge()
 	_show_challenge_select()
-
-
-## The next challenge sharing `def`'s family, in registry order, or null past the last one.
-func _next_challenge_after(def: ChallengeDef) -> ChallengeDef:
-	if def == null:
-		return null
-	var siblings := ChallengeRegistry.in_family(def.family())
-	for i in siblings.size():
-		if siblings[i].id == def.id:
-			return siblings[i + 1] if i + 1 < siblings.size() else null
-	return null
 
 
 ## True (and says why) when an attempt is in progress, for the controls that would undo it.
@@ -440,34 +421,69 @@ func _open_pause() -> void:
 		return  # nothing to pause, or a level load is in flight
 	var pause := PauseMenu.new()
 	# Before add_child: CONTROLS sheet greys what the machine lacks, off the same capability read.
-	pause.setup(_capabilities(), _dashboard.density_setting(), _ui.user_scale(),
-			_wind_preset, _current_preset, _wind_from_deg, _night, _challenge != null,
-			_debug.is_extended())
+	var state := PauseMenu.State.new()
+	state.density = _dashboard.density_setting()
+	state.ui_scale = _ui.user_scale()
+	state.extended_debug = _debug.is_extended()
+	state.key_softening = InputRouter.key_softening()
+	state.tcs_off = InputRouter.local_tcs_off()
+	state.wind_preset = _wind_preset
+	state.current_preset = _current_preset
+	state.wind_from_deg = _wind_from_deg
+	state.night = _night
+	state.conditions_locked = _challenge != null
+	pause.setup(_capabilities(), state)
 	pause.resume_requested.connect(_close_all_overlays)
 	pause.respawn_requested.connect(_on_pause_respawn)
 	pause.dashboard_density_changed.connect(_on_density_changed)
 	pause.ui_scale_changed.connect(_on_ui_scale_changed)
 	pause.extended_debug_changed.connect(_on_extended_debug_changed)
+	pause.key_softening_changed.connect(_on_key_softening_changed)
+	pause.tcs_off_changed.connect(_on_tcs_off_changed)
 	pause.conditions_changed.connect(_on_conditions_changed)
 	pause.night_toggled.connect(_on_night_toggled)
 	_push_overlay(pause)
 
 
+## The SETTINGS choices saved by an earlier visit, through the same setters a press uses.
+func _apply_saved_settings() -> void:
+	_dashboard.set_density_setting(int(_settings.value("density")))
+	_ui.set_user_scale(float(_settings.value("ui_scale")))
+	_debug.set_extended(bool(_settings.value("extended_debug")))
+	InputRouter.set_key_softening(float(_settings.value("key_softening")))
+	InputRouter.set_local_tcs_off(bool(_settings.value("tcs_off")))
+
+
 ## SETTINGS picked a new cluster density. The menu owns nothing, so applying and remembering
-## it is this file's job — session-only, like CONDITIONS.
+## it is this file's job: each handler below saves what its owner actually applied.
 func _on_density_changed(setting: int) -> void:
 	_dashboard.set_density_setting(setting)
+	_settings.set_value("density", _dashboard.density_setting())
 
 
 ## SETTINGS picked a new UI size. Handed to UiScale, which rebuilds the theme so every
 ## Control relayouts.
 func _on_ui_scale_changed(factor: float) -> void:
 	_ui.set_user_scale(factor)
+	_settings.set_value("ui_scale", _ui.user_scale())
 
 
 ## SETTINGS picked "Extended debug labels".
 func _on_extended_debug_changed(on: bool) -> void:
 	_debug.set_extended(on)
+	_settings.set_value("extended_debug", _debug.is_extended())
+
+
+## SETTINGS picked a new KEY RESPONSE step.
+func _on_key_softening_changed(amount: float) -> void:
+	InputRouter.set_key_softening(amount)
+	_settings.set_value("key_softening", InputRouter.key_softening())
+
+
+## SETTINGS flipped TRACTION CONTROL.
+func _on_tcs_off_changed(off: bool) -> void:
+	InputRouter.set_local_tcs_off(off)
+	_settings.set_value("tcs_off", InputRouter.local_tcs_off())
 
 
 ## F2: cycles the same density setting the SETTINGS page's button does, so the menu and the key
@@ -673,7 +689,7 @@ func _finish_load(scene: PackedScene) -> void:
 	_level.vehicle_changed.connect(_on_vehicle_changed)
 	_bind_hud()
 	_set_hud_visible(true)
-	_maybe_coach(GameState.current_vehicle)
+	CoachCue.maybe_coach(GameState.current_vehicle, _ui)
 	if _pending_challenge != null:
 		var def := _pending_challenge
 		_pending_challenge = null
@@ -681,35 +697,6 @@ func _finish_load(scene: PackedScene) -> void:
 	# The CI smokes require this line: a crash or hang before the first spawn leaves none.
 	print("Carlito level OK: %s (%s, baked: %s)" % [LevelRegistry.id_of(_level.scene_file_path),
 			GameState.current_variant, _level.baked])
-
-
-## Families with a control axis ground vehicles don't have; get a cue every time you climb
-## into one this session.
-const COACH_FAMILIES := ["plane", "drone"]
-
-
-## Two cues: the first-visit line (first level of a session only) and the aircraft line (once per
-## family per session, since climb/descend is undiscoverable). Aircraft takes precedence on a
-## session's first body; the first-visit line is left unseen for the next ground vehicle.
-func _maybe_coach(family: String) -> void:
-	if DisplayServer.get_name() == "headless":
-		return
-	if family in COACH_FAMILIES:
-		if _coached_families.has(family):
-			return
-		_coached_families[family] = true
-		_show_coach(family)
-		return
-	if _coach_shown:
-		return
-	_coach_shown = true
-	_show_coach("")
-
-
-func _show_coach(family: String) -> void:
-	var cue := CoachCue.new()
-	cue.family = family  # before add_child: _ready() builds the label from it
-	_ui.add_child(cue)
 
 
 ## (Re)bind HUD + bridge to the active level/vehicle. Called at load and whenever the
@@ -731,7 +718,7 @@ func _unbind_hud() -> void:
 
 func _on_vehicle_changed(type: String) -> void:
 	_bind_hud()
-	_maybe_coach(type)  # vehicle_changed carries the family
+	CoachCue.maybe_coach(type, _ui)  # vehicle_changed carries the family
 
 
 # --- vehicle selector --------------------------------------------------------
@@ -814,43 +801,4 @@ func _set_hud_visible(v: bool) -> void:
 	# reason to be hidden may overwrite the other.
 	_dashboard.set_shown(v)
 	_touch.set_active(v)
-	if v:
-		_restore_sticky_notice()
-	else:
-		_notice.visible = false
-
-
-## Show a message from the sim (GameState.notice). Re-showing restarts the dwell instead of
-## queueing, so holding E against a wall reads as one steady message. A sticky one starts no
-## timer and stays listed until cleared; a transient one hands back to it when its dwell ends.
-func _show_notice(text: String, dwell_s: float) -> void:
-	_notice.text = text
-	_notice.visible = true
-	var token := text + str(Time.get_ticks_msec())
-	_notice.set_meta("token", token)
-	if dwell_s == GameState.NOTICE_STICKY:
-		_sticky_notices.erase(text)
-		_sticky_notices.append(text)
-		return
-	var dwell := dwell_s if dwell_s > 0.0 else NOTICE_DWELL_S
-	await get_tree().create_timer(dwell).timeout
-	if is_instance_valid(_notice) and _notice.get_meta("token", "") == token:
-		_restore_sticky_notice()
-
-
-## Take a notice down early once what it warned about is fixed. Matches on text so it only
-## ever hides its own message; a later notice keeps the rest of its dwell.
-func _clear_notice(text: String) -> void:
-	_sticky_notices.erase(text)
-	if _notice.visible and _notice.text == text:
-		_restore_sticky_notice()
-
-
-## Show the newest sticky notice still up, or hide the line if there is none.
-func _restore_sticky_notice() -> void:
-	if _sticky_notices.is_empty():
-		_notice.visible = false
-		return
-	_notice.text = _sticky_notices.back()
-	_notice.visible = true
-	_notice.set_meta("token", "")
+	_notice.set_shown(v)

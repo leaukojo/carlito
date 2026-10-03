@@ -49,10 +49,10 @@ ALL input arbitration lives here (standing rule 5). Protocol tour: `docs/systems
 - **The gearbox mode is `set_manual_gearbox`**, set by the shell (selector in free play,
   `ChallengeDef.transmission` in an attempt). It is bridge-only: automatic reads the gear byte as
   PRND, manual takes it exactly (0 = N). Local input always drives automatic.
-- **Cycled-control lengths are declared once in `subsystem_counts.gd`** (a leaf: the router
-  must not depend on a vehicle class). Where the length is intrinsic to a structure (an enum, a
-  roster array), edit that structure; a test pins it against the constant, because a mismatch
-  silently stops the local key short of the new position.
+- **Cycled-control lengths are declared once in `subsystem_counts.gd`, their walks once in
+  `cycles.gd`** (leaves: the router must not depend on a vehicle class). Where the length is
+  intrinsic to a structure (an enum, a roster array), edit that structure; a test pins it
+  against the constant, because a mismatch silently stops the local key short of the new position.
 - **Presence-ruled in-signals.** `rudder` overrides `steer` when present (no VehicleInput field).
   `heading_cmd` DOES take a field: it overrides nothing, and every value in its [0,360] is a legal
   bearing, so absent cannot be a sentinel on the wire — `VehicleInput.HEADING_CMD_NONE` is internal

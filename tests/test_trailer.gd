@@ -2,9 +2,8 @@ extends GdUnitTestSuite
 ## Fifth-wheel geometry and the trailer's authored numbers. Pure statics plus scene/spec reads, no
 ## physics body.
 ##
-## What is pinned: the kinematic follower (Articulation.jackknife_step / pose_at_angle), where
-## forward straightens and reverse runs away; the does-not-sink invariant, which fails if a
-## trailer's mass is raised as a free number; scene-vs-code agreement on the kingpin; the ISO 11992
+## What is pinned: the does-not-sink invariant, which fails if a trailer's mass is raised as a
+## free number; scene-vs-code agreement on the kingpin; the ISO 11992
 ## signals, read out of the sim rather than described; and the per-trailer masses, since mass is the
 ## only thing on the wire that tells the four trailers apart.
 
@@ -124,82 +123,6 @@ func test_the_coupled_pose_carries_the_tractors_attitude() -> void:
 	var tractor := Transform3D(Basis(Vector3.RIGHT, 0.15) * Basis(Vector3.UP, 0.6), Vector3(0, 3, 0))
 	var pose := Artic.coupled_pose(tractor, FifthWheelScript.KINGPIN_LOCAL)
 	assert_vector(-pose.basis.z).is_equal_approx(-tractor.basis.z, Vector3.ONE * 1e-6)
-
-
-# --- the fallback: pose + jackknife integration --------------------------------
-
-func test_the_fallback_pose_round_trips_through_the_angle_it_was_given() -> void:
-	# pose_at_angle and articulation_angle are inverses, which is what makes the fallback safe to take:
-	# the pose reports back the angle the solve asked for, and stays hung off the kingpin.
-	var tractor := _yawed(0.7, Vector3(-3.0, 0.0, 11.0))
-	var kingpin := FifthWheelScript.KINGPIN_LOCAL
-	for phi in [0.0, 0.35, -0.9, 1.2]:
-		var pose := Artic.pose_at_angle(tractor, kingpin, phi, BOGIE_Z)
-		assert_float(Artic.articulation_angle(tractor, pose)) \
-			.override_failure_message("fallback pose lost the angle %f" % phi) \
-			.is_equal_approx(phi, 1e-5)
-		assert_vector(pose.origin).is_equal_approx(tractor * kingpin, Vector3.ONE * 1e-5)
-
-
-func test_the_fallback_pose_survives_a_pitched_tractor() -> void:
-	# The trailer is posed level (its yaw is the solved variable); a tractor on a ramp must not
-	# tilt or NaN the follower's basis.
-	var tractor := Transform3D(Basis(Vector3.RIGHT, 0.3), Vector3(0, 2, 0))
-	var pose := Artic.pose_at_angle(tractor, FifthWheelScript.KINGPIN_LOCAL, 0.5, BOGIE_Z)
-	assert_float(pose.basis.determinant()).is_equal_approx(1.0, 1e-5)
-	assert_float(pose.basis.y.dot(Vector3.UP)).is_equal_approx(1.0, 1e-5)
-
-
-func test_pulling_forward_straightens_the_rig() -> void:
-	# The negative-feedback half, and why towing a trailer forward is easy. The decay is exponential
-	# with a time constant of bogie_z / v (0.68 s at 8 m/s), so what is pinned is the shape — every
-	# step shrinks the angle monotonically toward zero — rather than a value after N ticks.
-	var phi := 0.5
-	for _i in 120:
-		var next := Artic.jackknife_step(phi, 8.0, 0.0, DELTA, BOGIE_Z, 0.2)
-		assert_float(next).is_between(0.0, phi)
-		phi = next
-	assert_float(phi).is_less(0.5 * 0.1)  # under a tenth of it after 2 s
-	# Symmetric: the same from the other side.
-	var neg := -0.5
-	for _i in 120:
-		var next := Artic.jackknife_step(neg, 8.0, 0.0, DELTA, BOGIE_Z, 0.2)
-		assert_float(next).is_between(neg, 0.0)
-		neg = next
-	assert_float(neg).is_greater(-0.5 * 0.1)
-
-
-func test_reversing_runs_the_angle_away_and_that_is_the_jackknife() -> void:
-	# The positive-feedback half. A tiny angle grows under reverse instead of decaying, which is
-	# why reversing a trailer is a skill — a model that stayed stable here would be wrong.
-	var phi := 0.05
-	var first := Artic.jackknife_step(phi, -3.0, 0.0, DELTA, BOGIE_Z, 0.2)
-	assert_float(first).is_greater(phi)
-	for _i in 600:
-		phi = Artic.jackknife_step(phi, -3.0, 0.0, DELTA, BOGIE_Z, 0.2)
-	# ...and it stops at the geometric limit rather than folding through the cab or wrapping.
-	assert_float(phi).is_equal_approx(deg_to_rad(Artic.JACKKNIFE_MAX_DEG), 1e-6)
-
-
-func test_the_limit_holds_on_both_sides() -> void:
-	var phi := -0.05
-	for _i in 600:
-		phi = Artic.jackknife_step(phi, -3.0, 0.0, DELTA, BOGIE_Z, 0.2)
-	assert_float(phi).is_equal_approx(-deg_to_rad(Artic.JACKKNIFE_MAX_DEG), 1e-6)
-
-
-func test_a_standing_rig_does_not_articulate_by_itself() -> void:
-	assert_float(Artic.jackknife_step(0.3, 0.0, 0.0, DELTA, BOGIE_Z, 0.2)).is_equal_approx(0.3, 1e-9)
-	# Nor does a degenerate trailer with no wheelbase (guarded rather than dividing by zero).
-	assert_float(Artic.jackknife_step(0.3, 8.0, 0.0, DELTA, 0.0, 0.2)).is_equal(0.3)
-
-
-func test_turning_the_tractor_opens_the_angle_the_way_the_rig_bends() -> void:
-	# Yaw is positive to the LEFT (the engine's own sign) and the trailer then lags on the right, a
-	# positive articulation. The kingpin-ahead term only softens it, never inverts it.
-	var left := Artic.jackknife_step(0.0, 5.0, 0.6, DELTA, BOGIE_Z, 0.2)
-	assert_float(left).is_greater(0.0)
-	assert_float(Artic.jackknife_step(0.0, 5.0, -0.6, DELTA, BOGIE_Z, 0.2)).is_less(0.0)
 
 
 # --- static load split (what sizes the springs) -------------------------------

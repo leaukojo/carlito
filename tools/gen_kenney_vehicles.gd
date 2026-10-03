@@ -115,11 +115,18 @@ const CAR_BASE := {
 	"cd": 0.32, "crr": 0.012,
 	# com_y is body-space height over the road: ~0.35 of the body's height for a saloon (a real one is
 	# ~0.5 m), raised per body for SUVs/vans and dropped for the open-wheelers.
-	"mass": 1150.0, "com_y": 0.48, "spring_rate": 22000.0, "damper_bump": 1800.0,
-	"damper_rebound": 2400.0, "max_suspension_force": 30000.0, "rest_length": 0.28,
-	# One rate for every corner; no Kenney body declares a rear axle share of its own.
-	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
-	# 10 kN/m with mu_lat 0.97: the sedan peaks at 0.87 g, 4.3 deg of roll (corner pass, 2026-10-02).
+	# Springs and dampers are derived per axle off a ride frequency (`_derive_springs`), so every
+	# body stands at the same 0.128 m sag (46 % of rest_length) whatever its mass and balance:
+	# 1.39 Hz / zeta 0.36 bump, 0.48 rebound is 22 kN/m on 1800 / 2400 N*s/m at the 1150 kg
+	# saloon's even corner.
+	"mass": 1150.0, "com_y": 0.48, "ride_hz": 1.39, "zeta_bump": 0.36, "zeta_rebound": 0.48,
+	"max_suspension_force": 30000.0, "rest_length": 0.28,
+	# Link geometry as a share of 100 % (`_derive_link_slopes`), inside a road car's 20-50 %
+	# anti-dive and 30-70 % anti-squat. The Kenney wheelbases are toy-scale (1.6 m on the SUV)
+	# under real masses and COM heights, and pitch goes as 1 / wheelbase^2, so with every newton
+	# of transfer through the springs a launch pitches the SUV 6 deg; a real car pitches 1-2.
+	"anti_dive": 0.4, "anti_squat": 0.5,
+	# 10 kN/m with mu_lat 0.97: the sedan peaks at 0.85 g, 4.3 deg of roll (corner pass, 2026-10-03).
 	"anti_roll_rate": 10000.0,
 	# FWD default; per-variant override in VARIANTS (rwd/awd where the body says so).
 	"wheel_inertia": 1.2, "driven_front": true, "driven_rear": false,
@@ -127,9 +134,14 @@ const CAR_BASE := {
 	# open centre unless the body really carries an LSD or a biasing centre (VARIANTS).
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
 	"mu_long": 1.05, "mu_lat": 0.97, "handbrake_grip": 0.45,
+	# Rear side grip 8 % over the front (GroundDriveSpec.rear_lat_grip): at 1.0 every body steers
+	# neutral, and a 20 % steer step at 100 km/h spun even the FWD sedan on a lift; 1.08 clears
+	# every held and lifted step on `sedan-sports` (step-steer probe, 2026-10-03;
+	# docs/vehicles.md § Balance).
+	"rear_lat_grip": 1.08,
 	# Every road car carries ABS (EU-mandatory since 2004); the open-wheelers opt out in VARIANTS.
 	"abs_equipped": true,
-	# Traction control too (part of ESC, EU-mandatory since 2014); the open-wheelers opt out with ABS.
+	# Traction control too (part of ESC, EU-mandatory since 2014); `race-future` opts out.
 	"tcs_equipped": true,
 	# Passenger radials: ~10% of mu per doubling of load past the corner's static share.
 	"load_sensitivity": 0.10,
@@ -173,6 +185,8 @@ const TRUCK_BASE := {
 	# One rate for every corner; no Kenney body declares a rear axle share of its own.
 	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
 	"anti_roll_rate": 0.0,
+	# No link geometry: the springs above were tuned by driving with all the transfer through them.
+	"anti_dive": 0.0, "anti_squat": 0.0,
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
 	# J1939: only family with an auxiliary retarder on the driven axle.
@@ -184,7 +198,7 @@ const TRUCK_BASE := {
 	# A truck tyre on dry asphalt, and the family's whole brake chain hangs off it: brake_torque,
 	# the retarder's rating and the steering-taper margin are all derived from mu_long/mu_lat
 	# (src/vehicles/CLAUDE.md, tyre class sets mu).
-	"mu_long": 0.80, "mu_lat": 0.75, "handbrake_grip": 1.0,
+	"mu_long": 0.80, "mu_lat": 0.75, "handbrake_grip": 1.0, "rear_lat_grip": 1.0,
 	# Commercial radials, a touch less load-sensitive than a passenger tyre.
 	"load_sensitivity": 0.08,
 	"torque_curve": [700, 400, 1200, 650, 1800, 800, 2400, 780, 2800, 600, 3200, 0],
@@ -204,17 +218,18 @@ const TRUCK_BASE := {
 const VAN_BASE := {
 	# A box van is a smoothed truck front: cd 0.45 on commercial tires.
 	"cd": 0.45, "crr": 0.009,
-	# 4-5 t vans; 240000 N/m is TRUCK_BASE's rate, measured on 8 t, and does not apply here.
-	"mass": 4000.0, "com_y": 0.65, "spring_rate": 65000.0, "damper_bump": 5000.0,
-	"damper_rebound": 7000.0, "max_suspension_force": 90000.0, "rest_length": 0.32,
-	# One rate for every corner; no Kenney body declares a rear axle share of its own.
-	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
+	# Derived per axle as CAR_BASE's: 1.28 Hz / zeta 0.31 bump, 0.43 rebound is 65 kN/m on
+	# 5000 / 7000 N*s/m at a 4 t van's even corner (TRUCK_BASE's 240 kN/m is an 8 t truck's).
+	"mass": 4000.0, "com_y": 0.65, "ride_hz": 1.28, "zeta_bump": 0.31, "zeta_rebound": 0.43,
+	"max_suspension_force": 90000.0, "rest_length": 0.32,
+	# CAR_BASE's geometry: the heavy vans' short wheelbases pitch the same way.
+	"anti_dive": 0.4, "anti_squat": 0.5,
 	# 110 kN/m: ~3 deg of roll at the 0.75 g limit (corner pass, 2026-10-02).
 	"anti_roll_rate": 110000.0,
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
 	# mu_lat 0.85: commercial-tyre side grip, so a cornering van slides before it lifts a wheel.
-	"mu_long": 1.0, "mu_lat": 0.85, "handbrake_grip": 1.0,
+	"mu_long": 1.0, "mu_lat": 0.85, "handbrake_grip": 1.0, "rear_lat_grip": 1.0,
 	"abs_equipped": true, "tcs_equipped": true,
 	# Commercial radials, as TRUCK_BASE.
 	"load_sensitivity": 0.08,
@@ -243,6 +258,8 @@ const TRACTOR_BASE := {
 	# stiffer than the 0.44 m front (both share the one 0.36 physics radius).
 	"spring_rate_rear": 300000.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
 	"anti_roll_rate": 0.0,
+	# No link geometry: the "suspension" is the tyres.
+	"anti_dive": 0.0, "anti_squat": 0.0,
 	# 6.0 is the 0.66 m rear tyre's share: I goes as r^2, and the baseline serves one variant.
 	# The spin step divides NET torque by 1 + reaction_stiffness, so a bigger inertia only slows
 	# spin-up.
@@ -253,7 +270,7 @@ const TRACTOR_BASE := {
 	# diff, so engaged it ties the two axles' mean speeds together (and winds up in tight turns).
 	"centre_diff_rigid": true,
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
-	"mu_long": 1.0, "mu_lat": 0.95, "handbrake_grip": 1.0,
+	"mu_long": 1.0, "mu_lat": 0.95, "handbrake_grip": 1.0, "rear_lat_grip": 1.0,
 	# No ABS: a farm tractor's service brakes are not anti-lock. They sit on the rear axle only, and
 	# the pedal engages MFWD so the shaft brakes the fronts (a 40 km/h tractor brakes all four).
 	"abs_equipped": false, "brake_engages_front_axle": true,
@@ -321,11 +338,18 @@ const VARIANTS := {
 	# torque change. Both keep a long top gear (0.66 vs CAR_BASE's 0.925), reaching 288.0 /
 	# 295.8 km/h.
 	# Differentials: `race` carries a plate LSD on its driven rear (2.5); `race-future` the same
-	# rear plus a Torsen-type centre (3.0). Neither carries ABS or TC: formula cars race without them.
+	# rear plus a Torsen-type centre (3.0). Neither carries ABS (formula cars race without it).
+	# `race` carries TC, as GT and prototype racers do: 389 Nm through gears 1-3 outpulls its rears,
+	# and floored through a turn below ~70 km/h it spun at almost any steer (step-steer probe,
+	# 2026-10-03); the AWD `race-future` spreads it over four tyres and needs none.
+	# `ride_hz` 1.6, stiffer than a saloon as a winged car is: at the family's 1.39 these light
+	# bodies' fronts bottom under the top-speed wing load (test_downforce_fits_inside_...).
 	# `torque_mul` tracks CAR_BASE so absolute torque stays fixed (2.10x185=389 Nm,
 	# 2.21x185=409 Nm) — re-derive on any CAR_BASE torque edit.
-	"race": {"family": "car", "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "max_steer_deg": 40.0, "handbrake_grip": 0.5, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.18, "steer_falloff_speed": 35.0, "diff_bias_rear": 2.5, "abs_equipped": false, "tcs_equipped": false},
-	"race-future": {"family": "car", "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "max_steer_deg": 42.0, "handbrake_grip": 0.5, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.17, "steer_falloff_speed": 35.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "tcs_equipped": false},
+	# `rear_lat_grip` 1.15: the wide rears a rear-heavy formula car runs; on equal tyres the heavier
+	# rear axle's load-sensitive mu sits under the front's and the body steers loose.
+	"race": {"family": "car", "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "handbrake_grip": 0.5, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.18, "steer_falloff_speed": 35.0, "diff_bias_rear": 2.5, "abs_equipped": false, "tcs_equipped": true},
+	"race-future": {"family": "car", "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "handbrake_grip": 0.5, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.17, "steer_falloff_speed": 35.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "tcs_equipped": false},
 	# Commercial bodies: RWD, governed at 180 like the real things (measured 198-200 ungoverned).
 	"van": {"family": "car", "com_y": 0.58, "anti_roll_rate": 18000.0, "mu_lat": 0.88, "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
 	# `ride_lift` 0.08 on the flatbeds: their arches are drawn shallower than the tyre, so at the
@@ -495,17 +519,20 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	gd.centre_diff_bias = get_f.call("centre_diff_bias")
 	gd.centre_diff_rigid = get_flag.call("centre_diff_rigid")
 	gd.rest_length = float(b["rest_length"])
-	gd.spring_rate = float(b["spring_rate"])
-	gd.damper_bump = float(b["damper_bump"])
-	gd.damper_rebound = float(b["damper_rebound"])
-	gd.spring_rate_rear = float(b["spring_rate_rear"])
+	# A `ride_hz` baseline derives these once the wheel stations exist (`_derive_springs`).
+	if not b.has("ride_hz"):
+		gd.spring_rate = float(b["spring_rate"])
+		gd.damper_bump = float(b["damper_bump"])
+		gd.damper_rebound = float(b["damper_rebound"])
+		gd.spring_rate_rear = float(b["spring_rate_rear"])
+		gd.damper_bump_rear = float(b["damper_bump_rear"])
+		gd.damper_rebound_rear = float(b["damper_rebound_rear"])
 	gd.anti_roll_rate = get_f.call("anti_roll_rate")
-	gd.damper_bump_rear = float(b["damper_bump_rear"])
-	gd.damper_rebound_rear = float(b["damper_rebound_rear"])
 	gd.max_suspension_force = float(b["max_suspension_force"])
 	gd.grip_curve = _grip_curve.duplicate()
 	gd.mu_long = get_f.call("mu_long")
 	gd.mu_lat = get_f.call("mu_lat")
+	gd.rear_lat_grip = get_f.call("rear_lat_grip")
 	gd.handbrake_grip = get_f.call("handbrake_grip")
 	# Family number, not a per-variant knob: baseline only, pinned by test_kenney_variants.
 	gd.load_sensitivity = float(b["load_sensitivity"])
@@ -537,9 +564,14 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	gd.min_steer_frac = get_f.call("min_steer_frac")
 	gd.steer_falloff_speed = get_f.call("steer_falloff_speed")
 
-	gd.wheel_positions = _wheel_positions(geo, spec, gd, float(ov.get("wheel_x_out", 0.0)),
+	var susp := _suspension_recipe(b, ov)
+	var sag := _static_sag(susp, spec, gd)
+	gd.wheel_positions = _wheel_positions(geo, gd, sag, float(ov.get("wheel_x_out", 0.0)),
 			float(ov.get("ride_lift", 0.0)))
-	_derive_brakes(spec, gd, String(ov.get("_id", "")))
+	if susp.has("ride_hz"):
+		_derive_springs(spec, gd, susp)
+	_derive_link_slopes(spec, gd, susp, sag)
+	_derive_brakes(spec, gd, String(ov.get("_id", "")), sag)
 
 	spec.headlight_paths.assign(_lamp_paths["headlight_paths"])
 	spec.head_lamp_paths.assign(_lamp_paths["head_lamp_paths"])
@@ -549,17 +581,33 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	return spec
 
 
+## The baseline with the variant's `ride_hz` over it, the one suspension key a variant may override
+## (it only re-derives on a `ride_hz` baseline).
+func _suspension_recipe(b: Dictionary, ov: Dictionary) -> Dictionary:
+	var susp := b.duplicate()
+	if ov.has("ride_hz") and b.has("ride_hz"):
+		susp["ride_hz"] = ov["ride_hz"]
+	return susp
+
+
+## Spring compression (m) at rest the wheel stations are built around: `g / (2 pi ride_hz)^2` on a
+## `ride_hz` baseline, where every axle sags alike, else the even corner's `mass / 4 * g /
+## spring_rate`. Held under 0.8 of the travel.
+func _static_sag(b: Dictionary, spec: VehicleSpec, gd: GroundDriveSpec) -> float:
+	var sag := GRAVITY / pow(TAU * float(b["ride_hz"]), 2.0) if b.has("ride_hz") \
+			else spec.mass / 4.0 * GRAVITY / gd.spring_rate
+	return clampf(sag, 0.0, gd.rest_length * 0.8)
+
+
 ## FL, FR, RL, RR hub anchors at the Kenney model's own wheel positions (body space), so RayWheel
-## visuals sit in the wheel wells. Anchor Y is uniform so the body rests level: at spring
-## equilibrium the visual wheel centre lands at WHEEL_RADIUS above ground. `x_out` pushes a
+## visuals sit in the wheel wells. Anchor Y is uniform so the body rests level: at the static
+## `sag` the visual wheel centre lands at WHEEL_RADIUS above ground. `x_out` pushes a
 ## corner further outboard (open-wheelers), widening suspension and visual track together.
 ## `ride_lift` drops the anchors, which raises the chassis that far over the wheels at
 ## equilibrium: purely a fit knob for a body whose arches are drawn too shallow for the tyre.
-func _wheel_positions(geo: Dictionary, spec: VehicleSpec, gd: GroundDriveSpec,
-		x_out: float, ride_lift := 0.0) -> PackedVector3Array:
-	var corner_mass := spec.mass / 4.0
-	var comp := clampf(corner_mass * GRAVITY / gd.spring_rate, 0.0, gd.rest_length * 0.8)
-	var y := WHEEL_RADIUS + gd.rest_length - comp - ride_lift
+func _wheel_positions(geo: Dictionary, gd: GroundDriveSpec, sag: float, x_out: float,
+		ride_lift := 0.0) -> PackedVector3Array:
+	var y := WHEEL_RADIUS + gd.rest_length - sag - ride_lift
 	var fl := Vector3.ZERO
 	var fr := Vector3.ZERO
 	var rl := Vector3.ZERO
@@ -595,7 +643,7 @@ func _wheel_positions(geo: Dictionary, spec: VehicleSpec, gd: GroundDriveSpec,
 ## the only shape that can't clear the rule, fixed on `race-future` by lengthening gear 1 (see
 ## VARIANTS) until it stopped saturating. `_brake_report` flags anything still over its tyre;
 ## `test_vehicle_catalog.test_kenney_specs_keep_force_hierarchy` is the authoritative check.
-func _derive_brakes(spec: VehicleSpec, gd: GroundDriveSpec, id: String) -> void:
+func _derive_brakes(spec: VehicleSpec, gd: GroundDriveSpec, id: String, sag: float) -> void:
 	var peak_engine := 0.0
 	var idle_engine := VehicleSpec.sample_curve(spec.torque_curve, spec.idle_rpm)
 	for i in spec.torque_curve.size():
@@ -616,7 +664,8 @@ func _derive_brakes(spec: VehicleSpec, gd: GroundDriveSpec, id: String) -> void:
 	var hierarchy_floor := transmissible / wheels * 1.02
 	gd.brake_torque = ceilf(maxf(grip_ceiling * BRAKE_GRIP_FRAC, hierarchy_floor))
 	# Rear-axle brakes that engage the front axle share through the shaft, not a split.
-	gd.brake_bias_front = 0.0 if gd.brake_engages_front_axle else _front_brake_share(spec, gd)
+	gd.brake_bias_front = 0.0 if gd.brake_engages_front_axle \
+			else _front_brake_share(spec, gd, sag)
 	_brake_report.append("%-16s %6.0f Nm/wheel = %.2f g (tyre holds %.2f g, %d driven), %.0f%% front%s"
 			% [id, gd.brake_torque,
 			gd.brake_torque * wheels / gd.wheel_radius / spec.mass / GRAVITY, gd.mu_long,
@@ -630,28 +679,18 @@ func _derive_brakes(spec: VehicleSpec, gd: GroundDriveSpec, id: String) -> void:
 ## `a * h / L` the stop moves forward, and its grip is load-scaled as RayWheel scales it
 ## (`load_scaled_mu`: the loaded front loses mu, the unloaded rear gains it); `a` is what full pedal
 ## asks, held to what the tyres can give, settled by a few passes. So both axles reach their limit
-## together: an even split under-brakes the front and locks the rear first. `h` is the COM's height
-## over the road at static sag: the anchors sit `WHEEL_RADIUS + rest_length - comp` above it
-## (_wheel_positions).
-func _front_brake_share(spec: VehicleSpec, gd: GroundDriveSpec) -> float:
-	var front_z := INF
-	var rear_z := -INF
-	var n_rear := 0
-	for p in gd.wheel_positions:
-		if RayWheel.is_rear_z(p.z):
-			rear_z = maxf(rear_z, p.z)
-			n_rear += 1
-		else:
-			front_z = minf(front_z, p.z)
-	var n_front := gd.wheel_positions.size() - n_rear
-	var wheelbase := rear_z - front_z
-	if not is_finite(wheelbase) or wheelbase <= 0.0 or n_front == 0 or n_rear == 0:
+## together: an even split under-brakes the front and locks the rear first.
+func _front_brake_share(spec: VehicleSpec, gd: GroundDriveSpec, sag: float) -> float:
+	var ax := _axles(spec, gd)
+	if ax.is_empty():
 		return -1.0  # no axle pair: every wheel alike
-	var comp := clampf(spec.mass / 4.0 * GRAVITY / gd.spring_rate, 0.0, gd.rest_length * 0.8)
-	var h := spec.center_of_mass.y + WHEEL_RADIUS + gd.rest_length - comp - gd.wheel_positions[0].y
+	var wheelbase: float = ax["wheelbase"]
+	var n_front: int = ax["n_front"]
+	var n_rear: int = ax["n_rear"]
+	var h := _com_height(spec, gd, sag)
 	var weight := spec.mass * GRAVITY
 	var ref_load := weight / gd.wheel_positions.size()  # RayWheel's: corner_mass * g
-	var static_front := (rear_z - spec.center_of_mass.z) / wheelbase
+	var static_front: float = ax["static_front"]
 	var asked := gd.brake_torque * gd.wheel_positions.size() / gd.wheel_radius / weight  # in g
 	var decel := asked
 	var cap_front := 0.0
@@ -667,6 +706,65 @@ func _front_brake_share(spec: VehicleSpec, gd: GroundDriveSpec) -> float:
 	var share := cap_front / maxf(cap_front + cap_rear, 1e-6)
 	# Thousandths, rounded so the stored float is the plain decimal.
 	return roundf(clampf(share, 0.05, 0.95) * 1000.0) / 1000.0
+
+
+## The axle pair off the wheel stations (front = -Z): `wheelbase`, wheels per axle and the static
+## share of weight on the front (`static_front`, off COM.z). Empty when there is no pair.
+func _axles(spec: VehicleSpec, gd: GroundDriveSpec) -> Dictionary:
+	var front_z := INF
+	var rear_z := -INF
+	var n_rear := 0
+	for p in gd.wheel_positions:
+		if RayWheel.is_rear_z(p.z):
+			rear_z = maxf(rear_z, p.z)
+			n_rear += 1
+		else:
+			front_z = minf(front_z, p.z)
+	var n_front := gd.wheel_positions.size() - n_rear
+	var wheelbase := rear_z - front_z
+	if not is_finite(wheelbase) or wheelbase <= 0.0 or n_front == 0 or n_rear == 0:
+		return {}
+	return {"wheelbase": wheelbase, "n_front": n_front, "n_rear": n_rear,
+			"static_front": (rear_z - spec.center_of_mass.z) / wheelbase}
+
+
+## The COM's height over the road at rest (m): the anchors sit `WHEEL_RADIUS + rest_length - sag`
+## above it (_wheel_positions).
+func _com_height(spec: VehicleSpec, gd: GroundDriveSpec, sag: float) -> float:
+	return spec.center_of_mass.y + WHEEL_RADIUS + gd.rest_length - sag - gd.wheel_positions[0].y
+
+
+## Per-axle springs and dampers off the baseline's `ride_hz` / `zeta_bump` / `zeta_rebound`: each
+## axle's corner mass `m` is its static share of the weight, its rate `m * omega^2` and each damper
+## `zeta * 2 m omega` (critical `2 sqrt(k m)` at that rate). A real car is sprung to a ride
+## frequency, not a rate, so a heavier body or axle stands at the saloon's sag instead of sitting
+## in its bump travel; every axle sagging alike keeps the body level (`_static_sag`).
+func _derive_springs(spec: VehicleSpec, gd: GroundDriveSpec, b: Dictionary) -> void:
+	var omega := TAU * float(b["ride_hz"])
+	var ax := _axles(spec, gd)
+	var front_m := spec.mass / maxf(gd.wheel_positions.size(), 1.0)
+	var rear_m := front_m
+	if not ax.is_empty():
+		front_m = spec.mass * float(ax["static_front"]) / float(ax["n_front"])
+		rear_m = spec.mass * (1.0 - float(ax["static_front"])) / float(ax["n_rear"])
+	gd.spring_rate = roundf(front_m * omega * omega)
+	gd.spring_rate_rear = roundf(rear_m * omega * omega)
+	gd.damper_bump = roundf(float(b["zeta_bump"]) * 2.0 * front_m * omega)
+	gd.damper_rebound = roundf(float(b["zeta_rebound"]) * 2.0 * front_m * omega)
+	gd.damper_bump_rear = roundf(float(b["zeta_bump"]) * 2.0 * rear_m * omega)
+	gd.damper_rebound_rear = roundf(float(b["zeta_rebound"]) * 2.0 * rear_m * omega)
+
+
+## `GroundDriveSpec.anti_dive_slope` / `anti_squat_slope` off the baseline's `anti_dive` /
+## `anti_squat` shares: 100 % is the slope `h / wheelbase` at which that axle's links carry its
+## whole load transfer and its springs none. Thousandths, so a regen writes a stable file.
+func _derive_link_slopes(spec: VehicleSpec, gd: GroundDriveSpec, b: Dictionary, sag: float) -> void:
+	var ax := _axles(spec, gd)
+	if ax.is_empty():
+		return
+	var full := _com_height(spec, gd, sag) / float(ax["wheelbase"])
+	gd.anti_dive_slope = roundf(float(b["anti_dive"]) * full * 1000.0) / 1000.0
+	gd.anti_squat_slope = roundf(float(b["anti_squat"]) * full * 1000.0) / 1000.0
 
 
 func _scaled_curve(flat: Array, mul: float) -> PackedVector2Array:

@@ -49,7 +49,7 @@ var suspension_force := 0.0
 var slip := 0.0         ## |longitudinal slip ratio|, for telemetry
 var abs_active := false ## the anti-lock held this wheel's brake back this tick
 var tcs_active := false ## traction control held this wheel's drive back this tick
-var force_long := 0.0   ## last tick's longitudinal tire force (N, +=forward); diagnostic only
+var force_long := 0.0   ## last tick's longitudinal tire force (N, +=forward); the next tick's link force reads it (`link_slope`)
 var force_lat := 0.0    ## last tick's lateral tire force (N, post friction circle); diagnostic only
 var contact_point := Vector3.ZERO  ## world-space hit position while in_contact (read by the dust emitter)
 var contact_normal := Vector3.UP  ## world-space contact normal while in_contact; diagnostic only
@@ -90,6 +90,12 @@ var lateral_cap_mass := INF
 var spring_rate := 0.0
 var damper_bump := 0.0
 var damper_rebound := 0.0
+## This axle's link geometry, signed so `link_slope * force_long` is the link force along the
+## contact normal: `GroundDriveSpec.anti_squat_slope` at the rear, `-anti_dive_slope` at the front.
+var link_slope := 0.0
+## This axle's side-grip multiple on `mu_lat`: `GroundDriveSpec.rear_lat_grip` at the rear, 1 at
+## the front.
+var axle_lat_grip := 1.0
 
 var _prev_compression := 0.0
 ## The body's velocity at its centre of mass last tick, valid only while this wheel was on the
@@ -118,12 +124,14 @@ func _init(p_anchor: Vector3, p_steered: bool, p_driven: bool, p_visual: Node3D,
 	_query.collision_mask = Layers.SOLID  ## Containment left out — see collision_layers.gd
 
 
-## Pick this axle's spring and dampers off the spec: the rear accessors fall back to the front
-## values at 0, so a spec with no rear fields is one rate for every corner.
+## Pick this axle's spring, dampers, links and side grip off the spec: the rear accessors fall back
+## to the front values at 0, so a spec with no rear fields is one rate for every corner.
 func apply_suspension(gd: GroundDriveSpec) -> void:
 	spring_rate = gd.rear_spring_rate() if is_rear else gd.spring_rate
 	damper_bump = gd.rear_damper_bump() if is_rear else gd.damper_bump
 	damper_rebound = gd.rear_damper_rebound() if is_rear else gd.damper_rebound
+	link_slope = gd.anti_squat_slope if is_rear else -gd.anti_dive_slope
+	axle_lat_grip = gd.rear_lat_grip if is_rear else 1.0
 
 
 func reset() -> void:
@@ -224,9 +232,11 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	# 60 Hz clamp: never exceed the force that reverses compression velocity in one tick.
 	var damper_force := clampf(damper * comp_vel,
 			-corner_mass * absf(comp_vel) / delta, corner_mass * absf(comp_vel) / delta)
-	# The bar sits inside the same force cap as spring and damper.
+	# The bar sits inside the same force cap as spring and damper. So do the links, off last tick's
+	# tyre force (this tick's needs the load being computed): `suspension_force` is the whole load
+	# the corner carries, which the tyre budget below and every load readout take.
 	suspension_force = clampf(spring_rate * compression + damper_force
-			+ bar_force(drive_spec.anti_roll_rate),
+			+ bar_force(drive_spec.anti_roll_rate) + link_slope * force_long,
 			0.0, drive_spec.max_suspension_force)
 	body.apply_force(normal * suspension_force, contact_point - body.global_position)
 
@@ -243,7 +253,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	var ref_load := corner_mass * 9.81
 	var mu_long := load_scaled_mu(drive_spec.mu_long * surface_grip,
 			suspension_force, ref_load, drive_spec.load_sensitivity)
-	var mu_lat := load_scaled_mu(drive_spec.mu_lat * lat_grip_scale * surface_grip,
+	var mu_lat := load_scaled_mu(drive_spec.mu_lat * axle_lat_grip * lat_grip_scale * surface_grip,
 			suspension_force, ref_load, drive_spec.load_sensitivity)
 
 	# Both slips on one denominator, so the slip vector points along the patch's slide.

@@ -60,6 +60,16 @@ extends Resource
 ## roll and leaves ride and pitch alone. Roll stiffness gained per axle is 2 x rate / spring_rate
 ## times what that axle's springs give.
 @export var anti_roll_rate := 0.0
+## Front axle's side-view link geometry: the tangent of the line from the contact patch to the
+## suspension's instant centre. A longitudinal tyre force `F` (+ = forward) at a front wheel puts
+## `-F * anti_dive_slope` through the links along the contact normal, so braking holds the nose up
+## (anti-dive) and drive holds it down (anti-lift). The tyre still carries the whole load transfer;
+## the springs carry only the rest, so the body pitches less. `h / wheelbase` is 100 %; 0 sends
+## every newton of transfer through the springs.
+@export var anti_dive_slope := 0.0
+## The rear axle's, signed the other way: `+F * anti_squat_slope`, so drive holds the tail up
+## (anti-squat) and braking holds it down (anti-lift).
+@export var anti_squat_slope := 0.0
 @export var max_suspension_force := 30000.0  ## N; clamp against deep-penetration catapults
 
 @export_group("Tires")
@@ -70,6 +80,12 @@ extends Resource
 ])
 @export var mu_long := 1.05
 @export var mu_lat := 0.95
+## The rear tyres' side grip as a multiple of `mu_lat` (slope and peak alike). Grip here scales
+## with load, so with 1.0 every body steers near neutral whatever its weight split (only
+## `load_sensitivity` tilts it, and toward oversteer on a rear-heavy body), and the
+## falling grip curve tips any rear excursion into a spin. A race car's wider rears are this
+## literally; on a road car it stands in for the suspension design that makes it understeer.
+@export var rear_lat_grip := 1.0
 ## Fractional mu lost per DOUBLING of load past the corner's static share
 ## (`RayWheel.corner_mass * g`); 0 = grip exactly linear in load, so weight transfer cannot move
 ## the balance. Car 0.10, truck/van/trailers 0.08, tractor 0.12 (soft flotation tyres), plane 0.
@@ -88,7 +104,7 @@ extends Resource
 ## `RayWheel.ABS_SLIP`.
 @export var abs_equipped := false
 ## Traction control, `abs_equipped`'s drive-side twin: the drive may not push a driven wheel's slip
-## past `RayWheel.TCS_SLIP`. The bridge's `tcs_off` switches it off.
+## past `RayWheel.TCS_SLIP`. `VehicleInput.tcs_off` switches it off (bridge or local setting).
 @export var tcs_equipped := false
 ## The foot brake engages the front axle (`front_axle_engageable`), as a fast tractor's rear-axle
 ## brakes do: braking the fronts through the shaft, never a brake of their own. Pairs with

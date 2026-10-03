@@ -113,7 +113,57 @@ func test_a_released_pedal_comes_off_in_the_release_time() -> void:
 	assert_float(Shaper.pedal_step(0.3, 0.3, Shaper.BRAKE_APPLY_S, TICK)).is_equal(0.3)
 
 
+# --- softening (the KEY RESPONSE setting) ----------------------------------------------------
+
+func test_zero_softening_passes_the_key_straight_through() -> void:
+	assert_float(Shaper.steer_step(0.0, 1.0, 30.0, TICK, 0.0)).is_equal(1.0)
+	assert_float(Shaper.steer_step(1.0, -1.0, 30.0, TICK, 0.0)).is_equal(-1.0)
+	assert_float(Shaper.pedal_step(0.0, 1.0, Shaper.ACCEL_APPLY_S, TICK, 0.0)).is_equal(1.0)
+	assert_float(Shaper.pedal_step(1.0, 0.0, Shaper.ACCEL_APPLY_S, TICK, 0.0)).is_equal(0.0)
+
+
+func test_softening_scales_every_travel_time() -> void:
+	# Half the softening = the full model run over twice the time.
+	for v: float in [0.0, 12.0]:
+		assert_float(Shaper.steer_step(0.0, 1.0, v, TICK, 0.5)) \
+				.is_equal_approx(Shaper.steer_step(0.0, 1.0, v, 2.0 * TICK), 1e-6)
+		assert_float(Shaper.steer_step(0.6, 0.0, v, TICK, 0.5)) \
+				.is_equal_approx(Shaper.steer_step(0.6, 0.0, v, 2.0 * TICK), 1e-6)
+	assert_float(Shaper.pedal_step(0.0, 1.0, Shaper.BRAKE_APPLY_S, TICK, 0.5)) \
+			.is_equal_approx(Shaper.pedal_step(0.0, 1.0, Shaper.BRAKE_APPLY_S, 2.0 * TICK), 1e-6)
+
+
+func test_the_softening_steps_cycle_through_raw_to_the_full_model() -> void:
+	assert_int(Shaper.SOFTENING_LABELS.size()).is_equal(Shaper.SOFTENING_STEPS.size())
+	assert_float(Shaper.SOFTENING_STEPS[0]).is_equal(0.0)
+	assert_float(Shaper.SOFTENING_STEPS[-1]).is_equal(1.0)
+	assert_bool(Shaper.SOFTENING_STEPS.has(Shaper.DEFAULT_SOFTENING)).is_true()
+	var a: float = Shaper.SOFTENING_STEPS[0]
+	for i in Shaper.SOFTENING_STEPS.size():
+		assert_str(Shaper.softening_label(a)).is_equal(Shaper.SOFTENING_LABELS[i])
+		a = Shaper.next_softening(a)
+	assert_float(a).is_equal(Shaper.SOFTENING_STEPS[0])
+
+
+func test_the_router_applies_its_softening_to_the_keys() -> void:
+	var router: Node = auto_free(RouterScript.new())
+	assert_float(router.key_softening()).is_equal(Shaper.DEFAULT_SOFTENING)
+	router.set_key_softening(0.0)
+	_key(KEY_D, true)
+	router._physics_process(TICK)
+	var steer: float = router.get_vehicle_input().steer
+	_key(KEY_D, false)
+	assert_float(steer).is_equal(1.0)
+
+
 # --- the router wiring -------------------------------------------------------------------
+
+## A router running the full hand-and-foot model, whose timings these asserts read.
+func _full_router() -> Node:
+	var router: Node = auto_free(RouterScript.new())
+	router.set_key_softening(1.0)
+	return router
+
 
 ## A touch stand-in holding GAS and the stick hard right.
 class _GasAndStickTouch extends RefCounted:
@@ -128,7 +178,7 @@ class _LiveBridge extends BridgeSourceScript:
 
 
 func test_local_pedals_ramp_and_the_touch_stick_passes_straight_through() -> void:
-	var router: Node = auto_free(RouterScript.new())
+	var router := _full_router()
 	router.set_touch_source(_GasAndStickTouch.new())
 	router._physics_process(TICK)
 	var first: VehicleInput = router.get_vehicle_input()
@@ -151,7 +201,7 @@ static func _key(code: Key, pressed: bool) -> void:
 
 
 func test_the_keyboard_steer_is_shaped() -> void:
-	var router: Node = auto_free(RouterScript.new())
+	var router := _full_router()
 	_key(KEY_D, true)
 	router._physics_process(TICK)
 	var steer: float = router.get_vehicle_input().steer
@@ -185,7 +235,7 @@ class _StickBody extends Node3D:
 
 func test_stick_pedals_ramp_both_ways_alike() -> void:
 	# S at a standstill reverses: throttle = -brake, ramped at the accel rate, not the brake's.
-	var router: Node = auto_free(RouterScript.new())
+	var router := _full_router()
 	router.register_vehicle(auto_free(_StickBody.new()))
 	_key(KEY_S, true)
 	router._physics_process(TICK)
@@ -197,7 +247,7 @@ func test_stick_pedals_ramp_both_ways_alike() -> void:
 func test_the_steer_slows_with_the_speed_the_body_steers_wheels_at() -> void:
 	# A plane at cruise banks with the key at its standstill rate: the 1 / v^2 slow-down is a wheel
 	# angle's law, so the router reads key_steer_speed, not road speed.
-	var router: Node = auto_free(RouterScript.new())
+	var router := _full_router()
 	router.register_vehicle(auto_free(_FlyingBody.new()))
 	_key(KEY_D, true)
 	router._physics_process(TICK)
@@ -267,7 +317,7 @@ func test_the_pad_stick_and_trigger_pass_straight_through() -> void:
 
 
 func test_key_and_pad_merge_like_any_two_local_sources() -> void:
-	var router: Node = auto_free(RouterScript.new())
+	var router := _full_router()
 	router.register_vehicle(auto_free(_FastCar.new()))
 	var pad := _StubPad.new()
 	pad.vals = {&"steer": -0.5, &"accel": 0.3}

@@ -6,15 +6,24 @@
 
 [sub_resource type="Resource" id="Resource_rn4y3"]
 script = ExtResource("1_psa8x")
-wheel_positions = PackedVector3Array(-0.6300001, 0.51193184, -0.8219999, 0.6300001, 0.51193184, -0.822, -0.6300001, 0.51193184, 0.7620001, 0.6300001, 0.51193184, 0.76199996)
+wheel_positions = PackedVector3Array(-0.6300001, 0.5115197, -0.8219999, 0.6300001, 0.5115197, -0.822, -0.6300001, 0.5115197, 0.7620001, 0.6300001, 0.5115197, 0.76199996)
 wheel_radius = 0.36
 wheel_scene = ExtResource("2_16fio")
 driven_front = true
 driven_rear = false
 rest_length = 0.28
+spring_rate = 26315.0
+damper_bump = 2169.0
+damper_rebound = 2893.0
+spring_rate_rear = 17544.0
+damper_bump_rear = 1446.0
+damper_rebound_rear = 1928.0
 anti_roll_rate = 10000.0
+anti_dive_slope = 0.121
+anti_squat_slope = 0.152
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_lat = 0.97
+rear_lat_grip = 1.08
 load_sensitivity = 0.1
 handbrake_grip = 0.45
 brake_torque = 1012.0

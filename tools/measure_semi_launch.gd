@@ -20,7 +20,7 @@ extends Node3D
 ##   godot --headless --path . res://tools/measure_semi_launch.tscn -- semi
 
 const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
-const Layers := preload("res://src/physics/collision_layers.gd")
+const MeasureRig := preload("res://tools/measure_rig.gd")
 
 const STRIP_LENGTH := 6000.0
 const STRIP_WIDTH := 40.0
@@ -105,8 +105,10 @@ func _ready() -> void:
 		printerr("unknown variant '%s'" % _variant)
 		get_tree().quit(1)
 		return
-	_build_strip()
-	_build_pad()
+	MeasureRig.add_slab(self, "Strip", Vector3(STRIP_WIDTH, 2.0, STRIP_LENGTH))
+	# The P7 skid pad, beside the strip rather than part of it: the launch strip is 40 m wide and a
+	# rig at full lock leaves it in under a second.
+	MeasureRig.add_slab(self, "Pad", Vector3(PAD_SIZE, 2.0, PAD_SIZE), PAD_X)
 	_car = load(Catalog.VARIANTS[_variant]["scene"]).instantiate() as SemiTractor
 	if _car == null:
 		printerr("'%s' is not a SemiTractor" % _variant)
@@ -145,47 +147,7 @@ func _ready() -> void:
 			else _trailer_want.get_file().get_basename()))
 	print("  driving over the BRIDGE (gear byte 1, key 3) — see the script header")
 	print("  phase P1_settle at t=0.000")
-	_drive(0.0, 0.0)
-
-
-func _build_strip() -> void:
-	var shape := BoxShape3D.new()
-	shape.size = Vector3(STRIP_WIDTH, 2.0, STRIP_LENGTH)
-	var collision := CollisionShape3D.new()
-	collision.shape = shape
-	var mesh := BoxMesh.new()
-	mesh.size = shape.size
-	var visual := MeshInstance3D.new()
-	visual.mesh = mesh
-	var ground := StaticBody3D.new()
-	ground.name = "Strip"
-	ground.collision_layer = Layers.TERRAIN
-	ground.collision_mask = Layers.DYNAMIC
-	ground.position = Vector3(0.0, -1.0, 0.0)  # top face at y = 0
-	ground.add_child(collision)
-	ground.add_child(visual)
-	add_child(ground)
-
-
-## The P7 skid pad, beside the strip rather than part of it: the launch strip is 40 m wide and a
-## rig at full lock leaves it in under a second. Same surface, same layers — only the size differs.
-func _build_pad() -> void:
-	var shape := BoxShape3D.new()
-	shape.size = Vector3(PAD_SIZE, 2.0, PAD_SIZE)
-	var collision := CollisionShape3D.new()
-	collision.shape = shape
-	var mesh := BoxMesh.new()
-	mesh.size = shape.size
-	var visual := MeshInstance3D.new()
-	visual.mesh = mesh
-	var pad := StaticBody3D.new()
-	pad.name = "Pad"
-	pad.collision_layer = Layers.TERRAIN
-	pad.collision_mask = Layers.DYNAMIC
-	pad.position = Vector3(PAD_X, -1.0, 0.0)  # top face at y = 0, level with the strip
-	pad.add_child(collision)
-	pad.add_child(visual)
-	add_child(pad)
+	MeasureRig.drive(0.0, 0.0)
 
 
 ## Optional in-memory geometry override, driven by extra command-line args of the form
@@ -246,18 +208,6 @@ func _parse_trailer_arg(args: PackedStringArray) -> void:
 		printerr("unknown trailer '%s'" % want)
 		get_tree().quit(1)
 		return
-
-
-## sloppyCAN's inbound stash, written straight into the (desktop-inert) Bridge autoload.
-## Percentages are the contract's "in" ranges; bridge_source normalizes them.
-## `steer_pct` is the contract's -100..100, + = right; it defaults to straight, so every launch
-## phase reads as it always did.
-func _drive(accel_pct: float, brake_pct: float, steer_pct := 0.0) -> void:
-	Bridge.set("_active", true)
-	Bridge.set("_inbound", {
-		"key": 3, "gear": 1, "accel": accel_pct, "brake": brake_pct,
-		"steer": steer_pct, "handbrake": 0.0,
-	})
 
 
 func _new_stats() -> Dictionary:
@@ -506,11 +456,11 @@ func _advance(s: Dictionary) -> void:
 				return
 			if _ticks >= TowHost.SPAWN_COUPLE_TICKS and _pt >= SETTLE_S:
 				_to_phase(Ph.P2)
-				_drive(100.0, 0.0)
+				MeasureRig.drive(100.0, 0.0)
 		Ph.P2:
 			if _pt >= THROTTLE_S:
 				_to_phase(Ph.P3)
-				_drive(0.0, 100.0)
+				MeasureRig.drive(0.0, 100.0)
 		Ph.P3:
 			if _sub == 0:
 				if absf(s["speed"]) < STOP_SPEED or _pt >= STOP_TIMEOUT_S:
@@ -520,7 +470,7 @@ func _advance(s: Dictionary) -> void:
 							% [_t, s["speed"], STOP_HOLD_S])
 			elif _pt >= STOP_HOLD_S:
 				_to_phase(Ph.P4)
-				_drive(0.0, 0.0)
+				MeasureRig.drive(0.0, 0.0)
 				_car.set_attachment(TrailerCatalog.BOBTAIL)
 				print("    dropped the trailer (bobtail) at t=%.3f" % _t)
 		Ph.P4:
@@ -537,17 +487,17 @@ func _advance(s: Dictionary) -> void:
 				_pt = 0.0
 			elif _pt >= RECOUPLE_S:
 				_to_phase(Ph.P5)
-				_drive(0.0, 100.0)
+				MeasureRig.drive(0.0, 100.0)
 		Ph.P5:
 			if _sub == 0 and _pt >= CHARGE_BRAKE_S:
 				_sub = 1
 				_pt = 0.0
-				_drive(0.0, 0.0)
+				MeasureRig.drive(0.0, 0.0)
 				print("    brake released at t=%.3f (air %.3f / %.3f, trailer_air %.3f)"
 						% [_t, s["air1"], s["air2"], _car._trailer_air])
 			elif _sub == 1 and _pt >= CHARGE_RELEASE_S:
 				_to_phase(Ph.P6)
-				_drive(100.0, 0.0)
+				MeasureRig.drive(100.0, 0.0)
 		Ph.P6:
 			if _pt >= THROTTLE_S:
 				# Re-laid on the skid pad, because a rig at full lock leaves the 40 m strip at
@@ -558,7 +508,7 @@ func _advance(s: Dictionary) -> void:
 				_car.respawn()
 				_prev_speed = 0.0  # or the teleport reads as an acceleration spike in P7
 				_to_phase(Ph.P7)
-				_drive(100.0, 0.0)
+				MeasureRig.drive(100.0, 0.0)
 				print("    moved to the skid pad, accelerating to %.1f km/h"
 						% (_tip_speed * 3.6))
 		Ph.P7:
@@ -574,7 +524,7 @@ func _advance(s: Dictionary) -> void:
 					else:
 						# Throttle released with the step, so what follows is a lateral manoeuvre
 						# and not a launch.
-						_drive(0.0, 0.0, 100.0)
+						MeasureRig.drive(0.0, 0.0, 100.0)
 						print("    step to full lock at t=%.3f (entry %.2f m/s, %.1f km/h)"
 								% [_t, s["speed"], float(s["speed"]) * 3.6])
 			else:
@@ -588,7 +538,7 @@ func _advance(s: Dictionary) -> void:
 								% [TIP_ROLL_DEG, absf(float(s["roll"]))]
 					else:
 						_ended_by = "%.0f s %s ran out" % [hold_s, "ramp" if _ramp else "hold"]
-					_drive(0.0, 0.0)
+					MeasureRig.drive(0.0, 0.0)
 					_finish()
 				elif _ramp:
 					_ramp_step(float(s["speed"]))
@@ -600,7 +550,7 @@ func _ramp_step(speed: float) -> void:
 	var err := _tip_speed - speed
 	_ramp_i = clampf(_ramp_i + err * get_physics_process_delta_time(), -RAMP_I_MAX, RAMP_I_MAX)
 	var u := RAMP_KP * err + RAMP_KI * _ramp_i
-	_drive(clampf(u, 0.0, 1.0) * 100.0, clampf(-u, 0.0, 1.0) * 100.0,
+	MeasureRig.drive(clampf(u, 0.0, 1.0) * 100.0, clampf(-u, 0.0, 1.0) * 100.0,
 			clampf(_pt / RAMP_S, 0.0, 1.0) * 100.0)
 
 

@@ -32,7 +32,9 @@ const COURSE_DIR := DIR + "/courses"
 const LEVEL_PATH := DIR + "/car_arena.tscn"
 const ARENA_ID := "car_arena"
 const TITLE := "Car Arena"
+const LOG_TAG := "car-arena"
 
+const GenIO := preload("res://tools/level_gen_io.gd")
 const BrushOps := preload("res://kit/helpers/brush_ops.gd")
 const SplatPaint := preload("res://kit/helpers/splat_paint.gd")
 
@@ -459,19 +461,20 @@ func _scaffold() -> int:
 	_paint_ice(splat, splat2, roads[ICE_ROAD], profiles[ICE_ROAD])
 	_paint_apron(splat, splat2, asphalt.get("splat_channel"))
 
-	if not _write_png(heights, "%s/car_arena_island_height.png" % DIR):
+	if not GenIO.write_png(heights, "%s/car_arena_island_height.png" % DIR, LOG_TAG):
 		return 1
-	if not _write_png(splat, "%s/car_arena_island_splat.png" % DIR):
+	if not GenIO.write_png(splat, "%s/car_arena_island_splat.png" % DIR, LOG_TAG):
 		return 1
-	if not _write_png(splat2, "%s/car_arena_island_splat2.png" % DIR):
+	if not GenIO.write_png(splat2, "%s/car_arena_island_splat2.png" % DIR, LOG_TAG):
 		return 1
 	for file_name in roads:
 		var path := "%s/%s" % [DIR, file_name]
 		if ResourceSaver.save(roads[file_name].curve(), path) != OK:
 			printerr("[car-arena] cannot save %s" % path)
 			return 1
-	_write_text("%s/car_arena_info.tres" % DIR, _info_text())
-	_write_text(LEVEL_PATH, _scene_text())
+	GenIO.write_text("%s/car_arena_info.tres" % DIR, GenIO.info_text(TITLE, ["car"], "car"),
+			LOG_TAG)
+	GenIO.write_text(LEVEL_PATH, _scene_text(), LOG_TAG)
 	print("[car-arena] scaffold done. Run --import, then `-- courses`, then bake.")
 	return 0
 
@@ -1142,19 +1145,6 @@ func _pack(root: Node3D, path: String) -> bool:
 # ============================================================================ text artifacts
 
 
-func _info_text() -> String:
-	return """[gd_resource type="Resource" script_class="LevelInfo" format=3]
-
-[ext_resource type="Script" path="res://src/levels/base/level_info.gd" id="1_info"]
-
-[resource]
-script = ExtResource("1_info")
-display_name = "%s"
-allowed_vehicles = PackedStringArray("car")
-default_vehicle = "car"
-""" % TITLE
-
-
 func _scene_text() -> String:
 	var f := _frame(_strip().curve(), START_UP_SPAWN_X - STRIP_START_X)
 	var spawn := Transform3D(Basis(-f.basis.x, Vector3.UP, -f.basis.z),
@@ -1317,24 +1307,6 @@ curve = ExtResource("%s")
 
 
 # ==================================================================================== helpers
-
-
-func _write_png(img: Image, path: String) -> bool:
-	if img.save_png(path) != OK:
-		printerr("[car-arena] failed to write %s" % path)
-		return false
-	TerrainGen.ensure_import_settings(path)
-	print("[car-arena] wrote %s" % path)
-	return true
-
-
-func _write_text(path: String, text: String) -> void:
-	var f := FileAccess.open(path, FileAccess.WRITE)
-	if f == null:
-		printerr("[car-arena] cannot write %s" % path)
-		return
-	f.store_string(text)
-	print("[car-arena] wrote %s" % path)
 
 
 # World <-> pixel, HeightmapTerrain's own convention: the grid spans [-span/2, +span/2] in

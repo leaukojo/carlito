@@ -1,12 +1,13 @@
 extends GdUnitTestSuite
-## DroneCAN node roster: one declaration pinned by three external sources (contract
-## JSON, InputRouter). Tests roster shape, the three pins, health derivations, and
-## the mode-cycle walk over full int range.
+## DroneCAN node roster: one declaration pinned by two external sources (contract
+## JSON, the input leaf counts). Tests roster shape, both pins, health derivations, and
+## the Y-key walk over full int range.
 
 const B := preload("res://src/vehicles/drone/drone_bus.gd")
 const Prop := preload("res://src/vehicles/drone/drone_propulsion.gd")
 const DroneT := preload("res://src/vehicles/drone/drone_telemetry.gd")
-const Router := preload("res://src/input/input_router.gd")
+const Counts := preload("res://src/input/subsystem_counts.gd")
+const Cycles := preload("res://src/input/cycles.gd")
 const ContractScript := preload("res://src/bridge/contract.gd")
 
 ## Roster indices (spelled out for readability in assertions).
@@ -156,10 +157,10 @@ func test_node_online_is_a_scalar_bitfield_that_renders_nowhere() -> void:
 	assert_bool(sig.is_instanced()).is_false()
 
 
-func test_the_router_mirrors_the_roster_size() -> void:
-	# InputRouter must not depend on a vehicle class (the BODY_CMD_COUNT rule), so it carries
-	# its own copy. This is the pin that stops the Y key quietly failing to reach a new node.
-	assert_int(Router.NODE_FAIL_COUNT).is_equal(B.count())
+func test_the_leaf_count_is_the_roster_size() -> void:
+	# The router must not depend on a vehicle class, so the Y key walks the leaf count. This is
+	# the pin that stops the Y key quietly failing to reach a new node.
+	assert_int(Counts.DRONE_NODES).is_equal(B.count())
 
 
 func test_the_telemetry_default_is_roster_shaped_and_all_ok() -> void:
@@ -354,11 +355,11 @@ func test_error_is_never_reported() -> void:
 func test_the_cycle_walks_the_roster_and_comes_home() -> void:
 	var bits := 0
 	for i in B.count():
-		bits = B.cycle_fail(bits)
+		bits = Cycles.node_fail(bits)
 		assert_int(bits).is_equal(1 << i)
 	# One more press and the bus is whole again — exactly count() + 1 states, so a press per
 	# node plus a press for "none".
-	assert_int(B.cycle_fail(bits)).is_equal(0)
+	assert_int(Cycles.node_fail(bits)).is_equal(0)
 
 
 func test_the_cycle_terminates_from_any_state() -> void:
@@ -368,21 +369,6 @@ func test_the_cycle_terminates_from_any_state() -> void:
 		var bits: int = start
 		var steps := 0
 		while bits != 0 and steps < 64:
-			bits = B.cycle_fail(bits)
+			bits = Cycles.node_fail(bits)
 			steps += 1
 		assert_int(bits).is_equal(0)
-
-
-func test_the_router_cycle_is_the_same_rule() -> void:
-	# InputRouter mirrors cycle_fail rather than calling it (it must not depend on a vehicle
-	# class). This pins the two implementations equal across the whole range they can meet on,
-	# so "change both or neither" is enforced instead of asked for.
-	#
-	# Both sides are called. Re-typing the router's rule here instead would pin the bus against
-	# a copy living in this file, and an edit to InputRouter would keep every test green — which
-	# is exactly what this assertion is supposed to make impossible.
-	for bits in range(0, (B.roster_mask() + 1) * 4):
-		assert_int(B.cycle_fail(bits)) 			.override_failure_message("DroneBus.cycle_fail and InputRouter.cycle_node_fail disagree at %d" % bits) 			.is_equal(Router.cycle_node_fail(bits))
-	# ...and off the ends the key can still be pressed on: a mask the bus set past the roster.
-	for bits in [-1, 1 << 20, 1 << 40]:
-		assert_int(B.cycle_fail(bits)).is_equal(Router.cycle_node_fail(bits))

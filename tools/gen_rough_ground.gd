@@ -10,6 +10,7 @@ extends Node
 ##   godot --headless --path . --import
 
 const Layout := preload("res://tools/rough_ground_layout.gd")
+const GenIO := preload("res://tools/level_gen_io.gd")
 
 const DIR := "res://src/levels/dev/rough_ground"
 const HEIGHT_PNG := DIR + "/rough_ground_height.png"
@@ -17,6 +18,7 @@ const SPLAT_PNG := DIR + "/rough_ground_splat.png"
 const SPLAT2_PNG := DIR + "/rough_ground_splat2.png"
 const INFO_PATH := DIR + "/rough_ground_info.tres"
 const TITLE := "Rough Ground (dev)"
+const LOG_TAG := "rough-ground"
 
 ## Channel table: level 1's, so the lanes are the same asphalt and mud a shipped island paints
 ## and `measure_grade.gd`'s SURFACES name the same (grip, crr) pairs.
@@ -86,14 +88,15 @@ func _scaffold() -> int:
 		print("[rough-ground]   %-9s z %7.1f .. %7.1f" % [Layout.PATCHES[i]["name"],
 				Layout.patch_start_z(i), Layout.patch_end_z(i)])
 	var heights := Image.create_from_data(cells, cells, false, Image.FORMAT_L8, height_bytes)
-	if not _write_png(heights, HEIGHT_PNG):
+	if not GenIO.write_png(heights, HEIGHT_PNG, LOG_TAG):
 		return 1
-	if not _write_png(splat, SPLAT_PNG):
+	if not GenIO.write_png(splat, SPLAT_PNG, LOG_TAG):
 		return 1
-	if not _write_png(splat2, SPLAT2_PNG):
+	if not GenIO.write_png(splat2, SPLAT2_PNG, LOG_TAG):
 		return 1
-	_write_text(INFO_PATH, _info_text())
-	_write_text(Layout.LEVEL_PATH, _scene_text())
+	GenIO.write_text(INFO_PATH, GenIO.info_text(TITLE, ["car", "truck", "tractor"], "car"),
+			LOG_TAG)
+	GenIO.write_text(Layout.LEVEL_PATH, _scene_text(), LOG_TAG)
 	print("[rough-ground] done. Run --import.")
 	return 0
 
@@ -108,19 +111,6 @@ func _island_y(x: float, z: float) -> float:
 ## HeightmapTerrain's own convention at one cell per metre, the terrain at the origin.
 func _world(p: int) -> float:
 	return float(p) - Layout.SIZE * 0.5
-
-
-func _info_text() -> String:
-	return """[gd_resource type="Resource" script_class="LevelInfo" format=3]
-
-[ext_resource type="Script" path="res://src/levels/base/level_info.gd" id="1_info"]
-
-[resource]
-script = ExtResource("1_info")
-display_name = "%s"
-allowed_vehicles = PackedStringArray("car", "truck", "tractor")
-default_vehicle = "car"
-""" % TITLE
 
 
 func _scene_text() -> String:
@@ -224,21 +214,3 @@ sand_height = {sand_height}
 				CHANNEL_DRAG.map(func(g: float) -> String: return str(g)))),
 		"spawn": var_to_str(spawn),
 	})
-
-
-func _write_png(img: Image, path: String) -> bool:
-	if img.save_png(path) != OK:
-		printerr("[rough-ground] failed to write %s" % path)
-		return false
-	TerrainGen.ensure_import_settings(path)
-	print("[rough-ground] wrote %s" % path)
-	return true
-
-
-func _write_text(path: String, text: String) -> void:
-	var f := FileAccess.open(path, FileAccess.WRITE)
-	if f == null:
-		printerr("[rough-ground] cannot write %s" % path)
-		return
-	f.store_string(text)
-	print("[rough-ground] wrote %s" % path)

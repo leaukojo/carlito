@@ -9,6 +9,7 @@ extends Control
 ## inherited theme. No emoji.
 
 const WorldConditions := preload("res://src/levels/base/world_conditions.gd")
+const KeyShaper := preload("res://src/input/key_shaper.gd")
 
 signal resume_requested
 signal respawn_requested
@@ -18,12 +19,31 @@ signal dashboard_density_changed(setting: int)
 signal ui_scale_changed(factor: float)
 ## New "Extended debug labels" pick; the shell applies it to the F3 overlay and writes it to user://.
 signal extended_debug_changed(on: bool)
+## New KEY RESPONSE step picked (KeyShaper softening, 0..1); the shell hands it to InputRouter and
+## writes it to user://.
+signal key_softening_changed(amount: float)
+## TRACTION CONTROL flipped (true = off); the shell hands it to InputRouter and writes it to user://.
+signal tcs_off_changed(off: bool)
 ## New wind/current preset or shared compass direction picked; the shell applies it to the
 ## current level and keeps it for the session.
 signal conditions_changed(wind_preset: int, current_preset: int, from_deg: float)
 ## Day/night picked directly (as opposed to the N key, which flips it). Named apart from
 ## GameState.night_changed, which is the level's own broadcast of the result.
 signal night_toggled(on: bool)
+
+## What the shell hands over for the pages to open on: the SETTINGS values as applied and the
+## CONDITIONS state. Named fields, so a call site cannot transpose them.
+class State extends RefCounted:
+	var density: int = Dashboard.Density.COMPACT
+	var ui_scale := UiScale.USER_DEFAULT
+	var extended_debug := false
+	var key_softening := KeyShaper.DEFAULT_SOFTENING
+	var tcs_off := false
+	var wind_preset: int = WorldConditions.Preset.LEVEL
+	var current_preset: int = WorldConditions.Preset.LEVEL
+	var wind_from_deg := 0.0
+	var night := false
+	var conditions_locked := false  ## a challenge owns wind, current and lighting
 
 ## Widest sensible button in logical px (scaled through UiTheme), matching the garage.
 const BUTTON_W := 260.0
@@ -39,6 +59,10 @@ const UI_SCALE_HELP := "Scales all on-screen controls and text. 100% is the auto
 
 ## F3 shows only FPS by default; this is what turning it on buys back.
 const EXTENDED_DEBUG_HELP := "Adds frame time, draw calls, VRAM, grip and wind/current to the F3 overlay."
+
+const KEY_RESPONSE_HELP := "How driving keys and on-screen pedals ease in. RAW is instant; REALISTIC eases in like a driver."
+
+const TCS_HELP := "Cuts engine power when a driven wheel spins. Cars fitted with it only; OFF lets the tyres spin and the rear step out."
 
 const WIND_HELP := "Overrides the level's wind for this session."
 const CURRENT_HELP := "Overrides the level's water current for this session."
@@ -58,6 +82,8 @@ var _resume_btn: Button
 var _density_btn: Button
 var _ui_scale_btn: Button
 var _extended_debug_btn: Button
+var _key_response_btn: Button
+var _tcs_btn: Button
 var _wind_btn: Button
 var _current_btn: Button
 var _from_btn: Button
@@ -67,6 +93,8 @@ var _caps := {}
 var _density: int = Dashboard.Density.COMPACT
 var _ui_scale := UiScale.USER_DEFAULT
 var _extended_debug := false
+var _key_softening := KeyShaper.DEFAULT_SOFTENING
+var _tcs_off := false
 var _wind_preset: int = WorldConditions.Preset.LEVEL
 var _current_preset: int = WorldConditions.Preset.LEVEL
 var _wind_from_deg := 0.0
@@ -76,20 +104,18 @@ var _conditions_locked := false  ## a challenge owns wind, current and lighting:
 
 ## Called by the shell before add_child; pages build in _ready. Optional: with nothing handed
 ## over, capability-gated rows read unavailable and every setting reads its default.
-func setup(caps: Dictionary, density_setting := Dashboard.Density.COMPACT,
-		ui_scale_factor := UiScale.USER_DEFAULT,
-		wind_preset := WorldConditions.Preset.LEVEL, current_preset := WorldConditions.Preset.LEVEL,
-		wind_from_deg := 0.0, night_on := false, conditions_locked := false,
-		extended_debug := false) -> void:
-	_conditions_locked = conditions_locked
+func setup(caps: Dictionary, state := State.new()) -> void:
 	_caps = caps
-	_density = density_setting
-	_ui_scale = ui_scale_factor
-	_extended_debug = extended_debug
-	_wind_preset = wind_preset
-	_current_preset = current_preset
-	_wind_from_deg = wind_from_deg
-	_night = night_on
+	_density = state.density
+	_ui_scale = state.ui_scale
+	_extended_debug = state.extended_debug
+	_key_softening = state.key_softening
+	_tcs_off = state.tcs_off
+	_wind_preset = state.wind_preset
+	_current_preset = state.current_preset
+	_wind_from_deg = state.wind_from_deg
+	_night = state.night
+	_conditions_locked = state.conditions_locked
 
 
 func _ready() -> void:
@@ -219,6 +245,16 @@ func _build_settings() -> void:
 	_settings.add_child(_extended_debug_btn)
 	_settings.add_child(_help(EXTENDED_DEBUG_HELP))
 
+	_key_response_btn = _menu_button("", _on_key_response_pressed)
+	_relabel_key_response()
+	_settings.add_child(_key_response_btn)
+	_settings.add_child(_help(KEY_RESPONSE_HELP))
+
+	_tcs_btn = _menu_button("", _on_tcs_pressed)
+	_relabel_tcs()
+	_settings.add_child(_tcs_btn)
+	_settings.add_child(_help(TCS_HELP))
+
 	_settings.add_child(_menu_button("BACK", func() -> void: _show_page(_root)))
 
 
@@ -308,6 +344,26 @@ func _on_extended_debug_pressed() -> void:
 
 func _relabel_extended_debug() -> void:
 	_extended_debug_btn.text = "EXTENDED DEBUG LABELS: %s" % ("ON" if _extended_debug else "OFF")
+
+
+func _on_key_response_pressed() -> void:
+	_key_softening = KeyShaper.next_softening(_key_softening)
+	_relabel_key_response()
+	key_softening_changed.emit(_key_softening)
+
+
+func _relabel_key_response() -> void:
+	_key_response_btn.text = "KEY RESPONSE: %s" % KeyShaper.softening_label(_key_softening)
+
+
+func _on_tcs_pressed() -> void:
+	_tcs_off = not _tcs_off
+	_relabel_tcs()
+	tcs_off_changed.emit(_tcs_off)
+
+
+func _relabel_tcs() -> void:
+	_tcs_btn.text = "TRACTION CONTROL: %s" % ("OFF" if _tcs_off else "ON")
 
 
 func _on_wind_pressed() -> void:

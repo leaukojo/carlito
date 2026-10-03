@@ -321,6 +321,18 @@ func test_families_group_in_first_listed_order() -> void:
 	assert_array(groups["car"]).contains_exactly([a, c])
 
 
+## NEXT on the result panel: the following def of the same family, never across into the next
+## family, and nothing past the last one or for a def the list does not hold.
+func test_next_after_walks_one_family_in_registry_order() -> void:
+	var cars := ChallengeRegistry.in_family("car")
+	assert_int(cars.size()).is_greater(1)
+	for i in cars.size() - 1:
+		assert_str(ChallengeRegistry.next_after(cars[i]).id).is_equal(cars[i + 1].id)
+	assert_object(ChallengeRegistry.next_after(cars[cars.size() - 1])).is_null()
+	assert_object(ChallengeRegistry.next_after(null)).is_null()
+	assert_object(ChallengeRegistry.next_after(ChallengeRegistry.dev_all()[0])).is_null()
+
+
 func test_duplicate_ids_are_reported_once() -> void:
 	var a := _good()
 	var b := _good()

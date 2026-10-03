@@ -1,8 +1,8 @@
 class_name NoticeLine
 extends Label
 ## The sim's transient message line ("no room to couple"), raised by GameState.notice and
-## dwelled/hidden by the shell. Red on a dark panel, centred, plain text, no emoji — colour
-## is semantic, so it's a node override rather than theme. Sits above screen middle, not the
+## dwelled here; the shell shows and hides it with the HUD (`set_shown`). Red on a dark panel,
+## centred, plain text, no emoji — colour is semantic, so it's a node override rather than theme. Sits above screen middle, not the
 ## top edge, so it isn't missed while watching the road.
 ##
 ## Lays itself out rather than fixed boot.tscn offsets: those clipped against the Title
@@ -23,18 +23,68 @@ const RESERVE := 220.0
 const MAX_INSET_RATIO := 0.22
 ## Lines the box fits; 2 so long notices autowrap instead of clipping.
 const LINES := 2
+## Seconds a GameState.notice stays on screen. Long enough to read while still driving.
+const NOTICE_DWELL_S := 3.0
 
 
 ## Re-entry guard: _layout installs a stylebox override, which itself raises
 ## NOTIFICATION_THEME_CHANGED — without this the two call each other forever.
 var _laying_out := false
+## Sticky notice texts still up, oldest first; the newest shows whenever no transient one does.
+var _sticky_notices: Array[String] = []
 
 
 func _ready() -> void:
+	GameState.notice.connect(_show_notice)
+	GameState.notice_cleared.connect(_clear_notice)
 	var parent := get_parent() as Control
 	if parent != null:
 		parent.resized.connect(_layout)  # the inset is a share of the width available
 	_layout()
+
+
+## The HUD showing or hiding as a whole: back up on the newest sticky notice, if any.
+func set_shown(v: bool) -> void:
+	if v:
+		_restore_sticky_notice()
+	else:
+		visible = false
+
+
+## Show a message from the sim (GameState.notice). Re-showing restarts the dwell instead of
+## queueing, so holding E against a wall reads as one steady message. A sticky one starts no
+## timer and stays listed until cleared; a transient one hands back to it when its dwell ends.
+func _show_notice(notice_text: String, dwell_s: float) -> void:
+	text = notice_text
+	visible = true
+	var token := notice_text + str(Time.get_ticks_msec())
+	set_meta("token", token)
+	if dwell_s == GameState.NOTICE_STICKY:
+		_sticky_notices.erase(notice_text)
+		_sticky_notices.append(notice_text)
+		return
+	var dwell := dwell_s if dwell_s > 0.0 else NOTICE_DWELL_S
+	await get_tree().create_timer(dwell).timeout
+	if get_meta("token", "") == token:
+		_restore_sticky_notice()
+
+
+## Take a notice down early once what it warned about is fixed. Matches on text so it only
+## ever hides its own message; a later notice keeps the rest of its dwell.
+func _clear_notice(notice_text: String) -> void:
+	_sticky_notices.erase(notice_text)
+	if visible and text == notice_text:
+		_restore_sticky_notice()
+
+
+## Show the newest sticky notice still up, or hide the line if there is none.
+func _restore_sticky_notice() -> void:
+	if _sticky_notices.is_empty():
+		visible = false
+		return
+	text = _sticky_notices.back()
+	visible = true
+	set_meta("token", "")
 
 
 func _notification(what: int) -> void:

@@ -7,12 +7,18 @@ references: `docs/overview.md`, `docs/systems.md`, `docs/vehicles.md`,
 ## What is this?
 
 Carlito is a driving sandbox that runs in the browser: car, truck, tractor, boat, drone,
-plane or train, around small levels. No missions or scores — the point is the **signals**:
+plane or train, around small levels. Free play has no missions or scores — the point is the
+**signals**:
 while you drive, the game continuously exchanges CAN-bus-style messages with a companion
 simulator (sloppyCAN/RAMN) in the same web page. Press the throttle in sloppyCAN and the car
 in Carlito accelerates; the car's real RPM, speed, GPS and warning lamps stream back the
 other way. Levels exist to make those signals visible: a steep grade makes `engine_load`
 climb, a hairpin makes the tires slip.
+
+The one exception is **challenges**: short goal-driven lessons (stop in a box, take a bend on
+ice, plough a field, couple a trailer and deliver it, ...) that teach CAN by making you drive *through* sloppyCAN. The keyboard
+is locked out for the attempt; you read the signals and send the commands yourself. Each pass is
+timed, and your best times are kept between visits. Press 5 (or CHALLENGE) to pick one.
 
 It's built in Godot 4.7 and exported to WebAssembly. Physics runs at a locked 60 Hz with
 interpolation for smooth rendering.
@@ -52,14 +58,22 @@ one VehicleInput struct         <- throttle, brake, steer, gear, lamps, hitch...
 BaseVehicle (the physics body)
 ```
 
-**InputRouter is the only place input decisions are made.** It merges keyboard and touch,
-and when fresh bridge data is arriving (less than 300 ms old) the bridge wins outright. All
+**InputRouter is the only place input decisions are made.** It merges keyboard, touch and
+gamepad, and when fresh bridge data carrying a driving control (throttle, brake or steer) is
+arriving (less than 300 ms old) the bridge wins outright. A live bridge that sends no driving
+control leaves the driving to you and keeps the rest (lamps, gear, switches). All
 the rules — brake is never throttle, the ignition key must be on to drive, the simulator's
 gear byte decides forward vs reverse when it's in control — live here as pure static
 functions with unit tests. Vehicles never know or care where their input came from; they
 just consume one normalized `VehicleInput` every physics tick, which is why the same car
 works with a keyboard, a phone touchscreen, and a CAN simulator with no vehicle code
 changing.
+
+A key is on or off, but a driver's hands and feet aren't, so InputRouter eases key presses
+in: the wheel turns over a fraction of a second (slower at speed) and the pedals take a moment
+to press down. How much is the KEY RESPONSE setting, from RAW (instant) to REALISTIC. The
+gamepad, the touch stick and the bridge are already analog and are never eased; the vehicles
+themselves are never detuned to suit a keyboard.
 
 ## Vehicles
 
@@ -79,8 +93,8 @@ Vehicles needing extra behavior (tractor hitch/PTO, boat buoyancy) subclass Base
 through exactly two hooks: `_make_telemetry()` and `_tick_extras()`, never the main physics
 loop, so every vehicle's core behavior stays identical and testable.
 
-The **tractor** carries the most signals of anything in the game — twenty, borrowing the
-names farm machinery really uses on its ISOBUS bus. One tractor body; press E to cycle what
+The **tractor** adds twenty signals beyond the car's, borrowing the names farm machinery
+really uses on its ISOBUS bus. One tractor body; press E to cycle what
 hangs off the back (fertilizer spreader, plough, power harrow, rotary mower, tipping
 trailer, or nothing), each using a different mix of the five real tractor↔implement
 connections. What a machine declares over the data cable decides what the bus reports about
@@ -159,8 +173,8 @@ you're choosing between: the page loads, an endless flat plain comes up, you're 
 true standalone and inside sloppyCAN alike, one boot path. A link can ask for something
 specific (`?level=…&vehicle=…`); otherwise it is the default level.
 
-Four buttons stay in the top-left corner whatever you drive — MENU, GARAGE, LEVEL, VIEW — and
-only F5 hides them. **Esc** (or MENU) opens RESUME, RESPAWN, CONDITIONS, CONTROLS, SETTINGS.
+Five buttons stay in the top-left corner whatever you drive — MENU, VEHICLE (the garage),
+LEVEL, CAMERA, CHALLENGE — and only F5 hides them. **Esc** (or MENU) opens RESUME, RESPAWN, CONDITIONS, CONTROLS, SETTINGS.
 
 - **GARAGE**: families down the left, that family's bodies as pictures in the middle, and a
   live 3D preview with the machine's specs (including what it speaks on the bus). Machines
@@ -173,7 +187,9 @@ only F5 hides them. **Esc** (or MENU) opens RESUME, RESPAWN, CONDITIONS, CONTROL
 - **CONDITIONS**: wind, water current, the direction they come from, and day/night — kept for
   the session and carried into every level you load.
 - **SETTINGS**: how much instrument cluster you want (COMPACT by default, FULL, or OFF — F2
-  cycles the same three) and the UI size.
+  cycles the same three), the UI size, extra F3 debug readouts, KEY RESPONSE, and traction
+  control on or off (on the cars that have it). Unlike CONDITIONS, these are saved and come
+  back on your next visit.
 
 **It has to work at any size.** No fixed layout: one theme is rebuilt at a scale derived from
 the window's short edge, and every screen sizes itself from that — card grids reflow their
@@ -183,12 +199,13 @@ the bottom of a short window.
 ## Testing and CI
 
 All the pure logic — drivetrain math, input arbitration, telemetry derivations, buoyancy,
-terrain/road/scatter/bake math — is covered by gdUnit4 unit tests (over 1,500 test
-functions). Anything with logic worth testing is written as a static pure function, so tests
+terrain/road/scatter/bake math — is covered by gdUnit4 unit tests (over 1,700 test
+cases). Anything with logic worth testing is written as a static pure function, so tests
 don't need a running game.
 
-Every push runs CI: editor-type and head-include gates → import → stale-bake check → bake →
-tests → two headless boot smokes → web export. `dev` auto-publishes with cache-busted
+Every push runs CI: editor-type, head-include, orphan and doc-reference gates → import →
+stale-bake check → bake → tests → two headless boot smokes → web export, with a straight-line
+tracking check and a semi-truck launch check running alongside. `dev` auto-publishes with cache-busted
 filenames; `stable` moves only on the manual promote button (`docs/deploying.md`).
 `tools/preflight.ps1` runs most of the same gates locally.
 

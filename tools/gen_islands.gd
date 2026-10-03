@@ -13,6 +13,7 @@ const CHANNEL_GRIP := "0.8, 0.7, 0.6, 0.7, 0.75, 0.5, 1, 0.85"
 ## Added rolling resistance per channel (HeightmapTerrain.channel_drag): grass drags, mud bogs,
 ## asphalt and rock are free, snow is a soft crust.
 const CHANNEL_DRAG := "0.06, 0.03, 0.1, 0.01, 0.05, 0.2, 0, 0.02"
+const GenIO := preload("res://tools/level_gen_io.gd")
 
 const LEVELS := [
 	{
@@ -60,25 +61,14 @@ func _build(cfg: Dictionary) -> void:
 	var px := SIZE / float(cells - 1)
 	var splat := TerrainGen.build_splatmap(heights, HEIGHT, px, px, 2.0, 22.0, 38.0)
 
-	_write_png(heights, "%s/%s_island_height.png" % [dir, id])
-	_write_png(splat, "%s/%s_island_splat.png" % [dir, id])
+	GenIO.save_png(heights, "%s/%s_island_height.png" % [dir, id])
+	GenIO.save_png(splat, "%s/%s_island_splat.png" % [dir, id])
 
 	var spawn := _find_land_spawn(heights, cells)
-	_write_text("%s/%s_info.tres" % [dir, id], _info_text(cfg["title"]))
-	_write_text("%s/%s.tscn" % [dir, id], _scene_text(cfg, spawn))
+	GenIO.save_text("%s/%s_info.tres" % [dir, id], GenIO.info_text(cfg["title"],
+			["car", "truck", "tractor", "boat"], "car", true))
+	GenIO.save_text("%s/%s.tscn" % [dir, id], _scene_text(cfg, spawn))
 	print("gen_islands: %s spawn at %v" % [id, spawn])
-
-
-func _write_png(img: Image, path: String) -> void:
-	var err := img.save_png(path)
-	assert(err == OK, "save_png failed for %s" % path)
-	TerrainGen.ensure_import_settings(path)
-
-
-func _write_text(path: String, text: String) -> void:
-	var f := FileAccess.open(path, FileAccess.WRITE)
-	assert(f != null, "cannot write %s" % path)
-	f.store_string(text)
 
 
 ## Picks a flat, comfortably-above-sea cell nearest the map centre for the car spawn:
@@ -102,19 +92,6 @@ func _find_land_spawn(img: Image, cells: int) -> Vector3:
 				best = Vector3((x / mid - 1.0) * SIZE * 0.5, h + 1.5,
 						(y / mid - 1.0) * SIZE * 0.5)
 	return best
-
-
-func _info_text(title: String) -> String:
-	return """[gd_resource type="Resource" script_class="LevelInfo" load_steps=2 format=3]
-
-[ext_resource type="Script" path="res://src/levels/base/level_info.gd" id="1_info"]
-
-[resource]
-script = ExtResource("1_info")
-display_name = "%s"
-allowed_vehicles = PackedStringArray("car", "truck", "tractor", "boat")
-default_vehicle = "car"
-""" % title
 
 
 func _scene_text(cfg: Dictionary, spawn: Vector3) -> String:

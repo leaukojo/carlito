@@ -1,12 +1,12 @@
 extends GdUnitTestSuite
 ## Drone flight modes: mode resolution, altitude cascade, position control, RTL, geofence.
-## Pins contract enums against the ladder and DroneModes against InputRouter's
-## FLIGHT_MODE_COUNT; router carries own copy, so both must stay in sync.
+## Pins contract enums and the Z key's leaf count against the ladder.
 
 const M := preload("res://src/vehicles/drone/drone_modes.gd")
 const D := preload("res://src/vehicles/drone/drone.gd")
 const S := preload("res://src/vehicles/drone/drone_sensors.gd")
-const Router := preload("res://src/input/input_router.gd")
+const Cycles := preload("res://src/input/cycles.gd")
+const Counts := preload("res://src/input/subsystem_counts.gd")
 
 const DELTA := 1.0 / 60.0
 
@@ -71,29 +71,26 @@ func test_both_contract_enum_tables_match_the_ladder_and_each_other() -> void:
 	assert_str(actual.flavor).is_equal("dronecan")
 
 
+## The router must not depend on a vehicle class, so the Z key walks the leaf count. Grow the
+## ladder without it and the local key silently stops short of the new mode.
+func test_the_leaf_count_is_the_ladder_length() -> void:
+	assert_int(Counts.FLIGHT_MODES) \
+		.override_failure_message("subsystem_counts FLIGHT_MODES has not followed DroneModes.COUNT") \
+		.is_equal(M.COUNT)
+
+
 func test_the_cycle_walks_the_whole_ladder_and_wraps() -> void:
 	var mode := M.STABILIZE
 	var seen := [mode]
 	for _i in M.COUNT:
-		mode = M.cycle(mode)
+		mode = Cycles.flight_mode(mode)
 		seen.append(mode)
 	assert_array(seen).is_equal([M.STABILIZE, M.ALT_HOLD, M.LOITER, M.RTL, M.LAND, M.STABILIZE])
 	# Out-of-range modes land inside the ladder (posmod, not %).
 	for mode_in in [-7, -1, 5, 99]:
-		assert_int(M.cycle(mode_in)) \
+		assert_int(Cycles.flight_mode(mode_in)) \
 			.override_failure_message("cycle(%d) escaped the ladder" % mode_in) \
 			.is_between(0, M.COUNT - 1)
-
-
-## Router mirrors the ladder (can't depend on a vehicle class); both asserted over full range.
-func test_the_router_mirrors_the_ladder() -> void:
-	assert_int(Router.FLIGHT_MODE_COUNT) \
-		.override_failure_message("InputRouter.FLIGHT_MODE_COUNT has not followed DroneModes.COUNT") \
-		.is_equal(M.COUNT)
-	for mode in range(-8, 16):
-		assert_int(M.cycle(mode)) \
-			.override_failure_message("DroneModes.cycle and InputRouter.cycle_flight_mode disagree at %d" % mode) \
-			.is_equal(Router.cycle_flight_mode(mode))
 
 
 # --- resolve_mode: every refusal and every override ----------------------------

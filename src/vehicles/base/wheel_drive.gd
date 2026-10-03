@@ -183,7 +183,7 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 	# One anti-roll snapshot for the whole body before any wheel ticks (`RayWheel.anti_roll_partner`).
 	for w in wheels:
 		w.latch_bar()
-	# Traction control rides the drive alone; the bridge may switch it off (`tcs_off`).
+	# Traction control rides the drive alone; `tcs_off` (bridge or local setting) switches it off.
 	var tcs_slip := RayWheel.TCS_SLIP if gd.tcs_equipped and not input.tcs_off else 0.0
 	for w in wheels:
 		w.steer_angle = _applied_steer if w.steered else 0.0

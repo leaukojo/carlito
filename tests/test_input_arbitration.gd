@@ -299,14 +299,26 @@ func test_bridge_mirrors_the_driveline_requests() -> void:
 	assert_int(bare.pto_mode).is_equal(0)
 
 
-func test_tcs_off_is_bridge_only_and_absent_means_on() -> void:
+func test_tcs_off_absent_means_on_on_both_paths() -> void:
 	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
 	vals["tcs_off"] = true
 	assert_bool(RouterScript.arbitrate_bridge(vals).tcs_off).is_true()
 	assert_bool(RouterScript.arbitrate_bridge(_bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)).tcs_off) \
 			.is_false()
-	# No local key: keyboard and touch always drive with traction control on.
+	# Local: the router writes the player's TRACTION CONTROL setting into the raw dict.
 	assert_bool(RouterScript.arbitrate_local(_raw(), 0.0, GEAR_D1).tcs_off).is_false()
+	var raw := _raw()
+	raw["tcs_off"] = true
+	assert_bool(RouterScript.arbitrate_local(raw, 0.0, GEAR_D1).tcs_off).is_true()
+
+
+func test_fallback_takes_tcs_off_from_the_bridge() -> void:
+	# A live bridge with no driving control owns `tcs_off`: the local setting is not a driving field.
+	var raw := _raw()
+	raw["tcs_off"] = true
+	var local := RouterScript.arbitrate_local(raw, 0.0, GEAR_D1)
+	assert_bool(RouterScript.blend_local_driving(_bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1), local)
+			.tcs_off).is_false()
 
 
 func test_local_passes_the_driveline_toggles_through() -> void:

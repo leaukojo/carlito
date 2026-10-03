@@ -141,13 +141,3 @@ static func health_all(fail_bits: int, esc_temps: PackedFloat32Array,
 ## A roster-sized all-OK health array: the telemetry default, right-shaped before the first tick.
 static func all_ok() -> Array:
 	return health_all(0, PackedFloat32Array(), INF)
-
-
-## The Y-key cycle: none -> ESC1 -> ... -> RANGE -> none, one node failed at a time. Shifts the
-## failure one bit left over EVERY int, so a multi-bit mask still terminates at none.
-##
-## The router must not depend on a vehicle class, so InputRouter.cycle_node_fail carries its own
-## copy (roster length from `src/input/subsystem_counts.gd`), pinned equal by `tests/test_drone_bus.gd`.
-static func cycle_fail(bits: int) -> int:
-	var next := maxi(bits << 1, 1)
-	return 0 if next > (1 << (count() - 1)) else next

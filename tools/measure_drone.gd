@@ -6,10 +6,9 @@ extends Node3D
 ## node-failure are per-frame edges and autoloads tick before scene nodes.
 
 const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
+const MeasureRig := preload("res://tools/measure_rig.gd")
 
 ## The strip: a rangefinder floor, a collision floor, enough width for the translate pass.
-const Layers := preload("res://src/physics/collision_layers.gd")
-
 const STRIP_SIZE := Vector3(1200.0, 2.0, 4000.0)
 ## Spawn, and therefore HOME: high enough for a descent pass, low enough for GEOFENCE_CEILING.
 const SPAWN := Vector3(0.0, 80.0, 1400.0)
@@ -91,7 +90,7 @@ var _failed := false         ## the ESC1 edge has been sent this pass
 
 
 func _ready() -> void:
-	_build_strip()
+	MeasureRig.add_slab(self, "Strip", STRIP_SIZE)
 	_drone = load(Catalog.VARIANTS["drone"]["scene"]).instantiate()
 	add_child(_drone)
 	_drone.global_transform = Transform3D(Basis.IDENTITY, SPAWN)
@@ -109,26 +108,6 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	InputRouter.clear_touch_source(_source)
-
-
-func _build_strip() -> void:
-	var shape := BoxShape3D.new()
-	shape.size = STRIP_SIZE
-	var collision := CollisionShape3D.new()
-	collision.shape = shape
-	var box := BoxMesh.new()
-	box.size = shape.size
-	var visual := MeshInstance3D.new()
-	visual.mesh = box
-	var ground := StaticBody3D.new()
-	ground.name = "Strip"
-	# TERRAIN: every gameplay ray masks Layers.SOLID; engine default would drop the craft through.
-	ground.collision_layer = Layers.TERRAIN
-	ground.collision_mask = Layers.DYNAMIC
-	ground.position = Vector3(0.0, -STRIP_SIZE.y * 0.5, 0.0)  # top face at y = 0
-	ground.add_child(collision)
-	ground.add_child(visual)
-	add_child(ground)
 
 
 func _enter_pass(which: int) -> void:
@@ -212,7 +191,7 @@ func _apply_stick(t: DroneTelemetry, flown: float) -> void:
 		Pass.TRANSLATE:
 			_source.throttle = 1.0
 		Pass.MOTOR_OUT:
-			# One Y-key edge takes roster index 0 (ESC1) off the bus, first stop on InputRouter.cycle_node_fail.
+			# One Y-key edge takes roster index 0 (ESC1) off the bus, first stop on Cycles.node_fail.
 			if not _failed and flown >= FAIL_AT_S:
 				_failed = true
 				_source.press(&"node_fail_cycle")

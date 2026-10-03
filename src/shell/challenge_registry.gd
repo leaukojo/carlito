@@ -97,6 +97,17 @@ static func in_family(family: String) -> Array[ChallengeDef]:
 	return out
 
 
+## The next challenge sharing `def`'s family, in registry order, or null past the last one.
+static func next_after(def: ChallengeDef) -> ChallengeDef:
+	if def == null:
+		return null
+	var siblings := in_family(def.family())
+	for i in siblings.size():
+		if siblings[i].id == def.id:
+			return siblings[i + 1] if i + 1 < siblings.size() else null
+	return null
+
+
 ## family -> Array of defs, both in the order `defs` lists them.
 static func group_by_family(defs: Array[ChallengeDef]) -> Dictionary:
 	var out := {}
