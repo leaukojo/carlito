@@ -27,10 +27,10 @@ func _real_contract() -> ContractScript.ContractData:
 	return _parse_file(ContractScript.CONTRACT_PATH)
 
 
-func test_real_contract_is_valid_v43() -> void:
+func test_real_contract_is_valid() -> void:
 	var data := _real_contract()
 	assert_array(data.errors).is_empty()
-	assert_int(data.version).is_equal(43)
+	assert_int(data.version).is_equal(46)
 
 
 func _assert_core_signals_present(names: PackedStringArray, dir: String) -> void:
@@ -348,9 +348,9 @@ func test_shared_engine_signals_are_reused_by_the_truck_not_duplicated() -> void
 			.is_equal(["tractor", "truck"])
 		assert_str(sig.flavor) \
 			.override_failure_message("%s/%s must stay isobus-flavored" % entry).is_equal("isobus")
-	# engine_hours is shared too, but Phase 5 widened it to the boat and dropped the isobus
-	# flavor: a boat does not speak J1939/ISOBUS, so the flavor would misstate the wire the
-	# reading travels for that family (the speed_limit/wheel_slip precedent).
+	# engine_hours is shared too, but with the boat, so it carries no isobus flavor: a boat does not
+	# speak J1939/ISOBUS, so the flavor would misstate the wire the reading travels for that family
+	# (the speed_limit/wheel_slip precedent).
 	var hours := data.get_signal_def("engine_hours", "out")
 	assert_object(hours).override_failure_message("missing engine_hours/out").is_not_null()
 	assert_array(hours.vehicles).is_equal(["tractor", "truck", "boat"])

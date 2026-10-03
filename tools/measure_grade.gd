@@ -9,7 +9,7 @@ extends Node3D
 ## `grip_at`/`drag_at`/`contains_xz`/`height_at` contract `HeightmapTerrain` does, so
 ## `BaseVehicle._find_grip_terrains` picks it up as a sibling of the vehicle's parent).
 ##
-## Beside each measurement it prints the two textbook ceilings, so a disagreement points at
+## Beside each measurement it prints the three textbook ceilings, so a disagreement points at
 ## which one bit:
 ##   traction  tan(a) <= (mu * rear_share - crr) / (1 - mu * h / L)   [driven rear only]
 ##             tan(a) <= mu - crr                                     [all wheels driven]
@@ -17,9 +17,11 @@ extends Node3D
 ## figure, which a rigid or biasing centre can approach; an OPEN centre stays capped by its
 ## lighter axle, under it.
 ##   torque    F_gear1_at_idle >= m*g*(sin a + crr * cos a)
-## Both are static, single-body and ignore `load_sensitivity`, so they are a reference, not a
-## gate: a coupled rig (the semi tows 24 t the moment it spawns) is outside what they describe
-## and says so in the report.
+##   tip       tan(a) <= b / h   [b: COM ahead of the rear axle; standing, so a climb sits under it]
+## All are static, single-body and ignore `load_sensitivity`, so they are a reference, not a
+## gate. A coupled rig (the semi tows 24 t the moment it spawns) swaps in the rig's mass for the
+## torque ceiling and, for traction, `tan(a) <= mu * share - crr` with `share` the driven wheels'
+## spring load over the rig's weight, read at the last trial's settle; it prints no tip ceiling.
 ##
 ## Dev report, always exits 0.
 ##
@@ -64,11 +66,33 @@ const BISECT_LO := 0.0
 const BISECT_HI := 45.0
 const BISECT_STEPS := 7   ## 45 deg / 2^7 -> ~0.35 deg of resolution
 
-## Slip the `tc` loop holds the driven axle at: the shipped grip curves all peak at 0.12.
+## Floor of the `tc` loop's slip target (`_tc_target`): the shipped grip curves all peak at 0.12.
 const TC_TARGET_SLIP := 0.12
 const TC_GAIN := 12.0     ## pedal units per second per unit of slip error
+## Front-axle spring load, as a share of its settled load, below which the `tc` driver lifts off.
+const TC_FRONT_KEEP := 0.3
+const TC_LIFT_GAIN := 2.0 ## pedal units per second per unit of that share short
 
 const LEVEL_STEP := 4.0   ## m between road-curve samples in level mode
+
+## `doc=grade` (arg 1): this set over asphalt and mud, then the `grade` region of
+## `docs/vehicles.md` is rewritten (`doc_region.gd`). The flags are per job here, not per run.
+const DocRegion := preload("res://tools/doc_region.gd")
+const MeasureVehicles := preload("res://tools/measure_vehicles.gd")
+const DOC_SURFACES: Array[String] = ["asphalt", "mud"]
+const DOC_JOBS: Array[Dictionary] = [
+	{"variant": "sedan", "mfwd": false, "diff": false, "tc": false},
+	{"variant": "suv", "mfwd": false, "diff": false, "tc": false},
+	{"variant": "suv-luxury", "mfwd": false, "diff": false, "tc": false},
+	{"variant": "race-future", "mfwd": false, "diff": false, "tc": false},
+	{"variant": "pickup", "mfwd": false, "diff": false, "tc": false},
+	{"variant": "garbage-truck", "mfwd": false, "diff": false, "tc": false},
+	{"variant": "tractor-kenney", "mfwd": false, "diff": false, "tc": false},
+	{"variant": "tractor-kenney", "mfwd": true, "diff": false, "tc": false},
+	{"variant": "tractor-kenney", "mfwd": true, "diff": true, "tc": false},
+	{"variant": "tractor-kenney", "mfwd": true, "diff": true, "tc": true},
+	{"variant": "semi", "mfwd": false, "diff": false, "tc": false},
+]
 
 enum Ph { SETTLE, CLIMB, DONE }
 
@@ -96,20 +120,22 @@ class GripPatch:
 		return drag
 
 
-var _queue: Array[String] = []        ## variants left to measure
+var _queue: Array[Dictionary] = []    ## jobs left to measure: variant + mfwd / diff / tc
 var _surface_list: Array[String] = [] ## surfaces every variant is run over
 var _surfaces: Array[String] = []     ## surfaces left for the current variant
 var _variant := ""
 var _surface := ""
 var _verbose := false                 ## print every bisection trial, not just the result
-## `tc`: hold the driven slip at the grip curve's peak instead of flooring the pedal, which is
+## `tc`: hold the driven slip at the tyre's best (`_tc_target`) instead of flooring the pedal, which is
 ## the difference between what the tyres could do and what a pedal-to-the-floor driver gets.
 var _tc := false
 var _throttle := 1.0                  ## pedal the TC loop is holding, 0..1
+var _front_settle := NAN              ## front-axle spring load at the end of the settle, N
 var _pedal := 0.0                     ## `pedal=<0..1>`: hold this throttle instead, diagnostic
 var _hold := NAN                      ## `hold=<deg>`: one trial at this angle, diagnostic
 var _mfwd := false                    ## tractor MFWD engaged for the run
 var _diff := false                    ## tractor rear diff locked for the run
+var _doc := false                     ## `doc=grade`: rewrite the doc region at the end
 
 var _ramp: StaticBody3D
 var _patch: GripPatch
@@ -125,6 +151,7 @@ var _t := 0.0
 var _start := Vector3.ZERO
 var _gain := 0.0                      ## up-slope metres gained this trial
 var _trace_t := 0.0
+var _drive_share := NAN               ## driven wheels' share of the rig's weight, at the last settle
 var _rows: Array[Dictionary] = []
 
 
@@ -150,10 +177,15 @@ func _ready() -> void:
 			_surface_list.append(String(args[i]))
 	if _surface_list.is_empty():
 		_surface_list = DEFAULT_SURFACES.duplicate()
-	if which == "all":
-		_queue.assign(_wheel_driven_variants())
+	if which == "doc=grade":
+		_doc = true
+		_queue = DOC_JOBS.duplicate(true)
+		_surface_list = DOC_SURFACES.duplicate()
+	elif which == "all":
+		for v in _wheel_driven_variants():
+			_queue.append({"variant": v, "mfwd": _mfwd, "diff": _diff, "tc": _tc})
 	elif Catalog.VARIANTS.has(which):
-		_queue = [which]
+		_queue = [{"variant": which, "mfwd": _mfwd, "diff": _diff, "tc": _tc}]
 	else:
 		printerr("unknown variant '%s' — expected 'all' or one of: %s"
 				% [which, ", ".join(_wheel_driven_variants())])
@@ -190,9 +222,15 @@ func _wheel_driven_variants() -> Array[String]:
 func _next_variant() -> void:
 	if _queue.is_empty():
 		_print_table()
+		if _doc:
+			DocRegion.write("grade", _doc_table())
 		get_tree().quit(0)
 		return
-	_variant = _queue.pop_front()
+	var job: Dictionary = _queue.pop_front()
+	_variant = String(job["variant"])
+	_mfwd = bool(job["mfwd"])
+	_diff = bool(job["diff"])
+	_tc = bool(job["tc"])
 	_surfaces = _surface_list.duplicate()
 	_next_surface()
 
@@ -287,7 +325,9 @@ func _physics_process(delta: float) -> void:
 			_phase = Ph.CLIMB
 			_t = 0.0
 			_throttle = 1.0
+			_front_settle = _front_load()
 			_start = _car.global_position
+			_drive_share = _driven_share()
 			_drive(100.0, 0.0)
 		return
 	if _pedal > 0.0:
@@ -296,8 +336,14 @@ func _physics_process(delta: float) -> void:
 		# Wheelspin is self-defeating here twice over: the grip curve falls away past its peak
 		# AND gear 1 drags the engine into the rev limiter, so a floored pedal measures the
 		# driver, not the tyre. Hold the slip at the peak and the measurement is the tyre's.
-		_throttle = clampf(_throttle + (TC_TARGET_SLIP - _car.telemetry.slip_rear) * TC_GAIN * delta,
-				0.0, 1.0)
+		var slip_rate := (_tc_target(delta) - _car.telemetry.slip_rear) * TC_GAIN
+		# Most force is not most climb: every newton past the weight accelerates the body and
+		# unloads the front axle by `m * a * h / L`, which flips a high-COM tractor backwards
+		# below its static tip angle. The driver also feathers as the front goes light, on the
+		# same integrator: a hard pedal cap would porpoise (lift, cut, land, repeat).
+		var front_left := _front_load() / _front_settle if _front_settle > 0.0 else 1.0
+		var lift_rate := (front_left - TC_FRONT_KEEP) * TC_LIFT_GAIN
+		_throttle = clampf(_throttle + minf(slip_rate, lift_rate) * delta, 0.0, 1.0)
 		_drive(_throttle * 100.0, 0.0)
 	## The ramp's own up-slope direction, not the body's forward: a body that has nosed up or
 	## slewed must still be measured along the hill.
@@ -326,6 +372,36 @@ func _physics_process(delta: float) -> void:
 	elif _t >= CLIMB_S:
 		var up_speed := _car.linear_velocity.dot(up_slope)
 		_end_trial(up_speed >= CLIMB_SPEED and _gain >= CLIMB_GAIN)
+
+
+## Slip at which the driven wheels together make their most force. The grip curve peaks at
+## TC_TARGET_SLIP, but RayWheel also caps a tick's force at what would cancel the slip velocity
+## (`corner_mass * slip_vel / delta`); near a standstill (slip over `LOW_SPEED_FLOOR`) under a heavy
+## axle load, a fifth wheel's, that cap still binds past the peak. One slip for every driven wheel:
+## one pedal sets it, and a rigid MFWD ties the axles anyway.
+func _tc_target(delta: float) -> float:
+	var gd: GroundDriveSpec = _car.spec.ground_drive
+	var denom := maxf(absf(_car.telemetry.speed), RayWheel.LOW_SPEED_FLOOR)
+	var budgets: Array[float] = []
+	var caps: Array[float] = []  ## N of capped force per unit slip
+	for w in _car.drive.wheels:
+		if not w.driven or not w.in_contact:
+			continue
+		budgets.append(RayWheel.load_scaled_mu(gd.mu_long * w.surface_grip, w.suspension_force,
+				w.corner_mass * 9.81, gd.load_sensitivity) * w.suspension_force)
+		caps.append(w.corner_mass * denom / delta)
+	var best := TC_TARGET_SLIP
+	var best_force := -1.0
+	var s := TC_TARGET_SLIP  ## below the peak both curve and cap rise, so the answer is not there
+	while s <= 1.0:
+		var force := 0.0
+		for i in budgets.size():
+			force += minf(VehicleSpec.sample_curve(gd.grip_curve, s) * budgets[i], caps[i] * s)
+		if force > best_force:
+			best_force = force
+			best = s
+		s += 0.01
+	return best
 
 
 func _end_trial(climbed: bool) -> void:
@@ -362,13 +438,22 @@ func _record() -> void:
 	var spec: VehicleSpec = _car.spec
 	var gd: GroundDriveSpec = spec.ground_drive
 	var s: Vector2 = SURFACES[_surface]
+	var coupled := _coupled_mass()
+	var traction := _traction_limit_deg(spec, gd, s.x, s.y)
+	if coupled > 0.0:
+		# The kingpin load on the drive axle has no static figure here: read it off the springs.
+		# Grade transfer included, since the last trial settled on its slope (within a bisection
+		# step of the answer).
+		traction = rad_to_deg(atan(maxf(gd.mu_long * s.x * _drive_share - s.y, 0.0)))
 	_rows.append({
 		"variant": _variant,
 		"surface": _surface,
 		"measured": _best,
-		"traction": _traction_limit_deg(spec, gd, s.x, s.y),
-		"torque": _torque_limit_deg(spec, gd, s.y),
-		"coupled": _coupled_mass(),
+		"traction": traction,
+		"torque": _torque_limit_deg(spec, gd, s.y, spec.mass + coupled),
+		"tip": _tip_limit_deg(spec, gd) if coupled <= 0.0 else NAN,  ## kingpin load moves the COM
+		"coupled": coupled,
+		"label": _doc_label(spec, gd, coupled),
 	})
 	print("  %-16s %-8s measured %5.1f deg (%5.1f %%)" % [_variant, _surface,
 			_best if not is_nan(_best) else 0.0,
@@ -413,15 +498,49 @@ func _traction_limit_deg(spec: VehicleSpec, gd: GroundDriveSpec, grip: float,
 	return rad_to_deg(atan(num / den))
 
 
-## Steepest grade first gear at full throttle can push the body's own weight up from rest, in
+## Grade at which the body, standing still, tips over backwards, in degrees: the COM passes over
+## the rear contact patch, `tan(a) = b / h`. A climb also spends some of that margin on
+## acceleration (`m * a * h / L` off the front axle), so the measurement sits under it.
+func _tip_limit_deg(spec: VehicleSpec, gd: GroundDriveSpec) -> float:
+	var rear_z := -INF
+	for p in gd.wheel_positions:
+		if RayWheel.is_rear_z(p.z):
+			rear_z = maxf(rear_z, p.z)
+	if is_inf(rear_z):
+		return NAN
+	# Same contact plane as `_traction_limit_deg`: springs at half travel.
+	var contact_y := gd.wheel_positions[0].y - gd.rest_length * 0.5 - gd.wheel_radius
+	var h := maxf(spec.center_of_mass.y - contact_y, 0.05)
+	return rad_to_deg(atan(maxf(rear_z - spec.center_of_mass.z, 0.0) / h))
+
+
+## Fraction of the whole rig's weight across the slope that the driven wheels carry right now.
+func _driven_share() -> float:
+	var driven_load := 0.0
+	for w in _car.drive.wheels:
+		if w.driven:
+			driven_load += w.suspension_force
+	return driven_load / ((_car.mass + _coupled_mass()) * 9.81 * cos(deg_to_rad(_angle)))
+
+
+## Spring load on the front axle right now, N.
+func _front_load() -> float:
+	var front := 0.0
+	for w in _car.drive.wheels:
+		if not w.is_rear:
+			front += w.suspension_force
+	return front
+
+
+## Steepest grade first gear at full throttle can push `mass` (kg, the whole rig) up from rest, in
 ## degrees. Sampled where a held body's crank sits: `Drivetrain.converter_free_rpm` (idle with
 ## no converter).
-func _torque_limit_deg(spec: VehicleSpec, gd: GroundDriveSpec, crr: float) -> float:
+func _torque_limit_deg(spec: VehicleSpec, gd: GroundDriveSpec, crr: float, mass: float) -> float:
 	if spec.gear_ratios.is_empty():
 		return NAN
 	var launch_rpm := Drivetrain.converter_free_rpm(spec, 1.0)
 	var force := Drivetrain.wheel_torque(spec, launch_rpm, 1.0, 1) / gd.wheel_radius
-	var ratio := force / (spec.mass * 9.81)
+	var ratio := force / (mass * 9.81)
 	if ratio <= crr:
 		return 0.0
 	# sin a + crr cos a = ratio  ->  sin(a + atan(crr)) = ratio / sqrt(1 + crr^2)
@@ -445,18 +564,61 @@ func _coupled_mass() -> float:
 
 
 func _print_table() -> void:
-	print("\n%-16s %-8s %8s %8s %10s %10s  %s"
-			% ["variant", "surface", "measured", "grade", "traction", "torque", "note"])
+	print("\n%-16s %-8s %8s %8s %10s %10s %10s  %s"
+			% ["variant", "surface", "measured", "grade", "traction", "torque", "tip", "note"])
 	for r in _rows:
 		var m: float = r["measured"]
 		var note := ""
 		if r["coupled"] > 0.0:
-			note = "coupled +%.0f kg — predictions are tractor-only" % r["coupled"]
-		print("%-16s %-8s %7.1f%s %7.0f%% %9.1f%s %9.1f%s  %s" % [
+			note = "coupled +%.0f kg — torque on the rig, traction on its sprung drive-axle load" \
+					% r["coupled"]
+		print("%-16s %-8s %7.1f%s %7.0f%% %9.1f%s %9.1f%s %9.1f%s  %s" % [
 			r["variant"], r["surface"],
 			0.0 if is_nan(m) else m, " d",
 			0.0 if is_nan(m) else 100.0 * tan(deg_to_rad(m)),
-			r["traction"], " d", r["torque"], " d", note])
+			r["traction"], " d", r["torque"], " d", r["tip"], " d", note])
+
+
+## "`variant` (layout, toggles, mass)" for the doc table: the tractor reads 2WD / MFWD by its
+## engageable front axle, a coupled rig its towed mass.
+func _doc_label(spec: VehicleSpec, gd: GroundDriveSpec, coupled: float) -> String:
+	var layout := "AWD" if gd.driven_front and gd.driven_rear else ("FWD" if gd.driven_front else "RWD")
+	if gd.front_axle_engageable:
+		layout = "MFWD" if _mfwd else "2WD"
+	if _mfwd or not gd.front_axle_engageable:  ## a disengaged front axle leaves no centre to declare
+		layout += MeasureVehicles._diff_label(gd)
+	if _diff:
+		layout += ", diff lock"
+	if _tc:
+		layout += ", tc"
+	var mass := "%.2f t" % (spec.mass / 1000.0)
+	if coupled > 0.0:
+		mass += " + %.0f t towed" % (coupled / 1000.0)
+	return "`%s` (%s, %s)" % [_variant, layout, mass]
+
+
+## The `grade` region: one row per job, one column per DOC_SURFACES entry.
+func _doc_table() -> Array[String]:
+	var lines := DocRegion.wrap("%s (`measure_grade -- doc=grade`), standing start, full throttle"
+			% DocRegion.measured() + " unless `tc`:")
+	lines.append_array([
+		"",
+		"| Variant | %s |" % " | ".join(DOC_SURFACES.map(func(s: String) -> String:
+				return "%s (grip %.1f, crr %.2f)" % [s, SURFACES[s].x, SURFACES[s].y])),
+		"| --- |" + " --- |".repeat(DOC_SURFACES.size()),
+	])
+	var row := ""
+	var cells := 0
+	for r in _rows:
+		if cells == 0:
+			row = "| %s |" % r["label"]
+		var m: float = r["measured"]
+		row += " %.1f %% |" % (0.0 if is_nan(m) else 100.0 * tan(deg_to_rad(m)))
+		cells += 1
+		if cells == DOC_SURFACES.size():
+			lines.append(row)
+			cells = 0
+	return lines
 
 
 # ----------------------------------------------------------------- level mode

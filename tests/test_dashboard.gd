@@ -175,7 +175,7 @@ func test_the_hour_meter_rides_the_readout_and_only_where_the_contract_declares_
 			.is_false()
 	# Swept in both directions, or a contract edit either way would pass unnoticed.
 	assert_bool(_dash("tractor", Dashboard.Density.FULL)._has_engine_hours).is_true()
-	# Phase 5 widened engine_hours to the boat, so this flips from false to true.
+	# engine_hours is shared with the boat.
 	assert_bool(_dash("boat", Dashboard.Density.FULL)._has_engine_hours).is_true()
 	assert_bool(_dash("drone", Dashboard.Density.FULL)._has_engine_hours).is_false()
 

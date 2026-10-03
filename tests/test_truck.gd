@@ -58,39 +58,64 @@ func _contract() -> ContractScript.ContractData:
 
 func test_air_charges_only_while_the_engine_runs() -> void:
 	# The compressor is engine-driven, so a stopped engine makes no air however long you wait.
-	assert_float(TruckT.air_step(7.0, 0.0, false, 1.0, 0.45, 1.10)).is_equal(7.0)
-	assert_float(TruckT.air_step(7.0, 0.0, true, 1.0, 0.45, 1.10)).is_equal_approx(7.45, 1e-6)
-	assert_float(TruckT.air_step(7.0, 0.0, true, 1.0 / 60.0, 0.45, 1.10)) \
+	assert_float(TruckT.air_step(7.0, 0.0, 0.0, false, 1.0, 0.45, 0.7, 1.10)).is_equal(7.0)
+	assert_float(TruckT.air_step(7.0, 0.0, 0.0, true, 1.0, 0.45, 0.7, 1.10)) \
+			.is_equal_approx(7.45, 1e-6)
+	assert_float(TruckT.air_step(7.0, 0.0, 0.0, true, 1.0 / 60.0, 0.45, 0.7, 1.10)) \
 			.is_equal_approx(7.0 + 0.45 / 60.0, 1e-9)
 
 
-func test_a_brake_application_draws_the_reservoir_down() -> void:
-	assert_float(TruckT.air_step(7.0, 1.0, false, 1.0, 0.45, 1.10)).is_equal_approx(5.9, 1e-6)
-	# Running, full application: the compressor cannot keep up, so it still net-drains, which is what
-	# makes a long brake application able to reach the gate at all.
-	assert_float(TruckT.air_step(7.0, 1.0, true, 1.0, 0.45, 1.10)).is_equal_approx(6.35, 1e-6)
-	assert_float(TruckT.air_step(7.0, 0.5, false, 1.0, 0.45, 1.10)).is_equal_approx(6.45, 1e-6)
-	assert_float(TruckT.air_step(6.0, 0.0, true, 1.0, 0.45, 1.10)).is_greater(6.0)
+func test_a_brake_press_draws_on_the_rise_and_a_held_pedal_draws_nothing() -> void:
+	# A full press costs its whole press_bar, whatever the tick length.
+	assert_float(TruckT.air_step(7.0, 1.0, 0.0, false, 1.0 / 60.0, 0.45, 0.7, 1.10)) \
+			.is_equal_approx(6.3, 1e-6)
+	# A half press costs half; deepening it to full costs the other half.
+	assert_float(TruckT.air_step(7.0, 0.5, 0.0, false, 1.0, 0.45, 0.7, 1.10)) \
+			.is_equal_approx(6.65, 1e-6)
+	assert_float(TruckT.air_step(7.0, 1.0, 0.5, false, 1.0, 0.45, 0.7, 1.10)) \
+			.is_equal_approx(6.65, 1e-6)
+	# Held or released: nothing drawn, so a running engine recharges under a held pedal.
+	assert_float(TruckT.air_step(7.0, 1.0, 1.0, false, 1.0, 0.45, 0.7, 1.10)).is_equal(7.0)
+	assert_float(TruckT.air_step(7.0, 0.0, 1.0, false, 1.0, 0.45, 0.7, 1.10)).is_equal(7.0)
+	assert_float(TruckT.air_step(7.0, 1.0, 1.0, true, 1.0, 0.45, 0.7, 1.10)).is_greater(7.0)
+
+
+func test_pumping_about_once_a_second_beats_the_compressor_on_both_circuits() -> void:
+	# The press is what drains: one full press a second (half a second down, half up) at the locked
+	# 60 Hz must still net-drain each circuit, or no driving can ever reach the gate.
+	for press: float in [TruckT.AIR_PRESS_PRIMARY, TruckT.AIR_PRESS_SECONDARY]:
+		var bar := 7.0
+		var prev := 0.0
+		for i in 600:
+			var pedal := 1.0 if (i % 60) < 30 else 0.0
+			bar = TruckT.air_step(bar, pedal, prev, true, 1.0 / 60.0,
+					TruckT.AIR_CHARGE_RATE, press, TruckT.AIR_DRAW_PRIMARY)
+			prev = pedal
+		assert_float(bar).override_failure_message(
+				"pumping at 1 Hz for 10 s left %.2f bar (press %.2f)" % [bar, press]).is_less(7.0)
 
 
 func test_air_is_bounded_at_both_ends() -> void:
 	# Working pressure is a ceiling: the governor cuts the compressor out, it does not keep going.
-	assert_float(TruckT.air_step(TruckT.AIR_MAX_BAR, 0.0, true, 10.0, 0.45, 1.10)) \
+	assert_float(TruckT.air_step(TruckT.AIR_MAX_BAR, 0.0, 0.0, true, 10.0, 0.45, 0.7, 1.10)) \
 			.is_equal(TruckT.AIR_MAX_BAR)
-	assert_float(TruckT.air_step(0.2, 1.0, false, 10.0, 0.45, 1.10)).is_equal(0.0)
+	assert_float(TruckT.air_step(0.2, 1.0, 0.0, false, 1.0, 0.45, 0.7, 1.10)).is_equal(0.0)
 	# A garbage request is clamped like every other input.
-	assert_float(TruckT.air_step(7.0, 5.0, false, 1.0, 0.45, 1.10)).is_equal_approx(5.9, 1e-6)
-	assert_float(TruckT.air_step(7.0, -3.0, false, 1.0, 0.45, 1.10)).is_equal(7.0)
+	assert_float(TruckT.air_step(7.0, 5.0, 0.0, false, 1.0, 0.45, 0.7, 1.10)) \
+			.is_equal_approx(6.3, 1e-6)
+	assert_float(TruckT.air_step(7.0, -3.0, 0.0, false, 1.0, 0.45, 0.7, 1.10)).is_equal(7.0)
+	assert_float(TruckT.air_step(7.0, 1.0, -3.0, false, 1.0, 0.45, 0.7, 1.10)) \
+			.is_equal_approx(6.3, 1e-6)
 
 
 func test_the_two_circuits_diverge_rather_than_being_a_clone() -> void:
 	# The dual circuit is the point (SPN 1087/1088). Circuit 2 runs off a smaller reservoir, so after
 	# the same application the two read differently; if they ever match, the pair has become one
 	# signal published twice.
-	var primary := TruckT.air_step(7.0, 1.0, false, 1.0,
-			TruckT.AIR_CHARGE_RATE, TruckT.AIR_DRAW_PRIMARY)
-	var secondary := TruckT.air_step(7.0, 1.0, false, 1.0,
-			TruckT.AIR_CHARGE_RATE, TruckT.AIR_DRAW_SECONDARY)
+	var primary := TruckT.air_step(7.0, 1.0, 0.0, false, 1.0,
+			TruckT.AIR_CHARGE_RATE, TruckT.AIR_PRESS_PRIMARY, TruckT.AIR_DRAW_PRIMARY)
+	var secondary := TruckT.air_step(7.0, 1.0, 0.0, false, 1.0,
+			TruckT.AIR_CHARGE_RATE, TruckT.AIR_PRESS_SECONDARY, TruckT.AIR_DRAW_SECONDARY)
 	assert_float(primary).is_not_equal(secondary)
 	assert_float(primary).is_less(secondary)
 
@@ -170,16 +195,20 @@ func test_the_slip_cap_shuts_off_once_the_axle_is_at_the_target() -> void:
 	var dt := 1.0 / 60.0
 	var r := 0.36
 	var v := 20.0
-	assert_float(DrivetrainScript.retarder_slip_cap(v / r, v, r, 3.0, dt)).is_greater(0.0)
+	var free := dt / 3.0  # a free wheel's compliance: delta / inertia
+	assert_float(DrivetrainScript.retarder_slip_cap(v / r, v, r, free)).is_greater(0.0)
+	# A wheel the road holds up loses less spin per N·m, so the same slip headroom takes more torque.
+	assert_float(DrivetrainScript.retarder_slip_cap(v / r, v, r, free / 10.0)).is_equal_approx(
+			10.0 * DrivetrainScript.retarder_slip_cap(v / r, v, r, free), 1e-3)
 	# Already at the target slip: no headroom left, so the retarder adds nothing more.
 	var at_target := (v - DrivetrainScript.RETARDER_SLIP_TARGET * v) / r
-	assert_float(DrivetrainScript.retarder_slip_cap(at_target, v, r, 3.0, dt)) \
+	assert_float(DrivetrainScript.retarder_slip_cap(at_target, v, r, free)) \
 			.is_equal_approx(0.0, 1e-6)
 	# Past it (a wheel already skidding on something else): still nothing, never negative.
-	assert_float(DrivetrainScript.retarder_slip_cap(at_target * 0.5, v, r, 3.0, dt)).is_equal(0.0)
+	assert_float(DrivetrainScript.retarder_slip_cap(at_target * 0.5, v, r, free)).is_equal(0.0)
 	# Degenerate geometry is guarded rather than dividing by zero.
-	assert_float(DrivetrainScript.retarder_slip_cap(v / r, v, 0.0, 3.0, dt)).is_equal(0.0)
-	assert_float(DrivetrainScript.retarder_slip_cap(v / r, v, r, 3.0, 0.0)).is_equal(0.0)
+	assert_float(DrivetrainScript.retarder_slip_cap(v / r, v, 0.0, free)).is_equal(0.0)
+	assert_float(DrivetrainScript.retarder_slip_cap(v / r, v, r, 0.0)).is_equal(0.0)
 
 
 func test_the_slip_cap_reads_a_SIGNED_road_speed_and_works_in_reverse() -> void:
@@ -189,11 +218,11 @@ func test_the_slip_cap_reads_a_SIGNED_road_speed_and_works_in_reverse() -> void:
 	var dt := 1.0 / 60.0
 	var r := 0.36
 	var v := 20.0
-	var fwd := DrivetrainScript.retarder_slip_cap(v / r, v, r, 3.0, dt)
-	var rev := DrivetrainScript.retarder_slip_cap(-v / r, -v, r, 3.0, dt)
+	var fwd := DrivetrainScript.retarder_slip_cap(v / r, v, r, dt / 3.0)
+	var rev := DrivetrainScript.retarder_slip_cap(-v / r, -v, r, dt / 3.0)
 	assert_float(rev).is_equal_approx(fwd, 1e-6)
 	var at_target := -(v - DrivetrainScript.RETARDER_SLIP_TARGET * v) / r
-	assert_float(DrivetrainScript.retarder_slip_cap(at_target, -v, r, 3.0, dt)) \
+	assert_float(DrivetrainScript.retarder_slip_cap(at_target, -v, r, dt / 3.0)) \
 			.is_equal_approx(0.0, 1e-6)
 
 
@@ -204,13 +233,14 @@ func test_the_retarder_is_inert_at_a_standstill_however_the_wheels_are_spinning(
 	var dt := 1.0 / 60.0
 	for spec in _truck_specs():
 		var gd := spec.ground_drive
-		assert_float(DrivetrainScript.retarder_slip_cap(50.0, 0.0, gd.wheel_radius,
-				gd.wheel_inertia, dt)).is_greater(0.0)
+		var free := dt / gd.wheel_inertia
+		assert_float(DrivetrainScript.retarder_slip_cap(50.0, 0.0, gd.wheel_radius, free)) \
+				.is_greater(0.0)
 		# Stationary chassis, driven wheels spinning hard (a standing burnout): still nothing.
-		assert_float(DrivetrainScript.retarder_torque(1.0, 0.0, 50.0, gd, dt)).is_equal(0.0)
+		assert_float(DrivetrainScript.retarder_torque(1.0, 0.0, 50.0, gd, free)).is_equal(0.0)
 		# And just under the cutout, where the fade is still zero.
 		assert_float(DrivetrainScript.retarder_torque(
-				1.0, DrivetrainScript.RETARDER_CUTOUT_MS - 0.01, 50.0, gd, dt)).is_equal(0.0)
+				1.0, DrivetrainScript.RETARDER_CUTOUT_MS - 0.01, 50.0, gd, free)).is_equal(0.0)
 
 
 func test_the_retarder_can_never_skid_the_driven_axle() -> void:
@@ -218,15 +248,17 @@ func test_the_retarder_can_never_skid_the_driven_axle() -> void:
 	# RETARDER_SLIP_TARGET. It must be a SLIP limit and not a force limit — the first version capped
 	# at mu * N * r, which bounds the saturated road torque, and a locked wheel is already making that
 	# much, so it permitted a full skid (measured: slip 1.0 and 8 m/s^2). Integrated open-loop with no
-	# road reaction pushing back, which is the worst case the wheel can ever see.
+	# road reaction pushing back, which is the worst case the wheel can ever see: a free wheel's
+	# compliance, `delta / inertia`, for both the cap and the step.
 	var dt := 1.0 / 60.0
 	for spec in _truck_specs():
 		var gd := spec.ground_drive
+		var free := dt / gd.wheel_inertia
 		for v: float in [30.0, 22.0, 15.0, 8.0, 4.0, 2.0, -22.0, -8.0]:
 			var omega: float = v / gd.wheel_radius
 			for _tick in 200:
-				var tau := DrivetrainScript.retarder_torque(1.0, v, omega, gd, dt)
-				omega = move_toward(omega, 0.0, tau / gd.wheel_inertia * dt)
+				var tau := DrivetrainScript.retarder_torque(1.0, v, omega, gd, free)
+				omega = move_toward(omega, 0.0, tau * free)
 			# Unsigned: braking slip is how far the wheel has fallen behind the ground, whichever way the
 			# truck is pointing.
 			var denom: float = maxf(absf(v), RayWheel.LOW_SPEED_FLOOR)
@@ -687,6 +719,20 @@ func test_a_full_hopper_is_a_payload_the_shipped_suspension_can_carry() -> void:
 			.is_less(spec.ground_drive.max_suspension_force)
 		# And it must stay inside the axle_load signal's own range, or the AXLE bar pins.
 		assert_float(loaded).is_less(20000.0)
+
+
+func test_the_shipped_garbage_truck_yields_a_refuse_body_rig() -> void:
+	# Geometry is the declaration (TruckVehicle._find_rig): a regen that drops `Model/arm` or
+	# `Model/body/trash` leaves a truck that publishes zeros on every body signal, and nothing fails.
+	var truck := _truck_scene("garbage-truck") as TruckVehicle
+	assert_object(truck).override_failure_message("the garbage truck must run TruckVehicle") \
+		.is_not_null()
+	truck._find_rig()
+	assert_object(truck._body) \
+		.override_failure_message("no Model/arm: the garbage truck has no refuse body").is_not_null()
+	assert_object(truck._trash) \
+		.override_failure_message("no Model/body/trash: hopper_load has no pile to show").is_not_null()
+	truck.free()
 
 
 # --- the North American variant: the trailer bus as a SUBTRACTION ---------------------

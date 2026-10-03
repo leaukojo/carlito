@@ -86,15 +86,20 @@ func test_a_hull_bodied_vehicle_behaves_the_same_way() -> void:
 
 
 func test_the_tensor_scales_with_a_runtime_mass_rewrite() -> void:
-	# The refuse truck rewrites `mass` when the hopper fills (truck.gd, beside
-	# WheelDrive.set_corner_mass_from). The computed tensor follows it on its own, which is the
+	# The refuse truck rewrites `mass` when the hopper fills (truck.gd, through
+	# BaseVehicle.set_live_mass). The computed tensor follows it on its own, which is the
 	# other half of why no vehicle needs an explicit `inertia`.
 	var v := await _spawn("sedan", LOW)
 	var unladen := _inertia(v)
-	v.mass *= 2.0
+	v.set_live_mass(v.mass * 2.0)
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	var laden := _inertia(v)
 	assert_float(laden.x / unladen.x).is_equal_approx(2.0, 1e-3)
 	assert_float(laden.y / unladen.y).is_equal_approx(2.0, 1e-3)
 	assert_float(laden.z / unladen.z).is_equal_approx(2.0, 1e-3)
+	# The setter's other half: the one-tick clamps are re-sized in the same call.
+	for w in v.wheels:
+		assert_float(w.corner_mass).override_failure_message(
+				"set_live_mass left a corner sized for the old mass") \
+				.is_equal_approx(v.mass / float(v.wheels.size()), 1e-6)

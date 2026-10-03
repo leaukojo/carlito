@@ -139,6 +139,49 @@ func test_hash_file_text_ignores_crlf() -> void:
 	assert_str(Baker.hash_file(lf)).is_equal(Baker.hash_file(crlf))
 
 
+## A comment edit to bake code must not re-stale every level; a code edit must.
+func test_hash_file_gd_ignores_comment_and_blank_lines() -> void:
+	var a := "user://bake_test_a.gd"
+	var b := "user://bake_test_b.gd"
+	FileAccess.open(a, FileAccess.WRITE).store_string("extends Node\n## doc\nconst X := 1\n")
+	FileAccess.open(b, FileAccess.WRITE).store_string(
+			"# header\nextends Node\n\n\t# indented note\nconst X := 1\n")
+	assert_str(Baker.hash_file(a)).is_equal(Baker.hash_file(b))
+	FileAccess.open(b, FileAccess.WRITE).store_string("extends Node\nconst X := 2\n")
+	assert_str(Baker.hash_file(a)).is_not_equal(Baker.hash_file(b))
+
+
+## Comment stripping is GDScript-only: a `#` line in a scene or resource is content.
+func test_hash_file_keeps_hash_lines_in_other_text_formats() -> void:
+	var a := "user://bake_test_a.tscn"
+	var b := "user://bake_test_b.tscn"
+	FileAccess.open(a, FileAccess.WRITE).store_string("[node]\n#x\n")
+	FileAccess.open(b, FileAccess.WRITE).store_string("[node]\n#y\n")
+	assert_str(Baker.hash_file(a)).is_not_equal(Baker.hash_file(b))
+
+
+## The hooks' bake-trigger prefixes (tools/git-hooks/bake_paths.txt) must cover every input a
+## baked level's freshness hash reads, BAKE_CODE_INPUTS included, or an edit skips the gate.
+func test_bake_paths_cover_every_bake_input() -> void:
+	var prefixes := PackedStringArray()
+	for line in FileAccess.get_file_as_string("res://tools/git-hooks/bake_paths.txt").split("\n"):
+		var t := line.strip_edges()
+		if not t.is_empty() and not t.begins_with("#"):
+			prefixes.append("res://" + t)
+	assert_array(prefixes).is_not_empty()
+	for entry: Dictionary in preload("res://src/shell/level_registry.gd").LEVELS:
+		var level := String(entry["scene"])
+		if not FileAccess.file_exists(Baker.manifest_path(level)):
+			continue
+		for f in Baker.gather_bake_inputs(level):
+			var covered := false
+			for p in prefixes:
+				covered = covered or f.begins_with(p)
+			assert_bool(covered).override_failure_message(
+					"%s (bake input of %s) matches no prefix in tools/git-hooks/bake_paths.txt"
+					% [f, level]).is_true()
+
+
 func test_hash_inputs_order_independent_and_content_sensitive() -> void:
 	var a := "user://bake_test_a.tscn"
 	var b := "user://bake_test_b.tscn"
@@ -716,3 +759,57 @@ func test_scatter_ground_hash_gate() -> void:
 	level.region.set("stored_ground_hash", "whatever")
 	assert_array(Baker.scatter_ground_errors(root)).is_empty()
 	root.free()
+
+
+## Root + spawn + AuthoringRoot holding `child`: the smallest level the gates below can judge.
+func _authoring_level(child: Node) -> Node3D:
+	var root := Node3D.new()
+	root.name = "L"
+	var spawn := Marker3D.new()
+	spawn.name = "Spawn"
+	spawn.set_script(load("res://src/levels/base/vehicle_spawn.gd"))
+	root.add_child(spawn)
+	var authoring := Node3D.new()
+	authoring.name = "Authoring"
+	authoring.set_script(preload("res://kit/helpers/authoring_root.gd"))
+	root.add_child(authoring)
+	authoring.add_child(_scatter_prefab("box").instantiate())
+	authoring.add_child(child)
+	return root
+
+
+## AuthoringRoot is gone at runtime: a node the baker does not collect is a bake error, not
+## a silent vanish. A plain Node3D group is walked.
+func test_unknown_node_under_authoring_is_a_bake_error() -> void:
+	var loose := MeshInstance3D.new()
+	loose.name = "Loose"
+	loose.mesh = BoxMesh.new()
+	var root: Node3D = auto_free(_authoring_level(loose))
+	var result: Dictionary = Baker.bake(root)
+	assert_bool(result.ok).is_false()
+	assert_bool(String((result.errors as PackedStringArray)[0]).contains("'Loose'")).is_true()
+
+	var group := Node3D.new()
+	group.name = "Props"
+	group.add_child(_scatter_prefab("box").instantiate())
+	var ok_root: Node3D = auto_free(_authoring_level(group))
+	var ok: Dictionary = Baker.bake(ok_root)
+	assert_bool(ok.ok).is_true()
+	assert_int(int((ok.stats as Dictionary).shapes)).is_equal(2)
+	(ok.root as Node).free()
+
+
+## Palette meshes sit on the cell floor, so a GridMap left at the engine's
+## cell_center_y = true would bake half a cell high: a bake error.
+func test_gridmap_cell_center_y_is_a_bake_error() -> void:
+	var gm := GridMap.new()
+	gm.name = "Tiles"
+	gm.mesh_library = MeshLibrary.new()
+	var root: Node3D = auto_free(_authoring_level(gm))
+	var result: Dictionary = Baker.bake(root)
+	assert_bool(result.ok).is_false()
+	assert_bool(String((result.errors as PackedStringArray)[0]).contains("cell_center_y")).is_true()
+	gm.cell_center_y = false
+	var ok: Dictionary = Baker.bake(root)
+	assert_bool(ok.ok).is_true()
+	(ok.root as Node).free()

@@ -58,14 +58,15 @@ if echo "$staged" | grep -qE '^(src/bridge/web/head_include\.html|export_presets
   node tools/check_head_include.mjs || exit 1
 fi
 
-# 4. Bake inputs touched -> stale-bake check (same gate CI runs, ~30s). The alternation
-#    covers src/levels/ and kit/ plus every out-of-tree entry in level_baker.gd's
-#    BAKE_CODE_INPUTS (the source of truth for what a bake reads besides the level itself).
-if echo "$staged" | grep -qE '^(src/levels/|kit/|src/physics/collision_layers\.gd)'; then
-  echo "pre-commit: level/kit files staged — running stale-bake check..."
+# 4. Bake inputs touched -> stale-bake + road-paint check (same gate CI runs, ~30s). The
+#    prefixes are tools/git-hooks/bake_paths.txt, shared with the Stop hook.
+bake_re=$(tr -d '\r' < tools/git-hooks/bake_paths.txt | grep -vE '^(#|$)' | sed 's/\./\\./g; s/^/^/' | awk 'NR>1{printf "|"}{printf "%s", $0}')
+[ -n "$bake_re" ] || { echo "pre-commit: tools/git-hooks/bake_paths.txt is missing or empty" >&2; exit 1; }
+if echo "$staged" | grep -v '\.md$' | grep -qE "$bake_re"; then
+  echo "pre-commit: bake inputs staged — running stale-bake check..."
   resolve_godot
   "$GODOT" --headless --path . res://tools/check_bakes.tscn || {
-    echo "pre-commit: stale bakes. Run:  & \$GODOT --headless --path . res://tools/bake_levels.tscn"
+    echo "pre-commit: stale bakes or road paint (fix named above), then:  & \$GODOT --headless --path . res://tools/bake_levels.tscn"
     exit 1
   }
 fi

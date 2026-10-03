@@ -97,3 +97,50 @@ func test_a_rebuild_keeps_children_the_author_put_there() -> void:
 	assert_bool(is_instance_valid(mine)).is_true()
 	# ...and the authored child is not counted as a slab, so the box is still five boxes.
 	assert_int(_boxes(b).size()).is_equal(5)
+
+
+## Every level scene (`<id>/<id>.tscn`) that carries both a WorldBounds and a WaterSurface keeps
+## the containment walls on the water's edge: `extent` == the sea's `size`. Read off the packed
+## state, falling back to the script default when a level leaves the property unset.
+func test_every_level_walls_sit_on_its_water_edge() -> void:
+	var extent_default: Vector2 = (auto_free(WB.new()) as Node3D).extent
+	var size_default: Vector2 = (auto_free(WaterSurface.new()) as WaterSurface).size
+	var checked := 0
+	for path in _level_scenes("res://src/levels"):
+		var state := (load(path) as PackedScene).get_state()
+		var extent = null
+		var sea = null
+		for i in state.get_node_count():
+			var script_path := ""
+			for j in state.get_node_property_count(i):
+				if state.get_node_property_name(i, j) == &"script":
+					script_path = (state.get_node_property_value(i, j) as Script).resource_path
+			if script_path == "res://src/levels/base/world_bounds.gd":
+				extent = _prop_or(state, i, &"extent", extent_default)
+			elif script_path == "res://src/water/water_surface.gd":
+				assert_that(sea).override_failure_message("%s: two WaterSurfaces" % path).is_null()
+				sea = _prop_or(state, i, &"size", size_default)
+		if extent == null or sea == null:
+			continue
+		checked += 1
+		assert_vector(extent as Vector2).override_failure_message(
+				"%s: WorldBounds extent %s, water size %s" % [path, extent, sea]) \
+				.is_equal(sea as Vector2)
+	assert_int(checked).is_greater(0)
+
+
+func _prop_or(state: SceneState, node: int, prop: StringName, fallback: Vector2) -> Vector2:
+	for j in state.get_node_property_count(node):
+		if state.get_node_property_name(node, j) == prop:
+			return state.get_node_property_value(node, j)
+	return fallback
+
+
+func _level_scenes(dir: String) -> Array[String]:
+	var out: Array[String] = []
+	for sub in DirAccess.get_directories_at(dir):
+		var scene := dir.path_join(sub).path_join(sub + ".tscn")
+		if ResourceLoader.exists(scene):
+			out.append(scene)
+		out.append_array(_level_scenes(dir.path_join(sub)))
+	return out

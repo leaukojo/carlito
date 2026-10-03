@@ -34,7 +34,7 @@ const IMPLEMENT_GROUND_OFFSET := 0.21
 # --- splat channels -------------------------------------------------------------------
 const CH_GRASS := 0
 const CH_SAND := 2      ## splatmap.B — mixed into the field's light bands
-const CH_FIELD := 4     ## splatmap2.R — the ploughable soil, phase 6's "in soil" predicate
+const CH_FIELD := 4     ## splatmap2.R — the ploughable soil, the implements' "in soil" predicate
 const CH_MUD := 5       ## splatmap2.G — wallow + haul ramp, grip 0.5
 const CH_GRAVEL := 7    ## splatmap2.A — yard surround and farm tracks
 ## Packed*Array constructors are not constant expressions, so these are plain typed arrays
@@ -500,7 +500,7 @@ func _build_props(authoring: Node, root: Node, img: Image, apron: Rect2, deck_y:
 
 ## The four implements parked on the apron. Each wrapped in a KitPiece with collision "none":
 ## mandatory, since LevelBaker._collect only harvests MeshInstance3D from inside a KitPiece —
-## a plain Node3D would have its meshes silently dropped at bake.
+## a bare implement scene under AuthoringRoot is a bake error.
 func _build_implements(authoring: Node, root: Node, apron: Rect2, deck_y: float) -> void:
 	var group := Node3D.new()
 	group.name = "FarmImplements"

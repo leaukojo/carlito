@@ -13,7 +13,8 @@ generator). Headless gotchas (`--script` mode, float32, freed nodes): root `CLAU
   `shot_stage.gd`. Their PNGs are not byte-deterministic: compare a re-run with `png_drift.gd`,
   not a byte diff.
 - **Never speed a measure tool up with `Engine.time_scale`**: it enlarges the physics step
-  (`measure_vehicles.gd`). `measure_rough` takes `--fixed-fps 60` before `--` instead.
+  (`measure_vehicles.gd`). Pass `--fixed-fps 60` before `--` instead: same tick, byte-identical
+  output, ~10x faster (`measure_semi_launch` 40 s -> 4.5 s).
 
 ## Rare generators
 
@@ -35,17 +36,21 @@ generator). Headless gotchas (`--script` mode, float32, freed nodes): root `CLAU
 ## Measure tools
 
 Dev reports, not tests; reading guide and figures: `docs/vehicles.md` § Measuring a vehicle.
-Long sweeps (`all`, `baseline`) take minutes.
+Long sweeps (`all`, `baseline`) take minutes. The doc's figure tables are generated: a `doc=<id>`
+preset runs that table's fixed set and rewrites its `<!-- measure:<id> -->` region
+(`doc_region.gd`); refresh a figure by re-running, never by hand.
 
 ```powershell
 # accel / top speed / tracking on a flat full-grip strip. Arg 1: variant or `all` (default
-# sedan-sports); arg 2: time cap in s. Flags: coast, track, strict, corner.
+# sedan-sports); arg 2: time cap in s. Flags: coast, track, strict, corner, brake,
+# trailer=<name|bobtail>, tc (accel pass slip-limited at the grip peak).
 & $GODOT --headless --path . res://tools/measure_vehicles.tscn -- sedan-sports 45
 # the CI `tracking` gate: skips the accel pass, exits 1 on a FAIL
 & $GODOT --headless --path . res://tools/measure_vehicles.tscn -- all 45 track strict
 # drone: hover / climb / lean / endurance / one-motor-out (no args, ~1 min)
 & $GODOT --headless --path . res://tools/measure_drone.tscn
-# coupled semi launch: steer-axle load, pitch, air gate (~30 s; front_z= / com_z= what-ifs)
+# coupled semi launch: steer-axle load, pitch, air gate, step-steer rollover (~30 s; flags
+# trailer=<box|tanker|tipper|flatbed|bobtail> tip_kmh=<km/h> ramp front_z= com_z=; strict = the CI gate)
 & $GODOT --headless --path . res://tools/measure_semi_launch.tscn -- semi
 # steepest standing-start grade. Arg 1: variant, `all` or `level=<id>`; then surfaces
 # (asphalt gravel grass dirt field mud; none = all); flags mfwd diff tc verbose hold=<deg> pedal=<0..1>
@@ -54,4 +59,10 @@ Long sweeps (`all`, `baseline`) take minutes.
 # bumps and ditches, asphalt and mud. Arg 1: variant or `baseline`; flags mfwd diff tc
 # speed=<m/s> lane= patch= verbose
 & $GODOT --headless --path . --fixed-fps 60 res://tools/measure_rough.tscn -- baseline
+# rewrite docs/vehicles.md's figure tables (each a few minutes)
+& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=braking
+& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=cornering
+& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=accel
+& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_grade.tscn -- doc=grade
+& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_rough.tscn -- doc=rough
 ```

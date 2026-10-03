@@ -11,3 +11,7 @@ src/vehicles/base/drivetrain.gd:shift_cut_active # test accessor for _shift_cut_
 src/vehicles/base/towed_body.gd:load_shift_z    # documented test accessor, no runtime caller
 src/vehicles/base/towed_body.gd:load_shift_y    # documented test accessor, no runtime caller
 src/vehicles/base/towed_body.gd:collision_probes # documented test accessor; test_trailer is its consumer
+src/vehicles/base/articulation.gd:pose_at_angle  # kinematic fallback for a Jolt fifth-wheel joint that fails at 60 Hz; pinned by tests/test_trailer.gd, unwired
+src/vehicles/base/articulation.gd:jackknife_step # same fallback as pose_at_angle
+src/vehicles/base/towed_body.gd:live_kingpin_share # test accessor for the load model's kingpin share; test_trailer / test_drawbar_trailer read it
+src/vehicles/drone/drone_bus.gd:cycle_fail      # reference copy of InputRouter.cycle_node_fail, pinned equal by tests/test_drone_bus.gd

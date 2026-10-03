@@ -38,6 +38,7 @@ truck / trailer / tractor).
 - Steering lock: pick the lock in degrees, then divide (`min_steer_frac` scales the body's own
   `max_steer_deg`). The taper is linear from a standstill, so check a slow body at its working
   speed. Guard: `test_a_steering_taper_never_out_limits_the_tyres`.
+- Never detune a vehicle to suit an on/off key: keyboard feel belongs to `src/input/` (its CLAUDE.md).
 - Generated bodies: `kenney/*` (`tools/gen_kenney_vehicles.gd`) and `watercraft/*`
   (`tools/gen_boat_variants.gd`). A feel change goes into the recipe and a regen in the same
   commit, never into the `.tscn` / `.tres`. A failing `test_kenney_variants` / `test_boat_variants`
@@ -50,11 +51,22 @@ truck / trailer / tractor).
 
 - Hierarchy: brake > TRANSMISSIBLE drive (`min(peak drive, driven wheels * mu_long * N * r)`) >
   handbrake. Guard: `test_vehicle_catalog.test_kenney_specs_keep_force_hierarchy`. Drift comes from
-  `handbrake_grip`, never handbrake torque.
+  `handbrake_grip`, never handbrake torque. It is a total: a wheel holds only against its own
+  drive, which first gear beats on the heavies, so both pedals held are
+  `InputRouter.brake_override`'s.
 - Kenney `brake_torque` derives from the tyre (`BRAKE_GRIP_FRAC * mu_long * N * r`), with no
-  per-family knob. With AWD and a close-ratio first, the hierarchy floor can exceed the tyre: fix
-  gear 1 or torque, never the brake. The hand-built semis are not grip-derived (their retarder
-  hangs off `brake_torque`).
+  per-family knob, and `brake_bias_front` splits it by each axle's load-scaled grip in a full-pedal
+  stop (an even split locks the unloaded axle and under-brakes the loaded one); negative = even. With AWD and a close-ratio
+  first, the hierarchy floor can exceed the tyre: fix gear 1 or torque, never the brake. The
+  hand-built semis are not grip-derived (their retarder hangs off `brake_torque`).
+- The brake goes through the semi-implicit spin step (`* spin_compliance`), never a move_toward
+  after it: outside it, a held brake needs the tyre to carry `1 + reaction_stiffness` times its
+  torque and any firm pedal locks. Guard: `test_wheel_spin` § brakes.
+- ABS (`abs_equipped`, road vehicles; not the tractor, the race cars or the plane) caps the foot
+  brake and retarder at `RayWheel.ABS_SLIP`, the grip peak. A handbrake or spring brake is a
+  mechanical hold no ABS modulates: a wheel under one brakes without it.
+- TC (`tcs_equipped`, the car family minus the race cars) caps drive at `RayWheel.TCS_SLIP`, per
+  wheel and drive-only (never brakes); the bridge's `tcs_off` disables it.
 - The tyre class (`mu_long` / `mu_lat`) is the root of everything brake-shaped: brake, retarder
   rating, hierarchy floor, taper margin. A mu edit is a re-derivation (recipe + regen), never a
   number edit.
@@ -81,7 +93,7 @@ truck / trailer / tractor).
 
 - Stability at the locked 60 Hz (root rule 9) lives in:
   - `RayWheel`: damper ≤ one-tick reversal, suspension force cap, low-speed slip floors, one-tick
-    lateral cap;
+    lateral cap (a towed body's off its solver tensor: `TowedBody._size_lateral_caps`);
   - the semi-implicit spin step;
   - the boat's probe clamps;
   - `VehicleMath.damped_force`.
@@ -90,11 +102,12 @@ truck / trailer / tractor).
   external force (thrust, sail) does not.
 - Wheel spin is semi-implicit: divide the NET torque by `1 + reaction_stiffness`. Never cap the
   reaction term instead, which walks the wheel to a steady slip nothing paid for
-  (`test_wheel_spin`).
+  (`test_wheel_spin`). The step follows the body's last-tick change at the CENTRE OF MASS
+  (`dv_long`), never the contact's, which rings the pitch at the tick rate.
 - `RayWheel.FREE_SPIN_DECAY` lets a lifted wheel's limiter cut clear itself. Without it the cut
   latches until the driver lifts off.
-- The clamps are sized by `corner_mass`. Any runtime `mass` write calls
-  `WheelDrive.set_corner_mass_from(mass)` beside it (unguarded: `docs/to_investigate.md`).
+- The clamps are sized by `corner_mass`. A runtime `mass` write is `BaseVehicle.set_live_mass`,
+  never a bare assignment (it re-shares the corners; `test_body_inertia` pins the pair).
 - `ChaseCamera` follows `get_global_transform_interpolated()`, never `global_transform` in
   `_process`.
 
@@ -106,9 +119,9 @@ truck / trailer / tractor).
   `tests/test_body_inertia.gd`.
 - A car-family COM height (`com_y`) stays below ~45 % of the body's AABB height. If a narrow body
   tips before it slides, the levers are the anti-roll bar or `mu_lat`, never a lower COM.
-- Anti-roll bar: both wheels of an axle read the snapshot `WheelDrive.tick` latches for every
-  wheel before any wheel ticks (`latch_bar`). A live read is a phantom left-only damper that steers
-  the car (`test_wheel_spin.test_the_bar_reads_one_shared_snapshot_whatever_the_tick_order`). Size
+- Anti-roll bar: both wheels of an axle read the snapshot the body's tick (`WheelDrive.tick`,
+  `TowedBody.tick_towed`) latches for every wheel before any wheel ticks (`latch_bar`). A live
+  read is a phantom left-only damper that steers the car (`test_wheel_spin.test_the_bar_reads_one_shared_snapshot_whatever_the_tick_order`). Size
   a rate with `measure_vehicles -- <variant> 45 corner` (4-8 deg roll), then re-run `track`.
 - Suspension force acts along the contact normal, never the chassis up axis, which would push a
   pitched body along. Regression check: `measure_vehicles`' `balance` line.
@@ -156,8 +169,6 @@ truck / trailer / tractor).
   for both would do different things per vehicle. `cycle_implement()` is an unconditional `-> void`.
 - The trailer is a child of the towing unit's PARENT, never the unit, which would apply the parent
   transform twice.
-- `flatbed.tscn` names `towed_body.gd` by path with no `uid=`, so moving the script means
-  hand-editing the scene (`docs/to_investigate.md`).
 
 ## Telemetry
 
@@ -184,14 +195,13 @@ truck / trailer / tractor).
 - Head/brake/turn/LED share one material per group on `material_override`. Markers, flash and
   strobe get a private copy on surface override 0, so `material_override` reads `null` on a
   correctly lit marker (tests use a `_marker_mat()` helper).
-- `LampSet` tolerates a missing lamp path silently; only the trailer, drone and Kenney suites pin
-  the paths.
+- `LampSet` tolerates a missing lamp path silently. Guard: `test_vehicle_catalog` (every variant)
+  and `test_trailer` / `test_drawbar_trailer` (every trailer).
 
 ## Measuring
 
 - Changed gearing, mass, tyres, wheel positions, a diff, a wing or a governor? Re-measure with
   `tools/measure_vehicles.tscn` (run lines: `tools/CLAUDE.md`; reading guide: `docs/vehicles.md`).
-  "top (settled)" can be the time cap, so check it against the power balance.
 - Spawns put the body at `BaseVehicle.rest_ride_height()` with the wheels just touching, so chassis
   contact at t = 0 is a real problem.
 
@@ -212,6 +222,8 @@ truck / trailer / tractor).
   `tractor-kenney`): they would move tuned top speeds for nothing.
 - Open-diff friction (the open diff is an ideal 1.0): bodies that should fight one-wheel peel
   declare an LSD.
-- Fixing the floored 2WD tractor in mud through the diff: the lever is a clutch or a softer
-  low-throttle map.
+- Fixing the floored 2WD tractor in mud: it is the open diff's peel (held at the grip peak it
+  climbs 9.2 %); MFWD and the diff lock are the answer.
+- Converter torque multiplication to speed launches: under 0.1 s on any body behind its reference
+  (`docs/vehicles.md` § Converter).
 - Auto-respawn on overturn (`base_vehicle.gd`).

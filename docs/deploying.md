@@ -38,8 +38,11 @@ The editor rewrites this file on any UI export; CLI export reads it as-is.
 
 - `variant/thread_support` stays `false` — sloppyCAN is plain GitHub Pages (no COOP/COEP),
   so a threaded build never qualifies for SharedArrayBuffer; test inside a non-isolated
-  iframe, not standalone.
-- PWA stays enabled — offline caching plus cross-origin-isolation headers standalone.
+  iframe, not standalone. Unthreaded, the stock HTML shell (`html/custom_html_shell` empty)
+  never needs cross-origin isolation; a threaded build would need it to reload until the
+  service worker controls the page (stock gives up with "Service worker already exists").
+- PWA stays enabled — offline caching plus cross-origin-isolation headers standalone. Both
+  pinned by `tests/test_export_filter.gd`.
 - Never exclude a whole `kit/raw/<pack>/` folder — baked levels inline materials pointing at
   the pack's source textures. `kit/prefabs/*` is safe to exclude.
   `tests/test_export_filter.gd` walks every baked level's dependencies against the filter
@@ -104,15 +107,6 @@ Installs the JS bridge shim, pasted into `export_presets.cfg`; source is
 `src/bridge/web/head_include.html`. Edit the source and re-paste — they must match. `node
 tools/check_head_include.mjs` guards this from preflight and the pre-commit hook.
 
-### The custom HTML shell
-
-`html/custom_html_shell` → `src/bridge/web/shell.html`, a vendored copy of Godot's
-`godot.html`: where stock rejects with "Service worker already exists", ours reloads until
-the new worker actually controls the page (budget 3, `sessionStorage.carlitoCoiReloads`).
-
-On a Godot upgrade: re-extract `godot.html` from the export template and re-apply this
-patch, keeping the `$GODOT_*` placeholders (especially `$GODOT_HEAD_INCLUDE`).
-
 ### Debugging web-only breakage
 
 Reproduce on the actual web build, read the devtools console. Usually shows as `SCRIPT
@@ -145,8 +139,7 @@ Both workflows call `.github/scripts/publish-pages.sh`, rewriting `gh-pages` as 
 force-pushed orphan commit; source history stays on `dev`/`main`. Both share `concurrency:
 gh-pages` so two racing force-pushes can't drop one channel's update.
 
-First visit after a deploy may need one reload while the new worker takes over — self-heals
-(see *The custom HTML shell*).
+First visit after a deploy may need one reload while the new worker takes over — self-heals.
 
 ## When a promote turns out to be bad
 

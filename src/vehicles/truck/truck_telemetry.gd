@@ -17,22 +17,20 @@ const AIR_SPAWN_BAR := 7.0
 ## Below the contract's 'warn' (5.0), so the driver gets a band to stop in (FMVSS 121 / ECE R13).
 const AIR_SPRING_BRAKE_BAR := 3.0
 const AIR_CHARGE_RATE := 0.45      ## bar/s the compressor makes, engine running only
-const AIR_DRAW_PRIMARY := 1.10     ## bar/s drawn at a full brake application, circuit 1
+## bar one full brake press draws, circuit 1: the pedal's RISE fills the chambers, a held pedal
+## draws nothing more. Above the compressor's 0.45 bar/s, so pumping about once a second drains.
+const AIR_PRESS_PRIMARY := 0.70
 ## Circuit 2 runs off a smaller reservoir, so the pair (SPN 1087/1088) diverges under braking.
+const AIR_PRESS_SECONDARY := 0.55
+const AIR_DRAW_PRIMARY := 1.10     ## bar/s a continuous consumer draws at full demand, circuit 1
 const AIR_DRAW_SECONDARY := 0.85
-## A coupled trailer's draw on these reservoirs, as a fraction of a full brake application (it rides
-## air_step's draw rates, so primary dips further than secondary). Labelled honest model:
-## fixed-time fill, not a pressure-driven charge model.
+## A coupled trailer's draw on these reservoirs, as a fraction of AIR_DRAW_* (so primary dips
+## further than secondary). Labelled honest model: fixed-time fill, not a pressure-driven charge model.
 const TRAILER_AIR_DRAW := 0.75
 ## Seconds to charge a freshly coupled trailer. Net primary rate while charging is
-## 0.45 - 0.825 = -0.375 bar/s, so coupling costs 3 bar; braking while it charges reaches the
-## spring-brake gate in under 3 s.
+## 0.45 - 0.825 = -0.375 bar/s, so coupling costs 3 bar; pumping the brake while it charges
+## reaches the spring-brake gate in a few seconds.
 const TRAILER_CHARGE_S := 8.0
-
-# --- ISO 11992 trailer bus ---------------------------------------------------------------
-## Slip at which the trailer's ABS reports active (EBS21), well above the slip a braked axle
-## settles at. Unsigned: an undriven axle has no traction case to tell from a lock.
-const TRAILER_ABS_SLIP := 0.30
 
 # Retarder math lives on Drivetrain; this class only reports what BaseVehicle applied.
 
@@ -61,12 +59,13 @@ var trailer_abs := false            ## contract 'trailer_abs' (EBS21, off the tr
 
 # --- pure derivations (unit-tested in tests/test_truck.gd) -------------------------------
 
-## One reservoir's step (bar). Charges only while running. Draw is pedal position only. `aux01`
-## (coupled trailer) is a second consumer, clamped separately then summed.
-static func air_step(current: float, brake01: float, running: bool, delta: float,
-		charge_rate: float, draw_rate: float, aux01 := 0.0) -> float:
-	var demand := clampf(brake01, 0.0, 1.0) + clampf(aux01, 0.0, 1.0)
-	var next := current - demand * draw_rate * delta
+## One reservoir's step (bar). Charges only while running. The brake draws `press_bar` per full
+## press, on the pedal's rise since last tick only: holding costs nothing, pumping drains. `aux01`
+## (coupled trailer) is a continuous consumer at `draw_rate` bar/s per unit of demand.
+static func air_step(current: float, brake01: float, prev_brake01: float, running: bool,
+		delta: float, charge_rate: float, press_bar: float, draw_rate: float, aux01 := 0.0) -> float:
+	var rise := maxf(0.0, clampf(brake01, 0.0, 1.0) - clampf(prev_brake01, 0.0, 1.0))
+	var next := current - rise * press_bar - clampf(aux01, 0.0, 1.0) * draw_rate * delta
 	if running:
 		next += charge_rate * delta
 	return clampf(next, 0.0, AIR_MAX_BAR)
@@ -110,12 +109,6 @@ static func axle_load_kg(suspension_force_n: float) -> float:
 static func trailer_brake_blend(brake01: float, retarder_pct: int) -> float:
 	var retarder_share := clampf(float(retarder_pct) / 100.0, 0.0, 1.0) * Drivetrain.RETARDER_MAX_FRAC
 	return clampf(clampf(brake01, 0.0, 1.0) + retarder_share, 0.0, 1.0)
-
-
-## EBS21: is the trailer's ABS active? `max_slip` is the worst |longitudinal slip| across the
-## trailer's RayWheels this tick (undriven, so slip is a lock).
-static func trailer_abs_active(max_slip: float) -> bool:
-	return max_slip > TRAILER_ABS_SLIP
 
 
 ## Publish the bobtail state on the whole trailer bus: false/0 on every signal.

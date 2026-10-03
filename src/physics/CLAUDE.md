@@ -1,8 +1,7 @@
 # Collision layers — rules
 
-`collision_layers.gd` is the declaration, `preload`ed (never `class_name`d; whether that is
-needed is open in `docs/to_investigate.md`). It is a bake input: a comment edit re-stales every
-level.
+`collision_layers.gd` is the declaration. It is a bake input: a code edit (not a whole-line
+comment) re-stales every level.
 
 - **The seven bits are FROZEN**: they are written into `project.godot`'s `[layer_names]`, every
   `.baked.scn` and `cargo_payload.tscn`. A new layer appends at bit 8+; none is renumbered.

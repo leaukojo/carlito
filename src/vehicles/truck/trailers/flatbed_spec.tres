@@ -16,8 +16,9 @@
 ;   - spring_rate 145000 is sized so the 10 224 kg the bogie actually carries compresses it 0.115 m
 ;     of its 0.32 m travel (36 %). A spring sized for the FULL mass rides on its stops.
 ;   - brake_torque 6623 is load-apportioned, not copied: 16.72 kN per trailer wheel against 26.5 kN
-;     per tractor wheel, so 10500 * 16.72 / 26.5. A trailer braking harder per tonne than the unit
-;     pulling it jackknifes the rig under braking.
+;     per tractor wheel, so 10500 * 16.72 / 26.5: 1.10 x its own static wheel load on all four
+;     (test_trailer pins the ratio). The 26.5 kN reference is no tractor state, so the ends do NOT
+;     brake alike; each end's ABS (abs_equipped) holds whatever its own tyres cannot.
 ;   - handbrake_torque 1656 is the bogie's SPRING PARKING BRAKE, a quarter of this trailer's own
 ;     service brake like every trailer here (derivation: box_spec.tres). Both scale with what the
 ;     bogie carries, so all four rigs hold the same ~24 % grade.
@@ -46,6 +47,7 @@ rest_length = 0.32
 spring_rate = 145000.0
 damper_bump = 7700.0
 damper_rebound = 10400.0
+anti_roll_rate = 145000.0
 max_suspension_force = 70000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 0.8
@@ -53,6 +55,7 @@ mu_lat = 0.75
 load_sensitivity = 0.08
 brake_torque = 6623.0
 handbrake_torque = 1656.0
+abs_equipped = true
 
 [resource]
 script = ExtResource("1_spec")

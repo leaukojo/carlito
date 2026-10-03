@@ -25,11 +25,13 @@
 ;     wheel compresses it 0.115 m of its 0.32 m travel (36 %), the same fraction every trailer sits
 ;     at. Re-derive it whenever the share moves (weight on the plate is weight off the bogie), or
 ;     the trailer rides high on an over-stiff spring; one sized for the full mass rides on its
-;     stops.
+;     stops. anti_roll_rate equals it on all four trailers (test_trailer):
+;     ~1.7 deg of lean at 0.2 g.
 ;   - brake_torque 11355 is load-apportioned by the family's one formula, never copied:
-;     10500 * (per-trailer-wheel kN / 26.5 kN per tractor wheel) = 10500 * 28.66 / 26.5, so every
-;     trailer brakes at the same fraction of what it carries as the unit pulling it. Re-evaluate it
-;     whenever the tractor's service brake moves (see semi_spec.tres).
+;     10500 * (per-trailer-wheel kN / 26.5 kN per tractor wheel) = 10500 * 28.66 / 26.5, which is
+;     1.10 x its own static wheel load on all four (test_trailer pins the ratio). The 26.5 kN
+;     reference is no tractor state, so the ends do NOT brake alike; each end's ABS
+;     (abs_equipped) holds whatever its own tyres cannot.
 ;   - handbrake_torque 2839 IS THE RIG'S PARKING BRAKE. A semi-trailer's spring brakes sit on every
 ;     axle of the bogie and are applied by the same dash control as the tractor's; with
 ;     handbrake_torque 0 the rig is held by TWO tractor wheels and runs away downhill. It is a
@@ -63,6 +65,7 @@ rest_length = 0.32
 spring_rate = 249000.0
 damper_bump = 13100.0
 damper_rebound = 17650.0
+anti_roll_rate = 249000.0
 max_suspension_force = 110000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 0.8
@@ -70,6 +73,7 @@ mu_lat = 0.75
 load_sensitivity = 0.08
 brake_torque = 11355.0
 handbrake_torque = 2839.0
+abs_equipped = true
 
 [resource]
 script = ExtResource("1_spec")

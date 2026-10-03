@@ -1,4 +1,4 @@
-[gd_scene load_steps=30 format=3]
+[gd_scene load_steps=30 format=3 uid="uid://di03mghx6uk58"]
 
 ; Tri-axle flatbed semi-trailer. Hand-built low-poly (Kenney ships no trailers at all), flat
 ; boxes and 10-segment cylinders to match the kit's flat-shaded look.
@@ -37,7 +37,7 @@
 ; flatbed_spec.tres, wheels are the kit's own truck wheel scaled on the INSTANCE (RayWheel
 ; overwrites each Wheels/* root transform every tick, so the scale must ride the child).
 
-[ext_resource type="Script" path="res://src/vehicles/base/towed_body.gd" id="1_towed"]
+[ext_resource type="Script" uid="uid://brucikku8it5m" path="res://src/vehicles/base/towed_body.gd" id="1_towed"]
 [ext_resource type="Resource" path="res://src/vehicles/truck/trailers/flatbed_spec.tres" id="2_spec"]
 [ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="3_wheel"]
 
@@ -409,31 +409,37 @@ mesh = SubResource("MeshLensAmber")
 [node name="Wheels" type="Node3D" parent="."]
 
 [node name="WheelL1" type="Node3D" parent="Wheels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.72, -0.69, 4.4)
 
 [node name="Wheel" parent="Wheels/WheelL1" instance=ExtResource("3_wheel")]
 transform = Transform3D(0.36, 0, 0, 0, 0.36, 0, 0, 0, 0.36, 0, 0, 0)
 
 [node name="WheelR1" type="Node3D" parent="Wheels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.72, -0.69, 4.4)
 
 [node name="Wheel" parent="Wheels/WheelR1" instance=ExtResource("3_wheel")]
 transform = Transform3D(0.36, 0, 0, 0, -0.36, 0, 0, 0, -0.36, 0, 0, 0)
 
 [node name="WheelL2" type="Node3D" parent="Wheels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.72, -0.69, 5.2)
 
 [node name="Wheel" parent="Wheels/WheelL2" instance=ExtResource("3_wheel")]
 transform = Transform3D(0.36, 0, 0, 0, 0.36, 0, 0, 0, 0.36, 0, 0, 0)
 
 [node name="WheelR2" type="Node3D" parent="Wheels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.72, -0.69, 5.2)
 
 [node name="Wheel" parent="Wheels/WheelR2" instance=ExtResource("3_wheel")]
 transform = Transform3D(0.36, 0, 0, 0, -0.36, 0, 0, 0, -0.36, 0, 0, 0)
 
 [node name="WheelL3" type="Node3D" parent="Wheels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.72, -0.69, 6)
 
 [node name="Wheel" parent="Wheels/WheelL3" instance=ExtResource("3_wheel")]
 transform = Transform3D(0.36, 0, 0, 0, 0.36, 0, 0, 0, 0.36, 0, 0, 0)
 
 [node name="WheelR3" type="Node3D" parent="Wheels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.72, -0.69, 6)
 
 [node name="Wheel" parent="Wheels/WheelR3" instance=ExtResource("3_wheel")]
 transform = Transform3D(0.36, 0, 0, 0, -0.36, 0, 0, 0, -0.36, 0, 0, 0)

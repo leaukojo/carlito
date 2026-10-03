@@ -25,6 +25,6 @@ allow_attach_key = true
 arena = "flatland"
 course = "res://src/challenges/courses/truck_couple_deliver_course.tscn"
 briefing = "Coupling has no CAN signal, so E still works here. Couple, confirm trailer_connected, then stop the rig in the box in time."
-hint = "Coupling costs air pressure and takes a few seconds to recharge -- don't brake hard right away."
+hint = "Coupling costs air pressure while the trailer charges, and every brake press spends more -- brake once and hold it, don't pump."
 par_s = 35.0
 goals = Array[ExtResource("1_goal")]([SubResource("Resource_connected"), SubResource("Resource_box")])

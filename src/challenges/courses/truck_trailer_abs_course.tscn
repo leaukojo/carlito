@@ -20,7 +20,7 @@ transparency = 1
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_box"]
 material = SubResource("StandardMaterial3D_box")
-size = Vector2(6, 240)
+size = Vector2(6, 80)
 
 [node name="TruckTrailerAbsCourse" type="Node3D"]
 
@@ -44,11 +44,11 @@ cast_shadow = 0
 mesh = SubResource("PlaneMesh_gate")
 
 [node name="Box" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -600, 0, -270)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -600, 0, -190)
 script = ExtResource("3_zone")
-size = Vector3(6, 6, 240)
+size = Vector3(6, 6, 80)
 
 [node name="BoxMark" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -600, 0.03, -270)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -600, 0.03, -190)
 cast_shadow = 0
 mesh = SubResource("PlaneMesh_box")

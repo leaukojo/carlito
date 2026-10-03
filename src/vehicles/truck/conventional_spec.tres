@@ -31,9 +31,9 @@
 ; CENTRE OF MASS HEIGHT 0.90 IS THE CAB-OVER'S NUMBER for the same reasons and lands the same place
 ; on this geometry (~1.03 m over the road). Only z separates the two units; see semi_spec.tres.
 ;
-; SPRING RATES, DAMPING AND TRAVEL ARE THE SEMI'S (240000 front / 360000 rear over 0.32 m, rear
-; dampers 24700 / 28800), and they land the same band here: the fixed 0.50 m kingpin offset, not
-; the wheelbase, sets the split, so the coupled rear corner carries about 3.5-4.7 t depending on the
+; SPRING RATES, DAMPING, TRAVEL AND THE ANTI-ROLL BAR ARE THE SEMI'S (240000 front / 360000 rear
+; over 0.32 m, rear dampers 24700 / 28800, bar 480000), and they land the same band here: the
+; fixed 0.50 m kingpin offset, not the wheelbase, sets the split, so the coupled rear corner carries about 3.5-4.7 t depending on the
 ; trailer. See semi_spec.tres for the derivation and damping ratios.
 ;
 ; load_sensitivity 0.08: commercial radials lose ~8 % of mu per doubling of load past the
@@ -65,6 +65,7 @@ damper_rebound = 15800.0
 spring_rate_rear = 360000.0
 damper_bump_rear = 24700.0
 damper_rebound_rear = 28800.0
+anti_roll_rate = 480000.0
 max_suspension_force = 120000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 0.8
@@ -73,6 +74,7 @@ load_sensitivity = 0.08
 handbrake_grip = 1.0
 brake_torque = 10500.0
 handbrake_torque = 4800.0
+abs_equipped = true
 max_steer_deg = 24.0
 min_steer_frac = 0.21
 steer_falloff_speed = 29.0
@@ -83,20 +85,20 @@ mass = 8000.0
 center_of_mass = Vector3(0, 0.9, -1.30)
 ground_drive = SubResource("Resource_grounddrive")
 trailer_bus_equipped = false
-torque_curve = PackedVector2Array(700, 975, 1200, 1290, 1800, 1500, 2400, 1440, 2800, 1120, 3200, 375)
-idle_rpm = 700.0
-redline_rpm = 3200.0
-gear_ratios = PackedFloat32Array(6.5, 3.7, 2.4, 1.6, 1.2, 1)
+torque_curve = PackedVector2Array(600, 1500, 780, 1985, 1170, 2308, 1560, 2215, 1820, 1723, 2080, 577)
+idle_rpm = 600.0
+redline_rpm = 2080.0
+gear_ratios = PackedFloat32Array(6.5, 3.7, 2.4, 1.6, 1.2, 0.69)
 reverse_ratio = 6.0
-final_drive = 4.5
+final_drive = 2.925
 efficiency = 0.9
 engine_brake_frac = 0.15
 shift_cut_s = 0.4
-shift_up_rpm = 2600.0
-shift_down_rpm = 1200.0
+shift_up_rpm = 1690.0
+shift_down_rpm = 780.0
 ; ROAD-SPEED GOVERNOR 105 km/h: North American practice (no federal limiter mandate; fleets that
 ; fit one set it around 65 mph). Higher than the European unit by design, like the ISO 7638 split.
-; Inert as geared (the unit's drag-limited top speed is below it).
+; It binds: the overdrive 6th would run on to ~140 km/h at redline; ~1560 rpm at 105.
 speed_limit_kmh = 105.0
 ; HIGH-SPEED STEERING FALLOFF, the same 0.21 x 24 = 5.0 deg floor as the cab-over (same rack and
 ; mass). Only the floor SPEED differs: 29 m/s tracks this unit's higher 105 km/h limiter, so

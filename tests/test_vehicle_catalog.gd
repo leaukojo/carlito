@@ -4,6 +4,7 @@ extends GdUnitTestSuite
 
 const DrivetrainScript := preload("res://src/vehicles/base/drivetrain.gd")
 const VehicleSpecScript := preload("res://src/vehicles/base/vehicle_spec.gd")
+const Layers := preload("res://src/physics/collision_layers.gd")
 
 
 # --- catalog structure --------------------------------------------------------
@@ -79,6 +80,56 @@ func test_every_variant_scene_has_a_hood_cam_marker() -> void:
 				"%s has no HoodCam marker" % variant).is_true()
 
 
+## LampSet skips a path that resolves to nothing (or to the wrong node type) silently, so a lens
+## renamed in a scene or a regen is a dark lamp with nothing to say so. Resolved on an instance
+## that never enters the tree: the paths name scene-authored nodes, not ones `_ready` builds.
+func test_every_variant_lamp_path_resolves_in_its_own_scene() -> void:
+	# The plain drone loads drone-mk2's spec and has none of its lamps, by design
+	# (test_drone_indicators pins them on the mk2); the skip holds only while the spec is shared.
+	assert_str(_spec_of("drone").resource_path).is_equal(_spec_of("drone-mk2").resource_path)
+	for variant in VehicleCatalog.VARIANTS:
+		if variant == "drone":
+			continue
+		var body := (load(VehicleCatalog.scene_of(variant)) as PackedScene).instantiate()
+		var spec: VehicleSpecScript = body.get("spec")
+		for p in spec.headlight_paths:
+			assert_object(body.get_node_or_null(p)) \
+					.override_failure_message("%s: headlight_paths -> %s is no SpotLight3D" % [
+						variant, p]) \
+					.is_instanceof(SpotLight3D)
+		var groups := {
+			"head_lamp_paths": spec.head_lamp_paths,
+			"brake_lamp_paths": spec.brake_lamp_paths,
+			"turn_left_paths": spec.turn_left_paths,
+			"turn_right_paths": spec.turn_right_paths,
+			"steady_lamp_paths": spec.steady_lamp_paths,
+			"flash_lamp_paths": spec.flash_lamp_paths,
+			"strobe_lamp_paths": spec.strobe_lamp_paths,
+			"led_lamp_paths": spec.led_lamp_paths,
+		}
+		for group_name in groups:
+			for p: NodePath in groups[group_name]:
+				assert_object(body.get_node_or_null(p)) \
+						.override_failure_message("%s: %s -> %s is no MeshInstance3D" % [
+							variant, group_name, p]) \
+						.is_instanceof(MeshInstance3D)
+		body.free()
+
+
+## The water kill volume masks VEHICLE (test_collision_layers pins that side); this pins the other
+## side, on every body after its `_ready` — BaseVehicle's or a family override that skips `super`.
+func test_every_variant_sits_on_the_vehicle_layer() -> void:
+	for variant in VehicleCatalog.VARIANTS:
+		var body := (load(VehicleCatalog.scene_of(variant)) as PackedScene).instantiate() \
+				as CollisionObject3D
+		add_child(body)
+		assert_int(body.collision_layer) \
+				.override_failure_message("%s is on layer %d, not VEHICLE" % [
+					variant, body.collision_layer]) \
+				.is_equal(Layers.VEHICLE)
+		body.free()
+
+
 # --- the force hierarchy over every generated Kenney spec ---------------------
 
 func test_kenney_specs_keep_force_hierarchy() -> void:
@@ -112,7 +163,8 @@ func test_kenney_specs_keep_force_hierarchy() -> void:
 		var wheel_ceiling: float = spec.mass * 9.8 / maxi(gd.wheel_positions.size(), 1) \
 				* gd.mu_long * gd.wheel_radius
 		var transmissible: float = minf(max_drive, float(driven) * wheel_ceiling)
-		# The assertion: full accel + full brake still stops, on the road rather than on paper.
+		# A total, on paper: a wheel holds only against its own drive, so both pedals held on the
+		# road are InputRouter.brake_override's (docs/vehicles.md § Both pedals).
 		assert_float(total_brake).override_failure_message(
 				"%s: brake %.0f <= the %.0f its %d driven wheels can transmit (peak drive %.0f)"
 				% [variant, total_brake, transmissible, driven, max_drive]).is_greater(transmissible)

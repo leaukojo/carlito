@@ -16,6 +16,13 @@ const GEAR_R := 0xFF
 ## m/s below which S (held with no accel) swaps D->R and W swaps R->D.
 const REVERSE_ENGAGE_SPEED := 0.5
 
+## Brake-throttle override, an engine ECU's (honest model): with both pedals held in a gear, the
+## brake wins once the body moves faster than this (m/s). A wheel stays put only if its own brake
+## beats its own drive, and in gear 1 a rear-driven van's or truck's converter stall torque is 3-4x
+## its driven axle's grip-sized brake (docs/vehicles.md). A standstill press still revs (a stall
+## test); past this speed the throttle cuts, and stays cut until either pedal lifts.
+const BRAKE_OVERRIDE_SPEED := 1.0
+
 ## Cycle lengths, declared once in a leaf module (router must not depend on a vehicle
 ## class, so these can't be read off RefuseBody.Cmd / DroneBus.NODES / DroneModes directly).
 const Counts := preload("res://src/input/subsystem_counts.gd")
@@ -27,6 +34,7 @@ const SHEET_DETENT_COUNT := Counts.SHEET_DETENTS
 
 const LocalSource := preload("res://src/input/sources/local_source.gd")
 const BridgeSource := preload("res://src/input/sources/bridge_source.gd")
+const KeyShaper := preload("res://src/input/key_shaper.gd")
 
 
 var _local_source := LocalSource.new()
@@ -34,6 +42,12 @@ var _bridge_source := BridgeSource.new()
 var _touch_source: Object = null  ## optional on-screen source (touch_controls.gd), if present
 var _vehicle: Node3D = null
 var _current := VehicleInput.new()
+## The keyboard's shaped steer and the two shaped local pedals (KeyShaper), owned here like the
+## toggles. Zero whenever local input is not being polled, so it never resumes mid-travel.
+var _key_steer := 0.0
+var _pedal_accel := 0.0
+var _pedal_brake := 0.0
+var _brake_override := false  ## latched by `brake_override`, both sources alike
 var _lights := 1  ## headlight level owned here so keyboard + touch share one state
 # Local tractor implement state, owned here so keyboard + touch share it; bridge path ignores these.
 var _hitch_up := true  ## true = raised (transport), toggled by the local hitch key
@@ -136,6 +150,16 @@ func reset_vehicle_cycles() -> void:
 	_sheet = 0
 	# Cargo hook clears for the same reason: global key, no local indication.
 	_hardpoint = false
+	# A machine starting over starts with the wheel centred and the feet off the pedals.
+	_reset_key_shaping()
+	_brake_override = false
+
+
+## Zero the shaped keyboard steer and local pedals (KeyShaper).
+func _reset_key_shaping() -> void:
+	_key_steer = 0.0
+	_pedal_accel = 0.0
+	_pedal_brake = 0.0
 
 
 ## The touch UI registers itself as a second local source. It is
@@ -165,27 +189,71 @@ func _physics_process(delta: float) -> void:
 	if _bridge_only and not _dev_keys:
 		_warn_if_keys_locked()
 	if _bridge_drives:
+		_reset_key_shaping()
 		_set_fallback_notice(false)
 		_current = arbitrate_bridge(bridge_raw, _manual_gearbox)
+		_apply_brake_override()
 		_warn_if_ignition_off(bridge_raw)
 		return
 	_clear_ignition_notice()
 	_set_fallback_notice(live)
 	if not live and _bridge_only and not _dev_keys:
 		# Neither local source is polled, so no router toggle advances under the lock either.
+		_reset_key_shaping()
 		_current = locked_idle()
 		return
 	var local := _local_tick(delta, live)
 	_current = blend_local_driving(bridge_raw, local, _manual_gearbox) if live else local
+	_apply_brake_override()
 
 
-## The local path: poll keyboard + touch, advance the router-owned toggles, arbitrate. In
-## fallback (`driving_only`) only the driving group's own edges advance: a toggle whose field the
-## bridge still owns would otherwise latch unseen and take effect the moment the bridge goes away.
+## Cut the throttle while the brake override holds (BRAKE_OVERRIDE_SPEED). The cut rides
+## `throttle`, so the contract's applied throttle reads it on the bus.
+func _apply_brake_override() -> void:
+	var speed: float = _vehicle.get_speed() if _vehicle != null else 0.0
+	_brake_override = brake_override(_brake_override, _current, speed)
+	if _brake_override:
+		_current.throttle = 0.0
+
+
+## Next tick's brake-override latch, pure for tests: set past BRAKE_OVERRIDE_SPEED with both pedals
+## held, kept until either lifts. N never latches: no drive reaches the wheels there, so a braked
+## machine may still rev (the tractor's PTO with the brakes on).
+static func brake_override(latched: bool, input: VehicleInput, speed: float) -> bool:
+	if input.brake <= 0.0 or input.throttle == 0.0 or input.gear_request == GEAR_N:
+		return false
+	return latched or absf(speed) > BRAKE_OVERRIDE_SPEED
+
+
+## The local path: poll keyboard + touch, shape the keys, advance the router-owned toggles,
+## arbitrate. In fallback (`driving_only`) only the driving group's own edges advance: a toggle whose
+## field the bridge still owns would otherwise latch unseen and take effect the moment the bridge
+## goes away.
 func _local_tick(delta: float, driving_only := false) -> VehicleInput:
+	var speed := 0.0
+	var steer_speed := 0.0
+	var gear := GEAR_N
+	var brake_apply_s := KeyShaper.BRAKE_APPLY_S
+	if _vehicle != null:
+		speed = _vehicle.get_speed()
+		steer_speed = _vehicle.key_steer_speed()
+		gear = _vehicle.get_gear_byte()
+		if _vehicle.key_pedals_are_a_stick():
+			brake_apply_s = KeyShaper.ACCEL_APPLY_S
 	var raw := _local_source.poll(delta)
+	# Keys are on/off (KeyShaper). The keyboard's steer is shaped before the merge, since the touch
+	# stick is analog and passes through; both pedals after it, since every local pedal is a key.
+	_key_steer = KeyShaper.steer_step(_key_steer, float(raw.get(&"steer", 0.0)), steer_speed,
+			delta)
+	raw[&"steer"] = _key_steer
 	if _touch_source != null:
 		raw = merge_local(raw, _touch_source.poll())
+	_pedal_accel = KeyShaper.pedal_step(_pedal_accel, float(raw.get(&"accel", 0.0)),
+			KeyShaper.ACCEL_APPLY_S, delta)
+	_pedal_brake = KeyShaper.pedal_step(_pedal_brake, float(raw.get(&"brake_reverse", 0.0)),
+			brake_apply_s, delta)
+	raw[&"accel"] = _pedal_accel
+	raw[&"brake_reverse"] = _pedal_brake
 	if driving_only:
 		raw = driving_edges_only(raw)
 	# Single headlight owner: either source's cycle edge advances the shared level.
@@ -242,11 +310,6 @@ func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 	raw[&"pantograph"] = _pantograph
 	raw[&"doors"] = _doors
 	raw[&"body_cmd"] = _body_cmd
-	var speed := 0.0
-	var gear := GEAR_N
-	if _vehicle != null:
-		speed = _vehicle.get_speed()
-		gear = _vehicle.get_gear_byte()
 	return arbitrate_local(raw, speed, gear)
 
 
@@ -400,8 +463,8 @@ static func locked_idle() -> VehicleInput:
 
 
 ## Local (keyboard/gamepad) arbitration, pure for tests. Throttle only from accel; brake
-## never throttle; full accel + full brake both pass through (stopping is brake > accel's
-## job); key gates throttle. Reverse UX: S brakes while moving, engages R near standstill;
+## never throttle; full accel + full brake both pass through (the router's `brake_override`
+## settles them); key gates throttle. Reverse UX: S brakes while moving, engages R near standstill;
 ## W in R brakes, then re-engages D1 near standstill.
 static func arbitrate_local(raw: Dictionary, speed: float, gear_byte: int,
 		key: int = KEY_IGNITION) -> VehicleInput:
@@ -552,6 +615,8 @@ static func arbitrate_bridge(vals: Dictionary, manual := false) -> VehicleInput:
 	out.pto_mode = int(vals.get("pto_mode", 0))
 	out.diff_lock = bool(vals.get("diff_lock", false))
 	out.fwd_drive = bool(vals.get("fwd_drive", false))
+	# Car traction control: bridge-only, absent → on (the fitted system's rest state).
+	out.tcs_off = bool(vals.get("tcs_off", false))
 	# Hydraulic remote: bridge-only, absent → valve closed.
 	out.scv_flow = clampf(float(vals.get("scv_flow", 0.0)), 0.0, 1.0)
 	# Flight controls, already %→unit normalized in bridge_source; absent → neutral/disarmed/

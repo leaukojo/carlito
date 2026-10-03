@@ -23,7 +23,8 @@ const TIP_COM_SHIFT_Z := 0.90
 ##
 ## THE CONSEQUENCE IS THE POINT: the raised body puts the load 2.80 m over the road, and on the
 ## family's 0.72 m half-track that is a ~0.26 g rollover threshold. The interlock refuses the RAISE
-## direction only, so driving away with the body up is a real pose and rolls the rig in a turn.
+## direction only, so driving away with the body up is a real pose: `TowHost.BODY_UP_CAP_KMH` holds
+## it to a crawl, where full lock cannot reach that.
 const TIP_COM_RISE_Y := 1.50
 
 ## Top-hinged: swings open once the body has lifted enough.

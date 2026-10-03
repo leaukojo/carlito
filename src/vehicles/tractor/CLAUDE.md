@@ -53,11 +53,13 @@ Tour: `docs/heavy_vehicles.md` § Tractor, implement & ISOBUS and § The drawbar
   pin line (ground y = -0.21); geometry is measured off the scene. Moving a merged leaf mesh
   means listing it in `static_merge_skip()`.
 - `spin_from_pto` ratio is cosmetic (540 rpm aliases at 60 fps); published rpm stays honest.
+- The foot brake is rear-only (`brake_bias_front` 0) and engages MFWD while held
+  (`brake_engages_front_axle`), so the shaft brakes the fronts and `fwd_drive_state` reads true.
+  Guard: `test_the_foot_brake_engages_the_front_axle_and_brakes_only_the_rears`.
 - `wheel_speed` reads the REAR axle only (MFWD changes the driven set). `pto_mode` is a gearbox
   off `PTO_RATED_RPM`; `test_tractor` pins it against redline.
 - Absent signals publish a real 0 / false every tick.
 - `cycle_implement()` is duck-typed: `boot.gd` / `VehicleCatalog` never learn implements exist.
-- `ImplementCatalog.first()` stays three-point: `measure_vehicles` divides by `spec.mass`.
 - `scv_flow` has a local key (Q), binary, gated by `running`; owner `InputRouter._scv`.
 
 ## Rejected / expected

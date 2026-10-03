@@ -1,0 +1,8 @@
+# Repo-path prefixes that can hold a bake input: a change under one (bar *.md) runs the
+# stale-bake check in pre-commit gate 4 and tools/stop_freshness_hook.ps1. Pinned against
+# every registered level's real input set (BAKE_CODE_INPUTS included) by
+# tests/test_bake.gd test_bake_paths_cover_every_bake_input.
+src/levels/
+kit/
+src/physics/collision_layers.gd
+src/vehicles/tractor/implements/

@@ -12,12 +12,17 @@ are shared in `src/vehicles/base/` (`src/vehicles/CLAUDE.md` § Towing); only tr
   a remembered measurement. Guard: `test_truck` pins 0.7-1.6 m/s² per shipped spec.
   The floor tracks the tyre, so never raise `RETARDER_MAX_FRAC` to hold a figure.
 - Anti-lock is a SLIP limit (`RETARDER_SLIP_TARGET`), never a force cap at mu*N*r: a locked wheel
-  already makes that torque. Guard: `test_the_retarder_can_never_skid_the_driven_axle`.
+  already makes that torque. Guard: `test_the_retarder_can_never_skid_the_driven_axle`. Its cap reads
+  the wheel's own `spin_compliance`, the same step the brake goes through.
+- `trailer_abs` is the trailer's ABS holding a wheel back (`TowedBody.abs_active`), never a slip
+  threshold: EBS21 reports the device at work (rule 3), and a threshold is a number no trailer has.
+  Guard: `test_abs_reads_any_wheel_held_back_and_not_an_average`.
 - Air is a GATE, not a bar: below `AIR_SPRING_BRAKE_BAR` on either circuit the rear `omega` is pinned
   to 0 (a lock; first-gear drive torque beats `brake_torque`). `warn` stays above the gate.
 - The tach falling to idle at the gate is correct (lugging); no throttle cut. The gate does not
-  zero `retarder_state` (it ran). The draw is pedal position only. Losing air has no ramp (accepted).
-- Recouple after a heavy stop can reach the gate (margin ~0.1 bar): `docs/to_investigate.md`.
+  zero `retarder_state` (it ran). The brake draws per press (the pedal's rise), never while held:
+  pumping drains, so `AIR_PRESS_*` stays above `AIR_CHARGE_RATE` x 1 s (`test_truck`). Losing air
+  has no ramp (accepted).
 
 ## Telemetry
 
@@ -45,9 +50,11 @@ are shared in `src/vehicles/base/` (`src/vehicles/CLAUDE.md` § Towing); only tr
   `exclude_nodes_from_collision` stays true; yaw stop is `Articulation.JACKKNIFE_MAX_DEG`, one
   constant for joint and fallback.
 - Yaw friction is Coulomb (`TowHost._apply_yaw_friction`), never a spring toward zero or the joint's
-  angular motor (a velocity target, it fights the stop).
-- Wheelbase or COM change = re-run `tools/measure_semi_launch.tscn` (steer-axle load through launch,
-  `docs/heavy_vehicles.md` § Truck sizing).
+  angular motor (a velocity target, it fights the stop). Its one-tick cap is `YAW_CAP_SHARE` of the
+  PAIR's moment (`TowHost.yaw_pair_moment`), never one body's, never the whole stop (the tyres take
+  the rest; `test_a_coupled_rig_standing_still_stays_mirror_symmetric`).
+- Wheelbase or COM change: CI runs `tools/measure_semi_launch.tscn -- <unit> strict`, which fails
+  when a steer wheel drops under 8.5 kN in the launch (`docs/heavy_vehicles.md` § Truck sizing).
 - Rear dampers (`damper_*_rear`) are explicit per spec; the fallback sizes for the bobtail corner.
 - Mass: trailer:tractor <= 3:1 (`test_the_heaviest_trailer_holds_the_verified_mass_ratio`);
   `kingpin_share` 0.25-0.30 on every trailer (`test_every_trailer_puts_a_realistic_load_on_the_fifth_wheel`).
@@ -61,8 +68,13 @@ are shared in `src/vehicles/base/` (`src/vehicles/CLAUDE.md` § Towing); only tr
 ## Rollover
 
 - COM sits at real height; never lower a COM to buy a rollover threshold back. Levers:
-  `GroundDriveSpec.anti_roll_rate` (0 today), `mu_lat`. Thresholds: `docs/heavy_vehicles.md` § Truck sizing.
-- Narrow track (1.44 m) and the speed-taper steer lock are reopened: `docs/to_investigate.md`.
+  `GroundDriveSpec.anti_roll_rate`, `mu_lat`. Thresholds: `docs/heavy_vehicles.md` § Truck sizing.
+- A trailer's bar is its own spring rate (`test_trailer`); the tractor's must keep the tractor
+  leaning no further than its trailer, or it twists the trailer over through the ±1.5° plate.
+- A raised body caps the rig through `TowHost.speed_cap_kmh` -> `Drivetrain.speed_cap_kmh`, never a
+  throttle cut in the vehicle.
+- The speed-taper steer lock stays loose (a full-lock step rolls the box from 25 km/h): a keypress
+  is shaped in `src/input/`, never cured by tightening the taper.
 
 ## Trailer authoring, pulling away
 

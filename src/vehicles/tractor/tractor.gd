@@ -192,6 +192,7 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	if _drawbar != null:
 		_drawbar.tick_towing(input, input.brake, spool, pto_on, t.pto_rpm,
 				telemetry.speed, delta, _grip_terrains)
+		drivetrain.speed_cap_kmh = _drawbar.speed_cap_kmh()
 	# Draft force on the chassis while the linkage works in soil. Nothing above reads it:
 	# engine_load and wheel_slip are its consequences from prior ticks.
 	t.draft_force = roundi(TractorTelemetry.draft_pct(

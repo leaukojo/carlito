@@ -31,10 +31,11 @@ VehicleTelemetry` adds chassis, body-network and trailer-bus "out" fields.
 ### Air, retarder, axle load
 
 - Air gates the brakes: two reservoirs (SPN 1087/1088) charge while the engine runs, draw
-  down under braking; circuit 2 is smaller so the pair diverges. Below
+  down per brake press (**0.70 / 0.55 bar** a full press; a held pedal draws nothing more, so
+  pumping drains and holding does not); circuit 2 is smaller so the pair diverges. Below
   `TruckTelemetry.AIR_SPRING_BRAKE_BAR` (**3 bar**) on either circuit, spring brakes apply
   and the truck can't move; `warn` (**5 bar**) is a band to stop in first. Gate reads the
-  minimum of the two circuits; draw is pedal position only, no ramp. Rationale:
+  minimum of the two circuits; losing air has no ramp. Rationale:
   `truck/CLAUDE.md` § Brakes, retarder, air.
 - Retarder is real driveline torque, not an indicator bit: math on `Drivetrain`,
   `WheelDrive` adds it to driven wheels' brake torque, `RayWheel` integrates it,
@@ -101,8 +102,9 @@ the conventional carries none. No trailer of the four adds a signal to either.
 - Fifth wheel = `Generic6DOFJoint3D` at the scene's `Kingpin` marker
   (`TowHost._build_joint`, `FifthWheel` profile): linear axes locked, yaw free to **75°**
   jackknife stop, pitch **±15°**, roll **±1.5°**. A 25% grade break swings it -9.0° to
-  +12.8° (15° clears it). Kinematic fallback (`Articulation`) is written/tested but not
-  taken — deaf to trailer-side forces.
+  +12.8° (15° clears it); the rig meets one rolling or with speed, since from rest the box rig
+  pulls away on 16 % at most (`docs/vehicles.md` § Gradeability). Kinematic fallback
+  (`Articulation`) is written/tested but not taken — deaf to trailer-side forces.
 - Yaw limit models trailer-against-cab contact, not a fifth-wheel property (plate and nose
   overlap while coupled, so collision can't arbitrate it). `Articulation.JACKKNIFE_MAX_DEG`
   (**75°**) serves both joint and fallback. Rules: `truck/CLAUDE.md` § Fifth wheel, mass,
@@ -115,8 +117,17 @@ the conventional carries none. No trailer of the four adds a signal to either.
 
 - Wheelbase is sized by the launch: the trailer pulls at the 1.05 m kingpin, a lever on the steer
   axle. A 2.10 m wheelbase lifts both steer wheels for ~1 s of a gear-1 launch; the shipped
-  3.60 m (cab-over) and 4.40 m (conventional) keep >= 8.5 kN on the steer
-  axle (`tools/measure_semi_launch.tscn`, re-read after any wheelbase or COM move).
+  3.60 m (cab-over) and 4.40 m (conventional) keep >= 8.5 kN on each steer wheel (9.0 and
+  12.7 kN coupled to the box, P2 and P6, 2026-10-02). Gate: CI runs
+  `tools/measure_semi_launch.tscn -- <unit> strict` on both units.
+- Gearing: gears 1-5 span the 600-2080 rpm range; 6th is a 0.69 overdrive, so the governor, not
+  the redline, sets top speed. Coupled to the box, measured 2026-10-02 (`measure_vehicles -- <unit>
+  coast`): cab-over 88.4 km/h at 1323 rpm, conventional 103.1 km/h at 1544 rpm, coast-down 0.129 /
+  0.153 m/s^2. Upshift 1690 lands 6th at 972 rpm, clear of the 780 downshift.
+- Aero: the coupled cab-over + box declares 2.78 m^2 on a drawn silhouette of ~5.0 m^2 (1.92 m wide,
+  box roof ~2.6 m over the road), a whole-rig Cd of 0.55 against 0.48-0.54 measured on EU
+  tractor-trailers at zero yaw (ICCT 2019), and 1.27x its bobtail against ~1.2-1.4x real. A real
+  rig's ~5 m^2 is the half-scale body, not the trailer's wake figure (checked 2026-10-03).
 - Plate share: `center_of_mass.z` 3.798 puts 27 % of each trailer on the fifth wheel (a real van
   trailer: 25-30 %), ~90 % of it on the single driven axle: the 4x2's traction budget. Below the
   band the rig is grip-limited, not power-limited.
@@ -124,19 +135,33 @@ the conventional carries none. No trailer of the four adds a signal to either.
   zeta = c / (2 sqrt(k_rear * m)) at 0.30 (box) to 0.40 (flatbed) on the coupled rear corner
   (3.5-4.7 t) and 0.47-0.55 at the bobtail corner (1.9 t); the `GroundDriveSpec` fallback preserves
   the front's ratio at the bobtail mass instead. Laden band pinned in `test_trailer`.
-- Rollover: `rollover_g = half_track / com_height_over_road`, half-track 0.72 m; a body rolls
-  before it slides when that is under `mu_lat` 0.75:
+- Rollover: `rollover_g = half_track / com_height_over_road`, half-track 0.72 m (the tractor's
+  drive axle 0.62), is the rigid-body ceiling; a body rolls before it slides when that is under
+  `mu_lat` 0.75. Springs let the body lean, which carries the COM outboard and lifts a wheel
+  earlier; the anti-roll bars (`anti_roll_rate`) hold the lean. Every trailer axle carries one at
+  its own spring rate (`test_trailer`), each tractor unit 480 kN/m, twice its front spring: a
+  softer tractor out-leans its trailer, and past the plate's ±1.5° roll stop it twists the trailer
+  over (at 240 kN/m the flatbed's trailer lifted at 0.42 g). A full-lock step (the rack reaches
+  full lock in 0.56 s) overshoots the roll. Measured 2026-10-02 with `measure_semi_launch -- semi
+  trailer=<body>` (P7: each body's own lateral g at its first wheel lift; `ramp` holds 40 km/h and
+  winds the lock on over 20 s, the slow tip point; the default is the step at 40 km/h; `tip_kmh=`
+  for the lowest step speed that rolls the rig; the conventional's slow tips read within 0.03 g):
 
-  | Body | COM over road | rollover_g |
-  | --- | --- | --- |
-  | Box | 1.60 m | 0.45 |
-  | Tanker | 1.50 m | 0.48 |
-  | Tipper | 1.30 m (parked); 2.80 m raised | 0.55; 0.26 |
-  | Flatbed | 0.90 m | 0.80 |
-  | Tractor unit (bobtail) | 1.09 m (spec header also says ~1.03; contested, `docs/to_investigate.md`) | 0.66 |
+  | Body | COM over road | rollover_g | slow tip | lean at 0.2 g | step at 40 km/h lifts at | full-lock step rolls from |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | Box | 1.60 m | 0.45 | 0.35 g | 1.7° | 0.38 g | 25 km/h |
+  | Tanker | 1.50 m | 0.48 | 0.38 g | 1.6° | 0.41 g | 30 km/h (lifts at 25) |
+  | Tipper | 1.30 m (parked) | 0.55 | 0.45 g | 1.3° | 0.41 g | 30 km/h (lifts at 25) |
+  | Flatbed | 0.90 m | 0.80 | 0.50 g | 0.8° | 0.53 g | 60 km/h (lifts at 25) |
+  | Tractor unit (bobtail) | 1.10 m (1.03 coupled) | 0.65 | slides at ~0.55 g | 0.5° | 0.69 g | 35 km/h |
 
-  The 1.44 m track is the compromise (a real artic runs ~2.0 m, so every threshold reads ~25 %
-  low); widening it moves every wheel station and authored wheel visual. `BaseVehicle.is_overturned()`
+  Lean is the trailer's (the bobtail's own). The flatbed's slow tip is its trailer's, with the
+  tractor's inner wheels following at 0.53 g. A raised tipper puts its load 2.80 m over the road
+  (~0.26 g), so a body off its rest caps the rig at 5 km/h (`TowHost.speed_cap_kmh` into
+  `Drivetrain.speed_cap_kmh`, a notice on the edge), where full lock makes ~0.03 g.
+
+  The 1.44 m track is the compromise (a real artic runs ~2.0 m, so every ceiling reads ~25 % low);
+  widening it moves every wheel station and authored wheel visual. `BaseVehicle.is_overturned()`
   and the F3 overlay report a rollover; there is no auto-reset.
 
 ### TowHost, cycling and mass
@@ -171,7 +196,7 @@ bidirectional by design.
 | `trailer_connected` | out | The coupling claim — see below |
 | `trailer_axle_load` | out | SPN 582 on the towed unit. Read out of the sim: trailer's own bogie suspension force |
 | `trailer_brake_demand` | out | EBS11, towing→towed. A report of the blend the tractor sent, and what the trailer's wheels really brake with |
-| `trailer_abs` | out | EBS21, towed→towing. Read out of the sim: worst wheel slip past `TRAILER_ABS_SLIP` |
+| `trailer_abs` | out | EBS21, towed→towing. Read out of the sim: the trailer's own ABS holding a wheel at `RayWheel.ABS_SLIP` this tick |
 
 - `trailer_connected` is a claim, not "something is on the fifth wheel": needs the trailer
   coupled and `VehicleSpec.trailer_bus_equipped`. False with a trailer physically attached
@@ -241,7 +266,7 @@ them apart.
 - Both load models move a real centre of mass and nothing else. `set_load_offset` moves
   the body's `center_of_mass`; `trailer_axle_load`/`axle_load` move as consequences. The
   tipper moves it UP as well as back (the load rides the floor it is sitting on), which is
-  what makes driving off with the body raised roll the rig.
+  why a raised body caps the rig at 5 km/h (§ Truck sizing).
   Tanker's surge is a labelled model chasing longitudinal acceleration with a lag — real
   fluid physics is a non-goal, the rule that governs the boat's water too. Rationale for all
   of § Coupling and § Four trailers: `truck/CLAUDE.md` §§ ISO 11992 trailer bus / Four

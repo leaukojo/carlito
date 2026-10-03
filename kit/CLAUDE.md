@@ -13,7 +13,9 @@ headless gotchas are in the root `CLAUDE.md`. A level edit ends with the `level-
   bakes that use it.
 - Per-kit scales live in the recipe, `kit/import/<kit>.json` (lane-fit: ~12 m two-lane vs the
   1.8 m car). Roads palette cell `(12,3,12)`; racing `(12,12,12)` corner-anchor. **Every palette
-  GridMap needs `cell_center_y = false`** (the baker would place it half a cell off, unguarded).
+  GridMap needs `cell_center_y = false`** (bake error).
+- AuthoringRoot holds only GridMaps, KitPieces, scatter, roads and script-less Node3D groups —
+  it is freed at runtime, so anything else is a bake error.
 - The convex-decomposition helper is `create_multiple_convex_collisions` (plural).
 - `SurfaceTool.append_from` leaves scaled normals unnormalized: the baker's
   `SurfaceAccumulator` merges at array level instead.

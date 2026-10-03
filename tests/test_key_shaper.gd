@@ -1,0 +1,220 @@
+extends GdUnitTestSuite
+## KeyShaper: an on/off key becomes a hand on a wheel and a foot on a pedal. Pure statics, plus the
+## router wiring (keyboard steer shaped, touch stick not, local pedals shaped, bridge never).
+
+const Shaper := preload("res://src/input/key_shaper.gd")
+const RouterScript := preload("res://src/input/input_router.gd")
+const BridgeSourceScript := preload("res://src/input/sources/bridge_source.gd")
+
+const TICK := 1.0 / 60.0
+
+
+## Ticks of steer_step from `from` until the shaped value reaches `target` (capped).
+static func _ticks_to(from: float, target: float, speed: float) -> int:
+	var s := from
+	var n := 0
+	while not is_equal_approx(s, target) and n < 100000:
+		s = Shaper.steer_step(s, target, speed, TICK)
+		n += 1
+	return n
+
+
+# --- steer ---------------------------------------------------------------------------
+
+func test_the_out_rate_falls_with_road_speed() -> void:
+	var prev := INF
+	for v: float in [0.0, 2.0, 5.0, 10.0, 15.0, 25.0, 35.0]:
+		var rate := Shaper.steer_out_rate(v)
+		assert_float(rate).override_failure_message("out rate rose at %.0f m/s" % v).is_less(prev)
+		prev = rate
+	# Halved at STEER_V0, and a quarter of that again at twice it: the 1 / v^2 tail.
+	assert_float(Shaper.steer_out_rate(Shaper.STEER_V0)) \
+			.is_equal_approx(Shaper.STEER_OUT_RATE * 0.5, 1e-6)
+	assert_float(Shaper.steer_out_rate(-Shaper.STEER_V0)) \
+			.is_equal_approx(Shaper.STEER_OUT_RATE * 0.5, 1e-6)
+
+
+func test_letting_go_straightens_faster_than_the_wheel_went_out() -> void:
+	for v: float in [0.0, 8.0, 25.0]:
+		var out_ticks := _ticks_to(0.0, 0.5, v)
+		var back_ticks := _ticks_to(0.5, 0.0, v)
+		assert_int(back_ticks).override_failure_message("at %.0f m/s" % v).is_less(out_ticks)
+	# Never slower than the floor, even where the out rate has nearly vanished.
+	assert_float(Shaper.steer_return_rate(40.0)).is_equal(Shaper.STEER_RETURN_MIN)
+
+
+func test_a_held_key_reaches_full_lock_and_never_overshoots() -> void:
+	var s := 0.0
+	for _i in 600:
+		s = Shaper.steer_step(s, 1.0, 0.0, TICK)
+		assert_float(s).is_less_equal(1.0)
+	assert_float(s).is_equal(1.0)
+	# From the other side too, and toward a target nearer the centre on the same side.
+	s = 1.0
+	for _i in 600:
+		s = Shaper.steer_step(s, 0.3, 0.0, TICK)
+		assert_float(s).is_greater_equal(0.3)
+	assert_float(s).is_equal(0.3)
+
+
+func test_a_reversal_returns_at_the_return_rate_then_goes_out_past_centre() -> void:
+	# One tick big enough to cross centre: the inward leg costs dist / return_rate, the rest goes out.
+	var speed := 0.0
+	var c := 0.1
+	var dt := 0.2
+	var crossed := Shaper.steer_step(c, -1.0, speed, dt)
+	var left := dt - c / Shaper.steer_return_rate(speed)
+	assert_float(crossed).is_equal_approx(-Shaper.steer_out_rate(speed) * left, 1e-6)
+	# Within a tick, the opposite key only brings the wheel back toward centre.
+	var small := Shaper.steer_step(0.5, -1.0, speed, TICK)
+	assert_float(small).is_equal_approx(0.5 - Shaper.steer_return_rate(speed) * TICK, 1e-6)
+
+
+func test_a_short_tap_at_speed_asks_for_a_little_lock() -> void:
+	# The whole point: a quarter-second tap at motorway speed is a lane change, not a swerve.
+	var s := 0.0
+	for _i in 15:
+		s = Shaper.steer_step(s, 1.0, 27.8, TICK)
+	assert_float(s).is_less(0.05)
+	# The same tap in a car park is a real turn of the wheel.
+	var slow := 0.0
+	for _i in 15:
+		slow = Shaper.steer_step(slow, 1.0, 1.0, TICK)
+	assert_float(slow).is_greater(0.15)
+
+
+func test_no_time_no_change() -> void:
+	assert_float(Shaper.steer_step(0.4, 1.0, 10.0, 0.0)).is_equal(0.4)
+	assert_float(Shaper.steer_step(0.4, 0.4, 10.0, TICK)).is_equal(0.4)
+
+
+# --- pedals --------------------------------------------------------------------------
+
+func test_a_pedal_key_reaches_full_travel_in_its_apply_time() -> void:
+	for apply_s: float in [Shaper.ACCEL_APPLY_S, Shaper.BRAKE_APPLY_S]:
+		var p := 0.0
+		var n := 0
+		while p < 1.0 and n < 1000:
+			p = Shaper.pedal_step(p, 1.0, apply_s, TICK)
+			n += 1
+		assert_float(float(n) * TICK).is_equal_approx(apply_s, TICK)
+
+
+func test_a_released_pedal_comes_off_in_the_release_time() -> void:
+	var p := 1.0
+	var n := 0
+	while p > 0.0 and n < 1000:
+		p = Shaper.pedal_step(p, 0.0, Shaper.ACCEL_APPLY_S, TICK)
+		n += 1
+	assert_float(float(n) * TICK).is_equal_approx(Shaper.PEDAL_RELEASE_S, TICK)
+	assert_float(Shaper.pedal_step(0.3, 0.3, Shaper.BRAKE_APPLY_S, TICK)).is_equal(0.3)
+
+
+# --- the router wiring -------------------------------------------------------------------
+
+## A touch stand-in holding GAS and the stick hard right.
+class _GasAndStickTouch extends RefCounted:
+	func poll() -> Dictionary[StringName, Variant]:
+		return {&"accel": 1.0, &"steer": 0.6}
+
+
+class _LiveBridge extends BridgeSourceScript:
+	func poll() -> Dictionary[StringName, Variant]:
+		return {&"active": true, &"drive_sourced": true, &"accel": 1.0, &"brake": 1.0,
+				&"steer": 1.0, &"gear": 1, &"key": RouterScript.KEY_IGNITION}
+
+
+func test_local_pedals_ramp_and_the_touch_stick_passes_straight_through() -> void:
+	var router: Node = auto_free(RouterScript.new())
+	router.set_touch_source(_GasAndStickTouch.new())
+	router._physics_process(TICK)
+	var first: VehicleInput = router.get_vehicle_input()
+	assert_float(first.throttle).is_equal_approx(TICK / Shaper.ACCEL_APPLY_S, 1e-6)
+	# Analog: the stick is not a key, so it is not shaped.
+	assert_float(first.steer).is_equal_approx(0.6, 1e-6)
+	for _i in roundi(Shaper.ACCEL_APPLY_S / TICK):
+		router._physics_process(TICK)
+	assert_float(router.get_vehicle_input().throttle).is_equal(1.0)
+
+
+func test_the_keyboard_steer_is_shaped() -> void:
+	var router: Node = auto_free(RouterScript.new())
+	Input.action_press("steer_right")
+	router._physics_process(TICK)
+	var steer: float = router.get_vehicle_input().steer
+	Input.action_release("steer_right")
+	assert_float(steer).is_equal_approx(Shaper.steer_out_rate(0.0) * TICK, 1e-6)
+
+
+## A body flying at 40 m/s whose steer turns no road wheel (a plane in the air).
+class _FlyingBody extends Node3D:
+	func get_speed() -> float:
+		return 40.0
+	func key_steer_speed() -> float:
+		return 0.0
+	func get_gear_byte() -> int:
+		return RouterScript.GEAR_D1
+	func key_pedals_are_a_stick() -> bool:
+		return false
+
+
+## A hovering body whose pedal keys are one stick axis (the drone's pitch).
+class _StickBody extends Node3D:
+	func get_speed() -> float:
+		return 0.0
+	func key_steer_speed() -> float:
+		return 0.0
+	func get_gear_byte() -> int:
+		return RouterScript.GEAR_N
+	func key_pedals_are_a_stick() -> bool:
+		return true
+
+
+func test_stick_pedals_ramp_both_ways_alike() -> void:
+	# S at a standstill reverses: throttle = -brake, ramped at the accel rate, not the brake's.
+	var router: Node = auto_free(RouterScript.new())
+	router.register_vehicle(auto_free(_StickBody.new()))
+	Input.action_press("brake_reverse")
+	router._physics_process(TICK)
+	var throttle: float = router.get_vehicle_input().throttle
+	Input.action_release("brake_reverse")
+	assert_float(throttle).is_equal_approx(-TICK / Shaper.ACCEL_APPLY_S, 1e-6)
+
+
+func test_the_steer_slows_with_the_speed_the_body_steers_wheels_at() -> void:
+	# A plane at cruise banks with the key at its standstill rate: the 1 / v^2 slow-down is a wheel
+	# angle's law, so the router reads key_steer_speed, not road speed.
+	var router: Node = auto_free(RouterScript.new())
+	router.register_vehicle(auto_free(_FlyingBody.new()))
+	Input.action_press("steer_right")
+	router._physics_process(TICK)
+	var steer: float = router.get_vehicle_input().steer
+	Input.action_release("steer_right")
+	assert_float(steer).is_equal_approx(Shaper.steer_out_rate(0.0) * TICK, 1e-6)
+
+
+func test_the_bridge_is_never_shaped() -> void:
+	var router: Node = auto_free(RouterScript.new())
+	router._bridge_source = _LiveBridge.new()
+	router._physics_process(TICK)
+	var out: VehicleInput = router.get_vehicle_input()
+	assert_float(out.throttle).is_equal(1.0)
+	assert_float(out.brake).is_equal(1.0)
+	assert_float(out.steer).is_equal(1.0)
+
+
+func test_shaping_starts_over_when_the_bridge_hands_back_and_on_a_new_body() -> void:
+	var router: Node = auto_free(RouterScript.new())
+	router.set_touch_source(_GasAndStickTouch.new())
+	for _i in 30:
+		router._physics_process(TICK)
+	assert_float(router._pedal_accel).is_equal(1.0)
+	router._bridge_source = _LiveBridge.new()
+	router._physics_process(TICK)
+	assert_float(router._pedal_accel).is_equal(0.0)
+	router._bridge_source = BridgeSourceScript.new()
+	for _i in 30:
+		router._physics_process(TICK)
+	router.register_vehicle(null)
+	assert_float(router._pedal_accel).is_equal(0.0)
+	assert_float(router._key_steer).is_equal(0.0)

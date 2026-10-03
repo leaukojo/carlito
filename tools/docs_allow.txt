@@ -1,5 +1,5 @@
 # check_docs allow-list: "<span>" or "<file>:<span>", each with a reason.
-godot.html                       # the Godot export template's shell, not a repo file
 global_script_class_cache.cfg    # engine-generated under .godot/
 src/shell/level_weights.json     # written by the CI export, not committed
 VehicleSpec.air_drive            # a rejected design, named so it is not re-proposed
+docs/overview.md:docs/plans/    # empty (git drops it) between plans; new plans go there

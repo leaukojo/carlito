@@ -376,6 +376,31 @@ func test_governor_is_unsigned_so_it_limits_reverse_too() -> void:
 	assert_float(DrivetrainScript.governor_scale(spec, -limit + 0.5 * DrivetrainScript.GOVERNOR_BAND)) 			.is_equal_approx(0.5, 1e-4)
 
 
+func test_a_runtime_cap_governs_only_where_it_is_the_lower_limit() -> void:
+	var spec := _spec()
+	var cap := 5.0
+	var cap_ms := cap / 3.6
+	# Ungoverned spec: the cap alone governs, and 0 means no cap.
+	assert_float(DrivetrainScript.governor_scale(spec, cap_ms, cap)).is_equal(0.0)
+	assert_float(DrivetrainScript.governor_scale(spec, cap_ms, 0.0)).is_equal(1.0)
+	# Governed spec: the lower of the two wins, either way round.
+	spec.speed_limit_kmh = 90.0
+	assert_float(DrivetrainScript.governor_scale(spec, cap_ms, cap)).is_equal(0.0)
+	# A cap above the spec's limit leaves the spec's limit governing: shut at 90, not at 200.
+	assert_float(DrivetrainScript.governor_scale(spec, 90.0 / 3.6, 200.0)).is_equal(0.0)
+
+
+func test_process_cuts_the_throttle_at_the_runtime_cap() -> void:
+	var spec := _spec()
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	dt.speed_cap_kmh = 5.0
+	dt.process(1.0 / 60.0, 1.0, 10.0, 5.0 / 3.6, 1, false)
+	assert_float(dt.applied_throttle).is_equal(0.0)
+	dt.speed_cap_kmh = 0.0
+	dt.process(1.0 / 60.0, 1.0, 10.0, 5.0 / 3.6, 1, false)
+	assert_float(dt.applied_throttle).is_equal(1.0)
+
+
 func test_process_publishes_the_governed_throttle_not_the_pedal() -> void:
 	# Telemetry (engine_load, fuel, coolant) reads governed throttle, not pedal.
 	var spec := _spec()

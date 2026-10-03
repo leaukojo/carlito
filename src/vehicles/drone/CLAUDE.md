@@ -69,7 +69,7 @@ Tour, split table, sub-objects: `docs/vehicles.md` § Drone subsystems. Shared v
   every mode feeds the one `level_target_up` -> `align_torque` -> `limit_length` chain. Yaw stays
   manual.
 - One integrator (the altitude loop's); the position PD has none, so wind leaves a bounded offset.
-- The geofence is soft (400 m / 120 m above home) and reopened: `docs/to_investigate.md`.
+- The geofence is soft (400 m / 120 m above home), an accepted compromise (`GEOFENCE_*`).
 - `_fence_rtl` and `_rtl_landing` are released by the pilot's mode change, disarm or respawn, never
   by `_reset_controllers` (it runs on the mode change they cause). `_fence_answered` carries a
   cancel past the same-tick re-latch (`test_drone_vehicle.test_the_geofence_commands_rtl_and_the_mode_key_cancels_it_from_outside`).

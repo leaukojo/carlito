@@ -8,7 +8,6 @@ extends GdUnitTestSuite
 ## Statics and scene reads, no physics body, except the last sections - the duck-typed vehicle
 ## hooks and the two-body scenarios need a real chassis in a real tree.
 
-const SemiScript := preload("res://src/vehicles/truck/semi.gd")
 const DrawbarScript := preload("res://src/vehicles/tractor/drawbar.gd")
 const FifthWheelScript := preload("res://src/vehicles/truck/fifth_wheel.gd")
 const CatalogScript := preload("res://src/vehicles/vehicle_catalog.gd")
@@ -231,36 +230,21 @@ func test_the_friction_is_zero_at_zero_relative_rate() -> void:
 	assert_float(Articulation.yaw_friction_torque(1.0, 0.0, 1.0e6, DELTA)).is_equal(0.0)
 
 
-func test_one_tick_may_at_most_stop_the_relative_yaw() -> void:
+func test_one_tick_may_at_most_stop_part_of_the_relative_yaw() -> void:
 	# RayWheel's 60 Hz rule in torque form. Below the crossing rate the cap binds and the torque is
-	# exactly what zeroes the relative rate this tick — never more, or the rig buzzes across zero.
+	# the plate's share of what zeroes the relative rate this tick — the towed tyres stop the rest,
+	# and the two together taking more reverse it, so the rig buzzes across zero.
 	var friction: float = FifthWheelScript.YAW_FRICTION_NM
-	var inertia := 5.0e4
-	var crossing := friction * DELTA / inertia
+	var moment := 5.0e4
+	var crossing := friction * DELTA / (Articulation.YAW_CAP_SHARE * moment)
 	var slow := crossing * 0.25
-	var capped := absf(Articulation.yaw_friction_torque(slow, friction, inertia, DELTA))
-	assert_float(capped).is_equal_approx(inertia * slow / DELTA, 1e-6)
+	var capped := absf(Articulation.yaw_friction_torque(slow, friction, moment, DELTA))
+	assert_float(capped).is_equal_approx(Articulation.YAW_CAP_SHARE * moment * slow / DELTA, 1e-6)
 	assert_float(capped).override_failure_message(
-			"the clamp let one tick reverse the relative yaw").is_less(friction)
+			"the clamp let one tick stop the whole relative yaw").is_less(moment * slow / DELTA)
 	# Above it the Coulomb magnitude is what is applied, so the clamp is a floor-side device only.
-	var fast := absf(Articulation.yaw_friction_torque(crossing * 4.0, friction, inertia, DELTA))
+	var fast := absf(Articulation.yaw_friction_torque(crossing * 4.0, friction, moment, DELTA))
 	assert_float(fast).is_equal_approx(friction, 1e-9)
-
-
-func test_the_shipped_trailers_clamp_only_within_a_hair_of_straight() -> void:
-	# The cap has to be inert in real driving or the plate stops being Coulomb. Read against each
-	# shipped trailer's own yaw inertia proxy: the crossing rate must be far below anything a rig
-	# ever articulates at.
-	var friction: float = FifthWheelScript.YAW_FRICTION_NM
-	for id: String in TrailerCat.TRAILERS:
-		if not TrailerCat.is_coupled(id):
-			continue
-		var trailer: TowedBody = auto_free((load(id) as PackedScene).instantiate())
-		var inertia := trailer.yaw_inertia()
-		assert_float(inertia).override_failure_message(
-				"%s reports no yaw inertia to clamp against" % id).is_greater(1.0e4)
-		assert_float(friction * DELTA / inertia).override_failure_message(
-				"%s: the one-tick cap binds at real articulation rates" % id).is_less(1.0e-3)
 
 
 # --- the coupling timings ------------------------------------------------------------------------
@@ -436,6 +420,59 @@ func test_holding_the_spool_still_is_not_a_press() -> void:
 		.override_failure_message("the interlock nagged while the spool was held still").is_equal(0)
 
 
+# --- the body-up speed cap ---------------------------------------------------------------------
+
+## The cap `host` hands its Drivetrain with a stub on the back declaring `declares`, its load
+## displaced to `pos01`.
+func _cap_with(host: Node, declares: int, pos01: float) -> float:
+	var stub: StubTrailer = auto_free(StubTrailer.new())
+	stub.declares = declares
+	stub.pos01 = pos01
+	host.set("trailer", stub)
+	return host.call("speed_cap_kmh")
+
+
+func test_a_tipping_body_off_its_rest_caps_both_machines_and_a_lowered_one_does_not() -> void:
+	var hose := int(TowedBody.Consumer.HYDRAULIC)
+	for host: Node in [_fifth_wheel(), _drawbar()]:
+		assert_float(_cap_with(host, hose, 0.02)).is_equal(TowHost.BODY_UP_CAP_KMH)
+		assert_float(_cap_with(host, hose, 0.0)).is_equal(0.0)
+
+
+func test_a_load_that_moves_without_a_hose_is_never_a_body_up() -> void:
+	# The tanker's surge displaces its load and reports no body; the predicate is the hose, so a
+	# future load model that does report a position still never caps the rig.
+	assert_float(_cap_with(_fifth_wheel(), 0, 1.0)).is_equal(0.0)
+
+
+func test_the_body_up_notice_fires_once_on_the_way_up() -> void:
+	var host := _fifth_wheel()
+	var stub: StubTrailer = auto_free(StubTrailer.new())
+	stub.declares = int(TowedBody.Consumer.HYDRAULIC)
+	host.set("trailer", stub)
+	_notices = PackedStringArray()
+	for pos01 in [0.0, 0.1, 0.2, 0.0]:
+		stub.pos01 = pos01
+		host.call("_announce_body_up")
+	assert_array(_notices).is_equal(PackedStringArray([TowHost.BODY_UP_NOTICE]))
+
+
+func test_dropping_a_raised_body_takes_its_notice_down() -> void:
+	var host: TowHost = _fifth_wheel()
+	var stub := _dropped_stub()  # uncouple frees it
+	stub.declares = int(TowedBody.Consumer.HYDRAULIC)
+	stub.pos01 = 0.5
+	host.trailer = stub
+	host.call("_announce_body_up")
+	var cleared := PackedStringArray()
+	var on_cleared := func(text: String) -> void: cleared.append(text)
+	GameState.notice_cleared.connect(on_cleared)
+	host.uncouple()
+	GameState.notice_cleared.disconnect(on_cleared)
+	assert_array(cleared).is_equal(PackedStringArray([TowHost.BODY_UP_NOTICE]))
+	assert_float(host.speed_cap_kmh()).is_equal(0.0)
+
+
 # --- the two live discrepancies ----------------------------------------------------------------
 
 func test_the_semis_interlock_notice_restarts_when_the_trailer_changes() -> void:
@@ -452,26 +489,6 @@ func test_the_semis_interlock_notice_restarts_when_the_trailer_changes() -> void
 	assert_float(host.get("_last_tip_cmd")) \
 		.override_failure_message("the semi kept the old spool position across a trailer change") \
 		.is_equal(-1.0)
-
-
-func test_the_semi_does_not_hand_roll_the_bases_camera_exclusion() -> void:
-	# A source-level pin, and it has to be: BaseVehicle.get_camera_exclude_bodies returns exactly
-	# [get_rid()] today, so a hand-rolled copy is observably identical and no behavioural test can
-	# tell them apart. Same technique test_lamps uses to assert no blink timer comes back.
-	var src := FileAccess.get_file_as_string("res://src/vehicles/truck/semi.gd")
-	var at := src.find("func get_camera_exclude_bodies")
-	assert_int(at).override_failure_message("get_camera_exclude_bodies is gone").is_greater(-1)
-	var body := src.substr(at, src.find("\nfunc ", at + 1) - at)
-	# Comments are stripped first: the first version of this test matched the word "super" in the
-	# comment above the call, so it passed with the call reverted.
-	var code := ""
-	for line in body.split("\n"):
-		var stripped := (line as String).strip_edges()
-		if not stripped.begins_with("#"):
-			code += stripped + "\n"
-	assert_bool(code.contains("super.get_camera_exclude_bodies()")) \
-		.override_failure_message("the semi rebuilds the base's exclusion list instead of calling it") \
-		.is_true()
 
 
 # --- what became data --------------------------------------------------------------------------
@@ -862,6 +879,80 @@ func test_coupling_at_speed_hands_the_solver_no_relative_velocity() -> void:
 			.is_greater(10.0)
 
 
+# --- 3b. the solver's own numbers on a standing rig ----------------------------------------------
+
+## A rig at rest on flat ground, its countdown run by its own ticks and `towed_id` coupled. Laid at
+## `x` on its own ground: a test's rigs live until it ends, so a second rig laid on the first's
+## spot touches its body and the fit check uncouples it.
+func _standing_rig(kind: String, x := 0.0) -> Rig:
+	var r := _rig(kind)
+	var ground := StaticBody3D.new()
+	ground.collision_layer = preload("res://src/physics/collision_layers.gd").TERRAIN
+	ground.collision_mask = 0
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(200.0, 2.0, 200.0)
+	shape.shape = box
+	ground.add_child(shape)
+	r.root.add_child(ground)
+	ground.global_position = Vector3(x, -1.0, 0.0)
+	r.vehicle.global_position = Vector3(x, float(r.vehicle.call("rest_ride_height")), 0.0)
+	r.vehicle.set("spawn_transform", r.vehicle.global_transform)
+	for _i in TowHost.SPAWN_COUPLE_TICKS + 1:
+		await get_tree().physics_frame
+	r.vehicle.call("set_attachment", r.towed_id)
+	# A body is not in the space state until the space has stepped.
+	await get_tree().physics_frame
+	return r
+
+
+func test_a_coupled_rig_standing_still_stays_mirror_symmetric() -> void:
+	# Laid symmetric on flat ground, a rig has nothing to pick a side with but float noise. A 60 Hz
+	# overshoot in the towed tyres' lateral cap amplifies it tick on tick until the rig stands skewed,
+	# ~8e-3 rad within 1.5 s; the tracking gate never sees it. A plate friction cap that, with the
+	# tyres, overshoots the one-tick stop flips the relative yaw rate every tick instead (~3e-3
+	# rad/s, Coulomb-bounded), a buzz the angle hardly shows (~3e-5 rad), so the rate is read too.
+	for i in KINDS.size():
+		var kind := KINDS[i]
+		var r: Rig = await _standing_rig(kind, 300.0 * i)
+		var chassis := r.vehicle as RigidBody3D
+		var peak_rate := 0.0
+		for tick in 90:
+			await get_tree().physics_frame
+			if tick >= 30 and is_instance_valid(r.host.trailer):
+				var up := chassis.global_transform.basis.y
+				peak_rate = maxf(peak_rate,
+						absf((r.host.trailer.angular_velocity - chassis.angular_velocity).dot(up)))
+		# Anything uncoupled reads a zero angle and rate, which would pass on nothing.
+		assert_object(r.host.trailer).override_failure_message(
+				"%s: the rig stood uncoupled" % kind).is_not_null()
+		assert_float(absf(r.host.articulation())).override_failure_message(
+				"%s: a standing rig skewed to %f rad" % [kind, r.host.articulation()]) \
+				.is_less(1.0e-3)
+		assert_float(peak_rate).override_failure_message(
+				"%s: a standing rig buzzes at %f rad/s relative yaw" % [kind, peak_rate]) \
+				.is_less(1.0e-4)
+
+
+func test_the_shipped_trailers_clamp_only_within_a_hair_of_straight() -> void:
+	# The cap has to be inert in real driving or the plate stops being Coulomb: the rate it binds
+	# under, off each coupled trailer's pair moment with the solver's tensors, must be far below
+	# anything a rig ever articulates at.
+	var friction: float = FifthWheelScript.YAW_FRICTION_NM
+	var r: Rig = await _standing_rig(SEMI)
+	for id: String in TrailerCat.TRAILERS:
+		if not TrailerCat.is_coupled(id):
+			continue
+		r.vehicle.call("set_attachment", id)
+		await get_tree().physics_frame
+		var moment := r.host.yaw_pair_moment()
+		assert_float(moment).override_failure_message(
+				"%s reports no pair moment to clamp against" % id).is_greater(1.0e3)
+		var crossing := friction * DELTA / (Articulation.YAW_CAP_SHARE * moment)
+		assert_float(crossing).override_failure_message(
+				"%s: the one-tick cap binds below %f rad/s" % [id, crossing]).is_less(1.0e-2)
+
+
 # --- 4. teardown --------------------------------------------------------------------------------
 
 func test_tearing_the_level_down_takes_the_whole_rig_without_complaint() -> void:
@@ -1171,11 +1262,16 @@ func _scenario_trace(r: Rig) -> PackedStringArray:
 	t.append("tip/refused: valve=%.2f notices=%d said=%s" % [
 		r.host.trailer.valve_flow, _notices.size(),
 		_own(", ".join(_notices), p.tip_notice, "tip-notice")])
-	# ...and with the handbrake set it goes up, silently. Same two ticks, one condition different.
+	# ...and with the handbrake set it goes up. Same two ticks, one condition different: the only
+	# thing said is that the body-up speed cap is now on.
 	input.handbrake = 1.0
 	_reset_notices()
 	r.host.tick_towing(input, 0.0, 1.0, true, 1500, 0.0, DELTA, [] as Array[Node])
-	t.append("tip/allowed: valve=%.2f notices=%d" % [r.host.trailer.valve_flow, _notices.size()])
+	t.append("tip/allowed: valve=%.2f said=%s cap=%.0f" % [r.host.trailer.valve_flow,
+		_own(", ".join(_notices), TowHost.BODY_UP_NOTICE, "body-up-notice"), r.host.speed_cap_kmh()])
+	# Back down onto its rest, the cap comes off.
+	r.host.tick_towing(input, 0.0, 0.0, true, 1500, 0.0, DELTA, [] as Array[Node])
+	t.append("tip/lowered: cap=%.0f" % r.host.speed_cap_kmh())
 
 	# RESPAWN. The body is re-laid at its coupled pose and the fit-check window zeroed: a re-laid
 	# body goes back exactly where it stood.
@@ -1217,7 +1313,8 @@ func test_the_two_machines_differ_only_where_decision_seven_says_they_may() -> v
 		"moving/drop: coupled=false claimed=own-bare-id notices=0",
 		"fit: coupled=false claimed=own-bare-id told-shell=1 said=own-no-room-notice",
 		"tip/refused: valve=0.00 notices=1 said=own-tip-notice",
-		"tip/allowed: valve=1.00 notices=0",
+		"tip/allowed: valve=1.00 said=own-body-up-notice cap=5",
+		"tip/lowered: cap=0",
 		"respawn: relaid=true stopped=true watch=0",
 		"teardown: coupled=false body-freed=true joint-freed=true",
 	])

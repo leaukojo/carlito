@@ -218,7 +218,17 @@ jobs:
         run: godot --headless --import
 
       - name: Straight-line tracking (every wheel-driven variant)
-        run: godot --headless res://tools/measure_vehicles.tscn -- all 45 track strict
+        run: godot --headless --fixed-fps 60 res://tools/measure_vehicles.tscn -- all 45 track strict
+
+      # A tractor unit's steer wheels keep >= 8.5 kN through a coupled gear-1 launch, or a
+      # wheelbase / COM edit lifts them (docs/heavy_vehicles.md § Truck sizing). --fixed-fps 60
+      # is the same 60 Hz tick, output byte-identical, run faster than real time. The timeout
+      # catches a tool that fails to parse and never quits.
+      - name: Semi launch steer-wheel floor (both tractor units)
+        timeout-minutes: 5
+        run: |
+          godot --headless --fixed-fps 60 res://tools/measure_semi_launch.tscn -- semi strict
+          godot --headless --fixed-fps 60 res://tools/measure_semi_launch.tscn -- semi-conventional strict
 
   # Publishes the just-built site into gh-pages:/dev/. Pushes to main run the gate
   # stack above but publish nothing: main only ever moves via a promote, and those

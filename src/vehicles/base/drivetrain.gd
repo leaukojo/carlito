@@ -38,6 +38,9 @@ var rpm: float
 ## Telemetry reads this, not `input.throttle`: a governed vehicle holds the pedal down while fuel
 ## is cut.
 var applied_throttle := 0.0
+## A road-speed cap (km/h) imposed at runtime on top of the spec's governor, 0 = none: what a
+## towing host asks for while a tipping body is up (`TowHost.speed_cap_kmh`). The lower one governs.
+var speed_cap_kmh := 0.0
 ## Ticks left in the post-shift throttle cut (`spec.shift_cut_s`), 0 when driving through.
 var _shift_cut_ticks := 0
 
@@ -114,11 +117,15 @@ static func limiter_cut(p_spec: VehicleSpec, engine_rpm: float) -> bool:
 
 
 ## Fraction of throttle that reaches the engine at this road speed, 1.0 ungoverned. Fades
-## linearly to 0 across the last GOVERNOR_BAND m/s below the limit. Unsigned: it governs reverse.
-static func governor_scale(p_spec: VehicleSpec, ground_speed: float) -> float:
-	if p_spec.speed_limit_kmh <= 0.0:
+## linearly to 0 across the last GOVERNOR_BAND m/s below the limit: the spec's, or `cap_kmh` where
+## that is lower (see `speed_cap_kmh`). Unsigned: it governs reverse.
+static func governor_scale(p_spec: VehicleSpec, ground_speed: float, cap_kmh := 0.0) -> float:
+	var limit_kmh := p_spec.speed_limit_kmh
+	if cap_kmh > 0.0 and (limit_kmh <= 0.0 or cap_kmh < limit_kmh):
+		limit_kmh = cap_kmh
+	if limit_kmh <= 0.0:
 		return 1.0
-	var limit := p_spec.speed_limit_kmh / 3.6
+	var limit := limit_kmh / 3.6
 	return clampf((limit - absf(ground_speed)) / GOVERNOR_BAND, 0.0, 1.0)
 
 
@@ -161,9 +168,12 @@ static func overrun_torque(p_spec: VehicleSpec, at_rpm: float, throttle: float,
 
 
 # --- torque converter (the crank against a held wheel) -------------------------------------
-## The one element between engine and gearbox, and a rev model only: it multiplies NO torque
-## where a real converter makes 1.8-2.2x at stall, which keeps every launch figure conservative
-## and leaves the brake > drive > handbrake hierarchy alone (src/vehicles/CLAUDE.md).
+## The one element between engine and gearbox, and a rev model only. COMPROMISE: it multiplies NO
+## torque where a real converter makes 1.8-2.2x at stall. That acts only under stall, where most
+## bodies are already grip-bound and the rest saturate their tyres almost at once, so it buys
+## under 0.1 s on any body behind its reference (docs/vehicles.md § Converter). Adding it costs
+## the brake > drive > handbrake hierarchy on AWD (a 2x stall drive saturates all four tyres) and
+## roughly halves the handbrake's break-away throttle.
 
 ## Converter stall speed as a fraction of the engine's own usable band (idle -> redline): one
 ## derivation for every machine, not a per-spec knob. 0.25 puts every shipped stall below its
@@ -194,8 +204,9 @@ static func converter_free_rpm(p_spec: VehicleSpec, throttle: float) -> float:
 
 # --- auxiliary driveline retarder (truck, J1939 SPN 520) ------------------------------------
 ## Gated by GroundDriveSpec.retarder_equipped and applied by WheelDrive. It joins the other brake
-## torques so RayWheel integrates it in the same semi-implicit step, and must stay inside that
-## integrator: a separate move_toward after the wheels tick over-corrects on the first tick.
+## torques so RayWheel integrates it in the same semi-implicit step (through `spin_compliance`),
+## and must stay inside that integrator: a separate move_toward after the wheels tick
+## over-corrects on the first tick.
 
 ## Retarder rating per driven wheel, as a fraction of brake_torque (the 'retarder_state' 100%
 ## point); retardation figures: docs/heavy_vehicles.md. `test_truck` pins a band per spec. It stays
@@ -232,25 +243,27 @@ static func retarder_demand(request01: float, speed_ms: float, brake_torque: flo
 ## Anti-lock backstop (Nm): the most spin this wheel may lose in one tick without exceeding
 ## RETARDER_SLIP_TARGET, and 0 once the axle is already at or past it. Uses RayWheel's own slip
 ## denominator (LOW_SPEED_FLOOR). `road_speed` is the signed chassis forward velocity (negative in
-## reverse), never a magnitude.
-static func retarder_slip_cap(omega: float, road_speed: float, radius: float, inertia: float,
-		delta: float) -> float:
-	if radius <= 0.0 or delta <= 0.0:
+## reverse), never a magnitude. `compliance` is the wheel's spin change per N·m of brake this tick
+## (`RayWheel.spin_compliance`; `delta / inertia` on a free wheel), so a gripping wheel, which the
+## road holds up, may take more torque than a free one.
+static func retarder_slip_cap(omega: float, road_speed: float, radius: float,
+		compliance: float) -> float:
+	if radius <= 0.0 or compliance <= 0.0:
 		return 0.0
 	var denom := maxf(absf(road_speed), RayWheel.LOW_SPEED_FLOOR)
 	var slip_vel := omega * radius - road_speed
 	# Headroom toward the braking side (m/s of slip velocity); the sign of road_speed picks the
 	# direction. Nonzero at a standstill, harmless: demand is 0 below RETARDER_CUTOUT_MS.
 	var headroom := signf(road_speed) * slip_vel + RETARDER_SLIP_TARGET * denom
-	return maxf(headroom, 0.0) * maxf(inertia, 0.0) / (radius * delta)
+	return maxf(headroom, 0.0) / (radius * compliance)
 
 
 ## Retarder braking torque for one driven wheel (Nm, unsigned): demand held under the anti-lock
 ## backstop. `road_speed` is signed — see retarder_slip_cap.
 static func retarder_torque(request01: float, road_speed: float, omega: float,
-		gd: GroundDriveSpec, delta: float) -> float:
+		gd: GroundDriveSpec, compliance: float) -> float:
 	return minf(retarder_demand(request01, road_speed, gd.brake_torque),
-			retarder_slip_cap(omega, road_speed, gd.wheel_radius, gd.wheel_inertia, delta))
+			retarder_slip_cap(omega, road_speed, gd.wheel_radius, compliance))
 
 
 ## Retarder torque as the contract's percentage: applied over rating. Unsigned, though SPN 520
@@ -309,7 +322,7 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 			var road_omega := ground_speed / road_radius
 			gear_byte = auto_shift(spec, gear_byte, rpm_from_wheel(spec, road_omega, gear_byte))
 			# Against the limiter, take the tallest gear that will hold.
-			if governor_scale(spec, ground_speed) < 1.0:
+			if governor_scale(spec, ground_speed, speed_cap_kmh) < 1.0:
 				gear_byte = governed_upshift(spec, gear_byte, ground_speed, road_radius)
 	else:
 		gear_byte = req
@@ -334,7 +347,7 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 	rpm = lerpf(rpm, target_rpm, 1.0 - exp(-RPM_SMOOTH * delta))
 
 	# The limiter and governor cut between pedal and engine: rpm still follows the wheels.
-	applied_throttle = clampf(throttle, 0.0, 1.0) * governor_scale(spec, ground_speed)
+	applied_throttle = clampf(throttle, 0.0, 1.0) * governor_scale(spec, ground_speed, speed_cap_kmh)
 	if limiter_cut(spec, limiter_rpm):
 		applied_throttle = 0.0
 	# Overrun reads the PEDAL, not applied_throttle: a governed or limited engine with the

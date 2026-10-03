@@ -40,6 +40,8 @@ func poll() -> Dictionary[StringName, Variant]:
 		&"pto_mode": int(v.get("pto_mode", 0)),
 		&"diff_lock": bool(v.get("diff_lock", false)),
 		&"fwd_drive": bool(v.get("fwd_drive", false)),
+		# Car traction control; absent → TC on.
+		&"tcs_off": bool(v.get("tcs_off", false)),
 		# Hydraulic remote % → 0..1 valve; absent → closed.
 		&"scv_flow": clampf(float(v.get("scv_flow", 0.0)) / 100.0, 0.0, 1.0),
 		# Flight controls % → unit; absent → neutral.

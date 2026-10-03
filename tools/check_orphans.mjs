@@ -2,7 +2,8 @@
 // Finds public (non-underscore) GDScript functions under src/ and kit/ with zero call sites
 // anywhere in real code — same file included. Text search, not the class graph: a call,
 // `call("name")`/`call(&"name")`, a signal `.connect(name)`, and `has_method("name")` all
-// count as callers, since it's a whole-word search over the raw source. tests/ does NOT
+// count as callers, since it's a whole-word search over the source with `#` comments stripped
+// (a comment naming a function is not a caller). tests/ does NOT
 // count: a function reachable only from its own test suite is exactly the never-wired case
 // this looks for, same as if nothing called it at all.
 //     node tools/check_orphans.mjs
@@ -71,9 +72,35 @@ try {
   // no allow-list yet
 }
 
+// A comment naming a function is not a caller: drop each line's `#` tail, unless the `#` sits
+// inside a string literal ("#ff0000", `"%s#%d"`).
+function stripGdComments(src) {
+  return src
+    .split('\n')
+    .map((line) => {
+      let quote = null;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (quote) {
+          if (c === '\\') i++;
+          else if (c === quote) quote = null;
+        } else if (c === '"' || c === "'") {
+          quote = c;
+        } else if (c === '#') {
+          return line.slice(0, i);
+        }
+      }
+      return line;
+    })
+    .join('\n');
+}
+
 const contentCache = new Map();
 function contentOf(file) {
-  if (!contentCache.has(file)) contentCache.set(file, readFileSync(file, 'utf8'));
+  if (!contentCache.has(file)) {
+    const src = readFileSync(file, 'utf8');
+    contentCache.set(file, extname(file) === '.gd' ? stripGdComments(src) : src);
+  }
   return contentCache.get(file);
 }
 

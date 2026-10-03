@@ -11,7 +11,7 @@ Rules: `kit/CLAUDE.md`, `src/levels/CLAUDE.md`. Steps:
    & $GODOT --headless --path . res://tools/bake_levels.tscn      # or -- src/levels/<level>.tscn
    & $GODOT --headless --path . res://tools/check_bakes.tscn
    ```
-3. A road or road-profile edit: re-run the paint before the bake (never on `car_arena`):
+3. A road or road-profile edit on a level whose chain lists the paint: re-run it before the bake:
    `& $GODOT --headless --path . res://tools/paint_road_asphalt.tscn -- src/levels/<...>/<level>.tscn`
 4. The level's look changed: ask the user to re-shoot its card (Polish tab, windowed, after the
    bake).

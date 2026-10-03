@@ -88,7 +88,7 @@
       "args": [
         "src/levels/island/level_1/level_1.tscn"
       ],
-      "why": "Stamps channel 6 (Asphalt) under every RoadPath corridor at the profile's paved_half_width, so grip_at reads road on-road and terrain off-road. Writes the splat PNGs only -- it never saves the .tscn. Re-run it after ANY road or road-profile edit; nothing else notices that the paint went stale."
+      "why": "Stamps channel 6 (Asphalt) under every RoadPath corridor at the profile's paved_half_width, so grip_at reads road on-road and terrain off-road. Writes the splat PNGs only -- it never saves the .tscn. Re-run it after ANY road or road-profile edit; tools/check_bakes fails until it is."
     },
     {
       "kind": "import"

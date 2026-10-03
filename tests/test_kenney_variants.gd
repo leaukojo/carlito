@@ -4,6 +4,7 @@ extends GdUnitTestSuite
 ## fields are re-derived, never transcribed. Two traps inherited from boat tests.
 
 const Gen := preload("res://tools/gen_kenney_vehicles.gd")
+const StableSave := preload("res://tools/stable_save.gd")
 
 ## Scalars a variant may override (field -> recipe key mapping).
 const SPEC_OVERRIDABLE := {
@@ -35,7 +36,7 @@ const DRIVE_BASELINE_ONLY := {
 }
 ## Driveline flags: had gone missing once (now pinned).
 const DRIVELINE_FLAGS := ["rear_diff_lockable", "front_axle_engageable", "retarder_equipped",
-		"centre_diff_rigid"]
+		"centre_diff_rigid", "abs_equipped", "tcs_equipped", "brake_engages_front_axle"]
 ## Driven flags: must not default to false (missing key means baseline's answer).
 const DRIVEN_FLAGS := ["driven_front", "driven_rear"]
 
@@ -240,10 +241,14 @@ func test_brakes_are_what_the_generator_derives_from_the_tyre() -> void:
 		var scratch := shipped.duplicate(true) as VehicleSpec
 		scratch.ground_drive.brake_torque = 0.0
 		scratch.ground_drive.handbrake_torque = 0.0
+		scratch.ground_drive.brake_bias_front = -1.0
 		gen._derive_brakes(scratch, scratch.ground_drive, variant)
 		assert_float(shipped.ground_drive.brake_torque) \
 				.override_failure_message("%s_spec.tres brake_torque" % variant) \
 				.is_equal_approx(scratch.ground_drive.brake_torque, 1e-3)
+		assert_float(shipped.ground_drive.brake_bias_front) \
+				.override_failure_message("%s_spec.tres brake_bias_front" % variant) \
+				.is_equal_approx(scratch.ground_drive.brake_bias_front, 1e-6)
 		assert_float(shipped.ground_drive.handbrake_torque) \
 				.override_failure_message("%s_spec.tres handbrake_torque" % variant) \
 				.is_equal_approx(scratch.ground_drive.handbrake_torque, 1e-3)
@@ -308,6 +313,38 @@ func test_measured_geometry_still_matches_the_models() -> void:
 			assert_vector(gd.wheel_positions[i]) \
 					.override_failure_message("%s_spec.tres wheel_positions[%d]" % [variant, i]) \
 					.is_equal_approx(stations[i], Vector3.ONE * 1e-4)
+
+
+# --- regen idempotence --------------------------------------------------------
+
+## A regen of an up-to-date scene is a no-op. Breaks when a new generated child is missing from
+## GENERATED_CHILDREN (the next regen transplants the old copy beside the new one) or a hand `;`
+## comment sits in the scene (a regen drops it); see src/vehicles/kenney/CLAUDE.md.
+func test_regen_reproduces_every_shipped_scene() -> void:
+	var gen := _gen()
+	var scratch := "user://test_kenney_regen.tscn"
+	for variant: String in Gen.VARIANTS:
+		var ov: Dictionary = Gen.VARIANTS[variant]
+		var family := String(ov["family"])
+		var geo: Dictionary = gen._analyze(Gen.MODELS.path_join(variant + ".glb"),
+				ov.get("wheels", Gen.FAMILY_WHEELS[family]), float(ov.get("scale", 1.0)))
+		var scene_path := Gen.OUT_DIR.path_join(variant + ".tscn")
+		var packed: PackedScene = gen._build_scene(variant,
+				load(String(Gen.FAMILY_SCRIPTS.get(family, Gen.BASE_SCRIPT))),
+				load(Gen.OUT_DIR.path_join(variant + "_spec.tres")), geo)
+		var shipped := FileAccess.get_file_as_string(scene_path)
+		# A regen saves over the shipped path, where the saver reuses each ext_resource's id;
+		# hand the scratch path the same ids or every one reads as changed.
+		for m in RegEx.create_from_string(
+				"\\[ext_resource [^\\]]*path=\"([^\"]*)\" id=\"([^\"]*)\"").search_all(shipped):
+			(load(m.get_string(1)) as Resource).set_id_for_path(scratch, m.get_string(2))
+		assert_int(ResourceSaver.save(packed, scratch)).is_equal(OK)
+		var rebuilt := StableSave.restore_uids(shipped, FileAccess.get_file_as_string(scratch))
+		assert_str(StableSave.churn_key(rebuilt)) \
+				.override_failure_message(("%s.tscn changes on regen: a generated child missing "
+					+ "from GENERATED_CHILDREN, a hand `;` comment, or a regen not yet run") % variant) \
+				.is_equal(StableSave.churn_key(shipped))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(scratch))
 
 
 # --- helpers ------------------------------------------------------------------

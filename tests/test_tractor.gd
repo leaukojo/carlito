@@ -146,6 +146,26 @@ func _guidance_wheelbase(gd: GroundDriveSpec) -> float:
 	return rear_z - front_z
 
 
+func test_the_foot_brake_engages_the_front_axle_and_brakes_only_the_rears() -> void:
+	# Rear-axle brakes, as on a real tractor; the pedal engages MFWD so the rigid shaft brakes the
+	# fronts too. Released, the axle drops back to the driver's own MFWD choice.
+	var spec := _tractor_spec()
+	var gd := spec.ground_drive
+	assert_bool(gd.brake_engages_front_axle).is_true()
+	assert_float(gd.brake_bias_front).is_equal(0.0)
+	assert_float(gd.axle_brake_torque(false)).is_equal(0.0)
+	var drive := WheelDriveScript.new(auto_free(Node3D.new()), spec)
+	var input := VehicleInput.new()
+	drive.drive_omega(gd, input)
+	assert_int(drive._driven_count).is_equal(2)
+	input.brake = 0.2
+	drive.drive_omega(gd, input)
+	assert_int(drive._driven_count).is_equal(4)
+	input.brake = 0.0
+	drive.drive_omega(gd, input)
+	assert_int(drive._driven_count).is_equal(2)
+
+
 func test_guidance_steer_unit_is_nan_with_no_guidance_command() -> void:
 	var spec := _tractor_spec()
 	var drive := WheelDriveScript.new(auto_free(Node3D.new()), spec)

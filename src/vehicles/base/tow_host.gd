@@ -23,6 +23,12 @@ const COUPLE_SPEED_MS := TowedBody.RAISE_SPEED_MS
 ## Seconds the interlock notice stays up.
 const TIP_NOTICE_DWELL_S := 5.0
 
+## Road-speed cap (km/h) while a tipping body is off its rest: a raised body puts the load metres
+## over the road, and the rig rolls in any real turn (docs/heavy_vehicles.md § Truck sizing). The
+## interlock only refuses raising on the move; this is what stops driving off with it up.
+const BODY_UP_CAP_KMH := 5.0
+const BODY_UP_NOTICE := "BODY UP - %d KM/H LIMIT" % int(BODY_UP_CAP_KMH)
+
 var trailer: TowedBody = null  ## null while nothing is coupled
 
 var _marker_local := Vector3.ZERO
@@ -34,6 +40,7 @@ var _spawn_ticks := 0    ## ticks since spawn, against SPAWN_COUPLE_TICKS — co
 var _couple_watch := 0   ## ticks left in which a fresh coupling is watched for a body contact
 var _display_frozen := false  ## the showroom has this rig pinned (see set_display_frozen)
 var _last_tip_cmd := -1.0     ## last spool position, so the interlock notice fires on the edge
+var _body_was_up := false     ## last tick's `body_up()`, so the cap's notice fires on the edge
 
 
 # --- what a subclass declares -------------------------------------------------------------------
@@ -84,6 +91,19 @@ func coupled_pose(chassis: Transform3D) -> Transform3D:
 
 func is_coupled() -> bool:
 	return is_instance_valid(trailer)
+
+
+## Is a plumbed (tipping) body off its rest? A body that only shifts its load, the tanker's
+## surge, has no hose and is never "up".
+func body_up() -> bool:
+	return is_instance_valid(trailer) and trailer.uses(TowedBody.Consumer.HYDRAULIC) \
+			and trailer.body_pos01() > 0.0
+
+
+## The road-speed cap (km/h) the towing unit's Drivetrain takes this tick, 0 = none
+## (`Drivetrain.speed_cap_kmh`). Both machines forward it after `tick_towing`.
+func speed_cap_kmh() -> float:
+	return BODY_UP_CAP_KMH if body_up() else 0.0
 
 
 ## Has a real spawn transform existed yet? Until it has, a towed id is remembered, not coupled.
@@ -296,6 +316,7 @@ func tick_towing(input: VehicleInput, demand01: float, spool: float,
 	# always after the chassis' own wheels. The handbrake applies the spring brakes at both ends.
 	trailer.tick_towed(demand01, input.handbrake, delta, grip_terrains)
 	_apply_yaw_friction(delta)
+	_announce_body_up()
 
 	# The base only watches the chassis fall off the world. is_inside_tree() guards: outside the
 	# tree the engine hands back Transform3D(), an origin that reads as "at y=0".
@@ -324,11 +345,28 @@ func _apply_yaw_friction(delta: float) -> void:
 	var axis := chassis.global_transform.basis.y.normalized()
 	var rel_rate := (trailer.angular_velocity - chassis.angular_velocity).dot(axis)
 	var torque := Articulation.yaw_friction_torque(
-			rel_rate, friction, trailer.yaw_inertia(), delta)
+			rel_rate, friction, yaw_pair_moment(), delta)
 	if is_zero_approx(torque):
 		return
 	trailer.apply_torque(axis * torque)
 	chassis.apply_torque(axis * -torque)
+
+
+## The moment (kg*m^2) the yaw friction's torque pair meets about the articulation axis: both
+## bodies' solver tensors in series, since the pair turns both. 0 with nothing coupled.
+func yaw_pair_moment() -> float:
+	var chassis := _chassis()
+	if chassis == null or not is_instance_valid(trailer):
+		return 0.0
+	var axis := chassis.global_transform.basis.y.normalized()
+	return Articulation.pair_moment(_inverse_moment(trailer, axis), _inverse_moment(chassis, axis))
+
+
+## Inverse moment (1 / kg*m^2) of `body` about world `axis` through its centre of mass, off the
+## solver's tensor; 0 for a body the space does not hold.
+static func _inverse_moment(body: RigidBody3D, axis: Vector3) -> float:
+	var state := PhysicsServer3D.body_get_direct_state(body.get_rid())
+	return axis.dot(state.inverse_inertia_tensor * axis) if state != null else 0.0
 
 
 ## Did what we just coupled actually fit? A towed body rides RayWheels, so a contact right after
@@ -363,7 +401,21 @@ func _warn_if_tip_interlocked(cmd: float, plumbed: bool, handbrake: float, pto_o
 	GameState.notice.emit(profile().tip_notice, TIP_NOTICE_DWELL_S)
 
 
+## Say the cap is on as the body leaves its rest; take the notice down as it lands again.
+func _announce_body_up() -> void:
+	var up := body_up()
+	if up and not _body_was_up:
+		GameState.notice.emit(BODY_UP_NOTICE, TIP_NOTICE_DWELL_S)
+	elif _body_was_up and not up:
+		GameState.notice_cleared.emit(BODY_UP_NOTICE)
+	_body_was_up = up
+
+
 ## The interlock notice fires on a change of spool position, so a couple/uncouple restarts the
 ## latch, or the first refused press after a new coupling reads as "no edge" and says nothing.
 func _restart_tip_latch() -> void:
 	_last_tip_cmd = -1.0
+	# A body dropped while up takes its cap with it, so its notice goes too.
+	if _body_was_up:
+		GameState.notice_cleared.emit(BODY_UP_NOTICE)
+	_body_was_up = false

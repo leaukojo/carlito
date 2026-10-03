@@ -11,8 +11,9 @@ const KINGPIN_LOCAL := Vector3(0.0, 1.05, 0.45)
 
 ## Roll is a hair of compliance, which lets the solver settle. Pitch travel must cover a grade
 ## break rather than bound it: on its stop the bodies are rigid and a level trailer levers the
-## climbing drive axle off the road. A sharp break onto the climbable 25% grade swings the joint
-## -9.0 to +12.8 deg, so 15 clears it.
+## climbing drive axle off the road. A sharp break onto a 25% grade swings the joint -9.0 to
+## +12.8 deg, so 15 clears it. The rig meets one only rolling or with speed: from rest the box rig
+## pulls away on 16% at most (docs/vehicles.md § Gradeability).
 ##
 ## The coupled rig rests slightly tractor nose-up (rear axle at more spring travel than the steer
 ## axle), so KINGPIN_LOCAL.y cannot level the tractor; it only sets the trailer's own pitch.

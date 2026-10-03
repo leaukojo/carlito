@@ -12,13 +12,14 @@
 // an allow entry that no longer matches anything fails too, so the list cannot rot.
 
 import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = join(fileURLToPath(new URL('.', import.meta.url)), '..');
+// The working tree, not the index: a tracked file deleted but not yet committed is gone.
 const files = execSync('git ls-files --cached --others --exclude-standard', { cwd: repoRoot })
-  .toString().split('\n').filter(Boolean);
+  .toString().split('\n').filter((f) => f && existsSync(join(repoRoot, f)));
 const fileSet = new Set(files);
 const dirSet = new Set();
 for (const f of files) for (let d = posix.dirname(f); d !== '.'; d = posix.dirname(d)) dirSet.add(d);

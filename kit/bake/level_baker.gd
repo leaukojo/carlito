@@ -12,7 +12,6 @@ const BAKER_VERSION := 14
 const Groups := preload("res://src/levels/base/carlito_groups.gd")
 const RailTrackScript := preload("res://src/levels/base/rail_track.gd")
 
-## Preloaded, not class_name'd: the baker runs headless from the CLI.
 const Layers := preload("res://src/physics/collision_layers.gd")
 
 ## Bake-adjacent code no resource-dependency edge can reach; hashed explicitly. A new
@@ -111,13 +110,29 @@ static func normalize_text(s: String) -> String:
 	return s.replace("\r\n", "\n").replace("\r", "\n")
 
 
-## Text formats hash as normalized text, binaries as raw bytes.
+## Drops whole-line comments and blank lines from GDScript, so a comment edit to bake code
+## re-stales nothing. A trailing `code # comment` still hashes: telling it from a `#` inside
+## a string needs a tokenizer.
+static func strip_gd_comments(s: String) -> String:
+	var kept := PackedStringArray()
+	for line in s.split("\n"):
+		var t := line.strip_edges()
+		if not t.is_empty() and not t.begins_with("#"):
+			kept.append(line)
+	return "\n".join(kept)
+
+
+## Text formats hash as normalized text (GDScript comment-stripped), binaries as raw bytes.
 static func hash_file(path: String) -> String:
-	if TEXT_EXTS.has(path.get_extension().to_lower()):
+	var ext := path.get_extension().to_lower()
+	if TEXT_EXTS.has(ext):
 		var f := FileAccess.open(path, FileAccess.READ)
 		if f == null:
 			return "MISSING"
-		return normalize_text(f.get_as_text()).sha256_text()
+		var text := normalize_text(f.get_as_text())
+		if ext == "gd":
+			text = strip_gd_comments(text)
+		return text.sha256_text()
 	var h := FileAccess.get_sha256(path)
 	return h if h != "" else "MISSING"
 
@@ -489,6 +504,8 @@ static func _fail(errors: PackedStringArray) -> Dictionary:
 
 
 ## Recursive gather. GridMap cells are all drivable; KitPiece prefabs contribute render meshes plus collision per mode.
+## Anything else must be a script-less Node/Node3D group: AuthoringRoot is gone at runtime,
+## so any other node (water, WorldBounds, a payload, a loose mesh) would vanish from the level.
 static func _collect(node: Node, xform: Transform3D, ctx: BakeContext,
 		errors: PackedStringArray) -> void:
 	for child in node.get_children():
@@ -503,12 +520,19 @@ static func _collect(node: Node, xform: Transform3D, ctx: BakeContext,
 			_collect_scatter(child, cxform, ctx, errors)
 		elif child.is_in_group(Groups.ROAD):
 			_collect_road(child, cxform, ctx, errors)
-		else:
+		elif child.get_script() == null and child.get_class() in ["Node3D", "Node"]:
 			_collect(child, cxform, ctx, errors)
+		else:
+			errors.append("'%s' (%s) under AuthoringRoot is not bakeable (GridMap, KitPiece, scatter, road or a plain Node3D group) — it would vanish from the baked level; move it out of AuthoringRoot" %
+					[child.name, child.get_class()])
 
 
 static func _collect_gridmap(gm: GridMap, xform: Transform3D, ctx: BakeContext,
 		errors: PackedStringArray) -> void:
+	# Palette meshes sit on the cell floor; map_to_local would lift every cell half a cell.
+	if gm.cell_center_y:
+		errors.append("GridMap '%s' has cell_center_y = true — palette GridMaps need it false" % gm.name)
+		return
 	var ml := gm.mesh_library
 	if ml == null:
 		errors.append("GridMap '%s' has no MeshLibrary" % gm.name)

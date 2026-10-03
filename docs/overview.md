@@ -2,7 +2,7 @@
 
 Architecture map for agents. Product summary and standing rules: root `CLAUDE.md`; directory
 rules: the nested `CLAUDE.md` files; per-system detail: `docs/systems.md`, `docs/vehicles.md`,
-`docs/heavy_vehicles.md`, `docs/level_kit.md`. Open work: `docs/plans/`; backlog: `TODO.md`; suspected defects: `to_investigate.md`.
+`docs/heavy_vehicles.md`, `docs/level_kit.md`. Open work: `docs/plans/`; backlog: `TODO.md`.
 What goes where (CLAUDE.md / code comment / `docs/`): root `CLAUDE.md` § Working style.
 
 ## The big idea: one contract, everything flows through it

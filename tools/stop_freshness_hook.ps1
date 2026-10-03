@@ -27,9 +27,14 @@ if (-not $dirty) { Allow }
 
 $touchContract = $dirty | Where-Object { $_ -eq 'contract/carlito_contract.json' }
 $touchHead     = $dirty | Where-Object { $_ -match '^(src/bridge/web/head_include\.html|export_presets\.cfg)$' }
-$touchBake     = $dirty | Where-Object { $_ -match '^(src/levels/|kit/)' }
+# Bake-input prefixes: one list, shared with pre-commit gate 4.
+$bakePaths     = Get-Content (Join-Path $PSScriptRoot 'git-hooks\bake_paths.txt') |
+    Where-Object { $_ -and -not $_.StartsWith('#') }
+$touchBake     = $dirty | Where-Object {
+    $p = $_; -not $p.EndsWith('.md') -and ($bakePaths | Where-Object { $p.StartsWith($_) }) }
 
 function Block($msg) { [Console]::Error.WriteLine($msg); exit 2 }
+if (-not $bakePaths) { Block 'tools/git-hooks/bake_paths.txt is missing or empty, so no bake input can trigger the stale-bake check.' }
 
 # 1. Contract edited -> synced sloppyCAN copy must be regenerated.
 if ($touchContract) {
@@ -63,7 +68,9 @@ if ($touchBake) {
         Block "check_bakes did not finish, so bake freshness is unknown. Re-run it:  & `$GODOT --headless --path . res://tools/check_bakes.tscn`n$out"
     }
     if ([int]$done.Groups[1].Value -ne 0) {
-        Block 'Stale bakes. Re-bake:  & $GODOT --headless --path . res://tools/bake_levels.tscn'
+        # Unanchored: PowerShell 5.1 prefixes the first captured stderr line with the exe name.
+        $why = ($out -split "`n" | Where-Object { $_ -match '\[check-bakes\] .*: (stale|missing|error)' }) -join "`n"
+        Block "Stale bakes or road paint (fix as named), then re-bake:  & `$GODOT --headless --path . res://tools/bake_levels.tscn`n$why"
     }
 }
 

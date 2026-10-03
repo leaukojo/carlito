@@ -10,8 +10,7 @@ playgrounds**: content exists to make contract signals visibly perform
 goal-driven, bridge-only exception that teaches CAN — the defs in `src/challenges/defs/` are the list.
 
 Docs: `overview.md` (architecture map) · `HUMAN_EXPLANATIONS.md` · `systems.md` · `vehicles.md` ·
-`heavy_vehicles.md` · `level_kit.md` · `making_a_level.md` · `deploying.md` · `TODO.md` ·
-`to_investigate.md`.
+`heavy_vehicles.md` · `level_kit.md` · `making_a_level.md` · `deploying.md` · `TODO.md`.
 
 Autoloads (the whole set): `Contract`, `Bridge`, `InputRouter`, `GameState`. The Godot 3-era
 generation is a backup outside the project — a behavior/layout reference, never a source; a
@@ -95,8 +94,7 @@ Nested rules load with their directory: `src/vehicles/` (+ `truck/`, `tractor/`,
   are FROZEN (`src/physics/CLAUDE.md`).
 - **Scene tags** — `src/levels/base/carlito_groups.gd` declares the six SceneTree groups that say
   what a node IS (`carlito_authoring`, `carlito_kit_piece`, `carlito_road`, `carlito_scatter`,
-  `carlito_level`, `carlito_payload`) and owns the one copy of each authoring walk. `preload`ed,
-  never `class_name`d. **Every class joins its group in `_init`, not `_enter_tree`** — the baker
+  `carlito_level`, `carlito_payload`) and owns the one copy of each authoring walk. **Every class joins its group in `_init`, not `_enter_tree`** — the baker
   walks level scenes that never enter a tree and instantiates scatter templates loose, so only
   `is_in_group()` works there. `get_tree().get_nodes_in_group()` is correct ONLY in the running
   game (in the editor `get_tree()` holds every open scene); discovery in kit/addons/tools code
@@ -106,9 +104,10 @@ Nested rules load with their directory: `src/vehicles/` (+ `truck/`, `tractor/`,
   `.import` sidecar carries the same `uid://`) — a tool then sculpts the copy while every
   step reports success. Keep backups outside the repo or drop a `.gdignore` (`docs/img/`).
 - **Bake-adjacent CODE is hashed explicitly** via `LevelBaker.BAKE_CODE_INPUTS` (it reaches no
-  resource dependency edge): editing a listed file re-stales every level (comments included), a
-  new bake-adjacent file means a new entry, and `BAKER_VERSION` bumps only for a change no
-  hashed file carries.
+  resource dependency edge): editing a listed file re-stales every level (a `.gd`'s whole-line
+  comments are not hashed), a new bake-adjacent file means a new entry and a
+  `tools/git-hooks/bake_paths.txt` prefix (test-pinned), and `BAKER_VERSION` bumps only for a
+  change no hashed file carries.
 
 ## Running / testing / exporting
 
@@ -153,7 +152,8 @@ classes are **errors** in project.godot — intentional integer division needs
 `@warning_ignore("integer_division")`.
 
 - A fresh git worktree has no `.godot/` import cache and no `.baked.scn`: `--import` and bake
-  it before trusting a test result there. Never run two headless Godots on one checkout at once.
+  it before trusting a test result there. Headless resolves `class_name` only from that cache, so
+  a new or renamed one is undeclared there until `--import` (or the editor) rebuilds it. Never run two headless Godots on one checkout at once.
 - Headless with no `--level=` / `CARLITO_LEVEL` boots `boot.gd`'s `DEFAULT_LEVEL`
   (`flatland`), not the first registry entry (the garage).
 - **Judge a headless run by its output, never its exit code.** Ending with only

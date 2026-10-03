@@ -1,7 +1,6 @@
 extends RefCounted
 ## The scene-tagging vocabulary: SceneTree groups that say what a node is, plus the two
-## walks that find tagged nodes. Preloaded, never class_name'd — the baker, export-strip
-## plugin, and measure tools all run headless. Tagged in `_init`, not `_enter_tree`: the
+## walks that find tagged nodes. Tagged in `_init`, not `_enter_tree`: the
 ## baker walks level scenes and scatter prefab templates that never enter a tree.
 ## `is_in_group()` works out of the tree; `get_tree().get_nodes_in_group()` does not (and in
 ## the editor returns every open scene), so the walks below stay walks, scoped to a

@@ -102,13 +102,13 @@
 		"top_speed_kmh": 110.0
 	},
 	"semi": {
-		"label": "typical Class 8 semi tractor-trailer, loaded to ~36 t (e.g. Freightliner Cascadia + van trailer)",
-		"marks_s": {"50": 8.5, "96.56": 20.0, "100": 22.0},
-		"top_speed_kmh": 105.0
+		"label": "typical European diesel cab-over + box semi-trailer, 32-36 t, 90 km/h governed (e.g. Volvo FH / Scania R class)",
+		"marks_s": {"50": 16.0},
+		"top_speed_kmh": 90.0
 	},
 	"semi-conventional": {
-		"label": "typical North American conventional semi tractor-trailer, loaded to ~36 t (e.g. Peterbilt 579 + van trailer)",
-		"marks_s": {"50": 9.0, "96.56": 21.0, "100": 23.0},
+		"label": "typical North American diesel conventional semi tractor-trailer, loaded to 32-36 t (e.g. Peterbilt 579 + van trailer)",
+		"marks_s": {"50": 16.5, "96.56": 55.0, "100": 60.0},
 		"top_speed_kmh": 105.0
 	},
 	"tractor-kenney": {

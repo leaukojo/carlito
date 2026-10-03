@@ -154,6 +154,15 @@ func test_run_in_browser_is_the_web_preset_with_the_islands_in() -> void:
 	assert_dict(_preset("Run in Browser", true)).is_equal(_preset("Web", true))
 
 
+## Both fail only in an exported build (docs/deploying.md § export_presets.cfg): a threaded
+## build never boots inside sloppyCAN's non-isolated iframe, and PWA carries offline caching.
+## Run in Browser mirrors these options (test above).
+func test_web_preset_is_unthreaded_with_pwa() -> void:
+	var options := _preset("Web", true)
+	assert_bool(options.get("variant/thread_support", true)).is_false()
+	assert_bool(options.get("progressive_web_app/enabled", false)).is_true()
+
+
 ## CI exports one pack per "Web <id>" preset: each must still name a packed level.
 func test_no_level_preset_outlives_its_level() -> void:
 	for preset_name in _preset_names():

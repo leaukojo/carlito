@@ -61,7 +61,8 @@ const LAND_RATE := 1.0
 
 # --- the soft geofence ---
 
-## The fence is soft: a breach latches a forced RTL, never brakes, blocks or teleports.
+## The fence is soft, an accepted COMPROMISE: a breach latches a forced RTL, never brakes, blocks or
+## teleports, so a craft can overshoot it.
 ##
 ## Horizontal radius (m) around home; also the contract's `home_dist` range top (pinned by test),
 ## so the bar fills as the craft approaches it.

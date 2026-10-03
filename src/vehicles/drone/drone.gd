@@ -119,6 +119,11 @@ func _process(delta: float) -> void:
 		_motors.spin_visuals(delta)
 
 
+## W and S tilt the nose forward and back (`input.throttle`): one stick, so one ramp.
+func key_pedals_are_a_stick() -> bool:
+	return true
+
+
 func _make_telemetry() -> VehicleTelemetry:
 	return DroneTelemetry.new()
 

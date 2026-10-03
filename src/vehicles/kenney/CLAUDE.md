@@ -18,6 +18,7 @@
     `duplicate()` loses instance state, so the hitch would land pinned to today's hitch script.
   - A `;` comment in a generated `.tscn` does not survive, and while one is there the regen
     re-churns every `unique_id`. Notes go here or in the generator.
+  - Guard: `test_regen_reproduces_every_shipped_scene` (a regen of a current scene is a no-op).
 - **Wheel stations use one track for the whole body** (`_analyze` averages the four
   half-widths); flush-X alone would follow the flared fender and tucked arch. A body whose axles
   wear different wheel models (the tractor) keeps per-axle stations.

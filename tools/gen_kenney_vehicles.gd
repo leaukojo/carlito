@@ -8,6 +8,7 @@ extends Node
 ## Deterministic and destructive-by-run: a hand-tune driven into a shipped .tres must be folded
 ## back into the recipe here before the next run, or the rerun silently discards it.
 
+const StableSave := preload("res://tools/stable_save.gd")
 const OUT_DIR := "res://src/vehicles/kenney"
 const MODELS := OUT_DIR + "/models"
 const BASE_SCRIPT := "res://src/vehicles/base/base_vehicle.gd"
@@ -45,8 +46,9 @@ const FRONTAL_FILL := 0.82
 const GRAVITY := 9.8
 ## Share of the tyre's own longitudinal grip full pedal asks for; every baseline derives its foot
 ## brake from the tyre through this (see _derive_brakes): deceleration at full pedal is
-## `frac * mu_long * g` on every body, whatever it weighs. Just under 1 because RayWheel's slip
-## tyre saturates at the ceiling; past it the pedal becomes an on/off lock with no steering.
+## `frac * mu_long * g` on every body, whatever it weighs (split by axle, _front_brake_share). Just
+## under 1 because RayWheel's slip tyre peaks at the ceiling; past it a wheel without ABS locks and
+## brakes at the grip curve's sliding value (0.8 of the peak).
 const BRAKE_GRIP_FRAC := 0.95
 const MIN_CLEARANCE := 0.12  ## m the collision hull floor is held above the wheel-contact plane
 const WHEEL_BAND := 0.4   ## m z-window (body space) the body half-width is measured over per axle
@@ -117,24 +119,30 @@ const CAR_BASE := {
 	"damper_rebound": 2400.0, "max_suspension_force": 30000.0, "rest_length": 0.28,
 	# One rate for every corner; no Kenney body declares a rear axle share of its own.
 	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
-	"anti_roll_rate": 7000.0,
+	# 10 kN/m with mu_lat 0.97: the sedan peaks at 0.87 g, 4.3 deg of roll (corner pass, 2026-10-02).
+	"anti_roll_rate": 10000.0,
 	# FWD default; per-variant override in VARIANTS (rwd/awd where the body says so).
 	"wheel_inertia": 1.2, "driven_front": true, "driven_rear": false,
 	# Differentials: 1.0 is open (Differential.bias_capacity). Road cars keep open axles and an
 	# open centre unless the body really carries an LSD or a biasing centre (VARIANTS).
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
-	"mu_long": 1.05, "mu_lat": 1.1, "handbrake_grip": 0.45,
+	"mu_long": 1.05, "mu_lat": 0.97, "handbrake_grip": 0.45,
+	# Every road car carries ABS (EU-mandatory since 2004); the open-wheelers opt out in VARIANTS.
+	"abs_equipped": true,
+	# Traction control too (part of ESC, EU-mandatory since 2014); the open-wheelers opt out with ABS.
+	"tcs_equipped": true,
 	# Passenger radials: ~10% of mu per doubling of load past the corner's static share.
 	"load_sensitivity": 0.10,
 	# 185 Nm peak / ~156 hp at 6000 on the base saloon, anchored on a 1150 kg saloon hitting
-	# 220 km/h and 8.5 s to 100 (measured 219.8 / 8.35 via `measure_vehicles -- sedan`).
+	# 220 km/h and 8.5 s to 100 (measured 219.9 / 8.55 via `measure_vehicles -- sedan 180`; a
+	# 45 s cap stops it short, ~202 and still gaining).
 	# Keep the shape when re-scaling: idle fraction 98/185=0.53 lets the car pull away on a grade;
 	# 6600/6800 is the plateau coming down then a soft limiter keeping the sports bodies off the
 	# rev limiter in sixth.
 	"torque_curve": [900, 98, 2000, 154, 3200, 184, 4800, 185, 6000, 185, 6600, 170, 6800, 61],
 	"idle_rpm": 900.0, "redline_rpm": 6800.0,
 	# Brakes derive from the tyre on every baseline (BRAKE_GRIP_FRAC / _derive_brakes).
-	# Sixth is the top-speed control: 0.925 settles the sedan at 6012 rpm / 219.8 km/h.
+	# Sixth is the top-speed control: 0.925 settles the sedan at 6025 rpm / 219.9 km/h.
 	# Gears 2-5 re-spread: 1.550 / 1.470 / 1.380 / 1.290 / 1.199.
 	"gear_ratios": [4.5, 2.903, 1.975, 1.431, 1.109, 0.925],
 	# Reverse stays 2.2, sized against sliding grip not gear 1: 185x2.2x3.9x0.9 = 1429 Nm at the
@@ -147,8 +155,8 @@ const CAR_BASE := {
 	"max_steer_deg": 38.0, "steer_speed": 7.0,
 	# Steering falloff: BaseVehicle lerps lock from full to min_steer_frac near
 	# steer_falloff_speed, so the pair states an absolute lock at motorway speed — divide by the
-	# variant's own max_steer_deg. Car family: ~10 deg (0.26x38) at 42 m/s = 151 km/h; mu_lat 1.1
-	# needs ~2.5x less lock at that speed.
+	# variant's own max_steer_deg. Car family: ~10 deg (0.26x38) at 42 m/s = 151 km/h; mu_lat 0.97
+	# needs ~2.8x less lock at that speed.
 	"min_steer_frac": 0.26, "steer_falloff_speed": 42.0,
 }
 ## Diesel curves end at zero at the redline: the governor droops to nothing above rated speed,
@@ -159,7 +167,7 @@ const TRUCK_BASE := {
 	# Spring/damper/force hand-tuned by driving both trucks.
 	# com_y 0.75 is a working truck's real height, ~0.30 of the AABB on these bodies: a hopper or a
 	# pump deck sits high and the cab above it. Half-track 0.66-0.69 over 0.75 m tips at ~0.88 g,
-	# clear of mu_lat 0.75, so both bodies still slide before they roll.
+	# clear of mu_lat 0.75, so the firetruck slides before it rolls (the garbage truck overrides).
 	"mass": 4000.0, "com_y": 0.75, "spring_rate": 240000.0, "damper_bump": 12000.0,
 	"damper_rebound": 15800.0, "max_suspension_force": 120000.0, "rest_length": 0.32,
 	# One rate for every corner; no Kenney body declares a rear axle share of its own.
@@ -169,6 +177,10 @@ const TRUCK_BASE := {
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
 	# J1939: only family with an auxiliary retarder on the driven axle.
 	"retarder_equipped": true,
+	# ABS: mandatory on goods vehicles in the EU since 1991.
+	"abs_equipped": true,
+	# No TC: torque-bound with grip to spare, so it would buy nothing (docs/vehicles.md § Launches).
+	"tcs_equipped": false,
 	# A truck tyre on dry asphalt, and the family's whole brake chain hangs off it: brake_torque,
 	# the retarder's rating and the steering-taper margin are all derived from mu_long/mu_lat
 	# (src/vehicles/CLAUDE.md, tyre class sets mu).
@@ -197,10 +209,13 @@ const VAN_BASE := {
 	"damper_rebound": 7000.0, "max_suspension_force": 90000.0, "rest_length": 0.32,
 	# One rate for every corner; no Kenney body declares a rear axle share of its own.
 	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
-	"anti_roll_rate": 80000.0,
+	# 110 kN/m: ~3 deg of roll at the 0.75 g limit (corner pass, 2026-10-02).
+	"anti_roll_rate": 110000.0,
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
-	"mu_long": 1.0, "mu_lat": 0.95, "handbrake_grip": 1.0,
+	# mu_lat 0.85: commercial-tyre side grip, so a cornering van slides before it lifts a wheel.
+	"mu_long": 1.0, "mu_lat": 0.85, "handbrake_grip": 1.0,
+	"abs_equipped": true, "tcs_equipped": true,
 	# Commercial radials, as TRUCK_BASE.
 	"load_sensitivity": 0.08,
 	"torque_curve": [700, 400, 1200, 650, 1800, 800, 2400, 780, 2800, 600, 3200, 0],
@@ -239,6 +254,11 @@ const TRACTOR_BASE := {
 	"centre_diff_rigid": true,
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
 	"mu_long": 1.0, "mu_lat": 0.95, "handbrake_grip": 1.0,
+	# No ABS: a farm tractor's service brakes are not anti-lock. They sit on the rear axle only, and
+	# the pedal engages MFWD so the shaft brakes the fronts (a 40 km/h tractor brakes all four).
+	"abs_equipped": false, "brake_engages_front_axle": true,
+	# No TC either: MFWD and the diff lock are a tractor's traction aids.
+	"tcs_equipped": false,
 	# Big soft flotation tyres lose more mu per doubling of load than a road tyre.
 	"load_sensitivity": 0.12,
 	# Rated 2000, governed to nothing by 2600 (high idle).
@@ -277,9 +297,9 @@ const VARIANTS := {
 	# 0-100 goes as peak^-0.6 on the sedan, peak^-1.4 on the suv.
 	# Both SUVs: a Torsen-type centre (~3:1). Under launch squat the rear axle carries ~2x the
 	# front (2412 / 4956 N measured), inside 3:1, so the heavy axle is no longer capped by the light one.
-	"suv": {"family": "car", "com_y": 0.62, "anti_roll_rate": 18000.0, "mass": 1500.0, "torque_mul": 1.05, "mu_lat": 1.0, "max_steer_deg": 34.0, "driven_rear": true, "centre_diff_bias": 3.0},
+	"suv": {"family": "car", "com_y": 0.62, "anti_roll_rate": 18000.0, "mass": 1500.0, "torque_mul": 1.05, "mu_lat": 0.88, "max_steer_deg": 34.0, "driven_rear": true, "centre_diff_bias": 3.0},
 	# 1.54 is the biggest multiplier in the family: 285 Nm through an AWD 1600 kg body.
-	"suv-luxury": {"family": "car", "com_y": 0.62, "anti_roll_rate": 18000.0, "mass": 1600.0, "torque_mul": 1.54, "mu_lat": 1.0, "max_steer_deg": 33.0, "driven_rear": true, "centre_diff_bias": 3.0},
+	"suv-luxury": {"family": "car", "com_y": 0.62, "anti_roll_rate": 18000.0, "mass": 1600.0, "torque_mul": 1.54, "mu_lat": 0.88, "max_steer_deg": 33.0, "driven_rear": true, "centre_diff_bias": 3.0},
 	"taxi": {"family": "car", "mass": 1250.0, "front_weight": 0.60},
 	"police": {"family": "car", "mass": 1300.0, "torque_mul": 1.18, "final_drive": 4.0, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true},
 	# Open-wheelers: `wheel_x_out` measured per body against its own half-width at the wheel
@@ -301,13 +321,13 @@ const VARIANTS := {
 	# torque change. Both keep a long top gear (0.66 vs CAR_BASE's 0.925), reaching 288.0 /
 	# 295.8 km/h.
 	# Differentials: `race` carries a plate LSD on its driven rear (2.5); `race-future` the same
-	# rear plus a Torsen-type centre (3.0).
+	# rear plus a Torsen-type centre (3.0). Neither carries ABS or TC: formula cars race without them.
 	# `torque_mul` tracks CAR_BASE so absolute torque stays fixed (2.10x185=389 Nm,
 	# 2.21x185=409 Nm) — re-derive on any CAR_BASE torque edit.
-	"race": {"family": "car", "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "max_steer_deg": 40.0, "handbrake_grip": 0.5, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.18, "steer_falloff_speed": 35.0, "diff_bias_rear": 2.5},
-	"race-future": {"family": "car", "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "max_steer_deg": 42.0, "handbrake_grip": 0.5, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.17, "steer_falloff_speed": 35.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0},
+	"race": {"family": "car", "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "max_steer_deg": 40.0, "handbrake_grip": 0.5, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.18, "steer_falloff_speed": 35.0, "diff_bias_rear": 2.5, "abs_equipped": false, "tcs_equipped": false},
+	"race-future": {"family": "car", "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "max_steer_deg": 42.0, "handbrake_grip": 0.5, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.17, "steer_falloff_speed": 35.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "tcs_equipped": false},
 	# Commercial bodies: RWD, governed at 180 like the real things (measured 198-200 ungoverned).
-	"van": {"family": "car", "com_y": 0.58, "anti_roll_rate": 18000.0, "mu_lat": 1.0, "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
+	"van": {"family": "car", "com_y": 0.58, "anti_roll_rate": 18000.0, "mu_lat": 0.88, "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
 	# `ride_lift` 0.08 on the flatbeds: their arches are drawn shallower than the tyre, so at the
 	# flush ride height the rear wheels broke through the bed floor.
 	"pickup": {"family": "car", "anti_roll_rate": 14000.0, "ride_lift": 0.08, "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
@@ -320,7 +340,11 @@ const VARIANTS := {
 	# com_z -0.14 = 0.14 m forward (front = -Z), hand-tuned by driving: the hopper body pulls
 	# mass back off the rear axle. 90 km/h is the EU heavy-truck limiter (a refuse collector
 	# usually runs lower); this is the one body the governor visibly bites (measured 99.5).
-	"garbage-truck": {"family": "truck", "mass": 8000.0, "torque_mul": 1.3, "com_z": -0.14, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 85.0},
+	# com_y 1.05 is a laden compactor body: it rolls before it slides, overturning on the skid pad
+	# at 0.60 g (real ~0.4-0.5 g). Higher would put the COM past half the 1.72 m collision hull.
+	# Half-track over COM height (0.66 / ~1.1 m) is already below a real truck's (~1.0 / 1.5); a
+	# real one tips lower through tyre and frame compliance.
+	"garbage-truck": {"family": "truck", "mass": 8000.0, "com_y": 1.05, "torque_mul": 1.3, "com_z": -0.14, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 85.0},
 	# Emergency vehicles are exempt from the goods-vehicle limiter; 110 is the appliance's own
 	# rating, just above what this body reaches.
 	"firetruck": {"family": "truck", "mass": 7500.0, "torque_mul": 1.3, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 110.0},
@@ -375,13 +399,13 @@ func _ready() -> void:
 		recipe["_id"] = variant
 		var spec := _build_spec(String(ov.get("base", family)), recipe, geo, wheels)
 		var spec_path := OUT_DIR.path_join(variant + "_spec.tres")
-		if _save_spec_stable(spec, spec_path) != OK:
+		if StableSave.save(spec, spec_path) != OK:
 			push_error("failed to save " + spec_path)
 			continue
 		var scene_script: Variant = load(String(FAMILY_SCRIPTS.get(family, BASE_SCRIPT)))
 		var scene := _build_scene(variant, scene_script, load(spec_path), geo)
 		var scene_path := OUT_DIR.path_join(variant + ".tscn")
-		if _save_scene_stable(scene, scene_path) != OK:
+		if StableSave.save(scene, scene_path) != OK:
 			push_error("failed to save " + scene_path)
 			continue
 		ok += 1
@@ -461,6 +485,9 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	gd.rear_diff_lockable = get_flag.call("rear_diff_lockable")
 	gd.front_axle_engageable = get_flag.call("front_axle_engageable")
 	gd.retarder_equipped = get_flag.call("retarder_equipped")
+	gd.abs_equipped = get_flag.call("abs_equipped")
+	gd.tcs_equipped = get_flag.call("tcs_equipped")
+	gd.brake_engages_front_axle = get_flag.call("brake_engages_front_axle")
 	# Differentials (Differential): per variant over a baseline of open (1.0) everywhere, and the
 	# rigid centre is a driveline flag like the two above.
 	gd.diff_bias_front = get_f.call("diff_bias_front")
@@ -549,8 +576,9 @@ func _wheel_positions(geo: Dictionary, spec: VehicleSpec, gd: GroundDriveSpec,
 
 
 ## Derive brake/handbrake from the tyre on every baseline — one derivation, no per-baseline
-## brake knob. `brake_torque = BRAKE_GRIP_FRAC * the tyre's own per-wheel ceiling`, so full pedal
-## asks for `BRAKE_GRIP_FRAC * mu_long * g` of deceleration regardless of body mass or gearing.
+## brake knob. `brake_torque = BRAKE_GRIP_FRAC * the tyre's own per-wheel ceiling`, split by axle
+## (`_front_brake_share`), so full pedal asks for `BRAKE_GRIP_FRAC * mu_long * g` of deceleration
+## regardless of body mass or gearing.
 ## `handbrake_torque` (x2) = 1.5 * launch torque at idle+25% throttle (strictly between the
 ## 25%/50% brackets `test_vehicle_catalog` checks; `wheel_torque` is linear in throttle so this
 ## holds at any gear-1 ratio). Sampled at IDLE while a real launch happens at the converter's
@@ -587,11 +615,58 @@ func _derive_brakes(spec: VehicleSpec, gd: GroundDriveSpec, id: String) -> void:
 	var transmissible := minf(max_drive, float(driven) * grip_ceiling)
 	var hierarchy_floor := transmissible / wheels * 1.02
 	gd.brake_torque = ceilf(maxf(grip_ceiling * BRAKE_GRIP_FRAC, hierarchy_floor))
-	_brake_report.append("%-16s %6.0f Nm/wheel = %.2f g (tyre holds %.2f g, %d driven)%s" % [
-			id, gd.brake_torque,
+	# Rear-axle brakes that engage the front axle share through the shaft, not a split.
+	gd.brake_bias_front = 0.0 if gd.brake_engages_front_axle else _front_brake_share(spec, gd)
+	_brake_report.append("%-16s %6.0f Nm/wheel = %.2f g (tyre holds %.2f g, %d driven), %.0f%% front%s"
+			% [id, gd.brake_torque,
 			gd.brake_torque * wheels / gd.wheel_radius / spec.mass / GRAVITY, gd.mu_long,
-			driven, "  <-- OVER THE TYRE" if gd.brake_torque > grip_ceiling else ""])
+			driven, gd.brake_bias_front * 100.0,
+			"  <-- OVER THE TYRE" if gd.brake_torque > grip_ceiling else ""])
 	gd.handbrake_torque = maxf(1.0, roundf(launch_25 * 0.75))
+
+
+## The front axle's share of the foot brake (`GroundDriveSpec.brake_bias_front`): its share of
+## what the two axles can hold in a full-pedal stop. Each axle's load is its static share plus the
+## `a * h / L` the stop moves forward, and its grip is load-scaled as RayWheel scales it
+## (`load_scaled_mu`: the loaded front loses mu, the unloaded rear gains it); `a` is what full pedal
+## asks, held to what the tyres can give, settled by a few passes. So both axles reach their limit
+## together: an even split under-brakes the front and locks the rear first. `h` is the COM's height
+## over the road at static sag: the anchors sit `WHEEL_RADIUS + rest_length - comp` above it
+## (_wheel_positions).
+func _front_brake_share(spec: VehicleSpec, gd: GroundDriveSpec) -> float:
+	var front_z := INF
+	var rear_z := -INF
+	var n_rear := 0
+	for p in gd.wheel_positions:
+		if RayWheel.is_rear_z(p.z):
+			rear_z = maxf(rear_z, p.z)
+			n_rear += 1
+		else:
+			front_z = minf(front_z, p.z)
+	var n_front := gd.wheel_positions.size() - n_rear
+	var wheelbase := rear_z - front_z
+	if not is_finite(wheelbase) or wheelbase <= 0.0 or n_front == 0 or n_rear == 0:
+		return -1.0  # no axle pair: every wheel alike
+	var comp := clampf(spec.mass / 4.0 * GRAVITY / gd.spring_rate, 0.0, gd.rest_length * 0.8)
+	var h := spec.center_of_mass.y + WHEEL_RADIUS + gd.rest_length - comp - gd.wheel_positions[0].y
+	var weight := spec.mass * GRAVITY
+	var ref_load := weight / gd.wheel_positions.size()  # RayWheel's: corner_mass * g
+	var static_front := (rear_z - spec.center_of_mass.z) / wheelbase
+	var asked := gd.brake_torque * gd.wheel_positions.size() / gd.wheel_radius / weight  # in g
+	var decel := asked
+	var cap_front := 0.0
+	var cap_rear := 0.0
+	for _pass in 4:
+		var n_f := clampf(static_front + decel * h / wheelbase, 0.0, 1.0) * weight
+		var n_r := weight - n_f
+		cap_front = n_f * RayWheel.load_scaled_mu(gd.mu_long, n_f / n_front, ref_load,
+				gd.load_sensitivity)
+		cap_rear = n_r * RayWheel.load_scaled_mu(gd.mu_long, n_r / n_rear, ref_load,
+				gd.load_sensitivity)
+		decel = minf(asked, (cap_front + cap_rear) / weight)
+	var share := cap_front / maxf(cap_front + cap_rear, 1e-6)
+	# Thousandths, rounded so the stored float is the plain decimal.
+	return roundf(clampf(share, 0.05, 0.95) * 1000.0) / 1000.0
 
 
 func _scaled_curve(flat: Array, mul: float) -> PackedVector2Array:
@@ -1261,120 +1336,3 @@ func _xform_aabb(aabb: AABB, xform: Transform3D) -> AABB:
 				aabb.size.y if (i & 2) else 0.0,
 				aabb.size.z if (i & 4) else 0.0)))
 	return out
-
-
-# --- stable save (strip churny per-node unique_id, like gen_kit_assets) ----------------
-
-var _unique_id_re := RegEx.create_from_string(" unique_id=\\d+")
-## Godot re-rolls the 5-character suffix of every generated sub-resource id on each save
-## (`StandardMaterial3D_l7l2h` -> `StandardMaterial3D_lei3o`).
-var _subres_id_re := RegEx.create_from_string("\\b([A-Za-z0-9]+)_([a-z0-9]{5})\\b")
-
-
-## A scene's content minus the three things a re-save churns for free: per-node `unique_id`,
-## sub-resource ID suffixes, and line endings (git checks out CRLF, ResourceSaver writes LF, so
-## a raw byte compare calls every file changed). Sub-resource IDs are renumbered by order of
-## first appearance rather than blanked, so a genuine edit that repoints a node at a different
-## sub-resource of the same type still reads as a change (a real insertion shifts every later
-## number — errs toward reporting a difference, the safe direction).
-func _churn_key(text: String) -> String:
-	var flat := _unique_id_re.sub(text.replace("\r\n", "\n"), "", true)
-	var seen := {}
-	var out := ""
-	var cursor := 0
-	for m in _subres_id_re.search_all(flat):
-		out += flat.substr(cursor, m.get_start() - cursor)
-		cursor = m.get_end()
-		var token := m.get_string()
-		if not seen.has(token):
-			seen[token] = "%s_ID%d" % [m.get_string(1), seen.size()]
-		out += String(seen[token])
-	return out + flat.substr(cursor)
-
-
-## The ` uid="uid://..."` attribute of a .tres/.tscn header line, "" if it carries none.
-func _header_uid(text: String) -> String:
-	var head_end := text.find("]")
-	var at := text.find(" uid=\"uid://")
-	if head_end < 0 or at < 0 or at > head_end:
-		return ""
-	var close := text.find("\"", at + 6)
-	if close < 0 or close > head_end:
-		return ""
-	return text.substr(at, close - at + 1)
-
-
-var _ext_res_re := RegEx.create_from_string("\\[ext_resource [^\\]]*\\]")
-var _uid_attr_re := RegEx.create_from_string(" uid=\"uid://[^\"]*\"")
-var _path_attr_re := RegEx.create_from_string(" path=\"([^\"]*)\"")
-
-
-## `res://…` -> ` uid="uid://…"` for every `[ext_resource]` line in `text` that carries both.
-func _ext_resource_uids(text: String) -> Dictionary:
-	var out := {}
-	for m in _ext_res_re.search_all(text):
-		var line := m.get_string()
-		var u := _uid_attr_re.search(line)
-		var pa := _path_attr_re.search(line)
-		if u != null and pa != null:
-			out[pa.get_string(1)] = u.get_string()
-	return out
-
-
-## Re-inject the UIDs `after` lost relative to `before` (header + every `[ext_resource]`,
-## matched by resource path). ResourceSaver only writes a `uid=` it can see, so a plain save
-## silently strips one whenever the source resource carries none in memory — a broken reference
-## the moment a path moves, and a no-op regen turned into an 18-file diff.
-func _restore_uids(before: String, after: String) -> String:
-	if before.is_empty():
-		return after
-	var out := after
-	var head_uid := _header_uid(before)
-	if not head_uid.is_empty() and _header_uid(out).is_empty():
-		var head_end := out.find("]")
-		if head_end >= 0:
-			out = out.insert(head_end, head_uid)
-	var want := _ext_resource_uids(before)
-	if want.is_empty():
-		return out
-	var rebuilt := ""
-	var cursor := 0
-	for m in _ext_res_re.search_all(out):
-		var line := m.get_string()
-		rebuilt += out.substr(cursor, m.get_start() - cursor)
-		cursor = m.get_end()
-		if _uid_attr_re.search(line) == null:
-			var pa := _path_attr_re.search(line)
-			if pa != null and want.has(pa.get_string(1)):
-				line = line.insert(pa.get_start(), String(want[pa.get_string(1)]))
-		rebuilt += line
-	return rebuilt + out.substr(cursor)
-
-
-## Save a spec, keeping the UIDs the file already had (see `_restore_uids`).
-func _save_spec_stable(spec: Resource, path: String) -> Error:
-	var before := FileAccess.get_file_as_string(path) if FileAccess.file_exists(path) else ""
-	var err := ResourceSaver.save(spec, path)
-	if err != OK or before.is_empty():
-		return err
-	var after := _restore_uids(before, FileAccess.get_file_as_string(path))
-	if _churn_key(after) == _churn_key(before):
-		after = before   # unchanged: keep the on-disk line endings too
-	var f := FileAccess.open(path, FileAccess.WRITE)
-	if f != null:
-		f.store_string(after)
-	return OK
-
-
-func _save_scene_stable(packed: PackedScene, path: String) -> Error:
-	var before := FileAccess.get_file_as_string(path) if FileAccess.file_exists(path) else ""
-	var err := ResourceSaver.save(packed, path)
-	if err != OK or before.is_empty():
-		return err
-	var after := _restore_uids(before, FileAccess.get_file_as_string(path))
-	if _churn_key(after) == _churn_key(before):
-		after = before
-	var f := FileAccess.open(path, FileAccess.WRITE)
-	if f != null:
-		f.store_string(after)
-	return OK

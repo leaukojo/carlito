@@ -4,8 +4,7 @@
 an edit, run the `contract-edit` skill.
 
 - **Every edit bumps `version`**, and with it `tests/test_contract.gd`'s
-  `test_real_contract_is_valid_v<N>`: the number is in the assert AND the test name, and nothing
-  else pins it.
+  `test_real_contract_is_valid` assert: nothing else pins the number.
 - **An edit is a paired change across two repos**: the pre-commit hook regenerates
   `../sloppycan/carlito_contract.js` (`node tools/gen_js_contract.mjs`) and fails the commit until
   that copy is committed in `sloppycan`; both land on `dev` and are promoted together.

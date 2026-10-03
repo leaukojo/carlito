@@ -15,6 +15,12 @@ extends RefCounted
 ## the gooseneck sweeps through the tractor's frame.
 const JACKKNIFE_MAX_DEG := 75.0
 
+## Share of the one-tick stop the plate friction may take (`yaw_friction_torque`). The towed tyres'
+## one-tick lateral caps already stop the same relative yaw in the same tick, so a plate taking the
+## whole stop reverses it every tick and a standing rig buzzes for ever; at 0.5 the reversal halves
+## each tick and dies out. Guard: `test_tow_host` `test_a_coupled_rig_standing_still_stays_mirror_symmetric`.
+const YAW_CAP_SHARE := 0.5
+
 
 ## Signed articulation angle between two body transforms. Flattened onto the horizontal plane,
 ## so a pitched tractor on a ramp does not read as articulated.
@@ -77,16 +83,23 @@ static func jackknife_step(phi: float, v_fwd: float, yaw_rate: float, delta: flo
 ## applies the equal and opposite on the chassis.
 ##
 ## Coulomb, not viscous: the magnitude is `friction_nm` at any rate, so it damps trailer sway
-## without re-centring the trailer. `yaw_inertia * |rate| / delta` is the one-tick rule in torque
-## form (60 Hz clamp: src/vehicles/CLAUDE.md § The 60 Hz tick): one tick may at most stop the
-## relative yaw, so a rig at a standstill cannot buzz across zero. The cap only binds at tiny rates
-## on a semi-trailer, so the inertia figure may be a proxy.
-static func yaw_friction_torque(rel_yaw_rate: float, friction_nm: float, yaw_inertia: float,
+## without re-centring the trailer. `moment * |rate| / delta` is the one-tick rule in torque
+## form (60 Hz clamp: src/vehicles/CLAUDE.md § The 60 Hz tick), of which the plate takes
+## `YAW_CAP_SHARE`, so a rig at a standstill cannot buzz across zero. `moment` is the PAIR's
+## (`pair_moment`): the torque turns both bodies, so either body's own moment alone overshoots.
+static func yaw_friction_torque(rel_yaw_rate: float, friction_nm: float, moment: float,
 		delta: float) -> float:
 	if friction_nm <= 0.0 or delta <= 0.0:
 		return 0.0
-	var cap := maxf(yaw_inertia, 0.0) * absf(rel_yaw_rate) / delta
+	var cap := YAW_CAP_SHARE * maxf(moment, 0.0) * absf(rel_yaw_rate) / delta
 	return -signf(rel_yaw_rate) * minf(friction_nm, cap)
+
+
+## The moment a torque pair meets, off the two bodies' inverse moments about its axis: in series,
+## `1 / (inv_a + inv_b)`. 0 when neither body can turn.
+static func pair_moment(inv_a: float, inv_b: float) -> float:
+	var inv := maxf(inv_a, 0.0) + maxf(inv_b, 0.0)
+	return 1.0 / inv if inv > 0.0 else 0.0
 
 
 ## Fraction of a semi-trailer's weight resting on the fifth wheel rather than its own bogie:

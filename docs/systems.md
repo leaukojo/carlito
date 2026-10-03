@@ -30,6 +30,10 @@ is invisible in a web release). sloppyCAN reads a generated copy,
 static/pure, tested in `tests/test_input_arbitration.gd`.
 
 - `merge_local`: keyboard + touch (max analog, summed steer, OR'd bits).
+- `KeyShaper` (`key_shaper.gd`): an on/off key becomes a hand and a foot. The keyboard's steer
+  ramps out ever more slowly with road speed while it turns road wheels (1 / v^2 above 10 m/s;
+  `BaseVehicle.key_steer_speed`, 0 for a flying plane, drone and boat) and returns faster; pedals
+  ramp in over 0.25-0.4 s and off in 0.1 s. Local only: the touch stick and the bridge are analog.
 - `arbitrate_local`: ignition gates throttle; brake never throttles; S = brake, then reverse
   at standstill; foot brake drives `brake_lamp`.
 - `arbitrate_bridge`: the gear byte owns direction. Mode = `InputRouter.set_manual_gearbox`
@@ -255,7 +259,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   non-boat `BaseVehicle`, region via `contains_xz`); does not own the map boundary.
   `WorldBounds` (`src/levels/base/world_bounds.gd`, `@tool StaticBody3D`): four walls on `extent` plus a ceiling at `ceiling_height`, down to
   `floor_depth`, axis-aligned. Set `extent` to the water `size` so sea wall and map wall
-  match (nothing tests that per level); default `ceiling_height` is 1500 m, clear of the
+  match (`test_world_bounds` checks every level); default `ceiling_height` is 1500 m, clear of the
   contract's 0-500 m `altitude` scale.
 - Depth-fade shading (`water.gdshader`): samples `hint_depth_texture`, fades
   `shallow_alpha`->`deep_alpha` / `water_color`->`deep_color` over `depth_fade_m`; `depth *

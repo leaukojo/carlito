@@ -1,9 +1,6 @@
 extends RefCounted
 ## The project's 3D physics collision layers, and the composite masks built from them.
 ##
-## Reached by `preload()`, never `class_name`: the baker and measure tools run headless,
-## where class_name cache state is unreliable and a layer resolving to 0 puts a body nowhere.
-##
 ## Bit assignment is frozen: written into `project.godot`'s `[layer_names]`, every
 ## `.baked.scn`, and `cargo_payload.tscn`. A new layer appends at bit 8+; none is renumbered.
 

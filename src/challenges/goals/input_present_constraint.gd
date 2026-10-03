@@ -16,6 +16,6 @@ func input_refs() -> PackedStringArray:
 
 func step(frame: ChallengeFrame, _delta: float) -> Status:
 	if float(frame.input_value(field)) == sentinel:
-		message = "%s is absent — hand steering doesn't pass this one" % field
+		message = "%s is absent: hand steering doesn't pass this one" % field
 		return Status.FAIL
 	return Status.RUNNING

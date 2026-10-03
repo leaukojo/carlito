@@ -30,7 +30,7 @@ const OVERTURNED_DEG := 70.0
 const OVERTURNED_S := 1.5
 ## Raised sticky (dwell 0) and cleared by exact text match, so it stays up until the body is back
 ## on its wheels.
-const OVERTURNED_NOTICE := "OVERTURNED - PRESS R TO RESPAWN"
+const OVERTURNED_NOTICE := "OVERTURNED - PRESS BACKSPACE TO RESPAWN"
 
 @export var spec: VehicleSpec
 
@@ -327,9 +327,8 @@ func reset_session_state() -> void:
 	_prev_velocity = Vector3.ZERO  # zero accel/impact history so the teleport isn't read as an impact
 	_impact_hold = 0.0
 	# A body that rewrites `mass` at runtime (the refuse truck's hopper) is back to spec mass.
-	mass = spec.mass
+	set_live_mass(spec.mass)
 	if drive != null:
-		drive.set_corner_mass_from(mass)
 		drive.respawn()
 	if _horn_fade != null:
 		_horn_fade.kill()
@@ -338,6 +337,14 @@ func reset_session_state() -> void:
 	_prev_horn = false
 	_clear_overturned()
 	InputRouter.reset_vehicle_cycles()
+
+
+## The one runtime `mass` write for a wheeled body: the RayWheel one-tick clamps are sized off
+## `corner_mass`, so the corners are re-shared in the same call (WheelDrive.set_corner_mass_from).
+func set_live_mass(kg: float) -> void:
+	mass = kg
+	if drive != null:
+		drive.set_corner_mass_from(kg)
 
 
 ## Copy a fresh telemetry's every field onto the live one. IN PLACE, never a new object: the
@@ -377,6 +384,20 @@ func rest_ride_height() -> float:
 ## Read by InputRouter for local brake-vs-reverse arbitration.
 func get_speed() -> float:
 	return telemetry.speed
+
+
+## Road speed the keyboard steer's slow-down reads (InputRouter, KeyShaper): this body's speed while
+## its steer turns road wheels, 0 when it turns none (boat, drone, train), so a held key moves at
+## the standstill rate. The 1 / v^2 law holds only for a wheel angle (sideways g = v^2 x curvature).
+func key_steer_speed() -> float:
+	return telemetry.speed if drive != null else 0.0
+
+
+## True when the two pedal keys are the two ends of one stick axis rather than a throttle and a
+## brake (the drone's pitch): InputRouter then ramps both at the accel rate, so W and S lean the
+## body alike.
+func key_pedals_are_a_stick() -> bool:
+	return false
 
 
 func get_gear_byte() -> int:

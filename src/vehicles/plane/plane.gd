@@ -205,6 +205,12 @@ func reset_session_state() -> void:
 	_elevator_pos = 0.0
 
 
+## In the air the steer commands a bank angle, whose sideways g does not grow with speed: the key
+## moves at its standstill rate there, and slows with speed only while a wheel steers on the ground.
+func key_steer_speed() -> float:
+	return 0.0 if _airborne() else super.key_steer_speed()
+
+
 ## True when no wheel touches the ground (the stall nose-drop only acts in the air).
 func _airborne() -> bool:
 	for w in wheels:

@@ -494,6 +494,56 @@ func test_every_trailer_is_a_towed_body_with_its_wheels_authored_to_match_its_sp
 		node.free()
 
 
+func test_every_semi_trailer_pairs_its_bogie_under_a_bar_sized_off_its_own_spring() -> void:
+	# The bar is what holds a trailer's lean in a corner (docs/heavy_vehicles.md § Truck sizing), and
+	# one the bogie never pairs is silently inert. Sized off the trailer's own spring, never copied: a
+	# box's bar on the flatbed would roll it no further than its tractor allows.
+	for path in Catalog.TRAILERS:
+		if not Catalog.is_coupled(path):
+			continue
+		var trailer := _trailer(path) as TowedBody
+		add_child(trailer)  # the pairing is built in _ready
+		var gd := trailer.spec.ground_drive
+		assert_float(gd.anti_roll_rate) \
+			.override_failure_message("%s: bar %.0f against spring %.0f" % [
+				path, gd.anti_roll_rate, gd.spring_rate]) \
+			.is_equal(gd.spring_rate)
+		for w in trailer.wheels:
+			assert_object(w.anti_roll_partner) \
+				.override_failure_message("%s: a wheel at %s has no bar partner" % [path, w.anchor]) \
+				.is_not_null()
+			if w.anti_roll_partner != null:
+				assert_float(w.anti_roll_partner.anchor.z).is_equal_approx(w.anchor.z, 1e-6)
+				assert_float(signf(w.anti_roll_partner.anchor.x)).is_equal(-signf(w.anchor.x))
+		trailer.free()
+
+
+func test_every_semi_trailer_brakes_at_one_fraction_of_its_own_wheel_load() -> void:
+	# The headers' one load-apportioned formula: brake force over static bogie-wheel load is the same
+	# on all four, so a number copied onto a lighter trailer over-brakes it. A ratio against the first
+	# trailer, not figures, so retuning the family moves all four together. The parking brake is a
+	# quarter of the service brake on each (box_spec.tres).
+	var first := -1.0
+	for path in Catalog.TRAILERS:
+		if not Catalog.is_coupled(path):
+			continue
+		var node := (load(path) as PackedScene).instantiate()
+		var spec: VehicleSpec = node.get("spec")
+		var gd := spec.ground_drive
+		var wheel_n: float = spec.mass * (1.0 - float(node.call("kingpin_share"))) * G \
+				/ float(gd.wheel_positions.size())
+		var per_load := gd.brake_torque / (gd.wheel_radius * wheel_n)
+		if first < 0.0:
+			first = per_load
+		assert_float(per_load / first).override_failure_message(
+				"%s brakes at %.3f x its wheel load, the first trailer at %.3f" % [path, per_load, first]) \
+				.is_equal_approx(1.0, 0.01)
+		assert_float(gd.handbrake_torque / gd.brake_torque).override_failure_message(
+				"%s: the parking brake is not a quarter of the service brake" % path) \
+				.is_equal_approx(0.25, 0.01)
+		node.free()
+
+
 func test_the_semi_is_a_truck_that_tows_and_declares_its_retarder() -> void:
 	assert_str(CatalogScript.family_of("semi")).is_equal("truck")
 	# The garage default must stay the garbage truck: the semi is last in the family because V on
@@ -654,35 +704,31 @@ func test_the_first_tick_of_an_application_is_still_almost_nothing() -> void:
 	assert_float(first).is_greater(0.0)
 
 
-# --- ISO 11992: the EBS21 ABS predicate ---------------------------------------
+# --- ISO 11992: EBS21, the trailer's own ABS at work ----------------------------
 
-func test_abs_reports_only_a_wheel_going_to_a_lock() -> void:
-	# The threshold sits far above the 0.024-0.029 a braked axle settles at, so normal braking must
-	# not light the lamp — an ABS telltale that is on whenever you brake says nothing.
-	assert_bool(TruckT.trailer_abs_active(0.0)).is_false()
-	assert_bool(TruckT.trailer_abs_active(0.03)).is_false()
-	assert_bool(TruckT.trailer_abs_active(TruckT.TRAILER_ABS_SLIP)).is_false()
-	assert_bool(TruckT.trailer_abs_active(TruckT.TRAILER_ABS_SLIP + 0.01)).is_true()
-	# A fully locked wheel (slip 1.0 — the spin has stopped while the road has not).
-	assert_bool(TruckT.trailer_abs_active(1.0)).is_true()
-	assert_float(TruckT.TRAILER_ABS_SLIP).override_failure_message(
-			"the ABS threshold must sit clear of ordinary braking slip").is_greater(0.1)
+func test_every_semi_trailer_carries_abs() -> void:
+	# EBS21 reports a device: a trailer without one could never set trailer_abs, and a real O4
+	# semi-trailer has carried ABS since 1998.
+	for path in [FLATBED, BOX, TIPPER, TANKER]:
+		var trailer: Node3D = (load(path) as PackedScene).instantiate()
+		var spec: VehicleSpec = trailer.get("spec")
+		assert_bool(spec.ground_drive.abs_equipped) \
+			.override_failure_message("%s ships without ABS" % path).is_true()
+		trailer.free()
 
 
-func test_abs_reads_the_worst_wheel_and_not_an_average() -> void:
-	# ABS is a per-wheel device: one locking wheel is the event, and averaging it against three
+func test_abs_reads_any_wheel_held_back_and_not_an_average() -> void:
+	# ABS is a per-wheel device: one wheel at its limit is the event, and averaging it against the
 	# healthy ones would hide exactly the case worth showing.
 	var trailer := _wheeled_flatbed()
 	var wheels: Array = trailer.get("wheels")
 	assert_int(wheels.size()).is_greater(1)
 	for w in wheels:
-		w.slip = 0.02
-	assert_float(trailer.call("max_wheel_slip")).is_equal_approx(0.02, 1e-9)
-	assert_bool(TruckT.trailer_abs_active(trailer.call("max_wheel_slip"))).is_false()
-	wheels[0].slip = 0.85
-	assert_float(trailer.call("max_wheel_slip")).is_equal_approx(0.85, 1e-9)
-	assert_bool(TruckT.trailer_abs_active(trailer.call("max_wheel_slip"))) \
-		.override_failure_message("one locked wheel must light the trailer ABS").is_true()
+		w.abs_active = false
+	assert_bool(trailer.call("abs_active")).is_false()
+	wheels[0].abs_active = true
+	assert_bool(trailer.call("abs_active")) \
+		.override_failure_message("one wheel held back must light the trailer ABS").is_true()
 	trailer.free()
 
 
@@ -767,10 +813,10 @@ func test_coupling_dips_both_circuits_and_the_primary_further() -> void:
 	var charge := 0.0
 	for _i in roundi(TruckT.TRAILER_CHARGE_S / DELTA):
 		var draw := TruckT.trailer_air_draw(true, charge)
-		primary = TruckT.air_step(primary, 0.0, true, DELTA,
-				TruckT.AIR_CHARGE_RATE, TruckT.AIR_DRAW_PRIMARY, draw)
-		secondary = TruckT.air_step(secondary, 0.0, true, DELTA,
-				TruckT.AIR_CHARGE_RATE, TruckT.AIR_DRAW_SECONDARY, draw)
+		primary = TruckT.air_step(primary, 0.0, 0.0, true, DELTA, TruckT.AIR_CHARGE_RATE,
+				TruckT.AIR_PRESS_PRIMARY, TruckT.AIR_DRAW_PRIMARY, draw)
+		secondary = TruckT.air_step(secondary, 0.0, 0.0, true, DELTA, TruckT.AIR_CHARGE_RATE,
+				TruckT.AIR_PRESS_SECONDARY, TruckT.AIR_DRAW_SECONDARY, draw)
 		charge = TruckT.trailer_air_step(charge, DELTA)
 
 	assert_float(primary).override_failure_message(
@@ -787,27 +833,35 @@ func test_coupling_dips_both_circuits_and_the_primary_further() -> void:
 	# every time. The gate is what the next brake application can reach, not what coupling does.
 	assert_bool(TruckT.spring_brakes_applied(primary, secondary)) \
 		.override_failure_message("coupling alone immobilized the truck").is_false()
+	# Nor may one held stop at the bottom of the dip: a held pedal draws a single press.
+	assert_bool(TruckT.spring_brakes_applied(primary - TruckT.AIR_PRESS_PRIMARY,
+			secondary - TruckT.AIR_PRESS_SECONDARY)) \
+		.override_failure_message("one brake press after coupling set the spring brakes").is_false()
 
 	for _i in 600:
-		primary = TruckT.air_step(primary, 0.0, true, DELTA,
-				TruckT.AIR_CHARGE_RATE, TruckT.AIR_DRAW_PRIMARY, TruckT.trailer_air_draw(true, 1.0))
+		primary = TruckT.air_step(primary, 0.0, 0.0, true, DELTA, TruckT.AIR_CHARGE_RATE,
+				TruckT.AIR_PRESS_PRIMARY, TruckT.AIR_DRAW_PRIMARY, TruckT.trailer_air_draw(true, 1.0))
 	assert_float(primary).is_greater(warn)
 
 
-func test_coupling_and_driving_off_can_reach_the_spring_brake_gate() -> void:
-	# The consequence: brake while the trailer is still charging and the reservoirs reach the cut-in,
-	# at which point the spring brakes set and the rig stops where it stands. Pinned as "sooner than
-	# the brake alone would", so it stays a real interaction rather than a coincidence of two rates.
+func test_coupling_and_pumping_the_brake_can_reach_the_spring_brake_gate() -> void:
+	# The consequence: pump the brake while the trailer is still charging and the reservoirs reach
+	# the cut-in, at which point the spring brakes set and the rig stops where it stands. Pinned as
+	# "sooner than the brake alone would", so it stays a real interaction rather than a coincidence
+	# of two rates. One full press a second: air is drawn per press, never while held.
 	var ticks_to_gate := func(with_trailer: bool) -> int:
 		var p := TruckT.AIR_SPAWN_BAR
 		var s := TruckT.AIR_SPAWN_BAR
 		var charge := 0.0
+		var prev := 0.0
 		for i in 3600:
+			var pedal := 1.0 if (i % 60) < 30 else 0.0
 			var draw: float = TruckT.trailer_air_draw(with_trailer, charge)
-			p = TruckT.air_step(p, 1.0, true, DELTA,
-					TruckT.AIR_CHARGE_RATE, TruckT.AIR_DRAW_PRIMARY, draw)
-			s = TruckT.air_step(s, 1.0, true, DELTA,
-					TruckT.AIR_CHARGE_RATE, TruckT.AIR_DRAW_SECONDARY, draw)
+			p = TruckT.air_step(p, pedal, prev, true, DELTA, TruckT.AIR_CHARGE_RATE,
+					TruckT.AIR_PRESS_PRIMARY, TruckT.AIR_DRAW_PRIMARY, draw)
+			s = TruckT.air_step(s, pedal, prev, true, DELTA, TruckT.AIR_CHARGE_RATE,
+					TruckT.AIR_PRESS_SECONDARY, TruckT.AIR_DRAW_SECONDARY, draw)
+			prev = pedal
 			charge = TruckT.trailer_air_step(charge, DELTA)
 			if TruckT.spring_brakes_applied(p, s):
 				return i
@@ -816,7 +870,7 @@ func test_coupling_and_driving_off_can_reach_the_spring_brake_gate() -> void:
 	var coupled: int = ticks_to_gate.call(true)
 	var bobtail: int = ticks_to_gate.call(false)
 	assert_int(coupled).override_failure_message(
-			"a full application on a freshly coupled rig never reached the gate").is_greater(0)
+			"pumping the brake on a freshly coupled rig never reached the gate").is_greater(0)
 	assert_int(coupled).override_failure_message(
 			"the fresh trailer must reach the gate SOONER than the brake alone (%d vs %d ticks)"
 			% [coupled, bobtail]).is_less(bobtail)

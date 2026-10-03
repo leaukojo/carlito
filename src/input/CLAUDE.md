@@ -2,6 +2,11 @@
 
 ALL input arbitration lives here (standing rule 5). Protocol tour: `docs/systems.md`.
 
+- **Keyboard and analog (bridge, gamepad) both drive; vehicles stay realistic for analog.** An
+  on/off key's feel is shaped here (`key_shaper.gd`), never by detuning a spec: the keyboard's steer
+  before `merge_local` (the touch stick is analog), every local pedal after it, the bridge never. A
+  measure tool that drives through `Input` measures the shaper: drive the bridge stash instead.
+
 - **`VehicleInput` is a `class_name` in `vehicle_input.gd`, not an inner class of the autoload** —
   an inner class makes every vehicle's static types depend on the autoload's registered *name*.
   Its fields are **flat except `lamps`**: the router deliberately knows no vehicle family, so every
@@ -32,6 +37,9 @@ ALL input arbitration lives here (standing rule 5). Protocol tour: `docs/systems
 - **The challenge bridge-only lock is `set_bridge_only`**: local and touch are never polled, and
   with no live bridge the input is `locked_idle()`. Its keyboard override (`--challenge-keys` /
   `CARLITO_CHALLENGE_KEYS`) is honoured in debug builds only.
+- **Both pedals held: `brake_override`** (both paths) cuts the throttle once the body passes
+  `BRAKE_OVERRIDE_SPEED` and holds the cut until a pedal lifts; never a bigger brake
+  (`docs/vehicles.md` § Both pedals).
 - **A live bridge without `accel`/`brake`/`steer` does not drive**: `bridge_drives()` is false,
   `blend_local_driving` takes the driving group from local and the rest from the bridge (never
   under `set_bridge_only`).

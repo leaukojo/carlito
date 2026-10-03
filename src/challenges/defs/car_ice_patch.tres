@@ -16,5 +16,5 @@ variant = "sedan-sports"
 arena = "car_arena"
 course = "res://src/levels/island/car_arena/courses/car_ice_patch_course.tscn"
 briefing = "Reach the finish line past the bend. Somewhere on this road the grip drops, and nothing on the road shows where."
-hint = "slip (two values, front and rear axle: mean wheel slip ratio), speed, accel, steer. When slip spikes, the tyres have let go: ease off accel until it settles, the way traction control does. The bend is 35 m radius over 70 deg."
+hint = "slip (two values, front and rear axle: mean wheel slip ratio), speed, accel, steer, and tcs_off: set it, or the car's own traction control does this lesson for you. When slip spikes, the tyres have let go: ease off accel until it settles, the way traction control does. The bend is 35 m radius over 70 deg."
 goals = Array[ExtResource("1_goal")]([SubResource("Resource_finish")])

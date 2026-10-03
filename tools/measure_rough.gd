@@ -13,9 +13,9 @@ extends Node3D
 ## D, automatic gearbox), so every trial is the same drive whatever the body. The pedal climbs to
 ## the floor whenever the body cannot hold the crawl, so a stuck trial is a floored one: that is
 ## what a player holding the key gets. `tc` adds a second limit, a driver feathering the pedal to
-## hold the WORST driven wheel at the grip curve's 0.12 peak (measure_grade.gd's `tc`, but on the
-## worst wheel, not the rear axle's mean): it takes throttle sensitivity out of the answer, and
-## what is left is the differentials' own ceiling.
+## hold the WORST driven wheel at the grip curve's 0.12 peak (`tc_pedal.gd`; unlike
+## measure_grade.gd's `tc`, on the worst wheel, not the rear axle's mean): it takes throttle
+## sensitivity out of the answer, and what is left is the differentials' own ceiling.
 ##
 ## Per trial: CROSSED (every wheel past the patch), STUCK (under STUCK_PROGRESS of forward progress
 ## in STUCK_S), OFF LANE, or TIMEOUT; the time and mean speed over the patch; seconds of chassis
@@ -51,6 +51,13 @@ const BASELINE: Array[Dictionary] = [
 	{"variant": "pickup", "mfwd": false, "diff": false},
 ]
 
+## `doc=rough` (arg 1): BASELINE plus `hatchback-sports` floored, then BASELINE under `tc`, and the
+## `rough` region of `docs/vehicles.md` is rewritten (`doc_region.gd`): the mud lane's matrix,
+## and every asphalt cell that did not cross.
+const DocRegion := preload("res://tools/doc_region.gd")
+const TcPedal := preload("res://tools/tc_pedal.gd")
+const DOC_EXTRA: Dictionary = {"variant": "hatchback-sports", "mfwd": false, "diff": false}
+
 const SETTLE_S := 1.5
 const CRAWL_SPEED := 2.0       ## m/s the driver holds, overridden by `speed=`
 const PEDAL_GAIN := 0.5        ## pedal units per second per m/s of speed shortfall
@@ -64,8 +71,6 @@ const TRIAL_S := 60.0
 const SHORT_OF_CRAWL := 0.25   ## m/s under the crawl that counts a tick as `short`
 ## Crawl pedal at or above this is FLOORED: the driver is asking for everything the body has.
 const PEDAL_FLOORED := 0.98
-const TC_TARGET_SLIP := 0.12   ## the shipped grip curves all peak here
-const TC_GAIN := 12.0          ## pedal units per second per unit of slip error
 const BODY_FLAG_S := 1.0       ## s of chassis contact the summary table flags
 
 enum Ph { SETTLE, DRIVE, DONE }
@@ -78,6 +83,7 @@ var _patches: Array[int] = []
 var _crawl := CRAWL_SPEED
 var _tc := false
 var _verbose := false
+var _doc := false
 
 var _level: Level
 var _car: BaseVehicle
@@ -109,7 +115,15 @@ func _ready() -> void:
 			lane_filter = s.substr(5)
 		elif s.begins_with("patch="):
 			patch_filter = s.substr(6)
-	if which == "baseline":
+	if which == "doc=rough":
+		_doc = true
+		_configs = BASELINE.duplicate(true)
+		_configs.append(DOC_EXTRA.duplicate())
+		for c: Dictionary in BASELINE:
+			var tc := c.duplicate()
+			tc["tc"] = true
+			_configs.append(tc)
+	elif which == "baseline":
 		_configs = BASELINE.duplicate(true)
 	elif Catalog.VARIANTS.has(which):
 		_configs = [{"variant": which, "mfwd": args.has("mfwd"), "diff": args.has("diff")}]
@@ -140,9 +154,13 @@ func _ready() -> void:
 func _next_config() -> void:
 	if _configs.is_empty():
 		_print_table()
+		if _doc:
+			DocRegion.write("rough", _doc_table())
 		get_tree().quit(0)
 		return
 	_config = _configs.pop_front()
+	if _doc:
+		_tc = bool(_config.get("tc", false))
 	var variant := String(_config["variant"])
 	if _level.vehicle == null or GameState.current_variant != variant:
 		_level.set_vehicle(variant)
@@ -216,8 +234,7 @@ func _physics_process(delta: float) -> void:
 	var steer := clampf(-(STEER_OFFSET_GAIN * offset + STEER_HEADING_GAIN * forward.x), -1.0, 1.0)
 	_pedal = clampf(_pedal + (_crawl - speed) * PEDAL_GAIN * delta, 0.0, 1.0)
 	if _tc:
-		_tc_pedal = clampf(_tc_pedal + (TC_TARGET_SLIP - _worst_driven_slip()) * TC_GAIN * delta,
-				0.0, 1.0)
+		_tc_pedal = TcPedal.step(_tc_pedal, _car.drive.wheels, delta)
 	var brake := clampf((speed - _crawl - BRAKE_OVER) * BRAKE_GAIN, 0.0, 1.0)
 	if brake > 0.0:
 		_pedal = 0.0
@@ -244,14 +261,6 @@ func _physics_process(delta: float) -> void:
 		_end("STUCK")
 	elif _t > TRIAL_S:
 		_end("TIMEOUT")
-
-
-func _worst_driven_slip() -> float:
-	var worst := 0.0
-	for w in _car.drive.wheels:
-		if w.driven and w.in_contact:
-			worst = maxf(worst, w.slip)
-	return worst
 
 
 ## Accumulates this tick's wheel state while any hub is over the patch (and after, until the
@@ -306,6 +315,7 @@ func _end(result: String) -> void:
 	var demand := int(s["demand_ticks"])
 	var row := {
 		"config": _config_label(_config),
+		"tc": _tc,
 		"lane": String(Layout.LANES[_lane]["name"]),
 		"patch": String(Layout.PATCHES[_patch]["name"]),
 		"result": result,
@@ -387,23 +397,64 @@ func _print_table() -> void:
 				print(line)
 			key = row_key
 			line = "%-28s %-7s" % [r["config"], r["lane"]]
-		var cell := ""
-		match String(r["result"]):
-			"CROSSED":
-				cell = "%.1fs" % float(r["t"])
-			"STUCK":
-				cell = "stuck%+.1f" % float(r["into"])
-			"OFF LANE":
-				cell = "off%+.1f" % float(r["into"])
-			_:
-				cell = "t/o%+.1f" % float(r["into"])
-		if float(r["body"]) >= BODY_FLAG_S:
-			cell += "b"
-		if not is_nan(float(r["use"])):
-			cell += " .%02d" % clampi(roundi(100.0 * float(r["use"])), 0, 99)
-		line += " %-14s" % cell
+		line += " %-14s" % _cell(r)
 	if line != "":
 		print(line)
+
+
+## One summary-table cell: seconds to cross or where it stopped, `b`, then `use`.
+func _cell(r: Dictionary) -> String:
+	var cell := ""
+	match String(r["result"]):
+		"CROSSED":
+			cell = "%.1fs" % float(r["t"])
+		"STUCK":
+			cell = "stuck%+.1f" % float(r["into"])
+		"OFF LANE":
+			cell = "off%+.1f" % float(r["into"])
+		_:
+			cell = "t/o%+.1f" % float(r["into"])
+	if float(r["body"]) >= BODY_FLAG_S:
+		cell += "b"
+	if not is_nan(float(r["use"])):
+		cell += " .%02d" % clampi(roundi(100.0 * float(r["use"])), 0, 99)
+	return cell
+
+
+## The `rough` region: the date and run line, the asphalt cells that did not cross, then the mud
+## lane's matrix, floored configs first and `tc` ones under a `tc` line (labels without the ` tc`).
+func _doc_table() -> Array[String]:
+	var misses: Array[String] = []
+	for r in _rows:
+		if r["lane"] == "asphalt" and r["result"] != "CROSSED":
+			misses.append("`%s` %s (%s)" % [r["config"], r["patch"], _cell(r)])
+	var lines := DocRegion.wrap("%s (`measure_rough -- doc=rough`, with `--fixed-fps 60`), mud lane"
+			% DocRegion.measured() + " below. Asphalt cells that did not cross: %s."
+			% ("none" if misses.is_empty() else ", ".join(misses)))
+	lines.append_array(["", "```"])
+	var head := "%-25s" % "floored"
+	for p: Dictionary in Layout.PATCHES:
+		head += " %-14s" % p["name"]
+	lines.append(head.strip_edges(false, true))
+	var in_tc := false
+	var line := ""
+	var key := ""
+	for r in _rows:
+		if r["lane"] != "mud":
+			continue
+		if String(r["config"]) != key:
+			if line != "":
+				lines.append(line.strip_edges(false, true))
+			key = String(r["config"])
+			if bool(r["tc"]) and not in_tc:
+				in_tc = true
+				lines.append("tc")
+			line = "%-25s" % key.replace(" tc", "")
+		line += " %-14s" % _cell(r)
+	if line != "":
+		lines.append(line.strip_edges(false, true))
+	lines.append("```")
+	return lines
 
 
 func _config_label(c: Dictionary) -> String:

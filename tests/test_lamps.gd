@@ -101,7 +101,9 @@ func test_the_drone_status_lights_keep_no_clock_either() -> void:
 	assert_str(src).is_not_empty()
 	assert_bool(src.contains("Time.get_ticks_msec")).is_false()
 	assert_bool(src.contains("Time.get_unix_time")).is_false()
-	assert_bool(src.contains("Timer")).is_false()
+	# Code shapes, not the bare word, so a comment saying "no Timer" does not fail this.
+	for needle in ["Timer.new", ": Timer", "create_timer"]:
+		assert_bool(src.contains(needle)).override_failure_message(needle).is_false()
 
 
 func test_the_beacon_and_the_strobes_are_separate_contract_bits() -> void:

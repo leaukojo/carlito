@@ -108,6 +108,8 @@ func _ready() -> void:
 		var wheel := RayWheel.new(gd.wheel_positions[i], false, false, visual, corner_mass)
 		wheel.apply_suspension(gd)
 		wheels.append(wheel)
+	if gd.anti_roll_rate > 0.0:
+		RayWheel.pair_axles(wheels)
 	# LampSet tolerates every path missing: a lampless trailer binds nothing.
 	_lamps.setup(self, spec)
 
@@ -139,8 +141,14 @@ func tick_towed(brake01: float, handbrake01: float, delta: float,
 	_brake_actual = lagged_brake(_brake_actual, brake01, delta)
 	var brake_t := _brake_actual * gd.brake_torque \
 			+ clampf(handbrake01, 0.0, 1.0) * gd.handbrake_torque
+	# The trailer's own ABS modulates the service brake; spring brakes are a mechanical hold.
+	var abs_slip := RayWheel.ABS_SLIP if gd.abs_equipped and handbrake01 <= 0.0 else 0.0
+	_size_lateral_caps(gd)
+	# One anti-roll snapshot for the whole bogie before any wheel ticks (`RayWheel.anti_roll_partner`).
 	for w in wheels:
-		w.tick(self, gd, space, 0.0, brake_t, delta, grip_terrains)
+		w.latch_bar()
+	for w in wheels:
+		w.tick(self, gd, space, 0.0, brake_t, delta, grip_terrains, abs_slip)
 	# Resistance is a sum, not a multiple: this trailer's own drag area plus its bogie load.
 	apply_central_force(VehicleMath.road_resistance(linear_velocity, gd.drag_area,
 			gd.rolling_resistance, bogie_suspension_force(), mass, delta))
@@ -161,21 +169,24 @@ func brake_applied() -> float:
 	return _brake_actual
 
 
-## Yaw inertia proxy (kg*m^2) about this body's own up axis: `VehicleMath.inertia_of`'s box
-## footprint off the wheel anchors (the rearmost plus a tyre radius is where the deck ends, the
-## outermost pair is the track). A labelled proxy, not the solver's tensor: its only consumer is
-## the coupling's Coulomb one-tick clamp, which binds only near zero relative yaw rate.
-func yaw_inertia() -> float:
-	if spec == null or spec.ground_drive == null:
-		return 0.0
-	var gd := spec.ground_drive
-	var length := 0.0
-	var half_track := 0.0
-	for pos in gd.wheel_positions:
-		length = maxf(length, absf(pos.z) + gd.wheel_radius)
-		half_track = maxf(half_track, absf(pos.x))
-	# spec.mass, not the body's: a scene instanced for a test has not run _ready yet.
-	return VehicleMath.inertia_of(spec.mass, 2.0 * half_track, length)
+## Each wheel's one-tick lateral cap off the mass its contact really moves sideways, the bogie's
+## wheels sharing it. `corner_mass` alone overstates it ~6x here (the COM rides 1.7 m above the
+## contacts on a narrow hull); capped by it, the tyres' explicit lateral stiffness at a standstill
+## overruns the tick and the rig rings left/right off float noise. Sized every tick: the load models
+## move the COM. The lever runs to full droop, the longest it gets.
+## COMPROMISE: towed bodies only. Every RayWheel body overstates it (a bobtail tractor ~3x) but
+## tracks exact; extending this tightens their crawl-speed lateral grip and re-measures every
+## vehicle.
+func _size_lateral_caps(gd: GroundDriveSpec) -> void:
+	var state := PhysicsServer3D.body_get_direct_state(get_rid())
+	if state == null:
+		return
+	var b := global_transform.basis
+	var inv_inertia := b.transposed() * state.inverse_inertia_tensor * b
+	var droop := Vector3(0.0, gd.rest_length + gd.wheel_radius, 0.0)
+	for w in wheels:
+		w.lateral_cap_mass = RayWheel.lateral_mass_at(w.anchor - droop - center_of_mass, mass,
+				inv_inertia) / wheels.size()
 
 
 ## Re-lay the trailer at `pose`, stopped; stale wheel compression or spin would read as a
@@ -330,10 +341,10 @@ func bogie_suspension_force() -> float:
 	return total
 
 
-## Worst |longitudinal slip| across the bogie this tick, which trailer_abs (EBS21) reads. Max, not
-## mean: ABS is per-wheel, so one locking wheel is the event.
-func max_wheel_slip() -> float:
-	var worst := 0.0
+## Whether the trailer's ABS held any wheel's brake back this tick, which trailer_abs (EBS21)
+## reads. Any, not most: ABS is per wheel, so one wheel at its limit is the event.
+func abs_active() -> bool:
 	for w in wheels:
-		worst = maxf(worst, w.slip)
-	return worst
+		if w.abs_active:
+			return true
+	return false

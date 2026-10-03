@@ -59,6 +59,8 @@ var lamps := LampInput.new()
 # that defaults off — inert on a machine whose spec doesn't declare the hardware.
 var diff_lock := false    ## rear differential lock request
 var fwd_drive := false    ## MFWD front-axle engage request
+## Bridge-only, no local key: keyboard and touch always drive with traction control on.
+var tcs_off := false      ## traction control off request
 ## Truck driveline brake, bridge-only, no local key: no keyboard analogue worth inventing.
 var retarder := 0.0       ## 0..1 auxiliary driveline brake request
 # ISOBUS implement request (tractor; the semi reads hitch_request in its transport sense).

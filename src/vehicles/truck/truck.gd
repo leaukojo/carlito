@@ -21,6 +21,7 @@ var _trash_empty_y := 0.0            ## measured off the pile's own mesh
 var _mass_applied := 0.0             ## payload currently written into `mass`
 var _last_body_cmd := 0              ## previous tick's body_cmd, for the notice edge
 var _spring_brakes_were_applied := false  ## last tick's gate, for the notice edge
+var _prev_brake := 0.0               ## last tick's brake pedal: air is drawn on its rise
 
 ## Told to the driver when the body stalk is worked with the PTO out or the parking brake off.
 ## Fires on the press, not while inhibited.
@@ -73,10 +74,13 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	# Air first: this tick's pressures feed the spring-brake gate below. The aux consumer is asked
 	# BEFORE the step, so a trailer coupled this tick pays for its charge the same tick.
 	var aux_air := _aux_air_draw(delta)
-	t.air_primary = TruckTelemetry.air_step(t.air_primary, input.brake, running, delta,
-			TruckTelemetry.AIR_CHARGE_RATE, TruckTelemetry.AIR_DRAW_PRIMARY, aux_air)
-	t.air_secondary = TruckTelemetry.air_step(t.air_secondary, input.brake, running, delta,
-			TruckTelemetry.AIR_CHARGE_RATE, TruckTelemetry.AIR_DRAW_SECONDARY, aux_air)
+	t.air_primary = TruckTelemetry.air_step(t.air_primary, input.brake, _prev_brake, running,
+			delta, TruckTelemetry.AIR_CHARGE_RATE, TruckTelemetry.AIR_PRESS_PRIMARY,
+			TruckTelemetry.AIR_DRAW_PRIMARY, aux_air)
+	t.air_secondary = TruckTelemetry.air_step(t.air_secondary, input.brake, _prev_brake, running,
+			delta, TruckTelemetry.AIR_CHARGE_RATE, TruckTelemetry.AIR_PRESS_SECONDARY,
+			TruckTelemetry.AIR_DRAW_SECONDARY, aux_air)
+	_prev_brake = input.brake
 
 	var pto_on := input.pto and running
 	t.pto_state = pto_on
@@ -146,9 +150,7 @@ func _tick_body(t: TruckTelemetry, input: VehicleInput, pto_on: bool, running: b
 	var payload := RefuseBody.hopper_mass_kg(_body.hopper)
 	if not is_equal_approx(payload, _mass_applied):
 		_mass_applied = payload
-		mass = spec.mass + payload
-		if drive != null:
-			drive.set_corner_mass_from(mass)
+		set_live_mass(spec.mass + payload)
 
 
 ## Say WHY the body stalk did nothing, on the press that did nothing. Only the two conditions the
@@ -212,6 +214,7 @@ func reset_session_state() -> void:
 	super.reset_session_state()
 	_last_body_cmd = RefuseBody.Cmd.IDLE
 	_spring_brakes_were_applied = false
+	_prev_brake = 0.0
 	if _body != null:
 		_body.reset()
 		_pose_rig()

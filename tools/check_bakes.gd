@@ -8,6 +8,7 @@ extends Node
 
 const Baker := preload("res://kit/bake/level_baker.gd")
 const Registry := preload("res://src/shell/level_registry.gd")
+const Paint := preload("res://tools/paint_road_asphalt.gd")
 
 
 func _ready() -> void:
@@ -19,6 +20,15 @@ func _ready() -> void:
 	for entry: Dictionary in Registry.LEVELS:
 		var path := String(entry["scene"])
 		var result: Dictionary = Baker.check_level_file(path)
+		# Stale road paint fails here too, and outranks a stale bake: a re-paint writes the splat
+		# PNGs, so a bake made before it would only re-stale.
+		if String(result.status) in ["fresh", "unbuilt", "stale"] and Paint.is_painted_level(path):
+			var level_root := (load(path) as PackedScene).instantiate()
+			var px := Paint.stale_pixels(level_root)
+			level_root.free()
+			if px != 0:
+				result = {"status": "stale paint", "detail": "%d road px unpainted — first run tools/paint_road_asphalt.tscn -- %s and --import" %
+						[px, path.trim_prefix("res://")]}
 		match String(result.status):
 			"no_authoring":
 				skipped += 1
@@ -42,8 +52,9 @@ func _ready() -> void:
 				# bytes, which differ Windows CRLF vs Linux LF checkout) rather than a genuine
 				# content change. Printed here so CI itself names the offending file instead of
 				# a re-run with an ad hoc debug patch.
-				for f in Baker.gather_bake_inputs(path):
-					print("[check-bakes][hash] %s : %s" % [f, Baker.hash_file(f)])
+				if String(result.status) != "stale paint":
+					for f in Baker.gather_bake_inputs(path):
+						print("[check-bakes][hash] %s : %s" % [f, Baker.hash_file(f)])
 	# Completion sentinel, printed only once every level has been checked. Callers must
 	# read this rather than the process exit code: headless Godot can finish the whole
 	# check and still die during teardown (intermittent SIGSEGV), turning a clean run into

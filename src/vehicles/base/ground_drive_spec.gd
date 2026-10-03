@@ -63,8 +63,8 @@ extends Resource
 @export var max_suspension_force := 30000.0  ## N; clamp against deep-penetration catapults
 
 @export_group("Tires")
-## Slip -> grip factor, both axes: x is slip ratio (longitudinal) or slip angle in radians
-## (lateral), peaking around 0.10-0.15.
+## Slip -> grip factor, peaking around 0.10-0.15: x is the combined slip, the length of (slip
+## ratio, `v_lat / |v_long|`) (`RayWheel.combined_slip_force`).
 @export var grip_curve := PackedVector2Array([
 	Vector2(0.0, 0.0), Vector2(0.12, 1.0), Vector2(0.4, 0.9), Vector2(1.0, 0.8),
 ])
@@ -77,8 +77,23 @@ extends Resource
 @export_range(0.0, 1.0) var handbrake_grip := 1.0  ## rear lateral grip while handbrake is pulled (1 = no effect); arcade drift knob since handbrake_torque alone can't lock the rears
 
 @export_group("Brakes")
-@export var brake_torque := 1300.0     ## Nm per wheel, all four
+@export var brake_torque := 1300.0     ## Nm per wheel on average; `brake_bias_front` splits it by axle
 @export var handbrake_torque := 160.0  ## Nm per rear wheel — magnitudes encode the tested hierarchy: foot brake > drive force > handbrake (holds only below ~30% throttle)
+## Share of the whole foot brake (`brake_torque` x wheel count) on the front axle, 0 = rear only;
+## negative = every wheel `brake_torque`. A generated body takes the share its front axle can hold
+## in a full-pedal stop (gen_kenney_vehicles `_derive_brakes`): an even split under-brakes the axle
+## braking loads up.
+@export_range(-1.0, 1.0) var brake_bias_front := -1.0
+## Anti-lock brakes: the foot brake (and retarder) may not drive a wheel's braking slip past
+## `RayWheel.ABS_SLIP`.
+@export var abs_equipped := false
+## Traction control, `abs_equipped`'s drive-side twin: the drive may not push a driven wheel's slip
+## past `RayWheel.TCS_SLIP`. The bridge's `tcs_off` switches it off.
+@export var tcs_equipped := false
+## The foot brake engages the front axle (`front_axle_engageable`), as a fast tractor's rear-axle
+## brakes do: braking the fronts through the shaft, never a brake of their own. Pairs with
+## `brake_bias_front` 0.
+@export var brake_engages_front_axle := false
 
 @export_group("Resistance")
 ## Aerodynamic drag area in m^2 (Cd x frontal area), fed to `VehicleMath.aero_drag`. It never
@@ -122,6 +137,22 @@ func rear_damper_rebound() -> float:
 
 func _rear_damper_scale() -> float:
 	return sqrt(rear_spring_rate() / spring_rate) if spring_rate > 0.0 else 1.0
+
+
+## Foot-brake torque (Nm) at one wheel of the front or rear axle: `brake_torque` until a bias is
+## declared, then that axle's share of the whole foot brake spread over its own wheels.
+func axle_brake_torque(rear: bool) -> float:
+	if brake_bias_front < 0.0:
+		return brake_torque
+	var n_rear := 0
+	for p in wheel_positions:
+		if RayWheel.is_rear_z(p.z):
+			n_rear += 1
+	var n_front := wheel_positions.size() - n_rear
+	var total := brake_torque * wheel_positions.size()
+	if rear:
+		return total * (1.0 - brake_bias_front) / maxf(1.0, n_rear)
+	return total * brake_bias_front / maxf(1.0, n_front)
 
 
 ## Origin height (m) above flat ground with every wheel just touching and the springs unloaded:

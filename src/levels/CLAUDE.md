@@ -21,18 +21,18 @@
   `rebuild_level.ps1` CLASSIFIES a changed PNG (`tools/png_drift.gd` against the manifest's
   `sculpt_drift` map; no entry = byte equality). COMPROMISE: bit-equality would cost ~184 KB of
   baseline PNG to buy a guarantee nothing consumes.
-- **Re-run `paint_road_asphalt` after any road or road-profile edit.** A stale paint is
-  invisible — nothing in the bake, the tests or CI notices that the committed splat2 has
-  stopped matching the road profile.
+- **`paint_road_asphalt` applies to a level whose `<id>_gen.json` lists it** (level 1 only), and
+  `check_bakes` fails it when a road or profile edit leaves corridor pixels unpainted. Paint
+  added for an OLD corridor stays (the stamp is additive): a moved road needs its chain replayed.
 - **Level 2's mountain road is steeper than most bodies pull away on** (the curve's Y values,
   not the paint; figures: `docs/vehicles.md` § Gradeability). Nothing gates road grade:
-  `measure_grade -- level=<id>` is a dev report. Reopened: `docs/to_investigate.md`.
-- **Never run `paint_road_asphalt` on `car_arena`**: its scaffold paints its own roads at the inset
-  paved width, then splat channel 4, **Ice**, under the ice road's bend only. The tool's full-width
-  stamp would bury the ice, and nothing would notice.
+  `measure_grade -- level=<id>` is a dev report.
+- **`car_arena`'s chain never lists `paint_road_asphalt`** (the tool refuses it): its scaffold paints
+  its own roads at the inset paved width, then splat channel 4, **Ice**, under the ice road's bend
+  only. The tool's full-width stamp would bury the ice.
 - Water: `get_height()` is flat; shader waves are visual-only and **must never feed
   physics**. The kill volume is an axis-aligned rect — don't rotate the node. Water and
-  terrain are direct children of the level, never under `Authoring`.
+  terrain are direct children of the level, never under `Authoring` (bake error).
 - **The water column is `Sea.y` over a pan `island_falloff` clamps to 0**, so the shared y=1
   makes every level 1 m deep and a depth reading a constant. Level 6's sea is at y=6 (ceiling
   6.6, where `gen_skyport.gd`'s canyon repaint walk starts); `depth` and `sand_height` move with

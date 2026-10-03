@@ -2,18 +2,20 @@ extends Node3D
 ## Dev utility: measures a coupled tractor unit's launch on a flat full-grip strip — steer-axle
 ## load, rear travel, pitch, joint pitch, chassis contacts, and the air gate — through
 ## spawn -> full throttle -> brake -> E-recouple -> brake-while-charging -> full throttle,
-## then a step-steer on a skid pad that asks whether the rig rolls over (P7).
+## then a step-steer on a skid pad that asks whether the rig rolls over (P7). With `ramp`, P7
+## holds the entry speed and winds the lock on slowly instead: the steady-state tip point.
 ## Optional `front_z=<float>` / `com_z=<float>` args (variant name is args[0]) apply an
 ## in-memory geometry override for what-if runs, without touching the shipped spec;
 ## `trailer=<box|tipper|tanker|flatbed|bobtail>` picks what is on the back.
 ##
 ## Driven through the BRIDGE rather than the keyboard: InputRouter.arbitrate_local latches
 ## GEAR_R the moment `brake_reverse` is held under REVERSE_ENGAGE_SPEED, which turns a
-## standstill brake application into a full-throttle reverse — and P5 (the trailer-charge
-## catch-out) is exactly a standstill brake application. The bridge path takes the gear byte
+## standstill brake application into a full-throttle reverse — and P5 (braking while the trailer
+## charges) is exactly a standstill brake application. The bridge path takes the gear byte
 ## explicitly, so `brake` stays a brake.
 ##
-## Dev report, not CI: always exits 0.
+## A dev report that exits 0, except with `strict`: then a P2 or P6 launch that drops a steer wheel
+## under STEER_FLOOR_N exits 1 (the CI gate on wheelbase and COM edits).
 ##
 ##   godot --headless --path . res://tools/measure_semi_launch.tscn -- semi
 
@@ -42,11 +44,23 @@ const STOP_TIMEOUT_S := 40.0
 # launch, which is why the entry speed is reported beside the peak.
 const PAD_SIZE := 400.0
 const PAD_X := -700.0        ## far enough off the strip that the two never share collision
-const TIP_SPEED_MS := 11.11  ## 40 km/h
+const TIP_SPEED_MS := 11.11  ## 40 km/h; `tip_kmh=<float>` overrides it for one run
 const TIP_SPINUP_TIMEOUT_S := 30.0
 const TIP_HOLD_S := 8.0
 ## Tilt counted as overturned, the same figure BaseVehicle announces to the driver.
 const TIP_ROLL_DEG := BaseVehicle.OVERTURNED_DEG
+# P7 `ramp`: the lock wound from straight to full over RAMP_S while a PI loop on the pedals holds the
+# entry speed, so the lateral g climbs slowly enough to be a steady-state turn at every instant.
+const RAMP_S := 20.0
+const RAMP_KP := 0.5      ## pedal per m/s of speed error
+const RAMP_KI := 0.2      ## pedal per m of integrated speed error
+const RAMP_I_MAX := 5.0   ## anti-windup clamp on the integral, m
+## Lateral g the lean is read at: a brisk but ordinary corner.
+const LEAN_G := 0.2
+
+## Least force (N) a single steer wheel may carry through a launch (P2, and P6 after the
+## recouple): the shipped wheelbases' margin (docs/heavy_vehicles.md § Truck sizing).
+const STEER_FLOOR_N := 8500.0
 
 enum Ph { P1, P2, P3, P4, P5, P6, P7, DONE }
 
@@ -68,12 +82,25 @@ var _csv_suffix := ""   ## set by the override args; keeps override runs' CSVs d
 var _trailer_want := ""     ## trailer= id; "" is a valid value (bobtail), hence the flag below
 var _trailer_requested := false  ## an arg named a trailer (stays true for the whole run)
 var _trailer_pending := false    ## ...and it has not been coupled yet
+var _strict := false             ## `strict`: exit 1 when P2 or P6 breaks STEER_FLOOR_N
+var _tip_speed := TIP_SPEED_MS   ## P7 entry speed, m/s
+var _ramp := false               ## `ramp`: P7 winds the lock on at a held speed instead of a step
+var _ramp_i := 0.0               ## the speed hold's integrated error, m
+var _ended_by := ""              ## what stopped P7: the hold running out or a body passing TIP_ROLL_DEG
+var _trailer_seen := 0           ## instance id of the trailer the two vars below belong to
+var _trailer_prev_v := Vector3.ZERO
+var _trailer_acc_lat := 0.0      ## m/s^2, smoothed like VehicleTelemetry.acc_lat
 
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		_variant = String(args[0])
+	_strict = args.has("strict")
+	_ramp = args.has("ramp")
+	for a in args:
+		if String(a).begins_with("tip_kmh="):
+			_tip_speed = String(a).substr(8).to_float() / 3.6
 	if not Catalog.VARIANTS.has(_variant):
 		printerr("unknown variant '%s'" % _variant)
 		get_tree().quit(1)
@@ -248,6 +275,8 @@ func _new_stats() -> Dictionary:
 		"max_roll": -INF, "min_roll": INF, "max_trailer_roll": -INF, "min_trailer_roll": INF,
 		"max_joint_roll": 0.0, "peak_lat_g": 0.0, "max_wheels_up": 0, "wheels_up_ticks": 0,
 		"rolled_tractor": false, "rolled_trailer": false, "entry_speed": -1.0,
+		"lift_g": -1.0, "trailer_lift_g": -1.0, "max_trailer_wheels_up": 0,
+		"lean_roll": NAN, "lean_trailer_roll": NAN,
 	}
 
 
@@ -299,16 +328,34 @@ func _sample(delta: float) -> Dictionary:
 	# own +-FifthWheel.ROLL_LIMIT_DEG stop constrains.
 	var joint_roll := 0.0
 	var bogie_frac := 0.0
+	var trailer_up := 0
+	var trailer_lat_g := 0.0
 	if trailer != null and is_instance_valid(trailer):
 		trailer_pitch = VehicleMath.pitch_deg(trailer.global_transform.basis)
 		trailer_roll = VehicleMath.roll_deg(trailer.global_transform.basis)
 		joint_roll = VehicleMath.roll_deg(
 				_car.global_transform.basis.inverse() * trailer.global_transform.basis)
+		# The trailer's own sideways acceleration, differentiated and smoothed exactly as the
+		# tractor's telemetry acc_lat is: once articulated it is not turning the tractor's circle,
+		# and in a step it is whipped sideways before its yaw rate builds.
+		if trailer.get_instance_id() != _trailer_seen:
+			_trailer_seen = trailer.get_instance_id()
+			_trailer_prev_v = trailer.linear_velocity
+			_trailer_acc_lat = 0.0
+		var tb := trailer.global_transform.basis
+		var ta := VehicleTelemetry.body_accel(trailer.linear_velocity, _trailer_prev_v, delta,
+				-tb.z, tb.x, tb.y)
+		_trailer_prev_v = trailer.linear_velocity
+		_trailer_acc_lat = lerpf(_trailer_acc_lat, ta.y,
+				1.0 - exp(-BaseVehicle.ACCEL_SMOOTH * delta))
+		trailer_lat_g = absf(_trailer_acc_lat) / 9.81
 		var tgd: GroundDriveSpec = trailer.spec.ground_drive
 		var n := 0
 		for w in trailer.wheels:
 			bogie_frac += w.compression / tgd.rest_length
 			n += 1
+			if not w.in_contact:
+				trailer_up += 1
 		if n > 0:
 			bogie_frac /= float(n)
 
@@ -341,8 +388,11 @@ func _sample(delta: float) -> Dictionary:
 		"trailer_roll": trailer_roll,
 		"joint_roll": joint_roll,
 		"lat_g": lat_g,
+		"acc_lat_g": absf(t.acc_lat) / 9.81,
+		"trailer_lat_g": trailer_lat_g,
 		"wheels_up": ((0 if fl.in_contact else 1) + (0 if fr.in_contact else 1)
 				+ (0 if rl.in_contact else 1) + (0 if rr.in_contact else 1)),
+		"trailer_wheels_up": trailer_up,
 		"contacts": _car.get_contact_count(),
 		"trailer_air": _car._trailer_air,
 		"bogie_comp": bogie_frac,
@@ -413,10 +463,20 @@ func _accumulate(st: Dictionary, s: Dictionary) -> void:
 	st["max_roll"] = maxf(st["max_roll"], s["roll"])
 	st["min_roll"] = minf(st["min_roll"], s["roll"])
 	st["peak_lat_g"] = maxf(st["peak_lat_g"], s["lat_g"])
+	if is_nan(float(st["lean_roll"])) and float(s["acc_lat_g"]) >= LEAN_G:
+		st["lean_roll"] = s["roll"]
+		st["lean_trailer_roll"] = s["trailer_roll"] if bool(s["coupled"]) else NAN
 	var up := int(s["wheels_up"])
 	st["max_wheels_up"] = maxi(int(st["max_wheels_up"]), up)
 	if up > 0:
 		st["wheels_up_ticks"] = int(st["wheels_up_ticks"]) + 1
+		# The lateral g at the FIRST lift is the rollover threshold; the peak is read later, mid-roll.
+		if float(st["lift_g"]) < 0.0:
+			st["lift_g"] = s["acc_lat_g"]
+	var trailer_up := int(s["trailer_wheels_up"])
+	st["max_trailer_wheels_up"] = maxi(int(st["max_trailer_wheels_up"]), trailer_up)
+	if trailer_up > 0 and float(st["trailer_lift_g"]) < 0.0:
+		st["trailer_lift_g"] = s["trailer_lat_g"]
 	if absf(float(s["roll"])) >= TIP_ROLL_DEG:
 		st["rolled_tractor"] = true
 	if bool(s["coupled"]):
@@ -466,9 +526,14 @@ func _advance(s: Dictionary) -> void:
 		Ph.P4:
 			if _sub == 0:
 				_sub = 1
-				_car.set_attachment(TrailerCatalog.first())
-				print("    re-coupled by driving at t=%.3f, trailer_air=%.3f"
-						% [_t, _car._trailer_air])
+				# The run's own trailer, or P5-P7 measure the box whatever `trailer=` asked for.
+				var again := _trailer_want if _trailer_requested else TrailerCatalog.first()
+				_car.set_attachment(again)
+				if TrailerCatalog.is_coupled(again):
+					print("    re-coupled by driving at t=%.3f, trailer_air=%.3f"
+							% [_t, _car._trailer_air])
+				else:
+					print("    bobtail run: nothing to re-couple at t=%.3f" % _t)
 				_pt = 0.0
 			elif _pt >= RECOUPLE_S:
 				_to_phase(Ph.P5)
@@ -495,28 +560,64 @@ func _advance(s: Dictionary) -> void:
 				_to_phase(Ph.P7)
 				_drive(100.0, 0.0)
 				print("    moved to the skid pad, accelerating to %.1f km/h"
-						% (TIP_SPEED_MS * 3.6))
+						% (_tip_speed * 3.6))
 		Ph.P7:
 			if _sub == 0:
-				if absf(s["speed"]) >= TIP_SPEED_MS or _pt >= TIP_SPINUP_TIMEOUT_S:
+				if absf(s["speed"]) >= _tip_speed or _pt >= TIP_SPINUP_TIMEOUT_S:
 					_sub = 1
 					_pt = 0.0
 					_stats[Ph.P7]["entry_speed"] = s["speed"]
-					# Throttle released with the step, so what follows is a lateral manoeuvre
-					# and not a launch.
-					_drive(0.0, 0.0, 100.0)
-					print("    step to full lock at t=%.3f (entry %.2f m/s, %.1f km/h)"
-							% [_t, s["speed"], float(s["speed"]) * 3.6])
-			elif _pt >= TIP_HOLD_S or absf(float(s["roll"])) >= TIP_ROLL_DEG 					or (bool(s["coupled"]) and absf(float(s["trailer_roll"])) >= TIP_ROLL_DEG):
-				_drive(0.0, 0.0)
-				_finish()
+					if _ramp:
+						_ramp_i = 0.0
+						print("    winding to full lock over %.0f s at t=%.3f, holding %.2f m/s"
+								% [RAMP_S, _t, _tip_speed])
+					else:
+						# Throttle released with the step, so what follows is a lateral manoeuvre
+						# and not a launch.
+						_drive(0.0, 0.0, 100.0)
+						print("    step to full lock at t=%.3f (entry %.2f m/s, %.1f km/h)"
+								% [_t, s["speed"], float(s["speed"]) * 3.6])
+			else:
+				var hold_s := RAMP_S if _ramp else TIP_HOLD_S
+				if _pt >= hold_s or absf(float(s["roll"])) >= TIP_ROLL_DEG \
+						or (bool(s["coupled"]) and absf(float(s["trailer_roll"])) >= TIP_ROLL_DEG):
+					if absf(float(s["roll"])) >= TIP_ROLL_DEG:
+						_ended_by = "tractor passed %.0f deg" % TIP_ROLL_DEG
+					elif _pt < hold_s:
+						_ended_by = "trailer passed %.0f deg (tractor at %.0f)" \
+								% [TIP_ROLL_DEG, absf(float(s["roll"]))]
+					else:
+						_ended_by = "%.0f s %s ran out" % [hold_s, "ramp" if _ramp else "hold"]
+					_drive(0.0, 0.0)
+					_finish()
+				elif _ramp:
+					_ramp_step(float(s["speed"]))
+
+
+## One tick of the P7 ramp: the lock a straight line in time, the pedals a PI loop on the entry
+## speed. One pedal at a time, so the router's brake-over-throttle latch never enters.
+func _ramp_step(speed: float) -> void:
+	var err := _tip_speed - speed
+	_ramp_i = clampf(_ramp_i + err * get_physics_process_delta_time(), -RAMP_I_MAX, RAMP_I_MAX)
+	var u := RAMP_KP * err + RAMP_KI * _ramp_i
+	_drive(clampf(u, 0.0, 1.0) * 100.0, clampf(-u, 0.0, 1.0) * 100.0,
+			clampf(_pt / RAMP_S, 0.0, 1.0) * 100.0)
 
 
 func _finish() -> void:
 	_phase = Ph.DONE
 	_write_csv()
 	_print_summary()
-	get_tree().quit(0)
+	var ok := true
+	for i: int in [Ph.P2, Ph.P6]:
+		var floor_n: float = _stats[i]["min_front_susp"]
+		var phase_ok := floor_n >= STEER_FLOOR_N
+		ok = ok and phase_ok
+		print("%ssteer-wheel floor: %s launch min %.0f N against %.0f N: %s%s"
+				% ["\n" if i == Ph.P2 else "", PH_NAMES[i].substr(0, 2), floor_n, STEER_FLOOR_N,
+				"PASS" if phase_ok else "FAIL",
+				"" if phase_ok else " (a steer wheel goes light: wheelbase or COM, docs/heavy_vehicles.md)"])
+	get_tree().quit(1 if _strict and not ok else 0)
 
 
 func _write_csv() -> void:
@@ -616,8 +717,21 @@ func _print_phase(i: int, spring_max: float, susp_cap: float) -> void:
 	print("   peak lateral       : %.3f g   wheels off the ground: peak %d, %d ticks"
 			% [st["peak_lat_g"], st["max_wheels_up"], st["wheels_up_ticks"]])
 	if float(st["entry_speed"]) >= 0.0:
-		print("   step entry speed   : %.2f m/s (%.1f km/h)"
-				% [st["entry_speed"], float(st["entry_speed"]) * 3.6])
+		print("   %s entry speed   : %.2f m/s (%.1f km/h)"
+				% ["ramp" if _ramp else "step", st["entry_speed"], float(st["entry_speed"]) * 3.6])
+	if i == Ph.P7:
+		# The threshold is the lateral g at the first lift, each body's own measured sideways
+		# acceleration; the v * yaw-rate peak above is read later, often mid-roll.
+		print("   first wheel lift   : tractor %s, trailer %s (trailer wheels up: peak %d)"
+				% [_g_label(st["lift_g"]), _g_label(st["trailer_lift_g"]),
+				st["max_trailer_wheels_up"]])
+		print("   lean at %.1f g     : tractor %s deg, trailer %s deg" % [LEAN_G,
+				_f(absf(float(st["lean_roll"]))), _f(absf(float(st["lean_trailer_roll"])))])
+		print("   run ended          : %s" % _ended_by)
 	print("   OVERTURNED (>= %.0f deg): tractor %s, trailer %s"
 			% [TIP_ROLL_DEG, "YES" if st["rolled_tractor"] else "no",
 			"YES" if st["rolled_trailer"] else "no"])
+
+
+func _g_label(g: float) -> String:
+	return "never" if g < 0.0 else "at %.3f g" % g

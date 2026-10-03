@@ -3,31 +3,35 @@
 ; Cab-over tractor unit. HAND-AUTHORED, like train_spec.tres: Kenney ships no semi, so there is no
 ; generator baseline and every flag must be right here or it is simply absent.
 ;
-; DRIVETRAIN. This is the only truck here that tows 24 t, so the engine is an 11-13 L six. The
-; converter only lets a held rig rev to 1325 rpm (Drivetrain.converter_free_rpm), so pulling away is
-; decided by the LOW END of the curve: 975 Nm at idle (65 % of the 1500 Nm peak, the shape of a real
-; truck diesel) and 1334 at 1325 rpm. The launch grade it buys is measured in docs/vehicles.md
-; § Gradeability. Keep the rpm range: shift points, engine_load's peak-torque denominator and the
-; retarder fade depend on it.
+; DRIVETRAIN. This is the only truck here that tows 24 t, so the engine is an 11-13 L six: 2308 Nm
+; at 1170 rpm, 2080 redline, 600 idle. The converter only lets a held rig rev to 970 rpm
+; (Drivetrain.converter_free_rpm), so pulling away is decided by the LOW END of the curve: 1500 Nm at
+; idle (65 % of the peak, the shape of a real truck diesel) and 2142 at 970 rpm. The launch grade it
+; buys is measured in docs/vehicles.md § Gradeability. Shift points, engine_load's peak-torque
+; denominator and the converter's stall all scale with the rpm range. The peak sits in a real 32 t
+; artic's 2300-2800 Nm band.
 ;
-; WHAT BOUNDS 1500 Nm IS TRACTION, NOT THE BRAKE CHAIN. tests/test_truck.gd requires brake >
+; GEARS 1-5 x final_drive 2.925 are a road-speed ladder for that rpm range; 6th is an OVERDRIVE
+; (0.69, 1.74x off 5th, about the 1.76x of 1st-2nd): ~1310 rpm at 88 km/h, a real unit's cruise, and
+; the governor, not the redline, sets top speed. The 1690 upshift lands 6th at 972 rpm, clear of the
+; 780 downshift, so no gear hunts.
+;
+; WHAT BOUNDS 2308 Nm IS TRACTION, NOT THE BRAKE CHAIN. tests/test_truck.gd requires brake >
 ; TRANSMISSIBLE drive = min(peak drive, driven wheels x per-wheel grip), and on a truck tyre the tyre
 ; is the smaller (2 x 0.80 x 19600 N x 0.36 = 11290 Nm against 42000 Nm of service brake), so no
-; test bounds peak engine torque. The limit is the road: gear 1 puts 1500 x 6.5 x 4.5 x 0.9 / 0.36
+; test bounds peak engine torque. The limit is the road: gear 1 puts 2308 x 6.5 x 2.925 x 0.9 / 0.36
 ; = 110 kN at the tyres against ~66 kN of coupled drive-axle grip (92 kN of axle load x mu 0.80 x
 ; the 0.90 load-sensitivity factor), so the rig is ~1.65x traction-limited off the line and a bigger
-; engine buys wheelspin. A real 32 t artic makes 2300-2800 Nm; closing that gap is ballast and plate
-; share, not torque.
+; engine buys wheelspin.
 ;
 ; brake_torque 10500 IS NOT GRIP-DERIVED (unlike every Kenney body). Above it: retarder_rating is a
 ; FRACTION of it, so 0.20 * B * 2 / 0.36 / 8000 must stay under 1.6 m/s^2 (B < 11520); 10500 gives
 ; 1.46 m/s^2. Below it: at mu 0.80 the coupled rig's per-wheel static load is 3618 kg, whose grip
 ; ceiling is 10213 Nm, so 10500 sits AT the coupled tyre.
-; ACCEPTED COMPROMISE: one brake_torque serves all four corners while the coupled axle loads split
-; about 1:1.9 (steer 2527 kg, drive 4709 kg), so the steer axle's own ceiling is 7132 Nm and a
-; FLOORED pedal locks the front before the rear (a real rig fits a load-sensing valve). Undoing it
-; is brake apportioning, a new mechanism, not a number here; part pedal is unaffected because
-; RayWheel's slip tyre saturates rather than stepping.
+; One brake_torque serves all four corners (no brake_bias_front) while the coupled axle loads split
+; about 1:1.9 (steer 2527 kg, drive 4709 kg), so the steer axle's own ceiling is 7132 Nm: a FLOORED
+; pedal asks the front for more than it can hold, and abs_equipped holds it at the grip peak, as a
+; real rig's ABS does. Part pedal stays under every ceiling.
 ;
 ; handbrake_torque 4800 is pinned by construction: the same test holds the total handbrake inside
 ; (25 %, 50 %) of the drive torque at idle (3209-6417 per wheel), and 4800 sits mid-window. It
@@ -57,14 +61,18 @@
 ; tests/test_trailer.gd; with the COM further back the coupled steer axle carries too little and
 ; both front wheels leave the road under throttle in a corner.
 ;
-; CENTRE OF MASS HEIGHT 0.90 IS ~1.03 m OVER THE ROAD (the body origin rides ~0.13 m up coupled:
-; measure_semi_launch's P5 reads kingpin_y 1.18 minus KINGPIN_LOCAL.y 1.05). A real tractor unit
-; carries its mass about a metre up; a low COM leaves the unit unable to lean, transfer load or
-; roll. The cost is real: the steer axle sheds weight under a gear-1 launch (the >= 8.5 kN floor is
-; measured, not assumed) and the bobtail unit rolls near its slide limit. If it stops being
-; slide-first, the lever is anti_roll_rate or mu_lat, never the height back down. Rollover
-; thresholds: docs/heavy_vehicles.md § Truck sizing (the bobtail baseline is contested in
-; docs/to_investigate.md).
+; CENTRE OF MASS HEIGHT 0.90 IS ~1.03 m OVER THE ROAD COUPLED, ~1.10 m BOBTAIL (the body origin
+; rides 0.13 m up coupled, 0.20 m bobtail on its less-compressed rear springs: measure_semi_launch's
+; P5 kingpin_y 1.18 / 1.25 minus KINGPIN_LOCAL.y 1.05). A real tractor unit carries its mass about
+; a metre up; a low COM leaves the unit unable to lean, transfer load or roll. The cost is real: the
+; steer axle sheds weight under a gear-1 launch (the >= 8.5 kN floor is measured, and gated in CI)
+; and the bobtail's rigid ceiling (0.65 g) sits under mu_lat 0.75. The levers are anti_roll_rate
+; or mu_lat, never the height back down. Rollover thresholds: docs/heavy_vehicles.md § Truck sizing.
+;
+; anti_roll_rate 480000 (2x the front spring) is sized by the TRAILER, not the bobtail: the plate
+; lets the two bodies roll only +-1.5 deg apart, so a tractor that leans further than its trailer
+; twists the trailer over through it (at 240000 the flatbed's trailer lifted at 0.42 g, here 0.50).
+; It also holds the bobtail flat enough to slide (~0.55 g) before it lifts a wheel in a steady turn.
 ;
 ; THE SPRINGS ARE SIZED PER AXLE: the rear carries the fifth-wheel load as well as its own, and the
 ; drive axle is the ONLY driven axle, so what the plate puts on it (kingpin_share, a 25-30 % band
@@ -121,6 +129,7 @@ damper_rebound = 15800.0
 spring_rate_rear = 360000.0
 damper_bump_rear = 24700.0
 damper_rebound_rear = 28800.0
+anti_roll_rate = 480000.0
 max_suspension_force = 120000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 0.8
@@ -129,6 +138,7 @@ load_sensitivity = 0.08
 handbrake_grip = 1.0
 brake_torque = 10500.0
 handbrake_torque = 4800.0
+abs_equipped = true
 max_steer_deg = 24.0
 min_steer_frac = 0.21
 steer_falloff_speed = 25.0
@@ -139,20 +149,20 @@ mass = 8000.0
 center_of_mass = Vector3(0, 0.9, -0.92)
 ground_drive = SubResource("Resource_grounddrive")
 trailer_bus_equipped = true
-torque_curve = PackedVector2Array(700, 975, 1200, 1290, 1800, 1500, 2400, 1440, 2800, 1120, 3200, 375)
-idle_rpm = 700.0
-redline_rpm = 3200.0
-gear_ratios = PackedFloat32Array(6.5, 3.7, 2.4, 1.6, 1.2, 1)
+torque_curve = PackedVector2Array(600, 1500, 780, 1985, 1170, 2308, 1560, 2215, 1820, 1723, 2080, 577)
+idle_rpm = 600.0
+redline_rpm = 2080.0
+gear_ratios = PackedFloat32Array(6.5, 3.7, 2.4, 1.6, 1.2, 0.69)
 reverse_ratio = 6.0
-final_drive = 4.5
+final_drive = 2.925
 efficiency = 0.9
 engine_brake_frac = 0.15
 shift_cut_s = 0.4
-shift_up_rpm = 2600.0
-shift_down_rpm = 1200.0
-; ROAD-SPEED GOVERNOR 90 km/h: the EU goods-vehicle limiter (Directive 92/6/EEC). Inert as geared
-; (the rig's drag-limited top speed is below it), and declared anyway: it is the honest spec for a
-; European artic and catches a later gearing change that would put this unit over the legal figure.
+shift_up_rpm = 1690.0
+shift_down_rpm = 780.0
+; ROAD-SPEED GOVERNOR 90 km/h: the EU goods-vehicle limiter (Directive 92/6/EEC). It binds: coupled
+; or bobtail the unit settles on it at 88-89 km/h (measure_vehicles), ~1310 rpm in the overdrive 6th.
+; It is the honest spec for a European artic.
 speed_limit_kmh = 90.0
 ; HIGH-SPEED STEERING FALLOFF. 0.21 x 24 = 5.0 deg of usable lock at the floor, and the floor is set
 ; at 25 m/s = the 90 km/h limiter above, so the governed cruise sits on it. A coupled rig is the

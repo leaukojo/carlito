@@ -6,9 +6,7 @@ extends RefCounted
 const DETACHED := AttachmentCatalog.NONE  ## nothing on the hitch and nothing on the drawbar
 
 ## Cycle order. The spreader leads because it uses every connection, so the tractor spawns with
-## every attachment signal doing something. The trailer must stay off first(): the tractor spawns on
-## it and measure_vehicles reports force against `spec.mass` alone, so a towed first() would
-## measure the whole combination against the bare tractor.
+## every attachment signal doing something.
 const IMPLEMENTS: PackedStringArray = [
 	"res://src/vehicles/tractor/implements/spreader.tscn",
 	"res://src/vehicles/tractor/implements/plough.tscn",

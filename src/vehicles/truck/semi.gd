@@ -90,6 +90,7 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	# Spawn countdown, PTO/valve gates, raise interlock, lamps, running gear, fall + fit checks (TowHost).
 	_fifth_wheel.tick_towing(input, demand01, spool, t.pto_state, roundi(drivetrain.rpm),
 			t.speed, delta, _grip_terrains)
+	drivetrain.speed_cap_kmh = _fifth_wheel.speed_cap_kmh()
 
 	# Published only now: before tick_towing the trailer's loads and slip are a tick stale. A unit
 	# with no data pair keeps zeros.
@@ -99,7 +100,7 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 		t.trailer_axle_load = TruckTelemetry.axle_load_kg(trailer.bogie_suspension_force())
 		# The LAGGED application, not the blend: EBS11 reports what the trailer brakes with.
 		t.trailer_brake_demand = roundi(trailer.brake_applied() * 100.0)
-		t.trailer_abs = TruckTelemetry.trailer_abs_active(trailer.max_wheel_slip())
+		t.trailer_abs = trailer.abs_active()
 
 
 ## Couple `id`, or go bobtail for TrailerCatalog.BOBTAIL. Routing only: the pose, velocity match,
@@ -126,7 +127,7 @@ func _set_trailer(id: String) -> void:
 
 ## A coupled trailer draws air off this tractor's supply while it charges, so AIR1 and AIR2 sag
 ## through the same air_step model. Coupling costs ~3 bar (`TruckTelemetry.TRAILER_CHARGE_S`),
-## close enough to the spring-brake gate that braking while it charges can trip it.
+## close enough to the spring-brake gate that pumping the brake while it charges can trip it.
 func _aux_air_draw(delta: float) -> float:
 	if _fifth_wheel == null or not _fifth_wheel.is_coupled():
 		_trailer_air = 0.0

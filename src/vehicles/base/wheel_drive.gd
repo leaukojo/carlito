@@ -28,12 +28,16 @@ var _rear: Array[RayWheel] = []
 ## Front-to-rear anchor distance (m), body space; 0 if the spec declares no front/rear pair
 ## (never happens for a real wheeled body). Cached once in _init since wheel_positions is data.
 var _wheelbase := 0.0
+## Full-pedal foot-brake torque at one front / rear wheel (`GroundDriveSpec.axle_brake_torque`),
+## cached in _init like the wheelbase.
+var _brake_front := 0.0
+var _brake_rear := 0.0
 
 
 ## Build the wheels and their visuals.
 func _init(body: Node3D, spec: VehicleSpec) -> void:
 	var gd := spec.ground_drive
-	# Per-corner mass share; a runtime `mass` write calls set_corner_mass_from.
+	# Per-corner mass share; a runtime `mass` write re-shares it (BaseVehicle.set_live_mass).
 	var corner_mass := spec.mass / maxf(1.0, gd.wheel_positions.size())
 	for i in gd.wheel_positions.size():
 		var pos := gd.wheel_positions[i]
@@ -72,22 +76,14 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 		else:
 			_front.append(wheel)
 	if gd.anti_roll_rate > 0.0:
-		_link_anti_roll_pairs()
+		RayWheel.pair_axles(wheels)
 	_wheelbase = _compute_wheelbase()
-
-
-## Pair each wheel with the one across its axle (same z, opposite side) for the anti-roll bar.
-func _link_anti_roll_pairs() -> void:
-	for w in wheels:
-		for other in wheels:
-			if other != w and is_equal_approx(other.anchor.z, w.anchor.z) \
-					and signf(other.anchor.x) != signf(w.anchor.x):
-				w.anti_roll_partner = other
-				break
+	_brake_front = gd.axle_brake_torque(false)
+	_brake_rear = gd.axle_brake_torque(true)
 
 
 ## Re-share the body's LIVE mass over the corners. The three one-tick RayWheel clamps are sized
-## off `corner_mass`, so every runtime `mass` write (the refuse truck's hopper) calls this, or the
+## off `corner_mass`, so BaseVehicle.set_live_mass (the refuse truck's hopper) calls this, or the
 ## clamps stay sized for the empty vehicle and bite on forces the laden body legitimately makes.
 func set_corner_mass_from(live_mass: float) -> void:
 	var corner_mass := live_mass / maxf(1.0, wheels.size())
@@ -107,11 +103,14 @@ func build_dust(body: Node3D, gd: GroundDriveSpec) -> void:
 ## placement. Called before Drivetrain.process; the driven count latched here is reused by tick()
 ## for the torque split.
 func drive_omega(gd: GroundDriveSpec, input: VehicleInput) -> float:
-	# MFWD: the tractor front axle engages at runtime, so `driven` is not fixed at _ready.
+	# MFWD: the tractor front axle engages at runtime, so `driven` is not fixed at _ready. The foot
+	# brake engages it too where declared: the rigid shaft then carries the rear brakes' torque to
+	# the front wheels (`_couple_differentials`).
 	if gd.front_axle_engageable:
+		var braking := gd.brake_engages_front_axle and input.brake > 0.0
 		for w in wheels:
 			if not w.is_rear:
-				w.driven = input.fwd_drive or gd.driven_front  ## can only ADD drive
+				w.driven = input.fwd_drive or gd.driven_front or braking  ## can only ADD drive
 
 	_driven_count = 0
 	var omega := 0.0
@@ -184,22 +183,36 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 	# One anti-roll snapshot for the whole body before any wheel ticks (`RayWheel.anti_roll_partner`).
 	for w in wheels:
 		w.latch_bar()
+	# Traction control rides the drive alone; the bridge may switch it off (`tcs_off`).
+	var tcs_slip := RayWheel.TCS_SLIP if gd.tcs_equipped and not input.tcs_off else 0.0
 	for w in wheels:
 		w.steer_angle = _applied_steer if w.steered else 0.0
 		# The nominal equal split (open-diff law); `_couple_differentials` adds what a biasing,
 		# locked or rigid diff moves on top, once every wheel has integrated.
 		var drive_t := axle_torque / _driven_count if w.driven else 0.0
-		var brake_t := input.brake * gd.brake_torque
+		var brake_t := input.brake * (_brake_rear if w.is_rear else _brake_front)
+		# Anti-lock rides the foot brake and the retarder; a handbrake is a mechanical hold no ABS
+		# modulates, so a rear wheel under it brakes without.
+		var abs_slip := RayWheel.ABS_SLIP if gd.abs_equipped else 0.0
 		if w.is_rear:
 			brake_t += input.handbrake * gd.handbrake_torque
 			w.lat_grip_scale = lerpf(1.0, gd.handbrake_grip, input.handbrake)
-			# Retarder (truck only): a brake on the driven axle, never a separate model.
+			if input.handbrake > 0.0:
+				abs_slip = 0.0
+			# Retarder (truck only): a brake on the driven axle, never a separate model. Its slip cap
+			# reads last tick's compliance (a free wheel's `delta / I` before the first tick).
+			# COMPROMISE: on the tick a gripping wheel leaves the ground the cap is up to
+			# `1 + reaction_stiffness` too generous and the retarder can stop the lifted wheel; ABS
+			# lets it spin back up on landing. Exact needs the cap solved inside RayWheel's step.
 			if gd.retarder_equipped and w.driven:
+				var compliance := w.spin_compliance if w.spin_compliance > 0.0 \
+						else delta / gd.wheel_inertia
 				var ret := Drivetrain.retarder_torque(
-						input.retarder, ground_speed, w.omega, gd, delta)
+						input.retarder, ground_speed, w.omega, gd, compliance)
 				brake_t += ret
 				retarder_torque_applied += ret
-		w.tick(body, gd, space, drive_t, brake_t, delta, grip_terrains)
+		w.tick(body, gd, space, drive_t, brake_t, delta, grip_terrains, abs_slip,
+				tcs_slip if w.driven else 0.0)
 
 	_couple_differentials(gd, input, axle_torque)
 	_apply_resistance(body, gd, delta)

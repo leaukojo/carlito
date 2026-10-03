@@ -49,8 +49,8 @@ func test_brake_never_produces_throttle_while_moving() -> void:
 
 
 func test_full_accel_plus_full_brake_pass_through() -> void:
-	# §6: stopping is the brake > accel force hierarchy's job (in the spec), not
-	# the router's — both pedals pass through untouched.
+	# Arbitration passes both pedals; the router's brake override (below) settles them, since it
+	# needs the body's speed and a latch across ticks.
 	var out: VehicleInput = RouterScript.arbitrate_local(
 			_raw(1.0, 1.0), 15.0, GEAR_D1)
 	assert_float(out.throttle).is_equal(1.0)
@@ -297,6 +297,16 @@ func test_bridge_mirrors_the_driveline_requests() -> void:
 	assert_bool(bare.diff_lock).is_false()
 	assert_bool(bare.fwd_drive).is_false()
 	assert_int(bare.pto_mode).is_equal(0)
+
+
+func test_tcs_off_is_bridge_only_and_absent_means_on() -> void:
+	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
+	vals["tcs_off"] = true
+	assert_bool(RouterScript.arbitrate_bridge(vals).tcs_off).is_true()
+	assert_bool(RouterScript.arbitrate_bridge(_bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)).tcs_off) \
+			.is_false()
+	# No local key: keyboard and touch always drive with traction control on.
+	assert_bool(RouterScript.arbitrate_local(_raw(), 0.0, GEAR_D1).tcs_off).is_false()
 
 
 func test_local_passes_the_driveline_toggles_through() -> void:
@@ -811,6 +821,69 @@ class _CountingTouch extends RefCounted:
 
 
 ## A bridge that is live and sending full throttle in D1.
+# --- the brake override: both pedals held, the brake wins once the body moves -----------------
+
+static func _both(gear := GEAR_D1) -> VehicleInput:
+	var out := VehicleInput.new()
+	out.throttle = -1.0 if gear == GEAR_R else 1.0
+	out.brake = 1.0
+	out.gear_request = gear
+	return out
+
+
+func test_a_standstill_press_revs_and_a_moving_one_latches_the_cut() -> void:
+	assert_bool(RouterScript.brake_override(false, _both(), 0.0)).is_false()
+	var over := RouterScript.BRAKE_OVERRIDE_SPEED + 0.01
+	assert_bool(RouterScript.brake_override(false, _both(), over)).is_true()
+	assert_bool(RouterScript.brake_override(false, _both(GEAR_R), -over)).is_true()
+	# Latched, it holds down to a standstill, where the brakes then hold the body.
+	assert_bool(RouterScript.brake_override(true, _both(), 0.0)).is_true()
+
+
+func test_the_cut_clears_when_either_pedal_lifts_and_never_latches_in_neutral() -> void:
+	var off_brake := _both()
+	off_brake.brake = 0.0
+	var off_gas := _both()
+	off_gas.throttle = 0.0
+	for input: VehicleInput in [off_brake, off_gas, _both(GEAR_N)]:
+		assert_bool(RouterScript.brake_override(true, input, 5.0)).is_false()
+
+
+## A body the test rolls by hand: the router reads only these off a registered vehicle.
+class _RollingBody extends Node3D:
+	var speed := 0.0
+	func get_speed() -> float:
+		return speed
+	func key_steer_speed() -> float:
+		return speed
+	func get_gear_byte() -> int:
+		return RouterScript.GEAR_D1
+	func key_pedals_are_a_stick() -> bool:
+		return false
+
+
+class _BothPedalsBridge extends BridgeSourceScript:
+	func poll() -> Dictionary[StringName, Variant]:
+		return {&"active": true, &"drive_sourced": true, &"accel": 1.0, &"brake": 1.0,
+				&"gear": GEAR_D1, &"key": RouterScript.KEY_IGNITION}
+
+
+func test_the_router_cuts_the_throttle_once_a_braked_body_creeps() -> void:
+	var router: Node = auto_free(RouterScript.new())
+	router._bridge_source = _BothPedalsBridge.new()
+	var body: _RollingBody = auto_free(_RollingBody.new())
+	router.register_vehicle(body)
+	router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().throttle).is_equal(1.0)
+	body.speed = RouterScript.BRAKE_OVERRIDE_SPEED + 0.5
+	router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().throttle).is_equal(0.0)
+	assert_float(router.get_vehicle_input().brake).is_equal(1.0)
+	body.speed = 0.0
+	router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().throttle).is_equal(0.0)
+
+
 class _LiveBridge extends BridgeSourceScript:
 	func poll() -> Dictionary[StringName, Variant]:
 		return {&"active": true, &"drive_sourced": true, &"accel": 1.0, &"gear": GEAR_D1,
@@ -853,11 +926,12 @@ func test_bridge_only_never_polls_local_or_touch() -> void:
 	assert_int(out.key).is_equal(RouterScript.KEY_LOCK)
 	assert_float(out.handbrake).is_equal(1.0)
 	assert_float(out.throttle).is_equal(0.0)
-	# Lifting the lock hands driving straight back to the local sources.
+	# Lifting the lock hands driving straight back to the local sources (the pedal key ramps in,
+	# KeyShaper, so any throttle at all is the hand-back).
 	router.set_bridge_only(false)
 	router._physics_process(1.0 / 60.0)
 	assert_int(touch.polls).is_equal(1)
-	assert_float(router.get_vehicle_input().throttle).is_equal(1.0)
+	assert_float(router.get_vehicle_input().throttle).is_greater(0.0)
 
 
 func test_a_live_bridge_drives_under_the_lock() -> void:
@@ -903,7 +977,7 @@ func test_a_quiet_bridge_hands_the_driving_group_to_local() -> void:
 	assert_bool(router.bridge_drives()).is_false()
 	var out: VehicleInput = router.get_vehicle_input()
 	assert_int(out.key).is_equal(RouterScript.KEY_IGNITION)
-	assert_float(out.throttle).is_equal(1.0)
+	assert_float(out.throttle).is_greater(0.0)  # local drives; the pedal key ramps (KeyShaper)
 	assert_int(out.body_cmd).is_equal(2)
 	# A driving control arriving hands the vehicle straight back to the bridge.
 	router._bridge_source = _LiveBridge.new()
@@ -982,7 +1056,7 @@ func test_the_dev_override_lets_local_drive_under_the_lock() -> void:
 	router._dev_keys = true
 	router._physics_process(1.0 / 60.0)
 	assert_int(touch.polls).is_equal(1)
-	assert_float(router.get_vehicle_input().throttle).is_equal(1.0)
+	assert_float(router.get_vehicle_input().throttle).is_greater(0.0)
 
 
 func test_the_dev_override_lets_local_drive_under_the_lock_with_a_merely_connected_bridge() -> void:
@@ -995,4 +1069,4 @@ func test_the_dev_override_lets_local_drive_under_the_lock_with_a_merely_connect
 	router._physics_process(1.0 / 60.0)
 	assert_bool(router.bridge_drives()).is_false()
 	assert_int(touch.polls).is_equal(1)
-	assert_float(router.get_vehicle_input().throttle).is_equal(1.0)
+	assert_float(router.get_vehicle_input().throttle).is_greater(0.0)
