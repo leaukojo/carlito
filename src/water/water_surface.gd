@@ -10,7 +10,7 @@ extends Area3D
 ## Axis-aligned rect around the node's origin; don't rotate the node.
 
 const Layers := preload("res://src/physics/collision_layers.gd")
-const WATER_GROUP := "water"
+const Groups := preload("res://src/levels/base/carlito_groups.gd")
 const SHADER := preload("res://src/water/water.gdshader")
 ## Target width of one visual plane quad, in metres. Subdivisions are derived from
 ## `size` so a bigger water body keeps the same wave sampling density. The shader's
@@ -70,13 +70,16 @@ var _shape: CollisionShape3D
 var _far_mesh: MeshInstance3D
 
 
+func _init() -> void:
+	add_to_group(Groups.WATER)
+
+
 func _ready() -> void:
 	# The mask is what makes the kill volume fire: an Area3D reports a body only if its mask
 	# names that body's layer. This line and BaseVehicle's layer are one mechanism in two
 	# files — drop VEHICLE here and drowning stops silently.
 	collision_layer = Layers.TRIGGER
 	collision_mask = Layers.VEHICLE
-	add_to_group(WATER_GROUP)
 	_rebuild()
 	set_physics_process(infinite and not Engine.is_editor_hint())
 	if not Engine.is_editor_hint():

@@ -114,8 +114,9 @@ truck / trailer / tractor).
 ## Wheels and ground
 
 - Never set `RigidBody3D.inertia`: Jolt computes the tensor about the declared `center_of_mass`, so
-  a COM height is pure data. Read the tensor only through
-  `PhysicsDirectBodyState3D.inverse_inertia`; `inertia` reads `ZERO` on a computed body. Guard:
+  a COM height is pure data. Read the tensor only off `PhysicsDirectBodyState3D`, never `inertia`
+  (`ZERO` on a computed body): `inverse_inertia` for body-local axes, `inverse_inertia_tensor` for
+  world-axis maths (the tow code). Guard:
   `tests/test_body_inertia.gd`.
 - A car-family COM height (`com_y`) stays below ~45 % of the body's AABB height. If a narrow body
   tips before it slides, the levers are the anti-roll bar or `mu_lat`, never a lower COM.

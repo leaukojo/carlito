@@ -40,7 +40,7 @@ jobs:
       - name: Editor-type annotation gate
         shell: bash
         run: |
-          if grep -rnE '^[^#]*(:|->)[[:space:]]*Editor[A-Z][A-Za-z0-9]*' --include='*.gd' src kit tools tests; then
+          if grep -rnE '^[^#]*((:|->)[[:space:]]*|Array\[|[[:space:]]as[[:space:]]+)Editor[A-Z][A-Za-z0-9]*' --include='*.gd' src kit tools tests; then
             echo "editor-only type annotation outside addons/ (breaks exported builds)"
             exit 1
           fi
@@ -78,21 +78,26 @@ jobs:
           fi
 
       # The .baked.scn is build output, not a committed artifact (root CLAUDE.md
-      # rule 1). Bake all six registered levels here, before the tests: the unit suite's
-      # bake-weight assertion, the baked-level smoke and the web export all read the real
-      # file. Judged by output, not exit code — leak-at-exit makes the code meaningless.
+      # rule 1). Bake every registered level with an AuthoringRoot (seven) here, before the
+      # tests: the unit suite's bake-weight assertion, the baked-level smoke and the web export
+      # all read the real file. Judged by output, not exit code — leak-at-exit makes the code
+      # meaningless; the completion sentinel is what proves the run finished.
       - name: Bake levels
         shell: bash
         run: |
           set +e
           godot --headless res://tools/bake_levels.tscn 2>&1 | tee bake.log
           set -e
-          if grep -E "^\[bake\] " bake.log | grep -vE ": OK — |: no AuthoringRoot, skipped"; then
+          if grep -E "^\[bake\] " bake.log | grep -vE ": OK — |: no AuthoringRoot content, skipped|^\[bake\] complete: "; then
             echo "bake failed: lines above"
             exit 1
           fi
-          if ! grep -q ": OK — " bake.log; then
-            echo "bake produced no output — the run did not finish"
+          if grep -q "SCRIPT ERROR" bake.log; then
+            echo "bake hit a script error: see the log above"
+            exit 1
+          fi
+          if ! grep -qE "^\[bake\] complete: [0-9]+ baked, [0-9]+ skipped, 0 failed$" bake.log; then
+            echo "bake printed no clean completion sentinel — the run failed or did not finish"
             exit 1
           fi
 
@@ -104,10 +109,12 @@ jobs:
       - name: Unit tests (gdUnit4)
         run: godot --headless --path . -s -d --remote-debug tcp://127.0.0.1:0 res://addons/gdUnit4/bin/GdUnitCmdTool.gd --ignoreHeadlessMode -a tests
 
-      # Boot the real main scene headless; a nonzero exit (shell: bash => pipefail)
-      # or any SCRIPT ERROR / ERROR fails the build. "still in use" / "leaked at
-      # exit" / "Pages in use exist at exit" (PagedAllocator, Linux-only) are
-      # known-harmless leak-at-exit noise emitted after the run's real work.
+      # Boot the real main scene headless. Judged by output, not exit code: the exit code is
+      # ignored (leak-at-exit noise makes it meaningless). Any SCRIPT ERROR / ERROR fails, and so
+      # does a missing "Carlito level OK:" line, which boot.gd prints once the first vehicle has
+      # spawned — a crash or a hang before that leaves no line. "still in use" / "leaked at
+      # exit" / "Pages in use exist at exit" (PagedAllocator, Linux-only) are known-harmless
+      # leak-at-exit noise emitted after the run's real work.
       - name: Headless smoke
         shell: bash
         run: |
@@ -118,12 +125,15 @@ jobs:
             echo "smoke failed: errors above"
             exit 1
           fi
+          if ! grep -q "^Carlito level OK: " smoke.log; then
+            echo "smoke failed: no level-OK line — the level never finished loading"
+            exit 1
+          fi
 
       # Baked-level smoke (load -> baked-scene swap -> spawn -> play) against the
-      # dressed level_1 island. CARLITO_LEVEL
-      # picks the registry id; boot.gd loads it headless. Same error gate as the default
-      # smoke; "still in use"/"leaked at exit"/"Pages in use exist at exit" are known-harmless
-      # leak-at-exit noise.
+      # dressed level_1 island. CARLITO_LEVEL picks the registry id; boot.gd loads it headless.
+      # Same gate as the default smoke, plus the level-OK line must say "baked: true" (an
+      # unbaked level plays on dev collision and passes everything else).
       - name: Baked-level smoke (level_1)
         shell: bash
         env:
@@ -134,6 +144,10 @@ jobs:
           set -e
           if grep -E "SCRIPT ERROR|ERROR:" baked.log | grep -vE "still in use at exit|leaked at exit|Pages in use exist at exit"; then
             echo "baked smoke failed: errors above"
+            exit 1
+          fi
+          if ! grep -qE "^Carlito level OK: level_1 \(.*, baked: true\)" baked.log; then
+            echo "baked smoke failed: no 'Carlito level OK: level_1 (..., baked: true)' line"
             exit 1
           fi
 
@@ -217,18 +231,46 @@ jobs:
       - name: Import project
         run: godot --headless --import
 
+      # Judged by output, not exit code: the summary line measure_vehicles.gd prints last is the
+      # verdict, and its absence means the run died before finishing.
       - name: Straight-line tracking (every wheel-driven variant)
-        run: godot --headless --fixed-fps 60 res://tools/measure_vehicles.tscn -- all 45 track strict
+        shell: bash
+        timeout-minutes: 15
+        run: |
+          set +e
+          godot --headless --fixed-fps 60 res://tools/measure_vehicles.tscn -- all 45 track strict 2>&1 | tee tracking.log
+          set -e
+          if grep -q "with a tracking FAIL" tracking.log; then
+            echo "tracking failed: lines above"
+            exit 1
+          fi
+          if ! grep -qE "^all vehicles tracked straight" tracking.log; then
+            echo "tracking printed no summary line — the run did not finish"
+            exit 1
+          fi
 
       # A tractor unit's steer wheels keep >= 8.5 kN through a coupled gear-1 launch, or a
       # wheelbase / COM edit lifts them (docs/heavy_vehicles.md § Truck sizing). --fixed-fps 60
       # is the same 60 Hz tick, output byte-identical, run faster than real time. The timeout
-      # catches a tool that fails to parse and never quits.
+      # catches a tool that fails to parse and never quits. Judged by output: each run prints
+      # two "steer-wheel floor:" lines (P2, P6); a FAIL on either, or fewer than two, fails.
       - name: Semi launch steer-wheel floor (both tractor units)
+        shell: bash
         timeout-minutes: 5
         run: |
-          godot --headless --fixed-fps 60 res://tools/measure_semi_launch.tscn -- semi strict
-          godot --headless --fixed-fps 60 res://tools/measure_semi_launch.tscn -- semi-conventional strict
+          for v in semi semi-conventional; do
+            set +e
+            godot --headless --fixed-fps 60 res://tools/measure_semi_launch.tscn -- "$v" strict 2>&1 | tee "semi-$v.log"
+            set -e
+            if grep -E "steer-wheel floor: .*: FAIL" "semi-$v.log"; then
+              echo "$v: steer-wheel floor failed"
+              exit 1
+            fi
+            if [ "$(grep -c "steer-wheel floor:" "semi-$v.log")" -lt 2 ]; then
+              echo "$v: fewer than two steer-wheel floor lines — the run did not finish"
+              exit 1
+            fi
+          done
 
   # Publishes the just-built site into gh-pages:/dev/. Pushes to main run the gate
   # stack above but publish nothing: main only ever moves via a promote, and those

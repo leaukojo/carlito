@@ -52,6 +52,13 @@ else
 fi
 
 if [ "$MODE" = dev ]; then
+  # Two overlapping pushes publish in no fixed order: an older build must not overwrite a
+  # newer one. Only the run built from dev's current tip publishes.
+  DEV_TIP="$(git ls-remote "$REMOTE" refs/heads/dev | cut -f1)"
+  if [ "$DEV_TIP" != "$SITE_SHA" ]; then
+    echo "dev moved on to ${DEV_TIP}; its own run publishes"
+    exit 0
+  fi
   # Replace, never merge: a stale c2-<oldsha>.* left behind would be served forever.
   rm -rf "$GHP/dev"
   mkdir -p "$GHP/dev"

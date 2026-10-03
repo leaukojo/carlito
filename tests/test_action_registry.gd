@@ -8,6 +8,7 @@ const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
 const ContractScript := preload("res://src/bridge/contract.gd")
 const TouchScript := preload("res://src/ui/touch_controls.gd")
 const LocalSourceScript := preload("res://src/input/sources/local_source.gd")
+const PadSourceScript := preload("res://src/input/sources/pad_source.gd")
 
 
 ## Actions enumerated from ProjectSettings (hand list gets forgotten, hence this bug).
@@ -85,6 +86,18 @@ func test_local_source_and_merge_local_carry_the_same_keys() -> void:
   only in poll():       %s
   only in merge_local(): %s" % [
 				_missing(polled, merged), _missing(merged, polled)]) 		.is_equal(merged)
+
+
+## The pad source reports only the analog keys, so it is a subset rather than the same set; a key
+## merge_local does not carry would drop the stick silently.
+func test_every_pad_key_is_merged() -> void:
+	var polled := PadSourceScript.new().poll().keys()
+	var merged := RouterScript.merge_local({}, {}).keys()
+	assert_array(_missing(polled, merged)) \
+		.override_failure_message("PadSource.poll writes keys InputRouter.merge_local does not "
+				+ "merge: %s" % [_missing(polled, merged)]) \
+		.is_empty()
+	assert_array(polled).is_not_empty()
 
 
 static func _missing(from: Array, other: Array) -> Array:

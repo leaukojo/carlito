@@ -212,17 +212,6 @@ func test_an_explicit_setting_is_what_is_shown() -> void:
 		assert_int(_dash("car", setting).density_setting()).is_equal(setting)
 
 
-## The setting round-trips through the string ShellPrefs stores, and an unknown key (an older or
-## hand-edited user://shell.cfg, including a stale "auto") falls back to COMPACT rather than to a
-## blank dashboard.
-func test_density_keys_round_trip_and_reject_junk() -> void:
-	for setting: int in Dashboard.DENSITY_KEYS:
-		assert_int(Dashboard.setting_from_key(Dashboard.key_of(setting))).is_equal(setting)
-	assert_int(Dashboard.setting_from_key("gauges-only")).is_equal(Dashboard.Density.COMPACT)
-	assert_int(Dashboard.setting_from_key("")).is_equal(Dashboard.Density.COMPACT)
-	assert_int(Dashboard.setting_from_key("auto")).is_equal(Dashboard.Density.COMPACT)
-
-
 ## The SETTINGS page (and F2) is one button, cycling COMPACT -> FULL -> OFF -> COMPACT, so every
 ## mode has to be reachable by pressing it repeatedly and the cycle has to come back round.
 func test_next_setting_cycles_every_mode() -> void:
@@ -493,6 +482,25 @@ func test_the_rose_and_the_sounder_are_fed_the_fields_they_name() -> void:
 	# ...and the resolution really did go through the contract names, in their declared order.
 	assert_array(dash._rose_fields).is_equal(Array(Dashboard.WIND_ROSE_SIGNALS).map(
 			func(n: String) -> StringName: return StringName(n)))
+
+
+## A lamp's colour is overridden only on change, so the cache must not swallow a real one: lit
+## follows the field on, and unlit follows it off again.
+func test_a_telemetry_lamp_follows_its_field_both_ways() -> void:
+	var dash := _dash("tractor", Dashboard.Density.FULL)
+	var telem := TractorTelemetry.new()
+	dash._telem = telem
+	dash._resolve_fields()
+	dash.set_shown(true)
+	var lamp: Label = dash._out_lamps["pto_state"]
+	dash._process(0.0)
+	assert_that(lamp.get_theme_color("font_color")).is_equal(Dashboard.LAMP_OFF)
+	telem.pto_state = true
+	dash._process(0.0)
+	assert_that(lamp.get_theme_color("font_color")).is_not_equal(Dashboard.LAMP_OFF)
+	telem.pto_state = false
+	dash._process(0.0)
+	assert_that(lamp.get_theme_color("font_color")).is_equal(Dashboard.LAMP_OFF)
 
 
 ## The readout line's range-less extras reach it the same way, and each lands under its own

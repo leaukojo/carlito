@@ -33,11 +33,13 @@ const NAV_MODE_COUNT := Counts.NAV_MODES
 const SHEET_DETENT_COUNT := Counts.SHEET_DETENTS
 
 const LocalSource := preload("res://src/input/sources/local_source.gd")
+const PadSource := preload("res://src/input/sources/pad_source.gd")
 const BridgeSource := preload("res://src/input/sources/bridge_source.gd")
 const KeyShaper := preload("res://src/input/key_shaper.gd")
 
 
 var _local_source := LocalSource.new()
+var _pad_source := PadSource.new()
 var _bridge_source := BridgeSource.new()
 var _touch_source: Object = null  ## optional on-screen source (touch_controls.gd), if present
 var _vehicle: Node3D = null
@@ -92,7 +94,7 @@ const IGNITION_NOTICE_TEXT := "IGNITION OFF - MOVE THE ENGINE KEY"
 
 ## Edge latch for the "ignition off" notice — see _warn_if_ignition_off.
 var _ignition_warned := false
-## Raised and cleared by text match, like the ignition notice; dwell is the shell default.
+## Raised sticky and cleared by text match, like the ignition notice.
 const FALLBACK_NOTICE_TEXT := "NO DRIVING CONTROLS FROM SLOPPYCAN - KEYBOARD DRIVES"
 ## Edge latch for the fallback notice — see _set_fallback_notice.
 var _fallback_warned := false
@@ -241,8 +243,9 @@ func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 		if _vehicle.key_pedals_are_a_stick():
 			brake_apply_s = KeyShaper.ACCEL_APPLY_S
 	var raw := _local_source.poll(delta)
-	# Keys are on/off (KeyShaper). The keyboard's steer is shaped before the merge, since the touch
-	# stick is analog and passes through; both pedals after it, since every local pedal is a key.
+	# Keys are on/off (KeyShaper). The keyboard's steer is shaped before the touch merge, since the
+	# touch stick is analog and passes through; both pedals after it, since every key and touch pedal
+	# is on/off. The gamepad is analog throughout, so it merges last, unshaped.
 	_key_steer = KeyShaper.steer_step(_key_steer, float(raw.get(&"steer", 0.0)), steer_speed,
 			delta)
 	raw[&"steer"] = _key_steer
@@ -254,6 +257,7 @@ func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 			brake_apply_s, delta)
 	raw[&"accel"] = _pedal_accel
 	raw[&"brake_reverse"] = _pedal_brake
+	raw = merge_local(raw, _pad_source.poll())
 	if driving_only:
 		raw = driving_edges_only(raw)
 	# Single headlight owner: either source's cycle edge advances the shared level.
@@ -350,7 +354,7 @@ func _set_fallback_notice(on: bool) -> void:
 		return
 	_fallback_warned = on
 	if on:
-		GameState.notice.emit(FALLBACK_NOTICE_TEXT, 0.0)
+		GameState.notice.emit(FALLBACK_NOTICE_TEXT, GameState.NOTICE_STICKY)
 	else:
 		GameState.notice_cleared.emit(FALLBACK_NOTICE_TEXT)
 

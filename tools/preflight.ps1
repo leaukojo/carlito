@@ -12,7 +12,7 @@ function Fail($name) { Write-Host "PREFLIGHT FAILED: $name" -ForegroundColor Red
 function Announce($name) { Write-Host "`n== $name" -ForegroundColor Cyan }
 
 Announce 'Editor-type annotation gate'
-$bad = git grep -nE '^[^#]*(:|->)[[:space:]]*Editor[A-Z][A-Za-z0-9]*' -- 'src/*.gd' 'kit/*.gd' 'tools/*.gd' 'tests/*.gd'
+$bad = git grep -nE '^[^#]*((:|->)[[:space:]]*|Array\[|[[:space:]]as[[:space:]]+)Editor[A-Z][A-Za-z0-9]*' -- 'src/*.gd' 'kit/*.gd' 'tools/*.gd' 'tests/*.gd'
 if ($bad) { $bad; Write-Host 'editor-only type annotation outside addons/ (breaks exported builds)'; Fail 'editor-type gate' }
 
 Announce 'Import'
@@ -35,10 +35,12 @@ if ($staleBakes) { Fail 'stale-bake check (run: & $GODOT --headless --path . res
 if ($bakes -notmatch '\[check-bakes\] complete:') { Fail 'stale-bake check (no completion sentinel — the run did not finish)' }
 
 Announce 'Headless smoke'
+# Judged by output, not exit code: no errors, and boot.gd's level-OK line (printed after the first spawn).
 $smoke = & $GODOT --headless --path . --quit-after 120 2>&1 | Out-String
 $errors = ($smoke -split "`n") | Select-String -Pattern 'SCRIPT ERROR|ERROR:' |
     Where-Object { $_ -notmatch 'still in use at exit|leaked at exit|Pages in use exist at exit' }
-if ($LASTEXITCODE -ne 0 -or $errors) { $errors; Fail 'headless smoke' }
+if ($errors) { $errors; Fail 'headless smoke' }
+if ($smoke -notmatch '(?m)^Carlito level OK: ') { Fail 'headless smoke (no level-OK line — the level never finished loading)' }
 
 Announce 'Orphan check'
 node tools/check_orphans.mjs

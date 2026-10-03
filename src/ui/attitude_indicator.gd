@@ -37,11 +37,15 @@ var caption := ""                   ## static label drawn under the top bezel
 
 
 func _set_pitch(v: float) -> void:
+	if v == pitch:
+		return
 	pitch = v
 	queue_redraw()
 
 
 func _set_roll(v: float) -> void:
+	if v == roll:
+		return
 	roll = v
 	queue_redraw()
 

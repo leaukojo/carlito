@@ -20,6 +20,7 @@ const BAKE_CODE_INPUTS: PackedStringArray = [
 	"res://kit/bake/level_baker.gd",
 	"res://src/levels/base/carlito_groups.gd",
 	"res://kit/helpers/road_builder.gd",
+	"res://kit/helpers/road_profile.gd",
 	"res://kit/helpers/scatter_base.gd",
 	"res://src/levels/base/rail_track.gd",
 	"res://src/physics/collision_layers.gd",
@@ -414,6 +415,12 @@ static func hash_extra(chunk_size: float) -> PackedStringArray:
 ## First AuthoringRoot under `root`; a walk, not a group lookup — level may be outside any tree.
 static func find_authoring(root: Node) -> Node:
 	return Groups.find_authoring(root)
+
+
+## Whether `authoring` (a find_authoring result) holds anything to bake. An empty
+## AuthoringRoot is a freshly scaffolded level: no bake output is required of it yet.
+static func has_bakeable_authoring(authoring: Node) -> bool:
+	return authoring != null and authoring.get_child_count() > 0
 
 
 ## Spawn descriptors for validate_spawns, from VehicleSpawn markers (duck-typed on accepts()).
@@ -874,8 +881,7 @@ static func check_level_file(level_path: String) -> Dictionary:
 	var level_root := packed.instantiate()
 	var authoring := find_authoring(level_root)
 	# Read everything before freeing the tree: a freed node compares equal to null.
-	# An empty AuthoringRoot is a freshly scaffolded level; bake output isn't required yet.
-	var has_authoring := authoring != null and authoring.get_child_count() > 0
+	var has_authoring := has_bakeable_authoring(authoring)
 	var chunk_size := float(authoring.get("chunk_size")) if has_authoring else 0.0
 	var scatter_errors := scatter_ground_errors(level_root)
 	level_root.free()

@@ -119,8 +119,14 @@ Push to `dev`. `.github/workflows/ci.yml` runs `build` (editor-type gate → hea
 check → import → stale-bake check → bake → gdUnit4 → headless smoke → baked-level smoke →
 web export + level packs) beside a parallel `tracking` job, then `publish-dev` copies
 `build/web/` into `gh-pages:/dev/`. Steps are judged by output, not exit code — headless
-Godot can finish and still die in teardown. Contract sync is a pre-commit/preflight gate,
-not CI.
+Godot can finish and still die in teardown — so each step requires its tool's completion
+line (`[bake] complete: … 0 failed`, `Carlito level OK: <id> (<variant>, baked: <bool>)`,
+the tracking summary, two `steer-wheel floor:` lines). Contract sync is a pre-commit/preflight
+gate, not CI.
+
+`publish-dev` publishes only when its commit is still `dev`'s tip: of two overlapping pushes,
+the older run skips, so dev never rolls back — and if the newer run fails, dev keeps whatever
+it last published.
 
 Pushes to `main` run the same gates but publish nothing.
 

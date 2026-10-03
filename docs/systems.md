@@ -19,8 +19,8 @@ signal makes a readout line, not a bar. `count` (>= 1, default 1) makes an Array
 `node_health` (8), `slip` (2); rejected on `"in"`, `bool`, or with an `enum` —
 `Bridge._publish` drops a wrong-shaped value with one warning.
 
-A version mismatch with sloppyCAN warns at runtime and raises a sticky notice (`push_warning`
-is invisible in a web release). sloppyCAN reads a generated copy,
+A version mismatch with sloppyCAN warns at runtime and raises a transient notice, once per session
+(`push_warning` is invisible in a web release). sloppyCAN reads a generated copy,
 `../sloppycan/carlito_contract.js` (`window.CARLITO_CONTRACT`). Edit ritual:
 `contract/CLAUDE.md`.
 
@@ -29,11 +29,12 @@ is invisible in a web release). sloppyCAN reads a generated copy,
 `InputRouter` merges every source into one `VehicleInput` per tick. All arbitration is
 static/pure, tested in `tests/test_input_arbitration.gd`.
 
-- `merge_local`: keyboard + touch (max analog, summed steer, OR'd bits).
+- `merge_local`: keyboard + touch, then + gamepad (max analog, summed steer, OR'd bits).
 - `KeyShaper` (`key_shaper.gd`): an on/off key becomes a hand and a foot. The keyboard's steer
   ramps out ever more slowly with road speed while it turns road wheels (1 / v^2 above 10 m/s;
   `BaseVehicle.key_steer_speed`, 0 for a flying plane, drone and boat) and returns faster; pedals
-  ramp in over 0.25-0.4 s and off in 0.1 s. Local only: the touch stick and the bridge are analog.
+  ramp in over 0.25-0.4 s and off in 0.1 s. Order: keyboard steer shaped, touch merged, pedals
+  shaped, gamepad merged. Local keys only: the touch stick, the gamepad and the bridge are analog.
 - `arbitrate_local`: ignition gates throttle; brake never throttles; S = brake, then reverse
   at standstill; foot brake drives `brake_lamp`.
 - `arbitrate_bridge`: the gear byte owns direction. Mode = `InputRouter.set_manual_gearbox`
@@ -61,7 +62,7 @@ Three paths, chosen per tick:
 - `InputRouter.bridge_drives()` is the "who drives" predicate (touch driving layer,
   action-registry context); `Bridge.is_active()` only says a peer is connected.
   `bridge_source.gd` normalizes contract-in fields (%->unit); `local_source.gd` reads the
-  keyboard; touch registers via `InputRouter.set_touch_source()`.
+  keyboard (edges from either device), `pad_source.gd` the gamepad's axes; touch registers via `InputRouter.set_touch_source()`.
 - Toggle state is owned by the router, never a source: headlight level `_lights`
   (OFF->CLEARANCE->LOW->HIGH), tractor hitch/PTO/PTO-speed/diff-lock/MFWD, drone arm/cargo
   hook/injected node failure/flight mode, plane flaps, train pantograph/doors, refuse body
@@ -123,7 +124,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   | Readout | "out" signals with no `range`, beside HDG/ODO/GPS (boat SOG/STW/DRIFT in m/s) |
   | Hand-built | gauges (`gauge.gd`, `kmh`/`rpm`, 90° text gap), attitude (`pitch`/`roll`), wind rose (`wind_rose.gd`, `awa`/`aws`/`twd`/`tws`/`cog`/`sog`), sounder (`depth_readout.gd`, `depth`, `---` for -1), `node_health`, train's `REVERSER N/D/R` |
 
-  Captions (`BAR_LABEL`, `LAMP_TEXT`) are hand-picked. `Dashboard.Density`: FULL, COMPACT (default, no signal drops: `tests/test_dashboard.gd`), OFF — SETTINGS/F2 (`toggle_dashboard`) cycles COMPACT -> FULL -> OFF, persisted in `user://shell.cfg`.
+  Captions (`BAR_LABEL`, `LAMP_TEXT`) are hand-picked. `Dashboard.Density`: FULL, COMPACT (default, no signal drops: `tests/test_dashboard.gd`), OFF — SETTINGS/F2 (`toggle_dashboard`) cycles COMPACT -> FULL -> OFF, held for the session.
 - Debug overlay (`debug_overlay.gd`): FPS/frame ms/draw calls/VRAM/node count via
   `Performance`, F3. Target 60 fps in the worst deployed view.
 
@@ -134,7 +135,8 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   `{type:'carlitoInput'}` with a timestamp, exposes `publish()` for outbound
   `{type:'carlitoOutput'}`. `Bridge` autoload (`src/bridge/bridge.gd`,
   `OS.has_feature("web")`-gated): polls the inbound stash each physics tick (~60 Hz),
-  freshness-gated 300 ms in JS; publishes at `PUBLISH_HZ` (20) via
+  freshness-gated 300 ms in JS on `performance.now()` (monotonic); runs while the tree is
+  paused (menus open) so the link never goes silent, unlike `InputRouter`; publishes at `PUBLISH_HZ` (20) via
   `Contract.data.signals_for_vehicle(GameState.current_vehicle, "out")` ×
   `telemetry.to_bridge_dict()`, both sides stamping contract version. `carlitoOutput` also
   carries `challenge` (bool, `Bridge.set_challenge` from `boot.gd`), not a contract signal —
@@ -170,7 +172,6 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   | Authority | Source | Notes |
   |---|---|---|
   | Deep link | `?level=<id>&vehicle=<variant>`, `--level=`/`--vehicle=`, or `CARLITO_LEVEL` | `src/shell/boot_params.gd`: unknown ids dropped; `vehicle` names a VARIANT |
-  | Saved session | `src/shell/shell_prefs.gd` -> `user://shell.cfg` | Skipped on deep link/`--headless`; `ShellPrefs.ENABLED` is `false` today |
   | `boot.gd`'s `DEFAULT_LEVEL` | `flatland` (no bake) | keeps every island pack out of the boot download |
 
   Variant reaches the level via `Level.initial_variant`, read before `_ready` spawns it.
@@ -182,7 +183,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   cover keyboard/gamepad, CONTROLS scrolls on Up/Down instead. Notice line
   (`src/ui/notice_line.gd`, `Notice` Label): `GameState.notice` text, dwelled
   `Boot.NOTICE_DWELL_S`. First-run cue (`src/ui/coach_cue.gd`): dismissed by input or
-  timeout, once (`ShellPrefs.coach_seen`), via non-consuming `_input`.
+  timeout, once per session (`Boot._maybe_coach`), via non-consuming `_input`.
 - Pause overlay (`src/ui/pause_menu.gd`, Esc or touch MENU):
   RESUME/RESPAWN/CONDITIONS/CONTROLS/SETTINGS; GARAGE/LEVEL live on touch (hidden only by
   F5, never F4) and G / 4.
@@ -190,10 +191,10 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   | Page | Contents |
   |---|---|
   | CONTROLS | off `InputMap`; hidden if unusable (`ActionRegistry.relevant_entry`), greyed if bridge-owned. `setup(caps, density, ui_scale, wind_preset, current_preset, wind_from_deg, night_on)` before `add_child` |
-  | SETTINGS | dashboard density + UI scale cycling buttons -> `user://shell.cfg` |
+  | SETTINGS | dashboard density + UI scale cycling buttons, session-held |
   | CONDITIONS | WIND/CURRENT preset (`WorldConditions.Preset` LEVEL/CALM/LIGHT/STRONG), FROM direction, TIME -> greys per `WorldConditions.WIND_FAMILIES`/`CURRENT_FAMILIES` |
 
-  Session-held (`ShellPrefs` disabled), re-applied each load (`Boot._finish_load`, restoring `PAUSABLE`); night tracks `GameState.night_changed`. `Boot` is `PROCESS_MODE_ALWAYS`.
+  Session-held, re-applied each load (`Boot._finish_load`, restoring `PAUSABLE`); night tracks `GameState.night_changed`. `Boot` is `PROCESS_MODE_ALWAYS`.
 - Level select (`src/ui/level_select.gd`, touch LEVEL or 4): BACK + `closed` signal, reads
   `LevelRegistry.LEVELS` (`{id, name, scene, desc}`); cards from
   `src/ui/level_thumbs/<id>.png` (`LevelShot.thumb_path`), framed by `<level>_shot.tres`.
@@ -253,7 +254,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
 
 ### Water & world bounds
 
-- `WaterSurface` (`src/water/water_surface.gd`, `@tool Area3D`, group `"water"`):
+- `WaterSurface` (`src/water/water_surface.gd`, `@tool Area3D`, group `Groups.WATER`):
   `get_height(pos)`, optional `far_sea_extent` skirt, non-boat kill/respawn volume
   (`kill_margin` below the surface, `body_entered` -> `call_deferred("respawn")` on any
   non-boat `BaseVehicle`, region via `contains_xz`); does not own the map boundary.

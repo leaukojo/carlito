@@ -10,8 +10,9 @@ const WATERCRAFT := "res://src/vehicles/watercraft/"
 
 ## variant id -> { scene: String, family: String }. Insertion order is the cycle order.
 const VARIANTS := {
-	# -- hand-built bodies, first in their family. Car / truck / boat / tractor have none: they
-	# default to their first generated variant below. --
+	# -- hand-built bodies, first in their family. Car / boat / tractor have none: they default
+	# to their first generated variant below. The truck family's hand-built semis are listed after
+	# the Kenney trucks. --
 	# First so it is the drone family's default; same flight numbers as "drone".
 	"drone-mk2": {"scene": "res://src/vehicles/drone/drone_mk2.tscn", "family": "drone"},
 	"drone": {"scene": "res://src/vehicles/drone/drone.tscn", "family": "drone"},

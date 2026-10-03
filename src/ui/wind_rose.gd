@@ -56,6 +56,9 @@ var caption := ""   ## static label drawn under the top bezel
 ## setters would queue seven redraws for one tick.
 func set_reading(awa_deg: float, aws_ms: float, twd_deg: float, tws_ms: float,
 		cog_deg: float, sog_ms: float, heading_deg: float) -> void:
+	if awa_deg == awa and aws_ms == aws and twd_deg == twd and tws_ms == tws \
+			and cog_deg == cog and sog_ms == sog and heading_deg == heading:
+		return
 	awa = awa_deg
 	aws = aws_ms
 	twd = twd_deg

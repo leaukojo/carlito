@@ -30,6 +30,10 @@ static func adaptive_offsets(curve: Curve3D, max_seg_len: float,
 	var out := PackedFloat32Array()
 	if curve == null or curve.point_count < 2:
 		return out
+	# Curve3D's bake errors on a zero-length curve, so gate on the control polygon (which
+	# bounds the curve's length from above) before baking.
+	if _control_polygon_length(curve) < 0.001:
+		return out
 	var length := curve.get_baked_length()
 	if length < 0.001:
 		return out
@@ -50,6 +54,18 @@ static func adaptive_offsets(curve: Curve3D, max_seg_len: float,
 					seg_a + (seg_b - seg_a) * float(i + 1) / float(coarse),
 					max_angle, length, out)
 	return out
+
+
+## Length of the Bezier control polygon: each point, through its handles, to the next.
+static func _control_polygon_length(curve: Curve3D) -> float:
+	var total := 0.0
+	for i in curve.point_count - 1:
+		var a := curve.get_point_position(i)
+		var b := curve.get_point_position(i + 1)
+		var a_out := a + curve.get_point_out(i)
+		var b_in := b + curve.get_point_in(i + 1)
+		total += a.distance_to(a_out) + a_out.distance_to(b_in) + b_in.distance_to(b)
+	return total
 
 
 ## Catmull-Rom-style auto-handles: each handle is a third of the distance to its own

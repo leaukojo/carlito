@@ -133,8 +133,12 @@ func test_adaptive_degenerate_curves_are_empty() -> void:
 	var one := Curve3D.new()
 	one.add_point(Vector3(3, 0, 0))
 	assert_int(Builder.adaptive_offsets(one, 6.0, 6.0).size()).is_equal(0)
-	assert_int(Builder.adaptive_offsets(
-			_straight(Vector3(3, 0, 0), Vector3(3, 0, 0)), 6.0, 6.0).size()).is_equal(0)
+	# A zero-length curve must return empty without baking it (Curve3D's bake logs an error).
+	var sizes: Array[int] = []
+	await assert_error(func() -> void: sizes.append(Builder.adaptive_offsets(
+			_straight(Vector3(3, 0, 0), Vector3(3, 0, 0)), 6.0, 6.0).size())) \
+		.override_failure_message("a zero-length curve logged an engine error").is_success()
+	assert_array(sizes).is_equal([0])
 
 
 # ------------------------------------------------------------- draw-mode primitives

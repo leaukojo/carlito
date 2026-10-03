@@ -211,6 +211,7 @@ var _node_squares: Array[ColorRect] = []  ## one per bus node, roster order; emp
 var _bars := {}
 var _lamps := {}     ## signal name -> Label (input bool tell-tales)
 var _out_lamps := {} ## signal name -> Label (bool "out" ISOBUS tell-tales, driven from telemetry)
+var _lamp_colors := {}  ## Label -> Color last applied, see _set_lamp_color
 var _chips := {}     ## signal name -> [Label, SignalDef] (enum "in" requests)
 var _out_chips := {} ## signal name -> [Label, SignalDef] (flavored enum "out" readouts)
 var _readout: Label = null
@@ -266,18 +267,9 @@ func bind(level: Node) -> void:
 
 # --- density -----------------------------------------------------------------
 
-## Setting -> the key it persists as (ShellPrefs stores a string; a cfg file may be hand-edited).
+## Setting -> its label key (the SETTINGS button text).
 static func key_of(setting: int) -> String:
 	return String(DENSITY_KEYS.get(setting, DENSITY_KEYS[Density.COMPACT]))
-
-
-## Inverse; an unknown key (older or hand-edited cfg, including a stale "auto") falls back to
-## COMPACT.
-static func setting_from_key(key: String) -> int:
-	for setting: int in DENSITY_KEYS:
-		if DENSITY_KEYS[setting] == key:
-			return setting
-	return Density.COMPACT
 
 
 ## Next setting in the cycle, for the SETTINGS page's one button (and F2).
@@ -329,6 +321,7 @@ func _build(vehicle_type: String) -> void:
 	_node_squares.clear()
 	_lamps.clear()
 	_out_lamps.clear()
+	_lamp_colors.clear()
 	_chips.clear()
 	_out_chips.clear()
 
@@ -501,9 +494,18 @@ func _make_lamp(sig_name: String, into: Node) -> Label:
 	var lamp := Label.new()
 	lamp.text = LAMP_TEXT.get(sig_name, sig_name.to_upper())
 	lamp.theme_type_variation = &"Small"
-	lamp.add_theme_color_override("font_color", LAMP_OFF)  # state, not styling
+	_set_lamp_color(lamp, LAMP_OFF)  # state, not styling
 	into.add_child(lamp)
 	return lamp
+
+
+## A lamp's font colour, overridden only on change: every add_theme_color_override raises
+## NOTIFICATION_THEME_CHANGED, which re-shapes the label, and the lamps are set each frame.
+func _set_lamp_color(lamp: Label, col: Color) -> void:
+	if _lamp_colors.get(lamp) == col:
+		return
+	_lamp_colors[lamp] = col
+	lamp.add_theme_color_override("font_color", col)
 
 
 ## Bars for every "out" signal that has a range and is either warn'd or flavored (contract
@@ -826,7 +828,7 @@ func _process(_dt: float) -> void:
 		if field == &"body_inhibit" and on and not bool(t.get(BODY_BUS_FIELD)):
 			on = false
 		var col: Color = pair[2] if on else LAMP_OFF
-		(pair[1] as Label).add_theme_color_override("font_color", col)
+		_set_lamp_color(pair[1], col)
 
 	# Flavored enum "out" chips (implement_type), telemetry-driven like the out lamps.
 	for chip in _out_chip_fields:
@@ -900,7 +902,7 @@ func _update_telltales() -> void:
 	for sig_name in _lamps:
 		var on: bool = active.get(sig_name, false)
 		var col: Color = LAMP_COLOR.get(sig_name, Color(1.0, 0.70, 0.15)) if on else LAMP_OFF
-		_lamps[sig_name].add_theme_color_override("font_color", col)
+		_set_lamp_color(_lamps[sig_name], col)
 
 	var enums := {
 		"key": vi.key, "lights": vi.lights, "pto_mode": vi.pto_mode,

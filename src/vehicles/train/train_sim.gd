@@ -64,10 +64,9 @@ func step(delta: float, throttle: float, brake: float, parking: float,
 		var f := 0.0
 		if i == 0:
 			f += tractive_effort(v[i], throttle, base_speed, max_tractive, max_power)
-		# Davis and the brake both oppose v. brake_force alone clamps to one tick's zeroing, but the
-		# unclamped sum with Davis can overshoot zero and sign-chatter, so clamp the SUM.
-		var resistive := davis_resistance(v[i], davis_a, davis_b, davis_c) \
-				+ brake_force(v[i], brake, parking, max_brake, masses[i], delta)
+		# Davis alone is clamped to one tick's zeroing so it cannot sign-chatter; the brake is
+		# applied last, below, as Coulomb friction.
+		var resistive := davis_resistance(v[i], davis_a, davis_b, davis_c)
 		if v[i] != 0.0:
 			var tick_cap := masses[i] * absf(v[i]) / delta
 			resistive = clampf(resistive, -tick_cap, tick_cap)
@@ -88,9 +87,12 @@ func step(delta: float, throttle: float, brake: float, parking: float,
 		if i == 0:
 			head_coupler_force = fc
 
-	loco_accel = forces[0] / masses[0]
+	var demand := clampf(brake + parking, 0.0, 1.0) * max_brake
 	for i in n:
-		v[i] += forces[i] / masses[i] * delta
+		var v_old := v[i]
+		v[i] = brake_step(v_old + forces[i] / masses[i] * delta, demand, masses[i], delta)
+		if i == 0:
+			loco_accel = (v[0] - v_old) / delta
 		s[i] = _wrap(s[i] + v[i] * delta)
 
 
@@ -132,15 +134,14 @@ static func davis_resistance(speed: float, a: float, b: float, c: float) -> floa
 	return -signf(speed) * (a + b * spd + c * spd * spd)
 
 
-## Train + parking brake force (N), opposing velocity, clamped so one tick at most zeroes the
-## car's speed, never reverses it.
-static func brake_force(speed: float, brake: float, parking: float, brake_max: float,
-		mass: float, delta: float) -> float:
-	var demand := clampf(brake + parking, 0.0, 1.0) * brake_max
-	if demand <= 0.0 or speed == 0.0:
+## Speed after the train + parking brake (`demand`, N) acts on `v_free`, the speed every other force
+## has already produced. Coulomb friction: it removes at most demand/m*dt toward zero and holds the
+## car at rest when the other forces (a grade) are within that, so a parked train does not creep.
+static func brake_step(v_free: float, demand: float, mass: float, delta: float) -> float:
+	var capacity := demand / mass * delta
+	if absf(v_free) <= capacity:
 		return 0.0
-	var tick_cap := mass * absf(speed) / delta
-	return clampf(-signf(speed) * demand, -tick_cap, tick_cap)
+	return v_free - signf(v_free) * capacity
 
 
 ## Gravity along the track (N): negative (retarding +s travel) on a climb, positive on a descent.

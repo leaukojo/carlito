@@ -303,7 +303,7 @@ func _find_water() -> WaterSurface:
 
 func _collect_waters() -> void:
 	_waters.clear()
-	for node in get_tree().get_nodes_in_group(WaterSurface.WATER_GROUP):
+	for node in get_tree().get_nodes_in_group(Groups.WATER):
 		var w := node as WaterSurface
 		if w != null:
 			_waters.append(w)

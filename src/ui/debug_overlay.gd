@@ -21,7 +21,7 @@ func set_level(level: Node) -> void:
 	_level = level
 
 
-## SETTINGS applies this (mirrors Dashboard.set_density_setting); persisted through ShellPrefs.
+## SETTINGS applies this (mirrors Dashboard.set_density_setting).
 func set_extended(on: bool) -> void:
 	_extended = on
 	if visible:
@@ -91,7 +91,6 @@ func _refresh() -> void:
 	text += _articulation_line()
 	text += _flow_line("wind", "wind_vector")
 	text += _flow_line("current", "current_vector")
-	text += _ui_scale_line()
 
 
 ## Per-wheel painted-surface grip of the active vehicle (1.00 on unpainted ground), or "" when
@@ -147,21 +146,3 @@ func _flow_line(label: String, method: String) -> String:
 	# atan2(x, -z): the inverse of WindField.base_vector, so 0 deg is -Z and 90 deg is +X.
 	var heading := fposmod(rad_to_deg(atan2(v.x, -v.z)), 360.0)
 	return "\n%s %.1f m/s @ %03d deg" % [label, speed, int(round(heading))]
-
-
-## Diagnostic: every number UiScale's formula touches, so a screenshot from another browser
-## shows which one disagrees. Remove once touch-UI sizing is confirmed consistent cross-browser.
-func _ui_scale_line() -> String:
-	var win := get_window()
-	var w := 0.0
-	var h := 0.0
-	var dpr := 0.0
-	if OS.has_feature("web"):
-		w = float(JavaScriptBridge.eval("window.innerWidth", true))
-		h = float(JavaScriptBridge.eval("window.innerHeight", true))
-		dpr = float(JavaScriptBridge.eval("window.devicePixelRatio", true))
-	return "\nwin %dx%d  css %dx%d  dpr %.2f\nscreen_scale %.2f  touch %s  short %.0f  ui_scale %.2f" % [
-		win.size.x, win.size.y, int(w), int(h), dpr,
-		DisplayServer.screen_get_scale(DisplayServer.SCREEN_OF_MAIN_WINDOW),
-		UiScale.is_touch_display(), UiScale.logical_short_edge(win),
-		UiTheme.scale_of(self)]

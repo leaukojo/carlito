@@ -66,6 +66,9 @@ var _env_time := 0.0
 var _authored_wind: WindField
 var _authored_current: CurrentField
 
+## Whether `_setup_baked` swapped in the `.baked.scn` (false: unbaked authoring, or no bake).
+var baked := false
+
 
 ## Tagged in `_init`, not `_enter_tree`: bake tools load level scenes that never enter a tree.
 func _init() -> void:
@@ -168,6 +171,7 @@ func _setup_baked() -> void:
 					+ "Run tools/bake_levels.tscn.") % scene_file_path.get_file())
 		return
 	add_child((load(baked_path) as PackedScene).instantiate())
+	baked = true
 	if authoring != null:
 		authoring.queue_free()
 
@@ -310,6 +314,7 @@ func _spawn_vehicle(variant: String, at: VehicleSpawn = null) -> void:
 	if vehicle != null:
 		# Detach before freeing: queue_free() defers to end of frame, else the outgoing body
 		# stays in the tree (and collidable, sharing layer VEHICLE) for a physics tick under the new one.
+		vehicle.release_level_items()
 		remove_child(vehicle)
 		vehicle.queue_free()
 

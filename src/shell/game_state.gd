@@ -3,9 +3,13 @@ extends Node
 ## level/vehicle/UI scenes at runtime; this only tracks what's currently active.
 
 ## Transient player message. Lets sim refuse something and say why without a HUD reference.
-## dwell_s <= 0 means shell default; longer for actionable notices (ignition-key).
+## dwell_s <= 0 = shell default; longer for actionable notices (ignition-key); NOTICE_STICKY =
+## until notice_cleared.
 @warning_ignore("UNUSED_SIGNAL")  # emitted from InputRouter, not from this class
 signal notice(text: String, dwell_s: float)
+
+## The `notice` dwell that keeps a message up until `notice_cleared` names it.
+const NOTICE_STICKY := INF
 
 ## Takes a notice down before its dwell expires, once the condition it described is fixed.
 ## Raised with the exact text shown, so a stale caller can't clear someone else's message.

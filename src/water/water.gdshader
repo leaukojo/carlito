@@ -50,7 +50,7 @@ varying vec2 v_wave_pos;
 varying float v_fade;
 
 // Same displacement the vertex uses, plus its analytic slope so lighting reacts to the
-// waves. The wavelengths (~11-13 m) stay coarser than the 17.5 m quad only just; anything
+// waves. The wavelengths (~11-13 m) stay coarser than the 5 m quad (WAVE_QUAD_M); anything
 // finer belongs in fragment() (see glitter), where it is sampled per pixel. All ALU.
 void vertex() {
 	vec2 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz;

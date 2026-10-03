@@ -1,8 +1,7 @@
 class_name ChallengeProgress
 extends RefCounted
 ## Which challenges the player has passed and their best times, in `user://challenges.cfg`
-## (IndexedDB on web). Always on: it is independent of ShellPrefs, whose ENABLED switch is off for
-## boot-path testing and must not take progress with it. A pass is always timed, so "done" is
+## (IndexedDB on web). A pass is always timed, so "done" is
 ## simply "has a best time" — one stored fact, not two that could disagree.
 ##
 ## Everything read back is validated: an id the registry no longer lists, or a value that is not a

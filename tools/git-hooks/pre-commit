@@ -31,7 +31,7 @@ staged=$(git diff --cached --name-only --diff-filter=ACMR)
 #    builds (the node silently does nothing — this emptied the deployed terrain once).
 gd_staged=$(echo "$staged" | grep '\.gd$' | grep -v '^addons/' || true)
 if [ -n "$gd_staged" ]; then
-  bad=$(echo "$gd_staged" | xargs grep -nE '^[^#]*(:|->)[[:space:]]*Editor[A-Z][A-Za-z0-9]*' 2>/dev/null || true)
+  bad=$(echo "$gd_staged" | xargs grep -nE '^[^#]*((:|->)[[:space:]]*|Array\[|[[:space:]]as[[:space:]]+)Editor[A-Z][A-Za-z0-9]*' 2>/dev/null || true)
   if [ -n "$bad" ]; then
     echo "pre-commit: editor-only type annotation in runtime script (breaks exported builds):"
     echo "$bad"
@@ -65,23 +65,42 @@ bake_re=$(tr -d '\r' < tools/git-hooks/bake_paths.txt | grep -vE '^(#|$)' | sed 
 if echo "$staged" | grep -v '\.md$' | grep -qE "$bake_re"; then
   echo "pre-commit: bake inputs staged — running stale-bake check..."
   resolve_godot
-  "$GODOT" --headless --path . res://tools/check_bakes.tscn || {
+  # Judged by output, not exit code (root CLAUDE.md): same patterns as tools/preflight.ps1.
+  bakes_out=$("$GODOT" --headless --path . res://tools/check_bakes.tscn 2>&1 || true)
+  echo "$bakes_out"
+  if echo "$bakes_out" | grep -qE '\[check-bakes\].*: (stale|missing|error)'; then
     echo "pre-commit: stale bakes or road paint (fix named above), then:  & \$GODOT --headless --path . res://tools/bake_levels.tscn"
     exit 1
-  }
+  fi
+  if ! echo "$bakes_out" | grep -q '\[check-bakes\] complete:'; then
+    echo "pre-commit: check_bakes printed no completion sentinel — the run did not finish"
+    exit 1
+  fi
 fi
 
 # 5. project.godot touched -> restore the frozen 60 Hz physics pin (rule 9) if the
 #    editor's UI-save dropped a value equal to its own built-in default.
 if echo "$staged" | grep -q '^project\.godot$'; then
   fixed=0
-  if ! grep -q '^common/physics_ticks_per_second=60$' project.godot; then
-    sed -i '/^\[physics\]$/a common/physics_ticks_per_second=60' project.godot
+  # pin_setting <key> <value>: rewrite a wrong value in place, else add the key under
+  # [physics], else append the whole section.
+  pin_setting() {
+    grep -q "^$1=$2\$" project.godot && return 0
     fixed=1
-  fi
-  if ! grep -q '^common/physics_interpolation=true$' project.godot; then
-    sed -i '/^\[physics\]$/a common/physics_interpolation=true' project.godot
-    fixed=1
+    if grep -q "^$1=" project.godot; then
+      sed -i "s|^$1=.*|$1=$2|" project.godot
+    elif grep -q '^\[physics\]$' project.godot; then
+      sed -i "/^\[physics\]\$/a $1=$2" project.godot
+    else
+      printf '\n[physics]\n\n%s=%s\n' "$1" "$2" >> project.godot
+    fi
+  }
+  pin_setting common/physics_ticks_per_second 60
+  pin_setting common/physics_interpolation true
+  if ! grep -q '^common/physics_ticks_per_second=60$' project.godot \
+      || ! grep -q '^common/physics_interpolation=true$' project.godot; then
+    echo "pre-commit: could not restore the 60 Hz physics pin in project.godot (rule 9)" >&2
+    exit 1
   fi
   if [ "$fixed" = 1 ]; then
     git add project.godot

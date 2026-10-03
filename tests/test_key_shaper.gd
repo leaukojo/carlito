@@ -1,10 +1,13 @@
 extends GdUnitTestSuite
 ## KeyShaper: an on/off key becomes a hand on a wheel and a foot on a pedal. Pure statics, plus the
-## router wiring (keyboard steer shaped, touch stick not, local pedals shaped, bridge never).
+## router wiring (keyboard steer shaped, touch stick not, key and touch pedals shaped, gamepad and
+## bridge never).
 
 const Shaper := preload("res://src/input/key_shaper.gd")
 const RouterScript := preload("res://src/input/input_router.gd")
 const BridgeSourceScript := preload("res://src/input/sources/bridge_source.gd")
+const LocalSourceScript := preload("res://src/input/sources/local_source.gd")
+const PadSourceScript := preload("res://src/input/sources/pad_source.gd")
 
 const TICK := 1.0 / 60.0
 
@@ -137,12 +140,22 @@ func test_local_pedals_ramp_and_the_touch_stick_passes_straight_through() -> voi
 	assert_float(router.get_vehicle_input().throttle).is_equal(1.0)
 
 
+## Hold or release a physical key the way the OS does. LocalSource reads keys, not the action, so
+## `Input.action_press` would press nothing it sees.
+static func _key(code: Key, pressed: bool) -> void:
+	var ev := InputEventKey.new()
+	ev.physical_keycode = code
+	ev.pressed = pressed
+	Input.parse_input_event(ev)
+	Input.flush_buffered_events()
+
+
 func test_the_keyboard_steer_is_shaped() -> void:
 	var router: Node = auto_free(RouterScript.new())
-	Input.action_press("steer_right")
+	_key(KEY_D, true)
 	router._physics_process(TICK)
 	var steer: float = router.get_vehicle_input().steer
-	Input.action_release("steer_right")
+	_key(KEY_D, false)
 	assert_float(steer).is_equal_approx(Shaper.steer_out_rate(0.0) * TICK, 1e-6)
 
 
@@ -174,10 +187,10 @@ func test_stick_pedals_ramp_both_ways_alike() -> void:
 	# S at a standstill reverses: throttle = -brake, ramped at the accel rate, not the brake's.
 	var router: Node = auto_free(RouterScript.new())
 	router.register_vehicle(auto_free(_StickBody.new()))
-	Input.action_press("brake_reverse")
+	_key(KEY_S, true)
 	router._physics_process(TICK)
 	var throttle: float = router.get_vehicle_input().throttle
-	Input.action_release("brake_reverse")
+	_key(KEY_S, false)
 	assert_float(throttle).is_equal_approx(-TICK / Shaper.ACCEL_APPLY_S, 1e-6)
 
 
@@ -186,10 +199,10 @@ func test_the_steer_slows_with_the_speed_the_body_steers_wheels_at() -> void:
 	# angle's law, so the router reads key_steer_speed, not road speed.
 	var router: Node = auto_free(RouterScript.new())
 	router.register_vehicle(auto_free(_FlyingBody.new()))
-	Input.action_press("steer_right")
+	_key(KEY_D, true)
 	router._physics_process(TICK)
 	var steer: float = router.get_vehicle_input().steer
-	Input.action_release("steer_right")
+	_key(KEY_D, false)
 	assert_float(steer).is_equal_approx(Shaper.steer_out_rate(0.0) * TICK, 1e-6)
 
 
@@ -218,3 +231,76 @@ func test_shaping_starts_over_when_the_bridge_hands_back_and_on_a_new_body() -> 
 	router.register_vehicle(null)
 	assert_float(router._pedal_accel).is_equal(0.0)
 	assert_float(router._key_steer).is_equal(0.0)
+
+
+# --- the gamepad ---------------------------------------------------------------------------
+
+## A pad stand-in holding whatever the test sets.
+class _StubPad extends PadSourceScript:
+	var vals: Dictionary[StringName, Variant] = {}
+	func poll() -> Dictionary[StringName, Variant]:
+		return vals
+
+
+## A car at 30 m/s, where a held key takes ~11 s to full lock.
+class _FastCar extends Node3D:
+	func get_speed() -> float:
+		return 30.0
+	func key_steer_speed() -> float:
+		return 30.0
+	func get_gear_byte() -> int:
+		return RouterScript.GEAR_D1
+	func key_pedals_are_a_stick() -> bool:
+		return false
+
+
+func test_the_pad_stick_and_trigger_pass_straight_through() -> void:
+	var router: Node = auto_free(RouterScript.new())
+	router.register_vehicle(auto_free(_FastCar.new()))
+	var pad := _StubPad.new()
+	pad.vals = {&"steer": 1.0, &"accel": 1.0}
+	router._pad_source = pad
+	router._physics_process(TICK)
+	var out: VehicleInput = router.get_vehicle_input()
+	assert_float(out.steer).is_equal(1.0)
+	assert_float(out.throttle).is_equal(1.0)
+
+
+func test_key_and_pad_merge_like_any_two_local_sources() -> void:
+	var router: Node = auto_free(RouterScript.new())
+	router.register_vehicle(auto_free(_FastCar.new()))
+	var pad := _StubPad.new()
+	pad.vals = {&"steer": -0.5, &"accel": 0.3}
+	router._pad_source = pad
+	_key(KEY_D, true)
+	router._physics_process(TICK)
+	var out: VehicleInput = router.get_vehicle_input()
+	_key(KEY_D, false)
+	# Steer sums (the key's shaped share plus the stick); the pedal takes the stronger request.
+	assert_float(out.steer).is_equal_approx(Shaper.steer_out_rate(30.0) * TICK - 0.5, 1e-6)
+	assert_float(out.throttle).is_equal_approx(0.3, 1e-6)
+
+
+func test_a_pad_axis_reads_like_the_engines_action_strength() -> void:
+	# Bound direction only, zero inside the deadzone, rescaled from its edge.
+	assert_float(PadSourceScript.axis_strength(-0.8, 1.0, 0.2)).is_equal(0.0)
+	assert_float(PadSourceScript.axis_strength(0.0, 1.0, 0.2)).is_equal(0.0)
+	assert_float(PadSourceScript.axis_strength(0.15, 1.0, 0.2)).is_equal(0.0)
+	assert_float(PadSourceScript.axis_strength(0.6, 1.0, 0.2)).is_equal_approx(0.5, 1e-5)
+	assert_float(PadSourceScript.axis_strength(-0.6, -1.0, 0.2)).is_equal_approx(0.5, 1e-5)
+	assert_float(PadSourceScript.axis_strength(1.0, 1.0, 0.2)).is_equal(1.0)
+	assert_float(PadSourceScript.axis_strength(1.0, 1.0, 1.0)).is_equal(1.0)
+
+
+func test_the_keyboard_source_reads_keys_not_the_action() -> void:
+	# action_press holds the action with no key down, which is what a pad axis does to it.
+	Input.action_press("steer_right")
+	var action := Input.get_action_strength("steer_right")
+	var key := LocalSourceScript.key_strength(&"steer_right")
+	Input.action_release("steer_right")
+	assert_float(action).is_equal(1.0)
+	assert_float(key).is_equal(0.0)
+	_key(KEY_D, true)
+	key = LocalSourceScript.key_strength(&"steer_right")
+	_key(KEY_D, false)
+	assert_float(key).is_equal(1.0)

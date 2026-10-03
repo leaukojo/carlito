@@ -150,7 +150,7 @@ func _ready() -> void:
 
 ## A carried crate is a child of the Hardpoint marker, so a vehicle swap would free it too
 ## (`Level._spawn_vehicle`). Hands it back to the level before teardown.
-func _exit_tree() -> void:
+func release_level_items() -> void:
 	if _hook != null:
 		_hook.reset(self)
 

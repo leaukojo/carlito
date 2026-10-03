@@ -87,14 +87,14 @@ junctions, lane markings, traffic, third-party level sharing (a `.tscn` can embe
 
 Nested rules load with their directory: `src/vehicles/` (+ `truck/`, `tractor/`, `drone/`,
 `train/`, `kenney/`), `src/input/`, `src/ui/`, `src/bridge/`, `src/physics/`, `src/levels/`,
-`contract/`, `kit/`, `tools/`.
+`contract/`, `kit/`, `tools/`, `addons/carlito_kit/`.
 
 - **Who drives** is `InputRouter.bridge_drives()`, never `Bridge.is_active()`.
 - **Every gameplay ray masks `Layers.SOLID`**, which omits `WorldBounds`; the seven layer bits
   are FROZEN (`src/physics/CLAUDE.md`).
-- **Scene tags** — `src/levels/base/carlito_groups.gd` declares the six SceneTree groups that say
+- **Scene tags** — `src/levels/base/carlito_groups.gd` declares the seven SceneTree groups that say
   what a node IS (`carlito_authoring`, `carlito_kit_piece`, `carlito_road`, `carlito_scatter`,
-  `carlito_level`, `carlito_payload`) and owns the one copy of each authoring walk. **Every class joins its group in `_init`, not `_enter_tree`** — the baker
+  `carlito_level`, `carlito_payload`, `carlito_water`) and owns the one copy of each authoring walk. **Every class joins its group in `_init`, not `_enter_tree`** — the baker
   walks level scenes that never enter a tree and instantiates scatter templates loose, so only
   `is_in_group()` works there. `get_tree().get_nodes_in_group()` is correct ONLY in the running
   game (in the editor `get_tree()` holds every open scene); discovery in kit/addons/tools code

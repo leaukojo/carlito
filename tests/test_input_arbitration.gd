@@ -576,6 +576,28 @@ func test_bridge_source_clamps_guidance_curvature_to_full_lock() -> void:
 	Bridge.set("_inbound", {})
 
 
+func test_bridge_source_survives_non_numeric_json() -> void:
+	# JSON.stringify turns a NaN into null, and the inbound side is not origin-gated, so a value
+	# can arrive as null or an Array. Each reads as the field's default, with no engine error.
+	var src := BridgeSourceScript.new()
+	Bridge.set("_active", true)
+	Bridge.set("_inbound", {"accel": null, "steer": [1], "horn": [1], "gear": "x", "key": {}})
+	var out: Dictionary[StringName, Variant] = {}
+	await assert_error(func() -> void: out.merge(src.poll())).is_success()
+	assert_float(float(out["accel"])).is_equal(0.0)
+	assert_float(float(out["steer"])).is_equal(0.0)
+	assert_bool(out["horn"]).is_false()
+	assert_int(out["gear"]).is_equal(0)
+	assert_int(out["key"]).is_equal(3)
+	Bridge.set("_active", false)
+	Bridge.set("_inbound", {})
+
+
+func test_bridge_runs_under_a_paused_tree_and_the_router_does_not() -> void:
+	assert_int(Bridge.process_mode).is_equal(Node.PROCESS_MODE_ALWAYS)
+	assert_int(InputRouter.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
+
+
 func test_bridge_mirrors_scv_flow_absent_is_closed() -> void:
 	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
 	vals["scv_flow"] = 0.6   # bridge_source already did the %→unit

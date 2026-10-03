@@ -197,7 +197,7 @@ func _ready() -> void:
 	_scale = UiTheme.scale_of(self)
 	_pad_scale = _compute_pad_scale()
 	_build_widgets()
-	visible = _should_show()
+	visible = true
 	InputRouter.set_touch_source(self)
 
 
@@ -264,7 +264,7 @@ func _exit_tree() -> void:
 
 
 func set_active(active: bool) -> void:
-	visible = active and _should_show()
+	visible = active
 
 
 ## Hides the driving layer for a challenge (Pad drops anything held as it hides).
@@ -378,12 +378,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("toggle_important"):
 		_important_shown = not _important_shown
 		_important.visible = _important_shown
-
-
-## On by default everywhere, desktop included. F4 (toggle_touch) hides the driving layer, F5
-## (toggle_important) the important one.
-func _should_show() -> bool:
-	return true
 
 
 # --- handbrake (latching) ----------------------------------------------------

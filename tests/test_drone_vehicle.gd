@@ -543,6 +543,54 @@ func test_the_hook_latches_only_over_a_payload_and_the_craft_really_gets_heavier
 	assert_float(r.t.payload_weight).is_equal_approx(0.0, 1e-4)
 
 
+## A real level with the drone spawned and a crate latched under its hook (30 m up, so the capture
+## ray meets only the crate, which sits just below the hook: a ray starting inside a box misses it). Returns [level, crate].
+func _latched_in_a_level() -> Array:
+	var level := (load(LevelRegistry.scene_of(Boot.DEFAULT_LEVEL)) as PackedScene).instantiate() as Level
+	level.initial_variant = "drone"
+	add_child(level)
+	await get_tree().physics_frame
+	var drone := level.vehicle as DroneVehicle
+	drone.global_position = Vector3(0.0, 30.0, 0.0)
+	drone.linear_velocity = Vector3.ZERO
+	var input := VehicleInput.new()
+	input.key = Router.KEY_IGNITION
+	var crate := (load(CRATE) as PackedScene).instantiate() as CargoPayload
+	level.add_child(crate)
+	crate.freeze = true
+	crate.global_position = drone.to_global(drone._hook.hook_local()) + Vector3.DOWN * 1.5
+	await get_tree().physics_frame
+	crate.global_position = drone.to_global(drone._hook.hook_local()) + Vector3.DOWN * 1.5
+	input.hardpoint_cmd = true
+	for _i in 2:
+		drone._update_telemetry(input, DELTA)
+		drone._tick_extras(input, DELTA)
+	assert_bool(crate.carried).is_true()
+	return [level, crate]
+
+
+## A vehicle swap hands a latched crate back to the level instead of orphaning it (the hook's
+## reset ran inside `remove_child`, where the level refuses new children).
+func test_a_vehicle_swap_hands_the_hooked_crate_back_to_the_level() -> void:
+	var made: Array = await _latched_in_a_level()
+	var level := made[0] as Level
+	var crate := made[1] as CargoPayload
+	var hooked_at := crate.global_position
+	await assert_error(func() -> void: level.set_vehicle("sedan")) \
+		.override_failure_message("the swap logged an engine error").is_success()
+	assert_object(crate.get_parent()).is_same(level)
+	assert_bool(crate.is_inside_tree()).is_true()
+	assert_bool(crate.carried).is_false()
+	assert_vector(crate.global_position).is_equal_approx(hooked_at, Vector3.ONE * 0.5)
+	level.free()
+
+
+func test_tearing_a_level_down_with_a_latched_crate_logs_no_error() -> void:
+	var made: Array = await _latched_in_a_level()
+	var level := made[0] as Level
+	await assert_error(func() -> void: level.free()).is_success()
+
+
 ## The ceiling is a CAPTURE refusal, not a mass truncation: a crate over MAX_PAYLOAD_KG must
 ## never reach the hook at all, or the felt mass would silently disagree with what's really
 ## hanging there (carried_mass's own clamp is a degenerate-input guard, never reached this way).

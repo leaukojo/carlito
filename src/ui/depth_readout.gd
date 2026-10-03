@@ -35,6 +35,8 @@ var caption := ""
 
 
 func _set_value(v: float) -> void:
+	if v == value:
+		return
 	value = v
 	queue_redraw()
 

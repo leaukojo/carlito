@@ -227,6 +227,28 @@ func test_bake_code_inputs_resolve_to_real_files() -> void:
 				"%s hashed as MISSING" % code).is_not_equal("MISSING")
 
 
+## A script's base class (`extends ClassName`) is no resource-dependency edge, so a kit base
+## reached only through a subclass is invisible to gather_bake_inputs unless listed in
+## BAKE_CODE_INPUTS. Every kit/level base of a hashed script must itself be hashed.
+func test_bake_inputs_include_every_base_script_of_a_hashed_script() -> void:
+	for entry: Dictionary in preload("res://src/shell/level_registry.gd").LEVELS:
+		var level := String(entry["scene"])
+		if not FileAccess.file_exists(Baker.manifest_path(level)):
+			continue
+		var inputs := Baker.gather_bake_inputs(level)
+		for p: String in inputs:
+			if p.get_extension() != "gd":
+				continue
+			var base := (load(p) as GDScript).get_base_script()
+			while base != null:
+				var bp := base.resource_path
+				if bp.begins_with("res://kit/") or bp.begins_with("res://src/levels/"):
+					assert_bool(inputs.has(bp)).override_failure_message(
+							"%s (base of %s) missing from %s's bake inputs: add it to BAKE_CODE_INPUTS"
+							% [bp, p, level]).is_true()
+				base = base.get_base_script()
+
+
 ## Hash covers resources anywhere (not just kit/); runtime scripts excluded.
 func test_is_bake_input_keeps_resources_outside_kit_but_not_runtime_scripts() -> void:
 	assert_bool(Baker.is_bake_input("res://src/levels/harbor/dock_props.tscn")).is_true()
@@ -813,3 +835,29 @@ func test_gridmap_cell_center_y_is_a_bake_error() -> void:
 	var ok: Dictionary = Baker.bake(root)
 	assert_bool(ok.ok).is_true()
 	(ok.root as Node).free()
+
+
+## A freshly scaffolded level (empty AuthoringRoot): the stale-bake check and the bake tool
+## agree to skip it, or a registered scaffold passes the check and then fails the CI bake.
+func test_empty_authoring_root_is_skipped_by_check_and_bake_alike() -> void:
+	var root := Node3D.new()
+	root.name = "L"
+	var authoring := Node3D.new()
+	authoring.name = "Authoring"
+	authoring.set_script(preload("res://kit/helpers/authoring_root.gd"))
+	root.add_child(authoring)
+	authoring.owner = root
+	assert_bool(Baker.has_bakeable_authoring(null)).is_false()
+	assert_bool(Baker.has_bakeable_authoring(authoring)).is_false()
+	var path := "user://bake_test_empty_authoring.tscn"
+	var packed := PackedScene.new()
+	packed.pack(root)
+	var probe := Node3D.new()
+	authoring.add_child(probe)
+	assert_bool(Baker.has_bakeable_authoring(authoring)).is_true()
+	root.free()
+	assert_int(ResourceSaver.save(packed, path)).is_equal(OK)
+
+	assert_str(String(Baker.check_level_file(path)["status"])).is_equal("no_authoring")
+	var tool: Node = auto_free(load("res://tools/bake_levels.gd").new())
+	assert_bool(tool.call("_has_authoring", path)).is_false()

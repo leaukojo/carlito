@@ -28,7 +28,9 @@ const MOVING_SPEED := 0.3       ## m/s standstill epsilon for the status 'moving
 ## respawn hides what just happened.
 const OVERTURNED_DEG := 70.0
 const OVERTURNED_S := 1.5
-## Raised sticky (dwell 0) and cleared by exact text match, so it stays up until the body is back
+## ...and slow: a body on its roof is near-stationary, a diving plane or tumbling drone is not.
+const OVERTURNED_MAX_SPEED := 2.0  ## m/s
+## Raised sticky (GameState.NOTICE_STICKY) and cleared by exact text match, so it stays up until the body is back
 ## on its wheels.
 const OVERTURNED_NOTICE := "OVERTURNED - PRESS BACKSPACE TO RESPAWN"
 
@@ -110,6 +112,12 @@ func _exit_tree() -> void:
 	_clear_overturned()
 	if drive != null:  # stop dust emission before a garage/cycle swap frees the subtree
 		drive.respawn()
+
+
+## Hand back anything the level owns before this body is removed (`Level._spawn_vehicle` calls it
+## ahead of `remove_child`, while the level can still take children). No-op by default.
+func release_level_items() -> void:
+	pass
 
 
 func _physics_process(delta: float) -> void:
@@ -277,7 +285,8 @@ func _update_telemetry(input: VehicleInput, delta: float) -> void:
 func _tick_overturned(delta: float) -> void:
 	if display_only:  # a selector/thumbnail body is posed, not driven, and must not shout
 		return
-	if VehicleMath.is_inverted(global_transform.basis, OVERTURNED_DEG):
+	if VehicleMath.is_inverted(global_transform.basis, OVERTURNED_DEG) \
+			and linear_velocity.length() < OVERTURNED_MAX_SPEED:
 		_overturned_t += delta
 	else:
 		_overturned_t = 0.0
@@ -286,7 +295,7 @@ func _tick_overturned(delta: float) -> void:
 		return
 	_overturned = now
 	if now:
-		GameState.notice.emit(OVERTURNED_NOTICE, 0.0)
+		GameState.notice.emit(OVERTURNED_NOTICE, GameState.NOTICE_STICKY)
 	else:
 		GameState.notice_cleared.emit(OVERTURNED_NOTICE)
 

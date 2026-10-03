@@ -1,9 +1,9 @@
 class_name CoachCue
 extends Control
-## The one-line "you can drive this" cue, shown over the first frames of a first visit — the
+## The one-line "you can drive this" cue, shown over the first frames of a session — the
 ## game opens straight into a level with no menu in front of it, so this teaches it once.
 ## One line, dismissed by the first input of any kind or a short timeout, never shown again
-## on this machine (ShellPrefs.coach_seen).
+## within a session (Boot._maybe_coach).
 ##
 ## Listens on `_input`, which sees events without consuming them, so the press that dismisses
 ## the cue is also the press that drives the car. No emoji; colour/type from the theme.

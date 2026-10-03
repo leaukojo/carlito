@@ -4,6 +4,8 @@
 
 # Shell scripts must stay LF for the Linux CI runner
 *.sh text eol=lf
+# Git hooks have no extension; a CRLF shebang breaks them on Linux/macOS.
+tools/git-hooks/* text eol=lf
 
 # Godot rewrites .import sidecars with LF; force LF here too so autocrlf on
 # Windows doesn't flip them to CRLF and create noise on every re-import.

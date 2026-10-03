@@ -716,6 +716,7 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec, geo
 		if lname.begins_with("wheel") and (lname.ends_with("left") or lname.ends_with("right")):
 			continue  # a driven corner wheel — RayWheel provides these
 		glb.remove_child(child)
+		child.owner = null
 		model.add_child(child)
 		_own(child, root)
 	glb.free()

@@ -28,6 +28,8 @@ var _challenge := false
 
 
 func _ready() -> void:
+	# Polls and publishes under an open menu too; InputRouter stays pausable (no toggles from menu keys).
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_web = OS.has_feature("web")
 	if _web:
 		var version := Contract.data.version if Contract.data != null else 0
@@ -78,7 +80,7 @@ func _poll_inbound() -> void:
 	if not _web:
 		return
 	# Freshness gate in JS: stash only while fresh, else "".
-	var code := "(function(){var c=window.__carlito;return (c && Date.now()-c.inT < %d) ? JSON.stringify({v:c.ver,d:c.in}) : '';})();" % FRESHNESS_MS
+	var code := "(function(){var c=window.__carlito;return (c && performance.now()-c.inT < %d) ? JSON.stringify({v:c.ver,d:c.in}) : '';})();" % FRESHNESS_MS
 	var raw: Variant = JavaScriptBridge.eval(code, true)
 	if typeof(raw) != TYPE_STRING or (raw as String).is_empty():
 		_active = false

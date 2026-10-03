@@ -12,8 +12,10 @@ build/
 tmp/*
 !tmp/.gdignore
 
-# gdUnit4 output
-reports/
+# gdUnit4 output and the measure tools' CSVs. .gdignore is COMMITTED: without it Godot
+# imports every CSV as a translation.
+reports/*
+!reports/.gdignore
 
 # scratch measurement scenes (not shipped)
 tools/claude/

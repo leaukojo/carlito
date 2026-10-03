@@ -12,9 +12,10 @@ const KIT_PIECE := &"carlito_kit_piece"    ## KitPiece — a placed prefab the b
 const ROAD := &"carlito_road"              ## RoadPath — a drawn road/rail curve
 const SCATTER := &"carlito_scatter"        ## ScatterBase — a scatter region or canvas
 
-## Runtime content, tagged in `src/levels/base/`.
+## Runtime content, tagged in `src/levels/base/` (WATER in `src/water/`).
 const LEVEL := &"carlito_level"            ## Level — the one per running game
 const PAYLOAD := &"carlito_payload"        ## CargoPayload — what the drone's hook may catch
+const WATER := &"carlito_water"            ## WaterSurface — what the boat floats on
 
 
 ## First AuthoringRoot at or under `root`, or null; depth-first so the shallowest wins.

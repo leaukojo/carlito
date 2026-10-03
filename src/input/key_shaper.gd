@@ -4,9 +4,9 @@ extends RefCounted
 ## the wheel ever more slowly, since the same angle makes ever more sideways g. Pure static steps:
 ## InputRouter owns the state, as it owns every local toggle.
 ##
-## Local input only. The bridge is analog and drives exactly as sent, and so is the touch stick,
-## so only the keyboard's steer is shaped; every local pedal (keys, touch buttons) is on/off and is
-## shaped. Vehicles never see this: it is input, not a detuned spec (src/input/CLAUDE.md).
+## Local input only. The bridge is analog and drives exactly as sent, and so are the touch stick
+## and the gamepad, so only the keyboard's steer is shaped; every key and touch pedal is on/off and
+## is shaped. Vehicles never see this: it is input, not a detuned spec (src/input/CLAUDE.md).
 
 ## Steer travel per second away from centre at a standstill, as a fraction of full lock.
 const STEER_OUT_RATE := 0.9

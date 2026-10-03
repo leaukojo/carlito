@@ -68,6 +68,30 @@ func test_righting_the_body_clears_it_with_no_respawn() -> void:
 	assert_bool(v.is_overturned()).is_false()
 
 
+func _fast_then_slow(variant: String) -> void:
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	var v := (load(VehicleCatalog.scene_of(variant)) as PackedScene).instantiate() as BaseVehicle
+	root.add_child(v)
+	await get_tree().physics_frame
+	v.freeze = true
+	_lay_on_side(v)
+	v.linear_velocity = Vector3(0, 0, BaseVehicle.OVERTURNED_MAX_SPEED * 5.0)
+	_tick(v, BaseVehicle.OVERTURNED_S * 3.0)
+	assert_bool(v.is_overturned()).is_false()
+	v.linear_velocity = Vector3.ZERO
+	_tick(v, BaseVehicle.OVERTURNED_S + DELTA)
+	assert_bool(v.is_overturned()).is_true()
+
+
+func test_a_fast_inverted_sedan_does_not_trip_but_a_slow_one_does() -> void:
+	await _fast_then_slow("sedan")
+
+
+func test_a_fast_inverted_plane_does_not_trip_but_a_slow_one_does() -> void:
+	await _fast_then_slow("plane")
+
+
 func test_a_lean_short_of_the_threshold_never_latches() -> void:
 	var v := await _spawn()
 	v.global_transform = Transform3D(

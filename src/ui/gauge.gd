@@ -28,6 +28,8 @@ var center_text := "": set = _set_center_text  ## overrides the number when non-
 
 
 func _set_value(v: float) -> void:
+	if v == value:
+		return
 	value = v
 	queue_redraw()
 

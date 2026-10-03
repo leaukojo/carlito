@@ -1,6 +1,6 @@
 class_name Boot
 extends Node3D
-## Shell composing independent level/UI scenes (no main.tscn). Deep link → saved session →
+## Shell composing independent level/UI scenes (no main.tscn). Deep link →
 ## DEFAULT_LEVEL. PROCESS_MODE_ALWAYS (set in boot.tscn) keeps menus running while paused.
 
 const WorldConditions := preload("res://src/levels/base/world_conditions.gd")
@@ -37,14 +37,13 @@ var _fetching := false  # _loading_path's level pack is downloading; the load st
 var _hold_frames := 0  # see HOLD_FRAMES
 var _warmup: ShaderWarmup = null  # in effect for exactly the HOLD_FRAMES
 var _next_variant := ""  # variant the level now loading should spawn ("" = its own default)
-## Whether this session writes itself to user://. False for a deep link (must not overwrite
-## an explicit link's intent) and under headless (CI must not inherit a local session).
-var _persist := true
+## Sticky notice texts still up, oldest first; the newest shows whenever no transient one does.
+var _sticky_notices: Array[String] = []
 var _coach_shown := false
-## Families coached this session (see _maybe_coach). Not persisted: the aircraft cue teaches
-## a control set only relevant while flying, so it reappears each new flight of a session.
+## Families coached this session (see _maybe_coach): the aircraft cue teaches a control set only
+## relevant while flying, so it reappears each new flight of a session.
 var _coached_families := {}
-## CONDITIONS page state, kept for the session only (ShellPrefs stays disabled) and re-applied to
+## CONDITIONS page state, kept for the session only and re-applied to
 ## every level this loads (`_finish_load`) and on change (`_on_conditions_changed`).
 var _wind_preset: int = WorldConditions.Preset.LEVEL
 var _current_preset: int = WorldConditions.Preset.LEVEL
@@ -94,35 +93,23 @@ func _ready() -> void:
 	_packs.finished.connect(_on_pack_finished)
 	add_child(_packs)
 	_progress = ChallengeProgress.open()
-	# Set before the first bind so nothing builds twice.
-	_dashboard.set_density_setting(ShellPrefs.dashboard_density())
-	_ui.set_user_scale(ShellPrefs.ui_scale())
-	_debug.set_extended(ShellPrefs.extended_debug())
 	_set_hud_visible(false)  # nothing to bind to until the level is up
 	_boot()
 
 
-## Three authorities in order: deep link (`?level=&vehicle=` web, `--level=`/`--vehicle=`/
-## CARLITO_LEVEL local), saved session, then DEFAULT_LEVEL. BootParams validates every id, so
-## an unknown level/save falls back instead of booting into nothing. Also the headless CI
+## Two authorities in order: deep link (`?level=&vehicle=` web, `--level=`/`--vehicle=`/
+## CARLITO_LEVEL local), then DEFAULT_LEVEL. BootParams validates every id, so
+## an unknown level falls back instead of booting into nothing. Also the headless CI
 ## path: reaching a level never requires a menu.
 func _boot() -> void:
-	# A debug build's `--challenge=` goes straight into an attempt, and like a deep link is never
-	# remembered as the session.
+	# A debug build's `--challenge=` goes straight into an attempt.
 	var challenge_id := BootParams.challenge()
 	if challenge_id != "":
-		_persist = false
 		_start_challenge(ChallengeRegistry.def_of(challenge_id, true))
 		return
 	var params := BootParams.resolve()
 	var level_id := String(params["level"])
 	var variant := String(params["vehicle"])
-	_persist = level_id.is_empty() and variant.is_empty() \
-			and DisplayServer.get_name() != "headless"
-	if _persist:
-		var saved := ShellPrefs.load_boot()
-		level_id = String(saved["level"])
-		variant = String(saved["vehicle"])
 	if level_id.is_empty():
 		level_id = DEFAULT_LEVEL
 	_load_level(LevelRegistry.scene_of(level_id), variant)
@@ -149,7 +136,7 @@ func _unhandled_input(event: InputEvent) -> void:
 ## level's spawn/respawn path; a family with one variant is a no-op. V always changes the
 ## body only, never an attachment — that's E's axis, and the two never interact.
 func _cycle_vehicle() -> void:
-	if _level == null or _level.vehicle == null:
+	if _level == null or _level.vehicle == null or not _overlays.is_empty():
 		return
 	if _refused_in_challenge():
 		return
@@ -161,7 +148,7 @@ func _cycle_vehicle() -> void:
 ## capability hook, so neither this file nor VehicleCatalog learns what an implement or
 ## trailer is.
 func _cycle_attachment() -> void:
-	if _level == null or _level.vehicle == null:
+	if _level == null or _level.vehicle == null or not _overlays.is_empty():
 		return
 	if not (_challenge != null and _challenge.allow_attach_key) and _refused_in_challenge():
 		return
@@ -467,24 +454,20 @@ func _open_pause() -> void:
 
 
 ## SETTINGS picked a new cluster density. The menu owns nothing, so applying and remembering
-## it is this file's job — session-only while `ShellPrefs.ENABLED` stays false, like CONDITIONS,
-## not carried across visits even for a deep-linked session.
+## it is this file's job — session-only, like CONDITIONS.
 func _on_density_changed(setting: int) -> void:
 	_dashboard.set_density_setting(setting)
-	ShellPrefs.set_dashboard_density(setting)
 
 
 ## SETTINGS picked a new UI size. Handed to UiScale, which rebuilds the theme so every
-## Control relayouts. Remembered, same reasoning as density.
+## Control relayouts.
 func _on_ui_scale_changed(factor: float) -> void:
 	_ui.set_user_scale(factor)
-	ShellPrefs.set_ui_scale(factor)
 
 
-## SETTINGS picked "Extended debug labels". Remembered, same reasoning as density/UI size.
+## SETTINGS picked "Extended debug labels".
 func _on_extended_debug_changed(on: bool) -> void:
 	_debug.set_extended(on)
-	ShellPrefs.set_extended_debug(on)
 
 
 ## F2: cycles the same density setting the SETTINGS page's button does, so the menu and the key
@@ -500,7 +483,7 @@ func _on_pause_respawn() -> void:
 
 
 ## CONDITIONS picked a new wind/current preset or compass direction. Kept for the session
-## (ShellPrefs stays disabled) and applied to the current level; `_finish_load` re-applies it to
+## and applied to the current level; `_finish_load` re-applies it to
 ## whatever loads next.
 func _on_conditions_changed(wind_preset: int, current_preset: int, from_deg: float) -> void:
 	_wind_preset = wind_preset
@@ -674,7 +657,7 @@ func _drop_loading_screen() -> void:
 func _finish_load(scene: PackedScene) -> void:
 	_level = scene.instantiate()
 	# Set before the level enters the tree: _ready spawns the vehicle, so this is how a deep
-	# link or saved session gets a body other than the level's default.
+	# link gets a body other than the level's default.
 	_level.initial_variant = _next_variant
 	_next_variant = ""
 	# This node is PROCESS_MODE_ALWAYS; the level would inherit that, so put back explicitly.
@@ -683,30 +666,21 @@ func _finish_load(scene: PackedScene) -> void:
 	# GameState.night_changed, which overwrites _night.
 	var night := _night
 	add_child(_level)  # level._ready() spawns the vehicle synchronously here
-	# CONDITIONS is a session setting (ShellPrefs stays disabled), so every level this loads gets
+	# CONDITIONS is a session setting, so every level this loads gets
 	# the same wind/current/night the player picked, not the level's own authored defaults.
 	_level.set_conditions(_wind_preset, _current_preset, _wind_from_deg)
 	_level.set_night(night)
 	_level.vehicle_changed.connect(_on_vehicle_changed)
 	_bind_hud()
 	_set_hud_visible(true)
-	# Initial spawn already happened above, before the signal connected, so save here too.
-	_save_session()
 	_maybe_coach(GameState.current_vehicle)
 	if _pending_challenge != null:
 		var def := _pending_challenge
 		_pending_challenge = null
 		_begin_challenge(def)
-
-
-## Remember where the player is, so a reload resumes it. No-op for a deep-linked or headless
-## run (see _persist), during an attempt, and anywhere on a challenge arena: an arena is reached
-## through a challenge, never the place to resume.
-func _save_session() -> void:
-	if not _persist or _level == null or _challenge != null \
-			or bool(LevelRegistry.entry_of(_level.scene_file_path).get("arena", false)):
-		return
-	ShellPrefs.save_boot(LevelRegistry.id_of(_level.scene_file_path), GameState.current_variant)
+	# The CI smokes require this line: a crash or hang before the first spawn leaves none.
+	print("Carlito level OK: %s (%s, baked: %s)" % [LevelRegistry.id_of(_level.scene_file_path),
+			GameState.current_variant, _level.baked])
 
 
 ## Families with a control axis ground vehicles don't have; get a cue every time you climb
@@ -714,10 +688,9 @@ func _save_session() -> void:
 const COACH_FAMILIES := ["plane", "drone"]
 
 
-## Two cues, different lifetimes: the first-visit line (once per machine, first level of a
-## session only) and the aircraft line (once per family per session, since climb/descend is
-## undiscoverable). Aircraft takes precedence on a brand-new machine; the first-visit line is
-## left unseen for the next ground vehicle.
+## Two cues: the first-visit line (first level of a session only) and the aircraft line (once per
+## family per session, since climb/descend is undiscoverable). Aircraft takes precedence on a
+## session's first body; the first-visit line is left unseen for the next ground vehicle.
 func _maybe_coach(family: String) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
@@ -727,10 +700,9 @@ func _maybe_coach(family: String) -> void:
 		_coached_families[family] = true
 		_show_coach(family)
 		return
-	if _coach_shown or ShellPrefs.coach_seen():
+	if _coach_shown:
 		return
 	_coach_shown = true
-	ShellPrefs.mark_coach_seen()
 	_show_coach("")
 
 
@@ -759,7 +731,6 @@ func _unbind_hud() -> void:
 
 func _on_vehicle_changed(type: String) -> void:
 	_bind_hud()
-	_save_session()
 	_maybe_coach(type)  # vehicle_changed carries the family
 
 
@@ -843,25 +814,43 @@ func _set_hud_visible(v: bool) -> void:
 	# reason to be hidden may overwrite the other.
 	_dashboard.set_shown(v)
 	_touch.set_active(v)
-	if not v:
+	if v:
+		_restore_sticky_notice()
+	else:
 		_notice.visible = false
 
 
-## Show a transient message from the sim (GameState.notice). Re-showing restarts the dwell
-## instead of queueing, so holding E against a wall reads as one steady message.
+## Show a message from the sim (GameState.notice). Re-showing restarts the dwell instead of
+## queueing, so holding E against a wall reads as one steady message. A sticky one starts no
+## timer and stays listed until cleared; a transient one hands back to it when its dwell ends.
 func _show_notice(text: String, dwell_s: float) -> void:
 	_notice.text = text
 	_notice.visible = true
 	var token := text + str(Time.get_ticks_msec())
 	_notice.set_meta("token", token)
+	if dwell_s == GameState.NOTICE_STICKY:
+		_sticky_notices.erase(text)
+		_sticky_notices.append(text)
+		return
 	var dwell := dwell_s if dwell_s > 0.0 else NOTICE_DWELL_S
 	await get_tree().create_timer(dwell).timeout
 	if is_instance_valid(_notice) and _notice.get_meta("token", "") == token:
-		_notice.visible = false
+		_restore_sticky_notice()
 
 
 ## Take a notice down early once what it warned about is fixed. Matches on text so it only
 ## ever hides its own message; a later notice keeps the rest of its dwell.
 func _clear_notice(text: String) -> void:
+	_sticky_notices.erase(text)
 	if _notice.visible and _notice.text == text:
+		_restore_sticky_notice()
+
+
+## Show the newest sticky notice still up, or hide the line if there is none.
+func _restore_sticky_notice() -> void:
+	if _sticky_notices.is_empty():
 		_notice.visible = false
+		return
+	_notice.text = _sticky_notices.back()
+	_notice.visible = true
+	_notice.set_meta("token", "")

@@ -38,23 +38,21 @@ func test_davis_resistance_opposes_motion_zero_at_rest() -> void:
 	assert_float(Sim.davis_resistance(-10.0, 400.0, 15.0, 0.8)).is_equal_approx(400.0 + 150.0 + 80.0, 1e-6)
 
 
-# --- brake force: opposes velocity, one-tick clamp ------------------------------------------
+# --- brake: Coulomb friction applied last ----------------------------------------------------
 
-func test_brake_force_opposes_velocity() -> void:
-	assert_float(Sim.brake_force(10.0, 1.0, 0.0, 200.0, 100.0, DELTA)).is_equal_approx(-200.0, 1e-6)
-	assert_float(Sim.brake_force(-10.0, 1.0, 0.0, 200.0, 100.0, DELTA)).is_equal_approx(200.0, 1e-6)
-	assert_float(Sim.brake_force(10.0, 0.5, 1.0, 200.0, 100.0, DELTA)).is_equal_approx(-200.0, 1e-6)
-
-
-func test_brake_force_zero_at_standstill() -> void:
-	assert_float(Sim.brake_force(0.0, 1.0, 0.0, 200.0, 100.0, DELTA)).is_equal(0.0)
+func test_brake_step_removes_demand_toward_zero() -> void:
+	assert_float(Sim.brake_step(10.0, 200.0, 100.0, DELTA)).is_equal_approx(10.0 - 200.0 / 100.0 * DELTA, 1e-9)
+	assert_float(Sim.brake_step(-10.0, 200.0, 100.0, DELTA)).is_equal_approx(-10.0 + 200.0 / 100.0 * DELTA, 1e-9)
 
 
-func test_brake_force_clamped_to_one_tick_zeroing() -> void:
-	# Clamp: mass*|v|/delta (never reverse, like boat's damped_force).
-	var v := 0.001
-	var cap := 100.0 * v / DELTA
-	assert_float(Sim.brake_force(v, 1.0, 0.0, 1e9, 100.0, DELTA)).is_equal_approx(-cap, 1e-6)
+func test_brake_step_never_reverses() -> void:
+	assert_float(Sim.brake_step(0.001, 1e9, 100.0, DELTA)).is_equal(0.0)
+	assert_float(Sim.brake_step(-0.001, 1e9, 100.0, DELTA)).is_equal(0.0)
+
+
+func test_brake_step_without_demand_is_a_no_op() -> void:
+	assert_float(Sim.brake_step(3.0, 0.0, 100.0, DELTA)).is_equal(3.0)
+	assert_float(Sim.brake_step(0.0, 0.0, 100.0, DELTA)).is_equal(0.0)
 
 
 # --- grade holdback ------------------------------------------------------------------------
@@ -138,6 +136,41 @@ func test_full_brake_beats_full_traction() -> void:
 	for _t in 60:
 		sim.step(DELTA, 1.0, 1.0, 0.0, PackedFloat64Array([0.0, 0.0, 0.0, 0.0, 0.0]))
 	assert_bool(sim.v[0] < 10.0).is_true()
+
+
+func _stop_distance(sim: RefCounted, brake: float) -> float:
+	for i in sim.v.size():
+		sim.v[i] = 20.0
+	var start: float = sim.s[0]
+	var grades := PackedFloat64Array([0.0, 0.0, 0.0, 0.0, 0.0])
+	for _t in 3000:
+		sim.step(DELTA, 0.0, brake, 0.0, grades)
+		if sim.v[0] == 0.0:
+			break
+	return sim.s[0] - start
+
+
+func test_a_moving_train_still_stops_in_the_same_distance() -> void:
+	assert_float(_stop_distance(_consist_sim(), 1.0)).is_equal_approx(81.9, 0.5)
+
+
+func test_a_braked_train_holds_at_rest_on_a_grade() -> void:
+	var sim := _consist_sim()
+	var grades := PackedFloat64Array([0.05, 0.05, 0.05, 0.05, 0.05])
+	for _t in 600:
+		sim.step(DELTA, 0.0, 1.0, 0.0, grades)
+	for i in sim.v.size():
+		assert_float(sim.v[i]).is_equal(0.0)
+	assert_float(sim.loco_accel).is_equal(0.0)
+
+
+func test_a_weak_brake_lets_the_train_roll_down_a_grade() -> void:
+	var sim := _consist_sim()
+	sim.max_brake = 1000.0
+	var grades := PackedFloat64Array([0.05, 0.05, 0.05, 0.05, 0.05])
+	for _t in 600:
+		sim.step(DELTA, 0.0, 1.0, 0.0, grades)
+	assert_bool(sim.v[0] < -1.0).is_true()
 
 
 func test_integrator_stable_over_bumpy_grades() -> void:

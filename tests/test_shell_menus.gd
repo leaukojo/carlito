@@ -412,6 +412,67 @@ func after_test() -> void:
 	get_tree().paused = false
 
 
+func _action_event(action: String) -> InputEventAction:
+	var ev := InputEventAction.new()
+	ev.action = action
+	ev.pressed = true
+	return ev
+
+
+## V / E reach the shell while a menu is open (boot is PROCESS_MODE_ALWAYS and the overlays do not
+## eat letter keys): they must not swap the live body or cycle the trailer under the menu.
+func test_boot_vehicle_and_attachment_keys_are_inert_behind_an_overlay() -> void:
+	var boot := _booted()
+	boot._level.set_vehicle("sedan")
+	# Control: with no overlay, V swaps the body.
+	var was := GameState.current_variant
+	boot._unhandled_input(_action_event("next_vehicle"))
+	assert_str(GameState.current_variant).is_not_equal(was)
+
+	boot._on_menu_key()
+	assert_int(boot._overlays.size()).is_equal(1)
+	was = GameState.current_variant
+	boot._unhandled_input(_action_event("next_vehicle"))
+	assert_str(GameState.current_variant).is_equal(was)
+
+	boot._on_menu_key()
+	boot._level.set_vehicle("tractor-kenney")
+	var implement: Variant = boot._level.vehicle.get("_implement_id")
+	boot._on_menu_key()
+	boot._unhandled_input(_action_event("next_attachment"))
+	assert_that(boot._level.vehicle.get("_implement_id")).is_equal(implement)
+
+
+## A sticky notice outlives the default dwell; a transient one shown over it hands back to it.
+func test_boot_sticky_notice_outlasts_a_transient_one() -> void:
+	var boot := _booted()
+	GameState.notice.emit("STICKY", GameState.NOTICE_STICKY)
+	GameState.notice.emit("BRIEF", 0.05)
+	assert_str(boot._notice.text).is_equal("BRIEF")
+	await get_tree().create_timer(0.15).timeout
+	assert_bool(boot._notice.visible).is_true()
+	assert_str(boot._notice.text).is_equal("STICKY")
+	# No timer runs for it at all: the default dwell passes and it is still up.
+	await get_tree().create_timer(Boot.NOTICE_DWELL_S + 0.2).timeout
+	assert_bool(boot._notice.visible).is_true()
+	assert_str(boot._notice.text).is_equal("STICKY")
+
+
+## Clearing takes down only the matching text: the next sticky one shows, a transient one stays.
+func test_boot_clearing_a_notice_removes_only_its_own_text() -> void:
+	var boot := _booted()
+	GameState.notice.emit("FIRST", GameState.NOTICE_STICKY)
+	GameState.notice.emit("SECOND", GameState.NOTICE_STICKY)
+	GameState.notice_cleared.emit("FIRST")
+	assert_str(boot._notice.text).is_equal("SECOND")
+	GameState.notice.emit("BRIEF", 0.0)
+	GameState.notice_cleared.emit("SECOND")
+	assert_str(boot._notice.text).is_equal("BRIEF")
+	assert_bool(boot._notice.visible).is_true()
+	GameState.notice_cleared.emit("BRIEF")
+	assert_bool(boot._notice.visible).is_false()
+
+
 ## LEVEL then CHALLENGES: Esc closes the top of the stack (CHALLENGES) only, and the world
 ## stays paused underneath since LEVEL is still open.
 func test_boot_esc_closes_the_top_overlay_only() -> void:

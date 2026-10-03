@@ -45,6 +45,6 @@ func step(frame: ChallengeFrame, _delta: float) -> Status:
 	return Status.PASS if absf(_swept) >= TAU - HOLD_EPS else Status.RUNNING
 
 
-## Net angle swept so far, radians (signed), for the objective line.
+## Net angle swept so far, radians (signed). Read by the tests only: nothing in the HUD shows it.
 func swept() -> float:
 	return _swept

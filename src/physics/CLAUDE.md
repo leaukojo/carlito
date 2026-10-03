@@ -5,7 +5,7 @@ comment) re-stales every level.
 
 - **The seven bits are FROZEN**: they are written into `project.godot`'s `[layer_names]`, every
   `.baked.scn` and `cargo_payload.tscn`. A new layer appends at bit 8+; none is renumbered.
-- **`SOLID` (everything but `Containment`) masks every gameplay ray.** `Containment` is
+- **`SOLID` (everything but `Containment` and `Trigger`) masks every gameplay ray.** `Containment` is
   `WorldBounds`, walls off the coast reaching 1500 m up: a ray that sees them makes the drone lose
   satellites over open water and pulls the chase camera in at the beach.
 - Moving bodies mask `WORLD`; static bodies mask `DYNAMIC`. Masks are deliberately generous: a

@@ -4,8 +4,10 @@ ALL input arbitration lives here (standing rule 5). Protocol tour: `docs/systems
 
 - **Keyboard and analog (bridge, gamepad) both drive; vehicles stay realistic for analog.** An
   on/off key's feel is shaped here (`key_shaper.gd`), never by detuning a spec: the keyboard's steer
-  before `merge_local` (the touch stick is analog), every local pedal after it, the bridge never. A
-  measure tool that drives through `Input` measures the shaper: drive the bridge stash instead.
+  before `merge_local` (the touch stick is analog), every key and touch pedal after it, the gamepad
+  and the bridge never. One action per control: `LocalSource` reads its key events, `PadSource` its
+  joypad events, merged after the pedal shaping. A measure tool that drives through `Input`
+  measures the shaper: drive the bridge stash instead.
 
 - **`VehicleInput` is a `class_name` in `vehicle_input.gd`, not an inner class of the autoload** —
   an inner class makes every vehicle's static types depend on the autoload's registered *name*.
@@ -18,11 +20,12 @@ ALL input arbitration lives here (standing rule 5). Protocol tour: `docs/systems
   defensive `copy()`, because a hand-written field mirror is a field that goes missing silently.
   `arbitrate_*` build a fresh struct each tick, so a stashed reference reads stale, never live; a
   caller that needs to keep or change one copies it itself.
-- **The raw-intent wire is `Dictionary[StringName, Variant]`** across all four producers
-  (`LocalSource`, `TouchControls`, `BridgeSource`, `measure_drone`'s `StickSource`) and
+- **The raw-intent wire is `Dictionary[StringName, Variant]`** across all five producers
+  (`LocalSource`, `PadSource`, `TouchControls`, `BridgeSource`, `measure_drone`'s `StickSource`) and
   `merge_local`, which builds its dict explicitly: a key on one side only silently drops the
-  keyboard's edge while touch is registered. StringName keys catch no typo at parse time; guards:
-  `test_every_touch_poll_key_is_merged`, `test_local_source_and_merge_local_carry_the_same_keys`,
+  keyboard's edge while touch is registered (`PadSource` writes only analog keys, a subset).
+  StringName keys catch no typo at parse time; guards: `test_every_touch_poll_key_is_merged`,
+  `test_local_source_and_merge_local_carry_the_same_keys`, `test_every_pad_key_is_merged`,
   `test_every_widget_key_is_merged`. `arbitrate_local` / `arbitrate_bridge` stay plain
   `Dictionary` on purpose:
   they are the wire's consumers and `test_input_arbitration.gd` is their spec. An **untyped dict
