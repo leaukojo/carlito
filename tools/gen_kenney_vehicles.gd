@@ -163,7 +163,7 @@ const CAR_BASE := {
 	# shift_up 5900, bound by the weak bodies reaching sixth; governed bodies (van/pickup) reach
 	# it via `Drivetrain.governed_upshift`.
 	"final_drive": 3.9, "efficiency": 0.9, "shift_up_rpm": 5900.0, "shift_down_rpm": 2200.0,
-	"engine_brake_frac": 0.12, "shift_cut_s": 0.15,
+	"engine_brake_frac": 0.12, "shift_cut_s": 0.15, "launch_engage_s": 0.0, "launch_gear": 1,
 	"max_steer_deg": 38.0, "steer_speed": 7.0,
 	# Steering falloff: BaseVehicle lerps lock from full to min_steer_frac near
 	# steer_falloff_speed, so the pair states an absolute lock at motorway speed — divide by the
@@ -176,25 +176,30 @@ const CAR_BASE := {
 const TRUCK_BASE := {
 	# Flat-fronted working truck: cd 0.70, crr 0.007 for low-resistance commercial radials.
 	"cd": 0.70, "crr": 0.007,
-	# Spring/damper/force hand-tuned by driving both trucks.
+	# Springs and dampers are bounded by launch pitch on the toy 1.94 m wheelbase (docs/vehicles.md
+	# § Pitch): 400 kN/m (~2.5 Hz on the ~1.5 t front corner) at ~0.6 / 0.8 of critical
+	# (bump / rebound). At 240 kN/m and 0.3 / 0.4 a floored launch and every shift cut rang the
+	# pitch, swinging the front axle from 0 to 210 % of its parked load.
 	# com_y 0.75 is a working truck's real height, ~0.30 of the AABB on these bodies: a hopper or a
 	# pump deck sits high and the cab above it. Half-track 0.66-0.69 over 0.75 m tips at ~0.88 g,
 	# clear of mu_lat 0.75, so the firetruck slides before it rolls (the garbage truck overrides).
-	"mass": 4000.0, "com_y": 0.75, "spring_rate": 240000.0, "damper_bump": 12000.0,
-	"damper_rebound": 15800.0, "max_suspension_force": 120000.0, "rest_length": 0.32,
+	"mass": 4000.0, "com_y": 0.75, "spring_rate": 400000.0, "damper_bump": 31000.0,
+	"damper_rebound": 41000.0, "max_suspension_force": 120000.0, "rest_length": 0.32,
 	# One rate for every corner; no Kenney body declares a rear axle share of its own.
 	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
 	"anti_roll_rate": 0.0,
-	# No link geometry: the springs above were tuned by driving with all the transfer through them.
-	"anti_dive": 0.0, "anti_squat": 0.0,
+	# Anti-squat as CAR_BASE's share: with every newton of launch transfer through the springs the
+	# rear squat alone was ~1 deg of the pitch. No anti-dive: braking pitch was never the complaint.
+	"anti_dive": 0.0, "anti_squat": 0.5,
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
 	# J1939: only family with an auxiliary retarder on the driven axle.
 	"retarder_equipped": true,
 	# ABS: mandatory on goods vehicles in the EU since 1991.
 	"abs_equipped": true,
-	# No TC: torque-bound with grip to spare, so it would buy nothing (docs/vehicles.md § Launches).
-	"tcs_equipped": false,
+	# ASR, standard beside EBS: gear 1 out-pulls the driven axle, and without it a floored start
+	# spins the drive tyres into the limiter and cycles there (a twitching rpm needle).
+	"tcs_equipped": true,
 	# A truck tyre on dry asphalt, and the family's whole brake chain hangs off it: brake_torque,
 	# the retarder's rating and the steering-taper margin are all derived from mu_long/mu_lat
 	# (src/vehicles/CLAUDE.md, tyre class sets mu).
@@ -206,7 +211,7 @@ const TRUCK_BASE := {
 	# 6th 1.0 -> 0.92: overdrive top, governed speed ~102 km/h vs 96.5 direct-drive.
 	"gear_ratios": [6.5, 3.7, 2.4, 1.6, 1.2, 0.92], "reverse_ratio": 6.0,
 	"final_drive": 4.5, "efficiency": 0.9, "shift_up_rpm": 2600.0, "shift_down_rpm": 1200.0,
-	"engine_brake_frac": 0.15, "shift_cut_s": 0.4,
+	"engine_brake_frac": 0.15, "shift_cut_s": 0.4, "launch_engage_s": 0.0, "launch_gear": 1,
 	"max_steer_deg": 26.0, "steer_speed": 2.0,
 	# ~5.7 deg floor (0.22x26) at 26 m/s, under both governed cruise speeds (85/110 km/h);
 	# 19.5 deg at 30 km/h, still wider than the ~17.6 deg mu_lat 0.75 can hold there.
@@ -238,7 +243,7 @@ const VAN_BASE := {
 	# 6th 1.0 -> 0.78: governed top ~120 km/h.
 	"gear_ratios": [6.5, 3.7, 2.4, 1.6, 1.2, 0.78], "reverse_ratio": 6.0,
 	"final_drive": 4.5, "efficiency": 0.9, "shift_up_rpm": 2600.0, "shift_down_rpm": 1200.0,
-	"engine_brake_frac": 0.12, "shift_cut_s": 0.15,
+	"engine_brake_frac": 0.12, "shift_cut_s": 0.15, "launch_engage_s": 0.0, "launch_gear": 1,
 	"max_steer_deg": 26.0, "steer_speed": 2.0,
 	# ~6 deg floor (0.23x26) at 28 m/s, between the cars' 10 deg and trucks' 4.8. Ambulance keeps
 	# the fraction on its narrower 24 deg rack (5.5 deg).
@@ -248,15 +253,16 @@ const TRACTOR_BASE := {
 	# cd 0.90 (nothing streamlined), crr 0.020 (worst in the project, lugged tires).
 	"cd": 0.90, "crr": 0.020,
 	"mass": 4200.0, "com_y": 0.35,
-	# A tractor's "suspension" is its tyres: 260 kN/m is 2.57 Hz on a 1 t corner (a sedan is
-	# ~1.3 Hz), static sag 1000*9.8/260000 = 3.8 cm, 31% of the 0.12 m rest_length — the same
-	# sag/travel fraction band the truck family targets. Damping ratio 0.40-0.50 (a tyre has
-	# little hysteresis, but this models the whole axle, not just the rubber).
-	"spring_rate": 260000.0, "damper_bump": 13000.0,
-	"damper_rebound": 16000.0, "max_suspension_force": 110000.0, "rest_length": 0.12,
+	# A tractor's "suspension" is its tyres: 330 kN/m is 2.5 Hz on the 1.33 t front corner of the
+	# 7 t variant (a sedan is ~1.3 Hz), static sag 1330*9.8/330000 = 4.0 cm, 33% of the 0.12 m
+	# rest_length — the same sag/travel fraction band the truck family targets; a real front tyre
+	# of this size is 300-400 kN/m. Damping ratio 0.40-0.50 (a tyre has little hysteresis, but
+	# this models the whole axle, not just the rubber).
+	"spring_rate": 330000.0, "damper_bump": 16500.0,
+	"damper_rebound": 20300.0, "max_suspension_force": 110000.0, "rest_length": 0.12,
 	# Rear carries the drawbar nose weight and the implement, and the 0.66 m rear tyre is
 	# stiffer than the 0.44 m front (both share the one 0.36 physics radius).
-	"spring_rate_rear": 300000.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
+	"spring_rate_rear": 380000.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
 	"anti_roll_rate": 0.0,
 	# No link geometry: the "suspension" is the tyres.
 	"anti_dive": 0.0, "anti_squat": 0.0,
@@ -282,10 +288,17 @@ const TRACTOR_BASE := {
 	"torque_curve": [800, 550, 1200, 680, 1600, 700, 2000, 640, 2200, 560, 2600, 0],
 	"idle_rpm": 800.0, "redline_rpm": 2600.0,
 	# ~4.4:1 spread, 9 km/h first to a 40 km/h road gear. First is free of the foot brake
-	# (tyre-derived), so a crawler gear costs only a bigger handbrake.
-	"gear_ratios": [7.0, 5.2, 3.9, 2.9, 2.15, 1.6], "reverse_ratio": 7.0,
+	# (tyre-derived), so a crawler gear costs only a bigger handbrake. Reverse is the bus's one R
+	# byte, so it is the launch gear's ratio (D3): a shuttle reverses near forward speeds, and a
+	# first-gear reverse spun the unloading rears and rode the limiter at 9 km/h.
+	"gear_ratios": [7.0, 5.2, 3.9, 2.9, 2.15, 1.6], "reverse_ratio": 3.9,
 	"final_drive": 5.5, "efficiency": 0.9, "shift_up_rpm": 2200.0, "shift_down_rpm": 1000.0,
 	"engine_brake_frac": 0.20, "shift_cut_s": 0.0,  ## powershift: no interruption
+	# Powershift clutch modulation: drive builds over 0.8 s on a pull-away. First gear whole on the
+	# first tick is ~2x what the rear tyres hold, so a floored start flashed them to the limiter.
+	# Start gear D3 (~the rear grip at full drive): first spans only 0-8 km/h, so a launch in it
+	# outran D1 and D2 before the clutch closed. A bogged start still downshifts to D1 after it.
+	"launch_engage_s": 0.8, "launch_gear": 3,
 	"max_steer_deg": 38.0, "steer_speed": 1.8,
 	# steer_falloff_speed 11 m/s = 39.6 km/h is the tractor's own top speed, so the floor lock
 	# arrives exactly at type-approval road speed. 0.55 keeps field-work cost (8-12 km/h headland
@@ -324,9 +337,8 @@ const VARIANTS := {
 	# wing really do run ~2x a saloon's drag. `front_weight` 0.42: engine sits behind the driver;
 	# at the body origin they measured 58/42 and 61/39, backwards for the layout. `race` is
 	# rear-drive (classic formula car), `race-future` is AWD.
-	# Steering falloff exists because of these two: `race` let go at ~140 km/h with full lock
-	# live. They keep ~7 deg at the floor, reached at 35 m/s = 126 km/h (family: 151) — still ~6x
-	# what mu_lat holds there.
+	# Steering falloff: the family's ~10 deg at 42 m/s, as an absolute lock (0.25x40, 0.24x42). A
+	# race car turns in no slower than a saloon; spin margin is `rear_lat_grip` and TC, not lock.
 	# `cl` 2.5 is the only wing in the project: same measured area as `cd`, Cl*A 2.24 against
 	# Cd*A 0.63 (lift/drag 3.6). 2.1 kN at 140 km/h rising to 8.8 kN at 288 km/h top end; a spring
 	# force (GroundDriveSpec.downforce_area) worth ~0.10 m of squat — raising `cl` past this
@@ -348,8 +360,8 @@ const VARIANTS := {
 	# 2.21x185=409 Nm) — re-derive on any CAR_BASE torque edit.
 	# `rear_lat_grip` 1.15: the wide rears a rear-heavy formula car runs; on equal tyres the heavier
 	# rear axle's load-sensitive mu sits under the front's and the body steers loose.
-	"race": {"family": "car", "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "handbrake_grip": 0.5, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.18, "steer_falloff_speed": 35.0, "diff_bias_rear": 2.5, "abs_equipped": false, "tcs_equipped": true},
-	"race-future": {"family": "car", "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "handbrake_grip": 0.5, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.17, "steer_falloff_speed": 35.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "tcs_equipped": false},
+	"race": {"family": "car", "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "handbrake_grip": 0.5, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.25, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "abs_equipped": false, "tcs_equipped": true},
+	"race-future": {"family": "car", "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "handbrake_grip": 0.5, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "tcs_equipped": false},
 	# Commercial bodies: RWD, governed at 180 like the real things (measured 198-200 ungoverned).
 	"van": {"family": "car", "com_y": 0.58, "anti_roll_rate": 18000.0, "mu_lat": 0.88, "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
 	# `ride_lift` 0.08 on the flatbeds: their arches are drawn shallower than the tyre, so at the
@@ -364,11 +376,11 @@ const VARIANTS := {
 	# com_z -0.14 = 0.14 m forward (front = -Z), hand-tuned by driving: the hopper body pulls
 	# mass back off the rear axle. 90 km/h is the EU heavy-truck limiter (a refuse collector
 	# usually runs lower); this is the one body the governor visibly bites (measured 99.5).
-	# com_y 1.05 is a laden compactor body: it rolls before it slides, overturning on the skid pad
-	# at 0.60 g (real ~0.4-0.5 g). Higher would put the COM past half the 1.72 m collision hull.
-	# Half-track over COM height (0.66 / ~1.1 m) is already below a real truck's (~1.0 / 1.5); a
-	# real one tips lower through tyre and frame compliance.
-	"garbage-truck": {"family": "truck", "mass": 8000.0, "com_y": 1.05, "torque_mul": 1.3, "com_z": -0.14, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 85.0},
+	# com_y 0.85 is bounded by the launch, not the rollover: on the toy 1.94 m wheelbase the front
+	# axle unloads fully at g * 0.40 * L / h, 0.72 g at 1.05, under the 0.8 g the rear tyres push in
+	# gear 1, so the body wheelied (measure_vehicles `track` gate). 0.85 puts that at ~0.9 g, and it
+	# still rolls before it slides.
+	"garbage-truck": {"family": "truck", "mass": 8000.0, "com_y": 0.85, "torque_mul": 1.3, "com_z": -0.14, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 85.0},
 	# Emergency vehicles are exempt from the goods-vehicle limiter; 110 is the appliance's own
 	# rating, just above what this body reaches.
 	"firetruck": {"family": "truck", "mass": 7500.0, "torque_mul": 1.3, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 110.0},
@@ -379,21 +391,22 @@ const VARIANTS := {
 	# spec sits on something the size of a tractor. What bounds it is not any gate (the field
 	# fence leaves 13 m) but what does NOT scale with it: the three-point linkage, the four
 	# implements and the 1.90 m farm tipper.
-	# `mass` 5500 / `front_weight` 0.38 is ballast, not torque: gear-1 wheel force against rear
-	# axle grip was 3.4x at 4000 kg; at 5500 kg with 62% on the rear (3.4 t, 33 kN at mu 1.0) it
-	# is ~2.0x, and the added mass lands where the draft reaction wants it. The torque curve and
-	# `final_drive` stay untouched — low-end torque is what pulls a drawbar trailer away.
-	# `com_y_frac` 0.35 of the body's AABB top (2.60 m on the scaled body) = 0.91 m over the
-	# road, a real tractor's COM height. A fraction, not a metre figure, because `scale` above
-	# may still move and the fraction survives it. Against the 0.70 m half-track that is a
-	# rollover threshold of 0.78 g under lug mu 1.0: roll-first, which is the real machine.
-	# `wheel_x_out` 0.064: the flush rule measures the outer face against the body side, so the
-	# wider tyre above would have swallowed its own growth inboard and narrowed the gap between
-	# the rears. This pushes both axles back out until that inner face is where it was, leaving
-	# the track ~5% wider than the flush fit alone — a tractor's tyres stand proud of its body.
+	# `mass` 7000 / `front_weight` 0.38 is a ballasted tractor: ~180 hp at ~39 kg/hp (a working
+	# tractor of this power is 40-50). Ballast is traction, not torque: gear-1 wheel force against
+	# rear axle grip is ~1.6x (4.3 t, 43 kN at mu 1.0), and the launch gear's ~0.9x. The torque
+	# curve and `final_drive` stay untouched — low-end torque is what pulls a drawbar trailer away.
+	# `com_y_frac` 0.32 of the body's AABB top (2.60 m on the scaled body) = 0.83 m over the road:
+	# the 5.5 t machine's 0.91 m with 1.5 t of ballast at ~0.55 m (liquid in the rear tyres, hub
+	# weights). A fraction, not a metre figure, because `scale` above may still move and the
+	# fraction survives it.
+	# `wheel_x_out` 0.214 sets the track: 1.62 m front / 1.79 m rear, a real tractor's 1.8-1.9 m
+	# (the flush fit alone left 1.31 / 1.49, and the body rolled ~3 deg per jolt and tipped at
+	# 0.84 g). Roll stiffness and roll damping both go as track squared, so this is the rocking
+	# and the rollover fix in one: rear half-track 0.90 over 0.83 m is a static threshold of
+	# ~1.08 g, at the lug tyres' slide. The tyres stand proud of the body, as a tractor's do.
 	"tractor-kenney": {
-		"family": "tractor", "mass": 5500.0, "front_weight": 0.38, "speed_limit_kmh": 40.0,
-		"com_y_frac": 0.35, "scale": 1.35, "wheel_x_out": 0.064},
+		"family": "tractor", "mass": 7000.0, "front_weight": 0.38, "speed_limit_kmh": 40.0,
+		"com_y_frac": 0.32, "scale": 1.35, "wheel_x_out": 0.214},
 }
 
 ## Feel baselines, keyed by a variant's `base` (defaulting to its `family`). "van" is a feel
@@ -549,6 +562,8 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	spec.efficiency = float(b["efficiency"])
 	spec.engine_brake_frac = float(b["engine_brake_frac"])
 	spec.shift_cut_s = float(b["shift_cut_s"])
+	spec.launch_engage_s = float(b["launch_engage_s"])
+	spec.launch_gear = int(b["launch_gear"])
 	spec.shift_up_rpm = float(b["shift_up_rpm"])
 	spec.shift_down_rpm = float(b["shift_down_rpm"])
 	# Road-speed governor (0 = ungoverned). Per variant with a baseline fallback: what a body is

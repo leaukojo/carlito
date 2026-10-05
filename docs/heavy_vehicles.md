@@ -116,8 +116,8 @@ the conventional carries none. No trailer of the four adds a signal to either.
 
 - Wheelbase is sized by the launch: the trailer pulls at the 1.05 m kingpin, a lever on the steer
   axle. A 2.10 m wheelbase lifts both steer wheels for ~1 s of a gear-1 launch; the shipped
-  3.60 m (cab-over) and 4.40 m (conventional) keep >= 8.5 kN on each steer wheel (9.0 and
-  12.7 kN coupled to the box, P2 and P6, 2026-10-02). Gate: CI runs
+  3.60 m (cab-over) and 4.40 m (conventional) keep >= 8.0 kN on each steer wheel (8.4 and
+  12.0 kN coupled to the box, P2 and P6, with ASR holding the drive axle at full grip, 2026-10-05). Gate: CI runs
   `tools/measure_semi_launch.tscn -- <unit> strict` on both units.
 - Gearing: gears 1-5 span the 600-2080 rpm range; 6th is a 0.69 overdrive, so the governor, not
   the redline, sets top speed. Coupled to the box, measured 2026-10-02 (`measure_vehicles -- <unit>
@@ -129,7 +129,13 @@ the conventional carries none. No trailer of the four adds a signal to either.
   rig's ~5 m^2 is the half-scale body, not the trailer's wake figure (checked 2026-10-03).
 - Plate share: `center_of_mass.z` 3.798 puts 27 % of each trailer on the fifth wheel (a real van
   trailer: 25-30 %), ~90 % of it on the single driven axle: the 4x2's traction budget. Below the
-  band the rig is grip-limited, not power-limited.
+  band the rig is grip-limited, not power-limited. Gear 1 asks ~1.5x that budget; the rig's ASR
+  (`tcs_equipped`, standard beside EBS) holds the drive tyres at the grip peak instead of letting
+  them spin into the limiter (measured 2026-10-05: 0-50 km/h 14.9 s against a real loaded rig's
+  ~16, standing start on 22 % against a real one's 15-20 %). Near a standstill the TC lets the slip
+  run past the floor-scaled peak as far as the one-tick force cap needs to pass the full grip:
+  these tyres carry the plate load on a `corner_mass` sized for the unit alone
+  (`RayWheel.tcs_spin_room`).
 - Rear damper: `damper_bump_rear` / `damper_rebound_rear` 24700 / 28800 hold
   zeta = c / (2 sqrt(k_rear * m)) at 0.30 (box) to 0.40 (flatbed) on the coupled rear corner
   (3.5-4.7 t) and 0.47-0.55 at the bobtail corner (1.9 t); the `GroundDriveSpec` fallback preserves
@@ -327,19 +333,29 @@ them apart.
   four-bar — implement pitch and rockshaft arm angle fall out of a circle-circle
   intersection, why implements tip back as they lift.
 - Draft 60 Hz margin: below `DRAFT_SPEED_REF` the draft is a linear damper, `k = rated /
-  DRAFT_SPEED_REF`, stable while `k*dt/m < 2`; 12 kN on 5.5 t gives 0.018
+  DRAFT_SPEED_REF`, stable while `k*dt/m < 2`; 12 kN on 7 t gives 0.014
   (`test_the_shipped_rating_keeps_the_60hz_damper_margin` holds it under 0.5). The one-tick
   `damped_force` cap behind it is unreachable below ~480 kN and bounds only the linear impulse.
 - Ballast: gear-1 wheel force at `converter_free_rpm` (1250 rpm, ~682 Nm) is ~65.7 kN against
-  33 kN of rear grip at 5.5 t / `front_weight` 0.38 (~2.0x; 3.4x at the unballasted 4 t 50/50).
-  Top speed in 6th is rpm-bound, so ballast moves only acceleration and grade climb.
+  43 kN of rear grip at 7 t / `front_weight` 0.38 (~1.5x; 3.4x at the unballasted 4 t 50/50); the
+  D3 launch gear's 36.6 kN is ~0.9x. Top speed in 6th is rpm-bound, so ballast moves only
+  acceleration and grade climb.
+- Launch: a powershift's, not a car's. The start-up clutch takes 0.8 s to carry full torque
+  (`launch_engage_s`) and the auto box pulls away in D3 (`launch_gear`), holding it while the
+  clutch closes and the tractor still gains speed; a launch that stops gaining has bogged and
+  steps down to D1. Measured 2026-10-05 on the flat strip: 0-35 km/h in 4.4 s, three upshifts,
+  rear slip at most 0.08. Reverse is the bus's single R byte, at D3's ratio: 16 km/h top.
 - Steady draft does not involve COM height: drag at the hitch and tyre reaction at ground form a
-  couple of `F × h_hitch`, a few kN off a ~20 kN static front. The 0.91 m COM (`com_y_frac` 0.35)
-  matters for transients and for the ~0.78 g side-slope rollover (0.70 m mean half-track, lug mu
-  1.0): the tractor tips before it slides.
+  couple of `F × h_hitch`, a few kN off a ~20 kN static front. The 0.83 m COM (`com_y_frac` 0.32:
+  the bare machine's 0.91 m with 1.5 t of liquid and hub ballast at ~0.55 m) matters for
+  transients and for rollover: over the 0.85 m mean half-track (1.62 / 1.79 m track, a real
+  tractor's) the static threshold is ~1.0 g, at the lug tyres' slide. Measured 2026-10-05 at
+  35 km/h: the slow wind-on runs the fronts wide at 0.79 g with 2.6° of roll, and a full-lock step
+  steer holds 0.67 g at 2.3°; on the 1.31 / 1.49 m track the same two runs overturned.
 - Body scale 1.35 (2.99 × 2.17 m, 2.12 m wheelbase). Visual radii 0.44 front / 0.66 rear over a
   0.36 physics radius, so the rear tyre stands 0.30 m proud of its contact and clips a kerb first.
-  Suspension is the tyres: 260 / 300 kN/m, `rest_length` 0.12 m, ~31 % static sag.
+  Suspension is the tyres: 330 / 380 kN/m, `rest_length` 0.12 m, ~33 % static sag. A side jolt at
+  speed rolls 1.8° and rebounds 28 % (roll damping ratio ~0.37; 3.0° and 34 % on the narrow track).
 
 ### What an implement declares
 
@@ -401,8 +417,8 @@ semi-trailers use. The tractor side is the same `TowHost` the semi's fifth wheel
   datum is 0.40 m, not the semi's 1.05 m (a fifth-wheel plate height); trailer origin is at
   the drawbar eye, ground at y = −0.40.
 - Joint differs from a fifth wheel on three axes: pitch ±20° (fifth wheel's cover-the-grade
-  rule); yaw ±90° (`Drawbar.SWING_MAX_DEG`, not `Articulation.JACKKNIFE_MAX_DEG` — up to 90°
-  nothing behind the eye reaches forward of the pin's z-plane); roll ±25° against the semi's
+  rule); yaw ±80° (`Drawbar.SWING_MAX_DEG`, not `Articulation.JACKKNIFE_MAX_DEG` — the
+  trailer's front corners meet the rear tyres just past it); roll ±25° against the semi's
   ±1.5° (a pin through an eye doesn't lever the tractor over on a rut).
 - A drawbar carries a nose weight, not a share: 12% against the fifth wheel's 27%.
 

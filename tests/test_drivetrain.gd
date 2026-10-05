@@ -512,6 +512,74 @@ func test_no_cut_declared_means_no_interruption() -> void:
 	assert_float(dt.applied_throttle).is_equal(1.0)
 
 
+func test_no_launch_engagement_declared_delivers_whole_drive_on_the_first_tick() -> void:
+	var dt: DrivetrainScript = DrivetrainScript.new(_spec())
+	dt.process(1.0 / 60.0, 1.0, 0.0, 0.0, 1, true)
+	assert_float(dt.clutch).is_equal(1.0)
+
+
+func test_the_launch_clutch_builds_drive_over_the_declared_time() -> void:
+	var spec := _spec()
+	spec.launch_engage_s = 0.5  # 30 ticks at 60 Hz
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	var first: float = dt.process(1.0 / 60.0, 1.0, 0.0, 0.0, 1, true)
+	assert_float(dt.clutch).is_equal_approx(1.0 / 30.0, 1e-5)
+	assert_float(first).is_greater(0.0)
+	for i in 29:
+		dt.process(1.0 / 60.0, 1.0, 0.0, 0.0, 1, true)
+	assert_float(dt.clutch).is_equal_approx(1.0, 1e-5)
+	# The engine side is untouched: the slip is the clutch's, not a throttle cut.
+	assert_float(dt.applied_throttle).is_equal(1.0)
+
+
+func test_the_launch_clutch_opens_when_stopped_with_the_pedal_up_and_holds_while_rolling() -> void:
+	var spec := _spec()
+	spec.launch_engage_s = 0.5
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	dt.clutch = 1.0
+	dt.process(1.0 / 60.0, 0.0, 30.0, 10.0, 1, false)  # coasting: stays closed
+	assert_float(dt.clutch).is_equal(1.0)
+	dt.process(1.0 / 60.0, 0.0, 0.0, 0.0, 1, false)  # stopped, pedal up: opens
+	assert_float(dt.clutch).is_equal(0.0)
+
+
+func test_the_launch_clutch_opens_in_neutral_and_on_a_direction_change() -> void:
+	var spec := _spec()
+	spec.launch_engage_s = 0.5
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	dt.process(1.0 / 60.0, 1.0, 30.0, 10.0, 1, false)
+	dt.clutch = 1.0
+	dt.process(1.0 / 60.0, 1.0, 30.0, 10.0, GEAR_R, false)
+	assert_float(dt.clutch).is_equal(0.0)
+	dt.clutch = 1.0
+	dt.process(1.0 / 60.0, 1.0, 30.0, 10.0, GEAR_N, false)
+	assert_float(dt.clutch).is_equal(0.0)
+	# An upshift is not a pull-away.
+	dt.process(1.0 / 60.0, 1.0, 30.0, 10.0, 1, false)
+	dt.clutch = 1.0
+	dt.process(1.0 / 60.0, 1.0, 30.0, 10.0, 2, false)
+	assert_float(dt.clutch).is_equal(1.0)
+
+
+func test_the_auto_box_pulls_away_in_the_launch_gear_and_holds_it_until_engaged() -> void:
+	var spec := _spec()
+	spec.launch_engage_s = 0.5
+	spec.launch_gear = 3
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	dt.process(1.0 / 60.0, 1.0, 0.0, 0.0, 1, true)
+	assert_int(dt.gear_byte).is_equal(3)
+	# Still slipping at a standstill, far under shift_down: no downshift yet.
+	for i in 28:
+		dt.process(1.0 / 60.0, 1.0, 0.0, 0.0, 1, true)
+	assert_int(dt.gear_byte).is_equal(3)
+	# Engaged and still bogged: the box steps down as it would anywhere else.
+	while dt.clutch < 1.0:
+		dt.process(1.0 / 60.0, 1.0, 0.0, 0.0, 1, true)
+	assert_int(dt.gear_byte).is_equal(3)
+	dt.process(1.0 / 60.0, 1.0, 0.0, 0.0, 1, true)
+	assert_int(dt.gear_byte).is_equal(2)
+
+
 func test_auto_upshift_latches_the_cut_once() -> void:
 	var spec := _spec()
 	spec.shift_cut_s = 0.1

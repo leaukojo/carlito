@@ -286,8 +286,12 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	dv_long *= clampf(absf(v_long) / LOW_SPEED_FLOOR - 1.0, 0.0, 1.0)
 	_prev_body_vel = body.linear_velocity
 	_prev_vel_valid = true
+	# The slip velocity the one-tick cap above needs to pass this tyre's whole long budget. A TC
+	# holding slip at the floor-scaled peak stalls under it wherever the tyre carries more than its
+	# `corner_mass` (a coupled tractor unit's drive axle under the plate), so the TC may go that far.
+	var tcs_cap_vel := mu_long * suspension_force * delta / maxf(corner_mass, 1.0)
 	_integrate_spin(drive_torque, -f_long * drive_spec.wheel_radius, brake_torque, drive_spec,
-			delta, slip_vel, v_long, abs_slip, dv_long, tcs_slip)
+			delta, slip_vel, v_long, abs_slip, dv_long, tcs_slip, tcs_cap_vel)
 	_update_visual(drive_spec, delta)
 
 
@@ -398,7 +402,7 @@ static func surface_drag_force(v_long: float, crr: float, normal_load: float, mo
 ## negative drive (engine overrun) is held the same way on its own side.
 func _integrate_spin(drive_torque: float, reaction_torque: float, brake_torque: float,
 		drive_spec: GroundDriveSpec, delta: float, slip_vel: float, v_long := 0.0,
-		abs_slip := 0.0, dv_long := 0.0, tcs_slip := 0.0) -> void:
+		abs_slip := 0.0, dv_long := 0.0, tcs_slip := 0.0, tcs_cap_vel := 0.0) -> void:
 	var null_slip_torque := drive_spec.wheel_inertia * absf(slip_vel) \
 			/ (delta * drive_spec.wheel_radius)
 	var reaction_stiffness := absf(reaction_torque) / maxf(null_slip_torque, 1e-6)
@@ -415,7 +419,7 @@ func _integrate_spin(drive_torque: float, reaction_torque: float, brake_torque: 
 		var dir := signf(drive_torque)
 		var share := absf(drive_torque) * spin_compliance
 		var room := tcs_spin_room(omega * dir - share, (v_long + dv_long) * dir,
-				drive_spec.wheel_radius, tcs_slip)
+				drive_spec.wheel_radius, tcs_slip, tcs_cap_vel)
 		if share > room:
 			omega -= dir * (share - room)
 			tcs_active = true
@@ -446,11 +450,13 @@ static func abs_spin_room(spin: float, v_long: float, radius: float, abs_slip: f
 ## mirror of `abs_spin_room` on the same LOW_SPEED_FLOOR denominator. `spin` and `v_long` are signed
 ## along the drive (the caller multiplies both by the drive torque's sign), so reverse mirrors
 ## forward. A wheel turning slower than the road, or against the drive, has all the way back to the
-## road speed plus the peak to spin up through.
-static func tcs_spin_room(spin: float, v_long: float, radius: float, tcs_slip: float) -> float:
+## road speed plus the peak to spin up through. `cap_vel` (m/s) is a floor under the allowed slip
+## velocity: what the one-tick force cap needs to pass the peak force (see `tick`).
+static func tcs_spin_room(spin: float, v_long: float, radius: float, tcs_slip: float,
+		cap_vel := 0.0) -> float:
 	if radius <= 0.0:
 		return INF
-	var ceiling := (v_long + tcs_slip * maxf(absf(v_long), LOW_SPEED_FLOOR)) / radius
+	var ceiling := (v_long + maxf(tcs_slip * maxf(absf(v_long), LOW_SPEED_FLOOR), cap_vel)) / radius
 	return maxf(ceiling - spin, 0.0)
 
 

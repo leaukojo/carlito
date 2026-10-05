@@ -35,8 +35,8 @@ drag_area = 0.63
 rolling_resistance = 0.012
 downforce_area = 2.24
 max_steer_deg = 42.0
-min_steer_frac = 0.17
-steer_falloff_speed = 35.0
+min_steer_frac = 0.24
+steer_falloff_speed = 42.0
 
 [resource]
 script = ExtResource("3_j5dhf")

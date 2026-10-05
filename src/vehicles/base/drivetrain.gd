@@ -43,6 +43,12 @@ var applied_throttle := 0.0
 var speed_cap_kmh := 0.0
 ## Ticks left in the post-shift throttle cut (`spec.shift_cut_s`), 0 when driving through.
 var _shift_cut_ticks := 0
+## Start-up clutch engagement, 0..1: the share of drive and overrun torque reaching the axle. Always
+## 1 with no `spec.launch_engage_s`.
+var clutch := 1.0
+## The auto box is holding `spec.launch_gear` through a pull-away (see `process`).
+var _launching := false
+var _prev_ground_speed := 0.0
 
 
 func _init(p_spec: VehicleSpec) -> void:
@@ -50,6 +56,7 @@ func _init(p_spec: VehicleSpec) -> void:
 	road_radius = maxf(p_spec.ground_drive.wheel_radius, MIN_ROAD_RADIUS) \
 			if p_spec.ground_drive != null else DEFAULT_ROAD_RADIUS
 	rpm = spec.idle_rpm
+	clutch = 0.0 if spec.launch_engage_s > 0.0 else 1.0
 
 
 static func is_drive(byte: int) -> bool:
@@ -274,6 +281,28 @@ static func retarder_pct(applied_nm: float, rated_nm: float) -> float:
 	return clampf(absf(applied_nm) / rated_nm * 100.0, 0.0, 100.0)
 
 
+# --- start-up clutch (powershift modulation) -----------------------------------------------
+## Road speed (m/s) under which a released pedal opens the start-up clutch, as a powershift
+## disengages before the engine would lug to a stall.
+const CLUTCH_OPEN_SPEED := 0.5
+
+
+## One tick of the start-up clutch (`spec.launch_engage_s`): open in N, on a direction change, and
+## when nearly stopped with the pedal up; otherwise closing linearly over `launch_engage_s`. It
+## only ever withholds torque, so brake > drive > handbrake holds. The slip lives on the engine
+## side: rpm keeps reading the converter floor, and `applied_throttle` is the engine's own load.
+static func clutch_step(p_spec: VehicleSpec, current: float, from_byte: int, to_byte: int,
+		throttle: float, ground_speed: float, delta: float) -> float:
+	if p_spec.launch_engage_s <= 0.0:
+		return 1.0
+	if to_byte == GEAR_N or (is_shift(from_byte, to_byte)
+			and is_reverse(from_byte) != is_reverse(to_byte)):
+		return 0.0
+	if throttle <= 0.0 and absf(ground_speed) < CLUTCH_OPEN_SPEED:
+		return 0.0
+	return move_toward(current, 1.0, delta / p_spec.launch_engage_s)
+
+
 ## True while the post-shift throttle cut is running. Test accessor for `_shift_cut_ticks`.
 func shift_cut_active() -> bool:
 	return _shift_cut_ticks > 0
@@ -317,7 +346,19 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 			gear_byte = req
 		elif not is_drive(gear_byte):
 			gear_byte = req
-		if is_drive(gear_byte):
+		if is_drive(gear_byte) and clutch <= 0.0:
+			# An open clutch (last tick's) selects the launch gear.
+			gear_byte = clampi(spec.launch_gear, 1,
+					mini(TOP_GEAR, maxi(spec.gear_ratios.size(), 1)))
+			_launching = true
+		if _launching:
+			# The box holds the launch gear while the clutch closes, then while the body still gains
+			# speed below the downshift point; a launch that stops gaining has bogged and steps down.
+			var road_rpm := rpm_from_wheel(spec, ground_speed / road_radius, gear_byte)
+			var gaining := absf(ground_speed) > absf(_prev_ground_speed)
+			_launching = is_drive(gear_byte) \
+					and (clutch < 1.0 or (road_rpm <= spec.shift_down_rpm and gaining))
+		if is_drive(gear_byte) and not _launching:
 			# Road speed, not the drive wheel: wheelspin over-reads rpm and upshifts early.
 			var road_omega := ground_speed / road_radius
 			gear_byte = auto_shift(spec, gear_byte, rpm_from_wheel(spec, road_omega, gear_byte))
@@ -326,10 +367,13 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 				gear_byte = governed_upshift(spec, gear_byte, ground_speed, road_radius)
 	else:
 		gear_byte = req
+		_launching = false
+	_prev_ground_speed = ground_speed
 	# One latch per tick however many gears governed_upshift walked: the comparison is against
 	# the byte this tick STARTED with.
 	if is_shift(prev_byte, gear_byte):
 		_shift_cut_ticks = shift_cut_ticks(spec.shift_cut_s, delta)
+	clutch = clutch_step(spec, clutch, prev_byte, gear_byte, throttle, ground_speed, delta)
 
 	# In N the wheels say nothing about crank speed, so a free-rev model stands in, built off the
 	# redline so it can never trip the limiter.
@@ -360,5 +404,5 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 		_shift_cut_ticks -= 1
 		applied_throttle = 0.0
 		pedal = 0.0
-	return wheel_torque(spec, rpm, applied_throttle, gear_byte) \
-			+ overrun_torque(spec, rpm, pedal, gear_byte)
+	return (wheel_torque(spec, rpm, applied_throttle, gear_byte)
+			+ overrun_torque(spec, rpm, pedal, gear_byte)) * clutch

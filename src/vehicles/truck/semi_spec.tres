@@ -32,6 +32,9 @@
 ; about 1:1.9 (steer 2527 kg, drive 4709 kg), so the steer axle's own ceiling is 7132 Nm: a FLOORED
 ; pedal asks the front for more than it can hold, and abs_equipped holds it at the grip peak, as a
 ; real rig's ABS does. Part pedal stays under every ceiling.
+; tcs_equipped is the rig's ASR, standard beside EBS: gear 1 puts ~102 kN on a driven axle that grips
+; ~70 kN, and without it a floored start spins the drive tyres into the limiter and cycles there at
+; ~8 Hz, which the rpm needle shows as twitching.
 ;
 ; handbrake_torque 4800 is pinned by construction: the same test holds the total handbrake inside
 ; (25 %, 50 %) of the drive torque at idle (3209-6417 per wheel), and 4800 sits mid-window. It
@@ -139,6 +142,7 @@ handbrake_grip = 1.0
 brake_torque = 10500.0
 handbrake_torque = 4800.0
 abs_equipped = true
+tcs_equipped = true
 max_steer_deg = 24.0
 min_steer_frac = 0.21
 steer_falloff_speed = 25.0

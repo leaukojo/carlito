@@ -24,6 +24,8 @@ const SPEC_BASELINE_ONLY := {
 	"idle_rpm": "idle_rpm", "redline_rpm": "redline_rpm", "reverse_ratio": "reverse_ratio",
 	"efficiency": "efficiency", "engine_brake_frac": "engine_brake_frac",
 	"shift_cut_s": "shift_cut_s",
+	"launch_engage_s": "launch_engage_s",
+	"launch_gear": "launch_gear",
 	"shift_up_rpm": "shift_up_rpm",
 	"shift_down_rpm": "shift_down_rpm",
 }

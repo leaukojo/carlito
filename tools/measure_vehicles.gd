@@ -33,6 +33,10 @@ const TRACK_DISTANCE := 200.0     ## m of straight running measured after that
 ## Set well above what shipped vehicles do; a FAIL means a real asymmetry (docs/vehicles.md).
 const MAX_LATERAL_DRIFT := 1.0    ## m off the latched forward axis over TRACK_DISTANCE
 const MAX_HEADING_DRIFT := 1.0    ## deg of heading change over the same stretch
+## Ticks the whole front axle may spend off the ground over the pass, launch included: a wheelie.
+## The Kenney wheelbases are toy-scale under real COM heights (docs/vehicles.md § Pitch), so a COM
+## or damper edit can tip a rear-driven body onto its rear axle with no other test noticing.
+const MAX_FRONT_LIFT_TICKS := 0
 ## Variants whose tracking FAIL is a KNOWN, open defect: still measured, still printed as FAIL,
 ## but excluded from `strict`'s exit code so one unfixed body does not block every deploy. A
 ## variant that is not on this list gates CI as before, so a NEW asymmetry still turns the job
@@ -170,9 +174,12 @@ var _track_dist := 0.0
 var _drift_peak := 0.0
 var _drift_final := 0.0
 var _heading_peak := 0.0
+var _front_lift_ticks := 0
 
 # cornering pass
-var _corner_ramping := false   ## false while still getting up to CORNER_SPEED
+var _corner_ramping := false   ## false while still getting up to _corner_speed
+## m/s held through this body's pass (`_corner_target`).
+var _corner_speed := CORNER_SPEED
 var _corner_ramp_t := 0.0
 var _corner_lat := 0.0         ## smoothed lateral acceleration, m/s^2
 var _corner_peak := 0.0
@@ -368,7 +375,9 @@ func _reset_pass(phase: Phase) -> void:
 	_drift_peak = 0.0
 	_drift_final = 0.0
 	_heading_peak = 0.0
+	_front_lift_ticks = 0
 	_corner_ramping = false
+	_corner_speed = _corner_target(_car.spec)
 	_corner_ramp_t = 0.0
 	_corner_lat = 0.0
 	_corner_peak = 0.0
@@ -592,6 +601,8 @@ func _end_launch_run() -> void:
 
 func _tick_tracking() -> void:
 	var pos := _car.global_position
+	if _front_lifted():
+		_front_lift_ticks += 1
 	if not _latched:
 		# Latch this pose as the ideal line once the launch transient is over.
 		if _car.telemetry.speed >= TRACK_START_SPEED:
@@ -615,13 +626,38 @@ func _tick_tracking() -> void:
 		_report_tracking(false)
 
 
-## Hold CORNER_SPEED on the pad, then wind the lock on from zero over CORNER_RAMP_S and watch what
-## the tyres will hold. Full pedal up to the speed, then a PI hold (CORNER_PEDAL_KP / _KI) through
-## the ramp; a governed or slow body simply sits on the pedal.
+## Every wheel on the foremost axle (front = -Z) is out of contact while another one is down. Not
+## "no front contact" alone: before the first wheel tick every wheel reads out of contact.
+func _front_lifted() -> bool:
+	var front_z := INF
+	for w in _car.wheels:
+		front_z = minf(front_z, w.anchor.z)
+	var other_down := false
+	for w in _car.wheels:
+		if is_equal_approx(w.anchor.z, front_z):
+			if w.in_contact:
+				return false
+		elif w.in_contact:
+			other_down = true
+	return other_down
+
+
+## CORNER_SPEED, or just under a governor that would never let the body reach it (the tractor):
+## where the fade starts, so the hold has throttle left.
+static func _corner_target(spec: VehicleSpec) -> float:
+	if spec.speed_limit_kmh > 0.0:
+		return minf(CORNER_SPEED, spec.speed_limit_kmh / 3.6 - Drivetrain.GOVERNOR_BAND)
+	return CORNER_SPEED
+
+
+## Hold `_corner_speed` on the pad, then wind the lock on from zero over CORNER_RAMP_S and watch
+## what the tyres will hold. Full pedal up to the speed, then a PI hold (CORNER_PEDAL_KP / _KI)
+## through the ramp; a governed or slow body simply sits on the pedal.
 func _tick_cornering(delta: float) -> void:
 	var vel: Vector3 = _car.linear_velocity
-	var speed := vel.length()
-	var err := CORNER_SPEED - speed
+	# Horizontal: a body off the pad edge would otherwise reach the speed by falling.
+	var speed := Vector2(vel.x, vel.z).length()
+	var err := _corner_speed - speed
 	if _corner_ramping:
 		_corner_pedal_i = clampf(_corner_pedal_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
 	var pedal := clampf(_corner_pedal_i + err * CORNER_PEDAL_KP, 0.0, 1.0) if _corner_ramping 			else 1.0
@@ -629,12 +665,12 @@ func _tick_cornering(delta: float) -> void:
 		MeasureRig.drive(pedal * 100.0, 0.0)
 		# Wait for the speed, but never past the budget — a body that cannot reach 40 km/h says so
 		# rather than silently reporting the transient.
-		if speed >= CORNER_SPEED:
+		if speed >= _corner_speed:
 			_corner_ramping = true
 			_corner_pedal_i = CORNER_PEDAL_START
 		elif _t >= _seconds:
 			print("  %-13s : never reached %.0f km/h, skipped"
-					% ["cornering", CORNER_SPEED * 3.6])
+					% ["cornering", _corner_speed * 3.6])
 			_report_cornering(true)
 		return
 	_corner_ramp_t += delta
@@ -694,18 +730,18 @@ func _report_cornering(skipped: bool) -> void:
 	# passes and read there as a chassis that pulls.
 	MeasureRig.drive(100.0, 0.0)
 	if skipped:
-		_current["cornering"] = {"skipped": true}
+		_current["cornering"] = {"skipped": true, "speed_kmh": _corner_speed * 3.6}
 		_after_lateral_passes()
 		return
 	var axle := "front" if _corner_front >= _corner_rear else "rear"
 	var note := "  <-- SLID: peak is the last reading before the body let go" if _corner_slid else ""
 	print("  %-13s : peak %.2f m/s^2 (%.2f g) at %.0f km/h; %s saturates first"
-			% ["cornering", _corner_peak, _corner_peak / 9.81, CORNER_SPEED * 3.6, axle]
+			% ["cornering", _corner_peak, _corner_peak / 9.81, _corner_speed * 3.6, axle]
 			+ " (front %.2f, rear %.2f)%s" % [_corner_front, _corner_rear, note])
 	print("  %-13s : roll %.1f deg at the peak, up to %d wheel(s) off the ground%s"
 			% ["", _corner_roll, _corner_lifted,
 			"  <-- OVERTURNED" if _car.is_overturned() else ""])
-	_current["cornering"] = {"skipped": false, "peak": _corner_peak,
+	_current["cornering"] = {"skipped": false, "peak": _corner_peak, "speed_kmh": _corner_speed * 3.6,
 			"peak_g": _corner_peak / 9.81, "front": _corner_front, "rear": _corner_rear,
 			"axle": axle, "slid": _corner_slid, "roll_deg": _corner_roll,
 			"wheels_lifted": _corner_lifted, "overturned": _car.is_overturned()}
@@ -893,7 +929,7 @@ func _report_tracking(skipped: bool) -> void:
 	if skipped:
 		_current["tracking"] = {"skipped": true}
 	else:
-		var ok := _drift_peak <= MAX_LATERAL_DRIFT and _heading_peak <= MAX_HEADING_DRIFT
+		var ok := _drift_peak <= MAX_LATERAL_DRIFT and _heading_peak <= MAX_HEADING_DRIFT 				and _front_lift_ticks <= MAX_FRONT_LIFT_TICKS
 		var known := KNOWN_TRACKING_FAILS.has(_variant)
 		if not ok:
 			if known:
@@ -903,14 +939,18 @@ func _report_tracking(skipped: bool) -> void:
 		elif known:
 			_stale_allowances.append(_variant)
 		var verdict := "PASS" if ok else ("FAIL (known)" if known else "FAIL")
-		print("  %-13s : %s  drift %.3f m peak / %.3f m final over %.0f m, heading %.3f deg"
+		print("  %-13s : %s  drift %.3f m peak / %.3f m final over %.0f m, heading %.3f deg,"
 				% ["tracking", verdict, _drift_peak, _drift_final,
-				_track_dist, _heading_peak])
-		if not ok:
+				_track_dist, _heading_peak]
+				+ " front axle off the ground %d ticks" % _front_lift_ticks)
+		if _front_lift_ticks > MAX_FRONT_LIFT_TICKS:
+			print("                 wheelie — suspect a raised com_y or softer pitch damping")
+		elif not ok:
 			print("                 straight-line pull — suspect asymmetric wheel_positions,")
 			print("                 a one-sided drive split, or uneven brake torque")
 		_current["tracking"] = {"skipped": false, "pass": ok, "drift_peak": _drift_peak,
-				"drift_final": _drift_final, "track_dist": _track_dist, "heading_peak": _heading_peak}
+				"drift_final": _drift_final, "track_dist": _track_dist, "heading_peak": _heading_peak,
+				"front_lift_ticks": _front_lift_ticks}
 	if _corner:
 		# Onto the pad: spawn_transform is what respawn() re-lays the body (and any trailer) on.
 		# Pad top is y=0, same as the strip.
@@ -1062,7 +1102,7 @@ func _cornering_table() -> Array[String]:
 		if c.is_empty():
 			continue
 		if c.get("skipped", false):
-			lines.append("| `%s` | never reached %.0f km/h | | | |" % [e["variant"], CORNER_SPEED * 3.6])
+			lines.append("| `%s` | never reached %.0f km/h | | | |" % [e["variant"], c["speed_kmh"]])
 			continue
 		lines.append("| `%s` | %.2f g%s | %s | %.1f deg | %d%s |" % [e["variant"], c["peak_g"],
 				" (slid)" if c["slid"] else "", c["axle"], c["roll_deg"], c["wheels_lifted"],
@@ -1204,10 +1244,10 @@ func _report_lines(e: Dictionary) -> Array[String]:
 	if e.has("cornering"):
 		var c: Dictionary = e["cornering"]
 		if c.get("skipped", false):
-			lines.append("| cornering | never reached %.0f km/h, skipped | — |" % (CORNER_SPEED * 3.6))
+			lines.append("| cornering | never reached %.0f km/h, skipped | — |" % c["speed_kmh"])
 		else:
 			lines.append("| cornering | peak %.2f m/s^2 (%.2f g) at %.0f km/h, %s saturates first (front %.2f, rear %.2f)%s | — |"
-					% [c["peak"], c["peak_g"], CORNER_SPEED * 3.6, c["axle"], c["front"],
+					% [c["peak"], c["peak_g"], c["speed_kmh"], c["axle"], c["front"],
 					c["rear"], "  (SLID)" if c["slid"] else ""])
 	if e.has("braking"):
 		for b: Dictionary in e["braking"]:

@@ -326,6 +326,19 @@ func test_tcs_room_is_the_mirror_of_abs() -> void:
 	assert_float(WheelScript.tcs_spin_room(20.0 / r, 10.0, r, WheelScript.TCS_SLIP)).is_equal(0.0)
 
 
+func test_tcs_room_lets_the_one_tick_cap_pass_the_peak_force() -> void:
+	var r := 0.36
+	# A tyre loaded past its corner_mass (a tractor unit's drive axle under the plate) needs more
+	# slip velocity than the floor-scaled peak for the one-tick cap to pass its budget.
+	assert_float(WheelScript.tcs_spin_room(0.0, 0.0, r, WheelScript.TCS_SLIP, 0.35)) \
+			.is_equal_approx(0.35 / r, 1e-6)
+	# Under the peak's own slip velocity it changes nothing.
+	assert_float(WheelScript.tcs_spin_room(0.0, 0.0, r, WheelScript.TCS_SLIP, 0.1)) \
+			.is_equal_approx(0.18 / r, 1e-6)
+	assert_float(WheelScript.tcs_spin_room(0.0, 10.0, r, WheelScript.TCS_SLIP, 0.35)) \
+			.is_equal_approx(10.0 * (1.0 + WheelScript.TCS_SLIP) / r, 1e-5)
+
+
 func test_tcs_holds_a_floored_drive_at_its_slip() -> void:
 	var spec := _spec()
 	var v := 10.0

@@ -75,6 +75,7 @@ handbrake_grip = 1.0
 brake_torque = 10500.0
 handbrake_torque = 4800.0
 abs_equipped = true
+tcs_equipped = true
 max_steer_deg = 24.0
 min_steer_frac = 0.21
 steer_falloff_speed = 29.0

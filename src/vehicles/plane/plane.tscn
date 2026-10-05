@@ -169,28 +169,19 @@ size = Vector3(0.1, 0.3, 1)
 size = Vector3(0.14, 0.08, 0.1)
 
 [sub_resource type="StandardMaterial3D" id="NavGreenMat"]
-albedo_color = Color(0.02, 0.3, 0.06, 1)
+albedo_color = Color(0.03, 0.44, 0.09, 1)
 roughness = 0.3
-emission_enabled = true
-emission = Color(0.05, 0.95, 0.18, 1)
-emission_energy_multiplier = 0.15
 
 [sub_resource type="StandardMaterial3D" id="NavRedMat"]
-albedo_color = Color(0.34, 0.03, 0.02, 1)
+albedo_color = Color(0.48, 0.04, 0.02, 1)
 roughness = 0.3
-emission_enabled = true
-emission = Color(0.95, 0.06, 0.03, 1)
-emission_energy_multiplier = 0.15
 
 [sub_resource type="BoxMesh" id="LandingLensMesh"]
 size = Vector3(0.24, 0.1, 0.05)
 
 [sub_resource type="StandardMaterial3D" id="LandingLensMat"]
-albedo_color = Color(0.4, 0.38, 0.33, 1)
+albedo_color = Color(0.55, 0.52, 0.46, 1)
 roughness = 0.2
-emission_enabled = true
-emission = Color(1, 0.96, 0.85, 1)
-emission_energy_multiplier = 0.15
 
 [sub_resource type="BoxMesh" id="StrutMesh"]
 size = Vector3(0.07, 1.53, 0.16)

@@ -16,9 +16,9 @@ extends TowHost
 const PIN_LOCAL := Vector3(0.0, 0.40, 1.9935)
 
 ## Yaw stop, degrees each side. Not Articulation.JACKKNIFE_MAX_DEG, which models a semi-trailer
-## against a cab. Up to 90 deg nothing behind the eye reaches forward of the pin's z-plane;
-## test_drawbar_trailer sweeps every BoxMesh corner at this angle.
-const SWING_MAX_DEG := 90.0
+## against a cab: this is the trailer's front corners against the rear tyres, which on the tractor's
+## 1.79 m track meet them just past 80 deg. test_drawbar_trailer sweeps every BoxMesh corner over it.
+const SWING_MAX_DEG := 80.0
 
 ## Pitch stop, degrees each side. It must cover the steepest grade break rather than bound it: at
 ## the stop the bodies go rigid and lever the drive axle off the ground. 20 gives headroom over the

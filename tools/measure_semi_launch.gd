@@ -59,8 +59,10 @@ const RAMP_I_MAX := 5.0   ## anti-windup clamp on the integral, m
 const LEAN_G := 0.2
 
 ## Least force (N) a single steer wheel may carry through a launch (P2, and P6 after the
-## recouple): the shipped wheelbases' margin (docs/heavy_vehicles.md § Truck sizing).
-const STEER_FLOOR_N := 8500.0
+## recouple): the shipped wheelbases' margin (docs/heavy_vehicles.md § Truck sizing). It catches a
+## wheelbase or COM edit that unloads a steer wheel (the 2.10 m wheelbase takes it to 0); the
+## cab-over's ASR launch at full grip sits at ~8.4 kN.
+const STEER_FLOOR_N := 8000.0
 
 enum Ph { P1, P2, P3, P4, P5, P6, P7, DONE }
 

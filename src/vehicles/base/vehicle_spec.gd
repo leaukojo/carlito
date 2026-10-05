@@ -50,6 +50,12 @@ extends Resource
 ## 0 = seamless, a powershift). Bridge-exact byte writes count as shifts too. During the cut
 ## the axle sees overrun only, and `applied_throttle` reads 0 so telemetry sees the cut.
 @export var shift_cut_s := 0.0
+## Seconds a modulated start-up clutch takes to carry full torque on a pull-away (a powershift's
+## clutch modulation); 0 = the drive arrives whole on the first tick. See `Drivetrain.clutch`.
+@export var launch_engage_s := 0.0
+## D gear the auto box pulls away in, held until the start-up clutch closes (a powershift's start
+## gear). Needs `launch_engage_s`: without a clutch to open, the box never selects it.
+@export var launch_gear := 1
 @export var shift_up_rpm := 5600.0
 @export var shift_down_rpm := 2200.0
 @export var speed_limit_kmh := 0.0  ## road-speed governor, km/h; 0 = ungoverned (J1939 SPN 74). Fades throttle over `Drivetrain.GOVERNOR_BAND` so it settles instead of hunting

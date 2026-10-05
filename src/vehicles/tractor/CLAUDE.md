@@ -20,6 +20,8 @@ Tour: `docs/heavy_vehicles.md` § Tractor, implement & ISOBUS and § The drawbar
 - Suspension IS the tyres: stiff and short-travel is the picture, not a softening target.
 - Traction is ballast (`mass`, `front_weight`), never the torque curve or `final_drive`: low-end
   torque at `converter_free_rpm` pulls a drawbar trailer away.
+- A pull-away is a powershift launch (`launch_engage_s`, `launch_gear` D3); D1 is the bogged-start
+  fallback, never detuned. Guard: `test_drivetrain` (the launch tests).
 - The COM is `com_y_frac` of the body AABB, never a metre figure (`scale` moves). Front unload is
   fixed with `front_weight`, never COM height.
 - `scale` 1.35 is bounded by what it does not reach: linkage, implements, tipper.
@@ -35,7 +37,7 @@ Tour: `docs/heavy_vehicles.md` § Tractor, implement & ISOBUS and § The drawbar
 - `ImplementCatalog.TOWED` routes ids before anything is instanced; `test_drawbar_trailer` sweeps it.
 - The pin is fixed: a swinging bar moves the hole while the joint stays put.
 - Roll ±25 deg (a rut must not lever the tractor); never narrow toward the fifth wheel's ±1.5.
-- Yaw is `Drawbar.SWING_MAX_DEG` (90), not `Articulation.JACKKNIFE_MAX_DEG`; swept by test.
+- Yaw is `Drawbar.SWING_MAX_DEG` (80, the rear tyres), not `Articulation.JACKKNIFE_MAX_DEG`; swept by test.
 - Size `TIP_COM_SHIFT_Z` by what stays on the pin (nose weight 12 %, not a 27 % share).
 - Two vocabularies, `consumers()` and `connections()`, agree (SCV ⟺ HYDRAULIC, tested).
 - No bus claim is content (attached steel, electronic silence), not an omission.

@@ -67,9 +67,9 @@ truck / trailer / tractor).
 - ABS (`abs_equipped`, road vehicles; not the tractor, the race cars or the plane) caps the foot
   brake and retarder at `RayWheel.ABS_SLIP`, the grip peak. A handbrake or spring brake is a
   mechanical hold no ABS modulates: a wheel under one brakes without it.
-- TC (`tcs_equipped`, the car family minus `race-future`) caps drive at `RayWheel.TCS_SLIP`, per
-  wheel and drive-only (never brakes); `tcs_off` disables it (the bridge's, or the local
-  TRACTION CONTROL setting).
+- TC (`tcs_equipped`, the car family minus `race-future`, and the semis' ASR) caps drive at
+  `RayWheel.TCS_SLIP`, per wheel and drive-only (never brakes); `tcs_off` disables it (the
+  bridge's, or the local TRACTION CONTROL setting).
 - The tyre class (`mu_long` / `mu_lat`) is the root of everything brake-shaped: brake, retarder
   rating, hierarchy floor, taper margin. A mu edit is a re-derivation (recipe + regen), never a
   number edit.

@@ -20,7 +20,7 @@ const SLIP_FLOOR_KMH := 0.5
 ## Travel speed (m/s) at which draft reaches its rated value (~7 km/h). A labelled model: real
 ## draft is mostly speed-independent, but a constant rearward force would shove a standing tractor
 ## out of the furrow. It is also the 60 Hz margin: below the reference this is a linear damper
-## F = -k*v, stable while k*dt/m < 2 (0.018 at the shipped 12 kN / 5.5 t).
+## F = -k*v, stable while k*dt/m < 2 (0.014 at the shipped 12 kN / 7 t).
 const DRAFT_SPEED_REF := 2.0
 
 var hitch_pos_actual := 100        ## %, contract 'hitch_pos_actual'
