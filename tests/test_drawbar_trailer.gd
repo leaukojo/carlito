@@ -238,28 +238,25 @@ func test_the_trailer_rides_on_its_springs_and_not_on_its_stops() -> void:
 	trailer.free()
 
 
-func test_the_brake_is_inside_its_own_tyres_and_apportioned_to_the_tractors() -> void:
-	# Two rules at once, both of them the trailer family's. A trailer must not brake harder per tonne
-	# than the machine pulling it (that is how a rig jackknifes under braking), and it must not ask
-	# for more than its own tyres can hand back (past that the wheel just locks).
+func test_the_brake_is_apportioned_to_the_tractors() -> void:
+	# The trailer family's rule (farm_tipper_spec.tres): a full demand brakes the bogie load at the
+	# deceleration the tractor's brakes make on its coupled static load (its mass plus the drawbar
+	# load), so neither pushes the other. An under-braked trailer pushes the tractor toward a
+	# jackknife; an over-braked one drags it. Past the tyre is allowed: the ABS-less bogie locks at
+	# full pedal, as the tractor's rears do.
 	var tractor := _tractor()
 	var t_spec := _spec_of(tractor)
-	var tractor_per_wheel := t_spec.mass * G / float(t_spec.ground_drive.wheel_positions.size())
-	var tractor_brake := t_spec.ground_drive.brake_torque
 	tractor.free()
 
 	var trailer := _trailer()
 	var spec := _spec_of(trailer)
-	var bogie_kg: float = spec.mass * (1.0 - float(trailer.call(&"kingpin_share")))
-	var per_wheel := bogie_kg * G / float(spec.ground_drive.wheel_positions.size())
-	var apportioned := tractor_brake * per_wheel / tractor_per_wheel
-	assert_float(spec.ground_drive.brake_torque) \
-		.override_failure_message("%.0f Nm is not the load-apportioned %.0f Nm"
-			% [spec.ground_drive.brake_torque, apportioned]) \
-		.is_equal_approx(apportioned, apportioned * 0.05)
-	assert_float(spec.ground_drive.brake_torque) \
-		.override_failure_message("full pedal asks for more than the tyre can give") \
-		.is_less(spec.ground_drive.mu_long * per_wheel * spec.ground_drive.wheel_radius)
+	var share := float(trailer.call(&"kingpin_share"))
+	var tractor_g := BrakeSizing.g_per_demand(t_spec, t_spec.mass + spec.mass * share)
+	var trailer_g := BrakeSizing.g_per_demand(spec, spec.mass * (1.0 - share))
+	assert_float(trailer_g) \
+		.override_failure_message("the trailer brakes at %.2f g of its load, the tractor at %.2f g"
+			% [trailer_g, tractor_g]) \
+		.is_equal_approx(tractor_g, tractor_g * 0.05)
 	# The spring parking brake is a flat quarter of its own service brake, like every trailer here.
 	assert_float(spec.ground_drive.handbrake_torque) \
 		.is_equal_approx(spec.ground_drive.brake_torque * 0.25, spec.ground_drive.brake_torque * 0.02)

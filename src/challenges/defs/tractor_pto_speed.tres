@@ -21,5 +21,5 @@ attachment = "res://src/vehicles/tractor/implements/mower.tscn"
 arena = "level_1"
 course = "res://src/levels/island/level_1/courses/tractor_pto_speed_course.tscn"
 briefing = "Select the 1000 PTO gear, engage the shaft, then hold it in its rated speed band."
-hint = "pto_mode picks 540 or 1000. Neutral with the throttle up gets the shaft there without moving."
+hint = "pto_mode picks 540 or 1000. In neutral the engine revs freely, so a light throttle (about 17-24 %) gets the shaft there without moving; full throttle overshoots."
 goals = Array[ExtResource("1_goal")]([SubResource("Resource_rated")])

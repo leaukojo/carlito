@@ -80,12 +80,30 @@ const BRAKE_PEDALS: Array[float] = [0.3, 0.6, 1.0]
 const BRAKE_LOCK_SLIP := 0.3
 const BRAKE_STOP_SPEED := 0.3      ## m/s counted as stopped
 
+## --- both pedals at stall (`stall`, instead of every other pass) ---
+## Settles on the full foot brake, then floors the throttle against it in manual D1 (the worst gear;
+## the automatic box would start the tractor in D3) with traction control off (the ideal TC takes
+## the drive back at a standstill, so it would measure the TC, not the brake), and reports how far
+## the body moved, its peak speed and the driven wheels' peak spin. `InputRouter.brake_override`
+## latches only past BRAKE_OVERRIDE_SPEED, so a body that holds never reaches it: a latch is
+## reported as a failure to hold, never hidden.
+const STALL_SETTLE_S := 1.5
+const STALL_HOLD_S := 10.0
+## --- handbrake turn (`handbrake`, instead of every other pass) ---
+## Up to HB_SPEED on the strip, then a HB_STEER step with the throttle lifted, held HB_HOLD_S and
+## released straight for HB_AFTER_S: once with the steer alone, once with the handbrake pulled
+## over the same window. Reports the rear wheels' locked time, peak yaw rate and heading change.
+const HB_SPEED := 16.67            ## m/s (60 km/h)
+const HB_STEER := 30.0             ## % of lock, + = right
+const HB_HOLD_S := 1.0
+const HB_AFTER_S := 1.5
+
 # --- launch breakdown (accel pass) -----------------------------------------
 ## Where the time to each LAUNCH_MARKS mark goes, in seconds since the pass began. The buckets
 ## overlap (a spinning wheel can be in the fuel cut too), except `torque-bound`, which excludes the
 ## rest: pedal floored, no cut, every driven wheel on the ground under the grip peak, so the tyres
 ## had grip to spare and more torque would have bought speed. Its `stall` share has the wheel side
-## under converter stall (`Drivetrain.converter_free_rpm` at full pedal): the only ticks converter
+## under the launch target (`Drivetrain.launch_target_rpm` at full pedal): the only ticks converter
 ## torque multiplication could act in.
 const LAUNCH_MARKS: Array[float] = [50.0, 100.0]
 ## Slip that counts as wheelspin: well past the 0.12 grip peak, so `tc` holding the peak reads none.
@@ -93,18 +111,63 @@ const SPIN_SLIP := 0.2
 const LAUNCH_FLOORED := 0.98       ## pedal at or above this is floored
 const TcPedal := preload("res://tools/tc_pedal.gd")
 
+# --- launch trace (`trace`, accel pass) ------------------------------------
+## A per-tick line of the launch (`_trace_line`) and the launch gates, judged over the launch: to the
+## last LAUNCH_MARKS mark, to the held gear's full-pedal upshift point (`ShiftPolicy.upshift_rpm`)
+## on road speed under `gear=`, or to the end of the pass for a body that never gets there (the
+## 40 km/h tractor, traced to its top). The gates are a report of what reads as wrong from the
+## seat, never CI.
+## On the foot brake first, so the front axle's parked load is a settled one (and a trailer couples).
+const TRACE_SETTLE_S := 1.5
+const TRACE_PRINT_S := 3.0         ## default `trace_s=`: seconds of lines printed
+## Two shifts closer than this read as one busy shift.
+const GATE_MIN_GEAR_S := 1.0
+## An upshift lands (road speed, new gear) at least this far over the downshift point at the pedal
+## it was taken at (`ShiftPolicy.down_rpm`), or the box would hunt back down: the policy's own floor.
+const GATE_LANDING_MARGIN := ShiftPolicy.LANDING_MARGIN
+## The front axle keeps at least this share of its parked load: under half, the steering goes light.
+const GATE_FRONT_SHARE := 0.5
+
+# --- part-pedal probes (`cruise`, `kickdown`, `pulse`, instead of every other pass) ----------
+## Each runs at every speed of the body's CRUISE_SETS row, from a standstill, in automatic D: the
+## PI pedal (CORNER_PEDAL_KP / _KI) follows a setpoint ramped from the speed it is at to the target
+## at the row's m/s², then holds it until the speed stays within CRUISE_TOL for CRUISE_SETTLE_S with
+## no shift; that settle prints the cruise line (gear, rpm, pedal and `engine_load` averaged over
+## it). `kickdown` then steps the pedal to 1 until KICK_GAIN_KMH more; `pulse` (re-settled first)
+## drives the hold's PI pedal as on/off for PULSE_S, its duty latched at each period's start (or
+## fixed by `duty=`): a keyboard holding a speed, the worst case. A row's speeds within
+## GOVERNOR_BAND of a governor are dropped (its fade would hold them, not the pedal). Every window
+## (approach and hold, kick, pulse) gets the hunting, landing and limiter gates.
+const CRUISE_SETS := {
+	"car": {"kmh": [50.0, 60.0, 90.0, 100.0, 120.0], "ramp": 1.0},
+	"truck": {"kmh": [30.0, 50.0, 70.0, 85.0], "ramp": 0.5},
+	"tractor": {"kmh": [15.0, 25.0, 34.0], "ramp": 0.5},
+}
+const CRUISE_TOL := 0.3            ## m/s off the target that still counts as held
+const CRUISE_SETTLE_S := 5.0
+const KICK_GAIN_KMH := 20.0
+const PULSE_PERIOD_S := 1.0        ## default `pulse=<s>`
+const PULSE_S := 30.0              ## s of pulsing at each speed
+
 # --- doc presets (`doc=<id>` as arg 1) -------------------------------------
 ## Each runs a fixed set and rewrites its `docs/vehicles.md` region (`doc_region.gd`). Cornering
 ## and accel run every wheel-driven variant (accel twice, floored then `tc`, each only to
 ## 100 km/h); braking the set below, heavies from 90 % of their top.
 const DocRegion := preload("res://tools/doc_region.gd")
 const DOC_BRAKING: Array[String] = ["sedan", "pickup", "delivery", "garbage-truck", "semi", "race"]
+## doc=cruise: one body per shift map (the car's, the sports car's, the governed light
+## commercial's, the heavy van's, the Kenney truck's, the semi's AMT on its spawn trailer, the
+## tractor's powershift).
+const DOC_CRUISE: Array[String] = ["sedan", "sedan-sports", "van", "delivery", "garbage-truck",
+		"semi", "tractor-kenney"]
 const DOC_SECONDS := 60.0
 
 const REFERENCE_SPECS_PATH := "res://tools/vehicle_reference_specs.json"
 const REPORT_DIR := "res://reports/specs_sweep/"
 
-enum Phase { ACCEL, COAST, TRACKING, CORNERING, BRAKING, DONE }
+enum Phase { ACCEL, COAST, TRACKING, CORNERING, BRAKING, STALL, HANDBRAKE, CRUISE, DONE }
+## What a part-pedal probe window is doing (`_tick_cruise`).
+enum Cruise { APPROACH, KICK, PULSE }
 
 var _queue: Array[String] = []
 var _seconds := DEFAULT_SECONDS
@@ -122,6 +185,21 @@ var _coast := false
 var _corner := false
 ## `brake`: run the braking pass last. Off by default, like `corner`.
 var _brake := false
+## `stall` / `handbrake`: run only that probe on each body (see their constants).
+var _stall := false
+var _hb_turn := false
+var _probe_on := false        ## past the settle / run-up, into the measured window
+var _probe_t := 0.0
+var _probe_x0 := Vector3.ZERO
+## Heading change (deg) integrated off the yaw rate, so a spin past 180 reads as one (a wrapped
+## heading difference cannot tell a J-turn from a full rotation).
+var _probe_turned := 0.0
+var _probe_v_peak := 0.0
+var _probe_spin_peak := 0.0
+var _probe_yaw_peak := 0.0
+var _probe_lock_t := 0.0
+var _probe_override := false
+var _hb_pulled := false       ## this handbrake run pulls the lever (the second of the pair)
 ## `track`: skip the accel/top-speed pass — CI only needs the tracking gate.
 var _track_only := false
 ## `strict`: exit nonzero on a tracking FAIL. Off by default so dev invocation stays a report.
@@ -130,8 +208,8 @@ var _strict := false
 ## scene's file name (`box`, `flatbed`, `farm_tipper`...) or `bobtail` / `none` for nothing.
 ## Empty: the catalog's own first entry.
 var _trailer := ""
-## `doc=<braking|cornering|accel>`: the preset that ran, its region rewritten at the end; empty
-## otherwise.
+## `doc=<braking|cornering|accel|cruise>`: the preset that ran, its region rewritten at the end;
+## empty otherwise.
 var _doc := ""
 ## `tc`: the accel pass slip-limits the worst driven wheel (`tc_pedal.gd`) instead of flooring.
 var _tc := false
@@ -139,12 +217,70 @@ var _tc := false
 var _tc_run := false
 var _tc_pedal := 1.0
 var _loss := {}     ## launch-breakdown seconds so far this pass (`_sample_launch`)
+## The limiter and shift cuts that shaped the car's last tick (`_latch_cuts`), and what judging the
+## shift cut needs from the tick before: the gear, a shift cut still pending.
+var _limiter_cut := false
+var _shift_cut := false
+var _cut_gear := -1
+var _cut_pending := false
 var _launch := {}   ## `_loss` snapshotted as each LAUNCH_MARKS mark latched, keyed by km/h
+## `trace[=n]`: a trace line every n ticks for `trace_s=<s>` seconds, plus every gear change, and
+## the launch gates at the end of the accel pass.
+var _trace := false
+var _trace_every := 1
+var _trace_s := TRACE_PRINT_S
+var _trace_settling := false  ## still on the foot brake before the traced launch
+var _trace_ticks := 0
+var _parked_front := 0.0      ## N on the front axle at the end of the settle
+var _gate := {}               ## the gates' running state this pass (`_sample_gates`)
+## `notc`: the accel pass with the body's traction control off, as the bridge's `tcs_off` does.
+var _notc := false
+## `gear=<1-6>`: the accel pass in the bridge's manual mode, held in that byte (0: automatic D).
+var _held_gear := 0
+## `j=<kg·m²>`: the crank's inertia overridden on a copy of the spec, in memory, never shipped: the
+## anchor run that compares the coupled crank against the wheels' own inertia (NAN: the spec's).
+var _engine_inertia := NAN
+## `pedal=<0..1>`: the accel pass held at this pedal instead of floored (it implies the trace's
+## settle and gates).
+var _pedal := 1.0
+
+# part-pedal probes (`cruise`, `kickdown`, `pulse`)
+var _cruise := false
+var _kickdown := false
+var _pulse := false
+var _pulse_period := PULSE_PERIOD_S
+var _pulse_duty := NAN             ## `duty=<0..1>`; NAN: the PI pedal, latched each period
+var _cr_speeds: Array[float] = []  ## km/h still to run, this body
+var _cr_actions: Array[Cruise] = []  ## what follows each settle at the current speed
+var _cr_stage := Cruise.APPROACH
+var _cr_target := 0.0              ## m/s
+var _cr_set := 0.0                 ## m/s, the ramped setpoint
+var _cr_ramp := 1.0                ## m/s²
+var _cr_i := 0.0                   ## integral half of the PI pedal
+var _cr_pedal := 0.0               ## the pedal that drove the last tick
+var _cr_settled := false           ## this speed's cruise line printed
+var _cr_hold_t := 0.0              ## s within CRUISE_TOL with no shift
+var _cr_sums := Vector3.ZERO       ## pedal, rpm and engine_load summed over the hold
+var _cr_ticks := 0
+var _cr_pedal_peak := 0.0          ## the approach's highest pedal: 1.00 is a floored approach
+var _cr_gear := -1                 ## gear byte at the last tick, to catch a shift
+var _cr_shifts: Array = []         ## this window's shifts (`_shift_record`)
+var _cr_limiter := 0               ## limiter ticks this window
+var _cr_v0 := 0.0                  ## m/s at the start of this window
+var _cr_g0 := 0                    ## gear at the start of a window (a kick's cruise gear)
+var _cr_t0 := 0.0                  ## `_t` at the start of this window
+var _cr_duty := 0.0                ## this pulse period's on share
+var _cr_duty_sum := 0.0            ## summed over the pulse's periods, for its mean
+var _cr_periods := 0
+var _cr_band := Vector2(INF, -INF)  ## m/s, the slowest and fastest of the pulse
 
 # coast pass
 var _coast_v0 := 0.0
 var _coast_declared := 0.0   ## N, declared resistance summed over the coast's ticks
 var _coast_overrun := 0.0    ## N at the road, `Drivetrain.overrun_torque` summed the same way
+## kg the crank adds to the rig while its coupling is locked, `J G^2 / (eta r^2)` (the overrun
+## direction's reflection), summed the same way
+var _coast_crank_kg := 0.0
 var _coast_ticks := 0
 var _coast_tyres := 0.0      ## N, retarding tyre force over the rig's wheels, summed the same way
 var _contact_peak := 0
@@ -218,12 +354,47 @@ func _ready() -> void:
 	_coast = flags.has("coast")
 	_corner = flags.has("corner")
 	_brake = flags.has("brake")
+	_stall = flags.has("stall")
+	_hb_turn = flags.has("handbrake")
 	_track_only = flags.has("track")
 	_strict = flags.has("strict")
 	_tc = flags.has("tc")
+	_notc = flags.has("notc")
+	_cruise = flags.has("cruise")
+	_kickdown = flags.has("kickdown")
 	for f in flags:
-		if String(f).begins_with("trailer="):
-			_trailer = String(f).substr(8).to_lower()
+		var flag := String(f)
+		if flag.begins_with("trailer="):
+			_trailer = flag.substr(8).to_lower()
+		elif flag == "trace" or flag.begins_with("trace="):
+			_trace = true
+			_trace_every = maxi(1, int(flag.substr(6))) if flag.length() > 5 else 1
+		elif flag.begins_with("trace_s="):
+			_trace_s = float(flag.substr(8))
+		elif flag.begins_with("j="):
+			_engine_inertia = float(flag.substr(2))
+		elif flag.begins_with("pedal="):
+			_pedal = clampf(float(flag.substr(6)), 0.05, 1.0)
+		elif flag == "pulse" or flag.begins_with("pulse="):
+			_pulse = true
+			if flag.length() > 5:
+				_pulse_period = maxf(float(flag.substr(6)), 0.1)
+		elif flag.begins_with("duty="):
+			_pulse_duty = clampf(float(flag.substr(5)), 0.0, 1.0)
+		elif flag.begins_with("gear="):
+			_held_gear = int(flag.substr(5))
+			if _held_gear < 1 or _held_gear > Drivetrain.TOP_GEAR:
+				printerr("gear=%s: expected a drive byte 1-%d" % [flag.substr(5), Drivetrain.TOP_GEAR])
+				get_tree().quit(1)
+				return
+	if _pedal < 1.0 and _tc:
+		printerr("pedal= and tc both set the accel pass's pedal: pick one")
+		get_tree().quit(1)
+		return
+	if _pedal < 1.0 and not _trace:
+		# The gates and each shift's line; per-tick lines only when `trace` asks for them.
+		_trace = true
+		_trace_s = 0.0
 	if which.begins_with("doc="):
 		_doc = which.substr(4)
 		_seconds = DOC_SECONDS
@@ -234,11 +405,17 @@ func _ready() -> void:
 			_corner = true
 		elif _doc == "accel":
 			_tc = false  # the preset runs each body floored, then `tc`
-		else:
-			printerr("unknown doc preset '%s' — expected doc=braking, doc=cornering or doc=accel"
-					% _doc)
+		elif _doc != "cruise":
+			printerr(("unknown doc preset '%s' — expected doc=braking, doc=cornering, doc=accel or"
+					+ " doc=cruise") % _doc)
 			get_tree().quit(1)
 			return
+		if _trace or _notc or _held_gear > 0 or not is_nan(_engine_inertia) or _cruise_probe():
+			printerr("trace / notc / gear= / j= / pedal= / cruise / kickdown / pulse change the"
+					+ " passes a doc preset tabulates: run them per body")
+			get_tree().quit(1)
+			return
+		_cruise = _doc == "cruise"  # after the check above: the preset is the cruise probe alone
 	var ref_file := FileAccess.open(REFERENCE_SPECS_PATH, FileAccess.READ)
 	_reference = JSON.parse_string(ref_file.get_as_text())
 	# Do not speed up with Engine.time_scale: it enlarges the physics step and breaks the
@@ -252,6 +429,8 @@ func _ready() -> void:
 		_queue.assign(_wheel_driven_variants())
 	elif _doc == "braking":
 		_queue = DOC_BRAKING.duplicate()
+	elif _doc == "cruise":
+		_queue = DOC_CRUISE.duplicate()
 	elif Catalog.VARIANTS.has(which):
 		_queue = [which]
 	else:
@@ -303,6 +482,8 @@ func _next_vehicle() -> void:
 			DocRegion.write(_doc, _cornering_table())
 		elif _doc == "accel":
 			DocRegion.write(_doc, _accel_table())
+		elif _doc == "cruise":
+			DocRegion.write(_doc, _cruise_table())
 		get_tree().quit(1 if _strict and _failures > 0 else 0)
 		return
 	_variant = _queue.pop_front()
@@ -311,6 +492,10 @@ func _next_vehicle() -> void:
 	_brake_i = 0
 	_brake_rows = []
 	_car = load(Catalog.VARIANTS[_variant]["scene"]).instantiate()
+	if not is_nan(_engine_inertia):
+		_car.spec = _car.spec.duplicate()
+		_car.spec.engine_inertia = _engine_inertia
+		_current["engine_inertia"] = _engine_inertia
 	_current["abs"] = _car.spec.ground_drive.abs_equipped
 	add_child(_car)
 	# Strip top is y=0; wheels just touching, no spawn drop onto the springs.
@@ -322,7 +507,34 @@ func _next_vehicle() -> void:
 		_car.contact_monitor = true
 		_car.max_contacts_reported = 8
 	_tc_run = _tc
-	_reset_pass(Phase.TRACKING if _track_only else Phase.ACCEL)
+	if _stall:
+		_start_stall()
+	elif _cruise_probe():
+		_start_cruise()
+	elif _hb_turn:
+		_hb_pulled = false
+		_start_handbrake_run()
+	elif _track_only:
+		_reset_pass(Phase.TRACKING)
+	else:
+		_start_accel()
+
+
+## The accel pass from a standstill: floored at once, or with `trace` held on the foot brake for
+## TRACE_SETTLE_S first (`_tick_accel` floors it and restarts the clock).
+func _start_accel() -> void:
+	_reset_pass(Phase.ACCEL)
+	InputRouter.set_manual_gearbox(_held_gear > 0)
+	_trace_settling = _trace
+	if _trace_settling:
+		_drive_accel(0.0, 100.0)
+	else:
+		_drive_accel(_pedal * 100.0)
+
+
+## The accel pass's bridge stash: `gear=` and `notc` ride it; every other pass drives D with TC.
+func _drive_accel(accel_pct: float, brake_pct := 0.0) -> void:
+	MeasureRig.drive(accel_pct, brake_pct, 0.0, false, maxi(_held_gear, 1), _notc)
 
 
 ## Swap the spawn attachment for `trailer=`'s before the first tick: set_attachment only remembers
@@ -362,9 +574,16 @@ func _reset_pass(phase: Phase) -> void:
 			"force": 0.0, "budget": 0.0, "under_peak": 0.0, "past_peak": 0.0, "tick_cap": 0.0,
 			"tcs": 0.0}
 	_launch = {}
+	_limiter_cut = false
+	_shift_cut = false
+	_cut_gear = -1
+	_cut_pending = false
+	_gate = {}
+	_trace_ticks = 0
 	_coast_v0 = 0.0
 	_coast_declared = 0.0
 	_coast_overrun = 0.0
+	_coast_crank_kg = 0.0
 	_coast_tyres = 0.0
 	_coast_ticks = 0
 	_contact_peak = 0
@@ -414,18 +633,34 @@ func _physics_process(delta: float) -> void:
 		_tick_cornering(delta)
 	elif _phase == Phase.BRAKING:
 		_tick_braking(delta)
+	elif _phase == Phase.STALL:
+		_tick_stall(delta)
+	elif _phase == Phase.HANDBRAKE:
+		_tick_handbrake(delta)
+	elif _phase == Phase.CRUISE:
+		_tick_cruise(delta)
 	else:
 		_tick_tracking()
 
 
 func _tick_accel(delta: float) -> void:
+	if _trace_settling:
+		if _t < TRACE_SETTLE_S:
+			return
+		_trace_settling = false
+		_parked_front = _front_axle_load()
+		# The clock starts on the pedal: a line at t has had t of floored ticks.
+		_reset_pass(Phase.ACCEL)
+		_drive_accel(_pedal * 100.0)
+		_print_trace_header()
+		return
 	# The pedal that drove this tick, then next tick's.
-	var pedal := _tc_pedal if _tc_run else 1.0
+	var pedal := _tc_pedal if _tc_run else _pedal
 	if _tc_run:
 		# Held through a shift cut: the wheels unload there, and the integral would wind up.
 		if not _car.drivetrain.shift_cut_active():
-			_tc_pedal = TcPedal.step(_tc_pedal, _car.wheels, delta)
-		MeasureRig.drive(_tc_pedal * 100.0, 0.0)
+			_tc_pedal = TcPedal.step(_tc_pedal, _car.wheels, delta, _car.drivetrain)
+		_drive_accel(_tc_pedal * 100.0)
 	var v: float = _car.telemetry.speed  # signed m/s, read out of the sim
 	_inst_a = (v - _prev_v) / delta
 	_prev_v = v
@@ -437,7 +672,10 @@ func _tick_accel(delta: float) -> void:
 			_marks[kmh] = _t
 	if not _marks.has("quarter") and _dist >= 402.34:
 		_marks["quarter"] = Vector2(_t, v * 3.6)
+	_latch_cuts(delta)
 	_sample_launch(delta, pedal)
+	if _trace:
+		_sample_gates()
 	if _doc == "accel":
 		if _marks.has(LAUNCH_MARKS[-1]) or _t >= _seconds:
 			_end_launch_run()
@@ -457,8 +695,22 @@ func _tick_accel(delta: float) -> void:
 		_report_accel(true)
 
 
+## The cuts that shaped the car's last tick. The limiter's is the drivetrain's own record
+## (`Drivetrain.on_limiter`: its hard cut, or a crossing landed on the redline). A shift cut ran if
+## one was still pending from the tick before or a shift latched it in this one (`shift_cut_active`
+## reads the count after its decrement, so it misses a cut's last tick).
+func _latch_cuts(delta: float) -> void:
+	var spec: VehicleSpec = _car.spec
+	var dt: Drivetrain = _car.drivetrain
+	_limiter_cut = dt.on_limiter
+	_shift_cut = _cut_pending or (Drivetrain.is_shift(_cut_gear, dt.gear_byte)
+			and Drivetrain.shift_cut_ticks(spec.shift_cut_s, delta) > 0)
+	_cut_gear = dt.gear_byte
+	_cut_pending = dt.shift_cut_active()
+
+
 ## One tick of the launch breakdown (§ launch breakdown), until the last LAUNCH_MARKS mark latches.
-## The limiter is judged as `Drivetrain.process` judges it, on the driven wheels' raw rpm.
+## The cuts are the ones that shaped the tick (`_latch_cuts`).
 func _sample_launch(delta: float, pedal: float) -> void:
 	if _launch.has(LAUNCH_MARKS[-1]):
 		return
@@ -489,8 +741,8 @@ func _sample_launch(delta: float, pedal: float) -> void:
 			if w.slip > SPIN_SLIP:
 				spinning = true
 	var wheel_rpm := Drivetrain.wheel_engine_rpm(spec, omega / maxf(1.0, driven), dt.gear_byte)
-	var cut := Drivetrain.limiter_cut(spec, wheel_rpm)
-	var shifting := dt.shift_cut_active()
+	var cut := _limiter_cut
+	var shifting := _shift_cut
 	if spinning:
 		_loss["spin"] += delta
 	if cut:
@@ -503,7 +755,7 @@ func _sample_launch(delta: float, pedal: float) -> void:
 	# torque-bound.
 	if pedal >= LAUNCH_FLOORED and spare_grip and not cut and not shifting and not tcs:
 		_loss["torque"] += delta
-		if wheel_rpm < Drivetrain.converter_free_rpm(spec, 1.0):
+		if wheel_rpm < Drivetrain.launch_target_rpm(spec, 1.0):
 			_loss["stall"] += delta
 	var gears: Dictionary = _loss["gears"]
 	gears[dt.gear_byte] = float(gears.get(dt.gear_byte, 0.0)) + delta
@@ -527,7 +779,7 @@ func _split_deficit(w: RayWheel, gd: GroundDriveSpec, budget: float, delta: floa
 	var slip_denom := maxf(absf(vel.dot(forward)), RayWheel.LOW_SPEED_FLOOR)
 	var slip_long := w.slip * signf(w.force_long)
 	var budget_lat: float = RayWheel.load_scaled_mu(
-			gd.mu_lat * w.axle_lat_grip * w.lat_grip_scale * w.surface_grip,
+			gd.mu_lat * w.axle_lat_grip * w.surface_grip,
 			w.suspension_force, w.corner_mass * 9.81, gd.load_sensitivity) * w.suspension_force
 	var curve := RayWheel.combined_slip_force(slip_long,
 			-vel.dot(forward.cross(w.contact_normal)) / slip_denom, budget, budget_lat,
@@ -574,6 +826,302 @@ func _print_launch() -> void:
 			print("  %-13s : %s" % ["launch 0-%.0f" % kmh, _loss_label(_launch[kmh])])
 
 
+## One tick of the launch trace (§ launch trace): its line on cadence (and on every gear change
+## inside the launch), then the gates' running state until the launch window closes. Every field is
+## the state the car's last tick left, read as `_sample_launch` reads it; the two cuts are the ones
+## that shaped that tick (`_latch_cuts`), so a CUT line reads fuel 0.
+func _sample_gates() -> void:
+	var spec: VehicleSpec = _car.spec
+	var dt: Drivetrain = _car.drivetrain
+	var v: float = _car.telemetry.speed
+	var gear := dt.gear_byte
+	if _gate.is_empty():
+		_gate = {"open": true, "end": "", "end_t": 0.0, "gear": gear, "since": 0.0, "shifts": [],
+				"dwell_min": INF, "dwell_gear": gear, "limiter": 0, "cut": false, "cuts": [],
+				"front_min": INF, "front_min_t": 0.0, "front_min_xfer": 1.0, "front_min_a": 0.0,
+				"a_peak": 0.0, "a_peak_t": 0.0, "lifted": 0}
+	_trace_ticks += 1
+	var wheel_rpm := Drivetrain.wheel_engine_rpm(spec, _driven_omega(), gear)
+	var cut := _limiter_cut
+	var share := _front_axle_load() / maxf(_parked_front, 1.0)
+	var xfer := _transfer_share(_inst_a)
+	var shifted := gear != int(_gate["gear"])
+	if (_t <= _trace_s and (_trace_ticks - 1) % _trace_every == 0) or (shifted and _gate["open"]):
+		print(_trace_line(wheel_rpm, share, xfer))
+	if not _gate["open"]:
+		return
+	var road_omega := v / dt.road_radius
+	if shifted:
+		var from := int(_gate["gear"])
+		var dwell := _t - float(_gate["since"])
+		if dwell < float(_gate["dwell_min"]):
+			_gate["dwell_min"] = dwell
+			_gate["dwell_gear"] = from
+		var rec := _shift_record(from, gear)
+		rec["slip_ticks"] = 0
+		rec["tc_peak"] = 0.0
+		(_gate["shifts"] as Array).append(rec)
+		_gate["slipping"] = rec
+		_gate["gear"] = gear
+		_gate["since"] = _t
+	# The shift's handover: its ticks until the coupling locks (or the converter's law takes it), and
+	# the peak torque it carried at the crank.
+	var slipping: Dictionary = _gate.get("slipping", {})
+	if not slipping.is_empty():
+		slipping["slip_ticks"] = int(slipping["slip_ticks"]) + 1
+		slipping["tc_peak"] = maxf(float(slipping["tc_peak"]), absf(dt.coupling_torque))
+		if dt.coupling_state != Drivetrain.CouplingState.SLIPPING or dt.converting:
+			slipping["slip_s"] = float(slipping["slip_ticks"]) / Engine.physics_ticks_per_second
+			_gate["slipping"] = {}
+	if cut:
+		_gate["limiter"] = int(_gate["limiter"]) + 1
+		if not _gate["cut"]:
+			(_gate["cuts"] as Array).append(_t)
+	_gate["cut"] = cut
+	if _front_lifted():
+		_gate["lifted"] = int(_gate["lifted"]) + 1
+	if share < float(_gate["front_min"]):
+		_gate["front_min"] = share
+		_gate["front_min_t"] = _t
+		_gate["front_min_xfer"] = xfer
+		_gate["front_min_a"] = _inst_a
+	if _inst_a > float(_gate["a_peak"]):
+		_gate["a_peak"] = _inst_a
+		_gate["a_peak_t"] = _t
+	if _held_gear > 0:
+		var up := ShiftPolicy.upshift_rpm(spec, gear, 1.0)
+		if Drivetrain.wheel_engine_rpm(spec, road_omega, gear) >= up:
+			_close_gates("held in D%d to its %.0f rpm upshift point" % [gear, up])
+	elif v * 3.6 >= LAUNCH_MARKS[-1]:
+		_close_gates("to %.0f km/h" % LAUNCH_MARKS[-1])
+
+
+func _close_gates(why: String) -> void:
+	_gate["open"] = false
+	_gate["end"] = why
+	_gate["end_t"] = _t
+
+
+## "  1.250   38.2   D1  4980    5010 S   -30  0.59  1.00    -     -    86% | FL +0.11* FR +0.10 ":
+## t, km/h, gear, published rpm (the crank), the wheel-side rpm through the gear (the coupling's
+## synchronous speed), the coupling's state (O open, S slipping, L locked) and slip (crank less
+## wheel side, rpm), `clutch` (the commanded capacity over the rating), the delivered fuel
+## (`applied_throttle`), the limiter and shift cuts, the front axle's load over parked and what
+## steady transfer predicts at the body's acceleration (`_transfer_share`), that acceleration in g,
+## then each driven wheel's slip (signed by its force; * = its TC held drive back).
+func _trace_line(wheel_rpm: float, front_share: float, xfer: float) -> String:
+	var dt: Drivetrain = _car.drivetrain
+	var slips: Array[String] = []
+	for w in _car.wheels:
+		if w.driven:
+			slips.append("%s %+.2f%s" % [_wheel_label(w), w.slip * signf(w.force_long),
+					"*" if w.tcs_active else " "])
+	# `c`: O(pen), S(lipping), L(ocked), or H while the converter's (hydrodynamic) law carries it.
+	var state := "H" if dt.converting else "OSL"[dt.coupling_state]
+	return ("  %7.3f %6.1f %4s %5.0f %7.0f %s %5.0f %6.2f %6.0f %5.2f %4s %5s %5.0f%% %4.0f%% %+5.2f"
+			+ " | %s") % [_t,
+			_car.telemetry.speed * 3.6, _gear_label(dt.gear_byte), _car.telemetry.rpm, wheel_rpm,
+			state, _car.telemetry.rpm - wheel_rpm, dt.clutch, dt.coupling_torque, dt.applied_throttle,
+			"CUT" if _limiter_cut else "-", "CUT" if _shift_cut else "-", front_share * 100.0,
+			xfer * 100.0, _inst_a / 9.81, " ".join(slips)]
+
+
+func _print_trace_header() -> void:
+	print("  %-13s : parked front axle %.1f kN; a line every %d tick(s) to %.1f s, and each gear change"
+			% ["trace", _parked_front / 1000.0, _trace_every, _trace_s])
+	print("  %7s %6s %4s %5s %7s %s %5s %6s %6s %5s %4s %5s %6s %5s %5s | %s" % ["t s", "km/h",
+			"gear", "rpm", "whl rpm", "c", "slip", "clutch", "Tc", "fuel", "lim", "shift", "front",
+			"xfer", "a g", "driven slip (* = TC)"])
+
+
+## The launch gates (§ launch trace), each PASS or FAIL with its figure.
+func _print_gates() -> void:
+	if _gate.is_empty():
+		return
+	if _gate["open"]:
+		_close_gates("until the pass ended at %.1f km/h" % (_car.telemetry.speed * 3.6))
+	var spec: VehicleSpec = _car.spec
+	print("  %-13s : over the launch %s, %.2f s" % ["gates", _gate["end"], _gate["end_t"]])
+	var shifts: Array = _gate["shifts"]
+	var downs := 0
+	var steps: Array[String] = []
+	for s: Dictionary in shifts:
+		if int(s["to"]) < int(s["from"]):
+			downs += 1
+		steps.append("%s>%s %.2f s" % [_gear_label(s["from"]), _gear_label(s["to"]), s["t"]])
+	_gate_line("shifts", downs == 0, "%d%s%s" % [shifts.size(), ", %d down" % downs if downs > 0
+			else "", ": " + ", ".join(steps) if not steps.is_empty() else ""])
+	if not shifts.is_empty():
+		print("  %-13s : %s" % ["  each shift", _shifts_label(shifts)])
+	var dwell: float = _gate["dwell_min"]
+	_gate_line("gear dwell", dwell >= GATE_MIN_GEAR_S, "no gear left" if is_inf(dwell)
+			else "shortest %.2f s in %s, floor %.2f s" % [dwell, _gear_label(_gate["dwell_gear"]),
+			GATE_MIN_GEAR_S])
+	var cuts: Array = _gate["cuts"]
+	var limiter := "%d ticks" % _gate["limiter"]
+	if cuts.size() >= 2:
+		var span: float = cuts[-1] - cuts[0]
+		limiter += ", the cut cycles at %.1f Hz (%d cuts over %.2f s)" % [(cuts.size() - 1) / span,
+				cuts.size(), span]
+	elif cuts.size() == 1:
+		limiter += ", one cut from %.2f s" % cuts[0]
+	_gate_line("limiter", int(_gate["limiter"]) == 0, limiter)
+	_gate_line.callv(["landing"] + _landing_gate(shifts, spec))
+	_gate_line.callv(["hunting"] + _hunting_gate(shifts))
+	_gate_line("front axle", int(_gate["lifted"]) == 0 and float(_gate["front_min"]) >= GATE_FRONT_SHARE,
+			"lowest %.0f %% of parked at %.2f s, lifted %d ticks; floor %.0f %%" % [
+			float(_gate["front_min"]) * 100.0, _gate["front_min_t"], _gate["lifted"],
+			GATE_FRONT_SHARE * 100.0])
+	# Not a gate: what reads the lowest share (§ launch trace, `_transfer_share`).
+	print(("  %-13s : at the lowest, steady transfer at the %+.2f g there predicts %.0f %%; peak"
+			+ " acceleration %.2f g at %.2f s") % ["  front why", float(_gate["front_min_a"]) / 9.81,
+			float(_gate["front_min_xfer"]) * 100.0, float(_gate["a_peak"]) / 9.81, _gate["a_peak_t"]])
+
+
+func _gate_line(gate: String, ok: bool, detail: String) -> void:
+	print("  %-13s : %s  %s" % ["  " + gate, "PASS" if ok else "FAIL", detail])
+
+
+## One shift as the gates judge it, read on the tick the byte changed: when, from and to, the road
+## speed, the crank rpm that road speed gives in the gear left (`before`) and the gear taken
+## (`land`), and the pedal the shift policy read (`Drivetrain.last_pedal`).
+func _shift_record(from: int, to: int) -> Dictionary:
+	var spec: VehicleSpec = _car.spec
+	var v: float = _car.telemetry.speed
+	var road_omega := v / _car.drivetrain.road_radius
+	return {"t": _t, "from": from, "to": to, "kmh": v * 3.6,
+			"before": Drivetrain.wheel_engine_rpm(spec, road_omega, from),
+			"land": Drivetrain.wheel_engine_rpm(spec, road_omega, to),
+			"pedal": _car.drivetrain.last_pedal}
+
+
+## "D1>D2 46.1 km/h 5900>3800 rpm, ...": each `_shift_record` on road speed; on the launch trace
+## also its slip ("slip 0.30 s Tc 412": the time until the coupling locked and the peak torque it
+## carried at the crank, the shift's handover).
+static func _shifts_label(shifts: Array) -> String:
+	var out: Array[String] = []
+	for s: Dictionary in shifts:
+		var slip := ""
+		if s.has("slip_s"):
+			slip = " slip %.2f s Tc %.0f" % [s["slip_s"], s["tc_peak"]]
+		elif s.has("slip_ticks"):
+			slip = " slip open, Tc %.0f" % s["tc_peak"]
+		out.append("%s>%s %.1f km/h %.0f>%.0f rpm%s" % [_gear_label(s["from"]), _gear_label(s["to"]),
+				s["kmh"], s["before"], s["land"], slip])
+	return ", ".join(out)
+
+
+## Every upshift lands at GATE_LANDING_MARGIN x the downshift point at its pedal or more, or the box
+## would hunt back down. [pass, detail]
+static func _landing_gate(shifts: Array, spec: VehicleSpec) -> Array:
+	var land_low := INF
+	var label := "no upshift"
+	for s: Dictionary in shifts:
+		var down := ShiftPolicy.down_rpm(spec, float(s["pedal"]))
+		var land := float(s["land"]) / maxf(down, 1.0)
+		if int(s["to"]) > int(s["from"]) and land < land_low:
+			land_low = land
+			label = "lowest %.2fx (%s>%s lands %.0f rpm over %.0f)" % [land,
+					_gear_label(s["from"]), _gear_label(s["to"]), s["land"], down]
+	return [land_low >= GATE_LANDING_MARGIN, label + ", floor %.2fx the downshift point"
+			% GATE_LANDING_MARGIN]
+
+
+## No two consecutive shifts in opposite directions inside GATE_MIN_GEAR_S: the box hunting.
+## Consecutive pairs suffice, since an opposite pair further apart has a closer one between.
+## [pass, detail]
+static func _hunting_gate(shifts: Array) -> Array:
+	var gap := INF
+	var label := "no opposite shifts"
+	for i in range(1, shifts.size()):
+		var a: Dictionary = shifts[i - 1]
+		var b: Dictionary = shifts[i]
+		var dt: float = float(b["t"]) - float(a["t"])
+		if (int(a["to"]) > int(a["from"])) != (int(b["to"]) > int(b["from"])) and dt < gap:
+			gap = dt
+			label = "shortest %.2f s between opposite shifts (%s>%s, %s>%s at %.2f s)" % [dt,
+					_gear_label(a["from"]), _gear_label(a["to"]), _gear_label(b["from"]),
+					_gear_label(b["to"]), b["t"]]
+	return [gap >= GATE_MIN_GEAR_S, label + ", floor %.2f s" % GATE_MIN_GEAR_S]
+
+
+## The driven wheels' mean spin (rad/s), as `WheelDrive.drive_omega` hands it to
+## `Drivetrain.process`: through the gear, the wheel-side rpm the limiter judges.
+func _driven_omega() -> float:
+	var omega := 0.0
+	var driven := 0
+	for w in _car.wheels:
+		if w.driven:
+			omega += w.omega
+			driven += 1
+	return omega / maxf(1.0, driven)
+
+
+## The front axle's share of its parked load that steady longitudinal transfer predicts at the
+## body's acceleration `a` (m/s²): `(N_f - (m a h + F h_hitch) / L) / N_f`. `m` is the chassis'
+## mass, `h` its COM's height over the strip, `L` from the front axle to the mean station of the
+## others (a tandem shares the transfer), `N_f` the parked load (`_parked_front`). A coupled
+## trailer's pull `F` at the hitch's height is what the chassis' tyres push less what its own mass
+## takes (`sum force_long - m a`), so a trailer whose brakes still hold reads as the pull it is; the
+## chassis' drag, and the change in what the trailer rests on the hitch as it pitches, are left out.
+## What a measured share does beyond this is the sprung body pitching past steady state, or an
+## acceleration the driveline spiked.
+func _transfer_share(a: float) -> float:
+	var front_z := INF
+	for w in _car.wheels:
+		front_z = minf(front_z, w.anchor.z)
+	var rear_z := 0.0
+	var rears := 0
+	for w in _car.wheels:
+		if not is_equal_approx(w.anchor.z, front_z):
+			rear_z += w.anchor.z
+			rears += 1
+	var wheelbase := rear_z / maxf(1.0, rears) - front_z
+	if wheelbase <= 0.0 or _parked_front <= 0.0:
+		return 1.0
+	var moment := _car.mass * a * (_car.global_transform * _car.center_of_mass).y
+	for node in _car.find_children("*", "", true, false):
+		var host := node as TowHost
+		if host != null and host.is_coupled():
+			var pull := -_car.mass * a
+			for w in _car.wheels:
+				pull += w.force_long
+			moment += pull * (_car.global_transform * host.marker_local()).y
+	return (_parked_front - moment / wheelbase) / _parked_front
+
+
+## N on the foremost axle's springs (the axle `_front_lifted` judges).
+func _front_axle_load() -> float:
+	var front_z := INF
+	for w in _car.wheels:
+		front_z = minf(front_z, w.anchor.z)
+	var total := 0.0
+	for w in _car.wheels:
+		if is_equal_approx(w.anchor.z, front_z):
+			total += w.suspension_force
+	return total
+
+
+## "FL", "RR": a wheel's axle (F / R, or A1, A2... front to back past two axles) and side.
+func _wheel_label(w: RayWheel) -> String:
+	var axles: Array[float] = []
+	for o in _car.wheels:
+		if not axles.any(func(z: float) -> bool: return is_equal_approx(z, o.anchor.z)):
+			axles.append(o.anchor.z)
+	axles.sort()
+	var i := axles.find_custom(func(z: float) -> bool: return is_equal_approx(z, w.anchor.z))
+	var axle := ("F" if i == 0 else "R") if axles.size() == 2 else "A%d" % (i + 1)
+	return axle + ("L" if w.anchor.x < 0.0 else "R")
+
+
+static func _gear_label(byte: int) -> String:
+	if Drivetrain.is_drive(byte):
+		return "D%d" % byte
+	if Drivetrain.is_reverse(byte):
+		return "R"
+	return "P" if byte == Drivetrain.GEAR_P else "N"
+
+
 ## doc=accel: one launch is done. The body runs floored first, then slip-limited, then the next
 ## body; no top speed, tracking or other pass.
 func _end_launch_run() -> void:
@@ -596,7 +1144,7 @@ func _end_launch_run() -> void:
 		return
 	_car.respawn()
 	_tc_run = true
-	_reset_pass(Phase.ACCEL)
+	_start_accel()
 
 
 func _tick_tracking() -> void:
@@ -711,7 +1259,7 @@ func _axle_saturation(rear: bool) -> float:
 		var ref_load: float = w.corner_mass * 9.81
 		var budget_long := _long_budget(w, gd)
 		var budget_lat: float = RayWheel.load_scaled_mu(
-				gd.mu_lat * w.axle_lat_grip * w.lat_grip_scale * w.surface_grip,
+				gd.mu_lat * w.axle_lat_grip * w.surface_grip,
 				w.suspension_force, ref_load, gd.load_sensitivity) * w.suspension_force
 		total += Vector2(w.force_long / maxf(budget_long, 1.0),
 				w.force_lat / maxf(budget_lat, 1.0)).length()
@@ -794,10 +1342,24 @@ func _report_accel(capped: bool) -> void:
 	if _tc_run:
 		print("  %-13s : slip-limited at %.2f on the worst driven wheel (tc)"
 				% ["pedal", TcPedal.TARGET_SLIP])
+	var run: Array[String] = []
+	if _notc:
+		run.append("traction control off (notc)")
+	if _held_gear > 0:
+		run.append("manual, held in D%d (gear=%d)" % [_held_gear, _held_gear])
+	if _pedal < 1.0:
+		run.append("pedal held at %.2f (pedal=)" % _pedal)
+	if not is_nan(_engine_inertia):
+		run.append("crank inertia %.3f kg·m² (j=, not the spec's)" % _engine_inertia)
+	if not run.is_empty():
+		print("  %-13s : %s" % ["run", ", ".join(run)])
 	_print_launch()
 	_current["launch"] = {"tc": _tc_run, "loss": _launch.duplicate(true)}
-	# The passes after this one run floored.
+	if _trace:
+		_print_gates()
+	# The passes after this one run floored, in D with the body's TC.
 	_tc_run = false
+	InputRouter.set_manual_gearbox(false)
 	MeasureRig.drive(100.0, 0.0)
 	# Settled, capped, or a peak the body then lost: three different claims, never one label.
 	var v_now: float = _car.telemetry.speed
@@ -894,6 +1456,10 @@ func _tick_coast() -> void:
 	var dt: Drivetrain = _car.drivetrain
 	_coast_overrun += absf(Drivetrain.overrun_torque(_car.spec, dt.rpm, 0.0, dt.gear_byte)) \
 			/ _car.spec.ground_drive.wheel_radius
+	if dt.coupling_state == Drivetrain.CouplingState.LOCKED:
+		var g := Drivetrain.ratio_for_byte(_car.spec, dt.gear_byte)
+		_coast_crank_kg += Drivetrain.crank_inertia(_car.spec) * g * g \
+				/ (maxf(_car.spec.efficiency, 0.05) * pow(_car.spec.ground_drive.wheel_radius, 2.0))
 	_coast_ticks += 1
 	if _t < COAST_SECONDS:
 		return
@@ -902,19 +1468,23 @@ func _tick_coast() -> void:
 	var all_up := _combination_mass()
 	var declared := _coast_declared / _coast_ticks
 	var overrun := _coast_overrun / _coast_ticks
+	var crank_kg := _coast_crank_kg / _coast_ticks
 	var tyres := _coast_tyres / _coast_ticks
 	print("  %-13s : %.1f -> %.1f km/h in %.1f s = %.3f m/s^2 (%.3f g), %.0f N on %.0f kg"
 			% ["coast-down", _coast_v0 * 3.6, v * 3.6, _t, decel, decel / 9.81,
 			decel * all_up, all_up])
 	print("  %-13s : declared resistance %.0f N + engine overrun %.0f N = %.0f N (mean per tick)"
 			% ["  model", declared, overrun, declared + overrun])
+	# The crank turns with the wheels while its coupling is locked, so it is decelerated too.
+	print("  %-13s : the locked crank adds %.0f kg (J G^2 / eta r^2), so the model decelerates"
+			% ["", crank_kg] + " %.3f m/s^2" % ((declared + overrun) / (all_up + crank_kg)))
 	# What reached the road: the overrun less what the wheels' own spin absorbs or gives back.
 	print("  %-13s : the tyres carried %.0f N of retardation, so declared + tyres = %.0f N"
 			% ["", tyres, declared + tyres])
 	print("  %-13s : %s" % ["hull contacts", _contact_label("coast")])
 	_current["coast"] = {"v0_kmh": _coast_v0 * 3.6, "v1_kmh": v * 3.6, "t": _t,
 			"decel": decel, "decel_g": decel / 9.81, "force_n": decel * all_up, "mass": all_up,
-			"declared_n": declared, "overrun_n": overrun, "tyres_n": tyres}
+			"declared_n": declared, "overrun_n": overrun, "tyres_n": tyres, "crank_kg": crank_kg}
 	_current["coast_contacts"] = _contact_label("coast")
 	MeasureRig.drive(100.0, 0.0)
 	_car.respawn()
@@ -1023,6 +1593,322 @@ func _tick_braking(delta: float) -> void:
 	_finish_vehicle()
 
 
+func _reset_probe() -> void:
+	_probe_on = false
+	_probe_t = 0.0
+	_probe_v_peak = 0.0
+	_probe_spin_peak = 0.0
+	_probe_yaw_peak = 0.0
+	_probe_turned = 0.0
+	_probe_lock_t = 0.0
+	_probe_override = false
+
+
+func _start_stall() -> void:
+	_reset_pass(Phase.STALL)
+	_reset_probe()
+	InputRouter.set_manual_gearbox(true)
+	MeasureRig.drive(0.0, 100.0, 0.0, false, 1, true)
+
+
+func _tick_stall(delta: float) -> void:
+	if not _probe_on:
+		if _t >= STALL_SETTLE_S:
+			_probe_on = true
+			_probe_x0 = _car.global_position
+			MeasureRig.drive(100.0, 100.0, 0.0, false, 1, true)
+		return
+	_probe_t += delta
+	_probe_v_peak = maxf(_probe_v_peak, absf(_car.telemetry.speed))
+	for w in _car.wheels:
+		if w.driven:
+			_probe_spin_peak = maxf(_probe_spin_peak, absf(w.omega))
+	_probe_override = _probe_override or bool(InputRouter.get("_brake_override"))
+	if _probe_t < STALL_HOLD_S:
+		return
+	var moved := (_car.global_position - _probe_x0).length()
+	var held := not _probe_override and moved < 0.05
+	print(("  %-13s : %s  moved %.3f m in %.0f s, peak %.3f m/s, driven spin peak %.2f rad/s%s;"
+			+ " gear %d, %.0f rpm, applied throttle %.2f")
+			% ["stall", "HOLDS" if held else "CREEPS", moved, STALL_HOLD_S, _probe_v_peak,
+			_probe_spin_peak, ", brake_override latched" if _probe_override else "",
+			_car.drivetrain.gear_byte, _car.drivetrain.rpm, _car.drivetrain.applied_throttle])
+	_current["stall"] = {"held": held, "moved": moved, "v_peak": _probe_v_peak,
+			"spin_peak": _probe_spin_peak, "override": _probe_override}
+	InputRouter.set_manual_gearbox(false)
+	MeasureRig.drive(100.0, 0.0)
+	_finish_vehicle()
+
+
+func _start_handbrake_run() -> void:
+	_car.spawn_transform = Transform3D(Basis.IDENTITY,
+			Vector3(0.0, _car.rest_ride_height(), START_Z))
+	_car.respawn()
+	_reset_pass(Phase.HANDBRAKE)
+	_reset_probe()
+	MeasureRig.drive(100.0, 0.0)
+
+
+func _tick_handbrake(delta: float) -> void:
+	if not _probe_on:
+		if _car.telemetry.speed >= HB_SPEED or _t >= _seconds:
+			_probe_on = true
+			MeasureRig.drive(0.0, 0.0, HB_STEER, _hb_pulled)
+		return
+	_probe_t += delta
+	if _probe_t >= HB_HOLD_S and _probe_t - delta < HB_HOLD_S:
+		MeasureRig.drive(0.0, 0.0, 0.0, false)
+	_probe_yaw_peak = maxf(_probe_yaw_peak, absf(rad_to_deg(_car.angular_velocity.y)))
+	_probe_turned += rad_to_deg(_car.angular_velocity.y) * delta
+	if _probe_t <= HB_HOLD_S:
+		var locked := false
+		for w in _car.wheels:
+			if w.is_rear and w.in_contact and w.slip > BRAKE_LOCK_SLIP:
+				locked = true
+		if locked:
+			_probe_lock_t += delta
+	if _probe_t < HB_HOLD_S + HB_AFTER_S:
+		return
+	var turned := absf(_probe_turned)
+	var label := "handbrake" if _hb_pulled else "steer only"
+	print(("  %-13s : rears locked %.2f of %.1f s, yaw rate peak %.0f deg/s, turned %.0f deg%s,"
+			+ " %.0f km/h left") % [label, _probe_lock_t, HB_HOLD_S, _probe_yaw_peak, turned,
+			" (spun)" if turned > 180.0 else "", _car.telemetry.speed * 3.6])
+	_current["handbrake_pulled" if _hb_pulled else "handbrake_steer"] = {"lock_t": _probe_lock_t,
+			"yaw_peak": _probe_yaw_peak, "turned": turned}
+	if not _hb_pulled:
+		_hb_pulled = true
+		_start_handbrake_run()
+		return
+	MeasureRig.drive(100.0, 0.0)
+	_finish_vehicle()
+
+
+func _cruise_probe() -> bool:
+	return _cruise or _kickdown or _pulse
+
+
+## The part-pedal probes (§ part-pedal probes) on this body: its family's CRUISE_SETS row (a van
+## rides the car row), less the speeds its governor would cap.
+func _start_cruise() -> void:
+	var family := String(Catalog.VARIANTS[_variant]["family"])
+	var row: Dictionary = CRUISE_SETS.get(family, CRUISE_SETS["car"])
+	var limit: float = _car.spec.speed_limit_kmh
+	_cr_speeds = []
+	for kmh: float in row["kmh"]:
+		if limit <= 0.0 or kmh < limit - Drivetrain.GOVERNOR_BAND * 3.6:
+			_cr_speeds.append(kmh)
+	_cr_ramp = row["ramp"]
+	_reset_pass(Phase.CRUISE)
+	InputRouter.set_manual_gearbox(false)
+	_current["cruise"] = []
+	var speeds := PackedStringArray()
+	for kmh in _cr_speeds:
+		speeds.append("%.0f" % kmh)
+	var label := "=== %s, part pedal at %s km/h, setpoint ramped at %.1f m/s²" % [_variant,
+			" / ".join(speeds), _cr_ramp]
+	if _current.has("trailer"):
+		label += ", trailer=%s" % _current["trailer"]
+	print(label + " ===")
+	_next_cruise_speed()
+
+
+func _next_cruise_speed() -> void:
+	if _cr_speeds.is_empty():
+		MeasureRig.drive(100.0, 0.0)
+		_finish_vehicle()
+		return
+	# Each speed from a fresh standstill: its line never depends on what the last speed left in
+	# the box, and the strip holds every window.
+	_car.respawn()
+	_cr_i = 0.0
+	_cr_target = _cr_speeds.pop_front() / 3.6
+	_cr_settled = false
+	_cr_actions = []
+	if _kickdown:
+		_cr_actions.append(Cruise.KICK)
+	if _pulse:
+		if _kickdown:
+			_cr_actions.append(Cruise.APPROACH)  # re-settle after the kick
+		_cr_actions.append(Cruise.PULSE)
+	_begin_cruise_window(Cruise.APPROACH)
+
+
+func _begin_cruise_window(stage: Cruise) -> void:
+	_cr_stage = stage
+	_cr_t0 = _t
+	_cr_shifts = []
+	_cr_limiter = 0
+	_cr_gear = _car.drivetrain.gear_byte
+	_cr_g0 = _cr_gear
+	_cr_v0 = _car.telemetry.speed
+	# A pulse starts off a settle, so it holds the target; an approach ramps from where it is.
+	_cr_set = _cr_target if stage == Cruise.PULSE else _cr_v0
+	_cr_pedal_peak = 0.0
+	_cr_duty_sum = 0.0
+	_cr_periods = 0
+	_cr_band = Vector2(INF, -INF)
+	_reset_cruise_hold()
+	if stage == Cruise.KICK:
+		_drive_probe(1.0)
+
+
+func _reset_cruise_hold() -> void:
+	_cr_hold_t = 0.0
+	_cr_sums = Vector3.ZERO
+	_cr_ticks = 0
+
+
+## The probes drive automatic D, with `notc` riding the stash as the accel pass's does.
+func _drive_probe(pedal: float) -> void:
+	MeasureRig.drive(pedal * 100.0, 0.0, 0.0, false, 1, _notc)
+
+
+func _tick_cruise(delta: float) -> void:
+	var dt: Drivetrain = _car.drivetrain
+	var v: float = _car.telemetry.speed
+	var gear := dt.gear_byte
+	var shifted := gear != _cr_gear
+	if Drivetrain.is_shift(_cr_gear, gear):
+		_cr_shifts.append(_shift_record(_cr_gear, gear))
+	_cr_gear = gear
+	if dt.on_limiter:
+		_cr_limiter += 1
+	var window := _t - _cr_t0
+	if _cr_stage == Cruise.APPROACH:
+		_tick_cruise_hold(delta, v, shifted, window)
+	elif _cr_stage == Cruise.KICK:
+		if v >= _cr_v0 + KICK_GAIN_KMH / 3.6 or window >= _seconds:
+			_report_kick(v, window)
+	else:
+		var pi := _cruise_pi(delta, v)
+		var into := fmod(window, _pulse_period)
+		# Latched when the period's index moves: a test on the phase can miss a boundary in float.
+		var period := floori(window / _pulse_period)
+		if period != _cr_periods - 1:
+			_cr_duty = pi if is_nan(_pulse_duty) else _pulse_duty
+			_cr_duty_sum += _cr_duty
+			_cr_periods += 1
+		_drive_probe(1.0 if into < _pulse_period * _cr_duty else 0.0)
+		_cr_band = Vector2(minf(_cr_band.x, v), maxf(_cr_band.y, v))
+		if window >= PULSE_S:
+			_report_pulse()
+
+
+## The PI pedal on the ramped setpoint, and the settle test on the tick that just ran.
+func _tick_cruise_hold(delta: float, v: float, shifted: bool, window: float) -> void:
+	var dt: Drivetrain = _car.drivetrain
+	if _cr_set == _cr_target and absf(v - _cr_target) <= CRUISE_TOL and not shifted:
+		_cr_hold_t += delta
+		_cr_sums += Vector3(_cr_pedal, dt.rpm, VehicleTelemetry.engine_load_pct(dt.rpm,
+				dt.applied_throttle, _car.spec, false, 0.0))
+		_cr_ticks += 1
+	else:
+		_reset_cruise_hold()
+	if _cr_hold_t >= CRUISE_SETTLE_S:
+		_report_cruise_hold(window)
+		return
+	if window >= _seconds:
+		print("  %-13s : %.0f km/h not held in %.0f s (%.1f km/h now, pedal %.2f, %s)" % ["cruise",
+				_cr_target * 3.6, _seconds, v * 3.6, _cr_pedal, _gear_label(dt.gear_byte)])
+		if not _cr_settled:
+			(_current["cruise"] as Array).append({"kmh": _cr_target * 3.6, "held": false,
+					"now_kmh": v * 3.6})
+		_cruise_gates()
+		_next_cruise_speed()
+		return
+	_cr_set = move_toward(_cr_set, _cr_target, _cr_ramp * delta)
+	_cr_pedal = _cruise_pi(delta, v)
+	_cr_pedal_peak = maxf(_cr_pedal_peak, _cr_pedal)
+	_drive_probe(_cr_pedal)
+
+
+## One tick of the PI pedal on the setpoint (CORNER_PEDAL_KP / _KI). The integral is held through
+## a shift cut, as TcPedal holds it: the drive drops there, and it would wind up.
+func _cruise_pi(delta: float, v: float) -> float:
+	var err := _cr_set - v
+	if not _car.drivetrain.shift_cut_active():
+		_cr_i = clampf(_cr_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
+	return clampf(_cr_i + err * CORNER_PEDAL_KP, 0.0, 1.0)
+
+
+func _report_cruise_hold(window: float) -> void:
+	var m := _cr_sums / maxf(1.0, _cr_ticks)
+	var label := "cruise" if not _cr_settled else "  re-settled"
+	print(("  %-13s : %.0f km/h in %s at %.0f rpm, pedal %.2f, engine_load %.0f %%; settled after"
+			+ " %.1f s,") % [label, _cr_target * 3.6, _gear_label(_car.drivetrain.gear_byte), m.y,
+			m.x, m.z, window]
+			+ " approach pedal peak %.2f, %d shift(s)" % [_cr_pedal_peak, _cr_shifts.size()])
+	if m.x >= LAUNCH_FLOORED:
+		print("  %-13s : floored: the body's top, not a cruise" % "")
+	if not _cr_settled:
+		# Read here, not at the start: a spawn trailer couples after a countdown.
+		_current["towed_kg"] = _combination_mass() - _car.spec.mass
+		(_current["cruise"] as Array).append({"kmh": _cr_target * 3.6, "held": true,
+				"gear": _car.drivetrain.gear_byte, "rpm": m.y, "pedal": m.x, "load": m.z,
+				"floored": m.x >= LAUNCH_FLOORED})
+	_cr_settled = true
+	_cruise_gates()
+	_next_cruise_window()
+
+
+## Kickdown from the settle: the first downshift, the gears dropped below the cruise gear, the time
+## to KICK_GAIN_KMH more.
+func _report_kick(v: float, window: float) -> void:
+	var first_down := -1.0
+	var low: int = _cr_g0
+	for sh: Dictionary in _cr_shifts:
+		if int(sh["to"]) < int(sh["from"]) and first_down < 0.0:
+			first_down = float(sh["t"]) - _cr_t0
+		low = mini(low, int(sh["to"]))
+	var tick := 1.0 / Engine.physics_ticks_per_second
+	var down := "no downshift"
+	if first_down >= 0.0:
+		down = "first downshift after %d ticks (%.2f s)" % [roundi(first_down / tick), first_down]
+	var gain := "+%.0f km/h in %.2f s" % [KICK_GAIN_KMH, window]
+	if v < _cr_v0 + KICK_GAIN_KMH / 3.6:
+		gain = "+%.0f km/h not reached in %.0f s (%.1f km/h)" % [KICK_GAIN_KMH, _seconds,
+				v * 3.6]
+	print("  %-13s : from %.1f km/h in %s, pedal stepped to 1: %s, %d gear(s) down to %s; %s" % [
+			"kickdown", _cr_v0 * 3.6, _gear_label(_cr_g0), down, _cr_g0 - low, _gear_label(low), gain])
+	_cruise_gates()
+	_next_cruise_window()
+
+
+func _report_pulse() -> void:
+	var gears: Array[int] = [_cr_g0]
+	for sh: Dictionary in _cr_shifts:
+		gears.append(int(sh["to"]))
+	print(("  %-13s : %.0f s on/off at %.2f s period, mean duty %.2f, from %.1f km/h (%.1f-%.1f):"
+			+ " %d shift(s), %.1f a minute, %s to %s") % ["pulse", PULSE_S, _pulse_period,
+			_cr_duty_sum / maxf(1.0, _cr_periods),
+			_cr_v0 * 3.6, _cr_band.x * 3.6, _cr_band.y * 3.6, _cr_shifts.size(),
+			_cr_shifts.size() * 60.0 / PULSE_S,
+			_gear_label(int(gears.min())), _gear_label(int(gears.max()))])
+	_cruise_gates()
+	_next_cruise_window()
+
+
+## This speed's next window, or the next speed once its windows are done.
+func _next_cruise_window() -> void:
+	if _cr_actions.is_empty():
+		_next_cruise_speed()
+	else:
+		_begin_cruise_window(_cr_actions.pop_front())
+
+
+## The window's shifts, then its gates on one line: hunting, landing, the limiter.
+func _cruise_gates() -> void:
+	if not _cr_shifts.is_empty():
+		print("  %-13s : %s" % ["  each shift", _shifts_label(_cr_shifts)])
+	var gates: Array[String] = []
+	for g: Array in [["hunting"] + _hunting_gate(_cr_shifts),
+			["landing"] + _landing_gate(_cr_shifts, _car.spec),
+			["limiter", _cr_limiter == 0, "%d ticks" % _cr_limiter]]:
+		gates.append("%s %s (%s)" % [g[0], "PASS" if g[1] else "FAIL", g[2]])
+	print("  %-13s : %s" % ["  gates", "; ".join(gates)])
+
+
 func _finish_vehicle() -> void:
 	print("")
 	_sweep.append(_current)
@@ -1107,6 +1993,34 @@ func _cornering_table() -> Array[String]:
 		lines.append("| `%s` | %.2f g%s | %s | %.1f deg | %d%s |" % [e["variant"], c["peak_g"],
 				" (slid)" if c["slid"] else "", c["axle"], c["roll_deg"], c["wheels_lifted"],
 				", overturned" if c["overturned"] else ""])
+	return lines
+
+
+## The `cruise` region: DOC_CRUISE's bodies held on the flat by the PI pedal at each speed of their
+## family's CRUISE_SETS row, from a standstill: the gear and rpm the shift policy settled in, the
+## pedal and `engine_load` averaged over the hold.
+func _cruise_table() -> Array[String]:
+	var lines := DocRegion.wrap(("%s (`measure_vehicles -- doc=cruise`; per body `-- <variant> %.0f"
+			+ " cruise`): each speed held on the flat strip from a standstill, the setpoint ramped at"
+			+ " %.1f m/s² (%.1f on the trucks and the tractor), settled after %.0f s within %.1f m/s with"
+			+ " no shift; a speed within the governor's band is dropped. Each cell: the gear, the crank's"
+			+ " rpm, the pedal and `engine_load` over the hold.") % [DocRegion.measured(), _seconds,
+			CRUISE_SETS["car"]["ramp"], CRUISE_SETS["truck"]["ramp"], CRUISE_SETTLE_S, CRUISE_TOL])
+	lines.append_array(["", "| Body | Held at (km/h: gear, rpm, pedal, load) |", "| --- | --- |"])
+	for e in _sweep:
+		if not e.has("cruise"):
+			continue
+		var label := "`%s`" % e["variant"]
+		if float(e.get("towed_kg", 0.0)) > 1.0:
+			label += " + %.0f t towed" % (float(e["towed_kg"]) / 1000.0)
+		var cells: Array[String] = []
+		for c: Dictionary in e["cruise"]:
+			if not bool(c["held"]):
+				cells.append("%.0f: not held (%.1f)" % [c["kmh"], c["now_kmh"]])
+			else:
+				cells.append("%.0f: %s %.0f rpm, %.2f, %.0f %%%s" % [c["kmh"], _gear_label(c["gear"]),
+						c["rpm"], c["pedal"], c["load"], " (floored: its top)" if c["floored"] else ""])
+		lines.append("| %s | %s |" % [label, "; ".join(cells)])
 	return lines
 
 

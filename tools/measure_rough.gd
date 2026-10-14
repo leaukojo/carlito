@@ -234,7 +234,7 @@ func _physics_process(delta: float) -> void:
 	var steer := clampf(-(STEER_OFFSET_GAIN * offset + STEER_HEADING_GAIN * forward.x), -1.0, 1.0)
 	_pedal = clampf(_pedal + (_crawl - speed) * PEDAL_GAIN * delta, 0.0, 1.0)
 	if _tc:
-		_tc_pedal = TcPedal.step(_tc_pedal, _car.drive.wheels, delta)
+		_tc_pedal = TcPedal.step(_tc_pedal, _car.drive.wheels, delta, _car.drivetrain)
 	var brake := clampf((speed - _crawl - BRAKE_OVER) * BRAKE_GAIN, 0.0, 1.0)
 	if brake > 0.0:
 		_pedal = 0.0
@@ -370,9 +370,10 @@ func _trace(delta: float) -> void:
 	if _trace_t < 0.5:
 		return
 	_trace_t = 0.0
-	var line := "      t %5.1f  z %7.2f  v %4.2f  pedal %4.2f  thr %4.2f  gear %d  rpm %5.0f |" % [
-			_t, _car.global_position.z, _car.linear_velocity.length(), _pedal,
-			_car.drivetrain.applied_throttle, _car.telemetry.gear_byte, _car.telemetry.rpm]
+	var line := "      t %5.2f  z %7.2f  v %4.2f  pedal %4.2f  tc %4.2f  thr %4.2f  gear %d  rpm %5.0f c %d |" % [
+			_t, _car.global_position.z, _car.linear_velocity.length(), _pedal, _tc_pedal,
+			_car.drivetrain.applied_throttle, _car.telemetry.gear_byte, _car.telemetry.rpm,
+			_car.drivetrain.coupling_state]
 	for w in _car.drive.wheels:
 		line += "  %s N %6.0f s %5.2f fx %6.0f" % [_wheel_label(w), w.suspension_force, w.slip,
 				w.force_long]

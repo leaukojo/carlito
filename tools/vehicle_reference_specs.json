@@ -74,19 +74,19 @@
 		"top_speed_kmh": 170.0
 	},
 	"delivery": {
-		"label": "typical light delivery van (e.g. Mercedes Sprinter class)",
+		"label": "heavy van class (Ford Transit 350 HD, 3.2 diesel + 6R80); ungraded typical figures, no road test of that van found",
 		"marks_s": {"50": 5.0, "96.56": 11.0, "100": 11.8},
 		"quarter_mile_s": 18.5, "quarter_mile_kmh": 112.0,
 		"top_speed_kmh": 150.0
 	},
 	"delivery-flat": {
-		"label": "typical light delivery/box van, laden (e.g. Mercedes Sprinter box class)",
+		"label": "heavy box van class, laden (Ford Transit 350 HD, 3.2 diesel + 6R80); ungraded typical figures",
 		"marks_s": {"50": 5.3, "96.56": 11.5, "100": 12.3},
 		"quarter_mile_s": 19.0, "quarter_mile_kmh": 108.0,
 		"top_speed_kmh": 145.0
 	},
 	"ambulance": {
-		"label": "typical Type III ambulance (heavy van chassis, e.g. Mercedes Sprinter/Ford E-450 class)",
+		"label": "van-based box ambulance on the heavy van class (Ford Transit 350 HD, 3.2 diesel + 6R80); ungraded typical figures",
 		"marks_s": {"50": 5.5, "96.56": 12.0, "100": 12.9},
 		"quarter_mile_s": 19.5, "quarter_mile_kmh": 105.0,
 		"top_speed_kmh": 150.0

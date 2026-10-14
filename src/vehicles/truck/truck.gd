@@ -4,9 +4,11 @@ extends BaseVehicle
 ## reservoirs and the chassis PTO. Plugs into the two base seams only.
 ##
 ## Air pressure gates the brakes: below TruckTelemetry.AIR_SPRING_BRAKE_BAR on either circuit the
-## spring brakes apply and the truck cannot move. The retarder is a real driveline torque on the
-## driven axle (math on Drivetrain / WheelDrive, gated by retarder_equipped); this class only reads
-## back what ran. Spring brakes write wheel `omega` directly: a kinematic lock, not a torque.
+## spring brakes apply and the box drops to neutral (`Drivetrain.drive_inhibit`). The retarder is a
+## real driveline torque on the driven axle (math on Drivetrain / WheelDrive, gated by
+## retarder_equipped); this class only reads back what ran. Spring brakes are `handbrake_torque` on
+## the rears through the wheels' own spin step (`WheelDrive.spring_brake`), a mechanical hold like a
+## pulled handbrake.
 
 ## engine_load added while the chassis PTO is engaged (the tractor's parasitic term; the PTO also
 ## powers the body network, see body_bus).
@@ -101,11 +103,15 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 
 	_tick_body(t, input, pto_on, running, delta)
 
-	# Spring brakes go on LAST, after retarder_state is read, and do NOT zero it: the retarder torque
-	# ran and RayWheel integrated it this tick. (Demand already fades to 0 below RETARDER_CUTOUT_MS.)
+	# The gate is read off this tick's air and applies the spring brakes from the NEXT wheel tick: the
+	# one-tick lag (17 ms) is far inside a real chamber's ~0.5 s exhaust. It does not zero
+	# retarder_state: the retarder ran this tick. (Demand already fades to 0 below RETARDER_CUTOUT_MS.)
+	# The box drops to neutral while they are on (`Drivetrain.drive_inhibit`), from the same next
+	# tick: the spring brakes are a parking brake, not sized to out-hold the engine.
 	var gate_applied := TruckTelemetry.spring_brakes_applied(t.air_primary, t.air_secondary)
-	if gate_applied:
-		_apply_spring_brakes()
+	if drive != null:
+		drive.spring_brake = 1.0 if gate_applied else 0.0
+	drivetrain.drive_inhibit = gate_applied
 	if TruckTelemetry.spring_brake_notice_edge(gate_applied, _spring_brakes_were_applied):
 		GameState.notice.emit(SPRING_BRAKE_NOTICE, SPRING_BRAKE_NOTICE_DWELL_S)
 	_spring_brakes_were_applied = gate_applied
@@ -187,16 +193,7 @@ func _retarder_rating_total() -> float:
 	for w in wheels:
 		if w.is_rear and w.driven:
 			count += 1
-	return Drivetrain.retarder_rating(spec.ground_drive.brake_torque) * count
-
-
-## Spring brakes lock the rear wheels (omega = 0), a post-integration kinematic write: first-gear
-## drive torque exceeds brake_torque, so no torque could hold the truck. No ramp: losing air while
-## rolling locks the axle in one tick.
-func _apply_spring_brakes() -> void:
-	for w in wheels:
-		if w.is_rear:
-			w.omega = 0.0
+	return Drivetrain.retarder_rating(spec) * count
 
 
 ## Total suspension force carried by the rear axle this tick (N).
@@ -215,6 +212,9 @@ func reset_session_state() -> void:
 	_last_body_cmd = RefuseBody.Cmd.IDLE
 	_spring_brakes_were_applied = false
 	_prev_brake = 0.0
+	if drive != null:
+		drive.spring_brake = 0.0
+	drivetrain.drive_inhibit = false
 	if _body != null:
 		_body.reset()
 		_pose_rig()

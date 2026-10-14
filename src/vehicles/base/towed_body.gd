@@ -122,8 +122,9 @@ func apply_lamps(brake_on: bool, headlights: int, turn_left: bool, turn_right: b
 
 
 ## One physics tick of the trailer's running gear. `brake01` and `handbrake01` are computed by the
-## towing unit. The parking brake is on every axle of the bogie, not a rear pair: the tractor's two
-## driven wheels cannot hold 32 t on a grade.
+## towing unit (`handbrake01` is its parking brake: the lever or its air gate). The parking brake is
+## on every axle of the bogie, not a rear pair: the tractor's two driven wheels alone hold the 32 t
+## rig on 18 % with a 1.2 margin, and only after it settles onto them (`box_spec.tres`).
 func tick_towed(brake01: float, handbrake01: float, delta: float,
 		grip_terrains: Array[Node]) -> void:
 	# Empty means _ready found no spec, so roll along as dead weight rather than erroring at 60 Hz.

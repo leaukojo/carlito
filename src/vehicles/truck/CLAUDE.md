@@ -7,18 +7,23 @@ are shared in `src/vehicles/base/` (`src/vehicles/CLAUDE.md` § Towing); only tr
 
 - The retarder is a brake torque on the driven wheels, added inside `WheelDrive`'s wheel tick so
   `RayWheel` integrates it semi-implicitly. Never a post-tick `move_toward` (over-corrects on tick
-  one, slip 1.0). A kinematic LOCK (spring-brake pin) may be written after the tick.
+  one, slip 1.0), and no kinematic lock: the spring brakes are a torque too.
 - Quote retarder strength as arithmetic (`docs/heavy_vehicles.md` § Air, retarder, axle load), never
-  a remembered measurement. Guard: `test_truck` pins 0.7-1.6 m/s² per shipped spec.
-  The floor tracks the tyre, so never raise `RETARDER_MAX_FRAC` to hold a figure.
+  a remembered measurement. Guard: `test_truck` pins 0.7-1.6 m/s² per shipped spec. The rating is
+  the retarder's own (`retarder_rating_nm` at the gearbox output), never a share of the brake.
 - Anti-lock is a SLIP limit (`RETARDER_SLIP_TARGET`), never a force cap at mu*N*r: a locked wheel
   already makes that torque. Guard: `test_the_retarder_can_never_skid_the_driven_axle`. Its cap reads
   the wheel's own `spin_compliance`, the same step the brake goes through.
 - `trailer_abs` is the trailer's ABS holding a wheel back (`TowedBody.abs_active`), never a slip
   threshold: EBS21 reports the device at work (rule 3), and a threshold is a number no trailer has.
   Guard: `test_abs_reads_any_wheel_held_back_and_not_an_average`.
-- Air is a GATE, not a bar: below `AIR_SPRING_BRAKE_BAR` on either circuit the rear `omega` is pinned
-  to 0 (a lock; first-gear drive torque beats `brake_torque`). `warn` stays above the gate.
+- Air is a GATE, not a bar: below `AIR_SPRING_BRAKE_BAR` on either circuit the spring brakes apply
+  `handbrake_torque` on the rears from the next tick (`WheelDrive.spring_brake`), a parking brake no
+  stronger than the service brake on its drum, and the box drops to N (`Drivetrain.drive_inhibit`,
+  the park-brake auto-neutral, a vehicle-side interlock and not input arbitration). A coupled
+  trailer's spring brakes follow the gate (`TowHost.tick_towing`'s `parking01`), never the lever
+  alone. Guards: `test_truck`, `test_tow_host`, live `tools/measure_air_loss.tscn -- all strict`
+  (CI). `warn` stays above the gate.
 - The tach falling to idle at the gate is correct (lugging); no throttle cut. The gate does not
   zero `retarder_state` (it ran). The brake draws per press (the pedal's rise), never while held:
   pumping drains, so `AIR_PRESS_*` stays above `AIR_CHARGE_RATE` x 1 s (`test_truck`). Losing air
@@ -58,7 +63,10 @@ are shared in `src/vehicles/base/` (`src/vehicles/CLAUDE.md` § Towing); only tr
 - Mass: trailer:tractor <= 3:1 (`test_the_heaviest_trailer_holds_the_verified_mass_ratio`);
   `kingpin_share` 0.25-0.30 on every trailer (`test_every_trailer_puts_a_realistic_load_on_the_fifth_wheel`).
   Moving the share re-derives that trailer's bogie `spring_rate`, brakes, and the tractor's rear spring.
-- Trailer `spring_rate` / `brake_torque` are sized off its own bogie load, never copied.
+- Trailer `spring_rate` is sized off its own bogie load, never copied; its `brake_torque` brakes that
+  load at the deceleration its tractor's brakes make on the tractor's coupled load (apportioned, so
+  neither end pushes the other; `test_trailer` / `test_drawbar_trailer`, derivation in
+  `box_spec.tres`). A tractor brake change re-derives every trailer's.
 - `corner_mass` is `mass / wheel_count`: a trailer's clamps run ~25 % loose (its bogie carries only
   `1 - kingpin_share`), the tractor's run tight (plate load not in its `corner_mass`). Fix in the
   spec numbers, never the clamps.
@@ -84,8 +92,9 @@ are shared in `src/vehicles/base/` (`src/vehicles/CLAUDE.md` § Towing); only tr
   `test_no_two_boxes_share_a_face_plane_and_a_facing` (fix by moving the detail part, not the panel).
 - Swing clearance: every BoxMesh corner fits inside the kingpin-to-cab gap; swept by
   `test_every_trailer_clears_the_cab_all_the_way_round`.
-- Pull-away is decided by torque at `Drivetrain.converter_free_rpm`, never the peak: fix startability
-  at the low end of the curve.
+- Pull-away is decided by torque at `Drivetrain.launch_target_rpm` (the converter line, or the
+  semis' AMT target 300 rpm over idle), never the peak: fix startability at the low end of the
+  curve.
 
 ## ISO 11992 trailer bus
 
@@ -93,7 +102,8 @@ are shared in `src/vehicles/base/` (`src/vehicles/CLAUDE.md` § Towing); only tr
   still run without it.
 - The two READ signals are read AFTER `tick_towed`; `clear_trailer_bus` runs each tick.
 - `trailer_brake_demand` reports `retarder_state` (what ran), lagged by `TowedBody.BRAKE_APPLY_S` /
-  `BRAKE_RELEASE_S`. The handbrake is unlagged (spring brakes apply by loss of air).
+  `BRAKE_RELEASE_S`. The parking brake (lever or air gate) is unlagged (spring brakes apply by
+  loss of air).
 - A coupled trailer draws air through `air_step`'s `aux01`; spawn starts it charged, a driven coupling
   starts empty. The gate notice latches on `spring_brake_notice_edge`.
 

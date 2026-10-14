@@ -187,11 +187,14 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 		_hitch.set_hitch(_hitch_actual)
 		_hitch.set_pto(pto_on, t.pto_rpm)
 		_hitch.set_scv(spool)
-	# Towing: brake demand is the plain foot brake (no retarder). The trailer brakes regardless of
-	# the bus: hoses are not a data bus.
+	# Towing: brake demand is the plain foot brake's application (no retarder; the hill hold's
+	# included, so the rig holds as one). The trailer brakes regardless of the bus: hoses are not a
+	# data bus. No air system: the lever is the parking brake.
 	if _drawbar != null:
-		_drawbar.tick_towing(input, input.brake, spool, pto_on, t.pto_rpm,
-				telemetry.speed, delta, _grip_terrains)
+		drive.towed_kg = _drawbar.towed_mass_kg()
+		var foot := drive.pedal_application(drive.foot_pedal(input))
+		_drawbar.tick_towing(input, foot, input.handbrake, spool,
+				pto_on, t.pto_rpm, telemetry.speed, delta, _grip_terrains)
 		drivetrain.speed_cap_kmh = _drawbar.speed_cap_kmh()
 	# Draft force on the chassis while the linkage works in soil. Nothing above reads it:
 	# engine_load and wheel_slip are its consequences from prior ticks.

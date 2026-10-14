@@ -29,6 +29,10 @@ extends Node3D
 ##   godot --headless --path . res://tools/measure_grade.tscn -- suv mud
 ##   godot --headless --path . res://tools/measure_grade.tscn -- tractor-kenney mud mfwd diff
 ##   godot --headless --path . res://tools/measure_grade.tscn -- level=level_2
+##   godot --headless --path . res://tools/measure_grade.tscn -- sedan park=5.7 hand
+##   godot --headless --path . res://tools/measure_grade.tscn -- sedan creep
+##   godot --headless --path . res://tools/measure_grade.tscn -- sedan rollback nohold
+##   godot --headless --path . res://tools/measure_grade.tscn -- semi climb grade=8 pedal=0.6
 
 const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
 const Layers := preload("res://src/physics/collision_layers.gd")
@@ -94,7 +98,22 @@ const DOC_JOBS: Array[Dictionary] = [
 	{"variant": "semi", "mfwd": false, "diff": false, "tc": false},
 ]
 
-enum Ph { SETTLE, CLIMB, DONE }
+## PARK MODE (`park=<deg>`, flags `hand` / `pawl` / `cross`): the body held on the ramp by its foot
+## brake (or handbrake, `hand`, or P alone, `pawl`: no brake, a body with no pawl parks in N), nose
+## up the slope (or across it, `cross`), for PARK_HOLD_S after the settle. Reports how far it
+## moved: a tyre that holds statically moves nothing. Asphalt only, the hill hold off (`_nohold`):
+## the table is the brake hardware's.
+const PARK_HOLD_S := 60.0
+## `doc=park` (arg 1): this set, then the `park` region of `docs/vehicles.md` is rewritten.
+const DOC_PARK_VARIANTS: Array[String] = ["sedan", "suv", "pickup", "garbage-truck",
+		"tractor-kenney", "semi"]
+const DOC_PARK_ANGLES: Array[float] = [5.7, 16.7]  ## 10 % and 30 %
+const DOC_PARK_MODES: Array[String] = ["foot", "hand", "pawl", "cross"]
+## ...plus one handbrake hold per variant on its regulation grade (`BrakeSizing.regulation_grade`:
+## 20 % to 3.5 t, 18 % above, the rig's mass for a coupled semi).
+
+enum Ph { SETTLE, CLIMB, PARK_SETTLE, PARK_HOLD, CREEP_SETTLE, CREEP, ROLL_SETTLE, ROLL, ASCENT_SETTLE,
+		ASCENT, DONE }
 
 
 ## Synthetic painted surface for the ramp: one grip/drag pair everywhere, and a `height_at`
@@ -136,6 +155,36 @@ var _hold := NAN                      ## `hold=<deg>`: one trial at this angle, 
 var _mfwd := false                    ## tractor MFWD engaged for the run
 var _diff := false                    ## tractor rear diff locked for the run
 var _doc := false                     ## `doc=grade`: rewrite the doc region at the end
+var _park_queue: Array[Dictionary] = []  ## park mode: variant + angle + mode jobs left
+var _park_doc := false                ## `doc=park`: rewrite the park region at the end
+var _park_mode := "foot"              ## foot | hand | pawl | cross, the current park job's
+var _park_reg := false                ## the current job is the regulation-grade handbrake hold
+var _park_peak := 0.0                 ## fastest the held body moved after the settle, m/s
+var _park_rows: Array[Dictionary] = []
+var _creep_queue: Array[String] = []  ## creep mode: converter variants left
+var _creep_flat := true               ## the current creep trial is the flat run
+var _creep_sum := Vector3.ZERO        ## flat run's last CREEP_MEAN_S: speed m/s, rpm, load %
+var _creep_n := 0
+var _creep_row := {}
+var _creep_rows: Array[Dictionary] = []
+var _roll_queue: Array[Dictionary] = []  ## rollback mode: variant + grade jobs left
+var _roll_rows: Array[Dictionary] = []
+var _roll_grade := 0.0                ## the current rollback job's grade, %
+var _roll_delay := 0.0                ## `delay=<s>`: release to pedal
+var _roll_min := 0.0                  ## most negative up-slope gain since the release, m
+var _roll_go := NAN                   ## s from the release to ROLL_GO_M up the slope
+var _roll_held := 0.0                 ## s after the release the hill hold last held
+var _nohold := false                  ## `nohold`: the body's hill hold off, on a copy of its spec
+var _tipper := false                  ## `tipper`: the tractor spawns with its drawbar tipper
+## climb mode: the shifts so far, each {t, kmh, from, to, before, landing, load}; the byte engaged
+## last tick; the run's grade, %
+var _ascent_shifts: Array[Dictionary] = []
+var _ascent_byte := 0
+var _ascent_grade := 0.0
+var _ascent_room := 0.0  ## m of ramp from the start to ASCENT_MARGIN short of its top
+## `gear=<1-6>`: climbs and roll-backs in the bridge's manual mode, held in that byte (0: automatic
+## D). A start gear the automatic box would leave at once (it downshifts at a standstill), held.
+var _held_gear := 0
 
 var _ramp: StaticBody3D
 var _patch: GripPatch
@@ -171,12 +220,49 @@ func _ready() -> void:
 			_pedal = String(a).substr(6).to_float()
 		if String(a).begins_with("hold="):
 			_hold = String(a).substr(5).to_float()
+		if String(a).begins_with("gear="):
+			_held_gear = String(a).substr(5).to_int()
+			if _held_gear < 1 or _held_gear > Drivetrain.TOP_GEAR:
+				printerr("gear=%s: expected a drive byte 1-%d" % [String(a).substr(5),
+						Drivetrain.TOP_GEAR])
+				get_tree().quit(1)
+				return
+	InputRouter.set_manual_gearbox(_held_gear > 0)
 	_diff = args.has("diff")
 	for i in range(1, args.size()):
 		if SURFACES.has(String(args[i])):
 			_surface_list.append(String(args[i]))
 	if _surface_list.is_empty():
 		_surface_list = DEFAULT_SURFACES.duplicate()
+	_patch = GripPatch.new()
+	_patch.name = "GripPatch"
+	add_child(_patch)
+	var park := NAN
+	for a in args:
+		if String(a).begins_with("park="):
+			park = String(a).substr(5).to_float()
+	if _held_gear > 0 and (args.has("creep") or which == "doc=park" or not is_nan(park)):
+		printerr("gear= holds a start gear for the climbs and the roll-back; creep is D1, park is"
+				+ " the hold")
+		get_tree().quit(1)
+		return
+	_nohold = args.has("nohold")
+	_tipper = args.has("tipper")
+	if args.has("creep"):
+		_nohold = true  ## creep alone: a hill hold would shorten the roll-back window
+		_start_creep(which)
+		return
+	if args.has("rollback"):
+		_start_rollback(which, args)
+		return
+	if args.has("climb"):
+		_start_ascent(which, args)
+		return
+	if which == "doc=park" or not is_nan(park):
+		_nohold = true  ## the brake hardware alone: the tractor's hill hold would join its handbrake
+		_start_park(which, park, "cross" if args.has("cross") else (
+				"hand" if args.has("hand") else ("pawl" if args.has("pawl") else "foot")))
+		return
 	if which == "doc=grade":
 		_doc = true
 		_queue = DOC_JOBS.duplicate(true)
@@ -191,12 +277,11 @@ func _ready() -> void:
 				% [which, ", ".join(_wheel_driven_variants())])
 		get_tree().quit(1)
 		return
-	_patch = GripPatch.new()
-	_patch.name = "GripPatch"
-	add_child(_patch)
 	print("=== grade climb: standing start, %.0f s per trial ===" % CLIMB_S)
 	print("  surfaces: %s" % ", ".join(_surface_list))
 	print("  throttle: %s" % ("slip-limited (tc)" if _tc else "full"))
+	if _held_gear > 0:
+		print("  gear: manual, held in D%d (gear=%d)" % [_held_gear, _held_gear])
 	if _mfwd or _diff:
 		print("  tractor toggles: %s%s" % ["MFWD " if _mfwd else "", "diff-lock" if _diff else ""])
 	_next_variant()
@@ -290,16 +375,26 @@ func _build_ramp(angle_deg: float) -> void:
 	_patch.drag = SURFACES[_surface].y
 
 
-func _spawn(angle_deg: float) -> void:
+## `yaw` turns the body about the ramp's normal: PI / 2 parks it across the slope.
+func _spawn(angle_deg: float, yaw := 0.0, up := SPAWN_UP) -> void:
 	if _car != null:
 		remove_child(_car)
 		_car.queue_free()
 		_car = null
 	var tilt := Basis(Vector3.RIGHT, deg_to_rad(angle_deg))
 	_car = load(Catalog.VARIANTS[_variant]["scene"]).instantiate()
+	if _nohold:
+		# On a copy, in memory, never shipped: the ground drive is a sub-resource the copy shares.
+		_car.spec = _car.spec.duplicate()
+		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
+		_car.spec.ground_drive.hill_hold = HillHold.Kind.NONE
 	add_child(_car)
-	var surface := tilt * Vector3(0.0, 0.0, -SPAWN_UP)  ## SPAWN_UP up the slope from origin
-	_car.global_transform = Transform3D(tilt, surface + tilt.y * _car.rest_ride_height())
+	if _tipper and _car.has_method(&"set_attachment"):
+		# Remembered until the drawbar's spawn countdown has run, then coupled (TowHost).
+		_car.call(&"set_attachment", ImplementCatalog.TOWED[0])
+	var surface := tilt * Vector3(0.0, 0.0, -up)  ## `up` metres up the slope from origin
+	_car.global_transform = Transform3D(tilt * Basis(Vector3.UP, yaw),
+			surface + tilt.y * _car.rest_ride_height())
 	_car.spawn_transform = _car.global_transform
 	_car.reset_physics_interpolation()
 	_start = _car.global_position
@@ -307,11 +402,12 @@ func _spawn(angle_deg: float) -> void:
 
 ## Drive through the bridge, not the keyboard: `InputRouter.arbitrate_local` latches reverse on
 ## a brake held at a standstill, and a standstill brake is exactly the settle phase here.
-func _drive(accel_pct: float, brake_pct: float) -> void:
+func _drive(accel_pct: float, brake_pct: float, handbrake01 := 0.0, gear := -1) -> void:
 	Bridge.set("_active", true)
 	Bridge.set("_inbound", {
-		"key": 3, "gear": 1, "accel": accel_pct, "brake": brake_pct,
-		"steer": 0.0, "handbrake": 0.0,
+		"key": 3, "gear": gear if gear >= 0 else maxi(_held_gear, 1),
+		"accel": accel_pct, "brake": brake_pct,
+		"steer": 0.0, "handbrake": handbrake01,
 		"diff_lock": _diff, "fwd_drive": _mfwd,
 	})
 
@@ -320,6 +416,18 @@ func _physics_process(delta: float) -> void:
 	if _car == null or _phase == Ph.DONE:
 		return
 	_t += delta
+	if _phase == Ph.PARK_SETTLE or _phase == Ph.PARK_HOLD:
+		_park_step()
+		return
+	if _phase == Ph.CREEP_SETTLE or _phase == Ph.CREEP:
+		_creep_step()
+		return
+	if _phase == Ph.ROLL_SETTLE or _phase == Ph.ROLL:
+		_roll_step()
+		return
+	if _phase == Ph.ASCENT_SETTLE or _phase == Ph.ASCENT:
+		_ascent_step(delta)
+		return
 	if _phase == Ph.SETTLE:
 		if _t >= SETTLE_S:
 			_phase = Ph.CLIMB
@@ -533,13 +641,12 @@ func _front_load() -> float:
 
 
 ## Steepest grade first gear at full throttle can push `mass` (kg, the whole rig) up from rest, in
-## degrees. Sampled where a held body's crank sits: `Drivetrain.converter_free_rpm` (idle with
-## no converter).
+## degrees. Sampled where a held body's crank sits, through a converter's stall torque ratio
+## (`Drivetrain.stall_axle_torque`).
 func _torque_limit_deg(spec: VehicleSpec, gd: GroundDriveSpec, crr: float, mass: float) -> float:
 	if spec.gear_ratios.is_empty():
 		return NAN
-	var launch_rpm := Drivetrain.converter_free_rpm(spec, 1.0)
-	var force := Drivetrain.wheel_torque(spec, launch_rpm, 1.0, 1) / gd.wheel_radius
+	var force := Drivetrain.stall_axle_torque(spec) / gd.wheel_radius
 	var ratio := force / (mass * 9.81)
 	if ratio <= crr:
 		return 0.0
@@ -554,13 +661,12 @@ func _torque_limit_deg(spec: VehicleSpec, gd: GroundDriveSpec, crr: float, mass:
 ## couples a 24 t box the moment it spawns, which is exactly the case the single-body
 ## predictions above do not describe.
 func _coupled_mass() -> float:
-	var fifth: Variant = _car.get("_fifth_wheel")
-	if fifth == null:
+	var host: Variant = _car.get("_fifth_wheel")
+	if host == null:
+		host = _car.get("_drawbar")
+	if host == null:
 		return 0.0
-	var trailer: Variant = fifth.get("trailer")
-	if trailer == null or not is_instance_valid(trailer):
-		return 0.0
-	return float(trailer.mass)
+	return float(host.call(&"towed_mass_kg"))
 
 
 func _print_table() -> void:
@@ -619,6 +725,517 @@ func _doc_table() -> Array[String]:
 			lines.append(row)
 			cells = 0
 	return lines
+
+
+# ------------------------------------------------------------------ park mode
+
+## Metres of movement that ends a park trial early: the body is sliding, not held.
+const PARK_SLIDE := 5.0
+
+
+func _start_park(which: String, angle_deg: float, mode: String) -> void:
+	if which == "doc=park":
+		_park_doc = true
+		for v in DOC_PARK_VARIANTS:
+			for a in DOC_PARK_ANGLES:
+				for m in DOC_PARK_MODES:
+					_park_queue.append({"variant": v, "angle": a, "mode": m})
+			_park_queue.append({"variant": v, "mode": "hand", "reg": true,
+					"angle": rad_to_deg(atan(BrakeSizing.regulation_grade(_rig_mass_of(v))))})
+	elif Catalog.VARIANTS.has(which):
+		_park_queue.append({"variant": which, "angle": angle_deg, "mode": mode})
+	else:
+		printerr("unknown variant '%s'" % which)
+		get_tree().quit(1)
+		return
+	print("=== park: held on asphalt, %.0f s after a %.1f s settle ===" % [PARK_HOLD_S, SETTLE_S])
+	_next_park()
+
+
+## Laden mass (kg) a variant parks with: the body, plus the trailer a semi spawns coupled to.
+func _rig_mass_of(variant: String) -> float:
+	var body: Node = (load(Catalog.VARIANTS[variant]["scene"]) as PackedScene).instantiate()
+	var mass: float = (body.get("spec") as VehicleSpec).mass
+	body.free()
+	if variant.begins_with("semi") and TrailerCatalog.is_coupled(TrailerCatalog.first()):
+		var trailer: Node = (load(TrailerCatalog.first()) as PackedScene).instantiate()
+		mass += (trailer.get("spec") as VehicleSpec).mass
+		trailer.free()
+	return mass
+
+
+func _next_park() -> void:
+	if _park_queue.is_empty():
+		_print_park()
+		if _park_doc:
+			DocRegion.write("park", _park_doc_table())
+		get_tree().quit(0)
+		return
+	var job: Dictionary = _park_queue.pop_front()
+	_variant = String(job["variant"])
+	_angle = float(job["angle"])
+	_park_mode = String(job["mode"])
+	_park_reg = bool(job.get("reg", false))
+	_surface = "asphalt"
+	_build_ramp(_angle)
+	_spawn(_angle, PI / 2.0 if _park_mode == "cross" else 0.0)
+	_phase = Ph.PARK_SETTLE
+	_t = 0.0
+	_park_peak = 0.0
+	_park_hold()
+
+
+## The held pedal for this job, every tick (the bridge snapshot is the whole input).
+func _park_hold() -> void:
+	if _park_mode == "hand":
+		_drive(0.0, 0.0, 1.0)
+	elif _park_mode == "pawl":
+		_drive(0.0, 0.0, 0.0, Drivetrain.GEAR_P)
+	else:
+		_drive(0.0, 100.0)
+
+
+func _park_step() -> void:
+	_park_hold()
+	if _phase == Ph.PARK_SETTLE:
+		if _t >= SETTLE_S:
+			_phase = Ph.PARK_HOLD
+			_t = 0.0
+			_start = _car.global_position
+		return
+	_park_peak = maxf(_park_peak, _car.linear_velocity.length())
+	var moved := (_car.global_position - _start).length()
+	if _verbose:
+		_trace_t += get_physics_process_delta_time()
+		if _trace_t >= 1.0:
+			_trace_t = 0.0
+			print("      t %4.1f  moved %7.1f mm  gear %d  thr %.2f  rpm %5.0f" % [_t, moved * 1000.0,
+					_car.telemetry.gear_byte, _car.drivetrain.applied_throttle, _car.telemetry.rpm])
+			for i in _car.drive.wheels.size():
+				var w: RayWheel = _car.drive.wheels[i]
+				print("        w%d %s%s N %7.0f  f_long %8.0f  f_lat %7.0f  omega %9.5f  held %s"
+						% [i, "R" if w.is_rear else "F", "d" if w.driven else "-",
+						w.suspension_force, w.force_long, w.force_lat, w.omega, w._spin_held])
+	if _t >= PARK_HOLD_S or moved >= PARK_SLIDE:
+		_end_park()
+
+
+func _end_park() -> void:
+	var tilt := Basis(Vector3.RIGHT, deg_to_rad(_angle))
+	var d := _car.global_position - _start
+	var row := {
+		"variant": _variant, "angle": _angle, "mode": _park_mode,
+		"along": d.dot(tilt * Vector3.FORWARD),  ## + = up the slope
+		"across": d.dot(tilt * Vector3.RIGHT),
+		"peak": _park_peak, "t": _t, "slid": d.length() >= PARK_SLIDE,
+		"reg": _park_reg,
+	}
+	_park_rows.append(row)
+	print("  %-16s %4.1f %% %-5s along %+9.1f mm  across %+9.1f mm  peak %6.3f m/s%s" % [
+		_variant, 100.0 * tan(deg_to_rad(_angle)), _park_mode,
+		1000.0 * float(row["along"]), 1000.0 * float(row["across"]), _park_peak,
+		"  SLID (%.1f s)" % _t if row["slid"] else ""])
+	_phase = Ph.DONE
+	_next_park()
+
+
+func _print_park() -> void:
+	print("\n%-16s %6s %-5s %10s %10s %9s" % ["variant", "grade", "brake", "along mm",
+			"across mm", "peak m/s"])
+	for r in _park_rows:
+		print("%-16s %5.0f%% %-5s %10.1f %10.1f %9.3f%s" % [r["variant"],
+				100.0 * tan(deg_to_rad(r["angle"])), r["mode"], 1000.0 * float(r["along"]),
+				1000.0 * float(r["across"]), r["peak"], "  slid" if r["slid"] else ""])
+
+
+## The `park` region: one row per variant, one column per angle x mode, movement in mm over the
+## hold (or "slides" when it left PARK_SLIDE behind).
+func _park_doc_table() -> Array[String]:
+	var lines := DocRegion.wrap(("%s (`measure_grade -- doc=park`), asphalt: mm moved in %.0f s held"
+			+ " after a %.1f s settle, nose up the slope (`foot`, `hand`, `pawl`: P alone, N on a body"
+			+ " with no pawl) or across it (`cross`, foot brake), and on the handbrake at the"
+			+ " regulation grade (UN R13-H 20 %% to 3.5 t, R13 18 %%"
+			+ " above; the semi with its trailer):") % [DocRegion.measured(), PARK_HOLD_S, SETTLE_S])
+	var header := "| Variant |"
+	for a in DOC_PARK_ANGLES:
+		for m in DOC_PARK_MODES:
+			header += " %.0f %% %s |" % [100.0 * tan(deg_to_rad(a)), m]
+	header += " hand, regulation grade |"
+	var per_row := DOC_PARK_ANGLES.size() * DOC_PARK_MODES.size() + 1
+	lines.append_array(["", header, "| --- |" + " --- |".repeat(per_row)])
+	var row := ""
+	var cells := 0
+	for r in _park_rows:
+		if cells == 0:
+			row = "| `%s` |" % r["variant"]
+		var cell := "slides" if r["slid"] else "%.1f" % (1000.0 * Vector2(r["along"],
+				r["across"]).length())
+		if r["reg"]:
+			cell += " (%.0f %%)" % (100.0 * tan(deg_to_rad(r["angle"])))
+		row += " %s |" % cell
+		cells += 1
+		if cells == per_row:
+			lines.append(row)
+			cells = 0
+	return lines
+
+
+# ----------------------------------------------------------------- creep mode
+
+## CREEP MODE (`creep`; a converter variant or `all` of them): settled on the foot brake on asphalt,
+## then released in D1 with no pedal, the converter's idle drag the only drive (the hill hold off,
+## `_nohold`). On the flat it reports the steady creep speed (the mean over the last CREEP_MEAN_S of
+## CREEP_FLAT_S), the crank and `engine_load`; then the steepest grade that creep holds, bisected
+## over [0, CREEP_BISECT_HI] deg: held when, CREEP_HOLD_S after the release, the body has rolled
+## back less than CREEP_ROLL_M.
+const CREEP_FLAT_S := 15.0
+const CREEP_MEAN_S := 2.0
+const CREEP_HOLD_S := 10.0
+const CREEP_ROLL_M := 0.25
+const CREEP_BISECT_HI := 30.0
+
+
+func _start_creep(which: String) -> void:
+	for v in (_wheel_driven_variants() if which == "all" else [which]):
+		if not Catalog.VARIANTS.has(v):
+			printerr("unknown variant '%s'" % v)
+			get_tree().quit(1)
+			return
+		var body: Node = (load(Catalog.VARIANTS[v]["scene"]) as PackedScene).instantiate()
+		var spec := body.get("spec") as VehicleSpec
+		if spec.coupling == VehicleSpec.Coupling.CONVERTER:
+			_creep_queue.append(v)
+		elif which != "all":
+			print("%s has no converter (a clutch opens at a stop): nothing creeps" % v)
+		body.free()
+	print("=== creep: released in D1 with no pedal on asphalt, after a %.1f s settle ===" % SETTLE_S)
+	_surface = "asphalt"
+	_next_creep()
+
+
+func _next_creep() -> void:
+	if _creep_queue.is_empty():
+		_print_creep()
+		get_tree().quit(0)
+		return
+	_variant = _creep_queue.pop_front()
+	_creep_row = {"variant": _variant}
+	_creep_flat = true
+	_creep_sum = Vector3.ZERO
+	_creep_n = 0
+	_begin_creep(0.0)
+
+
+func _begin_creep(angle_deg: float) -> void:
+	_angle = angle_deg
+	_build_ramp(angle_deg)
+	_spawn(angle_deg)
+	_phase = Ph.CREEP_SETTLE
+	_t = 0.0
+	_drive(0.0, 100.0)
+
+
+func _creep_step() -> void:
+	if _phase == Ph.CREEP_SETTLE:
+		_drive(0.0, 100.0)
+		if _t >= SETTLE_S:
+			_phase = Ph.CREEP
+			_t = 0.0
+			_start = _car.global_position
+		return
+	_drive(0.0, 0.0)
+	var up_slope := Basis(Vector3.RIGHT, deg_to_rad(_angle)) * Vector3(0.0, 0.0, -1.0)
+	var gain := (_car.global_position - _start).dot(up_slope)
+	if _creep_flat:
+		if _t >= CREEP_FLAT_S - CREEP_MEAN_S:
+			var dt: Drivetrain = _car.drivetrain
+			_creep_sum += Vector3(_car.linear_velocity.dot(up_slope), dt.rpm,
+					VehicleTelemetry.engine_load_pct(dt.rpm, dt.applied_throttle, _car.spec, false,
+					0.0))
+			_creep_n += 1
+		if _t >= CREEP_FLAT_S:
+			var mean := _creep_sum / maxf(1.0, _creep_n)
+			_creep_row["kmh"] = mean.x * 3.6
+			_creep_row["rpm"] = mean.y
+			_creep_row["load"] = mean.z
+			_creep_flat = false
+			_lo = 0.0
+			_hi = CREEP_BISECT_HI
+			_step = 0
+			_best = 0.0
+			_begin_creep((_lo + _hi) * 0.5)
+		return
+	if gain <= -CREEP_ROLL_M or _t >= CREEP_HOLD_S:
+		var held := gain > -CREEP_ROLL_M
+		if _verbose:
+			print("      %5.2f deg  %s  %+.2f m" % [_angle, "holds" if held else "rolls", gain])
+		if held:
+			_best = _angle
+			_lo = _angle
+		else:
+			_hi = _angle
+		_step += 1
+		if _step >= BISECT_STEPS:
+			_creep_row["deg"] = _best
+			_creep_rows.append(_creep_row)
+			print("  %-16s flat %4.1f km/h at %4.0f rpm, engine_load %2.0f %%; holds %4.1f %% (%.1f deg)"
+					% [_variant, _creep_row["kmh"], _creep_row["rpm"], _creep_row["load"],
+					100.0 * tan(deg_to_rad(_best)), _best])
+			_phase = Ph.DONE
+			_next_creep()
+			return
+		_begin_creep((_lo + _hi) * 0.5)
+
+
+func _print_creep() -> void:
+	print("
+%-16s %8s %6s %6s %9s" % ["variant", "km/h", "rpm", "load", "holds"])
+	for r in _creep_rows:
+		print("%-16s %8.1f %6.0f %5.0f%% %8.1f%%" % [r["variant"], r["kmh"], r["rpm"], r["load"],
+				100.0 * tan(deg_to_rad(r["deg"]))])
+
+
+# -------------------------------------------------------------- rollback mode
+
+## ROLLBACK MODE (`rollback`; a variant or `all`): settled SETTLE_S on the foot brake nose up a grade
+## (`grade=<%>`, else each of ROLL_GRADES), then released with no pedal, and the drive pedal
+## (`pedal=<0..1>`, else full) applied `delay=<s>` later (ROLL_DELAY_S), a driver moving a foot
+## across. Reports how far the body rolled back, when it was ROLL_GO_M up the slope, and how long
+## the hill hold held after the release. `nohold` runs the body with its hold off; `tipper` gives the
+## tractor its drawbar tipper. Asphalt unless a surface is named.
+const ROLL_GRADES: Array[float] = [10.0, 25.0]
+const ROLL_DELAY_S := 0.5
+const ROLL_S := 10.0      ## trial cap after the release
+const ROLL_GO_M := 0.1    ## m up the slope that reads as moving forward
+const ROLL_DONE_M := 1.0  ## m up the slope that ends the trial early
+const ROLL_LOST_M := 4.0  ## m rolled back that ends it
+
+
+func _start_rollback(which: String, args: PackedStringArray) -> void:
+	var grades := ROLL_GRADES.duplicate()
+	_roll_delay = ROLL_DELAY_S
+	_surface = "asphalt"
+	for a in args:
+		if String(a).begins_with("grade="):
+			grades = [String(a).substr(6).to_float()]
+		elif String(a).begins_with("delay="):
+			_roll_delay = String(a).substr(6).to_float()
+		elif SURFACES.has(String(a)):
+			_surface = String(a)
+	for v in (_wheel_driven_variants() if which == "all" else [which]):
+		if not Catalog.VARIANTS.has(v):
+			printerr("unknown variant '%s'" % v)
+			get_tree().quit(1)
+			return
+		for g: float in grades:
+			_roll_queue.append({"variant": v, "grade": g})
+	print("=== rollback: released on %s after a %.1f s settle, pedal %.0f %% after %.2f s; hold %s%s ==="
+			% [_surface, SETTLE_S, 100.0 * (_pedal if _pedal > 0.0 else 1.0), _roll_delay,
+			"off (nohold)" if _nohold else "as fitted", ", tipper" if _tipper else ""])
+	_next_roll()
+
+
+func _next_roll() -> void:
+	if _roll_queue.is_empty():
+		_print_roll()
+		get_tree().quit(0)
+		return
+	var job: Dictionary = _roll_queue.pop_front()
+	_variant = String(job["variant"])
+	_roll_grade = float(job["grade"])
+	_angle = rad_to_deg(atan(_roll_grade / 100.0))
+	_build_ramp(_angle)
+	_spawn(_angle)
+	_phase = Ph.ROLL_SETTLE
+	_t = 0.0
+	_roll_min = 0.0
+	_roll_go = NAN
+	_roll_held = 0.0
+	_drive(0.0, 100.0)
+
+
+func _roll_step() -> void:
+	if _phase == Ph.ROLL_SETTLE:
+		_drive(0.0, 100.0)
+		if _t >= SETTLE_S:
+			_phase = Ph.ROLL
+			_t = 0.0
+			_start = _car.global_position
+		return
+	var pedal := (_pedal if _pedal > 0.0 else 1.0) if _t >= _roll_delay else 0.0
+	_drive(pedal * 100.0, 0.0)
+	var up_slope := Basis(Vector3.RIGHT, deg_to_rad(_angle)) * Vector3(0.0, 0.0, -1.0)
+	var gain := (_car.global_position - _start).dot(up_slope)
+	_roll_min = minf(_roll_min, gain)
+	if _car.drive.hill_holding:
+		_roll_held = _t
+	if _verbose and int(round(_t * 60.0)) % 30 == 0:
+		_print_roll_forces(gain)
+	if is_nan(_roll_go) and gain >= ROLL_GO_M:
+		_roll_go = _t
+	if _t < ROLL_S and gain < ROLL_DONE_M and gain > -ROLL_LOST_M:
+		return
+	var row := {"variant": _variant, "grade": _roll_grade, "back": -_roll_min, "go": _roll_go,
+			"held": _roll_held, "towed": _coupled_mass()}
+	_roll_rows.append(row)
+	print("  %-16s %4.1f %%  rolled back %7.1f mm  forward %s  held %.2f s%s" % [_variant,
+			_roll_grade, 1000.0 * float(row["back"]),
+			"never" if is_nan(_roll_go) else "at %.2f s" % _roll_go, _roll_held,
+			"  (+%.0f kg towed)" % row["towed"] if float(row["towed"]) > 0.0 else ""])
+	_phase = Ph.DONE
+	_next_roll()
+
+
+## `verbose` roll-back line, every 0.5 s: the tractor unit's tyre force and slip per axle, and with a
+## trailer its tyres' force, its brake and the drawbar's pull, read off the trailer's own balance
+## (`m a + m g sin - sum Fx` along the slope; its rolling resistance is a body force, so it lands in
+## the pull). Names what bounds a slow pull-away: traction, the drawbar, or the trailer.
+func _print_roll_forces(gain: float) -> void:
+	var fx := {true: 0.0, false: 0.0}
+	var slip := {true: 0.0, false: 0.0}
+	var n := {true: 0, false: 0}
+	for w: RayWheel in _car.drive.wheels:
+		if w.in_contact:
+			fx[w.is_rear] += w.force_long
+			slip[w.is_rear] += w.long_slip
+			n[w.is_rear] += 1
+	var line := "    t %5.2f  %+7.3f m  %5.2f km/h  rpm %4.0f c %d  Fx front %6.0f rear %6.0f N  slip %+.2f / %+.2f" \
+			% [_t, gain, _car.telemetry.speed * 3.6, _car.drivetrain.rpm, _car.drivetrain.coupling_state,
+			fx[false], fx[true], slip[false] / maxi(n[false], 1), slip[true] / maxi(n[true], 1)]
+	var host: Variant = _car.get("_drawbar")
+	if host == null:
+		host = _car.get("_fifth_wheel")
+	var trailer: TowedBody = host.get("trailer") if host != null else null
+	if trailer != null:
+		var t_fx := 0.0
+		for w: RayWheel in trailer.wheels:
+			if w.in_contact:
+				t_fx += w.force_long
+		var g_pull := trailer.mass * 9.81 * sin(deg_to_rad(_angle))
+		line += "  | trailer Fx %6.0f N brake %.2f  drawbar %6.0f N (grade %6.0f)" % [t_fx,
+				trailer.brake_applied(), trailer.mass * trailer.accel_fwd + g_pull - t_fx, g_pull]
+	print(line)
+
+
+func _print_roll() -> void:
+	print("\n%-16s %6s %10s %9s %7s" % ["variant", "grade", "back mm", "forward", "held"])
+	for r in _roll_rows:
+		print("%-16s %5.1f%% %10.1f %9s %6.2fs" % [r["variant"], r["grade"], 1000.0 * float(r["back"]),
+				"never" if is_nan(r["go"]) else "%.2fs" % r["go"], r["held"]])
+
+
+# ----------------------------------------------------------------- climb mode
+
+## CLIMB MODE (`climb`; one variant): settled SETTLE_S on the foot brake near the foot of a fixed
+## grade (`grade=<%>`, else ASCENT_GRADE), then released into the automatic box at a held pedal
+## (`pedal=<0..1>`, else full) for ASCENT_S or until the ramp's top. Prints each shift (road speed,
+## the road speed's rpm in the gear left and the one landed in, and the gearbox's road-load
+## estimate where it keeps one) and a `falls back` gate: an upshift a later downshift undoes, back
+## into the gear it left. `tipper` / `mfwd` / a surface as the other modes.
+const ASCENT_GRADE := 8.0
+const ASCENT_S := 40.0
+## Metres up from the ramp's foot the body starts, and short of its top the run ends.
+const ASCENT_MARGIN := 15.0
+## Deepest (m under the origin) the body starts: clear of `BaseVehicle.FALL_RESPAWN_Y`'s -20, so a
+## steep ramp starts it higher up the slope instead.
+const ASCENT_DEPTH := 15.0
+
+
+func _start_ascent(which: String, args: PackedStringArray) -> void:
+	if not Catalog.VARIANTS.has(which):
+		printerr("unknown variant '%s'" % which)
+		get_tree().quit(1)
+		return
+	_variant = which
+	_ascent_grade = ASCENT_GRADE
+	_surface = "asphalt"
+	for a in args:
+		if String(a).begins_with("grade="):
+			_ascent_grade = String(a).substr(6).to_float()
+		elif SURFACES.has(String(a)):
+			_surface = String(a)
+	_angle = rad_to_deg(atan(_ascent_grade / 100.0))
+	_build_ramp(_angle)
+	var down := minf(RAMP_LENGTH * 0.5 - ASCENT_MARGIN, ASCENT_DEPTH / sin(deg_to_rad(_angle)))
+	_ascent_room = RAMP_LENGTH * 0.5 - ASCENT_MARGIN + down
+	_spawn(_angle, 0.0, -down)
+	print("=== climb: %s on %.1f %% %s, pedal %.0f %%%s%s, automatic D, %.0f s or the ramp's top ==="
+			% [_variant, _ascent_grade, _surface, 100.0 * _ascent_pedal(), ", tipper" if _tipper else "",
+			", MFWD" if _mfwd else "", ASCENT_S])
+	_phase = Ph.ASCENT_SETTLE
+	_t = 0.0
+	_trace_t = 0.0
+	_drive(0.0, 100.0)
+
+
+func _ascent_pedal() -> float:
+	return _pedal if _pedal > 0.0 else 1.0
+
+
+## The gearbox's road-load estimate (N·m at the axle), NAN where it keeps none.
+func _ascent_load() -> float:
+	var estimate: Variant = _car.drivetrain.get("road_load")
+	return float(estimate) if estimate != null else NAN
+
+
+func _ascent_step(delta: float) -> void:
+	if _phase == Ph.ASCENT_SETTLE:
+		_drive(0.0, 100.0)
+		if _t >= SETTLE_S:
+			_phase = Ph.ASCENT
+			_t = 0.0
+			_start = _car.global_position
+			_ascent_byte = _car.drivetrain.gear_byte
+			_ascent_shifts.clear()
+		return
+	_drive(_ascent_pedal() * 100.0, 0.0)
+	var dt: Drivetrain = _car.drivetrain
+	var road_omega := _car.telemetry.speed / dt.road_radius
+	if dt.gear_byte != _ascent_byte and Drivetrain.is_drive(_ascent_byte) \
+			and Drivetrain.is_drive(dt.gear_byte):
+		_ascent_shifts.append({"t": _t, "kmh": _car.telemetry.speed * 3.6, "from": _ascent_byte,
+				"to": dt.gear_byte,
+				"before": Drivetrain.rpm_from_wheel(dt.spec, road_omega, _ascent_byte),
+				"landing": Drivetrain.rpm_from_wheel(dt.spec, road_omega, dt.gear_byte),
+				"load": _ascent_load()})
+	_ascent_byte = dt.gear_byte
+	_trace_t += delta
+	if _trace_t >= 1.0 - 1e-6:
+		_trace_t = 0.0
+		var road_load := _ascent_load()
+		print("    t %5.2f  %6.2f km/h  D%d  rpm %5.0f  fuel %.2f%s" % [_t,
+				_car.telemetry.speed * 3.6, dt.gear_byte, dt.rpm, dt.applied_throttle,
+				"" if is_nan(road_load) else "  load %6.0f N·m" % road_load])
+	var up_slope := Basis(Vector3.RIGHT, deg_to_rad(_angle)) * Vector3(0.0, 0.0, -1.0)
+	var gain := (_car.global_position - _start).dot(up_slope)
+	if _t < ASCENT_S and gain < _ascent_room and gain > -ROLL_LOST_M:
+		return
+	_print_ascent(gain)
+	_phase = Ph.DONE
+	get_tree().quit(0)
+
+
+func _print_ascent(gain: float) -> void:
+	print("  end           : %.2f s, %.1f m up, %.1f km/h in D%d" % [_t, gain,
+			_car.telemetry.speed * 3.6, _car.drivetrain.gear_byte])
+	var lines: Array[String] = []
+	for s in _ascent_shifts:
+		lines.append("D%d>D%d %.2f s %.1f km/h %.0f>%.0f rpm%s" % [s["from"], s["to"], s["t"],
+				s["kmh"], s["before"], s["landing"],
+				"" if is_nan(float(s["load"])) else " load %.0f" % s["load"]])
+	print("  each shift    : %s" % (", ".join(lines) if not lines.is_empty() else "none"))
+	var falls: Array[String] = []
+	for i in _ascent_shifts.size():
+		var up: Dictionary = _ascent_shifts[i]
+		if int(up["to"]) <= int(up["from"]):
+			continue
+		for j in range(i + 1, _ascent_shifts.size()):
+			var later: Dictionary = _ascent_shifts[j]
+			if int(later["to"]) <= int(up["from"]) and int(later["from"]) > int(later["to"]):
+				falls.append("D%d>D%d at %.2f s undone at %.2f s" % [up["from"], up["to"], up["t"],
+						later["t"]])
+				break
+	print("  falls back    : %s" % ("PASS  none" if falls.is_empty() else "FAIL  " + ", ".join(falls)))
 
 
 # ----------------------------------------------------------------- level mode

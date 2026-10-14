@@ -41,14 +41,24 @@ ALL input arbitration lives here (standing rule 5). Protocol tour: `docs/systems
   with no live bridge the input is `locked_idle()`. Its keyboard override (`--challenge-keys` /
   `CARLITO_CHALLENGE_KEYS`) is honoured in debug builds only.
 - **Both pedals held: `brake_override`** (both paths) cuts the throttle once the body passes
-  `BRAKE_OVERRIDE_SPEED` and holds the cut until a pedal lifts; never a bigger brake
-  (`docs/vehicles.md` § Both pedals).
+  `BRAKE_OVERRIDE_SPEED` and holds the cut until a pedal lifts: a modelled brake-throttle override
+  on every family. Physics alone holds every body (`docs/vehicles.md` § Both pedals).
+- **The auto hold (`auto_hold`) is keyboard feel, for keys and touch only.** At a standstill in D
+  or R with no throttle, the router holds the foot brake (`AUTO_HOLD_BRAKE`) until the throttle
+  asks to move, on a body whose engine drives road wheels (`key_auto_hold`). It stands aside while
+  the gamepad moved a pedal last (`pad_drives_pedals`), and never reaches the bridge (real creep).
+  Injected after `arbitrate_local` (so it never reads as S at a standstill, which selects R), and
+  only at throttle 0 (so it never meets `brake_override`). On a grade the handover is the vehicle's
+  hill-start assist (`WheelDrive.hold_step`). Guard: `test_input_arbitration`.
 - **A live bridge without `accel`/`brake`/`steer` does not drive**: `bridge_drives()` is false,
   `blend_local_driving` takes the driving group from local and the rest from the bridge (never
   under `set_bridge_only`).
 - **The gearbox mode is `set_manual_gearbox`**, set by the shell (selector in free play,
   `ChallengeDef.transmission` in an attempt). It is bridge-only: automatic reads the gear byte as
-  PRND, manual takes it exactly (0 = N). Local input always drives automatic.
+  PRND, manual takes it exactly (0 = N). P is byte 254 (`GEAR_P`, never sent by RAMN) in both
+  modes; local input has no P key and leaves P only on a pedal, as automatic's byte 0 does
+  (it holds an engaged P, `arbitrate_bridge`'s `gear_byte`); `locked_idle` requests it. Local
+  input always drives automatic.
 - **Cycled-control lengths are declared once in `subsystem_counts.gd`, their walks once in
   `cycles.gd`** (leaves: the router must not depend on a vehicle class). Where the length is
   intrinsic to a structure (an enum, a roster array), edit that structure; a test pins it

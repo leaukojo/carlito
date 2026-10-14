@@ -418,6 +418,30 @@ func test_the_shipped_tractor_can_actually_pull_its_rated_draft() -> void:
 	assert_float(rated).is_less(0.5 * spec.mass * 9.8 * spec.ground_drive.mu_long)
 
 
+## The standing load (N·m at the axle) on a grade of `grade_pct`, nose up, with `soil` (the painted
+## surface's added rolling coefficient) and `towed_kg` behind: what `WheelDrive.hold_step` hands
+## the gearbox.
+static func _standing_load(spec: VehicleSpec, grade_pct: float, soil: float, towed_kg := 0.0) -> float:
+	var tilt := Basis(Vector3.RIGHT, atan(grade_pct / 100.0))
+	return ShiftPolicy.standing_load(Vector3(0.0, -9.8, 0.0), tilt * Vector3.UP,
+			tilt * Vector3.FORWARD, spec.ground_drive.rolling_resistance + soil,
+			(spec.mass + towed_kg) * spec.ground_drive.wheel_radius)
+
+
+func test_the_shipped_tractor_starts_in_d3_empty_on_the_flat_and_lower_laden_or_on_a_grade() -> void:
+	# A powershift's start gear is a driver preset, higher empty and lower laden: here the load
+	# standing on the grade picks it (`ShiftPolicy.start_gear`, up to the spec's D3).
+	var spec := _tractor_spec()
+	assert_int(spec.start_gear_max).is_equal(3)
+	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 0.0, 0.0))).is_equal(3)
+	# Mud's 0.2 is still D3 bobtail; laden with the 10 t tipper it is D1.
+	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 0.0, 0.2))).is_equal(3)
+	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 0.0, 0.2, 10000.0))).is_equal(1)
+	# The tipper on 10 % asphalt takes D2; the 26 % mud climb takes D1, its measured best.
+	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 10.0, 0.0, 10000.0))).is_equal(2)
+	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 26.4, 0.2))).is_equal(1)
+
+
 # The hour meter moved to test_telemetry with VehicleTelemetry.hours_step: engine_hours is a
 # shared tractor/truck signal now (J1939 SPN 247), so the model is not tractor math any more.
 

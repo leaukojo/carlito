@@ -19,12 +19,10 @@
 ;     both ends.
 ;   - spring_rate 197000 is sized off the load the bogie ACTUALLY carries parked, 13 875 kg:
 ;     22 686 N per wheel compresses it 0.115 m of its 0.32 m travel (36 %), the family's fraction.
-;   - brake_torque 8990 is load-apportioned by the family's one formula, never copied:
-;     10500 * (22.69 kN per trailer wheel / 26.5 kN per tractor wheel): 1.10 x its own static
-;     wheel load on all four (test_trailer pins the ratio). The 26.5 kN reference is no tractor
-;     state, so the ends do NOT brake alike; each end's ABS (abs_equipped) holds whatever its own
-;     tyres cannot.
-;   - handbrake_torque 2247 is the bogie's SPRING PARKING BRAKE, a quarter of this trailer's own
+;   - brake_torque 10928 is load-apportioned against the tractor unit, never copied: a full demand
+;     brakes the 13 877 kg bogie at the 1.34 g the semi's brakes make on its coupled static load,
+;     8000 + 5123 kg on the plate (derivation: box_spec.tres; test_trailer).
+;   - handbrake_torque 2732 is the bogie's SPRING PARKING BRAKE, a quarter of this trailer's own
 ;     service brake like every trailer here (derivation: box_spec.tres). The tip interlock wants a
 ;     parking brake.
 ;
@@ -58,8 +56,8 @@ grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 0.8
 mu_lat = 0.75
 load_sensitivity = 0.08
-brake_torque = 8990.0
-handbrake_torque = 2247.0
+brake_torque = 10928.0
+handbrake_torque = 2732.0
 abs_equipped = true
 
 [resource]

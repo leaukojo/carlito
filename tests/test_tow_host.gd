@@ -501,6 +501,7 @@ class DeclaringTrailer:
 
 	var declares := 0
 	var last_valve := -1.0
+	var last_parking := -1.0
 
 	## No spec, so no _ready: this stub is in the tree only to have a global_position, and
 	## TowedBody._ready would complain about a trailer with no mass, wheels or brakes.
@@ -516,9 +517,9 @@ class DeclaringTrailer:
 	func apply_lamps(_brake_on: bool, _headlights: int, _l: bool, _r: bool) -> void:
 		pass
 
-	func tick_towed(_brake01: float, _handbrake01: float, _delta: float,
+	func tick_towed(_brake01: float, handbrake01: float, _delta: float,
 			_grip_terrains: Array[Node]) -> void:
-		pass
+		last_parking = handbrake01
 
 	func body_pos01() -> float:
 		return 0.0
@@ -540,7 +541,7 @@ func _valve_after_tick(declares: int, pto_on: bool) -> float:
 	drawbar.set("trailer", stub)
 	var input := VehicleInput.new()
 	input.handbrake = 1.0
-	drawbar.call("tick_towing", input, 0.0, 1.0, pto_on, 1500, 0.0, 1.0 / 60.0,
+	drawbar.call("tick_towing", input, 0.0, input.handbrake, 1.0, pto_on, 1500, 0.0, 1.0 / 60.0,
 			[] as Array[Node])
 	return stub.last_valve
 
@@ -599,6 +600,50 @@ func test_every_profile_can_say_all_three_things_a_driver_is_told() -> void:
 		.is_not_equal(_profile_of(FifthWheelScript).tip_notice)
 
 
+func test_the_trailer_is_handed_the_parking_brake_the_unit_computed_and_not_the_lever() -> void:
+	# The towing unit's air gate is a parking brake the driver never pulled: the host hands down the
+	# number it was given, whatever the lever says.
+	var drawbar := _drawbar()
+	var stub := DeclaringTrailer.new()
+	add_child(auto_free(stub))
+	add_child(drawbar)
+	drawbar.set("trailer", stub)
+	var input := VehicleInput.new()
+	input.handbrake = 0.0
+	drawbar.call("tick_towing", input, 0.0, 1.0, 0.0, false, 0, 0.0, 1.0 / 60.0,
+			[] as Array[Node])
+	assert_float(stub.last_parking) \
+		.override_failure_message("the trailer was handed the lever, not the unit's parking brake") \
+		.is_equal(1.0)
+
+
+## A semi whose air has gone under the gate hands its trailer the spring brakes the same tick, with
+## the lever off: the trailer's emergency brakes apply on the tractor's loss of air. Both units.
+func test_a_semi_under_its_air_gate_applies_the_trailers_spring_brakes() -> void:
+	for variant: String in ["semi", "semi-conventional"]:
+		var root: Node3D = auto_free(Node3D.new())
+		add_child(root)
+		var unit := auto_free((load(CatalogScript.scene_of(variant)) as PackedScene).instantiate()) \
+				as SemiTractor
+		root.add_child(unit)
+		var stub := DeclaringTrailer.new()
+		root.add_child(auto_free(stub))
+		var host := unit.get_node("FifthWheel") as TowHost
+		host.trailer = stub
+		var input := VehicleInput.new()
+		var t := unit.telemetry as TruckTelemetry
+		t.air_primary = TruckTelemetry.AIR_SPRING_BRAKE_BAR + 2.0
+		unit.call("_tick_extras", input, 1.0 / 60.0)
+		assert_float(stub.last_parking) \
+			.override_failure_message("%s: trailer braked with healthy air" % variant).is_equal(0.0)
+		t.air_primary = 0.0
+		unit.call("_tick_extras", input, 1.0 / 60.0)
+		assert_float(stub.last_parking) \
+			.override_failure_message("%s: the trailer kept rolling free under the air gate" % variant) \
+			.is_equal(1.0)
+		host.trailer = null
+
+
 # --- the duck-typed vehicle hooks, asked of a real chassis --------------------------------------
 
 ## The host reaches its vehicle through two duck-typed hooks, and neither can be asked without a
@@ -618,7 +663,8 @@ func test_the_spawn_countdown_couples_a_remembered_trailer_on_a_real_tractor() -
 	tractor.set("_implement_id", ImplementCat.TOWED[0])
 	var input := VehicleInput.new()
 	for i in TowHost.SPAWN_COUPLE_TICKS:
-		host.tick_towing(input, 0.0, 0.0, false, 0, 0.0, 1.0 / 60.0, [] as Array[Node])
+		host.tick_towing(input, 0.0, input.handbrake, 0.0, false, 0, 0.0, 1.0 / 60.0,
+				[] as Array[Node])
 	assert_bool(host.is_coupled()) \
 		.override_failure_message("the spawn countdown never coupled the remembered trailer") \
 		.is_true()
@@ -657,14 +703,20 @@ func test_both_tractor_units_couple_at_their_own_datum_and_spawn_with_charged_ai
 		unit.set("spawn_transform", unit.global_transform)
 		var host := unit.get_node("FifthWheel") as TowHost
 		# The datum is the marker's own position, because the FifthWheel node sits at identity.
-		assert_vector(host.marker_local()) 			.override_failure_message("%s: the coupling datum moved" % variant) 			.is_equal_approx((unit.get_node("FifthWheel/Kingpin") as Node3D).position,
+		assert_vector(host.marker_local()) \
+			.override_failure_message("%s: the coupling datum moved" % variant) \
+			.is_equal_approx((unit.get_node("FifthWheel/Kingpin") as Node3D).position,
 				Vector3.ONE * 1e-6)
 		unit.set("_trailer_id", TrailerCat.first())
 		var input := VehicleInput.new()
 		for _i in TowHost.SPAWN_COUPLE_TICKS:
-			host.tick_towing(input, 0.0, 0.0, false, 0, 0.0, 1.0 / 60.0, [] as Array[Node])
-		assert_bool(host.is_coupled()) 			.override_failure_message("%s: the spawn countdown never coupled" % variant).is_true()
-		assert_float(unit.get("_trailer_air")) 			.override_failure_message("%s: the spawn rig began life with an empty trailer" % variant) 			.is_equal(1.0)
+			host.tick_towing(input, 0.0, input.handbrake, 0.0, false, 0, 0.0, 1.0 / 60.0,
+					[] as Array[Node])
+		assert_bool(host.is_coupled()) \
+			.override_failure_message("%s: the spawn countdown never coupled" % variant).is_true()
+		assert_float(unit.get("_trailer_air")) \
+			.override_failure_message("%s: the spawn rig began life with an empty trailer" % variant) \
+			.is_equal(1.0)
 		# A respawn re-lays the air on BOTH bodies, or it would cost air the driver never spent.
 		unit.set("_trailer_air", 0.3)
 		unit.call("respawn")
@@ -738,7 +790,7 @@ func _rig(kind: String) -> Rig:
 func _spawn(r: Rig) -> void:
 	var input := VehicleInput.new()
 	for _i in TowHost.SPAWN_COUPLE_TICKS:
-		r.host.tick_towing(input, 0.0, 0.0, false, 0, 0.0, DELTA, [] as Array[Node])
+		r.host.tick_towing(input, 0.0, input.handbrake, 0.0, false, 0, 0.0, DELTA, [] as Array[Node])
 
 
 func _reset_notices() -> void:
@@ -826,12 +878,12 @@ func test_a_rig_standing_in_the_showroom_still_shows_its_markers() -> void:
 		var tail := towed.get_node(spec.brake_lamp_paths[0]) as MeshInstance3D
 		var input := VehicleInput.new()
 		input.lights = LampSet.HL_OFF
-		r.host.tick_towing(input, 0.0, 0.0, false, 0, 0.0, DELTA, [] as Array[Node])
+		r.host.tick_towing(input, 0.0, input.handbrake, 0.0, false, 0, 0.0, DELTA, [] as Array[Node])
 		var dark: float = _marker_mat(marker).emission_energy_multiplier
 		# Sidelights on and the pedal down, on a rig that cannot move: both still light.
 		input.lights = LampSet.HL_LOW
 		input.lamps.brake_lamp = true
-		r.host.tick_towing(input, 0.0, 0.0, false, 0, 0.0, DELTA, [] as Array[Node])
+		r.host.tick_towing(input, 0.0, input.handbrake, 0.0, false, 0, 0.0, DELTA, [] as Array[Node])
 		assert_bool(towed.freeze) \
 			.override_failure_message("%s: the rig was not frozen, so this proves nothing" % kind) \
 			.is_true()
@@ -1256,9 +1308,9 @@ func _scenario_trace(r: Rig) -> PackedStringArray:
 	input.handbrake = 0.0
 	# The spool starts down and is then opened, because the notice fires on the edge: the first tick is
 	# the parked spool and the second is the press.
-	r.host.tick_towing(input, 0.0, 0.0, true, 1500, 0.0, DELTA, [] as Array[Node])
+	r.host.tick_towing(input, 0.0, input.handbrake, 0.0, true, 1500, 0.0, DELTA, [] as Array[Node])
 	_reset_notices()
-	r.host.tick_towing(input, 0.0, 1.0, true, 1500, 0.0, DELTA, [] as Array[Node])
+	r.host.tick_towing(input, 0.0, input.handbrake, 1.0, true, 1500, 0.0, DELTA, [] as Array[Node])
 	t.append("tip/refused: valve=%.2f notices=%d said=%s" % [
 		r.host.trailer.valve_flow, _notices.size(),
 		_own(", ".join(_notices), p.tip_notice, "tip-notice")])
@@ -1266,11 +1318,11 @@ func _scenario_trace(r: Rig) -> PackedStringArray:
 	# thing said is that the body-up speed cap is now on.
 	input.handbrake = 1.0
 	_reset_notices()
-	r.host.tick_towing(input, 0.0, 1.0, true, 1500, 0.0, DELTA, [] as Array[Node])
+	r.host.tick_towing(input, 0.0, input.handbrake, 1.0, true, 1500, 0.0, DELTA, [] as Array[Node])
 	t.append("tip/allowed: valve=%.2f said=%s cap=%.0f" % [r.host.trailer.valve_flow,
 		_own(", ".join(_notices), TowHost.BODY_UP_NOTICE, "body-up-notice"), r.host.speed_cap_kmh()])
 	# Back down onto its rest, the cap comes off.
-	r.host.tick_towing(input, 0.0, 0.0, true, 1500, 0.0, DELTA, [] as Array[Node])
+	r.host.tick_towing(input, 0.0, input.handbrake, 0.0, true, 1500, 0.0, DELTA, [] as Array[Node])
 	t.append("tip/lowered: cap=%.0f" % r.host.speed_cap_kmh())
 
 	# RESPAWN. The body is re-laid at its coupled pose and the fit-check window zeroed: a re-laid

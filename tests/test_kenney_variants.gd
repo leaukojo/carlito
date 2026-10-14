@@ -9,30 +9,44 @@ const StableSave := preload("res://tools/stable_save.gd")
 ## Scalars a variant may override (field -> recipe key mapping).
 const SPEC_OVERRIDABLE := {
 	"mass": "mass", "final_drive": "final_drive", "steer_speed": "steer_speed",
+	"engine_inertia": "engine_inertia", "coupling": "coupling",
+	"shift_up_light_rpm": "shift_up_light_rpm", "shift_down_light_rpm": "shift_down_light_rpm",
+	"kickdown_pedal": "kickdown_pedal", "shift_dwell_s": "shift_dwell_s",
+	"shift_handover_s": "shift_handover_s", "shift_cut_s": "shift_cut_s",
 }
 const DRIVE_OVERRIDABLE := {
 	"rolling_resistance": "crr", "mu_long": "mu_long", "mu_lat": "mu_lat",
 	"rear_lat_grip": "rear_lat_grip",
-	"handbrake_grip": "handbrake_grip", "max_steer_deg": "max_steer_deg",
+	"max_steer_deg": "max_steer_deg",
+	# Brake hardware: declared classes, never derived (the split is; see the brake test below).
+	"brake_torque": "brake_torque", "handbrake_torque": "handbrake_torque",
+	"park_pawl_torque": "park_pawl_torque",
 	"min_steer_frac": "min_steer_frac", "steer_falloff_speed": "steer_falloff_speed",
 	"anti_roll_rate": "anti_roll_rate",
 	"diff_bias_front": "diff_bias_front", "diff_bias_rear": "diff_bias_rear",
 	"centre_diff_bias": "centre_diff_bias",
+	"hill_hold": "hill_hold",
 }
 ## Baseline-only fields: overrides silently dropped (test_no_variant_overrides catches this).
 const SPEC_BASELINE_ONLY := {
 	"idle_rpm": "idle_rpm", "redline_rpm": "redline_rpm", "reverse_ratio": "reverse_ratio",
 	"efficiency": "efficiency", "engine_brake_frac": "engine_brake_frac",
-	"shift_cut_s": "shift_cut_s",
+	"engine_friction_frac": "engine_friction_frac",
 	"launch_engage_s": "launch_engage_s",
-	"launch_gear": "launch_gear",
+	"clutch_reserve": "clutch_reserve",
+	"converter_stall_ratio": "converter_stall_ratio",
+	"lockup_gear": "lockup_gear",
+	"launch_rpm_over_idle": "launch_rpm_over_idle",
 	"shift_up_rpm": "shift_up_rpm",
 	"shift_down_rpm": "shift_down_rpm",
+	"skip_shifts": "skip_shifts",
+	"start_gear_max": "start_gear_max",
 }
 const DRIVE_BASELINE_ONLY := {
 	"wheel_inertia": "wheel_inertia", "rest_length": "rest_length",
 	"max_suspension_force": "max_suspension_force",
 	"load_sensitivity": "load_sensitivity",
+	"hill_hold_s": "hill_hold_s",
 }
 ## Springs and dampers: verbatim from a baseline that states them, re-derived on one that states a
 ## `ride_hz` (test_springs_are_what_the_generator_derives).
@@ -232,32 +246,30 @@ func test_torque_curve_is_the_baseline_scaled_by_torque_mul() -> void:
 					.is_equal_approx(float(flat[i * 2 + 1]) * mul, 1e-3)
 
 
-## The brakes are re-derived by the generator's own function, on a copy of the shipped spec, so
-## what is pinned is the DERIVATION and not the number: `brake_torque` is `BRAKE_GRIP_FRAC` x the
-## tyre's per-wheel ceiling (floored by the transmissible-drive hierarchy) and `handbrake_torque`
-## is 0.75 x the launch torque at idle + 25 % throttle. A hand-edited brake in a `.tres` — the
-## fiction the whole derivation exists to stop — fails here whatever value it carries.
-##
-## Brakes are re-derived (catalog owns force-hierarchy satisfaction, not here).
-func test_brakes_are_what_the_generator_derives_from_the_tyre() -> void:
+## The axle split is the one derived brake figure: `brake_bias_front` is the generator's own
+## proportioning (`_front_brake_share`) re-run on the shipped spec, so a hand-edited split fails
+## whatever value it carries. The hardware it splits is the recipe's (DRIVE_OVERRIDABLE).
+func test_the_brake_split_is_what_the_generator_proportions() -> void:
 	var gen := _gen()
 	for variant: String in Gen.VARIANTS:
 		var shipped := _spec_of(variant)
-		var scratch := shipped.duplicate(true) as VehicleSpec
-		scratch.ground_drive.brake_torque = 0.0
-		scratch.ground_drive.handbrake_torque = 0.0
-		scratch.ground_drive.brake_bias_front = -1.0
-		gen._derive_brakes(scratch, scratch.ground_drive, variant,
-				gen._static_sag(_suspension(gen, variant), shipped, shipped.ground_drive))
-		assert_float(shipped.ground_drive.brake_torque) \
-				.override_failure_message("%s_spec.tres brake_torque" % variant) \
-				.is_equal_approx(scratch.ground_drive.brake_torque, 1e-3)
-		assert_float(shipped.ground_drive.brake_bias_front) \
+		var gd := shipped.ground_drive
+		var want: float = 0.0 if gd.brake_engages_front_axle else gen._front_brake_share(shipped, gd,
+				gen._static_sag(_suspension(gen, variant), shipped, gd))
+		assert_float(gd.brake_bias_front) \
 				.override_failure_message("%s_spec.tres brake_bias_front" % variant) \
-				.is_equal_approx(scratch.ground_drive.brake_bias_front, 1e-6)
-		assert_float(shipped.ground_drive.handbrake_torque) \
-				.override_failure_message("%s_spec.tres handbrake_torque" % variant) \
-				.is_equal_approx(scratch.ground_drive.handbrake_torque, 1e-3)
+				.is_equal_approx(want, 1e-6)
+
+
+## The retarder's rating is the recipe's, on the bodies that carry one.
+func test_the_retarder_rating_is_the_recipes() -> void:
+	for variant: String in Gen.VARIANTS:
+		var ov: Dictionary = Gen.VARIANTS[variant]
+		var b: Dictionary = Gen.BASELINES[String(ov.get("base", ov["family"]))]
+		assert_float(_spec_of(variant).ground_drive.retarder_rating_nm) \
+				.override_failure_message("%s_spec.tres retarder_rating_nm" % variant) \
+				.is_equal_approx(float(ov.get("retarder_rating_nm", b.get("retarder_rating_nm", 0.0))),
+						1e-3)
 
 
 ## Springs, dampers and link slopes are the generator's derivation on a copy of the shipped spec, as

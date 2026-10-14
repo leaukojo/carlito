@@ -36,6 +36,10 @@ a rolling tyre.
 - The tractor's front and rear tyres really differ; a real MFWD runs a lead ratio matched to their
   rolling circumferences. With a per-axle radius, a lead ratio becomes meaningful again (reversing
   the Rejected entry is the user's call).
+- Carried here: `TRUCK_BASE`'s idle creep holds 21-23 % and out-pushes a 30 % foot pedal on
+  `garbage-truck`, which never stops in `doc=braking` (`docs/vehicles.md` § Braking). Its levers are
+  the 29:1 first gear and the derived 1325 rpm stall speed (`(idle / stall)²` 0.28); a truck radius
+  re-derives that gearing.
 
 ## Options (the planner chooses)
 

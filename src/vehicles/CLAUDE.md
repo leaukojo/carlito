@@ -44,42 +44,99 @@ truck / trailer / tractor).
 - Generated bodies: `kenney/*` (`tools/gen_kenney_vehicles.gd`) and `watercraft/*`
   (`tools/gen_boat_variants.gd`). A feel change goes into the recipe and a regen in the same
   commit, never into the `.tscn` / `.tres`. A failing `test_kenney_variants` / `test_boat_variants`
-  is fixed the same way, because the derived values (brakes, handbrake, Cd*A) move with it.
+  is fixed the same way, because the derived values (brake split, springs, Cd*A) move with it.
   Hand-authored collision survives a regen by whitelist (`kenney/CLAUDE.md`, `tools/CLAUDE.md`).
   - A Kenney spec flag must also be in the generator's family baseline, or the next regen wipes it.
     Edit the spec the shipped SCENE loads (`test_tractor` walks catalog → scene → spec).
 
 ## Drivetrain and brakes
 
-- Hierarchy: brake > TRANSMISSIBLE drive (`min(peak drive, driven wheels * mu_long * N * r)`) >
-  handbrake. Guard: `test_vehicle_catalog.test_kenney_specs_keep_force_hierarchy`. Drift comes from
-  `handbrake_grip`, never handbrake torque. It is a total: a wheel holds only against its own
-  drive, which first gear beats on the heavies, so both pedals held are
-  `InputRouter.brake_override`'s.
-- Kenney `brake_torque` derives from the tyre (`BRAKE_GRIP_FRAC * mu_long * N * r`), with no
-  per-family knob, and `brake_bias_front` splits it by each axle's load-scaled grip in a full-pedal
-  stop (an even split locks the unloaded axle and under-brakes the loaded one); negative = even. With AWD and a close-ratio
-  first, the hierarchy floor can exceed the tyre: fix gear 1 or torque, never the brake. The
-  hand-built semis are not grip-derived (their retarder hangs off `brake_torque`).
+- Brakes are declared hardware, a real class per body (`brake_torque`, `handbrake_torque`,
+  `park_pawl_torque`, `retarder_rating_nm`), never derived from the tyre or from each other; only
+  `brake_bias_front` is derived (proportioning by each axle's load-scaled grip in a tyre-limited
+  stop; negative = even). Guards (`BrakeSizing`, `test_vehicle_catalog`): the foot brake can lock
+  its tyres, holds gear 1 at converter stall on every body (a creeper is a drivetrain fix, never a
+  bigger brake), the handbrake locks the rears and parks on the regulation grade, a pawl outholds its
+  tyres. A tyre (mu) edit moves no brake figure.
+- Drift is the handbrake LOCKING the rears; there is no side-grip cut.
 - The brake goes through the semi-implicit spin step (`* spin_compliance`), never a move_toward
   after it: outside it, a held brake needs the tyre to carry `1 + reaction_stiffness` times its
   torque and any firm pedal locks. Guard: `test_wheel_spin` § brakes.
+  - On a `WheelDrive` wheel it is solved WITH the differentials (`RayWheel.settle_spin`,
+    `Differential.braked_coupling_torque`), never before them, and so is the TC hold: a held wheel
+    stays held unless the torque a diff must pass it beats its brake, so an AWD / MFWD body holds
+    on its brake total. Guard: `test_wheel_spin` § differentials, `test_differential`.
+  - The park pawl is a lock of the gearbox output to ground, solved FIRST in that pass, never a
+    brake on each driven wheel: an open diff still counter-rotates in P (`docs/vehicles.md`
+    § P (park)). Guard: `test_wheel_spin` § differentials.
 - ABS (`abs_equipped`, road vehicles; not the tractor, the race cars or the plane) caps the foot
-  brake and retarder at `RayWheel.ABS_SLIP`, the grip peak. A handbrake or spring brake is a
-  mechanical hold no ABS modulates: a wheel under one brakes without it.
-- TC (`tcs_equipped`, the car family minus `race-future`, and the semis' ASR) caps drive at
-  `RayWheel.TCS_SLIP`, per wheel and drive-only (never brakes); `tcs_off` disables it (the
-  bridge's, or the local TRACTION CONTROL setting).
-- The tyre class (`mu_long` / `mu_lat`) is the root of everything brake-shaped: brake, retarder
-  rating, hierarchy floor, taper margin. A mu edit is a re-derivation (recipe + regen), never a
-  number edit.
-- The rev limiter judges `wheel_engine_rpm` (raw), never `Drivetrain.rpm` (its lerp never reaches
-  redline). The limiter, the governor and the shift cut all ride `applied_throttle`.
-- The limiter and engine braking are hard edges: a fade band eats drive torque below redline and
-  moves top speeds. A lazy launch is fixed at the launch (grip, gear 1, `shift_up_rpm`), not at the
-  limiter.
-- `converter_free_rpm` is a floor under the wheels, never a ceiling, and the converter multiplies
-  no torque (COMPROMISE at `drivetrain.gd`).
+  brake and retarder at `RayWheel.ABS_SLIP`, the grip peak. A handbrake, spring brake or park pawl
+  is a mechanical hold no ABS modulates: a wheel under one brakes without it.
+- The hill hold (`hill_hold`, `HillHold`) is brake equipment like ABS, on every input path:
+  `WheelDrive.hold_step` runs before the drivetrain, and `foot_pedal` is the pedal every brake
+  application reads (the wheels, the MFWD engagement, the controller's `braking`, a trailer's
+  demand). A truck's air draw stays on the driver's pedal (its rise): a hold draws nothing.
+  ASSIST (every ABS body) keeps the driver's last application after the release; STANDSTILL (the
+  tractor) holds at rest in gear with the drive pedal up. Each lets go once the coupling's drive
+  meets gravity's pull, read off the wheels' contact plane, never the body's pitch
+  (`HillHold.drive_holds`); ASSIST also lets go on its `hill_hold_s` timeout. Guard:
+  `test_hill_hold`, `test_wheel_spin`, `test_vehicle_catalog`.
+- TC (`tcs_equipped`, the car family minus `race-future`, and the semis' ASR) holds drive at
+  `RayWheel.TCS_SLIP`: a one-sided hold in each wheel's settle law (`RayWheel.settled_spin`), before
+  the brake and solved with it inside the differentials and the crank's coupling. Its share is the
+  wheel's part of what the coupling may pass it this tick (`Drivetrain.tcs_drive_torque`), and it
+  only pulls the wheel down to a ceiling above road speed, so it never brakes; a held wheel stays
+  there under a biasing diff unless the diff passes it more than its share. On overrun it is fuel,
+  never a wheel push: drag-torque control (`Drivetrain.drag_control`). `tcs_off` disables both (the
+  bridge's, or the local TRACTION CONTROL setting). Guard: `test_wheel_spin` § TC,
+  `test_differential`, `test_drivetrain`.
+- The tyre class (`mu_long` / `mu_lat`) sets the brake split and the taper margin. A mu edit is a
+  re-derivation (recipe + regen), never a number edit.
+- The foot pedal reaches the capacity through `WheelDrive.brake_application`, anchored per body:
+  half pedal is `BRAKE_HALF_PEDAL_G` on every body, full pedal its whole capacity, so feel never
+  follows a declared capacity. A towing unit sends its trailer the same application
+  (`WheelDrive.pedal_application`). The handbrake, spring brakes, pawl and retarder are not shaped.
+- ABS and TC read the hub's speed off the ground too: an airborne braked wheel keeps turning and
+  lands gripping (`RayWheel.tick`).
+- On a body whose engine drives wheels (`Drivetrain.drives_wheels`) the crank is a rotating mass
+  (`engine_inertia`, per class): `Drivetrain.rpm` is its integrated speed and the published rpm,
+  never a lerp. It meets the driven wheels only through the coupling, solved first in
+  `WheelDrive._couple_differentials` (`Drivetrain.couple`); the wheels' own steps carry no drive.
+  Nothing stalls. The boat, drone, train and plane keep the rigid crank (Rejected: splitting
+  `Drivetrain`). Controller and figures: `docs/vehicles.md` § Physics derivations and figures.
+  Guards: `test_drivetrain` § the crank / the coupling, `test_wheel_spin` § the crank.
+- The rev limiter judges the crank (`Drivetrain.rpm`), never the wheel side. It is a hard cut, and
+  the tick that would cross the redline is fuelled to land on it (`couple`): a fade band eats drive
+  torque below redline and moves top speeds. A lazy launch is fixed at the launch (grip, gear 1,
+  `shift_up_rpm`), not at the limiter. The limiter, the governor and the shift cut all ride
+  `applied_throttle`.
+- One engine law on the DELIVERED fuel `f = applied_throttle`, at the crank: `f * curve + (1 - f)
+  * motoring` (`Drivetrain.crank_torque`), so every fuel cut and a lifted pedal is engine braking,
+  and `f = 1` is the curve alone. Never feed the pedal to it (a governed truck would freewheel
+  downhill pedal-down). The controller's floors (idle, the rev-match blip, drag-torque control)
+  are fuel too, and telemetry reads them. Motoring is never 0 at idle: it is the engine's friction
+  (`engine_friction_frac`, sourced per class) rising to `engine_brake_frac` at redline, and that
+  friction is what returns a free crank to idle and stops a key-off one (no separate key-off
+  term). Guard: `test_drivetrain` § overrun, `test_vehicle_catalog`.
+- A converter body (`coupling` CONVERTER) runs `TorqueConverter`'s law while it slips, solved
+  implicitly with both sides' end-of-tick speeds (`TorqueConverter.solve`, from `Drivetrain.couple`
+  against `Differential.settled_mean_spin`). A shift slips the gearbox's clutch, never the
+  converter; an upshift's inertia phase, like a clutch pull-away's close onto turning wheels, spans
+  `shift_handover_s` (`Drivetrain.handover_rate`), never the rating's one-tick shock. On a
+  converter body the TCU fuels the engine down through that phase (`Drivetrain.handover_fuel`), with
+  no fixed `shift_cut_s`. A clutch body keeps its clutch closed for engine braking. The torque ratio
+  is data shipped at 1.0 (COMPROMISE at `drivetrain.gd`). Law, lock-up, creep: `docs/vehicles.md`
+  § Converter. Guards: `test_torque_converter`, `test_drivetrain` § the converter.
+- Gear selection is `ShiftPolicy`: static functions `Drivetrain.auto_shift` consults on road speed
+  and the PEDAL, never `applied_throttle` (the limiter, governor and shift cut would read as
+  lifts); its state (time in gear, the last pedal, a kickdown's arm, the road-load estimate, a start
+  gear) is gearbox fields. Its dwell never holds a gear past `shift_up_rpm` or under the coast
+  downshift, and every upshift lands `ShiftPolicy.LANDING_MARGIN` over the downshift point at the
+  same pedal. The load (`Drivetrain.road_load`) gates only the pedal's map: on a grade
+  (`ShiftPolicy.on_grade`) no upshift whose landing cannot hold the speed at this pedal, never the
+  forced one at `shift_up_rpm`; a lugging crank steps down through the dwell. Maps and figures:
+  `docs/vehicles.md` § The shift policy. Guards: `test_shift_policy`, `test_vehicle_catalog` (no
+  box hunts, full pedal is the fixed pair), `test_drivetrain`.
 - Declaring `speed_limit_kmh`: re-measure the variant (a governor below the next upshift strands
   the gearbox; `governed_upshift` handles it). The value is contract-visible: whole km/h, 0-250
   (`test_vehicle_catalog`).
@@ -96,7 +153,9 @@ truck / trailer / tractor).
 
 - Stability at the locked 60 Hz (root rule 9) lives in:
   - `RayWheel`: damper ≤ one-tick reversal, suspension force cap, low-speed slip floors, one-tick
-    lateral cap (a towed body's off its solver tensor: `TowedBody._size_lateral_caps`);
+    lateral cap (a towed body's off its solver tensor: `TowedBody._size_lateral_caps`), the
+    static-friction patch spring's stiffness cap (`STICK_TICK_STIFFNESS`; along the wheel only
+    while its spin is held, never on a free wheel);
   - the semi-implicit spin step;
   - the boat's probe clamps;
   - `VehicleMath.damped_force`.
@@ -107,8 +166,15 @@ truck / trailer / tractor).
   reaction term instead, which walks the wheel to a steady slip nothing paid for
   (`test_wheel_spin`). The step follows the body's last-tick change at the CENTRE OF MASS
   (`dv_long`), never the contact's, which rings the pitch at the tick rate.
-- `RayWheel.FREE_SPIN_DECAY` lets a lifted wheel's limiter cut clear itself. Without it the cut
-  latches until the driver lifts off.
+- The crank is one more output of that solve (spin `omega / G`, compliance `crank_compliance / G^2`
+  through the efficiency by direction), never a torque applied after it. Its own step is
+  semi-implicit in its curve's slope (`Drivetrain.crank_compliance`): `race`'s droop gains ~3 a
+  tick explicitly. Guard: `test_vehicle_catalog` (every crank settles on its steepest droop). A
+  converter's law is solved at the end-of-tick speeds, never explicitly: its slope through G² is
+  ~4x past the explicit limit.
+- `RayWheel.FREE_SPIN_DECAY` is a lifted wheel's bearing and tyre loss: what stops an undriven
+  wheel or one in N (a driven one in gear turns with the crank, held under the limiter and slowed
+  by its overrun).
 - The clamps are sized by `corner_mass`. A runtime `mass` write is `BaseVehicle.set_live_mass`,
   never a bare assignment (it re-shares the corners; `test_body_inertia` pins the pair).
 - `ChaseCamera` follows `get_global_transform_interpolated()`, never `global_transform` in
@@ -140,8 +206,8 @@ truck / trailer / tractor).
 - `RayWheel.is_rear_z` is the one front/rear predicate (ties go front; `test_vehicle_catalog`
   asserts no wheel station sits at z = 0).
 - RayWheel is single-radius; bigger visual wheels are visual only (`wheel_visual_radius`,
-  `visual_lift`). Wheel scenes are radius-normalized. Per-instance tweaks ride the visual's
-  children (RayWheel overwrites the root). The right-side flip is `Basis(Vector3.RIGHT, PI)`,
+  `visual_lift`, which also scales the drawn spin to the tread's ground speed). Wheel scenes are
+  radius-normalized. Per-instance tweaks ride the visual's children (RayWheel overwrites the root). The right-side flip is `Basis(Vector3.RIGHT, PI)`,
   never `UP` (local Y is the axle): `wheel_drive.gd` applies it, trailer scenes author it.
 
 ## Drag and downforce
@@ -229,7 +295,10 @@ truck / trailer / tractor).
 - Open-diff friction (the open diff is an ideal 1.0): bodies that should fight one-wheel peel
   declare an LSD.
 - Fixing the floored 2WD tractor in mud: it is the open diff's peel (held at the grip peak it
-  climbs 9.2 %); MFWD and the diff lock are the answer.
-- Converter torque multiplication to speed launches: under 0.1 s on any body behind its reference
-  (`docs/vehicles.md` § Converter).
+  climbs 8.6 %); MFWD and the diff lock are the answer.
+- Shipping converter torque multiplication (`converter_stall_ratio` above 1.0). COMPROMISE: the
+  ratio is data and ships 1.0, a fluid coupling; a real converter makes ~2.0 at stall
+  (`docs/vehicles.md` § Converter), which fails the foot brake's static stall hold on seven more
+  bodies until their brake classes are reviewed against sourced hardware (never a bigger brake to
+  make a body hold).
 - Auto-respawn on overturn (`base_vehicle.gd`).

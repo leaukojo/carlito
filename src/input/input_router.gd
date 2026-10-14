@@ -12,6 +12,9 @@ const KEY_IGNITION := 3
 const GEAR_N := 0x00
 const GEAR_D1 := 0x01
 const GEAR_R := 0xFF
+## P: a byte RAMN never sends, so every byte it does send keeps its meaning (`Drivetrain.GEAR_P`;
+## a body without a park pawl reads it as N).
+const GEAR_P := 0xFE
 
 ## m/s below which S (held with no accel) swaps D->R and W swaps R->D.
 const REVERSE_ENGAGE_SPEED := 0.5
@@ -22,6 +25,11 @@ const REVERSE_ENGAGE_SPEED := 0.5
 ## its driven axle's grip-sized brake (docs/vehicles.md). A standstill press still revs (a stall
 ## test); past this speed the throttle cuts, and stays cut until either pedal lifts.
 const BRAKE_OVERRIDE_SPEED := 1.0
+
+## Auto hold, a keyboard-feel aid for keys and touch (`auto_hold`): at a standstill in a drive gear
+## with no throttle, the foot brake holds at this application until the throttle asks to move, so a
+## converter body never creeps off while the keys are up. The whole service brake.
+const AUTO_HOLD_BRAKE := 1.0
 
 ## Cycle lengths, declared once in a leaf module (router must not depend on a vehicle
 ## class, so these can't be read off RefuseBody.Cmd / DroneBus.NODES / DroneModes directly).
@@ -53,6 +61,10 @@ var _key_softening := KeyShaper.DEFAULT_SOFTENING
 ## its own `tcs_off`).
 var _local_tcs_off := false
 var _brake_override := false  ## latched by `brake_override`, both sources alike
+var _auto_hold := false  ## latched by `auto_hold`, local key and touch pedals only
+## The gamepad moved a pedal last, not a key or a touch pedal: the auto hold stands aside, since an
+## analog trigger feathers the brake itself, as the bridge does.
+var _pad_pedals := false
 var _lights := 1  ## headlight level owned here so keyboard + touch share one state
 # Local tractor implement state, owned here so keyboard + touch share it; bridge path ignores these.
 var _hitch_up := true  ## true = raised (transport), toggled by the local hitch key
@@ -176,11 +188,12 @@ func reset_vehicle_cycles() -> void:
 	_brake_override = false
 
 
-## Zero the shaped keyboard steer and local pedals (KeyShaper).
+## Zero the shaped keyboard steer and local pedals (KeyShaper), and let go the auto hold.
 func _reset_key_shaping() -> void:
 	_key_steer = 0.0
 	_pedal_accel = 0.0
 	_pedal_brake = 0.0
+	_auto_hold = false
 
 
 ## The touch UI registers itself as a second local source. It is
@@ -212,7 +225,8 @@ func _physics_process(delta: float) -> void:
 	if _bridge_drives:
 		_reset_key_shaping()
 		_set_fallback_notice(false)
-		_current = arbitrate_bridge(bridge_raw, _manual_gearbox)
+		_current = arbitrate_bridge(bridge_raw, _manual_gearbox,
+				_vehicle.get_gear_byte() if _vehicle != null else GEAR_N)
 		_apply_brake_override()
 		_warn_if_ignition_off(bridge_raw)
 		return
@@ -225,6 +239,7 @@ func _physics_process(delta: float) -> void:
 		return
 	var local := _local_tick(delta, live)
 	_current = blend_local_driving(bridge_raw, local, _manual_gearbox) if live else local
+	_apply_auto_hold()
 	_apply_brake_override()
 
 
@@ -237,11 +252,39 @@ func _apply_brake_override() -> void:
 		_current.throttle = 0.0
 
 
+## Hold the foot brake while the auto hold is latched (`auto_hold`), on a body whose engine drives
+## road wheels (`key_auto_hold`: a drone's pedals are a stick). After `arbitrate_local`, so the held
+## brake never reads as S at a standstill (which selects R). The bridge never gets it: it drives the
+## real creep.
+func _apply_auto_hold() -> void:
+	if _vehicle == null or not _vehicle.key_auto_hold():
+		_auto_hold = false
+		return
+	_auto_hold = auto_hold(_auto_hold, _current, _vehicle.get_speed(), _pad_pedals)
+	if _auto_hold:
+		_current.brake = maxf(_current.brake, AUTO_HOLD_BRAKE)
+		_current.lamps.brake_lamp = true
+
+
+## Next tick's auto-hold latch, pure for tests: set at a standstill (REVERSE_ENGAGE_SPEED, the
+## router's own) in a drive gear (D or R) with no throttle, kept until the throttle asks to move or
+## the box leaves gear. Never while the gamepad drives the pedals (`pad`). It holds what it caught,
+## so a body sliding on a grade its brakes cannot hold stays held. Hill-start assist
+## (`WheelDrive.hold_step`) takes the handover when the throttle lets it go.
+static func auto_hold(latched: bool, input: VehicleInput, speed: float, pad: bool) -> bool:
+	var in_gear := input.gear_request == GEAR_R \
+			or (input.gear_request >= GEAR_D1 and input.gear_request <= 6)
+	if pad or not in_gear or input.throttle != 0.0:
+		return false
+	return latched or absf(speed) <= REVERSE_ENGAGE_SPEED
+
+
 ## Next tick's brake-override latch, pure for tests: set past BRAKE_OVERRIDE_SPEED with both pedals
-## held, kept until either lifts. N never latches: no drive reaches the wheels there, so a braked
-## machine may still rev (the tractor's PTO with the brakes on).
+## held, kept until either lifts. N and P never latch: no drive reaches the wheels there, so a
+## braked machine may still rev (the tractor's PTO with the brakes on).
 static func brake_override(latched: bool, input: VehicleInput, speed: float) -> bool:
-	if input.brake <= 0.0 or input.throttle == 0.0 or input.gear_request == GEAR_N:
+	if input.brake <= 0.0 or input.throttle == 0.0 or input.gear_request == GEAR_N \
+			or input.gear_request == GEAR_P:
 		return false
 	return latched or absf(speed) > BRAKE_OVERRIDE_SPEED
 
@@ -276,7 +319,10 @@ func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 			brake_apply_s, delta, _key_softening)
 	raw[&"accel"] = _pedal_accel
 	raw[&"brake_reverse"] = _pedal_brake
-	raw = merge_local(raw, _pad_source.poll())
+	var pad := _pad_source.poll()
+	_pad_pedals = pad_drives_pedals(_pad_pedals, _pedal_accel + _pedal_brake,
+			float(pad.get(&"accel", 0.0)) + float(pad.get(&"brake_reverse", 0.0)))
+	raw = merge_local(raw, pad)
 	if driving_only:
 		raw = driving_edges_only(raw)
 	# Single headlight owner: either source's cycle edge advances the shared level.
@@ -439,14 +485,25 @@ static func merge_local(a: Dictionary[StringName, Variant],
 	return out
 
 
-## What a bridge-only vehicle gets with no live bridge: key at Lock, handbrake on, every other
+## What a bridge-only vehicle gets with no live bridge: key at Lock, P, handbrake on, every other
 ## field at its struct default. Also what the rig falls back to when the bridge goes stale
 ## mid-attempt, so a lost connection parks it rather than coasting.
 static func locked_idle() -> VehicleInput:
 	var out := VehicleInput.new()
 	out.key = KEY_LOCK
+	out.gear_request = GEAR_P
 	out.handbrake = 1.0
 	return out
+
+
+## Whether the gamepad moved a pedal last, pure for tests: `keys` is the shaped key and touch pedals'
+## sum, `pad` the gamepad's. The pad wins a tie; with neither down the last device stands.
+static func pad_drives_pedals(was_pad: bool, keys: float, pad: float) -> bool:
+	if pad > 0.0:
+		return true
+	if keys > 0.0:
+		return false
+	return was_pad
 
 
 ## Local (keyboard/gamepad) arbitration, pure for tests. Throttle only from accel; brake
@@ -517,6 +574,9 @@ static func arbitrate_local(raw: Dictionary, speed: float, gear_byte: int,
 		else:
 			if gear_byte >= 1 and gear_byte <= 6:
 				out.gear_request = gear_byte
+			elif gear_byte == GEAR_P and accel <= 0.0:
+				# Parked by the bridge or `locked_idle`: stays in P until the driver asks to move.
+				out.gear_request = GEAR_P
 			else:
 				out.gear_request = GEAR_D1 if accel > 0.0 else GEAR_N
 			out.throttle = accel
@@ -574,11 +634,13 @@ static func blend_local_driving(vals: Dictionary, local: VehicleInput,
 
 ## Bridge (sloppyCAN) arbitration, pure for tests. The gear byte owns direction — throttle is
 ## `accel` signed by it (-R, + otherwise), local reverse UX ignored. How much more it owns is the
-## gearbox mode: `manual` takes the byte exactly (0 = N, 1-6, R; gear_auto = false); automatic
-## reads it as a PRND lever (R reverses, 1-6 is D and the gearbox picks the gear; byte 0 is
-## "no gear opinion", also D). Brake is never throttle; key gates throttle; steer/handbrake/
-## lights/horn pass through. Values arrive pre-normalized to VehicleInput ranges from bridge_source.
-static func arbitrate_bridge(vals: Dictionary, manual := false) -> VehicleInput:
+## gearbox mode: `manual` takes the byte exactly (0 = N, 1-6, R, P; gear_auto = false); automatic
+## reads it as a PRND lever (P parks, R reverses, 1-6 is D and the gearbox picks the gear; byte 0
+## is "no gear opinion", also D, except that a body parked in P (`gear_byte`, the engaged byte)
+## stays in P until a D or R byte or the accelerator asks it to move). Brake is never throttle;
+## key gates throttle; steer/handbrake/lights/horn pass through. Values arrive pre-normalized to VehicleInput ranges from bridge_source.
+static func arbitrate_bridge(vals: Dictionary, manual := false,
+		gear_byte := GEAR_N) -> VehicleInput:
 	var out := VehicleInput.new()
 	# Steer overrides, both pre-normalized to -1..1 from bridge_source: 'guidance' (tractor
 	# auto-steer) wins as an external computer holding the wheel; 'rudder' (boat) IS steer.
@@ -665,17 +727,22 @@ static func arbitrate_bridge(vals: Dictionary, manual := false) -> VehicleInput:
 	out.throttle = -accel if gear == GEAR_R else accel
 	if manual:
 		# Exact byte: 0 is a real N (free revs), and nothing ever shifts on its own.
-		out.gear_request = gear if gear == GEAR_R or (gear >= GEAR_D1 and gear <= 6) else GEAR_N
-	elif gear == GEAR_R:
-		out.gear_request = GEAR_R
+		out.gear_request = gear if gear == GEAR_R or gear == GEAR_P \
+				or (gear >= GEAR_D1 and gear <= 6) else GEAR_N
+	elif gear == GEAR_R or gear == GEAR_P:
+		out.gear_request = gear
 	elif gear >= GEAR_D1 and gear <= 6:
 		# A D intent: the drivetrain keeps the drive gear it is in and auto-shifts from there.
 		out.gear_request = GEAR_D1
 	else:
 		# Byte 0 means "no gear opinion" (not park): hardware that never sends 0x077 would
 		# otherwise leave the accelerator dead with no explanation. Gearbox drives itself as
-		# with no bridge: forward, auto-shifting. Reverse still needs the explicit R byte.
-		out.gear_request = GEAR_D1 if accel > 0.0 else GEAR_N
+		# with no bridge: forward, auto-shifting. Reverse still needs the explicit R byte. A parked
+		# body is not unparked by silence: it stays in P until the accelerator asks it to move.
+		if accel > 0.0:
+			out.gear_request = GEAR_D1
+		else:
+			out.gear_request = GEAR_P if gear_byte == GEAR_P else GEAR_N
 
 	if out.key != KEY_IGNITION:
 		out.throttle = 0.0

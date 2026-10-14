@@ -219,6 +219,8 @@ class _FlyingBody extends Node3D:
 		return RouterScript.GEAR_D1
 	func key_pedals_are_a_stick() -> bool:
 		return false
+	func key_auto_hold() -> bool:
+		return false
 
 
 ## A hovering body whose pedal keys are one stick axis (the drone's pitch).
@@ -231,6 +233,8 @@ class _StickBody extends Node3D:
 		return RouterScript.GEAR_N
 	func key_pedals_are_a_stick() -> bool:
 		return true
+	func key_auto_hold() -> bool:
+		return false
 
 
 func test_stick_pedals_ramp_both_ways_alike() -> void:
@@ -301,6 +305,8 @@ class _FastCar extends Node3D:
 	func get_gear_byte() -> int:
 		return RouterScript.GEAR_D1
 	func key_pedals_are_a_stick() -> bool:
+		return false
+	func key_auto_hold() -> bool:
 		return false
 
 

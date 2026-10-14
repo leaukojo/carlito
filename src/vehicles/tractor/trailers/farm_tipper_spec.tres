@@ -20,16 +20,17 @@
 ;   - spring_rate 187000 is sized off the load the bogie ACTUALLY carries, 8800 kg: 21 582 N per
 ;     wheel compresses it 0.115 m of its 0.32 m travel (36 %), which is where every trailer in the
 ;     project sits parked. A spring sized for the FULL mass would ride on its stops.
-;   - brake_torque 7374 is load-apportioned against the TRACTOR that pulls it, not copied from the
-;     semi-trailers (whose reference is the 10 500 Nm tractor unit): 21.58 kN per trailer wheel
-;     against 9.81 kN per tractor wheel, so 3352 * 21.58 / 9.81. A trailer braking harder per tonne
-;     than the machine pulling it is how a rig jackknifes under braking.
-;     It is also inside its own tyres: mu_long * N * r = 1.0 * 21 582 * 0.36 = 7770 Nm, so full
-;     pedal asks for 95 % of what the road can hand back rather than locking the bogie.
-;   - handbrake_torque 1844 is a quarter of this trailer's own service brake, the family rule. The
-;     tractor's two braked axles cannot hold 14 t of combination on a farm ramp on their own, and
-;     the tip interlock wants the parking brake set before the body will move at all — so this is
-;     the brake that actually holds the rig while it tips.
+;   - brake_torque 9229 is load-apportioned against the TRACTOR that pulls it: a full demand brakes
+;     the 8800 kg bogie at the 1.19 g the tractor's brakes (4 x 8600 / 0.36) make on its coupled
+;     static load, 7000 + 1200 kg on the drawbar, so the two brake alike and the trailer never
+;     pushes the tractor (test_drawbar_trailer). Like the tractor's it is past the tyre (1.0 x
+;     21 560 N x 0.36 = 7762 Nm): an ABS-less bogie locks at full pedal, as the tractor's rears do.
+;   - handbrake_torque 2307 is a quarter of this trailer's own service brake, the family rule. It
+;     is not what parks the rig: the tractor's two rear wheels alone hold the 17 t combination on
+;     UNECE R13's 18 % (2 x 8000 / 0.36 = 44.4 kN against 17 t x g x sin(atan 0.18) = 29.5 kN, a
+;     1.5 margin; measured 2026-10-08, the lever set: 2.9 mm moved in 60 s as shipped, 2.6 mm with
+;     this at 0). The tip interlock wants the lever set before the body moves, and the lever
+;     applies this too.
 ;
 ; load_sensitivity 0.08 matches the towing unit. A trailer's axles carry LESS than their even
 ; static share once the plate/drawbar takes its cut, so they sit below the reference and gain a
@@ -66,8 +67,8 @@ grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 1.0
 mu_lat = 0.95
 load_sensitivity = 0.08
-brake_torque = 7374.0
-handbrake_torque = 1844.0
+brake_torque = 9229.0
+handbrake_torque = 2307.0
 
 [resource]
 script = ExtResource("1_spec")

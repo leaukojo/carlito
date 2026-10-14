@@ -4,11 +4,9 @@ Shared context: `00_README.md`. Root cause: a missing piece of geometry. Size: s
 
 ## Summary
 
-In a turn the inner front wheel rolls on a smaller circle than the outer one, so it needs more
-steering angle; Ackermann geometry gives it that. Here both steered wheels get the same angle
-(parallel steer), so in tight turns the two front tyres point at different turn centres and
-scrub against each other: a slightly wider turning circle and drag at parking speeds. Negligible
-at road speed.
+Both steered wheels get the same angle (parallel steer), where the inner wheel of a turn needs more
+(Ackermann). In tight turns the two front tyres point at different turn centres and scrub: a
+slightly wider turning circle and drag at parking speeds. Negligible at road speed.
 
 ## What happens
 
@@ -42,7 +40,7 @@ at road speed.
   `test_vehicle_catalog.test_a_steering_taper_never_out_limits_the_tyres` reads the lock.
 - The tractor's rigid MFWD winds up in tight turns (`TRACTOR_BASE` comment); Ackermann reduces
   front scrub, not the front/rear axle speed mismatch.
-- Wheel visuals already follow each wheel's `steer_angle` (`RayWheel._update_visual`).
+- Wheel visuals already follow each wheel's `steer_angle` (`RayWheel.update_visual`).
 
 ## Done
 

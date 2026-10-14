@@ -5,40 +5,47 @@ semis and their trailers, the tractor and its drawbar trailer), 2026-10-05. Plan
 train are out of scope.
 
 Each numbered file is one **brief** for a planning agent: what is wrong or missing, where it lives,
-why it matters, what binds a fix, and what "done" looks like. A brief is **not a plan**: the
-planning agent turns it into one (see § Where plans go).
+what binds a fix, and what "done" looks like. A brief is **not a plan** (see § Where plans go).
 
 ## Recommended order
 
-| # | Brief | Size | Needs first |
-| --- | --- | --- | --- |
-| 01 | `01_tractor_wheel_visual_spin.md` — tractor tyres visually spin 1.83x / 1.22x too fast | trivial | — |
-| 02 | `02_engine_torque_model.md` — a fuel cut gives zero torque instead of engine braking | small | — |
-| 03 | `03_tyre_static_friction.md` — no static friction: held vehicles creep | medium | — |
-| 04 | `04_brakes_and_parking.md` — brake, handbrake and retarder sized from the tyre, launch torque and the service brake, not the hardware | medium-large | 03 (to measure parking) |
-| 05 | `05_engine_driveline_inertia.md` — the engine has no rotating mass | large | 02 |
-| 06 | `06_shift_schedule.md` — fixed-rpm shifting (a sedan cruises 60 km/h in 2nd at ~5000 rpm), start gear, shift trace | medium | 05 (recommended) |
-| 07 | `07_body_scale_and_yaw_inertia.md` — toy-scale Kenney geometry with real mass | medium | — |
-| 08 | `08_handling_balance.md` — `rear_lat_grip` stands in for roll-stiffness distribution | medium | 07 |
-| 09 | `09_ackermann_steering.md` — parallel steer scrubs in tight turns | small | — |
-| 10 | `10_wheel_radius_and_contact.md` — one 0.36 m ray wheel for every body | large | 04, 05, 06 |
-| 11 | `11_tractor_implements_and_draft.md` — weightless implements, ramped draft | medium | — |
-| 12 | `12_tyre_classes_and_surfaces.md` — user-swappable tyres, tyre x surface response (future) | medium-large | 03, 04 (08 ideally) |
-| 13 | `13_minor_items.md` — wind, aero balance, rolling-resistance vector, ideal ABS/TC, taper | small each | — |
+| # | Brief | Size | Needs first | Planning effort | Phases |
+| --- | --- | --- | --- | --- | --- |
+| 01 | `01_tractor_wheel_visual_spin.md` — tractor tyres visually spin 1.83x / 1.22x too fast | trivial | — | landed | — |
+| 02 | `02_engine_torque_model.md` — a fuel cut gives zero torque instead of engine braking | small | — | landed | — |
+| 03 | `03_tyre_static_friction.md` — no static friction: held vehicles creep | medium | — | landed | — |
+| 04 | `04_brakes_and_parking.md` — brake, handbrake and retarder sized from the tyre, launch torque and the service brake, not the hardware | medium-large | 03 (to measure parking) | landed | — |
+| 04b | `04b_drained_air_truck.md` — a truck that loses its air is tested only in parts; its trailer does not brake | small | 04 | landed | — |
+| 04c | `04c_brakes_in_differential_solve.md` — diffs couple after each wheel's brake step, so AWD bodies and the tractor creep on enough brake | medium | 04 | landed | — |
+| 04d | P (park): the pawl as a lock of the gearbox output, contract v48 with sloppyCAN | small (+ sloppyCAN) | 04, 04c | landed | — |
+| 05 | engine inertia, coupling, creep — the engine had no rotating mass | large | 02 | landed (`docs/vehicles.md` § Crank and coupling, § Converter, § Hill hold) | — |
+| 06 | shift policy, start gear, shift trace — fixed-rpm shifting (a sedan cruised 60 km/h in 2nd at ~5000 rpm) | medium | 05 | landed (`docs/vehicles.md` § The shift policy; `docs/heavy_vehicles.md` § Tractor, implement & ISOBUS) | — |
+| 06b | the heavy vans' drivetrain — they ran the 8 t trucks' engine and gearing | small-medium | 05, 06 | landed (`docs/vehicles.md` § Sourced figures, the heavy vans' drivetrain) | — |
+| 07 | `07_body_scale_and_yaw_inertia.md` — toy-scale Kenney geometry with real mass | medium | — | high: declared gyration reverses "never set inertia"; each fudge needs a real lever found | two to three: yaw-inertia decision + mechanism, de-fudge per body, restate the pitch / front-lift targets (the brief carries the measured front-axle launch figures) |
+| 08 | `08_handling_balance.md` — `rear_lat_grip` stands in for roll-stiffness distribution | medium | 07 | high: the tyre-model change ripples into brake split and the grade / launch ceilings; tyre data to source; understeer targets from the user | several: step-steer tool first, per-axle bars, cornering-stiffness load model, retire `rear_lat_grip` |
+| 09 | `09_ackermann_steering.md` — parallel steer scrubs in tight turns | small | — | low: pure geometry, spec fraction defaulting to 0, mean angle unchanged; one decision (which wheel the lock limits) | one |
+| 10 | `10_wheel_radius_and_contact.md` — one 0.36 m ray wheel for every body | large | 04, 05, 06 | xhigh: every body and trailer, the tractor linkage geometry, a Rejected entry (MFWD lead ratio) | several, likely two plans: radius (re-derive every body), then contact shape (web perf study) |
+| 11 | `11_tractor_implements_and_draft.md` — weightless implements, ramped draft | medium | — | medium (high if the draft law is reshaped): implement mass is plain; speed-independent draft needs an angular-bound derivation and reverses "keep the speed ramp" | two to three: implement mass + axle load, draft law, draft control if wanted (contract) |
+| 12 | `12_tyre_classes_and_surfaces.md` — user-swappable tyres, tyre x surface response (future) | medium-large | 03, 04 (08 ideally) | high: a feature with many user decisions, across vehicles, levels and UI | several: tyre-class resource, cross-level surface identity (untangle `SOIL_CHANNEL`), tyre x surface table, swap UI, level content |
+| 13 | `13_minor_items.md` — wind, aero balance, rolling-resistance vector, ideal ABS/TC, taper | small each | — | per item: 1 wind low (wait for a windy land level); 2 aero centre of pressure medium; 3 rolling-resistance vector low (fold into 05 or 10); 4 cycling ABS/TC medium (user decision first); 5 taper: a decision, no plan; 6 (converter creep): landed with 05 | one each |
 
-Why this order: 01 is a free visual fix. 02 and 03 are foundations that later briefs measure
-against (03 in particular: no parking or hold figure means anything until a held wheel holds). 04
-retires the most patches per unit of work. 05 is the largest driveline change and 06 builds on
-it. 07 comes before 08 because balance is tuned on the final inertia. 10 re-derives gearing and
-brakes, so it goes after the briefs that change them. 12 is the user's future feature and needs
-04's decoupling of brakes from tyres.
+"Planning effort" is the effort level for the agent that WRITES the plan (low / medium / high /
+xhigh / max): how much design is open, how much must be sourced, how many rules or user decisions it
+meets; not the size of the change.
+
+Order: 07 before 08 (balance is tuned on the final inertia); 10 after the briefs that re-derive
+gearing and brakes; 12 needs 04's decoupling of brakes from tyres.
 
 Two cross-dependencies the table does not show:
-- **The shift trace (06 Part C) is the tool for judging 05's launches.** Build it first: as the
-  first phase of 05, or ahead of it.
-- **04 sizes the foot brake against first gear at converter stall, and 05 Part B may add converter
-  torque multiplication (1.8-2.2x at stall).** Either 04 sizes brakes with that margin, or 05 B
-  re-checks the brakes when it lands.
+- **The shift trace judges every launch.** `measure_vehicles -- <variant> <s> trace`
+  (`docs/vehicles.md` § Measuring a vehicle): its gates (dwell, landing, hunting, front axle) and
+  each shift's slip are what a driveline change is read against.
+- **04 sized the foot brake against first gear at converter stall, and the converter's torque
+  ratio ships at 1.0** (05; a real one's ~2.0 fails seven more bodies' static stall hold,
+  `docs/vehicles.md` § Converter). `BrakeSizing.stall_hold_margin` reads
+  `Drivetrain.stall_axle_torque`, so `test_vehicle_catalog` re-checks every body when the ratio
+  moves. The brakes sit inside the coupled diff solve (04c), so the AWD and MFWD bodies are judged
+  on their brake total.
 
 ## The three root causes
 
@@ -74,8 +81,8 @@ Read before planning:
   § Rough and soft ground), `docs/heavy_vehicles.md`.
 - `docs/TODO.md`: its drivetrain items that the audit covers (engine as a rotating mass, the
   coupling model, creep and hill hold, shift policy, the shift trace, the tractor's launch gear)
-  now live in briefs 05 and 06. What stays there (CVT, diesel governor and hand throttle, real
-  gear counts) builds on those two briefs.
+  landed with 05 and 06 (`docs/vehicles.md`). What stays there (CVT, diesel governor and hand
+  throttle, real gear counts, a progressive pedal map, fuel from delivered power) builds on them.
 
 Constraints that bind every brief:
 - Godot 4.7.1 + Jolt. Physics is **locked at 60 Hz** with interpolation (root rule 9). Never raise
@@ -102,9 +109,9 @@ Constraints that bind every brief:
   `measure_semi_launch -- <unit> strict`.
 - The user verifies by driving; any verification scene is a real Level with a VehicleSpawn.
 
-Evidence: figures marked **computed** were derived from code and spec numbers during the audit,
-not measured in game. Re-measure before relying on one. Figures marked **measured** are quoted from
-`docs/vehicles.md` or a spec header.
+Evidence: **computed** figures are derived from code and spec numbers, not measured in game
+(re-measure before relying on one); **measured** figures are quoted from `docs/vehicles.md` or a
+spec header.
 
 ## Where plans go
 
@@ -116,7 +123,6 @@ When a brief's work lands, its lasting content is distilled into `docs/` (plus a
 CLAUDE.md line) per the root CLAUDE.md § Where things go, the `docs/TODO.md` items that build on
 it are re-read against the result, and the brief is deleted.
 
-CI: `docs/TODO.md` cites `mechanical_update/05_…` and `06_…` in backticks, and
-`tools/check_docs.mjs` (run in CI) fails on a path that does not exist. So `mechanical_update/` is
-committed together with the TODO edit, and deleting brief 05 or 06 means repointing those TODO
-references in the same change.
+CI: a doc that cites a brief's path in backticks fails `tools/check_docs.mjs` once the brief is gone,
+so deleting a brief means repointing its references in the same change. Code comments cite briefs by
+number and `check_docs` does not read code: grep for the number.

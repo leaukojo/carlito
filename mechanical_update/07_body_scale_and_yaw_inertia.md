@@ -23,6 +23,12 @@ property that is an artefact rather than a footprint fact: yaw inertia.
   wheelbase and are out of this brief's scope.
 - Consequence: longitudinal load transfer per g is ~1.5x a full-size saloon's; the front axle
   unloads hard on a rear-biased launch.
+- The rear axle unloads under braking: `sedan` (centre of mass ~0.61 m over the contact plane off
+  the unsagged station, 0.38 of its wheelbase, 40 % static rear load) unloads its rears completely
+  at ~1.04 g, the tyre's peak. Its brakes reach that peak, so a full-pedal ABS stop from 100 km/h
+  has its rear wheels off the road for ~0.3 s each (38 wheel-ticks,
+  `measure_vehicles -- sedan 60 brake`, 2026-10-08). ABS reads the hub's speed off the ground, so they land turning. No other
+  road body lifts. Honest for the footprint; this brief decides whether `sedan` keeps it.
 
 ## What bends toward full size
 
@@ -45,6 +51,25 @@ Targets that ask for full-size figures:
 - The `measure_vehicles` tracking pass fails a tick with the whole front axle off the ground (a
   CI gate). Keep the gate (a wheelie on a road car is wrong at any footprint) but reach it with
   real levers.
+
+**Measured** front-axle load at a floored launch (2026-10-11, `measure_vehicles -- <variant> 60
+trace`; this brief is the record of these figures). The trace's front-axle gate (50 % of the parked
+load, unsourced) fails on seven rigs; its `xfer` column is the share steady transfer `m a h / L`
+predicts at the measured acceleration. Shift shocks (`delivery`, `garbage-truck`, the tractor) belong
+to the shift's handover and the tractor's launch close (`docs/vehicles.md` § The shift policy,
+`docs/heavy_vehicles.md` § Tractor, implement & ISOBUS), the semi's pull against its venting trailer
+brakes to the brakes. This brief's:
+- `sedan-sports` pitches ~12 points past steady state as its D1 acceleration climbs 0.34 to 0.73 g in
+  0.5 s (44 % against 56 % predicted; steady at 0.61 g, 60 %).
+- `suv` sits ~6-10 points under steady transfer through its whole D1 launch (46 % against 56 % at
+  0.47 g). `delivery` sits ~9 points under it (54 % against 63 % at 0.39 g); on its van drivetrain
+  (`docs/vehicles.md` § Sourced figures, the heavy vans' drivetrain) its lowest is 54 % against 64 %
+  at 0.38 g with no shift shock, so the gap is not the driveline's. Both are unexplained; the
+  measured share is the tyre's whole normal load (springs, damper, bar and link force).
+- The other bodies sit 0-3 points under steady transfer.
+- The absolute floor, and whether the semi family keeps `measure_semi_launch`'s 8.5 kN steer-axle
+  floor in its place, is the open decision on the front-lift reference; until then the gate is
+  judged by no regression.
 
 A correct consequence, not a fudge: the `sedan`'s `brake_bias_front` 0.873 (87 % front, against
 ~65-75 % on full-size saloons) follows from the transfer. Leave it.

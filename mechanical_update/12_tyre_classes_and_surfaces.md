@@ -46,8 +46,8 @@ uses them today.
   longer than a summer tyre; on snow a winter tyre has roughly 1.5-2x a summer tyre's grip; on
   ice both are very low (studs help); a lug tyre is weaker on asphalt and much stronger in mud and
   soil.
-- Temperature (winter rubber in the cold, summer rubber hardening) needs an ambient temperature
-  that does not exist; likely out of scope, say so.
+- Temperature (winter rubber in the cold) needs an ambient temperature that does not exist; likely
+  out of scope.
 - Selection: a local setting or garage choice; optionally a bridge signal (a contract change,
   `contract-edit` skill). User decision.
 - Content: a snow or ice patch on a level to make the difference visible (`level-edit` skill;

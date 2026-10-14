@@ -28,6 +28,9 @@ const BOAT_BASE := {
 	"idle_rpm": 800.0, "redline_rpm": 5200.0,
 	"gear_ratios": [2.6, 1.9, 1.4, 1.05, 0.8, 0.62], "reverse_ratio": 2.0,
 	"final_drive": 2.1, "efficiency": 0.9, "shift_up_rpm": 4400.0, "shift_down_rpm": 1800.0,
+	# The part-pedal shift policy (`ShiftPolicy`) declared neutral: the full-pedal pair at any pedal.
+	"shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0,
+	"shift_dwell_s": 0.0, "skip_shifts": false, "shift_handover_s": 0.0, "start_gear_max": 0,
 	"steer_speed": 2.2,
 }
 
@@ -116,6 +119,13 @@ func _build_spec(ov: Dictionary, geo: Dictionary) -> VehicleSpec:
 	spec.efficiency = float(BOAT_BASE["efficiency"])
 	spec.shift_up_rpm = float(BOAT_BASE["shift_up_rpm"])
 	spec.shift_down_rpm = float(BOAT_BASE["shift_down_rpm"])
+	spec.shift_up_light_rpm = float(BOAT_BASE["shift_up_light_rpm"])
+	spec.shift_down_light_rpm = float(BOAT_BASE["shift_down_light_rpm"])
+	spec.kickdown_pedal = float(BOAT_BASE["kickdown_pedal"])
+	spec.shift_dwell_s = float(BOAT_BASE["shift_dwell_s"])
+	spec.skip_shifts = bool(BOAT_BASE["skip_shifts"])
+	spec.shift_handover_s = float(BOAT_BASE["shift_handover_s"])
+	spec.start_gear_max = int(BOAT_BASE["start_gear_max"])
 	# No max_steer_deg; `rudder_torque` turns the hull, `steer_speed` slews the rudder axis.
 	spec.steer_speed = float(ov.get("steer_speed", BOAT_BASE["steer_speed"]))
 	spec.headlight_paths.assign([NodePath("Lamps/Headlight")])

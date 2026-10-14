@@ -25,8 +25,8 @@ by a physical reason. The hitch has position control only.
   against travel. So it is already 0 at rest and can never push the tractor; without the ramp it
   would still be 0 at a standstill.
 - The ramp's comment gives two reasons: "a constant rearward force would shove a standing tractor
-  out of the furrow" (not true of the capped, signed law above) and "It is also the 60 Hz margin".
-  The second is the real one. Below `DRAFT_SPEED_REF` the law is a linear damper `F = -k v`, kept
+  out of the furrow" (not true of the capped, signed law above) and "It is also the 60 Hz margin",
+  the real one. Below `DRAFT_SPEED_REF` the law is a linear damper `F = -k v`, kept
   well damped at 60 Hz (`k * dt / m < 0.5`). The one-tick cap bounds only the LINEAR impulse, and
   the force acts ~1.3 m behind the COM, so a larger force could spin the chassis. Guard:
   `test_tractor.test_the_shipped_rating_keeps_the_60hz_damper_margin`, whose comment says raising

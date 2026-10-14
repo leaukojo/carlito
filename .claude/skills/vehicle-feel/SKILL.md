@@ -7,7 +7,7 @@ Rules: `src/vehicles/CLAUDE.md` (+ the family's nested file). Steps:
 
 1. Generated body (`kenney/*`, `watercraft/*`): edit the recipe in `tools/gen_kenney_vehicles.gd`
    / `tools/gen_boat_variants.gd`, never the `.tscn` / `.tres`. A tyre (`mu_*`) edit re-derives
-   brakes, so it is a recipe edit too. A hand-built spec (semi, trailers, drone, plane, train):
+   the brake split, so it is a recipe edit too. A hand-built spec (semi, trailers, drone, plane, train):
    edit the `.tres` the shipped scene loads, then skip to step 3.
 2. Regen (`tools/CLAUDE.md` § Rare generators) and diff: only the intended values move, and
    hand-authored collision survives.

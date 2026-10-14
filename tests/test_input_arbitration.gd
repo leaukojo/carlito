@@ -145,6 +145,49 @@ func test_manual_bridge_gear_is_exact_and_owns_direction() -> void:
 	assert_bool(neu.gear_auto).is_false()
 
 
+func test_bridge_p_parks_in_both_gearbox_modes() -> void:
+	for manual in [true, false]:
+		var out: VehicleInput = RouterScript.arbitrate_bridge(
+				_bridge(0.6, 0.0, 0.0, 0.0, RouterScript.GEAR_P), manual)
+		assert_int(out.gear_request).is_equal(RouterScript.GEAR_P)
+		# Nothing drives in P; the pedal still revs the engine, forward-signed.
+		assert_float(out.throttle).is_equal(0.6)
+
+
+func test_automatic_bridge_byte_0_keeps_a_parked_body_in_p() -> void:
+	# Byte 0 is "no gear opinion": silence never unparks, the accelerator does.
+	var held: VehicleInput = RouterScript.arbitrate_bridge(_bridge(0.0, 0.0, 0.0, 0.0, GEAR_N),
+			false, RouterScript.GEAR_P)
+	assert_int(held.gear_request).is_equal(RouterScript.GEAR_P)
+	var go: VehicleInput = RouterScript.arbitrate_bridge(_bridge(0.4, 0.0, 0.0, 0.0, GEAR_N),
+			false, RouterScript.GEAR_P)
+	assert_int(go.gear_request).is_equal(GEAR_D1)
+	# Not parked: byte 0 with no throttle is N, as before.
+	var idle: VehicleInput = RouterScript.arbitrate_bridge(_bridge(0.0, 0.0, 0.0, 0.0, GEAR_N),
+			false, GEAR_D1)
+	assert_int(idle.gear_request).is_equal(GEAR_N)
+	# Manual takes byte 0 exactly: a real N, parked or not.
+	var manual: VehicleInput = RouterScript.arbitrate_bridge(_bridge(0.0, 0.0, 0.0, 0.0, GEAR_N),
+			true, RouterScript.GEAR_P)
+	assert_int(manual.gear_request).is_equal(GEAR_N)
+
+
+func test_local_driving_leaves_p_only_when_asked_to_move() -> void:
+	var held: VehicleInput = RouterScript.arbitrate_local(_intent({}), 0.0, RouterScript.GEAR_P)
+	assert_int(held.gear_request).is_equal(RouterScript.GEAR_P)
+	var go: VehicleInput = RouterScript.arbitrate_local(_intent({&"accel": 1.0}), 0.0,
+			RouterScript.GEAR_P)
+	assert_int(go.gear_request).is_equal(GEAR_D1)
+
+
+func test_the_brake_override_never_latches_in_p() -> void:
+	var input := VehicleInput.new()
+	input.brake = 1.0
+	input.throttle = 1.0
+	input.gear_request = RouterScript.GEAR_P
+	assert_bool(RouterScript.brake_override(false, input, 5.0)).is_false()
+
+
 func test_manual_bridge_all_forward_gears_drive_forward() -> void:
 	for g in [2, 3, 4, 5, 6]:
 		var out: VehicleInput = RouterScript.arbitrate_bridge(_bridge(0.5, 0.0, 0.0, 0.0, g), true)
@@ -883,9 +926,76 @@ func test_the_cut_clears_when_either_pedal_lifts_and_never_latches_in_neutral() 
 		assert_bool(RouterScript.brake_override(true, input, 5.0)).is_false()
 
 
+# --- the auto hold: keys and touch at a standstill in gear ----------------------------------
+
+static func _idle(gear := GEAR_D1, throttle := 0.0) -> VehicleInput:
+	var out := VehicleInput.new()
+	out.gear_request = gear
+	out.throttle = throttle
+	return out
+
+
+func test_the_auto_hold_latches_at_a_standstill_in_d_or_r_with_no_throttle() -> void:
+	assert_bool(RouterScript.auto_hold(false, _idle(), 0.0, false)).is_true()
+	assert_bool(RouterScript.auto_hold(false, _idle(GEAR_R), -0.2, false)).is_true()
+	assert_bool(RouterScript.auto_hold(false, _idle(3), RouterScript.REVERSE_ENGAGE_SPEED,
+			false)).is_true()
+
+
+func test_the_auto_hold_never_latches_moving_out_of_gear_or_under_the_pad() -> void:
+	var moving := RouterScript.REVERSE_ENGAGE_SPEED + 0.01
+	assert_bool(RouterScript.auto_hold(false, _idle(), moving, false)).is_false()
+	assert_bool(RouterScript.auto_hold(false, _idle(GEAR_N), 0.0, false)).is_false()
+	assert_bool(RouterScript.auto_hold(false, _idle(RouterScript.GEAR_P), 0.0, false)).is_false()
+	assert_bool(RouterScript.auto_hold(false, _idle(), 0.0, true)).is_false()
+	assert_bool(RouterScript.auto_hold(true, _idle(), 0.0, true)).is_false()
+
+
+func test_the_auto_hold_keeps_what_it_caught_until_the_throttle_asks_to_move() -> void:
+	# A body its brakes cannot hold slides, and stays held.
+	assert_bool(RouterScript.auto_hold(true, _idle(), 3.0, false)).is_true()
+	assert_bool(RouterScript.auto_hold(true, _idle(GEAR_D1, 0.1), 0.0, false)).is_false()
+	assert_bool(RouterScript.auto_hold(true, _idle(GEAR_R, -0.1), 0.0, false)).is_false()
+	assert_bool(RouterScript.auto_hold(true, _idle(GEAR_N), 0.0, false)).is_false()
+
+
+func test_the_last_pedal_device_decides_whether_the_pad_drives() -> void:
+	assert_bool(RouterScript.pad_drives_pedals(false, 0.0, 0.3)).is_true()
+	assert_bool(RouterScript.pad_drives_pedals(true, 0.5, 0.0)).is_false()
+	assert_bool(RouterScript.pad_drives_pedals(false, 0.5, 0.5)).is_true()
+	# Neither pedal down: the last device stands.
+	assert_bool(RouterScript.pad_drives_pedals(true, 0.0, 0.0)).is_true()
+	assert_bool(RouterScript.pad_drives_pedals(false, 0.0, 0.0)).is_false()
+
+
+## A live bridge in D with every pedal up.
+class _IdleBridge extends BridgeSourceScript:
+	func poll() -> Dictionary[StringName, Variant]:
+		return {&"active": true, &"drive_sourced": true, &"accel": 0.0, &"brake": 0.0,
+				&"gear": GEAR_D1, &"key": RouterScript.KEY_IGNITION}
+
+
+func test_the_local_path_holds_the_brake_at_a_standstill_and_the_bridge_creeps() -> void:
+	var router: Node = auto_free(RouterScript.new())
+	var body: _RollingBody = auto_free(_RollingBody.new())
+	router.register_vehicle(body)
+	router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().brake).is_equal(RouterScript.AUTO_HOLD_BRAKE)
+	assert_bool(router.get_vehicle_input().lamps.brake_lamp).is_true()
+	# A body whose engine drives no road wheel (a drone's pedals are a stick) never gets it.
+	body.holds = false
+	router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().brake).is_equal(0.0)
+	body.holds = true
+	router._bridge_source = _IdleBridge.new()
+	router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().brake).is_equal(0.0)
+
+
 ## A body the test rolls by hand: the router reads only these off a registered vehicle.
 class _RollingBody extends Node3D:
 	var speed := 0.0
+	var holds := true  ## an engine that drives road wheels (`key_auto_hold`)
 	func get_speed() -> float:
 		return speed
 	func key_steer_speed() -> float:
@@ -894,6 +1004,8 @@ class _RollingBody extends Node3D:
 		return RouterScript.GEAR_D1
 	func key_pedals_are_a_stick() -> bool:
 		return false
+	func key_auto_hold() -> bool:
+		return holds
 
 
 class _BothPedalsBridge extends BridgeSourceScript:
@@ -941,14 +1053,14 @@ func _locked_router(touch: _CountingTouch) -> Node:
 	return router
 
 
-func test_the_locked_idle_is_key_lock_with_the_handbrake_on() -> void:
+func test_the_locked_idle_is_key_lock_in_p_with_the_handbrake_on() -> void:
 	var out: VehicleInput = RouterScript.locked_idle()
 	assert_int(out.key).is_equal(RouterScript.KEY_LOCK)
 	assert_float(out.handbrake).is_equal(1.0)
 	assert_float(out.throttle).is_equal(0.0)
 	assert_float(out.brake).is_equal(0.0)
 	assert_float(out.steer).is_equal(0.0)
-	assert_int(out.gear_request).is_equal(GEAR_N)
+	assert_int(out.gear_request).is_equal(RouterScript.GEAR_P)
 
 
 func test_bridge_only_never_polls_local_or_touch() -> void:

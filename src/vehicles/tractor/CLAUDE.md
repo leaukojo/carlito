@@ -19,9 +19,17 @@ Tour: `docs/heavy_vehicles.md` § Tractor, implement & ISOBUS and § The drawbar
 
 - Suspension IS the tyres: stiff and short-travel is the picture, not a softening target.
 - Traction is ballast (`mass`, `front_weight`), never the torque curve or `final_drive`: low-end
-  torque at `converter_free_rpm` pulls a drawbar trailer away.
-- A pull-away is a powershift launch (`launch_engage_s`, `launch_gear` D3); D1 is the bogged-start
-  fallback, never detuned. Guard: `test_drivetrain` (the launch tests).
+  torque at `launch_target_rpm` pulls a drawbar trailer away.
+- A pull-away is a powershift launch in its start gear (`ShiftPolicy.start_gear`, up to
+  `start_gear_max` D3): the highest whose launch drive at the driver's pedal beats the load standing
+  on the grade twice. The pack's capacity ramps over `launch_engage_s` while the controller slips it
+  (holds a floored start near the grip peak), and its close spans `shift_handover_s`, never the
+  rating. Guards:
+  `test_drivetrain` (the launch ramp, the close, the start gear), `test_tractor`.
+- At rest in gear with the drive pedal up, the foot brake holds the tractor (`hill_hold`
+  STANDSTILL, Valtra's HillHold). It has no timeout, and lets go once the pedal is down and the
+  clutch carries the grade. The pedal engages MFWD, so the hold is on all four wheels and
+  `fwd_drive_state` reads true while it holds.
 - The COM is `com_y_frac` of the body AABB, never a metre figure (`scale` moves). Front unload is
   fixed with `front_weight`, never COM height.
 - `scale` 1.35 is bounded by what it does not reach: linkage, implements, tipper.

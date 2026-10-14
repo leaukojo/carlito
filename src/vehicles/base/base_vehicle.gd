@@ -128,8 +128,19 @@ func _physics_process(delta: float) -> void:
 	var steer_target := input.steer if is_nan(guidance_unit) else guidance_unit
 	_steer = move_toward(_steer, steer_target, spec.steer_speed * delta)
 
-	var drive_omega := drive.drive_omega(spec.ground_drive, input) if drive != null else 0.0
+	# The order is load-bearing on a body whose engine drives wheels: the gearbox, the fuel and the
+	# crank's predictor (`process`, on last tick's wheel spin), then the wheels and the coupled
+	# solve, inside which the crank settles (`WheelDrive.tick` -> `Drivetrain.couple`), then
+	# telemetry, which reads the settled crank.
 	var ground_speed := linear_velocity.dot(-global_transform.basis.z)
+	drivetrain.running = input.key == InputRouter.KEY_IGNITION
+	var foot := input.brake
+	if drive != null:
+		# The hill hold first: the MFWD engagement and the controller read its pedal.
+		drive.hold_step(self, spec.ground_drive, input, drivetrain, ground_speed, delta)
+		foot = drive.foot_pedal(input)
+	var drive_omega := drive.drive_omega(spec.ground_drive, input) if drive != null else 0.0
+	drivetrain.braking = foot > 0.0
 	var axle_torque := drivetrain.process(
 			delta, absf(input.throttle), drive_omega, ground_speed, input.gear_request, input.gear_auto)
 
@@ -138,7 +149,9 @@ func _physics_process(delta: float) -> void:
 		_terrains_found = true
 
 	if drive != null:
-		drive.tick(self, spec, input, _steer, axle_torque, ground_speed, delta, _grip_terrains)
+		drive.park_engaged = drivetrain.gear_byte == Drivetrain.GEAR_P
+		drive.tick(self, spec, input, _steer, axle_torque, ground_speed, delta, _grip_terrains,
+				drivetrain)
 
 	_update_telemetry(input, delta)
 	var lamp_bits := input.lamps
@@ -407,6 +420,12 @@ func key_steer_speed() -> float:
 ## body alike.
 func key_pedals_are_a_stick() -> bool:
 	return false
+
+
+## True when the body's engine drives road wheels, so a converter creeps it off and a grade rolls it
+## back with the keys up: InputRouter's auto hold then holds its foot brake at a standstill.
+func key_auto_hold() -> bool:
+	return Drivetrain.drives_wheels(spec)
 
 
 func get_gear_byte() -> int:

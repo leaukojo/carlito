@@ -3,8 +3,8 @@
 ; North American conventional (bonneted) tractor unit. HAND-AUTHORED like semi_spec.tres, and a
 ; VARIANT of it: the drivetrain, brake, handbrake, wheel, suspension and tyre blocks are
 ; semi_spec.tres's VERBATIM, so everything tests/test_truck.gd walks across the truck family (the
-; retarder band, the brake > transmissible drive > handbrake hierarchy, the retarder's slip-cap
-; backstop margin) holds here by construction. What differs is GEOMETRY and one flag.
+; retarder band, the stall hold, the parking grade, the retarder's slip-cap backstop margin) holds
+; here by construction. What differs is GEOMETRY and one flag.
 ;
 ; trailer_bus_equipped IS DELIBERATELY ABSENT, and that absence is the whole variant. Europe puts a
 ; CAN pair on pins 6 and 7 of the ISO 7638 connector; North America has none, so trailer ABS status
@@ -58,6 +58,7 @@ wheel_scene = ExtResource("2_wheel")
 driven_front = false
 driven_rear = true
 retarder_equipped = true
+retarder_rating_nm = 1450.0
 rest_length = 0.32
 spring_rate = 240000.0
 damper_bump = 12000.0
@@ -71,11 +72,12 @@ grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 0.8
 mu_lat = 0.75
 load_sensitivity = 0.08
-handbrake_grip = 1.0
-brake_torque = 10500.0
-handbrake_torque = 4800.0
+brake_torque = 15500.0
+handbrake_torque = 12000.0
 abs_equipped = true
 tcs_equipped = true
+hill_hold = 1
+hill_hold_s = 3.0
 max_steer_deg = 24.0
 min_steer_frac = 0.21
 steer_falloff_speed = 29.0
@@ -94,9 +96,20 @@ reverse_ratio = 6.0
 final_drive = 2.925
 efficiency = 0.9
 engine_brake_frac = 0.15
+engine_friction_frac = 0.05
 shift_cut_s = 0.4
+engine_inertia = 3.0
+coupling = 1
+clutch_reserve = 2.0
+launch_rpm_over_idle = 300.0
 shift_up_rpm = 1690.0
 shift_down_rpm = 780.0
+shift_up_light_rpm = 1500.0
+shift_down_light_rpm = 700.0
+kickdown_pedal = 0.95
+shift_dwell_s = 1.5
+skip_shifts = true
+shift_handover_s = 0.4
 ; ROAD-SPEED GOVERNOR 105 km/h: North American practice (no federal limiter mandate; fleets that
 ; fit one set it around 65 mph). Higher than the European unit by design, like the ISO 7638 split.
 ; It binds: the overdrive 6th would run on to ~140 km/h at redline; ~1560 rpm at 105.

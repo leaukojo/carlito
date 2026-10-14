@@ -28,9 +28,13 @@ static func add_slab(parent: Node, slab_name: String, size: Vector3, x := 0.0) -
 
 ## sloppyCAN's inbound stash, written straight into the (desktop-inert) Bridge autoload. Percentages
 ## are the contract's "in" ranges (`steer` -100..100, + = right); bridge_source normalizes them.
-static func drive(accel_pct: float, brake_pct: float, steer_pct := 0.0) -> void:
+## `gear` is the RAMN byte: 1 is D in the automatic box, D1 under `InputRouter.set_manual_gearbox`.
+## `tcs_off` switches the body's traction control off, as the bridge's own flag does. `key` is the
+## ignition byte (`InputRouter.KEY_*`); anything but 3 stops the engine and a truck's compressor.
+static func drive(accel_pct: float, brake_pct: float, steer_pct := 0.0, handbrake := false,
+		gear := 1, tcs_off := false, key := 3) -> void:
 	Bridge.set("_active", true)
 	Bridge.set("_inbound", {
-		"key": 3, "gear": 1, "accel": accel_pct, "brake": brake_pct,
-		"steer": steer_pct, "handbrake": 0.0,
+		"key": key, "gear": gear, "accel": accel_pct, "brake": brake_pct,
+		"steer": steer_pct, "handbrake": 1.0 if handbrake else 0.0, "tcs_off": tcs_off,
 	})

@@ -35,13 +35,13 @@ or be folded into a bigger brief that touches the same code.
 
 - `RayWheel.ABS_SLIP` / `TCS_SLIP`: they know the true road speed and hold the slip exactly at the
   0.12 peak with no cycling ("an honest model of an ideal ABS").
-- Real systems estimate speed from the wheels and cycle around the peak; real ABS on dry asphalt
-  stops a few per cent longer than an ideal hold, and the pulsing is the visible sign of ABS at
-  work.
+- Real systems estimate speed from the wheels and cycle around the peak (a few per cent longer dry
+  stops than an ideal hold; the pulsing is the visible sign).
 - Fine as a choice. If ABS or TC activity should become a teaching signal (only `trailer_abs` is on
-  the bus today), a cycling model makes the intervention visible. User decision.
-- Related COMPROMISE: per-wheel TC on an open diff (`RayWheel._integrate_spin`, ~line 415) is
-  neither engine-side nor brake-based TC. Revisit after brief 05.
+  the bus today), a cycling model makes it visible. User decision.
+- Related: TC is a hold solved with the brakes inside the differentials (`RayWheel.settled_spin`),
+  exact under a biasing diff. The drive reaches the wheels through the crank's coupling, so an
+  open diff sends the cut across too (`src/vehicles/CLAUDE.md`, the TC bullet).
 
 ## 5. The speed-tapered steering lock applies to analog input too
 
@@ -49,12 +49,5 @@ or be folded into a bigger brief that touches the same code.
   every input source, bridge and gamepad included; sized to stay at least 1.5x the lock the tyres
   can use (`STEER_GRIP_MARGIN`,
   `test_vehicle_catalog.test_a_steering_taper_never_out_limits_the_tyres`).
-- Real cars with speed-sensitive steering do something similar, so this is defensible. Listed
-  because `src/input/CLAUDE.md` wants analog input to meet a realistic vehicle. No action unless the
-  user wants analog input to bypass it.
-
-## 6. The converter multiplies no torque and does not creep
-
-- Documented COMPROMISE (`drivetrain.gd` § torque converter; `docs/vehicles.md` § Converter).
-  Covered by brief 05 (Part B, coupling model; Part C, creep and hill hold); listed here only so
-  this file is a complete list of the small oddities.
+- Defensible (real cars with speed-sensitive steering do similar). No action unless the user wants
+  analog input to bypass it.

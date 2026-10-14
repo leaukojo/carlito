@@ -103,11 +103,13 @@ static func axle_load_kg(suspension_force_n: float) -> float:
 ## trailer's own wheels brake with it.
 ##
 ## The retarder acts on the TRACTOR's axle alone, so without a share down the bus the trailer would
-## push the tractor. Retarder at full is Drivetrain.RETARDER_MAX_FRAC of the tractor's brake
-## torque, asked of the trailer's brakes at the same fraction. `retarder_pct` (what ran) inherits
-## the speed fade.
-static func trailer_brake_blend(brake01: float, retarder_pct: int) -> float:
-	var retarder_share := clampf(float(retarder_pct) / 100.0, 0.0, 1.0) * Drivetrain.RETARDER_MAX_FRAC
+## push the tractor. Retarder at full is `retarder_frac` (`Drivetrain.retarder_fraction`) of the
+## tractor's brake, asked of the trailer's brakes at the same fraction. `brake01` is the service
+## brake's application (`WheelDrive.pedal_application`); `retarder_pct` (what ran)
+## inherits the speed fade.
+static func trailer_brake_blend(brake01: float, retarder_pct: int, retarder_frac: float) -> float:
+	var retarder_share := clampf(float(retarder_pct) / 100.0, 0.0, 1.0) \
+			* clampf(retarder_frac, 0.0, 1.0)
 	return clampf(clampf(brake01, 0.0, 1.0) + retarder_share, 0.0, 1.0)
 
 

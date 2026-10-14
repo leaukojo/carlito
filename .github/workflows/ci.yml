@@ -280,6 +280,26 @@ jobs:
             fi
           done
 
+      # A truck that loses its air: spring brakes hold it on 18 %, the auto-neutral keeps it from
+      # driving away, and from 30 km/h it stops at UN R13's secondary-braking floor — on the
+      # garbage truck and both tractor units with their trailers braking too
+      # (docs/heavy_vehicles.md § Air). Judged by output: any FAIL, or no summary line, fails.
+      - name: Drained air (spring brakes + auto-neutral, live)
+        shell: bash
+        timeout-minutes: 5
+        run: |
+          set +e
+          godot --headless --fixed-fps 60 res://tools/measure_air_loss.tscn -- all strict 2>&1 | tee air-loss.log
+          set -e
+          if grep -E ": FAIL$" air-loss.log; then
+            echo "drained-air probe failed: lines above"
+            exit 1
+          fi
+          if ! grep -qE "^air loss: all [0-9]+ passes PASS" air-loss.log; then
+            echo "drained-air probe printed no passing summary — the run did not finish"
+            exit 1
+          fi
+
   # Publishes the just-built site into gh-pages:/dev/. Pushes to main run the gate
   # stack above but publish nothing: main only ever moves via a promote, and those
   # bytes are already live on dev.

@@ -112,7 +112,8 @@ const GRID_LEVEL_M := 3.0
 ## Display names for the eight paint channels. Color is the matching CHANNEL_PARAMS shader param.
 @export var channel_names := default_channel_names()
 ## Tire grip multiplier per paint channel 0..7 (1.0 = spec grip, lower = slippery).
-## Clamped to [0, 1] on read: above 1 breaks the brake > drive hierarchy, below 0 inverts friction.
+## Clamped to [0, 1] on read: above 1 grips past the tyre every vehicle is tuned on, below 0
+## inverts friction.
 @export var channel_grip := PackedFloat32Array([1, 1, 1, 1, 1, 1, 1, 1])
 ## Rolling-resistance coefficient ADDED per paint channel 0..7 (0 = a hard road, mud ~0.2): the
 ## ground deforming under the tyre, a body force at the contact off the wheel's normal load. Grip
@@ -162,7 +163,7 @@ func _get_configuration_warnings() -> PackedStringArray:
 	for i in channel_grip.size():
 		if channel_grip[i] < 0.0 or channel_grip[i] > 1.0:
 			warnings.append(("channel_grip[%d] = %.2f is outside [0, 1] and will be clamped: "
-					+ "above 1 breaks the vehicle's tuned brake > drive hierarchy, below 0 "
+					+ "above 1 grips past the tyre every vehicle is tuned on, below 0 "
 					+ "inverts tire friction.") % [i, channel_grip[i]])
 	for i in channel_drag.size():
 		if channel_drag[i] < 0.0 or channel_drag[i] > MAX_CHANNEL_DRAG:

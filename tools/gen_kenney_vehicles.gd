@@ -1,8 +1,9 @@
 extends Node
 ## One-shot generator for the Kenney car-kit vehicle variants (CC0). For each variant writes
 ## src/vehicles/kenney/<variant>.tscn + <variant>_spec.tres from a family baseline + per-variant
-## overrides (chassis, GLB body, lamps, wheels). brake_torque / handbrake_torque are always
-## derived from the tyre (BRAKE_GRIP_FRAC / _derive_brakes), never hand-tuned.
+## overrides (chassis, GLB body, lamps, wheels). Brake hardware (`brake_torque`, `handbrake_torque`,
+## `park_pawl_torque`, `retarder_rating_nm`) is declared per baseline as a real hardware class,
+## never derived from the tyre; only the axle split (`_front_brake_share`) is derived.
 ## Game-mode tool scene (not --script): base_vehicle.gd / tractor.gd need the InputRouter/Bridge
 ## autoloads. Run `godot --headless --path . res://tools/gen_kenney_vehicles.tscn`.
 ## Deterministic and destructive-by-run: a hand-tune driven into a shipped .tres must be folded
@@ -15,7 +16,7 @@ const BASE_SCRIPT := "res://src/vehicles/base/base_vehicle.gd"
 const TRACTOR_SCRIPT := "res://src/vehicles/tractor/tractor.gd"
 const TRUCK_SCRIPT := "res://src/vehicles/truck/truck.gd"
 ## Vehicle script per CONTRACT family; unlisted gets plain BaseVehicle. Garbage-truck/firetruck
-## are family "truck" (J1939 chassis); the heavy vans drive like trucks but are family "car"
+## are family "truck" (J1939 chassis); the heavy vans (VAN_BASE) are family "car"
 ## (ordinary chassis, proprietary CAN) and keep base_vehicle.gd.
 const FAMILY_SCRIPTS := {"tractor": TRACTOR_SCRIPT, "truck": TRUCK_SCRIPT}
 
@@ -44,12 +45,6 @@ const WHEEL_RADIUS := 0.36  ## physics radius, all four corners (RayWheel is sin
 ## are outside the AABB and not added; they're already inside the Cd this multiplies.
 const FRONTAL_FILL := 0.82
 const GRAVITY := 9.8
-## Share of the tyre's own longitudinal grip full pedal asks for; every baseline derives its foot
-## brake from the tyre through this (see _derive_brakes): deceleration at full pedal is
-## `frac * mu_long * g` on every body, whatever it weighs (split by axle, _front_brake_share). Just
-## under 1 because RayWheel's slip tyre peaks at the ceiling; past it a wheel without ABS locks and
-## brakes at the grip curve's sliding value (0.8 of the peak).
-const BRAKE_GRIP_FRAC := 0.95
 const MIN_CLEARANCE := 0.12  ## m the collision hull floor is held above the wheel-contact plane
 const WHEEL_BAND := 0.4   ## m z-window (body space) the body half-width is measured over per axle
 
@@ -107,9 +102,9 @@ var _fallback_lamp_y := {"tractor-kenney": {"rear": 1.647}}
 var _drag_report: Array = []  ## per-variant measured frontal area + derived drag area
 var _shape_report: Array = []  ## per-variant collision shape kind + hull vertex count
 var _lens_report: Array = []   ## per-variant lens detection, so a bad lamp is diagnosable
-var _brake_report: Array = []  ## per-variant grip-derived brake, so a fictional one is visible
+var _brake_report: Array = []  ## per-variant brakes against the tyre, the stall and the grade
 
-# --- family baselines (spec fields; brake/handbrake are derived, not listed) -----------
+# --- family baselines (spec fields) ---------------------------------------------------
 const CAR_BASE := {
 	# cd 0.32 is a modern saloon; crr 0.012 is a passenger radial on asphalt.
 	"cd": 0.32, "crr": 0.012,
@@ -133,7 +128,7 @@ const CAR_BASE := {
 	# Differentials: 1.0 is open (Differential.bias_capacity). Road cars keep open axles and an
 	# open centre unless the body really carries an LSD or a biasing centre (VARIANTS).
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
-	"mu_long": 1.05, "mu_lat": 0.97, "handbrake_grip": 0.45,
+	"mu_long": 1.05, "mu_lat": 0.97,
 	# Rear side grip 8 % over the front (GroundDriveSpec.rear_lat_grip): at 1.0 every body steers
 	# neutral, and a 20 % steer step at 100 km/h spun even the FWD sedan on a lift; 1.08 clears
 	# every held and lifted step on `sedan-sports` (step-steer probe, 2026-10-03;
@@ -143,6 +138,9 @@ const CAR_BASE := {
 	"abs_equipped": true,
 	# Traction control too (part of ESC, EU-mandatory since 2014); `race-future` opts out.
 	"tcs_equipped": true,
+	# Hill-start assist (HillHold.Kind.ASSIST): the brake held ~1 s after its release on a grade
+	# (Honda), unless the drive holds the grade first. The open-wheelers opt out with ABS.
+	"hill_hold": HillHold.Kind.ASSIST, "hill_hold_s": 1.0,
 	# Passenger radials: ~10% of mu per doubling of load past the corner's static share.
 	"load_sensitivity": 0.10,
 	# 185 Nm peak / ~156 hp at 6000 on the base saloon, anchored on a 1150 kg saloon hitting
@@ -153,7 +151,13 @@ const CAR_BASE := {
 	# rev limiter in sixth.
 	"torque_curve": [900, 98, 2000, 154, 3200, 184, 4800, 185, 6000, 185, 6600, 170, 6800, 61],
 	"idle_rpm": 900.0, "redline_rpm": 6800.0,
-	# Brakes derive from the tyre on every baseline (BRAKE_GRIP_FRAC / _derive_brakes).
+	# Brake hardware, Nm per wheel (`BrakeSizing` checks every figure; `_brakes`). A saloon's
+	# 280-300 mm vented discs: 1450 Nm average is 1.43 g of capacity at 1150 kg, past the 1.05 tyre,
+	# so full pedal reaches ABS. The handbrake is a cable on the rear discs, 1400 Nm a wheel: it
+	# locks the unloaded rears at speed (the saloon's static rear wheel holds ~850 Nm), so the
+	# parking grade is the rear tyres' (`BrakeSizing.park_grade`), past the 20 % R13-H grade. The
+	# pawl is a steel tooth sized past the driven tyres, so they slip first.
+	"brake_torque": 1450.0, "handbrake_torque": 1400.0, "park_pawl_torque": 3000.0,
 	# Sixth is the top-speed control: 0.925 settles the sedan at 6025 rpm / 219.9 km/h.
 	# Gears 2-5 re-spread: 1.550 / 1.470 / 1.380 / 1.290 / 1.199.
 	"gear_ratios": [4.5, 2.903, 1.975, 1.431, 1.109, 0.925],
@@ -163,7 +167,32 @@ const CAR_BASE := {
 	# shift_up 5900, bound by the weak bodies reaching sixth; governed bodies (van/pickup) reach
 	# it via `Drivetrain.governed_upshift`.
 	"final_drive": 3.9, "efficiency": 0.9, "shift_up_rpm": 5900.0, "shift_down_rpm": 2200.0,
-	"engine_brake_frac": 0.12, "shift_cut_s": 0.15, "launch_engage_s": 0.0, "launch_gear": 1,
+	# The converter automatic's part-pedal map (`ShiftPolicy`), off the one measured TCU map found, a
+	# 2013 Malibu's 6T40 (EPA, SAE 2015-01-1142, Fig. 11): its ~20 % pedal line upshifts at
+	# 1720-1910 rpm, its coast downshifts sit at 1120-1190 rpm (3rd to 6th). Light 1800 / coast 1150;
+	# the landing floor raises D1>D2 to 1961 (lands 1265). Kickdown past 0.8: the Malibu's kickdown
+	# lines climb at 59-100 % pedal (estimate inside them). Dwell 1.5 s: EPA ALPHA's six-speed hold
+	# after an upshift (the Malibu's shortest measured stay ~1.25 s). Sequential: no skip-shifts.
+	"shift_up_light_rpm": 1800.0, "shift_down_light_rpm": 1150.0, "kickdown_pedal": 0.8,
+	"shift_dwell_s": 1.5, "skip_shifts": false, "start_gear_max": 0,
+	# The shift's inertia phase: 0.3 s, mid of a converter automatic's 0.15-0.5 s (US 11,724,688), an
+	# estimate inside that band. No fixed cut: the TCU reduces the engine's torque through the phase
+	# so the clutch passes the driver's demand (`Drivetrain.handover_fuel`; US 9,327,733).
+	"shift_handover_s": 0.3,
+	"engine_brake_frac": 0.12, "shift_cut_s": 0.0, "launch_engage_s": 0.0,
+	# Motoring at and below idle (engine_friction_frac): ~0.10 of peak, ~18 N·m, an estimate for a
+	# 1.6-2.0 L petrol's friction plus closed-throttle pumping (no primary figure found): it runs a
+	# blipped crank back to idle, and a key-off one to rest in about a second. docs/vehicles.md
+	# § Crank and coupling.
+	"engine_friction_frac": 0.10,
+	# Crank and coupling (docs/vehicles.md § Crank and coupling): 0.20 kg·m² is a 1.2-2.0 L petrol's
+	# measured rotating assembly with a flexplate and a converter impeller (0.125-0.149 whole engine
+	# with flywheel and clutch, 0.092 impeller); an automatic's converter; a clutch rating 1.5x the
+	# peak, a car's OE margin. The converter ships as a fluid coupling (ratio 1.0, D4: a real one's
+	# ~2.0 waits on a brake review); a 6-speed's lock-up closes in every gear past the launch.
+	"engine_inertia": 0.20, "coupling": VehicleSpec.Coupling.CONVERTER, "clutch_reserve": 1.5,
+	"converter_stall_ratio": 1.0, "lockup_gear": 1,
+	"launch_rpm_over_idle": 0.0,
 	"max_steer_deg": 38.0, "steer_speed": 7.0,
 	# Steering falloff: BaseVehicle lerps lock from full to min_steer_frac near
 	# steer_falloff_speed, so the pair states an absolute lock at motorway speed — divide by the
@@ -171,8 +200,8 @@ const CAR_BASE := {
 	# needs ~2.8x less lock at that speed.
 	"min_steer_frac": 0.26, "steer_falloff_speed": 42.0,
 }
-## Diesel curves end at zero at the redline: the governor droops to nothing above rated speed,
-## so top gear is governed (never drag-limited), top speed = `redline x gear 6`.
+## TRUCK_BASE's diesel curve ends at zero at the redline: the governor droops to nothing above
+## rated speed, so top gear is governed (never drag-limited), top speed = `redline x gear 6`.
 const TRUCK_BASE := {
 	# Flat-fronted working truck: cd 0.70, crr 0.007 for low-resistance commercial radials.
 	"cd": 0.70, "crr": 0.007,
@@ -193,17 +222,31 @@ const TRUCK_BASE := {
 	"anti_dive": 0.0, "anti_squat": 0.5,
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
-	# J1939: only family with an auxiliary retarder on the driven axle.
-	"retarder_equipped": true,
+	# J1939: only family with an auxiliary retarder on the driven axle. 600 Nm at the gearbox output
+	# is a medium-duty output retarder: 0.94 m/s^2 on the 8 t body through the 4.5 final drive.
+	"retarder_equipped": true, "retarder_rating_nm": 600.0,
+	# Axle brakes of the ~26 t chassis these bodies are built on (7.1 t steer, 13 t drive axle):
+	# 15500 Nm a wheel is 2.2 g at 8 t, so the light body can lock its wheels and ABS works for it,
+	# and full pedal holds gear 1 at converter stall (BrakeSizing.stall_hold_margin). The spring
+	# brakes act on the drive axle's drums at 7000 Nm a wheel, under the service brake the
+	# proportioning leaves on that drum (8.6 kNm on `garbage-truck`, 9.6 on `firetruck`; a spring
+	# chamber never out-torques its service chamber), and still past the static rear wheel's grip, so
+	# they lock it. A truck whose air drains cannot drive away because its Allison-class box drops to
+	# neutral while they are on (`Drivetrain.drive_inhibit`, set by TruckVehicle), not because the
+	# drums out-hold the engine. No pawl: the box parks on the spring brakes.
+	"brake_torque": 15500.0, "handbrake_torque": 7000.0, "park_pawl_torque": 0.0,
 	# ABS: mandatory on goods vehicles in the EU since 1991.
 	"abs_equipped": true,
-	# ASR, standard beside EBS: gear 1 out-pulls the driven axle, and without it a floored start
-	# spins the drive tyres into the limiter and cycles there (a twitching rpm needle).
+	# ASR, standard beside EBS on a goods vehicle: kept as equipment, whose work is on low grip. On
+	# dry asphalt the converter's slip holds a floored start near the grip peak without it, and the
+	# crank keeps it off the limiter: `garbage-truck` notc spins 0.08 s and reaches 50 km/h 0.10 s
+	# sooner (measure_vehicles trace, 2026-10-10).
 	"tcs_equipped": true,
-	# A truck tyre on dry asphalt, and the family's whole brake chain hangs off it: brake_torque,
-	# the retarder's rating and the steering-taper margin are all derived from mu_long/mu_lat
-	# (src/vehicles/CLAUDE.md, tyre class sets mu).
-	"mu_long": 0.80, "mu_lat": 0.75, "handbrake_grip": 1.0, "rear_lat_grip": 1.0,
+	# Hill-start assist held 3 s (Volvo VN); the converter's creep alone holds ~21 % here.
+	"hill_hold": HillHold.Kind.ASSIST, "hill_hold_s": 3.0,
+	# A truck tyre on dry asphalt: it sets the brake split and the steering-taper margin
+	# (src/vehicles/CLAUDE.md, tyre class sets mu); the brake hardware is declared above.
+	"mu_long": 0.80, "mu_lat": 0.75, "rear_lat_grip": 1.0,
 	# Commercial radials, a touch less load-sensitive than a passenger tyre.
 	"load_sensitivity": 0.08,
 	"torque_curve": [700, 400, 1200, 650, 1800, 800, 2400, 780, 2800, 600, 3200, 0],
@@ -211,15 +254,34 @@ const TRUCK_BASE := {
 	# 6th 1.0 -> 0.92: overdrive top, governed speed ~102 km/h vs 96.5 direct-drive.
 	"gear_ratios": [6.5, 3.7, 2.4, 1.6, 1.2, 0.92], "reverse_ratio": 6.0,
 	"final_drive": 4.5, "efficiency": 0.9, "shift_up_rpm": 2600.0, "shift_down_rpm": 1200.0,
-	"engine_brake_frac": 0.15, "shift_cut_s": 0.4, "launch_engage_s": 0.0, "launch_gear": 1,
+	# The converter automatic's map (`ShiftPolicy`) by CAR_BASE's structure at this diesel's band, an
+	# estimate (no truck map found): light 1600, under the 1800 peak; coast 900. The landing floor
+	# raises the 1.76 D1>D2 to 1739 (lands 990). Kickdown, dwell and no skip-shifts as CAR_BASE's.
+	"shift_up_light_rpm": 1600.0, "shift_down_light_rpm": 900.0, "kickdown_pedal": 0.8,
+	"shift_dwell_s": 1.5, "skip_shifts": false, "start_gear_max": 0,
+	# A converter automatic's inertia phase and torque reduction, as CAR_BASE's: no fixed cut (an
+	# Allison-class box shifts clutch to clutch, with no torque interruption).
+	"shift_handover_s": 0.3,
+	"engine_brake_frac": 0.15, "shift_cut_s": 0.0, "launch_engage_s": 0.0,
+	# Motoring at and below idle: 0.10 of peak, the Volvo Penta TD640VE's (5.5 L) published friction
+	# power (17-26 kW, 90-104 N·m, at 1800-2400 rpm) run linearly down to idle (~66 N·m of its 658).
+	"engine_friction_frac": 0.10,
+	# A 6-9 L medium diesel behind an Allison-class converter box: 1.5 kg·m² at the crank (a 5.5 L
+	# industrial diesel's published total, Volvo Penta TD640VE); a truck clutch's 2x peak rating.
+	"engine_inertia": 1.5, "coupling": VehicleSpec.Coupling.CONVERTER, "clutch_reserve": 2.0,
+	# An Allison-class box: lock-up from 2nd range (1st-range lock-up is an option); the converter a
+	# fluid coupling, as CAR_BASE's.
+	"converter_stall_ratio": 1.0, "lockup_gear": 2,
+	"launch_rpm_over_idle": 0.0,
 	"max_steer_deg": 26.0, "steer_speed": 2.0,
 	# ~5.7 deg floor (0.22x26) at 26 m/s, under both governed cruise speeds (85/110 km/h);
 	# 19.5 deg at 30 km/h, still wider than the ~17.6 deg mu_lat 0.75 can hold there.
 	"min_steer_frac": 0.22, "steer_falloff_speed": 26.0,
 }
-## Heavy vans (delivery / delivery-flat / ambulance): car-family, proprietary CAN, but drive
-## like trucks, so a deliberate snapshot of TRUCK_BASE's numbers rather than an alias — TRUCK_BASE
-## also carries J1939-only flags, so the two must be free to diverge.
+## Heavy vans (delivery / delivery-flat / ambulance): car-family, proprietary CAN, on a van
+## drivetrain of their own class (a Ford Transit 3.2 L five-cylinder diesel behind the 6R80
+## six-speed automatic). A baseline of its own, not a CAR_BASE / TRUCK_BASE alias: TRUCK_BASE
+## carries J1939-only flags, and the chassis figures below are a 4-5 t van's.
 const VAN_BASE := {
 	# A box van is a smoothed truck front: cd 0.45 on commercial tires.
 	"cd": 0.45, "crr": 0.009,
@@ -234,16 +296,48 @@ const VAN_BASE := {
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
 	# mu_lat 0.85: commercial-tyre side grip, so a cornering van slides before it lifts a wheel.
-	"mu_long": 1.0, "mu_lat": 0.85, "handbrake_grip": 1.0, "rear_lat_grip": 1.0,
+	"mu_long": 1.0, "mu_lat": 0.85, "rear_lat_grip": 1.0,
 	"abs_equipped": true, "tcs_equipped": true,
+	# Hill-start assist held 3 s, a truck's (Volvo VN).
+	"hill_hold": HillHold.Kind.ASSIST, "hill_hold_s": 3.0,
+	# A 3.5-5 t van's brakes: 5200 Nm a wheel is 1.4 g at 4.2 t, and they hold gear 1 at converter
+	# stall (BrakeSizing.stall_hold_margin). Handbrake: drum-in-hat rears, 4800 Nm a wheel, locks the
+	# rears; the parking grade is the rear tyres' (`BrakeSizing.park_grade`).
+	"brake_torque": 5200.0, "handbrake_torque": 4800.0, "park_pawl_torque": 8000.0,
 	# Commercial radials, as TRUCK_BASE.
 	"load_sensitivity": 0.08,
-	"torque_curve": [700, 400, 1200, 650, 1800, 800, 2400, 780, 2800, 600, 3200, 0],
-	"idle_rpm": 700.0, "redline_rpm": 3200.0,
-	# 6th 1.0 -> 0.78: governed top ~120 km/h.
-	"gear_ratios": [6.5, 3.7, 2.4, 1.6, 1.2, 0.78], "reverse_ratio": 6.0,
-	"final_drive": 4.5, "efficiency": 0.9, "shift_up_rpm": 2600.0, "shift_down_rpm": 1200.0,
-	"engine_brake_frac": 0.12, "shift_cut_s": 0.15, "launch_engage_s": 0.0, "launch_gear": 1,
+	# The van class (docs/vehicles.md § Sourced figures, the heavy vans'): Ford's 3.2 L diesel, 470 Nm
+	# over 1750-2500 rpm and at least 90 % of it over 1500-2750 (secondary), 147 kW at 3000 rpm (EU,
+	# secondary), which is 468 Nm, so the plateau holds to rated speed. Idle 750 (estimate) at half
+	# the peak, TRUCK_BASE's idle share, rising straight to the band's 1500 edge. Rated speed to
+	# 4000 rpm is a governor droop to nothing (estimate: no published high-idle figure).
+	"torque_curve": [750, 235, 1500, 423, 1750, 470, 2500, 470, 3000, 468, 4000, 0],
+	"idle_rpm": 750.0, "redline_rpm": 4000.0,
+	# The 6R80's ratios and reverse (secondary), through the 3.73 limited-slip axle of a 4.7 t
+	# dual-rear-wheel Transit 350 HD with this engine (secondary): first 15.6:1 overall, top
+	# 52.7 km/h per 1000 rpm at r 0.36, so top speed is drag's, well under the 211 km/h droop end.
+	"gear_ratios": [4.171, 2.340, 1.521, 1.143, 0.867, 0.691], "reverse_ratio": 3.403,
+	# shift_up 3300: past rated speed, where the next gear's torque meets this gear's on the droop
+	# (D1 > D2 crosses ~3440, D5 > D6 ~3200); it lands the 1.78 D1 > D2 step at 1850 rpm, in the
+	# band. shift_down 1400, under the band's 1500 edge: the widest landing sits 1.32x over it.
+	"final_drive": 3.73, "efficiency": 0.9, "shift_up_rpm": 3300.0, "shift_down_rpm": 1400.0,
+	# The converter automatic's map (`ShiftPolicy`) by CAR_BASE's structure at the diesel's band, an
+	# estimate (no van map found): light 1750, the plateau's start; coast 1000. The landing floor
+	# raises the 1.78 D1>D2 to 1958 (lands 1100). Kickdown, dwell and no skip-shifts as CAR_BASE's.
+	"shift_up_light_rpm": 1750.0, "shift_down_light_rpm": 1000.0, "kickdown_pedal": 0.8,
+	"shift_dwell_s": 1.5, "skip_shifts": false, "start_gear_max": 0,
+	# A converter automatic's inertia phase and torque reduction, as CAR_BASE's: no fixed cut.
+	"shift_handover_s": 0.3,
+	"engine_brake_frac": 0.12, "shift_cut_s": 0.0, "launch_engage_s": 0.0,
+	# No van-diesel friction figure found: TRUCK_BASE's 0.10 of peak at idle (TD640VE).
+	"engine_friction_frac": 0.10,
+	# Crank 0.40 kg·m² (estimate, band 0.35-0.45): twice a 2.5 L petrol's measured 0.20 with its
+	# impeller (CAR_BASE's anchor), for a 3.2 L five-cylinder diesel's heavier crank and flywheel. A
+	# car-and-light-truck box, so the car OE clutch margin 1.5; a six-speed's lock-up closes in every
+	# gear past the launch. The converter a fluid coupling, as CAR_BASE's.
+	"engine_inertia": 0.40, "coupling": VehicleSpec.Coupling.CONVERTER, "clutch_reserve": 1.5,
+	"converter_stall_ratio": 1.0, "lockup_gear": 1,
+	"launch_rpm_over_idle": 0.0,
 	"max_steer_deg": 26.0, "steer_speed": 2.0,
 	# ~6 deg floor (0.23x26) at 28 m/s, between the cars' 10 deg and trucks' 4.8. Ambulance keeps
 	# the fraction on its narrower 24 deg rack (5.5 deg).
@@ -276,29 +370,63 @@ const TRACTOR_BASE := {
 	# diff, so engaged it ties the two axles' mean speeds together (and winds up in tight turns).
 	"centre_diff_rigid": true,
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
-	"mu_long": 1.0, "mu_lat": 0.95, "handbrake_grip": 1.0, "rear_lat_grip": 1.0,
+	"mu_long": 1.0, "mu_lat": 0.95, "rear_lat_grip": 1.0,
 	# No ABS: a farm tractor's service brakes are not anti-lock. They sit on the rear axle only, and
 	# the pedal engages MFWD so the shaft brakes the fronts (a 40 km/h tractor brakes all four).
 	"abs_equipped": false, "brake_engages_front_axle": true,
+	# Wet multi-disc brakes on the rear axle: 8600 Nm a wheel on average (17.2 kNm at each rear) is
+	# 1.4 g at 7 t, and the 34 kNm total beats gear 1 at stall (23.6 kNm over all four wheels through
+	# MFWD): the shaft carries the fronts' drive into the rears' spare brake
+	# (`BrakeSizing.stall_hold_margin`). The parking brake
+	# on the rear axle, 8000 Nm a wheel, locks the rears; the parking grade is the rear tyres'
+	# (`BrakeSizing.park_grade`). The powershift's park lock is the pawl.
+	"brake_torque": 8600.0, "handbrake_torque": 8000.0, "park_pawl_torque": 15000.0,
 	# No TC either: MFWD and the diff lock are a tractor's traction aids.
 	"tcs_equipped": false,
+	# A powershift hill hold (Valtra HillHold): held at rest in gear until the drive pedal is down
+	# and the clutch carries the grade, with no timeout.
+	"hill_hold": HillHold.Kind.STANDSTILL, "hill_hold_s": 0.0,
 	# Big soft flotation tyres lose more mu per doubling of load than a road tyre.
 	"load_sensitivity": 0.12,
 	# Rated 2000, governed to nothing by 2600 (high idle).
 	"torque_curve": [800, 550, 1200, 680, 1600, 700, 2000, 640, 2200, 560, 2600, 0],
 	"idle_rpm": 800.0, "redline_rpm": 2600.0,
-	# ~4.4:1 spread, 9 km/h first to a 40 km/h road gear. First is free of the foot brake
-	# (tyre-derived), so a crawler gear costs only a bigger handbrake. Reverse is the bus's one R
-	# byte, so it is the launch gear's ratio (D3): a shuttle reverses near forward speeds, and a
-	# first-gear reverse spun the unloading rears and rode the limiter at 9 km/h.
+	# ~4.4:1 spread, 9 km/h first to a 40 km/h road gear. Reverse is the bus's one R byte, so it is
+	# D3's ratio: a shuttle reverses near its forward working speeds.
 	"gear_ratios": [7.0, 5.2, 3.9, 2.9, 2.15, 1.6], "reverse_ratio": 3.9,
 	"final_drive": 5.5, "efficiency": 0.9, "shift_up_rpm": 2200.0, "shift_down_rpm": 1000.0,
+	# The powershift's map (`ShiftPolicy`): light 1500, Massey Ferguson AutoDrive's Eco mode (its
+	# Power mode's 2100 is the full pair's 2200); the sourced 1200 downshift (Dynashift, both modes)
+	# sits over the full pair's 1000, so the coast stays at it (0). 1500 lands ~1110 on the 1.35
+	# steps, just over the landing floor (1484). No pedal kickdown: AutoDrive shifts on engine speed
+	# and none is sourced for a powershift; with one, the bobtail kicked from D5 to D4 at 15 km/h
+	# and revved into its forced upshift 0.62 s later (cruise probe, 2026-10-13). The six-speed's
+	# 1.5 s dwell, and skip-shifts: a lift from 2200 in D1 lands D2 past its own light point and
+	# takes D3.
+	# The start gear up to D3 (`ShiftPolicy.start_gear`): a powershift's start gear is a driver
+	# preset, higher for an empty run and lower with a load; picked here from the load standing on
+	# the grade, as the I-Shift picks its own from gross weight and gradient. D3 on the flat, D1 laden
+	# on mud or on a steep grade (docs/heavy_vehicles.md § Tractor, implement & ISOBUS).
+	"shift_up_light_rpm": 1500.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0,
+	"shift_dwell_s": 1.5, "skip_shifts": true, "start_gear_max": 3,
+	# The clutch overlap: 0.3 s, a simulated tractor powershift's baseline (YTO TX4A, Agriculture
+	# 14(2) 254, 2024).
+	"shift_handover_s": 0.3,
 	"engine_brake_frac": 0.20, "shift_cut_s": 0.0,  ## powershift: no interruption
-	# Powershift clutch modulation: drive builds over 0.8 s on a pull-away. First gear whole on the
-	# first tick is ~2x what the rear tyres hold, so a floored start flashed them to the limiter.
-	# Start gear D3 (~the rear grip at full drive): first spans only 0-8 km/h, so a launch in it
-	# outran D1 and D2 before the clutch closed. A bogged start still downshifts to D1 after it.
-	"launch_engage_s": 0.8, "launch_gear": 3,
+	# Motoring at and below idle: 0.10 of peak, the same 5.5 L industrial diesel's friction power
+	# run down to idle, as TRUCK_BASE's.
+	"engine_friction_frac": 0.10,
+	# Powershift clutch modulation: the pack's capacity builds over 0.8 s on a pull-away (an
+	# estimate; no fill-and-ramp duration sourced) while the controller slips it on the launch line,
+	# in the start gear. The ramp is what holds a floored start near the grip peak: with the whole
+	# rating on the first tick the rears flash to 0.6 slip and the front axle drops to 5 % of parked
+	# (measure_vehicles trace, 2026-10-10). Its close onto the wheels spans `shift_handover_s`.
+	"launch_engage_s": 0.8,
+	# A 4.5-7 L tractor diesel: 1.5 kg·m² at the crank (the 5.5 L industrial anchor). A powershift is
+	# a wet clutch pack, rated as a truck clutch (2x peak, an estimate: no pack figure sourced).
+	"engine_inertia": 1.5, "coupling": VehicleSpec.Coupling.CLUTCH, "clutch_reserve": 2.0,
+	"converter_stall_ratio": 1.0, "lockup_gear": 1,
+	"launch_rpm_over_idle": 0.0,
 	"max_steer_deg": 38.0, "steer_speed": 1.8,
 	# steer_falloff_speed 11 m/s = 39.6 km/h is the tractor's own top speed, so the floor lock
 	# arrives exactly at type-approval road speed. 0.55 keeps field-work cost (8-12 km/h headland
@@ -314,24 +442,29 @@ const TRACTOR_BASE := {
 # may all be overridden per variant over the baseline.
 const VARIANTS := {
 	# car family
+	# Brake hardware classes over CAR_BASE's saloon: the performance package on `sedan-sports` and
+	# `police` (1800 Nm, 1.6-1.9 g, and enough rear brake that both pedals hold the rear-driven
+	# bodies at stall); SUV / light-commercial discs on the 1.5-1.6 t bodies (2000 Nm, 1.3-1.5 g;
+	# 1700 Nm handbrakes for their heavier rears); racing brakes on the open-wheelers (2000 Nm,
+	# 2.5 g at 900 kg; no pawl, a sequential box has no P).
 	# Driven layout per body: FWD is the CAR_BASE default, `driven_rear` alone is RWD, both is
 	# AWD — the axis that gives each car its own handling (FWD hatch scrabbles, RWD interceptor
 	# steps out, SUVs hook up). `front_weight` on the front-drivers puts the transverse engine
 	# over the driven axle (measured 48/52 rear-biased at the body origin, unusable for FWD).
 	"sedan": {"family": "car", "front_weight": 0.60},
-	"sedan-sports": {"family": "car", "mass": 1050.0, "torque_mul": 1.12, "final_drive": 4.1, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true},
+	"sedan-sports": {"family": "car", "engine_inertia": 0.18, "mass": 1050.0, "torque_mul": 1.12, "final_drive": 4.1, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0},
 	# Hot hatch: a helical front LSD (Quaife-class, ~2.5:1), so a front wheel a bump or a steer input
 	# peels still leaves its partner up to 2.5x its torque rather than an equal share.
-	"hatchback-sports": {"family": "car", "mass": 1000.0, "torque_mul": 1.10, "final_drive": 4.2, "max_steer_deg": 42.0, "front_weight": 0.60, "diff_bias_front": 2.5},
+	"hatchback-sports": {"family": "car", "engine_inertia": 0.18, "mass": 1000.0, "torque_mul": 1.10, "final_drive": 4.2, "max_steer_deg": 42.0, "front_weight": 0.60, "diff_bias_front": 2.5},
 	# Lever for SUV power is their own `torque_mul`, not the shared CAR_BASE curve: measured
 	# 0-100 goes as peak^-0.6 on the sedan, peak^-1.4 on the suv.
 	# Both SUVs: a Torsen-type centre (~3:1). Under launch squat the rear axle carries ~2x the
 	# front (2412 / 4956 N measured), inside 3:1, so the heavy axle is no longer capped by the light one.
-	"suv": {"family": "car", "com_y": 0.62, "anti_roll_rate": 18000.0, "mass": 1500.0, "torque_mul": 1.05, "mu_lat": 0.88, "max_steer_deg": 34.0, "driven_rear": true, "centre_diff_bias": 3.0},
+	"suv": {"family": "car", "com_y": 0.62, "anti_roll_rate": 18000.0, "mass": 1500.0, "torque_mul": 1.05, "mu_lat": 0.88, "max_steer_deg": 34.0, "driven_rear": true, "centre_diff_bias": 3.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
 	# 1.54 is the biggest multiplier in the family: 285 Nm through an AWD 1600 kg body.
-	"suv-luxury": {"family": "car", "com_y": 0.62, "anti_roll_rate": 18000.0, "mass": 1600.0, "torque_mul": 1.54, "mu_lat": 0.88, "max_steer_deg": 33.0, "driven_rear": true, "centre_diff_bias": 3.0},
+	"suv-luxury": {"family": "car", "com_y": 0.62, "anti_roll_rate": 18000.0, "mass": 1600.0, "torque_mul": 1.54, "mu_lat": 0.88, "max_steer_deg": 33.0, "driven_rear": true, "centre_diff_bias": 3.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
 	"taxi": {"family": "car", "mass": 1250.0, "front_weight": 0.60},
-	"police": {"family": "car", "mass": 1300.0, "torque_mul": 1.18, "final_drive": 4.0, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true},
+	"police": {"family": "car", "mass": 1300.0, "torque_mul": 1.18, "final_drive": 4.0, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0},
 	# Open-wheelers: `wheel_x_out` measured per body against its own half-width at the wheel
 	# stations (re-drive after changing, it also steadies cornering). `cd` 0.70: exposed wheels +
 	# wing really do run ~2x a saloon's drag. `front_weight` 0.42: engine sits behind the driver;
@@ -343,14 +476,15 @@ const VARIANTS := {
 	# Cd*A 0.63 (lift/drag 3.6). 2.1 kN at 140 km/h rising to 8.8 kN at 288 km/h top end; a spring
 	# force (GroundDriveSpec.downforce_area) worth ~0.10 m of squat — raising `cl` past this
 	# bottoms the suspension.
-	# The two gear boxes differ on gear 1: `race` is rear-drive so 3.2 first clears the
-	# transmissible-drive hierarchy free. `race-future` is AWD (all four tyres saturate), capped
-	# by `max_drive / 4 * 1.02 <= grip_ceiling` at this body's 409 Nm peak -> gear1 <= 2.377,
-	# giving 2.375 with 2-5 re-spread (1.33/1.31/1.29/1.27/1.26). Re-derive per body on any
-	# torque change. Both keep a long top gear (0.66 vs CAR_BASE's 0.925), reaching 288.0 /
-	# 295.8 km/h.
+	# The two gear boxes differ on gear 1, a launch choice: `race` has TC to hold a 3.2 first at the
+	# grip peak. `race-future` is AWD with no TC, and 409 Nm through a 3.2 first spins all four tyres
+	# (0-100 3.25 s, 1.4 s of it spinning), so its first is 2.375, about where the engine stops
+	# saturating them (0-100 3.00 s; measure_vehicles, 2026-10-08), with 2-5 re-spread
+	# (1.33/1.31/1.29/1.27/1.26). Both keep a long top gear (0.66 vs CAR_BASE's 0.925), reaching
+	# 288.0 / 295.8 km/h.
 	# Differentials: `race` carries a plate LSD on its driven rear (2.5); `race-future` the same
-	# rear plus a Torsen-type centre (3.0). Neither carries ABS (formula cars race without it).
+	# rear plus a Torsen-type centre (3.0). Neither carries ABS (formula cars race without it) or
+	# hill-start assist.
 	# `race` carries TC, as GT and prototype racers do: 389 Nm through gears 1-3 outpulls its rears,
 	# and floored through a turn below ~70 km/h it spun at almost any steer (step-steer probe,
 	# 2026-10-03); the AWD `race-future` spreads it over four tyres and needs none.
@@ -360,18 +494,22 @@ const VARIANTS := {
 	# 2.21x185=409 Nm) — re-derive on any CAR_BASE torque edit.
 	# `rear_lat_grip` 1.15: the wide rears a rear-heavy formula car runs; on equal tyres the heavier
 	# rear axle's load-sensitive mu sits under the front's and the body steers loose.
-	"race": {"family": "car", "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "handbrake_grip": 0.5, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.25, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "abs_equipped": false, "tcs_equipped": true},
-	"race-future": {"family": "car", "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "handbrake_grip": 0.5, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "tcs_equipped": false},
+	# Shifting: the full-pedal pair at any pedal (no light map, kickdown or dwell). The sequential
+	# cuts the ignition 0.15 s through a shift (the torque interruption CAR_BASE's converter has no
+	# need of) and closes at its rating: on J 0.06 the rev drop already spans ~2 ticks, a dog box's
+	# near-instant engagement (estimate).
+	"race": {"family": "car", "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.25, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": true, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
+	"race-future": {"family": "car", "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": false, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
 	# Commercial bodies: RWD, governed at 180 like the real things (measured 198-200 ungoverned).
-	"van": {"family": "car", "com_y": 0.58, "anti_roll_rate": 18000.0, "mu_lat": 0.88, "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
+	"van": {"family": "car", "com_y": 0.58, "anti_roll_rate": 18000.0, "mu_lat": 0.88, "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
 	# `ride_lift` 0.08 on the flatbeds: their arches are drawn shallower than the tyre, so at the
 	# flush ride height the rear wheels broke through the bed floor.
-	"pickup": {"family": "car", "anti_roll_rate": 14000.0, "ride_lift": 0.08, "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
-	"pickup-flat": {"family": "car", "anti_roll_rate": 14000.0, "ride_lift": 0.08, "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0},
+	"pickup": {"family": "car", "anti_roll_rate": 14000.0, "ride_lift": 0.08, "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
+	"pickup-flat": {"family": "car", "anti_roll_rate": 14000.0, "ride_lift": 0.08, "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
 	# heavy vans: car family, van feel (VAN_BASE, not CAR_BASE) — these are 4-5 t vehicles
 	"delivery": {"family": "car", "base": "van", "mass": 4200.0},
 	"delivery-flat": {"family": "car", "base": "van", "com_y": 0.55, "ride_lift": 0.08, "mass": 4000.0},
-	"ambulance": {"family": "car", "base": "van", "mass": 4800.0, "torque_mul": 1.1, "max_steer_deg": 24.0, "speed_limit_kmh": 150.0},
+	"ambulance": {"family": "car", "base": "van", "mass": 4800.0, "max_steer_deg": 24.0, "speed_limit_kmh": 150.0},
 	# truck family (J1939) — garbage-truck first, matching VehicleCatalog's cycle order.
 	# com_z -0.14 = 0.14 m forward (front = -Z), hand-tuned by driving: the hopper body pulls
 	# mass back off the rear axle. 90 km/h is the EU heavy-truck limiter (a refuse collector
@@ -393,7 +531,7 @@ const VARIANTS := {
 	# implements and the 1.90 m farm tipper.
 	# `mass` 7000 / `front_weight` 0.38 is a ballasted tractor: ~180 hp at ~39 kg/hp (a working
 	# tractor of this power is 40-50). Ballast is traction, not torque: gear-1 wheel force against
-	# rear axle grip is ~1.6x (4.3 t, 43 kN at mu 1.0), and the launch gear's ~0.9x. The torque
+	# rear axle grip is ~1.6x (4.3 t, 43 kN at mu 1.0), which the launch ramp meters. The torque
 	# curve and `final_drive` stay untouched — low-end torque is what pulls a drawbar trailer away.
 	# `com_y_frac` 0.32 of the body's AABB top (2.60 m on the scaled body) = 0.83 m over the road:
 	# the 5.5 t machine's 0.91 m with 1.5 t of ballast at ~0.55 m (liquid in the rear tyres, hub
@@ -451,7 +589,7 @@ func _ready() -> void:
 	print("resistance (frontal area measured off the body AABB, see FRONTAL_FILL):")
 	for line: String in _drag_report:
 		print("   ", line)
-	print("brakes (per wheel; see BRAKE_GRIP_FRAC / _derive_brakes):")
+	print("brakes (Nm per wheel, declared hardware; see _brakes / BrakeSizing):")
 	for line: String in _brake_report:
 		print("   ", line)
 	print("lamp lenses (right side; 'fallback' = no lamp painted on that end):")
@@ -522,8 +660,11 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	gd.rear_diff_lockable = get_flag.call("rear_diff_lockable")
 	gd.front_axle_engageable = get_flag.call("front_axle_engageable")
 	gd.retarder_equipped = get_flag.call("retarder_equipped")
+	gd.retarder_rating_nm = float(ov.get("retarder_rating_nm", b.get("retarder_rating_nm", 0.0)))
 	gd.abs_equipped = get_flag.call("abs_equipped")
 	gd.tcs_equipped = get_flag.call("tcs_equipped")
+	gd.hill_hold = int(ov.get("hill_hold", b["hill_hold"])) as HillHold.Kind
+	gd.hill_hold_s = get_f.call("hill_hold_s")
 	gd.brake_engages_front_axle = get_flag.call("brake_engages_front_axle")
 	# Differentials (Differential): per variant over a baseline of open (1.0) everywhere, and the
 	# rigid centre is a driveline flag like the two above.
@@ -546,7 +687,6 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	gd.mu_long = get_f.call("mu_long")
 	gd.mu_lat = get_f.call("mu_lat")
 	gd.rear_lat_grip = get_f.call("rear_lat_grip")
-	gd.handbrake_grip = get_f.call("handbrake_grip")
 	# Family number, not a per-variant knob: baseline only, pinned by test_kenney_variants.
 	gd.load_sensitivity = float(b["load_sensitivity"])
 
@@ -561,11 +701,28 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	spec.final_drive = get_f.call("final_drive")
 	spec.efficiency = float(b["efficiency"])
 	spec.engine_brake_frac = float(b["engine_brake_frac"])
-	spec.shift_cut_s = float(b["shift_cut_s"])
+	spec.engine_friction_frac = float(b["engine_friction_frac"])
+	spec.shift_cut_s = get_f.call("shift_cut_s")
 	spec.launch_engage_s = float(b["launch_engage_s"])
-	spec.launch_gear = int(b["launch_gear"])
+	# The crank is per engine (the sports pair, the open-wheelers), the coupling per gearbox (the
+	# open-wheelers' sequential); the rating and launch target are the class's.
+	spec.engine_inertia = get_f.call("engine_inertia")
+	spec.coupling = int(ov.get("coupling", b["coupling"])) as VehicleSpec.Coupling
+	spec.clutch_reserve = float(b["clutch_reserve"])
+	spec.converter_stall_ratio = float(b["converter_stall_ratio"])
+	spec.lockup_gear = int(b["lockup_gear"])
+	spec.launch_rpm_over_idle = float(b["launch_rpm_over_idle"])
 	spec.shift_up_rpm = float(b["shift_up_rpm"])
 	spec.shift_down_rpm = float(b["shift_down_rpm"])
+	# The part-pedal map and the shift's handover are the gearbox's, per variant like `coupling`:
+	# the open-wheelers' sequential keeps full-pedal shifting and closes at its rating.
+	spec.shift_up_light_rpm = get_f.call("shift_up_light_rpm")
+	spec.shift_down_light_rpm = get_f.call("shift_down_light_rpm")
+	spec.kickdown_pedal = get_f.call("kickdown_pedal")
+	spec.shift_dwell_s = get_f.call("shift_dwell_s")
+	spec.shift_handover_s = get_f.call("shift_handover_s")
+	spec.skip_shifts = bool(b["skip_shifts"])
+	spec.start_gear_max = int(b["start_gear_max"])
 	# Road-speed governor (0 = ungoverned). Per variant with a baseline fallback: what a body is
 	# limited to is a regulatory/class fact about that body, not a family feel knob.
 	spec.speed_limit_kmh = float(ov.get("speed_limit_kmh", b.get("speed_limit_kmh", 0.0)))
@@ -586,7 +743,7 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	if susp.has("ride_hz"):
 		_derive_springs(spec, gd, susp)
 	_derive_link_slopes(spec, gd, susp, sag)
-	_derive_brakes(spec, gd, String(ov.get("_id", "")), sag)
+	_brakes(spec, gd, get_f, String(ov.get("_id", "")), sag)
 
 	spec.headlight_paths.assign(_lamp_paths["headlight_paths"])
 	spec.head_lamp_paths.assign(_lamp_paths["head_lamp_paths"])
@@ -638,55 +795,24 @@ func _wheel_positions(geo: Dictionary, gd: GroundDriveSpec, sag: float, x_out: f
 	return PackedVector3Array([fl, fr, rl, rr])
 
 
-## Derive brake/handbrake from the tyre on every baseline — one derivation, no per-baseline
-## brake knob. `brake_torque = BRAKE_GRIP_FRAC * the tyre's own per-wheel ceiling`, split by axle
-## (`_front_brake_share`), so full pedal asks for `BRAKE_GRIP_FRAC * mu_long * g` of deceleration
-## regardless of body mass or gearing.
-## `handbrake_torque` (x2) = 1.5 * launch torque at idle+25% throttle (strictly between the
-## 25%/50% brackets `test_vehicle_catalog` checks; `wheel_torque` is linear in throttle so this
-## holds at any gear-1 ratio). Sampled at IDLE while a real launch happens at the converter's
-## throttle-proportional rev (`Drivetrain.converter_free_rpm`), which is the stronger end of the
-## curve: break-away lands at ~30% throttle on the car and truck families and ~34% on the
-## tractor, whose curve is nearly flat over the stall rise — inside the bracket either way, but
-## under the 37.5% the idle arithmetic states. Deriving it at the converter rpm instead would be
-## a 1.19x bigger handbrake on the cars and trucks and 1.07x on the tractor.
-##
-## The floor is the force hierarchy stated against transmissible drive: the brake must beat
-## `min(peak drive, driven * per-wheel grip)`, since it never needs to out-muscle torque a
-## spinning tyre can't hand the road. Free on a 2-driven-wheel body (1.9x margin); on AWD it's
-## 3.8 against 4.0, so an engine that saturates all four tyres can land 2% over its own tyre —
-## the only shape that can't clear the rule, fixed on `race-future` by lengthening gear 1 (see
-## VARIANTS) until it stopped saturating. `_brake_report` flags anything still over its tyre;
-## `test_vehicle_catalog.test_kenney_specs_keep_force_hierarchy` is the authoritative check.
-func _derive_brakes(spec: VehicleSpec, gd: GroundDriveSpec, id: String, sag: float) -> void:
-	var peak_engine := 0.0
-	var idle_engine := VehicleSpec.sample_curve(spec.torque_curve, spec.idle_rpm)
-	for i in spec.torque_curve.size():
-		peak_engine = maxf(peak_engine, spec.torque_curve[i].y)
-	var ratio1 := spec.gear_ratios[0] * spec.final_drive
-	var max_drive := peak_engine * ratio1 * spec.efficiency
-	var launch_25 := idle_engine * 0.25 * ratio1 * spec.efficiency
-	var wheels := maxi(gd.wheel_positions.size(), 1)
-	var grip_ceiling := spec.mass * GRAVITY / wheels * gd.mu_long * gd.wheel_radius
-	# Driven corners off the spec's own geometry + layout (front = -Z, same convention
-	# BaseVehicle reads), so an FWD/RWD/AWD override moves this with no second list to keep.
-	var driven := 0
-	for p in gd.wheel_positions:
-		if (p.z < 0.0 and gd.driven_front) or (p.z > 0.0 and gd.driven_rear):
-			driven += 1
-	# 2% over the bare minimum, so `ceilf` rounding can never land on the assertion.
-	var transmissible := minf(max_drive, float(driven) * grip_ceiling)
-	var hierarchy_floor := transmissible / wheels * 1.02
-	gd.brake_torque = ceilf(maxf(grip_ceiling * BRAKE_GRIP_FRAC, hierarchy_floor))
+## The declared brake hardware (Nm per wheel; a variant overrides its baseline's class), with only
+## the axle split derived (`_front_brake_share`). `_brake_report` prints what `BrakeSizing` makes
+## of it: capacity against the tyre, the stall hold, the rear lock and the parking grade;
+## `test_vehicle_catalog` is the authoritative check.
+func _brakes(spec: VehicleSpec, gd: GroundDriveSpec, get_f: Callable, id: String,
+		sag: float) -> void:
+	gd.brake_torque = get_f.call("brake_torque")
+	gd.handbrake_torque = get_f.call("handbrake_torque")
+	gd.park_pawl_torque = get_f.call("park_pawl_torque")
 	# Rear-axle brakes that engage the front axle share through the shaft, not a split.
 	gd.brake_bias_front = 0.0 if gd.brake_engages_front_axle \
 			else _front_brake_share(spec, gd, sag)
-	_brake_report.append("%-16s %6.0f Nm/wheel = %.2f g (tyre holds %.2f g, %d driven), %.0f%% front%s"
-			% [id, gd.brake_torque,
-			gd.brake_torque * wheels / gd.wheel_radius / spec.mass / GRAVITY, gd.mu_long,
-			driven, gd.brake_bias_front * 100.0,
-			"  <-- OVER THE TYRE" if gd.brake_torque > grip_ceiling else ""])
-	gd.handbrake_torque = maxf(1.0, roundf(launch_25 * 0.75))
+	_brake_report.append(("%-16s %6.0f / hand %5.0f / pawl %5.0f: %.2f g (%.2fx the tyre), "
+			+ "%.0f%% front, stall hold %.2f, rear lock %.2f, parks %.0f%%")
+			% [id, gd.brake_torque, gd.handbrake_torque, gd.park_pawl_torque,
+			BrakeSizing.capacity_g(spec), BrakeSizing.capacity_g(spec) / gd.mu_long,
+			gd.brake_bias_front * 100.0, BrakeSizing.stall_hold_margin(spec),
+			BrakeSizing.rear_lock_ratio(spec), BrakeSizing.park_grade(spec) * 100.0])
 
 
 ## The front axle's share of the foot brake (`GroundDriveSpec.brake_bias_front`): its share of

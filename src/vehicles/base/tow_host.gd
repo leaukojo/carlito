@@ -93,6 +93,21 @@ func is_coupled() -> bool:
 	return is_instance_valid(trailer)
 
 
+## What the coupled trailer rests on the towing unit right now (kg), 0 uncoupled: its mass times
+## its live coupling share (a load model's shift included). What an EBS load-senses. A body with no
+## spec declares no running gear to share, so it rests nothing.
+func coupled_load_kg() -> float:
+	if not is_instance_valid(trailer) or trailer.spec == null:
+		return 0.0
+	return trailer.mass * trailer.live_kingpin_share()
+
+
+## The coupled trailer's whole mass (kg), 0 uncoupled: what hangs on the towing unit on a grade
+## once the trailer's own brakes let go (`WheelDrive.towed_kg`, the hill hold's load).
+func towed_mass_kg() -> float:
+	return trailer.mass if is_instance_valid(trailer) else 0.0
+
+
 ## Is a plumbed (tipping) body off its rest? A body that only shifts its load, the tanker's
 ## surge, has no hose and is never "up".
 func body_up() -> bool:
@@ -282,7 +297,7 @@ func camera_exclude_into(out: Array[RID]) -> void:
 ## The spawn countdown must not `return` early out of the rest, or a body coupled with E during
 ## the wait hangs off the joint with dead wheels. tick_towed runs last so a caller publishing
 ## wheel-derived state this tick (ISO 11992 axle load / ABS) gets current numbers.
-func tick_towing(input: VehicleInput, demand01: float, spool: float,
+func tick_towing(input: VehicleInput, demand01: float, parking01: float, spool: float,
 		pto_on: bool, pto_rpm: int, speed_ms: float, delta: float,
 		grip_terrains: Array[Node]) -> void:
 	_spawn_ticks += 1
@@ -313,8 +328,10 @@ func tick_towing(input: VehicleInput, demand01: float, spool: float,
 	trailer.apply_lamps(input.lamps.brake_lamp, input.lights,
 			input.lamps.turn_left, input.lamps.turn_right)
 	# Ticked here, not from the towed body's own _physics_process: one tick per physics frame,
-	# always after the chassis' own wheels. The handbrake applies the spring brakes at both ends.
-	trailer.tick_towed(demand01, input.handbrake, delta, grip_terrains)
+	# always after the chassis' own wheels. `parking01` is the unit's parking brake, lever or air
+	# gate: a towed body's spring brakes apply on the same event as the unit's (its supply line
+	# losing pressure), never on the lever alone. The raise interlock above stays on the lever.
+	trailer.tick_towed(demand01, parking01, delta, grip_terrains)
 	_apply_yaw_friction(delta)
 	_announce_body_up()
 

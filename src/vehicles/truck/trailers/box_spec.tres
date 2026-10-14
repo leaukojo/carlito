@@ -27,18 +27,23 @@
 ;     the trailer rides high on an over-stiff spring; one sized for the full mass rides on its
 ;     stops. anti_roll_rate equals it on all four trailers (test_trailer):
 ;     ~1.7 deg of lean at 0.2 g.
-;   - brake_torque 11355 is load-apportioned by the family's one formula, never copied:
-;     10500 * (per-trailer-wheel kN / 26.5 kN per tractor wheel) = 10500 * 28.66 / 26.5, which is
-;     1.10 x its own static wheel load on all four (test_trailer pins the ratio). The 26.5 kN
-;     reference is no tractor state, so the ends do NOT brake alike; each end's ABS
-;     (abs_equipped) holds whatever its own tyres cannot.
-;   - handbrake_torque 2839 IS THE RIG'S PARKING BRAKE. A semi-trailer's spring brakes sit on every
-;     axle of the bogie and are applied by the same dash control as the tractor's; with
-;     handbrake_torque 0 the rig is held by TWO tractor wheels and runs away downhill. It is a
-;     quarter of this trailer's own service brake, the same load-apportioned fraction on all four:
-;     6 wheels * 2839 / 0.36 = 47 kN, plus the tractor's 27 kN, holds a laden rig on a 24 % grade:
-;     above the 18 % a combination must hold under UNECE R13 and far below a locked-wheel skid (the
-;     bogie has ~190 kN of grip), so the parking brake is brake-limited like a real one.
+;   - brake_torque 12517 is load-apportioned against the tractor unit, never copied: a full demand
+;     brakes this trailer's bogie at the deceleration the tractor unit's brakes make on the
+;     tractor's own coupled static load, so the two ends brake alike and neither pushes nor drags
+;     the other through the plate (an under-braked trailer pushes the tractor toward a jackknife).
+;     The semi's 4 x 15500 / 0.36 = 172 kN on 8000 + 6471 kg (kingpin_share 0.27 of 24 t) is
+;     1.21 g, so each of the bogie's six wheels gets 1.21 x 28.63 kN x 0.36 m. Every trailer is
+;     sized the same way against its own coupled load (test_trailer pins it within 5 %). It is past
+;     the trailer's tyres, as the tractor's is: each end's ABS (abs_equipped) holds the peak.
+;   - handbrake_torque 3129 IS THE RIG'S PARKING BRAKE. A semi-trailer's spring brakes sit on every
+;     axle of the bogie and are applied by the same dash control as the tractor's (and by its air
+;     gate, TowHost.tick_towing's parking01). With handbrake_torque 0 the rig hangs on TWO tractor
+;     wheels: 2 x 12000 / 0.36 = 66.7 kN against 32 t x g x sin(atan 0.18) = 55.6 kN on 18 %, a
+;     1.2 margin, and it settles 23 mm onto them before holding (2.2 mm with these brakes;
+;     measured 2026-10-08, tools/measure_air_loss.tscn). It is a
+;     quarter of this trailer's own service brake, the same load-apportioned fraction on all four.
+;     With the tractor unit's spring brakes it holds the laden rig on UNECE R13's 18 % (measured:
+;     docs/vehicles.md, measure:park).
 ;
 ; load_sensitivity 0.08 matches the towing unit. A trailer's axles carry LESS than their even static
 ; share once the plate takes its cut, so they sit below the reference and gain a few per cent of
@@ -71,8 +76,8 @@ grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 0.8
 mu_lat = 0.75
 load_sensitivity = 0.08
-brake_torque = 11355.0
-handbrake_torque = 2839.0
+brake_torque = 12517.0
+handbrake_torque = 3129.0
 abs_equipped = true
 
 [resource]

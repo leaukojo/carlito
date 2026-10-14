@@ -16,7 +16,8 @@ const SCENE_KNOBS := [
 ## `VehicleSpec` fields `_build_spec` copies straight out of `BOAT_BASE`, same for every variant.
 const SHARED_SPEC_FIELDS := [
 	"idle_rpm", "redline_rpm", "reverse_ratio", "final_drive", "efficiency",
-	"shift_up_rpm", "shift_down_rpm",
+	"shift_up_rpm", "shift_down_rpm", "shift_up_light_rpm", "shift_down_light_rpm",
+	"kickdown_pedal", "shift_dwell_s", "skip_shifts", "shift_handover_s", "start_gear_max",
 ]
 
 
@@ -57,8 +58,11 @@ func test_sail_center_matches_the_recipe() -> void:
 	for variant: String in Gen.VARIANTS:
 		var ov: Dictionary = Gen.VARIANTS[variant]
 		var props := _root_overrides(Gen.OUT_DIR.path_join(variant + ".tscn"))
-		var actual: Vector3 = props["sail_center"] if props.has("sail_center") 				else defaults["sail_center"]
-		assert_vector(actual) 			.override_failure_message("%s.tscn sail_center" % variant) 			.is_equal_approx(ov["sail_center"] as Vector3, Vector3.ONE * 1e-4)
+		var actual: Vector3 = props["sail_center"] if props.has("sail_center") \
+				else defaults["sail_center"]
+		assert_vector(actual) \
+			.override_failure_message("%s.tscn sail_center" % variant) \
+			.is_equal_approx(ov["sail_center"] as Vector3, Vector3.ONE * 1e-4)
 
 
 # --- spec fields --------------------------------------------------------------

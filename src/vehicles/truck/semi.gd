@@ -82,14 +82,24 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 		return
 	var t := telemetry as TruckTelemetry
 
+	# EBS load sensing: the pedal anchors on the coupled load, for this tick's trailer demand and the
+	# unit's own next wheel tick (`WheelDrive.brake_load_kg`).
+	drive.brake_load_kg = mass + _fifth_wheel.coupled_load_kg()
+	drive.towed_kg = _fifth_wheel.towed_mass_kg()
 	# EBS11, towing to towed: the trailer is handed a number and never gates itself. Blends the foot
-	# brake with this tick's retarder_state (set by super() above).
-	var demand01 := TruckTelemetry.trailer_brake_blend(input.brake, t.retarder_state)
+	# brake (the hill hold's included, so the rig holds as one) with this tick's retarder_state (set
+	# by super() above).
+	var foot := drive.pedal_application(drive.foot_pedal(input))
+	var demand01 := TruckTelemetry.trailer_brake_blend(foot,
+			t.retarder_state, Drivetrain.retarder_fraction(spec))
 	# Spool: hitch_request read in its transport sense (1 = tipping body down), not as a height.
 	var spool := 1.0 - clampf(input.hitch_request, 0.0, 1.0)
+	# The trailer's spring brakes follow the lever and this tick's air gate (set by super() above):
+	# they apply on the gate tick, the tractor's rears from its next wheel tick.
+	var parking01 := WheelDrive.parking_application(input.handbrake, drive.spring_brake)
 	# Spawn countdown, PTO/valve gates, raise interlock, lamps, running gear, fall + fit checks (TowHost).
-	_fifth_wheel.tick_towing(input, demand01, spool, t.pto_state, roundi(drivetrain.rpm),
-			t.speed, delta, _grip_terrains)
+	_fifth_wheel.tick_towing(input, demand01, parking01, spool, t.pto_state,
+			roundi(drivetrain.rpm), t.speed, delta, _grip_terrains)
 	drivetrain.speed_cap_kmh = _fifth_wheel.speed_cap_kmh()
 
 	# Published only now: before tick_towing the trailer's loads and slip are a tick stale. A unit

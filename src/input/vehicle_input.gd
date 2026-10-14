@@ -47,7 +47,7 @@ var throttle := 0.0    ## -1..1, signed by direction (never from the brake)
 var brake := 0.0       ## 0..1 foot brake
 var steer := 0.0       ## -1..1, negative = left
 var handbrake := 0.0   ## 0..1
-var gear_request := 0  ## RAMN gear byte: 0=N, 1..6=D1-D6, 255=R
+var gear_request := 0  ## RAMN gear byte: 0=N, 1..6=D1-D6, 255=R, 254=P
 var gear_auto := true  ## true: byte is a direction intent, gearbox auto-shifts in D;
                        ## false (bridge, manual gearbox): byte is exact and owns direction
 var key := 1           ## 1=Lock, 2=On, 3=Ignition

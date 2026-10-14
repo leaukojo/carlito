@@ -441,26 +441,27 @@ func test_every_semi_trailer_pairs_its_bogie_under_a_bar_sized_off_its_own_sprin
 		trailer.free()
 
 
-func test_every_semi_trailer_brakes_at_one_fraction_of_its_own_wheel_load() -> void:
-	# The headers' one load-apportioned formula: brake force over static bogie-wheel load is the same
-	# on all four, so a number copied onto a lighter trailer over-brakes it. A ratio against the first
-	# trailer, not figures, so retuning the family moves all four together. The parking brake is a
-	# quarter of the service brake on each (box_spec.tres).
-	var first := -1.0
+func test_every_semi_trailer_brakes_like_the_tractor_unit_that_pulls_it() -> void:
+	# Load-apportioned against the towing unit (box_spec.tres): a full demand brakes the trailer's
+	# bogie load at the deceleration the tractor unit's brakes make on its own coupled static load
+	# (its mass plus the plate load), so neither end pushes the other through the coupling. An
+	# under-braked trailer pushes the tractor toward a jackknife; an over-braked one drags it. Both
+	# units share one brake block, so the cab-over stands for both. The parking brake is a quarter of
+	# the service brake on each.
+	var unit: VehicleSpec = load("res://src/vehicles/truck/semi_spec.tres")
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
 		var node := (load(path) as PackedScene).instantiate()
 		var spec: VehicleSpec = node.get("spec")
 		var gd := spec.ground_drive
-		var wheel_n: float = spec.mass * (1.0 - float(node.call("kingpin_share"))) * G \
-				/ float(gd.wheel_positions.size())
-		var per_load := gd.brake_torque / (gd.wheel_radius * wheel_n)
-		if first < 0.0:
-			first = per_load
-		assert_float(per_load / first).override_failure_message(
-				"%s brakes at %.3f x its wheel load, the first trailer at %.3f" % [path, per_load, first]) \
-				.is_equal_approx(1.0, 0.01)
+		var share := float(node.call("kingpin_share"))
+		var unit_g := BrakeSizing.g_per_demand(unit, unit.mass + spec.mass * share)
+		var trailer_g := BrakeSizing.g_per_demand(spec, spec.mass * (1.0 - share))
+		assert_float(trailer_g / unit_g).override_failure_message(
+				"%s brakes its bogie at %.2f g, the tractor unit its coupled load at %.2f g"
+				% [path, trailer_g, unit_g]) \
+				.is_equal_approx(1.0, 0.05)
 		assert_float(gd.handbrake_torque / gd.brake_torque).override_failure_message(
 				"%s: the parking brake is not a quarter of the service brake" % path) \
 				.is_equal_approx(0.25, 0.01)
@@ -529,32 +530,34 @@ func test_every_trailer_clears_the_cab_all_the_way_round() -> void:
 func test_the_foot_brake_alone_is_the_whole_demand() -> void:
 	# With the retarder released the tractor sends the pedal and nothing else, so a driver who
 	# never touches the stalk sees TBRK track the brake exactly.
-	assert_float(TruckT.trailer_brake_blend(0.0, 0)).is_equal(0.0)
-	assert_float(TruckT.trailer_brake_blend(0.4, 0)).is_equal_approx(0.4, 1e-9)
-	assert_float(TruckT.trailer_brake_blend(1.0, 0)).is_equal_approx(1.0, 1e-9)
+	var frac := _retarder_frac()
+	assert_float(TruckT.trailer_brake_blend(0.0, 0, frac)).is_equal(0.0)
+	assert_float(TruckT.trailer_brake_blend(0.4, 0, frac)).is_equal_approx(0.4, 1e-9)
+	assert_float(TruckT.trailer_brake_blend(1.0, 0, frac)).is_equal_approx(1.0, 1e-9)
 
 
 func test_the_retarder_asks_the_trailer_for_the_same_fraction_it_is_making_itself() -> void:
-	# The share is arithmetic: a retarder at full is RETARDER_MAX_FRAC of the tractor's own brake
-	# torque, so it asks the trailer for that same fraction of the trailer's brakes and the two ends
-	# scrub at matched fractions. Asserted against the constant, so re-rating moves both together.
-	assert_float(TruckT.trailer_brake_blend(0.0, 100)) \
-			.is_equal_approx(DrivetrainScript.RETARDER_MAX_FRAC, 1e-9)
-	assert_float(TruckT.trailer_brake_blend(0.0, 50)) \
-			.is_equal_approx(DrivetrainScript.RETARDER_MAX_FRAC * 0.5, 1e-9)
-	assert_float(TruckT.trailer_brake_blend(0.0, 100)).is_greater(0.05)
+	# The share is arithmetic: a retarder at full is `retarder_fraction` of the tractor's own brake
+	# capacity, so it asks the trailer for that same fraction of the trailer's brakes and the two ends
+	# scrub at matched fractions. Read off the shipped unit, so re-rating moves both together.
+	var frac := _retarder_frac()
+	assert_float(TruckT.trailer_brake_blend(0.0, 100, frac)).is_equal_approx(frac, 1e-9)
+	assert_float(TruckT.trailer_brake_blend(0.0, 50, frac)).is_equal_approx(frac * 0.5, 1e-9)
+	assert_float(TruckT.trailer_brake_blend(0.0, 100, frac)).is_greater(0.05)
 
 
 func test_the_blend_adds_and_saturates_at_a_full_application() -> void:
 	# Both consumers push the same channel, and it is monotone in each — a rig cannot brake the
 	# trailer harder than the trailer's own brakes.
-	var pedal_only := TruckT.trailer_brake_blend(0.5, 0)
-	assert_float(TruckT.trailer_brake_blend(0.5, 100)).is_greater(pedal_only)
-	assert_float(TruckT.trailer_brake_blend(0.9, 100)).is_equal(1.0)
-	assert_float(TruckT.trailer_brake_blend(1.0, 100)).is_equal(1.0)
+	var frac := _retarder_frac()
+	var pedal_only := TruckT.trailer_brake_blend(0.5, 0, frac)
+	assert_float(TruckT.trailer_brake_blend(0.5, 100, frac)).is_greater(pedal_only)
+	# An application within the retarder's share of full already saturates.
+	assert_float(TruckT.trailer_brake_blend(1.0 - frac * 0.5, 100, frac)).is_equal(1.0)
+	assert_float(TruckT.trailer_brake_blend(1.0, 100, frac)).is_equal(1.0)
 	# Garbage on either input is sanitized like every other request in this project.
-	assert_float(TruckT.trailer_brake_blend(-2.0, -50)).is_equal(0.0)
-	assert_float(TruckT.trailer_brake_blend(9.0, 900)).is_equal(1.0)
+	assert_float(TruckT.trailer_brake_blend(-2.0, -50, frac)).is_equal(0.0)
+	assert_float(TruckT.trailer_brake_blend(9.0, 900, frac)).is_equal(1.0)
 
 
 func test_the_demand_inherits_the_retarders_speed_fade_for_free() -> void:
@@ -563,16 +566,18 @@ func test_the_demand_inherits_the_retarders_speed_fade_for_free() -> void:
 	# trailer for anything.
 	var semi := _semi()
 	var spec: VehicleSpec = semi.get("spec")
-	var rated := DrivetrainScript.retarder_rating(spec.ground_drive.brake_torque) * 2.0
+	var rating := DrivetrainScript.retarder_rating(spec)
+	var frac := DrivetrainScript.retarder_fraction(spec)
+	var rated := rating * 2.0
 	var crawling := roundi(DrivetrainScript.retarder_pct(
-			DrivetrainScript.retarder_demand(1.0, 0.3, spec.ground_drive.brake_torque) * 2.0, rated))
+			DrivetrainScript.retarder_demand(1.0, 0.3, rating) * 2.0, rated))
 	assert_int(crawling).override_failure_message(
 			"the retarder should have faded out at walking pace").is_equal(0)
-	assert_float(TruckT.trailer_brake_blend(0.0, crawling)).is_equal(0.0)
+	assert_float(TruckT.trailer_brake_blend(0.0, crawling, frac)).is_equal(0.0)
 	var rolling := roundi(DrivetrainScript.retarder_pct(
-			DrivetrainScript.retarder_demand(1.0, 20.0, spec.ground_drive.brake_torque) * 2.0, rated))
+			DrivetrainScript.retarder_demand(1.0, 20.0, rating) * 2.0, rated))
 	assert_int(rolling).is_equal(100)
-	assert_float(TruckT.trailer_brake_blend(0.0, rolling)).is_greater(0.0)
+	assert_float(TruckT.trailer_brake_blend(0.0, rolling, frac)).is_greater(0.0)
 	semi.free()
 
 
@@ -1677,3 +1682,9 @@ func test_a_trailers_lamps_light_from_the_bits_the_tractor_hands_down() -> void:
 		assert_float(turn_l.material_override.emission_energy_multiplier) 			.is_equal_approx(LampSet.TURN_ON_ENERGY, 1e-5)
 		assert_float(turn_r.material_override.emission_energy_multiplier) 			.override_failure_message("%s: the right indicator lit with the left" % path) 			.is_equal_approx(LampSet.TURN_OFF_ENERGY, 1e-5)
 		trailer.free()
+
+
+## The shipped cab-over's retarder share of its own brake (`Drivetrain.retarder_fraction`).
+func _retarder_frac() -> float:
+	return DrivetrainScript.retarder_fraction(
+			load("res://src/vehicles/truck/semi_spec.tres") as VehicleSpec)

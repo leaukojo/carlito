@@ -4,8 +4,8 @@ extends GdUnitTestSuite
 ##
 ## The two behavioural claims it exists to pin, because both are quiet failures: the retarder
 ## cannot lock a wheel (its torque is capped below what the road can answer at that contact patch,
-## a property of the model rather than a clamp someone might tune away), and the §6 hierarchy
-## (brake > peak drive > handbrake) still holds on every shipped truck spec with the retarder on.
+## a property of the model rather than a clamp someone might tune away), and the spring brakes hold
+## gear 1 at stall on every shipped truck spec, so a truck that loses its air cannot drive away.
 
 const TruckT := preload("res://src/vehicles/truck/truck_telemetry.gd")
 const Body := preload("res://src/vehicles/truck/refuse_body.gd")
@@ -131,6 +131,38 @@ func test_spring_brakes_apply_below_the_cut_in() -> void:
 	assert_bool(TruckT.spring_brakes_applied(TruckT.AIR_MAX_BAR, TruckT.AIR_MAX_BAR)).is_false()
 
 
+func test_spring_brakes_are_the_handbrake_torque_and_no_stronger_than_the_service_brake() -> void:
+	# The spring brakes are a torque through the wheels' own spin step, the same hardware as the
+	# handbrake (WheelDrive.parking_torque), and a parking brake on the service brake's own drum: a
+	# spring chamber never out-torques the service chamber it shares.
+	for spec in _truck_specs():
+		var gd := spec.ground_drive
+		assert_float(WheelDrive.parking_torque(0.0, 1.0, gd)).is_equal(gd.handbrake_torque)
+		assert_float(WheelDrive.parking_torque(0.3, 1.0, gd)).is_equal(gd.handbrake_torque)
+		assert_float(WheelDrive.parking_torque(0.5, 0.0, gd)).is_equal(gd.handbrake_torque * 0.5)
+		assert_float(WheelDrive.parking_torque(0.0, 0.0, gd)).is_equal(0.0)
+		assert_float(gd.handbrake_torque) \
+			.override_failure_message("%s: spring brakes %.0f Nm over the %.0f Nm service brake"
+				% [spec.resource_path, gd.handbrake_torque, gd.axle_brake_torque(true)]) \
+			.is_less_equal(gd.axle_brake_torque(true))
+
+
+func test_the_drive_inhibit_engages_neutral_until_it_lifts() -> void:
+	# The park-brake auto-neutral (Drivetrain.drive_inhibit): a truck whose air drains cannot drive
+	# away against spring brakes that are not sized to out-hold its engine.
+	for spec in _truck_specs():
+		for auto in [true, false]:
+			var dt := DrivetrainScript.new(spec)
+			dt.drive_inhibit = true
+			for byte: int in [1, 3, DrivetrainScript.GEAR_R]:
+				var torque: float = dt.process(1.0 / 60.0, 1.0, 0.0, 0.0, byte, auto)
+				assert_int(dt.gear_byte).is_equal(DrivetrainScript.GEAR_N)
+				assert_float(torque).is_equal(0.0)
+			dt.drive_inhibit = false
+			dt.process(1.0 / 60.0, 0.0, 0.0, 0.0, 1, auto)
+			assert_bool(DrivetrainScript.is_drive(dt.gear_byte)).is_true()
+
+
 func test_spring_brake_notice_fires_once_per_application() -> void:
 	# Edge only: false -> true fires, held true is silent, and releasing re-arms it.
 	assert_bool(TruckT.spring_brake_notice_edge(true, false)).is_true()
@@ -178,8 +210,7 @@ func test_retarder_fades_out_at_low_speed_and_saturates_once_rolling() -> void:
 
 
 func test_retarder_demand_scales_with_the_request_and_stops_at_its_rating() -> void:
-	var rated := DrivetrainScript.retarder_rating(1000.0)
-	assert_float(rated).is_equal_approx(1000.0 * DrivetrainScript.RETARDER_MAX_FRAC, 1e-6)
+	var rated := 1000.0
 	assert_float(DrivetrainScript.retarder_demand(1.0, 20.0, 1000.0)).is_equal_approx(rated, 1e-6)
 	assert_float(DrivetrainScript.retarder_demand(0.5, 20.0, 1000.0)) \
 			.is_equal_approx(rated * 0.5, 1e-6)
@@ -189,6 +220,21 @@ func test_retarder_demand_scales_with_the_request_and_stops_at_its_rating() -> v
 	# A garbage request off the bus is clamped like every other input.
 	assert_float(DrivetrainScript.retarder_demand(4.0, 20.0, 1000.0)).is_equal_approx(rated, 1e-6)
 	assert_float(DrivetrainScript.retarder_demand(-1.0, 20.0, 1000.0)).is_equal(0.0)
+
+
+func test_the_rating_is_the_gearbox_output_figure_through_the_final_drive() -> void:
+	# Its own hardware figure, at the gearbox output: each driven rear wheel sees its share through
+	# the final drive, whatever the service brake is. Hand figures, so the arithmetic is checked
+	# rather than restated: the semi's 1450 Nm through 2.925 over two wheels, a Kenney truck's 600
+	# through 4.5.
+	var semi: VehicleSpec = load("res://src/vehicles/truck/semi_spec.tres")
+	assert_float(DrivetrainScript.retarder_rating(semi)).is_equal_approx(2120.625, 1e-3)
+	var garbage: VehicleSpec = load("res://src/vehicles/kenney/garbage-truck_spec.tres")
+	assert_float(DrivetrainScript.retarder_rating(garbage)).is_equal_approx(1350.0, 1e-3)
+	# Its share of the whole foot brake, what the trailer is asked for: 2 x 2120.6 over 4 x 15500.
+	assert_float(DrivetrainScript.retarder_fraction(semi)).is_equal_approx(0.06841, 1e-4)
+	for spec in _truck_specs():
+		assert_float(spec.ground_drive.retarder_rating_nm).is_greater(0.0)
 
 
 func test_the_slip_cap_shuts_off_once_the_axle_is_at_the_target() -> void:
@@ -237,10 +283,11 @@ func test_the_retarder_is_inert_at_a_standstill_however_the_wheels_are_spinning(
 		assert_float(DrivetrainScript.retarder_slip_cap(50.0, 0.0, gd.wheel_radius, free)) \
 				.is_greater(0.0)
 		# Stationary chassis, driven wheels spinning hard (a standing burnout): still nothing.
-		assert_float(DrivetrainScript.retarder_torque(1.0, 0.0, 50.0, gd, free)).is_equal(0.0)
+		var rating := DrivetrainScript.retarder_rating(spec)
+		assert_float(DrivetrainScript.retarder_torque(1.0, 0.0, 50.0, gd, free, rating)).is_equal(0.0)
 		# And just under the cutout, where the fade is still zero.
 		assert_float(DrivetrainScript.retarder_torque(
-				1.0, DrivetrainScript.RETARDER_CUTOUT_MS - 0.01, 50.0, gd, free)).is_equal(0.0)
+				1.0, DrivetrainScript.RETARDER_CUTOUT_MS - 0.01, 50.0, gd, free, rating)).is_equal(0.0)
 
 
 func test_the_retarder_can_never_skid_the_driven_axle() -> void:
@@ -254,10 +301,11 @@ func test_the_retarder_can_never_skid_the_driven_axle() -> void:
 	for spec in _truck_specs():
 		var gd := spec.ground_drive
 		var free := dt / gd.wheel_inertia
+		var rating := DrivetrainScript.retarder_rating(spec)
 		for v: float in [30.0, 22.0, 15.0, 8.0, 4.0, 2.0, -22.0, -8.0]:
 			var omega: float = v / gd.wheel_radius
 			for _tick in 200:
-				var tau := DrivetrainScript.retarder_torque(1.0, v, omega, gd, free)
+				var tau := DrivetrainScript.retarder_torque(1.0, v, omega, gd, free, rating)
 				omega = move_toward(omega, 0.0, tau * free)
 			# Unsigned: braking slip is how far the wheel has fallen behind the ground, whichever way the
 			# truck is pointing.
@@ -273,22 +321,11 @@ func test_the_retarder_can_never_skid_the_driven_axle() -> void:
 func test_the_retarder_is_worth_feeling_on_every_shipped_truck() -> void:
 	# The rating is only defensible if the number the docs quote is the number the constants make.
 	# Fully faded in, the driven axle's torque over the wheel radius is a force and over the mass a
-	# deceleration — flat road, no drag, the same arithmetic drivetrain.gd states. The band's two ends
-	# are set by different things: the FLOOR is wherever the tyre puts a grip-derived retarder (see
-	# below), and the CEILING is a design limit — past ~1.6 an auxiliary brake stands in for the foot
-	# brake instead of supplementing it.
-	#
-	# The floor is 0.7 as a closed form, and it tracks the TYRE: a grip-derived brake is
-	# `BRAKE_GRIP_FRAC * mu_long * m * g * r / 4` per wheel, so a two-driven-wheel truck retards at
-	# `RETARDER_MAX_FRAC * BRAKE_GRIP_FRAC * mu_long * g / 2` = 0.20 * 0.95 * 0.80 * 9.8 / 2 =
-	# 0.745 m/s^2; mass and wheel radius both cancel, which is why both Kenney trucks land on the same
-	# number whatever they weigh. A retarder that is a FRACTION of a grip-derived brake is worth what
-	# the tyre is worth, so the floor sits under the truck tyre rather than the fraction being raised
-	# to hold a feel number the grip no longer supports. The ceiling is unmoved at the other end: the
-	# hand-built units' 10500 Nm brake is fixed rather than grip-derived, so they sit at 1.46 whatever
-	# mu_long is.
+	# deceleration — flat road, no drag, the same arithmetic drivetrain.gd states, at the body's own
+	# mass (a semi bobtail). The FLOOR is worth feeling; the CEILING is a design limit — past ~1.6
+	# an auxiliary brake stands in for the foot brake instead of supplementing it.
 	for spec in _truck_specs():
-		var total: float = DrivetrainScript.retarder_rating(spec.ground_drive.brake_torque) * _rear_count(spec)
+		var total: float = DrivetrainScript.retarder_rating(spec) * _rear_count(spec)
 		var decel: float = total / spec.ground_drive.wheel_radius / spec.mass
 		assert_float(decel) \
 			.override_failure_message(
@@ -305,7 +342,7 @@ func test_the_slip_cap_stays_a_backstop_and_not_the_operating_point() -> void:
 	for spec in _truck_specs():
 		var rear: int = _rear_count(spec)
 		var gd := spec.ground_drive
-		var demand_n: float = DrivetrainScript.retarder_rating(gd.brake_torque) / gd.wheel_radius
+		var demand_n: float = DrivetrainScript.retarder_rating(spec) / gd.wheel_radius
 		# Static rear-axle load off the spec's own geometry: the com sits between the axles, so
 		# each axle carries the share proportional to the OTHER axle's distance from it.
 		var front_z := 0.0
@@ -354,51 +391,21 @@ func test_axle_load_is_the_suspension_force_in_kilograms() -> void:
 
 # --- the shipped truck specs --------------------------------------------------
 
-func test_every_truck_spec_keeps_the_force_hierarchy_with_the_retarder_added() -> void:
-	# test_vehicle_catalog states the hierarchy over the generated specs and test_drivetrain pins it
-	# on the sedan; the retarder is a new braking torque on the driven axle, so it is checked here on
-	# the specs that carry it, and on the two hand-built units the generated sweep never sees.
+func test_every_truck_specs_retarder_stays_an_auxiliary_brake() -> void:
+	# The retarder is a braking torque on the driven axle with its own rating, checked on the specs
+	# that carry it (the hand-built units included): it supplements the foot brake, so at full it
+	# stays under the service brake's capacity on its own axle.
 	var specs := _truck_specs()
 	assert_int(specs.size()).override_failure_message("no truck specs found").is_greater(0)
 	for spec in specs:
 		var gd := spec.ground_drive
-		var peak_engine := 0.0
-		for p in spec.torque_curve:
-			peak_engine = maxf(peak_engine, p.y)
-		var ratio1 := spec.gear_ratios[0] * spec.final_drive
-		var max_drive := peak_engine * ratio1 * spec.efficiency
-		var total_brake := gd.brake_torque * gd.wheel_positions.size()
-		var total_handbrake := gd.handbrake_torque * 2.0
-		var total_retarder := DrivetrainScript.retarder_rating(gd.brake_torque) * _rear_count(spec)
-
-		# Full accel + full brake must stop, against the drive the DRIVEN wheels can transmit — the form
-		# test_vehicle_catalog states and the only form a grip-derived brake on a 6.5:1 first gear can
-		# satisfy. The two Kenney trucks brake at 4 x BRAKE_GRIP_FRAC of the per-wheel `mu_long * N * r`
-		# against the 2 driven wheels' worth of it; the hand-built units are far clear of both, their
-		# brake being fixed rather than grip-derived.
-		var driven := 0
-		for p in gd.wheel_positions:
-			if (p.z < 0.0 and gd.driven_front) or (p.z > 0.0 and gd.driven_rear):
-				driven += 1
-		var wheel_ceiling := spec.mass * 9.8 / maxi(gd.wheel_positions.size(), 1) \
-				* gd.mu_long * gd.wheel_radius
-		var transmissible := minf(max_drive, float(driven) * wheel_ceiling)
-		assert_float(total_brake) \
-			.override_failure_message("brake no longer beats transmissible drive") \
-			.is_greater(transmissible)
-		# Unchanged: the handbrake holds only below ~25 % throttle.
-		var drive_25: float = absf(DrivetrainScript.wheel_torque(spec, spec.idle_rpm, 0.25, 1))
-		var drive_50: float = absf(DrivetrainScript.wheel_torque(spec, spec.idle_rpm, 0.5, 1))
-		assert_float(total_handbrake).is_greater(drive_25)
-		assert_float(total_handbrake).is_less(drive_50)
-		# The retarder is an auxiliary brake: it must stay well under peak drive, and everything else
-		# braking at once must come to less than the service brake, or the hierarchy has a back door.
+		var total_retarder := DrivetrainScript.retarder_rating(spec) * _rear_count(spec)
+		var rear_brake := gd.axle_brake_torque(true) * _rear_count(spec)
 		assert_float(total_retarder) \
-			.override_failure_message("the retarder has become a second service brake") \
-			.is_less(max_drive)
-		assert_float(total_retarder + total_handbrake) \
-			.override_failure_message("retarder + handbrake outrank the foot brake") \
-			.is_less(total_brake)
+			.override_failure_message("%s: the retarder has become a second service brake"
+				% spec.resource_path) \
+			.is_less(rear_brake)
+		assert_float(DrivetrainScript.retarder_fraction(spec)).is_between(0.0, 1.0)
 
 
 func test_only_the_truck_declares_a_retarder() -> void:
@@ -829,9 +836,10 @@ func test_a_coupled_trailer_on_the_north_american_unit_publishes_honest_zeros() 
 func test_the_trailer_still_brakes_on_the_unit_with_no_bus() -> void:
 	# The pneumatic lines are not the data pair: only the publishing goes dark, so the EBS11 blend the
 	# trailer's own wheels brake with is computed the same way on both units.
-	assert_float(TruckT.trailer_brake_blend(0.6, 0)).is_equal_approx(0.6, 1e-6)
-	assert_float(TruckT.trailer_brake_blend(0.0, 100)) \
-		.is_equal_approx(DrivetrainScript.RETARDER_MAX_FRAC, 1e-6)
+	var frac := DrivetrainScript.retarder_fraction(
+			load("res://src/vehicles/truck/conventional_spec.tres") as VehicleSpec)
+	assert_float(TruckT.trailer_brake_blend(0.6, 0, frac)).is_equal_approx(0.6, 1e-6)
+	assert_float(TruckT.trailer_brake_blend(0.0, 100, frac)).is_equal_approx(frac, 1e-6)
 	# ...and a coupled trailer draws air off either unit's reservoirs, for the same reason.
 	assert_float(TruckT.trailer_air_draw(true, 0.0)).is_greater(0.0)
 

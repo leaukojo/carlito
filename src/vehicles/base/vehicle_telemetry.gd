@@ -36,7 +36,7 @@ const ST_HEADLIGHTS := 1 << 6  ## headlights at LOW or brighter
 var speed := 0.0        ## signed longitudinal m/s (contract 'speed')
 var kmh := 0.0          ## absolute km/h (contract 'kmh')
 var rpm := 0.0          ## real engine RPM out of the drivetrain (contract 'rpm')
-var gear_byte := 0      ## RAMN byte: 0=N, 1..6=D1-D6, 255=R (contract 'gear')
+var gear_byte := 0      ## RAMN byte: 0=N, 1..6=D1-D6, 255=R, 254=P (contract 'gear')
 var throttle := 0.0     ## -1..1 as applied, signed by direction (contract 'throttle')
 var steer := 0.0        ## -1..1 as applied (contract 'steer')
 ## Body angular rates and accelerations (DroneCAN's `angular_velocity` / `linear_acceleration`).

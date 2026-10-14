@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## VehicleCatalog helpers and the force-hierarchy guard (brake > drive > handbrake).
+## VehicleCatalog helpers and the brake-hardware guards (lock, stall hold, parking grade, pawl).
 ## Regression here means the generator broke; fix the generator, not this test.
 
 const DrivetrainScript := preload("res://src/vehicles/base/drivetrain.gd")
@@ -130,89 +130,320 @@ func test_every_variant_sits_on_the_vehicle_layer() -> void:
 		body.free()
 
 
-# --- the force hierarchy over every generated Kenney spec ---------------------
+# --- engine constants over every generated Kenney spec -------------------------
 
-func test_kenney_specs_keep_force_hierarchy() -> void:
+func test_kenney_specs_keep_their_engine_constants_in_band() -> void:
 	for variant in VehicleCatalog.VARIANTS:
 		var scene := VehicleCatalog.scene_of(variant)
 		if not scene.begins_with("res://src/vehicles/kenney/"):
-			continue  # hand-built legacy specs are covered elsewhere
-		var spec_path := scene.trim_suffix(".tscn") + "_spec.tres"
-		var spec: VehicleSpecScript = load(spec_path)
+			continue  # hand-built specs are covered by their family's suites
+		var spec: VehicleSpecScript = load(scene.trim_suffix(".tscn") + "_spec.tres")
 		assert_object(spec).override_failure_message("no spec for " + variant).is_not_null()
-		var gd := spec.ground_drive
-
 		assert_float(spec.engine_brake_frac).override_failure_message(
 				variant + ": engine_brake_frac outside [0, 0.3]").is_between(0.0, 0.3)
 		assert_float(spec.shift_cut_s).override_failure_message(
 				variant + ": shift_cut_s outside [0, 1]").is_between(0.0, 1.0)
-		var peak_engine := 0.0
-		for p in spec.torque_curve:
-			peak_engine = maxf(peak_engine, p.y)
-		var max_drive: float = peak_engine * spec.gear_ratios[0] * spec.final_drive * spec.efficiency
-		var total_brake: float = gd.brake_torque * gd.wheel_positions.size()
-		var total_handbrake: float = gd.handbrake_torque * 2.0
-		# Brake beats what driven wheels can transmit: tyre limit is mu_long * N * r.
-		# Gearbox multiplies torque without limit; only the road limits tyre force.
-		# Require brake to exceed tyre ceiling per wheel, not peak engine torque.
-		# Static per-wheel load: same model the tyre ceiling uses.
-		var driven := 0
-		for p in gd.wheel_positions:
-			if (p.z < 0.0 and gd.driven_front) or (p.z > 0.0 and gd.driven_rear):
-				driven += 1
-		var wheel_ceiling: float = spec.mass * 9.8 / maxi(gd.wheel_positions.size(), 1) \
-				* gd.mu_long * gd.wheel_radius
-		var transmissible: float = minf(max_drive, float(driven) * wheel_ceiling)
-		# A total, on paper: a wheel holds only against its own drive, so both pedals held on the
-		# road are InputRouter.brake_override's (docs/vehicles.md § Both pedals).
-		assert_float(total_brake).override_failure_message(
-				"%s: brake %.0f <= the %.0f its %d driven wheels can transmit (peak drive %.0f)"
-				% [variant, total_brake, transmissible, driven, max_drive]).is_greater(transmissible)
-		# handbrake holds only below ~25% throttle: between the 25% and 50% launch brackets.
-		var drive_25: float = absf(DrivetrainScript.wheel_torque(spec, spec.idle_rpm, 0.25, 1))
-		var drive_50: float = absf(DrivetrainScript.wheel_torque(spec, spec.idle_rpm, 0.5, 1))
-		assert_float(total_handbrake).override_failure_message(
-				"%s: handbrake %.0f <= drive_25 %.0f" % [variant, total_handbrake, drive_25]).is_greater(drive_25)
-		assert_float(total_handbrake).override_failure_message(
-				"%s: handbrake %.0f >= drive_50 %.0f" % [variant, total_handbrake, drive_50]).is_less(drive_50)
 
 
-## The variants whose brake torque is still more than four tyres can hold: they ship knowingly
-## over-braked, with full pedal locking the wheels before the travel runs out.
-const OVER_BRAKED := [
-	# A ratchet: fixing one means deleting its name, and nothing new goes in without a reason
-	# beside it. Currently empty. The one entry it ever carried was `race-future` at 1.28 g
-	# against 1.25 of grip — AWD on a close-ratio 3.2 first, so its engine saturated all four
-	# tyres. Fixed the only way that shape can be: first gear lengthened 3.2 -> 2.375, never a
-	# bigger brake. Every 2-driven-wheel body clears the rule by 1.9x.
-]
+# --- the shift policy over every gearbox ---------------------------------------------
+
+## Steps of the pedal grid the no-hunt guard sweeps (0, 0.05 .. 1).
+const SHIFT_PEDAL_STEPS := 20
 
 
-func test_no_kenney_spec_brakes_harder_than_its_tyres_except_the_listed_ones() -> void:
-	# While brake_torque was 0.35 * peak drive this was an identity with the hierarchy assertion
-	# above and could name any number: `race` shipped demanding 2.07 g from 1.2 g of grip. Sized
-	# off the tyre it is a real claim — four wheels ask `4 * brake / r` of force and the road can
-	# only answer `mass * g * mu_long`, so anything past that is a lock, not a stop.
+## Every variant's spec with a gearbox to shift: every family, since the plane, boats, drone and
+## train walk one for the gear byte.
+func _gearbox_specs() -> Dictionary:
+	var out := {}
 	for variant in VehicleCatalog.VARIANTS:
-		var scene := VehicleCatalog.scene_of(variant)
-		if not scene.begins_with("res://src/vehicles/kenney/"):
+		var spec := _spec_of(variant)
+		if spec != null and spec.gear_ratios.size() >= 2:
+			out[variant] = spec
+	return out
+
+
+static func _top_gear(spec: VehicleSpecScript) -> int:
+	return mini(DrivetrainScript.TOP_GEAR, spec.gear_ratios.size())
+
+
+## Full pedal is where the launches and top speeds are tuned: there the policy is the box's two fixed
+## thresholds, on every gear, and the landing floor moves no upshift point.
+func test_every_box_shifts_at_its_full_pedal_pair_at_full_pedal() -> void:
+	var specs := _gearbox_specs()
+	for variant: String in specs:
+		var spec: VehicleSpecScript = specs[variant]
+		var top := _top_gear(spec)
+		for byte in range(1, top + 1):
+			if byte < top:
+				assert_float(ShiftPolicy.upshift_rpm(spec, byte, 1.0)).override_failure_message(
+						"%s: D%d's full-pedal upshift moved off shift_up_rpm" % [variant, byte]) \
+						.is_equal(spec.shift_up_rpm)
+			var rpm := spec.idle_rpm
+			while rpm <= spec.redline_rpm:
+				var expected := byte
+				if rpm >= spec.shift_up_rpm and byte < top:
+					expected = byte + 1
+				elif rpm <= spec.shift_down_rpm and byte > 1:
+					expected = byte - 1
+				assert_int(ShiftPolicy.next_gear(spec, byte, rpm, 1.0, INF, false)) \
+						.override_failure_message("%s: D%d at %.0f rpm, full pedal" % [variant, byte,
+						rpm]).is_equal(expected)
+				rpm += 25.0
+
+
+## No box hunts at any pedal: every upshift lands LANDING_MARGIN over the downshift point at the
+## same pedal, the map rises with the pedal, a stop steps the box down to D1 (the coast downshift
+## sits over idle, which the gear selection's rpm is clamped to), and a kickdown never lands past
+## its ceiling.
+func test_no_box_hunts_at_any_pedal() -> void:
+	var specs := _gearbox_specs()
+	for variant: String in specs:
+		var spec: VehicleSpecScript = specs[variant]
+		var top := _top_gear(spec)
+		assert_float(ShiftPolicy.up_rpm(spec, 0.0)).override_failure_message(
+				variant + ": the light upshift sits over the full-pedal one") \
+				.is_less_equal(spec.shift_up_rpm)
+		assert_float(ShiftPolicy.down_rpm(spec, 0.0)).override_failure_message(
+				variant + ": the coast downshift sits over the full-pedal one") \
+				.is_less_equal(spec.shift_down_rpm)
+		assert_float(ShiftPolicy.down_rpm(spec, 0.0)).override_failure_message(
+				variant + ": the coast downshift is at or under idle; a stop strands the gear") \
+				.is_greater(spec.idle_rpm)
+		for i in SHIFT_PEDAL_STEPS + 1:
+			var pedal := float(i) / SHIFT_PEDAL_STEPS
+			var down := ShiftPolicy.down_rpm(spec, pedal)
+			for byte in range(1, top):
+				var land := ShiftPolicy.upshift_rpm(spec, byte, pedal) \
+						* spec.gear_ratios[byte] / spec.gear_ratios[byte - 1]
+				assert_float(land).override_failure_message(
+						"%s: D%d>D%d lands %.0f rpm at pedal %.2f, under %.2fx its %.0f downshift"
+						% [variant, byte, byte + 1, land, pedal, ShiftPolicy.LANDING_MARGIN, down]) \
+						.is_greater_equal(ShiftPolicy.LANDING_MARGIN * down - 1e-2)
+		for byte in range(2, top + 1):
+			var rpm := spec.idle_rpm
+			while rpm <= spec.redline_rpm:
+				var k := ShiftPolicy.kickdown_target(spec, byte, rpm)
+				if k < byte:
+					assert_float(rpm * spec.gear_ratios[k - 1] / spec.gear_ratios[byte - 1]) \
+							.override_failure_message("%s: a kickdown from D%d lands past its ceiling"
+							% [variant, byte]) \
+							.is_less_equal(ShiftPolicy.kickdown_ceiling_rpm(spec))
+				rpm += 50.0
+
+
+## A box single-speed by construction (its upshift point past the redline the gear selection's rpm
+## is clamped to: the plane) stays single-speed at every pedal.
+func test_a_single_speed_box_never_upshifts_at_any_pedal() -> void:
+	var specs := _gearbox_specs()
+	for variant: String in specs:
+		var spec: VehicleSpecScript = specs[variant]
+		if spec.shift_up_rpm < spec.redline_rpm:
 			continue
-		var spec: VehicleSpecScript = load(scene.trim_suffix(".tscn") + "_spec.tres")
+		for i in SHIFT_PEDAL_STEPS + 1:
+			var pedal := float(i) / SHIFT_PEDAL_STEPS
+			assert_int(ShiftPolicy.next_gear(spec, 1, spec.redline_rpm, pedal, INF, false)) \
+					.override_failure_message("%s upshifts at pedal %.2f" % [variant, pedal]) \
+					.is_equal(1)
+
+
+# --- brake hardware over every wheel-driven body ---------------------------------
+
+## Every wheel-driven variant's spec, keyed by variant (the hand-built semis included).
+func _driven_specs() -> Dictionary:
+	var out := {}
+	for variant in VehicleCatalog.VARIANTS:
+		if not WHEELED_FAMILIES.has(VehicleCatalog.family_of(variant)):
+			continue
+		var spec := _spec_of(variant)
+		if spec != null and spec.ground_drive != null:
+			out[variant] = spec
+	return out
+
+
+func test_every_foot_brake_can_lock_its_wheels() -> void:
+	# The hardware is rated on its own, past what the tyre can use: full pedal locks a wheel without
+	# ABS, or ABS holds it at the grip peak. A total, not per axle: proportioning gives each axle its
+	# share at the tyre-limited stop's transfer, and the measured braking table shows each lock.
+	var specs := _driven_specs()
+	assert_int(specs.size()).is_greater(0)
+	for variant: String in specs:
+		var spec: VehicleSpecScript = specs[variant]
+		assert_float(BrakeSizing.capacity_g(spec)).override_failure_message(
+				"%s: %.2f g of brake against %.2f of tyre" % [variant,
+				BrakeSizing.capacity_g(spec), spec.ground_drive.mu_long]) \
+				.is_greater_equal(1.15 * spec.ground_drive.mu_long)
+
+
+func test_the_full_foot_brake_holds_gear_one_at_converter_stall() -> void:
+	# Both pedals floored in D1: the brakes hold the body (a driven wheel may spin, a brake-stand
+	# burnout) with no help from InputRouter.brake_override, which stays a modelled feature.
+	var specs := _driven_specs()
+	for variant: String in specs:
+		var margin := BrakeSizing.stall_hold_margin(specs[variant])
+		assert_float(margin).override_failure_message(
+				"%s: the full foot brake holds only %.2f of gear 1 at stall" % [variant, margin]) \
+				.is_greater_equal(1.0)
+
+
+func test_every_engine_that_drives_wheels_declares_its_crank_and_coupling() -> void:
+	# The crank is a rotating mass on every wheel-driving body (`Drivetrain.drives_wheels`): its
+	# inertia is declared per class, never the floor a missing value falls to; its friction is
+	# declared (what runs it down to idle, and a key-off crank to rest) and never past the motoring
+	# law's redline anchor; and its coupling is rated at least at the engine's peak, or a locked
+	# clutch would slip under its own engine.
+	var specs := _driven_specs()
+	for variant: String in specs:
+		var spec: VehicleSpecScript = specs[variant]
+		if not Drivetrain.drives_wheels(spec):
+			continue
+		assert_float(spec.engine_inertia).override_failure_message(
+				"%s declares no engine_inertia" % variant).is_greater(0.01)
+		assert_float(spec.engine_friction_frac).override_failure_message(
+				"%s declares no engine_friction_frac" % variant).is_greater(0.0)
+		assert_float(spec.engine_friction_frac).override_failure_message(
+				"%s: friction %.2f past its redline motoring %.2f" % [variant,
+				spec.engine_friction_frac, spec.engine_brake_frac]) \
+				.is_less_equal(spec.engine_brake_frac)
+		assert_float(spec.clutch_reserve).override_failure_message(
+				"%s: a coupling rated %.2fx its peak" % [variant, spec.clutch_reserve]) \
+				.is_greater_equal(1.0)
+		if spec.coupling != VehicleSpec.Coupling.CONVERTER:
+			continue
+		# A converter multiplies (or at 1.0 passes) its impeller's torque, never less, and its
+		# lock-up closes in a gear the box has.
+		assert_float(spec.converter_stall_ratio).override_failure_message(
+				"%s: a converter ratio of %.2f" % [variant, spec.converter_stall_ratio]) \
+				.is_greater_equal(1.0)
+		assert_int(spec.lockup_gear).override_failure_message(
+				"%s: lock-up from D%d" % [variant, spec.lockup_gear]) \
+				.is_between(1, mini(spec.gear_ratios.size(), Drivetrain.TOP_GEAR))
+
+
+func test_every_road_body_carries_a_hill_hold_and_the_tractor_a_powershift_one() -> void:
+	# Hill-start assist rides with ABS (the road bodies and trucks, the semis' AMT included); the
+	# open-wheelers carry neither. The tractor's is a powershift hill hold, with no timeout.
+	var specs := _driven_specs()
+	for variant: String in specs:
+		var gd: GroundDriveSpec = (specs[variant] as VehicleSpecScript).ground_drive
+		if gd.abs_equipped:
+			assert_int(gd.hill_hold).override_failure_message(
+					"%s carries ABS and no hill-start assist" % variant) \
+					.is_equal(HillHold.Kind.ASSIST)
+			assert_float(gd.hill_hold_s).override_failure_message(
+					"%s: hill-start assist held %.1f s" % [variant, gd.hill_hold_s]).is_greater(0.0)
+		elif gd.front_axle_engageable:
+			assert_int(gd.hill_hold).override_failure_message(
+					"%s: a powershift tractor with no hill hold" % variant) \
+					.is_equal(HillHold.Kind.STANDSTILL)
+		else:
+			assert_int(gd.hill_hold).override_failure_message(
+					"%s: a hill hold on a body without ABS" % variant) \
+					.is_equal(HillHold.Kind.NONE)
+
+
+func test_every_free_crank_settles_on_its_steepest_droop_without_ringing() -> void:
+	# The crank's step is semi-implicit in its own curve (`Drivetrain.crank_compliance`): on the
+	# steepest falling segment, held at the fuel that balances the motoring law mid-segment, a free
+	# crank started at the segment's top climbs onto that point and never passes it.
+	var specs := _driven_specs()
+	for variant: String in specs:
+		var spec: VehicleSpecScript = specs[variant]
+		if not Drivetrain.drives_wheels(spec):
+			continue
+		var curve := spec.torque_curve
+		var steepest := -1
+		var drop := 0.0
+		for i in range(1, curve.size()):
+			var fall := (curve[i - 1].y - curve[i].y) / (curve[i].x - curve[i - 1].x)
+			if fall > drop:
+				drop = fall
+				steepest = i
+		if steepest < 0 or curve[steepest].x > spec.redline_rpm:
+			continue
+		var mid := (curve[steepest - 1].x + curve[steepest].x) * 0.5
+		var pedal := Drivetrain.drag_fuel(spec, mid)
+		var dt := Drivetrain.new(spec)
+		dt.rpm = curve[steepest - 1].x + 1.0
+		var prev := dt.rpm
+		for i in 240:
+			dt.process(1.0 / 60.0, pedal, 0.0, 0.0, Drivetrain.GEAR_N, false)
+			dt.couple(func(_spin: float, _c: float, _cap: float) -> float: return 0.0,
+					func(_t: float) -> float: return 0.0)
+			assert_float(dt.rpm).override_failure_message(
+					"%s rang on its %.0f-%.0f rpm droop: %.1f after %.1f" % [variant,
+					curve[steepest - 1].x, curve[steepest].x, dt.rpm, prev]) \
+					.is_between(prev - 1e-6, mid + 1e-3)
+			prev = dt.rpm
+		assert_float(dt.rpm).override_failure_message("%s never reached its droop" % variant) \
+				.is_equal_approx(mid, 1.0)
+
+
+func test_the_centre_carries_an_axles_shortfall_to_the_other_axles_brakes() -> void:
+	# `suv-luxury`'s rear brakes are under their own drive at stall, its fronts' have spare. Its
+	# Torsen centre carries the rears' shortfall forward, as the coupled solve does, and nothing
+	# pushes; an open centre carries none, and the rears push against the fronts' hold (a brake-stand
+	# burnout).
+	var spec: VehicleSpecScript = _spec_of("suv-luxury").duplicate()
+	spec.ground_drive = spec.ground_drive.duplicate()
+	var gd := spec.ground_drive
+	assert_float(gd.axle_brake_torque(true)).is_less(absf(Drivetrain.stall_axle_torque(spec)) / 4.0)
+	assert_float(BrakeSizing.stall_hold_margin(spec)).is_equal(INF)
+	gd.centre_diff_bias = 1.0
+	var open := BrakeSizing.stall_hold_margin(spec)
+	assert_bool(is_finite(open)).is_true()
+	# A rigid centre carries it all.
+	gd.centre_diff_rigid = true
+	assert_float(BrakeSizing.stall_hold_margin(spec)).is_equal(INF)
+
+
+func test_every_handbrake_locks_the_rears_and_parks_on_its_regulation_grade() -> void:
+	# A parking brake that can lock the rears makes the handbrake turn (the combined-slip tyre drops a
+	# locked wheel's side force), and it parks the laden body on UN R13-H's 20 % or R13's 18 %. A
+	# semi-trailer rig adds the trailer's spring brakes (test_trailer).
+	var specs := _driven_specs()
+	for variant: String in specs:
+		var spec: VehicleSpecScript = specs[variant]
+		assert_float(BrakeSizing.rear_lock_ratio(spec)).override_failure_message(
+				"%s: the handbrake cannot lock the rears" % variant).is_greater(1.0)
+		var need := BrakeSizing.regulation_grade(spec.mass)
+		assert_float(BrakeSizing.park_grade(spec)).override_failure_message(
+				"%s parks on %.0f %%, under the %.0f %% regulation grade"
+				% [variant, BrakeSizing.park_grade(spec) * 100.0, need * 100.0]) \
+				.is_greater_equal(need)
+
+
+func test_the_parking_grade_is_the_lesser_of_the_handbrake_and_the_rear_tyres() -> void:
+	# BrakeSizing.park_grade: a handbrake too weak to lock parks on its own arithmetic, either way it
+	# faces; past the lock the rear tyres hold the grade and more handbrake moves nothing.
+	var shipped: VehicleSpecScript = load("res://src/vehicles/kenney/sedan_spec.tres")
+	var spec := shipped.duplicate(true) as VehicleSpecScript
+	var gd := spec.ground_drive
+	gd.handbrake_torque = 200.0
+	var s := 2.0 * 200.0 / gd.wheel_radius / (spec.mass * BrakeSizing.G)
+	assert_float(BrakeSizing.park_grade(spec)).is_equal_approx(s / sqrt(1.0 - s * s), 0.003)
+	gd.handbrake_torque = 5000.0
+	var tyre_limited := BrakeSizing.park_grade(spec)
+	gd.handbrake_torque = 50000.0
+	assert_float(BrakeSizing.park_grade(spec)).is_equal(tyre_limited)
+	# 2 x 5000 / r is past m g, so the brake alone would hold a wall: the tyres set the grade.
+	assert_float(tyre_limited).override_failure_message(
+			"a locking handbrake parked on %.2f, not on its rear tyres" % tyre_limited) \
+			.is_between(BrakeSizing.PARK_GRADE_LIGHT, 1.0)
+
+
+func test_a_park_pawl_outholds_the_driven_tyres() -> void:
+	# A steel tooth: the tyre slips before the pawl does.
+	var specs := _driven_specs()
+	for variant: String in specs:
+		var spec: VehicleSpecScript = specs[variant]
 		var gd := spec.ground_drive
-		var wheels: int = maxi(gd.wheel_positions.size(), 1)
-		var ceiling: float = spec.mass * 9.8 / wheels * gd.mu_long * gd.wheel_radius
-		var demand_g: float = gd.brake_torque * wheels / gd.wheel_radius / spec.mass / 9.8
-		if OVER_BRAKED.has(variant):
-			# Ratchet: a listed variant that no longer exceeds its tyres has been fixed, and the
-			# list has to shrink with it or the exemption quietly outlives the problem.
-			assert_float(gd.brake_torque).override_failure_message(
-					"%s is in OVER_BRAKED but brakes at %.2f g, within its %.2f g of grip — remove it"
-					% [variant, demand_g, gd.mu_long]).is_greater(ceiling)
+		if gd.park_pawl_torque <= 0.0:
 			continue
-		assert_float(gd.brake_torque).override_failure_message(
-				("%s demands %.2f g of braking from %.2f g of grip (%.0f Nm/wheel against %.0f)"
-				+ " — the pedal is an on/off wheel lock") % [variant, demand_g, gd.mu_long,
-				gd.brake_torque, ceiling]).is_less_equal(ceiling)
+		var loads := BrakeSizing.wheel_loads(spec)
+		var heaviest := maxf(loads.x if gd.driven_front else 0.0, loads.y if gd.driven_rear else 0.0)
+		assert_float(gd.park_pawl_torque).override_failure_message(
+				"%s: the pawl slips before its tyre" % variant) \
+				.is_greater(BrakeSizing.wheel_grip(spec, heaviest) * gd.wheel_radius)
 
 
 ## Wheel-driven families. The free bodies below carry their own drag through VehicleMath and

@@ -28,6 +28,10 @@ extends Resource
 @export var rear_diff_lockable := false  ## rear axle can rigidly lock at runtime (tractor); off elsewhere so diff_lock affects nothing else
 @export var front_axle_engageable := false  ## front axle engages at runtime (tractor MFWD) instead of fixed by driven_front; off elsewhere
 @export var retarder_equipped := false  ## driveline carries an auxiliary retarder (truck J1939 SPN 520); off elsewhere
+## The retarder's rating (Nm) at the gearbox output, a figure of its own hardware class: the driven
+## axle sees it through `final_drive` (`Drivetrain.retarder_rating`). Read only while
+## `retarder_equipped`.
+@export var retarder_rating_nm := 0.0
 ## Torque bias ratio of the front axle's differential (`Differential.bias_capacity`): the slower
 ## wheel may take up to this many times the faster one's torque. 1 = open; a helical or plate LSD
 ## sits around 2-3. Only read while the axle is driven.
@@ -90,15 +94,23 @@ extends Resource
 ## (`RayWheel.corner_mass * g`); 0 = grip exactly linear in load, so weight transfer cannot move
 ## the balance. Car 0.10, truck/van/trailers 0.08, tractor 0.12 (soft flotation tyres), plane 0.
 @export_range(0.0, 0.5) var load_sensitivity := 0.0
-@export_range(0.0, 1.0) var handbrake_grip := 1.0  ## rear lateral grip while handbrake is pulled (1 = no effect); arcade drift knob since handbrake_torque alone can't lock the rears
 
 @export_group("Brakes")
-@export var brake_torque := 1300.0     ## Nm per wheel on average; `brake_bias_front` splits it by axle
-@export var handbrake_torque := 160.0  ## Nm per rear wheel — magnitudes encode the tested hierarchy: foot brake > drive force > handbrake (holds only below ~30% throttle)
+## Full-pedal foot-brake capacity, Nm per wheel on average: the hardware's own rating, more than
+## the tyre can use (full pedal locks a wheel, or ABS holds it at the peak). `brake_bias_front`
+## splits it by axle; the pedal reaches it through `WheelDrive.brake_application`.
+@export var brake_torque := 1300.0
+## Parking-brake torque, Nm per rear wheel (a truck's spring brakes): a mechanical hold no ABS
+## modulates. Sized to lock the rears at speed and park the laden body on its regulation grade
+## (`BrakeSizing`).
+@export var handbrake_torque := 160.0
+## Park pawl strength, Nm per driven wheel while the gearbox sits in P (`Drivetrain.GEAR_P`); 0 =
+## no pawl, and a P request reads as N. A steel tooth: sized past the tyre, so the tyre slips first.
+@export var park_pawl_torque := 0.0
 ## Share of the whole foot brake (`brake_torque` x wheel count) on the front axle, 0 = rear only;
 ## negative = every wheel `brake_torque`. A generated body takes the share its front axle can hold
-## in a full-pedal stop (gen_kenney_vehicles `_derive_brakes`): an even split under-brakes the axle
-## braking loads up.
+## in a full-pedal stop (gen_kenney_vehicles `_front_brake_share`): an even split under-brakes the
+## axle braking loads up.
 @export_range(-1.0, 1.0) var brake_bias_front := -1.0
 ## Anti-lock brakes: the foot brake (and retarder) may not drive a wheel's braking slip past
 ## `RayWheel.ABS_SLIP`.
@@ -106,6 +118,17 @@ extends Resource
 ## Traction control, `abs_equipped`'s drive-side twin: the drive may not push a driven wheel's slip
 ## past `RayWheel.TCS_SLIP`. `VehicleInput.tcs_off` switches it off (bridge or local setting).
 @export var tcs_equipped := false
+## A hold on the foot brake that stops a pull-away on a grade from rolling back while the coupling
+## takes up (`HillHold`, applied in `WheelDrive.hold_step`): equipment like ABS, on every input path.
+## ASSIST is hill-start assist (the road bodies and trucks); STANDSTILL is a powershift tractor's
+## hill hold (Valtra HillHold). COMPROMISE: a real HillHold holds in the transmission; this one
+## holds on the foot brake, the hold that is solved with the crank's coupling inside the
+## differentials (`Differential.braked_coupling_torque`). A lock of the gearbox output is solved
+## before the coupling in that one pass, so the drive would creep the body against it.
+@export var hill_hold := HillHold.Kind.NONE
+## ASSIST's timeout (s): the hold lets go this long after the brake's release whatever the drive
+## carries (Honda's ~1 s on a car, Volvo's 3 s on a truck). STANDSTILL has none.
+@export var hill_hold_s := 0.0
 ## The foot brake engages the front axle (`front_axle_engageable`), as a fast tractor's rear-axle
 ## brakes do: braking the fronts through the shaft, never a brake of their own. Pairs with
 ## `brake_bias_front` 0.
