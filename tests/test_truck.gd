@@ -226,11 +226,11 @@ func test_the_rating_is_the_gearbox_output_figure_through_the_final_drive() -> v
 	# Its own hardware figure, at the gearbox output: each driven rear wheel sees its share through
 	# the final drive, whatever the service brake is. Hand figures, so the arithmetic is checked
 	# rather than restated: the semi's 1450 Nm through 2.925 over two wheels, a Kenney truck's 600
-	# through 4.5.
+	# through 4.01.
 	var semi: VehicleSpec = load("res://src/vehicles/truck/semi_spec.tres")
 	assert_float(DrivetrainScript.retarder_rating(semi)).is_equal_approx(2120.625, 1e-3)
 	var garbage: VehicleSpec = load("res://src/vehicles/kenney/garbage-truck_spec.tres")
-	assert_float(DrivetrainScript.retarder_rating(garbage)).is_equal_approx(1350.0, 1e-3)
+	assert_float(DrivetrainScript.retarder_rating(garbage)).is_equal_approx(1203.0, 1e-3)
 	# Its share of the whole foot brake, what the trailer is asked for: 2 x 2120.6 over 4 x 15500.
 	assert_float(DrivetrainScript.retarder_fraction(semi)).is_equal_approx(0.06841, 1e-4)
 	for spec in _truck_specs():
@@ -284,10 +284,12 @@ func test_the_retarder_is_inert_at_a_standstill_however_the_wheels_are_spinning(
 				.is_greater(0.0)
 		# Stationary chassis, driven wheels spinning hard (a standing burnout): still nothing.
 		var rating := DrivetrainScript.retarder_rating(spec)
-		assert_float(DrivetrainScript.retarder_torque(1.0, 0.0, 50.0, gd, free, rating)).is_equal(0.0)
+		assert_float(DrivetrainScript.retarder_torque(1.0, 0.0, 50.0, gd.wheel_radius, free,
+				rating)).is_equal(0.0)
 		# And just under the cutout, where the fade is still zero.
 		assert_float(DrivetrainScript.retarder_torque(
-				1.0, DrivetrainScript.RETARDER_CUTOUT_MS - 0.01, 50.0, gd, free, rating)).is_equal(0.0)
+				1.0, DrivetrainScript.RETARDER_CUTOUT_MS - 0.01, 50.0, gd.wheel_radius, free,
+				rating)).is_equal(0.0)
 
 
 func test_the_retarder_can_never_skid_the_driven_axle() -> void:
@@ -305,7 +307,7 @@ func test_the_retarder_can_never_skid_the_driven_axle() -> void:
 		for v: float in [30.0, 22.0, 15.0, 8.0, 4.0, 2.0, -22.0, -8.0]:
 			var omega: float = v / gd.wheel_radius
 			for _tick in 200:
-				var tau := DrivetrainScript.retarder_torque(1.0, v, omega, gd, free, rating)
+				var tau := DrivetrainScript.retarder_torque(1.0, v, omega, gd.wheel_radius, free, rating)
 				omega = move_toward(omega, 0.0, tau * free)
 			# Unsigned: braking slip is how far the wheel has fallen behind the ground, whichever way the
 			# truck is pointing.

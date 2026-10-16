@@ -9,6 +9,7 @@ script = ExtResource("1_jbiru")
 wheel_positions = PackedVector3Array(-0.6300002, 0.4484882, -1.242, 0.6300002, 0.4484882, -1.242, -0.6300002, 0.4484882, 0.70200014, 0.6300002, 0.4484882, 0.702)
 wheel_radius = 0.36
 wheel_inertia = 3.0
+tyre_half_width = 0.21
 wheel_scene = ExtResource("2_355ka")
 rest_length = 0.32
 spring_rate = 46714.0

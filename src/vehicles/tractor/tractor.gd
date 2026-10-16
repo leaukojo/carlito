@@ -170,7 +170,7 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	t.fwd_drive_state = _front_axle_driven()
 	# ISOBUS wheel-based / ground-based speed pair; the difference is slip.
 	t.wheel_speed = TractorTelemetry.wheel_kmh(
-			_drive_axle_omega(), spec.ground_drive.wheel_radius)
+			_drive_axle_omega(), spec.ground_drive.axle_radius(true))
 	t.ground_speed = absf(t.speed) * 3.6
 	t.wheel_slip = roundi(TractorTelemetry.slip_pct(t.wheel_speed, t.ground_speed))
 	# implement_connected and type report the address claim (ISOBUS_DATA), not the steel: the

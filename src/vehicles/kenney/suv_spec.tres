@@ -8,6 +8,7 @@
 script = ExtResource("1_v5bot")
 wheel_positions = PackedVector3Array(-0.6300001, 0.5115197, -0.91199964, 0.6300001, 0.5115197, -0.91199976, -0.6300001, 0.5115197, 0.6720004, 0.6300001, 0.5115197, 0.6720003)
 wheel_radius = 0.36
+tyre_half_width = 0.21
 wheel_scene = ExtResource("2_mravm")
 driven_front = true
 centre_diff_bias = 3.0

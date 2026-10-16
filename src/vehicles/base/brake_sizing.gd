@@ -26,7 +26,21 @@ static func g_per_demand(spec: VehicleSpec, load_kg: float) -> float:
 	var gd := spec.ground_drive
 	if gd == null or gd.wheel_radius <= 0.0 or load_kg <= 0.0:
 		return 0.0
-	return gd.brake_torque * gd.wheel_positions.size() / gd.wheel_radius / (load_kg * G)
+	return brake_force(gd) / (load_kg * G)
+
+
+## Full-pedal foot-brake force (N) at the road: each wheel's brake (`axle_brake_torque`) over its
+## axle's radius. Written as the whole brake over the front radius with the rear axle's share moved
+## to its own, so on equal radii it is exactly `brake_torque * wheels / wheel_radius`.
+static func brake_force(gd: GroundDriveSpec) -> float:
+	var r_front := maxf(gd.axle_radius(false), 1e-6)
+	var r_rear := maxf(gd.axle_radius(true), 1e-6)
+	var rear_torque := 0.0
+	for p in gd.wheel_positions:
+		if RayWheel.is_rear_z(p.z):
+			rear_torque += gd.axle_brake_torque(true)
+	return gd.brake_torque * gd.wheel_positions.size() / r_front \
+			- rear_torque * (1.0 / r_front - 1.0 / r_rear)
 
 
 ## The axle pair off the wheel stations (front = -Z, `RayWheel.is_rear_z`): the foremost front and
@@ -67,14 +81,14 @@ static func wheel_loads(spec: VehicleSpec) -> Vector2:
 			weight * (1.0 - front_share) / maxf(1.0, int(ax["n_rear"])))
 
 
-## Height (m) of the centre of mass over the contact plane, off the UNCOMPRESSED wheel station
-## (`RayWheel`'s ray is `rest_length + wheel_radius` long): a few cm over the sagged height, which
-## overstates weight transfer, the conservative side for a parking grade.
+## Height (m) of the centre of mass over the contact plane, off the UNCOMPRESSED wheel stations
+## (`GroundDriveSpec.rest_ride_height`): a few cm over the sagged height, which overstates weight
+## transfer, the conservative side for a parking grade.
 static func com_height(spec: VehicleSpec) -> float:
 	var gd := spec.ground_drive
 	if gd.wheel_positions.is_empty():
 		return 0.0
-	return spec.center_of_mass.y + gd.wheel_radius + gd.rest_length - gd.wheel_positions[0].y
+	return spec.center_of_mass.y + gd.rest_ride_height()
 
 
 ## A wheel's longitudinal grip (N) at `n_load`, as RayWheel scales it against the even corner share.
@@ -108,15 +122,18 @@ static func stall_hold_margin(spec: VehicleSpec) -> float:
 		return INF
 	var axle_drive := absf(Drivetrain.stall_axle_torque(spec))
 	var drive := axle_drive / driven
-	# Per-wheel drive on each axle after the centre's transfer (floats: a Vector2 is float32).
+	# The drive is the shaft's (`WheelDrive.shaft_frame`): a wheel geared at `n` takes `n` times it.
+	var n_front_gear := gd.axle_radius(false) / gd.drive_radius()
+	var n_rear_gear := gd.axle_radius(true) / gd.drive_radius()
+	# Per-wheel shaft drive on each axle after the centre's transfer (floats: a Vector2 is float32).
 	var d_front := drive if front_driven else 0.0
 	var d_rear := drive if rear_driven else 0.0
 	if front_driven and rear_driven:
 		var capacity := INF if gd.centre_diff_rigid \
 				else Differential.bias_capacity(axle_drive, gd.centre_diff_bias)
-		# An axle's shortfall: its drive past its own brakes (negative: their spare).
-		var b_front := gd.axle_brake_torque(false)
-		var b_rear := gd.axle_brake_torque(true)
+		# An axle's shortfall: its drive past its own brakes, at the shaft (negative: their spare).
+		var b_front := gd.axle_brake_torque(false) / n_front_gear
+		var b_rear := gd.axle_brake_torque(true) / n_rear_gear
 		var front_short := n_front * (drive - b_front)
 		var rear_short := n_rear * (drive - b_rear)
 		if front_short > 0.0 and rear_short < 0.0:
@@ -128,13 +145,13 @@ static func stall_hold_margin(spec: VehicleSpec) -> float:
 			d_front = drive + moved / n_front
 			d_rear = b_rear + (rear_short - moved) / n_rear
 	var loads := wheel_loads(spec)
-	var r := gd.wheel_radius
 	var push := 0.0
 	var resist := 0.0
 	for p in gd.wheel_positions:
 		var rear := RayWheel.is_rear_z(p.z)
 		var grip := wheel_grip(spec, loads.y if rear else loads.x)
-		var f := clampf(((d_rear if rear else d_front) - gd.axle_brake_torque(rear)) / r, -grip,
+		var wheel_drive := d_rear * n_rear_gear if rear else d_front * n_front_gear
+		var f := clampf((wheel_drive - gd.axle_brake_torque(rear)) / gd.axle_radius(rear), -grip,
 				grip)
 		if f > 0.0:
 			push += f
@@ -148,7 +165,7 @@ static func stall_hold_margin(spec: VehicleSpec) -> float:
 static func rear_lock_ratio(spec: VehicleSpec) -> float:
 	var gd := spec.ground_drive
 	var grip := wheel_grip(spec, wheel_loads(spec).y)
-	return INF if grip <= 0.0 else gd.handbrake_torque / (grip * gd.wheel_radius)
+	return INF if grip <= 0.0 else gd.handbrake_torque / (grip * gd.axle_radius(true))
 
 
 ## Steepest grade (rise over run) the handbrake alone parks the body on, facing either way: each
@@ -160,7 +177,7 @@ static func park_grade(spec: VehicleSpec) -> float:
 	var gd := spec.ground_drive
 	var ax := axle_geometry(spec)
 	var n_rear := int(ax["n_rear"])
-	if n_rear == 0 or gd.wheel_radius <= 0.0 or spec.mass <= 0.0:
+	if n_rear == 0 or gd.axle_radius(true) <= 0.0 or spec.mass <= 0.0:
 		return 0.0
 	var weight := spec.mass * G
 	var rear_share := 1.0 - _static_front_share(spec, ax)
@@ -179,7 +196,8 @@ static func park_grade(spec: VehicleSpec) -> float:
 					+ facing * sin(theta) * h_over_l, 0.0, 1.0) / n_rear
 			var grip := n_wheel * RayWheel.load_scaled_mu(gd.mu_long, n_wheel, ref,
 					gd.load_sensitivity)
-			if n_rear * minf(gd.handbrake_torque / gd.wheel_radius, grip) < weight * sin(theta):
+			if n_rear * minf(gd.handbrake_torque / gd.axle_radius(true), grip) \
+					< weight * sin(theta):
 				break
 			held_deg = deg
 			deg += PARK_SCAN_DEG

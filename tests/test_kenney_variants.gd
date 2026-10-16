@@ -253,12 +253,17 @@ func test_every_declared_yaw_index_sits_in_its_class_band() -> void:
 				.is_between(band.x, band.y)
 
 
-## Single radius across kit (tractor's big wheel is VISUAL only).
-func test_every_body_runs_the_kit_wheel_radius() -> void:
+## Every axle's physics radius is the wheel drawn on it (a body is judged against what it shows).
+func test_every_body_runs_its_drawn_wheel_radius_per_axle() -> void:
 	for variant: String in Gen.VARIANTS:
-		assert_float(_spec_of(variant).ground_drive.wheel_radius) \
-				.override_failure_message("%s_spec.tres wheel_radius" % variant) \
-				.is_equal_approx(Gen.WHEEL_RADIUS, 1e-4)
+		var ov: Dictionary = Gen.VARIANTS[variant]
+		var wheels: Array = ov.get("wheels", Gen.FAMILY_WHEELS[ov["family"]])
+		var gd := _spec_of(variant).ground_drive
+		for rear: bool in [false, true]:
+			assert_float(gd.axle_radius(rear)) \
+					.override_failure_message("%s_spec.tres %s axle radius" % [variant,
+						"rear" if rear else "front"]) \
+					.is_equal_approx(float(wheels[1 if rear else 0]["radius"]), 1e-4)
 
 
 # --- re-derived values --------------------------------------------------------

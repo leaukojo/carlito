@@ -8,6 +8,7 @@
 script = ExtResource("1_psa8x")
 wheel_positions = PackedVector3Array(-0.6300001, 0.5115197, -0.8219999, 0.6300001, 0.5115197, -0.822, -0.6300001, 0.5115197, 0.7620001, 0.6300001, 0.5115197, 0.76199996)
 wheel_radius = 0.36
+tyre_half_width = 0.21
 wheel_scene = ExtResource("2_16fio")
 driven_front = true
 driven_rear = false

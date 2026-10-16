@@ -553,7 +553,7 @@ func _traction_limit_deg(spec: VehicleSpec, gd: GroundDriveSpec, grip: float,
 	if gd.driven_front and not gd.driven_rear:
 		share_rear = 1.0 - share_rear
 	# COM height over the contact plane, springs at half travel.
-	var contact_y := gd.wheel_positions[0].y - gd.rest_length * 0.5 - gd.wheel_radius
+	var contact_y := gd.rest_length * 0.5 - gd.rest_ride_height()
 	var h := maxf(spec.center_of_mass.y - contact_y, 0.05)
 	var transfer := mu * h / wheelbase
 	if gd.driven_front and not gd.driven_rear:
@@ -576,7 +576,7 @@ func _tip_limit_deg(spec: VehicleSpec, gd: GroundDriveSpec) -> float:
 	if is_inf(rear_z):
 		return NAN
 	# Same contact plane as `_traction_limit_deg`: springs at half travel.
-	var contact_y := gd.wheel_positions[0].y - gd.rest_length * 0.5 - gd.wheel_radius
+	var contact_y := gd.rest_length * 0.5 - gd.rest_ride_height()
 	var h := maxf(spec.center_of_mass.y - contact_y, 0.05)
 	return rad_to_deg(atan(maxf(rear_z - spec.center_of_mass.z, 0.0) / h))
 
@@ -605,7 +605,7 @@ func _front_load() -> float:
 func _torque_limit_deg(spec: VehicleSpec, gd: GroundDriveSpec, crr: float, mass: float) -> float:
 	if spec.gear_ratios.is_empty():
 		return NAN
-	var force := Drivetrain.stall_axle_torque(spec) / gd.wheel_radius
+	var force := Drivetrain.stall_axle_torque(spec) / gd.drive_radius()
 	var ratio := force / (mass * 9.81)
 	if ratio <= crr:
 		return 0.0

@@ -419,7 +419,7 @@ func test_the_parking_grade_is_the_lesser_of_the_handbrake_and_the_rear_tyres() 
 	var spec := shipped.duplicate(true) as VehicleSpecScript
 	var gd := spec.ground_drive
 	gd.handbrake_torque = 200.0
-	var s := 2.0 * 200.0 / gd.wheel_radius / (spec.mass * BrakeSizing.G)
+	var s := 2.0 * 200.0 / gd.axle_radius(true) / (spec.mass * BrakeSizing.G)
 	assert_float(BrakeSizing.park_grade(spec)).is_equal_approx(s / sqrt(1.0 - s * s), 0.003)
 	gd.handbrake_torque = 5000.0
 	var tyre_limited := BrakeSizing.park_grade(spec)
@@ -443,7 +443,7 @@ func test_a_park_pawl_outholds_the_driven_tyres() -> void:
 		var heaviest := maxf(loads.x if gd.driven_front else 0.0, loads.y if gd.driven_rear else 0.0)
 		assert_float(gd.park_pawl_torque).override_failure_message(
 				"%s: the pawl slips before its tyre" % variant) \
-				.is_greater(BrakeSizing.wheel_grip(spec, heaviest) * gd.wheel_radius)
+				.is_greater(BrakeSizing.wheel_grip(spec, heaviest) * gd.drive_radius())
 
 
 ## Wheel-driven families. The free bodies below carry their own drag through VehicleMath and
@@ -518,6 +518,24 @@ func test_every_wheeled_variant_declares_a_ground_drive() -> void:
 		assert_object(t_gd).override_failure_message(
 				"%s declares no ground_drive" % path).is_not_null()
 		assert_int(t_gd.wheel_positions.size()).is_greater(0)
+
+
+func test_every_ground_drive_declares_its_tyre_width() -> void:
+	# The contact is a cylinder of the tyre's width (`RayWheel`): a body at 0 builds no cast and
+	# trips its assert on the first tick.
+	var specs := {}
+	for variant in VehicleCatalog.VARIANTS:
+		specs[variant] = _spec_of(variant)
+	for path: String in TRAILER_SPECS:
+		specs[path] = load(path)
+	for id: String in specs:
+		var gd: GroundDriveSpec = (specs[id] as VehicleSpecScript).ground_drive
+		if gd == null:
+			continue
+		for rear in [false, true]:
+			assert_float(gd.axle_half_width(rear)).override_failure_message(
+					"%s declares no %s tyre_half_width" % [id, "rear" if rear else "front"]) \
+					.is_greater(0.0)
 
 
 ## The families with no running gear at all. The plane is deliberately NOT here: it stands on

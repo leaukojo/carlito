@@ -29,8 +29,8 @@ const GOVERNOR_BAND := 1.5
 ## Gear-selection radius (m) for a body with no ground drive, which still walks a gearbox and
 ## publishes the gear byte without owning a wheel.
 const DEFAULT_ROAD_RADIUS := 0.32
-## Floor under any declared `wheel_radius` (m): a divisor in gear selection and `governed_upshift`,
-## so a misconfigured 0 cannot reach the division.
+## Floor under any declared drive radius (`GroundDriveSpec.drive_radius`, m): a divisor in gear
+## selection and `governed_upshift`, so a misconfigured 0 cannot reach the division.
 const MIN_ROAD_RADIUS := 0.05
 
 var spec: VehicleSpec
@@ -159,7 +159,7 @@ var _stall_bound := 0.0
 
 func _init(p_spec: VehicleSpec) -> void:
 	spec = p_spec
-	road_radius = maxf(p_spec.ground_drive.wheel_radius, MIN_ROAD_RADIUS) \
+	road_radius = maxf(p_spec.ground_drive.drive_radius(), MIN_ROAD_RADIUS) \
 			if p_spec.ground_drive != null else DEFAULT_ROAD_RADIUS
 	rpm = spec.idle_rpm
 	ramp = 0.0 if spec.launch_engage_s > 0.0 else 1.0
@@ -650,12 +650,12 @@ static func retarder_slip_cap(omega: float, road_speed: float, radius: float,
 	return maxf(headroom, 0.0) / (radius * compliance)
 
 
-## Retarder braking torque for one driven wheel (Nm, unsigned): demand on `rating` held under the
-## anti-lock backstop. `road_speed` is signed — see retarder_slip_cap.
-static func retarder_torque(request01: float, road_speed: float, omega: float,
-		gd: GroundDriveSpec, compliance: float, rating: float) -> float:
+## Retarder braking torque for one driven wheel of `radius` (Nm, unsigned): demand on `rating` held
+## under the anti-lock backstop. `road_speed` is signed — see retarder_slip_cap.
+static func retarder_torque(request01: float, road_speed: float, omega: float, radius: float,
+		compliance: float, rating: float) -> float:
 	return minf(retarder_demand(request01, road_speed, rating),
-			retarder_slip_cap(omega, road_speed, gd.wheel_radius, compliance))
+			retarder_slip_cap(omega, road_speed, radius, compliance))
 
 
 ## Retarder torque as the contract's percentage: applied over rating. Unsigned, though SPN 520

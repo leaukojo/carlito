@@ -14,6 +14,15 @@ static func add_slab(parent: Node, slab_name: String, size: Vector3, x := 0.0) -
 	parent.add_child(ground)
 
 
+## A box of `size` under `parent` at `xform` (its centre), on TERRAIN. Returns it, so a pass can
+## free it (the kerb pass's plateau).
+static func add_box(parent: Node, box_name: String, size: Vector3, xform: Transform3D) -> StaticBody3D:
+	var box := _box_body(box_name, size)
+	box.transform = xform
+	parent.add_child(box)
+	return box
+
+
 ## `ramp` (built under `parent` from `size` when null) tilted `angle` rad about +X, so its -Z (the
 ## body's forward) climbs and its top face passes through the origin. Returns the ramp.
 static func tilt_ramp(parent: Node, ramp: StaticBody3D, size: Vector3, angle: float) -> StaticBody3D:

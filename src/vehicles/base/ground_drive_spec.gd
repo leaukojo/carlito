@@ -10,12 +10,19 @@ extends Resource
 	Vector3(-0.78, -0.1, -1.25), Vector3(0.78, -0.1, -1.25),
 	Vector3(-0.78, -0.1, 1.25), Vector3(0.78, -0.1, 1.25),
 ])
-@export var wheel_radius := 0.32  ## physics radius, all four corners; gear-selection scale is separate (Drivetrain.road_radius)
-@export var wheel_inertia := 1.2   ## kg*m^2 around the axle
-@export var wheel_scene: PackedScene  ## optional visual scene under WheelFL..RR when the scene authors no wheel mesh; radius-normalized (scaled to radius 1.0), WheelDrive scales it to wheel_visual_radius
+@export var wheel_radius := 0.32  ## physics radius (m): the front axle, and every axle at `wheel_radius_rear` 0
+@export var wheel_inertia := 1.2   ## kg*m^2 around the axle: the front's, and every axle's at `wheel_inertia_rear` 0
+## Rear-axle physics radius (m); 0 = `wheel_radius`. Read through `axle_radius`.
+@export var wheel_radius_rear := 0.0
+## Rear-axle wheel inertia (kg*m^2); 0 = `wheel_inertia`. Read through `axle_inertia`.
+@export var wheel_inertia_rear := 0.0
+## Tread half-width (m) of the drawn tyre: the front axle, and every axle at `tyre_half_width_rear`
+## 0. Read through `axle_half_width`: the contact cylinder's width (`RayWheel`), so > 0 on every body.
+@export var tyre_half_width := 0.0
+## Rear-axle tread half-width (m); 0 = `tyre_half_width`.
+@export var tyre_half_width_rear := 0.0
+@export var wheel_scene: PackedScene  ## optional visual scene under WheelFL..RR when the scene authors no wheel mesh; radius-normalized (scaled to radius 1.0), WheelDrive scales it to the axle's radius
 @export var wheel_scene_rear: PackedScene  ## optional rear-axle visual (tractor's big rears); null = wheel_scene
-@export var wheel_visual_radius := 0.0  ## rendered radius, m; 0 = wheel_radius. Visual only — a mismatch is lifted/dropped to still meet the ground
-@export var wheel_visual_radius_rear := 0.0  ## rendered rear-axle radius; 0 = wheel_visual_radius, visual only
 
 @export_group("Driveline")
 @export var driven_front := false
@@ -187,13 +194,35 @@ func axle_brake_torque(rear: bool) -> float:
 	return total * brake_bias_front / maxf(1.0, n_front)
 
 
+## Physics radius (m) of a front or rear wheel: `wheel_radius_rear`, or the front's at 0.
+func axle_radius(rear: bool) -> float:
+	return wheel_radius_rear if rear and wheel_radius_rear > 0.0 else wheel_radius
+
+
+## Wheel inertia (kg*m^2) of a front or rear wheel: `wheel_inertia_rear`, or the front's at 0.
+func axle_inertia(rear: bool) -> float:
+	return wheel_inertia_rear if rear and wheel_inertia_rear > 0.0 else wheel_inertia
+
+
+## Tread half-width (m) of a front or rear tyre: `tyre_half_width_rear`, or the front's at 0.
+func axle_half_width(rear: bool) -> float:
+	return tyre_half_width_rear if rear and tyre_half_width_rear > 0.0 else tyre_half_width
+
+
+## The radius (m) the final drive is quoted at: the rear axle's when it is driven, else the
+## front's. A wheel at radius `r` turns `r / drive_radius()` times the shaft (`WheelDrive`'s shaft
+## frame).
+func drive_radius() -> float:
+	return axle_radius(driven_rear)
+
+
 ## Origin height (m) above flat ground with every wheel just touching and the springs unloaded:
-## `wheel_radius + rest_length` above the LOWEST wheel anchor (least y). 0.0 with no wheel
+## the most any wheel asks, `axle_radius + rest_length` above its anchor. 0.0 with no wheel
 ## positions, so a spawn placer can call it on any spec unguarded.
 func rest_ride_height() -> float:
 	if wheel_positions.is_empty():
 		return 0.0
-	var lowest_y := INF
+	var height := -INF
 	for p in wheel_positions:
-		lowest_y = minf(lowest_y, p.y)
-	return wheel_radius + rest_length - lowest_y
+		height = maxf(height, axle_radius(RayWheel.is_rear_z(p.z)) + rest_length - p.y)
+	return height

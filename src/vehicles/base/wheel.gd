@@ -1,8 +1,8 @@
 class_name RayWheel
 extends RefCounted
-## One raycast-suspension wheel: one ray per wheel, slip-based grip. Ticked by WheelDrive each
-## physics frame, casting the suspension ray, applying spring and damper force plus slip friction
-## at the contact, and integrating spin from drive, brake and road-reaction torque.
+## One cast-suspension wheel: the tyre's cylinder swept down its travel, slip-based grip. Ticked by
+## WheelDrive each physics frame, casting the tyre, applying spring and damper force plus slip
+## friction at the contact, and integrating spin from drive, brake and road-reaction torque.
 ##
 ## Tuned for the locked 60 Hz tick: the clamps below plus the semi-implicit spin step in
 ## _integrate_spin keep it stable (src/vehicles/CLAUDE.md § Physics). Retune
@@ -51,6 +51,10 @@ const STICK_RELAX := STICK_DEFLECTION / ABS_SLIP
 ## 60 Hz clamp on the patch spring: stiffness never above this fraction of `mass / delta^2`
 ## (omega * dt <= 0.5), so the spring cannot ring at the tick rate on the mass it moves.
 const STICK_TICK_STIFFNESS := 0.25
+
+## Contact casts that started inside something, read as full bump (`_contact_query`), process-wide:
+## a diagnostic the measure tools read (an attachment under a hub shows here).
+static var start_overlaps := 0
 
 var anchor: Vector3     ## hub anchor, body space
 var steered: bool
@@ -108,10 +112,6 @@ var coupled_torque := 0.0
 ## (`WheelDrive.pawl_torque`; 0 = no lock): the case holds the wheel through the diffs, so a wheel
 ## the lock stopped (`hold_by_lock`) is held like a braked one, to that rating beyond the brake.
 var lock_torque := 0.0
-## Visual radius minus wheel_radius, which keeps an over- or undersized wheel visual meeting the
-## ground while physics stays single-radius. Rides the root transform, not the visual's children.
-## Also scales the drawn spin (`visual_spin_step`), so a big tyre's tread moves at ground speed.
-var visual_lift := 0.0
 ## The other wheel of this axle, paired by `pair_axles` when the spec asks for a bar; null means no
 ## bar on this body. The bar reads the snapshot `_bar_compression`, never the live `compression`,
 ## and the body's tick (`WheelDrive.tick`, `TowedBody.tick_towed`) latches it for EVERY wheel
@@ -161,6 +161,12 @@ var axle_lat_grip := 1.0
 ## The share of this corner's load one of its tyres carries, which the side grip and the
 ## cornering-stiffness law read: 0.5 on a twin rear (`GroundDriveSpec.rear_twin_tyres`), else 1.
 var tyre_share := 1.0
+## This wheel's physics radius (m) and spin inertia (kg*m^2), picked per axle by `apply_suspension`
+## (`GroundDriveSpec.axle_radius`, `axle_inertia`).
+var wheel_radius := 0.0
+var wheel_inertia := 0.0
+## This axle's tread half-width (m), `GroundDriveSpec.axle_half_width`: the contact cylinder's.
+var half_width := 0.0
 
 var _prev_compression := 0.0
 ## Contact-patch deflection (m; x along the wheel's forward, y along its side), the static-friction
@@ -182,8 +188,13 @@ var _prev_vel_valid := false
 var _bar_compression := 0.0
 var _spin_angle := 0.0
 var _visual: Node3D
-var _query := PhysicsRayQueryParameters3D.new()  ## built once, refilled per tick (hot allocation)
+## The contact cast, built by `apply_suspension` off this axle's radius and width, refilled per tick
+## (hot allocation). Null until then.
+var _query: PhysicsShapeQueryParameters3D = null
 var _query_body := RID()  ## body `_query.exclude` was built for
+## `_contact_query`'s result: the hub's drop below the anchor (m) and the contact normal.
+var _contact_drop := 0.0
+var _contact_normal := Vector3.UP
 
 
 func _init(p_anchor: Vector3, p_steered: bool, p_driven: bool, p_visual: Node3D,
@@ -194,11 +205,11 @@ func _init(p_anchor: Vector3, p_steered: bool, p_driven: bool, p_visual: Node3D,
 	is_rear = is_rear_z(p_anchor.z)
 	_visual = p_visual
 	corner_mass = p_corner_mass
-	_query.collision_mask = Layers.SOLID  ## Containment left out — see collision_layers.gd
 
 
-## Pick this axle's spring, dampers, links and side grip off the spec: the rear accessors fall back
-## to the front values at 0, so a spec with no rear fields is one rate for every corner.
+## Pick this axle's spring, dampers, links, side grip, radius and inertia off the spec, and build
+## the contact cylinder: the rear accessors fall back to the front values at 0, so a spec with no
+## rear fields is one rate for every corner.
 func apply_suspension(gd: GroundDriveSpec) -> void:
 	spring_rate = gd.rear_spring_rate() if is_rear else gd.spring_rate
 	damper_bump = gd.rear_damper_bump() if is_rear else gd.damper_bump
@@ -207,6 +218,18 @@ func apply_suspension(gd: GroundDriveSpec) -> void:
 	link_slope = gd.anti_squat_slope if is_rear else -gd.anti_dive_slope
 	axle_lat_grip = gd.rear_lat_grip if is_rear else 1.0
 	tyre_share = 0.5 if is_rear and gd.rear_twin_tyres else 1.0
+	wheel_radius = gd.axle_radius(is_rear)
+	wheel_inertia = gd.axle_inertia(is_rear)
+	half_width = gd.axle_half_width(is_rear)
+	_query = null
+	if half_width > 0.0 and wheel_radius > 0.0:
+		var cylinder := CylinderShape3D.new()
+		cylinder.radius = wheel_radius
+		cylinder.height = 2.0 * half_width
+		_query = PhysicsShapeQueryParameters3D.new()
+		_query.shape = cylinder
+		_query.collision_mask = Layers.SOLID  ## Containment left out — see collision_layers.gd
+		_query_body = RID()
 
 
 func reset() -> void:
@@ -271,16 +294,17 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	var xform := body.global_transform
 	var up := xform.basis.y
 	var ray_from := xform * anchor
-	var ray_len := drive_spec.rest_length + drive_spec.wheel_radius
-	# Self-exclusion: this body is on VEHICLE, which SOLID includes.
-	if _query_body != body.get_rid():
-		_query_body = body.get_rid()
-		_query.exclude = [_query_body]
-	_query.from = ray_from
-	_query.to = ray_from - up * ray_len
-	var hit := space.intersect_ray(_query)
+	var ray_len := drive_spec.rest_length + wheel_radius
+	# The contact query: whether the tyre touches, how far below the anchor its hub sits touching
+	# plus the radius (`hit_dist`), and the contact normal.
+	var hit_dist := 0.0
+	var normal := Vector3.UP
+	in_contact = _contact_query(space, body, ray_from, up, Basis(up, steer_angle) * xform.basis,
+			drive_spec.rest_length)
+	if in_contact:
+		hit_dist = _contact_drop + wheel_radius
+		normal = _contact_normal
 
-	in_contact = not hit.is_empty()
 	if not in_contact:
 		compression = 0.0
 		_prev_compression = 0.0
@@ -301,21 +325,20 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		# and it lands locked.
 		var hub_vel := VehicleMath.point_velocity(body, ray_from)
 		var hub_v_long := hub_vel.dot(Basis(up, steer_angle) * -xform.basis.z)
-		_integrate_spin(drive_torque, 0.0, brake_torque, drive_spec, delta, 0.0,  ## airborne
+		_integrate_spin(drive_torque, 0.0, brake_torque, delta, 0.0,  ## airborne
 				hub_v_long, abs_slip, 0.0, tcs_slip, tcs_drive)
 		omega = free_spin_omega(omega, delta)
 		if not coupled_spin:
 			update_visual(drive_spec, delta)
 		return
 
-	var normal: Vector3 = hit.normal
 	contact_normal = normal
-	# The spring travels along the ray, so compression reads along it: exact level and in roll,
-	# `r (1 / cos - 1)` short in pitch. The patch is the hub's disk on the hit's plane, under the hub.
-	var hit_dist := ray_from.distance_to(hit.position)
-	var hub := ray_from - up * (hit_dist - drive_spec.wheel_radius)
+	# The spring travels along the cast (the body's down), so compression reads along it. The patch
+	# is the hub's disk touching along the contact normal, on the wheel's mid-plane: Jolt's own rest
+	# point wanders across the tread (9 cm on a steered wheel).
+	var hub := ray_from - up * (hit_dist - wheel_radius)
 	contact_point = hub + patch_offset(normal, up, Basis(up, steer_angle) * xform.basis.x,
-			drive_spec.wheel_radius)
+			wheel_radius)
 	var terrain := terrain_at(contact_point, grip_terrains)
 	surface_grip = terrain.grip_at(contact_point) if terrain != null else 1.0
 	surface_drag = terrain.drag_at(contact_point) if terrain != null else 0.0
@@ -358,7 +381,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 			drive_spec.grip_curve, delta)
 	var floor_vel := maxf(slip_floor, _own_slip_floor)
 	var slip_denom := maxf(absf(v_long), floor_vel)
-	var slip_vel := omega * drive_spec.wheel_radius - v_long
+	var slip_vel := omega * wheel_radius - v_long
 	var slip_ratio := slip_vel / slip_denom
 	long_slip = slip_ratio
 	slip = absf(slip_ratio)
@@ -388,7 +411,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		var hold_torque := brake_torque + lock_torque
 		var held := _spin_held and hold_torque > absf(held_against)
 		_stick = stick_step(_stick, Vector2(slip_vel if held else 0.0, -v_lat),
-				absf(omega * drive_spec.wheel_radius), delta)
+				absf(omega * wheel_radius), delta)
 		if not held:
 			_stick.x = 0.0
 		var k := Vector2(stick_stiffness(budget_long, long_mass, delta),
@@ -397,8 +420,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		f = friction_ellipse(f + stick_w * k * _stick, budget_long, budget_lat)
 		if held:
 			# Along the wheel only, so a brake-limited hold costs the patch no side grip.
-			var hold := held_force_range(budget_long, hold_torque, held_against,
-					drive_spec.wheel_radius)
+			var hold := held_force_range(budget_long, hold_torque, held_against, wheel_radius)
 			var stiffness := maxf(k.x, 1e-6)
 			_stick.x = clampf(_stick.x, hold.x / stiffness, hold.y / stiffness)
 			f.x = clampf(f.x, hold.x, hold.y)
@@ -420,8 +442,8 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	dv_long *= clampf(absf(v_long) / LOW_SPEED_FLOOR - 1.0, 0.0, 1.0)
 	_prev_body_vel = body.linear_velocity
 	_prev_vel_valid = true
-	_integrate_spin(drive_torque, -f.x * drive_spec.wheel_radius, brake_torque, drive_spec,
-			delta, slip_vel, v_long, abs_slip, dv_long, tcs_slip, tcs_drive, floor_vel)
+	_integrate_spin(drive_torque, -f.x * wheel_radius, brake_torque, delta, slip_vel, v_long, abs_slip,
+			dv_long, tcs_slip, tcs_drive, floor_vel)
 	if not coupled_spin:
 		update_visual(drive_spec, delta)
 
@@ -493,6 +515,70 @@ static func patch_offset(normal: Vector3, up: Vector3, axle: Vector3, radius: fl
 	return -in_plane.normalized() * radius
 
 
+## Distance (m) from a cylinder's centre to its support plane of `normal`: radius `radius`, axis
+## `axle`, `half_len` either side. Exact for Jolt's cylinder but where its convex radius rounds the
+## rim (a normal with a part along the axle).
+static func cylinder_support(normal: Vector3, axle: Vector3, radius: float, half_len: float) -> float:
+	var along := absf(normal.dot(axle))
+	return radius * sqrt(maxf(1.0 - along * along, 0.0)) + half_len * along
+
+
+## The hub's drop (m) where the tyre just touches, between the sweep's last free stop `safe_drop`
+## and its first touching one `unsafe_drop`: the touching stop backed out by `gap` (m, the
+## centre's height over the contact's support plane less the cylinder's support; < 0 overlapping)
+## along `up`, whose part along the normal is `normal_up`. Exact on a face, to first order over
+## the step at an edge.
+static func settled_drop(safe_drop: float, unsafe_drop: float, gap: float, normal_up: float) -> float:
+	return clampf(unsafe_drop + gap / maxf(normal_up, 0.1), safe_drop, unsafe_drop)
+
+
+## The contact: a cylinder of the wheel's radius and `2 half_width` across, its axis on the steered
+## axle (`wheel_basis`'s x), swept from full bump (the hub at the anchor) down the travel; the
+## normal is the rest contact's where the sweep stops, the face's on a face and radial at an edge.
+## A start inside something reads full bump, the clamp's figure (`start_overlaps`). Sets
+## `_contact_drop` and `_contact_normal`; false when nothing is under the tyre.
+## COMPROMISE: `cast_motion` bisects to 1/256 of the motion (1.2 mm on a 0.3 m travel), a step
+## the hub flickers across at rest and the dampers turn into load spikes (a semi's steer wheel
+## lost ~1.1 kN at launch). `settled_drop` closes it off the touching stop's contact; reading the
+## raw fraction instead costs that noise on every body.
+func _contact_query(space: PhysicsDirectSpaceState3D, body: RigidBody3D, ray_from: Vector3,
+		up: Vector3, wheel_basis: Basis, rest_length: float) -> bool:
+	assert(_query != null, "the contact needs GroundDriveSpec.tyre_half_width and apply_suspension")
+	# Self-exclusion: this body is on VEHICLE, which SOLID includes.
+	if _query_body != body.get_rid():
+		_query_body = body.get_rid()
+		_query.exclude = [_query_body]
+	var motion := -up * rest_length
+	_query.transform = Transform3D(wheel_basis * Basis(Vector3.BACK, PI / 2.0), ray_from)
+	_query.motion = motion
+	var fractions := space.cast_motion(_query)
+	_query.motion = Vector3.ZERO
+	if fractions.size() < 2 or fractions[1] >= 1.0:
+		# Jolt's sweep ignores what the shape already overlaps at its start, so "no hit" is either a
+		# free wheel or one already past full bump: the rest test at the start tells them apart.
+		var start := space.get_rest_info(_query)
+		if start.is_empty():
+			return false
+		start_overlaps += 1
+		_contact_drop = 0.0
+		_contact_normal = start.get("normal", up)
+		return true
+	if fractions[1] <= 0.0:
+		start_overlaps += 1
+	var safe_drop := rest_length * fractions[0]
+	var unsafe_drop := rest_length * fractions[1]
+	_query.transform.origin = ray_from + motion * fractions[1]
+	var rest := space.get_rest_info(_query)
+	_contact_drop = safe_drop
+	_contact_normal = up
+	if not rest.is_empty():
+		_contact_normal = rest["normal"]
+		var gap := (_query.transform.origin - (rest["point"] as Vector3)).dot(_contact_normal) \
+				- cylinder_support(_contact_normal, wheel_basis.x, wheel_radius, half_width)
+		_contact_drop = settled_drop(safe_drop, unsafe_drop, gap, _contact_normal.dot(up))
+	return true
+
+
 ## Each wheel's cap masses off what the wheels' contacts really move together (`contact_masses`),
 ## along the wheel and across it. Sized every tick, since the load models move the COM; the lever
 ## runs to full droop, the longest it gets, and on to last tick's patch (`patch_offset`). Also shares
@@ -509,7 +595,7 @@ static func size_cap_masses(wheels: Array[RayWheel], body: RigidBody3D,
 	for w in wheels:
 		var normal := b.transposed() * w.contact_normal if w.in_contact else Vector3.UP
 		var patch := patch_offset(normal, Vector3.UP, Basis(Vector3.UP, w.steer_angle) * Vector3.RIGHT,
-				gd.wheel_radius)
+				w.wheel_radius)
 		arms.append(w.anchor - droop + patch - body.center_of_mass)
 	var along := contact_masses(arms, Vector3.BACK, body.mass, inv_inertia)
 	var across := contact_masses(arms, Vector3.RIGHT, body.mass, inv_inertia)
@@ -679,25 +765,22 @@ static func slip_floor_for(budget: float, mass: float, grip_curve: PackedVector2
 ## removes drive, never brakes) are latched by the step and applied by `settle_spin`, after the
 ## differentials on a `coupled_spin` wheel. Derivation and figures: docs/vehicles.md, "Spin step".
 func _integrate_spin(drive_torque: float, reaction_torque: float, brake_torque: float,
-		drive_spec: GroundDriveSpec, delta: float, slip_vel: float, v_long := 0.0,
-		abs_slip := 0.0, dv_long := 0.0, tcs_slip := 0.0, tcs_drive := 0.0,
-		floor_vel := LOW_SPEED_FLOOR) -> void:
-	var null_slip_torque := drive_spec.wheel_inertia * absf(slip_vel) \
-			/ (delta * drive_spec.wheel_radius)
+		delta: float, slip_vel: float, v_long := 0.0, abs_slip := 0.0, dv_long := 0.0,
+		tcs_slip := 0.0, tcs_drive := 0.0, floor_vel := LOW_SPEED_FLOOR) -> void:
+	var null_slip_torque := wheel_inertia * absf(slip_vel) / (delta * wheel_radius)
 	var reaction_stiffness := absf(reaction_torque) / maxf(null_slip_torque, 1e-6)
-	spin_compliance = delta / (drive_spec.wheel_inertia * (1.0 + reaction_stiffness))
-	omega += (drive_torque + reaction_torque) / (1.0 + reaction_stiffness) \
-			/ drive_spec.wheel_inertia * delta \
-			+ dv_long / drive_spec.wheel_radius * reaction_stiffness / (1.0 + reaction_stiffness)
+	spin_compliance = delta / (wheel_inertia * (1.0 + reaction_stiffness))
+	omega += (drive_torque + reaction_torque) / (1.0 + reaction_stiffness) / wheel_inertia * delta \
+			+ dv_long / wheel_radius * reaction_stiffness / (1.0 + reaction_stiffness)
 	tcs_spin = 0.0
 	tcs_ceiling = 0.0
 	var held_drive := drive_torque + tcs_drive
-	if tcs_slip > 0.0 and held_drive != 0.0 and drive_spec.wheel_radius > 0.0:
+	if tcs_slip > 0.0 and held_drive != 0.0 and wheel_radius > 0.0:
 		tcs_spin = held_drive * spin_compliance
-		tcs_ceiling = tcs_ceiling_spin(v_long + dv_long, signf(held_drive),
-				drive_spec.wheel_radius, tcs_slip, floor_vel)
+		tcs_ceiling = tcs_ceiling_spin(v_long + dv_long, signf(held_drive), wheel_radius, tcs_slip,
+				floor_vel)
 	brake_spin = brake_torque * spin_compliance
-	abs_floor = abs_floor_spin(v_long + dv_long, drive_spec.wheel_radius, abs_slip, floor_vel)
+	abs_floor = abs_floor_spin(v_long + dv_long, wheel_radius, abs_slip, floor_vel)
 	abs_active = false
 	if not coupled_spin:
 		settle_spin(0.0)
@@ -787,26 +870,13 @@ static func settled_spin(spin: float, can_take: float, stop_at: float, tcs_share
 			stop_at)
 
 
-## Visual spin step (rad) for one tick: `spin` is the physics spin at `radius`, so a tyre drawn at
-## `visual_radius` turns by `radius / visual_radius` of it to show the contact's surface speed
-## (ground speed when rolling, faster when spinning). A non-positive `visual_radius` draws at
-## `radius`.
-static func visual_spin_step(spin: float, delta: float, radius: float,
-		visual_radius: float) -> float:
-	if visual_radius <= 0.0:
-		return spin * delta
-	return spin * delta * radius / visual_radius
-
-
 ## Draw this tick's settled spin and suspension travel. A `coupled_spin` wheel's owner calls it
 ## after `settle_spin`, or a held wheel would draw the spin its brake then takes back.
 func update_visual(drive_spec: GroundDriveSpec, delta: float) -> void:
 	if _visual == null:
 		return
-	var r := drive_spec.wheel_radius
-	_spin_angle = wrapf(_spin_angle + visual_spin_step(omega, delta, r, r + visual_lift), -TAU, TAU)
-	var center := anchor + Vector3.DOWN * (drive_spec.rest_length - compression) \
-			+ Vector3.UP * visual_lift
+	_spin_angle = wrapf(_spin_angle + omega * delta, -TAU, TAU)
+	var center := anchor + Vector3.DOWN * (drive_spec.rest_length - compression)
 	_visual.transform = Transform3D(
 			Basis(Vector3.UP, steer_angle) * Basis(Vector3.RIGHT, -_spin_angle)
 			* Basis(Vector3.BACK, PI / 2.0),

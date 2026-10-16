@@ -8,6 +8,7 @@ script = ExtResource("2_grounddrive")
 wheel_positions = PackedVector3Array(0, 0, -2, -1.1, 0, 0.6, 1.1, 0, 0.6)
 wheel_radius = 0.22
 wheel_inertia = 0.8
+tyre_half_width = 0.065
 driven_front = false
 driven_rear = false
 rest_length = 0.3

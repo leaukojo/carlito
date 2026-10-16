@@ -55,8 +55,8 @@ static func pto_shaft_rpm(engine_rpm: float, mode: int) -> int:
 	return int(clampf(engine_rpm * pto_ratio_for_mode(mode), 0.0, float(PTO_RPM_MAX)))
 
 
-## ISO wheel-based speed, km/h, from the drive axle's mean spin. `radius` is the physics radius
-## (the tractor's differing wheel sizes are visual only).
+## ISO wheel-based speed, km/h, from the drive axle's mean spin. `radius` is that axle's physics
+## radius, the tyre drawn under it.
 static func wheel_kmh(axle_omega: float, radius: float) -> float:
 	return absf(axle_omega) * radius * 3.6
 

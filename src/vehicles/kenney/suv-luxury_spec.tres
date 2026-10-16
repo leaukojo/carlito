@@ -8,6 +8,7 @@
 script = ExtResource("1_pufi0")
 wheel_positions = PackedVector3Array(-0.6300001, 0.5115197, -0.9419999, 0.6300001, 0.5115197, -0.94200003, -0.6300001, 0.5115197, 0.882, 0.6300001, 0.5115197, 0.8819999)
 wheel_radius = 0.36
+tyre_half_width = 0.21
 wheel_scene = ExtResource("2_5idfk")
 driven_front = true
 centre_diff_bias = 3.0

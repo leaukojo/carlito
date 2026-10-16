@@ -48,7 +48,7 @@ VehicleTelemetry` adds chassis, body-network and trailer-bus "out" fields.
 
   | Body | Parked 30 s on 18 %, air drained, no lever | Floored in D, air drained | Air cut at 30 km/h, pedal floored |
   | --- | --- | --- | --- |
-  | `garbage-truck` | 0.0 mm | gear N, 0.0 mm | stops in 13.8 m, 2.49 m/s² |
+  | `garbage-truck` | 0.1 mm | gear N, 0.0 mm | stops in 13.6 m, 2.54 m/s² |
   | `semi` + box | 2.2 mm | gear N, 0.0 mm | stops in 10.8 m, 2.98 m/s² |
   | `semi-conventional` + box | 2.2 mm | gear N, 0.3 mm | stops in 10.0 m, 3.18 m/s² |
 
@@ -67,7 +67,7 @@ VehicleTelemetry` adds chassis, body-network and trailer-bus "out" fields.
 
   | Body | Rating at the output | Per driven wheel | Retardation |
   | --- | --- | --- | --- |
-  | `garbage-truck` / `firetruck` (8 / 7.5 t) | 600 Nm, medium-duty output retarder | 1350 Nm | 0.94 / 1.00 m/s² |
+  | `garbage-truck` / `firetruck` (8 / 7.5 t) | 600 Nm, medium-duty output retarder | 1203 Nm | 0.84 / 0.89 m/s² |
   | `semi` / `semi-conventional` bobtail (8 t) | 1450 Nm, low end of the hydraulic class | 2120 Nm | 1.47 m/s² (0.81 coupled to the 24 t box, its trailer braking its share) |
 
   `test_truck` pins a **0.7-1.6 m/s²** band per shipped spec at its own mass (past ~1.6 an
@@ -330,8 +330,9 @@ them apart.
   mean speed to the rear's, a geared transfer with no centre diff. Both requests gate on
   `GroundDriveSpec` flags (`rear_diff_lockable`, `front_axle_engageable`), which are true only on
   the tractor's spec. Both axles stay open inside, so 2WD with the lock off is still the open
-  rear diff. Rejected: an MFWD lead ratio between the axles; with one physics radius for both,
-  it would be wind-up, not feel.
+  rear diff. The transfer runs the kinematic ratio, `r_rear / r_front` = 1.5 (`WheelDrive`'s shaft
+  frame). Rejected: a lead past the kinematic ratio; with exact radii it is straight-line wind-up,
+  not feel.
 - `wheel_speed`/`ground_speed`/`wheel_slip` are the signature ISO pair and its difference:
   wheel-based is the mean spin of the rear axle × tire radius; ground-based is chassis
   forward velocity; `wheel_slip` is how far the first runs ahead of the second (unsigned,
@@ -399,12 +400,12 @@ them apart.
   the bare machine's 0.91 m with 1.5 t of liquid and hub ballast at ~0.55 m) matters for
   transients and for rollover: over the 0.85 m mean half-track (1.62 / 1.79 m track, a real
   tractor's) the static threshold is ~1.0 g, at the lug tyres' slide. Measured at
-  35 km/h: the slow wind-on runs the fronts wide at 0.79 g with 2.6° of roll, and a full-lock step
+  35 km/h: the slow wind-on runs the fronts wide at 0.78 g with 2.6° of roll, and a full-lock step
   steer holds 0.67 g at 2.3°; on the 1.31 / 1.49 m track the same two runs overturned.
-- Body scale 1.35 (2.99 × 2.17 m, 2.12 m wheelbase). Visual radii 0.44 front / 0.66 rear over a
-  0.36 physics radius, so the rear tyre stands 0.30 m proud of its contact and clips a kerb first.
-  Suspension is the tyres: 330 / 380 kN/m, `rest_length` 0.12 m, ~33 % static sag. A side jolt at
-  speed rolls 1.8° and rebounds 28 % (roll damping ratio ~0.37; 3.0° and 34 % on the narrow track).
+- Body scale 1.35 (2.99 × 2.17 m, 2.12 m wheelbase). It rides on its drawn tyres, 0.44 m front /
+  0.66 m rear. Suspension is the tyres: 330 / 380 kN/m, `rest_length` 0.12 m, ~33 % static sag.
+  A side jolt at speed rolls 1.8° and rebounds 28 % (roll damping ratio ~0.37; 3.0° and 34 % on the
+  narrow track).
 
 ### What an implement declares
 
@@ -494,5 +495,4 @@ semi-trailers use. The tractor side is the same `TowHost` the semi's fifth wheel
   on a body already writing its own centre of mass).
 - `E` refuses only for a press that hitches (the tractor moving); dropping the trailer lays
   nothing. Level 1's first `E` at the tractor spawn is refused by the fit check (scenery close
-  behind): that is the check working; pull forward. Uniform wheel radius: RayWheel is single-radius, so the tractor's
-  big-rear/small-front wheels are visual only.
+  behind): that is the check working; pull forward.

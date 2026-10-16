@@ -54,6 +54,7 @@ rolling_resistance = 0.007
 wheel_positions = PackedVector3Array(-0.72, 0.424, -3.35, 0.72, 0.424, -3.35, -0.62, 0.424, 1.05, 0.62, 0.424, 1.05)
 wheel_radius = 0.36
 wheel_inertia = 3.0
+tyre_half_width = 0.21
 wheel_scene = ExtResource("2_wheel")
 driven_front = false
 driven_rear = true

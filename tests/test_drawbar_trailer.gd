@@ -335,7 +335,7 @@ func _tractor_volumes() -> Array[AABB]:
 		if box == null:
 			continue
 		out.append(AABB(shape.position - box.size * 0.5, box.size))
-	var radius := spec.ground_drive.wheel_visual_radius_rear
+	var radius := spec.ground_drive.axle_radius(true)
 	for p in spec.ground_drive.wheel_positions:
 		if p.z <= 0.0:
 			continue  # front axle; a trailer behind the pin can never reach it

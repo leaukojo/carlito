@@ -1,8 +1,8 @@
 # 11 — Tractor: implement weight and draft
 
 Shared context: `00_README.md`. Root cause: a missing phenomenon (implement weight), plus a draft
-law shaped by a 60 Hz bound. Size: medium. No hard dependency; brief 10 (tractor tyre radius)
-touches the same machine.
+law shaped by a 60 Hz bound. Size: medium. No hard dependency; the tractor's tyre radius (landed, `docs/vehicles.md` §
+Physics derivations, Wheel radius) touches the same machine.
 
 ## Summary
 
@@ -87,4 +87,4 @@ by a physical reason. The hitch has position control only.
 
 ## Related
 
-Brief 10 (tractor tyre radius). Brief 03 does not bear on the draft law (see its "Not this gap").
+The tractor's tyre radius (landed: `docs/vehicles.md` § Physics derivations, Wheel radius). Brief 03 does not bear on the draft law (see its "Not this gap").

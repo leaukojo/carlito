@@ -9,6 +9,7 @@ script = ExtResource("1_gqvta")
 wheel_positions = PackedVector3Array(-0.6300002, 0.5284882, -1.242, 0.6300002, 0.5284882, -1.242, -0.6300002, 0.5284882, 1.062, 0.6300002, 0.5284882, 1.062)
 wheel_radius = 0.36
 wheel_inertia = 3.0
+tyre_half_width = 0.21
 wheel_scene = ExtResource("2_koaho")
 rest_length = 0.32
 spring_rate = 71554.0

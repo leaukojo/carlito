@@ -65,8 +65,7 @@ static func axles(spec: VehicleSpec) -> Dictionary:
 			peak = pt.y
 			peak_slip = pt.x
 	return {"front": front, "rear": rear, "mass": spec.mass,
-			"h": spec.center_of_mass.y + gd.wheel_radius + gd.rest_length - sag
-				- gd.wheel_positions[0].y,
+			"h": spec.center_of_mass.y + gd.rest_ride_height() - sag,
 			"ref": spec.mass * G / 4.0, "sensitivity": gd.load_sensitivity,
 			"peak_slip": maxf(peak_slip, 1e-3), "peak_load": gd.cornering_peak_load,
 			"wheelbase": wheelbase, "yaw_inertia": yaw_inertia, "yaw_damp": yaw_damp}

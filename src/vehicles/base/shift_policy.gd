@@ -76,9 +76,9 @@ static func kickdown_ceiling_rpm(spec: VehicleSpec) -> float:
 static func time_to_upshift(spec: VehicleSpec, g: int, landing: float, road: float,
 		mass: float) -> float:
 	var gd := spec.ground_drive
-	if is_nan(road) or mass <= 0.0 or gd == null or gd.wheel_radius <= 0.0:
+	if is_nan(road) or mass <= 0.0 or gd == null or gd.drive_radius() <= 0.0:
 		return INF
-	var r := gd.wheel_radius
+	var r := gd.drive_radius()
 	var ratio := absf(Drivetrain.ratio_for_byte(spec, g))
 	var net := drive_at(spec, g, landing, 1.0) - road
 	if net <= 0.0 or ratio <= 0.0:
@@ -189,7 +189,7 @@ static func flat_load(spec: VehicleSpec, speed: float, mass: float) -> float:
 	if gd == null:
 		return 0.0
 	return (VehicleMath.aero_drag(absf(speed), gd.drag_area)
-			+ maxf(gd.rolling_resistance, 0.0) * mass * BrakeSizing.G) * gd.wheel_radius
+			+ maxf(gd.rolling_resistance, 0.0) * mass * BrakeSizing.G) * gd.drive_radius()
 
 
 ## Grade logic: `road` sits past the flat road's by more than GRADE_LOGIC of the rig's weight (a
@@ -198,7 +198,7 @@ static func on_grade(spec: VehicleSpec, road: float, speed: float, mass: float) 
 	if is_nan(road) or spec.ground_drive == null:
 		return false
 	return road > flat_load(spec, speed, mass) \
-			+ GRADE_LOGIC * mass * BrakeSizing.G * spec.ground_drive.wheel_radius
+			+ GRADE_LOGIC * mass * BrakeSizing.G * spec.ground_drive.drive_radius()
 
 
 ## One tick of the road-load estimate (N·m at the axle, + = resisting): the coupling's drive less

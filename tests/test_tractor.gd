@@ -76,6 +76,8 @@ func test_wheel_kmh_is_spin_through_the_physics_radius() -> void:
 	# Unsigned: reversing still reports a speed (direction lives on 'gear' / 'speed').
 	assert_float(TractorT.wheel_kmh(-10.0, 0.5)).is_equal_approx(18.0, 1e-4)
 	assert_float(TractorT.wheel_kmh(0.0, 0.6)).is_equal(0.0)
+	# The shipped tractor's drive axle is its drawn 0.66 m rear.
+	assert_float(_tractor_spec().ground_drive.axle_radius(true)).is_equal_approx(0.66, 1e-4)
 
 
 # --- ISO wheel slip -----------------------------------------------------------
@@ -430,7 +432,7 @@ static func _standing_load(spec: VehicleSpec, grade_pct: float, soil: float, tow
 	var tilt := Basis(Vector3.RIGHT, atan(grade_pct / 100.0))
 	return ShiftPolicy.standing_load(Vector3(0.0, -9.8, 0.0), tilt * Vector3.UP,
 			tilt * Vector3.FORWARD, spec.ground_drive.rolling_resistance + soil,
-			(spec.mass + towed_kg) * spec.ground_drive.wheel_radius)
+			(spec.mass + towed_kg) * spec.ground_drive.drive_radius())
 
 
 func test_the_shipped_tractor_starts_in_d3_empty_on_the_flat_and_lower_laden_or_on_a_grade() -> void:

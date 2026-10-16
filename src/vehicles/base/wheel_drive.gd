@@ -54,6 +54,9 @@ var _coupling := PackedFloat64Array()
 ## The park pawl's part of `_coupling` (N·m), which the brake holds with, never against
 ## (`RayWheel.settle_spin`).
 var _lock_coupling := PackedFloat64Array()
+## Each wheel's gearing to the shaft, `wheel_radius / GroundDriveSpec.drive_radius()`
+## (`shaft_frame`): exactly 1 on equal radii.
+var _ratio := PackedFloat64Array()
 ## Front-to-rear anchor distance (m), body space; 0 if the spec declares no front/rear pair
 ## (never happens for a real wheeled body). Cached once in _init since wheel_positions is data.
 var _wheelbase := 0.0
@@ -90,12 +93,8 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 		var front := not RayWheel.is_rear_z(pos.z)
 		var driven := (front and gd.driven_front) or (not front and gd.driven_rear)
 		var visual: Node3D = null
-		# Rendered radius for this corner; physics always uses gd.wheel_radius.
-		var vis_radius := gd.wheel_radius
-		if not front and gd.wheel_visual_radius_rear > 0.0:
-			vis_radius = gd.wheel_visual_radius_rear
-		elif gd.wheel_visual_radius > 0.0:
-			vis_radius = gd.wheel_visual_radius
+		# Drawn at the axle's physics radius (`GroundDriveSpec.axle_radius`).
+		var vis_radius := gd.axle_radius(not front)
 		if i < WHEEL_VISUAL_NAMES.size():
 			visual = body.get_node_or_null(NodePath(WHEEL_VISUAL_NAMES[i]))
 			# No authored wheel mesh; instance the spec's under the expected name.
@@ -114,8 +113,8 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 						(child as Node3D).basis = Basis(Vector3.RIGHT, PI) * b if pos.x > 0.0 else b
 				body.add_child(visual)
 		var wheel := RayWheel.new(pos, front, driven, visual, corner_mass)
-		wheel.visual_lift = vis_radius - gd.wheel_radius
 		wheel.apply_suspension(gd)
+		_ratio.append(wheel.wheel_radius / gd.drive_radius())
 		# Brakes are solved with the differentials (`_couple_differentials`).
 		wheel.coupled_spin = true
 		if wheel.is_rear:
@@ -131,7 +130,7 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 	_brake_front = gd.axle_brake_torque(false)
 	_brake_rear = gd.axle_brake_torque(true)
 	_retarder_rating = Drivetrain.retarder_rating(spec)
-	_brake_force = gd.brake_torque * gd.wheel_positions.size() / maxf(gd.wheel_radius, 1e-6)
+	_brake_force = BrakeSizing.brake_force(gd)
 	_live_mass = spec.mass
 
 
@@ -225,7 +224,7 @@ func hold_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 	if normal != Vector3.ZERO:
 		var gravity := body.get_gravity()
 		var forward := -body.global_transform.basis.z
-		var lever := mass * gd.wheel_radius
+		var lever := mass * gd.drive_radius()
 		pull = HillHold.pull_torque(gravity, normal.normalized(), forward, lever)
 		drivetrain.standing_load = ShiftPolicy.standing_load(gravity, normal.normalized(), forward,
 				gd.rolling_resistance + soil / touching, lever)
@@ -235,9 +234,9 @@ func hold_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 	hill_holding = _hold.x > input.brake
 
 
-## Mean spin speed of the driven wheels, which the drivetrain uses for gear pick and torque-curve
-## placement. Called before Drivetrain.process; the driven count latched here is reused by tick()
-## for the torque split.
+## Mean spin speed of the driven wheels in the shaft frame (`shaft_frame`: each `n * omega`), which
+## the drivetrain uses for gear pick and torque-curve placement. Called before Drivetrain.process;
+## the driven count latched here is reused by tick() for the torque split.
 func drive_omega(gd: GroundDriveSpec, input: VehicleInput) -> float:
 	# MFWD: the tractor front axle engages at runtime, so `driven` is not fixed at _ready. The foot
 	# brake engages it too where declared, the hill hold's included: the rigid shaft then carries the
@@ -250,10 +249,10 @@ func drive_omega(gd: GroundDriveSpec, input: VehicleInput) -> float:
 
 	_driven_count = 0
 	var omega := 0.0
-	for w in wheels:
-		if w.driven:
+	for i in wheels.size():
+		if wheels[i].driven:
 			_driven_count += 1
-			omega += w.omega
+			omega += _ratio[i] * wheels[i].omega
 	return omega / maxf(1.0, _driven_count)
 
 
@@ -336,10 +335,11 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 	var space := body.get_world_3d().direct_space_state
 	retarder_torque_applied = 0.0
 	var pawl := pawl_torque(park_engaged, gd, ground_speed)
-	# The driven wheels, which the pawl locks while it is in.
+	# The driven wheels, which the pawl locks while it is in. The pawl is quoted at the drive radius,
+	# so a wheel geared at `n` sees `n` times it.
 	var locked := PackedInt32Array()
 	for i in wheels.size():
-		wheels[i].lock_torque = pawl if wheels[i].driven else 0.0
+		wheels[i].lock_torque = pawl * _ratio[i] if wheels[i].driven else 0.0
 		if wheels[i].lock_torque > 0.0:
 			locked.append(i)
 	RayWheel.size_cap_masses(wheels, body, gd)
@@ -353,12 +353,14 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 	var tcs_drive := drivetrain.tcs_drive_torque() / maxf(1.0, _driven_count) \
 			if drivetrain != null and Drivetrain.drives_wheels(spec) else 0.0
 	var pedal := pedal_application(foot_pedal(input))
-	for w in wheels:
+	for i in wheels.size():
+		var w := wheels[i]
 		w.steer_angle = ackermann_angle(_applied_steer, w.anchor.x, _wheelbase, gd.ackermann) \
 				if w.steered else 0.0
-		# The nominal equal split (open-diff law); `_couple_differentials` adds what a biasing,
-		# locked or rigid diff moves on top, once every wheel has integrated.
-		var drive_t := axle_torque / _driven_count if w.driven else 0.0
+		# The nominal equal split (open-diff law) of the shaft torque, geared to the wheel;
+		# `_couple_differentials` adds what a biasing, locked or rigid diff moves on top, once every
+		# wheel has integrated.
+		var drive_t := axle_torque / _driven_count * _ratio[i] if w.driven else 0.0
 		var brake_t := pedal * (_brake_rear if w.is_rear else _brake_front)
 		# Anti-lock rides the foot brake and the retarder; a handbrake or spring brake is a
 		# mechanical hold no ABS modulates, so a wheel under one brakes without.
@@ -375,13 +377,14 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 			# lets it spin back up on landing. Exact needs the cap solved inside RayWheel's step.
 			if gd.retarder_equipped and w.driven:
 				var compliance := w.spin_compliance if w.spin_compliance > 0.0 \
-						else delta / gd.wheel_inertia
+						else delta / w.wheel_inertia
 				var ret := Drivetrain.retarder_torque(
-						input.retarder, ground_speed, w.omega, gd, compliance, _retarder_rating)
+						input.retarder, ground_speed, w.omega, w.wheel_radius, compliance,
+						_retarder_rating)
 				brake_t += ret
 				retarder_torque_applied += ret
 		w.tick(body, gd, space, drive_t, brake_t, delta, grip_terrains, abs_slip,
-				tcs_slip if w.driven else 0.0, tcs_drive if w.driven else 0.0)
+				tcs_slip if w.driven else 0.0, tcs_drive * _ratio[i] if w.driven else 0.0)
 
 	_couple_differentials(gd, input, axle_torque, locked, pawl * locked.size(),
 			drivetrain if drivetrain != null and Drivetrain.drives_wheels(spec) else null)
@@ -392,16 +395,21 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 
 
 ## The declared differentials, as coupling torques solved off each wheel's own spin step with every
-## wheel's holds inside each solve, then every wheel settled (`RayWheel.settle_spin`). `locked` /
-## `lock_capacity`: the park pawl's driven wheels; `drivetrain`: the crank in D or R.
+## wheel's holds inside each solve, then every wheel settled (`RayWheel.settle_spin`). Solved in the
+## shaft frame (`shaft_frame`): every torque here is the shaft's, and a wheel geared at `n` takes
+## `n` times it. `locked` / `lock_capacity`: the park pawl's driven wheels; `drivetrain`: the crank
+## in D or R.
 ## Order: gearbox output, centre, each axle, settle. COMPROMISE: one pass, so a later coupling moves
-## a mean an earlier one balanced; exact needs nested solves. docs/vehicles.md, "The solve order".
+## a mean an earlier one balanced; exact needs nested solves. The crank above a rigid coupling is
+## nested (`_rigid_downstream`). docs/vehicles.md, "The solve order".
 func _couple_differentials(gd: GroundDriveSpec, input: VehicleInput, axle_torque: float,
 		locked := PackedInt32Array(), lock_capacity := 0.0, drivetrain: Drivetrain = null) -> void:
 	_coupling.fill(0.0)
 	_lock_coupling.fill(0.0)
 	var front_driven := _axle_driven(_front)
 	var rear_driven := _axle_driven(_rear)
+	# A lock is one rigid shaft whether or not the axle is driven this tick.
+	rear_diff_locked = gd.rear_diff_lockable and input.diff_lock and _rear.size() == 2
 	var shaft_torque := axle_torque
 	_drive_torque = axle_torque
 	var lock_holds := false
@@ -412,7 +420,7 @@ func _couple_differentials(gd: GroundDriveSpec, input: VehicleInput, axle_torque
 		lock_holds = absf(lock) < lock_capacity
 		_share(locked, lock)
 		for i in locked:
-			_lock_coupling[i] = lock / locked.size()
+			_lock_coupling[i] = lock / locked.size() * _ratio[i]
 		shaft_torque += lock
 	if drivetrain != null:
 		# In N or P the crank settles free and passes nothing (`Drivetrain.couple`).
@@ -420,18 +428,49 @@ func _couple_differentials(gd: GroundDriveSpec, input: VehicleInput, axle_torque
 		for i in wheels.size():
 			if wheels[i].driven:
 				driven.append(i)
-		# The turbine's side, read only while a converter slips.
-		var held: Array = _outputs(driven) if drivetrain.converting else []
-		var drive := drivetrain.couple(
-				func(spin: float, compliance: float, capacity: float) -> float:
-					return -_coupling_torque(driven, PackedInt32Array(), capacity, spin, compliance),
-				func(torque: float) -> float:
-					return Differential.settled_mean_spin(held[0], held[1], held[2], held[3],
-							held[4], held[5], torque))
+		var drive := 0.0
+		if _rigid_downstream(gd, front_driven, rear_driven):
+			var base := shaft_torque
+			var spin_at := func(torque: float) -> float:
+				return _settled_drive_spin(gd, driven, base, torque, front_driven, rear_driven)
+			drive = drivetrain.couple(
+					func(spin: float, compliance: float, capacity: float) -> float:
+						return Differential.falling_root(
+								func(t: float) -> float: return spin - t * compliance - spin_at.call(t),
+								capacity),
+					spin_at)
+		else:
+			# The turbine's side, read only while a converter slips.
+			var held: Array = _outputs(driven) if drivetrain.converting else []
+			drive = drivetrain.couple(
+					func(spin: float, compliance: float, capacity: float) -> float:
+						return -_coupling_torque(driven, PackedInt32Array(), capacity, spin, compliance),
+					func(torque: float) -> float:
+						return Differential.settled_mean_spin(held[0], held[1], held[2], held[3],
+								held[4], held[5], torque))
 		_drive_torque += drive
 		if drive != 0.0:
 			_share(driven, drive)
 			shaft_torque += drive
+	_couple_downstream(gd, shaft_torque, front_driven, rear_driven)
+	for i in wheels.size():
+		wheels[i].settle_spin(_coupling[i], _lock_coupling[i])
+	if drivetrain != null:
+		_report_to_controller(gd, input, drivetrain)
+	# The pawl holds the whole driveline still, or none of it: one wheel turning is the lock slipping
+	# or an open diff counter-rotating off it.
+	if lock_holds:
+		for i in locked:
+			if absf(wheels[i].omega) > LOCK_STUCK_SPIN:
+				return
+		for i in locked:
+			wheels[i].hold_by_lock()
+
+
+## The couplings under the gearbox output, `shaft_torque` (N·m) through them: the centre whenever
+## both axles are driven, then each axle, its capacity sized off the torque it received.
+func _couple_downstream(gd: GroundDriveSpec, shaft_torque: float, front_driven: bool,
+		rear_driven: bool) -> void:
 	var per_wheel := shaft_torque / maxf(1.0, _driven_count)
 	var front_in := per_wheel * _front.size() if front_driven else 0.0
 	var rear_in := per_wheel * _rear.size() if rear_driven else 0.0
@@ -447,24 +486,40 @@ func _couple_differentials(gd: GroundDriveSpec, input: VehicleInput, axle_torque
 			front_in += t
 	if front_driven:
 		_couple_axle(_front, Differential.bias_capacity(front_in, gd.diff_bias_front))
-	# A lock is one rigid shaft whether or not the axle is driven this tick.
-	rear_diff_locked = gd.rear_diff_lockable and input.diff_lock and _rear.size() == 2
 	if rear_diff_locked:
 		_couple_axle(_rear, INF)
 	elif rear_driven:
 		_couple_axle(_rear, Differential.bias_capacity(rear_in, gd.diff_bias_rear))
-	for i in wheels.size():
-		wheels[i].settle_spin(_coupling[i], _lock_coupling[i])
-	if drivetrain != null:
-		_report_to_controller(gd, input, drivetrain)
-	# The pawl holds the whole driveline still, or none of it: one wheel turning is the lock slipping
-	# or an open diff counter-rotating off it.
-	if lock_holds:
-		for i in locked:
-			if absf(wheels[i].omega) > LOCK_STUCK_SPIN:
-				return
-		for i in locked:
-			wheels[i].hold_by_lock()
+
+
+## A rigid coupling sits under the gearbox output: MFWD's centre, or the rear lock on a driven rear.
+## The one-pass order shares the output's torque equally (the open-diff law) and lands the crank on
+## the driven wheels' arithmetic mean; a rigid coupling then re-lands them on its compliance-weighted
+## mean. A light, free wheel beside a loaded one (the tractor's fronts on a steep grade) sits far
+## above it in the first, so a locked clutch held its crank at up to 3x its wheels' spin, every tick
+## (docs/vehicles.md, "The solve order"). A biasing coupling moves no more than its capacity.
+func _rigid_downstream(gd: GroundDriveSpec, front_driven: bool, rear_driven: bool) -> bool:
+	return (front_driven and rear_driven and gd.centre_diff_rigid) \
+			or (rear_driven and rear_diff_locked)
+
+
+## The driven wheels' mean spin in the shaft frame (rad/s) once `torque` (N·m) more is shared over
+## them and the couplings under the gearbox output have solved on it (`_couple_downstream`, the
+## shaft carrying `base + torque`), each wheel settled on its holds: what the gearbox output turns
+## at. Nondecreasing in `torque`; every coupling solved here is undone.
+func _settled_drive_spin(gd: GroundDriveSpec, driven: PackedInt32Array, base: float,
+		torque: float, front_driven: bool, rear_driven: bool) -> float:
+	var saved := _coupling.duplicate()
+	_share(driven, torque)
+	_couple_downstream(gd, base + torque, front_driven, rear_driven)
+	var sum := 0.0
+	for i in driven:
+		var w := wheels[i]
+		# `settled_spin` is positively homogeneous: gearing the settled spin settles the geared one.
+		sum += _ratio[i] * RayWheel.settled_spin(w.omega + _coupling[i] * w.spin_compliance,
+				w.brake_spin, w.abs_floor, w.tcs_spin, w.tcs_ceiling)
+	_coupling = saved
+	return sum / maxf(1.0, driven.size())
 
 
 ## What the transmission controller reads off the driven wheels for its next tick: ABS holding one
@@ -486,14 +541,14 @@ func _report_to_controller(gd: GroundDriveSpec, input: VehicleInput,
 			and n > 0 and dir * slip_sum / n < -RayWheel.TCS_SLIP
 
 
-## Couple the two wheels of one axle through a diff of `capacity`; only a two-wheel axle is a
-## differential.
+## Couple the two wheels of one axle through a diff of `capacity` (shaft torque); only a two-wheel
+## axle is a differential.
 func _couple_axle(axle: PackedInt32Array, capacity: float) -> void:
 	if axle.size() != 2 or capacity <= 0.0:
 		return
 	var t := _coupling_torque(axle.slice(0, 1), axle.slice(1, 2), capacity)
-	_coupling[axle[0]] -= t
-	_coupling[axle[1]] += t
+	_coupling[axle[0]] -= t * _ratio[axle[0]]
+	_coupling[axle[1]] += t * _ratio[axle[1]]
 
 
 ## Torque (N·m) a coupling of `capacity` moves from `side_a`'s wheels to `side_b`'s, each wheel
@@ -523,8 +578,9 @@ func _coupling_torque(side_a: PackedInt32Array, side_b: PackedInt32Array, capaci
 			tcs_at, side_a.size(), capacity)
 
 
-## The wheels at `indices` as a solve's outputs, each entering with what the diffs passed it so far
-## this tick: [spin, compliance, `brake_spin`, `abs_floor`, `tcs_spin`, `tcs_ceiling`].
+## The wheels at `indices` as a solve's outputs in the shaft frame (`shaft_frame`), each entering
+## with what the diffs passed it so far this tick: [spin, compliance, `brake_spin`, `abs_floor`,
+## `tcs_spin`, `tcs_ceiling`].
 func _outputs(indices: PackedInt32Array) -> Array[PackedFloat64Array]:
 	var omega := PackedFloat64Array()
 	var compliance := PackedFloat64Array()
@@ -532,6 +588,7 @@ func _outputs(indices: PackedInt32Array) -> Array[PackedFloat64Array]:
 	var stop_at := PackedFloat64Array()
 	var tcs_share := PackedFloat64Array()
 	var tcs_at := PackedFloat64Array()
+	var ratios := PackedFloat64Array()
 	for i in indices:
 		var w := wheels[i]
 		omega.append(w.omega + _coupling[i] * w.spin_compliance)
@@ -540,14 +597,32 @@ func _outputs(indices: PackedInt32Array) -> Array[PackedFloat64Array]:
 		stop_at.append(w.abs_floor)
 		tcs_share.append(w.tcs_spin)
 		tcs_at.append(w.tcs_ceiling)
-	return [omega, compliance, can_take, stop_at, tcs_share, tcs_at]
+		ratios.append(_ratio[i])
+	var outputs: Array[PackedFloat64Array] = [omega, compliance, can_take, stop_at, tcs_share, tcs_at]
+	shaft_frame(outputs, ratios)
+	return outputs
 
 
-## Torque into an axle, split equally over its wheels (the open-diff law).
+## Re-states a solve's wheel-side outputs (`_outputs`' arrays, in place) as the shaft sees them,
+## wheel `i` geared to it at `ratios[i]` = `wheel_radius / GroundDriveSpec.drive_radius()`, so
+## wheels on one road speed share one shaft spin `n * omega`. A gear of ratio `n` reflects spin x n,
+## torque / n and so compliance (spin per torque) x n²; the holds are spins, x n.
+## `RayWheel.settled_spin` is positively homogeneous (`move_toward`, min / max), so settling in this
+## frame is settling the wheel and gearing the result: `Differential.braked_coupling_torque` is
+## exact in it. A shaft torque `T` reaches the wheel as `n * T` (`_share`). Within one axle `n` is
+## shared, so an axle diff sees no change; on equal radii every `n` is exactly 1, the identity.
+static func shaft_frame(outputs: Array[PackedFloat64Array], ratios: PackedFloat64Array) -> void:
+	for k in outputs.size():
+		var values := outputs[k]  # a packed array is shared, so this scales the caller's
+		for i in ratios.size():
+			values[i] *= ratios[i] * ratios[i] if k == 1 else ratios[i]
+
+
+## Shaft torque into an axle, split equally over its wheels (the open-diff law) and geared to each.
 func _share(axle: PackedInt32Array, torque: float) -> void:
 	var share := torque / maxf(1.0, axle.size())
 	for i in axle:
-		_coupling[i] += share
+		_coupling[i] += share * _ratio[i]
 
 
 func _axle_driven(axle: PackedInt32Array) -> bool:

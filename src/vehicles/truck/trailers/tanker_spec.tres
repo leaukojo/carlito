@@ -41,6 +41,7 @@ rolling_resistance = 0.007
 wheel_positions = PackedVector3Array(-0.72, -0.626, 4.4, 0.72, -0.626, 4.4, -0.72, -0.626, 5.2, 0.72, -0.626, 5.2, -0.72, -0.626, 6, 0.72, -0.626, 6)
 wheel_radius = 0.36
 wheel_inertia = 3.0
+tyre_half_width = 0.21
 driven_front = false
 driven_rear = false
 rest_length = 0.32

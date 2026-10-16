@@ -37,7 +37,6 @@ const LENS_MIN_DEPTH := 0.04   ## m depth floor for a lens the model draws as a 
 const LENS_MIN_H := 0.06       ## m floor on lens height (some are a single flat quad)
 const TURN_FRAC := 0.35        ## outboard share of a lens' width that becomes the indicator
 const DISC_MIN_TRIS := 12      ## a lens this dense with square extents is a disc, not a box
-const WHEEL_RADIUS := 0.36  ## physics radius, all four corners (RayWheel is single-radius)
 
 ## --- resistance (see VehicleMath's road-resistance header) ----------------------------
 ## Frontal area is derived from each body's own AABB (not listed per variant) at FRONTAL_FILL,
@@ -49,18 +48,19 @@ const MIN_CLEARANCE := 0.12  ## m the collision hull floor is held above the whe
 const BALANCE_G := 0.15  ## side g `_balance` reads K at: the 10 % held step at 30 km/h (0.1-0.26 g)
 const WHEEL_BAND := 0.4   ## m z-window (body space) the body half-width is measured over per axle
 
-## Wheel visuals per model: the radius-normalized scene, the rendered radius, and the tread
-## half-width at that radius. The flush-X rule below places the wheel's outer face at the body
-## side, so this must match the model.
-const WHEEL_DEFAULT := {"scene": OUT_DIR + "/wheel.tscn", "radius": WHEEL_RADIUS, "half": 0.240}
-const WHEEL_TRUCK := {"scene": OUT_DIR + "/wheel-truck.tscn", "radius": WHEEL_RADIUS, "half": 0.210}
-## Tractor axles differ visually only, and both sit on the tractor's own `scale` 1.35 body: these
+## Wheels per model: the radius-normalized scene, the drawn radius (the axle's physics radius too:
+## a body is judged against the tyre it shows), and the tread half-width at that radius. The
+## flush-X rule below places the wheel's outer face at the body side, so this must match the model.
+## 0.36 is the kit wheel's native 0.30 m at KIT_SCALE.
+const WHEEL_DEFAULT := {"scene": OUT_DIR + "/wheel.tscn", "radius": 0.36, "half": 0.240}
+const WHEEL_TRUCK := {"scene": OUT_DIR + "/wheel-truck.tscn", "radius": 0.36, "half": 0.210}
+## The tractor's axles differ, and both sit on the tractor's own `scale` 1.35 body: these
 ## are the model's 0.30 / 0.45 radii scaled with it AND by a further 1.086, taking the rear tyre's
 ## diameter to 0.62 of the wheelbase (the bare body scale left it at 0.57, reading as a small
 ## wheel under a big machine; a real field tractor is nearer 0.64, which is where the spreader's
-## hopper corner starts sweeping the tread -- `test_three_point_hitch` is the ceiling). Both straddle
-## the 0.36 physics radius. Scaling `half` with the radius is what keeps the flush-X rule landing
-## on the scaled authored station; the tyre growing inboard is what `wheel_x_out` pays back.
+## hopper corner starts sweeping the tread -- `test_three_point_hitch` is the ceiling). Scaling
+## `half` with the radius is what keeps the flush-X rule landing on the scaled authored station;
+## the tyre growing inboard is what `wheel_x_out` pays back.
 const WHEEL_TRACTOR_FRONT := {
 	"scene": OUT_DIR + "/wheel-tractor-front.tscn", "radius": 0.44, "half": 0.3021}
 const WHEEL_TRACTOR_REAR := {
@@ -217,16 +217,18 @@ const CAR_BASE := {
 	# needs ~2.8x less lock at that speed.
 	"min_steer_frac": 0.26, "steer_falloff_speed": 42.0,
 }
-## TRUCK_BASE's diesel curve ends at zero at the redline: the governor droops to nothing above
-## rated speed, so top gear is governed (never drag-limited), top speed = `redline x gear 6`.
+## The Kenney trucks' driveline is a medium-duty class, sized to the 7.5-8 t these bodies carry (a
+## Class 7 rear loader, the Mack MD7's): a Cummins B6.7 behind an Allison 3000-family close-ratio
+## six-speed, into a 5.57 axle on a 315/80R22.5 (docs/vehicles.md § Sourced figures). Its diesel
+## curve ends at zero at the redline: the governor droops to nothing above rated speed.
 const TRUCK_BASE := {
 	# Flat-fronted working truck: cd 0.70, crr 0.007 for low-resistance commercial radials.
 	"cd": 0.70, "crr": 0.007,
 	# Springs and dampers are an honest choice bounded by launch pitch on the toy 1.94 m wheelbase
 	# (docs/vehicles.md § Pitch): 400 kN/m (~2.3 Hz on `garbage-truck`'s 1.9 t front corner, an
 	# estimate for an unladen steer axle) at ~0.6 / 0.75 of critical (bump / rebound), over a road
-	# damper's 0.2-0.4 (Gillespie): a road band rings the D1>D2 shift's pitch harder (figures in
-	# docs/vehicles.md § Pitch).
+	# damper's 0.2-0.4 (Gillespie): a road band rings the D1>D2 shift's pitch harder (an estimate:
+	# not re-measured on the medium-duty gearing).
 	# com_y 0.75 is a working truck's real height, ~0.30 of the AABB on these bodies: a hopper or a
 	# pump deck sits high and the cab above it. Half-track 0.66-0.69 over 0.75 m tips at ~0.88 g,
 	# clear of mu_lat 0.75, so the firetruck slides before it rolls (the garbage truck overrides).
@@ -244,7 +246,7 @@ const TRUCK_BASE := {
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
 	# J1939: only family with an auxiliary retarder on the driven axle. 600 Nm at the gearbox output
-	# is a medium-duty output retarder: 0.94 m/s^2 on the 8 t body through the 4.5 final drive.
+	# is a medium-duty output retarder: 0.84 m/s^2 on the 8 t body through the 4.01 final drive.
 	"retarder_equipped": true, "retarder_rating_nm": 600.0,
 	# Axle brakes of the ~26 t chassis these bodies are built on (7.1 t steer, 13 t drive axle):
 	# 15500 Nm a wheel is 2.2 g at 8 t, so the light body can lock its wheels and ABS works for it,
@@ -259,11 +261,10 @@ const TRUCK_BASE := {
 	# ABS: mandatory on goods vehicles in the EU since 1991.
 	"abs_equipped": true,
 	# ASR, standard beside EBS on a goods vehicle: kept as equipment, whose work is on low grip. On
-	# dry asphalt the converter's slip holds a floored start near the grip peak without it, and the
-	# crank keeps it off the limiter: `garbage-truck` notc spins 0.08 s and reaches 50 km/h 0.10 s
-	# sooner (measure_vehicles trace, 2026-10-10).
+	# dry asphalt gear 1 at converter stall pushes ~0.38 g, under the rear tyres' grip: `garbage-truck`
+	# notc reaches 50 km/h in the same 6.82 s (measure_vehicles trace, 2026-10-16).
 	"tcs_equipped": true,
-	# Hill-start assist held 3 s (Volvo VN); the converter's creep alone holds ~21 % here.
+	# Hill-start assist held 3 s (Volvo VN); the converter's creep alone holds ~11 % here.
 	"hill_hold": HillHold.Kind.ASSIST, "hill_hold_s": 3.0,
 	# A truck tyre on dry asphalt: it sets the brake split and the steering-taper margin
 	# (src/vehicles/CLAUDE.md, tyre class sets mu); the brake hardware is declared above.
@@ -274,14 +275,25 @@ const TRUCK_BASE := {
 	# BalanceModel.limit leaves both bodies front-first without a bar (garbage-truck +0.7 %,
 	# firetruck +0.2 %); the corner pass saturates the front first on both (0.99 / 0.89 and 0.87).
 	"load_sensitivity": 0.08, "cornering_peak_load": 3.33,
-	"torque_curve": [700, 400, 1200, 650, 1800, 800, 2400, 780, 2800, 600, 3200, 0],
-	"idle_rpm": 700.0, "redline_rpm": 3200.0,
-	# 6th 1.0 -> 0.92: overdrive top, governed speed ~102 km/h vs 96.5 direct-drive.
-	"gear_ratios": [6.5, 3.7, 2.4, 1.6, 1.2, 0.92], "reverse_ratio": 6.0,
-	"final_drive": 4.5, "efficiency": 0.9, "shift_up_rpm": 2600.0, "shift_down_rpm": 1200.0,
+	# The 2021 B6.7's top Performance rating (Cummins): 325 hp, 750 lb-ft (1017 N·m) at 1800, governed
+	# 2600, which is 890 N·m at rated speed. Idle 700 at half the peak and 1200 rpm at 0.81 of it (the
+	# shape this baseline carried before), rated speed to 2900 a governor droop to nothing: estimates.
+	# The derived stall is 1250 rpm, `(idle / stall)²` 0.31.
+	"torque_curve": [700, 509, 1200, 826, 1800, 1017, 2600, 890, 2900, 0],
+	"idle_rpm": 700.0, "redline_rpm": 2900.0,
+	# The Allison 3000 / 3200 close ratios and reverse (Allison; the 3200 carries 325 hp in refuse
+	# service), into a 5.57 axle on a Class 7 rear loader with this engine (dealer listing): on the
+	# 315/80R22.5's 0.500 m loaded radius, re-referred to the drawn 0.36 m (x 0.72), so road speed
+	# per rpm and force per N*m are the real truck's. First 19.4:1 overall (38.9 per metre of radius),
+	# top 52.1 km/h per 1000 rpm: the speed limit governs, never the droop.
+	"gear_ratios": [3.49, 1.86, 1.41, 1.00, 0.75, 0.65], "reverse_ratio": 5.03,
+	# shift_up 2700: past rated speed, where the next gear's torque meets this gear's on the droop
+	# (D1 > D2 crosses ~2740, D5 > D6 ~2630); it lands the 1.88 D1 > D2 step at 1440 rpm. shift_down
+	# 1200, 1.2x under that landing.
+	"final_drive": 4.010, "efficiency": 0.9, "shift_up_rpm": 2700.0, "shift_down_rpm": 1200.0,
 	# The converter automatic's map (`ShiftPolicy`) by CAR_BASE's structure at this diesel's band, an
 	# estimate (no truck map found): light 1600, under the 1800 peak; coast 900. The landing floor
-	# raises the 1.76 D1>D2 to 1739 (lands 990). Kickdown, dwell and no skip-shifts as CAR_BASE's.
+	# raises the 1.88 D1>D2 to 1857 (lands 990). Kickdown, dwell and no skip-shifts as CAR_BASE's.
 	"shift_up_light_rpm": 1600.0, "shift_down_light_rpm": 900.0, "kickdown_pedal": 0.8,
 	"shift_dwell_s": 1.5, "skip_shifts": false, "start_gear_max": 0,
 	# A converter automatic's inertia phase and torque reduction, as CAR_BASE's: no fixed cut (an
@@ -398,16 +410,17 @@ const TRACTOR_BASE := {
 	"spring_rate": 330000.0, "damper_bump": 16500.0,
 	"damper_rebound": 20300.0, "max_suspension_force": 110000.0, "rest_length": 0.12,
 	# Rear carries the drawbar nose weight and the implement, and the 0.66 m rear tyre is
-	# stiffer than the 0.44 m front (both share the one 0.36 physics radius).
+	# stiffer than the 0.44 m front.
 	"spring_rate_rear": 380000.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
 	"anti_roll_rate": 0.0,
 	"anti_roll_rate_rear": -1.0,
 	# No link geometry: the "suspension" is the tyres.
 	"anti_dive": 0.0, "anti_squat": 0.0,
-	# 6.0 is the 0.66 m rear tyre's share: I goes as r^2, and the baseline serves one variant.
-	# The spin step divides NET torque by 1 + reaction_stiffness, so a bigger inertia only slows
+	# Per axle, I = m (kappa r)^2 at the drawn radius, tyre and rim (liquid ballast does not turn
+	# with the tyre): rear 367 kg x (0.75 x 0.66)^2 = 90, front 143 kg x (0.75 x 0.44)^2 = 16
+	# (docs/vehicles.md § Sourced figures grades the masses and kappa). The spin step divides NET torque by 1 + reaction_stiffness, so a bigger inertia only slows
 	# spin-up.
-	"wheel_inertia": 6.0, "driven_front": false, "driven_rear": true,
+	"wheel_inertia": 16.0, "wheel_inertia_rear": 90.0, "driven_front": false, "driven_rear": true,
 	# ISOBUS: only family with lockable diff / engageable front axle at runtime.
 	"rear_diff_lockable": true, "front_axle_engageable": true,
 	# Open rear with a lock; MFWD is a clutch into a rigid transfer to the front axle, no centre
@@ -423,13 +436,18 @@ const TRACTOR_BASE := {
 	# No ABS: a farm tractor's service brakes are not anti-lock. They sit on the rear axle only, and
 	# the pedal engages MFWD so the shaft brakes the fronts (a 40 km/h tractor brakes all four).
 	"abs_equipped": false, "brake_engages_front_axle": true,
-	# Wet multi-disc brakes on the rear axle: 8600 Nm a wheel on average (17.2 kNm at each rear) is
-	# 1.4 g at 7 t, and the 34 kNm total beats gear 1 at stall (23.6 kNm over all four wheels through
-	# MFWD): the shaft carries the fronts' drive into the rears' spare brake
-	# (`BrakeSizing.stall_hold_margin`). The parking brake
-	# on the rear axle, 8000 Nm a wheel, locks the rears; the parking grade is the rear tyres'
-	# (`BrakeSizing.park_grade`). The powershift's park lock is the pawl.
-	"brake_torque": 8600.0, "handbrake_torque": 8000.0, "park_pawl_torque": 15000.0,
+	# Wet multi-disc brakes on the rear axle: 8600 Nm a wheel on average at a 0.36 m wheel (17.2 kNm
+	# at each rear) is 1.4 g at 7 t, and the 34 kNm total beats gear 1 at stall (23.6 kNm over all
+	# four wheels through MFWD; 63 / 43.3 kNm re-referred below): the shaft carries the fronts'
+	# drive into the rears' spare brake (`BrakeSizing.stall_hold_margin`). The parking brake on the
+	# rear axle, 8000 Nm a wheel at 0.36 m, locks the rears; the parking grade is the rear tyres'
+	# (`BrakeSizing.park_grade`). The powershift's park lock is the pawl, 15000 Nm at 0.36 m.
+	# All three sit inboard of the final reduction (the Case IH Puma's "differential" wet discs,
+	# secondary, off a spec listing, not a workshop manual; the parking brake and pawl in the
+	# transmission), so the re-derived reduction below (x 0.66 / 0.36 = 1.833) puts that much more
+	# of the same hardware at the wheel: re-referred, not enlarged, and every force (torque over
+	# radius) is unchanged.
+	"brake_torque": 15767.0, "handbrake_torque": 14667.0, "park_pawl_torque": 27500.0,
 	# No TC either: MFWD and the diff lock are a tractor's traction aids.
 	"tcs_equipped": false,
 	# A powershift hill hold (Valtra HillHold): held at rest in gear until the drive pedal is down
@@ -444,8 +462,11 @@ const TRACTOR_BASE := {
 	"idle_rpm": 800.0, "redline_rpm": 2600.0,
 	# ~4.4:1 spread, 9 km/h first to a 40 km/h road gear. Reverse is the bus's one R byte, so it is
 	# D3's ratio: a shuttle reverses near its forward working speeds.
+	# `final_drive` 10.083 is 5.5 at a 0.36 m wheel re-referred to the drawn 0.66 m rear
+	# (x 0.66 / 0.36): G / r is unchanged, so every road speed per rpm, the force per N*m and the
+	# crank's reflected mass J (G / r)^2 / m are too. A radius re-referral, not a traction lever.
 	"gear_ratios": [7.0, 5.2, 3.9, 2.9, 2.15, 1.6], "reverse_ratio": 3.9,
-	"final_drive": 5.5, "efficiency": 0.9, "shift_up_rpm": 2200.0, "shift_down_rpm": 1000.0,
+	"final_drive": 10.083, "efficiency": 0.9, "shift_up_rpm": 2200.0, "shift_down_rpm": 1000.0,
 	# The powershift's map (`ShiftPolicy`): light 1500, Massey Ferguson AutoDrive's Eco mode (its
 	# Power mode's 2100 is the full pair's 2200); the sourced 1200 downshift (Dynashift, both modes)
 	# sits over the full pair's 1000, so the coast stays at it (0). 1500 lands ~1110 on the 1.35
@@ -583,17 +604,17 @@ const VARIANTS := {
 	# refuse-truck figure found): 0.48 of the 1.77 m body, over TRUCK_BASE's ~0.30 because the hopper
 	# and arms sit high. Half-track 0.66 over it tips at ~0.78 g static, beside mu_lat 0.75.
 	# On the toy 1.94 m wheelbase the front axle unloads fully at g * 0.465 * L / h = 1.06 g, clear of
-	# the ~0.8 g the rear tyres push in gear 1.
+	# the ~0.45 g the rear tyres push in gear 1.
 	# Spring brakes 6500 Nm a wheel: under the 6820 Nm the service brake's split leaves on its lighter
 	# rear drum (a spring chamber never out-torques its service chamber), still past the static rear
 	# wheel's ~6000 Nm of grip, so they lock it.
 	# Governed at 85 km/h, under the EU's 90 km/h heavy-truck limiter (a refuse collector usually
-	# runs lower); this is the one body the governor visibly bites (docs/vehicles.md § Engine braking
-	# under a fuel cut).
-	"garbage-truck": {"family": "truck", "mass": 8000.0, "com_y": 0.85, "front_weight": 0.465, "handbrake_torque": 6500.0, "torque_mul": 1.3, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 85.0},
+	# runs lower); the governor settles it at 83.5 (docs/vehicles.md § Engine braking under a fuel
+	# cut).
+	"garbage-truck": {"family": "truck", "mass": 8000.0, "com_y": 0.85, "front_weight": 0.465, "handbrake_torque": 6500.0, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 85.0},
 	# Emergency vehicles are exempt from the goods-vehicle limiter; 110 is the appliance's own
-	# rating, just above what this body reaches.
-	"firetruck": {"family": "truck", "mass": 7500.0, "torque_mul": 1.3, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 110.0},
+	# rating, where the governor settles it (108.2 km/h).
+	"firetruck": {"family": "truck", "mass": 7500.0, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 110.0},
 	# tractor family (ISOBUS) — one drivable body.
 	# 40 km/h is type approval; gearing already lands on 39.6, so this limit never acts, but
 	# catches a future gearing change that would make the body road-illegal.
@@ -711,21 +732,21 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 			FRONTAL_FILL * body_box.size.x * body_box.size.y, get_f.call("cd"),
 			gd.drag_area, gd.rolling_resistance,
 			"" if cl <= 0.0 else ", cl %.2f -> Cl*A %.2f" % [cl, gd.downforce_area]])
-	gd.wheel_radius = WHEEL_RADIUS
-	gd.wheel_inertia = float(b["wheel_inertia"])
-	# Wheel visuals: one scene per axle when they differ (tractor); physics stays single-radius
-	# (gd.wheel_radius is the only radius RayWheel uses).
+	# Each axle's physics radius is its drawn tyre's; one scene per axle when they differ (tractor).
 	var front_wheel: Dictionary = wheels[0]
 	var rear_wheel: Dictionary = wheels[1]
 	gd.wheel_scene = load(String(front_wheel["scene"])) as PackedScene
 	if String(rear_wheel["scene"]) != String(front_wheel["scene"]):
 		gd.wheel_scene_rear = load(String(rear_wheel["scene"])) as PackedScene
-	var front_r := float(front_wheel["radius"])
-	var rear_r := float(rear_wheel["radius"])
-	# Left at 0 (= wheel_radius) only when both axles render at the physics radius.
-	if front_r != WHEEL_RADIUS or rear_r != WHEEL_RADIUS:
-		gd.wheel_visual_radius = front_r
-		gd.wheel_visual_radius_rear = rear_r
+	gd.wheel_radius = float(front_wheel["radius"])
+	# Left at 0 (= the front's) on equal radii, so those bodies' files do not move.
+	if float(rear_wheel["radius"]) != gd.wheel_radius:
+		gd.wheel_radius_rear = float(rear_wheel["radius"])
+	gd.tyre_half_width = float(front_wheel["half"])
+	if float(rear_wheel["half"]) != gd.tyre_half_width:
+		gd.tyre_half_width_rear = float(rear_wheel["half"])
+	gd.wheel_inertia =float(b["wheel_inertia"])
+	gd.wheel_inertia_rear = float(b.get("wheel_inertia_rear", 0.0))
 	# Driven layout is per variant with the baseline as fallback. `get_flag` would be wrong here
 	# (defaults a missing key to false, silently undriving an axle the baseline drives).
 	gd.driven_front = bool(ov.get("driven_front", b["driven_front"]))
@@ -855,19 +876,19 @@ func _static_sag(b: Dictionary, spec: VehicleSpec, gd: GroundDriveSpec) -> float
 
 
 ## FL, FR, RL, RR hub anchors at the Kenney model's own wheel positions (body space), so RayWheel
-## visuals sit in the wheel wells. Anchor Y is uniform so the body rests level: at the static
-## `sag` the visual wheel centre lands at WHEEL_RADIUS above ground. `x_out` pushes a
+## visuals sit in the wheel wells. Each axle's anchor Y puts its hub at its own radius above
+## ground at the static `sag`, so the body rests level. `x_out` pushes a
 ## corner further outboard (open-wheelers), widening suspension and visual track together.
 ## `ride_lift` drops the anchors, which raises the chassis that far over the wheels at
 ## equilibrium: purely a fit knob for a body whose arches are drawn too shallow for the tyre.
 func _wheel_positions(geo: Dictionary, gd: GroundDriveSpec, sag: float, x_out: float,
 		ride_lift := 0.0) -> PackedVector3Array:
-	var y := WHEEL_RADIUS + gd.rest_length - sag - ride_lift
 	var fl := Vector3.ZERO
 	var fr := Vector3.ZERO
 	var rl := Vector3.ZERO
 	var rr := Vector3.ZERO
 	for xz: Vector2 in geo["wheel_xz"]:
+		var y := gd.axle_radius(RayWheel.is_rear_z(xz.y)) + gd.rest_length - sag - ride_lift
 		var p := Vector3(xz.x + signf(xz.x) * x_out, y, xz.y)  # body space (front = -Z, right = +X)
 		if p.z < 0.0:
 			if p.x < 0.0: fl = p
@@ -935,7 +956,8 @@ func _front_brake_share(spec: VehicleSpec, gd: GroundDriveSpec, sag: float) -> f
 	var weight := spec.mass * GRAVITY
 	var ref_load := weight / gd.wheel_positions.size()  # RayWheel's: corner_mass * g
 	var static_front: float = ax["static_front"]
-	var asked := gd.brake_torque * gd.wheel_positions.size() / gd.wheel_radius / weight  # in g
+	var asked := gd.brake_torque * (n_front / gd.axle_radius(false)
+			+ n_rear / gd.axle_radius(true)) / weight  # in g
 	var decel := asked
 	var cap_front := 0.0
 	var cap_rear := 0.0
@@ -972,10 +994,11 @@ func _axles(spec: VehicleSpec, gd: GroundDriveSpec) -> Dictionary:
 			"static_front": (rear_z - spec.center_of_mass.z) / wheelbase}
 
 
-## The COM's height over the road at rest (m): the anchors sit `WHEEL_RADIUS + rest_length - sag`
-## above it (_wheel_positions).
+## The COM's height over the road at rest (m): each anchor sits its axle's `radius + rest_length -
+## sag` above it (_wheel_positions); [0] is a front one.
 func _com_height(spec: VehicleSpec, gd: GroundDriveSpec, sag: float) -> float:
-	return spec.center_of_mass.y + WHEEL_RADIUS + gd.rest_length - sag - gd.wheel_positions[0].y
+	return spec.center_of_mass.y + gd.axle_radius(false) + gd.rest_length - sag \
+			- gd.wheel_positions[0].y
 
 
 ## Per-axle springs and dampers off the baseline's `ride_hz` / `zeta_bump` / `zeta_rebound`: each
@@ -1356,7 +1379,7 @@ func _add(scene_owner: Node, parent: Node, child: Node) -> void:
 ##              (the wheel-contact plane). Everything downstream measures the body through this
 ##              transform — drag_area, com_z and the wheel stations all follow a `scale` for free,
 ##              and so does the ride height, since _wheel_positions derives anchor Y from
-##              WHEEL_RADIUS and rest_length rather than off the model.
+##              each axle's radius and rest_length rather than off the model.
 ##   wheel_xz:  the four wheels' body-space (x, z). z is the Kenney wheel z; x is the flush
 ##              rule below (never inset from the authored position).
 ##   body_pairs: [Mesh, native transform] for the wheel-less body (collision hull source)

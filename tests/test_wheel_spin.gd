@@ -16,8 +16,11 @@ func _spec() -> GroundDriveSpecScript:
 
 ## corner_mass is irrelevant to _integrate_spin (it sizes the CONTACT clamps, which live in
 ## tick()), so any positive value does; it is passed only because the constructor demands one.
+## The radius and inertia are `_spec()`'s.
 func _wheel() -> WheelScript:
-	return WheelScript.new(Vector3(0.0, 0.0, 1.0), false, true, null, 300.0)
+	var w := WheelScript.new(Vector3(0.0, 0.0, 1.0), false, true, null, 300.0)
+	w.apply_suspension(_spec())
+	return w
 
 
 # --- surface drag: a body force at the contact, outside the circle ----------------
@@ -286,18 +289,17 @@ func test_the_friction_ellipse_keeps_direction_and_never_leaves_the_budget() -> 
 
 func test_a_brake_that_stops_the_spin_holds_the_wheel_and_a_weak_one_does_not() -> void:
 	# The held latch is the step's own Coulomb check: brake >= the reaction it must carry.
-	var spec := _spec()
 	var w := _wheel()
-	w._integrate_spin(0.0, -900.0, 1000.0, spec, TICK, 0.001)
+	w._integrate_spin(0.0, -900.0, 1000.0, TICK, 0.001)
 	assert_float(w.omega).is_equal(0.0)
 	assert_bool(w._spin_held).is_true()
 	var weak := _wheel()
-	weak._integrate_spin(0.0, -900.0, 800.0, spec, TICK, 0.001)
+	weak._integrate_spin(0.0, -900.0, 800.0, TICK, 0.001)
 	assert_float(weak.omega).is_not_equal(0.0)
 	assert_bool(weak._spin_held).is_false()
 	# No brake is never a hold, however still the wheel.
 	var free := _wheel()
-	free._integrate_spin(0.0, 0.0, 0.0, spec, TICK, 0.0)
+	free._integrate_spin(0.0, 0.0, 0.0, TICK, 0.0)
 	assert_bool(free._spin_held).is_false()
 
 
@@ -321,7 +323,7 @@ func test_a_held_patch_carries_no_more_than_its_brake_holds() -> void:
 	# At either edge the step's Coulomb check still holds the wheel.
 	for edge: float in [fwd.x, fwd.y]:
 		var w := _wheel()
-		w._integrate_spin(100.0, -edge * 0.36, 305.0, _spec(), TICK, 0.0)
+		w._integrate_spin(100.0, -edge * 0.36, 305.0, TICK, 0.0)
 		assert_bool(w._spin_held).is_true()
 
 
@@ -413,12 +415,11 @@ func test_a_wheel_in_equilibrium_does_not_move() -> void:
 	# It must not accelerate or decelerate, at ANY reaction magnitude — this is the property a
 	# clamp on the reaction alone destroys: it leaves (drive - clamped_reaction) pushing every
 	# tick, walking the wheel to a slip the driveline never paid for.
-	var spec := _spec()
 	for torque: float in [10.0, 500.0, 3000.0, 20000.0]:
 		var w := _wheel()
 		w.omega = 30.0
 		for _i in 120:
-			w._integrate_spin(torque, -torque, 0.0, spec, TICK, 0.4)
+			w._integrate_spin(torque, -torque, 0.0, TICK, 0.4)
 		assert_float(w.omega) \
 			.override_failure_message("balanced %.0f Nm moved omega" % torque) \
 			.is_equal_approx(30.0, 1e-6)
@@ -428,14 +429,13 @@ func test_the_reaction_never_overshoots_into_ringing() -> void:
 	# A stationary-slip wheel handed a reaction far too big for its own inertia must settle,
 	# not oscillate. Unclamped explicit integration flips the sign of the correction every
 	# tick here; the semi-implicit step cannot, because its divisor only ever shrinks a step.
-	var spec := _spec()
 	var w := _wheel()
 	w.omega = 30.0
 	var prev_delta := 0.0
 	for i in 60:
 		var was := w.omega
 		# Reaction opposing the spin, sized like a real tire (~10 kN at 0.36 m).
-		w._integrate_spin(0.0, -3600.0, 0.0, spec, TICK, 0.4)
+		w._integrate_spin(0.0, -3600.0, 0.0, TICK, 0.4)
 		var step := w.omega - was
 		assert_float(step).override_failure_message("step %d grew" % i) \
 			.is_less_equal(0.0)
@@ -451,7 +451,7 @@ func test_the_step_never_exceeds_the_plain_explicit_one() -> void:
 	for reaction: float in [0.0, -100.0, -3600.0, 12000.0]:
 		var w := _wheel()
 		w.omega = 5.0
-		w._integrate_spin(800.0, reaction, 0.0, spec, TICK, 0.4)
+		w._integrate_spin(800.0, reaction, 0.0, TICK, 0.4)
 		var explicit := 5.0 + (800.0 + reaction) / spec.wheel_inertia * TICK
 		assert_float(absf(w.omega - 5.0)) \
 			.override_failure_message("reaction %.0f overshot the explicit step" % reaction) \
@@ -467,7 +467,7 @@ func test_it_relaxes_to_the_explicit_step_as_the_tick_shrinks() -> void:
 	var fine := TICK / 64.0
 	var w := _wheel()
 	w.omega = 5.0
-	w._integrate_spin(800.0, -400.0, 0.0, spec, fine, 0.4)
+	w._integrate_spin(800.0, -400.0, 0.0, fine, 0.4)
 	var explicit := 5.0 + (800.0 - 400.0) / spec.wheel_inertia * fine
 	assert_float(w.omega).is_equal_approx(explicit, absf(explicit - 5.0) * 0.05)
 
@@ -479,12 +479,11 @@ func test_a_brake_the_road_holds_up_does_not_move_the_wheel() -> void:
 	# Both go through the semi-implicit step, so it must not move at any magnitude. A brake outside
 	# the step falls (1 + k) times faster than the road can answer, and a firm pedal locks every
 	# wheel.
-	var spec := _spec()
 	for torque: float in [10.0, 500.0, 3000.0, 20000.0]:
 		var w := _wheel()
 		w.omega = 30.0
 		for _i in 120:
-			w._integrate_spin(0.0, torque, torque, spec, TICK, 0.4)
+			w._integrate_spin(0.0, torque, torque, TICK, 0.4)
 		assert_float(w.omega) \
 			.override_failure_message("a held %.0f Nm brake moved omega" % torque) \
 			.is_equal_approx(30.0, 1e-6)
@@ -502,7 +501,7 @@ func test_a_brake_under_the_tyre_settles_where_the_road_carries_it() -> void:
 	w.omega = v / spec.wheel_radius
 	for _i in 600:
 		var slip_vel := w.omega * spec.wheel_radius - v
-		w._integrate_spin(0.0, -c * slip_vel * spec.wheel_radius, brake, spec, TICK, slip_vel)
+		w._integrate_spin(0.0, -c * slip_vel * spec.wheel_radius, brake, TICK, slip_vel)
 	assert_float(w.omega * spec.wheel_radius - v) \
 			.is_equal_approx(-brake / (c * spec.wheel_radius), 1e-3)
 
@@ -522,7 +521,7 @@ func test_a_wheel_on_a_decelerating_body_pays_only_its_own_inertia() -> void:
 	for _i in 120:
 		var slip_vel := w.omega * spec.wheel_radius - v
 		road = -c * slip_vel * spec.wheel_radius
-		w._integrate_spin(0.0, road, brake, spec, TICK, slip_vel, v, 0.0, -a * TICK)
+		w._integrate_spin(0.0, road, brake, TICK, slip_vel, v, 0.0, -a * TICK)
 		v -= a * TICK
 	assert_float(road).is_equal_approx(brake - spec.wheel_inertia * a / spec.wheel_radius, 1.0)
 
@@ -534,18 +533,18 @@ func test_abs_holds_an_over_strong_brake_at_its_slip() -> void:
 	var v := 20.0
 	var locked := _wheel()
 	locked.omega = v / spec.wheel_radius
-	locked._integrate_spin(0.0, 0.0, 1.0e6, spec, TICK, 0.0, v, 0.0)
+	locked._integrate_spin(0.0, 0.0, 1.0e6, TICK, 0.0, v, 0.0)
 	assert_float(locked.omega).is_equal(0.0)
 	assert_bool(locked.abs_active).is_false()
 	var held := _wheel()
 	held.omega = v / spec.wheel_radius
-	held._integrate_spin(0.0, 0.0, 1.0e6, spec, TICK, 0.0, v, WheelScript.ABS_SLIP)
+	held._integrate_spin(0.0, 0.0, 1.0e6, TICK, 0.0, v, WheelScript.ABS_SLIP)
 	assert_float(held.omega).is_equal_approx(v * (1.0 - WheelScript.ABS_SLIP) / spec.wheel_radius, 1e-6)
 	assert_bool(held.abs_active).is_true()
 	# A brake the wheel can carry is not touched, and ABS does not claim it.
 	var light := _wheel()
 	light.omega = v / spec.wheel_radius
-	light._integrate_spin(0.0, 0.0, 10.0, spec, TICK, 0.0, v, WheelScript.ABS_SLIP)
+	light._integrate_spin(0.0, 0.0, 10.0, TICK, 0.0, v, WheelScript.ABS_SLIP)
 	assert_float(light.omega).is_equal_approx(v / spec.wheel_radius - 10.0 * TICK / spec.wheel_inertia, 1e-6)
 	assert_bool(light.abs_active).is_false()
 
@@ -565,9 +564,8 @@ func test_abs_lets_a_stopping_or_stopped_wheel_hold() -> void:
 	assert_float(_abs_room(-10.0 / r, -10.0, r, WheelScript.ABS_SLIP)) \
 			.is_equal_approx(_abs_room(10.0 / r, 10.0, r, WheelScript.ABS_SLIP), 1e-6)
 	# Stopped with the brake on: nothing to take off, and no ABS event to report.
-	var spec := _spec()
 	var w := _wheel()
-	w._integrate_spin(0.0, 0.0, 5000.0, spec, TICK, 0.0, 0.0, WheelScript.ABS_SLIP)
+	w._integrate_spin(0.0, 0.0, 5000.0, TICK, 0.0, 0.0, WheelScript.ABS_SLIP)
 	assert_float(w.omega).is_equal(0.0)
 	assert_bool(w.abs_active).is_false()
 
@@ -636,7 +634,7 @@ func test_tcs_holds_a_floored_drive_at_its_slip() -> void:
 	var slip_vel := 0.05 * v
 	var held := _wheel()
 	held.omega = (v + slip_vel) / spec.wheel_radius
-	held._integrate_spin(1.0e6, -c * slip_vel * spec.wheel_radius, 0.0, spec, TICK, slip_vel, v,
+	held._integrate_spin(1.0e6, -c * slip_vel * spec.wheel_radius, 0.0, TICK, slip_vel, v,
 			0.0, 0.0, WheelScript.TCS_SLIP)
 	assert_float(held.omega).is_equal_approx(v * (1.0 + WheelScript.TCS_SLIP) / spec.wheel_radius,
 			1e-6)
@@ -644,21 +642,20 @@ func test_tcs_holds_a_floored_drive_at_its_slip() -> void:
 	# A light drive under the peak is the plain step, and TC does not claim it.
 	var light := _wheel()
 	light.omega = (v + slip_vel) / spec.wheel_radius
-	light._integrate_spin(50.0, -c * slip_vel * spec.wheel_radius, 0.0, spec, TICK, slip_vel, v,
+	light._integrate_spin(50.0, -c * slip_vel * spec.wheel_radius, 0.0, TICK, slip_vel, v,
 			0.0, 0.0, WheelScript.TCS_SLIP)
 	var plain := _wheel()
 	plain.omega = (v + slip_vel) / spec.wheel_radius
-	plain._integrate_spin(50.0, -c * slip_vel * spec.wheel_radius, 0.0, spec, TICK, slip_vel, v)
+	plain._integrate_spin(50.0, -c * slip_vel * spec.wheel_radius, 0.0, TICK, slip_vel, v)
 	assert_float(light.omega).is_equal(plain.omega)
 	assert_bool(light.tcs_active).is_false()
 
 
 func test_tcs_reverse_mirrors_forward() -> void:
-	var spec := _spec()
 	var fwd := _wheel()
-	fwd._integrate_spin(1.0e6, 0.0, 0.0, spec, TICK, 0.0, 5.0, 0.0, 0.0, WheelScript.TCS_SLIP)
+	fwd._integrate_spin(1.0e6, 0.0, 0.0, TICK, 0.0, 5.0, 0.0, 0.0, WheelScript.TCS_SLIP)
 	var rev := _wheel()
-	rev._integrate_spin(-1.0e6, 0.0, 0.0, spec, TICK, 0.0, -5.0, 0.0, 0.0, WheelScript.TCS_SLIP)
+	rev._integrate_spin(-1.0e6, 0.0, 0.0, TICK, 0.0, -5.0, 0.0, 0.0, WheelScript.TCS_SLIP)
 	assert_float(rev.omega).is_equal_approx(-fwd.omega, 1e-6)
 	assert_bool(rev.tcs_active).is_true()
 
@@ -672,10 +669,10 @@ func test_tcs_takes_back_no_more_than_the_drive_share() -> void:
 	var reaction := -400.0
 	var plain := _wheel()
 	plain.omega = (v + slip_vel) / spec.wheel_radius
-	plain._integrate_spin(20.0, reaction, 0.0, spec, TICK, slip_vel, v)
+	plain._integrate_spin(20.0, reaction, 0.0, TICK, slip_vel, v)
 	var capped := _wheel()
 	capped.omega = (v + slip_vel) / spec.wheel_radius
-	capped._integrate_spin(20.0, reaction, 0.0, spec, TICK, slip_vel, v, 0.0, 0.0,
+	capped._integrate_spin(20.0, reaction, 0.0, TICK, slip_vel, v, 0.0, 0.0,
 			WheelScript.TCS_SLIP)
 	assert_float(capped.omega).is_equal_approx(plain.omega - 20.0 * plain.spin_compliance, 1e-9)
 	assert_bool(capped.tcs_active).is_true()
@@ -691,7 +688,7 @@ func test_tcs_only_removes_drive_and_never_brakes() -> void:
 	var slip_vel := 0.5 * v
 	var held := _wheel()
 	held.omega = (v + slip_vel) / spec.wheel_radius
-	held._integrate_spin(0.0, -400.0, 0.0, spec, TICK, slip_vel, v, 0.0, 0.0,
+	held._integrate_spin(0.0, -400.0, 0.0, TICK, slip_vel, v, 0.0, 0.0,
 			WheelScript.TCS_SLIP, 1.0e6)
 	var ceiling := WheelScript.tcs_ceiling_spin(v, 1.0, spec.wheel_radius, WheelScript.TCS_SLIP)
 	assert_float(held.omega).is_equal_approx(ceiling, 1e-9)
@@ -700,23 +697,22 @@ func test_tcs_only_removes_drive_and_never_brakes() -> void:
 	# Under its ceiling a wheel loses nothing to the hold, however big the share.
 	var slow := _wheel()
 	slow.omega = (v + 0.05 * v) / spec.wheel_radius
-	slow._integrate_spin(0.0, -100.0, 0.0, spec, TICK, 0.05 * v, v, 0.0, 0.0,
+	slow._integrate_spin(0.0, -100.0, 0.0, TICK, 0.05 * v, v, 0.0, 0.0,
 			WheelScript.TCS_SLIP, 1.0e6)
 	var plain := _wheel()
 	plain.omega = (v + 0.05 * v) / spec.wheel_radius
-	plain._integrate_spin(0.0, -100.0, 0.0, spec, TICK, 0.05 * v, v)
+	plain._integrate_spin(0.0, -100.0, 0.0, TICK, 0.05 * v, v)
 	assert_float(slow.omega).is_equal(plain.omega)
 	assert_bool(slow.tcs_active).is_false()
 
 
 func test_tcs_off_is_todays_step_bit_for_bit() -> void:
-	var spec := _spec()
 	var a := _wheel()
 	a.omega = 30.0
-	a._integrate_spin(800.0, -300.0, 0.0, spec, TICK, 2.0, 10.0, 0.0, 0.1)
+	a._integrate_spin(800.0, -300.0, 0.0, TICK, 2.0, 10.0, 0.0, 0.1)
 	var b := _wheel()
 	b.omega = 30.0
-	b._integrate_spin(800.0, -300.0, 0.0, spec, TICK, 2.0, 10.0, 0.0, 0.1, 0.0)
+	b._integrate_spin(800.0, -300.0, 0.0, TICK, 2.0, 10.0, 0.0, 0.1, 0.0)
 	assert_float(b.omega).is_equal(a.omega)
 	assert_bool(b.tcs_active).is_false()
 
@@ -727,7 +723,7 @@ func test_tcs_holds_an_airborne_wheel_at_the_body_speed_plus_the_peak() -> void:
 	var spec := _spec()
 	var v := 0.5
 	var w := _wheel()
-	w._integrate_spin(2000.0, 0.0, 0.0, spec, TICK, 0.0, v, 0.0, 0.0, WheelScript.TCS_SLIP)
+	w._integrate_spin(2000.0, 0.0, 0.0, TICK, 0.0, v, 0.0, 0.0, WheelScript.TCS_SLIP)
 	assert_float(w.omega).is_equal_approx(
 			(v + WheelScript.TCS_SLIP * WheelScript.LOW_SPEED_FLOOR) / spec.wheel_radius, 1e-6)
 	assert_bool(w.tcs_active).is_true()
@@ -736,12 +732,11 @@ func test_tcs_holds_an_airborne_wheel_at_the_body_speed_plus_the_peak() -> void:
 func test_tc_drives_through_settle_spin() -> void:
 	# A coupled wheel leaves its step with the hold latched, not applied: the differentials solve it
 	# first. Settled with no coupling torque it lands exactly where a lone wheel's own step does.
-	var spec := _spec()
 	var lone := _wheel()
-	lone._integrate_spin(1.0e6, 0.0, 0.0, spec, TICK, 0.0, 5.0, 0.0, 0.0, WheelScript.TCS_SLIP)
+	lone._integrate_spin(1.0e6, 0.0, 0.0, TICK, 0.0, 5.0, 0.0, 0.0, WheelScript.TCS_SLIP)
 	var coupled := _wheel()
 	coupled.coupled_spin = true
-	coupled._integrate_spin(1.0e6, 0.0, 0.0, spec, TICK, 0.0, 5.0, 0.0, 0.0, WheelScript.TCS_SLIP)
+	coupled._integrate_spin(1.0e6, 0.0, 0.0, TICK, 0.0, 5.0, 0.0, 0.0, WheelScript.TCS_SLIP)
 	assert_float(coupled.omega).is_greater(lone.omega)
 	assert_bool(coupled.tcs_active).is_false()
 	coupled.settle_spin(0.0)
@@ -750,15 +745,14 @@ func test_tc_drives_through_settle_spin() -> void:
 
 
 func test_brakes_decelerate_toward_zero_and_never_reverse_the_spin() -> void:
-	var spec := _spec()
 	var w := _wheel()
 	w.omega = 1.0
 	# A brake torque far bigger than one tick's worth stops the wheel dead, not backwards.
-	w._integrate_spin(0.0, 0.0, 1.0e6, spec, TICK, 0.0)
+	w._integrate_spin(0.0, 0.0, 1.0e6, TICK, 0.0)
 	assert_float(w.omega).is_equal(0.0)
 	# Reverse spin brakes toward zero from the other side.
 	w.omega = -1.0
-	w._integrate_spin(0.0, 0.0, 1.0e6, spec, TICK, 0.0)
+	w._integrate_spin(0.0, 0.0, 1.0e6, TICK, 0.0)
 	assert_float(w.omega).is_equal(0.0)
 
 
@@ -766,7 +760,7 @@ func test_airborne_spin_is_pure_drive_and_brake() -> void:
 	# No contact = no reaction and no slip velocity; the wheel just spins up under drive.
 	var spec := _spec()
 	var w := _wheel()
-	w._integrate_spin(400.0, 0.0, 0.0, spec, TICK, 0.0)
+	w._integrate_spin(400.0, 0.0, 0.0, TICK, 0.0)
 	assert_float(w.omega).is_equal_approx(400.0 / spec.wheel_inertia * TICK, 1e-9)
 
 
@@ -1106,6 +1100,95 @@ func test_a_massless_body_moves_nothing() -> void:
 			.is_equal(0.0)
 
 
+# --- the contact: a cylinder swept down the travel -----------------------------------
+
+func test_a_cylinder_rests_on_its_tread_or_its_end() -> void:
+	# A normal square to the axle meets the tread at the radius; along it, the end face.
+	assert_float(WheelScript.cylinder_support(Vector3.UP, Vector3.RIGHT, 0.36, 0.1)) \
+			.is_equal_approx(0.36, 1e-6)
+	assert_float(WheelScript.cylinder_support(Vector3.RIGHT, Vector3.RIGHT, 0.36, 0.1)) \
+			.is_equal_approx(0.1, 1e-6)
+	# Rolled 10 degrees on a flat: the rim corner, `r cos + w sin`.
+	var n := Vector3(sin(deg_to_rad(10.0)), cos(deg_to_rad(10.0)), 0.0)
+	assert_float(WheelScript.cylinder_support(n, Vector3.RIGHT, 0.36, 0.1)) \
+			.is_equal_approx(0.36 * cos(deg_to_rad(10.0)) + 0.1 * sin(deg_to_rad(10.0)), 1e-6)
+
+
+func test_the_settled_drop_backs_the_touching_stop_out_of_its_overlap() -> void:
+	# Stopped 0.6 mm into a flat face: the hub sits that much higher, between the two stops.
+	assert_float(WheelScript.settled_drop(0.2, 0.2012, -0.0006, 1.0)).is_equal_approx(0.2006, 1e-7)
+	# A face leaning 60 degrees: the same overlap is twice as far along `up`.
+	assert_float(WheelScript.settled_drop(0.2, 0.2012, -0.0005, 0.5)).is_equal_approx(0.2002, 1e-7)
+	# Never outside the bracket the sweep measured.
+	assert_float(WheelScript.settled_drop(0.2, 0.2012, -0.01, 1.0)).is_equal(0.2)
+	assert_float(WheelScript.settled_drop(0.2, 0.2012, 0.01, 1.0)).is_equal_approx(0.2012, 1e-7)
+
+
+## A static box on TERRAIN, `size` at `center`, under `root`.
+func _box(root: Node3D, size: Vector3, center: Vector3) -> void:
+	var body := StaticBody3D.new()
+	body.collision_layer = 1  # TERRAIN, inside Layers.SOLID
+	var shape := CollisionShape3D.new()
+	shape.shape = BoxShape3D.new()
+	(shape.shape as BoxShape3D).size = size
+	body.add_child(shape)
+	root.add_child(body)
+	body.global_position = center
+
+
+## One wheel (radius `r`, 0.3 m of travel, anchor 0.6 m up) ticked once on a frozen body whose hub
+## sits at z 0, a 12 cm step's edge `edge_ahead` m in front of it (-Z, the wheel's forward).
+func _wheel_at_a_step(r: float, edge_ahead: float) -> WheelScript:
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	_box(root, Vector3(4.0, 1.0, 20.0), Vector3(0.0, -0.5, 0.0))
+	_box(root, Vector3(4.0, 0.12, 10.0), Vector3(0.0, 0.06, -edge_ahead - 5.0))
+	var body := RigidBody3D.new()
+	body.freeze = true
+	body.collision_layer = 0
+	root.add_child(body)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var gd: GroundDriveSpecScript = GroundDriveSpecScript.new()
+	gd.wheel_radius = r
+	gd.wheel_inertia = 1.0
+	gd.tyre_half_width = 0.1
+	gd.rest_length = 0.3
+	var w := WheelScript.new(Vector3(0.0, 0.6, 0.0), false, false, null, 300.0)
+	w.apply_suspension(gd)
+	var terrains: Array[Node] = []
+	w.tick(body, gd, root.get_world_3d().direct_space_state, 0.0, 0.0, TICK, terrains)
+	return w
+
+
+func test_the_cast_meets_a_step_where_the_disk_does() -> void:
+	# The disk rests on the edge 0.15 m ahead: its hub `sqrt(r² - x²)` over the step's top, the
+	# normal leaning back `asin(x / r)`, and the patch on the edge itself.
+	var r := 0.36
+	var x := 0.15
+	var w: WheelScript = await _wheel_at_a_step(r, x)
+	# Jolt rounds the box's edge by its collision margin, 8 % of the least half-extent (4.8 mm on
+	# the 12 cm step): the disk rests `r + c` from the rounding's centre.
+	var c := 0.08 * 0.06
+	var hub_y := 0.12 - c + sqrt((r + c) * (r + c) - (x + c) * (x + c))
+	assert_bool(w.in_contact).is_true()
+	assert_float(w.compression).is_equal_approx(0.3 - (0.6 - hub_y), 5e-4)
+	assert_float(rad_to_deg(w.contact_normal.angle_to(Vector3.UP))) \
+			.is_equal_approx(rad_to_deg(asin(x / r)), 1.0)
+	assert_float(w.contact_normal.z).is_greater(0.0)
+	assert_vector(w.contact_point).is_equal_approx(Vector3(0.0, 0.12, -x), Vector3.ONE * 0.005)
+
+
+func test_the_cast_on_a_face_reads_the_face() -> void:
+	# The edge past the disk's reach: the tyre sits on the flat, under its hub. Within a fraction
+	# of the sweep's 1/256 step (1.2 mm here): `settled_drop` closes it.
+	var w: WheelScript = await _wheel_at_a_step(0.36, 0.5)
+	assert_bool(w.in_contact).is_true()
+	assert_float(w.compression).is_equal_approx(0.3 - (0.6 - 0.36), 1e-4)
+	assert_vector(w.contact_normal).is_equal_approx(Vector3.UP, Vector3.ONE * 1e-3)
+	assert_vector(w.contact_point).is_equal_approx(Vector3.ZERO, Vector3.ONE * 0.005)
+
+
 # --- patch_offset: where a disk on the hub touches the road --------------------------
 
 func test_a_level_wheel_touches_straight_below_its_hub() -> void:
@@ -1174,6 +1257,20 @@ func test_rest_ride_height_is_set_by_the_lowest_anchor_when_they_differ() -> voi
 	assert_float(gd.rest_ride_height()).is_equal_approx(0.5 + 0.3 + 0.2, 1e-6)
 
 
+func test_rest_ride_height_takes_the_wheel_that_asks_the_most() -> void:
+	var gd := GroundDriveSpecScript.new()
+	gd.wheel_radius = 0.44
+	gd.wheel_radius_rear = 0.66
+	gd.rest_length = 0.1
+	gd.wheel_positions = PackedVector3Array([
+		Vector3(-0.8, -0.1, -1.3), Vector3(0.8, -0.1, -1.3),
+		Vector3(-0.8, 0.1, 1.3), Vector3(0.8, 0.1, 1.3),
+	])
+	# Front 0.44 + 0.1 + 0.1 = 0.64; rear 0.66 + 0.1 - 0.1 = 0.66: the higher anchor on the bigger
+	# tyre sets it, not the lowest anchor.
+	assert_float(gd.rest_ride_height()).is_equal_approx(0.66, 1e-6)
+
+
 func test_rest_ride_height_is_zero_with_no_wheel_positions() -> void:
 	var gd := GroundDriveSpecScript.new()
 	gd.wheel_positions = PackedVector3Array()
@@ -1204,14 +1301,13 @@ func test_a_torque_applied_through_the_compliance_is_the_one_inside_the_step() -
 	# The semi-implicit step is linear in the applied torque, so a coupling torque applied after it
 	# through `spin_compliance` IS the same torque added to drive_t, at any reaction. That is what
 	# lets `Differential` couple wheels after they tick without the explicit over-correction.
-	var spec := _spec()
 	for reaction: float in [0.0, -400.0, -3600.0, -20000.0]:
 		var inside := _wheel()
 		inside.omega = 20.0
-		inside._integrate_spin(800.0 - 150.0, reaction, 0.0, spec, TICK, 0.4)
+		inside._integrate_spin(800.0 - 150.0, reaction, 0.0, TICK, 0.4)
 		var outside := _wheel()
 		outside.omega = 20.0
-		outside._integrate_spin(800.0, reaction, 0.0, spec, TICK, 0.4)
+		outside._integrate_spin(800.0, reaction, 0.0, TICK, 0.4)
 		outside.omega -= 150.0 * outside.spin_compliance
 		assert_float(outside.omega) \
 				.override_failure_message("reaction %.0f: post-tick torque diverged" % reaction) \
@@ -1221,11 +1317,32 @@ func test_a_torque_applied_through_the_compliance_is_the_one_inside_the_step() -
 func test_a_gripping_wheel_is_stiffer_than_a_free_one() -> void:
 	var spec := _spec()
 	var free_wheel := _wheel()
-	free_wheel._integrate_spin(400.0, 0.0, 0.0, spec, TICK, 0.0)
+	free_wheel._integrate_spin(400.0, 0.0, 0.0, TICK, 0.0)
 	assert_float(free_wheel.spin_compliance).is_equal_approx(TICK / spec.wheel_inertia, 1e-12)
 	var gripping := _wheel()
-	gripping._integrate_spin(400.0, -3600.0, 0.0, spec, TICK, 0.4)
+	gripping._integrate_spin(400.0, -3600.0, 0.0, TICK, 0.4)
 	assert_float(gripping.spin_compliance).is_less(free_wheel.spin_compliance)
+
+
+func test_a_wheel_steps_on_its_own_axles_radius_and_inertia() -> void:
+	# A rear axle at 2r and 4I: `apply_suspension` hands the wheel its axle's figures and the spin
+	# step reads them, never the front's.
+	var gd := _spec()
+	gd.wheel_radius_rear = 2.0 * gd.wheel_radius
+	gd.wheel_inertia_rear = 4.0 * gd.wheel_inertia
+	var rear := WheelScript.new(Vector3(0.0, 0.0, 1.0), false, true, null, 300.0)
+	rear.apply_suspension(gd)
+	var r := gd.wheel_radius_rear
+	var inertia := gd.wheel_inertia_rear
+	rear.omega = 10.0
+	rear._integrate_spin(800.0, -400.0, 0.0, TICK, 0.4)
+	var k := 400.0 / (inertia * 0.4 / (TICK * r))
+	assert_float(rear.omega).is_equal_approx(10.0 + 400.0 / (1.0 + k) / inertia * TICK, 1e-9)
+	assert_float(rear.spin_compliance).is_equal_approx(TICK / (inertia * (1.0 + k)), 1e-12)
+	var front := WheelScript.new(Vector3(0.0, 0.0, -1.0), false, true, null, 300.0)
+	front.apply_suspension(gd)
+	assert_float(front.wheel_radius).is_equal(gd.wheel_radius)
+	assert_float(front.wheel_inertia).is_equal(gd.wheel_inertia)
 
 
 # --- the differential passes in WheelDrive ---------------------------------------
@@ -1287,6 +1404,49 @@ func test_disengaged_mfwd_couples_nothing_across_the_axles() -> void:
 	drive._couple_differentials(spec.ground_drive, input, 4000.0)
 	for i in drive.wheels.size():
 		assert_float(drive.wheels[i].omega).is_equal(SPREAD_OMEGAS[i])
+
+
+func test_the_shaft_frame_gears_spin_and_holds_by_n_and_compliance_by_n_squared() -> void:
+	# [spin, compliance, brake_spin, abs_floor, tcs_spin, tcs_ceiling], scaled in place.
+	var outputs: Array[PackedFloat64Array] = []
+	for k in 6:
+		outputs.append(PackedFloat64Array([2.0, 3.0]))
+	WheelDrive.shaft_frame(outputs, PackedFloat64Array([1.0, 0.5]))
+	for k in 6:
+		assert_float(outputs[k][0]).is_equal(2.0)
+		assert_float(outputs[k][1]).is_equal(3.0 * (0.25 if k == 1 else 0.5))
+
+
+func test_a_rigid_centre_lands_axles_of_two_radii_on_one_road_speed() -> void:
+	# Fronts at r, rears at 2r: the shaft is quoted at the driven rears, so a front turns n = 0.5 of
+	# it (`WheelDrive.shaft_frame`). The rigid centre lands both axles on one road speed, the 2r
+	# wheels at half the fronts' spin, and the slipping clutch reaches the road as its shaft torque
+	# over the drive radius, whatever the centre moved between the axles.
+	var spec := _crank_spec()
+	spec.clutch_reserve = 0.1
+	var gd := spec.ground_drive
+	gd.wheel_radius = 0.36
+	gd.wheel_radius_rear = 0.72
+	gd.front_axle_engageable = true
+	gd.centre_diff_rigid = true
+	var drive := _drive_for(spec)
+	var input := VehicleInput.new()
+	input.fwd_drive = true
+	drive.drive_omega(gd, input)
+	var dt := _crank_in_d1(spec, Drivetrain.CouplingState.LOCKED, 40.0, 0.0, 1.0)
+	# Fronts rolling at 3.6 m/s, rears at 2.88 m/s.
+	_set_spin(drive, [10.0, 10.0, 4.0, 4.0], [0.001, 0.001, 0.001, 0.001])
+	_set_brakes(drive, [0.0, 0.0, 0.0, 0.0])
+	drive._couple_differentials(gd, input, 0.0, PackedInt32Array(), 0.0, dt)
+	var w := drive.wheels
+	assert_float((w[2].omega + w[3].omega) * 0.5) \
+			.is_equal_approx((w[0].omega + w[1].omega) * 0.5 * 0.5, 1e-9)
+	var road_force := 0.0
+	for each in w:
+		road_force += each.coupled_torque / each.wheel_radius
+	var carried := Drivetrain.clutch_rating(spec) * Drivetrain.ratio_for_byte(spec, 1) \
+			* spec.efficiency
+	assert_float(road_force).is_equal_approx(carried / gd.drive_radius(), 1e-6)
 
 
 func test_the_diff_lock_puts_the_rear_pair_on_one_shaft() -> void:
@@ -1553,6 +1713,57 @@ func test_a_locked_crank_lands_on_the_compliance_weighted_mean_with_its_wheels()
 	assert_float(w[0].omega).is_equal(0.0)
 
 
+## The driven wheels' mean spin in the shaft frame: what a locked crank turns with.
+func _shaft_mean(drive: WheelDrive) -> float:
+	var sum := 0.0
+	var n := 0
+	for i in drive.wheels.size():
+		if drive.wheels[i].driven:
+			sum += drive._ratio[i] * drive.wheels[i].omega
+			n += 1
+	return sum / n
+
+
+func test_a_locked_crank_above_a_rigid_coupling_turns_with_its_wheels() -> void:
+	# A light free wheel beside a loaded one (compliance 20:1), under the rigid MFWD centre and under
+	# the rear lock: the coupling settles them on its compliance-weighted mean, and the locked crank
+	# lands there with them, never on their arithmetic mean before it.
+	for mfwd: bool in [true, false]:
+		var spec := _crank_spec()
+		var gd := spec.ground_drive
+		gd.front_axle_engageable = true
+		gd.centre_diff_rigid = true
+		gd.rear_diff_lockable = true
+		var drive := _drive_for(spec)
+		var input := VehicleInput.new()
+		input.fwd_drive = mfwd
+		input.diff_lock = not mfwd
+		drive.drive_omega(gd, input)
+		var dt := _crank_in_d1(spec, Drivetrain.CouplingState.LOCKED, 20.0, 18.0, 1.0)
+		var soft := 0.02
+		var stiff := 0.001
+		_set_spin(drive, [18.0, 18.0, 18.0, 18.0], [soft, soft, stiff, soft if not mfwd else stiff])
+		_set_brakes(drive, [0.0, 0.0, 0.0, 0.0])
+		drive._couple_differentials(gd, input, 0.0, PackedInt32Array(), 0.0, dt)
+		var g := Drivetrain.ratio_for_byte(spec, 1)
+		assert_int(dt.coupling_state).is_equal(Drivetrain.CouplingState.LOCKED)
+		assert_float(dt.rpm / Drivetrain.RADS_TO_RPM / g).is_equal_approx(_shaft_mean(drive), 1e-6)
+
+
+func test_the_falling_root_is_exact_on_a_line_and_finds_a_kinked_one() -> void:
+	var line := func(t: float) -> float: return 3.0 - 0.002 * t
+	assert_float(Differential.falling_root(line, 5000.0)).is_equal_approx(1500.0, 1e-9)
+	# Past the bound the coupling carries its capacity, either way round.
+	assert_float(Differential.falling_root(line, 1000.0)).is_equal(1000.0)
+	var below := func(t: float) -> float: return -3.0 - 0.002 * t
+	assert_float(Differential.falling_root(below, 1000.0)).is_equal(-1000.0)
+	# A flat stretch (a held wheel) between two slopes.
+	var kinked := func(t: float) -> float:
+		return 2.0 - 0.01 * minf(t, 100.0) - 0.0005 * maxf(t - 400.0, 0.0)
+	assert_float(kinked.call(Differential.falling_root(kinked, 1e5))).is_equal_approx(0.0, 1e-9)
+	assert_float(Differential.falling_root(func(_t: float) -> float: return 0.0, 10.0)).is_equal(0.0)
+
+
 func test_a_slipping_coupling_carries_only_its_capacity() -> void:
 	# A weak coupling (0.1x peak) locked onto a wide spread: it carries its rating through the
 	# ratio and the driveline loss, split over the open pair, and no more.
@@ -1749,19 +1960,3 @@ func test_the_wheels_report_abs_and_overrun_slip_to_the_controller() -> void:
 	input.tcs_off = true
 	drive._report_to_controller(spec.ground_drive, input, dt)
 	assert_bool(dt.drag_control).is_false()
-
-
-# --- visual spin: the drawn tread moves at the contact's surface speed ------------
-
-func test_a_bigger_visual_tyre_turns_slower_to_show_the_same_tread_speed() -> void:
-	var r := 0.36
-	var spin := 10.0 / r  # rolling at 10 m/s on the physics radius
-	# Same radius: the physics spin unchanged.
-	assert_float(WheelScript.visual_spin_step(spin, TICK, r, r)).is_equal_approx(spin * TICK, 1e-6)
-	# The tractor's 0.66 m rear: its drawn tread covers exactly the ground the body does.
-	var step := WheelScript.visual_spin_step(spin, TICK, r, 0.66)
-	assert_float(step * 0.66).is_equal_approx(10.0 * TICK, 1e-6)
-	# Its 0.44 m front turns 0.66 / 0.44 = 1.5x the rear's rate.
-	assert_float(WheelScript.visual_spin_step(spin, TICK, r, 0.44) / step).is_equal_approx(1.5, 1e-5)
-	# No visual radius declared: drawn at the physics radius.
-	assert_float(WheelScript.visual_spin_step(spin, TICK, r, 0.0)).is_equal_approx(spin * TICK, 1e-6)

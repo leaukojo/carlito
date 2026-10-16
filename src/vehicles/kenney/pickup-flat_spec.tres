@@ -8,6 +8,7 @@
 script = ExtResource("1_twtdu")
 wheel_positions = PackedVector3Array(-0.6300002, 0.43151963, -0.9390686, 0.6300002, 0.43151963, -0.93906873, -0.6300002, 0.43151963, 0.7649315, 0.6300002, 0.43151963, 0.7649314)
 wheel_radius = 0.36
+tyre_half_width = 0.21
 wheel_scene = ExtResource("2_5hv01")
 rest_length = 0.28
 spring_rate = 25681.0

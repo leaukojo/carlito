@@ -9,6 +9,9 @@ extends RefCounted
 
 ## Spread (rad/s) `braked_coupling_torque` reads as zero at a kink: rounding, not slip.
 const SPREAD_EPS := 1e-12
+## Steps `falling_root` takes at most: a linear spread lands on the first, each kink between the
+## bracket's ends costs a few more.
+const ROOT_STEPS := 40
 
 
 ## Largest coupling torque (N·m) a torque-biasing diff can carry with `input_torque` through it: the
@@ -110,6 +113,44 @@ static func braked_coupling_torque(omega: PackedFloat64Array, compliance: Packed
 	if h_cap > 0.0:
 		return dir * capacity
 	return dir * (prev_s + prev_h / (prev_h - h_cap) * (capacity - prev_s))
+
+
+## The torque `t` (N·m) in [-capacity, capacity] where `spread(t)` (rad/s; continuous,
+## nonincreasing, piecewise linear) reaches zero, or the bound on the side `spread(0)` points to
+## where it never does. For a coupling whose far side settles through solves of its own
+## (`WheelDrive._settled_drive_spin`), so its kinks cannot be listed up front: regula falsi with the
+## Illinois step, exact on a linear spread (one interpolation) and superlinear across kinks.
+static func falling_root(spread: Callable, capacity: float) -> float:
+	var g0: float = spread.call(0.0)
+	if capacity <= 0.0 or absf(g0) <= SPREAD_EPS:
+		return 0.0
+	var dir := signf(g0)
+	var hi := dir * capacity
+	var g_hi: float = spread.call(hi)
+	if g_hi * dir >= 0.0:
+		return hi
+	var lo := 0.0
+	var g_lo := g0
+	var kept := 0  # the end the last step kept: 1 hi, -1 lo
+	var x := 0.0
+	for i in ROOT_STEPS:
+		x = lo + g_lo * (hi - lo) / (g_lo - g_hi)
+		var g: float = spread.call(x)
+		if absf(g) <= SPREAD_EPS:
+			return x
+		if signf(g) == signf(g_lo):
+			lo = x
+			g_lo = g
+			if kept == 1:
+				g_hi *= 0.5
+			kept = 1
+		else:
+			hi = x
+			g_hi = g
+			if kept == -1:
+				g_lo *= 0.5
+			kept = -1
+	return x
 
 
 ## The mean settled spin (rad/s) of a set of outputs with `torque` (N·m, + = forward) shared equally
