@@ -133,7 +133,7 @@ for (const f of docs.filter((d) => /(^|\/)CLAUDE\.md$/.test(d))) {
 }
 
 // Raw lines summed over the top-level docs/*.md (plans/ are temporary). One cap, no per-doc caps.
-const DOCS_LINE_CAP = 3280;
+const DOCS_LINE_CAP = 3285;
 const docsLines = docs.filter((d) => /^docs\/[^/]+\.md$/.test(d))
   .reduce((sum, d) => sum + read(d).replace(/\n$/, '').split('\n').length, 0);
 if (docsLines > DOCS_LINE_CAP) overBudget.push(`  docs/*.md: ${docsLines} lines in total, cap ${DOCS_LINE_CAP}`);

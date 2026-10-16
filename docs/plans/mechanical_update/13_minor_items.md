@@ -51,3 +51,10 @@ or be folded into a bigger brief that touches the same code.
   `test_vehicle_catalog.test_a_steering_taper_never_out_limits_the_tyres`).
 - Defensible (real cars with speed-sensitive steering do similar). No action unless the user wants
   analog input to bypass it.
+
+## 7. The heavy vans' twin rears are not drawn
+
+- `VAN_BASE` runs twin rear tyres (`rear_twin_tyres`, `docs/vehicles.md` § Balance), but the
+  Kenney van bodies render one wheel per rear corner (`WHEEL_DEFAULT`).
+- A twin-rear wheel scene for the vans' rear axle (`wheel_scene_rear`, as the tractor's), measured
+  against the arches. Visual only: physics stays one ray per corner.

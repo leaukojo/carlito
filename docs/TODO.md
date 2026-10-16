@@ -39,3 +39,8 @@ Builds on `docs/vehicles.md` § Crank and coupling, § Converter, § Hill hold, 
   the same speed held in D2 at ~5000 rpm would burn the same. A rule-3 model reads the crank's
   delivered power (torque at `Drivetrain.rpm` times speed) through a brake-specific fuel consumption figure per engine class
   (source a petrol and a diesel BSFC map), labelled an honest model like the other aux systems.
+
+## Code hygiene
+
+- **~55 run-on `.gd` lines**: a lost `\` continuation left tabs mid-line (e.g. `ground_drive_spec.gd`
+  `rear_damper_rebound`). They compile; re-wrap them. Find: `git grep -nP '\S \t{2,}\S' -- '*.gd'`.

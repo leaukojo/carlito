@@ -148,12 +148,16 @@ const GATE_MIN_GEAR_S := 1.0
 ## An upshift lands (road speed, new gear) at least this far over the downshift point at the pedal
 ## it was taken at (`ShiftPolicy.down_rpm`), or the box would hunt back down: the policy's own floor.
 const GATE_LANDING_MARGIN := ShiftPolicy.LANDING_MARGIN
-## The front axle's share of its parked load falls at most this far (in shares, 0.05 = 5 points)
-## past what steady transfer predicts (`_transfer_share`) once the gap is cleared of road resistance,
-## the trace's tick-late acceleration and the pitched pose's steady lean (`_gap_split`'s `over`): the
-## allowance for dynamic overshoot past steady transfer, a damping and link question, independent of
-## the footprint.
+## The front axle's share of its parked load falls past what steady transfer predicts
+## (`_transfer_share`), once the gap is cleared of road resistance, the trace's tick-late
+## acceleration and the pitched pose's steady lean (`_gap_split`'s `over`), by at most what a body
+## damped at GATE_XFER_ZETA overshoots a step of the event's own swing (the steady share's change
+## since the event began), and never less than this floor (in shares, 0.05 = 5 points). So the gate
+## judges damping and the drive's shape; a short, tall body's larger swing is its footprint's.
 const GATE_XFER_GAP := 0.05
+## The reference damping ratio: the low end of the road band (0.3-0.4 of critical, § Pitch). A step
+## overshoots `exp(-ζπ / sqrt(1 - ζ²))` of itself, 37 % here; a ramped drive overshoots less.
+const GATE_XFER_ZETA := 0.3
 ## The pitch-per-g reading averages the launch gear's middle stretch, this share of its time
 ## dropped at each end: the take-up's pitch ring before it, the shift's handover after.
 const PITCH_TRIM := 0.25
@@ -249,6 +253,8 @@ var _st_spin_t := -1.0                ## s into the step the body passed STEP_SP
 var _st_roll_peak := 0.0              ## deg
 var _st_lifted := 0                   ## most wheels off the ground in one tick of the step
 var _st_roll_t := -1.0                ## s into the step the body passed STEP_ROLL_DEG
+var _st_xfer0 := Vector2.ZERO         ## `_axle_transfer` on the step's first tick
+var _st_xfer := Vector2.ZERO          ## `_axle_transfer` summed over the steady tail
 ## `track`: skip the accel/top-speed pass — CI only needs the tracking gate.
 var _track_only := false
 ## `strict`: exit nonzero on a tracking FAIL. Off by default so dev invocation stays a report.
@@ -282,6 +288,7 @@ var _trace_settling := false  ## still on the foot brake before the traced launc
 var _trace_ticks := 0
 var _parked_front := 0.0      ## N on the front axle at the end of the settle
 var _parked_pitch := 0.0      ## deg of body pitch at the end of the settle
+var _parked_kingpin := 0.0    ## N a coupled trailer rests on the hitch at the end of the settle
 var _gate := {}               ## the gates' running state this pass (`_sample_gates`)
 ## `notc`: the accel pass with the body's traction control off, as the bridge's `tcs_off` does.
 var _notc := false
@@ -291,8 +298,13 @@ var _held_gear := 0
 ## anchor run that compares the coupled crank against the wheels' own inertia (NAN: the spec's).
 var _engine_inertia := NAN
 ## `rear_lat_grip=<x>`: the rear side-grip factor overridden the same way, the step pass's probe of
-## a balance lever (NAN: the spec's).
+## a rear tyre's grip (NAN: the spec's).
 var _rear_lat_grip := NAN
+## `bar_rear=<N/m>`: the rear anti-roll bar rate overridden the same way (NAN: the spec's).
+var _bar_rear := NAN
+## `cornering_peak=<x>`: the tyre's cornering-stiffness law (`GroundDriveSpec.cornering_peak_load`)
+## overridden the same way (NAN: the spec's).
+var _cornering_peak := NAN
 ## `pedal=<0..1>`: the accel pass held at this pedal instead of floored (it implies the trace's
 ## settle and gates).
 var _pedal := 1.0
@@ -376,6 +388,8 @@ var _corner_front := 0.0       ## front-axle saturation at the peak
 var _corner_rear := 0.0
 var _corner_slid := false      ## the slip-angle gate tripped at some point
 var _corner_roll := 0.0        ## chassis roll (deg) at the lateral-g peak
+var _corner_xfer0 := Vector2.ZERO  ## `_axle_transfer` as the lock starts winding on
+var _corner_lltd := NAN        ## front share of the lateral load transfer at the peak (`_lltd`)
 var _corner_lifted := 0        ## most wheels off the ground in any one tick of the pass
 var _corner_pedal_i := 0.0     ## integral half of the PI speed hold
 
@@ -429,6 +443,10 @@ func _ready() -> void:
 			_engine_inertia = float(flag.substr(2))
 		elif flag.begins_with("rear_lat_grip="):
 			_rear_lat_grip = float(flag.substr(14))
+		elif flag.begins_with("bar_rear="):
+			_bar_rear = float(flag.substr(9))
+		elif flag.begins_with("cornering_peak="):
+			_cornering_peak = float(flag.substr(15))
 		elif flag.begins_with("pedal="):
 			_pedal = clampf(float(flag.substr(6)), 0.05, 1.0)
 		elif flag == "pulse" or flag.begins_with("pulse="):
@@ -469,9 +487,11 @@ func _ready() -> void:
 			get_tree().quit(1)
 			return
 		if _trace or _notc or _held_gear > 0 or not is_nan(_engine_inertia) \
-				or not is_nan(_rear_lat_grip) or _cruise_probe():
-			printerr("trace / notc / gear= / j= / rear_lat_grip= / pedal= / cruise / kickdown /"
-					+ " pulse change the passes a doc preset tabulates: run them per body")
+				or not is_nan(_rear_lat_grip) or not is_nan(_bar_rear) or not is_nan(_cornering_peak) \
+				or _cruise_probe():
+			printerr("trace / notc / gear= / j= / rear_lat_grip= / bar_rear= / cornering_peak= /"
+					+ " pedal= / cruise /"
+					+ " kickdown / pulse change the passes a doc preset tabulates: run them per body")
 			get_tree().quit(1)
 			return
 		_cruise = _doc == "cruise"  # after the check above: the preset is the cruise probe alone
@@ -567,6 +587,14 @@ func _next_vehicle() -> void:
 		_car.spec = _car.spec.duplicate()
 		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
 		_car.spec.ground_drive.rear_lat_grip = _rear_lat_grip
+	if not is_nan(_bar_rear):
+		_car.spec = _car.spec.duplicate()
+		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
+		_car.spec.ground_drive.anti_roll_rate_rear = _bar_rear
+	if not is_nan(_cornering_peak):
+		_car.spec = _car.spec.duplicate()
+		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
+		_car.spec.ground_drive.cornering_peak_load = _cornering_peak
 	_current["abs"] = _car.spec.ground_drive.abs_equipped
 	add_child(_car)
 	# Strip top is y=0; wheels just touching, no spawn drop onto the springs.
@@ -677,6 +705,8 @@ func _reset_pass(phase: Phase) -> void:
 	_corner_rear = 0.0
 	_corner_slid = false
 	_corner_roll = 0.0
+	_corner_xfer0 = Vector2.ZERO
+	_corner_lltd = NAN
 	_corner_lifted = 0
 	_corner_pedal_i = 0.0
 	_brake_on = false
@@ -725,6 +755,7 @@ func _tick_accel(delta: float) -> void:
 		_trace_settling = false
 		_parked_front = _front_axle_load()
 		_parked_pitch = _car.telemetry.pitch
+		_parked_kingpin = _kingpin_load(0.0)
 		# The clock starts on the pedal: a line at t has had t of floored ticks.
 		_reset_pass(Phase.ACCEL)
 		_drive_accel(_pedal * 100.0)
@@ -856,10 +887,12 @@ func _split_deficit(w: RayWheel, gd: GroundDriveSpec, budget: float, delta: floa
 	var slip_long := w.slip * signf(w.force_long)
 	var budget_lat: float = RayWheel.load_scaled_mu(
 			gd.mu_lat * w.axle_lat_grip * w.surface_grip,
-			w.suspension_force, w.corner_mass * 9.81, gd.load_sensitivity) * w.suspension_force
+			w.suspension_force * w.tyre_share, w.corner_mass * 9.81, gd.load_sensitivity) \
+			* w.suspension_force
 	var curve := RayWheel.combined_slip_force(slip_long,
 			-vel.dot(forward.cross(w.contact_normal)) / slip_denom, budget, budget_lat,
-			gd.grip_curve).x
+			gd.grip_curve, RayWheel.lateral_peak_slip(w.suspension_force * w.tyre_share,
+				w.corner_mass * 9.81, gd.load_sensitivity, gd.cornering_peak_load)).x
 	var capped := curve - w.force_long if absf(curve) > w.long_cap else 0.0
 	_loss["tick_cap"] += capped * delta
 	_loss["under_peak" if w.slip < TcPedal.TARGET_SLIP else "past_peak"] += \
@@ -911,7 +944,7 @@ func _sample_gates() -> void:
 	if _gate.is_empty():
 		_gate = {"open": true, "end": "", "end_t": 0.0, "gear": gear, "since": 0.0, "shifts": [],
 				"dwell_min": INF, "dwell_gear": gear, "limiter": 0, "cut": false, "cuts": [],
-				"gap": {"over": -INF}, "shift_gap": {"over": -INF}, "a_peak": 0.0, "a_peak_t": 0.0, "lifted": 0, "pitch": [],
+				"gap": {"over": -INF}, "shift_gap": {"over": -INF}, "events": [], "a_peak": 0.0, "a_peak_t": 0.0, "lifted": 0, "pitch": [],
 				"h_l": (_car.global_transform * _car.center_of_mass).y
 						/ maxf(_transfer_wheelbase(), 0.01)}
 	_trace_ticks += 1
@@ -974,6 +1007,38 @@ func _sample_gates() -> void:
 				"a": _inst_a, "split": split,
 				"shift": "%s>%s" % [_gear_label(handover["from"]), _gear_label(handover["to"])]
 				if not handover.is_empty() else "a shift cut"}
+	# Each event (the launch, then each shift's settle) is judged on its own swing: the largest step
+	# the steady share has taken within it, as a two-tick mean like `over`. The launch's runs from
+	# parked (1.0). A shift's is the larger of the rise through its handover and cut (from the shift's
+	# tick to its highest) and the fall since, the body still answering the first as the second comes.
+	# Its worst tick is kept.
+	var xfer_mean := 0.5 * (xfer + float(_gate.get("last_xfer", xfer)))
+	_gate["last_xfer"] = xfer
+	if shifted:
+		_gate["shift_lo"] = xfer_mean
+		_gate["shift_hi"] = xfer_mean
+	elif in_shift:
+		_gate["shift_hi"] = maxf(float(_gate.get("shift_hi", xfer_mean)), xfer_mean)
+	if key == "gap" and _inst_a > 0.0 and not is_nan(over):
+		var shifts: Array = _gate["shifts"]
+		var event := "launch" if shifts.is_empty() else "%s>%s" % [
+				_gear_label(shifts[-1]["from"]), _gear_label(shifts[-1]["to"])]
+		var events: Array = _gate["events"]
+		if events.is_empty() or events[-1]["event"] != event:
+			var launch := shifts.is_empty()
+			events.append({"event": event, "margin": -INF, "peak": {"over": -INF},
+					"hi": 1.0 if launch else float(_gate.get("shift_hi", xfer_mean)),
+					"lo": 1.0 if launch else float(_gate.get("shift_lo", xfer_mean))})
+		var e: Dictionary = events[-1]
+		var hi := float(e["hi"])
+		var swing := maxf(hi - float(e["lo"]), hi - xfer_mean)
+		var allowance := maxf(GATE_XFER_GAP, _step_overshoot(GATE_XFER_ZETA) * swing)
+		var tick := {"over": over, "allowance": allowance, "t": _t}
+		if over - allowance > float(e["margin"]):
+			e["margin"] = over - allowance
+			e["worst"] = tick
+		if over > float(e["peak"]["over"]):
+			e["peak"] = tick
 	# The launch gear's stretch, for the pitch-per-g reading: t, pitch over parked, predicted, a.
 	if (_gate["shifts"] as Array).is_empty():
 		(_gate["pitch"] as Array).append(Vector4(_t, _car.telemetry.pitch - _parked_pitch,
@@ -1062,11 +1127,23 @@ func _print_gates() -> void:
 	_gate_line.callv(["landing"] + _landing_gate(shifts, spec))
 	_gate_line.callv(["hunting"] + _hunting_gate(shifts))
 	var gap: Dictionary = _gate["gap"]
-	_gate_line("front axle", int(_gate["lifted"]) == 0 and float(gap["over"]) <= GATE_XFER_GAP,
-			"%s, lifted %d ticks; allowance %.0f points" % [_gap_label(gap), _gate["lifted"],
+	var events: Array[String] = []
+	var within := true
+	for e: Dictionary in _gate["events"]:
+		var over := float(e["margin"]) > 0.0
+		within = within and not over
+		var tick: Dictionary = e["worst"] if over else e["peak"]
+		events.append("%s %.1f of %.1f at %.2f s%s" % [e["event"], float(tick["over"]) * 100.0,
+				float(tick["allowance"]) * 100.0, tick["t"], " OVER" if over else ""])
+	_gate_line("front axle", int(_gate["lifted"]) == 0 and within,
+			"%s, lifted %d ticks; allowance %.0f %% of each event's swing, at least %.0f points" % [
+			_gap_label(gap), _gate["lifted"], _step_overshoot(GATE_XFER_ZETA) * 100.0,
 			GATE_XFER_GAP * 100.0])
 	if gap.has("split"):
 		print("  %-13s : %s (the peak tick's)" % ["  front split", _split_label(gap["split"])])
+	if not events.is_empty():
+		print("  %-13s : %s (points of overshoot against that tick's allowance: each event's peak, or its worst tick when OVER)"
+				% ["  per event", ", ".join(events)])
 	var shift_gap: Dictionary = _gate["shift_gap"]
 	if not is_inf(float(shift_gap["over"])):
 		# Not a gate: § The shift policy owns it.
@@ -1075,6 +1152,11 @@ func _print_gates() -> void:
 	print("  %-13s : peak acceleration %.2f g at %.2f s" % ["  front why",
 			float(_gate["a_peak"]) / 9.81, _gate["a_peak_t"]])
 	_print_pitch()
+
+
+## The share of a step a second-order body damped at `zeta` (0..1) overshoots it by.
+static func _step_overshoot(zeta: float) -> float:
+	return exp(-zeta * PI / sqrt(1.0 - zeta * zeta))
 
 
 ## "8 points of overshoot (two-tick mean) at 2.25 s (that tick: 12 under steady transfer, 49 % of
@@ -1240,11 +1322,30 @@ func _transfer_moment(a: float) -> float:
 
 ## A coupled hitch's height over the strip (m), or -1 with nothing coupled.
 func _hitch_y() -> float:
+	var host := _coupled_host()
+	return (_car.global_transform * host.marker_local()).y if host != null else -1.0
+
+
+## The coupled hitch, or null with nothing coupled.
+func _coupled_host() -> TowHost:
 	for node in _car.find_children("*", "", true, false):
 		var host := node as TowHost
 		if host != null and host.is_coupled():
-			return (_car.global_transform * host.marker_local()).y
-	return -1.0
+			return host
+	return null
+
+
+## N a coupled trailer rests on the hitch, off the trailer's own vertical balance: its mass times
+## `g` plus its COM's vertical acceleration `z_accel` (m/s²), less what its own wheels carry. 0 with
+## nothing coupled.
+func _kingpin_load(z_accel: float) -> float:
+	var host := _coupled_host()
+	if host == null or host.trailer == null:
+		return 0.0
+	var rests := host.trailer.mass * (9.81 + z_accel)
+	for w in host.trailer.wheels:
+		rests -= w.suspension_force
+	return rests
 
 
 ## Body pitch (deg, + = nose up) that steady transfer at `a` sets on the springs: the transfer
@@ -1282,16 +1383,19 @@ func _front_axle_load() -> float:
 
 
 ## The body's motion `_gap_split` differentiates: velocity of the COM (and its vertical part), pitch
-## rate (+ = nose up), each wheel's tyre force (the next tick's link force reads it), and the pose:
-## the COM and the level heading.
+## rate (+ = nose up), each wheel's tyre force (the next tick's link force reads it), the pose (the
+## COM and the level heading), and a coupled trailer's vertical velocity.
 func _body_kinematics() -> Dictionary:
 	var body := _car.global_transform.basis
 	var force_long := PackedFloat32Array()
 	for w in _car.wheels:
 		force_long.append(w.force_long)
+	var host := _coupled_host()
 	return {"vel": _car.linear_velocity, "vy": _car.linear_velocity.y,
 			"w": _car.angular_velocity.dot(body.x), "force_long": force_long, "com": _car.global_transform * _car.center_of_mass,
-			"ahead": Vector3(-body.z.x, 0.0, -body.z.z).normalized()}
+			"ahead": Vector3(-body.z.x, 0.0, -body.z.z).normalized(),
+			"trailer_vy": host.trailer.linear_velocity.y if host != null and host.trailer != null
+					else 0.0}
 
 
 ## The `front axle` gap taken apart, in shares of the parked load. This tool ticks before its child
@@ -1307,8 +1411,10 @@ func _body_kinematics() -> Dictionary:
 ## - `lean`: `Σ N d / L`, each load's patch `d` ahead of where its station puts it. A patch stays
 ##   under its hub (`RayWheel.patch_offset`), so a pitched body moves it by the COM's height less
 ##   the radius times the angle: the pitched pose's steady geometry;
-## - `residual`: the rest, ~0 when the terms above are the whole story (a trailer's kingpin load
-##   moving as it pitches is not among them).
+## - `kingpin` (coupled only): `-ΔV e / L`, the load a trailer rests on the hitch (`_kingpin_load`)
+##   moved off its parked figure, at `e` ahead of the rear stations. Not taken out of `over`: it is
+##   part steady (the trailer's own transfer) and part the trailer's pitch;
+## - `residual`: the rest, ~0 when the terms above are the whole story.
 ## `over`: the overshoot, the gap less resistance, lag and lean (the gate takes a two-tick mean).
 ## Also the front axle's own split (N): spring, damper (the remainder), bar, link.
 func _gap_split(kin: Dictionary, prev: Dictionary, gap: float) -> Dictionary:
@@ -1343,7 +1449,7 @@ func _gap_split(kin: Dictionary, prev: Dictionary, gap: float) -> Dictionary:
 		if not is_equal_approx(w.anchor.z, front_z) or not w.in_contact:
 			continue
 		var spring := w.spring_rate * w.compression
-		var bar := w.bar_force(_car.spec.ground_drive.anti_roll_rate)
+		var bar := w.bar_force(w.bar_rate)
 		var link := w.link_slope * prev_long[i]
 		front["spring"] += spring
 		front["bar"] += bar
@@ -1364,6 +1470,11 @@ func _gap_split(kin: Dictionary, prev: Dictionary, gap: float) -> Dictionary:
 		"pitch": -i_pitch * (float(kin["w"]) - float(prev["w"])) / delta * per_moment,
 		"lean": lean * per_moment,
 	}
+	var host := _coupled_host()
+	if host != null:
+		var z_accel := (float(kin["trailer_vy"]) - float(prev["trailer_vy"])) / delta
+		var ahead_of_rears := front_z + wheelbase - host.marker_local().z
+		terms["kingpin"] = -(_kingpin_load(z_accel) - _parked_kingpin) * ahead_of_rears * per_moment
 	var residual := gap
 	for term: String in terms:
 		residual -= float(terms[term])
@@ -1497,6 +1608,7 @@ func _tick_cornering(delta: float) -> void:
 		if speed >= _corner_speed:
 			_corner_ramping = true
 			_corner_pedal_i = CORNER_PEDAL_START
+			_corner_xfer0 = _axle_transfer()
 		elif _t >= _seconds:
 			print("  %-13s : never reached %.0f km/h, skipped"
 					% ["cornering", _corner_speed * 3.6])
@@ -1521,19 +1633,22 @@ func _tick_cornering(delta: float) -> void:
 		_corner_front = _axle_saturation(false)
 		_corner_rear = _axle_saturation(true)
 		_corner_roll = absf(VehicleMath.roll_deg(_car.global_transform.basis))
+		_corner_lltd = _lltd(_axle_transfer() - _corner_xfer0)
 	if _corner_ramp_t >= CORNER_RAMP_S or _t >= _seconds:
 		_report_cornering(false)
 
 
-## Mean share of the friction ellipse each of one axle's contacts uses,
-## `|(force_long / long budget, force_lat / lat budget)|`, 1.0 being a saturated tyre: a driven
-## wheel's drive spends the budget its side grip would use (`RayWheel.combined_slip_force`). The
-## budgets are rebuilt through `RayWheel.load_scaled_mu` rather than stored on the wheel, so the
-## reading cannot drift away from the law the sim actually applied.
+## Share of the friction ellipse one axle's contacts use, each tyre's
+## `|(force_long / long budget, force_lat / lat budget)|` weighted by its side budget, 1.0 being a
+## saturated axle: a driven wheel's drive spends the budget its side grip would use
+## (`RayWheel.combined_slip_force`). The weight keeps an inner wheel unloaded to ~0 N from halving
+## the reading while its partner carries the axle. The budgets are rebuilt through
+## `RayWheel.load_scaled_mu` rather than stored on the wheel, so the reading cannot drift away from
+## the law the sim actually applied.
 func _axle_saturation(rear: bool) -> float:
 	var gd: GroundDriveSpec = _car.spec.ground_drive
 	var total := 0.0
-	var n := 0
+	var weight := 0.0
 	for w in _car.wheels:
 		if w.is_rear != rear or not w.in_contact:
 			continue
@@ -1541,11 +1656,11 @@ func _axle_saturation(rear: bool) -> float:
 		var budget_long := _long_budget(w, gd)
 		var budget_lat: float = RayWheel.load_scaled_mu(
 				gd.mu_lat * w.axle_lat_grip * w.surface_grip,
-				w.suspension_force, ref_load, gd.load_sensitivity) * w.suspension_force
+				w.suspension_force * w.tyre_share, ref_load, gd.load_sensitivity) * w.suspension_force
 		total += Vector2(w.force_long / maxf(budget_long, 1.0),
-				w.force_lat / maxf(budget_lat, 1.0)).length()
-		n += 1
-	return total / maxf(float(n), 1.0)
+				w.force_lat / maxf(budget_lat, 1.0)).length() * budget_lat
+		weight += budget_lat
+	return total / maxf(weight, 1.0)
 
 
 ## A contact's longitudinal grip budget (N): load-scaled `mu_long` times its spring load.
@@ -1567,12 +1682,15 @@ func _report_cornering(skipped: bool) -> void:
 	print("  %-13s : peak %.2f m/s^2 (%.2f g) at %.0f km/h; %s saturates first"
 			% ["cornering", _corner_peak, _corner_peak / 9.81, _corner_speed * 3.6, axle]
 			+ " (front %.2f, rear %.2f)%s" % [_corner_front, _corner_rear, note])
-	print("  %-13s : roll %.1f deg at the peak, up to %d wheel(s) off the ground%s"
-			% ["", _corner_roll, _corner_lifted,
-			"  <-- OVERTURNED" if _car.is_overturned() else ""])
+	var model := BalanceModel.axles(_car.spec)
+	print(("  %-13s : roll %.1f deg at the peak (pred %.1f), front %s (pred %s) of the load transfer,"
+			+ " up to %d wheel(s)") % ["", _corner_roll,
+			BalanceModel.roll_deg(model, _corner_peak / 9.81), _pct(_corner_lltd),
+			_pct(BalanceModel.lltd(model)), _corner_lifted]
+			+ " off the ground%s" % ("  <-- OVERTURNED" if _car.is_overturned() else ""))
 	_current["cornering"] = {"skipped": false, "peak": _corner_peak, "speed_kmh": _corner_speed * 3.6,
 			"peak_g": _corner_peak / 9.81, "front": _corner_front, "rear": _corner_rear,
-			"axle": axle, "slid": _corner_slid, "roll_deg": _corner_roll,
+			"axle": axle, "slid": _corner_slid, "roll_deg": _corner_roll, "lltd": _corner_lltd,
 			"wheels_lifted": _corner_lifted, "overturned": _car.is_overturned()}
 	_after_lateral_passes()
 
@@ -1980,6 +2098,10 @@ func _start_step() -> void:
 	_current["step"] = []
 	var probe := "" if is_nan(_rear_lat_grip) \
 			else ", rear_lat_grip %.2f (not the spec's)" % _rear_lat_grip
+	if not is_nan(_bar_rear):
+		probe += ", bar_rear %.0f N/m (not the spec's)" % _bar_rear
+	if not is_nan(_cornering_peak):
+		probe += ", cornering_peak %.2f (not the spec's)" % _cornering_peak
 	print("=== %s (%s), step steer%s ===" % [_variant, _drive_label(_car.spec), probe])
 	_next_step_run()
 
@@ -2006,6 +2128,7 @@ func _next_step_run() -> void:
 	_st_roll_peak = 0.0
 	_st_lifted = 0
 	_st_roll_t = -1.0
+	_st_xfer = Vector2.ZERO
 	MeasureRig.drive(100.0, 0.0)
 
 
@@ -2038,6 +2161,7 @@ func _tick_step(delta: float) -> void:
 			_st_stage = Step.STEPPED
 			_st_t = 0.0
 			_st_run["v0_kmh"] = v_long * 3.6
+			_st_xfer0 = _axle_transfer()
 			if not _current.has("yaw_index"):
 				_current["yaw_index"] = _yaw_index()
 				var yi: Dictionary = _current["yaw_index"]
@@ -2067,6 +2191,7 @@ func _tick_step(delta: float) -> void:
 				angle += absf(w.steer_angle)
 				n += 1
 		_st_tail += Vector3(v_long, angle / maxf(n, 1), 1.0)
+		_st_xfer += _axle_transfer()
 	if _st_t >= STEP_HOLD_S:
 		_report_step_run(delta)
 		_next_step_run()
@@ -2113,9 +2238,23 @@ func _report_step_run(delta: float) -> void:
 	r["of_neutral"] = steady / neutral if neutral > 0.0 else 0.0
 	r["rise_s"] = rise
 	r["overshoot"] = peak / steady - 1.0 if steady > 0.0 else 0.0
-	print(("  %-26s : steady %.1f deg/s (%.2f g), %.2f of neutral; rise %.2f s, overshoot %.0f %%,"
-			+ " slip peak %.1f deg, %s") % [label, r["steady_dps"], r["lat_g"], r["of_neutral"], rise,
-			r["overshoot"] * 100.0, _st_slip_peak, tilt])
+	r["lltd"] = _lltd(_st_xfer / maxf(_st_tail.z, 1.0) - _st_xfer0)
+	# Understeer gradient off the steady tail: the steer past the neutral `L r / v` per g of side
+	# force. Held runs only: a lifted run slows through its tail, so it is never steady.
+	r["k_dpg"] = NAN
+	if not r["lifted"] and r["lat_g"] > 0.01:
+		r["k_dpg"] = rad_to_deg((delta_mean - _wheelbase() * steady / v_mean) / r["lat_g"])
+	# BalanceModel's prediction beside each, off the live spec (a probe flag included) and the live
+	# yaw tensor (Jolt's own where the spec declares none).
+	var model := BalanceModel.axles(_car.spec)
+	if not model.is_empty():
+		model["yaw_inertia"] = (_current["yaw_index"] as Dictionary)["iyy"]
+	var k := "" if is_nan(r["k_dpg"]) else "K %.2f deg/g (pred %.2f), " \
+			% [r["k_dpg"], BalanceModel.understeer_gradient(model, r["lat_g"], v_mean)]
+	print(("  %-26s : steady %.1f deg/s (%.2f g), %.2f of neutral; %sfront %s (pred %s) of the load"
+			+ " transfer; rise %.2f s, overshoot %.0f %%, slip peak %.1f deg, %s") % [label,
+			r["steady_dps"], r["lat_g"], r["of_neutral"], k, _pct(r["lltd"]),
+			_pct(BalanceModel.lltd(model)), rise, r["overshoot"] * 100.0, _st_slip_peak, tilt])
 	_current["step"].append(r)
 
 
@@ -2124,6 +2263,31 @@ func _report_step_run(delta: float) -> void:
 func _wheelbase() -> float:
 	var ax := BrakeSizing.axle_geometry(_car.spec)
 	return maxf(float(ax["rear_z"]) - float(ax["front_z"]), 1e-3)
+
+
+## Each axle group's left-minus-right load (N; x the front, y the rear axles), off the springs'
+## `suspension_force`: the whole load each corner carries, bar and links included.
+func _axle_transfer() -> Vector2:
+	var d := Vector2.ZERO
+	for w in _car.wheels:
+		var f: float = w.suspension_force * (1.0 if w.anchor.x < 0.0 else -1.0)
+		if w.is_rear:
+			d.y += f
+		else:
+			d.x += f
+	return d
+
+
+## The front axles' share of a lateral load transfer `change` (`_axle_transfer` now less before):
+## the roll-stiffness split's reading (LLTD). NAN when the change is too small to share out.
+static func _lltd(change: Vector2) -> float:
+	var total := change.x + change.y
+	return change.x / total if absf(total) > 1.0 else NAN
+
+
+## "58 %", or "-" for NAN.
+static func _pct(share: float) -> String:
+	return "-" if is_nan(share) else "%.0f %%" % (share * 100.0)
 
 
 ## The yaw dynamic index k² / (a·b) the body runs with, off the live tensor: the moment about the
@@ -2487,10 +2651,13 @@ func _steer_table() -> Array[String]:
 			+ " (last %.1f s) over neutral steer `v * delta / L` (under 1 understeers), the rise to"
 			+ " %.0f %% of it, the overshoot past it, `(n up)` with wheels lifted; `spun` past %.0f deg"
 			+ " of body slip, `rolled` past %.0f deg off vertical. The body's yaw dynamic index"
-			+ " k² / (a·b) beside its name.") % [DocRegion.measured(), _seconds, STEP_HOLD_S,
-			STEP_STEADY_S, STEP_RISE * 100.0, STEP_SPIN_DEG, STEP_ROLL_DEG])
-	var head := "| Body | km/h |"
-	var rule := "| --- | --- |"
+			+ " k² / (a·b) beside its name. `K` is the understeer gradient off the smallest held step"
+			+ " (`(delta - L r / v)` per g of side force; linear only at low g, so read it with its g),"
+			+ " beside the front axles' share of the lateral load transfer (LLTD).")
+			% [DocRegion.measured(), _seconds, STEP_HOLD_S, STEP_STEADY_S, STEP_RISE * 100.0,
+			STEP_SPIN_DEG, STEP_ROLL_DEG])
+	var head := "| Body | km/h | K at %.0f %% held, LLTD |" % STEP_LOCKS[0]
+	var rule := "| --- | --- | --- |"
 	for lock in STEP_LOCKS:
 		head += " %.0f %% lock, held / lifted |" % lock
 		rule += " --- |"
@@ -2505,13 +2672,23 @@ func _steer_table() -> Array[String]:
 			var pair: Array = by_lock.get_or_add(r["lock"], ["-", "-"])
 			pair[1 if r["lifted"] else 0] = _step_cell(r)
 		for kmh in rows:
-			var cells: Array[String] = []
+			var cells: Array[String] = [_k_cell(e["step"], kmh)]
 			for lock in STEP_LOCKS:
 				var pair: Array = (rows[kmh] as Dictionary).get(lock, ["-", "-"])
 				cells.append("%s / %s" % pair)
 			lines.append("| %s | %.0f | %s |" % [label, kmh, " | ".join(cells)])
 			label = ""
 	return lines
+
+
+## "1.42 deg/g at 0.21 g, 58 %": K and LLTD off the smallest held step at `kmh`.
+static func _k_cell(runs: Array, kmh: float) -> String:
+	for r: Dictionary in runs:
+		if r["kmh"] == kmh and r["lock"] == STEP_LOCKS[0] and not r["lifted"]:
+			if is_nan(float(r.get("k_dpg", NAN))):
+				return "-"
+			return "%.2f deg/g at %.2f g, %s" % [r["k_dpg"], r["lat_g"], _pct(r["lltd"])]
+	return "-"
 
 
 ## "0.86, 0.42 s, +6 %": one step run's table cell.

@@ -5,6 +5,7 @@ extends GdUnitTestSuite
 
 const RouterScript := preload("res://src/input/input_router.gd")
 const BridgeSourceScript := preload("res://src/input/sources/bridge_source.gd")
+const PadSourceScript := preload("res://src/input/sources/pad_source.gd")
 const BodyScript := preload("res://src/vehicles/truck/refuse_body.gd")
 
 const GEAR_N := 0x00
@@ -21,6 +22,20 @@ static func _intent(d: Dictionary) -> Dictionary[StringName, Variant]:
 	for k: StringName in d:
 		out[k] = d[k]
 	return out
+
+
+## A pad at rest. A router polls every connected joypad (PadSource), so one built bare reads
+## whatever controller sits on the machine running the suite.
+class _IdlePad extends PadSourceScript:
+	func poll() -> Dictionary[StringName, Variant]:
+		return {}
+
+
+## A router on an idle pad (`_IdlePad`): every router a test here builds.
+func _router() -> Node:
+	var router: Node = auto_free(RouterScript.new())
+	router._pad_source = _IdlePad.new()
+	return router
 
 
 func _raw(accel := 0.0, brake_reverse := 0.0, steer := 0.0, handbrake := 0.0) -> Dictionary:
@@ -217,7 +232,7 @@ func test_automatic_bridge_reads_the_gear_as_a_direction() -> void:
 
 
 func test_the_router_gearbox_mode_reaches_bridge_arbitration() -> void:
-	var router: Node = auto_free(RouterScript.new())
+	var router := _router()
 	router._bridge_source = _LiveBridge.new()
 	router._physics_process(1.0 / 60.0)
 	assert_bool(router.get_vehicle_input().gear_auto).is_true()
@@ -830,7 +845,7 @@ func test_the_node_fail_edge_survives_merge_local() -> void:
 
 
 func test_a_new_body_clears_the_node_failure_but_not_the_other_toggles() -> void:
-	var router: Node = auto_free(RouterScript.new())
+	var router := _router()
 	add_child(router)
 	router._node_fail = 0b0010
 	router._pto = true
@@ -879,7 +894,7 @@ func test_the_autopilot_edge_survives_merge_local() -> void:
 
 func test_a_new_body_clears_the_autopilot() -> void:
 	# A new hull must not spawn with an engaged pilot steering to the last boat's course.
-	var router: Node = auto_free(RouterScript.new())
+	var router := _router()
 	add_child(router)
 	router._nav_mode = 1
 	router.register_vehicle(null)
@@ -976,7 +991,7 @@ class _IdleBridge extends BridgeSourceScript:
 
 
 func test_the_local_path_holds_the_brake_at_a_standstill_and_the_bridge_creeps() -> void:
-	var router: Node = auto_free(RouterScript.new())
+	var router := _router()
 	var body: _RollingBody = auto_free(_RollingBody.new())
 	router.register_vehicle(body)
 	router._physics_process(1.0 / 60.0)
@@ -1015,7 +1030,7 @@ class _BothPedalsBridge extends BridgeSourceScript:
 
 
 func test_the_router_cuts_the_throttle_once_a_braked_body_creeps() -> void:
-	var router: Node = auto_free(RouterScript.new())
+	var router := _router()
 	router._bridge_source = _BothPedalsBridge.new()
 	var body: _RollingBody = auto_free(_RollingBody.new())
 	router.register_vehicle(body)
@@ -1046,7 +1061,7 @@ class _QuietBridge extends BridgeSourceScript:
 
 ## Kept out of the tree so no real physics tick runs between the steps a test makes by hand.
 func _locked_router(touch: _CountingTouch) -> Node:
-	var router: Node = auto_free(RouterScript.new())
+	var router := _router()
 	router._dev_keys = false
 	router.set_touch_source(touch)
 	router.set_bridge_only(true)
@@ -1115,7 +1130,7 @@ func test_drive_sourced_is_the_presence_of_a_driving_control() -> void:
 
 func test_a_quiet_bridge_hands_the_driving_group_to_local() -> void:
 	var touch := _CountingTouch.new()
-	var router: Node = auto_free(RouterScript.new())
+	var router := _router()
 	router.set_touch_source(touch)
 	router._bridge_source = _QuietBridge.new()
 	router._physics_process(1.0 / 60.0)
@@ -1175,7 +1190,7 @@ class _EveryEdgeTouch extends RefCounted:
 func test_fallback_advances_only_the_driving_toggles() -> void:
 	# A PTO or flight-mode edge the bridge still owns must not latch unseen and apply the moment
 	# the bridge goes away.
-	var router: Node = auto_free(RouterScript.new())
+	var router := _router()
 	router.set_touch_source(_EveryEdgeTouch.new())
 	router._bridge_source = _QuietBridge.new()
 	router._physics_process(1.0 / 60.0)

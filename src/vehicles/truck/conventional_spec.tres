@@ -98,6 +98,7 @@ efficiency = 0.9
 engine_brake_frac = 0.15
 engine_friction_frac = 0.05
 shift_cut_s = 0.4
+shift_torque_ramp_s = 0.3
 engine_inertia = 3.0
 coupling = 1
 clutch_reserve = 2.0

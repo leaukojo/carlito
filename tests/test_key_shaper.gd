@@ -146,7 +146,7 @@ func test_the_softening_steps_cycle_through_raw_to_the_full_model() -> void:
 
 
 func test_the_router_applies_its_softening_to_the_keys() -> void:
-	var router: Node = auto_free(RouterScript.new())
+	var router := _router()
 	assert_float(router.key_softening()).is_equal(Shaper.DEFAULT_SOFTENING)
 	router.set_key_softening(0.0)
 	_key(KEY_D, true)
@@ -158,9 +158,17 @@ func test_the_router_applies_its_softening_to_the_keys() -> void:
 
 # --- the router wiring -------------------------------------------------------------------
 
+## A router on an idle pad (`_StubPad` holding nothing). A router polls every connected joypad
+## (PadSource), so one built bare reads whatever controller sits on the machine running the suite.
+func _router() -> Node:
+	var router: Node = auto_free(RouterScript.new())
+	router._pad_source = _StubPad.new()
+	return router
+
+
 ## A router running the full hand-and-foot model, whose timings these asserts read.
 func _full_router() -> Node:
-	var router: Node = auto_free(RouterScript.new())
+	var router := _router()
 	router.set_key_softening(1.0)
 	return router
 
@@ -261,7 +269,7 @@ func test_the_steer_slows_with_the_speed_the_body_steers_wheels_at() -> void:
 
 
 func test_the_bridge_is_never_shaped() -> void:
-	var router: Node = auto_free(RouterScript.new())
+	var router := _router()
 	router._bridge_source = _LiveBridge.new()
 	router._physics_process(TICK)
 	var out: VehicleInput = router.get_vehicle_input()
@@ -271,7 +279,7 @@ func test_the_bridge_is_never_shaped() -> void:
 
 
 func test_shaping_starts_over_when_the_bridge_hands_back_and_on_a_new_body() -> void:
-	var router: Node = auto_free(RouterScript.new())
+	var router := _router()
 	router.set_touch_source(_GasAndStickTouch.new())
 	for _i in 30:
 		router._physics_process(TICK)
@@ -311,7 +319,7 @@ class _FastCar extends Node3D:
 
 
 func test_the_pad_stick_and_trigger_pass_straight_through() -> void:
-	var router: Node = auto_free(RouterScript.new())
+	var router := _router()
 	router.register_vehicle(auto_free(_FastCar.new()))
 	var pad := _StubPad.new()
 	pad.vals = {&"steer": 1.0, &"accel": 1.0}

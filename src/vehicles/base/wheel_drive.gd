@@ -125,7 +125,7 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 		wheels.append(wheel)
 	_coupling.resize(wheels.size())
 	_lock_coupling.resize(wheels.size())
-	if gd.anti_roll_rate > 0.0:
+	if gd.has_anti_roll_bar():
 		RayWheel.pair_axles(wheels)
 	_wheelbase = _compute_wheelbase()
 	_brake_front = gd.axle_brake_torque(false)

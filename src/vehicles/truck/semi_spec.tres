@@ -36,7 +36,11 @@
 ; are I-Shift's, but a skip needs a light upshift at 2310 rpm or more, past the 2080 redline, so on
 ; this six-speed it never fires (it waits on real gear counts, docs/TODO.md). The shift's inertia
 ; phase spans 0.4 s, inside the shift cut (an estimate: no AMT figure found): the clutch brings the
-; unfuelled crank down to the new gear at that rate instead of at its 4616 Nm rating.
+; unfuelled crank down to the new gear at that rate instead of at its 4616 Nm rating. Once the
+; clutch has locked and the cut ends, the fuel comes back over shift_torque_ramp_s 0.3 s, as an AMT
+; ramps the engine's torque back after engagement (an estimate: no ramp-in figure found; Eaton's
+; zero-torque dwell before disengagement is 150-300 ms, US 6,406,403). Stepped back in one tick,
+; the drive rings the cab in pitch (docs/vehicles.md § Pitch).
 ;
 ; WHAT BOUNDS 2308 Nm IS TRACTION. Gear 1 puts 2308 x 6.5 x 2.925 x 0.9 / 0.36 = 110 kN at the tyres
 ; against ~66 kN of coupled drive-axle grip (92 kN of axle load x mu 0.80 x the 0.90
@@ -106,6 +110,12 @@
 ; lets the two bodies roll only +-1.5 deg apart, so a tractor that leans further than its trailer
 ; twists the trailer over through it (at 240000 the flatbed's trailer lifted at 0.42 g, here 0.50).
 ; It also holds the bobtail flat enough to slide (~0.55 g) before it lifts a wheel in a steady turn.
+;
+; COMPROMISE: cornering_peak_load stays 0 (off) on the semis and their trailers, where the Kenney
+; trucks run the truck tyre's 3.33. On, the tractor builds side force faster and out-leans its
+; trailer: the 40 km/h full-lock step lifts the flatbed's trailer at 0.41 g (off: never) and every
+; other trailer 0.003-0.013 g earlier. Undoing it means re-sizing this bar with the law on, then
+; re-measuring every rollover row (docs/heavy_vehicles.md § Truck sizing).
 ;
 ; THE SPRINGS ARE SIZED PER AXLE: the rear carries the fifth-wheel load as well as its own, and the
 ; drive axle is the ONLY driven axle, so what the plate puts on it (kingpin_share, a 25-30 % band
@@ -195,6 +205,7 @@ efficiency = 0.9
 engine_brake_frac = 0.15
 engine_friction_frac = 0.05
 shift_cut_s = 0.4
+shift_torque_ramp_s = 0.3
 engine_inertia = 3.0
 coupling = 1
 clutch_reserve = 2.0

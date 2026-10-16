@@ -56,6 +56,9 @@ var speed_cap_kmh := 0.0
 var drive_inhibit := false
 ## Ticks left in the post-shift throttle cut (`spec.shift_cut_s`), 0 when driving through.
 var _shift_cut_ticks := 0
+## The fuel's ceiling after a shift cut, 0..1 (`torque_restore_step`): 0 through the cut, rising
+## back to 1 over `spec.shift_torque_ramp_s`.
+var _torque_restore := 1.0
 ## The shift policy's state (`ShiftPolicy`), the gearbox's own: seconds since the gear byte last
 ## changed (the dwell's clock), and a kickdown armed and waiting on the dwell.
 var _gear_s := 0.0
@@ -691,6 +694,17 @@ func shift_cut_active() -> bool:
 	return _shift_cut_ticks > 0
 
 
+## One tick of the fuel's ceiling after a shift cut (`spec.shift_torque_ramp_s`): 0 while `cutting`,
+## then rising linearly to 1 over the ramp; 1 with no ramp. A ceiling only: it never adds fuel.
+static func torque_restore_step(p_spec: VehicleSpec, current: float, cutting: bool,
+		delta: float) -> float:
+	if p_spec.shift_torque_ramp_s <= 0.0:
+		return 1.0
+	if cutting:
+		return 0.0
+	return move_toward(current, 1.0, delta / p_spec.shift_torque_ramp_s)
+
+
 ## Ticks a shift cut lasts at this tick length: whole ticks, rounded up, 0 for no cut.
 static func shift_cut_ticks(cut_s: float, delta: float) -> int:
 	if cut_s <= 0.0 or delta <= 0.0:
@@ -803,6 +817,8 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 	if on_limiter:
 		applied_throttle = 0.0
 	# The shift cut is a lift: no fuel, and it rides applied_throttle so telemetry reads it.
+	_torque_restore = torque_restore_step(spec, _torque_restore, _shift_cut_ticks > 0, delta)
+	applied_throttle = minf(applied_throttle, _torque_restore)
 	if _shift_cut_ticks > 0:
 		_shift_cut_ticks -= 1
 		applied_throttle = 0.0
@@ -894,6 +910,8 @@ func _process_crank(delta: float, throttle: float, drive_wheel_omega: float,
 			fuel = 0.0
 	on_limiter = running and (limiter_cut(spec, rpm) or _landed)
 	_landed = false
+	_torque_restore = torque_restore_step(spec, _torque_restore, _shift_cut_ticks > 0, delta)
+	fuel = minf(fuel, _torque_restore)
 	if _shift_cut_ticks > 0:
 		_shift_cut_ticks -= 1
 		fuel = 0.0

@@ -150,12 +150,17 @@ var long_cap_mass := INF
 var spring_rate := 0.0
 var damper_bump := 0.0
 var damper_rebound := 0.0
+## This axle's anti-roll bar rate (`GroundDriveSpec.rear_anti_roll_rate` at the rear).
+var bar_rate := 0.0
 ## This axle's link geometry, signed so `link_slope * force_long` is the link force along the
 ## contact normal: `GroundDriveSpec.anti_squat_slope` at the rear, `-anti_dive_slope` at the front.
 var link_slope := 0.0
 ## This axle's side-grip multiple on `mu_lat`: `GroundDriveSpec.rear_lat_grip` at the rear, 1 at
 ## the front.
 var axle_lat_grip := 1.0
+## The share of this corner's load one of its tyres carries, which the side grip and the
+## cornering-stiffness law read: 0.5 on a twin rear (`GroundDriveSpec.rear_twin_tyres`), else 1.
+var tyre_share := 1.0
 
 var _prev_compression := 0.0
 ## Contact-patch deflection (m; x along the wheel's forward, y along its side), the static-friction
@@ -198,8 +203,10 @@ func apply_suspension(gd: GroundDriveSpec) -> void:
 	spring_rate = gd.rear_spring_rate() if is_rear else gd.spring_rate
 	damper_bump = gd.rear_damper_bump() if is_rear else gd.damper_bump
 	damper_rebound = gd.rear_damper_rebound() if is_rear else gd.damper_rebound
+	bar_rate = gd.rear_anti_roll_rate() if is_rear else gd.anti_roll_rate
 	link_slope = gd.anti_squat_slope if is_rear else -gd.anti_dive_slope
 	axle_lat_grip = gd.rear_lat_grip if is_rear else 1.0
+	tyre_share = 0.5 if is_rear and gd.rear_twin_tyres else 1.0
 
 
 func reset() -> void:
@@ -325,7 +332,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	# tyre force (this tick's needs the load being computed): `suspension_force` is the whole load
 	# the corner carries, which the tyre budget below and every load readout take.
 	suspension_force = clampf(spring_rate * compression + damper_force
-			+ bar_force(drive_spec.anti_roll_rate) + link_slope * force_long,
+			+ bar_force(bar_rate) + link_slope * force_long,
 			0.0, drive_spec.max_suspension_force)
 	body.apply_force(normal * suspension_force, contact_point - body.global_position)
 
@@ -342,7 +349,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	var mu_long := load_scaled_mu(drive_spec.mu_long * surface_grip,
 			suspension_force, ref_load, drive_spec.load_sensitivity)
 	var mu_lat := load_scaled_mu(drive_spec.mu_lat * axle_lat_grip * surface_grip,
-			suspension_force, ref_load, drive_spec.load_sensitivity)
+			suspension_force * tyre_share, ref_load, drive_spec.load_sensitivity)
 
 	# Both slips on one denominator, so the slip vector points along the patch's slide; its floor
 	# keeps the curve's rise inside the one-tick cap below (`slip_floor_for`).
@@ -355,8 +362,11 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	var slip_ratio := slip_vel / slip_denom
 	long_slip = slip_ratio
 	slip = absf(slip_ratio)
+	# A twin pair at half load each: `mu(L / 2) * L` over `2 C(L / 2)` is this at `L / 2`.
+	var lat_peak := lateral_peak_slip(suspension_force * tyre_share, ref_load,
+			drive_spec.load_sensitivity, drive_spec.cornering_peak_load)
 	var tyre := combined_slip_force(slip_ratio, -v_lat / slip_denom,
-			mu_long * suspension_force, mu_lat * suspension_force, drive_spec.grip_curve)
+			mu_long * suspension_force, mu_lat * suspension_force, drive_spec.grip_curve, lat_peak)
 
 	# Each axis capped by the force that would cancel its slip velocity in one tick (the lateral cap
 	# kills parked-car jitter).
@@ -527,19 +537,48 @@ static func load_scaled_mu(mu: float, normal_load: float, ref_load: float,
 	return clampf(mu * (1.0 - sensitivity * log(ratio) / log(2.0)), mu * 0.5, mu * 1.25)
 
 
+## A tyre's cornering stiffness at `normal_load` over its stiffness at `ref_load`, on the Magic
+## Formula's load law `sin(2 atan(L / (peak_load * ref)))` (`PKY2`): it rises with load, flattens and
+## peaks at `peak_load` times the reference, so a heavier wheel gives less stiffness per newton. 1 at
+## the reference, and 1 at any load when `peak_load` <= 0 (off: the stiffness then follows `mu(L) * L`).
+static func cornering_load_shape(normal_load: float, ref_load: float, peak_load: float) -> float:
+	if peak_load <= 0.0 or ref_load <= 0.0:
+		return 1.0
+	var at_ref := sin(2.0 * atan(1.0 / peak_load))
+	return sin(2.0 * atan(maxf(normal_load, 0.0) / (peak_load * ref_load))) / at_ref
+
+
+## The side slip (a multiple of the grip curve's own peak slip) at which a tyre at `normal_load`
+## reaches its peak side force: `mu(L) * L / C(L)`, its peak force over its cornering stiffness
+## (`cornering_load_shape`), normalised to 1 at `ref_load`. 1 at any load when `peak_load` <= 0, the
+## stiffness then following `mu(L) * L`. Surface grip and `axle_lat_grip` scale force and stiffness
+## alike, so they drop out. The load is floored at `load_scaled_mu`'s, which keeps it finite at 0.
+static func lateral_peak_slip(normal_load: float, ref_load: float, sensitivity: float,
+		peak_load: float) -> float:
+	if peak_load <= 0.0 or ref_load <= 0.0:
+		return 1.0
+	var n_load := maxf(normal_load, ref_load * 0.25)
+	return load_scaled_mu(1.0, n_load, ref_load, sensitivity) * n_load \
+			/ (ref_load * cornering_load_shape(n_load, ref_load, peak_load))
+
+
 ## Tyre force (N; x along the wheel's forward, y along its side) for the slip vector
 ## (`slip_long`, `slip_lat`), both slips over one speed denominator so the vector points along the
-## contact patch's slide. The grip curve reads its LENGTH and the force points along it, scaled per
-## axis by the budgets (`mu * N`), so it never leaves their ellipse. A locked wheel's slip is almost
-## all longitudinal: its force opposes the slide and it stops steering. On the curve's linear rise
-## each axis is exactly what it would be alone.
+## contact patch's slide. The side slip is read against its own peak, `lat_peak` times the curve's
+## (`lateral_peak_slip`; the longitudinal peak is the curve's). The grip curve reads the LENGTH of
+## that normalised vector and the force points along it, scaled per axis by the budgets (`mu * N`),
+## so it never leaves their ellipse and its peak is the budget whatever `lat_peak`. A locked wheel's
+## slip is almost all longitudinal: its force opposes the slide, tilted by the budget ratio and
+## `1 / lat_peak`, and it stops steering. On the curve's linear rise each axis is exactly what it
+## would be alone.
 static func combined_slip_force(slip_long: float, slip_lat: float, budget_long: float,
-		budget_lat: float, grip_curve: PackedVector2Array) -> Vector2:
-	var s := Vector2(slip_long, slip_lat).length()
+		budget_lat: float, grip_curve: PackedVector2Array, lat_peak := 1.0) -> Vector2:
+	var sigma := Vector2(slip_long, slip_lat / lat_peak)
+	var s := sigma.length()
 	if s <= 0.0:
 		return Vector2.ZERO
 	var grip := minf(VehicleSpec.sample_curve(grip_curve, s), 1.0) / s
-	return Vector2(budget_long * slip_long * grip, budget_lat * slip_lat * grip)
+	return Vector2(budget_long * sigma.x * grip, budget_lat * sigma.y * grip)
 
 
 ## The patch deflection (m) after one tick: the old one decayed over the distance rolled
@@ -619,6 +658,9 @@ static func surface_drag_force(v_long: float, crr: float, normal_load: float, mo
 ## full budget, at its peak's slip ratio. A numerical floor like
 ## LOW_SPEED_FLOOR, not a tyre property: a heavy corner on a light cap mass (a drive axle under a
 ## fifth wheel) needs more slip velocity at a crawl for the same force.
+## The longitudinal rise only: the side rise, `1 / lateral_peak_slip` steeper on a light wheel, is
+## held by its own one-tick cap, deadbeat on `contact_masses`; a floor reading it would move every
+## straight-line crawl figure through the shared denominator.
 static func slip_floor_for(budget: float, mass: float, grip_curve: PackedVector2Array,
 		delta: float) -> float:
 	if mass <= 0.0:

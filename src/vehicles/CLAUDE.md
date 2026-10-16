@@ -30,8 +30,8 @@ rejected designs (read before proposing a shared refactor): `docs/vehicles.md`,
   clamp; an external force (thrust, sail) does not.
 - Never set roll or pitch in `RigidBody3D.inertia` (Jolt computes them about `center_of_mass`);
   yaw only through `yaw_dynamic_index`. Read the tensor off `PhysicsDirectBodyState3D`.
-- Handling levers: understeer is `rear_lat_grip`; tipping before sliding is the anti-roll bar or
-  `mu_lat`. Never a slower steer, a detuned lock or a lower COM.
+- Understeer is the bar split and the tyre's load laws (`rear_lat_grip`: a real rear-tyre fact);
+  tipping before sliding is the bar or `mu_lat`. Never a slower steer, a detuned lock or a lower COM.
 - Drag is declared, never inherited: a new towed or attached rigid body needs its own
   resistance call.
 - Free-body helpers live in `VehicleMath`, never a fourth copy.

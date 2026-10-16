@@ -71,6 +71,10 @@ enum Coupling { CONVERTER, CLUTCH }
 ## ignition cut); 0 = seamless (powershift, or a converter's `Drivetrain.handover_fuel`).
 ## Bridge-exact byte writes count as shifts; `applied_throttle` reads 0 through the cut.
 @export var shift_cut_s := 0.0
+## Seconds over which the fuel returns after `shift_cut_s` ends: an AMT ramps the engine's torque
+## back once the new gear is engaged, so the drive does not step into the driveline
+## (`Drivetrain.torque_restore_step`). 0 = it returns in one tick (a sequential's ignition cut).
+@export var shift_torque_ramp_s := 0.0
 ## Seconds a modulated start-up clutch takes to reach its whole rating on a pull-away (a
 ## powershift's pressure ramp); 0 = the rating is there on the first tick. See `Drivetrain.ramp`.
 @export var launch_engage_s := 0.0

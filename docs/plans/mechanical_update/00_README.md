@@ -23,22 +23,21 @@ what binds a fix, and what "done" looks like. A brief is **not a plan** (see § 
 | 06b | the heavy vans' drivetrain — they ran the 8 t trucks' engine and gearing | small-medium | 05, 06 | landed (`docs/vehicles.md` § Sourced figures, the heavy vans' drivetrain) | — |
 | 07 | toy-scale Kenney geometry with real mass | medium | — | landed (`docs/vehicles.md` § Inertia, § Pitch, § Balance, § Braking) | — |
 | 07b | crawl-speed tyre caps and the patch under the hub | medium-large | 07 | landed (`docs/vehicles.md` § One-tick caps, § Slip floor, § Pitch) | — |
-| 14 | `14_semi_shift_ring_and_drift.md` — the semi's front axle unloads 17 points past steady transfer at D1>D2; a slow yaw mode drifts it centimetres | medium (1), small (2) | 07b | (1) high: a driveline handover, levers already tried; (2) medium: name the mode first | (1) one or two after diagnosis; (2) one |
-| 08 | `08_handling_balance.md` — `rear_lat_grip` stands in for roll-stiffness distribution | medium | 07 | high: the tyre-model change ripples into brake split and the grade / launch ceilings; tyre data to source; understeer targets from the user | several: per-axle bars, cornering-stiffness load model, retire `rear_lat_grip` |
+| 14 | `14_semi_shift_ring_and_drift.md` — (1) the semi's shift ring: landed (`docs/vehicles.md` § Pitch); (2) a slow yaw mode drifts the semis centimetres | small (2) | 07b | (2) medium: name the mode first | (2) one |
 | 09 | `09_ackermann_steering.md` — parallel steer scrubs in tight turns | small | — | low: pure geometry, spec fraction defaulting to 0, mean angle unchanged; one decision (which wheel the lock limits) | one |
 | 10 | `10_wheel_radius_and_contact.md` — one 0.36 m ray wheel for every body | large | 04, 05, 06 | xhigh: every body and trailer, the tractor linkage geometry, a Rejected entry (MFWD lead ratio) | several, likely two plans: radius (re-derive every body), then contact shape (web perf study) |
 | 11 | `11_tractor_implements_and_draft.md` — weightless implements, ramped draft | medium | — | medium (high if the draft law is reshaped): implement mass is plain; speed-independent draft needs an angular-bound derivation and reverses "keep the speed ramp" | two to three: implement mass + axle load, draft law, draft control if wanted (contract) |
-| 12 | `12_tyre_classes_and_surfaces.md` — user-swappable tyres, tyre x surface response (future) | medium-large | 03, 04 (08 ideally) | high: a feature with many user decisions, across vehicles, levels and UI | several: tyre-class resource, cross-level surface identity (untangle `SOIL_CHANNEL`), tyre x surface table, swap UI, level content |
-| 13 | `13_minor_items.md` — wind, aero balance, rolling-resistance vector, ideal ABS/TC, taper | small each | — | per item: 1 wind low (wait for a windy land level); 2 aero centre of pressure medium; 3 rolling-resistance vector low (fold into 05 or 10); 4 cycling ABS/TC medium (user decision first); 5 taper: a decision, no plan; 6 (converter creep): landed with 05 | one each |
+| 12 | `12_tyre_classes_and_surfaces.md` — user-swappable tyres, tyre x surface response (future) | medium-large | 03, 04 | high: a feature with many user decisions, across vehicles, levels and UI | several: tyre-class resource, cross-level surface identity (untangle `SOIL_CHANNEL`), tyre x surface table, swap UI, level content |
+| 13 | `13_minor_items.md` — wind, aero balance, rolling-resistance vector, ideal ABS/TC, taper | small each | — | per item: 1 wind low (wait for a windy land level); 2 aero centre of pressure medium; 3 rolling-resistance vector low (fold into 05 or 10); 4 cycling ABS/TC medium (user decision first); 5 taper: a decision, no plan; 6 (converter creep): landed with 05; 7 twin-rear van visual low | one each |
+| 15 | `15_roll_steer.md` — bars and tyre laws buy the limit margin but not a road car's linear understeer | medium | — | high: source per-axle roll steer, a 60 Hz feedback on roll, a decision on the default angular damping | one or two: the model + `BalanceModel` term, then tune the road cars |
 
 "Planning effort" is the effort level for the agent that WRITES the plan (low / medium / high /
 xhigh / max): how much design is open, how much must be sourced, how many rules or user decisions it
 meets; not the size of the change.
 
-Order: 07, then 07b, before 08 (balance is tuned on the final inertia and contact; 10's contact
-shape starts from 07b's patch); 14's ring before 08, its drift after 08;
-10 after the briefs that re-derive
-gearing and brakes; 12 needs 04's decoupling of brakes from tyres.
+Order: 10's contact shape starts from 07b's patch; 14's drift when the semis take the tyre law
+(`docs/vehicles.md` § Balance); 10 after the briefs that re-derive gearing and brakes; 12 needs
+04's decoupling of brakes from tyres.
 
 Two cross-dependencies the table does not show:
 - **The shift trace judges every launch.** `measure_vehicles -- <variant> <s> trace`

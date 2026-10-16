@@ -1298,6 +1298,49 @@ func test_shift_cut_ticks_rounds_up_and_is_zero_without_a_cut() -> void:
 	assert_int(DrivetrainScript.shift_cut_ticks(0.15, 1.0 / 60.0)).is_equal(9)
 
 
+func test_torque_restore_is_one_without_a_ramp() -> void:
+	var spec := _spec()
+	assert_float(DrivetrainScript.torque_restore_step(spec, 0.0, true, 1.0 / 60.0)).is_equal(1.0)
+	assert_float(DrivetrainScript.torque_restore_step(spec, 0.3, false, 1.0 / 60.0)).is_equal(1.0)
+
+
+func test_torque_restore_ramps_back_over_its_time_after_the_cut() -> void:
+	var spec := _spec()
+	spec.shift_torque_ramp_s = 0.3
+	var delta := 1.0 / 60.0
+	var c := DrivetrainScript.torque_restore_step(spec, 1.0, true, delta)
+	assert_float(c).is_equal(0.0)
+	for i in 17:
+		c = DrivetrainScript.torque_restore_step(spec, c, false, delta)
+	assert_float(c).is_less(1.0)
+	c = DrivetrainScript.torque_restore_step(spec, c, false, delta)
+	assert_float(c).is_equal_approx(1.0, 1e-5)
+	# A new cut mid-ramp starts it over.
+	c = DrivetrainScript.torque_restore_step(spec, 0.5, true, delta)
+	assert_float(c).is_equal(0.0)
+
+
+func test_the_restore_ramp_only_withholds_fuel_after_a_shift_cut() -> void:
+	# Off (0) the fuel returns in one tick; on, the delivered fuel climbs back under the pedal.
+	var spec := _spec()
+	spec.shift_cut_s = 0.1
+	spec.shift_torque_ramp_s = 0.3
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	for i in 60:
+		_tick(dt, 1.0, LumpedWheel.new(30.0), 1)
+	assert_float(dt.applied_throttle).is_equal(1.0)
+	for i in 6:
+		_tick(dt, 1.0, LumpedWheel.new(30.0), 2)
+	assert_float(dt.applied_throttle).is_equal(0.0)
+	var last := 0.0
+	for i in 18:
+		_tick(dt, 1.0, LumpedWheel.new(30.0), 2)
+		assert_float(dt.applied_throttle).is_greater_equal(last)
+		assert_float(dt.applied_throttle).is_less_equal(1.0)
+		last = dt.applied_throttle
+	assert_float(last).is_equal_approx(1.0, 1e-5)
+
+
 func test_is_shift_needs_both_sides_engaged() -> void:
 	assert_bool(DrivetrainScript.is_shift(1, 2)).is_true()
 	assert_bool(DrivetrainScript.is_shift(1, GEAR_R)).is_true()

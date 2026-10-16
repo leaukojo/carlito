@@ -22,6 +22,7 @@ grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 0.8
 mu_lat = 0.75
 load_sensitivity = 0.08
+cornering_peak_load = 3.33
 brake_torque = 15500.0
 handbrake_torque = 6500.0
 brake_bias_front = 0.78

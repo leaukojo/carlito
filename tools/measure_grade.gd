@@ -176,6 +176,9 @@ var _roll_go := NAN                   ## s from the release to ROLL_GO_M up the 
 var _roll_held := 0.0                 ## s after the release the hill hold last held
 var _nohold := false                  ## `nohold`: the body's hill hold off, on a copy of its spec
 var _tipper := false                  ## `tipper`: the tractor spawns with its drawbar tipper
+## `cornering_peak=<x>`: the tyre's cornering-stiffness law (`GroundDriveSpec.cornering_peak_load`)
+## on a copy of the spec, in memory (NAN: the spec's).
+var _cornering_peak := NAN
 ## climb mode: the shifts so far, each {t, kmh, from, to, before, landing, load}; the byte engaged
 ## last tick; the run's grade, %
 var _ascent_shifts: Array[Dictionary] = []
@@ -220,6 +223,8 @@ func _ready() -> void:
 			_pedal = String(a).substr(6).to_float()
 		if String(a).begins_with("hold="):
 			_hold = String(a).substr(5).to_float()
+		if String(a).begins_with("cornering_peak="):
+			_cornering_peak = String(a).substr(15).to_float()
 		if String(a).begins_with("gear="):
 			_held_gear = String(a).substr(5).to_int()
 			if _held_gear < 1 or _held_gear > Drivetrain.TOP_GEAR:
@@ -227,6 +232,10 @@ func _ready() -> void:
 						Drivetrain.TOP_GEAR])
 				get_tree().quit(1)
 				return
+	if which.begins_with("doc=") and not is_nan(_cornering_peak):
+		printerr("cornering_peak= changes the figures a doc preset tabulates: run it per body")
+		get_tree().quit(1)
+		return
 	InputRouter.set_manual_gearbox(_held_gear > 0)
 	_diff = args.has("diff")
 	for i in range(1, args.size()):
@@ -368,6 +377,10 @@ func _spawn(angle_deg: float, yaw := 0.0, up := SPAWN_UP) -> void:
 		_car.spec = _car.spec.duplicate()
 		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
 		_car.spec.ground_drive.hill_hold = HillHold.Kind.NONE
+	if not is_nan(_cornering_peak):
+		_car.spec = _car.spec.duplicate()
+		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
+		_car.spec.ground_drive.cornering_peak_load = _cornering_peak
 	add_child(_car)
 	if _tipper and _car.has_method(&"set_attachment"):
 		# Remembered until the drawbar's spawn countdown has run, then coupled (TowHost).

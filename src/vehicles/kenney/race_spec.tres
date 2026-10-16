@@ -25,6 +25,7 @@ mu_long = 1.35
 mu_lat = 1.4
 rear_lat_grip = 1.15
 load_sensitivity = 0.1
+cornering_peak_load = 2.56
 brake_torque = 2000.0
 handbrake_torque = 1400.0
 brake_bias_front = 0.621

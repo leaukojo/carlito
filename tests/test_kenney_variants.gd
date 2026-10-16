@@ -24,6 +24,8 @@ const DRIVE_OVERRIDABLE := {
 	"park_pawl_torque": "park_pawl_torque",
 	"min_steer_frac": "min_steer_frac", "steer_falloff_speed": "steer_falloff_speed",
 	"anti_roll_rate": "anti_roll_rate",
+	"anti_roll_rate_rear": "anti_roll_rate_rear",
+	"cornering_peak_load": "cornering_peak_load",
 	"diff_bias_front": "diff_bias_front", "diff_bias_rear": "diff_bias_rear",
 	"centre_diff_bias": "centre_diff_bias",
 	"hill_hold": "hill_hold",
@@ -53,9 +55,10 @@ const DRIVE_BASELINE_ONLY := {
 ## `ride_hz` (test_springs_are_what_the_generator_derives).
 const SUSPENSION := ["spring_rate", "damper_bump", "damper_rebound", "spring_rate_rear",
 		"damper_bump_rear", "damper_rebound_rear"]
-## Driveline flags: had gone missing once (now pinned).
+## Driveline (and twin-tyre) flags: had gone missing once (now pinned).
 const DRIVELINE_FLAGS := ["rear_diff_lockable", "front_axle_engageable", "retarder_equipped",
-		"centre_diff_rigid", "abs_equipped", "tcs_equipped", "brake_engages_front_axle"]
+		"centre_diff_rigid", "abs_equipped", "tcs_equipped", "brake_engages_front_axle",
+		"rear_twin_tyres"]
 ## Driven flags: must not default to false (missing key means baseline's answer).
 const DRIVEN_FLAGS := ["driven_front", "driven_rear"]
 

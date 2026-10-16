@@ -108,7 +108,7 @@ func _ready() -> void:
 		var wheel := RayWheel.new(gd.wheel_positions[i], false, false, visual, corner_mass)
 		wheel.apply_suspension(gd)
 		wheels.append(wheel)
-	if gd.anti_roll_rate > 0.0:
+	if gd.has_anti_roll_bar():
 		RayWheel.pair_axles(wheels)
 	# LampSet tolerates every path missing: a lampless trailer binds nothing.
 	_lamps.setup(self, spec)

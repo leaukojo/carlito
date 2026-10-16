@@ -51,6 +51,8 @@ extends Resource
 ## Anti-roll bar, N per metre of left/right compression difference on an axle (0 = none): stiffens
 ## roll, leaves ride and pitch alone.
 @export var anti_roll_rate := 0.0
+## Rear-axle bar rate; -1 = `anti_roll_rate`. 0 is real hardware (no rear bar), so not the sentinel.
+@export var anti_roll_rate_rear := -1.0
 ## Front side-view link slope (contact patch to instant centre): a tyre force `F` puts
 ## `-F * anti_dive_slope` through the links, so the body pitches less. `h / wheelbase` = 100 %.
 @export var anti_dive_slope := 0.0
@@ -60,19 +62,33 @@ extends Resource
 
 @export_group("Tires")
 ## Slip -> grip factor, peaking around 0.10-0.15: x is the combined slip, the length of (slip
-## ratio, `v_lat / |v_long|`) (`RayWheel.combined_slip_force`).
+## ratio, `v_lat / |v_long|`) (`RayWheel.combined_slip_force`), the side slip read against its own
+## peak (`RayWheel.lateral_peak_slip`).
 @export var grip_curve := PackedVector2Array([
 	Vector2(0.0, 0.0), Vector2(0.12, 1.0), Vector2(0.4, 0.9), Vector2(1.0, 0.8),
 ])
 @export var mu_long := 1.05
 @export var mu_lat := 0.95
-## The rear tyres' side grip as a multiple of `mu_lat`. Grip scales with load, so 1.0 steers near
-## neutral and spins easily; on a road car this stands in for the design that makes it understeer.
+## The rear tyres' side grip as a multiple of `mu_lat`: a rear-tyre hardware fact (a wider or a
+## larger rear tyre), 1.0 on equal tyres. Understeer is the bar split and the tyre's load laws
+## (`docs/vehicles.md` § Balance).
 @export var rear_lat_grip := 1.0
+## Twin tyres on each rear corner (a dual-rear-wheel van or truck): each carries half the corner's
+## load, so the side grip and the cornering-stiffness law read at half load (`RayWheel.tyre_share`):
+## the pair's peak is `1 + load_sensitivity` over one tyre's, its stiffness `2 C(L / 2)`. Lateral
+## only: the longitudinal budget, the brake split and the launch keep one tyre's figures.
+@export var rear_twin_tyres := false
 ## Fractional mu lost per DOUBLING of load past the corner's static share
 ## (`RayWheel.corner_mass * g`); 0 = grip exactly linear in load, so weight transfer cannot move
 ## the balance. Car 0.10, truck/van/trailers 0.08, tractor 0.12 (soft flotation tyres), plane 0.
+## The cars' 0.10 reads low against sourced tyres (`docs/vehicles.md` § Balance); raising it
+## re-derives the brake split.
 @export_range(0.0, 0.5) var load_sensitivity := 0.0
+## The load at which the tyre's cornering stiffness peaks, as a multiple of the corner's static
+## share (Magic Formula `PKY2 * Fz0 / ref`, `RayWheel.cornering_load_shape`): a heavier wheel gives
+## less stiffness per newton. 0 = off, stiffness follows `mu(L) * L`. A family tyre figure, like
+## `load_sensitivity`; it moves only the slip at which the side force peaks, never the peak.
+@export_range(0.0, 6.0) var cornering_peak_load := 0.0
 
 @export_group("Brakes")
 ## Full-pedal foot-brake capacity, Nm per wheel on average: the hardware's rating, more than the
@@ -123,6 +139,16 @@ extends Resource
 ## Rear-axle spring rate, N/m: `spring_rate_rear`, or the front rate when it is 0.
 func rear_spring_rate() -> float:
 	return spring_rate_rear if spring_rate_rear > 0.0 else spring_rate
+
+
+## Rear-axle anti-roll bar rate, N/m: `anti_roll_rate_rear`, or the front rate when it is negative.
+func rear_anti_roll_rate() -> float:
+	return anti_roll_rate_rear if anti_roll_rate_rear >= 0.0 else anti_roll_rate
+
+
+## Either axle carries a bar, so the wheels need their partners (`RayWheel.pair_axles`).
+func has_anti_roll_bar() -> bool:
+	return anti_roll_rate > 0.0 or rear_anti_roll_rate() > 0.0
 
 
 ## Rear-axle bump damper, N*s/m: explicit, or the front damper scaled by sqrt(rate ratio) so the

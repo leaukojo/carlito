@@ -66,7 +66,8 @@ making it visible may need a signal, which overlaps brief 13 § 4.
   `get_image()` per tick (`heightmap_terrain.gd`).
 - Non-goals (root CLAUDE.md) include "texture-layer terrain"; the splat channels are the existing
   surface mechanism and stay so.
-- Load sensitivity becomes a tyre property; brief 08 may already have moved it.
+- Load sensitivity and the cornering-stiffness law (`cornering_peak_load`) become tyre properties;
+  both are family figures on `GroundDriveSpec` today, sourced in `docs/vehicles.md` § Balance.
 
 ## Done
 

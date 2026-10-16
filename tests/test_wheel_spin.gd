@@ -79,6 +79,107 @@ func test_combined_force_never_leaves_the_ellipse_and_is_zero_without_slip() -> 
 		assert_float(Vector2(f.x / B_LONG, f.y / B_LAT).length()).is_less_equal(1.0 + 1e-5)
 
 
+# --- the cornering-stiffness load law: the side slip read against its own peak -----
+
+const REF_N := 3000.0  ## the even corner load the laws are referred to
+## The loads the clamps allow, as multiples of REF_N: `load_scaled_mu`'s floor up to the default
+## `max_suspension_force` on a 300 kg corner (30 kN / 2943 N).
+const LOADS: Array[float] = [0.25, 0.5, 1.0, 2.0, 10.2]
+## `cornering_peak_load` around the sourced 1.92-3.33 (`docs/vehicles.md` § Balance).
+const PEAKS: Array[float] = [1.5, 1.92, 2.56, 3.33]
+
+
+func test_the_lateral_peak_slip_is_the_curves_at_the_reference_and_when_off() -> void:
+	assert_float(WheelScript.lateral_peak_slip(REF_N, REF_N, 0.1, 2.56)).is_equal_approx(1.0, 1e-6)
+	assert_float(WheelScript.lateral_peak_slip(2.0 * REF_N, REF_N, 0.1, 0.0)).is_equal(1.0)
+	# Finite at no load: the budget is 0 there, but the multiple must not be NAN.
+	assert_bool(is_finite(WheelScript.lateral_peak_slip(0.0, REF_N, 0.1, 2.56))).is_true()
+	# Off, the force is exactly the old one.
+	for slip: Vector2 in [Vector2(0.03, -0.04), Vector2(-1.0, 0.05), Vector2(0.2, 0.3)]:
+		assert_that(WheelScript.combined_slip_force(slip.x, slip.y, B_LONG, B_LAT, _curve(), 1.0)) \
+				.is_equal(WheelScript.combined_slip_force(slip.x, slip.y, B_LONG, B_LAT, _curve()))
+
+
+## A wheel's side force at `ratio` times REF_N and side slip `slip_lat`, built the way `tick` builds
+## it: budget `mu(L) * L`, the side slip over `lateral_peak_slip`.
+func _side_force(ratio: float, slip_long: float, slip_lat: float, peak: float,
+		sensitivity := 0.1) -> Vector2:
+	var n_load := ratio * REF_N
+	var budget_lat := WheelScript.load_scaled_mu(MU, n_load, REF_N, sensitivity) * n_load
+	return WheelScript.combined_slip_force(slip_long, slip_lat, budget_lat, budget_lat, _curve(),
+			WheelScript.lateral_peak_slip(n_load, REF_N, sensitivity, peak))
+
+
+func test_with_the_law_on_an_axle_under_transfer_loses_stiffness() -> void:
+	# Outer plus inner wheel at a small slip, against twice the static wheel.
+	for peak: float in PEAKS:
+		var static_pair := 2.0 * _side_force(1.0, 0.0, 0.01, peak).y
+		for d: float in [0.2, 0.5, 0.9]:
+			assert_float(_side_force(1.0 + d, 0.0, 0.01, peak).y
+					+ _side_force(1.0 - d, 0.0, 0.01, peak).y).is_less(static_pair)
+
+
+func test_the_law_moves_where_the_side_force_peaks_never_the_peak() -> void:
+	for peak: float in PEAKS:
+		for ratio: float in LOADS:
+			var n_load := ratio * REF_N
+			var budget := WheelScript.load_scaled_mu(MU, n_load, REF_N, 0.1) * n_load
+			var p := WheelScript.lateral_peak_slip(n_load, REF_N, 0.1, peak)
+			assert_float(_side_force(ratio, 0.0, 0.12 * p, peak).y).is_equal_approx(budget,
+					budget * 1e-5)
+			# And nowhere past the ellipse, side slip alone or combined.
+			for slip: Vector2 in [Vector2(0.0, 0.05), Vector2(0.0, 2.0), Vector2(0.1, 0.1),
+					Vector2(-1.0, 0.3), Vector2(0.05, -0.6)]:
+				var f := _side_force(ratio, slip.x, slip.y, peak)
+				assert_float(f.length() / budget).is_less_equal(1.0 + 1e-5)
+
+
+func test_with_the_law_on_a_locked_wheel_still_stops_steering() -> void:
+	# The force's tilt off the slide is `1 / lateral_peak_slip`: most toward the side on a light wheel
+	# (p down to 0.82 at c 1.5, 0.91 at the van's 1.92), least on a heavy one. Locked at 0.05 side
+	# slip the old law puts 4.0 % of the budget sideways; the worst here 4.9 %.
+	var off := _side_force(1.0, -1.0, 0.05, 0.0)
+	var off_share := off.y / -off.x
+	for peak: float in PEAKS:
+		for sensitivity: float in [0.08, 0.12]:
+			for ratio: float in LOADS:
+				var locked := _side_force(ratio, -1.0, 0.05, peak, sensitivity)
+				var share := locked.y / -locked.x
+				assert_float(share / off_share).override_failure_message(
+						"c %.2f s %.2f at %.2f ref: %.3f" % [peak, sensitivity, ratio, share / off_share]) \
+						.is_less(1.25)
+				if peak >= 1.92:
+					assert_float(share / off_share).is_less(1.15)
+				if ratio >= 2.0:
+					assert_float(share).is_less(off_share)
+
+
+func test_a_crawling_contact_on_a_steep_side_rise_settles_without_a_cycle() -> void:
+	# One contact crawling at 1 m/s (under the slip floor, past the patch spring), a steady side
+	# demand of half its budget, near the least side peak slip of the lowest law here (c 1.5): the
+	# side rise passes the one-tick cap, which holds it deadbeat, never ringing.
+	var n_load := 0.35 * REF_N
+	var budget := WheelScript.load_scaled_mu(MU, n_load, REF_N, 0.08) * n_load
+	var p := WheelScript.lateral_peak_slip(n_load, REF_N, 0.08, 1.5)
+	var mass := 60.0  ## a light cap mass, so the curve's rise is past the cap
+	assert_float(budget / (0.12 * p * WheelScript.LOW_SPEED_FLOOR)).is_greater(mass / TICK)
+	var demand := 0.5 * budget
+	var v := 0.0
+	var prev_dv := 0.0
+	var flips := 0
+	for _i in 300:
+		var tyre := WheelScript.combined_slip_force(0.0, -v / WheelScript.LOW_SPEED_FLOOR, budget,
+				budget, _curve(), p)
+		var f := clampf(tyre.y, -mass * absf(v) / TICK, mass * absf(v) / TICK)
+		var dv := (demand + f) / mass * TICK
+		if absf(dv) > 1e-9 and absf(prev_dv) > 1e-9 and signf(dv) * signf(prev_dv) < 0.0:
+			flips += 1  ## float noise around the settled force is not a cycle
+		prev_dv = dv
+		v += dv
+	assert_int(flips).is_equal(0)
+	assert_float(prev_dv).is_equal_approx(0.0, 1e-6)
+
+
 # --- static friction: the patch spring a held wheel stands on ---------------------
 
 const CORNER_KG := 350.0
@@ -743,6 +844,48 @@ func test_the_bar_reads_one_shared_snapshot_whatever_the_tick_order() -> void:
 	var f_right := right.bar_force(7000.0)
 	assert_float(f_left).is_equal_approx(VehicleMath.anti_roll_force(0.050, 0.040, 7000.0), 1e-9)
 	assert_float(f_left + f_right).is_equal_approx(0.0, 1e-9)
+
+
+## Unequal bars: each wheel carries its own axle's rate, and each axle's pair stays equal and
+## opposite off the one shared latch.
+func test_each_axle_reads_its_own_bar_rate_off_the_shared_snapshot() -> void:
+	var spec := _bench_spec(2000.0)
+	spec.ground_drive.anti_roll_rate = 7000.0
+	spec.ground_drive.anti_roll_rate_rear = 3000.0
+	var drive := _drive_for(spec)
+	for w in drive.wheels:
+		w.in_contact = true
+		w.compression = 0.050 if w.anchor.x < 0.0 else 0.040
+		assert_float(w.bar_rate).is_equal(3000.0 if w.is_rear else 7000.0)
+	for w in drive.wheels:
+		w.latch_bar()
+	for w in drive.wheels:
+		w.compression += 0.008  # this tick's write must not move either axle's bar
+	for w in drive.wheels:
+		var f := w.bar_force(w.bar_rate)
+		var mine := 0.050 if w.anchor.x < 0.0 else 0.040
+		var theirs := 0.090 - mine
+		assert_float(f).is_equal_approx(VehicleMath.anti_roll_force(mine, theirs, w.bar_rate), 1e-9)
+		assert_float(f + w.anti_roll_partner.bar_force(w.anti_roll_partner.bar_rate)) \
+				.is_equal_approx(0.0, 1e-9)
+
+
+## A rear-only bar (front 0) still pairs the wheels, or it would never act.
+func test_a_rear_only_bar_still_pairs_the_wheels() -> void:
+	var spec := _bench_spec(2000.0)
+	spec.ground_drive.anti_roll_rate_rear = 5000.0
+	for w in _drive_for(spec).wheels:
+		assert_object(w.anti_roll_partner).is_not_null()
+		assert_float(w.bar_rate).is_equal(5000.0 if w.is_rear else 0.0)
+
+
+func test_the_rear_bar_falls_back_to_the_front_rate_only_when_negative() -> void:
+	var gd := _spec()
+	gd.anti_roll_rate = 7000.0
+	assert_float(gd.rear_anti_roll_rate()).is_equal(7000.0)
+	gd.anti_roll_rate_rear = 0.0  # no rear bar: real hardware, not the sentinel
+	assert_float(gd.rear_anti_roll_rate()).is_equal(0.0)
+	assert_bool(gd.has_anti_roll_bar()).is_true()
 
 
 func test_the_bar_hangs_free_while_the_partner_is_airborne() -> void:
