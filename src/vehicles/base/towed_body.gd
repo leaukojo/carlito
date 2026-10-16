@@ -81,7 +81,7 @@ func _ready() -> void:
 	# Where it sits between kingpin and bogie is the load split (Articulation.kingpin_share).
 	center_of_mass = spec.center_of_mass
 	can_sleep = false
-	# Drag is declared, never the engine default (src/vehicles/CLAUDE.md § Drag and downforce); not
+	# Drag is declared, never the engine default (src/vehicles/CLAUDE.md § Physics); not
 	# a BaseVehicle, so nothing else clears it here.
 	linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
 	linear_damp = 0.0

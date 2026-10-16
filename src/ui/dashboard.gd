@@ -79,23 +79,11 @@ const GAUGE_W_COMPACT := 112.0
 ## The boat is not the widest thing here; a THIRD bar column (~1236, see BAR_ROWS_MAX) is.
 const SOUNDER_W_FRAC := 0.6
 const BAR_H := 18.0
-## Max bar rows (bars + group captions) per column before spilling into a second column. The
-## cluster is full-width (280 px middle between two 150 px gauges), so a third column pushes
-## the gauges off a 1280-wide window — that bound sets this number.
-##
-## Packing is greedy first-fit over unsplittable groups, so column count is not
-## `ceil(rows / cap)`. The drone's 26 rows are three unsplittable 5-row ESC groups that land in
-## three columns at any cap below 14; 14 is the smallest value holding the two-column bound.
-##
-## Re-derive rather than assume: must also stay at or above the tallest scalar cluster (the
-## truck's, currently 12) or a family with no instanced signal splits into two columns for no
-## reason. `test_dashboard` pins both ends.
-##
-## The drone is the tallest cluster at 26 of the 28 rows two columns hold. Give a drone signal
-## a range only if it has a meaningful full scale and you've re-derived this budget —
-## `esc_fault`, `node_health`, `node_online` stay range-less for that reason.
-##
-## Cost is panel height: 14 rows is ~356 px against 11 rows' ~278; the panel has no other bound.
+## Max bar rows (bars + group captions) per column before spilling into a second; a third column
+## pushes the gauges off a 1280-wide window. 14 is the smallest cap that packs the drone's three
+## unsplittable 5-row ESC groups into two columns, and must stay >= the tallest scalar cluster
+## (truck, 12); `test_dashboard` pins both. The drone fills 26 of 28 rows: a new drone range
+## needs this re-derived (`esc_fault`, `node_health`, `node_online` stay range-less for it).
 const BAR_ROWS_MAX := 14
 ## Enum "in" signals shown as small state chips rather than a lamp or a bar (gear rides the tacho
 ## instead).

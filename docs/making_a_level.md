@@ -101,8 +101,10 @@ Drop a `VehicleSpawn` marker for every allowed vehicle. Set its `vehicle_types` 
    reproduces. Set `"replayable": false` with a `blocked` reason if a re-run would delete
    hand work. Replay: `powershell -File tools/rebuild_level.ps1 -Level <id>`
    (`level_1_gen.json` is the worked example). A non-idempotent sculpt step gets a
-   `"sculpt_drift"` entry (`{"<source>.png": {"max_px": N, "max_step": N}}`;
-   `src/levels/CLAUDE.md`).
+   `"sculpt_drift"` entry (`{"<source>.png": {"max_px": N, "max_step": N}}`), and
+   `rebuild_level.ps1` classifies a changed PNG with `tools/png_drift.gd` (no entry = byte
+   equality). Level 1's `_flatten`/`_smooth` move ~150-250 heightmap pixels by 1-3 steps each run;
+   COMPROMISE: bit-equality would cost ~184 KB of baseline PNG to buy a guarantee nothing consumes.
 
 ## 9. Perf check
 

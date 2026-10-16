@@ -77,7 +77,7 @@ A correct consequence, not a fudge: the `sedan`'s `brake_bias_front` 0.873 (87 %
 ## Yaw inertia
 
 - Jolt computes the inertia tensor from the collision boxes at uniform density about the declared
-  COM. Rule (`src/vehicles/CLAUDE.md` § Wheels and ground): "Never set `RigidBody3D.inertia`";
+  COM. Rule (`src/vehicles/CLAUDE.md` § Physics): "Never set `RigidBody3D.inertia`";
   guard `tests/test_body_inertia.gd`. Uniform density puts as much mass in the overhangs as in the
   engine bay.
 - **Computed** for the `sedan` from its two boxes: Izz ~1000 kg·m², k² = Izz/m ~0.87 m², front x

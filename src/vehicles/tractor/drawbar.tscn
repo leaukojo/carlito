@@ -38,7 +38,7 @@ roughness = 0.55
 
 ; The hanger casting under the housing. It overlaps the housing case rather than butting onto it —
 ; parts of one machine may interpenetrate freely, it is COPLANAR faces with a shared facing that
-; z-fight (see src/vehicles/truck/CLAUDE.md § Trailer authoring).
+; z-fight (test_no_two_boxes_share_a_face_plane_and_a_facing).
 [sub_resource type="BoxMesh" id="MeshHanger"]
 material = SubResource("MatCast")
 size = Vector3(0.3, 0.16, 0.16)

@@ -5,7 +5,7 @@ extends RefCounted
 ## and attitude terms instead of leaning on RayWheel.
 ##
 ## The one-tick clamps (damper force <= moment * |vel| / delta) are the 60 Hz clamp rule in
-## free-body form: src/vehicles/CLAUDE.md § The 60 Hz tick.
+## free-body form (src/vehicles/CLAUDE.md § Physics).
 
 
 ## Linear damping force (or torque) against `vel`, clamped so one tick can at most zero it.

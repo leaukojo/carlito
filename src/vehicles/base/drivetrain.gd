@@ -1,17 +1,12 @@
 class_name Drivetrain
 extends RefCounted
 ## Diff-less drivetrain: torque curve -> coupling -> gearbox (RAMN gear byte) -> drive axle.
-## On a body that drives wheels (`drives_wheels`) the crank is a rotating mass
-## (`spec.engine_inertia`): `rpm` is a state integrated from the engine law, and the crank meets the
-## driven wheels through a coupling, solved inside the wheels' spin step (`couple`, from
-## `WheelDrive._couple_differentials`): a friction clutch whose capacity a transmission controller
-## commands (`coupling_step`), or a torque converter (`TorqueConverter`) with a lock-up clutch in
-## parallel. Nothing stalls: the controller opens a clutch first, and the idle controller fuels a
-## converter's load.
-## Every other body (boat, drone, train, plane) keeps the rigid crank: rpm follows wheel speed
-## through the ratio, clamped [idle, redline]. Static pure functions beside the instance's state.
-## Approach informed by Dechode/Godot-Advanced-Vehicle and Tobalation/GDCustomRaycastVehicle
-## (credited in README).
+## On a body that `drives_wheels` the crank is a rotating mass integrated from the engine law,
+## meeting the wheels through a clutch (`coupling_step`) or a converter (`TorqueConverter`) solved
+## inside the spin step (`couple`). Nothing stalls: the controller opens a clutch first, and the
+## idle controller fuels a converter's load. Every other body keeps the rigid crank (rpm follows
+## the wheels, clamped [idle, redline]). Informed by Dechode/Godot-Advanced-Vehicle and
+## Tobalation/GDCustomRaycastVehicle (credited in README).
 
 ## RAMN gear byte: 0x00 = N, 0x01..0x06 = D1-D6, 0xFF = R, plus 0xFE = P, a value RAMN never
 ## sends, so every byte it does send keeps its meaning.
@@ -940,20 +935,12 @@ func _process_crank(delta: float, throttle: float, drive_wheel_omega: float,
 				_stall_bound = _ratio * TorqueConverter.impeller_torque(_coef, _predict(fuel), 0.0)
 				_drives = _predict(fuel) >= sync
 			elif closing:
-				# Closing onto turning wheels (a shift, a re-engagement while rolling, a pull-away
-				# whose wheels have come up to the launch target): the whole rating. The solve
-				# carries only what closes the slip, so the crank's inertia sets a rev drop, and
-				# `couple` locks it the tick it closes. An inertia phase lands the crank on the wheels
-				# at its handover rate instead (`handover_rate`): the engine's torque plus the
-				# inertia's share, under the rating; a converter automatic's TCU first reduces the
-				# engine's torque so the clutch passes the driver's (`handover_fuel`). An upshift
-				# opens one; so does a clutch's pull-away the tick it turns to closing, the crank
-				# flared over the launch line while the ramp held the clutch under the engine's
-				# torque: closed at the rating, that flare reaches the wheels in a tick.
-				# Where the wheels run faster (a downshift, a re-engagement) the rev-match blip fuels
-				# the crank up to them first, and the clutch stays open until the blip reaches them
-				# this tick: closed early, it would drag the driven wheels with the rating to spin
-				# the crank up (an ABS trip under braking).
+				# Closing onto turning wheels: the whole rating; the solve carries only what closes
+				# the slip, and `couple` locks it the tick it closes. An inertia phase (an upshift,
+				# or a clutch pull-away turning to closing, whose flare would reach the wheels in a
+				# tick) lands at `handover_rate` instead. Where the wheels run faster (a downshift)
+				# the clutch stays open until the rev-match blip reaches them: closed early, the
+				# rating drags the driven wheels to spin the crank up (an ABS trip under braking).
 				_capacity = ceiling
 				if not _inertia_phase and spec.coupling == VehicleSpec.Coupling.CLUTCH:
 					_inertia_phase = true
@@ -997,20 +984,12 @@ func _predict(fuel: float) -> float:
 	return maxf(_pred_base + _pred_per_fuel * fuel, 0.0)
 
 
-## The gearbox-output coupling, solved first in `WheelDrive._couple_differentials` on a body that
-## drives wheels: the crank is one more output of the solve, with spin `omega / G` and compliance
-## `c / G^2` at the axle (`c` its `crank_compliance`), carrying at most the commanded capacity
-## through the ratio. The driveline loss applies by the torque's direction: driving, the crank pays
-## `1 / efficiency` of what reaches the axle, so its compliance there is `c / (G^2 eta)` and its
-## capacity `C |G| eta`; in overrun the wheels pay it (`eta c / G^2`, `C |G| / eta`). The settled
-## spread's sign does not depend on compliance, so the first solve tells which.
-## `wheel_solve(spin, compliance, capacity)` returns the axle torque (N·m, + = pushes the wheels
-## forward) the coupling passes the driven wheels, solved with their holds. While `converting` the
-## converter's law is solved instead (`TorqueConverter.solve`), against `wheel_spin(axle_torque)`,
-## the driven wheels' settled mean spin with that torque. Lands a crossing of the redline on fuel
-## (`LIMITER_LANDING_STEPS`), commits `applied_throttle`, settles the crank, locks a slipping
-## coupling that carried less than its capacity, and returns that torque. In N or P, or open, the
-## crank settles free and it returns 0.
+## The gearbox-output coupling, solved first in `WheelDrive._couple_differentials`: the crank is
+## one more output, spin `omega / G` and compliance `c / G^2` at the axle, the loss by direction
+## (driving `c / (G^2 eta)`, capacity `C |G| eta`; overrun `eta c / G^2`, `C |G| / eta`).
+## `wheel_solve(spin, compliance, capacity)` returns the axle torque (+ = forward) with the wheels'
+## holds; while `converting`, `TorqueConverter.solve` runs against `wheel_spin` instead. Locks a
+## coupling that carried under its capacity. Returns the axle torque; 0 in N, P or open.
 func couple(wheel_solve: Callable, wheel_spin: Callable) -> float:
 	var g := ratio_for_byte(spec, gear_byte)
 	var fuel := applied_throttle

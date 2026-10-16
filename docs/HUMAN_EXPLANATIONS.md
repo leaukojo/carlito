@@ -20,8 +20,8 @@ ice, plough a field, couple a trailer and deliver it, ...) that teach CAN by mak
 is locked out for the attempt; you read the signals and send the commands yourself. Each pass is
 timed, and your best times are kept between visits. Press 5 (or CHALLENGE) to pick one.
 
-It's built in Godot 4.7 and exported to WebAssembly. Physics runs at a locked 60 Hz with
-interpolation for smooth rendering.
+It's built in Godot 4.7 and exported to WebAssembly. Physics runs at 60 Hz with interpolation for
+smooth rendering.
 
 ## The one idea that organizes everything: the contract
 
@@ -85,7 +85,7 @@ themselves are never detuned to suit a keyboard.
 - **Drivetrain** is pure math (torque, gears, and RPM computed back from wheel speed — or from
   the torque converter, whichever is spinning the engine faster).
 - **RayWheel** is a one-raycast-per-wheel suspension and tire model, clamps tuned to keep
-  physics stable at exactly 60 Hz — the tick rate is locked because of this.
+  physics stable at 60 Hz, so suspension tuning depends on the tick rate.
 - **BaseVehicle** ties it together: reads input, runs wheels and drivetrain, publishes
   telemetry, drives lamps and horn.
 
@@ -198,33 +198,8 @@ the bottom of a short window.
 
 ## Testing and CI
 
-All the pure logic — drivetrain math, input arbitration, telemetry derivations, buoyancy,
-terrain/road/scatter/bake math — is covered by gdUnit4 unit tests (over 1,700 test
-cases). Anything with logic worth testing is written as a static pure function, so tests
-don't need a running game.
-
-Every push runs CI: editor-type, head-include, orphan and doc-reference gates → import →
-stale-bake check → bake → tests → two headless boot smokes → web export, with a straight-line
-tracking check and a semi-truck launch check running alongside. `dev` auto-publishes with cache-busted
-filenames; `stable` moves only on the manual promote button (`docs/deploying.md`).
-`tools/preflight.ps1` runs most of the same gates locally.
-
-## House rules worth knowing (and why)
-
-A digest for orientation — `CLAUDE.md`'s standing rules are the authoritative copy.
-
-- **Physics is 60 Hz, forever** — suspension tuning depends on the tick length.
-- **One contract file, everything generated.** Never hand-copy a signal list.
-- **All input arbitration lives in InputRouter.**
-- **Telemetry is read out of the simulation, never invented.**
-- **Lamp state rides the input struct** — no local blink timer; the simulator is the
-  authority.
-- **Baked geometry ships, authoring content doesn't** — an export plugin strips it.
-- **Trimesh collision is the exception** — ground is a heightmap shape, props get boxes or
-  convex hulls.
-- **No emoji in UI** — the web font has no glyphs.
-- **Loading a stranger's level file is code execution** (Godot scenes embed scripts), so
-  level sharing is out of scope.
-
-More sharp edges: the `CLAUDE.md` files (root, and one beside the code they bind), before
-touching wheels, bakes, or the web export.
+All the pure logic is covered by gdUnit4 unit tests. Anything with logic worth testing is
+written as a static pure function, so tests don't need a running game. Every push runs CI
+(`docs/overview.md` § Testing & CI); `dev` publishes itself, `stable` moves only on the manual
+promote button (`docs/deploying.md`). The house rules and their reasons are root `CLAUDE.md`'s
+standing rules.

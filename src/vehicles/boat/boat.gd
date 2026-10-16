@@ -4,7 +4,7 @@ extends BaseVehicle
 ## and push the hull up, thrust acts at the stern, the rudder makes yaw torque, the hull below the
 ## waterline drags against the level's CurrentField and the hull above it takes windage from the
 ## level's WindField: two frames on one body. Force magnitudes are static functions with one-tick
-## clamps (`src/vehicles/CLAUDE.md` § The 60 Hz tick). Hull geometry is node knobs; engine tuning
+## clamps (`src/vehicles/CLAUDE.md` § Physics). Hull geometry is node knobs; engine tuning
 ## lives in the variant's spec. The autopilot (BoatAutopilot) steers through the helm slew; see
 ## _autopilot.
 

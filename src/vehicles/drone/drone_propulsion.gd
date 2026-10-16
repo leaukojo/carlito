@@ -2,7 +2,7 @@ class_name DroneProp
 extends RefCounted
 ## Quad propulsion chain: pure statics. Demand -> four motor commands, speeds, thrusts, currents,
 ## temps, rotor rpm. Nothing reaches back to DroneVehicle. Constants' arithmetic: drone.gd @exports
-## (max_attitude_torque, max_yaw_torque, prop_torque_ratio); rules: `src/vehicles/drone/CLAUDE.md`.
+## (max_attitude_torque, max_yaw_torque, prop_torque_ratio).
 
 
 # ---------------------------------------------------------------- the airframe

@@ -13,8 +13,7 @@ const SubsystemCounts := preload("res://src/input/subsystem_counts.gd")
 ## wire); `tests/test_drone_modes.gd` pins both.
 enum { STABILIZE = 0, ALT_HOLD = 1, LOITER = 2, RTL = 3, LAND = 4 }
 
-## How many modes the Z key walks; from the leaf-counts module so the router (which must not depend
-## on a vehicle class) sees the same number.
+## From the leaf-counts module so the router, which must not depend on a vehicle class, agrees.
 const COUNT := SubsystemCounts.FLIGHT_MODES
 
 ## RTL's three legs. Internal only, not a contract enum: `mode_actual` reports RTL then LAND.
@@ -61,21 +60,16 @@ const LAND_RATE := 1.0
 
 # --- the soft geofence ---
 
-## The fence is soft, an accepted COMPROMISE: a breach latches a forced RTL, never brakes, blocks or
-## teleports, so a craft can overshoot it.
-##
-## Horizontal radius (m) around home; also the contract's `home_dist` range top (pinned by test),
-## so the bar fills as the craft approaches it.
+## COMPROMISE: the fence is soft; a breach latches a forced RTL, so a craft can overshoot it.
+## Horizontal radius (m) around home; also the contract's `home_dist` range top (pinned by test).
 const GEOFENCE_RADIUS := 400.0
 ## Ceiling (m) ABOVE HOME, not sea level, so a mountain home gets the same air.
 const GEOFENCE_CEILING := 120.0
 
 # --- the fix the MODE decides on ---
 
-## s a fix change must stand before it moves the mode. `sats` turns over four of sixteen sky rays a
-## tick, so raw fix_type flips across the 4-satellite line within ticks at a shed's edge; undebounced
-## that is a mode change per tick, each re-seating the hold targets. Symmetric: a one-tick dropout
-## must not drop a LOITER, nor a one-tick reacquisition re-enter one.
+## s a fix change must stand before it moves the mode, both ways: raw fix_type flickers at a
+## shed's edge, and each mode change re-seats the hold targets.
 const FIX_DEBOUNCE := 1.0
 
 
@@ -109,9 +103,8 @@ static func fence_latch(latched: bool, armed: bool, pos: Vector3, home: Vector3,
 	return latched or geofence_breach(pos, home, radius, ceiling)
 
 
-## Is the craft in a breach the pilot already answered? The caller sets it true when a mode change
-## cancels a latched fence RTL; else `fence_latch` re-latches the same tick and the RTL could only
-## be cancelled from inside the fence. Holds while outside, clears on re-entry or disarm.
+## Is the craft in a breach the pilot already answered (a mode change cancelled the fence RTL)?
+## Else `fence_latch` re-latches the same tick. Clears on re-entry or disarm.
 static func fence_answered(answered: bool, armed: bool, pos: Vector3, home: Vector3,
 		radius: float, ceiling: float) -> bool:
 	return answered and armed and geofence_breach(pos, home, radius, ceiling)
@@ -211,12 +204,9 @@ static func alt_hold_collective(hover: float, rate_err: float, integ: float,
 
 # --- the position controller ---
 
-## Tilt that flies the craft toward a point: PD, no integrator.
-##
-## `err`/`vel` are in the craft's heading frame as (forward, right) m and m/s. The return uses
-## `DroneVehicle.level_target_up`'s tilt convention (x about right axis, y about forward axis), so a
-## target ahead comes back negative x, like the manual `-input.throttle` path (a positive rotation
-## about the right axis leans the up-vector backward). Limited as a vector to `max_tilt_rad`.
+## Tilt that flies the craft toward a point: PD, no integrator. `err`/`vel` are (forward, right)
+## in the heading frame; the return is in `DroneVehicle.level_target_up`'s convention, so a target
+## ahead comes back negative x, like the manual `-input.throttle` path.
 static func position_tilt_demand(err: Vector2, vel: Vector2, max_tilt_rad: float) -> Vector2:
 	var demand := Vector2(
 			-(POS_KP * err.x - POS_KD * vel.x),

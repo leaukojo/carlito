@@ -1,7 +1,7 @@
 class_name ChaseCamera
 extends Camera3D
 ## Chase camera on the BaseVehicle camera-target contract. It follows in _process via
-## get_global_transform_interpolated() (src/vehicles/CLAUDE.md § The 60 Hz tick).
+## get_global_transform_interpolated(), never global_transform (60 Hz physics + interpolation).
 ##
 ## Four views, cycled by [method cycle]: CHASE (yaw-only follow, default), HOOD (rigid to the
 ## body), ISO (fixed 3/4 angle, orthogonal) and TOP (overhead yaw-follow). Every view but HOOD

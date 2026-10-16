@@ -15,7 +15,7 @@ const COMPASS := ["NORTH", "NORTHEAST", "EAST", "SOUTHEAST", "SOUTH", "SOUTHWEST
 		"NORTHWEST"]
 
 ## Families whose physics reads the level's wind (drone/plane drag, BoatVehicle windage —
-## src/vehicles/CLAUDE.md § Free bodies); ground vehicles and the train ignore it.
+## `VehicleMath.air_damper`); ground vehicles and the train ignore it.
 const WIND_FAMILIES := ["drone", "plane", "boat"]
 ## Families whose physics reads the level's current (BoatVehicle hull drag, `boat.gd`); nothing
 ## else names `CurrentField`.
@@ -36,8 +36,7 @@ const WIND_STRONG_GUST := 4.0
 const GUST_SEED := 1
 
 ## LIGHT/STRONG current: sized against `BoatVehicle`'s hull drag so a boat can still make way
-## against either preset (`src/vehicles/CLAUDE.md` § Free bodies; boats are the only current
-## reader).
+## against either preset (boats are the only current reader).
 const CURRENT_LIGHT_DRIFT := 0.5
 const CURRENT_STRONG_DRIFT := 1.5
 ## A player-picked current is one steady push for the session, not an authored tide cycle: period

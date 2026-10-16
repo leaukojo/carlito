@@ -1,19 +1,12 @@
 class_name ChallengeRunner
 extends Node
-## Runs one ChallengeDef on the loaded level. The shell adds it under the level root for an attempt
-## (`boot.gd _begin_challenge`), so it is freed with the level. It instances the def's course as a
-## runtime overlay beside the level's own content, spawns a fresh body at the course's marker with
-## the def's attachment, lays the def's visibility over the level's lighting, and each physics tick
-## builds a ChallengeFrame and steps a ChallengeAttempt. `end()` takes all of it off again.
+## Runs one ChallengeDef on the loaded level, as a child of the level root (freed with it): the
+## course as a runtime overlay, a fresh body at its marker, the def's visibility, and each tick a
+## ChallengeFrame stepping a ChallengeAttempt. `end()` takes all of it off again.
 ##
-## What comes back is acted on here:
-## - RESET (a fail zone): the constraint's warning as a notice, then a respawn.
-## - PASS / FAIL: `finished`. The attempt keeps its result and the body stays drivable.
-## - Any respawn, whatever caused it (R, a fall, a RESET), starts the attempt over from the next
-##   tick, and the start pose for the respawn after it is rolled then.
-##
-## Every START is a fresh body (`start`, and `restart` for a retry) — see `restart`. A respawn
-## within an attempt is the vehicle's own `respawn()`, which resets the machine just as far.
+## RESET (a fail zone) notices the constraint's warning and respawns; PASS / FAIL emit `finished`
+## and leave the body drivable. Any respawn (R, a fall, a RESET) restarts the attempt next tick.
+## Every START is a fresh body (`start`, `restart`).
 
 signal finished(passed: bool, elapsed_s: float, message: String)
 

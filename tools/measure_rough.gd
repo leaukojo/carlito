@@ -55,6 +55,7 @@ const BASELINE: Array[Dictionary] = [
 ## `rough` region of `docs/vehicles.md` is rewritten (`doc_region.gd`): the mud lane's matrix,
 ## and every asphalt cell that did not cross.
 const DocRegion := preload("res://tools/doc_region.gd")
+const MeasureRig := preload("res://tools/measure_rig.gd")
 const TcPedal := preload("res://tools/tc_pedal.gd")
 const DOC_EXTRA: Dictionary = {"variant": "hatchback-sports", "mfwd": false, "diff": false}
 
@@ -209,12 +210,8 @@ func _next_trial() -> void:
 ## Through the bridge, not the keyboard, as measure_grade.gd does: `InputRouter.arbitrate_local`
 ## latches reverse on a brake held at a standstill, and the settle phase is exactly that.
 func _drive(accel_pct: float, brake_pct: float, steer_pct: float) -> void:
-	Bridge.set("_active", true)
-	Bridge.set("_inbound", {
-		"key": 3, "gear": 1, "accel": accel_pct, "brake": brake_pct,
-		"steer": steer_pct, "handbrake": 0.0,
-		"diff_lock": bool(_config["diff"]), "fwd_drive": bool(_config["mfwd"]),
-	})
+	MeasureRig.drive(accel_pct, brake_pct, steer_pct, false, 1, false, 3,
+			{"diff_lock": bool(_config["diff"]), "fwd_drive": bool(_config["mfwd"])})
 
 
 func _physics_process(delta: float) -> void:

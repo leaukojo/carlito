@@ -5,7 +5,7 @@ extends RefCounted
 ## at the contact, and integrating spin from drive, brake and road-reaction torque.
 ##
 ## Tuned for the locked 60 Hz tick: the clamps below plus the semi-implicit spin step in
-## _integrate_spin keep it stable (src/vehicles/CLAUDE.md § The 60 Hz tick). Retune
+## _integrate_spin keep it stable (src/vehicles/CLAUDE.md § Physics). Retune
 ## GroundDriveSpec, never a clamp.
 
 const Layers := preload("res://src/physics/collision_layers.gd")
@@ -117,7 +117,7 @@ var anti_roll_partner: RayWheel = null
 ## COMPROMISE: a semi tractor's kingpin load is NOT folded in (it rides the rear axle without
 ## touching `mass`), so this corner mass is understated there. That is the safe way round, since a
 ## clamp sized under the true load can only be tighter; widening it to chase the load undoes the
-## stability (src/vehicles/truck/CLAUDE.md § Fifth wheel, mass, axle loads).
+## stability (src/vehicles/truck/CLAUDE.md).
 var corner_mass: float
 ## Tightens the one-tick lateral cap below `corner_mass` where the body's own tensor says the
 ## contact moves less mass sideways (`lateral_mass_at`); INF leaves `corner_mass` alone. Only
@@ -528,28 +528,12 @@ static func surface_drag_force(v_long: float, crr: float, normal_load: float, mo
 	return clampf(-signf(v_long) * crr * normal_load, -tick_cap, tick_cap)
 
 
-## Wheel spin from drive plus road-reaction torque; the brake decelerates it toward zero and never
-## reverses it. Semi-implicit on purpose: tire force is huge next to the wheel's own inertia, so an
-## explicit step makes `omega` ring at the tick rate. `reaction_stiffness` is the secant slope of
-## tire reaction against contact slip; dividing the net torque by (1 + that) is the linearized
-## implicit update (divisor >= 1, so it only shrinks a correction). Clamping the reaction instead
-## leaves a steady slip the driveline never paid for (figures: docs/vehicles.md).
-## The brake goes through the same step (`* spin_compliance`), only clamped at zero spin. Taken
-## outside it, a held brake needs the tyre to carry `1 + reaction_stiffness` times its torque
-## (figures: docs/vehicles.md). The step latches it (`brake_spin`) and `settle_spin` applies it,
-## after the differentials on a `coupled_spin` wheel. `abs_slip` > 0 stops the brake at the spin
-## that braking slip leaves (`abs_floor`), against the contact's `v_long` at the tick's end.
-## The step solves for SLIP, not spin: `dv_long`, the road's change under the wheel over the tick
-## (the body's last one, as the predictor), is followed in proportion to the grip (`k / (1 + k)`),
-## and only the rest pays the divisor. Solved for spin alone, every tick the body accelerates costs
-## the wheel `I * a * k / r` it never needed: ~12 % of a full brake mid-stop, 6-9 % on a launch.
-## This lands within ~3 % of a 480 Hz reference (figures: docs/vehicles.md).
-## `tcs_slip` > 0 latches a traction-control hold the same way (`tcs_spin`, `tcs_ceiling`): the
-## drive's share of the step (`drive_torque` plus `tcs_drive`, what the coupling may pass the wheel
-## this tick), taken back as far as the drive slip passes `tcs_slip` against the same end-of-tick
-## road speed as ABS, and never more than that share: TC removes drive, never brakes. A negative
-## drive is held the same way on its own side. `settle_spin` applies it before the brake, so a
-## `coupled_spin` wheel's hold is solved with the differentials.
+## Wheel spin from drive plus road-reaction torque, semi-implicit (an explicit step rings at the
+## tick rate): the net torque is divided by (1 + `reaction_stiffness`), never the reaction clamped.
+## It solves for SLIP: the road's change under the wheel is followed in proportion `k / (1 + k)`.
+## The brake (`brake_spin`, ABS floor `abs_floor`) and the TC hold (`tcs_spin`, `tcs_ceiling`: TC
+## removes drive, never brakes) are latched by the step and applied by `settle_spin`, after the
+## differentials on a `coupled_spin` wheel. Derivation and figures: docs/vehicles.md, "Spin step".
 func _integrate_spin(drive_torque: float, reaction_torque: float, brake_torque: float,
 		drive_spec: GroundDriveSpec, delta: float, slip_vel: float, v_long := 0.0,
 		abs_slip := 0.0, dv_long := 0.0, tcs_slip := 0.0, tcs_cap_vel := 0.0,

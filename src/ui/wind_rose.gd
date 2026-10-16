@@ -1,26 +1,12 @@
 class_name WindRose
 extends Control
-## Hand-built wind and track rose, the marine counterpart of Gauge and AttitudeIndicator and
-## built the same way: one instance, shown only where the vehicle declares the whole wind/track
-## set (boat). The dashboard feeds the readings per frame and reads nothing off the contract but
-## the fact that they are declared.
+## Hand-built wind and track rose, the marine counterpart of Gauge and AttitudeIndicator, shown
+## only where the vehicle declares the whole wind/track set (boat).
 ##
-## HEADING-UP: the bow index is fixed at the top and the compass card turns under it, which is
-## what makes the two angles this instrument exists for READ AS ANGLES rather than as numbers —
-## the apparent wind sits where it blows from relative to the bow, and the gap between the track
-## needle and the fixed bow index IS the crab angle (contract: cog minus heading is leeway plus
-## the set of the tide).
-##
-## Conventions are the contract's, verbatim: 'awa' 0 = dead ahead and negative = from port, so
-## starboard is screen-right; 'twd' and 'cog' are absolute compass bearings converted here to
-## relative ones. Either sign backwards makes an instrument worse than none — pinned in
-## tests/test_dashboard.gd via `needle_dir` / `relative_bearing`.
-##
-## TWO ANGLES HERE ARE UNDEFINED AT ZERO SPEED and both read 0, a perfectly good bearing: 'awa'
-## when the relative air is calm, and 'cog' with no way on. Each is gated on its own speed
-## reading and reads "---" instead — the same trap 'depth' answers with its -1.
-##
-## Plain text + color only, no emoji.
+## Heading-up: the bow index is fixed and the card turns, so the gap between the track needle and
+## the bow index IS the crab angle. Signs are the contract's ('awa' negative = from port), pinned
+## in tests/test_dashboard.gd. 'awa' and 'cog' are undefined at zero speed (both read 0, a valid
+## bearing), so each is gated on its own speed and reads "---".
 
 const DISC_INSET := 6.0        ## disc inset from the widget's short edge, for the bezel stroke
 const CARD_STEP := 30          ## compass card ticks, degrees

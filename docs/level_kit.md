@@ -29,7 +29,8 @@ fails; excludes need a `reason`.
 `roads/sign-highway{,-wide,-detailed}`, `commercial/building-{a,c}`. Generated files keep
 their existing `uid://` (`gen_kit_assets._keep_uid`).
 
-**Scales and thumbnails.** Lane-fit rule and palette cell sizes: `kit/CLAUDE.md`. Racing:
+**Scales and thumbnails.** Per-kit scales live in the recipe, `kit/import/<kit>.json` (lane-fit:
+~12 m two-lane vs the 1.8 m car); roads palette cell `(12, 3, 12)`. Racing:
 cubic `(12, 12, 12)`, corner-anchor, bridge y-offset **0.393**. `road-curve` is the 2×2
 sweeping curve; `road-bend` the tight 1×1 corner. All palette GridMaps need `cell_center_y =
 false`. Thumbnails (windowed-only, never CI: `tools/CLAUDE.md`): `tools/gen_thumbs.tscn`
@@ -90,7 +91,7 @@ breaks 3D nav in 4.6): Palette / Terrain / Scatter / Roads / Polish; selecting a
 `HeightmapTerrain` / `ScatterCanvas` / `RoadPath` jumps to its tool tab. **Level card
 (Polish tab):** **Set thumbnail view** writes `<level>_shot.tres`; **Shoot thumbnail**
 writes `src/ui/level_thumbs/<registry id>.png` via `tools/gen_level_thumbs.tscn` against the
-**baked** level (side-car rationale: `src/levels/CLAUDE.md`); all levels at once:
+**baked** level (a side-car, never a node: the level `.tscn` is a bake input); all levels at once:
 `tools/gen_level_thumbs.tscn` (windowed).
 
 - **`palette_dock.gd`:** reads `kit/import/*.json`, buckets by family
@@ -106,8 +107,9 @@ writes `src/ui/level_thumbs/<registry id>.png` via `tools/gen_level_thumbs.tscn`
 
 ## Terrain generation & splat ground
 
-`HeightmapTerrain` mesh chunking, collision shape, normals and splat-sampling rules:
-`kit/CLAUDE.md`. Chunk size: `chunk_cells` (default 64) under an unowned `Chunks` node.
+`HeightmapTerrain`: the render mesh is chunked for frustum culling (not LOD); collision stays one
+`HeightMapShape3D`; normals are analytic (per-chunk `generate_normals()` seams borders); UVs are
+global; the splatmap is sampled raw (no `source_color`: sRGB bends weights). Chunk size: `chunk_cells` (default 64) under an unowned `Chunks` node.
 
 **Generator:** `TerrainGen` (`kit/terrain/terrain_gen.gd`, static pure fns,
 `tests/test_terrain_gen.gd`). Preset = character (fractal type, amplitude, island falloff).
@@ -155,7 +157,7 @@ beneath. Paint is additive and biased undercover on purpose (never widen the ins
 out of grip reach and need none.
 
 Generated-PNG import settings (`detect_3d/compress_to=0`, `process/fix_alpha_border=false`),
-written by `TerrainGen.ensure_import_settings`; rationale: `src/levels/CLAUDE.md`. Demo:
+written by `TerrainGen.ensure_import_settings` (runtime `get_image()` needs lossless, no mipmaps). Demo:
 `src/levels/island/level_1/level_1.tscn`, 512 m terraced island, seed **499399**, ISOBUS
 farm playground (`tools/gen_farm_playground.tscn`). Levels 2-4: hand-dressed on a one-shot
 `tools/gen_islands.gd` scaffold (never re-run). Level 5: railway (`tools/gen_rail_level.gd`).
@@ -193,8 +195,8 @@ emit `source_image_replaced(kind)`, nulling the brush's cached image.
 
 ## Scatter
 
-Stored-transform contract, ground-snap fallback, and the stale-guard mechanism:
-`kit/CLAUDE.md`. Stored in the level `.tscn` (`stored_transforms`, stride 5: x, y, z, yaw,
+The stored transforms are the only artifact (no expansion at bake or runtime); ground snap drops
+un-snappable points (no Y=0 fallback); weld-mode prefabs in scatter are a bake error. Stored in the level `.tscn` (`stored_transforms`, stride 5: x, y, z, yaw,
 scale — `@export_storage`).
 
 - **`ScatterBase`** (`scatter_base.gd`): shared core — `items`/`stored_transforms`/
@@ -215,7 +217,7 @@ scale — `@export_storage`).
 continue one lattice with no seam.
 
 Stale-scatter guard (config warning + **`bake()` fails** + **`check_level_file` reports
-stale**): stores `ground_hash` (sha256 of terrain state); detail: `kit/CLAUDE.md`.
+stale**): stores `ground_hash` (sha256 of terrain state), so a terrain edit or a conform trips it.
 **Re-snap to ground** re-snaps stored Ys in place, keeps XZ/yaw/scale, drops groundless
 instances.
 
@@ -236,7 +238,9 @@ Bridges ride the same pieces (no bridge class): `RoadProfile.base_depth` > 0 mak
 Rails ride the same pieces too: a **`RailProfile`** (extends `RoadProfile`, gauge **1.44
 m**, preset `rail_profile.tres`); Roads panel's Rail checkbox swaps profile. A baked level
 emits a `RailTrack` node (`src/levels/base/rail_track.gd`) per rail road; the train runs
-only on a closed loop (`RailTrack.find_closed_rail`). Rail mechanics: `kit/CLAUDE.md`.
+only on a closed loop (`RailTrack.find_closed_rail`, the one walk that finds a loop, so the train
+never runs where the level refuses to spawn it). Its rib walls are vertical, so its cross-section
+drops degenerate strips on **both** axes.
 `tools/gen_rail_level.gd` builds level 5's loop.
 
 ### Draw mode and drape
@@ -273,7 +277,10 @@ and prefab in `CONFORM_PREFAB_FAMILIES`. Tile deck runs curb-to-curb ±4.8 (9.6 
 first/last ring so a bridge is solid, not an open tube. Near-closed loops leave a real
 collision hole past the 1 mm weld; `RoadPath` flags a gap smaller than the ribbon's
 half-width. Conform samples the curve at `adaptive_offsets` rings, flattens to road height
-minus `conform_epsilon`; `conform_falloff` smoothsteps beyond the plateau. Conform rules and
-authoring order: `kit/CLAUDE.md`.
+minus `conform_epsilon`; `conform_falloff` smoothsteps beyond the plateau. Conform flattens the
+**full half-width incl. skirt**, projects onto the nearest centerline **segment** (the nearest
+sample is wrong on grades) and floor-quantizes to 8-bit, so `edge_drop` must absorb ε +
+height/255 (conform warns). Authoring order: terrain → roads + conform → splat → scatter (conform
+trips the scatter guard by design).
 
 **Non-goals:** root `CLAUDE.md`.

@@ -262,7 +262,7 @@ func test_universal_rows_are_the_ungated_ones() -> void:
 	assert_bool(Registry.applies(&"handbrake", _ctx("drone"))).is_false()
 
 
-## Rule 10: the web font has no emoji glyphs, so anything non-ASCII on a button renders as tofu.
+## The web font has no emoji glyphs, so anything non-ASCII on a button renders as tofu.
 func test_labels_are_present_and_plain_ascii() -> void:
 	for entry in Registry.ENTRIES:
 		var label := String(entry["label"])

@@ -1,21 +1,12 @@
 class_name StaticMeshMerge
 extends RefCounted
-## Folds a Node3D subtree's static MeshInstance3D children into one merged mesh per PIVOT GROUP:
-## every Node3D with >= 2 direct MeshInstance3D children (after skips) gets one new "MergedMesh"
-## child, one surface per distinct get_active_material(surface). Never merges across a pivot: a
-## mesh only joins its own direct parent's group, so an articulating part (a rockshaft arm, the
-## farm tipper's TipBody) still poses the merged node like the originals.
+## Folds a Node3D subtree's static MeshInstance3D children into one "MergedMesh" per PIVOT GROUP
+## (a Node3D's direct mesh children), one surface per material, so articulating parts still pose.
+## Originals are HIDDEN, never freed (farm_tipper.gd and the hitch sweeps read per-part meshes).
 ##
-## Originals are HIDDEN, never freed: farm_tipper.gd reads the Ram/Rod CylinderMesh height off its
-## own scene, and the sweeps in tests/test_three_point_hitch.gd expect the per-part AABBs, not one
-## union. Merging is idempotent: a MERGED_META node is never folded again, and a hidden original
-## is never a candidate on a second pass.
-##
-## The per-vertex math is a LOCAL COPY of `SurfaceAccumulator` in kit/bake/level_baker.gd, not a
-## preload: src/vehicles/ must not depend on kit/ (baker code is hash-stamped, BAKE_CODE_INPUTS).
-## UVs and vertex colours carry only when every merged surface has them; tangents are dropped. Unlike
-## the baker, surfaces are NOT quantized (ARRAY_FLAG_COMPRESS_ATTRIBUTES): these are small parts
-## near the camera, and full-precision normals matter more on a thin rod than the bytes saved.
+## The vertex math is a LOCAL COPY of `SurfaceAccumulator` in kit/bake/level_baker.gd: src/vehicles/
+## must not depend on hash-stamped kit/ code. Unlike the baker it does not quantize: full-precision
+## normals matter more on a thin rod near the camera than the bytes saved.
 
 ## Meta key marking a node as StaticMeshMerge's own output.
 const MERGED_META := &"static_mesh_merge"

@@ -1054,8 +1054,7 @@ func _axis_boxes(node: Node, xf: Transform3D, out: Array) -> void:
 
 
 func test_no_two_boxes_share_a_face_plane_and_a_facing() -> void:
-	# The z-fight rule, asserted instead of remembered. src/vehicles/truck/CLAUDE.md § Trailer
-	# authoring states it: two boxes that TOUCH on a face plane flicker, two that OVERLAP never do,
+	# The z-fight rule, asserted instead of remembered: two boxes that TOUCH on a face plane flicker, two that OVERLAP never do,
 	# and the safe pairs are the ones whose faces point at each other, because back-face culling
 	# drops one of them. So what is forbidden is a shared plane with a shared facing (both minima or
 	# both maxima on the same axis) over a patch big enough to see.

@@ -1,32 +1,8 @@
 class_name ShaderWarmup
 extends RefCounted
-## Front-loads shader compiles behind the loading screen. gl_compatibility has no ubershader:
-## every material variant compiles synchronously on its first draw, so geometry scrolling into
-## view (cresting a hill) hitches the frame it arrives. While begin() is in effect the renderer
-## draws the WHOLE level every frame — each instance's culling box is grown past the level, so
-## every chunk, scatter MultiMesh, prop and vehicle is submitted in its real passes (shadow
-## cascades included) with its real vertex format and instancing. Nothing on screen changes:
-## geometry outside the frustum is still clipped on the GPU. The cost is a few full-level frames,
-## which the loading screen covers.
-##
-## Particles need a twin: an emitter that has never emitted is inactive and is never drawn, so
-## growing its box compiles nothing. Each GPUParticles3D gets an emitting copy sharing its
-## process and draw materials; the original is left alone (WheelDrive.update_dust rewrites its
-## `emitting` every tick).
-##
-## Hidden instances (the plane's prop disc, a lamp lens) are never submitted however wide their
-## box, so each is shown for the warmup frames and hidden again in end(); an instance under a
-## hidden ANCESTOR still isn't drawn and compiles on its first reveal.
-##
-## Not covered: materials first seen after the load (a V / garage body swap, an E attachment)
-## and light-count variants (headlights, night) still compile on the frame they first draw.
-## Hiding that hitch needs the reveal delayed a few frames behind an off-screen compile pass,
-## and `Level._spawn_vehicle` is called synchronously today — `ChallengeRunner.start()` and
-## `boot.gd`'s `_on_vehicle_picked` -> `_on_attachment_picked` both read `Level.vehicle` on the
-## line right after calling it. Covering the swap means either threading `await` through those
-## call sites or a synchronous mid-frame flush (`RenderingServer.force_draw`, unused and
-## unverified elsewhere in this codebase) — a real architecture change, not a bolt-on. Left
-## uncovered on purpose until one of those is worth doing.
+## Front-loads shader compiles behind the loading screen by drawing the whole level for a few
+## frames. The original particle emitter is left alone (WheelDrive.update_dust owns `emitting`).
+## What it covers and what it doesn't: docs/systems.md § Shell, touch controls & garage.
 
 ## GeometryInstance3D.extra_cull_margin's range maximum: metres, wider than any level.
 const CULL_MARGIN := 16384.0

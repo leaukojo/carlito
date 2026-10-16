@@ -84,8 +84,7 @@ func _ready() -> void:
 	can_sleep = false
 	# A hard fall can tunnel through thin terrain collision in one 60 Hz tick otherwise.
 	continuous_cd = true
-	# Drag is declared, never the engine's default_linear_damp (src/vehicles/CLAUDE.md § Drag and
-	# downforce).
+	# Drag is declared, never the engine's default_linear_damp (src/vehicles/CLAUDE.md § Physics).
 	linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
 	linear_damp = 0.0
 	if spec.angular_damping > 0.0:  # stability-assist yaw/roll bleed

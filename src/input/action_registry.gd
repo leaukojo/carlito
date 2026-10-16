@@ -33,17 +33,11 @@ const BRIDGE_NOTE := "sloppyCAN is driving"
 ## A live bridge that carries no driving control: the keyboard drives, sloppyCAN still sets this.
 const BRIDGE_SETS_NOTE := "set by sloppyCAN"
 
-## Every bound action, one row each — one control on two keys (drive/reverse, steer, climb)
-## becomes one row. Gating fields: families (empty = all), excludes, capability
-## (shell-read bool), bridge_owned (VehicleInput-only, inert when bridge active; shell signals
-## are always local), driving (bridge-owned only while the bridge DRIVES — the rows
-## InputRouter.blend_local_driving hands to the keyboard when a live bridge carries no driving
-## control). signals: contract IN signal(s), cross-checked vs contract's vehicles list.
-## touch_state: a VehicleInput field that is truthy while the switch is engaged — the button
-## then reads "<label> ON" in amber. Only for on/off switches; a cycled ladder has no ON.
-##
-## Pedals/joystick are equally inert under bridge but deliberately NOT flagged — they're the
-## overlay's identity and flickering them with bridge freshness reads as broken.
+## Every bound action, one row each (one control on two keys is one row). Gating: families (empty
+## = all), excludes, capability, bridge_owned (inert under the bridge), driving (bridge-owned only
+## while the bridge DRIVES). signals: contract IN signal(s). touch_state: a VehicleInput field
+## truthy while an on/off switch is engaged (the button reads "<label> ON" in amber).
+## Pedals/joystick are not flagged on purpose: greying them with bridge freshness reads as broken.
 const ENTRIES: Array[Dictionary] = [
 	# --- drive ---------------------------------------------------------------
 	{
@@ -85,8 +79,7 @@ const ENTRIES: Array[Dictionary] = [
 	},
 	{
 		# No `signals`, deliberately: on a semi this reads the same local toggle as a tipper
-		# valve with no contract signal of its own (see src/vehicles/truck/CLAUDE.md § Four
-		# trailers). Naming hitch_pos here would fail the family cross-check for the right reason.
+		# valve with no contract signal of its own (see src/vehicles/truck/CLAUDE.md). Naming hitch_pos here would fail the family cross-check for the right reason.
 		"id": &"hitch", "actions": ["hitch"], "group": Group.VEHICLE,
 		"label": "Raise / lower the hitch (tip the body)",
 		"capability": "lift", "bridge_owned": true,

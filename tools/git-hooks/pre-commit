@@ -78,33 +78,4 @@ if echo "$staged" | grep -v '\.md$' | grep -qE "$bake_re"; then
   fi
 fi
 
-# 5. project.godot touched -> restore the frozen 60 Hz physics pin (rule 9) if the
-#    editor's UI-save dropped a value equal to its own built-in default.
-if echo "$staged" | grep -q '^project\.godot$'; then
-  fixed=0
-  # pin_setting <key> <value>: rewrite a wrong value in place, else add the key under
-  # [physics], else append the whole section.
-  pin_setting() {
-    grep -q "^$1=$2\$" project.godot && return 0
-    fixed=1
-    if grep -q "^$1=" project.godot; then
-      sed -i "s|^$1=.*|$1=$2|" project.godot
-    elif grep -q '^\[physics\]$' project.godot; then
-      sed -i "/^\[physics\]\$/a $1=$2" project.godot
-    else
-      printf '\n[physics]\n\n%s=%s\n' "$1" "$2" >> project.godot
-    fi
-  }
-  pin_setting common/physics_ticks_per_second 60
-  pin_setting common/physics_interpolation true
-  if ! grep -q '^common/physics_ticks_per_second=60$' project.godot \
-      || ! grep -q '^common/physics_interpolation=true$' project.godot; then
-    echo "pre-commit: could not restore the 60 Hz physics pin in project.godot (rule 9)" >&2
-    exit 1
-  fi
-  if [ "$fixed" = 1 ]; then
-    git add project.godot
-    echo "pre-commit: restored the 60 Hz physics pin in project.godot (rule 9)."
-  fi
-fi
 exit 0

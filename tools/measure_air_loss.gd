@@ -1,6 +1,6 @@
 extends Node3D
 ## Dev utility and CI gate: a live truck losing its air. Below `TruckTelemetry.AIR_SPRING_BRAKE_BAR`
-## on either circuit the spring brakes apply and the box drops to N (`truck/CLAUDE.md` § Brakes);
+## on either circuit the spring brakes apply and the box drops to N (`docs/heavy_vehicles.md` § Air, retarder, axle load);
 ## this drives a real body through it, three passes per variant:
 ##
 ## - `park`: on the regulation grade (`BrakeSizing.regulation_grade`, the rig's mass), nose up the
@@ -30,15 +30,12 @@ extends Node3D
 
 const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
 const MeasureRig := preload("res://tools/measure_rig.gd")
-const Layers := preload("res://src/physics/collision_layers.gd")
 
 ## `all`: the Kenney truck and both tractor units, each with the trailer it spawns coupled to.
 const ALL_VARIANTS: Array[String] = ["garbage-truck", "semi", "semi-conventional"]
 const PASSES: Array[String] = ["park", "floor", "roll"]
 
-const RAMP_LENGTH := 400.0
-const RAMP_WIDTH := 30.0
-const RAMP_THICKNESS := 2.0
+const RAMP_SIZE := Vector3(30.0, 2.0, 400.0)  ## width, thickness, length
 const SPAWN_UP := 60.0          ## m up the ramp from its origin; a coupled trailer stays on it
 const FLAT_X := 200.0           ## the flat slab, far enough off the ramp to share no collision
 const FLAT_LENGTH := 1000.0
@@ -125,8 +122,8 @@ func _next_job() -> void:
 	_gate_tick = -1
 	_stopped_t = -1.0
 	if _pass == "park":
-		var angle := atan(BrakeSizing.regulation_grade(_rig_mass_of(_variant)))
-		_build_ramp(angle)
+		var angle := atan(BrakeSizing.regulation_grade(MeasureRig.rig_mass(_variant)))
+		_ramp = MeasureRig.tilt_ramp(self, _ramp, RAMP_SIZE, angle)
 		var tilt := Basis(Vector3.RIGHT, angle)
 		_spawn(func(car: TruckVehicle) -> Transform3D:
 			return Transform3D(tilt, tilt * Vector3(0.0, 0.0, -SPAWN_UP)
@@ -136,42 +133,6 @@ func _next_job() -> void:
 			return Transform3D(Basis.IDENTITY,
 					Vector3(FLAT_X, car.rest_ride_height(), FLAT_START_Z)))
 	_to(Ph.SETTLE)
-
-
-## Laden mass (kg) the body parks with: its own, plus the trailer a semi spawns coupled to.
-func _rig_mass_of(variant: String) -> float:
-	var body: Node = (load(Catalog.VARIANTS[variant]["scene"]) as PackedScene).instantiate()
-	var mass: float = (body.get("spec") as VehicleSpec).mass
-	var tows := body is SemiTractor
-	body.free()
-	if tows and TrailerCatalog.is_coupled(TrailerCatalog.first()):
-		var trailer: Node = (load(TrailerCatalog.first()) as PackedScene).instantiate()
-		mass += (trailer.get("spec") as VehicleSpec).mass
-		trailer.free()
-	return mass
-
-
-## Rotated about +X so the ramp's -Z (the body's forward) climbs; its top face passes through the
-## origin. TERRAIN, or every gameplay ray (Layers.SOLID) misses it.
-func _build_ramp(angle: float) -> void:
-	if _ramp == null:
-		var shape := BoxShape3D.new()
-		shape.size = Vector3(RAMP_WIDTH, RAMP_THICKNESS, RAMP_LENGTH)
-		var collision := CollisionShape3D.new()
-		collision.shape = shape
-		var mesh := BoxMesh.new()
-		mesh.size = shape.size
-		var visual := MeshInstance3D.new()
-		visual.mesh = mesh
-		_ramp = StaticBody3D.new()
-		_ramp.name = "Ramp"
-		_ramp.collision_layer = Layers.TERRAIN
-		_ramp.collision_mask = Layers.DYNAMIC
-		_ramp.add_child(collision)
-		_ramp.add_child(visual)
-		add_child(_ramp)
-	var tilt := Basis(Vector3.RIGHT, angle)
-	_ramp.transform = Transform3D(tilt, tilt * Vector3(0.0, -RAMP_THICKNESS * 0.5, 0.0))
 
 
 ## A fresh body per pass: removing the unit takes its trailer with it, and a new one starts on spawn

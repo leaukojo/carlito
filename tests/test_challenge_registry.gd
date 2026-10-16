@@ -143,7 +143,7 @@ func test_a_manual_gearbox_needs_a_family_that_takes_a_gear() -> void:
 	_assert_problem(drone, "manual gearbox on the drone family")
 
 
-## Rule 10: the web font has no emoji glyphs.
+## The web font has no emoji glyphs.
 func test_player_facing_text_is_present_and_plain_ascii() -> void:
 	var d := _good()
 	d.title = ""

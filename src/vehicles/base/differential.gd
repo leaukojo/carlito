@@ -1,19 +1,11 @@
 class_name Differential
 extends RefCounted
 ## A differential as a friction coupling between its two outputs: pure statics, applied by
-## `WheelDrive._couple_differentials` after the wheels integrate their spin, with each output's
-## holds (traction control, brake) solved in the same step (`braked_coupling_torque`).
-##
-## Every diff splits its input torque equally (the open-diff law) and then moves a coupling torque
-## from the faster output to the slower one, bounded by a CAPACITY: 0 is an open diff, a torque-
-## biasing diff (Torsen, plate LSD) scales with the torque going through it, and a locked or rigid
-## one is unbounded. Never a traction cap: nothing here reads grip or load.
-##
-## The coupling is solved inside the wheels' semi-implicit spin step, not after it. That step is
-## linear in the applied torque (`RayWheel.spin_compliance`), so a torque `T` applied as
-## `omega -= T * compliance` after integrating is exactly what adding it to the drive torque would
-## have given. An explicit post-tick transfer skips the `1 + reaction_stiffness` divisor, acts that
-## much too strong on a gripping wheel and turns any limited-slip diff into a spool.
+## `WheelDrive._couple_differentials`. It splits input torque equally (open-diff law), then moves a
+## coupling torque from the faster output to the slower, bounded by a CAPACITY: 0 open, biasing
+## (Torsen, LSD) scaled by the torque through it, locked unbounded. Never a traction cap.
+## Solved inside the spin step (it is linear in torque, `RayWheel.spin_compliance`): a post-tick
+## transfer skips the `1 + reaction_stiffness` divisor and turns any LSD into a spool.
 
 ## Spread (rad/s) `braked_coupling_torque` reads as zero at a kink: rounding, not slip.
 const SPREAD_EPS := 1e-12
@@ -45,21 +37,12 @@ static func coupling_torque(omega_a: float, omega_b: float, compliance_a: float,
 	return clampf((omega_a - omega_b) / compliance, -capacity, capacity)
 
 
-## Coupling torque (N·m) moved from side a to side b, positive when a runs faster, with every
-## output's holds solved in the same step. Outputs `[0, n_a)` are side a, the rest side b; a side's
-## torque splits equally over its outputs (the open-diff law) and its spin is their mean, so one
-## output a side is an axle diff and an axle a side the centre. Each output enters as its spin
-## before its holds, its `compliance`, its brake (`can_take`, `stop_at`: `RayWheel.brake_spin` and
-## `abs_floor`) and its traction-control hold (`tcs_share`, `tcs_at`: `RayWheel.tcs_spin` and
-## `tcs_ceiling`; 0 share = none).
-## The settled spread `g(t)`, side a's mean spin less side b's once `t` is applied and each output
-## settled (`RayWheel.settled_spin`), is piecewise linear and never rises with `t`: the root nearest
-## zero, clamped to `capacity`, is walked off the holds' kinks exactly. So a braked output stays
-## held unless the torque the coupling must pass it beats its brake, a TC-held output stays at its
-## ceiling unless the coupling passes it more than its drive share, and between two held sides the
-## coupling carries only what holding them takes. With no hold it is `coupling_torque` on the two
-## means. The torque takes the settled spread's sign and never more than closes it, so it never
-## reverses a spread and needs no 60 Hz clamp of its own.
+## Coupling torque (N·m) moved from side a (outputs `[0, n_a)`) to side b, positive when a runs
+## faster, with every output's holds solved in the same step: brake (`can_take`, `stop_at`) and TC
+## (`tcs_share`, `tcs_at`; 0 share = none). One output a side is an axle diff; an axle a side, the
+## centre. The settled spread is piecewise linear and never rises with `t`, so its root (clamped to
+## `capacity`) is walked off the holds' kinks exactly; the torque never reverses a spread and needs
+## no 60 Hz clamp of its own.
 static func braked_coupling_torque(omega: PackedFloat64Array, compliance: PackedFloat64Array,
 		can_take: PackedFloat64Array, stop_at: PackedFloat64Array, tcs_share: PackedFloat64Array,
 		tcs_at: PackedFloat64Array, n_a: int, capacity: float) -> float:

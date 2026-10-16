@@ -10,6 +10,9 @@
 // Paths outside the repo (`../sloppycan/...`) are not checked. A hit is either fixed or added
 // to tools/docs_allow.txt (a rejected design named on purpose, a generated file) with a reason;
 // an allow entry that no longer matches anything fails too, so the list cannot rot.
+// Also fails a CLAUDE.md over its line budget (CLAUDE_MD_BUDGET; nested files default to 40), the
+// top-level docs/*.md over their one shared DOCS_LINE_CAP, and a run of whole-line comments in src/
+// or kit/ GDScript longer than COMMENT_BLOCK_CAP.
 
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -119,11 +122,56 @@ for (const key of allow) {
   if (!usedAllow.has(key)) problems.push(`  tools/docs_allow.txt: unused allow entry: ${key}`);
 }
 
-if (problems.length === 0) {
-  console.log('check_docs: every reference resolves.');
+// Raw lines per CLAUDE.md. Raising a cap is a decision made in this diff, not a side effect.
+const CLAUDE_MD_BUDGET = { 'CLAUDE.md': 110 };
+const NESTED_CLAUDE_MD_CAP = 40;
+const overBudget = [];
+for (const f of docs.filter((d) => /(^|\/)CLAUDE\.md$/.test(d))) {
+  const cap = CLAUDE_MD_BUDGET[f] ?? NESTED_CLAUDE_MD_CAP;
+  const n = read(f).replace(/\n$/, '').split('\n').length;
+  if (n > cap) overBudget.push(`  ${f}: ${n} lines, cap ${cap}`);
+}
+
+// Raw lines summed over the top-level docs/*.md (plans/ are temporary). One cap, no per-doc caps.
+const DOCS_LINE_CAP = 3280;
+const docsLines = docs.filter((d) => /^docs\/[^/]+\.md$/.test(d))
+  .reduce((sum, d) => sum + read(d).replace(/\n$/, '').split('\n').length, 0);
+if (docsLines > DOCS_LINE_CAP) overBudget.push(`  docs/*.md: ${docsLines} lines in total, cap ${DOCS_LINE_CAP}`);
+
+// Consecutive whole-line comments per block. A derivation belongs in docs/ behind a pointer.
+const COMMENT_BLOCK_CAP = 10;
+const longComments = [];
+for (const f of gdFiles.filter((g) => /^(src|kit)\//.test(g))) {
+  let run = 0;
+  read(f).split('\n').concat('').forEach((line, i) => {
+    if (/^\s*#/.test(line)) return void run++;
+    if (run > COMMENT_BLOCK_CAP) longComments.push(`  ${f}:${i - run + 1}: ${run} lines`);
+    run = 0;
+  });
+}
+
+if (problems.length === 0 && overBudget.length === 0 && longComments.length === 0) {
+  console.log('check_docs: every reference resolves; every CLAUDE.md, docs/ and comment block is within budget.');
   process.exit(0);
 }
-console.log(`check_docs: ${problems.length} dangling reference(s):\n`);
-console.log(problems.join('\n'));
-console.log('\nEach hit: fix the doc, or add "<span>" or "<file>:<span>  # reason" to tools/docs_allow.txt.');
+if (problems.length > 0) {
+  console.log(`check_docs: ${problems.length} dangling reference(s):\n`);
+  console.log(problems.join('\n'));
+  console.log('\nEach hit: fix the doc, or add "<span>" or "<file>:<span>  # reason" to tools/docs_allow.txt.');
+}
+if (overBudget.length > 0) {
+  console.log(`${problems.length > 0 ? '\n' : ''}check_docs: CLAUDE.md or docs/ over its line budget:\n`);
+  console.log(overBudget.join('\n'));
+  console.log('\nA line stays only if it binds work in its directory, cannot be read from the code or a');
+  console.log("guard's failure message, and still matches the code (root CLAUDE.md § Where things go).");
+  console.log('Cut it, or move a derivation to docs/. In docs/, a figure has one home (elsewhere a');
+  console.log('pointer) and only its latest value. Raising a cap is a decision: edit CLAUDE_MD_BUDGET or');
+  console.log('DOCS_LINE_CAP in tools/check_docs.mjs.');
+}
+if (longComments.length > 0) {
+  console.log(`\ncheck_docs: comment block over ${COMMENT_BLOCK_CAP} lines:\n`);
+  console.log(longComments.join('\n'));
+  console.log('\nKeep the constraint at its site in one or two sentences; move the derivation to docs/ and');
+  console.log('leave a one-line pointer (root CLAUDE.md § Where things go).');
+}
 process.exit(1);

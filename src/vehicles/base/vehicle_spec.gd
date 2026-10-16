@@ -1,16 +1,11 @@
 class_name VehicleSpec
 extends Resource
-## All tuning for one vehicle: a new vehicle is a new spec plus a model scene. Data-only, consumed
-## by BaseVehicle, Drivetrain and LampSet. Curves are point arrays sampled by `sample_curve` rather
-## than Curve resources, for deterministic tests.
-##
-## The wheeled ground drive is the `ground_drive` sub-resource, so a boat or drone spec carries no
-## wheel field; free bodies tune hull, airframe and aero as `@export`s on the vehicle node. The
-## boat is tuned twice over: `watercraft/boat-*.tscn` overrides fields `tools/gen_boat_variants.gd`
-## also writes, and changing one without the other is undone by the next regen.
+## All tuning for one vehicle: a new vehicle is a new spec plus a model scene. Curves are point
+## arrays (`sample_curve`), not Curve resources, for deterministic tests. Free bodies tune hull,
+## airframe and aero as `@export`s on the vehicle node. Boat fields are also written by
+## `tools/gen_boat_variants.gd`: edit the recipe, or the next regen undoes it.
 
-## Wheeled ground drive, or null with no running gear (boat, drone, train). Embedded per spec as
-## a `[sub_resource]`, never external.
+## Wheeled ground drive, or null (boat, drone, train). A `[sub_resource]` per spec, never external.
 @export var ground_drive: GroundDriveSpec
 
 @export_group("Body")
@@ -19,16 +14,13 @@ extends Resource
 @export var angular_damping := 0.0  ## 0 = engine default; raise for a narrow-track, low-yaw-inertia body as a stability-assist yaw bleed
 
 @export_group("Trailer")
-## Whether the tow unit's ISO 7638 connector carries the ISO 11992 data pair. False elsewhere by
-## design: North America runs trailer ABS on the power line (SAE J2497) with no data pair, so a
-## coupled trailer there publishes trailer_connected false with honest zeros behind it.
+## Whether the ISO 7638 connector carries the ISO 11992 data pair. False = North American SAE
+## J2497 (power-line ABS only): a coupled trailer publishes trailer_connected false, honest zeros.
 @export var trailer_bus_equipped := false
 
 @export_group("Drivetrain")
-## Whether the showroom describes this machine as having an engine. Decoration only: `Drivetrain`
-## runs for every family regardless, since the gear byte is the direction latch
-## `InputRouter.arbitrate_local` reads. Not inferred from `ground_drive == null`, because a boat's
-## outdrive has forward, neutral and reverse despite no wheels.
+## Showroom decoration only: `Drivetrain` runs for every family (the gear byte is the direction
+## latch). Not `ground_drive == null`: a boat's outdrive has gears but no wheels.
 @export var has_engine := true
 ## rpm -> engine Nm at full throttle. It may end nonzero at the redline, since
 ## `Drivetrain.limiter_cut` is the fuel cut that stops the engine; ending at zero is a droop.
@@ -46,22 +38,14 @@ extends Resource
 ## torque curve's peak; the motoring law runs linearly to it from `engine_friction_frac` at idle,
 ## and part fuel blends it in by the unfuelled share (`Drivetrain.motoring_torque`).
 @export var engine_brake_frac := 0.0
-## The motoring torque at and below idle, as a fraction of the curve's peak: the engine's friction
-## (and a petrol's closed-throttle pumping), what runs a free crank down to idle after a blip and a
-## key-off crank to rest. Sourced per class: docs/vehicles.md § Crank and coupling. 0 = none (the
-## rigid crank, which nothing observes).
+## Motoring torque at and below idle, as a fraction of the curve's peak: friction (and a petrol's
+## pumping) that runs a free crank down. 0 = none. Sourced: docs/vehicles.md § Crank and coupling.
 @export var engine_friction_frac := 0.0
-## Rotating inertia at the crank (kg·m²): crankshaft, flywheel or flexplate, and a converter's
-## impeller side. Integrated by `Drivetrain` on every wheel-driving body
-## (`Drivetrain.drives_wheels`) and reflected onto the driven wheels through the gear ratio squared
-## while the coupling is locked; unread on the rigid crank (boat, drone, train, plane). Sourced per
-## class: docs/vehicles.md § Crank and coupling.
+## Rotating inertia at the crank (kg·m²), on wheel-driving bodies only (`Drivetrain.drives_wheels`).
+## Sourced per class: docs/vehicles.md § Crank and coupling.
 @export var engine_inertia := 0.0
-## How the crank meets the gearbox: a torque converter (an automatic: `TorqueConverter`, with a
-## lock-up clutch) or a friction clutch (an AMT, a sequential or a powershift). A converter never
-## opens in gear, so it creeps, and its lock-up lets go whenever the wheel side falls under
-## `Drivetrain.converter_free_rpm`; a clutch stays locked until a shift or the controller opens it
-## (`Drivetrain.coupling_step`).
+## Torque converter (an automatic; creeps in gear, lock-up per `Drivetrain.converter_free_rpm`) or
+## friction clutch (AMT, sequential, powershift; `Drivetrain.coupling_step`).
 enum Coupling { CONVERTER, CLUTCH }
 @export var coupling: Coupling = Coupling.CONVERTER
 ## The coupling's torque rating over the torque curve's peak (`Drivetrain.clutch_rating`): about
@@ -69,9 +53,8 @@ enum Coupling { CONVERTER, CLUTCH }
 ## locked, and the ceiling on a shift's slip (`shift_handover_s`).
 @export var clutch_reserve := 1.5
 ## A converter's torque ratio with the turbine held (`TorqueConverter.torque_ratio`), falling to 1.0
-## at the coupling point. COMPROMISE: 1.0 ships, a fluid coupling; a real converter makes about 2.0
-## (docs/vehicles.md § Converter), which fails the foot brake's static stall hold on seven more
-## bodies until their brake classes are reviewed against sourced hardware.
+## at the coupling point. COMPROMISE: 1.0 (a fluid coupling) ships; a real ~2.0 fails the foot
+## brake's stall hold on seven bodies until their brakes are sourced (docs/vehicles.md § Converter).
 @export var converter_stall_ratio := 1.0
 ## Lowest D gear a converter's lock-up closes in: 1 on a 6-speed car (the converter opens only for
 ## the launch), 2 on an Allison-class box (lock-up from 2nd range standard).
@@ -79,11 +62,9 @@ enum Coupling { CONVERTER, CLUTCH }
 ## Launch target over idle (rpm) the clutch controller holds the crank at while a pull-away slips:
 ## a heavy AMT's (~300 over idle). 0 = the stall line (`Drivetrain.launch_target_rpm`).
 @export var launch_rpm_over_idle := 0.0
-## Seconds of throttle cut after a gear change (an automated manual's torque interruption, a
-## sequential's ignition cut; 0 = seamless: a powershift, or a converter automatic, whose TCU
-## reduces the engine's torque through the inertia phase instead, `Drivetrain.handover_fuel`).
-## Bridge-exact byte writes count as shifts too. During the cut the axle sees overrun only, and
-## `applied_throttle` reads 0 so telemetry sees the cut.
+## Seconds of throttle cut after a gear change (an AMT's torque interruption, a sequential's
+## ignition cut); 0 = seamless (powershift, or a converter's `Drivetrain.handover_fuel`).
+## Bridge-exact byte writes count as shifts; `applied_throttle` reads 0 through the cut.
 @export var shift_cut_s := 0.0
 ## Seconds a modulated start-up clutch takes to reach its whole rating on a pull-away (a
 ## powershift's pressure ramp); 0 = the rating is there on the first tick. See `Drivetrain.ramp`.
@@ -113,10 +94,7 @@ enum Coupling { CONVERTER, CLUTCH }
 ## An upshift goes straight to the gear a sequential box would ripple to (an AMT's or a
 ## powershift's skip-shift); a full pedal never skips (`ShiftPolicy.upshift_target`).
 @export var skip_shifts := false
-## The highest gear a pull-away may start in (`ShiftPolicy.start_gear`: the highest whose launch
-## drive beats the load standing on the grade by `ShiftPolicy.START_RESERVE`). No downshift goes under
-## it until the coupling locks; a launch that does not move steps it down. 0 or 1 = D1, the requested
-## byte.
+## The highest gear a pull-away may start in (`ShiftPolicy.start_gear`). 0 or 1 = D1.
 @export var start_gear_max := 0
 @export var speed_limit_kmh := 0.0  ## road-speed governor, km/h; 0 = ungoverned (J1939 SPN 74). Fades throttle over `Drivetrain.GOVERNOR_BAND` so it settles instead of hunting
 

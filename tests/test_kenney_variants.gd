@@ -364,7 +364,7 @@ func test_measured_geometry_still_matches_the_models() -> void:
 
 ## A regen of an up-to-date scene is a no-op. Breaks when a new generated child is missing from
 ## GENERATED_CHILDREN (the next regen transplants the old copy beside the new one) or a hand `;`
-## comment sits in the scene (a regen drops it); see src/vehicles/kenney/CLAUDE.md.
+## comment sits in the scene (a regen drops it).
 func test_regen_reproduces_every_shipped_scene() -> void:
 	var gen := _gen()
 	var scratch := "user://test_kenney_regen.tscn"

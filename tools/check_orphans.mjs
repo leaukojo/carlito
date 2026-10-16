@@ -6,11 +6,14 @@
 // (a comment naming a function is not a caller). tests/ does NOT
 // count: a function reachable only from its own test suite is exactly the never-wired case
 // this looks for, same as if nothing called it at all.
+// It also flags tracked tools/ scripts no other tracked file names (a mention in any doc counts,
+// so this catches abandoned scripts, not sprawl).
 //     node tools/check_orphans.mjs
 // A hit is either wired up, deleted, or added to tools/orphans_allow.txt with a reason.
 
+import { execSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { extname, join, relative } from 'node:path';
+import { basename, extname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -119,16 +122,48 @@ for (const def of definitions) {
   if (!hasCaller) orphans.push({ ...def, relFile });
 }
 
-if (orphans.length === 0) {
-  console.log('check_orphans: no unwired public functions found.');
+// A tools/ script's own scene and uid sidecar do not count as references to it.
+const TOOL_EXTS = new Set(['.gd', '.mjs', '.ps1', '.py']);
+const tracked = execSync('git ls-files', { cwd: repoRoot, encoding: 'utf8' })
+  .split('\n')
+  .filter((f) => f && !f.startsWith('reports/'));
+const textOf = new Map();
+for (const f of tracked) {
+  try {
+    const src = readFileSync(join(repoRoot, f), 'utf8');
+    if (!src.includes('\0')) textOf.set(f, src);
+  } catch {
+    // listed but deleted in the working tree
+  }
+}
+const orphanTools = tracked.filter((tool) => {
+  if (!tool.startsWith('tools/') || !TOOL_EXTS.has(extname(tool))) return false;
+  const stem = tool.slice(0, -extname(tool).length);
+  const name = basename(stem);
+  for (const [f, src] of textOf) {
+    if (f === tool || f === `${stem}.tscn` || f === `${tool}.uid`) continue;
+    if (src.includes(name)) return false;
+  }
+  return true;
+});
+
+if (orphans.length === 0 && orphanTools.length === 0) {
+  console.log('check_orphans: no unwired public functions or tools/ scripts found.');
   process.exit(0);
 }
 
-console.log(`check_orphans: ${orphans.length} public function(s) with no caller anywhere outside tests/:\n`);
-for (const o of orphans) {
-  console.log(`  ${o.relFile}:${o.line}: ${o.name}`);
+if (orphans.length > 0) {
+  console.log(`check_orphans: ${orphans.length} public function(s) with no caller anywhere outside tests/:\n`);
+  for (const o of orphans) {
+    console.log(`  ${o.relFile}:${o.line}: ${o.name}`);
+  }
+  console.log(
+    '\nEach hit: wire it up, delete it, or add "<path>:<func>  # reason" to tools/orphans_allow.txt.',
+  );
 }
-console.log(
-  '\nEach hit: wire it up, delete it, or add "<path>:<func>  # reason" to tools/orphans_allow.txt.',
-);
+if (orphanTools.length > 0) {
+  console.log(`check_orphans: ${orphanTools.length} tools/ script(s) no other tracked file names:\n`);
+  for (const t of orphanTools) console.log(`  ${t}`);
+  console.log('\nEach hit: reference it from a doc, skill or CI line, or delete it.');
+}
 process.exit(1);

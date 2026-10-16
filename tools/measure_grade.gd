@@ -35,7 +35,6 @@ extends Node3D
 ##   godot --headless --path . res://tools/measure_grade.tscn -- semi climb grade=8 pedal=0.6
 
 const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
-const Layers := preload("res://src/physics/collision_layers.gd")
 const Groups := preload("res://src/levels/base/carlito_groups.gd")
 
 ## Named surfaces, (grip, added crr) — the shipped island channel tables
@@ -82,6 +81,7 @@ const LEVEL_STEP := 4.0   ## m between road-curve samples in level mode
 ## `doc=grade` (arg 1): this set over asphalt and mud, then the `grade` region of
 ## `docs/vehicles.md` is rewritten (`doc_region.gd`). The flags are per job here, not per run.
 const DocRegion := preload("res://tools/doc_region.gd")
+const MeasureRig := preload("res://tools/measure_rig.gd")
 const MeasureVehicles := preload("res://tools/measure_vehicles.gd")
 const DOC_SURFACES: Array[String] = ["asphalt", "mud"]
 const DOC_JOBS: Array[Dictionary] = [
@@ -349,27 +349,7 @@ func _begin_trial(angle_deg: float) -> void:
 
 func _build_ramp(angle_deg: float) -> void:
 	var a := deg_to_rad(angle_deg)
-	if _ramp == null:
-		var shape := BoxShape3D.new()
-		shape.size = Vector3(RAMP_WIDTH, RAMP_THICKNESS, RAMP_LENGTH)
-		var collision := CollisionShape3D.new()
-		collision.shape = shape
-		var mesh := BoxMesh.new()
-		mesh.size = shape.size
-		var visual := MeshInstance3D.new()
-		visual.mesh = mesh
-		_ramp = StaticBody3D.new()
-		_ramp.name = "Ramp"
-		# Every gameplay ray masks Layers.SOLID; engine-default would drop the body through.
-		_ramp.collision_layer = Layers.TERRAIN
-		_ramp.collision_mask = Layers.DYNAMIC
-		_ramp.add_child(collision)
-		_ramp.add_child(visual)
-		add_child(_ramp)
-	# Rotated about +X so the ramp's own -Z (the body's forward) climbs; the top face passes
-	# through the world origin, which is where the up-slope measurement starts from.
-	var tilt := Basis(Vector3.RIGHT, a)
-	_ramp.transform = Transform3D(tilt, tilt * Vector3(0.0, -RAMP_THICKNESS * 0.5, 0.0))
+	_ramp = MeasureRig.tilt_ramp(self, _ramp, Vector3(RAMP_WIDTH, RAMP_THICKNESS, RAMP_LENGTH), a)
 	_patch.tan_angle = tan(a)
 	_patch.grip = SURFACES[_surface].x
 	_patch.drag = SURFACES[_surface].y
@@ -403,13 +383,8 @@ func _spawn(angle_deg: float, yaw := 0.0, up := SPAWN_UP) -> void:
 ## Drive through the bridge, not the keyboard: `InputRouter.arbitrate_local` latches reverse on
 ## a brake held at a standstill, and a standstill brake is exactly the settle phase here.
 func _drive(accel_pct: float, brake_pct: float, handbrake01 := 0.0, gear := -1) -> void:
-	Bridge.set("_active", true)
-	Bridge.set("_inbound", {
-		"key": 3, "gear": gear if gear >= 0 else maxi(_held_gear, 1),
-		"accel": accel_pct, "brake": brake_pct,
-		"steer": 0.0, "handbrake": handbrake01,
-		"diff_lock": _diff, "fwd_drive": _mfwd,
-	})
+	MeasureRig.drive(accel_pct, brake_pct, 0.0, false, gear if gear >= 0 else maxi(_held_gear, 1),
+			false, 3, {"handbrake": handbrake01, "diff_lock": _diff, "fwd_drive": _mfwd})
 
 
 func _physics_process(delta: float) -> void:
@@ -741,7 +716,7 @@ func _start_park(which: String, angle_deg: float, mode: String) -> void:
 				for m in DOC_PARK_MODES:
 					_park_queue.append({"variant": v, "angle": a, "mode": m})
 			_park_queue.append({"variant": v, "mode": "hand", "reg": true,
-					"angle": rad_to_deg(atan(BrakeSizing.regulation_grade(_rig_mass_of(v))))})
+					"angle": rad_to_deg(atan(BrakeSizing.regulation_grade(MeasureRig.rig_mass(v))))})
 	elif Catalog.VARIANTS.has(which):
 		_park_queue.append({"variant": which, "angle": angle_deg, "mode": mode})
 	else:
@@ -750,18 +725,6 @@ func _start_park(which: String, angle_deg: float, mode: String) -> void:
 		return
 	print("=== park: held on asphalt, %.0f s after a %.1f s settle ===" % [PARK_HOLD_S, SETTLE_S])
 	_next_park()
-
-
-## Laden mass (kg) a variant parks with: the body, plus the trailer a semi spawns coupled to.
-func _rig_mass_of(variant: String) -> float:
-	var body: Node = (load(Catalog.VARIANTS[variant]["scene"]) as PackedScene).instantiate()
-	var mass: float = (body.get("spec") as VehicleSpec).mass
-	body.free()
-	if variant.begins_with("semi") and TrailerCatalog.is_coupled(TrailerCatalog.first()):
-		var trailer: Node = (load(TrailerCatalog.first()) as PackedScene).instantiate()
-		mass += (trailer.get("spec") as VehicleSpec).mass
-		trailer.free()
-	return mass
 
 
 func _next_park() -> void:

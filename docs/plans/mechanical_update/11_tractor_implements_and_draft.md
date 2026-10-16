@@ -14,7 +14,7 @@ by a physical reason. The hitch has position control only.
 
 ## What happens
 
-- Tractor CLAUDE.md § Implements: "VISUAL only: no collision, joint or body in the subtree."
+- `implement_base.gd`: "VISUAL only: no collision, joint or body in the subtree."
   Code: `src/vehicles/tractor/implement_base.gd`, `three_point_hitch.gd`, `implement_catalog.gd`,
   `implements/` (plough, harrow, mower, spreader).
 - `TractorVehicle._apply_draft` (`src/vehicles/tractor/tractor.gd`): force = rated
@@ -52,18 +52,18 @@ by a physical reason. The hitch has position control only.
   spreads, like the refuse hopper gains it; check that against the root non-goal "crop/farm
   simulation" (payload mass is fine; modelling the crop is not).
 - A speed-independent draft above crawl speed, which needs the angular bound the guard test asks
-  for; Tractor CLAUDE.md § Draft says "Keep the speed ramp", so dropping or reshaping it is a rule
+  for; `tractor_telemetry.gd` says "Keep the speed ramp", so dropping or reshaping it is a rule
   change for the user.
 - Optional draft-control hitch mode (hitch control, not crop simulation).
 
 ## Constraints
 
 - Implements stay visual (no body in the subtree) unless the user changes that rule.
-- Tractor CLAUDE.md § Draft: draft is ONE force at the hitch; "engine_load / rpm sag / wheel_slip
+- `src/vehicles/tractor/CLAUDE.md`: draft is ONE force at the hitch; "engine_load / rpm sag / wheel_slip
   are its consequences; never add a draft term to them (rule 3)"; "Keep the speed ramp: it is the
   60 Hz margin"; "The force sits below the COM on purpose"; the linkage is posed before draft reads
   `ball_lift()` / `hitch_point()`.
-- Tractor CLAUDE.md § Body: "Traction is ballast (`mass`, `front_weight`)"; COM is `com_y_frac`;
+- `src/vehicles/tractor/CLAUDE.md`: "Traction is ballast (`mass`, `front_weight`)"; COM is `com_y_frac`;
   front unload is fixed with `front_weight`, never COM height.
 - `BaseVehicle.set_live_mass` is the one runtime mass write (it re-shares `corner_mass` for the
   60 Hz clamps).

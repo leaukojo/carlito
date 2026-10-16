@@ -1,17 +1,10 @@
 @tool
 class_name ArenaPreview
 extends Node3D
-## Authoring aid for a challenge course: shows the arena the course is laid over, in the editor
-## only. A course is a runtime overlay and never arena content — zones authored inside an arena
-## would be bake inputs and re-stale its bake on every tweak — so while authoring it is the course
-## that carries the arena, never the reverse.
-##
-## The arena is named by its LevelRegistry id, a String, so the course takes no dependency on the
-## level and instancing it at runtime never loads the arena a second time. The instance is an
-## unowned internal child, so saving the course never writes it, and it is top-level at the world
-## origin, where the arena sits at runtime, whatever the course root's own transform. At runtime
-## this node frees itself. `ChallengeRegistry.problems` fails a preview naming a different arena
-## than the def.
+## Editor-only authoring aid: shows the arena a challenge course is laid over. The course carries
+## the arena, never the reverse (zones inside an arena would re-stale its bake on every tweak).
+## Named by LevelRegistry id, so the course never depends on or reloads the level; an unowned,
+## top-level internal child, so saving never writes it. Frees itself at runtime.
 
 @export var arena := "":
 	set(value):

@@ -27,7 +27,7 @@ are the front/rear split of roll stiffness (per-axle anti-roll bars) and tyre lo
   20 % steer step at 100 km/h spun `race` and `sedan-sports` (held or lifted) and the FWD `sedan`
   on a lift; at the shipped values none spin, one marginal case. The probe was a one-off, not a
   shipped tool.
-- Rule (`src/vehicles/CLAUDE.md` § Wheels and ground): "a body's understeer margin is
+- Rule (`src/vehicles/CLAUDE.md` § Physics): "a body's understeer margin is
   `rear_lat_grip`, never a slower steer or a detuned lock."
 
 ## Why per-axle bars alone are not enough
@@ -49,7 +49,7 @@ are the front/rear split of roll stiffness (per-axle anti-roll bars) and tyre lo
 - The open-wheelers' 1.15 is partly real: race cars run wider rears. Keep a rear tyre grip term
   for them, labelled as tyre width.
 - The semi's bar (480 kN/m) is sized by the trailer twisting over through the ±1.5° plate: the
-  tractor must not lean further than its trailer (truck CLAUDE.md § Rollover). A per-axle split
+  tractor must not lean further than its trailer (`semi_spec.tres`). A per-axle split
   must keep that.
 - Trailers carry their own bar rates (`test_trailer`).
 - Load sensitivity also feeds the brake split (`_front_brake_share` uses `load_scaled_mu`), launch

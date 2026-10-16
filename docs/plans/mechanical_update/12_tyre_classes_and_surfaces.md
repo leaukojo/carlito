@@ -63,7 +63,7 @@ making it visible may need a signal, which overlaps brief 13 § 4.
 
 - Surface grip multiplies mu and leaves the 60 Hz clamps alone; `channel_grip` is clamped to
   [0, 1]; `grip_at` pow-sharpens weights like the splat shader; cached decoded images, never
-  `get_image()` per tick (`src/vehicles/CLAUDE.md` § Wheels and ground).
+  `get_image()` per tick (`heightmap_terrain.gd`).
 - Non-goals (root CLAUDE.md) include "texture-layer terrain"; the splat channels are the existing
   surface mechanism and stay so.
 - Load sensitivity becomes a tyre property; brief 08 may already have moved it.

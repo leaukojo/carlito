@@ -1,72 +1,11 @@
-# Input — gotchas & hard-won rules
+# Input — rules
 
 ALL input arbitration lives here (standing rule 5). Protocol tour: `docs/systems.md`.
 
 - **Keyboard and analog (bridge, gamepad) both drive; vehicles stay realistic for analog.** An
-  on/off key's feel is shaped here (`key_shaper.gd`), never by detuning a spec: the keyboard's steer
-  before `merge_local` (the touch stick is analog), every key and touch pedal after it, the gamepad
-  and the bridge never. One action per control: `LocalSource` reads its key events, `PadSource` its
-  joypad events, merged after the pedal shaping. A measure tool that drives through `Input`
-  measures the shaper: drive the bridge stash instead.
-
-- **`VehicleInput` is a `class_name` in `vehicle_input.gd`, not an inner class of the autoload** —
-  an inner class makes every vehicle's static types depend on the autoload's registered *name*.
-  Its fields are **flat except `lamps`**: the router deliberately knows no vehicle family, so every
-  group is allocated for every machine. `input.lamps` earns its nesting on ONE RULE (the
-  verbatim-mirrored bits, root `CLAUDE.md`), not on one family. Its read sites are `BaseVehicle` →
-  LampSet, `TowHost` (the trailer's LampSet), `Dashboard._update_telltales` and the challenge
-  frame's lamp checks. `lights` is a level the router cycles, so it stays flat.
-- **`get_vehicle_input()` returns the router's own struct, read-only by convention** — there is no
-  defensive `copy()`, because a hand-written field mirror is a field that goes missing silently.
-  `arbitrate_*` build a fresh struct each tick, so a stashed reference reads stale, never live; a
-  caller that needs to keep or change one copies it itself.
-- **The raw-intent wire is `Dictionary[StringName, Variant]`** across all five producers
-  (`LocalSource`, `PadSource`, `TouchControls`, `BridgeSource`, `measure_drone`'s `StickSource`) and
-  `merge_local`, which builds its dict explicitly: a key on one side only silently drops the
-  keyboard's edge while touch is registered (`PadSource` writes only analog keys, a subset).
-  StringName keys catch no typo at parse time; guards: `test_every_touch_poll_key_is_merged`,
-  `test_local_source_and_merge_local_carry_the_same_keys`, `test_every_pad_key_is_merged`,
-  `test_every_widget_key_is_merged`. `arbitrate_local` / `arbitrate_bridge` stay plain
-  `Dictionary` on purpose:
-  they are the wire's consumers and `test_input_arbitration.gd` is their spec. An **untyped dict
-  literal is rejected at the call**, not converted — a test passing one inline needs `_intent({...})`
-  or a typed declaration.
+  on/off key's feel is shaped here (`key_shaper.gd`), never by detuning a spec; the gamepad and
+  the bridge are never shaped. A measure tool that drives through `Input` measures the shaper:
+  drive the bridge stash instead.
 - Toggle owners (`_lights`, `_hitch_up`, `_pto`, `_scv`, `_body_cmd`, …) live in InputRouter so
-  keyboard and touch share one owner; sources only report per-frame edges. Cycles that belong to
-  the airframe (`_node_fail`, the drone mode key) are `reset_vehicle_cycles()`, called by
-  `register_vehicle` AND by `BaseVehicle.reset_session_state` — the keys are bound globally, so a
-  press in a car must not follow you into a drone, and a respawn is a reset. Local latches only:
-  what a bridge sends is sloppyCAN's to say.
-- **The challenge bridge-only lock is `set_bridge_only`**: local and touch are never polled, and
-  with no live bridge the input is `locked_idle()`. Its keyboard override (`--challenge-keys` /
-  `CARLITO_CHALLENGE_KEYS`) is honoured in debug builds only.
-- **Both pedals held: `brake_override`** (both paths) cuts the throttle once the body passes
-  `BRAKE_OVERRIDE_SPEED` and holds the cut until a pedal lifts: a modelled brake-throttle override
-  on every family. Physics alone holds every body (`docs/vehicles.md` § Both pedals).
-- **The auto hold (`auto_hold`) is keyboard feel, for keys and touch only.** At a standstill in D
-  or R with no throttle, the router holds the foot brake (`AUTO_HOLD_BRAKE`) until the throttle
-  asks to move, on a body whose engine drives road wheels (`key_auto_hold`). It stands aside while
-  the gamepad moved a pedal last (`pad_drives_pedals`), and never reaches the bridge (real creep).
-  Injected after `arbitrate_local` (so it never reads as S at a standstill, which selects R), and
-  only at throttle 0 (so it never meets `brake_override`). On a grade the handover is the vehicle's
-  hill-start assist (`WheelDrive.hold_step`). Guard: `test_input_arbitration`.
-- **A live bridge without `accel`/`brake`/`steer` does not drive**: `bridge_drives()` is false,
-  `blend_local_driving` takes the driving group from local and the rest from the bridge (never
-  under `set_bridge_only`).
-- **The gearbox mode is `set_manual_gearbox`**, set by the shell (selector in free play,
-  `ChallengeDef.transmission` in an attempt). It is bridge-only: automatic reads the gear byte as
-  PRND, manual takes it exactly (0 = N). P is byte 254 (`GEAR_P`, never sent by RAMN) in both
-  modes; local input has no P key and leaves P only on a pedal, as automatic's byte 0 does
-  (it holds an engaged P, `arbitrate_bridge`'s `gear_byte`); `locked_idle` requests it. Local
-  input always drives automatic.
-- **Cycled-control lengths are declared once in `subsystem_counts.gd`, their walks once in
-  `cycles.gd`** (leaves: the router must not depend on a vehicle class). Where the length is
-  intrinsic to a structure (an enum, a roster array), edit that structure; a test pins it
-  against the constant, because a mismatch silently stops the local key short of the new position.
-- **Presence-ruled in-signals.** `rudder` overrides `steer` when present (no VehicleInput field).
-  `heading_cmd` DOES take a field: it overrides nothing, and every value in its [0,360] is a legal
-  bearing, so absent cannot be a sentinel on the wire — `VehicleInput.HEADING_CMD_NONE` is internal
-  and `bridge_source` writes the key only when sent. `guidance_curvature` follows the same rule with
-  its own field (`GUIDANCE_CURVATURE_NONE`): it overrides `steer`, and `WheelDrive` turns it into a
-  wheel angle off the wheelbase, untapered. A commanded dead-straight 0 is a real command, not an
-  absence; no vehicle code knows it was steered externally.
+  keyboard and touch share one owner; sources only report per-frame edges. Airframe cycles reset
+  in `reset_vehicle_cycles()`. Local latches only: what a bridge sends is sloppyCAN's to say.

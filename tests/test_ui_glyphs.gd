@@ -1,5 +1,5 @@
 extends GdUnitTestSuite
-## Rule 10: the web font has no emoji glyphs. test_action_registry and test_challenge_registry
+## The web font has no emoji glyphs. test_action_registry and test_challenge_registry
 ## guard the registry labels and the challenge defs' text fields; this guards every other string
 ## literal the player can see — the UI, the shell, and the challenge goals' runtime messages —
 ## against the font itself, so a glyph Barlow does carry (the dashboard's degree sign) passes.

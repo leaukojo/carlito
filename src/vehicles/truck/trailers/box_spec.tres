@@ -5,8 +5,8 @@
 ;
 ; THE HEAVIEST TRAILER IN THE CATALOG, and mass is the ONLY thing that separates it from the
 ; flatbed (see box.gd). 24 000 kg against the flatbed's 14 000 is a 3.0 : 1 ratio against the
-; 8 000 kg tractor unit, exactly the tested ceiling (src/vehicles/truck/CLAUDE.md § Fifth wheel,
-; mass, axle loads); going past it needs re-verification, and test_trailer fails instead.
+; 8 000 kg tractor unit, exactly the tested ceiling; going past it needs re-verification, and
+; test_trailer fails instead.
 ;
 ; Everything below is measured off box.tscn (origin AT THE KINGPIN, ground at y = -1.05):
 ;   - the tri-axle bogie is the family's: z 4.40 / 5.20 / 6.00, anchors at y = 0.424 - 1.05.

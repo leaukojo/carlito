@@ -371,30 +371,11 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 	_apply_downforce(body, gd)
 
 
-## The declared differentials, as coupling torques solved off each wheel's own spin step
-## (`Differential`, `RayWheel.spin_compliance`) with every wheel's holds inside each solve
-## (`Differential.braked_coupling_torque`), then every wheel settled (`RayWheel.settle_spin`): a
-## braked wheel stays held unless the torque a diff must pass it beats its brake, and a TC-held one
-## stays at its ceiling unless the diff passes it more than its drive share. One pass, the gearbox
-## output first. In P, while the pawl is in (`locked`, the driven wheels; `lock_capacity` > 0): a
-## lock of the gearbox output to the case, so a coupling of the driven wheels' mean spin to a ground
-## of no compliance, its torque reaching them equally through the diffs; an open diff downstream
-## still lets its outputs counter-rotate, as a real one does in P. In D or R on an engine that
-## drives the wheels (`drivetrain`): the crank, an output with its own spin and compliance behind
-## the controller's capacity, or behind a converter's law solved against the driven wheels' settled
-## mean (`Drivetrain.couple`), its torque reaching the wheels the same way.
-## Either torque sizes a biasing diff's capacity, as `axle_torque` (the rigid crank's) does. Then
-## the centre, whenever both axles are driven (rigid for MFWD, else `centre_diff_bias`), its torque
-## reaching an axle's wheels equally; then each axle, capacity sized off the torque it actually
-## received, unbounded on the rear while the diff lock is held. All open, each wheel settles on its
-## own holds.
-## COMPROMISE: one pass. An axle coupling between wheels of unequal compliance moves that axle's
-## mean after the centre balanced it (`race-future`'s rear LSD, the tractor's lock under MFWD).
-## Exact needs each axle solved inside the centre's solve. Likewise the centre and axles move the
-## driven wheels' mean after the gearbox output settled against it: under the pawl LOCK_STUCK_SPIN
-## absorbs it, and a locked crank coupling stays locked (the state is the controller's, set when the
-## solve carried less than its capacity), the crank a spread's worth off its wheels until the next
-## tick's solve.
+## The declared differentials, as coupling torques solved off each wheel's own spin step with every
+## wheel's holds inside each solve, then every wheel settled (`RayWheel.settle_spin`). `locked` /
+## `lock_capacity`: the park pawl's driven wheels; `drivetrain`: the crank in D or R.
+## Order: gearbox output, centre, each axle, settle. COMPROMISE: one pass, so a later coupling moves
+## a mean an earlier one balanced; exact needs nested solves. docs/vehicles.md, "The solve order".
 func _couple_differentials(gd: GroundDriveSpec, input: VehicleInput, axle_torque: float,
 		locked := PackedInt32Array(), lock_capacity := 0.0, drivetrain: Drivetrain = null) -> void:
 	_coupling.fill(0.0)

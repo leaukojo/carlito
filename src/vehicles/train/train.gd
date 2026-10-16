@@ -1,7 +1,7 @@
 class_name TrainVehicle
 extends BaseVehicle
 ## Electric consist on a rail spline. The loco is kinematic with a rail (`_has_rail`); wagons are
-## AnimatableBody3D followers; TrainSim owns the consist forces (rules: `src/vehicles/train/CLAUDE.md`).
+## AnimatableBody3D followers; TrainSim owns the consist forces and their 60 Hz clamps.
 ## The reverser rides the gear byte (N/D/R). The rail Curve3D is duck-typed, so the same code drives
 ## RailTrack and the authoring RoadPath.
 

@@ -1,13 +1,8 @@
 class_name GroundDriveSpec
 extends Resource
 ## Wheeled ground drive as data: wheels, what drives and brakes them, suspension, tires,
-## resistance. Pure data, read by WheelDrive, RayWheel and the retarder half of Drivetrain.
-##
-## Boat, drone and train declare none, so no WheelDrive is built; the plane has one but is not
-## driven by it, since three undriven, braked, steered wheels are still a ground drive.
-##
-## Embedded per `<variant>_spec.tres` as a `[sub_resource]`, never standalone: an external resource
-## would re-stale bakes on every tuning change.
+## resistance. Boat, drone and train declare none; the plane's wheels are an undriven one.
+## A `[sub_resource]` per `<variant>_spec.tres`: an external one re-stales bakes on every tune.
 
 @export_group("Wheels")
 ## Hub anchors in body space, order FL, FR, RL, RR (front = -Z, right = +X).
@@ -28,16 +23,12 @@ extends Resource
 @export var rear_diff_lockable := false  ## rear axle can rigidly lock at runtime (tractor); off elsewhere so diff_lock affects nothing else
 @export var front_axle_engageable := false  ## front axle engages at runtime (tractor MFWD) instead of fixed by driven_front; off elsewhere
 @export var retarder_equipped := false  ## driveline carries an auxiliary retarder (truck J1939 SPN 520); off elsewhere
-## The retarder's rating (Nm) at the gearbox output, a figure of its own hardware class: the driven
-## axle sees it through `final_drive` (`Drivetrain.retarder_rating`). Read only while
-## `retarder_equipped`.
+## The retarder's hardware rating (Nm) at the gearbox output (`Drivetrain.retarder_rating`).
 @export var retarder_rating_nm := 0.0
 ## Torque bias ratio of the front axle's differential (`Differential.bias_capacity`): the slower
-## wheel may take up to this many times the faster one's torque. 1 = open; a helical or plate LSD
-## sits around 2-3. Only read while the axle is driven.
+## wheel may take up to this many times the faster one's torque. 1 = open; an LSD sits around 2-3.
 @export_range(1.0, 10.0) var diff_bias_front := 1.0
-## The rear axle's, as `diff_bias_front`. The diff lock (`rear_diff_lockable`) overrides it with an
-## unbounded coupling while held.
+## The rear axle's, as `diff_bias_front`; the diff lock overrides it while held.
 @export_range(1.0, 10.0) var diff_bias_rear := 1.0
 ## Torque bias ratio between the axles, read whenever both are driven: 1 = an open centre, where
 ## the lighter axle caps the whole body; a Torsen-type centre sits around 3.
@@ -52,27 +43,18 @@ extends Resource
 @export var spring_rate := 22000.0  ## N/m (~1.3 Hz natural frequency at 300 kg/corner — 60 Hz-safe)
 @export var damper_bump := 1800.0   ## N*s/m
 @export var damper_rebound := 2400.0
-## Rear-axle rate; 0 = spring_rate (the wheel_visual_radius_rear precedent). A body whose rear
-## carries a multiple of the front's load (a coupled tractor unit) is sized per axle here.
+## Rear-axle rate; 0 = spring_rate. For a rear carrying a multiple of the front's load.
 @export var spring_rate_rear := 0.0
-## Rear-axle dampers; 0 = the front value x sqrt(rear_spring_rate() / spring_rate), which keeps
-## the front's damping ratio on the stiffer axle at the same corner mass.
+## Rear-axle dampers; 0 = the front value scaled to keep its damping ratio (`rear_damper_bump`).
 @export var damper_bump_rear := 0.0
 @export var damper_rebound_rear := 0.0
-## Anti-roll bar, N per metre of left/right compression difference on an axle (0 = none). Moves
-## spring load between the two wheels of an axle without adding net vertical force, so it stiffens
-## roll and leaves ride and pitch alone. Roll stiffness gained per axle is 2 x rate / spring_rate
-## times what that axle's springs give.
+## Anti-roll bar, N per metre of left/right compression difference on an axle (0 = none): stiffens
+## roll, leaves ride and pitch alone.
 @export var anti_roll_rate := 0.0
-## Front axle's side-view link geometry: the tangent of the line from the contact patch to the
-## suspension's instant centre. A longitudinal tyre force `F` (+ = forward) at a front wheel puts
-## `-F * anti_dive_slope` through the links along the contact normal, so braking holds the nose up
-## (anti-dive) and drive holds it down (anti-lift). The tyre still carries the whole load transfer;
-## the springs carry only the rest, so the body pitches less. `h / wheelbase` is 100 %; 0 sends
-## every newton of transfer through the springs.
+## Front side-view link slope (contact patch to instant centre): a tyre force `F` puts
+## `-F * anti_dive_slope` through the links, so the body pitches less. `h / wheelbase` = 100 %.
 @export var anti_dive_slope := 0.0
-## The rear axle's, signed the other way: `+F * anti_squat_slope`, so drive holds the tail up
-## (anti-squat) and braking holds it down (anti-lift).
+## The rear axle's, signed the other way (`+F * anti_squat_slope`).
 @export var anti_squat_slope := 0.0
 @export var max_suspension_force := 30000.0  ## N; clamp against deep-penetration catapults
 
@@ -84,11 +66,8 @@ extends Resource
 ])
 @export var mu_long := 1.05
 @export var mu_lat := 0.95
-## The rear tyres' side grip as a multiple of `mu_lat` (slope and peak alike). Grip here scales
-## with load, so with 1.0 every body steers near neutral whatever its weight split (only
-## `load_sensitivity` tilts it, and toward oversteer on a rear-heavy body), and the
-## falling grip curve tips any rear excursion into a spin. A race car's wider rears are this
-## literally; on a road car it stands in for the suspension design that makes it understeer.
+## The rear tyres' side grip as a multiple of `mu_lat`. Grip scales with load, so 1.0 steers near
+## neutral and spins easily; on a road car this stands in for the design that makes it understeer.
 @export var rear_lat_grip := 1.0
 ## Fractional mu lost per DOUBLING of load past the corner's static share
 ## (`RayWheel.corner_mass * g`); 0 = grip exactly linear in load, so weight transfer cannot move
@@ -96,21 +75,16 @@ extends Resource
 @export_range(0.0, 0.5) var load_sensitivity := 0.0
 
 @export_group("Brakes")
-## Full-pedal foot-brake capacity, Nm per wheel on average: the hardware's own rating, more than
-## the tyre can use (full pedal locks a wheel, or ABS holds it at the peak). `brake_bias_front`
-## splits it by axle; the pedal reaches it through `WheelDrive.brake_application`.
+## Full-pedal foot-brake capacity, Nm per wheel on average: the hardware's rating, more than the
+## tyre can use. `brake_bias_front` splits it by axle.
 @export var brake_torque := 1300.0
-## Parking-brake torque, Nm per rear wheel (a truck's spring brakes): a mechanical hold no ABS
-## modulates. Sized to lock the rears at speed and park the laden body on its regulation grade
-## (`BrakeSizing`).
+## Parking-brake torque, Nm per rear wheel, no ABS; sized by `BrakeSizing`.
 @export var handbrake_torque := 160.0
 ## Park pawl strength, Nm per driven wheel while the gearbox sits in P (`Drivetrain.GEAR_P`); 0 =
 ## no pawl, and a P request reads as N. A steel tooth: sized past the tyre, so the tyre slips first.
 @export var park_pawl_torque := 0.0
 ## Share of the whole foot brake (`brake_torque` x wheel count) on the front axle, 0 = rear only;
-## negative = every wheel `brake_torque`. A generated body takes the share its front axle can hold
-## in a full-pedal stop (gen_kenney_vehicles `_front_brake_share`): an even split under-brakes the
-## axle braking loads up.
+## negative = every wheel `brake_torque`. Generated bodies: gen_kenney_vehicles `_front_brake_share`.
 @export_range(-1.0, 1.0) var brake_bias_front := -1.0
 ## Anti-lock brakes: the foot brake (and retarder) may not drive a wheel's braking slip past
 ## `RayWheel.ABS_SLIP`.
@@ -118,42 +92,30 @@ extends Resource
 ## Traction control, `abs_equipped`'s drive-side twin: the drive may not push a driven wheel's slip
 ## past `RayWheel.TCS_SLIP`. `VehicleInput.tcs_off` switches it off (bridge or local setting).
 @export var tcs_equipped := false
-## A hold on the foot brake that stops a pull-away on a grade from rolling back while the coupling
-## takes up (`HillHold`, applied in `WheelDrive.hold_step`): equipment like ABS, on every input path.
-## ASSIST is hill-start assist (the road bodies and trucks); STANDSTILL is a powershift tractor's
-## hill hold (Valtra HillHold). COMPROMISE: a real HillHold holds in the transmission; this one
-## holds on the foot brake, the hold that is solved with the crank's coupling inside the
-## differentials (`Differential.braked_coupling_torque`). A lock of the gearbox output is solved
-## before the coupling in that one pass, so the drive would creep the body against it.
+## Foot-brake hold against roll-back on a grade pull-away (`HillHold`). ASSIST: hill-start assist;
+## STANDSTILL: a powershift tractor's. COMPROMISE: a real tractor holds in the transmission; a
+## gearbox-output lock here is solved before the coupling, so the drive would creep against it.
 @export var hill_hold := HillHold.Kind.NONE
 ## ASSIST's timeout (s): the hold lets go this long after the brake's release whatever the drive
 ## carries (Honda's ~1 s on a car, Volvo's 3 s on a truck). STANDSTILL has none.
 @export var hill_hold_s := 0.0
-## The foot brake engages the front axle (`front_axle_engageable`), as a fast tractor's rear-axle
-## brakes do: braking the fronts through the shaft, never a brake of their own. Pairs with
-## `brake_bias_front` 0.
+## The foot brake engages the front axle, braking the fronts through the shaft (a fast tractor).
+## Pairs with `brake_bias_front` 0.
 @export var brake_engages_front_axle := false
 
 @export_group("Resistance")
-## Aerodynamic drag area in m^2 (Cd x frontal area), fed to `VehicleMath.aero_drag`. It never
-## scales with mass, so a coupled rig's drag is the sum of both bodies' areas: a 32 t artic resists
-## ~1.2x a rigid truck, not 4x. 0 means the plane, which runs its own drag through VehicleMath.
+## Aerodynamic drag area in m^2 (Cd x frontal area); never scales with mass. 0 = the plane's own.
 @export var drag_area := 0.0
 @export var rolling_resistance := 0.0  ## `F = crr * N`; asphalt ~0.010-0.015 car, ~0.006-0.008 truck, ~0.020 lugged. N is read off the suspension each tick, not mass, so an airborne wheel resists nothing
-## Aerodynamic downforce area in m^2 (Cl x frontal area), pushed down the body's own up axis via
-## `VehicleMath.aero_downforce`; 0 means no wing. A force through the suspension, never a grip
-## multiplier. Must pair with `drag_area` (`test_vehicle_catalog`); bounded only by
-## `max_suspension_force` and `rest_length`.
+## Aerodynamic downforce area in m^2 (Cl x frontal area); 0 = no wing. A force through the
+## suspension, never a grip multiplier; pairs with `drag_area` (`test_vehicle_catalog`).
 @export var downforce_area := 0.0
 
 
 @export_group("Steering lock")
-## Maximum steered-wheel angle in degrees. `steer_speed` stays on VehicleSpec, as it also slews a
-## rudder.
+## Maximum steered-wheel angle in degrees (`steer_speed` is on VehicleSpec).
 @export var max_steer_deg := 32.0
-## At or above steer_falloff_speed the usable lock shrinks linearly to this fraction of
-## max_steer_deg; 1.0 is a constant lock. It multiplies each body's own max_steer_deg: pick the
-## degrees wanted at speed, then divide.
+## Fraction of max_steer_deg left at steer_falloff_speed, linear in between; 1.0 = constant lock.
 @export_range(0.0, 1.0) var min_steer_frac := 1.0
 @export var steer_falloff_speed := 30.0  ## m/s at which min_steer_frac is fully reached
 

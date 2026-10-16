@@ -46,7 +46,7 @@ jobs:
           fi
 
       # export_presets.cfg's pasted Head Include must match its source file verbatim
-      # (src/bridge/CLAUDE.md). GitHub-hosted ubuntu runners ship node.
+      # (docs/deploying.md § The web export). GitHub-hosted ubuntu runners ship node.
       - name: Head-include sync check
         run: node tools/check_head_include.mjs
 

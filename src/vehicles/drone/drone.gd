@@ -1,7 +1,7 @@
 class_name DroneVehicle
 extends BaseVehicle
 ## Quadcopter drone. Each subsystem's laws live in a pure-fn sibling; this holds the cross-tick
-## state and the tick order. Tick order and rules: `src/vehicles/drone/CLAUDE.md`; tour:
+## state and the tick order (`_tick_extras`). Rules: `src/vehicles/drone/CLAUDE.md`; tour:
 ## `docs/vehicles.md` § Drone subsystems.
 
 
@@ -236,8 +236,10 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	var t := telemetry as DroneTelemetry
 	var body_basis := global_transform.basis
 	var up := body_basis.y
-	# Attitude/height telemetry is the base's, written before _tick_extras runs. Tick order:
-	# `src/vehicles/drone/CLAUDE.md`.
+	# Attitude/height telemetry is the base's, written before _tick_extras runs. The tick order is
+	# load-bearing: sensors, hook, fix debounce, arming, modes, demands, mixer/motors, pack, gimbal,
+	# landed predicate, indicators (last). Measure, then decide, then act; `_pack.soc` and
+	# `_landed` are read one tick late on purpose.
 
 	# fix_type refuses a LOITER, so the sensors measure first (resolving on last tick's fix would
 	# fly on a stale reading). Sky fan + rangefinder: five rays a tick (DroneSensors.SKY_RAYS_PER_TICK).

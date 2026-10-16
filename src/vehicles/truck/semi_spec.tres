@@ -127,7 +127,7 @@
 ;
 ; LOAD SENSITIVITY 0.08 IS WHERE THE PLATE LOAD SHOWS UP. RayWheel scales mu by
 ; `1 - 0.08 * log2(load / corner_mass*g)`, and corner_mass excludes the fifth-wheel share
-; (truck/CLAUDE.md § Fifth wheel, mass, axle loads), so coupled to the box each drive wheel sits
+; (truck/CLAUDE.md), so coupled to the box each drive wheel sits
 ; ~2.35x its reference and holds ~90 % of mu_long while the steer axle is untouched: the laden
 ; drive axle really losing grip, the conservative direction. Re-measure with
 ; tools/measure_semi_launch.tscn.

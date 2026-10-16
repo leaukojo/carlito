@@ -8,8 +8,7 @@ extends RefCounted
 
 # --- the standard atmosphere ---------------------------------------------------
 
-## ISA standard-day sea-level pressure (Pa): the SUBSCALE SETTING the altimeter is left on. The
-## instrument assumes this; the air does not.
+## ISA standard-day sea-level pressure (Pa): the altimeter's subscale setting, not the air's.
 const QNH_STANDARD := 101325.0
 ## ISA sea-level temperature (K).
 const T0_K := 288.15
@@ -30,8 +29,7 @@ const DRIFT_PERIOD := 240.0
 ## Static-source position error coefficient (dimensionless): the port under-reads by this fraction
 ## of dynamic pressure (~69 Pa / ~6 m at 15 m/s).
 const PORT_ERROR_K := 0.5
-## Air density for that dynamic pressure (kg/m^3): sea-level ISA, held constant (0-120 m changes
-## it ~1%).
+## Air density for that dynamic pressure (kg/m^3): sea-level ISA, constant (~1% over 0-120 m).
 const AIR_DENSITY := 1.225
 
 
@@ -41,7 +39,6 @@ static func sea_level_pressure(t: float) -> float:
 
 
 ## Static pressure at `alt_m` above sea level under `sea_level_pa` (ISA barometric formula).
-## Clamped at zero so an absurd altitude cannot return a negative pressure.
 static func pressure_at(alt_m: float, sea_level_pa: float) -> float:
 	var ratio := 1.0 - LAPSE_K_M * alt_m / T0_K
 	if ratio <= 0.0:

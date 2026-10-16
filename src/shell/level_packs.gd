@@ -1,16 +1,9 @@
 class_name LevelPacks
 extends Node
-## Island levels ship in packs of their own beside the main .pck, fetched the first time one is
-## opened, so the boot download carries no island (docs/deploying.md § Level packs). A pack is
-## `<build>.<level id>.pck`, which CI exports as a delta patch against the main pack of the SAME
-## build, so it mounts over that build only. It is kept in user:// under that name, and every
-## pack from another build is deleted on the next fetch. dev and stable share one origin and so
-## one user://: while they run different builds, visiting one deletes the other's packs, and
-## they download again on the next visit there. Keeping them apart would mean a cache folder per
-## channel, keyed off the page URL.
-##
-## The editor and a desktop run have every island on disk; `needs_fetch` is false there and
-## nothing below runs.
+## Island levels ship in packs of their own, fetched on first open (docs/deploying.md § Level
+## packs). A `<build>.<level id>.pck` is a delta patch against the SAME build's main pack, cached
+## in user://; other builds' packs are deleted on the next fetch, so dev and stable (one origin)
+## evict each other's. Editor and desktop runs have every island on disk (`needs_fetch` false).
 
 ## Emitted once per `fetch`: the pack is mounted, or it could not be downloaded or mounted.
 signal finished(ok: bool)

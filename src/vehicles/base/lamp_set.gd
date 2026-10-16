@@ -4,7 +4,7 @@ extends RefCounted
 ## to the vehicle root; transforms live in the model scene.
 ##
 ## sloppyCAN is the sole authority on lamp state: every bit is mirrored verbatim and a lamp blinks
-## because the source toggles its bit. Never add a timer here (src/vehicles/CLAUDE.md § Lamps).
+## because the source toggles its bit. Never add a timer here (`tests/test_lamps.gd`).
 
 ## Rear tri-state: STOP (brake) > TAIL (headlights on) > OFF (dim housing, never invisible).
 enum Rear { OFF, TAIL, STOP }

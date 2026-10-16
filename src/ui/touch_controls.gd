@@ -1,22 +1,12 @@
 class_name TouchControls
 extends Control
-## On-screen touch controls, registered on InputRouter as a second local source. Reports raw
-## intents via poll() like local_source.gd — arbitration stays in InputRouter. Plain text, no
-## emoji.
+## On-screen touch controls, registered on InputRouter as a second local source; reports raw
+## intents via poll(), arbitration stays in InputRouter. Layers: docs/systems.md.
 ##
-## Two layers, hidden independently: IMPORTANT (the top-left column every vehicle has — MENU,
-## GARAGE, LEVEL, CAMERA, CHALLENGE; F5) and DRIVING (joystick and the bottom-right cluster; F4). The cluster
-## is three tiers, most-used nearest the thumb: the pedal row (GAS, BRAKE, UP/DOWN, PANTO), one
-## QUICK row of short buttons spanning exactly the pedal row's width (LIGHTS, HORN, the family's
-## extra, then its safety latch HAND/ARM always above GAS), and the machine's equipment in an
-## EQUIP drawer, closed by default, above them. The stack buttons are generated from
-## ActionRegistry (captions, gating, raw-intent key all come from that table); `is_universal`
-## decides the layer. Widgets (joystick, pedals, flight pads) are hand-built, but the registry
-## still decides whether each is shown.
-##
-## RETRY and INFO join the important column only while a challenge attempt is running
-## (`set_challenge_mode`, alongside `set_driving_locked`) — they carry no ActionRegistry row of
-## their own, since the registry has no notion of challenge state.
+## The DRIVING cluster is three tiers, most-used nearest the thumb: the pedal row, one QUICK row
+## spanning exactly its width (the safety latch HAND/ARM always above GAS), and the EQUIP drawer.
+## Stack buttons are generated from ActionRegistry; widgets are hand-built but registry-gated.
+## RETRY and INFO have no registry row (it has no challenge state): `set_challenge_mode` adds them.
 
 signal menu_pressed
 signal garage_pressed

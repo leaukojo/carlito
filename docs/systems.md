@@ -152,8 +152,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
 
 ## Lamps, horn & day/night
 
-- Lamp state rides `VehicleInput`, mirrored verbatim, no local blink timer (`src/vehicles/CLAUDE.md` §
-  Lamps); locally only `brake_lamp` is driven, from the foot brake
+- Lamp state rides `VehicleInput`, mirrored verbatim, no local blink timer; locally only `brake_lamp` is driven, from the foot brake
   (`tests/test_lamps.gd` asserts no clock in `lamp_set.gd`). `LampSet`
   (`src/vehicles/base/lamp_set.gd`) applies lamp state to nodes the `VehicleSpec` names by
   NodePath (`headlight_paths`, `brake_lamp_paths`/`turn_*_paths`); rear lamps tri-state via
@@ -231,6 +230,16 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   `LEVEL` also binds `level_select` (key 4), checked by `_shell_signals()` /
   `tests/test_action_registry.gd`. Raw intent: `_held`/`_edges` keyed by `poll_key`, drained
   by `poll()`; a hidden pad emits its own release (`Pad._notification`).
+- Shader warmup (`src/shell/shader_warmup.gd`): gl_compatibility has no ubershader, so each
+  material variant compiles on its first draw. Behind the loading screen every instance's cull
+  margin grows past the level, so the whole level draws in its real passes for a few frames.
+  Particles get an emitting twin (an idle emitter is never drawn); hidden instances are shown
+  for the warmup, but one under a hidden ancestor still compiles on reveal. Not covered: a V /
+  garage swap, an E attachment and light-count variants (headlights, night) still hitch on first
+  draw. Covering them means delaying the reveal behind an off-screen pass, but
+  `Level._spawn_vehicle` is synchronous (`ChallengeRunner.start()` and `boot.gd`'s
+  `_on_vehicle_picked` read `Level.vehicle` on the next line): either thread `await` through
+  those call sites or flush mid-frame (`RenderingServer.force_draw`, unverified here).
 
 ## Level framework
 

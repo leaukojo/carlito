@@ -1,20 +1,11 @@
 class_name DepthReadout
 extends Control
-## Hand-built echo sounder, built like Gauge and AttitudeIndicator: one instance, shown only
-## where the vehicle declares 'depth' (boat), configured from that signal's contract metadata
-## and fed the reading per frame.
+## Hand-built echo sounder, built like Gauge and AttitudeIndicator, shown only where the vehicle
+## declares 'depth' (boat).
 ##
-## IT EXISTS FOR THE SENTINEL. 'depth' publishes -1 with no bottom under the transducer and the
-## contract puts that value INSIDE the range so the bar and the bridge agree on it — which on a
-## generated bar pins the fill at the low end of a LOW-side warn and reads as a permanent shoal
-## alarm over open water. Here the sentinel BLANKS the number to "---" instead of colouring it,
-## and it is taken from the contract's own range floor rather than typed in, so the two cannot
-## drift apart. Everything below the sentinel is likewise not a depth.
-##
-## The scale starts at 0 rather than at the range floor: a water column has no negative side,
-## and the reading is under-keel clearance from the probe plane the hull floats on.
-##
-## Plain text + color only, no emoji.
+## It exists for the sentinel: 'depth' publishes -1 (no bottom) inside its range, which a generated
+## bar would show as a permanent shoal alarm. Here the contract's range floor blanks the number to
+## "---". The scale starts at 0: the reading is under-keel clearance, with no negative side.
 
 const TRACK_COLOR := Color(0.20, 0.22, 0.26)
 const WATER_COLOR := Color(0.24, 0.48, 0.68)

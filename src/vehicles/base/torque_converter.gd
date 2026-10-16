@@ -70,17 +70,11 @@ static func torque_ratio(stall_ratio: float, sr: float) -> float:
 	return lerpf(stall_ratio, 1.0, clampf(sr / COUPLING_POINT, 0.0, 1.0))
 
 
-## One tick of the converter with a lock-up clutch of `lockup_capacity` (N·m at the crank, 0 open)
-## in parallel, solved with both sides' steps. The crank is predicted at `pred` (rad/s, no coupling)
-## and moves `crank_c` rad/s per N·m (`Drivetrain.crank_compliance`); the gear's signed ratio is `g`
-## and its efficiency `eta`. `wheel_spin(axle_torque)` returns the driven wheels' settled mean spin
-## (rad/s) with that axle torque (+ = forward) shared over them, their holds solved in
-## (`Differential.settled_mean_spin`). The unknown is the impeller torque `T`: the crank ends at
-## `pred - T c`, the axle takes `T ratio g eta` driving (`ratio` the torque ratio, read by the caller
-## at the tick's start) or `T g / eta` in overrun, and the turbine turns at the wheels' spin times
-## `g`. `T - law - lockup * sgn(slip)` rises strictly with `T`, with a jump where the lock-up closes
-## the slip, so bisection finds the one root. Returns [T, axle torque, the crank's end spin, whether
-## the lock-up closed it: carried less than its capacity].
+## One tick of the converter with a parallel lock-up clutch (`lockup_capacity`, 0 open), solved for
+## the impeller torque `T`: the crank ends at `pred - T crank_c`, the axle takes `T ratio g eta`
+## driving or `T g / eta` in overrun, the turbine turns at `wheel_spin(axle torque) * g`.
+## `T - law - lockup * sgn(slip)` rises strictly with `T`, so bisection finds the one root.
+## Returns [T, axle torque, the crank's end spin, whether the lock-up closed the slip].
 static func solve(pred: float, crank_c: float, coef: float, g: float, eta: float, ratio: float,
 		lockup_capacity: float, wheel_spin: Callable) -> Array:
 	var cap := maxf(lockup_capacity, 0.0)

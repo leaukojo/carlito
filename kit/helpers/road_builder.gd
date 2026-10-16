@@ -515,17 +515,11 @@ static func flatten_weight(dist: float, half_width: float, falloff: float) -> fl
 	return 1.0 - t * t * (3.0 - 2.0 * t)
 
 
-## Flatten the greyscale height image under a road. `samples` are terrain-local
-## (local_x, local_z, target_norm) triples at the extrusion's adaptive_offsets rings, so
-## the lerp between samples is the ribbon's own chordal surface, not the analytic curve
-## (which rides above the chords over a crest). `deck` (optional, same packing, 3
-## verts/triangle) is the full-width deck strip; a pixel inside a deck triangle takes its
-## plane height instead of the centerline projection, which is wrong on steep + yawing
-## segments. Per pixel the nearest centerline segment wins and the target is lerped at
-## the projection onto it, not the nearest sample point. quantize floors (never rounds)
-## so the 8-bit PNG never stores terrain above the analytic road height; the skirt must
-## absorb epsilon + one height step. Returns the tight dirty Rect2i (empty if unchanged).
-## Same inputs -> identical bytes.
+## Flatten the greyscale height image under a road. `samples` are terrain-local (x, z,
+## target_norm) triples at the extrusion's rings, so between them the target is the ribbon's own
+## chordal surface. A pixel inside a `deck` triangle (optional, 3 verts each) takes its plane
+## height; else the nearest centerline segment's projection. Quantize floors, never rounds, so the
+## PNG never stores terrain above the road. Returns the dirty Rect2i; deterministic.
 static func conform_heights(img: Image, samples: PackedVector3Array, half_width: float,
 		falloff: float, span_x: float, span_z: float,
 		deck := PackedVector3Array()) -> Rect2i:

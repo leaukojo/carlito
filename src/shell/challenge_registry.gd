@@ -203,7 +203,7 @@ static func arena_info(scene_path: String) -> LevelInfo:
 	return LevelInfo.new()
 
 
-## Title, briefing and hint are what the player reads: present, and plain ASCII (rule 10 — the
+## Title, briefing and hint are what the player reads: present, and plain ASCII (the
 ## web font has no emoji glyphs, so anything non-ASCII renders as tofu).
 static func _text_problems(d: ChallengeDef) -> PackedStringArray:
 	var out := PackedStringArray()

@@ -2,12 +2,8 @@ class_name BoatAutopilot
 extends RefCounted
 ## The boat's autopilot (contract 'nav_mode' / 'heading_cmd', PGN 127237 Heading/Track Control):
 ## pure static logic, no node state. BoatVehicle keeps the per-tick state and calls in here for
-## every law, the DroneModes shape. Tested in tests/test_boat_autopilot.gd.
-##
-## `nav_mode` is what was requested (bridge / the 2 key); `nav_mode_actual` is what the pilot is
-## doing. `resolve_mode` is the only place a mode is decided.
-##
-## HEADING HOLD AND NOTHING MORE: no routes, no cross-track error.
+## every law, the DroneModes shape. `resolve_mode` is the only place a mode is decided.
+## Heading hold and nothing more: no routes, no cross-track error.
 
 const SubsystemCounts := preload("res://src/input/subsystem_counts.gd")
 
@@ -15,8 +11,7 @@ const SubsystemCounts := preload("res://src/input/subsystem_counts.gd")
 ## reordering this silently desyncs the wire; test_boat_autopilot.gd pins both.
 enum { STANDBY = 0, HEADING_HOLD = 1 }
 
-## How many positions the 2 key walks; from the leaf-counts module so the router (which must not
-## depend on a vehicle class) sees the same number.
+## From the leaf-counts module so the router, which must not depend on a vehicle class, agrees.
 const COUNT := SubsystemCounts.NAV_MODES
 
 ## |steer| above which the helmsman has the helm and the pilot stands by. Above a joystick's rest
@@ -26,25 +21,9 @@ const HELM_DEADBAND := 0.05
 ## Rudder fraction per DEGREE of heading error: full rudder at 28.6 deg off course.
 const KP := 0.035
 ## Rudder fraction per deg/s of turn rate (damping): full rudder against a 50 deg/s swing.
+## Derivation (zeta 1.6-1.9 on every hull; raising `drag_yaw` toward `I / delta` voids it):
+## docs/vehicles.md § Autopilot gains.
 const KD := 0.02
-
-## Why those two numbers, so a re-tune starts from the derivation. Linearize the hull about its
-## heading: `I * theta_dd = rudder_torque * A * u - drag_yaw * theta_d`, with `I` from
-## `VehicleMath.inertia_of(mass, probe span)` and `A` the rudder authority. With
-## `u = KP * e - KD * e_d` (per-radian units): `wn = sqrt(rudder_torque * A * KP / I)` and
-## `zeta = (drag_yaw + rudder_torque * A * KD) / (2 * wn * I)`. Over authorities 0.4 to 1.0:
-##
-##     boat-speed-a  I  685   wn 2.8-4.4   zeta 1.79-1.88
-##     boat-speed-j  I 2338   wn 1.9-3.1   zeta 1.71-1.88
-##     boat-sail-a   I  681   wn 2.2-3.5   zeta 1.64-1.69
-##
-## Overdamped on every hull (wn * dt under 0.08 at 60 Hz), and `drag_yaw` alone carries zeta
-## 0.6-1.3, so one gain pair suits all three hulls with no per-variant knob.
-##
-## The linear plant IS the shipped one: rudder torque is applied raw, and the yaw damper's one-tick
-## clamp (`VehicleMath.damped_force`) binds only when `drag_yaw > I / delta` (41 kN*m/(rad/s) on
-## boat-speed-a against its 3800; every hull clears it by 11-13x). Raising `drag_yaw` (or cutting
-## mass or probe span) toward `I / delta` would put the clamp in the loop and invalidate the zetas.
 
 # --- the mode ------------------------------------------------------------------
 
