@@ -630,7 +630,8 @@ static func retarder_demand(request01: float, speed_ms: float, rating: float) ->
 
 ## Anti-lock backstop (Nm): the most spin this wheel may lose in one tick without exceeding
 ## RETARDER_SLIP_TARGET, and 0 once the axle is already at or past it. Uses RayWheel's own slip
-## denominator (LOW_SPEED_FLOOR). `road_speed` is the signed chassis forward velocity (negative in
+## denominator at its least floor (LOW_SPEED_FLOOR, under any wheel's `slip_floor`, so the cap only
+## tightens). `road_speed` is the signed chassis forward velocity (negative in
 ## reverse), never a magnitude. `compliance` is the wheel's spin change per N·m of brake this tick
 ## (`RayWheel.spin_compliance`; `delta / inertia` on a free wheel), so a gripping wheel, which the
 ## road holds up, may take more torque than a free one.

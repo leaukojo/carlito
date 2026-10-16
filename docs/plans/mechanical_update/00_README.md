@@ -22,7 +22,8 @@ what binds a fix, and what "done" looks like. A brief is **not a plan** (see § 
 | 06 | shift policy, start gear, shift trace — fixed-rpm shifting (a sedan cruised 60 km/h in 2nd at ~5000 rpm) | medium | 05 | landed (`docs/vehicles.md` § The shift policy; `docs/heavy_vehicles.md` § Tractor, implement & ISOBUS) | — |
 | 06b | the heavy vans' drivetrain — they ran the 8 t trucks' engine and gearing | small-medium | 05, 06 | landed (`docs/vehicles.md` § Sourced figures, the heavy vans' drivetrain) | — |
 | 07 | toy-scale Kenney geometry with real mass | medium | — | landed (`docs/vehicles.md` § Inertia, § Pitch, § Balance, § Braking) | — |
-| 07b | `docs/plans/wheel_contact_caps_and_patch.md` (a plan, not a brief) — the COM-lever contact's tensor caps cost crawl traction; the patch rides the pitched body instead of staying under the hub | medium-large | 07 | plan written | three: caps that bind on overshoot only, patch under the hub, re-measure |
+| 07b | crawl-speed tyre caps and the patch under the hub | medium-large | 07 | landed (`docs/vehicles.md` § One-tick caps, § Slip floor, § Pitch) | — |
+| 14 | `14_semi_shift_ring_and_drift.md` — the semi's front axle unloads 17 points past steady transfer at D1>D2; a slow yaw mode drifts it centimetres | medium (1), small (2) | 07b | (1) high: a driveline handover, levers already tried; (2) medium: name the mode first | (1) one or two after diagnosis; (2) one |
 | 08 | `08_handling_balance.md` — `rear_lat_grip` stands in for roll-stiffness distribution | medium | 07 | high: the tyre-model change ripples into brake split and the grade / launch ceilings; tyre data to source; understeer targets from the user | several: per-axle bars, cornering-stiffness load model, retire `rear_lat_grip` |
 | 09 | `09_ackermann_steering.md` — parallel steer scrubs in tight turns | small | — | low: pure geometry, spec fraction defaulting to 0, mean angle unchanged; one decision (which wheel the lock limits) | one |
 | 10 | `10_wheel_radius_and_contact.md` — one 0.36 m ray wheel for every body | large | 04, 05, 06 | xhigh: every body and trailer, the tractor linkage geometry, a Rejected entry (MFWD lead ratio) | several, likely two plans: radius (re-derive every body), then contact shape (web perf study) |
@@ -35,7 +36,8 @@ xhigh / max): how much design is open, how much must be sourced, how many rules 
 meets; not the size of the change.
 
 Order: 07, then 07b, before 08 (balance is tuned on the final inertia and contact; 10's contact
-shape starts from 07b's patch); 10 after the briefs that re-derive
+shape starts from 07b's patch); 14's ring before 08, its drift after 08;
+10 after the briefs that re-derive
 gearing and brakes; 12 needs 04's decoupling of brakes from tyres.
 
 Two cross-dependencies the table does not show:

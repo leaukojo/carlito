@@ -497,17 +497,32 @@ func test_tcs_ceiling_is_the_mirror_of_abs() -> void:
 	assert_float(WheelScript.tcs_take(20.0 / r, 2.0, ceiling)).is_equal_approx(2.0, 1e-9)
 
 
-func test_tcs_ceiling_lets_the_one_tick_cap_pass_the_peak_force() -> void:
-	var r := 0.36
-	# A tyre loaded past its corner_mass (a tractor unit's drive axle under the plate) needs more
-	# slip velocity than the floor-scaled peak for the one-tick cap to pass its budget.
-	assert_float(WheelScript.tcs_ceiling_spin(0.0, 1.0, r, WheelScript.TCS_SLIP, 0.35)) \
-			.is_equal_approx(0.35 / r, 1e-6)
-	# Under the peak's own slip velocity it changes nothing.
-	assert_float(WheelScript.tcs_ceiling_spin(0.0, 1.0, r, WheelScript.TCS_SLIP, 0.1)) \
-			.is_equal_approx(0.18 / r, 1e-6)
-	assert_float(WheelScript.tcs_ceiling_spin(10.0, 1.0, r, WheelScript.TCS_SLIP, 0.35)) \
-			.is_equal_approx(10.0 * (1.0 + WheelScript.TCS_SLIP) / r, 1e-5)
+func test_a_light_corner_keeps_the_low_speed_floor() -> void:
+	# 3000 N on 400 kg: the curve's rise, 3000 / 0.12 / 1.5 N per m/s, is under 400 / TICK.
+	assert_float(WheelScript.slip_floor_for(3000.0, 400.0, _curve(), TICK)) 			.is_equal(WheelScript.LOW_SPEED_FLOOR)
+	assert_float(WheelScript.slip_floor_for(3000.0, 0.0, _curve(), TICK)) 			.is_equal(WheelScript.LOW_SPEED_FLOOR)
+
+
+func test_on_its_slip_floor_a_crawling_tyre_reaches_its_budget_inside_the_one_tick_cap() -> void:
+	# A TC-held crawl: 3900 N on a 250 kg cap mass. On the 1.5 m/s floor the peak sits at 0.18 m/s
+	# of slip, where the cap passes only 2700 N; the raised floor moves the peak to where it passes
+	# the whole budget, and keeps every slip short of it inside the cap too.
+	var budget := 3900.0
+	var m := 250.0
+	assert_float(m * 0.12 * WheelScript.LOW_SPEED_FLOOR / TICK).is_less(budget)
+	var floor_vel := WheelScript.slip_floor_for(budget, m, _curve(), TICK)
+	assert_float(floor_vel).is_greater(WheelScript.LOW_SPEED_FLOOR)
+	for i in range(1, 41):
+		var slip_vel := 0.01 * i
+		var f := WheelScript.combined_slip_force(slip_vel / floor_vel, 0.0, budget, budget,
+				_curve()).x
+		assert_float(f).override_failure_message("%.0f N past the cap at %.2f m/s" % [
+				f - m * slip_vel / TICK, slip_vel]).is_less_equal(m * slip_vel / TICK + 1e-3)
+	var peak := WheelScript.combined_slip_force(0.12, 0.0, budget, budget, _curve()).x
+	assert_float(peak).is_equal_approx(budget, 1e-3)
+	assert_float(m * 0.12 * floor_vel / TICK).is_greater_equal(budget - 1e-3)
+	# The traction control holds the same peak: its ceiling reads the same floor.
+	assert_float(WheelScript.tcs_ceiling_spin(0.0, 1.0, 0.36, WheelScript.TCS_SLIP, floor_vel)) 			.is_equal_approx(WheelScript.TCS_SLIP * floor_vel / 0.36, 1e-6)
 
 
 func test_tcs_holds_a_floored_drive_at_its_slip() -> void:
@@ -573,7 +588,7 @@ func test_tcs_only_removes_drive_and_never_brakes() -> void:
 	var held := _wheel()
 	held.omega = (v + slip_vel) / spec.wheel_radius
 	held._integrate_spin(0.0, -400.0, 0.0, spec, TICK, slip_vel, v, 0.0, 0.0,
-			WheelScript.TCS_SLIP, 0.0, 1.0e6)
+			WheelScript.TCS_SLIP, 1.0e6)
 	var ceiling := WheelScript.tcs_ceiling_spin(v, 1.0, spec.wheel_radius, WheelScript.TCS_SLIP)
 	assert_float(held.omega).is_equal_approx(ceiling, 1e-9)
 	assert_bool(held.tcs_active).is_true()
@@ -582,7 +597,7 @@ func test_tcs_only_removes_drive_and_never_brakes() -> void:
 	var slow := _wheel()
 	slow.omega = (v + 0.05 * v) / spec.wheel_radius
 	slow._integrate_spin(0.0, -100.0, 0.0, spec, TICK, 0.05 * v, v, 0.0, 0.0,
-			WheelScript.TCS_SLIP, 0.0, 1.0e6)
+			WheelScript.TCS_SLIP, 1.0e6)
 	var plain := _wheel()
 	plain.omega = (v + 0.05 * v) / spec.wheel_radius
 	plain._integrate_spin(0.0, -100.0, 0.0, spec, TICK, 0.05 * v, v)
@@ -733,7 +748,8 @@ func test_the_bar_reads_one_shared_snapshot_whatever_the_tick_order() -> void:
 func test_the_bar_hangs_free_while_the_partner_is_airborne() -> void:
 	var spec := _bench_spec(2000.0)
 	spec.ground_drive.anti_roll_rate = 7000.0
-	var left: RayWheel = _drive_for(spec).wheels[0]
+	var drive := _drive_for(spec)  # holds the pair: a wheel holds its partner only weakly
+	var left: RayWheel = drive.wheels[0]
 	left.compression = 0.05
 	left.latch_bar()
 	left.anti_roll_partner.in_contact = false
@@ -936,6 +952,49 @@ func test_capped_contacts_never_overshoot_in_any_mode() -> void:
 
 func test_a_massless_body_moves_nothing() -> void:
 	assert_float(_lone_mass(Vector3(0.0, -1.0, 0.0), Vector3.RIGHT, 0.0, Basis.IDENTITY)) 			.is_equal(0.0)
+
+
+# --- patch_offset: where a disk on the hub touches the road --------------------------
+
+func test_a_level_wheel_touches_straight_below_its_hub() -> void:
+	assert_vector(WheelScript.patch_offset(Vector3.UP, Vector3.UP, Vector3.RIGHT, 0.35)) \
+			.is_equal_approx(Vector3(0.0, -0.35, 0.0), Vector3.ONE * 1e-5)
+
+
+func test_a_rolled_wheel_still_touches_along_its_own_up() -> void:
+	# A thin disk rolled on a flat touches the rim point in its own plane: body down, as before.
+	var roll := Basis(Vector3.BACK, deg_to_rad(8.0))
+	var up := roll * Vector3.UP
+	assert_vector(WheelScript.patch_offset(Vector3.UP, up, roll * Vector3.RIGHT, 0.35)) \
+			.is_equal_approx(-up * 0.35, Vector3.ONE * 1e-5)
+
+
+func test_a_pitched_wheel_touches_straight_below_its_hub_in_the_world() -> void:
+	var pitch := Basis(Vector3.RIGHT, deg_to_rad(5.0))
+	var offset := WheelScript.patch_offset(Vector3.UP, pitch * Vector3.UP, pitch * Vector3.RIGHT,
+			0.35)
+	assert_vector(offset).is_equal_approx(Vector3(0.0, -0.35, 0.0), Vector3.ONE * 1e-5)
+
+
+func test_a_steered_wheel_touches_in_its_own_plane() -> void:
+	# Steered 30 degrees on a body pitched on a flat: the patch leaves the hub in the wheel's plane
+	# only, and lands on the road's line under it.
+	var pitch := Basis(Vector3.RIGHT, deg_to_rad(5.0))
+	var up := pitch * Vector3.UP
+	var axle := Basis(up, deg_to_rad(30.0)) * (pitch * Vector3.RIGHT)
+	var offset := WheelScript.patch_offset(Vector3.UP, up, axle, 0.35)
+	assert_float(offset.dot(axle)).is_equal_approx(0.0, 1e-5)
+	assert_float(offset.length()).is_equal_approx(0.35, 1e-5)
+	assert_float(offset.y).is_less(-0.35 * cos(deg_to_rad(5.0)))
+
+
+func test_a_back_face_hit_keeps_the_patch_below_the_hub() -> void:
+	var up := Vector3.UP
+	assert_vector(WheelScript.patch_offset(Vector3.DOWN, up, Vector3.RIGHT, 0.35)) \
+			.is_equal_approx(-up * 0.35, Vector3.ONE * 1e-5)
+	# A normal along the axle has nothing in the wheel's plane.
+	assert_vector(WheelScript.patch_offset(Vector3.RIGHT, up, Vector3.RIGHT, 0.35)) \
+			.is_equal_approx(-up * 0.35, Vector3.ONE * 1e-5)
 
 
 # --- rest ride height: the spawn placer's ground-clearance figure ------------------

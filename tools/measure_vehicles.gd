@@ -150,7 +150,7 @@ const GATE_MIN_GEAR_S := 1.0
 const GATE_LANDING_MARGIN := ShiftPolicy.LANDING_MARGIN
 ## The front axle's share of its parked load falls at most this far (in shares, 0.05 = 5 points)
 ## past what steady transfer predicts (`_transfer_share`) once the gap is cleared of road resistance,
-## the trace's tick-late acceleration and the pitched pose's lean (`_gap_split`'s `over`): the
+## the trace's tick-late acceleration and the pitched pose's steady lean (`_gap_split`'s `over`): the
 ## allowance for dynamic overshoot past steady transfer, a damping and link question, independent of
 ## the footprint.
 const GATE_XFER_GAP := 0.05
@@ -841,17 +841,18 @@ func _sample_launch(delta: float, pedal: float) -> void:
 
 
 ## Splits one driven contact's `budget - force_long` into `_loss`'s three deficit buckets, which sum
-## to it exactly: `tick_cap`, what the one-tick cap took off the curve force where it bound; the
+## to it exactly: `tick_cap`, what the one-tick cap (`RayWheel.long_cap`) took off the curve force
+## where it bound; the
 ## rest, the curve short of its 1.0 peak (plus the share lateral slip takes), is `under_peak` or
 ## `past_peak` by the slip's side of TcPedal.TARGET_SLIP. The wheel's fields are from its last tick,
-## the body's velocity one step on: the slip denominator is exact under LOW_SPEED_FLOOR, which is
-## where the cap binds.
+## the body's velocity one step on: the slip denominator is exact under the wheel's `slip_floor`,
+## which is where the cap binds.
 func _split_deficit(w: RayWheel, gd: GroundDriveSpec, budget: float, delta: float) -> void:
 	var up := _car.global_transform.basis.y
 	var wheel_forward := Basis(up, w.steer_angle) * -_car.global_transform.basis.z
 	var forward := (wheel_forward - w.contact_normal * wheel_forward.dot(w.contact_normal)).normalized()
 	var vel := VehicleMath.point_velocity(_car, w.contact_point)
-	var slip_denom := maxf(absf(vel.dot(forward)), RayWheel.LOW_SPEED_FLOOR)
+	var slip_denom := maxf(absf(vel.dot(forward)), w.slip_floor)
 	var slip_long := w.slip * signf(w.force_long)
 	var budget_lat: float = RayWheel.load_scaled_mu(
 			gd.mu_lat * w.axle_lat_grip * w.surface_grip,
@@ -859,10 +860,7 @@ func _split_deficit(w: RayWheel, gd: GroundDriveSpec, budget: float, delta: floa
 	var curve := RayWheel.combined_slip_force(slip_long,
 			-vel.dot(forward.cross(w.contact_normal)) / slip_denom, budget, budget_lat,
 			gd.grip_curve).x
-	# A COPY of the one-tick longitudinal cap inline in `RayWheel.tick`
-	# (`long_mass * |slip_vel| / delta`): edit both together.
-	var cap := minf(w.corner_mass, w.long_cap_mass) * absf(slip_long * slip_denom) / delta
-	var capped := curve - w.force_long if absf(curve) > cap else 0.0
+	var capped := curve - w.force_long if absf(curve) > w.long_cap else 0.0
 	_loss["tick_cap"] += capped * delta
 	_loss["under_peak" if w.slip < TcPedal.TARGET_SLIP else "past_peak"] += \
 			(budget - w.force_long - capped) * delta
@@ -1306,9 +1304,9 @@ func _body_kinematics() -> Dictionary:
 ##   behind;
 ## - `heave`: `-z'' / g`, the body rising or settling;
 ## - `pitch`: `-I θ'' / L`, the body's pitch accelerating;
-## - `lean`: `Σ N d / L`, each load's patch `d` ahead of where its station puts it. The rays are
-##   body-fixed, so a pitched body carries its patches with it, by the COM's height times the
-##   angle, where a real tyre's patch stays under its hub (the COM's height less the radius);
+## - `lean`: `Σ N d / L`, each load's patch `d` ahead of where its station puts it. A patch stays
+##   under its hub (`RayWheel.patch_offset`), so a pitched body moves it by the COM's height less
+##   the radius times the angle: the pitched pose's steady geometry;
 ## - `residual`: the rest, ~0 when the terms above are the whole story (a trailer's kingpin load
 ##   moving as it pitches is not among them).
 ## `over`: the overshoot, the gap less resistance, lag and lean (the gate takes a two-tick mean).

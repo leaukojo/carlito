@@ -39,7 +39,3 @@ Builds on `docs/vehicles.md` § Crank and coupling, § Converter, § Hill hold, 
   the same speed held in D2 at ~5000 rpm would burn the same. A rule-3 model reads the crank's
   delivered power (torque at `Drivetrain.rpm` times speed) through a brake-specific fuel consumption figure per engine class
   (source a petrol and a diesel BSFC map), labelled an honest model like the other aux systems.
-
-## Wheels: contact geometry
-
-- **Patch under the hub** and the crawl-speed tyre caps: `docs/plans/wheel_contact_caps_and_patch.md`.

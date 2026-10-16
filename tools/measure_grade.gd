@@ -69,7 +69,7 @@ const BISECT_LO := 0.0
 const BISECT_HI := 45.0
 const BISECT_STEPS := 7   ## 45 deg / 2^7 -> ~0.35 deg of resolution
 
-## Floor of the `tc` loop's slip target (`_tc_target`): the shipped grip curves all peak at 0.12.
+## The `tc` loop's slip target: the shipped grip curves all peak at 0.12.
 const TC_TARGET_SLIP := 0.12
 const TC_GAIN := 12.0     ## pedal units per second per unit of slip error
 ## Front-axle spring load, as a share of its settled load, below which the `tc` driver lifts off.
@@ -145,7 +145,7 @@ var _surfaces: Array[String] = []     ## surfaces left for the current variant
 var _variant := ""
 var _surface := ""
 var _verbose := false                 ## print every bisection trial, not just the result
-## `tc`: hold the driven slip at the tyre's best (`_tc_target`) instead of flooring the pedal, which is
+## `tc`: hold the driven slip at the tyre's best (TC_TARGET_SLIP) instead of flooring the pedal, which is
 ## the difference between what the tyres could do and what a pedal-to-the-floor driver gets.
 var _tc := false
 var _throttle := 1.0                  ## pedal the TC loop is holding, 0..1
@@ -419,7 +419,7 @@ func _physics_process(delta: float) -> void:
 		# Wheelspin is self-defeating here twice over: the grip curve falls away past its peak
 		# AND gear 1 drags the engine into the rev limiter, so a floored pedal measures the
 		# driver, not the tyre. Hold the slip at the peak and the measurement is the tyre's.
-		var slip_rate := (_tc_target(delta) - _car.telemetry.slip_rear) * TC_GAIN
+		var slip_rate := (TC_TARGET_SLIP - _car.telemetry.slip_rear) * TC_GAIN
 		# Most force is not most climb: every newton past the weight accelerates the body and
 		# unloads the front axle by `m * a * h / L`, which flips a high-COM tractor backwards
 		# below its static tip angle. The driver also feathers as the front goes light, on the
@@ -456,35 +456,6 @@ func _physics_process(delta: float) -> void:
 		var up_speed := _car.linear_velocity.dot(up_slope)
 		_end_trial(up_speed >= CLIMB_SPEED and _gain >= CLIMB_GAIN)
 
-
-## Slip at which the driven wheels together make their most force. The grip curve peaks at
-## TC_TARGET_SLIP, but RayWheel also caps a tick's force at what would cancel the slip velocity
-## (`long_mass * slip_vel / delta`); near a standstill (slip over `LOW_SPEED_FLOOR`) under a heavy
-## axle load, a fifth wheel's, that cap still binds past the peak. One slip for every driven wheel:
-## one pedal sets it, and a rigid MFWD ties the axles anyway.
-func _tc_target(delta: float) -> float:
-	var gd: GroundDriveSpec = _car.spec.ground_drive
-	var denom := maxf(absf(_car.telemetry.speed), RayWheel.LOW_SPEED_FLOOR)
-	var budgets: Array[float] = []
-	var caps: Array[float] = []  ## N of capped force per unit slip
-	for w in _car.drive.wheels:
-		if not w.driven or not w.in_contact:
-			continue
-		budgets.append(RayWheel.load_scaled_mu(gd.mu_long * w.surface_grip, w.suspension_force,
-				w.corner_mass * 9.81, gd.load_sensitivity) * w.suspension_force)
-		caps.append(minf(w.corner_mass, w.long_cap_mass) * denom / delta)
-	var best := TC_TARGET_SLIP
-	var best_force := -1.0
-	var s := TC_TARGET_SLIP  ## below the peak both curve and cap rise, so the answer is not there
-	while s <= 1.0:
-		var force := 0.0
-		for i in budgets.size():
-			force += minf(VehicleSpec.sample_curve(gd.grip_curve, s) * budgets[i], caps[i] * s)
-		if force > best_force:
-			best_force = force
-			best = s
-		s += 0.01
-	return best
 
 
 func _end_trial(climbed: bool) -> void:

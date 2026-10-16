@@ -142,8 +142,8 @@ the conventional carries none. No trailer of the four adds a signal to either.
 
 - Wheelbase is sized by the launch: the trailer pulls at the 1.05 m kingpin, a lever on the steer
   axle. A 2.10 m wheelbase lifts both steer wheels for ~1 s of a gear-1 launch; the shipped
-  3.60 m (cab-over) and 4.40 m (conventional) keep >= 8.0 kN on each steer wheel (8.4 and
-  12.0 kN coupled to the box, P2 and P6, with ASR holding the drive axle at full grip). Gate: CI runs
+  3.60 m (cab-over) and 4.40 m (conventional) keep >= 7.0 kN on each steer wheel (7.8 and
+  11.5 kN coupled to the box, P2 and P6, with ASR holding the drive axle at full grip). Gate: CI runs
   `tools/measure_semi_launch.tscn -- <unit> strict` on both units.
 - Gearing: gears 1-5 span the 600-2080 rpm range; 6th is a 0.69 overdrive, so the governor, not
   the redline, sets top speed. Coupled to the box (`measure_vehicles -- <unit> 120 coast`; top
@@ -159,11 +159,9 @@ the conventional carries none. No trailer of the four adds a signal to either.
   band the rig is grip-limited, not power-limited. Gear 1 asks ~1.5x that budget; the rig's ASR
   (`tcs_equipped`, standard beside EBS) holds the drive tyres near the grip peak while the AMT's
   clutch slips on its target (its 0-50 and standing-start grade: `docs/vehicles.md` § Launches,
-  § Gradeability; without it: § Limiter at launch). Near a
-  standstill the TC lets the slip run past the floor-scaled peak as far as the one-tick force cap
-  needs to pass the full grip:
-  these tyres carry the plate load on a `corner_mass` sized for the unit alone
-  (`RayWheel.tcs_ceiling_spin`).
+  § Gradeability; without it: § Limiter at launch). These tyres carry the plate load on a
+  `corner_mass` sized for the unit alone, so near a standstill their slip ratio reads over a raised
+  floor, where the one-tick force cap passes their full grip at the peak (`RayWheel.slip_floor_for`).
 - Rear damper: `damper_bump_rear` / `damper_rebound_rear` 24700 / 28800 hold
   zeta = c / (2 sqrt(k_rear * m)) at 0.30 (box) to 0.40 (flatbed) on the coupled rear corner
   (3.5-4.7 t) and 0.47-0.55 at the bobtail corner (1.9 t); the `GroundDriveSpec` fallback preserves
@@ -183,16 +181,17 @@ the conventional carries none. No trailer of the four adds a signal to either.
   | Body | COM over road | rollover_g | slow tip | lean at 0.2 g | step at 40 km/h lifts at | full-lock step rolls from |
   | --- | --- | --- | --- | --- | --- | --- |
   | Box | 1.60 m | 0.45 | 0.34 g | 1.7° | 0.34 g | 30 km/h (lifts at 25) |
-  | Tanker | 1.50 m | 0.48 | 0.37 g | 1.6° | 0.36 g | 30 km/h |
+  | Tanker | 1.50 m | 0.48 | 0.37 g | 1.6° | 0.37 g | 30 km/h |
   | Tipper | 1.30 m (parked) | 0.55 | 0.45 g | 1.3° | 0.41 g | 30 km/h |
-  | Flatbed | 0.90 m | 0.80 | 0.52 g | 0.8° | never (tractor 0.64 g) | 45 km/h (lifts at 30) |
+  | Flatbed | 0.90 m | 0.80 | 0.31 g, does not roll | 0.8° | never (tractor 0.64 g) | 50 km/h (lifts at 30) |
   | Tractor unit (bobtail) | 1.10 m (1.03 coupled) | 0.65 | 0.61 g, rolls | 0.5° | 0.66 g | 35 km/h |
 
-  Lean is the trailer's (the bobtail's own). The flatbed's slow tip is its trailer's, with the
-  tractor's inner wheels following at 0.53 g; on the step its trailer wheels stay down and the
-  tractor's lift. A raised tipper puts its load 2.80 m over the road
-  (~0.26 g), so a body off its rest caps the rig at 5 km/h (`TowHost.speed_cap_kmh` into
-  `Drivetrain.speed_cap_kmh`, a notice on the edge), where full lock makes ~0.03 g.
+  Lean is the trailer's (the bobtail's own). The flatbed's slow tip is its trailer's, twisted up by
+  the plate's roll stop with the tractor's inner wheels following at 0.53 g, the rig left upright;
+  on the step its trailer wheels stay down and the tractor's lift. A raised tipper puts its load
+  2.80 m over the road (~0.26 g), so a body off its rest caps the rig at 5 km/h
+  (`TowHost.speed_cap_kmh` into `Drivetrain.speed_cap_kmh`, a notice on the edge), where full
+  lock makes ~0.03 g.
 
   The 1.44 m track is the compromise (a real artic runs ~2.0 m, so every ceiling reads ~25 % low);
   widening it moves every wheel station and authored wheel visual. `BaseVehicle.is_overturned()`

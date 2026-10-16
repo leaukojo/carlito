@@ -10,7 +10,8 @@ extends RefCounted
 
 const Layers := preload("res://src/physics/collision_layers.gd")
 
-## Slip-ratio denominator floor (m/s): keeps slip finite as speed -> 0.
+## Slip-ratio denominator floor (m/s): keeps slip finite as speed -> 0. The least of a wheel's
+## `slip_floor`.
 const LOW_SPEED_FLOOR := 1.5
 
 ## How far above or below a terrain surface a contact may sit and still pick up its painted grip
@@ -67,7 +68,15 @@ var abs_active := false ## the anti-lock held this wheel's brake back this tick
 var tcs_active := false ## traction control held this wheel's drive back this tick
 var force_long := 0.0   ## last tick's longitudinal tire force (N, +=forward); the next tick's link force reads it (`link_slope`)
 var force_lat := 0.0    ## last tick's lateral tire force (N, post friction circle); diagnostic only
-var contact_point := Vector3.ZERO  ## world-space hit position while in_contact (read by the dust emitter)
+var long_cap := 0.0     ## last tick's one-tick cap on the longitudinal slip force (N); diagnostic only
+## The body's slip-denominator floor (m/s): the highest of its wheels' own (`slip_floor_for`) last
+## tick, shared by `size_cap_masses`. A slip ratio's denominator is the road speed, one per body:
+## each wheel's own floor would put its grip peak at its own slip velocity, and a driveline that
+## turns the wheels together (a centre diff, a TC on the light axle) would hold the heavy ones under
+## theirs. A wheel reads at least its own floor this tick.
+var slip_floor := LOW_SPEED_FLOOR
+var _own_slip_floor := LOW_SPEED_FLOOR
+var contact_point := Vector3.ZERO  ## world-space patch, under the hub (`patch_offset`), while in_contact
 var contact_normal := Vector3.UP  ## world-space contact normal while in_contact (the hill hold's grade)
 var surface_grip := 1.0  ## grip multiplier from the painted terrain under the contact (F3 readout)
 var surface_drag := 0.0  ## added rolling-resistance coefficient of the painted terrain under the contact (F3 readout)
@@ -110,7 +119,14 @@ var visual_lift := 0.0
 ## Wheels tick in array order, so a latch inside `tick` gives the first wheel of a pair a partner
 ## value one tick staler than the second's: a phantom damper on the left wheels only
 ## (docs/vehicles.md has the figures).
-var anti_roll_partner: RayWheel = null
+## Held weakly: the pair refer to each other, and a RefCounted cycle is never freed (every spawn
+## would leak its wheels). The owner's `wheels` array keeps both alive.
+var anti_roll_partner: RayWheel:
+	get:
+		return _partner_ref.get_ref() as RayWheel if _partner_ref != null else null
+	set(value):
+		_partner_ref = weakref(value) if value != null else null
+var _partner_ref: WeakRef = null
 ## Body mass share this corner carries (kg): `mass / wheel count`, sizing the three 60 Hz clamps
 ## below. Constructor-required: a wheel built with zero applies no damping or tire force and just
 ## slides. It tracks the body's LIVE mass (every runtime `mass` write is `BaseVehicle.set_live_mass`).
@@ -124,7 +140,8 @@ var corner_mass: float
 ## `size_cap_masses`, every tick; INF leaves `corner_mass` alone. The patch velocity is read about
 ## the COM, which rides 0.7-1.7 m over the contacts, so `corner_mass` alone overruns the tick and
 ## the patch rings (a crawl reads slip 0.15 at a standstill; a parked rig winds its side spring up
-## and slides off the hand brake).
+## and slides off the hand brake). The long one also sizes the slip floor (`slip_floor_for`), so
+## the cap it sets never cuts the grip curve.
 var lateral_cap_mass := INF
 var long_cap_mass := INF
 ## This corner's spring and dampers, picked per axle from the spec by `apply_suspension`
@@ -190,6 +207,8 @@ func reset() -> void:
 	compression = 0.0
 	_prev_compression = 0.0
 	_prev_vel_valid = false
+	_own_slip_floor = LOW_SPEED_FLOOR
+	slip_floor = LOW_SPEED_FLOOR
 	_bar_compression = 0.0
 	in_contact = false
 	suspension_force = 0.0
@@ -250,11 +269,6 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	if _query_body != body.get_rid():
 		_query_body = body.get_rid()
 		_query.exclude = [_query_body]
-	# COMPROMISE: the ray runs down the body's own up axis, so a pitched body carries its patches with
-	# it, by the COM's height times the angle, where a real tyre's patch stays under its hub (the
-	# COM's height less the radius). The extra `r sin(pitch)` of lever is a destabilising pitch moment
-	# (its size: docs/vehicles.md § Pitch, the front-axle gap's lean). Undoing it moves every patch,
-	# and so every measured figure.
 	_query.from = ray_from
 	_query.to = ray_from - up * ray_len
 	var hit := space.intersect_ray(_query)
@@ -281,21 +295,26 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		var hub_vel := VehicleMath.point_velocity(body, ray_from)
 		var hub_v_long := hub_vel.dot(Basis(up, steer_angle) * -xform.basis.z)
 		_integrate_spin(drive_torque, 0.0, brake_torque, drive_spec, delta, 0.0,  ## airborne
-				hub_v_long, abs_slip, 0.0, tcs_slip, 0.0, tcs_drive)
+				hub_v_long, abs_slip, 0.0, tcs_slip, tcs_drive)
 		omega = free_spin_omega(omega, delta)
 		if not coupled_spin:
 			update_visual(drive_spec, delta)
 		return
 
-	contact_point = hit.position
 	var normal: Vector3 = hit.normal
 	contact_normal = normal
+	# The spring travels along the ray, so compression reads along it: exact level and in roll,
+	# `r (1 / cos - 1)` short in pitch. The patch is the hub's disk on the hit's plane, under the hub.
+	var hit_dist := ray_from.distance_to(hit.position)
+	var hub := ray_from - up * (hit_dist - drive_spec.wheel_radius)
+	contact_point = hub + patch_offset(normal, up, Basis(up, steer_angle) * xform.basis.x,
+			drive_spec.wheel_radius)
 	var terrain := terrain_at(contact_point, grip_terrains)
 	surface_grip = terrain.grip_at(contact_point) if terrain != null else 1.0
 	surface_drag = terrain.drag_at(contact_point) if terrain != null else 0.0
 
 	# Along the contact normal, never the chassis up axis, which would push a pitched body along.
-	compression = clampf(ray_len - ray_from.distance_to(contact_point), 0.0, drive_spec.rest_length)
+	compression = clampf(ray_len - hit_dist, 0.0, drive_spec.rest_length)
 	var comp_vel := (compression - _prev_compression) / delta
 	_prev_compression = compression
 	var damper := damper_bump if comp_vel > 0.0 else damper_rebound
@@ -325,8 +344,13 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	var mu_lat := load_scaled_mu(drive_spec.mu_lat * axle_lat_grip * surface_grip,
 			suspension_force, ref_load, drive_spec.load_sensitivity)
 
-	# Both slips on one denominator, so the slip vector points along the patch's slide.
-	var slip_denom := maxf(absf(v_long), LOW_SPEED_FLOOR)
+	# Both slips on one denominator, so the slip vector points along the patch's slide; its floor
+	# keeps the curve's rise inside the one-tick cap below (`slip_floor_for`).
+	var long_mass := minf(corner_mass, long_cap_mass)
+	_own_slip_floor = slip_floor_for(mu_long * suspension_force, long_mass,
+			drive_spec.grip_curve, delta)
+	var floor_vel := maxf(slip_floor, _own_slip_floor)
+	var slip_denom := maxf(absf(v_long), floor_vel)
 	var slip_vel := omega * drive_spec.wheel_radius - v_long
 	var slip_ratio := slip_vel / slip_denom
 	long_slip = slip_ratio
@@ -336,9 +360,8 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 
 	# Each axis capped by the force that would cancel its slip velocity in one tick (the lateral cap
 	# kills parked-car jitter).
-	var long_mass := minf(corner_mass, long_cap_mass)
-	var f_long := clampf(tyre.x,
-			-long_mass * absf(slip_vel) / delta, long_mass * absf(slip_vel) / delta)
+	long_cap = long_mass * absf(slip_vel) / delta
+	var f_long := clampf(tyre.x, -long_cap, long_cap)
 	var lat_mass := minf(corner_mass, lateral_cap_mass)
 	var f_lat := clampf(tyre.y, -lat_mass * absf(v_lat) / delta, lat_mass * absf(v_lat) / delta)
 
@@ -387,12 +410,8 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	dv_long *= clampf(absf(v_long) / LOW_SPEED_FLOOR - 1.0, 0.0, 1.0)
 	_prev_body_vel = body.linear_velocity
 	_prev_vel_valid = true
-	# The slip velocity the one-tick cap above needs to pass this tyre's whole long budget. A TC
-	# holding slip at the floor-scaled peak stalls under it wherever the tyre carries more than its
-	# cap mass (a coupled tractor unit's drive axle under the plate), so the TC may go that far.
-	var tcs_cap_vel := mu_long * suspension_force * delta / maxf(long_mass, 1.0)
 	_integrate_spin(drive_torque, -f.x * drive_spec.wheel_radius, brake_torque, drive_spec,
-			delta, slip_vel, v_long, abs_slip, dv_long, tcs_slip, tcs_cap_vel, tcs_drive)
+			delta, slip_vel, v_long, abs_slip, dv_long, tcs_slip, tcs_drive, floor_vel)
 	if not coupled_spin:
 		update_visual(drive_spec, delta)
 
@@ -420,9 +439,10 @@ func latch_bar() -> void:
 ## while the partner is airborne, where its zero compression would read as full droop and shove
 ## this corner up on a bar that is really just hanging.
 func bar_force(rate: float) -> float:
-	if anti_roll_partner == null or not anti_roll_partner.in_contact:
+	var partner := anti_roll_partner
+	if partner == null or not partner.in_contact:
 		return 0.0
-	return VehicleMath.anti_roll_force(_bar_compression, anti_roll_partner._bar_compression, rate)
+	return VehicleMath.anti_roll_force(_bar_compression, partner._bar_compression, rate)
 
 
 ## Effective mass (kg) each contact's force along body-space unit `axis` meets while every contact
@@ -452,9 +472,21 @@ static func contact_masses(arms: PackedVector3Array, axis: Vector3, body_mass: f
 	return masses
 
 
+## Offset (m) from the hub to the patch: where a disk of `radius` in the wheel's plane (its spin
+## axis `axle`) touches a plane of `normal`, `-radius` along the normal's part in that plane. Exact
+## on a plane: straight under the hub in pitch, along the body's `up` in roll. Along `up` when the
+## normal has no part pointing up in that plane (a back face, a face along the axle).
+static func patch_offset(normal: Vector3, up: Vector3, axle: Vector3, radius: float) -> Vector3:
+	var in_plane := normal - axle * normal.dot(axle)
+	if in_plane.dot(up) <= 1e-3:
+		return -up * radius
+	return -in_plane.normalized() * radius
+
+
 ## Each wheel's cap masses off what the wheels' contacts really move together (`contact_masses`),
 ## along the wheel and across it. Sized every tick, since the load models move the COM; the lever
-## runs to full droop, the longest it gets.
+## runs to full droop, the longest it gets, and on to last tick's patch (`patch_offset`). Also shares
+## the body's slip floor (`slip_floor`).
 static func size_cap_masses(wheels: Array[RayWheel], body: RigidBody3D,
 		gd: GroundDriveSpec) -> void:
 	var state := PhysicsServer3D.body_get_direct_state(body.get_rid())
@@ -462,15 +494,22 @@ static func size_cap_masses(wheels: Array[RayWheel], body: RigidBody3D,
 		return
 	var b := body.global_transform.basis
 	var inv_inertia := b.transposed() * state.inverse_inertia_tensor * b
-	var droop := Vector3(0.0, gd.rest_length + gd.wheel_radius, 0.0)
+	var droop := Vector3(0.0, gd.rest_length, 0.0)
 	var arms := PackedVector3Array()
 	for w in wheels:
-		arms.append(w.anchor - droop - body.center_of_mass)
+		var normal := b.transposed() * w.contact_normal if w.in_contact else Vector3.UP
+		var patch := patch_offset(normal, Vector3.UP, Basis(Vector3.UP, w.steer_angle) * Vector3.RIGHT,
+				gd.wheel_radius)
+		arms.append(w.anchor - droop + patch - body.center_of_mass)
 	var along := contact_masses(arms, Vector3.BACK, body.mass, inv_inertia)
 	var across := contact_masses(arms, Vector3.RIGHT, body.mass, inv_inertia)
+	var floor_vel := LOW_SPEED_FLOOR
+	for w in wheels:
+		floor_vel = maxf(floor_vel, w._own_slip_floor if w.in_contact else LOW_SPEED_FLOOR)
 	for i in wheels.size():
 		wheels[i].long_cap_mass = along[i]
 		wheels[i].lateral_cap_mass = across[i]
+		wheels[i].slip_floor = floor_vel
 
 
 ## Tyre mu at a load off the corner's static reference: `mu * (1 - sensitivity * log2(load / ref))`,
@@ -573,6 +612,24 @@ static func surface_drag_force(v_long: float, crr: float, normal_load: float, mo
 	return clampf(-signf(v_long) * crr * normal_load, -tick_cap, tick_cap)
 
 
+## Slip-ratio denominator floor (m/s) for a tyre of longitudinal budget `budget` (N) whose one-tick
+## cap moves `mass`: LOW_SPEED_FLOOR, or higher where the grip curve's steepest rise, `budget * rise
+## / floor` N per m/s of slip, would pass the cap's `mass / delta`. On that floor the curve sits
+## inside the cap everywhere, so the cap binds only on an overshoot and a crawl still reaches the
+## full budget, at its peak's slip ratio. A numerical floor like
+## LOW_SPEED_FLOOR, not a tyre property: a heavy corner on a light cap mass (a drive axle under a
+## fifth wheel) needs more slip velocity at a crawl for the same force.
+static func slip_floor_for(budget: float, mass: float, grip_curve: PackedVector2Array,
+		delta: float) -> float:
+	if mass <= 0.0:
+		return LOW_SPEED_FLOOR
+	var rise := 0.0  ## steepest secant from the origin, per unit slip: a vertex's, the curve linear
+	for p in grip_curve:
+		if p.x > 0.0:
+			rise = maxf(rise, minf(p.y, 1.0) / p.x)
+	return maxf(LOW_SPEED_FLOOR, budget * rise * delta / mass)
+
+
 ## Wheel spin from drive plus road-reaction torque, semi-implicit (an explicit step rings at the
 ## tick rate): the net torque is divided by (1 + `reaction_stiffness`), never the reaction clamped.
 ## It solves for SLIP: the road's change under the wheel is followed in proportion `k / (1 + k)`.
@@ -581,8 +638,8 @@ static func surface_drag_force(v_long: float, crr: float, normal_load: float, mo
 ## differentials on a `coupled_spin` wheel. Derivation and figures: docs/vehicles.md, "Spin step".
 func _integrate_spin(drive_torque: float, reaction_torque: float, brake_torque: float,
 		drive_spec: GroundDriveSpec, delta: float, slip_vel: float, v_long := 0.0,
-		abs_slip := 0.0, dv_long := 0.0, tcs_slip := 0.0, tcs_cap_vel := 0.0,
-		tcs_drive := 0.0) -> void:
+		abs_slip := 0.0, dv_long := 0.0, tcs_slip := 0.0, tcs_drive := 0.0,
+		floor_vel := LOW_SPEED_FLOOR) -> void:
 	var null_slip_torque := drive_spec.wheel_inertia * absf(slip_vel) \
 			/ (delta * drive_spec.wheel_radius)
 	var reaction_stiffness := absf(reaction_torque) / maxf(null_slip_torque, 1e-6)
@@ -596,9 +653,9 @@ func _integrate_spin(drive_torque: float, reaction_torque: float, brake_torque: 
 	if tcs_slip > 0.0 and held_drive != 0.0 and drive_spec.wheel_radius > 0.0:
 		tcs_spin = held_drive * spin_compliance
 		tcs_ceiling = tcs_ceiling_spin(v_long + dv_long, signf(held_drive),
-				drive_spec.wheel_radius, tcs_slip, tcs_cap_vel)
+				drive_spec.wheel_radius, tcs_slip, floor_vel)
 	brake_spin = brake_torque * spin_compliance
-	abs_floor = abs_floor_spin(v_long + dv_long, drive_spec.wheel_radius, abs_slip)
+	abs_floor = abs_floor_spin(v_long + dv_long, drive_spec.wheel_radius, abs_slip, floor_vel)
 	abs_active = false
 	if not coupled_spin:
 		settle_spin(0.0)
@@ -647,25 +704,24 @@ static func brake_room(spin: float, stop_at: float) -> float:
 
 
 ## Signed spin (rad/s) an anti-lock brake stops at: the spin whose braking slip is `abs_slip` at
-## the contact's `v_long`, on RayWheel's own slip denominator (LOW_SPEED_FLOOR). 0 (stop the wheel)
-## with no ABS, and near a standstill, where the floor lets it stop: a stopped vehicle must still be
-## held.
-static func abs_floor_spin(v_long: float, radius: float, abs_slip: float) -> float:
+## the contact's `v_long`, on RayWheel's own slip denominator (floored at `floor_vel`, the wheel's
+## `slip_floor`). 0 (stop the wheel) with no ABS, and near a standstill, where the floor lets it
+## stop: a stopped vehicle must still be held.
+static func abs_floor_spin(v_long: float, radius: float, abs_slip: float,
+		floor_vel := LOW_SPEED_FLOOR) -> float:
 	if radius <= 0.0 or abs_slip <= 0.0:
 		return 0.0
-	var denom := maxf(absf(v_long), LOW_SPEED_FLOOR)
+	var denom := maxf(absf(v_long), floor_vel)
 	return signf(v_long) * maxf(absf(v_long) - abs_slip * denom, 0.0) / radius
 
 
 ## Signed spin (rad/s) a traction-controlled drive stops at: the spin whose drive slip is
 ## `tcs_slip` at the contact's `v_long`, on the drive's side `dir` (the drive torque's sign), so
-## reverse mirrors forward. The mirror of `abs_floor_spin` on the same LOW_SPEED_FLOOR denominator.
-## `cap_vel` (m/s) is a floor under the allowed slip velocity: what the one-tick force cap needs to
-## pass the peak force (see `tick`). `radius` must be positive: the caller latches no hold at 0.
+## reverse mirrors forward. The mirror of `abs_floor_spin` on the same denominator (`floor_vel`).
+## `radius` must be positive: the caller latches no hold at 0.
 static func tcs_ceiling_spin(v_long: float, dir: float, radius: float, tcs_slip: float,
-		cap_vel := 0.0) -> float:
-	return dir * ((v_long * dir + maxf(tcs_slip * maxf(absf(v_long), LOW_SPEED_FLOOR), cap_vel))
-			/ radius)
+		floor_vel := LOW_SPEED_FLOOR) -> float:
+	return dir * ((v_long * dir + tcs_slip * maxf(absf(v_long), floor_vel)) / radius)
 
 
 ## Spin (rad/s, >= 0, against the drive) the traction-control hold takes off `spin`: as far as it
