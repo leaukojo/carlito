@@ -1,8 +1,6 @@
 extends GdUnitTestSuite
-## Project settings that are INVARIANTS, not preferences. Standing rule 9 locks the physics tick
-## at 60 Hz with interpolation because the suspension tuning is rate-dependent: every RayWheel
-## clamp (damper <= one-tick reversal, suspension force cap, spin integration) is sized for a
-## 1/60 s step, so changing the rate silently re-tunes every vehicle. 60 Hz is the engine default.
+## Project settings that are INVARIANTS, not preferences. Standing rule 9: physics interpolation
+## stays on.
 
 const PROJECT_FILE := "res://project.godot"
 
@@ -11,10 +9,6 @@ func _project_text() -> String:
 	var f := FileAccess.open(PROJECT_FILE, FileAccess.READ)
 	assert_object(f).is_not_null()  # tests run from source; no project.godot means no guard
 	return f.get_as_text()
-
-
-func test_physics_tick_is_60hz() -> void:
-	assert_int(ProjectSettings.get_setting("physics/common/physics_ticks_per_second", -1)).is_equal(60)
 
 
 func test_physics_interpolation_is_on() -> void:

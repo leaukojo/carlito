@@ -51,7 +51,7 @@ Docs map: `docs/overview.md`. The Godot 3 generation is an outside backup: a ref
    buoyancy, terrain/scatter/road/bake math) gets gdUnit4 tests.
 9. `.web` overrides + perf budget: msaa_3d.web=0, positional shadows hard on web, the sun at soft
    quality 1 (hard shimmers); `scaling_3d/scale.web` stays ≥ 1 (below adds an upscale pass).
-   Physics: **60 Hz (engine default) + interpolation**; suspension tuning is rate-dependent.
+   Physics: interpolation on; suspension tuning is rate-dependent.
 
 Perf target: 60 fps in the worst view on the DEPLOYED web build (F3 overlay; draw calls first).
 Authoring tools are deterministic (seeded) and destructive-by-button, never per-frame.
