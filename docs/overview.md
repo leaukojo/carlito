@@ -55,9 +55,8 @@ dashboard), web-only transport (§ Bridge).
 
 ### The tractor and the truck
 
-The tractor (20 ISOBUS signals) and the truck (J1939 chassis plus, per variant, a CANopen
-body network, an ISO 11992 trailer bus, or none). Full detail — implements, drawbar trailer,
-J1939/ISOBUS/ISO 11992, four truck variants, four semi-trailers — in `docs/heavy_vehicles.md`.
+Tractor (20 ISOBUS signals) and truck (J1939 chassis; per variant a CANopen body network, an
+ISO 11992 trailer bus, or none): `docs/heavy_vehicles.md`.
 
 ## Levels and the authoring kit
 

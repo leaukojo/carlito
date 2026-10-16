@@ -150,6 +150,26 @@ for (const f of gdFiles.filter((g) => /^(src|kit)\//.test(g))) {
   });
 }
 
+// Measured figures (a number with an output unit) outside a generated `<!-- measure:<id> -->`
+// region in docs/*.md; backticked spans (code values, run lines) are skipped. They go stale when
+// vehicle code moves; a region refreshes by re-running its tool. A ratchet: the cap only goes down.
+// Code comments are not scanned: their figures are mostly set tolerances, not measurements.
+// `(?!\d{4}s\b)`: a decade or product name ("1990s", "3000s"), not seconds.
+const MEASURED_FIGURE = /(?<![\w.])(?!\d{4}s\b)\d+(?:\.\d+)?\s?(?:s|ms|µs|g|km\/h|fps|mm|kN|N|°)(?![\w/²])/g;
+const MEASURED_FIGURE_CAP = 25;
+const figureHits = [];
+for (const f of docs.filter((d) => /^docs\/[^/]+\.md$/.test(d))) {
+  let inRegion = false;
+  read(f).split('\n').forEach((line, i) => {
+    if (/<!-- measure:/.test(line)) return void (inRegion = true);
+    if (/<!-- \/measure:/.test(line)) return void (inRegion = false);
+    if (!inRegion) for (const m of line.replace(/`[^`\n]+`/g, '').matchAll(MEASURED_FIGURE)) figureHits.push(`  ${f}:${i + 1}: ${m[0]}`);
+  });
+}
+if (figureHits.length > MEASURED_FIGURE_CAP) {
+  overBudget.push(`  measured figures outside a measure region: ${figureHits.length}, cap ${MEASURED_FIGURE_CAP}`);
+}
+
 if (problems.length === 0 && overBudget.length === 0 && longComments.length === 0) {
   console.log('check_docs: every reference resolves; every CLAUDE.md, docs/ and comment block is within budget.');
   process.exit(0);
@@ -167,6 +187,14 @@ if (overBudget.length > 0) {
   console.log('Cut it, or move a derivation to docs/. In docs/, a figure has one home (elsewhere a');
   console.log('pointer) and only its latest value. Raising a cap is a decision: edit CLAUDE_MD_BUDGET or');
   console.log('DOCS_LINE_CAP in tools/check_docs.mjs.');
+}
+if (figureHits.length > MEASURED_FIGURE_CAP) {
+  console.log(`\ncheck_docs: measured figures outside a measure region:\n`);
+  console.log(figureHits.join('\n'));
+  console.log('\nA measured output (speed, time, g, force, tick, cost) lives only in a generated');
+  console.log('`<!-- measure:<id> -->` region; prose points at it (§ name) instead of quoting it. A value');
+  console.log('set in code is cited by its name (`GroundDriveSpec.axle_radius`), not its number. Lower');
+  console.log('MEASURED_FIGURE_CAP as hits are fixed; raising it is a decision.');
 }
 if (longComments.length > 0) {
   console.log(`\ncheck_docs: comment block over ${COMMENT_BLOCK_CAP} lines:\n`);

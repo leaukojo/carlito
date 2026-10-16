@@ -26,7 +26,7 @@ Docs map: `docs/overview.md`. The Godot 3 generation is an outside backup: a ref
     clear message before commit (test, hook, preflight); keep it if the guard fires only in CI or late.
   - **Code comment** = the constraint at its site. A COMPROMISE is stated there: what is true,
     and what undoing it costs.
-  - **`docs/`** = derivations, latest figures (one home each; elsewhere a § pointer), tours. A
+  - **`docs/`** = derivations, tours (measured figures: `check_docs`, pre-commit). A
     finished plan (or TODO item) is distilled here, plus at most one CLAUDE.md line, then deleted.
   - Everywhere: present tense, no history ("used to", "replaces", "Phase N adds"), no restating code.
   - "Never" is only for a constraint a guard enforces; "ALL" / "every" in docs states intent, not

@@ -33,7 +33,7 @@ static/pure, tested in `tests/test_input_arbitration.gd`.
 - `KeyShaper` (`key_shaper.gd`): an on/off key becomes a hand and a foot. The keyboard's steer
   ramps out ever more slowly with road speed while it turns road wheels (1 / v^2 above 10 m/s;
   `BaseVehicle.key_steer_speed`, 0 for a flying plane, drone and boat) and returns faster; pedals
-  ramp in over 0.25-0.4 s and off in 0.1 s. Order: keyboard steer shaped, touch merged, pedals
+  ramp in over `key_shaper.gd`'s `ACCEL_APPLY_S` / `BRAKE_APPLY_S`, off in `PEDAL_RELEASE_S`. Order: keyboard steer shaped, touch merged, pedals
   shaped, gamepad merged. Local keys only: the touch stick, the gamepad and the bridge are analog.
   Those timings are the full model (SETTINGS ▸ KEY RESPONSE: REALISTIC); the player's softening
   scales every one of them, from RAW (0, the key as pressed) up, and defaults to ARCADE (0.15).
@@ -58,7 +58,7 @@ Three paths, chosen per tick:
 
 | Path | When | Input |
 |---|---|---|
-| Bridge drives | fresh (< 300 ms, `Bridge.FRESHNESS_MS`) and `accel`/`brake`/`steer` present (`BridgeSource.drive_sourced`) | `arbitrate_bridge` |
+| Bridge drives | fresh (within `Bridge.FRESHNESS_MS`) and `accel`/`brake`/`steer` present (`BridgeSource.drive_sourced`) | `arbitrate_bridge` |
 | Fallback | fresh, no driving control (CHAdeMO, CANopen, DroneCAN with Drone Control closed, NMEA 2000) | `blend_local_driving`: pedals, steer, handbrake, key, gear, STOP lamp, lights, horn, arm/climb, elevator from local; the rest from the bridge |
 | Local | no fresh bridge | `arbitrate_local` |
 
@@ -128,11 +128,11 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   | Tell-tale | lamp per bool "in", `key`/`lights` chips, lamp/chip per flavored bool/enum "out" |
   | Bars | warn'd or flavored "out" signals with a `range`, via `dash_bar.gd` (`BAR_ROWS_MAX`-row, `WIDGET_SIGNALS` excluded) |
   | Readout | "out" signals with no `range`, beside HDG/ODO/GPS (boat SOG/STW/DRIFT in m/s) |
-  | Hand-built | gauges (`gauge.gd`, `kmh`/`rpm`, 90° text gap), attitude (`pitch`/`roll`), wind rose (`wind_rose.gd`, `awa`/`aws`/`twd`/`tws`/`cog`/`sog`), sounder (`depth_readout.gd`, `depth`, `---` for -1), `node_health`, train's `REVERSER N/D/R` |
+  | Hand-built | gauges (`gauge.gd`, `kmh`/`rpm`, text in the arc's bottom gap), attitude (`pitch`/`roll`), wind rose (`wind_rose.gd`, `awa`/`aws`/`twd`/`tws`/`cog`/`sog`), sounder (`depth_readout.gd`, `depth`, `---` for -1), `node_health`, train's `REVERSER N/D/R` |
 
   Captions (`BAR_LABEL`, `LAMP_TEXT`) are hand-picked. `Dashboard.Density`: FULL, COMPACT (default, no signal drops: `tests/test_dashboard.gd`), OFF — SETTINGS/F2 (`toggle_dashboard`) cycles COMPACT -> FULL -> OFF, held for the session.
 - Debug overlay (`debug_overlay.gd`): FPS/frame ms/draw calls/VRAM/node count via
-  `Performance`, F3. Target 60 fps in the worst deployed view.
+  `Performance`, F3. Target: root CLAUDE.md perf target.
 
 ## Bridge
 
@@ -141,7 +141,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   `{type:'carlitoInput'}` with a timestamp, exposes `publish()` for outbound
   `{type:'carlitoOutput'}`. `Bridge` autoload (`src/bridge/bridge.gd`,
   `OS.has_feature("web")`-gated): polls the inbound stash each physics tick (~60 Hz),
-  freshness-gated 300 ms in JS on `performance.now()` (monotonic); runs while the tree is
+  freshness-gated `Bridge.FRESHNESS_MS` in JS on `performance.now()` (monotonic); runs while the tree is
   paused (menus open) so the link never goes silent, unlike `InputRouter`; publishes at `PUBLISH_HZ` (20) via
   `Contract.data.signals_for_vehicle(GameState.current_vehicle, "out")` ×
   `telemetry.to_bridge_dict()`, both sides stamping contract version. `carlitoOutput` also

@@ -6,14 +6,10 @@ references: `docs/overview.md`, `docs/systems.md`, `docs/vehicles.md`,
 
 ## What is this?
 
-Carlito is a driving sandbox that runs in the browser: car, truck, tractor, boat, drone,
-plane or train, around small levels. Free play has no missions or scores — the point is the
-**signals**:
-while you drive, the game continuously exchanges CAN-bus-style messages with a companion
-simulator (sloppyCAN/RAMN) in the same web page. Press the throttle in sloppyCAN and the car
-in Carlito accelerates; the car's real RPM, speed, GPS and warning lamps stream back the
-other way. Levels exist to make those signals visible: a steep grade makes `engine_load`
-climb, a hairpin makes the tires slip.
+A browser driving sandbox (car, truck, tractor, boat, drone, plane, train) that exchanges
+CAN-style messages with a companion simulator (sloppyCAN/RAMN) in the same page. Throttle in
+sloppyCAN accelerates the car; real RPM, speed, GPS and lamps stream back. Levels make signals
+visible: a grade raises `engine_load`, a hairpin makes tires slip.
 
 The one exception is **challenges**: short goal-driven lessons (stop in a box, take a bend on
 ice, plough a field, couple a trailer and deliver it, ...) that teach CAN by making you drive *through* sloppyCAN. The keyboard
@@ -23,44 +19,22 @@ timed, and your best times are kept between visits. Press 5 (or CHALLENGE) to pi
 It's built in Godot 4.7 and exported to WebAssembly. Physics runs at 60 Hz with interpolation for
 smooth rendering.
 
-## The one idea that organizes everything: the contract
+## The contract
 
-`contract/carlito_contract.json` is the heart of the project. It lists every signal that
-crosses the game↔simulator boundary: name, direction (`in` = simulator drives the game,
-`out` = game reports telemetry), type, unit, valid range, warning threshold, and which
-vehicles carry it.
-
-Nothing else hand-maintains a signal list. The `Contract` autoload loads and validates the
-JSON at startup; the **dashboard** builds its warning lamps and bar gauges by walking it for
-the current vehicle (add a signal, a lamp appears — no UI code); the **bridge** decides what
-telemetry to send the same way; the simulator side uses a generated JS copy
-(`tools/gen_js_contract.mjs`).
-
-Adding or changing a signal is a one-file edit plus a regeneration step. Both sides stamp a
-contract version on every message and warn if they differ, so they can never silently
-disagree about what a signal means.
+`contract/carlito_contract.json` lists every signal crossing the game-simulator boundary (name,
+direction, type, unit, range, warning threshold, vehicles). Nothing else hand-maintains a list: the
+`Contract` autoload validates it, the dashboard and bridge walk it, the simulator uses a generated
+JS copy (`tools/gen_js_contract.mjs`). Both sides stamp a contract version on every message and
+warn on mismatch. Detail: `docs/overview.md`, `docs/systems.md`.
 
 ## How input flows, start to finish
 
-```
-sloppyCAN (JS in the page)
-      | postMessage
-      v
-window.__carlito stash          <- a tiny script injected into the exported HTML
-      | polled 60x/sec
-      v
-Bridge (autoload)               <- inert on desktop; web-only
-      v
-InputRouter (autoload)          <- ALSO reads keyboard + touch controls
-      v
-one VehicleInput struct         <- throttle, brake, steer, gear, lamps, hitch...
-      v
-BaseVehicle (the physics body)
-```
+Flow: sloppyCAN -> postMessage -> `window.__carlito` stash -> `Bridge` (web-only) -> `InputRouter`
+(also keyboard/touch) -> one `VehicleInput` -> `BaseVehicle` (diagram: `docs/overview.md`).
 
 **InputRouter is the only place input decisions are made.** It merges keyboard, touch and
 gamepad, and when fresh bridge data carrying a driving control (throttle, brake or steer) is
-arriving (less than 300 ms old) the bridge wins outright. A live bridge that sends no driving
+arriving (recent, not stale) the bridge wins outright. A live bridge that sends no driving
 control leaves the driving to you and keeps the rest (lamps, gear, switches). All
 the rules — brake is never throttle, the ignition key must be on to drive, the simulator's
 gear byte decides forward vs reverse when it's in control — live here as pure static
@@ -69,80 +43,38 @@ just consume one normalized `VehicleInput` every physics tick, which is why the 
 works with a keyboard, a phone touchscreen, and a CAN simulator with no vehicle code
 changing.
 
-A key is on or off, but a driver's hands and feet aren't, so InputRouter eases key presses
-in: the wheel turns over a fraction of a second (slower at speed) and the pedals take a moment
-to press down. How much is the KEY RESPONSE setting, from RAW (instant) to REALISTIC. The
-gamepad, the touch stick and the bridge are already analog and are never eased; the vehicles
-themselves are never detuned to suit a keyboard.
+Key presses are eased (KEY RESPONSE setting, RAW to REALISTIC); gamepad, touch stick and bridge are
+analog and never eased.
 
 ## Vehicles
 
-`src/vehicles/base/` is a small framework:
+`src/vehicles/base/` is a small framework: a `VehicleSpec` `.tres` (all driving-feel numbers; a new
+vehicle is a spec plus a scene), pure-math `Drivetrain`, one-raycast `RayWheel`, and `BaseVehicle`,
+which subclasses extend only through `_make_telemetry()` and `_tick_extras()`. Detail:
+`docs/overview.md`, `docs/systems.md`.
 
-- **VehicleSpec** (`.tres`, wheeled half — wheels, suspension, tires, brakes, road
-  resistance — in an embedded **GroundDriveSpec**) holds all the driving-feel numbers. A new
-  vehicle is a new spec plus a scene, no new code.
-- **Drivetrain** is pure math (torque, gears, and RPM computed back from wheel speed — or from
-  the torque converter, whichever is spinning the engine faster).
-- **RayWheel** is a one-raycast-per-wheel suspension and tire model, clamps tuned to keep
-  physics stable at 60 Hz, so suspension tuning depends on the tick rate.
-- **BaseVehicle** ties it together: reads input, runs wheels and drivetrain, publishes
-  telemetry, drives lamps and horn.
+The **tractor** adds twenty ISOBUS-style signals. Press E to cycle the implement (spreader, plough,
+power harrow, mower, tipping trailer, or nothing); what a machine declares over the data cable
+decides what the bus reports. The trailer has no electronics beyond lamps, so it reports as nothing
+attached, like a real dumb trailer. Signals do real work: the diff lock ties the rear wheels,
+`guidance_curvature` lets the simulator steer, and the plough puts a real rearward force at the
+hitch (engine bog, load climb and slip all follow from it). Detail: `docs/heavy_vehicles.md`.
 
-Vehicles needing extra behavior (tractor hitch/PTO, boat buoyancy) subclass BaseVehicle
-through exactly two hooks: `_make_telemetry()` and `_tick_extras()`, never the main physics
-loop, so every vehicle's core behavior stays identical and testable.
+The **truck** family carries several networks: four variants share one J1939 chassis bus (air
+pressure is a real brake gate); the garbage truck adds a CANopen body bus behind a gateway; the
+cab-over semi tows over a brakes-only bus; the conventional tows with no trailer bus. "Nothing on
+the bus" and "nothing there" are different states. Detail: `docs/heavy_vehicles.md`.
 
-The **tractor** adds twenty signals beyond the car's, borrowing the names farm machinery
-really uses on its ISOBUS bus. One tractor body; press E to cycle what
-hangs off the back (fertilizer spreader, plough, power harrow, rotary mower, tipping
-trailer, or nothing), each using a different mix of the five real tractor↔implement
-connections. What a machine declares over the data cable decides what the bus reports about
-it. The trailer is the odd one out: a separate ten-tonne body on a real joint and its own
-wheels, with no electronics beyond its lamps — hitch it and the three-point linkage still
-rises and falls behind it, doing nothing (you can't lift a trailer with a linkage), so ten
-tonnes of attached steel reports on the bus as nothing attached, exactly like a real dumb
-trailer.
+The **train** is a 1D sim of carriages on a spline joined by spring couplers; the locomotive body
+follows it each tick. Raise the pantograph to draw power; the reverser rides the shared gear byte.
 
-Signals do real work rather than light up lamps: locking the differential really ties the
-rear wheels to one shaft, `guidance_curvature` lets the simulator take the wheel (GPS
-auto-steer), and dropping the plough into the painted field puts a genuine rearward force at
-the hitch — engine bog, load-bar climb and rear-wheel slip are consequences of that one
-force, not separately invented numbers. Signal-by-signal detail: `docs/heavy_vehicles.md`.
+The **drone** speaks DroneCAN: each ESC, the GPS, the power module and the attitude sensor is its
+own node that broadcasts unprompted. Press Y and one node goes silent: a killed ESC really stops
+the motor and the craft spins, but its reported rpm and current freeze at the last values, as on a
+real bus. Spotting a stale-but-plausible number is the point.
 
-The **truck** family shows that real vehicles carry several networks at once. All four
-variants share one J1939 chassis bus — air pressure is a genuine brake gate, not a decorative
-bar — and then diverge: the garbage truck adds a second CANopen bus for its body behind a
-gateway; the cab-over semi tows a trailer over a thin bus that only talks about brakes; the
-North American conventional tows the same trailers with no trailer bus at all. Same lesson as
-the plough: "nothing on the bus" and "nothing there" are different states. Full breakdown:
-`docs/heavy_vehicles.md`.
-
-The **train** takes the same idea furthest: an electric multiple-unit consist on rails, not
-roads. Instead of steering, its motion is a small 1D physics sim — each carriage a weight
-sliding along the spline, connected by spring couplers, feeling grade and brakes — and the
-locomotive body is moved to match that sim each tick, so the speed/acceleration readouts stay
-honest. Raise the pantograph to draw power (drop it and traction cuts, like a real overhead
-line), and the reverser rides the same gear byte every other vehicle uses.
-
-The **drone** answers a question the others don't: what if the bus isn't a bus, but a
-network? Every other vehicle here has one computer that knows everything; a quadcopter isn't
-built that way. DroneCAN (the language ArduPilot and PX4 peripherals actually speak) treats
-the aircraft as a small committee: each motor's speed controller is its own computer with its
-own address, and so are the GPS, the power module, the attitude sensor. Nobody polls them —
-each one just talks ("I am node 11, healthy, motor at 6,400 rpm") and whoever cares, listens.
-
-Which means the interesting thing a drone can do on a bench is stop talking. Press Y and one
-node drops off the network: kill an ESC and that motor really stops, the craft really starts
-to spin — nothing compensates, because nothing would on a real airframe. But the dead motor's
-rpm and current don't fall to zero, they freeze at whatever they last said, because a
-computer that has stopped talking cannot tell you it has stopped. Learning to spot a
-stale-but-plausible number is most of what this vehicle is for.
-
-A **VehicleCatalog** lists variants on top of the families (car, truck, tractor, boat, drone,
-plane, train): individual bodies like the taxi, the ambulance, the two semi tractor units.
-The contract never sees variants, only families — usually cosmetic, but not always: the two
-semis are the same family and script, and only one has a trailer bus.
+A **VehicleCatalog** lists variants (taxi, ambulance, two semi units) on the families. The contract
+sees only families; the two semis share a family and script, and only one has a trailer bus.
 
 **Telemetry is honest.** RPM comes from the drivetrain that actually moved the car, slip from
 the tire model, GPS from position. The few things a driving sim doesn't naturally produce
@@ -151,50 +83,25 @@ clearly labelled — never random numbers.
 
 ## Levels
 
-A level is a self-contained scene: terrain, props, spawn points, and a `LevelInfo` resource
-saying which vehicles are allowed. The shell (`boot.gd`) loads a level, spawns a vehicle,
-wires up the camera, dashboard and bridge. Levels, vehicles and UI are independent scenes
-composed at runtime — nothing is hardwired.
-
-Levels are authored with an in-editor kit (terrain brushes, GridMap tile palettes, prefab
-placement dock, vegetation scatter brushes, spline-based roads that flatten the terrain under
-them), but what ships is a bake: a tool merges the static authoring content into a few big
-meshes per chunk and welds every drivable surface into one collision body. Each bake is
-hash-stamped; CI fails on a stale bake.
-
-Water is its own system: a flat height API for the boat's buoyancy (visual waves are
-shader-only, never touch physics), plus a "you drove into the lake" respawn volume for land
+A level is a scene (terrain, props, spawns, a `LevelInfo` of allowed vehicles); the shell (`boot.gd`)
+loads it and wires camera, dashboard and bridge. Authoring uses the in-editor kit, but what ships is
+a hash-stamped bake (merged meshes per chunk, one welded collision body); CI fails a stale bake.
+Water is a flat height API for buoyancy (waves are shader-only) plus a respawn volume for land
 vehicles.
 
 ## What you see on screen
 
-**The game drives first.** No front door, no menu asking you to choose before you know what
-you're choosing between: the page loads, an endless flat plain comes up, you're already in a car —
-true standalone and inside sloppyCAN alike, one boot path. A link can ask for something
-specific (`?level=…&vehicle=…`); otherwise it is the default level.
+The game drives first: the page loads straight into a car on a flat plain, standalone or inside
+sloppyCAN (`?level=&vehicle=` picks others). Five top-left buttons (MENU, VEHICLE, LEVEL, CAMERA,
+CHALLENGE; F5 hides them); Esc/MENU opens RESUME, RESPAWN, CONDITIONS, CONTROLS, SETTINGS.
 
-Five buttons stay in the top-left corner whatever you drive — MENU, VEHICLE (the garage),
-LEVEL, CAMERA, CHALLENGE — and only F5 hides them. **Esc** (or MENU) opens RESUME, RESPAWN, CONDITIONS, CONTROLS, SETTINGS.
+- **GARAGE**: families, bodies, a live 3D preview with specs; unspawnable machines show the reason.
+- **LEVEL**: screenshot cards with the download weight (each island is a separate download).
+- **CONTROLS** is generated from one table (`ActionRegistry`), as are the touch buttons.
+- **CONDITIONS**: wind, current, day/night; session-wide, not saved.
+- **SETTINGS** (saved): cluster COMPACT/FULL/OFF (F2), UI size, F3 readouts, KEY RESPONSE, traction control.
 
-- **GARAGE**: families down the left, that family's bodies as pictures in the middle, and a
-  live 3D preview with the machine's specs (including what it speaks on the bus). Machines
-  this level won't spawn are still browsable, carrying the reason on the card.
-- **LEVEL**: a grid of screenshots with a description and a download weight on each — every
-  island is a separate download, and you see its size before you wait for it.
-- **CONTROLS** is generated, never typed. One table (`ActionRegistry`) describes every bound
-  key; the sheet and the touchscreen buttons are both built from it. A control can't exist
-  without being documented, or be documented without being reachable.
-- **CONDITIONS**: wind, water current, the direction they come from, and day/night — kept for
-  the session and carried into every level you load.
-- **SETTINGS**: how much instrument cluster you want (COMPACT by default, FULL, or OFF — F2
-  cycles the same three), the UI size, extra F3 debug readouts, KEY RESPONSE, and traction
-  control on or off (on the cars that have it). Unlike CONDITIONS, these are saved and come
-  back on your next visit.
-
-**It has to work at any size.** No fixed layout: one theme is rebuilt at a scale derived from
-the window's short edge, and every screen sizes itself from that — card grids reflow their
-column count, the touchscreen button stack wraps into another column rather than running off
-the bottom of a short window.
+Any size: one theme is rebuilt at a scale from the window's short edge; screens and grids reflow.
 
 ## Testing and CI
 

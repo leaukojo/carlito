@@ -42,9 +42,9 @@ Rules: `src/vehicles/CLAUDE.md`; derivations and figures: § Physics derivations
 | `RayWheel` | one cylinder cast per wheel (the tyre's radius and width, down its travel), spring-damper + slip tires. Grip: `HeightmapTerrain.grip_at()` into `mu_long`/`mu_lat`, nearest surface within `SURFACE_GRIP_REACH` |
 | `BaseVehicle` | consumes `InputRouter.get_vehicle_input()`, runs wheels/drivetrain, publishes telemetry, lamps, horn. No `ground_drive` → no `WheelDrive`. Seams: `_make_telemetry()`, `_tick_extras(input, delta)` |
 | Road resistance | `VehicleMath.aero_drag`/`rolling_drag`/`road_resistance` (`WheelDrive._apply_resistance` / `TowedBody.tick_towed`): `0.5 * rho * Cd*A * v^2` off `drag_area` + `crr * N` off `rolling_resistance` (N = suspension force, not `mass * g`). `DAMP_MODE_REPLACE` at 0, not `physics/3d/default_linear_damp`. Kenney Cd*A derived (`gen_kenney_vehicles`: `cd * FRONTAL_FILL * w * h`, its own `cd`). Tested `tests/test_vehicle_math.gd` / `tests/test_vehicle_catalog.gd` |
-| Downforce | `VehicleMath.aero_downforce`, `WheelDrive._apply_downforce`: `0.5 * rho * C*A * v^2` off `downforce_area` (Cl*A), through the suspension. Open-wheelers only (`cl`); worth 12 km/h top speed on `race` |
+| Downforce | `VehicleMath.aero_downforce`, `WheelDrive._apply_downforce`: `0.5 * rho * C*A * v^2` off `downforce_area` (Cl*A), through the suspension. Open-wheelers only (`cl`); lifts `race`'s top speed (§ Cruise table) |
 | Drift | `handbrake_torque` locks the rears; the combined-slip tyre drops a locked wheel's side force |
-| Holds | `hill_hold` (`HillHold`, `WheelDrive.hold_step`): hill-start assist (ASSIST: the ABS bodies, `hill_hold_s` 1 s on the cars, 3 s on the vans, trucks and semis) and the tractor's powershift hill hold (STANDSTILL); `InputRouter.auto_hold` for keys and touch. Tested `tests/test_hill_hold.gd`, `tests/test_input_arbitration.gd` |
+| Holds | `hill_hold` (`HillHold`, `WheelDrive.hold_step`): hill-start assist (ASSIST: the ABS bodies, `hill_hold_s` set per class: Honda's hold on the cars, Volvo VN's on the vans, trucks and semis, § sources [23, 24]) and the tractor's powershift hill hold (STANDSTILL); `InputRouter.auto_hold` for keys and touch. Tested `tests/test_hill_hold.gd`, `tests/test_input_arbitration.gd` |
 
 `ChaseCamera` follows `get_global_transform_interpolated()`. `LampSet`/`Horn`:
 `docs/systems.md` § Lamps, horn & day/night.
@@ -96,13 +96,13 @@ more slowly. Per class, at idle / at redline, as a share of peak:
   (16.1 L) publishes 36 / 53 kW at 1500 / 1800 rpm: 229 / 281 N·m, FMEP 1.8 / 2.2 bar. Scaled to
   12 L and to idle (~1.2 bar), that is ~115 N·m. Scaled the same way, the redline figure is about
   0.10, against the shipped 0.15. **Open:** the redline anchor is kept (the user's call).
-- **Car petrol:** 0.10 / 0.12. The 0.10 is an estimate (~18 N·m on the 185 N·m curve): a
+- **Car petrol:** 0.10 / 0.12. The 0.10 is an estimate : a
   1.6-2.0 L petrol's friction (~1 bar FMEP at low speed) plus closed-throttle pumping. No primary
   figure was found. Secondary FMEP figures put the redline motoring at about 0.3-0.4. **Open:** the
   shipped 0.12 stays until a primary figure is found (the user's call).
 
-On the `sedan` a blip falls about 1000 rpm/s to idle, and the key off stops an idling crank in
-about 1 s. At idle the controller burns the fuel that nets the friction out (~16 % on the
+On the `sedan` a blip falls steadily to idle, and the key off stops an idling crank within about a
+second. At idle the controller burns the fuel that nets the friction out (~16 % on the
 `sedan`), so `engine_load` reads that fuel there.
 
 **Sourced figures.** Each figure is graded:
@@ -198,14 +198,14 @@ torque on the droop (D1 > D2 ~3440 rpm, D5 > D6 ~3200), and lands the 1.78 D1 > 
 rpm, in the band. `shift_down_rpm` 1400 sits under the band's 1500 edge.
 
 *The Kenney trucks' drivetrain* (`TRUCK_BASE`), medium-duty for their 7.5-8 t: a Class 8 L9 (1695 N·m)
-creeps at 0.26-0.35 g on them (computed), past the 0.17 g a 30 % pedal asks.
+creeps harder on them (computed) than a 30 % pedal asks.
 
 | Figure | Value | Grade |
 | --- | --- | --- |
 | Engine | Cummins B6.7 (2021) 325 hp, 750 lb-ft (1017 N·m) at 1800 rpm, governed 2600 ([brochure](https://mart.cummins.com/imagelibrary/data/assetfiles/0064235.pdf)): 890 N·m rated. Idle 700 at half the peak, 0.81 of it at 1200, rated speed to nothing at 2900 | sourced; computed; estimate |
 | Ratios | Allison 3000 / 3200 close: 3.49 / 1.86 / 1.41 / 1.00 / 0.75 / 0.65, R 5.03 ([Allison](https://pprod.allisontransmission.com/en-gb/transmissions/models/3000-series)) | sourced |
 | Axle, tyre | 5.57 on a Mack MD7 rear loader, 6.7 L and 3000 RDS ([listing](https://www.brucknertruck.com/inventory/2026-mack-md7-base-68364/)); 315/80R22.5 at 0.500 m loaded ([Michelin](https://business.michelin.ca/en/tires/michelin-x-multi-z-315)); `firetruck` takes the same | secondary, search summaries; estimate |
-| At the drawn 0.36 m | `final_drive` 5.57 × 0.36 / 0.500 = 4.010, the same `G / r`: first 38.9 per metre, top 52.1 km/h per 1000 rpm. Creep at rest `T(stall) (idle / stall)² G η / r`, stall 1250 rpm: 264 N·m, 0.118 g at 8 t | computed |
+| At the drawn 0.36 m | `final_drive` 5.57 × 0.36 / 0.500 = 4.010, the same `G / r`: first 38.9 per metre, top 52.1 km/h per 1000 rpm. Creep at rest `T(stall) (idle / stall)² G η / r`, stall 1250 rpm: the creep of § Creep | computed |
 
 | The tractor's wheels, `I = m (κ r)²` at the drawn radius (tyre and rim; ballast does not turn) | Value | Grade |
 | --- | --- | --- |
@@ -214,83 +214,50 @@ creeps at 0.26-0.35 g on them (computed), past the 0.17 g a 30 % pedal asks.
 | Brakes inboard of the final reduction | [Case IH Puma](https://www.ultimatespecs.com/tractor-specs/caseih/caseih-puma-155-2008): "differential" wet discs; on the differential shaft, upstream of the planetary reduction ([Dana US 4,646,880](https://patents.google.com/patent/US4646880)) | secondary, no workshop manual |
 
 Sources:
-1. Ubysz, "Problems of rotational mass in passenger vehicles", Transport Problems 5(1), 2010,
-   Table 1: http://transportproblems.polsl.pl/pl/archiwum/2010/zeszyt1/2010t5z1_04.pdf
+1. Ubysz, "Problems of rotational mass in passenger vehicles", Transport Problems 5(1), 2010, Table 1: http://transportproblems.polsl.pl/pl/archiwum/2010/zeszyt1/2010t5z1_04.pdf
 2. Honda CR-V converter impeller inertia, arXiv 2305.15216: https://arxiv.org/pdf/2305.15216
-3. SimulationX automotive powertrain tutorial:
-   https://doc.simulationx.com/4.3/1033/Content/Tutorials/AutomotivePowertrain.htm
-4. "Impact of Engine Inertia on P2 Mild HEV Fuel Consumption", WEVJ 15(5) 220, 2024:
-   https://doi.org/10.3390/wevj15050220
-5. Volvo Penta TD640VE technical data (inertia 1.50 kg·m²; friction power 17-26 kW at
-   1800-2400 rpm): https://sra-moteur.com/uploads/catalogue/produits/documentations/td640ve-td640ve.pdf
+3. SimulationX automotive powertrain tutorial: https://doc.simulationx.com/4.3/1033/Content/Tutorials/AutomotivePowertrain.htm
+4. "Impact of Engine Inertia on P2 Mild HEV Fuel Consumption", WEVJ 15(5) 220, 2024: https://doi.org/10.3390/wevj15050220
+5. Volvo Penta TD640VE technical data (inertia 1.50 kg·m²; friction power 17-26 kW at 1800-2400 rpm): https://sra-moteur.com/uploads/catalogue/produits/documentations/td640ve-td640ve.pdf
 6. Volvo Penta TAD734GE data sheet: https://www.scribd.com/document/457581321/TAD734GE
-7. Volvo Penta TAD1641GE technical data (inertia 4.20 kg·m²; friction power 36 / 53 kW at
-   1500 / 1800 rpm): https://www.wincogen.com/wp-content/uploads/PD/Engines/VOLVO_TAD1641GE.pdf
-8. Middelmann, "The Torque Converter as a System", Schaeffler (LuK) symposium:
-   https://www.schaeffler.com/remotemedien/media/_shared_media/08_media_library/01_publications/schaeffler_2/symposia_1/downloads_11/6_Torque_Converter.pdf
-9. MathWorks Powertrain Blockset, Torque Converter block:
-   https://www.mathworks.com/help/autoblks/ref/torqueconverter.html
+7. Volvo Penta TAD1641GE technical data (inertia 4.20 kg·m²; friction power 36 / 53 kW at 1500 / 1800 rpm): https://www.wincogen.com/wp-content/uploads/PD/Engines/VOLVO_TAD1641GE.pdf
+8. Middelmann, "The Torque Converter as a System", Schaeffler (LuK) symposium: https://www.schaeffler.com/remotemedien/media/_shared_media/08_media_library/01_publications/schaeffler_2/symposia_1/downloads_11/6_Torque_Converter.pdf
+9. MathWorks Powertrain Blockset, Torque Converter block: https://www.mathworks.com/help/autoblks/ref/torqueconverter.html
 10. Allison 3000 stall torque ratios, quoted on a forum: https://www.skoolie.net/goto/post?id=7439134
-11. ADVISOR automatic transmission model validation (NREL):
-    https://adv-vehicle-sim.sourceforge.net/NewAutoTX.html
-12. Lock-up release: US 4,618,041 (https://patents.google.com/patent/US4618041A/en) and US 7,238,142
-    (https://patents.google.com/patent/US7238142B2/en)
-13. Audi technology portal, tiptronic (ZF 8HP):
-    https://www.audi-technology-portal.de/en/drivetrain/transmission-technologies/tiptronic_en
+11. ADVISOR automatic transmission model validation (NREL): https://adv-vehicle-sim.sourceforge.net/NewAutoTX.html
+12. Lock-up release: US 4,618,041 (https://patents.google.com/patent/US4618041A/en) and US 7,238,142 (https://patents.google.com/patent/US7238142B2/en)
+13. Audi technology portal, tiptronic (ZF 8HP): https://www.audi-technology-portal.de/en/drivetrain/transmission-technologies/tiptronic_en
 14. Fleet Equipment, "Allison continues to optimize for 2011": https://www.fleetequipmentmag.com/?p=82312
 15. Stall speed glossary: https://www.youcanic.com/glossary/stall-speed/
 16. An AT545 owner report, seen only in a search summary (unverified).
-17. Maki and Iwasaki, "On the transmitted torque of automotive friction clutches", Trans. JSME
-    18(70), 1952: https://ndlsearch.ndl.go.jp/books/R000000004-I10033763
-18. Phoenix Friction, clutch torque capacity ratings:
-    https://www.phoenixfriction.com/t-Clutch-Kit-Torque-Capacity-Ratings.aspx
+17. Maki and Iwasaki, "On the transmitted torque of automotive friction clutches", Trans. JSME 18(70), 1952: https://ndlsearch.ndl.go.jp/books/R000000004-I10033763
+18. Phoenix Friction, clutch torque capacity ratings: https://www.phoenixfriction.com/t-Clutch-Kit-Torque-Capacity-Ratings.aspx
 19. Eaton, US 9,783,181 B2: https://patents.google.com/patent/US9783181B2/en
 20. Caterpillar, US 5,467,854: https://patents.google.com/patent/US5467854A/en
-21. Saab WIS, Motronic 2.8.1 idling compensation:
-    https://saabwisonline.com/900/1994/2-engine/motronic-2-8-1/technical-description/idling-compensation
+21. Saab WIS, Motronic 2.8.1 idling compensation: https://saabwisonline.com/900/1994/2-engine/motronic-2-8-1/technical-description/idling-compensation
 22. Ranger Station forum, D/P rpm drop: https://www.therangerstation.com/forums/threads/d-p-rpm-drop.164763
 23. Honda Hill Start Assist: https://global.honda/en/tech/Hill_Start_Assist/
 24. Volvo VN hill start assist: https://static.nhtsa.gov/odi/tsbs/2019/MC-10169013-9999.pdf
 25. Robert Bosch, EP 2 203 334 B1: https://patents.google.com/patent/EP2203334B1/en
-26. Valtra, "What exactly is the Powershift Revolution":
-    https://valtra.co.uk/blog/technology/what-exactly-is-the-powershift-revolution.html
-27. Ford Motor Company, press release, 2012-12-10, "Advanced, Fuel-Efficient 3.2-Liter Power Stroke
-    Turbo Diesel Makes North American Debut in All-New 2014 Ford Transit", reproduced at
-    https://www.firehouse.com/apparatus/press-release/10839682/ford-motor-media-advanced-fuel-efficient-32-liter-power-stroke-turbo-diesel-makes-north-american-debut-in-all-new-2014-ford-transit
+26. Valtra, "What exactly is the Powershift Revolution": https://valtra.co.uk/blog/technology/what-exactly-is-the-powershift-revolution.html
+27. Ford Motor Company, press release, 2012-12-10, "Advanced, Fuel-Efficient 3.2-Liter Power Stroke Turbo Diesel Makes North American Debut in All-New 2014 Ford Transit", reproduced at https://www.firehouse.com/apparatus/press-release/10839682/ford-motor-media-advanced-fuel-efficient-32-liter-power-stroke-turbo-diesel-makes-north-american-debut-in-all-new-2014-ford-transit
 28. Wikipedia, "Ford 6R transmission": https://en.wikipedia.org/wiki/Ford_6R_transmission
 29. Wikipedia, "Ford Duratorq engine" (3.2 L Puma): https://en.wikipedia.org/wiki/Ford_Duratorq_engine
 30. DieselHub, "3.2 Power Stroke": https://www.dieselhub.com/halfton/3.2-powerstroke.html
-31. Dealer listing, 2019 Transit 350 HD DRW cutaway (3.73 limited-slip, 10,360 lb GVWR):
-    https://www.comvoy.com/work-truck/kenosha-wi/used-2019-ford-transit-350-hd-service-utility-van-18061317
-32. Parts and dealer listings for 3.31 / 3.73 / 4.10 diesel Transit axles, seen only in search
-    summaries: https://allusedparts.com/ford/transit_350/2017/rear_axle_assembly/
-33. Newman, Kargul, Barba (US EPA), "Benchmarking and Modeling of a Conventional Mid-Size Car Using
-    ALPHA", SAE 2015-01-1140:
-    https://19january2021snapshot.epa.gov/sites/static/files/2016-10/documents/2015-01-1140.pdf
-34. Newman, Kargul, Barba (US EPA), "Development and Testing of an Automatic Transmission Shift
-    Schedule Algorithm for Vehicle Simulation", SAE 2015-01-1142 (the Malibu's measured shift map,
-    Fig. 11; ALPHA's suggested hold times and downshift ceiling):
-    https://19january2021snapshot.epa.gov/sites/static/files/2016-10/documents/2015-01-1142.pdf
+31. Dealer listing, 2019 Transit 350 HD DRW cutaway (3.73 limited-slip, 10,360 lb GVWR): https://www.comvoy.com/work-truck/kenosha-wi/used-2019-ford-transit-350-hd-service-utility-van-18061317
+32. Parts and dealer listings for 3.31 / 3.73 / 4.10 diesel Transit axles, seen only in search summaries: https://allusedparts.com/ford/transit_350/2017/rear_axle_assembly/
+33. Newman, Kargul, Barba (US EPA), "Benchmarking and Modeling of a Conventional Mid-Size Car Using ALPHA", SAE 2015-01-1140: https://19january2021snapshot.epa.gov/sites/static/files/2016-10/documents/2015-01-1140.pdf
+34. Newman, Kargul, Barba (US EPA), "Development and Testing of an Automatic Transmission Shift Schedule Algorithm for Vehicle Simulation", SAE 2015-01-1142 (the Malibu's measured shift map, Fig. 11; ALPHA's suggested hold times and downshift ceiling): https://19january2021snapshot.epa.gov/sites/static/files/2016-10/documents/2015-01-1142.pdf
 35. Wikipedia, "GM 6T40 transmission" (secondary): https://en.wikipedia.org/wiki/GM_6T40_transmission
-36. Volvo Trucks, fact sheet "I-Shift drive modes", 2024:
-    https://stpi.it.volvo.com/STPIFiles/Volvo/FactSheet/DRM-E,DRM-BE_Eng_06_331992824.pdf
-37. Volvo Trucks North America, "Operator's manual, I-Shift transmission", PV776-20906026, 2007:
-    https://hhrvresource.com/sites/default/files/dfiles/VolvoOperatorsManualI_Shift_PV77620906026.pdf
-38. Volvo Trucks North America, D13 engine brochure (cruise 1250-1500 rpm, never above 1550):
-    https://www.volvotrucks.us/media/vtna/files/shared/powertrain/revised4147-101-volvo-d13-engine-brochure-low-res.pdf
-39. Massey Ferguson, "Innovation", AutoDrive (Power 2100 rpm, Eco 1500 rpm):
-    https://www.masseyferguson.com/en_za/farming-technology/innovation.html
-40. Farmers Weekly, "MF's new developments improve efficiency", 2001-02-16 (Dynashift AutoDrive):
-    https://www.fwi.co.uk/news/mfs-new-developments-improve-efficiency
-41. Jaguar Land Rover, US 11,724,688 B2 (torque and inertia phases ~0.15-0.5 s each):
-    https://patents.google.com/patent/US11724688B2/en
-42. Ford Global Technologies, US 10,343,690 B2 (inertia-phase output torque set by the oncoming
-    clutch): https://patents.google.com/patent/US10343690B2/en
-43. Zhang et al., "Study on Shifting Performance of Tractor Multi-Clutch under Different Engagement
-    Rules", Agriculture 14(2) 254, 2024 (a simulation; abstract read):
-    https://ideas.repec.org/a/gam/jagris/v14y2024i2p254-d1333372.html
-44. GM Global Technology Operations, US 9,327,733 B2 (engine torque held reduced through the
-    inertia phase): https://patents.google.com/patent/US9327733B2/en
+36. Volvo Trucks, fact sheet "I-Shift drive modes", 2024: https://stpi.it.volvo.com/STPIFiles/Volvo/FactSheet/DRM-E,DRM-BE_Eng_06_331992824.pdf
+37. Volvo Trucks North America, "Operator's manual, I-Shift transmission", PV776-20906026, 2007: https://hhrvresource.com/sites/default/files/dfiles/VolvoOperatorsManualI_Shift_PV77620906026.pdf
+38. Volvo Trucks North America, D13 engine brochure (cruise 1250-1500 rpm, never above 1550): https://www.volvotrucks.us/media/vtna/files/shared/powertrain/revised4147-101-volvo-d13-engine-brochure-low-res.pdf
+39. Massey Ferguson, "Innovation", AutoDrive (Power 2100 rpm, Eco 1500 rpm): https://www.masseyferguson.com/en_za/farming-technology/innovation.html
+40. Farmers Weekly, "MF's new developments improve efficiency", 2001-02-16 (Dynashift AutoDrive): https://www.fwi.co.uk/news/mfs-new-developments-improve-efficiency
+41. Jaguar Land Rover, US 11,724,688 B2 (torque and inertia phases ~0.15-0.5 s each): https://patents.google.com/patent/US11724688B2/en
+42. Ford Global Technologies, US 10,343,690 B2 (inertia-phase output torque set by the oncoming clutch): https://patents.google.com/patent/US10343690B2/en
+43. Zhang et al., "Study on Shifting Performance of Tractor Multi-Clutch under Different Engagement Rules", Agriculture 14(2) 254, 2024 (a simulation; abstract read): https://ideas.repec.org/a/gam/jagris/v14y2024i2p254-d1333372.html
+44. GM Global Technology Operations, US 9,327,733 B2 (engine torque held reduced through the inertia phase): https://patents.google.com/patent/US9327733B2/en
 
 **Converter.** A converter body (`coupling` CONVERTER: the cars, the vans, `garbage-truck` and
 `firetruck`) slips through `TorqueConverter`'s law, solved with both sides' end-of-tick speeds
@@ -318,24 +285,26 @@ inside the wheels' solve (`TorqueConverter.solve`):
   from 2nd range). So top speeds and governed settles do not move (§ Engine braking): every cruise is
   locked.
 - **A shift** slips the gearbox's own clutch (the handover, § The shift policy), never the
-  converter: released, the converter would drag the `sedan`'s crank down from 6380 rpm with
-  ~895 N·m on the first tick, ~3x the rating.
+  converter: released, the converter would drag the `sedan`'s crank down from the redline with
+  a torque several times the rating on the first tick.
 
 Drive reaches the wheels from the first tick of a pull-away (the trace's `H` column and `Tc`). At ratio 1.0 the converter passes no more than the engine makes, so the launches move little (§ Launches).
 
-**Creep.** In gear the converter loads the idling crank, `coef * omega_idle^2`: ~23 N·m on the
-`sedan`, ~100 on the heavy vans, ~264 on the Kenney trucks. The idle controller fuels it, so the
+**Creep.** In gear the converter loads the idling crank, `coef * omega_idle^2`: small on the
+`sedan`, larger on the heavy vans, largest on the Kenney trucks. The idle controller fuels it, so the
 crank holds ~3-4 rpm under idle (~1 on the trucks), and `engine_load` reads 9-10 %: that fuel,
 against the converter's load and the engine's friction. Released in D1 with no pedal
 (`measure_grade -- all creep`; asphalt):
 
-| Body | Creep on the flat | Steepest grade held at idle |
-| --- | --- | --- |
-| `sedan`, `taxi`, `suv`, `suv-luxury`, `police` | 6.5-6.7 km/h | 7.0-9.4 % |
-| `sedan-sports`, `hatchback-sports` | 6.2-6.4 km/h | 11.1-11.9 % |
-| `van`, `pickup`, `pickup-flat` | 6.6 km/h | 6.1-7.0 % |
-| `delivery`, `delivery-flat`, `ambulance` | 6.3 km/h | 7.4-9.0 % |
-| `garbage-truck`, `firetruck` | 6.6 km/h | 10.7-11.5 % |
+| Body | Steepest grade held at idle |
+| --- | --- |
+| `sedan`, `taxi`, `suv`, `suv-luxury`, `police` | 7.0-9.4 % |
+| `sedan-sports`, `hatchback-sports` | 11.1-11.9 % |
+| `van`, `pickup`, `pickup-flat` | 6.1-7.0 % |
+| `delivery`, `delivery-flat`, `ambulance` | 7.4-9.0 % |
+| `garbage-truck`, `firetruck` | 10.7-11.5 % |
+
+Every body creeps on the flat at a walking pace, within a few tenths of a km/h of the others.
 
 The Kenney trucks' creep is ~1.3x a car's in g (`(idle / stall)²` 0.31 against the cars' 0.14,
 through a 14:1 first); a 30 % pedal out-holds it (§ Braking). The heavy vans' 15.6:1 first and 0.23
@@ -351,8 +320,8 @@ brake rolls the body back while the coupling takes up, and a clutch body (nothin
 rolls back on any grade. Three holds stop it:
 - **Hill-start assist** (`hill_hold` ASSIST, on every ABS body). The foot brake's last application
   at rest in a drive gear stays on after the release. It lets go when the drive the coupling passed
-  last tick meets gravity's pull along the heading (`HillHold.drive_holds`), or after `hill_hold_s`:
-  1 s on the cars (Honda), 3 s on the vans, trucks and semis (Volvo VN).
+  last tick meets gravity's pull along the heading (`HillHold.drive_holds`), or after `hill_hold_s`,
+  set per class (Honda on the cars, Volvo VN on the vans, trucks and semis).
   - The grade is read off the wheels' contact plane. The pull is the rig's: a trailer's mass is
     added (`WheelDrive.towed_kg`), and the trailer is sent the held pedal (`foot_pedal`).
   - Rolling resistance is left out, so it lets go a little late. On the flat or downhill it lets
@@ -368,26 +337,22 @@ rolls back on any grade. Three holds stop it:
   the whole foot brake stays on until the throttle asks to move; hill-start assist takes the
   handover. A gamepad driver and the bridge get the real creep.
 
-Released after 1.5 s on the foot brake and floored 0.5 s later (`measure_grade -- <variant>
+Released after a `SETTLE_S` foot-brake hold and floored `ROLL_DELAY_S` later (`measure_grade -- <variant>
 rollback`, with and without `nohold`, the tractor's rows on its D1 launch; asphalt, the
 tractor on mud with MFWD):
 
-| Body | Grade | Rolled back, hold / `nohold` | Hold let go at | 0.1 m forward at, hold / `nohold` |
-| --- | --- | --- | --- | --- |
-| `sedan` | 10 % / 25 % | 0.6 / 15.5 mm; 1.7 / 293 mm | 0.55 s; 0.72 s | 1.07 / 1.12 s; 1.27 / 2.00 s |
-| `pickup` | 10 % / 25 % | 0.5 / 34.7 mm; 1.6 / 422 mm | 0.60 s; 0.78 s | 1.13 / 1.23 s; 1.38 / 2.28 s |
-| `delivery` | 10 % / 25 % | 0.9 / 18.9 mm; 2.6 / 382 mm | 0.57 s; 0.73 s | 1.08 / 1.13 s; 1.37 / 2.42 s |
-| `garbage-truck` | 10 % / 25 % | 1.4 mm either way; 2.9 / 488 mm | never held; 0.82 s | 1.08 s; 1.53 / 2.78 s |
-| `semi` + 24 t | 10 % / 25 % | 0.3 / 16.2 mm; 376 / 2225 mm | 0.60 s; 0.62 s | 1.30 / 1.13 s; never |
-| `semi-conventional` + 24 t | 10 % / 25 % | 0.2 / 14.7 mm; 2286 / 4009 mm | 0.60 s; 0.62 s | 1.37 / 1.17 s; never |
-| `tractor-kenney` (MFWD, mud) | 10 % | 0.5 / 19.4 mm | 0.67 s | 1.12 / 1.17 s |
-| ... with the farm tipper (10 t) | 10 % | 0.1 / 0.0 mm | 0.67 s | 4.93 / 5.20 s |
+Per body, on 10 % and 25 % (`measure_grade -- <variant> rollback` prints rollback, release time and
+time to move forward). With the hold, the cars and Kenney trucks roll back a patch spring's worth on
+both grades, against hundreds of millimetres on 25 % without it, and the hold lets go inside a
+second. The `garbage-truck` is never held on 10 %: its creep carries the grade. The laden semis roll
+back far on 25 % with or without the hold, and with `nohold` never pull away. The tractor on mud
+(MFWD) rolls back a patch spring's worth on 10 %; with the farm tipper it pulls away much later.
 
 What remains with the hold is the static patch spring (§ Holding at rest). On 25 % the semis' hold
 lets go once the clutch's drive meets the rig's pull, but the drive tyres cannot carry it
-(§ Gradeability): the hold reads torque, never grip. On 10 % the semis reach 0.1 m ~0.2 s later
+(§ Gradeability): the hold reads torque, never grip. On 10 % the semis reach 0.1 m a little later
 with the hold, because the brakes wait for the clutch to carry the grade. The tipper rig's slow
-start is its own pull-away on mud: 4.9 s from D1 or D2, 3.4 s from D3.
+start is its own pull-away on mud: slow from D1 or D2, quicker from D3.
 
 **The shift policy** (`ShiftPolicy`). Each transmission type declares a part-pedal map:
 a light pair at and under 20 % pedal, blending linearly to the full-pedal pair at pedal 1, where the
@@ -396,11 +361,11 @@ pedal, so no gearing hunts (`test_vehicle_catalog`). The full pair is unchanged 
 
 | Type (bodies) | Light up / coast down (rpm) | Kickdown | Dwell | Skip | Basis |
 | --- | --- | --- | --- | --- | --- |
-| Converter automatic (`CAR_BASE`) | 1800 / 1150 | past 0.8 | 1.5 s | no | the Malibu map below [34]; dwell: EPA ALPHA's six-speed hold [34] |
-| ... heavy vans (`VAN_BASE`) | 1750 / 1000 | past 0.8 | 1.5 s | no | the same structure at the diesel's band (plateau from 1750): estimate |
-| ... Kenney trucks (`TRUCK_BASE`) | 1600 / 900 | past 0.8 | 1.5 s | no | the same, under the 1800 peak: estimate |
-| AMT (both semis) | 1500 / 700 | past 0.95 | 1.5 s | yes | the D13's 1250-1500 rpm cruise band [38]; I-Shift's kickdown switch past full travel [36, 37] |
-| Powershift (`TRACTOR_BASE`) | 1500 / 1000 (the full pair's) | none | 1.5 s | yes | AutoDrive Eco's 1500 [39]; the sourced 1200 downshift [40] sits over the full pair's 1000 |
+| Converter automatic (`CAR_BASE`) | 1800 / 1150 | past 0.8 | `shift_dwell_s` | no | the Malibu map below [34]; dwell: EPA ALPHA's six-speed hold [34] |
+| ... heavy vans (`VAN_BASE`) | 1750 / 1000 | past 0.8 | `shift_dwell_s` | no | the same structure at the diesel's band (plateau from 1750): estimate |
+| ... Kenney trucks (`TRUCK_BASE`) | 1600 / 900 | past 0.8 | `shift_dwell_s` | no | the same, under the 1800 peak: estimate |
+| AMT (both semis) | 1500 / 700 | past 0.95 | `shift_dwell_s` | yes | the D13's 1250-1500 rpm cruise band [38]; I-Shift's kickdown switch past full travel [36, 37] |
+| Powershift (`TRACTOR_BASE`) | 1500 / 1000 (the full pair's) | none | `shift_dwell_s` | yes | AutoDrive Eco's 1500 [39]; the sourced 1200 downshift [40] sits over the full pair's 1000 |
 | Sequential (`race`, `race-future`) | the full pair | none | none | no | full-pedal shifting kept (the user's call) |
 
 - **The Malibu map** [34, Fig. 11]: a 2013 Malibu's 6T40 (2.5 L I4), upshifts driven on level road
@@ -417,9 +382,9 @@ pedal, so no gearing hunts (`test_vehicle_catalog`). The full pair is unchanged 
   default ceiling, 85 % of the gear's maximum speed (the redline) [34], never within the 1.1 landing
   margin of `shift_up_rpm`. The cap binds on every body and lets a kickdown reach the rpm where the
   engine makes its power (the vans' rated 3000 rpm under their 3300 upshift). The gear must also hold
-  1.0 s at full pedal before its forced upshift (`ShiftPolicy.time_to_upshift` on the road load and
-  the rig's mass; EPA ALPHA's minimum time after a downshift [34]): `sedan-sports` at 60 km/h would
-  land D2 at 5259 rpm and rev out of it in 0.87 s, so it takes D3. None on the tractor: no powershift
+  `shift_dwell_s` at full pedal before its forced upshift (`ShiftPolicy.time_to_upshift` on the road load and
+  the rig's mass; EPA ALPHA's minimum time after a downshift [34]): `sedan-sports` at moderate speed
+  would land D2 too high and rev out of it inside the dwell, so it takes D3. None on the tractor: no powershift
   kickdown is sourced.
 
 *The shift's handover.* During an upshift's inertia phase the oncoming clutch's capacity sets the
@@ -427,15 +392,15 @@ output torque, a little over the driver's demanded torque, the surplus taking ou
 inertia [42]; the phase lasts ~0.15-0.5 s on a converter automatic [41], and its TCU holds the
 engine's torque reduced through it [44]. The controller lands the crank on the new gear at an even
 rate over `shift_handover_s` (`Drivetrain.handover_rate`), never past the rating:
-- **Converter automatic** (cars, vans, Kenney trucks; 0.3 s, mid of [41], an estimate): the engine
+- **Converter automatic** (cars, vans, Kenney trucks; `shift_handover_s` mid of [41], an estimate): the engine
   is fuelled down so the clutch passes the driver's demand, the engine's torque at the pedal's fuel
   (`Drivetrain.handover_fuel`), and the crank's inertia goes into the reduction. No fixed cut
   (`shift_cut_s` 0): an Allison-class or car automatic shifts clutch to clutch, with no torque
   interruption. A lift upshift, with nothing to reduce, takes the surplus on the clutch.
-- **AMT** (the semis; 0.4 s in its 0.4 s cut, an estimate) and **powershift** (the tractor; 0.3 s,
-  [43]'s overlap baseline): the clutch carries the delivered torque plus `J Δω / t`. The AMT's cut is
-  its interruption; its fuel returns over `shift_torque_ramp_s` 0.3 s (an estimate; a step rings).
-- **Sequential** (the race pair): its 0.15 s ignition cut, and the clutch closes at its rating (on
+- **AMT** (the semis; `shift_handover_s` within its `shift_cut_s`, an estimate) and **powershift** (the tractor;
+  `shift_handover_s` at [43]'s overlap baseline): the clutch carries the delivered torque plus `J Δω / t`. The AMT's cut is
+  its interruption; its fuel returns over `shift_torque_ramp_s` (an estimate; a step rings).
+- **Sequential** (the race pair): its ignition cut (`shift_cut_s`), and the clutch closes at its rating (on
   J 0.06 the drop spans ~2 ticks).
 
 Peak torque at the crank through each floored upshift (`measure_vehicles -- <variant> 60 trace`,
@@ -443,13 +408,13 @@ the `each shift` line):
 
 | Body | Peak crank torque | Slip |
 | --- | --- | --- |
-| `sedan` | 185-213, the curve's 185 N·m | 0.27-0.30 s |
-| `delivery`, `ambulance` | 470, the curve's peak | 0.28-0.30 s |
-| `garbage-truck` | 911-1009, the curve near its 1017 N·m peak | 0.27-0.32 s |
-| `semi` + 24 t | 1650-2336, the closing tick with its fuel back | 0.42 s |
-| `tractor-kenney` | 875-962 | 0.07-0.22 s |
+| `sedan` | the curve's peak | the handover |
+| `delivery`, `ambulance` | the curve's peak | the handover |
+| `garbage-truck` | the curve near its peak | the handover |
+| `semi` + 24 t | over the curve's peak, the closing tick with its fuel back | the cut |
+| `tractor-kenney` | near the curve's peak | inside the handover |
 
-- The trace's dwell gate reads `race` D2 0.87 s against its 1.0 s:
+- The trace's dwell gate reads `race` D2 under `shift_dwell_s`:
   the policy never holds a full-pedal upshift (it is where the launches are tuned), so on a
   launch the dwell is the gearing's, a report, not a shift-policy fault.
 
@@ -473,24 +438,23 @@ is dropped. Each cell: the gear, the crank's rpm, the pedal and `engine_load` ov
 <!-- /measure:cruise -->
 
 *At a held part pedal* the box upshifts low and the engine law is the delivered fuel times the
-curve, so the same pedal makes less power: 0-50 km/h at pedal 0.3 (`-- <variant> 90 pedal=0.3`):
-`sedan` 40.55 s (light upshifts at ~2315 rpm, landing 1.17x over the downshift point; 7.45 s at
-0.6); `delivery` 53.70; `garbage-truck` 51.17; `semi` + 24 t 88.88. A progressive pedal map is brief
+curve, so the same pedal makes less power: the `doc=accel` benchmark at pedal 0.3 (`-- <variant> 90 pedal=0.3`): the
+`sedan` takes several times its floored time (light upshifts at ~2315 rpm, landing 1.17x over the
+downshift point; far less at pedal 0.6); `delivery`, `garbage-truck` and `semi` + 24 t take longer
+still. A progressive pedal map is brief
 16 (`docs/plans/mechanical_update/16_drivetrain_control.md`).
 
-*Kickdown and the keyboard* (`cruise kickdown pulse`): a stab kicks the `sedan` to D2
-at 50, D3 at 60-90 and D4 at 100-120 km/h (+20 km/h in 2.0-3.9 s); the `ambulance` to D3 at 50-60,
-D4 at 90 and D5 at 100-120 (+20 km/h in 4.7-16.6 s), the `delivery` the same (4.1-13.5 s). The
-`garbage-truck` kicks one gear at 30-70 km/h (+20 in 3.4 / 4.9 s; 85 km/h governs from 70); the semi
-never finds a gear under its ceiling. A key held on and off at a 1 s period (the pulse) kicks down
-on each press and lifts up on each release, paced by the 1.5 s dwell: 30-40 shifts a minute on the
-cars, the vans and `garbage-truck` at 30-70 km/h (hunting gate PASS on every body, no two opposite
-shifts inside 1.0 s), and the `sedan` swings 58-65 km/h at 60. The semis and the tractor do not
-cycle.
+*Kickdown and the keyboard* (`cruise kickdown pulse`): a stab kicks the `sedan` down a gear or two
+at every cruise speed, and the `ambulance` and `delivery` likewise, the vans slower to gain speed.
+The `garbage-truck` kicks one gear, then its governor binds; the semi never finds a gear under its
+ceiling. A key held on and off (the pulse) kicks down on each press and lifts up on each release,
+paced by `shift_dwell_s`: 30-40 shifts a minute on the cars, the vans and `garbage-truck`
+(hunting gate PASS on every body, no two opposite shifts inside the dwell), and the `sedan` swings
+a few km/h around its set speed. The semis and the tractor do not cycle.
 
 *The load*. The gearbox keeps a road-load estimate (`Drivetrain.road_load`): the
 torque the coupling passed less the rig's mass (its live mass plus what it tows, the sim's own)
-times its measured acceleration, filtered over 1 s, seeded at rest from the load standing on the
+times its measured acceleration, filtered over `LOAD_FILTER_S` (`shift_policy.gd`), seeded at rest from the load standing on the
 grade (the grade's pull plus the tyres' and the soil's rolling resistance), and held under the foot
 brake, which would read as load. It reads as a grade once it passes the flat-road load the body
 declares (`drag_area`, `rolling_resistance`) by a 2 % grade's pull on the rig (`ShiftPolicy.on_grade`,
@@ -512,15 +476,15 @@ a TCU's grade logic; the 2 % is an estimate). The pedal's map then reads it:
   until the coupling locks (`docs/heavy_vehicles.md` § Tractor, implement & ISOBUS).
 
 Climbs from rest in automatic D at a held pedal (`measure_grade -- <variant> climb grade=<%>
-pedal=<p>`, 40 s or the ramp's top):
+pedal=<p>`, a fixed run or the ramp's top):
 
 | Climb | Result |
 | --- | --- |
 | `semi` + 24 t, 8 %, pedal 0.6 | holds D2: 185 m |
-| `garbage-truck`, 15 %, 0.6 / 0.7 | 0.6 rolls back once the hold lets go: the converter passes ~265 N·m at that fuel, under the ~350 the grade asks; 0.7 holds D1 to 24 km/h: 203 m in 40 s |
+| `garbage-truck`, 15 %, 0.6 / 0.7 | 0.6 rolls back once the hold lets go: the converter passes less than the grade asks at that fuel; 0.7 holds D1 up the run: 203 m |
 | `tractor-kenney` + tipper, 8 %, 0.6 | D1 start (its pedal's), D3 held: 128 m |
-| `sedan`, 10 %, 0.5 | D2 held to 49.6 km/h; 336 m in 33.5 s |
-| `semi` + 24 t, 4 %, 0.6 | D3>D4 at 32.7 km/h, 4.6 s later |
+| `sedan`, 10 %, 0.5 | D2 held; 336 m |
+| `semi` + 24 t, 4 %, 0.6 | D3>D4, a few seconds into the climb |
 
 Floored climbs (`garbage-truck` 8 / 15 %, `semi` 8 %) keep every shift.
 
@@ -530,30 +494,30 @@ reaches the limiter, even with traction control off (`notc`: 0 ticks on `sedan-s
 `garbage-truck`, `semi` and the tractor's D1 launch). `race notc` spins its rears from the lock up
 to 6784 rpm over 12 ticks. The equipment beside the limiter stands on its own merit:
 - The semis' ASR keeps the drive tyres near the peak while the AMT's clutch slips. Without it the
-  tyres spin past 0.20 slip for 2.0 s, under the limiter, and 50 km/h comes 0.17 s later (16.07
-  against 15.90 s, `trace`).
+  tyres spin past the slip peak for seconds, under the limiter, and the `doc=accel` benchmark comes a
+  fraction of a second later (`trace`).
 - The Kenney trucks' ASR does not act on dry asphalt, where gear 1 at converter stall pushes
-  ~0.38 g, under the rear tyres' grip (`garbage-truck` `notc` reaches 50 km/h in the same 6.82 s). It
+  less than the rear tyres' grip (`garbage-truck` `notc` reaches the benchmark in the same time). It
   is kept as the EBS equipment it is, for low grip.
-- The tractor's 0.8 s launch ramp (`launch_engage_s`) is the powershift's modulation: with the
-  whole rating on the first tick its rears flash to 0.61 slip and the front axle drops to 5 % of
-  parked (23 % with the ramp). It pulls away in D1 (`docs/heavy_vehicles.md` § Tractor,
+- The tractor's launch ramp (`launch_engage_s`) is the powershift's modulation: with the
+  whole rating on the first tick its rears flash to high slip and the front axle unloads far more
+  than with the ramp. It pulls away in D1 (`docs/heavy_vehicles.md` § Tractor,
   implement & ISOBUS).
 
 **Engine braking under a fuel cut.** The governor fades `f` across `GOVERNOR_BAND`, and the
 unfuelled share motors, so a governed body settles where `f * curve + (1 - f) * motoring` meets
-the road load, 1-4 km/h under the limit. A top speed reached at full fuel (`f = 1`, set by drag
+the road load, a few km/h under the limit. A top speed reached at full fuel (`f = 1`, set by drag
 or by the curve running out at redline) is the curve's alone. Measured
 (`measure_vehicles -- <variant> 120`, `top (settled)`; the semis carry the catalog's first trailer):
 
-| Body (limit, km/h) | Settles at |
+| Body (limit, km/h) | Settles |
 | --- | --- |
-| `van` / `pickup` / `pickup-flat` (180) | 176.0 / 176.3 / 176.3 km/h |
-| `garbage-truck` (85) | 83.5 km/h |
-| `semi` / `semi-conventional` (90 / 105) | 88.0 / 102.7 km/h |
-| `tractor-kenney` (40) | 37.1 km/h |
-| `ambulance` (150) | 146.6 km/h in D6 |
-| `firetruck` (110) | 108.2 km/h |
+| `van` / `pickup` / `pickup-flat` (180) | just under the limit |
+| `garbage-truck` (85) | just under the limit |
+| `semi` / `semi-conventional` (90 / 105) | under the limit |
+| `tractor-kenney` (40) | under the limit |
+| `ambulance` (150) | under the limit, in D6 |
+| `firetruck` (110) | just under the limit |
 
 A wheel spinning up drags the crank with it, so a peeling open pair is held by the engine's
 inertia as well as its grip: the floored 2WD tractor's asphalt climb (§ Gradeability) is ~9 points
@@ -600,19 +564,19 @@ off.
 The car family carries an ideal traction control (`tcs_equipped`; not `race-future`), a hold on
 each driven wheel bounded by its share of what the coupling may pass, solved with the brakes inside
 the differentials (`RayWheel.settled_spin`), so floored and `tc` match: the grip-bound cars spend
-1-3 s of the 0-50 held at the peak, with no spin and no limiter. `race` holds the peak on TC for
-1.8 s; `race-future` does not spin. The semis (ASR) are torque-bound for 11.9 s with grip to spare
-and run 0-50 in ~15.0 s against a loaded diesel rig's ~16. Energy bounds it at 9.5 s (½mv² of 32 t
-at 362 kW peak, 90 % efficient, no shifts); a loaded diesel needs ~45-60 s to 60 mph.
+a short stretch of the 0-50 held at the peak, with no spin and no limiter. `race` holds the peak on
+TC for longer; `race-future` does not spin. The semis (ASR) are torque-bound for most of it with
+grip to spare and run 0-50 a little under a loaded diesel rig's typical time. Energy bounds it
+(½mv² of the rig's mass at the engine's peak power, 90 % efficient, no shifts); a loaded diesel
+needs far longer to 60 mph.
 
-The heavy vans run 0-100 in 17.3-21.2 s against `ref` 11.8-12.9 s, and 0-50 0.0-0.9 s behind
-theirs. The `ref` figures are ungraded "typical" values with no road test of the class behind them
-(none of a Transit 3.2 automatic was found), and they sit at or under the energy bound: ½mv² to
-100 km/h at the class's 147 kW, 90 % efficient, no shifts, is 12.2 s at 4.2 t, 11.7 s at 4.0 t
-(`delivery-flat`) and 14.0 s at 4.8 t (`ambulance`). The vans are torque-bound through 0-50 (0.15 s
-of shift, no spin) and run 0-100 in D1-D4, upshifting at 3300 rpm. Their top speed is drag's:
-`delivery` settles at 171.4 km/h in D6 at 3287 rpm (`ref` 150; no governor declared), and
-`ambulance` is governed (§ Engine braking under a fuel cut).
+The heavy vans run 0-100 slower than `ref` and 0-50 a little behind theirs (§ accel table). The
+`ref` figures are ungraded "typical" values with no road test of the class behind them (none of a
+Transit 3.2 automatic was found), and they sit at or under the energy bound: ½mv² to the 0-100 speed at
+the class's 147 kW, 90 % efficient, no shifts, per van mass. The vans are torque-bound through 0-50
+(a brief shift, no spin) and run 0-100 in D1-D4, upshifting at `shift_up_rpm`. Their top speed is
+drag's: `delivery` settles in D6 above `ref` (no governor declared), and `ambulance` is governed
+(§ Engine braking under a fuel cut).
 
 **Differentials.** Declared in `gen_kenney_vehicles.gd`:
 
@@ -631,8 +595,8 @@ axle LSDs change nothing in a straight launch (both wheels turn at one speed), a
 not move.
 
 A biasing diff shows up as power oversteer, so the corner pass holds speed with a PI pedal
-(`measure_vehicles.gd`): the diffs move peak lateral g by 0.01-0.08 g (bang-bang pulses spun `race`
-at a reported 1.62 g).
+(`measure_vehicles.gd`): the diffs move peak lateral g by a few hundredths (bang-bang pulses spun `race`
+at an implausible reported g).
 
 **Open-diff peel.** Each `RayWheel` integrates its own spin, and the grip curve falls past 0.12
 slip. Under an equal split, the wheel that slips further grips less and spins further still, so
@@ -644,8 +608,8 @@ mud barely climbs: a quarter pedal in gear 1 is already past the mud grip peak. 
 the tractor. A real 2WD tractor bogs in mud
 too; MFWD and the diff lock are the answer. The `tractor_mud` challenge teaches it on level 1's
 wallow (bridge-driven toward its far zone): floored on the open diff the tractor sticks
-three quarters of the way across with one rear spinning (87 % of the ticks) and misses the 30 s
-par; the diff lock crosses in 8.8 s, MFWD in 7.2 s, both in 6.5 s.
+three quarters of the way across with one rear spinning (87 % of the ticks) and misses the
+par (`par_s` in `tractor_mud.tres`); the diff lock, MFWD and both each cross inside it, both fastest.
 
 **Wheel radius.** Each axle runs its drawn tyre's radius (`GroundDriveSpec.axle_radius`): 0.36 m (the kit
 wheel at `KIT_SCALE`) on every Kenney body, semi and trailer, 0.44 / 0.66 m on the tractor, its `final_drive` and inboard
@@ -653,24 +617,25 @@ brakes quoted at the rear. `WheelDrive` gears a wheel `n = r / drive_radius()` t
 
 **Contact.** Each wheel sweeps a cylinder of its tyre's radius and width down its travel from full
 bump (a start inside something reads full bump); the normal is the face's, or radial at an edge.
-At a square step (`kerb`) a 0.36 m tyre first touches 12 / 20 cm 0.24 / 0.30 m ahead of its hub at
-~46 / 60° (a disk: 0.27 / 0.32 m, 48 / 64°); a crawl's largest tick is 31 mm, binds no clamp, peaks
-at 0.2-1.5 g. A ray jumps the whole step in one tick (2.6-4.2 g, clamp-bound) and, tilted with the
-body, pushes sideways off the face; parallel rays strand the trucks on 20 cm. Cost, `semi` + `box`:
-238 µs a tick natively (the ray 23), ~0.56 ms on web, the frame 9-12 ms against 7-9.
+At a square step (`kerb`, 12 / 20 cm) a tyre first touches the face ahead of its hub, partway up its
+arc (a disk touches a little further out, steeper); a crawl's largest tick binds no clamp and
+peaks at a gentle g. A ray jumps the whole step in one tick (several g, clamp-bound) and, tilted
+with the body, pushes sideways off the face; parallel rays strand the trucks on 20 cm. Cost,
+`semi` + `box`: the cast costs an order of magnitude over the ray, natively and on web (`kerb`,
+§ Measure-tool run lines).
 
 **Spin step.** Tyre force is huge next to the wheel's own inertia (`I / r²` is 207 kg on the
 tractor's rear, against its 1750 kg corner mass), so an explicit step rings at the tick rate. Against a
 480 Hz reference, capping the reaction term gave +20 % top speed on the car and +41 % on the
 tractor. The brake rides the same step: applied after it, a held brake needs the tyre to carry
-`1 + k` times its torque (k ~1.5 on a sedan at 100 km/h, ~12 on a trailer wheel at 40), so any
-pedal past ~30 % locks; measured that way, the sedan at 30 % stops at 0.85 g with a wheel past 0.3
-slip for 2.9 s.
+`1 + k` times its torque (k is small on a sedan at speed, large on a trailer wheel), so any
+pedal past ~30 % locks; measured that way, the sedan at 30 % stopped with a wheel past 0.3
+slip for seconds.
 
 **Following the body.** Solved for spin with the road speed frozen, the step reads each tick's
 change in road speed as slip it must buy back, and a body that accelerates costs its wheels
-`I * a * k / r`. That is about `dv per tick / slip velocity` of the torque: ~12 % of a full brake
-mid-stop, 30 % at 18 km/h. So the step follows the body's last-tick velocity change at the centre
+`I * a * k / r`. That is about `dv per tick / slip velocity` of the torque: a sizeable share of a full brake
+mid-stop, more at low speed. So the step follows the body's last-tick velocity change at the centre
 of mass, in proportion `k / (1 + k)`. Against the same runs at 480 Hz it lands 0-100 times and
 full-pedal stops within 4 %, where spin alone ran 6-11 % long.
 
@@ -705,10 +670,9 @@ from 100 km/h, or 90 % of the top where that is lower (`from`).
 A converter body's part-pedal stop is a real automatic's: the foot brake releases the lock-up
 (`Drivetrain.braking`, as a TCU does on braking), so the brakes never slow the crank through a
 lower gear, and the open converter passes the crank's friction back as overrun. A `sedan` 30 %
-stop traces 8-10 N·m at the crank from 97 km/h down to the last downshift. Below the turbine's
-idle speed it creeps against the brake for the last ~1.5 s. `garbage-truck` stops at 30 %: its
-idle creep (0.12 g at rest, § Converter) sits under the 0.17 g that pedal asks of its 2.2 g brake
-hardware (`WheelDrive.brake_application`). The clutch bodies
+stop traces only the crank's friction torque from speed down to the last downshift. Below the
+turbine's idle speed it creeps against the brake for the last stretch. `garbage-truck` stops at 30 %: its
+idle creep (§ Converter) sits under what that pedal asks of its brake hardware (`WheelDrive.brake_application`). The clutch bodies
 keep their clutch closed, so their engine braking includes the friction (`race` 30 % 150.6 m
 against 187.9 without it). Full pedal, on ABS, is unaffected.
 
@@ -716,20 +680,20 @@ Mean g is speed over time, so it reads under the peak. Full pedal asks the brake
 whole capacity (§ Brake hardware), more than any tyre gives, so every ABS body stops on ABS and
 `race` (no ABS) locks its wheels: it stops shorter at 60 % pedal than at 100 %, as a real non-ABS
 car does. The pedal is anchored per body (`WheelDrive.brake_application`): half pedal asks
-`BRAKE_HALF_PEDAL_G` (0.5 g) of every body and full pedal its whole capacity, so 60 % reads
-0.60-0.78 g across the table whatever the hardware, and a body with more capacity is gentler in
+`BRAKE_HALF_PEDAL_G` of every body and full pedal its whole capacity, so 60 % reads
+about the same across the table whatever the hardware (§ Braking table), and a body with more capacity is gentler in
 the first third and keeps the rest for the end of the travel. The semi anchors on its coupled load
 (EBS load sensing, `WheelDrive.brake_load_kg`), so the 32 t rig answers the pedal as a car does.
-ABS reads the hub's speed off the ground too: the `sedan`'s rears leave the road for ~0.3 s each
-in a full-pedal stop near the tyre's ~1.04 g peak, and keep turning there instead of landing
-locked. Steady transfer alone unloads them only at `g · rear share · L / h` = 0.40 · 1.58 / 0.48
-≈ 1.3 g (computed, on the sagged COM height), so the lift is the stop's pitch dynamics: the dive
+ABS reads the hub's speed off the ground too: the `sedan`'s rears leave the road briefly each
+in a full-pedal stop near the tyre's peak g, and keep turning there instead of landing
+locked. Steady transfer alone unloads them only at `g · rear share · L / h` (computed, on the
+sagged COM height), well past the tyre's peak, so the lift is the stop's pitch dynamics: the dive
 and its lean (§ Pitch). It stays, as honest for the footprint, and so does the 87 % front brake
 split (`brake_bias_front` 0.873). No other road body lifts. The tractor (no ABS; rear brakes, the pedal engages MFWD) stops
-from 33 km/h at 0.84 g in 5.4 m, skidding 0.80 s.
+in 5.4 m, skidding for under a second.
 
 **Both pedals.** Floored in D1 against the full foot brake, traction control off (it would hold
-the drive back itself), 10 s (`measure_vehicles -- <variant> 30 stall`: a converter
+the drive back itself), `STALL_HOLD_S` (`measure_vehicles -- <variant> 30 stall`: a converter
 held on its stall speed, a clutch slipping on its launch target). Every
 body moves under 5 cm:
 - 0.000 m: `sedan`, `hatchback-sports`, `suv`, `suv-luxury`, `taxi`, `race-future`,
@@ -816,8 +780,8 @@ What stays is front lift: the front links push down only in proportion to the FR
 a rear-driven or rear-biased body lifts its nose on springs alone (the front axle's low and its
 gap under predicted transfer: the launch trace's `front axle` gate). The trucks keep hand-tuned springs (no
 `ride_hz`) and carry anti-squat only. The front axle unloads fully at `g * front_share * L / h`,
-past the ~0.45 g the rear tyres push in gear 1 (`garbage-truck` 1.06 g on its sourced
-`front_weight`); where that falls short, the levers are the weight split and the start gear,
+past what the rear tyres push in gear 1 (`garbage-truck`'s threshold on its sourced
+`front_weight` sits well above it); where that falls short, the levers are the weight split and the start gear,
 not a lower COM. Guard: the tracking pass's front-lift check.
 
 *The front-axle gap* (the launch trace's `front split` line, `_gap_split`). The front axle's load
@@ -845,10 +809,9 @@ laden `semi`'s launch swings 62 points and overshoots 12 (its pitch mode reads ~
 ~15 expected), `sedan-sports`' 43 and 6. Every car, van and Kenney truck passes (2026-10-15/16).
 It fails on:
 - the semis' high-gear shifts by under a point (`semi` D4>D5 5.4 of 5.0, `semi-conventional` D3>D4
-  6.3 of 5.5), inside a ±0.5-point spread between a lone run and the sweep: the 0.4 s cut is half
-  the 0.7 s pitch period, so its swing and the drive's return add. `shift_torque_ramp_s` took D1>D2
-  from 16 to 10 points; a launch clutch ramp moves the launch only near the pitch period (12 → 8 at
-  1.2 s, +0.3 s to 50 km/h), so none ships;
+  6.3 of 5.5), inside a ±0.5-point spread between a lone run and the sweep: the cut is half
+  the pitch period, so its swing and the drive's return add. `shift_torque_ramp_s` took D1>D2
+  from 16 to 10 points; a launch clutch ramp moves the launch only near the pitch period (12 → 8, at the cost of a slower launch), so none ships;
 - `tractor-kenney`'s D3 take-up (16), its wheelie.
 
 **Steering geometry.** `max_steer_deg` (the garage's "Max steer"), the speed taper and guidance
@@ -860,31 +823,30 @@ cotangent mean is `cot δ`, so the turn centre `δ` asks for is kept, and a read
 angle takes `mean_steer_angle()`, never the wheels' average. The lock limits `δ`, not the inner
 wheel: the lock figures are recipe feel numbers, and limiting the inner wheel would widen every
 turning circle (`sedan` 2.02 → 2.65 m at the rear axle) or relabel every lock. So the inner wheel
-turns past the lock at full lock: `sedan` 48.6° / 30.8° at 38°, `race-future` 55.7° / 33.0° at 42°,
-`semi` 26.0° / 22.2° at 24°. The law holds while `tan δ < L / (f |x|)`, past every lock at `f = 1`
+turns past the lock at full lock (`max_steer_deg`; `test_vehicle_catalog` asserts it). The law holds while `tan δ < L / (f |x|)`, past every lock at `f = 1`
 (`test_vehicle_catalog`).
 
 Every wheeled family ships `f = 1.0` (`CAR_BASE`, `TRUCK_BASE`, `VAN_BASE`, `TRACTOR_BASE`, both
 semis), each an **estimate**: road cars run partial Ackermann (~40-60 %, a patent claim, not a
 textbook figure) for the loaded outer tyre at high g; trucks set close to full for steer-tyre wear
 (SAE 861975 and 912693, no figure); no ag-tractor figure was found. Here the low-speed scrub is the
-point: at road speed the split is second order (~0.15° on `sedan`'s 10 % step at 30 km/h). Against
+point: at road speed the split is second order (a fraction of a degree on `sedan`'s step at road speed). Against
 the parallel-steer table the step sweep's `K` rises 0.01-0.04 deg/g on every body (consistent with
 the outer, loaded tyre steering less), with no new spin, rollover or lifted wheel (2026-10-16). Trailers and the plane
 have no steered pair.
 
-Full lock at 5 km/h (`circle`, 2026-10-16), parallel steer → `f = 1`: the radius driven at the rear
+Full lock at crawl speed (`circle`, 2026-10-16), parallel steer → `f = 1`: the radius driven at the rear
 axle over `L / tan δ`, and the inner / outer front slip angles (+ = the wheel points further into
 the turn than it travels). Parallel, the two fronts fight; at `f = 1` both carry the same small slip
 the cornering force needs.
 
-| Body | Radius / law | Inner slip | Outer slip |
-| --- | --- | --- | --- |
-| `sedan` | 2.39 → 2.13 m / 2.10 | -5.8° → +2.3° | +8.7° → +1.8° |
-| `suv` | 2.65 → 2.48 m / 2.43 | -4.4° → +2.5° | +7.9° → +2.0° |
-| `tractor-kenney` | 3.24 → 2.97 m / 2.93 | -5.0° → +1.7° | +8.4° → +1.3° |
-| `delivery` | 4.33 → 4.23 m / 4.21 | -2.0° → +1.4° | +4.2° → +1.2° |
-| `semi` (bobtail) | 9.01 → 8.76 m / 8.50 | -0.2° → +1.3° | +3.0° → +1.1° |
+| Body | Radius / law |
+| --- | --- |
+| `sedan` | 2.39 → 2.13 m / 2.10 |
+| `suv` | 2.65 → 2.48 m / 2.43 |
+| `tractor-kenney` | 3.24 → 2.97 m / 2.93 |
+| `delivery` | 4.33 → 4.23 m / 4.21 |
+| `semi` (bobtail) | 9.01 → 8.76 m / 8.50 |
 
 ### Brake hardware
 
@@ -937,12 +899,12 @@ every locked wheel settles under `LOCK_STUCK_SPIN` (0.01 rad/s, 3.5 mm/s at a ca
 an open diff counter-rotates off lost grip turns at rad/s. The `pawl` columns of the park table
 below hold P alone, with no brake.
 
-**Handbrake turn.** A full handbrake at 60 km/h with a 30 % steer step, held 1 s
-(`measure_vehicles -- <variant> 30 handbrake`; `sedan`, `police`, `hatchback-sports`,
-`suv`, `race`; 2026-10-15): the rears lock for 0.78-0.90 s and the body turns 169-184 deg
-(integrated off the yaw rate, so a spin would read past 180) at a peak yaw rate of 104-153 deg/s,
-ending at 12-18 km/h backwards: a J-turn. On the steer alone it turns 45-71 deg. The lock does
-it: the combined-slip tyre gives a locked wheel no side force.
+**Handbrake turn.** A full handbrake at `HB_SPEED` with a `HB_STEER` step held `HB_HOLD_S`
+(`measure_vehicles.gd`; `measure_vehicles -- <variant> 30 handbrake`; `sedan`, `police`,
+`hatchback-sports`, `suv`, `race`; 2026-10-15): the rears lock for under a second and the body
+turns about a half turn (integrated off the yaw rate, so a spin would read past it), ending
+backwards: a J-turn. On the steer alone it turns far less. The lock does it: the combined-slip tyre
+gives a locked wheel no side force.
 
 ### Measuring a vehicle: `tools/measure_vehicles.tscn`
 
@@ -1070,11 +1032,11 @@ lost per doubling): passenger 205/60R15 (Pacejka 2nd ed. Table A3.1: PKY2 2.13, 
 3.33, 35 kN, 10 %) -> c 3.33, s 0.08; ag radial has no open set -> c 3.0, s 0.12 (estimates).
 Tractor `rear_lat_grip` 1.077 = `1 + s * log2(rated rear / rated front)` (Michelin MultiBib
 650/65R38 over 540/65R28).
-- **Stated shortfall: linear K.** Road bodies read near neutral at 30 km/h (a real car 2-4
+- **Stated shortfall: linear K.** Road bodies read near neutral in the step test (a real car 2-4
   deg/g): roll camber, roll steer and compliance steer are unmodelled (Bundorf & Leffert, SAE
   760713; brief 15).
 - **COMPROMISE:** `sedan-sports`, `suv`, `suv-luxury`, `pickup`, `pickup-flat` and the semis keep
-  even bars and the law off (recipe comment): otherwise a lift at 100 km/h spins them.
+  even bars and the law off (recipe comment): otherwise a lift at speed spins them.
 
 <!-- measure:steer (generated by `measure_vehicles -- doc=steer`; edits inside are overwritten) -->
 Measured 2026-10-16 (`measure_vehicles -- doc=steer`; per body `-- <variant> 60 step`): from each
@@ -1114,7 +1076,7 @@ of the lateral load transfer (LLTD).
 - `-- semi` measures the coupled 32 t box rig (`trailer=<box|tanker|tipper|flatbed|bobtail>` or any
   attachment file name). Its launch is not bit-reproducible across run contexts (the coupling
   countdown inherits the previous vehicle): compare runs of the same shape.
-- `tractor-kenney` never reaches the tracking pass's 60 km/h; its wheelie check is the trace's
+- `tractor-kenney` never reaches the tracking pass's speed; its wheelie check is the trace's
   front-axle gate (`-- tractor-kenney 40 trace`).
 - `tools/measure_semi_launch.tscn`: static pose off P5; P7 is the rollover skid pad (`tip_kmh=`,
   `ramp`), lateral g read at first wheel lift; `strict` exits 1 when a steer wheel drops under
@@ -1132,7 +1094,7 @@ is not most climb: the surplus pitches a high-COM tractor over backwards); `hold
 pedal=<0..1>` runs one diagnostic trial with a per-wheel force / slip / omega dump. `gear=<1-6>`
 holds a start gear in the bridge's manual mode (the automatic box downshifts a standing D3 to D1 on
 every body without a start gear), for the climbs and the roll-back. `climb grade=<%>` instead runs
-one climb from rest in automatic D at a held pedal for 40 s or to the ramp's top, printing each
+one climb from rest in automatic D at a held pedal for `ASCENT_S` (`measure_grade.gd`) or to the ramp's top, printing each
 shift with the gearbox's road load and a `falls back` gate (§ The shift policy).
 
 Ramp mode bisects the steepest angle the body climbs FROM REST — no run-up, which is the
@@ -1176,17 +1138,16 @@ ceiling, 24-26 deg); in mud the driven rears are traction-bound.
 
 Every standing start here goes through the body's hill hold (§ Hill hold): the brakes stay on until
 the drive carries the grade.
-- The MFWD tractor never rolls back through its 0.8 s clutch ramp, and from its D1 launch climbs
-  77.1 % on asphalt (37.6 deg; lock 78.0, `tc` 80.0: floored D1 out-pulls the tyres' peak, ~44
-  against ~33 kN·m), under its 45 deg traction and 44.3 deg tip ceilings; a real one: 35-45 %.
+- The MFWD tractor never rolls back through its clutch ramp (`launch_engage_s`), and from its D1 launch climbs
+  77.1 % on asphalt (37.6 deg; lock 78.0, `tc` 80.0: floored D1 out-pulls the tyres' peak), under its 45 deg traction and 44.3 deg tip ceilings; a real one: 35-45 %.
 
 In mud the bodies split by driveline:
 - A biasing or rigid centre climbs toward the all-wheel ceiling the tool prints (SUV 16.9 against
   18.0 deg; tractor `mfwd diff tc` 14.8 against 16.7).
 - One driven axle on an open diff barely leaves the flat, because one wheel peels past the grip
   peak (§ Physics derivations and figures, open-diff peel). `garbage-truck` does not leave it
-  (0.0 %): its empty front-loader split leaves 0.535 of the weight on the driven rears, ~0.21 g of
-  traction at mud's half grip against the 0.20 its crr asks before any grade (computed).
+  (0.0 %): its empty front-loader split leaves 0.535 of the weight on the driven rears, traction at
+  mud's half grip short of what its `rolling_resistance` asks before any grade (computed).
 - The surface is also tyre-blind: a lug tyre loses the same half of its grip in mud as a road
   tyre.
 
@@ -1229,7 +1190,7 @@ damper:
 - **Fade.** The spring fades in below `STICK_SPEED` (0.5 m/s) of ground speed, so driving,
   braking and cornering figures above a crawl never see it.
 
-A held body winds the spring up by `STICK_DEFLECTION * tan(a) / mu` (2 mm on 10 %) and then stays
+A held body winds the spring up by `STICK_DEFLECTION * tan(a) / mu` and then stays
 put; without it every braked body creeps 1.0-1.5 m per minute on 10 %. Every handbrake holds 30 % (§ Brake hardware). Guard: `test_wheel_spin` § static friction
 (`test_a_braked_wheel_holds_at_rest_on_a_grade`).
 
@@ -1238,7 +1199,7 @@ Side effects:
   bisection step or more (`pickup` 53.5 to 54.2 %).
 - **Rough ground.** The `pickup` does not cross the asphalt 50 cm ditch. It wedges on its chassis
   with both rears at the grip peak, as the `sedan` does. Without the spring it escapes only because
-  its undriven fronts ring at ±3 kN on the stopped body, which the spring removes.
+  its undriven fronts ring on the stopped body, which the spring removes.
 
 <!-- measure:park (generated by `measure_grade -- doc=park`; edits inside are overwritten) -->
 Measured 2026-10-16 (`measure_grade -- doc=park`), asphalt: mm moved in 60 s held after a 1.5 s
@@ -1271,8 +1232,8 @@ in `tools/rough_ground_layout.gd`, which the level's generator (`tools/gen_rough
 chain in `rough_ground_gen.json`) and this tool both read.
 
 `baseline` runs `suv`, `tractor-kenney` in 2WD / MFWD / MFWD + diff lock, `sedan` and
-`pickup`. `--fixed-fps 60` runs one 1/60 s tick per frame with the step unchanged, so a baseline
-takes ~1.5 min instead of ~30 and matches a real-time run exactly.
+`pickup`. `--fixed-fps 60` runs one physics tick per frame with the step unchanged, so a baseline
+takes minutes instead of half an hour and matches a real-time run exactly.
 
 Each trial is a standing start 10 m before a patch. A driver holds the crawl with the pedal and
 the lane's centre line with the wheel, through the bridge. Without `tc` the pedal floors whenever
@@ -1293,7 +1254,7 @@ its partner's.
 A cell is the time over the patch and `use`:
 - `stuck+N` is stopped N m into the patch; `stuck-N` never reached it; `t/o-N` timed out N m
   short of it, still creeping;
-- `b` is 1 s or more of chassis contact.
+- `b` is `BODY_FLAG_S` or more of chassis contact (`measure_rough.gd`).
 
 <!-- measure:rough (generated by `measure_rough -- doc=rough`; edits inside are overwritten) -->
 Measured 2026-10-16 (`measure_rough -- doc=rough`, with `--fixed-fps 60`), mud lane below. Asphalt
@@ -1327,13 +1288,13 @@ What the matrix shows:
   hatchback (the first two grounded, `b`), the 35 cm one the sedan; `suv` climbs out of both.
 - **The 2WD tractor floored** sticks in mud in the 50 cm ditch; the open rear peels and drags the
   crank (Rejected: never tuned). Wheel inertia and the contact shape move which cells peel, and its
-  bumps_10 / bumps_20 times swing run to run (~16 to ~51 s against ~15 s on the flat): it stalls
+  bumps_10 / bumps_20 times swing run to run (far above the flat's time): it stalls
   part-way and recovers (not investigated).
 - **The 2WD tractor with `tc`** sticks only on bumps_20 and in the 50 cm ditch.
   - The measuring driver (`tools/tc_pedal.gd`) climbs only once the drive reaches the wheels
     (`bite_pending`), and slowly (`ERROR_SPAN_UNDER`): while the clutch slips with the crank
     revving to its launch line the rears read no slip, and a pedal wound up to 1.0 flashes both
-    rears to ~0.85 slip, held ~0.5 s by the locked 2223 kg·m² crank (at the axle).
+    rears to ~0.85 slip, held briefly by the locked 2223 kg·m² crank (at the axle).
   - On bumps_20 the pedal freezes near idle fuel against wheels blocked on a bump (`use` .41), a
     COMPROMISE at `bite_pending`.
 - **MFWD crosses everything** and is rarely short of traction (`-`).
@@ -1412,7 +1373,7 @@ Flat-plate polar (`Cl = CL_MAX·sin 2a`, `Cd = CD_MIN + CD_STALL·(1 − cos 2a)
   `Dashboard.READOUT_EXTRAS`. Gates on `sail_area > 0`
   (`BoatVehicle.vehicle_capabilities()["sail"]`, the `body_cmd` shape); `sail_area` 0 skips
   the whole force block.
-- `thrust_force` 500 N / `drag_long` 150 are one tuned pair (~5 hp outboard, 3.3 m/s top
+- `thrust_force` / `drag_long` are one tuned pair (~5 hp outboard, 3.3 m/s top
   speed); the § Autopilot gains table is untouched by the retune.
 
 ### Tide
@@ -1488,7 +1449,7 @@ with `I` from `VehicleMath.inertia_of(mass, probe span)` and `A` the rudder auth
 Overdamped on every hull (wn * dt under 0.08 at 60 Hz), and `drag_yaw` alone carries zeta
 0.6-1.3, so there is no per-variant knob. The linear plant is the shipped one: rudder torque is
 applied raw, and the yaw damper's one-tick clamp (`VehicleMath.damped_force`) binds only when
-`drag_yaw > I / delta` (41 kN·m/(rad/s) on boat-speed-a against its 3800; every hull clears it by
+`drag_yaw > I / delta` (`drag_yaw` on boat-speed-a against its `I / delta`; every hull clears it by
 11-13x). Raising `drag_yaw`, or cutting mass or probe span, toward `I / delta` puts the clamp in
 the loop and invalidates the zetas.
 
@@ -1554,7 +1515,7 @@ on the vehicle: `lift_thrust`, `heading_frame`, `level_target_up`, `align_torque
 | `drone_propulsion.gd` | quad-X mixer in thrust-fraction space, command = sqrt (`thrust ~ ω²`); yaw = summed `prop_torque_ratio` N·m per N thrust; per-motor clamp, no rescaling; `MOTORS` (array → `esc_index`) pinned to `drone.tscn` by test; `rotor_rpm` = mean `esc_rpm` |
 | `drone_bus.gd` | DroneCAN roster (`uavcan.protocol.NodeStatus`), 4 ESCs (ids 11-14) + GNSS/POWER/AHRS/RANGE (20-23); Y key / `node_fail` drops one, drops out of `node_online`, holds last telemetry, health derived |
 | `drone_power.gd` | DroneCAN `power.BatteryInfo`, replaces the shared `battery` model: `V = V_oc(soc) - I * R_internal`; `pack_current` sums four `esc_current` + avionics draw; `soc`/`pack_temp` |
-| `drone_sensors.gd` | `sats` sixteen-ray golden-angle spiral (80° mask); `fix_type` = DroneCAN `Fix2.status`; `hdop`; `agl` one ray, `-1` invalid; masks `Layers.SOLID`, omits `Containment` |
+| `drone_sensors.gd` | `sats` sixteen-ray golden-angle spiral (`SKY_MASK_DEG` mask); `fix_type` = DroneCAN `Fix2.status`; `hdop`; `agl` one ray, `-1` invalid; masks `Layers.SOLID`, omits `Containment` |
 | `drone_modes.gd` | STABILIZE/ALT_HOLD/LOITER/RTL/LAND, Z key or `flight_mode`, read back as `mode_actual`; altitude cascade + PD position; geofence 400 m / 120 m ceiling latches RTL |
 | `drone_arming.gd` | seven pre-arm checks in `prearm_fail`; `arming_state` DISARMED/BLOCKED/ARMED; arm = rising edge, disarm = refused level in flight |
 | `drone_payload.gd` | cargo hook mass/COM change; `hardpoint_cmd` closes only with a `CargoPayload` in reach else `hardpoint_state` false; `payload_weight` = mass×gravity N (`uavcan.equipment.hardpoint.Status`'s unit) |
@@ -1577,7 +1538,7 @@ pinned.
 ### Drone: the cluster
 
 - `ST_GROUND` is family-specific: drone's `DroneSensors.landed_now` (AGL close, |vspeed|
-  low, collective ≤ hover, 0.5 s debounce); boat's `BoatVehicle.aground_now` (mean probe
+  low, collective ≤ hover, `LANDED_DEBOUNCE`); boat's `BoatVehicle.aground_now` (mean probe
   depth < `AGROUND_SHALLOW_FRAC` of `float_depth`); `VehicleTelemetry.with_status_bit`
   stamps either over the packed word. IMU triple (`roll_rate`/`pitch_rate` beside `yaw`,
   `acc_vert` beside `accLong`/`accLat` — DroneCAN `ahrs.Solution`'s

@@ -8,11 +8,9 @@ framework/plumbing: `docs/systems.md`. Rules: `src/vehicles/truck/CLAUDE.md`,
 
 ## Truck & J1939
 
-The truck family covers a J1939 chassis, a CANopen body network across a gateway, a thin
-truck/trailer bus, and (on one variant) no trailer bus at all. It is a chassis class, not a
-job: `garbage-truck`, `firetruck`, and the two hand-built tractor units (`semi`,
-`semi-conventional`) only — ordinary heavy vans (delivery, delivery-flat, ambulance) are
-`car`-family, proprietary CAN, not J1939. J1939 is the parent of both ISOBUS and NMEA 2000.
+A chassis class, not a job: `garbage-truck`, `firetruck`, and the hand-built tractor units
+(`semi`, `semi-conventional`) only; heavy vans are `car`-family, proprietary CAN. J1939 is the
+parent of ISOBUS and NMEA 2000.
 
 `TruckVehicle extends BaseVehicle` (`src/vehicles/truck/truck.gd`) owns air reservoirs, PTO,
 refuse body network and the ISO 11992 trailer bus in `_tick_extras`. `TruckTelemetry extends
@@ -43,18 +41,14 @@ VehicleTelemetry` adds chassis, body-network and trailer-bus "out" fields.
 - A coupled trailer's spring brakes apply on the same event: the towing unit hands
   `TowHost.tick_towing` its parking brake (`parking01`, the lever or the air gate,
   `WheelDrive.parking_application`), on the gate tick. The auto-neutral engages at any speed
-  (COMPROMISE in `drivetrain.gd`). `tools/measure_air_loss.tscn -- all strict` (CI) drives it live,
-  measured:
+  (COMPROMISE in `drivetrain.gd`). `tools/measure_air_loss.tscn -- all strict` (CI) drives it live.
+  Per body, three passes: parked on 18 % with the air drained and no lever (`PARK_HOLD_S`), floored in D with the
+  air drained (drive goes to gear N, no creep), and the air cut while rolling (`ROLL_SPEED_MS`)
+  with the pedal floored. Every body holds within a millimetre or two and stops in roughly 10-14 m.
 
-  | Body | Parked 30 s on 18 %, air drained, no lever | Floored in D, air drained | Air cut at 30 km/h, pedal floored |
-  | --- | --- | --- | --- |
-  | `garbage-truck` | 0.1 mm | gear N, 0.0 mm | stops in 13.6 m, 2.54 m/s² |
-  | `semi` + box | 2.2 mm | gear N, 0.0 mm | stops in 10.8 m, 2.98 m/s² |
-  | `semi-conventional` + box | 2.2 mm | gear N, 0.3 mm | stops in 10.0 m, 3.18 m/s² |
-
-  Floors: 10 mm held, 2.2 m/s² (UN R13 secondary braking, goods vehicles). With the trailer left
-  unbraked the semi settles 23 mm onto the tractor's rears before they hold it (a 1.2 margin,
-  `box_spec.tres`) and stops at 1.36 m/s²: both fail. `park` and `floor` drain
+  Floors: `FLOOR_MAX_M` held, `ROLL_MIN_DECEL` (UN R13 secondary braking, goods vehicles). With
+  the trailer left unbraked the semi settles about 2 cm onto the tractor's rears before they hold
+  it (a 1.2 margin, `box_spec.tres`) and stops well under the decel floor: both fail. `park` and `floor` drain
   honestly (key off, brake pumped); `roll` writes `air_primary = 0` (a burst line, the model has
   no leak).
 - Retarder is real driveline torque, not an indicator bit: math on `Drivetrain`,
@@ -127,13 +121,13 @@ the conventional carries none. No trailer of the four adds a signal to either.
 ### The joint and the trailer's wheels
 
 - Fifth wheel = `Generic6DOFJoint3D` at the scene's `Kingpin` marker
-  (`TowHost._build_joint`, `FifthWheel` profile): linear axes locked, yaw free to **75°**
-  jackknife stop, pitch **±15°**, roll **±1.5°**. A 25% grade break swings it -9.0° to
-  +12.8° (15° clears it); the rig meets one rolling or with speed, since from rest the box rig
+  (`TowHost._build_joint`, `FifthWheel` profile): linear axes locked, yaw free to `YAW_LIMIT_DEG`
+  jackknife stop (`FifthWheel.YAW_LIMIT_DEG`), pitch `PITCH_LIMIT_DEG`, roll `ROLL_LIMIT_DEG`. A 25% grade
+  break swings the pitch within the limit (the swing is in `fifth_wheel.gd`'s comment); the rig meets one rolling or with speed, since from rest the box rig
   pulls away on 16 % at most (`docs/vehicles.md` § Gradeability).
 - Yaw limit models trailer-against-cab contact, not a fifth-wheel property (plate and nose
   overlap while coupled, so collision can't arbitrate it). `Articulation.JACKKNIFE_MAX_DEG`
-  (**75°**) is the joint's stop. Guards: `tests/test_tow_host.gd`; sizing: § Truck sizing.
+  is the joint's stop. Guards: `tests/test_tow_host.gd`; sizing: § Truck sizing.
 - Trailer carries its own unmodified `RayWheel`s — undriven, braked, six on a tri-axle
   bogie, making `trailer_axle_load`/`trailer_abs` real numbers, ticked from
   `TowHost.tick_towing`.
@@ -141,9 +135,10 @@ the conventional carries none. No trailer of the four adds a signal to either.
 ### Truck sizing (derivations)
 
 - Wheelbase is sized by the launch: the trailer pulls at the 1.05 m kingpin, a lever on the steer
-  axle. A 2.10 m wheelbase lifts both steer wheels for ~1 s of a gear-1 launch; the shipped
-  3.60 m (cab-over) and 4.40 m (conventional) keep >= 7.0 kN on each steer wheel (7.8 and
-  11.5 kN coupled to the box, P2 and P6, with ASR holding the drive axle at full grip). Gate: CI runs
+  axle. A 2.10 m wheelbase lifts both steer wheels for about a second of a gear-1 launch; the shipped
+  3.60 m (cab-over) and 4.40 m (conventional) keep `STEER_FLOOR_N` on each steer wheel, coupled to the
+  box (P2 and P6, with ASR holding the drive axle at full grip; the floor and the figures are
+  `measure_semi_launch`'s). Gate: CI runs
   `tools/measure_semi_launch.tscn -- <unit> strict` on both units.
 - Gearing: gears 1-5 span the 600-2080 rpm range; 6th is a 0.69 overdrive, so the governor, not
   the redline, sets top speed. Coupled to the box (`measure_vehicles -- <unit> 120 coast`; top
@@ -171,27 +166,30 @@ the conventional carries none. No trailer of the four adds a signal to either.
   `mu_lat` 0.75. Springs let the body lean, which carries the COM outboard and lifts a wheel
   earlier; the anti-roll bars (`anti_roll_rate`) hold the lean. Every trailer axle carries one at
   its own spring rate (`test_trailer`), each tractor unit 480 kN/m, twice its front spring: a
-  softer tractor out-leans its trailer, and past the plate's ±1.5° roll stop it twists the trailer
-  over (at 240 kN/m the flatbed's trailer lifted at 0.42 g). A full-lock step (the rack reaches
-  full lock in 0.56 s) overshoots the roll. Measured with `measure_semi_launch -- semi
-  trailer=<body>` (P7: each body's own lateral g at its first wheel lift; `ramp` holds 40 km/h and
-  winds the lock on over 20 s, the slow tip point; the default is the step at 40 km/h; `tip_kmh=`
-  for the lowest step speed that rolls the rig; the conventional's slow tips read within 0.03 g):
+  softer tractor out-leans its trailer, and past the plate's roll stop (`ROLL_LIMIT_DEG`) it twists the trailer
+  over (at half that rate the flatbed's trailer lifted well below its own ceiling). A full-lock step
+  (the rack reaches full lock in a fraction of a second) overshoots the roll. Measured with `measure_semi_launch -- semi
+  trailer=<body>` (P7: each body's own lateral g at its first wheel lift; `ramp` holds `TIP_SPEED_MS` and
+  winds the lock on over `RAMP_S`, the slow tip point; the default is the step at `TIP_SPEED_MS`; `tip_kmh=`
+  for the lowest step speed that rolls the rig; the conventional's slow tips agree between runs to a few hundredths of a g):
 
-  | Body | COM over road | rollover_g | slow tip | lean at 0.2 g | step at 40 km/h lifts at | full-lock step rolls from |
-  | --- | --- | --- | --- | --- | --- | --- |
-  | Box | 1.60 m | 0.45 | 0.34 g | 1.7° | 0.34 g | 30 km/h (lifts at 25) |
-  | Tanker | 1.50 m | 0.48 | 0.37 g | 1.6° | 0.37 g | 30 km/h |
-  | Tipper | 1.30 m (parked) | 0.55 | 0.45 g | 1.3° | 0.41 g | 30 km/h |
-  | Flatbed | 0.90 m | 0.80 | 0.31 g, does not roll | 0.8° | never (tractor 0.64 g) | 50 km/h (lifts at 30) |
-  | Tractor unit (bobtail) | 1.10 m (1.03 coupled) | 0.65 | 0.61 g, rolls | 0.5° | 0.66 g | 35 km/h |
+  | Body | COM over road | rollover_g |
+  | --- | --- | --- |
+  | Box | 1.60 m | 0.45 |
+  | Tanker | 1.50 m | 0.48 |
+  | Tipper | 1.30 m (parked) | 0.55 |
+  | Flatbed | 0.90 m | 0.80 |
+  | Tractor unit (bobtail) | 1.10 m (1.03 coupled) | 0.65 |
 
-  Lean is the trailer's (the bobtail's own). The flatbed's slow tip is its trailer's, twisted up by
-  the plate's roll stop with the tractor's inner wheels following at 0.53 g, the rig left upright;
-  on the step its trailer wheels stay down and the tractor's lift. A raised tipper puts its load
-  2.80 m over the road (~0.26 g), so a body off its rest caps the rig at 5 km/h
+  The measured tip points follow the same order: the tall bodies (box, tanker, tipper) lift a
+  wheel below their `rollover_g` and from the lowest step speeds, the flatbed's tractor lifts
+  before its low trailer does, and the bobtail rolls on the slow wind-on. Lean is the trailer's
+  (the bobtail's own). The flatbed's slow tip is its trailer's, twisted up by the plate's roll
+  stop with the tractor's inner wheels following, the rig left upright; on the step its trailer
+  wheels stay down and the tractor's lift. A raised tipper puts its load about 2.8 m over the
+  road, so a body off its rest caps the rig at `TowHost.BODY_UP_CAP_KMH`
   (`TowHost.speed_cap_kmh` into `Drivetrain.speed_cap_kmh`, a notice on the edge), where full
-  lock makes ~0.03 g.
+  lock makes almost no lateral g.
 
   The 1.44 m track is the compromise (a real artic runs ~2.0 m, so every ceiling reads ~25 % low);
   widening it moves every wheel station and authored wheel visual. `BaseVehicle.is_overturned()`
@@ -298,7 +296,7 @@ them apart.
 - Both load models move a real centre of mass and nothing else. `set_load_offset` moves
   the body's `center_of_mass`; `trailer_axle_load`/`axle_load` move as consequences. The
   tipper moves it UP as well as back (the load rides the floor it is sitting on), which is
-  why a raised body caps the rig at 5 km/h (§ Truck sizing).
+  why a raised body caps the rig at `TowHost.BODY_UP_CAP_KMH` (§ Truck sizing).
   Tanker's surge is a labelled model chasing longitudinal acceleration with a lag — real
   fluid physics is a non-goal, the rule that governs the boat's water too. Guards for § Coupling and
   § Four trailers: `tests/test_trailer.gd`, `tests/test_tow_host.gd`.
@@ -336,7 +334,7 @@ them apart.
 - `wheel_speed`/`ground_speed`/`wheel_slip` are the signature ISO pair and its difference:
   wheel-based is the mean spin of the rear axle × tire radius; ground-based is chassis
   forward velocity; `wheel_slip` is how far the first runs ahead of the second (unsigned,
-  J1939 SPN 1858, floored below 0.5 km/h).
+  J1939 SPN 1858, floored at low speed).
 - `pto_mode` is a gearbox selection, not an engine speed: 540/1000 are shaft speeds off
   `PTO_RATED_RPM` (**2200**); an unknown byte falls back to 540. `engine_hours` is an hour
   meter, range-less, on the readout line beside ODO.
@@ -362,11 +360,11 @@ them apart.
   four-bar — implement pitch and rockshaft arm angle fall out of a circle-circle
   intersection, why implements tip back as they lift.
 - Draft 60 Hz margin: below `DRAFT_SPEED_REF` the draft is a linear damper, `k = rated /
-  DRAFT_SPEED_REF`, stable while `k*dt/m < 2`; 12 kN on 7 t gives 0.014
-  (`test_the_shipped_rating_keeps_the_60hz_damper_margin` holds it under 0.5). The one-tick
-  `damped_force` cap behind it is unreachable below ~480 kN and bounds only the linear impulse.
-- Ballast: gear-1 wheel force at `launch_target_rpm` (1250 rpm, ~682 Nm) is ~65.7 kN against
-  43 kN of rear grip at 7 t / `front_weight` 0.38 (~1.5x; 3.4x at the unballasted 4 t 50/50). Top
+  DRAFT_SPEED_REF`, stable while `k*dt/m < 2`; the shipped rating sits far inside that
+  (`test_the_shipped_rating_keeps_the_60hz_damper_margin` holds `k*dt/m` under 0.5). The one-tick
+  `damped_force` cap behind it is unreachable at any plausible rating and bounds only the linear impulse.
+- Ballast: gear-1 wheel force at `Drivetrain.launch_target_rpm` is about 1.5x the rear grip at 7 t /
+  `front_weight` 0.38 (about 3.4x unballasted at 4 t 50/50). Top
   speed in 6th is rpm-bound, so ballast moves only acceleration and grade climb.
 - Launch: a powershift's, not a car's, in its start gear (`ShiftPolicy.start_gear`, up to
   `start_gear_max` D3). A powershift's start gear is a driver preset, higher for an empty run and
@@ -376,36 +374,37 @@ them apart.
   by `ShiftPolicy.START_RESERVE` (2, an estimate). Picked at full pedal while the tractor stands, it
   steps down through the launch to what the driver's pedal holds (a pedal of 0.6 with the tipper on
   8 % takes D1 at once), and down again if the launch has not moved after the ramp and a dwell
-  (2.3 s). Computed picks (`test_tractor`): D3 empty on the flat or on flat mud; D2 with the tipper
+  (the dwell). Computed picks (`test_tractor`): D3 empty on the flat or on flat mud; D2 with the tipper
   on 10 %; D1 with the tipper on mud, and on the 26 % mud climb.
-- The pack's capacity ramps to its rating over 0.8 s (`launch_engage_s`) while the controller slips
-  it toward the 1250 rpm line, which holds a floored start near the grip peak (with the whole rating
-  on the first tick the rears flash to 0.61 slip and the front axle drops to 5 % of parked); while
-  the ramp is short of the engine's torque the 1.5 kg·m² crank flares over the line (1658 rpm). The
-  close onto the wheels is a handover over `shift_handover_s` (0.3 s), never the rating: closed at
-  the rating, a held D3 poured the flare into the wheels at 1400 N·m in a tick (0.68 g, front axle
-  35 %), and a held D2 flashed its rears to 0.23 slip.
+- The pack's capacity ramps to its rating over `launch_engage_s` while the controller slips
+  it toward the launch line, which holds a floored start near the grip peak (with the whole rating
+  on the first tick the rears flash to heavy slip and the front axle unloads almost entirely); while
+  the ramp is short of the engine's torque the crank flares over the line. The
+  close onto the wheels is a handover over `shift_handover_s`, never the rating: closed at
+  the rating, a held D3 poured the flare into the wheels in a tick (a spike of g, the front axle
+  unloaded), and a held D2 flashed its rears into slip.
 - Flat strip (`measure_vehicles -- tractor-kenney 12 trace=3 trace_s=2`):
-  - bobtail: D3, the close at 0.97-1.07 s carrying 897-902 N·m, then D4-D6 at 1.57, 2.03 and
-    2.85 s; rear slip at most 0.10, front axle at least 39 % of parked;
-  - with the farm tipper: D3, D4-D6 at 3.43, 4.55 and 6.65 s; rear slip 0.12, front axle 60 %,
-    shortest gear 1.12 s.
-  - The bobtail's D4 lasts 0.47 s: at full pedal the policy never holds an upshift, so on the
+  - bobtail: D3, a clean close at about a second carrying the engine's torque, then D4-D6 in
+    quick succession; rear slip low, front axle kept loaded;
+  - with the farm tipper: D3, D4-D6 spread over several seconds; rear slip low, front axle kept
+    loaded, no gear shorter than about a second.
+  - The bobtail's D4 is the shortest gear: at full pedal the policy never holds an upshift, so on the
     1.35 steps the dwell is the gearing's (brief 16, `docs/plans/mechanical_update/16_drivetrain_control.md`).
 - Standing starts: `docs/vehicles.md` § Gradeability and § Hill hold; with the tipper on 10 %
-  asphalt it starts in D2 and reaches 0.1 m at 1.45 s.
-- Reverse is the bus's single R byte, at D3's ratio: 16 km/h top.
+  asphalt it starts in D2 and starts moving within a couple of seconds.
+- Reverse is the bus's single R byte, at D3's ratio; its top speed follows from that ratio and the governor.
 - Steady draft does not involve COM height: drag at the hitch and tyre reaction at ground form a
-  couple of `F × h_hitch`, a few kN off a ~20 kN static front. The 0.83 m COM (`com_y_frac` 0.32:
+  couple of `F × h_hitch`, a few kN off the static front load. The 0.83 m COM (`com_y_frac` 0.32:
   the bare machine's 0.91 m with 1.5 t of liquid and hub ballast at ~0.55 m) matters for
   transients and for rollover: over the 0.85 m mean half-track (1.62 / 1.79 m track, a real
-  tractor's) the static threshold is ~1.0 g, at the lug tyres' slide. Measured at
-  35 km/h: the slow wind-on runs the fronts wide at 0.78 g with 2.6° of roll, and a full-lock step
-  steer holds 0.67 g at 2.3°; on the 1.31 / 1.49 m track the same two runs overturned.
+  tractor's) the static threshold is about 1 g, at the lug tyres' slide. Measured at
+  speed (`measure_semi_launch`'s tractor runs): the slow wind-on and a full-lock step steer both
+  run the fronts wide with only a few degrees of roll; on the 1.31 / 1.49 m track the same two runs
+  overturned.
 - Body scale 1.35 (2.99 × 2.17 m, 2.12 m wheelbase). It rides on its drawn tyres, 0.44 m front /
   0.66 m rear. Suspension is the tyres: 330 / 380 kN/m, `rest_length` 0.12 m, ~33 % static sag.
-  A side jolt at speed rolls 1.8° and rebounds 28 % (roll damping ratio ~0.37; 3.0° and 34 % on the
-  narrow track).
+  A side jolt at speed rolls a couple of degrees and rebounds a fraction of it (roll damping ratio
+  ~0.37); the narrow track rolls further and rebounds more.
 
 ### What an implement declares
 
@@ -466,21 +465,21 @@ semi-trailers use. The tractor side is the same `TowHost` the semi's fifth wheel
 - Pin is fixed, not swinging (`Drawbar.PIN_LOCAL`, runtime reads the `Pin` marker). Coupling
   datum is 0.40 m, not the semi's 1.05 m (a fifth-wheel plate height); trailer origin is at
   the drawbar eye, ground at y = −0.40.
-- Joint differs from a fifth wheel on three axes: pitch ±20° (fifth wheel's cover-the-grade
-  rule); yaw ±80° (`Drawbar.SWING_MAX_DEG`, not `Articulation.JACKKNIFE_MAX_DEG` — the
-  trailer's front corners meet the rear tyres just past it); roll ±25° against the semi's
-  ±1.5° (a pin through an eye doesn't lever the tractor over on a rut).
+- Joint differs from a fifth wheel on three axes: pitch `Drawbar.PITCH_LIMIT_DEG` (fifth wheel's cover-the-grade
+  rule); yaw `Drawbar.SWING_MAX_DEG` (not `Articulation.JACKKNIFE_MAX_DEG` — the
+  trailer's front corners meet the rear tyres just past it); roll `Drawbar.ROLL_LIMIT_DEG` against the semi's
+  `FifthWheel.ROLL_LIMIT_DEG` (a pin through an eye doesn't lever the tractor over on a rut).
 - A drawbar carries a nose weight, not a share: 12% against the fifth wheel's 27%.
 - **Laden on 10 % mud the rig is traction-bound.** That is `measure_grade -- tractor-kenney rollback
-  grade=10 mud mfwd tipper verbose`: 0.1 m forward only at 8.1 s, the same from any
+  grade=10 mud mfwd tipper verbose`: it first moves 0.1 m forward only after several seconds, the same from any
   start gear and with or without the hold.
-  - What it asks: the 17 t combination needs ~16.6 kN of grade pull plus mud's 0.2 drag on
-    ~166 kN of load, ~33 kN.
-  - What it has: the MFWD tractor's 8.2 t (7 t plus the 1.2 t nose) grips ~40 kN at the peak.
-    Floored, all four tyres spin at a slip ratio of ~1.4 and carry ~30 kN.
-  - The tipper's own brake is off by 1.5 s, and its tyres carry nothing. The drawbar pulls its
-    grade share (~9.7 kN) plus its share of the drag.
-  - The rig crawls at ~0.05 km/h instead of standing, because the drag's per-tick cap
+  - What it asks: the 17 t combination needs the grade pull plus mud's 0.2 drag on the whole
+    load (weight x (grade + 0.2)).
+  - What it has: the MFWD tractor's 8.2 t (7 t plus the 1.2 t nose) grips less than that at the
+    peak. Floored, all four tyres spin at a slip ratio well past the peak and carry less still.
+  - The tipper's own brake is off shortly after the start, and its tyres carry nothing. The
+    drawbar pulls its grade share plus its share of the drag.
+  - The rig crawls instead of standing, because the drag's per-tick cap
     (`RayWheel.surface_drag_force`, a 60 Hz clamp) shrinks with speed.
 
   A real 7 t tractor with 10 t on a 10 % mud bank sticks too.

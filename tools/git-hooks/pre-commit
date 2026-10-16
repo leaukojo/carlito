@@ -58,6 +58,11 @@ if echo "$staged" | grep -qE '^(src/bridge/web/head_include\.html|export_presets
   node tools/check_head_include.mjs || exit 1
 fi
 
+# 3b. A doc touched -> references, budgets and the measured-figure ratchet (node, ~1 s).
+if echo "$staged" | grep -qE '(^|/)CLAUDE\.md$|^docs/.*\.md$'; then
+  node tools/check_docs.mjs || exit 1
+fi
+
 # 4. Bake inputs touched -> stale-bake + road-paint check (same gate CI runs, ~30s). The
 #    prefixes are tools/git-hooks/bake_paths.txt, shared with the Stop hook.
 bake_re=$(tr -d '\r' < tools/git-hooks/bake_paths.txt | grep -vE '^(#|$)' | sed 's/\./\\./g; s/^/^/' | awk 'NR>1{printf "|"}{printf "%s", $0}')

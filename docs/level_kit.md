@@ -64,7 +64,7 @@ flat AuthoringRoot into those folders in one undo step. Detection is SceneTree g
 ## Bake (`kit/bake/level_baker.gd`)
 
 Merges render meshes per XZ chunk into one StaticBody3D per chunk; welds ALL drivable
-geometry into **one level-wide ConcavePolygonShape3D body**, vertices snapped to **1 mm**.
+geometry into **one level-wide ConcavePolygonShape3D body**, vertices snapped to `LevelBaker.WELD_EPSILON`.
 Outputs `<level>.baked.scn` + `<level>.bake.json`; pure fns tested in `tests/test_bake.gd`.
 `.baked.scn`/`.bake.json` split and the run-once-after-clone rule: root `CLAUDE.md` rule 1.
 
@@ -254,7 +254,7 @@ by `draw_clearance` (0.3), commits one undoable action.
 | Straight | zero-handle chords; refuses corners tighter than the fold limit |
 | Arc | 3-click: start, tangent, end; chained arcs are tangent-continuous |
 
-**Angle snap** (Off/45°/15°) snaps to the heading grid. **Close loop** exits Draw with a
+**Angle snap** (`SNAP_LABELS` in `road_panel.gd`) snaps to the heading grid. **Close loop** exits Draw with a
 Catmull-Rom seam. **Reverse direction** reverses point order. RoadPath buttons: **Drape
 curve onto terrain**, **Smooth curve (Catmull-Rom)**. Draw refuses clicks under
 `RoadBuilder.min_turn_radius` (~6 m asphalt).
@@ -275,7 +275,7 @@ and prefab in `CONFORM_PREFAB_FAMILIES`. Tile deck runs curb-to-curb ±4.8 (9.6 
 
 **Profile edge cases.** A closed cross-section (`base_depth > 0`) triangulates onto the
 first/last ring so a bridge is solid, not an open tube. Near-closed loops leave a real
-collision hole past the 1 mm weld; `RoadPath` flags a gap smaller than the ribbon's
+collision hole past `WELD_EPSILON`; `RoadPath` flags a gap smaller than the ribbon's
 half-width. Conform samples the curve at `adaptive_offsets` rings, flattens to road height
 minus `conform_epsilon`; `conform_falloff` smoothsteps beyond the plateau. Conform flattens the
 **full half-width incl. skirt**, projects onto the nearest centerline **segment** (the nearest
