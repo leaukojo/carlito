@@ -693,9 +693,11 @@ func test_speed_limit_is_range_less_and_unflavored_so_it_never_becomes_a_bar() -
 	# sedan publishes a real 0 rather than changing the cluster's shape), and no family that never
 	# runs Drivetrain.governor_scale does. Unflavored on purpose — the SPN is a naming reference.
 	for family in ["car", "truck", "tractor"]:
-		assert_bool(lim.vehicles.has(family)) 			.override_failure_message("speed_limit must be declared for '%s'" % family).is_true()
+		assert_bool(lim.vehicles.has(family)) \
+			.override_failure_message("speed_limit must be declared for '%s'" % family).is_true()
 	for family in ["boat", "plane", "drone", "train"]:
-		assert_bool(lim.vehicles.has(family)) 			.override_failure_message("speed_limit must NOT be declared for '%s'" % family).is_false()
+		assert_bool(lim.vehicles.has(family)) \
+			.override_failure_message("speed_limit must NOT be declared for '%s'" % family).is_false()
 
 
 # --- train family (flavor "train": rail practice, not a real train CAN standard) ---
@@ -789,7 +791,9 @@ func test_the_drone_declares_the_gnss_and_rangefinder_block() -> void:
 	for vehicle in ["car", "truck", "tractor", "boat", "plane", "train"]:
 		var names := data.signals_for_vehicle(vehicle, "out").map(
 				func(s: ContractScript.SignalDef) -> String: return s.name)
-		assert_array(names) 			.override_failure_message("%s leaked a drone sensor signal" % vehicle) 			.not_contains(["sats", "fix_type", "hdop", "agl"])
+		assert_array(names) \
+			.override_failure_message("%s leaked a drone sensor signal" % vehicle) \
+			.not_contains(["sats", "fix_type", "hdop", "agl"])
 
 
 ## The three display assignments in this block, each a decision: `sats` warns LOW (the count a 3D
@@ -799,14 +803,17 @@ func test_the_gnss_block_reads_the_right_way_round_on_the_dashboard() -> void:
 	var data := _real_contract()
 	var sats := data.get_signal_def("sats", "out")
 	assert_bool(sats.has_warn()).is_true()
-	assert_bool(sats.warn_is_low()) 		.override_failure_message("sats warn must be low-side (too FEW satellites)").is_true()
+	assert_bool(sats.warn_is_low()) \
+		.override_failure_message("sats warn must be low-side (too FEW satellites)").is_true()
 	assert_float(sats.warn).is_equal(4.0)
 	var hdop := data.get_signal_def("hdop", "out")
 	assert_bool(hdop.has_warn()).is_true()
-	assert_bool(hdop.warn_is_low()) 		.override_failure_message("hdop warn must be high-side (dilution is bad)").is_false()
+	assert_bool(hdop.warn_is_low()) \
+		.override_failure_message("hdop warn must be high-side (dilution is bad)").is_false()
 	var fix := data.get_signal_def("fix_type", "out")
 	assert_bool(fix.has_enum()).is_true()
-	assert_int(fix.range.size()) 		.override_failure_message("fix_type must carry no range or it becomes a bar").is_equal(0)
+	assert_int(fix.range.size()) \
+		.override_failure_message("fix_type must carry no range or it becomes a bar").is_equal(0)
 	# The enum is the DroneCAN Fix2.status ordinals, verbatim and complete.
 	for pair in [[0, "NO FIX"], [1, "TIME"], [2, "2D"], [3, "3D"]]:
 		assert_str(fix.enum_label(pair[0])).is_equal(pair[1])
@@ -818,7 +825,8 @@ func test_the_gnss_block_reads_the_right_way_round_on_the_dashboard() -> void:
 func test_agl_reserves_its_range_floor_for_the_invalid_reading() -> void:
 	var agl := _real_contract().get_signal_def("agl", "out")
 	assert_array(agl.range).is_equal([-1.0, 100.0])
-	assert_bool(agl.has_warn()) 		.override_failure_message("agl has no danger threshold - it is a measurement").is_false()
+	assert_bool(agl.has_warn()) \
+		.override_failure_message("agl has no danger threshold - it is a measurement").is_false()
 
 
 ## The IMU triples are complete and deliberately UNFLAVORED: honest body motion, not a DroneCAN
@@ -831,17 +839,22 @@ func test_the_imu_axes_complete_two_triples_and_stay_unflavored() -> void:
 		var sig := data.get_signal_def(sig_name, "out")
 		assert_object(sig).override_failure_message("missing '%s'" % sig_name).is_not_null()
 		assert_str(sig.type).is_equal("f32")
-		assert_str(sig.flavor) 			.override_failure_message("'%s' must stay unflavored" % sig_name).is_equal("")
-		assert_bool(sig.has_warn()) 			.override_failure_message("'%s' must not warn" % sig_name).is_false()
+		assert_str(sig.flavor) \
+			.override_failure_message("'%s' must stay unflavored" % sig_name).is_equal("")
+		assert_bool(sig.has_warn()) \
+			.override_failure_message("'%s' must not warn" % sig_name).is_false()
 		# The plane declares all three (v30) at the cost of three list entries and no code: BaseVehicle
 		# has always computed the triple off the rigid body for every vehicle.
 		assert_array(sig.vehicles) \
 			.override_failure_message("'%s' must be declared for the plane too" % sig_name) \
 			.contains(["plane", "drone"])
 	# Same scale as the axis each one joins, so a triple reads on one set of units.
-	assert_array(data.get_signal_def("roll_rate", "out").range) 		.is_equal(data.get_signal_def("yaw", "out").range)
-	assert_array(data.get_signal_def("pitch_rate", "out").range) 		.is_equal(data.get_signal_def("yaw", "out").range)
-	assert_array(data.get_signal_def("acc_vert", "out").range) 		.is_equal(data.get_signal_def("accLong", "out").range)
+	assert_array(data.get_signal_def("roll_rate", "out").range) \
+		.is_equal(data.get_signal_def("yaw", "out").range)
+	assert_array(data.get_signal_def("pitch_rate", "out").range) \
+		.is_equal(data.get_signal_def("yaw", "out").range)
+	assert_array(data.get_signal_def("acc_vert", "out").range) \
+		.is_equal(data.get_signal_def("accLong", "out").range)
 
 
 # --- the drone's flight modes (v26) ---------------------------------------------
@@ -874,7 +887,9 @@ func test_no_other_vehicle_sees_the_mode_ladder() -> void:
 		for dir in ["in", "out"]:
 			var names := data.signals_for_vehicle(vehicle, dir).map(
 				func(s: ContractScript.SignalDef) -> String: return s.name)
-			assert_array(names) 				.override_failure_message("%s/%s leaked a flight-mode signal" % [vehicle, dir]) 				.not_contains(["flight_mode", "mode_actual", "home_dist"])
+			assert_array(names) \
+				.override_failure_message("%s/%s leaked a flight-mode signal" % [vehicle, dir]) \
+				.not_contains(["flight_mode", "mode_actual", "home_dist"])
 
 
 ## The request and the readback are a PAIR, and it only works if both decode the same table. Typed
@@ -888,7 +903,9 @@ func test_the_mode_request_and_readback_share_one_table() -> void:
 	assert_bool(request.has_enum()).is_true()
 	assert_bool(actual.has_enum()).is_true()
 	for mode in 5:
-		assert_str(actual.enum_label(mode)) 			.override_failure_message("the two mode tables disagree at %d" % mode) 			.is_equal(request.enum_label(mode))
+		assert_str(actual.enum_label(mode)) \
+			.override_failure_message("the two mode tables disagree at %d" % mode) \
+			.is_equal(request.enum_label(mode))
 	# Five modes and no sixth: a label past the ladder means an entry nothing can request.
 	assert_str(request.enum_label(5)).is_equal("")
 	assert_str(actual.enum_label(5)).is_equal("")
@@ -899,7 +916,9 @@ func test_the_mode_request_and_readback_share_one_table() -> void:
 ## and this keeps mode_actual on the right side of it.
 func test_mode_actual_is_a_chip_and_not_a_bar() -> void:
 	var actual := _real_contract().get_signal_def("mode_actual", "out")
-	assert_int(actual.range.size()) 		.override_failure_message("mode_actual grew a range and would render as a 0-4 bar") 		.is_equal(0)
+	assert_int(actual.range.size()) \
+		.override_failure_message("mode_actual grew a range and would render as a 0-4 bar") \
+		.is_equal(0)
 	assert_bool(actual.has_warn()).is_false()
 	assert_int(actual.count).is_equal(1)
 

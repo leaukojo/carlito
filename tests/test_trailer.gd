@@ -1614,7 +1614,8 @@ func test_every_trailer_declares_lamps_that_resolve_in_its_own_scene() -> void:
 			continue
 		var trailer := _trailer(path)
 		var spec: VehicleSpec = trailer.get("spec")
-		assert_array(spec.head_lamp_paths) 			.override_failure_message("%s declares headlamps; a trailer has none" % path).is_empty()
+		assert_array(spec.head_lamp_paths) \
+			.override_failure_message("%s declares headlamps; a trailer has none" % path).is_empty()
 		var groups := {
 			"brake_lamp_paths": spec.brake_lamp_paths,
 			"turn_left_paths": spec.turn_left_paths,
@@ -1623,10 +1624,13 @@ func test_every_trailer_declares_lamps_that_resolve_in_its_own_scene() -> void:
 		}
 		for group_name in groups:
 			var paths: Array[NodePath] = groups[group_name]
-			assert_array(paths) 				.override_failure_message("%s declares no %s" % [path, group_name]).is_not_empty()
+			assert_array(paths) \
+				.override_failure_message("%s declares no %s" % [path, group_name]).is_not_empty()
 			for lens_path in paths:
-				assert_object(trailer.get_node_or_null(lens_path)) 					.override_failure_message("%s: %s -> %s resolves to nothing" % [
-						path, group_name, lens_path]) 					.is_instanceof(MeshInstance3D)
+				assert_object(trailer.get_node_or_null(lens_path)) \
+					.override_failure_message("%s: %s -> %s resolves to nothing" % [
+						path, group_name, lens_path]) \
+					.is_instanceof(MeshInstance3D)
 		trailer.free()
 
 
@@ -1656,8 +1660,12 @@ func test_a_trailers_lamps_light_from_the_bits_the_tractor_hands_down() -> void:
 		# Every lens is on a PRIVATE override, so nothing here can mutate the scene's shared lens
 		# material — which is the same resource on all four of this trailer's rear lamps.
 		for lens in [tail, turn_l, turn_r]:
-			assert_object(lens.material_override) 				.override_failure_message("%s: %s got no lamp material" % [path, lens.name]) 				.is_not_null()
-		assert_object(_marker_mat(marker)) 			.override_failure_message("%s: %s got no lamp material" % [path, marker.name]) 			.is_not_null()
+			assert_object(lens.material_override) \
+				.override_failure_message("%s: %s got no lamp material" % [path, lens.name]) \
+				.is_not_null()
+		assert_object(_marker_mat(marker)) \
+			.override_failure_message("%s: %s got no lamp material" % [path, marker.name]) \
+			.is_not_null()
 		assert_object(turn_l.material_override).is_not_same(turn_r.material_override)
 
 		lamps.apply(false, LampSet.HL_OFF, false, false)
@@ -1669,17 +1677,23 @@ func test_a_trailers_lamps_light_from_the_bits_the_tractor_hands_down() -> void:
 
 		# The stop lamp is the bit, not the pedal — brake_lamp arrives already decided.
 		lamps.apply(true, LampSet.HL_OFF, false, false)
-		assert_float(tail.material_override.emission_energy_multiplier) 			.override_failure_message("%s: stop lamp did not light" % path).is_greater(tail_dark)
+		assert_float(tail.material_override.emission_energy_multiplier) \
+			.override_failure_message("%s: stop lamp did not light" % path).is_greater(tail_dark)
 
 		# Headlights on: the tail tier and the markers come up together, still no stop lamp.
 		lamps.apply(false, LampSet.HL_LOW, false, false)
-		assert_float(tail.material_override.emission_energy_multiplier) 			.is_equal_approx(LampSet.REAR_ENERGY[LampSet.Rear.TAIL], 1e-5)
-		assert_float(_marker_mat(marker).emission_energy_multiplier) 			.override_failure_message("%s: markers stayed dark" % path).is_greater(marker_dark)
+		assert_float(tail.material_override.emission_energy_multiplier) \
+			.is_equal_approx(LampSet.REAR_ENERGY[LampSet.Rear.TAIL], 1e-5)
+		assert_float(_marker_mat(marker).emission_energy_multiplier) \
+			.override_failure_message("%s: markers stayed dark" % path).is_greater(marker_dark)
 
 		# ONE side at a time, which is what makes it an indicator rather than a hazard.
 		lamps.apply(false, LampSet.HL_OFF, true, false)
-		assert_float(turn_l.material_override.emission_energy_multiplier) 			.is_equal_approx(LampSet.TURN_ON_ENERGY, 1e-5)
-		assert_float(turn_r.material_override.emission_energy_multiplier) 			.override_failure_message("%s: the right indicator lit with the left" % path) 			.is_equal_approx(LampSet.TURN_OFF_ENERGY, 1e-5)
+		assert_float(turn_l.material_override.emission_energy_multiplier) \
+			.is_equal_approx(LampSet.TURN_ON_ENERGY, 1e-5)
+		assert_float(turn_r.material_override.emission_energy_multiplier) \
+			.override_failure_message("%s: the right indicator lit with the left" % path) \
+			.is_equal_approx(LampSet.TURN_OFF_ENERGY, 1e-5)
 		trailer.free()
 
 

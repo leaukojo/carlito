@@ -81,11 +81,13 @@ func test_local_source_and_merge_local_carry_the_same_keys() -> void:
 	var merged := RouterScript.merge_local({}, {}).keys()
 	polled.sort()
 	merged.sort()
-	assert_array(polled) 		.override_failure_message("LocalSource.poll and InputRouter.merge_local disagree on the "
+	assert_array(polled) \
+		.override_failure_message("LocalSource.poll and InputRouter.merge_local disagree on the "
 				+ "raw-intent key set:
   only in poll():       %s
   only in merge_local(): %s" % [
-				_missing(polled, merged), _missing(merged, polled)]) 		.is_equal(merged)
+				_missing(polled, merged), _missing(merged, polled)]) \
+		.is_equal(merged)
 
 
 ## The pad source reports only the analog keys, so it is a subset rather than the same set; a key

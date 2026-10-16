@@ -144,13 +144,15 @@ func test_instance_bars_are_labelled_with_their_zero_based_index() -> void:
 ## on the boat and the drone. Driving one family cannot catch that; this can.
 func test_the_speed_limit_rides_the_readout_and_only_where_the_contract_declares_it() -> void:
 	for family in FAMILIES:
-		var declares: bool = Contract.data.signals_for_vehicle(family, "out") 				.any(func(sig: RefCounted) -> bool: return sig.name == "speed_limit")
+		var declares: bool = Contract.data.signals_for_vehicle(family, "out") \
+				.any(func(sig: RefCounted) -> bool: return sig.name == "speed_limit")
 		var full := _dash(family, Dashboard.Density.FULL)
 		assert_bool(full._has_speed_limit).override_failure_message(
 				"'%s': cluster LIM flag disagrees with the contract" % family).is_equal(declares)
 		# Range-less and unflavored, so it must never have generated a bar either.
 		assert_bool(full._bars.has("speed_limit")).override_failure_message(
-				"'%s': speed_limit generated a bar — it is a readout, not a full scale" % family) 			.is_false()
+				"'%s': speed_limit generated a bar — it is a readout, not a full scale" % family) \
+			.is_false()
 	# The sweep has to be sweeping something in BOTH directions, or a contract edit that dropped
 	# the signal (or spread it to every family) would pass it unchanged.
 	assert_bool(_dash("truck", Dashboard.Density.FULL)._has_speed_limit).is_true()
@@ -249,7 +251,9 @@ func test_the_node_bus_publishes_but_draws_nothing() -> void:
 func test_no_cluster_needs_a_third_bar_column() -> void:
 	for family in FAMILIES:
 		var columns := _bar_columns(family)
-		assert_int(columns) 			.override_failure_message("%s needs %d bar columns" % [family, columns]) 			.is_less_equal(2)
+		assert_int(columns) \
+			.override_failure_message("%s needs %d bar columns" % [family, columns]) \
+			.is_less_equal(2)
 
 
 ## ...and the OTHER end of the budget: a SCALAR family stays in one column. The drone is the only
@@ -644,7 +648,9 @@ func test_every_flavored_enum_out_signal_becomes_a_chip_with_no_special_casing()
 		# ...and no chip exists that no signal asked for.
 		for chip_name: String in dash._out_chips:
 			var def := Contract.data.get_signal_def(chip_name, "out")
-			assert_bool(def != null and def.has_enum() and def.flavor != "") 					.override_failure_message("chip '%s' has no flavored enum behind it" % chip_name) 					.is_true()
+			assert_bool(def != null and def.has_enum() and def.flavor != "") \
+					.override_failure_message("chip '%s' has no flavored enum behind it" % chip_name) \
+					.is_true()
 	assert_int(seen).is_greater(0)
 	# The drone's four really are among them, so the sweep is not vacuously passing.
 	var drone := _dash("drone", Dashboard.Density.FULL)

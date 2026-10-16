@@ -600,8 +600,10 @@ func test_tcs_ceiling_is_the_mirror_of_abs() -> void:
 
 func test_a_light_corner_keeps_the_low_speed_floor() -> void:
 	# 3000 N on 400 kg: the curve's rise, 3000 / 0.12 / 1.5 N per m/s, is under 400 / TICK.
-	assert_float(WheelScript.slip_floor_for(3000.0, 400.0, _curve(), TICK)) 			.is_equal(WheelScript.LOW_SPEED_FLOOR)
-	assert_float(WheelScript.slip_floor_for(3000.0, 0.0, _curve(), TICK)) 			.is_equal(WheelScript.LOW_SPEED_FLOOR)
+	assert_float(WheelScript.slip_floor_for(3000.0, 400.0, _curve(), TICK)) \
+			.is_equal(WheelScript.LOW_SPEED_FLOOR)
+	assert_float(WheelScript.slip_floor_for(3000.0, 0.0, _curve(), TICK)) \
+			.is_equal(WheelScript.LOW_SPEED_FLOOR)
 
 
 func test_on_its_slip_floor_a_crawling_tyre_reaches_its_budget_inside_the_one_tick_cap() -> void:
@@ -623,7 +625,8 @@ func test_on_its_slip_floor_a_crawling_tyre_reaches_its_budget_inside_the_one_ti
 	assert_float(peak).is_equal_approx(budget, 1e-3)
 	assert_float(m * 0.12 * floor_vel / TICK).is_greater_equal(budget - 1e-3)
 	# The traction control holds the same peak: its ceiling reads the same floor.
-	assert_float(WheelScript.tcs_ceiling_spin(0.0, 1.0, 0.36, WheelScript.TCS_SLIP, floor_vel)) 			.is_equal_approx(WheelScript.TCS_SLIP * floor_vel / 0.36, 1e-6)
+	assert_float(WheelScript.tcs_ceiling_spin(0.0, 1.0, 0.36, WheelScript.TCS_SLIP, floor_vel)) \
+			.is_equal_approx(WheelScript.TCS_SLIP * floor_vel / 0.36, 1e-6)
 
 
 func test_tcs_holds_a_floored_drive_at_its_slip() -> void:
@@ -1030,9 +1033,11 @@ func _lone_mass(arm: Vector3, axis: Vector3, m: float, inv: Basis) -> float:
 
 func test_a_contact_at_the_centre_of_mass_moves_the_whole_body() -> void:
 	var inv := Basis.from_scale(Vector3(1e-4, 1e-4, 1e-4))
-	assert_float(_lone_mass(Vector3.ZERO, Vector3.RIGHT, 8000.0, inv)) 			.is_equal_approx(8000.0, 1e-6)
+	assert_float(_lone_mass(Vector3.ZERO, Vector3.RIGHT, 8000.0, inv)) \
+			.is_equal_approx(8000.0, 1e-6)
 	# A lever along X is the force's own line: no moment, still the whole body.
-	assert_float(_lone_mass(Vector3(0.72, 0.0, 0.0), Vector3.RIGHT, 8000.0, inv)) 			.is_equal_approx(8000.0, 1e-6)
+	assert_float(_lone_mass(Vector3(0.72, 0.0, 0.0), Vector3.RIGHT, 8000.0, inv)) \
+			.is_equal_approx(8000.0, 1e-6)
 
 
 func test_a_contact_below_the_centre_of_mass_rolls_the_body_and_moves_less() -> void:
@@ -1040,7 +1045,8 @@ func test_a_contact_below_the_centre_of_mass_rolls_the_body_and_moves_less() -> 
 	var m := 24000.0
 	var inv := Basis.from_scale(Vector3(1.0 / 140000.0, 1.0 / 140000.0, 1.0 / 13500.0))
 	var arm := Vector3(0.0, -1.74, 0.0)
-	assert_float(_lone_mass(arm, Vector3.RIGHT, m, inv)) 			.is_equal_approx(1.0 / (1.0 / m + 1.74 * 1.74 / 13500.0), 1e-2)  # float32 Basis
+	assert_float(_lone_mass(arm, Vector3.RIGHT, m, inv)) \
+			.is_equal_approx(1.0 / (1.0 / m + 1.74 * 1.74 / 13500.0), 1e-2)  # float32 Basis
 	# A fore-aft offset adds the yaw the force turns as well.
 	var aft := _lone_mass(arm + Vector3(0.0, 0.0, 1.42), Vector3.RIGHT, m, inv)
 	assert_float(aft).is_less(_lone_mass(arm, Vector3.RIGHT, m, inv))
@@ -1052,9 +1058,11 @@ func test_a_contact_below_the_centre_of_mass_pitches_the_body_along_the_wheel() 
 	var m := 1500.0
 	var inv := Basis.from_scale(Vector3(1.0 / 2200.0, 1.0 / 2500.0, 1.0 / 600.0))
 	var arm := Vector3(0.0, -0.74, 0.0)
-	assert_float(_lone_mass(arm, Vector3.BACK, m, inv)) 			.is_equal_approx(1.0 / (1.0 / m + 0.74 * 0.74 / 2200.0), 1e-2)  # float32 Basis
+	assert_float(_lone_mass(arm, Vector3.BACK, m, inv)) \
+			.is_equal_approx(1.0 / (1.0 / m + 0.74 * 0.74 / 2200.0), 1e-2)  # float32 Basis
 	# The track's half-width adds the yaw a single wheel's push turns.
-	assert_float(_lone_mass(arm + Vector3(0.63, 0.0, 0.0), Vector3.BACK, m, inv)) 			.is_less(_lone_mass(arm, Vector3.BACK, m, inv))
+	assert_float(_lone_mass(arm + Vector3(0.63, 0.0, 0.0), Vector3.BACK, m, inv)) \
+			.is_less(_lone_mass(arm, Vector3.BACK, m, inv))
 
 
 func test_four_wheels_pushing_together_cancel_their_yaw_and_share_the_pitch() -> void:
@@ -1094,7 +1102,8 @@ func test_capped_contacts_never_overshoot_in_any_mode() -> void:
 
 
 func test_a_massless_body_moves_nothing() -> void:
-	assert_float(_lone_mass(Vector3(0.0, -1.0, 0.0), Vector3.RIGHT, 0.0, Basis.IDENTITY)) 			.is_equal(0.0)
+	assert_float(_lone_mass(Vector3(0.0, -1.0, 0.0), Vector3.RIGHT, 0.0, Basis.IDENTITY)) \
+			.is_equal(0.0)
 
 
 # --- patch_offset: where a disk on the hub touches the road --------------------------

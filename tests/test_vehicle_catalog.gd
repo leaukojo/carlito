@@ -592,7 +592,8 @@ func test_downforce_fits_inside_the_suspension_travel_it_acts_through() -> void:
 				+ " — cut cl, not the springs") % [variant, TOP_SPEED * 3.6, load_per_corner,
 				spring_ceiling]).is_less(spring_ceiling)
 		assert_float(load_per_corner).override_failure_message(
-				"%s exceeds its own max_suspension_force at speed" % variant) 				.is_less(gd.max_suspension_force)
+				"%s exceeds its own max_suspension_force at speed" % variant) \
+				.is_less(gd.max_suspension_force)
 
 
 func test_a_coupled_rig_adds_a_trailers_drag_instead_of_multiplying_the_tractors() -> void:
@@ -693,9 +694,11 @@ func test_every_declared_speed_limit_fits_the_byte_it_is_published_in() -> void:
 		assert_float(limit).override_failure_message(
 				"%s: speed_limit_kmh %f is negative" % [variant, limit]).is_greater_equal(0.0)
 		assert_float(limit).override_failure_message(
-				"%s: speed_limit_kmh %f exceeds SPN 74's 250 km/h" % [variant, limit]) 			.is_less_equal(250.0)
+				"%s: speed_limit_kmh %f exceeds SPN 74's 250 km/h" % [variant, limit]) \
+			.is_less_equal(250.0)
 		assert_float(limit).override_failure_message(
-				"%s: speed_limit_kmh %f is not a whole km/h — SPN 74 has no fraction" 				% [variant, limit]).is_equal(float(roundi(limit)))
+				"%s: speed_limit_kmh %f is not a whole km/h — SPN 74 has no fraction" \
+				% [variant, limit]).is_equal(float(roundi(limit)))
 		if limit > 0.0:
 			governed += 1
 	# ...and the sweep must actually be sweeping something: nine shipped specs carry a limiter

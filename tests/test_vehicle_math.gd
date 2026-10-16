@@ -343,10 +343,13 @@ func test_road_resistance_clamped_to_one_tick_zeroing() -> void:
 func test_road_resistance_is_off_at_a_standstill() -> void:
 	# Rolling resistance does not fade with speed, so without the floor it would keep shoving
 	# a parked vehicle. Zero velocity and a crawl both come back exactly zero.
-	assert_vector(M.road_resistance(Vector3.ZERO, 0.6, 0.012, 10000.0, MASS, DELTA)) 			.is_equal(Vector3.ZERO)
-	assert_vector(M.road_resistance(Vector3(0.0, 0.0, -0.01), 0.6, 0.012, 10000.0, MASS, DELTA)) 			.is_equal(Vector3.ZERO)
+	assert_vector(M.road_resistance(Vector3.ZERO, 0.6, 0.012, 10000.0, MASS, DELTA)) \
+			.is_equal(Vector3.ZERO)
+	assert_vector(M.road_resistance(Vector3(0.0, 0.0, -0.01), 0.6, 0.012, 10000.0, MASS, DELTA)) \
+			.is_equal(Vector3.ZERO)
 	# A zero delta is a divide-by-zero in the clamp, not a physical case.
-	assert_vector(M.road_resistance(Vector3(0.0, 0.0, -20.0), 0.6, 0.012, 1e4, MASS, 0.0)) 			.is_equal(Vector3.ZERO)
+	assert_vector(M.road_resistance(Vector3(0.0, 0.0, -20.0), 0.6, 0.012, 1e4, MASS, 0.0)) \
+			.is_equal(Vector3.ZERO)
 
 
 func test_anti_roll_force_is_equal_and_opposite_across_the_axle() -> void:

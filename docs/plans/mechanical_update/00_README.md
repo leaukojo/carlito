@@ -23,13 +23,14 @@ what binds a fix, and what "done" looks like. A brief is **not a plan** (see § 
 | 06b | the heavy vans' drivetrain — they ran the 8 t trucks' engine and gearing | small-medium | 05, 06 | landed (`docs/vehicles.md` § Sourced figures, the heavy vans' drivetrain) | — |
 | 07 | toy-scale Kenney geometry with real mass | medium | — | landed (`docs/vehicles.md` § Inertia, § Pitch, § Balance, § Braking) | — |
 | 07b | crawl-speed tyre caps and the patch under the hub | medium-large | 07 | landed (`docs/vehicles.md` § One-tick caps, § Slip floor, § Pitch) | — |
-| 14 | `14_semi_shift_ring_and_drift.md` — (1) the semi's shift ring: landed (`docs/vehicles.md` § Pitch); (2) a slow yaw mode drifts the semis centimetres | small (2) | 07b | (2) medium: name the mode first | (2) one |
+| 14 | `14_semi_shift_ring_and_drift.md` — (1) the semi's shift ring: landed (`docs/vehicles.md` § Pitch); (2) a slow yaw mode drifts the semis centimetres: parked until the semis take the tyre law | small (2) | 07b | landed. (2) medium: name the mode first | (2) one |
 | 09 | `09_ackermann_steering.md` — parallel steer scrubs in tight turns | small | — | low: pure geometry, spec fraction defaulting to 0, mean angle unchanged; one decision (which wheel the lock limits) | one |
 | 10 | `10_wheel_radius_and_contact.md` — one 0.36 m ray wheel for every body | large | 04, 05, 06 | xhigh: every body and trailer, the tractor linkage geometry, a Rejected entry (MFWD lead ratio) | several, likely two plans: radius (re-derive every body), then contact shape (web perf study) |
 | 11 | `11_tractor_implements_and_draft.md` — weightless implements, ramped draft | medium | — | medium (high if the draft law is reshaped): implement mass is plain; speed-independent draft needs an angular-bound derivation and reverses "keep the speed ramp" | two to three: implement mass + axle load, draft law, draft control if wanted (contract) |
 | 12 | `12_tyre_classes_and_surfaces.md` — user-swappable tyres, tyre x surface response (future) | medium-large | 03, 04 | high: a feature with many user decisions, across vehicles, levels and UI | several: tyre-class resource, cross-level surface identity (untangle `SOIL_CHANNEL`), tyre x surface table, swap UI, level content |
 | 13 | `13_minor_items.md` — wind, aero balance, rolling-resistance vector, ideal ABS/TC, taper | small each | — | per item: 1 wind low (wait for a windy land level); 2 aero centre of pressure medium; 3 rolling-resistance vector low (fold into 05 or 10); 4 cycling ABS/TC medium (user decision first); 5 taper: a decision, no plan; 6 (converter creep): landed with 05; 7 twin-rear van visual low | one each |
 | 15 | `15_roll_steer.md` — bars and tyre laws buy the limit margin but not a road car's linear understeer | medium | — | high: source per-axle roll steer, a 60 Hz feedback on roll, a decision on the default angular damping | one or two: the model + `BalanceModel` term, then tune the road cars |
+| 16 | `16_drivetrain_control.md` — 6-ratio trucks and tractor, no governor or hand throttle, no CVT, a linear pedal, fuel blind to rpm | large | 10, 11 (items 1-3); 05, 06 | high: two contract changes, sourced pedal and BSFC maps, a CVT decision | two plans: pedal map + fuel (any time), then gear counts, governor, CVT |
 
 "Planning effort" is the effort level for the agent that WRITES the plan (low / medium / high /
 xhigh / max): how much design is open, how much must be sourced, how many rules or user decisions it
@@ -37,7 +38,8 @@ meets; not the size of the change.
 
 Order: 10's contact shape starts from 07b's patch; 14's drift when the semis take the tyre law
 (`docs/vehicles.md` § Balance); 10 after the briefs that re-derive gearing and brakes; 12 needs
-04's decoupling of brakes from tyres.
+04's decoupling of brakes from tyres; 16's gear counts after 10 (which re-derives gearing) and its
+governor after 11 (the draft load it holds PTO speed against).
 
 Two cross-dependencies the table does not show:
 - **The shift trace judges every launch.** `measure_vehicles -- <variant> <s> trace`
@@ -82,10 +84,8 @@ Read before planning:
   `tools/CLAUDE.md`.
 - `docs/vehicles.md` (§ Physics derivations and figures, § Measuring a vehicle, § Gradeability,
   § Rough and soft ground), `docs/heavy_vehicles.md`.
-- `docs/TODO.md`: its drivetrain items that the audit covers (engine as a rotating mass, the
-  coupling model, creep and hill hold, shift policy, the shift trace, the tractor's launch gear)
-  landed with 05 and 06 (`docs/vehicles.md`). What stays there (CVT, diesel governor and hand
-  throttle, real gear counts, a progressive pedal map, fuel from delivered power) builds on them.
+- The engine as a rotating mass, the coupling model, creep and hill hold, the shift policy and the
+  shift trace landed with 05 and 06 (`docs/vehicles.md`); what builds on them is brief 16.
 
 Constraints that bind every brief:
 - Godot 4.7.1 + Jolt. Physics is **locked at 60 Hz** with interpolation (root rule 9). Never raise
@@ -110,6 +110,11 @@ Constraints that bind every brief:
   `doc=<id>` presets and refreshed by re-running, never by hand. Long sweeps run in the background
   with `--fixed-fps 60`. CI gates: `measure_vehicles -- all 45 track strict` and
   `measure_semi_launch -- <unit> strict`.
+- Known oddities in the figure tables (baseline 2026-10-16, all gates green; not regressions, do not
+  chase unless the brief touches them): the 2WD tractor's floored mud bumps_10 / bumps_20 times
+  swing run to run (§ Rough and soft ground); the `semi` moves ~10 mm in 60 s parked across a 30 %
+  slope on the foot brake, every other cell under 1 mm (`doc=park`, unexplained); the
+  `hatchback-sports` mud ditch_35 takes 10.3 s against ~3.5 s for its neighbours (unexplained).
 - The user verifies by driving; any verification scene is a real Level with a VehicleSpawn.
 
 Evidence: **computed** figures are derived from code and spec numbers, not measured in game

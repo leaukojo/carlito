@@ -390,7 +390,7 @@ them apart.
   - with the farm tipper: D3, D4-D6 at 3.43, 4.55 and 6.65 s; rear slip 0.12, front axle 60 %,
     shortest gear 1.12 s.
   - The bobtail's D4 lasts 0.47 s: at full pedal the policy never holds an upshift, so on the
-    1.35 steps the dwell is the gearing's (`docs/TODO.md` "Real gear counts").
+    1.35 steps the dwell is the gearing's (brief 16, `docs/plans/mechanical_update/16_drivetrain_control.md`).
 - Standing starts: `docs/vehicles.md` § Gradeability and § Hill hold; with the tipper on 10 %
   asphalt it starts in D2 and reaches 0.1 m at 1.45 s.
 - Reverse is the bus's single R byte, at D3's ratio: 16 km/h top.

@@ -159,7 +159,8 @@ func rear_damper_bump() -> float:
 
 ## Rear-axle rebound damper, N*s/m; same rule as rear_damper_bump.
 func rear_damper_rebound() -> float:
-	return damper_rebound_rear if damper_rebound_rear > 0.0 			else damper_rebound * _rear_damper_scale()
+	return damper_rebound_rear if damper_rebound_rear > 0.0 \
+			else damper_rebound * _rear_damper_scale()
 
 
 func _rear_damper_scale() -> float:

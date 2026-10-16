@@ -281,7 +281,9 @@ func test_true_wind_inverts_the_wind_fields_toward_convention() -> void:
 	# The inversion holds all the way round, including across the 0/360 wrap.
 	for deg: float in [0.0, 90.0, 179.0, 181.0, 270.0, 359.0]:
 		var t2 := BoatT.true_wind(W.base_vector(deg, 3.0))
-		assert_float(t2.y) 			.override_failure_message("toward %f did not inverse-map" % deg) 			.is_equal_approx(fposmod(deg + 180.0, 360.0), 1e-3)
+		assert_float(t2.y) \
+			.override_failure_message("toward %f did not inverse-map" % deg) \
+			.is_equal_approx(fposmod(deg + 180.0, 360.0), 1e-3)
 
 
 func test_a_heeling_hull_reads_the_same_apparent_wind() -> void:
@@ -300,8 +302,12 @@ func test_a_heeling_hull_reads_the_same_apparent_wind() -> void:
 		]
 		for b in attitudes:
 			var tilted := BoatT.apparent_wind(Vector3.ZERO, wind, b)
-			assert_float(tilted.x) 				.override_failure_message("AWS moved at %f deg" % deg) 				.is_equal_approx(level.x, 1e-5)
-			assert_float(tilted.y) 				.override_failure_message("AWA moved at %f deg" % deg) 				.is_equal_approx(level.y, 1e-3)
+			assert_float(tilted.x) \
+				.override_failure_message("AWS moved at %f deg" % deg) \
+				.is_equal_approx(level.x, 1e-5)
+			assert_float(tilted.y) \
+				.override_failure_message("AWA moved at %f deg" % deg) \
+				.is_equal_approx(level.y, 1e-3)
 
 
 func test_true_wind_in_dead_calm_is_zero() -> void:

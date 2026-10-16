@@ -230,7 +230,9 @@ func test_to_bridge_dict_invents_no_signal() -> void:
 	}
 	for vehicle in dicts:
 		for key in (dicts[vehicle] as Dictionary):
-			assert_bool(known.has(key)) 				.override_failure_message("to_bridge_dict invents '%s' key: %s" % [vehicle, key]) 				.is_true()
+			assert_bool(known.has(key)) \
+				.override_failure_message("to_bridge_dict invents '%s' key: %s" % [vehicle, key]) \
+				.is_true()
 
 
 ## An INSTANCED signal (contract 'count' > 1) must be an Array of exactly that many
@@ -281,7 +283,9 @@ func test_slip_publishes_front_then_rear_in_contract_index_order() -> void:
 	t.slip_rear = 0.75
 	var v: Variant = t.to_bridge_dict()["slip"]
 	assert_int(typeof(v)).is_equal(TYPE_ARRAY)
-	assert_array(v as Array) 		.override_failure_message("slip element 0 is the FRONT axle, element 1 the rear") 		.is_equal([0.25, 0.75])
+	assert_array(v as Array) \
+		.override_failure_message("slip element 0 is the FRONT axle, element 1 the rear") \
+		.is_equal([0.25, 0.75])
 	# A plain Array, not a Packed one: JSON.stringify is what puts it on the wire, and a
 	# PackedFloat32Array would still pass the bridge's shape check and then not serialize.
 	assert_int(typeof(v)).is_not_equal(TYPE_PACKED_FLOAT32_ARRAY)

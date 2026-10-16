@@ -1600,7 +1600,8 @@ func _tick_cornering(delta: float) -> void:
 	var err := _corner_speed - speed
 	if _corner_ramping:
 		_corner_pedal_i = clampf(_corner_pedal_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
-	var pedal := clampf(_corner_pedal_i + err * CORNER_PEDAL_KP, 0.0, 1.0) if _corner_ramping 			else 1.0
+	var pedal := clampf(_corner_pedal_i + err * CORNER_PEDAL_KP, 0.0, 1.0) if _corner_ramping \
+			else 1.0
 	if not _corner_ramping:
 		MeasureRig.drive(pedal * 100.0, 0.0)
 		# Wait for the speed, but never past the budget — a body that cannot reach 40 km/h says so
@@ -1898,7 +1899,8 @@ func _report_tracking(skipped: bool) -> void:
 	if skipped:
 		_current["tracking"] = {"skipped": true}
 	else:
-		var ok := _drift_peak <= MAX_LATERAL_DRIFT and _heading_peak <= MAX_HEADING_DRIFT 				and _front_lift_ticks <= MAX_FRONT_LIFT_TICKS
+		var ok := _drift_peak <= MAX_LATERAL_DRIFT and _heading_peak <= MAX_HEADING_DRIFT \
+				and _front_lift_ticks <= MAX_FRONT_LIFT_TICKS
 		var known := KNOWN_TRACKING_FAILS.has(_variant)
 		if not ok:
 			if known:
