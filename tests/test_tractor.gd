@@ -252,12 +252,17 @@ func test_guidance_wheel_angle_matches_the_slewed_steer_with_no_taper() -> void:
 	var telemetry: VehicleTelemetry = tractor.get("telemetry")
 	assert_float(tractor.get("_steer")).is_equal_approx(target, 1e-5)
 	assert_float(telemetry.steer).is_equal_approx(target, 1e-5)
+	# The bicycle angle tracks the command; each steered wheel is its Ackermann split.
+	var mean := -target * deg_to_rad(gd.max_steer_deg)
+	assert_float(drive.mean_steer_angle()).is_equal_approx(mean, 1e-4)
+	var wheelbase: float = drive.get("_wheelbase")
 	var wheels: Array = tractor.get("wheels")
 	var checked := 0
 	for w in wheels:
 		if w.steered:
 			checked += 1
-			assert_float(w.steer_angle).is_equal_approx(-target * deg_to_rad(gd.max_steer_deg), 1e-4)
+			assert_float(w.steer_angle).is_equal_approx(
+					WheelDrive.ackermann_angle(mean, w.anchor.x, wheelbase, gd.ackermann), 1e-4)
 	assert_int(checked).is_greater(0)
 
 

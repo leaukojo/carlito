@@ -18,7 +18,7 @@ const SPEC_OVERRIDABLE := {
 const DRIVE_OVERRIDABLE := {
 	"rolling_resistance": "crr", "mu_long": "mu_long", "mu_lat": "mu_lat",
 	"rear_lat_grip": "rear_lat_grip",
-	"max_steer_deg": "max_steer_deg",
+	"max_steer_deg": "max_steer_deg", "ackermann": "ackermann",
 	# Brake hardware: declared classes, never derived (the split is; see the brake test below).
 	"brake_torque": "brake_torque", "handbrake_torque": "handbrake_torque",
 	"park_pawl_torque": "park_pawl_torque",

@@ -35,6 +35,7 @@ hill_hold_s = 1.0
 drag_area = 0.63
 rolling_resistance = 0.012
 max_steer_deg = 40.0
+ackermann = 1.0
 min_steer_frac = 0.26
 steer_falloff_speed = 42.0
 

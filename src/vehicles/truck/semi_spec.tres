@@ -186,6 +186,9 @@ tcs_equipped = true
 hill_hold = 1
 hill_hold_s = 3.0
 max_steer_deg = 24.0
+; ACKERMANN 1.0, an estimate: trucks set close to full for steer-tyre wear (SAE 861975, 912693; no
+; figure sourced). The 24 deg lock is the bicycle angle: the inner wheel turns 26.0, the outer 22.2.
+ackermann = 1.0
 min_steer_frac = 0.21
 steer_falloff_speed = 25.0
 

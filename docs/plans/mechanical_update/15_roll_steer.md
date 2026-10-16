@@ -43,4 +43,4 @@ there.
 
 ## Related
 
-`docs/vehicles.md` § Balance, 09 (Ackermann: per-wheel angles).
+`docs/vehicles.md` § Balance, § Steering geometry (Ackermann: per-wheel angles).

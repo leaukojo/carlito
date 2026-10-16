@@ -833,6 +833,41 @@ It fails on:
   1.2 s, +0.3 s to 50 km/h), so none ships;
 - `tractor-kenney`'s D3 take-up (18), its wheelie.
 
+**Steering geometry.** `max_steer_deg` (the garage's "Max steer"), the speed taper and guidance
+(`steer_angle_from_curvature`) set the bicycle (mean) angle `δ`; `WheelDrive.ackermann_angle`
+splits it per steered wheel off its lateral offset `x` (+ = right), the wheelbase `L` and the spec's
+fraction `f` (`GroundDriveSpec.ackermann`): `tan δ_w = tan δ / (1 + f x tan δ / L)`. At `f = 1` every
+steered wheel's axis meets one turn centre (`cot δ_o - cot δ_i = t / L`); at any `f` the two wheels'
+cotangent mean is `cot δ`, so the turn centre `δ` asks for is kept, and a reading of "the" steer
+angle takes `mean_steer_angle()`, never the wheels' average. The lock limits `δ`, not the inner
+wheel: the lock figures are recipe feel numbers, and limiting the inner wheel would widen every
+turning circle (`sedan` 2.02 → 2.65 m at the rear axle) or relabel every lock. So the inner wheel
+turns past the lock at full lock: `sedan` 48.6° / 30.8° at 38°, `race-future` 55.7° / 33.0° at 42°,
+`semi` 26.0° / 22.2° at 24°. The law holds while `tan δ < L / (f |x|)`, past every lock at `f = 1`
+(`test_vehicle_catalog`).
+
+Every wheeled family ships `f = 1.0` (`CAR_BASE`, `TRUCK_BASE`, `VAN_BASE`, `TRACTOR_BASE`, both
+semis), each an **estimate**: road cars run partial Ackermann (~40-60 %, a patent claim, not a
+textbook figure) for the loaded outer tyre at high g; trucks set close to full for steer-tyre wear
+(SAE 861975 and 912693, no figure); no ag-tractor figure was found. Here the low-speed scrub is the
+point: at road speed the split is second order (~0.15° on `sedan`'s 10 % step at 30 km/h). Against
+the parallel-steer table the step sweep's `K` rises 0.01-0.04 deg/g on every body (consistent with
+the outer, loaded tyre steering less), with no new spin, rollover or lifted wheel (2026-10-16). Trailers and the plane
+have no steered pair.
+
+Full lock at 5 km/h (`circle`, 2026-10-16), parallel steer → `f = 1`: the radius driven at the rear
+axle over `L / tan δ`, and the inner / outer front slip angles (+ = the wheel points further into
+the turn than it travels). Parallel, the two fronts fight; at `f = 1` both carry the same small slip
+the cornering force needs.
+
+| Body | Radius / law | Inner slip | Outer slip |
+| --- | --- | --- | --- |
+| `sedan` | 2.39 → 2.13 m / 2.10 | -5.8° → +2.3° | +8.7° → +1.8° |
+| `suv` | 2.65 → 2.48 m / 2.43 | -4.4° → +2.5° | +7.9° → +2.0° |
+| `tractor-kenney` | 3.24 → 2.97 m / 2.93 | -5.0° → +1.7° | +8.4° → +1.3° |
+| `delivery` | 4.33 → 4.23 m / 4.21 | -2.0° → +1.4° | +4.2° → +1.2° |
+| `semi` (bobtail) | 9.01 → 8.76 m / 8.50 | -0.2° → +1.3° | +3.0° → +1.1° |
+
 ### Brake hardware
 
 Each body declares its brakes as a real hardware class, never derived from the tyre or from each
@@ -908,10 +943,12 @@ region (`doc_region.gd`); refresh a figure by re-running, never by hand.
 # sedan-sports); arg 2: time cap in s. Flags: coast, track, strict, corner, brake,
 # trailer=<name|bobtail>, tc (accel pass slip-limited at the grip peak). `stall` (both pedals
 # floored in manual D1, TC off, 10 s), `handbrake` (60 km/h steer step, with and without the
-# lever) and `step` (step steer at the family's speeds, pedal held then lifted) replace the other
-# passes. `rear_lat_grip=` / `bar_rear=` / `cornering_peak=<x>`: that spec field, in memory.
+# lever), `step` (step steer at the family's speeds, pedal held then lifted) and `circle` (full
+# right lock at 5 km/h, no attachment unless trailer=) replace the other passes. `rear_lat_grip=` /
+# `bar_rear=` / `cornering_peak=` / `ackermann=<x>`: that spec field, in memory.
 & $GODOT --headless --path . res://tools/measure_vehicles.tscn -- sedan-sports 45
 & $GODOT --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 60 step
+& $GODOT --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 60 circle ackermann=0
 # launch trace + gates on the accel pass: trace[=<every n ticks>] trace_s=<s printed, 3>; notc (the
 # body's TC off), gear=<1-6> (manual, held in that byte); not with a doc= preset
 & $GODOT --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- semi 40 trace notc
@@ -971,7 +1008,7 @@ region (`doc_region.gd`); refresh a figure by re-running, never by hand.
 | Cornering (`corner`) | skid pad at 40 km/h held by a PI pedal, lock wound on over 10 s: peak lateral g, axle saturating first, roll at the peak and the front axles' share of the lateral load transfer since the lock began (LLTD, off the corners' spring loads), wheels lifted | the anti-roll bar's sizing pass (4-8 deg target); a bang-bang pedal reads a biasing diff's power oversteer instead of grip |
 | Braking (`brake`) | straight stops at 30 / 60 / 100 % pedal from 100 km/h (or 90 % of top): time, distance, mean g, seconds any wheel skids (slip > 0.3) and any wheel's ABS acts | part pedal must stay proportional with no skid; ABS acts only where the pedal outruns a tyre |
 | Launch trace (`trace`, on the accel pass) | settled 1.5 s on the foot brake, then floored: a line per tick (`trace=<n>` every n, `trace_s=` how long, plus each gear change) of km/h, gear, published rpm, the wheel side's rpm, the coupling's state (`c`: O, S, L, or H on the converter's law) and slip, `clutch`, the torque it carried at the crank (`Tc`), delivered fuel, limiter and shift cuts, front-axle load over parked beside what steady transfer predicts at the body's measured acceleration (`xfer`: `m a h / L`, a coupled trailer's pull at the hitch's height) and that acceleration (`a g`), each driven wheel's signed slip and TC flag; then the launch gates, `each shift` (road speed, the crank rpm that speed gives in the gear left and the gear taken, and the shift's slip: its time until the coupling locks and the peak torque it carried at the crank) | gates (a report, never CI), over the launch to 100 km/h, to the held gear's upshift point under `gear=`, or to the pass's end (the 40 km/h tractor, so its launch wheelie is checked): no downshift, no gear left inside 1.0 s, no limiter tick (its cycle rate in Hz when it toggles), every upshift landing at 1.1x the downshift point at its pedal (`ShiftPolicy.down_rpm`) or more on road speed, no two opposite shifts inside 1.0 s (hunting), the front axle never lifted and its overshoot past steady transfer (`xfer`; the gap less road resistance, the trace's tick-late acceleration and the pitched pose's lean, § Pitch) at most what a body damped at 0.3 of critical overshoots a step of the event's own swing (37 %, at least 5 points; `GATE_XFER_ZETA`), judged per event, the launch and each shift's settle; the peak prints its tick, gap, share and `a g`, and `front split` takes that gap apart; `per event` prints each event's own peak (the launch, then each shift's settle), so a smaller one is not hidden under the gate's figure. A gap inside a shift's handover or cut is kept apart (`in shifts`, with the shift: § The shift policy owns it), reported, not gated. `front why` prints the peak acceleration (a spike in `a g` is a driveline shock); `pitch` prints body pitch per g over the launch gear's middle half beside the springs-and-links prediction and `h / L`. `notc` runs the pass with the body's TC off (the limiter-at-launch symptom); `gear=<1-6>` holds that byte in the bridge's manual mode (the tractor's D1, held to its upshift point); `pedal=<0..1>` holds the launch at that pedal, with the gates and shift lines (per-tick lines only with `trace`) |
-| Step steer (`step`, instead of the other passes) | at each speed of the family's set (cars 30 / 60 / 100 km/h, trucks 30 / 50 / 70, the tractor 15 / 25 / 34; none within 5.4 km/h of a governor), run up floored and settled 3 s on the PI pedal, the bridge steer stepped in one tick to 10 / 20 / 30 % of lock and held 3 s, once on the PI pedal, once lifted on the step: the body's yaw index (live tensor about its up axis over `m a b`), steady yaw rate (last 0.5 s) and lateral g, that rate over neutral steer `v * delta / L` off the steered wheels' angle, the rise to 90 % of it, the overshoot, peak body slip and roll, most wheels lifted at once, LLTD over the steady tail against the step's first tick; on a held step the understeer gradient `K = (delta - L r / v) / (a_y / g)` in deg/g (`doc=steer` prints the smallest step's) | a spin is body slip past 20 deg, a rollover the up axis past 45 deg off vertical (its yaw and slip are then not handling figures). Run on a 400 m slab under the strip (a 100 km/h step travels ~35 m sideways in 3 s). The wheels follow the input at the body's `steer_speed` and speed taper, as for a driver |
+| Step steer (`step`, instead of the other passes) | at each speed of the family's set (cars 30 / 60 / 100 km/h, trucks 30 / 50 / 70, the tractor 15 / 25 / 34; none within 5.4 km/h of a governor), run up floored and settled 3 s on the PI pedal, the bridge steer stepped in one tick to 10 / 20 / 30 % of lock and held 3 s, once on the PI pedal, once lifted on the step: the body's yaw index (live tensor about its up axis over `m a b`), steady yaw rate (last 0.5 s) and lateral g, that rate over neutral steer `v * delta / L` off the bicycle angle (§ Steering geometry), the rise to 90 % of it, the overshoot, peak body slip and roll, most wheels lifted at once, LLTD over the steady tail against the step's first tick; on a held step the understeer gradient `K = (delta - L r / v) / (a_y / g)` in deg/g (`doc=steer` prints the smallest step's) | a spin is body slip past 20 deg, a rollover the up axis past 45 deg off vertical (its yaw and slip are then not handling figures). Run on a 400 m slab under the strip (a 100 km/h step travels ~35 m sideways in 3 s). The wheels follow the input at the body's `steer_speed` and speed taper, as for a driver |
 | Part pedal (`cruise`, `kickdown`, `pulse`, instead of the other passes) | at each speed of the family's set (cars 50 / 60 / 90 / 100 / 120 km/h, trucks 30 / 50 / 70 / 85, the tractor 15 / 25 / 34; none within 5.4 km/h of a governor), from a standstill in automatic D: a PI pedal follows a setpoint ramped at 1.0 m/s² (0.5 trucks and tractor) and holds it until 5 s within 0.3 m/s with no shift. `cruise`: gear, rpm, pedal and `engine_load` (the trucks' law, read for every body) over that hold, the approach's peak pedal and its shifts. `kickdown`: the pedal stepped to 1, ticks to the first downshift, gears dropped, time to +20 km/h. `pulse[=<s>]`: re-settled, then 30 s of on/off pedal at that period (1.0 s), its duty the PI's latched each period (`duty=` fixes it): the speed band, shifts per minute and the gears seen | each window (approach and hold, kick, pulse) gets the hunting, landing and limiter gates on one line. A peak approach pedal of 1.00 is a floored approach, so the shift points seen are the full-pedal ones; a hold on a floored pedal is flagged as the body's top, not a cruise |
 
 <!-- measure:cornering (generated by `measure_vehicles -- doc=cornering`; edits inside are overwritten) -->
@@ -1033,27 +1070,27 @@ of the lateral load transfer (LLTD).
 
 | Body | km/h | K at 10 % held, LLTD | 10 % lock, held / lifted | 20 % lock, held / lifted | 30 % lock, held / lifted |
 | --- | --- | --- | --- | --- | --- |
-| `sedan` (1.03) | 30 | 1.11 deg/g at 0.23 g, 70 % | 0.92, 0.28 s, +0 % / 0.96, 0.22 s, +11 % | 0.90, 0.28 s, +0 % / 0.96, 0.22 s, +13 % | 0.86, 0.28 s, +0 % / 0.96, 0.22 s, +15 % |
-|  | 60 | 1.91 deg/g at 0.52 g, 70 % | 0.63, 0.25 s, +13 % / 0.75, 0.30 s, +8 % | 0.46, 0.18 s, +36 % / 0.65, 0.23 s, +13 % | 0.33, 0.15 s, +64 % / 0.54, 0.18 s, +24 % |
-|  | 100 | 2.26 deg/g at 0.57 g, 70 % | 0.34, 0.18 s, +56 % / 0.44, 0.25 s, +28 % | 0.26, 0.15 s, +76 % / 0.31, 0.18 s, +56 % | 0.18, 0.12 s, +128 % / 0.23, 0.15 s, +84 % |
-| `sedan-sports` (1.03) | 30 | 0.75 deg/g at 0.25 g, 49 % | 0.95, 0.28 s, +0 % / 1.00, 0.20 s, +16 % | 0.94, 0.28 s, +0 % / 1.00, 0.20 s, +20 % | 0.93, 0.30 s, +0 % / 1.01, 0.20 s, +25 % |
-|  | 60 | 1.19 deg/g at 0.64 g, 49 % | 0.73, 0.30 s, +8 % / 0.94, 0.38 s, +5 % | 0.48, 0.18 s, +48 % / 0.77, 0.25 s, +16 % | 0.32, 0.13 s, +77 % / 0.58, 0.18 s, +28 % |
-|  | 100 | 1.59 deg/g at 0.75 g, 49 % | 0.42, 0.23 s, +47 % / 0.61, 0.35 s, +22 % | 0.22, 0.13 s, +142 % / 0.29, 0.15 s, +95 % | 0.16, 0.12 s, +162 % / 0.22, 0.13 s, +105 % |
-| `suv` (1.03) | 30 | 0.62 deg/g at 0.21 g, 47 % | 0.95, 0.32 s, +0 % / 1.00, 0.23 s, +11 % | 0.95, 0.30 s, +0 % / 1.00, 0.23 s, +14 % | 0.93, 0.30 s, +0 % / 1.01, 0.23 s, +19 % |
-|  | 60 | 1.22 deg/g at 0.54 g, 47 % | 0.73, 0.32 s, +14 % / 0.95, 0.45 s, +4 % | 0.34, 0.13 s, +120 % / 0.75, 0.27 s, +19 % | 0.30, 0.13 s, +108 % / 0.54, 0.18 s, +45 % |
-|  | 100 | 1.67 deg/g at 0.62 g, 47 % | 0.41, 0.23 s, +57 % / 0.63, 0.40 s, +20 % | 0.06, 0.07 s, +799 % / 0.40, 0.23 s, +47 % | 0.08, 0.08 s, +511 % / 0.35, 0.20 s, +41 % |
-| `race` (1.00) | 30 | 0.60 deg/g at 0.22 g, 46 % | 0.96, 0.20 s, +0 % / 0.89, 0.07 s, +98 % | 0.97, 0.22 s, +0 % / 0.96, 0.08 s, +103 % | 0.97, 0.23 s, +0 % / 0.98, 0.10 s, +110 % |
-|  | 60 | 0.61 deg/g at 0.65 g, 46 % | 0.86, 0.28 s, +1 % / 0.89, 0.22 s, +16 % | 0.80, 0.25 s, +5 % / 0.96, 0.22 s, +26 % | 0.56, 0.17 s, +38 % / 0.99, 0.20 s, +27 % |
-|  | 100 | 0.49 deg/g at 1.11 g, 46 % | 0.73, 0.35 s, +0 % / 0.89, 0.50 s, +3 % | 0.49, 0.18 s, +45 % / 0.72, 0.27 s, +20 % | 0.34, 0.13 s, +75 % / 0.52, 0.18 s, +41 % |
-| `van` (1.03) | 30 | 0.27 deg/g at 0.18 g, 58 % | 0.98, 0.32 s, +0 % / 1.01, 0.25 s, +10 % | 0.96, 0.32 s, +0 % / 1.01, 0.23 s, +11 % | 0.94, 0.32 s, +0 % / 1.01, 0.23 s, +13 % |
-|  | 60 | 0.99 deg/g at 0.47 g, 58 % | 0.79, 0.35 s, +10 % / 0.94, 0.45 s, +4 % | 0.45, 0.18 s, +67 % / 0.82, 0.32 s, +9 % | 0.45, 0.18 s, +51 % / 0.65, 0.23 s, +27 % |
-|  | 100 | 1.59 deg/g at 0.56 g, 58 % | 0.45, 0.27 s, +52 % / 0.64, 0.38 s, +20 % | 0.19, 0.12 s, +209 % / 0.46, 0.27 s, +38 % | 0.10, 0.10 s, +424 % / 0.07, 0.08 s, +659 % |
-| `delivery` (0.91) | 30 | 0.51 deg/g at 0.12 g, 47 % | 0.97, 0.27 s, +0 % / 0.99, 0.23 s, +6 % | 0.96, 0.30 s, +1 % / 0.99, 0.27 s, +6 % | 0.94, 0.32 s, +1 % / 0.99, 0.28 s, +7 % |
-|  | 60 | 0.80 deg/g at 0.30 g, 47 % | 0.83, 0.35 s, +4 % / 0.90, 0.40 s, +1 % | 0.70, 0.30 s, +14 % / 0.80, 0.35 s, +6 % | 0.59, 0.27 s, +25 % / 0.72, 0.32 s, +9 % |
-|  | 100 | 0.81 deg/g at 0.28 g, 47 % | 0.64, 0.37 s, +15 % / 0.74, 0.50 s, +3 % | 0.50, 0.30 s, +35 % / 0.58, 0.38 s, +16 % | 0.41, 0.27 s, +54 % / 0.48, 0.33 s, +26 % |
-| `garbage-truck` (1.64) | 30 | 0.29 deg/g at 0.10 g, 50 % | 0.98, 0.58 s, +0 % / 1.02, 0.47 s, +6 % | 0.98, 0.60 s, +0 % / 1.02, 0.50 s, +6 % | 0.97, 0.63 s, +0 % / 1.03, 0.52 s, +7 % |
-|  | 50 | 0.28 deg/g at 0.21 g, 50 % | 0.95, 0.85 s, +0 % / 1.05, 0.95 s, +0 % | 0.89, 0.75 s, +3 % / 1.05, 0.97 s, +1 % | 0.81, 0.65 s, +9 % / 1.05, 0.98 s, +1 % |
-|  | 70 | 0.35 deg/g at 0.28 g, 50 % | 0.89, 1.00 s, +1 % / 1.10, 1.50 s, +1 % | 0.74, 0.73 s, +12 % / 1.07, 1.53 s, +1 % | 0.75, 0.82 s, +6 % (1 up) / 0.93, 1.12 s, +1 % (1 up) |
+| `sedan` (1.03) | 30 | 1.12 deg/g at 0.23 g, 70 % | 0.92, 0.28 s, +0 % / 0.96, 0.22 s, +11 % | 0.89, 0.28 s, +0 % / 0.96, 0.22 s, +13 % | 0.85, 0.27 s, +0 % / 0.96, 0.22 s, +14 % |
+|  | 60 | 1.93 deg/g at 0.52 g, 70 % | 0.63, 0.25 s, +13 % / 0.75, 0.30 s, +8 % | 0.45, 0.18 s, +36 % / 0.63, 0.23 s, +15 % | 0.33, 0.15 s, +60 % / 0.54, 0.18 s, +21 % |
+|  | 100 | 2.27 deg/g at 0.57 g, 70 % | 0.34, 0.18 s, +56 % / 0.44, 0.25 s, +28 % | 0.26, 0.15 s, +76 % / 0.31, 0.18 s, +55 % | 0.20, 0.13 s, +104 % / 0.23, 0.15 s, +82 % |
+| `sedan-sports` (1.03) | 30 | 0.79 deg/g at 0.25 g, 49 % | 0.94, 0.28 s, +0 % / 0.99, 0.20 s, +16 % | 0.93, 0.28 s, +0 % / 1.00, 0.20 s, +19 % | 0.90, 0.28 s, +0 % / 1.00, 0.20 s, +23 % |
+|  | 60 | 1.22 deg/g at 0.63 g, 49 % | 0.73, 0.30 s, +8 % / 0.93, 0.38 s, +5 % | 0.48, 0.18 s, +47 % / 0.77, 0.25 s, +15 % | 0.32, 0.13 s, +76 % / 0.58, 0.18 s, +28 % |
+|  | 100 | 1.60 deg/g at 0.74 g, 49 % | 0.42, 0.23 s, +47 % / 0.61, 0.35 s, +22 % | 0.22, 0.13 s, +137 % / 0.29, 0.17 s, +92 % | 0.16, 0.12 s, +162 % / 0.23, 0.13 s, +94 % |
+| `suv` (1.03) | 30 | 0.66 deg/g at 0.21 g, 47 % | 0.95, 0.30 s, +0 % / 1.00, 0.23 s, +11 % | 0.93, 0.30 s, +0 % / 0.99, 0.23 s, +13 % | 0.90, 0.28 s, +0 % / 0.99, 0.22 s, +17 % |
+|  | 60 | 1.25 deg/g at 0.53 g, 47 % | 0.72, 0.32 s, +14 % / 0.94, 0.43 s, +4 % | 0.33, 0.13 s, +119 % / 0.75, 0.27 s, +18 % | 0.30, 0.13 s, +107 % / 0.53, 0.18 s, +45 % |
+|  | 100 | 1.70 deg/g at 0.61 g, 47 % | 0.40, 0.23 s, +58 % / 0.63, 0.40 s, +19 % | 0.06, 0.07 s, +766 % / 0.40, 0.23 s, +47 % | 0.07, 0.08 s, +512 % / 0.35, 0.20 s, +40 % |
+| `race` (1.00) | 30 | 0.61 deg/g at 0.22 g, 46 % | 0.96, 0.20 s, +0 % / 0.89, 0.07 s, +98 % | 0.96, 0.22 s, +0 % / 0.96, 0.08 s, +102 % | 0.96, 0.23 s, +0 % / 0.99, 0.10 s, +107 % |
+|  | 60 | 0.63 deg/g at 0.65 g, 46 % | 0.85, 0.28 s, +1 % / 0.89, 0.22 s, +16 % | 0.79, 0.23 s, +5 % / 0.95, 0.22 s, +25 % | 0.56, 0.17 s, +36 % / 0.98, 0.20 s, +25 % |
+|  | 100 | 0.50 deg/g at 1.10 g, 46 % | 0.73, 0.33 s, +0 % / 0.89, 0.48 s, +3 % | 0.49, 0.18 s, +44 % / 0.72, 0.27 s, +19 % | 0.34, 0.13 s, +76 % / 0.52, 0.18 s, +40 % |
+| `van` (1.03) | 30 | 0.30 deg/g at 0.18 g, 58 % | 0.98, 0.32 s, +0 % / 1.01, 0.25 s, +10 % | 0.96, 0.32 s, +0 % / 1.00, 0.23 s, +11 % | 0.92, 0.30 s, +0 % / 1.00, 0.23 s, +13 % |
+|  | 60 | 1.01 deg/g at 0.47 g, 58 % | 0.79, 0.35 s, +10 % / 0.93, 0.43 s, +4 % | 0.47, 0.18 s, +61 % / 0.80, 0.32 s, +9 % | 0.46, 0.18 s, +48 % / 0.64, 0.22 s, +26 % |
+|  | 100 | 1.60 deg/g at 0.56 g, 58 % | 0.45, 0.27 s, +52 % / 0.63, 0.38 s, +20 % | 0.19, 0.13 s, +204 % / 0.46, 0.27 s, +36 % | 0.10, 0.10 s, +407 % / 0.07, 0.08 s, +705 % |
+| `delivery` (0.91) | 30 | 0.52 deg/g at 0.12 g, 47 % | 0.97, 0.27 s, +0 % / 0.99, 0.23 s, +6 % | 0.96, 0.30 s, +1 % / 0.99, 0.27 s, +6 % | 0.93, 0.32 s, +1 % / 0.98, 0.28 s, +7 % |
+|  | 60 | 0.81 deg/g at 0.30 g, 47 % | 0.83, 0.35 s, +4 % / 0.90, 0.40 s, +1 % | 0.70, 0.30 s, +14 % / 0.80, 0.35 s, +6 % | 0.58, 0.27 s, +26 % / 0.71, 0.32 s, +10 % |
+|  | 100 | 0.81 deg/g at 0.28 g, 47 % | 0.64, 0.37 s, +15 % / 0.74, 0.50 s, +3 % | 0.50, 0.30 s, +35 % / 0.58, 0.38 s, +16 % | 0.41, 0.27 s, +54 % / 0.47, 0.33 s, +26 % |
+| `garbage-truck` (1.64) | 30 | 0.30 deg/g at 0.10 g, 50 % | 0.98, 0.58 s, +0 % / 1.02, 0.47 s, +6 % | 0.97, 0.60 s, +0 % / 1.02, 0.50 s, +6 % | 0.96, 0.63 s, +0 % / 1.02, 0.52 s, +7 % |
+|  | 50 | 0.29 deg/g at 0.21 g, 50 % | 0.95, 0.83 s, +0 % / 1.05, 0.95 s, +0 % | 0.89, 0.75 s, +3 % / 1.04, 0.95 s, +1 % | 0.80, 0.63 s, +9 % / 1.03, 0.95 s, +1 % |
+|  | 70 | 0.36 deg/g at 0.28 g, 50 % | 0.89, 1.00 s, +1 % / 1.10, 1.50 s, +1 % | 0.74, 0.72 s, +12 % / 1.06, 1.50 s, +1 % | 0.75, 0.82 s, +5 % (1 up) / 0.93, 1.13 s, +0 % (1 up) |
 <!-- /measure:steer -->
 
 - `-- semi` measures the coupled 32 t box rig (`trailer=<box|tanker|tipper|flatbed|bobtail>` or any

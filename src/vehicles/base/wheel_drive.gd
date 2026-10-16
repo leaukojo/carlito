@@ -273,14 +273,32 @@ func _compute_wheelbase() -> float:
 
 
 ## Pure: ISOBUS curvature (1/km, + = right) to wheel angle (rad, same sign; the caller negates it
-## for `_applied_steer`'s convention, as the plain `steer` path does). One angle for both steered
-## wheels (no Ackermann). `angle = atan(wheelbase * curvature)`, clamped to the mechanical lock,
-## never the speed-tapered one.
+## for `_applied_steer`'s convention, as the plain `steer` path does). Returns the bicycle (mean)
+## angle; `ackermann_angle` splits it per wheel. `angle = atan(wheelbase * curvature)`, clamped to
+## the mechanical lock, never the speed-tapered one.
 static func steer_angle_from_curvature(curvature_per_km: float, wheelbase: float,
 		max_steer_deg: float) -> float:
 	var max_rad := deg_to_rad(max_steer_deg)
 	var angle := atan(wheelbase * (curvature_per_km / 1000.0))
 	return clampf(angle, -max_rad, max_rad)
+
+
+## Pure: a steered wheel's angle (rad, + = left) off the bicycle angle `mean`, the wheel's lateral
+## offset (m, + = right) and the wheelbase: `tan δ_w = tan δ / (1 + f x tan δ / L)`. The two wheels'
+## cotangent mean is `cot δ`, so the turn centre the bicycle angle asks for is kept. `f = 0` or
+## `x = 0` returns `mean` exactly. Valid while `tan δ < L / (f |x|)` (`test_vehicle_catalog`).
+static func ackermann_angle(mean: float, lateral_x: float, wheelbase: float,
+		fraction: float) -> float:
+	if fraction == 0.0 or lateral_x == 0.0 or wheelbase <= 0.0:
+		return mean
+	var t := tan(mean)
+	return atan(t / (1.0 + fraction * lateral_x * t / wheelbase))
+
+
+## The bicycle (mean) steer angle applied this tick (rad, + = left); each steered wheel's own angle
+## is `ackermann_angle` of it.
+func mean_steer_angle() -> float:
+	return _applied_steer
 
 
 ## The guidance path's slew TARGET, in the unit of `input.steer` ([-1, 1], + = right): the
@@ -336,7 +354,8 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 			if drivetrain != null and Drivetrain.drives_wheels(spec) else 0.0
 	var pedal := pedal_application(foot_pedal(input))
 	for w in wheels:
-		w.steer_angle = _applied_steer if w.steered else 0.0
+		w.steer_angle = ackermann_angle(_applied_steer, w.anchor.x, _wheelbase, gd.ackermann) \
+				if w.steered else 0.0
 		# The nominal equal split (open-diff law); `_couple_differentials` adds what a biasing,
 		# locked or rigid diff moves on top, once every wheel has integrated.
 		var drive_t := axle_torque / _driven_count if w.driven else 0.0

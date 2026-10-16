@@ -207,7 +207,10 @@ const CAR_BASE := {
 	"engine_inertia": 0.20, "coupling": VehicleSpec.Coupling.CONVERTER, "clutch_reserve": 1.5,
 	"converter_stall_ratio": 1.0, "lockup_gear": 1,
 	"launch_rpm_over_idle": 0.0,
-	"max_steer_deg": 38.0, "steer_speed": 7.0,
+	# Ackermann 1.0 (docs/vehicles.md § Steering geometry), an estimate: real road cars run partial
+	# (~40-60 %, a patent claim, for the loaded outer tyre at high g), but here the low-speed scrub is
+	# the point and the road-speed split is ~0.15 deg; the step-steer sweep is the guard.
+	"max_steer_deg": 38.0, "steer_speed": 7.0, "ackermann": 1.0,
 	# Steering falloff: BaseVehicle lerps lock from full to min_steer_frac near
 	# steer_falloff_speed, so the pair states an absolute lock at motorway speed — divide by the
 	# variant's own max_steer_deg. Car family: ~10 deg (0.26x38) at 42 m/s = 151 km/h; mu_lat 0.97
@@ -295,7 +298,9 @@ const TRUCK_BASE := {
 	# fluid coupling, as CAR_BASE's.
 	"converter_stall_ratio": 1.0, "lockup_gear": 2,
 	"launch_rpm_over_idle": 0.0,
-	"max_steer_deg": 26.0, "steer_speed": 2.0,
+	# Ackermann 1.0, an estimate: trucks set close to full for steer-tyre wear (SAE 861975, 912693;
+	# no figure sourced).
+	"max_steer_deg": 26.0, "steer_speed": 2.0, "ackermann": 1.0,
 	# ~5.7 deg floor (0.22x26) at 26 m/s, under both governed cruise speeds (85/110 km/h);
 	# 19.5 deg at 30 km/h, still wider than the ~17.6 deg mu_lat 0.75 can hold there.
 	"min_steer_frac": 0.22, "steer_falloff_speed": 26.0,
@@ -373,7 +378,8 @@ const VAN_BASE := {
 	"engine_inertia": 0.40, "coupling": VehicleSpec.Coupling.CONVERTER, "clutch_reserve": 1.5,
 	"converter_stall_ratio": 1.0, "lockup_gear": 1,
 	"launch_rpm_over_idle": 0.0,
-	"max_steer_deg": 26.0, "steer_speed": 2.0,
+	# Ackermann 1.0, an estimate, as TRUCK_BASE.
+	"max_steer_deg": 26.0, "steer_speed": 2.0, "ackermann": 1.0,
 	# ~6 deg floor (0.23x26) at 28 m/s, between the cars' 10 deg and trucks' 4.8. Ambulance keeps
 	# the fraction on its narrower 24 deg rack (5.5 deg).
 	"min_steer_frac": 0.23, "steer_falloff_speed": 28.0,
@@ -472,7 +478,9 @@ const TRACTOR_BASE := {
 	"engine_inertia": 1.5, "coupling": VehicleSpec.Coupling.CLUTCH, "clutch_reserve": 2.0,
 	"converter_stall_ratio": 1.0, "lockup_gear": 1,
 	"launch_rpm_over_idle": 0.0,
-	"max_steer_deg": 38.0, "steer_speed": 1.8,
+	# Ackermann 1.0, an estimate (no ag-tractor figure sourced): headland turns at full lock are the
+	# scrub case.
+	"max_steer_deg": 38.0, "steer_speed": 1.8, "ackermann": 1.0,
 	# steer_falloff_speed 11 m/s = 39.6 km/h is the tractor's own top speed, so the floor lock
 	# arrives exactly at type-approval road speed. 0.55 keeps field-work cost (8-12 km/h headland
 	# turns, a quarter of road speed) to ~11% while cutting 45% of road dartiness.
@@ -806,6 +814,7 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	# so a variant that overrides the rack usually wants to override this too rather than
 	# inherit the family number.
 	gd.max_steer_deg = get_f.call("max_steer_deg")
+	gd.ackermann = get_f.call("ackermann")
 	gd.min_steer_frac = get_f.call("min_steer_frac")
 	gd.steer_falloff_speed = get_f.call("steer_falloff_speed")
 

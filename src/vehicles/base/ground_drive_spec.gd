@@ -129,8 +129,12 @@ extends Resource
 
 
 @export_group("Steering lock")
-## Maximum steered-wheel angle in degrees (`steer_speed` is on VehicleSpec).
+## The bicycle (mean) angle's lock in degrees; with `ackermann` the inner wheel turns past it
+## (`steer_speed` is on VehicleSpec).
 @export var max_steer_deg := 32.0
+## Ackermann fraction (`WheelDrive.ackermann_angle`): 0 = parallel steer, 1 = every steered wheel's
+## axis through one turn centre on the rear axle line.
+@export_range(0.0, 1.0) var ackermann := 0.0
 ## Fraction of max_steer_deg left at steer_falloff_speed, linear in between; 1.0 = constant lock.
 @export_range(0.0, 1.0) var min_steer_frac := 1.0
 @export var steer_falloff_speed := 30.0  ## m/s at which min_steer_frac is fully reached

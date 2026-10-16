@@ -37,6 +37,7 @@ brake_engages_front_axle = true
 drag_area = 3.67
 rolling_resistance = 0.02
 max_steer_deg = 38.0
+ackermann = 1.0
 min_steer_frac = 0.55
 steer_falloff_speed = 11.0
 

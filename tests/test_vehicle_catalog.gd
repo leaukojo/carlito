@@ -666,6 +666,25 @@ func test_a_steering_taper_never_out_limits_the_tyres() -> void:
 				).is_greater(grip_deg * STEER_GRIP_MARGIN)
 
 
+func test_every_inner_wheel_keeps_a_turn_centre_at_full_lock() -> void:
+	# `WheelDrive.ackermann_angle` divides by `1 + f x tan(lock) / L`; on the inner wheel that
+	# reaches 0 (the wheel at 90 deg) and then flips the steer. The bicycle lock is the largest
+	# angle any body asks for, so the check is there.
+	for variant in VehicleCatalog.VARIANTS:
+		if not WHEELED_FAMILIES.has(VehicleCatalog.family_of(variant)):
+			continue
+		var gd := _spec_of(variant).ground_drive
+		var wheelbase := _wheelbase_of(_spec_of(variant))
+		var t := tan(deg_to_rad(gd.max_steer_deg))
+		for station in gd.wheel_positions:
+			if RayWheel.is_rear_z(station.z):
+				continue
+			var denom: float = 1.0 - gd.ackermann * absf(station.x) * t / wheelbase
+			assert_float(denom).override_failure_message(
+					"%s: inner wheel past 90 deg at its %.1f deg lock (ackermann %.2f)"
+					% [variant, gd.max_steer_deg, gd.ackermann]).is_greater(0.0)
+
+
 ## Front-to-rear wheel spread, read off the stations rather than declared: it is just the z
 ## extent of the same array.
 func _wheelbase_of(spec: VehicleSpecScript) -> float:

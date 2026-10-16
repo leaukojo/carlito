@@ -103,7 +103,7 @@ const HB_AFTER_S := 1.5
 ## STEP_HOLD_S: once with the PI pedal still holding the entry speed, once with the pedal lifted on
 ## the step. The body's own `steer_speed` slews the wheels behind the input, as for a driver.
 ## Reports the steady yaw rate (mean of the last STEP_STEADY_S) against the neutral-steer
-## `v * delta / L` off the steered wheels' own angle (under 1 understeers), the rise to 90 % of
+## `v * delta / L` off the bicycle angle (under 1 understeers), the rise to 90 % of
 ## it, the overshoot past it, the peak body slip and roll, the most wheels lifted at once, a spin
 ## (slip past STEP_SPIN_DEG) and a rollover (up axis past STEP_ROLL_DEG from vertical).
 const STEP_SETS := {
@@ -120,6 +120,17 @@ const STEP_SPIN_DEG := 20.0
 const STEP_ROLL_DEG := 45.0
 ## The strip is 40 m wide; a 3 s step at 100 km/h and 0.8 g travels ~35 m sideways.
 const STEP_PAD_WIDTH := 400.0
+## --- full-lock circle (`circle`, instead of every other pass) ---
+## Full right lock from a standstill on the PI pedal (CORNER_PEDAL_KP / _KI) at CIRCLE_SPEED,
+## CIRCLE_SETTLE_S to settle, then averaged over CIRCLE_HOLD_S: the rear axle centre's speed over
+## the yaw rate (the radius driven) against `L / tan δ` off the bicycle angle, and each steered
+## wheel's slip angle off its contact velocity (+ = it points further into the turn than its patch
+## travels): the front scrub Ackermann removes. Every body runs with no attachment unless `trailer=`
+## names one.
+const CIRCLE_SPEED := 1.39         ## m/s (5 km/h)
+const CIRCLE_LOCK := 100.0         ## % of lock, + = right
+const CIRCLE_SETTLE_S := 8.0
+const CIRCLE_HOLD_S := 4.0
 
 # --- launch breakdown (accel pass) -----------------------------------------
 ## Where the time to each LAUNCH_MARKS mark goes, in seconds since the pass began. The buckets
@@ -202,7 +213,8 @@ const DOC_SECONDS := 60.0
 const REFERENCE_SPECS_PATH := "res://tools/vehicle_reference_specs.json"
 const REPORT_DIR := "res://reports/specs_sweep/"
 
-enum Phase { ACCEL, COAST, TRACKING, CORNERING, BRAKING, STALL, HANDBRAKE, STEP, CRUISE, DONE }
+enum Phase { ACCEL, COAST, TRACKING, CORNERING, BRAKING, STALL, HANDBRAKE, STEP, CRUISE, CIRCLE,
+		DONE }
 ## Where a step-steer run is (`_tick_step`).
 enum Step { RUN_UP, SETTLE, STEPPED }
 ## What a part-pedal probe window is doing (`_tick_cruise`).
@@ -255,6 +267,10 @@ var _st_lifted := 0                   ## most wheels off the ground in one tick 
 var _st_roll_t := -1.0                ## s into the step the body passed STEP_ROLL_DEG
 var _st_xfer0 := Vector2.ZERO         ## `_axle_transfer` on the step's first tick
 var _st_xfer := Vector2.ZERO          ## `_axle_transfer` summed over the steady tail
+## `circle`: run only the full-lock circle (§ full-lock circle) on each body.
+var _circle := false
+var _ci_i := 0.0                      ## integral half of the circle's PI pedal
+var _ci_sums := {}                    ## the circle's figures summed over the hold (`_tick_circle`)
 ## `track`: skip the accel/top-speed pass — CI only needs the tracking gate.
 var _track_only := false
 ## `strict`: exit nonzero on a tracking FAIL. Off by default so dev invocation stays a report.
@@ -305,6 +321,9 @@ var _bar_rear := NAN
 ## `cornering_peak=<x>`: the tyre's cornering-stiffness law (`GroundDriveSpec.cornering_peak_load`)
 ## overridden the same way (NAN: the spec's).
 var _cornering_peak := NAN
+## `ackermann=<0..1>`: the Ackermann fraction (`GroundDriveSpec.ackermann`) overridden the same way
+## (NAN: the spec's).
+var _ackermann := NAN
 ## `pedal=<0..1>`: the accel pass held at this pedal instead of floored (it implies the trace's
 ## settle and gates).
 var _pedal := 1.0
@@ -424,6 +443,7 @@ func _ready() -> void:
 	_stall = flags.has("stall")
 	_hb_turn = flags.has("handbrake")
 	_step = flags.has("step")
+	_circle = flags.has("circle")
 	_track_only = flags.has("track")
 	_strict = flags.has("strict")
 	_tc = flags.has("tc")
@@ -447,6 +467,8 @@ func _ready() -> void:
 			_bar_rear = float(flag.substr(9))
 		elif flag.begins_with("cornering_peak="):
 			_cornering_peak = float(flag.substr(15))
+		elif flag.begins_with("ackermann="):
+			_ackermann = clampf(float(flag.substr(10)), 0.0, 1.0)
 		elif flag.begins_with("pedal="):
 			_pedal = clampf(float(flag.substr(6)), 0.05, 1.0)
 		elif flag == "pulse" or flag.begins_with("pulse="):
@@ -488,9 +510,9 @@ func _ready() -> void:
 			return
 		if _trace or _notc or _held_gear > 0 or not is_nan(_engine_inertia) \
 				or not is_nan(_rear_lat_grip) or not is_nan(_bar_rear) or not is_nan(_cornering_peak) \
-				or _cruise_probe():
+				or not is_nan(_ackermann) or _circle or _cruise_probe():
 			printerr("trace / notc / gear= / j= / rear_lat_grip= / bar_rear= / cornering_peak= /"
-					+ " pedal= / cruise /"
+					+ " ackermann= / circle / pedal= / cruise /"
 					+ " kickdown / pulse change the passes a doc preset tabulates: run them per body")
 			get_tree().quit(1)
 			return
@@ -504,7 +526,7 @@ func _ready() -> void:
 		# Skid pad: a wide square well off to the side, since a body at full lock circles in a few
 		# tens of metres and the strip is only 40 m wide.
 		MeasureRig.add_slab(self, "Pad", Vector3(PAD_SIZE, 2.0, PAD_SIZE), PAD_X)
-	if _step:
+	if _step or _circle:
 		# Under the strip and either side of it, top face flush with the strip's.
 		MeasureRig.add_slab(self, "StepPad", Vector3(STEP_PAD_WIDTH, 2.0, STRIP_LENGTH))
 	if which == "all" or _doc == "cornering" or _doc == "accel":
@@ -522,9 +544,13 @@ func _ready() -> void:
 				[which, ", ".join(_wheel_driven_variants())])
 		get_tree().quit(1)
 		return
+	if _circle and _trailer == "":
+		_trailer = "bobtail"
+	var steer_label := "steer stepped" if _step else "zero steer input"
+	if _circle:
+		steer_label = "full right lock"
 	print("strip: %.0f x %.0f m flat, surface_grip 1.0, %s, %.0f s cap per pass\n" %
-			[STEP_PAD_WIDTH if _step else STRIP_WIDTH, STRIP_LENGTH,
-			"steer stepped" if _step else "zero steer input", _seconds])
+			[STEP_PAD_WIDTH if _step else STRIP_WIDTH, STRIP_LENGTH, steer_label, _seconds])
 	MeasureRig.drive(100.0, 0.0)
 	_next_vehicle()
 
@@ -595,6 +621,10 @@ func _next_vehicle() -> void:
 		_car.spec = _car.spec.duplicate()
 		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
 		_car.spec.ground_drive.cornering_peak_load = _cornering_peak
+	if not is_nan(_ackermann):
+		_car.spec = _car.spec.duplicate()
+		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
+		_car.spec.ground_drive.ackermann = _ackermann
 	_current["abs"] = _car.spec.ground_drive.abs_equipped
 	add_child(_car)
 	# Strip top is y=0; wheels just touching, no spawn drop onto the springs.
@@ -615,6 +645,8 @@ func _next_vehicle() -> void:
 		_start_handbrake_run()
 	elif _step:
 		_start_step()
+	elif _circle:
+		_start_circle()
 	elif _track_only:
 		_reset_pass(Phase.TRACKING)
 	else:
@@ -744,6 +776,8 @@ func _physics_process(delta: float) -> void:
 		_tick_step(delta)
 	elif _phase == Phase.CRUISE:
 		_tick_cruise(delta)
+	elif _phase == Phase.CIRCLE:
+		_tick_circle(delta)
 	else:
 		_tick_tracking()
 
@@ -2186,13 +2220,8 @@ func _tick_step(delta: float) -> void:
 			airborne += 1
 	_st_lifted = maxi(_st_lifted, airborne)
 	if _st_t > STEP_HOLD_S - STEP_STEADY_S:
-		var angle := 0.0
-		var n := 0
-		for w in _car.wheels:
-			if w.steered:
-				angle += absf(w.steer_angle)
-				n += 1
-		_st_tail += Vector3(v_long, angle / maxf(n, 1), 1.0)
+		# The bicycle angle: with Ackermann the steered wheels' own angles do not average to it.
+		_st_tail += Vector3(v_long, absf(_car.drive.mean_steer_angle()), 1.0)
 		_st_xfer += _axle_transfer()
 	if _st_t >= STEP_HOLD_S:
 		_report_step_run(delta)
@@ -2258,6 +2287,71 @@ func _report_step_run(delta: float) -> void:
 			r["steady_dps"], r["lat_g"], r["of_neutral"], k, _pct(r["lltd"]),
 			_pct(BalanceModel.lltd(model)), rise, r["overshoot"] * 100.0, _st_slip_peak, tilt])
 	_current["step"].append(r)
+
+
+## The full-lock circle (§ full-lock circle) on this body, from where `_next_vehicle` spawned it.
+func _start_circle() -> void:
+	_reset_pass(Phase.CIRCLE)
+	_ci_i = 0.0
+	_ci_sums = {"ticks": 0.0, "v": 0.0, "radius": 0.0, "mean": 0.0, "n_in": 0.0, "n_out": 0.0,
+			"angle_in": 0.0, "angle_out": 0.0, "slip_in": 0.0, "slip_out": 0.0}
+	var probe := "" if is_nan(_ackermann) else " (not the spec's)"
+	print("=== %s (%s), full-lock circle, ackermann %.2f%s ===" % [_variant,
+			_drive_label(_car.spec), _car.spec.ground_drive.ackermann, probe])
+	MeasureRig.drive(0.0, 0.0, CIRCLE_LOCK)
+
+
+func _tick_circle(delta: float) -> void:
+	var b := _car.global_transform.basis
+	var v_long := _car.linear_velocity.dot(-b.z)
+	var err := CIRCLE_SPEED - v_long
+	_ci_i = clampf(_ci_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
+	MeasureRig.drive(clampf(_ci_i + err * CORNER_PEDAL_KP, 0.0, 1.0) * 100.0, 0.0, CIRCLE_LOCK)
+	if _t < CIRCLE_SETTLE_S:
+		return
+	var s := _ci_sums
+	var rear := _car.global_transform * Vector3(0.0, 0.0,
+			float(BrakeSizing.axle_geometry(_car.spec)["rear_z"]))
+	var v_rear := VehicleMath.point_velocity(_car, rear)
+	v_rear -= b.y * v_rear.dot(b.y)
+	s["ticks"] += 1.0
+	s["v"] += v_long
+	s["radius"] += v_rear.length() / maxf(absf(_car.angular_velocity.dot(b.y)), 1e-4)
+	s["mean"] += absf(_car.drive.mean_steer_angle())
+	for w in _car.wheels:
+		if not w.steered or not w.in_contact:
+			continue
+		var side := "in" if w.anchor.x > 0.0 else "out"  # a right turn: the inner wheel is +x
+		s["n_" + side] += 1.0
+		s["angle_" + side] += rad_to_deg(absf(w.steer_angle))
+		s["slip_" + side] += _slip_angle_deg(w)
+	if _t < CIRCLE_SETTLE_S + CIRCLE_HOLD_S:
+		return
+	var n: float = s["ticks"]
+	var mean: float = s["mean"] / n
+	var r := {"kmh": s["v"] / n * 3.6, "radius": s["radius"] / n, "mean_deg": rad_to_deg(mean),
+			"law_radius": _wheelbase() / tan(mean)}
+	for side in ["in", "out"]:
+		var k := maxf(s["n_" + side], 1.0)
+		r["angle_" + side] = s["angle_" + side] / k
+		r["slip_" + side] = s["slip_" + side] / k
+	print(("  %-13s : %.1f km/h, R %.2f m at the rear axle (L / tan δ %.2f, δ %.1f deg); inner"
+			+ " %.1f deg slip %+.2f deg, outer %.1f deg slip %+.2f deg") % ["circle", r["kmh"],
+			r["radius"], r["law_radius"], r["mean_deg"], r["angle_in"], r["slip_in"],
+			r["angle_out"], r["slip_out"]])
+	_current["circle"] = r
+	MeasureRig.drive(0.0, 0.0)
+	_finish_vehicle()
+
+
+## A steered wheel's slip angle (deg) in the circle's right turn, off its contact patch's velocity
+## as `_split_deficit` reads the wheel's forward: + = it points further right than it travels.
+func _slip_angle_deg(w: RayWheel) -> float:
+	var n := w.contact_normal
+	var fwd := Basis(_car.global_transform.basis.y, w.steer_angle) * -_car.global_transform.basis.z
+	fwd = (fwd - n * fwd.dot(n)).normalized()
+	var vel := VehicleMath.point_velocity(_car, w.contact_point)
+	return rad_to_deg(atan2(-vel.dot(fwd.cross(n)), vel.dot(fwd)))
 
 
 ## Wheelbase (m) off the axle stations, foremost front to rearmost rear. A tandem's effective

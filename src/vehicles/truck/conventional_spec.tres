@@ -79,6 +79,8 @@ tcs_equipped = true
 hill_hold = 1
 hill_hold_s = 3.0
 max_steer_deg = 24.0
+; ACKERMANN 1.0, as semi_spec.tres: the inner wheel turns 25.7 at the 24 deg lock, the outer 22.5.
+ackermann = 1.0
 min_steer_frac = 0.21
 steer_falloff_speed = 29.0
 
