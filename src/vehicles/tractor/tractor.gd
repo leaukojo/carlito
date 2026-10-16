@@ -14,16 +14,20 @@ const SOIL_CHANNEL := 4
 
 @export var hitch_travel_time := 1.5   ## s for a full raise or lower
 @export var pto_load := 0.35           ## engine_load added while PTO engaged
-## Rated draft (N): the pull of a draft-relevant implement at full depth at DRAFT_SPEED_REF, and
-## the 100% end of 'draft_force'. 12 kN is a real 3-furrow plough figure.
-@export var draft_max_force := 12000.0
+## The 100% end of 'draft_force' (N): the plough's `draft_rating()`, so the plough at full depth on
+## full soil at `TractorTelemetry.DRAFT_S_REF_KMH` reads 100 %. Each implement pulls its own rating.
+@export var draft_max_force := 22410.0
 @export var hitch_path: NodePath = ^"ThreePointHitch"
 @export var drawbar_path: NodePath = ^"Drawbar"
 
+## N along forward, this tick's draft force; unclamped, where `draft_force` stops at 100 %.
+var draft_applied := 0.0
 var _hitch_actual := SPAWN_HITCH       ## 0..1, chases input.hitch_request
 var _hitch: ThreePointHitch
 var _drawbar: TowHost
 var _implement_id := ImplementCatalog.DETACHED  ## current entry in the E cycle
+var _carried_applied := 0.0            ## implement kg currently written into `mass`
+var _com_applied := Vector3.ZERO       ## the COM written with it (the spec's from _ready)
 
 
 func _make_telemetry() -> VehicleTelemetry:
@@ -34,6 +38,8 @@ func _ready() -> void:
 	super._ready()
 	_hitch = get_node_or_null(hitch_path) as ThreePointHitch
 	_drawbar = get_node_or_null(drawbar_path) as TowHost
+	# The base wrote spec mass and COM: a bare tractor never writes them again.
+	_com_applied = spec.center_of_mass
 	# Spawn with an implement on the linkage.
 	_set_implement(ImplementCatalog.first())
 
@@ -173,6 +179,8 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 			_drive_axle_omega(), spec.ground_drive.axle_radius(true))
 	t.ground_speed = absf(t.speed) * 3.6
 	t.wheel_slip = roundi(TractorTelemetry.slip_pct(t.wheel_speed, t.ground_speed))
+	# Rear (drive) axle load off its springs: an implement's carried weight moves it.
+	t.axle_load = VehicleTelemetry.axle_load_kg(drive.rear_suspension_force())
 	# implement_connected and type report the address claim (ISOBUS_DATA), not the steel: the
 	# shipped drawbar trailer is attached and electronically silent. Reads whichever end is loaded.
 	var implement: ImplementBase = _hitch.implement if _hitch != null else null
@@ -184,9 +192,10 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	# Pose the linkage before the draft force reads ball_lift() / hitch_point(), which come from
 	# the same solve; posing after would use last tick's geometry.
 	if _hitch != null:
-		_hitch.set_hitch(_hitch_actual)
+		_hitch.set_hitch(_hitch_actual, delta)
 		_hitch.set_pto(pto_on, t.pto_rpm)
 		_hitch.set_scv(spool)
+	_apply_implement_mass()
 	# Towing: brake demand is the plain foot brake's application (no retarder; the hill hold's
 	# included, so the rig holds as one). The trailer brakes regardless of the bus: hoses are not a
 	# data bus. No air system: the lever is the parking brake.
@@ -198,16 +207,40 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 		drivetrain.speed_cap_kmh = _drawbar.speed_cap_kmh()
 	# Draft force on the chassis while the linkage works in soil. Nothing above reads it:
 	# engine_load and wheel_slip are its consequences from prior ticks.
-	t.draft_force = roundi(TractorTelemetry.draft_pct(
-			_apply_draft(implement, t.speed, delta), draft_max_force))
+	draft_applied = _apply_draft(implement, delta)
+	t.draft_force = roundi(TractorTelemetry.draft_pct(draft_applied, draft_max_force))
+
+
+## Fold the carried share of the implement's weight into the chassis' live mass and COM, off the
+## linkage as posed this tick: all of it raised clear, `1 - ground_share()` at the bottom stop.
+## Written only on change (`mass` and `center_of_mass` are physics-server writes).
+## COMPROMISE: Jolt's tensor is the hull's about the live COM, so an implement's lever term
+## (`m_t m_i / M · D²`) reaches roll, pitch and yaw only as the COM shift's `M d²`, about `m_i / M`
+## of it (the `hitch` pass reports the gap); closing it is a composite inertia declaration, against
+## "never set roll or pitch" and "yaw only through `yaw_dynamic_index`". The ground-borne share
+## also leaves the horizontal inertia, and a lowered implement drags nothing beyond the draft law.
+func _apply_implement_mass() -> void:
+	var implement: ImplementBase = _hitch.implement if _hitch != null else null
+	var carried := 0.0
+	var com := spec.center_of_mass
+	if implement != null:
+		carried = implement.mass_kg() * ImplementBase.carried01(
+				_hitch.ball_lift(), implement.support_lift(), implement.ground_share())
+		com = VehicleMath.carried_com(spec.center_of_mass, _hitch.implement_com(), spec.mass,
+				carried)
+	if is_equal_approx(carried, _carried_applied) and com.is_equal_approx(_com_applied):
+		return
+	_carried_applied = carried
+	_com_applied = com
+	set_live_mass(spec.mass + carried, com)
 
 
 ## Apply this tick's draft force to the chassis and return it (N, signed along forward), or 0
 ## unless a draft-relevant implement is down in painted soil.
-func _apply_draft(implement: ImplementBase, v_fwd: float, delta: float) -> float:
+func _apply_draft(implement: ImplementBase, delta: float) -> float:
 	if _hitch == null or implement == null or not implement.draft_relevant():
 		return 0.0
-	# Working depth is the implement's own declared reach (plough 0.055 m, harrow tines 0.02 m).
+	# Working depth is the implement's own declared reach (plough 0.25 m, harrow tines 0.10 m).
 	var depth01 := TractorTelemetry.draft_depth01(
 			_hitch.ball_lift(), implement.tool_depth())
 	if depth01 <= 0.0:
@@ -216,12 +249,28 @@ func _apply_draft(implement: ImplementBase, v_fwd: float, delta: float) -> float
 	var soil01 := _soil_at(point)
 	if soil01 <= 0.0:
 		return 0.0
-	var force := TractorTelemetry.draft_newtons(
-			v_fwd, depth01, soil01, draft_max_force, mass, delta)
+	# The implement moves with the hitch, so its speed through the soil is the hitch point's.
+	var forward := -global_transform.basis.z
+	var v_hitch := VehicleMath.point_velocity(self, point).dot(forward)
+	var force := TractorTelemetry.draft_newtons(v_hitch, depth01, soil01,
+			implement.draft_rating(), implement.draft_shape(), hitch_effective_mass(point), delta)
 	# Applied at the hitch point, below the centre of mass, so its own moment is nose-down; the net
 	# nose-up transfer comes from the tyres' answering drive force at ground level, a longer arm.
-	apply_force(-global_transform.basis.z * force, point - global_position)
+	apply_force(forward * force, point - global_position)
 	return force
+
+
+## Effective mass (kg) a force along the forward axis at world `point` meets: the body plus the
+## moments its arm from the COM turns, off the live tensor (`RayWheel.contact_masses` for one arm,
+## read the way `size_cap_masses` reads it). What bounds draft (TractorTelemetry.DRAFT_V_CRAWL).
+func hitch_effective_mass(point: Vector3) -> float:
+	var state := PhysicsServer3D.body_get_direct_state(get_rid())
+	if state == null:
+		return mass
+	var b := global_transform.basis
+	var arm := b.transposed() * (point - global_position) - center_of_mass
+	return RayWheel.contact_masses(PackedVector3Array([arm]), Vector3.FORWARD, mass,
+			b.transposed() * state.inverse_inertia_tensor * b)[0]
 
 
 ## Ploughable-soil weight under `point`, 0..1, off the wheels' terrain pick; unpainted means no soil.
@@ -253,10 +302,13 @@ func _front_axle_driven() -> bool:
 
 
 ## Re-raise the implement. Whatever is attached survives a respawn: the drawbar re-lays it at the
-## coupled pose.
+## coupled pose. The base has written spec mass and COM, so the cache says so and the next tick
+## writes the surviving implement's load again.
 func reset_session_state() -> void:
 	super.reset_session_state()
 	_hitch_actual = SPAWN_HITCH
+	_carried_applied = 0.0
+	_com_applied = spec.center_of_mass
 	if _drawbar != null:
 		_drawbar.respawn_relay(spawn_transform)
 

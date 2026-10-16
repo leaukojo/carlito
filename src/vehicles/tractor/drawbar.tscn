@@ -16,7 +16,7 @@
 ;     at z 1.15 rather than running through it;
 ;   - the PTO stub is on the centreline at y 0.60 out to z ~ 1.22, so the bar's top at y 0.45
 ;     passes 0.10 m beneath it;
-;   - the lower draft links splay to their ball ends at |x| 0.37, and lowered they sit at y 0.21,
+;   - the lower draft links splay to their ball ends at |x| 0.43, and lowered they sit at y 0.21,
 ;     z 1.72 -- below and behind the bar, which is why the linkage can work with a trailer hitched.
 ;
 ; NO CollisionShape, and no RigidBody: this is tractor anatomy on the chassis body, exactly like

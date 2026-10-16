@@ -409,9 +409,15 @@ const TRACTOR_BASE := {
 	# this models the whole axle, not just the rubber).
 	"spring_rate": 330000.0, "damper_bump": 16500.0,
 	"damper_rebound": 20300.0, "max_suspension_force": 110000.0, "rest_length": 0.12,
-	# Rear carries the drawbar nose weight and the implement, and the 0.66 m rear tyre is
-	# stiffer than the 0.44 m front.
-	"spring_rate_rear": 380000.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
+	# Rear: the 650/65R38 157D's secant rate at its rated 4127 kg and 1.6 bar max pressure, 9.65 cm
+	# down (72.8 in across, 32.6 in static loaded radius: docs/vehicles.md § Sourced figures),
+	# 4127*9.81/0.0965 = 420 kN/m. Sized at max pressure because the rear carries the implement:
+	# pressure set to a field load holds the same deflection, ~305 kN/m at 3 t a corner.
+	# COMPROMISE: the raised harrow sags a rear corner 8.2 cm of the 0.12 m `rest_length` (bare
+	# 5.1 cm), leaving ~4 cm of bump; the `plough` pass's transients stay inside it, a harder jolt
+	# reaches full bump (`RayWheel.start_overlaps`). The real tyre has its 0.42 m section in
+	# reserve; a longer rear travel is a new spec field that moves every bare-tractor row.
+	"spring_rate_rear": 420000.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
 	"anti_roll_rate": 0.0,
 	"anti_roll_rate_rear": -1.0,
 	# No link geometry: the "suspension" is the tyres.
@@ -501,7 +507,11 @@ const TRACTOR_BASE := {
 	"launch_rpm_over_idle": 0.0,
 	# Ackermann 1.0, an estimate (no ag-tractor figure sourced): headland turns at full lock are the
 	# scrub case.
-	"max_steer_deg": 38.0, "steer_speed": 1.8, "ackermann": 1.0,
+	# `steer_speed` 0.75: a hydrostatic steering unit turns the wheels only as fast as the driver
+	# winds the wheel. A Fendt 516 Vario takes 5 1/3 turns lock to lock (topagrar test), 960 deg
+	# centre to lock, and a quick human hand runs ~720 deg/s (NHTSA's fishhook rate), so lock in
+	# ~1.3 s (docs/vehicles.md § Sourced figures).
+	"max_steer_deg": 38.0, "steer_speed": 0.75, "ackermann": 1.0,
 	# steer_falloff_speed 11 m/s = 39.6 km/h is the tractor's own top speed, so the floor lock
 	# arrives exactly at type-approval road speed. 0.55 keeps field-work cost (8-12 km/h headland
 	# turns, a quarter of road speed) to ~11% while cutting 45% of road dartiness.

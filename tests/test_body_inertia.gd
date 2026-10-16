@@ -150,6 +150,29 @@ func test_a_hull_bodied_vehicle_behaves_the_same_way() -> void:
 	assert_float(mid.y / high.y).is_between(0.98, 1.02)
 
 
+func test_a_live_centre_of_mass_rides_the_mass_write() -> void:
+	# The tractor's carried implement: a body that declares no yaw takes the COM with the mass.
+	var v := await _spawn("sedan", MID)
+	var moved := v.spec.center_of_mass + Vector3(0.0, 0.1, 0.4)
+	v.set_live_mass(v.mass + 100.0, moved)
+	assert_vector(v.center_of_mass).is_equal(moved)
+	# Without one, the spec's: the refuse hopper's mass-only path, and a respawn's reset.
+	v.set_live_mass(v.spec.mass)
+	assert_vector(v.center_of_mass).is_equal(v.spec.center_of_mass)
+
+
+func test_a_body_that_declares_yaw_refuses_a_live_centre_of_mass() -> void:
+	# `index · m · a · b` is sized off the spec COM; a rear load would shrink `b` and lower the yaw
+	# moment, the wrong way. Refused loudly, and the spec COM stays.
+	var v := await _spawn("sedan", MID, 1.0)
+	var moved := v.spec.center_of_mass + Vector3(0.0, 0.0, 0.4)
+	await assert_error(func() -> void: v.set_live_mass(v.mass + 100.0, moved)) \
+		.is_push_error("%s declares yaw_dynamic_index: a live centre of mass cannot be expressed"
+				% v.name)
+	assert_vector(v.center_of_mass).is_equal(v.spec.center_of_mass)
+	assert_float(v.mass).is_equal_approx(v.spec.mass + 100.0, 1e-3)
+
+
 func test_the_tensor_scales_with_a_runtime_mass_rewrite() -> void:
 	# The refuse truck rewrites `mass` when the hopper fills (truck.gd, through
 	# BaseVehicle.set_live_mass). The computed tensor follows it on its own, which is the

@@ -346,7 +346,7 @@ script = ExtResource("10_8ignm")
 [node name="FarmImplements" type="Node3D" parent="AuthoringRoot" unique_id=1378131959]
 
 [node name="ParkedPlough" type="Node3D" parent="AuthoringRoot/FarmImplements" unique_id=841301858]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 27.23, -2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 27.48, -2)
 script = ExtResource("10_8ignm")
 collision_mode = "none"
 
@@ -354,7 +354,7 @@ collision_mode = "none"
 script = ExtResource("40_37jhm")
 
 [node name="ParkedHarrow" type="Node3D" parent="AuthoringRoot/FarmImplements" unique_id=819343994]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 27.23, -2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 27.33, -2)
 script = ExtResource("10_8ignm")
 collision_mode = "none"
 

@@ -211,7 +211,30 @@ creeps harder on them (computed) than a 30 % pedal asks.
 | --- | --- | --- |
 | Tyres, MultiBib 650/65R38 / 540/65R28; rims 20 × 38 / 16 × 28 | 207 / 83 kg ([rear](https://onlineshop.bohnenkamp.de/en/tyre-michelin-multibib-650-65-r-38-13327680), [front](https://onlineshop.bohnenkamp-benelux.com/en/tyre-michelin-multibib-540-65-r-28-13327620): light, other makes 106-135 kg); 160 kg ([Deere AL205108](https://shop.deere.com/us/product/AL205108%3A-Rim%2C-20-X-38/p/AL205108)) / ~60 kg (off [Deere's 16 × 30](https://shop.deere.com/us/product/0250282713%3A-Rim%2C-16-X-30/p/0250282713), 64 kg) | secondary / sourced, one retailer; secondary / estimate |
 | κ, then I rear / front | 0.75 (half the tyre at its tread, half over the sidewall annulus, the rim at 0.89 of its bead seat; no measured figure found); 367 kg × (0.75 × 0.66)² = 90, 143 kg × (0.75 × 0.44)² = 16 kg·m² | computed, estimate model |
+| Rear tyre rate (`spring_rate_rear`), 650/65R38 157D at its rated 4127 kg, 1.6 bar | 72.8 in across, 32.6 in static loaded radius: 9.65 cm down, a secant 420 kN/m [62] | secondary, one retailer's data sheet; computed |
+| Steering rate (`steer_speed`): a hydrostatic unit turns the wheels as fast as the hand winds | a Fendt 516 Vario takes 5 1/3 turns lock to lock [60]; a quick human hand ~720 deg/s, NHTSA's fishhook rate [61]; their ratio over the 960 deg centre to lock | sourced; secondary |
 | Brakes inboard of the final reduction | [Case IH Puma](https://www.ultimatespecs.com/tractor-specs/caseih/caseih-puma-155-2008): "differential" wet discs; on the differential shaft, upstream of the planetary reduction ([Dana US 4,646,880](https://patents.google.com/patent/US4646880)) | secondary, no workshop manual |
+
+| Implement draft (`ImplementBase.draft_rating` / `draft_shape`); speeds in km/h, forces in kN | Value | Grade |
+| --- | --- | --- |
+| Mouldboard plough, ASABE D497.7's row (plough.gd `DRAFT_SHAPE`) | A 652, B 0, C 5.1, in N per m width per cm depth; soil texture factor fine 1.0, medium 0.70, coarse 0.45 [45] | secondary |
+| Its field speed range | 5.0-10.0, typical 7.0, the reference speed (`TractorTelemetry.DRAFT_S_REF_KMH`); held above the top [46] | sourced; the table read does not name D497 |
+| Plough working depth | 25 cm, drawn, for the 4 × 14" (1.42 m) cut: furrow width over depth ~1.4, inside a design slide's 1.1-1.5 [47]; a 4-furrow plough measured in work ran 1.4 m at 28 cm [51] | estimate |
+| Plough rating (plough.gd `RATED_DRAFT_N`, also `draft_max_force`) | medium soil × the row at 7 × 1.42 m × 25 cm, 22.41; g(0) 0.72 | computed |
+| Power harrow | 3 m, 6-15 cm, speeds 3-12, rotors at 285 / 411 rpm off a 1000 rpm PTO; draught 4-13 over the trials [48]; 5.7 at 3 rising to 10.0 at 9 [49] | the trials sourced (abstract); both draught figures secondary, unverified against the paper's tables |
+| Harrow rating (harrow.gd `DRAFT_SHAPE`, `RATED_DRAFT_N`) | the line through that pair, per m of width, held above 9; over the drawn 3.0 m, the trials' own width, 8.57; g(0) 0.41 | computed, estimate |
+
+| Implement mass and ground support (`ImplementBase.mass_kg` / `ground_share`), Category 2 | Value | Grade |
+| --- | --- | --- |
+| Linkage (`headstock.tscn`) | lower pins 0.86 m apart at the ball centres (34 in [58]; 32 in between the link ends [59]); mast 0.533 m, inside the class's 15-24 in [59] | secondary |
+| Plough, 4 × 14" conventional | 900 kg: Kverneland AD Variomat 85 at 4 furrows, 80-100 hp [50] | sourced |
+| Its ground share | 0.35: the depth wheel carried about a third of a 2180 kg 4-furrow plough's weight, top link free, in work [51] | sourced, read off a graph |
+| Power harrow, 3.0 m with packer | 1550 kg: Kverneland M 3.0 at 1550 (its summary table says 927) [52]; Amazone KE 3002 at 1530 with its roller, 1040 without [53]; Kuhn HR 3030 at 1679, Cat 2/3 [54] | sourced; secondary |
+| Its ground share | 0.8: the roller sets the depth and carries the machine | estimate |
+| Rotary cutter, 7 ft | 620 kg: Land Pride RCR2684 at 1370 lb with a single tail wheel, Cat II/III, 60-130 hp [55]; Woods BB84.40 at 1041-1132 lb [56] | sourced; secondary |
+| Its ground share | the mass centre's lever over the tail wheel's (1.21 / 2.8 m behind the pins, off `mower.tscn`), the top link floating | computed; the float an estimate |
+| Spreader, ~800 L single disc | 150 kg empty, Demir DMR SF 800 [57]; carried full of AN prill at 950 kg/m³ | sourced |
+| Front-axle ballasting minimum (the `hitch` pass's guideline) | ≥ 20 % of total weight on the front axle to keep the tractor steerable: John Deere operator's manual, "Select Ballast Carefully" | sourced, no link recorded |
 
 Sources:
 1. Ubysz, "Problems of rotational mass in passenger vehicles", Transport Problems 5(1), 2010, Table 1: http://transportproblems.polsl.pl/pl/archiwum/2010/zeszyt1/2010t5z1_04.pdf
@@ -258,6 +281,24 @@ Sources:
 42. Ford Global Technologies, US 10,343,690 B2 (inertia-phase output torque set by the oncoming clutch): https://patents.google.com/patent/US10343690B2/en
 43. Zhang et al., "Study on Shifting Performance of Tractor Multi-Clutch under Different Engagement Rules", Agriculture 14(2) 254, 2024 (a simulation; abstract read): https://ideas.repec.org/a/gam/jagris/v14y2024i2p254-d1333372.html
 44. GM Global Technology Operations, US 9,327,733 B2 (engine torque held reduced through the inertia phase): https://patents.google.com/patent/US9327733B2/en
+45. Hefele and Oksanen, "EcoTIM: Fuel-saving multi-brand tillage with ISO 11783 TIM", arXiv 2604.17991, 2026 (its draft model and Table 2, quoting ASAE D497.7): https://arxiv.org/html/2604.17991
+46. University of Arizona, "Table 3 – Field efficiency, field speed, and repair and maintenance cost parameters" (an archived copy read): https://web.archive.org/web/20240420133028/https://ag.arizona.edu/crop/equipment/agmgttable3.pdf
+47. "Mouldboard plough" design slides (furrow width over depth 1.1-1.5): https://www.slideshare.net/slideshow/mb-ploughpptx/254915097
+48. Balsari et al., "Performance analysis of a tractor - power harrow system under different working conditions", Biosystems Engineering 202, 28-41, 2021, doi:10.1016/j.biosystemseng.2020.11.009 (abstract read via OpenAlex; its highlights seen only in search results; the full text sits behind a bot check): https://www.sciencedirect.com/science/article/pii/S1537511020303147
+49. Academia.edu's generated summary of [48], seen only in search results: https://www.academia.edu/83175306/Performance_analysis_of_a_tractor_power_harrow_system_under_different_working_conditions
+50. Kverneland, "Kverneland AD", technical specifications (AD Variomat 85: 730 / 900 / 1090 kg at 3 / 4 / 5 furrows): https://ien.kverneland.com/ploughs/conventional-ploughs/kverneland-ad
+51. Oberhaus, Biller, Keuper and Stachnik, "Load Transfer from the Fully-mounted Plough to the Tractor", Landtechnik 60(6) 330-331, 2005 (Fig. 2 at 0 MPa; read in full): https://www.agricultural-engineering.eu/landtechnik/article/download/2005-60-6-330-331/2005-60-6-330-331-en-pdf/2059
+52. Kverneland, "M series" power harrows, technical data (with levelling bar, tooth packer roller and PTO shaft): https://uk.kverneland.com/tillage-tools/power-harrows/m-series
+53. AllMachines, "Amazone KE 3002-150" (2293 lb without roller, 3373 lb with KW 580): https://www.allmachines.com/harrows/amazone-ke-3002-150
+54. Kuhn North America, HR 1030 series (HR 3030: 3702 lb with MaxiPacker): https://kuhn-usa.com/node/14441
+55. Land Pride, RCR2684 rotary cutter manual, form 312-785S, 2012-03-05: https://www.manualsdir.com/manuals/168383/land-pride-rotary-cutter-rcr2684.html
+56. Woods BB84.40 dealer listings (1041 and 1132 lb), seen only in search results: https://www.parishtractor.com/product/bb84-40
+57. Demir Machinery, single-disc fertilizer spreader (DMR SF 800: 800 L, 150 kg): https://www.demirmachinery.com/fertilizer-spreader-single-disc/
+58. Wikipedia, "Three-point hitch" (category table: lower hitch spacing 28 / 34 / 40 in): https://en.wikipedia.org/wiki/Three-point_hitch
+59. Koenig Equipment, "What are the Differences in 3-point Hitch Categories?" (lift arm spacing 26 / 32 / 38 in; Category 2 mast 15-24 in): https://blog.koenigequipment.com/what-are-differences-3-point-hitch-categories
+60. top agrar, "Testprotokoll Fendt 516 Vario" ("Das Lenkrad ist mit 5 1/3 Umdrehungen lang übersetzt"; under 4 with VarioActive): https://www.topagrar.com/technik/aus-dem-heft/testprotokoll-fendt-516-vario-9670043.html
+61. NHTSA rollover-resistance manoeuvres (fishhook at 720 deg/s handwheel rate; J-turn 1000 deg/s), seen only in search results: https://www.nhtsa.gov/sites/nhtsa.gov/files/forkenbrock_0.pdf
+62. NTS Tire Supply, "650/65R38 Firestone Performer 65 R-1W 157D" (diameter 72.8, static load radius 32.6, 4127 kg, 23 psi): https://store.ntstiresupply.com/shop/003015-650-65r38-firestone-performer-65-r-1w-157d-100-34994
 
 **Converter.** A converter body (`coupling` CONVERTER: the cars, the vans, `garbage-truck` and
 `firetruck`) slips through `TorqueConverter`'s law, solved with both sides' end-of-tick speeds
@@ -754,6 +795,10 @@ outriggers, IPMD v5 / VIMF): cars 0.93-1.20, median 1.03 (n 35), shipped on `CAR
 pickups 0.85-1.02, median 0.94 (36), shipped on `pickup*`. No measured open-wheeler, heavy truck or
 tractor was found, so those stay computed: `race` 1.00, `garbage-truck` 1.64, `firetruck` 1.56, the
 tractor 0.96.
+A carried implement reaches the tensor only through the COM it moves (`M d'²` about the shapes,
+not its own lever `m_t m_i / M · D²`), a COMPROMISE at `TractorVehicle._apply_implement_mass`:
+raised, Jolt carries 57-86 % of the composite's yaw (plough 57, mower 72, harrow 79, spreader 86),
+60-82 % of its pitch and 92-118 % of its roll (`measure_vehicles -- tractor-kenney 20 hitch`).
 Guards: `test_body_inertia`, and `test_kenney_variants` holds every declared index inside its band.
 A body with its COM off z 0 reads its yaw ~5 % apart over 1 m of COM height in the principal frame
 (the `I_yz` product), parallel axis, not an engine effect.
@@ -924,11 +969,18 @@ region (`doc_region.gd`); refresh a figure by re-running, never by hand.
 # trailer=<name|bobtail>, tc (accel pass slip-limited at the grip peak). `stall` (both pedals floored
 # in manual D1, TC off, 10 s), `handbrake` (60 km/h steer step, with and without the lever), `step`
 # (step steer at the family's speeds, pedal held then lifted), `circle` (full right lock at 5 km/h,
-# no attachment unless trailer=) and `kerb` (12 / 20 cm steps) replace the other passes.
+# no attachment unless trailer=), `hitch` (parked: axle loads bare, then each carried implement or
+# trailer=<implement> lowered / raised / lowered, against statics and the composite tensor), `plough`
+# (on level 1's field: each draft implement or trailer=<implement> down, held at 3 / 7 / 10 km/h
+# against D497, then a floored standing start's shifts; `trace[=n] trace_s=` prints the start per
+# tick; `course` runs tractor_plough's Row with its light bands instead, the plough down at 3 / 5 /
+# 7 / 9 km/h and raised at 7 / 16) and `kerb` (12 / 20 cm steps) replace the other passes.
 # `rear_lat_grip=` / `bar_rear=` / `cornering_peak=` / `ackermann=<x>`: that spec field, in memory.
 & $GODOT --headless --path . res://tools/measure_vehicles.tscn -- sedan-sports 45
 & $GODOT --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 60 step
 & $GODOT --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 60 circle ackermann=0
+& $GODOT --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- tractor-kenney 20 hitch
+& $GODOT --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- tractor-kenney 20 plough
 # launch trace + gates on the accel pass: trace[=<every n ticks>] trace_s=<s printed, 3>; notc (the
 # body's TC off), gear=<1-6> (manual, held in that byte); not with a doc= preset
 & $GODOT --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- semi 40 trace notc
@@ -1263,17 +1315,17 @@ cells that did not cross: `sedan` ditch_50 (stuck+1.1b .99), `sedan tc` ditch_50
 ```
 floored                   flat           bumps_5        bumps_10       bumps_20       ditch_20       ditch_35       ditch_50
 suv                       19.6s .71      19.6s .71      19.2s .71      18.9s .71      4.1s .67       5.0s .64       4.3s .78
-tractor-kenney            15.5s          14.6s          23.5s .74      51.2s .63      3.9s           4.2s .80       stuck+4.6 .77
-tractor-kenney mfwd       16.2s          16.1s          16.0s          15.6s          3.8s           3.6s           3.8s
+tractor-kenney            15.5s          14.6s          22.3s .74      t/o+21.5 .62   3.8s           4.2s .80       stuck+4.3 .77
+tractor-kenney mfwd       16.2s          16.2s          16.0s          15.6s          3.8s           3.7s           3.8s
 tractor-kenney mfwd diff  16.2s          16.2s          16.0s          15.8s          3.8s           3.7s           3.8s
 sedan                     17.9s .93      18.7s .93      18.1s .93      17.0s .95      3.0s .91       stuck+3.1 .97  stuck+1.1b .99
 pickup                    19.4s .93      20.4s .94      19.4s .93      17.9s .94      3.4s .92       3.4s .92       stuck+3.0b .99
 hatchback-sports          17.1s .93      17.5s .93      17.5s .93      14.6s .94      3.2s .91       8.0s .96       stuck+1.8 .97
 tc
 suv                       19.6s .71      19.6s .71      19.2s .71      18.9s .71      4.1s .67       5.0s .64       4.5s .75
-tractor-kenney            15.2s .78      15.4s .72      16.2s .71      stuck+2.4 .41  4.0s .68       4.6s .73       stuck+4.2 .51
-tractor-kenney mfwd       16.1s          15.8s          15.5s .41      16.4s .41      3.7s           3.7s           4.1s .57
-tractor-kenney mfwd diff  16.1s          15.8s          15.5s          15.7s .44      3.7s           3.7s           4.1s .57
+tractor-kenney            15.2s .78      15.7s .73      23.0s .73      stuck+2.1 .35  3.9s .69       4.5s .72       stuck+4.1 .50
+tractor-kenney mfwd       16.2s          15.8s          15.6s .41      16.3s .41      3.8s           3.7s           4.2s .48
+tractor-kenney mfwd diff  16.2s          15.8s          15.3s          15.7s .44      3.8s           3.7s           4.2s .48
 sedan                     17.9s .93      18.7s .93      18.1s .93      17.0s .95      3.0s .91       stuck+3.1 .97  stuck+1.1b .99
 pickup                    19.4s .93      20.4s .94      19.4s .93      17.9s .94      3.4s .92       3.4s .92       stuck+3.0b .99
 ```

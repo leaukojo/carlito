@@ -68,6 +68,29 @@ func solve(pos01: float) -> Dictionary:
 	}
 
 
+## Bisection steps in float_pos: 2^-12 of the stroke, ~0.14 mm of ball travel.
+const FLOAT_STEPS := 12
+
+
+## The smallest pos01 at or above `commanded` whose least support clearance is ≥ 0, clamped to 1.
+## `clearance` takes a solve() result and returns the lowest support's height above its ground
+## (m); it is assumed to rise with lift, as a support under a lifting implement does.
+func float_pos(commanded: float, clearance: Callable) -> float:
+	var lo := clampf(commanded, 0.0, 1.0)
+	if float(clearance.call(solve(lo))) >= 0.0:
+		return lo
+	var hi := 1.0
+	if float(clearance.call(solve(hi))) < 0.0:
+		return hi
+	for i in FLOAT_STEPS:
+		var mid := (lo + hi) * 0.5
+		if float(clearance.call(solve(mid))) >= 0.0:
+			hi = mid
+		else:
+			lo = mid
+	return hi
+
+
 ## Intersection of circle (c1, r1) with circle (c2, r2), picking the root furthest along `prefer`
 ## (from c1): the branch must be stable across the sweep, and a fixed perpendicular sign is not
 ## (which side is "up" flips as c1 -> c2 rotates). Returns { point: Vector2, reachable: bool };

@@ -348,7 +348,8 @@ func reset_session_state() -> void:
 	_steer = 0.0
 	_prev_velocity = Vector3.ZERO  # zero accel/impact history so the teleport isn't read as an impact
 	_impact_hold = 0.0
-	# A body that rewrites `mass` at runtime (the refuse truck's hopper) is back to spec mass.
+	# A body that rewrites `mass` at runtime (the refuse truck's hopper, the tractor's implement) is
+	# back to spec mass and COM.
 	set_live_mass(spec.mass)
 	if drive != null:
 		drive.respawn()
@@ -363,8 +364,21 @@ func reset_session_state() -> void:
 
 ## The one runtime `mass` write for a wheeled body: the RayWheel one-tick clamps are sized off
 ## `corner_mass`, so the corners are re-shared in the same call (WheelDrive.set_corner_mass_from).
-func set_live_mass(kg: float) -> void:
+## `com` is the live centre of mass (body space) of a carried load (the tractor's implement);
+## without one, the spec's. A body that declares its yaw refuses one: `index · m · a · b` is sized
+## off the spec COM, and a rear load would shrink `b` and LOWER the yaw moment.
+func set_live_mass(kg: float, com := Vector3.INF) -> void:
 	mass = kg
+	var target := spec.center_of_mass
+	if com.is_finite():
+		if spec.yaw_dynamic_index > 0.0:
+			push_error("%s declares yaw_dynamic_index: a live centre of mass cannot be expressed"
+					% name)
+		else:
+			target = com
+	# Written only on change: the refuse hopper's mass-only path leaves the COM untouched.
+	if center_of_mass != target:
+		center_of_mass = target
 	_declare_yaw(kg)
 	if drive != null:
 		drive.set_corner_mass_from(kg)

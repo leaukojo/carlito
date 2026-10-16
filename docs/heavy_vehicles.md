@@ -73,8 +73,9 @@ VehicleTelemetry` adds chassis, body-network and trailer-bus "out" fields.
   reports torque applied, not the request (J1939 SPN 520 is negative; the contract publishes the
   magnitude).
 - `axle_load` is read out of the sim: summed `RayWheel.suspension_force` on the rear axle in
-  kg (SPN 582), never a mass lookup. `warn` **11500** is the EU 11.5 t drive-axle limit,
-  `warn_side: high`.
+  kg (SPN 582, `WheelDrive.rear_suspension_force`), never a mass lookup. `warn` **11500** is the
+  EU 11.5 t drive-axle limit, `warn_side: high`. The tractor publishes it too (its rear is the
+  drive axle), where it never reaches the warn.
 
 ### Lamps and the cluster
 
@@ -307,7 +308,8 @@ them apart.
 `hitch_pos`, `pto`, `pto_mode` (540/1000), `diff_lock`, `fwd_drive`, `guidance_curvature`,
 `scv_flow`. Out (13): `hitch_pos_actual`, `pto_state`, `pto_rpm`, `engine_load`,
 `implement_connected`, `implement_type`, `diff_lock_state`, `fwd_drive_state`,
-`wheel_speed`, `ground_speed`, `wheel_slip`, `engine_hours`, `draft_force`.
+`wheel_speed`, `ground_speed`, `wheel_slip`, `engine_hours`, `draft_force`. It also publishes
+the truck's `j1939` `axle_load`: lifting an implement moves its weight onto the rear axle.
 
 - One body, five swappable attachments, on two connections. The drivable tractor is a single
   variant (`kenney/tractor-kenney.tscn`); `E` cycles the attachment — spreader → plough →
@@ -350,19 +352,61 @@ them apart.
 
 - Draft is a real force: with a draft-relevant implement (plough, power harrow) down in the
   ploughable field, `TractorVehicle._apply_draft` puts a rearward force at the hitch point
-  (rated draft × working depth × soil × speed ramp, `TractorTelemetry.draft_newtons`).
+  (`TractorTelemetry.draft_newtons`): the implement's own rating × working depth × soil × ASABE
+  D497's speed factor at the hitch's speed (`ImplementBase.draft_rating` / `draft_shape`, held at
+  the top of its speed range) × a fade to 0 below `DRAFT_V_CRAWL`. `draft_max_force`, the 100 % end
+  of `draft_force`, is the plough's rating. The level's light bands paint soil 0.5; D497's
+  coarse-to-medium texture ratio is 0.64.
   `engine_load`, rpm sag and `wheel_slip` move as consequences. Lift comes from
   `ThreePointHitch.ball_lift()`; working depth is the implement's own
-  (`ImplementBase.tool_depth` — plough 0.055 m, harrow tines 0.02 m). "In soil" is splat
+  (`ImplementBase.tool_depth` — plough 0.25 m, harrow tines 0.10 m). "In soil" is splat
   channel 4 via `HeightmapTerrain.channel_weight_at`.
 - `ThreePointHitch` (`src/vehicles/tractor/three_point_hitch.{gd,tscn}`) is tractor anatomy,
   whole with nothing attached. `HitchLinkage` (pure math, tested) solves the side view as a
   four-bar — implement pitch and rockshaft arm angle fall out of a circle-circle
   intersection, why implements tip back as they lift.
-- Draft 60 Hz margin: below `DRAFT_SPEED_REF` the draft is a linear damper, `k = rated /
-  DRAFT_SPEED_REF`, stable while `k*dt/m < 2`; the shipped rating sits far inside that
-  (`test_the_shipped_rating_keeps_the_60hz_damper_margin` holds `k*dt/m` under 0.5). The one-tick
-  `damped_force` cap behind it is unreachable at any plausible rating and bounds only the linear impulse.
+- Draft 60 Hz margin: below `DRAFT_V_CRAWL` the draft is a linear damper on the hitch point's
+  speed, which meets the effective mass `m_eff` (the body plus the pitch the hitch's arm turns,
+  `TractorVehicle.hitch_effective_mass`), stable while `k*dt/m_eff < 2`
+  (`test_the_shipped_draft_keeps_the_60hz_damper_margin_on_the_hitch` holds it under 0.5). The
+  one-tick cap behind it, `m_eff · |v_hitch| / dt`, bounds the angular impulse with the linear one.
+- Weight: the linkage's carried share of an implement folds into the chassis' live mass and COM
+  (`TractorVehicle._apply_implement_mass`, `VehicleMath.carried_com`). At the bottom stop the
+  ground carries `ground_share()` (depth wheel, roller, tail wheel), handed to the linkage across
+  `support_lift()` (`ImplementBase.carried01`); the spreader never touches, so attaching it, not
+  lifting it, moves its load. Raised, the plough and the harrow take the front under John Deere's
+  ballasting minimum, ≥ 20 % of total weight on the front axle: reported, not enforced; that is
+  what front weights fix. `measure_vehicles -- tractor-kenney 20 hitch`, parked, per-axle kg off the
+  springs (computed 2026-10-16; every reading within 1.6 % of the statics `m e / L`):
+
+  | Implement | Front / rear, bottom stop | Front / rear, raised | Front share, raised |
+  |---|---|---|---|
+  | none | 2655 / 4345 | | 37.9 % |
+  | Plough | 1843 / 5742 | 1452 / 6448 | 18.4 % |
+  | Power harrow | 2419 / 4891 | 1538 / 7012 | 18.0 % |
+  | Rotary mower | 2283 / 5069 | 2027 / 5593 | 26.6 % |
+  | Spreader, full | 1987 / 5916 | 2141 / 5761 | 27.1 % |
+
+  Carried full, the spreader barely moves the handling: the full-lock circle and the step-steer yaw
+  rates stay within a few percent of bare, the yaw index read off the tensor 1.06 against 0.96. The
+  light front shows as no extra understeer in the linear range (`20 circle`, `20 step`, with and
+  without `trailer=spreader`).
+  Held on full soil (`20 plough`), the plough's and the harrow's measured draft sit on D497 at each
+  held speed, to 0.0 %. Floored from rest with the plough down on the open diff, the launch holds
+  both rears near the slip peak until the pack locks; the step in crank torque then takes them past
+  it and the right rear, lighter under the plough's left-of-centre mass, peels to ~50 % slip while
+  the governor holds the speed. The diff lock settles the same start at ~10 % slip: honest, a
+  ploughing driver engages it (`20 plough trace=3 trace_s=6`).
+  Not modelled: draft control (the Ferguson hitch), a spreader that empties, a composite inertia
+  declaration, front ballast as an attachment, a start gear that reads draft, skid drag.
+- Ground support is drawn, not simulated: `ThreePointHitch` keeps two poses. Physics (ball lift,
+  hitch point, implement COM) reads the commanded solve on flat ground; the drawn pose floats the
+  implement up until its `support_points()` meet the ground under them
+  (`HitchLinkage.float_pos`, one ray per point while lowered), as a linkage in float does. A float
+  moves no weight or draft depth, and a dip under the support leaves the implement on its stop.
+  The drawn pose chases that contact through a critically damped follower, stiff into the ground
+  and soft out of it (`ThreePointHitch.FLOAT_OMEGA_UP` / `_DOWN`): copied tick by tick, the
+  implement jumped every facet of the 8-bit heightmap and landed on its stop dead.
 - Ballast: gear-1 wheel force at `Drivetrain.launch_target_rpm` is about 1.5x the rear grip at 7 t /
   `front_weight` 0.38 (about 3.4x unballasted at 4 t 50/50). Top
   speed in 6th is rpm-bound, so ballast moves only acceleration and grade climb.
@@ -402,7 +446,7 @@ them apart.
   run the fronts wide with only a few degrees of roll; on the 1.31 / 1.49 m track the same two runs
   overturned.
 - Body scale 1.35 (2.99 × 2.17 m, 2.12 m wheelbase). It rides on its drawn tyres, 0.44 m front /
-  0.66 m rear. Suspension is the tyres: 330 / 380 kN/m, `rest_length` 0.12 m, ~33 % static sag.
+  0.66 m rear. Suspension is the tyres: 330 / 420 kN/m, `rest_length` 0.12 m, ~33 / 42 % static sag.
   A side jolt at speed rolls a couple of degrees and rebounds a fraction of it (roll damping ratio
   ~0.37); the narrow track rolls further and rebounds more.
 
@@ -410,9 +454,13 @@ them apart.
 
 `ImplementBase` (`implement_base.gd`) declares which of the five connections it uses, its
 ISO 11783-1 device class, its A-frame (`mast_offset`), whether it works in soil
-(`draft_relevant()`) and reach lowered (`tool_depth()`). Implements are visual only — no
-CollisionShape, no joint. The declared connections are load-bearing: `ISOBUS_DATA` decides
-whether `implement_connected`/ `implement_type` report anything; `PTO`/`SCV` decide whether
+(`draft_relevant()`) and reach lowered (`tool_depth()`), its draft (`draft_rating()` at
+`TractorTelemetry.DRAFT_S_REF_KMH`, full depth and soil; `draft_shape()`, D497's A, B, C and the top
+of its speed range), and its mass, centre, ground share and the `support_points()` it rests on.
+Implements are visual only — no CollisionShape, no joint; their weight reaches the chassis as live
+mass and COM (`TractorVehicle._apply_implement_mass`). The declared connections are load-bearing:
+`ISOBUS_DATA` decides whether `implement_connected`/ `implement_type` report anything; `PTO`/`SCV`
+decide whether
 drive/flow reach the machine. Attach/detach is a logical address claim — `ImplementCatalog`
 holds the cycle order with DETACHED a real entry; `E` cycles it via duck-typed
 `cycle_implement()`.
@@ -422,12 +470,14 @@ holds the cycle order with DETACHED a real entry; `E` cycles it via duck-typed
 `src/vehicles/tractor/implements/`, each a different connection set and a device class no
 other machine may share (`test_implement_catalog`):
 
-| Implement | Connections | `implement_type` | Draft | Moving part |
+| Implement, drawn class | Connections | `implement_type` | Draft depth | Moving part |
 |---|---|---|---|---|
-| Plough | three-point, bus | 2 tillage | 0.055 m | gauge wheel arm swings on lift |
-| Power harrow | + PTO | 3 secondary tillage | 0.02 m | tine rotor, transverse axis |
-| Rotary mower | + PTO | 9 forage | none | rotor, vertical axis |
-| Fertilizer spreader | + PTO, SCV | 5 fertilizer | none | disc + `scv_flow` hopper gate |
+| Plough, 4 × 14" | three-point, bus | 2 tillage | 0.25 m | gauge wheel arm swings on lift |
+| Power harrow, 3.0 m | + PTO | 3 secondary tillage | 0.10 m | tine rotor, transverse axis |
+| Rotary mower, 7 ft | + PTO | 9 forage | none | rotor, vertical axis |
+| Fertilizer spreader, ~800 L | + PTO, SCV | 5 fertilizer | none | disc + `scv_flow` hopper gate |
+
+Their masses, ground shares and draft ratings: `docs/vehicles.md` § Sourced figures.
 
 And the fifth cycle entry, none of the above (§ drawbar below):
 

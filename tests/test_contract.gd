@@ -30,7 +30,7 @@ func _real_contract() -> ContractScript.ContractData:
 func test_real_contract_is_valid() -> void:
 	var data := _real_contract()
 	assert_array(data.errors).is_empty()
-	assert_int(data.version).is_equal(48)
+	assert_int(data.version).is_equal(49)
 
 
 func _assert_core_signals_present(names: PackedStringArray, dir: String) -> void:
@@ -379,16 +379,20 @@ func test_j1939_chassis_signals_are_truck_only_and_flavored() -> void:
 	# trucks would mislabel the protocol, since signals are unique by (name, dir)).
 	assert_array(truck_in).not_contains(["diff_lock", "fwd_drive", "hitch_pos", "scv_flow"])
 	assert_array(truck_out).not_contains(["diff_lock_state", "draft_force", "pto_rpm"])
-	# The J1939 chassis signals belong to the truck alone.
+	# The J1939 chassis signals belong to the truck alone, but for axle_load (below).
 	for entry: Array in [["retarder", "in"], ["red_stop", "in"], ["amber_warn", "in"],
 			["protect_lamp", "in"], ["air_primary", "out"], ["air_secondary", "out"],
-			["retarder_state", "out"], ["axle_load", "out"]]:
+			["retarder_state", "out"]]:
 		var sig := data.get_signal_def(entry[0], entry[1])
 		assert_object(sig).override_failure_message("missing %s/%s" % entry).is_not_null()
 		assert_str(sig.flavor) \
 			.override_failure_message("%s/%s must be j1939-flavored" % entry).is_equal("j1939")
 		assert_array(sig.vehicles) \
 			.override_failure_message("%s/%s must be truck-only" % entry).is_equal(["truck"])
+	# SPN 582 is the drive axle's on both families: the tractor's rear is always driven.
+	var axle := data.get_signal_def("axle_load", "out")
+	assert_str(axle.flavor).is_equal("j1939")
+	assert_array(axle.vehicles).contains_exactly_in_any_order(["tractor", "truck"])
 
 
 # --- boat NMEA 2000 ---

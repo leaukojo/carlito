@@ -350,7 +350,7 @@ func _sample(delta: float) -> Dictionary:
 		"bogie_comp": bogie_frac,
 		"rear_axle_kg": t.axle_load,
 		"trailer_axle_kg": t.trailer_axle_load,
-		"bogie_kg": (TruckTelemetry.axle_load_kg(trailer.bogie_suspension_force())
+		"bogie_kg": (VehicleTelemetry.axle_load_kg(trailer.bogie_suspension_force())
 				if trailer != null and is_instance_valid(trailer) else 0.0),
 		"kingpin_y": kingpin_y,
 		"coupled": trailer != null and is_instance_valid(trailer),

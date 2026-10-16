@@ -33,12 +33,8 @@ static func carried_mass(base_mass: float, payload_kg: float) -> float:
 ## and pitch, not a compensation).
 static func carried_com(base_com: Vector3, hook_local: Vector3, base_mass: float,
 		payload_kg: float) -> Vector3:
-	var m := maxf(base_mass, 0.0)
-	var p := clampf(payload_kg, 0.0, MAX_PAYLOAD_KG)
-	var total := m + p
-	if total <= 0.0:
-		return base_com
-	return (base_com * m + hook_local * p) / total
+	return VehicleMath.carried_com(base_com, hook_local, base_mass,
+			clampf(payload_kg, 0.0, MAX_PAYLOAD_KG))
 
 
 ## What the hook reports it holds, in newtons (uavcan.equipment.hardpoint.Status `payload_weight`

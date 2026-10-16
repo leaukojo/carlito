@@ -20,6 +20,8 @@ const COOLANT_HOT := 108.0       ## degC steady running temp at full load
 const BATTERY_RESTING := 12.6    ## V engine off
 const BATTERY_CHARGING := 14.2   ## V engine running (alternator), before load droop
 
+const GRAVITY := 9.8  ## m/s^2, for the suspension-force -> kilograms read
+
 # --- status bitfield (contract 'status', u16) ---
 ## FROZEN wire layout: a new flag appends at bit 7 or above, never renumbering (contract-edit skill).
 const ST_IGNITION := 1 << 0    ## engine running (key in Ignition)
@@ -145,6 +147,12 @@ static func battery_volts(running: bool, load_frac: float) -> float:
 	if not running:
 		return BATTERY_RESTING
 	return BATTERY_CHARGING - 0.6 * clampf(load_frac, 0.0, 1.0)
+
+
+## Axle load (kg) from the summed suspension force (N) on that axle, not a mass lookup. Shared
+## by the truck's drive axle and trailer bogie and the tractor's rear axle (SPN 582).
+static func axle_load_kg(suspension_force_n: float) -> float:
+	return maxf(suspension_force_n, 0.0) / GRAVITY
 
 
 ## Engine load, J1939 SPN 92: delivered torque over peak torque, plus a parasitic PTO term.

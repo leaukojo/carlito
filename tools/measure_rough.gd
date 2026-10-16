@@ -166,6 +166,8 @@ func _next_config() -> void:
 	if _level.vehicle == null or GameState.current_variant != variant:
 		_level.set_vehicle(variant)
 	_car = _level.vehicle
+	if _car is TractorVehicle:
+		_car.call(&"set_attachment", AttachmentCatalog.NONE)  ## bare: an implement's weight moves the axles
 	_car.contact_monitor = true
 	_car.max_contacts_reported = 8
 	_trials.clear()

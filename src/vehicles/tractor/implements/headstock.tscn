@@ -4,7 +4,8 @@
 ; only part of an implement whose dimensions are not free: the two lower pins must meet the
 ; tractor's lower-link ball ends and the top pin must sit exactly at
 ; ImplementBase.mast_offset() = (z -0.06, y 0.533), which is what HitchLinkage closes its
-; four-bar on. It lives in ONE scene so the four implements cannot drift apart from the
+; four-bar on. Category 2: lower pins 0.86 m apart (34 in, ball centres; 32 in between the
+; link ends), mast 0.533 m inside the class's 15-24 in (docs/vehicles.md § Sourced figures). It lives in ONE scene so the four implements cannot drift apart from the
 ; linkage one at a time.
 ;
 ; Origin is ON THE LOWER PIN LINE, which is where ThreePointHitch's Mount sits, so an
@@ -44,7 +45,7 @@ rings = 0
 material = SubResource("MatSteel")
 top_radius = 0.05
 bottom_radius = 0.05
-height = 0.8
+height = 0.92
 radial_segments = 8
 rings = 0
 
@@ -79,31 +80,31 @@ rings = 0
 [node name="Headstock" type="Node3D"]
 
 [node name="PinL" type="MeshInstance3D" parent="."]
-position = Vector3(-0.37, 0, 0)
+position = Vector3(-0.43, 0, 0)
 rotation = Vector3(0, 0, 1.5707964)
 mesh = SubResource("MeshPin")
 
 [node name="PinR" type="MeshInstance3D" parent="."]
-position = Vector3(0.37, 0, 0)
+position = Vector3(0.43, 0, 0)
 rotation = Vector3(0, 0, 1.5707964)
 mesh = SubResource("MeshPin")
 
 [node name="CollarL" type="MeshInstance3D" parent="."]
-position = Vector3(-0.335, 0, 0)
+position = Vector3(-0.395, 0, 0)
 rotation = Vector3(0, 0, 1.5707964)
 mesh = SubResource("MeshCollar")
 
 [node name="CollarR" type="MeshInstance3D" parent="."]
-position = Vector3(0.335, 0, 0)
+position = Vector3(0.395, 0, 0)
 rotation = Vector3(0, 0, 1.5707964)
 mesh = SubResource("MeshCollar")
 
 [node name="LugL" type="MeshInstance3D" parent="."]
-position = Vector3(-0.305, 0, 0)
+position = Vector3(-0.365, 0, 0)
 mesh = SubResource("MeshLug")
 
 [node name="LugR" type="MeshInstance3D" parent="."]
-position = Vector3(0.305, 0, 0)
+position = Vector3(0.365, 0, 0)
 mesh = SubResource("MeshLug")
 
 [node name="CrossTube" type="MeshInstance3D" parent="."]

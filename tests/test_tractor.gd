@@ -302,8 +302,9 @@ func test_wheelbase_is_measured_off_the_shipped_tractor_wheels() -> void:
 
 
 # --- draft force (the pure model) ---------------------------------------------
-## Model sizes draft force: depth from linkage lift, soil/speed factors, RESISTANCE,
-## 60 Hz damper margin, one-tick backstop, published percentage.
+## Model sizes draft force: depth from linkage lift, soil, D497's speed factor and the crawl
+## taper, RESISTANCE, the 60 Hz damper margin on the hitch's effective mass, one-tick backstop,
+## published percentage.
 
 func test_draft_depth_comes_out_of_the_linkage_lift() -> void:
 	var full := PloughScript.SHARE_DEPTH_M
@@ -324,83 +325,139 @@ func test_draft_depth_is_bounded_and_survives_a_degenerate_depth() -> void:
 	assert_float(TractorT.draft_depth01(0.0, 0.0)).is_equal(0.0)
 
 
+## A speed-independent shape: g(S) = 1 everywhere, so these tests isolate one factor at a time.
+const FLAT := Vector4(1.0, 0.0, 0.0, 0.0)
+## The reference speed in m/s, where every rating is given.
+const V_REF := TractorT.DRAFT_S_REF_KMH / 3.6
+const HarrowScript := preload("res://src/vehicles/tractor/implements/harrow.gd")
+
+
 func test_draft_opposes_travel_in_both_directions() -> void:
 	# Signed along FORWARD, so it is negative while driving forward: a resistance, never a push.
-	var fwd := TractorT.draft_newtons(TractorT.DRAFT_SPEED_REF, 1.0, 1.0, 12000.0, 4000.0, 1.0 / 60.0)
+	var fwd := TractorT.draft_newtons(V_REF, 1.0, 1.0, 12000.0, FLAT, 4000.0, 1.0 / 60.0)
 	assert_float(fwd).is_equal_approx(-12000.0, 1e-3)
-	var rev := TractorT.draft_newtons(-TractorT.DRAFT_SPEED_REF, 1.0, 1.0, 12000.0, 4000.0, 1.0 / 60.0)
+	var rev := TractorT.draft_newtons(-V_REF, 1.0, 1.0, 12000.0, FLAT, 4000.0, 1.0 / 60.0)
 	assert_float(rev).is_equal_approx(12000.0, 1e-3)
 
 
 func test_draft_scales_with_depth_and_soil_and_is_zero_without_either() -> void:
-	var v := TractorT.DRAFT_SPEED_REF
+	var v := V_REF
+	var dt := 1.0 / 60.0
 	# Half depth, full soil.
-	assert_float(TractorT.draft_newtons(v, 0.5, 1.0, 12000.0, 4000.0, 1.0 / 60.0)) \
+	assert_float(TractorT.draft_newtons(v, 0.5, 1.0, 12000.0, FLAT, 4000.0, dt)) \
 			.is_equal_approx(-6000.0, 1e-3)
 	# Full depth over half-painted soil (a splat border) — the same halving.
-	assert_float(TractorT.draft_newtons(v, 1.0, 0.5, 12000.0, 4000.0, 1.0 / 60.0)) \
+	assert_float(TractorT.draft_newtons(v, 1.0, 0.5, 12000.0, FLAT, 4000.0, dt)) \
 			.is_equal_approx(-6000.0, 1e-3)
 	# Out of the soil, or not over soil at all: a clean zero, not a small polite number.
-	assert_float(TractorT.draft_newtons(v, 0.0, 1.0, 12000.0, 4000.0, 1.0 / 60.0)).is_equal(0.0)
-	assert_float(TractorT.draft_newtons(v, 1.0, 0.0, 12000.0, 4000.0, 1.0 / 60.0)).is_equal(0.0)
-	# And a machine with no rated draft (or garbage off a bad edit) produces none.
-	assert_float(TractorT.draft_newtons(v, 1.0, 1.0, 0.0, 4000.0, 1.0 / 60.0)).is_equal(0.0)
-	assert_float(TractorT.draft_newtons(v, 1.0, 1.0, -500.0, 4000.0, 1.0 / 60.0)).is_equal(0.0)
+	assert_float(TractorT.draft_newtons(v, 0.0, 1.0, 12000.0, FLAT, 4000.0, dt)).is_equal(0.0)
+	assert_float(TractorT.draft_newtons(v, 1.0, 0.0, 12000.0, FLAT, 4000.0, dt)).is_equal(0.0)
+	# And a machine with no rating (or garbage off a bad edit) produces none.
+	assert_float(TractorT.draft_newtons(v, 1.0, 1.0, 0.0, FLAT, 4000.0, dt)).is_equal(0.0)
+	assert_float(TractorT.draft_newtons(v, 1.0, 1.0, -500.0, FLAT, 4000.0, dt)).is_equal(0.0)
 
 
-func test_draft_builds_with_speed_and_saturates() -> void:
+func test_draft_follows_d497_and_holds_at_its_range_top() -> void:
+	# The plough's row is A + C S² (B 0): the ratio to 7 km/h at 3 and 10 km/h, and held past 10.
+	var shape := PloughScript.DRAFT_SHAPE
+	var at_ref := shape.x + shape.z * 49.0
+	assert_float(TractorT.draft_speed01(7.0, shape)).is_equal_approx(1.0, 1e-6)
+	assert_float(TractorT.draft_speed01(3.0, shape)) \
+			.is_equal_approx((shape.x + shape.z * 9.0) / at_ref, 1e-6)
+	assert_float(TractorT.draft_speed01(10.0, shape)) \
+			.is_equal_approx((shape.x + shape.z * 100.0) / at_ref, 1e-6)
+	assert_float(TractorT.draft_speed01(25.0, shape)).is_equal(TractorT.draft_speed01(10.0, shape))
+	# Never extrapolated, and the force carries it: at road speed it is the range top's.
 	var dt := 1.0 / 60.0
+	assert_float(TractorT.draft_newtons(25.0 / 3.6, 1.0, 1.0, 8000.0, shape, 6000.0, dt)) \
+			.is_equal_approx(-8000.0 * TractorT.draft_speed01(10.0, shape), 1e-2)
+	# The harrow's row is linear (C 0), held past its 9 km/h.
+	var h := HarrowScript.DRAFT_SHAPE
+	assert_float(TractorT.draft_speed01(3.0, h)) \
+			.is_equal_approx((h.x + h.y * 3.0) / (h.x + h.y * 7.0), 1e-6)
+	assert_float(TractorT.draft_speed01(12.0, h)).is_equal(TractorT.draft_speed01(9.0, h))
+	# A shape with nothing at the reference is no draft, never a division by zero.
+	assert_float(TractorT.draft_speed01(7.0, Vector4.ZERO)).is_equal(0.0)
+
+
+func test_draft_tapers_to_zero_below_the_crawl_speed() -> void:
+	var dt := 1.0 / 60.0
+	var shape := PloughScript.DRAFT_SHAPE
 	# Standstill: soil resists motion, it does not shove a parked tractor out of the furrow.
-	assert_float(TractorT.draft_newtons(0.0, 1.0, 1.0, 12000.0, 4000.0, dt)).is_equal(0.0)
-	# Half the reference ploughing speed = half the rated draft.
-	assert_float(TractorT.draft_newtons(TractorT.DRAFT_SPEED_REF * 0.5, 1.0, 1.0, 12000.0, 4000.0, dt)) \
-			.is_equal_approx(-6000.0, 1e-3)
-	# Past the reference it saturates — draft must not grow without limit with road speed.
-	assert_float(TractorT.draft_newtons(TractorT.DRAFT_SPEED_REF * 5.0, 1.0, 1.0, 12000.0, 4000.0, dt)) \
-			.is_equal_approx(-12000.0, 1e-3)
+	assert_float(TractorT.draft_newtons(0.0, 1.0, 1.0, 8000.0, shape, 6000.0, dt)).is_equal(0.0)
+	# Half the crawl speed: half of D497's own value there.
+	var v := TractorT.DRAFT_V_CRAWL * 0.5
+	assert_float(TractorT.draft_newtons(v, 1.0, 1.0, 8000.0, shape, 6000.0, dt)) \
+			.is_equal_approx(-8000.0 * TractorT.draft_speed01(v * 3.6, shape) * 0.5, 1e-2)
+	# At the crawl speed it is fully on: D497's own value there, a hair over its zero-speed share of
+	# the rating (A over A + C S_ref²).
+	var crawl_kmh := TractorT.DRAFT_V_CRAWL * 3.6
+	assert_float(TractorT.draft_newtons(TractorT.DRAFT_V_CRAWL, 1.0, 1.0, 8000.0, shape, 6000.0, dt)) \
+			.is_equal_approx(-8000.0 * TractorT.draft_speed01(crawl_kmh, shape), 8000.0 * 1e-5)
+	assert_float(TractorT.draft_speed01(crawl_kmh, shape)) \
+			.is_equal_approx(TractorT.draft_speed01(0.0, shape), 0.01)
 
 
-func test_draft_can_never_reverse_travel_inside_one_tick() -> void:
-	# The 60 Hz guardrail, swept from a crawl up to working speed with an absurd rated draft: the
-	# impulse may slow the tractor to a dead stop but never past it, at any speed. (Landing exactly
-	# on zero is the cap doing its job, so the bound carries a float-precision allowance.)
+func test_draft_can_never_reverse_the_hitch_inside_one_tick() -> void:
+	# The 60 Hz backstop, swept from a crawl up to working speed with an absurd rating: the impulse
+	# on the effective mass the hitch point meets may stop the hitch dead but never past it, at
+	# any speed. (Landing exactly on zero is the cap doing its job, so the bound carries a
+	# float-precision allowance.)
 	var dt := 1.0 / 60.0
-	var body_mass := 4000.0
+	var eff_mass := 4000.0
 	for i in 40:
 		var v := 0.001 + float(i) * 0.05
-		var f := TractorT.draft_newtons(v, 1.0, 1.0, 500000.0, body_mass, dt)
+		var f := TractorT.draft_newtons(v, 1.0, 1.0, 500000.0, FLAT, eff_mass, dt)
 		assert_float(f).is_less_equal(0.0)
-		var dv := f / body_mass * dt   # the tick's velocity change from this force alone
+		var dv := f / eff_mass * dt   # the hitch's velocity change from this force alone
 		assert_float(absf(dv)) \
-			.override_failure_message("draft reversed travel at v = %f m/s" % v) \
+			.override_failure_message("draft reversed the hitch at v = %f m/s" % v) \
 			.is_less_equal(v * (1.0 + 1e-9))
 
 
-func test_the_speed_ramp_not_the_backstop_is_what_fades_draft_out() -> void:
-	# With the SHIPPED rating and mass the cap must stay a backstop: at a crawl the ramp has
-	# already taken the force to a small fraction of the impulse the cap would allow. If this
-	# inverts, the tractor is being arrested by a stability device instead of resisted by soil.
-	var dt := 1.0 / 60.0
-	var body_mass := _tractor_spec().mass
-	var rated := _tractor_draft_max()
-	var v := 0.05
-	var f := absf(TractorT.draft_newtons(v, 1.0, 1.0, rated, body_mass, dt))
-	assert_float(f).is_equal_approx(rated * v / TractorT.DRAFT_SPEED_REF, 1e-3)
-	assert_float(f).is_less(body_mass * v / dt * 0.1)
+func test_the_dial_reads_100_for_the_plough_at_its_rating() -> void:
+	# 'draft_force' is a percentage of draft_max_force, and that is the plough's own rating.
+	var plough: ImplementBase = auto_free((load(PLOUGH_PATH) as PackedScene).instantiate())
+	assert_float(_tractor_draft_max()).is_equal(plough.draft_rating())
 
 
-func test_the_shipped_rating_keeps_the_60hz_damper_margin() -> void:
-	# The real 60 Hz guarantee, pinned against the SHIPPED numbers rather than a literal. Below
-	# DRAFT_SPEED_REF the model is exactly a linear damper, F = -k*v, and an explicit damper is
-	# stable while k*dt/m < 2. This is what makes the one-tick cap unreachable — and the cap
-	# bounds only the LINEAR impulse, so a rating that reached it would still be free to spin the
-	# chassis about the 1.3 m hitch offset. Fail here rather than there: raising draft_max_force
-	# past this margin means the force needs a real angular bound too, not just a bigger number.
+func test_the_shipped_draft_keeps_the_60hz_damper_margin_on_the_hitch() -> void:
+	# The real 60 Hz guarantee, pinned against the SHIPPED numbers. Below DRAFT_V_CRAWL the draft
+	# is a linear damper on the hitch point's speed, k = F_crawl / DRAFT_V_CRAWL, and an explicit
+	# damper is stable while k*dt/m_eff < 2. m_eff is what the hitch meets, the body plus the
+	# pitch its arm below and behind the COM turns, read off a spawned tractor: bare, and with each
+	# draft machine on at the bottom stop. Under 1 it also keeps the one-tick cap (m_eff·v/dt) a
+	# backstop the soil never reaches.
 	var dt := 1.0 / 60.0
-	var body_mass := _tractor_spec().mass
-	var k := _tractor_draft_max() / TractorT.DRAFT_SPEED_REF
-	assert_float(k * dt / body_mass) \
-		.override_failure_message("draft is no longer a well-damped linear force at 60 Hz") \
+	var f_crawl := 0.0
+	var ids: Array[String] = [ImplementCatalog.DETACHED]
+	for path in ImplementCatalog.IMPLEMENTS:
+		if not ImplementCatalog.is_attached(path) or ImplementCatalog.is_towed(path):
+			continue
+		var node: ImplementBase = auto_free((load(path) as PackedScene).instantiate())
+		if node.draft_relevant():
+			f_crawl = maxf(f_crawl,
+					node.draft_rating() * TractorT.draft_speed01(0.0, node.draft_shape()))
+			ids.append(path)
+	assert_float(f_crawl).is_greater(0.0)
+	var t := await _spawn_tractor()
+	# Posed by hand, so no tick may re-pose it; the space still steps the tensor to the new load.
+	t.set_physics_process(false)
+	var lowest := INF
+	var labels := PackedStringArray()
+	for id in ids:
+		_carry(t, id, 0.0)
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+		var m_eff := t.hitch_effective_mass(t._hitch.hitch_point())
+		labels.append("%s %.0f kg" % [id.get_file().get_basename() if id != "" else "bare", m_eff])
+		assert_float(m_eff).is_less(t.mass)
+		lowest = minf(lowest, m_eff)
+	var k := f_crawl / TractorT.DRAFT_V_CRAWL
+	assert_float(k * dt / lowest) \
+		.override_failure_message(("draft is no longer a well-damped force at 60 Hz: k*dt/m_eff"
+				+ " %.2f (m_eff, the body plus the pitch the hitch's arm turns: %s); raise"
+				+ " DRAFT_V_CRAWL") % [k * dt / lowest, ", ".join(labels)]) \
 		.is_less(0.5)
 
 
@@ -418,11 +475,24 @@ func test_draft_percentage_is_the_applied_force_over_the_rating() -> void:
 func test_the_shipped_tractor_can_actually_pull_its_rated_draft() -> void:
 	# A plough the tractor cannot move is not a playground: the rating has to sit well under what
 	# the tires can put down (mu x weight). Half of that is a generous bound — only the rear axle
-	# carries drive in 2WD, and some of the traction budget belongs to steering.
+	# carries drive in 2WD, and some of the traction budget belongs to steering. Judged at each
+	# draft machine's hardest pull, its rating where D497's curve is held (the top of its range).
 	var spec := _tractor_spec()
-	var rated := _tractor_draft_max()
-	assert_float(rated).is_greater(0.0)
-	assert_float(rated).is_less(0.5 * spec.mass * 9.8 * spec.ground_drive.mu_long)
+	var budget := 0.5 * spec.mass * 9.8 * spec.ground_drive.mu_long
+	var checked := 0
+	for path in ImplementCatalog.IMPLEMENTS:
+		if not ImplementCatalog.is_attached(path) or ImplementCatalog.is_towed(path):
+			continue
+		var node: ImplementBase = auto_free((load(path) as PackedScene).instantiate())
+		if not node.draft_relevant():
+			continue
+		checked += 1
+		var hardest := node.draft_rating() * maxf(TractorT.draft_speed01(0.0, node.draft_shape()),
+				TractorT.draft_speed01(node.draft_shape().w, node.draft_shape()))
+		assert_float(hardest) \
+			.override_failure_message("%s pulls %.0f N, past the tyres' %.0f N" % [path, hardest, budget]) \
+			.is_less(budget)
+	assert_int(checked).is_greater(0)
 
 
 ## The standing load (N·m at the axle) on a grade of `grade_pct`, nose up, with `soil` (the painted
@@ -542,6 +612,133 @@ func test_the_shell_hook_is_duck_typed_and_the_tractor_answers_it() -> void:
 	var early: Dictionary = tractor.attachment_controls()
 	assert_bool(early["pto"]).is_false()
 	assert_bool(early["lift"]).is_true()
+
+
+# --- implement mass through the linkage -------------------------------------------
+## The carried share of an implement's weight goes into the chassis' live mass and COM
+## (`TractorVehicle._apply_implement_mass`), read off the linkage as posed. Scene tests: the hitch
+## pose and the mass write need the tractor in the tree.
+
+const PLOUGH_PATH := "res://src/vehicles/tractor/implements/plough.tscn"
+const SPREADER_PATH := "res://src/vehicles/tractor/implements/spreader.tscn"
+
+
+func _spawn_tractor() -> TractorVehicle:
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	var variant := CatalogScript.first_in_family("tractor")
+	var t := (load(CatalogScript.scene_of(variant)) as PackedScene).instantiate() as TractorVehicle
+	t.display_only = true  # no InputRouter registration; nothing here is driven
+	root.add_child(t)
+	t.global_position = Vector3(0.0, 50.0, 0.0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	return t
+
+
+## Attach `id`, pose the linkage at `pos01` and write the load, all inside one call stack so no
+## physics tick re-poses it in between.
+func _carry(t: TractorVehicle, id: String, pos01: float) -> void:
+	t.set_attachment(id)
+	t._hitch.set_hitch(pos01)
+	t._apply_implement_mass()
+
+
+func test_a_raised_plough_moves_live_mass_and_com_by_its_declared_figures() -> void:
+	var t := await _spawn_tractor()
+	_carry(t, PLOUGH_PATH, 1.0)
+	var plough := t._hitch.implement
+	assert_float(t.mass).is_equal_approx(t.spec.mass + plough.mass_kg(), 1e-3)
+	var expected := VehicleMath.carried_com(t.spec.center_of_mass, t._hitch.implement_com(),
+			t.spec.mass, plough.mass_kg())
+	assert_vector(t.center_of_mass).is_equal_approx(expected, Vector3.ONE * 1e-5)
+	# Hung behind the rear axle and lifted: the COM moves rearward and up.
+	assert_float(t.center_of_mass.z).is_greater(t.spec.center_of_mass.z)
+	assert_float(t.center_of_mass.y).is_greater(t.spec.center_of_mass.y)
+
+
+func test_at_the_bottom_stop_the_ground_carries_its_share() -> void:
+	var t := await _spawn_tractor()
+	_carry(t, PLOUGH_PATH, 0.0)
+	var plough := t._hitch.implement
+	assert_float(t._hitch.ball_lift()).is_equal_approx(0.0, 1e-5)
+	assert_float(t.mass).is_equal_approx(
+			t.spec.mass + plough.mass_kg() * (1.0 - plough.ground_share()), 1e-3)
+
+
+func test_the_spreader_is_carried_whole_raised_and_lowered() -> void:
+	var t := await _spawn_tractor()
+	_carry(t, SPREADER_PATH, 1.0)
+	var raised := t.mass
+	_carry(t, SPREADER_PATH, 0.0)
+	assert_float(t.mass).is_equal_approx(raised, 1e-3)
+	assert_float(t.mass).is_equal_approx(t.spec.mass + t._hitch.implement.mass_kg(), 1e-3)
+
+
+func test_detached_is_the_spec_exactly() -> void:
+	var t := await _spawn_tractor()
+	_carry(t, PLOUGH_PATH, 1.0)
+	_carry(t, ImplementCatalog.DETACHED, 1.0)
+	assert_float(t.mass).is_equal(t.spec.mass)
+	assert_vector(t.center_of_mass).is_equal(t.spec.center_of_mass)
+
+
+func test_a_respawn_with_the_plough_on_carries_it_again_one_tick_later() -> void:
+	var t := await _spawn_tractor()
+	_carry(t, PLOUGH_PATH, 1.0)
+	t.respawn()
+	# The base reset wrote the bare machine; the plough survives the respawn on the linkage.
+	assert_float(t.mass).is_equal(t.spec.mass)
+	# `physics_frame` fires before the nodes tick, so the second await is the first one past a tick.
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert_float(t.mass).is_equal_approx(t.spec.mass + t._hitch.implement.mass_kg(), 1e-3)
+
+
+## `axle_load` is the rear springs' force, so it needs a floor and real ticks. `InputRouter`
+## re-arbitrates every tick, so the hitch is commanded over the bridge (`MeasureRig.drive`'s inbound),
+## parked on the foot brake and the lever as the `hitch` pass is.
+func test_axle_load_reads_the_rear_springs_and_rises_when_the_plough_is_raised() -> void:
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	var ground := StaticBody3D.new()
+	ground.collision_layer = preload("res://src/physics/collision_layers.gd").TERRAIN
+	ground.collision_mask = 0
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(400.0, 10.0, 400.0)
+	shape.shape = box
+	ground.add_child(shape)
+	root.add_child(ground)
+	ground.global_position = Vector3(0.0, -5.0, 0.0)
+	var t := (load(CatalogScript.scene_of("tractor-kenney")) as PackedScene).instantiate() \
+			as TractorVehicle
+	t.display_only = true
+	root.add_child(t)
+	await get_tree().physics_frame
+	t.global_position = Vector3(0.0, 2.0, 0.0)
+	t.set_attachment(PLOUGH_PATH)
+	var inbound := {"key": 3, "gear": 1, "accel": 0.0, "brake": 100.0, "steer": 0.0,
+			"handbrake": 1.0, "hitch_pos": 0.0}
+	Bridge.set("_active", true)
+	Bridge.set("_inbound", inbound)
+	for i in 240:
+		await get_tree().physics_frame
+	var tel := t.telemetry as TractorTelemetry
+	assert_float(tel.axle_load).is_equal_approx(
+			t.drive.rear_suspension_force() / VehicleTelemetry.GRAVITY, 1e-3)
+	var lowered := tel.axle_load
+	inbound["hitch_pos"] = 100.0
+	for i in 240:
+		await get_tree().physics_frame
+	Bridge.set("_active", false)
+	Bridge.set("_inbound", {})
+	# The ground's share moves onto the linkage, hung behind the rear axle: the rear takes more
+	# than the share itself (`m (L + e) / L`).
+	var plough := t._hitch.implement
+	assert_float(tel.axle_load - lowered) \
+		.override_failure_message("raising the plough must load the rear axle") \
+		.is_greater(plough.mass_kg() * plough.ground_share())
 
 
 ## Every *_spec.tres under `root`, recursively.

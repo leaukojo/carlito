@@ -511,13 +511,16 @@ func _build_implements(authoring: Node, root: Node, apron: Rect2, deck_y: float)
 		if scene == null:
 			printerr("[farm] cannot load implement %s" % IMPLEMENT_SCENES[i])
 			continue
+		var implement := scene.instantiate()
+		# Parked on its tools' points: at the working pose they would stand in the concrete.
+		var lift := (implement as ImplementBase).tool_depth() if implement is ImplementBase else 0.0
 		var piece := KitPiece.new()
 		piece.collision_mode = "none"
 		piece.name = "Parked%s" % IMPLEMENT_SCENES[i].get_file().get_basename().capitalize()
 		piece.position = Vector3(apron.position.x + IMPLEMENT_X[i],
-				deck_y + IMPLEMENT_GROUND_OFFSET, z)
+				deck_y + IMPLEMENT_GROUND_OFFSET + lift, z)
 		_add(group, piece, root)
-		_add(piece, scene.instantiate(), root)
+		_add(piece, implement, root)
 
 
 ## Furrow dressing on the field's western strip: a ScatterCanvas on the grid pattern, laying

@@ -3,14 +3,29 @@
 [ext_resource type="Script" path="res://src/challenges/goals/challenge_goal.gd" id="1_goal"]
 [ext_resource type="Script" path="res://src/challenges/goals/signal_band_goal.gd" id="2_band"]
 [ext_resource type="Script" path="res://src/challenges/challenge_def.gd" id="3_def"]
+[ext_resource type="Script" path="res://src/challenges/goals/signal_reach_goal.gd" id="4_reach"]
+[ext_resource type="Script" path="res://src/challenges/goals/challenge_constraint.gd" id="5_cons"]
+[ext_resource type="Script" path="res://src/challenges/goals/signal_limit_constraint.gd" id="6_limit"]
+
+[sub_resource type="Resource" id="Resource_lower"]
+script = ExtResource("4_reach")
+signal_name = "hitch_pos_actual"
+low = 0.0
+high = 5.0
 
 [sub_resource type="Resource" id="Resource_row"]
 script = ExtResource("2_band")
 zone = &"Row"
 exit_zone = &"Exit"
 signal_name = "engine_load"
-low = 12.0
+low = 25.0
 high = 70.0
+
+[sub_resource type="Resource" id="Resource_down"]
+script = ExtResource("6_limit")
+signal_name = "hitch_pos_actual"
+high = 5.0
+from_goal = 1
 
 [resource]
 script = ExtResource("3_def")
@@ -21,5 +36,6 @@ attachment = "res://src/vehicles/tractor/implements/plough.tscn"
 arena = "level_1"
 course = "res://src/levels/island/level_1/courses/tractor_plough_course.tscn"
 briefing = "Lower the plough into the field, then hold a straight furrow with engine_load in band. The paler bands are light sandy soil."
-hint = "The plough only bites near the bottom of the hitch stroke. On a light band draft_force halves and engine_load falls with it; past the band both climb again."
-goals = Array[ExtResource("1_goal")]([SubResource("Resource_row")])
+hint = "Lower the hitch all the way and keep it there: the shares bite over the lower part of its stroke. On a light band draft_force halves and engine_load falls with it; past the band both climb again. Much past 7 km/h and engine_load climbs out of the top."
+goals = Array[ExtResource("1_goal")]([SubResource("Resource_lower"), SubResource("Resource_row")])
+constraints = Array[ExtResource("5_cons")]([SubResource("Resource_down")])

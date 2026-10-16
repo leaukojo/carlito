@@ -107,7 +107,7 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	if _fifth_wheel.is_coupled() and spec.trailer_bus_equipped:
 		var trailer := _fifth_wheel.trailer
 		t.trailer_connected = true
-		t.trailer_axle_load = TruckTelemetry.axle_load_kg(trailer.bogie_suspension_force())
+		t.trailer_axle_load = VehicleTelemetry.axle_load_kg(trailer.bogie_suspension_force())
 		# The LAGGED application, not the blend: EBS11 reports what the trailer brakes with.
 		t.trailer_brake_demand = roundi(trailer.brake_applied() * 100.0)
 		t.trailer_abs = trailer.abs_active()

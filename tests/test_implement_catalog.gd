@@ -70,6 +70,9 @@ func test_base_defaults_are_the_detached_reading() -> void:
 	assert_bool(base.uses(ImplementBase.Connection.THREE_POINT)).is_false()
 	assert_bool(base.draft_relevant()).is_false()
 	assert_float(base.tool_depth()).is_equal(0.0)
+	assert_float(base.draft_rating()).is_equal(0.0)
+	assert_float(base.mass_kg()).is_equal(0.0)
+	assert_float(base.ground_share()).is_equal(0.0)
 	base.free()
 
 
@@ -84,11 +87,84 @@ func test_a_draft_machine_declares_its_own_working_depth() -> void:
 			assert_float(node.tool_depth()) \
 				.override_failure_message("%s is draft-relevant but declares no tool depth" % path) \
 				.is_greater(0.0)
+			# And a pull: the force is its rating, so a draft machine rated 0 would pull nothing.
+			assert_float(node.draft_rating()) \
+				.override_failure_message("%s is draft-relevant but declares no draft rating" % path) \
+				.is_greater(0.0)
+			assert_float(TractorTelemetry.draft_speed01(TractorTelemetry.DRAFT_S_REF_KMH,
+					node.draft_shape())) \
+				.override_failure_message("%s's draft shape is not 1 at the reference speed" % path) \
+				.is_equal_approx(1.0, 1e-5)
 		else:
 			assert_float(node.tool_depth()) \
 				.override_failure_message("%s works above the ground but declares a depth" % path) \
 				.is_equal(0.0)
 		node.free()
+
+
+func test_every_implement_declares_a_mass_behind_the_pins_and_a_ground_share() -> void:
+	# The tractor folds mass x carried share into its chassis at this centre: a weightless machine
+	# moves no axle load, and a centre ahead of the pin line would sit inside the tractor.
+	for path in _three_point_entries():
+		var node: ImplementBase = (load(path) as PackedScene).instantiate()
+		assert_float(node.mass_kg()) \
+			.override_failure_message("%s declares no mass" % path).is_greater(0.0)
+		assert_float(node.mass_centre().z) \
+			.override_failure_message("%s: centre of mass not behind the pin line" % path) \
+			.is_greater(0.0)
+		assert_float(node.ground_share()) \
+			.override_failure_message("%s: ground share outside 0..1" % path).is_between(0.0, 1.0)
+		node.free()
+
+
+func test_an_implement_rests_on_support_points_exactly_when_the_ground_carries_it() -> void:
+	# The drawn linkage floats on these points, so each sits on the authored ground line.
+	for path in _three_point_entries():
+		var node: ImplementBase = (load(path) as PackedScene).instantiate()
+		var points := node.support_points()
+		assert_bool(points.is_empty()) \
+			.override_failure_message("%s: support points disagree with its ground share" % path) \
+			.is_equal(node.ground_share() <= 0.0)
+		for p in points:
+			assert_float(p.y) \
+				.override_failure_message("%s: support point off the ground line" % path) \
+				.is_equal_approx(-0.21, 0.003)
+		node.free()
+
+
+func test_the_spreader_never_rests_on_the_ground() -> void:
+	# Nothing on it touches the ground at any hitch position, so attaching it, not lifting it, is
+	# what moves its load.
+	var spreader: ImplementBase = SpreaderScript.new()
+	assert_float(spreader.ground_share()).is_equal(0.0)
+	spreader.free()
+
+
+func test_carried_share_hands_over_from_the_ground_across_the_support_lift() -> void:
+	var span := 0.05
+	# At the bottom stop the ground carries its share; from the support lift up, the linkage all.
+	assert_float(ImplementBase.carried01(0.0, span, 0.8)).is_equal_approx(0.2, 1e-6)
+	assert_float(ImplementBase.carried01(span, span, 0.8)).is_equal(1.0)
+	assert_float(ImplementBase.carried01(0.5, span, 0.8)).is_equal(1.0)
+	assert_float(ImplementBase.carried01(span * 0.5, span, 0.8)).is_equal_approx(0.6, 1e-6)
+	# Monotone over the stroke, so a lift never puts weight back on the ground.
+	var prev := -1.0
+	for i in 11:
+		var c := ImplementBase.carried01(span * 1.2 * i / 10.0, span, 0.5)
+		assert_float(c).is_greater_equal(prev)
+		prev = c
+	# Nothing on the ground: carried everywhere.
+	assert_float(ImplementBase.carried01(0.0, span, 0.0)).is_equal(1.0)
+
+
+func test_the_support_lift_is_the_tools_reach_or_the_support_band() -> void:
+	var plough: ImplementBase = PloughScript.new()
+	var mower: ImplementBase = MowerScript.new()
+	# The plough's weight leaves the ground where its shares leave the soil.
+	assert_float(plough.support_lift()).is_equal(maxf(plough.tool_depth(), ImplementBase.SUPPORT_BAND))
+	assert_float(mower.support_lift()).is_equal(ImplementBase.SUPPORT_BAND)
+	plough.free()
+	mower.free()
 
 
 func test_the_harrow_works_shallower_than_the_plough() -> void:
@@ -138,7 +214,7 @@ func test_mower_is_pto_driven_and_carries_no_draft() -> void:
 	assert_bool(mower.uses(ImplementBase.Connection.THREE_POINT)).is_true()
 	assert_bool(mower.uses(ImplementBase.Connection.PTO)).is_true()
 	assert_bool(mower.uses(ImplementBase.Connection.ISOBUS_DATA)).is_true()
-	# A deck on skids is neither towed nor hydraulically fed, and it rides ABOVE the ground.
+	# A deck on a tail wheel is neither towed nor hydraulically fed, and it rides ABOVE the ground.
 	assert_bool(mower.uses(ImplementBase.Connection.DRAWBAR)).is_false()
 	assert_bool(mower.uses(ImplementBase.Connection.SCV)).is_false()
 	assert_bool(mower.draft_relevant()).is_false()

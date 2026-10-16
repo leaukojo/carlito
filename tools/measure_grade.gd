@@ -385,6 +385,8 @@ func _spawn(angle_deg: float, yaw := 0.0, up := SPAWN_UP) -> void:
 	if _tipper and _car.has_method(&"set_attachment"):
 		# Remembered until the drawbar's spawn countdown has run, then coupled (TowHost).
 		_car.call(&"set_attachment", ImplementCatalog.TOWED[0])
+	elif _car is TractorVehicle:
+		_car.call(&"set_attachment", AttachmentCatalog.NONE)  ## bare: an implement's weight moves the axles
 	var surface := tilt * Vector3(0.0, 0.0, -up)  ## `up` metres up the slope from origin
 	_car.global_transform = Transform3D(tilt * Basis(Vector3.UP, yaw),
 			surface + tilt.y * _car.rest_ride_height())

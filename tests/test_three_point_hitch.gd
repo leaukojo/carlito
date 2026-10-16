@@ -8,6 +8,7 @@ const HarrowScene := preload("res://src/vehicles/tractor/implements/harrow.tscn"
 const MowerScene := preload("res://src/vehicles/tractor/implements/mower.tscn")
 const SpreaderScene := preload("res://src/vehicles/tractor/implements/spreader.tscn")
 const TractorScene := preload("res://src/vehicles/kenney/tractor-kenney.tscn")
+const Layers := preload("res://src/physics/collision_layers.gd")
 
 ## Joint slop we accept. The parts are rigid, so this is float noise, not a fudge factor.
 const JOINT_EPS := 0.002
@@ -55,8 +56,8 @@ func test_ball_ends_and_top_link_follow_the_solve() -> void:
 		hitch.set_hitch(t)
 		var s := link.solve(t)
 		var ball: Vector2 = s["ball"]
-		# Both ball ends sit at the solved (z, y), splayed to +/-0.37 in x.
-		for side in [["LowerLinkL/Ball", -0.37], ["LowerLinkR/Ball", 0.37]]:
+		# Both ball ends sit at the solved (z, y), splayed to +/-0.43 in x.
+		for side in [["LowerLinkL/Ball", -0.43], ["LowerLinkR/Ball", 0.43]]:
 			assert_vector(_at(hitch, side[0])) \
 				.override_failure_message("ball end adrift at pos01 = %.2f" % t) \
 				.is_equal_approx(Vector3(side[1], ball.y, ball.x), Vector3.ONE * JOINT_EPS)
@@ -278,13 +279,13 @@ func test_each_implement_sits_at_its_own_working_height_and_lifts_clear() -> voi
 	# touches the ground" would be wrong for two of the three:
 	#   plough   — the shares must be IN the soil, i.e. below zero;
 	#   harrow   — the tines reach INTO the soil and the packer roller rests on it;
-	#   mower    — the skids rest on the ground, the blades sweep just above it;
+	#   mower    — the tail wheel rests on the ground, the blades sweep just above it;
 	#   spreader — nothing touches at any position; the disc is held clear by design, and its
 	#              lowest point is not even part of the machine, it is the mounting lugs.
 	# Raised, all three must be unmistakably airborne — the whole visual point of hitch_pos.
 	var cases := [
-		[PloughScene, -0.10, -0.01, 0.35],
-		[HarrowScene, -0.05, 0.02, 0.35],
+		[PloughScene, -0.30, -0.20, 0.35],
+		[HarrowScene, -0.13, -0.07, 0.35],
 		[MowerScene, -0.03, 0.05, 0.35],
 		[SpreaderScene, 0.10, 0.35, 0.60],
 	]
@@ -303,6 +304,74 @@ func test_each_implement_sits_at_its_own_working_height_and_lifts_clear() -> voi
 			.override_failure_message("%s raised is only y = %.3f off the ground"
 				% [hitch.implement.name, high]) \
 			.is_true()
+
+
+
+## A floor whose top is at `top_y` in the hitch's frame (the hitch sits at the origin).
+func _floor(top_y: float) -> StaticBody3D:
+	var body: StaticBody3D = auto_free(StaticBody3D.new())
+	body.collision_layer = Layers.TERRAIN
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(20.0, 1.0, 20.0)
+	shape.shape = box
+	body.add_child(shape)
+	body.position = Vector3(0.0, top_y - 0.5, 0.0)
+	add_child(body)
+	return body
+
+
+## The roller's lowest point: a cylinder across the machine, so its centre less its radius.
+func _roller_bottom(hitch: ThreePointHitch) -> float:
+	return _named(hitch.implement, "Roller").y - 0.2
+
+
+func test_a_lowered_roller_rides_raised_ground_and_physics_reads_the_commanded_pose() -> void:
+	var hitch := _hitch()
+	hitch.attach(HarrowScene)
+	hitch.set_hitch(0.0)
+	var lift := hitch.ball_lift()
+	var point := hitch.hitch_point()
+	var com := hitch.implement_com()
+	_floor(0.05)
+	await get_tree().physics_frame
+	hitch.set_hitch(0.0)
+	assert_float(_roller_bottom(hitch)) \
+		.override_failure_message("roller drawn at y = %.3f, not on the floor" % _roller_bottom(hitch)) \
+		.is_equal_approx(0.05, 0.003)
+	assert_float(hitch.ball_lift()).is_equal(lift)
+	assert_vector(hitch.hitch_point()).is_equal(point)
+	assert_vector(hitch.implement_com()).is_equal(com)
+
+
+func test_ticked_the_drawn_float_eases_onto_raised_ground_and_never_under_the_stop() -> void:
+	# A heightmap facet must not jump the drawn implement in one tick: per tick it follows.
+	var hitch := _hitch()
+	hitch.attach(HarrowScene)
+	hitch.set_hitch(0.0)
+	var resting := _roller_bottom(hitch)
+	_floor(0.05)
+	await get_tree().physics_frame
+	hitch.set_hitch(0.0, 1.0 / 60.0)
+	var first := _roller_bottom(hitch)
+	assert_bool(first > resting and first < 0.04) \
+		.override_failure_message("one tick moved the roller to y = %.3f" % first).is_true()
+	for i in 60:
+		hitch.set_hitch(0.0, 1.0 / 60.0)
+	assert_float(_roller_bottom(hitch)).is_equal_approx(0.05, 0.003)
+	assert_float(hitch.ball_lift()).is_equal(0.0)
+
+
+func test_a_raised_implement_never_floats() -> void:
+	var hitch := _hitch()
+	hitch.attach(HarrowScene)
+	hitch.set_hitch(1.0)
+	var mount := (hitch.get_node("Mount") as Node3D).position
+	# Ground well above the raised roller: lowered it would float onto it, raised it is not cast.
+	_floor(_roller_bottom(hitch) + 0.1)
+	await get_tree().physics_frame
+	hitch.set_hitch(1.0)
+	assert_vector((hitch.get_node("Mount") as Node3D).position).is_equal(mount)
 
 
 # --- the tractor driving it ---------------------------------------------------

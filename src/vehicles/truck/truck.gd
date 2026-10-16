@@ -91,7 +91,7 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 			drivetrain.rpm, drivetrain.applied_throttle, spec, pto_on, pto_load))
 
 	# kg the rear springs held up this tick, not a mass lookup, so weight transfer and load move it.
-	t.axle_load = TruckTelemetry.axle_load_kg(_rear_suspension_force())
+	t.axle_load = VehicleTelemetry.axle_load_kg(drive.rear_suspension_force())
 
 	# What ran this tick, off the driveline, not what was asked.
 	t.retarder_state = roundi(Drivetrain.retarder_pct(
@@ -194,15 +194,6 @@ func _retarder_rating_total() -> float:
 		if w.is_rear and w.driven:
 			count += 1
 	return Drivetrain.retarder_rating(spec) * count
-
-
-## Total suspension force carried by the rear axle this tick (N).
-func _rear_suspension_force() -> float:
-	var total := 0.0
-	for w in wheels:
-		if w.is_rear:
-			total += w.suspension_force
-	return total
 
 
 ## The refuse body is re-laid stowed with the hopper empty (the only way to empty it: the rig has

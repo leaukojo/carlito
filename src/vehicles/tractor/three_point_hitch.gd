@@ -5,8 +5,23 @@ extends Node3D
 ## planar Vector2(z, y); every pivot on local +Z. Pose: `rotation.x = -planar_angle`. Draft at
 ## chassis hitch point, not via colliders.
 
+const Layers := preload("res://src/physics/collision_layers.gd")
+
 ## Top-link angle (degrees) while detached: parks instead of tracking a missing pin.
 const DETACHED_TOP_ANGLE_DEG := 4.0
+
+## Metres above a support point its ground ray starts: the most ground the drawn implement can
+## float onto, about the balls' 0.57 m rise over the stroke.
+const FLOAT_REACH := 0.6
+
+## Natural frequencies (rad/s) of the critically damped follower the drawn float chases its ground
+## contact with: the implement's mass on the soil's give. Without it the drawn implement copies
+## every heightmap facet in a tick and lands on its bottom stop dead. UP while the support is under
+## its contact (the ground pushes: stiff, so it sinks little), DOWN while above it (it settles
+## under its weight: soft, so it lands gently). ESTIMATES, picked off a scratch probe over the
+## rough-ground bump fields; ω·dt must stay under ~0.8 at 60 Hz (60 rings).
+const FLOAT_OMEGA_UP := 40.0
+const FLOAT_OMEGA_DOWN := 15.0
 
 ## Lower-link / rockshaft-arm pivot spacing (m), applied in _ready to both together.
 @export var lower_link_x := 0.19
@@ -26,8 +41,12 @@ var _bare_mast_offset := _linkage.mast_offset
 var _pto_on := false
 var _pto_rpm := 0
 var _pos01 := 1.0  ## last solved hitch position, for attach/detach re-pose
-var _ball_y := 0.0          ## last solved ball height (body space)
+var _ball_y := 0.0          ## last solved ball height (body space), the physics pose's
+## Mount's transform in the physics (commanded) pose; the node itself carries the drawn pose.
+var _mount_physics := Transform3D.IDENTITY
 var _ball_y_lowered := 0.0  ## ball height at pos01 = 0, ball_lift's datum
+var _drawn := 1.0           ## drawn pose's pos01, at or above the commanded one
+var _drawn_rate := 0.0      ## its rate (1/s), the follower's state
 
 
 func _ready() -> void:
@@ -74,9 +93,91 @@ func detach() -> void:
 
 
 ## pos01 in [0, 1]: 1 = fully raised (transport), 0 = fully lowered (working). Poses every part.
-func set_hitch(pos01: float) -> void:
+## Two poses: the physics pose is the commanded solve, which ball_lift(), hitch_point() and
+## implement_com() read; the drawn pose floats the implement onto its supports (_float_pos).
+## `delta` > 0 (the physics tick) moves the drawn pose by the FLOAT_OMEGA_UP / _DOWN follower;
+## 0 snaps it there.
+func set_hitch(pos01: float, delta := 0.0) -> void:
 	_pos01 = pos01
 	var s := _linkage.solve(pos01)
+	_ball_y = (s["ball"] as Vector2).y
+	_mount_physics = _mount_pose(s)
+	var target := _float_pos(pos01)
+	if delta > 0.0:
+		# Semi-implicit, critically damped on either side of the contact it chases.
+		var w := FLOAT_OMEGA_UP if target > _drawn else FLOAT_OMEGA_DOWN
+		_drawn_rate += (w * w * (target - _drawn) - 2.0 * w * _drawn_rate) * delta
+		_drawn += _drawn_rate * delta
+	else:
+		_drawn = target
+		_drawn_rate = 0.0
+	# Never under the commanded pose (the linkage's stop), never past fully raised.
+	if _drawn <= pos01:
+		_drawn = pos01
+		_drawn_rate = maxf(_drawn_rate, 0.0)
+	elif _drawn >= 1.0:
+		_drawn = 1.0
+		_drawn_rate = minf(_drawn_rate, 0.0)
+	_pose(s if _drawn == pos01 else _linkage.solve(_drawn))
+	if implement != null:
+		implement.set_hitch(_drawn)
+
+
+## Mount rides the ball ends and carries the solved pitch; the implement is authored lowered, about
+## the lower pin line (Mount's origin).
+func _mount_pose(s: Dictionary) -> Transform3D:
+	var ball: Vector2 = s["ball"]
+	return Transform3D(Basis.from_euler(Vector3(-float(s["pitch"]), 0.0, 0.0)),
+			Vector3(0.0, ball.y, ball.x))
+
+
+## The drawn pose: a real linkage in float lets its support ride the ground. One ray per support
+## point along the body's down axis, cast only while the commanded lift is inside the support's
+## reach, so a raised implement never floats; no physics space or no hit floats nothing.
+## COMPROMISE: physics reads the commanded pose on flat ground. Riding its support, an implement
+## works at its drawn depth relative to the ground it rides, which is what that pose reports, so a
+## float lift moves no weight and no draft depth. A dip under the support leaves the implement
+## hanging at its stop. Undoing it means the mass fold-in and draft read the ground under the
+## implement: these rays feed physics, and every hitch / plough figure is re-measured.
+func _float_pos(pos01: float) -> float:
+	if implement == null or not is_inside_tree() or ball_lift() > implement.support_lift():
+		return pos01
+	var points := implement.support_points()
+	if points.is_empty():
+		return pos01
+	var space := get_world_3d().direct_space_state
+	if space == null:
+		return pos01
+	var body := get_parent() as CollisionObject3D
+	var exclude: Array[RID] = []
+	if body != null:
+		exclude.append(body.get_rid())
+	var xf := global_transform
+	var to_hitch := xf.affine_inverse()
+	var posed := _mount_physics * implement.transform
+	var supports := PackedVector3Array()   # implement frame
+	var ground_y := PackedFloat32Array()   # this frame, under each support
+	for p in points:
+		var at := posed * p
+		var query := PhysicsRayQueryParameters3D.create(
+				xf * (at + Vector3.UP * FLOAT_REACH), xf * at, Layers.SOLID, exclude)
+		var hit := space.intersect_ray(query)
+		if not hit.is_empty():
+			supports.append(p)
+			ground_y.append((to_hitch * (hit["position"] as Vector3)).y)
+	if supports.is_empty():
+		return pos01
+	var clearance := func(sol: Dictionary) -> float:
+		var drawn := _mount_pose(sol) * implement.transform
+		var least := INF
+		for i in supports.size():
+			least = minf(least, (drawn * supports[i]).y - ground_y[i])
+		return least
+	return _linkage.float_pos(pos01, clearance)
+
+
+## Pose every drawn part off solve `s`.
+func _pose(s: Dictionary) -> void:
 	var lower_rot := -float(s["lower_angle"])
 	var rock_rot := -float(s["rock_angle"])
 	var rod_rot := -((s["rod_attach"] as Vector2) - (s["rod_end"] as Vector2)).angle()
@@ -92,28 +193,30 @@ func set_hitch(pos01: float) -> void:
 	_top_link.rotation.x = -float(s["top_angle"]) if implement != null \
 			else -deg_to_rad(DETACHED_TOP_ANGLE_DEG)
 
-	# Mount rides the ball ends and carries the solved pitch; the implement is authored lowered,
-	# about the lower pin line (this node's origin).
 	var ball: Vector2 = s["ball"]
-	_ball_y = ball.y
 	_mount.position = Vector3(0.0, ball.y, ball.x)
 	_mount.rotation.x = -float(s["pitch"])
 
-	if implement != null:
-		implement.set_hitch(pos01)
-
 
 ## Metres the lower-link balls sit above their fully-lowered height: the implement's lift. Balls
-## rise 0.57 m over the stroke while a plough share reaches 55 mm, so shares clear the soil after
-## the first tenth of the stroke.
+## rise 0.57 m over the stroke while a plough share reaches 0.25 m, so shares clear the soil at
+## ~43 % of the stroke.
 func ball_lift() -> float:
 	return _ball_y - _ball_y_lowered
 
 
-## World-space ball line: where the implement hangs and where draft force is applied to the chassis
-## (the implement subtree has no collision).
+## World-space ball line in the physics pose: where draft force is applied to the chassis (the
+## implement subtree has no collision).
 func hitch_point() -> Vector3:
-	return _mount.global_position
+	return global_transform * _mount_physics.origin
+
+
+## The posed implement's centre of mass in the tractor's body space (this node's parent frame), or
+## Vector3.INF with nothing attached. Composed off local transforms, so it is pose-independent.
+func implement_com() -> Vector3:
+	if implement == null:
+		return Vector3.INF
+	return transform * (_mount_physics * (implement.transform * implement.mass_centre()))
 
 
 ## Store PTO state; the stub shaft spins in _process at the real shaft rpm.

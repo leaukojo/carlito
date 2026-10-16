@@ -383,7 +383,7 @@ func test_the_drawbar_itself_clears_the_linkage_and_the_tyres() -> void:
 	# The bar is bolted under the hitch housing and runs aft on the centreline under the PTO stub.
 	# It has to miss BOTH the rear tyres and the swing of the lower links, or a tractor with an
 	# implement on cannot lower it. Checked against the tyres here; the linkage clearance is
-	# geometry the hitch scene's own header records (|x| 0.19 inboard, ball ends at |x| 0.37).
+	# geometry the hitch scene's own header records (|x| 0.19 inboard, ball ends at |x| 0.43).
 	var drawbar := _drawbar()
 	var corners: Array[Vector3] = []
 	_box_corners(drawbar, Transform3D.IDENTITY, corners)

@@ -131,6 +131,50 @@ const CIRCLE_SPEED := 1.39         ## m/s (5 km/h)
 const CIRCLE_LOCK := 100.0         ## % of lock, + = right
 const CIRCLE_SETTLE_S := 8.0
 const CIRCLE_HOLD_S := 4.0
+## --- hitch statics (`hitch`, instead of every other pass) ---
+## Parked on the foot brake and the lever, a body with three-point implements is read bare, then per
+## implement (`trailer=` names one; else every carried one) at each of HITCH_STAGES. A reading waits
+## HITCH_WAIT_S (the linkage's 1.5 s stroke and the settle), then averages HITCH_AVG_S: each axle's
+## summed `suspension_force` (kg) against the statics off the live mass and COM; the front change
+## from bare against `m e / L` off the implement point the live COM implies; the front share against
+## HITCH_FRONT_MIN; and the body-frame tensor diagonal against the composite (the bare tensor plus
+## parallel-axis terms for the bare mass and a point implement), the gap Jolt's COM-shift leaves.
+const HITCH_WAIT_S := 4.0
+const HITCH_AVG_S := 1.0
+## Ballasting minimum: at least 20 % of total weight on the front axle to keep the tractor
+## steerable (John Deere operator's manual, "Select Ballast Carefully").
+const HITCH_FRONT_MIN := 0.20
+## `hitch_pos` per reading: the bottom stop, raised, lowered again.
+const HITCH_STAGES: Array[float] = [0.0, 100.0, 0.0]
+## --- draft (`plough`, instead of every other pass) ---
+## The strip answers as level 1's field (`FieldStrip`), so draft acts. Per draft-relevant implement
+## (`trailer=` names one; else each), lowered at rest for HITCH_WAIT_S, then each of PLOUGH_KMH
+## held on the circle's PI pedal for PLOUGH_SETTLE_S and averaged over PLOUGH_AVG_S: the draft (N,
+## `TractorVehicle.draft_applied`; the `draft_force` dial beside it) against its D497 figure at the speed held, `engine_load`,
+## `wheel_slip`, `axle_load`, the front share, gear and rpm. Then braked to a stop, held
+## PLOUGH_STOP_S, and floored from rest for PLOUGH_START_S with the implement down: every shift as
+## it lands, a trace line every PLOUGH_TRACE_S, and the hunting gate. With `trace[=n]` the start's
+## first `trace_s=` seconds print a line every n ticks instead (`_plough_trace_line`).
+const PLOUGH_KMH: Array[float] = [3.0, 7.0, 10.0]
+const PLOUGH_SETTLE_S := 8.0
+const PLOUGH_AVG_S := 3.0
+const PLOUGH_STOP_S := 2.0
+const PLOUGH_START_S := 15.0
+const PLOUGH_TRACE_S := 0.5
+## `plough course`: the strip answers as tractor_plough's course instead (`FieldStrip`), measured
+## off the course scene and `gen_farm_playground.gd` by distance ahead of the course's Spawn: its
+## light bands mix Field with Sand at LIGHT_SOIL_MIX. Per COURSE_RUNS entry (km/h, `hitch_pos`):
+## respawned, the plough set at rest for HITCH_WAIT_S, then the PI pedal on a setpoint ramped at
+## COURSE_RAMP to the run's speed, through the Row to its Exit: `engine_load` and the
+## `draft_force` dial, mean, least and most inside the Row on full soil and on a band (the soil at
+## the hitch point; telemetry lags it a tick), each extreme's distance into the Row, gear and rpm;
+## every shift in the Row.
+const COURSE_SCENE := "res://src/levels/island/level_1/courses/tractor_plough_course.tscn"
+const FarmPlayground := preload("res://tools/gen_farm_playground.gd")
+const COURSE_RUNS: Array[Vector2] = [Vector2(3.0, 0.0), Vector2(5.0, 0.0), Vector2(7.0, 0.0),
+		Vector2(9.0, 0.0), Vector2(7.0, 100.0), Vector2(16.0, 100.0)]
+const COURSE_RAMP := 0.5           ## m/s², the tractor's CRUISE_SETS ramp
+const COURSE_TIMEOUT_S := 120.0
 ## --- kerb (`kerb`, instead of every other pass) ---
 ## Square steps across the strip: how the contact (`RayWheel`) meets an edge. At each of
 ## KERB_HEIGHTS a raised plateau is crawled square on at KERB_CRAWL (the circle's PI pedal, braked past it: a converter's creep outruns it), coasted
@@ -242,11 +286,54 @@ const REFERENCE_SPECS_PATH := "res://tools/vehicle_reference_specs.json"
 const REPORT_DIR := "res://reports/specs_sweep/"
 
 enum Phase { ACCEL, COAST, TRACKING, CORNERING, BRAKING, STALL, HANDBRAKE, STEP, CRUISE, CIRCLE,
-		KERB, DONE }
+		KERB, HITCH, PLOUGH, DONE }
 ## Where a step-steer run is (`_tick_step`).
 enum Step { RUN_UP, SETTLE, STEPPED }
 ## What a part-pedal probe window is doing (`_tick_cruise`).
 enum Cruise { APPROACH, KICK, PULSE }
+## Where a `plough` run is (`_tick_plough`).
+enum Plough { LOWER, HOLD, STOP, START, COURSE_SET, COURSE_RUN }
+
+
+## The strip as level 1's field for the `plough` pass, on what `BaseVehicle._collect_grip_terrains`
+## and `TractorVehicle._soil_at` duck-type: splat channel 4 ("Field") at full weight everywhere, at
+## level_1.tscn's `channel_grip` / `channel_drag` for it. With `bands` (`plough course`), Field at
+## `field` weight and Sand (channel 2) over the rest inside each band, by distance ahead of strip z
+## `start_z` (the body faces -Z).
+class FieldStrip extends Node:
+	const GRIP := 0.7
+	const DRAG := 0.08
+	const SAND_GRIP := 0.6
+	const SAND_DRAG := 0.1
+
+	var start_z := 0.0
+	var bands: Array[Vector2] = []
+	var field := 1.0
+
+	func ahead(p: Vector3) -> float:
+		return start_z - p.z
+
+	func field_at(p: Vector3) -> float:
+		var s := ahead(p)
+		for b in bands:
+			if s >= b.x and s <= b.y:
+				return field
+		return 1.0
+
+	func contains_xz(_p: Vector3) -> bool:
+		return true
+
+	func height_at(_p: Vector3) -> float:
+		return 0.0
+
+	func grip_at(p: Vector3) -> float:
+		return lerpf(SAND_GRIP, GRIP, field_at(p))
+
+	func drag_at(p: Vector3) -> float:
+		return lerpf(SAND_DRAG, DRAG, field_at(p))
+
+	func channel_weight_at(p: Vector3, ch: int) -> float:
+		return field_at(p) if ch == TractorVehicle.SOIL_CHANNEL else 0.0
 
 var _queue: Array[String] = []
 var _seconds := DEFAULT_SECONDS
@@ -299,6 +386,38 @@ var _st_xfer := Vector2.ZERO          ## `_axle_transfer` summed over the steady
 var _circle := false
 var _ci_i := 0.0                      ## integral half of the circle's PI pedal
 var _ci_sums := {}                    ## the circle's figures summed over the hold (`_tick_circle`)
+## `hitch`: run only the hitch statics (§ hitch statics) on each body.
+var _hitch_pass := false
+var _hi_ids: Array[String] = []       ## implements still to read, this body
+var _hi_stage := -1                   ## index into HITCH_STAGES; -1 the bare reading
+var _hi_sums := Vector3.ZERO          ## front N, rear N, ticks over the current average
+var _hi_bare := {}                    ## the bare reading: front kg, mass, COM, body-frame tensor
+## `plough`: run only the draft pass (§ draft) on each body.
+var _plough_pass := false
+var _pl_ids: Array[String] = []       ## draft implements still to run, this body
+var _pl_stage := Plough.LOWER
+var _pl_speed := 0                    ## index into PLOUGH_KMH
+var _pl_i := 0.0                      ## integral half of the PI pedal
+var _pl_sums := {}                    ## the hold's figures summed (`_tick_plough`)
+var _pl_rating := 0.0                 ## N, the implement's `draft_rating()`
+var _pl_shape := Vector4.ZERO         ## its `draft_shape()`
+var _pl_shifts: Array = []            ## the standing start's shifts (`_shift_record`)
+var _pl_gear := -1                    ## gear byte at the last tick, to catch a shift
+var _pl_trace_t := 0.0                ## s of the start at the next trace line
+var _pl_moving_t := -1.0              ## s into the start the body first passed 0.5 km/h
+var _pl_ticks := 0                    ## ticks into the start, for `trace=n`
+var _pl_peak_slip := 0.0              ## the grip curve's peak slip (`_plough_trace_line`)
+## `plough course`: run the course (§ draft) instead of the held speeds and the start.
+var _course := false
+var _co_strip: FieldStrip
+var _co_row := Vector2.ZERO           ## the Row, m ahead of the course's Spawn
+var _co_id := ""                      ## the implement the course runs
+var _co_runs: Array[Vector2] = []     ## COURSE_RUNS still to run, this body
+var _co_run := Vector2.ZERO           ## this run's km/h and `hitch_pos`
+var _co_set := 0.0                    ## the ramped setpoint, m/s
+var _co_ext := {}                     ## "<signal>, <soil> soil" -> [least, at, most, at, sum, ticks]
+var _co_shifts: Array[String] = []    ## shifts inside the Row
+var _co_gear := -1
 ## `kerb`: run only the kerb runs (§ kerb) on each body.
 var _kerb := false
 var _kb_runs: Array[Dictionary] = []  ## {h, coast, oblique} still to run, this body
@@ -324,7 +443,7 @@ var _track_only := false
 var _strict := false
 ## `trailer=<name>`: what a body with an attachment axis spawns carrying, by the attachment
 ## scene's file name (`box`, `flatbed`, `farm_tipper`...) or `bobtail` / `none` for nothing.
-## Empty: the catalog's own first entry.
+## Empty: the catalog's own first entry; the tractor's none.
 var _trailer := ""
 ## `doc=<braking|cornering|accel|cruise>`: the preset that ran, its region rewritten at the end;
 ## empty otherwise.
@@ -491,6 +610,9 @@ func _ready() -> void:
 	_hb_turn = flags.has("handbrake")
 	_step = flags.has("step")
 	_circle = flags.has("circle")
+	_hitch_pass = flags.has("hitch")
+	_plough_pass = flags.has("plough")
+	_course = _plough_pass and flags.has("course")
 	_kerb = flags.has("kerb")
 	_track_only = flags.has("track")
 	_strict = flags.has("strict")
@@ -558,9 +680,9 @@ func _ready() -> void:
 			return
 		if _trace or _notc or _held_gear > 0 or not is_nan(_engine_inertia) \
 				or not is_nan(_rear_lat_grip) or not is_nan(_bar_rear) or not is_nan(_cornering_peak) \
-				or not is_nan(_ackermann) or _circle or _kerb or _cruise_probe():
+				or not is_nan(_ackermann) or _circle or _hitch_pass or _plough_pass or _kerb or _cruise_probe():
 			printerr("trace / notc / gear= / j= / rear_lat_grip= / bar_rear= / cornering_peak= /"
-					+ " ackermann= / circle / kerb / pedal= / cruise /"
+					+ " ackermann= / circle / hitch / plough / kerb / pedal= / cruise /"
 					+ " kickdown / pulse change the passes a doc preset tabulates: run them per body")
 			get_tree().quit(1)
 			return
@@ -577,6 +699,13 @@ func _ready() -> void:
 	if _step or _circle:
 		# Under the strip and either side of it, top face flush with the strip's.
 		MeasureRig.add_slab(self, "StepPad", Vector3(STEP_PAD_WIDTH, 2.0, STRIP_LENGTH))
+	if _plough_pass:
+		# Before the first body ticks: its wheels find the painted terrains once.
+		var strip := FieldStrip.new()
+		if _course:
+			_co_strip = strip
+			_load_course(strip)
+		add_child(strip)
 	if which == "all" or _doc == "cornering" or _doc == "accel":
 		_queue.assign(_wheel_driven_variants())
 	elif _doc == "braking":
@@ -597,9 +726,16 @@ func _ready() -> void:
 		return
 	if _circle and _trailer == "":
 		_trailer = "bobtail"
+	if _course and _trailer == "":
+		_trailer = "plough"  # the implement tractor_plough attaches
 	var steer_label := "steer stepped" if _step else "zero steer input"
 	if _circle:
 		steer_label = "full right lock"
+	elif _hitch_pass:
+		steer_label = "parked"
+	elif _plough_pass:
+		steer_label = "level 1's field (grip %.2f, drag %.2f) under it" % [FieldStrip.GRIP,
+				FieldStrip.DRAG]
 	print("strip: %.0f x %.0f m flat, surface_grip 1.0, %s, %.0f s cap per pass\n" %
 			[STEP_PAD_WIDTH if _step else STRIP_WIDTH, STRIP_LENGTH, steer_label, _seconds])
 	MeasureRig.drive(100.0, 0.0)
@@ -699,6 +835,10 @@ func _next_vehicle() -> void:
 		_start_step()
 	elif _circle:
 		_start_circle()
+	elif _hitch_pass:
+		_start_hitch()
+	elif _plough_pass:
+		_start_plough()
 	elif _kerb:
 		_start_kerb()
 	elif _track_only:
@@ -729,6 +869,10 @@ func _drive_accel(accel_pct: float, brake_pct := 0.0) -> void:
 func _apply_trailer(body: BaseVehicle = null) -> void:
 	if body == null:
 		body = _car
+	if _trailer == "" and body is TractorVehicle:
+		# Bare tractor by default: a carried implement's weight moves its axle loads.
+		body.call(&"set_attachment", AttachmentCatalog.NONE)
+		return
 	if _trailer == "" or not body.has_method(&"attachment_ids"):
 		return
 	var found := _trailer in ["bobtail", "none"]
@@ -832,6 +976,10 @@ func _physics_process(delta: float) -> void:
 		_tick_step(delta)
 	elif _phase == Phase.CRUISE:
 		_tick_cruise(delta)
+	elif _phase == Phase.HITCH:
+		_tick_hitch()
+	elif _phase == Phase.PLOUGH:
+		_tick_plough(delta)
 	elif _phase == Phase.CIRCLE:
 		_tick_circle(delta)
 	elif _phase == Phase.KERB:
@@ -2410,6 +2558,446 @@ func _slip_angle_deg(w: RayWheel) -> float:
 	fwd = (fwd - n * fwd.dot(n)).normalized()
 	var vel := VehicleMath.point_velocity(_car, w.contact_point)
 	return rad_to_deg(atan2(-vel.dot(fwd.cross(n)), vel.dot(fwd)))
+
+
+## The hitch statics (§ hitch statics) on this body: parked, bare first.
+func _start_hitch() -> void:
+	_reset_pass(Phase.HITCH)
+	_hi_ids = []
+	_hi_bare = {}
+	if not _car is TractorVehicle:
+		print("=== %s: no three-point linkage, hitch skipped ===" % _variant)
+		_finish_vehicle()
+		return
+	for id: String in _car.call(&"attachment_ids"):
+		if not ImplementCatalog.is_attached(id) or ImplementCatalog.is_towed(id):
+			continue
+		if _trailer == "" or id.get_file().get_basename() == _trailer:
+			_hi_ids.append(id)
+	print("=== %s (%s), hitch statics, parked: per-axle kg off the springs ===" % [_variant,
+			_drive_label(_car.spec)])
+	_car.call(&"set_attachment", AttachmentCatalog.NONE)
+	_hi_stage = -1
+	_begin_hitch_reading(100.0)
+
+
+## Command `hitch_pos` (0..100) on the parking brakes and restart the reading's clock.
+func _begin_hitch_reading(hitch_pos: float) -> void:
+	_t = 0.0
+	_hi_sums = Vector3.ZERO
+	MeasureRig.drive(0.0, 100.0, 0.0, true, 1, false, 3, {"hitch_pos": hitch_pos})
+
+
+func _tick_hitch() -> void:
+	if _t < HITCH_WAIT_S:
+		return
+	var axles := Vector2.ZERO
+	for w in _car.wheels:
+		if w.is_rear:
+			axles.y += w.suspension_force
+		else:
+			axles.x += w.suspension_force
+	_hi_sums += Vector3(axles.x, axles.y, 1.0)
+	if _t < HITCH_WAIT_S + HITCH_AVG_S:
+		return
+	_report_hitch_reading()
+	# After the bare reading, or an implement's last stage: on to the next implement.
+	if _hi_stage >= 0 and _hi_stage + 1 < HITCH_STAGES.size():
+		_hi_stage += 1
+	elif _hi_ids.is_empty():
+		MeasureRig.drive(0.0, 0.0)
+		_finish_vehicle()
+		return
+	else:
+		_car.call(&"set_attachment", _hi_ids.pop_front())
+		_hi_stage = 0
+	_begin_hitch_reading(HITCH_STAGES[_hi_stage])
+
+
+## The body-frame inertia tensor (kg·m²) off the live state: `inverse_inertia_tensor` is world-space
+## (`RayWheel.size_cap_masses`' read), so it is turned into the body's axes and inverted.
+func _body_tensor() -> Basis:
+	var state := PhysicsServer3D.body_get_direct_state(_car.get_rid())
+	var b := _car.global_transform.basis
+	return (b.transposed() * state.inverse_inertia_tensor * b).inverse()
+
+
+## Diagonal of the parallel-axis tensor of `kg` at offset `d`: x pitch, y yaw, z roll.
+static func _parallel_axis(kg: float, d: Vector3) -> Vector3:
+	return kg * Vector3(d.y * d.y + d.z * d.z, d.x * d.x + d.z * d.z, d.x * d.x + d.y * d.y)
+
+
+func _report_hitch_reading() -> void:
+	var g := _car.get_gravity().length()
+	var n := maxf(_hi_sums.z, 1.0)
+	var front := _hi_sums.x / n / g
+	var rear := _hi_sums.y / n / g
+	var rear_z := float(BrakeSizing.axle_geometry(_car.spec)["rear_z"])
+	var wheelbase := _wheelbase()
+	var m := _car.mass
+	var com := _car.center_of_mass
+	var front_pred := m * (rear_z - com.z) / wheelbase
+	var share := front / maxf(front + rear, 1e-6)
+	var tensor := _body_tensor()
+	var label := "bare"
+	if _hi_stage >= 0:
+		var where := "raised" if HITCH_STAGES[_hi_stage] > 50.0 else "bottom stop"
+		label = "%s, %s" % [String(_car.call(&"current_attachment")).get_file().get_basename(), where]
+	print(("  %-22s: front %.0f kg, rear %.0f kg; statics %.0f / %.0f (front %+.1f %%, rear %+.1f %%);"
+			+ " front share %.1f %% (min %.0f %%)") % [label, front, rear, front_pred, m - front_pred,
+			(front / front_pred - 1.0) * 100.0, (rear / (m - front_pred) - 1.0) * 100.0, share * 100.0,
+			HITCH_FRONT_MIN * 100.0])
+	var row := {"label": label, "front_kg": front, "rear_kg": rear, "front_pred": front_pred,
+			"share": share, "mass": m, "com_z": com.z, "com_y": com.y}
+	if _hi_stage < 0:
+		_hi_bare = {"front": front, "mass": m, "com": com, "tensor": tensor}
+		print("  %-22s  mass %.0f kg, COM (%.3f, %.3f, %.3f); tensor diagonal %s kg·m²" % ["",
+				m, com.x, com.y, com.z, _diag_label(_diag(tensor))])
+	else:
+		var bare_m: float = _hi_bare["mass"]
+		var bare_com: Vector3 = _hi_bare["com"]
+		var carried := m - bare_m
+		var lines := "  %-22s  mass %.0f kg (+%.0f carried), COM (%.3f, %.3f, %.3f)" % ["", m, carried,
+				com.x, com.y, com.z]
+		if carried > 0.5:
+			# The point the carried load sits at, recovered from the live COM (carried_com inverted).
+			var p := bare_com + (com - bare_com) * m / carried
+			var d_front_pred := carried * (rear_z - p.z) / wheelbase
+			var jolt := _diag(tensor)
+			var composite := _diag(_hi_bare["tensor"]) + _parallel_axis(bare_m, bare_com - com) \
+					+ _parallel_axis(carried, p - com)
+			lines += ("; Δfront %+.0f kg (m e / L %+.0f, e %.2f m behind the rear axle)\n  %-22s  tensor"
+					+ " diagonal %s, composite %s: Jolt carries %.0f / %.0f / %.0f %% (pitch / yaw / roll)") \
+					% [front - float(_hi_bare["front"]), d_front_pred, p.z - rear_z, "",
+					_diag_label(jolt), _diag_label(composite), jolt.x / composite.x * 100.0,
+					jolt.y / composite.y * 100.0, jolt.z / composite.z * 100.0]
+			row["d_front"] = front - float(_hi_bare["front"])
+			row["d_front_pred"] = d_front_pred
+			row["yaw_ratio"] = jolt.y / composite.y
+		print(lines)
+	if not _current.has("hitch"):
+		_current["hitch"] = []
+	(_current["hitch"] as Array).append(row)
+
+
+static func _diag(t: Basis) -> Vector3:
+	return Vector3(t.x.x, t.y.y, t.z.z)
+
+
+static func _diag_label(d: Vector3) -> String:
+	return "%.0f / %.0f / %.0f" % [d.x, d.y, d.z]
+
+
+## The draft pass (§ draft) on this body: each draft-relevant implement in turn.
+func _start_plough() -> void:
+	_reset_pass(Phase.PLOUGH)
+	_pl_ids = []
+	if not _car is TractorVehicle:
+		print("=== %s: no three-point linkage, plough skipped ===" % _variant)
+		_finish_vehicle()
+		return
+	for id: String in _car.call(&"attachment_ids"):
+		if not ImplementCatalog.is_attached(id) or ImplementCatalog.is_towed(id):
+			continue
+		var node := (load(id) as PackedScene).instantiate() as ImplementBase
+		var draft := node.draft_relevant()
+		node.free()
+		if draft and (_trailer == "" or id.get_file().get_basename() == _trailer):
+			_pl_ids.append(id)
+	print("=== %s (%s), draft on the field, dial 100 %% = %.2f kN ===" % [_variant,
+			_drive_label(_car.spec), (_car as TractorVehicle).draft_max_force / 1000.0])
+	_next_plough_implement()
+
+
+## Respawn with the next implement on and lower it at rest, or finish the body.
+func _next_plough_implement() -> void:
+	if _pl_ids.is_empty():
+		MeasureRig.drive(0.0, 0.0)
+		_finish_vehicle()
+		return
+	var id: String = _pl_ids.pop_front()
+	if _course:
+		_co_id = id
+		_co_runs = COURSE_RUNS.duplicate()
+		_next_course_run()
+		return
+	_car.spawn_transform = Transform3D(Basis.IDENTITY,
+			Vector3(0.0, _car.rest_ride_height(), START_Z))
+	_car.respawn()
+	_car.call(&"set_attachment", id)
+	var node := (load(id) as PackedScene).instantiate() as ImplementBase
+	_pl_rating = node.draft_rating()
+	_pl_shape = node.draft_shape()
+	node.free()
+	print("  %s: rated %.2f kN at %.0f km/h, D497 shape (%.0f, %.0f, %.1f) held above %.0f km/h;"
+			% [id.get_file().get_basename(), _pl_rating / 1000.0, TractorTelemetry.DRAFT_S_REF_KMH,
+			_pl_shape.x, _pl_shape.y, _pl_shape.z, _pl_shape.w]
+			+ " g(0) %.2f" % TractorTelemetry.draft_speed01(0.0, _pl_shape))
+	_pl_stage = Plough.LOWER
+	_pl_speed = 0
+	_pl_i = 0.0
+	_t = 0.0
+	_plough_drive(0.0, 100.0, true)
+
+
+## A held speed's sums, zeroed (`_tick_plough`).
+static func _plough_sums() -> Dictionary:
+	var sums := {"gear": 0}
+	for k: String in ["ticks", "v", "draft", "dial", "load", "slip", "axle", "front", "total", "rpm",
+			"pedal"]:
+		sums[k] = 0.0
+	return sums
+
+
+## The bridge stash for the pass: the linkage always at its bottom stop.
+func _plough_drive(accel_pct: float, brake_pct: float, handbrake := false) -> void:
+	MeasureRig.drive(accel_pct, brake_pct, 0.0, handbrake, 1, false, 3, {"hitch_pos": 0.0})
+
+
+func _tick_plough(delta: float) -> void:
+	var v_long := _car.linear_velocity.dot(-_car.global_transform.basis.z)
+	var tel := _car.telemetry as TractorTelemetry
+	match _pl_stage:
+		Plough.COURSE_SET:
+			if _t < HITCH_WAIT_S:
+				return
+			_pl_stage = Plough.COURSE_RUN
+			_t = 0.0
+		Plough.COURSE_RUN:
+			_co_set = minf(_co_set + COURSE_RAMP * delta, _co_run.x / 3.6)
+			var err := _co_set - v_long
+			_pl_i = clampf(_pl_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
+			_course_drive(clampf(_pl_i + err * CORNER_PEDAL_KP, 0.0, 1.0) * 100.0, 0.0)
+			var s := _co_strip.ahead(_car.global_position)
+			if s > _co_row.y or _t > COURSE_TIMEOUT_S:
+				_report_course_run(s)
+				_next_course_run()
+			elif s >= _co_row.x:
+				_course_sample(s - _co_row.x, tel)
+		Plough.LOWER:
+			if _t < HITCH_WAIT_S:
+				return
+			_pl_stage = Plough.HOLD
+			_t = 0.0
+			_pl_sums = _plough_sums()
+		Plough.HOLD:
+			var err := PLOUGH_KMH[_pl_speed] / 3.6 - v_long
+			_pl_i = clampf(_pl_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
+			var pedal := clampf(_pl_i + err * CORNER_PEDAL_KP, 0.0, 1.0)
+			_plough_drive(pedal * 100.0, 0.0)
+			if _t < PLOUGH_SETTLE_S:
+				return
+			var axles := Vector2.ZERO
+			for w in _car.wheels:
+				if w.is_rear:
+					axles.y += w.suspension_force
+				else:
+					axles.x += w.suspension_force
+			_pl_sums["ticks"] += 1.0
+			_pl_sums["v"] += v_long
+			_pl_sums["draft"] += absf((_car as TractorVehicle).draft_applied)
+			_pl_sums["dial"] += float(tel.draft_force)
+			_pl_sums["load"] += float(tel.engine_load)
+			_pl_sums["slip"] += float(tel.wheel_slip)
+			_pl_sums["axle"] += tel.axle_load
+			_pl_sums["front"] += axles.x
+			_pl_sums["total"] += axles.x + axles.y
+			_pl_sums["rpm"] += _car.drivetrain.rpm
+			_pl_sums["pedal"] += pedal
+			_pl_sums["gear"] = _car.drivetrain.gear_byte
+			if _t < PLOUGH_SETTLE_S + PLOUGH_AVG_S:
+				return
+			_report_plough_hold()
+			_pl_speed += 1
+			_t = 0.0
+			_pl_sums = _plough_sums()
+			if _pl_speed >= PLOUGH_KMH.size():
+				_pl_stage = Plough.STOP
+		Plough.STOP:
+			_plough_drive(0.0, 100.0)
+			if absf(v_long) > 0.05:
+				_t = 0.0
+			if _t < PLOUGH_STOP_S:
+				return
+			_pl_stage = Plough.START
+			_t = 0.0
+			_pl_shifts = []
+			_pl_gear = _car.drivetrain.gear_byte
+			_pl_trace_t = 0.0
+			_pl_moving_t = -1.0
+			_pl_ticks = 0
+			print("    standing start, floored, implement down (from %s):" % _gear_label(_pl_gear))
+			if _trace:
+				_pl_peak_slip = 0.0
+				var peak := 0.0
+				for pt in _car.spec.ground_drive.grip_curve:
+					if pt.y > peak:
+						peak = pt.y
+						_pl_peak_slip = pt.x
+				print(("      trace: a line every %d tick(s) to %.1f s; c O(pen) S(lipping) L(ocked), ramp"
+						+ " the start-up ramp, clutch its commanded capacity, Tc at the crank (N·m); per rear"
+						+ " wheel the slip ratio, < / > the grip curve's rising / falling side of its %.2f"
+						+ " peak, and Fx / Fz") % [_trace_every, _trace_s, _pl_peak_slip])
+		Plough.START:
+			_plough_drive(100.0, 0.0)
+			var gear: int = _car.drivetrain.gear_byte
+			if gear != _pl_gear:
+				var s := _shift_record(_pl_gear, gear)
+				_pl_shifts.append(s)
+				print("      %5.2f s  %s" % [_t, _shifts_label([s])])
+				_pl_gear = gear
+			if _pl_moving_t < 0.0 and absf(v_long) * 3.6 > 0.5:
+				_pl_moving_t = _t
+			_pl_ticks += 1
+			if _trace and _t < _trace_s:
+				if (_pl_ticks - 1) % _trace_every == 0:
+					print(_plough_trace_line(v_long))
+				_pl_trace_t = _t + PLOUGH_TRACE_S
+			elif _t >= _pl_trace_t:
+				_pl_trace_t += PLOUGH_TRACE_S
+				print("      %5.2f s  %4.1f km/h %s %4.0f rpm, draft %3d %%, wheel_slip %2d %%, engine_load %3d %%"
+						% [_t, v_long * 3.6, _gear_label(gear), _car.drivetrain.rpm, tel.draft_force,
+						tel.wheel_slip, tel.engine_load])
+			if _t < PLOUGH_START_S:
+				return
+			print("      moving (0.5 km/h) at %s; %s" % ["%.2f s" % _pl_moving_t if _pl_moving_t >= 0.0
+					else "never", _shifts_label(_pl_shifts) if not _pl_shifts.is_empty() else "no shift"])
+			var hunt := _hunting_gate(_pl_shifts)
+			_gate_line("hunting", hunt[0], hunt[1])
+			_next_plough_implement()
+
+
+## One held speed's averages against D497 at the speed held (full depth, full soil).
+func _report_plough_hold() -> void:
+	var s := _pl_sums
+	var n: float = maxf(s["ticks"], 1.0)
+	var v: float = s["v"] / n
+	var draft_n: float = s["draft"] / n
+	var d497 := _pl_rating * TractorTelemetry.draft_speed01(v * 3.6, _pl_shape) \
+			* clampf(absf(v) / TractorTelemetry.DRAFT_V_CRAWL, 0.0, 1.0)
+	if not _current.has("plough"):
+		_current["plough"] = []
+	(_current["plough"] as Array).append({"implement": String(_car.call(&"current_attachment"))
+			.get_file().get_basename(), "kmh": v * 3.6, "draft_n": draft_n, "d497_n": d497,
+			"engine_load": s["load"] / n, "wheel_slip": s["slip"] / n, "axle_load": s["axle"] / n,
+			"front_share": s["front"] / maxf(s["total"], 1e-6)})
+	print(("    %4.1f km/h (held %4.1f): draft %.2f kN (D497 %.2f, %+.1f %%), dial %.0f %%; engine_load"
+			+ " %.0f %%, wheel_slip %.1f %%, axle_load %.0f kg, front share %.1f %%; %s %.0f rpm,"
+			+ " pedal %.2f") % [PLOUGH_KMH[_pl_speed], v * 3.6, draft_n / 1000.0, d497 / 1000.0,
+			(draft_n / maxf(d497, 1.0) - 1.0) * 100.0, s["dial"] / n, s["load"] / n, s["slip"] / n,
+			s["axle"] / n, s["front"] / maxf(s["total"], 1e-6) * 100.0, _gear_label(int(s["gear"])),
+			s["rpm"] / n, s["pedal"] / n])
+
+
+## The course's Row and light bands as distances ahead of its Spawn, laid on `strip` (§ draft).
+func _load_course(strip: FieldStrip) -> void:
+	var course := (load(COURSE_SCENE) as PackedScene).instantiate()
+	var spawn := (course.get_node("Spawn") as Node3D).transform
+	var row := course.get_node("Row") as ChallengeZone
+	var row_z := Vector2(row.position.z - row.size.z * 0.5, row.position.z + row.size.z * 0.5)
+	course.free()
+	# The course runs along world z (its Spawn faces +z or -z); distance ahead of the Spawn.
+	var dir := signf(-spawn.basis.z.z)
+	var ahead := func(z: float) -> float: return (z - spawn.origin.z) * dir
+	var a: float = ahead.call(row_z.x)
+	var b: float = ahead.call(row_z.y)
+	_co_row = Vector2(minf(a, b), maxf(a, b))
+	strip.start_z = START_Z
+	strip.field = 1.0 - FarmPlayground.LIGHT_SOIL_MIX
+	var bands: Array[String] = []
+	for band in FarmPlayground.LIGHT_SOIL_BANDS:
+		a = ahead.call(band.x)
+		b = ahead.call(band.y)
+		strip.bands.append(Vector2(minf(a, b), maxf(a, b)))
+		bands.append("%.0f-%.0f m" % [minf(a, b) - _co_row.x, maxf(a, b) - _co_row.x])
+	print("course: tractor_plough's Row %.0f-%.0f m ahead of its Spawn; light bands %s into it, Field"
+			% [_co_row.x, _co_row.y, ", ".join(bands)] + " %.2f (grip %.2f, drag %.3f), open diff"
+			% [strip.field, lerpf(FieldStrip.SAND_GRIP, FieldStrip.GRIP, strip.field),
+			lerpf(FieldStrip.SAND_DRAG, FieldStrip.DRAG, strip.field)])
+
+
+## The bridge stash for a course run: the linkage held at the run's `hitch_pos`.
+func _course_drive(accel_pct: float, brake_pct: float, handbrake := false) -> void:
+	MeasureRig.drive(accel_pct, brake_pct, 0.0, handbrake, 1, false, 3, {"hitch_pos": _co_run.y})
+
+
+## Respawn at the course's Spawn for the next COURSE_RUNS entry, or the next implement.
+func _next_course_run() -> void:
+	if _co_runs.is_empty():
+		_next_plough_implement()
+		return
+	_co_run = _co_runs.pop_front()
+	_car.spawn_transform = Transform3D(Basis.IDENTITY,
+			Vector3(0.0, _car.rest_ride_height(), START_Z))
+	_car.respawn()
+	_car.call(&"set_attachment", _co_id)
+	_co_ext = {}
+	_co_shifts = []
+	_co_gear = -1
+	_co_set = 0.0
+	_pl_i = 0.0
+	_t = 0.0
+	_pl_stage = Plough.COURSE_SET
+	_course_drive(0.0, 100.0, true)
+
+
+## One tick inside the Row, `d` m into it: each signal's extremes by the soil at the hitch point.
+func _course_sample(d: float, tel: TractorTelemetry) -> void:
+	var dt: Drivetrain = _car.drivetrain
+	var hitch := _car.get_node((_car as TractorVehicle).hitch_path) as ThreePointHitch
+	var soil := "band" if _co_strip.field_at(hitch.hitch_point()) < 1.0 else "full"
+	var at := "%4.1f m, %s %4.0f rpm" % [d, _gear_label(dt.gear_byte), dt.rpm]
+	for sig: String in ["engine_load", "draft_force"]:
+		var v := float(tel.get(sig))
+		var key := "%s, %s soil" % [sig, soil]
+		if not _co_ext.has(key):
+			_co_ext[key] = [v, at, v, at, 0.0, 0]
+		var ext: Array = _co_ext[key]
+		ext[4] += v
+		ext[5] += 1
+		if v < ext[0]:
+			ext[0] = v
+			ext[1] = at
+		if v > ext[2]:
+			ext[2] = v
+			ext[3] = at
+	if _co_gear >= 0 and dt.gear_byte != _co_gear:
+		_co_shifts.append("%s>%s at %.1f m" % [_gear_label(_co_gear), _gear_label(dt.gear_byte), d])
+	_co_gear = dt.gear_byte
+
+
+func _report_course_run(s: float) -> void:
+	print("  %s %s, %.0f km/h: %s" % [_co_id.get_file().get_basename(),
+			"down" if _co_run.y <= 0.0 else "raised", _co_run.x,
+			"through the Row in %.1f s" % _t if s > _co_row.y
+			else "TIMEOUT %.1f m into the Row" % (s - _co_row.x)])
+	var keys := _co_ext.keys()
+	keys.sort()
+	for key: String in keys:
+		var ext: Array = _co_ext[key]
+		print("    %-28s mean %3.0f %%, least %3.0f %% (%s), most %3.0f %% (%s)" % [key,
+				ext[4] / maxi(ext[5], 1), ext[0], ext[1], ext[2], ext[3]])
+	print("    shifts in the Row: %s" % (", ".join(_co_shifts) if not _co_shifts.is_empty()
+			else "none"))
+
+
+## One `trace` line of the floored start (§ draft): what the coupling passes, the draft against the
+## rears' summed tyre force, and each rear tyre against its grip curve.
+func _plough_trace_line(v_long: float) -> String:
+	var dt: Drivetrain = _car.drivetrain
+	var rears: Array[String] = []
+	var fx := 0.0
+	for w in _car.wheels:
+		if w.is_rear:
+			fx += w.force_long
+			rears.append("%s %.3f %s %+.3f" % [_wheel_label(w), w.slip,
+					">" if w.slip > _pl_peak_slip else "<",
+					w.force_long / maxf(w.suspension_force, 1.0)])
+	return ("      %6.3f %5.2f km/h %s %4.0f rpm %s ramp %.2f clutch %.2f Tc %5.0f fuel %.2f | draft"
+			+ " %5.2f kN, rear Fx %5.2f kN | %s") % [_t, v_long * 3.6, _gear_label(dt.gear_byte),
+			dt.rpm, "OSL"[dt.coupling_state], dt.ramp, dt.clutch, dt.coupling_torque,
+			dt.applied_throttle, absf((_car as TractorVehicle).draft_applied) / 1000.0, fx / 1000.0,
+			"  ".join(rears)]
 
 
 ## The kerb runs (§ kerb) on this body, after the disk's prediction per axle: a disk of radius `r`

@@ -21,8 +21,6 @@ const TRAILER_AIR_DRAW := 0.75
 ## Seconds to charge a freshly coupled trailer: coupling costs ~3 bar of primary.
 const TRAILER_CHARGE_S := 8.0
 
-const GRAVITY := 9.8  ## m/s^2, for the suspension-force -> kilograms read
-
 var air_primary := AIR_SPAWN_BAR    ## bar, contract 'air_primary' (SPN 1087)
 var air_secondary := AIR_SPAWN_BAR  ## bar, contract 'air_secondary' (SPN 1088)
 var retarder_state := 0             ## %, contract 'retarder_state' (magnitude; see the contract desc)
@@ -74,11 +72,6 @@ static func spring_brakes_applied(primary: float, secondary: float) -> bool:
 ## True on the tick the gate goes false -> true: one driver notice per application.
 static func spring_brake_notice_edge(applied: bool, was_applied: bool) -> bool:
 	return applied and not was_applied
-
-
-## Axle load (kg) from the summed suspension force (N) on that axle, not a mass lookup.
-static func axle_load_kg(suspension_force_n: float) -> float:
-	return maxf(suspension_force_n, 0.0) / GRAVITY
 
 
 ## EBS11 braking demand (0..1) down the trailer bus: foot brake plus the retarder's share

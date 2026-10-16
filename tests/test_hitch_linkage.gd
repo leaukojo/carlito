@@ -138,6 +138,38 @@ func test_every_catalog_implement_frame_closes_the_linkage() -> void:
 			t += 0.05
 
 
+## A support riding the balls, `ground` metres over its lowered height: float_pos's clearance.
+func _support_over(link: HitchLinkage, ground: float) -> Callable:
+	var lowered := (link.solve(0.0)["ball"] as Vector2).y
+	return func(s: Dictionary) -> float: return (s["ball"] as Vector2).y - lowered - ground
+
+
+func test_float_pos_leaves_ground_at_the_authored_height_alone() -> void:
+	var link := _linkage()
+	assert_float(link.float_pos(0.0, _support_over(link, 0.0))).is_equal(0.0)
+
+
+func test_float_pos_lifts_the_support_onto_raised_ground() -> void:
+	var link := _linkage()
+	var lowered := (link.solve(0.0)["ball"] as Vector2).y
+	var pos := link.float_pos(0.0, _support_over(link, 0.05))
+	assert_float((link.solve(pos)["ball"] as Vector2).y - lowered).is_equal_approx(0.05, 1e-3)
+
+
+func test_float_pos_is_never_below_the_commanded_position() -> void:
+	var link := _linkage()
+	for commanded in [0.0, 0.3, 0.7]:
+		assert_float(link.float_pos(commanded, _support_over(link, 0.05))) \
+			.is_greater_equal(commanded)
+	# Ground already under the support at 0.5: it stays commanded.
+	assert_float(link.float_pos(0.5, _support_over(link, 0.05))).is_equal(0.5)
+
+
+func test_float_pos_clamps_at_fully_raised() -> void:
+	var link := _linkage()
+	assert_float(link.float_pos(0.0, _support_over(link, 5.0))).is_equal(1.0)
+
+
 func test_a_taller_implement_frame_changes_the_solved_pitch() -> void:
 	# mast_offset comes from the attached implement, so a different A-frame really does
 	# re-solve the linkage (it is not a per-implement authored constant).

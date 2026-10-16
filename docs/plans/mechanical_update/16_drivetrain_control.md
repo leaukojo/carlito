@@ -39,7 +39,8 @@ the sim.
   one target.
 - A hand throttle holds PTO speed (540/1000) through a load change. Needs a contract signal for the
   hand throttle; it enters through `VehicleInput` (root rule 5).
-- **Done when** the tractor at 540 PTO holds speed within its droop as 11's draft comes on.
+- **Done when** the tractor at 540 PTO holds speed within its droop as 11's draft comes on (the
+  D497 law, `docs/heavy_vehicles.md` § Draft, hitch, linkage).
 
 ## 3. CVT
 

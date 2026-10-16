@@ -668,6 +668,15 @@ func fill_slip(t: VehicleTelemetry) -> void:
 	t.slip_rear = slip_sum[1] / maxi(1, count[1])
 
 
+## Total suspension force carried by the rear axle this tick (N): what `axle_load` reads.
+func rear_suspension_force() -> float:
+	var total := 0.0
+	for w in wheels:
+		if w.is_rear:
+			total += w.suspension_force
+	return total
+
+
 ## Rear-slip dust, scaled by rear slip, world-space so the plume stays where kicked up.
 func update_dust(t: VehicleTelemetry) -> void:
 	if _dust == null:

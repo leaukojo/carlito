@@ -181,6 +181,28 @@ func test_inertia_of_is_symmetric_in_its_dimensions() -> void:
 			.is_equal_approx(M.inertia_of(1200.0, 2.0, 4.0), 1e-6)
 
 
+# --- carried_com: a load's mass-weighted pull on the centre of mass ---------------
+
+func test_carried_com_is_the_mass_weighted_mean() -> void:
+	# 7000 kg at z 0.3 and 1000 kg at z 2.3: (7000*0.3 + 1000*2.3) / 8000 = 0.55.
+	var com := M.carried_com(Vector3(0.0, 0.8, 0.3), Vector3(0.0, 0.8, 2.3), 7000.0, 1000.0)
+	assert_float(com.z).is_equal_approx(0.55, 1e-5)
+	assert_float(com.y).is_equal_approx(0.8, 1e-5)
+
+
+func test_carried_com_with_no_payload_is_the_base_exactly() -> void:
+	# Exactly, not approximately: a detached tractor must write the spec COM bit for bit.
+	var base := Vector3(0.0, 0.8305302, 0.3053797)
+	assert_vector(M.carried_com(base, Vector3(1.0, 2.0, 3.0), 7000.0, 0.0)).is_equal(base)
+	assert_vector(M.carried_com(base, Vector3(1.0, 2.0, 3.0), 7000.0, -5.0)).is_equal(base)
+
+
+func test_carried_com_survives_a_massless_body() -> void:
+	# A payload on a massless base sits at its own point; nothing at all keeps the base, never NaN.
+	assert_vector(M.carried_com(Vector3.UP, Vector3.DOWN, 0.0, 2.0)).is_equal(Vector3.DOWN)
+	assert_vector(M.carried_com(Vector3.UP, Vector3.DOWN, 0.0, 0.0)).is_equal(Vector3.UP)
+
+
 # --- pitch / roll extraction (straight from the sim's basis) --------------------
 
 func test_pitch_deg_nose_up_positive() -> void:

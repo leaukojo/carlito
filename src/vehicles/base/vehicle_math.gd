@@ -62,6 +62,18 @@ static func yaw_inertia(body_mass: float, index: float, front_arm: float, rear_a
 	return index * body_mass * front_arm * rear_arm
 
 
+## The centre of mass with a `payload` (kg) carried at `point`, both in the body's frame: the
+## mass-weighted mean of `base_com` and `point`. No payload returns `base_com` exactly (no
+## `x * m / m` rounding), and a massless total never divides by zero.
+static func carried_com(base_com: Vector3, point: Vector3, base_mass: float,
+		payload: float) -> Vector3:
+	var m := maxf(base_mass, 0.0)
+	var p := maxf(payload, 0.0)
+	if p <= 0.0 or m + p <= 0.0:
+		return base_com
+	return (base_com * m + point * p) / (m + p)
+
+
 ## Body pitch in degrees, + = nose/bow up. Read straight from the basis.
 static func pitch_deg(b: Basis) -> float:
 	return rad_to_deg(asin(clampf((-b.z).y, -1.0, 1.0)))

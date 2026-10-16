@@ -15,6 +15,25 @@ const GATE_TRAVEL := 0.16
 ## Seconds for the ram to run the gate shut to open.
 const GATE_TRAVEL_TIME := 1.2
 
+## Empty mass (kg) of the class drawn: an ~800 L single-disc spreader, the Demir DMR SF 800 at
+## 150 kg: sourced. Citations: docs/vehicles.md § Sourced figures.
+const FRAME_KG := 150.0
+
+## The empty machine's centre in this frame: the area-weighted centroid of its meshes, the open
+## hopper and the ring rim taken without their cylinder caps.
+const FRAME_CENTRE := Vector3(0.01, 0.56, 0.44)
+
+## Hopper volume (m³) off the scene: an octagonal frustum (CylinderMesh, 8 segments, R 0.8 /
+## r 0.2 / h 1.0), area 2√2·r² per section.
+const HOPPER_M3 := 0.792
+
+## Fertiliser bulk density (kg/m³): high-density ammonium nitrate prill, 0.90-0.95 t/m³
+## (US 5486246): primary. Carried full, one laden mass; nothing empties it.
+const LOAD_DENSITY := 950.0
+
+## The load's centre: the frustum's volume centroid, 0.321 m under the 1.34 m rim, over the outlet.
+const LOAD_CENTRE := Vector3(0.0, 1.019, 0.55)
+
 @onready var _spinner: Node3D = $Spinner
 @onready var _gate: Node3D = $Gate
 @onready var _ram_rod: Node3D = $RamRod
@@ -36,6 +55,20 @@ func connections() -> int:
 
 func device_class() -> int:
 	return CLASS_FERTILIZER
+
+
+## Machine plus a full hopper.
+func mass_kg() -> float:
+	return FRAME_KG + HOPPER_M3 * LOAD_DENSITY
+
+
+func mass_centre() -> Vector3:
+	return VehicleMath.carried_com(FRAME_CENTRE, LOAD_CENTRE, FRAME_KG, HOPPER_M3 * LOAD_DENSITY)
+
+
+## The disc stays clear of the ground at every hitch position, so the linkage carries it all.
+func ground_share() -> float:
+	return 0.0
 
 
 ## The gate plate and its rod slide on their own position.x every tick; merged into the root they
