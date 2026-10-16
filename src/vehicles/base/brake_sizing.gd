@@ -31,7 +31,7 @@ static func g_per_demand(spec: VehicleSpec, load_kg: float) -> float:
 
 ## The axle pair off the wheel stations (front = -Z, `RayWheel.is_rear_z`): the foremost front and
 ## rearmost rear station z and each axle's wheel count.
-static func _axle_geometry(spec: VehicleSpec) -> Dictionary:
+static func axle_geometry(spec: VehicleSpec) -> Dictionary:
 	var gd := spec.ground_drive
 	var front_z := INF
 	var rear_z := -INF
@@ -60,7 +60,7 @@ static func _static_front_share(spec: VehicleSpec, ax: Dictionary) -> float:
 ## Static normal load (N) on one wheel of each axle: x front, y rear. A body with one axle carries
 ## it all there.
 static func wheel_loads(spec: VehicleSpec) -> Vector2:
-	var ax := _axle_geometry(spec)
+	var ax := axle_geometry(spec)
 	var weight := spec.mass * G
 	var front_share := _static_front_share(spec, ax)
 	return Vector2(weight * front_share / maxf(1.0, int(ax["n_front"])),
@@ -98,7 +98,7 @@ static func stall_hold_margin(spec: VehicleSpec) -> float:
 	var gd := spec.ground_drive
 	if gd == null or gd.wheel_positions.is_empty() or gd.wheel_radius <= 0.0:
 		return INF
-	var ax := _axle_geometry(spec)
+	var ax := axle_geometry(spec)
 	var n_front := int(ax["n_front"])
 	var n_rear := int(ax["n_rear"])
 	var front_driven := n_front > 0 and (gd.driven_front or gd.brake_engages_front_axle)
@@ -158,7 +158,7 @@ static func rear_lock_ratio(spec: VehicleSpec) -> float:
 ## off the rears (`com_height`). Scanned in PARK_SCAN_DEG steps, so exact to that step.
 static func park_grade(spec: VehicleSpec) -> float:
 	var gd := spec.ground_drive
-	var ax := _axle_geometry(spec)
+	var ax := axle_geometry(spec)
 	var n_rear := int(ax["n_rear"])
 	if n_rear == 0 or gd.wheel_radius <= 0.0 or spec.mass <= 0.0:
 		return 0.0

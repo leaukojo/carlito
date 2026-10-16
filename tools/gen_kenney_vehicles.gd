@@ -116,12 +116,16 @@ const CAR_BASE := {
 	# saloon's even corner.
 	"mass": 1150.0, "com_y": 0.48, "ride_hz": 1.39, "zeta_bump": 0.36, "zeta_rebound": 0.48,
 	"max_suspension_force": 30000.0, "rest_length": 0.28,
+	# Yaw dynamic index k²/(a·b) (VehicleSpec.yaw_dynamic_index): the measured cars' median, which
+	# SUVs and light vans share; pickups and the open-wheelers override (bands and sources:
+	# docs/vehicles.md § Inertia).
+	"yaw_index": 1.03,
 	# Link geometry as a share of 100 % (`_derive_link_slopes`), inside a road car's 20-50 %
-	# anti-dive and 30-70 % anti-squat. The Kenney wheelbases are toy-scale (1.6 m on the SUV)
-	# under real masses and COM heights, and pitch goes as 1 / wheelbase^2, so with every newton
-	# of transfer through the springs a launch pitches the SUV 6 deg; a real car pitches 1-2.
+	# anti-dive and 30-70 % anti-squat. Pitch is judged per g against the body's own h / L and
+	# what its springs and links predict (the launch trace's `pitch` line), never a full-size
+	# degree figure: the toy wheelbases (1.6 m on the SUV) pitch more by geometry alone.
 	"anti_dive": 0.4, "anti_squat": 0.5,
-	# 10 kN/m with mu_lat 0.97: the sedan peaks at 0.85 g, 4.3 deg of roll (corner pass, 2026-10-03).
+	# 10 kN/m with mu_lat 0.97: the sedan peaks at 0.88 g, 4.7 deg of roll (corner pass, 2026-10-15).
 	"anti_roll_rate": 10000.0,
 	# FWD default; per-variant override in VARIANTS (rwd/awd where the body says so).
 	"wheel_inertia": 1.2, "driven_front": true, "driven_rear": false,
@@ -205,15 +209,18 @@ const CAR_BASE := {
 const TRUCK_BASE := {
 	# Flat-fronted working truck: cd 0.70, crr 0.007 for low-resistance commercial radials.
 	"cd": 0.70, "crr": 0.007,
-	# Springs and dampers are bounded by launch pitch on the toy 1.94 m wheelbase (docs/vehicles.md
-	# § Pitch): 400 kN/m (~2.5 Hz on the ~1.5 t front corner) at ~0.6 / 0.8 of critical
-	# (bump / rebound). At 240 kN/m and 0.3 / 0.4 a floored launch and every shift cut rang the
-	# pitch, swinging the front axle from 0 to 210 % of its parked load.
+	# Springs and dampers are an honest choice bounded by launch pitch on the toy 1.94 m wheelbase
+	# (docs/vehicles.md § Pitch): 400 kN/m (~2.3 Hz on `garbage-truck`'s 1.9 t front corner, an
+	# estimate for an unladen steer axle) at ~0.6 / 0.75 of critical (bump / rebound), over a road
+	# damper's 0.2-0.4 (Gillespie): a road band rings the D1>D2 shift's pitch harder (figures in
+	# docs/vehicles.md § Pitch).
 	# com_y 0.75 is a working truck's real height, ~0.30 of the AABB on these bodies: a hopper or a
 	# pump deck sits high and the cab above it. Half-track 0.66-0.69 over 0.75 m tips at ~0.88 g,
 	# clear of mu_lat 0.75, so the firetruck slides before it rolls (the garbage truck overrides).
 	"mass": 4000.0, "com_y": 0.75, "spring_rate": 400000.0, "damper_bump": 31000.0,
 	"damper_rebound": 41000.0, "max_suspension_force": 120000.0, "rest_length": 0.32,
+	# Yaw index 0: Jolt's uniform-density tensor; no measured heavy truck (docs/vehicles.md § Inertia).
+	"yaw_index": 0.0,
 	# One rate for every corner; no Kenney body declares a rear axle share of its own.
 	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
 	"anti_roll_rate": 0.0,
@@ -229,7 +236,7 @@ const TRUCK_BASE := {
 	# 15500 Nm a wheel is 2.2 g at 8 t, so the light body can lock its wheels and ABS works for it,
 	# and full pedal holds gear 1 at converter stall (BrakeSizing.stall_hold_margin). The spring
 	# brakes act on the drive axle's drums at 7000 Nm a wheel, under the service brake the
-	# proportioning leaves on that drum (8.6 kNm on `garbage-truck`, 9.6 on `firetruck`; a spring
+	# proportioning leaves on that drum (9.6 kNm on `firetruck`; `garbage-truck` overrides; a spring
 	# chamber never out-torques its service chamber), and still past the static rear wheel's grip, so
 	# they lock it. A truck whose air drains cannot drive away because its Allison-class box drops to
 	# neutral while they are on (`Drivetrain.drive_inhibit`, set by TruckVehicle), not because the
@@ -289,9 +296,12 @@ const VAN_BASE := {
 	# 5000 / 7000 N*s/m at a 4 t van's even corner (TRUCK_BASE's 240 kN/m is an 8 t truck's).
 	"mass": 4000.0, "com_y": 0.65, "ride_hz": 1.28, "zeta_bump": 0.31, "zeta_rebound": 0.43,
 	"max_suspension_force": 90000.0, "rest_length": 0.32,
+	# Yaw index 0.91, estimate: no 4-5 t van is measured; the median of the full-size Ford E-series
+	# vans (0.87 / 0.91 / 0.94; docs/vehicles.md § Inertia).
+	"yaw_index": 0.91,
 	# CAR_BASE's geometry: the heavy vans' short wheelbases pitch the same way.
 	"anti_dive": 0.4, "anti_squat": 0.5,
-	# 110 kN/m: ~3 deg of roll at the 0.75 g limit (corner pass, 2026-10-02).
+	# 110 kN/m: 2.6-3.0 deg of roll at the 0.75-0.84 g limit (corner pass, 2026-10-15).
 	"anti_roll_rate": 110000.0,
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
@@ -347,6 +357,8 @@ const TRACTOR_BASE := {
 	# cd 0.90 (nothing streamlined), crr 0.020 (worst in the project, lugged tires).
 	"cd": 0.90, "crr": 0.020,
 	"mass": 4200.0, "com_y": 0.35,
+	# Yaw index 0: Jolt's uniform-density tensor; no measured tractor (docs/vehicles.md § Inertia).
+	"yaw_index": 0.0,
 	# A tractor's "suspension" is its tyres: 330 kN/m is 2.5 Hz on the 1.33 t front corner of the
 	# 7 t variant (a sedan is ~1.3 Hz), static sag 1330*9.8/330000 = 4.0 cm, 33% of the 0.12 m
 	# rest_length — the same sag/travel fraction band the truck family targets; a real front tyre
@@ -438,8 +450,8 @@ const TRACTOR_BASE := {
 # `family` is the CONTRACT family (VehicleCatalog) and picks the feel baseline + vehicle script
 # (FAMILY_SCRIPTS); `base` names the feel baseline when it differs (heavy vans are car-family,
 # van chassis feel). Driveline flags (rear_diff_lockable / front_axle_engageable /
-# retarder_equipped / centre_diff_rigid), the differential bias ratios, `gear_ratios` and `com_z`
-# may all be overridden per variant over the baseline.
+# retarder_equipped / centre_diff_rigid), the differential bias ratios and `gear_ratios` may all
+# be overridden per variant over the baseline.
 const VARIANTS := {
 	# car family
 	# Brake hardware classes over CAR_BASE's saloon: the performance package on `sedan-sports` and
@@ -498,27 +510,36 @@ const VARIANTS := {
 	# cuts the ignition 0.15 s through a shift (the torque interruption CAR_BASE's converter has no
 	# need of) and closes at its rating: on J 0.06 the rev drop already spans ~2 ticks, a dog box's
 	# near-instant engagement (estimate).
-	"race": {"family": "car", "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.25, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": true, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
-	"race-future": {"family": "car", "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": false, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
+	# `yaw_index` 0: no measured open-wheeler, so Jolt's tensor (docs/vehicles.md § Inertia).
+	"race": {"family": "car", "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.25, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": true, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
+	"race-future": {"family": "car", "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": false, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
 	# Commercial bodies: RWD, governed at 180 like the real things (measured 198-200 ungoverned).
 	"van": {"family": "car", "com_y": 0.58, "anti_roll_rate": 18000.0, "mu_lat": 0.88, "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
 	# `ride_lift` 0.08 on the flatbeds: their arches are drawn shallower than the tyre, so at the
 	# flush ride height the rear wheels broke through the bed floor.
-	"pickup": {"family": "car", "anti_roll_rate": 14000.0, "ride_lift": 0.08, "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
-	"pickup-flat": {"family": "car", "anti_roll_rate": 14000.0, "ride_lift": 0.08, "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
+	# `yaw_index` 0.94, the measured pickups' median (docs/vehicles.md § Inertia): the empty bed
+	# leaves the mass forward.
+	"pickup": {"family": "car", "yaw_index": 0.94, "anti_roll_rate": 14000.0, "ride_lift": 0.08, "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
+	"pickup-flat": {"family": "car", "yaw_index": 0.94, "anti_roll_rate": 14000.0, "ride_lift": 0.08, "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
 	# heavy vans: car family, van feel (VAN_BASE, not CAR_BASE) — these are 4-5 t vehicles
 	"delivery": {"family": "car", "base": "van", "mass": 4200.0},
 	"delivery-flat": {"family": "car", "base": "van", "com_y": 0.55, "ride_lift": 0.08, "mass": 4000.0},
 	"ambulance": {"family": "car", "base": "van", "mass": 4800.0, "max_steer_deg": 24.0, "speed_limit_kmh": 150.0},
 	# truck family (J1939) — garbage-truck first, matching VehicleCatalog's cycle order.
-	# com_z -0.14 = 0.14 m forward (front = -Z), hand-tuned by driving: the hopper body pulls
-	# mass back off the rear axle. 90 km/h is the EU heavy-truck limiter (a refuse collector
-	# usually runs lower); this is the one body the governor visibly bites (measured 99.5).
-	# com_y 0.85 is bounded by the launch, not the rollover: on the toy 1.94 m wheelbase the front
-	# axle unloads fully at g * 0.40 * L / h, 0.72 g at 1.05, under the 0.8 g the rear tyres push in
-	# gear 1, so the body wheelied (measure_vehicles `track` gate). 0.85 puts that at ~0.9 g, and it
-	# still rolls before it slides.
-	"garbage-truck": {"family": "truck", "mass": 8000.0, "com_y": 0.85, "torque_mul": 1.3, "com_z": -0.14, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 85.0},
+	# A front loader (the lift arms over the cab). `front_weight` 0.465 is an empty one's, sourced:
+	# 7800 of 16760 kg on the steer axle (City of Barrie, Vehicle Loads on Structures, Appx B, 2022;
+	# its empty rear and side loaders sit at 0.35 and 0.42). `com_y` 0.85 is an estimate (no measured
+	# refuse-truck figure found): 0.48 of the 1.77 m body, over TRUCK_BASE's ~0.30 because the hopper
+	# and arms sit high. Half-track 0.66 over it tips at ~0.78 g static, beside mu_lat 0.75.
+	# On the toy 1.94 m wheelbase the front axle unloads fully at g * 0.465 * L / h = 1.06 g, clear of
+	# the ~0.8 g the rear tyres push in gear 1.
+	# Spring brakes 6500 Nm a wheel: under the 6820 Nm the service brake's split leaves on its lighter
+	# rear drum (a spring chamber never out-torques its service chamber), still past the static rear
+	# wheel's ~6000 Nm of grip, so they lock it.
+	# Governed at 85 km/h, under the EU's 90 km/h heavy-truck limiter (a refuse collector usually
+	# runs lower); this is the one body the governor visibly bites (docs/vehicles.md § Engine braking
+	# under a fuel cut).
+	"garbage-truck": {"family": "truck", "mass": 8000.0, "com_y": 0.85, "front_weight": 0.465, "handbrake_torque": 6500.0, "torque_mul": 1.3, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 85.0},
 	# Emergency vehicles are exempt from the goods-vehicle limiter; 110 is the appliance's own
 	# rating, just above what this body reaches.
 	"firetruck": {"family": "truck", "mass": 7500.0, "torque_mul": 1.3, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 110.0},
@@ -613,12 +634,13 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	var gd := GroundDriveSpec.new()
 	spec.ground_drive = gd
 	spec.mass = get_f.call("mass")
-	# com_y is a family figure a body may override; com_z is per body, preferring `front_weight`
-	# (fraction of static weight on the front axle) over a raw `com_z` offset. com_z 0 is wherever Kenney put the
+	# com_y is a family figure a body may override; com_z is per body, from `front_weight`
+	# (fraction of static weight on the front axle). com_z 0 is wherever Kenney put the
 	# body origin, which spans 36/64 to 61/39 across these bodies — invisible under AWD (four
 	# driven wheels carry any split), but decisive the moment a variant drives one axle: the
 	# open-wheeler launched badly as a rear-driver because its origin was 58% front-heavy.
 	spec.center_of_mass = Vector3(0, _com_y(get_f, geo, ov), _com_z(geo, ov))
+	spec.yaw_dynamic_index = get_f.call("yaw_index")
 	# Resistance: Cd + crr from the family recipe, frontal area measured off this body's own
 	# AABB (FRONTAL_FILL). Snapped to 0.01 m^2 so a regen writes a stable file.
 	var body_box: AABB = geo["box"]
@@ -1543,7 +1565,7 @@ func _collect_body_wheels(node: Node, xform: Transform3D, body_pairs: Array, whe
 
 
 ## Body-space z of the centre of mass, from the recipe's `front_weight` where it declares one
-## (`com_z` where it states the offset directly, 0 where it says nothing). Measured off THIS
+## (0 where it says nothing). Measured off THIS
 ## body's own axle line, so the same declared split means the same handling on every wheelbase.
 ## COM height over the road. `com_y_frac` is the same figure expressed as a fraction of the
 ## body's own AABB top, for a body whose `scale` may still move (the tractor): the fraction is
@@ -1557,7 +1579,7 @@ func _com_y(get_f: Callable, geo: Dictionary, ov: Dictionary) -> float:
 
 func _com_z(geo: Dictionary, ov: Dictionary) -> float:
 	if not ov.has("front_weight"):
-		return float(ov.get("com_z", 0.0))
+		return 0.0
 	var front_z := INF
 	var rear_z := -INF
 	for xz: Vector2 in geo["wheel_xz"]:

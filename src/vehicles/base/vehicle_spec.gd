@@ -12,6 +12,11 @@ extends Resource
 @export var mass := 1200.0                         ## kg, applied to the RigidBody3D
 @export var center_of_mass := Vector3(0, -0.3, 0)  ## body-space; low COM keeps the car flat
 @export var angular_damping := 0.0  ## 0 = engine default; raise for a narrow-track, low-yaw-inertia body as a stability-assist yaw bleed
+## Yaw dynamic index k² / (a·b), a and b the COM's distances to the front and rear axles: the yaw
+## moment is declared as `index * mass * a * b` (`BaseVehicle`). 0 = Jolt's tensor off the
+## collision shapes at uniform density, which puts as much mass per metre in the overhangs as
+## between the axles. Roll and pitch are always Jolt's.
+@export var yaw_dynamic_index := 0.0
 
 @export_group("Trailer")
 ## Whether the ISO 7638 connector carries the ISO 11992 data pair. False = North American SAE

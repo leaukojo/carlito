@@ -1,9 +1,11 @@
 extends GdUnitTestSuite
-## No vehicle sets `RigidBody3D.inertia`, and none needs to: Jolt computes the tensor off the
-## collision shapes ABOUT THE DECLARED CENTRE OF MASS, not about the shape centroid. That is the
-## whole reason the COM heights can be raised as a data change. This suite is the guard on that
-## engine behaviour — a Godot or Jolt upgrade that quietly moved the tensor back to the centroid
-## would leave every raised body rolling about a point below its own mass, with nothing to see.
+## Roll and pitch are never set: Jolt computes them off the collision shapes ABOUT THE DECLARED
+## CENTRE OF MASS, not about the shape centroid. That is the whole reason the COM heights can be
+## raised as a data change. Yaw alone may be declared (`VehicleSpec.yaw_dynamic_index`), written to
+## the y component of `RigidBody3D.inertia`: Jolt overrides only an axis set above 0 and keeps
+## computing the others. This suite is the guard on both engine behaviours — a Godot or Jolt
+## upgrade that moved the tensor back to the centroid, or made the override all-or-nothing, would
+## leave a body rolling about the wrong point or freeze its roll and pitch, with nothing to see.
 ##
 ## Read the tensor through `PhysicsDirectBodyState3D.inverse_inertia` and nothing else:
 ## `RigidBody3D.inertia` and `PhysicsServer3D.body_get_param(..., BODY_PARAM_INERTIA)` are the
@@ -17,14 +19,17 @@ const MID := 0.79
 const HIGH := 1.40
 
 
-func _spawn(variant: String, com_y: float) -> BaseVehicle:
+## `com_z` NAN keeps the shipped spec's.
+func _spawn(variant: String, com_y: float, yaw_index := 0.0, com_z := NAN) -> BaseVehicle:
 	var root: Node3D = auto_free(Node3D.new())
 	add_child(root)
 	var v := (load(VehicleCatalog.scene_of(variant)) as PackedScene).instantiate() as BaseVehicle
 	# The spec is a shared Resource loaded off the .tres, so it is duplicated before the override
 	# — nothing here is written back to the shipped vehicle.
 	v.spec = v.spec.duplicate(true)
-	v.spec.center_of_mass = Vector3(v.spec.center_of_mass.x, com_y, v.spec.center_of_mass.z)
+	v.spec.center_of_mass = Vector3(v.spec.center_of_mass.x, com_y,
+			v.spec.center_of_mass.z if is_nan(com_z) else com_z)
+	v.spec.yaw_dynamic_index = yaw_index
 	v.display_only = true  # no InputRouter registration; this suite never drives anything
 	root.add_child(v)
 	v.global_position = Vector3(0.0, 50.0, 0.0)
@@ -41,14 +46,71 @@ static func _inertia(v: BaseVehicle) -> Vector3:
 	return Vector3(1.0 / inv.x, 1.0 / inv.y, 1.0 / inv.z)
 
 
+## The declared yaw moment the spec asks for, off the same axle stations the body uses.
+static func _declared_yaw(v: BaseVehicle) -> float:
+	var ax := BrakeSizing.axle_geometry(v.spec)
+	var com_z := v.spec.center_of_mass.z
+	return v.spec.yaw_dynamic_index * v.mass * (com_z - float(ax["front_z"])) \
+			* (float(ax["rear_z"]) - com_z)
+
+
 func test_the_override_is_never_the_way_to_read_the_tensor() -> void:
 	var v := await _spawn("sedan", LOW)
-	# Both of these are the override, and a vehicle sets neither. Reading them as "the inertia"
-	# is the trap this suite exists to keep out of the next COM change.
+	# Both of these are the override, and a body that declares no yaw sets neither. Reading them
+	# as "the inertia" is the trap this suite exists to keep out of the next COM change.
 	assert_vector(v.inertia).is_equal(Vector3.ZERO)
 	assert_vector(PhysicsServer3D.body_get_param(
 			v.get_rid(), PhysicsServer3D.BODY_PARAM_INERTIA)).is_equal(Vector3.ZERO)
 	assert_vector(_inertia(v)).is_not_equal(Vector3.ZERO)
+	# A body that declares its yaw writes that axis alone.
+	var d := await _spawn("sedan", LOW, 1.0)
+	assert_float(d.inertia.x).is_equal(0.0)
+	assert_float(d.inertia.z).is_equal(0.0)
+	assert_float(d.inertia.y).is_greater(0.0)
+
+
+func test_one_declared_axis_leaves_the_other_two_computed() -> void:
+	# The engine behaviour the yaw declaration stands on, pinned off any spec: set y alone on a
+	# computed body and the roll and pitch it had stay what Jolt computes.
+	var v := await _spawn("sedan", MID)
+	var computed := _inertia(v)
+	v.inertia = Vector3(0.0, computed.y * 1.5, 0.0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var declared := _inertia(v)
+	assert_float(declared.y / computed.y).is_equal_approx(1.5, 1e-3)
+	assert_float(declared.x / computed.x).is_equal_approx(1.0, 0.02)
+	assert_float(declared.z / computed.z).is_equal_approx(1.0, 0.02)
+
+
+func test_a_declared_yaw_is_index_times_mass_times_the_axle_arms() -> void:
+	var v := await _spawn("sedan", MID, 1.2)
+	assert_float(_inertia(v).y / _declared_yaw(v)).is_equal_approx(1.0, 1e-3)
+
+
+func test_roll_and_pitch_follow_the_com_with_yaw_declared() -> void:
+	var low := _inertia(await _spawn("sedan", LOW, 1.0))
+	var mid := _inertia(await _spawn("sedan", MID, 1.0))
+	var high := _inertia(await _spawn("sedan", HIGH, 1.0))
+	assert_float(mid.z).is_less(low.z)
+	assert_float(mid.z).is_less(high.z)
+	assert_float(mid.x).is_less(low.x)
+	assert_float(mid.x).is_less(high.x)
+	assert_float(low.z / mid.z).is_greater(1.3)
+	assert_float(high.z / mid.z).is_greater(1.3)
+
+
+func test_a_declared_yaw_scales_with_a_runtime_mass_rewrite() -> void:
+	# A declared axis does not follow a `mass` write in Jolt: set_live_mass re-declares it.
+	var v := await _spawn("sedan", LOW, 1.0)
+	var unladen := _inertia(v)
+	v.set_live_mass(v.mass * 2.0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var laden := _inertia(v)
+	assert_float(laden.x / unladen.x).is_equal_approx(2.0, 1e-3)
+	assert_float(laden.y / unladen.y).is_equal_approx(2.0, 1e-3)
+	assert_float(laden.z / unladen.z).is_equal_approx(2.0, 1e-3)
 
 
 func test_roll_and_pitch_moments_follow_the_custom_centre_of_mass() -> void:
@@ -78,17 +140,20 @@ func test_moving_the_com_along_y_leaves_the_yaw_moment_alone() -> void:
 
 
 func test_a_hull_bodied_vehicle_behaves_the_same_way() -> void:
-	# The sedan's collision is a pair of boxes; most Kenney bodies are convex hulls. Same rule.
-	var mid := _inertia(await _spawn("garbage-truck", 1.20))
-	var high := _inertia(await _spawn("garbage-truck", 2.20))
+	# The sedan's collision is a pair of boxes; most Kenney bodies are convex hulls. Same rule, at
+	# z 0, where the height is the COM's only offset. Off the hull's centroid in z too (the shipped
+	# -0.262), parallel axis adds the product `I_yz = -m dy dz`, which grows with height and moves
+	# the principal-frame yaw reading ~5 % over 1 m: real, but not this rule's signature.
+	var mid := _inertia(await _spawn("garbage-truck", 1.20, 0.0, 0.0))
+	var high := _inertia(await _spawn("garbage-truck", 2.20, 0.0, 0.0))
 	assert_float(mid.z).is_less(high.z)
-	assert_float(mid.y / high.y).is_between(0.95, 1.05)
+	assert_float(mid.y / high.y).is_between(0.98, 1.02)
 
 
 func test_the_tensor_scales_with_a_runtime_mass_rewrite() -> void:
 	# The refuse truck rewrites `mass` when the hopper fills (truck.gd, through
 	# BaseVehicle.set_live_mass). The computed tensor follows it on its own, which is the
-	# other half of why no vehicle needs an explicit `inertia`.
+	# other half of why no vehicle needs an explicit roll or pitch `inertia`.
 	var v := await _spawn("sedan", LOW)
 	var unladen := _inertia(v)
 	v.set_live_mass(v.mass * 2.0)

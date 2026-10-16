@@ -223,6 +223,39 @@ func test_is_inverted_threshold_is_the_angle_from_world_up() -> void:
 	assert_bool(M.is_inverted(tilt, 61.0)).is_false()
 
 
+# --- point_velocity: the lever runs from the COM ---------------------------------
+
+## Engine guard: a pure spin about a COM 2 m off the origin. The COM stays put while the origin
+## sweeps ~2 m/s, so a lever from the origin reads every point that much wrong.
+func test_point_velocity_matches_the_motion_of_a_point_on_an_off_origin_com() -> void:
+	var b: RigidBody3D = auto_free(RigidBody3D.new())
+	var cs := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(1.0, 1.0, 4.0)
+	cs.shape = box
+	b.add_child(cs)
+	b.gravity_scale = 0.0
+	b.linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+	b.angular_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+	b.center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
+	b.center_of_mass = Vector3(0.0, 0.5, 2.0)
+	add_child(b)
+	b.global_position = Vector3(0.0, 100.0, 0.0)
+	await get_tree().physics_frame
+	b.linear_velocity = Vector3.ZERO
+	b.angular_velocity = Vector3(0.3, 1.0, 0.0)
+	await get_tree().physics_frame
+	var p_local := Vector3(1.0, -0.4, -1.5)
+	var com := b.global_transform * b.center_of_mass
+	var p := b.global_transform * p_local
+	var v := M.point_velocity(b, p)
+	await get_tree().physics_frame
+	assert_vector(b.global_transform * b.center_of_mass).is_equal_approx(com, Vector3.ONE * 1e-4)
+	# One tick's chord of the arc, ~0.03 m/s here, against the origin lever's ~2 m/s.
+	assert_vector((b.global_transform * p_local - p) / DELTA) \
+		.is_equal_approx(v, Vector3.ONE * 0.05)
+
+
 # --- road resistance: aero + rolling, the wheeled vehicles' whole drag model ----
 
 func test_aero_drag_is_the_textbook_formula() -> void:

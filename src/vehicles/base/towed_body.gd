@@ -144,7 +144,7 @@ func tick_towed(brake01: float, handbrake01: float, delta: float,
 			+ clampf(handbrake01, 0.0, 1.0) * gd.handbrake_torque
 	# The trailer's own ABS modulates the service brake; spring brakes are a mechanical hold.
 	var abs_slip := RayWheel.ABS_SLIP if gd.abs_equipped and handbrake01 <= 0.0 else 0.0
-	_size_lateral_caps(gd)
+	RayWheel.size_cap_masses(wheels, self, gd)
 	# One anti-roll snapshot for the whole bogie before any wheel ticks (`RayWheel.anti_roll_partner`).
 	for w in wheels:
 		w.latch_bar()
@@ -168,26 +168,6 @@ static func lagged_brake(actual: float, cmd: float, delta: float) -> float:
 ## `trailer_brake_demand` reports (ISO 11992 EBS11 is a report of the application, not the pedal).
 func brake_applied() -> float:
 	return _brake_actual
-
-
-## Each wheel's one-tick lateral cap off the mass its contact really moves sideways, the bogie's
-## wheels sharing it. `corner_mass` alone overstates it ~6x here (the COM rides 1.7 m above the
-## contacts on a narrow hull); capped by it, the tyres' explicit lateral stiffness at a standstill
-## overruns the tick and the rig rings left/right off float noise. Sized every tick: the load models
-## move the COM. The lever runs to full droop, the longest it gets.
-## COMPROMISE: towed bodies only. Every RayWheel body overstates it (a bobtail tractor ~3x) but
-## tracks exact; extending this tightens their crawl-speed lateral grip and re-measures every
-## vehicle.
-func _size_lateral_caps(gd: GroundDriveSpec) -> void:
-	var state := PhysicsServer3D.body_get_direct_state(get_rid())
-	if state == null:
-		return
-	var b := global_transform.basis
-	var inv_inertia := b.transposed() * state.inverse_inertia_tensor * b
-	var droop := Vector3(0.0, gd.rest_length + gd.wheel_radius, 0.0)
-	for w in wheels:
-		w.lateral_cap_mass = RayWheel.lateral_mass_at(w.anchor - droop - center_of_mass, mass,
-				inv_inertia) / wheels.size()
 
 
 ## Re-lay the trailer at `pose`, stopped; stale wheel compression or spin would read as a

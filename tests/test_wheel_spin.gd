@@ -862,15 +862,18 @@ func test_link_slopes_are_signed_per_axle() -> void:
 	assert_float(front.link_slope * -1000.0).is_equal_approx(120.0, 1e-4)  # brake: nose up
 
 
-# --- lateral_mass_at: what a sideways contact force really moves -------------------
+# --- contact_masses: what a contact force really moves -------------------------------
+
+## A lone contact's figure.
+func _lone_mass(arm: Vector3, axis: Vector3, m: float, inv: Basis) -> float:
+	return WheelScript.contact_masses(PackedVector3Array([arm]), axis, m, inv)[0]
+
 
 func test_a_contact_at_the_centre_of_mass_moves_the_whole_body() -> void:
 	var inv := Basis.from_scale(Vector3(1e-4, 1e-4, 1e-4))
-	assert_float(WheelScript.lateral_mass_at(Vector3.ZERO, 8000.0, inv)) \
-			.is_equal_approx(8000.0, 1e-6)
+	assert_float(_lone_mass(Vector3.ZERO, Vector3.RIGHT, 8000.0, inv)) 			.is_equal_approx(8000.0, 1e-6)
 	# A lever along X is the force's own line: no moment, still the whole body.
-	assert_float(WheelScript.lateral_mass_at(Vector3(0.72, 0.0, 0.0), 8000.0, inv)) \
-			.is_equal_approx(8000.0, 1e-6)
+	assert_float(_lone_mass(Vector3(0.72, 0.0, 0.0), Vector3.RIGHT, 8000.0, inv)) 			.is_equal_approx(8000.0, 1e-6)
 
 
 func test_a_contact_below_the_centre_of_mass_rolls_the_body_and_moves_less() -> void:
@@ -878,17 +881,61 @@ func test_a_contact_below_the_centre_of_mass_rolls_the_body_and_moves_less() -> 
 	var m := 24000.0
 	var inv := Basis.from_scale(Vector3(1.0 / 140000.0, 1.0 / 140000.0, 1.0 / 13500.0))
 	var arm := Vector3(0.0, -1.74, 0.0)
-	assert_float(WheelScript.lateral_mass_at(arm, m, inv)) \
-			.is_equal_approx(1.0 / (1.0 / m + 1.74 * 1.74 / 13500.0), 1e-2)  # float32 Basis
+	assert_float(_lone_mass(arm, Vector3.RIGHT, m, inv)) 			.is_equal_approx(1.0 / (1.0 / m + 1.74 * 1.74 / 13500.0), 1e-2)  # float32 Basis
 	# A fore-aft offset adds the yaw the force turns as well.
-	var aft := WheelScript.lateral_mass_at(arm + Vector3(0.0, 0.0, 1.42), m, inv)
-	assert_float(aft).is_less(WheelScript.lateral_mass_at(arm, m, inv))
+	var aft := _lone_mass(arm + Vector3(0.0, 0.0, 1.42), Vector3.RIGHT, m, inv)
+	assert_float(aft).is_less(_lone_mass(arm, Vector3.RIGHT, m, inv))
 	assert_float(aft).is_less(m / 6.0)
 
 
+func test_a_contact_below_the_centre_of_mass_pitches_the_body_along_the_wheel() -> void:
+	# The same lever along the wheel meets the PITCH moment (X), not the roll one.
+	var m := 1500.0
+	var inv := Basis.from_scale(Vector3(1.0 / 2200.0, 1.0 / 2500.0, 1.0 / 600.0))
+	var arm := Vector3(0.0, -0.74, 0.0)
+	assert_float(_lone_mass(arm, Vector3.BACK, m, inv)) 			.is_equal_approx(1.0 / (1.0 / m + 0.74 * 0.74 / 2200.0), 1e-2)  # float32 Basis
+	# The track's half-width adds the yaw a single wheel's push turns.
+	assert_float(_lone_mass(arm + Vector3(0.63, 0.0, 0.0), Vector3.BACK, m, inv)) 			.is_less(_lone_mass(arm, Vector3.BACK, m, inv))
+
+
+func test_four_wheels_pushing_together_cancel_their_yaw_and_share_the_pitch() -> void:
+	# A car's four contacts 0.74 m under the COM: pushed evenly along the wheel the sides' yaw
+	# cancels, so each moves a quarter of the pitch-only figure, more than a lone wheel's quarter.
+	var m := 1500.0
+	var inv := Basis.from_scale(Vector3(1.0 / 2200.0, 1.0 / 2500.0, 1.0 / 600.0))
+	var arms := PackedVector3Array([Vector3(-0.63, -0.74, -1.3), Vector3(0.63, -0.74, -1.3),
+			Vector3(-0.63, -0.74, 1.3), Vector3(0.63, -0.74, 1.3)])
+	var masses := WheelScript.contact_masses(arms, Vector3.BACK, m, inv)
+	var even := 1.0 / (4.0 * (1.0 / m + 0.74 * 0.74 / 2200.0))
+	for i in arms.size():
+		assert_float(masses[i]).is_equal_approx(even, 1e-2)  # float32 Basis
+	assert_float(masses[0]).is_greater(_lone_mass(arms[0], Vector3.BACK, m, inv) / 4.0)
+
+
+func test_capped_contacts_never_overshoot_in_any_mode() -> void:
+	# A is the contacts' coupled inverse mass, D the caps; a mode's one-tick response is the Rayleigh
+	# quotient of D^1/2 A D^1/2, which must stay <= 1 (cancel at most): an even push, the sides
+	# against each other, the axles against each other, one wheel alone.
+	var m := 8000.0
+	var inv := Basis.from_scale(Vector3(1.0 / 30000.0, 1.0 / 32000.0, 1.0 / 6000.0))
+	var arms := PackedVector3Array([Vector3(-1.0, -1.4, -2.0), Vector3(1.0, -1.4, -2.0),
+			Vector3(-1.0, -1.4, 2.5), Vector3(1.0, -1.4, 2.5)])
+	for axis: Vector3 in [Vector3.BACK, Vector3.RIGHT]:
+		var masses := WheelScript.contact_masses(arms, axis, m, inv)
+		for u: Array in [[1.0, 1.0, 1.0, 1.0], [1.0, -1.0, 1.0, -1.0], [1.0, 1.0, -1.0, -1.0],
+				[1.0, 0.0, 0.0, 0.0]]:
+			var response := 0.0
+			var norm := 0.0
+			for i in arms.size():
+				norm += u[i] * u[i]
+				for j in arms.size():
+					var a_ij := 1.0 / m + arms[i].cross(axis).dot(inv * arms[j].cross(axis))
+					response += u[i] * sqrt(masses[i]) * a_ij * sqrt(masses[j]) * u[j]
+			assert_float(response / norm).is_less_equal(1.0 + 1e-4)
+
+
 func test_a_massless_body_moves_nothing() -> void:
-	assert_float(WheelScript.lateral_mass_at(Vector3(0.0, -1.0, 0.0), 0.0, Basis.IDENTITY)) \
-			.is_equal(0.0)
+	assert_float(_lone_mass(Vector3(0.0, -1.0, 0.0), Vector3.RIGHT, 0.0, Basis.IDENTITY)) 			.is_equal(0.0)
 
 
 # --- rest ride height: the spawn placer's ground-clearance figure ------------------

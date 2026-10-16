@@ -324,6 +324,7 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 		wheels[i].lock_torque = pawl if wheels[i].driven else 0.0
 		if wheels[i].lock_torque > 0.0:
 			locked.append(i)
+	RayWheel.size_cap_masses(wheels, body, gd)
 	# One anti-roll snapshot for the whole body before any wheel ticks (`RayWheel.anti_roll_partner`).
 	for w in wheels:
 		w.latch_bar()

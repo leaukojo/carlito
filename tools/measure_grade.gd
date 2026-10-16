@@ -459,7 +459,7 @@ func _physics_process(delta: float) -> void:
 
 ## Slip at which the driven wheels together make their most force. The grip curve peaks at
 ## TC_TARGET_SLIP, but RayWheel also caps a tick's force at what would cancel the slip velocity
-## (`corner_mass * slip_vel / delta`); near a standstill (slip over `LOW_SPEED_FLOOR`) under a heavy
+## (`long_mass * slip_vel / delta`); near a standstill (slip over `LOW_SPEED_FLOOR`) under a heavy
 ## axle load, a fifth wheel's, that cap still binds past the peak. One slip for every driven wheel:
 ## one pedal sets it, and a rigid MFWD ties the axles anyway.
 func _tc_target(delta: float) -> float:
@@ -472,7 +472,7 @@ func _tc_target(delta: float) -> float:
 			continue
 		budgets.append(RayWheel.load_scaled_mu(gd.mu_long * w.surface_grip, w.suspension_force,
 				w.corner_mass * 9.81, gd.load_sensitivity) * w.suspension_force)
-		caps.append(w.corner_mass * denom / delta)
+		caps.append(minf(w.corner_mass, w.long_cap_mass) * denom / delta)
 	var best := TC_TARGET_SLIP
 	var best_force := -1.0
 	var s := TC_TARGET_SLIP  ## below the peak both curve and cap rise, so the answer is not there

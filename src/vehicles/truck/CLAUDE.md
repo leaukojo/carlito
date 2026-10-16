@@ -7,8 +7,8 @@ Tour, signal tables, derivations: `docs/heavy_vehicles.md`. Shared towing and ve
   `engine_load`.
 - Pull-away is decided by torque at `Drivetrain.launch_target_rpm`, never the peak: fix
   startability at the low end of the curve.
-- `corner_mass` is `mass / wheel_count`, so a trailer's clamps run loose and the tractor's tight:
-  fix it in the spec numbers, never the clamps.
+- The clamps are sized off `corner_mass` (`mass / wheel_count`) and the body's tensor
+  (`RayWheel.size_cap_masses`): fix a rig in the spec numbers, never the clamps.
 - `conventional_spec.tres` shares `semi_spec.tres`'s drivetrain/brake/suspension/tyre block:
   retune both.
 - `Kingpin` Y is frozen (every trailer is authored against it; only the semi's is tested).

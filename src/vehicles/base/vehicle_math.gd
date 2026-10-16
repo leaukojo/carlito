@@ -55,6 +55,13 @@ static func inertia_of(body_mass: float, dim_a: float, dim_b: float) -> float:
 	return body_mass * (dim_a * dim_a + dim_b * dim_b) / 12.0
 
 
+## Yaw moment of inertia (kg*m^2) off a dynamic index `k² / (a·b)`: `front_arm` and `rear_arm`
+## are the COM's distances to the front and rear axles. An index of 1 is the two-mass car whose
+## mass sits on its axles.
+static func yaw_inertia(body_mass: float, index: float, front_arm: float, rear_arm: float) -> float:
+	return index * body_mass * front_arm * rear_arm
+
+
 ## Body pitch in degrees, + = nose/bow up. Read straight from the basis.
 static func pitch_deg(b: Basis) -> float:
 	return rad_to_deg(asin(clampf((-b.z).y, -1.0, 1.0)))
@@ -70,6 +77,16 @@ static func roll_deg(b: Basis) -> float:
 ## rollover belongs to the caller. Combined pitch and roll, so a body on its nose counts too.
 static func is_inverted(b: Basis, threshold_deg: float) -> bool:
 	return b.y.dot(Vector3.UP) < cos(deg_to_rad(threshold_deg))
+
+
+## World velocity of the world point `point` riding on `body`. `linear_velocity` is the CENTRE OF
+## MASS's velocity, so the lever runs from the COM, never the origin: on a body whose COM sits off
+## its origin the origin lever is out by `angular_velocity x (com - origin)`. Reads the declared
+## `center_of_mass`, so the body is in CENTER_OF_MASS_MODE_CUSTOM (every vehicle and towed body
+## is); `PhysicsDirectBodyState3D.get_velocity_at_local_position` is the same figure in any mode.
+static func point_velocity(body: RigidBody3D, point: Vector3) -> Vector3:
+	return body.linear_velocity \
+			+ body.angular_velocity.cross(point - body.global_transform * body.center_of_mass)
 
 
 # --- road resistance (wheeled vehicles) --------------------------------------------------

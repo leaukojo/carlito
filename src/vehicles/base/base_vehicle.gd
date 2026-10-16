@@ -81,6 +81,7 @@ func _ready() -> void:
 	mass = spec.mass
 	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
 	center_of_mass = spec.center_of_mass
+	_declare_yaw(spec.mass)
 	can_sleep = false
 	# A hard fall can tunnel through thin terrain collision in one 60 Hz tick otherwise.
 	continuous_cd = true
@@ -364,8 +365,29 @@ func reset_session_state() -> void:
 ## `corner_mass`, so the corners are re-shared in the same call (WheelDrive.set_corner_mass_from).
 func set_live_mass(kg: float) -> void:
 	mass = kg
+	_declare_yaw(kg)
 	if drive != null:
 		drive.set_corner_mass_from(kg)
+
+
+## The declared yaw moment (`VehicleSpec.yaw_dynamic_index`) at `kg`, written to the y component
+## alone: Jolt overrides only an axis set above 0, so roll and pitch stay computed about the COM.
+## A declared axis does not follow a `mass` write, hence the call from `set_live_mass`.
+func _declare_yaw(kg: float) -> void:
+	if spec.yaw_dynamic_index <= 0.0 or spec.ground_drive == null:
+		return
+	var ax := BrakeSizing.axle_geometry(spec)
+	if int(ax["n_front"]) == 0 or int(ax["n_rear"]) == 0:
+		return
+	var com_z := spec.center_of_mass.z
+	var iyy := VehicleMath.yaw_inertia(kg, spec.yaw_dynamic_index,
+			com_z - float(ax["front_z"]), float(ax["rear_z"]) - com_z)
+	# Jolt reads an axis at or under 0 as "compute it", so a COM outside the wheelbase would fall
+	# back silently.
+	if iyy <= 0.0:
+		push_warning("%s: COM outside the wheelbase, yaw_dynamic_index ignored" % name)
+		return
+	inertia = Vector3(0.0, iyy, 0.0)
 
 
 ## Copy a fresh telemetry's every field onto the live one. IN PLACE, never a new object: the

@@ -42,6 +42,7 @@ script = ExtResource("3_ac4ng")
 ground_drive = SubResource("Resource_3x851")
 mass = 1050.0
 center_of_mass = Vector3(0, 0.48, 0)
+yaw_dynamic_index = 1.03
 torque_curve = PackedVector2Array(900, 109.76, 2000, 172.48, 3200, 206.08, 4800, 207.2, 6000, 207.2, 6600, 190.4, 6800, 68.32)
 gear_ratios = PackedFloat32Array(4.5, 2.903, 1.975, 1.431, 1.109, 0.925)
 final_drive = 4.1

@@ -36,7 +36,7 @@ VehicleTelemetry` adds chassis, body-network and trailer-bus "out" fields.
   `TruckTelemetry.AIR_SPRING_BRAKE_BAR` (**3 bar**) on either circuit, spring brakes apply
   from the next tick: `handbrake_torque` on the rears through the spin step
   (`WheelDrive.spring_brake`), a parking brake no stronger than the service brake on its drum
-  (7 kNm a wheel on the Kenney trucks, 12 kNm on the semis), and the box drops to N
+  (6.5 kNm a wheel on `garbage-truck`, 7 on `firetruck`, 12 on the semis), and the box drops to N
   (`Drivetrain.drive_inhibit`, an Allison-class park-brake auto-neutral), so the truck can't
   drive away; `warn` (**5 bar**) is a band to stop in first. Gate reads the
   minimum of the two circuits; losing air has no ramp.
@@ -48,7 +48,7 @@ VehicleTelemetry` adds chassis, body-network and trailer-bus "out" fields.
 
   | Body | Parked 30 s on 18 %, air drained, no lever | Floored in D, air drained | Air cut at 30 km/h, pedal floored |
   | --- | --- | --- | --- |
-  | `garbage-truck` | 0.0 mm | gear N, 0.0 mm | stops in 12.7 m, 2.76 m/s² |
+  | `garbage-truck` | 0.0 mm | gear N, 0.0 mm | stops in 13.8 m, 2.49 m/s² |
   | `semi` + box | 2.2 mm | gear N, 0.0 mm | stops in 10.8 m, 2.98 m/s² |
   | `semi-conventional` + box | 2.2 mm | gear N, 0.3 mm | stops in 10.0 m, 3.18 m/s² |
 
@@ -182,14 +182,15 @@ the conventional carries none. No trailer of the four adds a signal to either.
 
   | Body | COM over road | rollover_g | slow tip | lean at 0.2 g | step at 40 km/h lifts at | full-lock step rolls from |
   | --- | --- | --- | --- | --- | --- | --- |
-  | Box | 1.60 m | 0.45 | 0.35 g | 1.7° | 0.38 g | 25 km/h |
-  | Tanker | 1.50 m | 0.48 | 0.38 g | 1.6° | 0.41 g | 30 km/h (lifts at 25) |
-  | Tipper | 1.30 m (parked) | 0.55 | 0.45 g | 1.3° | 0.41 g | 30 km/h (lifts at 25) |
-  | Flatbed | 0.90 m | 0.80 | 0.50 g | 0.8° | 0.53 g | 60 km/h (lifts at 25) |
-  | Tractor unit (bobtail) | 1.10 m (1.03 coupled) | 0.65 | slides at ~0.55 g | 0.5° | 0.69 g | 35 km/h |
+  | Box | 1.60 m | 0.45 | 0.34 g | 1.7° | 0.34 g | 30 km/h (lifts at 25) |
+  | Tanker | 1.50 m | 0.48 | 0.37 g | 1.6° | 0.36 g | 30 km/h |
+  | Tipper | 1.30 m (parked) | 0.55 | 0.45 g | 1.3° | 0.41 g | 30 km/h |
+  | Flatbed | 0.90 m | 0.80 | 0.52 g | 0.8° | never (tractor 0.64 g) | 45 km/h (lifts at 30) |
+  | Tractor unit (bobtail) | 1.10 m (1.03 coupled) | 0.65 | 0.61 g, rolls | 0.5° | 0.66 g | 35 km/h |
 
   Lean is the trailer's (the bobtail's own). The flatbed's slow tip is its trailer's, with the
-  tractor's inner wheels following at 0.53 g. A raised tipper puts its load 2.80 m over the road
+  tractor's inner wheels following at 0.53 g; on the step its trailer wheels stay down and the
+  tractor's lift. A raised tipper puts its load 2.80 m over the road
   (~0.26 g), so a body off its rest caps the rig at 5 km/h (`TowHost.speed_cap_kmh` into
   `Drivetrain.speed_cap_kmh`, a notice on the edge), where full lock makes ~0.03 g.
 

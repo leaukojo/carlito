@@ -119,10 +119,14 @@ var anti_roll_partner: RayWheel = null
 ## clamp sized under the true load can only be tighter; widening it to chase the load undoes the
 ## stability (src/vehicles/truck/CLAUDE.md).
 var corner_mass: float
-## Tightens the one-tick lateral cap below `corner_mass` where the body's own tensor says the
-## contact moves less mass sideways (`lateral_mass_at`); INF leaves `corner_mass` alone. Only
-## `TowedBody` sizes it (see `TowedBody._size_lateral_caps`).
+## Tighten the one-tick caps and the patch spring below `corner_mass` where the body's own tensor
+## says the contacts move less mass, across the wheel (roll, yaw) and along it (pitch, yaw):
+## `size_cap_masses`, every tick; INF leaves `corner_mass` alone. The patch velocity is read about
+## the COM, which rides 0.7-1.7 m over the contacts, so `corner_mass` alone overruns the tick and
+## the patch rings (a crawl reads slip 0.15 at a standstill; a parked rig winds its side spring up
+## and slides off the hand brake).
 var lateral_cap_mass := INF
+var long_cap_mass := INF
 ## This corner's spring and dampers, picked per axle from the spec by `apply_suspension`
 ## (`GroundDriveSpec.rear_spring_rate` and friends). Every builder calls it; a wheel left at 0
 ## carries nothing.
@@ -246,6 +250,11 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	if _query_body != body.get_rid():
 		_query_body = body.get_rid()
 		_query.exclude = [_query_body]
+	# COMPROMISE: the ray runs down the body's own up axis, so a pitched body carries its patches with
+	# it, by the COM's height times the angle, where a real tyre's patch stays under its hub (the
+	# COM's height less the radius). The extra `r sin(pitch)` of lever is a destabilising pitch moment
+	# (its size: docs/vehicles.md § Pitch, the front-axle gap's lean). Undoing it moves every patch,
+	# and so every measured figure.
 	_query.from = ray_from
 	_query.to = ray_from - up * ray_len
 	var hit := space.intersect_ray(_query)
@@ -269,8 +278,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		# read the hub's own forward velocity. So a braked wheel that lifts (the rears in a hard stop)
 		# keeps turning near road speed and lands gripping, where a brake alone stops it dead in the air
 		# and it lands locked.
-		var hub_vel := body.linear_velocity \
-				+ body.angular_velocity.cross(ray_from - body.global_position)
+		var hub_vel := VehicleMath.point_velocity(body, ray_from)
 		var hub_v_long := hub_vel.dot(Basis(up, steer_angle) * -xform.basis.z)
 		_integrate_spin(drive_torque, 0.0, brake_torque, drive_spec, delta, 0.0,  ## airborne
 				hub_v_long, abs_slip, 0.0, tcs_slip, 0.0, tcs_drive)
@@ -306,8 +314,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	var forward := (wheel_forward - normal * wheel_forward.dot(normal)).normalized()
 	var side := forward.cross(normal)
 
-	var vel := body.linear_velocity \
-			+ body.angular_velocity.cross(contact_point - body.global_position)
+	var vel := VehicleMath.point_velocity(body, contact_point)
 	var v_long := vel.dot(forward)
 	var v_lat := vel.dot(side)
 
@@ -329,8 +336,9 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 
 	# Each axis capped by the force that would cancel its slip velocity in one tick (the lateral cap
 	# kills parked-car jitter).
+	var long_mass := minf(corner_mass, long_cap_mass)
 	var f_long := clampf(tyre.x,
-			-corner_mass * absf(slip_vel) / delta, corner_mass * absf(slip_vel) / delta)
+			-long_mass * absf(slip_vel) / delta, long_mass * absf(slip_vel) / delta)
 	var lat_mass := minf(corner_mass, lateral_cap_mass)
 	var f_lat := clampf(tyre.y, -lat_mass * absf(v_lat) / delta, lat_mass * absf(v_lat) / delta)
 
@@ -350,7 +358,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 				absf(omega * drive_spec.wheel_radius), delta)
 		if not held:
 			_stick.x = 0.0
-		var k := Vector2(stick_stiffness(budget_long, corner_mass, delta),
+		var k := Vector2(stick_stiffness(budget_long, long_mass, delta),
 				stick_stiffness(budget_lat, lat_mass, delta))
 		_stick = stick_saturate(_stick, k, budget_long, budget_lat)
 		f = friction_ellipse(f + stick_w * k * _stick, budget_long, budget_lat)
@@ -371,7 +379,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	# Surface drag is the ground deforming, not the tyre: outside the friction circle and the spin
 	# step (a wheel in mud keeps rolling at road speed; the body slows).
 	body.apply_force(forward * surface_drag_force(v_long, surface_drag, suspension_force,
-			corner_mass, delta), contact_point - body.global_position)
+			long_mass, delta), contact_point - body.global_position)
 
 	# Faded out from twice the slip floor down to it: below the floor slip is read against the floor,
 	# the tyre's slope sits at the one-tick cap, and following the body rings it at the tick rate.
@@ -381,8 +389,8 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	_prev_vel_valid = true
 	# The slip velocity the one-tick cap above needs to pass this tyre's whole long budget. A TC
 	# holding slip at the floor-scaled peak stalls under it wherever the tyre carries more than its
-	# `corner_mass` (a coupled tractor unit's drive axle under the plate), so the TC may go that far.
-	var tcs_cap_vel := mu_long * suspension_force * delta / maxf(corner_mass, 1.0)
+	# cap mass (a coupled tractor unit's drive axle under the plate), so the TC may go that far.
+	var tcs_cap_vel := mu_long * suspension_force * delta / maxf(long_mass, 1.0)
 	_integrate_spin(drive_torque, -f.x * drive_spec.wheel_radius, brake_torque, drive_spec,
 			delta, slip_vel, v_long, abs_slip, dv_long, tcs_slip, tcs_cap_vel, tcs_drive)
 	if not coupled_spin:
@@ -417,15 +425,52 @@ func bar_force(rate: float) -> float:
 	return VehicleMath.anti_roll_force(_bar_compression, anti_roll_partner._bar_compression, rate)
 
 
-## Effective mass (kg) a force along body +X meets at body-space `arm` from the centre of mass:
-## `1 / (1/m + (arm x X) . I^-1 (arm x X))`, the body's own mass plus the roll and yaw the lever
-## adds. `inv_inertia` is the solver's inverse tensor in body axes. A free-body figure, so a joint
-## on the body can only raise the real one. 0 for a massless body.
-static func lateral_mass_at(arm: Vector3, body_mass: float, inv_inertia: Basis) -> float:
+## Effective mass (kg) each contact's force along body-space unit `axis` meets while every contact
+## pushes along it: `1 / sum_j |1/m + (arm_i x axis) . I^-1 (arm_j x axis)|`, at body-space `arms`
+## from the centre of mass. The row sum bounds every mode at once (Gershgorin: an even push, where
+## the sides' yaw cancels, or the sides against each other), so caps sized off it cancel the slip
+## velocities in one tick at most and never overshoot them. One arm is a lone contact's own figure,
+## the body's mass plus the moments its lever turns. `inv_inertia` is the solver's inverse tensor
+## in body axes. A free-body figure, so a joint on the body can only raise the real one. 0 for a
+## massless body.
+static func contact_masses(arms: PackedVector3Array, axis: Vector3, body_mass: float,
+		inv_inertia: Basis) -> PackedFloat64Array:
+	var masses := PackedFloat64Array()
+	masses.resize(arms.size())
 	if body_mass <= 0.0:
-		return 0.0
-	var lever := arm.cross(Vector3.RIGHT)
-	return 1.0 / (1.0 / body_mass + lever.dot(inv_inertia * lever))
+		return masses
+	var levers := PackedVector3Array()
+	var turned := PackedVector3Array()
+	for arm in arms:
+		levers.append(arm.cross(axis))
+		turned.append(inv_inertia * levers[levers.size() - 1])
+	for i in arms.size():
+		var row := 0.0
+		for j in arms.size():
+			row += absf(1.0 / body_mass + levers[i].dot(turned[j]))
+		masses[i] = 1.0 / row
+	return masses
+
+
+## Each wheel's cap masses off what the wheels' contacts really move together (`contact_masses`),
+## along the wheel and across it. Sized every tick, since the load models move the COM; the lever
+## runs to full droop, the longest it gets.
+static func size_cap_masses(wheels: Array[RayWheel], body: RigidBody3D,
+		gd: GroundDriveSpec) -> void:
+	var state := PhysicsServer3D.body_get_direct_state(body.get_rid())
+	if state == null or wheels.is_empty():
+		return
+	var b := body.global_transform.basis
+	var inv_inertia := b.transposed() * state.inverse_inertia_tensor * b
+	var droop := Vector3(0.0, gd.rest_length + gd.wheel_radius, 0.0)
+	var arms := PackedVector3Array()
+	for w in wheels:
+		arms.append(w.anchor - droop - body.center_of_mass)
+	var along := contact_masses(arms, Vector3.BACK, body.mass, inv_inertia)
+	var across := contact_masses(arms, Vector3.RIGHT, body.mass, inv_inertia)
+	for i in wheels.size():
+		wheels[i].long_cap_mass = along[i]
+		wheels[i].lateral_cap_mass = across[i]
 
 
 ## Tyre mu at a load off the corner's static reference: `mu * (1 - sensitivity * log2(load / ref))`,

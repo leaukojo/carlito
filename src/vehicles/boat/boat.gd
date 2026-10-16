@@ -143,7 +143,7 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 			var p := global_transform * p_local
 			var depth := water_y - p.y
 			depth_sum += depth
-			var vert_vel := (linear_velocity + angular_velocity.cross(p - global_position)).y
+			var vert_vel := VehicleMath.point_velocity(self, p).y
 			var f := probe_force(depth, vert_vel, k, damp, probe_mass, delta, max_f)
 			# Immersion is read off DEPTH, not the force, which caps at max_f.
 			if depth > 0.0:

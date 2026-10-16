@@ -13,6 +13,7 @@ const SPEC_OVERRIDABLE := {
 	"shift_up_light_rpm": "shift_up_light_rpm", "shift_down_light_rpm": "shift_down_light_rpm",
 	"kickdown_pedal": "kickdown_pedal", "shift_dwell_s": "shift_dwell_s",
 	"shift_handover_s": "shift_handover_s", "shift_cut_s": "shift_cut_s",
+	"yaw_dynamic_index": "yaw_index",
 }
 const DRIVE_OVERRIDABLE := {
 	"rolling_resistance": "crr", "mu_long": "mu_long", "mu_lat": "mu_lat",
@@ -66,7 +67,7 @@ const META_KEYS := [
 	"cd", "cl",       # aero coefficients, applied to the MEASURED frontal box
 	"com_y",          # body-space height of the COM over the road, overriding the family figure
 	"com_y_frac",     # the same height as a fraction of the body's AABB top (a rescale)
-	"com_z", "front_weight",  # the two ways a recipe may state the longitudinal balance
+	"front_weight",   # the longitudinal balance, as the front axle's static share
 	"gear_ratios",    # a whole array, overridable
 	"speed_limit_kmh",
 	"wheels", "wheel_x_out",  # wheel models and the outboard push
@@ -75,6 +76,21 @@ const META_KEYS := [
 	"ride_hz",        # spring derivation input over the baseline's (_suspension_recipe)
 	"_id",            # stamped in by `_ready`, never authored
 ]
+
+## Yaw dynamic index k²/(a·b) per class, min-max of NHTSA's measured vehicles (SAE 1999-01-1336;
+## driver only, no outriggers, IPMD v5 / VIMF, yaw within 3 %): cars n 35, SUVs 44, vans 29
+## (1.5-2.5 t), pickups 36.
+const YAW_INDEX_BANDS := {
+	"car": Vector2(0.93, 1.20), "suv": Vector2(0.91, 1.19), "van": Vector2(0.84, 1.17),
+	"pickup": Vector2(0.85, 1.02),
+}
+## The class a declaring body is judged against; any other car-family body is "car".
+const YAW_CLASS := {
+	"suv": "suv", "suv-luxury": "suv", "van": "van", "pickup": "pickup", "pickup-flat": "pickup",
+	"delivery": "van", "delivery-flat": "van", "ambulance": "van",
+}
+## Bodies left on Jolt's tensor (index 0): no measured figure for their class.
+const YAW_COMPUTED := ["race", "race-future", "garbage-truck", "firetruck", "tractor-kenney"]
 
 
 # --- roster -------------------------------------------------------------------
@@ -214,6 +230,24 @@ func test_com_y_matches_the_recipe() -> void:
 		assert_float(_spec_of(variant).center_of_mass.y) \
 				.override_failure_message("%s_spec.tres center_of_mass.y" % variant) \
 				.is_equal_approx(float(ov.get("com_y", _baseline(variant)["com_y"])), 1e-4)
+
+
+## A declared yaw index sits inside its class's measured band; an undeclared one is a stated
+## unsourced class, never a forgotten override.
+func test_every_declared_yaw_index_sits_in_its_class_band() -> void:
+	for variant: String in Gen.VARIANTS:
+		var index := _spec_of(variant).yaw_dynamic_index
+		if index <= 0.0:
+			assert_bool(YAW_COMPUTED.has(variant)) \
+					.override_failure_message("%s runs Jolt's yaw tensor but is not in YAW_COMPUTED"
+						% variant).is_true()
+			continue
+		var cls := String(YAW_CLASS.get(variant, "car"))
+		var band: Vector2 = YAW_INDEX_BANDS[cls]
+		assert_float(index) \
+				.override_failure_message("%s yaw index %.2f outside the %s band %.2f-%.2f"
+					% [variant, index, cls, band.x, band.y]) \
+				.is_between(band.x, band.y)
 
 
 ## Single radius across kit (tractor's big wheel is VISUAL only).

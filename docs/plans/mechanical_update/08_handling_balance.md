@@ -1,7 +1,7 @@
 # 08 — Handling balance: replace `rear_lat_grip` with real levers
 
-Shared context: `00_README.md`. Root cause 3 (a stand-in for missing hardware). Size: medium. Do
-after brief 07 (inertia changes spin-proneness).
+Shared context: `00_README.md`. Root cause 3 (a stand-in for missing hardware). Size: medium. Tuned
+on the declared yaw inertia (it sets spin-proneness).
 
 ## Summary
 
@@ -23,10 +23,10 @@ are the front/rear split of roll stiffness (per-axle anti-roll bars) and tyre lo
   only by `RayWheel.load_scaled_mu` (`mu * (1 - s * log2(L / ref))`, `s` = 0.10 cars, 0.08 trucks,
   vans and trailers, 0.12 tractor; a family number pinned by `test_kenney_variants`).
 - `rear_lat_grip` multiplies the rear `mu_lat` (slope and peak), `RayWheel.apply_suspension`.
-- Evidence (**measured**, `docs/vehicles.md` § Balance, step-steer probe 2026-10-03): at 1.0, a
-  20 % steer step at 100 km/h spun `race` and `sedan-sports` (held or lifted) and the FWD `sedan`
-  on a lift; at the shipped values none spin, one marginal case. The probe was a one-off, not a
-  shipped tool.
+- Evidence (**measured**, `docs/vehicles.md` § Balance): the shipped step pass
+  (`measure_vehicles -- <variant> 60 step`, `doc=steer`, on the declared yaw inertia) at
+  `rear_lat_grip=1.0` spins `sedan`, `sedan-sports`, `suv` and `van`, and `delivery` at its shipped
+  1.0.
 - Rule (`src/vehicles/CLAUDE.md` § Physics): "a body's understeer margin is
   `rear_lat_grip`, never a slower steer or a detuned lock."
 
@@ -66,7 +66,6 @@ are the front/rear split of roll stiffness (per-axle anti-roll bars) and tyre lo
   class does.
 - `rear_lat_grip` back to 1.0 on road bodies (or a residual tied to a real hardware fact) with the
   step-steer results at least as good; the open-wheelers keep a labelled rear-width term.
-- A step-steer pass in a shipped measure tool, so the balance claim can be re-checked.
 - `docs/vehicles.md` § Balance and the CLAUDE.md rule rewritten.
 
 ## Open decisions (user)
@@ -75,4 +74,4 @@ are the front/rear split of roll stiffness (per-axle anti-roll bars) and tyre lo
 
 ## Related
 
-Brief 07 (yaw inertia), 12 (load sensitivity becomes a tyre-class property).
+`docs/vehicles.md` § Inertia (declared yaw), 12 (load sensitivity becomes a tyre-class property).

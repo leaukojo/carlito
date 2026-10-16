@@ -44,6 +44,7 @@ script = ExtResource("3_qhefe")
 ground_drive = SubResource("Resource_8jptd")
 mass = 4000.0
 center_of_mass = Vector3(0, 0.55, 0)
+yaw_dynamic_index = 0.91
 torque_curve = PackedVector2Array(750, 235, 1500, 423, 1750, 470, 2500, 470, 3000, 468, 4000, 0)
 idle_rpm = 750.0
 redline_rpm = 4000.0
