@@ -273,12 +273,13 @@ func test_grade_logic_reads_a_load_past_the_flat_roads_by_a_two_percent_pull() -
 	spec.ground_drive.wheel_radius = 0.36
 	spec.ground_drive.rolling_resistance = 0.02
 	spec.ground_drive.drag_area = 0.8
-	var flat := ShiftPolicy.flat_load(spec, 20.0, 1000.0)
+	var crr := spec.ground_drive.rolling_resistance
+	var flat := ShiftPolicy.flat_load(spec, 20.0, 1000.0, crr)
 	assert_float(flat).is_equal_approx((196.0 + 196.0) * 0.36, 1e-2)
 	var pull := ShiftPolicy.GRADE_LOGIC * 1000.0 * 9.8 * 0.36
-	assert_bool(ShiftPolicy.on_grade(spec, flat + pull - 1.0, 20.0, 1000.0)).is_false()
-	assert_bool(ShiftPolicy.on_grade(spec, flat + pull + 1.0, 20.0, 1000.0)).is_true()
-	assert_bool(ShiftPolicy.on_grade(spec, NAN, 20.0, 1000.0)).is_false()
+	assert_bool(ShiftPolicy.on_grade(spec, flat + pull - 1.0, 20.0, 1000.0, crr)).is_false()
+	assert_bool(ShiftPolicy.on_grade(spec, flat + pull + 1.0, 20.0, 1000.0, crr)).is_true()
+	assert_bool(ShiftPolicy.on_grade(spec, NAN, 20.0, 1000.0, crr)).is_false()
 
 
 func test_a_kickdown_skips_a_gear_the_floored_body_revs_out_of_within_the_hold() -> void:

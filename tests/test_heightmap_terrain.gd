@@ -142,72 +142,101 @@ func test_splat_weights_blend() -> void:
 	assert_float(w[1]).is_equal(0.5)
 
 
-func test_drag_default_table_is_zero() -> void:
+## A response with only `s` set to `g` (every other surface 1.0), so a blend stays binary-exact.
+func _response(s: int, g: float) -> PackedFloat32Array:
+	var r := PackedFloat32Array()
+	r.resize(Surface.COUNT)
+	r.fill(1.0)
+	r[s] = g
+	return r
+
+
+## Channel 0 is `s`, the rest the default table.
+func _with_channel0(t: HeightmapTerrain, s: int) -> void:
+	var table := PackedInt32Array(HeightmapTerrain.DEFAULT_CHANNEL_SURFACE)
+	table[0] = s
+	t.channel_surface = table
+
+
+## Channel 4 is Field, the rest the default table.
+func _with_field4(t: HeightmapTerrain) -> void:
+	var table := PackedInt32Array(HeightmapTerrain.DEFAULT_CHANNEL_SURFACE)
+	table[4] = Surface.FIELD
+	t.channel_surface = table
+
+
+func test_drag_reads_the_channel_surface() -> void:
 	var t := _terrain(Vector2(4, 4), 10.0)
 	t.splatmap = _splat(Color(1, 0, 0, 0))
+	_with_channel0(t, Surface.MUD)
+	assert_float(t.drag_at(Vector3.ZERO)).is_equal_approx(Surface.drag(Surface.MUD), 1e-6)
+	_with_channel0(t, Surface.ASPHALT)
 	assert_float(t.drag_at(Vector3.ZERO)).is_equal(0.0)
 
 
-func test_drag_single_channel_and_blend() -> void:
+func test_drag_blends_channels() -> void:
+	# Half Mud and half Asphalt (0): weights 0.5/0.5 -> half Mud's drag.
 	var t := _terrain(Vector2(4, 4), 10.0)
-	t.splatmap = _splat(Color(1, 0, 0, 0))
-	t.channel_drag = PackedFloat32Array([0.25, 0, 0, 0, 0, 0, 0, 0])
-	assert_float(t.drag_at(Vector3.ZERO)).is_equal(0.25)
-	# Half channel 0 (0.5) and half channel 1 (0): weights 0.5/0.5 -> 0.25.
 	t.splatmap = _splat(Color(0.5, 0.5, 0, 0))
-	t.channel_drag = PackedFloat32Array([0.5, 0, 0, 0, 0, 0, 0, 0])
-	assert_float(t.drag_at(Vector3.ZERO)).is_equal(0.25)
+	t.channel_surface = PackedInt32Array([Surface.MUD, Surface.ASPHALT, 0, 0, 0, 0, 0, 0])
+	assert_float(t.drag_at(Vector3.ZERO)).is_equal_approx(0.5 * Surface.drag(Surface.MUD), 1e-6)
 
 
-func test_drag_unpainted_and_missing_splat_is_zero_and_clamped() -> void:
+func test_drag_unpainted_and_missing_splat_reads_asphalt() -> void:
 	var t := _terrain(Vector2(4, 4), 10.0)
-	t.channel_drag = PackedFloat32Array([0.5, 0, 0, 0, 0, 0, 0, 0])
+	_with_channel0(t, Surface.MUD)
 	assert_float(t.drag_at(Vector3.ZERO)).is_equal(0.0)   # no splatmap
 	t.splatmap = _splat(Color(0, 0, 0, 0))
 	assert_float(t.drag_at(Vector3.ZERO)).is_equal(0.0)   # painted nothing
-	t.splatmap = _splat(Color(1, 0, 0, 0))
-	t.channel_drag = PackedFloat32Array([9.0, 0, 0, 0, 0, 0, 0, 0])
-	assert_float(t.drag_at(Vector3.ZERO)).is_equal(0.5)   # MAX_CHANNEL_DRAG
-	t.channel_drag = PackedFloat32Array([-1.0, 0, 0, 0, 0, 0, 0, 0])
-	assert_float(t.drag_at(Vector3.ZERO)).is_equal(0.0)
 
 
-func test_grip_default_table_is_neutral() -> void:
+func test_grip_without_a_response_is_the_surface_ref_grip() -> void:
 	var t := _terrain(Vector2(4, 4), 10.0)
-	t.splatmap = _splat(Color(1, 0, 0, 0))   # painted, but default channel_grip is all 1.0
-	assert_float(t.grip_at(Vector3.ZERO)).is_equal(1.0)
+	t.splatmap = _splat(Color(1, 0, 0, 0))   # the default table's channel 0 is Grass
+	assert_float(t.grip_at(Vector3.ZERO, PackedFloat32Array())) \
+			.is_equal_approx(Surface.ref_grip(Surface.GRASS), 1e-6)
+	_with_channel0(t, Surface.ASPHALT)
+	assert_float(t.grip_at(Vector3.ZERO, PackedFloat32Array())).is_equal(1.0)
 
 
-func test_grip_scales_by_channel() -> void:
+func test_grip_reads_the_response_by_surface() -> void:
 	var t := _terrain(Vector2(4, 4), 10.0)
 	t.splatmap = _splat(Color(1, 0, 0, 0))
-	t.channel_grip = PackedFloat32Array([0.25, 1, 1, 1, 1, 1, 1, 1])
-	assert_float(t.grip_at(Vector3.ZERO)).is_equal(0.25)
+	_with_channel0(t, Surface.SNOW)
+	assert_float(t.grip_at(Vector3.ZERO, _response(Surface.SNOW, 0.25))).is_equal(0.25)
+	# Not clamped: a tyre may out-grip the reference on its surface.
+	assert_float(t.grip_at(Vector3.ZERO, _response(Surface.SNOW, 1.25))).is_equal(1.25)
+	# A response too short for the surface falls back to its ref_grip.
+	assert_float(t.grip_at(Vector3.ZERO, PackedFloat32Array([0.5]))) \
+			.is_equal_approx(Surface.ref_grip(Surface.SNOW), 1e-6)
 
 
 func test_grip_blends_channels() -> void:
 	var t := _terrain(Vector2(4, 4), 10.0)
 	t.splatmap = _splat(Color(0.5, 0.5, 0, 0))
-	t.channel_grip = PackedFloat32Array([0.5, 1, 1, 1, 1, 1, 1, 1])
+	t.channel_surface = PackedInt32Array([Surface.ICE, Surface.ASPHALT, 0, 0, 0, 0, 0, 0])
 	# (0.5*0.5 + 0.5*1.0) / (0.5 + 0.5) = 0.75
-	assert_float(t.grip_at(Vector3.ZERO)).is_equal(0.75)
+	assert_float(t.grip_at(Vector3.ZERO, _response(Surface.ICE, 0.5))).is_equal(0.75)
 
 
-func test_grip_unpainted_is_one() -> void:
+func test_grip_unpainted_reads_asphalt() -> void:
 	var t := _terrain(Vector2(4, 4), 10.0)
-	assert_float(t.grip_at(Vector3.ZERO)).is_equal(1.0)   # no splatmap
-	t.splatmap = _splat(Color(0, 0, 0, 0))                # all-zero weights: still neutral
-	assert_float(t.grip_at(Vector3.ZERO)).is_equal(1.0)
+	_with_channel0(t, Surface.ICE)
+	assert_float(t.grip_at(Vector3.ZERO, PackedFloat32Array())).is_equal(1.0)   # no splatmap
+	t.splatmap = _splat(Color(0, 0, 0, 0))   # all-zero weights: Asphalt, not channel 0
+	assert_float(t.grip_at(Vector3.ZERO, PackedFloat32Array())).is_equal(1.0)
+	# ...and the fitted tyre's Asphalt figure, not the reference's.
+	assert_float(t.grip_at(Vector3.ZERO, _response(Surface.ASPHALT, 1.25))).is_equal(1.25)
 
 
 func test_grip_sharpens_like_the_shader() -> void:
-	# A brush-falloff pixel: mostly grass with a little ice. The shader's pow(w, 8) makes it
-	# draw as ~pure grass, so the grip must follow — raw weights would hand back 0.78 here,
+	# A brush-falloff pixel: mostly asphalt with a little ice. The shader's pow(w, 8) makes it
+	# draw as ~pure asphalt, so the grip must follow — raw weights would hand back 0.78 here,
 	# an invisible slick apron around every painted patch.
 	var t := _terrain(Vector2(4, 4), 10.0)
 	t.splatmap = _splat(Color(0.75, 0.25, 0, 0))
-	t.channel_grip = PackedFloat32Array([1, 0.12, 1, 1, 1, 1, 1, 1])
-	assert_float(t.grip_at(Vector3.ZERO)).is_greater(0.99)
+	t.channel_surface = PackedInt32Array([Surface.ASPHALT, Surface.ICE, 0, 0, 0, 0, 0, 0])
+	assert_float(t.grip_at(Vector3.ZERO, PackedFloat32Array())).is_greater(0.99)
 
 
 func test_grip_ignores_a_faint_trace() -> void:
@@ -215,66 +244,94 @@ func test_grip_ignores_a_faint_trace() -> void:
 	# normalize to FULL ice. Sharpened, it falls under the shader's own unpainted threshold.
 	var t := _terrain(Vector2(4, 4), 10.0)
 	t.splatmap = _splat(Color(0.0625, 0, 0, 0))   # binary-exact faint trace of channel 0
-	t.channel_grip = PackedFloat32Array([0.12, 1, 1, 1, 1, 1, 1, 1])
-	assert_float(t.grip_at(Vector3.ZERO)).is_equal(1.0)
+	_with_channel0(t, Surface.ICE)
+	assert_float(t.grip_at(Vector3.ZERO, PackedFloat32Array())).is_equal(1.0)
 
 
-func test_grip_clamps_out_of_range_channels() -> void:
-	# An author-typed negative would invert tire friction and disable the friction circle;
-	# above 1 would raise mu past the tuned spec. Both clamp into [0, 1].
+func test_an_unknown_surface_id_warns_and_reads_asphalt() -> void:
 	var t := _terrain(Vector2(4, 4), 10.0)
 	t.splatmap = _splat(Color(1, 0, 0, 0))
-	t.channel_grip = PackedFloat32Array([-2, 1, 1, 1, 1, 1, 1, 1])
-	assert_float(t.grip_at(Vector3.ZERO)).is_equal(0.0)
-	t.channel_grip = PackedFloat32Array([3, 1, 1, 1, 1, 1, 1, 1])
-	assert_float(t.grip_at(Vector3.ZERO)).is_equal(1.0)
-	assert_bool("\n".join(t._get_configuration_warnings()).contains("channel_grip[0]")).is_true()
+	assert_array(t._get_configuration_warnings()).is_empty()
+	_with_channel0(t, 99)
+	assert_float(t.grip_at(Vector3.ZERO, PackedFloat32Array())).is_equal(1.0)
+	assert_float(t.drag_at(Vector3.ZERO)).is_equal(0.0)
+	assert_bool("\n".join(t._get_configuration_warnings()).contains("channel_surface[0]")).is_true()
+	t.channel_surface = PackedInt32Array([Surface.ICE])   # short: channels 1..7 read Asphalt
+	assert_bool("\n".join(t._get_configuration_warnings()).contains("1 entries")).is_true()
 
 
-# --- single-channel coverage: channel_weight_at (the "is this soil?" query) ---
-
-
-func test_channel_weight_reports_the_painted_channel() -> void:
+func test_channel_names_come_from_the_surfaces() -> void:
 	var t := _terrain(Vector2(4, 4), 10.0)
-	t.splatmap = _splat(Color(1, 0, 0, 0))
-	assert_float(t.channel_weight_at(Vector3.ZERO, 0)).is_equal(1.0)
-	assert_float(t.channel_weight_at(Vector3.ZERO, 1)).is_equal(0.0)
+	assert_array(Array(t.channel_names())).is_equal(Array(HeightmapTerrain.default_channel_names()))
+	_with_channel0(t, Surface.FIELD)
+	assert_str(t.channel_names()[0]).is_equal("Field")
+	assert_str(t.channel_names()[6]).is_equal("Asphalt")
 
 
-func test_channel_weight_reads_the_second_splatmap() -> void:
-	# Channel 4 is splatmap2.R — level 1's "Field", the tractor's in-soil predicate.
+# --- surface coverage: surface_weight_at (the "is this soil?" query) ---
+
+
+func test_surface_weight_reports_the_painted_surface() -> void:
 	var t := _terrain(Vector2(4, 4), 10.0)
+	t.splatmap = _splat(Color(1, 0, 0, 0))   # channel 0: Grass in the default table
+	assert_float(t.surface_weight_at(Vector3.ZERO, Surface.GRASS)).is_equal(1.0)
+	assert_float(t.surface_weight_at(Vector3.ZERO, Surface.DIRT)).is_equal(0.0)
+
+
+func test_surface_weight_reads_the_second_splatmap() -> void:
+	var t := _terrain(Vector2(4, 4), 10.0)
+	_with_field4(t)
 	t.splatmap = _splat(Color(0, 0, 0, 0))
 	t.splatmap2 = _splat(Color(1, 0, 0, 0))
-	assert_float(t.channel_weight_at(Vector3.ZERO, 4)).is_equal(1.0)
-	assert_float(t.channel_weight_at(Vector3.ZERO, 5)).is_equal(0.0)
+	assert_float(t.surface_weight_at(Vector3.ZERO, Surface.FIELD)).is_equal(1.0)
+	assert_float(t.surface_weight_at(Vector3.ZERO, Surface.MUD)).is_equal(0.0)
 
 
-func test_channel_weight_is_zero_where_nothing_is_painted() -> void:
+func test_surface_weight_sums_every_channel_holding_it() -> void:
 	var t := _terrain(Vector2(4, 4), 10.0)
-	assert_float(t.channel_weight_at(Vector3.ZERO, 4)).is_equal(0.0)   # no splatmap at all
+	t.channel_surface = PackedInt32Array([Surface.FIELD, Surface.GRASS, Surface.FIELD, 0, 0, 0, 0, 0])
+	t.splatmap = _splat(Color(0.5, 0.5, 0.5, 0))
+	# Three equal weights, two of them Field.
+	assert_float(t.surface_weight_at(Vector3.ZERO, Surface.FIELD)).is_equal_approx(2.0 / 3.0, 1e-6)
+
+
+## The F3 readout's name: the surface with the most summed weight, Asphalt where unpainted.
+func test_surface_at_names_the_heaviest_surface() -> void:
+	var t := _terrain(Vector2(4, 4), 10.0)
+	assert_int(t.surface_at(Vector3.ZERO)).is_equal(Surface.ASPHALT)   # no splatmap
+	t.channel_surface = PackedInt32Array([Surface.GRASS, Surface.FIELD, Surface.FIELD, 0, 0, 0, 0, 0])
+	t.splatmap = _splat(Color(0.52, 0.5, 0.5, 0))
+	# Grass is the heaviest channel; Field's two outweigh it (2 x (0.5 / 0.52)^8 = 1.46).
+	assert_int(t.surface_at(Vector3.ZERO)).is_equal(Surface.FIELD)
+
+
+func test_surface_weight_is_zero_where_nothing_is_painted() -> void:
+	var t := _terrain(Vector2(4, 4), 10.0)
+	_with_field4(t)
+	assert_float(t.surface_weight_at(Vector3.ZERO, Surface.FIELD)).is_equal(0.0)   # no splatmap
 	t.splatmap = _splat(Color(1, 0, 0, 0))
 	# Base map painted but no splatmap2: channels 4..7 are unpainted by construction.
-	assert_float(t.channel_weight_at(Vector3.ZERO, 4)).is_equal(0.0)
-	# All-zero weights, and out-of-range channels, answer "not this channel" rather than 1.0 —
-	# there is no neutral fallback here, unlike grip_at.
+	assert_float(t.surface_weight_at(Vector3.ZERO, Surface.FIELD)).is_equal(0.0)
+	# All-zero weights and unknown surfaces answer "not this surface", never Asphalt's fallback.
 	t.splatmap = _splat(Color(0, 0, 0, 0))
-	assert_float(t.channel_weight_at(Vector3.ZERO, 0)).is_equal(0.0)
-	assert_float(t.channel_weight_at(Vector3.ZERO, 8)).is_equal(0.0)
-	assert_float(t.channel_weight_at(Vector3.ZERO, -1)).is_equal(0.0)
+	assert_float(t.surface_weight_at(Vector3.ZERO, Surface.GRASS)).is_equal(0.0)
+	assert_float(t.surface_weight_at(Vector3.ZERO, Surface.ASPHALT)).is_equal(0.0)
+	assert_float(t.surface_weight_at(Vector3.ZERO, Surface.COUNT)).is_equal(0.0)
+	assert_float(t.surface_weight_at(Vector3.ZERO, -1)).is_equal(0.0)
 
 
-func test_channel_weight_sharpens_and_ignores_a_faint_trace_like_grip() -> void:
+func test_surface_weight_sharpens_and_ignores_a_faint_trace_like_grip() -> void:
 	var t := _terrain(Vector2(4, 4), 10.0)
+	_with_field4(t)
 	# A brush-falloff pixel the shader draws as ~pure grass: the field weight has to follow it
 	# down, or the plough would find soil in a border the player sees as grass.
 	t.splatmap = _splat(Color(0.75, 0, 0, 0))
 	t.splatmap2 = _splat(Color(0.25, 0, 0, 0))
-	assert_float(t.channel_weight_at(Vector3.ZERO, 4)).is_less(0.01)
+	assert_float(t.surface_weight_at(Vector3.ZERO, Surface.FIELD)).is_less(0.01)
 	# And a faint trace of field over nothing else falls under the unpainted threshold.
 	t.splatmap = _splat(Color(0, 0, 0, 0))
 	t.splatmap2 = _splat(Color(0.0625, 0, 0, 0))
-	assert_float(t.channel_weight_at(Vector3.ZERO, 4)).is_equal(0.0)
+	assert_float(t.surface_weight_at(Vector3.ZERO, Surface.FIELD)).is_equal(0.0)
 
 
 func test_splat2_size_mismatch_warns() -> void:

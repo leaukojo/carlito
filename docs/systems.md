@@ -2,8 +2,8 @@
 
 The plumbing every vehicle rides: signal contract, input pipeline, telemetry/dashboard,
 bridge, lamps, shell, level framework. Per-family vehicle detail is in `docs/vehicles.md`
-and `docs/heavy_vehicles.md`. Editor/authoring tooling is in `docs/level_kit.md`; rules and
-rules are in the nested `CLAUDE.md` files.
+(its header lists the rest). Editor/authoring tooling is in `docs/level_kit.md`; rules are in
+the nested `CLAUDE.md` files.
 
 ## Signal contract
 
@@ -41,16 +41,16 @@ static/pure, tested in `tests/test_input_arbitration.gd`.
   at standstill; foot brake drives `brake_lamp`; `tcs_off` is the player's SETTINGS ▸ TRACTION
   CONTROL (a live bridge's own `tcs_off` wins, fallback included).
 - `auto_hold`: with keys or touch, a wheel-driving body stopped in D or R with no throttle holds
-  its foot brake until the throttle asks to move (`docs/vehicles.md` § Hill hold). It is
+  its foot brake until the throttle asks to move (`docs/drivetrain.md` § Hill hold). It is
   off while the gamepad moved a pedal last, and never applies to the bridge.
 - `arbitrate_bridge`: the gear byte owns direction. Mode = `InputRouter.set_manual_gearbox`
   (vehicle selector, or `ChallengeDef.transmission`).
-- Automatic (default): PRND lever. R reverses, D1-D6 = D with auto-shift, 0 = D. why: RAMN
-    `0x077` never sends gear.
-- Manual: byte taken exactly, 0 = N, no auto-shift. Local input is always automatic.
-- Absent bridge keys fall to rest state (lamps off, hitch raised, PTO off, 540, open diff,
+  - Automatic (default): PRND lever. R reverses, D1-D6 = D with auto-shift, 0 = D (RAMN
+    `0x077` never sends gear).
+  - Manual: byte taken exactly, 0 = N, no auto-shift. Local input is always automatic.
+  - Absent bridge keys fall to rest state (lamps off, hitch raised, PTO off, 540, open diff,
     2WD, SCV shut, flaps up, disarmed, doors shut, LEDs black, body Idle).
-- `rudder` (boat) and `guidance_curvature` (tractor) override `steer` when the key is
+  - `rudder` (boat) and `guidance_curvature` (tractor) override `steer` when the key is
     present. `bridge_source.gd` writes the key only when sloppyCAN sent it: 0 is a command.
 - "Ignition off" notice clears when the key reaches Ignition (`GameState.notice_cleared`).
 
@@ -250,22 +250,25 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   (`Marker3D`, vehicle-type filter + `is_water` for boat/drown-respawn spots). `level.tscn`
   is the authoring template (env + sun + camera + one spawn); duplicate it.
   `HeightmapTerrain` (authoring: `docs/level_kit.md`): runtime greyscale image -> chunked
-  welded grid mesh + `HeightMapShape3D`; a surface is TWO numbers per paint channel, both
-  blended the same way by `grip_at` / `drag_at(world_pos)` over bilinear splat weights,
-  pow-sharpened by `blend_sharpness` (`get_splat_weights` returns raw weights): `channel_grip`
-  (a mu multiplier, ≤ 1) and `channel_drag` (an ADDED rolling-resistance coefficient, ≤ 0.5).
-  Ice is low grip and no drag; mud is low grip and high drag; grass is mostly drag.
+  welded grid mesh + `HeightMapShape3D`; `channel_surface` names each paint channel's
+  `Surface` (`src/levels/base/surface.gd`, one shared table; figures graded in `docs/sources.md`
+  § Sourced figures): `ref_grip` (a mu multiplier, ASPHALT 1, none above) and `drag` (an ADDED
+  rolling-resistance coefficient), blended by `grip_at(world_pos, response)` / `drag_at` over the
+  splat weights pow-sharpened by `blend_sharpness`; `response` is the tyre's per-surface grip
+  (`docs/vehicles.md` § Tyres and surfaces). Unpainted ground reads Asphalt. Car 15
+  (`car_ice_patch`) on WET has no par window, which is why it is unregistered.
 - `src/levels/island/level_1/` .. `level_6/`: six islands, terraced terrain + auto-splat +
   sea, each rostering at least car/truck/tractor/boat. `level_1` is the CI baked-level smoke
   target; 2-4 (Mountain, City, Racing) are hand-dressed on a one-shot `tools/gen_islands.gd`
   scaffold. `level_5` (rail loop) and `level_6` (skyport) are
   owned by their generator (`tools/gen_rail_level.gd`, `tools/gen_skyport.gd`).
-  `src/levels/island/car_arena/` (`arena: true`, not in LEVEL select) is a car-only plateau
-  owned by `tools/gen_car_arena.gd`. `flatland`/`open_sea` are endless, unbounded, no kit
-  content: `InfiniteGround` (`src/levels/base/infinite_ground.gd`) or an `infinite`
-  `WaterSurface` re-centres on the camera; no `WorldBounds`. `src/levels/dev/flat.tscn` is a
-  bare test plane for wheel checks; `src/levels/dev/rough_ground/` is the unregistered traction
-  island `tools/measure_rough.tscn` drives, owned by `tools/gen_rough_ground.gd`.
+  `src/levels/island/car_arena/` (`arena: true`, also in LEVEL select; pause → SPAWN POINT
+  reaches its tyre pad) is a car plateau owned by `tools/gen_car_arena.gd`. `flatland`/`open_sea`
+  are endless, unbounded, no kit content: `InfiniteGround` (`src/levels/base/infinite_ground.gd`)
+  or an `infinite` `WaterSurface` re-centres on the camera; no `WorldBounds`. Dev, unregistered:
+  `src/levels/dev/flat.tscn` (wheel checks). Dev, registered (`dev: true`, hidden from LEVEL select,
+  reached by `--level=rough_ground` for garage tyres): `src/levels/dev/rough_ground/`
+  (`measure_rough`'s lanes and an ice pad, owned by `tools/gen_rough_ground.gd`).
 
 ### Water & world bounds
 

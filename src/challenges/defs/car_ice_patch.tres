@@ -11,7 +11,7 @@ zone = &"Finish"
 [resource]
 script = ExtResource("3_def")
 id = "car_ice_patch"
-title = "Ice patch"
+title = "Wet patch"
 variant = "sedan-sports"
 arena = "car_arena"
 course = "res://src/levels/island/car_arena/courses/car_ice_patch_course.tscn"

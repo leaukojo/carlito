@@ -5,7 +5,7 @@
 ; tractor's lower-link ball ends and the top pin must sit exactly at
 ; ImplementBase.mast_offset() = (z -0.06, y 0.533), which is what HitchLinkage closes its
 ; four-bar on. Category 2: lower pins 0.86 m apart (34 in, ball centres; 32 in between the
-; link ends), mast 0.533 m inside the class's 15-24 in (docs/vehicles.md § Sourced figures). It lives in ONE scene so the four implements cannot drift apart from the
+; link ends), mast 0.533 m inside the class's 15-24 in (docs/sources.md § Sourced figures). It lives in ONE scene so the four implements cannot drift apart from the
 ; linkage one at a time.
 ;
 ; Origin is ON THE LOWER PIN LINE, which is where ThreePointHitch's Mount sits, so an

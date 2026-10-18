@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="TyreClass" load_steps=2 format=3]
+
+; The tractor's stock R-1W agricultural lug, the only class on TRACTOR. Factors over the all-season tyre, all estimates: mud 1.25, field 1.2 (0.56 and 0.60 of asphalt), grass 1.15, sand 1.1 (deep lugs). No published lug-against-road-tread figure found. D497's traction law (Zoz and Grisso, docs/sources.md [45]) has no tread term; on this 650/65R38 at its 21 kN rear load it gives 0.49 gross traction at the 0.12 slip peak in tilled soil (900 kPa) and 0.44 in wet soft soil (450 kPa). On roads the reference's.
+
+[ext_resource type="Script" path="res://src/vehicles/base/tyre_class.gd" id="1_tyre"]
+
+[resource]
+script = ExtResource("1_tyre")
+id = "ag_lug"
+display_name = "R-1W ag lug"
+fits = Array[int]([4])
+surface_grip = Dictionary[String, float]({
+"Field": 1.2,
+"Grass": 1.15,
+"Mud": 1.25,
+"Sand": 1.1
+})

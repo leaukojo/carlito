@@ -22,7 +22,7 @@ const HELM_DEADBAND := 0.05
 const KP := 0.035
 ## Rudder fraction per deg/s of turn rate (damping): full rudder against a 50 deg/s swing.
 ## Derivation (zeta 1.6-1.9 on every hull; raising `drag_yaw` toward `I / delta` voids it):
-## docs/vehicles.md § Autopilot gains.
+## docs/boat.md § Autopilot gains.
 const KD := 0.02
 
 # --- the mode ------------------------------------------------------------------

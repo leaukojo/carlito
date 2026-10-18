@@ -12,13 +12,16 @@ extends RefCounted
 ## DITCH_HALF either side, in a patch one metre longer than the trough so the centre line falls
 ## on a heightmap row. Sampled on the 1 m grid that is the profile [0, d/3, d, d/3, 0]: two 1 m
 ## segments a side, the inner one at 2d/3 per metre (the nominal d / 1.5 m wall) and the outer
-## at half that. The 50 cm ditch's inner wall is
-## atan(0.333) = 18.4 deg, above the atan(0.5 - 0.2) = 16.7 deg ceiling a perfect all-wheel
-## drive can hold in mud (grip 0.5, added crr 0.2) on a uniform grade. But the wall is 1 m of run,
-## shorter than any wheelbase, so while the front pair climbs it the rear pair pushes from the
-## gentler face, and a body arrives rolling: a traction-capable 4x4 crosses it at a crawl and
-## stalls on it from a near-standstill, which is honest. The pull-away ceiling itself is checked by
-## `measure_grade`, on a whole-body grade. The 35 cm ditch's wall is 13.1 deg, under it.
+## at half that. The atan(grip - added crr) = 19.3 deg a perfect all-wheel drive holds in mud on
+## the reference tyre (`Surface`) on a uniform grade sits between the ditches: the 35 cm one's
+## inner wall is 13.1 deg, under it, and the 60 cm one's atan(0.4) = 21.8 deg, over it: in mud
+## its wall alone out-climbs the tyre, though it grounds the sedan and pickup first, on either
+## lane (`doc=rough`). A wall is 1 m of run, shorter than any wheelbase, so while the front pair
+## climbs it the rear pair pushes from the gentler face. The pull-away ceiling itself is checked
+## by `measure_grade`, on a whole-body grade.
+##
+## East of the lanes, a flat ice pad (a stadium round its centre segment) for the tyre classes on
+## ice; not a lane, so `measure_rough` never drives it.
 
 enum Kind { FLAT, BUMPS, DITCH }
 
@@ -56,6 +59,14 @@ const BUMP_SEED := 4127
 const DITCH_HALF := 1.5     ## m from a ditch's centre line to where it is level again
 const DITCH_LENGTH := 2.0 * DITCH_HALF + 1.0  ## whole metres either side of an on-grid centre
 
+## The ice pad's centre segment, x and its two ends' z, and its half-width: long enough for a
+## winter tyre to reach 50 km/h on ice (~0.17 g, ~58 m) and stop (49.7 m,
+## `docs/vehicle_measurements.md` § Tyre classes by surface).
+const ICE_PAD_X := 40.0
+const ICE_PAD_FROM_Z := 70.0
+const ICE_PAD_TO_Z := -70.0
+const ICE_PAD_HALF := 8.0
+
 ## In driving order. `amp` is the bump field's peak (+-amp about the plateau), `depth` the
 ## ditch's; `length` is the patch's extent along the lane.
 const PATCHES: Array[Dictionary] = [
@@ -65,7 +76,7 @@ const PATCHES: Array[Dictionary] = [
 	{"name": "bumps_20", "kind": Kind.BUMPS, "length": 24.0, "amp": 0.20},
 	{"name": "ditch_20", "kind": Kind.DITCH, "length": DITCH_LENGTH, "depth": 0.20},
 	{"name": "ditch_35", "kind": Kind.DITCH, "length": DITCH_LENGTH, "depth": 0.35},
-	{"name": "ditch_50", "kind": Kind.DITCH, "length": DITCH_LENGTH, "depth": 0.50},
+	{"name": "ditch_60", "kind": Kind.DITCH, "length": DITCH_LENGTH, "depth": 0.60},
 ]
 
 

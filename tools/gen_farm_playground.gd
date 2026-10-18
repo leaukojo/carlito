@@ -34,18 +34,15 @@ const IMPLEMENT_GROUND_OFFSET := 0.21
 # --- splat channels -------------------------------------------------------------------
 const CH_GRASS := 0
 const CH_SAND := 2      ## splatmap.B — mixed into the field's light bands
-const CH_FIELD := 4     ## splatmap2.R — the ploughable soil, the implements' "in soil" predicate
-const CH_MUD := 5       ## splatmap2.G — wallow + haul ramp, grip 0.5
+const CH_FIELD := 4     ## splatmap2.R — Surface.FIELD, the ploughable soil
+const CH_MUD := 5       ## splatmap2.G — Surface.MUD: wallow + haul ramp
 const CH_GRAVEL := 7    ## splatmap2.A — yard surround and farm tracks
-## Packed*Array constructors are not constant expressions, so these are plain typed arrays
-## converted at the call site (the same dodge HeightmapTerrain.default_channel_names uses).
-const CHANNEL_NAMES: Array[String] = [
-	"Grass", "Dirt", "Sand", "Rock", "Field", "Mud", "Asphalt", "Gravel",
+## A typed array, converted at the call site: a Packed*Array constructor is not a constant
+## expression. Tilled Field drags, so the tractor's tyres pay in the soil as well as the draft.
+const CHANNEL_SURFACE: Array[int] = [
+	Surface.GRASS, Surface.DIRT, Surface.SAND, Surface.ROCK,
+	Surface.FIELD, Surface.MUD, Surface.ASPHALT, Surface.GRAVEL,
 ]
-const CHANNEL_GRIP: Array[float] = [0.8, 0.7, 0.6, 0.7, 0.7, 0.5, 1.0, 0.85]
-## Added rolling resistance (HeightmapTerrain.channel_drag); tilled Field is soft, so the
-## tractor's tyres pay in the soil as well as the implement's draft.
-const CHANNEL_DRAG: Array[float] = [0.06, 0.03, 0.1, 0.01, 0.08, 0.2, 0.0, 0.02]
 ## Fresh tilled loam: lighter than Mud (0.30/0.24/0.17), darker than Dirt (0.52/0.40/0.26),
 ## so the field reads as its own surface against both.
 const FIELD_COLOR := Color(0.44, 0.29, 0.17)
@@ -72,9 +69,9 @@ const PADDOCK_RECT := Rect2(-100, -16, 20, 44)    ## the haul ramp's destination
 ## open rear diff spins it. A painted grip split cannot do this job. At level 1's 1 px/m splat,
 ## blended and sharpened, a split line only puts the tractor's wheels (1.06 m apart) on
 ## different surfaces while it holds a 1 m window of lateral position.
-## Measured through the bridge on tractor_mud's line: floored, 2WD sticks, while the lock alone,
-## MFWD alone, and both together all cross. At a 2 m/s crawl, 2WD and MFWD alone stick (both
-## axles open), and the lock crosses.
+## Measured on tractor_mud's line (`measure_rough -- course=tractor_mud`): floored, every driveline
+## crosses in ~5 s, the open 2WD with a driven wheel past 0.3 slip on 16 % of the ticks, so the
+## 30 s par separates none of them.
 const WALLOW_RECT := Rect2(-2, 4, 24, 14)
 ## The blend ring is the wallow's entry/exit ramp, so its width sets their grade: 8 m gives
 ## ~7.5% (half of a 4 m ring) so climbing out is a gentle roll, not a step.
@@ -90,13 +87,12 @@ const RIM_SMOOTH_PASSES := 4                      ## evens the exit ramp's 8-bit
 
 ## Haul ramp: three straight segments along z = RAMP_Z, grades 8.1 / 14.0 / 23.6 degrees,
 ## progressive so the crossover is a place on the hill, not a knife-edge threshold.
-## THE TOP SEGMENT IS ABOVE THE CEILING AND NOTHING CLIMBS IT. Mud is grip 0.5 AND crr 0.2, and
-## the drag term is half the budget: a perfect all-wheel drive tops out at
-## atan(0.5 - 0.2) = 16.7 deg, not the atan(0.5) = 26.6 deg this was sized against. Measured, the
-## shipped tractor manages ~3.9 deg in mud on MFWD and 0 deg flat out in two-wheel drive, because
-## drive torque splits evenly per wheel (docs/vehicles.md § Physics derivations and figures,
-## open-diff peel). Re-profiling the three segments is a level change; measure first with
-## tools/measure_grade.tscn.
+## NOTHING CLIMBS THE TOP SEGMENT. In mud the tractor's R-1W lug (`Surface`, `ag_lug.tres`) tops
+## out at atan(grip - added crr) = 24.8 deg on a perfect all-wheel drive; measured
+## (`measure_grade -- doc=grade`), it climbs 22.9 deg on MFWD with the lock held at the slip peak,
+## 17.6 floored on MFWD and 9.5 floored in two-wheel drive, where drive torque splits evenly per
+## wheel (docs/vehicles.md § Open-diff peel). Re-profiling the
+## three segments is a level change; measure first with tools/measure_grade.tscn.
 const RAMP_Z := -18.0
 const RAMP_HALF_WIDTH := 8.0
 const RAMP_PROFILE: Array[Vector2] = [   ## (world x, world y) along the climb
@@ -247,9 +243,7 @@ func _build(root: Node) -> int:
 	_paint(splat, splat2, WALLOW_RECT, CH_MUD)
 
 	# --- level data the new surfaces need ----------------------------------------------
-	_terrain.set("channel_names", PackedStringArray(CHANNEL_NAMES))
-	_terrain.set("channel_grip", PackedFloat32Array(CHANNEL_GRIP))
-	_terrain.set("channel_drag", PackedFloat32Array(CHANNEL_DRAG))
+	_terrain.set("channel_surface", PackedInt32Array(CHANNEL_SURFACE))
 	var mat := _terrain.get("material") as ShaderMaterial
 	if mat == null:
 		printerr("[farm] terrain material is not a ShaderMaterial — cannot recolour channel 4")
@@ -975,7 +969,7 @@ func _report(img: Image, splat: Image, splat2: Image, apron: Rect2, deck_y: floa
 
 
 ## HeightmapTerrain.grip_at against our freshly painted images: pow-sharpen every weight by
-## the shader's blend_sharpness, renormalize, and mix channel_grip.
+## the shader's blend_sharpness, renormalize, and mix each channel's Surface.ref_grip.
 func _grip_at(splat: Image, splat2: Image, p: Vector2) -> float:
 	var mat := _terrain.get("material") as ShaderMaterial
 	var sharp: Variant = mat.get_shader_parameter(&"blend_sharpness") if mat != null else null
@@ -988,5 +982,5 @@ func _grip_at(splat: Image, splat2: Image, p: Vector2) -> float:
 		var raw: float = (c0 if i < 4 else c1)[i & 3]
 		var w := pow(raw, exponent)
 		total += w
-		grip += w * CHANNEL_GRIP[i]
+		grip += w * Surface.ref_grip(CHANNEL_SURFACE[i])
 	return 1.0 if total < 0.001 else grip / total

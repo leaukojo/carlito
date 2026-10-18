@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="TyreClass" load_steps=2 format=3]
+
+; The towed bodies' stock: the reference row, every factor 1, never re-sourced (a trailer's tyre only brakes and carries).
+
+[ext_resource type="Script" path="res://src/vehicles/base/tyre_class.gd" id="1_tyre"]
+
+[resource]
+script = ExtResource("1_tyre")
+id = "trailer"
+display_name = "Trailer"
+fits = Array[int]([6])

@@ -1,6 +1,6 @@
 # Tools — rules and run lines
 
-Editor/CI scripts. Kit/bake rules: `kit/CLAUDE.md`. Headless gotchas: root `CLAUDE.md` § Running.
+Editor/CI scripts. Kit/bake rules: `kit/CLAUDE.md`.
 
 - **A level generator's chain lives in its manifest**, `src/levels/**/<id>_gen.json`; a generator
   edit moves the manifest in the same commit (`src/levels/CLAUDE.md`).
@@ -10,8 +10,8 @@ Editor/CI scripts. Kit/bake rules: `kit/CLAUDE.md`. Headless gotchas: root `CLAU
 - **Never speed a measure tool up with `Engine.time_scale`**: it enlarges the physics step. Pass
   `--fixed-fps 60` before `--` instead: same tick, byte-identical output, ~10x faster.
 - **A new measurement is a scenario in an existing tool**; shared setup goes in `measure_rig.gd`.
-- Measure-tool run lines, flags and the `doc=` figure presets: `docs/vehicles.md` § Measure-tool
-  run lines.
+- Measure-tool run lines, flags and the `doc=` figure presets: `docs/vehicle_measurements.md`
+  § Measure-tool run lines.
 
 ## Rare generators
 

@@ -1,8 +1,9 @@
 class_name PauseMenu
 extends Control
-## The pause overlay: RESUME / RESPAWN / CONDITIONS / CONTROLS / SETTINGS. GARAGE, LEVEL and
-## CHALLENGES live on the on-screen important buttons (and G / 4 / 5), not here. Never tears the
-## level down on its own. RESPAWN is a signal — respawning is the shell's to do (rule 6); this
+## The pause overlay: RESUME / RESPAWN / SPAWN POINT / CONDITIONS / CONTROLS / SETTINGS. GARAGE,
+## LEVEL and CHALLENGES live on the on-screen important buttons (and G / 4 / 5), not here. Never
+## tears the level down on its own. RESPAWN and SPAWN POINT are signals — respawning is the
+## shell's to do (rule 6), SPAWN POINT lists names and hands back an index; this
 ## menu never learns what a level or vehicle is. CONTROLS, SETTINGS and CONDITIONS own nothing either:
 ## CONTROLS is generated from ActionRegistry (same source the touch overlay reads), SETTINGS and
 ## CONDITIONS emit new values for the shell to apply/persist. Built in code, colour/type from the
@@ -13,6 +14,8 @@ const KeyShaper := preload("res://src/input/key_shaper.gd")
 
 signal resume_requested
 signal respawn_requested
+## A SPAWN POINT page pick: the index into `State.spawns`. Moving there is the shell's to do.
+signal spawn_picked(index: int)
 ## New Dashboard.Density setting picked; the shell applies it and writes it to user://.
 signal dashboard_density_changed(setting: int)
 ## New UI-size multiplier picked; the shell applies it to UiScale and writes it to user://.
@@ -44,6 +47,8 @@ class State extends RefCounted:
 	var wind_from_deg := 0.0
 	var night := false
 	var conditions_locked := false  ## a challenge owns wind, current and lighting
+	## The level's spawn points this body may use, by name; SPAWN POINT shows from two up.
+	var spawns := PackedStringArray()
 
 ## Widest sensible button in logical px (scaled through UiTheme), matching the garage.
 const BUTTON_W := 260.0
@@ -77,6 +82,7 @@ var _root: VBoxContainer
 var _controls: VBoxContainer
 var _settings: VBoxContainer
 var _conditions: VBoxContainer
+var _spawn_page: VBoxContainer
 var _sheet: ScrollContainer  ## CONTROLS sheet's scroll area, driven by Up/Down (_unhandled_input)
 var _resume_btn: Button
 var _density_btn: Button
@@ -100,6 +106,7 @@ var _current_preset: int = WorldConditions.Preset.LEVEL
 var _wind_from_deg := 0.0
 var _night := false
 var _conditions_locked := false  ## a challenge owns wind, current and lighting: CONDITIONS greys out
+var _spawns := PackedStringArray()
 
 
 ## Called by the shell before add_child; pages build in _ready. Optional: with nothing handed
@@ -116,6 +123,7 @@ func setup(caps: Dictionary, state := State.new()) -> void:
 	_wind_from_deg = state.wind_from_deg
 	_night = state.night
 	_conditions_locked = state.conditions_locked
+	_spawns = state.spawns
 
 
 func _ready() -> void:
@@ -137,6 +145,9 @@ func _ready() -> void:
 	_conditions = _page()
 	_conditions.visible = false
 	_build_conditions()
+	_spawn_page = _page()
+	_spawn_page.visible = false
+	_build_spawns()
 
 	_resume_btn.grab_focus()  # keyboard/gamepad start point
 
@@ -156,6 +167,8 @@ func _build_root() -> void:
 	_resume_btn = _menu_button("RESUME", func() -> void: resume_requested.emit())
 	_root.add_child(_resume_btn)
 	_root.add_child(_menu_button("RESPAWN", func() -> void: respawn_requested.emit()))
+	if _spawns.size() >= 2:
+		_root.add_child(_menu_button("SPAWN POINT", func() -> void: _show_page(_spawn_page)))
 	_root.add_child(_menu_button("CONDITIONS", func() -> void: _show_page(_conditions)))
 	_root.add_child(_menu_button("CONTROLS", func() -> void: _show_page(_controls)))
 	_root.add_child(_menu_button("SETTINGS", func() -> void: _show_page(_settings)))
@@ -305,6 +318,15 @@ func _build_conditions() -> void:
 	_conditions.add_child(_menu_button("BACK", func() -> void: _show_page(_root)))
 
 
+## One button per spawn point, in the level's order (the first is its default).
+func _build_spawns() -> void:
+	_spawn_page.add_child(_title("SPAWN POINT"))
+	for i in _spawns.size():
+		_spawn_page.add_child(_menu_button(_spawns[i].to_upper(),
+				func() -> void: spawn_picked.emit(i)))
+	_spawn_page.add_child(_menu_button("BACK", func() -> void: _show_page(_root)))
+
+
 func _help(text: String) -> Label:
 	var label := Label.new()
 	label.text = text
@@ -429,7 +451,7 @@ func _notification(what: int) -> void:
 	if what != NOTIFICATION_THEME_CHANGED or _root == null:
 		return
 	var margin := int(UiTheme.px(self, UiTheme.MARGIN))
-	for page: VBoxContainer in [_root, _controls, _settings, _conditions]:
+	for page: VBoxContainer in [_root, _controls, _settings, _conditions, _spawn_page]:
 		page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT,
 				Control.PRESET_MODE_MINSIZE, margin)
 		for child in page.get_children():
@@ -451,6 +473,7 @@ func _show_page(page: VBoxContainer) -> void:
 	_controls.visible = page == _controls
 	_settings.visible = page == _settings
 	_conditions.visible = page == _conditions
+	_spawn_page.visible = page == _spawn_page
 	# Focus follows the page, else a keyboard player is left driving an invisible button.
 	for child in page.get_children():
 		if child is Button and not (child as Button).disabled:

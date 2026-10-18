@@ -7,7 +7,7 @@ tractor / boat / drone / plane / train) while exchanging live CAN signals with t
 sloppyCAN/RAMN simulator over a postMessage bridge. Web-first. Levels are **signal
 playgrounds**: content exists to make contract signals visibly perform
 (grades for `engine_load`, fields for hitch/PTO, water for pitch/roll). **Challenges** are the
-goal-driven, bridge-only exception that teaches CAN — the defs in `src/challenges/defs/` are the list.
+goal-driven, bridge-only exception that teaches CAN — `ChallengeRegistry.DEFS` is the list.
 
 Docs map: `docs/overview.md`. The Godot 3 generation is an outside backup: a reference, not a source.
 
@@ -19,7 +19,7 @@ Docs map: `docs/overview.md`. The Godot 3 generation is an outside backup: a ref
   VehicleSpawn (F6-runnable, unregistered), never camera-only. Visual bar: crisp high-contrast
   splat borders, plateaued buildable terrain, coasts circular by water at sea level, no square edge.
 - "Quickly / do not verify" = skip ceremony, make the small change, stop.
-- **Where things go** (one policy; `docs/overview.md` points here):
+- **Where things go:**
   - **CLAUDE.md** = the constraint, a ≤1-line why, and its guard; only what binds work in its
     directory, is not readable from the code or a guard's message, and still matches the code
     (budget: `tools/check_docs.mjs`). **Exit rule:** delete a line once a guard enforces it with a
@@ -46,7 +46,8 @@ Docs map: `docs/overview.md`. The Godot 3 generation is an outside backup: a ref
 5. Vehicles consume one normalized `VehicleInput` from `InputRouter` (lamp and ISOBUS state
    included, never a side channel); arbitration lives **only** in `src/input/`.
 6. Levels, vehicles, and UI are independent scenes composed by the shell.
-7. CI does the export; deploys are cache-busted. No manual deploy.
+7. CI does the export; deploys are cache-busted, no manual deploy: `dev` publishes on every push,
+   stable moves only on the *Promote dev → stable* workflow (`docs/deploying.md`).
 8. Pure logic (drivetrain math, contract encode/decode, arbitration, GPS/odometer,
    buoyancy, terrain/scatter/road/bake math) gets gdUnit4 tests.
 9. `.web` overrides + perf budget: msaa_3d.web=0, positional shadows hard on web, the sun at soft
@@ -103,8 +104,3 @@ powershell -File tools/preflight.ps1                        # "am I safe to push
 - **Parse-check `addons/`** with `--headless --path . --editor --quit-after 30` (it misses
   integer division between two *constants*).
 - **`export_presets.cfg` traps fail only in an exported build**: `docs/deploying.md` § The web export.
-
-## CI / deploy
-
-Channels: **dev** (<https://leaukojo.github.io/carlito/dev/>, CI on every push to `dev`) and
-**stable** (<https://leaukojo.github.io/carlito/>, the manual *Promote dev → stable* workflow only).

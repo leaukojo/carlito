@@ -25,7 +25,7 @@ shader_parameter/grass_color = Color(0.35, 0.55, 0.25, 1)
 shader_parameter/dirt_color = Color(0.52, 0.4, 0.26, 1)
 shader_parameter/sand_color = Color(0.83, 0.76, 0.55, 1)
 shader_parameter/rock_color = Color(0.45, 0.44, 0.42, 1)
-shader_parameter/color5 = Color(0.44, 0.29, 0.17, 1)
+shader_parameter/color5 = Color(0.78, 0.86, 0.93, 1)
 shader_parameter/color6 = Color(0.3, 0.24, 0.17, 1)
 shader_parameter/color7 = Color(0.22, 0.22, 0.24, 1)
 shader_parameter/color8 = Color(0.62, 0.6, 0.56, 1)
@@ -56,6 +56,10 @@ script = ExtResource("3_cam")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 3, 120)
 script = ExtResource("4_spawn")
 
+[node name="IcePad" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 40, 3, 70)
+script = ExtResource("4_spawn")
+
 [node name="Sea" type="Area3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0, 0)
 script = ExtResource("10_water")
@@ -80,7 +84,5 @@ height = 3.06
 material = SubResource("SplatMat")
 splatmap = ExtResource("7_splat")
 splatmap2 = ExtResource("8_splat2")
-channel_names = PackedStringArray("Grass", "Dirt", "Sand", "Rock", "Field", "Mud", "Asphalt", "Gravel")
-channel_grip = PackedFloat32Array(0.8, 0.7, 0.6, 0.7, 0.7, 0.5, 1.0, 0.85)
-channel_drag = PackedFloat32Array(0.06, 0.03, 0.1, 0.01, 0.08, 0.2, 0.0, 0.02)
+channel_surface = PackedInt32Array(5, 4, 6, 7, 11, 8, 0, 3)
 sand_height = 1.6

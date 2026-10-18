@@ -111,7 +111,7 @@ tools/check_head_include.mjs` guards this from preflight and the pre-commit hook
 
 Reproduce on the actual web build, read the devtools console. Usually shows as `SCRIPT
 ERROR: Parse Error: Could not find type "…"` — an editor-only class used as a type
-annotation in a runtime-loaded `@tool` script (`kit/CLAUDE.md`).
+annotation in a runtime-loaded `@tool` script.
 
 ## Publishing to dev
 

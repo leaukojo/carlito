@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="TyreClass" load_steps=2 format=3]
+
+; The reference road tyre: every factor 1 by definition (TyreClass). Stock on PASSENGER and LIGHT_TRUCK.
+
+[ext_resource type="Script" path="res://src/vehicles/base/tyre_class.gd" id="1_tyre"]
+
+[resource]
+script = ExtResource("1_tyre")
+id = "all_season"
+display_name = "All-season"
+fits = Array[int]([1, 2])

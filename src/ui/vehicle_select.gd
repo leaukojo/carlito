@@ -14,6 +14,9 @@ signal vehicle_chosen(variant: String)
 signal attachment_chosen(id: String)
 ## Also follows DRIVE, and only for a family whose contract takes a gear byte (`has_gearbox`).
 signal gearbox_chosen(manual: bool)
+## Also follows DRIVE, and only for a variant that fits more than its stock class (`tyre_choices`).
+## Carries the variant: the level may refuse the body, and the choice is still that variant's.
+signal tyre_chosen(variant: String, id: String)
 signal closed
 
 const CardGrid := preload("res://src/ui/card_grid.gd")
@@ -49,6 +52,8 @@ var _attachment_of := ""
 var _manual_gearbox := false  ## seeded from the shell's free-play choice
 var _manual_gearbox_btn: Button      ## disabled live when the bridge drops (null with no gearbox row)
 var _automatic_gearbox_btn: Button   ## pressed live when the bridge drops and forces AUTOMATIC
+var _tyres := {}  ## variant -> TyreClass id, seeded from the shell's store; a pick updates it
+var _tyre := ""   ## the class picked for the variant on show; "" while it has no TYRES row
 
 var _pulse_t := 0.0  ## phase of the DRIVE button's attention pulse, in turns
 
@@ -71,9 +76,11 @@ var _settle := 0
 ## `allowed` is the level's raw allow-list, `rail` its runtime closed-loop answer — both rather
 ## than a pre-filtered roster, since the screen shows what it cannot spawn and must say why.
 ## `has_spawn` is `Level.has_spawn_for`, invalid (default) when the caller has none to offer.
+## `tyres` is the stored class per variant (`UserSettings.tyre_of`).
 func setup(allowed: PackedStringArray, level_name: String, rail: bool,
 		variant: String, attachment: String, manual_gearbox := false,
-		has_spawn := Callable()) -> void:
+		has_spawn := Callable(), tyres := {}) -> void:
+	_tyres = tyres.duplicate()
 	_allowed = allowed
 	_level_name = level_name
 	_has_rail = rail
@@ -322,6 +329,61 @@ func _on_gearbox_pressed(manual: bool) -> void:
 	_manual_gearbox = manual
 
 
+## The classes the previewed body may fit, as one ButtonGroup between GEARBOX and BODY; none when
+## only the stock fits. Read off the preview's spec, so it is rebuilt on every preview swap.
+func _refresh_tyres() -> void:
+	for child in _cards.get_children():
+		if child.has_meta("tyres"):
+			_cards.remove_child(child)
+			child.queue_free()
+	_tyre = ""
+	var spec: VehicleSpec = _preview.spec if _preview != null and "spec" in _preview else null
+	var choices := VehicleSelect.tyre_choices(spec.ground_drive if spec != null else null)
+	if choices.is_empty():
+		return
+	var ids := choices.map(func(c: TyreClass) -> String: return c.id)
+	var stored := String(_tyres.get(_variant, ""))
+	_tyre = stored if ids.has(stored) else choices[0].id
+	var box := VBoxContainer.new()
+	box.set_meta("tyres", true)
+	box.add_child(_heading("TYRES"))
+	var row := HFlowContainer.new()
+	var group := ButtonGroup.new()
+	for cls in choices:
+		var b := Button.new()
+		b.text = cls.display_name.to_upper()
+		b.custom_minimum_size.y = UiTheme.px(self, UiTheme.TOUCH_MIN)
+		b.toggle_mode = true
+		b.button_group = group
+		b.theme_type_variation = &"Choice"
+		b.button_pressed = cls.id == _tyre
+		b.pressed.connect(_on_tyre_pressed.bind(cls.id))
+		row.add_child(b)
+	box.add_child(row)
+	_cards.add_child(box)
+	_cards.move_child(box, 1 if VehicleSelect.has_gearbox(_family) else 0)
+
+
+func _on_tyre_pressed(id: String) -> void:
+	_tyre = id
+	_tyres[_variant] = id
+
+
+## The classes a body of `gd` may fit, its stock first and then `TyreCatalog`'s order; empty with
+## no ground drive or when the stock is all that fits (no choice to offer).
+static func tyre_choices(gd: GroundDriveSpec) -> Array[TyreClass]:
+	var out: Array[TyreClass] = []
+	if gd == null or gd.tyre == null:
+		return out
+	out.append(gd.tyre)
+	for cls in TyreCatalog.fitting(gd.tyre_fit):
+		if cls.id != gd.tyre.id:
+			out.append(cls)
+	if out.size() < 2:
+		out.clear()
+	return out
+
+
 func _heading(text: String, reason := "") -> Label:
 	var l := Label.new()
 	l.text = text if reason.is_empty() else "%s  -  %s" % [text, reason.to_upper()]
@@ -441,6 +503,7 @@ func _refresh_attachments() -> void:
 func _show_preview(variant: String) -> void:
 	_variant = variant
 	_free_preview()
+	_tyre = ""  # a body that fails to show offers no TYRES row, so DRIVE sends none
 	_spec_label.text = ""
 	_update_drive_button()
 	var scene_path := VehicleCatalog.scene_of(variant)
@@ -461,6 +524,7 @@ func _show_preview(variant: String) -> void:
 		else:
 			_attachment = String(_preview.current_attachment())
 			_attachment_of = variant
+	_refresh_tyres()
 	_refresh_attachments()
 	_settle = SETTLE_FRAMES
 	_bounds = AABB()
@@ -609,6 +673,8 @@ func _on_drive() -> void:
 		attachment_chosen.emit(_attachment)
 	if VehicleSelect.has_gearbox(VehicleCatalog.family_of(_variant)):
 		gearbox_chosen.emit(_manual_gearbox)
+	if not _tyre.is_empty():
+		tyre_chosen.emit(_variant, _tyre)
 
 
 func _reflow() -> void:

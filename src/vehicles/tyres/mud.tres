@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="TyreClass" load_steps=2 format=3]
+
+; Mud-terrain lug. Factors as responses (dry x factor) over the all-season tyre; brackets are docs/sources.md. dry 0.92: estimate. Wet 0.77 in all: a Hilux on wet tar stopped from 80 km/h ~9 m longer on mud-terrains (38.7 m) than on highway-terrains [73]. Snow 0.83, ice 0.74: open lugs, few sipes (estimate). Mud 1.2, field 1.1, grass 1.0, sand 1.0 in all: estimate, no published lug-against-road-tread figure found (D497 has no tread term). crr 1.3: label E's floor over C's middle, 2020/740 [74].
+
+[ext_resource type="Script" path="res://src/vehicles/base/tyre_class.gd" id="1_tyre"]
+
+[resource]
+script = ExtResource("1_tyre")
+id = "mud"
+display_name = "Mud"
+fits = Array[int]([2, 3])
+dry = 0.92
+surface_grip = Dictionary[String, float]({
+"Field": 1.2,
+"Grass": 1.1,
+"Ice": 0.8,
+"Mud": 1.3,
+"Sand": 1.1,
+"Snow": 0.9,
+"Wet": 0.84
+})
+crr_factor = 1.3

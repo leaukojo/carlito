@@ -1,8 +1,11 @@
 # Carlito — Architecture Overview
 
 Architecture map for agents. Product summary and standing rules: root `CLAUDE.md`; directory
-rules: the nested `CLAUDE.md` files; per-system detail: `docs/systems.md`, `docs/vehicles.md`,
-`docs/heavy_vehicles.md`, `docs/level_kit.md`. Open work: `docs/plans/`; backlog: `TODO.md`.
+rules: the nested `CLAUDE.md` files; per-system detail: `docs/systems.md`, `docs/vehicles.md`
+(framework, tyres, brakes, body), `docs/drivetrain.md`, `docs/heavy_vehicles.md`, `docs/boat.md`,
+`docs/flight.md`, `docs/rail.md`, `docs/level_kit.md`; measured figure tables and the measure
+tools (read to measure or quote a figure): `docs/vehicle_measurements.md`; sourced figures and
+references (read only to check or change a sourced value): `docs/sources.md`. Open work: `docs/plans/`; backlog: `TODO.md`.
 What goes where (CLAUDE.md / code comment / `docs/`): root `CLAUDE.md` § Working style.
 
 ## The big idea: one contract, everything flows through it
@@ -44,14 +47,14 @@ dashboard), web-only transport (§ Bridge).
   `VehicleSpec`+`GroundDriveSpec` (`.tres`), `Drivetrain`, `RayWheel`, `VehicleMath`,
   `BaseVehicle`, `WheelDrive`, `ChaseCamera`, `LampSet`, `Horn`, towing trio
   `TowHost`/`CouplingProfile`/`TowedBody`/`Articulation`. Detail: `docs/systems.md`,
-  `docs/vehicles.md`, `docs/heavy_vehicles.md`.
+  `docs/vehicles.md` (its header lists the rest).
 - `BaseVehicle` is family-agnostic; `WheelDrive` is the wheeled ground-drive half it owns.
   Subclasses hook `_make_telemetry()`/`_tick_extras(input, delta)`: `TractorVehicle`,
   `TruckVehicle`/`SemiTractor` (J1939), `BoatVehicle` (buoyancy), `DroneVehicle` (DroneCAN),
   `PlaneVehicle` (CANaerospace), `TrainVehicle` (rail spline).
 - `VehicleCatalog` maps cosmetic variants onto families (V cycles variants, E cycles
   attachments via `cycle_implement()`); contract/dashboard/bridge see only the family. Tire
-  grip is per-surface via `channel_grip`.
+  grip is per-surface via `Surface` (`HeightmapTerrain.channel_surface`).
 
 ### The tractor and the truck
 
@@ -72,12 +75,9 @@ ISO 11992 trailer bus, or none): `docs/heavy_vehicles.md`.
 
 ## Testing & CI
 
-- gdUnit4 covers all pure logic (drivetrain, input arbitration, telemetry, lamps, buoyancy,
-  terrain/scatter/road/bake math); run headless with the console Godot binary (`CLAUDE.md`).
+- gdUnit4 covers the pure logic (root rule 8); run lines: root `CLAUDE.md` § Running.
 - CI (`.github/workflows/ci.yml`): editor-type gate → head-include check → import →
   stale-bake check → bake → gdUnit4 → headless smoke → baked-level smoke → web export +
   level packs, plus a parallel tracking gate.
-- `dev` auto-publishes on every push (cache-busted); `stable` moves only on the manual
-  promote workflow — `docs/deploying.md`.
-- Code is MIT, assets CC0. `../_old/CARLITO_SLOPPYCAN_V1_BACKUP/carlito/` is a behavior/layout
-  reference only; nothing is ported from it.
+- Deploy channels: root `CLAUDE.md` rule 7, `docs/deploying.md`. The Godot 3 backup lives at
+  `../_old/CARLITO_SLOPPYCAN_V1_BACKUP/carlito/`.

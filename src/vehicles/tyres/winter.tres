@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="TyreClass" load_steps=2 format=3]
+
+; Studless. Factors as responses (dry x factor) over the all-season tyre; brackets are docs/sources.md. dry 0.97: it stops ~13 % longer than summer (estimate inside the brief's few-to-15 %). Snow 1.16 in all: the winter references stop from 50 km/h in 22.3-22.7 m, the all-season tyres in 22.6-24.4 [66], 31 against 38 m in a blog's comparison [67]. Ice 1.48 in all: 17.7 m against 26.2 from 40 km/h [71]. Field and mud factors 1.05: open tread (estimate). crr: label C's top over its middle, 2020/740 [74].
+
+[ext_resource type="Script" path="res://src/vehicles/base/tyre_class.gd" id="1_tyre"]
+
+[resource]
+script = ExtResource("1_tyre")
+id = "winter"
+display_name = "Winter"
+fits = Array[int]([1, 2, 3])
+dry = 0.97
+surface_grip = Dictionary[String, float]({
+"Field": 1.05,
+"Ice": 1.53,
+"Mud": 1.05,
+"Snow": 1.2
+})
+crr_factor = 1.05

@@ -81,6 +81,10 @@ var _hold := Vector2.ZERO
 ## Axle torque (N·m, + = forward) the engine passed the driven wheels last tick, which the hill hold
 ## weighs against the grade.
 var _drive_torque := 0.0
+## The tyre class on the wheels (`fit_tyre`): the spec's stock until another is fitted. A session
+## choice, not state: a respawn keeps it.
+var tyre: TyreClass
+var _crr := 0.0  ## the fitted class's hard-road rolling resistance (`rolling_resistance`)
 
 
 ## Build the wheels and their visuals.
@@ -132,6 +136,25 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 	_retarder_rating = Drivetrain.retarder_rating(spec)
 	_brake_force = BrakeSizing.brake_force(gd)
 	_live_mass = spec.mass
+	fit_tyre(gd, gd.tyre)
+
+
+## Fit `cls` on every wheel; one that is null or not made in the body's `tyre_fit` reads as the
+## stock class. Moves only the class's factors on mu and crr: brakes and every fitment figure stay
+## the body's. True when `cls` itself was fitted.
+func fit_tyre(gd: GroundDriveSpec, cls: TyreClass) -> bool:
+	var fitted := cls != null and cls.fits_body(gd.tyre_fit)
+	tyre = cls if fitted else gd.tyre
+	for w in wheels:
+		w.apply_tyre(tyre, gd.tyre)
+	_crr = gd.rolling_resistance * TyreClass.crr_scale(tyre, gd.tyre)
+	return fitted
+
+
+## Hard-road rolling resistance coefficient of the fitted tyre (`GroundDriveSpec.rolling_resistance`
+## is the stock's).
+func rolling_resistance() -> float:
+	return _crr
 
 
 ## Share of the foot brake's capacity a pedal at `pedal` (0..1) applies on a body whose full pedal
@@ -220,6 +243,7 @@ func hold_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 	var mass := _live_mass + towed_kg
 	var pull := 0.0
 	drivetrain.load_mass_kg = mass
+	drivetrain.rolling_crr = _crr
 	drivetrain.standing_load = 0.0
 	if normal != Vector3.ZERO:
 		var gravity := body.get_gravity()
@@ -227,7 +251,7 @@ func hold_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 		var lever := mass * gd.drive_radius()
 		pull = HillHold.pull_torque(gravity, normal.normalized(), forward, lever)
 		drivetrain.standing_load = ShiftPolicy.standing_load(gravity, normal.normalized(), forward,
-				gd.rolling_resistance + soil / touching, lever)
+				_crr + soil / touching, lever)
 	_hold = HillHold.step(gd.hill_hold, gd.hill_hold_s, _hold.x, _hold.y, input.brake,
 			absf(input.throttle), absf(ground_speed) < HillHold.REST_SPEED, in_gear,
 			HillHold.drive_holds(dir, _drive_torque, pull), delta)
@@ -636,13 +660,13 @@ func _axle_driven(axle: PackedInt32Array) -> bool:
 ## load is this tick's spring reading, not `mass * g`: an airborne car resists nothing and a laden
 ## truck resists more for free. Inert when neither is declared.
 func _apply_resistance(body: RigidBody3D, gd: GroundDriveSpec, delta: float) -> void:
-	if gd.drag_area <= 0.0 and gd.rolling_resistance <= 0.0:
+	if gd.drag_area <= 0.0 and _crr <= 0.0:
 		return
 	var normal_load := 0.0
 	for w in wheels:
 		normal_load += w.suspension_force
 	body.apply_central_force(VehicleMath.road_resistance(body.linear_velocity, gd.drag_area,
-			gd.rolling_resistance, normal_load, body.mass, delta))
+			_crr, normal_load, body.mass, delta))
 
 
 ## Downforce down the body's own up axis so it follows roll and pitch; applied centrally to keep

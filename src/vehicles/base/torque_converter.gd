@@ -12,7 +12,7 @@ extends RefCounted
 ## `solve` finds the torque where the law and the two sides' end-of-tick speeds agree.
 
 ## Speed ratio at which the torque ratio has fallen to 1.0 (the MathWorks Powertrain Blockset
-## defaults: 1.07 at 0.87, 1.00 at 0.94): docs/vehicles.md § Converter.
+## defaults: 1.07 at 0.87, 1.00 at 0.94): docs/drivetrain.md § Converter.
 const COUPLING_POINT := 0.9
 ## The impeller's torque at one impeller speed over its stall torque, `(K_stall / K(SR))^2`, against
 ## the speed ratio: the MathWorks defaults' capacity factor K (12.3 at stall, 14.6 at 0.8, 16.3 at

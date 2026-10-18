@@ -9,9 +9,6 @@ extends SceneTree
 const DIR := "res://src/levels/island/level_5"
 const SIZE := 512.0            ## world extent (X and Z), matching the other islands
 const HEIGHT := 51.0           ## white-pixel amplitude; stores the 3 m road levels exactly
-const CHANNEL_NAMES := '"Grass", "Dirt", "Sand", "Rock", "Snow", "Mud", "Asphalt", "Gravel"'
-const CHANNEL_GRIP := "0.8, 0.7, 0.6, 0.7, 0.75, 0.5, 1, 0.85"
-const CHANNEL_DRAG := "0.06, 0.03, 0.1, 0.01, 0.05, 0.2, 0, 0.02"  ## gen_islands' table
 const TITLE := "Level 5 - Railway"
 const RAIL_PROFILE := "res://kit/roads/rail_profile.tres"
 const GenIO := preload("res://tools/level_gen_io.gd")
@@ -471,9 +468,7 @@ falloff_end = {falloff_end}
 coast_roughness = {coast_roughness}
 terrace_levels = {terrace_levels}
 splatmap = ExtResource("7_splat")
-channel_names = PackedStringArray({channel_names})
-channel_grip = PackedFloat32Array({channel_grip})
-channel_drag = PackedFloat32Array({channel_drag})
+channel_surface = PackedInt32Array({channel_surface})
 
 [node name="AuthoringRoot" type="Node3D" parent="."]
 script = ExtResource("10_authoring")
@@ -492,7 +487,7 @@ curve = ExtResource("14_curve")
 		"seed": GEN_SEED, "feature_scale": FEATURE_SCALE, "octaves": OCTAVES,
 		"falloff_start": FALLOFF_START, "falloff_end": FALLOFF_END,
 		"coast_roughness": COAST_ROUGHNESS, "terrace_levels": TERRACE_LEVELS,
-		"channel_names": CHANNEL_NAMES, "channel_grip": CHANNEL_GRIP, "channel_drag": CHANNEL_DRAG,
+		"channel_surface": GenIO.surface_list(HeightmapTerrain.DEFAULT_CHANNEL_SURFACE),
 		"conform_falloff": CONFORM_FALLOFF,
 		"sx": spawn.x, "sy": spawn.y, "sz": spawn.z,
 		"wx": SIZE * 0.5 + 14.0,

@@ -25,8 +25,8 @@ func test_the_constants_the_briefings_quote_are_unchanged() -> void:
 		"BAY_WIDTH": Gen.BAY_WIDTH == 2.4,
 		"BAY_LENGTH": Gen.BAY_LENGTH == 4.6,
 		"BAY_HEADING": Gen.BAY_HEADING == 180.0,
-		"ICE_R": Gen.ICE_R == 35.0,
-		"ICE_SWEEP": Gen.ICE_SWEEP == 70.0,
+		"WET_R": Gen.WET_R == 35.0,
+		"WET_SWEEP": Gen.WET_SWEEP == 70.0,
 	}
 	for key in pinned:
 		assert_bool(pinned[key]).override_failure_message(

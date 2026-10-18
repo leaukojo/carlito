@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="TyreClass" load_steps=2 format=3]
+
+; A truck's M+S drive-axle tyre, stock on TRUCK: its dry only sets Winter's and Mud's ratio to it, while its surface factors are the trucks' own grip off asphalt. Factors over the all-season tyre, all estimates: dry 0.95 (a lug block), snow 1.05 (M+S), mud 1.15, field 1.1, grass 1.05 (open lugs).
+
+[ext_resource type="Script" path="res://src/vehicles/base/tyre_class.gd" id="1_tyre"]
+
+[resource]
+script = ExtResource("1_tyre")
+id = "truck_drive"
+display_name = "M+S drive"
+fits = Array[int]([3])
+dry = 0.95
+surface_grip = Dictionary[String, float]({
+"Field": 1.1,
+"Grass": 1.05,
+"Mud": 1.15,
+"Snow": 1.05
+})

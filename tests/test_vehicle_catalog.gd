@@ -260,18 +260,32 @@ func _driven_specs() -> Dictionary:
 	return out
 
 
+## How far a foot brake is rated past its stock tyre's grip.
+const BRAKE_STOCK_MARGIN := 1.15
+
+
 func test_every_foot_brake_can_lock_its_wheels() -> void:
 	# The hardware is rated on its own, past what the tyre can use: full pedal locks a wheel without
 	# ABS, or ABS holds it at the grip peak. A total, not per axle: proportioning gives each axle its
 	# share at the tyre-limited stop's transfer, and the measured braking table shows each lock.
+	# The design margin is over the stock tyre; every other class the fit takes need only lock, as
+	# a real body's brakes still lock its aftermarket summers (`taxi` on Summer has 1.14x).
 	var specs := _driven_specs()
 	assert_int(specs.size()).is_greater(0)
 	for variant: String in specs:
 		var spec: VehicleSpecScript = specs[variant]
-		assert_float(BrakeSizing.capacity_g(spec)).override_failure_message(
-				"%s: %.2f g of brake against %.2f of tyre" % [variant,
-				BrakeSizing.capacity_g(spec), spec.ground_drive.mu_long]) \
-				.is_greater_equal(1.15 * spec.ground_drive.mu_long)
+		for cls in TyreCatalog.fitting(spec.ground_drive.tyre_fit):
+			var mu: float = spec.ground_drive.mu_long * _asphalt_ratio(cls, spec.ground_drive)
+			var margin := BRAKE_STOCK_MARGIN if cls.id == spec.ground_drive.tyre.id else 1.0
+			assert_float(BrakeSizing.capacity_g(spec)).override_failure_message(
+					"%s on %s: %.2f g of brake against %.2f of tyre (needs %.2fx)" % [variant,
+					cls.id, BrakeSizing.capacity_g(spec), mu, margin]) \
+					.is_greater_equal(margin * mu)
+
+
+## `cls`'s dry-asphalt grip over the body's spec mu (its stock class's).
+static func _asphalt_ratio(cls: TyreClass, gd: GroundDriveSpec) -> float:
+	return TyreClass.grip_response(cls, gd.tyre)[Surface.ASPHALT]
 
 
 func test_the_full_foot_brake_holds_gear_one_at_converter_stall() -> void:
@@ -520,6 +534,25 @@ func test_every_wheeled_variant_declares_a_ground_drive() -> void:
 		assert_int(t_gd.wheel_positions.size()).is_greater(0)
 
 
+func test_every_wheeled_spec_declares_a_fit_and_a_stock_class() -> void:
+	# The fitment figures (mu, the load laws, crr) describe the stock class; with no class, or one
+	# not made in the body's fit, a fitted class has nothing to be read over.
+	var specs := {}
+	for variant in VehicleCatalog.VARIANTS:
+		if WHEELED_FAMILIES.has(VehicleCatalog.family_of(variant)):
+			specs[variant] = _spec_of(variant)
+	for path: String in TRAILER_SPECS:
+		specs[path] = load(path)
+	for id: String in specs:
+		var gd: GroundDriveSpec = (specs[id] as VehicleSpecScript).ground_drive
+		assert_int(gd.tyre_fit).override_failure_message("%s declares no tyre_fit" % id) \
+				.is_not_equal(TyreClass.Fit.NONE)
+		assert_object(gd.tyre).override_failure_message("%s declares no stock tyre" % id) \
+				.is_not_null()
+		assert_bool(gd.tyre.fits_body(gd.tyre_fit)).override_failure_message(
+				"%s: stock %s is not made in fit %d" % [id, gd.tyre.id, gd.tyre_fit]).is_true()
+
+
 func test_every_ground_drive_declares_its_tyre_width() -> void:
 	# The contact is a cylinder of the tyre's width (`RayWheel`): a body at 0 builds no cast and
 	# trips its assert on the first tick.
@@ -573,6 +606,9 @@ func test_the_planes_ground_drive_is_undriven_and_makes_no_road_resistance() -> 
 	# VehicleMath — the double-drag the engine default was.
 	assert_float(gd.drag_area).is_equal(0.0)
 	assert_float(gd.rolling_resistance).is_equal(0.0)
+	# The gear declares no class: it reads the reference tyre, and no swap is offered.
+	assert_object(gd.tyre).is_null()
+	assert_int(gd.tyre_fit).is_equal(TyreClass.Fit.NONE)
 
 
 func test_a_declared_wing_declares_its_drag_too() -> void:
@@ -676,12 +712,15 @@ func test_a_steering_taper_never_out_limits_the_tyres() -> void:
 				"%s has no wheelbase to steer about" % variant).is_greater(0.0)
 		var v := spec.ground_drive.steer_falloff_speed
 		var floor_deg: float = spec.ground_drive.max_steer_deg * spec.ground_drive.min_steer_frac
-		# a = v^2/R and R = wheelbase / tan(steer), so the angle mu_lat * g can sustain.
-		var grip_deg := rad_to_deg(atan(spec.ground_drive.mu_lat * 9.8 * wheelbase / (v * v)))
-		assert_float(floor_deg).override_failure_message(
-				"%s: %.1f deg of lock at %.0f m/s against %.1f deg of grip (%.2fx, floor %.2fx)"
-				% [variant, floor_deg, v, grip_deg, floor_deg / grip_deg, STEER_GRIP_MARGIN]
-				).is_greater(grip_deg * STEER_GRIP_MARGIN)
+		# Once per class the body's fit takes, at its dry-asphalt grip (no surface grips more).
+		for cls in TyreCatalog.fitting(spec.ground_drive.tyre_fit):
+			var mu_lat: float = spec.ground_drive.mu_lat * _asphalt_ratio(cls, spec.ground_drive)
+			# a = v^2/R and R = wheelbase / tan(steer), so the angle mu_lat * g can sustain.
+			var grip_deg := rad_to_deg(atan(mu_lat * 9.8 * wheelbase / (v * v)))
+			assert_float(floor_deg).override_failure_message(
+					"%s on %s: %.1f deg of lock at %.0f m/s against %.1f deg of grip (%.2fx, floor %.2fx)"
+					% [variant, cls.id, floor_deg, v, grip_deg, floor_deg / grip_deg,
+					STEER_GRIP_MARGIN]).is_greater(grip_deg * STEER_GRIP_MARGIN)
 
 
 func test_every_inner_wheel_keeps_a_turn_centre_at_full_lock() -> void:

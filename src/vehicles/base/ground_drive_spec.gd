@@ -68,6 +68,12 @@ extends Resource
 @export var max_suspension_force := 30000.0  ## N; clamp against deep-penetration catapults
 
 @export_group("Tires")
+## The fitment below (mu, the load laws, the radius, `rolling_resistance`) is this body's stock
+## class on dry asphalt and a hard road; a fitted class moves only its own factors on mu and crr
+## (`TyreClass`, `WheelDrive.fit_tyre`). Null on the plane's gear: the reference tyre.
+@export var tyre: TyreClass
+## The tyre size this body takes, which decides the classes it may fit.
+@export var tyre_fit := TyreClass.Fit.NONE
 ## Slip -> grip factor, peaking around 0.10-0.15: x is the combined slip, the length of (slip
 ## ratio, `v_lat / |v_long|`) (`RayWheel.combined_slip_force`), the side slip read against its own
 ## peak (`RayWheel.lateral_peak_slip`).

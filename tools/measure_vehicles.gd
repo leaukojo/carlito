@@ -7,6 +7,9 @@ extends Node3D
 ## Driven through the bridge stash, as measure_semi_launch / measure_grade / measure_rough are: the
 ## keyboard path shapes its keys (src/input/key_shaper.gd), which would measure the shaper instead of
 ## the vehicle.
+## `tyre=<id>` fits that `TyreCatalog` class on each body (`MeasureRig.fit_tyre`; the stock where it
+## is not made in the body's fit); `surface=<name>` paints every slab one `Surface`
+## (`MeasureRig.GripPatch`). Without it the slabs are bare ground, which reads the tyre's asphalt.
 
 const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
 const MeasureRig := preload("res://tools/measure_rig.gd")
@@ -30,7 +33,7 @@ const SETTLE_WINDOW := 3.0    ## s
 ## Measured from a latched origin once up to speed, so the launch transient is not counted as drift.
 const TRACK_START_SPEED := 16.7   ## m/s (~60 km/h) before the origin is latched
 const TRACK_DISTANCE := 200.0     ## m of straight running measured after that
-## Set well above what shipped vehicles do; a FAIL means a real asymmetry (docs/vehicles.md).
+## Set well above what shipped vehicles do; a FAIL means a real asymmetry (docs/vehicle_measurements.md).
 const MAX_LATERAL_DRIFT := 1.0    ## m off the latched forward axis over TRACK_DISTANCE
 const MAX_HEADING_DRIFT := 1.0    ## deg of heading change over the same stretch
 ## Ticks the whole front axle may spend off the ground over the pass, launch included: a wheelie.
@@ -46,7 +49,8 @@ const KNOWN_TRACKING_FAILS: Array[String] = []
 # --- coast-down pass (opt-in: pass the `coast` flag) ----------------------
 ## Cuts throttle at settled top speed and measures the deceleration. The gear byte stays D, so
 ## the engine's overrun stays in: it is printed beside the declared resistance
-## model `0.5 * 1.225 * drag_area * v^2 + rolling_resistance * m * g`, both averaged per tick.
+## model `0.5 * 1.225 * drag_area * v^2 + crr * m * g` (the fitted tyre's crr, `MeasureRig.crr`),
+## both averaged per tick.
 ## Also reports chassis contacts: RayWheel is a raycast, so any contact is the hull scraping.
 const COAST_SECONDS := 5.0
 
@@ -67,8 +71,9 @@ const CORNER_MAX_SLIP_ANGLE := 0.5  ## |v_lat| / |v|
 const CORNER_PEDAL_KP := 0.8       ## pedal per m/s of speed error
 const CORNER_PEDAL_KI := 0.5       ## pedal per second per m/s of speed error
 const CORNER_PEDAL_START := 0.35   ## integral seed when the ramp begins, roughly a car's cruise
-const PAD_SIZE := 300.0
-const PAD_X := -400.0              ## well clear of the strip's +/- STRIP_WIDTH / 2
+## On ice (grip 0.12) the run-up to CORNER_SPEED takes ~50 m and the circle is ~100 m in radius.
+const PAD_SIZE := 600.0
+const PAD_X := -500.0              ## clear of the strip's +/- STRIP_WIDTH / 2 and the step pad
 
 # --- braking pass (opt-in: pass the `brake` flag) --------------------------
 ## Straight stops on the strip, one per pedal in BRAKE_PEDALS: full throttle up to BRAKE_SPEED (or
@@ -267,7 +272,7 @@ const PULSE_PERIOD_S := 1.0        ## default `pulse=<s>`
 const PULSE_S := 30.0              ## s of pulsing at each speed
 
 # --- doc presets (`doc=<id>` as arg 1) -------------------------------------
-## Each runs a fixed set and rewrites its `docs/vehicles.md` region (`doc_region.gd`). Cornering
+## Each runs a fixed set and rewrites its `docs/vehicle_measurements.md` region (`doc_region.gd`). Cornering
 ## and accel run every wheel-driven variant (accel twice, floored then `tc`, each only to
 ## 100 km/h); braking the set below, heavies from 90 % of their top.
 const DocRegion := preload("res://tools/doc_region.gd")
@@ -281,6 +286,14 @@ const DOC_CRUISE: Array[String] = ["sedan", "sedan-sports", "van", "delivery", "
 const DOC_STEER: Array[String] = ["sedan", "sedan-sports", "suv", "race", "van", "delivery",
 		"garbage-truck"]
 const DOC_SECONDS := 60.0
+## doc=tyres: a passenger car, a light truck and a heavy truck, each on every class its fit takes
+## (`TyreCatalog.fitting`) over each of DOC_TYRE_SURFACES. A run is three passes: a `tc` launch to
+## TYRES_LAUNCH_KMH, the cornering pass, and a full-pedal stop from TYRES_STOP_KMH.
+const DOC_TYRES: Array[String] = ["sedan", "pickup", "garbage-truck"]
+const DOC_TYRE_SURFACES: Array[int] = [Surface.ASPHALT, Surface.WET, Surface.SNOW, Surface.ICE,
+		Surface.MUD, Surface.FIELD]
+const TYRES_LAUNCH_KMH := 30.0
+const TYRES_STOP_KMH := 50.0
 
 const REFERENCE_SPECS_PATH := "res://tools/vehicle_reference_specs.json"
 const REPORT_DIR := "res://reports/specs_sweep/"
@@ -296,16 +309,10 @@ enum Plough { LOWER, HOLD, STOP, START, COURSE_SET, COURSE_RUN }
 
 
 ## The strip as level 1's field for the `plough` pass, on what `BaseVehicle._collect_grip_terrains`
-## and `TractorVehicle._soil_at` duck-type: splat channel 4 ("Field") at full weight everywhere, at
-## level_1.tscn's `channel_grip` / `channel_drag` for it. With `bands` (`plough course`), Field at
-## `field` weight and Sand (channel 2) over the rest inside each band, by distance ahead of strip z
-## `start_z` (the body faces -Z).
+## and `TractorVehicle.soil_under` duck-type: `Surface.FIELD` at full weight everywhere. With `bands`
+## (`plough course`), Field at `field` weight and Sand over the rest inside each band, by distance
+## ahead of strip z `start_z` (the body faces -Z).
 class FieldStrip extends Node:
-	const GRIP := 0.7
-	const DRAG := 0.08
-	const SAND_GRIP := 0.6
-	const SAND_DRAG := 0.1
-
 	var start_z := 0.0
 	var bands: Array[Vector2] = []
 	var field := 1.0
@@ -326,16 +333,21 @@ class FieldStrip extends Node:
 	func height_at(_p: Vector3) -> float:
 		return 0.0
 
-	func grip_at(p: Vector3) -> float:
-		return lerpf(SAND_GRIP, GRIP, field_at(p))
+	func grip_at(p: Vector3, response: PackedFloat32Array) -> float:
+		return lerpf(Surface.grip_in(response, Surface.SAND), Surface.grip_in(response, Surface.FIELD),
+				field_at(p))
 
 	func drag_at(p: Vector3) -> float:
-		return lerpf(SAND_DRAG, DRAG, field_at(p))
+		return lerpf(Surface.drag(Surface.SAND), Surface.drag(Surface.FIELD), field_at(p))
 
-	func channel_weight_at(p: Vector3, ch: int) -> float:
-		return field_at(p) if ch == TractorVehicle.SOIL_CHANNEL else 0.0
+	func surface_weight_at(p: Vector3, surface: int) -> float:
+		return field_at(p) if surface == Surface.FIELD else 0.0
 
 var _queue: Array[String] = []
+## The first body spawns on the first physics tick, as every later one does (`_finish_vehicle`):
+## spawned from `_ready` instead it launched a tick early (`sedan,sedan,sedan 30 tc` 0-50 km/h:
+## 3.62 / 3.63 / 3.63 s).
+var _first_pending := false
 var _seconds := DEFAULT_SECONDS
 var _car: BaseVehicle
 var _variant := ""
@@ -445,9 +457,16 @@ var _strict := false
 ## scene's file name (`box`, `flatbed`, `farm_tipper`...) or `bobtail` / `none` for nothing.
 ## Empty: the catalog's own first entry; the tractor's none.
 var _trailer := ""
-## `doc=<braking|cornering|accel|cruise>`: the preset that ran, its region rewritten at the end;
-## empty otherwise.
+## `doc=<braking|cornering|accel|cruise|steer|tyres>`: the preset that ran, its region rewritten at
+## the end; empty otherwise.
 var _doc := ""
+## doc=tyres: each run's {tyre, surface}, popped beside its variant in `_queue`.
+var _runs: Array[Dictionary] = []
+## `tyre=<id>`: the class fitted on each body ("": its stock). Per run under doc=tyres.
+var _tyre := ""
+## `surface=<name>`: the `Surface` the slabs are painted (-1: bare). Per run under doc=tyres.
+var _surface := -1
+var _patch: MeasureRig.GripPatch
 ## `tc`: the accel pass slip-limits the worst driven wheel (`tc_pedal.gd`) instead of flooring.
 var _tc := false
 ## This accel pass is slip-limited: `tc`, or doc=accel's second run of a body.
@@ -577,6 +596,11 @@ var _corner_xfer0 := Vector2.ZERO  ## `_axle_transfer` as the lock starts windin
 var _corner_lltd := NAN        ## front share of the lateral load transfer at the peak (`_lltd`)
 var _corner_lifted := 0        ## most wheels off the ground in any one tick of the pass
 var _corner_pedal_i := 0.0     ## integral half of the PI speed hold
+## `telemetry.acc_lat` (the path's own lateral acceleration) under the same smoothing, and its peak
+## below the slip-angle gate. `v * yaw_rate` also counts the yaw a body overshoots into a slip
+## angle: on ice (`sedan`, `surface=ice`) it peaks at 0.22 g against a 0.10 g path.
+var _corner_path := 0.0
+var _corner_path_peak := 0.0
 
 # braking pass
 var _top_seen := 0.0           ## m/s, the accel pass's peak (0 when it did not run)
@@ -589,6 +613,8 @@ var _brake_x0 := Vector3.ZERO
 var _brake_lock_t := 0.0       ## s any wheel spent past BRAKE_LOCK_SLIP
 var _brake_abs_t := 0.0        ## s any wheel's ABS held its brake back
 var _brake_rows: Array[Dictionary] = []
+var _brake_from := BRAKE_SPEED     ## m/s; doc=tyres stops from TYRES_STOP_KMH
+var _brake_pedals := BRAKE_PEDALS  ## doc=tyres: full pedal alone
 
 # sweep report: per-vehicle measured figures, buffered as each pass reports, plus the
 # real-world comparison figures loaded once from REFERENCE_SPECS_PATH.
@@ -624,6 +650,12 @@ func _ready() -> void:
 		var flag := String(f)
 		if flag.begins_with("trailer="):
 			_trailer = flag.substr(8).to_lower()
+		elif flag.begins_with("surface="):
+			_surface = Surface.from_key(flag.substr(8))
+			if _surface < 0:
+				printerr("surface=%s: expected one of %s" % [flag.substr(8), ", ".join(Surface.NAMES)])
+				get_tree().quit(1)
+				return
 		elif flag == "trace" or flag.begins_with("trace="):
 			_trace = true
 			_trace_every = maxi(1, int(flag.substr(6))) if flag.length() > 5 else 1
@@ -653,6 +685,14 @@ func _ready() -> void:
 				printerr("gear=%s: expected a drive byte 1-%d" % [flag.substr(5), Drivetrain.TOP_GEAR])
 				get_tree().quit(1)
 				return
+	_tyre = MeasureRig.tyre_flag(flags)
+	if _tyre == "?":
+		get_tree().quit(1)
+		return
+	if _surface >= 0 and _plough_pass:
+		printerr("surface= and plough both paint the strip: plough runs on level 1's field")
+		get_tree().quit(1)
+		return
 	if _pedal < 1.0 and _tc:
 		printerr("pedal= and tc both set the accel pass's pedal: pick one")
 		get_tree().quit(1)
@@ -673,17 +713,26 @@ func _ready() -> void:
 			_tc = false  # the preset runs each body floored, then `tc`
 		elif _doc == "steer":
 			_step = true
+		elif _doc == "tyres":
+			# A `tc` launch, the cornering pass, a full-pedal stop (`_end_tyre_launch`).
+			_tc = true
+			_corner = true
+			_brake = true
+			_brake_from = TYRES_STOP_KMH / 3.6
+			_brake_pedals = [1.0]
 		elif _doc != "cruise":
 			printerr(("unknown doc preset '%s' — expected doc=braking, doc=cornering, doc=accel,"
-					+ " doc=cruise or doc=steer") % _doc)
+					+ " doc=cruise, doc=steer or doc=tyres") % _doc)
 			get_tree().quit(1)
 			return
 		if _trace or _notc or _held_gear > 0 or not is_nan(_engine_inertia) \
 				or not is_nan(_rear_lat_grip) or not is_nan(_bar_rear) or not is_nan(_cornering_peak) \
-				or not is_nan(_ackermann) or _circle or _hitch_pass or _plough_pass or _kerb or _cruise_probe():
+				or not is_nan(_ackermann) or _circle or _hitch_pass or _plough_pass or _kerb or _cruise_probe() \
+				or _tyre != "" or _surface >= 0:
 			printerr("trace / notc / gear= / j= / rear_lat_grip= / bar_rear= / cornering_peak= /"
 					+ " ackermann= / circle / hitch / plough / kerb / pedal= / cruise /"
-					+ " kickdown / pulse change the passes a doc preset tabulates: run them per body")
+					+ " kickdown / pulse / tyre= / surface= change the passes a doc preset tabulates:"
+					+ " run them per body")
 			get_tree().quit(1)
 			return
 		_cruise = _doc == "cruise"  # after the check above: the preset is the cruise probe alone
@@ -693,12 +742,17 @@ func _ready() -> void:
 	# locked-60-Hz tuning (default car's 0-100 went 5.30 s -> 6.40 s at time_scale 8).
 	MeasureRig.add_slab(self, "Strip", Vector3(STRIP_WIDTH, 2.0, STRIP_LENGTH))
 	if _corner:
-		# Skid pad: a wide square well off to the side, since a body at full lock circles in a few
-		# tens of metres and the strip is only 40 m wide.
+		# Skid pad: a wide square well off to the side, since a body at full lock circles in tens of
+		# metres (a hundred on ice) and the strip is only 40 m wide.
 		MeasureRig.add_slab(self, "Pad", Vector3(PAD_SIZE, 2.0, PAD_SIZE), PAD_X)
 	if _step or _circle:
 		# Under the strip and either side of it, top face flush with the strip's.
 		MeasureRig.add_slab(self, "StepPad", Vector3(STEP_PAD_WIDTH, 2.0, STRIP_LENGTH))
+	if _surface >= 0 or _doc == "tyres":
+		# Before the first body ticks, as the field below.
+		_patch = MeasureRig.GripPatch.new()
+		_patch.name = "GripPatch"
+		add_child(_patch)
 	if _plough_pass:
 		# Before the first body ticks: its wheels find the painted terrains once.
 		var strip := FieldStrip.new()
@@ -714,6 +768,12 @@ func _ready() -> void:
 		_queue = DOC_CRUISE.duplicate()
 	elif _doc == "steer":
 		_queue = DOC_STEER.duplicate()
+	elif _doc == "tyres":
+		for v in DOC_TYRES:
+			for cls in TyreCatalog.fitting(_tyre_fit(v)):
+				for s in DOC_TYRE_SURFACES:
+					_queue.append(v)
+					_runs.append({"tyre": cls.id, "surface": s})
 	elif Catalog.VARIANTS.has(which):
 		_queue = [which]
 	elif which.contains(",") and Array(which.split(",")).all(
@@ -734,12 +794,13 @@ func _ready() -> void:
 	elif _hitch_pass:
 		steer_label = "parked"
 	elif _plough_pass:
-		steer_label = "level 1's field (grip %.2f, drag %.2f) under it" % [FieldStrip.GRIP,
-				FieldStrip.DRAG]
-	print("strip: %.0f x %.0f m flat, surface_grip 1.0, %s, %.0f s cap per pass\n" %
-			[STEP_PAD_WIDTH if _step else STRIP_WIDTH, STRIP_LENGTH, steer_label, _seconds])
+		steer_label = "level 1's field (grip %.2f, drag %.2f) under it" % [Surface.ref_grip(Surface.FIELD),
+				Surface.drag(Surface.FIELD)]
+	print("strip: %.0f x %.0f m flat, %s, %s, %.0f s cap per pass\n" %
+			[STEP_PAD_WIDTH if _step else STRIP_WIDTH, STRIP_LENGTH, _surface_label(), steer_label,
+			_seconds])
 	MeasureRig.drive(100.0, 0.0)
-	_next_vehicle()
+	_first_pending = true
 
 
 ## Every catalog variant with a driven axle; boat/drone/plane/train declare none.
@@ -755,6 +816,26 @@ func _wheel_driven_variants() -> Array[String]:
 				out.append(id)
 		body.free()
 	return out
+
+
+## `variant`'s `GroundDriveSpec.tyre_fit` (`TyreClass.Fit.NONE` on a body with no ground drive).
+static func _tyre_fit(variant: String) -> int:
+	var body: Node = (load(Catalog.VARIANTS[variant]["scene"]) as PackedScene).instantiate()
+	var spec: VehicleSpec = body.get("spec")
+	var fit: int = spec.ground_drive.tyre_fit if spec != null and spec.ground_drive != null \
+			else TyreClass.Fit.NONE
+	body.free()
+	return fit
+
+
+## What the slabs are painted: per run under doc=tyres, else `surface=` or bare ground.
+func _surface_label() -> String:
+	if _doc == "tyres":
+		return "painted per run"
+	if _surface >= 0:
+		return "painted %s (grip %.2f, drag %.2f)" % [Surface.display_name(_surface),
+				Surface.ref_grip(_surface), Surface.drag(_surface)]
+	return "bare (the tyre's asphalt)"
 
 
 func _next_vehicle() -> void:
@@ -784,9 +865,17 @@ func _next_vehicle() -> void:
 			DocRegion.write(_doc, _cruise_table())
 		elif _doc == "steer":
 			DocRegion.write(_doc, _steer_table())
+		elif _doc == "tyres":
+			DocRegion.write(_doc, _tyres_table())
 		get_tree().quit(1 if _strict and _failures > 0 else 0)
 		return
 	_variant = _queue.pop_front()
+	if not _runs.is_empty():
+		var run: Dictionary = _runs.pop_front()
+		_tyre = run["tyre"]
+		_surface = run["surface"]
+	if _patch != null:
+		_patch.surface = _surface
 	_current = {"variant": _variant, "family": String(Catalog.VARIANTS[_variant]["family"])}
 	_top_seen = 0.0
 	_brake_i = 0
@@ -815,6 +904,13 @@ func _next_vehicle() -> void:
 		_car.spec.ground_drive.ackermann = _ackermann
 	_current["abs"] = _car.spec.ground_drive.abs_equipped
 	add_child(_car)
+	var tyre := MeasureRig.fit_tyre(_car, _tyre)
+	if _tyre != "" or _surface >= 0:
+		_current["tyre"] = tyre
+		_current["stock"] = _car.drive != null and _car.drive.tyre == _car.spec.ground_drive.tyre
+		_current["surface"] = _surface
+		print("--- %s: tyre %s, on %s ---" % [_variant, tyre,
+				Surface.display_name(_surface) if _surface >= 0 else "bare ground"])
 	# Strip top is y=0; wheels just touching, no spawn drop onto the springs.
 	_car.global_transform = Transform3D(Basis.IDENTITY, Vector3(0.0, _car.rest_ride_height(), START_Z))
 	_car.spawn_transform = _car.global_transform
@@ -941,6 +1037,8 @@ func _reset_pass(phase: Phase) -> void:
 	_corner_lltd = NAN
 	_corner_lifted = 0
 	_corner_pedal_i = 0.0
+	_corner_path = 0.0
+	_corner_path_peak = 0.0
 	_brake_on = false
 	_brake_v0 = 0.0
 	_brake_t = 0.0
@@ -949,6 +1047,10 @@ func _reset_pass(phase: Phase) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _first_pending:
+		_first_pending = false
+		_next_vehicle()
+		return
 	if _car == null or _phase == Phase.DONE:
 		return
 	_t += delta
@@ -1026,6 +1128,10 @@ func _tick_accel(delta: float) -> void:
 	if _doc == "accel":
 		if _marks.has(LAUNCH_MARKS[-1]) or _t >= _seconds:
 			_end_launch_run()
+		return
+	if _doc == "tyres":
+		if v * 3.6 >= TYRES_LAUNCH_KMH or _t >= _seconds:
+			_end_tyre_launch(v * 3.6 >= TYRES_LAUNCH_KMH)
 		return
 	# Plateaued: call it rather than idling at terminal speed for the rest of the budget.
 	var settled := _t - _settle_t >= SETTLE_WINDOW
@@ -1701,7 +1807,7 @@ func _gap_split(kin: Dictionary, prev: Dictionary, gap: float) -> Dictionary:
 		var normal_load := 0.0
 		for w in _car.wheels:
 			normal_load += w.suspension_force
-		resistance = -VehicleMath.road_resistance(prev["vel"], gd.drag_area, gd.rolling_resistance,
+		resistance = -VehicleMath.road_resistance(prev["vel"], gd.drag_area, MeasureRig.crr(_car),
 				normal_load, _car.mass, delta).dot(ahead)
 	var terms := {
 		"resistance": resistance * lever * per_moment,
@@ -1777,6 +1883,17 @@ func _end_launch_run() -> void:
 	_car.respawn()
 	_tc_run = true
 	_start_accel()
+
+
+## doc=tyres: the `tc` launch is done (`reached`: at TYRES_LAUNCH_KMH, else out of time). On to the
+## cornering pass, then the stop; no top speed or tracking.
+func _end_tyre_launch(reached: bool) -> void:
+	_current["launch_t"] = _t if reached else NAN
+	print("  %-13s : %s" % ["0-%.0f km/h tc" % TYRES_LAUNCH_KMH,
+			("%.2f s" % _t) if reached else "not reached in %.0f s" % _seconds])
+	_tc_run = false
+	MeasureRig.drive(100.0, 0.0)
+	_start_cornering()
 
 
 func _tick_tracking() -> void:
@@ -1867,6 +1984,10 @@ func _tick_cornering(delta: float) -> void:
 			airborne += 1
 	_corner_lifted = maxi(_corner_lifted, airborne)
 	var slip_angle := absf(vel.dot(_car.global_transform.basis.x)) / maxf(speed, 1.0)
+	_corner_path += (absf(_car.telemetry.acc_lat) - _corner_path) * clampf(delta / CORNER_SMOOTH_S,
+			0.0, 1.0)
+	if slip_angle <= CORNER_MAX_SLIP_ANGLE:
+		_corner_path_peak = maxf(_corner_path_peak, _corner_path)
 	if slip_angle > CORNER_MAX_SLIP_ANGLE:
 		_corner_slid = true
 	elif _corner_lat > _corner_peak:
@@ -1923,6 +2044,7 @@ func _report_cornering(skipped: bool) -> void:
 	print("  %-13s : peak %.2f m/s^2 (%.2f g) at %.0f km/h; %s saturates first"
 			% ["cornering", _corner_peak, _corner_peak / 9.81, _corner_speed * 3.6, axle]
 			+ " (front %.2f, rear %.2f)%s" % [_corner_front, _corner_rear, note])
+	print("  %-13s : path %.2f g at most (`acc_lat`)" % ["", _corner_path_peak / 9.81])
 	var model := BalanceModel.axles(_car.spec)
 	print(("  %-13s : roll %.1f deg at the peak (pred %.1f), front %s (pred %s) of the load transfer,"
 			+ " up to %d wheel(s)") % ["", _corner_roll,
@@ -1930,8 +2052,8 @@ func _report_cornering(skipped: bool) -> void:
 			_pct(BalanceModel.lltd(model)), _corner_lifted]
 			+ " off the ground%s" % ("  <-- OVERTURNED" if _car.is_overturned() else ""))
 	_current["cornering"] = {"skipped": false, "peak": _corner_peak, "speed_kmh": _corner_speed * 3.6,
-			"peak_g": _corner_peak / 9.81, "front": _corner_front, "rear": _corner_rear,
-			"axle": axle, "slid": _corner_slid, "roll_deg": _corner_roll, "lltd": _corner_lltd,
+			"peak_g": _corner_peak / 9.81, "path_g": _corner_path_peak / 9.81, "front": _corner_front,
+			"rear": _corner_rear, "axle": axle, "slid": _corner_slid, "roll_deg": _corner_roll, "lltd": _corner_lltd,
 			"wheels_lifted": _corner_lifted, "overturned": _car.is_overturned()}
 	_after_lateral_passes()
 
@@ -2053,9 +2175,9 @@ func _report_accel(capped: bool) -> void:
 			rake += w.suspension_force * w.contact_normal.dot(vdir)
 		normal_load += body_load
 		applied += VehicleMath.road_resistance(body.linear_velocity, bs.drag_area,
-				bs.rolling_resistance, body_load, body.mass, get_physics_process_delta_time()).length()
+				MeasureRig.crr(body), body_load, body.mass, get_physics_process_delta_time()).length()
 		declared += VehicleMath.aero_drag(body.linear_velocity.length(), bs.drag_area) \
-				+ VehicleMath.rolling_drag(bs.rolling_resistance, body.mass * 9.81)
+				+ VehicleMath.rolling_drag(MeasureRig.crr(body), body.mass * 9.81)
 	var net := tyre - applied + rake
 	var up_dot := rake / maxf(normal_load, 1.0)
 	print("  %-13s : tyres %.0f N - resistance %.0f N (declared %.0f) + rake %.0f N = %.0f N"
@@ -2090,7 +2212,7 @@ func _tick_coast() -> void:
 	for body in _rig_bodies():
 		var bs: GroundDriveSpec = body.spec.ground_drive
 		_coast_declared += VehicleMath.aero_drag(body.linear_velocity.length(), bs.drag_area) \
-				+ VehicleMath.rolling_drag(bs.rolling_resistance, body.mass * 9.81)
+				+ VehicleMath.rolling_drag(MeasureRig.crr(body), body.mass * 9.81)
 		for w in body.wheels:
 			_coast_tyres -= w.force_long
 	var dt: Drivetrain = _car.drivetrain
@@ -2163,13 +2285,17 @@ func _report_tracking(skipped: bool) -> void:
 				"drift_final": _drift_final, "track_dist": _track_dist, "heading_peak": _heading_peak,
 				"front_lift_ticks": _front_lift_ticks}
 	if _corner:
-		# Onto the pad: spawn_transform is what respawn() re-lays the body (and any trailer) on.
-		# Pad top is y=0, same as the strip.
-		_car.spawn_transform = Transform3D(Basis.IDENTITY, Vector3(PAD_X, _car.rest_ride_height(), 0.0))
-		_car.respawn()
-		_reset_pass(Phase.CORNERING)
+		_start_cornering()
 		return
 	_after_lateral_passes()
+
+
+## Onto the pad: spawn_transform is what respawn() re-lays the body (and any trailer) on. Pad top is
+## y=0, same as the strip.
+func _start_cornering() -> void:
+	_car.spawn_transform = Transform3D(Basis.IDENTITY, Vector3(PAD_X, _car.rest_ride_height(), 0.0))
+	_car.respawn()
+	_reset_pass(Phase.CORNERING)
 
 
 ## Tracking and the optional cornering pass are done: the braking pass if asked for, else the next
@@ -2188,7 +2314,7 @@ func _start_brake_run() -> void:
 			Vector3(0.0, _car.rest_ride_height(), START_Z))
 	_car.respawn()
 	_reset_pass(Phase.BRAKING)
-	_brake_target = BRAKE_SPEED if _top_seen <= 0.0 else minf(BRAKE_SPEED, 0.9 * _top_seen)
+	_brake_target = _brake_from if _top_seen <= 0.0 else minf(_brake_from, 0.9 * _top_seen)
 	MeasureRig.drive(100.0, 0.0)
 
 
@@ -2200,7 +2326,7 @@ func _tick_braking(delta: float) -> void:
 			_brake_on = true
 			_brake_v0 = v
 			_brake_x0 = _car.global_position
-			MeasureRig.drive(0.0, BRAKE_PEDALS[_brake_i] * 100.0)
+			MeasureRig.drive(0.0, _brake_pedals[_brake_i] * 100.0)
 		return
 	_brake_t += delta
 	var skidding := false
@@ -2218,7 +2344,7 @@ func _tick_braking(delta: float) -> void:
 	if absf(v) > BRAKE_STOP_SPEED and _brake_t < _seconds:
 		return
 	var dist := (_car.global_position - _brake_x0).length()
-	var row := {"pedal": BRAKE_PEDALS[_brake_i], "v0_kmh": _brake_v0 * 3.6, "t": _brake_t,
+	var row := {"pedal": _brake_pedals[_brake_i], "v0_kmh": _brake_v0 * 3.6, "t": _brake_t,
 			"dist": dist, "g": _brake_v0 / maxf(_brake_t, 1e-6) / 9.81, "skid_t": _brake_lock_t,
 			"abs_t": _brake_abs_t}
 	_brake_rows.append(row)
@@ -2226,7 +2352,7 @@ func _tick_braking(delta: float) -> void:
 			% ["braking", row["pedal"] * 100.0, row["v0_kmh"], row["t"], row["dist"], row["g"],
 			row["skid_t"], row["abs_t"]])
 	_brake_i += 1
-	if _brake_i < BRAKE_PEDALS.size():
+	if _brake_i < _brake_pedals.size():
 		_start_brake_run()
 		return
 	_current["braking"] = _brake_rows.duplicate(true)
@@ -2912,8 +3038,9 @@ func _load_course(strip: FieldStrip) -> void:
 		bands.append("%.0f-%.0f m" % [minf(a, b) - _co_row.x, maxf(a, b) - _co_row.x])
 	print("course: tractor_plough's Row %.0f-%.0f m ahead of its Spawn; light bands %s into it, Field"
 			% [_co_row.x, _co_row.y, ", ".join(bands)] + " %.2f (grip %.2f, drag %.3f), open diff"
-			% [strip.field, lerpf(FieldStrip.SAND_GRIP, FieldStrip.GRIP, strip.field),
-			lerpf(FieldStrip.SAND_DRAG, FieldStrip.DRAG, strip.field)])
+			% [strip.field,
+			lerpf(Surface.ref_grip(Surface.SAND), Surface.ref_grip(Surface.FIELD), strip.field),
+			lerpf(Surface.drag(Surface.SAND), Surface.drag(Surface.FIELD), strip.field)])
 
 
 ## The bridge stash for a course run: the linkage held at the run's `hitch_pos`.
@@ -3635,6 +3762,57 @@ func _steer_table() -> Array[String]:
 	return lines
 
 
+## The `tyres` region: per DOC_TYRES body, a row per class it fits, a cell per DOC_TYRE_SURFACES
+## surface: the full-pedal stop, the cornering pass's peak, the `tc` launch.
+func _tyres_table() -> Array[String]:
+	var lines := DocRegion.wrap(("%s (`measure_vehicles -- doc=tyres`; per run `-- <variant> %.0f"
+			+ " track corner brake tc tyre=<id> surface=<name>`). Each cell: the full-pedal stop from"
+			+ " %.0f km/h, the cornering pass's path g at %.0f km/h (`slid`: the body let go), the `tc`"
+			+ " 0-%.0f km/h time; `-` where the body never reached that speed in the cap.")
+			% [DocRegion.measured(), _seconds, TYRES_STOP_KMH, CORNER_SPEED * 3.6, TYRES_LAUNCH_KMH])
+	var head := "| Body | Tyre |"
+	var rule := "| --- | --- |"
+	for s in DOC_TYRE_SURFACES:
+		head += " %s |" % Surface.display_name(s)
+		rule += " --- |"
+	lines.append_array(["", head, rule])
+	var rows := {}  # "variant tyre" -> {surface -> entry}, in run order
+	for e in _sweep:
+		if e.has("tyre"):
+			var by_surface: Dictionary = rows.get_or_add("%s %s" % [e["variant"], e["tyre"]], {})
+			by_surface[e["surface"]] = e
+	var last := ""
+	for key: String in rows:
+		var by_surface: Dictionary = rows[key]
+		var first: Dictionary = by_surface.values()[0]
+		var cells: Array[String] = []
+		for s in DOC_TYRE_SURFACES:
+			cells.append(_tyre_cell(by_surface.get(s, {})))
+		var body := "`%s`" % first["variant"] if first["variant"] != last else ""
+		last = first["variant"]
+		lines.append("| %s | %s%s | %s |" % [body, first["tyre"], " (stock)" if first["stock"] else "",
+				" | ".join(cells)])
+	return lines
+
+
+## "14.2 m, 0.81 g, 1.95 s": one doc=tyres run.
+static func _tyre_cell(e: Dictionary) -> String:
+	if e.is_empty():
+		return "-"
+	var stops: Array = e.get("braking", [])
+	var stop := "-"
+	if not stops.is_empty():
+		var b: Dictionary = stops[0]
+		stop = "%.1f m" % float(b["dist"])
+		if float(b["v0_kmh"]) < TYRES_STOP_KMH - 1.0:
+			stop = "from %.0f km/h: %s" % [float(b["v0_kmh"]), stop]
+	var c: Dictionary = e.get("cornering", {})
+	var corner := "-" if c.is_empty() or c.get("skipped", false) \
+			else "%.2f g%s" % [c["path_g"], " slid" if c["slid"] else ""]
+	var t: float = e.get("launch_t", NAN)
+	return "%s, %s, %s" % [stop, corner, "-" if is_nan(t) else "%.2f s" % t]
+
+
 ## "1.42 deg/g at 0.21 g, 58 %": K and LLTD off the smallest held step at `kmh`.
 static func _k_cell(runs: Array, kmh: float) -> String:
 	for r: Dictionary in runs:
@@ -3723,8 +3901,8 @@ func _write_report() -> void:
 	var lines: Array[String] = []
 	lines.append("# Vehicle spec sweep — %s" % stamp)
 	lines.append("")
-	lines.append("Strip: %.0f x %.0f m flat, surface_grip 1.0, zero steer input, %.0f s cap per pass."
-			% [STRIP_WIDTH, STRIP_LENGTH, _seconds])
+	lines.append("Strip: %.0f x %.0f m flat, %s, zero steer input, %.0f s cap per pass."
+			% [STRIP_WIDTH, STRIP_LENGTH, _surface_label(), _seconds])
 	lines.append("Reference figures are real-world comparison numbers, not measured — see "
 			+ "`tools/vehicle_reference_specs.json`.")
 	lines.append("")
@@ -3738,7 +3916,11 @@ func _report_lines(e: Dictionary) -> Array[String]:
 	var lines: Array[String] = []
 	var ref: Dictionary = _reference.get(e["variant"], {})
 	var ref_label: String = ref.get("label", "no reference data for this variant")
-	lines.append("## %s (%s)" % [e["variant"], e["family"]])
+	var run := ""
+	if e.has("tyre"):
+		run = ", tyre %s on %s" % [e["tyre"], Surface.display_name(e["surface"])
+				if int(e["surface"]) >= 0 else "bare ground"]
+	lines.append("## %s (%s)%s" % [e["variant"], e["family"], run])
 	lines.append("")
 	if e.has("mass_label"):
 		lines.append("%s, %s" % [e["mass_label"], e["drive_label"]])

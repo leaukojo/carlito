@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="VehicleSpec" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="VehicleSpec" load_steps=5 format=3]
 
 ; Box / curtainside semi-trailer running gear. A VehicleSpec because RayWheel consumes one; the
 ; drivetrain / steering fields are meaningless on a towed body and stay at their defaults.
@@ -43,14 +43,19 @@
 ;     measured 2026-10-08, tools/measure_air_loss.tscn). It is a
 ;     quarter of this trailer's own service brake, the same load-apportioned fraction on all four.
 ;     With the tractor unit's spring brakes it holds the laden rig on UNECE R13's 18 % (measured:
-;     docs/vehicles.md, measure:park).
+;     docs/vehicle_measurements.md, measure:park).
 ;
 ; load_sensitivity 0.08 matches the towing unit. A trailer's axles carry LESS than their even static
 ; share once the plate takes its cut, so they sit below the reference and gain a few per cent of
 ; mu, the mirror image of what the drive axle loses.
 
+; TYRES: the TRAILER fit on the Trailer class, the reference row (tyres/trailer.tres), which a towed
+; body keeps (TowedBody). mu_long / mu_lat and rolling_resistance below are that class on dry
+; asphalt and a hard road.
+
 [ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
 [ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="2_grounddrive"]
+[ext_resource type="Resource" path="res://src/vehicles/tyres/trailer.tres" id="9_tyre"]
 
 ; DRAG AREA 0.60 m^2 IS A MARGINAL AREA, NOT THIS BODY'S FRONTAL AREA. The van is 1.86 x 1.6 above
 ; the deck (2.4 m^2) but runs in the tractor's wake, so it adds roughly a quarter of that. That
@@ -74,6 +79,8 @@ damper_rebound = 17650.0
 anti_roll_rate = 249000.0
 max_suspension_force = 110000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
+tyre = ExtResource("9_tyre")
+tyre_fit = 6
 mu_long = 0.8
 mu_lat = 0.75
 load_sensitivity = 0.08

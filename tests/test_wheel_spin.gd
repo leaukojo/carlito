@@ -1960,3 +1960,138 @@ func test_the_wheels_report_abs_and_overrun_slip_to_the_controller() -> void:
 	input.tcs_off = true
 	drive._report_to_controller(spec.ground_drive, input, dt)
 	assert_bool(dt.drag_control).is_false()
+
+
+# --- the fitted tyre: a class factor on the budget ----------------------------------------
+
+## A ground patch painting one surface everywhere, duck-typed as a terrain (`RayWheel.terrain_at`).
+class PaintedPatch extends Node:
+	var surface := Surface.ASPHALT
+
+	func contains_xz(_p: Vector3) -> bool:
+		return true
+
+	func height_at(_p: Vector3) -> float:
+		return 0.0
+
+	func grip_at(_p: Vector3, response: PackedFloat32Array) -> float:
+		return Surface.grip_in(response, surface)
+
+	func drag_at(_p: Vector3) -> float:
+		return 0.0
+
+
+## One wheel fitted with `fitted` on a `stock` spec (null, null: no class), on flat ground under a
+## frozen body, spun far past its grip peak so the force sits on the curve's tail whatever the
+## budget, and ticked once.
+func _spun_wheel(fitted: TyreClass, stock: TyreClass, terrains: Array[Node]) -> WheelScript:
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	_box(root, Vector3(4.0, 1.0, 4.0), Vector3(0.0, -0.5, 0.0))
+	var body := RigidBody3D.new()
+	body.freeze = true
+	body.collision_layer = 0
+	root.add_child(body)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var gd: GroundDriveSpecScript = GroundDriveSpecScript.new()
+	gd.wheel_radius = 0.36
+	gd.wheel_inertia = 1.0
+	gd.tyre_half_width = 0.1
+	gd.rest_length = 0.3
+	var w := WheelScript.new(Vector3(0.0, 0.6, 0.0), false, true, null, 300.0)
+	w.apply_suspension(gd)
+	w.apply_tyre(fitted, stock)
+	w.omega = 100.0
+	w.tick(body, gd, root.get_world_3d().direct_space_state, 0.0, 0.0, TICK, terrains)
+	return w
+
+
+## `dry` 1.2 and 1.5 on snow, over the reference.
+static func _fixture_tyre() -> TyreClass:
+	var cls := TyreClass.new()
+	cls.fits = [TyreClass.Fit.PASSENGER]
+	cls.dry = 1.2
+	cls.surface_grip = {"Snow": 1.5}
+	cls.crr_factor = 1.3
+	return cls
+
+
+func test_a_stock_fit_is_the_unfitted_tyre_bit_for_bit() -> void:
+	var stock := TyreCatalog.by_id("all_season")
+	var patch: PaintedPatch = auto_free(PaintedPatch.new())
+	patch.surface = Surface.SNOW
+	var bare: Array[Node] = []
+	var snow: Array[Node] = [patch]
+	for terrains: Array[Node] in [bare, snow]:
+		var unfitted: WheelScript = await _spun_wheel(null, null, terrains)
+		var fitted: WheelScript = await _spun_wheel(stock, stock, terrains)
+		assert_bool(fitted.in_contact).is_true()
+		assert_float(absf(fitted.force_long)).is_greater(0.0)
+		# Off asphalt the response is float32 (`tyre_grip`) and the bare table a double: equal to
+		# float32's resolution, bit for bit only where the figure is binary-exact (asphalt's 1).
+		var tol := 0.0 if terrains.is_empty() else 1e-6
+		assert_float(fitted.surface_grip).is_equal_approx(unfitted.surface_grip, tol)
+		assert_float(fitted.force_long).is_equal_approx(unfitted.force_long,
+				tol * absf(unfitted.force_long))
+	assert_float((await _spun_wheel(stock, stock, bare)).surface_grip).is_equal(1.0)
+
+
+func test_a_class_scales_the_budget_on_a_painted_surface_and_on_bare_ground() -> void:
+	var stock := TyreClass.new()
+	var cls := _fixture_tyre()
+	var patch: PaintedPatch = auto_free(PaintedPatch.new())
+	patch.surface = Surface.SNOW
+	var bare: Array[Node] = []
+	var snow: Array[Node] = [patch]
+	# On snow: the reference's snow grip, x the dry ratio, x the class's snow factor.
+	var ref_snow: WheelScript = await _spun_wheel(stock, stock, snow)
+	var on_snow: WheelScript = await _spun_wheel(cls, stock, snow)
+	var want := Surface.ref_grip(Surface.SNOW) * 1.2 * 1.5
+	assert_float(ref_snow.surface_grip).is_equal_approx(Surface.ref_grip(Surface.SNOW), 1e-6)
+	assert_float(on_snow.surface_grip).is_equal_approx(want, 1e-6)
+	assert_float(on_snow.force_long / ref_snow.force_long) \
+			.is_equal_approx(want / Surface.ref_grip(Surface.SNOW), 1e-5)
+	# No terrain under it: asphalt, the dry ratio alone.
+	var ref_bare: WheelScript = await _spun_wheel(stock, stock, bare)
+	var on_bare: WheelScript = await _spun_wheel(cls, stock, bare)
+	assert_float(on_bare.surface_grip).is_equal_approx(1.2, 1e-6)
+	assert_float(on_bare.force_long / ref_bare.force_long).is_equal_approx(1.2, 1e-5)
+
+
+func test_fitting_a_class_reaches_every_wheel_and_the_rolling_resistance() -> void:
+	var spec := _bench_spec(1200.0)
+	var gd := spec.ground_drive
+	gd.rolling_resistance = 0.012
+	gd.tyre = TyreClass.new()
+	gd.tyre.fits = [TyreClass.Fit.PASSENGER]
+	gd.tyre_fit = TyreClass.Fit.PASSENGER
+	var drive := _drive_for(spec)
+	assert_object(drive.tyre).is_same(gd.tyre)
+	assert_float(drive.rolling_resistance()).is_equal(0.012)
+	var cls := _fixture_tyre()
+	assert_bool(drive.fit_tyre(gd, cls)).is_true()
+	assert_object(drive.tyre).is_same(cls)
+	assert_float(drive.rolling_resistance()).is_equal_approx(0.012 * 1.3, 1e-9)
+	var want := Array(TyreClass.grip_response(cls, gd.tyre))
+	for w in drive.wheels:
+		assert_array(Array(w.tyre_grip)).is_equal(want)
+	# The gearbox's flat road reads it too: the spec's stock until the hill hold's tick hands it over.
+	var dt := Drivetrain.new(spec)
+	assert_float(dt.rolling_crr).is_equal(0.012)
+	var body: RigidBody3D = auto_free(RigidBody3D.new())
+	drive.hold_step(body, gd, VehicleInput.new(), dt, 0.0, TICK)
+	assert_float(dt.rolling_crr).is_equal(drive.rolling_resistance())
+	# A session choice, not state: a respawn keeps it.
+	drive.respawn()
+	assert_object(drive.tyre).is_same(cls)
+	for w in drive.wheels:
+		assert_array(Array(w.tyre_grip)).is_equal(want)
+	# A class not made in this fit, or none, reads as the stock.
+	var truck_only := TyreClass.new()
+	truck_only.fits = [TyreClass.Fit.TRUCK]
+	assert_bool(drive.fit_tyre(gd, truck_only)).is_false()
+	assert_object(drive.tyre).is_same(gd.tyre)
+	assert_float(drive.rolling_resistance()).is_equal(0.012)
+	assert_bool(drive.fit_tyre(gd, null)).is_false()
+	assert_object(drive.tyre).is_same(gd.tyre)

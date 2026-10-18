@@ -61,6 +61,8 @@ const DRIVELINE_FLAGS := ["rear_diff_lockable", "front_axle_engageable", "retard
 		"rear_twin_tyres"]
 ## Driven flags: must not default to false (missing key means baseline's answer).
 const DRIVEN_FLAGS := ["driven_front", "driven_rear"]
+## The stock tyre: its fit and its class id (`TyreCatalog`).
+const TYRE_KEYS := ["tyre_fit", "tyre"]
 
 ## Recipe-only keys: routing or derivation inputs.
 const META_KEYS := [
@@ -169,6 +171,19 @@ func test_driven_layout_matches_the_recipe() -> void:
 					.is_equal(bool(ov.get(flag, b[flag])))
 
 
+## The stock tyre is the recipe's: the variant's fit and class, else the baseline's.
+func test_the_tyre_is_the_recipes() -> void:
+	for variant: String in Gen.VARIANTS:
+		var ov: Dictionary = Gen.VARIANTS[variant]
+		var b := _baseline(variant)
+		var gd := _spec_of(variant).ground_drive
+		assert_int(gd.tyre_fit).override_failure_message("%s_spec.tres tyre_fit" % variant) \
+				.is_equal(int(ov.get("tyre_fit", b["tyre_fit"])))
+		assert_object(gd.tyre).override_failure_message("%s_spec.tres tyre" % variant).is_not_null()
+		assert_str(gd.tyre.id).override_failure_message("%s_spec.tres tyre" % variant) \
+				.is_equal(String(ov.get("tyre", b["tyre"])))
+
+
 func test_overridable_scalars_match_the_recipe() -> void:
 	for variant: String in Gen.VARIANTS:
 		_assert_scalars(variant, _spec_of(variant), SPEC_OVERRIDABLE, true)
@@ -188,6 +203,7 @@ func test_no_variant_overrides_a_baseline_only_field() -> void:
 	honoured.append_array(DRIVE_OVERRIDABLE.values())
 	honoured.append_array(DRIVELINE_FLAGS)
 	honoured.append_array(DRIVEN_FLAGS)
+	honoured.append_array(TYRE_KEYS)
 	for variant: String in Gen.VARIANTS:
 		for key: String in Gen.VARIANTS[variant]:
 			assert_bool(honoured.has(key)) \

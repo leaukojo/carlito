@@ -13,7 +13,7 @@ const SHARE_DEPTH_M := 0.25
 
 ## Mass (kg) of the class drawn: four 14" bodies (0.356 m across a 1.42 m cut, 0.85 m interbody
 ## clearance) on a Cat 2 headstock, the Kverneland AD Variomat 85's 4-furrow at 80-100 hp:
-## sourced. Citations: docs/vehicles.md § Sourced figures.
+## sourced. Citations: docs/sources.md.
 const MASS_KG := 900.0
 
 ## Centre of mass in this frame: the area-weighted centroid of the scene's meshes (sheet and tube
@@ -31,7 +31,7 @@ const SUPPORT := Vector3(-1.488, -0.21, 3.42)
 ## ASABE D497.7's mouldboard row, N per m width per cm depth with S in km/h: A 652, B 0, C 5.1
 ## (EcoTIM, arXiv 2604.17991, quoting D497.7: secondary). Its field speed range is 5-10 km/h,
 ## typical 7 (U. Arizona's machinery-management Table 3: sourced); held above 10. Citations:
-## docs/vehicles.md § Sourced figures.
+## docs/sources.md.
 const DRAFT_SHAPE := Vector4(652.0, 0.0, 5.1, 10.0)
 
 ## Pull at 7 km/h, full depth, full soil: D497 for the drawn 1.42 m cut at its drawn 25 cm (a 14"

@@ -13,11 +13,12 @@ Rules: `src/vehicles/CLAUDE.md` (+ the family's nested file). Steps:
    hand-authored collision survives.
 3. Run the suite (`test_vehicle_catalog`, `test_kenney_variants` / `test_boat_variants`, the
    family's tests). A failing derived-value test is fixed in the recipe, not the spec.
-4. Re-measure the changed variant (`docs/vehicles.md` § Measure-tool run lines): `measure_vehicles` for
+4. Re-measure the changed variant (`docs/vehicle_measurements.md` § Measure-tool run lines):
+   `measure_vehicles` for
    accel/top speed, `track` for straight-line, `corner` for an anti-roll change, `measure_grade`
    / `measure_rough` for a diff or traction change. Hand `all` / `baseline` sweeps to the user.
-5. A figure in `docs/vehicles.md` / `docs/heavy_vehicles.md` that moved gets the new value and
-   date.
+5. A hand-written figure in `docs/vehicles.md` / `docs/drivetrain.md` / `docs/heavy_vehicles.md`
+   that moved gets the new value and date; a generated table is re-run (`doc=<id>`).
 6. Ask the user to drive-test, one vehicle per checklist: vehicle, level, what to try, what
    should feel different. Not after each tweak: finish the change first. Changes to different
    vehicles can share one request; changes to the same vehicle cannot (they interact).

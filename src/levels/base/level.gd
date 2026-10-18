@@ -391,11 +391,27 @@ func _process(_delta: float) -> void:
 
 ## First VehicleSpawn accepting `family`; null if none.
 func pick_spawn(family: String) -> VehicleSpawn:
+	var spawns := spawns_for(family)
+	return spawns[0] if not spawns.is_empty() else null
+
+
+## Every VehicleSpawn accepting `family`, in tree order: the first is the default.
+func spawns_for(family: String) -> Array[VehicleSpawn]:
+	var out: Array[VehicleSpawn] = []
 	for node in find_children("*", "VehicleSpawn", true, false):
 		var spawn := node as VehicleSpawn
 		if spawn != null and spawn.accepts(family):
-			return spawn
-	return null
+			out.append(spawn)
+	return out
+
+
+## Moves the current body to `spawn` and makes it the respawn point, keeping the body itself (its
+## trailer and fitted tyre included).
+func respawn_at(spawn: VehicleSpawn) -> void:
+	if vehicle == null or spawn == null:
+		return
+	vehicle.spawn_transform = _rest_transform(vehicle, spawn.global_transform)
+	vehicle.respawn()
 
 
 ## First closed rail loop here (RailTrack.find_closed_rail is the one shared walk); null if none.

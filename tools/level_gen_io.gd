@@ -35,6 +35,11 @@ static func save_text(path: String, text: String) -> void:
 	f.store_string(text)
 
 
+## `HeightmapTerrain.channel_surface`'s value as `.tscn` text: `Surface` ids, comma-joined.
+static func surface_list(surfaces: Array[int]) -> String:
+	return ", ".join(PackedStringArray(surfaces.map(func(s: int) -> String: return str(s))))
+
+
 ## The level's LevelInfo `.tres`. `load_steps` stamps the header's (ignored, but committed)
 ## `load_steps=2`.
 static func info_text(title: String, allowed: PackedStringArray, default_vehicle: String,

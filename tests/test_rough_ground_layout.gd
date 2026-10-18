@@ -16,30 +16,35 @@ func test_patches_are_disjoint_and_in_driving_order() -> void:
 
 
 func test_ditch_samples_on_the_grid_as_the_header_states() -> void:
-	# Integer z rows through the 50 cm ditch: [0, d/3, d, d/3, 0].
-	var i := _ditch("ditch_50")
+	# Integer z rows through the 60 cm ditch: [0, d/3, d, d/3, 0].
+	var i := _ditch("ditch_60")
 	var z0 := Layout.patch_start_z(i)
 	var got: Array[float] = []
 	for k in 5:
 		got.append(Layout.relief(i, 0.0, z0 - float(k)))
-	var want: Array[float] = [0.0, -0.5 / 3.0, -0.5, -0.5 / 3.0, 0.0]
+	var want: Array[float] = [0.0, -0.6 / 3.0, -0.6, -0.6 / 3.0, 0.0]
 	for k in 5:
 		assert_float(got[k]).is_equal_approx(want[k], 1e-6)
 
 
-func test_fifty_cm_inner_wall_is_above_the_mud_ceiling_and_thirty_five_is_under() -> void:
-	# The mud ceiling for a perfect all-wheel drive: atan(grip 0.5 - added crr 0.2).
-	var ceiling := rad_to_deg(atan(0.5 - 0.2))
-	for pair: Array in [["ditch_50", true], ["ditch_35", false]]:
-		var i := _ditch(String(pair[0]))
-		var z0 := Layout.patch_start_z(i)
-		# The inner segment, row 1 to row 2 (the centre line).
-		var drop := Layout.relief(i, 0.0, z0 - 1.0) - Layout.relief(i, 0.0, z0 - 2.0)
-		var wall := rad_to_deg(atan(drop))
-		if bool(pair[1]):
-			assert_float(wall).is_greater(ceiling)
-		else:
-			assert_float(wall).is_less(ceiling)
+func test_thirty_five_cm_inner_wall_is_under_the_mud_ceiling() -> void:
+	# The mud ceiling for a perfect all-wheel drive on the reference tyre: atan(grip - added crr).
+	var ceiling := rad_to_deg(atan(Surface.ref_grip(Surface.MUD) - Surface.drag(Surface.MUD)))
+	var i := _ditch("ditch_35")
+	var z0 := Layout.patch_start_z(i)
+	# The inner segment, row 1 to row 2 (the centre line).
+	var drop := Layout.relief(i, 0.0, z0 - 1.0) - Layout.relief(i, 0.0, z0 - 2.0)
+	assert_float(rad_to_deg(atan(drop))).is_less(ceiling)
+
+
+func test_sixty_cm_inner_wall_is_over_the_mud_ceiling() -> void:
+	# The mud lane ends on a traction-limited ditch: its inner wall is steeper than the reference
+	# tyre's mud ceiling.
+	var ceiling := rad_to_deg(atan(Surface.ref_grip(Surface.MUD) - Surface.drag(Surface.MUD)))
+	var i := _ditch("ditch_60")
+	var z0 := Layout.patch_start_z(i)
+	var drop := Layout.relief(i, 0.0, z0 - 1.0) - Layout.relief(i, 0.0, z0 - 2.0)
+	assert_float(rad_to_deg(atan(drop))).is_greater(ceiling)
 
 
 func test_bump_fields_fade_to_nothing_at_their_ends() -> void:

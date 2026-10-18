@@ -1,7 +1,7 @@
 # Levels & water — rules
 
 - **Auto-splat on level 1 wipes hand paint.** It reclassifies channels 0..3 and zeroes
-  `splatmap2` on purpose, so it wipes Field (the tractor's "in soil" channel 4), Mud, Gravel and
+  `splatmap2` on purpose, so it wipes Field (`Surface.FIELD`, the tractor's soil), Mud, Gravel and
   the road asphalt. The recovery is to replay the level's chain.
 - **A level's generator chain is a committed manifest**, `src/levels/**/<id>_gen.json`, the ONE
   copy: a generator edit moves it in the same commit. Replay with

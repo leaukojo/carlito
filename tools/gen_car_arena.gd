@@ -16,16 +16,18 @@ extends Node
 ##   along, L L R, so the outside of every corner and both sides of every straight are a cliff.
 ##   No course uses it. The ridge is stamped from the road's own curve, so it moves with it.
 ## - CAUSEWAY, south: a gravel S across a lagoon carved below the sea (Car 5).
-## - ICE, south-east: a run-up and one bend with the Ice channel painted under its deck (Car 15).
+## - WET, south-east: a run-up and one bend with the Wet channel painted under its deck (Car 15).
 ## - APRON, north-west: a painted asphalt rectangle, no road (Car 11).
+## - PAD: the tyre pad, no course: asphalt, wet and snow strips between STRIP and WINDING, and a
+##   half-asphalt, half-snow skidpad inside the CORNERS U, each with its own VehicleSpawn.
 ##
 ## `-- courses` writes the courses only, so it never re-stales the bake. Zones are placed by
 ## distance along the SAVED curves, so a course cannot sit off its road. The briefings in
 ## src/challenges/defs/car_*.tres quote STRIP_START_X, START_UP_SPAWN_X, START_UP_FINISH_X,
 ## BOX_GATE_X, BOX_GATE_TO_BOX, BOX_LENGTH, BOX_WIDTH, TRAP_FROM_X, TRAP_TO_X, SIGNAL_LENGTH,
 ## WINDING_R, the CORNER_TURNS order, BAY_WIDTH, BAY_LENGTH, BAY_HEADING, the bay's printed
-## lat/lon, ICE_R and ICE_SWEEP: move one, edit the briefing (and re-measure the par of Car 7 for
-## START_UP_SPAWN_X / START_UP_FINISH_X, of Car 14 for WINDING_R, of Car 15 for the ice road).
+## lat/lon, WET_R and WET_SWEEP: move one, edit the briefing (and re-measure the par of Car 7 for
+## START_UP_SPAWN_X / START_UP_FINISH_X, of Car 14 for WINDING_R, of Car 15 for the wet road).
 
 const DIR := "res://src/levels/island/car_arena"
 const COURSE_DIR := DIR + "/courses"
@@ -70,7 +72,8 @@ const MIN_RADIUS := 12.0       ## the scaffold fails on a tighter corner
 
 const RIDGE_ROAD := "car_arena_ridge_curve.tres"
 const CAUSEWAY_ROAD := "car_arena_causeway_curve.tres"
-const ICE_ROAD := "car_arena_ice_curve.tres"
+## The file, its `IceRoad` node and the course keep the challenge id `car_ice_patch`.
+const WET_ROAD := "car_arena_ice_curve.tres"
 
 const STRIP_START_X := -160.0
 const STRIP_LENGTH := 320.0
@@ -126,13 +129,13 @@ const CAUSEWAY_R := 70.0
 const CAUSEWAY_SWEEPS: Array[float] = [25.0, -50.0, 25.0]
 const CAUSEWAY_FALLOFF := 4.0
 
-## The ice road: a run-up long enough to reach ~45 km/h in D1, then the iced bend.
-const ICE_START := Vector2(95.0, 106.0)
-const ICE_HEADING := 20.0
-const ICE_RUN_UP := 45.0
-const ICE_R := 35.0
-const ICE_SWEEP := 70.0
-const ICE_EXIT := 20.0
+## The wet road: a run-up long enough to reach ~45 km/h in D1, then the wet bend.
+const WET_START := Vector2(95.0, 106.0)
+const WET_HEADING := 20.0
+const WET_RUN_UP := 45.0
+const WET_R := 35.0
+const WET_SWEEP := 70.0
+const WET_EXIT := 20.0
 
 ## Car 11's parking apron, world X/Z.
 const APRON := Rect2(-145.0, -87.0, 40.0, 30.0)
@@ -143,17 +146,37 @@ const ROAD_GAP := 4.0
 const CHECK_STEP := 2.0
 
 # --- splat -----------------------------------------------------------------------------------------
-## Channel 4 is Ice, painted only under the ice road's bend: invisible, `slip` is the warning.
-const ICE_CHANNEL := 4
-## Between catalogue 15's 0.6 (a clear slip spike, still controllable) and its 0.5 (spins the
-## car out). At 0.55 Car 15 has no par window (catalogue 15), which is why it is unregistered.
-const ICE_GRIP := 0.55
-const CHANNEL_NAMES: Array[String] = [
-	"Grass", "Dirt", "Sand", "Rock", "Ice", "Mud", "Asphalt", "Gravel",
+## Channel 4 is Wet (`Surface.WET`; its 0.55: `docs/systems.md` § Level framework): under the wet
+## road's bend, invisible there (`slip` is the warning), and on the pad's wet strip. Channel 5 is
+## Snow, painted only on the pad.
+const WET_CHANNEL := 4
+const SNOW_CHANNEL := 5
+const CHANNEL_SURFACE: Array[int] = [
+	Surface.GRASS, Surface.DIRT, Surface.SAND, Surface.ROCK,
+	Surface.WET, Surface.SNOW, Surface.ASPHALT, Surface.GRAVEL,
 ]
-const CHANNEL_GRIP: Array[float] = [0.8, 0.7, 0.6, 0.7, ICE_GRIP, 0.5, 1.0, 0.85]
-## Added rolling resistance (HeightmapTerrain.channel_drag); ice is slick AND free-rolling.
-const CHANNEL_DRAG: Array[float] = [0.06, 0.03, 0.1, 0.01, 0.0, 0.2, 0.0, 0.02]
+
+# --- the tyre pad ---------------------------------------------------------------------------
+## Three parallel strips on the grass between the strip road and the winding road, one surface
+## each, west to east: long enough for a summer tyre to reach 50 km/h on snow (~0.24 g, ~41 m)
+## and stop again (31.9 m, `docs/vehicle_measurements.md` § Tyre classes by surface). Paint only,
+## round-ended, no deck.
+const PAD_FROM_X := -145.0
+const PAD_TO_X := 5.0
+const PAD_HALF := 3.5
+## Strip name -> centre z and channel (6 is the asphalt profile's).
+const PAD_STRIPS: Array[Dictionary] = [
+	{"name": "PadAsphalt", "z": 14.0, "channel": 6},
+	{"name": "PadWet", "z": 23.0, "channel": WET_CHANNEL},
+	{"name": "PadSnow", "z": 32.0, "channel": SNOW_CHANNEL},
+]
+## A strip's spawn this far in from its west end, facing east.
+const PAD_SPAWN_IN := 5.0
+## The skidpad, inside the corners road's U: a disc, asphalt north of its centre, snow south.
+const SKIDPAD_C := Vector2(-25.0, -72.0)
+const SKIDPAD_R := 25.0
+## Its spawn on the north (asphalt) side of a circle this big, facing east: clockwise round it.
+const SKIDPAD_SPAWN_R := 18.0
 
 # --- courses -----------------------------------------------------------------------------------------
 ## Every course zone is a box this tall, its base 1 m under the deck: it holds the body origin and
@@ -192,7 +215,7 @@ const CORNER_ZONE_WIDTH := 24.0
 const FINISH_BEFORE_END := 15.0
 ## A fall volume's top sits this far under the deck it guards, so no body on the deck is in it.
 const FALL_BELOW := 2.0
-## Car 15: the spawn this far along the ice road, so none of the run-up is lost behind it.
+## Car 15: the spawn this far along the wet road, so none of the run-up is lost behind it.
 const RUN_UP_SPAWN := 4.0
 ## Car 11: the bay on the apron's north edge, open to the south; the car spawns in the aisle
 ## BAY_AISLE south of the bay's mouth, at the apron's west end, facing east.
@@ -361,12 +384,12 @@ func _causeway() -> Turtle:
 	return t
 
 
-## Marks `ice_*` on the iced bend.
-func _ice() -> Turtle:
-	var t := Turtle.new(Vector3(ICE_START.x, Y_PLATEAU, ICE_START.y), ICE_HEADING)
-	t.straight(ICE_RUN_UP)
-	t.arc(ICE_R, ICE_SWEEP, "ice")
-	t.straight(ICE_EXIT)
+## Marks `wet_*` on the wet bend.
+func _wet() -> Turtle:
+	var t := Turtle.new(Vector3(WET_START.x, Y_PLATEAU, WET_START.y), WET_HEADING)
+	t.straight(WET_RUN_UP)
+	t.arc(WET_R, WET_SWEEP, "wet")
+	t.straight(WET_EXIT)
 	return t
 
 
@@ -378,7 +401,7 @@ func _roads() -> Dictionary[String, Turtle]:
 		"car_arena_winding_curve.tres": _winding(),
 		RIDGE_ROAD: _ridge(),
 		CAUSEWAY_ROAD: _causeway(),
-		ICE_ROAD: _ice(),
+		WET_ROAD: _wet(),
 	}
 
 
@@ -449,6 +472,7 @@ func _scaffold() -> int:
 	ok = _stamp_ridge(heights, ridge) and ok
 	_conform(heights, roads[RIDGE_ROAD].curve(), profiles[RIDGE_ROAD], _falloff(RIDGE_ROAD))
 	ok = _check_clearance(roads, profiles, ridge) and ok
+	ok = _check_pad(roads, profiles, ridge) and ok
 	if not ok:
 		return 1
 
@@ -458,8 +482,12 @@ func _scaffold() -> int:
 	splat2.fill(Color(0, 0, 0, 0))
 	for file_name in roads:
 		_paint_road_splat(splat, splat2, roads[file_name].curve(), profiles[file_name])
-	_paint_ice(splat, splat2, roads[ICE_ROAD], profiles[ICE_ROAD])
+	_paint_wet(splat, splat2, roads[WET_ROAD], profiles[WET_ROAD])
 	_paint_apron(splat, splat2, asphalt.get("splat_channel"))
+	if int(asphalt.get("splat_channel")) != int(PAD_STRIPS[0]["channel"]):
+		printerr("[car-arena] the pad's asphalt strip is not the asphalt profile's channel")
+		return 1
+	_paint_pad(splat, splat2)
 
 	if not GenIO.write_png(heights, "%s/car_arena_island_height.png" % DIR, LOG_TAG):
 		return 1
@@ -590,6 +618,64 @@ func _check_clearance(roads: Dictionary[String, Turtle], profiles: Dictionary[St
 	return ok
 
 
+## Every pad piece (a strip's centre segment, the skidpad's centre) its own half-width plus
+## ROAD_GAP clear of every road's full width, of the corner course's zones, of Car 14's grass
+## islands, of the ridge, lagoon and apron, and of the strip's gate and finish zones; and on the
+## plateau, since nothing flattens under it.
+func _check_pad(roads: Dictionary[String, Turtle], profiles: Dictionary[String, Resource],
+		ridge: RidgeShape) -> bool:
+	var pieces: Dictionary[String, PackedVector2Array] = {}
+	var halves: Dictionary[String, float] = {}
+	for strip: Dictionary in PAD_STRIPS:
+		var piece := PackedVector2Array()
+		var x := PAD_FROM_X
+		while x < PAD_TO_X:
+			piece.append(Vector2(x, float(strip["z"])))
+			x += CHECK_STEP
+		piece.append(Vector2(PAD_TO_X, float(strip["z"])))
+		pieces[String(strip["name"])] = piece
+		halves[String(strip["name"])] = PAD_HALF
+	pieces["Skidpad"] = PackedVector2Array([SKIDPAD_C])
+	halves["Skidpad"] = SKIDPAD_R
+	var winding := roads["car_arena_winding_curve.tres"]
+	var island_r := WINDING_R - _paved_width() * 0.5 - WINDING_ISLAND_MARGIN
+	var ok := true
+	for piece_name in pieces:
+		var half := halves[piece_name]
+		for file_name in roads:
+			var curve := roads[file_name].curve()
+			var reach := float(profiles[file_name].call("full_half_width"))
+			if file_name == "car_arena_corners_curve.tres":
+				reach = maxf(reach, CORNER_ZONE_WIDTH * 0.5)
+			var need := reach + half + ROAD_GAP
+			if _min_gap(pieces[piece_name], _samples_xz(curve, 0.0, curve.get_baked_length(),
+					CHECK_STEP)) < need:
+				printerr("[car-arena] the pad's %s comes within %.0f m of %s" % [piece_name, need,
+						file_name])
+				ok = false
+		var near := {"Car 14's islands": false, "the ridge": false, "the lagoon": false,
+				"the apron": false, "the strip's zones": false, "the plateau's edge": false}
+		for p in pieces[piece_name]:
+			for i in WINDING_SWEEPS.size():
+				var c := _xz(winding.marks["w%d_c" % i])
+				near["Car 14's islands"] = near["Car 14's islands"] \
+						or p.distance_to(c) < island_r + half + ROAD_GAP
+			near["the ridge"] = near["the ridge"] or ridge.sd(p) < CLIFF_RUN + half + ROAD_GAP
+			near["the lagoon"] = near["the lagoon"] or _lagoon_sd(p) < half + ROAD_GAP
+			near["the apron"] = near["the apron"] or APRON.grow(half + ROAD_GAP).has_point(p)
+			near["the strip's zones"] = near["the strip's zones"] \
+					or (absf(p.y) - half < STRIP_ZONE_WIDTH * 0.5 + ROAD_GAP
+					and p.x + half + ROAD_GAP > BOX_GATE_X - 0.25)
+			near["the plateau's edge"] = near["the plateau's edge"] \
+					or p.length() + half > PLATEAU_R
+		for feature: String in near:
+			if near[feature]:
+				printerr("[car-arena] the pad's %s comes within %.0f m of %s" % [piece_name,
+						ROAD_GAP, feature])
+				ok = false
+	return ok
+
+
 func _min_gap(a: PackedVector2Array, b: PackedVector2Array) -> float:
 	var best := INF
 	for p in a:
@@ -699,16 +785,16 @@ func _stamp_ridge(heights: Image, ridge: RidgeShape) -> bool:
 # ============================================================================= paint on top
 
 
-## The Ice channel under the ice road's bend only, at the road paint's inset paved width, so the
+## The Wet channel under the wet road's bend only, at the road paint's inset paved width, so the
 ## deck hides it. Samples dense enough that the centreline sweep alone covers the strip.
-func _paint_ice(splat: Image, splat2: Image, ice: Turtle, profile: Resource) -> void:
-	var curve := ice.curve()
+func _paint_wet(splat: Image, splat2: Image, wet: Turtle, profile: Resource) -> void:
+	var curve := wet.curve()
 	var pw: float = float(profile.call("paved_half_width")) - SPLAT_PAINT_INSET
-	var samples := _samples_xz(curve, curve.get_closest_offset(ice.marks["ice_in"]),
-			curve.get_closest_offset(ice.marks["ice_out"]), 0.5)
+	var samples := _samples_xz(curve, curve.get_closest_offset(wet.marks["wet_in"]),
+			curve.get_closest_offset(wet.marks["wet_out"]), 0.5)
 	var images: Array[Image] = [splat, splat2]
 	var units: Array[Color] = [
-		BrushOps.unit_slice(ICE_CHANNEL, 0), BrushOps.unit_slice(ICE_CHANNEL, 1),
+		BrushOps.unit_slice(WET_CHANNEL, 0), BrushOps.unit_slice(WET_CHANNEL, 1),
 	]
 	SplatPaint.paint_strip(images, units, samples, pw, SIZE, SIZE)
 
@@ -717,6 +803,30 @@ func _paint_ice(splat: Image, splat2: Image, ice: Turtle, profile: Resource) -> 
 func _paint_apron(splat: Image, splat2: Image, channel: int) -> void:
 	for pz in range(_px_z(APRON.position.y), _px_z(APRON.end.y) + 1):
 		for px in range(_px_x(APRON.position.x), _px_x(APRON.end.x) + 1):
+			splat.set_pixel(px, pz, BrushOps.unit_slice(channel, 0))
+			splat2.set_pixel(px, pz, BrushOps.unit_slice(channel, 1))
+
+
+## The tyre pad: each strip pure on every pixel within PAD_HALF of its centre segment (hard edge,
+## round ends), then the skidpad disc, split on the line through its centre.
+func _paint_pad(splat: Image, splat2: Image) -> void:
+	var images: Array[Image] = [splat, splat2]
+	for strip: Dictionary in PAD_STRIPS:
+		var channel := int(strip["channel"])
+		var units: Array[Color] = [
+			BrushOps.unit_slice(channel, 0), BrushOps.unit_slice(channel, 1),
+		]
+		var z := float(strip["z"])
+		SplatPaint.paint_strip(images, units,
+				PackedVector2Array([Vector2(PAD_FROM_X, z), Vector2(PAD_TO_X, z)]), PAD_HALF,
+				SIZE, SIZE)
+	for pz in range(_px_z(SKIDPAD_C.y - SKIDPAD_R), _px_z(SKIDPAD_C.y + SKIDPAD_R) + 1):
+		for px in range(_px_x(SKIDPAD_C.x - SKIDPAD_R), _px_x(SKIDPAD_C.x + SKIDPAD_R) + 1):
+			var w := Vector2(_world_x(px), _world_z(pz))
+			if w.distance_to(SKIDPAD_C) > SKIDPAD_R:
+				continue
+			# North is -Z: the asphalt half.
+			var channel := int(PAD_STRIPS[0]["channel"]) if w.y < SKIDPAD_C.y else SNOW_CHANNEL
 			splat.set_pixel(px, pz, BrushOps.unit_slice(channel, 0))
 			splat2.set_pixel(px, pz, BrushOps.unit_slice(channel, 1))
 
@@ -758,7 +868,7 @@ func _courses() -> int:
 		"car_speed_trap": _speed_trap(strip),
 		"car_lights": _lights(curves[CAUSEWAY_ROAD]),
 		"car_reverse_park": _reverse_park(),
-		"car_ice_patch": _ice_patch(curves[ICE_ROAD]),
+		"car_ice_patch": _ice_patch(curves[WET_ROAD]),
 	}
 	# All or none: a course that failed to build leaves the others unwritten too.
 	if built.values().has(null):
@@ -922,16 +1032,16 @@ func _reverse_park() -> Node3D:
 	return root
 
 
-## Car 15: the ice road end to end. Nothing marks the iced bend.
-func _ice_patch(ice: Curve3D) -> Node3D:
+## Car 15: the wet road end to end. Nothing marks the wet bend.
+func _ice_patch(road: Curve3D) -> Node3D:
 	var root := _course_root("CarIcePatchCourse")
 	var mats := _materials()
-	_spawn(root, ice, RUN_UP_SPAWN)
-	var at := ice.get_baked_length() - FINISH_BEFORE_END
-	_zone(root, "Finish", ice, at - 0.5, at + 0.5, _paved_width())
+	_spawn(root, road, RUN_UP_SPAWN)
+	var at := road.get_baked_length() - FINISH_BEFORE_END
+	_zone(root, "Finish", road, at - 0.5, at + 0.5, _paved_width())
 	var markers := _markers(root)
-	_line(markers, ice, at, 1.0, mats["white"], "FinishLine")
-	_posts(markers, ice, at, mats["dark"], "Finish")
+	_line(markers, road, at, 1.0, mats["white"], "FinishLine")
+	_posts(markers, road, at, mats["dark"], "Finish")
 	return root
 
 
@@ -1186,8 +1296,8 @@ shader_parameter/grass_color = Color(0.35, 0.55, 0.25, 1)
 shader_parameter/dirt_color = Color(0.52, 0.4, 0.26, 1)
 shader_parameter/sand_color = Color(0.83, 0.76, 0.55, 1)
 shader_parameter/rock_color = Color(0.45, 0.44, 0.42, 1)
-shader_parameter/color5 = Color(0.92, 0.94, 0.97, 1)
-shader_parameter/color6 = Color(0.3, 0.24, 0.17, 1)
+shader_parameter/color5 = Color(0.12, 0.13, 0.15, 1)
+shader_parameter/color6 = Color(0.92, 0.94, 0.97, 1)
 shader_parameter/color7 = Color(0.22, 0.22, 0.24, 1)
 shader_parameter/color8 = Color(0.62, 0.6, 0.56, 1)
 shader_parameter/splatmap = ExtResource("7_splat")
@@ -1217,7 +1327,7 @@ script = ExtResource("3_cam")
 transform = {spawn}
 script = ExtResource("4_spawn")
 vehicle_types = PackedStringArray("car")
-
+{pad_spawns}
 [node name="Sea" type="Area3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, {sea_y}, 0)
 script = ExtResource("9_water")
@@ -1250,9 +1360,7 @@ coast_roughness = {coast_roughness}
 terrace_levels = {terrace_levels}
 splatmap = ExtResource("7_splat")
 splatmap2 = ExtResource("17_splat2")
-channel_names = PackedStringArray({channel_names})
-channel_grip = PackedFloat32Array({channel_grip})
-channel_drag = PackedFloat32Array({channel_drag})
+channel_surface = PackedInt32Array({channel_surface})
 sand_height = {sand_height}
 dirt_slope_deg = 22.0
 rock_slope_deg = 38.0
@@ -1267,13 +1375,31 @@ metadata/_custom_type_script = "uid://t88htpmwukbg"
 		"seed": GEN_SEED, "feature_scale": FEATURE_SCALE, "octaves": OCTAVES,
 		"falloff_start": FALLOFF_START, "falloff_end": FALLOFF_END,
 		"coast_roughness": COAST_ROUGHNESS, "terrace_levels": TERRACE_LEVELS,
-		"channel_names": '"%s"' % '", "'.join(CHANNEL_NAMES),
-		"channel_grip": ", ".join(PackedStringArray(
-				CHANNEL_GRIP.map(func(g: float) -> String: return str(g)))),
-		"channel_drag": ", ".join(PackedStringArray(
-				CHANNEL_DRAG.map(func(g: float) -> String: return str(g)))),
-		"spawn": var_to_str(spawn),
+		"channel_surface": GenIO.surface_list(CHANNEL_SURFACE),
+		"spawn": var_to_str(spawn), "pad_spawns": _pad_spawns_text(),
 	}) + _road_nodes_text()
+
+
+## One VehicleSpawn per pad strip and the skidpad, after the level's own `Spawn` so that one
+## stays the default (`Level.pick_spawn`); the pause menu's SPAWN POINT page reaches them.
+func _pad_spawns_text() -> String:
+	var poses: Dictionary[String, Transform3D] = {}
+	for strip: Dictionary in PAD_STRIPS:
+		poses[String(strip["name"])] = _pose(Vector3(PAD_FROM_X + PAD_SPAWN_IN, Y_PLATEAU,
+				float(strip["z"])), 90.0)
+	poses["Skidpad"] = _pose(Vector3(SKIDPAD_C.x, Y_PLATEAU, SKIDPAD_C.y - SKIDPAD_SPAWN_R), 90.0)
+	var text := ""
+	for node_name in poses:
+		var f := poses[node_name]
+		var xform := Transform3D(Basis(-f.basis.x, Vector3.UP, -f.basis.z),
+				f.origin + Vector3.UP * SPAWN_CLEARANCE)
+		text += """
+[node name="%s" type="Marker3D" parent="."]
+transform = %s
+script = ExtResource("4_spawn")
+vehicle_types = PackedStringArray("car")
+""" % [node_name, var_to_str(xform)]
+	return text
 
 
 ## One RoadPath per road in _roads(), in its order, carrying the profile and falloff the scaffold
@@ -1285,7 +1411,7 @@ func _road_nodes_text() -> String:
 		"car_arena_winding_curve.tres": ["Winding", "16_winding"],
 		RIDGE_ROAD: ["Ridge", "19_ridge"],
 		CAUSEWAY_ROAD: ["Causeway", "20_causeway"],
-		ICE_ROAD: ["IceRoad", "21_ice"],
+		WET_ROAD: ["IceRoad", "21_ice"],
 	}
 	var profile_ids := {ASPHALT_PROFILE: "13_asphalt", CAUSEWAY_PROFILE: "22_gravel"}
 	var text := ""

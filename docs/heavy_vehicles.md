@@ -2,7 +2,7 @@
 
 Truck, trailer and tractor each publish a second machine's state on a second network: J1939
 (truck chassis + CANopen body network across a gateway), ISO 11992 (trailer bus), ISOBUS/ISO
-11783 (implement bus). The other four families: `docs/vehicles.md`; shared
+11783 (implement bus). The framework and the other families: `docs/vehicles.md`; shared
 framework/plumbing: `docs/systems.md`. Rules: `src/vehicles/truck/CLAUDE.md`,
 `src/vehicles/tractor/CLAUDE.md` — this doc is the tour and the derivations.
 
@@ -125,7 +125,7 @@ the conventional carries none. No trailer of the four adds a signal to either.
   (`TowHost._build_joint`, `FifthWheel` profile): linear axes locked, yaw free to `YAW_LIMIT_DEG`
   jackknife stop (`FifthWheel.YAW_LIMIT_DEG`), pitch `PITCH_LIMIT_DEG`, roll `ROLL_LIMIT_DEG`. A 25% grade
   break swings the pitch within the limit (the swing is in `fifth_wheel.gd`'s comment); the rig meets one rolling or with speed, since from rest the box rig
-  pulls away on 16 % at most (`docs/vehicles.md` § Gradeability).
+  pulls away on 16 % at most (`docs/vehicle_measurements.md` § Gradeability).
 - Yaw limit models trailer-against-cab contact, not a fifth-wheel property (plate and nose
   overlap while coupled, so collision can't arbitrate it). `Articulation.JACKKNIFE_MAX_DEG`
   is the joint's stop. Guards: `tests/test_tow_host.gd`; sizing: § Truck sizing.
@@ -143,7 +143,7 @@ the conventional carries none. No trailer of the four adds a signal to either.
   `tools/measure_semi_launch.tscn -- <unit> strict` on both units.
 - Gearing: gears 1-5 span the 600-2080 rpm range; 6th is a 0.69 overdrive, so the governor, not
   the redline, sets top speed. Coupled to the box (`measure_vehicles -- <unit> 120 coast`; top
-  speeds: `docs/vehicles.md` § Engine braking under a fuel cut): cab-over at 1317 rpm, conventional
+  speeds: `docs/drivetrain.md` § Engine braking under a fuel cut): cab-over at 1317 rpm, conventional
   at 1539 rpm, coast-down 0.140 / 0.161 m/s^2. Upshift 1690 lands 6th at 972 rpm, clear of the
   780 downshift.
 - Aero: the coupled cab-over + box declares 2.78 m^2 on a drawn silhouette of ~5.0 m^2 (1.92 m wide,
@@ -154,7 +154,7 @@ the conventional carries none. No trailer of the four adds a signal to either.
   trailer: 25-30 %), ~90 % of it on the single driven axle: the 4x2's traction budget. Below the
   band the rig is grip-limited, not power-limited. Gear 1 asks ~1.5x that budget; the rig's ASR
   (`tcs_equipped`, standard beside EBS) holds the drive tyres near the grip peak while the AMT's
-  clutch slips on its target (its 0-50 and standing-start grade: `docs/vehicles.md` § Launches,
+  clutch slips on its target (its 0-50 and standing-start grade: `docs/vehicle_measurements.md` § Launches,
   § Gradeability; without it: § Limiter at launch). These tyres carry the plate load on a
   `corner_mass` sized for the unit alone, so near a standstill their slip ratio reads over a raised
   floor, where the one-tick force cap passes their full grip at the peak (`RayWheel.slip_floor_for`).
@@ -208,9 +208,8 @@ the conventional carries none. No trailer of the four adds a signal to either.
 - `E` cycles the combination, `V` the body: box → tipper → tanker → flatbed → bobtail via
   the same duck-typed `cycle_implement()` the tractor uses (`TrailerCatalog`, `BOBTAIL` a
   real entry).
-- Coupling is honest about weight: trailer COM sits between kingpin and bogie, 27% rests on
-  the plate (a real van trailer's 25-30%), landing on the tractor's single driven axle.
-  `axle_load` reports it the moment you couple.
+- Coupling is honest about weight (the plate share: § Truck sizing): `axle_load` reports it the
+  moment you couple.
 - Mass ratio: 8 t : 24 t shipped (3:1, the box), verified at 8 t : 25 t; `test_trailer` pins
   suspension travel per case.
 
@@ -359,8 +358,8 @@ the truck's `j1939` `axle_load`: lifting an implement moves its weight onto the 
   coarse-to-medium texture ratio is 0.64.
   `engine_load`, rpm sag and `wheel_slip` move as consequences. Lift comes from
   `ThreePointHitch.ball_lift()`; working depth is the implement's own
-  (`ImplementBase.tool_depth` — plough 0.25 m, harrow tines 0.10 m). "In soil" is splat
-  channel 4 via `HeightmapTerrain.channel_weight_at`.
+  (`ImplementBase.tool_depth` — plough 0.25 m, harrow tines 0.10 m). "In soil" is
+  `Surface.FIELD`, in whichever channel a level paints it (`HeightmapTerrain.surface_weight_at`).
 - `ThreePointHitch` (`src/vehicles/tractor/three_point_hitch.{gd,tscn}`) is tractor anatomy,
   whole with nothing attached. `HitchLinkage` (pure math, tested) solves the side view as a
   four-bar — implement pitch and rockshaft arm angle fall out of a circle-circle
@@ -391,12 +390,16 @@ the truck's `j1939` `axle_load`: lifting an implement moves its weight onto the 
   rates stay within a few percent of bare, the yaw index read off the tensor 1.06 against 0.96. The
   light front shows as no extra understeer in the linear range (`20 circle`, `20 step`, with and
   without `trailer=spreader`).
-  Held on full soil (`20 plough`), the plough's and the harrow's measured draft sit on D497 at each
-  held speed, to 0.0 %. Floored from rest with the plough down on the open diff, the launch holds
-  both rears near the slip peak until the pack locks; the step in crank torque then takes them past
-  it and the right rear, lighter under the plough's left-of-centre mass, peels to ~50 % slip while
-  the governor holds the speed. The diff lock settles the same start at ~10 % slip: honest, a
-  ploughing driver engages it (`20 plough trace=3 trace_s=6`).
+  Held on full soil (`20 plough`), the measured draft sits on D497 at each speed held, to 0.0 %.
+  The harrow holds each of the pass's speeds. The plough holds the slowest at 15 % slip; stepped to
+  the reference speed on the open diff, the right rear, lighter under the plough's left-of-centre
+  mass, peels past the slip peak and the tractor settles about a third under it, 42 % slip, in D1
+  on the governor. Floored from rest it peels the same way (~50 %, then 42 %). Ramped in as a
+  driver does (`20 plough course`), the course's reference-speed run reads `engine_load` 62 % on
+  full soil and 43 % on the light bands, inside tractor_plough's 25-70 %. The lug's grip in soil
+  (0.60 of asphalt, `ag_lug.tres`) is an estimate, and D497's own traction at the slip peak is
+  lower still (0.49): an open-diff 2WD tractor ploughing is traction-limited, and the diff lock or
+  MFWD is the answer, as a ploughing driver engages it.
   Not modelled: draft control (the Ferguson hitch), a spreader that empties, a composite inertia
   declaration, front ballast as an attachment, a start gear that reads draft, skid drag.
 - Ground support is drawn, not simulated: `ThreePointHitch` keeps two poses. Physics (ball lift,
@@ -434,7 +437,7 @@ the truck's `j1939` `axle_load`: lifting an implement moves its weight onto the 
     loaded, no gear shorter than about a second.
   - The bobtail's D4 is the shortest gear: at full pedal the policy never holds an upshift, so on the
     1.35 steps the dwell is the gearing's (brief 16, `docs/plans/mechanical_update/16_drivetrain_control.md`).
-- Standing starts: `docs/vehicles.md` § Gradeability and § Hill hold; with the tipper on 10 %
+- Standing starts: `docs/vehicle_measurements.md` § Gradeability, `docs/drivetrain.md` § Hill hold; with the tipper on 10 %
   asphalt it starts in D2 and starts moving within a couple of seconds.
 - Reverse is the bus's single R byte, at D3's ratio; its top speed follows from that ratio and the governor.
 - Steady draft does not involve COM height: drag at the hitch and tyre reaction at ground form a
@@ -477,7 +480,7 @@ other machine may share (`test_implement_catalog`):
 | Rotary mower, 7 ft | + PTO | 9 forage | none | rotor, vertical axis |
 | Fertilizer spreader, ~800 L | + PTO, SCV | 5 fertilizer | none | disc + `scv_flow` hopper gate |
 
-Their masses, ground shares and draft ratings: `docs/vehicles.md` § Sourced figures.
+Their masses, ground shares and draft ratings: `docs/sources.md`.
 
 And the fifth cycle entry, none of the above (§ drawbar below):
 

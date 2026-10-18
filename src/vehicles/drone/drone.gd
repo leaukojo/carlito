@@ -2,7 +2,7 @@ class_name DroneVehicle
 extends BaseVehicle
 ## Quadcopter drone. Each subsystem's laws live in a pure-fn sibling; this holds the cross-tick
 ## state and the tick order (`_tick_extras`). Rules: `src/vehicles/drone/CLAUDE.md`; tour:
-## `docs/vehicles.md` § Drone subsystems.
+## `docs/flight.md` § Drone subsystems.
 
 
 ## Blade rad/s per rotor rpm: cosmetic, far below the real rev rate (which would alias to a

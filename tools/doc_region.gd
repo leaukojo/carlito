@@ -3,7 +3,7 @@
 ## write their figure tables through it, so a figure refreshes by re-running the tool; the opening
 ## marker names that run line, and hand edits between the markers are overwritten.
 
-const DOC := "res://docs/vehicles.md"
+const DOC := "res://docs/vehicle_measurements.md"
 const WIDTH := 100
 
 

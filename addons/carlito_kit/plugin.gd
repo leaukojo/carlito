@@ -321,7 +321,7 @@ func _on_selection_changed() -> void:
 		var colors := PackedColorArray()
 		for i in 8:
 			colors.append(terrain.channel_color(i))
-		_panel.set_channels(terrain.channel_names, colors)
+		_panel.set_channels(terrain.channel_names(), colors)
 	_scatter_brush.set_target(canvas)
 	_scatter_panel.set_has_canvas(canvas != null)
 	_road_tool.set_target(road)

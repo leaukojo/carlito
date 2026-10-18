@@ -12,7 +12,7 @@ or be folded into a bigger brief that touches the same code.
   level has wind.
 - A crosswind on a high-sided body (box trailer, vans) is real and visible. `air_damper`'s `axis`
   masks world space, so a body-frame side force needs its own term, like the boat's windage
-  (`docs/vehicles.md` § Boat).
+  (`docs/boat.md`).
 - Low priority until a land level has wind.
 
 ## 2. Aero forces act at the centre of mass
@@ -42,6 +42,9 @@ or be folded into a bigger brief that touches the same code.
 - Related: TC is a hold solved with the brakes inside the differentials (`RayWheel.settled_spin`),
   exact under a biasing diff. The drive reaches the wheels through the crank's coupling, so an
   open diff sends the cut across too (`src/vehicles/CLAUDE.md`, the TC bullet).
+- Tyre classes (brief 12, landed) keep the body curve's 0.12 peak on every class and surface, so
+  the ideal hold is right for each. A class or surface with its own peak slip (studded on ice,
+  a mud lug) is where a hold that follows the tyre's peak, or a cycling estimate, would differ.
 
 ## 5. The speed-tapered steering lock applies to analog input too
 

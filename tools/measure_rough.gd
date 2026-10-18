@@ -33,11 +33,22 @@ extends Node3D
 ##   godot --headless --path . res://tools/measure_rough.tscn -- tractor-kenney mfwd diff
 ##   godot --headless --path . res://tools/measure_rough.tscn -- suv lane=mud patch=bumps_20 verbose
 ##   godot --headless --path . res://tools/measure_rough.tscn -- baseline tc
+##   godot --headless --path . res://tools/measure_rough.tscn -- pickup lane=mud tyre=mud
 ##
-## `baseline` runs the set `docs/vehicles.md` § Rough and soft ground records: suv, tractor-kenney in
+## `baseline` runs the set `docs/vehicle_measurements.md` § Rough and soft ground records: suv, tractor-kenney in
 ## 2WD / MFWD / MFWD + diff lock, sedan and pickup. Add `--fixed-fps 60` BEFORE `--` to run faster
 ## than real time: one 1/60 s tick per frame, the step itself unchanged (never Engine.time_scale,
-## which enlarges the step — docs/vehicles.md).
+## which enlarges the step — docs/vehicle_measurements.md).
+##
+##   godot --headless --path . res://tools/measure_rough.tscn -- course=tractor_mud
+##
+## `course=<challenge id>` drives a reach-zone challenge's own course instead of the lanes: its
+## arena level with the course laid on it (as `ChallengeRunner` does), the def's variant and
+## attachment, the same driver steering the straight line from the family's VehicleSpawn to its
+## zone's centre, once per COURSE_CONFIGS entry; no spawn jitter. The pedal floors unless `speed=`
+## sets a crawl. Per run: reached / stuck / off line / timeout, the time from the release against
+## the def's `par_s` (the settle is not counted), and the share of ticks a driven wheel spun past
+## SPIN_SLIP.
 
 const Layout := preload("res://tools/rough_ground_layout.gd")
 const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
@@ -52,7 +63,7 @@ const BASELINE: Array[Dictionary] = [
 ]
 
 ## `doc=rough` (arg 1): BASELINE plus `hatchback-sports` floored, then BASELINE under `tc`, and the
-## `rough` region of `docs/vehicles.md` is rewritten (`doc_region.gd`): the mud lane's matrix,
+## `rough` region of `docs/vehicle_measurements.md` is rewritten (`doc_region.gd`): the mud lane's matrix,
 ## and every asphalt cell that did not cross.
 const DocRegion := preload("res://tools/doc_region.gd")
 const MeasureRig := preload("res://tools/measure_rig.gd")
@@ -73,6 +84,15 @@ const SHORT_OF_CRAWL := 0.25   ## m/s under the crawl that counts a tick as `sho
 ## Crawl pedal at or above this is FLOORED: the driver is asking for everything the body has.
 const PEDAL_FLOORED := 0.98
 const BODY_FLAG_S := 1.0       ## s of chassis contact the summary table flags
+## --- course (`course=<id>`) ---
+## The drivelines a course run compares: open, the rear lock, MFWD, both.
+const COURSE_CONFIGS: Array[Dictionary] = [
+	{"mfwd": false, "diff": false}, {"mfwd": false, "diff": true},
+	{"mfwd": true, "diff": false}, {"mfwd": true, "diff": true},
+]
+const COURSE_FLOORED := 99.0   ## m/s "crawl": the pedal floors within two ticks
+const COURSE_HALF_WIDTH := 10.0 ## m either side of the line before a run is OFF LINE
+const SPIN_SLIP := 0.3         ## the braking table's skid threshold
 
 enum Ph { SETTLE, DRIVE, DONE }
 
@@ -85,6 +105,16 @@ var _crawl := CRAWL_SPEED
 var _tc := false
 var _verbose := false
 var _doc := false
+## `tyre=<id>`: the `TyreCatalog` class fitted on every config's body ("": its stock).
+var _tyre := ""
+## `course=<id>`: the challenge driven instead of the lanes (null: the lanes).
+var _course: ChallengeDef
+var _course_goal: ZoneShape
+var _course_spawn := Transform3D.IDENTITY
+## The line the driver holds: from `_line_o` along `_line_dir` (level, unit); the lanes' is -z.
+var _line_o := Vector3.ZERO
+var _line_dir := Vector3.FORWARD
+var _prev_pos := Vector3.ZERO
 
 var _level: Level
 var _car: BaseVehicle
@@ -116,7 +146,30 @@ func _ready() -> void:
 			lane_filter = s.substr(5)
 		elif s.begins_with("patch="):
 			patch_filter = s.substr(6)
+	_tyre = MeasureRig.tyre_flag(args)
+	if _tyre == "?":
+		get_tree().quit(1)
+		return
+	if which.begins_with("course="):
+		if not _load_course(which.substr(7)):
+			get_tree().quit(1)
+			return
+		if not "speed=" in " ".join(args):
+			_crawl = COURSE_FLOORED
+		for c: Dictionary in COURSE_CONFIGS:
+			var config := c.duplicate()
+			config["variant"] = _course.variant
+			_configs.append(config)
+		print("=== course %s on %s: %s, par %.0f s, line %.1f m to %s ===" % [_course.id,
+				_course.arena, "floored" if _crawl == COURSE_FLOORED else "crawl %.1f m/s" % _crawl,
+				_course.par_s, _course_length(), (_course.goals[0] as ReachZoneGoal).zone])
+		_next_config()
+		return
 	if which == "doc=rough":
+		if _tyre != "":
+			printerr("tyre= changes the figures doc=rough tabulates: run it per body")
+			get_tree().quit(1)
+			return
 		_doc = true
 		_configs = BASELINE.duplicate(true)
 		_configs.append(DOC_EXTRA.duplicate())
@@ -152,9 +205,50 @@ func _ready() -> void:
 	_next_config()
 
 
+## Loads challenge `id`'s arena with its course under the level root, as `ChallengeRunner` does
+## (its props stand on the line), and reads the family's VehicleSpawn and the first goal's zone,
+## which must be a reach.
+func _load_course(id: String) -> bool:
+	_course = ChallengeRegistry.def_of(id)
+	if _course == null or _course.goals.is_empty() or not _course.goals[0] is ReachZoneGoal:
+		printerr("course=%s: no challenge of that id whose first goal is a zone to reach" % id)
+		return false
+	if LevelRegistry.scene_of(_course.arena) == "":
+		printerr("course=%s: arena '%s' is no registered level" % [id, _course.arena])
+		return false
+	_level = (load(LevelRegistry.scene_of(_course.arena)) as PackedScene).instantiate() as Level
+	_level.initial_variant = _course.variant
+	add_child(_level)
+	var course := (load(_course.course) as PackedScene).instantiate() as Node3D
+	_level.add_child(course)
+	var spawn: VehicleSpawn = null
+	for n in course.find_children("*", "VehicleSpawn", true, false):
+		if (n as VehicleSpawn).accepts(_course.family()):
+			spawn = n as VehicleSpawn
+			break
+	var zone := (_course.goals[0] as ReachZoneGoal).zone
+	# The level root sits at the world origin: the zones and the spawn are world space.
+	_course_goal = ChallengeZone.zones_of(course).get(zone) as ZoneShape
+	if spawn == null or _course_goal == null:
+		printerr("course=%s: its course has no %s spawn or no zone '%s'" % [id, _course.family(),
+				zone])
+		return false
+	_course_spawn = spawn.global_transform
+	_line_o = _course_spawn.origin
+	_line_dir = Vector3(_course_goal.xform.origin.x - _line_o.x, 0.0,
+			_course_goal.xform.origin.z - _line_o.z).normalized()
+	return true
+
+
+func _course_length() -> float:
+	var d := _course_goal.xform.origin - _line_o
+	return Vector2(d.x, d.z).length()
+
+
 func _next_config() -> void:
 	if _configs.is_empty():
-		_print_table()
+		if _course == null:   # a course run's line is its table
+			_print_table()
 		if _doc:
 			DocRegion.write("rough", _doc_table())
 		get_tree().quit(0)
@@ -166,15 +260,22 @@ func _next_config() -> void:
 	if _level.vehicle == null or GameState.current_variant != variant:
 		_level.set_vehicle(variant)
 	_car = _level.vehicle
-	if _car is TractorVehicle:
+	if _course != null:
+		if _car.has_method(&"set_attachment"):
+			_car.call(&"set_attachment", _course.attachment)  ## the def's, as the runner lays it
+	elif _car is TractorVehicle:
 		_car.call(&"set_attachment", AttachmentCatalog.NONE)  ## bare: an implement's weight moves the axles
+	var tyre := MeasureRig.fit_tyre(_car, _tyre)
 	_car.contact_monitor = true
 	_car.max_contacts_reported = 8
 	_trials.clear()
+	if _course != null:
+		_trials.append(Vector2i.ZERO)
 	for lane in _lanes:
 		for patch in _patches:
 			_trials.append(Vector2i(lane, patch))
-	print("\n--- %s: %s, %.0f kg ---" % [_config_label(_config), _drive_label(), _car.mass])
+	print("\n--- %s: %s, %.0f kg, tyre %s ---" % [_config_label(_config), _drive_label(), _car.mass,
+			tyre])
 	_next_trial()
 
 
@@ -185,10 +286,16 @@ func _next_trial() -> void:
 	var trial: Vector2i = _trials.pop_front()
 	_lane = trial.x
 	_patch = trial.y
-	var start := Vector3(float(Layout.LANES[_lane]["x"]),
-			Layout.PLATEAU_Y + _car.rest_ride_height(), Layout.patch_start_z(_patch) + Layout.RUN_UP)
-	_car.spawn_transform = Transform3D(Basis.IDENTITY, start)
+	if _course != null:
+		_car.spawn_transform = _course_spawn
+	else:
+		var start := Vector3(float(Layout.LANES[_lane]["x"]), Layout.PLATEAU_Y
+				+ _car.rest_ride_height(), Layout.patch_start_z(_patch) + Layout.RUN_UP)
+		_car.spawn_transform = Transform3D(Basis.IDENTITY, start)
+		_line_o = start
+		_line_dir = Vector3.FORWARD
 	_car.respawn()
+	_prev_pos = _car.global_position
 	_phase = Ph.SETTLE
 	_t = 0.0
 	_pedal = 0.0
@@ -200,6 +307,7 @@ func _next_trial() -> void:
 		"on": false, "t_on": 0.0, "dist": 0.0, "ticks": 0, "body": 0.0,
 		"slip_sum": [], "slip_peak": [], "contact": [], "air": [],
 		"short_ticks": 0, "demand_ticks": 0, "use_sum": 0.0, "fx_sum": 0.0, "cap_sum": 0.0,
+		"spin_ticks": 0,
 	}
 	for w in _car.drive.wheels:
 		(_stats["slip_sum"] as Array).append(0.0)
@@ -228,9 +336,10 @@ func _physics_process(delta: float) -> void:
 	var xform := _car.global_transform
 	var forward := -xform.basis.z
 	var speed := _car.linear_velocity.dot(forward)
-	var lane_x := float(Layout.LANES[_lane]["x"])
-	var offset := xform.origin.x - lane_x
-	var steer := clampf(-(STEER_OFFSET_GAIN * offset + STEER_HEADING_GAIN * forward.x), -1.0, 1.0)
+	var right := _line_dir.cross(Vector3.UP)
+	var offset := (xform.origin - _line_o).dot(right)
+	var steer := clampf(-(STEER_OFFSET_GAIN * offset + STEER_HEADING_GAIN * forward.dot(right)),
+			-1.0, 1.0)
 	_pedal = clampf(_pedal + (_crawl - speed) * PEDAL_GAIN * delta, 0.0, 1.0)
 	if _tc:
 		_tc_pedal = TcPedal.step(_tc_pedal, _car.drive.wheels, delta, _car.drivetrain)
@@ -239,7 +348,7 @@ func _physics_process(delta: float) -> void:
 		_pedal = 0.0
 	_drive(minf(_pedal, _tc_pedal) * 100.0, brake * 100.0, steer * 100.0)
 
-	var progress := Layout.patch_start_z(_patch) + Layout.RUN_UP - xform.origin.z
+	var progress := (xform.origin - _line_o).dot(_line_dir)
 	if progress > _best + STUCK_PROGRESS:
 		_best = progress
 		_best_t = _t
@@ -247,6 +356,19 @@ func _physics_process(delta: float) -> void:
 	if _verbose:
 		_trace(delta)
 
+	if _course != null:
+		var reached := _course_goal.contains(xform.origin) \
+				or _course_goal.crosses(_prev_pos, xform.origin)
+		_prev_pos = xform.origin
+		if reached:
+			_end("REACHED")
+		elif absf(offset) > COURSE_HALF_WIDTH:
+			_end("OFF LINE")
+		elif _t - _best_t > STUCK_S:
+			_end("STUCK")
+		elif _t > maxf(TRIAL_S, 2.0 * _course.par_s):
+			_end("TIMEOUT")
+		return
 	var end_z := Layout.patch_end_z(_patch)
 	var cleared := true
 	for w in _car.drive.wheels:
@@ -267,6 +389,8 @@ func _physics_process(delta: float) -> void:
 func _sample(speed: float, delta: float) -> void:
 	var xform := _car.global_transform
 	var start_z := Layout.patch_start_z(_patch)
+	if _course != null:
+		_stats["on"] = true   # a course run counts from the release
 	if not _stats["on"]:
 		for w in _car.drive.wheels:
 			if (xform * w.anchor).z < start_z:
@@ -281,6 +405,7 @@ func _sample(speed: float, delta: float) -> void:
 	var gd := _car.spec.ground_drive
 	var fx := 0.0
 	var cap := 0.0
+	var spun := false
 	for i in _car.drive.wheels.size():
 		var w: RayWheel = _car.drive.wheels[i]
 		if not w.in_contact:
@@ -292,6 +417,9 @@ func _sample(speed: float, delta: float) -> void:
 		if w.driven:
 			fx += w.force_long
 			cap += gd.mu_long * w.surface_grip * w.suspension_force
+			spun = spun or absf(w.slip) > SPIN_SLIP
+	if spun:
+		_stats["spin_ticks"] += 1
 	if speed < _crawl - SHORT_OF_CRAWL:
 		_stats["short_ticks"] += 1
 	# `use` reads only the ticks the driver asks for everything: short of the crawl with the pedal
@@ -315,10 +443,12 @@ func _end(result: String) -> void:
 	var row := {
 		"config": _config_label(_config),
 		"tc": _tc,
-		"lane": String(Layout.LANES[_lane]["name"]),
-		"patch": String(Layout.PATCHES[_patch]["name"]),
+		"lane": "course" if _course != null else String(Layout.LANES[_lane]["name"]),
+		"patch": _course.id if _course != null else String(Layout.PATCHES[_patch]["name"]),
 		"result": result,
-		"into": Layout.patch_start_z(_patch) - _car.global_position.z,
+		"into": (_car.global_position - _line_o).dot(_line_dir) if _course != null
+				else Layout.patch_start_z(_patch) - _car.global_position.z,
+		"spin": float(s["spin_ticks"]) / float(n),
 		"t": float(s["t_on"]),
 		"v": float(s["dist"]) / maxf(float(s["t_on"]), 0.001),
 		"body": float(s["body"]),
@@ -344,11 +474,17 @@ func _end(result: String) -> void:
 
 func _print_row(r: Dictionary) -> void:
 	var outcome := String(r["result"])
-	if outcome != "CROSSED":
-		outcome += " at %+.1f m" % float(r["into"])
-	print("  %-7s %-9s %-18s %5.1f s  %4.2f m/s  body %4.1f s  short %3.0f%%  use %s" % [
-			r["lane"], r["patch"], outcome, r["t"], r["v"], r["body"], 100.0 * float(r["short"]),
-			_use_text(r)])
+	if _course != null:
+		print("  %-26s %-9s %5.1f s (par %.0f: %s)  %.1f m along the line  spin %3.0f%%  use %s" % [
+				r["config"], outcome, r["t"], _course.par_s,
+				"inside" if outcome == "REACHED" and float(r["t"]) <= _course.par_s else "missed",
+				r["into"], 100.0 * float(r["spin"]), _use_text(r)])
+	else:
+		if outcome != "CROSSED":
+			outcome += " at %+.1f m" % float(r["into"])
+		print("  %-7s %-9s %-18s %5.1f s  %4.2f m/s  body %4.1f s  short %3.0f%%  use %s" % [
+				r["lane"], r["patch"], outcome, r["t"], r["v"], r["body"], 100.0 * float(r["short"]),
+				_use_text(r)])
 	var parts: Array[String] = []
 	for w: Dictionary in r["wheels"]:
 		parts.append("%s%s %4.2f/%5.2f%s" % [w["label"], "*" if w["driven"] else " ",

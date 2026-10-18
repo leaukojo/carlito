@@ -357,13 +357,16 @@ func test_the_slip_cap_stays_a_backstop_and_not_the_operating_point() -> void:
 		var to_front: float = absf(spec.center_of_mass.z - front_z)
 		var wheelbase: float = rear_z - front_z
 		var rear_load_n: float = spec.mass * 9.8 * (to_front / wheelbase) / rear
-		var grip_at_target: float = VehicleSpec.sample_curve(
-				gd.grip_curve, DrivetrainScript.RETARDER_SLIP_TARGET) * gd.mu_long * rear_load_n
-		assert_float(grip_at_target) \
-			.override_failure_message(
-				"%s: the retarder demands %.0f N/wheel but the road only makes %.0f N at the slip cap, so the cap IS the operating point" % [
-					spec.resource_path, demand_n, grip_at_target]) \
-			.is_greater(demand_n * 2.0)
+		# Once per class the truck's fit takes, on dry asphalt: a less grippy class lowers mu.
+		for cls in TyreCatalog.fitting(gd.tyre_fit):
+			var mu: float = gd.mu_long * TyreClass.grip_response(cls, gd.tyre)[Surface.ASPHALT]
+			var grip_at_target: float = VehicleSpec.sample_curve(
+					gd.grip_curve, DrivetrainScript.RETARDER_SLIP_TARGET) * mu * rear_load_n
+			assert_float(grip_at_target) \
+				.override_failure_message(
+					"%s on %s: the retarder demands %.0f N/wheel but the road only makes %.0f N at the slip cap, so the cap IS the operating point" % [
+						spec.resource_path, cls.id, demand_n, grip_at_target]) \
+				.is_greater(demand_n * 2.0)
 
 
 func test_retarder_percentage_is_what_was_applied_over_the_rating() -> void:

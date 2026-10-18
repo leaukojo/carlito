@@ -62,3 +62,33 @@ func test_a_memory_only_store_keeps_nothing() -> void:
 func test_headless_runs_use_no_file() -> void:
 	assert_str(UserSettings.store_path(true)).is_empty()
 	assert_str(UserSettings.store_path(false)).is_equal(UserSettings.PATH)
+
+
+## The garage's tyre per variant survives a reload; a variant never picked reads "" (the stock).
+func test_the_tyre_per_variant_round_trips_through_the_file() -> void:
+	var s := UserSettings.new(SCRATCH)
+	s.set_tyre("sedan", "winter")
+	s.set_tyre("pickup", "mud")
+	s.set_tyre("sedan", "summer")
+	var again := UserSettings.new(SCRATCH)
+	assert_str(again.tyre_of("sedan")).is_equal("summer")
+	assert_str(again.tyre_of("pickup")).is_equal("mud")
+	assert_str(again.tyre_of("taxi")).is_empty()
+
+
+## A hand-edited tyre entry that is not String -> String is dropped; a store that is not a
+## dictionary reads as none picked. Whether a kept id is known or fits is judged on fitting.
+func test_a_hand_edited_tyre_store_keeps_only_strings() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value(UserSettings.SECTION, "tyres", {"sedan": "winter", "pickup": 3, 4: "mud",
+			"taxi": "no_such_class"})
+	cfg.save(SCRATCH)
+	var s := UserSettings.new(SCRATCH)
+	assert_str(s.tyre_of("sedan")).is_equal("winter")
+	assert_str(s.tyre_of("pickup")).is_empty()
+	assert_str(s.tyre_of("taxi")).is_equal("no_such_class")
+	assert_int((s.value("tyres") as Dictionary).size()).is_equal(2)
+
+	cfg.set_value(UserSettings.SECTION, "tyres", "winter")
+	cfg.save(SCRATCH)
+	assert_str(UserSettings.new(SCRATCH).tyre_of("sedan")).is_empty()

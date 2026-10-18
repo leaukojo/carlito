@@ -13,8 +13,7 @@ const TINE_DEPTH_M := 0.1
 
 ## Mass (kg) of the class drawn: a 3.0 m Cat 2 power harrow with a packer roller. Kverneland's M
 ## 3.0 at 1550 kg (sourced; its summary table says 927), the Amazone KE 3002 at 1530 with its
-## roller (secondary) and Kuhn's HR 3030 at 1679 (sourced). Citations: docs/vehicles.md
-## § Sourced figures.
+## roller (secondary) and Kuhn's HR 3030 at 1679 (sourced). Citations: docs/sources.md.
 const MASS_KG := 1550.0
 
 ## Centre of mass in this frame: the area-weighted centroid of the scene's meshes.
@@ -34,7 +33,7 @@ const ROLLER_HALF := 1.46
 ## Engineering 202, 2021: trials at 6-15 cm, two rotor speeds, a 1000 rpm PTO; the abstract read, the
 ## pair only from a summary of it: secondary, unverified against its tables). D497 rates no power
 ## harrow's draft (its load is mostly PTO). Held above 9 km/h, the top of the pair. Citations:
-## docs/vehicles.md § Sourced figures.
+## docs/sources.md.
 const DRAFT_SHAPE := Vector4(1183.0, 239.0, 0.0, 9.0)
 
 ## Pull at 7 km/h, full depth, full soil: that line at 7 km/h (2.856 kN/m) over the drawn 3.0 m,

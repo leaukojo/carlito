@@ -246,6 +246,7 @@ func _end_challenge() -> void:
 		_level.day_night_locked = false
 		_level.set_conditions(_wind_preset, _current_preset, _wind_from_deg)
 		_level.set_night(_night_before_challenge)
+	_fit_tyre()  # the attempt's stock comes off with the lock
 
 
 ## The attempt passed or failed: a result panel (RETRY, plus NEXT on a pass), and a pass is
@@ -432,9 +433,12 @@ func _open_pause() -> void:
 	state.wind_from_deg = _wind_from_deg
 	state.night = _night
 	state.conditions_locked = _challenge != null
+	for spawn in _spawn_points():
+		state.spawns.append(String(spawn.name).capitalize())
 	pause.setup(_capabilities(), state)
 	pause.resume_requested.connect(_close_all_overlays)
 	pause.respawn_requested.connect(_on_pause_respawn)
+	pause.spawn_picked.connect(_on_spawn_picked)
 	pause.dashboard_density_changed.connect(_on_density_changed)
 	pause.ui_scale_changed.connect(_on_ui_scale_changed)
 	pause.extended_debug_changed.connect(_on_extended_debug_changed)
@@ -496,6 +500,23 @@ func _toggle_dashboard() -> void:
 func _on_pause_respawn() -> void:
 	_close_all_overlays()
 	_respawn()
+
+
+## The spawn points SPAWN POINT offers: none in a challenge (running or pending: the course owns
+## the spawn) or for the train (rail-guided, it ignores every marker).
+func _spawn_points() -> Array[VehicleSpawn]:
+	if _level == null or _challenge != null or _pending_challenge != null \
+			or GameState.current_vehicle == "train":
+		return []
+	return _level.spawns_for(GameState.current_vehicle)
+
+
+## SPAWN POINT picked one: close the overlay first (as RESPAWN does), then move the body there.
+func _on_spawn_picked(index: int) -> void:
+	var spawns := _spawn_points()
+	_close_all_overlays()
+	if index >= 0 and index < spawns.size():
+		_level.respawn_at(spawns[index])
 
 
 ## CONDITIONS picked a new wind/current preset or compass direction. Kept for the session
@@ -687,6 +708,7 @@ func _finish_load(scene: PackedScene) -> void:
 	_level.set_conditions(_wind_preset, _current_preset, _wind_from_deg)
 	_level.set_night(night)
 	_level.vehicle_changed.connect(_on_vehicle_changed)
+	_fit_tyre()  # the level's _ready spawned before vehicle_changed was connected
 	_bind_hud()
 	_set_hud_visible(true)
 	CoachCue.maybe_coach(GameState.current_vehicle, _ui)
@@ -717,6 +739,7 @@ func _unbind_hud() -> void:
 
 
 func _on_vehicle_changed(type: String) -> void:
+	_fit_tyre()  # emitted on the spawn tick, before the body's first physics tick
 	_bind_hud()
 	CoachCue.maybe_coach(type, _ui)  # vehicle_changed carries the family
 
@@ -741,10 +764,11 @@ func _open_vehicle_select() -> void:
 	# pre-filtered roster, so the screen can say why it can't spawn something.
 	vehicles.setup(_level.info.allowed_vehicles, String(_level.info.display_name),
 			_level.has_closed_rail(), GameState.current_variant, _current_attachment(),
-			_manual_gearbox, _level.has_spawn_for)
+			_manual_gearbox, _level.has_spawn_for, _settings.value("tyres"))
 	vehicles.vehicle_chosen.connect(_on_vehicle_picked)
 	vehicles.attachment_chosen.connect(_on_attachment_picked)
 	vehicles.gearbox_chosen.connect(_on_gearbox_picked)
+	vehicles.tyre_chosen.connect(_on_tyre_picked)
 	vehicles.closed.connect(_close_overlay.bind(vehicles))
 	_push_overlay(vehicles)
 
@@ -782,6 +806,27 @@ func _on_attachment_picked(id: String) -> void:
 func _on_gearbox_picked(manual: bool) -> void:
 	_manual_gearbox = manual
 	InputRouter.set_manual_gearbox(manual)
+
+
+## Fires on DRIVE, after the body is (re)spawned, for a variant that fits more than its stock.
+## Stored per variant, so a reload keeps it.
+func _on_tyre_picked(variant: String, id: String) -> void:
+	_settings.set_tyre(variant, id)
+	_fit_tyre()
+
+
+## Fit the driven body's stored tyre class, or its stock in a challenge (a pending one included:
+## its arena spawns before the attempt begins). An unknown or unfitting stored id reads as the
+## stock (`WheelDrive.fit_tyre`). A respawn keeps the fit; every spawn comes through here.
+func _fit_tyre() -> void:
+	if _level == null or not (_level.vehicle is BaseVehicle):
+		return
+	var body: BaseVehicle = _level.vehicle
+	if body.drive == null:
+		return
+	var in_challenge := _challenge != null or _pending_challenge != null
+	var id := "" if in_challenge else _settings.tyre_of(GameState.current_variant)
+	body.drive.fit_tyre(body.spec.ground_drive, TyreCatalog.by_id(id) if id != "" else null)
 
 
 func _cycle_camera() -> void:

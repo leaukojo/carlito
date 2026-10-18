@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="VehicleSpec" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="VehicleSpec" load_steps=5 format=3]
 
 ; Tipper / dump semi-trailer running gear. A VehicleSpec because RayWheel consumes one; the
 ; drivetrain / steering fields are meaningless on a towed body and stay at their defaults.
@@ -30,8 +30,13 @@
 ; share once the plate takes its cut, so they sit below the reference and gain a few per cent of
 ; mu, the mirror image of what the drive axle loses.
 
+; TYRES: the TRAILER fit on the Trailer class, the reference row (tyres/trailer.tres), which a towed
+; body keeps (TowedBody). mu_long / mu_lat and rolling_resistance below are that class on dry
+; asphalt and a hard road.
+
 [ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
 [ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="2_grounddrive"]
+[ext_resource type="Resource" path="res://src/vehicles/tyres/trailer.tres" id="9_tyre"]
 
 ; DRAG AREA 0.55 m^2: a marginal, in-the-wake figure like every trailer's (see box_spec.tres), a
 ; little under the box van's (open-topped, slightly lower). Raising the body does not raise it: the
@@ -54,6 +59,8 @@ damper_rebound = 14400.0
 anti_roll_rate = 197000.0
 max_suspension_force = 90000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
+tyre = ExtResource("9_tyre")
+tyre_fit = 6
 mu_long = 0.8
 mu_lat = 0.75
 load_sensitivity = 0.08

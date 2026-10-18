@@ -123,7 +123,7 @@ for (const key of allow) {
 }
 
 // Raw lines per CLAUDE.md. Raising a cap is a decision made in this diff, not a side effect.
-const CLAUDE_MD_BUDGET = { 'CLAUDE.md': 110 };
+const CLAUDE_MD_BUDGET = { 'CLAUDE.md': 106 };
 const NESTED_CLAUDE_MD_CAP = 40;
 const overBudget = [];
 for (const f of docs.filter((d) => /(^|\/)CLAUDE\.md$/.test(d))) {
@@ -132,9 +132,10 @@ for (const f of docs.filter((d) => /(^|\/)CLAUDE\.md$/.test(d))) {
   if (n > cap) overBudget.push(`  ${f}: ${n} lines, cap ${cap}`);
 }
 
-// Raw lines summed over the top-level docs/*.md (plans/ are temporary). One cap, no per-doc caps.
-const DOCS_LINE_CAP = 3285;
-const docsLines = docs.filter((d) => /^docs\/[^/]+\.md$/.test(d))
+// Raw lines summed over the top-level docs/*.md (plans/ are temporary; sources.md is reference
+// data, read on demand). One cap, no per-doc caps.
+const DOCS_LINE_CAP = 3634;
+const docsLines = docs.filter((d) => /^docs\/[^/]+\.md$/.test(d) && d !== 'docs/sources.md')
   .reduce((sum, d) => sum + read(d).replace(/\n$/, '').split('\n').length, 0);
 if (docsLines > DOCS_LINE_CAP) overBudget.push(`  docs/*.md: ${docsLines} lines in total, cap ${DOCS_LINE_CAP}`);
 

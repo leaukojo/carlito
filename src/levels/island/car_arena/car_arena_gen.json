@@ -37,7 +37,7 @@
       "args": [
         "scaffold"
       ],
-      "why": "Writes the island heightmap (plateau, lagoon, ridge) and splats (road paint, the ice bend, the apron), the six road curves, the LevelInfo and the level .tscn text."
+      "why": "Writes the island heightmap (plateau, lagoon, ridge) and splats (road paint, the wet bend, the apron, the tyre pad's strips and skidpad), the six road curves, the LevelInfo and the level .tscn text (the pad's spawns included)."
     },
     {
       "kind": "import",

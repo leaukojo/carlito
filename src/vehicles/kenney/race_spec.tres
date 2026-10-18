@@ -1,15 +1,16 @@
 [gd_resource type="Resource" script_class="VehicleSpec" format=3]
 
-[ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="1_7iqsd"]
-[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel.tscn" id="2_63asi"]
-[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="3_1tc8y"]
+[ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="1_63asi"]
+[ext_resource type="Resource" path="res://src/vehicles/tyres/slick.tres" id="2_1tc8y"]
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel.tscn" id="3_icyla"]
+[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="4_6yml0"]
 
-[sub_resource type="Resource" id="Resource_icyla"]
-script = ExtResource("1_7iqsd")
+[sub_resource type="Resource" id="Resource_0cy2o"]
+script = ExtResource("1_63asi")
 wheel_positions = PackedVector3Array(-0.63, 0.54303247, -0.7678634, 0.63, 0.54303247, -0.7678635, -0.63, 0.54303247, 1.0561365, 0.63, 0.54303247, 1.0561365)
 wheel_radius = 0.36
 tyre_half_width = 0.24
-wheel_scene = ExtResource("2_63asi")
+wheel_scene = ExtResource("3_icyla")
 diff_bias_rear = 2.5
 rest_length = 0.28
 spring_rate = 19101.0
@@ -21,6 +22,8 @@ damper_rebound_rear = 2519.0
 anti_roll_rate = 10000.0
 anti_dive_slope = 0.066
 anti_squat_slope = 0.082
+tyre = ExtResource("2_1tc8y")
+tyre_fit = 5
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 1.35
 mu_lat = 1.4
@@ -41,8 +44,8 @@ min_steer_frac = 0.25
 steer_falloff_speed = 42.0
 
 [resource]
-script = ExtResource("3_1tc8y")
-ground_drive = SubResource("Resource_icyla")
+script = ExtResource("4_6yml0")
+ground_drive = SubResource("Resource_0cy2o")
 mass = 900.0
 center_of_mass = Vector3(0, 0.3, 0.2900565)
 torque_curve = PackedVector2Array(900, 205.8, 2000, 323.4, 3200, 386.4, 4800, 388.5, 6000, 388.5, 6600, 357, 6800, 128.1)

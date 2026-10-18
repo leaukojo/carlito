@@ -35,8 +35,8 @@ shader_parameter/grass_color = Color(0.35, 0.55, 0.25, 1)
 shader_parameter/dirt_color = Color(0.52, 0.4, 0.26, 1)
 shader_parameter/sand_color = Color(0.83, 0.76, 0.55, 1)
 shader_parameter/rock_color = Color(0.45, 0.44, 0.42, 1)
-shader_parameter/color5 = Color(0.92, 0.94, 0.97, 1)
-shader_parameter/color6 = Color(0.3, 0.24, 0.17, 1)
+shader_parameter/color5 = Color(0.12, 0.13, 0.15, 1)
+shader_parameter/color6 = Color(0.92, 0.94, 0.97, 1)
 shader_parameter/color7 = Color(0.22, 0.22, 0.24, 1)
 shader_parameter/color8 = Color(0.62, 0.6, 0.56, 1)
 shader_parameter/splatmap = ExtResource("7_splat")
@@ -64,6 +64,26 @@ script = ExtResource("3_cam")
 
 [node name="Spawn" type="Marker3D" parent="."]
 transform = Transform3D(6.123032e-17, 0, -1, 0, 1, 0, 1, 0, 6.123032e-17, -150, 6.6, -6.123032e-16)
+script = ExtResource("4_spawn")
+vehicle_types = PackedStringArray("car")
+
+[node name="PadAsphalt" type="Marker3D" parent="."]
+transform = Transform3D(6.123032e-17, 0, -1, 0, 1, 0, 1, 0, 6.123032e-17, -140, 6.6, 14)
+script = ExtResource("4_spawn")
+vehicle_types = PackedStringArray("car")
+
+[node name="PadWet" type="Marker3D" parent="."]
+transform = Transform3D(6.123032e-17, 0, -1, 0, 1, 0, 1, 0, 6.123032e-17, -140, 6.6, 23)
+script = ExtResource("4_spawn")
+vehicle_types = PackedStringArray("car")
+
+[node name="PadSnow" type="Marker3D" parent="."]
+transform = Transform3D(6.123032e-17, 0, -1, 0, 1, 0, 1, 0, 6.123032e-17, -140, 6.6, 32)
+script = ExtResource("4_spawn")
+vehicle_types = PackedStringArray("car")
+
+[node name="Skidpad" type="Marker3D" parent="."]
+transform = Transform3D(6.123032e-17, 0, -1, 0, 1, 0, 1, 0, 6.123032e-17, -25, 6.6, -90)
 script = ExtResource("4_spawn")
 vehicle_types = PackedStringArray("car")
 
@@ -99,9 +119,7 @@ coast_roughness = 0.35
 terrace_levels = 2
 splatmap = ExtResource("7_splat")
 splatmap2 = ExtResource("17_splat2")
-channel_names = PackedStringArray("Grass", "Dirt", "Sand", "Rock", "Ice", "Mud", "Asphalt", "Gravel")
-channel_grip = PackedFloat32Array(0.8, 0.7, 0.6, 0.7, 0.55, 0.5, 1.0, 0.85)
-channel_drag = PackedFloat32Array(0.06, 0.03, 0.1, 0.01, 0, 0.2, 0, 0.02)
+channel_surface = PackedInt32Array(5, 4, 6, 7, 1, 10, 0, 3)
 sand_height = 2.0
 dirt_slope_deg = 22.0
 rock_slope_deg = 38.0

@@ -4,7 +4,7 @@ Shared context: `00_README.md`. Root cause: none of the three; the engine and co
 06) are in, and what sits between the driver and them (how many ratios, what the pedal commands,
 what fuel reads) is still a first cut. Size: large, five separable items.
 
-Builds on `docs/vehicles.md` § Crank and coupling, § Converter, § Hill hold, § The shift policy,
+Builds on `docs/drivetrain.md` § Crank and coupling, § Converter, § Hill hold, § The shift policy,
 § Measuring a vehicle. Rule 3: every new state (CVT range, governor droop, fuel rate) is read out of
 the sim.
 
@@ -22,7 +22,7 @@ the sim.
   tractor powershift 16-24.
 - Squeezed into 6, the trucks step ~1.5-1.76x per gear (real ~1.2-1.3x), the tractor 1.35x (real
   1.10-1.15x): every upshift drops rpm by a third and reads as a lurch. The semis' light map cannot
-  land in the D13's cruise band and their skip-shifts never fire (`docs/vehicles.md` § The shift
+  land in the D13's cruise band and their skip-shifts never fire (`docs/drivetrain.md` § The shift
   policy); a floored empty tractor holds D4 ~0.5 s, under the trace's 1.0 s dwell gate
   (`docs/heavy_vehicles.md`).
 - **Route:** keep the RAMN byte as the shared coarse signal (direction and a D range) and add a
@@ -53,7 +53,7 @@ the sim.
 
 - The pedal is the delivered fuel fraction (`Drivetrain.crank_torque`), so the same pedal makes
   power in proportion to rpm, and the light-pedal upshifts make a held part pedal slow (`sedan` 0-50
-  at pedal 0.3: 40.55 s; `docs/vehicles.md` § The shift policy).
+  at pedal 0.3: 40.55 s; `docs/drivetrain.md` § The shift policy).
 - Source a car and a diesel pedal map; put it between the pedal and the fuel (never in
   `src/input/`, which shapes keys); the shift policy keeps reading the pedal itself. Re-measure the
   part-pedal and cruise probes. Independent of 10 and 11: can go first.

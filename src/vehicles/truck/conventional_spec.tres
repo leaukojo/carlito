@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="VehicleSpec" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="VehicleSpec" load_steps=6 format=3]
 
 ; North American conventional (bonneted) tractor unit. HAND-AUTHORED like semi_spec.tres, and a
 ; VARIANT of it: the drivetrain, brake, handbrake, wheel, suspension and tyre blocks are
@@ -39,9 +39,14 @@
 ; load_sensitivity 0.08: commercial radials lose ~8 % of mu per doubling of load past the
 ; corner's static share. Family number, matching the semi.
 
+; TYRES: the TRUCK fit on its stock class, M+S drive (tyres/truck_drive.tres). mu_long / mu_lat and
+; rolling_resistance below are that class on dry asphalt and a hard road; a fitted class (Winter,
+; Mud: WheelDrive.fit_tyre) moves only its factors on them (TyreClass), never these brakes.
+
 [ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
 [ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="2_wheel"]
 [ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="3_grounddrive"]
+[ext_resource type="Resource" path="res://src/vehicles/tyres/truck_drive.tres" id="9_tyre"]
 
 ; DRAG AREA 2.43 m^2 = 0.75 x 0.82 x the cab's 1.92 x 2.055 box (derived like semi_spec.tres): a
 ; bonneted conventional is taller AND blunter (0.75 against 0.70) than the cab-over, so it is the
@@ -70,6 +75,8 @@ damper_rebound_rear = 28800.0
 anti_roll_rate = 480000.0
 max_suspension_force = 120000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
+tyre = ExtResource("9_tyre")
+tyre_fit = 3
 mu_long = 0.8
 mu_lat = 0.75
 load_sensitivity = 0.08

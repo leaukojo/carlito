@@ -1,8 +1,9 @@
 # Vehicles — rules
 
-True of every vehicle; family rules nest beside the code. Tour, derivations, figures and the
-rejected designs (read before proposing a shared refactor): `docs/vehicles.md`,
-`docs/heavy_vehicles.md`.
+True of every vehicle; family rules nest beside the code. Tour, derivations and the rejected
+designs (read before proposing a shared refactor): `docs/vehicles.md`, `docs/drivetrain.md`,
+`docs/heavy_vehicles.md`; measured figures: `docs/vehicle_measurements.md`; sourced figures and
+citations: `docs/sources.md`.
 
 ## Structure
 
@@ -21,7 +22,7 @@ rejected designs (read before proposing a shared refactor): `docs/vehicles.md`,
 ## Physics
 
 - Brakes are declared hardware per body, never derived or enlarged to make a body hold (a creeper
-  is a drivetrain fix). A tyre (mu) edit moves no brake figure.
+  is a drivetrain fix). A tyre swap moves only the class factor on mu and crr; fitment stays the body's.
 - Every wheel-side torque (brake, retarder, TC hold, differential, crank, converter) is solved
   inside the semi-implicit spin step, never applied after it (a `move_toward` or post-tick torque).
 - One engine law on the DELIVERED fuel `Drivetrain.applied_throttle`; never feed it the pedal.

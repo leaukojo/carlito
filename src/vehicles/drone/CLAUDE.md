@@ -1,6 +1,6 @@
 # Drone — rules
 
-Tour, split table, sub-objects: `docs/vehicles.md` § Drone subsystems. Derivations sit at their
+Tour, split table, sub-objects: `docs/flight.md` § Drone subsystems. Derivations sit at their
 site (`drone.gd` @exports, `drone_modes.gd`, `drone_bus.gd`).
 
 - Tuning knobs stay `@export`s on `drone.tscn`, passed into the sub-objects; a copy on a

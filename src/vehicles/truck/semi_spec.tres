@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="VehicleSpec" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="VehicleSpec" load_steps=6 format=3]
 
 ; Cab-over tractor unit. HAND-AUTHORED, like train_spec.tres: Kenney ships no semi, so there is no
 ; generator baseline and every flag must be right here or it is simply absent.
@@ -7,7 +7,7 @@
 ; at 1170 rpm, 2080 redline, 600 idle. A pull-away slips the clutch at 900 rpm (see CRANK AND
 ; CLUTCH), so it is decided by the LOW END of the curve: 1500 Nm at idle (65 % of the peak, the
 ; shape of a real truck diesel) and 2084 at 900 rpm. The launch grade it
-; buys is measured in docs/vehicles.md § Gradeability. Shift points, engine_load's peak-torque
+; buys is measured in docs/vehicle_measurements.md § Gradeability. Shift points, engine_load's peak-torque
 ; denominator and the launch target all scale with the rpm range. The peak sits in a real 32 t
 ; artic's 2300-2800 Nm band.
 ;
@@ -43,9 +43,9 @@
 ; the drive rings the cab in pitch (docs/vehicles.md § Pitch).
 ;
 ; WHAT BOUNDS 2308 Nm IS TRACTION. Gear 1 puts 2308 x 6.5 x 2.925 x 0.9 / 0.36 = 110 kN at the tyres
-; against ~66 kN of coupled drive-axle grip (92 kN of axle load x mu 0.80 x the 0.90
-; load-sensitivity factor), so the rig is ~1.65x traction-limited off the line and a bigger engine
-; buys wheelspin.
+; against ~66 kN of coupled drive-axle grip (92 kN of axle load x the M+S drive tyre's mu 0.80 x
+; the 0.90 load-sensitivity factor), so the rig is ~1.65x traction-limited off the line and a
+; bigger engine buys wheelspin.
 ;
 ; BRAKES ARE THE TRACTOR UNIT'S OWN HARDWARE, not derived from the tyre or from each other:
 ; - brake_torque 15500 a wheel: EBS disc brakes on a 7.1 t steer and 11.5 t drive axle, 2.2 g of
@@ -57,7 +57,7 @@
 ; - handbrake_torque 12000 a wheel: the drive axle's spring brakes, 0.77 of the service brake on the
 ;   same drum. They lock the bobtail rears, so the unit's parking grade is its rear tyres'
 ;   (BrakeSizing.park_grade); coupled, the trailer's own spring brakes join them and the rig holds
-;   UN R13's 18 % (docs/vehicles.md, measure:park). A unit whose air drains cannot drive away
+;   UN R13's 18 % (docs/vehicle_measurements.md, measure:park). A unit whose air drains cannot drive away
 ;   because the box drops to neutral while they are on (Drivetrain.drive_inhibit), not because the
 ;   drums out-hold the engine.
 ; - retarder_rating_nm 1450 at the gearbox output: a hydraulic retarder at the low end of its class
@@ -142,9 +142,14 @@
 ; drive axle really losing grip, the conservative direction. Re-measure with
 ; tools/measure_semi_launch.tscn.
 
+; TYRES: the TRUCK fit on its stock class, M+S drive (tyres/truck_drive.tres). mu_long / mu_lat and
+; rolling_resistance below are that class on dry asphalt and a hard road; a fitted class (Winter,
+; Mud: WheelDrive.fit_tyre) moves only its factors on them (TyreClass), never these brakes.
+
 [ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="1_spec"]
 [ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="2_wheel"]
 [ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="3_grounddrive"]
+[ext_resource type="Resource" path="res://src/vehicles/tyres/truck_drive.tres" id="9_tyre"]
 
 ; DRAG AREA 2.18 m^2 = 0.70 (a flat-fronted cab-over) x 0.82 x the cab's own 1.92 x 1.98 box: the
 ; Cd x 0.82 x w x h recipe gen_kenney_vehicles derives every generated spec from, measured off
@@ -177,6 +182,8 @@ damper_rebound_rear = 28800.0
 anti_roll_rate = 480000.0
 max_suspension_force = 120000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
+tyre = ExtResource("9_tyre")
+tyre_fit = 3
 mu_long = 0.8
 mu_lat = 0.75
 load_sensitivity = 0.08

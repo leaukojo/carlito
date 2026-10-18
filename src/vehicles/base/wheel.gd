@@ -82,6 +82,10 @@ var slip_floor := LOW_SPEED_FLOOR
 var _own_slip_floor := LOW_SPEED_FLOOR
 var contact_point := Vector3.ZERO  ## world-space patch, under the hub (`patch_offset`), while in_contact
 var contact_normal := Vector3.UP  ## world-space contact normal while in_contact (the hill hold's grade)
+## The fitted tyre's grip per `Surface` id over the spec's mu (`apply_tyre`;
+## `HeightmapTerrain.grip_at`'s response); empty reads each surface's `Surface.ref_grip`, the
+## reference tyre.
+var tyre_grip := PackedFloat32Array()
 var surface_grip := 1.0  ## grip multiplier from the painted terrain under the contact (F3 readout)
 var surface_drag := 0.0  ## added rolling-resistance coefficient of the painted terrain under the contact (F3 readout)
 ## Spin change per N·m of extra torque in this tick's step, `delta / (I * (1 + reaction_stiffness))`
@@ -232,6 +236,12 @@ func apply_suspension(gd: GroundDriveSpec) -> void:
 		_query_body = RID()
 
 
+## Fit a tyre class on a body whose spec describes `stock` (`TyreClass.grip_response`): once per
+## fit, never per tick. A `reset` keeps it.
+func apply_tyre(fitted: TyreClass, stock: TyreClass) -> void:
+	tyre_grip = TyreClass.grip_response(fitted, stock)
+
+
 func reset() -> void:
 	omega = 0.0
 	compression = 0.0
@@ -340,7 +350,9 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	contact_point = hub + patch_offset(normal, up, Basis(up, steer_angle) * xform.basis.x,
 			wheel_radius)
 	var terrain := terrain_at(contact_point, grip_terrains)
-	surface_grip = terrain.grip_at(contact_point) if terrain != null else 1.0
+	# Bare ground (flatland, a deck off the terrain) is asphalt to the fitted tyre too.
+	surface_grip = terrain.grip_at(contact_point, tyre_grip) if terrain != null \
+			else Surface.grip_in(tyre_grip, Surface.ASPHALT)
 	surface_drag = terrain.drag_at(contact_point) if terrain != null else 0.0
 
 	# Along the contact normal, never the chassis up axis, which would push a pitched body along.

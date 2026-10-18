@@ -1,12 +1,13 @@
 [gd_resource type="Resource" script_class="VehicleSpec" format=3]
 
-[ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="1_6q52r"]
-[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-tractor-front.tscn" id="2_3gcuq"]
-[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-tractor-rear.tscn" id="3_y3m6k"]
-[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="4_rucm1"]
+[ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="1_3gcuq"]
+[ext_resource type="Resource" path="res://src/vehicles/tyres/ag_lug.tres" id="2_y3m6k"]
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-tractor-front.tscn" id="3_rucm1"]
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-tractor-rear.tscn" id="4_sm7g4"]
+[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="5_wagv3"]
 
-[sub_resource type="Resource" id="Resource_sm7g4"]
-script = ExtResource("1_6q52r")
+[sub_resource type="Resource" id="Resource_f4h4l"]
+script = ExtResource("1_3gcuq")
 wheel_positions = PackedVector3Array(-0.8027379, 0.5080303, -1.0061542, 0.8027379, 0.5080303, -1.0061542, -0.89622015, 0.7280303, 1.109223, 0.89622015, 0.7280303, 1.1092229)
 wheel_radius = 0.44
 wheel_inertia = 16.0
@@ -14,8 +15,8 @@ wheel_radius_rear = 0.66
 wheel_inertia_rear = 90.0
 tyre_half_width = 0.3021
 tyre_half_width_rear = 0.4048
-wheel_scene = ExtResource("2_3gcuq")
-wheel_scene_rear = ExtResource("3_y3m6k")
+wheel_scene = ExtResource("3_rucm1")
+wheel_scene_rear = ExtResource("4_sm7g4")
 rear_diff_lockable = true
 front_axle_engageable = true
 centre_diff_rigid = true
@@ -25,6 +26,8 @@ damper_bump = 16500.0
 damper_rebound = 20300.0
 spring_rate_rear = 420000.0
 max_suspension_force = 110000.0
+tyre = ExtResource("2_y3m6k")
+tyre_fit = 4
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 1.0
 rear_lat_grip = 1.077
@@ -44,8 +47,8 @@ min_steer_frac = 0.55
 steer_falloff_speed = 11.0
 
 [resource]
-script = ExtResource("4_rucm1")
-ground_drive = SubResource("Resource_sm7g4")
+script = ExtResource("5_wagv3")
+ground_drive = SubResource("Resource_f4h4l")
 mass = 7000.0
 center_of_mass = Vector3(0, 0.8305302, 0.3053797)
 torque_curve = PackedVector2Array(800, 550, 1200, 680, 1600, 700, 2000, 640, 2200, 560, 2600, 0)

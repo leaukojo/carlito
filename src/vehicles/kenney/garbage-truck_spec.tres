@@ -1,16 +1,17 @@
 [gd_resource type="Resource" script_class="VehicleSpec" format=3 uid="uid://djj8cm46wlt0t"]
 
-[ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="1_p1exh"]
-[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="2_iy4vk"]
-[ext_resource type="Script" uid="uid://dfx5igkkufs6j" path="res://src/vehicles/base/vehicle_spec.gd" id="3_nqva0"]
+[ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="1_iy4vk"]
+[ext_resource type="Resource" path="res://src/vehicles/tyres/truck_drive.tres" id="2_nqva0"]
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-truck.tscn" id="3_1ureh"]
+[ext_resource type="Script" uid="uid://dfx5igkkufs6j" path="res://src/vehicles/base/vehicle_spec.gd" id="4_yokus"]
 
-[sub_resource type="Resource" id="Resource_1ureh"]
-script = ExtResource("1_p1exh")
+[sub_resource type="Resource" id="Resource_1sr8e"]
+script = ExtResource("1_iy4vk")
 wheel_positions = PackedVector3Array(-0.6600001, 0.631, -1.302, 0.6600001, 0.631, -1.302, -0.6600001, 0.631, 0.642, 0.6600001, 0.631, 0.6419999)
 wheel_radius = 0.36
 wheel_inertia = 3.0
 tyre_half_width = 0.21
-wheel_scene = ExtResource("2_iy4vk")
+wheel_scene = ExtResource("3_1ureh")
 retarder_equipped = true
 retarder_rating_nm = 600.0
 rest_length = 0.32
@@ -19,6 +20,8 @@ damper_bump = 31000.0
 damper_rebound = 41000.0
 anti_squat_slope = 0.219
 max_suspension_force = 120000.0
+tyre = ExtResource("2_nqva0")
+tyre_fit = 3
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 0.8
 mu_lat = 0.75
@@ -39,8 +42,8 @@ min_steer_frac = 0.22
 steer_falloff_speed = 26.0
 
 [resource]
-script = ExtResource("3_nqva0")
-ground_drive = SubResource("Resource_1ureh")
+script = ExtResource("4_yokus")
+ground_drive = SubResource("Resource_1sr8e")
 mass = 8000.0
 center_of_mass = Vector3(0, 0.85, -0.26196)
 torque_curve = PackedVector2Array(700, 509, 1200, 826, 1800, 1017, 2600, 890, 2900, 0)

@@ -3,7 +3,7 @@ extends Object
 ## Shell's playable-levels list: add a new entry + .tscn. `name` is menu label, `desc` is
 ## flavor text, `id` names the scene and screenshot. `dev: true` entries hidden from
 ## level-select but included in bake/check/smoke tests. `arena: true` is a shipped challenge
-## arena: hidden from level-select too, reached through a challenge (ChallengeDef.arena).
+## arena (ChallengeDef.arena), listed in level-select like any other level.
 
 const LEVELS: Array[Dictionary] = [
 	{ "id": "garage", "name": "Garage", "scene": "res://src/levels/garage/garage.tscn",
@@ -25,8 +25,11 @@ const LEVELS: Array[Dictionary] = [
 	{ "id": "open_sea", "name": "Open Sea", "scene": "res://src/levels/open_sea/open_sea.tscn",
 		"desc": "Endless open water under a steady wind. Boats only: no shore, no bottom." },
 	{ "id": "car_arena", "name": "Car Arena", "scene": "res://src/levels/island/car_arena/car_arena.tscn",
-		"desc": "Car challenge arena: a plateau with a straight, corners, a winding road, a cliff-edged ridge road, a lagoon causeway, an ice bend and a parking apron.",
+		"desc": "Car challenge arena: a plateau with a straight, corners, a winding road, a cliff-edged ridge road, a lagoon causeway, a wet bend, a tyre pad (asphalt, wet and snow strips, a skidpad) and a parking apron.",
 		"arena": true },
+	{ "id": "rough_ground", "name": "Rough Ground", "scene": "res://src/levels/dev/rough_ground/rough_ground.tscn",
+		"desc": "measure_rough's bump and ditch lanes, asphalt and mud, and an ice pad (spawn IcePad).",
+		"dev": true },
 ]
 
 

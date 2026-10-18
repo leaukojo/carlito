@@ -188,10 +188,10 @@ const CH_ROCK := 3      ## the canyon walls: painted, not left to auto-splat —
 const WALL_BAND := 3.0
 const CH_PAD := 4       ## splatmap2.R — the marked landing/payload decks, this level's own
 const CH_GRAVEL := 7
-const CHANNEL_NAMES: Array[String] = [
-	"Grass", "Dirt", "Sand", "Rock", "Pad", "Snow", "Asphalt", "Gravel",
+const CHANNEL_SURFACE: Array[int] = [
+	Surface.GRASS, Surface.DIRT, Surface.SAND, Surface.ROCK,
+	Surface.PAD, Surface.SNOW, Surface.ASPHALT, Surface.GRAVEL,
 ]
-const CHANNEL_GRIP: Array[float] = [0.8, 0.7, 0.6, 0.7, 0.95, 0.75, 1.0, 0.85]
 ## Safety yellow: a marked pad has to read as a MARKING against grass, rock and asphalt
 ## alike, and blend_sharpness 8 gives it a hard border for free.
 const PAD_COLOR := Color(0.95, 0.78, 0.12)
@@ -1263,8 +1263,7 @@ coast_roughness = {coast_roughness}
 terrace_levels = {terrace_levels}
 splatmap = ExtResource("7_splat")
 splatmap2 = ExtResource("18_splat2")
-channel_names = PackedStringArray({channel_names})
-channel_grip = PackedFloat32Array({channel_grip})
+channel_surface = PackedInt32Array({channel_surface})
 sand_height = {sand_height}
 dirt_slope_deg = 24.0
 rock_slope_deg = 40.0
@@ -1309,9 +1308,7 @@ curve = ExtResource("17_rim")
 		"seed": GEN_SEED, "feature_scale": FEATURE_SCALE, "octaves": OCTAVES,
 		"falloff_start": FALLOFF_START, "falloff_end": FALLOFF_END,
 		"coast_roughness": COAST_ROUGHNESS, "terrace_levels": TERRACE_LEVELS,
-		"channel_names": '"%s"' % '", "'.join(CHANNEL_NAMES),
-		"channel_grip": ", ".join(PackedStringArray(
-				CHANNEL_GRIP.map(func(g: float) -> String: return str(g)))),
+		"channel_surface": GenIO.surface_list(CHANNEL_SURFACE),
 		"conform_falloff": CONFORM_FALLOFF, "conform_epsilon": CONFORM_EPSILON,
 		"pad_r": PAD_COLOR.r, "pad_g": PAD_COLOR.g, "pad_b": PAD_COLOR.b,
 		"sx": SPAWN_LAND.x, "sy": SPAWN_LAND.y + 0.6, "sz": SPAWN_LAND.z,

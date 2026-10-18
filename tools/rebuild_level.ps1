@@ -84,14 +84,21 @@ if (-not $NoSnapshot) {
 }
 
 # --- run ----------------------------------------------------------------------------------
-# Judged by output, not exit code: --import and game-mode tool scenes hand back unreliable process codes (leak-at-exit noise).
-function Invoke-Godot($label, $godotArgs) {
+# A script error fails every step. --import hands back an unreliable process code, so it fails on
+# any ERROR: line too; a tool step's verdict is its exit code (every chain tool ends in
+# quit(code)), and an engine ERROR: line it logs while exiting 0 is shown, not fatal.
+function Invoke-Godot($label, $godotArgs, [switch]$ByExitCode) {
     Announce "$label"
     $out = & $GODOT @godotArgs 2>&1 | Out-String
+    $code = $LASTEXITCODE
     Write-Host $out
-    $bad = ($out -split "`n") | Select-String -Pattern 'SCRIPT ERROR|Failed to load|Compile Error|ERROR:' |
-        Where-Object { $_ -notmatch 'still in use at exit|leaked at exit|Pages in use exist at exit' }
-    if ($bad) { $bad; Fail $label }
+    $lines = ($out -split "`n") | Where-Object { $_ -notmatch 'still in use at exit|leaked at exit|Pages in use exist at exit' }
+    $scriptErrors = $lines | Select-String -Pattern 'SCRIPT ERROR|Failed to load|Compile Error'
+    if ($scriptErrors) { $scriptErrors; Fail $label }
+    $engineErrors = $lines | Select-String -Pattern 'ERROR:'
+    if (-not $ByExitCode) { if ($engineErrors) { $engineErrors; Fail $label }; return }
+    if ($code -ne 0) { Fail "$label (exit code $code)" }
+    if ($engineErrors) { Write-Host 'engine errors logged, tool exited 0:' -ForegroundColor Yellow; $engineErrors }
 }
 
 $i = 0
@@ -100,16 +107,16 @@ foreach ($step in $m.steps) {
     switch ($step.kind) {
         'manual' { Announce "step $i - manual, skipped: $($step.what)" }
         'import' { Invoke-Godot "step $i - import" @('--headless', '--path', '.', '--import') }
-        'bake'   { Invoke-Godot "step $i - bake $sceneRel" @('--headless', '--path', '.', 'res://tools/bake_levels.tscn', '--', $sceneRel) }
+        'bake'   { Invoke-Godot "step $i - bake $sceneRel" @('--headless', '--path', '.', 'res://tools/bake_levels.tscn', '--', $sceneRel) -ByExitCode }
         'script' {
             $a = @('--headless', '--path', '.', '--script', $step.path)
             if ($Force) { $a += @('--', '--force') }  # a one-shot generator refuses without it
-            Invoke-Godot "step $i - --script $($step.path)" $a
+            Invoke-Godot "step $i - --script $($step.path)" $a -ByExitCode
         }
         'scene'  {
             $a = @('--headless', '--path', '.', [string]$step.path)
             if ($step.args) { $a += '--'; $a += ($step.args | ForEach-Object { [string]$_ }) }
-            Invoke-Godot "step $i - $($step.path) $($step.args -join ' ')" $a
+            Invoke-Godot "step $i - $($step.path) $($step.args -join ' ')" $a -ByExitCode
         }
     }
 }

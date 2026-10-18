@@ -19,11 +19,11 @@ func _cards(sel: LevelSelect) -> Array:
 	return out
 
 
-## The entries level select lists: not dev fixtures (test assets), not challenge arenas.
+## The entries level select lists: not dev fixtures (test assets); challenge arenas included.
 func _shipped() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for entry in LevelRegistry.LEVELS:
-		if not bool(entry.get("dev", false)) and not bool(entry.get("arena", false)):
+		if not bool(entry.get("dev", false)):
 			out.append(entry)
 	return out
 
@@ -60,8 +60,11 @@ func test_level_select_hides_dev_fixtures() -> void:
 	for b in _buttons(sel):
 		tooltips.append(b.tooltip_text)
 	for entry in LevelRegistry.LEVELS:
-		if bool(entry.get("dev", false)) or bool(entry.get("arena", false)):
-			assert_array(tooltips).not_contains([String(entry.get("desc", ""))])
+		var desc := String(entry.get("desc", ""))
+		if bool(entry.get("dev", false)):
+			assert_array(tooltips).not_contains([desc])
+		elif bool(entry.get("arena", false)):
+			assert_array(tooltips).contains([desc])  # free play reaches an arena's pad
 
 
 func test_level_select_cards_carry_the_registry_description() -> void:
@@ -116,9 +119,9 @@ func test_bake_weights_carry_every_baked_level() -> void:
 
 ## Selector on level with allowed families; emits VARIANT not family.
 func _selector(allowed: PackedStringArray, variant: String,
-		rail := false, attachment := "") -> VehicleSelect:
+		rail := false, attachment := "", tyres := {}) -> VehicleSelect:
 	var sel: VehicleSelect = auto_free(VehicleSelect.new())
-	sel.setup(allowed, "Test Level", rail, variant, attachment)
+	sel.setup(allowed, "Test Level", rail, variant, attachment, false, Callable(), tyres)
 	add_child(sel)
 	return sel
 
@@ -221,6 +224,57 @@ func test_vehicle_select_offers_the_gearbox_only_where_the_family_takes_a_gear()
 	boat.gearbox_chosen.connect(func(m: bool) -> void: boat_chosen.append(m))
 	_press(boat, "DRIVE")
 	assert_array(boat_chosen).is_empty()
+
+
+## TYRES lists what the variant's fit is made in, stock first; it opens on the stored class when
+## that fits (else the stock) and rides DRIVE as its own signal.
+func test_vehicle_select_offers_the_tyres_the_variant_fits() -> void:
+	var car := _selector(PackedStringArray(["car"]), "sedan")
+	assert_array(_labels(car)).contains(["ALL-SEASON", "SUMMER", "WINTER", "STUDDED WINTER"])
+	assert_array(_labels(car)).not_contains(["MUD", "SLICK", "M+S DRIVE"])
+	var chosen := []
+	car.tyre_chosen.connect(func(v: String, id: String) -> void: chosen.append(v + ":" + id))
+	_press(car, "DRIVE")
+	_press(car, "WINTER")
+	_press(car, "DRIVE")
+	assert_array(chosen).is_equal(["sedan:all_season", "sedan:winter"])
+
+	var stored := _selector(PackedStringArray(["car"]), "sedan", false, "", {"sedan": "summer"})
+	var unfitting := _selector(PackedStringArray(["car"]), "sedan", false, "", {"sedan": "mud"})
+	var got := []
+	stored.tyre_chosen.connect(func(_v: String, id: String) -> void: got.append(id))
+	unfitting.tyre_chosen.connect(func(_v: String, id: String) -> void: got.append(id))
+	_press(stored, "DRIVE")
+	_press(unfitting, "DRIVE")
+	assert_array(got).is_equal(["summer", "all_season"])
+
+
+## The rows read GEARBOX, TYRES, BODY, top to bottom.
+func test_vehicle_select_puts_the_tyres_between_gearbox_and_body() -> void:
+	var car := _selector(PackedStringArray(["car"]), "sedan")
+	var titles := []
+	for l in car.find_children("*", "Label", true, false):
+		if ["GEARBOX", "TYRES", "BODY"].has((l as Label).text.get_slice(" ", 0)):
+			titles.append((l as Label).text.get_slice(" ", 0))
+	assert_array(titles).is_equal(["GEARBOX", "TYRES", "BODY"])
+
+
+## Only the stock fits (slicks) or no tyre at all (a boat): no row, and DRIVE sends no tyre.
+func test_vehicle_select_hides_the_tyres_when_only_the_stock_fits() -> void:
+	for pick: Array in [["car", "race"], ["boat", "boat-speed-a"]]:
+		var sel := _selector(PackedStringArray([pick[0]]), pick[1])
+		assert_array(_labels(sel)).not_contains(["SLICK"])
+		var chosen := []
+		sel.tyre_chosen.connect(func(_v: String, id: String) -> void: chosen.append(id))
+		_press(sel, "DRIVE")
+		assert_array(chosen).is_empty()
+
+
+func test_tyre_choices_put_the_stock_first_in_catalog_order() -> void:
+	var gd := (load("res://src/vehicles/truck/semi_spec.tres") as VehicleSpec).ground_drive
+	var ids := VehicleSelect.tyre_choices(gd).map(func(c: TyreClass) -> String: return c.id)
+	assert_array(ids).is_equal(["truck_drive", "winter", "mud"])
+	assert_array(VehicleSelect.tyre_choices(null)).is_empty()
 
 
 ## Pause overlay: all entries reachable, each reaches shell.
@@ -444,6 +498,57 @@ func test_boot_vehicle_and_attachment_keys_are_inert_behind_an_overlay() -> void
 	assert_that(boot._level.vehicle.get("_implement_id")).is_equal(implement)
 
 
+## SPAWN POINT shows only with somewhere to choose, and its page hands the shell an index.
+func test_pause_menu_spawn_page_needs_two_spawns_and_emits_the_index() -> void:
+	var one := PauseMenu.State.new()
+	one.spawns = PackedStringArray(["Spawn"])
+	var lone: PauseMenu = auto_free(PauseMenu.new())
+	lone.setup({}, one)
+	add_child(lone)
+	assert_array(_buttons(lone).map(func(b: Button) -> String: return b.text)) \
+			.not_contains(["SPAWN POINT"])
+
+	var three := PauseMenu.State.new()
+	three.spawns = PackedStringArray(["Spawn", "Pad Wet", "Pad Snow"])
+	var pause: PauseMenu = auto_free(PauseMenu.new())
+	pause.setup({}, three)
+	add_child(pause)
+	var picked := []
+	pause.spawn_picked.connect(func(i: int) -> void: picked.append(i))
+	for b in _buttons(pause):
+		if b.text == "SPAWN POINT":
+			b.pressed.emit()
+	assert_bool(pause.back()).is_true()  # it was a page of its own
+	for b in _buttons(pause):
+		if b.text == "PAD SNOW":
+			b.pressed.emit()
+	assert_array(picked).is_equal([2])
+
+
+## The arena offers its pad's spawns; a pick moves the same body there and makes it the respawn
+## point, and a challenge offers none (its course owns the spawn).
+func test_boot_spawn_point_moves_the_body_and_respawn_returns_there() -> void:
+	var boot := _booted()
+	boot._next_variant = "sedan"
+	boot._finish_load(load(LevelRegistry.scene_of("car_arena")) as PackedScene)
+	var names := boot._spawn_points().map(func(n: VehicleSpawn) -> String: return String(n.name))
+	assert_array(names).is_equal(["Spawn", "PadAsphalt", "PadWet", "PadSnow", "Skidpad"])
+	var body: BaseVehicle = boot._level.vehicle
+	var snow: VehicleSpawn = boot._spawn_points()[3]
+	boot._on_spawn_picked(3)
+	assert_object(boot._level.vehicle).is_same(body)
+	var at := Vector2(body.global_position.x, body.global_position.z)
+	var want := Vector2(snow.global_position.x, snow.global_position.z)
+	assert_float(at.distance_to(want)).is_less(0.01)
+	body.global_position += Vector3(30.0, 0.0, 0.0)
+	boot._respawn()
+	at = Vector2(body.global_position.x, body.global_position.z)
+	assert_float(at.distance_to(want)).is_less(0.01)
+
+	_run_challenge(boot, "car_box_stop")
+	assert_array(boot._spawn_points()).is_empty()
+
+
 ## A sticky notice outlives the default dwell; a transient one shown over it hands back to it.
 func test_boot_sticky_notice_outlasts_a_transient_one() -> void:
 	var boot := _booted()
@@ -529,3 +634,30 @@ func test_boot_menu_key_reveals_an_already_open_overlay() -> void:
 	boot._show_level_select()
 	assert_int(boot._overlays.size()).is_equal(1)
 	assert_object(boot._overlays[0]).is_same(first)
+
+
+## The stored tyre is on every free-play spawn of its variant and survives a respawn; an unknown
+## id reads as the stock. A challenge runs the stock, and the stored class comes back with the lock.
+func test_boot_fits_the_stored_tyre_and_a_challenge_runs_the_stock() -> void:
+	var boot := _booted()
+	boot._settings = UserSettings.new("")
+	boot._settings.set_tyre("sedan", "winter")
+	boot._level.set_vehicle("sedan")
+	assert_str(boot._level.vehicle.drive.tyre.id).is_equal("winter")
+	boot._level.vehicle.respawn()
+	assert_str(boot._level.vehicle.drive.tyre.id).is_equal("winter")
+	boot._settings.set_tyre("sedan", "no_such_class")
+	boot._level.set_vehicle("sedan")
+	assert_str(boot._level.vehicle.drive.tyre.id).is_equal("all_season")
+	# A pick is stored under the variant it was made for, never the body still driven (the level
+	# may refuse the new one).
+	boot._on_tyre_picked("pickup", "mud")
+	assert_str(boot._settings.tyre_of("pickup")).is_equal("mud")
+	assert_str(boot._settings.tyre_of("sedan")).is_equal("no_such_class")
+
+	boot._settings.set_tyre("sedan-sports", "summer")
+	_run_challenge(boot, "car_blind_stadium")
+	assert_str(GameState.current_variant).is_equal("sedan-sports")
+	assert_str(boot._level.vehicle.drive.tyre.id).is_equal("all_season")
+	boot._end_challenge()
+	assert_str(boot._level.vehicle.drive.tyre.id).is_equal("summer")

@@ -71,6 +71,10 @@ var last_pedal := 0.0
 ## axle, `ShiftPolicy.standing_load`). 0 mass = no estimate: the policy reads no load.
 var load_mass_kg := 0.0
 var standing_load := 0.0
+## Owner-set the same way: the fitted tyre's hard-road rolling resistance
+## (`WheelDrive.rolling_resistance`), the flat road `ShiftPolicy.on_grade` weighs against. The
+## spec's stock figure until the owner sets it.
+var rolling_crr := 0.0
 ## The road-load estimate the policy reads (N·m at the axle, + = resisting forward motion): the
 ## torque the coupling passed less the rig's mass times its measured acceleration, filtered
 ## (`ShiftPolicy.road_load_step`); `standing_load` at rest, held while the foot brake is on (the brake
@@ -161,6 +165,7 @@ func _init(p_spec: VehicleSpec) -> void:
 	spec = p_spec
 	road_radius = maxf(p_spec.ground_drive.drive_radius(), MIN_ROAD_RADIUS) \
 			if p_spec.ground_drive != null else DEFAULT_ROAD_RADIUS
+	rolling_crr = p_spec.ground_drive.rolling_resistance if p_spec.ground_drive != null else 0.0
 	rpm = spec.idle_rpm
 	ramp = 0.0 if spec.launch_engage_s > 0.0 else 1.0
 	if p_spec.coupling == VehicleSpec.Coupling.CONVERTER and drives_wheels(p_spec):
@@ -496,7 +501,7 @@ static func handover_fuel(pred_base: float, pred_per_fuel: float, target: float,
 ## point (`lockup_engages`), so it carries drive from the first tick of a pull-away and loads the
 ## idling crank in gear: it creeps. COMPROMISE: the torque ratio is data and ships 1.0
 ## (`spec.converter_stall_ratio`, a fluid coupling), where a real converter makes about 2.0 at stall
-## (docs/vehicles.md § Converter): at 2.0, seven more bodies fail the foot brake's static stall hold
+## (docs/drivetrain.md § Converter): at 2.0, seven more bodies fail the foot brake's static stall hold
 ## (`BrakeSizing.stall_hold_margin` reads `stall_axle_torque`), which waits on a review of their
 ## brake classes against sourced hardware. A shift slips the gearbox's own clutch (the friction
 ## path, `_inertia_phase`, at `handover_rate`), never the converter.
@@ -770,7 +775,8 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 			var floor_gear := _start_gear if _launching else 1
 			kick = ShiftPolicy.kickdown_armed(spec, _kickdown, pedal, last_pedal)
 			gear_byte = auto_shift(spec, from, at_rpm, pedal, gear_s, kick, road_load, floor_gear,
-					braking, ShiftPolicy.on_grade(spec, road_load, ground_speed, load_mass_kg),
+					braking, ShiftPolicy.on_grade(spec, road_load, ground_speed, load_mass_kg,
+							rolling_crr),
 					load_mass_kg)
 			kick = kick and not ShiftPolicy.kickdown_spent(spec, from, at_rpm, pedal, gear_s,
 					floor_gear)

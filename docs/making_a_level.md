@@ -47,7 +47,7 @@ folders. Detail: `level_kit.md` § Authoring model.
 
 - **Organic routes:** add a `RoadPath` (under Authoring) → Roads tab → Draw mode
   (`city`/`asphalt`/`gravel` presets); flatten under it with Conform terrain. Detail:
-  `level_kit.md` § Draw mode and drape, § Ports and port snapping.
+  `level_kit.md` § Draw mode and drape (ports included).
 - **City grids:** Palette tab → roads kit → paint the built-in GridMap. Cell `(12,3,12)`;
   `road-curve` = 2×2 sweep, `road-bend` = 1×1 corner. Conform terrain (palette toolbar)
   flattens the pad under painted tiles and prefab buildings.
@@ -58,7 +58,7 @@ folders. Detail: `level_kit.md` § Authoring model.
 ## 4. Splat (terrain color)
 
 Terrain tab: Auto-splat classifies grass/dirt/sand/rock from slope + height, then hand-paint
-any of the 8 channels. Channel table, `channel_names`, `blend_sharpness`: `level_kit.md`
+any of the 8 channels. Channel table, `channel_surface`, `blend_sharpness`: `level_kit.md`
 § Terrain generation & splat ground. Splat after roads/conform, so conform's height edits
 are reflected.
 

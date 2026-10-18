@@ -133,19 +133,20 @@ Below-sea ring splats sand to the map edge so `WaterSurface` reads a circular co
 Auto-splat classifies from slope + height (`sand_height`, `dirt_slope_deg`,
 `rock_slope_deg`).
 
-| Index | Source | Default color param | Default name |
+| Index | Source | Default color param | Default surface |
 |---|---|---|---|
 | 0 | `splatmap`.R | `grass_color` | grass |
 | 1 | `splatmap`.G | `dirt_color` | dirt |
 | 2 | `splatmap`.B | `sand_color` | sand |
 | 3 | `splatmap`.A | `rock_color` | rock |
-| 4 | `splatmap2`.R | `color5` | Field (level 1) |
+| 4 | `splatmap2`.R | `color5` | snow (level 1: Field) |
 | 5 | `splatmap2`.G | `color6` | mud |
 | 6 | `splatmap2`.B | `color7` | asphalt |
 | 7 | `splatmap2`.A | `color8` | gravel |
 
-`CHANNEL_PARAMS` maps index → param; name: `channel_names`; grip: `channel_grip`
-(PackedFloat32Array, default 1.0 — `grip_at`, `docs/systems.md` § Level framework).
+`CHANNEL_PARAMS` maps index → param; `channel_surface` maps index → `Surface` id, which gives
+the channel its name, grip and drag (`src/levels/base/surface.gd`; `grip_at`, `docs/systems.md`
+§ Level framework).
 `splatmap2` absent samples transparent (`hint_default_transparent`). Channel 4 "Field" and
 the Auto-splat-zeroes-`splatmap2` rule: `src/levels/CLAUDE.md`.
 
@@ -159,11 +160,9 @@ out of grip reach and need none.
 Generated-PNG import settings (`detect_3d/compress_to=0`, `process/fix_alpha_border=false`),
 written by `TerrainGen.ensure_import_settings` (runtime `get_image()` needs lossless, no mipmaps). Demo:
 `src/levels/island/level_1/level_1.tscn`, 512 m terraced island, seed **499399**, ISOBUS
-farm playground (`tools/gen_farm_playground.tscn`). Levels 2-4: hand-dressed on a one-shot
-`tools/gen_islands.gd` scaffold (never re-run). Level 5: railway (`tools/gen_rail_level.gd`).
-Level 6: drone playground (`tools/gen_skyport.gd`), only level with a `WindField`, a
-`CurrentField`, and `Payloads` (`CargoPayload` crates as children of the LEVEL ROOT, not
-`AuthoringRoot` — a bake input would weld them). Generator stages: each level's `<id>_gen.json`.
+farm playground (`tools/gen_farm_playground.tscn`); the other levels and their generators:
+`docs/systems.md` § Level framework. Level 6's `CargoPayload` crates are children of the LEVEL
+ROOT, not `AuthoringRoot` (a bake input would weld them).
 
 ## Terrain brushes
 

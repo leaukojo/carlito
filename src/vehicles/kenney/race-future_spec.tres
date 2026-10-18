@@ -1,15 +1,16 @@
 [gd_resource type="Resource" script_class="VehicleSpec" format=3]
 
-[ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="1_sag7n"]
-[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel.tscn" id="2_55k7i"]
-[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="3_j5dhf"]
+[ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="1_55k7i"]
+[ext_resource type="Resource" path="res://src/vehicles/tyres/slick.tres" id="2_j5dhf"]
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel.tscn" id="3_hqdio"]
+[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="4_fnlax"]
 
-[sub_resource type="Resource" id="Resource_hqdio"]
-script = ExtResource("1_sag7n")
+[sub_resource type="Resource" id="Resource_igr2o"]
+script = ExtResource("1_55k7i")
 wheel_positions = PackedVector3Array(-0.78000015, 0.54303247, -0.70786345, 0.78000015, 0.54303247, -0.70786357, -0.78000015, 0.54303247, 1.1161366, 0.78000015, 0.54303247, 1.1161366)
 wheel_radius = 0.36
 tyre_half_width = 0.24
-wheel_scene = ExtResource("2_55k7i")
+wheel_scene = ExtResource("3_hqdio")
 driven_front = true
 diff_bias_rear = 2.5
 centre_diff_bias = 3.0
@@ -23,6 +24,8 @@ damper_rebound_rear = 2379.0
 anti_roll_rate = 10000.0
 anti_dive_slope = 0.066
 anti_squat_slope = 0.082
+tyre = ExtResource("2_j5dhf")
+tyre_fit = 5
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 mu_long = 1.25
 mu_lat = 1.35
@@ -42,8 +45,8 @@ min_steer_frac = 0.24
 steer_falloff_speed = 42.0
 
 [resource]
-script = ExtResource("3_j5dhf")
-ground_drive = SubResource("Resource_hqdio")
+script = ExtResource("4_fnlax")
+ground_drive = SubResource("Resource_igr2o")
 mass = 850.0
 center_of_mass = Vector3(0, 0.3, 0.3500565)
 torque_curve = PackedVector2Array(900, 216.58, 2000, 340.34, 3200, 406.64, 4800, 408.85, 6000, 408.85, 6600, 375.7, 6800, 134.81)

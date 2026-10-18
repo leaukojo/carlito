@@ -7,11 +7,6 @@ extends BaseVehicle
 
 const SPAWN_HITCH := 1.0                ## spawn default: raised (transport), PTO off
 
-## Splat channel 4 ("Field") is the "in soil" predicate for draft, not Dirt (channel 1), which
-## auto-splat paints on every slope. Auto-splat only zeroes splatmap2, so an unpainted level reads
-## "no soil" everywhere.
-const SOIL_CHANNEL := 4
-
 @export var hitch_travel_time := 1.5   ## s for a full raise or lower
 @export var pto_load := 0.35           ## engine_load added while PTO engaged
 ## The 100% end of 'draft_force' (N): the plough's `draft_rating()`, so the plough at full depth on
@@ -273,12 +268,18 @@ func hitch_effective_mass(point: Vector3) -> float:
 			b.transposed() * state.inverse_inertia_tensor * b)[0]
 
 
-## Ploughable-soil weight under `point`, 0..1, off the wheels' terrain pick; unpainted means no soil.
 func _soil_at(point: Vector3) -> float:
-	var terrain := RayWheel.terrain_at(point, _grip_terrains)
-	if terrain == null or not terrain.has_method("channel_weight_at"):
+	return soil_under(point, _grip_terrains)
+
+
+## Ploughable-soil weight under `point`, 0..1, off the wheels' terrain pick: `Surface.FIELD`,
+## whichever channel a level paints it in. Not Dirt, which auto-splat paints on every slope;
+## unpainted means no soil.
+static func soil_under(point: Vector3, terrains: Array[Node]) -> float:
+	var terrain := RayWheel.terrain_at(point, terrains)
+	if terrain == null or not terrain.has_method("surface_weight_at"):
 		return 0.0
-	return terrain.channel_weight_at(point, SOIL_CHANNEL)
+	return terrain.surface_weight_at(point, Surface.FIELD)
 
 
 ## Mean spin of the rear axle (rad/s): always driven (the front changes with MFWD), and it digs in,

@@ -1,7 +1,7 @@
 class_name BoatSail
 extends RefCounted
 ## The sailboat's rig (contract 'sheet' -> 'sail_angle'): pure static logic, no node state, the
-## BoatAutopilot shape. Tour: docs/vehicles.md § Sailing.
+## BoatAutopilot shape. Tour: docs/boat.md § Sailing.
 ##
 ## The boom angle shares `awa`'s sign (which side the wind is on), so `aoa = awa - boom`.
 ## Not through VehicleMath.air_damper (its `axis` masks WORLD space) nor damped_force: a sail force

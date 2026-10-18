@@ -1,11 +1,13 @@
 class_name UserSettings
 extends RefCounted
-## The SETTINGS page's choices, in `user://settings.cfg` (IndexedDB on web), so a reload keeps
-## them. CONDITIONS and the gearbox stay session-only (boot.gd).
+## The SETTINGS page's choices and the garage's tyre class per variant, in `user://settings.cfg`
+## (IndexedDB on web), so a reload keeps them. CONDITIONS and the gearbox stay session-only
+## (boot.gd).
 ##
 ## Read back by type only: a value whose type is not its default's is ignored (and dropped on the
 ## next write). Range is its owner's job (Dashboard, UiScale, DebugOverlay, InputRouter), whose
-## setter validates a saved value exactly as it does a press.
+## setter validates a saved value exactly as it does a press; a stored tyre is judged when it is
+## fitted (`WheelDrive.fit_tyre`: an unknown or unfitting class reads as the stock).
 
 const KeyShaper := preload("res://src/input/key_shaper.gd")
 
@@ -18,10 +20,11 @@ const DEFAULTS := {
 	"extended_debug": false,
 	"key_softening": KeyShaper.DEFAULT_SOFTENING,
 	"tcs_off": false,
+	"tyres": {},  ## variant -> TyreClass id (`tyre_of`, `set_tyre`)
 }
 
 var _path := ""    ## "" = memory only, never written
-var _values := DEFAULTS.duplicate()
+var _values := DEFAULTS.duplicate(true)
 
 
 ## `store` "" keeps everything in memory.
@@ -57,6 +60,18 @@ func set_value(key: String, v: Variant) -> void:
 	_save()
 
 
+## The tyre class id stored for `variant`, "" when none was picked (the stock).
+func tyre_of(variant: String) -> String:
+	return String((_values["tyres"] as Dictionary).get(variant, ""))
+
+
+## Record `id` as `variant`'s tyre and write the file.
+func set_tyre(variant: String, id: String) -> void:
+	var tyres := (_values["tyres"] as Dictionary).duplicate()
+	tyres[variant] = id
+	set_value("tyres", tyres)
+
+
 func _load() -> void:
 	if _path == "":
 		return
@@ -67,6 +82,7 @@ func _load() -> void:
 		var v: Variant = cfg.get_value(SECTION, key)
 		if _fits(key, v):
 			_values[key] = type_convert(v, typeof(DEFAULTS[key]))
+	_values["tyres"] = _strings_only(_values["tyres"])
 
 
 func _save() -> void:
@@ -85,3 +101,12 @@ static func _fits(key: String, v: Variant) -> bool:
 		return false
 	var want := typeof(DEFAULTS[key])
 	return typeof(v) == want or (want == TYPE_FLOAT and typeof(v) == TYPE_INT)
+
+
+## `d`'s String -> String entries; a hand-edited entry of any other type is dropped.
+static func _strings_only(d: Dictionary) -> Dictionary:
+	var out := {}
+	for k: Variant in d:
+		if typeof(k) == TYPE_STRING and typeof(d[k]) == TYPE_STRING:
+			out[k] = d[k]
+	return out

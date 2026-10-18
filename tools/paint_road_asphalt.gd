@@ -2,7 +2,7 @@ extends Node
 ## Stamps the "Asphalt" splat channel (channel 6 = splatmap2.B) into a level's terrain
 ## along its RoadPath corridors, so splat-paint friction reads road vs offroad. Additive:
 ## only writes pixels inside the current corridors. Applies only to a level whose generator
-## chain (`<id>_gen.json`) lists this tool — car_arena paints its own inset roads and Ice, which
+## chain (`<id>_gen.json`) lists this tool — car_arena paints its own inset roads and Wet, which
 ## the full-width stamp would bury. `tools/check_bakes.gd` dry-runs it (`stale_pixels`), so a
 ## road or profile edit without a re-paint fails the stale-bake gate.
 

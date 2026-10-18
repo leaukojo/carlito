@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="TyreClass" load_steps=2 format=3]
+
+; The open-wheelers' stock racing slick, the only class on RACE. Factors over the all-season tyre, all estimates: no tread to clear water or bite loose ground (wet 0.5, snow 0.4, ice 0.6, gravel and dirt 0.85, grass and sand 0.7, mud and field 0.6).
+
+[ext_resource type="Script" path="res://src/vehicles/base/tyre_class.gd" id="1_tyre"]
+
+[resource]
+script = ExtResource("1_tyre")
+id = "slick"
+display_name = "Slick"
+fits = Array[int]([5])
+surface_grip = Dictionary[String, float]({
+"Dirt": 0.85,
+"Field": 0.6,
+"Grass": 0.7,
+"Gravel": 0.85,
+"Ice": 0.6,
+"Mud": 0.6,
+"Sand": 0.7,
+"Snow": 0.4,
+"Wet": 0.5
+})

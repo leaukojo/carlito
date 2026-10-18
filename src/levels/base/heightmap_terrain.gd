@@ -6,7 +6,8 @@ extends StaticBody3D
 ## collision coincide exactly. @tool; call rebuild() after changing image/size.
 ##
 ## Eight paint channels: 0..3 = splatmap.RGBA, 4..7 = optional splatmap2.RGBA (absent =
-## plain 4-channel terrain). Colors are the material's shader params; names are `channel_names`.
+## plain 4-channel terrain). Colors are the material's shader params; what each channel IS (its
+## name, grip and drag) is its `Surface`, in `channel_surface`.
 
 const Layers := preload("res://src/physics/collision_layers.gd")
 const SPLAT_SHADER_PATH := "res://kit/terrain/terrain_splat.gdshader"
@@ -19,10 +20,10 @@ const CHANNEL_PARAMS: Array[StringName] = [
 const DEFAULT_BLEND_SHARPNESS := 8.0
 ## Sharpened-weight total below which a pixel counts as unpainted (matches the shader).
 const MIN_SPLAT_TOTAL := 0.001
-## Ceiling on a channel's added rolling resistance (deep mud is ~0.3).
-const MAX_CHANNEL_DRAG := 0.5
-const DEFAULT_CHANNEL_NAMES := [
-	"Grass", "Dirt", "Sand", "Rock", "Snow", "Mud", "Asphalt", "Gravel",
+## The island table: auto-splat's four (the shader's grass/dirt/sand/rock colors), then 4..7.
+const DEFAULT_CHANNEL_SURFACE: Array[int] = [
+	Surface.GRASS, Surface.DIRT, Surface.SAND, Surface.ROCK,
+	Surface.SNOW, Surface.MUD, Surface.ASPHALT, Surface.GRAVEL,
 ]
 
 
@@ -31,9 +32,16 @@ const DEFAULT_CHANNEL_NAMES := [
 signal source_image_replaced(kind: String)
 
 
-## Function because a PackedStringArray isn't a constant expression.
+## The brush's labels for a terrain it has not been pointed at yet.
 static func default_channel_names() -> PackedStringArray:
-	return PackedStringArray(DEFAULT_CHANNEL_NAMES)
+	return _names_of(PackedInt32Array(DEFAULT_CHANNEL_SURFACE))
+
+
+static func _names_of(surfaces: PackedInt32Array) -> PackedStringArray:
+	var out := PackedStringArray()
+	for i in CHANNEL_PARAMS.size():
+		out.append(Surface.display_name(surfaces[i] if i < surfaces.size() else Surface.ASPHALT))
+	return out
 
 ## Grayscale image that IS the terrain: white = high, black = low.
 @export var heightmap: Texture2D:
@@ -109,17 +117,13 @@ const GRID_LEVEL_M := 3.0
 		_splat_dirty = true
 		_push_splat_param()
 		source_image_replaced.emit("splat2")
-## Display names for the eight paint channels. Color is the matching CHANNEL_PARAMS shader param.
-@export var channel_names := default_channel_names()
-## Tire grip multiplier per paint channel 0..7 (1.0 = spec grip, lower = slippery).
-## Clamped to [0, 1] on read: above 1 grips past the tyre every vehicle is tuned on, below 0
-## inverts friction.
-@export var channel_grip := PackedFloat32Array([1, 1, 1, 1, 1, 1, 1, 1])
-## Rolling-resistance coefficient ADDED per paint channel 0..7 (0 = a hard road, mud ~0.2): the
-## ground deforming under the tyre, a body force at the contact off the wheel's normal load. Grip
-## and drag are the two numbers a surface has — ice is low grip / no drag, mud is low grip / high
-## drag, grass is mostly drag. Clamped to [0, 0.5] on read.
-@export var channel_drag := PackedFloat32Array([0, 0, 0, 0, 0, 0, 0, 0])
+## The `Surface` id each paint channel 0..7 is: its name in the brush, its grip and its drag. Color
+## is the matching CHANNEL_PARAMS shader param. A missing or unknown id reads Asphalt.
+@export var channel_surface := PackedInt32Array(DEFAULT_CHANNEL_SURFACE):
+	set(value):
+		channel_surface = value
+		_cache_surfaces()
+		update_configuration_warnings()
 ## Beaches appear below this world height, fading out over another half of it.
 @export var sand_height := 2.0
 ## Ground steeper than this becomes dirt.
@@ -140,10 +144,19 @@ var _splat_dirty := true
 var _sharpness := DEFAULT_BLEND_SHARPNESS  ## cached with the splat images (material param)
 var _decode_warned := false                ## one-shot guard for the decode-failure warning
 var _weight_buf := PackedFloat32Array([0, 0, 0, 0, 0, 0, 0, 0])  ## reused by _sharpened_weights
+# Per channel, off channel_surface (_init and its setter refill them): the surface id made valid,
+# its ref_grip and its drag, so the per-contact blend is eight lookups.
+var _channel_id := PackedInt32Array()
+var _channel_ref_grip := PackedFloat32Array()
+var _channel_drag := PackedFloat32Array()
 
 # Same deal for the heightmap; runtime only (editor height_at reads the texture directly).
 var _height_img: Image
 var _height_dirty := true
+
+
+func _init() -> void:
+	_cache_surfaces()  # the default channel_surface never runs its setter
 
 
 func _ready() -> void:
@@ -160,16 +173,13 @@ func _get_configuration_warnings() -> PackedStringArray:
 				+ "cover a different footprint than 0..3. Repaint splatmap2 at the base size.")
 				% [splatmap2.get_width(), splatmap2.get_height(),
 				splatmap.get_width(), splatmap.get_height()])
-	for i in channel_grip.size():
-		if channel_grip[i] < 0.0 or channel_grip[i] > 1.0:
-			warnings.append(("channel_grip[%d] = %.2f is outside [0, 1] and will be clamped: "
-					+ "above 1 grips past the tyre every vehicle is tuned on, below 0 "
-					+ "inverts tire friction.") % [i, channel_grip[i]])
-	for i in channel_drag.size():
-		if channel_drag[i] < 0.0 or channel_drag[i] > MAX_CHANNEL_DRAG:
-			warnings.append(("channel_drag[%d] = %.2f is outside [0, %.1f] and will be clamped: "
-					+ "below 0 pushes the vehicle along, above it the one-tick cap is all that "
-					+ "stops a wheel.") % [i, channel_drag[i], MAX_CHANNEL_DRAG])
+	for i in channel_surface.size():
+		if not Surface.is_valid(channel_surface[i]):
+			warnings.append(("channel_surface[%d] = %d is not a Surface id: that channel reads "
+					+ "as Asphalt.") % [i, channel_surface[i]])
+	if channel_surface.size() != CHANNEL_PARAMS.size():
+		warnings.append("channel_surface has %d entries, not %d: a missing channel reads as Asphalt."
+				% [channel_surface.size(), CHANNEL_PARAMS.size()])
 	return warnings
 
 
@@ -309,30 +319,39 @@ func get_splat_weights(world_pos: Vector3) -> PackedFloat32Array:
 	return weights
 
 
-## Tire grip multiplier under `world_pos`: paint-weight-blended channel_grip, 1.0 when
-## unpainted. Weights are pow-sharpened/normalized exactly as the splat shader, so a
-## brush-falloff pixel doesn't leak an invisible slick apron. Diverges from the shader
-## below MIN_SPLAT_TOTAL: falls back to neutral 1.0, never channel 0 (which can be ice).
-func grip_at(world_pos: Vector3) -> float:
+## Tire grip multiplier under `world_pos`, blended over the paint weights. `response` is the tyre's
+## grip per Surface id; an empty one (or one too short for a surface) reads that surface's
+## `Surface.ref_grip`. The response is not clamped: a tyre may grip past the reference.
+## Weights are pow-sharpened/normalized exactly as the splat shader, so a brush-falloff pixel
+## doesn't leak an invisible slick apron. Diverges from the shader below MIN_SPLAT_TOTAL:
+## unpainted ground reads ASPHALT, never channel 0's surface.
+func grip_at(world_pos: Vector3, response: PackedFloat32Array) -> float:
 	var total := _weights_at(world_pos)
 	if total < MIN_SPLAT_TOTAL:
-		return 1.0
+		return Surface.grip_in(response, Surface.ASPHALT)
 	var grip := 0.0
+	var n := response.size()
 	for i in 8:
-		grip += _weight_buf[i] * channel_grip_at(i)
+		var s := _channel_id[i]
+		grip += _weight_buf[i] * (response[s] if s < n else _channel_ref_grip[i])
 	return grip / total
 
 
-## Added rolling-resistance coefficient under `world_pos`: paint-weight-blended channel_drag,
-## 0.0 when unpainted. Same blend as grip_at, neutral is "no drag" rather than "full grip".
+## Added rolling-resistance coefficient under `world_pos`: the paint-weight-blended `Surface.drag`,
+## ASPHALT's (0) when unpainted. Same blend as grip_at; tyre-blind.
 func drag_at(world_pos: Vector3) -> float:
 	var total := _weights_at(world_pos)
 	if total < MIN_SPLAT_TOTAL:
-		return 0.0
+		return Surface.drag(Surface.ASPHALT)
 	var drag := 0.0
 	for i in 8:
-		drag += _weight_buf[i] * channel_drag_at(i)
+		drag += _weight_buf[i] * _channel_drag[i]
 	return drag / total
+
+
+## The surface names of the eight paint channels (the brush panel's labels).
+func channel_names() -> PackedStringArray:
+	return _names_of(channel_surface)
 
 
 ## Fills `_weight_buf` with the sharpened splat weights under `world_pos` and returns their
@@ -352,24 +371,37 @@ func _weights_at(world_pos: Vector3) -> float:
 	return _sharpened_weights(c0, c1)
 
 
-## How strongly channel `ch` covers `world_pos`, 0..1. Same sharpening as grip_at, but no neutral fallback — "not painted" is 0.
-func channel_weight_at(world_pos: Vector3, ch: int) -> float:
-	if splatmap == null or ch < 0 or ch >= CHANNEL_PARAMS.size():
+## How strongly `surface` covers `world_pos`, 0..1, summed over every channel that is it. Same
+## sharpening as grip_at, but no fallback: unpainted ground is no surface at all (0), not Asphalt.
+func surface_weight_at(world_pos: Vector3, surface: int) -> float:
+	if not Surface.is_valid(surface):
 		return 0.0
-	_ensure_splat_cache()
-	if _splat_img == null:
-		return 0.0
-	if ch >= 4 and _splat2_img == null:
-		return 0.0   # plain 4-channel terrain: 4..7 unpainted by construction
-	var uv := _terrain_uv(world_pos)
-	var c0 := _sample_rgba_bilinear(_splat_img, uv.x, uv.y)
-	var c1 := Color(0, 0, 0, 0)
-	if _splat2_img != null:
-		c1 = _sample_rgba_bilinear(_splat2_img, uv.x, uv.y)
-	var total := _sharpened_weights(c0, c1)
+	var total := _weights_at(world_pos)  # 4..7 weigh 0 without splatmap2
 	if total < MIN_SPLAT_TOTAL:
 		return 0.0
-	return _weight_buf[ch] / total
+	var w := 0.0
+	for i in 8:
+		if _channel_id[i] == surface:
+			w += _weight_buf[i]
+	return w / total
+
+
+## The surface with the most weight under `world_pos` (summed over its channels), ASPHALT when
+## unpainted, as grip_at reads it. Off the tick (the F3 readout): it samples again.
+func surface_at(world_pos: Vector3) -> int:
+	if _weights_at(world_pos) < MIN_SPLAT_TOTAL:
+		return Surface.ASPHALT
+	var best := Surface.ASPHALT
+	var best_w := -1.0
+	for i in 8:
+		var w := 0.0
+		for j in 8:
+			if _channel_id[j] == _channel_id[i]:
+				w += _weight_buf[j]
+		if w > best_w:
+			best_w = w
+			best = _channel_id[i]
+	return best
 
 
 ## Pow-sharpens the 8 raw splat channels (c0=RGBA, c1=RGBA) into `_weight_buf`, same exponent
@@ -385,18 +417,19 @@ func _sharpened_weights(c0: Color, c1: Color) -> float:
 	return total
 
 
-## Grip multiplier of channel `ch`, clamped to [0, 1], defaulting to 1.0 for a short array.
-func channel_grip_at(ch: int) -> float:
-	if ch < 0 or ch >= channel_grip.size():
-		return 1.0
-	return clampf(channel_grip[ch], 0.0, 1.0)
-
-
-## Added rolling resistance of channel `ch`, clamped to [0, MAX_CHANNEL_DRAG], 0 for a short array.
-func channel_drag_at(ch: int) -> float:
-	if ch < 0 or ch >= channel_drag.size():
-		return 0.0
-	return clampf(channel_drag[ch], 0.0, MAX_CHANNEL_DRAG)
+## Refills the per-channel caches off channel_surface; a missing or unknown id reads ASPHALT.
+func _cache_surfaces() -> void:
+	var n := CHANNEL_PARAMS.size()
+	_channel_id.resize(n)
+	_channel_ref_grip.resize(n)
+	_channel_drag.resize(n)
+	for i in n:
+		var s := channel_surface[i] if i < channel_surface.size() else Surface.ASPHALT
+		if not Surface.is_valid(s):
+			s = Surface.ASPHALT
+		_channel_id[i] = s
+		_channel_ref_grip[i] = Surface.ref_grip(s)
+		_channel_drag[i] = Surface.drag(s)
 
 
 ## Decodes both splatmaps into uncompressed working Images, re-running only on _splat_dirty.

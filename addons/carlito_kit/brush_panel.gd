@@ -102,7 +102,7 @@ func _build() -> void:
 	_channel_box = OptionButton.new()
 	_channel_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_channel_box.tooltip_text = "Which ground color to paint. Names and colors are the " \
-			+ "terrain's own — rename them on the node, recolor them on its material."
+			+ "terrain's own — set its channel_surface, recolor them on its material."
 	_channel_box.item_selected.connect(func(i): channel_changed.emit(i))
 	_channel_row.add_child(_channel_box)
 	set_channels(HeightmapTerrain.default_channel_names(), PackedColorArray())
@@ -307,8 +307,9 @@ func set_picked_height(y: float) -> void:
 func set_channels(names: PackedStringArray, colors: PackedColorArray) -> void:
 	var selected := maxi(_channel_box.selected, 0)
 	_channel_box.clear()
+	var defaults := HeightmapTerrain.default_channel_names()
 	for i in CHANNEL_COUNT:
-		var label: String = HeightmapTerrain.DEFAULT_CHANNEL_NAMES[i]
+		var label: String = defaults[i]
 		if i < names.size() and not names[i].is_empty():
 			label = names[i]
 		if i < colors.size():

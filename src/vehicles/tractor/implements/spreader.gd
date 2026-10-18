@@ -16,7 +16,7 @@ const GATE_TRAVEL := 0.16
 const GATE_TRAVEL_TIME := 1.2
 
 ## Empty mass (kg) of the class drawn: an ~800 L single-disc spreader, the Demir DMR SF 800 at
-## 150 kg: sourced. Citations: docs/vehicles.md § Sourced figures.
+## 150 kg: sourced. Citations: docs/sources.md.
 const FRAME_KG := 150.0
 
 ## The empty machine's centre in this frame: the area-weighted centroid of its meshes, the open

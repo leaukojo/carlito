@@ -3,7 +3,7 @@ extends RefCounted
 ## The automatic gearbox's shift policy, as pure statics beside `TorqueConverter` and `HillHold`:
 ## which D byte the box takes next (`next_gear`, through `Drivetrain.auto_shift`). Its state (the
 ## time in gear, the last pedal, the kickdown's arm) is the gearbox's, on `Drivetrain`. Sources and
-## figures: docs/vehicles.md, "The shift policy" and "The load".
+## figures: docs/drivetrain.md, "The shift policy" and "The load".
 ##
 ## It reads the PEDAL and the road speed's rpm in the engaged gear, never `applied_throttle` (the
 ## limiter, governor and shift cut would read as lifts) and never the wheels' spin (wheelspin would
@@ -183,21 +183,23 @@ static func standing_load(gravity: Vector3, normal: Vector3, forward: Vector3, c
 
 
 ## The road load a body declares on the flat at `speed` (N·m at the axle): aero drag plus rolling
-## resistance, the reference `on_grade` weighs against. 0 with no ground drive.
-static func flat_load(spec: VehicleSpec, speed: float, mass: float) -> float:
+## resistance `crr` (the fitted tyre's, `WheelDrive.rolling_resistance`), the reference `on_grade`
+## weighs against. 0 with no ground drive.
+static func flat_load(spec: VehicleSpec, speed: float, mass: float, crr: float) -> float:
 	var gd := spec.ground_drive
 	if gd == null:
 		return 0.0
 	return (VehicleMath.aero_drag(absf(speed), gd.drag_area)
-			+ maxf(gd.rolling_resistance, 0.0) * mass * BrakeSizing.G) * gd.drive_radius()
+			+ maxf(crr, 0.0) * mass * BrakeSizing.G) * gd.drive_radius()
 
 
 ## Grade logic: `road` sits past the flat road's by more than GRADE_LOGIC of the rig's weight (a
 ## climb, soft ground or a heavy draft). False with no estimate.
-static func on_grade(spec: VehicleSpec, road: float, speed: float, mass: float) -> bool:
+static func on_grade(spec: VehicleSpec, road: float, speed: float, mass: float,
+		crr: float) -> bool:
 	if is_nan(road) or spec.ground_drive == null:
 		return false
-	return road > flat_load(spec, speed, mass) \
+	return road > flat_load(spec, speed, mass, crr) \
 			+ GRADE_LOGIC * mass * BrakeSizing.G * spec.ground_drive.drive_radius()
 
 

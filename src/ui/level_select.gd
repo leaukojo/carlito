@@ -71,8 +71,7 @@ func _ready() -> void:
 	var first: Button = null
 	for entry in LevelRegistry.LEVELS:
 		# Dev fixtures are test assets, not shipped content; bake/check tools still walk them.
-		# Challenge arenas ship, but are reached through CHALLENGES.
-		if bool(entry.get("dev", false)) or bool(entry.get("arena", false)):
+		if bool(entry.get("dev", false)):
 			continue
 		var card := _make_card(entry)
 		_grid.add_child(card)

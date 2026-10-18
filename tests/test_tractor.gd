@@ -357,6 +357,34 @@ func test_draft_scales_with_depth_and_soil_and_is_zero_without_either() -> void:
 	assert_float(TractorT.draft_newtons(v, 1.0, 1.0, -500.0, FLAT, 4000.0, dt)).is_equal(0.0)
 
 
+## The soil is `Surface.FIELD` wherever a level paints it, never a channel number: a level whose
+## channel 4 is Snow has no soil there, and Field painted in channel 7 is soil.
+func test_soil_is_the_field_surface_not_a_channel() -> void:
+	var t: HeightmapTerrain = auto_free(HeightmapTerrain.new())
+	t.terrain_size = Vector2(4, 4)
+	add_child(t)
+	var full := Image.create(2, 2, false, Image.FORMAT_RGBAF)
+	full.fill(Color(1, 0, 0, 0))
+	var bare := Image.create(2, 2, false, Image.FORMAT_RGBAF)
+	bare.fill(Color(0, 0, 0, 0))
+	t.splatmap = ImageTexture.create_from_image(bare)
+	t.splatmap2 = ImageTexture.create_from_image(full)   # channel 4 at full weight
+	var terrains: Array[Node] = [t]
+	var table := PackedInt32Array(HeightmapTerrain.DEFAULT_CHANNEL_SURFACE)
+	table[4] = Surface.SNOW
+	t.channel_surface = table
+	var soil := TractorVehicle.soil_under(Vector3.ZERO, terrains)
+	assert_float(soil).is_equal(0.0)
+	assert_float(TractorT.draft_newtons(V_REF, 1.0, soil, 12000.0, FLAT, 4000.0, 1.0 / 60.0)) \
+			.is_equal(0.0)
+	var alpha := Image.create(2, 2, false, Image.FORMAT_RGBAF)
+	alpha.fill(Color(0, 0, 0, 1))
+	t.splatmap2 = ImageTexture.create_from_image(alpha)   # channel 7 at full weight
+	table[7] = Surface.FIELD
+	t.channel_surface = table
+	assert_float(TractorVehicle.soil_under(Vector3.ZERO, terrains)).is_equal(1.0)
+
+
 func test_draft_follows_d497_and_holds_at_its_range_top() -> void:
 	# The plough's row is A + C S² (B 0): the ratio to 7 km/h at 3 and 10 km/h, and held past 10.
 	var shape := PloughScript.DRAFT_SHAPE

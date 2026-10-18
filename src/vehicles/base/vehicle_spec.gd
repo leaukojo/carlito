@@ -44,10 +44,10 @@ extends Resource
 ## and part fuel blends it in by the unfuelled share (`Drivetrain.motoring_torque`).
 @export var engine_brake_frac := 0.0
 ## Motoring torque at and below idle, as a fraction of the curve's peak: friction (and a petrol's
-## pumping) that runs a free crank down. 0 = none. Sourced: docs/vehicles.md § Crank and coupling.
+## pumping) that runs a free crank down. 0 = none. Sourced: docs/drivetrain.md § Crank and coupling.
 @export var engine_friction_frac := 0.0
 ## Rotating inertia at the crank (kg·m²), on wheel-driving bodies only (`Drivetrain.drives_wheels`).
-## Sourced per class: docs/vehicles.md § Crank and coupling.
+## Sourced per class: docs/drivetrain.md § Crank and coupling.
 @export var engine_inertia := 0.0
 ## Torque converter (an automatic; creeps in gear, lock-up per `Drivetrain.converter_free_rpm`) or
 ## friction clutch (AMT, sequential, powershift; `Drivetrain.coupling_step`).
@@ -59,7 +59,7 @@ enum Coupling { CONVERTER, CLUTCH }
 @export var clutch_reserve := 1.5
 ## A converter's torque ratio with the turbine held (`TorqueConverter.torque_ratio`), falling to 1.0
 ## at the coupling point. COMPROMISE: 1.0 (a fluid coupling) ships; a real ~2.0 fails the foot
-## brake's stall hold on seven bodies until their brakes are sourced (docs/vehicles.md § Converter).
+## brake's stall hold on seven bodies until their brakes are sourced (docs/drivetrain.md § Converter).
 @export var converter_stall_ratio := 1.0
 ## Lowest D gear a converter's lock-up closes in: 1 on a 6-speed car (the converter opens only for
 ## the launch), 2 on an Allison-class box (lock-up from 2nd range standard).

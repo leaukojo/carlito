@@ -213,8 +213,13 @@ func _level_root() -> Node:
 	return root
 
 
-## Painted terrains under the owning level for the wheels' grip query: duck-typed on grip_at +
-## contains_xz + height_at.
+## The painted terrains the wheels sample (`RayWheel.terrain_at`); empty before the first tick.
+func grip_terrains() -> Array[Node]:
+	return _grip_terrains
+
+
+## Painted terrains under the owning level for the wheels' grip query: duck-typed on
+## grip_at(point, response) + drag_at + contains_xz + height_at.
 func _find_grip_terrains() -> Array[Node]:
 	var out: Array[Node] = []
 	_collect_grip_terrains(_level_root(), out)

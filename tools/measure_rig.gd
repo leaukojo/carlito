@@ -1,10 +1,79 @@
 extends RefCounted
 ## What the game-mode measure tools share: the flat full-grip slab or tilted ramp a body is driven
-## on, a rig's laden mass, and the bridge stash it is driven through. Each tool keeps its own layout
-## (strip, pad) and pass logic.
+## on, the painted surface over it, the tyre class on the body, a rig's laden mass, and the bridge
+## stash it is driven through. Each tool keeps its own layout (strip, pad) and pass logic.
 
 const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
 const Layers := preload("res://src/physics/collision_layers.gd")
+
+
+## One `Surface` everywhere, over a slab or a ramp: the duck-typed contract `HeightmapTerrain`
+## answers (`BaseVehicle._collect_grip_terrains`), nothing more. `height_at` is the plane through
+## the origin rising `tan_angle` toward -Z, so `RayWheel.terrain_at`'s reach finds it anywhere on a
+## climb. A body finds its terrains once: add the patch before its first tick, then change
+## `surface` in place.
+class GripPatch:
+	extends Node3D
+
+	var surface := Surface.ASPHALT
+	var tan_angle := 0.0
+
+	func contains_xz(_world_pos: Vector3) -> bool:
+		return true
+
+	func height_at(world_pos: Vector3) -> float:
+		return -world_pos.z * tan_angle
+
+	func grip_at(_world_pos: Vector3, response: PackedFloat32Array) -> float:
+		return Surface.grip_in(response, surface)
+
+	func drag_at(_world_pos: Vector3) -> float:
+		return Surface.drag(surface)
+
+	func surface_weight_at(_world_pos: Vector3, id: int) -> float:
+		return 1.0 if id == surface else 0.0
+
+	func surface_at(_world_pos: Vector3) -> int:
+		return surface
+
+
+## A tool's `tyre=<id>` flag: the id, "" when absent. An id `TyreCatalog` does not know is printed
+## as an error and returned as "?", which the tool quits on.
+static func tyre_flag(args: PackedStringArray) -> String:
+	for a in args:
+		if a.begins_with("tyre="):
+			var id := a.substr(5).to_lower()
+			if TyreCatalog.by_id(id) == null:
+				printerr("tyre=%s: expected one of %s" % [id, ", ".join(Array(TyreCatalog.CLASSES).map(
+						func(p: String) -> String: return p.get_file().get_basename()))])
+				return "?"
+			return id
+	return ""
+
+
+## Fit the `TyreCatalog` class `id` on `body` (in the tree, so its drive is built); "" keeps the
+## stock. Returns the id on the wheels, with a note when `id` is not made in the body's `tyre_fit`
+## and the stock stayed (`WheelDrive.fit_tyre`).
+static func fit_tyre(body: BaseVehicle, id: String) -> String:
+	if body.drive == null:
+		return ""
+	var gd := body.spec.ground_drive
+	if id != "" and not body.drive.fit_tyre(gd, TyreCatalog.by_id(id)):
+		return "%s (%s is not made in its fit: stock)" % [_tyre_id(gd.tyre), id]
+	return _tyre_id(body.drive.tyre)
+
+
+static func _tyre_id(cls: TyreClass) -> String:
+	return cls.id if cls != null else "reference"
+
+
+## Hard-road rolling resistance of the tyre on `body`: the fitted class's on a driven body
+## (`WheelDrive.rolling_resistance`), the spec's stock on a towed one (it keeps its stock).
+static func crr(body: Node) -> float:
+	var wheel_drive := body.get("drive") as WheelDrive
+	if wheel_drive != null:
+		return wheel_drive.rolling_resistance()
+	return (body.get("spec") as VehicleSpec).ground_drive.rolling_resistance
 
 
 ## A flat slab of `size` under `parent`, centred at `x` with its top face at y = 0.

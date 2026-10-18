@@ -7,7 +7,7 @@ const ROTOR_RATIO := 0.3
 
 ## Mass (kg) of the class drawn: a 7 ft (2.14 m sweep) Cat 2 single-spindle rotary cutter, the
 ## Land Pride RCR2684 at 1370 lb with a single tail wheel (sourced: its manual); Woods' BB84.40
-## lists 1041-1132 lb (secondary). Citations: docs/vehicles.md § Sourced figures.
+## lists 1041-1132 lb (secondary). Citations: docs/sources.md.
 const MASS_KG := 620.0
 
 ## Centre of mass in this frame: the area-weighted centroid of the scene's meshes.

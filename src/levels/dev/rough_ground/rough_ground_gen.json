@@ -11,7 +11,7 @@
   "notes": [
     "gen_rough_ground.gd owns this level end to end and overwrites every byte of it: heightmap,",
     "both splats, the LevelInfo and the .tscn text. Every position (lanes, patches, bump seed,",
-    "ditch depths) lives in tools/rough_ground_layout.gd, which tools/measure_rough.gd reads",
+    "ditch depths, the ice pad) lives in tools/rough_ground_layout.gd, which tools/measure_rough.gd reads",
     "too, so moving a patch there moves the measurement with it; re-run this chain after any",
     "edit to that file.",
     "Unregistered (not in LevelRegistry): F6 it, or drive it through measure_rough. It has no",
@@ -22,7 +22,7 @@
       "kind": "scene",
       "path": "res://tools/gen_rough_ground.tscn",
       "args": [],
-      "why": "Writes the island heightmap (plateau, lanes' bump fields and V-ditches), both splats (grass/sand, asphalt and mud lanes), the LevelInfo and the level .tscn text."
+      "why": "Writes the island heightmap (plateau, lanes' bump fields and V-ditches), both splats (grass/sand, asphalt and mud lanes, the ice pad), the LevelInfo and the level .tscn text (the ice pad's spawn included)."
     },
     {
       "kind": "import",

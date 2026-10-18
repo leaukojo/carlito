@@ -5,9 +5,7 @@ extends Node3D
 ##
 ## RAMP MODE bisects the steepest angle the body climbs FROM REST — no run-up, which is the
 ## honest "can it get up there" question and the one a driver asks halfway up. Each trial is a
-## fresh body on a fresh ramp over a synthetic grip patch (`GripPatch` below answers the same
-## `grip_at`/`drag_at`/`contains_xz`/`height_at` contract `HeightmapTerrain` does, so
-## `BaseVehicle._find_grip_terrains` picks it up as a sibling of the vehicle's parent).
+## fresh body on a fresh ramp over a synthetic grip patch (`MeasureRig.GripPatch`, one surface).
 ##
 ## Beside each measurement it prints the three textbook ceilings, so a disagreement points at
 ## which one bit:
@@ -37,16 +35,7 @@ extends Node3D
 const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
 const Groups := preload("res://src/levels/base/carlito_groups.gd")
 
-## Named surfaces, (grip, added crr) — the shipped island channel tables
-## (`HeightmapTerrain.channel_grip` / `channel_drag`, level 1's row).
-const SURFACES := {
-	"asphalt": Vector2(1.0, 0.0),
-	"gravel": Vector2(0.85, 0.02),
-	"grass": Vector2(0.8, 0.06),
-	"dirt": Vector2(0.7, 0.03),
-	"field": Vector2(0.7, 0.08),
-	"mud": Vector2(0.5, 0.2),
-}
+## Surfaces by `Surface` name (any one is a flag: `Surface.from_key`).
 const DEFAULT_SURFACES: Array[String] = ["asphalt", "gravel", "grass", "field", "mud"]
 
 const RAMP_LENGTH := 400.0
@@ -79,7 +68,7 @@ const TC_LIFT_GAIN := 2.0 ## pedal units per second per unit of that share short
 const LEVEL_STEP := 4.0   ## m between road-curve samples in level mode
 
 ## `doc=grade` (arg 1): this set over asphalt and mud, then the `grade` region of
-## `docs/vehicles.md` is rewritten (`doc_region.gd`). The flags are per job here, not per run.
+## `docs/vehicle_measurements.md` is rewritten (`doc_region.gd`). The flags are per job here, not per run.
 const DocRegion := preload("res://tools/doc_region.gd")
 const MeasureRig := preload("res://tools/measure_rig.gd")
 const MeasureVehicles := preload("res://tools/measure_vehicles.gd")
@@ -104,7 +93,7 @@ const DOC_JOBS: Array[Dictionary] = [
 ## moved: a tyre that holds statically moves nothing. Asphalt only, the hill hold off (`_nohold`):
 ## the table is the brake hardware's.
 const PARK_HOLD_S := 60.0
-## `doc=park` (arg 1): this set, then the `park` region of `docs/vehicles.md` is rewritten.
+## `doc=park` (arg 1): this set, then the `park` region of `docs/vehicle_measurements.md` is rewritten.
 const DOC_PARK_VARIANTS: Array[String] = ["sedan", "suv", "pickup", "garbage-truck",
 		"tractor-kenney", "semi"]
 const DOC_PARK_ANGLES: Array[float] = [5.7, 16.7]  ## 10 % and 30 %
@@ -114,29 +103,6 @@ const DOC_PARK_MODES: Array[String] = ["foot", "hand", "pawl", "cross"]
 
 enum Ph { SETTLE, CLIMB, PARK_SETTLE, PARK_HOLD, CREEP_SETTLE, CREEP, ROLL_SETTLE, ROLL, ASCENT_SETTLE,
 		ASCENT, DONE }
-
-
-## Synthetic painted surface for the ramp: one grip/drag pair everywhere, and a `height_at`
-## that reports the inclined plane so `RayWheel.terrain_at`'s 1 m reach finds it at any point
-## of the climb. Same duck-typed contract as HeightmapTerrain, nothing more.
-class GripPatch:
-	extends Node3D
-
-	var grip := 1.0
-	var drag := 0.0
-	var tan_angle := 0.0  ## ramp slope; surface height is -z * tan(angle)
-
-	func contains_xz(_world_pos: Vector3) -> bool:
-		return true
-
-	func height_at(world_pos: Vector3) -> float:
-		return -world_pos.z * tan_angle
-
-	func grip_at(_world_pos: Vector3) -> float:
-		return grip
-
-	func drag_at(_world_pos: Vector3) -> float:
-		return drag
 
 
 var _queue: Array[Dictionary] = []    ## jobs left to measure: variant + mfwd / diff / tc
@@ -188,9 +154,13 @@ var _ascent_room := 0.0  ## m of ramp from the start to ASCENT_MARGIN short of i
 ## `gear=<1-6>`: climbs and roll-backs in the bridge's manual mode, held in that byte (0: automatic
 ## D). A start gear the automatic box would leave at once (it downshifts at a standstill), held.
 var _held_gear := 0
+## `tyre=<id>`: the `TyreCatalog` class fitted on every body ("": its stock), and what the last
+## spawn fitted (`MeasureRig.fit_tyre`: the stock where the class is not made in the body's fit).
+var _tyre := ""
+var _tyre_label := ""
 
 var _ramp: StaticBody3D
-var _patch: GripPatch
+var _patch: MeasureRig.GripPatch
 var _car: BaseVehicle
 
 var _lo := BISECT_LO
@@ -232,18 +202,22 @@ func _ready() -> void:
 						Drivetrain.TOP_GEAR])
 				get_tree().quit(1)
 				return
-	if which.begins_with("doc=") and not is_nan(_cornering_peak):
-		printerr("cornering_peak= changes the figures a doc preset tabulates: run it per body")
+	_tyre = MeasureRig.tyre_flag(args)
+	if _tyre == "?":
+		get_tree().quit(1)
+		return
+	if which.begins_with("doc=") and (not is_nan(_cornering_peak) or _tyre != ""):
+		printerr("cornering_peak= / tyre= change the figures a doc preset tabulates: run them per body")
 		get_tree().quit(1)
 		return
 	InputRouter.set_manual_gearbox(_held_gear > 0)
 	_diff = args.has("diff")
 	for i in range(1, args.size()):
-		if SURFACES.has(String(args[i])):
+		if Surface.from_key(String(args[i])) >= 0:
 			_surface_list.append(String(args[i]))
 	if _surface_list.is_empty():
 		_surface_list = DEFAULT_SURFACES.duplicate()
-	_patch = GripPatch.new()
+	_patch = MeasureRig.GripPatch.new()
 	_patch.name = "GripPatch"
 	add_child(_patch)
 	var park := NAN
@@ -289,6 +263,8 @@ func _ready() -> void:
 	print("=== grade climb: standing start, %.0f s per trial ===" % CLIMB_S)
 	print("  surfaces: %s" % ", ".join(_surface_list))
 	print("  throttle: %s" % ("slip-limited (tc)" if _tc else "full"))
+	if _tyre != "":
+		print("  tyre: %s on every body that takes it" % _tyre)
 	if _held_gear > 0:
 		print("  gear: manual, held in D%d (gear=%d)" % [_held_gear, _held_gear])
 	if _mfwd or _diff:
@@ -360,8 +336,7 @@ func _build_ramp(angle_deg: float) -> void:
 	var a := deg_to_rad(angle_deg)
 	_ramp = MeasureRig.tilt_ramp(self, _ramp, Vector3(RAMP_WIDTH, RAMP_THICKNESS, RAMP_LENGTH), a)
 	_patch.tan_angle = tan(a)
-	_patch.grip = SURFACES[_surface].x
-	_patch.drag = SURFACES[_surface].y
+	_patch.surface = Surface.from_key(_surface)
 
 
 ## `yaw` turns the body about the ramp's normal: PI / 2 parks it across the slope.
@@ -382,6 +357,7 @@ func _spawn(angle_deg: float, yaw := 0.0, up := SPAWN_UP) -> void:
 		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
 		_car.spec.ground_drive.cornering_peak_load = _cornering_peak
 	add_child(_car)
+	_tyre_label = MeasureRig.fit_tyre(_car, _tyre)
 	if _tipper and _car.has_method(&"set_attachment"):
 		# Remembered until the drawbar's spawn countdown has run, then coupled (TowHost).
 		_car.call(&"set_attachment", ImplementCatalog.TOWED[0])
@@ -506,7 +482,9 @@ func _end_trial(climbed: bool) -> void:
 func _record() -> void:
 	var spec: VehicleSpec = _car.spec
 	var gd: GroundDriveSpec = spec.ground_drive
-	var s: Vector2 = SURFACES[_surface]
+	var sid := Surface.from_key(_surface)
+	# The fitted tyre's grip there (`RayWheel.tyre_grip`), the reference tyre's on no class.
+	var s := Vector2(Surface.grip_in(_car.drive.wheels[0].tyre_grip, sid), Surface.drag(sid))
 	var coupled := _coupled_mass()
 	var traction := _traction_limit_deg(spec, gd, s.x, s.y)
 	if coupled > 0.0:
@@ -524,9 +502,10 @@ func _record() -> void:
 		"coupled": coupled,
 		"label": _doc_label(spec, gd, coupled),
 	})
-	print("  %-16s %-8s measured %5.1f deg (%5.1f %%)" % [_variant, _surface,
+	print("  %-16s %-8s measured %5.1f deg (%5.1f %%)%s" % [_variant, _surface,
 			_best if not is_nan(_best) else 0.0,
-			100.0 * tan(deg_to_rad(_best)) if not is_nan(_best) else 0.0])
+			100.0 * tan(deg_to_rad(_best)) if not is_nan(_best) else 0.0,
+			", tyre %s" % _tyre_label if _tyre != "" else ""])
 
 
 ## Steepest grade the tyres alone hold, in degrees: static weight split plus the uphill transfer
@@ -671,7 +650,8 @@ func _doc_table() -> Array[String]:
 	lines.append_array([
 		"",
 		"| Variant | %s |" % " | ".join(DOC_SURFACES.map(func(s: String) -> String:
-				return "%s (grip %.1f, crr %.2f)" % [s, SURFACES[s].x, SURFACES[s].y])),
+				return "%s (grip %.2f, crr %.2f)" % [s, Surface.ref_grip(Surface.from_key(s)),
+						Surface.drag(Surface.from_key(s))])),
 		"| --- |" + " --- |".repeat(DOC_SURFACES.size()),
 	])
 	var row := ""
@@ -969,7 +949,7 @@ func _start_rollback(which: String, args: PackedStringArray) -> void:
 			grades = [String(a).substr(6).to_float()]
 		elif String(a).begins_with("delay="):
 			_roll_delay = String(a).substr(6).to_float()
-		elif SURFACES.has(String(a)):
+		elif Surface.from_key(String(a)) >= 0:
 			_surface = String(a)
 	for v in (_wheel_driven_variants() if which == "all" else [which]):
 		if not Catalog.VARIANTS.has(v):
@@ -1101,7 +1081,7 @@ func _start_ascent(which: String, args: PackedStringArray) -> void:
 	for a in args:
 		if String(a).begins_with("grade="):
 			_ascent_grade = String(a).substr(6).to_float()
-		elif SURFACES.has(String(a)):
+		elif Surface.from_key(String(a)) >= 0:
 			_surface = String(a)
 	_angle = rad_to_deg(atan(_ascent_grade / 100.0))
 	_build_ramp(_angle)
@@ -1260,7 +1240,7 @@ func _report_road(road: Node, terrains: Array[Node]) -> void:
 				over_25 += LEVEL_STEP
 		var terrain := RayWheel.terrain_at(p, terrains)
 		if terrain != null:
-			grip_sum += terrain.grip_at(p)
+			grip_sum += terrain.grip_at(p, PackedFloat32Array())
 			drag_sum += terrain.drag_at(p)
 		prev = p
 		d += LEVEL_STEP

@@ -107,6 +107,8 @@ func _ready() -> void:
 		# Undriven and unsteered: a semi-trailer axle only ever brakes.
 		var wheel := RayWheel.new(gd.wheel_positions[i], false, false, visual, corner_mass)
 		wheel.apply_suspension(gd)
+		# A towed body keeps its stock tyre: no swap reaches it.
+		wheel.apply_tyre(gd.tyre, gd.tyre)
 		wheels.append(wheel)
 	if gd.has_anti_roll_bar():
 		RayWheel.pair_axles(wheels)

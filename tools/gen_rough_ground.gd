@@ -1,10 +1,11 @@
 extends Node
-## Author the rough-ground dev level: an unregistered island whose only content is two lanes of
-## rising unevenness, asphalt and mud, for measuring traction off flat ground
-## (`tools/measure_rough.tscn`). Every position lives in `rough_ground_layout.gd`, shared with that
-## tool. Writes the heightmap, both splats, the LevelInfo and the level .tscn text, overwriting
-## all of them; chain recorded in src/levels/dev/rough_ground/rough_ground_gen.json
-## (tools/CLAUDE.md). No roads, props or scatter, so there is nothing to bake.
+## Author the rough-ground dev level: an unregistered island carrying two lanes of rising
+## unevenness, asphalt and mud, for measuring traction off flat ground
+## (`tools/measure_rough.tscn`), and a flat ice pad beside them with its own spawn. Every
+## position lives in `rough_ground_layout.gd`, shared with that tool. Writes the heightmap, both
+## splats, the LevelInfo and the level .tscn text, overwriting all of them; chain recorded in
+## src/levels/dev/rough_ground/rough_ground_gen.json (tools/CLAUDE.md). No roads, props or
+## scatter, so there is nothing to bake.
 ##
 ##   godot --headless --path . res://tools/gen_rough_ground.tscn
 ##   godot --headless --path . --import
@@ -20,13 +21,13 @@ const INFO_PATH := DIR + "/rough_ground_info.tres"
 const TITLE := "Rough Ground (dev)"
 const LOG_TAG := "rough-ground"
 
-## Channel table: level 1's, so the lanes are the same asphalt and mud a shipped island paints
-## and `measure_grade.gd`'s SURFACES name the same (grip, crr) pairs.
-const CHANNEL_NAMES: Array[String] = [
-	"Grass", "Dirt", "Sand", "Rock", "Field", "Mud", "Asphalt", "Gravel",
+## Channel table: level 1's with Ice in Field's slot, so the lanes are the same `Surface` asphalt
+## and mud a shipped island paints and `measure_grade.gd` names.
+const CHANNEL_SURFACE: Array[int] = [
+	Surface.GRASS, Surface.DIRT, Surface.SAND, Surface.ROCK,
+	Surface.ICE, Surface.MUD, Surface.ASPHALT, Surface.GRAVEL,
 ]
-const CHANNEL_GRIP: Array[float] = [0.8, 0.7, 0.6, 0.7, 0.7, 0.5, 1.0, 0.85]
-const CHANNEL_DRAG: Array[float] = [0.06, 0.03, 0.1, 0.01, 0.08, 0.2, 0.0, 0.02]
+const CH_ICE := 4
 const CH_GRASS := 0
 const CH_SAND := 2
 ## Land below this is beach.
@@ -51,6 +52,14 @@ func _scaffold() -> int:
 	splat2.fill(Color(0, 0, 0, 0))
 	var lane_north := Layout.patch_end_z(Layout.PATCHES.size() - 1) - LANE_MARGIN
 	var lane_south := Layout.patch_start_z(0) + Layout.RUN_UP + LANE_MARGIN
+	for lane: Dictionary in Layout.LANES:
+		if absf(Layout.ICE_PAD_X - float(lane["x"])) < Layout.ICE_PAD_HALF + Layout.LANE_WIDTH * 0.5:
+			printerr("[rough-ground] the ice pad overlaps the %s lane" % lane["name"])
+			return 1
+	for z: float in [Layout.ICE_PAD_FROM_Z, Layout.ICE_PAD_TO_Z]:
+		if Vector2(Layout.ICE_PAD_X, z).length() + Layout.ICE_PAD_HALF > Layout.PLATEAU_R:
+			printerr("[rough-ground] the ice pad leaves the plateau")
+			return 1
 	var lowest := INF
 	var highest := -INF
 	for pz in cells:
@@ -70,6 +79,12 @@ func _scaffold() -> int:
 			var base := Color(0, 0, 0, 0)
 			base[CH_SAND if stored < SAND_BELOW else CH_GRASS] = 1.0
 			splat.set_pixel(px, pz, base)
+			if _on_ice_pad(x, z):
+				splat.set_pixel(px, pz, Color(0, 0, 0, 0))
+				var ice := Color(0, 0, 0, 0)
+				ice[CH_ICE - 4] = 1.0
+				splat2.set_pixel(px, pz, ice)
+				continue
 			if z < lane_north or z > lane_south:
 				continue
 			for lane: Dictionary in Layout.LANES:
@@ -108,6 +123,15 @@ func _island_y(x: float, z: float) -> float:
 	return Layout.PLATEAU_Y * (1.0 - c * c * (3.0 - 2.0 * c))
 
 
+## Within ICE_PAD_HALF of the pad's centre segment: a hard edge and round ends.
+func _on_ice_pad(x: float, z: float) -> bool:
+	var p := Vector2(x, z)
+	var q := Geometry2D.get_closest_point_to_segment(p,
+			Vector2(Layout.ICE_PAD_X, Layout.ICE_PAD_FROM_Z),
+			Vector2(Layout.ICE_PAD_X, Layout.ICE_PAD_TO_Z))
+	return p.distance_to(q) <= Layout.ICE_PAD_HALF
+
+
 ## HeightmapTerrain's own convention at one cell per metre, the terrain at the origin.
 func _world(p: int) -> float:
 	return float(p) - Layout.SIZE * 0.5
@@ -116,6 +140,9 @@ func _world(p: int) -> float:
 func _scene_text() -> String:
 	var spawn := Transform3D(Basis.IDENTITY, Vector3(float(Layout.LANES[0]["x"]),
 			Layout.PLATEAU_Y + SPAWN_CLEARANCE, Layout.patch_start_z(0) + Layout.RUN_UP))
+	# Facing north (-Z) up the pad from its south end; after `Spawn`, which stays the default.
+	var ice_spawn := Transform3D(Basis.IDENTITY, Vector3(Layout.ICE_PAD_X,
+			Layout.PLATEAU_Y + SPAWN_CLEARANCE, Layout.ICE_PAD_FROM_Z))
 	var extent := Layout.SIZE + 48.0
 	return """[gd_scene format=3]
 
@@ -144,7 +171,7 @@ shader_parameter/grass_color = Color(0.35, 0.55, 0.25, 1)
 shader_parameter/dirt_color = Color(0.52, 0.4, 0.26, 1)
 shader_parameter/sand_color = Color(0.83, 0.76, 0.55, 1)
 shader_parameter/rock_color = Color(0.45, 0.44, 0.42, 1)
-shader_parameter/color5 = Color(0.44, 0.29, 0.17, 1)
+shader_parameter/color5 = Color(0.78, 0.86, 0.93, 1)
 shader_parameter/color6 = Color(0.3, 0.24, 0.17, 1)
 shader_parameter/color7 = Color(0.22, 0.22, 0.24, 1)
 shader_parameter/color8 = Color(0.62, 0.6, 0.56, 1)
@@ -175,6 +202,10 @@ script = ExtResource("3_cam")
 transform = {spawn}
 script = ExtResource("4_spawn")
 
+[node name="IcePad" type="Marker3D" parent="."]
+transform = {ice_spawn}
+script = ExtResource("4_spawn")
+
 [node name="Sea" type="Area3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, {sea_y}, 0)
 script = ExtResource("10_water")
@@ -199,18 +230,12 @@ height = {height}
 material = SubResource("SplatMat")
 splatmap = ExtResource("7_splat")
 splatmap2 = ExtResource("8_splat2")
-channel_names = PackedStringArray({channel_names})
-channel_grip = PackedFloat32Array({channel_grip})
-channel_drag = PackedFloat32Array({channel_drag})
+channel_surface = PackedInt32Array({channel_surface})
 sand_height = {sand_height}
 """.format({
 		"info": INFO_PATH, "height_png": HEIGHT_PNG, "splat_png": SPLAT_PNG,
 		"splat2_png": SPLAT2_PNG, "extent": extent, "size": Layout.SIZE,
 		"height": Layout.HEIGHT, "sea_y": Layout.SEA_Y, "sand_height": SAND_BELOW,
-		"channel_names": '"%s"' % '", "'.join(CHANNEL_NAMES),
-		"channel_grip": ", ".join(PackedStringArray(
-				CHANNEL_GRIP.map(func(g: float) -> String: return str(g)))),
-		"channel_drag": ", ".join(PackedStringArray(
-				CHANNEL_DRAG.map(func(g: float) -> String: return str(g)))),
-		"spawn": var_to_str(spawn),
+		"channel_surface": GenIO.surface_list(CHANNEL_SURFACE),
+		"spawn": var_to_str(spawn), "ice_spawn": var_to_str(ice_spawn),
 	})

@@ -93,20 +93,41 @@ func _refresh() -> void:
 	text += _flow_line("current", "current_vector")
 
 
-## Per-wheel painted-surface grip of the active vehicle (1.00 on unpainted ground), or "" when
-## there's no vehicle / it has no wheels (the boat). Wheel order is FL FR RL RR.
+## The active vehicle's tyre class, then per wheel the surface under it, its grip (the fitted
+## tyre's, over the spec mu) and its added drag; "" when there's no vehicle / it has no wheels
+## (the boat). Wheel order is FL FR RL RR; "-" is a wheel off the ground.
 func _grip_line() -> String:
 	if _level == null:
 		return ""
 	var vehicle: BaseVehicle = _level.get("vehicle")
 	if vehicle == null or vehicle.wheels.is_empty():
 		return ""
+	var tyre := "-"
+	if vehicle.drive != null:
+		tyre = vehicle.drive.tyre.id if vehicle.drive.tyre != null else "reference"
+	var terrains := vehicle.grip_terrains()
+	var surfaces := PackedStringArray()
 	var parts := PackedStringArray()
 	var drags := PackedStringArray()
 	for w in vehicle.wheels:
+		surfaces.append(_surface_under(w, terrains))
 		parts.append("%.2f" % w.surface_grip)
 		drags.append("%.2f" % w.surface_drag)
-	return "\ngrip " + " ".join(parts) + "\ndrag " + " ".join(drags)
+	return "\ntyre " + tyre + "\nsurf " + " ".join(surfaces) + "\ngrip " + " ".join(parts) \
+			+ "\ndrag " + " ".join(drags)
+
+
+## The surface name under `w`'s contact, as its grip reads it: bare ground is Asphalt; a duck-typed
+## terrain that cannot name its surface (a measure fixture) reads "?".
+static func _surface_under(w: RayWheel, terrains: Array[Node]) -> String:
+	if not w.in_contact:
+		return "-"
+	var terrain := RayWheel.terrain_at(w.contact_point, terrains)
+	if terrain == null:
+		return Surface.display_name(Surface.ASPHALT)
+	if not terrain.has_method("surface_at"):
+		return "?"
+	return Surface.display_name(terrain.surface_at(w.contact_point))
 
 
 ## Body attitude of the active vehicle, and whether it is past the overturn threshold. Every

@@ -11,10 +11,10 @@ CAN-style messages with a companion simulator (sloppyCAN/RAMN) in the same page.
 sloppyCAN accelerates the car; real RPM, speed, GPS and lamps stream back. Levels make signals
 visible: a grade raises `engine_load`, a hairpin makes tires slip.
 
-The one exception is **challenges**: short goal-driven lessons (stop in a box, take a bend on
-ice, plough a field, couple a trailer and deliver it, ...) that teach CAN by making you drive *through* sloppyCAN. The keyboard
-is locked out for the attempt; you read the signals and send the commands yourself. Each pass is
-timed, and your best times are kept between visits. Press 5 (or CHALLENGE) to pick one.
+The one exception is **challenges**: short goal-driven lessons (stop in a box, plough a field,
+couple a trailer and deliver it, ...) that teach CAN by making you drive *through* sloppyCAN. The
+keyboard is locked out for the attempt; you read the signals and send the commands yourself. Each
+pass is timed, and your best times are kept between visits. Press 5 (or CHALLENGE) to pick one.
 
 It's built in Godot 4.7 and exported to WebAssembly. Physics runs at 60 Hz with interpolation for
 smooth rendering.
