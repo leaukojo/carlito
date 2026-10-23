@@ -130,6 +130,14 @@ static func anti_roll_force(comp_l: float, comp_r: float, rate: float) -> float:
 	return maxf(rate, 0.0) * (comp_l - comp_r)
 
 
+## Angular damping declared on `body` (1/s): REPLACEs the engine's default, so 0 is none and the
+## yaw, roll and pitch bleed is the tyres' and dampers' alone. The wheeled bodies and trailers call it
+## with their `VehicleSpec.angular_damping` (src/vehicles/CLAUDE.md § Physics).
+static func declare_angular_damp(body: RigidBody3D, figure: float) -> void:
+	body.angular_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+	body.angular_damp = maxf(figure, 0.0)
+
+
 ## Rolling-resistance magnitude (N): `crr * N`. Pass the suspension force the springs reported
 ## this tick as `normal_load`, never `mass * g`. Applied per contact (`RayWheel.surface_drag_force`).
 static func rolling_drag(crr: float, normal_load: float) -> float:

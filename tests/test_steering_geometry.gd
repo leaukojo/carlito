@@ -1,6 +1,7 @@
 extends GdUnitTestSuite
 ## Ackermann steering: `WheelDrive.ackermann_angle`, each steered wheel's angle off the bicycle
-## angle, pure statics. The per-body domain check lives in test_vehicle_catalog.
+## angle, pure statics; then roll steer (`RayWheel.roll_steer`), the angle each axle adds off its
+## own suspension roll. The per-body domain check lives in test_vehicle_catalog.
 
 const WheelDriveScript := preload("res://src/vehicles/base/wheel_drive.gd")
 
@@ -52,3 +53,137 @@ func test_any_fraction_orders_the_pair_mirrors_it_and_keeps_the_cotangent_mean()
 					.is_equal_approx(-outer, 1e-6)
 			assert_float((1.0 / tan(inner) + 1.0 / tan(outer)) / 2.0).is_equal_approx(
 					1.0 / tan(mean), 1e-5)
+
+
+# --- roll steer: an angle off the axle's suspension roll, added after the split ----------------
+
+## On the sedan's track, the right wheel 2 cm deeper than the left: the axle rolled right (a left
+## turn) by atan(0.02 / 1.264).
+const RS_LEFT := 0.050
+const RS_RIGHT := 0.070
+
+
+## `RayWheel.roll_steer_angle` for a wheel at `x_self` and its partner mirrored across the axle.
+func _rs(comp_self: float, comp_partner: float, x_self: float, coeff: float, rear: bool) -> float:
+	return RayWheel.roll_steer_angle(comp_self, comp_partner, x_self, -x_self, coeff, rear)
+
+
+func test_a_zero_coefficient_steers_nothing_whatever_the_roll() -> void:
+	for rear in [false, true]:
+		assert_float(_rs(RS_LEFT, RS_RIGHT, -SEDAN_HALF_TRACK, 0.0, rear)).is_equal(0.0)
+
+
+func test_rolled_right_steers_the_front_right_and_the_rear_left() -> void:
+	# A left turn rolls the body right: understeer steers the front out of it (right, -) and the
+	# rear into it (left, +), read the same off either wheel of the axle.
+	for x: float in [-SEDAN_HALF_TRACK, SEDAN_HALF_TRACK]:
+		var mine := RS_LEFT if x < 0.0 else RS_RIGHT
+		var theirs := RS_RIGHT if x < 0.0 else RS_LEFT
+		assert_float(_rs(mine, theirs, x, 0.2, false)).is_less(0.0)
+		assert_float(_rs(mine, theirs, x, 0.1, true)).is_greater(0.0)
+
+
+func test_pure_heave_steers_nothing() -> void:
+	assert_float(_rs(0.06, 0.06, -SEDAN_HALF_TRACK, 0.2, false)).is_equal(0.0)
+	assert_float(_rs(0.06, 0.06, SEDAN_HALF_TRACK, 0.1, true)).is_equal(0.0)
+
+
+func test_the_angle_is_the_coefficient_times_the_axle_roll() -> void:
+	var phi := atan((RS_RIGHT - RS_LEFT) / (2.0 * SEDAN_HALF_TRACK))
+	assert_float(_rs(RS_LEFT, RS_RIGHT, -SEDAN_HALF_TRACK, 0.2, false)).is_equal_approx(-0.2 * phi,
+			1e-12)
+	assert_float(_rs(RS_RIGHT, RS_LEFT, SEDAN_HALF_TRACK, 0.13, true)).is_equal_approx(0.13 * phi,
+			1e-12)
+
+
+## A 2000 kg four-wheeler on the sedan's track, front steered, roll steer on both axles and no bar.
+func _rs_drive(front: float, rear: float) -> WheelDrive:
+	var gd := GroundDriveSpec.new()
+	gd.wheel_positions = [
+		Vector3(-SEDAN_HALF_TRACK, 0.0, -0.79), Vector3(SEDAN_HALF_TRACK, 0.0, -0.79),
+		Vector3(-SEDAN_HALF_TRACK, 0.0, 0.79), Vector3(SEDAN_HALF_TRACK, 0.0, 0.79),
+	]
+	gd.ackermann = 1.0
+	gd.roll_steer_front = front
+	gd.roll_steer_rear = rear
+	var spec := VehicleSpec.new()
+	spec.mass = 2000.0
+	spec.ground_drive = gd
+	return WheelDrive.new(auto_free(Node3D.new()), spec)
+
+
+## Rolled right off one shared latch, then each wheel writes this tick's compression as it ticks.
+func _roll_and_latch(drive: WheelDrive) -> void:
+	for w in drive.wheels:
+		w.compression = RS_LEFT if w.anchor.x < 0.0 else RS_RIGHT
+	for w in drive.wheels:
+		w.latch_bar()
+
+
+func test_both_wheels_of_an_axle_take_one_increment_whichever_ticks_first() -> void:
+	var drive := _rs_drive(0.2, 0.1)
+	_roll_and_latch(drive)
+	var latched := PackedFloat64Array()
+	for w in drive.wheels:
+		latched.append(w.roll_steer())
+	drive.wheels[0].compression += 0.01  # the first wheel ticks and writes its live compression
+	for i in drive.wheels.size():
+		var w: RayWheel = drive.wheels[i]
+		assert_float(w.roll_steer()).is_equal(latched[i])
+		assert_float(w.roll_steer()).is_equal(w.anti_roll_partner.roll_steer())
+
+
+func test_a_lifted_partner_reads_full_droop() -> void:
+	# Roll steer is the links' kinematics: the airborne wheel hangs at compression 0, and the axle
+	# steers off that, where the bar would hang free.
+	var drive := _rs_drive(0.2, 0.0)
+	var left: RayWheel = drive.wheels[0]
+	var right: RayWheel = left.anti_roll_partner
+	left.in_contact = true
+	left.compression = RS_LEFT
+	right.in_contact = false
+	right.compression = 0.0
+	left.latch_bar()
+	right.latch_bar()
+	assert_float(left.roll_steer()).is_equal_approx(
+			-0.2 * atan(-RS_LEFT / (2.0 * SEDAN_HALF_TRACK)), 1e-7)  # float32 anchors
+	assert_float(left.bar_force(7000.0)).is_equal(0.0)
+
+
+func test_roll_steer_alone_pairs_the_axles_with_no_bar_force() -> void:
+	var drive := _rs_drive(0.0, 0.1)
+	for w in drive.wheels:
+		w.in_contact = true
+		assert_object(w.anti_roll_partner).is_not_null()
+	_roll_and_latch(drive)
+	for w in drive.wheels:
+		assert_float(w.bar_force(w.bar_rate)).is_equal(0.0)
+
+
+func test_each_wheel_angle_is_the_split_plus_its_roll_steer() -> void:
+	var drive := _rs_drive(0.2, 0.1)
+	var spec_gd := GroundDriveSpec.new()
+	spec_gd.ackermann = 1.0
+	drive._applied_steer = deg_to_rad(10.0)
+	_roll_and_latch(drive)
+	var phi := atan((RS_RIGHT - RS_LEFT) / (2.0 * SEDAN_HALF_TRACK))
+	for w in drive.wheels:
+		var split := WheelDriveScript.ackermann_angle(drive.mean_steer_angle(), w.anchor.x,
+				drive._wheelbase, 1.0) if w.steered else 0.0
+		var expected := split + (0.1 * phi if w.is_rear else -0.2 * phi)
+		# float32 anchors
+		assert_float(drive.wheel_steer_angle(w, spec_gd)).is_equal_approx(expected, 1e-7)
+	# The driver's angle never carries it.
+	assert_float(drive.mean_steer_angle()).is_equal(deg_to_rad(10.0))
+
+
+func test_with_no_roll_steer_each_wheel_angle_is_the_split_bit_for_bit() -> void:
+	var drive := _rs_drive(0.0, 0.0)
+	var spec_gd := GroundDriveSpec.new()
+	spec_gd.ackermann = 1.0
+	drive._applied_steer = deg_to_rad(17.0)
+	_roll_and_latch(drive)
+	for w in drive.wheels:
+		var split := WheelDriveScript.ackermann_angle(drive.mean_steer_angle(), w.anchor.x,
+				drive._wheelbase, 1.0) if w.steered else 0.0
+		assert_float(drive.wheel_steer_angle(w, spec_gd)).is_equal(split)

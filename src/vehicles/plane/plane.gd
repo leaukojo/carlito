@@ -131,6 +131,12 @@ func _ready() -> void:
 	_inertia_roll = VehicleMath.inertia_of(spec.mass, body_extents.x, body_extents.y)
 
 
+## A flight body: its landing gear is a `ground_drive`, but in the air only pitch and roll carry
+## declared rate dampers, so the engine's angular damping stays on.
+func declares_angular_damp() -> bool:
+	return false
+
+
 func _tick_extras(input: VehicleInput, delta: float) -> void:
 	var t := telemetry as PlaneTelemetry
 	var body := global_transform.basis

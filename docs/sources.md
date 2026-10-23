@@ -193,6 +193,29 @@ is a fitment law (the mobility number), a later `GroundDriveSpec` field.
 | The side force acts ahead of the COM | most road vehicles have their centre of pressure in the front half, typically ahead of the neutral steer point, so a crosswind yaws them downwind [80]. `SIDE_CP_FRAC` 0.25 of the wheelbase ahead of the axles' midpoint | sourced; the fraction an estimate |
 | Tanker barrel 0.7 | a circular cylinder's drag coefficient climbs back to ~0.7 near Re 3.5e6 past the drag crisis and holds [81]; the barrel at a 13 m/s crosswind sits at Re 1.5e6, below that plateau, so 0.7 is the upper end | secondary; the figure an estimate |
 
+*Roll steer* (`GroundDriveSpec.roll_steer_front` / `_rear`, `gen_kenney_vehicles.gd`): degrees of
+wheel steer per degree of the axle's suspension roll, + = toward understeer on either axle (the
+front out of the turn, the rear into it). Gillespie's ε (+ = toward the side the body rolls to)
+converts as `ε_f = front`, `ε_r = −rear`; MRA's axle coefficient signs the rear the same as here
+and the front opposite.
+
+| Figure | Basis | Grade |
+| --- | --- | --- |
+| Roll is the axle's against the chassis, not the body's world roll | the axle roll steer coefficients are defined on axle roll relative to the chassis; a positive rear coefficient is understeer [82] | sourced |
+| Twist-beam rear 0.036 | an OEM baseline twist beam (ADAMS, correlated with the physical K&C rig) steers both rear wheels 0.14 deg into the turn at 3.9 deg of body roll [83] | sourced |
+| Strut / double-wishbone front 0.10 | "typical near design height", varying a lot between well-handling cars; one reply calls 0.1 a little high [85]. Inside the compilation's front band, +0.2 (understeer) to −0.1 [84] | secondary |
+| Multi-link rear 0.05 | mid of the compilation's rear band, +0.13 (understeer) to −0.06 [84]; no per-type figure found | secondary band; the figure an estimate |
+| Leaf-sprung solid rear 0.10 | upper half of that band: a live axle is laid out for roll understeer, the leaf's front eye set low so the wheel moves forward in jounce [87] | secondary band; the figure an estimate |
+| The rear band's sign | the compilation names no turn or roll direction; the twist beam's measured understeer [83] and the live-axle layout [87] both read its + end as understeer | not confirmed in a primary |
+| Open-wheelers, trucks, tractor 0 | no figure found; race kinematics are laid out for minimal toe change, and a truck's leaf axle is the candidate | estimate |
+
+*Linear understeer* (the step pass's K at its slowest speed, `docs/vehicle_measurements.md` § Step steer):
+
+| Figure | Basis | Grade |
+| --- | --- | --- |
+| K band 0.7-8.2 deg/g, mean 4.4 (FWD 4.2, RWD 4.7) | US vehicles at a lateral acceleration of 0.15 of g [84]; no band split by class was found | secondary |
+| Roll steer's share | 1.0 of an illustrative 4.1 deg/g budget (front 0.6, rear −0.4 in the per-axle K convention, K = front − rear); roll camber 1.2, compliance steer 0.5 (side-force 0.4, aligning-torque 0.1) and aligning torque 0.4 more [86] | secondary |
+
 ## Reference list
 
 1. Ubysz, "Problems of rotational mass in passenger vehicles", Transport Problems 5(1), 2010, Table 1: http://transportproblems.polsl.pl/pl/archiwum/2010/zeszyt1/2010t5z1_04.pdf
@@ -276,3 +299,9 @@ is a fitment law (the mobility number), a later `GroundDriveSpec` field.
 79. M. Hammache, M. Michaelian, F. Browand, "Aerodynamic Forces on Truck Models, Including Two Trucks in Tandem", California PATH UCB-ITS-PRR-2001-27, 2001: https://escholarship.org/uc/item/6jr154q9
 80. A. Brandt, "Driving stability of passenger vehicles under crosswinds", licentiate thesis, Chalmers, 2021: https://research.chalmers.se/publication/521674/file/521674_Fulltext.pdf
 81. A. Roshko, "Experiments on the flow past a circular cylinder at very high Reynolds number", J. Fluid Mech. 10, 1961 (abstract): https://authors.library.caltech.edu/records/m8vtc-33e74
+82. Milliken Research Associates, *MRA Moment Method User's Manual* v4.10, § 4.5.5 Axle Roll Steer, 2000: https://millikenresearch.com/MMM410man.pdf
+83. Auto/Steel Partnership, *Lightweight Twist Beam Development — Final Report*, Fig. 35 (K&C: roll — roll steer): https://www.a-sp.org/wp-content/uploads/2020/08/Lightweight-Twist-Beam-Final-Report.pdf
+84. "Summary of typical vehicle parameter measurements — compliance parameters", unattributed compilation (search summary; the page refuses fetching): https://www.researchgate.net/publication/329552571
+85. Eng-Tips, "Understeer gradient of modern passenger cars" (forum): https://www.eng-tips.com/threads/understeer-gradient-of-modern-passenger-cars.190555/
+86. Wikipedia, "Bundorf analysis" (after Bundorf & Leffert, SAE 760713; the example is illustrative): https://en.wikipedia.org/wiki/Bundorf_analysis
+87. US 4,919,449, "Vehicle rear suspension" (search summary): https://patents.google.com/patent/US4919449

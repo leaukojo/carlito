@@ -60,6 +60,12 @@ extends Resource
 @export var anti_roll_rate := 0.0
 ## Rear-axle bar rate; -1 = `anti_roll_rate`. 0 is real hardware (no rear bar), so not the sentinel.
 @export var anti_roll_rate_rear := -1.0
+## Roll steer, deg of wheel steer per deg of that axle's suspension roll (`RayWheel.roll_steer`),
+## + = toward understeer: the front steers out of the turn, the rear into it. The K term is
+## `(front + rear) * roll gradient` (`BalanceModel.roll_steer_gradient`). Gillespie's ε (+ = toward
+## the side the body rolls to) converts as `ε_f = front`, `ε_r = -rear`.
+@export var roll_steer_front := 0.0
+@export var roll_steer_rear := 0.0
 ## Front side-view link slope (contact patch to instant centre): a tyre force `F` puts
 ## `-F * anti_dive_slope` through the links, so the body pitches less. `h / wheelbase` = 100 %.
 @export var anti_dive_slope := 0.0
@@ -179,6 +185,11 @@ func rear_anti_roll_rate() -> float:
 ## Either axle carries a bar, so the wheels need their partners (`RayWheel.pair_axles`).
 func has_anti_roll_bar() -> bool:
 	return anti_roll_rate > 0.0 or rear_anti_roll_rate() > 0.0
+
+
+## Either axle steers with its roll, so the wheels need their partners (`RayWheel.pair_axles`).
+func has_roll_steer() -> bool:
+	return roll_steer_front != 0.0 or roll_steer_rear != 0.0
 
 
 ## Rear-axle bump damper, N*s/m: explicit, or the front damper scaled by sqrt(rate ratio) so the

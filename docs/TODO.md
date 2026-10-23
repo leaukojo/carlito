@@ -1,43 +1,5 @@
 # TODO
 
-## Tyre classes and surfaces: the user's checks
-
-Feel only (figures: `docs/vehicle_measurements.md` § Tyre classes by surface). Garage TYRES row;
-F3 names `tyre` and `surf`. Car Arena pad (pause, SPAWN POINT): `sedan` all-season / winter /
-summer on PadSnow, a stop and the Skidpad. Ice pad (`--level=rough_ground`, IcePad; an F6 run has no
-shell and fits the stock): studded vs winter. Level 1's wallow: `pickup` all-season
-vs Mud. A swap survives a reload on the deployed web build. Grass off any road; level 3's gravel
-and `car_lights` (no par).
-
-## Tractor implements: the user's checks
-
-Figures: `docs/heavy_vehicles.md` § Draft, hitch, linkage.
-
-- **Drive level 1's farm playground:** lift and lower the plough (the front lightens, `axle_load`
-  rises); cycle the full spreader on with E (the steering lightens); plough across a light band
-  (`draft_force` and `engine_load` dip and recover); start with the plough down; lower the harrow
-  and the mower on the field and over the wallow's ridges (the roller and the tail wheel ride the
-  surface).
-- **Run `tractor_plough`** (bridge-driven) on its 25-70 % band and hint; drop `[NOT-TESTED]` from
-  its title once it passes.
-- **Re-shoot the cards:** the four implement selector cards and level 1's show Cat I machines
-  (`gen_vehicle_thumbs.tscn` windowed, `tools/CLAUDE.md` § Rare generators; the level card from the
-  Polish tab), then `--import`.
-
-## Aero balance: the user's check
-
-Feel only (`docs/vehicles.md` § Aero balance). `race` on any level with a long fast sweeper: take
-it at 200+ km/h. It should turn in without the rear stepping out, and stay planted through the
-sweeper. Then lift mid-corner: the nose should tuck in a little, not snap round.
-
-## Crosswind: the user's check
-
-Feel only (`docs/vehicles.md` § Crosswind; figures `docs/vehicle_measurements.md` § Wind). Pause,
-CONDITIONS, WIND: STRONG, on any land level. Drive `delivery` into the wind, then with it: the
-`engine_load` gauge sits higher, then lower, at the same speed. Then across it: the van drifts
-and yaws downwind with the wheel straight, weaving with the gusts. Is it a correction you make
-without thinking, or a fight on the keyboard? Repeat in a `sedan`, and in the `semi` with the box.
-
 ## Compass and wind direction on the land dashboards
 
 From the crosswind drive check: on a land vehicle you can't see your heading or where the wind
@@ -51,3 +13,25 @@ those for the boat only. Two routes:
   bump, sloppyCAN copy). This also puts wind on the bus.
 - **UI only:** a compass rose with a wind arrow fed from the level, not the contract. It is
   cheaper, but it would be the first dashboard widget the contract doesn't declare (rule 4).
+
+## Handling follow-ups
+
+From the roll-steer work (`docs/vehicles.md` § Balance):
+- **The corner pass's limit in `BalanceModel`:** the pass runs driven at 9-23 deg of lock, where
+  the turn's drive spends a driven axle's ellipse, a front-driven axle's tilted drive carries side
+  force, and a rear-driven body's front makes a few points over its static share. The drive alone
+  makes the calls worse (it flips `firetruck` and the tractor): model the pass's geometry whole,
+  calibrate it on every body against the pass's `pred`, then judge `delivery` (rear-first there).
+- **Compliance steer** (a brief): rear toe-in under side force, the classic cure for lift-off
+  oversteer. The four COMPROMISE bodies' 1.08 and the `police` / `suv-luxury` lifted spins are
+  lift-off cases, so it is the candidate to retire them. Its linear-K share is small (0.5 of
+  Bundorf's illustrative 4.1 deg/g); roll camber (1.2) is the larger share left.
+- **Truck understeer:** with no angular damping the Kenney trucks read neutral to slightly
+  oversteer at the slowest step (`garbage-truck` K -0.01 deg/g); a real truck understeers. A
+  leaf-sprung axle's roll understeer is the candidate once a figure is sourced; the semis'
+  COMPROMISE goes with it.
+- **Primary sources:** Gillespie ch. 6, SAE 1999-01-1323 and NHTSA's SPMD data, to upgrade the
+  multi-link and leaf estimates, confirm the rear band's sign and replace the population K band
+  with class bands (`docs/sources.md` § Roll steer).
+- **`measure_rough` probes:** `rollsteer=` and `angdamp=`, as `measure_vehicles` has; attributing
+  a rough-ground cell takes a hand edit of the body's `.tres` today.

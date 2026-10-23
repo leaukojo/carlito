@@ -58,11 +58,24 @@ func test_lltd_is_the_roll_stiffness_split_on_equal_tracks() -> void:
 	var front := gd.spring_rate / 2.0 + gd.anti_roll_rate
 	var rear := gd.rear_spring_rate() / 2.0 + gd.rear_anti_roll_rate()
 	assert_float(BalanceModel.lltd(m)).is_equal_approx(front / (front + rear), 1e-5)
-	# And the transfers' moment is the side force's: roll comes off the summed stiffness.
+	# And the springs carry the side force's moment plus the rolled COM's weight, `m g h phi`: roll
+	# comes off the summed stiffness less the weight's.
 	var h: float = m["h"]
 	var phi := deg_to_rad(BalanceModel.roll_deg(m, 0.5))
-	assert_float(phi * (front + rear) * 1.5 * 1.5).is_equal_approx(spec.mass * BalanceModel.G * 0.5 * h,
-			1.0)
+	assert_float(phi * (front + rear) * 1.5 * 1.5).is_equal_approx(
+			spec.mass * BalanceModel.G * h * (0.5 + phi), 1.0)
+	# Which is `phi / ay` over the side force's alone (~8 % at this stiffness).
+	assert_float(phi * (front + rear) * 1.5 * 1.5 / (spec.mass * BalanceModel.G * 0.5 * h)) \
+			.is_equal_approx(1.0 + phi / 0.5, 1e-5)
+
+
+func test_a_roll_stiffness_under_the_weights_moment_tips() -> void:
+	# `sum(K) <= m g h`: the rolled COM's weight out-turns the springs, so any side force tips it.
+	var m := BalanceModel.axles(_spec(0.6, 0.1))
+	for key in ["front", "rear"]:
+		(m[key] as Dictionary)["spring"] = 1.0
+		(m[key] as Dictionary)["bar"] = 0.0
+	assert_float(BalanceModel.roll_deg(m, 0.05)).is_equal(INF)
 
 
 func test_the_hand_figures_for_peak_grip_under_transfer() -> void:
@@ -80,7 +93,8 @@ func test_the_hand_figures_for_peak_grip_under_transfer() -> void:
 
 func test_a_lifted_axle_hands_the_rest_of_the_moment_to_the_other() -> void:
 	# A front bar stiff enough to lift the inner front wheel: the front carries twice its static
-	# wheel load across it and no more, the rear the rest of `m ay h`, and the body rolls on the rear.
+	# wheel load across it and no more, the rear the rest of `m ay h` plus the rolled COM's weight
+	# `m g h phi`, and the body rolls on the rear.
 	var m := BalanceModel.axles(_spec(0.6, 0.1, 400000.0))
 	(m["rear"] as Dictionary)["bar"] = 0.0
 	var g := 0.9
@@ -88,8 +102,25 @@ func test_a_lifted_axle_hands_the_rest_of_the_moment_to_the_other() -> void:
 	var front: Dictionary = m["front"]
 	assert_float(float(state["front"])).is_equal_approx(2.0 * float(front["load"]), 1e-3)
 	var moment := (float(state["front"]) + float(state["rear"])) * 1.5 / 2.0
-	assert_float(moment).is_equal_approx(float(m["mass"]) * BalanceModel.G * g * float(m["h"]), 0.5)
+	var phi := float(state["phi"])
+	assert_float(moment).is_equal_approx(float(m["mass"]) * BalanceModel.G * (g + phi) * float(m["h"]),
+			0.5)
 	assert_float(BalanceModel.roll_deg(m, g)).is_greater(BalanceModel.roll_deg(m, 0.5) * g / 0.5)
+
+
+func test_a_lifted_axle_over_springs_under_the_weights_moment_tips() -> void:
+	# The stiff front bar lifts the inner front; the rear, its roll stiffness under `m g h`, cannot
+	# hold the rolled COM's weight alone, so the body tips. Its own transfer stays far under its
+	# cap, so this is the lifted-axle branch, not both axles past theirs.
+	var m := BalanceModel.axles(_spec(0.6, 0.1, 400000.0))
+	var rear: Dictionary = m["rear"]
+	rear["bar"] = 0.0
+	rear["spring"] = 1.0
+	var weight_h := float(m["mass"]) * BalanceModel.G * float(m["h"])
+	assert_float(BalanceModel._roll_stiffness(rear)).is_less(weight_h)
+	# Below lift-off the front bar holds it elastically.
+	assert_bool(is_finite(BalanceModel.roll_deg(m, 0.1))).is_true()
+	assert_float(BalanceModel.roll_deg(m, 1.5)).is_equal(INF)
 
 
 func test_the_limit_settles_on_the_first_axle_to_saturate() -> void:
@@ -178,6 +209,10 @@ func test_angular_damping_adds_understeer_falling_with_speed() -> void:
 	assert_float(BalanceModel.understeer_gradient(m, 0.15, 30.0 / 3.6)).is_equal_approx(slow, 1e-4)
 	m["yaw_damp"] = 0.0
 	assert_float(BalanceModel.understeer_gradient(m, 0.15, 30.0 / 3.6)).is_equal_approx(0.0, 1e-4)
+	# No damping is no term, whatever the inertia: an undeclared one (NAN) must not poison K.
+	m["yaw_inertia"] = NAN
+	assert_float(BalanceModel.yaw_damping_gradient(m, 0.15, 30.0 / 3.6)).is_equal(0.0)
+	assert_bool(is_nan(BalanceModel.understeer_gradient(m, 0.15, 30.0 / 3.6))).is_false()
 
 
 func test_bodies_off_two_pairs_are_not_predicted() -> void:
@@ -223,3 +258,50 @@ func test_unset_share_splits_downforce_by_weight() -> void:
 	var fast := BalanceModel.axles(spec, 50.0)
 	var f := float(fast["front"]["aero"])
 	assert_float(f / (f + float(fast["rear"]["aero"]))).is_equal_approx(0.6, 1e-5)
+
+
+func test_zero_roll_steer_reproduces_the_model_exactly() -> void:
+	# Explicit zeros against a model built without the key: K, LLTD and the limit, bit for bit.
+	var m := BalanceModel.axles(_spec(0.6, 0.1))
+	var bare := m.duplicate(true)
+	(bare["front"] as Dictionary).erase("roll_steer")
+	(bare["rear"] as Dictionary).erase("roll_steer")
+	assert_float(BalanceModel.roll_steer_gradient(m, 0.15)).is_equal(0.0)
+	assert_float(BalanceModel.understeer_gradient(m, 0.15)).is_equal(
+			BalanceModel.understeer_gradient(bare, 0.15))
+	assert_float(BalanceModel.lltd(m)).is_equal(BalanceModel.lltd(bare))
+	assert_dict(BalanceModel.limit(m)).is_equal(BalanceModel.limit(bare))
+
+
+func test_roll_steer_adds_the_coefficients_times_the_roll_gradient() -> void:
+	var spec := _spec(0.6, 0.1)
+	var base := BalanceModel.understeer_gradient(BalanceModel.axles(spec), 0.15)
+	spec.ground_drive.roll_steer_front = 0.2
+	spec.ground_drive.roll_steer_rear = 0.13
+	var m := BalanceModel.axles(spec)
+	var term := 0.33 * BalanceModel.roll_deg(m, 0.15) / 0.15
+	assert_float(BalanceModel.roll_steer_gradient(m, 0.15)).is_equal_approx(term, 1e-9)
+	assert_float(BalanceModel.understeer_gradient(m, 0.15)).is_equal_approx(base + term, 1e-9)
+	# The same term at speed: it is steady state, not a speed term.
+	m["yaw_inertia"] = 1800.0
+	m["yaw_damp"] = 0.0
+	assert_float(BalanceModel.understeer_gradient(m, 0.15, 30.0 / 3.6)).is_equal_approx(base + term,
+			1e-4)
+
+
+func test_roll_steer_never_moves_the_limit() -> void:
+	var spec := _spec(0.6, 0.1)
+	var plain := BalanceModel.limit(BalanceModel.axles(spec))
+	spec.ground_drive.roll_steer_front = 0.2
+	spec.ground_drive.roll_steer_rear = 0.13
+	assert_dict(BalanceModel.limit(BalanceModel.axles(spec))).is_equal(plain)
+
+
+func test_a_tipping_body_reads_infinite_roll_steer_and_none_without_it() -> void:
+	# Far past the tipping g both inner wheels are up and roll reads INF: 0 times it must not be NAN.
+	var m := BalanceModel.axles(_spec(0.6, 0.1))
+	assert_float(BalanceModel.roll_deg(m, 10.0)).is_equal(INF)
+	assert_float(BalanceModel.roll_steer_gradient(m, 10.0)).is_equal(0.0)
+	assert_bool(is_nan(BalanceModel.understeer_gradient(m, 10.0))).is_false()
+	(m["front"] as Dictionary)["roll_steer"] = 0.1
+	assert_float(BalanceModel.roll_steer_gradient(m, 10.0)).is_equal(INF)

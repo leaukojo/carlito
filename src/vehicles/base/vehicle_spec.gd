@@ -11,7 +11,9 @@ extends Resource
 @export_group("Body")
 @export var mass := 1200.0                         ## kg, applied to the RigidBody3D
 @export var center_of_mass := Vector3(0, -0.3, 0)  ## body-space; low COM keeps the car flat
-@export var angular_damping := 0.0  ## 0 = engine default; raise for a narrow-track, low-yaw-inertia body as a stability-assist yaw bleed
+## 1/s. A wheeled body or trailer declares it (`BaseVehicle.declares_angular_damp`): 0 = none. A
+## boat, drone, train or the plane keeps the engine default at 0 and REPLACEs it with a figure above.
+@export var angular_damping := 0.0
 ## Yaw dynamic index k² / (a·b), a and b the COM's distances to the front and rear axles: the yaw
 ## moment is declared as `index * mass * a * b` (`BaseVehicle`). 0 = Jolt's tensor off the
 ## collision shapes at uniform density, which puts as much mass per metre in the overhangs as

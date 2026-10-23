@@ -120,10 +120,10 @@ var coupled_torque := 0.0
 ## (`WheelDrive.pawl_torque`; 0 = no lock): the case holds the wheel through the diffs, so a wheel
 ## the lock stopped (`hold_by_lock`) is held like a braked one, to that rating beyond the brake.
 var lock_torque := 0.0
-## The other wheel of this axle, paired by `pair_axles` when the spec asks for a bar; null means no
-## bar on this body. The bar reads the snapshot `_bar_compression`, never the live `compression`,
-## and the body's tick (`WheelDrive.tick`, `TowedBody.tick_towed`) latches it for EVERY wheel
-## before any wheel ticks.
+## The other wheel of this axle, paired by `pair_axles` for a bar or roll steer; null means neither
+## (a 0 rate or coefficient on a pair acts as none). Both read the snapshot `_bar_compression`,
+## never the live `compression`, and the body's tick (`WheelDrive.tick`, `TowedBody.tick_towed`)
+## latches it for EVERY wheel before any wheel ticks.
 ## Wheels tick in array order, so a latch inside `tick` gives the first wheel of a pair a partner
 ## value one tick staler than the second's: a phantom damper on the left wheels only
 ## (docs/vehicles.md has the figures).
@@ -160,6 +160,9 @@ var damper_bump := 0.0
 var damper_rebound := 0.0
 ## This axle's anti-roll bar rate (`GroundDriveSpec.rear_anti_roll_rate` at the rear).
 var bar_rate := 0.0
+## This axle's roll steer, deg per deg of its roll (`GroundDriveSpec.roll_steer_rear` at the rear,
+## `roll_steer_front` at the front; + = toward understeer).
+var roll_steer_coeff := 0.0
 ## This axle's link geometry, signed so `link_slope * force_long` is the link force along the
 ## contact normal: `GroundDriveSpec.anti_squat_slope` at the rear, `-anti_dive_slope` at the front.
 var link_slope := 0.0
@@ -223,6 +226,7 @@ func apply_suspension(gd: GroundDriveSpec) -> void:
 	damper_bump = gd.rear_damper_bump() if is_rear else gd.damper_bump
 	damper_rebound = gd.rear_damper_rebound() if is_rear else gd.damper_rebound
 	bar_rate = gd.rear_anti_roll_rate() if is_rear else gd.anti_roll_rate
+	roll_steer_coeff = gd.roll_steer_rear if is_rear else gd.roll_steer_front
 	link_slope = gd.anti_squat_slope if is_rear else -gd.anti_dive_slope
 	axle_lat_grip = gd.rear_lat_grip if is_rear else 1.0
 	tyre_share = 0.5 if is_rear and gd.rear_twin_tyres else 1.0
@@ -473,9 +477,9 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		update_visual(drive_spec, delta)
 
 
-## Pair each wheel with the one across its axle (same z, opposite side) for the anti-roll bar. Every
-## body with a bar builds its pairs here: the chassis (`WheelDrive`) and the towed bogie
-## (`TowedBody`), whose three axles each get their own.
+## Pair each wheel with the one across its axle (same z, opposite side) for the anti-roll bar and
+## roll steer. Every body with either builds its pairs here: the chassis (`WheelDrive`) and the
+## towed bogie (`TowedBody`), whose three axles each get their own.
 static func pair_axles(wheels: Array[RayWheel]) -> void:
 	for w in wheels:
 		for other in wheels:
@@ -485,10 +489,38 @@ static func pair_axles(wheels: Array[RayWheel]) -> void:
 				break
 
 
-## Snapshot this wheel's compression for the anti-roll bar. The body's tick calls it on every
-## wheel BEFORE any of them ticks (see `anti_roll_partner`).
+## Snapshot this wheel's compression for the anti-roll bar and roll steer. The body's tick calls
+## it on every wheel BEFORE any of them ticks (see `anti_roll_partner`).
 func latch_bar() -> void:
 	_bar_compression = compression
+
+
+## This wheel's roll steer (rad, + = left) off the shared snapshot, which the owner adds to the
+## Ackermann angle: both wheels of the axle read one latch, so they take the same increment
+## whichever ticks first. 0 with no partner or no coefficient. Unlike `bar_force` a lifted partner still
+## counts: roll steer is the links' kinematics, not a force through the partner, and its zero
+## compression is where its link really hangs (full droop).
+func roll_steer() -> float:
+	var partner := anti_roll_partner
+	if partner == null or roll_steer_coeff == 0.0:
+		return 0.0
+	return roll_steer_angle(_bar_compression, partner._bar_compression, anchor.x, partner.anchor.x,
+			roll_steer_coeff, is_rear)
+
+
+## Pure: an axle wheel's roll steer (rad, + = left) off its own and its partner's compression (m) at
+## lateral offsets `x_self` / `x_partner` (m, + = right). The axle's suspension roll is
+## `phi = atan((c_right - c_left) / track)`, + = rolled right (a left turn); the front steers
+## `-coeff * phi`, out of the turn, and the rear `+coeff * phi`, into it, so + `coeff` understeers
+## on both. Exactly 0 at `coeff == 0`, and on pure heave.
+static func roll_steer_angle(comp_self: float, comp_partner: float, x_self: float, x_partner: float,
+		coeff: float, rear: bool) -> float:
+	var track := absf(x_self - x_partner)
+	if coeff == 0.0 or track <= 0.0:
+		return 0.0
+	var rolled := comp_self - comp_partner if x_self > x_partner else comp_partner - comp_self
+	var phi := atan(rolled / track)
+	return coeff * phi if rear else -coeff * phi
 
 
 ## This wheel's anti-roll bar force off the shared snapshot (N, + = pushes this corner up): equal

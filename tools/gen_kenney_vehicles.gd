@@ -144,15 +144,22 @@ const CAR_BASE := {
 	# degree figure: the toy wheelbases (1.6 m on the SUV) pitch more by geometry alone.
 	"anti_dive": 0.4, "anti_squat": 0.5,
 	# Bars: the 20 kN/m pair split 16 / 4 kN/m, so the front carries ~65-70 % of the roll stiffness
-	# and washes wide first on equal side grip: the corner pass saturates the front first at 0.82-0.89 g
-	# (front / rear ellipse share: sedan 0.96 / 0.91, taxi 0.97 / 0.88, hatchback-sports 0.99 / 0.86,
-	# police 0.99 / 0.84), roll 4.4-5.0 deg, no wheel lifted. BalanceModel.limit predicts +9.7 / +9.6 /
-	# +11.5 / +5.6 % front-first. All-front (no rear bar) reads front-first too, but lifts
-	# hatchback-sports' inner front (6.5 deg of roll), which caps the transfer. The linear understeer left
-	# is near neutral (K at 0.15 g 0.79-0.80 on the front-heavy saloons, 0.03 on `police`): roll steer
-	# and compliance steer, which the sim lacks, make the rest of a real car's 2-4 deg/g.
+	# and washes wide first on equal side grip: the corner pass saturates the front first at 0.82-0.90 g
+	# (front / rear ellipse share: sedan 0.97 / 0.93, taxi 0.97 / 0.91, hatchback-sports 0.96 / 0.89,
+	# police 0.99 / 0.84), roll 4.4-5.0 deg, no wheel lifted. BalanceModel.limit predicts +10.9 / +10.8 /
+	# +13.1 / +7.0 % front-first. All-front (no rear bar) reads front-first too, but lifts
+	# hatchback-sports' inner front (6.5 deg of roll), which caps the transfer. The linear understeer is
+	# the bars and tyre laws plus roll steer below (BalanceModel K at 0.15 g 1.49-1.61 on the front-heavy
+	# saloons, 0.85 on `police`; the step pass reads 1.70-2.23 and 1.09 at 30 km/h); roll camber and
+	# compliance steer, which the sim lacks, make the rest of a real car's 2-4 deg/g.
 	"anti_roll_rate": 16000.0,
 	"anti_roll_rate_rear": 4000.0,
+	# Roll steer, deg of steer per deg of the axle's suspension roll, + = toward understeer
+	# (`GroundDriveSpec.roll_steer_front`; docs/sources.md § Roll steer). Front 0.10: a strut's
+	# "typical near design height" (secondary), inside the front band -0.1 to +0.2. Rear 0.036: the
+	# FWD saloons' twist beam, an OEM baseline's K&C (A/SP, sourced); the multi-link and leaf rears
+	# override in VARIANTS. At the saloons' ~5 deg/g of roll the pair adds ~+0.65 deg/g of K.
+	"roll_steer_front": 0.10, "roll_steer_rear": 0.036,
 	# FWD default; per-variant override in VARIANTS (rwd/awd where the body says so).
 	"wheel_inertia": 1.2, "driven_front": true, "driven_rear": false,
 	# Differentials: 1.0 is open (Differential.bias_capacity). Road cars keep open axles and an
@@ -260,6 +267,9 @@ const TRUCK_BASE := {
 	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
 	"anti_roll_rate": 0.0,
 	"anti_roll_rate_rear": -1.0,
+	# No roll steer: a leaf-sprung solid axle's roll understeer is the candidate, with no truck figure
+	# found (docs/sources.md § Roll steer).
+	"roll_steer_front": 0.0, "roll_steer_rear": 0.0,
 	# Anti-squat as CAR_BASE's share: with every newton of launch transfer through the springs the
 	# rear squat alone was ~1 deg of the pitch. No anti-dive: braking pitch was never the complaint.
 	"anti_dive": 0.0, "anti_squat": 0.5,
@@ -294,8 +304,9 @@ const TRUCK_BASE := {
 	# Commercial radials, a touch less load-sensitive than a passenger tyre. Cornering stiffness peaks
 	# at 3.33x the static corner load: MF `PKY2` 3.33 on a 315/80R22.5 (projectchrono
 	# `CityBus_Pac02Tire.tir`), a truck tyre running at its rated `Fz0` as a loaded truck's does.
-	# BalanceModel.limit leaves both bodies front-first without a bar (garbage-truck +0.7 %,
-	# firetruck +0.2 %); the corner pass saturates the front first on both (0.99 / 0.89 and 0.87).
+	# Without a bar BalanceModel.limit reads firetruck +0.5 % front-first and garbage-truck -1.2 %
+	# rear-first, as the corner pass does (front 0.99 / 0.94; rear 0.97 / 0.99): margins inside the
+	# model's error at the pass's steer (docs/vehicles.md § Balance).
 	"load_sensitivity": 0.08, "cornering_peak_load": 3.33,
 	# The 2021 B6.7's top Performance rating (Cummins): 325 hp, 750 lb-ft (1017 N·m) at 1800, governed
 	# 2600, which is 890 N·m at rated speed. Idle 700 at half the peak and 1200 rpm at 0.81 of it (the
@@ -358,16 +369,23 @@ const VAN_BASE := {
 	# 110 kN/m: 2.6-3.0 deg of roll at the 0.75-0.84 g limit (corner pass, 2026-10-15).
 	"anti_roll_rate": 110000.0,
 	"anti_roll_rate_rear": -1.0,
+	# Roll steer: CAR_BASE's strut front (a Transit-class van's) and a leaf-sprung solid rear at 0.10,
+	# the upper half of the rear band, as a live axle is laid out for roll understeer (estimate;
+	# docs/sources.md § Roll steer). ~+0.71 deg/g of K at the vans' ~3.6 deg/g of roll.
+	"roll_steer_front": 0.10, "roll_steer_rear": 0.10,
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
 	# mu_lat 0.85: commercial-tyre side grip, so a cornering van slides before it lifts a wheel.
 	# Twin rear tyres (the dual-rear-wheel Transit 350 HD class, drawn as singles), each at half the
 	# corner's load (GroundDriveSpec.rear_twin_tyres): the pair's peak side force is
-	# `1 + load_sensitivity` over one tyre's, its cornering stiffness `2 C(L / 2)`. BalanceModel.limit:
-	# delivery -2.0 -> +5.4 %, delivery-flat +6.0 %, ambulance +7.5 % front-first (corner pass: front
-	# first, 0.97 / 0.95, 0.98 / 0.84, 0.99 / 0.84); a bar split moves
+	# `1 + load_sensitivity` over one tyre's, its cornering stiffness `2 C(L / 2)`. BalanceModel.limit
+	# reads single rears -2.9 % (rear-first) on delivery, twins +3.9 %, delivery-flat +4.7 %,
+	# ambulance +7.9 %. The corner pass saturates `delivery`'s rear first (0.97 / 1.00): its rear
+	# spends ~5 kN of drive holding the speed, which the free-rolling model does not see (on side
+	# force alone its front leads); delivery-flat 0.98 / 0.86, ambulance 0.98 / 0.88. A bar split moves
 	# `delivery` not at all, so the bars stay even. Step pass: no spin, body slip <= 5 deg, K at
-	# 30 km/h +0.51 deg/g on `delivery` (single rears at c 1.92: -0.95, and a lifted 100 km/h step spins).
+	# 30 km/h 1.13 deg/g on `delivery` with roll steer, 0.41 without (single rears at c 1.92: -0.95,
+	# and a lifted 100 km/h step spins).
 	# The heavy vans: a light-truck fit on the all-season class.
 	"tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "tyre": "all_season",
 	"mu_long": 1.0, "mu_lat": 0.85, "rear_lat_grip": 1.0, "rear_twin_tyres": true,
@@ -444,6 +462,8 @@ const TRACTOR_BASE := {
 	"spring_rate_rear": 420000.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
 	"anti_roll_rate": 0.0,
 	"anti_roll_rate_rear": -1.0,
+	# No roll steer: the "suspension" is the tyres, with no links to steer.
+	"roll_steer_front": 0.0, "roll_steer_rear": 0.0,
 	# No link geometry: the "suspension" is the tyres.
 	"anti_dive": 0.0, "anti_squat": 0.0,
 	# Per axle, I = m (kappa r)^2 at the drawn radius, tyre and rim (liquid ballast does not turn
@@ -460,8 +480,8 @@ const TRACTOR_BASE := {
 	# `rear_lat_grip` 1.077: the rears are the bigger tyre, so they carry their load at a smaller share
 	# of their rating, `1 + load_sensitivity * log2(rated rear / rated front)`: 650/65R38 157D (4125 kg)
 	# over 540/65R28 142D (2650 kg), a ~180 hp tractor's fit (Michelin MultiBib). It scales the rear's
-	# peak and its cornering stiffness alike. BalanceModel.limit: -3.2 -> +4.6 % front-first; the
-	# corner pass saturates the front first (0.99 / 0.80 at 0.78 g).
+	# peak and its cornering stiffness alike. BalanceModel.limit reads equal tyres -5.1 % (rear-first),
+	# these +2.1 % front-first; the corner pass saturates the front first (0.99 / 0.85 at 0.80 g).
 	"tyre_fit": TyreClass.Fit.TRACTOR, "tyre": "ag_lug",
 	"mu_long": 1.0, "mu_lat": 0.95, "rear_lat_grip": 1.077,
 	# No ABS: a farm tractor's service brakes are not anti-lock. They sit on the rear axle only, and
@@ -560,14 +580,19 @@ const VARIANTS := {
 	# AWD — the axis that gives each car its own handling (FWD hatch scrabbles, RWD interceptor
 	# steps out, SUVs hook up). `front_weight` on the front-drivers puts the transverse engine
 	# over the driven axle (measured 48/52 rear-biased at the body origin, unusable for FWD).
+	# Roll steer by rear layout (docs/sources.md § Roll steer): CAR_BASE's twist beam on the FWD
+	# saloons; a multi-link rear at 0.05, mid of the rear band (estimate), on the rear- and all-driven
+	# cars; a leaf-sprung solid rear at 0.10, its upper half (estimate), on `van` and the pickups; none
+	# on the open-wheelers, whose kinematics are laid out for minimal toe change (estimate).
 	"sedan": {"family": "car", "front_weight": 0.60},
-	# COMPROMISE (`sedan-sports`, `suv`, `suv-luxury`, `pickup`, `pickup-flat`): even bars,
-	# `rear_lat_grip` 1.08 and the cornering-stiffness law off, a rear grip bonus with no hardware
-	# behind it. These near-50/50 rear-driven bodies spin lifted 100 km/h steps on equal tyres with
-	# a front-biased bar (1, 4, 1, 1, 2 cells; `suv` 3 with the law off too): on a lift the lightened
-	# rears reach their side peak at a smaller slip, which the steady BalanceModel margin cannot see.
-	# Undoing it needs roll steer (brief 15); until then these bodies hold 1.08's step results.
-	"sedan-sports": {"family": "car", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "engine_inertia": 0.18, "mass": 1050.0, "torque_mul": 1.12, "final_drive": 4.1, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0},
+	# COMPROMISE (`sedan-sports`, `suv`, `pickup`, `pickup-flat`): even bars, `rear_lat_grip` 1.08 and
+	# the cornering-stiffness law off, a rear grip bonus with no hardware behind it. These near-50/50
+	# rear-driven bodies spin lifted 60-100 km/h steps on equal tyres with a front-biased bar: with
+	# roll steer on, CAR_BASE's 80/20 split of their bar total adds 1, 4, 1, 1 spun cells over the
+	# compromise (`measure_vehicles -- <v> 60 step`, 2026-10-19). On a lift the lightened rears reach
+	# their side peak at a smaller slip, which the steady BalanceModel margin cannot see. Undoing it
+	# costs those cells.
+	"sedan-sports": {"family": "car", "roll_steer_rear": 0.05, "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "engine_inertia": 0.18, "mass": 1050.0, "torque_mul": 1.12, "final_drive": 4.1, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0},
 	# Hot hatch: a helical front LSD (Quaife-class, ~2.5:1), so a front wheel a bump or a steer input
 	# peels still leaves its partner up to 2.5x its torque rather than an equal share.
 	"hatchback-sports": {"family": "car", "engine_inertia": 0.18, "mass": 1000.0, "torque_mul": 1.10, "final_drive": 4.2, "max_steer_deg": 42.0, "front_weight": 0.60, "diff_bias_front": 2.5},
@@ -575,11 +600,15 @@ const VARIANTS := {
 	# 0-100 goes as peak^-0.6 on the sedan, peak^-1.4 on the suv.
 	# Both SUVs: a Torsen-type centre (~3:1). Under launch squat the rear axle carries ~2x the
 	# front (2412 / 4956 N measured), inside 3:1, so the heavy axle is no longer capped by the light one.
-	"suv": {"family": "car", "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.62, "anti_roll_rate": 18000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "mass": 1500.0, "torque_mul": 1.05, "mu_lat": 0.88, "max_steer_deg": 34.0, "driven_rear": true, "centre_diff_bias": 3.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
+	"suv": {"family": "car", "roll_steer_rear": 0.05, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.62, "anti_roll_rate": 18000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "mass": 1500.0, "torque_mul": 1.05, "mu_lat": 0.88, "max_steer_deg": 34.0, "driven_rear": true, "centre_diff_bias": 3.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
 	# 1.54 is the biggest multiplier in the family: 285 Nm through an AWD 1600 kg body.
-	"suv-luxury": {"family": "car", "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.62, "anti_roll_rate": 18000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "mass": 1600.0, "torque_mul": 1.54, "mu_lat": 0.88, "max_steer_deg": 33.0, "driven_rear": true, "centre_diff_bias": 3.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
+	# Off the COMPROMISE: the 36 kN/m pair split 27 / 9, the law on, equal tyres. Under roll steer its
+	# step sweep spins only the 100 km/h 30 % lifted cell the compromise spins too; BalanceModel.limit
+	# +4.5 % front-first. CAR_BASE's 80/20 lifts the inner front in the corner pass (5.9 deg of roll),
+	# and 2:1 spins a lifted 100 km/h 20 % step (2026-10-19).
+	"suv-luxury": {"family": "car", "roll_steer_rear": 0.05, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.62, "anti_roll_rate": 27000.0, "anti_roll_rate_rear": 9000.0, "mass": 1600.0, "torque_mul": 1.54, "mu_lat": 0.88, "max_steer_deg": 33.0, "driven_rear": true, "centre_diff_bias": 3.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
 	"taxi": {"family": "car", "mass": 1250.0, "front_weight": 0.60},
-	"police": {"family": "car", "mass": 1300.0, "torque_mul": 1.18, "final_drive": 4.0, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0},
+	"police": {"family": "car", "roll_steer_rear": 0.05, "mass": 1300.0, "torque_mul": 1.18, "final_drive": 4.0, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0},
 	# Open-wheelers: `wheel_x_out` measured per body against its own half-width at the wheel
 	# stations (re-drive after changing, it also steadies cornering). `cd` 0.70: exposed wheels +
 	# wing really do run ~2x a saloon's drag. `front_weight` 0.42: engine sits behind the driver;
@@ -613,25 +642,25 @@ const VARIANTS := {
 	# 2.21x185=409 Nm) — re-derive on any CAR_BASE torque edit.
 	# `rear_lat_grip` 1.15: the wide rears a rear-heavy formula car runs; on equal tyres the heavier
 	# rear axle's load-sensitive mu sits under the front's and the body steers loose. Bars even
-	# (10 kN/m each): +11.0 / +10.4 % front-first (BalanceModel.limit).
+	# (10 kN/m each): +11.3 / +10.5 % front-first (BalanceModel.limit).
 	# Shifting: the full-pedal pair at any pedal (no light map, kickdown or dwell). The sequential
 	# cuts the ignition 0.15 s through a shift (the torque interruption CAR_BASE's converter has no
 	# need of) and closes at its rating: on J 0.06 the rev drop already spans ~2 ticks, a dog box's
 	# near-instant engagement (estimate).
 	# `yaw_index` 0: no measured open-wheeler, so Jolt's tensor (docs/vehicles.md § Inertia).
-	"race": {"family": "car", "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.25, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": true, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
-	"race-future": {"family": "car", "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": false, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
+	"race": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.25, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": true, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
+	"race-future": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": false, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
 	# Commercial bodies: RWD, governed at 180 like the real things (measured 198-200 ungoverned).
 	# Bars: the 36 kN/m pair split 24 / 12 kN/m: the corner pass saturates the front first (0.99 /
-	# 0.83 at 0.74 g), LLTD 58 %, roll 4.0 deg, no wheel lifted; BalanceModel.limit predicts +4.4 %.
-	# 31 / 5 (predicted +8.1 %) and 36 / 0 lift the inner front (4.8 / 6.1 deg). K at 0.15 g -0.10.
-	"van": {"family": "car", "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.58, "anti_roll_rate": 24000.0, "anti_roll_rate_rear": 12000.0, "mu_lat": 0.88, "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
+	# 0.84 at 0.74 g), LLTD 58 %, roll 4.0 deg, no wheel lifted; BalanceModel.limit predicts +5.6 %.
+	# 31 / 5 and 36 / 0 lift the inner front (4.8 / 6.1 deg). K at 0.15 g 0.98 with roll steer.
+	"van": {"family": "car", "roll_steer_rear": 0.10, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.58, "anti_roll_rate": 24000.0, "anti_roll_rate_rear": 12000.0, "mu_lat": 0.88, "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
 	# `ride_lift` 0.08 on the flatbeds: their arches are drawn shallower than the tyre, so at the
 	# flush ride height the rear wheels broke through the bed floor.
 	# `yaw_index` 0.94, the measured pickups' median (docs/vehicles.md § Inertia): the empty bed
 	# leaves the mass forward.
-	"pickup": {"family": "car", "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 14000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "ride_lift": 0.08, "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
-	"pickup-flat": {"family": "car", "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 14000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "ride_lift": 0.08, "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
+	"pickup": {"family": "car", "roll_steer_rear": 0.10, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 14000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "ride_lift": 0.08, "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
+	"pickup-flat": {"family": "car", "roll_steer_rear": 0.10, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 14000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "ride_lift": 0.08, "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
 	# heavy vans: car family, van feel (VAN_BASE, not CAR_BASE) — these are 4-5 t vehicles
 	"delivery": {"family": "car", "base": "van", "mass": 4200.0},
 	"delivery-flat": {"family": "car", "base": "van", "com_y": 0.55, "ride_lift": 0.08, "mass": 4000.0},
@@ -831,6 +860,8 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 		gd.damper_rebound_rear = float(b["damper_rebound_rear"])
 	gd.anti_roll_rate = get_f.call("anti_roll_rate")
 	gd.anti_roll_rate_rear = get_f.call("anti_roll_rate_rear")
+	gd.roll_steer_front = get_f.call("roll_steer_front")
+	gd.roll_steer_rear = get_f.call("roll_steer_rear")
 	gd.max_suspension_force = float(b["max_suspension_force"])
 	gd.grip_curve = _grip_curve.duplicate()
 	# The stock class and the size it is fitted in; the figures below are that class on dry asphalt.
@@ -987,9 +1018,11 @@ func _balance(spec: VehicleSpec, id: String) -> void:
 	var lim := BalanceModel.limit(m)
 	# The damping term needs a declared yaw inertia; Jolt computes the rest only at runtime.
 	var damped := BalanceModel.yaw_damping_gradient(m, BALANCE_G, 30.0 / 3.6)
-	_balance_report.append(("%-16s K %.2f deg/g at %.2f g (%s angular damping at 30 km/h), "
-			+ "LLTD %.0f %%; limit %.2f g, %s first (front %.2f / rear %.2f g, %+.1f %%), roll %.1f deg there")
+	_balance_report.append(("%-16s K %.2f deg/g at %.2f g (%+.2f roll steer, %s angular damping"
+			+ " at 30 km/h), LLTD %.0f %%; limit %.2f g, %s first (front %.2f / rear %.2f g,"
+			+ " %+.1f %%), roll %.1f deg there")
 			% [id, BalanceModel.understeer_gradient(m, BALANCE_G), BALANCE_G,
+			BalanceModel.roll_steer_gradient(m, BALANCE_G),
 			"-" if is_nan(damped) else "%+.2f" % damped,
 			BalanceModel.lltd(m) * 100.0, lim["g"],
 			"front" if float(lim["margin"]) >= 0.0 else "rear", lim["front"], lim["rear"],

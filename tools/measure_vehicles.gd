@@ -120,6 +120,13 @@ const STEP_LOCKS: Array[float] = [10.0, 20.0, 30.0]  ## % of lock, + = right
 const STEP_SETTLE_S := 3.0
 const STEP_HOLD_S := 3.0
 const STEP_STEADY_S := 0.5
+## `chatter_runs`: the consecutive sign flips that count as a tick-rate oscillation, and the
+## smallest tick-to-tick change read as a direction: CHATTER_EPS (rad), or CHATTER_REL of the
+## angle. Contact noise in the latched compressions flips at 0.1-2 µrad on a 2-5 mrad angle
+## (`sedan`, 2026-10-19) and does not grow with the coefficient; a ringing loop's swing scales with it.
+const CHATTER_FLIPS := 3
+const CHATTER_EPS := 1e-7
+const CHATTER_REL := 0.01
 const STEP_RISE := 0.9
 const STEP_SPIN_DEG := 20.0
 const STEP_ROLL_DEG := 45.0
@@ -413,6 +420,9 @@ var _st_lifted := 0                   ## most wheels off the ground in one tick 
 var _st_roll_t := -1.0                ## s into the step the body passed STEP_ROLL_DEG
 var _st_xfer0 := Vector2.ZERO         ## `_axle_transfer` on the step's first tick
 var _st_xfer := Vector2.ZERO          ## `_axle_transfer` summed over the steady tail
+## Each axle's mean roll-steer angle (rad; x front, y rear; + = toward understeer), one per tick of
+## the step (`_axle_roll_steer`).
+var _st_rs: PackedVector2Array = []
 ## `circle`: run only the full-lock circle (§ full-lock circle) on each body.
 var _circle := false
 var _ci_i := 0.0                      ## integral half of the circle's PI pedal
@@ -531,6 +541,12 @@ var _step_speeds: Array[float] = []
 ## `ackermann=<0..1>`: the Ackermann fraction (`GroundDriveSpec.ackermann`) overridden the same way
 ## (NAN: the spec's).
 var _ackermann := NAN
+## `rollsteer=<front>,<rear>`: the roll-steer coefficients (deg/deg,
+## `GroundDriveSpec.roll_steer_front` / `_rear`) overridden the same way (NAN: the spec's).
+var _roll_steer := Vector2(NAN, NAN)
+## `angdamp=<1/s>`: the body's angular damping REPLACEd with this, and every towed body's as it
+## couples (`_apply_angdamp`); 0 = none (NAN: as the body sets it).
+var _angdamp := NAN
 ## `pedal=<0..1>`: the accel pass held at this pedal instead of floored (it implies the trace's
 ## settle and gates).
 var _pedal := 1.0
@@ -630,6 +646,7 @@ var _corner_front := 0.0       ## front-axle saturation at the peak
 var _corner_rear := 0.0
 var _corner_slid := false      ## the slip-angle gate tripped at some point
 var _corner_roll := 0.0        ## chassis roll (deg) at the lateral-g peak
+var _corner_drive := 0.0       ## the tyres' summed longitudinal force (N) at the peak
 var _corner_xfer0 := Vector2.ZERO  ## `_axle_transfer` as the lock starts winding on
 var _corner_lltd := NAN        ## front share of the lateral load transfer at the peak (`_lltd`)
 var _corner_lifted := 0        ## most wheels off the ground in any one tick of the pass
@@ -717,6 +734,12 @@ func _ready() -> void:
 				_step_speeds.append(float(kmh))
 		elif flag.begins_with("ackermann="):
 			_ackermann = clampf(float(flag.substr(10)), 0.0, 1.0)
+		elif flag.begins_with("rollsteer="):
+			var pair := flag.substr(10).split(",")
+			_roll_steer = Vector2(float(pair[0]) if pair.size() > 0 else 0.0,
+					float(pair[1]) if pair.size() > 1 else 0.0)
+		elif flag.begins_with("angdamp="):
+			_angdamp = maxf(float(flag.substr(8)), 0.0)
 		elif flag.begins_with("pedal="):
 			_pedal = clampf(float(flag.substr(6)), 0.05, 1.0)
 		elif flag == "pulse" or flag.begins_with("pulse="):
@@ -788,11 +811,13 @@ func _ready() -> void:
 			return
 		if _trace or _notc or _held_gear > 0 or not is_nan(_engine_inertia) \
 				or not is_nan(_rear_lat_grip) or not is_nan(_bar_rear) or not is_nan(_cornering_peak) \
-				or not is_nan(_ackermann) or _circle or _hitch_pass or _plough_pass or _kerb or _cruise_probe() \
+				or not is_nan(_ackermann) or not is_nan(_roll_steer.x) or not is_nan(_angdamp) \
+				or _circle or _hitch_pass or _plough_pass or _kerb or _cruise_probe() \
 				or _tyre != "" or _surface >= 0 or not _step_speeds.is_empty() or _xwind or _headtail \
 				or _wind_base != Vector3.ZERO:
 			printerr("trace / notc / gear= / j= / rear_lat_grip= / bar_rear= / cornering_peak= / speeds= /"
-					+ " ackermann= / circle / hitch / plough / kerb / pedal= / cruise /"
+					+ " ackermann= / rollsteer= / angdamp= / circle / hitch / plough / kerb /"
+					+ " pedal= / cruise /"
 					+ " kickdown / pulse / xwind / headtail / wind= / tyre= / surface= change the passes a"
 					+ " doc preset tabulates:"
 					+ " run them per body")
@@ -972,6 +997,11 @@ func _next_vehicle() -> void:
 		_car.spec = _car.spec.duplicate()
 		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
 		_car.spec.ground_drive.ackermann = _ackermann
+	if not is_nan(_roll_steer.x):
+		_car.spec = _car.spec.duplicate()
+		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
+		_car.spec.ground_drive.roll_steer_front = _roll_steer.x
+		_car.spec.ground_drive.roll_steer_rear = _roll_steer.y
 	_current["abs"] = _car.spec.ground_drive.abs_equipped
 	add_child(_car)
 	var tyre := MeasureRig.fit_tyre(_car, _tyre)
@@ -1103,6 +1133,7 @@ func _reset_pass(phase: Phase) -> void:
 	_corner_rear = 0.0
 	_corner_slid = false
 	_corner_roll = 0.0
+	_corner_drive = 0.0
 	_corner_xfer0 = Vector2.ZERO
 	_corner_lltd = NAN
 	_corner_lifted = 0
@@ -1124,6 +1155,7 @@ func _physics_process(delta: float) -> void:
 	if _car == null or _phase == Phase.DONE:
 		return
 	_t += delta
+	_apply_angdamp()
 	if _coast:
 		var n := _car.get_contact_count()
 		_contact_peak = maxi(_contact_peak, n)
@@ -1742,6 +1774,19 @@ func _hitch_y() -> float:
 	return (_car.global_transform * host.marker_local()).y if host != null else -1.0
 
 
+## `angdamp=`: the body's angular damping, and a coupled trailer's, REPLACEd with the probe's.
+## Every tick, since a trailer couples after its countdown and a respawn may re-couple it.
+func _apply_angdamp() -> void:
+	if is_nan(_angdamp):
+		return
+	var bodies: Array[RigidBody3D] = [_car]
+	var host := _coupled_host()
+	if host != null and host.trailer != null:
+		bodies.append(host.trailer)
+	for b in bodies:
+		VehicleMath.declare_angular_damp(b, _angdamp)
+
+
 ## The coupled hitch, or null with nothing coupled.
 func _coupled_host() -> TowHost:
 	for node in _car.find_children("*", "", true, false):
@@ -2070,6 +2115,10 @@ func _tick_cornering(delta: float) -> void:
 		_corner_front = _axle_saturation(false)
 		_corner_rear = _axle_saturation(true)
 		_corner_roll = absf(VehicleMath.roll_deg(_car.global_transform.basis))
+		_corner_drive = 0.0
+		for w in _car.wheels:
+			if w.in_contact:
+				_corner_drive += w.force_long
 		_corner_lltd = _lltd(_axle_transfer() - _corner_xfer0)
 	if _corner_ramp_t >= CORNER_RAMP_S or _t >= _seconds:
 		_report_cornering(false)
@@ -2116,11 +2165,19 @@ func _report_cornering(skipped: bool) -> void:
 		return
 	var axle := "front" if _corner_front >= _corner_rear else "rear"
 	var note := "  <-- SLID: peak is the last reading before the body let go" if _corner_slid else ""
+	# BalanceModel's free-rolling limit beside the reading (`docs/vehicles.md` § Balance: the pass
+	# runs driven, at 9-23 deg of lock on these wheelbases).
+	var model := BalanceModel.axles(_car.spec, _corner_speed)
+	var lim := BalanceModel.limit(model)
+	var pred := "-" if lim.is_empty() else "%s first, %+.1f %%" % [
+			"front" if float(lim["margin"]) >= 0.0 else "rear", float(lim["margin"]) * 100.0]
 	print("  %-13s : peak %.2f m/s^2 (%.2f g) at %.0f km/h; %s saturates first"
 			% ["cornering", _corner_peak, _corner_peak / 9.81, _corner_speed * 3.6, axle]
-			+ " (front %.2f, rear %.2f)%s" % [_corner_front, _corner_rear, note])
-	print("  %-13s : path %.2f g at most (`acc_lat`)" % ["", _corner_path_peak / 9.81])
-	var model := BalanceModel.axles(_car.spec, _corner_speed)
+			+ " (front %.2f, rear %.2f; pred %s)%s" % [_corner_front, _corner_rear, pred, note])
+	# The drive the speed hold spends at the peak: a driven axle saturates before its side force
+	# alone says, which BalanceModel's free-rolling limit does not see.
+	print("  %-13s : path %.2f g at most (`acc_lat`); drive %.0f N at the peak"
+			% ["", _corner_path_peak / 9.81, _corner_drive])
 	print(("  %-13s : roll %.1f deg at the peak (pred %.1f), front %s (pred %s) of the load transfer,"
 			+ " up to %d wheel(s)") % ["", _corner_roll,
 			BalanceModel.roll_deg(model, _corner_peak / 9.81), _pct(_corner_lltd),
@@ -2548,6 +2605,11 @@ func _start_step() -> void:
 		probe += ", bar_rear %.0f N/m (not the spec's)" % _bar_rear
 	if not is_nan(_cornering_peak):
 		probe += ", cornering_peak %.2f (not the spec's)" % _cornering_peak
+	if not is_nan(_roll_steer.x):
+		probe += ", roll steer %.2f / %.2f deg/deg (not the spec's)" % [_roll_steer.x,
+				_roll_steer.y]
+	if not is_nan(_angdamp):
+		probe += ", angular damping %.2f /s (not the body's)" % _angdamp
 	print("=== %s (%s), step steer%s ===" % [_variant, _drive_label(_car.spec), probe])
 	_next_step_run()
 
@@ -2575,6 +2637,7 @@ func _next_step_run() -> void:
 	_st_lifted = 0
 	_st_roll_t = -1.0
 	_st_xfer = Vector2.ZERO
+	_st_rs = PackedVector2Array()
 	MeasureRig.drive(100.0, 0.0)
 
 
@@ -2629,6 +2692,7 @@ func _tick_step(delta: float) -> void:
 		if not w.in_contact:
 			airborne += 1
 	_st_lifted = maxi(_st_lifted, airborne)
+	_st_rs.append(_axle_roll_steer(float(_st_run["lock"]) < 0.0))
 	if _st_t > STEP_HOLD_S - STEP_STEADY_S:
 		# The bicycle angle: with Ackermann the steered wheels' own angles do not average to it.
 		_st_tail += Vector3(v_long, absf(_car.drive.mean_steer_angle()), 1.0)
@@ -2653,11 +2717,15 @@ func _report_step_run(delta: float) -> void:
 	if _st_roll_t >= 0.0:
 		print("  %-26s : ROLLED %.2f s into the step (past %.0f deg); %s"
 				% [label, _st_roll_t, STEP_ROLL_DEG, tilt])
+		if _car.spec.ground_drive.has_roll_steer():
+			_report_roll_steer(r, {}, int(_st_tail.z))
 		_current["step"].append(r)
 		return
 	if _st_spin_t >= 0.0:
 		print("  %-26s : SPUN %.2f s into the step (slip past %.0f deg); %s"
 				% [label, _st_spin_t, STEP_SPIN_DEG, tilt])
+		if _car.spec.ground_drive.has_roll_steer():
+			_report_roll_steer(r, {}, int(_st_tail.z))
 		_current["step"].append(r)
 		return
 	var ticks := int(_st_tail.z)
@@ -2690,13 +2758,80 @@ func _report_step_run(delta: float) -> void:
 	var model := BalanceModel.axles(_car.spec, v_mean)
 	if not model.is_empty():
 		model["yaw_inertia"] = (_current["yaw_index"] as Dictionary)["iyy"]
+		if not is_nan(_angdamp):
+			model["yaw_damp"] = _angdamp
 	var k := "" if is_nan(r["k_dpg"]) else "K %.2f deg/g (pred %.2f), " \
 			% [r["k_dpg"], BalanceModel.understeer_gradient(model, r["lat_g"], v_mean)]
 	print(("  %-26s : steady %.1f deg/s (%.2f g), %.2f of neutral; %sfront %s (pred %s) of the load"
 			+ " transfer; rise %.2f s, overshoot %.0f %%, slip peak %.1f deg, %s") % [label,
 			r["steady_dps"], r["lat_g"], r["of_neutral"], k, _pct(r["lltd"]),
 			_pct(BalanceModel.lltd(model)), rise, r["overshoot"] * 100.0, _st_slip_peak, tilt])
+	if _car.spec.ground_drive.has_roll_steer():
+		_report_roll_steer(r, model, ticks)
 	_current["step"].append(r)
+
+
+## Each axle's mean roll-steer angle over the steady tail beside `BalanceModel`'s (its coefficient
+## times the predicted roll; "-" on an empty `model`, a spun or rolled run), and the chatter count
+## over the whole held step (`chatter_runs`), printed and kept in `r`.
+func _report_roll_steer(r: Dictionary, model: Dictionary, ticks: int) -> void:
+	var tail := Vector2.ZERO
+	for i in range(maxi(_st_rs.size() - ticks, 0), _st_rs.size()):
+		tail += _st_rs[i]
+	tail = tail / maxf(ticks, 1)
+	var roll := BalanceModel.roll_deg(model, r["lat_g"]) if not model.is_empty() else NAN
+	var gd := _car.spec.ground_drive
+	var fronts := PackedFloat64Array()
+	var rears := PackedFloat64Array()
+	for v in _st_rs:
+		fronts.append(v.x)
+		rears.append(v.y)
+	r["roll_steer"] = Vector2(rad_to_deg(tail.x), rad_to_deg(tail.y))
+	r["chatter"] = chatter_runs(fronts) + chatter_runs(rears)
+	var pred := func(coeff: float) -> String: return "-" if is_nan(roll) else "%+.3f" % (coeff * roll)
+	print(("  %-26s : roll steer front %+.3f deg (pred %s), rear %+.3f deg (pred %s),"
+			+ " + = toward understeer; chatter %d") % ["", rad_to_deg(tail.x),
+			pred.call(gd.roll_steer_front), rad_to_deg(tail.y), pred.call(gd.roll_steer_rear),
+			r["chatter"]])
+
+
+## Each axle's mean roll-steer angle this tick (rad; x front, y rear), signed + toward understeer:
+## the front out of the turn, the rear into it. `turn_left`: the step's direction.
+func _axle_roll_steer(turn_left: bool) -> Vector2:
+	var sums := Vector4.ZERO  # front sum, front count, rear sum, rear count
+	for w in _car.wheels:
+		if w.is_rear:
+			sums += Vector4(0.0, 0.0, w.roll_steer(), 1.0)
+		else:
+			sums += Vector4(w.roll_steer(), 1.0, 0.0, 0.0)
+	var front := sums.x / maxf(sums.y, 1.0)
+	var rear := sums.z / maxf(sums.w, 1.0)
+	# A left turn: out of it is right (-), into it left (+).
+	return Vector2(-front, rear) if turn_left else Vector2(front, -rear)
+
+
+## Pure: the runs in `series` where the tick-to-tick change flips sign on CHATTER_FLIPS or more
+## consecutive ticks, a tick-rate oscillation. A change under CHATTER_EPS (rad) or CHATTER_REL of
+## the angle is no direction and ends the run: a one-tick contact blip and its return, ticks apart
+## from the next, are not a ringing loop.
+static func chatter_runs(series: PackedFloat64Array) -> int:
+	var runs := 0
+	var flips := 0
+	var last := 0.0
+	for i in range(1, series.size()):
+		var d := series[i] - series[i - 1]
+		if absf(d) < maxf(CHATTER_EPS, CHATTER_REL * absf(series[i])):
+			flips = 0
+			last = 0.0
+			continue
+		if last != 0.0 and signf(d) != signf(last):
+			flips += 1
+			if flips == CHATTER_FLIPS:
+				runs += 1
+		else:
+			flips = 0
+		last = d
+	return runs
 
 
 ## The full-lock circle (§ full-lock circle) on this body, from where `_next_vehicle` spawned it.

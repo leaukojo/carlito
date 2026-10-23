@@ -85,6 +85,8 @@ func _ready() -> void:
 	# a BaseVehicle, so nothing else clears it here.
 	linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
 	linear_damp = 0.0
+	# Angular damping is declared too: 0 is none (VehicleSpec.angular_damping).
+	VehicleMath.declare_angular_damp(self, spec.angular_damping)
 	# A heavy body off a kerb can cross thin terrain collision in one tick.
 	continuous_cd = true
 	# What SemiTractor's fit check reads (body_is_colliding). Cheap: normally no contacts at all.
@@ -110,7 +112,7 @@ func _ready() -> void:
 		# A towed body keeps its stock tyre: no swap reaches it.
 		wheel.apply_tyre(gd.tyre, gd.tyre)
 		wheels.append(wheel)
-	if gd.has_anti_roll_bar():
+	if gd.has_anti_roll_bar() or gd.has_roll_steer():
 		RayWheel.pair_axles(wheels)
 	# LampSet tolerates every path missing: a lampless trailer binds nothing.
 	_lamps.setup(self, spec)
@@ -147,10 +149,13 @@ func tick_towed(brake01: float, handbrake01: float, delta: float,
 	# The trailer's own ABS modulates the service brake; spring brakes are a mechanical hold.
 	var abs_slip := RayWheel.ABS_SLIP if gd.abs_equipped and handbrake01 <= 0.0 else 0.0
 	RayWheel.size_cap_masses(wheels, self, gd)
-	# One anti-roll snapshot for the whole bogie before any wheel ticks (`RayWheel.anti_roll_partner`).
+	# One anti-roll and roll-steer snapshot for the whole bogie before any wheel ticks
+	# (`RayWheel.anti_roll_partner`).
 	for w in wheels:
 		w.latch_bar()
 	for w in wheels:
+		# Unsteered: a spec's roll steer is the only angle a trailer wheel takes (0 on every one).
+		w.steer_angle = w.roll_steer()
 		w.tick(self, gd, space, 0.0, brake_t, delta, grip_terrains, abs_slip)
 	# Resistance is a sum, not a multiple: this trailer's own drag and side area against the level's
 	# wind, at its own aero centre (the parent walk passes the towing vehicle to reach the level);

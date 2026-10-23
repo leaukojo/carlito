@@ -25,6 +25,7 @@ const DRIVE_OVERRIDABLE := {
 	"min_steer_frac": "min_steer_frac", "steer_falloff_speed": "steer_falloff_speed",
 	"anti_roll_rate": "anti_roll_rate",
 	"anti_roll_rate_rear": "anti_roll_rate_rear",
+	"roll_steer_front": "roll_steer_front", "roll_steer_rear": "roll_steer_rear",
 	"cornering_peak_load": "cornering_peak_load",
 	"diff_bias_front": "diff_bias_front", "diff_bias_rear": "diff_bias_rear",
 	"centre_diff_bias": "centre_diff_bias",

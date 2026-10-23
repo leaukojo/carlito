@@ -88,9 +88,10 @@ func _ready() -> void:
 	# Drag is declared, never the engine's default_linear_damp (src/vehicles/CLAUDE.md § Physics).
 	linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
 	linear_damp = 0.0
-	if spec.angular_damping > 0.0:  # stability-assist yaw/roll bleed
-		angular_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
-		angular_damp = spec.angular_damping
+	# Angular damping too, on a wheeled body (0 = none); the others keep the engine's unless they
+	# declare a figure.
+	if declares_angular_damp() or spec.angular_damping > 0.0:
+		VehicleMath.declare_angular_damp(self, spec.angular_damping)
 	drivetrain = Drivetrain.new(spec)
 	if spec.ground_drive != null:  # optional: boat/drone/train declare none
 		drive = WheelDrive.new(self, spec)
@@ -407,6 +408,12 @@ func _declare_yaw(kg: float) -> void:
 		push_warning("%s: COM outside the wheelbase, yaw_dynamic_index ignored" % name)
 		return
 	inertia = Vector3(0.0, iyy, 0.0)
+
+
+## Whether `spec.angular_damping` is this body's whole angular damping, 0 meaning none: a wheeled
+## body's is (its tyres and dampers bleed the motion); a body without wheels keeps the engine's.
+func declares_angular_damp() -> bool:
+	return spec.ground_drive != null
 
 
 ## Copy a fresh telemetry's every field onto the live one. IN PLACE, never a new object: the

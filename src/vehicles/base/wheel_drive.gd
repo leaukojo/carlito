@@ -131,7 +131,7 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 		wheels.append(wheel)
 	_coupling.resize(wheels.size())
 	_lock_coupling.resize(wheels.size())
-	if gd.has_anti_roll_bar():
+	if gd.has_anti_roll_bar() or gd.has_roll_steer():
 		RayWheel.pair_axles(wheels)
 	var stations := _axle_stations()
 	_wheelbase = stations.y - stations.x if is_finite(stations.x) and is_finite(stations.y) else 0.0
@@ -330,6 +330,14 @@ func mean_steer_angle() -> float:
 	return _applied_steer
 
 
+## Wheel `w`'s angle this tick (rad, + = left): its Ackermann split of `mean_steer_angle` if it is
+## steered, plus its roll steer off the shared latch (`RayWheel.roll_steer`) on every axle.
+## `mean_steer_angle` stays the driver's angle, without the roll steer.
+func wheel_steer_angle(w: RayWheel, gd: GroundDriveSpec) -> float:
+	return (ackermann_angle(_applied_steer, w.anchor.x, _wheelbase, gd.ackermann)
+			if w.steered else 0.0) + w.roll_steer()
+
+
 ## The guidance path's slew TARGET, in the unit of `input.steer` ([-1, 1], + = right): the
 ## untapered lock angle for the commanded curvature over that lock, so `BaseVehicle` slews it at
 ## `spec.steer_speed` like hand-steering. NAN with no guidance command or no wheelbase, so the
@@ -373,7 +381,8 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 		if wheels[i].lock_torque > 0.0:
 			locked.append(i)
 	RayWheel.size_cap_masses(wheels, body, gd)
-	# One anti-roll snapshot for the whole body before any wheel ticks (`RayWheel.anti_roll_partner`).
+	# One anti-roll and roll-steer snapshot for the whole body before any wheel ticks
+	# (`RayWheel.anti_roll_partner`).
 	for w in wheels:
 		w.latch_bar()
 	# Traction control rides the drive alone, a hold each wheel latches and the differentials settle
@@ -385,8 +394,7 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 	var pedal := pedal_application(foot_pedal(input))
 	for i in wheels.size():
 		var w := wheels[i]
-		w.steer_angle = ackermann_angle(_applied_steer, w.anchor.x, _wheelbase, gd.ackermann) \
-				if w.steered else 0.0
+		w.steer_angle = wheel_steer_angle(w, gd)
 		# The nominal equal split (open-diff law) of the shaft torque, geared to the wheel;
 		# `_couple_differentials` adds what a biasing, locked or rigid diff moves on top, once every
 		# wheel has integrated.

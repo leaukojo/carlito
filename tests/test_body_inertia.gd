@@ -191,3 +191,45 @@ func test_the_tensor_scales_with_a_runtime_mass_rewrite() -> void:
 		assert_float(w.corner_mass).override_failure_message(
 				"set_live_mass left a corner sized for the old mass") \
 				.is_equal_approx(v.mass / float(v.wheels.size()), 1e-6)
+
+
+# --- angular damping: declared on the wheeled bodies, the engine's elsewhere ------------------
+
+## A shipped scene, as built (no spec override), stepped into the space.
+func _spawn_as_built(path: String) -> RigidBody3D:
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	var b := (load(path) as PackedScene).instantiate() as RigidBody3D
+	if b is BaseVehicle:
+		(b as BaseVehicle).display_only = true
+	root.add_child(b)
+	b.global_position = Vector3(0.0, 50.0, 0.0)
+	await get_tree().physics_frame
+	return b
+
+
+func test_a_wheeled_body_and_a_trailer_declare_no_angular_damping() -> void:
+	for path in [VehicleCatalog.scene_of("sedan"), "res://src/vehicles/truck/trailers/box.tscn"]:
+		var b := await _spawn_as_built(path)
+		assert_int(b.angular_damp_mode).override_failure_message(path) \
+				.is_equal(RigidBody3D.DAMP_MODE_REPLACE)
+		assert_float(b.angular_damp).override_failure_message(path).is_equal(0.0)
+
+
+func test_a_declared_figure_is_the_whole_damping() -> void:
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	var v := (load(VehicleCatalog.scene_of("sedan")) as PackedScene).instantiate() as BaseVehicle
+	v.spec = v.spec.duplicate(true)
+	v.spec.angular_damping = 0.5
+	v.display_only = true
+	root.add_child(v)
+	assert_int(v.angular_damp_mode).is_equal(RigidBody3D.DAMP_MODE_REPLACE)
+	assert_float(v.angular_damp).is_equal(0.5)
+
+
+func test_the_plane_and_a_boat_keep_the_engine_default() -> void:
+	for variant in ["plane", "boat-speed-a"]:
+		var b := await _spawn_as_built(VehicleCatalog.scene_of(variant))
+		assert_int(b.angular_damp_mode).override_failure_message(variant) \
+				.is_equal(RigidBody3D.DAMP_MODE_COMBINE)
