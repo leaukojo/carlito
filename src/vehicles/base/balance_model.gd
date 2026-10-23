@@ -530,24 +530,16 @@ static func corner_at(m: Dictionary, speed: float, lat_g: float) -> Dictionary:
 
 ## Axle `key`'s outer corner's compression past its inner's (m) under `roll` (`_roll_state`), what
 ## `RayWheel.roll_steer` reads. Both corners loaded: the transfer over the pair's rate
-## `spring + 2 bar`. Its inner corner unloaded: the outer carries the axle, and the inner's ray reads
-## the body's roll over the track (the bar still pushing the outer, `RayWheel.bar_force`) until it
-## no longer reaches the road, then full droop under the outer's spring alone. Tipping (no steady
-## turn, `_newton_corner`) reads full droop.
+## `spring + 2 bar`. Its inner corner unloaded (and tipping, `_newton_corner`): the outer carries
+## the axle with the bar in series with the inner's spring, and the inner's link hangs at the bar's
+## hang point (`RayWheel.roll_steer`, `RayWheel.bar_force`), so the pair holds the difference it
+## lifted at, whatever the body's roll; with no bar that is the outer over full droop.
 static func _axle_rolled(m: Dictionary, key: String, roll: Dictionary) -> float:
 	var axle: Dictionary = m[key]
 	var spring := maxf(float(axle["spring"]), 1.0)
 	var bar := maxf(float(axle["bar"]), 0.0)
 	var cap := 2.0 * _normal(axle)
-	var transfer := float(roll[key])
-	if transfer < cap:
-		return transfer / (spring + 2.0 * bar)
-	var phi := float(roll["phi"])
-	var geometric := float(axle["track"]) * phi
-	# The outer at the axle's load with the bar on: `(spring + bar) c_o - bar c_i = cap`.
-	if is_finite(phi) and (cap - bar * geometric) / spring > geometric:
-		return geometric
-	return cap / spring
+	return minf(float(roll[key]), cap) / (spring + 2.0 * bar)
 
 
 ## `corner`'s equations at the state `x` (`beta`, yaw rate, drive): the residual of the body's

@@ -6,7 +6,7 @@ rules: the nested `CLAUDE.md` files. Per-system detail: `docs/systems.md` (plumb
 `docs/truck.md`, `docs/tractor.md`, `docs/boat.md`, `docs/flight.md`, `docs/rail.md`,
 `docs/level_kit.md`; measured figure tables and the measure tools (read to measure or quote a
 figure): `docs/vehicle_measurements.md`; sourced figures and references (read only to check or
-change a sourced value): `docs/sources.md`. Open work: `docs/plans/`; backlog: `docs/TODO.md`.
+change a sourced value): `docs/sources.md`. Open work, while any: docs/plans/; backlog: `docs/TODO.md`.
 What goes where (CLAUDE.md / code comment / `docs/`): root `CLAUDE.md` § Working style.
 
 ## The big idea: one contract, everything flows through it

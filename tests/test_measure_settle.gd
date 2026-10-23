@@ -63,3 +63,23 @@ func test_a_tail_too_short_or_without_yaw_is_not_settled() -> void:
 	var still := _tail(0.0, 0.0, 0.0)
 	still[1].fill(0.0)
 	assert_bool(_settled(still)).is_false()
+
+
+func test_an_unsettled_tail_names_each_failing_gate_with_its_reading() -> void:
+	# The yaw rate drifting 2 %/s, the speed and slip steady: only the yaw gate fails, its ends' means
+	# 24 ticks apart reading 0.8 %.
+	var t := _tail(0.0, 0.0, 0.02 * YAW)
+	var drift := Measure.tail_drift(t[0], t[1], t[2], TICKS, DT)
+	assert_float(float(drift["yaw"])).is_equal_approx(0.008, 0.0001)
+	var gates := Measure.unsettled_gates(drift)
+	assert_str(gates).is_equal("yaw 0.80 % (gate 0.3)")
+	# The PI pedal's 0.136 m/s^2 fails the speed gate alone.
+	t = _tail(0.136, 0.0, 0.0)
+	assert_str(Measure.unsettled_gates(Measure.tail_drift(t[0], t[1], t[2], TICKS, DT))) \
+			.is_equal("speed 0.136 m/s^2 (gate 0.02)")
+
+
+func test_a_settled_tail_names_no_gate_and_a_missing_one_says_so() -> void:
+	var t := _tail(0.0, 0.0, 0.0)
+	assert_str(Measure.unsettled_gates(Measure.tail_drift(t[0], t[1], t[2], TICKS, DT))).is_empty()
+	assert_str(Measure.unsettled_gates({})).is_equal("no tail")

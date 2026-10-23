@@ -510,15 +510,18 @@ func latch_bar() -> void:
 
 ## This wheel's roll steer (rad, + = left) off the shared snapshot, which the owner adds to the
 ## Ackermann angle: both wheels of the axle read one latch, so they take the same increment
-## whichever ticks first. 0 with no partner or no coefficient. Unlike `bar_force` a lifted partner still
-## counts: roll steer is the links' kinematics, not a force through the partner, and its zero
-## compression is where its link really hangs (full droop).
+## whichever ticks first. 0 with no partner or no coefficient. Each link reads where it really hangs:
+## an unloaded wheel, touching or airborne, at the bar's hang point (`bar_force`), which is full
+## droop (its ray's zero) with no bar. Symmetric in the pair, so the two still take one angle.
 func roll_steer() -> float:
 	var partner := anti_roll_partner
 	if partner == null or roll_steer_coeff == 0.0:
 		return 0.0
-	return roll_steer_angle(_bar_compression, partner._bar_compression, anchor.x, partner.anchor.x,
-			roll_steer_coeff, is_rear)
+	var mine := maxf(_bar_compression,
+			VehicleMath.anti_roll_hang(partner._bar_compression, bar_rate, spring_rate))
+	var theirs := maxf(partner._bar_compression,
+			VehicleMath.anti_roll_hang(_bar_compression, bar_rate, partner.spring_rate))
+	return roll_steer_angle(mine, theirs, anchor.x, partner.anchor.x, roll_steer_coeff, is_rear)
 
 
 ## Pure: an axle wheel's roll steer (rad, + = left) off its own and its partner's compression (m) at
@@ -557,14 +560,16 @@ static func compliance_steer_angle(f_self: float, f_partner: float, coeff: float
 
 
 ## This wheel's anti-roll bar force off the shared snapshot (N, + = pushes this corner up): equal
-## and opposite to the partner's while both snapshots come from the same latch. 0 with no bar, or
-## while the partner is airborne, where its zero compression would read as full droop and shove
-## this corner up on a bar that is really just hanging.
+## and opposite to the partner's while both snapshots come from the same latch and both tyres carry
+## load. 0 with no bar. An unloaded partner, touching or airborne, reads at its hang point
+## (`VehicleMath.anti_roll_hang`): the bar lifts it there instead of pulling the body down, so this
+## corner keeps the bar in series with the partner's spring, with no step as the partner lifts.
 func bar_force(rate: float) -> float:
 	var partner := anti_roll_partner
-	if partner == null or not partner.in_contact:
+	if partner == null:
 		return 0.0
-	return VehicleMath.anti_roll_force(_bar_compression, partner._bar_compression, rate)
+	var hang := VehicleMath.anti_roll_hang(_bar_compression, rate, partner.spring_rate)
+	return VehicleMath.anti_roll_force(_bar_compression, maxf(partner._bar_compression, hang), rate)
 
 
 ## Effective mass (kg) each contact's force along body-space unit `axis` meets while every contact

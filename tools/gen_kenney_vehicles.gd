@@ -148,7 +148,7 @@ const CAR_BASE := {
 	# (front / rear ellipse share: sedan 0.98 / 0.74, taxi 0.98 / 0.75, hatchback-sports 0.98 / 0.79,
 	# police 0.98 / 0.81), roll 4.3-5.0 deg at its 0.82-0.85 g peak, no wheel lifted.
 	# BalanceModel.corner_limit calls +11.2 / +12.6 / +14.7 / +19.3 % front-first. All-front (no rear
-	# bar) reads front-first too, but lifts hatchback-sports' inner front (6.5 deg of roll), which caps
+	# bar) reads front-first too, but unloads hatchback-sports' inner front (5.7 deg of roll), which caps
 	# the transfer. The linear understeer is the bars and tyre laws plus roll and compliance steer
 	# below (BalanceModel K at 0.15 g 1.35-1.49 on the front-heavy saloons, 0.85 on `police`; the step
 	# pass reads 1.55-2.06 and 1.09 at 30 km/h); roll camber, the front's compliance steer and aligning
@@ -411,7 +411,7 @@ const VAN_BASE := {
 	# corner's load (GroundDriveSpec.rear_twin_tyres): the pair's peak side force is
 	# `1 + load_sensitivity` over one tyre's, its cornering stiffness `2 C(L / 2)`. BalanceModel.limit
 	# reads single rears -2.9 % (rear-first) on delivery, twins +3.9 %. The corner pass saturates the
-	# front first (delivery 0.98 / 0.80 at 0.71 g, delivery-flat 0.98 / 0.79, ambulance 0.98 / 0.82),
+	# front first on all three (shares: docs/vehicle_measurements.md § Cornering),
 	# BalanceModel.corner_limit +23.1 / +23.6 / +18.6 %; past it `delivery` swings in yaw, its rear
 	# at 1.00 on the swings. A bar split moves `delivery` not at all, so the bars stay even. Step pass: no spin, body slip <= 5 deg, K at
 	# 30 km/h 1.13 deg/g on `delivery` with roll steer, 0.42 without (single rears at c 1.92: -0.95,
@@ -649,14 +649,14 @@ const VARIANTS := {
 	# COMPROMISE (`sedan-sports`, `suv`, `pickup`, `pickup-flat`): even bars, `rear_lat_grip` 1.08 and
 	# the cornering-stiffness law off, a rear grip bonus with no hardware behind it. These near-50/50
 	# rear-driven bodies spin lifted 60-100 km/h steps on equal tyres with a front-biased bar: with
-	# roll steer on, CAR_BASE's 80/20 split of their bar total adds 1, 4, 1, 2 spun cells over the
-	# compromise (`measure_vehicles -- <v> 60 step`, 2026-10-23). On a lift the lightened rears reach
-	# their side peak at a smaller slip, which the steady BalanceModel margin cannot see. Undoing it
-	# costs those cells. Compliance steer does not retire it on today's sources. No production
-	# multi-link rear was measured. As a what-if, a designed toe-in of +0.03 deg/kN clears
-	# `sedan-sports`' one cell (its BalanceModel.limit half of the retirement test unread), while
-	# +0.06 still leaves `suv` 3 and each pickup 1. The leaf's stock sign is toward oversteer, so it
-	# cannot retire the pickups'.
+	# roll steer on, CAR_BASE's class split (80/20 of their bar total, `rear_lat_grip` 1.0, the law at
+	# 2.56) adds 0, 4, 1, 2 spun cells over the compromise (`measure_vehicles -- <v> 60 step`,
+	# 2026-10-23). On a lift the lightened rears reach their side peak at a smaller slip, which the
+	# steady BalanceModel margin cannot see. Undoing it costs those cells; `sedan-sports` passes the
+	# spin half of the retirement test, its BalanceModel.limit half unread. Compliance steer does not
+	# retire the rest on today's sources. No production multi-link rear was measured. As a what-if,
+	# +0.06 deg/kN of designed toe-in still leaves `suv` 3 and each pickup 1. The leaf's stock sign is
+	# toward oversteer, so it cannot retire the pickups'.
 	"sedan-sports": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "engine_inertia": 0.18, "mass": 1050.0, "torque_mul": 1.12, "final_drive": 4.1, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0},
 	# Hot hatch: a helical front LSD (Quaife-class, ~2.5:1), so a front wheel a bump or a steer input
 	# peels still leaves its partner up to 2.5x its torque rather than an equal share.

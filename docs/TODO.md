@@ -1,9 +1,5 @@
 # TODO
 
-## Drive checks pending (measured headless; feel only)
-
-Land wind rose; pedal map; semi and tractor shifts, noses, kickdown, start gear; PTO load, the 540
-governor, garbage-truck PTO speed; CVT vs powershift; truck roll understeer; free fronts in a turn; twist-beam saloons' lift-off (a `sedan` motorway lane change, lifting mid-change).
 
 ## RAMN firmware: gear bytes past 6 (outside this repo)
 

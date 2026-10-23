@@ -951,15 +951,46 @@ func test_the_rear_bar_falls_back_to_the_front_rate_only_when_negative() -> void
 	assert_bool(gd.has_anti_roll_bar()).is_true()
 
 
-func test_the_bar_hangs_free_while_the_partner_is_airborne() -> void:
+## An airborne partner hangs on the bar where its spring balances it, so this corner keeps the bar
+## in series with that spring, not nothing.
+func test_the_bar_holds_an_airborne_partner_at_its_hang() -> void:
 	var spec := _bench_spec(2000.0)
 	spec.ground_drive.anti_roll_rate = 7000.0
 	var drive := _drive_for(spec)  # holds the pair: a wheel holds its partner only weakly
 	var left: RayWheel = drive.wheels[0]
+	var right: RayWheel = left.anti_roll_partner
 	left.compression = 0.05
+	right.compression = 0.0
+	right.in_contact = false
 	left.latch_bar()
-	left.anti_roll_partner.in_contact = false
-	assert_float(left.bar_force(7000.0)).is_equal(0.0)
+	right.latch_bar()
+	var k := right.spring_rate
+	assert_float(left.bar_force(7000.0)).is_equal_approx(0.05 * 7000.0 * k / (k + 7000.0), 1e-6)
+
+
+## The lift is not a step: a partner still touching under its hang (its tyre at no load) reads the
+## same bar as an airborne one, and a loaded partner the plain equal-and-opposite pair.
+func test_the_bar_does_not_step_as_its_partner_leaves_the_road() -> void:
+	var spec := _bench_spec(2000.0)
+	spec.ground_drive.anti_roll_rate = 7000.0
+	var drive := _drive_for(spec)
+	var left: RayWheel = drive.wheels[0]
+	var right: RayWheel = left.anti_roll_partner
+	var forces: Array[float] = []
+	for partner: float in [0.0, 0.001]:
+		left.compression = 0.05
+		right.compression = partner
+		right.in_contact = partner > 0.0
+		left.latch_bar()
+		right.latch_bar()
+		forces.append(left.bar_force(7000.0))
+	assert_float(forces[1]).is_equal_approx(forces[0], 1e-6)
+	right.compression = 0.04
+	right.in_contact = true
+	left.latch_bar()
+	right.latch_bar()
+	assert_float(left.bar_force(7000.0)).is_equal_approx(VehicleMath.anti_roll_force(0.05, 0.04, 7000.0), 1e-6)
+	assert_float(left.bar_force(7000.0) + right.bar_force(7000.0)).is_equal_approx(0.0, 1e-6)
 
 
 func test_no_bar_rate_leaves_every_partner_null() -> void:

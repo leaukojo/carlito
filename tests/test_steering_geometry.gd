@@ -98,8 +98,8 @@ func test_the_angle_is_the_coefficient_times_the_axle_roll() -> void:
 
 
 ## A 2000 kg four-wheeler on the sedan's track, front steered, roll steer on both axles, rear
-## compliance steer `compliance` (deg/kN) and no bar.
-func _rs_drive(front: float, rear: float, compliance := 0.0) -> WheelDrive:
+## compliance steer `compliance` (deg/kN) and an anti-roll bar of `bar` N/m on both (0: none).
+func _rs_drive(front: float, rear: float, compliance := 0.0, bar := 0.0) -> WheelDrive:
 	var gd := GroundDriveSpec.new()
 	gd.wheel_positions = [
 		Vector3(-SEDAN_HALF_TRACK, 0.0, -0.79), Vector3(SEDAN_HALF_TRACK, 0.0, -0.79),
@@ -109,6 +109,7 @@ func _rs_drive(front: float, rear: float, compliance := 0.0) -> WheelDrive:
 	gd.roll_steer_front = front
 	gd.roll_steer_rear = rear
 	gd.compliance_steer_rear = compliance
+	gd.anti_roll_rate = bar
 	var spec := VehicleSpec.new()
 	spec.mass = 2000.0
 	spec.ground_drive = gd
@@ -137,8 +138,8 @@ func test_both_wheels_of_an_axle_take_one_increment_whichever_ticks_first() -> v
 
 
 func test_a_lifted_partner_reads_full_droop() -> void:
-	# Roll steer is the links' kinematics: the airborne wheel hangs at compression 0, and the axle
-	# steers off that, where the bar would hang free.
+	# Roll steer is the links' kinematics: with no bar the airborne wheel hangs at full droop (its
+	# ray's 0), and the axle steers off that.
 	var drive := _rs_drive(0.2, 0.0)
 	var left: RayWheel = drive.wheels[0]
 	var right: RayWheel = left.anti_roll_partner
@@ -150,7 +151,25 @@ func test_a_lifted_partner_reads_full_droop() -> void:
 	right.latch_bar()
 	assert_float(left.roll_steer()).is_equal_approx(
 			-0.2 * atan(-RS_LEFT / (2.0 * SEDAN_HALF_TRACK)), 1e-7)  # float32 anchors
-	assert_float(left.bar_force(7000.0)).is_equal(0.0)
+	assert_float(left.bar_force(left.bar_rate)).is_equal(0.0)
+
+
+## On a bar the unloaded wheel's link hangs where its spring balances the bar
+## (`VehicleMath.anti_roll_hang`), touching or airborne, and both wheels still take one angle.
+func test_a_lifted_partner_on_a_bar_reads_its_hang() -> void:
+	var drive := _rs_drive(0.2, 0.0, 0.0, 7000.0)
+	var left: RayWheel = drive.wheels[0]
+	var right: RayWheel = left.anti_roll_partner
+	var hang := VehicleMath.anti_roll_hang(RS_LEFT, 7000.0, right.spring_rate)
+	var expected := -0.2 * atan(-(RS_LEFT - hang) / (2.0 * SEDAN_HALF_TRACK))
+	for touching: float in [0.0, hang * 0.5]:
+		left.compression = RS_LEFT
+		right.compression = touching
+		right.in_contact = touching > 0.0
+		left.latch_bar()
+		right.latch_bar()
+		assert_float(left.roll_steer()).is_equal_approx(expected, 1e-7)  # float32 anchors
+		assert_float(right.roll_steer()).is_equal(left.roll_steer())
 
 
 func test_roll_steer_alone_pairs_the_axles_with_no_bar_force() -> void:

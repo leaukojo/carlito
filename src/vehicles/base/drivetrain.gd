@@ -777,8 +777,7 @@ static func cvt_managed_setting(p_spec: VehicleSpec, p_demand: float, power: flo
 ## command's speed over the reference's, m/s) and `moved` (how far the command itself moved since
 ## last tick): the full `cvt_accel_ms2` while the command sits past one tick's reach (the reference
 ## ramps at its rate), else the command's own rate, capped there. A gap inside one tick's reach is
-## the reference landing, or the pressure cut-off holding it a little under a crank that slows, and
-## asks for nothing.
+## the reference landing, and asks for nothing.
 static func cvt_commanded_accel(p_spec: VehicleSpec, gap: float, moved: float,
 		delta: float) -> float:
 	var accel := maxf(p_spec.cvt_accel_ms2, 0.0)
@@ -827,10 +826,15 @@ static func cvt_ratio_step(p_spec: VehicleSpec, i: float, v_cmd: float, crank_rp
 	var bound := maxf(top_i, absf(i))
 	var next := clampf(move_toward(cvt_ground_speed(p_spec, i, set_rpm),
 			clampf(v_cmd, -v_top, v_top), accel * delta) * per_ms, -bound, bound)
-	# Pressure cut-off: the ratio never grows more than a step past the wheels' own (`wheel_omega`
-	# through it at this crank speed), so an overload the relief slips under holds the ratio
-	# rather than winding it up against wheels that do not follow.
-	var lead := absf(wheel_omega) * fd / (maxf(crank_rpm, p_spec.idle_rpm) / RADS_TO_RPM) + step
+	# Pressure cut-off: the ratio never grows more than a step past the wheels' own, so an overload
+	# the relief slips under holds the ratio rather than winding it up against wheels that do not
+	# follow. The wheels' speed (`wheel_omega`) is named at `set_rpm`, as the reference is: locked
+	# wheels slow with a crank the governor lowers, and that droop is the reference's to wind back.
+	# A cut-off read at the crank's speed alone binds on every tick the managed setting falls, and
+	# the rig sags into a limit cycle (`tractor-cvt` at 25 km/h).
+	var crank_w := maxf(crank_rpm, p_spec.idle_rpm) / RADS_TO_RPM
+	var lead := absf(wheel_omega) * fd / crank_w * maxf(set_rpm, p_spec.idle_rpm) / RADS_TO_RPM \
+			/ crank_w + step
 	if absf(next) > absf(i) and absf(next) > lead:
 		next = signf(next) * maxf(absf(i), lead)
 	if crank_rpm < limit_rpm:

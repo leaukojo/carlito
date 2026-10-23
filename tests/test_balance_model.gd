@@ -725,11 +725,11 @@ func test_a_changing_speed_moves_the_turns_balance_and_none_reproduces_it() -> v
 			float(m["mass"]) * 0.2, 0.1 * float(m["mass"]) * 0.2)
 
 
-func test_the_axles_roll_reads_its_rays_until_the_inner_one_leaves_the_road() -> void:
+func test_the_axles_roll_reads_its_rays_until_the_inner_one_lifts() -> void:
 	# Both corners loaded, an axle's compressions part by the body's roll over its track. Its inner
-	# corner unloaded, the bar still holds that ray on the road (the outer at
-	# `(k + bar) c_o - bar c_i` = the axle's load), so the roll steer keeps reading the body's roll,
-	# no step at the lift; once the ray would leave, full droop: the outer alone on its spring.
+	# corner unloaded, the outer holds the compression it lifted at (the bar in series with the
+	# hanging inner's spring, `RayWheel.bar_force`) and the inner's link hangs at the bar's hang point
+	# (`RayWheel.roll_steer`): the pair holds the difference it lifted at, no step, up to the tip.
 	var m := BalanceModel.axles(_spec(0.6, 0.1, 400000.0))
 	(m["rear"] as Dictionary)["bar"] = 0.0
 	var front: Dictionary = m["front"]
@@ -751,20 +751,17 @@ func test_the_axles_roll_reads_its_rays_until_the_inner_one_leaves_the_road() ->
 	var below := BalanceModel._axle_rolled(m, "front", BalanceModel._roll_state(m, lo))
 	var above := BalanceModel._axle_rolled(m, "front", BalanceModel._roll_state(m, hi))
 	assert_float(above).is_equal_approx(below, 1e-4)
-	# Further on, while the body still stands on its rear, the inner ray leaves: full droop.
+	# Further on, while the body still stands on its rear, and once it tips: the same difference,
+	# though the body's roll over the track runs on past it.
 	var spring := float(front["spring"])
 	var bar := float(front["bar"])
-	var g := hi
-	var gone := false
-	while g < BalanceModel.tip_g(m):
-		var phi := float(BalanceModel._roll_state(m, g)["phi"])
-		if (cap - bar * track * phi) / spring <= track * phi:
-			gone = true
-			break
-		g += 0.01
-	assert_bool(gone).is_true()
-	assert_float(BalanceModel._axle_rolled(m, "front", BalanceModel._roll_state(m, g))) \
-			.is_equal_approx(cap / spring, 1e-6)
+	var lifted := cap / (spring + 2.0 * bar)
+	var tip := BalanceModel.tip_g(m)
+	var late := BalanceModel._roll_state(m, (hi + tip) / 2.0)
+	assert_float(track * float(late["phi"])).is_greater(lifted)
+	assert_float(BalanceModel._axle_rolled(m, "front", late)).is_equal_approx(lifted, 1e-9)
+	assert_float(BalanceModel._axle_rolled(m, "front", BalanceModel._roll_state(m, tip + 0.1))) \
+			.is_equal_approx(lifted, 1e-9)
 
 
 func test_corner_at_lands_on_the_asked_g_and_is_empty_past_the_peak() -> void:

@@ -461,3 +461,20 @@ func test_anti_roll_force_is_zero_when_the_axle_is_level_or_the_bar_is_off() -> 
 	assert_float(M.anti_roll_force(0.07, 0.07, 10000.0)).is_equal(0.0)
 	assert_float(M.anti_roll_force(0.10, 0.02, 0.0)).is_equal(0.0)
 	assert_float(M.anti_roll_force(0.10, 0.02, -5000.0)).is_equal(0.0)
+
+
+## At the hang the partner's spring exactly balances the bar's pull: its tyre carries nothing.
+func test_the_bar_hangs_its_partner_where_the_partners_spring_balances_it() -> void:
+	var k := 22000.0
+	var bar := 10000.0
+	var hang := M.anti_roll_hang(0.10, bar, k)
+	assert_float(hang).is_equal_approx(0.10 * bar / (k + bar), 1e-9)
+	assert_float(k * hang + M.anti_roll_force(hang, 0.10, bar)).is_equal_approx(0.0, 1e-6)
+	# What the bar then puts on this corner: the bar in series with the partner's spring.
+	assert_float(M.anti_roll_force(0.10, hang, bar)).is_equal_approx(0.10 * bar * k / (k + bar), 1e-6)
+
+
+func test_no_bar_hangs_nothing() -> void:
+	assert_float(M.anti_roll_hang(0.10, 0.0, 22000.0)).is_equal(0.0)
+	assert_float(M.anti_roll_hang(0.10, -5000.0, 22000.0)).is_equal(0.0)
+	assert_float(M.anti_roll_hang(-0.01, 10000.0, 22000.0)).is_equal(0.0)

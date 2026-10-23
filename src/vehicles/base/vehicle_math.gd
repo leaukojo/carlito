@@ -130,6 +130,18 @@ static func anti_roll_force(comp_l: float, comp_r: float, rate: float) -> float:
 	return maxf(rate, 0.0) * (comp_l - comp_r)
 
 
+## The compression (m) at which a bar's partner corner hangs with its tyre carrying nothing: where
+## its spring `partner_spring` (N/m) balances the bar's pull off this corner's `comp_self`,
+## `rate c / (k + rate)`. A partner reads no lower than this, touching or airborne, so the bar's
+## force on this corner moves only the load the partner really has (its tyre cannot pull the
+## ground), with no step as the partner lifts. 0 with no bar.
+static func anti_roll_hang(comp_self: float, rate: float, partner_spring: float) -> float:
+	var k := maxf(partner_spring, 0.0)
+	if rate <= 0.0:
+		return 0.0
+	return rate * maxf(comp_self, 0.0) / (k + rate)
+
+
 ## Angular damping declared on `body` (1/s): REPLACEs the engine's default, so 0 is none and the
 ## yaw, roll and pitch bleed is the tyres' and dampers' alone. The wheeled bodies and trailers call it
 ## with their `VehicleSpec.angular_damping` (src/vehicles/CLAUDE.md § Physics).

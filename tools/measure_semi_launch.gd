@@ -518,6 +518,9 @@ func _advance(s: Dictionary) -> void:
 				if absf(s["speed"]) >= _tip_speed or _pt >= TIP_SPINUP_TIMEOUT_S:
 					_sub = 1
 					_pt = 0.0
+					# P7's figures are the turn's: the respawn tick reads every wheel off the ground,
+					# which would stand as the first lift at 0 g.
+					_stats[Ph.P7] = _new_stats()
 					_stats[Ph.P7]["entry_speed"] = s["speed"]
 					if _ramp:
 						_ramp_i = 0.0

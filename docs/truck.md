@@ -69,9 +69,8 @@ VehicleTelemetry` adds chassis, body-network and trailer-bus "out" fields.
   A trailer is asked for the same share of its brakes (`Drivetrain.retarder_fraction`, the
   retarder's torque over the tractor's whole foot brake, 0.068 on the semis); every trailer's
   service brake is apportioned to its tractor (`box_spec.tres`), so at that shared fraction both
-  ends decelerate alike. `retarder_state`
-  reports torque applied, not the request (J1939 SPN 520 is negative; the contract publishes the
-  magnitude).
+  ends decelerate alike. `retarder_state` reports torque applied, not the request (J1939 SPN 520
+  is negative; the contract publishes the magnitude).
 - `axle_load` is read out of the sim: summed `RayWheel.suspension_force` on the rear axle in
   kg (SPN 582, `WheelDrive.rear_suspension_force`), never a mass lookup. `warn` **11500** is the
   EU 11.5 t drive-axle limit, `warn_side: high`. The tractor publishes it too (its rear is the
@@ -153,8 +152,7 @@ the conventional carries none. No trailer of the four adds a signal to either.
   axle. A 2.10 m wheelbase lifts both steer wheels for about a second of a gear-1 launch; the shipped
   3.60 m (cab-over) and 4.40 m (conventional) keep `STEER_FLOOR_N` on each steer wheel, coupled to the
   box (P2 and P6, with ASR holding the drive axle at full grip; the floor and the figures are
-  `measure_semi_launch`'s). Gate: CI runs
-  `tools/measure_semi_launch.tscn -- <unit> strict` on both units.
+  `measure_semi_launch`'s). Gate: CI runs `tools/measure_semi_launch.tscn -- <unit> strict` on both.
 - Gearing: twelve ratios, the I-Shift ATO2612's steps fitted over D1 6.5 to the 0.69 overdrive
   (`docs/sources.md` § Gearing), so the governor, not the redline, sets top speed. Coupled to the
   box (`measure_vehicles -- <unit> 120 coast`; top speeds: `docs/drivetrain.md` § Engine braking
@@ -199,15 +197,15 @@ the conventional carries none. No trailer of the four adds a signal to either.
   | Flatbed | 0.90 m | 0.80 |
   | Tractor unit (bobtail) | 1.10 m (1.03 coupled) | 0.65 |
 
-  The measured tip points follow the same order: the tall bodies (box, tanker, tipper) lift a
-  wheel below their `rollover_g` and from the lowest step speeds, the flatbed's tractor lifts
-  before its low trailer does, and the bobtail rolls on the slow wind-on. Lean is the trailer's
-  (the bobtail's own). The flatbed's slow tip is its trailer's, twisted up by the plate's roll
-  stop with the tractor's inner wheels following, the rig left upright; on the step its trailer
-  wheels stay down and the tractor's lift. A raised tipper puts its load about 2.8 m over the
-  road, so a body off its rest caps the rig at `TowHost.BODY_UP_CAP_KMH`
-  (`TowHost.speed_cap_kmh` into `Drivetrain.speed_cap_kmh`, a notice on the edge), where full
-  lock makes almost no lateral g.
+  The measured tip points follow the same order. The tall bodies (box, tanker, tipper) lift a
+  trailer wheel below their `rollover_g`: the lean is the trailer's, and the plate's roll stop
+  hands it to the tractor. The flatbed's tractor and trailer lift together on the slow wind-on,
+  and the rig rolls under its ceiling (the track, below), as the bobtail does. A held step
+  (`measure_vehicles -- semi step`) stands under the trailer's slow-tip lift (P7 `ramp`) and rolls
+  over it at a constant g: the inner bogie unloads, then the tractor's inner wheels, and the rig
+  goes within seconds. A raised tipper puts its load about 2.8 m over the road, so a body off its
+  rest caps the rig at `TowHost.BODY_UP_CAP_KMH` (`TowHost.speed_cap_kmh` into
+  `Drivetrain.speed_cap_kmh`, a notice on the edge), where full lock makes almost no lateral g.
 
   The 1.44 m track is the compromise (a real artic runs ~2.0 m, so every ceiling reads ~25 % low);
   widening it moves every wheel station and authored wheel visual. `BaseVehicle.is_overturned()`

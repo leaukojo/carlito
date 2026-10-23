@@ -119,13 +119,13 @@
 ;
 ; anti_roll_rate 480000 (2x the front spring) is sized by the TRAILER, not the bobtail: the plate
 ; lets the two bodies roll only +-1.5 deg apart, so a tractor that leans further than its trailer
-; twists the trailer over through it (at 240000 the flatbed's trailer lifted at 0.42 g, here 0.50).
-; It also holds the bobtail flat enough to slide (~0.55 g) before it lifts a wheel in a steady turn.
+; twists the trailer over through it (at 240000 the flatbed's trailer lifts at 0.35 g, here 0.51).
+; On the slow wind-on (P7 `ramp`) it holds the bobtail to ~0.60 g before a wheel lifts.
 ;
 ; COMPROMISE: cornering_peak_load stays 0 (off) on the semis and their trailers, where the Kenney
 ; trucks run the truck tyre's 3.33. On, the tractor builds side force faster and out-leans its
-; trailer: the 40 km/h full-lock step lifts the flatbed's trailer at 0.41 g (off: never) and every
-; other trailer 0.003-0.013 g earlier. Undoing it means re-sizing this bar with the law on, then
+; trailer: the 40 km/h full-lock step lifts the flatbed's trailer at 0.46 g (off: 0.51) and every
+; other trailer within 0.01 g. Undoing it means re-sizing this bar with the law on, then
 ; re-measuring every rollover row (docs/truck.md § Truck sizing). With the law on, the laden
 ; step's K also falls away from the criterion below (flatbed, 40 km/h, roll steer on: 0.72 > 0.02
 ; deg/g at 0.18 g).
@@ -135,7 +135,7 @@
 ; its size is not. Without it the step pass reads the bobtail at K 0.22 deg/g at 0.06 g, under the
 ; tractor criterion's 0.5-2.0 at 0.15 g (Woodrooffe & El-Gindy); with it 0.47-0.50 at 0.12-0.16 g,
 ; and laden (box) 0.14 at 0.13 g (-0.27 without), as load on the drive axle cuts a truck's K (UMTRI
-; 1983). The laden 50 km/h 30 % lifted step lifts less (roll peak 37 > 16 deg); held, it rolls
+; 1983). The laden 50 km/h 30 % lifted step lifts less (roll peak 38 > 19 deg); held, it rolls
 ; either way. No new rolled cell (measure_vehicles -- semi 60 step trailer=<bobtail|box>,
 ; 2026-10-23). Front 0: no figure.
 ;

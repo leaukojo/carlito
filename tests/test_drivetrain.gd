@@ -2402,6 +2402,12 @@ func test_the_cvt_reference_holds_its_speed_through_a_crank_change() -> void:
 				TICK)
 		assert_float(next).is_equal_approx(i * 2000.0 / crank, 1e-6)
 		assert_float(DrivetrainScript.cvt_ground_speed(spec, next, crank)).is_equal_approx(v, 1e-5)
+	# Locked wheels slow with the crank the governor lowers: the pressure cut-off reads them at the
+	# reference's crank speed, so the droop is wound back past the rate, the speed held.
+	var drooped := DrivetrainScript.cvt_ground_speed(spec, i, 1800.0) / r
+	var held := DrivetrainScript.cvt_ratio_step(spec, i, v, 1800.0, 2000.0, 1000.0, drooped, 0.8,
+			TICK)
+	assert_float(DrivetrainScript.cvt_ground_speed(spec, held, 1800.0)).is_equal_approx(v, 1e-5)
 
 
 ## Under the limit speed the ratio gives way in proportion, filtered, never past zero.
@@ -2460,8 +2466,8 @@ func test_the_cvt_managed_setting_follows_the_load() -> void:
 
 
 ## The reference's commanded acceleration: the full rate while the command is out of one tick's
-## reach, else the command's own ramp; a gap inside a tick's reach (the reference held a little under
-## by the pressure cut-off) asks for nothing.
+## reach, else the command's own ramp; a gap inside a tick's reach (the reference landing) asks for
+## nothing.
 func test_the_cvt_commanded_acceleration_reads_the_command() -> void:
 	var spec := _cvt_spec()
 	assert_float(DrivetrainScript.cvt_commanded_accel(spec, 1.0, 0.0, TICK)).is_equal(1.5)

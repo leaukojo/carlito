@@ -214,8 +214,8 @@ speed, the overdrive Renius asks of a CVT. `Drivetrain.is_cvt` gates it; `gear_r
     back). A CVT governs road speed through its ratio, so its fuel takes no road-speed fade: a speed
     hold off the crank would read the fade as overload and pull the box down to its limit speed.
   - `cvt_accel_ms2` (JCB's "high" band) moves a ground-speed reference; the ratio turns the crank's
-    speed into it, so a crank that droops or lifts moves no ground speed. The ratio never grows a
-    step past the wheels' own (pressure cut-off), so it never winds up against held wheels.
+    speed into it, so a crank that droops or lifts moves no ground speed. Pressure cut-off: never a
+    step past the wheels' own ratio read at the reference's crank speed, so only lagging wheels trip it.
   - Limit-load control: under the governor line's full-fuel end (never over peak power) the ratio
     gives way over `CVT_LOAD_TAU_S`: the crank holds its speed, the ground speed gives.
   - The hand throttle never pulls away alone; the foot brake stops it (AutoPowr's AutoClutch).
@@ -253,9 +253,8 @@ of its speed range), and its mass, centre, ground share and the `support_points(
 Implements are visual only — no CollisionShape, no joint; their weight reaches the chassis as live
 mass and COM (`TractorVehicle._apply_implement_mass`). The declared connections are load-bearing:
 `ISOBUS_DATA` decides whether `implement_connected`/ `implement_type` report anything; `PTO`/`SCV`
-decide whether
-drive/flow reach the machine. Attach/detach is a logical address claim — `ImplementCatalog`
-holds the cycle order with DETACHED a real entry; `E` cycles it via duck-typed
+decide whether drive/flow reach the machine. Attach/detach is a logical address claim —
+`ImplementCatalog` holds the cycle order with DETACHED a real entry; `E` cycles it via duck-typed
 `cycle_implement()`.
 
 ### The four implements

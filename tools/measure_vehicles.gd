@@ -745,7 +745,7 @@ var _corner_xfer0 := Vector2.ZERO  ## `_axle_transfer` as the lock starts windin
 var _corner_lltd := NAN        ## front share of the lateral load transfer at the peak (`_lltd`)
 var _corner_lifted := 0        ## most wheels off the ground in any one tick of the pass
 ## Most wheels touching at no load in any one tick: an inner corner the bar has unloaded while its
-## ray still reaches the road (`RayWheel.bar_force` stays on until the ray misses).
+## ray still reaches the road (the bar holds it at no load before it lifts, `RayWheel.bar_force`).
 var _corner_unloaded := 0
 ## The first tick both axles carry an inner corner at no load, touching or not (the runtime's tip
 ## onset, `BalanceModel.tip_g`'s): `g_tick` (`v r`), `g` (smoothed), `path` (`acc_lat`), the roll
@@ -3039,10 +3039,10 @@ func _tick_step(delta: float) -> void:
 	# A held run that neither spun nor rolled holds on until its tail settles, up to the cap; a
 	# lifted run is its transient, read at STEP_HOLD_S.
 	var held := not bool(_st_run["lifted"]) and _st_spin_t < 0.0 and _st_roll_t < 0.0
-	var settled := held and tail_settled(_st_speed, _st_yaw, _st_beta, _tail_ticks(delta), delta)
-	if not held or settled or _st_t >= STEP_HOLD_MAX_S:
+	var gates := unsettled_gates(tail_drift(_st_speed, _st_yaw, _st_beta, _tail_ticks(delta), delta))
+	if not held or gates == "" or _st_t >= STEP_HOLD_MAX_S:
 		_st_run["hold_s"] = _st_t
-		_st_run["unsettled"] = held and not settled
+		_st_run["unsettled"] = gates if held else ""
 		_report_step_run(delta)
 		_next_step_run()
 
@@ -3052,16 +3052,24 @@ func _tail_ticks(delta: float) -> int:
 	return mini(roundi(STEP_STEADY_S / delta), _st_yaw.size())
 
 
-## Pure: whether a held step's last `ticks` samples (one per tick of `delta` s) are steady: across
-## them the COM's `speed` changes under STEP_SETTLE_ACCEL, and the body slip `beta` and the `yaw`
-## rate drift under STEP_SETTLE_SHARE of the turn. A slip drifting at `beta'` adds `v beta'` to the
-## side force `v r`, so `beta' / r` is the share the axles carry over the steady turn's. Each end
-## is the mean of its STEP_SETTLE_ENDS ticks. False on a tail shorter than two ends or with no yaw.
+## Pure: whether a held step's last `ticks` samples (one per tick of `delta` s) are steady: every
+## gate of `tail_drift` reads under its limit.
 static func tail_settled(speed: PackedFloat32Array, yaw: PackedFloat32Array,
 		beta: PackedFloat32Array, ticks: int, delta: float) -> bool:
+	return unsettled_gates(tail_drift(speed, yaw, beta, ticks, delta)) == ""
+
+
+## Pure: a held step's tail drift over its last `ticks` samples (one per tick of `delta` s):
+## `accel`, the COM's `speed` change (m/s^2, against STEP_SETTLE_ACCEL); `slip`, the body slip
+## `beta`'s drift as a share of the turn's side force; `yaw`, the `yaw` rate's drift as a share of
+## it (both against STEP_SETTLE_SHARE). A slip drifting at `beta'` adds `v beta'` to the side force
+## `v r`, so `beta' / r` is the share the axles carry over the steady turn's. Each end is the mean
+## of its STEP_SETTLE_ENDS ticks. Empty on a tail shorter than two ends or with no yaw.
+static func tail_drift(speed: PackedFloat32Array, yaw: PackedFloat32Array,
+		beta: PackedFloat32Array, ticks: int, delta: float) -> Dictionary:
 	var n := speed.size()
 	if ticks < 2 * STEP_SETTLE_ENDS or n < ticks or yaw.size() < n or beta.size() < n:
-		return false
+		return {}
 	var ends := func(series: PackedFloat32Array) -> Vector2:
 		var first := 0.0
 		var last := 0.0
@@ -3075,13 +3083,27 @@ static func tail_settled(speed: PackedFloat32Array, yaw: PackedFloat32Array,
 		r += yaw[i]
 	r = absf(r / ticks)
 	if r <= 0.0:
-		return false
+		return {}
 	var s: Vector2 = ends.call(speed)
 	var y: Vector2 = ends.call(yaw)
 	var b: Vector2 = ends.call(beta)
-	return absf(s.y - s.x) / span < STEP_SETTLE_ACCEL \
-			and absf(b.y - b.x) / span / r < STEP_SETTLE_SHARE \
-			and absf(y.y - y.x) / r < STEP_SETTLE_SHARE
+	return {"accel": absf(s.y - s.x) / span, "slip": absf(b.y - b.x) / span / r,
+			"yaw": absf(y.y - y.x) / r}
+
+
+## Pure: the gates a `tail_drift` fails, each with its reading and limit ("" when all pass; "no
+## tail" on an empty one).
+static func unsettled_gates(drift: Dictionary) -> String:
+	if drift.is_empty():
+		return "no tail"
+	var failed: Array[String] = []
+	if drift["accel"] >= STEP_SETTLE_ACCEL:
+		failed.append("speed %.3f m/s^2 (gate %.2f)" % [drift["accel"], STEP_SETTLE_ACCEL])
+	if drift["slip"] >= STEP_SETTLE_SHARE:
+		failed.append("slip %.2f %% (gate %.1f)" % [drift["slip"] * 100.0, STEP_SETTLE_SHARE * 100.0])
+	if drift["yaw"] >= STEP_SETTLE_SHARE:
+		failed.append("yaw %.2f %% (gate %.1f)" % [drift["yaw"] * 100.0, STEP_SETTLE_SHARE * 100.0])
+	return ", ".join(failed)
 
 
 ## The step's figures off its per-tick yaw rate (§ step steer), printed and kept in `_current`.
@@ -3170,7 +3192,8 @@ func _report_step_run(delta: float) -> void:
 				BalanceModel.understeer_gradient(model, r["lat_g"], v_mean)]
 	var hold := ""
 	if not r["lifted"]:
-		hold = "; held %.2f s%s" % [float(r["hold_s"]), ", UNSETTLED" if r["unsettled"] else ""]
+		hold = "; held %.2f s%s" % [float(r["hold_s"]),
+				", UNSETTLED: " + r["unsettled"] if r["unsettled"] else ""]
 	print(("  %-26s : steady %.1f deg/s (%.2f g), %.2f of neutral; %sfront %s (pred %s) of the load"
 			+ " transfer; rise %.2f s, overshoot %.0f %%, slip peak %.1f deg, %s%s") % [label,
 			r["steady_dps"], r["lat_g"], r["of_neutral"], k, _pct(r["lltd"]),
@@ -4866,7 +4889,7 @@ static func _k_cell(runs: Array, kmh: float) -> String:
 			if is_nan(float(r.get("k_dpg", NAN))):
 				return "-"
 			return "%.2f deg/g at %.2f g, %s%s" % [r["k_dpg"], r["lat_g"], _pct(r["lltd"]),
-					", unsettled" if r.get("unsettled", false) else ""]
+					", unsettled" if r.get("unsettled", "") != "" else ""]
 	return "-"
 
 
@@ -4880,7 +4903,7 @@ static func _step_cell(r: Dictionary) -> String:
 	if float(r["spin_t"]) >= 0.0:
 		return "spun" + lifted
 	return "%.2f, %.2f s, %+.0f %%%s%s" % [r["of_neutral"], r["rise_s"],
-			float(r["overshoot"]) * 100.0, lifted, " unsettled" if r.get("unsettled", false) else ""]
+			float(r["overshoot"]) * 100.0, lifted, " unsettled" if r.get("unsettled", "") != "" else ""]
 
 
 ## The `accel` region: every wheel-driven variant's standing start, floored and `tc`, beside the

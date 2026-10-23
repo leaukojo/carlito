@@ -8,12 +8,16 @@ tables: `docs/vehicle_measurements.md` (§ Cornering, § Step steer, § Wind); s
 
 ## Anti-roll latch
 
-Wheels tick in array order; a live read gave the first wheel of each pair a
-partner one tick staler than the second's, a phantom damper of `rate / 60` N·s/m on the left
-wheels only, which the open split turned into drift past the grip peak (1.07 m over 200 m on
-`hatchback-sports`). With the shared latch every bar-carrying body tracks 0.000 m, the semis 0.05 m. Ruled out
-as tracking causes: the COM heights, `mu_lat` and the axle pairing; body
-asymmetry; `load_scaled_mu`; a bar-driven load-transfer loop.
+Wheels tick in array order; a live read gave the first wheel of each pair a partner one tick
+staler than the second's, a phantom damper of `rate / 60` N·s/m on the left wheels only, which the
+open split turned into drift past the grip peak (1.07 m over 200 m on `hatchback-sports`). With the
+shared latch every bar-carrying body tracks 0.000 m, the semis 0.05 m. Ruled out as tracking causes:
+the COM heights, `mu_lat` and the axle pairing; body asymmetry; `load_scaled_mu`; a bar-driven
+load-transfer loop. An unloaded partner, touching or airborne, reads at its hang `K c / (k + K)`,
+where its spring balances the bar (`VehicleMath.anti_roll_hang`): the outer keeps the bar in series
+with that spring, with no step at the lift. A bar gated on the partner's contact instead hands the
+outer a lift no tyre carries while the partner touches at no load, then drops it in one tick: the
+lifting wheel chatters (the laden semi's inner front, five lifts in a second).
 
 ## Inertia
 
@@ -204,7 +208,7 @@ Tractor `rear_lat_grip` 1.077 = `1 + s * log2(rated rear / rated front)` (650/65
   4.1 deg/g budget), aligning torque (0.4), front and aligning-torque compliance steer, and every rear
   left at 0, against roll steer's 1.0 (SAE 760713; `docs/sources.md` § Linear understeer).
 - **COMPROMISE:** `sedan-sports`, `suv`, `pickup`, `pickup-flat` and the semis keep even bars and
-  the law off (recipe comment): the class split, roll steer on, spins a lifted step at speed (1, 4,
+  the law off (recipe comment): the class split, roll steer on, spins a lifted step at speed (0, 4,
   1, 2 more cells), and compliance steer retires none (no multi-link figure; the leaf sign adds oversteer). `suv-luxury`: 27 / 9, the law on, equal tyres.
 
 ## Aero balance
