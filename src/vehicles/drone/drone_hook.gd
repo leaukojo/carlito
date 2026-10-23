@@ -106,7 +106,7 @@ func _drop(body: RigidBody3D, velocity: Vector3) -> void:
 	dropped.call("detach_to", body.get_parent(), velocity)
 
 
-## The payload under the hook, or null. Selected by group (root CLAUDE.md § Scene tags). The ray
+## The payload under the hook, or null. Selected by group (root CLAUDE.md § Gotchas). The ray
 ## masks SOLID, not the payload alone, so the hook cannot reach a crate through a floor.
 func _find(space: PhysicsDirectSpaceState3D, body: RigidBody3D) -> Node:
 	if space == null or _marker == null:

@@ -213,7 +213,7 @@ for (const key of allow) {
 }
 
 // Raw lines per CLAUDE.md. Raising a cap is a decision made in this diff, not a side effect.
-const CLAUDE_MD_BUDGET = { 'CLAUDE.md': 106 };
+const CLAUDE_MD_BUDGET = { 'CLAUDE.md': 98 };
 const NESTED_CLAUDE_MD_CAP = 40;
 const overBudget = [];
 const lineCount = (f) => read(f).replace(/\n$/, '').split('\n').length;

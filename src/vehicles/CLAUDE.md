@@ -1,9 +1,7 @@
 # Vehicles — rules
 
-True of every vehicle; family rules nest beside the code. Tour, derivations and the rejected
-designs (read before proposing a shared refactor): `docs/vehicles.md`, `docs/drivetrain.md`,
-`docs/handling.md`, `docs/truck.md`, `docs/tractor.md`; measured figures: `docs/vehicle_measurements.md`; sourced figures and
-citations: `docs/sources.md`.
+True of every vehicle; family rules nest beside the code. Read `docs/vehicles.md` (and its
+family doc, via `docs/overview.md`) before proposing a shared refactor: it lists the rejected designs.
 
 ## Structure
 
@@ -13,9 +11,8 @@ citations: `docs/sources.md`.
   `has_method` guards in `chase_camera.gd` and `tow_host.gd` look dead and are not.
 - Driveline behaviour unique to one machine is a spec flag defaulting off, never a third seam.
   Extract only where two sites are identical, not merely analogous.
-- Generated bodies (`kenney/*`: `gen_kenney_vehicles.gd`; `watercraft/*`: `gen_boat_variants.gd`):
-  a change goes into the recipe and a regen in the same commit, never the `.tscn` / `.tres`.
-- Never detune a vehicle to suit an on/off key: keyboard feel belongs to `src/input/`.
+- Generated bodies (`kenney/*`, `watercraft/*`) change in their recipe plus a regen, never the
+  `.tscn` / `.tres` (the `vehicle-feel` skill). Keyboard feel belongs to `src/input/`, never a detune.
 - Contract signals key on the FAMILY: a pre-spawn path holding a variant name maps it through
   `VehicleCatalog.family_of` first.
 
@@ -31,7 +28,7 @@ citations: `docs/sources.md`.
   clamp; an external force (thrust, sail) does not.
 - Never set roll or pitch in `RigidBody3D.inertia` (Jolt computes them about `center_of_mass`);
   yaw only through `yaw_dynamic_index`. Read the tensor off `PhysicsDirectBodyState3D`.
-- Understeer: the bar split, tyre load laws (`rear_lat_grip`: real rear tyres), sourced roll and compliance steer;
+- Understeer: the bar split, tyre load laws (`rear_lat_grip`), sourced roll and compliance steer;
   tipping before sliding: the bar or `mu_lat`. Never a slower steer, a detuned lock or a lower COM.
 - Drag and angular damping are declared, never inherited: a new towed or attached rigid body
   needs its own resistance call and `VehicleMath.declare_angular_damp`.
