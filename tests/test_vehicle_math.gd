@@ -332,46 +332,122 @@ func test_rolling_drag_is_crr_times_the_normal_load() -> void:
 	assert_float(M.rolling_drag(-0.01, 10000.0)).is_equal(0.0)
 
 
-func test_road_resistance_sums_both_terms_and_opposes_velocity() -> void:
+# --- air_force: drag and side force against the wind, in the body frame ---------
+# Bodies face -Z (Basis.IDENTITY): forward -Z, right +X.
+
+func test_air_force_in_still_air_is_the_aero_drag_term_opposing_velocity() -> void:
 	var vel := Vector3(0.0, 0.0, -20.0)
-	var f := M.road_resistance(vel, 0.6, 0.012, 10000.0, MASS, DELTA)
-	var expected := M.aero_drag(20.0, 0.6) + M.rolling_drag(0.012, 10000.0)
-	assert_float(f.length()).is_equal_approx(expected, 1e-4)
+	var f := M.air_force(vel, Vector3.ZERO, Basis.IDENTITY, 0.6, 5.0, MASS, DELTA)
+	assert_float(f.length()).is_equal_approx(M.aero_drag(20.0, 0.6), 1e-4)
 	assert_float(f.normalized().dot(vel.normalized())).is_equal_approx(-1.0, 1e-5)
 
 
-func test_road_resistance_never_looks_at_mass() -> void:
-	# The argument this exists for. Godot's linear damp is an acceleration
-	# (F = mass * damp * v), so coupling a 24 t trailer to an 8 t tractor quadrupled the rig's
-	# resistance. Neither term here reads the mass, so the same coefficients produce the same
-	# force on a 260 kg body and on an 8 t truck — and a combination's drag is the SUM of the
-	# two bodies' own, roughly 1.2x a rigid truck rather than 4x.
-	var vel := Vector3(0.0, 0.0, -30.0)
-	var light := M.road_resistance(vel, 0.6, 0.012, 10000.0, 260.0, DELTA)
-	var heavy := M.road_resistance(vel, 0.6, 0.012, 10000.0, 8000.0, DELTA)
+func test_air_force_never_looks_at_mass() -> void:
+	# Godot's linear damp is an acceleration (F = mass * damp * v), so coupling a 24 t trailer to an
+	# 8 t tractor would quadruple the rig's drag. The force here never reads the mass, so a
+	# combination's drag is the SUM of the two bodies' own.
+	var vel := Vector3(4.0, 0.0, -30.0)
+	var light := M.air_force(vel, Vector3.ZERO, Basis.IDENTITY, 0.6, 5.0, 260.0, DELTA)
+	var heavy := M.air_force(vel, Vector3.ZERO, Basis.IDENTITY, 0.6, 5.0, 8000.0, DELTA)
 	assert_vector(light).is_equal_approx(heavy, Vector3.ONE * 1e-4)
 
 
-func test_road_resistance_clamped_to_one_tick_zeroing() -> void:
-	# The 60 Hz discipline: an absurd drag area may at most STOP the body this tick, never
-	# push it backwards. `body_mass` enters here and nowhere else.
-	var vel := Vector3(0.0, 0.0, -12.0)
-	var tick_cap := MASS * vel.length() / DELTA
-	var f := M.road_resistance(vel, 1e9, 0.0, 0.0, MASS, DELTA)
-	assert_float(f.length()).is_equal_approx(tick_cap, 1e-2)
-	assert_float(f.normalized().dot(vel.normalized())).is_equal_approx(-1.0, 1e-5)
+func test_air_force_clamped_to_one_tick_zeroing_on_each_axis() -> void:
+	# The 60 Hz discipline: an absurd area may at most STOP the body's air speed on that axis this
+	# tick, never reverse it. `body_mass` enters here and nowhere else.
+	var vel := Vector3(3.0, 0.0, -12.0)
+	var f := M.air_force(vel, Vector3.ZERO, Basis.IDENTITY, 1e9, 1e9, MASS, DELTA)
+	assert_float(f.z).is_equal_approx(MASS * 12.0 / DELTA, 1e-1)
+	assert_float(f.x).is_equal_approx(-MASS * 3.0 / DELTA, 1e-1)
 
 
-func test_road_resistance_is_off_at_a_standstill() -> void:
-	# Rolling resistance does not fade with speed, so without the floor it would keep shoving
-	# a parked vehicle. Zero velocity and a crawl both come back exactly zero.
-	assert_vector(M.road_resistance(Vector3.ZERO, 0.6, 0.012, 10000.0, MASS, DELTA)) \
+func test_air_force_is_off_in_still_air_at_a_standstill() -> void:
+	var b := Basis.IDENTITY
+	assert_vector(M.air_force(Vector3.ZERO, Vector3.ZERO, b, 0.6, 5.0, MASS, DELTA)) \
 			.is_equal(Vector3.ZERO)
-	assert_vector(M.road_resistance(Vector3(0.0, 0.0, -0.01), 0.6, 0.012, 10000.0, MASS, DELTA)) \
+	assert_vector(M.air_force(Vector3(0.0, 0.0, -0.01), Vector3.ZERO, b, 0.6, 5.0, MASS, DELTA)) \
 			.is_equal(Vector3.ZERO)
 	# A zero delta is a divide-by-zero in the clamp, not a physical case.
-	assert_vector(M.road_resistance(Vector3(0.0, 0.0, -20.0), 0.6, 0.012, 1e4, MASS, 0.0)) \
+	assert_vector(M.air_force(Vector3(0.0, 0.0, -20.0), Vector3.ZERO, b, 0.6, 5.0, MASS, 0.0)) \
 			.is_equal(Vector3.ZERO)
+
+
+func test_a_crosswind_on_a_parked_body_is_side_force_only() -> void:
+	# The gate reads the air, not the body: a parked body in wind is pushed, broadside at
+	# `0.5 rho cya w^2`, downwind, and with no drag part.
+	var wind := Vector3(9.0, 0.0, 0.0)  # blowing toward +X, the body's right
+	var f := M.air_force(Vector3.ZERO, wind, Basis.IDENTITY, 0.6, 5.0, MASS, DELTA)
+	assert_float(f.x).is_equal_approx(0.5 * M.AIR_DENSITY * 5.0 * 81.0, 1e-3)
+	assert_float(f.z).is_equal_approx(0.0, 1e-6)
+	assert_float(f.y).is_equal(0.0)
+
+
+func test_a_tailwind_at_the_body_speed_gives_no_force() -> void:
+	var vel := Vector3(0.0, 0.0, -15.0)
+	assert_vector(M.air_force(vel, vel, Basis.IDENTITY, 0.6, 5.0, MASS, DELTA)) \
+			.is_equal(Vector3.ZERO)
+
+
+func test_head_and_tail_winds_scale_drag_with_the_air_speed_squared() -> void:
+	var vel := Vector3(0.0, 0.0, -25.0)
+	var head := M.air_force(vel, Vector3(0.0, 0.0, 9.0), Basis.IDENTITY, 0.6, 5.0, MASS, DELTA)
+	var tail := M.air_force(vel, Vector3(0.0, 0.0, -9.0), Basis.IDENTITY, 0.6, 5.0, MASS, DELTA)
+	assert_float(head.z).is_equal_approx(M.aero_drag(34.0, 0.6), 1e-3)
+	assert_float(tail.z).is_equal_approx(M.aero_drag(16.0, 0.6), 1e-3)
+
+
+func test_the_side_term_is_q_cya_sin_yaw_in_a_quartering_wind() -> void:
+	# Air at yaw b over the body: side force q * cya * sin(b), drag q * cda * cos(b).
+	var vel := Vector3(0.0, 0.0, -25.0)
+	var wind := Vector3(-9.0, 0.0, 0.0)  # comes from the right, so it pushes the body left (-X)
+	var air := vel - wind
+	var q := 0.5 * M.AIR_DENSITY * air.length_squared()
+	var sin_b := air.x / air.length()
+	var f := M.air_force(vel, wind, Basis.IDENTITY, 0.6, 5.0, MASS, DELTA)
+	assert_float(f.x).is_equal_approx(-q * 5.0 * sin_b, 1e-3)
+
+
+func test_air_force_drops_the_body_up_part_of_the_air() -> void:
+	# A body falling or bouncing takes no drag from it: the model is drag and side force only.
+	var b := Basis(Vector3.RIGHT, 0.3)  # pitched, so body-up is not world-up
+	var vel := b.y * 10.0
+	assert_vector(M.air_force(vel, Vector3.ZERO, b, 0.6, 5.0, MASS, DELTA)) \
+			.is_equal_approx(Vector3.ZERO, Vector3.ONE * 1e-5)
+
+
+func test_the_downforce_point_splits_by_the_front_share() -> void:
+	# A vertical force at z splits by lever: the front axle takes (rear_z - z) / wheelbase.
+	var front_z := -1.3
+	var rear_z := 1.2
+	for share: float in [0.0, 0.4, 0.5, 1.0]:
+		var p := M.downforce_point(front_z, rear_z, share)
+		assert_float((rear_z - p.z) / (rear_z - front_z)).is_equal_approx(share, 1e-5)
+		assert_float(p.x).is_equal(0.0)
+		assert_float(p.y).is_equal(0.0)
+	assert_float(M.downforce_point(front_z, rear_z, 0.0).z).is_equal_approx(rear_z, 1e-6)
+	assert_float(M.downforce_point(front_z, rear_z, 1.0).z).is_equal_approx(front_z, 1e-6)
+
+
+func test_an_unset_aero_centre_is_the_central_force() -> void:
+	# ZERO is "unset": the force goes through the live COM and turns nothing, wherever the COM
+	# sits. A declared centre above the COM pitches the body under a rearward (+Z) drag.
+	# The point is measured from the ORIGIN: placed at the COM it turns nothing either.
+	var spins: Array[Vector3] = []
+	for at: Vector3 in [Vector3.ZERO, Vector3(0.0, 0.8, 0.0), Vector3(0.0, 0.3, 0.4)]:
+		var body: RigidBody3D = auto_free(RigidBody3D.new())
+		body.gravity_scale = 0.0
+		body.collision_layer = 0
+		body.center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
+		body.center_of_mass = Vector3(0.0, 0.3, 0.4)
+		add_child(body)
+		await get_tree().physics_frame
+		WheelDrive.apply_at(body, Vector3(0.0, 0.0, 500.0), at)
+		await get_tree().physics_frame
+		spins.append(body.angular_velocity)
+	assert_vector(spins[0]).is_equal_approx(Vector3.ZERO, Vector3.ONE * 1e-6)
+	# r x F with r = (0, 0.5, -0.4) from the COM and F = +Z: +X, the top pushed back (nose up).
+	assert_float(spins[1].x).is_greater(1e-4)
+	assert_vector(spins[2]).is_equal_approx(Vector3.ZERO, Vector3.ONE * 1e-6)
 
 
 func test_anti_roll_force_is_equal_and_opposite_across_the_axle() -> void:

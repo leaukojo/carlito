@@ -71,6 +71,19 @@ func _wheeled_flatbed() -> Node3D:
 	return trailer
 
 
+func test_every_semi_trailer_declares_its_aero_centre_and_side_area() -> void:
+	# A towed body's drag is its own call (`TowedBody.tick_towed`), at its own aero centre: ZERO
+	# would fall back to the live COM, which moves with the load. Its side area is its full side.
+	for path in [FLATBED, BOX, TIPPER, TANKER]:
+		var trailer := _trailer(path)
+		var gd: GroundDriveSpec = (trailer.get("spec") as VehicleSpec).ground_drive
+		assert_bool(gd.drag_area > 0.0 and gd.aero_centre != Vector3.ZERO) \
+				.override_failure_message("%s declares no aero_centre" % path).is_true()
+		assert_float(gd.side_area).override_failure_message("%s declares no side_area" % path) \
+				.is_greater(0.0)
+		trailer.free()
+
+
 # --- articulation angle -------------------------------------------------------
 
 func test_a_straight_rig_reads_zero_articulation() -> void:

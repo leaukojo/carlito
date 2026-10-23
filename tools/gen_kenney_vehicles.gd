@@ -38,11 +38,27 @@ const LENS_MIN_H := 0.06       ## m floor on lens height (some are a single flat
 const TURN_FRAC := 0.35        ## outboard share of a lens' width that becomes the indicator
 const DISC_MIN_TRIS := 12      ## a lens this dense with square extents is a disc, not a box
 
-## --- resistance (see VehicleMath's road-resistance header) ----------------------------
+## --- resistance (VehicleMath.air_force; rolling: RayWheel.surface_drag_force) ---
 ## Frontal area is derived from each body's own AABB (not listed per variant) at FRONTAL_FILL,
 ## the standard A ~ 0.8 * width * height rule of thumb for a non-rectangular silhouette. Wheels
 ## are outside the AABB and not added; they're already inside the Cd this multiplies.
 const FRONTAL_FILL := 0.82
+## Side area: broadside Cy x SIDE_FILL x the AABB's length x height. CY_SIDE 1.2 is a bluff road
+## body's broadside coefficient on its projected side area (docs/sources.md § Crosswind:
+## 1.17-1.34). One figure serves every baseline: `air_force`'s sin form makes it the small-yaw
+## slope per radian too. Slender-wing theory's pi * h^2 (printed beside each body) agrees with it
+## on a real car's proportions; these short bodies read 0.4-1.3x it. SIDE_FILL is FRONTAL_FILL's
+## silhouette rule (estimate).
+const CY_SIDE := 1.2
+const SIDE_FILL := 0.82
+## The side force acts this share of the wheelbase ahead of the axles' midpoint: a road vehicle's
+## centre of pressure sits in its front half at small yaw (§ Crosswind); the fraction is an
+## estimate. Read off the wheelbase, never the body length: on these short-wheelbase bodies a
+## quarter of the length sits ~0.36 of a wheelbase ahead of the sedan's COM, and a sedan held
+## straight at 90 km/h in 13 m/s then yaws downwind at ~4x the 2-3 deg/s computed for a real one.
+## COMPROMISE: one fixed point; the real centre moves back toward the side's centroid as yaw grows.
+## Undoing it means a yaw-dependent point in `WheelDrive._apply_resistance`.
+const SIDE_CP_FRAC := 0.25
 const GRAVITY := 9.8
 const MIN_CLEARANCE := 0.12  ## m the collision hull floor is held above the wheel-contact plane
 const BALANCE_G := 0.15  ## side g `_balance` reads K at: the 10 % held step at 30 km/h (0.1-0.26 g)
@@ -574,7 +590,11 @@ const VARIANTS := {
 	# `cl` 2.5 is the only wing in the project: same measured area as `cd`, Cl*A 2.24 against
 	# Cd*A 0.63 (lift/drag 3.6). 2.1 kN at 140 km/h rising to 8.8 kN at 288 km/h top end; a spring
 	# force (GroundDriveSpec.downforce_area) worth ~0.10 m of squat — raising `cl` past this
-	# bottoms the suspension.
+	# bottoms the suspension. `downforce_front` 0.40: the wing's front share, applied between the
+	# axle stations, so the live COM never moves it. A slight rear bias against the 0.42 weight
+	# split, as a race car runs its centre of pressure just behind its CG for stability (an F1 car
+	# ~45 % front; docs/sources.md, secondary): as speed rises the rear gains load faster than the
+	# front, and the limit stays front-first (test_vehicle_catalog's aero-balance guard).
 	# The two gear boxes differ on gear 1, a launch choice: `race` has TC to hold a 3.2 first at the
 	# grip peak. `race-future` is AWD with no TC, and 409 Nm through a 3.2 first spins all four tyres
 	# (0-100 3.25 s, 1.4 s of it spinning), so its first is 2.375, about where the engine stops
@@ -599,8 +619,8 @@ const VARIANTS := {
 	# need of) and closes at its rating: on J 0.06 the rev drop already spans ~2 ticks, a dog box's
 	# near-instant engagement (estimate).
 	# `yaw_index` 0: no measured open-wheeler, so Jolt's tensor (docs/vehicles.md § Inertia).
-	"race": {"family": "car", "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.25, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": true, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
-	"race-future": {"family": "car", "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": false, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
+	"race": {"family": "car", "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.25, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": true, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
+	"race-future": {"family": "car", "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": false, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
 	# Commercial bodies: RWD, governed at 180 like the real things (measured 198-200 ungoverned).
 	# Bars: the 36 kN/m pair split 24 / 12 kN/m: the corner pass saturates the front first (0.99 /
 	# 0.83 at 0.74 g), LLTD 58 %, roll 4.0 deg, no wheel lifted; BalanceModel.limit predicts +4.4 %.
@@ -746,11 +766,23 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	var cl := float(ov.get("cl", 0.0))
 	gd.downforce_area = float(roundi(
 			cl * FRONTAL_FILL * body_box.size.x * body_box.size.y * 100.0)) / 100.0
-	_drag_report.append("%-16s box %.2f w x %.2f h = %.2f m^2, cd %.2f -> Cd*A %.2f, crr %.3f%s" % [
-			ov.get("_id", ""), body_box.size.x, body_box.size.y,
+	gd.downforce_front = float(ov.get("downforce_front", -1.0))
+	gd.side_area = float(roundi(
+			CY_SIDE * SIDE_FILL * body_box.size.z * body_box.size.y * 100.0)) / 100.0
+	# The aero centre (x 0) is the same box's mid-height, SIDE_CP_FRAC of the wheelbase ahead of the
+	# axles' midpoint (front = -Z): the height sets drag's pitch moment and the side force's roll
+	# moment, z the side force's yaw moment. Drag is along the nose, so z moves no drag figure.
+	# Snapped like the areas.
+	var span := _axle_span(geo)
+	gd.aero_centre = Vector3(0.0, snappedf(body_box.get_center().y, 0.01),
+			snappedf((span.x + span.y) * 0.5 - SIDE_CP_FRAC * (span.y - span.x), 0.01))
+	_drag_report.append("%-16s box %.2f w x %.2f h x %.2f l = %.2f m^2, cd %.2f -> Cd*A %.2f, crr %.3f, Cy*A %.2f (pi h^2 %.2f), centre y %.2f z %.2f%s" % [
+			ov.get("_id", ""), body_box.size.x, body_box.size.y, body_box.size.z,
 			FRONTAL_FILL * body_box.size.x * body_box.size.y, get_f.call("cd"),
-			gd.drag_area, gd.rolling_resistance,
-			"" if cl <= 0.0 else ", cl %.2f -> Cl*A %.2f" % [cl, gd.downforce_area]])
+			gd.drag_area, gd.rolling_resistance, gd.side_area,
+			PI * body_box.size.y * body_box.size.y, gd.aero_centre.y, gd.aero_centre.z,
+			"" if cl <= 0.0 else ", cl %.2f -> Cl*A %.2f, %.2f front" % [cl, gd.downforce_area,
+					gd.downforce_front]])
 	# Each axle's physics radius is its drawn tyre's; one scene per axle when they differ (tractor).
 	var front_wheel: Dictionary = wheels[0]
 	var rear_wheel: Dictionary = wheels[1]
@@ -1709,13 +1741,17 @@ func _com_y(get_f: Callable, geo: Dictionary, ov: Dictionary) -> float:
 func _com_z(geo: Dictionary, ov: Dictionary) -> float:
 	if not ov.has("front_weight"):
 		return 0.0
-	var front_z := INF
-	var rear_z := -INF
-	for xz: Vector2 in geo["wheel_xz"]:
-		front_z = minf(front_z, xz.y)   # front = -Z
-		rear_z = maxf(rear_z, xz.y)
+	var span := _axle_span(geo)
 	var front := clampf(float(ov["front_weight"]), 0.05, 0.95)
-	return front_z + (1.0 - front) * (rear_z - front_z)
+	return span.x + (1.0 - front) * (span.y - span.x)
+
+
+## The front and rear wheel stations' z off the body's authored wheels (front = -Z).
+func _axle_span(geo: Dictionary) -> Vector2:
+	var span := Vector2(INF, -INF)
+	for xz: Vector2 in geo["wheel_xz"]:
+		span = Vector2(minf(span.x, xz.y), maxf(span.y, xz.y))
+	return span
 
 
 ## AABB of `aabb` after `xform` (8 corners; xform is rotation+uniform-scale+translation).

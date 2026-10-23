@@ -158,6 +158,9 @@ var _held_gear := 0
 ## spawn fitted (`MeasureRig.fit_tyre`: the stock where the class is not made in the body's fit).
 var _tyre := ""
 var _tyre_label := ""
+## `wind=<from_deg>:<m/s>` (`MeasureRig.wind_flag`): a steady wind on every body, answered as
+## `wind_vector()`. The ramp rises toward -Z, so `wind=0:<m/s>` (out of the north) blows downhill.
+var _wind := Vector3.ZERO
 
 var _ramp: StaticBody3D
 var _patch: MeasureRig.GripPatch
@@ -175,6 +178,11 @@ var _gain := 0.0                      ## up-slope metres gained this trial
 var _trace_t := 0.0
 var _drive_share := NAN               ## driven wheels' share of the rig's weight, at the last settle
 var _rows: Array[Dictionary] = []
+
+
+## The air every body under this tool moves through (`WindField.at`).
+func wind_vector() -> Vector3:
+	return _wind
 
 
 func _ready() -> void:
@@ -206,8 +214,14 @@ func _ready() -> void:
 	if _tyre == "?":
 		get_tree().quit(1)
 		return
-	if which.begins_with("doc=") and (not is_nan(_cornering_peak) or _tyre != ""):
-		printerr("cornering_peak= / tyre= change the figures a doc preset tabulates: run them per body")
+	_wind = MeasureRig.wind_flag(args)
+	if is_nan(_wind.x):
+		get_tree().quit(1)
+		return
+	if which.begins_with("doc=") and (not is_nan(_cornering_peak) or _tyre != ""
+			or _wind != Vector3.ZERO):
+		printerr("cornering_peak= / tyre= / wind= change the figures a doc preset tabulates: run them"
+				+ " per body")
 		get_tree().quit(1)
 		return
 	InputRouter.set_manual_gearbox(_held_gear > 0)

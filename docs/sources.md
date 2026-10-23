@@ -174,6 +174,25 @@ is a fitment law (the mobility number), a later `GroundDriveSpec` field.
 | Soil factors of every class (Mud, R-1W lug, slick ...) | no published lug-against-road-tread figure found; D497 carries no tread term | estimate |
 | `crr_factor` | EU label C1 classes: A ≤ 6.5, B 6.6-7.7, C 7.8-9.0, D 9.1-10.5, E ≥ 10.6 N/kN [74]; summer B, all-season C, winter C's top, mud E's floor | sourced bands; each class's band an estimate |
 
+*Aero balance* (`downforce_front`, `race` and `race-future`; `docs/vehicles.md` § Aero balance):
+
+| Figure | Basis | Grade |
+| --- | --- | --- |
+| The centre of pressure sits just behind the CG | a race car is set up with the aero resultant behind its CG, so a mid-engined car wants more downforce at the rear; an F1 car carries ~45 % of its downforce at the front axle line [75]. The centre of pressure closely matches the CG, wants a slight rear bias in low and mid-speed turns, and can sit neutral to slightly forward at high speed [76] | secondary: engineering articles, read; Katz and Milliken not opened |
+| `downforce_front` 0.40 against a 0.42 weight split | two points of rear bias, inside "closely matches" and on the stable side [75, 76] | estimate |
+
+*Crosswind* (`side_area`, the side force's `aero_centre`; `VehicleMath.air_force`, `gen_kenney_vehicles.gd`
+`CY_SIDE` / `SIDE_CP_FRAC`, each hand-built spec's header):
+
+| Figure | Basis | Grade |
+| --- | --- | --- |
+| Side force linear in yaw, set mostly by height | it rises about linearly over a wide yaw range, its gradient alike within a class and size, height dominating as slender-wing theory gives with the car's ground image [77]. With the image, that theory's slope is `q π h²` per radian (computed) | secondary |
+| `CY_SIDE` 1.2 broadside on the side area | a road vehicle's side-force coefficient on its projected side area rises to 1.17 (fitted) to 1.34 (CFD) and holds from ~75 to ~165 degrees of yaw; on the frontal area the same reads 6.5, which is why high-sided figures look large [78] | sourced (CFD) |
+| One `side_area` for broadside and the small-yaw slope | the `sin(yaw)` form makes them one figure. On a sedan-sized 4.4 × 1.38 m box, 1.2 × 0.82 × L × H is 5.97 m² against `π h²` 5.98; the Kenney bodies, shorter, sit at 0.4-1.3 × `π h²` (`gen_kenney_vehicles` prints both) | computed |
+| A trailer's side area is its full side | cab and trailer take side forces of about the same size at 0-16 degrees of yaw despite the trailer's length; the side force's line of action sits just below each body's mid-height [79] | sourced |
+| The side force acts ahead of the COM | most road vehicles have their centre of pressure in the front half, typically ahead of the neutral steer point, so a crosswind yaws them downwind [80]. `SIDE_CP_FRAC` 0.25 of the wheelbase ahead of the axles' midpoint | sourced; the fraction an estimate |
+| Tanker barrel 0.7 | a circular cylinder's drag coefficient climbs back to ~0.7 near Re 3.5e6 past the drag crisis and holds [81]; the barrel at a 13 m/s crosswind sits at Re 1.5e6, below that plateau, so 0.7 is the upper end | secondary; the figure an estimate |
+
 ## Reference list
 
 1. Ubysz, "Problems of rotational mass in passenger vehicles", Transport Problems 5(1), 2010, Table 1: http://transportproblems.polsl.pl/pl/archiwum/2010/zeszyt1/2010t5z1_04.pdf
@@ -250,3 +269,10 @@ is a fitment law (the mobility number), a later `GroundDriveSpec` field.
 72. VTI, "Field test of studded and non-studded winter tires: subjective rating by taxi drivers", 1990 (abstract, seen in search results): https://trid.trb.org/view/361699
 73. Leisure Wheels, highway-, all- and mud-terrain tyres on a Hilux (wet braking), seen in search results: https://www.leisurewheels.co.za/?p=1149944
 74. Regulation (EU) 2020/740, Annex I Part A (rolling resistance classes): https://legislation.gov.uk/eur/2020/740/annex/I/part/1?view=plain
+75. J. Paton, Total Simulation, "Secrets of Formula 1 Part 2 - Importance of Aerodynamics", 2016-06-14: https://www.totalsimulation.co.uk/secrets-formula-1-part-2-importance-aerodynamics/
+76. Formula 1 Dictionary, "Aerodynamic balance or Centre of Pressure (CofP)": https://www.formula1-dictionary.net/aerodynamic_balance.html
+77. J. Howell, S. Panigrahi, "Aerodynamic Side Forces on Passenger Cars at Yaw", SAE 2016-01-1620 (abstract): https://saemobilus.sae.org/content/2016-01-1620/
+78. V. Malviya et al., University of Huddersfield, "Effect of cross wind on aerodynamic coefficients of ground vehicles": https://eprints.hud.ac.uk/6856/1/4_V_Malviya.pdf
+79. M. Hammache, M. Michaelian, F. Browand, "Aerodynamic Forces on Truck Models, Including Two Trucks in Tandem", California PATH UCB-ITS-PRR-2001-27, 2001: https://escholarship.org/uc/item/6jr154q9
+80. A. Brandt, "Driving stability of passenger vehicles under crosswinds", licentiate thesis, Chalmers, 2021: https://research.chalmers.se/publication/521674/file/521674_Fulltext.pdf
+81. A. Roshko, "Experiments on the flow past a circular cylinder at very high Reynolds number", J. Fluid Mech. 10, 1961 (abstract): https://authors.library.caltech.edu/records/m8vtc-33e74

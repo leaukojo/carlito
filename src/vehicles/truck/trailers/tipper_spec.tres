@@ -42,9 +42,19 @@
 ; little under the box van's (open-topped, slightly lower). Raising the body does not raise it: the
 ; aero model reads the spec, not the pose.
 
+; AERO CENTRE (0, 0.47, 2.55) is the centre of tipper.tscn's lowered collision boxes less the bogie
+; (Neck, TipBody: y -0.06 to 0.99, z -1.15 to 6.25), kept at the centre like box_spec.tres's. Body
+; space from the origin, never the COM. The body tips only at a standstill, so drag keeps the
+; lowered centre.
+;
+; SIDE AREA 7.03 m^2 is the full side (see box_spec.tres): 1.2 x the lowered boxes' side, TipBody
+; 5.15 x 1.05 + Neck 2.23 x 0.2 = 5.86 m^2. Like the drag area, it reads the spec, not the pose.
+
 [sub_resource type="Resource" id="Resource_grounddrive"]
 script = ExtResource("2_grounddrive")
 drag_area = 0.55
+aero_centre = Vector3(0, 0.47, 2.55)
+side_area = 7.03
 rolling_resistance = 0.007
 wheel_positions = PackedVector3Array(-0.72, -0.626, 4.4, 0.72, -0.626, 4.4, -0.72, -0.626, 5.2, 0.72, -0.626, 5.2, -0.72, -0.626, 6, 0.72, -0.626, 6)
 wheel_radius = 0.36

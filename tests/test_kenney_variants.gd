@@ -70,6 +70,7 @@ const META_KEYS := [
 	"base",           # feel baseline when it differs from the family (the heavy vans)
 	"torque_mul",     # scales the baseline curve
 	"cd", "cl",       # aero coefficients, applied to the MEASURED frontal box
+	"downforce_front",  # the wing's front share, a per-variant opt-in like `cl`
 	"com_y",          # body-space height of the COM over the road, overriding the family figure
 	"com_y_frac",     # the same height as a fraction of the body's AABB top (a rescale)
 	"front_weight",   # the longitudinal balance, as the front axle's static share
@@ -362,6 +363,9 @@ func test_downforce_and_drag_measure_the_same_body() -> void:
 		var ov: Dictionary = Gen.VARIANTS[variant]
 		var gd := _spec_of(variant).ground_drive
 		var cl := float(ov.get("cl", 0.0))
+		assert_float(gd.downforce_front) \
+				.override_failure_message("%s_spec.tres downforce_front" % variant) \
+				.is_equal_approx(float(ov.get("downforce_front", -1.0)), 1e-6)
 		if is_zero_approx(cl):
 			assert_float(gd.downforce_area) \
 					.override_failure_message("%s_spec.tres declares no wing" % variant) \

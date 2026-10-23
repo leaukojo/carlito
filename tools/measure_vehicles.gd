@@ -270,6 +270,19 @@ const CRUISE_SETTLE_S := 5.0
 const KICK_GAIN_KMH := 20.0
 const PULSE_PERIOD_S := 1.0        ## default `pulse=<s>`
 const PULSE_S := 30.0              ## s of pulsing at each speed
+## `xwind[=<m/s>]` (with `cruise`): one speed per family, settled in the `wind=` flag's air (still by
+## default), then a steady crosswind from the body's right for XWIND_S, pedal held at the settle's
+## and steer at zero: lateral drift, heading, yaw rate and roll. The default speed is STRONG's
+## steady 9 + its 4 m/s gust ceiling (`WorldConditions`). `headtail` (with `cruise`) runs the same
+## speed twice more, each from a fresh standstill: into, then with, STRONG's steady WIND_HEADTAIL
+## along the heading (a re-settle would inherit the gear the last wind left).
+const XWIND_KMH := {"car": 90.0, "truck": 70.0, "tractor": 25.0}
+const WIND_HEADTAIL := 9.0
+const XWIND_SPEED := 13.0
+const XWIND_S := 2.0
+## s into the crosswind window that print a checkpoint: a driver corrects within about a second, so
+## the first is the figure a wheel held straight is judged on; later ones show where it goes.
+const XWIND_MARKS: Array[float] = [1.0]
 
 # --- doc presets (`doc=<id>` as arg 1) -------------------------------------
 ## Each runs a fixed set and rewrites its `docs/vehicle_measurements.md` region (`doc_region.gd`). Cornering
@@ -285,6 +298,9 @@ const DOC_CRUISE: Array[String] = ["sedan", "sedan-sports", "van", "delivery", "
 ## doc=steer: a FWD, a RWD and an AWD car, an open-wheeler, a light and a heavy van, a Kenney truck.
 const DOC_STEER: Array[String] = ["sedan", "sedan-sports", "suv", "race", "van", "delivery",
 		"garbage-truck"]
+## doc=wind: a car, a heavy van, a Kenney truck and the semi on its spawn trailer, each `cruise
+## headtail xwind` at its XWIND_KMH speed.
+const DOC_WIND: Array[String] = ["sedan", "delivery", "garbage-truck", "semi"]
 const DOC_SECONDS := 60.0
 ## doc=tyres: a passenger car, a light truck and a heavy truck, each on every class its fit takes
 ## (`TyreCatalog.fitting`) over each of DOC_TYRE_SURFACES. A run is three passes: a `tc` launch to
@@ -303,7 +319,10 @@ enum Phase { ACCEL, COAST, TRACKING, CORNERING, BRAKING, STALL, HANDBRAKE, STEP,
 ## Where a step-steer run is (`_tick_step`).
 enum Step { RUN_UP, SETTLE, STEPPED }
 ## What a part-pedal probe window is doing (`_tick_cruise`).
-enum Cruise { APPROACH, KICK, PULSE }
+enum Cruise { APPROACH, KICK, PULSE, XWIND }
+## The air a cruise speed runs in (`headtail`): the `wind=` flag's, or WIND_HEADTAIL against or
+## along the heading on top of it.
+enum Air { STILL, HEAD, TAIL }
 ## Where a `plough` run is (`_tick_plough`).
 enum Plough { LOWER, HOLD, STOP, START, COURSE_SET, COURSE_RUN }
 
@@ -506,6 +525,9 @@ var _bar_rear := NAN
 ## `cornering_peak=<x>`: the tyre's cornering-stiffness law (`GroundDriveSpec.cornering_peak_load`)
 ## overridden the same way (NAN: the spec's).
 var _cornering_peak := NAN
+## `speeds=<km/h>,<km/h>`: the step pass runs these instead of its family's STEP_SETS row (a
+## winged body's balance at speed). The step pad holds the run-up.
+var _step_speeds: Array[float] = []
 ## `ackermann=<0..1>`: the Ackermann fraction (`GroundDriveSpec.ackermann`) overridden the same way
 ## (NAN: the spec's).
 var _ackermann := NAN
@@ -542,6 +564,22 @@ var _cr_duty := 0.0                ## this pulse period's on share
 var _cr_duty_sum := 0.0            ## summed over the pulse's periods, for its mean
 var _cr_periods := 0
 var _cr_band := Vector2(INF, -INF)  ## m/s, the slowest and fastest of the pulse
+var _xwind := false
+var _headtail := false
+var _cr_airs: Array[Air] = []      ## the air each of `_cr_speeds` runs in
+var _cr_air := Air.STILL
+var _xwind_speed := XWIND_SPEED    ## m/s
+var _xw_origin := Vector3.ZERO     ## the body's position as the crosswind starts
+var _xw_right := Vector3.ZERO      ## its flat right axis then: drift is measured along it
+var _xw_heading := 0.0             ## rad
+var _xw_yaw_peak := 0.0            ## rad/s
+var _xw_pedal := 0.0
+var _xw_marks: Array[float] = []    ## s into the window still to print a checkpoint at
+
+## `wind=<from_deg>:<m/s>` (`MeasureRig.wind_flag`): the steady wind every body in this tool reads,
+## through `wind_vector()` (the duck-typed contract `WindField.at` walks up to).
+var _wind_base := Vector3.ZERO
+var _wind := Vector3.ZERO
 
 # coast pass
 var _coast_v0 := 0.0
@@ -623,6 +661,11 @@ var _sweep: Array[Dictionary] = []
 var _current := {}
 
 
+## The air every body under this tool moves through (`WindField.at`).
+func wind_vector() -> Vector3:
+	return _wind
+
+
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	var which := String(args[0]) if args.size() > 0 else "sedan-sports"
@@ -669,6 +712,9 @@ func _ready() -> void:
 			_bar_rear = float(flag.substr(9))
 		elif flag.begins_with("cornering_peak="):
 			_cornering_peak = float(flag.substr(15))
+		elif flag.begins_with("speeds="):
+			for kmh in flag.substr(7).split(",", false):
+				_step_speeds.append(float(kmh))
 		elif flag.begins_with("ackermann="):
 			_ackermann = clampf(float(flag.substr(10)), 0.0, 1.0)
 		elif flag.begins_with("pedal="):
@@ -679,6 +725,12 @@ func _ready() -> void:
 				_pulse_period = maxf(float(flag.substr(6)), 0.1)
 		elif flag.begins_with("duty="):
 			_pulse_duty = clampf(float(flag.substr(5)), 0.0, 1.0)
+		elif flag == "headtail":
+			_headtail = true
+		elif flag == "xwind" or flag.begins_with("xwind="):
+			_xwind = true
+			if flag.length() > 5:
+				_xwind_speed = maxf(float(flag.substr(6)), 0.0)
 		elif flag.begins_with("gear="):
 			_held_gear = int(flag.substr(5))
 			if _held_gear < 1 or _held_gear > Drivetrain.TOP_GEAR:
@@ -687,6 +739,15 @@ func _ready() -> void:
 				return
 	_tyre = MeasureRig.tyre_flag(flags)
 	if _tyre == "?":
+		get_tree().quit(1)
+		return
+	_wind_base = MeasureRig.wind_flag(flags)
+	if is_nan(_wind_base.x):
+		get_tree().quit(1)
+		return
+	_wind = _wind_base
+	if (_xwind or _headtail) and not _cruise:
+		printerr("xwind / headtail run inside the cruise probe: add `cruise`")
 		get_tree().quit(1)
 		return
 	if _surface >= 0 and _plough_pass:
@@ -720,22 +781,27 @@ func _ready() -> void:
 			_brake = true
 			_brake_from = TYRES_STOP_KMH / 3.6
 			_brake_pedals = [1.0]
-		elif _doc != "cruise":
+		elif _doc != "cruise" and _doc != "wind":
 			printerr(("unknown doc preset '%s' — expected doc=braking, doc=cornering, doc=accel,"
-					+ " doc=cruise, doc=steer or doc=tyres") % _doc)
+					+ " doc=cruise, doc=wind, doc=steer or doc=tyres") % _doc)
 			get_tree().quit(1)
 			return
 		if _trace or _notc or _held_gear > 0 or not is_nan(_engine_inertia) \
 				or not is_nan(_rear_lat_grip) or not is_nan(_bar_rear) or not is_nan(_cornering_peak) \
 				or not is_nan(_ackermann) or _circle or _hitch_pass or _plough_pass or _kerb or _cruise_probe() \
-				or _tyre != "" or _surface >= 0:
-			printerr("trace / notc / gear= / j= / rear_lat_grip= / bar_rear= / cornering_peak= /"
+				or _tyre != "" or _surface >= 0 or not _step_speeds.is_empty() or _xwind or _headtail \
+				or _wind_base != Vector3.ZERO:
+			printerr("trace / notc / gear= / j= / rear_lat_grip= / bar_rear= / cornering_peak= / speeds= /"
 					+ " ackermann= / circle / hitch / plough / kerb / pedal= / cruise /"
-					+ " kickdown / pulse / tyre= / surface= change the passes a doc preset tabulates:"
+					+ " kickdown / pulse / xwind / headtail / wind= / tyre= / surface= change the passes a"
+					+ " doc preset tabulates:"
 					+ " run them per body")
 			get_tree().quit(1)
 			return
-		_cruise = _doc == "cruise"  # after the check above: the preset is the cruise probe alone
+		# After the check above: each preset is the cruise probe alone.
+		_cruise = _doc == "cruise" or _doc == "wind"
+		_xwind = _doc == "wind"
+		_headtail = _doc == "wind"
 	var ref_file := FileAccess.open(REFERENCE_SPECS_PATH, FileAccess.READ)
 	_reference = JSON.parse_string(ref_file.get_as_text())
 	# Do not speed up with Engine.time_scale: it enlarges the physics step and breaks the
@@ -766,6 +832,8 @@ func _ready() -> void:
 		_queue = DOC_BRAKING.duplicate()
 	elif _doc == "cruise":
 		_queue = DOC_CRUISE.duplicate()
+	elif _doc == "wind":
+		_queue = DOC_WIND.duplicate()
 	elif _doc == "steer":
 		_queue = DOC_STEER.duplicate()
 	elif _doc == "tyres":
@@ -863,6 +931,8 @@ func _next_vehicle() -> void:
 			DocRegion.write(_doc, _accel_table())
 		elif _doc == "cruise":
 			DocRegion.write(_doc, _cruise_table())
+		elif _doc == "wind":
+			DocRegion.write(_doc, _wind_table())
 		elif _doc == "steer":
 			DocRegion.write(_doc, _steer_table())
 		elif _doc == "tyres":
@@ -1802,15 +1872,20 @@ func _gap_split(kin: Dictionary, prev: Dictionary, gap: float) -> Dictionary:
 		front["link"] += link
 		front["damper"] += w.suspension_force - spring - bar - link
 	var resistance := tyres - _car.mass * a
+	var gd := _car.spec.ground_drive
+	var aero := -VehicleMath.air_force(prev["vel"], _wind, _car.global_basis, gd.drag_area,
+			gd.side_area, _car.mass, delta).dot(ahead)
 	if hitch_y >= 0.0:
-		var gd := _car.spec.ground_drive
-		var normal_load := 0.0
+		var rolling := 0.0  ## each contact's own, along its wheel (`RayWheel.force_roll`)
 		for w in _car.wheels:
-			normal_load += w.suspension_force
-		resistance = -VehicleMath.road_resistance(prev["vel"], gd.drag_area, MeasureRig.crr(_car),
-				normal_load, _car.mass, delta).dot(ahead)
+			rolling += w.force_roll
+		resistance = aero - rolling
+	# Drag acts at the aero centre (`WheelDrive.apply_at`), not the COM: its own lever.
+	var aero_y := h if gd.aero_centre == Vector3.ZERO \
+			else (_car.global_transform * gd.aero_centre).y
 	var terms := {
-		"resistance": resistance * lever * per_moment,
+		"resistance": ((resistance - aero) * lever
+				+ aero * (aero_y - maxf(hitch_y, 0.0))) * per_moment,
 		"a lag": _car.mass * (a - _inst_a) * lever * per_moment,
 		"heave": -(float(kin["vy"]) - float(prev["vy"])) / delta / 9.81,
 		"pitch": -i_pitch * (float(kin["w"]) - float(prev["w"])) / delta * per_moment,
@@ -2045,7 +2120,7 @@ func _report_cornering(skipped: bool) -> void:
 			% ["cornering", _corner_peak, _corner_peak / 9.81, _corner_speed * 3.6, axle]
 			+ " (front %.2f, rear %.2f)%s" % [_corner_front, _corner_rear, note])
 	print("  %-13s : path %.2f g at most (`acc_lat`)" % ["", _corner_path_peak / 9.81])
-	var model := BalanceModel.axles(_car.spec)
+	var model := BalanceModel.axles(_car.spec, _corner_speed)
 	print(("  %-13s : roll %.1f deg at the peak (pred %.1f), front %s (pred %s) of the load transfer,"
 			+ " up to %d wheel(s)") % ["", _corner_roll,
 			BalanceModel.roll_deg(model, _corner_peak / 9.81), _pct(_corner_lltd),
@@ -2171,11 +2246,12 @@ func _report_accel(capped: bool) -> void:
 		for w in body.wheels:
 			body_load += w.suspension_force
 			tyre += w.force_long
+			applied += absf(w.force_roll)
 			# Per wheel: the four contacts of a body straddling a crest do not share one normal.
 			rake += w.suspension_force * w.contact_normal.dot(vdir)
 		normal_load += body_load
-		applied += VehicleMath.road_resistance(body.linear_velocity, bs.drag_area,
-				MeasureRig.crr(body), body_load, body.mass, get_physics_process_delta_time()).length()
+		applied += VehicleMath.air_force(body.linear_velocity, _wind, body.global_basis, bs.drag_area,
+				bs.side_area, body.mass, get_physics_process_delta_time()).length()
 		declared += VehicleMath.aero_drag(body.linear_velocity.length(), bs.drag_area) \
 				+ VehicleMath.rolling_drag(MeasureRig.crr(body), body.mass * 9.81)
 	var net := tyre - applied + rake
@@ -2457,7 +2533,9 @@ func _start_step() -> void:
 	var family := String(Catalog.VARIANTS[_variant]["family"])
 	var limit: float = _car.spec.speed_limit_kmh
 	_st_runs = []
-	for kmh: float in STEP_SETS.get(family, STEP_SETS["car"]):
+	var speeds: Array = _step_speeds if not _step_speeds.is_empty() \
+			else STEP_SETS.get(family, STEP_SETS["car"])
+	for kmh: float in speeds:
 		if limit > 0.0 and kmh >= limit - Drivetrain.GOVERNOR_BAND * 3.6:
 			continue
 		for lock in STEP_LOCKS:
@@ -2608,8 +2686,8 @@ func _report_step_run(delta: float) -> void:
 	if not r["lifted"] and r["lat_g"] > 0.01:
 		r["k_dpg"] = rad_to_deg((delta_mean - _wheelbase() * steady / v_mean) / r["lat_g"])
 	# BalanceModel's prediction beside each, off the live spec (a probe flag included) and the live
-	# yaw tensor (Jolt's own where the spec declares none).
-	var model := BalanceModel.axles(_car.spec)
+	# yaw tensor (Jolt's own where the spec declares none), its downforce at the run's speed.
+	var model := BalanceModel.axles(_car.spec, v_mean)
 	if not model.is_empty():
 		model["yaw_inertia"] = (_current["yaw_index"] as Dictionary)["iyy"]
 	var k := "" if is_nan(r["k_dpg"]) else "K %.2f deg/g (pred %.2f), " \
@@ -3389,9 +3467,12 @@ func _start_cruise() -> void:
 	var row: Dictionary = CRUISE_SETS.get(family, CRUISE_SETS["car"])
 	var limit: float = _car.spec.speed_limit_kmh
 	_cr_speeds = []
-	for kmh: float in row["kmh"]:
+	_cr_airs = []
+	for kmh: float in [XWIND_KMH.get(family, XWIND_KMH["car"])] if _xwind or _headtail else row["kmh"]:
 		if limit <= 0.0 or kmh < limit - Drivetrain.GOVERNOR_BAND * 3.6:
-			_cr_speeds.append(kmh)
+			for air: Air in [Air.STILL, Air.HEAD, Air.TAIL] if _headtail else [Air.STILL]:
+				_cr_speeds.append(kmh)
+				_cr_airs.append(air)
 	_cr_ramp = row["ramp"]
 	_reset_pass(Phase.CRUISE)
 	InputRouter.set_manual_gearbox(false)
@@ -3417,14 +3498,23 @@ func _next_cruise_speed() -> void:
 	_car.respawn()
 	_cr_i = 0.0
 	_cr_target = _cr_speeds.pop_front() / 3.6
+	_cr_air = _cr_airs.pop_front()
 	_cr_settled = false
 	_cr_actions = []
+	if _cr_air != Air.STILL:
+		_begin_cruise_window(Cruise.APPROACH)  # the settle in that air is the whole job
+		return
 	if _kickdown:
 		_cr_actions.append(Cruise.KICK)
 	if _pulse:
 		if _kickdown:
 			_cr_actions.append(Cruise.APPROACH)  # re-settle after the kick
 		_cr_actions.append(Cruise.PULSE)
+	if _xwind:
+		if not _cr_actions.is_empty():
+			_cr_actions.append(Cruise.APPROACH)
+		_cr_actions.append(Cruise.XWIND)
+	_wind = _wind_base
 	_begin_cruise_window(Cruise.APPROACH)
 
 
@@ -3443,8 +3533,26 @@ func _begin_cruise_window(stage: Cruise) -> void:
 	_cr_periods = 0
 	_cr_band = Vector2(INF, -INF)
 	_reset_cruise_hold()
+	var fwd_flat := -_car.global_basis.z
+	fwd_flat = Vector3(fwd_flat.x, 0.0, fwd_flat.z).normalized()
+	_wind = _wind_base
+	if _cr_air == Air.HEAD:
+		_wind = _wind_base - fwd_flat * WIND_HEADTAIL
+	elif _cr_air == Air.TAIL:
+		_wind = _wind_base + fwd_flat * WIND_HEADTAIL
 	if stage == Cruise.KICK:
 		_drive_probe(1.0)
+	elif stage == Cruise.XWIND:
+		_xw_origin = _car.global_position
+		var fwd := -_car.global_basis.z
+		_xw_right = Vector3(-fwd.z, 0.0, fwd.x).normalized()
+		_xw_heading = atan2(fwd.x, -fwd.z)
+		_xw_yaw_peak = 0.0
+		_xw_pedal = _cr_pedal
+		_xw_marks = XWIND_MARKS.duplicate()
+		# From the right, so it blows toward the body's left, on top of the flag's wind.
+		_wind = _wind_base - _xw_right * _xwind_speed
+		_drive_probe(_xw_pedal)
 
 
 func _reset_cruise_hold() -> void:
@@ -3474,6 +3582,14 @@ func _tick_cruise(delta: float) -> void:
 	elif _cr_stage == Cruise.KICK:
 		if v >= _cr_v0 + KICK_GAIN_KMH / 3.6 or window >= _seconds:
 			_report_kick(v, window)
+	elif _cr_stage == Cruise.XWIND:
+		_xw_yaw_peak = maxf(_xw_yaw_peak, absf(_car.angular_velocity.y))
+		if not _xw_marks.is_empty() and window >= _xw_marks[0]:
+			var mark: float = _xw_marks.pop_front()
+			print("  %-13s : %s" % ["  at %.0f s" % mark, _xwind_state()])
+			_current["xwind_%.0fs" % mark] = _xwind_figures()
+		if window >= XWIND_S:
+			_report_xwind(v)
 	else:
 		var pi := _cruise_pi(delta, v)
 		var into := fmod(window, _pulse_period)
@@ -3529,13 +3645,20 @@ func _cruise_pi(delta: float, v: float) -> float:
 func _report_cruise_hold(window: float) -> void:
 	var m := _cr_sums / maxf(1.0, _cr_ticks)
 	var label := "cruise" if not _cr_settled else "  re-settled"
+	if _cr_air == Air.HEAD:
+		label = "into %.0f m/s" % WIND_HEADTAIL
+	elif _cr_air == Air.TAIL:
+		label = "with %.0f m/s" % WIND_HEADTAIL
 	print(("  %-13s : %.0f km/h in %s at %.0f rpm, pedal %.2f, engine_load %.0f %%; settled after"
 			+ " %.1f s,") % [label, _cr_target * 3.6, _gear_label(_car.drivetrain.gear_byte), m.y,
 			m.x, m.z, window]
 			+ " approach pedal peak %.2f, %d shift(s)" % [_cr_pedal_peak, _cr_shifts.size()])
 	if m.x >= LAUNCH_FLOORED:
 		print("  %-13s : floored: the body's top, not a cruise" % "")
-	if not _cr_settled:
+	if _cr_air != Air.STILL:
+		_current["wind_head" if _cr_air == Air.HEAD else "wind_tail"] = {"pedal": m.x,
+				"load": m.z}
+	elif not _cr_settled:
 		# Read here, not at the start: a spawn trailer couples after a countdown.
 		_current["towed_kg"] = _combination_mass() - _car.spec.mass
 		(_current["cruise"] as Array).append({"kmh": _cr_target * 3.6, "held": true,
@@ -3581,6 +3704,31 @@ func _report_pulse() -> void:
 			_gear_label(int(gears.min())), _gear_label(int(gears.max()))])
 	_cruise_gates()
 	_next_cruise_window()
+
+
+## The crosswind window's line: where the body went with the wheel held straight.
+func _report_xwind(v: float) -> void:
+	print(("  %-13s : %.0f m/s from the right for %.0f s at %.0f km/h, pedal %.2f, steer 0: %s,"
+			+ " %.1f km/h at the end") % ["crosswind", _xwind_speed, XWIND_S, _cr_target * 3.6,
+			_xw_pedal, _xwind_state(), v * 3.6])
+	_current["xwind_%.0fs" % XWIND_S] = _xwind_figures()
+	_wind = _wind_base
+	_cruise_gates()
+	_next_cruise_window()
+
+
+## Drift (m, + = toward the wind), heading turned (deg, + = into it), the yaw-rate peak so far, roll.
+func _xwind_state() -> String:
+	var f := _xwind_figures()
+	return "drift %+.2f m, heading %+.2f deg, yaw rate peak %.2f deg/s, roll %+.2f deg" % [
+			f["drift"], f["heading"], f["yaw_peak"], f["roll"]]
+
+
+func _xwind_figures() -> Dictionary:
+	var fwd := -_car.global_basis.z
+	return {"drift": (_car.global_position - _xw_origin).dot(_xw_right),
+			"heading": rad_to_deg(wrapf(atan2(fwd.x, -fwd.z) - _xw_heading, -PI, PI)),
+			"yaw_peak": rad_to_deg(_xw_yaw_peak), "roll": VehicleMath.roll_deg(_car.global_basis)}
 
 
 ## This speed's next window, or the next speed once its windows are done.
@@ -3721,6 +3869,43 @@ func _cruise_table() -> Array[String]:
 				cells.append("%.0f: %s %.0f rpm, %.2f, %.0f %%%s" % [c["kmh"], _gear_label(c["gear"]),
 						c["rpm"], c["pedal"], c["load"], " (floored: its top)" if c["floored"] else ""])
 		lines.append("| %s | %s |" % [label, "; ".join(cells)])
+	return lines
+
+
+## The `wind` region: DOC_WIND's bodies at their XWIND_KMH speed, the cruise hold in still air,
+## into and with WIND_HEADTAIL, then the crosswind window's figures at each mark.
+func _wind_table() -> Array[String]:
+	var lines := DocRegion.wrap(("%s (`measure_vehicles -- doc=wind`; per body `-- <variant> %.0f"
+			+ " cruise headtail xwind`): one speed held from a standstill as `doc=cruise` holds it, and"
+			+ " again from a standstill into, then with, a steady %.0f m/s along the heading (STRONG's"
+			+ " steady wind): the pedal and `engine_load` over each hold, against drag's"
+			+ " `0.5 rho CdA ((v ± w)^2 - v^2)`."
+			+ " Then, from the still-air settle, %.0f m/s (STRONG's steady wind plus its gust ceiling)"
+			+ " from the right, the pedal held and the wheel straight: drift (+ toward the wind), the"
+			+ " heading turned (+ into it), the yaw-rate peak and the roll.") % [DocRegion.measured(),
+			_seconds, WIND_HEADTAIL, XWIND_SPEED])
+	var marks: Array[String] = []
+	for t: float in XWIND_MARKS + [XWIND_S]:
+		marks.append("at %.0f s" % t)
+	lines.append_array(["", "| Body | km/h | Still (pedal, load) | Into the wind | With it | Crosswind "
+			+ " | ".join(marks) + " |", "| --- | --- | --- | --- | --- |" + " --- |".repeat(marks.size())])
+	for e in _sweep:
+		if not e.has("cruise") or (e["cruise"] as Array).is_empty():
+			continue
+		var label := "`%s`" % e["variant"]
+		if float(e.get("towed_kg", 0.0)) > 1.0:
+			label += " + %.0f t towed" % (float(e["towed_kg"]) / 1000.0)
+		var c: Dictionary = e["cruise"][0]
+		var cells: Array[String] = [label, "%.0f" % c["kmh"]]
+		cells.append("%.2f, %.0f %%" % [c["pedal"], c["load"]] if bool(c["held"]) else "not held")
+		for key: String in ["wind_head", "wind_tail"]:
+			var h: Dictionary = e.get(key, {})
+			cells.append("not held" if h.is_empty() else "%.2f, %.0f %%" % [h["pedal"], h["load"]])
+		for t: float in XWIND_MARKS + [XWIND_S]:
+			var x: Dictionary = e.get("xwind_%.0fs" % t, {})
+			cells.append("-" if x.is_empty() else "%+.2f m, %+.1f deg, %.1f deg/s, roll %+.1f deg"
+					% [x["drift"], x["heading"], x["yaw_peak"], x["roll"]])
+		lines.append("| %s |" % " | ".join(cells))
 	return lines
 
 

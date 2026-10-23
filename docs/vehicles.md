@@ -43,8 +43,8 @@ Rules: `src/vehicles/CLAUDE.md`; derivations and figures: § Physics derivations
 | Governor | `spec.speed_limit_kmh` (0 = ungoverned, J1939 SPN 74) fades throttle via `governor_scale` over `GOVERNOR_BAND` m/s; `governed_upshift` stops it stranding a gear. Wire: `speed_limit` (u8, 1 km/h/bit, 0-250), range-less |
 | `RayWheel` | one cylinder cast per wheel (the tyre's radius and width, down its travel), spring-damper + slip tires. Grip: `HeightmapTerrain.grip_at()` into `mu_long`/`mu_lat`, nearest surface within `SURFACE_GRIP_REACH` |
 | `BaseVehicle` | consumes `InputRouter.get_vehicle_input()`, runs wheels/drivetrain, publishes telemetry, lamps, horn. No `ground_drive` → no `WheelDrive`. Seams: `_make_telemetry()`, `_tick_extras(input, delta)` |
-| Road resistance | `VehicleMath.aero_drag`/`rolling_drag`/`road_resistance` (`WheelDrive._apply_resistance` / `TowedBody.tick_towed`): `0.5 * rho * Cd*A * v^2` off `drag_area` + `crr * N` off `rolling_resistance` (N = suspension force, not `mass * g`). `DAMP_MODE_REPLACE` at 0, not `physics/3d/default_linear_damp`. Kenney Cd*A derived (`gen_kenney_vehicles`: `cd * FRONTAL_FILL * w * h`, its own `cd`). Tested `tests/test_vehicle_math.gd` / `tests/test_vehicle_catalog.gd` |
-| Downforce | `VehicleMath.aero_downforce`, `WheelDrive._apply_downforce`: `0.5 * rho * C*A * v^2` off `downforce_area` (Cl*A), through the suspension. Open-wheelers only (`cl`); lifts `race`'s top speed (`docs/vehicle_measurements.md` § Cruise) |
+| Road resistance | `VehicleMath.air_force` (`WheelDrive._apply_resistance` / `TowedBody.tick_towed`) against the level's wind (`WindField.at`), read in the body frame: drag `0.5 * rho * |air| * Cd*A * u` off `drag_area` along the nose and side force `0.5 * rho * |air| * Cy*A * w` off `side_area` across it, both at `aero_centre` (body space from the origin, never the live COM; generated: the body AABB's mid-height, a quarter wheelbase ahead of the axles' midpoint; hand-built: derived in each header; § Aero balance, § Crosswind). Still air and straight running is the plain drag term. Rolling: `crr * N` per contact along the wheel (`RayWheel.surface_drag_force`, one clamp with surface drag; `rolling_crr` = the fitted class's `rolling_resistance`, N = suspension force, not `mass * g`). On a steered front the force has a side component (`crr * N * sin(steer)`) that the front tyres must also carry: it is what turns the near-neutral `delivery` front-first in `docs/vehicle_measurements.md` § Cornering (a central force left it rear-first, and zeroing the steered wheels' `rolling_crr` restores that: `measure_vehicles -- delivery 60 track corner`). `DAMP_MODE_REPLACE` at 0, not `physics/3d/default_linear_damp`. Kenney Cd*A derived (`gen_kenney_vehicles`: `cd * FRONTAL_FILL * w * h`, its own `cd`), Cy*A likewise (`CY_SIDE * SIDE_FILL * l * h`). Tested `tests/test_vehicle_math.gd` / `tests/test_vehicle_catalog.gd` |
+| Downforce | `VehicleMath.aero_downforce`, `WheelDrive._apply_downforce`: `0.5 * rho * C*A * v^2` off `downforce_area` (Cl*A), through the suspension, split between the axle stations by `downforce_front` (`VehicleMath.downforce_point`; unset = through the live COM). Open-wheelers only (`cl`); lifts `race`'s top speed (`docs/vehicle_measurements.md` § Cruise) |
 | Drift | `handbrake_torque` locks the rears; the combined-slip tyre drops a locked wheel's side force |
 | Holds | `hill_hold` (`HillHold`, `WheelDrive.hold_step`): hill-start assist (ASSIST: the ABS bodies, `hill_hold_s` set per class: Honda's hold on the cars, Volvo VN's on the vans, trucks and semis, `docs/sources.md` [23, 24]) and the tractor's powershift hill hold (STANDSTILL); `InputRouter.auto_hold` for keys and touch. Tested `tests/test_hill_hold.gd`, `tests/test_input_arbitration.gd` |
 
@@ -332,6 +332,33 @@ Tractor `rear_lat_grip` 1.077 = `1 + s * log2(rated rear / rated front)` (Michel
 - **COMPROMISE:** `sedan-sports`, `suv`, `suv-luxury`, `pickup`, `pickup-flat` and the semis keep
   even bars and the law off (recipe comment): otherwise a lift at speed spins them.
 
+**Aero balance.** Downforce acts at the point between the axle stations that puts `downforce_front`
+of it on the front (`VehicleMath.downforce_point`), so the split depends on axle geometry and never
+on the live COM. The open-wheelers run their centre of pressure just behind the CG: `downforce_front`
+a little under `front_weight` (`gen_kenney_vehicles.gd`, `docs/sources.md` § Aero balance), so the
+rear gains load faster than the front as speed rises and the limit stays front-first.
+`BalanceModel.axles(spec, speed)` carries each axle's share as `aero`: grip, stiffness, sag and the
+lift cap read `load + aero`; the side force an axle must make, and every g, stay over the weight.
+`test_vehicle_catalog.test_a_winged_body_stays_front_first_at_any_speed` holds the margin from rest
+to the top end. Drag at `aero_centre` adds a pitch moment: above the COM it lifts the nose. The
+measured balance at speed: `measure_vehicles -- race 90 step speeds=150,200`, its `pred` beside it.
+
+**Crosswind.** The wheeled bodies read the level's wind (`WindField.at`, as the boat and the flight
+bodies do), so CONDITIONS' LIGHT and STRONG reach car, truck and tractor (`WorldConditions.WIND_FAMILIES`;
+the train has no aero term). `level_6` authors its own breeze, so a car there feels it at LEVEL.
+`VehicleMath.air_force` reads the air in the body frame: drag on its along-nose part, side force
+`Cy*A` on its across part, both scaled by the air speed, so the side term is `q * Cy*A * sin(yaw)`
+and one `side_area` is both the broadside figure and the small-yaw slope (`docs/sources.md`
+§ Crosswind). A headwind or tailwind moves `engine_load`, fuel and top speed by drag's
+`0.5 rho CdA ((v ± w)^2 - v^2)`. A crosswind pushes the body downwind and, acting ahead of the COM,
+yaws it downwind too (`docs/vehicle_measurements.md` § Wind). A parked body is pushed as well: the
+gate reads the air, and the static hold resists it (`measure_grade -- <v> park=16.7 cross
+wind=0:13` holds every `doc=park` body under a millimetre but the `semi`, whose known cross-slope
+creep grows). In a slide the across-air part takes `Cy*A` instead of drag's `Cd*A`, about seven
+times more on a car, at a point ahead of the COM. That lowers § Step steer's steady K a little in
+its fastest row and tips its three largest lift-off overshoots there into spins; with the side term zeroed,
+the old table returns to within transient noise.
+
 ### Tyres and surfaces
 
 A tyre is a **fitment** (the body's, on `GroundDriveSpec`: `mu_long` / `mu_lat` as the stock tyre
@@ -343,7 +370,7 @@ own corner load), so the load laws stay fitment. Grip on surface `s` is `spec mu
 dry_stock) x Surface ref_grip(s) x surface_grip_c(s)`: the stock on dry asphalt is the spec bit for
 bit, and one factor per surface cancels in `BalanceModel`'s front/rear ratio. Brakes, the brake
 split and peak slip (0.12, which `ABS_SLIP`, `TCS_SLIP` and the slip floor derive from) stay the
-body's (§ Brake hardware; an ABS following a class's own peak: brief 13 § 4). Surface drag is
+body's (§ Brake hardware; an ABS following a class's own peak: § Rejected designs). Surface drag is
 tyre-blind. The fitted class is a session choice per variant (`UserSettings.tyres`,
 `Boot._fit_tyre` on every spawn, the stock in a challenge, kept through a respawn; towed bodies keep
 theirs). Surfaces: `docs/systems.md` § Level framework; figures: `docs/sources.md`; measured:
@@ -480,5 +507,13 @@ Do not re-propose these without new evidence:
 - Shipping converter torque multiplication before the brake-class review (`docs/drivetrain.md` § Converter); never a
   bigger brake to make a body hold.
 - Auto-respawn on overturn (`base_vehicle.gd`).
+- A cycling or peak-following ABS/TC: every tyre class shares the 0.12 peak, so `ABS_SLIP` /
+  `TCS_SLIP` hold it ideally. Revisit when ABS/TC activity becomes a bus signal beyond
+  `trailer_abs`, or a class gets its own peak slip.
+- An analog bypass of the steering taper: it applies to every input source, as speed-sensitive
+  steering does, and `test_a_steering_taper_never_out_limits_the_tyres` keeps 1.5x the usable lock.
+  Revisit only if analog input must reach a lock the tyres cannot use.
+- Drawing the heavy vans' twin rears: the kit tyre (0.42 m) on their 1.26 m rear track puts the
+  inner pair at the centreline. They draw one tyre per corner over `rear_twin_tyres` physics.
 - A predicted-slip or per-tick force-change cap instead of the slip floor (§ One-tick caps): on a
   one-contact pitch model the first alternates the force 0 / 2x, the second limit-cycles.

@@ -37,9 +37,19 @@
 ; smallest in the catalog because an EMPTY deck has almost nothing standing in the air. It is the
 ; deck and its headboard only; a load's own aero is not modeled.
 
+; AERO CENTRE (0, 0.11, 2.65) is the centre of flatbed.tscn's collision boxes less the bogie (Frame,
+; Neck, Headboard: y -0.58 to 0.79, z -1.15 to 6.45), kept at the centre like box_spec.tres's.
+; Body space from the origin, never the COM.
+;
+; SIDE AREA 3.95 m^2 is the full side (see box_spec.tres): 1.2 x the same boxes' side, Frame 4.85 x
+; 0.55 + Neck 2.75 x 0.2 + Headboard 0.12 x 0.6 = 3.29 m^2. An empty deck shows a crosswind little
+; more than its rails; the solid Frame box overstates the open chassis under it (estimate).
+
 [sub_resource type="Resource" id="Resource_grounddrive"]
 script = ExtResource("2_grounddrive")
 drag_area = 0.25
+aero_centre = Vector3(0, 0.11, 2.65)
+side_area = 3.95
 rolling_resistance = 0.007
 wheel_positions = PackedVector3Array(-0.72, -0.626, 4.4, 0.72, -0.626, 4.4, -0.72, -0.626, 5.2, 0.72, -0.626, 5.2, -0.72, -0.626, 6, 0.72, -0.626, 6)
 wheel_radius = 0.36

@@ -60,6 +60,9 @@ var _ratio := PackedFloat64Array()
 ## Front-to-rear anchor distance (m), body space; 0 if the spec declares no front/rear pair
 ## (never happens for a real wheeled body). Cached once in _init since wheel_positions is data.
 var _wheelbase := 0.0
+## Body-space point (from the origin) the downforce acts at (`GroundDriveSpec.downforce_front`,
+## `VehicleMath.downforce_point`); NAN x = through the live COM. Cached in _init like the wheelbase.
+var _downforce_at := Vector3(NAN, 0.0, 0.0)
 ## Full-pedal foot-brake torque at one front / rear wheel (`GroundDriveSpec.axle_brake_torque`),
 ## cached in _init like the wheelbase.
 var _brake_front := 0.0
@@ -130,7 +133,10 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 	_lock_coupling.resize(wheels.size())
 	if gd.has_anti_roll_bar():
 		RayWheel.pair_axles(wheels)
-	_wheelbase = _compute_wheelbase()
+	var stations := _axle_stations()
+	_wheelbase = stations.y - stations.x if is_finite(stations.x) and is_finite(stations.y) else 0.0
+	if gd.downforce_front >= 0.0 and _wheelbase > 0.0:
+		_downforce_at = VehicleMath.downforce_point(stations.x, stations.y, gd.downforce_front)
 	_brake_front = gd.axle_brake_torque(false)
 	_brake_rear = gd.axle_brake_torque(true)
 	_retarder_rating = Drivetrain.retarder_rating(spec)
@@ -148,6 +154,8 @@ func fit_tyre(gd: GroundDriveSpec, cls: TyreClass) -> bool:
 	for w in wheels:
 		w.apply_tyre(tyre, gd.tyre)
 	_crr = gd.rolling_resistance * TyreClass.crr_scale(tyre, gd.tyre)
+	for w in wheels:
+		w.rolling_crr = _crr
 	return fitted
 
 
@@ -280,9 +288,9 @@ func drive_omega(gd: GroundDriveSpec, input: VehicleInput) -> float:
 	return omega / maxf(1.0, _driven_count)
 
 
-## Front axle to rear axle distance (m), from the built wheels' anchors. 0.0 with no front or no
-## rear wheel (never a real wheeled body).
-func _compute_wheelbase() -> float:
+## The foremost front and rearmost rear anchor z (x front, y rear; m, body space), from the built
+## wheels. INF on a side with no wheel (never a real wheeled body).
+func _axle_stations() -> Vector2:
 	var front_z := INF
 	var rear_z := -INF
 	for w in wheels:
@@ -290,9 +298,7 @@ func _compute_wheelbase() -> float:
 			rear_z = maxf(rear_z, w.anchor.z)
 		else:
 			front_z = minf(front_z, w.anchor.z)
-	if is_inf(front_z) or is_inf(rear_z):
-		return 0.0
-	return rear_z - front_z
+	return Vector2(front_z, rear_z)
 
 
 ## Pure: ISOBUS curvature (1/km, + = right) to wheel angle (rad, same sign; the caller negates it
@@ -656,26 +662,37 @@ func _axle_driven(axle: PackedInt32Array) -> bool:
 	return false
 
 
-## Aero plus rolling resistance, which sets top speed. Runs after the wheels tick so the normal
-## load is this tick's spring reading, not `mass * g`: an airborne car resists nothing and a laden
-## truck resists more for free. Inert when neither is declared.
+## Aero drag and side force against the level's wind (`WindField.at`); the drag, with each
+## contact's rolling resistance (`RayWheel.force_roll`), sets top speed. Both act at the declared
+## aero centre: its height gives drag a pitch moment and the side force a roll moment, its z the
+## side force a yaw moment. Inert when no drag area is declared.
 func _apply_resistance(body: RigidBody3D, gd: GroundDriveSpec, delta: float) -> void:
-	if gd.drag_area <= 0.0 and _crr <= 0.0:
+	if gd.drag_area <= 0.0:
 		return
-	var normal_load := 0.0
-	for w in wheels:
-		normal_load += w.suspension_force
-	body.apply_central_force(VehicleMath.road_resistance(body.linear_velocity, gd.drag_area,
-			_crr, normal_load, body.mass, delta))
+	apply_at(body, VehicleMath.air_force(body.linear_velocity, WindField.at(body),
+			body.global_basis, gd.drag_area, gd.side_area, body.mass, delta), gd.aero_centre)
 
 
-## Downforce down the body's own up axis so it follows roll and pitch; applied centrally to keep
-## the body's weight split. Not gated on ground contact.
+## Downforce down the body's own up axis so it follows roll and pitch, split between the axles by
+## `downforce_front` (`_downforce_at`), else through the live COM. Not gated on ground contact.
 func _apply_downforce(body: RigidBody3D, gd: GroundDriveSpec) -> void:
 	if gd.downforce_area <= 0.0:
 		return
-	body.apply_central_force(-body.global_basis.y * VehicleMath.aero_downforce(
-			body.linear_velocity.length(), gd.downforce_area))
+	var force := -body.global_basis.y * VehicleMath.aero_downforce(body.linear_velocity.length(),
+			gd.downforce_area)
+	if is_nan(_downforce_at.x):
+		body.apply_central_force(force)
+	else:
+		body.apply_force(force, body.global_basis * _downforce_at)
+
+
+## `force` at the body-space point `at` (from the origin, `GroundDriveSpec.aero_centre`); ZERO =
+## through the live COM. `apply_force` takes the offset from the origin in global orientation.
+static func apply_at(body: RigidBody3D, force: Vector3, at: Vector3) -> void:
+	if at == Vector3.ZERO:
+		body.apply_central_force(force)
+	else:
+		body.apply_force(force, body.global_basis * at)
 
 
 ## Per-axle slip telemetry; clears `ground` if any wheel is off the road.

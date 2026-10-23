@@ -39,9 +39,21 @@
 ; DRAG AREA 0.45 m^2: a marginal, in-the-wake figure like every trailer's (see box_spec.tres), the
 ; lowest of the three enclosed bodies because a round barrel sheds better than a square-edged van.
 
+; AERO CENTRE (0, 0.66, 2.5) is the centre of tanker.tscn's collision boxes less the bogie (Neck,
+; Cabinet, Barrel: y -0.19 to 1.51, z -1.15 to 6.15), kept at the centre like box_spec.tres's.
+; Body space from the origin, never the COM.
+;
+; SIDE AREA 8.28 m^2 is the full side (see box_spec.tres). The barrel is a cylinder in crossflow:
+; 0.7 x its 5.1 x 1.7 side (8.67 m^2) = 6.07. 0.7 is a circular cylinder's drag coefficient past the
+; drag crisis (docs/sources.md § Crosswind). In a 13 m/s crosswind the 1.7 m barrel sits at Re 1.5e6,
+; below that plateau, so 0.7 is the upper end. The square Cabinet (2.04 x 0.7) and the Neck under it
+; (2.2 x 0.19) take the box's 1.2: 1.84 m^2 -> 2.21.
+
 [sub_resource type="Resource" id="Resource_grounddrive"]
 script = ExtResource("2_grounddrive")
 drag_area = 0.45
+aero_centre = Vector3(0, 0.66, 2.5)
+side_area = 8.28
 rolling_resistance = 0.007
 wheel_positions = PackedVector3Array(-0.72, -0.626, 4.4, 0.72, -0.626, 4.4, -0.72, -0.626, 5.2, 0.72, -0.626, 5.2, -0.72, -0.626, 6, 0.72, -0.626, 6)
 wheel_radius = 0.36

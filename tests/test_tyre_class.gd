@@ -85,7 +85,8 @@ func test_the_classes_a_fit_offers_are_in_catalog_order_and_hold_its_stock() -> 
 		var gd: GroundDriveSpec = (specs[body] as VehicleSpecScript).ground_drive
 		var offered := TyreCatalog.fitting(gd.tyre_fit)
 		assert_bool(offered.has(gd.tyre)).override_failure_message(
-				"%s: fit %d does not offer its stock %s" % [body, gd.tyre_fit, gd.tyre.id]) 				.is_true()
+				"%s: fit %d does not offer its stock %s" % [body, gd.tyre_fit, gd.tyre.id]) \
+				.is_true()
 		var last := -1
 		for cls in offered:
 			var at := TyreCatalog.CLASSES.find(cls.resource_path)
@@ -133,7 +134,8 @@ func test_a_class_is_read_over_the_stock_one() -> void:
 	assert_float(response[Surface.ASPHALT]).is_equal_approx(1.2 / 0.8, 1e-6)
 	assert_float(response[Surface.SNOW]).is_equal_approx(
 			Surface.ref_grip(Surface.SNOW) * 1.5 * 1.2 / 0.8, 1e-6)
-	assert_float(response[Surface.WET]) 			.is_equal_approx(Surface.ref_grip(Surface.WET) * 1.2 / 0.8, 1e-6)
+	assert_float(response[Surface.WET]) \
+			.is_equal_approx(Surface.ref_grip(Surface.WET) * 1.2 / 0.8, 1e-6)
 	assert_float(TyreClass.crr_scale(cls, stock)).is_equal_approx(1.3 / 2.0, 1e-9)
 
 

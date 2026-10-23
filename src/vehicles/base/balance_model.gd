@@ -11,17 +11,17 @@ extends RefCounted
 const G := BrakeSizing.G
 
 
-## The model of `spec`, empty unless the body stands on exactly one front and one rear pair (a
-## tandem, a semi's kingpin load or a single axle is not predicted):
-## - `front` / `rear`: `load` (static N per wheel), `track` (m), `spring` (N/m per corner), `bar` (N/m),
-##   `mu` (side mu at the reference load, `rear_lat_grip` included), `share` (`RayWheel.tyre_share`);
+## The model of `spec` at `speed` (m/s); empty unless one front and one rear pair (no tandem, kingpin):
+## - `front` / `rear`: `load` (static N per wheel), `aero` (its downforce N per wheel, `_normal`),
+##   `track` (m), `spring` (N/m per corner), `bar` (N/m), `mu` (side mu at the reference load,
+##   `rear_lat_grip` included), `share` (`RayWheel.tyre_share`);
 ## - `mass` (kg), `h` (COM over the road at the static sag, m), `ref` (the even corner load, N,
 ##   `RayWheel.corner_mass * g`), `sensitivity` (`load_sensitivity`), `peak_slip` (the grip curve's
 ##   peak), `peak_load` (`cornering_peak_load`, x `ref`; 0 = off);
 ## - `wheelbase` (m), `yaw_inertia` (kg*m^2, the declared `yaw_dynamic_index`; NAN where Jolt computes
 ##   it, which a caller holding the live body fills in), `yaw_damp` (1/s, `angular_damping` or the
 ##   project's default, as `BaseVehicle` sets it).
-static func axles(spec: VehicleSpec) -> Dictionary:
+static func axles(spec: VehicleSpec, speed := 0.0) -> Dictionary:
 	var gd := spec.ground_drive
 	if gd == null or gd.wheel_positions.size() != 4 or spec.mass <= 0.0:
 		return {}
@@ -43,15 +43,21 @@ static func axles(spec: VehicleSpec) -> Dictionary:
 	if front_x.size() != 2 or rear_x.size() != 2:
 		return {}
 	var loads := BrakeSizing.wheel_loads(spec)
-	var front := {"load": loads.x, "track": absf(front_x[0] - front_x[1]), "spring": gd.spring_rate,
+	var front_share := loads.x / (loads.x + loads.y)
+	# The wing's split (`GroundDriveSpec.downforce_front`), else through the COM: the weight's.
+	var downforce := VehicleMath.aero_downforce(speed, gd.downforce_area) if speed > 0.0 else 0.0
+	var aero_front := gd.downforce_front if gd.downforce_front >= 0.0 else front_share
+	var front := {"load": loads.x, "aero": downforce * aero_front / 2.0,
+			"track": absf(front_x[0] - front_x[1]), "spring": gd.spring_rate,
 			"bar": gd.anti_roll_rate, "mu": gd.mu_lat, "share": 1.0}
-	var rear := {"load": loads.y, "track": absf(rear_x[0] - rear_x[1]),
+	var rear := {"load": loads.y, "aero": downforce * (1.0 - aero_front) / 2.0,
+			"track": absf(rear_x[0] - rear_x[1]),
 			"spring": gd.rear_spring_rate(), "bar": gd.rear_anti_roll_rate(),
 			"mu": gd.mu_lat * gd.rear_lat_grip, "share": 0.5 if gd.rear_twin_tyres else 1.0}
-	# Each axle sags under its own static load; the COM sits between them by its weight share.
-	var front_share := loads.x / (loads.x + loads.y)
-	var sag := front_share * _sag(loads.x, gd.spring_rate, gd) \
-			+ (1.0 - front_share) * _sag(loads.y, gd.rear_spring_rate(), gd)
+	# Each axle sags under its own load, downforce included; the COM sits between them by its
+	# weight share.
+	var sag := front_share * _sag(_normal(front), gd.spring_rate, gd) \
+			+ (1.0 - front_share) * _sag(_normal(rear), gd.rear_spring_rate(), gd)
 	var wheelbase := rear_z - front_z
 	var a := wheelbase * (1.0 - front_share)
 	var yaw_inertia := VehicleMath.yaw_inertia(spec.mass, spec.yaw_dynamic_index, a, wheelbase - a) \
@@ -75,6 +81,13 @@ static func _sag(n_load: float, rate: float, gd: GroundDriveSpec) -> float:
 	return clampf(n_load / maxf(rate, 1.0), 0.0, gd.rest_length)
 
 
+## An axle's normal load per wheel (N), its weight plus its downforce share (`axles`). Downforce adds
+## load, not mass: grip, stiffness, sag and the lift cap read this; the side force an axle must make,
+## and every g, stay over `load`. At speed 0 it is `load` exactly.
+static func _normal(axle: Dictionary) -> float:
+	return float(axle["load"]) + float(axle.get("aero", 0.0))
+
+
 ## An axle's roll stiffness (N*m/rad).
 static func _roll_stiffness(axle: Dictionary) -> float:
 	return (float(axle["spring"]) / 2.0 + maxf(float(axle["bar"]), 0.0)) * pow(float(axle["track"]), 2.0)
@@ -89,7 +102,7 @@ static func roll_deg(m: Dictionary, lat_g: float) -> float:
 
 ## Roll (`phi`, rad) and each axle's left-minus-right load change (`front`, `rear`, N) at `lat_g`.
 ## Elastic while both inner wheels stand: `phi = m ay h / sum(K)`. An axle whose inner wheel lifts
-## carries at most twice its static wheel load across it (moment `load * t`); the rest of the moment
+## carries at most twice its wheel load (`_normal`) across it (moment `load * t`); the rest of the moment
 ## rolls the body on the other axle alone. Both lifted: the body is tipping, and roll reads INF.
 static func _roll_state(m: Dictionary, lat_g: float) -> Dictionary:
 	var f: Dictionary = m["front"]
@@ -100,8 +113,8 @@ static func _roll_state(m: Dictionary, lat_g: float) -> Dictionary:
 	var phi := moment / maxf(k_f + k_r, 1e-6)
 	var df := 2.0 * k_f * phi / float(f["track"])
 	var dr := 2.0 * k_r * phi / float(r["track"])
-	var cap_f := 2.0 * float(f["load"])
-	var cap_r := 2.0 * float(r["load"])
+	var cap_f := 2.0 * _normal(f)
+	var cap_r := 2.0 * _normal(r)
 	if df > cap_f and dr > cap_r or (df > cap_f and k_r <= 0.0) or (dr > cap_r and k_f <= 0.0):
 		return {"phi": INF, "front": cap_f, "rear": cap_r}
 	if df > cap_f:
@@ -174,7 +187,7 @@ static func understeer_gradient(m: Dictionary, lat_g: float, speed := INF) -> fl
 ## An axle's cornering stiffness (N per unit slip) at the loads `lat_g` leaves it.
 static func _axle_stiffness(m: Dictionary, key: String, lat_g: float) -> float:
 	var axle: Dictionary = m[key]
-	var loads := pair_loads(float(axle["load"]), _transfer(m, key, lat_g))
+	var loads := pair_loads(_normal(axle), _transfer(m, key, lat_g))
 	var share: float = axle["share"]
 	return maxf(wheel_stiffness(m, float(axle["mu"]), loads.x, share)
 			+ wheel_stiffness(m, float(axle["mu"]), loads.y, share), 1e-6)
@@ -211,9 +224,8 @@ static func axle_capacity_g(m: Dictionary, lat_g: float) -> Vector2:
 	for i in 2:
 		var key := "front" if i == 0 else "rear"
 		var axle: Dictionary = m[key]
-		var n_load: float = axle["load"]
-		out[i] = pair_grip(float(axle["mu"]), n_load, _transfer(m, key, lat_g), float(m["ref"]),
-				float(m["sensitivity"]), float(axle["share"])) / (2.0 * n_load)
+		out[i] = pair_grip(float(axle["mu"]), _normal(axle), _transfer(m, key, lat_g), float(m["ref"]),
+				float(m["sensitivity"]), float(axle["share"])) / (2.0 * float(axle["load"]))
 	return out
 
 

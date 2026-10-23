@@ -395,7 +395,7 @@ func test_pause_menu_conditions_page_cycles_and_emits() -> void:
 ## still cycles, since the shell keeps the pick for whatever machine comes next.
 func test_pause_menu_conditions_page_greys_wind_and_current_off_family() -> void:
 	var saved_vehicle := GameState.current_vehicle
-	GameState.current_vehicle = "car"  # neither a WIND nor a CURRENT family
+	GameState.current_vehicle = "train"  # neither a WIND nor a CURRENT family
 	var pause: PauseMenu = auto_free(PauseMenu.new())
 	add_child(pause)
 	_press(pause, "CONDITIONS")

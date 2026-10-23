@@ -52,9 +52,18 @@
 ; bonneted conventional is taller AND blunter (0.75 against 0.70) than the cab-over, so it is the
 ; draggier unit pulling the identical trailer.
 
+; AERO CENTRE (0, 1.18, -2.25) is at the mid-height of conventional.tscn's collision boxes (Lower,
+; Cab, Hood: y 0.30-2.06), a quarter of the 4.40 m wheelbase ahead of the axles' midpoint (z -1.15),
+; as semi_spec.tres. Body space from the origin, never the COM.
+;
+; SIDE AREA 10.56 m^2 = 1.2 x 0.82 x those boxes' 6.10 x 1.76 side (z -4.30 to 1.80), derived like
+; semi_spec.tres.
+
 [sub_resource type="Resource" id="Resource_grounddrive"]
 script = ExtResource("3_grounddrive")
 drag_area = 2.43
+aero_centre = Vector3(0, 1.18, -2.25)
+side_area = 10.56
 rolling_resistance = 0.007
 wheel_positions = PackedVector3Array(-0.72, 0.424, -3.35, 0.72, 0.424, -3.35, -0.62, 0.424, 1.05, 0.62, 0.424, 1.05)
 wheel_radius = 0.36

@@ -59,12 +59,24 @@
 
 ; DRAG AREA 0.60 m^2 IS A MARGINAL AREA, NOT THIS BODY'S FRONTAL AREA. The van is 1.86 x 1.6 above
 ; the deck (2.4 m^2) but runs in the tractor's wake, so it adds roughly a quarter of that. That
-; makes a coupled rig resist ~1.27x a bobtail (see semi_spec.tres and VehicleMath's road-resistance
-; header). Never set it to the real box.
+; makes a coupled rig resist ~1.27x a bobtail (see semi_spec.tres and VehicleMath.air_resistance).
+; Never set it to the real box.
+
+; AERO CENTRE (0, 0.63, 2.66) is the centre of box.tscn's collision boxes less the bogie (Neck,
+; Front, Body: y -0.18 to 1.44, z -1.15 to 6.48). It stays at the box centre where a towing
+; body's sits a quarter back from its nose: a trailer runs behind the cab, and broadside the force
+; acts at the side's centroid (estimate). Body space from the origin, never the COM.
+;
+; SIDE AREA 14.2 m^2 IS THE FULL SIDE, unlike the drag area: no cab shelters a trailer from a
+; crosswind (docs/sources.md § Crosswind: a cab and its trailer take side forces of one size).
+; 1.2 (broadside Cy) x the same boxes' side: Body 5.45 x 1.62 + Front 2.13 x 1.24 ahead of it +
+; Neck 2.18 x 0.18 below that = 11.86 m^2, no fill (a box is its silhouette).
 
 [sub_resource type="Resource" id="Resource_grounddrive"]
 script = ExtResource("2_grounddrive")
 drag_area = 0.6
+aero_centre = Vector3(0, 0.63, 2.66)
+side_area = 14.2
 rolling_resistance = 0.007
 wheel_positions = PackedVector3Array(-0.72, -0.626, 4.4, 0.72, -0.626, 4.4, -0.72, -0.626, 5.2, 0.72, -0.626, 5.2, -0.72, -0.626, 6, 0.72, -0.626, 6)
 wheel_radius = 0.36

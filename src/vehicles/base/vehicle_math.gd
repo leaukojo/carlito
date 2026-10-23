@@ -131,17 +131,38 @@ static func anti_roll_force(comp_l: float, comp_r: float, rate: float) -> float:
 
 
 ## Rolling-resistance magnitude (N): `crr * N`. Pass the suspension force the springs reported
-## this tick as `normal_load`, never `mass * g`.
+## this tick as `normal_load`, never `mass * g`. Applied per contact (`RayWheel.surface_drag_force`).
 static func rolling_drag(crr: float, normal_load: float) -> float:
 	return maxf(crr, 0.0) * maxf(normal_load, 0.0)
 
 
-## The two terms together as a force vector opposing `vel`, one-tick clamped like
-## `clamped_damper`. `body_mass` is only the clamp basis; it enters neither term.
-static func road_resistance(vel: Vector3, cda: float, crr: float, normal_load: float,
+## Aero force on a wheeled body from the air it moves through (`wind` = `WindField.at`). The air
+## is read in the body frame with its body-up part dropped: `u` along the nose, `w` to the right.
+## Drag is `cda` on `u`, side force `cya` on `w`, both scaled by `|(u, w)|`, so the side term is
+## `q * cya * sin(yaw)`. Each axis is one-tick clamped on `body_mass`, which never enters the force.
+## Gated on the AIR speed, so a parked body in wind is pushed. Still air and straight running give
+## `w = 0`: the plain drag term. Rolling resistance is not here: it acts at each contact
+## (`RayWheel.surface_drag_force`).
+static func air_force(vel: Vector3, wind: Vector3, basis: Basis, cda: float, cya: float,
 		body_mass: float, delta: float) -> Vector3:
-	var speed := vel.length()
-	if speed < RESIST_EPS or delta <= 0.0:
+	var air := vel - wind
+	var up := basis.y.normalized()
+	air -= up * air.dot(up)
+	var airspeed := air.length()
+	if airspeed < RESIST_EPS or delta <= 0.0:
 		return Vector3.ZERO
-	var mag := aero_drag(speed, cda) + rolling_drag(crr, normal_load)
-	return -vel / speed * minf(mag, body_mass * speed / delta)
+	var fwd := -basis.z.normalized()
+	var right := basis.x.normalized()
+	var u := air.dot(fwd)
+	var w := air.dot(right)
+	var q_over_v := 0.5 * AIR_DENSITY * airspeed
+	var fu := minf(q_over_v * maxf(cda, 0.0) * absf(u), body_mass * absf(u) / delta)
+	var fw := minf(q_over_v * maxf(cya, 0.0) * absf(w), body_mass * absf(w) / delta)
+	return -fwd * signf(u) * fu - right * signf(w) * fw
+
+
+## The body-space point (from the origin) between the front and rear axle stations (`z`) at which a
+## vertical force puts `front_share` of itself on the front axle. Its height is irrelevant to a
+## force along body-up, so y is 0.
+static func downforce_point(front_z: float, rear_z: float, front_share: float) -> Vector3:
+	return Vector3(0.0, 0.0, rear_z - clampf(front_share, 0.0, 1.0) * (rear_z - front_z))

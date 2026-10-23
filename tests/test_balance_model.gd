@@ -186,3 +186,40 @@ func test_bodies_off_two_pairs_are_not_predicted() -> void:
 	var m := BalanceModel.axles(spec)
 	assert_bool(m.is_empty()).is_true()
 	assert_bool(is_nan(BalanceModel.understeer_gradient(m, 0.2))).is_true()
+
+
+func test_at_rest_the_model_carries_no_downforce() -> void:
+	# Speed 0 is the static model exactly: a winged spec reads its weight alone.
+	var spec := _spec(0.42, 0.1)
+	spec.ground_drive.downforce_area = 2.24
+	spec.ground_drive.downforce_front = 0.40
+	var m := BalanceModel.axles(spec)
+	assert_float(float(m["front"]["aero"])).is_equal(0.0)
+	assert_float(float(m["rear"]["aero"])).is_equal(0.0)
+	spec.ground_drive.downforce_area = 0.0
+	assert_dict(BalanceModel.limit(m)).is_equal(BalanceModel.limit(BalanceModel.axles(spec)))
+
+
+func test_downforce_splits_by_the_declared_share_and_adds_grip_not_demand() -> void:
+	var spec := _spec(0.42, 0.1)
+	spec.ground_drive.downforce_area = 2.24
+	spec.ground_drive.downforce_front = 0.40
+	var still := BalanceModel.axles(spec)
+	var fast := BalanceModel.axles(spec, 200.0 / 3.6)
+	var f := float(fast["front"]["aero"])
+	var r := float(fast["rear"]["aero"])
+	assert_float(f / (f + r)).is_equal_approx(0.40, 1e-6)
+	assert_float(2.0 * (f + r)).is_equal_approx(
+			VehicleMath.aero_downforce(200.0 / 3.6, 2.24), 1e-3)
+	# The weight the side force is made against is unchanged; the limit in g of it rises.
+	assert_float(float(fast["front"]["load"])).is_equal(float(still["front"]["load"]))
+	assert_float(float(BalanceModel.limit(fast)["g"])) \
+			.is_greater(float(BalanceModel.limit(still)["g"]))
+
+
+func test_unset_share_splits_downforce_by_weight() -> void:
+	var spec := _spec(0.6, 0.1)
+	spec.ground_drive.downforce_area = 2.0
+	var fast := BalanceModel.axles(spec, 50.0)
+	var f := float(fast["front"]["aero"])
+	assert_float(f / (f + float(fast["rear"]["aero"]))).is_equal_approx(0.6, 1e-5)

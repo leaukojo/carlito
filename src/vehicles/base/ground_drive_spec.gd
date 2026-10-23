@@ -139,6 +139,19 @@ extends Resource
 ## Aerodynamic downforce area in m^2 (Cl x frontal area); 0 = no wing. A force through the
 ## suspension, never a grip multiplier; pairs with `drag_area` (`test_vehicle_catalog`).
 @export var downforce_area := 0.0
+## Aero centre of pressure: a body-space point measured from the body ORIGIN, never the live COM
+## (that moves under load; the aero centre is the shape's). Drag acts here. ZERO = unset: through
+## the live COM. Every body with a `drag_area` declares one (`test_vehicle_catalog`).
+@export var aero_centre := Vector3.ZERO
+## Side-force area in m^2 (Cy x side area, broadside), acting at `aero_centre`. One figure is both
+## the broadside force and the small-yaw slope per radian (`VehicleMath.air_force`'s sin form). A
+## trailer's is its full side, unlike its in-wake `drag_area`. Every body with a `drag_area`
+## declares one (`test_vehicle_catalog`).
+@export var side_area := 0.0
+## The front axle's share of `downforce_area`'s force, applied at the point between the axle
+## stations that splits it so (`VehicleMath.downforce_point`): axle geometry only, so a moving COM
+## leaves the split alone. Below 0 = through the live COM.
+@export var downforce_front := -1.0
 
 
 @export_group("Steering lock")

@@ -9,7 +9,7 @@ signal vehicle_changed(type: String)
 @export var info: LevelInfo
 ## The chase camera to follow the active vehicle; optional.
 @export var camera: ChaseCamera
-## World wind (see WindField); null is dead calm. Only flight bodies read it.
+## World wind (see WindField); null is dead calm. Every family but the train reads it.
 @export var wind: WindField
 ## Tidal stream (see CurrentField); null is still water. Only the boat reads it.
 @export var current: CurrentField

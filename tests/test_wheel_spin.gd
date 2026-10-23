@@ -42,6 +42,30 @@ func test_surface_drag_never_exceeds_the_one_tick_stop() -> void:
 			.is_equal_approx(-1800.0, 1e-6)
 
 
+func test_rolling_and_surface_drag_share_one_clamp() -> void:
+	# The tyre's 0.5 and the ground's 0.5 go through one call: the sum stops at the one cap
+	# (1800 N), where two calls would each take it.
+	assert_float(WheelScript.surface_drag_force(0.1, 0.5 + 0.5, 5000.0, 300.0, TICK)) \
+			.is_equal_approx(-1800.0, 1e-6)
+
+
+func test_a_wheel_carries_the_specs_rolling_resistance_and_none_on_a_side_slide() -> void:
+	var gd := _spec()
+	gd.rolling_resistance = 0.012
+	var w := _wheel()
+	w.apply_suspension(gd)
+	assert_float(w.rolling_crr).is_equal(0.012)
+	# A pure side slide has no longitudinal velocity at the contact, so no rolling force.
+	assert_float(WheelScript.surface_drag_force(0.0, w.rolling_crr, 5000.0, 300.0, TICK)) \
+			.is_equal(0.0)
+
+
+func test_an_airborne_wheel_makes_no_rolling_force() -> void:
+	var w: WheelScript = await _spun_wheel(null, null, [] as Array[Node], 5.0)
+	assert_bool(w.in_contact).is_false()
+	assert_float(w.force_roll).is_equal(0.0)
+
+
 # --- combined slip: one slip vector, the force along it ---------------------------
 
 const B_LONG := 1050.0
@@ -1984,7 +2008,8 @@ class PaintedPatch extends Node:
 ## One wheel fitted with `fitted` on a `stock` spec (null, null: no class), on flat ground under a
 ## frozen body, spun far past its grip peak so the force sits on the curve's tail whatever the
 ## budget, and ticked once.
-func _spun_wheel(fitted: TyreClass, stock: TyreClass, terrains: Array[Node]) -> WheelScript:
+func _spun_wheel(fitted: TyreClass, stock: TyreClass, terrains: Array[Node],
+		lift := 0.0) -> WheelScript:
 	var root: Node3D = auto_free(Node3D.new())
 	add_child(root)
 	_box(root, Vector3(4.0, 1.0, 4.0), Vector3(0.0, -0.5, 0.0))
@@ -1999,7 +2024,7 @@ func _spun_wheel(fitted: TyreClass, stock: TyreClass, terrains: Array[Node]) -> 
 	gd.wheel_inertia = 1.0
 	gd.tyre_half_width = 0.1
 	gd.rest_length = 0.3
-	var w := WheelScript.new(Vector3(0.0, 0.6, 0.0), false, true, null, 300.0)
+	var w := WheelScript.new(Vector3(0.0, 0.6 + lift, 0.0), false, true, null, 300.0)
 	w.apply_suspension(gd)
 	w.apply_tyre(fitted, stock)
 	w.omega = 100.0
@@ -2073,6 +2098,8 @@ func test_fitting_a_class_reaches_every_wheel_and_the_rolling_resistance() -> vo
 	assert_bool(drive.fit_tyre(gd, cls)).is_true()
 	assert_object(drive.tyre).is_same(cls)
 	assert_float(drive.rolling_resistance()).is_equal_approx(0.012 * 1.3, 1e-9)
+	for w in drive.wheels:
+		assert_float(w.rolling_crr).is_equal(drive.rolling_resistance())
 	var want := Array(TyreClass.grip_response(cls, gd.tyre))
 	for w in drive.wheels:
 		assert_array(Array(w.tyre_grip)).is_equal(want)

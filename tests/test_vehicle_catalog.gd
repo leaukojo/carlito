@@ -627,27 +627,61 @@ func test_a_declared_wing_declares_its_drag_too() -> void:
 
 func test_downforce_fits_inside_the_suspension_travel_it_acts_through() -> void:
 	# The budget on `cl`. Downforce is a force through the springs, so at the body's own top
-	# speed the static load PLUS the wing has to still fit in the travel: a bottomed ray is a
-	# chassis dragged through the ground, not more grip. 80 m/s (288 km/h) is what the two
-	# open-wheelers actually reach, and nothing else in the catalog carries a wing at all.
+	# speed each axle's static load PLUS its share of the wing (`downforce_front`) has to still fit
+	# in that axle's travel: a bottomed ray is a chassis dragged through the ground, not more grip.
+	# 80 m/s (288 km/h) is what the two open-wheelers actually reach, and nothing else in the
+	# catalog carries a wing at all.
 	const TOP_SPEED := 80.0
 	for variant in VehicleCatalog.VARIANTS:
 		var spec := _spec_of(variant)
 		if spec == null or spec.ground_drive == null or spec.ground_drive.downforce_area <= 0.0:
 			continue
 		var gd := spec.ground_drive
-		var corners := maxf(1.0, float(gd.wheel_positions.size()))
-		var load_per_corner := (spec.mass * 9.8
-				+ VehicleMath.aero_downforce(TOP_SPEED, gd.downforce_area)) / corners
-		# The softer of the two axle rates: the ceiling every corner is guaranteed to have.
-		var spring_ceiling := minf(gd.spring_rate, gd.rear_spring_rate()) * gd.rest_length
-		assert_float(load_per_corner).override_failure_message(
-				("%s bottoms out at %.0f km/h: %.0f N/corner against %.0f N of spring travel"
-				+ " — cut cl, not the springs") % [variant, TOP_SPEED * 3.6, load_per_corner,
-				spring_ceiling]).is_less(spring_ceiling)
-		assert_float(load_per_corner).override_failure_message(
-				"%s exceeds its own max_suspension_force at speed" % variant) \
-				.is_less(gd.max_suspension_force)
+		var loads := BrakeSizing.wheel_loads(spec)
+		var share := gd.downforce_front if gd.downforce_front >= 0.0 				else loads.x / (loads.x + loads.y)
+		var wing := VehicleMath.aero_downforce(TOP_SPEED, gd.downforce_area)
+		for rear in [false, true]:
+			var corner := (loads.y + wing * (1.0 - share) / 2.0) if rear 					else (loads.x + wing * share / 2.0)
+			var spring_ceiling := (gd.rear_spring_rate() if rear else gd.spring_rate) * gd.rest_length
+			var axle := "rear" if rear else "front"
+			assert_float(corner).override_failure_message(
+					("%s's %s bottoms out at %.0f km/h: %.0f N/corner against %.0f N of spring travel"
+					+ " — cut cl, not the springs") % [variant, axle, TOP_SPEED * 3.6, corner,
+					spring_ceiling]).is_less(spring_ceiling)
+			assert_float(corner).override_failure_message(
+					"%s's %s exceeds its own max_suspension_force at speed" % [variant, axle]) \
+					.is_less(gd.max_suspension_force)
+
+
+func test_a_winged_body_stays_front_first_at_any_speed() -> void:
+	# The aero balance guard: a wing's split (`downforce_front`) moves each axle's grip with speed,
+	# so the limit must stay front-first (understeer, `BalanceModel.limit` margin > 0) from rest to
+	# the top end, not just at the static figure the generator reports.
+	for variant in VehicleCatalog.VARIANTS:
+		var spec := _spec_of(variant)
+		if spec == null or spec.ground_drive == null or spec.ground_drive.downforce_area <= 0.0:
+			continue
+		for kmh: float in [0.0, 150.0, 280.0]:
+			var lim := BalanceModel.limit(BalanceModel.axles(spec, kmh / 3.6))
+			assert_float(float(lim["margin"])).override_failure_message(
+					"%s goes rear-first at %.0f km/h (margin %+.1f %%)"
+					% [variant, kmh, float(lim["margin"]) * 100.0]).is_greater(0.0)
+
+
+func test_every_body_with_drag_declares_its_aero_centre_and_side_area() -> void:
+	# Drag and side force act at `aero_centre`; ZERO is "unset" and falls back to the live COM,
+	# which moves under load. A body with a drag area says where its shape's centre of pressure is,
+	# and how much side it shows a crosswind (0 would let wind push it only along its nose).
+	for variant in VehicleCatalog.VARIANTS:
+		var spec := _spec_of(variant)
+		if spec == null or spec.ground_drive == null or spec.ground_drive.drag_area <= 0.0:
+			continue
+		assert_bool(spec.ground_drive.aero_centre != Vector3.ZERO).override_failure_message(
+				"%s declares drag_area %.2f but no aero_centre"
+				% [variant, spec.ground_drive.drag_area]).is_true()
+		assert_float(spec.ground_drive.side_area).override_failure_message(
+				"%s declares drag_area %.2f but no side_area"
+				% [variant, spec.ground_drive.drag_area]).is_greater(0.0)
 
 
 func test_a_coupled_rig_adds_a_trailers_drag_instead_of_multiplying_the_tractors() -> void:

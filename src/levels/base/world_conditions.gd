@@ -15,8 +15,9 @@ const COMPASS := ["NORTH", "NORTHEAST", "EAST", "SOUTHEAST", "SOUTH", "SOUTHWEST
 		"NORTHWEST"]
 
 ## Families whose physics reads the level's wind (drone/plane drag, BoatVehicle windage —
-## `VehicleMath.air_damper`); ground vehicles and the train ignore it.
-const WIND_FAMILIES := ["drone", "plane", "boat"]
+## `VehicleMath.air_damper`; the wheeled bodies' drag and side force — `VehicleMath.air_force`).
+## The train ignores it.
+const WIND_FAMILIES := ["drone", "plane", "boat", "car", "truck", "tractor"]
 ## Families whose physics reads the level's current (BoatVehicle hull drag, `boat.gd`); nothing
 ## else names `CurrentField`.
 const CURRENT_FAMILIES := ["boat"]

@@ -51,6 +51,21 @@ static func tyre_flag(args: PackedStringArray) -> String:
 	return ""
 
 
+## A tool's `wind=<from_deg>:<m/s>` flag as a steady world wind vector: FROM degrees as the
+## CONDITIONS page enters them (0 = out of the north, -Z), turned into the heading it blows toward
+## as `WorldConditions.wind_for` does. ZERO when absent; a malformed flag is printed as an error
+## and returned as NAN, which the tool quits on. The tool's root answers it as `wind_vector()`.
+static func wind_flag(args: PackedStringArray) -> Vector3:
+	for a in args:
+		if a.begins_with("wind="):
+			var parts := a.substr(5).split(":")
+			if parts.size() != 2 or not parts[0].is_valid_float() or not parts[1].is_valid_float():
+				printerr("wind=%s: expected <from_deg>:<m/s>, e.g. wind=90:9" % a.substr(5))
+				return Vector3(NAN, NAN, NAN)
+			return WindField.base_vector(fposmod(float(parts[0]) + 180.0, 360.0), float(parts[1]))
+	return Vector3.ZERO
+
+
 ## Fit the `TyreCatalog` class `id` on `body` (in the tree, so its drive is built); "" keeps the
 ## stock. Returns the id on the wheels, with a note when `id` is not made in the body's `tyre_fit`
 ## and the stock stayed (`WheelDrive.fit_tyre`).

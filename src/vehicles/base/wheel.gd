@@ -71,7 +71,11 @@ var long_slip := 0.0    ## signed longitudinal slip ratio this tick (+ = wheel f
 var abs_active := false ## the anti-lock held this wheel's brake back this tick
 var tcs_active := false ## traction control held this wheel's drive back this tick
 var force_long := 0.0   ## last tick's longitudinal tire force (N, +=forward); the next tick's link force reads it (`link_slope`)
+var force_roll := 0.0   ## last tick's rolling plus surface drag at the contact (N, +=forward; `surface_drag_force`)
 var force_lat := 0.0    ## last tick's lateral tire force (N, post friction circle); diagnostic only
+## Hard-road rolling resistance coefficient of this wheel's tyre: the spec's stock
+## (`apply_suspension`), or the fitted class's from its owner (`WheelDrive.fit_tyre`).
+var rolling_crr := 0.0
 var long_cap := 0.0     ## last tick's one-tick cap on the longitudinal slip force (N); diagnostic only
 ## The body's slip-denominator floor (m/s): the highest of its wheels' own (`slip_floor_for`) last
 ## tick, shared by `size_cap_masses`. A slip ratio's denominator is the road speed, one per body:
@@ -225,6 +229,7 @@ func apply_suspension(gd: GroundDriveSpec) -> void:
 	wheel_radius = gd.axle_radius(is_rear)
 	wheel_inertia = gd.axle_inertia(is_rear)
 	half_width = gd.axle_half_width(is_rear)
+	rolling_crr = gd.rolling_resistance
 	_query = null
 	if half_width > 0.0 and wheel_radius > 0.0:
 		var cylinder := CylinderShape3D.new()
@@ -257,6 +262,7 @@ func reset() -> void:
 	abs_active = false
 	tcs_active = false
 	force_long = 0.0
+	force_roll = 0.0
 	force_lat = 0.0
 	surface_grip = 1.0
 	surface_drag = 0.0
@@ -324,6 +330,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		long_slip = 0.0
 		abs_active = false
 		force_long = 0.0
+		force_roll = 0.0
 		force_lat = 0.0
 		contact_normal = Vector3.UP
 		surface_grip = 1.0
@@ -443,10 +450,16 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	force_long = f.x
 	force_lat = f.y
 
-	# Surface drag is the ground deforming, not the tyre: outside the friction circle and the spin
-	# step (a wheel in mud keeps rolling at road speed; the body slows).
-	body.apply_force(forward * surface_drag_force(v_long, surface_drag, suspension_force,
-			long_mass, delta), contact_point - body.global_position)
+	# Rolling resistance: the tyre's hysteresis (`rolling_crr`) and the ground deforming
+	# (`surface_drag`) share one force and one tick clamp, outside the friction circle and the spin
+	# step (a wheel in mud keeps rolling at road speed; the body slows). Two separately clamped
+	# terms could take twice the cap.
+	# COMPROMISE: real rolling resistance is a moment on the wheel (the patch's pressure centre sits
+	# ahead of the axle); here it is a contact force outside the spin step. Undoing that is a torque
+	# inside the spin step and a re-check of the static hold (brief 03).
+	force_roll = surface_drag_force(v_long, rolling_crr + surface_drag, suspension_force,
+			long_mass, delta)
+	body.apply_force(forward * force_roll, contact_point - body.global_position)
 
 	# Faded out from twice the slip floor down to it: below the floor slip is read against the floor,
 	# the tyre's slope sits at the one-tick cap, and following the body rings it at the tick rate.
@@ -738,8 +751,8 @@ static func free_spin_omega(omega_in: float, delta: float) -> float:
 	return move_toward(omega_in, 0.0, absf(omega_in) * FREE_SPIN_DECAY * delta)
 
 
-## Rolling-resistance force (N, along the wheel's forward) from a painted surface: `crr * load`
-## opposing the contact's longitudinal velocity, capped at the force that would zero that
+## Rolling-resistance force (N, along the wheel's forward), the tyre's and a painted surface's
+## together: `crr * load` opposing the contact's longitudinal velocity, capped at the force that would zero that
 ## velocity in one tick so it can stop the wheel and never push it backward. 0 at rest.
 static func surface_drag_force(v_long: float, crr: float, normal_load: float, moment: float,
 		delta: float) -> float:

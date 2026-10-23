@@ -159,9 +159,20 @@
 ; BOTH bodies apply their own aero, so a coupled rig resists tractor + trailer = 2.78 m^2, about
 ; 1.27x a bobtail.
 
+; AERO CENTRE (0, 1.14, -1.75) is at the mid-height of semi.tscn's collision boxes (Lower + Upper:
+; y 0.30-1.98), a quarter of the 3.60 m wheelbase ahead of the axles' midpoint (z -0.85), as
+; gen_kenney_vehicles places every generated body's (SIDE_CP_FRAC: the side force's centre sits in
+; the front half). Body space from the origin, never the COM.
+;
+; SIDE AREA 9.01 m^2 = 1.2 (broadside Cy) x 0.82 x those boxes' 5.45 x 1.68 side (z -3.74 to 1.71),
+; the recipe gen_kenney_vehicles derives every generated spec from (docs/sources.md § Crosswind). It
+; is the bobtail's own side; a coupled trailer applies its own full side (box_spec.tres).
+
 [sub_resource type="Resource" id="Resource_grounddrive"]
 script = ExtResource("3_grounddrive")
 drag_area = 2.18
+aero_centre = Vector3(0, 1.14, -1.75)
+side_area = 9.01
 rolling_resistance = 0.007
 wheel_positions = PackedVector3Array(-0.72, 0.424, -2.65, 0.72, 0.424, -2.65, -0.62, 0.424, 0.95, 0.62, 0.424, 0.95)
 wheel_radius = 0.36

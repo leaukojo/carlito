@@ -271,6 +271,11 @@ func test_the_trailer_declares_its_own_road_resistance() -> void:
 	var spec := _spec_of(trailer)
 	assert_float(spec.ground_drive.drag_area).is_between(0.2, 1.0)
 	assert_float(spec.ground_drive.rolling_resistance).is_greater(0.0)
+	# Its own aero centre too: a towed body's drag is its own call (`TowedBody.tick_towed`).
+	assert_bool(spec.ground_drive.aero_centre != Vector3.ZERO) \
+			.override_failure_message("the drawbar trailer declares no aero_centre").is_true()
+	assert_float(spec.ground_drive.side_area).override_failure_message(
+			"the drawbar trailer declares no side_area").is_greater(0.0)
 	trailer.free()
 
 

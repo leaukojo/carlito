@@ -54,9 +54,21 @@
 ; Both terms are declared: nothing in this project rides physics/3d/default_linear_damp, and a
 ; towed body is the one that proved why (see TowedBody._ready).
 
+; AERO CENTRE (0, 0.86, 3.05) is the centre of farm_tipper.tscn's lowered collision boxes less the
+; bogie (Frame, TipBody: y 0.31-1.40, z 1.07-5.03). It stays at the box centre where a towing
+; body's sits a quarter back from its nose: a trailer runs behind the tractor, and broadside the
+; force acts at the side's centroid (estimate). Body space from the origin, never the COM. The body
+; tips only at a standstill, so drag keeps the lowered centre.
+;
+; SIDE AREA 5.14 m^2 IS THE FULL SIDE, unlike the drag area: no tractor shelters a trailer from a
+; crosswind (docs/sources.md § Crosswind). 1.2 (broadside Cy) x the lowered boxes' side: TipBody
+; 3.94 x 0.86 + the Frame's 3.86 x 0.23 showing below it = 4.28 m^2, no fill (a box is its silhouette).
+
 [sub_resource type="Resource" id="Resource_grounddrive"]
 script = ExtResource("2_grounddrive")
 drag_area = 0.45
+aero_centre = Vector3(0, 0.86, 3.05)
+side_area = 5.14
 rolling_resistance = 0.014
 wheel_positions = PackedVector3Array(-0.78, 0.024, 3.3, 0.78, 0.024, 3.3, -0.78, 0.024, 3.95, 0.78, 0.024, 3.95)
 wheel_radius = 0.36

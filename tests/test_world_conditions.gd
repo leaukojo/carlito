@@ -28,6 +28,17 @@ func test_compass_label_wraps_past_a_full_turn_and_below_zero() -> void:
 	assert_str(WC.compass_label(-45.0)).is_equal("NORTHWEST")
 
 
+# --- wind families -------------------------------------------------------------------
+
+func test_every_family_but_the_train_reads_the_wind() -> void:
+	# The wheeled bodies take drag and side force from it (`VehicleMath.air_force`), so CONDITIONS
+	# enables the wind button on them; the train has no aero term.
+	for family: String in ["drone", "plane", "boat", "car", "truck", "tractor"]:
+		assert_bool(WC.WIND_FAMILIES.has(family)) \
+			.override_failure_message("%s should read the wind" % family).is_true()
+	assert_bool(WC.WIND_FAMILIES.has("train")).is_false()
+
+
 # --- wind_for ------------------------------------------------------------------------
 
 func test_wind_for_level_returns_the_authored_instance_including_null() -> void:
