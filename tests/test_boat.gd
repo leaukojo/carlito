@@ -6,7 +6,6 @@ extends GdUnitTestSuite
 
 const B := preload("res://src/vehicles/boat/boat.gd")
 const BoatT := preload("res://src/vehicles/boat/boat_telemetry.gd")
-const W := preload("res://src/levels/base/wind_field.gd")
 const ContractScript := preload("res://src/bridge/contract.gd")
 const TerrainScript := preload("res://src/levels/base/heightmap_terrain.gd")
 
@@ -273,19 +272,6 @@ func test_apparent_wind_speed_adds_hull_speed_beating_and_cancels_running() -> v
 			Basis.IDENTITY).x).is_equal_approx(1.0, 1e-6)
 
 
-func test_true_wind_inverts_the_wind_fields_toward_convention() -> void:
-	# Level 6's field: 200 deg TOWARD at 5 m/s, so it comes FROM 020.
-	var tw := BoatT.true_wind(W.base_vector(200.0, 5.0))
-	assert_float(tw.x).is_equal_approx(5.0, 1e-5)
-	assert_float(tw.y).is_equal_approx(20.0, 1e-4)
-	# The inversion holds all the way round, including across the 0/360 wrap.
-	for deg: float in [0.0, 90.0, 179.0, 181.0, 270.0, 359.0]:
-		var t2 := BoatT.true_wind(W.base_vector(deg, 3.0))
-		assert_float(t2.y) \
-			.override_failure_message("toward %f did not inverse-map" % deg) \
-			.is_equal_approx(fposmod(deg + 180.0, 360.0), 1e-3)
-
-
 func test_a_heeling_hull_reads_the_same_apparent_wind() -> void:
 	# The angle is measured in the water plane, so heel must not move it — and a beam wind is
 	# itself what lays the hull over, through the windage term above the COM. A Y-only flatten
@@ -308,12 +294,6 @@ func test_a_heeling_hull_reads_the_same_apparent_wind() -> void:
 			assert_float(tilted.y) \
 				.override_failure_message("AWA moved at %f deg" % deg) \
 				.is_equal_approx(level.y, 1e-3)
-
-
-func test_true_wind_in_dead_calm_is_zero() -> void:
-	var tw := BoatT.true_wind(Vector3.ZERO)
-	assert_float(tw.x).is_equal(0.0)
-	assert_float(tw.y).is_equal(0.0)
 
 
 # --- flow_toward, and the track/tide readings built on it -----------------------

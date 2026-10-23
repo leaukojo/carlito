@@ -39,6 +39,10 @@ var spring_brake := 0.0
 ## The gearbox sits in P (`Drivetrain.GEAR_P`), set by the owner before each tick: the pawl locks
 ## the gearbox output to the case below PAWL_ENGAGE_SPEED (`_couple_differentials`).
 var park_engaged := false
+## The transmission's own hold on its output (N·m at the drive axle), set by the owner before each
+## tick like `park_engaged`: a CVT's active standstill (`Drivetrain.standstill_hold`), which locks
+## the driven wheels as the pawl does, at its relief. 0 = none.
+var standstill_lock := 0.0
 
 var _applied_steer := 0.0  ## steer angle applied to steered wheels this tick (rad)
 var _driven_count := 0     ## driven wheels as drive_omega() counted them THIS tick
@@ -235,10 +239,12 @@ func foot_pedal(input: VehicleInput) -> float:
 ## on the ground, the gear's direction off the byte the box engaged last tick, and the drive off
 ## what the coupling passed last tick. It also hands the gearbox the rig's mass and the load it
 ## stands under there (`Drivetrain.standing_load`: the grade, the tyres' rolling resistance and the
-## soil's drag under them), what the shift policy's start gear and road load read.
+## soil's drag under them), what the shift policy's start gear and road load read, and, standing
+## with the pedal up (before a launch moves load between the axles), what its driven tyres put down
+## (`Drivetrain.drive_grip_n`, `static_drive_grip`), held until the next stand.
 func hold_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 		drivetrain: Drivetrain, ground_speed: float, delta: float) -> void:
-	var dir := signf(Drivetrain.ratio_for_byte(drivetrain.spec, drivetrain.gear_byte))
+	var dir := Drivetrain.drive_sign(drivetrain.gear_byte)
 	var normal := Vector3.ZERO
 	var soil := 0.0
 	var touching := 0
@@ -250,6 +256,9 @@ func hold_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 	var in_gear := dir != 0.0 and drivetrain.running and normal != Vector3.ZERO
 	var mass := _live_mass + towed_kg
 	var pull := 0.0
+	var at_rest := absf(ground_speed) < HillHold.REST_SPEED
+	if at_rest and touching > 0 and absf(input.throttle) <= 0.0:
+		drivetrain.drive_grip_n = static_drive_grip(gd, input.fwd_drive)
 	drivetrain.load_mass_kg = mass
 	drivetrain.rolling_crr = _crr
 	drivetrain.standing_load = 0.0
@@ -261,9 +270,24 @@ func hold_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 		drivetrain.standing_load = ShiftPolicy.standing_load(gravity, normal.normalized(), forward,
 				_crr + soil / touching, lever)
 	_hold = HillHold.step(gd.hill_hold, gd.hill_hold_s, _hold.x, _hold.y, input.brake,
-			absf(input.throttle), absf(ground_speed) < HillHold.REST_SPEED, in_gear,
+			absf(input.throttle), at_rest, in_gear,
 			HillHold.drive_holds(dir, _drive_torque, pull), delta)
 	hill_holding = _hold.x > input.brake
+
+
+## What the axles the body drives put down (N): each wheel's peak longitudinal force at its load
+## this tick, as its tyre solve scales it (`RayWheel.load_scaled_mu` on the surface's grip). Read at
+## rest, that is the static share with the coupled load on it: the gearbox's grip (`hold_step`). The
+## front counts when the spec or the MFWD switch drives it, never the brake's engagement of it.
+func static_drive_grip(gd: GroundDriveSpec, fwd_drive: bool) -> float:
+	var grip := 0.0
+	for w in wheels:
+		var driven := gd.driven_rear if w.is_rear else (gd.driven_front or fwd_drive)
+		if not w.in_contact or not driven:
+			continue
+		grip += w.suspension_force * RayWheel.load_scaled_mu(gd.mu_long * w.surface_grip,
+				w.suspension_force, w.corner_mass * 9.81, gd.load_sensitivity)
+	return grip
 
 
 ## Mean spin speed of the driven wheels in the shaft frame (`shaft_frame`: each `n * omega`), which
@@ -372,7 +396,8 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 
 	var space := body.get_world_3d().direct_space_state
 	retarder_torque_applied = 0.0
-	var pawl := pawl_torque(park_engaged, gd, ground_speed)
+	var pawl := maxf(pawl_torque(park_engaged, gd, ground_speed),
+			standstill_lock / maxf(1.0, _driven_count))
 	# The driven wheels, which the pawl locks while it is in. The pawl is quoted at the drive radius,
 	# so a wheel geared at `n` sees `n` times it.
 	var locked := PackedInt32Array()
@@ -574,7 +599,7 @@ func _report_to_controller(gd: GroundDriveSpec, input: VehicleInput,
 			slip_sum += w.long_slip
 			n += 1
 	drivetrain.abs_release = abs_held
-	var dir := signf(Drivetrain.ratio_for_byte(drivetrain.spec, drivetrain.gear_byte))
+	var dir := Drivetrain.drive_sign(drivetrain.gear_byte)
 	drivetrain.drag_control = gd.tcs_equipped and not input.tcs_off and drivetrain.overrun \
 			and n > 0 and dir * slip_sum / n < -RayWheel.TCS_SLIP
 

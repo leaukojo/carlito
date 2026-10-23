@@ -8,14 +8,15 @@ extends RefCounted
 ## the wheels, clamped [idle, redline]). Informed by Dechode/Godot-Advanced-Vehicle and
 ## Tobalation/GDCustomRaycastVehicle (credited in README).
 
-## RAMN gear byte: 0x00 = N, 0x01..0x06 = D1-D6, 0xFF = R, plus 0xFE = P, a value RAMN never
+## RAMN gear byte: 0x00 = N, 0x01..0x18 = D1-D24, 0xFF = R, plus 0xFE = P, a value RAMN never
 ## sends, so every byte it does send keeps its meaning.
 const GEAR_N := 0x00
 const GEAR_R := 0xFF
 const GEAR_P := 0xFE
-## Tallest drive byte RAMN can express. Bus-defined, not spec-defined (never `gear_ratios.size()`);
-## the shift functions take `mini()` of both, since a short array counts too.
-const TOP_GEAR := 6
+## Tallest drive byte the bus expresses (the contract's `gear` enum; `test_contract` pins the two).
+## Bus-defined, not spec-defined (never `gear_ratios.size()`): the shift functions take `mini()` of
+## both, since a short array counts too. RAMN sends up to its own MAX_GEAR_VALUE.
+const TOP_GEAR := 24
 
 const RADS_TO_RPM := 60.0 / TAU
 ## 1/s exponential rate the rigid crank's rpm tracks the wheels (the wheel-less bodies and the
@@ -48,6 +49,24 @@ var applied_throttle := 0.0
 ## A road-speed cap (km/h) imposed at runtime on top of the spec's governor, 0 = none: what a
 ## towing host asks for while a tipping body is up (`TowHost.speed_cap_kmh`). The lower one governs.
 var speed_cap_kmh := 0.0
+## A load on the crank (N·m, + = absorbing) set by the owner, like `speed_cap_kmh`: what a driven
+## PTO takes (`VehicleTelemetry.pto_crank_torque`). Constant over the tick, so it enters the crank's
+## predictor with no stiffness, and the controller's floors fuel it as load. Set in `_tick_extras`
+## after `process`, so it acts from the next tick. `ShiftPolicy`'s estimates leave it out: its road
+## load reads the torque the coupling passed, already net of it.
+var accessory_torque := 0.0
+## The hand throttle (0..1), owner-set the same way (`TractorVehicle._tick_extras`, so from the next
+## tick): on an all-speed governor the demand is the higher of it and the pedal
+## (`PedalMap.demand`), read by the fuel, the shift policy and the launch line; any other map ignores
+## it. The pull-away still waits on the pedal: the start-up ramp and a clutch's opening at rest read
+## the pedal alone, as a shuttle's release.
+var hand_throttle := 0.0
+## The PTO mode's set speed (rpm, 0 = off), owner-set the same way (`TruckVehicle._tick_extras`, from
+## the PTO, the park brake and the road speed): the fuel runs the governor law at the higher of it and
+## the pedal's demand (`PedalMap.demand`), at `spec.governor_droop`, on any map. It acts only while
+## the box is in N or P (`_fuel_step`): the neutral interlock, read on the byte engaged this tick, so
+## a selected D drops it before any fuel reaches the wheels.
+var pto_set_rpm := 0.0
 ## A transmission interlock set by the owner, like `speed_cap_kmh`: while on, a D or R request is
 ## engaged as N (the park-brake auto-neutral of an Allison-class box or an AMT; `TruckVehicle` sets
 ## it while the spring brakes are on). N and P requests pass unchanged. COMPROMISE: it engages at
@@ -63,14 +82,20 @@ var _torque_restore := 1.0
 ## changed (the dwell's clock), and a kickdown armed and waiting on the dwell.
 var _gear_s := 0.0
 var _kickdown := false
-## The pedal (0..1) the shift policy read on the last `process`: a kickdown's edge, and what the
-## launch trace judges a shift's landing at.
+## The demand (0..1, `PedalMap.demand`: the pedal, or the higher of it and the hand throttle) the
+## shift policy read on the last `process`: a kickdown's edge, and what the launch trace judges a
+## shift's landing at.
 var last_pedal := 0.0
 ## Owner-set before `process` (`WheelDrive.hold_step`), like `speed_cap_kmh`: the rig's mass (kg, the
 ## body's live mass plus what it tows) and the load standing on the ground puts against D (N·m at the
 ## axle, `ShiftPolicy.standing_load`). 0 mass = no estimate: the policy reads no load.
 var load_mass_kg := 0.0
 var standing_load := 0.0
+## Owner-set the same way: what the driven tyres put down (N), off their loads at rest, the coupled
+## load and the surface included (`WheelDrive.hold_step`), held while rolling. The grip the
+## policy's estimates cap the drive at (`ShiftPolicy.time_to_upshift`, `start_gear`); 0 = no
+## estimate, no cap.
+var drive_grip_n := 0.0
 ## Owner-set the same way: the fitted tyre's hard-road rolling resistance
 ## (`WheelDrive.rolling_resistance`), the flat road `ShiftPolicy.on_grade` weighs against. The
 ## spec's stock figure until the owner sets it.
@@ -183,6 +208,13 @@ static func is_reverse(byte: int) -> bool:
 ## N or P: nothing drives the wheels, the engine revs free.
 static func is_open(byte: int) -> bool:
 	return not is_drive(byte) and not is_reverse(byte)
+
+
+## The gear's direction: +1 in D, -1 in R, 0 in N or P.
+static func drive_sign(byte: int) -> float:
+	if is_drive(byte):
+		return 1.0
+	return -1.0 if is_reverse(byte) else 0.0
 
 
 ## The gearbox has a parking pawl, so P is a gear of its own; without one a P request is N.
@@ -353,7 +385,13 @@ static func crank_torque(p_spec: VehicleSpec, at_rpm: float, fuel: float,
 ## crank's step divides by `1 + stiffness * delta / J` (`crank_compliance`), the semi-implicit
 ## form the wheels' spin step takes: on `race`'s droop (6600-6800 rpm) an explicit step gains ~3 a
 ## tick and a free crank rings there.
-static func crank_stiffness(p_spec: VehicleSpec, at_rpm: float, fuel: float) -> float:
+## On a tick the all-speed governor's line governs, `governed` (`PedalMap.governor_stiffness`, NAN
+## otherwise) is the stiffness instead: the line's net torque replaces the blend, so the step stays
+## semi-implicit at any droop (explicit, `k dt / J` is ~0.5 on the tractor at 7 %, ~3.7 at 1 %).
+static func crank_stiffness(p_spec: VehicleSpec, at_rpm: float, fuel: float,
+		governed := NAN) -> float:
+	if not is_nan(governed):
+		return maxf(governed, 0.0)
 	var curve_slope := 0.0
 	var points := p_spec.torque_curve
 	for i in range(1, points.size()):
@@ -370,35 +408,38 @@ static func crank_stiffness(p_spec: VehicleSpec, at_rpm: float, fuel: float) -> 
 
 
 ## The crank's spin change per N·m this tick (rad/s per N·m): `delta / (J (1 + k delta / J))`, with
-## `k` its `crank_stiffness` at the tick's fuel. Every torque on the crank (its own, a coupling's)
-## goes through it, as a wheel's go through `RayWheel.spin_compliance`.
+## `k` its `crank_stiffness` at the tick's fuel (`governed`: the governor line's, see there). Every
+## torque on the crank (its own, a coupling's) goes through it, as a wheel's go through
+## `RayWheel.spin_compliance`.
 static func crank_compliance(p_spec: VehicleSpec, at_rpm: float, fuel: float,
-		delta: float) -> float:
+		delta: float, governed := NAN) -> float:
 	var j := crank_inertia(p_spec)
-	return delta / (j + crank_stiffness(p_spec, at_rpm, fuel) * delta)
+	return delta / (j + crank_stiffness(p_spec, at_rpm, fuel, governed) * delta)
 
 
 ## The fuel (0..1) whose one tick lands a free crank at `omega` (rad/s) on `target` (rad/s), through
 ## a step of `compliance` (`crank_compliance`): the step is linear in fuel, so it is closed form. 0
 ## when the motoring law alone gets there, 1 when full fuel cannot. The idle controller, the
-## rev-match blip and the free limiter use it.
+## rev-match blip and the free limiter use it. `load_nm` is what else the crank drives
+## (`accessory_torque`).
 static func fuel_to_land(p_spec: VehicleSpec, omega: float, target: float,
-		compliance: float) -> float:
+		compliance: float, load_nm := 0.0) -> float:
 	var at_rpm := omega * RADS_TO_RPM
 	var motoring := motoring_torque(p_spec, at_rpm)
 	var span := engine_torque(p_spec, at_rpm) - motoring
-	var need := (target - omega) / maxf(compliance, 1e-12) - motoring
+	var need := (target - omega) / maxf(compliance, 1e-12) - motoring + load_nm
 	if span <= 0.0:
 		return 1.0 if need > 0.0 else 0.0
 	return clampf(need / span, 0.0, 1.0)
 
 
 ## The fuel (0..1) at which the engine's net torque is zero at this rpm: drag-torque control's floor
-## (`drag_control`), so the crank stops braking the wheels and never pushes them.
-static func drag_fuel(p_spec: VehicleSpec, at_rpm: float) -> float:
+## (`drag_control`), so the crank stops braking the wheels and never pushes them. `load_nm` is
+## what else the crank drives (`accessory_torque`).
+static func drag_fuel(p_spec: VehicleSpec, at_rpm: float, load_nm := 0.0) -> float:
 	var motoring := motoring_torque(p_spec, at_rpm)
 	var span := engine_torque(p_spec, at_rpm) - motoring
-	return clampf(-motoring / span, 0.0, 1.0) if span > 0.0 else 0.0
+	return clampf((load_nm - motoring) / span, 0.0, 1.0) if span > 0.0 else 0.0
 
 
 ## The transmission controller's coupling state for this tick (`sync_rpm` is the wheel side through
@@ -436,8 +477,13 @@ static func coupling_step(p_spec: VehicleSpec, state: CouplingState, from_byte: 
 
 ## A converter's lock-up may stay closed: in a D gear from `spec.lockup_gear` up, off the foot brake
 ## (`braking`, as a TCU releases it on braking), with no ABS event, and with the wheel side at or
-## above `free_rpm`, the converter's free rev at this pedal (`converter_free_rpm`: under it, the
-## lock-up would lug the crank below what the converter lets it reach, and at a stop stall it).
+## above `free_rpm`, the converter's free rev with the pedal read as the fuel (`converter_free_rpm`:
+## under it, the lock-up would lug the crank below what the converter lets it reach, and at a stop
+## stall it). COMPROMISE: the line reads the pedal, not its mapped fuel (`PedalMap`), as a TCU keys
+## its lock-up schedule on the pedal; on the petrol map's fuel a third of the pedal would put the
+## line near the stall speed, and the `sedan` at pedal 0.3 would pull through D3-D5 on the
+## converter, 400-500 rpm of slip. Full pedal reads the stall speed either way. No lock-up schedule
+## is sourced; undoing this is that schedule.
 static func lockup_holds(p_spec: VehicleSpec, byte: int, sync_rpm: float, free_rpm: float,
 		p_abs_release: bool, p_braking: bool) -> bool:
 	return p_spec.coupling == VehicleSpec.Coupling.CONVERTER and is_drive(byte) \
@@ -480,11 +526,12 @@ static func handover_rate(p_spec: VehicleSpec, rev_drop: float) -> float:
 	return absf(rev_drop) / p_spec.shift_handover_s
 
 
-## A converter automatic's torque reduction through an upshift's inertia phase: the fuel, at most
-## the pedal's `fuel`, that lands the crank (predicted `pred_base + pred_per_fuel * f`, rad/s) on
-## `target` while the clutch passes `demand` (N·m at the crank: the engine's net torque at the
-## pedal's fuel, the driver's demand), so the output follows the pedal through the shift with no
-## shock and no hole. The TCU holds the engine's torque reduced through the phase (US 9,327,733), the oncoming
+## A seamless box's torque reduction through an inertia phase (a converter automatic's or a
+## powershift's, `spec.shift_cut_s` 0; the powershift's is a COMPROMISE at TRACTOR_BASE): the
+## fuel, at most the pedal's `fuel`, that lands the crank (predicted `pred_base + pred_per_fuel *
+## f`, rad/s) on `target` while the clutch passes `demand` (N·m at the crank: the engine's net
+## torque at the pedal's fuel, the driver's demand), so the output follows the pedal through the
+## shift with no shock and no hole. The TCU holds the engine's torque reduced through the phase (US 9,327,733), the oncoming
 ## clutch passing a little over the driver's demand (US 10,343,690). Where even no fuel cannot shed
 ## the inertia at that rate (a lift upshift), it is 0 and the clutch takes the surplus.
 static func handover_fuel(pred_base: float, pred_per_fuel: float, target: float, demand: float,
@@ -520,15 +567,15 @@ static func stall_rpm(p_spec: VehicleSpec) -> float:
 	return p_spec.idle_rpm + STALL_RPM_FRAC * (p_spec.redline_rpm - p_spec.idle_rpm)
 
 
-## Crank speed the converter lets the engine reach with the turbine held (rpm): where the engine law
-## at this pedal's fuel meets the converter's N^2 load (`TorqueConverter.capacity_coefficient`), the
-## stall speed at full pedal, and never under idle (the idle controller fuels the converter's load
-## there). `idle_rpm` on the rigid crank.
-static func converter_free_rpm(p_spec: VehicleSpec, throttle: float) -> float:
+## Crank speed the converter lets the engine reach with the turbine held (rpm) at `fuel`: where the
+## engine law meets the converter's N^2 load (`TorqueConverter.capacity_coefficient`), the stall
+## speed at full fuel, and never under idle (the idle controller fuels the converter's load there).
+## `idle_rpm` on the rigid crank.
+static func converter_free_rpm(p_spec: VehicleSpec, fuel: float) -> float:
 	if not drives_wheels(p_spec):
 		return p_spec.idle_rpm
 	var stall := stall_rpm(p_spec)
-	var f := clampf(throttle, 0.0, 1.0)
+	var f := clampf(fuel, 0.0, 1.0)
 	if f >= 1.0:
 		return stall
 	var coef := TorqueConverter.capacity_coefficient(p_spec)
@@ -554,7 +601,8 @@ static func _held_turbine_balance(p_spec: VehicleSpec, at_rpm: float, f: float,
 
 ## The crank speed (rpm) a held body sits at, and a clutch's pull-away lands on: idle plus
 ## `launch_rpm_over_idle` where the spec declares one (a heavy AMT's launch target); on a converter
-## body its free rev at this pedal (`converter_free_rpm`); on any other clutch the line from idle to
+## body its free rev with the pedal read as the fuel (`converter_free_rpm`; the lock-up's line,
+## `lockup_holds`' COMPROMISE); on any other clutch the line from idle to
 ## the stall speed, linear in pedal. Every one but the AMT's is the stall speed at full pedal, so the
 ## foot brake is sized against it (`stall_axle_torque`).
 static func launch_target_rpm(p_spec: VehicleSpec, pedal: float) -> float:
@@ -566,12 +614,211 @@ static func launch_target_rpm(p_spec: VehicleSpec, pedal: float) -> float:
 
 
 ## The axle torque (N·m) full pedal in gear 1 makes with the wheels held: the curve at the launch
-## target, times a converter's stall torque ratio. What the foot brake must hold
-## (`BrakeSizing.stall_hold_margin`).
+## target, times a converter's stall torque ratio; on a CVT its relief (`cvt_max_axle_torque`), the
+## most its deepest ratio passes. What the foot brake must hold (`BrakeSizing.stall_hold_margin`).
 static func stall_axle_torque(p_spec: VehicleSpec) -> float:
+	if is_cvt(p_spec):
+		return maxf(p_spec.cvt_max_axle_torque, 0.0)
 	var ratio := maxf(p_spec.converter_stall_ratio, 1.0) \
 			if p_spec.coupling == VehicleSpec.Coupling.CONVERTER else 1.0
 	return wheel_torque(p_spec, launch_target_rpm(p_spec, 1.0), 1.0, 1) * ratio
+
+
+# --- power-split CVT (`spec.cvt_range_tops`) -------------------------------------------------
+## An Eccom-class box (ZF; Deere's AutoPowr): the ratio `cvt_i` (gearbox output over input speed,
+## signed, R negative) is drivetrain state the controller moves (`cvt_ratio_step`), solved as the
+## gear in the spin step at the overall speed ratio `k = cvt_i / final_drive` (`_solve_cvt`), so a
+## ratio of 0 is a hold, never a division: active standstill, the park pawl's form at the
+## hydrostatic relief (`cvt_max_axle_torque`). Its mechanical ranges change synchronously as it
+## drives, and the gear byte publishes the one engaged. No `ShiftPolicy`, no launch clutch, no shift.
+## Sources and figures: docs/heavy_vehicles.md § The CVT tractor.
+
+## The variator's efficiency, 45-degree bent-axis hydrostatic units (Renius & Resch, ASAE Lecture 29,
+## 2005, p. 25).
+const CVT_VARIATOR_EFF := 0.85
+## The hydrostatic path's share of the power at a range's bottom and top, through zero at its lock-up
+## (the Eccom's, Renius & Resch Fig. 40: about +40 % to -35 %).
+const CVT_SHARE_BOTTOM := 0.40
+const CVT_SHARE_TOP := -0.35
+## A range is published past its top by this share of the boundary, so a ratio held on a synchronous
+## point does not chatter the byte (an estimate; the engaged range sets the efficiency within it).
+const CVT_RANGE_HYSTERESIS := 0.02
+## Seconds limit-load control takes to pull the ratio back toward holding the crank on its limit
+## speed (`cvt_ratio_step`; an estimate, under the crank's own settle).
+const CVT_LOAD_TAU_S := 0.3
+## Reverse's top speed (km/h): Renius & Resch's market demand, "from zero to about 25 km/h".
+const CVT_REVERSE_KMH := 25.0
+## SPN 526's largest value (0.001 per bit over two bytes): the ratio active standstill publishes.
+const GEAR_RATIO_MAX := 64.255
+
+## The CVT's current ratio (gearbox output over input, signed) and engaged range (1-based).
+var cvt_i := 0.0
+var cvt_range := 1
+## The top ratio the box may reach this tick: its last range's, or the range a bridge byte selects.
+var _cvt_top := 0.0
+## The body runs at or past `WheelDrive.PAWL_ENGAGE_SPEED` this tick: active standstill holds
+## nothing there (`standstill_hold`), and a ratio of 0 re-synchronises to the wheels.
+var _cvt_moving := false
+
+
+## The body runs a CVT: its ranges are declared, and its engine drives wheels.
+static func is_cvt(p_spec: VehicleSpec) -> bool:
+	return not p_spec.cvt_range_tops.is_empty() and drives_wheels(p_spec)
+
+
+## The top ratio of range `byte` (a byte past the last range reads the last, as a short box reads
+## its top ratio).
+static func cvt_top_ratio(p_spec: VehicleSpec, byte: int) -> float:
+	var tops := p_spec.cvt_range_tops
+	return tops[clampi(byte, 1, tops.size()) - 1]
+
+
+## The range holding `i_abs` from `current`: up past a top, down under the one below, each by
+## CVT_RANGE_HYSTERESIS.
+static func cvt_range_for(p_spec: VehicleSpec, i_abs: float, current: int) -> int:
+	var tops := p_spec.cvt_range_tops
+	var r := clampi(current, 1, tops.size())
+	while r < tops.size() and i_abs > tops[r - 1] * (1.0 + CVT_RANGE_HYSTERESIS):
+		r += 1
+	while r > 1 and i_abs < tops[r - 2] * (1.0 - CVT_RANGE_HYSTERESIS):
+		r -= 1
+	return r
+
+
+## The driveline efficiency at `i_abs` in range `range_i`: `efficiency` (the stepped box's, axles
+## included) less the variator's loss on the hydrostatic share, which runs linearly from
+## CVT_SHARE_BOTTOM at the range's bottom to CVT_SHARE_TOP at its top, so it peaks at each lock-up.
+## COMPROMISE: range I's circulating power near zero speed is not modelled, where an input-coupled
+## split's rises hyperbolically (Renius & Resch Fig. 30); it is traction-limited there, and the
+## crank's load at a ratio near 0 is near 0 either way.
+static func cvt_efficiency(p_spec: VehicleSpec, i_abs: float, range_i: int) -> float:
+	var tops := p_spec.cvt_range_tops
+	var r := clampi(range_i, 1, tops.size())
+	var lo := tops[r - 2] if r > 1 else 0.0
+	var u := clampf((i_abs - lo) / maxf(tops[r - 1] - lo, 1e-6), 0.0, 1.0)
+	var share := lerpf(CVT_SHARE_BOTTOM, CVT_SHARE_TOP, u)
+	return p_spec.efficiency * (1.0 - absf(share) * (1.0 - CVT_VARIATOR_EFF))
+
+
+## The forward top speed (m/s): the road-speed governor's, else the last range at the redline.
+static func cvt_top_speed(p_spec: VehicleSpec) -> float:
+	if p_spec.speed_limit_kmh > 0.0:
+		return p_spec.speed_limit_kmh / 3.6
+	return cvt_top_ratio(p_spec, TOP_GEAR) / p_spec.final_drive \
+			* p_spec.redline_rpm / RADS_TO_RPM * p_spec.ground_drive.drive_radius()
+
+
+## The ground speed (m/s, signed with `dir`) the CVT's foot pedal commands: its share of the top
+## speed (`cvt_top_speed` forward, CVT_REVERSE_KMH back), never past `cap_kmh` (a towing host's,
+## `speed_cap_kmh`): a CVT governs road speed through its ratio, not by cutting the engine's fuel
+## (`_fuel_step`). 0 in N or P, and under the foot brake, which brings the box to active standstill
+## (Deere's AutoClutch). The hand throttle commands none: it sets engine speed only, so it never
+## pulls away alone.
+static func cvt_speed_command(p_spec: VehicleSpec, pedal: float, dir: float, p_braking: bool,
+		cap_kmh := 0.0) -> float:
+	if p_braking or dir == 0.0:
+		return 0.0
+	var top := CVT_REVERSE_KMH / 3.6 if dir < 0.0 else cvt_top_speed(p_spec)
+	if cap_kmh > 0.0:
+		top = minf(top, cap_kmh / 3.6)
+	return dir * clampf(pedal, 0.0, 1.0) * top
+
+
+## Limit-load control's engine speed (rpm) at `p_demand`: the governor line's full-fuel end, never
+## over the curve's peak power (`PedalMap.rated_rpm`; at the top setting the line is the curve's own
+## tail). Held there, the engine makes its most at that setting and the ground speed gives.
+static func cvt_limit_rpm(p_spec: VehicleSpec, p_demand: float) -> float:
+	return minf(PedalMap.governor_line(p_spec, p_demand).y, PedalMap.rated_rpm(p_spec))
+
+
+## One tick of the CVT's ratio from `i`: toward the ratio that turns the crank's speed into `v_cmd`
+## (m/s), capped at ±`top_i` (a range cap is reached at the rate too), at no more than
+## `cvt_accel_ms2` of ground acceleration at that crank speed, so the box holds the ground speed
+## while the engine droops on its governor line under load, and never more than a step past the
+## wheels' own ratio (pressure cut-off); under `limit_rpm` pulled back in proportion over
+## CVT_LOAD_TAU_S (limit-load control: the crank holds its limit speed and the ground speed gives,
+## through a launch or a draft onset). Then two hard bounds past the rate, as a clutch's anti-stall
+## opens it: a crank under idle lets the ratio follow the wheels (`wheel_omega`, rad/s at the axle)
+## down to idle, to 0 against wheels the brakes hold still, and the ratio on the wheels' side never
+## puts the crank past the redline.
+static func cvt_ratio_step(p_spec: VehicleSpec, i: float, v_cmd: float, crank_rpm: float,
+		limit_rpm: float, wheel_omega: float, top_i: float, delta: float) -> float:
+	var fd := p_spec.final_drive
+	var per_ms := fd / (p_spec.ground_drive.drive_radius()
+			* maxf(crank_rpm, p_spec.idle_rpm) / RADS_TO_RPM)
+	var step := maxf(p_spec.cvt_accel_ms2, 0.0) * per_ms * delta
+	var next := move_toward(i, clampf(v_cmd * per_ms, -top_i, top_i), step)
+	# Pressure cut-off: the ratio never grows more than a step past the wheels' own (`wheel_omega`
+	# through it at this crank speed), so an overload the relief slips under holds the ratio
+	# rather than winding it up against wheels that do not follow.
+	var lead := absf(wheel_omega) * fd / (maxf(crank_rpm, p_spec.idle_rpm) / RADS_TO_RPM) + step
+	if absf(next) > absf(i) and absf(next) > lead:
+		next = signf(next) * maxf(absf(i), lead)
+	if crank_rpm < limit_rpm:
+		var pulled := lerpf(i, i * crank_rpm / limit_rpm, 1.0 - exp(-delta / CVT_LOAD_TAU_S))
+		if absf(pulled) < absf(next):
+			next = pulled
+	if crank_rpm < p_spec.idle_rpm and wheel_omega * next >= 0.0:
+		var stall_i := wheel_omega * fd / (p_spec.idle_rpm / RADS_TO_RPM)
+		next = minf(next, stall_i) if next > 0.0 else maxf(next, stall_i)
+	# The redline bound binds only past a step: under it the wheels turn at the crank's speed through
+	# the ratio, so a bound read off them only shrinks it by the crank's share of the redline a tick
+	# and never lets it reach or cross 0 (a stop, a direction change).
+	if i * wheel_omega > 0.0:
+		var over_i := wheel_omega * fd / (p_spec.redline_rpm / RADS_TO_RPM)
+		if absf(over_i) > step:
+			next = maxf(next, over_i) if wheel_omega > 0.0 else minf(next, over_i)
+	return next
+
+
+## The CVT's torque capacity at the axle (N·m) at overall speed ratio `k`: the range clutches'
+## `capacity` at the crank (N·m) through `k` with `factor` (eta driving, 1 / eta in overrun), never
+## past the relief; the relief alone at `k` 0.
+static func cvt_axle_capacity(p_spec: VehicleSpec, capacity: float, k: float,
+		factor: float) -> float:
+	var relief := maxf(p_spec.cvt_max_axle_torque, 0.0)
+	if k == 0.0:
+		return relief
+	return minf(capacity * factor / absf(k), relief)
+
+
+## SPN 526's actual gear ratio: the gearbox's input speed over its output (no final drive),
+## unsigned, 0 in N or P. On a CVT its live ratio `i` (output over input) inverted, GEAR_RATIO_MAX at
+## active standstill.
+static func gear_ratio_of(p_spec: VehicleSpec, byte: int, i: float) -> float:
+	if is_open(byte):
+		return 0.0
+	if is_cvt(p_spec):
+		return GEAR_RATIO_MAX if absf(i) * GEAR_RATIO_MAX <= 1.0 else 1.0 / absf(i)
+	if is_reverse(byte):
+		return p_spec.reverse_ratio
+	var n := p_spec.gear_ratios.size()
+	return p_spec.gear_ratios[mini(byte, n) - 1] if n > 0 else 0.0
+
+
+## Active standstill's hold at the drive axle (N·m): the relief, while a locked CVT sits at a ratio
+## of 0 under `WheelDrive.PAWL_ENGAGE_SPEED`, the pawl's own gate; else 0. The owner hands it to the
+## wheels' lock (`WheelDrive.standstill_lock`), the park pawl's path with its stiction, as the
+## transmission holding the output still; the coupling then passes nothing (`_process_cvt`), so the
+## two never hold twice. Faster, brakes that hold the wheels still bring the ratio to 0 while the
+## body slides, and a hold there would keep them locked once the brakes let go.
+func standstill_hold() -> float:
+	if not is_cvt(spec) or coupling_state != CouplingState.LOCKED or cvt_i != 0.0 \
+			or _cvt_moving:
+		return 0.0
+	return maxf(spec.cvt_max_axle_torque, 0.0)
+
+
+## The gearbox as a spec sheet names it: its forward ratios' count, or a CVT's ranges.
+static func gears_label(p_spec: VehicleSpec) -> String:
+	if is_cvt(p_spec):
+		return "CVT, %d ranges" % p_spec.cvt_range_tops.size()
+	return "%d" % p_spec.gear_ratios.size()
+
+
+## This tick's SPN 526 ratio (`gear_ratio_of`).
+func gearbox_ratio() -> float:
+	return gear_ratio_of(spec, gear_byte, cvt_i)
 
 
 # --- auxiliary driveline retarder (truck, J1939 SPN 520) ------------------------------------
@@ -723,25 +970,25 @@ static func is_shift(from_byte: int, to_byte: int) -> bool:
 	return from_byte != to_byte and not is_open(from_byte) and not is_open(to_byte)
 
 
-## The automatic's shift step within D1-D6, as `ShiftPolicy.next_gear` gives it at `at_rpm` (the
+## The automatic's shift step within D1-D24, as `ShiftPolicy.next_gear` gives it at `at_rpm` (the
 ## road speed's, in `byte`), the pedal, the time in gear, an armed kickdown, the road load, the
 ## lowest gear a downshift takes, the foot brake, whether the load reads as a grade and the rig's
-## mass; N/R/P never auto-shift. The defaults are a full pedal with no state: the fixed-threshold
-## step.
+## mass and grip; N/R/P never auto-shift. The defaults are a full pedal with no state: the
+## fixed-threshold step.
 static func auto_shift(p_spec: VehicleSpec, byte: int, at_rpm: float, pedal := 1.0,
 		gear_s := INF, kickdown := false, road := NAN, floor_gear := 1,
-		p_braking := false, grade := true, mass := 0.0) -> int:
+		p_braking := false, grade := true, mass := 0.0, grip := INF) -> int:
 	if not is_drive(byte):
 		return normalize_byte(byte)
 	return ShiftPolicy.next_gear(p_spec, byte, at_rpm, pedal, gear_s, kickdown, road, floor_gear,
-			p_braking, grade, mass)
+			p_braking, grade, mass, grip)
 
 
 ## Per-tick update: adopt the gear request, then either run the rigid crank and return the
 ## drive-axle torque (Nm), or, on a body that drives wheels, run the controller and the crank's
 ## predictor and return 0: there the drive reaches the wheels only through `couple`, which the
 ## wheels' solve calls this same tick, so the wheels' own steps carry none.
-## auto=true (local input): request is a direction (N/enter-D/R), box auto-shifts within D1-D6.
+## auto=true (local input): request is a direction (N/enter-D/R), box auto-shifts within D1-D24.
 ## auto=false (bridge): byte is exact, auto-shift bypassed.
 ## `ground_speed` (not `drive_wheel_omega`) drives auto-shift so wheelspin can't fake a high rpm.
 func process(delta: float, throttle: float, drive_wheel_omega: float,
@@ -753,12 +1000,23 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 	if drive_inhibit and not is_open(req):
 		req = GEAR_N
 	var prev_byte := gear_byte
-	# The policy reads the pedal, never `applied_throttle` (ShiftPolicy's header).
+	# The policy reads the driver's demand, never `applied_throttle` (ShiftPolicy's header): the
+	# pedal, or on an all-speed governor the higher of it and the hand throttle.
 	var pedal := clampf(throttle, 0.0, 1.0)
+	var demand := PedalMap.demand(spec, pedal, hand_throttle)
 	var at_rest := absf(ground_speed) < HillHold.REST_SPEED
 	_update_road_load(delta, ground_speed, at_rest)
 	var kick := false
-	if auto:
+	if is_cvt(spec):
+		# The CVT's byte: the direction here, the range once the ratio moves (`_process_cvt`). A
+		# bridge's exact drive byte caps the range.
+		_cvt_top = cvt_top_ratio(spec, req if is_drive(req) and not auto else TOP_GEAR)
+		if not is_drive(req):
+			gear_byte = req
+		elif not is_drive(gear_byte):
+			gear_byte = cvt_range
+		_launching = false
+	elif auto:
 		var starts := spec.start_gear_max > 1
 		if req == GEAR_R or is_open(req):
 			gear_byte = req
@@ -766,19 +1024,19 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 			gear_byte = _pick_start_gear() if starts and at_rest else req
 		if is_drive(gear_byte):
 			if starts:
-				gear_byte = _start_gear_step(delta, pedal, at_rest)
+				gear_byte = _start_gear_step(delta, pedal, demand, at_rest)
 			# Road speed, not the drive wheel: wheelspin over-reads rpm and upshifts early.
 			var road_omega := ground_speed / road_radius
 			var gear_s := _gear_s if gear_byte == prev_byte else 0.0
 			var from := gear_byte
 			var at_rpm := rpm_from_wheel(spec, road_omega, from)
 			var floor_gear := _start_gear if _launching else 1
-			kick = ShiftPolicy.kickdown_armed(spec, _kickdown, pedal, last_pedal)
-			gear_byte = auto_shift(spec, from, at_rpm, pedal, gear_s, kick, road_load, floor_gear,
+			kick = ShiftPolicy.kickdown_armed(spec, _kickdown, demand, last_pedal)
+			gear_byte = auto_shift(spec, from, at_rpm, demand, gear_s, kick, road_load, floor_gear,
 					braking, ShiftPolicy.on_grade(spec, road_load, ground_speed, load_mass_kg,
 							rolling_crr),
-					load_mass_kg)
-			kick = kick and not ShiftPolicy.kickdown_spent(spec, from, at_rpm, pedal, gear_s,
+					load_mass_kg, _grip())
+			kick = kick and not ShiftPolicy.kickdown_spent(spec, from, at_rpm, demand, gear_s,
 					floor_gear)
 			# Against the limiter, take the tallest gear that will hold.
 			if governor_scale(spec, ground_speed, speed_cap_kmh) < 1.0:
@@ -790,14 +1048,14 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 		_launching = false
 	_kickdown = kick
 	_gear_s = 0.0 if gear_byte != prev_byte else _gear_s + delta
-	last_pedal = pedal
+	last_pedal = demand
 	# One latch per tick however many gears governed_upshift walked: the comparison is against
 	# the byte this tick STARTED with.
 	if is_shift(prev_byte, gear_byte):
 		_shift_cut_ticks = shift_cut_ticks(spec.shift_cut_s, delta)
 	ramp = ramp_step(spec, ramp, prev_byte, gear_byte, throttle, ground_speed, delta)
 	if crank:
-		_process_crank(delta, throttle, drive_wheel_omega, ground_speed, prev_byte)
+		_process_crank(delta, pedal, demand, drive_wheel_omega, ground_speed, prev_byte)
 		return 0.0
 
 	# The rigid crank. In N or P the wheels say nothing about crank speed, so a free-rev model
@@ -849,69 +1107,68 @@ func _update_road_load(delta: float, ground_speed: float, at_rest: bool) -> void
 	_last_speed = ground_speed
 
 
-## The start gear for a pull-away from here (`ShiftPolicy.start_gear` on `standing_load`), and the
-## launch it starts.
+## `drive_grip_n` as the policy reads it: INF (no cap) with no estimate.
+func _grip() -> float:
+	return drive_grip_n if drive_grip_n > 0.0 else INF
+
+
+## The start gear for a pull-away from here (`ShiftPolicy.start_gear` on `standing_load`, the rig's
+## mass and grip), and the launch it starts.
 func _pick_start_gear() -> int:
-	_start_gear = ShiftPolicy.start_gear(spec, standing_load)
+	_start_gear = ShiftPolicy.start_gear(spec, standing_load, 1.0, load_mass_kg, _grip())
 	_launching = true
 	_launch_s = 0.0
 	return _start_gear
 
 
 ## The start gear's tick, in D (`spec.start_gear_max` above 1). At rest with the pedal up the box
-## returns to the start gear for the load standing there, judged at full pedal. Through the launch
-## it steps down to the gear the driver's pedal holds that load in (`ShiftPolicy.start_gear` at that
-## pedal), never up: the moving estimate (`road_load`) reads a launch's transients, a trailer's
-## brakes still venting, as load. A pull-away held at rest with the pedal down for
-## `launch_engage_s + shift_dwell_s` steps it down one, and again after as long (a launch the gear
-## cannot move). The launch ends once the coupling locks, or on a lift while rolling. Returns the
-## byte to take.
-func _start_gear_step(delta: float, pedal: float, at_rest: bool) -> int:
+## re-picks for the load standing there, at full pedal. Through the launch it steps down to what the
+## driver's `demand` holds (`ShiftPolicy.start_gear`), never up: the moving estimate reads a launch's
+## transients as load. Held at rest with the pedal down for `launch_engage_s + shift_dwell_s`, it
+## steps to a deeper ratio (`ShiftPolicy.start_step_down`), and again after as long. The launch ends
+## once the coupling locks, or on a lift while rolling; the lock starts the dwell's clock, as tyres
+## slipping at their peak lock a heavy launch under the downshift point while it gains speed.
+func _start_gear_step(delta: float, pedal: float, demand: float, at_rest: bool) -> int:
 	if at_rest and pedal <= 0.0:
 		return _pick_start_gear()
 	if not _launching:
 		return gear_byte
-	if coupling_state == CouplingState.LOCKED or (not at_rest and pedal <= 0.0):
+	if coupling_state == CouplingState.LOCKED:
+		_launching = false
+		_gear_s = 0.0
+		return gear_byte
+	if not at_rest and pedal <= 0.0:
 		_launching = false
 		return gear_byte
-	var fit := ShiftPolicy.start_gear(spec, standing_load, pedal)
+	var fit := ShiftPolicy.start_gear(spec, standing_load, demand, load_mass_kg, _grip())
 	if fit < _start_gear:
 		_start_gear = fit
 		_launch_s = 0.0
 		return _start_gear
 	_launch_s = _launch_s + delta if at_rest else 0.0
 	if _start_gear > 1 and _launch_s >= spec.launch_engage_s + spec.shift_dwell_s:
-		_start_gear -= 1
+		_start_gear = ShiftPolicy.start_step_down(spec, _start_gear)
 		_launch_s = 0.0
 		return _start_gear
 	return gear_byte
 
 
-## The crank path's half of `process`: the controller's state, the delivered fuel and the crank's
-## predictor, plus the capacity `couple` solves with.
-func _process_crank(delta: float, throttle: float, drive_wheel_omega: float,
-		ground_speed: float, prev_byte: int) -> void:
-	var pedal := clampf(throttle, 0.0, 1.0)
-	if running and not _was_running and rpm < spec.idle_rpm:
-		rpm = spec.idle_rpm  # the key's Ignition edge: the starter, not modelled
-	_was_running = running
-	var omega := rpm / RADS_TO_RPM
-	var g := ratio_for_byte(spec, gear_byte)
-	var sync := drive_wheel_omega * g
-	coupling_state = coupling_step(spec, coupling_state, prev_byte, gear_byte, pedal, rpm,
-			sync * RADS_TO_RPM, running, abs_release, braking)
-	if is_shift(prev_byte, gear_byte):
-		_inertia_phase = true
-		_handover_rate = handover_rate(spec, omega - sync)
-	if coupling_state != CouplingState.SLIPPING:
-		_inertia_phase = false
-		_handover_rate = INF
-
-	# The fuel: the pedal through the governor, the limiter's hard cut on the crank and the shift
-	# cut; then the controller's floors (idle, drag-torque control), which no cut lifts.
+## The tick's delivered fuel (0..1) and the crank's predictor at it: the demand through its map (or,
+## in N or P with a PTO set speed, the governor at it: `pto_set_rpm`) and
+## the road-speed governor (on a stepped box; a CVT's ratio governs, `cvt_speed_command`), the
+## limiter's hard cut on the crank and the shift cut; then the
+## controller's floors (idle, drag-torque control), which no cut lifts. Sets `_compliance`,
+## `_pred_base` and `_pred_per_fuel`.
+func _fuel_step(delta: float, demand: float, ground_speed: float, omega: float) -> float:
+	var pto_set := pto_set_rpm if is_open(gear_byte) else 0.0
+	var pto_governs := pto_set > 0.0
+	if pto_governs:
+		demand = PedalMap.demand(spec, demand, hand_throttle, pto_set)
 	var fuel := 0.0
 	if running:
-		fuel = pedal * governor_scale(spec, ground_speed, speed_cap_kmh)
+		fuel = PedalMap.fuel(spec, demand, rpm, pto_governs)
+		if not is_cvt(spec):
+			fuel *= governor_scale(spec, ground_speed, speed_cap_kmh)
 		if limiter_cut(spec, rpm) or _landed:
 			fuel = 0.0
 	on_limiter = running and (limiter_cut(spec, rpm) or _landed)
@@ -922,16 +1179,58 @@ func _process_crank(delta: float, throttle: float, drive_wheel_omega: float,
 		_shift_cut_ticks -= 1
 		fuel = 0.0
 	# The step's stiffness is read at the pedal's fuel, before the floors: they move the fuel a
-	# little, and the step stays semi-implicit either way.
-	_compliance = crank_compliance(spec, rpm, fuel, delta)
+	# little, and the step stays semi-implicit either way. The pedal map's own slope in rpm is left
+	# out: the petrol request's steepest fall is k dt / J 0.23 on `race-future`'s crank, explicit
+	# and well inside the step's limit of 2. An all-speed governor's line is not: on a tick its line
+	# governs (`PedalMap.governor_stiffness`, the line's fuel strictly between 0 and 1) with this
+	# fuel inside (0, 1) too, the line's slope is the stiffness. A cap that holds the fuel under the
+	# line's (the road-speed governor, the torque restore) keeps that slope, which over-damps the
+	# step and never destabilises it.
+	var governed := PedalMap.governor_stiffness(spec, demand, rpm, pto_governs) \
+			if running and fuel > 0.0 and fuel < 1.0 else NAN
+	_compliance = crank_compliance(spec, rpm, fuel, delta, governed)
+	# A free crank's governor fuels no more than lands it on its setting this tick (`fuel_to_land`):
+	# read at the tick's start, full fuel carries it ~90 rpm a tick, past an isochronous line ~1 rpm
+	# wide, which it would then jump both ways and cycle on. In gear the wheels hold it under.
+	if running and is_open(gear_byte) \
+			and (spec.pedal_map == PedalMap.Kind.ALL_SPEED or pto_governs):
+		fuel = minf(fuel, fuel_to_land(spec, omega, PedalMap.setting_rpm(spec, demand) / RADS_TO_RPM,
+				_compliance, accessory_torque))
 	if running:
-		fuel = maxf(fuel, fuel_to_land(spec, omega, spec.idle_rpm / RADS_TO_RPM, _compliance))
+		fuel = maxf(fuel, fuel_to_land(spec, omega, spec.idle_rpm / RADS_TO_RPM, _compliance,
+				accessory_torque))
 		if drag_control:
-			fuel = maxf(fuel, drag_fuel(spec, rpm))
+			fuel = maxf(fuel, drag_fuel(spec, rpm, accessory_torque))
 	var unfuelled := crank_torque(spec, rpm, 0.0, running)
-	_pred_base = omega + unfuelled * _compliance
+	_pred_base = omega + (unfuelled - accessory_torque) * _compliance
 	_pred_per_fuel = (crank_torque(spec, rpm, 1.0, running) - unfuelled) * _compliance \
 			if running else 0.0
+	return fuel
+
+
+## The crank path's half of `process`: the controller's state, the delivered fuel and the crank's
+## predictor, plus the capacity `couple` solves with. The fuel and the launch line read `demand`; a
+## clutch's opening at rest reads the `pedal` (the hand throttle never pulls away alone).
+func _process_crank(delta: float, pedal: float, demand: float, drive_wheel_omega: float,
+		ground_speed: float, prev_byte: int) -> void:
+	if running and not _was_running and rpm < spec.idle_rpm:
+		rpm = spec.idle_rpm  # the key's Ignition edge: the starter, not modelled
+	_was_running = running
+	var omega := rpm / RADS_TO_RPM
+	if is_cvt(spec):
+		_process_cvt(delta, pedal, demand, omega, drive_wheel_omega, ground_speed)
+		return
+	var g := ratio_for_byte(spec, gear_byte)
+	var sync := drive_wheel_omega * g
+	coupling_state = coupling_step(spec, coupling_state, prev_byte, gear_byte, pedal, rpm,
+			sync * RADS_TO_RPM, running, abs_release, braking)
+	if is_shift(prev_byte, gear_byte):
+		_inertia_phase = true
+		_handover_rate = handover_rate(spec, omega - sync)
+	if coupling_state != CouplingState.SLIPPING:
+		_inertia_phase = false
+		_handover_rate = INF
+	var fuel := _fuel_step(delta, demand, ground_speed, omega)
 
 	# The capacity the controller commands at the crank, never past the rating times the ramp.
 	var ceiling := clutch_rating(spec) * ramp
@@ -944,7 +1243,7 @@ func _process_crank(delta: float, throttle: float, drive_wheel_omega: float,
 			_capacity = ceiling
 			_drives = _predict(fuel) >= sync
 		CouplingState.SLIPPING:
-			var line := launch_target_rpm(spec, pedal) / RADS_TO_RPM
+			var line := launch_target_rpm(spec, demand) / RADS_TO_RPM
 			var closing := sync >= line and not lock_up_released(spec, braking)
 			if spec.coupling == VehicleSpec.Coupling.CONVERTER and not (_inertia_phase and closing):
 				# The converter law, the lock-up closing in parallel once the two sides are past the
@@ -972,18 +1271,21 @@ func _process_crank(delta: float, throttle: float, drive_wheel_omega: float,
 					_handover_rate = handover_rate(spec, omega - sync)
 				if _inertia_phase and _predict(fuel) >= sync and not is_inf(_handover_rate):
 					var target := maxf(omega - _handover_rate * delta, sync)
-					if spec.coupling == VehicleSpec.Coupling.CONVERTER:
+					# A seamless box (no `shift_cut_s`: a converter automatic, a powershift) reduces
+					# the engine; a cut box's interruption is its cut.
+					if spec.shift_cut_s <= 0.0:
 						fuel = handover_fuel(_pred_base, _pred_per_fuel, target,
-								crank_torque(spec, rpm, fuel, running), _compliance, fuel)
+								crank_torque(spec, rpm, fuel, running) - accessory_torque, _compliance,
+								fuel)
 					# Nothing while the crank's own motoring already falls faster (a cut). The
 					# phase's last tick keeps the rating, so the solve closes the slip and locks
-					# (on a converter body at the reduced fuel, so it passes the demand there too).
+					# (on a seamless box at the reduced fuel, so it passes the demand there too).
 					if target > sync:
 						_capacity = landing_capacity(_predict(fuel), target, _compliance) \
 								if _predict(fuel) > target else 0.0
 				if _predict(fuel) < sync:
 					var blip := fuel_to_land(spec, omega,
-							minf(sync, spec.redline_rpm / RADS_TO_RPM), _compliance)
+							minf(sync, spec.redline_rpm / RADS_TO_RPM), _compliance, accessory_torque)
 					fuel = maxf(fuel, blip)
 					if _predict(fuel) < sync and blip >= 1.0:
 						_capacity = 0.0
@@ -997,10 +1299,49 @@ func _process_crank(delta: float, throttle: float, drive_wheel_omega: float,
 				# mud chases into a limit cycle).
 				if _predict(fuel) > line:
 					_capacity = minf(landing_capacity(_predict(fuel), line, _compliance),
-							maxf(fuel * engine_torque(spec, rpm), 0.0))
+							maxf(fuel * engine_torque(spec, rpm) - accessory_torque, 0.0))
 	_capacity = minf(_capacity, ceiling)
 	var rating := clutch_rating(spec)
 	clutch = _capacity / rating if rating > 0.0 else 0.0
+	applied_throttle = fuel
+
+
+## The CVT's half of `_process_crank`: the fuel (the all-speed governor's law, with no road-speed
+## fade), then the ratio (`cvt_ratio_step`) the solve will hold, chosen before it so the solve
+## carries what the ratio's change takes from the crank's inertia. Open with the key off and in N or
+## P; otherwise locked, the relief its only slip, and at a ratio of 0 at rest its hold the wheels'
+## (`standstill_hold`). Engaged from open, or at a ratio of 0 on the move, the ratio is synchronised
+## to the wheels first. The foot `pedal` commands ground speed; the `demand` sets the engine speed
+## and the limit-load speed.
+func _process_cvt(delta: float, pedal: float, demand: float, omega: float, wheel_omega: float,
+		ground_speed: float) -> void:
+	var fuel := _fuel_step(delta, demand, ground_speed, omega)
+	var dir := drive_sign(gear_byte)
+	var was_open := coupling_state == CouplingState.OPEN
+	_cvt_moving = absf(ground_speed) >= WheelDrive.PAWL_ENGAGE_SPEED
+	coupling_state = CouplingState.OPEN if not running or dir == 0.0 else CouplingState.LOCKED
+	converting = false
+	_inertia_phase = false
+	_stall_bound = 0.0
+	_capacity = 0.0
+	_drives = true
+	if coupling_state == CouplingState.OPEN:
+		cvt_i = 0.0
+	else:
+		if was_open or (cvt_i == 0.0 and _cvt_moving):
+			cvt_i = clampf(wheel_omega * spec.final_drive
+					/ maxf(omega, spec.idle_rpm / RADS_TO_RPM), -_cvt_top, _cvt_top)
+		cvt_i = cvt_ratio_step(spec, cvt_i,
+				cvt_speed_command(spec, pedal, dir, braking, speed_cap_kmh), rpm,
+				cvt_limit_rpm(spec, demand), wheel_omega, _cvt_top, delta)
+		cvt_range = cvt_range_for(spec, absf(cvt_i), cvt_range)
+		if dir > 0.0:
+			gear_byte = cvt_range
+		# At a ratio of 0 the hold is the wheels' lock (`standstill_hold`), not the coupling's.
+		_capacity = clutch_rating(spec) if cvt_i != 0.0 else 0.0
+		var k := cvt_i / spec.final_drive
+		_drives = k == 0.0 or (_predict(fuel) * k - wheel_omega) * signf(k) >= 0.0
+	clutch = 1.0 if _capacity > 0.0 else 0.0
 	applied_throttle = fuel
 
 
@@ -1016,14 +1357,16 @@ func _predict(fuel: float) -> float:
 ## holds; while `converting`, `TorqueConverter.solve` runs against `wheel_spin` instead. Locks a
 ## coupling that carried under its capacity. Returns the axle torque; 0 in N, P or open.
 func couple(wheel_solve: Callable, wheel_spin: Callable) -> float:
+	var cvt := is_cvt(spec)
 	var g := ratio_for_byte(spec, gear_byte)
 	var fuel := applied_throttle
 	var red := spec.redline_rpm / RADS_TO_RPM
-	if g == 0.0 or (not converting and _capacity <= 0.0):
+	if (g == 0.0 and not cvt) or (not converting and _capacity <= 0.0):
 		overrun = false
 		coupling_torque = 0.0
 		if _predict(fuel) > red and fuel > 0.0:
-			fuel = minf(fuel, fuel_to_land(spec, rpm / RADS_TO_RPM, red, _compliance))
+			fuel = minf(fuel, fuel_to_land(spec, rpm / RADS_TO_RPM, red, _compliance,
+					accessory_torque))
 			_landed = true
 			on_limiter = true
 		applied_throttle = fuel
@@ -1050,7 +1393,7 @@ func couple(wheel_solve: Callable, wheel_spin: Callable) -> float:
 		on_limiter = true
 	applied_throttle = fuel
 	var t: float = solved[0]
-	overrun = t * g < 0.0
+	overrun = t * (cvt_i if cvt else g) < 0.0
 	# An engine does not turn backwards: the controller opens the coupling before the wheels could
 	# drag it there.
 	rpm = maxf(solved[1], 0.0) * RADS_TO_RPM
@@ -1066,6 +1409,8 @@ func couple(wheel_solve: Callable, wheel_spin: Callable) -> float:
 ## settled spin (rad/s), whether it carried less than its capacity (it locks), the torque at the
 ## crank].
 func _solve_output(wheel_solve: Callable, wheel_spin: Callable, fuel: float, g: float) -> Array:
+	if is_cvt(spec):
+		return _solve_cvt(wheel_solve, fuel)
 	var pred := _predict(fuel)
 	var eta := maxf(spec.efficiency, 0.05)
 	if converting:
@@ -1083,6 +1428,24 @@ func _solve_output(wheel_solve: Callable, wheel_spin: Callable, fuel: float, g: 
 	return [t, pred - crank_load * _compliance, absf(t) < capacity, crank_load]
 
 
+## `_solve_output` on a CVT, at the overall speed ratio `k = cvt_i / final_drive` rather than its
+## inverse, so a ratio of 0 holds (spin 0, compliance 0, the relief: the park pawl's form) and never
+## divides. The loss is the range's (`cvt_efficiency`), by direction as the stepped box's.
+func _solve_cvt(wheel_solve: Callable, fuel: float) -> Array:
+	var pred := _predict(fuel)
+	var k := cvt_i / spec.final_drive
+	var eta := maxf(cvt_efficiency(spec, absf(cvt_i), cvt_range), 0.05)
+	var reflect := _compliance * k * k
+	var capacity := cvt_axle_capacity(spec, _capacity, k, eta)
+	var t: float = wheel_solve.call(pred * k, reflect / eta, capacity)
+	var crank_load := t * k / eta
+	if t * k < 0.0:
+		capacity = cvt_axle_capacity(spec, _capacity, k, 1.0 / eta)
+		t = wheel_solve.call(pred * k, reflect * eta, capacity)
+		crank_load = t * k * eta
+	return [t, pred - crank_load * _compliance, absf(t) < capacity, crank_load]
+
+
 ## The drive torque (N·m at the axle, signed with the gear) traction control may hold back across
 ## the driven wheels this tick: the coupling's capacity in drive (a converter's: its lock-up's plus
 ## what its law could pass against a held turbine), 0 in overrun or open. Each wheel's share bounds
@@ -1091,4 +1454,9 @@ func tcs_drive_torque() -> float:
 	var bound := _capacity + _stall_bound
 	if not _drives or bound <= 0.0:
 		return 0.0
+	if is_cvt(spec):
+		# Signed with the ratio, which a shuttle carries through 0 against the byte's direction.
+		var eta := maxf(cvt_efficiency(spec, absf(cvt_i), cvt_range), 0.05)
+		var dir := signf(cvt_i) if cvt_i != 0.0 else drive_sign(gear_byte)
+		return cvt_axle_capacity(spec, bound, cvt_i / spec.final_drive, eta) * dir
 	return bound * ratio_for_byte(spec, gear_byte) * maxf(spec.efficiency, 0.05)

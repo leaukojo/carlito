@@ -41,6 +41,18 @@ const DRAFT_SHAPE := Vector4(1183.0, 239.0, 0.0, 9.0)
 ## an estimate at any one.
 const RATED_DRAFT_N := 8570.0
 
+## PTO torque in D497's form, N·m at the 1000 rpm shaft with S in km/h: A 223, B -13.33, C 3.556, the
+## quadratic through the same trials' mean PTO torques, 215 / 271 / 391 N·m at 3 / 6 / 9 km/h over
+## their 6-15 cm (Balsari et al., as above: the means read only in excerpts of the paper, secondary).
+## Sihag et al. find a harrow's PTO torque quadratic in speed and linear in depth (an abstract).
+## Held above 9 km/h, the top of the three means. Citations: docs/sources.md § PTO power.
+const PTO_SHAPE := Vector4(223.0, -13.33, 3.556, 9.0)
+
+## Shaft power at 7 km/h, full depth, full soil: that curve's 303.9 N·m at 1000 rpm, 31.8 kW. The
+## trials' mean depth (~10 cm) is the drawn tines' 0.10 m. Linear in depth through zero, an
+## estimate: it reads 129 N·m at 6 cm and 3 km/h where the trials measured 116.
+const PTO_RATED_KW := 31.8
+
 @onready var _rotor: Node3D = $Rotor
 
 
@@ -66,6 +78,12 @@ func draft_rating() -> float:
 
 func draft_shape() -> Vector4:
 	return DRAFT_SHAPE
+
+
+## The rotors mill what the tines reach: rating x depth x soil x the curve's speed factor.
+func pto_power_kw(ground_kmh: float, ball_lift: float, soil01: float) -> float:
+	return PTO_RATED_KW * TractorTelemetry.draft_speed01(ground_kmh, PTO_SHAPE) \
+			* TractorTelemetry.draft_depth01(ball_lift, TINE_DEPTH_M) * clampf(soil01, 0.0, 1.0)
 
 
 func mass_kg() -> float:

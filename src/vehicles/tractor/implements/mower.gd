@@ -21,6 +21,12 @@ const TAIL_WHEEL_Z := 2.8
 ## the centre's lever over the wheel's.
 const GROUND_SHARE := MASS_CENTRE.z / TAIL_WHEEL_Z
 
+## Cutting power (kW): ASAE D497's disk mower, 5.0 kW per m of width (±30 %, no no-load term), on
+## the 2.14 m sweep, as Arizona's reproduction of the table and Rotz and Muhtar's selected figure
+## read it (secondary). D497 rates no single-spindle cutter; the disk mower is its vertical-axis
+## rotary row. Citations: docs/sources.md § PTO power.
+const CUT_KW := 5.0 * 2.14
+
 @onready var _rotor: Node3D = $Rotor
 
 
@@ -30,6 +36,14 @@ func connections() -> int:
 
 func device_class() -> int:
 	return CLASS_FORAGE
+
+
+## Cutting while the deck rides its tail wheel, faded out over its support lift as the linkage takes
+## it up. COMPROMISE: no level carries a crop, so the deck down is the deck cutting, and raised it
+## reads 0 where a spinning blade still takes its windage (no source sizes it); undoing it is a crop
+## model and a sourced no-load figure.
+func pto_power_kw(_ground_kmh: float, ball_lift: float, _soil01: float) -> float:
+	return CUT_KW * (1.0 - clampf(ball_lift / support_lift(), 0.0, 1.0))
 
 
 func mass_kg() -> float:

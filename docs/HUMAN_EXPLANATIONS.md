@@ -53,8 +53,8 @@ vehicle is a spec plus a scene), pure-math `Drivetrain`, one-raycast `RayWheel`,
 which subclasses extend only through `_make_telemetry()` and `_tick_extras()`. Detail:
 `docs/overview.md`, `docs/systems.md`.
 
-The **tractor** adds twenty ISOBUS-style signals. Press E to cycle the implement (spreader, plough,
-power harrow, mower, tipping trailer, or nothing); what a machine declares over the data cable
+The **tractor** adds twenty-one ISOBUS-style signals. Press E to cycle the implement (spreader,
+plough, power harrow, mower, tipping trailer, or nothing); what a machine declares over the data cable
 decides what the bus reports. The trailer has no electronics beyond lamps, so it reports as nothing
 attached, like a real dumb trailer. Signals do real work: the diff lock ties the rear wheels,
 `guidance_curvature` lets the simulator steer, and the plough puts a real rearward force at the

@@ -19,6 +19,9 @@ const HORIZON_SIGNALS: PackedStringArray = ["pitch", "roll"]
 ## bearing on either scale — the rose needs `aws` to know there is a wind and `sog` to know
 ## there is a course before it draws a needle for one.
 const WIND_ROSE_SIGNALS: PackedStringArray = ["awa", "aws", "twd", "tws", "cog", "sog"]
+## Declaring all of these, short of the full set, builds the rose's compass face (the land
+## families): the card turned by heading and the true-wind arrow, `tws` gating its bearing.
+const COMPASS_ROSE_SIGNALS: PackedStringArray = ["heading", "twd", "tws"]
 ## Declaring it builds the hand-built echo sounder (boat).
 const DEPTH_SIGNAL := "depth"
 ## Signals a hand-built instrument already draws, so they leave the generated bar column — the
@@ -50,7 +53,7 @@ const PAYLOAD_FIELD := &"payload_weight"
 const READOUT_EXTRAS := {
 	"sog": ["SOG", "%.1f"], "stw": ["STW", "%.1f"], "current_drift": ["DRIFT", "%.1f"],
 	"fuel_rate": ["BURN", "%.1f L/h"], "oil_press": ["OIL", "%.0f kPa"],
-	"sail_angle": ["SAIL", "%+.0f"],
+	"sail_angle": ["SAIL", "%+.0f"], "gear_ratio": ["RATIO", "%.2f"],
 }
 
 ## What is on screen.
@@ -191,7 +194,7 @@ var _gear_def: RefCounted = null  ## contract "gear" out SignalDef, for gear-byt
 var _speedo: Gauge
 var _tach: Gauge
 var _horizon: AttitudeIndicator = null  ## artificial horizon (flight families) — see HORIZON_SIGNALS
-var _rose: WindRose = null              ## wind/track rose (boat) — see WIND_ROSE_SIGNALS
+var _rose: WindRose = null              ## wind/track rose (boat) or compass face (land)
 var _sounder: DepthReadout = null       ## echo sounder (boat) — see DEPTH_SIGNAL
 var _node_squares: Array[ColorRect] = []  ## one per bus node, roster order; empty with no node_health
 ## signal name -> Array[DashBar], always an array (a scalar has one entry) so the update loop
@@ -219,7 +222,9 @@ var _bar_fields: Array[Array] = []       ## [[StringName, Array[DashBar]], ...]
 var _out_lamp_fields: Array[Array] = []  ## [[StringName, Label, lit Color], ...]
 var _out_chip_fields: Array[Array] = []  ## [[StringName, Label, SignalDef, caption], ...]
 var _node_health_field := &""  ## resolved 'node_health', or &"" where this cluster has no strip
-var _rose_fields: Array[StringName] = []   ## WIND_ROSE_SIGNALS in order, empty unless all resolved
+## The rose's signals in order (WIND_ROSE_SIGNALS, or twd/tws on the compass face), empty unless
+## all resolved.
+var _rose_fields: Array[StringName] = []
 var _depth_field := &""                    ## resolved 'depth', or &"" where there is no sounder
 var _extra_fields: Array[Array] = []       ## [[StringName, caption, format], ...] for the readout
 var _has_baro := false         ## bound telemetry carries 'baro_alt' (drone) — readout line
@@ -420,8 +425,8 @@ func _build(vehicle_type: String) -> void:
 	_rose = null
 	_sounder = null
 	if _density == Density.FULL:
-		if declares_wind_rose(out_names):
-			_rose = _make_wind_rose()
+		if declares_wind_rose(out_names) or declares_compass_rose(out_names):
+			_rose = _make_wind_rose(declares_wind_rose(out_names))
 			cluster.add_child(_rose)
 		if out_names.has(DEPTH_SIGNAL):
 			_sounder = _make_sounder()
@@ -612,6 +617,14 @@ static func declares_wind_rose(out_names: Array) -> bool:
 	return true
 
 
+## The land face of the rose: heading and true wind, short of the full marine set.
+static func declares_compass_rose(out_names: Array) -> bool:
+	for n in COMPASS_ROSE_SIGNALS:
+		if not out_names.has(n):
+			return false
+	return true
+
+
 ## Hand-built like the two gauges: only the two warn thresholds are read from the contract.
 func _make_horizon() -> AttitudeIndicator:
 	var h := AttitudeIndicator.new()
@@ -629,11 +642,12 @@ func _make_horizon() -> AttitudeIndicator:
 
 ## Hand-built; the contract decides only that it exists. No scale to read — a rose is angles,
 ## and aws/tws are the range-less readings the contract says have no honest full scale.
-func _make_wind_rose() -> WindRose:
+func _make_wind_rose(marine: bool) -> WindRose:
 	var w := WindRose.new()
 	var edge := UiTheme.px(self, GAUGE_W)  # FULL only, so there is no COMPACT size to pick
 	w.custom_minimum_size = Vector2(edge, edge)
-	w.caption = "WIND"
+	w.marine = marine
+	w.caption = "WIND" if marine else "COMPASS"
 	return w
 
 
@@ -718,10 +732,10 @@ func _resolve_fields() -> void:
 					String(OUT_CHIP_TEXT.get(sig_name, sig_name.to_upper()))])
 	if not _node_squares.is_empty():
 		_node_health_field = _field(fields, NODE_HEALTH_SIGNAL)
-	# The rose reads six fields or none: a partly-resolved instrument would draw some needles
+	# The rose reads all its fields or none: a partly-resolved instrument would draw some needles
 	# against a stale zero, which is worse than not being there.
 	if _rose != null:
-		for rose_name in WIND_ROSE_SIGNALS:
+		for rose_name in _rose_signals():
 			var rose_field := _field(fields, rose_name)
 			if rose_field == &"":
 				_rose_fields.clear()
@@ -738,6 +752,11 @@ func _resolve_fields() -> void:
 	_has_baro = fields.has(BARO_FIELD)
 	_has_gimbal = fields.has(GIMBAL_PITCH_FIELD) and fields.has(GIMBAL_YAW_FIELD)
 	_has_payload = fields.has(PAYLOAD_FIELD)
+
+
+## The telemetry fields the built rose reads, in `set_reading` order (heading is read directly).
+func _rose_signals() -> PackedStringArray:
+	return WIND_ROSE_SIGNALS if _rose.marine else PackedStringArray(["twd", "tws"])
 
 
 ## `name` as a telemetry field, or &"" (warned once) if the bound telemetry does not carry it.
@@ -769,10 +788,15 @@ func _process(_dt: float) -> void:
 		# declares_horizon above, so no duck-typed lookup is needed here.
 		_horizon.pitch = t.pitch
 		_horizon.roll = t.roll
-	if _rose != null and _rose_fields.size() == WIND_ROSE_SIGNALS.size():
-		# 'heading' is a shared base field; the other six are resolved above.
-		_rose.set_reading(t.get(_rose_fields[0]), t.get(_rose_fields[1]), t.get(_rose_fields[2]),
-				t.get(_rose_fields[3]), t.get(_rose_fields[4]), t.get(_rose_fields[5]), t.heading)
+	if _rose != null and not _rose_fields.is_empty():
+		# 'heading' is a shared base field; the others are resolved above.
+		if _rose.marine:
+			_rose.set_reading(t.get(_rose_fields[0]), t.get(_rose_fields[1]),
+					t.get(_rose_fields[2]), t.get(_rose_fields[3]), t.get(_rose_fields[4]),
+					t.get(_rose_fields[5]), t.heading)
+		else:
+			_rose.set_reading(0.0, 0.0, t.get(_rose_fields[0]), t.get(_rose_fields[1]), 0.0, 0.0,
+					t.heading)
 	if _sounder != null and _depth_field != &"":
 		_sounder.value = t.get(_depth_field)
 
@@ -849,9 +873,9 @@ func _process(_dt: float) -> void:
 		# "carrying nothing" rather than a gap.
 		if _has_payload:
 			_readout.text += "  PAY %.1f N" % t.get(PAYLOAD_FIELD)
-		# The boat's six range-less engine-room and track readings (READOUT_EXTRAS): the same
-		# "a running number has no full scale" rule as HRS, table-driven because there are six
-		# of them and each is a plain number.
+		# The range-less engine-room and track readings (READOUT_EXTRAS: the boat's six, the land
+		# families' BURN): the same "a running number has no full scale" rule as HRS, table-driven
+		# because each is a plain number.
 		for extra: Array in _extra_fields:
 			_readout.text += "  %s %s" % [extra[1], extra[2] % t.get(extra[0])]
 

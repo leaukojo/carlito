@@ -11,10 +11,15 @@ const KEY_IGNITION := 3
 
 const GEAR_N := 0x00
 const GEAR_D1 := 0x01
+## The tallest drive byte, the bus's (`Drivetrain.TOP_GEAR`).
+const GEAR_TOP := Drivetrain.TOP_GEAR
 const GEAR_R := 0xFF
 ## P: a byte RAMN never sends, so every byte it does send keeps its meaning (`Drivetrain.GEAR_P`;
 ## a body without a park pawl reads it as N).
 const GEAR_P := 0xFE
+
+## One press of a hand-throttle step key moves it this far (0..1).
+const HAND_THROTTLE_STEP := 0.1
 
 ## m/s below which S (held with no accel) swaps D->R and W swaps R->D.
 const REVERSE_ENGAGE_SPEED := 0.5
@@ -70,6 +75,10 @@ var _lights := 1  ## headlight level owned here so keyboard + touch share one st
 var _hitch_up := true  ## true = raised (transport), toggled by the local hitch key
 var _pto := false      ## local PTO engage, toggled by the local PTO key
 var _pto_mode := 0     ## local PTO speed (contract 'pto_mode': 0 = 540, 1 = 1000), cycled by its key
+## Local hand throttle, 0..1 (contract 'hand_throttle'), stepped by its two keys and set by the PTO
+## preset key. Driver state like _pto: it persists across a respawn and a body change (a body
+## without an all-speed governor ignores it, `PedalMap.demand`).
+var _hand_throttle := 0.0
 ## Local hydraulic-remote spool, toggled by the local SCV key; shut is the default resting state.
 ## Has a key because the SCV is the drawbar tipping trailer's only control (no key = no way to tip
 ## it locally). Not proportional: 0 or 1, and the far end slews (GATE_TRAVEL_TIME / TIP_TRAVEL_S)
@@ -273,7 +282,7 @@ func _apply_auto_hold() -> void:
 ## (`WheelDrive.hold_step`) takes the handover when the throttle lets it go.
 static func auto_hold(latched: bool, input: VehicleInput, speed: float, pad: bool) -> bool:
 	var in_gear := input.gear_request == GEAR_R \
-			or (input.gear_request >= GEAR_D1 and input.gear_request <= 6)
+			or (input.gear_request >= GEAR_D1 and input.gear_request <= GEAR_TOP)
 	if pad or not in_gear or input.throttle != 0.0:
 		return false
 	return latched or absf(speed) <= REVERSE_ENGAGE_SPEED
@@ -336,6 +345,15 @@ func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 		_pto = not _pto
 	if bool(raw.get(&"pto_mode_toggle", false)):
 		_pto_mode = 1 - _pto_mode  # two modes, so the cycle is a flip
+	# The PTO preset is the machine's to say (its governor and PTO gearing): a capability probe,
+	# asked only on the preset key's edge.
+	var preset_edge := bool(raw.get(&"hand_throttle_pto_toggle", false))
+	var preset := NAN
+	if preset_edge and _vehicle != null and _vehicle.has_method(&"pto_hand_throttle"):
+		preset = float(_vehicle.call(&"pto_hand_throttle"))
+	_hand_throttle = hand_throttle_step(_hand_throttle,
+			bool(raw.get(&"hand_throttle_down_cycle", false)),
+			bool(raw.get(&"hand_throttle_up_cycle", false)), preset_edge, preset)
 	if bool(raw.get(&"scv_toggle", false)):
 		_scv = not _scv
 	if bool(raw.get(&"diff_lock_toggle", false)):
@@ -366,6 +384,7 @@ func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 	raw[&"hitch_request"] = 1.0 if _hitch_up else 0.0
 	raw[&"pto"] = _pto
 	raw[&"pto_mode"] = _pto_mode
+	raw[&"hand_throttle"] = _hand_throttle
 	raw[&"scv_flow"] = 1.0 if _scv else 0.0
 	raw[&"diff_lock"] = _diff_lock
 	raw[&"fwd_drive"] = _fwd_drive
@@ -440,6 +459,21 @@ func get_vehicle_input() -> VehicleInput:
 	return _current
 
 
+## Next tick's local hand throttle, pure for tests: each step edge moves it HAND_THROTTLE_STEP,
+## clamped 0..1; the preset edge sets `preset` (the machine's PTO preset, NAN on a body with none),
+## or drops it to 0 if it already sits there, so one key sets and clears it.
+static func hand_throttle_step(current: float, down: bool, up: bool, preset_edge: bool,
+		preset: float) -> float:
+	var out := current
+	if down:
+		out -= HAND_THROTTLE_STEP
+	if up:
+		out += HAND_THROTTLE_STEP
+	if preset_edge and not is_nan(preset):
+		out = 0.0 if is_equal_approx(current, preset) else preset
+	return clampf(out, 0.0, 1.0)
+
+
 ## The detent as the 0..1 the wire and VehicleInput carry. Spread across the whole range so the
 ## ends are reachable, which is why the divisor is COUNT - 1 and not COUNT.
 static func sheet_fraction(detent: int) -> float:
@@ -462,6 +496,9 @@ static func merge_local(a: Dictionary[StringName, Variant],
 		&"hitch_toggle": bool(a.get(&"hitch_toggle", false)) or bool(b.get(&"hitch_toggle", false)),
 		&"pto_toggle": bool(a.get(&"pto_toggle", false)) or bool(b.get(&"pto_toggle", false)),
 		&"pto_mode_toggle": bool(a.get(&"pto_mode_toggle", false)) or bool(b.get(&"pto_mode_toggle", false)),
+		&"hand_throttle_down_cycle": bool(a.get(&"hand_throttle_down_cycle", false)) or bool(b.get(&"hand_throttle_down_cycle", false)),
+		&"hand_throttle_up_cycle": bool(a.get(&"hand_throttle_up_cycle", false)) or bool(b.get(&"hand_throttle_up_cycle", false)),
+		&"hand_throttle_pto_toggle": bool(a.get(&"hand_throttle_pto_toggle", false)) or bool(b.get(&"hand_throttle_pto_toggle", false)),
 		&"scv_toggle": bool(a.get(&"scv_toggle", false)) or bool(b.get(&"scv_toggle", false)),
 		&"diff_lock_toggle": bool(a.get(&"diff_lock_toggle", false)) or bool(b.get(&"diff_lock_toggle", false)),
 		&"fwd_drive_toggle": bool(a.get(&"fwd_drive_toggle", false)) or bool(b.get(&"fwd_drive_toggle", false)),
@@ -523,6 +560,7 @@ static func arbitrate_local(raw: Dictionary, speed: float, gear_byte: int,
 	out.hitch_request = clampf(float(raw.get(&"hitch_request", 1.0)), 0.0, 1.0)
 	out.pto = bool(raw.get(&"pto", false))
 	out.pto_mode = int(raw.get(&"pto_mode", 0))
+	out.hand_throttle = clampf(float(raw.get(&"hand_throttle", 0.0)), 0.0, 1.0)
 	out.diff_lock = bool(raw.get(&"diff_lock", false))
 	out.fwd_drive = bool(raw.get(&"fwd_drive", false))
 	# Traction control, from the player's TRACTION CONTROL setting (cars fitted with TC only).
@@ -572,7 +610,7 @@ static func arbitrate_local(raw: Dictionary, speed: float, gear_byte: int,
 			out.gear_request = GEAR_R
 			out.throttle = -brake_rev
 		else:
-			if gear_byte >= 1 and gear_byte <= 6:
+			if gear_byte >= GEAR_D1 and gear_byte <= GEAR_TOP:
 				out.gear_request = gear_byte
 			elif gear_byte == GEAR_P and accel <= 0.0:
 				# Parked by the bridge or `locked_idle`: stays in P until the driver asks to move.
@@ -634,8 +672,8 @@ static func blend_local_driving(vals: Dictionary, local: VehicleInput,
 
 ## Bridge (sloppyCAN) arbitration, pure for tests. The gear byte owns direction — throttle is
 ## `accel` signed by it (-R, + otherwise), local reverse UX ignored. How much more it owns is the
-## gearbox mode: `manual` takes the byte exactly (0 = N, 1-6, R, P; gear_auto = false); automatic
-## reads it as a PRND lever (P parks, R reverses, 1-6 is D and the gearbox picks the gear; byte 0
+## gearbox mode: `manual` takes the byte exactly (0 = N, 1-24, R, P; gear_auto = false); automatic
+## reads it as a PRND lever (P parks, R reverses, 1-24 is D and the gearbox picks the gear; byte 0
 ## is "no gear opinion", also D, except that a body parked in P (`gear_byte`, the engaged byte)
 ## stays in P until a D or R byte or the accelerator asks it to move). Brake is never throttle;
 ## key gates throttle; steer/handbrake/lights/horn pass through. Values arrive pre-normalized to VehicleInput ranges from bridge_source.
@@ -664,6 +702,8 @@ static func arbitrate_bridge(vals: Dictionary, manual := false,
 	out.pto = bool(vals.get("pto", false))
 	# Driveline requests; absent → open diff, 2WD, 540 PTO (a real tractor's rest state).
 	out.pto_mode = int(vals.get("pto_mode", 0))
+	# Hand throttle, already %→fraction in bridge_source; absent → 0. The local latch is not read.
+	out.hand_throttle = clampf(float(vals.get("hand_throttle", 0.0)), 0.0, 1.0)
 	out.diff_lock = bool(vals.get("diff_lock", false))
 	out.fwd_drive = bool(vals.get("fwd_drive", false))
 	# Car traction control: absent → on (the fitted system's rest state); the local setting never
@@ -728,10 +768,10 @@ static func arbitrate_bridge(vals: Dictionary, manual := false,
 	if manual:
 		# Exact byte: 0 is a real N (free revs), and nothing ever shifts on its own.
 		out.gear_request = gear if gear == GEAR_R or gear == GEAR_P \
-				or (gear >= GEAR_D1 and gear <= 6) else GEAR_N
+				or (gear >= GEAR_D1 and gear <= GEAR_TOP) else GEAR_N
 	elif gear == GEAR_R or gear == GEAR_P:
 		out.gear_request = gear
-	elif gear >= GEAR_D1 and gear <= 6:
+	elif gear >= GEAR_D1 and gear <= GEAR_TOP:
 		# A D intent: the drivetrain keeps the drive gear it is in and auto-shifts from there.
 		out.gear_request = GEAR_D1
 	else:

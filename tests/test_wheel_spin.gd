@@ -1213,6 +1213,45 @@ func test_the_cast_on_a_face_reads_the_face() -> void:
 	assert_vector(w.contact_point).is_equal_approx(Vector3.ZERO, Vector3.ONE * 0.005)
 
 
+func test_the_cast_reads_a_face_with_its_hub_on_a_sweep_stop() -> void:
+	# A semi's steer wheel on `measure_vehicles`' 6 km strip, 2.7 km from its centre, the body
+	# pitched 0.3 deg: its hub stepped 0.1 um at a time across 20 um around one of the sweep's stops
+	# (0.75 of the travel), at twenty places along the strip. Where the stop lies within Jolt's
+	# tolerance of the face, the sweep calls it touching and the rest test clear; the compression
+	# must still read the face, never the stop before it (a whole 1.25 mm step).
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	_box(root, Vector3(40.0, 2.0, 6000.0), Vector3(0.0, -1.0, 0.0))
+	var body := RigidBody3D.new()
+	body.freeze = true
+	body.collision_layer = 0
+	root.add_child(body)
+	var pitch := Basis(Vector3.RIGHT, deg_to_rad(-0.3))
+	body.global_transform = Transform3D(pitch, Vector3(0.0, 0.0, 2743.0))
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var gd: GroundDriveSpecScript = GroundDriveSpecScript.new()
+	gd.wheel_radius = 0.36
+	gd.wheel_inertia = 1.0
+	gd.tyre_half_width = 0.21
+	gd.rest_length = 0.32
+	var w := WheelScript.new(Vector3(0.72, 0.6, 0.0), false, false, null, 300.0)
+	w.apply_suspension(gd)
+	var terrains: Array[Node] = []
+	var space := root.get_world_3d().direct_space_state
+	var up := pitch * Vector3.UP
+	var worst := 0.0
+	for place in 20:
+		body.global_transform = Transform3D(pitch, Vector3(0.0, 0.0, 2743.0 - 0.0137 * place))
+		for i in 200:
+			w.anchor.y = 0.6 + 0.00001 - 0.0000001 * i
+			w.tick(body, gd, space, 0.0, 0.0, TICK, terrains)
+			# On the flat the hub touches at `r` over it, `(y - r) / up.y` down the travel.
+			var hub_y := (body.global_transform * w.anchor).y
+			worst = maxf(worst, absf(w.compression - (0.32 - (hub_y - 0.36) / up.y)))
+	assert_float(worst).is_less(1e-5)
+
+
 # --- patch_offset: where a disk on the hub touches the road --------------------------
 
 func test_a_level_wheel_touches_straight_below_its_hub() -> void:

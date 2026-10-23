@@ -36,7 +36,7 @@ Rules: `src/vehicles/CLAUDE.md`; derivations and figures: § Physics derivations
 
 | System | Key facts |
 | --- | --- |
-| `Drivetrain` | `engine_torque` curve, gear ratios, RAMN gear byte (0x00 = N, 0x01-0x06 = D1-D6, 0xFF = R) plus 0xFE = P (a park pawl where `park_pawl_torque` is fitted, else N). On a wheel-driving body (`drives_wheels`) the crank is a rotating mass (`engine_inertia`): `rpm` is its integrated speed, behind a coupling (`coupling_step`, `couple`): a friction clutch, or a torque converter (`TorqueConverter`) with a lock-up clutch; the boat, drone, train and plane keep the rigid crank. Tested `tests/test_drivetrain.gd`, `tests/test_torque_converter.gd` |
+| `Drivetrain` | `engine_torque` curve, gear ratios, RAMN gear byte (0x00 = N, 0x01-0x18 = D1-D24, 0xFF = R) plus 0xFE = P (a park pawl where `park_pawl_torque` is fitted, else N). On a wheel-driving body (`drives_wheels`) the crank is a rotating mass (`engine_inertia`): `rpm` is its integrated speed, behind a coupling (`coupling_step`, `couple`): a friction clutch, or a torque converter (`TorqueConverter`) with a lock-up clutch; the boat, drone, train and plane keep the rigid crank. Tested `tests/test_drivetrain.gd`, `tests/test_torque_converter.gd` |
 | `ShiftPolicy` | the automatic's gear selection, static functions `Drivetrain.auto_shift` consults on road speed and the pedal (never `applied_throttle`): the light-to-full pedal map (`shift_up_light_rpm` / `shift_down_light_rpm` at and under `LIGHT_PEDAL` to `shift_up_rpm` / `shift_down_rpm`, `LANDING_MARGIN`), kickdown (`kickdown_pedal`), dwell (`shift_dwell_s`), `skip_shifts`, the grade logic (`on_grade` on `Drivetrain.road_load`) and the start gear (`start_gear`, `start_gear_max`). A spec declaring none shifts at its two fixed points. The shift itself is the gearbox's, over `shift_handover_s` (`Drivetrain.handover_rate`). Maps and figures: `docs/drivetrain.md` § The shift policy. Tested `tests/test_shift_policy.gd`, `tests/test_vehicle_catalog.gd`, `tests/test_drivetrain.gd` |
 | Engine law | net crank torque `f * curve + (1 - f) * motoring` on the DELIVERED fuel `f = applied_throttle` (after governor, limiter, shift cut, the controller's idle, blip and drag-torque floors, and `Drivetrain.handover_fuel`): `crank_torque` (at the axle, `wheel_torque` + `overrun_torque`); motoring: `motoring_torque`, `docs/drivetrain.md` § Motoring and friction. Every fuel cut is engine braking; `f = 1` is the curve alone. No bus signal shows motoring (`engine_load` reads 0 off fuel) |
 | Rev limiter | judges the crank (`Drivetrain.rpm`; `wheel_engine_rpm` on the rigid crank): a hard cut, the crossing tick fuelled to land on the redline (`couple`); `limiter_cut` rides `applied_throttle` / `Drivetrain.applied_throttle` |
@@ -99,6 +99,17 @@ with the body, pushes sideways off the face; parallel rays strand the trucks on 
 `semi` + `box`: the cast costs an order of magnitude over the ray, natively and on web (`kerb`,
 `docs/vehicle_measurements.md` § Measure-tool run lines).
 
+The sweep bisects to 1/256 of the travel, so the hub's drop is read between its last free stop and
+its first touching one: `settled_drop` backs the touching stop out by the rest contact's overlap.
+Without it the hub flickers across a step at rest, which the dampers turn into load spikes (a
+semi's steer wheel lost about a kilonewton at launch). With the face micrometres past a stop on a
+pitched body, the sweep can call that stop touching where the rest test still reads it clear, more
+often far from a large collider's centre (float32 precision; `measure_vehicles`' strip is one 6 km
+box). That stop is a free one, so the bracket moves a step on and the contact is read there.
+Settling on the stop before it puts a whole step into one tick's compression: on a semi's steer
+axle at a steady pull, a one-tick swing of about ten points of its parked load, up and back
+(`test_wheel_spin`'s hub-on-a-sweep-stop case; the trace's `contact` lines).
+
 **Spin step.** Tyre force is huge next to the wheel's own inertia (`I / r²` is 207 kg on the
 tractor's rear, against its 1750 kg corner mass), so an explicit step rings at the tick rate. Against a
 480 Hz reference, capping the reaction term gave +20 % top speed on the car and +41 % on the
@@ -137,8 +148,8 @@ lower gear, and the open converter passes the crank's friction back as overrun. 
 stop traces only the crank's friction torque from speed down to the last downshift. Below the
 turbine's idle speed it creeps against the brake for the last stretch. `garbage-truck` stops at 30 %: its
 idle creep (`docs/drivetrain.md` § Converter) sits under what that pedal asks of its brake hardware (`WheelDrive.brake_application`). The clutch bodies
-keep their clutch closed, so their engine braking includes the friction (`race` 30 % 150.6 m
-against 187.9 without it). Full pedal, on ABS, is unaffected.
+keep their clutch closed, so their engine braking includes the friction: `race`'s 30 % stop is the
+shortest at that pedal. Full pedal, on ABS, is unaffected.
 
 Mean g is speed over time, so it reads under the peak. Full pedal asks the brake hardware's
 whole capacity (§ Brake hardware), more than any tyre gives, so every ABS body stops on ABS and
@@ -252,9 +263,12 @@ past what the rear tyres push in gear 1 (`garbage-truck`'s threshold on its sour
 `front_weight` sits well above it); where that falls short, the levers are the weight split and the start gear,
 not a lower COM. Guard: the tracking pass's front-lift check.
 
-*The front-axle gap* (the launch trace's `front split` line, `_gap_split`). The front axle's load
-under what steady transfer `m a h / L` predicts closes, to under a point on every body without a
-trailer, as the sum of:
+*The front-axle gap* (the launch trace's `front split` line, `_gap_split`). Steady transfer is
+counted since parked. A coupled rig settles on the foot brake with its two bodies pushing on the
+coupling, a load the parked front already carries (the trace header's `coupled` line prints it;
+the farm tipper's drawbar holds about twice the semis' plate). The front
+axle's load under what steady transfer `m a h / L` predicts closes, to under a point on every body
+without a trailer, as the sum of:
 - road resistance at the COM (~1 point);
 - the trace's acceleration, a tick late (large only at a take-up's spike);
 - heave;
@@ -265,22 +279,44 @@ trailer, as the sum of:
 
 The lean is a negative pitch stiffness `m g (h - r)` against the springs' pitch rate, which is why
 measured pitch per g reads over the springs-and-links prediction: -1 to +10 % on every body without
-a trailer, +20 / +22 % on the coupled `semi` / `semi-conventional` (`-- all 45 trace`,
-2026-10-15; `sedan` 5.08 deg per g against 4.84).
+a trailer (`-- all 45 trace`, 2026-10-15; `sedan` 4.93 deg per g against 4.84 on 2026-10-20), and
++5 % on the coupled rigs: `semi` and `semi-conventional` with the box, `tractor-kenney` with the farm tipper
+(2026-10-20).
 
 The `front axle` gate judges the overshoot alone (the gap less the other three; a two-tick mean)
 per event (the launch, then each shift's settle) against what a body damped at 0.3 of critical,
 the road band's low end, overshoots a step of that event's swing (`exp(-ζπ/√(1-ζ²))`, 37 %), never
 under 5 points. A launch swings from parked; a shift, the larger of the steady share's rise through
 its handover and cut and its fall since. So a short, tall body is not failed for its footprint: the
-laden `semi`'s launch swings 62 points and overshoots 12 (its pitch mode reads ~1.4 Hz at ζ ≈ 0.4,
-~15 expected), `sedan-sports`' 43 and 6. Every car, van and Kenney truck passes (2026-10-15/16).
-It fails on:
-- the semis' high-gear shifts by under a point (`semi` D4>D5 5.4 of 5.0, `semi-conventional` D3>D4
-  6.3 of 5.5), inside a ±0.5-point spread between a lone run and the sweep: the cut is half
-  the pitch period, so its swing and the drive's return add. `shift_torque_ramp_s` took D1>D2
-  from 16 to 10 points; a launch clutch ramp moves the launch only near the pitch period (12 → 8, at the cost of a slower launch), so none ships;
-- `tractor-kenney`'s D3 take-up (16), its wheelie.
+laden `semi`'s launch swings ~69 points and overshoots 5, `sedan-sports`' 43 and 6.
+
+Every car, van and Kenney truck passes (2026-10-15/16). So do both semis, bobtail and with the box,
+and the bare tractor on every event (2026-10-20). The tractor's floored skip-shifts pass on the
+powershift's torque reduction (`docs/drivetrain.md` § The shift's handover); without it, the
+crank's inertia reaches the wheels and D7>D13 overshoots 16 points. The AMT's cut returns over
+`shift_torque_ramp_s`, so its drive does not step into the pitch mode.
+
+The bobtail semis are where the gate reads the steer axle's damping and the contact itself:
+- The cab-over's launch is the shortest wheelbase's largest swing, and its overshoot is the nose
+  rising on the front rebound damper. Its front block (`semi_spec.tres`, shared by
+  `semi-conventional`) holds the road band's ends, 0.30 / 0.40 of critical, at the bobtail steer
+  corner: the launch reads 5.4 of 6.4 (2026-10-20). At 0.35 rebound it overshoots the allowance;
+  the bump side and the rear dampers do not move it.
+- A one-tick spike of the steer axle's load at a steady pull (up about ten points of parked, then
+  down as far) is the contact query's, not the body's: a sweep stop the rest test reads clear
+  (§ Physics derivations and figures, *Contact*). The trace's `contact` flag prints each wheel's
+  load, compression, patch, normal and collider under its lines to find one.
+
+Of the coupled rigs, one event fails: `tractor-kenney` + farm tipper's launch, 21.2 of 18.7 from its
+D6 start (2026-10-20).
+- The cause is the trailer's brake model, not the tractor's pitch: a one-tick jolt, back then
+  forward, as the tipper's service brakes finish venting (`TowedBody.BRAKE_RELEASE_S`) under a
+  floored pull-away.
+- Vented in three fifths of that time, the launch reads 5.6 of 17.9.
+- The tipper's shifts pass (0.3 / -0.4 / -0.2 / 1.7 of 5.0), and vented faster, too.
+- No tractor pitch damping is sourced. `GroundDriveSpec`'s rear fallback keeps the front's ζ at
+  the front's corner mass: ≈ 0.31 bump / 0.38 rebound on the 2.17 t rear corner, against the
+  front's 0.39 / 0.48. No failure traced here points at it.
 
 **Steering geometry.** `max_steer_deg` (the garage's "Max steer"), the speed taper and guidance
 (`steer_angle_from_curvature`) set the bicycle (mean) angle `δ`; `WheelDrive.ackermann_angle`
@@ -366,7 +402,7 @@ Tractor `rear_lat_grip` 1.077 = `1 + s * log2(rated rear / rated front)` (Michel
   turn's drive (`delivery`'s rear: front-first on side force alone, rear-first with it); a
   front-driven axle's tilted drive carries side force, so its front makes less than its static
   share; a rear-driven body's front makes a few points more. The pass prints `pred` beside its
-  reading: a margin under ~5 % sits inside this (`docs/TODO.md`).
+  reading: a margin under ~5 % sits inside this (`docs/plans/drivetrain_control.md` phase 10).
 - **Stated shortfall: linear K.** Under a real car's 2-4 deg/g: roll camber, compliance steer and
   aligning torque are unmodelled, 1.2, 0.5 and 0.4 of an illustrative 4.1 deg/g budget against
   roll steer's 1.0 (Bundorf & Leffert, SAE 760713; `docs/sources.md` § Linear understeer).

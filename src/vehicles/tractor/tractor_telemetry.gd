@@ -5,12 +5,15 @@ extends VehicleTelemetry
 ## draft_force reports a real applied force, so the rpm sag / engine_load / wheel_slip it causes
 ## are consequences, not separate terms.
 
-const PTO_RPM_MAX := 1200          ## contract 'pto_rpm' range max
+const PTO_RPM_MAX := 1300          ## contract 'pto_rpm' range max
 
-## Engine rpm at which the PTO stub turns at its named speed. Driveline gearing, not a feel knob:
-## at the shipped redline (2600) the 1000 mode lands at 1182 rpm, inside PTO_RPM_MAX.
+## Engine rpm at which the PTO stub turns at its named speed, in either mode (the hand throttle's
+## PTO preset sets it). Driveline gearing, not a feel knob: the 6175R turns 540 and 1000 at ~1950
+## against its 2100 rated speed (docs/sources.md § Governor), 0.929 of rated, here on the curve's
+## 2200. At the shipped high idle (2600) the 1000 mode lands at 1272 rpm (`pto_shaft_rpm`
+## truncates 1272.7), inside PTO_RPM_MAX.
 ## test_tractor pins it against the shipped spec.
-const PTO_RATED_RPM := 2200.0
+const PTO_RATED_RPM := 1950.0 / 2100.0 * 2200.0
 const PTO_MODE_540 := 0            ## contract 'pto_mode' enum
 const PTO_MODE_1000 := 1
 
@@ -57,6 +60,22 @@ static func pto_speed_for_mode(mode: int) -> float:
 ## Engine rpm -> PTO shaft rpm gearing for the selected mode.
 static func pto_ratio_for_mode(mode: int) -> float:
 	return pto_speed_for_mode(mode) / PTO_RATED_RPM
+
+
+## The crank load (N·m, `Drivetrain.accessory_torque`) of an attachment taking `shaft_kw`: 0 unless
+## the PTO turns (`pto_on`: the request and the key) and the attachment declares
+## `ImplementBase.Connection.PTO` in `connections`; an engaged PTO with nothing on it turns a stub.
+## The selected mode's shaft torque times its ratio is the power over PTO_RATED_RPM in either mode.
+static func pto_load_nm(pto_on: bool, connections: int, shaft_kw: float) -> float:
+	if not pto_on or (connections & int(ImplementBase.Connection.PTO)) == 0:
+		return 0.0
+	return pto_crank_torque(shaft_kw, PTO_RATED_RPM)
+
+
+## The hand-throttle demand (0..1) whose governor setting is PTO_RATED_RPM (`PedalMap.
+## demand_for_setting`): the PTO preset. The load droops the shaft under its named speed.
+static func pto_hand_throttle(spec: VehicleSpec) -> float:
+	return PedalMap.demand_for_setting(spec, PTO_RATED_RPM)
 
 
 ## PTO stub speed at an engine speed. The clamp is a backstop; the shipped gearing never reaches it.

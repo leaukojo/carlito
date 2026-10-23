@@ -129,7 +129,8 @@ extends Resource
 @export var tcs_equipped := false
 ## Foot-brake hold against roll-back on a grade pull-away (`HillHold`). ASSIST: hill-start assist;
 ## STANDSTILL: a powershift tractor's. COMPROMISE: a real tractor holds in the transmission; a
-## gearbox-output lock here is solved before the coupling, so the drive would creep against it.
+## gearbox-output lock here is solved before the coupling, so the drive would creep against it. A
+## CVT holds in its transmission (`Drivetrain.standstill_hold`) and declares none.
 @export var hill_hold := HillHold.Kind.NONE
 ## ASSIST's timeout (s): the hold lets go this long after the brake's release whatever the drive
 ## carries (Honda's ~1 s on a car, Volvo's 3 s on a truck). STANDSTILL has none.

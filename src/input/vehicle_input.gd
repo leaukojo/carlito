@@ -37,7 +37,7 @@ var throttle := 0.0    ## -1..1, signed by direction (never from the brake)
 var brake := 0.0       ## 0..1 foot brake
 var steer := 0.0       ## -1..1, negative = left
 var handbrake := 0.0   ## 0..1
-var gear_request := 0  ## RAMN gear byte: 0=N, 1..6=D1-D6, 255=R, 254=P
+var gear_request := 0  ## RAMN gear byte: 0=N, 1..24=D1-D24, 255=R, 254=P
 var gear_auto := true  ## true: byte is a direction intent, gearbox auto-shifts in D;
                        ## false (bridge, manual gearbox): byte is exact and owns direction
 var key := 1           ## 1=Lock, 2=On, 3=Ignition
@@ -55,6 +55,9 @@ var hitch_request := 1.0  ## 0..1 requested hitch height (1 = raised/transport)
 var pto := false          ## PTO engage request
 var pto_mode := 0         ## PTO speed selection: 0 = 540, 1 = 1000 (contract 'pto_mode' enum)
 var scv_flow := 0.0       ## 0..1 hydraulic remote (SCV) valve opening (local key: the SCV toggle)
+## 0..1 hand throttle: the all-speed governor's second lever (`PedalMap.demand`), contract
+## 'hand_throttle'. Sets engine speed only; the pull-away still takes `throttle`.
+var hand_throttle := 0.0
 # Flight controls (plane: elevator/flaps; drone: climb/arm).
 var elevator := 0.0       ## -1..1, + = nose up (plane elevator)
 var climb := 0.0          ## -1..1, + = ascend (drone vertical rate)

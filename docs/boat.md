@@ -66,7 +66,7 @@ through `v_long`. Level 6 is the only level with water under the boat rather tha
 | --- | --- | --- |
 | `stw` / `sog` / `cog` / `current_set` / `current_drift` | 128259, 129026, 130577 | `BoatTelemetry.flow_toward` — `sog`/`cog` off ground velocity, `stw` off `through_water`, `current_set`/`current_drift` off the tide |
 | `depth` | 128267 Water Depth | `HeightmapTerrain.height_at` under the transducer vs the `WaterSurface` plane |
-| `awa` / `aws` / `twd` / `tws` | 130306 Wind Data | two pure statics on `BoatTelemetry`, off the wind vector and hull velocity |
+| `awa` / `aws` / `twd` / `tws` | 130306 Wind Data | `BoatTelemetry.apparent_wind` off the wind vector and hull velocity; `VehicleTelemetry.true_wind` (shared with the land families) off the wind vector |
 | `rudder` / `rudder_actual` / `trim` | 127245 Rudder, 127488 Engine Parameters Rapid | slewed `_steer` (%) / `trim_step` chasing throttle |
 | `fuel_rate` / `oil_press` | 127489 Engine Parameters, Dynamic | labelled models off `applied_throttle` / `Drivetrain.rpm` |
 | `tank_level` | 127505 Fluid Level | fresh/waste ramp, `count` 3 (fresh water / waste / live-well) |
@@ -75,7 +75,7 @@ through `v_long`. Level 6 is the only level with water under the boat rather tha
 
 - `flow_toward`: (speed, bearing it flows TOWARD). `sog` ≠ `speed`/`kmh` (signed
   longitudinal); `cog` minus `heading` is the crab angle. `current_set` = `flow_toward` bare
-  (`twd` is `true_wind` + 180). Zero flow reads bearing 0. `stw`/`sog`/`current_drift` carry
+  (`twd` is `VehicleTelemetry.true_wind`, + 180). Zero flow reads bearing 0. `stw`/`sog`/`current_drift` carry
   no `range`; `cog`/`current_set` are ranged, so they're bars.
 - `depth` (`HeightmapTerrain.height_at`) rides `-float_depth`; `-1` is the only invalid
   reading (never 0, an alarm value), gated by `contains_xz` since `height_at` clamps outside

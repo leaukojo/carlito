@@ -48,6 +48,20 @@ extends Resource
 ## Motoring torque at and below idle, as a fraction of the curve's peak: friction (and a petrol's
 ## pumping) that runs a free crank down. 0 = none. Sourced: docs/drivetrain.md § Crank and coupling.
 @export var engine_friction_frac := 0.0
+## How the pedal becomes the delivered fuel on a wheel-driving crank (`PedalMap.fuel`): LINEAR (the
+## fuel is the pedal), a sourced torque-request map, or an all-speed governor (ALL_SPEED: the pedal
+## and the hand throttle set an engine speed). The rigid crank keeps the pedal.
+@export var pedal_map: PedalMap.Kind = PedalMap.Kind.LINEAR
+## The all-speed governor's speed droop (ALL_SPEED, or any map in the PTO mode): full fuel at
+## `setting / (1 + droop)`, no net torque at the setting. Sourced: docs/sources.md § Governor.
+@export var governor_droop := 0.0
+## The PTO mode's set speed (rpm, 0 = none): a road truck's ECM holding the engine there on the
+## governor law while its PTO works parked (`Drivetrain.pto_set_rpm`). Sourced: docs/sources.md
+## § PTO power.
+@export var pto_mode_rpm := 0.0
+## What the engine burns: its indicated efficiency, heating value and density
+## (`VehicleTelemetry.fuel_rate_lph`). Read on a wheel-driving crank only.
+@export var fuel_type: VehicleTelemetry.Fuel = VehicleTelemetry.Fuel.PETROL
 ## Rotating inertia at the crank (kg·m²), on wheel-driving bodies only (`Drivetrain.drives_wheels`).
 ## Sourced per class: docs/drivetrain.md § Crank and coupling.
 @export var engine_inertia := 0.0
@@ -107,6 +121,17 @@ enum Coupling { CONVERTER, CLUTCH }
 @export var skip_shifts := false
 ## The highest gear a pull-away may start in (`ShiftPolicy.start_gear`). 0 or 1 = D1.
 @export var start_gear_max := 0
+## A power-split CVT (`Drivetrain.is_cvt`): each mechanical range's top gearbox speed ratio (output
+## over input), ascending; the ratio is drivetrain state (`Drivetrain.cvt_i`) and `gear_ratios` stays
+## empty. Empty = a stepped box. Sources: docs/heavy_vehicles.md § The CVT tractor.
+@export var cvt_range_tops: PackedFloat32Array
+## The CVT controller's ratio rate (`Drivetrain.cvt_ratio_step`), as the ground acceleration (m/s²)
+## it lets the ratio change at the crank's speed.
+@export var cvt_accel_ms2 := 0.0
+## The CVT's output torque bound at the drive axle (N·m): its hydrostatic pressure relief, declared
+## hardware like the brakes. What active standstill holds and the foot brake is sized against
+## (`Drivetrain.stall_axle_torque`).
+@export var cvt_max_axle_torque := 0.0
 @export var speed_limit_kmh := 0.0  ## road-speed governor, km/h; 0 = ungoverned (J1939 SPN 74). Fades throttle over `Drivetrain.GOVERNOR_BAND` so it settles instead of hunting
 
 @export_group("Steering")

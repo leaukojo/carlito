@@ -23,14 +23,14 @@ what binds a fix, and what "done" looks like. A brief is **not a plan** (see § 
 | 06b | the heavy vans' drivetrain — they ran the 8 t trucks' engine and gearing | small-medium | 05, 06 | landed (`docs/sources.md`, the heavy vans' drivetrain) | — |
 | 07 | toy-scale Kenney geometry with real mass | medium | — | landed (`docs/vehicles.md` § Inertia, § Pitch, § Balance, § Braking) | — |
 | 07b | crawl-speed tyre caps and the patch under the hub | medium-large | 07 | landed (`docs/vehicles.md` § One-tick caps, § Slip floor, § Pitch) | — |
-| 14 | `14_semi_shift_ring_and_drift.md` — (1) the semi's shift ring: landed (`docs/vehicles.md` § Pitch); (2) a slow yaw mode drifts the semis centimetres: parked until the semis take the tyre law | small (2) | 07b | landed. (2) medium: name the mode first | (2) one |
+| 14 | semi shift — (1) the semi's shift ring: landed (`docs/vehicles.md` § Pitch); (2) a slow yaw mode drifts the semis centimetres: parked until the semis take the tyre law | small (2) | 07b | landed. (2) medium: name the mode first | (2) one |
 | 09 | parallel steer scrubs in tight turns | small | — | landed (`docs/vehicles.md` § Steering geometry) | — |
 | 10 | one 0.36 m ray wheel for every body | large | 04, 05, 06 | landed (`docs/vehicles.md` § Physics derivations: Wheel radius, Contact; `docs/sources.md`) | — |
 | 11 | weightless implements, ramped draft | medium | — | landed (`docs/heavy_vehicles.md` § Draft, hitch, linkage, § The four implements; `docs/vehicles.md` § Inertia; `docs/sources.md`) | — |
 | 12 | user-swappable tyres, tyre x surface response | medium-large | 03, 04 | landed (`docs/vehicles.md` § Tyres and surfaces; `docs/sources.md` § Sourced figures; `docs/vehicle_measurements.md` § Tyre classes by surface) | — |
 | 13 | minor items — wind, aero balance, rolling-resistance vector, ideal ABS/TC, taper, twin-rear visual | small each | — | landed (`docs/vehicles.md` § Aero balance, § Crosswind, § Road resistance, § Rejected designs; `docs/sources.md`) | — |
-| 15 | bars and tyre laws buy the limit margin but not a road car's linear understeer | medium | — | landed (`docs/vehicles.md` § Balance: roll steer, the 60 Hz loop, declared angular damping, the corner pass; § Steering geometry; `docs/sources.md` § Roll steer, § Linear understeer; follow-ups in `docs/TODO.md` § Handling follow-ups) | — |
-| 16 | `16_drivetrain_control.md` — 6-ratio trucks and tractor, no governor or hand throttle, no CVT, a linear pedal, fuel blind to rpm | large | 10, 11 (items 1-3); 05, 06 | high: two contract changes, sourced pedal and BSFC maps, a CVT decision | two plans: pedal map + fuel (any time), then gear counts, governor, CVT |
+| 15 | bars and tyre laws buy the limit margin but not a road car's linear understeer | medium | — | landed (`docs/vehicles.md` § Balance: roll steer, the 60 Hz loop, declared angular damping, the corner pass; § Steering geometry; `docs/sources.md` § Roll steer, § Linear understeer; follow-ups in `docs/plans/drivetrain_control.md` phases 8-10) | — |
+| 16 | `16_drivetrain_control.md` — 6-ratio trucks and tractor, no governor or hand throttle, no CVT, a linear pedal, fuel blind to rpm | large | 10, 11 (items 1-3); 05, 06 | high: two contract changes, sourced pedal and BSFC maps, a CVT decision | planned: `docs/plans/drivetrain_control.md` (phases 2-7) |
 
 "Planning effort" is the effort level for the agent that WRITES the plan (low / medium / high /
 xhigh / max): how much design is open, how much must be sourced, how many rules or user decisions it

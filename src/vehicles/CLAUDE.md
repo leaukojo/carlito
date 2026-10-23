@@ -26,7 +26,7 @@ citations: `docs/sources.md`.
 - Every wheel-side torque (brake, retarder, TC hold, differential, crank, converter) is solved
   inside the semi-implicit spin step, never applied after it (a `move_toward` or post-tick torque).
 - One engine law on the DELIVERED fuel `Drivetrain.applied_throttle`; never feed it the pedal.
-  Telemetry reads `applied_throttle`; `ShiftPolicy` reads the pedal.
+  Telemetry reads `applied_throttle`; `ShiftPolicy` reads the driver's demand (`PedalMap.demand`).
 - 60 Hz: never remove or weaken a clamp, never raise the tick. A damper or drag term takes a
   clamp; an external force (thrust, sail) does not.
 - Never set roll or pitch in `RigidBody3D.inertia` (Jolt computes them about `center_of_mass`);

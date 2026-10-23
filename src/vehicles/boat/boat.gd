@@ -207,7 +207,7 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 
 	t.aws = aw.x
 	t.awa = aw.y
-	var tw := BoatTelemetry.true_wind(wind)
+	var tw := VehicleTelemetry.true_wind(wind)
 	t.tws = tw.x
 	t.twd = tw.y
 	t.sail_angle = boom

@@ -34,6 +34,11 @@ const LOAD_DENSITY := 950.0
 ## The load's centre: the frustum's volume centroid, 0.321 m under the 1.34 m rim, over the outlet.
 const LOAD_CENTRE := Vector3(0.0, 1.019, 0.55)
 
+## The disc's drive (kW), an ESTIMATE: the throw itself is ~0.3 kW (~0.33 kg/s, 4 ha/h at
+## 300 kg/ha, leaving at ~30 m/s), the rest disc drag and the angle box; Pronar's single-disc
+## spreader asks an 11 kW tractor, which bounds it. Nothing empties the hopper, so it never varies.
+const DISC_KW := 2.0
+
 @onready var _spinner: Node3D = $Spinner
 @onready var _gate: Node3D = $Gate
 @onready var _ram_rod: Node3D = $RamRod
@@ -55,6 +60,10 @@ func connections() -> int:
 
 func device_class() -> int:
 	return CLASS_FERTILIZER
+
+
+func pto_power_kw(_ground_kmh: float, _ball_lift: float, _soil01: float) -> float:
+	return DISC_KW
 
 
 ## Machine plus a full hopper.

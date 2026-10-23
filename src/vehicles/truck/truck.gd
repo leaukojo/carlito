@@ -10,10 +10,6 @@ extends BaseVehicle
 ## the rears through the wheels' own spin step (`WheelDrive.spring_brake`), a mechanical hold like a
 ## pulled handbrake.
 
-## engine_load added while the chassis PTO is engaged (the tractor's parasitic term; the PTO also
-## powers the body network, see body_bus).
-@export var pto_load := 0.35
-
 ## CiA 422 refuse body unit, null on a truck with no body. See _find_rig.
 var _body: RefuseBody = null
 var _arm: MeshInstance3D = null      ## front-loader arm; body_pos reads back off its rotation
@@ -60,8 +56,9 @@ func _find_rig() -> void:
 
 
 ## No `arm` mesh means no body unit, so neither the X-key body stalk nor the chassis PTO has
-## anything to show. PTO is keyed to the body: with nothing plugged in it moves only engine_load,
-## and it powers the body network (RefuseBody.bus_up), so touch needs it to raise the arm.
+## anything to show. PTO is keyed to the body: it drives the body's pump (its load on the crank
+## while the arm rises) and powers the body network (RefuseBody.bus_up), so touch needs it to raise
+## the arm.
 func vehicle_capabilities() -> Dictionary:
 	var caps := super()
 	caps["body_cmd"] = _body != null
@@ -87,8 +84,9 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	var pto_on := input.pto and running
 	t.pto_state = pto_on
 	# The GOVERNED throttle, not the pedal: the request would report a load a cut engine isn't making.
+	# The body pump is in it as load on the crank.
 	t.engine_load = roundi(VehicleTelemetry.engine_load_pct(
-			drivetrain.rpm, drivetrain.applied_throttle, spec, pto_on, pto_load))
+			drivetrain.rpm, drivetrain.applied_throttle, spec))
 
 	# kg the rear springs held up this tick, not a mass lookup, so weight transfer and load move it.
 	t.axle_load = VehicleTelemetry.axle_load_kg(drive.rear_suspension_force())
@@ -102,6 +100,11 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	t.clear_trailer_bus()
 
 	_tick_body(t, input, pto_on, running, delta)
+	# The body's pump on the crank from the next tick; nothing else on this PTO takes power (the
+	# semi's tipper pump declares none). The ECM's PTO mode holds its set speed from the same tick.
+	drivetrain.accessory_torque = VehicleTelemetry.pto_crank_torque(_body.pump_kw(),
+			RefuseBody.PUMP_RATED_ENGINE_RPM) if pto_on and _body != null else 0.0
+	drivetrain.pto_set_rpm = spec.pto_mode_rpm 			if TruckTelemetry.pto_mode_engaged(pto_on, input.handbrake, t.speed) else 0.0
 
 	# The gate is read off this tick's air and applies the spring brakes from the NEXT wheel tick: the
 	# one-tick lag (17 ms) is far inside a real chamber's ~0.5 s exhaust. It does not zero
@@ -143,7 +146,7 @@ func _tick_body(t: TruckTelemetry, input: VehicleInput, pto_on: bool, running: b
 	var inhibit := RefuseBody.is_inhibited(t.speed, input.handbrake, bus)
 
 	_warn_if_body_interlocked(input, pto_on)
-	_body.step(input.body_cmd, inhibit, delta)
+	_body.step(input.body_cmd, inhibit, delta, RefuseBody.pump_flow(drivetrain.rpm))
 	_pose_rig()
 
 	t.body_state = _body.state
@@ -206,6 +209,7 @@ func reset_session_state() -> void:
 	if drive != null:
 		drive.spring_brake = 0.0
 	drivetrain.drive_inhibit = false
+	drivetrain.pto_set_rpm = 0.0
 	if _body != null:
 		_body.reset()
 		_pose_rig()

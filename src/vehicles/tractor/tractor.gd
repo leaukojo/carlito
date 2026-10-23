@@ -8,7 +8,6 @@ extends BaseVehicle
 const SPAWN_HITCH := 1.0                ## spawn default: raised (transport), PTO off
 
 @export var hitch_travel_time := 1.5   ## s for a full raise or lower
-@export var pto_load := 0.35           ## engine_load added while PTO engaged
 ## The 100% end of 'draft_force' (N): the plough's `draft_rating()`, so the plough at full depth on
 ## full soil at `TractorTelemetry.DRAFT_S_REF_KMH` reads 100 %. Each implement pulls its own rating.
 @export var draft_max_force := 22410.0
@@ -70,6 +69,12 @@ func attachment_controls() -> Dictionary:
 		"scv": (conn & int(ImplementBase.Connection.SCV)) != 0,
 		"lift": true,
 	}
+
+
+## The hand throttle's PTO preset (0..1, `TractorTelemetry.pto_hand_throttle`): InputRouter's preset
+## key asks the machine, which knows its governor and PTO gearing.
+func pto_hand_throttle() -> float:
+	return TractorTelemetry.pto_hand_throttle(spec)
 
 
 ## Garage showroom hook; the coupling owns the freeze and its fit-check exemption.
@@ -159,13 +164,15 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	var running := input.key == InputRouter.KEY_IGNITION
 	_hitch_actual = move_toward(_hitch_actual, input.hitch_request, delta / maxf(hitch_travel_time, 0.01))
 	var pto_on := input.pto and running
+	# The governor's second lever, from the next tick (`Drivetrain.hand_throttle`).
+	drivetrain.hand_throttle = input.hand_throttle
 	t.hitch_pos_actual = roundi(_hitch_actual * 100.0)
 	t.pto_state = pto_on
 	# 540/1000 select a gearbox ratio off the engine; the engine is never re-targeted.
 	t.pto_rpm = TractorTelemetry.pto_shaft_rpm(drivetrain.rpm, input.pto_mode) if pto_on else 0
-	# Governed throttle, not the pedal.
+	# Governed throttle, not the pedal; a driven PTO is in it as load on the crank.
 	t.engine_load = roundi(VehicleTelemetry.engine_load_pct(
-			drivetrain.rpm, drivetrain.applied_throttle, spec, pto_on, pto_load))
+			drivetrain.rpm, drivetrain.applied_throttle, spec))
 	# Driveline state read out of the sim, not the request bits.
 	t.diff_lock_state = rear_diff_locked
 	t.fwd_drive_state = _front_axle_driven()
@@ -200,10 +207,24 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 		_drawbar.tick_towing(input, foot, input.handbrake, spool,
 				pto_on, t.pto_rpm, telemetry.speed, delta, _grip_terrains)
 		drivetrain.speed_cap_kmh = _drawbar.speed_cap_kmh()
-	# Draft force on the chassis while the linkage works in soil. Nothing above reads it:
-	# engine_load and wheel_slip are its consequences from prior ticks.
-	draft_applied = _apply_draft(implement, delta)
+	# The implement moves with the hitch, so its speed through the soil is the hitch point's; the
+	# draft and the PTO read the same point.
+	var point := Vector3.ZERO
+	var v_hitch := 0.0
+	var soil01 := 0.0
+	if implement != null:
+		point = _hitch.hitch_point()
+		v_hitch = VehicleMath.point_velocity(self, point).dot(-global_transform.basis.z)
+		soil01 = _soil_at(point)
+	# Draft force on the chassis while the linkage works in soil, and the PTO's power on the crank
+	# from the next tick. Nothing above reads either: engine_load, rpm sag and wheel_slip are their
+	# consequences from prior ticks.
+	draft_applied = _apply_draft(implement, point, v_hitch, soil01, delta)
 	t.draft_force = roundi(TractorTelemetry.draft_pct(draft_applied, draft_max_force))
+	var pto_kw := implement.pto_power_kw(absf(v_hitch) * 3.6, _hitch.ball_lift(), soil01) \
+			if implement != null else 0.0
+	drivetrain.accessory_torque = TractorTelemetry.pto_load_nm(pto_on, _attachment_connections(),
+			pto_kw)
 
 
 ## Fold the carried share of the implement's weight into the chassis' live mass and COM, off the
@@ -230,28 +251,23 @@ func _apply_implement_mass() -> void:
 	set_live_mass(spec.mass + carried, com)
 
 
-## Apply this tick's draft force to the chassis and return it (N, signed along forward), or 0
-## unless a draft-relevant implement is down in painted soil.
-func _apply_draft(implement: ImplementBase, delta: float) -> float:
+## Apply this tick's draft force at the hitch `point` (moving `v_hitch` m/s along forward, over
+## `soil01` of soil) to the chassis and return it (N, signed along forward), or 0 unless a
+## draft-relevant implement is down in painted soil.
+func _apply_draft(implement: ImplementBase, point: Vector3, v_hitch: float, soil01: float,
+		delta: float) -> float:
 	if _hitch == null or implement == null or not implement.draft_relevant():
 		return 0.0
 	# Working depth is the implement's own declared reach (plough 0.25 m, harrow tines 0.10 m).
 	var depth01 := TractorTelemetry.draft_depth01(
 			_hitch.ball_lift(), implement.tool_depth())
-	if depth01 <= 0.0:
+	if depth01 <= 0.0 or soil01 <= 0.0:
 		return 0.0
-	var point := _hitch.hitch_point()
-	var soil01 := _soil_at(point)
-	if soil01 <= 0.0:
-		return 0.0
-	# The implement moves with the hitch, so its speed through the soil is the hitch point's.
-	var forward := -global_transform.basis.z
-	var v_hitch := VehicleMath.point_velocity(self, point).dot(forward)
 	var force := TractorTelemetry.draft_newtons(v_hitch, depth01, soil01,
 			implement.draft_rating(), implement.draft_shape(), hitch_effective_mass(point), delta)
 	# Applied at the hitch point, below the centre of mass, so its own moment is nose-down; the net
 	# nose-up transfer comes from the tyres' answering drive force at ground level, a longer arm.
-	apply_force(forward * force, point - global_position)
+	apply_force(-global_transform.basis.z * force, point - global_position)
 	return force
 
 

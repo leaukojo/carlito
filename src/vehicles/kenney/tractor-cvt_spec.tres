@@ -1,0 +1,83 @@
+[gd_resource type="Resource" script_class="VehicleSpec" format=3]
+
+[ext_resource type="Script" path="res://src/vehicles/base/ground_drive_spec.gd" id="1_v5i8p"]
+[ext_resource type="Resource" path="res://src/vehicles/tyres/ag_lug.tres" id="2_npedx"]
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-tractor-front.tscn" id="3_ptm4g"]
+[ext_resource type="PackedScene" path="res://src/vehicles/kenney/wheel-tractor-rear.tscn" id="4_q53td"]
+[ext_resource type="Script" path="res://src/vehicles/base/vehicle_spec.gd" id="5_q4d48"]
+
+[sub_resource type="Resource" id="Resource_ft2ok"]
+script = ExtResource("1_v5i8p")
+wheel_positions = PackedVector3Array(-0.8027379, 0.5080303, -1.0061542, 0.8027379, 0.5080303, -1.0061542, -0.89622015, 0.7280303, 1.109223, 0.89622015, 0.7280303, 1.1092229)
+wheel_radius = 0.44
+wheel_inertia = 16.0
+wheel_radius_rear = 0.66
+wheel_inertia_rear = 90.0
+tyre_half_width = 0.3021
+tyre_half_width_rear = 0.4048
+wheel_scene = ExtResource("3_ptm4g")
+wheel_scene_rear = ExtResource("4_q53td")
+rear_diff_lockable = true
+front_axle_engageable = true
+centre_diff_rigid = true
+rest_length = 0.12
+spring_rate = 330000.0
+damper_bump = 16500.0
+damper_rebound = 20300.0
+spring_rate_rear = 420000.0
+max_suspension_force = 110000.0
+tyre = ExtResource("2_npedx")
+tyre_fit = 4
+grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
+mu_long = 1.0
+rear_lat_grip = 1.077
+load_sensitivity = 0.12
+cornering_peak_load = 3.0
+brake_torque = 15767.0
+handbrake_torque = 14667.0
+park_pawl_torque = 27500.0
+brake_bias_front = 0.0
+brake_engages_front_axle = true
+drag_area = 3.67
+rolling_resistance = 0.02
+aero_centre = Vector3(0, 1.45, -0.48)
+side_area = 7.24
+max_steer_deg = 38.0
+ackermann = 1.0
+min_steer_frac = 0.55
+steer_falloff_speed = 11.0
+
+[resource]
+script = ExtResource("5_q4d48")
+ground_drive = SubResource("Resource_ft2ok")
+mass = 7000.0
+center_of_mass = Vector3(0, 0.8305302, 0.3053797)
+torque_curve = PackedVector2Array(800, 550, 1200, 680, 1600, 700, 2000, 640, 2200, 560, 2600, 0)
+idle_rpm = 800.0
+redline_rpm = 2600.0
+gear_ratios = PackedFloat32Array()
+reverse_ratio = 3.9
+final_drive = 10.083
+engine_brake_frac = 0.2
+engine_friction_frac = 0.1
+pedal_map = 2
+governor_droop = 0.07
+fuel_type = 1
+engine_inertia = 1.5
+coupling = 1
+clutch_reserve = 2.0
+shift_handover_s = 0.3
+shift_up_rpm = 2200.0
+shift_down_rpm = 1000.0
+shift_up_light_rpm = 1500.0
+shift_dwell_s = 1.5
+cvt_range_tops = PackedFloat32Array(0.1128, 0.229, 0.4581, 0.8986)
+cvt_accel_ms2 = 1.5
+cvt_max_axle_torque = 45280.0
+speed_limit_kmh = 40.0
+steer_speed = 0.75
+headlight_paths = Array[NodePath]([NodePath("Lamps/HeadlightL"), NodePath("Lamps/HeadlightR")])
+head_lamp_paths = Array[NodePath]([NodePath("Lamps/HeadLensL"), NodePath("Lamps/HeadLensR")])
+brake_lamp_paths = Array[NodePath]([NodePath("Lamps/BrakeLampL"), NodePath("Lamps/BrakeLampR")])
+turn_left_paths = Array[NodePath]([NodePath("Lamps/TurnLF"), NodePath("Lamps/TurnLR")])
+turn_right_paths = Array[NodePath]([NodePath("Lamps/TurnRF"), NodePath("Lamps/TurnRR")])

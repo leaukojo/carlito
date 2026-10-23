@@ -60,10 +60,10 @@ const BISECT_STEPS := 7   ## 45 deg / 2^7 -> ~0.35 deg of resolution
 
 ## The `tc` loop's slip target: the shipped grip curves all peak at 0.12.
 const TC_TARGET_SLIP := 0.12
-const TC_GAIN := 12.0     ## pedal units per second per unit of slip error
+const TC_GAIN := 12.0     ## fuel units per second per unit of slip error
 ## Front-axle spring load, as a share of its settled load, below which the `tc` driver lifts off.
 const TC_FRONT_KEEP := 0.3
-const TC_LIFT_GAIN := 2.0 ## pedal units per second per unit of that share short
+const TC_LIFT_GAIN := 2.0 ## fuel units per second per unit of that share short
 
 const LEVEL_STEP := 4.0   ## m between road-curve samples in level mode
 
@@ -84,6 +84,7 @@ const DOC_JOBS: Array[Dictionary] = [
 	{"variant": "tractor-kenney", "mfwd": true, "diff": false, "tc": false},
 	{"variant": "tractor-kenney", "mfwd": true, "diff": true, "tc": false},
 	{"variant": "tractor-kenney", "mfwd": true, "diff": true, "tc": true},
+	{"variant": "tractor-cvt", "mfwd": true, "diff": true, "tc": false},
 	{"variant": "semi", "mfwd": false, "diff": false, "tc": false},
 ]
 
@@ -114,7 +115,10 @@ var _verbose := false                 ## print every bisection trial, not just t
 ## `tc`: hold the driven slip at the tyre's best (TC_TARGET_SLIP) instead of flooring the pedal, which is
 ## the difference between what the tyres could do and what a pedal-to-the-floor driver gets.
 var _tc := false
-var _throttle := 1.0                  ## pedal the TC loop is holding, 0..1
+## The delivered fuel (0..1) the TC loop holds, sent through the pedal map's inverse
+## (`PedalMap.pedal_for`) so one loop gain serves every map: on a governed tractor the pedal is a
+## speed setting, which cuts no fuel until the setting reaches the lugging crank.
+var _tc_fuel := 1.0
 var _front_settle := NAN              ## front-axle spring load at the end of the settle, N
 var _pedal := 0.0                     ## `pedal=<0..1>`: hold this throttle instead, diagnostic
 var _hold := NAN                      ## `hold=<deg>`: one trial at this angle, diagnostic
@@ -151,7 +155,7 @@ var _ascent_shifts: Array[Dictionary] = []
 var _ascent_byte := 0
 var _ascent_grade := 0.0
 var _ascent_room := 0.0  ## m of ramp from the start to ASCENT_MARGIN short of its top
-## `gear=<1-6>`: climbs and roll-backs in the bridge's manual mode, held in that byte (0: automatic
+## `gear=<1-24>`: climbs and roll-backs in the bridge's manual mode, held in that byte (0: automatic
 ## D). A start gear the automatic box would leave at once (it downshifts at a standstill), held.
 var _held_gear := 0
 ## `tyre=<id>`: the `TyreCatalog` class fitted on every body ("": its stock), and what the last
@@ -412,7 +416,7 @@ func _physics_process(delta: float) -> void:
 		if _t >= SETTLE_S:
 			_phase = Ph.CLIMB
 			_t = 0.0
-			_throttle = 1.0
+			_tc_fuel = 1.0
 			_front_settle = _front_load()
 			_start = _car.global_position
 			_drive_share = _driven_share()
@@ -431,8 +435,8 @@ func _physics_process(delta: float) -> void:
 		# same integrator: a hard pedal cap would porpoise (lift, cut, land, repeat).
 		var front_left := _front_load() / _front_settle if _front_settle > 0.0 else 1.0
 		var lift_rate := (front_left - TC_FRONT_KEEP) * TC_LIFT_GAIN
-		_throttle = clampf(_throttle + minf(slip_rate, lift_rate) * delta, 0.0, 1.0)
-		_drive(_throttle * 100.0, 0.0)
+		_tc_fuel = clampf(_tc_fuel + minf(slip_rate, lift_rate) * delta, 0.0, 1.0)
+		_drive(PedalMap.pedal_for(_car.spec, _tc_fuel, _car.drivetrain.rpm) * 100.0, 0.0)
 	## The ramp's own up-slope direction, not the body's forward: a body that has nosed up or
 	## slewed must still be measured along the hill.
 	var up_slope := Basis(Vector3.RIGHT, deg_to_rad(_angle)) * Vector3(0.0, 0.0, -1.0)
@@ -447,8 +451,8 @@ func _physics_process(delta: float) -> void:
 			print("      t %4.1f  gain %6.2f  v %5.2f  slipR %5.2f  f_long %8.0f  rpm %6.0f"
 					% [_t, _gain, _car.telemetry.speed, _car.telemetry.slip_rear, f_long,
 					_car.telemetry.rpm]
-					+ "  gear %d  thr %.2f" % [_car.telemetry.gear_byte,
-					_car.drivetrain.applied_throttle])
+					+ "  gear %d  thr %.2f  tc %.2f" % [_car.telemetry.gear_byte,
+					_car.drivetrain.applied_throttle, _tc_fuel])
 			for i in _car.drive.wheels.size():
 				var w: RayWheel = _car.drive.wheels[i]
 				print("        w%d %s%s N %7.0f  f_long %8.0f  drag %7.0f  slip %5.2f  omega %6.2f"
@@ -596,9 +600,9 @@ func _front_load() -> float:
 
 ## Steepest grade first gear at full throttle can push `mass` (kg, the whole rig) up from rest, in
 ## degrees. Sampled where a held body's crank sits, through a converter's stall torque ratio
-## (`Drivetrain.stall_axle_torque`).
+## (`Drivetrain.stall_axle_torque`); a CVT's is its relief, the most its deepest ratio passes.
 func _torque_limit_deg(spec: VehicleSpec, gd: GroundDriveSpec, crr: float, mass: float) -> float:
-	if spec.gear_ratios.is_empty():
+	if spec.gear_ratios.is_empty() and not Drivetrain.is_cvt(spec):
 		return NAN
 	var force := Drivetrain.stall_axle_torque(spec) / gd.drive_radius()
 	var ratio := force / (mass * 9.81)
@@ -893,8 +897,7 @@ func _creep_step() -> void:
 		if _t >= CREEP_FLAT_S - CREEP_MEAN_S:
 			var dt: Drivetrain = _car.drivetrain
 			_creep_sum += Vector3(_car.linear_velocity.dot(up_slope), dt.rpm,
-					VehicleTelemetry.engine_load_pct(dt.rpm, dt.applied_throttle, _car.spec, false,
-					0.0))
+					VehicleTelemetry.engine_load_pct(dt.rpm, dt.applied_throttle, _car.spec))
 			_creep_n += 1
 		if _t >= CREEP_FLAT_S:
 			var mean := _creep_sum / maxf(1.0, _creep_n)

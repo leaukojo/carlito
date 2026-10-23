@@ -20,26 +20,36 @@
 ; Its friction (engine_friction_frac 0.05 of peak, ~115 Nm at and below idle) is scaled off the
 ; 16.1 L TAD1641GE's published friction power, 36 kW at 1500 rpm (229 Nm, FMEP 1.8 bar), to 12 L
 ; and idle (~1.2 bar), an estimate. It runs a lifted crank back to idle and a key-off one to rest.
+; The pedal is the fuel (pedal_map LINEAR, the default): a road diesel's min-max governor leaves
+; the injection pump's rack to the pedal (Bosch, Governors for In-Line Pumps, 1975). It burns
+; diesel (fuel_type DIESEL): ~1.6 L/h at idle, its friction power over the class's efficiency.
 ;
-; GEARS 1-5 x final_drive 2.925 are a road-speed ladder for that rpm range; 6th is an OVERDRIVE
-; (0.69, 1.74x off 5th, about the 1.76x of 1st-2nd): ~1310 rpm at 88 km/h, a real unit's cruise, and
-; the governor, not the redline, sets top speed. The 1690 upshift lands 6th at 972 rpm, clear of the
-; 780 downshift, so no gear hunts.
+; GEARS are the I-Shift ATO2612's twelve (11.73 down to the 0.79 overdrive in 1.26-1.30 steps, Volvo's
+; body-builder instructions, docs/sources.md § Gearing) log-scaled onto this unit's span: D1 6.5 x
+; final_drive 2.925 down to the 0.69 overdrive, 1.21-1.24 a step. ~1310 rpm at 88 km/h in D12, a real
+; unit's cruise, and the governor, not the redline, sets top speed. The 1690 upshift lands at
+; 1359-1392 rpm, clear of the 780 downshift, so no gear hunts. D1 pulls like a real unit's low
+; start gear (the ATO's 1st-2nd on a ~2.6 axle and 0.5 m tyre, an estimate). The box picks its start
+; gear up to D6 (start_gear_max) as an AMT does from gross weight and grade (Eaton, US 6,953,410):
+; the highest whose floored launch locks the clutch within 1.5 s on the rig's mass and the drive
+; axle's static grip (ShiftPolicy.start_gear). Bobtail D6 on the flat; with the 24 t box D3, and D1
+; on 8 %.
 ;
 ; SHIFTING is the AMT's map (ShiftPolicy). 1690 / 780 is the full-pedal pair, where the launches are
-; tuned. At a light pedal it upshifts at 1500, the top of the D13's 1250-1500 rpm cruise band (Volvo,
-; "never specify ... above 1550"); with these 1.5-1.76 steps no light upshift can land in that band
-; (it would fire at 1925-2640, past the 1690 point), so the light map only shifts sooner, landing
-; 854-1125 rpm, each over 1.1x the 700 coast downshift (the landing floor, ~1350 on the 1.74-1.76
-; steps, stays under 1500). The coast downshift sits over the 600 idle. Kickdown is I-Shift's switch past full travel (Volvo fact sheet and operator's manual),
-; read as the last 5 % of the pedal (0.95). The dwell is EPA ALPHA's 1.5 s six-speed hold. Skip-shifts
-; are I-Shift's, but a skip needs a light upshift at 2310 rpm or more, past the 2080 redline, so on
-; this six-speed it never fires (it waits on real gear counts, docs/TODO.md). The shift's inertia
-; phase spans 0.4 s, inside the shift cut (an estimate: no AMT figure found): the clutch brings the
-; unfuelled crank down to the new gear at that rate instead of at its 4616 Nm rating. Once the
-; clutch has locked and the cut ends, the fuel comes back over shift_torque_ramp_s 0.3 s, as an AMT
-; ramps the engine's torque back after engagement (an estimate: no ramp-in figure found; Eaton's
-; zero-torque dwell before disengagement is 150-300 ms, US 6,406,403). Stepped back in one tick,
+; tuned. At a light pedal it upshifts at 1555, which lands each 1.21-1.24 step at 1250-1281 rpm, the
+; bottom of the D13's 1250-1500 rpm cruise band (Volvo, "never specify ... above 1550", a cruise
+; speed, not a shift point), each over 1.1x the 700 coast downshift (the landing floor, 958 on the
+; widest step). The coast downshift sits over the 600 idle. Kickdown is I-Shift's switch past full
+; travel (Volvo fact sheet and operator's manual), read as the last 5 % of the pedal (0.95). The dwell
+; is EPA ALPHA's 1.5 s hold. Skip-shifts are I-Shift's: floored, the box passes the gears the rig
+; would not hold for the dwell (ShiftPolicy.forced_upshift, on the rig's mass, the drive axle's
+; grip and the cut's dead time): from its D6 start the bobtail skips D6>D8, the 24 t box D3>D5, each
+; singly after. The shift's inertia phase spans 0.4 s, inside the shift cut (an estimate: no AMT figure
+; found): the clutch brings the unfuelled crank down to the new gear at that rate instead of at its
+; 4616 Nm rating. Once the clutch has locked and the cut ends, the fuel comes back over
+; shift_torque_ramp_s 0.3 s, as an AMT ramps the engine's torque back after engagement (an estimate:
+; no ramp-in figure found; Eaton's zero-torque dwell before disengagement is 150-300 ms,
+; US 6,406,403). Stepped back in one tick,
 ; the drive rings the cab in pitch (docs/vehicles.md § Pitch).
 ;
 ; WHAT BOUNDS 2308 Nm IS TRACTION. Gear 1 puts 2308 x 6.5 x 2.925 x 0.9 / 0.36 = 110 kN at the tyres
@@ -65,10 +75,11 @@
 ;   1.47 m/s^2 bobtail and 0.81 coupled to the 24 t box, whose brakes take the same share
 ;   (Drivetrain.retarder_fraction; tests/test_truck.gd pins the band bobtail).
 ; tcs_equipped is the rig's ASR, standard beside EBS: gear 1 puts ~102 kN on a driven axle that grips
-; ~70 kN. With it the AMT's clutch slips on its 900 rpm target and the drive tyres hold up to ~0.3
-; slip. Without it (measure_vehicles semi 40 trace notc, coupled to the 24 t box, 2026-10-10) the
-; clutch locks within 0.17 s and the tyres spin at a slip of ~2 for 2.4 s, the crank holding them
-; under the limiter at up to ~1920 rpm, and 50 km/h comes 0.3 s later (15.60 against 15.30 s).
+; ~70 kN. Held in D1 (measure_vehicles semi 40 trace gear=1, coupled to the 24 t box, 2026-10-20)
+; with it the AMT's clutch slips on its 900 rpm target and the drive tyres hold ~0.12 slip; without
+; it (notc) the clutch locks within 0.2 s and the tyres spin past 0.4. The laden D3 start pushes
+; ~65 kN, at the grip, so on dry asphalt the ASR does not act there (notc reaches 50 km/h in the
+; same time): it is the equipment for a lower start gear and for low grip.
 ; hill_hold ASSIST (1) for hill_hold_s 3.0 is the AMT's hill-start aid, the brake-to-clutch rule: the
 ; brakes hold the rig after the pedal's release until the slipping clutch carries the grade with the
 ; trailer's mass (WheelDrive.towed_kg), or 3 s pass (Volvo VN). No converter creeps here: the clutch
@@ -125,6 +136,15 @@
 ; coupled-to-the-box drive corner as the load and ~40 % as the target, which splits the error
 ; between laden (a few tenths nose-up) and bobtail (a few tenths nose-down). tests/test_trailer.gd
 ; computes the travel fractions; measure_semi_launch reports the pose.
+;
+; FRONT DAMPERS ARE THE ROAD BAND'S ENDS AT THE BOBTAIL STEER CORNER. The steer axle parks 41.1 kN
+; bobtail, ~2.1 t a corner: damper_bump 13500 / damper_rebound 17900 hold zeta = c / (2 sqrt(k m))
+; at 0.30 / 0.40 there on the 240000 spring, the 0.3-0.4 band docs/vehicles.md § Pitch judges a
+; launch against; coupled to the box (~2.5 t a corner) they read 0.27 / 0.36. The nose's rise at
+; the take-up is the rebound's: at 15800 (0.35) the floored bobtail launch overshoots the trace's
+; front-axle allowance, and neither the bump side nor the rear dampers move it (measure_vehicles
+; semi 60 trace trailer=bobtail, 2026-10-20). An estimate: no steer-axle damping ratio is sourced
+; for a tractor unit, so the band's ends stand in for one.
 ;
 ; REAR DAMPERS ARE SIZED FOR THE COUPLED CORNER, not the spring-scale rule. The rear axle's own load
 ; (own_rear_kg, ~1922 kg/corner bobtail) plus its share of a coupled trailer's kingpin load
@@ -185,8 +205,8 @@ retarder_equipped = true
 retarder_rating_nm = 1450.0
 rest_length = 0.32
 spring_rate = 240000.0
-damper_bump = 12000.0
-damper_rebound = 15800.0
+damper_bump = 13500.0
+damper_rebound = 17900.0
 spring_rate_rear = 360000.0
 damper_bump_rear = 24700.0
 damper_rebound_rear = 28800.0
@@ -220,12 +240,13 @@ trailer_bus_equipped = true
 torque_curve = PackedVector2Array(600, 1500, 780, 1985, 1170, 2308, 1560, 2215, 1820, 1723, 2080, 577)
 idle_rpm = 600.0
 redline_rpm = 2080.0
-gear_ratios = PackedFloat32Array(6.5, 3.7, 2.4, 1.6, 1.2, 0.69)
+gear_ratios = PackedFloat32Array(6.5, 5.316, 4.277, 3.5, 2.849, 2.327, 1.917, 1.568, 1.26, 1.031, 0.839, 0.69)
 reverse_ratio = 6.0
 final_drive = 2.925
 efficiency = 0.9
 engine_brake_frac = 0.15
 engine_friction_frac = 0.05
+fuel_type = 1
 shift_cut_s = 0.4
 shift_torque_ramp_s = 0.3
 engine_inertia = 3.0
@@ -234,14 +255,15 @@ clutch_reserve = 2.0
 launch_rpm_over_idle = 300.0
 shift_up_rpm = 1690.0
 shift_down_rpm = 780.0
-shift_up_light_rpm = 1500.0
+shift_up_light_rpm = 1555.0
 shift_down_light_rpm = 700.0
 kickdown_pedal = 0.95
 shift_dwell_s = 1.5
 skip_shifts = true
+start_gear_max = 6
 shift_handover_s = 0.4
 ; ROAD-SPEED GOVERNOR 90 km/h: the EU goods-vehicle limiter (Directive 92/6/EEC). It binds: coupled
-; or bobtail the unit settles on it at 88-89 km/h (measure_vehicles), ~1310 rpm in the overdrive 6th.
+; or bobtail the unit settles on it at 88-89 km/h (measure_vehicles), ~1310 rpm in the overdrive D12.
 ; It is the honest spec for a European artic.
 speed_limit_kmh = 90.0
 ; HIGH-SPEED STEERING FALLOFF. 0.21 x 24 = 5.0 deg of usable lock at the floor, and the floor is set

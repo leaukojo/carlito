@@ -64,6 +64,7 @@ reverse_ratio = 3.403
 final_drive = 3.73
 engine_brake_frac = 0.12
 engine_friction_frac = 0.1
+fuel_type = 1
 engine_inertia = 0.4
 shift_handover_s = 0.3
 shift_up_rpm = 3300.0

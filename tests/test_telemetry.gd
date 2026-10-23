@@ -10,6 +10,7 @@ const DroneT := preload("res://src/vehicles/drone/drone_telemetry.gd")
 const PlaneT := preload("res://src/vehicles/plane/plane_telemetry.gd")
 const TrainT := preload("res://src/vehicles/train/train_telemetry.gd")
 const ContractScript := preload("res://src/bridge/contract.gd")
+const W := preload("res://src/levels/base/wind_field.gd")
 const VehicleSpecScript := preload("res://src/vehicles/base/vehicle_spec.gd")
 
 
@@ -39,6 +40,33 @@ func test_heading_cardinals() -> void:
 
 
 # --- odometer ---
+
+# --- true wind (contract 'twd' / 'tws', every family that publishes them) ---
+
+func test_true_wind_names_the_bearing_the_wind_comes_from() -> void:
+	# A wind blowing TOWARD north comes FROM the south.
+	var north := T.true_wind(W.base_vector(0.0, 4.0))
+	assert_float(north.x).is_equal_approx(4.0, 1e-5)
+	assert_float(north.y).is_equal_approx(180.0, 1e-3)
+	# Level 6's field: 200 deg TOWARD at 5 m/s, so it comes FROM 020.
+	var tw := T.true_wind(W.base_vector(200.0, 5.0))
+	assert_float(tw.x).is_equal_approx(5.0, 1e-5)
+	assert_float(tw.y).is_equal_approx(20.0, 1e-4)
+	# The inversion holds all the way round, including across the 0/360 wrap.
+	for deg: float in [0.0, 90.0, 179.0, 181.0, 270.0, 359.0]:
+		var t2 := T.true_wind(W.base_vector(deg, 3.0))
+		assert_float(t2.y) \
+			.override_failure_message("toward %f did not inverse-map" % deg) \
+			.is_equal_approx(fposmod(deg + 180.0, 360.0), 1e-3)
+
+
+func test_true_wind_ignores_the_vertical_and_reads_zero_in_a_calm() -> void:
+	assert_float(T.true_wind(Vector3(3.0, 9.0, -4.0)).x).is_equal_approx(5.0, 1e-5)
+	for still: Vector3 in [Vector3.ZERO, Vector3(0.0, 6.0, 0.0)]:
+		var tw := T.true_wind(still)
+		assert_float(tw.x).is_equal(0.0)
+		assert_float(tw.y).is_equal(0.0)
+
 
 func test_odo_accumulates_absolute_distance_in_km() -> void:
 	assert_float(T.odo_step(0.0, 10.0, 0.1)).is_equal_approx(0.001, 1e-9)
@@ -97,6 +125,65 @@ func test_fuel_burns_only_while_running_and_clamps() -> void:
 	assert_float(T.fuel_step(0.05, 1.0, true, 1.0)).is_equal(0.0)
 	# Load monotonically increases burn.
 	assert_float(T.fuel_step(50.0, 1.0, true, 1.0)).is_less(T.fuel_step(50.0, 0.0, true, 1.0))
+
+
+## A flat 100 N·m engine from 1000 to 5000 rpm whose motoring is 10 N·m throughout: every figure
+## below is arithmetic on it, never a tuned body's.
+func _flat_engine(kind: VehicleTelemetry.Fuel) -> VehicleSpec:
+	var spec: VehicleSpec = VehicleSpecScript.new()
+	spec.torque_curve = PackedVector2Array([Vector2(1000, 100), Vector2(5000, 100)])
+	spec.idle_rpm = 1000.0
+	spec.redline_rpm = 5000.0
+	spec.engine_friction_frac = 0.1
+	spec.engine_brake_frac = 0.1
+	spec.fuel_type = kind
+	return spec
+
+
+func test_fuel_rate_is_zero_at_zero_fuel_and_with_the_key_off() -> void:
+	var spec := _flat_engine(T.Fuel.PETROL)
+	assert_float(T.fuel_rate_lph(spec, 3000.0, 0.0, true)).is_equal(0.0)  # a cut burns nothing
+	assert_float(T.fuel_rate_lph(spec, 3000.0, 1.0, false)).is_equal(0.0)
+
+
+func test_fuel_rate_rises_with_fuel() -> void:
+	var spec := _flat_engine(T.Fuel.DIESEL)
+	var last := 0.0
+	for i in range(1, 11):
+		var burn := T.fuel_rate_lph(spec, 2000.0, i / 10.0, true)
+		assert_float(burn).is_greater(last)
+		last = burn
+
+
+## At the fuel that nets the engine's torque to zero (idle with nothing to drive) the burn is the
+## friction's power over the indicated efficiency: 10 N·m at 1000 rpm is 1047.2 W, over petrol's
+## 0.41 x 41.05 MJ/kg at 0.757 kg/L, 0.2959 L/h.
+func test_idle_burn_is_friction_power_over_the_indicated_efficiency() -> void:
+	var spec := _flat_engine(T.Fuel.PETROL)
+	var f := Drivetrain.drag_fuel(spec, 1000.0)
+	assert_float(Drivetrain.crank_torque(spec, 1000.0, f)).is_equal_approx(0.0, 1e-4)
+	var friction_w := 10.0 * 1000.0 / Drivetrain.RADS_TO_RPM
+	var expect := friction_w / (T.FUEL_INDICATED_EFFICIENCY[T.Fuel.PETROL]
+			* T.FUEL_HEATING_MJ_KG[T.Fuel.PETROL] * 1e6) / T.FUEL_DENSITY_KG_L[T.Fuel.PETROL] * 3600.0
+	assert_float(T.fuel_rate_lph(spec, 1000.0, f, true)).is_equal_approx(expect, 1e-4)
+	assert_float(T.fuel_rate_lph(spec, 1000.0, f, true)).is_equal_approx(0.2959, 1e-3)
+
+
+## Full fuel at 3000 rpm adds 110 N·m over the motoring law: 34.56 kW, over diesel's 0.45 x
+## 42.7 MJ/kg at 0.84 kg/L, 7.708 L/h. A check of the arithmetic, not of the sourced figures.
+func test_full_fuel_burn_reads_the_computed_figure() -> void:
+	assert_float(T.fuel_rate_lph(_flat_engine(T.Fuel.DIESEL), 3000.0, 1.0, true)) 		.is_equal_approx(7.708, 2e-3)
+
+
+## The tank is the COMPROMISE's: the rated burn empties it in FUEL_TANK_FULL_LOAD_S.
+func test_the_tank_lasts_its_full_load_time_at_the_rated_burn() -> void:
+	var spec := _flat_engine(T.Fuel.PETROL)
+	var tank := T.tank_litres(spec)
+	assert_float(tank).is_greater(0.0)
+	var rated := T.rated_fuel_rate_lph(spec)
+	assert_float(T.fuel_drain(100.0, rated, tank, T.FUEL_TANK_FULL_LOAD_S * 0.5)) 		.is_equal_approx(50.0, 1e-3)
+	assert_float(T.fuel_drain(1.0, rated, tank, T.FUEL_TANK_FULL_LOAD_S)).is_equal(0.0)
+	assert_float(T.fuel_drain(40.0, 0.0, tank, 10.0)).is_equal(40.0)
 
 
 # --- coolant model ---
@@ -316,20 +403,20 @@ func _load_spec() -> VehicleSpecScript:
 
 func test_engine_load_scales_with_throttle_at_a_fixed_rpm() -> void:
 	var spec := _load_spec()
-	assert_float(T.engine_load_pct(2000.0, 0.0, spec, false, 0.35)).is_equal(0.0)
+	assert_float(T.engine_load_pct(2000.0, 0.0, spec)).is_equal(0.0)
 	# At peak-torque rpm the engine can make all 200 Nm, so full throttle IS full load.
-	assert_float(T.engine_load_pct(2000.0, 1.0, spec, false, 0.35)).is_equal(100.0)
-	assert_float(T.engine_load_pct(2000.0, 0.5, spec, false, 0.35)).is_equal_approx(50.0, 1e-4)
+	assert_float(T.engine_load_pct(2000.0, 1.0, spec)).is_equal(100.0)
+	assert_float(T.engine_load_pct(2000.0, 0.5, spec)).is_equal_approx(50.0, 1e-4)
 	# Reverse throttle loads the engine just the same.
-	assert_float(T.engine_load_pct(2000.0, -0.5, spec, false, 0.35)).is_equal_approx(50.0, 1e-4)
+	assert_float(T.engine_load_pct(2000.0, -0.5, spec)).is_equal_approx(50.0, 1e-4)
 
 
 func test_engine_load_is_rpm_aware_not_a_second_pedal_readout() -> void:
 	# Load follows engine's curve position (off peak can't make full torque, so not full load).
 	var spec := _load_spec()
-	var at_peak := T.engine_load_pct(2000.0, 1.0, spec, false, 0.35)
-	var lugging := T.engine_load_pct(1000.0, 1.0, spec, false, 0.35)
-	var revved := T.engine_load_pct(3000.0, 1.0, spec, false, 0.35)
+	var at_peak := T.engine_load_pct(2000.0, 1.0, spec)
+	var lugging := T.engine_load_pct(1000.0, 1.0, spec)
+	var revved := T.engine_load_pct(3000.0, 1.0, spec)
 	assert_float(lugging).is_equal_approx(50.0, 1e-4)  # 100 of 200 Nm
 	assert_float(revved).is_equal_approx(50.0, 1e-4)   # 100 of 200 Nm
 	assert_float(at_peak).is_greater(lugging)
@@ -338,20 +425,27 @@ func test_engine_load_is_rpm_aware_not_a_second_pedal_readout() -> void:
 	# and `Drivetrain.applied_throttle` — which is what every caller passes here — carries it.
 	# The curve itself keeps saying what the engine makes at 4000 (100 Nm), which is honest;
 	# with the fuel cut there is no load.
-	assert_float(T.engine_load_pct(4000.0, 1.0, spec, false, 0.35)).is_equal_approx(50.0, 1e-4)
-	assert_float(T.engine_load_pct(4000.0, 0.0, spec, false, 0.35)).is_equal(0.0)
+	assert_float(T.engine_load_pct(4000.0, 1.0, spec)).is_equal_approx(50.0, 1e-4)
+	assert_float(T.engine_load_pct(4000.0, 0.0, spec)).is_equal(0.0)
 
 
-func test_engine_load_adds_the_pto_parasitic_term_and_clamps() -> void:
+func test_engine_load_is_bounded_and_survives_a_curveless_engine() -> void:
 	var spec := _load_spec()
-	# 50 % of the curve + a 35 % parasitic draw.
-	assert_float(T.engine_load_pct(2000.0, 0.5, spec, true, 0.35)).is_equal_approx(85.0, 1e-4)
-	# Clamped at 100 %.
-	assert_float(T.engine_load_pct(2000.0, 0.9, spec, true, 0.35)).is_equal(100.0)
+	assert_float(T.engine_load_pct(2000.0, 1.5, spec)).is_equal(100.0)
 	# An engine with no torque curve reports nothing rather than dividing by zero.
 	var curveless: VehicleSpecScript = VehicleSpecScript.new()
 	curveless.torque_curve = PackedVector2Array()
-	assert_float(T.engine_load_pct(2000.0, 1.0, curveless, false, 0.35)).is_equal(0.0)
+	assert_float(T.engine_load_pct(2000.0, 1.0, curveless)).is_equal(0.0)
+
+
+func test_a_pto_load_is_its_power_at_the_rated_engine_speed_through_the_driveline() -> void:
+	# 31.8 kW at 2200 rpm (230.38 rad/s) over D497's 0.90: 153.37 N·m on the crank.
+	assert_float(T.pto_crank_torque(31.8, 2200.0)).is_equal_approx(153.37, 0.01)
+	# A constant torque: the same at any live speed, so it is a function of the rating alone.
+	assert_float(T.pto_crank_torque(31.8, 1100.0)).is_equal_approx(2.0 * 153.37, 0.02)
+	assert_float(T.pto_crank_torque(0.0, 2200.0)).is_equal(0.0)
+	assert_float(T.pto_crank_torque(-5.0, 2200.0)).is_equal(0.0)
+	assert_float(T.pto_crank_torque(10.0, 0.0)).is_equal(0.0)
 
 
 # --- train telemetry struct ---

@@ -1,7 +1,10 @@
 class_name WindRose
 extends Control
-## Hand-built wind and track rose, the marine counterpart of Gauge and AttitudeIndicator, shown
-## only where the vehicle declares the whole wind/track set (boat).
+## Hand-built wind and track rose, the marine counterpart of Gauge and AttitudeIndicator. Two
+## faces, picked by the dashboard off the contract: the full rose where the vehicle declares the
+## whole wind/track set (boat), and a compass rose (`marine` false) where it declares only
+## heading and true wind (the land families): the card and the true-wind arrow, no apparent-wind
+## or track needle.
 ##
 ## Heading-up: the bow index is fixed and the card turns, so the gap between the track needle and
 ## the bow index IS the crab angle. Signs are the contract's ('awa' negative = from port), pinned
@@ -23,6 +26,8 @@ const CARD_TEXT := Color(0.72, 0.75, 0.80)
 const BOW_COLOR := Color(1.0, 0.78, 0.10)    ## the fixed hull index, amber like the horizon's
 const APPARENT_COLOR := Color(0.45, 0.72, 1.0)
 const TRUE_COLOR := Color(0.60, 0.63, 0.68)
+## The compass face's only needle, so it takes a colour that stands off the grey card.
+const COMPASS_WIND_COLOR := Color(0.45, 0.72, 1.0)
 const TRACK_COLOR := Color(0.35, 0.85, 0.45)
 const TEXT_COLOR := Color(0.95, 0.96, 1.0)
 ## What an undefined angle reads as, the echo sounder's answer to the same problem.
@@ -36,6 +41,7 @@ var cog := 0.0      ## deg, contract 'cog' (the bearing actually travelled)
 var sog := 0.0      ## m/s, contract 'sog'
 var heading := 0.0  ## deg, shared 'heading' — what the card is turned by
 var caption := ""   ## static label drawn under the top bezel
+var marine := true  ## false = the compass face: card, true wind, heading; awa/aws/cog/sog unread
 
 
 ## One setter for the whole reading: seven fields arrive together every frame, and seven
@@ -117,6 +123,10 @@ func _draw() -> void:
 					cardinal, small, CARD_TEXT)
 	draw_arc(center, r, 0.0, TAU, 96, BEZEL_COLOR, 2.0 * s, true)
 
+	if not marine:
+		_draw_compass_face(center, r, s, font, small)
+		return
+
 	# True wind: a short outer tick, so it cannot be mistaken for the apparent needle.
 	if has_wind(tws):
 		var td := needle_dir(relative_bearing(twd, heading))
@@ -125,25 +135,14 @@ func _draw() -> void:
 	# Apparent wind: an arrow flying FROM its bearing INTO the middle, which is what the airflow
 	# over the hull does. Not drawn in a calm — see the header.
 	if has_wind(aws):
-		var ad := needle_dir(awa)
-		var tip := center + ad * (r * 0.26)
-		draw_line(center + ad * (r * 0.92), tip, APPARENT_COLOR, 3.0 * s)
-		var side := Vector2(-ad.y, ad.x)
-		draw_colored_polygon(PackedVector2Array([
-			tip, tip + ad * (9.0 * s) + side * (5.0 * s), tip + ad * (9.0 * s) - side * (5.0 * s),
-		]), APPARENT_COLOR)
+		_draw_arrow(center, needle_dir(awa), r, s, APPARENT_COLOR)
 
 	# Ground track, only where there is one.
 	if has_track(sog):
 		var cd := needle_dir(crab(cog, heading))
 		draw_line(center, center + cd * (r * 0.86), TRACK_COLOR, 2.5 * s)
 
-	# The hull index: fixed at the top, so everything above is read against the bow.
-	draw_colored_polygon(PackedVector2Array([
-		center + Vector2(0.0, -r + 1.0 * s),
-		center + Vector2(-5.0 * s, -r + 11.0 * s),
-		center + Vector2(5.0 * s, -r + 11.0 * s),
-	]), BOW_COLOR)
+	_draw_bow_index(center, r, s)
 
 	if not caption.is_empty():
 		_draw_centered(font, center + Vector2(0.0, -r * 0.62), caption, small, CARD_COLOR)
@@ -157,6 +156,41 @@ func _draw() -> void:
 	_draw_centered(font, center + Vector2(0.0, r * 0.92),
 			("CRAB %+d" % roundi(crab(cog, heading))) if has_track(sog) else "CRAB " + BLANK,
 			small, TRACK_COLOR if has_track(sog) else CARD_COLOR)
+
+
+## The land face: true wind is the only needle, so it takes the apparent needle's arrow (flying
+## FROM its bearing into the middle: a body drifts away from the side it comes from).
+func _draw_compass_face(center: Vector2, r: float, s: float, font: Font, small: int) -> void:
+	if has_wind(tws):
+		_draw_arrow(center, needle_dir(relative_bearing(twd, heading)), r, s, COMPASS_WIND_COLOR)
+	_draw_bow_index(center, r, s)
+	if not caption.is_empty():
+		_draw_centered(font, center + Vector2(0.0, -r * 0.62), caption, small, CARD_COLOR)
+	_draw_centered(font, center + Vector2(0.0, r * 0.30), "%.1f" % tws,
+			int(UiTheme.px(self, 17.0)), TEXT_COLOR)
+	_draw_centered(font, center + Vector2(0.0, r * 0.30 + 15.0 * s), "TWS m/s", small, CARD_COLOR)
+	var twd_text := ("%03d" % (roundi(twd) % 360)) if has_wind(tws) else BLANK
+	_draw_centered(font, center + Vector2(0.0, r * 0.72), "TWD %s" % twd_text, small, CARD_TEXT)
+	_draw_centered(font, center + Vector2(0.0, r * 0.92), "HDG %03d" % (roundi(heading) % 360),
+			small, CARD_COLOR)
+
+
+func _draw_arrow(center: Vector2, dir: Vector2, r: float, s: float, color: Color) -> void:
+	var tip := center + dir * (r * 0.26)
+	draw_line(center + dir * (r * 0.92), tip, color, 3.0 * s)
+	var side := Vector2(-dir.y, dir.x)
+	draw_colored_polygon(PackedVector2Array([
+		tip, tip + dir * (9.0 * s) + side * (5.0 * s), tip + dir * (9.0 * s) - side * (5.0 * s),
+	]), color)
+
+
+## The hull index: fixed at the top, so everything on the card is read against the bow.
+func _draw_bow_index(center: Vector2, r: float, s: float) -> void:
+	draw_colored_polygon(PackedVector2Array([
+		center + Vector2(0.0, -r + 1.0 * s),
+		center + Vector2(-5.0 * s, -r + 11.0 * s),
+		center + Vector2(5.0 * s, -r + 11.0 * s),
+	]), BOW_COLOR)
 
 
 func _draw_centered(font: Font, at: Vector2, text: String, font_size: int, color: Color) -> void:

@@ -115,7 +115,7 @@ var _lens_overrides := {
 ## variant -> {front?: y, rear?: y}, BODY space — a figure on the SCALED body, so a `scale` edit
 ## has to bring it along. Tractor rear: the box centre lands too low there (verified driving);
 ## 1.647 is the shipped height.
-var _fallback_lamp_y := {"tractor-kenney": {"rear": 1.647}}
+var _fallback_lamp_y := {"tractor-kenney": {"rear": 1.647}}  ## keyed by model (`_model_of`)
 var _drag_report: Array = []  ## per-variant measured frontal area + derived drag area
 var _shape_report: Array = []  ## per-variant collision shape kind + hull vertex count
 var _lens_report: Array = []   ## per-variant lens detection, so a bad lamp is diagnosable
@@ -144,9 +144,9 @@ const CAR_BASE := {
 	# degree figure: the toy wheelbases (1.6 m on the SUV) pitch more by geometry alone.
 	"anti_dive": 0.4, "anti_squat": 0.5,
 	# Bars: the 20 kN/m pair split 16 / 4 kN/m, so the front carries ~65-70 % of the roll stiffness
-	# and washes wide first on equal side grip: the corner pass saturates the front first at 0.82-0.90 g
-	# (front / rear ellipse share: sedan 0.97 / 0.93, taxi 0.97 / 0.91, hatchback-sports 0.96 / 0.89,
-	# police 0.99 / 0.84), roll 4.4-5.0 deg, no wheel lifted. BalanceModel.limit predicts +10.9 / +10.8 /
+	# and washes wide first on equal side grip: the corner pass saturates the front first at 0.82-0.85 g
+	# (front / rear ellipse share: sedan 0.98 / 0.84, taxi 0.98 / 0.84, hatchback-sports 0.99 / 0.86,
+	# police 0.99 / 0.85), roll 4.3-5.0 deg, no wheel lifted. BalanceModel.limit predicts +10.9 / +10.8 /
 	# +13.1 / +7.0 % front-first. All-front (no rear bar) reads front-first too, but lifts
 	# hatchback-sports' inner front (6.5 deg of roll), which caps the transfer. The linear understeer is
 	# the bars and tyre laws plus roll steer below (BalanceModel K at 0.15 g 1.49-1.61 on the front-heavy
@@ -192,6 +192,12 @@ const CAR_BASE := {
 	# rev limiter in sixth.
 	"torque_curve": [900, 98, 2000, 154, 3200, 184, 4800, 185, 6000, 185, 6600, 170, 6800, 61],
 	"idle_rpm": 900.0, "redline_rpm": 6800.0,
+	# The pedal is a torque request, as a torque-based petrol engine management reads it: EPA's
+	# measured pedal map of a 2016 Honda L15B7 (SAE 2018-01-1412, Fig. 2; `PedalMap.PETROL_REQUEST`).
+	# A third of the pedal asks about two thirds of the peak; full pedal is the curve.
+	"pedal_map": PedalMap.Kind.PETROL,
+	# Pump petrol (`VehicleTelemetry.fuel_rate_lph`: E10, read off EPA's 2.5 L Malibu map).
+	"fuel_type": VehicleTelemetry.Fuel.PETROL,
 	# Brake hardware, Nm per wheel (`BrakeSizing` checks every figure; `_brakes`). A saloon's
 	# 280-300 mm vented discs: 1450 Nm average is 1.43 g of capacity at 1150 kg, past the 1.05 tyre,
 	# so full pedal reaches ABS. The handbrake is a cable on the rear discs, 1400 Nm a wheel: it
@@ -220,12 +226,13 @@ const CAR_BASE := {
 	# estimate inside that band. No fixed cut: the TCU reduces the engine's torque through the phase
 	# so the clutch passes the driver's demand (`Drivetrain.handover_fuel`; US 9,327,733).
 	"shift_handover_s": 0.3,
-	"engine_brake_frac": 0.12, "shift_cut_s": 0.0, "launch_engage_s": 0.0,
-	# Motoring at and below idle (engine_friction_frac): ~0.10 of peak, ~18 N·m, an estimate for a
-	# 1.6-2.0 L petrol's friction plus closed-throttle pumping (no primary figure found): it runs a
-	# blipped crank back to idle, and a key-off one to rest in about a second. docs/drivetrain.md
-	# § Crank and coupling.
-	"engine_friction_frac": 0.10,
+	# Motoring (friction plus closed-throttle pumping): EPA's measured 2.5 L Malibu curve, 0.069 of
+	# its peak at 1000 rpm rising to 0.250 at 6000, fitted to the linear law by least squares over
+	# 1000-6000 rpm on this idle and redline: 0.07 at idle, 0.25 at redline, every measured point
+	# within 0.025 of peak. A share of peak, so the 2.5 L's figure carries to the class.
+	# docs/drivetrain.md § Motoring and friction.
+	"engine_brake_frac": 0.25, "shift_cut_s": 0.0, "launch_engage_s": 0.0,
+	"engine_friction_frac": 0.07,
 	# Crank and coupling (docs/drivetrain.md § Crank and coupling): 0.20 kg·m² is a 1.2-2.0 L petrol's
 	# measured rotating assembly with a flexplate and a converter impeller (0.125-0.149 whole engine
 	# with flywheel and clutch, 0.092 impeller); an automatic's converter; a clutch rating 1.5x the
@@ -314,6 +321,10 @@ const TRUCK_BASE := {
 	# The derived stall is 1250 rpm, `(idle / stall)²` 0.31.
 	"torque_curve": [700, 509, 1200, 826, 1800, 1017, 2600, 890, 2900, 0],
 	"idle_rpm": 700.0, "redline_rpm": 2900.0,
+	# The pedal is the fuel rack, a road diesel's min-max governor (Bosch, Governors for In-Line
+	# Pumps, 1975): between idle and maximum speed the driver sets the torque directly.
+	"pedal_map": PedalMap.Kind.LINEAR,
+	"fuel_type": VehicleTelemetry.Fuel.DIESEL,
 	# The Allison 3000 / 3200 close ratios and reverse (Allison; the 3200 carries 325 hp in refuse
 	# service), into a 5.57 axle on a Class 7 rear loader with this engine (dealer listing): on the
 	# 315/80R22.5's 0.500 m loaded radius, re-referred to the drawn 0.36 m (x 0.72), so road speed
@@ -407,6 +418,10 @@ const VAN_BASE := {
 	# 4000 rpm is a governor droop to nothing (estimate: no published high-idle figure).
 	"torque_curve": [750, 235, 1500, 423, 1750, 470, 2500, 470, 3000, 468, 4000, 0],
 	"idle_rpm": 750.0, "redline_rpm": 4000.0,
+	# The pedal is the fuel rack, as TRUCK_BASE's (Bosch's min-max governor): no published pedal map
+	# of a light-duty diesel was found.
+	"pedal_map": PedalMap.Kind.LINEAR,
+	"fuel_type": VehicleTelemetry.Fuel.DIESEL,
 	# The 6R80's ratios and reverse (secondary), through the 3.73 limited-slip axle of a 4.7 t
 	# dual-rear-wheel Transit 350 HD with this engine (secondary): first 15.6:1 overall, top
 	# 52.7 km/h per 1000 rpm at r 0.36, so top speed is drag's, well under the 211 km/h droop end.
@@ -508,32 +523,54 @@ const TRACTOR_BASE := {
 	# peaks at 3.0x the static corner load, an estimate: no open ag-radial MF set (`PKY2 * Fz0 / ref`
 	# ~2.5-3.5).
 	"load_sensitivity": 0.12, "cornering_peak_load": 3.0,
-	# Rated 2000, governed to nothing by 2600 (high idle).
+	# Max power at 2000, rated (the governor's break) at 2200; governed to nothing by 2600 (high idle).
 	"torque_curve": [800, 550, 1200, 680, 1600, 700, 2000, 640, 2200, 560, 2600, 0],
 	"idle_rpm": 800.0, "redline_rpm": 2600.0,
-	# ~4.4:1 spread, 9 km/h first to a 40 km/h road gear. Reverse is the bus's one R byte, so it is
-	# D3's ratio: a shuttle reverses near its forward working speeds.
+	# An all-speed governor (Bosch's variable-speed governors, Governors for In-Line Pumps, 1975): the
+	# pedal or the hand throttle sets an engine speed from idle to the 2600 high idle, and the fuel
+	# holds it on a 7 % droop line, Deere's 6R (rated 2100, fast idle 2250). COMPROMISE: at the top
+	# setting the line is the curve's own 2200-2600 tail, an 18 % droop there; reshaping the tail to
+	# 7 % (high idle ~2350) drops the top speed from ~39 to ~35 km/h (docs/vehicles.md § Rejected
+	# designs, "torque-curve tails").
+	"pedal_map": PedalMap.Kind.ALL_SPEED, "governor_droop": 0.07,
+	# Diesel: the road diesels' figure reads the OECD-tested 6175R's specific consumption at its
+	# PTO within 5 % (docs/sources.md § Fuel), so the tractor shares it.
+	"fuel_type": VehicleTelemetry.Fuel.DIESEL,
+	# A full powershift of 16 forward speeds, the John Deere 8R e16 class (16F, full powershift: OECD
+	# 2/2 682; docs/sources.md § Gearing), over a ~4.4:1 spread, 9 km/h first to a 40 km/h road gear,
+	# in even 1.103 steps. COMPROMISE: the e16 spans 22:1 (1.9-42.2 km/h at 2100 rpm) in ~1.15 field
+	# steps, and this span is only its gears 8-16; its count in our span is a step at the brief's
+	# 1.10-1.15 lower edge. Undoing it is a deeper D1, which moves the stall hold, creep,
+	# gradeability and every tractor launch. Reverse is the bus's one R byte, at ~D7's ratio: a
+	# shuttle reverses near its forward working speeds.
 	# `final_drive` 10.083 is 5.5 at a 0.36 m wheel re-referred to the drawn 0.66 m rear
 	# (x 0.66 / 0.36): G / r is unchanged, so every road speed per rpm, the force per N*m and the
 	# crank's reflected mass J (G / r)^2 / m are too. A radius re-referral, not a traction lever.
-	"gear_ratios": [7.0, 5.2, 3.9, 2.9, 2.15, 1.6], "reverse_ratio": 3.9,
+	"gear_ratios": [7.0, 6.344, 5.75, 5.211, 4.722, 4.28, 3.879, 3.515, 3.186, 2.887, 2.617, 2.372,
+			2.149, 1.948, 1.765, 1.6], "reverse_ratio": 3.9,
 	"final_drive": 10.083, "efficiency": 0.9, "shift_up_rpm": 2200.0, "shift_down_rpm": 1000.0,
 	# The powershift's map (`ShiftPolicy`): light 1500, Massey Ferguson AutoDrive's Eco mode (its
 	# Power mode's 2100 is the full pair's 2200); the sourced 1200 downshift (Dynashift, both modes)
-	# sits over the full pair's 1000, so the coast stays at it (0). 1500 lands ~1110 on the 1.35
-	# steps, just over the landing floor (1484). No pedal kickdown: AutoDrive shifts on engine speed
-	# and none is sourced for a powershift; with one, the bobtail kicked from D5 to D4 at 15 km/h
-	# and revved into its forced upshift 0.62 s later (cruise probe, 2026-10-13). The six-speed's
-	# 1.5 s dwell, and skip-shifts: a lift from 2200 in D1 lands D2 past its own light point and
-	# takes D3.
-	# The start gear up to D3 (`ShiftPolicy.start_gear`): a powershift's start gear is a driver
-	# preset, higher for an empty run and lower with a load; picked here from the load standing on
-	# the grade, as the I-Shift picks its own from gross weight and gradient. D3 on the flat, D1 laden
-	# on mud or on a steep grade (docs/heavy_vehicles.md § Tractor, implement & ISOBUS).
+	# sits over the full pair's 1000, so the coast stays at it (0). 1500 lands ~1360 on the 1.103
+	# steps, over the landing floor (1214). No pedal kickdown: AutoDrive shifts on engine speed and
+	# none is sourced for a powershift; with one, the six-speed bobtail kicked from D5 to D4 at 15 km/h
+	# and revved into its forced upshift 0.62 s later (cruise probe, 2026-10-13). A 1.5 s dwell, and
+	# skip-shifts: a lift from 2200 ripples four gears to land under the light point, and floored, a
+	# bobtail passes the gears it would not hold for the dwell (`ShiftPolicy.forced_upshift`).
+	# The start gear up to D7, 3.88 (`ShiftPolicy.start_gear`): a powershift's
+	# start gear is a driver preset, higher for an empty run and lower with a load; picked here as an
+	# AMT picks its own from gross weight and gradient: the highest that beats the standing load
+	# twice and locks a floored launch within 1.5 s on the rig's mass. D7 bare on the flat, D6 with
+	# the farm tipper, deeper on mud or a grade (docs/heavy_vehicles.md § Tractor, implement & ISOBUS).
 	"shift_up_light_rpm": 1500.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0,
-	"shift_dwell_s": 1.5, "skip_shifts": true, "start_gear_max": 3,
+	"shift_dwell_s": 1.5, "skip_shifts": true, "start_gear_max": 7,
 	# The clutch overlap: 0.3 s, a simulated tractor powershift's baseline (YTO TX4A, Agriculture
-	# 14(2) 254, 2024).
+	# 14(2) 254, 2024). No cut, so the engine is fuelled down through the inertia phase and the clutch
+	# passes the pedal's torque (`Drivetrain.handover_fuel`). COMPROMISE: that reduction is sourced on
+	# road clutch-to-clutch boxes (US 9,327,733, US 7,086,989); the tractor source found has its TCU
+	# command engine torque over the bus through a powershift's shift, but held or raised (Deere,
+	# US 2004/0014563), with no reduction. Undone, the crank's `J Δω / t` reaches the wheels: a skip
+	# D7>D13 hands over ~1200 N·m against ~300 and drops it on the lock tick, and the nose rings.
 	"shift_handover_s": 0.3,
 	"engine_brake_frac": 0.20, "shift_cut_s": 0.0,  ## powershift: no interruption
 	# Motoring at and below idle: 0.10 of peak, the same 5.5 L industrial diesel's friction power
@@ -679,7 +716,11 @@ const VARIANTS := {
 	# Governed at 85 km/h, under the EU's 90 km/h heavy-truck limiter (a refuse collector usually
 	# runs lower); the governor settles it at 83.5 (docs/drivetrain.md § Engine braking under a fuel
 	# cut).
-	"garbage-truck": {"family": "truck", "mass": 8000.0, "com_y": 0.85, "front_weight": 0.465, "handbrake_torque": 6500.0, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 85.0},
+	# The ECM's PTO mode (Cummins remote PTO, a preset speed: the refuse body builder's calibration)
+	# holds the body pump's rated 1300 rpm parked, isochronously: no truck PTO droop figure found, and
+	# electronic set-speed control holds its speed, so the droop stays 0 (`PedalMap.MIN_DROOP`, an
+	# estimate). Interlocks: `TruckTelemetry.pto_mode_engaged`; docs/sources.md § PTO power.
+	"garbage-truck": {"family": "truck", "pto_mode_rpm": 1300.0, "mass": 8000.0, "com_y": 0.85, "front_weight": 0.465, "handbrake_torque": 6500.0, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 85.0},
 	# Emergency vehicles are exempt from the goods-vehicle limiter; 110 is the appliance's own
 	# rating, where the governor settles it (108.2 km/h).
 	"firetruck": {"family": "truck", "mass": 7500.0, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 110.0},
@@ -706,6 +747,21 @@ const VARIANTS := {
 	"tractor-kenney": {
 		"family": "tractor", "mass": 7000.0, "front_weight": 0.38, "speed_limit_kmh": 40.0,
 		"com_y_frac": 0.32, "scale": 1.35, "wheel_x_out": 0.214},
+	# The same tractor on a power-split CVT (`model`: the body, its hitch, drawbar and collision),
+	# the ZF Eccom class Deere fits as AutoPowr: four ranges changing synchronously as it drives,
+	# 0-6.4 / 6.4-13 / 13-26 / 26-51 km/h at 2300 rpm (Renius & Resch, ASAE Lecture 29, 2005,
+	# Fig. 39), re-derived through this body's 10.083 final drive and 0.66 m rear to ratios 0.1128 /
+	# 0.229 / 0.4581 / 0.8986 (`_cvt`): 40 km/h at ~1800 rpm, the overdrive Renius asks of a CVT.
+	# The ratio changes at 1.5 m/s² of ground acceleration at the crank's speed, JCB's "high" demand
+	# band for a CVT tractor (US 11,994,210: 1-2 m/s²). The relief at the axle is `mass g r`, 45.3 kN·m:
+	# the powershift's brakes (63 kN·m) hold it, as they hold its D1 stall (43.3 kN·m).
+	# Hill hold NONE: active standstill holds it in the transmission (docs/heavy_vehicles.md § The CVT
+	# tractor), the hold the powershift's STANDSTILL compromise stands in for.
+	"tractor-cvt": {
+		"family": "tractor", "model": "tractor-kenney", "mass": 7000.0, "front_weight": 0.38,
+		"speed_limit_kmh": 40.0, "com_y_frac": 0.32, "scale": 1.35, "wheel_x_out": 0.214,
+		"cvt_range_kmh": [6.4, 13.0, 26.0, 51.0], "cvt_range_rpm": 2300.0, "cvt_accel_ms2": 1.5,
+		"hill_hold": HillHold.Kind.NONE},
 }
 
 ## Feel baselines, keyed by a variant's `base` (defaulting to its `family`). "van" is a feel
@@ -727,7 +783,7 @@ func _ready() -> void:
 		var ov: Dictionary = VARIANTS[variant]
 		var family := String(ov["family"])
 		var wheels: Array = ov.get("wheels", FAMILY_WHEELS[family])
-		var geo := _analyze(MODELS.path_join(variant + ".glb"), wheels,
+		var geo := _analyze(MODELS.path_join(_model_of(variant) + ".glb"), wheels,
 				float(ov.get("scale", 1.0)))
 		if geo.is_empty():
 			continue
@@ -892,6 +948,12 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	spec.efficiency = float(b["efficiency"])
 	spec.engine_brake_frac = float(b["engine_brake_frac"])
 	spec.engine_friction_frac = float(b["engine_friction_frac"])
+	# The pedal map is the engine class's (the family baseline), never a variant knob.
+	spec.pedal_map = int(b["pedal_map"]) as PedalMap.Kind
+	spec.governor_droop = float(b.get("governor_droop", 0.0))
+	# One machine's flag (the garbage truck's), so a variant knob.
+	spec.pto_mode_rpm = float(ov.get("pto_mode_rpm", 0.0))
+	spec.fuel_type = int(b["fuel_type"]) as VehicleTelemetry.Fuel
 	spec.shift_cut_s = get_f.call("shift_cut_s")
 	spec.launch_engage_s = float(b["launch_engage_s"])
 	# The crank is per engine (the sports pair, the open-wheelers), the coupling per gearbox (the
@@ -913,6 +975,7 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	spec.shift_handover_s = get_f.call("shift_handover_s")
 	spec.skip_shifts = bool(b["skip_shifts"])
 	spec.start_gear_max = int(b["start_gear_max"])
+	_cvt(spec, gd, ov)
 	# Road-speed governor (0 = ungoverned). Per variant with a baseline fallback: what a body is
 	# limited to is a regulatory/class fact about that body, not a family feel knob.
 	spec.speed_limit_kmh = float(ov.get("speed_limit_kmh", b.get("speed_limit_kmh", 0.0)))
@@ -943,6 +1006,28 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	spec.turn_left_paths.assign(_lamp_paths["turn_left_paths"])
 	spec.turn_right_paths.assign(_lamp_paths["turn_right_paths"])
 	return spec
+
+
+## A power-split CVT where the variant declares one (`cvt_range_kmh`): its ranges' top speeds at
+## `cvt_range_rpm` become gearbox speed ratios through this body's `final_drive` and drive radius,
+## and the stepped box's own fields (ratios, start gear, skip-shifts, launch ramp) are cleared: the
+## ratio is drivetrain state (`Drivetrain.is_cvt`). The relief (`cvt_max_axle_torque`) is sized as
+## the pressure is: peak gross traction about the ballasted tractor's weight (Renius & Resch, ASAE
+## Lecture 29, 2005, p. 11), `mass g r` at the drive axle, rounded to 10 N·m.
+func _cvt(spec: VehicleSpec, gd: GroundDriveSpec, ov: Dictionary) -> void:
+	if not ov.has("cvt_range_kmh"):
+		return
+	var omega := float(ov["cvt_range_rpm"]) * TAU / 60.0
+	var tops := PackedFloat32Array()
+	for kmh: float in ov["cvt_range_kmh"]:
+		tops.append(snappedf(kmh / 3.6 / gd.drive_radius() * spec.final_drive / omega, 1e-4))
+	spec.cvt_range_tops = tops
+	spec.cvt_accel_ms2 = float(ov["cvt_accel_ms2"])
+	spec.cvt_max_axle_torque = snappedf(spec.mass * BrakeSizing.G * gd.drive_radius(), 10.0)
+	spec.gear_ratios = PackedFloat32Array()
+	spec.start_gear_max = 0
+	spec.skip_shifts = false
+	spec.launch_engage_s = 0.0
 
 
 ## The baseline with the variant's `ride_hz` over it, the one suspension key a variant may override
@@ -1161,7 +1246,7 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec, geo
 
 	# Body model: instance the GLB, steal its non-wheel children into a Model node under the body
 	# transform (180deg Y flip: Kenney +Z front -> project -Z, + kit scale + x/z centring).
-	var glb := (load(MODELS.path_join(variant + ".glb")) as PackedScene).instantiate()
+	var glb := (load(MODELS.path_join(_model_of(variant) + ".glb")) as PackedScene).instantiate()
 	var model := Node3D.new()
 	model.name = "Model"
 	model.transform = geo["xform"]
@@ -1178,7 +1263,7 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec, geo
 
 	_apply_body_material(model)
 
-	_add_lamps(root, variant, box_aabb, geo["lenses"])
+	_add_lamps(root, _model_of(variant), box_aabb, geo["lenses"])
 
 	# Hand-authored subsystem nodes (tractor's ThreePointHitch), added last to match editor order.
 	for extra: Node in kept["extras"]:
@@ -1222,6 +1307,12 @@ func _own(node: Node, scene_owner: Node) -> void:
 		_own(c, scene_owner)
 
 
+## The GLB (and its lamp tables and hand-authored scene) a variant is built on: its own, or the
+## variant its recipe's `model` names (a second gearbox on the same body).
+static func _model_of(variant: String) -> String:
+	return String(VARIANTS[variant].get("model", variant))
+
+
 ## Everything in the existing scene the generator does not rebuild, kept so it survives the old
 ## instance being freed. A whitelist of what the generator writes (GENERATED_CHILDREN plus
 ## collision), not a list of what to save, so a hand-added node is preserved by default.
@@ -1235,6 +1326,10 @@ func _own(node: Node, scene_owner: Node) -> void:
 func _existing_children(variant: String) -> Dictionary:
 	var kept := {"collision": [], "extras": []}
 	var path := OUT_DIR.path_join(variant + ".tscn")
+	# A new variant on another's model starts from that model's scene (its hand-authored collision
+	# and subsystem nodes), then keeps its own.
+	if not ResourceLoader.exists(path):
+		path = OUT_DIR.path_join(_model_of(variant) + ".tscn")
 	if not ResourceLoader.exists(path):
 		return kept
 	var scene := load(path) as PackedScene

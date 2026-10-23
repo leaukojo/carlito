@@ -131,6 +131,27 @@ func test_spring_brakes_apply_below_the_cut_in() -> void:
 	assert_bool(TruckT.spring_brakes_applied(TruckT.AIR_MAX_BAR, TruckT.AIR_MAX_BAR)).is_false()
 
 
+# --- the ECM's PTO mode ----------------------------------------------------------------
+
+func test_the_pto_mode_needs_the_pto_the_park_brake_and_a_stop() -> void:
+	var held := RefuseBody.PARK_BRAKE_MIN + 0.1
+	var crawl := TruckT.PTO_MODE_MAX_SPEED_MS
+	assert_bool(TruckT.pto_mode_engaged(true, held, 0.0)).is_true()
+	assert_bool(TruckT.pto_mode_engaged(true, held, crawl)).is_true()
+	assert_bool(TruckT.pto_mode_engaged(true, held, -crawl)).is_true()
+	assert_bool(TruckT.pto_mode_engaged(false, held, 0.0)).is_false()
+	assert_bool(TruckT.pto_mode_engaged(true, RefuseBody.PARK_BRAKE_MIN, 0.0)).is_false()
+	assert_bool(TruckT.pto_mode_engaged(true, held, crawl + 0.01)).is_false()
+
+
+func test_only_the_garbage_truck_declares_a_pto_mode() -> void:
+	# Its body's pump is rated at the set speed; the firetruck has no PTO.
+	var garbage: VehicleSpec = load("res://src/vehicles/kenney/garbage-truck_spec.tres")
+	var fire: VehicleSpec = load("res://src/vehicles/kenney/firetruck_spec.tres")
+	assert_float(garbage.pto_mode_rpm).is_equal(RefuseBody.PUMP_RATED_ENGINE_RPM)
+	assert_float(fire.pto_mode_rpm).is_equal(0.0)
+
+
 func test_spring_brakes_are_the_handbrake_torque_and_no_stronger_than_the_service_brake() -> void:
 	# The spring brakes are a torque through the wheels' own spin step, the same hardware as the
 	# handbrake (WheelDrive.parking_torque), and a parking brake on the service brake's own drum: a
@@ -549,6 +570,37 @@ func test_lift_raises_the_arm_and_saturates_at_the_top() -> void:
 	_run(unit, Body.Cmd.LIFT, Body.ARM_TRAVEL_SEC * 2.0)
 	assert_float(unit.pos).is_equal(1.0)
 	assert_int(unit.state).is_equal(Body.State.LIFTING)
+
+
+func test_the_arm_rises_at_the_pumps_flow_and_lowers_at_its_rate() -> void:
+	# A fixed displacement: at idle (700 rpm) the flow is 700 / 1300 of rated, capped at 1 past it.
+	assert_float(Body.pump_flow(Body.PUMP_RATED_ENGINE_RPM * 0.5)).is_equal_approx(0.5, 1e-6)
+	assert_float(Body.pump_flow(Body.PUMP_RATED_ENGINE_RPM * 2.0)).is_equal(1.0)
+	assert_float(Body.pump_flow(-100.0)).is_equal(0.0)
+	var unit := Body.new()
+	for _i in roundi(1.0 / DT):
+		unit.step(Body.Cmd.LIFT, false, DT, 0.5)
+	assert_float(unit.pos).is_equal_approx(0.5 / Body.ARM_TRAVEL_SEC, 1e-3)
+	# Lowering is the arm's weight through the valve: the rated rate at any pump speed.
+	var top := unit.pos
+	for _i in roundi(0.25 / DT):
+		unit.step(Body.Cmd.LOWER, false, DT, 0.0)
+	assert_float(unit.pos).is_equal_approx(top - 0.25 / Body.ARM_TRAVEL_SEC, 1e-3)
+
+
+func test_the_pump_draws_only_while_the_arm_rises() -> void:
+	var unit := Body.new()
+	_run(unit, Body.Cmd.LIFT, Body.ARM_TRAVEL_SEC * 0.5)
+	assert_float(unit.pump_kw()).is_equal(Body.PUMP_KW)
+	# At the top, holding: the load-sensing pump stands by.
+	_run(unit, Body.Cmd.LIFT, Body.ARM_TRAVEL_SEC)
+	assert_float(unit.pump_kw()).is_equal(0.0)
+	# Lowering rides the arm's own weight down.
+	_run(unit, Body.Cmd.LOWER, Body.ARM_TRAVEL_SEC * 0.5)
+	assert_float(unit.pump_kw()).is_equal(0.0)
+	# Inhibited, the arm freezes and the pump idles.
+	_run(unit, Body.Cmd.LIFT, DT, true)
+	assert_float(unit.pump_kw()).is_equal(0.0)
 
 
 func test_dump_lifts_first_then_tips_and_fills_the_hopper_once() -> void:

@@ -390,21 +390,27 @@ func test_the_boat_bars_fit_one_column() -> void:
 
 # --- the wind/track rose (hand-built, contract-gated) -------------------------
 
-## Built exactly where the vehicle declares the whole wind/track set, and nowhere else — the
-## artificial horizon's rule, swept the same way so a signal spreading to another family is
-## covered.
+## Built exactly where the vehicle declares the whole wind/track set (the marine face) or heading
+## and true wind (the compass face), and nowhere else — the artificial horizon's rule, swept the
+## same way so a signal spreading to another family is covered.
 func test_the_rose_is_built_only_where_the_wind_set_is_declared() -> void:
-	var built := 0
+	var marine := []
+	var compass := []
 	for family in FAMILIES:
 		var out_names: Array = Contract.data.signals_for_vehicle(family, "out") \
 				.map(func(sig: RefCounted) -> String: return sig.name)
-		var declares := Dashboard.declares_wind_rose(out_names)
+		var full := Dashboard.declares_wind_rose(out_names)
+		var land := Dashboard.declares_compass_rose(out_names)
 		var dash := _dash(family, Dashboard.Density.FULL)
 		assert_bool(dash._rose != null).override_failure_message(
-				"'%s': rose presence disagrees with the contract" % family).is_equal(declares)
-		if declares:
-			built += 1
-	assert_int(built).is_equal(1)  # the boat, and nothing else
+				"'%s': rose presence disagrees with the contract" % family).is_equal(full or land)
+		if dash._rose == null:
+			continue
+		assert_bool(dash._rose.marine).override_failure_message(
+				"'%s': rose face disagrees with the contract" % family).is_equal(full)
+		(marine if full else compass).append(family)
+	assert_array(marine).is_equal(["boat"])
+	assert_array(compass).contains_exactly_in_any_order(["car", "tractor", "truck"])
 
 
 ## ...and BOTH of these instruments are FULL-only. The horizon survives COMPACT because it sits
@@ -486,6 +492,50 @@ func test_the_rose_and_the_sounder_are_fed_the_fields_they_name() -> void:
 	# ...and the resolution really did go through the contract names, in their declared order.
 	assert_array(dash._rose_fields).is_equal(Array(Dashboard.WIND_ROSE_SIGNALS).map(
 			func(n: String) -> StringName: return StringName(n)))
+
+
+## The compass arrow names the side a body drifts away from: the arrow's screen side (heading-up,
+## through the telemetry and the rose's own geometry) is opposite the side force the crosswind
+## really applies (`VehicleMath.air_force`, what `doc=wind`'s drift measures), at two headings.
+func test_the_compass_arrow_comes_from_the_side_opposite_the_drift() -> void:
+	var north := Basis.IDENTITY
+	var east := Basis(Vector3.UP, -PI / 2.0)   # forward -Z turned to +X
+	for case: Array in [[north, Vector3(-9.0, 0.0, 0.0)], [north, Vector3(9.0, 0.0, 0.0)],
+			[east, Vector3(0.0, 0.0, 9.0)], [east, Vector3(0.0, 0.0, -9.0)]]:
+		var basis: Basis = case[0]
+		var wind: Vector3 = case[1]
+		var heading := VehicleTelemetry.heading_from_forward(-basis.z)
+		var tw := VehicleTelemetry.true_wind(wind)
+		var arrow_from := WindRose.needle_dir(WindRose.relative_bearing(tw.y, heading))
+		var push := VehicleMath.air_force(Vector3.ZERO, wind, basis, 0.6, 2.0, 1500.0, 1.0 / 60.0)
+		var drift_right := push.dot(basis.x)
+		assert_float(absf(arrow_from.x)).is_equal_approx(1.0, 1e-4)   # a beam wind, either side
+		assert_bool(signf(arrow_from.x) == -signf(drift_right)).override_failure_message(
+				"heading %.0f, wind %s: arrow from x %.2f, drift right %.1f N"
+				% [heading, wind, arrow_from.x, drift_right]).is_true()
+
+
+## The compass face is fed twd/tws and heading, never a stale marine field, and true wind stays
+## off the bar column on land.
+func test_the_compass_rose_is_fed_true_wind_and_heading() -> void:
+	var dash := _dash("car", Dashboard.Density.FULL)
+	assert_bool(dash._bars.has("twd")).is_false()
+	assert_bool(dash._bars.has("tws")).is_false()
+	var telem := VehicleTelemetry.new()
+	telem.twd = 33.0
+	telem.tws = 44.0
+	telem.heading = 77.0
+	dash._telem = telem
+	dash._resolve_fields()
+	dash.set_shown(true)
+	dash._process(0.0)
+
+	assert_float(dash._rose.twd).is_equal(33.0)
+	assert_float(dash._rose.tws).is_equal(44.0)
+	assert_float(dash._rose.heading).is_equal(77.0)
+	assert_float(dash._rose.aws).is_equal(0.0)
+	assert_float(dash._rose.sog).is_equal(0.0)
+	assert_array(dash._rose_fields).is_equal([&"twd", &"tws"])
 
 
 ## A lamp's colour is overridden only on change, so the cache must not swallow a real one: lit
@@ -571,10 +621,10 @@ func test_the_sounder_blanks_the_sentinel_instead_of_alarming_on_it() -> void:
 
 # --- the readout line's range-less extras -------------------------------------
 
-## The range-less marine readings ride the readout line under the HRS rule — gated on the
+## The range-less engine-room and marine readings ride the readout line under the HRS rule — gated on the
 ## CONTRACT, never on the telemetry field — and none of them may become a bar. Swept in both
 ## directions like the LIM/HRS cases above.
-func test_the_range_less_marine_readings_ride_the_readout() -> void:
+func test_the_range_less_extras_ride_the_readout() -> void:
 	for family in FAMILIES:
 		var out_names: Array = Contract.data.signals_for_vehicle(family, "out") \
 				.map(func(sig: RefCounted) -> String: return sig.name)
@@ -589,9 +639,18 @@ func test_the_range_less_marine_readings_ride_the_readout() -> void:
 					% [family, extra_name]).is_false()
 		assert_int(dash._readout_extras.size()).override_failure_message(
 				"'%s': readout extras disagree with the contract" % family).is_equal(wanted)
+	# The boat carries every one but the gearbox's ratio, which only the J1939 families declare.
 	assert_int(_dash("boat", Dashboard.Density.FULL)._readout_extras.size()) \
-		.is_equal(Dashboard.READOUT_EXTRAS.size())
-	assert_int(_dash("car", Dashboard.Density.FULL)._readout_extras.size()).is_equal(0)
+		.is_equal(Dashboard.READOUT_EXTRAS.size() - 1)
+	# The burn is the one the land families share: a car carries BURN and nothing marine; the truck
+	# and the tractor add the gearbox's RATIO.
+	for family in ["car", "truck", "tractor"]:
+		var names: Array = []
+		for extra: Array in _dash(family, Dashboard.Density.FULL)._readout_extras:
+			names.append(String(extra[0]))
+		var expected := ["fuel_rate"] if family == "car" else ["fuel_rate", "gear_ratio"]
+		assert_array(names).override_failure_message("'%s' readout extras" % family) \
+			.is_equal(expected)
 
 
 # --- the node health strip (the bus made visible) -----------------------------

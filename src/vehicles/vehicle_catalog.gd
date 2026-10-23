@@ -51,6 +51,8 @@ const VARIANTS := {
 	"semi-conventional": {"scene": "res://src/vehicles/truck/conventional.tscn", "family": "truck"},
 	# -- Kenney car kit: tractor family (ISOBUS) --
 	"tractor-kenney": {"scene": KENNEY + "tractor-kenney.tscn", "family": "tractor"},
+	# The same body on a power-split CVT; the powershift above stays the family's default.
+	"tractor-cvt": {"scene": KENNEY + "tractor-cvt.tscn", "family": "tractor"},
 }
 
 

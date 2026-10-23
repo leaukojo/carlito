@@ -21,7 +21,7 @@ VehicleTelemetry` adds chassis, body-network and trailer-bus "out" fields.
 | Signals | Flavor | Notes |
 | --- | --- | --- |
 | In (4): `retarder`, `red_stop`/`amber_warn`/`protect_lamp` (J1939-73 DM1 lamp bits) | `j1939` | published FMS set — J1939-71 subset six European makers agreed to expose in 2002 |
-| Out (4): `air_primary`, `air_secondary`, `retarder_state`, `axle_load` | `j1939` | — |
+| Out (5): `air_primary`, `air_secondary`, `retarder_state`, `axle_load`, `gear_ratio` | `j1939` | — |
 | `engine_load`, `engine_hours`, `pto`, `pto_state` | `isobus` | reused, not duplicated — listed on `truck` alongside `tractor` (ISO 11783 is built on J1939: `engine_load` = SPN 92, `engine_hours` = SPN 247) |
 
 `diff_lock`/`diff_lock_state` are not extended to the truck.
@@ -104,7 +104,21 @@ Out (5): `body_state`, `body_pos`, `body_inhibit`, `body_bus`, `hopper_load`.
 - The gateway is the content: `body_inhibit` is computed chassis-side (road speed, PTO
   state, parking brake), published on the body network; `body_bus` goes down when the body
   network loses power. `hopper_load` adds real mass to the chassis, so
-  `axle_load`/`engine_load` report the payload from their own measurements.
+  `axle_load`/`engine_load` report the payload from their own measurements. The chassis PTO
+  drives the body pump: while the arm rises it loads the crank (`RefuseBody.PUMP_KW` at
+  `PUMP_RATED_ENGINE_RPM`, `docs/sources.md` § PTO power), so `engine_load` and the fuel rise
+  with each lift; holding and lowering, the pump stands by. Its flow, so the arm's rise, follows
+  the pump's speed (`RefuseBody.pump_flow`), capped at the rated; the arm lowers on its own weight
+  at the rated rate.
+- **The ECM's PTO mode** holds the pump's rated speed parked (`VehicleSpec.pto_mode_rpm` 1300 on
+  `garbage-truck`, a Cummins-style remote PTO preset). Its interlocks: the PTO in, the park brake
+  on, at most 2 mph (`TruckTelemetry.pto_mode_engaged`), and the box in N or P
+  (`Drivetrain.pto_set_rpm`, read on the gear engaged that tick, so selecting D drops it before any
+  fuel reaches the wheels). It governs on the all-speed governor's law (`PedalMap.governor_fuel`)
+  isochronously; the pedal raises the speed over the set speed, never under it (J1939's
+  accelerator override). `measure_vehicles -- garbage-truck 60 arm` prints the cycle: the crank
+  lands on the set speed without overshoot and holds it through the lift, so the arm keeps its
+  rated `ARM_TRAVEL_SEC`; out of the mode it lifts on the idle's share of the flow.
 - The interlock is a real refusal: while `body_inhibit` is set, the arm freezes and
   `body_cmd` is ignored. `Idle`/`Lower` and an unknown command byte all stow. `body_pos` is
   written onto the arm and read back off it (the `ball_lift()` discipline).
@@ -141,11 +155,12 @@ the conventional carries none. No trailer of the four adds a signal to either.
   box (P2 and P6, with ASR holding the drive axle at full grip; the floor and the figures are
   `measure_semi_launch`'s). Gate: CI runs
   `tools/measure_semi_launch.tscn -- <unit> strict` on both units.
-- Gearing: gears 1-5 span the 600-2080 rpm range; 6th is a 0.69 overdrive, so the governor, not
-  the redline, sets top speed. Coupled to the box (`measure_vehicles -- <unit> 120 coast`; top
-  speeds: `docs/drivetrain.md` § Engine braking under a fuel cut): cab-over at 1317 rpm, conventional
-  at 1539 rpm, coast-down 0.140 / 0.161 m/s^2. Upshift 1690 lands 6th at 972 rpm, clear of the
-  780 downshift.
+- Gearing: twelve ratios, the I-Shift ATO2612's steps fitted over D1 6.5 to the 0.69 overdrive
+  (`docs/sources.md` § Gearing), so the governor, not the redline, sets top speed. Coupled to the
+  box (`measure_vehicles -- <unit> 120 coast`; top speeds: `docs/drivetrain.md` § Engine braking
+  under a fuel cut): cab-over at 1317 rpm, conventional at 1539 rpm, coast-down 0.140 / 0.161
+  m/s^2. Each 1690 upshift lands at 1359-1392 rpm, clear of the 780 downshift; a floored bobtail
+  skips (`docs/drivetrain.md` § The shift policy).
 - Aero: the coupled cab-over + box declares 2.78 m^2 on a drawn silhouette of ~5.0 m^2 (1.92 m wide,
   box roof ~2.6 m over the road), a whole-rig Cd of 0.55 against 0.48-0.54 measured on EU
   tractor-trailers at zero yaw (ICCT 2019), and 1.27x its bobtail against ~1.2-1.4x real. A real
@@ -158,6 +173,9 @@ the conventional carries none. No trailer of the four adds a signal to either.
   § Gradeability; without it: § Limiter at launch). These tyres carry the plate load on a
   `corner_mass` sized for the unit alone, so near a standstill their slip ratio reads over a raised
   floor, where the one-tick force cap passes their full grip at the peak (`RayWheel.slip_floor_for`).
+- Front damper: `damper_bump` / `damper_rebound` 13500 / 17900 hold zeta 0.30 / 0.40 on the
+  bobtail steer corner (~2.1 t), the road band's ends (`docs/vehicles.md` § Pitch), and 0.27 / 0.36
+  coupled to the box (~2.5 t). The nose's rise at a floored take-up is the rebound's to damp.
 - Rear damper: `damper_bump_rear` / `damper_rebound_rear` 24700 / 28800 hold
   zeta = c / (2 sqrt(k_rear * m)) at 0.30 (box) to 0.40 (flatbed) on the coupled rear corner
   (3.5-4.7 t) and 0.47-0.55 at the bobtail corner (1.9 t); the `GroundDriveSpec` fallback preserves
@@ -303,15 +321,17 @@ them apart.
 
 ## Tractor, implement & ISOBUS
 
-**Twenty ISOBUS signals, all `flavor: "isobus"`**, the widest cluster in the game. In (7):
-`hitch_pos`, `pto`, `pto_mode` (540/1000), `diff_lock`, `fwd_drive`, `guidance_curvature`,
-`scv_flow`. Out (13): `hitch_pos_actual`, `pto_state`, `pto_rpm`, `engine_load`,
-`implement_connected`, `implement_type`, `diff_lock_state`, `fwd_drive_state`,
+**Twenty-one ISOBUS signals, all `flavor: "isobus"`**, the widest cluster in the game. In (8):
+`hitch_pos`, `pto`, `pto_mode` (540/1000), `hand_throttle`, `diff_lock`, `fwd_drive`,
+`guidance_curvature`, `scv_flow`. Out (13): `hitch_pos_actual`, `pto_state`, `pto_rpm`,
+`engine_load`, `implement_connected`, `implement_type`, `diff_lock_state`, `fwd_drive_state`,
 `wheel_speed`, `ground_speed`, `wheel_slip`, `engine_hours`, `draft_force`. It also publishes
-the truck's `j1939` `axle_load`: lifting an implement moves its weight onto the rear axle.
+the truck's `j1939` `axle_load` (lifting an implement moves its weight onto the rear axle) and
+`gear_ratio` (§ The CVT tractor).
 
-- One body, five swappable attachments, on two connections. The drivable tractor is a single
-  variant (`kenney/tractor-kenney.tscn`); `E` cycles the attachment — spreader → plough →
+- One body, two gearboxes, five swappable attachments on two connections. `V` cycles the
+  gearbox: `kenney/tractor-kenney.tscn`'s powershift (the default) and `kenney/tractor-cvt.tscn`'s
+  CVT (§ The CVT tractor), the same body and recipe otherwise. `E` cycles the attachment — spreader → plough →
   power harrow → mower → drawbar tipping trailer → detached — each teaching one of the five
   real tractor↔implement connections (three-point linkage, drawbar, PTO, SCV hydraulic
   remote, ISOBUS data). Absent functions publish a real zero, never a gap.
@@ -337,8 +357,14 @@ the truck's `j1939` `axle_load`: lifting an implement moves its weight onto the 
   forward velocity; `wheel_slip` is how far the first runs ahead of the second (unsigned,
   J1939 SPN 1858, floored at low speed).
 - `pto_mode` is a gearbox selection, not an engine speed: 540/1000 are shaft speeds off
-  `PTO_RATED_RPM` (**2200**); an unknown byte falls back to 540. `engine_hours` is an hour
-  meter, range-less, on the readout line beside ODO.
+  `PTO_RATED_RPM` (**2043**, the 6175R's 1950 of its 2100 rated, on the curve's 2200;
+  `docs/sources.md` § Governor); an unknown byte falls back to 540.
+- `hand_throttle` is the all-speed governor's second lever (`docs/drivetrain.md` § The pedal map):
+  the higher of it and the pedal sets the engine speed, and it never pulls away alone. Local keys
+  `-` / `=` step it 10 %, `0` sets the PTO preset (`TractorTelemetry.pto_hand_throttle`, the
+  governor on `PTO_RATED_RPM`) or clears it; owner `InputRouter._hand_throttle`, the `_pto`
+  pattern, kept through a respawn. `engine_hours` is an hour meter, range-less, on the readout
+  line beside ODO.
 - `guidance_curvature` is auto-steer (the boat's `rudder` precedent): present, it overrides
   `steer`, arbitrated only in `InputRouter.arbitrate_bridge`. `bridge_source.gd` maps the
   contract's ±127 1/km onto the ±1 steer channel; 0 is a real held command, not an absence.
@@ -391,17 +417,39 @@ the truck's `j1939` `axle_load`: lifting an implement moves its weight onto the 
   light front shows as no extra understeer in the linear range (`20 circle`, `20 step`, with and
   without `trailer=spreader`).
   Held on full soil (`20 plough`), the measured draft sits on D497 at each speed held, to 0.0 %.
-  The harrow holds each of the pass's speeds. The plough holds the slowest at 15 % slip; stepped to
-  the reference speed on the open diff, the right rear, lighter under the plough's left-of-centre
-  mass, peels past the slip peak and the tractor settles about a third under it, 42 % slip, in D1
-  on the governor. Floored from rest it peels the same way (~50 %, then 42 %). Ramped in as a
-  driver does (`20 plough course`), the course's reference-speed run reads `engine_load` 62 % on
-  full soil and 43 % on the light bands, inside tractor_plough's 25-70 %. The lug's grip in soil
-  (0.60 of asphalt, `ag_lug.tres`) is an estimate, and D497's own traction at the slip peak is
+  The harrow holds each of the pass's speeds. The plough holds the slowest at 15 % slip and the
+  reference speed in D1 at 10 %: the all-speed governor caps the crank, and with it the rears' spin,
+  on its line, so the lighter right rear (under the plough's left-of-centre mass) stays under the
+  slip peak. Past the reference speed D1's governed top holds it there. Floored from rest it peels
+  (~55 %, then 45 %), its lugged D7 taking D1 in two shifts. Ramped in as a driver does (`20 plough
+  course`), the course's reference-speed run reads `engine_load` 62 % on full soil and 42 % on the
+  light bands, inside tractor_plough's 25-70 %; at part pedal the PI driver's governed box shifts
+  through D1-D7 in the Row, its load spiking on the shift ticks. The lug's grip in soil (0.60 of
+  asphalt, `ag_lug.tres`) is an estimate, and D497's own traction at the slip peak is
   lower still (0.49): an open-diff 2WD tractor ploughing is traction-limited, and the diff lock or
   MFWD is the answer, as a ploughing driver engages it.
   Not modelled: draft control (the Ferguson hitch), a spreader that empties, a composite inertia
   declaration, front ballast as an attachment, a start gear that reads draft, skid drag.
+- The PTO is real load: a driven implement declares its shaft power
+  (`ImplementBase.pto_power_kw`; the harrow's off its trials' torques in D497's form, by speed,
+  tine depth and soil; the mower's D497 cutting figure with its deck down; the spreader's disc an
+  estimate; `docs/sources.md` § PTO power), and the tractor puts it on the crank as a constant
+  torque at `PTO_RATED_RPM` (`TractorTelemetry.pto_load_nm`, `Drivetrain.accessory_torque`). It
+  acts only with the PTO in, the key on and an implement declaring `Connection.PTO`: the plough
+  with the PTO in reads as out (`20 plough course` byte-identical either way). `engine_load` and
+  the rpm sag carry it, never a term of their own. The harrow on full soil (`20 plough
+  trailer=harrow`, then with `pto`): parked lowered, `engine_load` 9 % rises to 24 % at idle;
+  held at the pass's three speeds, 36 / 41 / 61 % rise to 51 / 63 / 89 % (the PI driver's governed
+  box holds them in higher gears with the PTO's load). Floored from rest with the PTO in, the rig is
+  power-bound in D7 on the curve's tail over rated speed, its road speed short of the upshift point,
+  where with the PTO out it takes D7>D6>D11.
+- The governor holds the PTO (`20 plough governor`: the hand throttle at the PTO preset, 540, a
+  fixed D2 on the pedal's go request; `docs/drivetrain.md` § The pedal map). Parked in N the shaft
+  turns 540; the harrow lowered at rest pulls it to 533. Working raised it turns 535-536;
+  lowered, the draft and the harrow's PTO power come on together and the crank settles in about a
+  second, 3.4 % under the 2043 setting: the shaft 521 rpm, `engine_load` 55 %. The plough, with no
+  PTO and its full draft, settles 3.2 % under: 522 rpm, 53 %. Both inside the 7 % droop (the `droop`
+  gate's 504.7 rpm).
 - Ground support is drawn, not simulated: `ThreePointHitch` keeps two poses. Physics (ball lift,
   hitch point, implement COM) reads the commanded solve on flat ground; the drawn pose floats the
   implement up until its `support_points()` meet the ground under them
@@ -412,34 +460,36 @@ the truck's `j1939` `axle_load`: lifting an implement moves its weight onto the 
   implement jumped every facet of the 8-bit heightmap and landed on its stop dead.
 - Ballast: gear-1 wheel force at `Drivetrain.launch_target_rpm` is about 1.5x the rear grip at 7 t /
   `front_weight` 0.38 (about 3.4x unballasted at 4 t 50/50). Top
-  speed in 6th is rpm-bound, so ballast moves only acceleration and grade climb.
+  speed in D16 is rpm-bound, so ballast moves only acceleration and grade climb.
 - Launch: a powershift's, not a car's, in its start gear (`ShiftPolicy.start_gear`, up to
-  `start_gear_max` D3). A powershift's start gear is a driver preset, higher for an empty run and
-  lower with a load; here the load standing on the grade picks it, as the I-Shift picks its own
-  from gross weight and gradient: the highest gear whose launch drive (the curve at the launch line
-  on the pedal's fuel) beats the grade's pull plus the rolling and soil resistance on the whole rig
-  by `ShiftPolicy.START_RESERVE` (2, an estimate). Picked at full pedal while the tractor stands, it
+  `start_gear_max` D7). A powershift's start gear is a driver preset, higher for an empty run and
+  lower with a load; here the box picks it as an AMT picks its own from gross weight and grade
+  (`docs/drivetrain.md` § The shift policy): the highest gear whose launch drive (the curve at the
+  launch line on the pedal's fuel) beats the grade's pull plus the rolling and soil resistance on the
+  whole rig by `ShiftPolicy.START_RESERVE` (2, an estimate), and whose floored launch locks within
+  `START_SLIP_S` on the rig's mass. Picked at full pedal while the tractor stands, it
   steps down through the launch to what the driver's pedal holds (a pedal of 0.6 with the tipper on
-  8 % takes D1 at once), and down again if the launch has not moved after the ramp and a dwell
-  (the dwell). Computed picks (`test_tractor`): D3 empty on the flat or on flat mud; D2 with the tipper
-  on 10 %; D1 with the tipper on mud, and on the 26 % mud climb.
+  8 % takes D4, then D2 at once), and down again by ratio (`ShiftPolicy.start_step_down`) if the
+  launch has not moved after the ramp and a dwell. Computed picks (`test_tractor`): D7 empty on the
+  flat or on flat mud; D6 with the tipper on the flat, D4 on 10 %; D1 with the tipper on mud, and on
+  the 26 % mud climb.
 - The pack's capacity ramps to its rating over `launch_engage_s` while the controller slips
   it toward the launch line, which holds a floored start near the grip peak (with the whole rating
   on the first tick the rears flash to heavy slip and the front axle unloads almost entirely); while
   the ramp is short of the engine's torque the crank flares over the line. The
-  close onto the wheels is a handover over `shift_handover_s`, never the rating: closed at
-  the rating, a held D3 poured the flare into the wheels in a tick (a spike of g, the front axle
-  unloaded), and a held D2 flashed its rears into slip.
-- Flat strip (`measure_vehicles -- tractor-kenney 12 trace=3 trace_s=2`):
-  - bobtail: D3, a clean close at about a second carrying the engine's torque, then D4-D6 in
-    quick succession; rear slip low, front axle kept loaded;
-  - with the farm tipper: D3, D4-D6 spread over several seconds; rear slip low, front axle kept
-    loaded, no gear shorter than about a second.
-  - The bobtail's D4 is the shortest gear: at full pedal the policy never holds an upshift, so on the
-    1.35 steps the dwell is the gearing's (brief 16, `docs/plans/mechanical_update/16_drivetrain_control.md`).
+  close onto the wheels, like each shift, is a handover over `shift_handover_s` with the engine
+  fuelled down so the clutch passes the pedal's torque, not the flare's (`docs/drivetrain.md`
+  § The shift's handover), never the rating: closed at
+  the rating, a held D7 poured the flare into the wheels in a tick (a spike of g, the front axle
+  unloaded), and a held D4 flashed its rears into slip.
+- Flat strip (`measure_vehicles -- tractor-kenney 40 trace`):
+  - bobtail: D7, a clean close carrying the engine's torque, then two floored skip-shifts, D7>D13
+    and D13>D16, each gear held past the trace's dwell floor; rear slip low (~0.10), the front axle
+    kept loaded and every event inside its `front axle` gate (`docs/vehicles.md` § Pitch);
+  - with the farm tipper: D6, then D10, D13, D15 and D16, each held longer.
 - Standing starts: `docs/vehicle_measurements.md` § Gradeability, `docs/drivetrain.md` § Hill hold; with the tipper on 10 %
-  asphalt it starts in D2 and starts moving within a couple of seconds.
-- Reverse is the bus's single R byte, at D3's ratio; its top speed follows from that ratio and the governor.
+  asphalt it picks D4 (`measure_grade -- tractor-kenney rollback tipper` times how soon it moves).
+- Reverse is the bus's single R byte, at ~D7's ratio (3.9); its top speed follows from that ratio and the governor.
 - Steady draft does not involve COM height: drag at the hitch and tyre reaction at ground form a
   couple of `F × h_hitch`, a few kN off the static front load. The 0.83 m COM (`com_y_frac` 0.32:
   the bare machine's 0.91 m with 1.5 t of liquid and hub ballast at ~0.55 m) matters for
@@ -452,6 +502,60 @@ the truck's `j1939` `axle_load`: lifting an implement moves its weight onto the 
   0.66 m rear. Suspension is the tyres: 330 / 420 kN/m, `rest_length` 0.12 m, ~33 / 42 % static sag.
   A side jolt at speed rolls a couple of degrees and rebounds a fraction of it (roll damping ratio
   ~0.37); the narrow track rolls further and rebounds more.
+
+### The CVT tractor
+
+`tractor-cvt` is the same tractor on a power-split CVT of the ZF Eccom class, which John Deere fits
+as AutoPowr: four mechanical ranges changed synchronously as it drives, with no power interruption
+(Renius & Resch, ASAE Lecture 29, 2005; the ranges' speeds and every figure below: `docs/sources.md`
+§ CVT). Through this body's gearing its top range reaches the road-speed limit well under rated
+speed, the overdrive Renius asks of a CVT. `Drivetrain.is_cvt` gates it; `gear_ratios` stays empty.
+
+- **The ratio is drivetrain state** (`Drivetrain.cvt_i`), chosen by the controller before the spin
+  solve and solved in it as the gear, at the overall speed ratio `k = i / final_drive` rather than
+  its inverse (`_solve_cvt`): the reflected `J k²` moves with it, and what a ratio change takes from
+  the crank's inertia is carried in the step. The coupling is locked in D and R, open with the key
+  off and in N or P; the hydrostatic relief (`cvt_max_axle_torque`, `mass g r`: peak gross traction
+  about the ballasted weight) is its only slip, and the powershift's brakes hold it.
+- **The controller** (`Drivetrain.cvt_ratio_step`):
+  - The engine runs the all-speed governor at the demand, the higher of the pedal and the hand
+    throttle, exactly as on the powershift.
+  - The foot pedal commands ground speed, its share of the road-speed limit (`CVT_REVERSE_KMH`
+    back), and the ratio holds that speed off the crank's own speed while the engine droops on its
+    line. A CVT governs road speed through its ratio, so its fuel takes no road-speed fade: a speed
+    hold off the crank would read the fade as overload and pull the box down to its limit speed.
+  - The ratio changes at no more than `cvt_accel_ms2` of ground acceleration at the crank's speed
+    (JCB's "high" band for a CVT tractor), and never more than a step past the wheels' own
+    (pressure cut-off): against wheels that do not follow, it holds rather than winding up and
+    limit-cycling with the relief.
+  - Limit-load control: under the governor line's full-fuel end (never over the curve's peak
+    power) the ratio gives way over `CVT_LOAD_TAU_S`, so the crank holds its speed and the ground
+    speed gives.
+  - The hand throttle alone sets engine speed and never pulls away; the foot brake brings it to
+    standstill (AutoPowr's AutoClutch).
+- **Active standstill** at a ratio of 0 is the park pawl's path at the relief
+  (`Drivetrain.standstill_hold`, `WheelDrive.standstill_lock`): the transmission holds its output,
+  with the lock's stiction, so this variant needs no brake hold and retires the STANDSTILL
+  COMPROMISE (`GroundDriveSpec.hill_hold`) on itself. Every stop ends there, on the brake or with
+  the pedal up: the redline bound on the ratio binds only past one step of its rate, so the ratio
+  reaches 0 as the wheels stop, and a direction change sweeps it through 0 the same way. Like the pawl, it
+  holds only under `WheelDrive.PAWL_ENGAGE_SPEED`: brakes that lock the wheels at speed bring the
+  ratio to 0 with the crank at idle (the anti-stall bound), the wheels stay the brakes' alone, and
+  the ratio re-synchronises to them once they turn. `measure_grade -- tractor-cvt rollback` (and
+  `tipper`) reads the hold against the powershift's brake hold.
+- **The bus:** `gear` publishes the engaged range, D1-D4 (a bridge byte caps it; `CVT_RANGE_HYSTERESIS`
+  keeps a ratio held on a boundary from chattering it); `gear_ratio` (J1939 SPN 526, sloppyCAN's
+  ETC2) the live ratio inverted, `GEAR_RATIO_MAX` at standstill. The efficiency is the powershift's
+  at each range's lock-up, less the variator's loss on the hydrostatic share
+  (`Drivetrain.cvt_efficiency`).
+- **Measured:** floored from rest (`measure_vehicles -- tractor-cvt 40 trace`) it pulls away with no
+  clutch and no step, the bytes stepping D1 to D4, the crank on its governor line over its limit
+  speed, and the front-axle gate passes; the trace reports ranges, ratio and crank in place of the
+  shift gates, which judge a stepped box's shifts. The governor's hold (`20 plough governor`, the
+  pedal commanding the stepped run's working speed in range 2) keeps the shaft inside the droop
+  as the harrow's or the plough's draft comes on, as the powershift does; the ground speed drops by
+  the drive tyres' slip. Tables: `docs/vehicle_measurements.md` (`doc=accel`, `doc=cruise`,
+  `doc=grade`).
 
 ### What an implement declares
 

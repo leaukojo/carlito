@@ -30,7 +30,7 @@ func _real_contract() -> ContractScript.ContractData:
 func test_real_contract_is_valid() -> void:
 	var data := _real_contract()
 	assert_array(data.errors).is_empty()
-	assert_int(data.version).is_equal(49)
+	assert_int(data.version).is_equal(54)
 
 
 func _assert_core_signals_present(names: PackedStringArray, dir: String) -> void:
@@ -191,8 +191,23 @@ func test_gear_enum_decodes_ramn_byte_semantics() -> void:
 	assert_str(gear.enum_label(1)).is_equal("D1")
 	assert_str(gear.enum_label(3)).is_equal("D3")
 	assert_str(gear.enum_label(6)).is_equal("D6")
+	assert_str(gear.enum_label(24)).is_equal("D24")
 	assert_str(gear.enum_label(255)).is_equal("R")
-	assert_str(gear.enum_label(7)).is_equal("")
+	assert_str(gear.enum_label(25)).is_equal("")
+
+
+func test_the_gear_enum_tops_out_at_the_drivetrains_top_gear() -> void:
+	# The drive range is the bus's: the contract declares it, Drivetrain.TOP_GEAR reads it.
+	for dir: String in ["in", "out"]:
+		var gear := _real_contract().get_signal_def("gear", dir)
+		var drive: Array = []
+		for entry: Array in gear.enum_entries:
+			if entry[1] > entry[0]:
+				drive = entry
+		assert_array(drive).override_failure_message("gear %s: no 1-N drive range" % dir) \
+				.is_not_empty()
+		assert_int(drive[0]).is_equal(1)
+		assert_int(drive[1]).is_equal(Drivetrain.TOP_GEAR)
 
 
 func test_lights_and_key_enums_decode() -> void:
@@ -393,6 +408,11 @@ func test_j1939_chassis_signals_are_truck_only_and_flavored() -> void:
 	var axle := data.get_signal_def("axle_load", "out")
 	assert_str(axle.flavor).is_equal("j1939")
 	assert_array(axle.vehicles).contains_exactly_in_any_order(["tractor", "truck"])
+	# So is SPN 526, the gearbox's ratio: a readout (no full scale) on both families' boxes.
+	var ratio := data.get_signal_def("gear_ratio", "out")
+	assert_str(ratio.flavor).is_equal("j1939")
+	assert_array(ratio.range).is_empty()
+	assert_array(ratio.vehicles).contains_exactly_in_any_order(["tractor", "truck"])
 
 
 # --- boat NMEA 2000 ---
@@ -400,7 +420,7 @@ func test_j1939_chassis_signals_are_truck_only_and_flavored() -> void:
 func test_nmea2000_signals_are_boat_only_and_flavored() -> void:
 	var data := _real_contract()
 	for entry: Array in [["rudder", "in"], ["rudder_actual", "out"], ["trim", "out"],
-			["awa", "out"], ["aws", "out"], ["twd", "out"], ["tws", "out"],
+			["awa", "out"], ["aws", "out"],
 			["stw", "out"], ["sog", "out"], ["cog", "out"],
 			["current_set", "out"], ["current_drift", "out"], ["depth", "out"],
 			["nav_mode", "in"], ["heading_cmd", "in"],
@@ -413,9 +433,26 @@ func test_nmea2000_signals_are_boat_only_and_flavored() -> void:
 			.override_failure_message("%s/%s must be boat-only" % entry).is_equal(["boat"])
 
 
+## True wind is the one NMEA 2000 reading the land families share: their compass rose reads it.
+func test_true_wind_is_declared_on_land_and_water() -> void:
+	var data := _real_contract()
+	for sig_name in ["twd", "tws"]:
+		var sig := data.get_signal_def(sig_name, "out")
+		assert_str(sig.flavor).is_equal("nmea2000")
+		assert_array(sig.vehicles).contains_exactly_in_any_order(["car", "truck", "tractor", "boat"])
+
+
+## The burn is declared wherever an engine's fuel is modelled from the crank, and on the boat.
+func test_fuel_rate_is_declared_on_land_and_water() -> void:
+	var sig := _real_contract().get_signal_def("fuel_rate", "out")
+	assert_str(sig.flavor).is_equal("nmea2000")
+	assert_array(sig.range).is_empty()
+	assert_array(sig.vehicles).contains_exactly_in_any_order(["car", "truck", "tractor", "boat"])
+
+
 func test_nmea2000_engine_room_signals_are_boat_only_and_flavored() -> void:
 	var data := _real_contract()
-	for entry: Array in [["fuel_rate", "out"], ["oil_press", "out"], ["tank_level", "out"]]:
+	for entry: Array in [["oil_press", "out"], ["tank_level", "out"]]:
 		var sig := data.get_signal_def(entry[0], entry[1])
 		assert_object(sig).override_failure_message("missing %s/%s" % entry).is_not_null()
 		assert_str(sig.flavor) \

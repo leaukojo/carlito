@@ -45,7 +45,7 @@ static/pure, tested in `tests/test_input_arbitration.gd`.
   off while the gamepad moved a pedal last, and never applies to the bridge.
 - `arbitrate_bridge`: the gear byte owns direction. Mode = `InputRouter.set_manual_gearbox`
   (vehicle selector, or `ChallengeDef.transmission`).
-  - Automatic (default): PRND lever. R reverses, D1-D6 = D with auto-shift, 0 = D (RAMN
+  - Automatic (default): PRND lever. R reverses, D1-D24 = D with auto-shift, 0 = D (RAMN
     `0x077` never sends gear).
   - Manual: byte taken exactly, 0 = N, no auto-shift. Local input is always automatic.
   - Absent bridge keys fall to rest state (lamps off, hitch raised, PTO off, 540, open diff,
@@ -109,7 +109,8 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
 ## Telemetry & dashboard
 
 - `VehicleTelemetry` (`src/vehicles/base/vehicle_telemetry.gd`) carries every contract "out"
-  signal: motion straight from the sim, aux (fuel/coolant/battery) as simple models.
+  signal: motion straight from the sim, aux (fuel/coolant/battery) as simple models (the burn
+  read off the crank, `fuel_rate_lph`).
   Derivations are static pure fns (GPS `gps_lat`/`gps_lon` around Paris 48.8566/2.3522,
   `heading_from_forward`, `odo_step`, `body_accel`, `impact_gate`, `pack_status`), tested in
   `tests/test_telemetry.gd`. `BaseVehicle._update_telemetry(input, delta)` holds the only
@@ -128,7 +129,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   | Tell-tale | lamp per bool "in", `key`/`lights` chips, lamp/chip per flavored bool/enum "out" |
   | Bars | warn'd or flavored "out" signals with a `range`, via `dash_bar.gd` (`BAR_ROWS_MAX`-row, `WIDGET_SIGNALS` excluded) |
   | Readout | "out" signals with no `range`, beside HDG/ODO/GPS (boat SOG/STW/DRIFT in m/s) |
-  | Hand-built | gauges (`gauge.gd`, `kmh`/`rpm`, text in the arc's bottom gap), attitude (`pitch`/`roll`), wind rose (`wind_rose.gd`, `awa`/`aws`/`twd`/`tws`/`cog`/`sog`), sounder (`depth_readout.gd`, `depth`, `---` for -1), `node_health`, train's `REVERSER N/D/R` |
+  | Hand-built | gauges (`gauge.gd`, `kmh`/`rpm`, text in the arc's bottom gap), attitude (`pitch`/`roll`), wind rose (`wind_rose.gd`, `awa`/`aws`/`twd`/`tws`/`cog`/`sog`; its compass face on `heading`/`twd`/`tws` alone, the land families), sounder (`depth_readout.gd`, `depth`, `---` for -1), `node_health`, train's `REVERSER N/D/R` |
 
   Captions (`BAR_LABEL`, `LAMP_TEXT`) are hand-picked. `Dashboard.Density`: FULL, COMPACT (default, no signal drops: `tests/test_dashboard.gd`), OFF — SETTINGS/F2 (`toggle_dashboard`) cycles COMPACT -> FULL -> OFF, held for the session.
 - Debug overlay (`debug_overlay.gd`): FPS/frame ms/draw calls/VRAM/node count via

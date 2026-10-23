@@ -68,6 +68,17 @@ func test_pto_stays_in_contract_range_at_the_shipped_redline_without_clamping() 
 			.is_less(TractorT.pto_shaft_rpm(spec.redline_rpm, TractorT.PTO_MODE_1000))
 
 
+func test_the_pto_preset_sets_the_governor_on_the_ptos_rated_speed() -> void:
+	# The tractor runs an all-speed governor; the hand throttle's preset puts its setting on the
+	# engine speed the PTO is geared to, so an unloaded shaft turns its named speed.
+	var spec := _tractor_spec()
+	assert_int(spec.pedal_map).is_equal(PedalMap.Kind.ALL_SPEED)
+	var preset := TractorT.pto_hand_throttle(spec)
+	assert_float(PedalMap.setting_rpm(spec, preset)).is_equal_approx(TractorT.PTO_RATED_RPM, 1e-3)
+	assert_int(TractorT.pto_shaft_rpm(PedalMap.setting_rpm(spec, preset), TractorT.PTO_MODE_540)) \
+			.is_between(539, 540)
+
+
 # --- ISO wheel-based speed ----------------------------------------------------
 
 func test_wheel_kmh_is_spin_through_the_physics_radius() -> void:
@@ -500,6 +511,71 @@ func test_draft_percentage_is_the_applied_force_over_the_rating() -> void:
 	assert_float(TractorT.draft_pct(-1000.0, 0.0)).is_equal(0.0)
 
 
+# --- PTO power (the pure model) -----------------------------------------------
+## Each machine's shaft power and the load it puts on the crank.
+
+const MowerScript := preload("res://src/vehicles/tractor/implements/mower.gd")
+const SpreaderScript := preload("res://src/vehicles/tractor/implements/spreader.gd")
+## The 1000 rpm shaft the harrow trials ran, in rad/s.
+const SHAFT_1000 := 1000.0 / 60.0 * TAU
+
+
+func test_the_harrow_reads_the_trials_pto_torques_at_full_depth_on_full_soil() -> void:
+	var harrow: ImplementBase = auto_free(HarrowScript.new())
+	# Balsari et al.'s means, 215 / 271 / 391 N·m at 3 / 6 / 9 km/h on the 1000 rpm shaft.
+	for pair: Vector2 in [Vector2(3.0, 215.0), Vector2(6.0, 271.0), Vector2(9.0, 391.0)]:
+		assert_float(harrow.pto_power_kw(pair.x, 0.0, 1.0)) \
+				.is_equal_approx(pair.y * SHAFT_1000 / 1000.0, 0.05)
+	assert_float(harrow.pto_power_kw(TractorT.DRAFT_S_REF_KMH, 0.0, 1.0)) \
+			.is_equal(HarrowScript.PTO_RATED_KW)
+	# Held above the top of the means.
+	assert_float(harrow.pto_power_kw(15.0, 0.0, 1.0)).is_equal(harrow.pto_power_kw(9.0, 0.0, 1.0))
+
+
+func test_the_harrow_mills_only_what_its_tines_reach_in_soil() -> void:
+	var harrow: ImplementBase = auto_free(HarrowScript.new())
+	var full := harrow.pto_power_kw(7.0, 0.0, 1.0)
+	assert_float(harrow.pto_power_kw(7.0, HarrowScript.TINE_DEPTH_M * 0.5, 1.0)) \
+			.is_equal_approx(full * 0.5, 1e-4)
+	assert_float(harrow.pto_power_kw(7.0, 0.0, 0.5)).is_equal_approx(full * 0.5, 1e-4)
+	assert_float(harrow.pto_power_kw(7.0, HarrowScript.TINE_DEPTH_M, 1.0)).is_equal(0.0)
+	assert_float(harrow.pto_power_kw(7.0, 0.0, 0.0)).is_equal(0.0)
+
+
+func test_the_mower_cuts_with_its_deck_down_and_the_spreader_always_turns_its_disc() -> void:
+	var mower: ImplementBase = auto_free(MowerScript.new())
+	assert_float(mower.pto_power_kw(7.0, 0.0, 0.0)).is_equal_approx(10.7, 1e-4)
+	assert_float(mower.pto_power_kw(0.0, 0.0, 1.0)).is_equal_approx(10.7, 1e-4)
+	assert_float(mower.pto_power_kw(7.0, mower.support_lift(), 0.0)).is_equal(0.0)
+	assert_float(mower.pto_power_kw(7.0, 0.5, 0.0)).is_equal(0.0)
+	var spreader: ImplementBase = auto_free(SpreaderScript.new())
+	assert_float(spreader.pto_power_kw(0.0, 0.5, 0.0)).is_equal(SpreaderScript.DISC_KW)
+	# The plough is pulled, not driven.
+	var plough: ImplementBase = auto_free(PloughScript.new())
+	assert_float(plough.pto_power_kw(7.0, 0.0, 1.0)).is_equal(0.0)
+
+
+func test_the_pto_loads_the_crank_only_while_it_turns_a_machine_it_drives() -> void:
+	var pto := int(ImplementBase.Connection.PTO)
+	var linkage := int(ImplementBase.Connection.THREE_POINT)
+	assert_float(TractorT.pto_load_nm(true, linkage | pto, 31.8)) \
+			.is_equal(VehicleTelemetry.pto_crank_torque(31.8, TractorT.PTO_RATED_RPM))
+	# PTO out (or the key off: `pto_on` carries both), or no PTO connection: a stub shaft.
+	assert_float(TractorT.pto_load_nm(false, linkage | pto, 31.8)).is_equal(0.0)
+	assert_float(TractorT.pto_load_nm(true, linkage, 31.8)).is_equal(0.0)
+	assert_float(TractorT.pto_load_nm(true, 0, 31.8)).is_equal(0.0)
+
+
+func test_the_crank_pays_the_same_pto_torque_in_either_mode() -> void:
+	# The selected shaft speed's torque, P / omega_shaft, through its ratio onto the crank.
+	var kw := 31.8
+	for mode: int in [TractorT.PTO_MODE_540, TractorT.PTO_MODE_1000]:
+		var shaft_nm := kw * 1000.0 / (TractorT.pto_speed_for_mode(mode) / 60.0 * TAU)
+		assert_float(shaft_nm * TractorT.pto_ratio_for_mode(mode) / VehicleTelemetry.PTO_EFFICIENCY) \
+				.is_equal_approx(TractorT.pto_load_nm(true, int(ImplementBase.Connection.PTO), kw),
+				1e-3)
+
+
 func test_the_shipped_tractor_can_actually_pull_its_rated_draft() -> void:
 	# A plough the tractor cannot move is not a playground: the rating has to sit well under what
 	# the tires can put down (mu x weight). Half of that is a generous bound — only the rear axle
@@ -533,18 +609,38 @@ static func _standing_load(spec: VehicleSpec, grade_pct: float, soil: float, tow
 			(spec.mass + towed_kg) * spec.ground_drive.drive_radius())
 
 
-func test_the_shipped_tractor_starts_in_d3_empty_on_the_flat_and_lower_laden_or_on_a_grade() -> void:
+func test_the_shipped_tractor_starts_in_d7_empty_on_the_flat_and_lower_laden_or_on_a_grade() -> void:
 	# A powershift's start gear is a driver preset, higher empty and lower laden: here the load
-	# standing on the grade picks it (`ShiftPolicy.start_gear`, up to the spec's D3).
+	# standing on the grade picks it (`ShiftPolicy.start_gear`, up to the spec's D7). The highest gear
+	# whose drive at the 1250 rpm launch line makes 2.0x the load or more:
 	var spec := _tractor_spec()
-	assert_int(spec.start_gear_max).is_equal(3)
-	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 0.0, 0.0))).is_equal(3)
-	# Mud's 0.2 is still D3 bobtail; laden with the 10 t tipper it is D1.
-	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 0.0, 0.2))).is_equal(3)
+	assert_int(spec.start_gear_max).is_equal(7)
+	# 26.5x on the flat; mud's 0.2 is still D7 bobtail (2.41x).
+	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 0.0, 0.0))).is_equal(7)
+	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 0.0, 0.2))).is_equal(7)
+	# Laden with the 10 t tipper on mud no gear does (D1 1.79x): D1, the fallback.
 	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 0.0, 0.2, 10000.0))).is_equal(1)
-	# The tipper on 10 % asphalt takes D2; the 26 % mud climb takes D1, its measured best.
-	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 10.0, 0.0, 10000.0))).is_equal(2)
+	# The tipper on 10 % asphalt takes D6 (2.02x); the 26 % mud climb D1 (2.05x), its measured best.
+	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 10.0, 0.0, 10000.0))).is_equal(6)
 	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 26.4, 0.2))).is_equal(1)
+	# With the rig's mass and the rears' static grip the box also locks its launch within 1.5 s
+	# (`ShiftPolicy.launch_slip_s`, half the 0.8 s ramp included). Bobtail D7 locks in 0.84 s. The
+	# 10 t tipper (17 t all up, its 1200 kg nose weight on the rears, the pin behind them; its
+	# D4-D7 are engine-bound, so the grip only caps D1-D3) takes D6 on the flat, 1.32 s (D7 1.54 s),
+	# and D4 on 10 %, 1.36 s (D5 1.67 s), where the reserve alone picks D6.
+	var rear_n := BrakeSizing.wheel_loads(spec).y
+	var bare_grip := 2.0 * BrakeSizing.wheel_grip(spec, rear_n)
+	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 0.0, 0.0), 1.0, spec.mass,
+			bare_grip)).is_equal(7)
+	var axles := BrakeSizing.axle_geometry(spec)
+	var nose_n := 1200.0 * 9.8 * Articulation.rear_axle_share(Drawbar.PIN_LOCAL.z,
+			float(axles["front_z"]), float(axles["rear_z"]))
+	var tipper_grip := 2.0 * BrakeSizing.wheel_grip(spec, rear_n + nose_n / 2.0)
+	var rig_kg := spec.mass + 10000.0
+	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 0.0, 0.0, 10000.0), 1.0, rig_kg,
+			tipper_grip)).is_equal(6)
+	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 10.0, 0.0, 10000.0), 1.0, rig_kg,
+			tipper_grip)).is_equal(4)
 
 
 # The hour meter moved to test_telemetry with VehicleTelemetry.hours_step: engine_hours is a
@@ -572,10 +668,12 @@ func test_only_the_tractor_declares_a_lockable_diff_and_an_engageable_front_axle
 	assert_bool(tractor_spec.ground_drive.front_axle_engageable).is_true()
 	# Spawn state is 2WD: engaging MFWD has to be a thing you do, or it proves nothing.
 	assert_bool(tractor_spec.ground_drive.driven_front).is_false()
-	# Every other shipped spec leaves both off, so no car's driveline can move under these bits.
+	# Every other family's spec leaves both off, so no car's driveline can move under these bits.
+	# The tractor family's variants (a second gearbox on the same body) carry its driveline.
+	var tractors := VehicleCatalog.variants_in_family("tractor")
 	var checked := 0
 	for path in _spec_paths("res://src/vehicles"):
-		if path == tractor_spec.resource_path:
+		if tractors.has(path.get_file().trim_suffix("_spec.tres")):
 			continue
 		var spec: VehicleSpec = load(path)
 		if spec.ground_drive == null:
@@ -781,3 +879,30 @@ func _spec_paths(root: String) -> PackedStringArray:
 	for sub in dir.get_directories():
 		out.append_array(_spec_paths(root.path_join(sub)))
 	return out
+
+
+# --- the CVT tractor ----------------------------------------------------------
+
+## The CVT variant on the same body: its ranges are the Eccom's sourced speeds at 2300 rpm through
+## this body's gearing, its relief the ballasted weight's traction at the drive radius, held by the
+## powershift's own brakes, and it carries no brake hill hold (active standstill is its hold).
+func test_the_cvt_tractor_reads_its_sourced_ranges_and_holds_on_its_relief() -> void:
+	var state := (load(CatalogScript.scene_of("tractor-cvt")) as PackedScene).get_state()
+	var cvt: VehicleSpec = null
+	for i in state.get_node_property_count(0):
+		if state.get_node_property_name(0, i) == "spec":
+			cvt = state.get_node_property_value(0, i) as VehicleSpec
+	assert_object(cvt).is_not_null()
+	assert_bool(Drivetrain.is_cvt(cvt)).is_true()
+	assert_bool(Drivetrain.is_cvt(_tractor_spec())).is_false()
+	var gd := cvt.ground_drive
+	var omega := 2300.0 * TAU / 60.0
+	var kmh: Array[float] = [6.4, 13.0, 26.0, 51.0]
+	for n in kmh.size():
+		var top := cvt.cvt_range_tops[n] / cvt.final_drive * omega * gd.drive_radius() * 3.6
+		assert_float(top).is_equal_approx(kmh[n], 0.01)
+	assert_float(cvt.cvt_max_axle_torque) \
+			.is_equal_approx(cvt.mass * BrakeSizing.G * gd.drive_radius(), 10.0)
+	assert_float(BrakeSizing.stall_hold_margin(cvt)).is_greater_equal(1.0)
+	assert_int(gd.hill_hold).is_equal(HillHold.Kind.NONE)
+	assert_bool(cvt.gear_ratios.is_empty()).is_true()

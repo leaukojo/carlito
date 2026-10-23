@@ -32,9 +32,10 @@
 ; on this geometry (~1.03 m over the road). Only z separates the two units; see semi_spec.tres.
 ;
 ; SPRING RATES, DAMPING, TRAVEL AND THE ANTI-ROLL BAR ARE THE SEMI'S (240000 front / 360000 rear
-; over 0.32 m, rear dampers 24700 / 28800, bar 480000), and they land the same band here: the
-; fixed 0.50 m kingpin offset, not the wheelbase, sets the split, so the coupled rear corner carries about 3.5-4.7 t depending on the
-; trailer. See semi_spec.tres for the derivation and damping ratios.
+; over 0.32 m, front dampers 13500 / 17900, rear 24700 / 28800, bar 480000), and they land the
+; same band here: the fixed 0.50 m kingpin offset, not the wheelbase, sets the split, so the coupled
+; rear corner carries about 3.5-4.7 t depending on the trailer. See semi_spec.tres for the
+; derivation and damping ratios.
 ;
 ; load_sensitivity 0.08: commercial radials lose ~8 % of mu per doubling of load past the
 ; corner's static share. Family number, matching the semi.
@@ -76,8 +77,8 @@ retarder_equipped = true
 retarder_rating_nm = 1450.0
 rest_length = 0.32
 spring_rate = 240000.0
-damper_bump = 12000.0
-damper_rebound = 15800.0
+damper_bump = 13500.0
+damper_rebound = 17900.0
 spring_rate_rear = 360000.0
 damper_bump_rear = 24700.0
 damper_rebound_rear = 28800.0
@@ -110,12 +111,13 @@ trailer_bus_equipped = false
 torque_curve = PackedVector2Array(600, 1500, 780, 1985, 1170, 2308, 1560, 2215, 1820, 1723, 2080, 577)
 idle_rpm = 600.0
 redline_rpm = 2080.0
-gear_ratios = PackedFloat32Array(6.5, 3.7, 2.4, 1.6, 1.2, 0.69)
+gear_ratios = PackedFloat32Array(6.5, 5.316, 4.277, 3.5, 2.849, 2.327, 1.917, 1.568, 1.26, 1.031, 0.839, 0.69)
 reverse_ratio = 6.0
 final_drive = 2.925
 efficiency = 0.9
 engine_brake_frac = 0.15
 engine_friction_frac = 0.05
+fuel_type = 1
 shift_cut_s = 0.4
 shift_torque_ramp_s = 0.3
 engine_inertia = 3.0
@@ -124,15 +126,16 @@ clutch_reserve = 2.0
 launch_rpm_over_idle = 300.0
 shift_up_rpm = 1690.0
 shift_down_rpm = 780.0
-shift_up_light_rpm = 1500.0
+shift_up_light_rpm = 1555.0
 shift_down_light_rpm = 700.0
 kickdown_pedal = 0.95
 shift_dwell_s = 1.5
 skip_shifts = true
+start_gear_max = 6
 shift_handover_s = 0.4
 ; ROAD-SPEED GOVERNOR 105 km/h: North American practice (no federal limiter mandate; fleets that
 ; fit one set it around 65 mph). Higher than the European unit by design, like the ISO 7638 split.
-; It binds: the overdrive 6th would run on to ~140 km/h at redline; ~1560 rpm at 105.
+; It binds: the overdrive D12 would run on to ~140 km/h at redline; ~1560 rpm at 105.
 speed_limit_kmh = 105.0
 ; HIGH-SPEED STEERING FALLOFF, the same 0.21 x 24 = 5.0 deg floor as the cab-over (same rack and
 ; mass). Only the floor SPEED differs: 29 m/s tracks this unit's higher 105 km/h limiter, so

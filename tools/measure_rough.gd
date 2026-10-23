@@ -10,10 +10,12 @@ extends Node3D
 ## Each trial is a standing start RUN_UP metres before a patch, on the lane's centre line: brake
 ## held while the springs settle, then a driver holding a crawl (`speed=`, default 2 m/s) with the
 ## accelerator and keeping to the lane's centre with the wheel, both through the bridge (gear byte
-## D, automatic gearbox), so every trial is the same drive whatever the body. The pedal climbs to
-## the floor whenever the body cannot hold the crawl, so a stuck trial is a floored one: that is
-## what a player holding the key gets. `tc` adds a second limit, a driver feathering the pedal to
-## hold the WORST driven wheel at the grip curve's 0.12 peak (`tc_pedal.gd`; unlike
+## D, automatic gearbox), so every trial is the same drive whatever the body. The crawl is a fuel
+## command, fed to the pedal through the pedal map's inverse (`PedalMap.pedal_for`, the least pedal
+## reaching it), so its loop gain is the same on every map. It climbs to full fuel whenever the body
+## cannot hold the crawl, so a stuck trial is a floored one: the drive a player holding the key
+## gets, at the least pedal that delivers it. `tc` adds a second limit, a driver feathering the
+## pedal to hold the WORST driven wheel at the grip curve's 0.12 peak (`tc_pedal.gd`; unlike
 ## measure_grade.gd's `tc`, on the worst wheel, not the rear axle's mean): it takes throttle
 ## sensitivity out of the answer, and what is left is the differentials' own ceiling.
 ##
@@ -23,11 +25,11 @@ extends Node3D
 ## |slip| while in contact, plus the share of ticks it spent in the air. `use` is the driven
 ## wheels' summed traction force over their summed static capacity (mu_long x surface grip x
 ## normal load, load sensitivity ignored), averaged over the DEMANDING ticks: the body more than
-## SHORT_OF_CRAWL under the crawl AND the driver asking for everything (pedal floored, or `tc`
-## holding it back at the peak). 1.0 is every driven tyre at its peak, and an open diff's peel reads
-## as a low `use` with one wheel's slip far above the others'. `-` means the body never ran short
-## with the pedal down: traction was never the limit on that patch. `short` still counts every
-## tick under the crawl, the crawl controller's recoveries after a lift included.
+## SHORT_OF_CRAWL under the crawl AND the driver asking for everything (the fuel command floored,
+## or `tc` holding the pedal back at the peak). 1.0 is every driven tyre at its peak, and an open
+## diff's peel reads as a low `use` with one wheel's slip far above the others'. `-` means the body
+## never ran short with full fuel asked: traction was never the limit on that patch. `short` still
+## counts every tick under the crawl, the crawl controller's recoveries after a lift included.
 ##
 ##   godot --headless --path . res://tools/measure_rough.tscn -- suv
 ##   godot --headless --path . res://tools/measure_rough.tscn -- tractor-kenney mfwd diff
@@ -45,7 +47,7 @@ extends Node3D
 ## `course=<challenge id>` drives a reach-zone challenge's own course instead of the lanes: its
 ## arena level with the course laid on it (as `ChallengeRunner` does), the def's variant and
 ## attachment, the same driver steering the straight line from the family's VehicleSpawn to its
-## zone's centre, once per COURSE_CONFIGS entry; no spawn jitter. The pedal floors unless `speed=`
+## zone's centre, once per COURSE_CONFIGS entry; no spawn jitter. The fuel floors unless `speed=`
 ## sets a crawl. Per run: reached / stuck / off line / timeout, the time from the release against
 ## the def's `par_s` (the settle is not counted), and the share of ticks a driven wheel spun past
 ## SPIN_SLIP.
@@ -72,7 +74,7 @@ const DOC_EXTRA: Dictionary = {"variant": "hatchback-sports", "mfwd": false, "di
 
 const SETTLE_S := 1.5
 const CRAWL_SPEED := 2.0       ## m/s the driver holds, overridden by `speed=`
-const PEDAL_GAIN := 0.5        ## pedal units per second per m/s of speed shortfall
+const FUEL_GAIN := 0.5         ## fuel per second per m/s of speed shortfall
 const BRAKE_OVER := 0.5        ## m/s over the crawl before the driver brakes
 const BRAKE_GAIN := 0.5        ## brake units per m/s past that
 const STEER_OFFSET_GAIN := 0.5 ## steer units per metre off the lane's centre line
@@ -81,8 +83,9 @@ const STUCK_S := 5.0
 const STUCK_PROGRESS := 0.25   ## m of forward progress that resets the stuck clock
 const TRIAL_S := 60.0
 const SHORT_OF_CRAWL := 0.25   ## m/s under the crawl that counts a tick as `short`
-## Crawl pedal at or above this is FLOORED: the driver is asking for everything the body has.
-const PEDAL_FLOORED := 0.98
+## A crawl fuel command at or above this is FLOORED: the driver is asking for everything the body
+## has. Judged on the fuel, not the pedal: on the petrol map full fuel takes a pedal under 1.
+const FUEL_FLOORED := 0.98
 const BODY_FLAG_S := 1.0       ## s of chassis contact the summary table flags
 ## --- course (`course=<id>`) ---
 ## The drivelines a course run compares: open, the rear lock, MFWD, both.
@@ -90,7 +93,7 @@ const COURSE_CONFIGS: Array[Dictionary] = [
 	{"mfwd": false, "diff": false}, {"mfwd": false, "diff": true},
 	{"mfwd": true, "diff": false}, {"mfwd": true, "diff": true},
 ]
-const COURSE_FLOORED := 99.0   ## m/s "crawl": the pedal floors within two ticks
+const COURSE_FLOORED := 99.0   ## m/s "crawl": the fuel command floors within two ticks
 const COURSE_HALF_WIDTH := 10.0 ## m either side of the line before a run is OFF LINE
 const SPIN_SLIP := 0.3         ## the braking table's skid threshold
 
@@ -122,7 +125,8 @@ var _lane := 0
 var _patch := 0
 var _phase: int = Ph.DONE
 var _t := 0.0
-var _pedal := 0.0           ## speed governor's pedal, 0..1
+var _fuel := 0.0            ## speed governor's fuel command, 0..1
+var _pedal := 0.0           ## the pedal it takes (`PedalMap.pedal_for`), 0..1
 var _tc_pedal := 1.0        ## slip limiter's pedal (`tc`), 0..1; the driver presses the lower
 var _best := 0.0            ## furthest forward progress so far, m
 var _best_t := 0.0          ## trial time `_best` last grew by STUCK_PROGRESS
@@ -298,6 +302,7 @@ func _next_trial() -> void:
 	_prev_pos = _car.global_position
 	_phase = Ph.SETTLE
 	_t = 0.0
+	_fuel = 0.0
 	_pedal = 0.0
 	_tc_pedal = 1.0
 	_best = 0.0
@@ -340,12 +345,13 @@ func _physics_process(delta: float) -> void:
 	var offset := (xform.origin - _line_o).dot(right)
 	var steer := clampf(-(STEER_OFFSET_GAIN * offset + STEER_HEADING_GAIN * forward.dot(right)),
 			-1.0, 1.0)
-	_pedal = clampf(_pedal + (_crawl - speed) * PEDAL_GAIN * delta, 0.0, 1.0)
+	_fuel = clampf(_fuel + (_crawl - speed) * FUEL_GAIN * delta, 0.0, 1.0)
 	if _tc:
 		_tc_pedal = TcPedal.step(_tc_pedal, _car.drive.wheels, delta, _car.drivetrain)
 	var brake := clampf((speed - _crawl - BRAKE_OVER) * BRAKE_GAIN, 0.0, 1.0)
 	if brake > 0.0:
-		_pedal = 0.0
+		_fuel = 0.0
+	_pedal = PedalMap.pedal_for(_car.spec, _fuel, _car.drivetrain.rpm)
 	_drive(minf(_pedal, _tc_pedal) * 100.0, brake * 100.0, steer * 100.0)
 
 	var progress := (xform.origin - _line_o).dot(_line_dir)
@@ -422,10 +428,11 @@ func _sample(speed: float, delta: float) -> void:
 		_stats["spin_ticks"] += 1
 	if speed < _crawl - SHORT_OF_CRAWL:
 		_stats["short_ticks"] += 1
-	# `use` reads only the ticks the driver asks for everything: short of the crawl with the pedal
-	# floored, or with `tc` holding it back because the worst wheel is at the peak. A short tick
-	# with the pedal still climbing is the crawl controller recovering from a lift, not traction.
-	var demanding := _pedal >= PEDAL_FLOORED or (_tc and _tc_pedal < _pedal)
+	# `use` reads only the ticks the driver asks for everything: short of the crawl with the fuel
+	# command floored, or with `tc` holding the pedal back because the worst wheel is at the peak. A
+	# short tick with the fuel still climbing is the crawl controller recovering from a lift, not
+	# traction.
+	var demanding := _fuel >= FUEL_FLOORED or (_tc and _tc_pedal < _pedal)
 	if speed < _crawl - SHORT_OF_CRAWL and demanding and cap > 0.0:
 		_stats["demand_ticks"] += 1
 		_stats["use_sum"] += fx / cap

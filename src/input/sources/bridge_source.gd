@@ -38,6 +38,8 @@ func poll() -> Dictionary[StringName, Variant]:
 		&"hitch_pos": clampf(_num(v, "hitch_pos", 100.0), 0.0, 100.0),
 		&"pto": _flag(v, "pto"),
 		&"pto_mode": int(_num(v, "pto_mode", 0)),
+		# Hand throttle % → 0..1; absent → 0 (the governor at the accelerator's setting alone).
+		&"hand_throttle": clampf(_num(v, "hand_throttle", 0.0) / 100.0, 0.0, 1.0),
 		&"diff_lock": _flag(v, "diff_lock"),
 		&"fwd_drive": _flag(v, "fwd_drive"),
 		# Car traction control; absent → TC on.

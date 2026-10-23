@@ -31,6 +31,8 @@ const DRIVE_OVERRIDABLE := {
 	"centre_diff_bias": "centre_diff_bias",
 	"hill_hold": "hill_hold",
 }
+## The stepped box's own fields a CVT variant clears (`Gen._cvt`): its ratio is drivetrain state.
+const CVT_CLEARED := {"launch_engage_s": 0.0, "skip_shifts": 0.0, "start_gear_max": 0.0}
 ## Baseline-only fields: overrides silently dropped (test_no_variant_overrides catches this).
 const SPEC_BASELINE_ONLY := {
 	"idle_rpm": "idle_rpm", "redline_rpm": "redline_rpm", "reverse_ratio": "reverse_ratio",
@@ -60,6 +62,8 @@ const SUSPENSION := ["spring_rate", "damper_bump", "damper_rebound", "spring_rat
 const DRIVELINE_FLAGS := ["rear_diff_lockable", "front_axle_engageable", "retarder_equipped",
 		"centre_diff_rigid", "abs_equipped", "tcs_equipped", "brake_engages_front_axle",
 		"rear_twin_tyres"]
+## One machine's spec scalars: off (0) unless its variant declares them, never on a baseline.
+const MACHINE_SCALARS := {"pto_mode_rpm": "pto_mode_rpm"}
 ## Driven flags: must not default to false (missing key means baseline's answer).
 const DRIVEN_FLAGS := ["driven_front", "driven_rear"]
 ## The stock tyre: its fit and its class id (`TyreCatalog`).
@@ -81,6 +85,8 @@ const META_KEYS := [
 	"ride_lift",      # chassis raised over the wheels (shallow arches)
 	"scale",          # per-variant body scale, multiplied into KIT_SCALE by _analyze
 	"ride_hz",        # spring derivation input over the baseline's (_suspension_recipe)
+	"model",          # the variant whose GLB, lamps and hand-authored scene it is built on
+	"cvt_range_kmh", "cvt_range_rpm", "cvt_accel_ms2",  # a CVT's ranges and rate (`_cvt`)
 	"_id",            # stamped in by `_ready`, never authored
 ]
 
@@ -97,7 +103,8 @@ const YAW_CLASS := {
 	"delivery": "van", "delivery-flat": "van", "ambulance": "van",
 }
 ## Bodies left on Jolt's tensor (index 0): no measured figure for their class.
-const YAW_COMPUTED := ["race", "race-future", "garbage-truck", "firetruck", "tractor-kenney"]
+const YAW_COMPUTED := ["race", "race-future", "garbage-truck", "firetruck", "tractor-kenney",
+		"tractor-cvt"]
 
 
 # --- roster -------------------------------------------------------------------
@@ -198,6 +205,13 @@ func test_baseline_only_scalars_match_the_baseline() -> void:
 		_assert_scalars(variant, _spec_of(variant).ground_drive, DRIVE_BASELINE_ONLY, false)
 
 
+func test_machine_scalars_match_the_recipe_and_default_off() -> void:
+	for variant: String in Gen.VARIANTS:
+		var ov: Dictionary = Gen.VARIANTS[variant]
+		for field: String in MACHINE_SCALARS:
+			assert_float(float(_spec_of(variant).get(field))) 					.override_failure_message("%s_spec.tres %s" % [variant, field]) 					.is_equal(float(ov.get(MACHINE_SCALARS[field], 0.0)))
+
+
 ## Baseline-only overrides are silently dropped (same invisible drift, other direction).
 func test_no_variant_overrides_a_baseline_only_field() -> void:
 	var honoured := META_KEYS.duplicate()
@@ -206,6 +220,7 @@ func test_no_variant_overrides_a_baseline_only_field() -> void:
 	honoured.append_array(DRIVELINE_FLAGS)
 	honoured.append_array(DRIVEN_FLAGS)
 	honoured.append_array(TYRE_KEYS)
+	honoured.append_array(MACHINE_SCALARS.values())
 	for variant: String in Gen.VARIANTS:
 		for key: String in Gen.VARIANTS[variant]:
 			assert_bool(honoured.has(key)) \
@@ -228,8 +243,10 @@ func test_speed_limits_match_the_recipe() -> void:
 
 func test_gear_ratios_match_the_recipe() -> void:
 	for variant: String in Gen.VARIANTS:
-		var expected: Array = Gen.VARIANTS[variant].get(
-				"gear_ratios", _baseline(variant)["gear_ratios"])
+		var ov: Dictionary = Gen.VARIANTS[variant]
+		# A CVT's ratio is drivetrain state: its stepped ratios are cleared (`Gen._cvt`).
+		var expected: Array = [] if ov.has("cvt_range_kmh") \
+				else ov.get("gear_ratios", _baseline(variant)["gear_ratios"])
 		var ratios := _spec_of(variant).gear_ratios
 		assert_int(ratios.size()) \
 				.override_failure_message("%s_spec.tres gear_ratios length" % variant) \
@@ -386,7 +403,7 @@ func test_measured_geometry_still_matches_the_models() -> void:
 		var b := _baseline(variant)
 		var wheels: Array = ov.get("wheels", Gen.FAMILY_WHEELS[String(ov["family"])])
 		var geo: Dictionary = gen._analyze(
-				Gen.MODELS.path_join(variant + ".glb"), wheels,
+				Gen.MODELS.path_join(Gen._model_of(variant) + ".glb"), wheels,
 				float(ov.get("scale", 1.0)))
 		assert_bool(geo.is_empty()) \
 				.override_failure_message("%s.glb could not be analyzed" % variant).is_false()
@@ -434,7 +451,7 @@ func test_regen_reproduces_every_shipped_scene() -> void:
 	for variant: String in Gen.VARIANTS:
 		var ov: Dictionary = Gen.VARIANTS[variant]
 		var family := String(ov["family"])
-		var geo: Dictionary = gen._analyze(Gen.MODELS.path_join(variant + ".glb"),
+		var geo: Dictionary = gen._analyze(Gen.MODELS.path_join(Gen._model_of(variant) + ".glb"),
 				ov.get("wheels", Gen.FAMILY_WHEELS[family]), float(ov.get("scale", 1.0)))
 		var scene_path := Gen.OUT_DIR.path_join(variant + ".tscn")
 		var packed: PackedScene = gen._build_scene(variant,
@@ -497,6 +514,9 @@ func _assert_scalars(variant: String, res: Resource, fields: Dictionary,
 		var key: String = fields[field]
 		var expected := float(ov.get(key, b[key])) if overridable else float(b[key])
 		var how := "recipe" if overridable and ov.has(key) else "baseline"
+		if ov.has("cvt_range_kmh") and CVT_CLEARED.has(field):
+			expected = CVT_CLEARED[field]
+			how = "CVT's clearing"
 		assert_float(float(res.get(field))) \
 				.override_failure_message("%s_spec.tres %s (from the %s)" % [variant, field, how]) \
 				.is_equal_approx(expected, 1e-4)

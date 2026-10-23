@@ -86,6 +86,8 @@ var slip_floor := LOW_SPEED_FLOOR
 var _own_slip_floor := LOW_SPEED_FLOOR
 var contact_point := Vector3.ZERO  ## world-space patch, under the hub (`patch_offset`), while in_contact
 var contact_normal := Vector3.UP  ## world-space contact normal while in_contact (the hill hold's grade)
+## Instance id of the collider the contact query rests on, 0 when none answered; diagnostic only.
+var contact_collider := 0
 ## The fitted tyre's grip per `Surface` id over the spec's mu (`apply_tyre`;
 ## `HeightmapTerrain.grip_at`'s response); empty reads each surface's `Surface.ref_grip`, the
 ## reference tyre.
@@ -592,12 +594,13 @@ static func settled_drop(safe_drop: float, unsafe_drop: float, gap: float, norma
 ## The contact: a cylinder of the wheel's radius and `2 half_width` across, its axis on the steered
 ## axle (`wheel_basis`'s x), swept from full bump (the hub at the anchor) down the travel; the
 ## normal is the rest contact's where the sweep stops, the face's on a face and radial at an edge.
-## A start inside something reads full bump, the clamp's figure (`start_overlaps`). Sets
-## `_contact_drop` and `_contact_normal`; false when nothing is under the tyre.
-## COMPROMISE: `cast_motion` bisects to 1/256 of the motion (1.2 mm on a 0.3 m travel), a step
-## the hub flickers across at rest and the dampers turn into load spikes (a semi's steer wheel
-## lost ~1.1 kN at launch). `settled_drop` closes it off the touching stop's contact; reading the
-## raw fraction instead costs that noise on every body.
+## A start inside something reads full bump (`start_overlaps`). Sets `_contact_drop`,
+## `_contact_normal` and `contact_collider`; false when nothing is under the tyre.
+## COMPROMISE: `cast_motion` bisects to 1/256 of the motion, a step the hub flickers across that
+## the dampers turn into load spikes. `settled_drop` closes it off the touching stop's contact
+## (the raw fraction costs that noise on every body); a touching stop the rest test reads clear
+## is a free one, so the bracket moves a step on (`docs/vehicles.md` § Physics derivations and
+## figures).
 func _contact_query(space: PhysicsDirectSpaceState3D, body: RigidBody3D, ray_from: Vector3,
 		up: Vector3, wheel_basis: Basis, rest_length: float) -> bool:
 	assert(_query != null, "the contact needs GroundDriveSpec.tyre_half_width and apply_suspension")
@@ -610,6 +613,7 @@ func _contact_query(space: PhysicsDirectSpaceState3D, body: RigidBody3D, ray_fro
 	_query.motion = motion
 	var fractions := space.cast_motion(_query)
 	_query.motion = Vector3.ZERO
+	contact_collider = 0
 	if fractions.size() < 2 or fractions[1] >= 1.0:
 		# Jolt's sweep ignores what the shape already overlaps at its start, so "no hit" is either a
 		# free wheel or one already past full bump: the rest test at the start tells them apart.
@@ -619,6 +623,7 @@ func _contact_query(space: PhysicsDirectSpaceState3D, body: RigidBody3D, ray_fro
 		start_overlaps += 1
 		_contact_drop = 0.0
 		_contact_normal = start.get("normal", up)
+		contact_collider = start.get("collider_id", 0)
 		return true
 	if fractions[1] <= 0.0:
 		start_overlaps += 1
@@ -626,6 +631,12 @@ func _contact_query(space: PhysicsDirectSpaceState3D, body: RigidBody3D, ray_fro
 	var unsafe_drop := rest_length * fractions[1]
 	_query.transform.origin = ray_from + motion * fractions[1]
 	var rest := space.get_rest_info(_query)
+	if rest.is_empty() and fractions[1] > fractions[0]:
+		safe_drop = unsafe_drop
+		unsafe_drop += rest_length * (fractions[1] - fractions[0])
+		_query.transform.origin = ray_from - up * unsafe_drop
+		rest = space.get_rest_info(_query)
+	contact_collider = rest.get("collider_id", 0)
 	_contact_drop = safe_drop
 	_contact_normal = up
 	if not rest.is_empty():

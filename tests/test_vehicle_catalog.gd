@@ -37,7 +37,8 @@ func test_variants_in_family_grouping() -> void:
 	# The truck family is the J1939 chassis class only: two Kenney bodies + the two hand-built
 	# tractor units (the European cab-over and the North American conventional).
 	assert_int(VehicleCatalog.variants_in_family("truck").size()).is_equal(4)
-	assert_int(VehicleCatalog.variants_in_family("tractor").size()).is_equal(1)
+	# One tractor body on two gearboxes: the powershift and the CVT.
+	assert_int(VehicleCatalog.variants_in_family("tractor").size()).is_equal(2)
 	assert_int(VehicleCatalog.variants_in_family("boat").size()).is_equal(3)  # 3 watercraft
 
 
@@ -167,24 +168,34 @@ static func _top_gear(spec: VehicleSpecScript) -> int:
 
 
 ## Full pedal is where the launches and top speeds are tuned: there the policy is the box's two fixed
-## thresholds, on every gear, and the landing floor moves no upshift point.
+## thresholds, on every gear, and the landing floor moves no upshift point. A skip box takes in one
+## shift the gears a chain of forced shifts would: over-revved a step past `shift_up_rpm` (each
+## landing at or past the point forces the next), or lugged a step under the coast line.
 func test_every_box_shifts_at_its_full_pedal_pair_at_full_pedal() -> void:
 	var specs := _gearbox_specs()
 	for variant: String in specs:
 		var spec: VehicleSpecScript = specs[variant]
 		var top := _top_gear(spec)
+		var coast := ShiftPolicy.down_rpm(spec, 0.0)
 		for byte in range(1, top + 1):
 			if byte < top:
 				assert_float(ShiftPolicy.upshift_rpm(spec, byte, 1.0)).override_failure_message(
 						"%s: D%d's full-pedal upshift moved off shift_up_rpm" % [variant, byte]) \
 						.is_equal(spec.shift_up_rpm)
+			var ratio := spec.gear_ratios[byte - 1]
 			var rpm := spec.idle_rpm
 			while rpm <= spec.redline_rpm:
 				var expected := byte
 				if rpm >= spec.shift_up_rpm and byte < top:
 					expected = byte + 1
+					while spec.skip_shifts and expected < top \
+							and rpm * spec.gear_ratios[expected - 1] / ratio >= spec.shift_up_rpm:
+						expected += 1
 				elif rpm <= spec.shift_down_rpm and byte > 1:
 					expected = byte - 1
+					while spec.skip_shifts and rpm <= coast and expected > 1 \
+							and rpm * spec.gear_ratios[expected - 1] / ratio <= coast:
+						expected -= 1
 				assert_int(ShiftPolicy.next_gear(spec, byte, rpm, 1.0, INF, false)) \
 						.override_failure_message("%s: D%d at %.0f rpm, full pedal" % [variant, byte,
 						rpm]).is_equal(expected)
@@ -333,6 +344,35 @@ func test_every_engine_that_drives_wheels_declares_its_crank_and_coupling() -> v
 				.is_between(1, mini(spec.gear_ratios.size(), Drivetrain.TOP_GEAR))
 
 
+func test_every_pedal_map_is_none_at_rest_the_curve_floored_and_monotone() -> void:
+	# The pedal reaches the crank only through `PedalMap.fuel`: no fuel at pedal 0, the whole curve
+	# at pedal 1 (every floored figure is the curve's), and never less fuel for more pedal, from
+	# under idle to past the redline. An all-speed governor is the idle controller at pedal 0 (it
+	# fuels a crank under idle) and cuts past its high idle, the redline: there no fuel at pedal 0
+	# from just over idle, and the whole curve at pedal 1 up to the redline.
+	var specs := _driven_specs()
+	for variant: String in specs:
+		var spec: VehicleSpecScript = specs[variant]
+		if not Drivetrain.drives_wheels(spec):
+			continue
+		var governed := spec.pedal_map == PedalMap.Kind.ALL_SPEED
+		var at_rpm := spec.idle_rpm * 0.5
+		while at_rpm <= spec.redline_rpm * 1.1:
+			if not governed or at_rpm >= spec.idle_rpm * 1.05:
+				assert_float(PedalMap.fuel(spec, 0.0, at_rpm)).override_failure_message(
+						"%s: fuel at pedal 0, %.0f rpm" % [variant, at_rpm]).is_equal(0.0)
+			if not governed or at_rpm <= spec.redline_rpm:
+				assert_float(PedalMap.fuel(spec, 1.0, at_rpm)).override_failure_message(
+						"%s: under full fuel floored at %.0f rpm" % [variant, at_rpm]).is_equal(1.0)
+			var prev := 0.0
+			for i in range(1, 101):
+				var f := PedalMap.fuel(spec, i * 0.01, at_rpm)
+				assert_float(f).override_failure_message("%s: pedal %.2f at %.0f rpm fuels %f under %f"
+						% [variant, i * 0.01, at_rpm, f, prev]).is_greater_equal(prev)
+				prev = f
+			at_rpm += 250.0
+
+
 func test_every_road_body_carries_a_hill_hold_and_the_tractor_a_powershift_one() -> void:
 	# Hill-start assist rides with ABS (the road bodies and trucks, the semis' AMT included); the
 	# open-wheelers carry neither. The tractor's is a powershift hill hold, with no timeout.
@@ -345,6 +385,11 @@ func test_every_road_body_carries_a_hill_hold_and_the_tractor_a_powershift_one()
 					.is_equal(HillHold.Kind.ASSIST)
 			assert_float(gd.hill_hold_s).override_failure_message(
 					"%s: hill-start assist held %.1f s" % [variant, gd.hill_hold_s]).is_greater(0.0)
+		elif gd.front_axle_engageable and DrivetrainScript.is_cvt(specs[variant]):
+			# A CVT tractor holds in its transmission (`Drivetrain.standstill_hold`): no brake hold.
+			assert_int(gd.hill_hold).override_failure_message(
+					"%s: a CVT tractor's active standstill is its hold" % variant) \
+					.is_equal(HillHold.Kind.NONE)
 		elif gd.front_axle_engageable:
 			assert_int(gd.hill_hold).override_failure_message(
 					"%s: a powershift tractor with no hill hold" % variant) \
@@ -358,10 +403,12 @@ func test_every_road_body_carries_a_hill_hold_and_the_tractor_a_powershift_one()
 func test_every_free_crank_settles_on_its_steepest_droop_without_ringing() -> void:
 	# The crank's step is semi-implicit in its own curve (`Drivetrain.crank_compliance`): on the
 	# steepest falling segment, held at the fuel that balances the motoring law mid-segment, a free
-	# crank started at the segment's top climbs onto that point and never passes it.
+	# crank started at the segment's top climbs onto that point and never passes it. The fuel is held
+	# as the pedal on a linear copy: a torque-request map holds its request, not a fuel.
 	var specs := _driven_specs()
 	for variant: String in specs:
-		var spec: VehicleSpecScript = specs[variant]
+		var spec: VehicleSpecScript = (specs[variant] as VehicleSpecScript).duplicate()
+		spec.pedal_map = PedalMap.Kind.LINEAR
 		if not Drivetrain.drives_wheels(spec):
 			continue
 		var curve := spec.torque_curve
@@ -811,11 +858,11 @@ func test_every_declared_speed_limit_fits_the_byte_it_is_published_in() -> void:
 				% [variant, limit]).is_equal(float(roundi(limit)))
 		if limit > 0.0:
 			governed += 1
-	# ...and the sweep must actually be sweeping something: nine shipped specs carry a limiter
-	# (van, pickup, pickup-flat, ambulance, garbage-truck, firetruck, tractor-kenney, semi,
-	# conventional), and a regen that dropped the field would otherwise pass this silently.
+	# ...and the sweep must actually be sweeping something: ten shipped specs carry a limiter
+	# (van, pickup, pickup-flat, ambulance, garbage-truck, firetruck, tractor-kenney, tractor-cvt,
+	# semi, conventional), and a regen that dropped the field would otherwise pass this silently.
 	assert_int(governed).override_failure_message(
-			"no shipped spec declares a speed_limit_kmh any more").is_equal(9)
+			"no shipped spec declares a speed_limit_kmh any more").is_equal(10)
 
 
 ## The unnamed interface the shell duck-types at ~8 sites (vehicle_select's ATTACH button,
@@ -831,8 +878,8 @@ const ATTACHMENT_AXIS := [
 ]
 
 ## The towing bodies, and the whole list of them: TractorVehicle (three-point hitch + drawbar)
-## and SemiTractor (fifth wheel), which between them script exactly these three variants.
-const TOWING_VARIANTS := ["tractor-kenney", "semi", "semi-conventional"]
+## and SemiTractor (fifth wheel), which between them script exactly these four variants.
+const TOWING_VARIANTS := ["tractor-kenney", "tractor-cvt", "semi", "semi-conventional"]
 
 
 # --- the attachment axis: all of it, or none of it -----------------------------

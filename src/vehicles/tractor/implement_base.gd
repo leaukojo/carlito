@@ -80,6 +80,14 @@ func draft_shape() -> Vector4:
 	return Vector4(1.0, 0.0, 0.0, 0.0)
 
 
+## Power (kW) its PTO shaft takes at `ground_kmh` with the balls `ball_lift` m over the bottom stop
+## and `soil01` of ploughable soil under the hitch (subclass override): each machine reads its own
+## geometry. 0 by default, as for a machine the PTO does not drive. The tractor puts it on the crank
+## (`VehicleTelemetry.pto_crank_torque`) only while its PTO turns this machine.
+func pto_power_kw(_ground_kmh: float, _ball_lift: float, _soil01: float) -> float:
+	return 0.0
+
+
 ## The machine's mass in kg (subclass override), sourced for the class of its DRAWN size.
 func mass_kg() -> float:
 	return 0.0

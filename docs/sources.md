@@ -65,6 +65,12 @@ body behind its reference is fixed from its own data (curve, gearing), never by 
 - **AMT launch:** a heavy truck's AMT holds the crank about 300 rpm over idle [19].
 - **Powershift modulation:** a fill, then a pressure ramp [20]. No duration was found, so
   `launch_engage_s` 0.8 is an estimate.
+- **Torque through a clutch-to-clutch shift:** a road box's TCU holds the engine's torque reduced
+  through the inertia phase [44], or briefly cuts it there through the engine management, so the
+  output does not rise on the crank's inertia [97]. A Deere powershift's controller requests an
+  engine torque over the bus through the shift, held at a level such as 20 % over the present
+  torque and cancelled after the swap [98]; no tractor source reducing it was found. The tractor's
+  reduction is the road boxes' law (a COMPROMISE at `TRACTOR_BASE`).
 
 *Idle and holds:*
 - **Loaded idle:** the ECU adds air when a drive range is selected, so idle stays put. Without that
@@ -74,7 +80,7 @@ body behind its reference is fixed from its own data (curve, gearing), never by 
   [23, 24, 25].
 - **Tractor:** Valtra's HillHold holds a powershift tractor until the drive pedal is pressed [26].
 
-*Engine friction:* `docs/drivetrain.md` § Motoring and friction. It is Volvo Penta friction power: [5] and [7].
+*Engine friction:* `docs/drivetrain.md` § Motoring and friction. The diesels' is Volvo Penta friction power, [5] and [7]; the petrol's is EPA's measured Malibu motoring curve [91].
 
 *The heavy vans' drivetrain* (`VAN_BASE`: `delivery`, `delivery-flat`, `ambulance`): a Ford
 Transit 3.2 L five-cylinder diesel behind the 6R80 six-speed automatic, the class of a 4.7 t
@@ -135,6 +141,24 @@ creeps harder on them (computed) than a 30 % pedal asks.
 | Its ground share | the mass centre's lever over the tail wheel's (1.21 / 2.8 m behind the pins, off `mower.tscn`), the top link floating | computed; the float an estimate |
 | Spreader, ~800 L single disc | 150 kg empty, Demir DMR SF 800 [57]; carried full of AN prill at 950 kg/m³ | sourced |
 | Front-axle ballasting minimum (the `hitch` pass's guideline) | ≥ 20 % of total weight on the front axle to keep the tractor steerable: John Deere operator's manual, "Select Ballast Carefully" | sourced, no link recorded |
+
+*PTO power* (`ImplementBase.pto_power_kw`, `RefuseBody.PUMP_KW`; on the crank through
+`VehicleTelemetry.pto_crank_torque`). D497 rates neither drawn machine: its rotary-power table has
+no power harrow and no single-spindle cutter.
+
+| Figure; torques in N·m at the shaft, speeds in km/h, powers in kW | Value | Grade |
+| --- | --- | --- |
+| Power harrow PTO torque, 3 m, 1000 rpm shaft | means 215 / 271 / 391 at 3 / 6 / 9 over the trials' 6-15 cm; 116 at 6 cm and 3, 480 at 15 cm and 9 [48] | secondary: the results read only in search excerpts of the paper |
+| Its speed and depth law | quadratic in speed, linear in depth; a power harrow's mean 168.9 per m width at the PTO, 8-12 cm at 2.2-4.8 [100] | abstract read |
+| Harrow model (harrow.gd `PTO_SHAPE`, `PTO_RATED_KW`) | D497's form through the three means, A 223, B -13.33, C 3.556, held above 9; 303.9 at 7, 31.8 at 1000 rpm; g(0) 0.73; linear in depth through zero (129 at 6 cm and 3 against the 116 measured) | computed; the depth law an estimate |
+| Rotary mower (mower.gd `CUT_KW`) | D497's disk mower, b 5.0 per m width ±30 %, a 0: 10.7 on the 2.14 m sweep. Rotz and Muhtar select 5 per m for a rotary mower ±30 % [102]; Arizona's reproduction of the table reads the same [103]. The D497.4 OCR copy's b column runs a row off its names (its ranges do not) [101] | secondary |
+| Spreader disc (spreader.gd `DISC_KW`) | 2: the throw ~0.3 (0.33 kg/s leaving at ~30 m/s), the rest drag and the angle box; a single-disc spreader's maker asks for a tractor of 11 [104] | estimate |
+| Refuse body pump (`RefuseBody.PUMP_KW`, `PUMP_RATED_ENGINE_RPM`) | a 40 yd³ front loader's: ~50 gpm at 1300 engine rpm, 2500 psi relief, arms lifting an 8000 lb container in a 13-18 second cycle [105]; raising at half the relief over a 0.85 pump, 32 | the spec sourced; the pressure share and pump efficiency estimates |
+| PTO driveline (`VehicleTelemetry.PTO_EFFICIENCY`) | PTO power ~0.90 of net flywheel power [101] | secondary (an OCR copy); taken for the truck's gear PTO too, an estimate there |
+| The ECM's PTO mode, its interlocks (`TruckTelemetry.pto_mode_engaged`, `PTO_MODE_MAX_SPEED_MS`; the neutral one `Drivetrain.pto_set_rpm`) | a Cummins ECM's PTO parameters: maximum vehicle speed 2 mph, parking brake interlock, transmission neutral interlock enabled [113]; with the neutral interlock off, an rpm ramp-up in drive can overcome the park brake [114] | secondary: the bulletin and the recall read in search excerpts |
+| Its set speed (`VehicleSpec.pto_mode_rpm` 1300 on `garbage-truck`) | a Cummins remote PTO sets one of five preset speeds, typical for refuse [115]; J1939 PTO1 carries the set speed (SPN 187) and the governor's state (SPN 976), whose states include an accelerator override [116]. The preset is the body builder's calibration: the pump's rated speed | secondary; the value computed from the pump's rating |
+| Its governing (droop 0, `PedalMap.MIN_DROOP`) | no truck PTO droop figure found; an electronic set-speed control holds its speed (isochronous, droop 0 % [117]); an aftermarket PT-pump PTO governor quotes ~10 % at most | estimate |
+| The arm's rate against the pump's speed (`RefuseBody.pump_flow`) | a fixed-displacement pump's flow is its speed's share of the rated, so `ARM_TRAVEL_SEC` holds at 1300 rpm; capped at 1 past it, the body's flow control | computed; the cap an estimate |
 
 *Surfaces* (`Surface`, `src/levels/base/surface.gd`). Grip is the all-season tyre's peak over its
 dry-asphalt peak (Wong's 0.8-0.9, read as 0.85 [63]); drag is rolling resistance added over a car
@@ -216,15 +240,73 @@ and the front opposite.
 | K band 0.7-8.2 deg/g, mean 4.4 (FWD 4.2, RWD 4.7) | US vehicles at a lateral acceleration of 0.15 of g [84]; no band split by class was found | secondary |
 | Roll steer's share | 1.0 of an illustrative 4.1 deg/g budget (front 0.6, rear −0.4 in the per-axle K convention, K = front − rear); roll camber 1.2, compliance steer 0.5 (side-force 0.4, aligning-torque 0.1) and aligning torque 0.4 more [86] | secondary |
 
+*Pedal map* (`PedalMap`, `VehicleSpec.pedal_map`; `docs/drivetrain.md` § The pedal map):
+
+| Figure | Basis | Grade |
+| --- | --- | --- |
+| `PETROL_REQUEST` | brake torque against pedal % and rpm on a dynamometer, a 2016 Honda L15B7 (1.5 L turbo), 1000-5000 rpm [88, Fig. 2]; the contours read at 600 dpi as a share of the figure's own peak, to about ±0.013 of it | primary measurement, read off a figure (secondary) |
+| The jump inside the first 1 % of pedal | "torque output transitions from unfueled minimum to a positive value between zero and one percent accelerator pedal", on many production calibrations [88] | sourced |
+| The request flat in rpm, clipped by full load | the figure's contours run near-level in N·m from 1500 to 4500 rpm and meet full load at 1000-1500 rpm from 30 % pedal [88]; read as the torque-structured request the engine realises up to full load | the reading an interpretation of a sourced figure |
+| The rpm axis over rated speed | the L15B7 makes 174 hp at 6000 rpm [90]; each body's own rated speed is where its curve's power peaks | sourced |
+| Road diesels LINEAR | on a truck's min-max governor "the driver operates the control rod in the fuel injection pump directly by means of the accelerator pedal, and thus sets the required torque"; the governor acts at idle and maximum speed only [89]. No electronic road-diesel map (J1939 SPN 91 to SPN 512) was found | sourced (mechanical governor); the electronic one assumed alike |
+
+*Governor* (`PedalMap.Kind.ALL_SPEED`, `VehicleSpec.governor_droop`,
+`TractorTelemetry.PTO_RATED_RPM`; `docs/drivetrain.md` § The pedal map):
+
+| Figure | Basis | Grade |
+| --- | --- | --- |
+| The all-speed governor | a variable-speed governor holds every engine speed the lever sets between idle and maximum, fuelling along its regulation curve [89] | sourced |
+| `governor_droop` 0.07 | John Deere 6170R-6210R, operator's manual, Engine: slow idle 850, fast idle 2250, rated 2100 rpm, working range 1500-2100 [106]: fast idle 7.1 % over rated | secondary: read in a search excerpt; the manual's page refused the connection |
+| The top setting's 18 % (the curve's 2200-2600 tail, kept) | the sourced 7 % puts the high idle near 2350, and the top speed at D16's road speed there | COMPROMISE (`TRACTOR_BASE`) |
+| `PTO_RATED_RPM` 2043 | the 6175R turns 540 and 1000 at 1950 engine rpm [107], 0.929 of its 2100 rated speed [106]; on the curve's 2200 rated (its governor's break) | secondary |
+| An electronic engine's selectable droop; ISO 3046-4's governing classes | none found. ISO 3046-4 is paywalled, not read; patents describe a positive droop preset in software [108] and an isochronous mode held at a set engine speed [109], with no figure | not found |
+| A part demand upshifts two droops under its setting (`ShiftPolicy.GOVERNED_UPSHIFT_DROOP`): the line's full-fuel end, less a droop for the drive tyres' slip | no governed shift schedule found. Measured: on the map's own point the tractor at demand 0.5 (setting 1700, point 1762) never leaves its start gear; at half a droop (the line's middle) the tipper climbing 8 % at demand 0.6 holds D4 on 43 % fuel, its road speed's rpm 1744 under the 1816 point while ~5 % slip holds the crank at 1839 | estimate |
+| A governed box keeps the map's downshift points (`ShiftPolicy.down_rpm`): a setting under the landing floor holds its gear, one under the coast line crawls in D1 | an engine-speed-shifting powershift's behaviour (AutoPowr / Dynashift class); no shift schedule found | estimate |
+
+*Fuel* (`VehicleTelemetry.fuel_rate_lph`; `docs/drivetrain.md` § Fuel). The model's reading is computed off each spec:
+
+| Figure | Basis | Model reads | Grade |
+| --- | --- | --- | --- |
+| PETROL: 41.05 MJ/kg, 0.757 kg/L; η_i 0.41 | the Malibu map's E10 test fuel; its minimum BSFC 239 g/kWh [91] | `sedan` 241 g/kWh at 2000 rpm | sourced |
+| Petrol idle | the Malibu at 650 rpm at no load: 0.076 g/s, 0.36 L/h [91]; a 2.0 L compact, no accessory load, 0.61 L/h [92] | `sedan` 0.34 L/h at 900 rpm, on the Malibu's friction law (`docs/drivetrain.md` § Motoring and friction) | sourced; secondary |
+| DIESEL: 42.7 MJ/kg, 0.84 kg/L; η_i 0.45 | Volvo Penta's rating fuel; at full load over their friction power, η_i 0.450 (TD640VE, 213 g/kWh at 1800 rpm) and 0.456 (TAD1641GE, 197-200 at 1500) [5, 7] | `garbage-truck` 211, `semi` 201 g/kWh | sourced |
+| Diesel idle | a Class 8 tractor-semitrailer idles at 2.4 L/h [92], with the accessories and raised idle this model omits | `semi` 1.62 L/h at 600 rpm | secondary |
+| Tractor | OECD test 2136, John Deere 6175R: 130.4 kW at its PTO on 36.3 L/h, ~234 g/kWh there [93]; no tractor idle figure found | `tractor-kenney` 222 g/kWh at the crank at rated, 211 at best | secondary |
+
+*Gearing* (the semis' and the tractor's `gear_ratios`; `docs/drivetrain.md` § The shift policy):
+
+| Figure | Basis | Grade |
+| --- | --- | --- |
+| Semis' twelve, the I-Shift ATO2612 | overdrive, no crawler: 11.73 / 9.21 / 7.09 / 5.57 / 4.35 / 3.41 / 2.70 / 2.12 / 1.63 / 1.28 / 1.00 / 0.79, steps 1.26-1.30 [94] | sourced |
+| Fitted onto the shipped span | the steps' logarithms scaled by 0.8313 so 6.5 to 0.69 keeps D1 and the overdrive: 6.5 / 5.316 / 4.277 / 3.5 / 2.849 / 2.327 / 1.917 / 1.568 / 1.26 / 1.031 / 0.839 / 0.69, steps 1.21-1.24 | computed |
+| Tractor's sixteen, a full powershift | the John Deere 8R e16: Power Shift, 16 forward / 4 reverse, at rated speed 1.88 to 39.13 (km/h; OECD 2/2 682, the 8235R) [95]; its chart at 2100 rpm reads, in km/h, 1.9 / 2.4 / 3.2 / 4.5 / 5.0 / 5.8 / 6.8 / 7.7 / 9.0 / 10.3 / 12.1 / 13.8 / 16.3 / 21.7 / 29.0 / 42.2, field steps ~1.15 [96] | sourced; the chart secondary |
+| Even 1.103 steps over 7.0 to 1.6 | the shipped span is only the e16's gears 8-16, so sixteen ratios there step at the brief's 1.10 edge; its 22:1 span would deepen D1 past the stall hold (a COMPROMISE, `gen_kenney_vehicles.gd`) | computed |
+| The start gear's slip time, `START_SLIP_S` | an automatic start-gear selection: the highest start gear, up to a programmed maximum (3rd or 5th in its example), whose estimated clutch slip time on tractive effort, rolling resistance, grade and gross weight stays under a reference, "say 1.5 seconds" (a quarter of a second to five acceptable) [99]; the I-Shift picks its own and lets the driver take a lower one [37] | sourced; the half-ramp dead time an estimate |
+
+*CVT* (`tractor-cvt`; `docs/heavy_vehicles.md` § The CVT tractor):
+
+| Figure | Basis | Grade |
+| --- | --- | --- |
+| Four ranges changing synchronously; in km/h at 2300 rpm, 0-6.4 / 6.4-13 / 13-26 / 26-51 | the ZF Eccom, an input-coupled hydrostatic power split shifted at synchronous speeds without a power interruption; John Deere fits it as AutoPowr on its 6000 line since 2001 [110] | sourced (a review of Pohlenz & Gruhle 2002) |
+| Ratio tops 0.1128 / 0.229 / 0.4581 / 0.8986 (gearbox output over input) | those speeds through `final_drive` 10.083 and the 0.66 m rear at 2300 rpm (`gen_kenney_vehicles.gd` `_cvt`): the road-speed limit at ~1800 rpm, the overdrive Renius asks of a CVT [110] | computed |
+| Hydrostatic share +40 % at a range's bottom, -35 % at its top (`CVT_SHARE_BOTTOM` / `_TOP`) | the Eccom's hydrostatic power portion across each range, through zero at the lock-up [110] | sourced |
+| Variator 85 % (`CVT_VARIATOR_EFF`) | the analysis figure for 45-degree bent-axis units (gear pairs 97 %) [110] | sourced |
+| The efficiency linear in the share, `efficiency` at each lock-up | constant path efficiencies, as Renius's own analysis assumes; range I's near-zero-speed circulating power left out (a COMPROMISE at `Drivetrain.cvt_efficiency`) [110] | estimate |
+| Active standstill; reverse's top (`CVT_REVERSE_KMH`) | a CVT's market demands: active zero speed control under all practical loads, reverse from zero to about 25 (km/h) [110] | sourced (a requirement) |
+| The relief at `mass g r` (`cvt_max_axle_torque`) | peak gross traction on concrete is about the ballasted tractor's weight, and a hydrostatic CVT's pressure is limited to it [110] | sourced; the rule's application an estimate |
+| Ratio rate as a ground acceleration (`cvt_accel_ms2`) | a CVT tractor's acceleration demand bands: low up to 0.25, medium 0.5-0.7, high 1-2 m/s²; the ratio as output over input speed [111] | sourced (a patent's bands); the figure picked in the high band |
+| The brake pedal brings it to standstill (`Drivetrain.cvt_speed_command`) | AutoPowr's AutoClutch lets the driver stop the tractor on the brake pedals [112] | secondary |
+| Limit-load control (`cvt_ratio_step`): the crank held at the governor line's full-fuel end, the ground speed giving, over `CVT_LOAD_TAU_S`; the range byte's `CVT_RANGE_HYSTERESIS`; the pressure cut-off | no control law found | estimate |
+
 ## Reference list
 
 1. Ubysz, "Problems of rotational mass in passenger vehicles", Transport Problems 5(1), 2010, Table 1: http://transportproblems.polsl.pl/pl/archiwum/2010/zeszyt1/2010t5z1_04.pdf
 2. Honda CR-V converter impeller inertia, arXiv 2305.15216: https://arxiv.org/pdf/2305.15216
 3. SimulationX automotive powertrain tutorial: https://doc.simulationx.com/4.3/1033/Content/Tutorials/AutomotivePowertrain.htm
 4. "Impact of Engine Inertia on P2 Mild HEV Fuel Consumption", WEVJ 15(5) 220, 2024: https://doi.org/10.3390/wevj15050220
-5. Volvo Penta TD640VE technical data (inertia 1.50 kg·m²; friction power 17-26 kW at 1800-2400 rpm): https://sra-moteur.com/uploads/catalogue/produits/documentations/td640ve-td640ve.pdf
+5. Volvo Penta TD640VE technical data (inertia 1.50 kg·m²; friction power 17-26 kW at 1800-2400 rpm; specific fuel consumption by load; 42.7 MJ/kg, 0.84 kg/L): https://sra-moteur.com/uploads/catalogue/produits/documentations/td640ve-td640ve.pdf
 6. Volvo Penta TAD734GE data sheet: https://www.scribd.com/document/457581321/TAD734GE
-7. Volvo Penta TAD1641GE technical data (inertia 4.20 kg·m²; friction power 36 / 53 kW at 1500 / 1800 rpm): https://www.wincogen.com/wp-content/uploads/PD/Engines/VOLVO_TAD1641GE.pdf
+7. Volvo Penta TAD1641GE technical data (inertia 4.20 kg·m²; friction power 36 / 53 kW at 1500 / 1800 rpm; specific fuel consumption by load): https://www.wincogen.com/wp-content/uploads/PD/Engines/VOLVO_TAD1641GE.pdf
 8. Middelmann, "The Torque Converter as a System", Schaeffler (LuK) symposium: https://www.schaeffler.com/remotemedien/media/_shared_media/08_media_library/01_publications/schaeffler_2/symposia_1/downloads_11/6_Torque_Converter.pdf
 9. MathWorks Powertrain Blockset, Torque Converter block: https://www.mathworks.com/help/autoblks/ref/torqueconverter.html
 10. Allison 3000 stall torque ratios, quoted on a forum: https://www.skoolie.net/goto/post?id=7439134
@@ -265,7 +347,7 @@ and the front opposite.
 45. Hefele and Oksanen, "EcoTIM: Fuel-saving multi-brand tillage with ISO 11783 TIM", arXiv 2604.17991, 2026 (its draft model and Table 2, quoting ASAE D497.7): https://arxiv.org/html/2604.17991
 46. University of Arizona, "Table 3 – Field efficiency, field speed, and repair and maintenance cost parameters" (an archived copy read): https://web.archive.org/web/20240420133028/https://ag.arizona.edu/crop/equipment/agmgttable3.pdf
 47. "Mouldboard plough" design slides (furrow width over depth 1.1-1.5): https://www.slideshare.net/slideshow/mb-ploughpptx/254915097
-48. Balsari et al., "Performance analysis of a tractor - power harrow system under different working conditions", Biosystems Engineering 202, 28-41, 2021, doi:10.1016/j.biosystemseng.2020.11.009 (abstract read via OpenAlex; its highlights seen only in search results; the full text sits behind a bot check): https://www.sciencedirect.com/science/article/pii/S1537511020303147
+48. Balsari et al., "Performance analysis of a tractor - power harrow system under different working conditions", Biosystems Engineering 202, 28-41, 2021, doi:10.1016/j.biosystemseng.2020.11.009 (abstract read via OpenAlex; its highlights and its PTO torque means seen only in search results; the full text and the repository copy sit behind a bot check): https://www.sciencedirect.com/science/article/pii/S1537511020303147
 49. Academia.edu's generated summary of [48], seen only in search results: https://www.academia.edu/83175306/Performance_analysis_of_a_tractor_power_harrow_system_under_different_working_conditions
 50. Kverneland, "Kverneland AD", technical specifications (AD Variomat 85: 730 / 900 / 1090 kg at 3 / 4 / 5 furrows): https://ien.kverneland.com/ploughs/conventional-ploughs/kverneland-ad
 51. Oberhaus, Biller, Keuper and Stachnik, "Load Transfer from the Fully-mounted Plough to the Tractor", Landtechnik 60(6) 330-331, 2005 (Fig. 2 at 0 MPa; read in full): https://www.agricultural-engineering.eu/landtechnik/article/download/2005-60-6-330-331/2005-60-6-330-331-en-pdf/2059
@@ -305,3 +387,33 @@ and the front opposite.
 85. Eng-Tips, "Understeer gradient of modern passenger cars" (forum): https://www.eng-tips.com/threads/understeer-gradient-of-modern-passenger-cars.190555/
 86. Wikipedia, "Bundorf analysis" (after Bundorf & Leffert, SAE 760713; the example is illustrative): https://en.wikipedia.org/wiki/Bundorf_analysis
 87. US 4,919,449, "Vehicle rear suspension" (search summary): https://patents.google.com/patent/US4919449
+88. Dekraker, Barba, Moskalik, Butters (US EPA), "Constructing Engine Maps for Full Vehicle Simulation Modeling", SAE 2018-01-1412 (Fig. 2: pedal against torque, a 2016 Honda L15B7): https://www.epa.gov/sites/default/files/2018-10/documents/sae-paper-2018-01-1412.pdf
+89. Robert Bosch GmbH, *Fuel Injection Equipment for Diesel Engines: Governors for In-Line Pumps*, Technical Instruction, 1975 (English 1977; the min-max governor, read in full): https://injectionpumps.co.uk/wp-content/uploads/2020/04/Bosch-Governors-for-Inline-Injection-Pumps.pdf
+90. American Honda, press release, "Honda 1.5-liter turbo engine" (174 hp at 6000 rpm): https://hondanews.com/en-US/releases/release-40b876fa88ce36bf41449f6e441f9b95-honda-15-liter-turbo-engine
+91. US EPA NCAT, "Process for Generating Engine Fuel Consumption Map (Chevy Malibu 2.5L I4 engine using Tier 3 fuel)", 2016-11-28 (BSFC map, idle at 650 rpm, the closed-throttle motoring curve, the test fuel): https://19january2021snapshot.epa.gov/sites/static/files/2016-11/documents/procs-gen-eng-fuel-cons-map-2013-chevy-malibu.pdf
+92. US DOE, "Fact #861: Idle Fuel Consumption for Selected Gasoline and Diesel Vehicles", 2015, after an Argonne worksheet (no accessory load; seen only in search summaries): https://www.energy.gov/eere/vehicles/fact-861-february-23-2015-idle-fuel-consumption-selected-gasoline-and-diesel-vehicles
+93. TractorData, "John Deere 6175R Tests" (OECD Tractor Test 2136, 2015): https://www.tractordata.com/farm-tractors/007/9/3/7930-john-deere-6175r-tests.html
+94. Volvo Trucks North America, *Body Builder Instructions VNL, Section 4: I-Shift Transmission*, USA175332888, 5.2024, p. 5 (gear ratios, AT2612 and ATO2612): https://www.volvotrucks.us/media/vtna/files/shared/body-builder/manuals/2025/section-4.pdf
+95. OECD, tractor test approval 2/2 682, John Deere 8235R, Power Shift (the 40-km/h box), 2012-02-27 (Nebraska Tractor Test Laboratory): https://webfs.oecd.org/TADWEB/agriculture/data/tractor/2012/Fr2682.pdf
+96. TractorData, "John Deere 8235R Transmission" (16-speed Automatic PowerShift speed chart at 2100 rpm, Group 47 rears): https://www.tractordata.com/farm-tractors/006/7/1/6712-john-deere-8235r-transmission.html
+97. Getrag Ford Transmissions, US 7,086,989 B2 (drive torque briefly reduced through the speed-adaptation phase by an engine-management intervention; road vehicles): https://patents.google.com/patent/US7086989B2/en
+98. Deere & Company, US 2004/0014563 A1, "Transmission shift control with engine torque control" (a powershift's controller requests a torque level from the engine controller through the shift; read via its summary): https://patents.google.com/patent/US20040014563
+99. Eaton Corporation, US 6,953,410 B2, "Automatic selection of start gear", 2005-10-11 (the start gear from estimated clutch slip time; read via its description): https://patents.google.com/patent/US6953410B2/en
+100. Sihag, Upadhyay, Choudhary and Patel, "Specific Torque Requirement of Different Tractor PTO Operated Active Tillage Machinery", Journal of Agricultural Engineering (India) 63(2), 259-269, 2026, doi:10.52151/jae2026632.2002 (abstract read; the PTO speed not stated there): https://pub.isae.in/index.php/jae/article/view/3348
+101. ASAE D497.4, "Agricultural Machinery Management Data", 2003: Table 2, rotary power requirement parameters, and the PTO-to-flywheel figure (an OCR copy read): https://pdfcoffee.com/ansi-asabe-d497-4-2003-4-pdf-free.html
+102. Rotz and Muhtar, "Rotary Power Requirements for Harvesting and Handling Equipment", Applied Engineering in Agriculture 8(6), 751-757, 1992 (seen only in search results): https://pure.psu.edu/en/publications/rotary-power-requirements-for-harvesting-and-handling-equipment/
+103. University of Arizona, "Table 2 – Rotary power requirement parameters" (cutterbar 1.2, disk 5.0, flail 10.0 kW/m; seen only in search results): https://ag.arizona.edu/crop/equipment/agmgttable2.pdf
+104. Pronar, "Spreader FD1-M03 & FD1-M05" (single disc, 11 kW power requirement; seen in search results): https://pronar.pl/en/produkt/spreader-fd1-m03-fd1-m05/
+105. City of Caliente, "Request for equipment purchase through solicitation: rebuilt refuse collection truck", 2022 (40 yd³ front loader, items 18-19; read in full): https://cityofcaliente.com/wp-content/uploads/2022/12/Request-for-Equipment-Purchase-Through-Soliciation-Rebuilt-Refuse-Collection-Truck.pdf
+106. John Deere, operator's manual OMETN78900, "Engine (on Tractors 6170R to 6210R)" (seen in a search excerpt; the page refused the connection): http://manuals.deere.com/omview/OMETN78900_19/OULXBER,0001903_19_20120306.html
+107. TractorData, "John Deere 6175R" (rear PTO: 540@1950, 1000@1950 engine rpm): https://www.tractordata.com/farm-tractors/007/9/3/7930-john-deere-6175r.html
+108. US 8,175,790, "Engine droop governor and method" (seen in search results): https://patents.justia.com/patent/8175790
+109. US 8,991,143, "Work vehicle with a mower unit" (seen in search results): https://patents.google.com/patent/US8991143
+110. K. Th. Renius and R. Resch, "Continuously Variable Tractor Transmissions", ASAE Distinguished Lecture Series No. 29, February 2005 (read in full): https://elibrary.asabe.org/data/pdf/6/cvtt2005/lectureseries29rev.pdf
+111. US 11,994,210, "Method and system for controlling the acceleration of a vehicle" (JC Bamford Excavators; read): https://patents.google.com/patent/US11994210B2/en
+112. Pleinchamp, "John Deere : la variation continue et l'autoguidage pour les tracteurs 6M", 2020 (seen in a search summary): https://www.pleinchamp.com/actualite/john-deere-la-variation-continue-et-l-autoguidage-pour-les-tracteurs-6m
+113. Navistar service bulletin to NHTSA, MC-10189738, 2021 (PTO parameters in Cummins INSITE; seen in a search summary): https://static.nhtsa.gov/odi/tsbs/2021/MC-10189738-0001.pdf
+114. NHTSA recall report 22V-172 (the PTO neutral interlock not enabled in the Cummins ECM; seen in a search summary): https://static.nhtsa.gov/odi/rcl/2022/RCLRPT-22V172-2139.PDF
+115. Cummins, "Truck equipment manufacturers and body builders" (PTO engine-speed control interfaces; seen in a search summary): https://selfscreening.cummins.com/engines/truck/truck-equipment-manufacturers-and-body-builders
+116. SPN 976, PTO governor state, J1939 (DIMO's field reference; secondary to SAE J1939DA): https://docs.dimo.org/dimo-explorer/field-descriptions-in-detail/j1939-heavy-truck/assorted-signals/ptogovernorstatej1939-spn-976
+117. Toromont Power Systems, "Engine Speed Governors" (droop and isochronous; seen in a search summary): https://www.toromontpowersystems.com/pdf/ConsultantsCorner/Engine%20Speed%20Governors.pdf

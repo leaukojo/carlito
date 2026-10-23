@@ -45,7 +45,7 @@ func _refresh_stats() -> void:
 	var right: Array = []
 	# has_engine gates engine figures (the gearbox runs on every family, but a quadcopter has no crank).
 	if spec.has_engine:
-		left.append(["Gears", "%d" % spec.gear_ratios.size()])
+		left.append(["Gears", Drivetrain.gears_label(spec)])
 		right.append(["Redline", "%d rpm" % roundi(spec.redline_rpm)])
 		right.append(["Peak torque", "%d Nm" % roundi(Drivetrain.peak_torque(spec))])
 	# Steering lock and foot brake are ground-drive figures; a boat/drone/train gets no line rather than 0 Nm/0 deg.

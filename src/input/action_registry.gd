@@ -98,6 +98,21 @@ const ENTRIES: Array[Dictionary] = [
 		"touch": Touch.TAP, "touch_label": "PTO SPD", "poll_key": &"pto_mode_toggle",
 	},
 	{
+		# Every letter and 1-5 are bound: minus / equals read as down / up. Keyboard only: touch
+		# gets the preset below, which sets and clears it in one button.
+		"id": &"hand_throttle", "actions": ["hand_throttle_down", "hand_throttle_up"],
+		"group": Group.VEHICLE, "label": "Hand throttle down / up", "signals": ["hand_throttle"],
+		"families": ["tractor"], "bridge_owned": true,
+	},
+	{
+		"id": &"hand_throttle_pto", "actions": ["hand_throttle_pto"], "group": Group.VEHICLE,
+		"label": "Hand throttle to the PTO's rated speed (again: off)", "signals": ["hand_throttle"],
+		"families": ["tractor"], "bridge_owned": true,
+		# No `touch_state`: the hand throttle is a level, not an on/off switch, so "ON" would read
+		# for any setting, the preset or not.
+		"touch": Touch.TAP, "touch_label": "PTO RPM", "poll_key": &"hand_throttle_pto_toggle",
+	},
+	{
 		# Has a local key where the truck's `retarder` does not — see input_router.gd's
 		# _scv declaration. Capability-gated, not family-gated: a bare tractor has no remote
 		# plumbed in, so the button appears with the machine that answers it, like PTO.

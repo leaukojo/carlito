@@ -68,6 +68,10 @@ var _prev_horn := false
 var _overturned_t := 0.0   ## seconds the body has been tilted past OVERTURNED_DEG, 0 when upright
 var _overturned := false   ## edge latch for the notice; the public read is `is_overturned()`
 var _horn_fade: Tween  ## the release fade; killed if the horn is pressed again mid-fade
+## The burn at full fuel at rated speed (L/h) and the tank it drains (L), off the spec at _ready;
+## 0 on the rigid crank, which keeps the throttle model (`VehicleTelemetry.fuel_step`).
+var _rated_burn := 0.0
+var _tank_l := 0.0
 
 
 func _ready() -> void:
@@ -93,6 +97,9 @@ func _ready() -> void:
 	if declares_angular_damp() or spec.angular_damping > 0.0:
 		VehicleMath.declare_angular_damp(self, spec.angular_damping)
 	drivetrain = Drivetrain.new(spec)
+	if Drivetrain.drives_wheels(spec):
+		_rated_burn = VehicleTelemetry.rated_fuel_rate_lph(spec)
+		_tank_l = VehicleTelemetry.tank_litres(spec)
 	if spec.ground_drive != null:  # optional: boat/drone/train declare none
 		drive = WheelDrive.new(self, spec)
 	spawn_transform = global_transform
@@ -151,6 +158,7 @@ func _physics_process(delta: float) -> void:
 
 	if drive != null:
 		drive.park_engaged = drivetrain.gear_byte == Drivetrain.GEAR_P
+		drive.standstill_lock = drivetrain.standstill_hold()
 		drive.tick(self, spec, input, _steer, axle_torque, ground_speed, delta, _grip_terrains,
 				drivetrain)
 
@@ -244,6 +252,8 @@ func _update_telemetry(input: VehicleInput, delta: float) -> void:
 	telemetry.kmh = absf(telemetry.speed) * 3.6
 	telemetry.rpm = drivetrain.rpm
 	telemetry.gear_byte = drivetrain.gear_byte
+	if Drivetrain.drives_wheels(spec):
+		telemetry.gear_ratio = drivetrain.gearbox_ratio()
 	telemetry.throttle = input.throttle
 	telemetry.steer = _steer
 	telemetry.yaw = angular_velocity.dot(up)
@@ -273,14 +283,26 @@ func _update_telemetry(input: VehicleInput, delta: float) -> void:
 	telemetry.lon = VehicleTelemetry.gps_lon(global_position.x)
 	telemetry.heading = VehicleTelemetry.heading_from_forward(forward)
 	telemetry.odo = VehicleTelemetry.odo_step(telemetry.odo, telemetry.speed, delta)
+	if drive != null:  # the air the crosswind force reads (WheelDrive._apply_resistance)
+		var tw := VehicleTelemetry.true_wind(WindField.at(self))
+		telemetry.tws = tw.x
+		telemetry.twd = tw.y
 
 	var running := input.key == InputRouter.KEY_IGNITION
-	# Governed throttle, not the pedal (telemetry.throttle stays the pedal): an engine held
-	# back by the limiter is not burning fuel for a request it never made.
+	# The delivered fuel, not the pedal (telemetry.throttle stays the pedal): an engine held back by
+	# the limiter is not burning fuel for a request it never made.
 	var load_frac := clampf(drivetrain.applied_throttle, 0.0, 1.0)
-	telemetry.fuel = VehicleTelemetry.fuel_step(telemetry.fuel, load_frac, running, delta)
+	var heat_frac := load_frac
+	if _tank_l > 0.0:
+		telemetry.fuel_rate = VehicleTelemetry.fuel_rate_lph(spec, drivetrain.rpm,
+				drivetrain.applied_throttle, running)
+		telemetry.fuel = VehicleTelemetry.fuel_drain(telemetry.fuel, telemetry.fuel_rate, _tank_l,
+				delta)
+		heat_frac = telemetry.fuel_rate / _rated_burn
+	else:
+		telemetry.fuel = VehicleTelemetry.fuel_step(telemetry.fuel, load_frac, running, delta)
 	telemetry.coolant = VehicleTelemetry.coolant_step(
-			telemetry.coolant, VehicleTelemetry.coolant_target(running, load_frac), COOLANT_RATE, delta)
+			telemetry.coolant, VehicleTelemetry.coolant_target(running, heat_frac), COOLANT_RATE, delta)
 	telemetry.battery = VehicleTelemetry.battery_volts(running, load_frac)
 	telemetry.engine_hours = VehicleTelemetry.hours_step(telemetry.engine_hours, running, delta)
 

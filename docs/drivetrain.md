@@ -28,14 +28,68 @@ curve's peak (1.5 on cars, 2.0 elsewhere) and solved as one more output of the w
   converter's lock-up lets go under the foot brake (`Drivetrain.braking`, as an automatic's TCU
   does, so the brakes never slow the crank, where a clutch body keeps its clutch closed for
   engine braking), under ABS, under `lockup_gear` and when the wheel side falls under
-  `converter_free_rpm`.
+  `converter_free_rpm` at the raw pedal (§ The pedal map's COMPROMISE).
 
 Locked, the crank reflects `J G²` onto the driven wheels: +41 % on the `sedan`'s gear-1 mass
 factor, +28 % on `garbage-truck`'s (`docs/sources.md`). A lifted driven pair spins up at
 `G eta T / (n I_w + eta J G²)`, not `G eta T / (n I_w)`. The crank's own step is semi-implicit in
 its curve's slope (`crank_compliance`): `race`'s 6600-6800 rpm droop gains ~3 a tick explicitly.
-The key off runs it down to 0 on the motoring law's friction, in about a second from idle;
-Ignition puts it back on idle.
+A driven PTO is a constant torque in the same step (`Drivetrain.accessory_torque`, its power at
+the PTO's rated engine speed: `docs/heavy_vehicles.md` § Draft, hitch, linkage), which the idle floor, the
+rev-match blip, the limiter and drag-torque control fuel as load. The key off runs it down to 0 on the motoring law's friction (the `sedan`'s from idle in about one
+and a half seconds); Ignition puts it back on idle.
+
+**The pedal map.** On a wheel-driving crank the pedal reaches the engine law through `PedalMap.fuel`
+(`VehicleSpec.pedal_map`): the controller's fuel and the shift policy's "drive at this pedal" read
+it, while every shift point stays keyed on the pedal itself. Full pedal is exactly full fuel on
+every map (on ALL_SPEED up to its high idle, the redline), so no floored figure depends on it.
+COMPROMISE: the converter's lock-up line reads the raw pedal as the fuel (`Drivetrain.lockup_holds`).
+On the mapped fuel a third of the pedal would put the line near the stall speed, and the `sedan`'s
+pedal-0.3 pull would run D3-D5 on the converter, 400-500 rpm of slip. No lock-up schedule is
+sourced.
+- **PETROL** (the car family): the pedal is a torque request, as a torque-structured engine
+  management reads it. The table is EPA's dynamometer map of a 2016 Honda L15B7 [88, Fig. 2]: brake
+  torque against pedal and rpm, its rpm axis taken over rated speed (6000 rpm there [90], the body's
+  own power peak here). The request runs near-level in N·m across rpm, and full load clips it at low
+  rpm: a third of the pedal asks about two thirds of the peak at 2500-3500 rpm and is wide open
+  under 1500. Each row is solved for the fuel that delivers it on `crank_torque`'s law, so under
+  full load the crank makes the measured torque. The first 1 % of pedal already nets the motoring
+  out (the figure's "discrete transition"). A free crank in N nets the request itself: the 1 % and
+  5 % rows dip under zero toward the figure's top column, so a light touch settles there, and past
+  it (held flat) a tenth of the pedal still nets positive torque, so it runs a free crank to the
+  limiter. The measure tools' speed holds (the PI pedals, `measure_rough`'s crawl) command fuel
+  through the map's inverse (`PedalMap.pedal_for`): on the raw pedal that first 1 % limit-cycles
+  them.
+- **LINEAR** (the vans, the Kenney trucks, the semis): the fuel is the pedal. A road diesel's
+  min-max governor leaves the injection pump's control rod to the pedal between idle and maximum
+  speed [89]; no electronic road-diesel map was found.
+- **ALL_SPEED** (the tractor): an all-speed governor [89]. The demand, the higher of the pedal and
+  the hand throttle (`PedalMap.demand`, contract `hand_throttle`), sets an engine speed from idle
+  to the high idle (the redline), and the fuel holds it on a droop line: full fuel at
+  `setting / (1 + droop)`, no net torque at the setting, the line run on past it to the motoring
+  law (`PedalMap.governor_fuel`). `governor_droop` 0.07 is Deere's 6R (rated 2100, fast idle 2250
+  [106]). A free crank settles on its setting; a load holds it on the line. While the line governs,
+  its slope is the crank's stiffness (`PedalMap.governor_stiffness`), so the step stays
+  semi-implicit at any droop (explicit, `k dt / J` is ~0.5 on the tractor at 7 %, ~3.7 at 1 %).
+  On a free crank (N or P) a tick's fuel is capped at what lands it on the setting
+  (`Drivetrain.fuel_to_land`): full fuel moves it ~90 rpm a tick, past an isochronous line ~1 rpm
+  wide, which read at the tick's start it would jump both ways and cycle on. A road truck's PTO mode
+  runs the same law at its set speed, isochronously (`docs/heavy_vehicles.md` § The refuse body: a second network across a gateway).
+  COMPROMISE: at the top setting the line is the curve's own 2200-2600 tail, an 18 % droop; the
+  sourced 7 % puts the high idle near 2350 and takes the top speed down to D16's road speed there
+  (`docs/vehicles.md` § Rejected designs, "torque-curve tails"). Full demand is full fuel to the
+  redline, so the floored figures (trace, roll-back, gradeability) do not depend on the governor.
+  Three consequences on the gearbox:
+  - the demand caps the engine at its setting, so a part demand's upshift point is held two droops
+    under it (`ShiftPolicy.governed_up_rpm`, `GOVERNED_UPSHIFT_DROOP`, an estimate): on the map's
+    own point the tractor at demand 0.5 (setting 1700) would never leave its start gear;
+  - the downshift points stay the map's (`ShiftPolicy.down_rpm`), as a box that shifts on engine
+    speed keeps them: a setting under the landing floor (the tractor: 1.1 x 1000 x its 1.10 step,
+    ~1214 rpm, a demand under ~0.23) holds its gear, and one under the coast line (1000 rpm, a demand
+    under ~0.11) steps down to a crawl in D1;
+  - the hand throttle never pulls away alone: the start-up ramp and a clutch's opening at rest read
+    the pedal (`Drivetrain.hand_throttle`), as a shuttle's release. Moving, a lifted pedal leaves
+    the tractor driving in gear at the governed speed.
 
 **Motoring and friction.** Off fuel the crank turns against `motoring_torque`: its friction,
 `engine_friction_frac` of the curve's peak at and below idle, rising linearly to
@@ -51,14 +105,25 @@ more slowly. Per class, at idle / at redline, as a share of peak:
   (16.1 L) publishes 36 / 53 kW at 1500 / 1800 rpm: 229 / 281 N·m, FMEP 1.8 / 2.2 bar. Scaled to
   12 L and to idle (~1.2 bar), that is ~115 N·m. Scaled the same way, the redline figure is about
   0.10, against the shipped 0.15. **Open:** the redline anchor is kept (the user's call).
-- **Car petrol:** 0.10 / 0.12. The 0.10 is an estimate : a
-  1.6-2.0 L petrol's friction (~1 bar FMEP at low speed) plus closed-throttle pumping. No primary
-  figure was found. Secondary FMEP figures put the redline motoring at about 0.3-0.4. **Open:** the
-  shipped 0.12 stays until a primary figure is found (the user's call).
+- **Car petrol:** 0.07 / 0.25, sourced. EPA's Malibu map measures the 2.5 L's closed-throttle
+  motoring (friction plus pumping) at 0.069 of its peak at 1000 rpm rising to 0.250 at 6000 [91].
+  The linear law, fitted by least squares over 1000-6000 rpm on `CAR_BASE`'s idle and redline,
+  lands within 0.025 of peak at every point: over by up to 0.023 mid-range, under by 0.024 at 6000.
 
-On the `sedan` a blip falls steadily to idle, and the key off stops an idling crank within about a
-second. At idle the controller burns the fuel that nets the friction out (~16 % on the
+On the `sedan` a blip falls steadily to idle, and the key off stops an idling crank within about one
+and a half seconds. At idle the controller burns the fuel that nets the friction out (~12 % on the
 `sedan`), so `engine_load` reads that fuel there.
+
+**Fuel.** The burn is read off the crank (`VehicleTelemetry.fuel_rate_lph`, a Willans line): the
+delivered fuel adds `f * (curve - motoring)` over the motoring law, and that torque's power over an
+indicated efficiency per fuel (`VehicleSpec.fuel_type`: PETROL 0.41, DIESEL 0.45) is the fuel's
+chemical power. A cut burns nothing. At idle the controller's fuel nets the friction and any creep
+load, so idle burns their power, and part load costs more per kWh on its own. Read against its
+sources (`docs/sources.md` § Fuel): the `sedan` idles at 0.34 L/h and bottoms at 241 g/kWh, the
+`semi` at 1.62 L/h and 201 g/kWh. At one road speed the `sedan` held in D6 burns about half what it
+does in D3 (`-- sedan 90 cruise gear=6`, `gear=3`). Coolant chases the burn's share of its rated
+figure; battery keeps `applied_throttle`; the rigid crank (boat, plane) keeps a throttle model.
+COMPROMISE: `fuel` drains a game-scale tank, `FUEL_TANK_FULL_LOAD_S` at the rated burn.
 
 **Converter.** A converter body (`coupling` CONVERTER: the cars, the vans, `garbage-truck` and
 `firetruck`) slips through `TorqueConverter`'s law, solved with both sides' end-of-tick speeds
@@ -68,8 +133,9 @@ inside the wheels' solve (`TorqueConverter.solve`):
   16.3 at 0.87, 22.1 at 0.94, 50 at 0.97), so it falls to nothing at one speed. `coef` puts full
   fuel against a held turbine on the stall speed (`Drivetrain.stall_rpm`, STALL_RPM_FRAC 0.25 of
   idle to redline: 2375 rpm on the cars, 1250 on the Kenney trucks, inside a car's typical
-  1800-2800). At part pedal the free rev follows the N² load (`converter_free_rpm`), never under
-  idle. In overrun the turbine pumps at OVERRUN_CAPACITY 0.5 of drive, an estimate: no coast figure
+  1800-2800). At part pedal the free rev follows the N² load at the pedal's fuel, never under idle
+  (`converter_free_rpm` at a fuel; the lock-up's line reads it at the raw pedal, § The pedal map).
+  In overrun the turbine pumps at OVERRUN_CAPACITY 0.5 of drive, an estimate: no coast figure
   was found.
 - **Ratio.** The turbine passes `converter_stall_ratio` times the impeller's torque at stall,
   falling to 1.0 at the coupling point (SR 0.9). COMPROMISE: it ships 1.0, a fluid coupling. A
@@ -114,7 +180,7 @@ What moves with the converter:
 - `engine_load` samples the curve at `Drivetrain.rpm`, so a held truck at full pedal reads 83 %
   where it read 50 % at idle;
 - `pto_rpm` follows the rev, being a stub shaft off the crank;
-- fuel, coolant and battery read `applied_throttle` alone.
+- `fuel_rate` reads the creep load: the idle fuel that nets it out burns its power (§ Fuel).
 
 **Hill hold.** Creep holds the cars and the heavy vans on 6-12 % and the Kenney trucks on 11 %. Past that, a released
 brake rolls the body back while the coupling takes up, and a clutch body (nothing creeps there)
@@ -133,7 +199,8 @@ rolls back on any grade. Three holds stop it:
   drive pedal up, it holds on the foot brake, MFWD engaged, with no timeout. It lets go once the
   pedal is down and the clutch's ramp carries the grade. COMPROMISE (at
   `GroundDriveSpec.hill_hold`): the real one holds in the transmission. The brake is the hold
-  solved with the crank's coupling, where a lock of the gearbox output is solved before it.
+  solved with the crank's coupling, where a lock of the gearbox output is solved before it. The
+  CVT tractor has none: its active standstill is that transmission hold (§ The CVT below).
 - **Auto hold** (`InputRouter.auto_hold`, keys and touch only). Stopped in D or R with no throttle,
   the whole foot brake stays on until the throttle asks to move; hill-start assist takes the
   handover. A gamepad driver and the bridge get the real creep.
@@ -163,7 +230,7 @@ pedal, so no gearing hunts (`test_vehicle_catalog`). The full pair is unchanged 
 | Converter automatic (`CAR_BASE`) | 1800 / 1150 | past 0.8 | `shift_dwell_s` | no | the Malibu map below [34]; dwell: EPA ALPHA's six-speed hold [34] |
 | ... heavy vans (`VAN_BASE`) | 1750 / 1000 | past 0.8 | `shift_dwell_s` | no | the same structure at the diesel's band (plateau from 1750): estimate |
 | ... Kenney trucks (`TRUCK_BASE`) | 1600 / 900 | past 0.8 | `shift_dwell_s` | no | the same, under the 1800 peak: estimate |
-| AMT (both semis) | 1500 / 700 | past 0.95 | `shift_dwell_s` | yes | the D13's 1250-1500 rpm cruise band [38]; I-Shift's kickdown switch past full travel [36, 37] |
+| AMT (both semis) | 1555 / 700 | past 0.95 | `shift_dwell_s` | yes | the D13's 1250-1500 rpm cruise band [38], every light upshift landing at its bottom; I-Shift's kickdown switch past full travel [36, 37] |
 | Powershift (`TRACTOR_BASE`) | 1500 / 1000 (the full pair's) | none | `shift_dwell_s` | yes | AutoDrive Eco's 1500 [39]; the sourced 1200 downshift [40] sits over the full pair's 1000 |
 | Sequential (`race`, `race-future`) | the full pair | none | none | no | full-pedal shifting kept (the user's call) |
 
@@ -173,32 +240,54 @@ pedal, so no gearing hunts (`test_vehicle_catalog`). The full pair is unchanged 
   coast downshifts sit at 1120-1190 rpm (3rd to 6th). Each light upshift lands 1.07-1.12x over the
   next coast downshift, the landing floor's 1.1. Its kickdown lines climb at 59-100 % pedal.
 - **Landings, computed:** the floor raises the light D1>D2 to 1961 rpm on the cars (lands 1265),
-  1958 on the vans (1100) and 1857 on the Kenney trucks (990). The semis' 1.5-1.76 steps cannot land
-  a light upshift in the D13's band (it would fire at 1925-2640 rpm, past the 1690 point), so their
-  map only shifts sooner, landing 854-1125. A semi skip-shift needs a light upshift at 2310 rpm or
-  more, past the 2080 redline: it never fires on this six-speed (brief 16, `docs/plans/mechanical_update/16_drivetrain_control.md`).
-- **Kickdown:** one shift to the lowest gear under `ShiftPolicy.kickdown_ceiling_rpm`: EPA ALPHA's
-  default ceiling, 85 % of the gear's maximum speed (the redline) [34], never within the 1.1 landing
-  margin of `shift_up_rpm`. The cap binds on every body and lets a kickdown reach the rpm where the
-  engine makes its power (the vans' rated 3000 rpm under their 3300 upshift). The gear must also hold
-  `shift_dwell_s` at full pedal before its forced upshift (`ShiftPolicy.time_to_upshift` on the road load and
-  the rig's mass; EPA ALPHA's minimum time after a downshift [34]): `sedan-sports` at moderate speed
-  would land D2 too high and rev out of it inside the dwell, so it takes D3. None on the tractor: no powershift
-  kickdown is sourced.
+  1958 on the vans (1100) and 1857 on the Kenney trucks (990). On the semis' 1.21-1.24 steps the
+  light 1555 lands every upshift at 1250-1281 rpm, the bottom of the D13's band; a held part pedal
+  lands them at 1263-1311 (`-- semi 120 cruise`). The tractor's 1.10 steps land its light 1500 at
+  ~1360.
+- **Skip-shifts** (`skip_shifts`: the semis' AMT, the tractor's powershift). A lift ripples to the
+  gear a sequential box reaches in one shift (`ShiftPolicy.upshift_target`), and a lugged crank's
+  coast-line downshift takes the highest lower gear landing over the line, in one shift
+  (`ShiftPolicy.forced_downshift`: the plough's floored start, D7>D1). A floored, forced
+  upshift passes the gears the rig would not hold `shift_dwell_s` in at full pedal, on the road load
+  and its mass (`ShiftPolicy.forced_upshift`), as I-Shift and AutoDrive skip; it never lands under
+  1.1x `shift_down_rpm` or in a gear that cannot hold the road load, and with no estimate it steps
+  one gear. The hold (`ShiftPolicy.time_to_upshift`) is the box's picture of the rig: never more
+  drive than the driven tyres' static grip puts down (`Drivetrain.drive_grip_n`, read off their
+  loads at rest, the coupled load and the surface included), plus the shift's own dead time on an
+  AMT, its cut and half its torque ramp (`ShiftPolicy.shift_dead_s`, an estimate). Floored
+  (`-- <variant> 60 trace`): the bobtail `semi` from its D6 start D6>D8, then singly; with the 24 t
+  box from D3, D3>D5, then singly; the bobtail tractor D7>D13>D16, with the tipper from D6,
+  D6>D10>D13>D15>D16. Every gear holds past the trace's dwell floor and every landing sits at 1.22x
+  its downshift point or more.
+- **Kickdown:** one shift to the lowest gear under `ShiftPolicy.kickdown_ceiling_rpm` that holds
+  `KICKDOWN_HOLD_S` at full pedal before its forced upshift (`ShiftPolicy.time_to_upshift` on the
+  road load, the rig's mass and grip, and the AMT's dead time): EPA ALPHA's default ceiling, 85 % of
+  the gear's maximum speed (the redline), and its minimum time after a downshift [34]. The ceiling
+  sits under `shift_up_rpm`; the hold keeps a kickdown off its forced upshift, so a light body lands
+  lower than a heavy one from the same rpm. With no road-load estimate to judge the hold, the landing
+  stays 1.1x under `shift_up_rpm` instead. None on the tractor: no powershift kickdown is sourced.
 
 *The shift's handover.* During an upshift's inertia phase the oncoming clutch's capacity sets the
 output torque, a little over the driver's demanded torque, the surplus taking out the crank's
 inertia [42]; the phase lasts ~0.15-0.5 s on a converter automatic [41], and its TCU holds the
 engine's torque reduced through it [44]. The controller lands the crank on the new gear at an even
 rate over `shift_handover_s` (`Drivetrain.handover_rate`), never past the rating:
-- **Converter automatic** (cars, vans, Kenney trucks; `shift_handover_s` mid of [41], an estimate): the engine
-  is fuelled down so the clutch passes the driver's demand, the engine's torque at the pedal's fuel
-  (`Drivetrain.handover_fuel`), and the crank's inertia goes into the reduction. No fixed cut
-  (`shift_cut_s` 0): an Allison-class or car automatic shifts clutch to clutch, with no torque
-  interruption. A lift upshift, with nothing to reduce, takes the surplus on the clutch.
-- **AMT** (the semis; `shift_handover_s` within its `shift_cut_s`, an estimate) and **powershift** (the tractor;
-  `shift_handover_s` at [43]'s overlap baseline): the clutch carries the delivered torque plus `J Δω / t`. The AMT's cut is
-  its interruption; its fuel returns over `shift_torque_ramp_s` (an estimate; a step rings).
+- **Seamless boxes** (no `shift_cut_s`): the engine is fuelled down so the clutch passes the
+  driver's demand, the engine's torque at the pedal's fuel (`Drivetrain.handover_fuel`), and the
+  crank's inertia goes into the reduction. A lift upshift, with nothing to reduce, takes the surplus
+  on the clutch.
+  - **Converter automatic** (cars, vans, Kenney trucks; `shift_handover_s` mid of [41], an
+    estimate): an Allison-class or car automatic shifts clutch to clutch, with no torque
+    interruption.
+  - **Powershift** (the tractor; `shift_handover_s` at [43]'s overlap baseline). COMPROMISE: the
+    reduction is the road boxes' [44, 97]; the tractor source found holds or raises the engine's
+    torque through the shift instead [98]. The reduction also covers the pull-away's close onto
+    turning wheels. Without it, the crank's `J Δω / t` reaches the wheels: a floored skip D7>D13 hands
+    over several times the torque it held before and drops it on the lock tick, and the nose rings
+    16 points past the `front axle` gate (`docs/vehicles.md` § Pitch).
+- **AMT** (the semis; `shift_handover_s` within its `shift_cut_s`, an estimate): after its cut, the
+  clutch carries the delivered torque plus `J Δω / t`. The cut is its interruption; its fuel returns
+  over `shift_torque_ramp_s` (an estimate; a step rings).
 - **Sequential** (the race pair): its ignition cut (`shift_cut_s`), and the clutch closes at its rating (on
   J 0.06 the drop spans ~2 ticks).
 
@@ -219,20 +308,23 @@ the `each shift` line):
 
 *Cruise*, held by the PI pedal from a standstill: `docs/vehicle_measurements.md` § Cruise.
 
-*At a held part pedal* the box upshifts low and the engine law is the delivered fuel times the
-curve, so the same pedal makes less power: the `doc=accel` benchmark at pedal 0.3 (`-- <variant> 90 pedal=0.3`): the
-`sedan` takes several times its floored time (light upshifts at ~2315 rpm, landing 1.17x over the
-downshift point; far less at pedal 0.6); `delivery`, `garbage-truck` and `semi` + 24 t take longer
-still. A progressive pedal map is brief
-16 (`docs/plans/mechanical_update/16_drivetrain_control.md`).
+*At a held part pedal* the pedal map sets the drive (§ The pedal map) and the shift map the gears:
+the `doc=accel` benchmark at a part pedal (`-- <variant> 90 pedal=0.3`). On the `sedan` the box
+upshifts at the pedal's light points, the lock-up closes after each shift's handover, and the
+locked crank carries the map's request less its own `J α`. The diesels keep the linear pedal, so
+`delivery`, `garbage-truck` and `semi` + 24 t at pedal 0.3 still take several times their floored
+times.
 
-*Kickdown and the keyboard* (`cruise kickdown pulse`): a stab kicks the `sedan` down a gear or two
-at every cruise speed, and the `ambulance` and `delivery` likewise, the vans slower to gain speed.
-The `garbage-truck` kicks one gear, then its governor binds; the semi never finds a gear under its
-ceiling. A key held on and off (the pulse) kicks down on each press and lifts up on each release,
-paced by `shift_dwell_s`: 30-40 shifts a minute on the cars, the vans and `garbage-truck`
-(hunting gate PASS on every body, no two opposite shifts inside the dwell), and the `sedan` swings
-a few km/h around its set speed. The semis and the tractor do not cycle.
+*Kickdown and the keyboard* (`cruise kickdown pulse`): a stab kicks the cars and the light vans
+down two or three gears at every cruise speed (`van` and `pickup` four at their second), the
+`ambulance` and `delivery` one or two, slower to gain speed. The `garbage-truck` and `firetruck`
+kick one gear. The semi + 24 t kicks one gear at its lowest and highest cruise speeds (D7>D6,
+D11>D10; each holds once the hold counts the cut and the rig's mass) and none at the middle one,
+whose next gear down lands on its upshift; `semi-conventional` at its top speed kicks D12>D11. A key
+held on and off (the pulse) kicks down on each press and lifts up on each release, paced by
+`shift_dwell_s`: 26-40 shifts a minute on the cars, the vans, the Kenney trucks and the semis at
+their highest cruise speed (hunting gate PASS on every body, no two opposite shifts inside the
+dwell), and the `sedan` swings a few km/h around its set speed. The tractor does not cycle.
 
 *The load*. The gearbox keeps a road-load estimate (`Drivetrain.road_load`): the
 torque the coupling passed less the rig's mass (its live mass plus what it tows, the sim's own)
@@ -253,31 +345,53 @@ a TCU's grade logic; the 2 % is an estimate). The pedal's map then reads it:
   releasing the brake never upshifts straight back). A converter's lock-up still lets go under the
   brake.
 - **Off a grade** the map is unchanged: the `doc=cruise` table holds.
-- **The start gear** (`ShiftPolicy.start_gear`, the tractor's `start_gear_max` 3): the highest gear
-  whose launch drive beats the standing load twice, at the driver's pedal, held through the launch
-  until the coupling locks (`docs/heavy_vehicles.md` § Tractor, implement & ISOBUS).
+- **The start gear** (`ShiftPolicy.start_gear`, up to `start_gear_max`: the semis' 6, the
+  tractor's 7): the highest gear whose launch drive beats the standing load twice at the driver's
+  pedal (the grade's floor) and whose floored launch locks the coupling within `START_SLIP_S`
+  on the rig's mass and the driven tyres' static grip (`ShiftPolicy.launch_slip_s`, half a
+  powershift's engagement ramp included). That is Eaton's acceleration slip time [99]: an AMT picks
+  its start gear from gross weight and grade, the highest whose clutch slips under a reference
+  (their example is `START_SLIP_S`'s). On the flat the bobtail `semi` starts in D6 and with the 24 t box in D3
+  (D1 on 8 %); the tractor in D7 bare and D6 with the farm tipper (D4 on 10 %). The gear is held
+  through the launch until the coupling locks (`docs/heavy_vehicles.md` § Tractor, implement &
+  ISOBUS), and the lock starts the dwell's clock: the drive tyres slipping at their peak lock a
+  laden launch under the pedal's downshift point while it gains speed. A launch that has not moved steps down
+  by ratio, not index (`ShiftPolicy.start_step_down`, `START_STEP` 1.3), so each step covers the
+  same ratio whatever the box's own step.
 
 Climbs from rest in automatic D at a held pedal (`measure_grade -- <variant> climb grade=<%>
 pedal=<p>`, a fixed run or the ramp's top):
 
 | Climb | Result |
 | --- | --- |
-| `semi` + 24 t, 8 %, pedal 0.6 | holds D2: 185 m |
+| `semi` + 24 t, 8 %, pedal 0.6 | D1 start, to D4 a gear at a time, then holds D4: 188 m |
 | `garbage-truck`, 15 %, 0.6 / 0.7 | 0.6 rolls back once the hold lets go: the converter passes less than the grade asks at that fuel; 0.7 holds D1 up the run: 203 m |
-| `tractor-kenney` + tipper, 8 %, 0.6 | D1 start (its pedal's), D3 held: 128 m |
-| `sedan`, 10 %, 0.5 | D2 held; 336 m |
-| `semi` + 24 t, 4 %, 0.6 | D3>D4, a few seconds into the climb |
+| `tractor-kenney` + tipper, 8 %, 0.6 | D4 start (the box's), then a gear at a time to D14 on the governor's setting, each upshift two droops under it: 192 m |
+| `sedan`, 10 %, 0.5 | up to D5 by the top (half pedal is near full fuel on the petrol map); 336 m |
+| `semi` + 24 t, 4 %, 0.6 | D2 start, to D7 a gear at a time: 271 m |
 
-Floored climbs (`garbage-truck` 8 / 15 %, `semi` 8 %) keep every shift.
+Floored climbs (`garbage-truck` 8 / 15 %, `semi` 8 %) keep every shift; the floored `semi` on 8 %
+steps D1 to D7 a gear at a time, each gear holding the dwell on the drive axle's grip.
+
+**The CVT.** `tractor-cvt` runs a power-split CVT (`spec.cvt_range_tops`, `Drivetrain.is_cvt`;
+the tour, sources and measured figures: `docs/heavy_vehicles.md` § The CVT tractor). Its ratio is
+drivetrain state, moved by its controller before the spin solve and solved in it as the gear, at
+the overall speed ratio rather than its inverse, so a ratio of 0 holds: active standstill, the park
+pawl's path at the hydrostatic relief (`Drivetrain.standstill_hold`). The engine runs the all-speed
+governor's law (§ The pedal map) unchanged, the foot pedal commands ground speed, and the ratio
+holds it until the crank falls to its limit-load speed, where the ground speed gives. No
+`ShiftPolicy`, no launch clutch, no shift: the gear byte publishes the mechanical range, which
+changes synchronously, and a CVT governs road speed through its ratio, not the fuel.
 
 **Limiter at launch.** The limiter judges the crank, and auto-shift road speed. With the crank's
 inertia reflected onto a spinning pair and the curve's droop below the redline, no floored launch
 reaches the limiter, even with traction control off (`notc`: 0 ticks on `sedan-sports`, `race`,
 `garbage-truck`, `semi` and the tractor's D1 launch). `race notc` spins its rears from the lock up
 to 6784 rpm over 12 ticks. The equipment beside the limiter stands on its own merit:
-- The semis' ASR keeps the drive tyres near the peak while the AMT's clutch slips. Without it the
-  tyres spin past the slip peak for seconds, under the limiter, and the `doc=accel` benchmark comes a
-  fraction of a second later (`trace`).
+- The semis' ASR keeps the drive tyres near the peak while the AMT's clutch slips in a held D1
+  (`trace gear=1`); without it the clutch locks at once and the tyres spin past the slip peak. From
+  the laden D3 start the drive is at the grip, and on dry asphalt the ASR does not act (`notc`
+  reaches the `doc=accel` benchmark in the same time).
 - The Kenney trucks' ASR does not act on dry asphalt, where gear 1 at converter stall pushes
   less than the rear tyres' grip (`garbage-truck` `notc` reaches the benchmark in the same time). It
   is kept as the EBS equipment it is, for low grip.

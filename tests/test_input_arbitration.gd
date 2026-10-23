@@ -158,6 +158,15 @@ func test_manual_bridge_gear_is_exact_and_owns_direction() -> void:
 	assert_int(neu.gear_request).is_equal(GEAR_N)
 	assert_float(neu.throttle).is_equal(1.0)
 	assert_bool(neu.gear_auto).is_false()
+	# Every drive byte of the bus passes exactly; one past it is N.
+	var d12: VehicleInput = RouterScript.arbitrate_bridge(_bridge(1.0, 0.0, 0.0, 0.0, 12), true)
+	assert_int(d12.gear_request).is_equal(12)
+	var top: VehicleInput = RouterScript.arbitrate_bridge(
+			_bridge(1.0, 0.0, 0.0, 0.0, RouterScript.GEAR_TOP), true)
+	assert_int(top.gear_request).is_equal(RouterScript.GEAR_TOP)
+	var past: VehicleInput = RouterScript.arbitrate_bridge(
+			_bridge(1.0, 0.0, 0.0, 0.0, RouterScript.GEAR_TOP + 1), true)
+	assert_int(past.gear_request).is_equal(GEAR_N)
 
 
 func test_bridge_p_parks_in_both_gearbox_modes() -> void:
@@ -1231,3 +1240,74 @@ func test_the_dev_override_lets_local_drive_under_the_lock_with_a_merely_connect
 	assert_bool(router.bridge_drives()).is_false()
 	assert_int(touch.polls).is_equal(1)
 	assert_float(router.get_vehicle_input().throttle).is_greater(0.0)
+
+
+# --- the hand throttle ------------------------------------------------------------------------
+
+func test_the_hand_throttle_steps_clamp_and_the_preset_sets_and_clears() -> void:
+	var step := RouterScript.HAND_THROTTLE_STEP
+	assert_float(RouterScript.hand_throttle_step(0.0, false, true, false, NAN)).is_equal_approx(step, 1e-9)
+	assert_float(RouterScript.hand_throttle_step(0.0, true, false, false, NAN)).is_equal(0.0)
+	assert_float(RouterScript.hand_throttle_step(0.95, false, true, false, NAN)).is_equal(1.0)
+	# The preset sets the machine's figure, and a second press drops it to 0.
+	assert_float(RouterScript.hand_throttle_step(0.2, false, false, true, 0.69)).is_equal(0.69)
+	assert_float(RouterScript.hand_throttle_step(0.69, false, false, true, 0.69)).is_equal(0.0)
+	# A body with no preset (NAN) leaves it alone.
+	assert_float(RouterScript.hand_throttle_step(0.3, false, false, true, NAN)).is_equal(0.3)
+
+
+func test_the_hand_throttle_rides_the_input_from_either_source() -> void:
+	var local: VehicleInput = RouterScript.arbitrate_local(_intent({"hand_throttle": 0.4}), 0.0,
+			GEAR_D1)
+	assert_float(local.hand_throttle).is_equal_approx(0.4, 1e-9)
+	# The bridge's value is mirrored; absent reads 0, never the local latch.
+	var vals := _bridge()
+	assert_float(RouterScript.arbitrate_bridge(vals).hand_throttle).is_equal(0.0)
+	vals["hand_throttle"] = 0.7
+	assert_float(RouterScript.arbitrate_bridge(vals).hand_throttle).is_equal_approx(0.7, 1e-9)
+	# In fallback it stays the bridge's (not the driving group), and its local edges are dropped.
+	assert_float(RouterScript.blend_local_driving(vals, local).hand_throttle).is_equal_approx(0.7, 1e-9)
+	var edges := RouterScript.driving_edges_only(_intent({"hand_throttle_up_cycle": true,
+			"hand_throttle_down_cycle": true, "hand_throttle_pto_toggle": true}))
+	assert_bool(edges.is_empty()).is_true()
+
+
+## A touch source that taps the hand throttle's PTO preset once.
+class _PresetTap extends RefCounted:
+	var taps := 1
+
+	func poll() -> Dictionary[StringName, Variant]:
+		var tap := taps > 0
+		taps -= 1
+		return {&"hand_throttle_pto_toggle": tap}
+
+
+## `_RollingBody` that answers the PTO preset probe, as a tractor does.
+class _PresetBody extends _RollingBody:
+	func pto_hand_throttle() -> float:
+		return 0.69
+
+
+func test_the_preset_edge_asks_the_machine_and_the_latch_is_driver_state() -> void:
+	var router := _router()
+	var body: _PresetBody = auto_free(_PresetBody.new())
+	router.register_vehicle(body)
+	var touch := _PresetTap.new()
+	router.set_touch_source(touch)
+	router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().hand_throttle).is_equal_approx(0.69, 1e-6)
+	# Driver state like _pto: neither a respawn's reset nor a new body clears it.
+	router.reset_vehicle_cycles()
+	var other: _RollingBody = auto_free(_RollingBody.new())
+	router.register_vehicle(other)
+	router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().hand_throttle).is_equal_approx(0.69, 1e-6)
+	# A body with no preset (no `pto_hand_throttle`) leaves the latch where it is on the edge.
+	touch.taps = 1
+	router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().hand_throttle).is_equal_approx(0.69, 1e-6)
+	# Back on the machine, the edge again clears it.
+	router.register_vehicle(body)
+	touch.taps = 1
+	router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().hand_throttle).is_equal(0.0)

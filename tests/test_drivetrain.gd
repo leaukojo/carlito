@@ -83,19 +83,19 @@ func test_sample_curve_interpolates_and_clamps() -> void:
 	assert_float(VehicleSpecScript.sample_curve(PackedVector2Array(), 1.0)).is_equal(0.0)
 
 
-# --- gear byte semantics (RAMN: 0x00=N, 0x01..0x06=D1-D6, 0xFF=R; plus 0xFE=P) ------
+# --- gear byte semantics (RAMN: 0x00=N, 0x01..0x18=D1-D24, 0xFF=R; plus 0xFE=P) ----
 
 func test_gear_byte_classification() -> void:
 	assert_bool(DrivetrainScript.is_drive(0)).is_false()
-	for byte in range(1, 7):
+	for byte in range(1, DrivetrainScript.TOP_GEAR + 1):
 		assert_bool(DrivetrainScript.is_drive(byte)).is_true()
-	assert_bool(DrivetrainScript.is_drive(7)).is_false()
+	assert_bool(DrivetrainScript.is_drive(DrivetrainScript.TOP_GEAR + 1)).is_false()
 	assert_bool(DrivetrainScript.is_reverse(0xFF)).is_true()
-	assert_bool(DrivetrainScript.is_reverse(6)).is_false()
+	assert_bool(DrivetrainScript.is_reverse(DrivetrainScript.TOP_GEAR)).is_false()
 
 
 func test_invalid_gear_bytes_normalize_to_neutral() -> void:
-	for byte in [7, 100, 253, -1]:
+	for byte in [DrivetrainScript.TOP_GEAR + 1, 100, 253, -1]:
 		assert_int(DrivetrainScript.normalize_byte(byte)).is_equal(GEAR_N)
 	assert_int(DrivetrainScript.normalize_byte(GEAR_R)).is_equal(GEAR_R)
 	assert_int(DrivetrainScript.normalize_byte(GEAR_P)).is_equal(GEAR_P)
@@ -417,6 +417,49 @@ func test_fuel_to_land_puts_a_free_crank_on_its_target_in_one_tick() -> void:
 	assert_float(DrivetrainScript.fuel_to_land(spec, omega, omega - 1000.0, c)).is_equal(0.0)
 
 
+func test_the_controller_fuels_an_accessory_load_as_load() -> void:
+	# The idle floor's and drag-torque control's closed forms carry what else the crank drives.
+	var spec := _spec()
+	spec.engine_brake_frac = 0.1
+	var omega := 1500.0 / DrivetrainScript.RADS_TO_RPM
+	var c := TICK / spec.engine_inertia
+	var f := DrivetrainScript.fuel_to_land(spec, omega, omega + 2.0, c, 40.0)
+	assert_float(f).is_greater(DrivetrainScript.fuel_to_land(spec, omega, omega + 2.0, c))
+	assert_float(omega + (DrivetrainScript.crank_torque(spec, 1500.0, f) - 40.0) * c) \
+			.is_equal_approx(omega + 2.0, 1e-9)
+	var drag := DrivetrainScript.drag_fuel(spec, 1500.0, 40.0)
+	assert_float(DrivetrainScript.crank_torque(spec, 1500.0, drag)).is_equal_approx(40.0, 1e-9)
+
+
+func test_an_accessory_load_slows_a_free_crank_by_its_torque_through_the_step() -> void:
+	var spec := _spec()
+	spec.engine_brake_frac = 0.1
+	var bare: DrivetrainScript = DrivetrainScript.new(spec)
+	var loaded: DrivetrainScript = DrivetrainScript.new(spec)
+	bare.rpm = 2000.0
+	loaded.rpm = 2000.0
+	loaded.accessory_torque = 40.0
+	_tick(bare, 0.5, LumpedWheel.new(), GEAR_N)
+	_tick(loaded, 0.5, LumpedWheel.new(), GEAR_N)
+	# Same fuel (over the idle floor), the crank 40 N·m times the tick's compliance slower.
+	assert_float(loaded.applied_throttle).is_equal(bare.applied_throttle)
+	var c := DrivetrainScript.crank_compliance(spec, 2000.0, 0.5, TICK)
+	assert_float((bare.rpm - loaded.rpm) / DrivetrainScript.RADS_TO_RPM) \
+			.is_equal_approx(40.0 * c, 1e-9)
+
+
+func test_the_idle_controller_holds_idle_under_an_accessory_load() -> void:
+	var spec := _spec()
+	var bare: DrivetrainScript = DrivetrainScript.new(spec)
+	var loaded: DrivetrainScript = DrivetrainScript.new(spec)
+	loaded.accessory_torque = 60.0
+	for i in 240:
+		_tick(bare, 0.0, LumpedWheel.new(), GEAR_N, true)
+		_tick(loaded, 0.0, LumpedWheel.new(), GEAR_N, true)
+	assert_float(loaded.rpm).is_equal_approx(spec.idle_rpm, 1.0)
+	assert_float(loaded.applied_throttle).is_greater(bare.applied_throttle)
+
+
 func test_a_light_crank_settles_on_a_steep_droop_without_ringing() -> void:
 	# `race`'s case: a 0.06 kg·m² crank on a curve falling 230 N·m over 200 rpm gains ~3 a tick
 	# explicitly. The semi-implicit step (`crank_compliance`) lands it on the droop monotonically.
@@ -518,6 +561,122 @@ func test_key_off_runs_the_crank_down_and_ignition_steps_it_back_to_idle() -> vo
 	dt.running = true
 	_tick(dt, 0.0, LumpedWheel.new(), GEAR_N)
 	assert_float(dt.rpm).is_equal_approx(spec.idle_rpm, 1e-6)
+
+
+# --- the pedal map (PedalMap) --------------------------------------------------------
+# On `_spec` the power peaks at 3000 rpm, so 1500 rpm is PETROL_REQUEST's 0.5 column; with both
+# motoring fractions at 0.1 the motoring law is a flat -30 N·m.
+
+func _petrol_spec() -> VehicleSpecScript:
+	var spec := _spec()
+	spec.pedal_map = PedalMap.Kind.PETROL
+	spec.engine_friction_frac = 0.1
+	spec.engine_brake_frac = 0.1
+	return spec
+
+
+func test_the_linear_map_is_the_pedal_bit_for_bit() -> void:
+	var spec := _spec()
+	for i in range(-20, 141):
+		var pedal := i * 0.01
+		assert_float(PedalMap.fuel(spec, pedal, 2000.0)).is_equal(clampf(pedal, 0.0, 1.0))
+
+
+func test_the_petrol_map_solves_the_request_on_the_engine_law() -> void:
+	var spec := _petrol_spec()
+	assert_float(PedalMap.rated_rpm(spec)).is_equal(3000.0)
+	# Pedal 0.1 asks 0.215 x 300 = 64.5 N·m against a 150 N·m curve: (64.5 + 30) / 180. Pedal 0.2
+	# asks 131.1: (131.1 + 30) / 180. Between rows the fuel is the pedal's blend of the two.
+	var f1 := 94.5 / 180.0
+	var f2 := 161.1 / 180.0
+	assert_float(PedalMap.fuel(spec, 0.1, 1500.0)).is_equal_approx(f1, 1e-6)
+	assert_float(PedalMap.fuel(spec, 0.2, 1500.0)).is_equal_approx(f2, 1e-6)
+	assert_float(PedalMap.fuel(spec, 0.15, 1500.0)).is_equal_approx((f1 + f2) * 0.5, 1e-6)
+	# Pedal 0.3 asks 200 N·m, past the curve: full fuel, as the figure's contour meets full load.
+	assert_float(PedalMap.fuel(spec, 0.3, 1500.0)).is_equal(1.0)
+	# The crank then delivers the request: the one law at that fuel is 131.1 N·m.
+	assert_float(DrivetrainScript.crank_torque(spec, 1500.0, f2)).is_equal_approx(131.1, 1e-6)
+
+
+func test_the_petrol_map_is_none_at_rest_the_curve_floored_and_monotone() -> void:
+	var spec := _petrol_spec()
+	for at_rpm: float in [0.0, 600.0, 800.0, 1200.0, 1999.0, 2500.0, 3000.0, 3600.0, 4000.0, 4500.0]:
+		assert_float(PedalMap.fuel(spec, 0.0, at_rpm)).is_equal(0.0)
+		assert_float(PedalMap.fuel(spec, 1.0, at_rpm)).is_equal(1.0)
+		var prev := 0.0
+		for i in range(1, 201):
+			var f := PedalMap.fuel(spec, i * 0.005, at_rpm)
+			assert_float(f).override_failure_message("pedal %.3f at %.0f rpm: %f under %f" % [
+					i * 0.005, at_rpm, f, prev]).is_greater_equal(prev)
+			prev = f
+
+
+func test_the_pedal_for_a_fuel_inverts_the_map() -> void:
+	# The least pedal that reaches the fuel: linear is the fuel itself; on the petrol map it lands on
+	# the fuel to the bisection's step. Full fuel included: at 1500 rpm the 0.3 row already asks past
+	# the curve, so a saturated command holds pedal 0.3 there and never steps to a floored pedal.
+	var linear := _spec()
+	for u: float in [-0.5, 0.0, 0.07, 0.5, 1.0, 1.5]:
+		assert_float(PedalMap.pedal_for(linear, u, 2000.0)).is_equal(clampf(u, 0.0, 1.0))
+	var spec := _petrol_spec()
+	assert_float(PedalMap.pedal_for(spec, 0.0, 1500.0)).is_equal(0.0)
+	assert_float(PedalMap.pedal_for(spec, 1.0, 1500.0)).is_equal_approx(0.3, 1e-6)
+	for at_rpm: float in [1000.0, 1500.0, 2500.0, 3500.0]:
+		for u: float in [0.05, 0.2, 0.5, 0.8, 0.95]:
+			var p := PedalMap.pedal_for(spec, u, at_rpm)
+			assert_float(PedalMap.fuel(spec, p, at_rpm)).is_greater_equal(u)
+			assert_float(PedalMap.fuel(spec, p - 1e-6, at_rpm)).is_less(u + 1e-4)
+	# 161.1 / 180 at 1500 rpm is the 0.2 row's fuel: pedal 0.2 itself.
+	assert_float(PedalMap.pedal_for(spec, 161.1 / 180.0, 1500.0)).is_equal_approx(0.2, 1e-6)
+
+
+func test_the_crank_burns_the_mapped_fuel() -> void:
+	# A free crank at 1500 rpm in N, pedal 0.15: no floor binds there, so the delivered fuel is the
+	# map's.
+	var spec := _petrol_spec()
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	dt.rpm = 1500.0
+	_tick(dt, 0.15, LumpedWheel.new(), GEAR_N)
+	assert_float(dt.applied_throttle).is_equal_approx(PedalMap.fuel(spec, 0.15, 1500.0), 1e-12)
+	assert_float(dt.applied_throttle).is_greater(0.6)
+
+
+func test_the_lock_up_line_reads_the_pedal_not_its_mapped_fuel() -> void:
+	# `lockup_holds`' COMPROMISE: the release line is the converter's free rev with the pedal read
+	# as the fuel, on any map. Read so, 0.3 cannot hold idle against the converter (30 N·m against
+	# its 40 at 800 rpm): the line is idle. Mapped, 0.3 asks past the curve from idle to the stall
+	# speed (0.765 x 300 N·m at 800 rpm against 100, 0.662 x 300 at 1600 against 160), so its fuel
+	# is full and its line the stall speed, 1600 rpm.
+	var spec := _converter_spec()
+	spec.pedal_map = PedalMap.Kind.PETROL
+	assert_float(PedalMap.fuel(spec, 0.3, spec.idle_rpm)).is_equal(1.0)
+	assert_float(PedalMap.fuel(spec, 0.3, 1600.0)).is_equal_approx(1.0, 1e-12)
+	assert_float(DrivetrainScript.converter_free_rpm(spec, 0.3)).is_equal(spec.idle_rpm)
+	assert_float(DrivetrainScript.launch_target_rpm(spec, 0.3)).is_equal(spec.idle_rpm)
+	assert_float(DrivetrainScript.launch_target_rpm(spec, 1.0)).is_equal(1600.0)
+	# Locked in D3 at 1200 rpm, between the two lines, the lock-up holds at pedal 0.3: on the mapped
+	# fuel's line it would let go.
+	var locked := DrivetrainScript.CouplingState.LOCKED
+	assert_int(DrivetrainScript.coupling_step(spec, locked, 3, 3, 0.3, 1200.0, 1200.0, true,
+			false)).is_equal(locked)
+	assert_bool(DrivetrainScript.lockup_holds(spec, 3, 1200.0,
+			DrivetrainScript.converter_free_rpm(spec, PedalMap.fuel(spec, 0.3, 1200.0)), false,
+			false)).is_false()
+
+
+func test_a_crank_that_drives_no_wheels_keeps_the_pedal_on_any_map() -> void:
+	# The rigid crank burns the pedal (`Drivetrain.process`), so the map passes it through there,
+	# and its inverse the fuel: no ground drive, or one with no driven axle.
+	var no_gd := _spec()
+	no_gd.ground_drive = null
+	no_gd.pedal_map = PedalMap.Kind.PETROL
+	var undriven := _spec()
+	undriven.ground_drive.driven_rear = false
+	undriven.pedal_map = PedalMap.Kind.PETROL
+	for spec: VehicleSpecScript in [no_gd, undriven]:
+		for p: float in [-0.5, 0.0, 0.005, 0.1, 0.3, 0.75, 1.0, 1.5]:
+			assert_float(PedalMap.fuel(spec, p, 1500.0)).is_equal(clampf(p, 0.0, 1.0))
+			assert_float(PedalMap.pedal_for(spec, p, 1500.0)).is_equal(clampf(p, 0.0, 1.0))
 
 
 # --- the coupling (a held wheel stands in for the brake) ---------------------------
@@ -879,14 +1038,32 @@ func _hand_over(spec: VehicleSpecScript, check: Callable) -> int:
 	return ticks
 
 
-func test_an_upshift_hands_over_the_engines_torque_plus_the_cranks_inertia() -> void:
-	# A clutch body (an AMT, a powershift): the oncoming clutch carries the engine's delivered torque
-	# plus J x the rate, under the 450 N·m rating.
+func test_a_cut_box_hands_over_the_engines_torque_plus_the_cranks_inertia() -> void:
+	# A clutch body with a cut (an AMT): once the cut ends, the oncoming clutch carries the engine's
+	# delivered torque plus J x the rate, under the 450 N·m rating. Its interruption is the cut.
 	var spec := _spec()
+	spec.shift_cut_s = 0.05
+	var fuelled := [0]
 	var ticks := _hand_over(spec, func(dt: DrivetrainScript, was: float, rate: float) -> void:
+		if dt.applied_throttle <= 0.0:
+			return
+		fuelled[0] += 1
 		var law := DrivetrainScript.engine_torque(spec, was) + spec.engine_inertia * rate
 		assert_float(dt.coupling_torque).is_equal_approx(law, 0.05 * law)
 		assert_float(dt.applied_throttle).is_equal(1.0))
+	assert_int(ticks).is_between(15, 16)
+	assert_int(fuelled[0]).is_greater(8)
+
+
+func test_a_powershift_reduces_the_engine_so_the_shift_passes_the_drivers_torque() -> void:
+	# A clutch body with no cut (a powershift) shifts clutch to clutch as a converter automatic does:
+	# the engine is fuelled down so the clutch passes the pedal's torque, with no inertia surge.
+	var spec := _spec()
+	var ticks := _hand_over(spec, func(dt: DrivetrainScript, was: float, _rate: float) -> void:
+		var demand := DrivetrainScript.engine_torque(spec, was)
+		assert_float(dt.coupling_torque).is_equal_approx(demand, 1e-3 * demand)
+		assert_float(dt.applied_throttle).is_greater(0.0)
+		assert_float(dt.applied_throttle).is_less(1.0))
 	assert_int(ticks).is_between(15, 16)
 
 
@@ -1578,14 +1755,24 @@ func test_governed_upshift_reads_the_declared_radius_as_a_pure_scale() -> void:
 	assert_float(DrivetrainScript.new(spec).road_radius).is_equal(0.36)
 
 
+## TOP_GEAR + 1 ratios, 4.0 down in 0.9 steps: a box with a ratio past the bus's last byte.
+static func _past_top_ratios() -> PackedFloat32Array:
+	var ratios := PackedFloat32Array()
+	for i in DrivetrainScript.TOP_GEAR + 1:
+		ratios.append(4.0 * pow(0.9, i))
+	return ratios
+
+
 func test_governed_upshift_never_leaves_the_RAMN_drive_range() -> void:
-	# 7th ratio: is_drive rejects, ratio_for_byte returns 0.0 (free-wheel). TOP_GEAR is bus number.
+	# One ratio past TOP_GEAR: is_drive rejects it, so the walk stops on the bus's last byte even
+	# at a speed every ratio would take. TOP_GEAR is the bus's number, not the box's.
 	var spec := _spec()
 	spec.ground_drive.wheel_radius = 0.36
 	spec.speed_limit_kmh = 180.0
-	spec.gear_ratios = PackedFloat32Array([4.0, 2.6, 1.8, 1.3, 1.0, 0.8, 0.65])
-	var g := DrivetrainScript.governed_upshift(spec, 5, 180.0 / 3.6, spec.ground_drive.wheel_radius)
-	assert_int(g).is_less_equal(DrivetrainScript.TOP_GEAR)
+	spec.gear_ratios = _past_top_ratios()
+	var g := DrivetrainScript.governed_upshift(spec, DrivetrainScript.TOP_GEAR - 2, 200.0,
+			spec.ground_drive.wheel_radius)
+	assert_int(g).is_equal(DrivetrainScript.TOP_GEAR)
 	assert_bool(DrivetrainScript.is_drive(g)).is_true()
 	assert_float(DrivetrainScript.ratio_for_byte(spec, g)).is_not_equal(0.0)
 
@@ -1593,7 +1780,7 @@ func test_governed_upshift_never_leaves_the_RAMN_drive_range() -> void:
 func test_auto_shift_and_is_drive_agree_with_governed_upshift_on_top_gear() -> void:
 	# All three must read TOP_GEAR (is_drive, auto_shift, governed_upshift).
 	var spec := _spec()
-	spec.gear_ratios = PackedFloat32Array([4.0, 2.6, 1.8, 1.3, 1.0, 0.8, 0.65])
+	spec.gear_ratios = _past_top_ratios()
 	assert_bool(DrivetrainScript.is_drive(DrivetrainScript.TOP_GEAR)).is_true()
 	assert_bool(DrivetrainScript.is_drive(DrivetrainScript.TOP_GEAR + 1)).is_false()
 	# At the redline in top, auto-shift holds rather than stepping off the end of the range.
@@ -1707,7 +1894,11 @@ func test_a_clutch_pull_aways_close_hands_over_never_at_the_rating() -> void:
 
 ## `_spec` with a start gear up to D3, a 0.5 s launch ramp and a 1 s dwell: at its 1600 rpm launch
 ## line (160 N·m) D1 / D2 / D3 make 1728 / 1152 / 864 N·m at the axle, so a 400 N·m standing load
-## starts in D3, 500 in D2, 900 in D1.
+## starts in D3, 500 in D2, 900 in D1. The tests' rig is LIGHT_RIG_KG: D3 locks a floored launch in
+## 0.9 s, inside `ShiftPolicy.START_SLIP_S`, so the reserve alone picks.
+const LIGHT_RIG_KG := 100.0
+
+
 func _start_spec() -> VehicleSpecScript:
 	var spec := _spec()
 	spec.start_gear_max = 3
@@ -1718,7 +1909,7 @@ func _start_spec() -> VehicleSpecScript:
 
 func test_a_pull_away_starts_in_the_gear_the_standing_load_allows() -> void:
 	var dt: DrivetrainScript = DrivetrainScript.new(_start_spec())
-	dt.load_mass_kg = 1000.0
+	dt.load_mass_kg = LIGHT_RIG_KG
 	for load_gear: Vector2i in [Vector2i(400, 3), Vector2i(500, 2), Vector2i(900, 1),
 			Vector2i(400, 3)]:
 		dt.standing_load = load_gear.x
@@ -1739,7 +1930,7 @@ func test_a_pull_away_starts_in_the_gear_the_standing_load_allows() -> void:
 func test_a_launch_holds_its_start_gear_until_the_coupling_locks() -> void:
 	# Pedal down, rolling at 600 rpm in D3, under its 1500 coast line: no downshift while it slips.
 	var dt: DrivetrainScript = DrivetrainScript.new(_start_spec())
-	dt.load_mass_kg = 1000.0
+	dt.load_mass_kg = LIGHT_RIG_KG
 	dt.standing_load = 400.0
 	_auto_tick(dt, 0.0, 0.0, 1)
 	var v := _road_speed_for(dt, 3, 900.0)
@@ -1752,12 +1943,36 @@ func test_a_launch_holds_its_start_gear_until_the_coupling_locks() -> void:
 	assert_int(dt.gear_byte).is_equal(2)
 
 
+func test_the_dwell_starts_when_the_launch_locks() -> void:
+	# A coast line at 1000 under the full pedal's 1500 downshift: 1200 rpm in D3, floored, is a map
+	# downshift, which the dwell holds. The launch slips 2 s, past the 1 s dwell since the pick; its
+	# lock is the gear's engagement, so the map waits the dwell from there (driven tyres slipping at
+	# their peak lock a heavy launch under its downshift point while it gains speed).
+	var spec := _start_spec()
+	spec.shift_down_light_rpm = 1000.0
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	dt.load_mass_kg = LIGHT_RIG_KG
+	dt.standing_load = 400.0
+	_auto_tick(dt, 0.0, 0.0, 1)
+	var v := _road_speed_for(dt, 3, 1200.0)
+	for i in 120:
+		_auto_tick(dt, 1.0, v, 1)
+	assert_int(dt.gear_byte).is_equal(3)
+	dt.coupling_state = DrivetrainScript.CouplingState.LOCKED
+	for i in 59:
+		_auto_tick(dt, 1.0, v, 1)
+	assert_int(dt.gear_byte).is_equal(3)
+	for i in 3:  # one more for the float sum
+		_auto_tick(dt, 1.0, v, 1)
+	assert_int(dt.gear_byte).is_equal(2)
+
+
 func test_a_light_pedal_launches_in_the_gear_it_can_hold_the_load_in() -> void:
 	# A 400 N·m load starts D3 floored. At a fifth of the pedal the launch line is 960 rpm (100 N·m,
 	# 20 on that fuel): D3 makes 108, D2 144 and D1 216 N·m at the axle, none twice 400, so it
 	# takes D1 at once. Pressed on, it never goes back up while the launch lasts.
 	var dt: DrivetrainScript = DrivetrainScript.new(_start_spec())
-	dt.load_mass_kg = 1000.0
+	dt.load_mass_kg = LIGHT_RIG_KG
 	dt.standing_load = 400.0
 	_auto_tick(dt, 0.0, 0.0, 1)
 	assert_int(dt.gear_byte).is_equal(3)
@@ -1768,7 +1983,7 @@ func test_a_light_pedal_launches_in_the_gear_it_can_hold_the_load_in() -> void:
 	assert_int(dt.gear_byte).is_equal(1)
 	# Floored from the start it keeps D3.
 	var floored: DrivetrainScript = DrivetrainScript.new(_start_spec())
-	floored.load_mass_kg = 1000.0
+	floored.load_mass_kg = LIGHT_RIG_KG
 	floored.standing_load = 400.0
 	_auto_tick(floored, 0.0, 0.0, 1)
 	_auto_tick(floored, 1.0, 0.0, 1)
@@ -1779,7 +1994,7 @@ func test_a_launch_that_cannot_move_steps_its_start_gear_down() -> void:
 	# Held at rest with the pedal down: after the 0.5 s ramp and the 1 s dwell (90 ticks, one more
 	# for the float sum), one gear down, and again after as long.
 	var dt: DrivetrainScript = DrivetrainScript.new(_start_spec())
-	dt.load_mass_kg = 1000.0
+	dt.load_mass_kg = LIGHT_RIG_KG
 	dt.standing_load = 400.0
 	_auto_tick(dt, 0.0, 0.0, 1)
 	for i in 89:
@@ -1821,3 +2036,523 @@ func test_the_road_load_is_seeded_at_rest_and_held_under_the_brake() -> void:
 	boat.load_mass_kg = 1000.0
 	_auto_tick(boat, 0.0, 5.0, 1)
 	assert_bool(is_nan(boat.road_load)).is_true()
+
+
+# --- the all-speed governor (PedalMap.Kind.ALL_SPEED) and the hand throttle ------------------
+
+## `_spec` with an all-speed governor at `droop` and a motoring law, so the line meets it past the
+## setting.
+func _governed_spec(droop := 0.07) -> VehicleSpecScript:
+	var spec := _spec()
+	spec.pedal_map = PedalMap.Kind.ALL_SPEED
+	spec.governor_droop = droop
+	spec.engine_friction_frac = 0.1
+	spec.engine_brake_frac = 0.2
+	return spec
+
+
+func test_the_governor_fuels_fully_under_its_droop_and_none_past_its_setting() -> void:
+	var spec := _governed_spec()
+	for d: float in [0.25, 0.5, 0.75]:
+		var line := PedalMap.governor_line(spec, d)
+		assert_float(line.x).is_equal_approx(lerpf(spec.idle_rpm, spec.redline_rpm, d), 1e-3)
+		assert_float(line.y).is_equal_approx(line.x / 1.07, 1e-3)
+		assert_float(PedalMap.fuel(spec, d, line.y - 1.0)).is_equal(1.0)
+		# At the setting the crank nets nothing: the fuel that cancels the motoring law.
+		assert_float(PedalMap.fuel(spec, d, line.x)) \
+				.is_equal_approx(DrivetrainScript.drag_fuel(spec, line.x), 1e-6)
+		assert_float(PedalMap.fuel(spec, d, line.x + 200.0)).is_equal(0.0)
+		# Continuous in rpm through the line's ends: no step larger than a rpm's worth of line.
+		var prev := PedalMap.fuel(spec, d, line.y - 50.0)
+		var n := line.y - 49.0
+		while n < line.x + 100.0:
+			var f := PedalMap.fuel(spec, d, n)
+			assert_float(absf(f - prev)).override_failure_message(
+					"demand %.2f: fuel steps %f at %.0f rpm" % [d, f - prev, n]).is_less(0.02)
+			prev = f
+			n += 1.0
+	# Monotone in demand at any rpm.
+	for at_rpm: float in [600.0, 1500.0, 2500.0, 3500.0]:
+		var last := 0.0
+		for i in 101:
+			var f := PedalMap.fuel(spec, i * 0.01, at_rpm)
+			assert_float(f).is_greater_equal(last)
+			last = f
+
+
+func test_the_demand_is_the_higher_lever_only_on_a_governor() -> void:
+	assert_float(PedalMap.demand(_governed_spec(), 0.2, 0.6)).is_equal(0.6)
+	assert_float(PedalMap.demand(_governed_spec(), 0.7, 0.6)).is_equal(0.7)
+	assert_float(PedalMap.demand(_spec(), 0.2, 0.6)).is_equal(0.2)
+	assert_float(PedalMap.demand_for_setting(_governed_spec(), 2400.0)).is_equal_approx(0.5, 1e-6)
+
+
+func test_a_governed_free_crank_settles_on_its_setting_and_a_load_droops_it_on_the_line() -> void:
+	var spec := _governed_spec()
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	for i in 300:
+		_tick(dt, 0.5, LumpedWheel.new(), GEAR_N)
+	var line := PedalMap.governor_line(spec, 0.5)
+	assert_float(dt.rpm).is_equal_approx(line.x, 1.0)
+	# A constant load holds it `load / slope` under the setting, on the line.
+	dt.accessory_torque = 100.0
+	for i in 300:
+		_tick(dt, 0.5, LumpedWheel.new(), GEAR_N)
+	var motoring := DrivetrainScript.motoring_torque(spec, dt.rpm)
+	assert_float(dt.rpm).is_equal_approx(line.x - 100.0 / line.z, 2.0)
+	assert_float(dt.applied_throttle).is_greater(0.0)
+	assert_float(dt.applied_throttle).is_less(1.0)
+	assert_float(motoring).is_less(0.0)
+
+
+func test_a_near_isochronous_governor_settles_without_ringing() -> void:
+	# At 1 % droop the line's stiffness is k dt / J ~8 on this 0.2 kg·m² crank, four times past an
+	# explicit step's limit: the step takes it implicitly (`PedalMap.governor_stiffness`).
+	var spec := _governed_spec(0.01)
+	var line := PedalMap.governor_line(spec, 0.5)
+	assert_float(line.z * DrivetrainScript.RADS_TO_RPM * TICK / spec.engine_inertia).is_greater(2.0)
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	dt.accessory_torque = 50.0
+	for i in 120:
+		_tick(dt, 0.5, LumpedWheel.new(), GEAR_N)
+	var worst := 0.0
+	for i in 60:
+		_tick(dt, 0.5, LumpedWheel.new(), GEAR_N)
+		worst = maxf(worst, absf(dt.rpm - (line.x - 50.0 / line.z)))
+	assert_float(worst).is_less(1.0)
+
+
+func test_a_governed_tick_steps_on_the_lines_stiffness() -> void:
+	var spec := _governed_spec()
+	assert_float(DrivetrainScript.crank_stiffness(spec, 2000.0, 0.5, 50.0)).is_equal(50.0)
+	var line := PedalMap.governor_line(spec, 0.5)
+	var mid := (line.x + line.y) * 0.5
+	assert_float(PedalMap.governor_stiffness(spec, 0.5, mid)) \
+			.is_equal_approx(line.z * DrivetrainScript.RADS_TO_RPM, 1e-6)
+	assert_bool(is_nan(PedalMap.governor_stiffness(spec, 0.5, line.y - 10.0))).is_true()
+	assert_bool(is_nan(PedalMap.governor_stiffness(_spec(), 0.5, mid))).is_true()
+
+
+func test_the_hand_throttle_sets_a_governed_crank_and_nothing_else() -> void:
+	# On a governor the hand throttle alone holds the crank on its setting.
+	var governed: DrivetrainScript = DrivetrainScript.new(_governed_spec())
+	governed.hand_throttle = 0.5
+	for i in 300:
+		_tick(governed, 0.0, LumpedWheel.new(), GEAR_N)
+	assert_float(governed.rpm).is_equal_approx(PedalMap.setting_rpm(governed.spec, 0.5), 1.0)
+	# Any other map ignores it, bit for bit.
+	var bare: DrivetrainScript = DrivetrainScript.new(_spec())
+	var handed: DrivetrainScript = DrivetrainScript.new(_spec())
+	handed.hand_throttle = 1.0
+	bare.rpm = 2000.0
+	handed.rpm = 2000.0
+	for i in 60:
+		_tick(bare, 0.3, LumpedWheel.new(), GEAR_N)
+		_tick(handed, 0.3, LumpedWheel.new(), GEAR_N)
+	assert_float(handed.rpm).is_equal(bare.rpm)
+	assert_float(handed.applied_throttle).is_equal(bare.applied_throttle)
+
+
+# --- the PTO mode (`Drivetrain.pto_set_rpm`) on a road truck's LINEAR map -------------------------
+
+## `_spec` with a motoring law, its pedal LINEAR and its droop the default 0 (isochronous).
+func _pto_spec() -> VehicleSpecScript:
+	var spec := _spec()
+	spec.engine_friction_frac = 0.1
+	spec.engine_brake_frac = 0.2
+	return spec
+
+
+func test_a_pto_set_speed_raises_the_demand_on_any_map() -> void:
+	var spec := _pto_spec()
+	var set_demand := PedalMap.demand_for_setting(spec, 1600.0)
+	assert_float(PedalMap.demand(spec, 0.1, 0.0, 1600.0)).is_equal(set_demand)
+	assert_float(PedalMap.demand(spec, 0.9, 0.0, 1600.0)).is_equal(0.9)
+	assert_float(PedalMap.demand(spec, 0.1, 0.0)).is_equal(0.1)
+	# Not governed, LINEAR stays the pedal bit for bit; governed, it is the governor's.
+	for n: float in [900.0, 1580.0, 1600.0, 2500.0]:
+		assert_float(PedalMap.fuel(spec, 0.3, n)).is_equal(0.3)
+		assert_float(PedalMap.fuel(spec, set_demand, n, true)) \
+				.is_equal(PedalMap.governor_fuel(spec, set_demand, n))
+	assert_bool(is_nan(PedalMap.governor_stiffness(spec, set_demand, 1599.5))).is_true()
+	assert_float(PedalMap.governor_stiffness(spec, set_demand, 1599.5, true)).is_greater(0.0)
+
+
+func test_the_pto_mode_holds_its_set_speed_isochronously_under_a_load() -> void:
+	# Parked in N, the set speed from idle: it lands on it without overshoot or a cycle, then holds
+	# it within the 0.1 % floor droop under the pump's constant load.
+	var dt: DrivetrainScript = DrivetrainScript.new(_pto_spec())
+	dt.rpm = 800.0
+	dt.pto_set_rpm = 1600.0
+	var peak := 0.0
+	for i in 120:
+		_tick(dt, 0.0, LumpedWheel.new(), GEAR_N)
+		peak = maxf(peak, dt.rpm)
+	assert_float(peak).is_less_equal(1600.0 + 1.0)
+	assert_float(dt.rpm).is_equal_approx(1600.0, 1.0)
+	dt.accessory_torque = 100.0
+	var worst := 0.0
+	for i in 120:
+		_tick(dt, 0.0, LumpedWheel.new(), GEAR_N)
+		if i >= 30:
+			worst = maxf(worst, absf(dt.rpm - 1600.0))
+	assert_float(worst).is_less(1600.0 * PedalMap.MIN_DROOP + 0.5)
+	assert_float(dt.applied_throttle).is_greater(0.0)
+	assert_float(dt.applied_throttle).is_less(1.0)
+
+
+func test_the_pto_mode_acts_only_in_neutral() -> void:
+	# In D the neutral interlock drops it: the fuel is the pedal's, bit for bit.
+	var bare: DrivetrainScript = DrivetrainScript.new(_pto_spec())
+	var held: DrivetrainScript = DrivetrainScript.new(_pto_spec())
+	held.pto_set_rpm = 1600.0
+	var wa := LumpedWheel.new()
+	var wb := LumpedWheel.new()
+	for i in 120:
+		_tick(bare, 0.3, wa, 1)
+		_tick(held, 0.3, wb, 1)
+	assert_float(held.rpm).is_equal(bare.rpm)
+	assert_float(held.applied_throttle).is_equal(bare.applied_throttle)
+
+
+func test_the_hand_throttle_never_pulls_away_alone() -> void:
+	# In D at rest, the hand throttle up and the pedal down at 0: the start-up ramp and the clutch
+	# wait on the pedal, so nothing reaches the wheels.
+	var spec := _governed_spec()
+	spec.launch_engage_s = 0.8
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	dt.hand_throttle = 0.6
+	var wheel := LumpedWheel.new(0.0, 5.0)
+	var passed := 0.0
+	for i in 60:
+		passed = maxf(passed, absf(_tick(dt, 0.0, wheel, 1, false, 0.0)))
+	assert_float(passed).is_equal(0.0)
+	assert_float(dt.rpm).is_equal_approx(PedalMap.setting_rpm(spec, 0.6), 2.0)
+
+
+func test_a_lifted_pedal_keeps_a_governed_crank_driving_on_the_hand_throttle() -> void:
+	# Rolling in D1 behind a locked clutch on a heavy rig, the pedal lifted: the hand throttle's
+	# setting (2400 rpm, over the crank's 1500) keeps the governor fuelling, so the coupling stays
+	# shut and drives the wheels on. With the hand throttle at 0 the same lift is an overrun.
+	for hand: float in [0.5, 0.0]:
+		var dt: DrivetrainScript = DrivetrainScript.new(_governed_spec())
+		dt.hand_throttle = hand
+		var wheel := LumpedWheel.new(1500.0 / DrivetrainScript.RADS_TO_RPM
+				/ DrivetrainScript.ratio_for_byte(dt.spec, 1), 2000.0)
+		for i in 120:
+			_tick(dt, 0.3, wheel, 1)
+		assert_int(dt.coupling_state).is_equal(DrivetrainScript.CouplingState.LOCKED)
+		var start := wheel.omega
+		var least := INF
+		for i in 60:
+			least = minf(least, _tick(dt, 0.0, wheel, 1))
+		if hand > 0.0:
+			assert_int(dt.coupling_state).is_not_equal(DrivetrainScript.CouplingState.OPEN)
+			assert_float(least).is_greater(0.0)
+			assert_float(wheel.omega).is_greater(start)
+		else:
+			assert_float(least).is_less(0.0)
+
+
+func test_the_kickdown_reads_the_demand() -> void:
+	# Entered in D5 at 1600 rpm on a 0.05 pedal, the hand throttle stabbed to 1 on the next tick:
+	# the demand crosses `kickdown_pedal`, so after the 0.5 s dwell the box kicks down to D3, and
+	# `last_pedal` is the demand. On a map with no governor the same hand throttle is nothing.
+	for governed: bool in [true, false]:
+		var spec := _governed_spec() if governed else _spec()
+		spec.kickdown_pedal = 0.9
+		spec.shift_dwell_s = 0.5
+		var dt: DrivetrainScript = DrivetrainScript.new(spec)
+		var v := _road_speed_for(dt, 5, 1600.0)
+		_auto_tick(dt, 0.05, v, 5)
+		assert_int(dt.gear_byte).is_equal(5)
+		dt.hand_throttle = 1.0
+		for i in 40:
+			_auto_tick(dt, 0.05, v, 5)
+		assert_float(dt.last_pedal).is_equal(1.0 if governed else 0.05)
+		assert_int(dt.gear_byte).is_equal(3 if governed else 5)
+
+
+
+# --- the power-split CVT (`spec.cvt_range_tops`) ---------------------------------------------
+
+## `_governed_spec` on a four-range CVT: ranges topping at ratios 0.1 / 0.2 / 0.4 / 0.8 (gearbox
+## output over input), 1.5 m/s² of ratio rate, a 5000 N·m relief, governed at 40 km/h.
+func _cvt_spec() -> VehicleSpecScript:
+	var spec := _governed_spec()
+	spec.gear_ratios = PackedFloat32Array()
+	spec.cvt_range_tops = PackedFloat32Array([0.1, 0.2, 0.4, 0.8])
+	spec.cvt_accel_ms2 = 1.5
+	spec.cvt_max_axle_torque = 5000.0
+	spec.speed_limit_kmh = 40.0
+	return spec
+
+
+func test_only_a_wheel_driving_spec_with_ranges_is_a_cvt() -> void:
+	assert_bool(DrivetrainScript.is_cvt(_spec())).is_false()
+	assert_bool(DrivetrainScript.is_cvt(_cvt_spec())).is_true()
+	var wheelless := _cvt_spec()
+	wheelless.ground_drive = null
+	assert_bool(DrivetrainScript.is_cvt(wheelless)).is_false()
+
+
+## At a ratio of 0 the box is a hold at its relief; geared, the range clutches' rating through the
+## ratio, never past the relief.
+func test_the_cvt_capacity_is_the_relief_at_standstill_and_the_rating_through_the_ratio() -> void:
+	var spec := _cvt_spec()
+	assert_float(DrivetrainScript.cvt_axle_capacity(spec, 450.0, 0.0, 0.9)).is_equal(5000.0)
+	assert_float(DrivetrainScript.cvt_axle_capacity(spec, 450.0, 0.01, 0.9)).is_equal(5000.0)
+	assert_float(DrivetrainScript.cvt_axle_capacity(spec, 450.0, 0.2, 0.9)) \
+			.is_equal_approx(450.0 * 0.9 / 0.2, 1e-3)
+	assert_float(DrivetrainScript.cvt_axle_capacity(spec, 450.0, -0.2, 1.0 / 0.9)) \
+			.is_equal_approx(450.0 / 0.9 / 0.2, 1e-3)
+	assert_float(DrivetrainScript.stall_axle_torque(spec)).is_equal(5000.0)
+
+
+## The efficiency peaks at each range's lock-up (no hydrostatic share) and pays the variator's
+## loss on the share elsewhere: +40 % at a range's bottom, -35 % at its top.
+func test_the_cvt_efficiency_peaks_at_each_lock_up() -> void:
+	var spec := _cvt_spec()
+	var lock_up := 0.1 + 0.1 * DrivetrainScript.CVT_SHARE_BOTTOM \
+			/ (DrivetrainScript.CVT_SHARE_BOTTOM - DrivetrainScript.CVT_SHARE_TOP)
+	assert_float(DrivetrainScript.cvt_efficiency(spec, lock_up, 2)).is_equal_approx(0.9, 1e-5)
+	assert_float(DrivetrainScript.cvt_efficiency(spec, 0.1, 2)) \
+			.is_equal_approx(0.9 * (1.0 - 0.40 * 0.15), 1e-5)
+	assert_float(DrivetrainScript.cvt_efficiency(spec, 0.2, 2)) \
+			.is_equal_approx(0.9 * (1.0 - 0.35 * 0.15), 1e-5)
+	# The first range starts from standstill.
+	assert_float(DrivetrainScript.cvt_efficiency(spec, 0.0, 1)) \
+			.is_equal_approx(0.9 * (1.0 - 0.40 * 0.15), 1e-5)
+
+
+## The byte follows the ratio's range, a step past each boundary either way, so a ratio held on a
+## synchronous point does not chatter it.
+func test_the_cvt_range_changes_past_a_hysteresis_band() -> void:
+	var spec := _cvt_spec()
+	assert_int(DrivetrainScript.cvt_range_for(spec, 0.0, 4)).is_equal(1)
+	assert_int(DrivetrainScript.cvt_range_for(spec, 0.101, 1)).is_equal(1)
+	assert_int(DrivetrainScript.cvt_range_for(spec, 0.103, 1)).is_equal(2)
+	assert_int(DrivetrainScript.cvt_range_for(spec, 0.099, 2)).is_equal(2)
+	assert_int(DrivetrainScript.cvt_range_for(spec, 0.097, 2)).is_equal(1)
+	assert_int(DrivetrainScript.cvt_range_for(spec, 0.5, 1)).is_equal(4)
+	assert_int(DrivetrainScript.cvt_range_for(spec, 5.0, 1)).is_equal(4)
+
+
+## The pedal is a ground-speed command: its share of the governed top speed, reverse's own top
+## back, none in N, under the foot brake or past a towing host's cap.
+func test_the_cvt_pedal_commands_ground_speed() -> void:
+	var spec := _cvt_spec()
+	assert_float(DrivetrainScript.cvt_speed_command(spec, 0.5, 1.0, false)) \
+			.is_equal_approx(20.0 / 3.6, 1e-5)
+	assert_float(DrivetrainScript.cvt_speed_command(spec, 1.0, -1.0, false)) \
+			.is_equal_approx(-DrivetrainScript.CVT_REVERSE_KMH / 3.6, 1e-5)
+	assert_float(DrivetrainScript.cvt_speed_command(spec, 1.0, 0.0, false)).is_equal(0.0)
+	assert_float(DrivetrainScript.cvt_speed_command(spec, 1.0, 1.0, true)).is_equal(0.0)
+	assert_float(DrivetrainScript.cvt_speed_command(spec, 1.0, 1.0, false, 25.0)) \
+			.is_equal_approx(25.0 / 3.6, 1e-5)
+
+
+## The ratio moves toward the commanded speed at the declared ground acceleration, at the crank's
+## speed; past the rate, the crank's band bounds it.
+func test_the_cvt_ratio_moves_at_its_rate_and_inside_the_crank_band() -> void:
+	var spec := _cvt_spec()
+	var r := spec.ground_drive.drive_radius()
+	var omega := 2000.0 / DrivetrainScript.RADS_TO_RPM
+	var step := DrivetrainScript.cvt_ratio_step(spec, 0.0, 10.0, 2000.0, 1000.0, 0.0, 0.8, TICK)
+	assert_float(step).is_equal_approx(1.5 * spec.final_drive / (r * omega) * TICK, 1e-6)
+	# Already at the command: no move.
+	var at := 5.0 * spec.final_drive / (r * omega)
+	assert_float(DrivetrainScript.cvt_ratio_step(spec, at, 5.0, 2000.0, 1000.0, 5.0 / r, 0.8,
+			TICK)).is_equal_approx(at, 1e-6)
+	# Never a step past the wheels' own ratio: against held wheels it holds (pressure cut-off).
+	assert_float(DrivetrainScript.cvt_ratio_step(spec, 0.3, 100.0, 2000.0, 1000.0, 0.0, 0.8,
+			TICK)).is_equal(0.3)
+	# Within the range cap, and a cap under the ratio (a bridge byte) reached at the rate.
+	assert_float(DrivetrainScript.cvt_ratio_step(spec, 0.2, 100.0, 2000.0, 1000.0, 10.0, 0.2,
+			TICK)).is_equal(0.2)
+	assert_float(DrivetrainScript.cvt_ratio_step(spec, 0.4, 100.0, 2000.0, 1000.0, 10.0, 0.1,
+			TICK)).is_equal_approx(0.4 - step, 1e-9)
+	# Never so low the turning wheels over-rev the crank.
+	var wheel := 20.0
+	var over := wheel * spec.final_drive / (spec.redline_rpm / DrivetrainScript.RADS_TO_RPM)
+	assert_float(DrivetrainScript.cvt_ratio_step(spec, over * 1.01, 0.0, 3900.0, 1000.0, wheel,
+			0.8, 1.0)).is_equal_approx(over, 1e-6)
+	# With the crank under idle (a stop against the brakes), it follows the wheels down past its
+	# rate.
+	var slowing := 10.0
+	var stall := slowing * spec.final_drive / (spec.idle_rpm / DrivetrainScript.RADS_TO_RPM)
+	assert_float(DrivetrainScript.cvt_ratio_step(spec, 0.8, 100.0, 700.0, 600.0, slowing, 0.8,
+			TICK)).is_equal_approx(stall, 1e-6)
+
+
+## Under the limit speed the ratio gives way in proportion, filtered, never past zero.
+func test_the_cvt_limit_load_control_pulls_the_ratio_back() -> void:
+	var spec := _cvt_spec()
+	var i := 0.4
+	var prev := i
+	for n in 120:
+		i = DrivetrainScript.cvt_ratio_step(spec, i, 100.0, 2700.0, 3000.0, 0.0, 0.8, TICK)
+		assert_float(i).is_less(prev)
+		assert_float(i).is_greater(0.0)
+		prev = i
+	var expect := lerpf(0.4, 0.4 * 0.9, 1.0 - exp(-TICK / DrivetrainScript.CVT_LOAD_TAU_S))
+	assert_float(DrivetrainScript.cvt_ratio_step(spec, 0.4, 100.0, 2700.0, 3000.0, 0.0, 0.8,
+			TICK)).is_equal_approx(expect, 1e-6)
+	# The limit is the governor line's full-fuel end, never over the curve's peak power.
+	assert_float(DrivetrainScript.cvt_limit_rpm(spec, 1.0)).is_equal_approx(3000.0, 1e-3)
+	assert_float(DrivetrainScript.cvt_limit_rpm(spec, 0.5)) \
+			.is_equal_approx(PedalMap.setting_rpm(spec, 0.5) / 1.07, 1e-2)
+
+
+## SPN 526: the gearbox's input over output, final drive excluded; a CVT's inverted, the SPN's top
+## at active standstill; 0 in N or P.
+func test_the_gear_ratio_signal_reads_the_gearbox() -> void:
+	var stepped := _spec()
+	assert_float(DrivetrainScript.gear_ratio_of(stepped, 3, 0.0)).is_equal_approx(1.5, 1e-6)
+	assert_float(DrivetrainScript.gear_ratio_of(stepped, GEAR_R, 0.0)).is_equal_approx(3.2, 1e-6)
+	assert_float(DrivetrainScript.gear_ratio_of(stepped, GEAR_N, 0.0)).is_equal(0.0)
+	assert_float(DrivetrainScript.gear_ratio_of(stepped, GEAR_P, 0.0)).is_equal(0.0)
+	var cvt := _cvt_spec()
+	assert_float(DrivetrainScript.gear_ratio_of(cvt, 1, 0.0)) \
+			.is_equal_approx(DrivetrainScript.GEAR_RATIO_MAX, 1e-6)
+	assert_float(DrivetrainScript.gear_ratio_of(cvt, 3, 0.5)).is_equal_approx(2.0, 1e-6)
+	assert_float(DrivetrainScript.gear_ratio_of(cvt, GEAR_R, -0.25)).is_equal_approx(4.0, 1e-6)
+	assert_float(DrivetrainScript.gear_ratio_of(cvt, GEAR_N, 0.3)).is_equal(0.0)
+
+
+## Floored from rest on a 2 t rig: locked every tick (no launch clutch), the rig gaining speed at the
+## ratio's rate, and the byte stepping up through the ranges.
+func test_a_cvt_pulls_away_locked_at_its_ratio_rate() -> void:
+	var spec := _cvt_spec()
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	var r := spec.ground_drive.drive_radius()
+	var rig := LumpedWheel.new(0.0, 2000.0 * r * r)
+	var bytes: Array[int] = []
+	for n in 180:
+		var was := rig.omega
+		_tick(dt, 1.0, rig, 1, true)
+		assert_int(dt.coupling_state).is_equal(DrivetrainScript.CouplingState.LOCKED)
+		assert_float((rig.omega - was) * r / TICK).is_less(2.0)
+		if bytes.is_empty() or bytes[-1] != dt.gear_byte:
+			bytes.append(dt.gear_byte)
+	assert_float(rig.omega * r).is_between(3.8, 4.6)
+	assert_array(bytes).is_equal([1, 2])
+
+
+## The hand throttle sets engine speed alone: with the foot off it never pulls away, and the box
+## stays at active standstill.
+func test_a_cvt_never_pulls_away_on_the_hand_throttle_alone() -> void:
+	var spec := _cvt_spec()
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	dt.hand_throttle = 1.0
+	var r := spec.ground_drive.drive_radius()
+	var rig := LumpedWheel.new(0.0, 2000.0 * r * r)
+	for n in 120:
+		_tick(dt, 0.0, rig, 1, true)
+	assert_float(dt.cvt_i).is_equal(0.0)
+	assert_float(rig.omega).is_equal(0.0)
+	assert_float(dt.rpm).is_greater(3000.0)
+
+
+## Against wheels the road holds (an overload), limit-load control settles the crank on its limit
+## speed without ringing: the ground speed gives, never the engine.
+func test_a_cvt_holds_its_limit_speed_against_a_held_wheel() -> void:
+	var spec := _cvt_spec()
+	# A relief past what the crank's torque makes at this ratio, so the test is the controller's.
+	spec.cvt_max_axle_torque = 50000.0
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	var held := LumpedWheel.new(2.0 / spec.ground_drive.drive_radius())
+	var tail: Array[float] = []
+	for n in 300:
+		_tick(dt, 1.0, held, 1, true)
+		if n >= 240:
+			tail.append(dt.rpm)
+	var lo: float = tail.min()
+	var hi: float = tail.max()
+	var limit := DrivetrainScript.cvt_limit_rpm(spec, 1.0)
+	assert_float(hi - lo).is_less(0.02 * limit)
+	assert_float((hi + lo) * 0.5).is_between(0.95 * limit, 1.05 * limit)
+
+
+## A bridge's drive byte caps the range the box may reach.
+func test_a_bridge_byte_caps_the_cvt_range() -> void:
+	var spec := _cvt_spec()
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	var r := spec.ground_drive.drive_radius()
+	var rig := LumpedWheel.new(0.0, 2000.0 * r * r)
+	for n in 600:
+		_tick(dt, 1.0, rig, 2, false)
+		assert_int(dt.gear_byte).is_less_equal(2)
+		assert_float(absf(dt.cvt_i)).is_less_equal(0.2 + 1e-6)
+
+
+## `_cvt_spec` driven from rest at `pedal` in `byte` for `ticks` on a 2 t rig.
+func _cvt_rolling(pedal: float, byte: int, ticks: int) -> Array:
+	var spec := _cvt_spec()
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	var r := spec.ground_drive.drive_radius()
+	var rig := LumpedWheel.new(0.0, 2000.0 * r * r)
+	for n in ticks:
+		_tick(dt, pedal, rig, byte, true)
+	return [dt, rig]
+
+
+## Brakes that hold the wheels still at speed (a lock on soft ground) take the ratio to 0 at once,
+## so the crank is never dragged far under idle; at speed the box holds nothing there, at rest it
+## holds on its relief.
+func test_a_cvt_braked_onto_held_wheels_never_drags_its_crank_down() -> void:
+	var run := _cvt_rolling(0.75, 1, 300)
+	var dt: DrivetrainScript = run[0]
+	var spec := dt.spec
+	assert_float(dt.cvt_i).is_greater(0.1)
+	dt.braking = true
+	var held := LumpedWheel.new(0.0)
+	var low := INF
+	for n in 60:
+		# The body still slides at 8 m/s on the locked wheels.
+		_tick(dt, 0.0, held, 1, true, 8.0)
+		low = minf(low, dt.rpm)
+		assert_float(dt.standstill_hold()).is_equal(0.0)
+	assert_float(dt.cvt_i).is_equal(0.0)
+	assert_float(low).is_greater(0.5 * spec.idle_rpm)
+	assert_float(dt.rpm).is_greater_equal(spec.idle_rpm - 1.0)
+	# Stopped: the box holds on its relief.
+	_tick(dt, 0.0, held, 1, true, 0.0)
+	assert_float(dt.standstill_hold()).is_equal(spec.cvt_max_axle_torque)
+	# Released while still sliding: the ratio follows the wheels as they spin back up.
+	dt.braking = false
+	var rolling := LumpedWheel.new(8.0 / dt.road_radius)
+	_tick(dt, 0.0, rolling, 1, true, 8.0)
+	assert_float(dt.cvt_i).is_greater(0.0)
+
+
+## Lifted to a stop with no brake, the ratio reaches 0 and the box holds on its relief: the wheels
+## crawl under the lock's engage speed then, which the wheels' lock stops (the rig here has no lock).
+func test_a_cvt_lifted_to_a_stop_ends_at_active_standstill() -> void:
+	var run := _cvt_rolling(1.0, 1, 120)
+	var dt: DrivetrainScript = run[0]
+	var rig: LumpedWheel = run[1]
+	assert_float(rig.omega).is_greater(1.0)
+	for n in 600:
+		_tick(dt, 0.0, rig, 1, true)
+	assert_float(dt.cvt_i).is_equal(0.0)
+	assert_float(absf(rig.omega) * dt.road_radius).is_less(0.1 * WheelDrive.PAWL_ENGAGE_SPEED)
+	assert_float(dt.standstill_hold()).is_equal(dt.spec.cvt_max_axle_torque)
+
+
+## A direction change after a lift-stop, or on a crawl the other way, moves off the other way within
+## a second: the ratio crosses 0, never trapped above it by the redline bound.
+func test_a_cvt_changes_direction_within_a_second() -> void:
+	for dirs: Array in [[1, GEAR_R], [GEAR_R, 1]]:
+		var run := _cvt_rolling(1.0, dirs[0], 120)
+		var dt: DrivetrainScript = run[0]
+		var rig: LumpedWheel = run[1]
+		var first := signf(rig.omega)
+		assert_float(absf(rig.omega)).is_greater(1.0)
+		for n in 600:
+			_tick(dt, 0.0, rig, dirs[0], true)
+		for n in 60:
+			_tick(dt, 0.5, rig, dirs[1], true)
+		assert_float(-first * rig.omega * dt.road_radius).override_failure_message(
+				"%d -> %d: %.3f m/s the other way after 1 s" % [dirs[0], dirs[1],
+						-first * rig.omega * dt.road_radius]).is_greater(0.1)

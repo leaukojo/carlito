@@ -21,6 +21,11 @@ const TRAILER_AIR_DRAW := 0.75
 ## Seconds to charge a freshly coupled trailer: coupling costs ~3 bar of primary.
 const TRAILER_CHARGE_S := 8.0
 
+# --- the ECM's PTO mode (`VehicleSpec.pto_mode_rpm`) ----------------------------------------
+## Road speed (m/s) over which the PTO mode drops out: 2 mph, the PTO's maximum vehicle speed in a
+## Cummins ECM's interlocks (Navistar service bulletin; docs/sources.md § PTO power).
+const PTO_MODE_MAX_SPEED_MS := 0.894
+
 var air_primary := AIR_SPAWN_BAR    ## bar, contract 'air_primary' (SPN 1087)
 var air_secondary := AIR_SPAWN_BAR  ## bar, contract 'air_secondary' (SPN 1088)
 var retarder_state := 0             ## %, contract 'retarder_state' (magnitude; see the contract desc)
@@ -67,6 +72,13 @@ static func trailer_air_draw(coupled: bool, charge01: float) -> float:
 ## The MINIMUM of the two circuits: one healthy circuit must not mask a failing one.
 static func spring_brakes_applied(primary: float, secondary: float) -> bool:
 	return minf(primary, secondary) < AIR_SPRING_BRAKE_BAR
+
+
+## The PTO mode's interlocks the chassis reads (the same bulletin's): the PTO on, the park brake
+## applied, under PTO_MODE_MAX_SPEED_MS. The transmission's neutral interlock is the drivetrain's
+## (`Drivetrain.pto_set_rpm`), which holds the gear.
+static func pto_mode_engaged(pto_on: bool, handbrake01: float, speed_ms: float) -> bool:
+	return pto_on and handbrake01 > RefuseBody.PARK_BRAKE_MIN 			and absf(speed_ms) <= PTO_MODE_MAX_SPEED_MS
 
 
 ## True on the tick the gate goes false -> true: one driver notice per application.

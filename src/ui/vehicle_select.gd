@@ -604,7 +604,7 @@ static func protocols_for(family: String) -> String:
 ## Whether the family's contract takes a gear byte, the only thing a gearbox mode acts on (rule 4:
 ## read, not listed here). Plane and train still carry that byte on the wire (reverser N/D/R),
 ## but their own code only ever reads it through Drivetrain.is_drive/is_reverse, which collapse
-## every D1-D6 alike — so manual vs. automatic (literal byte vs. auto-shifted) changes nothing
+## every D1-D24 alike — so manual vs. automatic (literal byte vs. auto-shifted) changes nothing
 ## either can feel, and the picker would offer a choice with no effect (the plane is single-speed
 ## by construction: plane_spec.tres, test_plane).
 static func has_gearbox(family: String) -> bool:
@@ -628,7 +628,7 @@ func _spec_text(variant: String) -> String:
 		lines.append("Drive: %s" % _drive_text(spec))
 		lines.append("Mass: %d kg" % roundi(spec.mass))
 		if spec.has_engine:  # drone/train have no crank to quote
-			lines.append("Gears: %d   Redline: %d rpm" % [spec.gear_ratios.size(),
+			lines.append("Gears: %s   Redline: %d rpm" % [Drivetrain.gears_label(spec),
 					roundi(spec.redline_rpm)])
 	# Measured off the settled body, not a spec number, so an artic reports the combination's
 	# length, not its cab's.

@@ -21,15 +21,12 @@ var rudder_actual := 0            ## %, contract 'rudder_actual' (- = port/left)
 var trim := 0                      ## %, contract 'trim'
 var awa := 0.0                     ## deg, contract 'awa' (0 = dead ahead, - = from port)
 var aws := 0.0                     ## m/s, contract 'aws'
-var twd := 0.0                     ## deg, contract 'twd' (the bearing it comes FROM)
-var tws := 0.0                     ## m/s, contract 'tws'
 var stw := 0.0                     ## m/s, contract 'stw' (through the water, unsigned)
 var sog := 0.0                     ## m/s, contract 'sog' (over the ground, unsigned)
 var cog := 0.0                     ## deg, contract 'cog' (the bearing actually travelled)
 var current_set := 0.0             ## deg, contract 'current_set' (the bearing the tide flows TOWARD)
 var current_drift := 0.0           ## m/s, contract 'current_drift'
 var depth := 0.0                   ## m, contract 'depth' (DEPTH_INVALID = no bottom)
-var fuel_rate := 0.0               ## L/h, contract 'fuel_rate' (modeled, see fuel_rate_model())
 var oil_press := 0.0               ## kPa, contract 'oil_press' (modeled, see oil_press_model())
 var tank_level: Array = [100.0, 0.0, 50.0]  ## %, contract 'tank_level' (fresh/waste/live-well)
 var sail_angle := 0.0              ## deg, contract 'sail_angle' (boom off the centreline, signed like awa)
@@ -64,7 +61,8 @@ static func apparent_wind(velocity: Vector3, wind: Vector3, basis: Basis) -> Vec
 
 ## Any horizontal flow as (speed m/s, compass bearing deg it flows TOWARD). Flattened so a hull
 ## riding a wave does not read its heave as speed made good. Zero-length flow reads (0, 0).
-## `current_set` uses it as-is (a current is named by where it goes); only `true_wind` inverts.
+## `current_set` uses it as-is (a current is named by where it goes); only
+## `VehicleTelemetry.true_wind` inverts.
 static func flow_toward(v: Vector3) -> Vector2:
 	var flat := Vector3(v.x, 0.0, v.z)
 	var flow := flat.length()
@@ -80,16 +78,6 @@ static func sounding(has_bottom: bool, transducer_y: float, seabed_y: float) -> 
 	if not has_bottom:
 		return DEPTH_INVALID
 	return maxf(0.0, transducer_y - seabed_y)
-
-
-## True wind as (speed m/s, bearing deg it comes FROM). `WindField.direction_deg` is the heading
-## the wind blows TOWARD, so the marine inversion happens here (a wind is named by where it comes
-## from, a current by where it goes). Dead calm reads (0, 0).
-static func true_wind(wind: Vector3) -> Vector2:
-	var f := flow_toward(wind)
-	if f.x <= 0.0:
-		return Vector2.ZERO
-	return Vector2(f.x, fposmod(f.y + 180.0, 360.0))
 
 
 ## Modeled fuel burn rate, contract 'fuel_rate': idle burn plus a load term, zero with the key not

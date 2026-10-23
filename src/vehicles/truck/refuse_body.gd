@@ -11,7 +11,7 @@ extends RefCounted
 enum Cmd { IDLE = 0, LIFT = 1, DUMP = 2, LOWER = 3 }
 enum State { STOWED = 0, LIFTING = 1, DUMPING = 2, LOWERING = 3, INHIBITED = 4 }
 
-## Stowed to fully over the cab.
+## Stowed to fully over the cab, at the pump's rated flow (`pump_flow` 1).
 const ARM_TRAVEL_SEC := 3.0
 ## Arm travel ends, degrees about its own local X. Negative is up and back over the cab; stow is
 ## positive, below the authored pose. Measured by driving: the arm's origin is its AABB min corner,
@@ -29,8 +29,19 @@ const WALK_PACE_MS := 1.4
 ## Parking brake application the interlock demands (the local handbrake is the only one).
 const PARK_BRAKE_MIN := 0.5
 const POS_EPS := 0.001
+## The body pump's draw at the PTO shaft while the arm rises (kW). The pump is a 40 yd³ front
+## loader's, rated about 50 gpm at 1300 engine rpm against a 2500 psi relief (a city's bid spec:
+## sourced). Raising, it works at an ESTIMATED half the relief: 3.15 L/s at 8.6 MPa is 27 kW of
+## flow, over an ESTIMATED 0.85 pump efficiency. The same bid's 8000 lb container lifted an
+## estimated 4 m in half its 13-18 s cycle is ~22 kW, the same size. Lowering and holding run at a
+## load-sensing pump's standby (under 25 psi): 0. Citations: docs/sources.md § PTO power.
+const PUMP_KW := 32.0
+## The engine speed that flow is rated at: the pump's torque on the crank is PUMP_KW over it
+## (`VehicleTelemetry.pto_crank_torque`).
+const PUMP_RATED_ENGINE_RPM := 1300.0
 
 var pos := 0.0                ## 0..1 arm travel; the vehicle poses the mesh from this
+var raising := false          ## the arm rose on the last `step` (`pump_kw`)
 var state := State.STOWED     ## contract 'body_state'
 var hopper := 0.0             ## 0..100 %, contract 'hopper_load'
 var _dwell := 0.0             ## seconds into the tip at the top
@@ -71,10 +82,30 @@ static func hopper_mass_kg(hopper_pct: float) -> float:
 	return clampf(hopper_pct, 0.0, 100.0) / 100.0 * HOPPER_PAYLOAD_KG
 
 
+## The pump's flow over its rated flow at `engine_rpm`, 0..1: a fixed displacement's flow is its
+## speed's share of PUMP_RATED_ENGINE_RPM. The cap at 1 is an ESTIMATE, the body's flow control
+## holding the arm's rated speed past it (no body's figure found). The torque stays the pump's
+## displacement times its pressure, constant in speed (`VehicleTelemetry.pto_crank_torque`).
+static func pump_flow(engine_rpm: float) -> float:
+	return clampf(engine_rpm / PUMP_RATED_ENGINE_RPM, 0.0, 1.0)
+
+
+## The pump's draw at the PTO shaft this tick (kW): PUMP_KW while the arm rises, else 0.
+func pump_kw() -> float:
+	return PUMP_KW if raising else 0.0
+
+
 ## Advance the unit one tick; `inhibit` comes from is_inhibited(). LIFTING and LOWERING mean the
 ## mode is selected, not that the actuator is moving (there is no "Raised" state). Idle, Lower and
-## an unknown command byte all stow.
-func step(cmd: int, inhibit: bool, delta: float) -> void:
+## an unknown command byte all stow. The arm rises at the pump's `flow` (`pump_flow`); it lowers on
+## its own weight through the valve, at the rated rate whatever the pump turns.
+func step(cmd: int, inhibit: bool, delta: float, flow := 1.0) -> void:
+	var was := pos
+	_step_arm(cmd, inhibit, delta, clampf(flow, 0.0, 1.0))
+	raising = pos > was
+
+
+func _step_arm(cmd: int, inhibit: bool, delta: float, flow: float) -> void:
 	if inhibit:
 		# Frozen where it stands, not driven home: losing PTO mid-lift leaves the arm up.
 		state = State.INHIBITED
@@ -96,7 +127,7 @@ func step(cmd: int, inhibit: bool, delta: float) -> void:
 		_dwell = 0.0
 		_dumped = false
 		state = State.LIFTING
-		pos = move_toward(pos, 1.0, delta / ARM_TRAVEL_SEC)
+		pos = move_toward(pos, 1.0, delta * flow / ARM_TRAVEL_SEC)
 		return
 
 	# The latch clears on any other command: one Dump selection is one cycle.
@@ -105,7 +136,7 @@ func step(cmd: int, inhibit: bool, delta: float) -> void:
 
 	if cmd == Cmd.LIFT:
 		state = State.LIFTING
-		pos = move_toward(pos, 1.0, delta / ARM_TRAVEL_SEC)
+		pos = move_toward(pos, 1.0, delta * flow / ARM_TRAVEL_SEC)
 		return
 
 	pos = move_toward(pos, 0.0, delta / ARM_TRAVEL_SEC)
@@ -116,6 +147,7 @@ func step(cmd: int, inhibit: bool, delta: float) -> void:
 ## The load goes too: cargo is not a meter like the odometer and engine_hours.
 func reset() -> void:
 	pos = 0.0
+	raising = false
 	state = State.STOWED
 	hopper = 0.0
 	_dwell = 0.0

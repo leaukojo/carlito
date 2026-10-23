@@ -358,6 +358,38 @@ func test_the_semis_drive_axle_carries_the_fifth_wheel_load_without_bottoming() 
 	semi.free()
 
 
+func test_a_bobtail_unit_starts_higher_than_the_same_unit_coupled_to_the_box() -> void:
+	# The AMT's start gear (`ShiftPolicy.start_gear`, up to the units' D6): the highest whose floored
+	# launch locks the clutch within START_SLIP_S on the rig's mass and the drive axle's static grip,
+	# its own share plus the plate's (what `WheelDrive.static_drive_grip` reads off the sim at rest).
+	# On the flat the bobtail's 37 kN of drive-axle load holds D6 (D7 is engine-bound, 1.7 s); the
+	# box's 24 t behind ~66 kN of grip takes D3 (D4 2.1 s); on 8 % coupled, D1.
+	var box := _trailer(BOX)
+	var box_spec: VehicleSpec = box.get("spec")
+	var plate_kg: float = box_spec.mass * float(box.call("kingpin_share"))
+	box.free()
+	for scene_path in [CatalogScript.scene_of("semi"), CatalogScript.scene_of("semi-conventional")]:
+		var unit := (load(scene_path) as PackedScene).instantiate() as Node3D
+		var spec: VehicleSpec = unit.get("spec")
+		var axles := _tractor_axles(spec)
+		var kingpin_z: float = (unit.get_node("FifthWheel/Kingpin") as Node3D).position.z
+		unit.free()
+		var own_rear_kg := spec.mass * Artic.rear_axle_share(spec.center_of_mass.z, axles.x, axles.y)
+		var plate_rear_kg := plate_kg * Artic.rear_axle_share(kingpin_z, axles.x, axles.y)
+		var gd := spec.ground_drive
+		var picks := []
+		for case: Array in [[spec.mass, own_rear_kg, 0.0], [spec.mass + box_spec.mass,
+				own_rear_kg + plate_rear_kg, 0.0], [spec.mass + box_spec.mass,
+				own_rear_kg + plate_rear_kg, 0.08]]:
+			var mass: float = case[0]
+			var wheel_n: float = case[1] * G / 2.0
+			var grip := 2.0 * BrakeSizing.wheel_grip(spec, wheel_n)
+			var road: float = (gd.rolling_resistance + case[2]) * mass * G * gd.drive_radius()
+			picks.append(ShiftPolicy.start_gear(spec, road, 1.0, mass, grip))
+		assert_array(picks).override_failure_message("%s starts %s (bobtail, box, box on 8 %%)"
+				% [scene_path, picks]).is_equal([6, 3, 1])
+
+
 # --- the catalog, the cycle, and what the scenes declare ----------------------
 
 func test_the_cycle_includes_bobtail_and_wraps() -> void:
