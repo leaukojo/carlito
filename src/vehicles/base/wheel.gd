@@ -190,11 +190,12 @@ var _stick := Vector2.ZERO
 ## equivalent mass, which a spring would ring at 60 Hz; and an unbraked wheel should roll down a
 ## grade.
 var _spin_held := false
-## The body's velocity at its centre of mass last tick, valid only while this wheel was on the
-## ground: its change is the next step's predictor of how far the road moves under the wheel
-## (`_integrate_spin`). The centre of mass, not the contact: the contact also carries the pitch the
-## tyre's own force rocks in one tick, and following that rings the body at the tick rate.
-var _prev_body_vel := Vector3.ZERO
+## The body's velocity at its centre of mass last tick along last tick's `forward` (m/s), valid only
+## while this wheel was on the ground: its change is the next step's predictor of how far the road
+## moves under the wheel (`road_change`). The centre of mass, not the contact: the contact also
+## carries the pitch the tyre's own force rocks in one tick, and following that rings the body at the
+## tick rate.
+var _prev_com_long := 0.0
 var _prev_vel_valid := false
 ## Last tick's `compression`, latched by `latch_bar` for the whole body before any wheel ticks, so
 ## both wheels of an axle read the same snapshot. See `anti_roll_partner`.
@@ -467,11 +468,9 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 			long_mass, delta)
 	body.apply_force(forward * force_roll, contact_point - body.global_position)
 
-	# Faded out from twice the slip floor down to it: below the floor slip is read against the floor,
-	# the tyre's slope sits at the one-tick cap, and following the body rings it at the tick rate.
-	var dv_long := (body.linear_velocity - _prev_body_vel).dot(forward) if _prev_vel_valid else 0.0
-	dv_long *= clampf(absf(v_long) / LOW_SPEED_FLOOR - 1.0, 0.0, 1.0)
-	_prev_body_vel = body.linear_velocity
+	var dv_long := road_change(body.linear_velocity, forward, _prev_com_long, v_long) \
+			if _prev_vel_valid else 0.0
+	_prev_com_long = body.linear_velocity.dot(forward)
 	_prev_vel_valid = true
 	_integrate_spin(drive_torque, -f.x * wheel_radius, brake_torque, delta, slip_vel, v_long, abs_slip,
 			dv_long, tcs_slip, tcs_drive, floor_vel)
@@ -824,6 +823,19 @@ static func slip_floor_for(budget: float, mass: float, grip_curve: PackedVector2
 		if p.x > 0.0:
 			rise = maxf(rise, minf(p.y, 1.0) / p.x)
 	return maxf(LOW_SPEED_FLOOR, budget * rise * delta / mass)
+
+
+## Pure: the road's change along the wheel over the last tick (m/s), the spin step's predictor for
+## this one: the centre of mass's velocity `com_vel` along this tick's `forward`, less last tick's
+## along last tick's (`prev_com_long`). Both factors move, so a steady turn, whose acceleration is
+## all the path's turning, feeds nothing; `Δv · forward` alone would feed a wheel at angle β to the
+## path `a sin β`, and spin it past the road. Faded out from twice the slip floor down to it, by
+## `v_long`: below the floor slip is read against the floor, the tyre's slope sits at the one-tick
+## cap, and following the body rings it at the tick rate.
+static func road_change(com_vel: Vector3, forward: Vector3, prev_com_long: float,
+		v_long: float) -> float:
+	return (com_vel.dot(forward) - prev_com_long) \
+			* clampf(absf(v_long) / LOW_SPEED_FLOOR - 1.0, 0.0, 1.0)
 
 
 ## Wheel spin from drive plus road-reaction torque, semi-implicit (an explicit step rings at the

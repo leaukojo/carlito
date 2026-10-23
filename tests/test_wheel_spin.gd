@@ -550,6 +550,48 @@ func test_a_wheel_on_a_decelerating_body_pays_only_its_own_inertia() -> void:
 	assert_float(road).is_equal_approx(brake - spec.wheel_inertia * a / spec.wheel_radius, 1.0)
 
 
+func test_the_road_change_is_the_body_s_along_the_wheel_faded_at_a_crawl() -> void:
+	# Straight, slowing at 9 m/s^2: the predictor the decelerating-body case above is fed.
+	var a := 9.0
+	var v := 30.0
+	assert_float(WheelScript.road_change(Vector3.FORWARD * (v - a * TICK), Vector3.FORWARD, v, v)) \
+			.is_equal_approx(-a * TICK, 1e-5)
+	# Twice the slip floor and up it is followed whole; at the floor and under, not at all.
+	var floor_v := WheelScript.LOW_SPEED_FLOOR
+	assert_float(WheelScript.road_change(Vector3.FORWARD * 0.9, Vector3.FORWARD, 1.0, floor_v)) \
+			.is_equal(0.0)
+	assert_float(WheelScript.road_change(Vector3.FORWARD * 0.9, Vector3.FORWARD, 1.0, 1.5 * floor_v)) \
+			.is_equal_approx(-0.05, 1e-5)
+
+
+func test_a_free_wheel_in_a_steady_turn_carries_no_drive() -> void:
+	# 20 m/s round a 1.2 g turn, the wheel 5 deg off the path and yawing with it: the road speed
+	# along the wheel never changes. Read as `Δv · forward` alone, the turn's acceleration feeds the
+	# wheel `a sin β` (~1 m/s^2), and it settles one tick of that ahead of the road: ~130 N·m of
+	# push on this tyre. Started 5 cm/s off the road so the tyre's stiffness is in the step.
+	var spec := _spec()
+	var c := 20000.0
+	var v := 20.0
+	var yaw_rate := 1.2 * 9.81 / v
+	var beta := deg_to_rad(5.0)
+	var v_long := v * cos(beta)
+	var w := _wheel()
+	w.omega = (v_long + 0.05) / spec.wheel_radius
+	var prev_long := v_long
+	var road := 0.0
+	for i in 120:
+		var heading := yaw_rate * TICK * (i + 1)
+		var com_vel := Vector3.FORWARD.rotated(Vector3.UP, heading) * v
+		var forward := Vector3.FORWARD.rotated(Vector3.UP, heading + beta)
+		var dv := WheelScript.road_change(com_vel, forward, prev_long, v_long)
+		prev_long = com_vel.dot(forward)
+		var slip_vel := w.omega * spec.wheel_radius - v_long
+		road = -c * slip_vel * spec.wheel_radius
+		w._integrate_spin(0.0, road, 0.0, TICK, slip_vel, v_long, 0.0, dv)
+	assert_float(absf(road)).is_less(1.0)
+	assert_float(w.omega).is_equal_approx(v_long / spec.wheel_radius, 1e-3)
+
+
 func test_abs_holds_an_over_strong_brake_at_its_slip() -> void:
 	# A brake far past what the wheel can stop in a tick: without ABS the wheel locks in one step,
 	# with it the wheel stops at the spin that leaves exactly ABS_SLIP of braking slip.

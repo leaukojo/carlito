@@ -15,9 +15,10 @@ extends Node3D
 ## reaching it), so its loop gain is the same on every map. It climbs to full fuel whenever the body
 ## cannot hold the crawl, so a stuck trial is a floored one: the drive a player holding the key
 ## gets, at the least pedal that delivers it. `tc` adds a second limit, a driver feathering the
-## pedal to hold the WORST driven wheel at the grip curve's 0.12 peak (`tc_pedal.gd`; unlike
-## measure_grade.gd's `tc`, on the worst wheel, not the rear axle's mean): it takes throttle
-## sensitivity out of the answer, and what is left is the differentials' own ceiling.
+## fuel (sent through the same inverse) to hold the WORST driven wheel at the grip curve's 0.12
+## peak (`tc_pedal.gd`; unlike measure_grade.gd's `tc`, on the worst wheel, not the rear axle's
+## mean): it takes throttle sensitivity out of the answer, and what is left is the differentials'
+## own ceiling.
 ##
 ## Per trial: CROSSED (every wheel past the patch), STUCK (under STUCK_PROGRESS of forward progress
 ## in STUCK_S), OFF LANE, or TIMEOUT; the time and mean speed over the patch; seconds of chassis
@@ -36,6 +37,11 @@ extends Node3D
 ##   godot --headless --path . res://tools/measure_rough.tscn -- suv lane=mud patch=bumps_20 verbose
 ##   godot --headless --path . res://tools/measure_rough.tscn -- baseline tc
 ##   godot --headless --path . res://tools/measure_rough.tscn -- pickup lane=mud tyre=mud
+##   godot --headless --path . res://tools/measure_rough.tscn -- garbage-truck rollsteer=0,0.2 angdamp=0
+##
+## `rollsteer=<front>,<rear>` (deg/deg) and `angdamp=<1/s>` are measure_vehicles.gd's probes, applied
+## by the same `MeasureRig` calls: a rough-ground cell attributed to roll steer or to the body's
+## angular damping without editing its spec.
 ##
 ## `baseline` runs the set `docs/vehicle_measurements.md` § Rough and soft ground records: suv, tractor-kenney in
 ## 2WD / MFWD / MFWD + diff lock, sedan and pickup. Add `--fixed-fps 60` BEFORE `--` to run faster
@@ -110,6 +116,12 @@ var _verbose := false
 var _doc := false
 ## `tyre=<id>`: the `TyreCatalog` class fitted on every config's body ("": its stock).
 var _tyre := ""
+## `rollsteer=<front>,<rear>`: every config's roll-steer coefficients (deg/deg), in memory
+## (`MeasureRig.apply_roll_steer`; NAN: the spec's).
+var _roll_steer := Vector2(NAN, NAN)
+## `angdamp=<1/s>`: every config's angular damping REPLACEd, a coupled trailer's too
+## (`MeasureRig.apply_angdamp`; NAN: as the body sets it).
+var _angdamp := NAN
 ## `course=<id>`: the challenge driven instead of the lanes (null: the lanes).
 var _course: ChallengeDef
 var _course_goal: ZoneShape
@@ -127,7 +139,7 @@ var _phase: int = Ph.DONE
 var _t := 0.0
 var _fuel := 0.0            ## speed governor's fuel command, 0..1
 var _pedal := 0.0           ## the pedal it takes (`PedalMap.pedal_for`), 0..1
-var _tc_pedal := 1.0        ## slip limiter's pedal (`tc`), 0..1; the driver presses the lower
+var _tc_fuel := 1.0         ## slip limiter's fuel (`tc`), 0..1; the driver presses the lower
 var _best := 0.0            ## furthest forward progress so far, m
 var _best_t := 0.0          ## trial time `_best` last grew by STUCK_PROGRESS
 var _trace_t := 0.0
@@ -154,6 +166,8 @@ func _ready() -> void:
 	if _tyre == "?":
 		get_tree().quit(1)
 		return
+	_roll_steer = MeasureRig.roll_steer_flag(args)
+	_angdamp = MeasureRig.angdamp_flag(args)
 	if which.begins_with("course="):
 		if not _load_course(which.substr(7)):
 			get_tree().quit(1)
@@ -170,8 +184,9 @@ func _ready() -> void:
 		_next_config()
 		return
 	if which == "doc=rough":
-		if _tyre != "":
-			printerr("tyre= changes the figures doc=rough tabulates: run it per body")
+		if _tyre != "" or not is_nan(_roll_steer.x) or not is_nan(_angdamp):
+			printerr("tyre= / rollsteer= / angdamp= change the figures doc=rough tabulates: run them"
+					+ " per body")
 			get_tree().quit(1)
 			return
 		_doc = true
@@ -270,6 +285,7 @@ func _next_config() -> void:
 	elif _car is TractorVehicle:
 		_car.call(&"set_attachment", AttachmentCatalog.NONE)  ## bare: an implement's weight moves the axles
 	var tyre := MeasureRig.fit_tyre(_car, _tyre)
+	MeasureRig.apply_roll_steer(_car, _roll_steer)
 	_car.contact_monitor = true
 	_car.max_contacts_reported = 8
 	_trials.clear()
@@ -278,8 +294,8 @@ func _next_config() -> void:
 	for lane in _lanes:
 		for patch in _patches:
 			_trials.append(Vector2i(lane, patch))
-	print("\n--- %s: %s, %.0f kg, tyre %s ---" % [_config_label(_config), _drive_label(), _car.mass,
-			tyre])
+	print("\n--- %s: %s, %.0f kg, tyre %s%s ---" % [_config_label(_config), _drive_label(),
+			_car.mass, tyre, _probe_label()])
 	_next_trial()
 
 
@@ -304,7 +320,7 @@ func _next_trial() -> void:
 	_t = 0.0
 	_fuel = 0.0
 	_pedal = 0.0
-	_tc_pedal = 1.0
+	_tc_fuel = 1.0
 	_best = 0.0
 	_best_t = 0.0
 	_trace_t = 0.0
@@ -332,6 +348,7 @@ func _drive(accel_pct: float, brake_pct: float, steer_pct: float) -> void:
 func _physics_process(delta: float) -> void:
 	if _car == null or _phase == Ph.DONE:
 		return
+	MeasureRig.apply_angdamp(_car, _angdamp)
 	_t += delta
 	if _phase == Ph.SETTLE:
 		if _t >= SETTLE_S:
@@ -347,12 +364,12 @@ func _physics_process(delta: float) -> void:
 			-1.0, 1.0)
 	_fuel = clampf(_fuel + (_crawl - speed) * FUEL_GAIN * delta, 0.0, 1.0)
 	if _tc:
-		_tc_pedal = TcPedal.step(_tc_pedal, _car.drive.wheels, delta, _car.drivetrain)
+		_tc_fuel = TcPedal.step(_tc_fuel, _car.drive.wheels, delta, _car.drivetrain)
 	var brake := clampf((speed - _crawl - BRAKE_OVER) * BRAKE_GAIN, 0.0, 1.0)
 	if brake > 0.0:
 		_fuel = 0.0
-	_pedal = PedalMap.pedal_for(_car.spec, _fuel, _car.drivetrain.rpm)
-	_drive(minf(_pedal, _tc_pedal) * 100.0, brake * 100.0, steer * 100.0)
+	_pedal = PedalMap.pedal_for(_car.spec, minf(_fuel, _tc_fuel), _car.drivetrain.rpm)
+	_drive(_pedal * 100.0, brake * 100.0, steer * 100.0)
 
 	var progress := (xform.origin - _line_o).dot(_line_dir)
 	if progress > _best + STUCK_PROGRESS:
@@ -432,7 +449,7 @@ func _sample(speed: float, delta: float) -> void:
 	# command floored, or with `tc` holding the pedal back because the worst wheel is at the peak. A
 	# short tick with the fuel still climbing is the crawl controller recovering from a lift, not
 	# traction.
-	var demanding := _fuel >= FUEL_FLOORED or (_tc and _tc_pedal < _pedal)
+	var demanding := _fuel >= FUEL_FLOORED or (_tc and _tc_fuel < _fuel)
 	if speed < _crawl - SHORT_OF_CRAWL and demanding and cap > 0.0:
 		_stats["demand_ticks"] += 1
 		_stats["use_sum"] += fx / cap
@@ -513,7 +530,7 @@ func _trace(delta: float) -> void:
 		return
 	_trace_t = 0.0
 	var line := "      t %5.2f  z %7.2f  v %4.2f  pedal %4.2f  tc %4.2f  thr %4.2f  gear %d  rpm %5.0f c %d |" % [
-			_t, _car.global_position.z, _car.linear_velocity.length(), _pedal, _tc_pedal,
+			_t, _car.global_position.z, _car.linear_velocity.length(), _pedal, _tc_fuel,
 			_car.drivetrain.applied_throttle, _car.telemetry.gear_byte, _car.telemetry.rpm,
 			_car.drivetrain.coupling_state]
 	for w in _car.drive.wheels:
@@ -617,6 +634,16 @@ func _drive_label() -> String:
 	if gd.rear_diff_lockable:
 		label += ", rear diff %s" % ("locked" if bool(_config["diff"]) else "open")
 	return label + _diff_label(gd)
+
+
+## The probes on the body, e.g. ", roll steer 0.00 / 0.20 deg/deg (not the spec's)"; empty with none.
+func _probe_label() -> String:
+	var label := ""
+	if not is_nan(_roll_steer.x):
+		label += ", roll steer %.2f / %.2f deg/deg (not the spec's)" % [_roll_steer.x, _roll_steer.y]
+	if not is_nan(_angdamp):
+		label += ", angular damping %.2f /s (not the body's)" % _angdamp
+	return label
 
 
 ## The declared differentials that are not open (`GroundDriveSpec` § Driveline), e.g.

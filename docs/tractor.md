@@ -204,21 +204,21 @@ speed, the overdrive Renius asks of a CVT. `Drivetrain.is_cvt` gates it; `gear_r
   off and in N or P; the hydrostatic relief (`cvt_max_axle_torque`, `mass g r`: peak gross traction
   about the ballasted weight) is its only slip, and the powershift's brakes hold it.
 - **The controller** (`Drivetrain.cvt_ratio_step`):
-  - The engine runs the all-speed governor at the demand, the higher of the pedal and the hand
-    throttle, exactly as on the powershift.
+  - The engine runs the all-speed governor at the driver's demand while the hand throttle is set or
+    the PTO engaged; in pedal mode, engine-speed management (`Drivetrain.cvt_managed_setting`,
+    Deere's automatic mode) lowers it in proportion to the load (the power asked over the limit
+    speed's), from the setting whose full-fuel end is the limit speed to `CVT_LIGHT_LOAD_SHARE` of
+    rated, never under what the top ratio needs for the command nor past the pedal's own setting,
+    and falling no faster than the ratio can follow (`cvt_setting_step`).
   - The foot pedal commands ground speed, its share of the road-speed limit (`CVT_REVERSE_KMH`
-    back), and the ratio holds that speed off the crank's own speed while the engine droops on its
-    line. A CVT governs road speed through its ratio, so its fuel takes no road-speed fade: a speed
+    back). A CVT governs road speed through its ratio, so its fuel takes no road-speed fade: a speed
     hold off the crank would read the fade as overload and pull the box down to its limit speed.
-  - The ratio changes at no more than `cvt_accel_ms2` of ground acceleration at the crank's speed
-    (JCB's "high" band for a CVT tractor), and never more than a step past the wheels' own
-    (pressure cut-off): against wheels that do not follow, it holds rather than winding up and
-    limit-cycling with the relief.
-  - Limit-load control: under the governor line's full-fuel end (never over the curve's peak
-    power) the ratio gives way over `CVT_LOAD_TAU_S`, so the crank holds its speed and the ground
-    speed gives.
-  - The hand throttle alone sets engine speed and never pulls away; the foot brake brings it to
-    standstill (AutoPowr's AutoClutch).
+  - `cvt_accel_ms2` (JCB's "high" band) moves a ground-speed reference; the ratio turns the crank's
+    speed into it, so a crank that droops or lifts moves no ground speed. The ratio never grows a
+    step past the wheels' own (pressure cut-off), so it never winds up against held wheels.
+  - Limit-load control: under the governor line's full-fuel end (never over peak power) the ratio
+    gives way over `CVT_LOAD_TAU_S`: the crank holds its speed, the ground speed gives.
+  - The hand throttle never pulls away alone; the foot brake stops it (AutoPowr's AutoClutch).
 - **Active standstill** at a ratio of 0 is the park pawl's path at the relief
   (`Drivetrain.standstill_hold`, `WheelDrive.standstill_lock`): the transmission holds its output,
   with the lock's stiction, so this variant needs no brake hold and retires the STANDSTILL

@@ -1,40 +1,44 @@
 extends RefCounted
-## The measure tools' slip-limiting driver (`tc`): an integral controller feathering the pedal to
-## hold the WORST driven wheel at the grip curve's peak. It takes throttle sensitivity out of an
+## The measure tools' slip-limiting driver (`tc`): an integral controller feathering the delivered
+## fuel to hold the WORST driven wheel at the grip curve's peak. Callers send it through the
+## pedal map's inverse (`PedalMap.pedal_for`), as `measure_grade.gd`'s `_tc_fuel`, so one gain
+## serves every map: on a governed tractor the pedal is a speed setting, which cuts no fuel until
+## the setting reaches the lugging crank. It takes throttle sensitivity out of an
 ## answer, so what is left is the vehicle's own ceiling. `measure_grade.gd`'s `tc` is a different
 ## thing (a search for the force-max slip) and does not use this.
 ##
-## The integral runs on the LOGS of pedal and slip: under the peak, slip goes roughly as drive
+## The integral runs on the LOGS of fuel and slip: under the peak, slip goes roughly as drive
 ## torque, so one gain closes the loop at the same rate whatever the gear, speed or load. A linear
 ## integral on the slip error would climb back from a cut slowly (its error cannot pass the 0.12
 ## target) and slam to zero on a spin flash: about a second of a launch under the peak.
 
 const TARGET_SLIP := 0.12   ## the shipped grip curves all peak here
-const GAIN := 8.0           ## 1/s: log pedal per second per unit of log slip error
+const GAIN := 8.0           ## 1/s: log fuel per second per unit of log slip error
 ## Over the target the slip the integral reads is clamped to this factor of TARGET_SLIP, so a spin
-## flash cuts the pedal at most `exp(ln(4) * GAIN * delta)` (x0.83 at 60 Hz) a tick.
+## flash cuts the fuel at most `exp(ln(4) * GAIN * delta)` (x0.83 at 60 Hz) a tick.
 const ERROR_SPAN := 4.0
-## Under it, to this one: the climb is at most x1.055 a tick, 0.02 to full pedal in ~1.2 s. A wheel
+## Under it, to this one: the climb is at most x1.055 a tick, 0.02 to full fuel in ~1.2 s. A wheel
 ## held under the peak reads almost no slip until the drive passes the tyre's grip, then flashes in
 ## two or three ticks, and behind a locked heavy crank (the 2WD tractor in D1 on mud, 2223 kg·m² at
 ## the axle) no fuel cut pulls it back for ~0.5 s. Climbing at x1.2, the driver cycled there
-## between 0.02 and full pedal about once a second and never crossed flat mud.
+## between 0.02 and full fuel about once a second and never crossed flat mud.
 const ERROR_SPAN_UNDER := 1.5
-const MIN_PEDAL := 0.02     ## keeps the multiplicative step off 0, where it would stick
+const MIN_FUEL := 0.02      ## keeps the multiplicative step off 0, where it would stick
 
 
-## The tc pedal (MIN_PEDAL..1) for the next tick, from this tick's and the wheels' slip. Its
+## The tc fuel (MIN_FUEL..1) for the next tick, from this tick's and the wheels' slip. Its
 ## integral climbs only while the drive reaches the wheels (`bite_pending` false): a wheel reads no
 ## slip while the coupling withholds the pedal, and an integral climbing through that winds up to
-## full pedal, then flashes the tyres the tick the clutch bites.
-static func step(pedal: float, wheels: Array[RayWheel], delta: float,
+## full fuel, then flashes the tyres the tick the clutch bites.
+static func step(fuel: float, wheels: Array[RayWheel], delta: float,
 		drivetrain: Drivetrain = null) -> float:
 	var slip := clampf(worst_driven_slip(wheels), TARGET_SLIP / ERROR_SPAN_UNDER,
 			TARGET_SLIP * ERROR_SPAN)
-	var next := pedal * exp(log(TARGET_SLIP / slip) * GAIN * delta)
-	if drivetrain != null and bite_pending(drivetrain, pedal):
-		next = minf(next, pedal)
-	return clampf(next, MIN_PEDAL, 1.0)
+	var next := fuel * exp(log(TARGET_SLIP / slip) * GAIN * delta)
+	if drivetrain != null and bite_pending(drivetrain,
+			PedalMap.pedal_for(drivetrain.spec, fuel, drivetrain.rpm)):
+		next = minf(next, fuel)
+	return clampf(next, MIN_FUEL, 1.0)
 
 
 ## The coupling still withholds what `pedal` asks: a launch ramp short of its rating, or a friction

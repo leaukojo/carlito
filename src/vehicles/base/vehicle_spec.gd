@@ -125,8 +125,8 @@ enum Coupling { CONVERTER, CLUTCH }
 ## over input), ascending; the ratio is drivetrain state (`Drivetrain.cvt_i`) and `gear_ratios` stays
 ## empty. Empty = a stepped box. Sources: docs/tractor.md § The CVT tractor.
 @export var cvt_range_tops: PackedFloat32Array
-## The CVT controller's ratio rate (`Drivetrain.cvt_ratio_step`), as the ground acceleration (m/s²)
-## it lets the ratio change at the crank's speed.
+## The CVT controller's rate (`Drivetrain.cvt_ratio_step`): the ground acceleration (m/s²) at which
+## its ground-speed reference moves toward the pedal's command.
 @export var cvt_accel_ms2 := 0.0
 ## The CVT's output torque bound at the drive axle (N·m): its hydrostatic pressure relief, declared
 ## hardware like the brakes. What active standstill holds and the foot brake is sized against

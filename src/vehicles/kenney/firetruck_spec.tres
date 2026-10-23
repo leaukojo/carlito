@@ -18,6 +18,7 @@ rest_length = 0.32
 spring_rate = 400000.0
 damper_bump = 31000.0
 damper_rebound = 41000.0
+roll_steer_rear = 0.1
 anti_squat_slope = 0.193
 max_suspension_force = 120000.0
 tyre = ExtResource("2_sq2h0")

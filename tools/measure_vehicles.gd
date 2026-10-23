@@ -65,6 +65,15 @@ const CORNER_SMOOTH_S := 0.25      ## exponential smoothing on the lateral-g rea
 ## Past this slip angle the body is sliding, not cornering: `v * yaw_rate` there measures a spin,
 ## not a grip limit, so the peak stops being sampled and the report says the gate tripped.
 const CORNER_MAX_SLIP_ANGLE := 0.5  ## |v_lat| / |v|
+## An axle's ellipse share (`_axle_saturation`) that reads as saturated: the pass's peaks sit at
+## 0.98-1.00.
+const CORNER_SATURATED := 0.98
+## Both of `BalanceModel.corner_limit`'s shares under this at its peak: the sweep ended on something
+## other than a tyre (`end`), and the pass prints the call as unsaturated.
+const CORNER_UNSATURATED := 0.95
+## The ramp's opening the first-saturation reading skips: the PI's settle off the run-up's full
+## pedal, which saturates a driven axle on its drive alone at ~0 g.
+const CORNER_FIRST_AFTER_S := 1.0
 ## The speed hold is a PI pedal, never bang-bang: full-pedal pulses through a torque-biasing diff
 ## send the whole engine to the slower wheel or axle, and the pass then reads power-on oversteer
 ## instead of grip (`race` spun at a reported 1.62 g; the SUV's rear saturated first).
@@ -542,7 +551,7 @@ var _patch: MeasureRig.GripPatch
 var _tc := false
 ## This accel pass is slip-limited: `tc`, or doc=accel's second run of a body.
 var _tc_run := false
-var _tc_pedal := 1.0
+var _tc_fuel := 1.0  ## the delivered fuel `tc` holds, sent through `PedalMap.pedal_for`
 var _loss := {}     ## launch-breakdown seconds so far this pass (`_sample_launch`)
 ## The limiter and shift cuts that shaped the car's last tick (`_latch_cuts`), and what judging the
 ## shift cut needs from the tick before: the gear, a shift cut still pending.
@@ -588,11 +597,11 @@ var _step_speeds: Array[float] = []
 ## `ackermann=<0..1>`: the Ackermann fraction (`GroundDriveSpec.ackermann`) overridden the same way
 ## (NAN: the spec's).
 var _ackermann := NAN
-## `rollsteer=<front>,<rear>`: the roll-steer coefficients (deg/deg,
-## `GroundDriveSpec.roll_steer_front` / `_rear`) overridden the same way (NAN: the spec's).
+## `rollsteer=<front>,<rear>`: the roll-steer coefficients overridden the same way
+## (`MeasureRig.apply_roll_steer`; NAN: the spec's).
 var _roll_steer := Vector2(NAN, NAN)
 ## `angdamp=<1/s>`: the body's angular damping REPLACEd with this, and every towed body's as it
-## couples (`_apply_angdamp`); 0 = none (NAN: as the body sets it).
+## couples (`MeasureRig.apply_angdamp`); 0 = none (NAN: as the body sets it).
 var _angdamp := NAN
 ## `pedal=<0..1>`: the accel pass held at this pedal instead of floored (it implies the trace's
 ## settle and gates).
@@ -692,14 +701,35 @@ var _corner_speed := CORNER_SPEED
 var _corner_ramp_t := 0.0
 var _corner_lat := 0.0         ## smoothed lateral acceleration, m/s^2
 var _corner_peak := 0.0
-var _corner_front := 0.0       ## front-axle saturation at the peak
+var _corner_front := 0.0       ## front-axle saturation at the peak (`_corner_first`'s fallback)
 var _corner_rear := 0.0
 var _corner_slid := false      ## the slip-angle gate tripped at some point
 var _corner_roll := 0.0        ## chassis roll (deg) at the lateral-g peak
+## The tyres' summed side force across the body over the mass (m/s^2), under the `v r` smoothing:
+## what the springs carry, so what the roll answers, where `v r` also counts a yaw swing past an
+## axle's saturation. `_corner_peak_tyre` is it at the peak.
+var _corner_tyre := 0.0
+var _corner_peak_tyre := 0.0
 var _corner_drive := 0.0       ## the tyres' summed longitudinal force (N) at the peak
+## The first tick, both axles grounded and the body not yet tipping (`_corner_tip`), an axle's share
+## reaches CORNER_SATURATED: `axle` (the one that did), both shares, the smoothed g and that tick's
+## (`g_tick`), the mean steer, the body slip `beta` (rad, + = the velocity inside the nose), the
+## drive per axle (N), the horizontal `speed` and its rate `accel`, the path's g, the contacts per
+## axle `loaded` / `grounded` and `t` into the ramp then; empty until one does.
+var _corner_first := {}
 var _corner_xfer0 := Vector2.ZERO  ## `_axle_transfer` as the lock starts winding on
 var _corner_lltd := NAN        ## front share of the lateral load transfer at the peak (`_lltd`)
 var _corner_lifted := 0        ## most wheels off the ground in any one tick of the pass
+## Most wheels touching at no load in any one tick: an inner corner the bar has unloaded while its
+## ray still reaches the road (`RayWheel.bar_force` stays on until the ray misses).
+var _corner_unloaded := 0
+## The first tick both axles carry an inner corner at no load, touching or not (the runtime's tip
+## onset, `BalanceModel.tip_g`'s): `g_tick` (`v r`), `g` (smoothed), `path` (`acc_lat`), the roll
+## (deg) and its rate (deg/s), `t` (s into the ramp); empty until one does.
+var _corner_tip := {}
+var _corner_prev_speed := NAN  ## last tick's horizontal speed, for the latch's dv/dt
+## `ramp=<s>`: the wind-on from zero to full lock (CORNER_RAMP_S), a probe of the pass's lag.
+var _corner_ramp_s := CORNER_RAMP_S
 var _corner_pedal_i := 0.0     ## integral half of the PI speed hold
 ## `telemetry.acc_lat` (the path's own lateral acceleration) under the same smoothing, and its peak
 ## below the slip-angle gate. `v * yaw_rate` also counts the yaw a body overshoots into a slip
@@ -788,12 +818,8 @@ func _ready() -> void:
 				_step_speeds.append(float(kmh))
 		elif flag.begins_with("ackermann="):
 			_ackermann = clampf(float(flag.substr(10)), 0.0, 1.0)
-		elif flag.begins_with("rollsteer="):
-			var pair := flag.substr(10).split(",")
-			_roll_steer = Vector2(float(pair[0]) if pair.size() > 0 else 0.0,
-					float(pair[1]) if pair.size() > 1 else 0.0)
-		elif flag.begins_with("angdamp="):
-			_angdamp = maxf(float(flag.substr(8)), 0.0)
+		elif flag.begins_with("ramp="):
+			_corner_ramp_s = maxf(float(flag.substr(5)), 1.0)
 		elif flag.begins_with("pedal="):
 			_pedal = clampf(float(flag.substr(6)), 0.05, 1.0)
 		elif flag == "pulse" or flag.begins_with("pulse="):
@@ -814,6 +840,8 @@ func _ready() -> void:
 				printerr("gear=%s: expected a drive byte 1-%d" % [flag.substr(5), Drivetrain.TOP_GEAR])
 				get_tree().quit(1)
 				return
+	_roll_steer = MeasureRig.roll_steer_flag(flags)
+	_angdamp = MeasureRig.angdamp_flag(flags)
 	_tyre = MeasureRig.tyre_flag(flags)
 	if _tyre == "?":
 		get_tree().quit(1)
@@ -874,11 +902,12 @@ func _ready() -> void:
 		if _trace or _notc or _held_gear > 0 or not is_nan(_engine_inertia) \
 				or not is_nan(_rear_lat_grip) or not is_nan(_bar_rear) or not is_nan(_cornering_peak) \
 				or not is_nan(_ackermann) or not is_nan(_roll_steer.x) or not is_nan(_angdamp) \
+				or _corner_ramp_s != CORNER_RAMP_S \
 				or _circle or _hitch_pass or _plough_pass or _kerb or _arm_pass or _cruise_probe() \
 				or _tyre != "" or _surface >= 0 or not _step_speeds.is_empty() or _xwind or _headtail \
 				or _wind_base != Vector3.ZERO:
 			printerr("trace / notc / gear= / j= / rear_lat_grip= / bar_rear= / cornering_peak= / speeds= /"
-					+ " ackermann= / rollsteer= / angdamp= / circle / hitch / plough / kerb /"
+					+ " ackermann= / rollsteer= / angdamp= / ramp= / circle / hitch / plough / kerb /"
 					+ " pedal= / cruise /"
 					+ " kickdown / pulse / xwind / headtail / wind= / tyre= / surface= change the passes a"
 					+ " doc preset tabulates:"
@@ -1059,13 +1088,9 @@ func _next_vehicle() -> void:
 		_car.spec = _car.spec.duplicate()
 		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
 		_car.spec.ground_drive.ackermann = _ackermann
-	if not is_nan(_roll_steer.x):
-		_car.spec = _car.spec.duplicate()
-		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
-		_car.spec.ground_drive.roll_steer_front = _roll_steer.x
-		_car.spec.ground_drive.roll_steer_rear = _roll_steer.y
 	_current["abs"] = _car.spec.ground_drive.abs_equipped
 	add_child(_car)
+	MeasureRig.apply_roll_steer(_car, _roll_steer)
 	var tyre := MeasureRig.fit_tyre(_car, _tyre)
 	if _tyre != "" or _surface >= 0:
 		_current["tyre"] = tyre
@@ -1162,7 +1187,7 @@ func _reset_pass(phase: Phase) -> void:
 	# Must reset: a stale _prev_v reads the first tick of a new pass as the last vehicle's terminal speed falling to zero.
 	_prev_v = 0.0
 	_lateral_peak = 0.0
-	_tc_pedal = 1.0
+	_tc_fuel = 1.0
 	_loss = {"spin": 0.0, "limiter": 0.0, "shift": 0.0, "torque": 0.0, "stall": 0.0, "gears": {},
 			"force": 0.0, "budget": 0.0, "under_peak": 0.0, "past_peak": 0.0, "tick_cap": 0.0,
 			"tcs": 0.0}
@@ -1197,10 +1222,16 @@ func _reset_pass(phase: Phase) -> void:
 	_corner_rear = 0.0
 	_corner_slid = false
 	_corner_roll = 0.0
+	_corner_tyre = 0.0
+	_corner_peak_tyre = 0.0
 	_corner_drive = 0.0
+	_corner_first = {}
 	_corner_xfer0 = Vector2.ZERO
 	_corner_lltd = NAN
 	_corner_lifted = 0
+	_corner_unloaded = 0
+	_corner_tip = {}
+	_corner_prev_speed = NAN
 	_corner_pedal_i = 0.0
 	_corner_path = 0.0
 	_corner_path_peak = 0.0
@@ -1219,7 +1250,7 @@ func _physics_process(delta: float) -> void:
 	if _car == null or _phase == Phase.DONE:
 		return
 	_t += delta
-	_apply_angdamp()
+	MeasureRig.apply_angdamp(_car, _angdamp)
 	if _coast:
 		var n := _car.get_contact_count()
 		_contact_peak = maxi(_contact_peak, n)
@@ -1272,13 +1303,13 @@ func _tick_accel(delta: float) -> void:
 		_drive_accel(_pedal * 100.0)
 		_print_trace_header()
 		return
-	# The pedal that drove this tick, then next tick's.
-	var pedal := _tc_pedal if _tc_run else _pedal
+	# The demand that drove this tick (tc: its fuel), then next tick's.
+	var pedal := _tc_fuel if _tc_run else _pedal
 	if _tc_run:
 		# Held through a shift cut: the wheels unload there, and the integral would wind up.
 		if not _car.drivetrain.shift_cut_active():
-			_tc_pedal = TcPedal.step(_tc_pedal, _car.wheels, delta, _car.drivetrain)
-		_drive_accel(_tc_pedal * 100.0)
+			_tc_fuel = TcPedal.step(_tc_fuel, _car.wheels, delta, _car.drivetrain)
+		_drive_accel(PedalMap.pedal_for(_car.spec, _tc_fuel, _car.drivetrain.rpm) * 100.0)
 	var v: float = _car.telemetry.speed  # signed m/s, read out of the sim
 	_inst_a = (v - _prev_v) / delta
 	_prev_v = v
@@ -1681,16 +1712,17 @@ func _print_gates() -> void:
 
 ## A CVT's launch: its range changes reported, not gated (synchronous, no shift: dwell, landing and
 ## hunting do not apply), the crank's spread after the first second against limit-load control's
-## speed at the pass's demand, the limiter reported, then the front axle as on any box.
+## speed at the governor's demand (`Drivetrain.governor_demand`), the limiter reported, then the
+## front axle as on any box.
 func _print_cvt_gates(spec: VehicleSpec, steps: Array[String]) -> void:
 	print("  %-13s : %d range change(s), synchronous, not gated%s" % ["ranges", steps.size(),
 			": " + ", ".join(steps) if not steps.is_empty() else ""])
 	var lo := float(_gate.get("crank_lo", NAN))
 	var hi := float(_gate.get("crank_hi", NAN))
-	var limit := Drivetrain.cvt_limit_rpm(spec, _car.drivetrain.last_pedal)
+	var limit := Drivetrain.cvt_limit_rpm(spec, _car.drivetrain.governor_demand)
 	print("  %-13s : %s; limit-load speed %.0f rpm, setting %.0f rpm" % ["crank",
 			"held %.0f-%.0f rpm after 1 s" % [lo, hi] if not is_nan(lo) else "pass under 1 s",
-			limit, PedalMap.setting_rpm(spec, _car.drivetrain.last_pedal)])
+			limit, PedalMap.setting_rpm(spec, _car.drivetrain.governor_demand)])
 	# No gear to hold into it: a crank on the limiter here is the governor's high idle (the redline)
 	# with the load off, the top setting's own end.
 	print("  %-13s : %d ticks at the high idle, not gated (no gear to hold into it)"
@@ -1919,37 +1951,15 @@ func _transfer_moment(a: float) -> float:
 
 ## A coupled hitch's height over the strip (m), or -1 with nothing coupled.
 func _hitch_y() -> float:
-	var host := _coupled_host()
+	var host := MeasureRig.coupled_host(_car)
 	return (_car.global_transform * host.marker_local()).y if host != null else -1.0
-
-
-## `angdamp=`: the body's angular damping, and a coupled trailer's, REPLACEd with the probe's.
-## Every tick, since a trailer couples after its countdown and a respawn may re-couple it.
-func _apply_angdamp() -> void:
-	if is_nan(_angdamp):
-		return
-	var bodies: Array[RigidBody3D] = [_car]
-	var host := _coupled_host()
-	if host != null and host.trailer != null:
-		bodies.append(host.trailer)
-	for b in bodies:
-		VehicleMath.declare_angular_damp(b, _angdamp)
-
-
-## The coupled hitch, or null with nothing coupled.
-func _coupled_host() -> TowHost:
-	for node in _car.find_children("*", "", true, false):
-		var host := node as TowHost
-		if host != null and host.is_coupled():
-			return host
-	return null
 
 
 ## N a coupled trailer rests on the hitch, off the trailer's own vertical balance: its mass times
 ## `g` plus its COM's vertical acceleration `z_accel` (m/s²), less what its own wheels carry. 0 with
 ## nothing coupled.
 func _kingpin_load(z_accel: float) -> float:
-	var host := _coupled_host()
+	var host := MeasureRig.coupled_host(_car)
 	if host == null or host.trailer == null:
 		return 0.0
 	var rests := host.trailer.mass * (9.81 + z_accel)
@@ -2001,7 +2011,7 @@ func _body_kinematics() -> Dictionary:
 	var force_long := PackedFloat32Array()
 	for w in _car.wheels:
 		force_long.append(w.force_long)
-	var host := _coupled_host()
+	var host := MeasureRig.coupled_host(_car)
 	return {"vel": _car.linear_velocity, "vy": _car.linear_velocity.y,
 			"w": _car.angular_velocity.dot(body.x), "force_long": force_long, "com": _car.global_transform * _car.center_of_mass,
 			"ahead": Vector3(-body.z.x, 0.0, -body.z.z).normalized(),
@@ -2086,7 +2096,7 @@ func _gap_split(kin: Dictionary, prev: Dictionary, gap: float) -> Dictionary:
 		"pitch": -i_pitch * (float(kin["w"]) - float(prev["w"])) / delta * per_moment,
 		"lean": lean * per_moment,
 	}
-	var host := _coupled_host()
+	var host := MeasureRig.coupled_host(_car)
 	if host != null:
 		var z_accel := (float(kin["trailer_vy"]) - float(prev["trailer_vy"])) / delta
 		var ahead_of_rears := front_z + wheelbase - host.marker_local().z
@@ -2242,21 +2252,65 @@ func _tick_cornering(delta: float) -> void:
 			_report_cornering(true)
 		return
 	_corner_ramp_t += delta
-	MeasureRig.drive(pedal * 100.0, 0.0, minf(_corner_ramp_t / CORNER_RAMP_S, 1.0) * 100.0)
+	MeasureRig.drive(pedal * 100.0, 0.0, minf(_corner_ramp_t / _corner_ramp_s, 1.0) * 100.0)
 	# Lateral acceleration of the motion that actually happened: `v * yaw_rate` is the centripetal
 	# term of the body's own velocity and angular velocity, both read out of the sim (rule 3).
 	var lat := speed * absf(_car.angular_velocity.y)
 	_corner_lat += (lat - _corner_lat) * clampf(delta / CORNER_SMOOTH_S, 0.0, 1.0)
 	var airborne := 0
+	var unloaded := 0
+	var light := Vector2i.ZERO  # corners per axle at no load, touching or not
+	var across := 0.0  # the tyres' side force across the body (N, + = right)
 	for w in _car.wheels:
+		if w.in_contact:
+			# A wheel's side is `forward x up`, its right; a left steer tilts its forward to the left.
+			across += w.force_lat * cos(w.steer_angle) - w.force_long * sin(w.steer_angle)
 		if not w.in_contact:
 			airborne += 1
+		elif w.suspension_force <= 0.0:
+			unloaded += 1
+		if not w.in_contact or w.suspension_force <= 0.0:
+			light[1 if w.is_rear else 0] += 1
 	_corner_lifted = maxi(_corner_lifted, airborne)
-	var slip_angle := absf(vel.dot(_car.global_transform.basis.x)) / maxf(speed, 1.0)
+	_corner_unloaded = maxi(_corner_unloaded, unloaded)
+	_corner_tyre += (absf(across) / _car.mass - _corner_tyre) \
+			* clampf(delta / CORNER_SMOOTH_S, 0.0, 1.0)
+	var body_basis := _car.global_transform.basis
+	if _corner_tip.is_empty() and light.x > 0 and light.y > 0:
+		_corner_tip = {"g_tick": lat / 9.81, "g": _corner_lat / 9.81,
+				"path": absf(_car.telemetry.acc_lat) / 9.81, "t": _corner_ramp_t,
+				"roll": absf(VehicleMath.roll_deg(body_basis)),
+				"roll_rate": rad_to_deg(absf(_car.angular_velocity.dot(body_basis.z)))}
+	var slip_angle := absf(vel.dot(body_basis.x)) / maxf(speed, 1.0)
 	_corner_path += (absf(_car.telemetry.acc_lat) - _corner_path) * clampf(delta / CORNER_SMOOTH_S,
 			0.0, 1.0)
 	if slip_angle <= CORNER_MAX_SLIP_ANGLE:
 		_corner_path_peak = maxf(_corner_path_peak, _corner_path)
+	var accel := (speed - _corner_prev_speed) / delta if not is_nan(_corner_prev_speed) else 0.0
+	_corner_prev_speed = speed
+	if _corner_first.is_empty() and _corner_ramp_t >= CORNER_FIRST_AFTER_S:
+		var shares := Vector2(_axle_saturation(false), _axle_saturation(true))
+		var drive := Vector2.ZERO  # front, rear
+		var grounded := Vector2i.ZERO  # contacts per axle: a lifted axle reads a share of 0
+		var loaded := Vector2i.ZERO  # contacts per axle carrying load
+		for w in _car.wheels:
+			if w.in_contact:
+				drive[1 if w.is_rear else 0] += w.force_long
+				grounded[1 if w.is_rear else 0] += 1
+				if w.suspension_force > 0.0:
+					loaded[1 if w.is_rear else 0] += 1
+		if maxf(shares.x, shares.y) >= CORNER_SATURATED and grounded.x > 0 and grounded.y > 0 \
+				and _corner_tip.is_empty():
+			# The pass turns right: + x is the inside, so + slip is the velocity inside the nose.
+			# `g` is the smoothed reading the peak takes, `g_tick` this tick's `v r`, which the
+			# shares, steer and slip beside it are: the smoothing lags the ramp by CORNER_SMOOTH_S.
+			_corner_first = {"axle": "front" if shares.x >= shares.y else "rear", "front": shares.x,
+					"rear": shares.y, "g": _corner_lat / 9.81, "g_tick": lat / 9.81,
+					"steer": absf(_car.drive.mean_steer_angle()),
+					"beta": asin(clampf(vel.dot(body_basis.x) / maxf(speed, 1.0), -1.0,
+							1.0)), "drive_front": drive.x, "drive_rear": drive.y,
+					"speed": speed, "accel": accel, "path": absf(_car.telemetry.acc_lat) / 9.81,
+					"loaded": loaded, "grounded": grounded, "t": _corner_ramp_t}
 	if slip_angle > CORNER_MAX_SLIP_ANGLE:
 		_corner_slid = true
 	elif _corner_lat > _corner_peak:
@@ -2264,12 +2318,13 @@ func _tick_cornering(delta: float) -> void:
 		_corner_front = _axle_saturation(false)
 		_corner_rear = _axle_saturation(true)
 		_corner_roll = absf(VehicleMath.roll_deg(_car.global_transform.basis))
+		_corner_peak_tyre = _corner_tyre
 		_corner_drive = 0.0
 		for w in _car.wheels:
 			if w.in_contact:
 				_corner_drive += w.force_long
 		_corner_lltd = _lltd(_axle_transfer() - _corner_xfer0)
-	if _corner_ramp_t >= CORNER_RAMP_S or _t >= _seconds:
+	if _corner_ramp_t >= _corner_ramp_s or _t >= _seconds:
 		_report_cornering(false)
 
 
@@ -2312,31 +2367,114 @@ func _report_cornering(skipped: bool) -> void:
 		_current["cornering"] = {"skipped": true, "speed_kmh": _corner_speed * 3.6}
 		_after_lateral_passes()
 		return
-	var axle := "front" if _corner_front >= _corner_rear else "rear"
+	# The axle that saturated first as the lock wound on, both axles on the ground; "none" with the
+	# peak's shares if none reached CORNER_SATURATED. Past an axle's saturation the peak can be a yaw
+	# swing (`delivery`'s reads its rear at 1.00 there), so it is no reading of which axle let go first.
+	# A body that starts to tip (both axles an inner corner at no load) before either saturates reads
+	# "tip": what saturates after rides on the outer wheels alone.
+	var first := _corner_first
+	if first.is_empty() and not _corner_tip.is_empty():
+		first = {"axle": "tip", "front": _corner_front, "rear": _corner_rear, "g": _corner_tip["g"]}
+	elif first.is_empty():
+		first = {"axle": "none", "front": _corner_front, "rear": _corner_rear, "g": _corner_peak / 9.81}
+	var axle: String = first["axle"]
 	var note := "  <-- SLID: peak is the last reading before the body let go" if _corner_slid else ""
-	# BalanceModel's free-rolling limit beside the reading (`docs/handling.md` § Balance: the pass
-	# runs driven, at 9-23 deg of lock on these wheelbases).
-	var model := BalanceModel.axles(_car.spec, _corner_speed)
+	# BalanceModel's corner pass beside the reading (`corner_limit`: steered and driven, as the pass
+	# runs), and its free-rolling `limit` (`docs/handling.md` § Balance). Both model the unit alone:
+	# a coupled rig reads "-".
+	var coupled := MeasureRig.coupled_host(_car) != null
+	var model := {} if coupled else BalanceModel.axles(_car.spec, _corner_speed)
+	var turn := BalanceModel.corner_limit(model, _corner_speed)
 	var lim := BalanceModel.limit(model)
-	var pred := "-" if lim.is_empty() else "%s first, %+.1f %%" % [
+	var pred := "-" if turn.is_empty() else _corner_call(turn)
+	var free := "-" if lim.is_empty() else "%s first, %+.1f %%" % [
 			"front" if float(lim["margin"]) >= 0.0 else "rear", float(lim["margin"]) * 100.0]
-	print("  %-13s : peak %.2f m/s^2 (%.2f g) at %.0f km/h; %s saturates first"
-			% ["cornering", _corner_peak, _corner_peak / 9.81, _corner_speed * 3.6, axle]
-			+ " (front %.2f, rear %.2f; pred %s)%s" % [_corner_front, _corner_rear, pred, note])
+	var reading := ""
+	if axle == "tip":
+		reading = ("tips first (both axles an inner corner at no load) at %.2f g smoothed, %.2f that"
+				+ " tick") % [_corner_tip["g"], _corner_tip["g_tick"]]
+	elif axle == "none":
+		reading = "none saturated (front %.2f, rear %.2f at the %.2f g peak)" % [first["front"],
+				first["rear"], first["g"]]
+	else:
+		reading = "%s saturates first (front %.2f, rear %.2f at %.2f g smoothed, %.2f that tick)" % [
+				axle, first["front"], first["rear"], first["g"], first["g_tick"]]
+	print("  %-13s : peak %.2f m/s^2 (%.2f g) at %.0f km/h; %s; pred %s; free-rolling %s%s"
+			% ["cornering", _corner_peak, _corner_peak / 9.81, _corner_speed * 3.6, reading, pred, free,
+			note])
+	if not turn.is_empty() and not _corner_first.is_empty():
+		# Term by term where the first axle saturated: the model's turn at that tick's g and speed (the
+		# hold lags the ramp: the kinematic steer at one g goes as 1 / v^2) beside the sim's, or its
+		# peak where that g is past it. The hold is shedding speed then, so the drive a steady turn
+		# spends is the tyres' less the body's `m dv/dt`.
+		var g := float(first["g_tick"])
+		var v := float(first["speed"])
+		var model_v := BalanceModel.axles(_car.spec, v)
+		var at := BalanceModel.corner_at(model_v, v, g)
+		var where := "at %.2f g, %.2f m/s" % [g, v]
+		if at.is_empty():
+			at = BalanceModel.corner_limit(model_v, v)
+			where = "past its peak (%.2f g at %.2f m/s)" % [_num(at, "lat_g"), v]
+		var hold := _car.mass * float(first["accel"])
+		print(("  %-13s : model %s: front %.2f, rear %.2f; steer %.1f deg (pred %.1f), slip %+.1f"
+				+ " deg (pred %+.1f), drive front %.0f / rear %.0f N, m dv/dt %+.0f N (pred %.0f / %.0f)")
+				% ["", where, _num(at, "front"), _num(at, "rear"), rad_to_deg(first["steer"]),
+				_deg(at, "steer"), rad_to_deg(first["beta"]), _deg(at, "beta"), first["drive_front"],
+				first["drive_rear"], hold, _num(at, "drive_front"), _num(at, "drive_rear")])
+		var loaded: Vector2i = first["loaded"]
+		var grounded: Vector2i = first["grounded"]
+		print(("  %-13s : the hold then: %.0f %% of the ramp, %.2f m/s (target %.2f), dv/dt %+.2f m/s^2,"
+				+ " path %.2f g; %d+%d contacts loaded of %d+%d touching")
+				% ["", 100.0 * float(first["t"]) / _corner_ramp_s, v, _corner_speed, float(first["accel"]),
+				float(first["path"]), loaded.x, loaded.y, grounded.x, grounded.y])
+	if not _corner_tip.is_empty():
+		print(("  %-13s : tip onset (both axles an inner corner at no load) at %.0f %% of the ramp:"
+				+ " %.2f g smoothed, %.2f that tick, path %.2f g; roll %.1f deg at %.1f deg/s; up to %d"
+				+ " wheel(s) touching at no load; model tips at %s")
+				% ["", 100.0 * float(_corner_tip["t"]) / _corner_ramp_s, float(_corner_tip["g"]),
+				float(_corner_tip["g_tick"]), float(_corner_tip["path"]), float(_corner_tip["roll"]),
+				float(_corner_tip["roll_rate"]), _corner_unloaded,
+				"-" if model.is_empty() else "%.2f g" % BalanceModel.tip_g(model)])
 	# The drive the speed hold spends at the peak: a driven axle saturates before its side force
-	# alone says, which BalanceModel's free-rolling limit does not see.
+	# alone says, which `limit` does not see and `corner` does.
 	print("  %-13s : path %.2f g at most (`acc_lat`); drive %.0f N at the peak"
 			% ["", _corner_path_peak / 9.81, _corner_drive])
-	print(("  %-13s : roll %.1f deg at the peak (pred %.1f), front %s (pred %s) of the load transfer,"
-			+ " up to %d wheel(s)") % ["", _corner_roll,
-			BalanceModel.roll_deg(model, _corner_peak / 9.81), _pct(_corner_lltd),
-			_pct(BalanceModel.lltd(model)), _corner_lifted]
-			+ " off the ground%s" % ("  <-- OVERTURNED" if _car.is_overturned() else ""))
+	# The roll answers the tyres' side force, not `v r`.
+	var roll_pred := "-" if model.is_empty() else "%.1f" % BalanceModel.roll_deg(model,
+			_corner_peak_tyre / 9.81)
+	print(("  %-13s : roll %.1f deg at the peak (pred %s at the tyres' %.2f g), front %s (pred %s)"
+			+ " of the load transfer, up to %d wheel(s) off the ground, %d touching at no load")
+			% ["", _corner_roll, roll_pred, _corner_peak_tyre / 9.81, _pct(_corner_lltd),
+			_pct(BalanceModel.lltd(model)), _corner_lifted, _corner_unloaded]
+			+ ("  <-- OVERTURNED" if _car.is_overturned() else ""))
 	_current["cornering"] = {"skipped": false, "peak": _corner_peak, "speed_kmh": _corner_speed * 3.6,
-			"peak_g": _corner_peak / 9.81, "path_g": _corner_path_peak / 9.81, "front": _corner_front,
-			"rear": _corner_rear, "axle": axle, "slid": _corner_slid, "roll_deg": _corner_roll, "lltd": _corner_lltd,
-			"wheels_lifted": _corner_lifted, "overturned": _car.is_overturned()}
+			"peak_g": _corner_peak / 9.81, "path_g": _corner_path_peak / 9.81, "front": first["front"],
+			"rear": first["rear"], "first_g": first["g"], "first_found": not _corner_first.is_empty(),
+			"axle": axle, "slid": _corner_slid, "roll_deg": _corner_roll, "lltd": _corner_lltd,
+			"wheels_lifted": _corner_lifted, "overturned": _car.is_overturned(), "pred": pred}
 	_after_lateral_passes()
+
+
+## `corner_limit`'s call as the pass prints it: the axle whose share leads at the model's peak, the
+## margin, and "at lock" when the peak sits on the lock; with both shares under CORNER_UNSATURATED
+## the shares and where the sweep ended, a call no tyre makes; or the g the body tips at, under it.
+static func _corner_call(turn: Dictionary) -> String:
+	if bool(turn["tips"]):
+		return "tips at %.2f g" % float(turn["tip_g"])
+	var margin := float(turn["margin"])
+	var lead := "%s first, %+.1f %%" % ["front" if margin >= 0.0 else "rear", margin * 100.0]
+	if maxf(float(turn["front"]), float(turn["rear"])) < CORNER_UNSATURATED:
+		return lead + ", unsaturated (%.2f / %.2f, ends on %s)" % [float(turn["front"]),
+				float(turn["rear"]), turn["end"]]
+	return lead + (" at lock" if bool(turn["at_lock"]) else "")
+
+
+static func _deg(d: Dictionary, key: String) -> float:
+	return rad_to_deg(float(d[key])) if d.has(key) else NAN
+
+
+static func _num(d: Dictionary, key: String) -> float:
+	return float(d[key]) if d.has(key) else NAN
 
 
 ## Mass of everything this run accelerates (chassis + coupled sub-bodies), in kg. Not
@@ -3479,7 +3617,7 @@ func _governor_gear() -> int:
 ## the PTO shaft, `engine_load` and the draft dial.
 func _governor_line(v_long: float, tel: TractorTelemetry) -> String:
 	var dt: Drivetrain = _car.drivetrain
-	var setting := PedalMap.setting_rpm(_car.spec, dt.last_pedal)
+	var setting := PedalMap.setting_rpm(_car.spec, dt.governor_demand)
 	return ("%4.1f km/h %s %4.0f rpm (setting %4.0f, droop %4.1f %%), PTO %4d rpm, engine_load %3d %%,"
 			+ " draft %3d %%") % [v_long * 3.6, _gear_label(dt.gear_byte), dt.rpm, setting,
 			(setting - dt.rpm) / setting * 100.0, tel.pto_rpm, tel.engine_load, tel.draft_force]
@@ -3517,7 +3655,7 @@ func _tick_governor(v_long: float, tel: TractorTelemetry) -> void:
 				_gv_sums["ticks"] += 1.0
 				_gv_sums["v"] += v_long
 				_gv_sums["rpm"] += dt.rpm
-				_gv_sums["setting"] += PedalMap.setting_rpm(_car.spec, dt.last_pedal)
+				_gv_sums["setting"] += PedalMap.setting_rpm(_car.spec, dt.governor_demand)
 				_gv_sums["pto"] += float(tel.pto_rpm)
 				_gv_sums["load"] += float(tel.engine_load)
 				_gv_sums["dial"] += float(tel.draft_force)
@@ -4354,20 +4492,28 @@ func _braking_table() -> Array[String]:
 ## The `cornering` region: every wheel-driven variant on the skid pad.
 func _cornering_table() -> Array[String]:
 	var lines := DocRegion.wrap(("%s (`measure_vehicles -- doc=cornering`; per body `-- <variant>"
-			+ " %.0f track corner`): peak lateral g, the axle that saturates first (by its share of"
-			+ " the friction ellipse), roll at the peak, most wheels lifted at once.")
-			% [DocRegion.measured(), _seconds])
-	lines.append_array(["", "| Body | Peak | Saturates first | Roll | Lifted |",
-			"| --- | --- | --- | --- | --- |"])
+			+ " %.0f track corner`): peak lateral g; the axle that saturates first as the lock winds on"
+			+ " (its ellipse share past %.2f, both axles on the ground), with the shares and the smoothed"
+			+ " g then, or the g it tips at first (both axles an inner corner unloaded);"
+			+ " `BalanceModel.corner_limit`'s call (the axle leading at the model's peak, or its tip g; `-`"
+			+ " on a coupled rig); roll at the peak, most wheels lifted at once.") % [DocRegion.measured(),
+			_seconds, CORNER_SATURATED])
+	lines.append_array(["", "| Body | Peak | Saturates first | Pred | Roll | Lifted |",
+			"| --- | --- | --- | --- | --- | --- |"])
 	for e in _sweep:
 		var c: Dictionary = e.get("cornering", {})
 		if c.is_empty():
 			continue
 		if c.get("skipped", false):
-			lines.append("| `%s` | never reached %.0f km/h | | | |" % [e["variant"], c["speed_kmh"]])
+			lines.append("| `%s` | never reached %.0f km/h | | | | |" % [e["variant"], c["speed_kmh"]])
 			continue
-		lines.append("| `%s` | %.2f g%s | %s | %.1f deg | %d%s |" % [e["variant"], c["peak_g"],
-				" (slid)" if c["slid"] else "", c["axle"], c["roll_deg"], c["wheels_lifted"],
+		var first := "%s, %.2f / %.2f at %.2f g" % [c["axle"], c["front"], c["rear"], c["first_g"]]
+		if c["axle"] == "tip":
+			first = "tips at %.2f g" % c["first_g"]
+		elif not c["first_found"]:
+			first = "none past %.2f" % CORNER_SATURATED
+		lines.append("| `%s` | %.2f g%s | %s | %s | %.1f deg | %d%s |" % [e["variant"], c["peak_g"],
+				" (slid)" if c["slid"] else "", first, c["pred"], c["roll_deg"], c["wheels_lifted"],
 				", overturned" if c["overturned"] else ""])
 	return lines
 
@@ -4691,9 +4837,10 @@ func _report_lines(e: Dictionary) -> Array[String]:
 		if c.get("skipped", false):
 			lines.append("| cornering | never reached %.0f km/h, skipped | — |" % c["speed_kmh"])
 		else:
-			lines.append("| cornering | peak %.2f m/s^2 (%.2f g) at %.0f km/h, %s saturates first (front %.2f, rear %.2f)%s | — |"
-					% [c["peak"], c["peak_g"], c["speed_kmh"], c["axle"], c["front"],
-					c["rear"], "  (SLID)" if c["slid"] else ""])
+			var first := "tips first at %.2f g" % c["first_g"] if c["axle"] == "tip" \
+					else "%s saturates first (front %.2f, rear %.2f)" % [c["axle"], c["front"], c["rear"]]
+			lines.append("| cornering | peak %.2f m/s^2 (%.2f g) at %.0f km/h, %s%s | — |"
+					% [c["peak"], c["peak_g"], c["speed_kmh"], first, "  (SLID)" if c["slid"] else ""])
 	if e.has("braking"):
 		for b: Dictionary in e["braking"]:
 			lines.append("| braking %.0f%% | from %.0f km/h: %.2f s, %.1f m, %.2f g mean; skidding %.2f s, ABS %.2f s | — |"

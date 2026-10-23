@@ -6,14 +6,14 @@ train are out of scope.
 
 Each numbered file is one **brief** for a planning agent: what is wrong or missing, where it lives,
 what binds a fix, and what "done" looks like. A brief is **not a plan** (see § Where plans go).
-Briefs 01-15 have landed: their content is in `docs/vehicles.md`, `docs/handling.md`,
+Briefs 01-16 have landed: their content is in `docs/vehicles.md`, `docs/handling.md`,
 `docs/drivetrain.md`, `docs/truck.md`, `docs/tractor.md` and `docs/sources.md`.
 
 ## Open briefs
 
 | # | Brief | Size | Needs first | Planning effort | Phases |
 | --- | --- | --- | --- | --- | --- |
-| 16 | `16_drivetrain_control.md` — 6-ratio trucks and tractor, no governor or hand throttle, no CVT, a linear pedal, fuel blind to rpm | large | landed briefs | high: two contract changes, sourced pedal and BSFC maps, a CVT decision | planned: `docs/plans/drivetrain_control.md` |
+| 17 | `17_compliance_steer.md` — no rear axle steers under side force; the lift-off COMPROMISEs stand in for it | medium | landed briefs | high: the multi-link figure is unsourced, every retirement a measurement | not planned |
 
 "Planning effort" is the effort level for the agent that WRITES the plan (low / medium / high /
 xhigh / max): how much design is open, how much must be sourced, how many rules or user decisions it
@@ -77,7 +77,7 @@ Constraints that bind every brief:
   them): the 2WD tractor's floored mud bumps_10 / bumps_20 times swing run to run
   (`docs/vehicle_measurements.md` § Rough and soft ground); the `semi` creeps millimetres parked
   across a 30 % slope on the foot brake, every other cell under 1 mm (`doc=park`, unexplained); the
-  `hatchback-sports` mud ditch_60 takes ~10 s against ~3.5 s for its neighbours (unexplained).
+  `hatchback-sports` mud ditch_60 takes ~9 s against ~3.5 s for its neighbours (unexplained).
 - The user verifies by driving; any verification scene is a real Level with a VehicleSpawn.
 
 Evidence: **computed** figures are derived from code and spec numbers, not measured in game

@@ -126,7 +126,17 @@
 ; trucks run the truck tyre's 3.33. On, the tractor builds side force faster and out-leans its
 ; trailer: the 40 km/h full-lock step lifts the flatbed's trailer at 0.41 g (off: never) and every
 ; other trailer 0.003-0.013 g earlier. Undoing it means re-sizing this bar with the law on, then
-; re-measuring every rollover row (docs/truck.md § Truck sizing).
+; re-measuring every rollover row (docs/truck.md § Truck sizing). With the law on, the laden
+; step's K also falls away from the criterion below (flatbed, 40 km/h, roll steer on: 0.72 > 0.02
+; deg/g at 0.18 g).
+;
+; COMPROMISE: roll_steer_rear 0.10 on the leaf drive axle is TRUCK_BASE's fitted figure
+; (gen_kenney_vehicles; docs/sources.md § Roll steer): the leaf axle's roll understeer is sourced,
+; its size is not. Without it the step pass reads the bobtail at K 0.22 deg/g at 0.06 g, under the
+; tractor criterion's 0.5-2.0 at 0.15 g (Woodrooffe & El-Gindy); with it 0.46-0.50 at 0.12-0.18 g,
+; and laden (box) 0.35 at 0.12 g, as load on the drive axle cuts a truck's K (UMTRI 1983). The
+; laden 50 km/h 30 % step lifts less (roll peak 26 > 12 deg); no new rolled cell
+; (measure_vehicles -- semi 60 step trailer=<bobtail|box>, 2026-10-22). Front 0: no figure.
 ;
 ; THE SPRINGS ARE SIZED PER AXLE: the rear carries the fifth-wheel load as well as its own, and the
 ; drive axle is the ONLY driven axle, so what the plate puts on it (kingpin_share, a 25-30 % band
@@ -211,6 +221,7 @@ spring_rate_rear = 360000.0
 damper_bump_rear = 24700.0
 damper_rebound_rear = 28800.0
 anti_roll_rate = 480000.0
+roll_steer_rear = 0.1
 max_suspension_force = 120000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 tyre = ExtResource("9_tyre")

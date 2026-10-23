@@ -305,3 +305,318 @@ func test_a_tipping_body_reads_infinite_roll_steer_and_none_without_it() -> void
 	assert_bool(is_nan(BalanceModel.understeer_gradient(m, 10.0))).is_false()
 	(m["front"] as Dictionary)["roll_steer"] = 0.1
 	assert_float(BalanceModel.roll_steer_gradient(m, 10.0)).is_equal(INF)
+
+# --- the corner pass's turn (`corner`, `corner_limit`) ---------------------------------------------
+
+const CORNER_V := 11.11  ## m/s, the corner pass's 40 km/h
+
+
+## `_spec` driven as the corner pass drives it on `drive` ("front" / "rear"), with a lock, full
+## Ackermann and traction control, as every shipped road body (an open diff's light inner wheel caps
+## the drive without it; parallel steer loads the outer front, whose rearward pull at the track yaws
+## the body out of the turn).
+func _driven(front_share: float, sensitivity: float, drive: String, bar := 10000.0) -> Dictionary:
+	var spec := _spec(front_share, sensitivity, bar)
+	spec.ground_drive.tcs_equipped = true
+	spec.ground_drive.ackermann = 1.0
+	spec.ground_drive.driven_front = drive == "front"
+	spec.ground_drive.driven_rear = drive == "rear"
+	spec.ground_drive.max_steer_deg = 35.0
+	return BalanceModel.axles(spec, CORNER_V)
+
+
+## The front tyres' summed side force (N, along each wheel's own side) in a `corner` result.
+static func _front_side(turn: Dictionary) -> float:
+	var sum := 0.0
+	for w: Dictionary in turn["wheels"]:
+		if w["axle"] == "front":
+			sum += float(w["fy"])
+	return sum
+
+
+func test_a_neutral_turn_at_a_small_steer_is_the_kinematic_one() -> void:
+	# Linear laws steer neutral (K 0): at a small angle the yaw rate is `v tan(delta) / L`, and with
+	# no rolling resistance or drag the drive is the tyres' tilt alone, a few newtons.
+	var m := _driven(0.6, 0.0, "rear")
+	var steer := deg_to_rad(0.5)
+	var turn := BalanceModel.corner(m, CORNER_V, steer)
+	assert_bool(turn.is_empty()).is_false()
+	var kinematic := CORNER_V * tan(steer) / 2.5
+	assert_float(float(turn["yaw_rate"])).is_equal_approx(kinematic, 0.01 * kinematic)
+	assert_float(float(turn["drive"])).is_less(0.002 * float(m["mass"]) * BalanceModel.G)
+
+
+func test_nothing_driven_holds_no_steady_turn() -> void:
+	# With nothing driven the drive unknown moves no force, so nothing balances the rolling drag and
+	# the tyres' tilt: the solve has no steady turn (`_solve_corner`'s `drive`).
+	var m := _driven(0.6, 0.1, "rear")
+	(m["rear"] as Dictionary)["driven"] = false
+	assert_bool(BalanceModel.corner(m, CORNER_V, deg_to_rad(2.0)).is_empty()).is_true()
+	assert_str(str(BalanceModel._solve_corner(m, CORNER_V, deg_to_rad(2.0)).get("fails", ""))) \
+			.is_equal("drive")
+
+
+func test_at_a_small_steer_the_shares_are_the_demand_over_the_capacity() -> void:
+	# Near straight the drive is a few newtons, so each axle's ellipse share is its side force over
+	# its grip (`axle_capacity_g` at that g): `limit`'s picture, which `corner` reduces to.
+	var m := _driven(0.6, 0.1, "rear")
+	var turn := BalanceModel.corner(m, CORNER_V, deg_to_rad(2.0))
+	var g := float(turn["lat_g"])
+	var caps := BalanceModel.axle_capacity_g(m, g)
+	# Both axles carry `g` of their own weight (yaw balance), so each share is `g / capacity`.
+	assert_float(float(turn["front"])).is_equal_approx(g / caps.x, 0.02 * g / caps.x)
+	assert_float(float(turn["rear"])).is_equal_approx(g / caps.y, 0.02 * g / caps.y)
+
+
+func test_a_steered_front_carries_its_share_over_the_cosine() -> void:
+	# Rear-driven: the front's side force must still make its static share of `m a`, but across the
+	# body only its cosine counts, so it carries `m a (b / L) / cos(delta)` to the track moments' 1 %.
+	# A tight slow turn, where the cosine is 5 % of it.
+	var m := _driven(0.6, 0.0, "rear")
+	var turn := BalanceModel.corner(m, 6.0, deg_to_rad(18.0))
+	var demand := float(m["mass"]) * float(turn["lat_g"]) * BalanceModel.G * 0.6
+	var tilt := 1.0 / cos(deg_to_rad(18.0))
+	assert_float(_front_side(turn)).is_between(demand * tilt, demand * (tilt + 0.03))
+
+
+func test_a_driven_front_carries_side_force_on_its_drive() -> void:
+	# The same turn front-driven: the drive's tilt `Fx sin(delta)` carries part of the side force.
+	var steer := deg_to_rad(8.0)
+	var rear := BalanceModel.corner(_driven(0.6, 0.0, "rear"), CORNER_V, steer)
+	var front := BalanceModel.corner(_driven(0.6, 0.0, "front"), CORNER_V, steer)
+	var per_g_rear := _front_side(rear) / float(rear["lat_g"])
+	var per_g_front := _front_side(front) / float(front["lat_g"])
+	assert_float(float(front["drive_front"])).is_greater(100.0)
+	assert_float(per_g_front).is_less(per_g_rear)
+	# To 5 %: the rest is the two turns' slightly different loads and slips.
+	var tilt := float(front["drive_front"]) * sin(steer) / float(front["lat_g"])
+	assert_float(per_g_rear - per_g_front).is_equal_approx(tilt, 0.05 * tilt)
+
+
+func test_the_drive_spends_the_driven_axles_ellipse() -> void:
+	# The turn's drive (the front's tilted side force) spends the ellipse of the axle that makes it:
+	# per g, the rear's share is higher driven on the rear than on the front.
+	var steer := deg_to_rad(8.0)
+	var front := BalanceModel.corner(_driven(0.6, 0.1, "front"), CORNER_V, steer)
+	var rear := BalanceModel.corner(_driven(0.6, 0.1, "rear"), CORNER_V, steer)
+	assert_float(float(rear["drive_rear"])).is_greater(500.0)
+	assert_float(float(rear["rear"]) / float(rear["lat_g"])) \
+			.is_greater(float(front["rear"]) / float(front["lat_g"]))
+
+
+func test_the_drive_slip_carries_the_target_on_the_runtime_law() -> void:
+	# One law: the slip `corner` solves for gives the target back through `combined_slip_force`, on
+	# the rising side and past a side peak alike; a target no slip carries returns the most it pulls.
+	var curve := GroundDriveSpec.new().grip_curve
+	for side: float in [0.0, 0.05, 0.2]:
+		var k := BalanceModel._drive_slip(1500.0, side, 5000.0, 4500.0, curve, 1.0, 0.12)
+		var fx := RayWheel.combined_slip_force(k, side, 5000.0, 4500.0, curve, 1.0).x
+		assert_float(fx).is_equal_approx(1500.0, 1.5)
+	var most := BalanceModel._drive_slip(9000.0, 0.05, 5000.0, 4500.0, curve, 1.0, 0.12)
+	assert_float(RayWheel.combined_slip_force(most, 0.05, 5000.0, 4500.0, curve, 1.0).x) \
+			.is_less(5000.0)
+
+
+func test_the_corner_limit_calls_the_front_on_a_front_heavy_body() -> void:
+	# Front-heavy, load-sensitive and front-driven: the front saturates first, as `limit` reads it.
+	var m := _driven(0.6, 0.1, "front")
+	var turn := BalanceModel.corner_limit(m, CORNER_V)
+	assert_float(float(turn["margin"])).is_greater(0.0)
+	assert_float(float(BalanceModel.limit(m)["margin"])).is_greater(0.0)
+	assert_float(float(turn["front"])).is_greater(0.95)
+	assert_bool(bool(turn["at_lock"])).is_false()
+
+
+## A driven front pair for `_split_drive`, inner first as `_corner_state` builds it: the inner wheel
+## light (`inner_budget` N along it), both at a little side slip.
+static func _front_pair(inner_budget: float) -> Array[Dictionary]:
+	var pair: Array[Dictionary] = []
+	for w: Array in [[true, 10.5, inner_budget], [false, 11.0, 6000.0]]:
+		pair.append({"axle": "front", "inner": w[0], "v_long": w[1], "slip_lat": 0.02,
+				"budget_long": w[2], "budget_lat": 0.94 * float(w[2]), "lat_peak": 1.0})
+	return pair
+
+
+func test_traction_control_holds_the_light_inner_wheel_and_leaves_its_partner_its_half() -> void:
+	# An open diff splits 1600 N evenly; the inner wheel cannot carry its 800 N, so the hold keeps it
+	# at TCS_SLIP and takes the rest off, while the outer carries its whole 800 N.
+	var m := _driven(0.6, 0.0, "front")
+	var pair := _front_pair(700.0)
+	BalanceModel._split_drive(m, pair, 1600.0)
+	var curve: PackedVector2Array = m["grip_curve"]
+	assert_bool(bool(pair[0]["tc"])).is_true()
+	assert_float(float(pair[0]["kappa"])).is_equal(RayWheel.TCS_SLIP)
+	assert_float(float(pair[0]["target"])).is_equal(800.0)
+	assert_bool(bool(pair[1]["tc"])).is_false()
+	assert_float(float(pair[1]["target"])).is_equal(800.0)
+	assert_float(RayWheel.combined_slip_force(float(pair[1]["kappa"]), 0.02, 6000.0, 5640.0, curve,
+			1.0).x).is_equal_approx(800.0, 0.8)
+
+
+func test_a_lifted_driven_wheel_is_held_and_its_partner_keeps_its_half() -> void:
+	# No load, no budget: the wheel spins up to the hold (the runtime's ceiling), carrying nothing.
+	var m := _driven(0.6, 0.0, "front")
+	var pair := _front_pair(0.0)
+	BalanceModel._split_drive(m, pair, 1600.0)
+	assert_bool(bool(pair[0]["tc"])).is_true()
+	assert_float(float(pair[0]["kappa"])).is_equal(RayWheel.TCS_SLIP)
+	assert_float(float(pair[1]["target"])).is_equal(800.0)
+	# Without traction control the lifted wheel holds nothing, which is no steady drive.
+	m["tcs"] = false
+	BalanceModel._split_drive(m, pair, 1600.0)
+	assert_bool(bool(pair[0]["tc"])).is_false()
+
+
+func test_a_biased_diff_sends_the_drive_outward_past_a_wheel_on_its_traction_slip() -> void:
+	# The held inner wheel spins at TCS_SLIP over the road, faster than the loaded outer: the slow
+	# side is the outer, which takes `bias / (1 + bias)` of the axle's drive.
+	var m := _driven(0.6, 0.0, "front")
+	(m["front"] as Dictionary)["diff_bias"] = 3.0
+	var pair := _front_pair(200.0)
+	BalanceModel._split_drive(m, pair, 1600.0)
+	assert_bool(bool(pair[0]["tc"])).is_true()
+	assert_float(float(pair[0]["target"])).is_equal_approx(400.0, 1e-6)
+	assert_float(float(pair[1]["target"])).is_equal_approx(1200.0, 1e-6)
+	var spin_in := 10.5 * (1.0 + float(pair[0]["kappa"]))
+	assert_float(11.0 * (1.0 + float(pair[1]["kappa"]))).is_less(spin_in)
+
+
+func test_a_turn_holds_on_a_lifted_driven_wheel_under_traction_control() -> void:
+	# A tall body on a stiff front bar and no rear one lifts its inner front before the front
+	# saturates: the turn carries on to the front's grip on the outer wheel alone, the rear still
+	# holding the body up.
+	var m := _driven(0.6, 0.1, "front", 60000.0)
+	(m["rear"] as Dictionary)["bar"] = 0.0
+	m["h"] = 0.7
+	var turn := BalanceModel.corner_limit(m, CORNER_V)
+	assert_bool(bool(turn["tips"])).is_false()
+	var inner: Dictionary = turn["wheels"][0]
+	var outer: Dictionary = turn["wheels"][1]
+	assert_float(float(inner["load"])).is_equal(0.0)
+	assert_bool(bool(inner["tc"])).is_true()
+	assert_float(float(inner["fx"])).is_equal(0.0)
+	assert_float(float(outer["fx"])).is_equal_approx(float(outer["target"]),
+			1e-3 * float(outer["target"]))
+	assert_float(float(turn["front"])).is_greater(0.98)
+
+
+func test_the_corner_limit_reads_a_tip_under_its_peak() -> void:
+	# On a stiff front bar, raise the COM and the model tips under its peak; the plain body never does.
+	var m := _driven(0.6, 0.1, "front", 60000.0)
+	var low := BalanceModel.corner_limit(m, CORNER_V)
+	assert_bool(bool(low["tips"])).is_false()
+	assert_float(float(low["tip_g"])).is_greater(float(low["lat_g"]))
+	m["h"] = 1.0
+	var tall := BalanceModel.corner_limit(m, CORNER_V)
+	assert_bool(bool(tall["tips"])).is_true()
+	# `tip_g` is where the roll law first reads INF, to its 1e-4 g bisection.
+	var tip := float(tall["tip_g"])
+	assert_bool(is_finite(BalanceModel.roll_deg(m, tip - 2e-4))).is_true()
+	assert_float(BalanceModel.roll_deg(m, tip)).is_equal(INF)
+	# Past the tip no turn is steady: the sweep ends on it, its last turn at it (the roll reads the
+	# lateral `v r cos(beta)`, a hair under the turn's `v r`).
+	assert_str(str(tall["end"])).is_equal("tip")
+	assert_float(float(tall["lat_g"])).is_equal_approx(tip, 0.01)
+	assert_bool(BalanceModel.corner(m, CORNER_V, float(tall["steer"]) + deg_to_rad(1.0)).is_empty()) \
+			.is_true()
+
+
+func test_a_cold_call_holds_wherever_the_sweep_does() -> void:
+	# A tall body whose turn kinks as its inner wheels lift: called cold at any steer the sweep
+	# reaches, `corner` winds on to it (halving its step where one fails, as the sweep does) and lands
+	# on the turn a call continued from its neighbour finds.
+	var m := _driven(0.6, 0.0, "front", 60000.0)
+	m["h"] = 1.0
+	var top := float(BalanceModel.corner_limit(m, CORNER_V)["steer"])
+	var prev := {}
+	var steer := deg_to_rad(0.37)
+	while steer < top:
+		var continued := BalanceModel.corner(m, CORNER_V, steer, prev)
+		var cold := BalanceModel.corner(m, CORNER_V, steer)
+		assert_bool(cold.is_empty()).override_failure_message(
+				"no cold turn at %.2f deg" % rad_to_deg(steer)).is_false()
+		if cold.is_empty() or continued.is_empty():
+			return
+		assert_float(float(cold["lat_g"])).is_equal_approx(float(continued["lat_g"]), 1e-3)
+		assert_float(float(cold["beta"])).is_equal_approx(float(continued["beta"]), 1e-4)
+		prev = continued
+		steer += deg_to_rad(0.37)
+
+
+func test_roll_steer_in_the_turn_adds_its_angle_to_the_steer() -> void:
+	# At one g the tyres need the same slips, so the mean steer rises by the roll-steer angle each
+	# axle's suspension roll gives it: the front out of the turn, the rear into it (both understeer).
+	var g := 0.5
+	for key: String in ["front", "rear"]:
+		var m := _driven(0.6, 0.1, "rear")
+		var plain := BalanceModel.corner_at(m, CORNER_V, g)
+		(m[key] as Dictionary)["roll_steer"] = 0.1
+		var steered := BalanceModel.corner_at(m, CORNER_V, g)
+		var rolled := BalanceModel._axle_rolled(m, key, BalanceModel._roll_state(m, g))
+		var angle := 0.1 * atan(rolled / float((m[key] as Dictionary)["track"]))
+		assert_float(float(steered["steer"]) - float(plain["steer"])).is_equal_approx(angle, 0.05 * angle)
+	# No coefficient, no angle: the same turn to the bit.
+	var bare := _driven(0.6, 0.1, "rear")
+	var zeroed := _driven(0.6, 0.1, "rear")
+	(zeroed["front"] as Dictionary)["roll_steer"] = 0.0
+	(zeroed["rear"] as Dictionary)["roll_steer"] = 0.0
+	assert_float(float(BalanceModel.corner(zeroed, CORNER_V, deg_to_rad(6.0))["steer"])) \
+			.is_equal(float(BalanceModel.corner(bare, CORNER_V, deg_to_rad(6.0))["steer"]))
+	assert_float(float(BalanceModel.corner(zeroed, CORNER_V, deg_to_rad(6.0))["beta"])) \
+			.is_equal(float(BalanceModel.corner(bare, CORNER_V, deg_to_rad(6.0))["beta"]))
+
+
+func test_the_axles_roll_reads_its_rays_until_the_inner_one_leaves_the_road() -> void:
+	# Both corners loaded, an axle's compressions part by the body's roll over its track. Its inner
+	# corner unloaded, the bar still holds that ray on the road (the outer at
+	# `(k + bar) c_o - bar c_i` = the axle's load), so the roll steer keeps reading the body's roll,
+	# no step at the lift; once the ray would leave, full droop: the outer alone on its spring.
+	var m := BalanceModel.axles(_spec(0.6, 0.1, 400000.0))
+	(m["rear"] as Dictionary)["bar"] = 0.0
+	var front: Dictionary = m["front"]
+	var track := float(front["track"])
+	var state := BalanceModel._roll_state(m, 0.3)
+	for key: String in ["front", "rear"]:
+		assert_float(BalanceModel._axle_rolled(m, key, state)).is_equal_approx(
+				float((m[key] as Dictionary)["track"]) * float(state["phi"]), 1e-6)
+	# The lift: bisect the g where the front's transfer reaches its cap.
+	var cap := 2.0 * float(front["load"])
+	var lo := 0.3
+	var hi := 1.5
+	for _i in 40:
+		var mid := (lo + hi) / 2.0
+		if float(BalanceModel._roll_state(m, mid)["front"]) < cap:
+			lo = mid
+		else:
+			hi = mid
+	var below := BalanceModel._axle_rolled(m, "front", BalanceModel._roll_state(m, lo))
+	var above := BalanceModel._axle_rolled(m, "front", BalanceModel._roll_state(m, hi))
+	assert_float(above).is_equal_approx(below, 1e-4)
+	# Further on, while the body still stands on its rear, the inner ray leaves: full droop.
+	var spring := float(front["spring"])
+	var bar := float(front["bar"])
+	var g := hi
+	var gone := false
+	while g < BalanceModel.tip_g(m):
+		var phi := float(BalanceModel._roll_state(m, g)["phi"])
+		if (cap - bar * track * phi) / spring <= track * phi:
+			gone = true
+			break
+		g += 0.01
+	assert_bool(gone).is_true()
+	assert_float(BalanceModel._axle_rolled(m, "front", BalanceModel._roll_state(m, g))) \
+			.is_equal_approx(cap / spring, 1e-6)
+
+
+func test_corner_at_lands_on_the_asked_g_and_is_empty_past_the_peak() -> void:
+	var m := _driven(0.6, 0.1, "rear")
+	for g: float in [0.3, 0.6]:
+		assert_float(float(BalanceModel.corner_at(m, CORNER_V, g)["lat_g"])).is_equal_approx(g, 1e-3)
+	var peak := float(BalanceModel.corner_limit(m, CORNER_V)["lat_g"])
+	assert_bool(BalanceModel.corner_at(m, CORNER_V, peak + 0.05).is_empty()).is_true()
+
+
+func test_a_right_turn_is_not_modelled() -> void:
+	# `corner` is a left turn on a steer >= 0; the pass's right turn is its mirror.
+	var m := _driven(0.6, 0.1, "rear")
+	assert_bool(BalanceModel.corner(m, CORNER_V, -0.05).is_empty()).is_true()

@@ -61,6 +61,9 @@ var accessory_torque := 0.0
 ## it. The pull-away still waits on the pedal: the start-up ramp and a clutch's opening at rest read
 ## the pedal alone, as a shuttle's release.
 var hand_throttle := 0.0
+## The PTO is engaged, owner-set the same way (`TractorVehicle._tick_extras`): a CVT's engine-speed
+## management stands down, so the shaft keeps the demand's speed (`_cvt_managed_demand`).
+var pto_engaged := false
 ## The PTO mode's set speed (rpm, 0 = off), owner-set the same way (`TruckVehicle._tick_extras`, from
 ## the PTO, the park brake and the road speed): the fuel runs the governor law at the higher of it and
 ## the pedal's demand (`PedalMap.demand`), at `spec.governor_droop`, on any map. It acts only while
@@ -648,6 +651,10 @@ const CVT_RANGE_HYSTERESIS := 0.02
 const CVT_LOAD_TAU_S := 0.3
 ## Reverse's top speed (km/h): Renius & Resch's market demand, "from zero to about 25 km/h".
 const CVT_REVERSE_KMH := 25.0
+## Engine-speed management's light-load speed over rated speed (`cvt_managed_setting`): the bottom of
+## Deere's maximum speed-reduction mode, 57-81 % of rated (US 6,553,302; its example 1140 rpm on a
+## 2000 rpm engine).
+const CVT_LIGHT_LOAD_SHARE := 0.57
 ## SPN 526's largest value (0.001 per bit over two bytes): the ratio active standstill publishes.
 const GEAR_RATIO_MAX := 64.255
 
@@ -656,6 +663,18 @@ var cvt_i := 0.0
 var cvt_range := 1
 ## The top ratio the box may reach this tick: its last range's, or the range a bridge byte selects.
 var _cvt_top := 0.0
+## The crank speed (rpm) `cvt_i` was set at: through it the ratio names the ground-speed reference
+## (`cvt_ground_speed`) the rate moves, so a crank that changes speed between ticks moves none.
+var _cvt_set_rpm := 0.0
+## The pedal's ground-speed command (m/s) last tick: how fast the command itself moves
+## (`cvt_commanded_accel`).
+var _cvt_v_cmd := 0.0
+## Engine-speed management's setting (rpm) last tick (`cvt_setting_step`); the demand's own while it
+## stands down.
+var _cvt_setting := 0.0
+## The demand the all-speed governor runs this tick: on a CVT in pedal mode engine-speed
+## management's (`_cvt_managed_demand`), otherwise the driver's (`PedalMap.demand`).
+var governor_demand := 0.0
 ## The body runs at or past `WheelDrive.PAWL_ENGAGE_SPEED` this tick: active standstill holds
 ## nothing there (`standstill_hold`), and a ratio of 0 re-synchronises to the wheels.
 var _cvt_moving := false
@@ -731,23 +750,83 @@ static func cvt_limit_rpm(p_spec: VehicleSpec, p_demand: float) -> float:
 	return minf(PedalMap.governor_line(p_spec, p_demand).y, PedalMap.rated_rpm(p_spec))
 
 
-## One tick of the CVT's ratio from `i`: toward the ratio that turns the crank's speed into `v_cmd`
-## (m/s), capped at ±`top_i` (a range cap is reached at the rate too), at no more than
-## `cvt_accel_ms2` of ground acceleration at that crank speed, so the box holds the ground speed
-## while the engine droops on its governor line under load, and never more than a step past the
-## wheels' own ratio (pressure cut-off); under `limit_rpm` pulled back in proportion over
-## CVT_LOAD_TAU_S (limit-load control: the crank holds its limit speed and the ground speed gives,
-## through a launch or a draft onset). Then two hard bounds past the rate, as a clutch's anti-stall
-## opens it: a crank under idle lets the ratio follow the wheels (`wheel_omega`, rad/s at the axle)
-## down to idle, to 0 against wheels the brakes hold still, and the ratio on the wheels' side never
+## Engine-speed management's setting (rpm) in pedal mode: the governor's at `p_demand` brought down
+## in proportion to the load, as Deere's automatic mode does (US 6,553,302): at full load the setting
+## whose full-fuel end is the limit speed (`cvt_limit_rpm`, so a heavy load never runs on the
+## curve's falling tail), at none CVT_LIGHT_LOAD_SHARE of rated speed. The load is `power` (W, asked
+## at the crank) over what the limit speed makes at full fuel. Never under the setting whose
+## full-fuel end turns `top_i` into `v_cmd` (m/s), so the commanded speed stays in reach, and never
+## past the demand's own setting.
+static func cvt_managed_setting(p_spec: VehicleSpec, p_demand: float, power: float, v_cmd: float,
+		top_i: float) -> float:
+	var own := PedalMap.setting_rpm(p_spec, p_demand)
+	var droop := 1.0 + maxf(p_spec.governor_droop, PedalMap.MIN_DROOP)
+	var limit := cvt_limit_rpm(p_spec, p_demand)
+	var full_load := minf(own, limit * droop)
+	var full_power := engine_torque(p_spec, limit) * limit / RADS_TO_RPM
+	var share := clampf(power / full_power, 0.0, 1.0) if full_power > 0.0 else 1.0
+	var light := minf(CVT_LIGHT_LOAD_SHARE * PedalMap.rated_rpm(p_spec), full_load)
+	var reach := own
+	if top_i > 0.0:
+		reach = absf(v_cmd) * p_spec.final_drive / (top_i * p_spec.ground_drive.drive_radius()) \
+				* RADS_TO_RPM * droop
+	return minf(maxf(lerpf(light, full_load, share), reach), own)
+
+
+## The ground acceleration (m/s², >= 0) the speed reference is commanded this tick, from `gap` (the
+## command's speed over the reference's, m/s) and `moved` (how far the command itself moved since
+## last tick): the full `cvt_accel_ms2` while the command sits past one tick's reach (the reference
+## ramps at its rate), else the command's own rate, capped there. A gap inside one tick's reach is
+## the reference landing, or the pressure cut-off holding it a little under a crank that slows, and
+## asks for nothing.
+static func cvt_commanded_accel(p_spec: VehicleSpec, gap: float, moved: float,
+		delta: float) -> float:
+	var accel := maxf(p_spec.cvt_accel_ms2, 0.0)
+	if delta <= 0.0:
+		return 0.0
+	if gap > accel * delta:
+		return accel
+	return clampf(moved / delta, 0.0, accel)
+
+
+## One tick of engine-speed management's setting (rpm) from `prev` toward `target`: up at once, down
+## no faster than the ratio can wind up to hold the ground speed at its rate, `cvt_accel_ms2` over
+## `speed` (m/s) a tick. Faster, the crank sits past its setting with no fuel while the ratio winds
+## up behind it, the rig sags, and the reference asks for the power back.
+static func cvt_setting_step(p_spec: VehicleSpec, prev: float, target: float, speed: float,
+		delta: float) -> float:
+	var fall := maxf(p_spec.cvt_accel_ms2, 0.0) * delta
+	if target >= prev or absf(speed) <= fall:
+		return target
+	return maxf(target, prev * (1.0 - fall / absf(speed)))
+
+
+## The ground speed (m/s, signed) ratio `i` turns a crank at `at_rpm` into, idle at least (the
+## floor the ratio's rate reads too).
+static func cvt_ground_speed(p_spec: VehicleSpec, i: float, at_rpm: float) -> float:
+	return i * p_spec.ground_drive.drive_radius() * maxf(at_rpm, p_spec.idle_rpm) / RADS_TO_RPM \
+			/ p_spec.final_drive
+
+
+## One tick of the CVT's ratio from `i`, set at crank speed `set_rpm`: the ground speed it named
+## there (`cvt_ground_speed`), moved toward `v_cmd` (m/s) at `cvt_accel_ms2`, as a ratio at
+## `crank_rpm`, so a crank that droops or lifts between ticks moves no ground speed. Capped at
+## ±`top_i` (a cap under the ratio reached at the rate), never a step past the wheels' own ratio
+## (pressure cut-off); under `limit_rpm` pulled back over CVT_LOAD_TAU_S (limit-load control: the
+## crank holds its limit speed, the ground speed gives). Then two hard bounds past the rate, as a
+## clutch's anti-stall opens it: a crank under idle lets the ratio follow the wheels (`wheel_omega`,
+## rad/s at the axle) down to idle, to 0 against held wheels, and the ratio on the wheels' side never
 ## puts the crank past the redline.
 static func cvt_ratio_step(p_spec: VehicleSpec, i: float, v_cmd: float, crank_rpm: float,
-		limit_rpm: float, wheel_omega: float, top_i: float, delta: float) -> float:
+		set_rpm: float, limit_rpm: float, wheel_omega: float, top_i: float, delta: float) -> float:
 	var fd := p_spec.final_drive
-	var per_ms := fd / (p_spec.ground_drive.drive_radius()
-			* maxf(crank_rpm, p_spec.idle_rpm) / RADS_TO_RPM)
-	var step := maxf(p_spec.cvt_accel_ms2, 0.0) * per_ms * delta
-	var next := move_toward(i, clampf(v_cmd * per_ms, -top_i, top_i), step)
+	var per_ms := 1.0 / cvt_ground_speed(p_spec, 1.0, crank_rpm)
+	var accel := maxf(p_spec.cvt_accel_ms2, 0.0)
+	var step := accel * per_ms * delta
+	var v_top := top_i / per_ms
+	var bound := maxf(top_i, absf(i))
+	var next := clampf(move_toward(cvt_ground_speed(p_spec, i, set_rpm),
+			clampf(v_cmd, -v_top, v_top), accel * delta) * per_ms, -bound, bound)
 	# Pressure cut-off: the ratio never grows more than a step past the wheels' own (`wheel_omega`
 	# through it at this crank speed), so an overload the relief slips under holds the ratio
 	# rather than winding it up against wheels that do not follow.
@@ -1004,6 +1083,7 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 	# pedal, or on an all-speed governor the higher of it and the hand throttle.
 	var pedal := clampf(throttle, 0.0, 1.0)
 	var demand := PedalMap.demand(spec, pedal, hand_throttle)
+	governor_demand = demand
 	var at_rest := absf(ground_speed) < HillHold.REST_SPEED
 	_update_road_load(delta, ground_speed, at_rest)
 	var kick := false
@@ -1311,12 +1391,14 @@ func _process_crank(delta: float, pedal: float, demand: float, drive_wheel_omega
 ## carries what the ratio's change takes from the crank's inertia. Open with the key off and in N or
 ## P; otherwise locked, the relief its only slip, and at a ratio of 0 at rest its hold the wheels'
 ## (`standstill_hold`). Engaged from open, or at a ratio of 0 on the move, the ratio is synchronised
-## to the wheels first. The foot `pedal` commands ground speed; the `demand` sets the engine speed
-## and the limit-load speed.
+## to the wheels first. The foot `pedal` commands ground speed; the `demand`, managed in pedal mode
+## (`_cvt_managed_demand`), sets the engine speed and the limit-load speed.
 func _process_cvt(delta: float, pedal: float, demand: float, omega: float, wheel_omega: float,
 		ground_speed: float) -> void:
-	var fuel := _fuel_step(delta, demand, ground_speed, omega)
 	var dir := drive_sign(gear_byte)
+	var v_cmd := cvt_speed_command(spec, pedal, dir, braking, speed_cap_kmh)
+	governor_demand = _cvt_managed_demand(delta, demand, dir, v_cmd, ground_speed)
+	var fuel := _fuel_step(delta, governor_demand, ground_speed, omega)
 	var was_open := coupling_state == CouplingState.OPEN
 	_cvt_moving = absf(ground_speed) >= WheelDrive.PAWL_ENGAGE_SPEED
 	coupling_state = CouplingState.OPEN if not running or dir == 0.0 else CouplingState.LOCKED
@@ -1331,9 +1413,10 @@ func _process_cvt(delta: float, pedal: float, demand: float, omega: float, wheel
 		if was_open or (cvt_i == 0.0 and _cvt_moving):
 			cvt_i = clampf(wheel_omega * spec.final_drive
 					/ maxf(omega, spec.idle_rpm / RADS_TO_RPM), -_cvt_top, _cvt_top)
-		cvt_i = cvt_ratio_step(spec, cvt_i,
-				cvt_speed_command(spec, pedal, dir, braking, speed_cap_kmh), rpm,
-				cvt_limit_rpm(spec, demand), wheel_omega, _cvt_top, delta)
+			_cvt_set_rpm = rpm
+		cvt_i = cvt_ratio_step(spec, cvt_i, v_cmd, rpm, _cvt_set_rpm,
+				cvt_limit_rpm(spec, governor_demand), wheel_omega, _cvt_top, delta)
+		_cvt_set_rpm = rpm
 		cvt_range = cvt_range_for(spec, absf(cvt_i), cvt_range)
 		if dir > 0.0:
 			gear_byte = cvt_range
@@ -1343,6 +1426,32 @@ func _process_cvt(delta: float, pedal: float, demand: float, omega: float, wheel
 		_drives = k == 0.0 or (_predict(fuel) * k - wheel_omega) * signf(k) >= 0.0
 	clutch = 1.0 if _capacity > 0.0 else 0.0
 	applied_throttle = fuel
+
+
+## The demand a CVT's governor runs this tick. In pedal mode (in D or R with the hand throttle off, no
+## PTO engaged and a road-load estimate in hand) engine-speed management's (`cvt_managed_setting`)
+## at the power the rig asks: the road load, plus the rig's mass at the acceleration the speed
+## reference is commanded (`cvt_commanded_accel`, read before limit-load control, so a pull-back
+## never starves the setting), at the road speed and through the box's efficiency; it falls no
+## faster than the ratio can follow (`cvt_setting_step`). Otherwise `demand`: the hand throttle pins
+## engine speed, and with the PTO on the engine keeps the demand's speed (Deere's automatic mode
+## keeps rated speed there).
+func _cvt_managed_demand(delta: float, demand: float, dir: float, v_cmd: float,
+		ground_speed: float) -> float:
+	var moved := absf(v_cmd) - absf(_cvt_v_cmd)
+	_cvt_v_cmd = v_cmd
+	if not running or dir == 0.0 or hand_throttle > 0.0 or pto_engaged or is_nan(road_load) \
+			or delta <= 0.0:
+		_cvt_setting = PedalMap.setting_rpm(spec, demand)
+		return demand
+	var gap := absf(v_cmd) - absf(cvt_ground_speed(spec, cvt_i, _cvt_set_rpm))
+	var accel := cvt_commanded_accel(spec, gap, moved, delta)
+	var axle := (road_load * dir + load_mass_kg * accel * road_radius) * absf(ground_speed) \
+			/ road_radius
+	var power := maxf(axle, 0.0) / maxf(cvt_efficiency(spec, absf(cvt_i), cvt_range), 0.05)
+	_cvt_setting = cvt_setting_step(spec, _cvt_setting,
+			cvt_managed_setting(spec, demand, power, v_cmd, _cvt_top), ground_speed, delta)
+	return PedalMap.demand_for_setting(spec, _cvt_setting)
 
 
 ## The crank's predicted spin (rad/s) at the end of this tick with `fuel` and no coupling.

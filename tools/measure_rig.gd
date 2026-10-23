@@ -66,6 +66,66 @@ static func wind_flag(args: PackedStringArray) -> Vector3:
 	return Vector3.ZERO
 
 
+## A tool's `rollsteer=<front>,<rear>` flag: the roll-steer coefficients (deg/deg,
+## `GroundDriveSpec.roll_steer_front` / `_rear`; a missing half reads 0). NAN when absent.
+static func roll_steer_flag(args: PackedStringArray) -> Vector2:
+	for a in args:
+		if a.begins_with("rollsteer="):
+			var pair := a.substr(10).split(",")
+			return Vector2(float(pair[0]) if pair.size() > 0 else 0.0,
+					float(pair[1]) if pair.size() > 1 else 0.0)
+	return Vector2(NAN, NAN)
+
+
+## A tool's `angdamp=<1/s>` flag: the angular damping `apply_angdamp` declares (0 = none). NAN when
+## absent.
+static func angdamp_flag(args: PackedStringArray) -> float:
+	for a in args:
+		if a.begins_with("angdamp="):
+			return maxf(float(a.substr(8)), 0.0)
+	return NAN
+
+
+## `rollsteer=` on `body` (in the tree, so its drive is built): the coefficients overridden on a
+## copy of its spec, in memory, never shipped, and re-read by its wheels, which cache their axle's
+## at build (`RayWheel.apply_suspension`). Axles are paired for a spec that declared no bar or roll
+## steer. NAN: the spec's.
+static func apply_roll_steer(body: BaseVehicle, coeffs: Vector2) -> void:
+	if is_nan(coeffs.x) or body.drive == null:
+		return
+	body.spec = body.spec.duplicate()
+	var gd := body.spec.ground_drive.duplicate() as GroundDriveSpec
+	body.spec.ground_drive = gd
+	gd.roll_steer_front = coeffs.x
+	gd.roll_steer_rear = coeffs.y
+	for w in body.drive.wheels:
+		w.roll_steer_coeff = gd.roll_steer_rear if w.is_rear else gd.roll_steer_front
+	RayWheel.pair_axles(body.drive.wheels)
+
+
+## `angdamp=`: the angular damping of `body` and a coupled trailer REPLACEd with `figure` (1/s).
+## Call it every tick: a trailer couples after its countdown and a respawn may re-couple it. NAN:
+## as the bodies set it.
+static func apply_angdamp(body: BaseVehicle, figure: float) -> void:
+	if is_nan(figure):
+		return
+	var bodies: Array[RigidBody3D] = [body]
+	var host := coupled_host(body)
+	if host != null and host.trailer != null:
+		bodies.append(host.trailer)
+	for b in bodies:
+		VehicleMath.declare_angular_damp(b, figure)
+
+
+## `body`'s coupled hitch, or null with nothing coupled.
+static func coupled_host(body: Node) -> TowHost:
+	for node in body.find_children("*", "", true, false):
+		var host := node as TowHost
+		if host != null and host.is_coupled():
+			return host
+	return null
+
+
 ## Fit the `TyreCatalog` class `id` on `body` (in the tree, so its drive is built); "" keeps the
 ## stock. Returns the id on the wheels, with a note when `id` is not made in the body's `tyre_fit`
 ## and the stock stayed (`WheelDrive.fit_tyre`).

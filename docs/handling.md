@@ -166,10 +166,9 @@ roll and the limit margin (rear capacity over front, less 1; + = front first), p
 Its springs carry the side force's moment plus the rolled COM's weight, `m a h + m g h phi`
 (`BalanceModel._roll_state`): ~9 % more roll and transfer than the side force alone at a car's
 ~5 deg/g. The step pass's roll-steer angles read their `pred` within ~2 % at the held steps below
-the limit, and under it near the limit. The corner pass's roll reads its `pred` within 0.1 deg on
-every road body but `delivery` (0.5 over). `garbage-truck` reads INF there: just under its
-corner-pass peak the model lifts its inner rear too, a tip, where the pass holds on one lifted
-wheel (the bump travel that holds it is not in the model). Measured K runs 0.13-0.29 deg/g over
+the limit, and under it near the limit. The corner pass reads its roll pred at the tyres' summed
+side force (`v r` also counts the yaw swing past an axle's saturation): within 0.2 deg on every
+road body but `suv-luxury` (0.4 over). Measured K runs 0.13-0.29 deg/g over
 `pred`, 0.03-0.06 deg of steer at the smallest held step: ~1 % of each axle's slip,
 second-order steering geometry. `hatchback-sports` runs 0.57 over, because its front LSD adds
 0.43 deg/g of its own under the held pedal, which the model omits: K 2.23 at its 2.5 bias against
@@ -185,11 +184,10 @@ Tractor `rear_lat_grip` 1.077 = `1 + s * log2(rated rear / rated front)` (Michel
   never the body's world roll: a banked road or a slope moves no link. + = toward understeer, the
   front out of the turn and the rear into it. It is a wheel angle added after the Ackermann split,
   never a grip, so K gains `(front + rear) * roll gradient` (`roll_steer_gradient`) and `limit`
-  does not move. Shipped (`docs/sources.md` § Roll steer): front 0.10 on every road body
-  (secondary); rear 0.036 on the FWD saloons' twist beam (sourced), 0.05 multi-link on the rear-
-  and all-driven cars and 0.10 leaf on `van`, the pickups and `VAN_BASE` (estimates); 0 on the
-  open-wheelers, trucks and tractor. The road bodies read K 1.06-2.23 deg/g at the slowest step
-  (`measure_vehicles -- <variant> 60 step`), inside the secondary population band of 0.7-8.2.
+  does not move. Shipped (`docs/sources.md` § Roll steer, with grades): front 0.10 on the car
+  family; rear 0.036 twist beam on the FWD saloons, 0.05 multi-link on the RWD / AWD cars, 0.10 leaf
+  on `van`, the pickups, `VAN_BASE`, `TRUCK_BASE` and the semis; 0 on open-wheelers, tractor. The
+  slowest step reads the cars and `garbage-truck` inside their K bands, `firetruck` and laden semis under.
 - **The 60 Hz loop.** The angle follows roll, and roll the side force it makes: per tick the gain
   is ~`eps C h dt^2 / I_roll`, ~0.007 on a `sedan`, and understeer roll steer sheds side force as
   the body rolls. The step pass counts tick-rate ringing (`chatter_runs`: three consecutive flips,
@@ -200,16 +198,15 @@ Tractor `rear_lat_grip` 1.077 = `1 + s * log2(rated rear / rated front)` (Michel
 - **Angular damping is declared** (`VehicleMath.declare_angular_damp`): every wheeled body and
   trailer REPLACEs the engine's default with `VehicleSpec.angular_damping`, 0 on every one, so
   yaw, roll and pitch bleed through the tyres and dampers alone; the plane, boats, drone and train
-  keep the default. The engine's 0.1 /s would add 0.10-0.20 deg/g of K at the slowest step and
-  hold `delivery` and `garbage-truck` front-first in the corner pass; without it `police` and
-  `suv-luxury` spin the fastest lifted 30 % step (accepted;
+  keep the default. The engine's 0.1 /s would add 0.10-0.20 deg/g of K at the slowest step;
+  without it `police` and `suv-luxury` spin the fastest lifted 30 % step (accepted;
   `measure_vehicles -- <variant> 60 step`).
-- **The corner pass is not `limit`.** It runs driven, on its speed hold, at 9-23 deg of lock on
-  these wheelbases; `limit` is free-rolling at small steer. A driven axle spends ellipse on the
-  turn's drive (`delivery`'s rear: front-first on side force alone, rear-first with it); a
-  front-driven axle's tilted drive carries side force, so its front makes less than its static
-  share; a rear-driven body's front makes a few points more. The pass prints `pred` beside its
-  reading: a margin under ~5 % sits inside this (`docs/plans/drivetrain_control.md` phase 10).
+- **The corner pass has its own prediction** (`BalanceModel.corner_limit`), steered, on its speed
+  hold: the front's side force by its cosine, the drive in the driven axle's ellipse and a driven
+  front's tilt, a TC hold leaving the open-diff partner its half, each wheel's roll steer. Its peak's
+  leading axle is the pass's first on every Kenney body; past `tip_g` no turn is steady, and the
+  bobtail semis tip first in both. At that saturation it runs at the tick's speed, against the tyres'
+  drive less the hold's `m dv/dt`: the rest is K's second-order residual and the ramp's lag (`ramp=`).
 - **Stated shortfall: linear K.** Under a real car's 2-4 deg/g: roll camber, compliance steer and
   aligning torque are unmodelled, 1.2, 0.5 and 0.4 of an illustrative 4.1 deg/g budget against
   roll steer's 1.0 (Bundorf & Leffert, SAE 760713; `docs/sources.md` § Linear understeer).

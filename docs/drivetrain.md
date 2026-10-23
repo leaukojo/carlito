@@ -378,8 +378,8 @@ the tour, sources and measured figures: `docs/tractor.md` § The CVT tractor). I
 drivetrain state, moved by its controller before the spin solve and solved in it as the gear, at
 the overall speed ratio rather than its inverse, so a ratio of 0 holds: active standstill, the park
 pawl's path at the hydrostatic relief (`Drivetrain.standstill_hold`). The engine runs the all-speed
-governor's law (§ The pedal map) unchanged, the foot pedal commands ground speed, and the ratio
-holds it until the crank falls to its limit-load speed, where the ground speed gives. No
+governor's law (§ The pedal map), its demand managed in pedal mode (`cvt_managed_setting`); the
+pedal commands ground speed, held until the crank falls to its limit-load speed. No
 `ShiftPolicy`, no launch clutch, no shift: the gear byte publishes the mechanical range, which
 changes synchronously, and a CVT governs road speed through its ratio, not the fuel.
 

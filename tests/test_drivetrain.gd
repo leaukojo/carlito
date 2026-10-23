@@ -2352,37 +2352,56 @@ func test_the_cvt_pedal_commands_ground_speed() -> void:
 			.is_equal_approx(25.0 / 3.6, 1e-5)
 
 
+## `Drivetrain.cvt_ratio_step` with the ratio set last tick at `crank` itself (no crank change).
+func _ratio_step(spec: VehicleSpecScript, i: float, v_cmd: float, crank: float, limit: float,
+		wheel: float, top: float, delta := TICK) -> float:
+	return DrivetrainScript.cvt_ratio_step(spec, i, v_cmd, crank, crank, limit, wheel, top, delta)
+
+
 ## The ratio moves toward the commanded speed at the declared ground acceleration, at the crank's
 ## speed; past the rate, the crank's band bounds it.
 func test_the_cvt_ratio_moves_at_its_rate_and_inside_the_crank_band() -> void:
 	var spec := _cvt_spec()
 	var r := spec.ground_drive.drive_radius()
 	var omega := 2000.0 / DrivetrainScript.RADS_TO_RPM
-	var step := DrivetrainScript.cvt_ratio_step(spec, 0.0, 10.0, 2000.0, 1000.0, 0.0, 0.8, TICK)
+	var step := _ratio_step(spec, 0.0, 10.0, 2000.0, 1000.0, 0.0, 0.8)
 	assert_float(step).is_equal_approx(1.5 * spec.final_drive / (r * omega) * TICK, 1e-6)
 	# Already at the command: no move.
 	var at := 5.0 * spec.final_drive / (r * omega)
-	assert_float(DrivetrainScript.cvt_ratio_step(spec, at, 5.0, 2000.0, 1000.0, 5.0 / r, 0.8,
-			TICK)).is_equal_approx(at, 1e-6)
+	assert_float(_ratio_step(spec, at, 5.0, 2000.0, 1000.0, 5.0 / r, 0.8)) \
+			.is_equal_approx(at, 1e-6)
 	# Never a step past the wheels' own ratio: against held wheels it holds (pressure cut-off).
-	assert_float(DrivetrainScript.cvt_ratio_step(spec, 0.3, 100.0, 2000.0, 1000.0, 0.0, 0.8,
-			TICK)).is_equal(0.3)
+	assert_float(_ratio_step(spec, 0.3, 100.0, 2000.0, 1000.0, 0.0, 0.8)).is_equal(0.3)
 	# Within the range cap, and a cap under the ratio (a bridge byte) reached at the rate.
-	assert_float(DrivetrainScript.cvt_ratio_step(spec, 0.2, 100.0, 2000.0, 1000.0, 10.0, 0.2,
-			TICK)).is_equal(0.2)
-	assert_float(DrivetrainScript.cvt_ratio_step(spec, 0.4, 100.0, 2000.0, 1000.0, 10.0, 0.1,
-			TICK)).is_equal_approx(0.4 - step, 1e-9)
+	assert_float(_ratio_step(spec, 0.2, 100.0, 2000.0, 1000.0, 10.0, 0.2)).is_equal(0.2)
+	assert_float(_ratio_step(spec, 0.4, 100.0, 2000.0, 1000.0, 10.0, 0.1)) \
+			.is_equal_approx(0.4 - step, 1e-9)
 	# Never so low the turning wheels over-rev the crank.
 	var wheel := 20.0
 	var over := wheel * spec.final_drive / (spec.redline_rpm / DrivetrainScript.RADS_TO_RPM)
-	assert_float(DrivetrainScript.cvt_ratio_step(spec, over * 1.01, 0.0, 3900.0, 1000.0, wheel,
-			0.8, 1.0)).is_equal_approx(over, 1e-6)
+	assert_float(_ratio_step(spec, over * 1.01, 0.0, 3900.0, 1000.0, wheel, 0.8, 1.0)) \
+			.is_equal_approx(over, 1e-6)
 	# With the crank under idle (a stop against the brakes), it follows the wheels down past its
 	# rate.
 	var slowing := 10.0
 	var stall := slowing * spec.final_drive / (spec.idle_rpm / DrivetrainScript.RADS_TO_RPM)
-	assert_float(DrivetrainScript.cvt_ratio_step(spec, 0.8, 100.0, 700.0, 600.0, slowing, 0.8,
-			TICK)).is_equal_approx(stall, 1e-6)
+	assert_float(_ratio_step(spec, 0.8, 100.0, 700.0, 600.0, slowing, 0.8)) \
+			.is_equal_approx(stall, 1e-6)
+
+
+## The rate moves the ground-speed reference, not the ratio: a crank the governor lifts between
+## ticks (load coming off) unwinds the ratio at once, and one drooping under load winds it up, so
+## the ground speed holds either way.
+func test_the_cvt_reference_holds_its_speed_through_a_crank_change() -> void:
+	var spec := _cvt_spec()
+	var r := spec.ground_drive.drive_radius()
+	var v := 5.0
+	var i := v / DrivetrainScript.cvt_ground_speed(spec, 1.0, 2000.0)
+	for crank: float in [2200.0, 1800.0]:
+		var next := DrivetrainScript.cvt_ratio_step(spec, i, v, crank, 2000.0, 1000.0, v / r, 0.8,
+				TICK)
+		assert_float(next).is_equal_approx(i * 2000.0 / crank, 1e-6)
+		assert_float(DrivetrainScript.cvt_ground_speed(spec, next, crank)).is_equal_approx(v, 1e-5)
 
 
 ## Under the limit speed the ratio gives way in proportion, filtered, never past zero.
@@ -2391,18 +2410,100 @@ func test_the_cvt_limit_load_control_pulls_the_ratio_back() -> void:
 	var i := 0.4
 	var prev := i
 	for n in 120:
-		i = DrivetrainScript.cvt_ratio_step(spec, i, 100.0, 2700.0, 3000.0, 0.0, 0.8, TICK)
+		i = _ratio_step(spec, i, 100.0, 2700.0, 3000.0, 0.0, 0.8)
 		assert_float(i).is_less(prev)
 		assert_float(i).is_greater(0.0)
 		prev = i
 	var expect := lerpf(0.4, 0.4 * 0.9, 1.0 - exp(-TICK / DrivetrainScript.CVT_LOAD_TAU_S))
-	assert_float(DrivetrainScript.cvt_ratio_step(spec, 0.4, 100.0, 2700.0, 3000.0, 0.0, 0.8,
-			TICK)).is_equal_approx(expect, 1e-6)
+	assert_float(_ratio_step(spec, 0.4, 100.0, 2700.0, 3000.0, 0.0, 0.8)) \
+			.is_equal_approx(expect, 1e-6)
 	# The limit is the governor line's full-fuel end, never over the curve's peak power.
 	assert_float(DrivetrainScript.cvt_limit_rpm(spec, 1.0)).is_equal_approx(3000.0, 1e-3)
 	assert_float(DrivetrainScript.cvt_limit_rpm(spec, 0.5)) \
 			.is_equal_approx(PedalMap.setting_rpm(spec, 0.5) / 1.07, 1e-2)
 
+
+## Engine-speed management: the setting falls with the load at a held speed and rises with it, from
+## the light-load share of rated speed (3000 rpm here) to the setting whose full-fuel end is the
+## limit speed; never past the demand's own setting, never under what reaches the command at the top
+## ratio.
+func test_the_cvt_managed_setting_follows_the_load() -> void:
+	var spec := _cvt_spec()
+	var light := DrivetrainScript.CVT_LIGHT_LOAD_SHARE * 3000.0
+	var full_load := 3000.0 * 1.07
+	var full_power := 300.0 * 3000.0 / DrivetrainScript.RADS_TO_RPM
+	assert_float(DrivetrainScript.cvt_managed_setting(spec, 1.0, 0.0, 0.0, 0.8)) \
+			.is_equal_approx(light, 1e-3)
+	assert_float(DrivetrainScript.cvt_managed_setting(spec, 1.0, full_power, 0.0, 0.8)) \
+			.is_equal_approx(full_load, 1e-2)
+	assert_float(DrivetrainScript.cvt_managed_setting(spec, 1.0, 2.0 * full_power, 0.0, 0.8)) \
+			.is_equal_approx(full_load, 1e-2)
+	var prev := 0.0
+	for share: float in [0.0, 0.25, 0.5, 0.75, 1.0]:
+		var n := DrivetrainScript.cvt_managed_setting(spec, 1.0, share * full_power, 0.0, 0.8)
+		assert_float(n).is_equal_approx(lerpf(light, full_load, share), 1e-2)
+		assert_float(n).is_greater_equal(prev)
+		prev = n
+	# A light demand whose own setting sits under the light-load speed keeps its own at any load.
+	var own := PedalMap.setting_rpm(spec, 0.15)
+	assert_float(own).is_less(light)
+	for power: float in [0.0, full_power]:
+		assert_float(DrivetrainScript.cvt_managed_setting(spec, 0.15, power, 0.0, 0.8)) \
+				.is_equal_approx(own, 1e-2)
+	# Light load at a commanded speed past the light-load setting's reach: the setting's full-fuel
+	# end turns the top ratio into that speed.
+	var v := DrivetrainScript.cvt_ground_speed(spec, 0.8, 2000.0)
+	var reach := DrivetrainScript.cvt_managed_setting(spec, 1.0, 0.0, v, 0.8)
+	assert_float(reach).is_equal_approx(2000.0 * 1.07, 1e-2)
+	assert_float(DrivetrainScript.cvt_managed_setting(spec, 1.0, 0.0, -v, 0.8)) \
+			.is_equal_approx(reach, 1e-2)
+
+
+## The reference's commanded acceleration: the full rate while the command is out of one tick's
+## reach, else the command's own ramp; a gap inside a tick's reach (the reference held a little under
+## by the pressure cut-off) asks for nothing.
+func test_the_cvt_commanded_acceleration_reads_the_command() -> void:
+	var spec := _cvt_spec()
+	assert_float(DrivetrainScript.cvt_commanded_accel(spec, 1.0, 0.0, TICK)).is_equal(1.5)
+	assert_float(DrivetrainScript.cvt_commanded_accel(spec, 0.02, 0.0, TICK)).is_equal(0.0)
+	assert_float(DrivetrainScript.cvt_commanded_accel(spec, 0.02, 0.5 * TICK, TICK)) \
+			.is_equal_approx(0.5, 1e-6)
+	assert_float(DrivetrainScript.cvt_commanded_accel(spec, 0.0, -0.1, TICK)).is_equal(0.0)
+	assert_float(DrivetrainScript.cvt_commanded_accel(spec, 0.02, 1.0, TICK)).is_equal(1.5)
+
+
+## The managed setting rises at once and falls no faster than the ratio can wind up to hold the
+## ground speed: `cvt_accel_ms2` over the speed, a tick.
+func test_the_cvt_managed_setting_falls_at_the_ratio_rate() -> void:
+	var spec := _cvt_spec()
+	assert_float(DrivetrainScript.cvt_setting_step(spec, 1200.0, 2000.0, 5.0, TICK)).is_equal(2000.0)
+	assert_float(DrivetrainScript.cvt_setting_step(spec, 2000.0, 1200.0, 5.0, TICK)) \
+			.is_equal_approx(2000.0 * (1.0 - 1.5 * TICK / 5.0), 1e-3)
+	assert_float(DrivetrainScript.cvt_setting_step(spec, 2000.0, 1995.0, 5.0, TICK)).is_equal(1995.0)
+	# At rest nothing moves with the crank: at once.
+	assert_float(DrivetrainScript.cvt_setting_step(spec, 2000.0, 1200.0, 0.0, TICK)).is_equal(1200.0)
+
+
+## In pedal mode with a mass estimate, a light cruise runs the governor under the pedal's own
+## setting and holds the commanded speed; the hand throttle or an engaged PTO puts it back on the
+## driver's demand.
+func test_cvt_engine_speed_management_stands_down_for_the_hand_throttle_and_the_pto() -> void:
+	for mode: String in ["managed", "hand", "pto"]:
+		var spec := _cvt_spec()
+		var dt: DrivetrainScript = DrivetrainScript.new(spec)
+		var r := spec.ground_drive.drive_radius()
+		var rig := LumpedWheel.new(0.0, 2000.0 * r * r)
+		dt.load_mass_kg = 2000.0
+		dt.hand_throttle = 0.01 if mode == "hand" else 0.0
+		dt.pto_engaged = mode == "pto"
+		for n in 360:
+			_tick(dt, 0.5, rig, 1, true)
+		assert_float(rig.omega * r).is_equal_approx(20.0 / 3.6, 0.1)
+		if mode == "managed":
+			assert_float(dt.governor_demand).is_less(dt.last_pedal)
+			assert_float(dt.rpm).is_less(0.8 * PedalMap.setting_rpm(spec, dt.last_pedal))
+		else:
+			assert_float(dt.governor_demand).is_equal(dt.last_pedal)
 
 ## SPN 526: the gearbox's input over output, final drive excluded; a CVT's inverted, the SPN's top
 ## at active standstill; 0 in N or P.

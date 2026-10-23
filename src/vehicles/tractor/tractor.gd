@@ -166,6 +166,7 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	var pto_on := input.pto and running
 	# The governor's second lever, from the next tick (`Drivetrain.hand_throttle`).
 	drivetrain.hand_throttle = input.hand_throttle
+	drivetrain.pto_engaged = pto_on
 	t.hitch_pos_actual = roundi(_hitch_actual * 100.0)
 	t.pto_state = pto_on
 	# 540/1000 select a gearbox ratio off the engine; the engine is never re-targeted.

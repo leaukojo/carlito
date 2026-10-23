@@ -37,6 +37,10 @@
 ; rear corner carries about 3.5-4.7 t depending on the trailer. See semi_spec.tres for the
 ; derivation and damping ratios.
 ;
+; ROLL STEER 0.10 ON THE DRIVE AXLE IS THE SEMI'S COMPROMISE (see semi_spec.tres): the step pass
+; reads K 0.27 > 0.50 deg/g at 0.05 g bobtail, -0.39 > 0.05 at 0.12 g laden (box), no new rolled
+; cell (measure_vehicles -- semi-conventional 60 step trailer=<bobtail|box>, 2026-10-22).
+;
 ; load_sensitivity 0.08: commercial radials lose ~8 % of mu per doubling of load past the
 ; corner's static share. Family number, matching the semi.
 
@@ -83,6 +87,7 @@ spring_rate_rear = 360000.0
 damper_bump_rear = 24700.0
 damper_rebound_rear = 28800.0
 anti_roll_rate = 480000.0
+roll_steer_rear = 0.1
 max_suspension_force = 120000.0
 grip_curve = PackedVector2Array(0, 0, 0.12, 1, 0.4, 0.9, 1, 0.8)
 tyre = ExtResource("9_tyre")
