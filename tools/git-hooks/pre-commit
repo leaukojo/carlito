@@ -38,6 +38,8 @@ if [ -n "$gd_staged" ]; then
     echo "Fix: fetch via Engine.get_singleton(&\"EditorInterface\") into an UNTYPED var."
     exit 1
   fi
+  # 1b. Text damage a scripted edit leaves and the tests miss (a glued `\` continuation).
+  gd_text=$(echo "$gd_staged" | xargs node tools/check_gd_text.mjs) || { echo "$gd_text"; exit 1; }
 fi
 
 # 2. Contract edited -> synced sloppyCAN copy must be regenerated.
@@ -69,6 +71,7 @@ bake_re=$(tr -d '\r' < tools/git-hooks/bake_paths.txt | grep -vE '^(#|$)' | sed 
 [ -n "$bake_re" ] || { echo "pre-commit: tools/git-hooks/bake_paths.txt is missing or empty" >&2; exit 1; }
 if echo "$staged" | grep -v '\.md$' | grep -qE "$bake_re"; then
   echo "pre-commit: bake inputs staged — running stale-bake check..."
+  held=$(node tools/godot_lock.mjs) || { echo "pre-commit: a Godot run holds this checkout ($held); commit when it ends"; exit 1; }
   resolve_godot
   # Judged by output, not exit code (root CLAUDE.md): same patterns as tools/preflight.ps1.
   bakes_out=$("$GODOT" --headless --path . res://tools/check_bakes.tscn 2>&1 || true)

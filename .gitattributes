@@ -1,15 +1,12 @@
-# Normalize line endings in the repo regardless of each clone's core.autocrlf, so a
-# checkout on Windows and one on the Linux CI runner produce identical files.
-* text=auto
+# Every text file is LF in the index AND the working tree, whatever a clone's core.autocrlf:
+# Godot and Claude's edit tools write LF, so a CRLF checkout ends up with mixed-ending files
+# that exact-match edits miss. After changing this, an existing clone re-checks out once
+# (tools/setup_machine.ps1 does it when the tree is clean).
+* text=auto eol=lf
 
-# Shell scripts must stay LF for the Linux CI runner
-*.sh text eol=lf
-# Git hooks have no extension; a CRLF shebang breaks them on Linux/macOS.
-tools/git-hooks/* text eol=lf
-
-# Godot rewrites .import sidecars with LF; force LF here too so autocrlf on
-# Windows doesn't flip them to CRLF and create noise on every re-import.
-*.import text eol=lf
+# cmd.exe misparses labels in LF batch files.
+*.cmd text eol=crlf
+*.bat text eol=crlf
 
 # Binary assets: never eol-convert, never diff as text.
 *.png binary

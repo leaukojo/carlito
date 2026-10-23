@@ -17,15 +17,15 @@ Editor/CI scripts. Kit/bake rules: `kit/CLAUDE.md`.
 
 ```powershell
 # palettes/prefabs (after kit/import recipe edits only)
-& $GODOT --headless --path . --script res://tools/gen_kit_assets.gd
+node tools/godot_run.mjs -- --headless --path . --script res://tools/gen_kit_assets.gd
 # kit thumbnails (windowed), re-import, then regen to embed the previews
-& $GODOT --path . res://tools/gen_thumbs.tscn ; & $GODOT --headless --path . --import
-& $GODOT --headless --path . --script res://tools/gen_kit_assets.gd
+& $GODOT --path . res://tools/gen_thumbs.tscn ; node tools/godot_run.mjs -- --headless --path . --import
+node tools/godot_run.mjs -- --headless --path . --script res://tools/gen_kit_assets.gd
 # vehicle selector cards (windowed; every variant + implement/trailer), then re-import
-& $GODOT --path . res://tools/gen_vehicle_thumbs.tscn ; & $GODOT --headless --path . --import
+& $GODOT --path . res://tools/gen_vehicle_thumbs.tscn ; node tools/godot_run.mjs -- --headless --path . --import
 # Kenney / watercraft bodies (after a recipe edit)
-& $GODOT --headless --path . res://tools/gen_kenney_vehicles.tscn
-& $GODOT --headless --path . res://tools/gen_boat_variants.tscn
+node tools/godot_run.mjs -- --headless --path . res://tools/gen_kenney_vehicles.tscn
+node tools/godot_run.mjs -- --headless --path . res://tools/gen_boat_variants.tscn
 # drone-mk2 model (Blender 5.1; only to regenerate, the GLBs are committed), then re-import
 & "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --factory-startup --python tools/gen_drone_model.py
 ```

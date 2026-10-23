@@ -19,6 +19,10 @@ Docs map: `docs/overview.md`. The Godot 3 generation is an outside backup: a ref
   VehicleSpawn (F6-runnable, unregistered), never camera-only. Visual bar: crisp high-contrast
   splat borders, plateaued buildable terrain, coasts circular by water at sea level, no square edge.
 - "Quickly / do not verify" = skip ceremony, make the small change, stop.
+- Measure headless what headless can; ask the user only for feel. An approved plan changes only with
+  their OK; follow-up work is a new plan, not TODO items; a task they said to skip stays skipped.
+- A sourced figure cites a page actually opened, never a search summary or memory; a chart read by
+  eye says so. A plan file's `State:` line (done / next / open findings) is kept current at each step.
 - **Where things go:**
   - **CLAUDE.md** = the constraint, a ≤1-line why, and its guard; only what binds work in its
     directory, is not readable from the code or a guard's message, and still matches the code
@@ -35,9 +39,8 @@ Docs map: `docs/overview.md`. The Godot 3 generation is an outside backup: a ref
 ## Standing rules (permanent — numbering is referenced from `docs/`)
 
 1. Static world geometry ships **baked per chunk** (merged meshes, one collision body per chunk);
-   GridMaps are authoring-only; all drivable geometry welds into one level-wide body. The
-   `.baked.scn` is gitignored CI build output; the `.bake.json` is the committed hash record (CI
-   fails stale bakes). **Run `tools/bake_levels.tscn` once after cloning** (else dev collision).
+   GridMaps are authoring-only; all drivable geometry welds into one level-wide body. The `.baked.scn`
+   is gitignored CI build output; the `.bake.json` is the committed hash record (CI fails stale bakes).
 2. Ground = heightmap/plane collision; drivable structures get welded collision meshes;
    props get boxes/hulls. **Trimesh is the exception, never the default.**
 3. Telemetry is read out of the sim that produced the motion — no derived fictions. Aux
@@ -76,24 +79,21 @@ spline-road junctions, lane markings, traffic, third-party level sharing (a `.ts
 
 ## Running / testing / exporting
 
-Godot **4.7.1-stable**, resolved `$env:GODOT_BIN` → `git config carlito.godotbin` → `godot` on
-`PATH` (set the git-config one once per clone: the pre-commit hook sees it from every shell).
-Use the **`_console.exe`** build for ALL CLI/headless runs. Generators: `tools/CLAUDE.md`.
+Godot **4.7.1-stable**; a new machine or clone: `docs/machine_setup.md`. Generators: `tools/CLAUDE.md`.
 
 ```powershell
-git config carlito.godotbin 'C:\path\to\Godot_v4.7.1-stable_win64_console.exe'; git config core.hooksPath tools/git-hooks  # once per clone
-& $GODOT --headless --path . --import                       # import cache: once, and after adding assets
-$env:GODOT_BIN = $GODOT; .\addons\gdUnit4\runtest.cmd -a tests   # suite; one: -a tests/test_truck.gd
-& $GODOT --headless --path . --quit-after 120               # smoke; a challenge: --quit-after 300 -- --challenge=dev_box_stop
-& $GODOT --headless --path . res://tools/bake_levels.tscn   # bake; stale check: check_bakes.tscn ("unbuilt" passes)
-node tools/check_docs.mjs                                   # dangling refs + CLAUDE.md budgets
-powershell -File tools/preflight.ps1                        # "am I safe to push?" — most CI gates
+powershell -ExecutionPolicy Bypass -File tools/setup_machine.ps1     # once per clone/machine
+node tools/godot_run.mjs -- --headless --path . --import             # import cache: after adding assets
+node tools/godot_run.mjs --tests -- -a tests                         # suite; one: -a tests/test_truck.gd
+node tools/godot_run.mjs -- --headless --path . --quit-after 120     # smoke; a challenge: --quit-after 300 -- --challenge=dev_box_stop
+node tools/godot_run.mjs -- --headless --path . res://tools/bake_levels.tscn   # bake; stale check: check_bakes.tscn ("unbuilt" passes)
+node tools/check_docs.mjs                                            # dangling refs, budgets + headroom
+powershell -ExecutionPolicy Bypass -File tools/preflight.ps1         # "am I safe to push?" — most CI gates
 ```
 
 - Shadowing and integer-division warnings are **errors** (`project.godot` [debug]); intentional
   integer division needs `@warning_ignore`.
-- A fresh worktree has no `.godot/` cache or `.baked.scn`: `--import` and bake before trusting a
-  test there. Never run two headless Godots on one checkout at once.
+- A fresh worktree has no `.baked.scn`: bake before trusting a test there.
 - **Judge a headless run by its output, never its exit code.** Only `ERROR: N resources still in
   use at exit` is clean, as is `~130 ObjectDB instances leaked` after loading an island level.
 - `--headless --script` runs only `extends SceneTree` scripts, and autoload identifiers do not

@@ -28,7 +28,7 @@ eats Godot's `_`-prefixed files.
 
 ## The web export
 
-CI does the real export; `& $GODOT --headless --path . --export-release "Web"
+CI does the real export; `node tools/godot_run.mjs -- --headless --path . --export-release "Web"
 build/web/index.html` reproduces it locally. None of what follows shows up in a local
 `--headless` run — only in an exported build.
 
@@ -85,9 +85,9 @@ The editor rewrites this file on any UI export; CLI export reads it as-is.
   gzipping server is the faithful test.
 
 ```powershell
-& $GODOT --headless --path . --export-release "Web" build/web/index.html
+node tools/godot_run.mjs -- --headless --path . --export-release "Web" build/web/index.html
 foreach ($id in 'level_1','level_2','level_3','level_4','level_5','level_6','car_arena') {
-  & $GODOT --headless --path . --export-patch "Web $id" "build/web/index.$id.pck" --patches build/web/index.pck }
+  node tools/godot_run.mjs -- --headless --path . --export-patch "Web $id" "build/web/index.$id.pck" --patches build/web/index.pck }
 ```
 
 ### Download size

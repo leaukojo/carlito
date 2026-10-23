@@ -1,14 +1,48 @@
 {
+  "env": {
+    "PYTHONUTF8": "1",
+    "PYTHONIOENCODING": "utf-8"
+  },
   "permissions": {
     "allow": [
-      "Bash(./addons/gdUnit4/runtest.cmd *)",
+      "Bash(node tools/godot_run.mjs *)",
+      "PowerShell(node tools/godot_run.mjs *)",
+      "Bash(node tools/check_docs.mjs)",
+      "PowerShell(node tools/check_docs.mjs)",
+      "Bash(node tools/check_gd_text.mjs*)",
+      "PowerShell(node tools/check_gd_text.mjs*)",
       "Bash(node tools/gen_js_contract.mjs)",
       "Bash(powershell -File tools/preflight.ps1)",
+      "PowerShell(powershell -ExecutionPolicy Bypass -File tools/preflight.ps1)",
       "mcp__plugin_context7_context7__query-docs",
       "mcp__plugin_context7_context7__resolve-library-id"
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/tools/claude_hooks/session_check.mjs\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|WebFetch|WebSearch|Agent|Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/tools/claude_hooks/pretool_guard.mjs\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "matcher": "",

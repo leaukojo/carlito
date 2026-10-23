@@ -216,18 +216,26 @@ for (const key of allow) {
 const CLAUDE_MD_BUDGET = { 'CLAUDE.md': 106 };
 const NESTED_CLAUDE_MD_CAP = 40;
 const overBudget = [];
+const lineCount = (f) => read(f).replace(/\n$/, '').split('\n').length;
+let rootClaudeLines = 0;
 for (const f of docs.filter((d) => /(^|\/)CLAUDE\.md$/.test(d))) {
   const cap = CLAUDE_MD_BUDGET[f] ?? NESTED_CLAUDE_MD_CAP;
-  const n = read(f).replace(/\n$/, '').split('\n').length;
+  const n = lineCount(f);
+  if (f === 'CLAUDE.md') rootClaudeLines = n;
   if (n > cap) overBudget.push(`  ${f}: ${n} lines, cap ${cap}`);
 }
 
 // Raw lines summed over the top-level docs/*.md (plans/ are temporary; sources.md is reference
-// data, read on demand). One cap, no per-doc caps.
+// data, read on demand; machine_setup.md is read once per machine). One cap, no per-doc caps.
 const DOCS_LINE_CAP = 3605;
-const docsLines = docs.filter((d) => /^docs\/[^/]+\.md$/.test(d) && d !== 'docs/sources.md')
-  .reduce((sum, d) => sum + read(d).replace(/\n$/, '').split('\n').length, 0);
-if (docsLines > DOCS_LINE_CAP) overBudget.push(`  docs/*.md: ${docsLines} lines in total, cap ${DOCS_LINE_CAP}`);
+const UNCAPPED_DOCS = ['docs/sources.md', 'docs/machine_setup.md'];
+const docSizes = docs.filter((d) => /^docs\/[^/]+\.md$/.test(d) && !UNCAPPED_DOCS.includes(d))
+  .map((d) => [d, lineCount(d)]).sort((a, b) => b[1] - a[1]);
+const docsLines = docSizes.reduce((sum, [, n]) => sum + n, 0);
+if (docsLines > DOCS_LINE_CAP) {
+  overBudget.push(`  docs/*.md: ${docsLines} lines in total, cap ${DOCS_LINE_CAP} (largest: ` +
+    `${docSizes.slice(0, 5).map(([d, n]) => `${d.slice(5)} ${n}`).join(', ')})`);
+}
 
 // Consecutive whole-line comments per block. A derivation belongs in docs/ behind a pointer.
 const COMMENT_BLOCK_CAP = 10;
@@ -263,6 +271,9 @@ if (figureHits.length > MEASURED_FIGURE_CAP) {
 
 if (problems.length === 0 && overBudget.length === 0 && longComments.length === 0) {
   console.log('check_docs: every reference resolves; every CLAUDE.md, docs/ and comment block is within budget.');
+  // Headroom up front, so a doc edit is sized to fit instead of trimmed by trial afterwards.
+  console.log(`check_docs: headroom: CLAUDE.md ${rootClaudeLines}/${CLAUDE_MD_BUDGET['CLAUDE.md']}, ` +
+    `docs/*.md ${docsLines}/${DOCS_LINE_CAP}, measured figures ${figureHits.length}/${MEASURED_FIGURE_CAP}.`);
   process.exit(0);
 }
 if (problems.length > 0) {

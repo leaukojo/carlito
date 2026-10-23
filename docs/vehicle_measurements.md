@@ -40,71 +40,71 @@ region (`doc_region.gd`); refresh a figure by re-running, never by hand.
 # `compliance=<deg/kN>` the rear compliance steer (`step` prints its angle, preds, chatter);
 # `angdamp=<1/s>`: the body's and a coupled trailer's angular damping REPLACEd (0 = none).
 # tyre=<id>: that TyreCatalog class (else stock); surface=<name>: the slabs painted (not plough).
-& $GODOT --headless --path . res://tools/measure_vehicles.tscn -- sedan-sports 45
-& $GODOT --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 60 step
-& $GODOT --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 60 circle ackermann=0
-& $GODOT --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- tractor-kenney 20 hitch
-& $GODOT --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- tractor-kenney 20 plough
+node tools/godot_run.mjs -- --headless --path . res://tools/measure_vehicles.tscn -- sedan-sports 45
+node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 60 step
+node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 60 circle ackermann=0
+node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- tractor-kenney 20 hitch
+node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- tractor-kenney 20 plough
 # launch trace + gates on the accel pass: trace[=<every n ticks>] trace_s=<s printed, 3>; notc (the
 # body's TC off), gear=<1-24> (manual, held in that byte), contact (each wheel's load and contact
 # under each line); not with a doc= preset
-& $GODOT --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- semi 40 trace notc
+node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- semi 40 trace notc
 # the trace's launch held at a part pedal (its settle, gates and shift lines; `trace` adds the ticks)
-& $GODOT --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 90 pedal=0.3
+node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 90 pedal=0.3
 # part-pedal probes, instead of every other pass, at each speed of the family's set from a
 # standstill: cruise (PI pedal settled; gear=<1-24> holds it in that byte), kickdown (stepped to
 # 1), pulse[=<period s>] duty=<0..1>
-& $GODOT --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 90 cruise kickdown pulse
+node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 90 cruise kickdown pulse
 # wind (any pass): wind=<from_deg>:<m/s>, steady, FROM as CONDITIONS enters it (0 = out of the
 # north, -Z; the strip runs -Z, so wind=0:9 is a headwind). With cruise, one speed per family:
 # headtail (two more runs from a standstill, into then with 9 m/s along the heading), xwind[=<m/s>]
 # (13 m/s from the right, pedal held, wheel straight: drift, heading, yaw rate and roll at 1 s, 2 s)
-& $GODOT --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- delivery 120 cruise headtail xwind
+node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- delivery 120 cruise headtail xwind
 # the CI `tracking` gate: skips the accel pass, exits 1 on a FAIL
-& $GODOT --headless --path . res://tools/measure_vehicles.tscn -- all 45 track strict
+node tools/godot_run.mjs -- --headless --path . res://tools/measure_vehicles.tscn -- all 45 track strict
 # drone: hover / climb / lean / endurance / one-motor-out (no args, ~1 min)
-& $GODOT --headless --path . res://tools/measure_drone.tscn
+node tools/godot_run.mjs -- --headless --path . res://tools/measure_drone.tscn
 # coupled semi launch: steer-axle load, pitch, air gate, step-steer rollover (~30 s; flags
 # trailer=<box|tanker|tipper|flatbed|bobtail> tip_kmh=<km/h> ramp front_z= com_z=; strict = the CI gate)
-& $GODOT --headless --path . res://tools/measure_semi_launch.tscn -- semi
+node tools/godot_run.mjs -- --headless --path . res://tools/measure_semi_launch.tscn -- semi
 # a truck losing its air: parked on 18 %, floored in D, cut at 30 km/h. Arg 1: garbage-truck,
 # semi, semi-conventional or `all`; `strict` = the CI gate (~1.5 min)
-& $GODOT --headless --fixed-fps 60 --path . res://tools/measure_air_loss.tscn -- all strict
+node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_air_loss.tscn -- all strict
 # steepest standing-start grade. Arg 1: variant, `all` or `level=<id>`; then surfaces
 # (asphalt gravel grass dirt field mud; none = all); flags mfwd diff tc verbose hold=<deg> pedal=<0..1>
 # gear=<1-24> (manual, held in that byte: a start gear; roll-back too) cornering_peak=<x> (in memory)
 # tyre=<id> (that class fitted, every mode; the traction ceiling reads its grip)
-& $GODOT --headless --path . res://tools/measure_grade.tscn -- tractor-kenney mud mfwd tc
-& $GODOT --headless --path . res://tools/measure_grade.tscn -- level=level_2
+node tools/godot_run.mjs -- --headless --path . res://tools/measure_grade.tscn -- tractor-kenney mud mfwd tc
+node tools/godot_run.mjs -- --headless --path . res://tools/measure_grade.tscn -- level=level_2
 # converter creep: released in D1 with no pedal, the flat creep speed and the steepest grade held
 # (a converter variant or `all`; ~1 min a body)
-& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_grade.tscn -- sedan creep
+node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_grade.tscn -- sedan creep
 # roll-back: released on a grade after the foot-brake settle, floored delay=<s> later (0.5); the
 # roll-back, the time to 0.1 m forward and how long the hill hold held. Flags grade=<%> (else 10
 # and 25), pedal=<0..1>, nohold (the hold off), tipper (the tractor's drawbar tipper), mfwd, surface,
 # verbose (per-axle tyre force and slip, and the trailer's pull, every 0.5 s)
-& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_grade.tscn -- sedan rollback nohold
+node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_grade.tscn -- sedan rollback nohold
 # a climb in automatic D on a fixed grade (`grade=<%>`, 8) at a held pedal (`pedal=`, full), 40 s
 # or the ramp's top: each shift with the gearbox's road load, and a `falls back` gate (an upshift
 # a later downshift undoes); flags tipper, mfwd, a surface
-& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_grade.tscn -- semi climb grade=8 pedal=0.6
+node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_grade.tscn -- semi climb grade=8 pedal=0.6
 # held at rest for 60 s on a grade (deg): foot brake, `hand`, `pawl` (P alone), or across the slope `cross`;
 # wind=<from_deg>:<m/s> as measure_vehicles' (the ramp rises toward -Z: wind=0:13 blows downhill)
-& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_grade.tscn -- sedan park=5.7 hand
+node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_grade.tscn -- sedan park=5.7 hand
 # bumps and ditches, asphalt and mud. Arg 1: variant or `baseline`; flags mfwd diff tc speed=<m/s>
 # lane= patch= verbose tyre=<id> rollsteer= compliance= angdamp=. Arg 1 `course=<challenge id>` instead drives
 # that reach-zone challenge's line (open / lock / MFWD / both, floored unless speed=) against its par
-& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_rough.tscn -- baseline
+node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_rough.tscn -- baseline
 # rewrite this doc's figure tables (each a few minutes)
-& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=braking
-& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=cornering
-& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=accel
-& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=cruise
-& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=steer
-& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=tyres
-& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_grade.tscn -- doc=grade
-& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_grade.tscn -- doc=park
-& $GODOT --headless --path . --fixed-fps 60 res://tools/measure_rough.tscn -- doc=rough
+node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=braking
+node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=cornering
+node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=accel
+node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=cruise
+node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=steer
+node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=tyres
+node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_grade.tscn -- doc=grade
+node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_grade.tscn -- doc=park
+node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_rough.tscn -- doc=rough
 ```
 
 | Pass | Measures | Note |

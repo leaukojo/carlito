@@ -59,6 +59,9 @@ if ($touchHead) {
 # 3. Level/kit files touched -> stale-bake check (boots Godot; same gate CI runs).
 # Godot is resolved only here, so a machine without GODOT_BIN set still gets gates 1-2.
 if ($touchBake) {
+    # A background run holds the checkout: a second Godot would collide with it. The next stop re-checks.
+    node tools/godot_lock.mjs | Out-Null
+    if ($LASTEXITCODE -ne 0) { Allow }
     $GODOT = Resolve-GodotBin
     # Read the completion sentinel, not $LASTEXITCODE: headless Godot intermittently segfaults during teardown after a clean run.
     $out = (& $GODOT --headless --path . res://tools/check_bakes.tscn 2>&1) | Out-String

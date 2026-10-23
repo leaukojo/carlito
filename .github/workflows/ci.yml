@@ -58,6 +58,10 @@ jobs:
       - name: Doc reference check
         run: node tools/check_docs.mjs
 
+      # A `\` outside a string that is not a line continuation: scripted-edit damage that parses.
+      - name: GDScript text check
+        run: node tools/check_gd_text.mjs
+
       - name: Import project
         run: godot --headless --import
 
