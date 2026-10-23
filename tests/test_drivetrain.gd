@@ -396,7 +396,7 @@ func test_a_free_crank_integrates_the_engine_law() -> void:
 	var expected := 2000.0 / DrivetrainScript.RADS_TO_RPM \
 			+ DrivetrainScript.crank_torque(spec, 2000.0, 0.5) * TICK / spec.engine_inertia
 	assert_float(dt.rpm / DrivetrainScript.RADS_TO_RPM).is_equal_approx(expected, 1e-9)
-	# The law is brief 02's: f * curve + (1 - f) * motoring, motoring -frac * peak at the redline.
+	# The engine law: f * curve + (1 - f) * motoring, motoring -frac * peak at the redline.
 	assert_float(DrivetrainScript.crank_torque(spec, 4000.0, 0.0)).is_equal_approx(-30.0, 1e-9)
 	assert_float(DrivetrainScript.crank_torque(spec, 2000.0, 0.25)) \
 			.is_equal_approx(0.25 * 200.0 + 0.75 * DrivetrainScript.motoring_torque(spec, 2000.0), 1e-9)

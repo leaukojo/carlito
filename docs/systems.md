@@ -256,8 +256,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   § Sourced figures): `ref_grip` (a mu multiplier, ASPHALT 1, none above) and `drag` (an ADDED
   rolling-resistance coefficient), blended by `grip_at(world_pos, response)` / `drag_at` over the
   splat weights pow-sharpened by `blend_sharpness`; `response` is the tyre's per-surface grip
-  (`docs/vehicles.md` § Tyres and surfaces). Unpainted ground reads Asphalt. Car 15
-  (`car_ice_patch`) on WET has no par window, which is why it is unregistered.
+  (`docs/vehicles.md` § Tyres and surfaces). Unpainted ground reads Asphalt.
 - `src/levels/island/level_1/` .. `level_6/`: six islands, terraced terrain + auto-splat +
   sea, each rostering at least car/truck/tractor/boat. `level_1` is the CI baked-level smoke
   target; 2-4 (Mountain, City, Racing) are hand-dressed on a one-shot `tools/gen_islands.gd`
@@ -284,3 +283,13 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
 - Depth-fade shading (`water.gdshader`): samples `hint_depth_texture`, fades
   `shallow_alpha`->`deep_alpha` / `water_color`->`deep_color` over `depth_fade_m`; `depth *
   2.0 - 1.0` for gl_compatibility.
+
+## Challenges
+
+- The one goal-driven, bridge-only feature: a `ChallengeDef` (`src/challenges/defs/*.tres`: course,
+  marker, goals, constraints, `par_s`) is listed only once it is in `ChallengeRegistry.DEFS`, which
+  orders the CHALLENGES screen and whose `problems()` the suite holds every entry to.
+- `ChallengeRunner` (a child of the level root) overlays the course, spawns a fresh body at its
+  marker and steps a pure-logic `ChallengeAttempt` with a `ChallengeFrame` each physics tick after
+  the vehicles; PASS / FAIL end it, RESET respawns, any respawn restarts it.
+- A def stays unregistered while it has no par window: `car_ice_patch` on WET.

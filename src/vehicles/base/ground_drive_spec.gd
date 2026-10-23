@@ -90,7 +90,7 @@ extends Resource
 @export var mu_lat := 0.95
 ## The rear tyres' side grip as a multiple of `mu_lat`: a rear-tyre hardware fact (a wider or a
 ## larger rear tyre), 1.0 on equal tyres. Understeer is the bar split and the tyre's load laws
-## (`docs/vehicles.md` § Balance).
+## (`docs/handling.md` § Balance).
 @export var rear_lat_grip := 1.0
 ## Twin tyres on each rear corner (a dual-rear-wheel van or truck): each carries half the corner's
 ## load, so the side grip and the cornering-stiffness law read at half load (`RayWheel.tyre_share`):
@@ -100,7 +100,7 @@ extends Resource
 ## Fractional mu lost per DOUBLING of load past the corner's static share
 ## (`RayWheel.corner_mass * g`); 0 = grip exactly linear in load, so weight transfer cannot move
 ## the balance. Car 0.10, truck/van/trailers 0.08, tractor 0.12 (soft flotation tyres), plane 0.
-## The cars' 0.10 reads low against sourced tyres (`docs/vehicles.md` § Balance); raising it
+## The cars' 0.10 reads low against sourced tyres (`docs/handling.md` § Balance); raising it
 ## re-derives the brake split.
 @export_range(0.0, 0.5) var load_sensitivity := 0.0
 ## The load at which the tyre's cornering stiffness peaks, as a multiple of the corner's static

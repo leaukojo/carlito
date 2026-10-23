@@ -6,7 +6,7 @@ extends RefCounted
 ## is `(k / 2 + bar) * t^2` and every newton of transfer goes through it. Below the grip curve's peak
 ## a wheel's side force is exactly its cornering stiffness times its slip. The angular damping's yaw
 ## moment `I * c * r` is a term of its own, and so is roll steer, an angle and not a grip.
-## Derivation and calibration: `docs/vehicles.md` § Balance. The model is a plain Dictionary
+## Derivation and calibration: `docs/handling.md` § Balance. The model is a plain Dictionary
 ## (`axles`), so a what-if edits it.
 
 const G := BrakeSizing.G

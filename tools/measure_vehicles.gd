@@ -37,7 +37,7 @@ const TRACK_DISTANCE := 200.0     ## m of straight running measured after that
 const MAX_LATERAL_DRIFT := 1.0    ## m off the latched forward axis over TRACK_DISTANCE
 const MAX_HEADING_DRIFT := 1.0    ## deg of heading change over the same stretch
 ## Ticks the whole front axle may spend off the ground over the pass, launch included: a wheelie.
-## The Kenney wheelbases are toy-scale under real COM heights (docs/vehicles.md § Pitch), so a COM
+## The Kenney wheelbases are toy-scale under real COM heights (docs/handling.md § Pitch), so a COM
 ## or damper edit can tip a rear-driven body onto its rear axle with no other test noticing.
 const MAX_FRONT_LIFT_TICKS := 0
 ## Variants whose tracking FAIL is a KNOWN, open defect: still measured, still printed as FAIL,
@@ -2314,7 +2314,7 @@ func _report_cornering(skipped: bool) -> void:
 		return
 	var axle := "front" if _corner_front >= _corner_rear else "rear"
 	var note := "  <-- SLID: peak is the last reading before the body let go" if _corner_slid else ""
-	# BalanceModel's free-rolling limit beside the reading (`docs/vehicles.md` § Balance: the pass
+	# BalanceModel's free-rolling limit beside the reading (`docs/handling.md` § Balance: the pass
 	# runs driven, at 9-23 deg of lock on these wheelbases).
 	var model := BalanceModel.axles(_car.spec, _corner_speed)
 	var lim := BalanceModel.limit(model)

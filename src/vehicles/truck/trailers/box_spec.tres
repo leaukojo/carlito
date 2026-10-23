@@ -19,8 +19,8 @@
 ;   - center_of_mass y 0.55 is 1.60 m above the road: the shape of a LOADED van trailer (palletised
 ;     freight stacks toward the roof). That makes this the catalog's worst roller: half-track 0.72
 ;     over 1.60 m tips it at 0.45 g against mu_lat 0.75, so a laden box ROLLS BEFORE IT SLIDES and
-;     takes the tractor with it over the ±1.5 deg plate. docs/heavy_vehicles.md § Truck sizing
-;     carries the formula and why the family's narrow track reads every threshold low.
+;     takes the tractor with it over the ±1.5 deg plate. The formula, and why the family's narrow
+;     track reads every threshold low: docs/truck.md § Truck sizing.
 ;   - spring_rate 249000 is sized off the load the bogie ACTUALLY carries, 17 527 kg: 28 656 N per
 ;     wheel compresses it 0.115 m of its 0.32 m travel (36 %), the same fraction every trailer sits
 ;     at. Re-derive it whenever the share moves (weight on the plate is weight off the bogie), or

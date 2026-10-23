@@ -17,7 +17,7 @@ Rules: `src/vehicles/CLAUDE.md` (+ the family's nested file). Steps:
    `measure_vehicles` for
    accel/top speed, `track` for straight-line, `corner` for an anti-roll change, `measure_grade`
    / `measure_rough` for a diff or traction change. Hand `all` / `baseline` sweeps to the user.
-5. A hand-written figure in `docs/vehicles.md` / `docs/drivetrain.md` / `docs/heavy_vehicles.md`
+5. A hand-written figure in `docs/vehicles.md` / `docs/handling.md` / `docs/drivetrain.md` / `docs/truck.md` / `docs/tractor.md`
    that moved gets the new value and date; a generated table is re-run (`doc=<id>`).
 6. Ask the user to drive-test, one vehicle per checklist: vehicle, level, what to try, what
    should feel different. Not after each tweak: finish the change first. Changes to different

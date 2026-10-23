@@ -1,11 +1,12 @@
 # Carlito — Architecture Overview
 
 Architecture map for agents. Product summary and standing rules: root `CLAUDE.md`; directory
-rules: the nested `CLAUDE.md` files; per-system detail: `docs/systems.md`, `docs/vehicles.md`
-(framework, tyres, brakes, body), `docs/drivetrain.md`, `docs/heavy_vehicles.md`, `docs/boat.md`,
-`docs/flight.md`, `docs/rail.md`, `docs/level_kit.md`; measured figure tables and the measure
-tools (read to measure or quote a figure): `docs/vehicle_measurements.md`; sourced figures and
-references (read only to check or change a sourced value): `docs/sources.md`. Open work: `docs/plans/`; backlog: `TODO.md`.
+rules: the nested `CLAUDE.md` files. Per-system detail: `docs/systems.md` (plumbing),
+`docs/vehicles.md` (framework, tyres, brakes), `docs/handling.md` (the body), `docs/drivetrain.md`,
+`docs/truck.md`, `docs/tractor.md`, `docs/boat.md`, `docs/flight.md`, `docs/rail.md`,
+`docs/level_kit.md`; measured figure tables and the measure tools (read to measure or quote a
+figure): `docs/vehicle_measurements.md`; sourced figures and references (read only to check or
+change a sourced value): `docs/sources.md`. Open work: `docs/plans/`; backlog: `docs/TODO.md`.
 What goes where (CLAUDE.md / code comment / `docs/`): root `CLAUDE.md` § Working style.
 
 ## The big idea: one contract, everything flows through it
@@ -38,8 +39,8 @@ window.__carlito stash  --poll 60 Hz-->  Bridge autoload
 Bridge --publish 20 Hz--> window.__carlito.publish() --> postMessage {carlitoOutput}
 ```
 
-One input path (`docs/systems.md` § Input pipeline), honest telemetry (§ Telemetry &
-dashboard), web-only transport (§ Bridge).
+One input path, honest telemetry, web-only transport: `docs/systems.md` § Input pipeline,
+§ Telemetry & dashboard, § Bridge.
 
 ## Vehicles
 
@@ -59,7 +60,7 @@ dashboard), web-only transport (§ Bridge).
 ### The tractor and the truck
 
 Tractor (20 ISOBUS signals) and truck (J1939 chassis; per variant a CANopen body network, an
-ISO 11992 trailer bus, or none): `docs/heavy_vehicles.md`.
+ISO 11992 trailer bus, or none): `docs/tractor.md`, `docs/truck.md`.
 
 ## Levels and the authoring kit
 

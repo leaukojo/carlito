@@ -1,6 +1,6 @@
 # Truck & trailers — rules
 
-Tour, signal tables, derivations: `docs/heavy_vehicles.md`. Shared towing and vehicle rules:
+Tour, signal tables, derivations: `docs/truck.md`. Shared towing and vehicle rules:
 `src/vehicles/CLAUDE.md`.
 
 - `hopper_load` reaches the chassis only through `mass`: never a laden term in `axle_load` or

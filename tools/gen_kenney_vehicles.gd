@@ -136,7 +136,7 @@ const CAR_BASE := {
 	"max_suspension_force": 30000.0, "rest_length": 0.28,
 	# Yaw dynamic index k²/(a·b) (VehicleSpec.yaw_dynamic_index): the measured cars' median, which
 	# SUVs and light vans share; pickups and the open-wheelers override (bands and sources:
-	# docs/vehicles.md § Inertia).
+	# docs/handling.md § Inertia).
 	"yaw_index": 1.03,
 	# Link geometry as a share of 100 % (`_derive_link_slopes`), inside a road car's 20-50 %
 	# anti-dive and 30-70 % anti-squat. Pitch is judged per g against the body's own h / L and
@@ -241,7 +241,7 @@ const CAR_BASE := {
 	"engine_inertia": 0.20, "coupling": VehicleSpec.Coupling.CONVERTER, "clutch_reserve": 1.5,
 	"converter_stall_ratio": 1.0, "lockup_gear": 1,
 	"launch_rpm_over_idle": 0.0,
-	# Ackermann 1.0 (docs/vehicles.md § Steering geometry), an estimate: real road cars run partial
+	# Ackermann 1.0 (docs/handling.md § Steering geometry), an estimate: real road cars run partial
 	# (~40-60 %, a patent claim, for the loaded outer tyre at high g), but here the low-speed scrub is
 	# the point and the road-speed split is ~0.15 deg; the step-steer sweep is the guard.
 	"max_steer_deg": 38.0, "steer_speed": 7.0, "ackermann": 1.0,
@@ -259,7 +259,7 @@ const TRUCK_BASE := {
 	# Flat-fronted working truck: cd 0.70, crr 0.007 for low-resistance commercial radials.
 	"cd": 0.70, "crr": 0.007,
 	# Springs and dampers are an honest choice bounded by launch pitch on the toy 1.94 m wheelbase
-	# (docs/vehicles.md § Pitch): 400 kN/m (~2.3 Hz on `garbage-truck`'s 1.9 t front corner, an
+	# (docs/handling.md § Pitch): 400 kN/m (~2.3 Hz on `garbage-truck`'s 1.9 t front corner, an
 	# estimate for an unladen steer axle) at ~0.6 / 0.75 of critical (bump / rebound), over a road
 	# damper's 0.2-0.4 (Gillespie): a road band rings the D1>D2 shift's pitch harder (an estimate:
 	# not re-measured on the medium-duty gearing).
@@ -268,7 +268,7 @@ const TRUCK_BASE := {
 	# clear of mu_lat 0.75, so the firetruck slides before it rolls (the garbage truck overrides).
 	"mass": 4000.0, "com_y": 0.75, "spring_rate": 400000.0, "damper_bump": 31000.0,
 	"damper_rebound": 41000.0, "max_suspension_force": 120000.0, "rest_length": 0.32,
-	# Yaw index 0: Jolt's uniform-density tensor; no measured heavy truck (docs/vehicles.md § Inertia).
+	# Yaw index 0: Jolt's uniform-density tensor; no measured heavy truck (docs/handling.md § Inertia).
 	"yaw_index": 0.0,
 	# One rate for every corner; no Kenney body declares a rear axle share of its own.
 	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
@@ -313,7 +313,7 @@ const TRUCK_BASE := {
 	# `CityBus_Pac02Tire.tir`), a truck tyre running at its rated `Fz0` as a loaded truck's does.
 	# Without a bar BalanceModel.limit reads firetruck +0.5 % front-first and garbage-truck -1.2 %
 	# rear-first, as the corner pass does (front 0.99 / 0.94; rear 0.97 / 0.99): margins inside the
-	# model's error at the pass's steer (docs/vehicles.md § Balance).
+	# model's error at the pass's steer (docs/handling.md § Balance).
 	"load_sensitivity": 0.08, "cornering_peak_load": 3.33,
 	# The 2021 B6.7's top Performance rating (Cummins): 325 hp, 750 lb-ft (1017 N·m) at 1800, governed
 	# 2600, which is 890 N·m at rated speed. Idle 700 at half the peak and 1200 rpm at 0.81 of it (the
@@ -373,7 +373,7 @@ const VAN_BASE := {
 	"mass": 4000.0, "com_y": 0.65, "ride_hz": 1.28, "zeta_bump": 0.31, "zeta_rebound": 0.43,
 	"max_suspension_force": 90000.0, "rest_length": 0.32,
 	# Yaw index 0.91, estimate: no 4-5 t van is measured; the median of the full-size Ford E-series
-	# vans (0.87 / 0.91 / 0.94; docs/vehicles.md § Inertia).
+	# vans (0.87 / 0.91 / 0.94; docs/handling.md § Inertia).
 	"yaw_index": 0.91,
 	# CAR_BASE's geometry: the heavy vans' short wheelbases pitch the same way.
 	"anti_dive": 0.4, "anti_squat": 0.5,
@@ -457,7 +457,7 @@ const TRACTOR_BASE := {
 	# cd 0.90 (nothing streamlined), crr 0.020 (worst in the project, lugged tires).
 	"cd": 0.90, "crr": 0.020,
 	"mass": 4200.0, "com_y": 0.35,
-	# Yaw index 0: Jolt's uniform-density tensor; no measured tractor (docs/vehicles.md § Inertia).
+	# Yaw index 0: Jolt's uniform-density tensor; no measured tractor (docs/handling.md § Inertia).
 	"yaw_index": 0.0,
 	# A tractor's "suspension" is its tyres: 330 kN/m is 2.5 Hz on the 1.33 t front corner of the
 	# 7 t variant (a sedan is ~1.3 Hz), static sag 1330*9.8/330000 = 4.0 cm, 33% of the 0.12 m
@@ -561,7 +561,7 @@ const TRACTOR_BASE := {
 	# start gear is a driver preset, higher for an empty run and lower with a load; picked here as an
 	# AMT picks its own from gross weight and gradient: the highest that beats the standing load
 	# twice and locks a floored launch within 1.5 s on the rig's mass. D7 bare on the flat, D6 with
-	# the farm tipper, deeper on mud or a grade (docs/heavy_vehicles.md § Tractor, implement & ISOBUS).
+	# the farm tipper, deeper on mud or a grade (docs/tractor.md § Tractor, implement & ISOBUS).
 	"shift_up_light_rpm": 1500.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0,
 	"shift_dwell_s": 1.5, "skip_shifts": true, "start_gear_max": 7,
 	# The clutch overlap: 0.3 s, a simulated tractor powershift's baseline (YTO TX4A, Agriculture
@@ -684,7 +684,7 @@ const VARIANTS := {
 	# cuts the ignition 0.15 s through a shift (the torque interruption CAR_BASE's converter has no
 	# need of) and closes at its rating: on J 0.06 the rev drop already spans ~2 ticks, a dog box's
 	# near-instant engagement (estimate).
-	# `yaw_index` 0: no measured open-wheeler, so Jolt's tensor (docs/vehicles.md § Inertia).
+	# `yaw_index` 0: no measured open-wheeler, so Jolt's tensor (docs/handling.md § Inertia).
 	"race": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.25, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": true, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
 	"race-future": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": false, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
 	# Commercial bodies: RWD, governed at 180 like the real things (measured 198-200 ungoverned).
@@ -694,7 +694,7 @@ const VARIANTS := {
 	"van": {"family": "car", "roll_steer_rear": 0.10, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.58, "anti_roll_rate": 24000.0, "anti_roll_rate_rear": 12000.0, "mu_lat": 0.88, "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
 	# `ride_lift` 0.08 on the flatbeds: their arches are drawn shallower than the tyre, so at the
 	# flush ride height the rear wheels broke through the bed floor.
-	# `yaw_index` 0.94, the measured pickups' median (docs/vehicles.md § Inertia): the empty bed
+	# `yaw_index` 0.94, the measured pickups' median (docs/handling.md § Inertia): the empty bed
 	# leaves the mass forward.
 	"pickup": {"family": "car", "roll_steer_rear": 0.10, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 14000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "ride_lift": 0.08, "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
 	"pickup-flat": {"family": "car", "roll_steer_rear": 0.10, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 14000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "ride_lift": 0.08, "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
@@ -755,7 +755,7 @@ const VARIANTS := {
 	# The ratio changes at 1.5 m/s² of ground acceleration at the crank's speed, JCB's "high" demand
 	# band for a CVT tractor (US 11,994,210: 1-2 m/s²). The relief at the axle is `mass g r`, 45.3 kN·m:
 	# the powershift's brakes (63 kN·m) hold it, as they hold its D1 stall (43.3 kN·m).
-	# Hill hold NONE: active standstill holds it in the transmission (docs/heavy_vehicles.md § The CVT
+	# Hill hold NONE: active standstill holds it in the transmission (docs/tractor.md § The CVT
 	# tractor), the hold the powershift's STANDSTILL compromise stands in for.
 	"tractor-cvt": {
 		"family": "tractor", "model": "tractor-kenney", "mass": 7000.0, "front_weight": 0.38,

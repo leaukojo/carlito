@@ -462,7 +462,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	# terms could take twice the cap.
 	# COMPROMISE: real rolling resistance is a moment on the wheel (the patch's pressure centre sits
 	# ahead of the axle); here it is a contact force outside the spin step. Undoing that is a torque
-	# inside the spin step and a re-check of the static hold (brief 03).
+	# inside the spin step and a re-check of the static hold (`docs/vehicles.md` § Holding at rest).
 	force_roll = surface_drag_force(v_long, rolling_crr + surface_drag, suspension_force,
 			long_mass, delta)
 	body.apply_force(forward * force_roll, contact_point - body.global_position)

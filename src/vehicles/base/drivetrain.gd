@@ -368,8 +368,8 @@ static func motoring_torque(p_spec: VehicleSpec, at_rpm: float) -> float:
 			rpm01) * peak_torque(p_spec)
 
 
-## Net torque the engine puts on its own crank (N·m) at `fuel` (the delivered fraction): brief 02's
-## one law, `f * curve + (1 - f) * motoring`. With the key off it gets no fuel and turns against the
+## Net torque the engine puts on its own crank (N·m) at `fuel` (the delivered fraction): the
+## one engine law, `f * curve + (1 - f) * motoring`. With the key off it gets no fuel and turns against the
 ## motoring law alone; the caller stops it at zero.
 static func crank_torque(p_spec: VehicleSpec, at_rpm: float, fuel: float,
 		p_running := true) -> float:
@@ -631,7 +631,7 @@ static func stall_axle_torque(p_spec: VehicleSpec) -> float:
 ## ratio of 0 is a hold, never a division: active standstill, the park pawl's form at the
 ## hydrostatic relief (`cvt_max_axle_torque`). Its mechanical ranges change synchronously as it
 ## drives, and the gear byte publishes the one engaged. No `ShiftPolicy`, no launch clutch, no shift.
-## Sources and figures: docs/heavy_vehicles.md § The CVT tractor.
+## Sources and figures: docs/tractor.md § The CVT tractor.
 
 ## The variator's efficiency, 45-degree bent-axis hydrostatic units (Renius & Resch, ASAE Lecture 29,
 ## 2005, p. 25).
@@ -828,7 +828,7 @@ func gearbox_ratio() -> float:
 ## over-corrects on the first tick.
 
 ## Its rating is the hardware's own (`GroundDriveSpec.retarder_rating_nm`, at the gearbox output);
-## retardation figures: docs/heavy_vehicles.md. `test_truck` pins a band per spec. Raising a rating
+## retardation figures: docs/truck.md. `test_truck` pins a band per spec. Raising a rating
 ## means re-checking `RETARDER_SLIP_TARGET`.
 const RETARDER_CUTOUT_MS := 1.5  ## m/s below which a driveline brake does nothing at all
 const RETARDER_FULL_MS := 8.0    ## m/s (~29 km/h) at which it reaches its rating

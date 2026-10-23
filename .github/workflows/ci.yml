@@ -258,7 +258,7 @@ jobs:
           fi
 
       # A tractor unit's steer wheels keep >= 8.5 kN through a coupled gear-1 launch, or a
-      # wheelbase / COM edit lifts them (docs/heavy_vehicles.md § Truck sizing). --fixed-fps 60
+      # wheelbase / COM edit lifts them (docs/truck.md § Truck sizing). --fixed-fps 60
       # is the same 60 Hz tick, output byte-identical, run faster than real time. The timeout
       # catches a tool that fails to parse and never quits. Judged by output: each run prints
       # two "steer-wheel floor:" lines (P2, P6); a FAIL on either, or fewer than two, fails.
@@ -283,7 +283,7 @@ jobs:
       # A truck that loses its air: spring brakes hold it on 18 %, the auto-neutral keeps it from
       # driving away, and from 30 km/h it stops at UN R13's secondary-braking floor — on the
       # garbage truck and both tractor units with their trailers braking too
-      # (docs/heavy_vehicles.md § Air). Judged by output: any FAIL, or no summary line, fails.
+      # (docs/truck.md § Air). Judged by output: any FAIL, or no summary line, fails.
       - name: Drained air (spring brakes + auto-neutral, live)
         shell: bash
         timeout-minutes: 5

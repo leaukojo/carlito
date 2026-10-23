@@ -1,6 +1,6 @@
 extends Node3D
 ## Dev utility and CI gate: a live truck losing its air. Below `TruckTelemetry.AIR_SPRING_BRAKE_BAR`
-## on either circuit the spring brakes apply and the box drops to N (`docs/heavy_vehicles.md` § Air, retarder, axle load);
+## on either circuit the spring brakes apply and the box drops to N (`docs/truck.md` § Air, retarder, axle load);
 ## this drives a real body through it, three passes per variant:
 ##
 ## - `park`: on the regulation grade (`BrakeSizing.regulation_grade`, the rig's mass), nose up the
@@ -55,7 +55,7 @@ const STOPPED_MS := 0.05
 const STOPPED_HOLD_S := 3.0     ## stopped this long, still under the gate, ends the roll pass
 ## How far a stopped body may move in STOPPED_HOLD_S (m): the springs settling, not a roll-off.
 const STOPPED_MAX_M := 0.05
-## Movement allowed while held (m). Measured 2026-10-08 (docs/heavy_vehicles.md § Air): 0-2.2 mm
+## Movement allowed while held (m). Measured 2026-10-08 (docs/truck.md § Air): 0-2.2 mm
 ## held, 23 mm on a semi whose trailer is not braked.
 const PARK_MAX_M := 0.01
 const FLOOR_MAX_M := 0.01

@@ -112,7 +112,7 @@ const REF_N := 3000.0  ## the even corner load the laws are referred to
 ## The loads the clamps allow, as multiples of REF_N: `load_scaled_mu`'s floor up to the default
 ## `max_suspension_force` on a 300 kg corner (30 kN / 2943 N).
 const LOADS: Array[float] = [0.25, 0.5, 1.0, 2.0, 10.2]
-## `cornering_peak_load` around the sourced 1.92-3.33 (`docs/vehicles.md` § Balance).
+## `cornering_peak_load` around the sourced 1.92-3.33 (`docs/handling.md` § Balance).
 const PEAKS: Array[float] = [1.5, 1.92, 2.56, 3.33]
 
 

@@ -4,8 +4,8 @@ Shared context: `00_README.md`. Root cause: none of the three; the engine and co
 06) are in, and what sits between the driver and them (how many ratios, what the pedal commands,
 what fuel reads) is still a first cut. Size: large, five separable items.
 
-Builds on `docs/drivetrain.md` § Crank and coupling, § Converter, § Hill hold, § The shift policy,
-§ Measuring a vehicle. Rule 3: every new state (CVT range, governor droop, fuel rate) is read out of
+Builds on `docs/drivetrain.md` § Crank and coupling, § Converter, § Hill hold, § The shift policy;
+`docs/vehicle_measurements.md` § Measuring a vehicle. Rule 3: every new state (CVT range, governor droop, fuel rate) is read out of
 the sim.
 
 ## Why after 10 and 11
@@ -24,7 +24,7 @@ the sim.
   1.10-1.15x): every upshift drops rpm by a third and reads as a lurch. The semis' light map cannot
   land in the D13's cruise band and their skip-shifts never fire (`docs/drivetrain.md` § The shift
   policy); a floored empty tractor holds D4 ~0.5 s, under the trace's 1.0 s dwell gate
-  (`docs/heavy_vehicles.md`).
+  (`docs/tractor.md`).
 - **Route:** keep the RAMN byte as the shared coarse signal (direction and a D range) and add a
   truck/tractor-only J1939 gear signal (ETC2 selected/current gear, SPN 524/523) reporting the real
   gear. Contract change (`contract-edit` skill, sloppyCAN copy); `TOP_GEAR` then bounds only the
@@ -40,7 +40,7 @@ the sim.
 - A hand throttle holds PTO speed (540/1000) through a load change. Needs a contract signal for the
   hand throttle; it enters through `VehicleInput` (root rule 5).
 - **Done when** the tractor at 540 PTO holds speed within its droop as 11's draft comes on (the
-  D497 law, `docs/heavy_vehicles.md` § Draft, hitch, linkage).
+  D497 law, `docs/tractor.md` § Draft, hitch, linkage).
 
 ## 3. CVT
 

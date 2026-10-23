@@ -2,3 +2,4 @@
 global_script_class_cache.cfg    # engine-generated under .godot/
 src/shell/level_weights.json     # written by the CI export, not committed
 VehicleSpec.air_drive            # a rejected design, named so it is not re-proposed
+docs/sources.md:docs/sources.md § 4.5.5 Axle Roll Steer    # a section of the cited MRA manual, not of this doc

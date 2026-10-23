@@ -3,7 +3,7 @@
 ## RAMN firmware: gear bytes past 6 (outside this repo)
 
 Carlito's `gear` byte runs D1-D24 (contract v52), and sloppyCAN reads its top off the contract
-(`docs/plans/drivetrain_control.md` phase 4). Flash only once v52 is on stable. RAMN's shift
+(`docs/plans/drivetrain_control.md` phase 4). RAMN's shift
 joystick stops at `MAX_GEAR_VALUE` 0x06 (`../RAMN/firmware/RAMNV1/Core/Inc/ramn_vehicle_specific.h`).
 Raise it to 0x18, then check:
 - the joystick step (`ramn_sensors.c`: R 0xFF wraps up to N 0, and the top clamp);

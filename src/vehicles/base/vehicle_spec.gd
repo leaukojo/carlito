@@ -123,7 +123,7 @@ enum Coupling { CONVERTER, CLUTCH }
 @export var start_gear_max := 0
 ## A power-split CVT (`Drivetrain.is_cvt`): each mechanical range's top gearbox speed ratio (output
 ## over input), ascending; the ratio is drivetrain state (`Drivetrain.cvt_i`) and `gear_ratios` stays
-## empty. Empty = a stepped box. Sources: docs/heavy_vehicles.md § The CVT tractor.
+## empty. Empty = a stepped box. Sources: docs/tractor.md § The CVT tractor.
 @export var cvt_range_tops: PackedFloat32Array
 ## The CVT controller's ratio rate (`Drivetrain.cvt_ratio_step`), as the ground acceleration (m/s²)
 ## it lets the ratio change at the crank's speed.

@@ -24,7 +24,7 @@ const COUPLE_SPEED_MS := TowedBody.RAISE_SPEED_MS
 const TIP_NOTICE_DWELL_S := 5.0
 
 ## Road-speed cap (km/h) while a tipping body is off its rest: a raised body puts the load metres
-## over the road, and the rig rolls in any real turn (docs/heavy_vehicles.md § Truck sizing). The
+## over the road, and the rig rolls in any real turn (docs/truck.md § Truck sizing). The
 ## interlock only refuses raising on the move; this is what stops driving off with it up.
 const BODY_UP_CAP_KMH := 5.0
 const BODY_UP_NOTICE := "BODY UP - %d KM/H LIMIT" % int(BODY_UP_CAP_KMH)

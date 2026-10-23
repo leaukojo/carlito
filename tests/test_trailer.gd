@@ -463,7 +463,7 @@ func test_every_trailer_is_a_towed_body_with_its_wheels_authored_to_match_its_sp
 
 
 func test_every_semi_trailer_pairs_its_bogie_under_a_bar_sized_off_its_own_spring() -> void:
-	# The bar is what holds a trailer's lean in a corner (docs/heavy_vehicles.md § Truck sizing), and
+	# The bar is what holds a trailer's lean in a corner (docs/truck.md § Truck sizing), and
 	# one the bogie never pairs is silently inert. Sized off the trailer's own spring, never copied: a
 	# box's bar on the flatbed would roll it no further than its tractor allows.
 	for path in Catalog.TRAILERS:

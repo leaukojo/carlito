@@ -35,7 +35,7 @@ factor, +28 % on `garbage-truck`'s (`docs/sources.md`). A lifted driven pair spi
 `G eta T / (n I_w + eta J G²)`, not `G eta T / (n I_w)`. The crank's own step is semi-implicit in
 its curve's slope (`crank_compliance`): `race`'s 6600-6800 rpm droop gains ~3 a tick explicitly.
 A driven PTO is a constant torque in the same step (`Drivetrain.accessory_torque`, its power at
-the PTO's rated engine speed: `docs/heavy_vehicles.md` § Draft, hitch, linkage), which the idle floor, the
+the PTO's rated engine speed: `docs/tractor.md` § Draft, hitch, linkage), which the idle floor, the
 rev-match blip, the limiter and drag-torque control fuel as load. The key off runs it down to 0 on the motoring law's friction (the `sedan`'s from idle in about one
 and a half seconds); Ignition puts it back on idle.
 
@@ -74,7 +74,7 @@ sourced.
   On a free crank (N or P) a tick's fuel is capped at what lands it on the setting
   (`Drivetrain.fuel_to_land`): full fuel moves it ~90 rpm a tick, past an isochronous line ~1 rpm
   wide, which read at the tick's start it would jump both ways and cycle on. A road truck's PTO mode
-  runs the same law at its set speed, isochronously (`docs/heavy_vehicles.md` § The refuse body: a second network across a gateway).
+  runs the same law at its set speed, isochronously (`docs/truck.md` § The refuse body: a second network across a gateway).
   COMPROMISE: at the top setting the line is the curve's own 2200-2600 tail, an 18 % droop; the
   sourced 7 % puts the high idle near 2350 and takes the top speed down to D16's road speed there
   (`docs/vehicles.md` § Rejected designs, "torque-curve tails"). Full demand is full fuel to the
@@ -284,7 +284,7 @@ rate over `shift_handover_s` (`Drivetrain.handover_rate`), never past the rating
     torque through the shift instead [98]. The reduction also covers the pull-away's close onto
     turning wheels. Without it, the crank's `J Δω / t` reaches the wheels: a floored skip D7>D13 hands
     over several times the torque it held before and drops it on the lock tick, and the nose rings
-    16 points past the `front axle` gate (`docs/vehicles.md` § Pitch).
+    16 points past the `front axle` gate (`docs/handling.md` § Pitch).
 - **AMT** (the semis; `shift_handover_s` within its `shift_cut_s`, an estimate): after its cut, the
   clutch carries the delivered torque plus `J Δω / t`. The cut is its interruption; its fuel returns
   over `shift_torque_ramp_s` (an estimate; a step rings).
@@ -353,7 +353,7 @@ a TCU's grade logic; the 2 % is an estimate). The pedal's map then reads it:
   its start gear from gross weight and grade, the highest whose clutch slips under a reference
   (their example is `START_SLIP_S`'s). On the flat the bobtail `semi` starts in D6 and with the 24 t box in D3
   (D1 on 8 %); the tractor in D7 bare and D6 with the farm tipper (D4 on 10 %). The gear is held
-  through the launch until the coupling locks (`docs/heavy_vehicles.md` § Tractor, implement &
+  through the launch until the coupling locks (`docs/tractor.md` § Tractor, implement &
   ISOBUS), and the lock starts the dwell's clock: the drive tyres slipping at their peak lock a
   laden launch under the pedal's downshift point while it gains speed. A launch that has not moved steps down
   by ratio, not index (`ShiftPolicy.start_step_down`, `START_STEP` 1.3), so each step covers the
@@ -374,7 +374,7 @@ Floored climbs (`garbage-truck` 8 / 15 %, `semi` 8 %) keep every shift; the floo
 steps D1 to D7 a gear at a time, each gear holding the dwell on the drive axle's grip.
 
 **The CVT.** `tractor-cvt` runs a power-split CVT (`spec.cvt_range_tops`, `Drivetrain.is_cvt`;
-the tour, sources and measured figures: `docs/heavy_vehicles.md` § The CVT tractor). Its ratio is
+the tour, sources and measured figures: `docs/tractor.md` § The CVT tractor). Its ratio is
 drivetrain state, moved by its controller before the spin solve and solved in it as the gear, at
 the overall speed ratio rather than its inverse, so a ratio of 0 holds: active standstill, the park
 pawl's path at the hydrostatic relief (`Drivetrain.standstill_hold`). The engine runs the all-speed
@@ -397,7 +397,7 @@ to 6784 rpm over 12 ticks. The equipment beside the limiter stands on its own me
   is kept as the EBS equipment it is, for low grip.
 - The tractor's launch ramp (`launch_engage_s`) is the powershift's modulation: with the
   whole rating on the first tick its rears flash to high slip and the front axle unloads far more
-  than with the ramp. It pulls away in D1 (`docs/heavy_vehicles.md` § Tractor,
+  than with the ramp. It pulls away in D1 (`docs/tractor.md` § Tractor,
   implement & ISOBUS).
 
 **Engine braking under a fuel cut.** The governor fades `f` across `GOVERNOR_BAND`, and the

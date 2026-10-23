@@ -2,7 +2,7 @@
 
 Asset kits, editor tools, terrain, scatter, roads, and the bake that turns authoring content
 into what ships. Runtime systems: `docs/systems.md`, `docs/vehicles.md`,
-`docs/heavy_vehicles.md`; walkthrough: `docs/making_a_level.md`; gotchas: `kit/CLAUDE.md`,
+`docs/truck.md`, `docs/tractor.md`; walkthrough: `docs/making_a_level.md`; gotchas: `kit/CLAUDE.md`,
 `src/levels/CLAUDE.md`. Editor UX: `addons/carlito_kit/`; data + runtime-safe logic: `kit/`
 (`@tool` scripts, pure unit-tested cores). No `EditorInterface` where the baker touches —
 game-mode tool scenes bake in CI.

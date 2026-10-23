@@ -6,6 +6,8 @@
 //   - a `docs/plans/` link to a deleted plan (also unbackticked);
 //   - `Class.member` on a project class (class_name or preload alias) whose member appears
 //     nowhere in code. Engine classes are skipped by construction.
+// Also, anywhere in those docs and in .gd / .tres / .tscn / .yml comments: a `§ Name` that names no
+// heading or run-in head of its doc (`checkAnchors`).
 //     node tools/check_docs.mjs
 // Paths outside the repo (`../sloppycan/...`) are not checked. A hit is either fixed or added
 // to tools/docs_allow.txt (a rejected design named on purpose, a generated file) with a reason;
@@ -118,6 +120,94 @@ for (const f of gdFiles) {
   });
 }
 
+// `§ Name` anchors. A doc's anchors are its headings and its bold or italic run-in heads; a
+// reference resolves when its text starts with one (so "§ Balance: the pass" finds "Balance").
+// The target is the doc path just before the §, a § chained after another (", § X", " and § X"),
+// or else the file itself; a bare § in code has no file to mean, so it is skipped.
+const anchorCache = new Map();
+function anchorsOf(doc) {
+  if (!anchorCache.has(doc)) {
+    const set = [];
+    for (const line of read(doc).split('\n')) {
+      const h = /^#+\s+(.*)$/.exec(line);
+      if (h) set.push(h[1]);
+      for (const m of line.matchAll(/\*\*([^*]+)\*\*/g)) set.push(m[1]);
+      const it = /^\s*(?:- )?\*([^*\s][^*]*)\*/.exec(line);
+      if (it) set.push(it[1]);
+    }
+    anchorCache.set(doc, set.map((a) => a.replace(/`/g, '').replace(/[.:]\s*$/, '').trim().toLowerCase())
+      .filter(Boolean));
+  }
+  return anchorCache.get(doc);
+}
+// Characters of `rest` an anchor covers, or 0. A reference may shorten a heading to its leading
+// words ("§ Truck sizing" for "Truck sizing (derivations)") if it stops at punctuation or "and" there.
+function leadMatch(anchor, rest) {
+  if (rest.startsWith(anchor) && !/[a-z0-9]/.test(rest[anchor.length] ?? '')) return anchor.length;
+  const words = anchor.split(/\s+/);
+  for (let k = words.length - 1; k >= 1; k--) {
+    const lead = words.slice(0, k).join(' ').replace(/[,:;.]$/, '');
+    if (rest.startsWith(lead) && /^($|[^a-z0-9\s]|\s+(and|or)\s)/.test(rest.slice(lead.length))) return lead.length;
+  }
+  return 0;
+}
+function resolveDoc(p, fromDir) {
+  for (const c of [posix.normalize(posix.join(fromDir, p)), posix.normalize(p)]) if (fileSet.has(c)) return c;
+  const hits = files.filter((f) => f.endsWith('/' + p));
+  return hits.length === 1 ? hits[0] : null;
+}
+function checkAnchors(text, file, isDoc, lineAt) {
+  // Line breaks and comment markers blank out to spaces of the same length, so offsets stay lines.
+  const flat = text.replace(/\n[ \t]*(?:#+|;+)?/g, (w) => ' '.repeat(w.length));
+  let chainDoc = null;
+  let chainEnd = -1;
+  for (const m of flat.matchAll(/`?([\w./-]+\.md)`?|§ /g)) {
+    if (m[1]) {
+      // "root `CLAUDE.md`" names the repo root's, not the nearest one.
+      const root = /root\s+`?$/.test(flat.slice(Math.max(0, m.index - 6), m.index));
+      chainDoc = /^\.\./.test(m[1]) ? undefined : resolveDoc(m[1], root ? '.' : posix.dirname(file));
+      chainEnd = m.index + m[0].length;
+      continue;
+    }
+    const glue = flat.slice(chainEnd, m.index);
+    const doc = chainEnd >= 0 && /^[\s`,;(]*(?:and|or)?[\s`(]*$/.test(glue) ? chainDoc : (isDoc ? file : undefined);
+    if (doc === undefined || doc === null) continue; // outside the repo, or no file to mean
+    // The reference's text, backticks dropped and runs of space collapsed, each char mapped to flat.
+    let rest = '';
+    const at = [];
+    for (let i = m.index + 2; i < flat.length && rest.length < 200; i++) {
+      const c = flat[i];
+      if (c === '`' || (/\s/.test(c) && rest.endsWith(' '))) continue;
+      rest += /\s/.test(c) ? ' ' : c.toLowerCase();
+      at.push(i);
+    }
+    const hit = Math.max(0, ...anchorsOf(doc).map((a) => leadMatch(a, rest)));
+    if (!hit) {
+      const said = flat.slice(m.index + 2, m.index + 202).replace(/`/g, '').replace(/\s+/g, ' ');
+      const words = said.split(/[,;:()]|\s(?:and|or)\s|\.\s/)[0].trim();
+      report(`${file}:${lineAt(m.index)}`, 'missing anchor', `${doc} § ${words}`);
+      chainEnd = -1;
+    } else {
+      chainDoc = doc;
+      chainEnd = at[hit - 1] + 1;
+    }
+  }
+}
+function lineIndex(text) {
+  const starts = [0];
+  for (let i = 0; i < text.length; i++) if (text[i] === '\n') starts.push(i + 1);
+  return (pos) => { let lo = 0; while (lo + 1 < starts.length && starts[lo + 1] <= pos) lo++; return lo + 1; };
+}
+for (const f of docs) {
+  const t = read(f);
+  checkAnchors(t, f, true, lineIndex(t));
+}
+for (const f of files.filter((p) => /\.(gd|tres|tscn|yml)$/.test(p) && !p.startsWith('addons/gdUnit4/'))) {
+  // Comment runs only, kept on their own lines so a wrapped reference still reads whole.
+  const t = read(f).split('\n').map((l) => (/^\s*(#|;)/.test(l) ? l : '')).join('\n');
+  if (t.includes('§')) checkAnchors(t, f, false, lineIndex(t));
+}
+
 for (const key of allow) {
   if (!usedAllow.has(key)) problems.push(`  tools/docs_allow.txt: unused allow entry: ${key}`);
 }
@@ -134,7 +224,7 @@ for (const f of docs.filter((d) => /(^|\/)CLAUDE\.md$/.test(d))) {
 
 // Raw lines summed over the top-level docs/*.md (plans/ are temporary; sources.md is reference
 // data, read on demand). One cap, no per-doc caps.
-const DOCS_LINE_CAP = 3634;
+const DOCS_LINE_CAP = 3605;
 const docsLines = docs.filter((d) => /^docs\/[^/]+\.md$/.test(d) && d !== 'docs/sources.md')
   .reduce((sum, d) => sum + read(d).replace(/\n$/, '').split('\n').length, 0);
 if (docsLines > DOCS_LINE_CAP) overBudget.push(`  docs/*.md: ${docsLines} lines in total, cap ${DOCS_LINE_CAP}`);

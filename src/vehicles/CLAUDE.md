@@ -2,7 +2,7 @@
 
 True of every vehicle; family rules nest beside the code. Tour, derivations and the rejected
 designs (read before proposing a shared refactor): `docs/vehicles.md`, `docs/drivetrain.md`,
-`docs/heavy_vehicles.md`; measured figures: `docs/vehicle_measurements.md`; sourced figures and
+`docs/handling.md`, `docs/truck.md`, `docs/tractor.md`; measured figures: `docs/vehicle_measurements.md`; sourced figures and
 citations: `docs/sources.md`.
 
 ## Structure

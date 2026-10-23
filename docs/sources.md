@@ -198,7 +198,7 @@ is a fitment law (the mobility number), a later `GroundDriveSpec` field.
 | Soil factors of every class (Mud, R-1W lug, slick ...) | no published lug-against-road-tread figure found; D497 carries no tread term | estimate |
 | `crr_factor` | EU label C1 classes: A ≤ 6.5, B 6.6-7.7, C 7.8-9.0, D 9.1-10.5, E ≥ 10.6 N/kN [74]; summer B, all-season C, winter C's top, mud E's floor | sourced bands; each class's band an estimate |
 
-*Aero balance* (`downforce_front`, `race` and `race-future`; `docs/vehicles.md` § Aero balance):
+*Aero balance* (`downforce_front`, `race` and `race-future`; `docs/handling.md` § Aero balance):
 
 | Figure | Basis | Grade |
 | --- | --- | --- |
@@ -283,7 +283,7 @@ and the front opposite.
 | Even 1.103 steps over 7.0 to 1.6 | the shipped span is only the e16's gears 8-16, so sixteen ratios there step at the brief's 1.10 edge; its 22:1 span would deepen D1 past the stall hold (a COMPROMISE, `gen_kenney_vehicles.gd`) | computed |
 | The start gear's slip time, `START_SLIP_S` | an automatic start-gear selection: the highest start gear, up to a programmed maximum (3rd or 5th in its example), whose estimated clutch slip time on tractive effort, rolling resistance, grade and gross weight stays under a reference, "say 1.5 seconds" (a quarter of a second to five acceptable) [99]; the I-Shift picks its own and lets the driver take a lower one [37] | sourced; the half-ramp dead time an estimate |
 
-*CVT* (`tractor-cvt`; `docs/heavy_vehicles.md` § The CVT tractor):
+*CVT* (`tractor-cvt`; `docs/tractor.md` § The CVT tractor):
 
 | Figure | Basis | Grade |
 | --- | --- | --- |

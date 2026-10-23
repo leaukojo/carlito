@@ -1,6 +1,6 @@
 # Tractor & implements — rules
 
-Tour: `docs/heavy_vehicles.md` § Tractor, implement & ISOBUS and § The drawbar.
+Tour: `docs/tractor.md`.
 
 - Draft is ONE force at the hitch and the PTO ONE torque on the crank (`accessory_torque`), both
   from `_tick_extras`; `engine_load`, rpm sag and `wheel_slip` are their consequences, never add a

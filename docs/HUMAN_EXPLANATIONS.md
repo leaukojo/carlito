@@ -2,7 +2,7 @@
 
 A plain-language tour of how the game works, for someone joining the project. Detailed
 references: `docs/overview.md`, `docs/systems.md`, `docs/vehicles.md`,
-`docs/heavy_vehicles.md`, `docs/level_kit.md`. This file trades precision for readability.
+`docs/truck.md`, `docs/tractor.md`, `docs/level_kit.md`. This file trades precision for readability.
 
 ## What is this?
 
@@ -53,17 +53,17 @@ vehicle is a spec plus a scene), pure-math `Drivetrain`, one-raycast `RayWheel`,
 which subclasses extend only through `_make_telemetry()` and `_tick_extras()`. Detail:
 `docs/overview.md`, `docs/systems.md`.
 
-The **tractor** adds twenty-one ISOBUS-style signals. Press E to cycle the implement (spreader,
+The **tractor** adds twenty ISOBUS signals. Press E to cycle the implement (spreader,
 plough, power harrow, mower, tipping trailer, or nothing); what a machine declares over the data cable
 decides what the bus reports. The trailer has no electronics beyond lamps, so it reports as nothing
 attached, like a real dumb trailer. Signals do real work: the diff lock ties the rear wheels,
 `guidance_curvature` lets the simulator steer, and the plough puts a real rearward force at the
-hitch (engine bog, load climb and slip all follow from it). Detail: `docs/heavy_vehicles.md`.
+hitch (engine bog, load climb and slip all follow from it). Detail: `docs/tractor.md`.
 
 The **truck** family carries several networks: four variants share one J1939 chassis bus (air
 pressure is a real brake gate); the garbage truck adds a CANopen body bus behind a gateway; the
 cab-over semi tows over a brakes-only bus; the conventional tows with no trailer bus. "Nothing on
-the bus" and "nothing there" are different states. Detail: `docs/heavy_vehicles.md`.
+the bus" and "nothing there" are different states. Detail: `docs/truck.md`.
 
 The **train** is a 1D sim of carriages on a spline joined by spring couplers; the locomotive body
 follows it each tick. Raise the pantograph to draw power; the reverser rides the shared gear byte.

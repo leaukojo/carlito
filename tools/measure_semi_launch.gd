@@ -59,7 +59,7 @@ const RAMP_I_MAX := 5.0   ## anti-windup clamp on the integral, m
 const LEAN_G := 0.2
 
 ## Least force (N) a single steer wheel may carry through a launch (P2, and P6 after the
-## recouple): the shipped wheelbases' margin (docs/heavy_vehicles.md § Truck sizing). It catches a
+## recouple): the shipped wheelbases' margin (docs/truck.md § Truck sizing). It catches a
 ## wheelbase or COM edit that unloads a steer wheel (the 2.10 m wheelbase takes it to 0); the
 ## cab-over's ASR launch at full grip sits at ~7.8 kN, ~10 % over it.
 const STEER_FLOOR_N := 7000.0
@@ -568,7 +568,7 @@ func _finish() -> void:
 		print("%ssteer-wheel floor: %s launch min %.0f N against %.0f N: %s%s"
 				% ["\n" if i == Ph.P2 else "", PH_NAMES[i].substr(0, 2), floor_n, STEER_FLOOR_N,
 				"PASS" if phase_ok else "FAIL",
-				"" if phase_ok else " (a steer wheel goes light: wheelbase or COM, docs/heavy_vehicles.md)"])
+				"" if phase_ok else " (a steer wheel goes light: wheelbase or COM, docs/truck.md)"])
 	get_tree().quit(1 if _strict and not ok else 0)
 
 

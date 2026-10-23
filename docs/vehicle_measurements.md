@@ -1,7 +1,7 @@
 # Vehicle measurements
 
 The measure tools and every figure table they generate. The mechanisms behind the figures:
-`docs/vehicles.md`, `docs/drivetrain.md`, `docs/heavy_vehicles.md`.
+`docs/vehicles.md`, `docs/handling.md`, `docs/drivetrain.md`, `docs/truck.md`, `docs/tractor.md`.
 
 ## Measuring a vehicle: `tools/measure_vehicles.tscn`
 
@@ -111,18 +111,54 @@ region (`doc_region.gd`); refresh a figure by re-running, never by hand.
 | Coast-down (`coast`) | throttle cut where the accel pass ended, deceleration from resistance plus engine overrun (still in gear) | vs the `model` line: declared `0.5*rho*Cd*A*v^2 + crr*m*g` + `Drivetrain.overrun_torque / r`, mean per tick, then what the tyres carried (the wheels' spin keeps ~5-10 % of the overrun off the road), so declared + tyres closes on the measurement; the force column is on the all-up mass (`8000 kg chassis, 32000 kg all up`) |
 | Cornering (`corner`) | skid pad at 40 km/h held by a PI pedal, lock wound on over 10 s: peak lateral g (`v * yaw rate`) and the path's own (`acc_lat`, which a yaw overshoot into a slip angle does not inflate: `sedan` on ice 0.22 / 0.11 g), axle saturating first beside `BalanceModel.limit`'s free-rolling call (`pred`: its first axle and margin), the tyres' summed longitudinal force at the peak (the drive the speed hold spends), roll at the peak and the front axles' share of the lateral load transfer since the lock began (LLTD, off the corners' spring loads), wheels lifted | the anti-roll bar's sizing pass (4-8 deg target); a bang-bang pedal reads a biasing diff's power oversteer instead of grip |
 | Braking (`brake`) | straight stops at 30 / 60 / 100 % pedal from 100 km/h (or 90 % of top): time, distance, mean g, seconds any wheel skids (slip > 0.3) and any wheel's ABS acts | part pedal must stay proportional with no skid; ABS acts only where the pedal outruns a tyre |
-| Launch trace (`trace`, on the accel pass) | settled 1.5 s on the foot brake, then floored: a line per tick (`trace=<n>` every n, `trace_s=` how long, plus each gear change) of km/h, gear, published rpm, the wheel side's rpm, the coupling's state (`c`: O, S, L, or H on the converter's law) and slip, `clutch`, the torque it carried at the crank (`Tc`), delivered fuel, limiter and shift cuts, front-axle load over parked beside what steady transfer predicts at the body's measured acceleration (`xfer`: `m a h / L`, a coupled trailer's pull at the hitch's height, counted since parked: the header's `coupled` line prints the pull and the load a braked rig rests on its coupling at the settle) and that acceleration (`a g`), each driven wheel's signed slip and TC flag; then the launch gates, `each shift` (road speed, the crank rpm that speed gives in the gear left and the gear taken, and the shift's slip: its time until the coupling locks and the peak torque it carried at the crank) | gates (a report, never CI), over the launch to 100 km/h, to the held gear's upshift point under `gear=`, or to the pass's end (the 40 km/h tractor, so its launch wheelie is checked): no downshift, no gear left inside 1.0 s, no limiter tick (its cycle rate in Hz when it toggles), every upshift landing at 1.1x the downshift point at its pedal (`ShiftPolicy.down_rpm`) or more on road speed, no two opposite shifts inside 1.0 s (hunting), the front axle never lifted and its overshoot past steady transfer (`xfer`; the gap less road resistance, the trace's tick-late acceleration and the pitched pose's lean, `docs/vehicles.md` § Pitch) at most what a body damped at 0.3 of critical overshoots a step of the event's own swing (37 %, at least 5 points; `GATE_XFER_ZETA`), judged per event, the launch and each shift's settle; the peak prints its tick, gap, share and `a g`, and `front split` takes that gap apart; `per event` prints each event's own peak (the launch, then each shift's settle), so a smaller one is not hidden under the gate's figure. A gap inside a shift's handover or cut is kept apart (`in shifts`, with the shift: `docs/drivetrain.md` § The shift policy owns it), reported, not gated. `front why` prints the peak acceleration (a spike in `a g` is a driveline shock); `pitch` prints body pitch per g over the launch gear's middle half beside the springs-and-links prediction and `h / L`. `notc` runs the pass with the body's TC off (the limiter-at-launch symptom); `gear=<1-24>` holds that byte in the bridge's manual mode (the tractor's D1, held to its upshift point); `pedal=<0..1>` holds the launch at that pedal, with the gates and shift lines (per-tick lines only with `trace`); `contact` prints under each line every wheel's suspension force, compression, patch, contact normal and collider (`RayWheel.contact_collider`), where a one-tick load spike with no drive step shows its source |
-| Step steer (`step`, instead of the other passes) | at each speed of the family's set (cars 30 / 60 / 100 km/h, trucks 30 / 50 / 70, the tractor 15 / 25 / 34; none within 5.4 km/h of a governor), run up floored and settled 3 s on the PI pedal, the bridge steer stepped in one tick to 10 / 20 / 30 % of lock and held 3 s, once on the PI pedal, once lifted on the step: the body's yaw index (live tensor about its up axis over `m a b`), steady yaw rate (last 0.5 s) and lateral g, that rate over neutral steer `v * delta / L` off the bicycle angle (`docs/vehicles.md` § Steering geometry), the rise to 90 % of it, the overshoot, peak body slip and roll, most wheels lifted at once, LLTD over the steady tail against the step's first tick; on a held step the understeer gradient `K = (delta - L r / v) / (a_y / g)` in deg/g (`doc=steer` prints the smallest step's) | a spin is body slip past 20 deg, a rollover the up axis past 45 deg off vertical (its yaw and slip are then not handling figures). Run on a 400 m slab under the strip (a 100 km/h step travels ~35 m sideways in 3 s). The wheels follow the input at the body's `steer_speed` and speed taper, as for a driver |
-| Part pedal (`cruise`, `kickdown`, `pulse`, instead of the other passes) | at each speed of the family's set (cars 50 / 60 / 90 / 100 / 120 km/h, trucks 30 / 50 / 70 / 85, the tractor 15 / 25 / 34; none within 5.4 km/h of a governor), from a standstill in automatic D: a PI pedal (a fuel command through the pedal map's inverse, `PedalMap.pedal_for`, so its loop gain is the same on every map) follows a setpoint ramped at 1.0 m/s² (0.5 trucks and tractor) and holds it until 5 s within 0.3 m/s with no shift. `cruise`: gear, rpm, pedal, `engine_load` (the trucks' law, read for every body) and `fuel_rate` over that hold, the approach's peak fuel command and its shifts; `gear=<1-24>` holds it in that byte (no shift gates there). `kickdown`: the pedal stepped to 1, ticks to the first downshift, gears dropped, time to +20 km/h. `pulse[=<s>]`: re-settled, then 30 s of on/off pedal at that period (1.0 s), its duty the PI's latched each period (`duty=` fixes it): the speed band, shifts per minute and the gears seen | each window (approach and hold, kick, pulse) gets the hunting, landing and limiter gates on one line. Floored is judged on the fuel command, not the pedal: on the petrol map full fuel takes the least pedal that reaches it, under 1.00. A peak approach fuel of 1.00 is a floored approach, and its shift points are those of the pedal it held (the full-pedal ones only on a LINEAR map); a hold at full fuel is flagged as the body's top, not a cruise |
+| Launch trace (`trace`, on the accel pass) | § Launch trace, below | § Launch trace, below |
+| Step steer (`step`, instead of the other passes) | at each speed of the family's set (cars 30 / 60 / 100 km/h, trucks 30 / 50 / 70, the tractor 15 / 25 / 34; none within 5.4 km/h of a governor), run up floored and settled 3 s on the PI pedal, the bridge steer stepped in one tick to 10 / 20 / 30 % of lock and held 3 s, once on the PI pedal, once lifted on the step: the body's yaw index (live tensor about its up axis over `m a b`), steady yaw rate (last 0.5 s) and lateral g, that rate over neutral steer `v * delta / L` off the bicycle angle (`docs/handling.md` § Steering geometry), the rise to 90 % of it, the overshoot, peak body slip and roll, most wheels lifted at once, LLTD over the steady tail against the step's first tick; on a held step the understeer gradient `K = (delta - L r / v) / (a_y / g)` in deg/g (`doc=steer` prints the smallest step's) | a spin is body slip past 20 deg, a rollover the up axis past 45 deg off vertical (its yaw and slip are then not handling figures). Run on a 400 m slab under the strip (a 100 km/h step travels ~35 m sideways in 3 s). The wheels follow the input at the body's `steer_speed` and speed taper, as for a driver |
+| Part pedal (`cruise`, `kickdown`, `pulse`, instead of the other passes) | § Part pedal, below | § Part pedal, below |
+
+**Launch trace.** Measures:
+- settled 1.5 s on the foot brake, then floored: a line per tick (`trace=<n>` every n, `trace_s=` how long, plus each gear change) of km/h, gear, published rpm, the wheel side's rpm, the coupling's state (`c`: O, S, L, or H on the converter's law) and slip, `clutch`, the torque it carried at the crank (`Tc`), delivered fuel, limiter and shift cuts, front-axle load over parked beside what steady transfer predicts at the body's measured acceleration (`xfer`: `m a h / L`, a coupled trailer's pull at the hitch's height, counted since parked: the header's `coupled` line prints the pull and the load a braked rig rests on its coupling at the settle) and that acceleration (`a g`), each driven wheel's signed slip and TC flag; then the launch gates, `each shift` (road speed, the crank rpm that speed gives in the gear left and the gear taken, and the shift's slip: its time until the coupling locks and the peak torque it carried at the crank)
+
+Note:
+- gates (a report, never CI), over the launch to 100 km/h, to the held gear's upshift point under
+  `gear=`, or to the pass's end (the 40 km/h tractor, so its launch wheelie is checked):
+  - no downshift, no gear left inside 1.0 s, no two opposite shifts inside 1.0 s (hunting)
+  - no limiter tick (its cycle rate in Hz when it toggles)
+  - every upshift landing at 1.1x the downshift point at its pedal (`ShiftPolicy.down_rpm`) or more
+    on road speed
+  - the front axle never lifted and its overshoot past steady transfer (`xfer`) inside the allowance
+    `docs/handling.md` § Pitch derives (`GATE_XFER_ZETA`), judged per event, the launch and each
+    shift's settle; the peak prints its tick, gap, share and `a g`, and `front split` takes that gap
+    apart
+- `per event` prints each event's own peak (the launch, then each shift's settle), so a smaller one is not hidden under the gate's figure.
+- A gap inside a shift's handover or cut is kept apart (`in shifts`, with the shift: `docs/drivetrain.md` § The shift policy owns it), reported, not gated.
+- `front why` prints the peak acceleration (a spike in `a g` is a driveline shock)
+- `pitch` prints body pitch per g over the launch gear's middle half beside the springs-and-links prediction and `h / L`.
+- `notc` runs the pass with the body's TC off (the limiter-at-launch symptom)
+- `gear=<1-24>` holds that byte in the bridge's manual mode (the tractor's D1, held to its upshift point)
+- `pedal=<0..1>` holds the launch at that pedal, with the gates and shift lines (per-tick lines only with `trace`)
+- `contact` prints under each line every wheel's suspension force, compression, patch, contact normal and collider (`RayWheel.contact_collider`), where a one-tick load spike with no drive step shows its source
+
+**Part pedal.** Measures:
+- at each speed of the family's set (cars 50 / 60 / 90 / 100 / 120 km/h, trucks 30 / 50 / 70 / 85, the tractor 15 / 25 / 34; none within 5.4 km/h of a governor), from a standstill in automatic D: a PI pedal (a fuel command through the pedal map's inverse, `PedalMap.pedal_for`, so its loop gain is the same on every map) follows a setpoint ramped at 1.0 m/s² (0.5 trucks and tractor) and holds it until 5 s within 0.3 m/s with no shift.
+- `cruise`: gear, rpm, pedal, `engine_load` (the trucks' law, read for every body) and `fuel_rate` over that hold, the approach's peak fuel command and its shifts
+- `gear=<1-24>` holds it in that byte (no shift gates there).
+- `kickdown`: the pedal stepped to 1, ticks to the first downshift, gears dropped, time to +20 km/h.
+- `pulse[=<s>]`: re-settled, then 30 s of on/off pedal at that period (1.0 s), its duty the PI's latched each period (`duty=` fixes it): the speed band, shifts per minute and the gears seen
+
+Note:
+- each window (approach and hold, kick, pulse) gets the hunting, landing and limiter gates on one line.
+- Floored is judged on the fuel command, not the pedal: on the petrol map full fuel takes the least pedal that reaches it, under 1.00.
+- A peak approach fuel of 1.00 is a floored approach, and its shift points are those of the pedal it held (the full-pedal ones only on a LINEAR map); a hold at full fuel is flagged as the body's top, not a cruise
 
 - `-- semi` measures the coupled 32 t box rig (`trailer=<box|tanker|tipper|flatbed|bobtail>` or any
   attachment file name). Its launch is not bit-reproducible across run contexts (the coupling
   countdown inherits the previous vehicle): compare runs of the same shape.
 - `tractor-kenney` never reaches the tracking pass's speed; its wheelie check is the trace's
   front-axle gate (`-- tractor-kenney 40 trace`).
-- `tools/measure_semi_launch.tscn`: static pose off P5; P7 is the rollover skid pad (`tip_kmh=`,
-  `ramp`), lateral g read at first wheel lift; `strict` exits 1 when a steer wheel drops under
-  `STEER_FLOOR_N` in the P2 or P6 launch (CI runs it on both units).
+- `tools/measure_semi_launch.tscn`: static pose off P5; P7 is the rollover skid pad, lateral g read
+  at the first wheel lift: by default a lock step at `TIP_SPEED_MS`, `ramp` the slow tip point (the
+  lock wound on over `RAMP_S`), `tip_kmh=` the lowest step speed that rolls the rig; `strict` exits
+  1 when a steer wheel drops under `STEER_FLOOR_N` in the P2 or P6 launch (CI runs it on both units).
 - `tools/measure_drone.tscn`: hover, climb/descent, lean/translate, endurance, one-motor-out; a
   divergence from `DroneVehicle`/`DronePower` arithmetic is a finding.
 
@@ -342,7 +378,7 @@ steep a hill a level asks for. Surfaces are the shipped `Surface` table, by name
 flooring the pedal, the curve's peak, and lifts off as the front axle goes light (most force
 is not most climb: the surplus pitches a high-COM tractor over backwards). It feathers the fuel
 through the pedal map's inverse (`PedalMap.pedal_for`): on the governed tractor the pedal is a speed
-setting, and a loop on the pedal there climbs less than the floored row (70.4 / 26.4 %); `hold=<deg>
+setting, so a loop on the pedal there reads the governor's setting, not torque; `hold=<deg>
 pedal=<0..1>` runs one diagnostic trial with a per-wheel force / slip / omega dump. `gear=<1-24>`
 holds a start gear in the bridge's manual mode (the automatic box downshifts a standing D3 to D1 on
 every body without a start gear), for the climbs and the roll-back. `climb grade=<%>` instead runs
