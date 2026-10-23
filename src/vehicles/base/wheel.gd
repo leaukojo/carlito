@@ -72,7 +72,9 @@ var abs_active := false ## the anti-lock held this wheel's brake back this tick
 var tcs_active := false ## traction control held this wheel's drive back this tick
 var force_long := 0.0   ## last tick's longitudinal tire force (N, +=forward); the next tick's link force reads it (`link_slope`)
 var force_roll := 0.0   ## last tick's rolling plus surface drag at the contact (N, +=forward; `surface_drag_force`)
-var force_lat := 0.0    ## last tick's lateral tire force (N, post friction circle); diagnostic only
+## Last tick's lateral tire force (N, post friction circle, + = right); the next tick's compliance
+## steer reads it through the latch (`latch_bar`).
+var force_lat := 0.0
 ## Hard-road rolling resistance coefficient of this wheel's tyre: the spec's stock
 ## (`apply_suspension`), or the fitted class's from its owner (`WheelDrive.fit_tyre`).
 var rolling_crr := 0.0
@@ -122,10 +124,11 @@ var coupled_torque := 0.0
 ## (`WheelDrive.pawl_torque`; 0 = no lock): the case holds the wheel through the diffs, so a wheel
 ## the lock stopped (`hold_by_lock`) is held like a braked one, to that rating beyond the brake.
 var lock_torque := 0.0
-## The other wheel of this axle, paired by `pair_axles` for a bar or roll steer; null means neither
-## (a 0 rate or coefficient on a pair acts as none). Both read the snapshot `_bar_compression`,
-## never the live `compression`, and the body's tick (`WheelDrive.tick`, `TowedBody.tick_towed`)
-## latches it for EVERY wheel before any wheel ticks.
+## The other wheel of this axle, paired by `pair_axles` for a bar, roll or compliance steer; null
+## means none (a 0 rate or coefficient on a pair acts as none). All read the snapshots
+## `_bar_compression` and `_latched_lat`, never the live `compression` or `force_lat`, and the
+## body's tick (`WheelDrive.tick`, `TowedBody.tick_towed`) latches them for EVERY wheel before any
+## wheel ticks.
 ## Wheels tick in array order, so a latch inside `tick` gives the first wheel of a pair a partner
 ## value one tick staler than the second's: a phantom damper on the left wheels only
 ## (docs/vehicles.md has the figures).
@@ -165,6 +168,9 @@ var bar_rate := 0.0
 ## This axle's roll steer, deg per deg of its roll (`GroundDriveSpec.roll_steer_rear` at the rear,
 ## `roll_steer_front` at the front; + = toward understeer).
 var roll_steer_coeff := 0.0
+## This axle's compliance steer, deg per kN of side force at each patch
+## (`GroundDriveSpec.compliance_steer_rear` at the rear, 0 at the front; + = toward understeer).
+var compliance_steer_coeff := 0.0
 ## This axle's link geometry, signed so `link_slope * force_long` is the link force along the
 ## contact normal: `GroundDriveSpec.anti_squat_slope` at the rear, `-anti_dive_slope` at the front.
 var link_slope := 0.0
@@ -200,6 +206,8 @@ var _prev_vel_valid := false
 ## Last tick's `compression`, latched by `latch_bar` for the whole body before any wheel ticks, so
 ## both wheels of an axle read the same snapshot. See `anti_roll_partner`.
 var _bar_compression := 0.0
+## Last tick's `force_lat`, latched beside `_bar_compression` for compliance steer: 0 off the ground.
+var _latched_lat := 0.0
 var _spin_angle := 0.0
 var _visual: Node3D
 ## The contact cast, built by `apply_suspension` off this axle's radius and width, refilled per tick
@@ -230,6 +238,7 @@ func apply_suspension(gd: GroundDriveSpec) -> void:
 	damper_rebound = gd.rear_damper_rebound() if is_rear else gd.damper_rebound
 	bar_rate = gd.rear_anti_roll_rate() if is_rear else gd.anti_roll_rate
 	roll_steer_coeff = gd.roll_steer_rear if is_rear else gd.roll_steer_front
+	compliance_steer_coeff = gd.compliance_steer_rear if is_rear else 0.0
 	link_slope = gd.anti_squat_slope if is_rear else -gd.anti_dive_slope
 	axle_lat_grip = gd.rear_lat_grip if is_rear else 1.0
 	tyre_share = 0.5 if is_rear and gd.rear_twin_tyres else 1.0
@@ -262,6 +271,7 @@ func reset() -> void:
 	_own_slip_floor = LOW_SPEED_FLOOR
 	slip_floor = LOW_SPEED_FLOOR
 	_bar_compression = 0.0
+	_latched_lat = 0.0
 	in_contact = false
 	suspension_force = 0.0
 	slip = 0.0
@@ -479,8 +489,8 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 
 
 ## Pair each wheel with the one across its axle (same z, opposite side) for the anti-roll bar and
-## roll steer. Every body with either builds its pairs here: the chassis (`WheelDrive`) and the
-## towed bogie (`TowedBody`), whose three axles each get their own.
+## roll and compliance steer. Every body with any builds its pairs here: the chassis
+## (`WheelDrive`) and the towed bogie (`TowedBody`), whose three axles each get their own.
 static func pair_axles(wheels: Array[RayWheel]) -> void:
 	for w in wheels:
 		for other in wheels:
@@ -490,10 +500,12 @@ static func pair_axles(wheels: Array[RayWheel]) -> void:
 				break
 
 
-## Snapshot this wheel's compression for the anti-roll bar and roll steer. The body's tick calls
-## it on every wheel BEFORE any of them ticks (see `anti_roll_partner`).
+## Snapshot this wheel's compression for the anti-roll bar and roll steer, and its side force for
+## compliance steer. The body's tick calls it on every wheel BEFORE any of them ticks (see
+## `anti_roll_partner`).
 func latch_bar() -> void:
 	_bar_compression = compression
+	_latched_lat = force_lat
 
 
 ## This wheel's roll steer (rad, + = left) off the shared snapshot, which the owner adds to the
@@ -522,6 +534,26 @@ static func roll_steer_angle(comp_self: float, comp_partner: float, x_self: floa
 	var rolled := comp_self - comp_partner if x_self > x_partner else comp_partner - comp_self
 	var phi := atan(rolled / track)
 	return coeff * phi if rear else -coeff * phi
+
+
+## This wheel's compliance steer (rad, + = left) off the shared side-force latch, which the owner
+## adds beside its roll steer: both wheels of the axle read one latch, so they take the same angle
+## whichever ticks first. 0 with no partner or no coefficient. A lifted partner's latch is 0.
+func compliance_steer() -> float:
+	var partner := anti_roll_partner
+	if partner == null or compliance_steer_coeff == 0.0:
+		return 0.0
+	return compliance_steer_angle(_latched_lat, partner._latched_lat, compliance_steer_coeff)
+
+
+## Pure: an axle wheel's compliance steer (rad, + = left) off its own and its partner's side force
+## (N, + = right, `force_lat`: `side = forward x normal`) at `coeff` deg per kN at each patch: the
+## axle's total over two, `coeff` per kN. A left turn's tyre forces push the body left (< 0), so
+## + `coeff` steers the rear left, into the turn: understeer. Exactly 0 at `coeff == 0`.
+static func compliance_steer_angle(f_self: float, f_partner: float, coeff: float) -> float:
+	if coeff == 0.0:
+		return 0.0
+	return -deg_to_rad(coeff) * (f_self + f_partner) / 2.0 / 1000.0
 
 
 ## This wheel's anti-roll bar force off the shared snapshot (N, + = pushes this corner up): equal

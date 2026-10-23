@@ -43,7 +43,8 @@ Resistance applies what `0.5*rho*Cd*A*v^2 + crr*N` owes to within a
 newton, and summed tyre force matches `axle_torque / r` to within two. The `balance` line in
 `measure_vehicles` (`tyres - resistance + rake`) closes on the measured acceleration to a newton
 or two; a gap means a new force is unaccounted for. `Wheel.contact_normal` is diagnostic only;
-`Wheel.force_long` feeds only the next tick's link force (§ Pitch). `rake` reads ~0 only on the
+`Wheel.force_long` feeds only the next tick's link force (§ Pitch), and `force_lat` only the next
+tick's compliance steer through the bar's latch (§ Balance). `rake` reads ~0 only on the
 flat.
 
 ## Pitch
@@ -133,7 +134,7 @@ angle takes `mean_steer_angle()`, never the wheels' average. The lock limits `δ
 wheel: the lock figures are recipe feel numbers, and limiting the inner wheel would widen every
 turning circle (`sedan` 2.02 → 2.65 m at the rear axle) or relabel every lock. So the inner wheel
 turns past the lock at full lock (`max_steer_deg`; `test_vehicle_catalog` asserts it). The law holds while `tan δ < L / (f |x|)`, past every lock at `f = 1`
-(`test_vehicle_catalog`). Each wheel's angle is its split plus its roll steer (§ Balance), which
+(`test_vehicle_catalog`). Each wheel's angle is its split plus its roll steer and compliance steer (§ Balance), which
 `mean_steer_angle()` leaves out: guidance, ISOBUS and the step pass read the driver's angle.
 
 Every wheeled family ships `f = 1.0` (`CAR_BASE`, `TRUCK_BASE`, `VAN_BASE`, `TRACTOR_BASE`, both
@@ -163,56 +164,48 @@ the cornering force needs.
 Tyre load laws (`load_sensitivity`, `cornering_peak_load`: `GroundDriveSpec`
 comments), the bar split's LLTD and roll steer set the balance. `BalanceModel` predicts K, LLTD,
 roll and the limit margin (rear capacity over front, less 1; + = front first), printed as `pred`.
-Its springs carry the side force's moment plus the rolled COM's weight, `m a h + m g h phi`
-(`BalanceModel._roll_state`): ~9 % more roll and transfer than the side force alone at a car's
-~5 deg/g. The step pass's roll-steer angles read their `pred` within ~2 % at the held steps below
-the limit, and under it near the limit. The corner pass reads its roll pred at the tyres' summed
-side force (`v r` also counts the yaw swing past an axle's saturation): within 0.2 deg on every
-road body but `suv-luxury` (0.4 over). Measured K runs 0.13-0.29 deg/g over
-`pred`, 0.03-0.06 deg of steer at the smallest held step: ~1 % of each axle's slip,
-second-order steering geometry. `hatchback-sports` runs 0.57 over, because its front LSD adds
-0.43 deg/g of its own under the held pedal, which the model omits: K 2.23 at its 2.5 bias against
-1.80 with `diff_bias_front` set to 1.0 in its spec (`measure_vehicles -- hatchback-sports 60 step`).
+Its springs carry `m a h + m g h phi` (`BalanceModel._roll_state`): ~9 % more roll than the side
+force alone. Roll-steer angles read their `pred` within ~2 % at held steps below the limit; the
+corner pass's roll pred, within 0.2 deg (`suv-luxury` 0.4 over). A held step is read once its tail
+settles: K reads the corner model's turn (its g, speed rate, each patch's arm about the rolled COM)
+to 0.02 deg/g at 10 % of lock, the higher locks below the limit up to 0.08 under. The linear K
+(`understeer_gradient`) runs 0.16-0.31 under: no fore-aft forces across the track, no diffs.
 Sources (`c = PKY2 * Fz0 / ref`, `s` = mu lost per doubling): passenger 205/60R15 (Pacejka 2nd
 ed. Table A3.1: PKY2 2.13, Fz0 4 kN, 15 %) -> `CAR_BASE` c 2.56, s 0.10; van 185/80R14 (projectchrono `mf_185_80R14.tir`: 1.39, 3.8 kN,
 19 %) -> c 1.92 (estimate), s 0.08; truck 315/80R22.5 (projectchrono `CityBus_Pac02Tire.tir`:
 3.33, 35 kN, 10 %) -> c 3.33, s 0.08; ag radial has no open set -> c 3.0, s 0.12 (estimates).
-Tractor `rear_lat_grip` 1.077 = `1 + s * log2(rated rear / rated front)` (Michelin MultiBib
-650/65R38 over 540/65R28).
+Tractor `rear_lat_grip` 1.077 = `1 + s * log2(rated rear / rated front)` (650/65R38 / 540/65R28).
 - **Roll steer.** Each axle steers `roll_steer_front` / `_rear` deg per deg of its own suspension
-  roll, `atan((c_right - c_left) / track)` off the bar's shared latch (`RayWheel.roll_steer`),
-  never the body's world roll: a banked road or a slope moves no link. + = toward understeer, the
-  front out of the turn and the rear into it. It is a wheel angle added after the Ackermann split,
-  never a grip, so K gains `(front + rear) * roll gradient` (`roll_steer_gradient`) and `limit`
-  does not move. Shipped (`docs/sources.md` § Roll steer, with grades): front 0.10 on the car
-  family; rear 0.036 twist beam on the FWD saloons, 0.05 multi-link on the RWD / AWD cars, 0.10 leaf
-  on `van`, the pickups, `VAN_BASE`, `TRUCK_BASE` and the semis; 0 on open-wheelers, tractor. The
-  slowest step reads the cars and `garbage-truck` inside their K bands, `firetruck` and laden semis under.
-- **The 60 Hz loop.** The angle follows roll, and roll the side force it makes: per tick the gain
-  is ~`eps C h dt^2 / I_roll`, ~0.007 on a `sedan`, and understeer roll steer sheds side force as
-  the body rolls. The step pass counts tick-rate ringing (`chatter_runs`: three consecutive flips,
-  each past 1 % of the angle): 0 on every run but two decaying transients (`police` at a step's
-  onset; `pickup`, two cycles of 2.6 %, ~0.005 deg, gone at a 100x smaller coefficient). At 10x
-  the coefficients (`sedan`) it reads isolated three-flip bursts on 5 of 18 runs, no sustained
-  ringing.
+  roll, `atan((c_right - c_left) / track)` off the bar's latch (`RayWheel.roll_steer`), never the
+  world roll (a bank moves no link). + = toward understeer: front out of the turn, rear into it.
+  Shipped (`docs/sources.md` § Roll steer): front 0.10 on the car family; rear 0.036 twist beam on
+  the FWD saloons, 0.05 multi-link on the RWD / AWD cars, 0.10 leaf on `van`, the pickups,
+  `VAN_BASE`, `TRUCK_BASE` and the semis; 0 on open-wheelers, tractor. The slowest step reads the
+  cars and `garbage-truck` inside their K bands, `firetruck` and laden semis under.
+- **Compliance steer.** A rear steers `compliance_steer_rear` deg per kN at each patch (+ =
+  understeer), both wheels off half the axle's latched side force (a both-wheels K&C figure as
+  published). Only `CAR_BASE`'s twist beam ships one (`docs/sources.md` § Compliance steer); every
+  other rear is 0, its reason in the recipe; its angle reads its preds within 1 %. Both steers are
+  wheel angles after the Ackermann split, never a grip: K gains each `*_steer_gradient`, not `limit`.
+- **The 60 Hz loop.** Per tick, roll steer's gain is ~`eps C h dt^2 / I_roll` (~0.007 on `sedan`),
+  compliance steer's `coeff * C_patch` (~0.02; under 0.27, `test_vehicle_catalog`). `chatter_runs`
+  (three consecutive flips, each past 1 % of the angle) reads 0 on every run but two decaying
+  roll-steer transients (`police` at onset; `pickup`, ~0.005 deg); 10x roll steer, no ringing.
 - **Angular damping is declared** (`VehicleMath.declare_angular_damp`): every wheeled body and
-  trailer REPLACEs the engine's default with `VehicleSpec.angular_damping`, 0 on every one, so
-  yaw, roll and pitch bleed through the tyres and dampers alone; the plane, boats, drone and train
-  keep the default. The engine's 0.1 /s would add 0.10-0.20 deg/g of K at the slowest step;
-  without it `police` and `suv-luxury` spin the fastest lifted 30 % step (accepted;
-  `measure_vehicles -- <variant> 60 step`).
+  trailer REPLACEs the default with `VehicleSpec.angular_damping` (0), so rotation bleeds through the
+  tyres and dampers alone. The default 0.1 /s would add 0.10-0.20 deg/g of K at the slowest step;
+  without it `police` and `suv-luxury` spin the fastest lifted 30 % step (accepted).
 - **The corner pass has its own prediction** (`BalanceModel.corner_limit`), steered, on its speed
-  hold: the front's side force by its cosine, the drive in the driven axle's ellipse and a driven
-  front's tilt, a TC hold leaving the open-diff partner its half, each wheel's roll steer. Its peak's
-  leading axle is the pass's first on every Kenney body; past `tip_g` no turn is steady, and the
-  bobtail semis tip first in both. At that saturation it runs at the tick's speed, against the tyres'
-  drive less the hold's `m dv/dt`: the rest is K's second-order residual and the ramp's lag (`ramp=`).
-- **Stated shortfall: linear K.** Under a real car's 2-4 deg/g: roll camber, compliance steer and
-  aligning torque are unmodelled, 1.2, 0.5 and 0.4 of an illustrative 4.1 deg/g budget against
-  roll steer's 1.0 (Bundorf & Leffert, SAE 760713; `docs/sources.md` § Linear understeer).
+  hold: the front's force by its cosine, the drive in the driven axle's ellipse, a driven front's
+  tilt, a TC hold, each wheel's roll and compliance steer, the air at its centre. Its leading axle is
+  the pass's first on every Kenney body; past `tip_g` no turn is steady (the bobtail semis tip first).
+  At saturation the rest is K's residual and the ramp's lag (`ramp=`).
+- **Stated shortfall: linear K.** Under a real car's 2-4 deg/g: roll camber (1.2 of an illustrative
+  4.1 deg/g budget), aligning torque (0.4), front and aligning-torque compliance steer, and every rear
+  left at 0, against roll steer's 1.0 (SAE 760713; `docs/sources.md` § Linear understeer).
 - **COMPROMISE:** `sedan-sports`, `suv`, `pickup`, `pickup-flat` and the semis keep even bars and
-  the law off (recipe comment): on the class split, roll steer on, a lifted step at speed spins
-  them (1, 4, 1, 1 more cells). `suv-luxury` runs a 27 / 9 split, the law on, equal tyres.
+  the law off (recipe comment): the class split, roll steer on, spins a lifted step at speed (1, 4,
+  1, 2 more cells), and compliance steer retires none (no multi-link figure; the leaf sign adds oversteer). `suv-luxury`: 27 / 9, the law on, equal tyres.
 
 ## Aero balance
 

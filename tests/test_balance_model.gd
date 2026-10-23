@@ -306,6 +306,63 @@ func test_a_tipping_body_reads_infinite_roll_steer_and_none_without_it() -> void
 	(m["front"] as Dictionary)["roll_steer"] = 0.1
 	assert_float(BalanceModel.roll_steer_gradient(m, 10.0)).is_equal(INF)
 
+
+func test_zero_compliance_steer_reproduces_the_model_exactly() -> void:
+	# Explicit zeros against a model built without the key: K, LLTD, the limit and the turn, bit for
+	# bit.
+	var m := BalanceModel.axles(_spec(0.6, 0.1))
+	var bare := m.duplicate(true)
+	(bare["front"] as Dictionary).erase("compliance_steer")
+	(bare["rear"] as Dictionary).erase("compliance_steer")
+	assert_float(BalanceModel.compliance_steer_gradient(m)).is_equal(0.0)
+	assert_float(BalanceModel.compliance_loop_gain(m)).is_equal(0.0)
+	assert_float(BalanceModel.understeer_gradient(m, 0.15)).is_equal(
+			BalanceModel.understeer_gradient(bare, 0.15))
+	assert_float(BalanceModel.lltd(m)).is_equal(BalanceModel.lltd(bare))
+	assert_dict(BalanceModel.limit(m)).is_equal(BalanceModel.limit(bare))
+	var driven := _driven(0.6, 0.1, "rear")
+	var driven_bare := driven.duplicate(true)
+	(driven_bare["front"] as Dictionary).erase("compliance_steer")
+	(driven_bare["rear"] as Dictionary).erase("compliance_steer")
+	var turn := BalanceModel.corner(driven, CORNER_V, deg_to_rad(6.0))
+	var turn_bare := BalanceModel.corner(driven_bare, CORNER_V, deg_to_rad(6.0))
+	assert_float(float(turn["beta"])).is_equal(float(turn_bare["beta"]))
+	assert_float(float(turn["yaw_rate"])).is_equal(float(turn_bare["yaw_rate"]))
+
+
+func test_compliance_steer_adds_the_coefficient_times_the_load_per_wheel() -> void:
+	# Per g each rear patch carries its static weight per wheel: `coeff * load / 1000` deg/g, the same
+	# at every g and speed.
+	var spec := _spec(0.6, 0.1)
+	var base := BalanceModel.understeer_gradient(BalanceModel.axles(spec), 0.15)
+	spec.ground_drive.compliance_steer_rear = -0.0625
+	var m := BalanceModel.axles(spec)
+	var term := -0.0625 * float((m["rear"] as Dictionary)["load"]) / 1000.0
+	assert_float(BalanceModel.compliance_steer_gradient(m)).is_equal_approx(term, 1e-12)
+	assert_float(BalanceModel.understeer_gradient(m, 0.15)).is_equal_approx(base + term, 1e-9)
+	# 1150 kg at 40 % rear: 2.26 kN a patch, -0.14 deg/g (the saloons' figure).
+	assert_float(term).is_equal_approx(-0.141, 0.001)
+
+
+func test_compliance_steer_never_moves_the_limit() -> void:
+	var spec := _spec(0.6, 0.1)
+	var plain := BalanceModel.limit(BalanceModel.axles(spec))
+	spec.ground_drive.compliance_steer_rear = 0.06
+	assert_dict(BalanceModel.limit(BalanceModel.axles(spec))).is_equal(plain)
+
+
+func test_the_loop_gain_is_the_coefficient_times_the_patch_stiffness() -> void:
+	var spec := _spec(0.6, 0.1)
+	spec.ground_drive.compliance_steer_rear = -0.0625
+	var m := BalanceModel.axles(spec)
+	var patch := BalanceModel._axle_stiffness(m, "rear", 0.0) / 2.0
+	assert_float(BalanceModel.compliance_loop_gain(m)).is_equal_approx(
+			deg_to_rad(0.0625) / 1000.0 * patch, 1e-12)
+	# Sign-blind: the understeer sign rings, the oversteer one creeps, at the same |g|.
+	(m["rear"] as Dictionary)["compliance_steer"] = 0.0625
+	assert_float(BalanceModel.compliance_loop_gain(m)).is_equal_approx(
+			deg_to_rad(0.0625) / 1000.0 * patch, 1e-12)
+
 # --- the corner pass's turn (`corner`, `corner_limit`) ---------------------------------------------
 
 const CORNER_V := 11.11  ## m/s, the corner pass's 40 km/h
@@ -564,6 +621,108 @@ func test_roll_steer_in_the_turn_adds_its_angle_to_the_steer() -> void:
 			.is_equal(float(BalanceModel.corner(bare, CORNER_V, deg_to_rad(6.0))["steer"]))
 	assert_float(float(BalanceModel.corner(zeroed, CORNER_V, deg_to_rad(6.0))["beta"])) \
 			.is_equal(float(BalanceModel.corner(bare, CORNER_V, deg_to_rad(6.0))["beta"]))
+
+
+func test_compliance_steer_in_the_turn_reads_the_rears_own_force() -> void:
+	# Each rear wheel's angle is the pure law at its axle's own tyre force, the same on both: the
+	# runtime latch's fixed point, to the loop gain squared after the passes. The fore-aft forces
+	# across the track yaw the body out of the turn, so that force sits under the rear's equilibrium
+	# share of `m a_y`.
+	var m := _driven(0.6, 0.1, "rear")
+	(m["rear"] as Dictionary)["compliance_steer"] = 0.0625
+	var turn := BalanceModel.corner_at(m, CORNER_V, 0.5)
+	var fy := 0.0
+	for w: Dictionary in turn["wheels"]:
+		if w["axle"] == "rear":
+			fy += float(w["fy"])
+	var patch := -fy / 2.0
+	var expected := RayWheel.compliance_steer_angle(patch, patch, 0.0625)
+	assert_float(expected).is_greater(0.0)  # into the left turn
+	for w: Dictionary in turn["wheels"]:
+		if w["axle"] == "rear":
+			assert_float(float(w["complied"])).is_equal_approx(expected, 1e-4 * expected)
+	var acc_lat := CORNER_V * float(turn["yaw_rate"]) * cos(float(turn["beta"]))
+	var share := float(m["mass"]) * acc_lat * float(m["front_arm"]) / float(m["wheelbase"]) / 2.0
+	assert_float(absf(patch)).is_less(share)
+	assert_float(absf(patch)).is_greater(0.9 * share)
+
+
+func test_the_turn_carries_the_air_at_its_centre() -> void:
+	# At one state: drag along the body on `drag_area`, the side force on `side_area`, as
+	# `VehicleMath.air_force` puts them. The centre's height pitches drag's `aero_u * h / L` off the
+	# front, and its arm adds the side force's yaw moment.
+	var m := _driven(0.6, 0.1, "front")
+	m["drag_area"] = 0.65
+	m["side_area"] = 4.0
+	m["aero_h"] = 0.5
+	m["aero_arm"] = 0.0
+	var v := 27.0
+	var beta := deg_to_rad(-3.0)
+	var x := PackedFloat64Array([beta, 0.19, 900.0])
+	var low := BalanceModel._corner_state(m, v, deg_to_rad(1.5), x)
+	m["aero_h"] = 1.5
+	m["aero_arm"] = 0.3
+	var high := BalanceModel._corner_state(m, v, deg_to_rad(1.5), x)
+	var q_over_v := 0.5 * VehicleMath.AIR_DENSITY * v
+	var aero_u := -q_over_v * 0.65 * v * cos(beta)
+	var aero_w := -q_over_v * 4.0 * v * sin(beta)
+	assert_float(aero_w).is_greater(0.0)  # the outward-slipping body is pushed into the turn
+	var shift := 0.0
+	for i in 4:
+		var w_low: Dictionary = (low["wheels"] as Array)[i]
+		var w_high: Dictionary = (high["wheels"] as Array)[i]
+		if w_low["axle"] == "front":
+			shift += float(w_high["load"]) - float(w_low["load"])
+	assert_float(shift).is_equal_approx(aero_u * 1.0 / float(m["wheelbase"]), 1.0)
+	assert_float(shift).is_less(0.0)
+	# The side force: its share of the lateral balance, and its moment at the arm.
+	var bare := m.duplicate(true)
+	bare["side_area"] = 0.0
+	var plain := BalanceModel._corner_state(bare, v, deg_to_rad(1.5), x)
+	assert_float(float((plain["residual"] as PackedFloat64Array)[1]) - float((high["residual"]
+			as PackedFloat64Array)[1])).is_equal_approx(-aero_w, 30.0)
+	# The arm moves nothing but the yaw balance, by the side force times it.
+	var armless := m.duplicate(true)
+	armless["aero_arm"] = 0.0
+	var centred := BalanceModel._corner_state(armless, v, deg_to_rad(1.5), x)
+	assert_float(float((high["residual"] as PackedFloat64Array)[2])
+			- float((centred["residual"] as PackedFloat64Array)[2])).is_equal_approx(aero_w * 0.3, 1e-6)
+	assert_that(high["residual"][1]).is_equal(centred["residual"][1])
+
+
+func test_the_rolled_body_moves_every_patchs_arm_inboard() -> void:
+	# A left turn rolls the body right about the ground, carrying its COM `h sin(phi)` outboard: each
+	# patch's arm about it is `x cos(phi) - h sin(phi)`, the outer's the shorter, at the state's roll.
+	var m := _driven(0.6, 0.1, "rear")
+	m["drag_area"] = 0.0
+	var x := PackedFloat64Array([deg_to_rad(-2.0), 0.4, 600.0])
+	var state := BalanceModel._corner_state(m, CORNER_V, deg_to_rad(4.0), x)
+	var phi := float(BalanceModel._roll_state(m, CORNER_V * 0.4 * cos(x[0]) / BalanceModel.G)["phi"])
+	assert_float(phi).is_greater(0.01)
+	var shift := float(m["h"]) * sin(phi)
+	for w: Dictionary in state["wheels"]:
+		var half := float((m[w["axle"]] as Dictionary)["track"]) / 2.0
+		var x_right := -half if bool(w["inner"]) else half
+		assert_float(float(w["x"])).is_equal_approx(x_right * cos(phi) - shift, 1e-6)
+
+
+func test_a_changing_speed_moves_the_turns_balance_and_none_reproduces_it() -> void:
+	# `accel` along the path adds `m accel` to the balance along and across it; absent or 0, the
+	# steady turn bit for bit.
+	var m := _driven(0.6, 0.1, "rear")
+	var x := PackedFloat64Array([deg_to_rad(1.0), 0.5, 400.0])
+	var steady := BalanceModel._corner_state(m, CORNER_V, deg_to_rad(5.0), x)
+	var zero := m.duplicate(true)
+	zero["accel"] = 0.0
+	assert_that(BalanceModel._corner_state(zero, CORNER_V, deg_to_rad(5.0), x)["residual"]) \
+			.is_equal(steady["residual"])
+	var turn := BalanceModel.corner_at(m, CORNER_V, 0.4)
+	var faster := m.duplicate(true)
+	faster["accel"] = 0.2
+	var gaining := BalanceModel.corner_at(faster, CORNER_V, 0.4)
+	# The drive that also speeds the body up: m accel more at the wheels, near enough.
+	assert_float(float(gaining["drive"]) - float(turn["drive"])).is_equal_approx(
+			float(m["mass"]) * 0.2, 0.1 * float(m["mass"]) * 0.2)
 
 
 func test_the_axles_roll_reads_its_rays_until_the_inner_one_leaves_the_road() -> void:

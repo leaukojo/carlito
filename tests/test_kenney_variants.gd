@@ -26,6 +26,7 @@ const DRIVE_OVERRIDABLE := {
 	"anti_roll_rate": "anti_roll_rate",
 	"anti_roll_rate_rear": "anti_roll_rate_rear",
 	"roll_steer_front": "roll_steer_front", "roll_steer_rear": "roll_steer_rear",
+	"compliance_steer_rear": "compliance_steer_rear",
 	"cornering_peak_load": "cornering_peak_load",
 	"diff_bias_front": "diff_bias_front", "diff_bias_rear": "diff_bias_rear",
 	"centre_diff_bias": "centre_diff_bias",
@@ -210,6 +211,22 @@ func test_machine_scalars_match_the_recipe_and_default_off() -> void:
 		var ov: Dictionary = Gen.VARIANTS[variant]
 		for field: String in MACHINE_SCALARS:
 			assert_float(float(_spec_of(variant).get(field))) 					.override_failure_message("%s_spec.tres %s" % [variant, field]) 					.is_equal(float(ov.get(MACHINE_SCALARS[field], 0.0)))
+
+
+## A rear's roll and compliance steer describe one axle: an entry that sets one sets the other, so a
+## multi-link or leaf variant never inherits the twist beam's compliance figure.
+func test_every_entry_that_sets_a_rears_roll_steer_sets_its_compliance_steer() -> void:
+	var entries := {}
+	for family: String in Gen.BASELINES:
+		entries["%s base" % family] = Gen.BASELINES[family]
+	for variant: String in Gen.VARIANTS:
+		entries[variant] = Gen.VARIANTS[variant]
+	for id: String in entries:
+		var entry: Dictionary = entries[id]
+		if entry.has("roll_steer_rear"):
+			assert_bool(entry.has("compliance_steer_rear")) \
+					.override_failure_message("%s sets roll_steer_rear without compliance_steer_rear"
+						% id).is_true()
 
 
 ## Baseline-only overrides are silently dropped (same invisible drift, other direction).

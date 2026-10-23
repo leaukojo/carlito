@@ -715,6 +715,23 @@ func test_a_winged_body_stays_front_first_at_any_speed() -> void:
 					% [variant, kmh, float(lim["margin"]) * 100.0]).is_greater(0.0)
 
 
+func test_every_compliance_steer_loop_settles_inside_three_ticks() -> void:
+	# The angle reads last tick's force, which it moves by the patch's cornering stiffness:
+	# `F_n = F* + g (F_{n-1} - F*)`, so the step's error is `g^n` of it. Under 0.27 it is inside 2 %
+	# in three ticks (0.27^3 = 0.0197), a loop that settles before a driver could see it ring
+	# (`BalanceModel.compliance_loop_gain`).
+	for variant in VehicleCatalog.VARIANTS:
+		var spec := _spec_of(variant)
+		if spec == null or spec.ground_drive == null:
+			continue
+		var m := BalanceModel.axles(spec)
+		if m.is_empty():
+			continue
+		var gain := BalanceModel.compliance_loop_gain(m)
+		assert_float(gain).override_failure_message(
+				"%s: compliance-steer loop gain %.3f" % [variant, gain]).is_less(0.27)
+
+
 func test_every_body_with_drag_declares_its_aero_centre_and_side_area() -> void:
 	# Drag and side force act at `aero_centre`; ZERO is "unset" and falls back to the live COM,
 	# which moves under load. A body with a drag area says where its shape's centre of pressure is,

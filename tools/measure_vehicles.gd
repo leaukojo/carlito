@@ -116,7 +116,9 @@ const HB_AFTER_S := 1.5
 ## At each speed of the body's STEP_SETS row (run up floored, then STEP_SETTLE_S on the PI pedal,
 ## CORNER_PEDAL_KP / _KI), the bridge steer is stepped in one tick to each of STEP_LOCKS and held
 ## STEP_HOLD_S: once with the PI pedal still holding the entry speed, once with the pedal lifted on
-## the step. The body's own `steer_speed` slews the wheels behind the input, as for a driver.
+## the step. The body's own `steer_speed` slews the wheels behind the input, as for a driver. A held
+## run that neither spins nor rolls holds on until its last STEP_STEADY_S settles (`tail_settled`),
+## up to STEP_HOLD_MAX_S (`UNSETTLED` there): K is the steady state's.
 ## Reports the steady yaw rate (mean of the last STEP_STEADY_S) against the neutral-steer
 ## `v * delta / L` off the bicycle angle (under 1 understeers), the rise to 90 % of
 ## it, the overshoot past it, the peak body slip and roll, the most wheels lifted at once, a spin
@@ -130,6 +132,13 @@ const STEP_LOCKS: Array[float] = [10.0, 20.0, 30.0]  ## % of lock, + = right
 const STEP_SETTLE_S := 3.0
 const STEP_HOLD_S := 3.0
 const STEP_STEADY_S := 0.5
+## A held run's cap: the widest 8 s turn at 100 km/h (~0.8 g) strays ~160 m, inside the pad's half.
+const STEP_HOLD_MAX_S := 8.0
+## `tail_settled`'s gates. 3 s into `suv`'s 100 km/h 10 % held step (2026-10-23) the PI pedal still
+## gains 0.136 m/s^2 and beta' / r reads 0.009, its K 0.14 deg/g over the 6 s tail's (0.008 m/s^2).
+const STEP_SETTLE_ACCEL := 0.02    ## m/s^2
+const STEP_SETTLE_SHARE := 0.003   ## of the turn's side force (beta' / r) and its yaw rate
+const STEP_SETTLE_ENDS := 6        ## ticks averaged at each end of the tail
 ## `chatter_runs`: the consecutive sign flips that count as a tick-rate oscillation, and the
 ## smallest tick-to-tick change read as a direction: CHATTER_EPS (rad), or CHATTER_REL of the
 ## angle. Contact noise in the latched compressions flips at 0.1-2 µrad on a 2-5 mrad angle
@@ -140,7 +149,7 @@ const CHATTER_REL := 0.01
 const STEP_RISE := 0.9
 const STEP_SPIN_DEG := 20.0
 const STEP_ROLL_DEG := 45.0
-## The strip is 40 m wide; a 3 s step at 100 km/h and 0.8 g travels ~35 m sideways.
+## The strip is 40 m wide; a held step's 8 s cap at 100 km/h travels up to ~160 m sideways.
 const STEP_PAD_WIDTH := 400.0
 ## --- full-lock circle (`circle`, instead of every other pass) ---
 ## Full right lock from a standstill on the PI pedal (CORNER_PEDAL_KP / _KI) at CIRCLE_SPEED,
@@ -450,18 +459,27 @@ var _st_stage := Step.RUN_UP
 var _st_t := 0.0                      ## s into the current stage
 var _st_target := 0.0                 ## m/s held into the step
 var _st_i := 0.0                      ## integral half of the PI pedal
-var _st_yaw: PackedFloat32Array = []  ## rad/s in the steered direction, one per tick of the step
-var _st_tail := Vector3.ZERO          ## sums over the steady tail: v_long, steered angle, ticks
+## One per tick of the step: the yaw rate about the road normal (rad/s, in the steered direction),
+## `v_long` (m/s), the bicycle steer (rad, its size), the COM's speed (m/s), the body slip (rad).
+var _st_yaw: PackedFloat32Array = []
+var _st_v: PackedFloat32Array = []
+var _st_delta: PackedFloat32Array = []
+var _st_speed: PackedFloat32Array = []
+var _st_beta: PackedFloat32Array = []
 var _st_slip_peak := 0.0              ## deg
 var _st_spin_t := -1.0                ## s into the step the body passed STEP_SPIN_DEG
 var _st_roll_peak := 0.0              ## deg
 var _st_lifted := 0                   ## most wheels off the ground in one tick of the step
 var _st_roll_t := -1.0                ## s into the step the body passed STEP_ROLL_DEG
 var _st_xfer0 := Vector2.ZERO         ## `_axle_transfer` on the step's first tick
-var _st_xfer := Vector2.ZERO          ## `_axle_transfer` summed over the steady tail
+var _st_xfer: PackedVector2Array = [] ## `_axle_transfer`, one per tick of the step
 ## Each axle's mean roll-steer angle (rad; x front, y rear; + = toward understeer), one per tick of
 ## the step (`_axle_roll_steer`).
 var _st_rs: PackedVector2Array = []
+## The rear's compliance-steer angle (x, rad) and the half-axle side force that angle's pred reads
+## (y, N: the rear wheels' mean live `force_lat`), one per tick of the step
+## (`_rear_compliance`), both signed + toward understeer.
+var _st_cs: PackedVector2Array = []
 ## `circle`: run only the full-lock circle (§ full-lock circle) on each body.
 var _circle := false
 var _ci_i := 0.0                      ## integral half of the circle's PI pedal
@@ -588,6 +606,9 @@ var _engine_inertia := NAN
 var _rear_lat_grip := NAN
 ## `bar_rear=<N/m>`: the rear anti-roll bar rate overridden the same way (NAN: the spec's).
 var _bar_rear := NAN
+## `bar_front=<N/m>`: the front anti-roll bar rate overridden the same way, the rear pinned at the
+## spec's own rate where it follows the front (NAN: the spec's).
+var _bar_front := NAN
 ## `cornering_peak=<x>`: the tyre's cornering-stiffness law (`GroundDriveSpec.cornering_peak_load`)
 ## overridden the same way (NAN: the spec's).
 var _cornering_peak := NAN
@@ -600,6 +621,9 @@ var _ackermann := NAN
 ## `rollsteer=<front>,<rear>`: the roll-steer coefficients overridden the same way
 ## (`MeasureRig.apply_roll_steer`; NAN: the spec's).
 var _roll_steer := Vector2(NAN, NAN)
+## `compliance=<deg/kN>`: the rear compliance-steer coefficient overridden the same way
+## (`MeasureRig.apply_compliance`; NAN: the spec's).
+var _compliance := NAN
 ## `angdamp=<1/s>`: the body's angular damping REPLACEd with this, and every towed body's as it
 ## couples (`MeasureRig.apply_angdamp`); 0 = none (NAN: as the body sets it).
 var _angdamp := NAN
@@ -811,6 +835,8 @@ func _ready() -> void:
 			_rear_lat_grip = float(flag.substr(14))
 		elif flag.begins_with("bar_rear="):
 			_bar_rear = float(flag.substr(9))
+		elif flag.begins_with("bar_front="):
+			_bar_front = float(flag.substr(10))
 		elif flag.begins_with("cornering_peak="):
 			_cornering_peak = float(flag.substr(15))
 		elif flag.begins_with("speeds="):
@@ -841,6 +867,7 @@ func _ready() -> void:
 				get_tree().quit(1)
 				return
 	_roll_steer = MeasureRig.roll_steer_flag(flags)
+	_compliance = MeasureRig.compliance_flag(flags)
 	_angdamp = MeasureRig.angdamp_flag(flags)
 	_tyre = MeasureRig.tyre_flag(flags)
 	if _tyre == "?":
@@ -901,13 +928,15 @@ func _ready() -> void:
 			return
 		if _trace or _notc or _held_gear > 0 or not is_nan(_engine_inertia) \
 				or not is_nan(_rear_lat_grip) or not is_nan(_bar_rear) or not is_nan(_cornering_peak) \
+				or not is_nan(_bar_front) or not is_nan(_compliance) \
 				or not is_nan(_ackermann) or not is_nan(_roll_steer.x) or not is_nan(_angdamp) \
 				or _corner_ramp_s != CORNER_RAMP_S \
 				or _circle or _hitch_pass or _plough_pass or _kerb or _arm_pass or _cruise_probe() \
 				or _tyre != "" or _surface >= 0 or not _step_speeds.is_empty() or _xwind or _headtail \
 				or _wind_base != Vector3.ZERO:
-			printerr("trace / notc / gear= / j= / rear_lat_grip= / bar_rear= / cornering_peak= / speeds= /"
-					+ " ackermann= / rollsteer= / angdamp= / ramp= / circle / hitch / plough / kerb /"
+			printerr("trace / notc / gear= / j= / rear_lat_grip= / bar_rear= / bar_front= /"
+					+ " cornering_peak= / speeds= / ackermann= / rollsteer= / compliance= / angdamp= /"
+					+ " ramp= / circle / hitch / plough / kerb /"
 					+ " pedal= / cruise /"
 					+ " kickdown / pulse / xwind / headtail / wind= / tyre= / surface= change the passes a"
 					+ " doc preset tabulates:"
@@ -1080,6 +1109,13 @@ func _next_vehicle() -> void:
 		_car.spec = _car.spec.duplicate()
 		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
 		_car.spec.ground_drive.anti_roll_rate_rear = _bar_rear
+	if not is_nan(_bar_front):
+		_car.spec = _car.spec.duplicate()
+		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
+		var bars := _car.spec.ground_drive
+		# A rear that follows the front (-1) keeps the spec's rate: the flag moves the front alone.
+		bars.anti_roll_rate_rear = bars.rear_anti_roll_rate()
+		bars.anti_roll_rate = _bar_front
 	if not is_nan(_cornering_peak):
 		_car.spec = _car.spec.duplicate()
 		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
@@ -1091,6 +1127,7 @@ func _next_vehicle() -> void:
 	_current["abs"] = _car.spec.ground_drive.abs_equipped
 	add_child(_car)
 	MeasureRig.apply_roll_steer(_car, _roll_steer)
+	MeasureRig.apply_compliance(_car, _compliance)
 	var tyre := MeasureRig.fit_tyre(_car, _tyre)
 	if _tyre != "" or _surface >= 0:
 		_current["tyre"] = tyre
@@ -2890,11 +2927,15 @@ func _start_step() -> void:
 			else ", rear_lat_grip %.2f (not the spec's)" % _rear_lat_grip
 	if not is_nan(_bar_rear):
 		probe += ", bar_rear %.0f N/m (not the spec's)" % _bar_rear
+	if not is_nan(_bar_front):
+		probe += ", bar_front %.0f N/m (not the spec's)" % _bar_front
 	if not is_nan(_cornering_peak):
 		probe += ", cornering_peak %.2f (not the spec's)" % _cornering_peak
 	if not is_nan(_roll_steer.x):
 		probe += ", roll steer %.2f / %.2f deg/deg (not the spec's)" % [_roll_steer.x,
 				_roll_steer.y]
+	if not is_nan(_compliance):
+		probe += ", compliance steer %.4f deg/kN (not the spec's)" % _compliance
 	if not is_nan(_angdamp):
 		probe += ", angular damping %.2f /s (not the body's)" % _angdamp
 	print("=== %s (%s), step steer%s ===" % [_variant, _drive_label(_car.spec), probe])
@@ -2917,14 +2958,18 @@ func _next_step_run() -> void:
 	_st_target = float(_st_run["kmh"]) / 3.6
 	_st_i = CORNER_PEDAL_START
 	_st_yaw = PackedFloat32Array()
-	_st_tail = Vector3.ZERO
+	_st_v = PackedFloat32Array()
+	_st_delta = PackedFloat32Array()
+	_st_speed = PackedFloat32Array()
+	_st_beta = PackedFloat32Array()
 	_st_slip_peak = 0.0
 	_st_spin_t = -1.0
 	_st_roll_peak = 0.0
 	_st_lifted = 0
 	_st_roll_t = -1.0
-	_st_xfer = Vector2.ZERO
+	_st_xfer = PackedVector2Array()
 	_st_rs = PackedVector2Array()
+	_st_cs = PackedVector2Array()
 	MeasureRig.drive(100.0, 0.0)
 
 
@@ -2965,9 +3010,11 @@ func _tick_step(delta: float) -> void:
 						% ["yaw index", yi["index"], yi["iyy"], yi["mab"]])
 		return
 	MeasureRig.drive(pedal * 100.0, 0.0, float(_st_run["lock"]))
-	# Yaw rate in the steered direction: + steer is right, a clockwise turn seen from above.
-	_st_yaw.append(-_car.angular_velocity.dot(b.y))
-	var slip := absf(rad_to_deg(atan2(vel.dot(b.x), maxf(v_long, 0.1))))
+	# Yaw rate in the steered direction about the road normal (the flat strip's world up; the rolled
+	# body's up reads it `cos(roll)` low): + steer is right, a clockwise turn seen from above.
+	_st_yaw.append(-_car.angular_velocity.y)
+	var beta := atan2(vel.dot(b.x), maxf(v_long, 0.1))
+	var slip := absf(rad_to_deg(beta))
 	_st_slip_peak = maxf(_st_slip_peak, slip)
 	if slip > STEP_SPIN_DEG and _st_spin_t < 0.0:
 		_st_spin_t = _st_t
@@ -2980,13 +3027,61 @@ func _tick_step(delta: float) -> void:
 			airborne += 1
 	_st_lifted = maxi(_st_lifted, airborne)
 	_st_rs.append(_axle_roll_steer(float(_st_run["lock"]) < 0.0))
-	if _st_t > STEP_HOLD_S - STEP_STEADY_S:
-		# The bicycle angle: with Ackermann the steered wheels' own angles do not average to it.
-		_st_tail += Vector3(v_long, absf(_car.drive.mean_steer_angle()), 1.0)
-		_st_xfer += _axle_transfer()
-	if _st_t >= STEP_HOLD_S:
+	_st_cs.append(_rear_compliance(float(_st_run["lock"]) < 0.0))
+	_st_v.append(v_long)
+	# The bicycle angle: with Ackermann the steered wheels' own angles do not average to it.
+	_st_delta.append(absf(_car.drive.mean_steer_angle()))
+	_st_speed.append(vel.length())
+	_st_beta.append(beta)
+	_st_xfer.append(_axle_transfer())
+	if _st_t < STEP_HOLD_S:
+		return
+	# A held run that neither spun nor rolled holds on until its tail settles, up to the cap; a
+	# lifted run is its transient, read at STEP_HOLD_S.
+	var held := not bool(_st_run["lifted"]) and _st_spin_t < 0.0 and _st_roll_t < 0.0
+	var settled := held and tail_settled(_st_speed, _st_yaw, _st_beta, _tail_ticks(delta), delta)
+	if not held or settled or _st_t >= STEP_HOLD_MAX_S:
+		_st_run["hold_s"] = _st_t
+		_st_run["unsettled"] = held and not settled
 		_report_step_run(delta)
 		_next_step_run()
+
+
+## The steady tail's length in ticks: the last STEP_STEADY_S, or the whole step if shorter.
+func _tail_ticks(delta: float) -> int:
+	return mini(roundi(STEP_STEADY_S / delta), _st_yaw.size())
+
+
+## Pure: whether a held step's last `ticks` samples (one per tick of `delta` s) are steady: across
+## them the COM's `speed` changes under STEP_SETTLE_ACCEL, and the body slip `beta` and the `yaw`
+## rate drift under STEP_SETTLE_SHARE of the turn. A slip drifting at `beta'` adds `v beta'` to the
+## side force `v r`, so `beta' / r` is the share the axles carry over the steady turn's. Each end
+## is the mean of its STEP_SETTLE_ENDS ticks. False on a tail shorter than two ends or with no yaw.
+static func tail_settled(speed: PackedFloat32Array, yaw: PackedFloat32Array,
+		beta: PackedFloat32Array, ticks: int, delta: float) -> bool:
+	var n := speed.size()
+	if ticks < 2 * STEP_SETTLE_ENDS or n < ticks or yaw.size() < n or beta.size() < n:
+		return false
+	var ends := func(series: PackedFloat32Array) -> Vector2:
+		var first := 0.0
+		var last := 0.0
+		for i in STEP_SETTLE_ENDS:
+			first += series[n - ticks + i]
+			last += series[n - 1 - i]
+		return Vector2(first, last) / STEP_SETTLE_ENDS
+	var span := (ticks - STEP_SETTLE_ENDS) * delta
+	var r := 0.0
+	for i in range(n - ticks, n):
+		r += yaw[i]
+	r = absf(r / ticks)
+	if r <= 0.0:
+		return false
+	var s: Vector2 = ends.call(speed)
+	var y: Vector2 = ends.call(yaw)
+	var b: Vector2 = ends.call(beta)
+	return absf(s.y - s.x) / span < STEP_SETTLE_ACCEL \
+			and absf(b.y - b.x) / span / r < STEP_SETTLE_SHARE \
+			and absf(y.y - y.x) / r < STEP_SETTLE_SHARE
 
 
 ## The step's figures off its per-tick yaw rate (§ step steer), printed and kept in `_current`.
@@ -3004,24 +3099,27 @@ func _report_step_run(delta: float) -> void:
 	if _st_roll_t >= 0.0:
 		print("  %-26s : ROLLED %.2f s into the step (past %.0f deg); %s"
 				% [label, _st_roll_t, STEP_ROLL_DEG, tilt])
-		if _car.spec.ground_drive.has_roll_steer():
-			_report_roll_steer(r, {}, int(_st_tail.z))
+		_report_axle_steer(r, {}, _tail_ticks(delta))
 		_current["step"].append(r)
 		return
 	if _st_spin_t >= 0.0:
 		print("  %-26s : SPUN %.2f s into the step (slip past %.0f deg); %s"
 				% [label, _st_spin_t, STEP_SPIN_DEG, tilt])
-		if _car.spec.ground_drive.has_roll_steer():
-			_report_roll_steer(r, {}, int(_st_tail.z))
+		_report_axle_steer(r, {}, _tail_ticks(delta))
 		_current["step"].append(r)
 		return
-	var ticks := int(_st_tail.z)
-	var tail := 0.0
-	for i in range(_st_yaw.size() - ticks, _st_yaw.size()):
-		tail += _st_yaw[i]
-	var steady := tail / maxf(ticks, 1)
-	var v_mean := _st_tail.x / maxf(_st_tail.z, 1.0)
-	var delta_mean := _st_tail.y / maxf(_st_tail.z, 1.0)
+	var ticks := _tail_ticks(delta)
+	var tail_mean := func(series: PackedFloat32Array) -> float:
+		var sum := 0.0
+		for i in range(series.size() - ticks, series.size()):
+			sum += series[i]
+		return sum / maxf(ticks, 1)
+	var steady: float = tail_mean.call(_st_yaw)
+	var v_mean: float = tail_mean.call(_st_v)
+	var delta_mean: float = tail_mean.call(_st_delta)
+	var xfer := Vector2.ZERO
+	for i in range(_st_xfer.size() - ticks, _st_xfer.size()):
+		xfer += _st_xfer[i]
 	var neutral := v_mean * delta_mean / _wheelbase()
 	var rise := -1.0
 	var peak := 0.0
@@ -3034,7 +3132,7 @@ func _report_step_run(delta: float) -> void:
 	r["of_neutral"] = steady / neutral if neutral > 0.0 else 0.0
 	r["rise_s"] = rise
 	r["overshoot"] = peak / steady - 1.0 if steady > 0.0 else 0.0
-	r["lltd"] = _lltd(_st_xfer / maxf(_st_tail.z, 1.0) - _st_xfer0)
+	r["lltd"] = _lltd(xfer / maxf(ticks, 1) - _st_xfer0)
 	# Understeer gradient off the steady tail: the steer past the neutral `L r / v` per g of side
 	# force. Held runs only: a lifted run slows through its tail, so it is never steady.
 	r["k_dpg"] = NAN
@@ -3047,15 +3145,100 @@ func _report_step_run(delta: float) -> void:
 		model["yaw_inertia"] = (_current["yaw_index"] as Dictionary)["iyy"]
 		if not is_nan(_angdamp):
 			model["yaw_damp"] = _angdamp
-	var k := "" if is_nan(r["k_dpg"]) else "K %.2f deg/g (pred %.2f), " \
-			% [r["k_dpg"], BalanceModel.understeer_gradient(model, r["lat_g"], v_mean)]
+	# A held run's pred is the corner model's steady turn at its speed and g (`corner_at`): every
+	# wheel's force at its own angle, so the fore-aft forces across the track (the steered fronts'
+	# side forces, the outer wheels' rolling drag) and the diffs' drive split are in it. Its K
+	# beside the linear `understeer_gradient`, which omits them (docs/handling.md § Balance). The
+	# angular damping's share is added to both. A lifted run slows, which no steady turn models.
+	# What speed rate the settled tail keeps (under STEP_SETTLE_ACCEL; an unsettled one's, whatever
+	# it is) goes into the turn, whose drive and load transfer then match the run's.
+	r["accel"] = (_st_speed[_st_speed.size() - 1] - _st_speed[_st_speed.size() - ticks]) \
+			/ (maxf(ticks - 1.0, 1.0) * delta)
+	if not model.is_empty():
+		model["accel"] = r["accel"]
+	var turn := {} if model.is_empty() or r["lifted"] \
+			else BalanceModel.corner_at(model, v_mean, r["lat_g"])
+	r["turn"] = turn
+	var k := ""
+	if not is_nan(r["k_dpg"]):
+		var by_turn := "-"
+		if not turn.is_empty():
+			var damped := BalanceModel.yaw_damping_gradient(model, r["lat_g"], v_mean)
+			by_turn = "%.2f" % (rad_to_deg((float(turn["steer"]) - float(model["wheelbase"])
+					* float(turn["yaw_rate"]) / v_mean) / float(turn["lat_g"])) + damped)
+		k = "K %.2f deg/g (pred %s, linear %.2f), " % [r["k_dpg"], by_turn,
+				BalanceModel.understeer_gradient(model, r["lat_g"], v_mean)]
+	var hold := ""
+	if not r["lifted"]:
+		hold = "; held %.2f s%s" % [float(r["hold_s"]), ", UNSETTLED" if r["unsettled"] else ""]
 	print(("  %-26s : steady %.1f deg/s (%.2f g), %.2f of neutral; %sfront %s (pred %s) of the load"
-			+ " transfer; rise %.2f s, overshoot %.0f %%, slip peak %.1f deg, %s") % [label,
+			+ " transfer; rise %.2f s, overshoot %.0f %%, slip peak %.1f deg, %s%s") % [label,
 			r["steady_dps"], r["lat_g"], r["of_neutral"], k, _pct(r["lltd"]),
-			_pct(BalanceModel.lltd(model)), rise, r["overshoot"] * 100.0, _st_slip_peak, tilt])
+			_pct(BalanceModel.lltd(model)), rise, r["overshoot"] * 100.0, _st_slip_peak, tilt, hold])
+	_report_axle_steer(r, model, ticks)
+	_current["step"].append(r)
+
+
+## The per-axle steer prints a body with roll or compliance steer carries (`_report_roll_steer`,
+## `_report_compliance`); nothing on a body with neither.
+func _report_axle_steer(r: Dictionary, model: Dictionary, ticks: int) -> void:
 	if _car.spec.ground_drive.has_roll_steer():
 		_report_roll_steer(r, model, ticks)
-	_current["step"].append(r)
+	if _car.spec.ground_drive.has_compliance_steer():
+		_report_compliance(r, model, ticks)
+
+
+## The rear's compliance-steer angle over the steady tail beside two preds, the coefficient times
+## the measured half-axle force (the mechanism: exact but the latch's one tick) and the model's: on
+## a held run the corner model's rear angle at its turn (`r["turn"]`), on a lifted one the static
+## share `load * a_y / g`, which the slowing run's forward load transfer offsets ("-" on an empty
+## `model`, a spun or rolled run, or a held one past the model's peak), and the chatter count over
+## the whole held step (`chatter_runs`), printed and kept in `r`.
+func _report_compliance(r: Dictionary, model: Dictionary, ticks: int) -> void:
+	var tail := Vector2.ZERO
+	for i in range(maxi(_st_cs.size() - ticks, 0), _st_cs.size()):
+		tail += _st_cs[i]
+	tail = tail / maxf(ticks, 1)
+	var coeff := _car.spec.ground_drive.compliance_steer_rear
+	var angles := PackedFloat64Array()
+	for v in _st_cs:
+		angles.append(v.x)
+	r["compliance"] = rad_to_deg(tail.x)
+	r["compliance_chatter"] = chatter_runs(angles)
+	var by_model := "- off the model"
+	var turn: Dictionary = r.get("turn", {})
+	if not turn.is_empty():
+		# The left turn's rear angle, + into it: toward understeer.
+		var angle := 0.0
+		for w: Dictionary in turn["wheels"]:
+			if w["axle"] == "rear":
+				angle += float(w["complied"]) / 2.0
+		by_model = "%+.4f off the turn" % rad_to_deg(angle)
+	elif not model.is_empty() and r["lifted"]:
+		by_model = "%+.4f off the share" \
+				% (coeff * float((model["rear"] as Dictionary)["load"]) * float(r["lat_g"]) / 1000.0)
+	print(("  %-26s : compliance steer rear %+.4f deg (pred %+.4f off the force, %s),"
+			+ " + = toward understeer; chatter %d") % ["", r["compliance"], coeff * tail.y / 1000.0,
+			by_model, r["compliance_chatter"]])
+
+
+## The rear's mean compliance-steer angle this tick (x, rad) and its wheels' mean live side force
+## (y, N; on one pair, its total over two), both signed + toward understeer: the angle into the
+## turn, the force toward its centre. `turn_left`: the step's direction.
+func _rear_compliance(turn_left: bool) -> Vector2:
+	var angle := 0.0
+	var force := 0.0
+	var count := 0
+	for w in _car.wheels:
+		if w.is_rear:
+			angle += w.compliance_steer()
+			force += w.force_lat
+			count += 1
+	# The mean of each pair's total over two, a tandem's two pairs included.
+	angle /= maxf(count, 1.0)
+	force /= maxf(count, 1.0)
+	# A left turn: into it is left (+ angle), its centre left (- force_lat).
+	return Vector2(angle, -force) if turn_left else Vector2(-angle, force)
 
 
 ## Each axle's mean roll-steer angle over the steady tail beside `BalanceModel`'s (its coefficient
@@ -4589,14 +4772,16 @@ func _wind_table() -> Array[String]:
 func _steer_table() -> Array[String]:
 	var lines := DocRegion.wrap(("%s (`measure_vehicles -- doc=steer`; per body `-- <variant> %.0f"
 			+ " step`): from each speed settled on the PI pedal, the bridge steer stepped in one tick"
-			+ " and held %.0f s, the pedal held / lifted on the step. Each cell: the steady yaw rate"
+			+ " and held %.0f s, the pedal held (on until the tail settles, up to %.0f s, else"
+			+ " `unsettled`) / lifted on the step. Each cell: the steady yaw rate"
 			+ " (last %.1f s) over neutral steer `v * delta / L` (under 1 understeers), the rise to"
 			+ " %.0f %% of it, the overshoot past it, `(n up)` with wheels lifted; `spun` past %.0f deg"
 			+ " of body slip, `rolled` past %.0f deg off vertical. The body's yaw dynamic index"
 			+ " k² / (a·b) beside its name. `K` is the understeer gradient off the smallest held step"
-			+ " (`(delta - L r / v)` per g of side force; linear only at low g, so read it with its g),"
+			+ " (`(delta - L r / v)` per g of side force; linear only at low g: read it with its g),"
 			+ " beside the front axles' share of the lateral load transfer (LLTD).")
-			% [DocRegion.measured(), _seconds, STEP_HOLD_S, STEP_STEADY_S, STEP_RISE * 100.0,
+			% [DocRegion.measured(), _seconds, STEP_HOLD_S, STEP_HOLD_MAX_S, STEP_STEADY_S,
+			STEP_RISE * 100.0,
 			STEP_SPIN_DEG, STEP_ROLL_DEG])
 	var head := "| Body | km/h | K at %.0f %% held, LLTD |" % STEP_LOCKS[0]
 	var rule := "| --- | --- | --- |"
@@ -4680,7 +4865,8 @@ static func _k_cell(runs: Array, kmh: float) -> String:
 		if r["kmh"] == kmh and r["lock"] == STEP_LOCKS[0] and not r["lifted"]:
 			if is_nan(float(r.get("k_dpg", NAN))):
 				return "-"
-			return "%.2f deg/g at %.2f g, %s" % [r["k_dpg"], r["lat_g"], _pct(r["lltd"])]
+			return "%.2f deg/g at %.2f g, %s%s" % [r["k_dpg"], r["lat_g"], _pct(r["lltd"]),
+					", unsettled" if r.get("unsettled", false) else ""]
 	return "-"
 
 
@@ -4693,8 +4879,8 @@ static func _step_cell(r: Dictionary) -> String:
 	var lifted := " (%d up)" % int(r["lifted_n"]) if int(r["lifted_n"]) > 0 else ""
 	if float(r["spin_t"]) >= 0.0:
 		return "spun" + lifted
-	return "%.2f, %.2f s, %+.0f %%%s" % [r["of_neutral"], r["rise_s"], float(r["overshoot"]) * 100.0,
-			lifted]
+	return "%.2f, %.2f s, %+.0f %%%s%s" % [r["of_neutral"], r["rise_s"],
+			float(r["overshoot"]) * 100.0, lifted, " unsettled" if r.get("unsettled", false) else ""]
 
 
 ## The `accel` region: every wheel-driven variant's standing start, floored and `tc`, beside the

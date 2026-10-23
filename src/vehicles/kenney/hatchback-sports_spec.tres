@@ -25,6 +25,7 @@ anti_roll_rate = 16000.0
 anti_roll_rate_rear = 4000.0
 roll_steer_front = 0.1
 roll_steer_rear = 0.036
+compliance_steer_rear = -0.0625
 anti_dive_slope = 0.099
 anti_squat_slope = 0.123
 tyre = ExtResource("2_4gtox")

@@ -1,7 +1,8 @@
 extends GdUnitTestSuite
 ## Ackermann steering: `WheelDrive.ackermann_angle`, each steered wheel's angle off the bicycle
 ## angle, pure statics; then roll steer (`RayWheel.roll_steer`), the angle each axle adds off its
-## own suspension roll. The per-body domain check lives in test_vehicle_catalog.
+## own suspension roll, and the rear's compliance steer (`RayWheel.compliance_steer`) off its side
+## force. The per-body domain check lives in test_vehicle_catalog.
 
 const WheelDriveScript := preload("res://src/vehicles/base/wheel_drive.gd")
 
@@ -96,8 +97,9 @@ func test_the_angle_is_the_coefficient_times_the_axle_roll() -> void:
 			1e-12)
 
 
-## A 2000 kg four-wheeler on the sedan's track, front steered, roll steer on both axles and no bar.
-func _rs_drive(front: float, rear: float) -> WheelDrive:
+## A 2000 kg four-wheeler on the sedan's track, front steered, roll steer on both axles, rear
+## compliance steer `compliance` (deg/kN) and no bar.
+func _rs_drive(front: float, rear: float, compliance := 0.0) -> WheelDrive:
 	var gd := GroundDriveSpec.new()
 	gd.wheel_positions = [
 		Vector3(-SEDAN_HALF_TRACK, 0.0, -0.79), Vector3(SEDAN_HALF_TRACK, 0.0, -0.79),
@@ -106,6 +108,7 @@ func _rs_drive(front: float, rear: float) -> WheelDrive:
 	gd.ackermann = 1.0
 	gd.roll_steer_front = front
 	gd.roll_steer_rear = rear
+	gd.compliance_steer_rear = compliance
 	var spec := VehicleSpec.new()
 	spec.mass = 2000.0
 	spec.ground_drive = gd
@@ -187,3 +190,106 @@ func test_with_no_roll_steer_each_wheel_angle_is_the_split_bit_for_bit() -> void
 		var split := WheelDriveScript.ackermann_angle(drive.mean_steer_angle(), w.anchor.x,
 				drive._wheelbase, 1.0) if w.steered else 0.0
 		assert_float(drive.wheel_steer_angle(w, spec_gd)).is_equal(split)
+
+
+# --- compliance steer (`RayWheel.compliance_steer`) -------------------------------------------------
+
+## A left turn's tyre forces on the sedan's rear (N, + = right): the outer (right) wheel carries more.
+const CS_LEFT := -900.0
+const CS_RIGHT := -1700.0
+
+
+## Each wheel's side force as a left turn leaves it, then one shared latch.
+func _push_and_latch(drive: WheelDrive) -> void:
+	for w in drive.wheels:
+		w.in_contact = true
+		w.force_lat = CS_LEFT if w.anchor.x < 0.0 else CS_RIGHT
+	for w in drive.wheels:
+		w.latch_bar()
+
+
+func test_a_zero_coefficient_complies_nothing_whatever_the_force() -> void:
+	assert_float(RayWheel.compliance_steer_angle(CS_LEFT, CS_RIGHT, 0.0)).is_equal(0.0)
+
+
+func test_with_no_compliance_steer_each_angle_is_the_split_plus_its_roll_steer_bit_for_bit() -> void:
+	var drive := _rs_drive(0.2, 0.1)
+	var spec_gd := GroundDriveSpec.new()
+	spec_gd.ackermann = 1.0
+	drive._applied_steer = deg_to_rad(10.0)
+	_roll_and_latch(drive)
+	_push_and_latch(drive)
+	for w in drive.wheels:
+		assert_float(w.compliance_steer()).is_equal(0.0)
+		var split := WheelDriveScript.ackermann_angle(drive.mean_steer_angle(), w.anchor.x,
+				drive._wheelbase, 1.0) if w.steered else 0.0
+		assert_float(drive.wheel_steer_angle(w, spec_gd)).is_equal(split + w.roll_steer())
+
+
+func test_a_leftward_force_steers_an_understeering_rear_left_into_the_turn() -> void:
+	# `force_lat` is + = right (`side = forward x normal`): a left turn pushes the body left (< 0),
+	# and + `coeff` steers the rear into it (left, +); the stock sign (-) steers it out.
+	assert_float(RayWheel.compliance_steer_angle(CS_LEFT, CS_RIGHT, 0.06)).is_greater(0.0)
+	assert_float(RayWheel.compliance_steer_angle(CS_LEFT, CS_RIGHT, -0.06)).is_less(0.0)
+
+
+func test_the_angle_is_the_coefficient_per_kn_of_half_the_axles_force() -> void:
+	var half := (CS_LEFT + CS_RIGHT) / 2.0
+	assert_float(RayWheel.compliance_steer_angle(CS_LEFT, CS_RIGHT, 0.0625)).is_equal_approx(
+			-deg_to_rad(0.0625) * half / 1000.0, 1e-12)
+
+
+func test_a_lifted_partner_adds_nothing_and_the_total_is_still_halved() -> void:
+	# The inner wheel off the ground carries no force (`force_lat` 0, latched as 0): the outer's force
+	# alone, over two, as the both-wheels-loaded figure reads the axle's total.
+	var drive := _rs_drive(0.0, 0.0, 0.0625)
+	var outer: RayWheel = drive.wheels[3]
+	var inner: RayWheel = outer.anti_roll_partner
+	outer.in_contact = true
+	outer.force_lat = CS_RIGHT
+	inner.in_contact = false
+	inner.force_lat = 0.0
+	outer.latch_bar()
+	inner.latch_bar()
+	var expected := -deg_to_rad(0.0625) * CS_RIGHT / 2.0 / 1000.0
+	assert_float(outer.compliance_steer()).is_equal_approx(expected, 1e-12)
+	assert_float(inner.compliance_steer()).is_equal_approx(expected, 1e-12)
+
+
+func test_both_rear_wheels_take_one_compliance_angle_whichever_ticks_first() -> void:
+	var drive := _rs_drive(0.0, 0.0, 0.0625)
+	_push_and_latch(drive)
+	var latched := PackedFloat64Array()
+	for w in drive.wheels:
+		latched.append(w.compliance_steer())
+	drive.wheels[2].force_lat += 400.0  # the first rear wheel ticks and writes its live force
+	for i in drive.wheels.size():
+		var w: RayWheel = drive.wheels[i]
+		assert_float(w.compliance_steer()).is_equal(latched[i])
+		assert_float(w.compliance_steer()).is_equal(w.anti_roll_partner.compliance_steer())
+
+
+func test_the_front_never_complies() -> void:
+	var drive := _rs_drive(0.0, 0.0, 0.0625)
+	_push_and_latch(drive)
+	for w in drive.wheels:
+		if w.is_rear:
+			assert_float(w.compliance_steer()).is_not_equal(0.0)
+		else:
+			assert_float(w.compliance_steer_coeff).is_equal(0.0)
+			assert_float(w.compliance_steer()).is_equal(0.0)
+
+
+func test_compliance_steer_alone_pairs_the_axles_and_reaches_the_rear_angle() -> void:
+	var drive := _rs_drive(0.0, 0.0, 0.0625)
+	var spec_gd := GroundDriveSpec.new()
+	spec_gd.ackermann = 1.0
+	_push_and_latch(drive)
+	var expected := RayWheel.compliance_steer_angle(CS_LEFT, CS_RIGHT, 0.0625)
+	for w in drive.wheels:
+		assert_object(w.anti_roll_partner).is_not_null()
+		assert_float(w.bar_force(w.bar_rate)).is_equal(0.0)
+		if w.is_rear:
+			assert_float(drive.wheel_steer_angle(w, spec_gd)).is_equal(expected)
+	# The driver's angle never carries it.
+	assert_float(drive.mean_steer_angle()).is_equal(0.0)

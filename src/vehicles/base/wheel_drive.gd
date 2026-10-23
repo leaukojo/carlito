@@ -135,7 +135,7 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 		wheels.append(wheel)
 	_coupling.resize(wheels.size())
 	_lock_coupling.resize(wheels.size())
-	if gd.has_anti_roll_bar() or gd.has_roll_steer():
+	if gd.has_anti_roll_bar() or gd.has_roll_steer() or gd.has_compliance_steer():
 		RayWheel.pair_axles(wheels)
 	var stations := _axle_stations()
 	_wheelbase = stations.y - stations.x if is_finite(stations.x) and is_finite(stations.y) else 0.0
@@ -355,11 +355,12 @@ func mean_steer_angle() -> float:
 
 
 ## Wheel `w`'s angle this tick (rad, + = left): its Ackermann split of `mean_steer_angle` if it is
-## steered, plus its roll steer off the shared latch (`RayWheel.roll_steer`) on every axle.
-## `mean_steer_angle` stays the driver's angle, without the roll steer.
+## steered, plus its roll and compliance steer off the shared latch (`RayWheel.roll_steer`,
+## `RayWheel.compliance_steer`) on every axle. `mean_steer_angle` stays the driver's angle, without
+## either.
 func wheel_steer_angle(w: RayWheel, gd: GroundDriveSpec) -> float:
 	return (ackermann_angle(_applied_steer, w.anchor.x, _wheelbase, gd.ackermann)
-			if w.steered else 0.0) + w.roll_steer()
+			if w.steered else 0.0) + w.roll_steer() + w.compliance_steer()
 
 
 ## The guidance path's slew TARGET, in the unit of `input.steer` ([-1, 1], + = right): the
@@ -406,7 +407,7 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 		if wheels[i].lock_torque > 0.0:
 			locked.append(i)
 	RayWheel.size_cap_masses(wheels, body, gd)
-	# One anti-roll and roll-steer snapshot for the whole body before any wheel ticks
+	# One anti-roll, roll- and compliance-steer snapshot for the whole body before any wheel ticks
 	# (`RayWheel.anti_roll_partner`).
 	for w in wheels:
 		w.latch_bar()

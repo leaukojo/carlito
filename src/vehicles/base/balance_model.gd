@@ -5,10 +5,10 @@ extends RefCounted
 ## readings. RayWheel pushes at the patch, so the roll centre is the ground: an axle's roll stiffness
 ## is `(k / 2 + bar) * t^2` and every newton of transfer goes through it. Below the grip curve's peak
 ## a wheel's side force is exactly its cornering stiffness times its slip. The angular damping's yaw
-## moment `I * c * r` is a term of its own, and so is roll steer, an angle and not a grip. `limit`
-## is free-rolling at zero steer; the corner pass, steered and driven, has its own steady turn
-## (`corner`, `corner_limit`). Derivation and calibration: `docs/handling.md` § Balance. The model is
-## a plain Dictionary (`axles`), so a what-if edits it.
+## moment `I * c * r` is a term of its own, and so are roll and compliance steer, angles and not
+## grips. `limit` is free-rolling at zero steer; the corner pass, steered and driven, has its own
+## steady turn (`corner`, `corner_limit`). Derivation and calibration: `docs/handling.md` § Balance.
+## The model is a plain Dictionary (`axles`), so a what-if edits it.
 
 const G := BrakeSizing.G
 
@@ -16,13 +16,13 @@ const G := BrakeSizing.G
 ## The model of `spec` at `speed` (m/s), SI units; empty unless one front and one rear pair (no
 ## tandem, kingpin). Per axle (`front` / `rear`): `load` and `aero` (static weight and downforce per
 ## wheel, `_normal`), `track`, `spring`, `bar`, `mu` (side mu at the reference load, `rear_lat_grip`
-## in), `share` (`RayWheel.tyre_share`), `roll_steer` (deg/deg, + = under), `mu_long`, `driven`,
-## `diff_bias`. Body: `mass`, `h` (COM over the road at the static sag), `ref` (the even corner
-## load), `sensitivity`, `peak_slip` (the grip curve's peak), `peak_load` (x `ref`; 0 = off),
-## `wheelbase`, `front_arm` (COM to the front axle), `yaw_inertia` (the declared `yaw_dynamic_index`;
-## NAN where Jolt computes it, which a caller holding the live body fills in), `yaw_damp` (the
-## declared `angular_damping`; 0 = none), and for `corner` `grip_curve`, `crr`, `drag_area`,
-## `ackermann`, `lock` (the mean steer's at `speed`, rad), `centre_bias`, `tcs`.
+## in), `share` (`RayWheel.tyre_share`), `roll_steer` (deg/deg), `compliance_steer` (deg/kN a patch;
+## front 0; both + = under), `mu_long`, `driven`, `diff_bias`. Body: `mass`, `h` (COM over the road
+## at the static sag), `ref` (the even corner load), `sensitivity`, `peak_slip` (the grip curve's
+## peak), `peak_load` (x `ref`; 0 = off), `wheelbase`, `front_arm` (COM to the front axle),
+## `yaw_inertia` (declared `yaw_dynamic_index`; NAN where Jolt's: a caller fills it), `yaw_damp`
+## (`angular_damping`; 0 = none); for `corner`, `grip_curve`, `crr`, `drag_area`, `side_area`,
+## `aero_h` / `aero_arm`, `ackermann`, `lock` (the mean steer's at `speed`), `centre_bias`, `tcs`.
 static func axles(spec: VehicleSpec, speed := 0.0) -> Dictionary:
 	var gd := spec.ground_drive
 	if gd == null or gd.wheel_positions.size() != 4 or spec.mass <= 0.0:
@@ -52,13 +52,15 @@ static func axles(spec: VehicleSpec, speed := 0.0) -> Dictionary:
 	var front := {"load": loads.x, "aero": downforce * aero_front / 2.0,
 			"track": absf(front_x[0] - front_x[1]), "spring": gd.spring_rate,
 			"bar": gd.anti_roll_rate, "mu": gd.mu_lat, "share": 1.0,
-			"roll_steer": gd.roll_steer_front, "mu_long": gd.mu_long, "driven": gd.driven_front,
+			"roll_steer": gd.roll_steer_front, "compliance_steer": 0.0, "mu_long": gd.mu_long,
+			"driven": gd.driven_front,
 			"diff_bias": gd.diff_bias_front}
 	var rear := {"load": loads.y, "aero": downforce * (1.0 - aero_front) / 2.0,
 			"track": absf(rear_x[0] - rear_x[1]),
 			"spring": gd.rear_spring_rate(), "bar": gd.rear_anti_roll_rate(),
 			"mu": gd.mu_lat * gd.rear_lat_grip, "share": 0.5 if gd.rear_twin_tyres else 1.0,
-			"roll_steer": gd.roll_steer_rear, "mu_long": gd.mu_long, "driven": gd.driven_rear,
+			"roll_steer": gd.roll_steer_rear, "compliance_steer": gd.compliance_steer_rear,
+			"mu_long": gd.mu_long, "driven": gd.driven_rear,
 			"diff_bias": gd.diff_bias_rear}
 	# Each axle sags under its own load, downforce included; the COM sits between them by its
 	# weight share.
@@ -79,8 +81,14 @@ static func axles(spec: VehicleSpec, speed := 0.0) -> Dictionary:
 	var taper := 1.0
 	if gd.steer_falloff_speed > 0.0:
 		taper = lerpf(1.0, gd.min_steer_frac, clampf(speed / gd.steer_falloff_speed, 0.0, 1.0))
-	return {"front": front, "rear": rear, "mass": spec.mass,
-			"h": spec.center_of_mass.y + gd.rest_ride_height() - sag,
+	var h := spec.center_of_mass.y + gd.rest_ride_height() - sag
+	# The aero centre over the road and ahead of the COM; ZERO acts through the live COM
+	# (`WheelDrive.apply_at`).
+	var at_com := gd.aero_centre == Vector3.ZERO
+	return {"front": front, "rear": rear, "mass": spec.mass, "h": h,
+			"side_area": gd.side_area,
+			"aero_h": h if at_com else gd.aero_centre.y + gd.rest_ride_height() - sag,
+			"aero_arm": 0.0 if at_com else spec.center_of_mass.z - gd.aero_centre.z,
 			"ref": spec.mass * G / 4.0, "sensitivity": gd.load_sensitivity,
 			"peak_slip": maxf(peak_slip, 1e-3), "peak_load": gd.cornering_peak_load,
 			"wheelbase": wheelbase, "yaw_inertia": yaw_inertia, "yaw_damp": yaw_damp,
@@ -190,9 +198,12 @@ static func pair_loads(n_load: float, transfer: float) -> Vector2:
 
 ## Understeer gradient (deg/g) at `lat_g`: the steer past the neutral `L / R` per g, the axles' slip
 ## difference `Wf / Cf - Wr / Cr` on their stiffness at the loads that g leaves them, plus roll
-## steer (`roll_steer_gradient`) at every speed. The secant, as the step pass reads it (exact while
-## every wheel is under the curve's peak). At a finite `speed` (m/s) it adds the angular damping's
-## share (`yaw_damping_gradient`, NAN without a yaw inertia); INF leaves it out.
+## and compliance steer (`roll_steer_gradient`, `compliance_steer_gradient`) at every speed. The
+## secant, as the step pass reads it (exact while every wheel is under the curve's peak). At a
+## finite `speed` (m/s) it adds the angular damping's share (`yaw_damping_gradient`, NAN without a
+## yaw inertia); INF leaves it out. It omits the fore-aft forces across the track and the diffs'
+## split, which the corner model (`corner_at`) carries: measured K reads over it
+## (docs/handling.md § Balance).
 static func understeer_gradient(m: Dictionary, lat_g: float, speed := INF) -> float:
 	if m.is_empty():
 		return NAN
@@ -202,7 +213,7 @@ static func understeer_gradient(m: Dictionary, lat_g: float, speed := INF) -> fl
 		k += (1.0 if key == "front" else -1.0) * 2.0 * float(axle["load"]) \
 				/ _axle_stiffness(m, key, lat_g)
 	var damped := yaw_damping_gradient(m, lat_g, speed) if is_finite(speed) else 0.0
-	return rad_to_deg(k) + roll_steer_gradient(m, lat_g) + damped
+	return rad_to_deg(k) + roll_steer_gradient(m, lat_g) + compliance_steer_gradient(m) + damped
 
 
 ## Roll steer's understeer (deg/g) at `lat_g`: each axle steers `roll_steer` deg per deg of roll,
@@ -220,6 +231,35 @@ static func roll_steer_gradient(m: Dictionary, lat_g: float) -> float:
 		return 0.0
 	var g := maxf(absf(lat_g), 1e-3)
 	return coeff * roll_deg(m, g) / g
+
+
+## Compliance steer's understeer (deg/g): each axle's patches carry its static weight per wheel
+## (`load`) per g at steady state, so `sum(coeff * load / 1000)`. Linear in g, so no secant.
+## Exactly 0 with every coefficient 0; NAN on an empty model.
+static func compliance_steer_gradient(m: Dictionary) -> float:
+	if m.is_empty():
+		return NAN
+	var k := 0.0
+	for key: String in ["front", "rear"]:
+		var axle: Dictionary = m[key]
+		k += float(axle.get("compliance_steer", 0.0)) * float(axle["load"]) / 1000.0
+	return k
+
+
+## Compliance steer's 60 Hz loop gain: the angle reads last tick's force, which the angle changes by
+## the patch's cornering stiffness, so `F_n = F* + g (F_{n-1} - F*)` with
+## `g = deg_to_rad(|coeff|) / 1000 * C_patch`, at the static load (`_axle_stiffness / 2`); the
+## higher axle's. The one-tick lateral cap and the patch spring never slope over `C`, so it bounds
+## the gain at every speed. Exactly 0 with every coefficient 0; NAN on an empty model.
+static func compliance_loop_gain(m: Dictionary) -> float:
+	if m.is_empty():
+		return NAN
+	var gain := 0.0
+	for key: String in ["front", "rear"]:
+		var coeff := float((m[key] as Dictionary).get("compliance_steer", 0.0))
+		if coeff != 0.0:
+			gain = maxf(gain, deg_to_rad(absf(coeff)) / 1000.0 * _axle_stiffness(m, key, 0.0) / 2.0)
+	return gain
 
 
 ## An axle's cornering stiffness (N per unit slip) at the loads `lat_g` leaves it.
@@ -257,8 +297,9 @@ static func pair_grip(mu: float, n_load: float, transfer: float, ref: float,
 
 
 ## Each axle's side capacity in g of its own static weight at `lat_g` (x front, y rear): the axle
-## whose figure is lower saturates first. Roll steer is not in it: it moves the steer a side force
-## needs, never the force an axle can make, so `limit` reads the same with or without it.
+## whose figure is lower saturates first. Roll and compliance steer are not in it: they move the
+## steer a side force needs, never the force an axle can make, so `limit` reads the same with or
+## without them.
 static func axle_capacity_g(m: Dictionary, lat_g: float) -> Vector2:
 	if m.is_empty():
 		return Vector2(NAN, NAN)
@@ -273,7 +314,8 @@ static func axle_capacity_g(m: Dictionary, lat_g: float) -> Vector2:
 
 ## The steady-state limit: `g` where the first axle saturates, settled by a few passes (the transfer
 ## depends on the g it limits), each axle's capacity there (`front`, `rear`), and `margin`, the rear's
-## over the front's less 1 (+ = the front washes out first, understeer at the limit).
+## over the front's less 1 (+ = the front washes out first, understeer at the limit). Roll and
+## compliance steer never move it (`axle_capacity_g`).
 static func limit(m: Dictionary) -> Dictionary:
 	if m.is_empty():
 		return {}
@@ -286,6 +328,9 @@ static func limit(m: Dictionary) -> Dictionary:
 
 
 const CORNER_NEWTON_STEPS := 30
+## The passes `_corner_state` takes a body's compliance steer through its own tyres' force, each
+## shrinking the error by the loop's gain (~0.02, `compliance_loop_gain`); none without it.
+const CORNER_COMPLIANCE_PASSES := 2
 ## The mean steer's step (deg) as `corner_limit` winds the lock on.
 const CORNER_SWEEP_DEG := 0.5
 ## A wheel's drive force off its target by more than this fraction misses it.
@@ -294,14 +339,14 @@ const _CARRY_TOL := 1e-3
 
 ## The corner pass's steady turn (`docs/handling.md` § Balance): a left turn at `speed` (m/s, the
 ## COM's) on the mean steer `steer` (rad, >= 0; empty below), each wheel's slip off `beta` and the
-## yaw rate at its Ackermann angle plus its roll steer (`_axle_rolled`), its force off the runtime
-## law, the drive holding the speed split by the diffs and TC (`_split_drive`). Newton on (`beta`,
-## yaw rate, drive) from `guess` (a previous result), else wound on from straight (`_wind_on`).
-## Returns `lat_g` (`v r / g`), `front` / `rear` (`_axle_saturation`'s shares), `beta`, `yaw_rate`,
-## `steer`, `drive` (the shaft's), `drive_front` / `drive_rear` (what the tyres carry), `wheels`;
-## empty where no steady turn holds (`_solve_corner`).
-## Left out, each a fraction of a degree or a few newtons: drag's moments, a centre's split by wheel
-## radius. A rigid centre and the rear lock read as open (the tractor's, both off).
+## yaw rate at its Ackermann angle plus its roll and compliance steer, its force off the runtime
+## law at its arm about the rolled body's COM, the air at the aero centre, the drive holding the speed split by the diffs and TC
+## (`_split_drive`). Newton on (`beta`, yaw rate, drive) from `guess` (a previous result), else
+## wound on from straight (`_wind_on`). Returns `lat_g` (`v r / g`), `front` / `rear`
+## (`_axle_saturation`'s shares), `beta`, `yaw_rate`, `steer`, `drive` (the shaft's), `drive_front` /
+## `drive_rear` (what the tyres carry), `wheels`; empty where no steady turn holds (`_solve_corner`).
+## Left out, a few newtons: a centre's split by wheel radius. A rigid centre and the rear lock read
+## as open (the tractor's, both off).
 static func corner(m: Dictionary, speed: float, steer: float, guess := {}) -> Dictionary:
 	if m.is_empty() or speed <= 0.0 or steer < 0.0:
 		return {}
@@ -517,15 +562,81 @@ static func _corner_state(m: Dictionary, speed: float, steer: float,
 	var mass := float(m["mass"])
 	var wheelbase := float(m["wheelbase"])
 	var front_arm := float(m["front_arm"])
-	var acc_long := -speed * r * sin(beta)
-	var acc_lat := speed * r * cos(beta)
-	var roll := _roll_state(m, absf(acc_lat) / G)
+	# The speed's own rate along the path (`accel`, m/s^2, a caller's; absent = a steady turn) beside
+	# the turn's.
+	var accel := float(m.get("accel", 0.0))
+	var acc_long := accel * cos(beta) - speed * r * sin(beta)
+	var acc_lat := accel * sin(beta) + speed * r * cos(beta)
+	# The air on the body as `VehicleMath.air_force` puts it, along and across the body (+ = forward,
+	# left), at the aero centre: drag on `drag_area`, the side force on `side_area`. Its height
+	# pitches load off the front and rolls the body against the turn, and its arm yaws it.
+	var q_over_v := 0.5 * VehicleMath.AIR_DENSITY * speed
+	var aero_u := -q_over_v * maxf(float(m["drag_area"]), 0.0) * speed * cos(beta)
+	var aero_w := -q_over_v * maxf(float(m.get("side_area", 0.0)), 0.0) * speed * sin(beta) \
+			if float(m["drag_area"]) > 0.0 else 0.0
+	var aero_h := float(m.get("aero_h", m["h"]))
+	var h := float(m["h"])
+	var roll := _roll_state(m, absf(acc_lat) / G if aero_w == 0.0
+			else absf(mass * acc_lat * h - aero_w * aero_h) / (mass * G * h))
 	# Per front wheel; the rear sheds it.
-	var pitch := -mass * acc_long * float(m["h"]) / wheelbase / 2.0
+	var pitch := (-mass * acc_long * h + aero_u * aero_h) / wheelbase / 2.0
+	# Each axle's side force per patch (N, + = right as `force_lat`: a left turn pushes the body left)
+	# that its compliance steer reads: first its equilibrium share of `m a_y`, then what its own tyres
+	# make at the angle that share gives, as the runtime's latch reads its last tick
+	# (`RayWheel.compliance_steer`). The fore-aft forces across the track (the steered fronts' side
+	# forces, the outer wheels' larger rolling drag) yaw the body out of the turn, so the rear carries
+	# 1-4 % under its share. The loop's gain (~0.02, `compliance_loop_gain`) leaves the second pass
+	# within ~1e-5 of the fixed point.
+	var patch := {"front": -mass * acc_lat * (wheelbase - front_arm) / wheelbase / 2.0,
+			"rear": -mass * acc_lat * front_arm / wheelbase / 2.0}
+	var eval := _corner_wheels(m, speed, steer, x, roll, pitch, patch)
+	if float((m["front"] as Dictionary).get("compliance_steer", 0.0)) != 0.0 \
+			or float((m["rear"] as Dictionary).get("compliance_steer", 0.0)) != 0.0:
+		for _pass in CORNER_COMPLIANCE_PASSES:
+			for key: String in patch:
+				patch[key] = 0.0
+			for w: Dictionary in eval["wheels"]:
+				patch[w["axle"]] -= float(w["fy"]) / 2.0
+			eval = _corner_wheels(m, speed, steer, x, roll, pitch, patch)
+	var residual := PackedFloat64Array([float(eval["force_f"]) + aero_u - mass * acc_long,
+			float(eval["force_l"]) + aero_w - mass * acc_lat,
+			float(eval["moment"]) + aero_w * float(m.get("aero_arm", 0.0))])
+	var reach_sum: Dictionary = eval["reach_sum"]
+	var budget_sum: Dictionary = eval["budget_sum"]
+	var drives: Dictionary = eval["drives"]
+	return {"residual": residual, "holds": eval["holds"],
+			"tipping": not is_finite(float(roll["phi"])), "lat_g": speed * absf(r) / G,
+			"front": float(reach_sum["front"]) / maxf(float(budget_sum["front"]), 1.0),
+			"rear": float(reach_sum["rear"]) / maxf(float(budget_sum["rear"]), 1.0),
+			"beta": beta, "yaw_rate": r, "drive": drive, "drive_front": drives["front"],
+			"drive_rear": drives["rear"], "steer": steer, "wheels": eval["wheels"]}
+
+
+## `_corner_state`'s wheels at the state `x` under `roll` and `pitch` (N per front wheel), each axle's
+## compliance steer off `patch` (its side force per patch, N, + = right): each wheel's angle, load,
+## slips, drive, compliance-steer angle (`complied`, rad, + = left), tyre force (`fx`, `fy`, + =
+## forward / left) and arms about the COM (`x`, + = right, the rolled body's; `z`, + = forward), and
+## the body's summed forces (`force_f`, `force_l`), yaw moment (+ = left),
+## `holds`, and per axle the ellipse sums (`reach_sum`, `budget_sum`) and the drive its tyres carry
+## (`drives`).
+static func _corner_wheels(m: Dictionary, speed: float, steer: float, x: PackedFloat64Array,
+		roll: Dictionary, pitch: float, patch: Dictionary) -> Dictionary:
+	var beta := x[0]
+	var r := x[1]
+	var drive := x[2]
+	var wheelbase := float(m["wheelbase"])
+	var front_arm := float(m["front_arm"])
 	var curve: PackedVector2Array = m["grip_curve"]
 	var ref := float(m["ref"])
 	var sens := float(m["sensitivity"])
 	var wheels: Array[Dictionary] = []
+	# The rolled body carries its COM `h sin(phi)` outboard of the patches (the roll centre is the
+	# ground), so each patch's arm about it sits that much inboard: ~3 cm on a car at 0.5 g, through
+	# which the fore-aft forces yaw the body out of the turn. Pitch's fore-aft shift (1-2 mm while the
+	# step pass's speed recovers) is left out.
+	var phi := float(roll["phi"])
+	var roll_cos := cos(phi) if is_finite(phi) else 1.0
+	var shift := float(m["h"]) * sin(phi) if is_finite(phi) else 0.0
 	for key: String in ["front", "rear"]:
 		var axle: Dictionary = m[key]
 		var on_front := key == "front"
@@ -533,6 +644,8 @@ static func _corner_state(m: Dictionary, speed: float, steer: float,
 		var z := front_arm if on_front else front_arm - wheelbase
 		var loads := pair_loads(_normal(axle) + (pitch if on_front else -pitch), float(roll[key]))
 		var rolled := _axle_rolled(m, key, roll)
+		var complied := RayWheel.compliance_steer_angle(float(patch[key]), float(patch[key]),
+				float(axle.get("compliance_steer", 0.0)))
 		# A left turn: the inner wheel is the left one (x + = right, as the spec's positions).
 		for inner: bool in [true, false]:
 			var x_right := -half if inner else half
@@ -541,11 +654,12 @@ static func _corner_state(m: Dictionary, speed: float, steer: float,
 			var angle := (WheelDrive.ackermann_angle(steer, x_right, wheelbase,
 					float(m["ackermann"])) if on_front else 0.0) \
 					+ RayWheel.roll_steer_angle(0.0 if inner else rolled, rolled if inner else 0.0,
-					x_right, -x_right, float(axle.get("roll_steer", 0.0)), not on_front)
-			var v_f := speed * cos(beta) + r * x_right
+					x_right, -x_right, float(axle.get("roll_steer", 0.0)), not on_front) + complied
+			var x_com := x_right * roll_cos - shift
+			var v_f := speed * cos(beta) + r * x_com
 			var v_l := speed * sin(beta) + r * z
-			wheels.append({"axle": key, "inner": inner, "x": x_right, "z": z, "angle": angle,
-					"load": loads.y if inner else loads.x,
+			wheels.append({"axle": key, "inner": inner, "x": x_com, "z": z, "angle": angle,
+					"complied": complied, "load": loads.y if inner else loads.x,
 					"v_long": v_f * cos(angle) + v_l * sin(angle),
 					"v_lat": -v_f * sin(angle) + v_l * cos(angle)})
 	for w in wheels:
@@ -592,15 +706,8 @@ static func _corner_state(m: Dictionary, speed: float, steer: float,
 		drives[w["axle"]] += float(tyre.x)
 		w["fx"] = float(tyre.x)
 		w["fy"] = fy
-	var drag := VehicleMath.aero_drag(speed, float(m["drag_area"]))
-	var residual := PackedFloat64Array([force_f - drag * cos(beta) - mass * acc_long,
-			force_l - drag * sin(beta) - mass * acc_lat, moment])
-	return {"residual": residual, "holds": holds, "tipping": not is_finite(float(roll["phi"])),
-			"lat_g": speed * absf(r) / G,
-			"front": float(reach_sum["front"]) / maxf(float(budget_sum["front"]), 1.0),
-			"rear": float(reach_sum["rear"]) / maxf(float(budget_sum["rear"]), 1.0),
-			"beta": beta, "yaw_rate": r, "drive": drive, "drive_front": drives["front"],
-			"drive_rear": drives["rear"], "steer": steer, "wheels": wheels}
+	return {"wheels": wheels, "force_f": force_f, "force_l": force_l, "moment": moment,
+			"holds": holds, "reach_sum": reach_sum, "budget_sum": budget_sum, "drives": drives}
 
 
 ## Each wheel's drive `target` (N), its slip ratio `kappa` and whether traction control holds it

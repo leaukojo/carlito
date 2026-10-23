@@ -31,7 +31,7 @@ citations: `docs/sources.md`.
   clamp; an external force (thrust, sail) does not.
 - Never set roll or pitch in `RigidBody3D.inertia` (Jolt computes them about `center_of_mass`);
   yaw only through `yaw_dynamic_index`. Read the tensor off `PhysicsDirectBodyState3D`.
-- Understeer: the bar split, tyre load laws (`rear_lat_grip`: real rear tyres), sourced roll steer;
+- Understeer: the bar split, tyre load laws (`rear_lat_grip`: real rear tyres), sourced roll and compliance steer;
   tipping before sliding: the bar or `mu_lat`. Never a slower steer, a detuned lock or a lower COM.
 - Drag and angular damping are declared, never inherited: a new towed or attached rigid body
   needs its own resistance call and `VehicleMath.declare_angular_damp`.

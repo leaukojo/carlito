@@ -183,6 +183,13 @@ func test_the_trailer_is_authored_against_the_pin_and_not_against_a_fifth_wheel(
 	trailer.free()
 
 
+func test_the_trailer_ships_no_compliance_steer() -> void:
+	# No trailer axle's compliance steer is sourced (docs/sources.md § Compliance steer).
+	var trailer := _trailer()
+	assert_float(_spec_of(trailer).ground_drive.compliance_steer_rear).is_equal(0.0)
+	trailer.free()
+
+
 func test_the_bogie_centre_is_measured_off_the_spec() -> void:
 	var trailer := _trailer()
 	assert_float(trailer.call(&"bogie_z")).is_equal_approx(BOGIE_Z, 1e-6)

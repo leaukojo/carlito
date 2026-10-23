@@ -103,6 +103,30 @@ static func apply_roll_steer(body: BaseVehicle, coeffs: Vector2) -> void:
 	RayWheel.pair_axles(body.drive.wheels)
 
 
+## A tool's `compliance=<deg/kN>` flag: the rear compliance-steer coefficient
+## (`GroundDriveSpec.compliance_steer_rear`). NAN when absent.
+static func compliance_flag(args: PackedStringArray) -> float:
+	for a in args:
+		if a.begins_with("compliance="):
+			return float(a.substr(11))
+	return NAN
+
+
+## `compliance=` on `body` (in the tree, so its drive is built), as `apply_roll_steer`: the
+## coefficient overridden on a copy of its spec, in memory, never shipped, re-read by its rear
+## wheels, the axles paired. NAN: the spec's.
+static func apply_compliance(body: BaseVehicle, coeff: float) -> void:
+	if is_nan(coeff) or body.drive == null:
+		return
+	body.spec = body.spec.duplicate()
+	var gd := body.spec.ground_drive.duplicate() as GroundDriveSpec
+	body.spec.ground_drive = gd
+	gd.compliance_steer_rear = coeff
+	for w in body.drive.wheels:
+		w.compliance_steer_coeff = gd.compliance_steer_rear if w.is_rear else 0.0
+	RayWheel.pair_axles(body.drive.wheels)
+
+
 ## `angdamp=`: the angular damping of `body` and a coupled trailer REPLACEd with `figure` (1/s).
 ## Call it every tick: a trailer couples after its countdown and a respawn may re-couple it. NAN:
 ## as the bodies set it.

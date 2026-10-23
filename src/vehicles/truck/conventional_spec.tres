@@ -38,8 +38,8 @@
 ; derivation and damping ratios.
 ;
 ; ROLL STEER 0.10 ON THE DRIVE AXLE IS THE SEMI'S COMPROMISE (see semi_spec.tres): the step pass
-; reads K 0.27 > 0.50 deg/g at 0.05 g bobtail, -0.39 > 0.05 at 0.12 g laden (box), no new rolled
-; cell (measure_vehicles -- semi-conventional 60 step trailer=<bobtail|box>, 2026-10-22).
+; reads K 0.27 > 0.50 deg/g at 0.05 g bobtail, -0.59 > -0.22 at 0.12 g laden (box), no new rolled
+; cell (measure_vehicles -- semi-conventional 60 step trailer=<bobtail|box>, 2026-10-23).
 ;
 ; load_sensitivity 0.08: commercial radials lose ~8 % of mu per doubling of load past the
 ; corner's static share. Family number, matching the semi.

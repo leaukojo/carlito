@@ -459,6 +459,9 @@ func test_every_trailer_is_a_towed_body_with_its_wheels_authored_to_match_its_sp
 			.override_failure_message("%s claims a tractor driveline" % path).is_false()
 		# ...but it does brake, or the tractor would be stopping the whole rig on its own.
 		assert_float(spec.ground_drive.brake_torque).is_greater(0.0)
+		# No trailer axle's compliance steer is sourced (docs/sources.md § Compliance steer).
+		assert_float(spec.ground_drive.compliance_steer_rear) \
+			.override_failure_message("%s ships compliance steer" % path).is_equal(0.0)
 		node.free()
 
 

@@ -66,6 +66,15 @@ extends Resource
 ## the side the body rolls to) converts as `ε_f = front`, `ε_r = -rear`.
 @export var roll_steer_front := 0.0
 @export var roll_steer_rear := 0.0
+## Rear compliance steer, deg of wheel steer per kN of side force at each patch
+## (`RayWheel.compliance_steer`), + = toward understeer: the rear steers into the turn. Both rear
+## wheels take one angle off half the axle's total latched side force, a K&C figure's both-wheels-
+## loaded convention: a lifted partner adds 0, and the outer's force alone is still halved. A
+## one-wheel figure against its own force is a different quantity: convert it with its source. An
+## independent rear sourced per wheel would read its own wheel's force, which is not built. The K
+## term is `coeff * load per wheel / 1000` per g (`BalanceModel.compliance_steer_gradient`). No front
+## field: no figure is sourced, and the steering system's compliance is out of scope.
+@export var compliance_steer_rear := 0.0
 ## Front side-view link slope (contact patch to instant centre): a tyre force `F` puts
 ## `-F * anti_dive_slope` through the links, so the body pitches less. `h / wheelbase` = 100 %.
 @export var anti_dive_slope := 0.0
@@ -191,6 +200,11 @@ func has_anti_roll_bar() -> bool:
 ## Either axle steers with its roll, so the wheels need their partners (`RayWheel.pair_axles`).
 func has_roll_steer() -> bool:
 	return roll_steer_front != 0.0 or roll_steer_rear != 0.0
+
+
+## The rear steers with its side force, so the wheels need their partners (`RayWheel.pair_axles`).
+func has_compliance_steer() -> bool:
+	return compliance_steer_rear != 0.0
 
 
 ## Rear-axle bump damper, N*s/m: explicit, or the front damper scaled by sqrt(rate ratio) so the

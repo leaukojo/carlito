@@ -39,9 +39,9 @@ extends Node3D
 ##   godot --headless --path . res://tools/measure_rough.tscn -- pickup lane=mud tyre=mud
 ##   godot --headless --path . res://tools/measure_rough.tscn -- garbage-truck rollsteer=0,0.2 angdamp=0
 ##
-## `rollsteer=<front>,<rear>` (deg/deg) and `angdamp=<1/s>` are measure_vehicles.gd's probes, applied
-## by the same `MeasureRig` calls: a rough-ground cell attributed to roll steer or to the body's
-## angular damping without editing its spec.
+## `rollsteer=<front>,<rear>` (deg/deg), `compliance=<deg/kN>` and `angdamp=<1/s>` are
+## measure_vehicles.gd's probes, applied by the same `MeasureRig` calls: a rough-ground cell
+## attributed to roll or compliance steer or to the body's angular damping without editing its spec.
 ##
 ## `baseline` runs the set `docs/vehicle_measurements.md` § Rough and soft ground records: suv, tractor-kenney in
 ## 2WD / MFWD / MFWD + diff lock, sedan and pickup. Add `--fixed-fps 60` BEFORE `--` to run faster
@@ -119,6 +119,9 @@ var _tyre := ""
 ## `rollsteer=<front>,<rear>`: every config's roll-steer coefficients (deg/deg), in memory
 ## (`MeasureRig.apply_roll_steer`; NAN: the spec's).
 var _roll_steer := Vector2(NAN, NAN)
+## `compliance=<deg/kN>`: every config's rear compliance-steer coefficient, in memory
+## (`MeasureRig.apply_compliance`; NAN: the spec's).
+var _compliance := NAN
 ## `angdamp=<1/s>`: every config's angular damping REPLACEd, a coupled trailer's too
 ## (`MeasureRig.apply_angdamp`; NAN: as the body sets it).
 var _angdamp := NAN
@@ -167,6 +170,7 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 	_roll_steer = MeasureRig.roll_steer_flag(args)
+	_compliance = MeasureRig.compliance_flag(args)
 	_angdamp = MeasureRig.angdamp_flag(args)
 	if which.begins_with("course="):
 		if not _load_course(which.substr(7)):
@@ -184,9 +188,10 @@ func _ready() -> void:
 		_next_config()
 		return
 	if which == "doc=rough":
-		if _tyre != "" or not is_nan(_roll_steer.x) or not is_nan(_angdamp):
-			printerr("tyre= / rollsteer= / angdamp= change the figures doc=rough tabulates: run them"
-					+ " per body")
+		if _tyre != "" or not is_nan(_roll_steer.x) or not is_nan(_compliance) \
+				or not is_nan(_angdamp):
+			printerr("tyre= / rollsteer= / compliance= / angdamp= change the figures doc=rough"
+					+ " tabulates: run them per body")
 			get_tree().quit(1)
 			return
 		_doc = true
@@ -286,6 +291,7 @@ func _next_config() -> void:
 		_car.call(&"set_attachment", AttachmentCatalog.NONE)  ## bare: an implement's weight moves the axles
 	var tyre := MeasureRig.fit_tyre(_car, _tyre)
 	MeasureRig.apply_roll_steer(_car, _roll_steer)
+	MeasureRig.apply_compliance(_car, _compliance)
 	_car.contact_monitor = true
 	_car.max_contacts_reported = 8
 	_trials.clear()
@@ -641,6 +647,8 @@ func _probe_label() -> String:
 	var label := ""
 	if not is_nan(_roll_steer.x):
 		label += ", roll steer %.2f / %.2f deg/deg (not the spec's)" % [_roll_steer.x, _roll_steer.y]
+	if not is_nan(_compliance):
+		label += ", compliance steer %.4f deg/kN (not the spec's)" % _compliance
 	if not is_nan(_angdamp):
 		label += ", angular damping %.2f /s (not the body's)" % _angdamp
 	return label

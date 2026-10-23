@@ -7,6 +7,10 @@ the truck and its trailers: `docs/truck.md`; the tractor: `docs/tractor.md`; the
 `docs/boat.md`, `docs/flight.md`, `docs/rail.md`; graded figures and the `[n]` references:
 `docs/sources.md`; shared plumbing: `docs/systems.md`. Rules: `src/vehicles/CLAUDE.md` and the
 family files nested under it — these docs are the descriptive tour.
+**Agreed philosophy (user).** Keep the Kenney models: a short body of real mass behaves like a
+short real car, judged against one of that footprint; never a hidden longer wheelbase, a stretched
+model or a lowered COM to hit a number. A patch for a missing phenomenon is retired, on measurement,
+once the phenomenon is modelled.
 
 ## Vehicle framework
 

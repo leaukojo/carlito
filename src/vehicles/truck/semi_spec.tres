@@ -133,10 +133,11 @@
 ; COMPROMISE: roll_steer_rear 0.10 on the leaf drive axle is TRUCK_BASE's fitted figure
 ; (gen_kenney_vehicles; docs/sources.md § Roll steer): the leaf axle's roll understeer is sourced,
 ; its size is not. Without it the step pass reads the bobtail at K 0.22 deg/g at 0.06 g, under the
-; tractor criterion's 0.5-2.0 at 0.15 g (Woodrooffe & El-Gindy); with it 0.46-0.50 at 0.12-0.18 g,
-; and laden (box) 0.35 at 0.12 g, as load on the drive axle cuts a truck's K (UMTRI 1983). The
-; laden 50 km/h 30 % step lifts less (roll peak 26 > 12 deg); no new rolled cell
-; (measure_vehicles -- semi 60 step trailer=<bobtail|box>, 2026-10-22). Front 0: no figure.
+; tractor criterion's 0.5-2.0 at 0.15 g (Woodrooffe & El-Gindy); with it 0.47-0.50 at 0.12-0.16 g,
+; and laden (box) 0.14 at 0.13 g (-0.27 without), as load on the drive axle cuts a truck's K (UMTRI
+; 1983). The laden 50 km/h 30 % lifted step lifts less (roll peak 37 > 16 deg); held, it rolls
+; either way. No new rolled cell (measure_vehicles -- semi 60 step trailer=<bobtail|box>,
+; 2026-10-23). Front 0: no figure.
 ;
 ; THE SPRINGS ARE SIZED PER AXLE: the rear carries the fifth-wheel load as well as its own, and the
 ; drive axle is the ONLY driven axle, so what the plate puts on it (kingpin_share, a 25-30 % band
