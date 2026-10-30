@@ -48,7 +48,7 @@ const GRAVITY := 9.8  ## m/s^2, for the suspension-force -> kilograms read
 const PTO_EFFICIENCY := 0.90
 
 # --- status bitfield (contract 'status', u16) ---
-## FROZEN wire layout: a new flag appends at bit 7 or above, never renumbering (contract-edit skill).
+## FROZEN wire layout: a new flag appends at bit 8 or above, never renumbering (contract-edit skill).
 const ST_IGNITION := 1 << 0    ## engine running (key in Ignition)
 ## Wheels in contact, or the wheel-less body's own landed predicate (drone and boat overwrite
 ## this in `_tick_extras` via `with_status_bit`).
@@ -58,6 +58,7 @@ const ST_REVERSE := 1 << 3     ## engaged gear is R
 const ST_NEUTRAL := 1 << 4     ## engaged gear is N
 const ST_HANDBRAKE := 1 << 5   ## parking brake engaged
 const ST_HEADLIGHTS := 1 << 6  ## headlights at LOW or brighter
+const ST_ESC := 1 << 7         ## stability control braking for the yaw or the roll (`WheelDrive.esc_active`)
 
 # --- motion (measured from the sim) ---
 var speed := 0.0        ## signed longitudinal m/s (contract 'speed')
@@ -275,7 +276,7 @@ static func hours_step(prev_h: float, running: bool, delta: float) -> float:
 
 ## Pack the status bitfield from current vehicle state.
 static func pack_status(ignition: bool, ground_contact: bool, moving: bool,
-		gear_byte_: int, handbrake: bool, headlights: bool) -> int:
+		gear_byte_: int, handbrake: bool, headlights: bool, esc_active := false) -> int:
 	var s := 0
 	if ignition:
 		s |= ST_IGNITION
@@ -291,6 +292,8 @@ static func pack_status(ignition: bool, ground_contact: bool, moving: bool,
 		s |= ST_HANDBRAKE
 	if headlights:
 		s |= ST_HEADLIGHTS
+	if esc_active:
+		s |= ST_ESC
 	return s
 
 

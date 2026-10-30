@@ -2332,3 +2332,106 @@ func test_fitting_a_class_reaches_every_wheel_and_the_rolling_resistance() -> vo
 	assert_float(drive.rolling_resistance()).is_equal(0.012)
 	assert_bool(drive.fit_tyre(gd, null)).is_false()
 	assert_object(drive.tyre).is_same(gd.tyre)
+
+
+# --- stability control: the wiring, not the law --------------------------------------------
+
+## The law is `StabilityControl` (tests/test_stability_control.gd). Asserted here: the sensors
+## reach it with their signs, its torque lands on the right corner and adds to the pedal's, and
+## off it is today's step.
+
+## A 1500 kg body in the physics space (a box, so the solver has a yaw inertia), weightless, at
+## rest until a test sets its motion, and a bench drive on it, ESC fitted when `esc`.
+func _esc_rig(esc: bool) -> Array:
+	var spec := _bench_spec(1500.0)
+	spec.ground_drive.esc_equipped = esc
+	spec.ground_drive.esc_reference_k = PackedVector2Array([Vector2(0.1, 1.0)])
+	var body: RigidBody3D = auto_free(RigidBody3D.new())
+	body.mass = spec.mass
+	body.gravity_scale = 0.0
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(1.8, 1.4, 4.4)
+	shape.shape = box
+	body.add_child(shape)
+	add_child(body)
+	await get_tree().physics_frame
+	return [WheelDrive.new(body, spec), body, spec]
+
+
+func test_esc_brakes_the_outer_front_against_a_spin_to_the_left() -> void:
+	var rig: Array = await _esc_rig(true)
+	var drive: WheelDrive = rig[0]
+	var body: RigidBody3D = rig[1]
+	var gd: GroundDriveSpec = (rig[2] as VehicleSpec).ground_drive
+	var dt := Drivetrain.new(rig[2])
+	# Straight ahead at 72 km/h, the steer centred, the body yawing left: oversteer.
+	body.linear_velocity = Vector3(0.0, 0.0, -20.0)
+	body.angular_velocity = Vector3(0.0, 0.5, 0.0)
+	var input := VehicleInput.new()
+	drive.esc_step(body, gd, input, dt, 20.0, TICK)
+	assert_bool(drive.esc_active).is_true()
+	assert_float(drive._esc_torque[1]).is_greater(0.0)
+	for corner: int in [0, 2, 3]:
+		assert_float(drive._esc_torque[corner]).is_equal(0.0)
+	# Its first tick rises no faster than the modulator lets it.
+	assert_float(drive._esc_torque[1]).is_less_equal(
+			gd.axle_brake_torque(false) / StabilityControl.RISE_S * TICK + 1e-6)
+	assert_float(dt.esc_cap).is_equal_approx(1.0 - drive._esc_torque[1] / gd.axle_brake_torque(false),
+			1e-6)
+	assert_float(dt.esc_cap).is_less(1.0)
+	# The front-right wheel takes it.
+	var fr := -1
+	for i in drive.wheels.size():
+		if not drive.wheels[i].is_rear and drive.wheels[i].anchor.x > 0.0:
+			fr = i
+	assert_int(drive._corner[fr]).is_equal(1)
+	# Switched off: nothing braked, nothing capped, the estimate forgotten.
+	input.esc_off = true
+	drive.esc_step(body, gd, input, dt, 20.0, TICK)
+	assert_bool(drive.esc_active).is_false()
+	assert_that(drive._esc_torque).is_equal(Vector4.ZERO)
+	assert_float(dt.esc_cap).is_equal(1.0)
+	assert_float(drive._slip_est).is_equal(0.0)
+
+
+func test_esc_unfitted_or_slow_does_nothing() -> void:
+	var rig: Array = await _esc_rig(false)
+	var drive: WheelDrive = rig[0]
+	var body: RigidBody3D = rig[1]
+	var gd: GroundDriveSpec = (rig[2] as VehicleSpec).ground_drive
+	var dt := Drivetrain.new(rig[2])
+	body.linear_velocity = Vector3(0.0, 0.0, -20.0)
+	body.angular_velocity = Vector3(0.0, 0.5, 0.0)
+	drive.esc_step(body, gd, VehicleInput.new(), dt, 20.0, TICK)
+	assert_bool(drive.esc_active).is_false()
+	assert_float(dt.esc_cap).is_equal(1.0)
+	# Fitted, under StabilityControl.MIN_SPEED.
+	gd.esc_equipped = true
+	body.linear_velocity = Vector3(0.0, 0.0, -4.0)
+	drive.esc_step(body, gd, VehicleInput.new(), dt, 4.0, TICK)
+	assert_bool(drive.esc_active).is_false()
+	assert_float(dt.esc_cap).is_equal(1.0)
+
+
+func test_esc_reads_the_whole_ground_speed_in_a_spin() -> void:
+	# 72 km/h at ~75 deg of body slip: the nose's own part of it is under MIN_SPEED, the whole
+	# speed is not, and ESC stays on through the spin.
+	var rig: Array = await _esc_rig(true)
+	var drive: WheelDrive = rig[0]
+	var body: RigidBody3D = rig[1]
+	var gd: GroundDriveSpec = (rig[2] as VehicleSpec).ground_drive
+	var dt := Drivetrain.new(rig[2])
+	body.linear_velocity = Vector3(19.3, 0.0, -5.2)
+	body.angular_velocity = Vector3(0.0, 1.0, 0.0)
+	drive.esc_step(body, gd, VehicleInput.new(), dt, 5.2, TICK)
+	assert_float(5.2).is_less(StabilityControl.MIN_SPEED)
+	assert_bool(drive.esc_active).is_true()
+
+
+func test_esc_torque_adds_to_the_pedal_capped_at_the_declared_brake() -> void:
+	# No ESC torque: exactly the pedal's, bit for bit.
+	assert_float(WheelDrive.service_torque(0.37, 2100.0, 0.0)).is_equal(0.37 * 2100.0)
+	assert_float(WheelDrive.service_torque(0.2, 2000.0, 500.0)).is_equal_approx(900.0, 1e-9)
+	assert_float(WheelDrive.service_torque(0.9, 2000.0, 500.0)).is_equal(2000.0)
+	assert_float(WheelDrive.service_torque(0.0, 2000.0, 5000.0)).is_equal(2000.0)

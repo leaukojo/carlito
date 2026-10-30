@@ -20,6 +20,7 @@ const DEFAULTS := {
 	"extended_debug": false,
 	"key_softening": KeyShaper.DEFAULT_SOFTENING,
 	"tcs_off": false,
+	"esc_off": false,
 	"tyres": {},  ## variant -> TyreClass id (`tyre_of`, `set_tyre`)
 }
 

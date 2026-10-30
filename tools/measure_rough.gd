@@ -155,6 +155,7 @@ func _ready() -> void:
 	var which := String(args[0]) if args.size() > 0 else "suv"
 	_verbose = args.has("verbose")
 	_tc = args.has("tc")
+	MeasureRig.esc_off = args.has("noesc")
 	var lane_filter := ""
 	var patch_filter := ""
 	for a in args:
@@ -284,6 +285,7 @@ func _next_config() -> void:
 	if _level.vehicle == null or GameState.current_variant != variant:
 		_level.set_vehicle(variant)
 	_car = _level.vehicle
+	MeasureRig.unfit_esc(_car)
 	if _course != null:
 		if _car.has_method(&"set_attachment"):
 			_car.call(&"set_attachment", _course.attachment)  ## the def's, as the runner lays it

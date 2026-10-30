@@ -129,6 +129,8 @@ const LAMP_TEXT := {
 	"trailer_abs_lamp": "TRLR ABS",
 	# Aircraft flashing lamps; they flash because the bit flashes, no timer here.
 	"beacon": "BCN", "strobe": "STRB",
+	# Stability control: steady while switched off, flashing while it acts (`ESC_FLASH_HZ`).
+	"esc_off": "ESC",
 }
 const LAMP_COLOR := {
 	"handbrake": Color(0.95, 0.35, 0.30), "turnL": Color(0.35, 0.85, 0.45),
@@ -151,7 +153,11 @@ const LAMP_COLOR := {
 	"trailer_ebs_fault": Color(0.95, 0.35, 0.30),
 	"trailer_abs_lamp": Color(1.0, 0.70, 0.15),
 	"beacon": Color(0.95, 0.35, 0.30), "strobe": Color(1.0, 1.0, 1.0),
+	"esc_off": Color(1.0, 0.70, 0.15),
 }
+## The ESC tell-tale's flash while stability control acts (status ST_ESC): the cluster's own, as a
+## real one flashes it (Bendix's ATC/ESP lamp, `docs/sources.md` § Stability control).
+const ESC_FLASH_HZ := 2.5
 ## Cosmetic short captions for the generated "out" bars (like LAMP_TEXT for lamps).
 const BAR_LABEL := {
 	"hitch_pos_actual": "HITCH", "pto_rpm": "PTO", "engine_load": "LOAD",
@@ -881,6 +887,11 @@ func _process(_dt: float) -> void:
 			_readout.text += "  %s %s" % [extra[1], extra[2] % t.get(extra[0])]
 
 
+## The ESC tell-tale's flash phase at `seconds`: lit the first half of each ESC_FLASH_HZ period.
+static func esc_flash_on(seconds: float) -> bool:
+	return fposmod(seconds * ESC_FLASH_HZ, 1.0) < 0.5
+
+
 func _update_telltales() -> void:
 	var vi := InputRouter.get_vehicle_input()
 	# Mirror every lamp/warning bit verbatim; sloppyCAN is the sole authority when the bridge
@@ -911,6 +922,8 @@ func _update_telltales() -> void:
 		"hardpoint_cmd": vi.hardpoint_cmd,
 		"beacon": vi.lamps.beacon,
 		"strobe": vi.lamps.strobe,
+		"esc_off": vi.esc_off or ((_telem.status & VehicleTelemetry.ST_ESC) != 0
+				and esc_flash_on(Time.get_ticks_msec() / 1000.0)),
 	}
 	for sig_name in _lamps:
 		var on: bool = active.get(sig_name, false)

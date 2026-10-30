@@ -44,6 +44,8 @@ func poll() -> Dictionary[StringName, Variant]:
 		&"fwd_drive": _flag(v, "fwd_drive"),
 		# Car traction control; absent → TC on.
 		&"tcs_off": _flag(v, "tcs_off"),
+		# Stability control; absent → ESC on.
+		&"esc_off": _flag(v, "esc_off"),
 		# Hydraulic remote % → 0..1 valve; absent → closed.
 		&"scv_flow": clampf(_num(v, "scv_flow", 0.0) / 100.0, 0.0, 1.0),
 		# Flight controls % → unit; absent → neutral.

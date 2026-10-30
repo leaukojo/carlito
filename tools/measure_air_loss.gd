@@ -90,6 +90,7 @@ var _stop_at := Vector3.ZERO  ## roll: where it first came under STOPPED_MS
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	_strict = args.has("strict")
+	MeasureRig.esc_off = args.has("noesc")
 	var which := String(args[0]) if args.size() > 0 else "all"
 	if which == "all":
 		_variants = ALL_VARIANTS.duplicate()
@@ -143,6 +144,7 @@ func _spawn(pose: Callable) -> void:
 		_car.queue_free()
 		_car = null
 	_car = load(Catalog.VARIANTS[_variant]["scene"]).instantiate() as TruckVehicle
+	MeasureRig.unfit_esc(_car)
 	add_child(_car)
 	_car.global_transform = pose.call(_car)
 	_car.spawn_transform = _car.global_transform

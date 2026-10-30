@@ -38,6 +38,15 @@ func test_a_monotonic_build_is_no_run() -> void:
 	assert_int(Measure.chatter_runs(ramp)).is_equal(0)
 
 
+func test_the_esc_floor_reads_its_share_s_noise_as_no_run() -> void:
+	# The van's held touch: ±0.0003 on a 0.011 share flips past 1 % of it, under ESC_CHATTER_EPS;
+	# a dump's ring, 0 to the share, is still one.
+	var held := _alternating(0.011, 3e-4, 40)
+	assert_int(Measure.chatter_runs(held)).is_equal(1)
+	assert_int(Measure.chatter_runs(held, Measure.ESC_CHATTER_EPS)).is_equal(0)
+	assert_int(Measure.chatter_runs(_alternating(0.0, 0.2, 10), Measure.ESC_CHATTER_EPS)).is_equal(1)
+
+
 func test_two_flips_are_not_yet_a_run() -> void:
 	# Up, down, up: two flips, one short of CHATTER_FLIPS.
 	var s := PackedFloat64Array([5e-3, 5.5e-3, 5e-3, 5.5e-3])

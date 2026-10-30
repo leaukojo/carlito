@@ -99,6 +99,12 @@ brake_torque = 15500.0
 handbrake_torque = 12000.0
 abs_equipped = true
 tcs_equipped = true
+; ESC as semi_spec.tres; the table is this geometry's own (StabilityControl.reference_table).
+esc_equipped = true
+esc_reference_k = PackedVector2Array(0.0906, 0.5132, 0.1803, 0.5439, 0.2679, 0.5954, 0.3527, 0.6684, 0.4338, 0.7603)
+; Roll stability as semi_spec.tres, this unit's own lifts (`measure_semi_launch --
+; semi-conventional trailer=<body> ramp`, 2026-10-25).
+esc_roll_lift_g = PackedVector2Array(8000, 0.602, 11775, 0.551, 13123, 0.508, 13662, 0.457, 14471, 0.429)
 hill_hold = 1
 hill_hold_s = 3.0
 ; BRAKE HEAT (BrakeThermal; docs/sources.md § Brake heat): the 430 x 45 air disc's lump, every wheel.

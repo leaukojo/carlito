@@ -65,6 +65,8 @@ var _key_softening := KeyShaper.DEFAULT_SOFTENING
 ## The player's TRACTION CONTROL setting, set by the shell: local driving only (the bridge sends
 ## its own `tcs_off`).
 var _local_tcs_off := false
+## The player's STABILITY CONTROL setting, set by the shell: local driving only, like `tcs_off`.
+var _local_esc_off := false
 var _brake_override := false  ## latched by `brake_override`, both sources alike
 var _auto_hold := false  ## latched by `auto_hold`, local key and touch pedals only
 ## The gamepad moved a pedal last, not a key or a touch pedal: the auto hold stands aside, since an
@@ -170,6 +172,14 @@ func set_local_tcs_off(off: bool) -> void:
 
 func local_tcs_off() -> bool:
 	return _local_tcs_off
+
+
+func set_local_esc_off(off: bool) -> void:
+	_local_esc_off = off
+
+
+func local_esc_off() -> bool:
+	return _local_esc_off
 
 
 ## Vehicles register on _ready to read speed/gear.
@@ -399,6 +409,7 @@ func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 	raw[&"doors"] = _doors
 	raw[&"body_cmd"] = _body_cmd
 	raw[&"tcs_off"] = _local_tcs_off
+	raw[&"esc_off"] = _local_esc_off
 	return arbitrate_local(raw, speed, gear)
 
 
@@ -563,8 +574,10 @@ static func arbitrate_local(raw: Dictionary, speed: float, gear_byte: int,
 	out.hand_throttle = clampf(float(raw.get(&"hand_throttle", 0.0)), 0.0, 1.0)
 	out.diff_lock = bool(raw.get(&"diff_lock", false))
 	out.fwd_drive = bool(raw.get(&"fwd_drive", false))
-	# Traction control, from the player's TRACTION CONTROL setting (cars fitted with TC only).
-	out.tcs_off = bool(raw.get(&"tcs_off", false))
+	# Traction control and stability control, from the player's settings (bodies fitted with them
+	# only). ESC off takes TC with it, as a car's long press does; TC off alone leaves ESC on.
+	out.esc_off = bool(raw.get(&"esc_off", false))
+	out.tcs_off = bool(raw.get(&"tcs_off", false)) or out.esc_off
 	# Refuse body command (garbage truck only). Has a key: a real stalk with four positions.
 	out.body_cmd = int(raw.get(&"body_cmd", 0))
 	# Hydraulic remote spool (tractor only). See _scv declaration for why it earns a key.
@@ -708,7 +721,9 @@ static func arbitrate_bridge(vals: Dictionary, manual := false,
 	out.fwd_drive = bool(vals.get("fwd_drive", false))
 	# Car traction control: absent → on (the fitted system's rest state); the local setting never
 	# reaches a live bridge.
-	out.tcs_off = bool(vals.get("tcs_off", false))
+	# Stability control likewise, absent → on; ESC off takes TC with it.
+	out.esc_off = bool(vals.get("esc_off", false))
+	out.tcs_off = bool(vals.get("tcs_off", false)) or out.esc_off
 	# Hydraulic remote: bridge-only, absent → valve closed.
 	out.scv_flow = clampf(float(vals.get("scv_flow", 0.0)), 0.0, 1.0)
 	# Flight controls, already %→unit normalized in bridge_source; absent → neutral/disarmed/

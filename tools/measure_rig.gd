@@ -6,6 +6,23 @@ extends RefCounted
 const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
 const Layers := preload("res://src/physics/collision_layers.gd")
 
+## `noesc` (every tool): the body's stability control unfitted in memory (`unfit_esc`), its traction
+## control left as fitted: the bridge's `esc_off` would take TC with it, and the chassis tables are
+## recorded with TC on. Each tool sets it from its flags; a chassis table's doc preset sets it itself.
+static var esc_off := false
+
+
+## Under `esc_off`, `car`'s ESC unfitted on a copy of its spec, in memory, never shipped (the ground
+## drive is a sub-resource the copy shares). Its tick reads the spec each tick, so any time works.
+static func unfit_esc(car: Node) -> void:
+	var spec: VehicleSpec = car.get("spec")
+	if not esc_off or spec == null or spec.ground_drive == null or not spec.ground_drive.esc_equipped:
+		return
+	spec = spec.duplicate()
+	spec.ground_drive = spec.ground_drive.duplicate()
+	spec.ground_drive.esc_equipped = false
+	car.set("spec", spec)
+
 
 ## One `Surface` everywhere, over a slab or a ramp: the duck-typed contract `HeightmapTerrain`
 ## answers (`BaseVehicle._collect_grip_terrains`), nothing more. `height_at` is the plane through

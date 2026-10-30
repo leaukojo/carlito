@@ -234,6 +234,16 @@ brake_torque = 15500.0
 handbrake_torque = 12000.0
 abs_equipped = true
 tcs_equipped = true
+; ESC (R13's stability function, standard on N3): its reference K table is
+; StabilityControl.reference_table of this spec, the unit alone (bobtail); test_vehicle_catalog
+; fails a stale one and prints the fresh table.
+esc_equipped = true
+esc_reference_k = PackedVector2Array(0.1093, 0.4818, 0.2157, 0.543, 0.3166, 0.6446, 0.4098, 0.7866, 0.4928, 0.9797)
+; Roll stability: the rig's first wheel lift on this unit's sensor at its coupled load (8000 kg +
+; the kingpin's 27.0 %: bobtail, flatbed, tipper, tanker, box), measured 2026-10-25 with
+; `measure_semi_launch -- semi trailer=<body> ramp` ("rig's first lift"), yaw ESC on and no roll
+; table: a re-measure empties this table first (`esc_off` drops the yaw too).
+esc_roll_lift_g = PackedVector2Array(8000, 0.6, 11775, 0.558, 13123, 0.515, 13662, 0.462, 14471, 0.437)
 hill_hold = 1
 hill_hold_s = 3.0
 ; BRAKE HEAT (BrakeThermal; docs/sources.md § Brake heat): the 430 x 45 air disc's lump, every wheel.

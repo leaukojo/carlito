@@ -333,6 +333,8 @@ const CORNER_NEWTON_STEPS := 30
 const CORNER_COMPLIANCE_PASSES := 2
 ## The mean steer's step (deg) as `corner_limit` winds the lock on.
 const CORNER_SWEEP_DEG := 0.5
+## The least g `k_curve` reads K at.
+const K_CURVE_MIN_G := 0.02
 ## A wheel's drive force off its target by more than this fraction misses it.
 const _CARRY_TOL := 1e-3
 
@@ -526,6 +528,33 @@ static func corner_at(m: Dictionary, speed: float, lat_g: float) -> Dictionary:
 		return true
 	_wind_on(m, speed, float(m["lock"]), bisect)
 	return found
+
+
+## The corner model's understeer gradient against g at `speed` (m/s): one sweep as `corner_limit`
+## winds it, each turn's `(lat_g, K)` (K in deg/g, the step pass's `(δ − L r / v) / a_y`), from
+## K_CURVE_MIN_G (under it K is a ratio of two vanishing terms) up to the peak, x ascending, and
+## K never falling: the sweep ends at the first turn whose K drops (a step halved past a failed
+## probe can land on another branch, an inner wheel lifting another law), a kink that would hand
+## the reference a step in K for a hair of g. What `StabilityControl.reference_k` reads. Empty on an
+## empty model, or with no turn past the floor.
+static func k_curve(m: Dictionary, speed: float) -> PackedVector2Array:
+	var points := PackedVector2Array()
+	if m.is_empty() or speed <= 0.0:
+		return points
+	var wheelbase := float(m["wheelbase"])
+	var collect := func(turn: Dictionary, _prev: Dictionary) -> bool:
+		var g := float(turn["lat_g"])
+		if not points.is_empty() and g <= points[points.size() - 1].x:
+			return true
+		if g < K_CURVE_MIN_G:
+			return false
+		var k := rad_to_deg((float(turn["steer"]) - wheelbase * float(turn["yaw_rate"]) / speed) / g)
+		if not points.is_empty() and k < points[points.size() - 1].y:
+			return true
+		points.append(Vector2(g, k))
+		return false
+	_wind_on(m, speed, float(m["lock"]), collect)
+	return points
 
 
 ## Axle `key`'s outer corner's compression past its inner's (m) under `roll` (`_roll_state`), what

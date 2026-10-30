@@ -61,7 +61,7 @@ const SUSPENSION := ["spring_rate", "damper_bump", "damper_rebound", "spring_rat
 		"damper_bump_rear", "damper_rebound_rear"]
 ## Driveline (and twin-tyre) flags: had gone missing once (now pinned).
 const DRIVELINE_FLAGS := ["rear_diff_lockable", "front_axle_engageable", "retarder_equipped",
-		"centre_diff_rigid", "abs_equipped", "tcs_equipped", "brake_engages_front_axle",
+		"centre_diff_rigid", "abs_equipped", "tcs_equipped", "esc_equipped", "brake_engages_front_axle",
 		"rear_twin_tyres"]
 ## One machine's spec scalars: off (0) unless its variant declares them, never on a baseline.
 const MACHINE_SCALARS := {"pto_mode_rpm": "pto_mode_rpm"}

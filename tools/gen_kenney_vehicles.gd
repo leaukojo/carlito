@@ -214,6 +214,8 @@ const CAR_BASE := {
 	"abs_equipped": true,
 	# Traction control too (part of ESC, EU-mandatory since 2014); `race-future` opts out.
 	"tcs_equipped": true,
+	# ESC itself (`StabilityControl`) on every ABS road car; the open-wheelers opt out with ABS.
+	"esc_equipped": true,
 	# Hill-start assist (HillHold.Kind.ASSIST): the brake held ~1 s after its release on a grade
 	# (Honda), unless the drive holds the grade first. The open-wheelers opt out with ABS.
 	"hill_hold": HillHold.Kind.ASSIST, "hill_hold_s": 1.0,
@@ -349,6 +351,8 @@ const TRUCK_BASE := {
 	# dry asphalt a floored launch peaks at ~0.39 g with the rears at 0.09 slip, under the grip peak:
 	# `garbage-truck` notc reaches 50 km/h in the same 6.43 s (measure_vehicles trace, 2026-10-24).
 	"tcs_equipped": true,
+	# ESC: required on N2 / N3 goods vehicles (UN R13 5.2.1.32).
+	"esc_equipped": true,
 	# Hill-start assist held 3 s (Volvo VN); the converter's creep alone holds ~22 % here.
 	"hill_hold": HillHold.Kind.ASSIST, "hill_hold_s": 3.0,
 	# The stock M+S drive tyre on dry asphalt: it sets the brake split and the steering-taper margin;
@@ -451,7 +455,7 @@ const VAN_BASE := {
 	# The heavy vans: a light-truck fit on the all-season class.
 	"tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "tyre": "all_season",
 	"mu_long": 1.0, "mu_lat": 0.85, "rear_lat_grip": 1.0, "rear_twin_tyres": true,
-	"abs_equipped": true, "tcs_equipped": true,
+	"abs_equipped": true, "tcs_equipped": true, "esc_equipped": true,
 	# Hill-start assist held 3 s, a truck's (Volvo VN).
 	"hill_hold": HillHold.Kind.ASSIST, "hill_hold_s": 3.0,
 	# A 3.5-5 t van's brakes: 5200 Nm a wheel is 1.4 g at 4.2 t, and they hold gear 1 at converter
@@ -571,8 +575,9 @@ const TRACTOR_BASE := {
 	# radius) is unchanged.
 	"brake_torque": 15767.0, "handbrake_torque": 14667.0, "park_pawl_torque": 27500.0,
 	"brake_heat": "tractor_wet",
-	# No TC either: MFWD and the diff lock are a tractor's traction aids.
-	"tcs_equipped": false,
+	# No TC either: MFWD and the diff lock are a tractor's traction aids. Nor ESC: no road ESC on
+	# the machine.
+	"tcs_equipped": false, "esc_equipped": false,
 	# A powershift hill hold (Valtra HillHold): held at rest in gear until the drive pedal is down
 	# and the clutch carries the grade, with no timeout.
 	"hill_hold": HillHold.Kind.STANDSTILL, "hill_hold_s": 0.0,
@@ -762,8 +767,8 @@ const VARIANTS := {
 	# need of) and closes at its rating: on J 0.06 the rev drop already spans ~2 ticks, a dog box's
 	# near-instant engagement (estimate). A clutch multiplies nothing: `converter_stall_ratio` 1.0.
 	# `yaw_index` 0: no measured open-wheeler, so Jolt's tensor (docs/handling.md § Inertia).
-	"race": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "converter_stall_ratio": 1.0, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.25, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": true, "brake_torque": 2000.0, "park_pawl_torque": 0.0, "brake_heat": "racing"},
-	"race-future": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "converter_stall_ratio": 1.0, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": false, "brake_torque": 2000.0, "park_pawl_torque": 0.0, "brake_heat": "racing"},
+	"race": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "converter_stall_ratio": 1.0, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.25, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "abs_equipped": false, "esc_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": true, "brake_torque": 2000.0, "park_pawl_torque": 0.0, "brake_heat": "racing"},
+	"race-future": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "converter_stall_ratio": 1.0, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "esc_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": false, "brake_torque": 2000.0, "park_pawl_torque": 0.0, "brake_heat": "racing"},
 	# Commercial bodies: RWD, governed at 180 like the real things (measured 198-200 ungoverned).
 	# Bars: the 36 kN/m pair split 24 / 12 kN/m: the corner pass saturates the front first (0.98 /
 	# 0.83 at 0.72 g), LLTD 58 %, roll 4.0 deg, no wheel lifted; BalanceModel.corner_limit +20.4 %.
@@ -976,6 +981,7 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	gd.retarder_rating_nm = float(ov.get("retarder_rating_nm", b.get("retarder_rating_nm", 0.0)))
 	gd.abs_equipped = get_flag.call("abs_equipped")
 	gd.tcs_equipped = get_flag.call("tcs_equipped")
+	gd.esc_equipped = get_flag.call("esc_equipped")
 	gd.hill_hold = int(ov.get("hill_hold", b["hill_hold"])) as HillHold.Kind
 	gd.hill_hold_s = get_f.call("hill_hold_s")
 	gd.brake_engages_front_axle = get_flag.call("brake_engages_front_axle")
@@ -1081,6 +1087,9 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	_brakes(spec, gd, get_f, String(ov.get("_id", "")), sag,
 			String(ov.get("brake_heat", b["brake_heat"])))
 	_balance(spec, String(ov.get("_id", "")))
+	# ESC's calibration, off the finished chassis (`GroundDriveSpec.esc_reference_k`).
+	if gd.esc_equipped:
+		gd.esc_reference_k = StabilityControl.reference_table(spec)
 
 	spec.headlight_paths.assign(_lamp_paths["headlight_paths"])
 	spec.head_lamp_paths.assign(_lamp_paths["head_lamp_paths"])

@@ -23,12 +23,14 @@ func test_every_setting_round_trips_through_the_file() -> void:
 	s.set_value("extended_debug", true)
 	s.set_value("key_softening", 0.65)
 	s.set_value("tcs_off", true)
+	s.set_value("esc_off", true)
 	var again := UserSettings.new(SCRATCH)
 	assert_int(again.value("density")).is_equal(Dashboard.Density.FULL)
 	assert_float(again.value("ui_scale")).is_equal_approx(1.35, 1e-6)
 	assert_bool(again.value("extended_debug")).is_true()
 	assert_float(again.value("key_softening")).is_equal_approx(0.65, 1e-6)
 	assert_bool(again.value("tcs_off")).is_true()
+	assert_bool(again.value("esc_off")).is_true()
 
 
 ## A wrong type or an unknown key is skipped on read and dropped on the next write.

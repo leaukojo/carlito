@@ -88,10 +88,10 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	drive.towed_kg = _fifth_wheel.towed_mass_kg()
 	# EBS11, towing to towed: the trailer is handed a number and never gates itself. Blends the foot
 	# brake (the hill hold's included, so the rig holds as one) with this tick's retarder_state (set
-	# by super() above).
+	# by super() above). Roll stability asks the trailer at least its own application.
 	var foot := drive.pedal_application(drive.foot_pedal(input))
-	var demand01 := TruckTelemetry.trailer_brake_blend(foot,
-			t.retarder_state, Drivetrain.retarder_fraction(spec))
+	var demand01 := maxf(TruckTelemetry.trailer_brake_blend(foot,
+			t.retarder_state, Drivetrain.retarder_fraction(spec)), drive.roll_application())
 	# Spool: hitch_request read in its transport sense (1 = tipping body down), not as a height.
 	var spool := 1.0 - clampf(input.hitch_request, 0.0, 1.0)
 	# The trailer's spring brakes follow the lever and this tick's air gate (set by super() above):

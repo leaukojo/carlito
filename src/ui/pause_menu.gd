@@ -27,6 +27,8 @@ signal extended_debug_changed(on: bool)
 signal key_softening_changed(amount: float)
 ## TRACTION CONTROL flipped (true = off); the shell hands it to InputRouter and writes it to user://.
 signal tcs_off_changed(off: bool)
+## STABILITY CONTROL flipped (true = off); the shell hands it to InputRouter and writes it to user://.
+signal esc_off_changed(off: bool)
 ## New wind/current preset or shared compass direction picked; the shell applies it to the
 ## current level and keeps it for the session.
 signal conditions_changed(wind_preset: int, current_preset: int, from_deg: float)
@@ -42,6 +44,7 @@ class State extends RefCounted:
 	var extended_debug := false
 	var key_softening := KeyShaper.DEFAULT_SOFTENING
 	var tcs_off := false
+	var esc_off := false
 	var wind_preset: int = WorldConditions.Preset.LEVEL
 	var current_preset: int = WorldConditions.Preset.LEVEL
 	var wind_from_deg := 0.0
@@ -69,6 +72,8 @@ const KEY_RESPONSE_HELP := "How driving keys and on-screen pedals ease in. RAW i
 
 const TCS_HELP := "Cuts engine power when a driven wheel spins. Cars fitted with it only; OFF lets the tyres spin and the rear step out."
 
+const ESC_HELP := "Brakes one wheel to stop a spin or a plough. Road vehicles fitted with it only; OFF turns traction control off too."
+
 const WIND_HELP := "Overrides the level's wind for this session."
 const CURRENT_HELP := "Overrides the level's water current for this session."
 const FROM_HELP := "Where the wind and water current come from. Applies to LIGHT and STRONG."
@@ -90,6 +95,7 @@ var _ui_scale_btn: Button
 var _extended_debug_btn: Button
 var _key_response_btn: Button
 var _tcs_btn: Button
+var _esc_btn: Button
 var _wind_btn: Button
 var _current_btn: Button
 var _from_btn: Button
@@ -101,6 +107,7 @@ var _ui_scale := UiScale.USER_DEFAULT
 var _extended_debug := false
 var _key_softening := KeyShaper.DEFAULT_SOFTENING
 var _tcs_off := false
+var _esc_off := false
 var _wind_preset: int = WorldConditions.Preset.LEVEL
 var _current_preset: int = WorldConditions.Preset.LEVEL
 var _wind_from_deg := 0.0
@@ -118,6 +125,7 @@ func setup(caps: Dictionary, state := State.new()) -> void:
 	_extended_debug = state.extended_debug
 	_key_softening = state.key_softening
 	_tcs_off = state.tcs_off
+	_esc_off = state.esc_off
 	_wind_preset = state.wind_preset
 	_current_preset = state.current_preset
 	_wind_from_deg = state.wind_from_deg
@@ -268,6 +276,11 @@ func _build_settings() -> void:
 	_settings.add_child(_tcs_btn)
 	_settings.add_child(_help(TCS_HELP))
 
+	_esc_btn = _menu_button("", _on_esc_pressed)
+	_relabel_esc()
+	_settings.add_child(_esc_btn)
+	_settings.add_child(_help(ESC_HELP))
+
 	_settings.add_child(_menu_button("BACK", func() -> void: _show_page(_root)))
 
 
@@ -385,7 +398,20 @@ func _on_tcs_pressed() -> void:
 
 
 func _relabel_tcs() -> void:
-	_tcs_btn.text = "TRACTION CONTROL: %s" % ("OFF" if _tcs_off else "ON")
+	# STABILITY CONTROL off takes TC with it (`InputRouter.arbitrate_local`), whatever this setting.
+	_tcs_btn.text = "TRACTION CONTROL: %s" % ("OFF (WITH ESC)" if _esc_off
+			else "OFF" if _tcs_off else "ON")
+
+
+func _on_esc_pressed() -> void:
+	_esc_off = not _esc_off
+	_relabel_esc()
+	_relabel_tcs()
+	esc_off_changed.emit(_esc_off)
+
+
+func _relabel_esc() -> void:
+	_esc_btn.text = "STABILITY CONTROL: %s" % ("OFF" if _esc_off else "ON")
 
 
 func _on_wind_pressed() -> void:

@@ -66,6 +66,18 @@ func test_full_still_generates_the_bars_and_lamps() -> void:
 	assert_dict(tractor._out_lamps).is_not_empty()
 
 
+## The ESC tell-tale exists where the contract carries the switch (car, truck) and flashes at its
+## rate while stability control acts: lit the first half of each period.
+func test_the_esc_lamp_rides_the_switch_and_flashes_at_its_rate() -> void:
+	assert_bool(_dash("car", Dashboard.Density.COMPACT)._lamps.has("esc_off")).is_true()
+	assert_bool(_dash("truck", Dashboard.Density.COMPACT)._lamps.has("esc_off")).is_true()
+	assert_bool(_dash("tractor", Dashboard.Density.COMPACT)._lamps.has("esc_off")).is_false()
+	var period := 1.0 / Dashboard.ESC_FLASH_HZ
+	assert_bool(Dashboard.esc_flash_on(0.1 * period)).is_true()
+	assert_bool(Dashboard.esc_flash_on(0.6 * period)).is_false()
+	assert_bool(Dashboard.esc_flash_on(3.1 * period)).is_true()
+
+
 ## An instanced signal (contract 'count' N) generates N bars under one group caption, and a
 ## scalar one still generates exactly one — the uniform Array[DashBar] keying is what lets the
 ## update loop stay branch-free, so "count 1 quietly became a list of one that nobody reads" is

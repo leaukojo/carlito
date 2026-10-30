@@ -147,6 +147,8 @@ func _physics_process(delta: float) -> void:
 		# The hill hold first: the MFWD engagement and the controller read its pedal.
 		drive.hold_step(self, spec.ground_drive, input, drivetrain, ground_speed, delta)
 		foot = drive.foot_pedal(input)
+		# Stability control before the drivetrain, which reads its fuel cap this tick.
+		drive.esc_step(self, spec.ground_drive, input, drivetrain, ground_speed, delta)
 	var drive_omega := drive.drive_omega(spec.ground_drive, input) if drive != null else 0.0
 	drivetrain.braking = foot > 0.0
 	var axle_torque := drivetrain.process(
@@ -317,7 +319,8 @@ func _update_telemetry(input: VehicleInput, delta: float) -> void:
 
 	telemetry.status = VehicleTelemetry.pack_status(
 			running, telemetry.ground, absf(telemetry.speed) > MOVING_SPEED,
-			telemetry.gear_byte, input.handbrake > 0.0, input.lights >= 3)
+			telemetry.gear_byte, input.handbrake > 0.0, input.lights >= 3,
+			drive != null and drive.esc_active)
 
 	_prev_velocity = linear_velocity
 

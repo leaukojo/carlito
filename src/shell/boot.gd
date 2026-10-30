@@ -428,6 +428,7 @@ func _open_pause() -> void:
 	state.extended_debug = _debug.is_extended()
 	state.key_softening = InputRouter.key_softening()
 	state.tcs_off = InputRouter.local_tcs_off()
+	state.esc_off = InputRouter.local_esc_off()
 	state.wind_preset = _wind_preset
 	state.current_preset = _current_preset
 	state.wind_from_deg = _wind_from_deg
@@ -444,6 +445,7 @@ func _open_pause() -> void:
 	pause.extended_debug_changed.connect(_on_extended_debug_changed)
 	pause.key_softening_changed.connect(_on_key_softening_changed)
 	pause.tcs_off_changed.connect(_on_tcs_off_changed)
+	pause.esc_off_changed.connect(_on_esc_off_changed)
 	pause.conditions_changed.connect(_on_conditions_changed)
 	pause.night_toggled.connect(_on_night_toggled)
 	_push_overlay(pause)
@@ -456,6 +458,7 @@ func _apply_saved_settings() -> void:
 	_debug.set_extended(bool(_settings.value("extended_debug")))
 	InputRouter.set_key_softening(float(_settings.value("key_softening")))
 	InputRouter.set_local_tcs_off(bool(_settings.value("tcs_off")))
+	InputRouter.set_local_esc_off(bool(_settings.value("esc_off")))
 
 
 ## SETTINGS picked a new cluster density. The menu owns nothing, so applying and remembering
@@ -488,6 +491,12 @@ func _on_key_softening_changed(amount: float) -> void:
 func _on_tcs_off_changed(off: bool) -> void:
 	InputRouter.set_local_tcs_off(off)
 	_settings.set_value("tcs_off", InputRouter.local_tcs_off())
+
+
+## SETTINGS flipped STABILITY CONTROL.
+func _on_esc_off_changed(off: bool) -> void:
+	InputRouter.set_local_esc_off(off)
+	_settings.set_value("esc_off", InputRouter.local_esc_off())
 
 
 ## F2: cycles the same density setting the SETTINGS page's button does, so the menu and the key

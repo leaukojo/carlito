@@ -62,6 +62,13 @@ static func yaw_inertia(body_mass: float, index: float, front_arm: float, rear_a
 	return index * body_mass * front_arm * rear_arm
 
 
+## Inverse moment (1 / kg*m^2) of `body` about world `axis` through its centre of mass, off the
+## solver's tensor; 0 for a body the space does not hold.
+static func inverse_moment(body: RigidBody3D, axis: Vector3) -> float:
+	var state := PhysicsServer3D.body_get_direct_state(body.get_rid())
+	return axis.dot(state.inverse_inertia_tensor * axis) if state != null else 0.0
+
+
 ## The centre of mass with a `payload` (kg) carried at `point`, both in the body's frame: the
 ## mass-weighted mean of `base_com` and `point`. No payload returns `base_com` exactly (no
 ## `x * m / m` rounding), and a massless total never divides by zero.

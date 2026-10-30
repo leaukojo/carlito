@@ -100,6 +100,7 @@ func _ready() -> void:
 		_variant = String(args[0])
 	_strict = args.has("strict")
 	_ramp = args.has("ramp")
+	MeasureRig.esc_off = args.has("noesc")
 	for a in args:
 		if String(a).begins_with("tip_kmh="):
 			_tip_speed = String(a).substr(8).to_float() / 3.6
@@ -116,6 +117,7 @@ func _ready() -> void:
 		printerr("'%s' is not a SemiTractor" % _variant)
 		get_tree().quit(1)
 		return
+	MeasureRig.unfit_esc(_car)
 	_apply_geometry_override(args)
 	_parse_trailer_arg(args)
 	add_child(_car)
@@ -227,7 +229,7 @@ func _new_stats() -> Dictionary:
 		"max_roll": -INF, "min_roll": INF, "max_trailer_roll": -INF, "min_trailer_roll": INF,
 		"max_joint_roll": 0.0, "peak_lat_g": 0.0, "max_wheels_up": 0, "wheels_up_ticks": 0,
 		"rolled_tractor": false, "rolled_trailer": false, "entry_speed": -1.0,
-		"lift_g": -1.0, "trailer_lift_g": -1.0, "max_trailer_wheels_up": 0,
+		"lift_g": -1.0, "trailer_lift_g": -1.0, "rig_lift_g": -1.0, "max_trailer_wheels_up": 0,
 		"lean_roll": NAN, "lean_trailer_roll": NAN,
 	}
 
@@ -429,6 +431,10 @@ func _accumulate(st: Dictionary, s: Dictionary) -> void:
 	st["max_trailer_wheels_up"] = maxi(int(st["max_trailer_wheels_up"]), trailer_up)
 	if trailer_up > 0 and float(st["trailer_lift_g"]) < 0.0:
 		st["trailer_lift_g"] = s["trailer_lat_g"]
+	# The tractor's own g at the first lift on either body: what its roll stability reads
+	# (`GroundDriveSpec.esc_roll_lift_g`).
+	if (up > 0 or trailer_up > 0) and float(st["rig_lift_g"]) < 0.0:
+		st["rig_lift_g"] = s["acc_lat_g"]
 	if absf(float(s["roll"])) >= TIP_ROLL_DEG:
 		st["rolled_tractor"] = true
 	if bool(s["coupled"]):
@@ -680,6 +686,7 @@ func _print_phase(i: int, spring_max: float, susp_cap: float) -> void:
 		print("   first wheel lift   : tractor %s, trailer %s (trailer wheels up: peak %d)"
 				% [_g_label(st["lift_g"]), _g_label(st["trailer_lift_g"]),
 				st["max_trailer_wheels_up"]])
+		print("   rig's first lift   : %s on the tractor's sensor" % _g_label(st["rig_lift_g"]))
 		print("   lean at %.1f g     : tractor %s deg, trailer %s deg" % [LEAN_G,
 				_f(absf(float(st["lean_roll"]))), _f(absf(float(st["lean_trailer_roll"])))])
 		print("   run ended          : %s" % _ended_by)

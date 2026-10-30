@@ -772,6 +772,33 @@ func test_corner_at_lands_on_the_asked_g_and_is_empty_past_the_peak() -> void:
 	assert_bool(BalanceModel.corner_at(m, CORNER_V, peak + 0.05).is_empty()).is_true()
 
 
+func test_k_curve_is_corner_at_s_k_ascending_to_the_peak() -> void:
+	var m := _driven(0.6, 0.1, "rear")
+	var curve := BalanceModel.k_curve(m, CORNER_V)
+	assert_int(curve.size()).is_greater(3)
+	var wheelbase := float(m["wheelbase"])
+	# `corner_at` bisects the steer, and lands past the asked g where a probe fails (a kink); only a
+	# landing on the same g is the same turn (7 of 22 here, the low-g ones among them). Newton from another guess settles
+	# up to ~0.003 deg/g off it here (the TC hold's branch); 0.01 deg/g moves a reference yaw <0.5 %.
+	var same := 0
+	for i in curve.size():
+		if i > 0:
+			assert_float(curve[i].x).is_greater(curve[i - 1].x)
+			assert_float(curve[i].y).is_greater_equal(curve[i - 1].y)
+		var at := BalanceModel.corner_at(m, CORNER_V, curve[i].x)
+		if absf(float(at["lat_g"]) - curve[i].x) > 1e-5:
+			continue
+		same += 1
+		var k := rad_to_deg((float(at["steer"]) - wheelbase * float(at["yaw_rate"]) / CORNER_V)
+				/ float(at["lat_g"]))
+		assert_float(curve[i].y).is_equal_approx(k, 0.01)
+	assert_int(same).is_greater_equal(3)
+	assert_float(curve[0].x).is_greater_equal(BalanceModel.K_CURVE_MIN_G)
+	var peak := float(BalanceModel.corner_limit(m, CORNER_V)["lat_g"])
+	assert_float(curve[curve.size() - 1].x).is_less_equal(peak + 1e-6)
+	assert_bool(BalanceModel.k_curve({}, CORNER_V).is_empty()).is_true()
+
+
 func test_a_right_turn_is_not_modelled() -> void:
 	# `corner` is a left turn on a steer >= 0; the pass's right turn is its mirror.
 	var m := _driven(0.6, 0.1, "rear")

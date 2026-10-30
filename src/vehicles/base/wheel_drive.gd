@@ -92,6 +92,25 @@ var _drive_torque := 0.0
 ## choice, not state: a respawn keeps it.
 var tyre: TyreClass
 var _crr := 0.0  ## the fitted class's hard-road rolling resistance (`rolling_resistance`)
+## Stability control braked a wheel this tick, for the yaw or the roll (`esc_step`).
+var esc_active := false
+## Roll stability's application this tick, 0..1 of every wheel's declared brake
+## (`StabilityControl.roll_application`); a towing unit sends its trailer at least as much.
+var _roll_app := 0.0
+## The yaw and roll torques per corner as `tick` adds them to the pedal's
+## (`StabilityControl.corner_torques`).
+var _esc_brake := Vector4.ZERO
+## The yaw controller's brake torque (N·m) per corner, FL, FR, RL, RR, its rate-limited state
+## (`StabilityControl.intervention`); each wheel's corner (0-3) in `_corner`, by axle and side.
+var _esc_torque := Vector4.ZERO
+var _corner := PackedInt32Array()
+## ESC's body-slip estimate (rad, `StabilityControl.slip_step`).
+var _slip_est := 0.0
+## The body's velocity at the last `esc_step` (NAN: none since a respawn), its accelerometer.
+var _esc_velocity := Vector3(NAN, NAN, NAN)
+## Half the track and the wheel radius per axle (x front, y rear; m), for ESC's torque.
+var _half_track := Vector2.ZERO
+var _axle_radius := Vector2.ZERO
 
 
 ## Build the wheels and their visuals.
@@ -143,6 +162,11 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 		_downforce_at = VehicleMath.downforce_point(stations.x, stations.y, gd.downforce_front)
 	_brake_front = gd.axle_brake_torque(false)
 	_brake_rear = gd.axle_brake_torque(true)
+	_axle_radius = Vector2(gd.axle_radius(false), gd.axle_radius(true))
+	for w in wheels:
+		var axle := 1 if w.is_rear else 0
+		_corner.append(2 * axle + (0 if w.anchor.x < 0.0 else 1))
+		_half_track[axle] = maxf(_half_track[axle], absf(w.anchor.x))
 	_retarder_rating = Drivetrain.retarder_rating(spec)
 	_brake_force = BrakeSizing.brake_force(gd)
 	_live_mass = spec.mass
@@ -179,11 +203,31 @@ static func brake_application(pedal: float, capacity_g: float) -> float:
 	return pow(clampf(pedal, 0.0, 1.0), k)
 
 
+## One wheel's cold service-brake torque (N·m): the pedal's `application` of its declared
+## `hardware`, plus ESC's `esc_t` on the same hydraulics, the two capped at the hardware. With no
+## ESC torque, exactly the pedal's.
+static func service_torque(application: float, hardware: float, esc_t: float) -> float:
+	var torque := application * hardware
+	if esc_t > 0.0:
+		torque = minf(torque + esc_t, hardware)
+	return torque
+
+
 ## This body's `brake_application` of the foot pedal, its capacity read on `brake_load_kg` (or its
 ## live mass); what a towing unit also sends its trailer.
 func pedal_application(pedal: float) -> float:
-	var load_kg := brake_load_kg if brake_load_kg > 0.0 else _live_mass
-	return brake_application(pedal, _brake_force / (maxf(load_kg, 1e-6) * BrakeSizing.G))
+	return brake_application(pedal, _brake_force / (maxf(_load_kg(), 1e-6) * BrakeSizing.G))
+
+
+## The load (kg) the brakes are sensed on: `brake_load_kg`, or the body's live mass.
+func _load_kg() -> float:
+	return brake_load_kg if brake_load_kg > 0.0 else _live_mass
+
+
+## Roll stability's application this tick (`esc_step`), what a towing unit's trailer demand takes
+## at least.
+func roll_application() -> float:
+	return _roll_app
 
 
 ## The park pawl's rating (Nm) per driven wheel: `park_pawl_torque` while the gearbox is in P and
@@ -273,6 +317,56 @@ func hold_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 			absf(input.throttle), at_rest, in_gear,
 			HillHold.drive_holds(dir, _drive_torque, pull), delta)
 	hill_holding = _hold.x > input.brake
+
+
+## Stability control's tick (`StabilityControl`), before the drivetrain, which reads its fuel cap
+## (`Drivetrain.esc_cap`): off the sensors a real unit has (speed, the mean steer applied last
+## tick, yaw rate, and a lateral acceleration off the body's velocity change, gravity-free as a
+## bank-compensated reading is), one wheel's brake torque, which `tick` adds to the pedal's; with a
+## roll table, roll stability's application on every wheel, read on the sensed load (`_load_kg`).
+## Off (not fitted, or `esc_off`) it brakes nothing, caps nothing and forgets its slip estimate.
+## Signs + = left. The speed is the ground-plane velocity's whole magnitude, signed by the nose
+## (`ground_speed`): its forward part alone drops under MIN_SPEED in a spin ESC must catch. The
+## lateral axis is level (up × the nose), so a rolled body's heave never reads as side force.
+## The yaw inertia is the solver's, read each tick: a body's mass can move.
+func esc_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
+		drivetrain: Drivetrain, ground_speed: float, delta: float) -> void:
+	var velocity := body.linear_velocity
+	var accel := (velocity - _esc_velocity) / delta if is_finite(_esc_velocity.x) else Vector3.ZERO
+	_esc_velocity = velocity
+	if not gd.esc_equipped or input.esc_off or gd.esc_reference_k.is_empty():
+		_esc_torque = Vector4.ZERO
+		_slip_est = 0.0
+		_roll_app = 0.0
+		_esc_brake = Vector4.ZERO
+		esc_active = false
+		drivetrain.esc_cap = 1.0
+		return
+	var basis := body.global_basis
+	var gravity := body.get_gravity()
+	var level_up := -gravity.normalized() if gravity != Vector3.ZERO else Vector3.UP
+	var left := level_up.cross(-basis.z).normalized()
+	var lat_acc := accel.dot(left)
+	var yaw_rate := body.angular_velocity.dot(basis.y)
+	var speed := signf(ground_speed) * (velocity - level_up * velocity.dot(level_up)).length()
+	_slip_est = StabilityControl.slip_step(_slip_est, lat_acc, yaw_rate, speed, delta)
+	var k := StabilityControl.reference_k(gd.esc_reference_k, lat_acc / StabilityControl.G)
+	var ref := StabilityControl.reference_yaw(speed, _applied_steer, _wheelbase, k, lat_acc)
+	var inverse := VehicleMath.inverse_moment(body, basis.y)
+	var out := StabilityControl.intervention(speed, ref, yaw_rate, _slip_est,
+			1.0 / inverse if inverse > 0.0 else 0.0, _half_track, _axle_radius,
+			Vector2(_brake_front, _brake_rear), _esc_torque, delta)
+	_esc_torque = out["torques"]
+	# Roll reads the larger of the measured g and the g the steer asks: it acts off the steering,
+	# before the body builds the g.
+	var roll_g := maxf(absf(lat_acc) / StabilityControl.G,
+			StabilityControl.asked_lat_g(speed, _applied_steer, _wheelbase, k, lat_acc))
+	_roll_app = StabilityControl.roll_application(speed, roll_g,
+			StabilityControl.roll_lift_g(gd.esc_roll_lift_g, _load_kg()), _roll_app, delta)
+	_esc_brake = StabilityControl.corner_torques(_roll_app, _esc_torque,
+			Vector2(_brake_front, _brake_rear))
+	esc_active = _esc_torque != Vector4.ZERO or _roll_app > 0.0
+	drivetrain.esc_cap = minf(out["throttle_cap"], 1.0 - _roll_app)
 
 
 ## What the axles the body drives put down (N): each wheel's peak longitudinal force at its load
@@ -427,7 +521,8 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 		var drive_t := axle_torque / _driven_count * _ratio[i] if w.driven else 0.0
 		# The service brake fades with its temperature (`RayWheel.brake_fade`); the pedal map stays
 		# on the cold capacity, so a faded brake asks more pedal for the same deceleration.
-		var brake_t := pedal * (_brake_rear if w.is_rear else _brake_front) * w.brake_fade()
+		var brake_t := service_torque(pedal, _brake_rear if w.is_rear else _brake_front,
+				_esc_brake[_corner[i]]) * w.brake_fade()
 		var friction_t := brake_t
 		# Anti-lock rides the foot brake and the retarder; a handbrake or spring brake is a
 		# mechanical hold no ABS modulates, so a wheel under one brakes without.
@@ -792,6 +887,12 @@ func respawn() -> void:
 	_hold = Vector2.ZERO
 	hill_holding = false
 	_drive_torque = 0.0
+	_esc_torque = Vector4.ZERO
+	_slip_est = 0.0
+	_esc_velocity = Vector3(NAN, NAN, NAN)
+	_roll_app = 0.0
+	_esc_brake = Vector4.ZERO
+	esc_active = false
 	for w in wheels:
 		w.reset()
 	if _dust != null:

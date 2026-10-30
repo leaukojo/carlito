@@ -231,6 +231,7 @@ func wind_vector() -> Vector3:
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
+	MeasureRig.esc_off = args.has("noesc")
 	for a in args:
 		if String(a).begins_with("level="):
 			_report_level(String(a).substr(6))
@@ -409,6 +410,7 @@ func _spawn(angle_deg: float, yaw := 0.0, up := SPAWN_UP, lift := 0.0) -> void:
 		_car = null
 	var tilt := Basis(Vector3.RIGHT, deg_to_rad(angle_deg))
 	_car = load(Catalog.VARIANTS[_variant]["scene"]).instantiate()
+	MeasureRig.unfit_esc(_car)
 	if _nohold:
 		# On a copy, in memory, never shipped: the ground drive is a sub-resource the copy shares.
 		_car.spec = _car.spec.duplicate()

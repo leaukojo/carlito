@@ -376,14 +376,8 @@ func yaw_pair_moment() -> float:
 	if chassis == null or not is_instance_valid(trailer):
 		return 0.0
 	var axis := chassis.global_transform.basis.y.normalized()
-	return Articulation.pair_moment(_inverse_moment(trailer, axis), _inverse_moment(chassis, axis))
-
-
-## Inverse moment (1 / kg*m^2) of `body` about world `axis` through its centre of mass, off the
-## solver's tensor; 0 for a body the space does not hold.
-static func _inverse_moment(body: RigidBody3D, axis: Vector3) -> float:
-	var state := PhysicsServer3D.body_get_direct_state(body.get_rid())
-	return axis.dot(state.inverse_inertia_tensor * axis) if state != null else 0.0
+	return Articulation.pair_moment(VehicleMath.inverse_moment(trailer, axis),
+			VehicleMath.inverse_moment(chassis, axis))
 
 
 ## Did what we just coupled actually fit? A towed body rides RayWheels, so a contact right after

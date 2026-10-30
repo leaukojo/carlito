@@ -146,11 +146,48 @@ const STEP_SETTLE_ENDS := 6        ## ticks averaged at each end of the tail
 const CHATTER_FLIPS := 3
 const CHATTER_EPS := 1e-7
 const CHATTER_REL := 0.01
+## ESC's floor, in its moment share (`_esc_share`): a change under 0.5 % of a wheel's brake (~7 N·m
+## on `van`) is the sensors' per-tick noise on a held touch, no direction; a modulator dump's ring
+## swings from 0 to the whole share.
+const ESC_CHATTER_EPS := 0.005
 const STEP_RISE := 0.9
 const STEP_SPIN_DEG := 20.0
 const STEP_ROLL_DEG := 45.0
 ## The strip is 40 m wide; a held step's 8 s cap at 100 km/h travels up to ~160 m sideways.
 const STEP_PAD_WIDTH := 400.0
+## --- sine with dwell (`sine`, instead of every other pass) ---
+## FMVSS 126 S7.6 / S7.9 and R140 9.6 / 9.9 (`docs/sources.md` § Stability control), on the step
+## pad. A: the steer for a steady SINE_A_G in a steer wound on at SINE_RAMP_RATE of full lock per
+## second, SINE_KMH held on the PI pedal. Then each run coasts (pedal lifted) from SINE_KMH into a
+## SINE_HZ sine of amplitude k·A with a SINE_DWELL_S dwell at its second peak, k from SINE_FIRST_A
+## by SINE_STEP_A to SINE_LAST_A, on to SINE_MIN_LOCK if that is more, never past full lock; each
+## left first, then right. Carlito has no hand wheel: full lock reads as 300 deg of it (the
+## regulation's cap), so 13.5 deg/s and 270 deg become the shares below (estimates).
+const SINE_KMH := 80.0
+const SINE_HZ := 0.7
+const SINE_DWELL_S := 0.5
+const SINE_A_G := 0.3
+const SINE_RAMP_RATE := 13.5 / 300.0
+const SINE_FIRST_A := 1.5
+const SINE_STEP_A := 0.5
+const SINE_LAST_A := 6.5
+const SINE_MIN_LOCK := 270.0 / 300.0
+const SINE_SETTLE_S := 2.0
+## Pass: the yaw rate SINE_YAW_1_S after the steer completes at most SINE_YAW_1 of its first peak
+## after the steer changes sign, SINE_YAW_2 at SINE_YAW_2_S; the lateral displacement SINE_DISP_S
+## after the steer begins at least SINE_DISP_M (SINE_DISP_HEAVY_M over SINE_LIGHT_KG) on runs of
+## SINE_DISP_FROM_A times A or more.
+const SINE_YAW_1_S := 1.0
+const SINE_YAW_1 := 0.35
+const SINE_YAW_2_S := 1.75
+const SINE_YAW_2 := 0.20
+const SINE_DISP_S := 1.07
+const SINE_DISP_M := 1.83
+const SINE_DISP_HEAVY_M := 1.52
+const SINE_LIGHT_KG := 3500.0
+const SINE_DISP_FROM_A := 5.0
+## FMVSS 126's scope (kg GVWR), read on the spec mass: Carlito carries no rating (an estimate).
+const SINE_MAX_KG := 4536.0
 ## --- full-lock circle (`circle`, instead of every other pass) ---
 ## Full right lock from a standstill on the PI pedal (CORNER_PEDAL_KP / _KI) at CIRCLE_SPEED,
 ## CIRCLE_SETTLE_S to settle, then averaged over CIRCLE_HOLD_S: the rear axle centre's speed over
@@ -369,9 +406,11 @@ const REFERENCE_SPECS_PATH := "res://tools/vehicle_reference_specs.json"
 const REPORT_DIR := "res://reports/specs_sweep/"
 
 enum Phase { ACCEL, COAST, TRACKING, CORNERING, BRAKING, STALL, HANDBRAKE, STEP, CRUISE, CIRCLE,
-		KERB, HITCH, PLOUGH, ARM, DONE }
+		KERB, HITCH, PLOUGH, ARM, SINE, DONE }
 ## Where a step-steer run is (`_tick_step`).
 enum Step { RUN_UP, SETTLE, STEPPED }
+## Where a sine-with-dwell run is (`_tick_sine`): RAMP finds A, STEER is a run of the series.
+enum Sine { RUN_UP, SETTLE, RAMP, STEER }
 ## What a part-pedal probe window is doing (`_tick_cruise`).
 enum Cruise { APPROACH, KICK, PULSE, XWIND }
 ## The air a cruise speed runs in (`headtail`): the `wind=` flag's, or WIND_HEADTAIL against or
@@ -480,6 +519,26 @@ var _st_rs: PackedVector2Array = []
 ## (y, N: the rear wheels' mean live `force_lat`), one per tick of the step
 ## (`_rear_compliance`), both signed + toward understeer.
 var _st_cs: PackedVector2Array = []
+## Stability control's yaw moment as a share of one wheel's declared brake (+ = left: its torque on
+## a left corner over that brake, less a right one's), one per tick of the step (`_esc_share`).
+var _st_esc := PackedFloat64Array()
+## Roll stability's application per tick of the step (`WheelDrive.roll_application`).
+var _st_roll := PackedFloat64Array()
+## `sine`: the sine-with-dwell series (§ sine with dwell) on each body in FMVSS 126's mass range.
+var _sine := false
+var _sn_runs: Array = []       ## the runs still to drive: {"amp", "k", "dir"} (the first finds A)
+var _sn_run: Dictionary = {}
+var _sn_stage := Sine.RUN_UP
+var _sn_t := 0.0
+var _sn_i := 0.0               ## the PI pedal's integral
+var _sn_a := NAN               ## A (share of full lock)
+var _sn_yaw := PackedFloat32Array()  ## yaw rate per tick of the steer, rad/s, + = right
+var _sn_origin := Vector3.ZERO
+var _sn_left := Vector3.ZERO
+var _sn_disp := NAN            ## lateral displacement (m) at SINE_DISP_S
+var _sn_rolled := false
+## doc=esc: whether each queued body's run has stability control off (popped with the queue).
+var _esc_offs: Array[bool] = []
 ## `circle`: run only the full-lock circle (§ full-lock circle) on each body.
 var _circle := false
 var _ci_i := 0.0                      ## integral half of the circle's PI pedal
@@ -799,6 +858,7 @@ func _ready() -> void:
 	_stall = flags.has("stall")
 	_hb_turn = flags.has("handbrake")
 	_step = flags.has("step")
+	_sine = flags.has("sine")
 	_circle = flags.has("circle")
 	_hitch_pass = flags.has("hitch")
 	_plough_pass = flags.has("plough")
@@ -811,6 +871,7 @@ func _ready() -> void:
 	_strict = flags.has("strict")
 	_tc = flags.has("tc")
 	_notc = flags.has("notc")
+	MeasureRig.esc_off = flags.has("noesc")
 	_cruise = flags.has("cruise")
 	_kickdown = flags.has("kickdown")
 	_trace_contact = flags.has("contact")
@@ -921,11 +982,21 @@ func _ready() -> void:
 			_brake = true
 			_brake_from = TYRES_STOP_KMH / 3.6
 			_brake_pedals = [1.0]
+		elif _doc == "esc":
+			# The sine pass on each ESC body in its range, ESC on then off (`_esc_offs`).
+			_sine = true
 		elif _doc != "cruise" and _doc != "wind":
 			printerr(("unknown doc preset '%s' — expected doc=braking, doc=cornering, doc=accel,"
-					+ " doc=cruise, doc=wind, doc=steer or doc=tyres") % _doc)
+					+ " doc=cruise, doc=wind, doc=steer, doc=tyres or doc=esc") % _doc)
 			get_tree().quit(1)
 			return
+		# The chassis tables are recorded with stability control off: they measure the chassis.
+		var chassis := _doc in ["cornering", "steer", "tyres"]
+		if MeasureRig.esc_off and not chassis:
+			printerr("noesc changes what doc=%s tabulates: run it per body" % _doc)
+			get_tree().quit(1)
+			return
+		MeasureRig.esc_off = chassis
 		if _trace or _notc or _held_gear > 0 or not is_nan(_engine_inertia) \
 				or not is_nan(_rear_lat_grip) or not is_nan(_bar_rear) or not is_nan(_cornering_peak) \
 				or not is_nan(_bar_front) or not is_nan(_compliance) \
@@ -956,7 +1027,7 @@ func _ready() -> void:
 		# Skid pad: a wide square well off to the side, since a body at full lock circles in tens of
 		# metres (a hundred on ice) and the strip is only 40 m wide.
 		MeasureRig.add_slab(self, "Pad", Vector3(PAD_SIZE, 2.0, PAD_SIZE), PAD_X)
-	if _step or _circle:
+	if _step or _circle or _sine:
 		# Under the strip and either side of it, top face flush with the strip's.
 		MeasureRig.add_slab(self, "StepPad", Vector3(STEP_PAD_WIDTH, 2.0, STRIP_LENGTH))
 	if _surface >= 0 or _doc == "tyres":
@@ -981,6 +1052,10 @@ func _ready() -> void:
 		_queue = DOC_WIND.duplicate()
 	elif _doc == "steer":
 		_queue = DOC_STEER.duplicate()
+	elif _doc == "esc":
+		for v in _sine_variants():
+			_queue.append_array([v, v])
+			_esc_offs.append_array([false, true])
 	elif _doc == "tyres":
 		for v in DOC_TYRES:
 			for cls in TyreCatalog.fitting(_tyre_fit(v)):
@@ -1002,7 +1077,9 @@ func _ready() -> void:
 	if _course and _trailer == "":
 		_trailer = "plough"  # the implement tractor_plough attaches
 	var steer_label := "steer stepped" if _step else "zero steer input"
-	if _circle:
+	if _sine:
+		steer_label = "sine with dwell"
+	elif _circle:
 		steer_label = "full right lock"
 	elif _hitch_pass:
 		steer_label = "parked"
@@ -1010,7 +1087,7 @@ func _ready() -> void:
 		steer_label = "level 1's field (grip %.2f, drag %.2f) under it" % [Surface.ref_grip(Surface.FIELD),
 				Surface.drag(Surface.FIELD)]
 	print("strip: %.0f x %.0f m flat, %s, %s, %.0f s cap per pass\n" %
-			[STEP_PAD_WIDTH if _step else STRIP_WIDTH, STRIP_LENGTH, _surface_label(), steer_label,
+			[STEP_PAD_WIDTH if _step or _sine else STRIP_WIDTH, STRIP_LENGTH, _surface_label(), steer_label,
 			_seconds])
 	MeasureRig.drive(100.0, 0.0)
 	_first_pending = true
@@ -1082,6 +1159,8 @@ func _next_vehicle() -> void:
 			DocRegion.write(_doc, _steer_table())
 		elif _doc == "tyres":
 			DocRegion.write(_doc, _tyres_table())
+		elif _doc == "esc":
+			DocRegion.write(_doc, _esc_table())
 		get_tree().quit(1 if _strict and _failures > 0 else 0)
 		return
 	_variant = _queue.pop_front()
@@ -1092,6 +1171,9 @@ func _next_vehicle() -> void:
 	if _patch != null:
 		_patch.surface = _surface
 	_current = {"variant": _variant, "family": String(Catalog.VARIANTS[_variant]["family"])}
+	if not _esc_offs.is_empty():
+		MeasureRig.esc_off = _esc_offs.pop_front()
+	_current["noesc"] = MeasureRig.esc_off
 	_top_seen = 0.0
 	_brake_i = 0
 	_brake_rows = []
@@ -1125,6 +1207,7 @@ func _next_vehicle() -> void:
 		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
 		_car.spec.ground_drive.ackermann = _ackermann
 	_current["abs"] = _car.spec.ground_drive.abs_equipped
+	MeasureRig.unfit_esc(_car)
 	add_child(_car)
 	MeasureRig.apply_roll_steer(_car, _roll_steer)
 	MeasureRig.apply_compliance(_car, _compliance)
@@ -1151,6 +1234,8 @@ func _next_vehicle() -> void:
 	elif _hb_turn:
 		_hb_pulled = false
 		_start_handbrake_run()
+	elif _sine:
+		_start_sine()
 	elif _step:
 		_start_step()
 	elif _circle:
@@ -1310,6 +1395,8 @@ func _physics_process(delta: float) -> void:
 		_tick_handbrake(delta)
 	elif _phase == Phase.STEP:
 		_tick_step(delta)
+	elif _phase == Phase.SINE:
+		_tick_sine(delta)
 	elif _phase == Phase.CRUISE:
 		_tick_cruise(delta)
 	elif _phase == Phase.HITCH:
@@ -2563,6 +2650,8 @@ func _report_accel(capped: bool) -> void:
 	var run: Array[String] = []
 	if _notc:
 		run.append("traction control off (notc)")
+	if MeasureRig.esc_off:
+		run.append("stability control off (noesc)")
 	if _held_gear > 0:
 		run.append("manual, held in D%d (gear=%d)" % [_held_gear, _held_gear])
 	if _pedal < 1.0:
@@ -2970,6 +3059,8 @@ func _next_step_run() -> void:
 	_st_xfer = PackedVector2Array()
 	_st_rs = PackedVector2Array()
 	_st_cs = PackedVector2Array()
+	_st_esc = PackedFloat64Array()
+	_st_roll = PackedFloat64Array()
 	MeasureRig.drive(100.0, 0.0)
 
 
@@ -3028,6 +3119,8 @@ func _tick_step(delta: float) -> void:
 	_st_lifted = maxi(_st_lifted, airborne)
 	_st_rs.append(_axle_roll_steer(float(_st_run["lock"]) < 0.0))
 	_st_cs.append(_rear_compliance(float(_st_run["lock"]) < 0.0))
+	_st_esc.append(_esc_share())
+	_st_roll.append(_car.drive.roll_application())
 	_st_v.append(v_long)
 	# The bicycle angle: with Ackermann the steered wheels' own angles do not average to it.
 	_st_delta.append(absf(_car.drive.mean_steer_angle()))
@@ -3045,6 +3138,218 @@ func _tick_step(delta: float) -> void:
 		_st_run["unsettled"] = gates if held else ""
 		_report_step_run(delta)
 		_next_step_run()
+
+
+## The sine-with-dwell series (§ sine with dwell) on this body, skipped over SINE_MAX_KG: the first
+## run finds A (`Sine.RAMP`), whose result queues the series (`sine_series`).
+func _start_sine() -> void:
+	print("=== %s (%s), sine with dwell%s ===" % [_variant, _drive_label(_car.spec),
+			", stability control off (noesc)" if MeasureRig.esc_off else ""])
+	_current["sine"] = {"runs": [], "a": NAN, "mass": _car.spec.mass}
+	if _car.spec.mass > SINE_MAX_KG:
+		print("  %-13s : %.0f kg, over FMVSS 126's %.0f: skipped" % ["sine", _car.spec.mass,
+				SINE_MAX_KG])
+		_current["sine"]["skipped"] = true
+		_finish_vehicle()
+		return
+	_sn_a = NAN
+	_sn_runs = [{"find_a": true}]
+	_next_sine_run()
+
+
+func _next_sine_run() -> void:
+	if _sn_runs.is_empty():
+		_report_sine()
+		# Release the steer first: a held input would ride into the next vehicle's run-up.
+		MeasureRig.drive(100.0, 0.0)
+		_finish_vehicle()
+		return
+	_sn_run = _sn_runs.pop_front()
+	_car.spawn_transform = Transform3D(Basis.IDENTITY,
+			Vector3(0.0, _car.rest_ride_height(), START_Z))
+	_car.respawn()
+	_reset_pass(Phase.SINE)
+	_sn_stage = Sine.RUN_UP
+	_sn_t = 0.0
+	_sn_i = CORNER_PEDAL_START
+	_sn_yaw = PackedFloat32Array()
+	_sn_disp = NAN
+	_sn_rolled = false
+	MeasureRig.drive(100.0, 0.0)
+
+
+func _tick_sine(delta: float) -> void:
+	var b := _car.global_transform.basis
+	var v_long := _car.linear_velocity.dot(-b.z)
+	var target := SINE_KMH / 3.6
+	_sn_t += delta
+	if _sn_stage == Sine.RUN_UP:
+		if v_long >= target:
+			_sn_stage = Sine.SETTLE
+			_sn_t = 0.0
+		elif _t >= _seconds:
+			print("  %-13s : %.0f km/h never reached, the series skipped" % ["sine", SINE_KMH])
+			_current["sine"]["unreached"] = true
+			_sn_runs = []
+			_next_sine_run()
+		return
+	var err := target - v_long
+	_sn_i = clampf(_sn_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
+	var pedal := _pi_pedal(_sn_i + err * CORNER_PEDAL_KP, target)
+	if _sn_stage == Sine.SETTLE:
+		MeasureRig.drive(pedal * 100.0, 0.0)
+		if _sn_t >= SINE_SETTLE_S:
+			_sn_stage = Sine.RAMP if _sn_run.has("find_a") else Sine.STEER
+			_sn_t = 0.0
+			_sn_origin = _car.global_position
+			_sn_left = Vector3(-b.x.x, 0.0, -b.x.z).normalized()
+		return
+	if _sn_stage == Sine.RAMP:
+		var lock := minf(_sn_t * SINE_RAMP_RATE, 1.0)
+		MeasureRig.drive(pedal * 100.0, 0.0, lock * 100.0)
+		if absf(_car.telemetry.acc_lat) / 9.81 >= SINE_A_G:
+			_sn_a = lock
+			_current["sine"]["a"] = lock
+			_sn_runs = sine_series(lock)
+			print("  %-13s : %.3f of full lock for %.2f g at %.0f km/h, %d runs"
+					% ["A", lock, SINE_A_G, SINE_KMH, _sn_runs.size()])
+			_next_sine_run()
+		elif lock >= 1.0:
+			print("  %-13s : %.2f g never reached at full lock, the series skipped"
+					% ["A", SINE_A_G])
+			_sn_runs = []
+			_next_sine_run()
+		return
+	# A run of the series: coasting, the pedal lifted on the steer.
+	MeasureRig.drive(0.0, 0.0, float(_sn_run["dir"]) * sine_dwell_steer(_sn_t, _sn_run["amp"]) * 100.0)
+	# Yaw rate about the flat pad's up, + = right like the bridge steer.
+	_sn_yaw.append(-_car.angular_velocity.y)
+	if is_nan(_sn_disp) and _sn_t >= SINE_DISP_S:
+		_sn_disp = absf((_car.global_position - _sn_origin).dot(_sn_left))
+	_sn_rolled = _sn_rolled or VehicleMath.is_inverted(b, STEP_ROLL_DEG)
+	if _sn_rolled or _sn_t >= sine_steer_end() + SINE_YAW_2_S + delta:
+		_report_sine_run(delta)
+		_next_sine_run()
+
+
+## One run's figures (`sine_verdict`), printed and kept in `_current`.
+func _report_sine_run(delta: float) -> void:
+	var r := _sn_run
+	var v := sine_verdict(_sn_yaw, delta, r["dir"], r["k"], _sn_disp, _car.spec.mass)
+	v["k"] = r["k"]
+	v["dir"] = r["dir"]
+	v["rolled"] = _sn_rolled
+	v["ok"] = v["ok"] and not _sn_rolled
+	(_current["sine"]["runs"] as Array).append(v)
+	var disp := "%.2f m%s" % [v["disp"], "" if v["disp_judged"] else " (not judged)"]
+	print("  %-13s : steer %.3f, first peak %.1f deg/s, %.2f s %+.0f %%, %.2f s %+.0f %%, %.2f s %s%s, %s"
+			% ["%.1fA %s" % [r["k"], "left" if r["dir"] < 0.0 else "right"], r["amp"],
+			rad_to_deg(v["peak"]), SINE_YAW_1_S, v["r1"] * 100.0, SINE_YAW_2_S, v["r2"] * 100.0,
+			SINE_DISP_S, disp, ", ROLLED" if _sn_rolled else "", "pass" if v["ok"] else "FAIL"])
+
+
+## The series' summary: the worst yaw shares, the least judged displacement, the verdict.
+func _report_sine() -> void:
+	var s: Dictionary = _current["sine"]
+	var runs: Array = s["runs"]
+	var worst := Vector2.ZERO
+	var least := INF
+	var failed := 0
+	for v: Dictionary in runs:
+		worst = Vector2(maxf(worst.x, v["r1"]), maxf(worst.y, v["r2"]))
+		if v["disp_judged"]:
+			least = minf(least, v["disp"])
+		if not v["ok"]:
+			failed += 1
+	s["worst"] = worst
+	s["least_disp"] = least
+	s["failed"] = failed
+	s["ok"] = not runs.is_empty() and failed == 0
+	if runs.is_empty():
+		return
+	print("  %-13s : %s, %d of %d runs failed; worst %.2f s %.0f %%, %.2f s %.0f %%; least %.2f s"
+			% ["sine", "PASS" if s["ok"] else "FAIL", failed, runs.size(), SINE_YAW_1_S,
+			worst.x * 100.0, SINE_YAW_2_S, worst.y * 100.0, SINE_DISP_S]
+			+ (" %.2f m" % least if is_finite(least) else " -"))
+
+
+## Pure: the sine-with-dwell steer `t` s into it, as a share of full lock, + = the first lobe's
+## side: a SINE_HZ sine of `amp` to its second peak, held SINE_DWELL_S, then its last quarter back to
+## 0; 0 before and after.
+static func sine_dwell_steer(t: float, amp: float) -> float:
+	var quarter := 0.25 / SINE_HZ
+	if t <= 0.0:
+		return 0.0
+	if t < 3.0 * quarter:
+		return amp * sin(TAU * SINE_HZ * t)
+	if t < 3.0 * quarter + SINE_DWELL_S:
+		return -amp
+	if t < 4.0 * quarter + SINE_DWELL_S:
+		return amp * sin(TAU * SINE_HZ * (t - SINE_DWELL_S))
+	return 0.0
+
+
+## Pure: when the steer completes, in s after it begins.
+static func sine_steer_end() -> float:
+	return 1.0 / SINE_HZ + SINE_DWELL_S
+
+
+## Pure: the series on A (share of full lock): `{"k", "amp", "dir"}` per run, k from SINE_FIRST_A
+## by SINE_STEP_A to SINE_LAST_A, on while k·A is under SINE_MIN_LOCK, the amplitude capped at full
+## lock and the series ending at the first that reaches it; each left (`dir` -1: the bridge steer is
+## + right) then right. Empty for no A.
+static func sine_series(a: float) -> Array:
+	var out: Array = []
+	if not (a > 0.0):
+		return out
+	var k := SINE_FIRST_A
+	while true:
+		var amp := minf(k * a, 1.0)
+		out.append({"k": k, "amp": amp, "dir": -1.0})
+		out.append({"k": k, "amp": amp, "dir": 1.0})
+		if amp >= 1.0 or (k >= SINE_LAST_A - 1e-6 and k * a >= SINE_MIN_LOCK - 1e-6):
+			break
+		k += SINE_STEP_A
+	return out
+
+
+## Pure: one run's figures off its per-tick `yaw` (rad/s, + = right, the first sample one tick of
+## `delta` into the steer) for a first lobe to `dir`'s side: `peak`, the most yaw to the second
+## lobe's side once the steer changes sign until it completes; `r1` / `r2`, the yaw rate to that side
+## SINE_YAW_1_S / SINE_YAW_2_S after the steer completes over the peak; the displacement `disp`
+## judged on runs of SINE_DISP_FROM_A·A or more (`k`) against the gate for a body of `mass`; `ok`.
+static func sine_verdict(yaw: PackedFloat32Array, delta: float, dir: float, k: float, disp: float,
+		mass: float) -> Dictionary:
+	var end := sine_steer_end()
+	var peak := 0.0
+	for i in yaw.size():
+		var t := (i + 1) * delta
+		if t >= 0.5 / SINE_HZ and t <= end:
+			peak = maxf(peak, -dir * yaw[i])
+	var share := func(after: float) -> float:
+		var i := roundi((end + after) / delta) - 1
+		if peak <= 0.0 or i < 0 or i >= yaw.size():
+			return INF
+		return -dir * yaw[i] / peak
+	var r1: float = share.call(SINE_YAW_1_S)
+	var r2: float = share.call(SINE_YAW_2_S)
+	var disp_min := SINE_DISP_M if mass <= SINE_LIGHT_KG else SINE_DISP_HEAVY_M
+	var judged := k >= SINE_DISP_FROM_A - 1e-6
+	var disp_ok := not judged or (is_finite(disp) and disp >= disp_min)
+	return {"peak": peak, "r1": r1, "r2": r2, "disp": disp, "disp_judged": judged,
+			"disp_min": disp_min, "ok": r1 <= SINE_YAW_1 and r2 <= SINE_YAW_2 and disp_ok}
+
+
+## Every wheel-driven variant with ESC inside FMVSS 126's mass range: doc=esc's bodies.
+func _sine_variants() -> Array[String]:
+	var out: Array[String] = []
+	for id in _wheel_driven_variants():
+		var body: Node = (load(Catalog.VARIANTS[id]["scene"]) as PackedScene).instantiate()
+		var spec: VehicleSpec = body.get("spec")
+		if spec.ground_drive.esc_equipped and spec.mass <= SINE_MAX_KG:
+			out.append(id)
+		body.free()
+	return out
 
 
 ## The steady tail's length in ticks: the last STEP_STEADY_S, or the whole step if shorter.
@@ -3203,12 +3508,53 @@ func _report_step_run(delta: float) -> void:
 
 
 ## The per-axle steer prints a body with roll or compliance steer carries (`_report_roll_steer`,
-## `_report_compliance`); nothing on a body with neither.
+## `_report_compliance`), and stability control's on a body fitted with it (`_report_esc`); nothing
+## on a body with none.
 func _report_axle_steer(r: Dictionary, model: Dictionary, ticks: int) -> void:
 	if _car.spec.ground_drive.has_roll_steer():
 		_report_roll_steer(r, model, ticks)
 	if _car.spec.ground_drive.has_compliance_steer():
 		_report_compliance(r, model, ticks)
+	if _car.spec.ground_drive.esc_equipped:
+		_report_esc(r)
+
+
+## Stability control over the whole step: the share of ticks it braked, its peak moment share
+## (`_esc_share`) and the chatter count on that series (`chatter_runs`; a ring is fixed in the
+## controller's law, never a filter), printed and kept in `r`; on a body with a roll table, roll
+## stability's share of ticks, peak application and chatter likewise.
+func _report_esc(r: Dictionary) -> void:
+	var acting := 0
+	var peak := 0.0
+	for s in _st_esc:
+		if s != 0.0:
+			acting += 1
+		peak = maxf(peak, absf(s))
+	r["esc_chatter"] = chatter_runs(_st_esc, ESC_CHATTER_EPS)
+	print("  %-26s : ESC braking %.0f %% of the step, peak %.2f of a wheel's brake; chatter %d"
+			% ["", 100.0 * acting / maxf(_st_esc.size(), 1.0), peak, r["esc_chatter"]])
+	if _car.spec.ground_drive.esc_roll_lift_g.is_empty():
+		return
+	acting = 0
+	peak = 0.0
+	for s in _st_roll:
+		if s > 0.0:
+			acting += 1
+		peak = maxf(peak, s)
+	r["roll_chatter"] = chatter_runs(_st_roll, ESC_CHATTER_EPS)
+	print("  %-26s : roll braking %.0f %% of the step, peak %.2f of every brake; chatter %d"
+			% ["", 100.0 * acting / maxf(_st_roll.size(), 1.0), peak, r["roll_chatter"]])
+
+
+## Stability control's yaw moment this tick as a share of one wheel's declared brake, + = left:
+## each corner's torque (`WheelDrive._esc_torque`) over its axle's brake, a left corner's adding.
+func _esc_share() -> float:
+	var gd := _car.spec.ground_drive
+	if _car.drive == null or not gd.esc_equipped:
+		return 0.0
+	var t: Vector4 = _car.drive._esc_torque
+	var brake := Vector2(gd.axle_brake_torque(false), gd.axle_brake_torque(true))
+	return (t.x - t.y) / maxf(brake.x, 1e-6) + (t.z - t.w) / maxf(brake.y, 1e-6)
 
 
 ## The rear's compliance-steer angle over the steady tail beside two preds, the coefficient times
@@ -3306,14 +3652,14 @@ func _axle_roll_steer(turn_left: bool) -> Vector2:
 ## Pure: the runs in `series` where the tick-to-tick change flips sign on CHATTER_FLIPS or more
 ## consecutive ticks, a tick-rate oscillation. A change under CHATTER_EPS (rad) or CHATTER_REL of
 ## the angle is no direction and ends the run: a one-tick contact blip and its return, ticks apart
-## from the next, are not a ringing loop.
-static func chatter_runs(series: PackedFloat64Array) -> int:
+## from the next, are not a ringing loop. `eps`: another series' floor in its own unit.
+static func chatter_runs(series: PackedFloat64Array, eps := CHATTER_EPS) -> int:
 	var runs := 0
 	var flips := 0
 	var last := 0.0
 	for i in range(1, series.size()):
 		var d := series[i] - series[i - 1]
-		if absf(d) < maxf(CHATTER_EPS, CHATTER_REL * absf(series[i])):
+		if absf(d) < maxf(eps, CHATTER_REL * absf(series[i])):
 			flips = 0
 			last = 0.0
 			continue
@@ -4829,6 +5175,46 @@ func _steer_table() -> Array[String]:
 			lines.append("| %s | %.0f | %s |" % [label, kmh, " | ".join(cells)])
 			label = ""
 	return lines
+
+
+## The `esc` region: per body in FMVSS 126's range with ESC, the sine-with-dwell series with ESC on
+## and off: A, the worst yaw shares, the least judged displacement, the verdict.
+func _esc_table() -> Array[String]:
+	var lines := DocRegion.wrap(("%s (`measure_vehicles -- doc=esc`; per body `-- <variant> %.0f"
+			+ " sine`, `noesc` for ESC off): every ESC body within FMVSS 126's %.0f kg (on its spec"
+			+ " mass). A is the steer (share of full lock) for a steady %.2f g at %.0f km/h; each run"
+			+ " coasts from %.0f km/h into a %.1f Hz sine with a %.1f s dwell, %.1fA to %.1fA (or %.0f %%"
+			+ " of lock) in %.1fA steps, left then right. Each cell: the worst yaw rate %.2f s and %.2f s"
+			+ " after the steer as a share of its first peak (pass at most %.0f %% and %.0f %%), the"
+			+ " least lateral displacement %.2f s after the steer begins on runs of %.0fA or more"
+			+ " (pass at least %.2f m, %.2f m over %.0f kg), and the verdict over every run.")
+			% [DocRegion.measured(), _seconds, SINE_MAX_KG, SINE_A_G, SINE_KMH, SINE_KMH, SINE_HZ,
+			SINE_DWELL_S, SINE_FIRST_A, SINE_LAST_A, SINE_MIN_LOCK * 100.0, SINE_STEP_A,
+			SINE_YAW_1_S, SINE_YAW_2_S, SINE_YAW_1 * 100.0, SINE_YAW_2 * 100.0, SINE_DISP_S,
+			SINE_DISP_FROM_A, SINE_DISP_M, SINE_DISP_HEAVY_M, SINE_LIGHT_KG])
+	lines.append_array(["", "| Body | A | ESC on | ESC off |", "| --- | --- | --- | --- |"])
+	var rows := {}  # variant -> [on entry, off entry]
+	for e in _sweep:
+		if e.has("sine"):
+			var pair: Array = rows.get_or_add(e["variant"], [{}, {}])
+			pair[1 if e["noesc"] else 0] = e["sine"]
+	for variant: String in rows:
+		var pair: Array = rows[variant]
+		var a: float = (pair[0] as Dictionary).get("a", NAN)
+		lines.append("| `%s` | %s | %s | %s |" % [variant, "%.3f" % a if is_finite(a) else "-",
+				_sine_cell(pair[0]), _sine_cell(pair[1])])
+	return lines
+
+
+## "18 %, 4 %, 2.31 m, PASS": one series' worst yaw shares, least displacement and verdict.
+static func _sine_cell(s: Dictionary) -> String:
+	if s.is_empty() or (s.get("runs", []) as Array).is_empty():
+		return "-"
+	var worst: Vector2 = s["worst"]
+	var least: float = s["least_disp"]
+	return "%.0f %%, %.0f %%, %s, %s" % [worst.x * 100.0, worst.y * 100.0,
+			"%.2f m" % least if is_finite(least) else "-",
+			"PASS" if s["ok"] else "FAIL (%d of %d)" % [s["failed"], (s["runs"] as Array).size()]]
 
 
 ## The `tyres` region: per DOC_TYRES body, a row per class it fits, a cell per DOC_TYRE_SURFACES

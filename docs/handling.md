@@ -1,9 +1,10 @@
 # Handling
 
-The body on its wheels: inertia, pitch, steering geometry, the understeer balance, aero balance
-and crosswind. The wheel, tyre and brake models underneath: `docs/vehicles.md`; the measured
-tables: `docs/vehicle_measurements.md` (§ Cornering, § Step steer, § Wind); sources:
-`docs/sources.md` (§ Roll steer, § Linear understeer, § Aero balance, § Crosswind). Rules:
+The body on its wheels: inertia, pitch, steering geometry, the understeer balance, aero balance,
+crosswind and stability control. The wheel, tyre and brake models underneath: `docs/vehicles.md`;
+the measured tables: `docs/vehicle_measurements.md` (§ Cornering, § Step steer, § Sine with dwell,
+§ Wind); sources: `docs/sources.md` (§ Roll steer, § Linear understeer, § Aero balance,
+§ Crosswind, § Stability control). Rules:
 `src/vehicles/CLAUDE.md` § Physics.
 
 ## Anti-roll latch
@@ -241,3 +242,31 @@ creep grows). In a slide the across-air part takes `Cy*A` instead of drag's `Cd*
 times more on a car, at a point ahead of the COM. That lowers the step pass's steady K (`docs/vehicle_measurements.md` § Step steer) a little in
 its fastest row and tips its three largest lift-off overshoots there into spins; with the side term zeroed,
 the old table returns to within transient noise.
+
+## Stability control
+
+Every road body with ABS carries ESC (`GroundDriveSpec.esc_equipped`; not `race`, `race-future` or
+the tractors). `StabilityControl` reads only what a real unit senses: speed, the mean steer, yaw
+rate and a bank-compensated lateral acceleration, with body slip estimated from them. The yaw it
+asks is the bicycle model's on the body's own steady K (`esc_reference_k`, the corner model's K
+against g, kept fresh by `test_vehicle_catalog`), bounded by the measured g plus a margin. Past a dead-band
+it brakes one wheel (the outer front against oversteer, the inner rear against understeer) inside
+the spin step with ABS on, and trims the delivered fuel in proportion. On the semis it adds roll
+stability: past `ROLL_SHARE` of the rig's measured first lift at its sensed coupled load
+(`esc_roll_lift_g`), or as the steer asks that g, it brakes every wheel and the trailer and cuts
+the fuel; the yaw torque keeps its priority on a wheel (`corner_torques`).
+- **Switch and lamp.** `esc_off` (the bridge, or SETTINGS ▸ STABILITY CONTROL) takes TC with it;
+  `tcs_off` leaves ESC on. Status bit 7 reports it acting (a truck's VDC1 YC / ROP); the cluster's
+  ESC lamp is steady while switched off and flashes while ESC acts. The handbrake leaves it on: a
+  J-turn still turns, tamer, and ESC catches the spin at its end.
+- **Measured.** Every ESC body in FMVSS 126's range passes the sine with dwell with ESC on and
+  fails it off (`docs/vehicle_measurements.md` § Sine with dwell); the step pass's lifted spins go with ESC on; the accel and
+  cruise tables do not move. ESC's inner-rear brake turns a ploughing car in (corner peaks rise);
+  the semis stop under their tip; near-limit steady step cells slow (the bobtail's most).
+- **Chassis tables stay ESC-off.** `doc=steer`, `doc=cornering` and `doc=tyres` set `noesc`
+  (every measure tool takes it): K, the balance and the corner limit are the chassis's. ESC retires
+  no handling COMPROMISE: the lift-off `rear_lat_grip` patches stand for unmodelled chassis effects
+  and are judged with it off.
+- **Limits.** The K table is held flat past its end and keeps the stock tyre and load; a coupled
+  semi reads the unit's own K; ESC braking lights no brake lamp. Dead-band, gains, the modulator's
+  rates and `ROLL_SHARE` are estimates (`docs/sources.md` § Stability control).

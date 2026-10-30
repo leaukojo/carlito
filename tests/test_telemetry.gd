@@ -221,6 +221,7 @@ func test_status_bits_are_frozen() -> void:
 	assert_int(T.ST_NEUTRAL).is_equal(16)
 	assert_int(T.ST_HANDBRAKE).is_equal(32)
 	assert_int(T.ST_HEADLIGHTS).is_equal(64)
+	assert_int(T.ST_ESC).is_equal(128)
 
 
 func test_pack_status_sets_expected_bits() -> void:
@@ -233,6 +234,9 @@ func test_pack_status_sets_expected_bits() -> void:
 	# Parked in N with handbrake and headlights on, engine off.
 	assert_int(T.pack_status(false, false, false, 0, true, true)) \
 			.is_equal(T.ST_NEUTRAL | T.ST_HANDBRAKE | T.ST_HEADLIGHTS)
+	# Stability control acting.
+	assert_int(T.pack_status(true, true, true, 3, false, false, true)) \
+			.is_equal(T.ST_IGNITION | T.ST_GROUND | T.ST_MOVING | T.ST_ESC)
 
 
 ## The seam a wheel-less vehicle answers ST_GROUND through (the drone's landed predicate

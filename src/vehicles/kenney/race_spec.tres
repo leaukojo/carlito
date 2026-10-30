@@ -34,6 +34,7 @@ brake_torque = 2000.0
 handbrake_torque = 1400.0
 brake_bias_front = 0.621
 tcs_equipped = true
+esc_reference_k = PackedVector2Array()
 hill_hold_s = 1.0
 brake_heat_capacity = 6360.0
 brake_heat_capacity_rear = 4770.0

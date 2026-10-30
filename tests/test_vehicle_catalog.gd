@@ -400,6 +400,51 @@ func test_every_road_body_carries_a_hill_hold_and_the_tractor_a_powershift_one()
 					.is_equal(HillHold.Kind.NONE)
 
 
+func test_every_esc_body_rides_on_abs_and_carries_its_fresh_reference_table() -> void:
+	# ESC on every ABS road body (docs/handling.md § Stability control); its K table
+	# is the corner model's of the spec as it stands, so a chassis edit without a regen (or, on a
+	# hand-built spec, a re-paste of the table printed here) fails.
+	var specs := _driven_specs()
+	for variant: String in specs:
+		var spec: VehicleSpecScript = specs[variant]
+		var gd := spec.ground_drive
+		assert_bool(gd.esc_equipped).override_failure_message(
+				"%s: ESC %s, ABS %s" % [variant, gd.esc_equipped, gd.abs_equipped]) \
+				.is_equal(gd.abs_equipped)
+		if not gd.esc_equipped:
+			continue
+		var fresh := StabilityControl.reference_table(spec)
+		assert_bool(fresh.is_empty()).override_failure_message(
+				"%s: ESC with no corner model to calibrate on" % variant).is_false()
+		var stale := gd.esc_reference_k.size() != fresh.size()
+		for i in mini(fresh.size(), gd.esc_reference_k.size()):
+			# Two snaps of slack: another platform's float may round a point the other way.
+			var off := (gd.esc_reference_k[i] - fresh[i]).abs()
+			stale = stale or maxf(off.x, off.y) > 2.0 * StabilityControl.TABLE_SNAP
+		assert_bool(stale).override_failure_message(
+				"%s: esc_reference_k is stale; fresh: %s" % [variant, fresh]).is_false()
+
+
+func test_roll_stability_rides_on_the_semis_from_their_bobtail_load() -> void:
+	# Roll stability on the semis alone, their table keyed on the coupled load from the bare unit's
+	# mass up, ascending.
+	var specs := _driven_specs()
+	for variant: String in specs:
+		var spec: VehicleSpecScript = specs[variant]
+		var table := spec.ground_drive.esc_roll_lift_g
+		var semi := variant in ["semi", "semi-conventional"]
+		assert_bool(table.is_empty()).override_failure_message(
+				"%s: roll table %s" % [variant, table]).is_equal(not semi)
+		if table.is_empty():
+			continue
+		assert_bool(spec.ground_drive.esc_equipped).is_true()
+		assert_float(table[0].x).override_failure_message(
+				"%s: the table starts at %.0f kg, the bobtail is %.0f" % [variant, table[0].x, spec.mass]) \
+				.is_equal_approx(spec.mass, 1.0)
+		for i in range(1, table.size()):
+			assert_float(table[i].x).is_greater(table[i - 1].x)
+
+
 func test_every_free_crank_settles_on_its_steepest_droop_without_ringing() -> void:
 	# The crank's step is semi-implicit in its own curve (`Drivetrain.crank_compliance`): on the
 	# steepest falling segment, held at the fuel that balances the motoring law mid-segment, a free

@@ -136,6 +136,18 @@ extends Resource
 ## Traction control, `abs_equipped`'s drive-side twin: the drive may not push a driven wheel's slip
 ## past `RayWheel.TCS_SLIP`. `VehicleInput.tcs_off` switches it off (bridge or local setting).
 @export var tcs_equipped := false
+## Electronic stability control (`StabilityControl`): one wheel braked against the yaw error and
+## the engine trimmed. `VehicleInput.esc_off` switches it off.
+@export var esc_equipped := false
+## ESC's reference K table (x g, y deg/g): `StabilityControl.reference_table` of this body, as a
+## real unit is calibrated on its car. Generated bodies: the generator writes it; a hand-built spec
+## carries it, and `test_vehicle_catalog` fails a stale one. Built offline: the sweep costs up to
+## ~30 ms a body on desktop.
+@export var esc_reference_k := PackedVector2Array()
+## ESC's roll stability table (x the coupled load in kg, ascending; y g): the rig's lateral g on the
+## unit's own sensor at its first wheel lift, measured (`measure_semi_launch -- <unit>
+## trailer=<body> ramp`, "rig's first lift"). Empty = no roll stability (`StabilityControl.roll_lift_g`).
+@export var esc_roll_lift_g := PackedVector2Array()
 ## Foot-brake hold against roll-back on a grade pull-away (`HillHold`). ASSIST: hill-start assist;
 ## STANDSTILL: a powershift tractor's. COMPROMISE: a real tractor holds in the transmission; a
 ## gearbox-output lock here is solved before the coupling, so the drive would creep against it. A

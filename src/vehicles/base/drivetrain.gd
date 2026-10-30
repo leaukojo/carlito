@@ -155,6 +155,9 @@ var braking := false
 ## floor last tick. Drag-torque control: the controller fuels the crank to zero net motoring torque
 ## (`drag_fuel`), never a torque on the wheel.
 var drag_control := false
+## Owner-set before `process` (`WheelDrive.esc_step`): stability control's cap on the delivered fuel,
+## 0..1, 1 = none. A cut like the shift cut's, on `applied_throttle`; the policy keeps the demand.
+var esc_cap := 1.0
 ## The coupling ran in overrun at its last solve (the wheels driving the crank).
 var overrun := false
 var _was_running := true
@@ -1162,9 +1165,10 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 	on_limiter = crank_forward and limiter_cut(spec, limiter_rpm)
 	if on_limiter:
 		applied_throttle = 0.0
-	# The shift cut is a lift: no fuel, and it rides applied_throttle so telemetry reads it.
+	# The shift cut is a lift: no fuel, and it rides applied_throttle so telemetry reads it; ESC's
+	# cap rides it the same way.
 	_torque_restore = torque_restore_step(spec, _torque_restore, _shift_cut_ticks > 0, delta)
-	applied_throttle = minf(applied_throttle, _torque_restore)
+	applied_throttle = minf(applied_throttle, minf(_torque_restore, esc_cap))
 	if _shift_cut_ticks > 0:
 		_shift_cut_ticks -= 1
 		applied_throttle = 0.0
@@ -1238,7 +1242,7 @@ func _start_gear_step(delta: float, pedal: float, demand: float, at_rest: bool) 
 ## The tick's delivered fuel (0..1) and the crank's predictor at it: the demand through its map (or,
 ## in N or P with a PTO set speed, the governor at it: `pto_set_rpm`) and
 ## the road-speed governor (on a stepped box; a CVT's ratio governs, `cvt_speed_command`), the
-## limiter's hard cut on the crank and the shift cut; then the
+## limiter's hard cut on the crank, stability control's cap (`esc_cap`) and the shift cut; then the
 ## controller's floors (idle, drag-torque control), which no cut lifts. Sets `_compliance`,
 ## `_pred_base` and `_pred_per_fuel`.
 func _fuel_step(delta: float, demand: float, ground_speed: float, omega: float) -> float:
@@ -1256,7 +1260,7 @@ func _fuel_step(delta: float, demand: float, ground_speed: float, omega: float) 
 	on_limiter = running and (limiter_cut(spec, rpm) or _landed)
 	_landed = false
 	_torque_restore = torque_restore_step(spec, _torque_restore, _shift_cut_ticks > 0, delta)
-	fuel = minf(fuel, _torque_restore)
+	fuel = minf(fuel, minf(_torque_restore, esc_cap))
 	if _shift_cut_ticks > 0:
 		_shift_cut_ticks -= 1
 		fuel = 0.0

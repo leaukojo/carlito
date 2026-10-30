@@ -49,6 +49,7 @@ var lamps := LampInput.new()
 var diff_lock := false    ## rear differential lock request
 var fwd_drive := false    ## MFWD front-axle engage request
 var tcs_off := false      ## traction control off request (bridge-only: local drives with TC on)
+var esc_off := false      ## stability control off request (bridge or local setting; arbitration sets tcs_off with it)
 var retarder := 0.0       ## 0..1 truck driveline brake request (bridge-only)
 # ISOBUS implement request (tractor; the semi reads hitch_request in its transport sense).
 var hitch_request := 1.0  ## 0..1 requested hitch height (1 = raised/transport)

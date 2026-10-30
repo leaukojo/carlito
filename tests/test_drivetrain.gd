@@ -1518,6 +1518,26 @@ func test_the_restore_ramp_only_withholds_fuel_after_a_shift_cut() -> void:
 	assert_float(last).is_equal_approx(1.0, 1e-5)
 
 
+func test_the_esc_cap_holds_the_delivered_fuel_never_the_demand() -> void:
+	# Stability control's trim rides `applied_throttle` on both engines, the crank and the rigid
+	# one; the shift policy keeps reading the driver's full pedal.
+	for inertia: float in [0.2, 0.0]:
+		var spec := _spec()
+		spec.engine_inertia = inertia
+		var dt: DrivetrainScript = DrivetrainScript.new(spec)
+		for i in 30:
+			_tick(dt, 1.0, LumpedWheel.new(30.0), 1)
+		assert_float(dt.applied_throttle).is_equal(1.0)
+		dt.esc_cap = 0.5
+		_tick(dt, 1.0, LumpedWheel.new(30.0), 1)
+		assert_float(dt.applied_throttle).override_failure_message("inertia %.1f" % inertia) \
+				.is_equal(0.5)
+		assert_float(dt.last_pedal).is_equal(1.0)
+		dt.esc_cap = 1.0
+		_tick(dt, 1.0, LumpedWheel.new(30.0), 1)
+		assert_float(dt.applied_throttle).is_equal(1.0)
+
+
 func test_is_shift_needs_both_sides_engaged() -> void:
 	assert_bool(DrivetrainScript.is_shift(1, 2)).is_true()
 	assert_bool(DrivetrainScript.is_shift(1, GEAR_R)).is_true()

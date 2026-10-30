@@ -379,6 +379,30 @@ func test_tcs_off_absent_means_on_on_both_paths() -> void:
 	assert_bool(RouterScript.arbitrate_local(raw, 0.0, GEAR_D1).tcs_off).is_true()
 
 
+func test_esc_off_takes_tc_with_it_and_tc_off_leaves_esc_on() -> void:
+	# ESC off turns TC off too, as a car's long press does; TC off alone leaves ESC on. Absent, both
+	# are on.
+	var plain := RouterScript.arbitrate_local(_raw(), 0.0, GEAR_D1)
+	assert_bool(plain.esc_off).is_false()
+	var raw := _raw()
+	raw["esc_off"] = true
+	var esc_off := RouterScript.arbitrate_local(raw, 0.0, GEAR_D1)
+	assert_bool(esc_off.esc_off).is_true()
+	assert_bool(esc_off.tcs_off).is_true()
+	raw = _raw()
+	raw["tcs_off"] = true
+	assert_bool(RouterScript.arbitrate_local(raw, 0.0, GEAR_D1).esc_off).is_false()
+	# On the bridge: absent → on; sent, ESC off with TC; the local setting never reaches it, in
+	# fallback too.
+	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
+	assert_bool(RouterScript.arbitrate_bridge(vals).esc_off).is_false()
+	assert_bool(RouterScript.blend_local_driving(vals, esc_off).esc_off).is_false()
+	vals["esc_off"] = true
+	var bridged := RouterScript.arbitrate_bridge(vals)
+	assert_bool(bridged.esc_off).is_true()
+	assert_bool(bridged.tcs_off).is_true()
+
+
 func test_fallback_takes_tcs_off_from_the_bridge() -> void:
 	# A live bridge with no driving control owns `tcs_off`: the local setting is not a driving field.
 	var raw := _raw()
