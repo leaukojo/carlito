@@ -329,14 +329,15 @@ func test_a_brake_that_stops_the_spin_holds_the_wheel_and_a_weak_one_does_not() 
 
 func test_a_held_patch_carries_no_more_than_its_brake_holds() -> void:
 	# 305 Nm on 0.36 m against no drive: under the tyre's 4000 N, so the brake bounds both ways.
+	var share := WheelScript.HELD_SHARE
 	var none := WheelScript.held_force_range(4000.0, 305.0, 0.0, 0.36)
-	assert_float(none.y).is_equal_approx(0.98 * 305.0 / 0.36, 1e-3)
-	assert_float(none.x).is_equal_approx(-0.98 * 305.0 / 0.36, 1e-3)
+	assert_float(none.y).is_equal_approx(share * 305.0 / 0.36, 1e-3)
+	assert_float(none.x).is_equal_approx(-share * 305.0 / 0.36, 1e-3)
 	# A drive is held with its sign: 100 Nm forward (a converter's creep) lets the patch push the
 	# body forward by that much more and backward by that much less; reversed, the other way.
 	var fwd := WheelScript.held_force_range(4000.0, 305.0, 100.0, 0.36)
-	assert_float(fwd.y).is_equal_approx((100.0 + 0.98 * 305.0) / 0.36, 1e-3)
-	assert_float(fwd.x).is_equal_approx((100.0 - 0.98 * 305.0) / 0.36, 1e-3)
+	assert_float(fwd.y).is_equal_approx((100.0 + share * 305.0) / 0.36, 1e-3)
+	assert_float(fwd.x).is_equal_approx((100.0 - share * 305.0) / 0.36, 1e-3)
 	var back := WheelScript.held_force_range(4000.0, 305.0, -100.0, 0.36)
 	assert_float(back.y).is_equal_approx(-fwd.x, 1e-3)
 	# More drive than brake holds nothing.

@@ -51,6 +51,10 @@ const STICK_RELAX := STICK_DEFLECTION / ABS_SLIP
 ## 60 Hz clamp on the patch spring: stiffness never above this fraction of `mass / delta^2`
 ## (omega * dt <= 0.5), so the spring cannot ring at the tick rate on the mass it moves.
 const STICK_TICK_STIFFNESS := 0.25
+## Share of its brake a held wheel's patch may load it to (`held_force_range`): just inside the
+## settle's Coulomb check, and no more, since a held wheel's spare brake can be small beside its
+## drive (an AWD centre passing the fronts most of their brake at stall).
+const HELD_SHARE := 0.998
 
 ## Contact casts that started inside something, read as full bump (`_contact_query`), process-wide:
 ## a diagnostic the measure tools read (an attachment under a hub shows here).
@@ -68,6 +72,7 @@ var in_contact := false
 var suspension_force := 0.0
 var slip := 0.0         ## |longitudinal slip ratio|, for telemetry
 var long_slip := 0.0    ## signed longitudinal slip ratio this tick (+ = wheel faster than the road)
+var slide_speed := 0.0  ## m/s the tread moves over the road along the wheel this tick (tyre smoke)
 var abs_active := false ## the anti-lock held this wheel's brake back this tick
 var tcs_active := false ## traction control held this wheel's drive back this tick
 var force_long := 0.0   ## last tick's longitudinal tire force (N, +=forward); the next tick's link force reads it (`link_slope`)
@@ -304,6 +309,7 @@ func reset() -> void:
 	suspension_force = 0.0
 	slip = 0.0
 	long_slip = 0.0
+	slide_speed = 0.0
 	abs_active = false
 	tcs_active = false
 	force_long = 0.0
@@ -394,6 +400,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		suspension_force = 0.0
 		slip = 0.0
 		long_slip = 0.0
+		slide_speed = 0.0
 		abs_active = false
 		force_long = 0.0
 		force_roll = 0.0
@@ -469,6 +476,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	var floor_vel := maxf(slip_floor, _own_slip_floor)
 	var slip_denom := maxf(absf(v_long), floor_vel)
 	var slip_vel := omega * wheel_radius - v_long
+	slide_speed = absf(slip_vel)
 	var slip_ratio := slip_vel / slip_denom
 	long_slip = slip_ratio
 	slip = absf(slip_ratio)
@@ -887,16 +895,16 @@ static func stick_saturate(stick: Vector2, k: Vector2, budget_long: float,
 ## differentials pass it, + = forward), so a drive working with the patch's force (a converter's
 ## creep up a grade) widens that side and one working against it narrows it. Past it the brake slips
 ## at its own Coulomb limit and the body slides there; letting the wheel turn at that edge instead
-## flickers it held / free, rewinding the patch from zero on a moving body every catch. 2 % inside
-## the brake, so the settle's own check (`brake >= |reaction|`) keeps it held. Empty (both 0) once
-## the drive alone out-holds the brake.
+## flickers it held / free, rewinding the patch from zero on a moving body every catch. HELD_SHARE
+## of the brake, so the settle's own check (`brake >= |reaction|`) keeps it held. Empty (both 0)
+## once the drive alone out-holds the brake.
 static func held_force_range(budget_long: float, brake_torque: float, held_against: float,
 		radius: float) -> Vector2:
 	if radius <= 0.0:
 		return Vector2(-budget_long, budget_long)
 	if absf(held_against) >= brake_torque:
 		return Vector2.ZERO
-	var hold := 0.98 * brake_torque
+	var hold := HELD_SHARE * brake_torque
 	return Vector2(clampf((held_against - hold) / radius, -budget_long, 0.0),
 			clampf((held_against + hold) / radius, 0.0, budget_long))
 

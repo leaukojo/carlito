@@ -10,7 +10,9 @@ const WHEEL_VISUAL_NAMES: PackedStringArray = ["WheelFL", "WheelFR", "WheelRL", 
 ## Wheel-slip dust emitter, built in code.
 const DUST_SLIP_MIN := 0.2      ## rear slip ratio where dust starts
 const DUST_SLIP_FULL := 0.6     ## rear slip ratio for full emission
-const DUST_MOVING := 1.0        ## m/s below which dust is suppressed (idle burnout stays clean)
+## m/s the body, or a rear tread over the road, must pass: a gripping pull-away's slip at a crawl
+## stays clean; a wheelspin launch or a brake-stand burnout smokes.
+const DUST_MOVING := 1.0
 
 ## Foot-brake application against pedal travel, anchored per body: half pedal asks
 ## BRAKE_HALF_PEDAL_G of deceleration on every body, full pedal the hardware's whole capacity
@@ -897,12 +899,14 @@ func update_dust(t: VehicleTelemetry) -> void:
 		return
 	var midpoint := Vector3.ZERO
 	var rear_contacts := 0
+	var slide := 0.0
 	for w in wheels:
 		if w.is_rear and w.in_contact:
 			midpoint += w.contact_point
 			rear_contacts += 1
+			slide = maxf(slide, w.slide_speed)
 	var intensity := 0.0
-	if rear_contacts > 0 and absf(t.speed) > DUST_MOVING:
+	if rear_contacts > 0 and maxf(absf(t.speed), slide) > DUST_MOVING:
 		_dust.global_position = midpoint / rear_contacts
 		intensity = clampf(
 				(t.slip_rear - DUST_SLIP_MIN) / (DUST_SLIP_FULL - DUST_SLIP_MIN), 0.0, 1.0)

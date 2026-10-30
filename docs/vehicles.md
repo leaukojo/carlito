@@ -140,7 +140,7 @@ patch velocity is read about the COM, and on `corner_mass` alone a crawl rings (
 and a parked `semi` slides 5 m off its hand brake on 16.7 deg. The body's slip floor
 (`slip_floor_for`) keeps the grip curve inside those caps, so a crawl reaches the full budget and
 the cap takes nothing off any launch (`doc=accel`'s tick cap 0.00); per-wheel floors held
-`suv-luxury` at 66.8 % against 81.0 %. Guard: `test_wheel_spin` (`contact_masses`, `slip_floor_for`).
+`suv-luxury` at 66.8 % against 81.0 % (both at a 1.0 converter). Guard: `test_wheel_spin` (`contact_masses`, `slip_floor_for`).
 
 **Braking.**
 
@@ -175,23 +175,26 @@ in 5.4 m, skidding for under a second.
 the drive back itself), `STALL_HOLD_S` (`measure_vehicles -- <variant> 30 stall`: a converter
 held on its stall speed, a clutch slipping on its launch target). Every
 body moves under 5 cm:
-- 0.000 m: `hatchback-sports`, `suv`, `suv-luxury`, `race-future`, `tractor-kenney`;
-- 0.1-2.5 cm, a driven wheel turning slowly against its brake while the other axle's brakes hold
-  the body (a brake-stand burnout): `delivery`, `delivery-flat` (2.5 each), `van` (2.3),
-  `pickup-flat`, `ambulance` (2.1 each), `sedan-sports` (1.9), `pickup`, `garbage-truck` (1.4 each),
-  `race` (1.3), `police` (1.1), `semi`, `semi-conventional` (0.6 each), `firetruck` (0.4), `taxi`
-  (0.3), `sedan` (0.1).
+- 0.000 m: `hatchback-sports`, `suv`, `race-future`, `tractor-kenney`;
+- 0.1-4.9 cm, a driven wheel turning or spinning against its brake while the other axle's brakes
+  hold the body (a brake-stand burnout): `sedan-sports` (4.9), `delivery`, `delivery-flat` (2.5
+  each), `police` (2.4), `van` (2.3), `pickup-flat`, `ambulance` (2.1 each), `pickup`,
+  `garbage-truck` (1.4 each), `race` (1.3), `semi`, `semi-conventional` (0.6 each), `firetruck`
+  (0.4), `taxi` (0.3), `suv-luxury` (0.2), `sedan` (0.1).
 
 On a body with both axles driven the brakes are solved with the differentials
 (`WheelDrive._couple_differentials`, `Differential.braked_coupling_torque`): a held wheel stays
 held unless the torque a diff must pass it beats its brake, so the body holds on its brake total.
-`suv-luxury`'s rear brakes (820 Nm a wheel) are under their own drive (~990 Nm); its Torsen centre
-carries the excess to the fronts' spare brake. The tractor brakes only its rears; the pedal engages
-MFWD, and the rigid shaft carries the fronts' drive into the rears' spare brake (34 kNm in total
-against 23.6 kNm of gear 1 at stall). The static check is `BrakeSizing.stall_hold_margin`, and
-`test_vehicle_catalog` holds every body to it. On the heavy vans (a 470 N·m engine through 15.6:1 and
-a 2.0 converter) it reads 1.04 on `delivery`, 1.02 on `delivery-flat` and 1.26 on `ambulance`; the
-first two are the fleet's thinnest.
+`suv-luxury`'s rear brakes (820 Nm a wheel) are under their own drive (~1990 Nm); its Torsen
+centre carries what its bias allows to the fronts' spare brake (1.15). The tractor brakes only its
+rears; the pedal engages MFWD, and the rigid shaft carries the fronts' drive into the rears' spare
+brake (34 kNm in total against 23.6 kNm of gear 1 at stall). The static check is `BrakeSizing.stall_hold_margin`, and
+`test_vehicle_catalog` holds every body to it. A driven wheel its drive spins past its grip
+counts at the grip curve's tail (0.8), where it settles on the standing body: a brake-stand
+burnout's front brakes hold the car while the rears spin [186]. The spin-up passes the peak, a
+lurch the check does not read: `sedan-sports` (1.17) moves the most of the 2.0 cars. On the heavy
+vans (a 470 N·m engine through 15.6:1 and a 2.0 converter) it reads 1.04 on `delivery`, 1.02 on
+`delivery-flat` and 1.26 on `ambulance`; the first two are the fleet's thinnest.
 
 *The solve order* (`WheelDrive._couple_differentials`), one pass a tick, each coupling solved off
 the wheels' own spin steps with every wheel's holds inside it:
@@ -368,8 +371,8 @@ Do not re-propose these without new evidence:
 - Open-diff friction (the open diff is an ideal 1.0): bodies that should fight one-wheel peel
   declare an LSD.
 - Fixing the floored 2WD tractor in mud: it is the open diff's peel (§ Open-diff peel).
-- Converter torque multiplication on `hatchback-sports`, `sedan-sports`, `police` and `suv-luxury`
-  (`docs/drivetrain.md` § Converter); never a bigger brake to make a body hold.
+- Converter torque multiplication on `hatchback-sports` (`docs/drivetrain.md` § Converter); never
+  a bigger brake to make a body hold.
 - Auto-respawn on overturn (`base_vehicle.gd`).
 - A cycling or peak-following ABS/TC: every tyre class shares the 0.12 peak, so `ABS_SLIP` /
   `TCS_SLIP` hold it ideally. Revisit when ABS/TC activity becomes a bus signal beyond

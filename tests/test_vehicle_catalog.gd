@@ -488,20 +488,49 @@ func test_every_free_crank_settles_on_its_steepest_droop_without_ringing() -> vo
 
 func test_the_centre_carries_an_axles_shortfall_to_the_other_axles_brakes() -> void:
 	# `suv-luxury`'s rear brakes are under their own drive at stall, its fronts' have spare. Its
-	# Torsen centre carries the rears' shortfall forward, as the coupled solve does, and nothing
-	# pushes; an open centre carries none, and the rears push against the fronts' hold (a brake-stand
-	# burnout).
+	# Torsen centre carries what its bias allows of the rears' shortfall forward, as the coupled
+	# solve does, and the rears push the rest against the fronts' hold; an open centre carries none.
 	var spec: VehicleSpecScript = _spec_of("suv-luxury").duplicate()
 	spec.ground_drive = spec.ground_drive.duplicate()
 	var gd := spec.ground_drive
 	assert_float(gd.axle_brake_torque(true)).is_less(absf(Drivetrain.stall_axle_torque(spec)) / 4.0)
-	assert_float(BrakeSizing.stall_hold_margin(spec)).is_equal(INF)
+	var biased := BrakeSizing.stall_hold_margin(spec)
+	assert_float(biased).is_greater_equal(1.0)
 	gd.centre_diff_bias = 1.0
 	var open := BrakeSizing.stall_hold_margin(spec)
-	assert_bool(is_finite(open)).is_true()
+	assert_float(open).is_less(biased)
 	# A rigid centre carries it all.
 	gd.centre_diff_rigid = true
 	assert_float(BrakeSizing.stall_hold_margin(spec)).is_equal(INF)
+
+
+func test_a_rear_spinning_against_its_brake_pushes_at_the_grip_curves_tail() -> void:
+	# `sedan-sports`' rears out-drive their brakes past their grip at stall and spin; the standing
+	# body puts them past slip 1.0, the curve's tail. The fronts hold at their own grip.
+	var spec: VehicleSpecScript = _spec_of("sedan-sports").duplicate()
+	spec.ground_drive = spec.ground_drive.duplicate()
+	var gd := spec.ground_drive
+	var loads := BrakeSizing.wheel_loads(spec)
+	var front := minf(gd.axle_brake_torque(false) / gd.axle_radius(false),
+			BrakeSizing.wheel_grip(spec, loads.x))
+	var rear := BrakeSizing.wheel_grip(spec, loads.y)
+	var tail := VehicleSpec.sample_curve(gd.grip_curve, INF)
+	assert_float(BrakeSizing.stall_hold_margin(spec)).is_equal_approx(front / (rear * tail), 1e-4)
+	# A lower tail pushes less.
+	gd.grip_curve = PackedVector2Array([Vector2(0, 0), Vector2(0.12, 1), Vector2(1, 0.5)])
+	assert_float(BrakeSizing.stall_hold_margin(spec)).is_equal_approx(front / (rear * 0.5), 1e-4)
+
+
+func test_a_driven_wheel_under_its_grip_pushes_its_drive_past_its_brake() -> void:
+	# `van`'s rears out-drive their brakes but stay under their grip: they roll, never spin, and
+	# the tail never enters.
+	var spec: VehicleSpecScript = _spec_of("van").duplicate()
+	spec.ground_drive = spec.ground_drive.duplicate()
+	var shipped := BrakeSizing.stall_hold_margin(spec)
+	assert_bool(is_finite(shipped)).is_true()
+	spec.ground_drive.grip_curve = PackedVector2Array([Vector2(0, 0), Vector2(0.12, 1),
+			Vector2(1, 0.5)])
+	assert_float(BrakeSizing.stall_hold_margin(spec)).is_equal(shipped)
 
 
 func test_every_handbrake_locks_the_rears_and_parks_on_its_regulation_grade() -> void:

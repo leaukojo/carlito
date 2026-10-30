@@ -356,6 +356,7 @@ is a fitment law (the mobility number), a later `GroundDriveSpec` field.
 | Mud on wet asphalt | wet-tar braking on a Hilux: mud-terrains 38.7 m, ~9 m past highway-terrains [73] | secondary |
 | Soil factors of every class (Mud, R-1W lug, slick ...) | on roads, an R-1 lug pulls about its weight on concrete (OECD 2136, the tractor's chassis table above); no lug-against-road-tread figure on soil found, and D497 carries no tread term | the road figure sourced; soil an estimate |
 | `crr_factor` | EU label C1 classes: A ≤ 6.5, B 6.6-7.7, C 7.8-9.0, D 9.1-10.5, E ≥ 10.6 N/kN [74]; summer B, all-season C, winter C's top, mud E's floor | sourced bands; each class's band an estimate |
+| `grip_curve` tail, 0.8 of peak at slip 1.0 | Wong's dry asphalt slides at 0.75 against a 0.80-0.90 peak, 0.83-0.94 of it; sliding includes a wheel spinning on a standing car [63]. A brake-stand burnout: the front brakes hold the car while the rears spin [186] | secondary; 0.8 an estimate, just under the range |
 
 *Aero balance* (`downforce_front`, `race` and `race-future`; `docs/handling.md` § Aero balance):
 
@@ -696,3 +697,4 @@ understeer as above:
 183. Bendix ESP EC-80 controller service data (Yaw Control, RSP, lamp behaviour), hosted by NHTSA: https://static.nhtsa.gov/odi/tsbs/2015/SB-10057460-3833.pdf
 184. Soodoo, "Heavy Vehicle Stability Control: NHTSA Policy Issues", TRB 2011: https://www.ugpti.org/trb/truckandbus/meetings/2011/downloads/NHTSA_Policy.pdf
 185. Winkler, Ervin, "Rollover of Heavy Commercial Vehicles", UMTRI-99-19, 1999: https://comt.ca/english/programs/trucking/Stability/UMTRI%20Rollover%20of%20Heavy%20Commercial%20Vehicles%201999.pdf
+186. Wikipedia, "Burnout (vehicle)" (the RWD brakestand; its balance sentence tagged citation-needed): https://en.wikipedia.org/wiki/Burnout_(vehicle)

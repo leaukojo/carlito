@@ -714,11 +714,7 @@ const VARIANTS := {
 	# retire the rest on today's sources. No production multi-link rear was measured. As a what-if,
 	# +0.06 deg/kN of designed toe-in still leaves `suv` 3 and each pickup 1. The leaf's stock sign is
 	# toward oversteer, so it cannot retire the pickups'.
-	# COMPROMISE (`sedan-sports`, `police`): converter ratio 1.0, a fluid coupling. At CAR_BASE's 2.0
-	# the stall hold is grip-limited (rears spinning at peak grip against fronts holding at theirs:
-	# 0.94 and exactly 1.00, `BrakeSizing.stall_hold_margin`), so no brake size moves it. Undoing it
-	# waits on whether that check should count a spinning wheel at peak grip.
-	"sedan-sports": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "engine_inertia": 0.18, "mass": 1050.0, "torque_mul": 1.12, "final_drive": 4.1, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0, "converter_stall_ratio": 1.0, "brake_heat": "performance"},
+	"sedan-sports": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "engine_inertia": 0.18, "mass": 1050.0, "torque_mul": 1.12, "final_drive": 4.1, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0, "brake_heat": "performance"},
 	# Hot hatch: a helical front LSD (Quaife-class, ~2.5:1), so a front wheel a bump or a steer input
 	# peels still leaves its partner up to 2.5x its torque rather than an equal share.
 	# COMPROMISE: a converter held at ratio 1.0, a fluid coupling. Its reference, a Mk7 GTI, is a
@@ -736,13 +732,9 @@ const VARIANTS := {
 	# +4.5 % front-first. CAR_BASE's 80/20 lifts the inner front in the corner pass (5.9 deg of roll),
 	# and 2:1 spins a lifted 100 km/h 20 % step (2026-10-19). Compliance steer from -0.0625 to +0.06
 	# deg/kN, as a what-if, neither adds nor clears a cell here or on `police` (2026-10-23).
-	# COMPROMISE: converter ratio 1.0, a fluid coupling. At CAR_BASE's 2.0 the static stall hold
-	# reads 1.15 (the Torsen carrying what its bias allows), but both pedals floored creep 0.12 m in
-	# 10 s (`measure_vehicles -- suv-luxury 30 stall`, 2026-10-24): the check over-reads this body.
-	# Undoing it waits on the check agreeing with the coupled solve.
-	"suv-luxury": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.62, "anti_roll_rate": 27000.0, "anti_roll_rate_rear": 9000.0, "mass": 1600.0, "torque_mul": 1.54, "mu_lat": 0.88, "max_steer_deg": 33.0, "driven_rear": true, "centre_diff_bias": 3.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0, "converter_stall_ratio": 1.0, "brake_heat": "suv_lc"},
+	"suv-luxury": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.62, "anti_roll_rate": 27000.0, "anti_roll_rate_rear": 9000.0, "mass": 1600.0, "torque_mul": 1.54, "mu_lat": 0.88, "max_steer_deg": 33.0, "driven_rear": true, "centre_diff_bias": 3.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0, "brake_heat": "suv_lc"},
 	"taxi": {"family": "car", "mass": 1250.0, "front_weight": 0.60},
-	"police": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "mass": 1300.0, "torque_mul": 1.18, "final_drive": 4.0, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0, "converter_stall_ratio": 1.0, "brake_heat": "performance"},
+	"police": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "mass": 1300.0, "torque_mul": 1.18, "final_drive": 4.0, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0, "brake_heat": "performance"},
 	# Open-wheelers: `wheel_x_out` measured per body against its own half-width at the wheel
 	# stations (re-drive after changing, it also steadies cornering). `cd` 0.70: exposed wheels +
 	# wing really do run ~2x a saloon's drag. `front_weight` 0.42: engine sits behind the driver;

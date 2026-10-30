@@ -140,10 +140,8 @@ inside the wheels' solve (`TorqueConverter.solve`):
 - **Ratio.** The turbine passes `converter_stall_ratio` times the impeller's torque at stall,
   falling to 1.0 at the coupling point (SR 0.9): 2.0 on the cars and vans, 1.98 on the Kenney
   trucks (a TC-418, one the 3000 RDS is offered with; `docs/sources.md`). COMPROMISE: 1.0, a
-  fluid coupling, on `hatchback-sports` (its reference car has no converter), `sedan-sports` and
-  `police` (their stall hold, `BrakeSizing.stall_hold_margin`, is grip-limited: 0.94 and exactly
-  1.00 at 2.0) and `suv-luxury` (the check passes it, 1.15, yet it creeps on both pedals): they wait
-  on that check against the sim. The torque ratio is read at the tick's start speed ratio, explicit
+  fluid coupling, on `hatchback-sports` (its reference car has no converter). The torque ratio is
+  read at the tick's start speed ratio, explicit
   where the capacity is implicit: it varies slowly.
 - **Lock-up.** The lock-up clutch (rated `clutch_rating`) closes in parallel once the two sides
   turn within the coupling point of each other, from `lockup_gear`: 1 on the cars and the heavy
@@ -164,8 +162,8 @@ against the converter's load and the engine's friction. Released in D1 with no p
 
 | Body | Steepest grade held at idle |
 | --- | --- |
-| `sedan`, `taxi`, `suv` | 15.3-18.2 % |
-| `sedan-sports`, `hatchback-sports`, `police`, `suv-luxury` (ratio 1.0) | 10.3-12.7 % |
+| `sedan`, `taxi`, `suv`, `police`, `suv-luxury`, `sedan-sports` | 15.3-23.3 % |
+| `hatchback-sports` (ratio 1.0) | 12.7 % |
 | `van`, `pickup`, `pickup-flat` | 13.6-14.8 % |
 | `delivery`, `delivery-flat`, `ambulance` | 15.7-18.6 % |
 | `garbage-truck`, `firetruck` | 21.6-23.3 % |

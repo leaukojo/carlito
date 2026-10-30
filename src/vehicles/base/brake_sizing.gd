@@ -102,12 +102,11 @@ static func wheel_grip(spec: VehicleSpec, n_load: float) -> float:
 ## (`Drivetrain.stall_axle_torque`: the curve at the launch target, converter stall on most
 ## bodies, times a converter's stall torque ratio): what the wheels can hold back over what the
 ## driven tyres push, >= 1 holding.
-## A driven wheel whose brake is under its drive pushes the body with `(D - B) / r`, at most its
-## tyre's grip (past that it spins, a brake-stand burnout, and pushes with less); every other
-## wheel's brake holds back through its own tyre. With both axles driven (an AWD centre, or a pedal
-## that engages MFWD) the centre first carries an axle's shortfall to the other axle's spare brake,
-## up to its capacity at the stall drive, as the coupled solve does
-## (`WheelDrive._couple_differentials`): the body holds on its brake total.
+## A driven wheel pushes with `(D - B) / r` up to its tyre's grip; past that it spins and, on the
+## standing body, pushes at the grip curve's tail (`docs/vehicles.md` § Both pedals). Other wheels
+## hold back through their tyres. With both axles driven the centre first carries an axle's
+## shortfall to the other's spare brake, up to its capacity at the stall drive, as the coupled
+## solve does (`WheelDrive._couple_differentials`).
 static func stall_hold_margin(spec: VehicleSpec) -> float:
 	var gd := spec.ground_drive
 	if gd == null or gd.wheel_positions.is_empty() or gd.wheel_radius <= 0.0:
@@ -145,14 +144,18 @@ static func stall_hold_margin(spec: VehicleSpec) -> float:
 			d_front = drive + moved / n_front
 			d_rear = b_rear + (rear_short - moved) / n_rear
 	var loads := wheel_loads(spec)
+	# The tyre's share of its peak once spinning: a standing wheel's slip runs past the curve's end
+	# (`RayWheel`'s slip floor), capped at the peak as `RayWheel` reads it.
+	var spinning := minf(VehicleSpec.sample_curve(gd.grip_curve, INF), 1.0)
 	var push := 0.0
 	var resist := 0.0
 	for p in gd.wheel_positions:
 		var rear := RayWheel.is_rear_z(p.z)
 		var grip := wheel_grip(spec, loads.y if rear else loads.x)
 		var wheel_drive := d_rear * n_rear_gear if rear else d_front * n_front_gear
-		var f := clampf((wheel_drive - gd.axle_brake_torque(rear)) / gd.axle_radius(rear), -grip,
-				grip)
+		var f := maxf((wheel_drive - gd.axle_brake_torque(rear)) / gd.axle_radius(rear), -grip)
+		if f > grip:
+			f = grip * spinning
 		if f > 0.0:
 			push += f
 		else:
