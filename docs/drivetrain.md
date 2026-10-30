@@ -56,10 +56,10 @@ sourced.
   full load the crank makes the measured torque. The first 1 % of pedal already nets the motoring
   out (the figure's "discrete transition"). A free crank in N nets the request itself: the 1 % and
   5 % rows dip under zero toward the figure's top column, so a light touch settles there, and past
-  it (held flat) a tenth of the pedal still nets positive torque, so it runs a free crank to the
-  limiter. The measure tools' speed holds (the PI pedals, `measure_rough`'s crawl) command fuel
-  through the map's inverse (`PedalMap.pedal_for`): on the raw pedal that first 1 % limit-cycles
-  them.
+  it the request still nets positive torque, so in N or P the limiter cuts at `free_rev_limit_rpm`
+  (`docs/vehicle_measurements.md` § Free crank). The measure tools' speed holds (the PI pedals,
+  `measure_rough`'s crawl) command fuel through the map's inverse (`PedalMap.pedal_for`): on the
+  raw pedal that first 1 % limit-cycles them.
 - **LINEAR** (the vans, the Kenney trucks, the semis): the fuel is the pedal. A road diesel's
   min-max governor leaves the injection pump's control rod to the pedal between idle and maximum
   speed [89]; no electronic road-diesel map was found.
@@ -200,9 +200,9 @@ rolls back on any grade. Three holds stop it:
   `GroundDriveSpec.hill_hold`): the real one holds in the transmission. The brake is the hold
   solved with the crank's coupling, where a lock of the gearbox output is solved before it. The
   CVT tractor has none: its active standstill is that transmission hold (§ The CVT below).
-- **Auto hold** (`InputRouter.auto_hold`, keys and touch only). Stopped in D or R with no throttle,
-  the whole foot brake stays on until the throttle asks to move; hill-start assist takes the
-  handover. A gamepad driver and the bridge get the real creep.
+- **Auto hold** (`InputRouter.auto_hold`, keys and touch; SETTINGS ▸ AUTO HOLD, off by default;
+  a local lamp). On, a body stopped in D or R with no throttle keeps the whole foot brake on until
+  the throttle asks to move; hill-start assist takes the handover. Gamepad and bridge: real creep.
 
 Released after a `SETTLE_S` foot-brake hold and floored `ROLL_DELAY_S` later, on 10 % and 25 %
 (`measure_grade -- <variant> rollback`, with and without `nohold`, prints rollback, release time

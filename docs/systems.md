@@ -40,7 +40,7 @@ static/pure, tested in `tests/test_input_arbitration.gd`.
 - `arbitrate_local`: ignition gates throttle; brake never throttles; S = brake, then reverse
   at standstill; foot brake drives `brake_lamp`; `tcs_off` is SETTINGS ▸ TRACTION CONTROL (a live
   bridge's own wins, fallback included), `esc_off` STABILITY CONTROL (local only; sets `tcs_off`).
-- `auto_hold`: with keys or touch, a wheel-driving body stopped in D or R with no throttle holds
+- `auto_hold` (SETTINGS ▸ AUTO HOLD, off by default): with keys or touch, a wheel-driving body stopped in D or R with no throttle holds
   its foot brake until the throttle asks to move (`docs/drivetrain.md` § Hill hold). It is
   off while the gamepad moved a pedal last, and never applies to the bridge.
 - `arbitrate_bridge`: the gear byte owns direction. Mode = `InputRouter.set_manual_gearbox`

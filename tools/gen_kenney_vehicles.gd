@@ -232,6 +232,11 @@ const CAR_BASE := {
 	# rev limiter in sixth.
 	"torque_curve": [900, 98, 2000, 154, 3200, 184, 4800, 185, 6000, 185, 6600, 170, 6800, 61],
 	"idle_rpm": 900.0, "redline_rpm": 6800.0,
+	# COMPROMISE: the limiter's line in N or P (`Drivetrain.limiter_line`). The petrol map nets
+	# positive torque on a free crank, so without it a tenth of the pedal reaches the redline. 4000
+	# is an estimate from owner reports (2016 Civic, ~4000 rpm in P and N; civicx.com "Maximum RPM in
+	# Park mode", opened 2026-10-25); no manufacturer figure was found. 0 undoes it.
+	"free_rev_limit_rpm": 4000.0,
 	# The pedal is a torque request, as a torque-based petrol engine management reads it: EPA's
 	# measured pedal map of a 2016 Honda L15B7 (SAE 2018-01-1412, Fig. 2; `PedalMap.PETROL_REQUEST`).
 	# A third of the pedal asks about two thirds of the peak; full pedal is the curve.
@@ -1027,6 +1032,7 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	spec.torque_curve = _scaled_curve(b["torque_curve"], torque_mul)
 	spec.idle_rpm = float(b["idle_rpm"])
 	spec.redline_rpm = float(b["redline_rpm"])
+	spec.free_rev_limit_rpm = float(b.get("free_rev_limit_rpm", 0.0))
 	# A whole array, so it takes the same per-variant override path as the scalars: the two
 	# open-wheelers run a close-ratio box the rest of the car family does not.
 	spec.gear_ratios = PackedFloat32Array(ov.get("gear_ratios", b["gear_ratios"]))

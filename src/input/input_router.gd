@@ -31,7 +31,8 @@ const REVERSE_ENGAGE_SPEED := 0.5
 ## test); past this speed the throttle cuts, and stays cut until either pedal lifts.
 const BRAKE_OVERRIDE_SPEED := 1.0
 
-## Auto hold, a keyboard-feel aid for keys and touch (`auto_hold`): at a standstill in a drive gear
+## Auto hold, a keyboard-feel aid for keys and touch (`auto_hold`), on only by the AUTO HOLD
+## setting (`set_auto_hold_on`): at a standstill in a drive gear
 ## with no throttle, the foot brake holds at this application until the throttle asks to move, so a
 ## converter body never creeps off while the keys are up. The whole service brake.
 const AUTO_HOLD_BRAKE := 1.0
@@ -68,6 +69,9 @@ var _local_tcs_off := false
 ## The player's STABILITY CONTROL setting, set by the shell: local driving only, like `tcs_off`.
 var _local_esc_off := false
 var _brake_override := false  ## latched by `brake_override`, both sources alike
+## The player's AUTO HOLD setting, set by the shell. Off by default: a real car's auto hold is a
+## button the driver turns on, and off is where converter creep and roll-back are felt.
+var _auto_hold_on := false
 var _auto_hold := false  ## latched by `auto_hold`, local key and touch pedals only
 ## The gamepad moved a pedal last, not a key or a touch pedal: the auto hold stands aside, since an
 ## analog trigger feathers the brake itself, as the bridge does.
@@ -182,6 +186,21 @@ func local_esc_off() -> bool:
 	return _local_esc_off
 
 
+func set_auto_hold_on(on: bool) -> void:
+	_auto_hold_on = on
+	if not on:
+		_auto_hold = false
+
+
+func auto_hold_on() -> bool:
+	return _auto_hold_on
+
+
+## The auto hold is holding the foot brake this tick (the dashboard's lamp).
+func auto_hold_holding() -> bool:
+	return _auto_hold
+
+
 ## Vehicles register on _ready to read speed/gear.
 func register_vehicle(vehicle: Node3D) -> void:
 	_vehicle = vehicle
@@ -276,7 +295,7 @@ func _apply_brake_override() -> void:
 ## brake never reads as S at a standstill (which selects R). The bridge never gets it: it drives the
 ## real creep.
 func _apply_auto_hold() -> void:
-	if _vehicle == null or not _vehicle.key_auto_hold():
+	if not _auto_hold_on or _vehicle == null or not _vehicle.key_auto_hold():
 		_auto_hold = false
 		return
 	_auto_hold = auto_hold(_auto_hold, _current, _vehicle.get_speed(), _pad_pedals)

@@ -104,6 +104,14 @@ const BRAKE_STOP_SPEED := 0.3      ## m/s counted as stopped
 ## reported as a failure to hold, never hidden.
 const STALL_SETTLE_S := 1.5
 const STALL_HOLD_S := 10.0
+## --- free crank (`freerev`, instead of every other pass) ---
+## Parked in N on the full foot brake, the pedal stepped through FREEREV_PEDALS, each held
+## FREEREV_HOLD_S: the mean rpm over its last FREEREV_AVG_S, the applied throttle, and whether the
+## limiter cut in that window. A map whose free crank runs away reads the limiter on a light pedal.
+const FREEREV_PEDALS: Array[float] = [0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0]
+const FREEREV_SETTLE_S := 1.5
+const FREEREV_HOLD_S := 4.0
+const FREEREV_AVG_S := 1.0
 ## --- handbrake turn (`handbrake`, instead of every other pass) ---
 ## Up to HB_SPEED on the strip, then a HB_STEER step with the throttle lifted, held HB_HOLD_S and
 ## released straight for HB_AFTER_S: once with the steer alone, once with the handbrake pulled
@@ -392,6 +400,8 @@ const DOC_STEER: Array[String] = ["sedan", "sedan-sports", "suv", "race", "van",
 ## doc=wind: a car, a heavy van, a Kenney truck and the semi on its spawn trailer, each `cruise
 ## headtail xwind` at its XWIND_KMH speed.
 const DOC_WIND: Array[String] = ["sedan", "delivery", "garbage-truck", "semi"]
+## doc=freerev: one body per pedal map's free crank (PETROL, a light and a heavy LINEAR, ALL_SPEED).
+const DOC_FREEREV: Array[String] = ["sedan", "delivery", "semi", "tractor-kenney"]
 const DOC_SECONDS := 60.0
 ## doc=tyres: a passenger car, a light truck and a heavy truck, each on every class its fit takes
 ## (`TyreCatalog.fitting`) over each of DOC_TYRE_SURFACES. A run is three passes: a `tc` launch to
@@ -406,7 +416,7 @@ const REFERENCE_SPECS_PATH := "res://tools/vehicle_reference_specs.json"
 const REPORT_DIR := "res://reports/specs_sweep/"
 
 enum Phase { ACCEL, COAST, TRACKING, CORNERING, BRAKING, STALL, HANDBRAKE, STEP, CRUISE, CIRCLE,
-		KERB, HITCH, PLOUGH, ARM, SINE, DONE }
+		KERB, HITCH, PLOUGH, ARM, SINE, FREEREV, DONE }
 ## Where a step-steer run is (`_tick_step`).
 enum Step { RUN_UP, SETTLE, STEPPED }
 ## Where a sine-with-dwell run is (`_tick_sine`): RAMP finds A, STEER is a run of the series.
@@ -479,6 +489,12 @@ var _brake := false
 ## `stall` / `handbrake`: run only that probe on each body (see their constants).
 var _stall := false
 var _hb_turn := false
+var _freerev := false
+var _freerev_step := 0        ## index into FREEREV_PEDALS; -1 while settling
+var _freerev_rpm := 0.0       ## rpm summed over the step's averaging window
+var _freerev_ticks := 0
+var _freerev_cut := false     ## the limiter cut inside the step's averaging window
+var _freerev_rows: Array[Dictionary] = []
 var _probe_on := false        ## past the settle / run-up, into the measured window
 var _probe_t := 0.0
 var _probe_x0 := Vector3.ZERO
@@ -857,6 +873,7 @@ func _ready() -> void:
 	_brake = flags.has("brake")
 	_stall = flags.has("stall")
 	_hb_turn = flags.has("handbrake")
+	_freerev = flags.has("freerev")
 	_step = flags.has("step")
 	_sine = flags.has("sine")
 	_circle = flags.has("circle")
@@ -985,9 +1002,11 @@ func _ready() -> void:
 		elif _doc == "esc":
 			# The sine pass on each ESC body in its range, ESC on then off (`_esc_offs`).
 			_sine = true
+		elif _doc == "freerev":
+			_freerev = true
 		elif _doc != "cruise" and _doc != "wind":
 			printerr(("unknown doc preset '%s' — expected doc=braking, doc=cornering, doc=accel,"
-					+ " doc=cruise, doc=wind, doc=steer, doc=tyres or doc=esc") % _doc)
+					+ " doc=cruise, doc=wind, doc=steer, doc=tyres, doc=esc or doc=freerev") % _doc)
 			get_tree().quit(1)
 			return
 		# The chassis tables are recorded with stability control off: they measure the chassis.
@@ -1052,6 +1071,8 @@ func _ready() -> void:
 		_queue = DOC_WIND.duplicate()
 	elif _doc == "steer":
 		_queue = DOC_STEER.duplicate()
+	elif _doc == "freerev":
+		_queue = DOC_FREEREV.duplicate()
 	elif _doc == "esc":
 		for v in _sine_variants():
 			_queue.append_array([v, v])
@@ -1161,6 +1182,8 @@ func _next_vehicle() -> void:
 			DocRegion.write(_doc, _tyres_table())
 		elif _doc == "esc":
 			DocRegion.write(_doc, _esc_table())
+		elif _doc == "freerev":
+			DocRegion.write(_doc, _freerev_table())
 		get_tree().quit(1 if _strict and _failures > 0 else 0)
 		return
 	_variant = _queue.pop_front()
@@ -1229,6 +1252,8 @@ func _next_vehicle() -> void:
 	_tc_run = _tc
 	if _stall:
 		_start_stall()
+	elif _freerev:
+		_start_freerev()
 	elif _cruise_probe():
 		_start_cruise()
 	elif _hb_turn:
@@ -1391,6 +1416,8 @@ func _physics_process(delta: float) -> void:
 		_tick_braking(delta)
 	elif _phase == Phase.STALL:
 		_tick_stall(delta)
+	elif _phase == Phase.FREEREV:
+		_tick_freerev()
 	elif _phase == Phase.HANDBRAKE:
 		_tick_handbrake(delta)
 	elif _phase == Phase.STEP:
@@ -2951,6 +2978,53 @@ func _tick_stall(delta: float) -> void:
 	InputRouter.set_manual_gearbox(false)
 	MeasureRig.drive(100.0, 0.0)
 	_finish_vehicle()
+
+
+func _start_freerev() -> void:
+	_reset_pass(Phase.FREEREV)
+	_freerev_step = -1
+	_freerev_rows = []
+	# Manual: on the automatic a 0 byte with the pedal down reads as D (`arbitrate_bridge`).
+	InputRouter.set_manual_gearbox(true)
+	MeasureRig.drive(0.0, 100.0, 0.0, false, InputRouter.GEAR_N)
+
+
+func _tick_freerev() -> void:
+	if _freerev_step < 0:
+		if _t >= FREEREV_SETTLE_S:
+			_next_freerev_step()
+		return
+	if _t > FREEREV_HOLD_S - FREEREV_AVG_S:
+		_freerev_rpm += _car.drivetrain.rpm
+		_freerev_ticks += 1
+		_freerev_cut = _freerev_cut or _car.drivetrain.on_limiter
+	if _t < FREEREV_HOLD_S:
+		return
+	var pedal := FREEREV_PEDALS[_freerev_step]
+	var mean := _freerev_rpm / maxi(_freerev_ticks, 1)
+	print("  %-13s : %s pedal %.2f  %5.0f rpm, limiter line %.0f, applied throttle %.3f, gear %d%s"
+			% ["freerev", _variant, pedal, mean, Drivetrain.limiter_line(_car.spec, Drivetrain.GEAR_N),
+			_car.drivetrain.applied_throttle, _car.drivetrain.gear_byte,
+			", limiter cut" if _freerev_cut else ""])
+	_freerev_rows.append({"pedal": pedal, "rpm": mean, "cut": _freerev_cut})
+	if _freerev_step + 1 < FREEREV_PEDALS.size():
+		_next_freerev_step()
+		return
+	_current["freerev"] = _freerev_rows
+	_current["freerev_map"] = PedalMap.Kind.keys()[_car.spec.pedal_map]
+	_current["freerev_line"] = Drivetrain.limiter_line(_car.spec, Drivetrain.GEAR_N)
+	InputRouter.set_manual_gearbox(false)
+	MeasureRig.drive(100.0, 0.0)
+	_finish_vehicle()
+
+
+func _next_freerev_step() -> void:
+	_freerev_step += 1
+	_t = 0.0
+	_freerev_rpm = 0.0
+	_freerev_ticks = 0
+	_freerev_cut = false
+	MeasureRig.drive(FREEREV_PEDALS[_freerev_step] * 100.0, 100.0, 0.0, false, InputRouter.GEAR_N)
 
 
 func _start_handbrake_run() -> void:
@@ -5097,6 +5171,29 @@ func _cruise_table() -> Array[String]:
 						_gear_label(c["gear"]), c["rpm"], c["pedal"], c["load"], c["burn"],
 						" (floored: its top)" if c["floored"] else ""])
 		lines.append("| %s | %s |" % [label, "; ".join(cells)])
+	return lines
+
+
+## The `freerev` region: DOC_FREEREV's bodies parked in N, the settled rpm at each pedal step.
+func _freerev_table() -> Array[String]:
+	var lines := DocRegion.wrap(("%s (`measure_vehicles -- doc=freerev`; per body `-- <variant> 40"
+			+ " freerev`): parked in N on the manual box, foot brake held, each pedal held %.0f s; the"
+			+ " mean rpm over its last %.0f s, `*` where the limiter cut. Line: the limiter's in N"
+			+ " (`Drivetrain.limiter_line`).") % [DocRegion.measured(), FREEREV_HOLD_S, FREEREV_AVG_S])
+	var head := "| Body (map) | Line |"
+	var rule := "| --- | --- |"
+	for p in FREEREV_PEDALS:
+		head += " %s |" % str(p)
+		rule += " --- |"
+	lines.append_array(["", head, rule])
+	for e in _sweep:
+		if not e.has("freerev"):
+			continue
+		var cells: Array[String] = []
+		for r: Dictionary in e["freerev"]:
+			cells.append("%.0f%s" % [r["rpm"], "*" if r["cut"] else ""])
+		lines.append("| `%s` (%s) | %.0f | %s |" % [e["variant"], e["freerev_map"],
+				e["freerev_line"], " | ".join(cells)])
 	return lines
 
 

@@ -38,6 +38,7 @@ handbrake_torque = 14667.0
 park_pawl_torque = 27500.0
 brake_bias_front = 0.0
 esc_reference_k = PackedVector2Array()
+esc_roll_lift_g = PackedVector2Array()
 brake_engages_front_axle = true
 brake_heat_capacity_rear = 93000.0
 brake_cooling_g0_rear = 4.0

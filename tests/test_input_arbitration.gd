@@ -1023,8 +1023,27 @@ class _IdleBridge extends BridgeSourceScript:
 				&"gear": GEAR_D1, &"key": RouterScript.KEY_IGNITION}
 
 
+func test_the_auto_hold_is_off_by_default_and_never_latches_while_off() -> void:
+	var router := _router()
+	var body: _RollingBody = auto_free(_RollingBody.new())
+	router.register_vehicle(body)
+	assert_bool(router.auto_hold_on()).is_false()
+	router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().brake).is_equal(0.0)
+	assert_bool(router.auto_hold_holding()).is_false()
+	# Switched off while holding, it lets go at once.
+	router.set_auto_hold_on(true)
+	router._physics_process(1.0 / 60.0)
+	assert_bool(router.auto_hold_holding()).is_true()
+	router.set_auto_hold_on(false)
+	assert_bool(router.auto_hold_holding()).is_false()
+	router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().brake).is_equal(0.0)
+
+
 func test_the_local_path_holds_the_brake_at_a_standstill_and_the_bridge_creeps() -> void:
 	var router := _router()
+	router.set_auto_hold_on(true)
 	var body: _RollingBody = auto_free(_RollingBody.new())
 	router.register_vehicle(body)
 	router._physics_process(1.0 / 60.0)

@@ -37,6 +37,9 @@ extends Resource
 ])
 @export var idle_rpm := 900.0
 @export var redline_rpm := 6800.0
+## The limiter's line with the box in N or P (`Drivetrain.limiter_line`), under the redline: a free
+## crank's fuel cut. 0 = none (the redline). Never in a drive gear or a PTO set-speed mode.
+@export var free_rev_limit_rpm := 0.0
 @export var gear_ratios := PackedFloat32Array([3.5, 2.2, 1.55, 1.18, 0.94, 0.78])
 @export var reverse_ratio := 2.2  ## short enough that reverse wheel torque stays under sliding grip
 @export var final_drive := 3.9

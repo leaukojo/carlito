@@ -449,11 +449,13 @@ func test_every_free_crank_settles_on_its_steepest_droop_without_ringing() -> vo
 	# The crank's step is semi-implicit in its own curve (`Drivetrain.crank_compliance`): on the
 	# steepest falling segment, held at the fuel that balances the motoring law mid-segment, a free
 	# crank started at the segment's top climbs onto that point and never passes it. The fuel is held
-	# as the pedal on a linear copy: a torque-request map holds its request, not a fuel.
+	# as the pedal on a linear copy: a torque-request map holds its request, not a fuel. The copy has
+	# no free-rev limit: in N it would cut the crank under a droop near the redline.
 	var specs := _driven_specs()
 	for variant: String in specs:
 		var spec: VehicleSpecScript = (specs[variant] as VehicleSpecScript).duplicate()
 		spec.pedal_map = PedalMap.Kind.LINEAR
+		spec.free_rev_limit_rpm = 0.0
 		if not Drivetrain.drives_wheels(spec):
 			continue
 		var curve := spec.torque_curve

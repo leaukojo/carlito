@@ -131,6 +131,8 @@ const LAMP_TEXT := {
 	"beacon": "BCN", "strobe": "STRB",
 	# Stability control: steady while switched off, flashing while it acts (`ESC_FLASH_HZ`).
 	"esc_off": "ESC",
+	# Local, not a contract signal (`_auto_hold_lamp`): dim while switched on, lit while holding.
+	"auto_hold": "AUTO HOLD",
 }
 const LAMP_COLOR := {
 	"handbrake": Color(0.95, 0.35, 0.30), "turnL": Color(0.35, 0.85, 0.45),
@@ -154,6 +156,7 @@ const LAMP_COLOR := {
 	"trailer_abs_lamp": Color(1.0, 0.70, 0.15),
 	"beacon": Color(0.95, 0.35, 0.30), "strobe": Color(1.0, 1.0, 1.0),
 	"esc_off": Color(1.0, 0.70, 0.15),
+	"auto_hold": Color(0.35, 0.85, 0.45),
 }
 ## The ESC tell-tale's flash while stability control acts (status ST_ESC): the cluster's own, as a
 ## real one flashes it (Bendix's ATC/ESP lamp, `docs/sources.md` § Stability control).
@@ -210,6 +213,11 @@ var _bars := {}
 var _lamps := {}     ## signal name -> Label (input bool tell-tales)
 var _out_lamps := {} ## signal name -> Label (bool "out" ISOBUS tell-tales, driven from telemetry)
 var _lamp_colors := {}  ## Label -> Color last applied, see _set_lamp_color
+## InputRouter's auto hold, a keys and touch aid the bridge never gets, so it is no contract
+## signal: shown only on a body it holds (`key_auto_hold`), while the setting is on and local
+## input drives. Null on any other body.
+var _auto_hold_lamp: Label = null
+var _auto_hold_body := false  ## the bound vehicle's `key_auto_hold()`, read at bind
 var _chips := {}     ## signal name -> [Label, SignalDef] (enum "in" requests)
 var _out_chips := {} ## signal name -> [Label, SignalDef] (flavored enum "out" readouts)
 var _readout: Label = null
@@ -258,10 +266,12 @@ func bind(level: Node) -> void:
 	_built = true
 	# Resolve telemetry before building: _build ends by binding every widget to a field on it.
 	_telem = null
+	_auto_hold_body = false
 	if level != null:
 		var vehicle: Node = level.get("vehicle")
 		if vehicle != null:
 			_telem = vehicle.get("telemetry")
+			_auto_hold_body = vehicle.has_method(&"key_auto_hold") and vehicle.call(&"key_auto_hold")
 	_build(vtype)
 
 
@@ -322,6 +332,7 @@ func _build(vehicle_type: String) -> void:
 	_lamps.clear()
 	_out_lamps.clear()
 	_lamp_colors.clear()
+	_auto_hold_lamp = null
 	_chips.clear()
 	_out_chips.clear()
 
@@ -476,6 +487,9 @@ func _build_telltale_row(vehicle_type: String) -> Control:
 		if sig.type != "bool" or sig.flavor == "":
 			continue
 		_out_lamps[sig.name] = _make_lamp(sig.name, row)
+
+	if _auto_hold_body:
+		_auto_hold_lamp = _make_lamp("auto_hold", row)
 
 	# Flavored enum "out" signals become state chips, the readout counterpart of the enum
 	# input chips above. 'gear' out is unflavored and stays on the tacho.
@@ -929,6 +943,10 @@ func _update_telltales() -> void:
 		var on: bool = active.get(sig_name, false)
 		var col: Color = LAMP_COLOR.get(sig_name, Color(1.0, 0.70, 0.15)) if on else LAMP_OFF
 		_set_lamp_color(_lamps[sig_name], col)
+	if _auto_hold_lamp != null:
+		_auto_hold_lamp.visible = InputRouter.auto_hold_on() and not InputRouter.bridge_drives()
+		_set_lamp_color(_auto_hold_lamp, LAMP_COLOR["auto_hold"] if InputRouter.auto_hold_holding()
+				else LAMP_OFF)
 
 	var enums := {
 		"key": vi.key, "lights": vi.lights, "pto_mode": vi.pto_mode,

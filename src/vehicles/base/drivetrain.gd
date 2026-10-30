@@ -280,9 +280,20 @@ static func rpm_from_wheel(p_spec: VehicleSpec, wheel_omega: float, byte: int) -
 
 ## Rev limiter: does the engine get fuel at this crank speed? Feed it the crank (`rpm` on a
 ## wheel-driving body, `wheel_engine_rpm` on the rigid crank), never a clamped rpm. A hard cut on
-## purpose (a fade band moves top speeds); `couple` lands the crossing tick on the redline.
-static func limiter_cut(p_spec: VehicleSpec, engine_rpm: float) -> bool:
-	return engine_rpm >= p_spec.redline_rpm
+## purpose (a fade band moves top speeds); `couple` lands the crossing tick on the line, which is
+## `limiter_line`'s for gear `byte` and PTO set speed `pto_set`.
+static func limiter_cut(p_spec: VehicleSpec, engine_rpm: float, byte: int, pto_set := 0.0) -> bool:
+	return engine_rpm >= limiter_line(p_spec, byte, pto_set)
+
+
+## The limiter's line (rpm): the spec's free-rev limit with the box in N or P and no PTO set speed
+## governing the crank (`pto_set` rpm, 0 = none), else the redline. In a drive gear with the clutch
+## open (a shift, the blip, a pull-away's slip, the stall test) it stays the redline. Held between
+## idle and the redline: under idle it would fight the idle controller.
+static func limiter_line(p_spec: VehicleSpec, byte: int, pto_set := 0.0) -> float:
+	if p_spec.free_rev_limit_rpm > 0.0 and is_open(byte) and pto_set <= 0.0:
+		return clampf(p_spec.free_rev_limit_rpm, p_spec.idle_rpm, p_spec.redline_rpm)
+	return p_spec.redline_rpm
 
 
 ## Fraction of throttle that reaches the engine at this road speed, 1.0 ungoverned. Fades
@@ -1144,11 +1155,12 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 		return 0.0
 
 	# The rigid crank. In N or P the wheels say nothing about crank speed, so a free-rev model
-	# stands in, built off the redline so it can never trip the limiter.
+	# stands in, built off the limiter's line so it can never trip the limiter.
 	var limiter_rpm := spec.idle_rpm
 	var target_rpm: float
 	if is_open(gear_byte):
-		target_rpm = lerpf(spec.idle_rpm, spec.redline_rpm, clampf(throttle, 0.0, 1.0))
+		target_rpm = lerpf(spec.idle_rpm, limiter_line(spec, gear_byte),
+				clampf(throttle, 0.0, 1.0))
 	else:
 		limiter_rpm = wheel_engine_rpm(spec, drive_wheel_omega, gear_byte)
 		target_rpm = maxf(clampf(limiter_rpm, spec.idle_rpm, spec.redline_rpm),
@@ -1162,7 +1174,7 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 	var crank_forward := drive_wheel_omega * ratio_for_byte(spec, gear_byte) >= 0.0
 	# The limiter and governor cut between pedal and engine: rpm still follows the wheels.
 	applied_throttle = clampf(throttle, 0.0, 1.0) * governor_scale(spec, ground_speed, speed_cap_kmh)
-	on_limiter = crank_forward and limiter_cut(spec, limiter_rpm)
+	on_limiter = crank_forward and limiter_cut(spec, limiter_rpm, gear_byte)
 	if on_limiter:
 		applied_throttle = 0.0
 	# The shift cut is a lift: no fuel, and it rides applied_throttle so telemetry reads it; ESC's
@@ -1251,13 +1263,14 @@ func _fuel_step(delta: float, demand: float, ground_speed: float, omega: float) 
 	if pto_governs:
 		demand = PedalMap.demand(spec, demand, hand_throttle, pto_set)
 	var fuel := 0.0
+	var cut := limiter_cut(spec, rpm, gear_byte, pto_set)
 	if running:
 		fuel = PedalMap.fuel(spec, demand, rpm, pto_governs)
 		if not is_cvt(spec):
 			fuel *= governor_scale(spec, ground_speed, speed_cap_kmh)
-		if limiter_cut(spec, rpm) or _landed:
+		if cut or _landed:
 			fuel = 0.0
-	on_limiter = running and (limiter_cut(spec, rpm) or _landed)
+	on_limiter = running and (cut or _landed)
 	_landed = false
 	_torque_restore = torque_restore_step(spec, _torque_restore, _shift_cut_ticks > 0, delta)
 	fuel = minf(fuel, minf(_torque_restore, esc_cap))
@@ -1475,7 +1488,7 @@ func couple(wheel_solve: Callable, wheel_spin: Callable) -> float:
 	var cvt := is_cvt(spec)
 	var g := ratio_for_byte(spec, gear_byte)
 	var fuel := applied_throttle
-	var red := spec.redline_rpm / RADS_TO_RPM
+	var red := limiter_line(spec, gear_byte, pto_set_rpm) / RADS_TO_RPM
 	if (g == 0.0 and not cvt) or (not converting and _capacity <= 0.0):
 		overrun = false
 		coupling_torque = 0.0

@@ -29,6 +29,8 @@ signal key_softening_changed(amount: float)
 signal tcs_off_changed(off: bool)
 ## STABILITY CONTROL flipped (true = off); the shell hands it to InputRouter and writes it to user://.
 signal esc_off_changed(off: bool)
+## AUTO HOLD flipped; the shell hands it to InputRouter and writes it to user://.
+signal auto_hold_changed(on: bool)
 ## New wind/current preset or shared compass direction picked; the shell applies it to the
 ## current level and keeps it for the session.
 signal conditions_changed(wind_preset: int, current_preset: int, from_deg: float)
@@ -45,6 +47,7 @@ class State extends RefCounted:
 	var key_softening := KeyShaper.DEFAULT_SOFTENING
 	var tcs_off := false
 	var esc_off := false
+	var auto_hold := false
 	var wind_preset: int = WorldConditions.Preset.LEVEL
 	var current_preset: int = WorldConditions.Preset.LEVEL
 	var wind_from_deg := 0.0
@@ -74,6 +77,8 @@ const TCS_HELP := "Cuts engine power when a driven wheel spins. Cars fitted with
 
 const ESC_HELP := "Brakes one wheel to stop a spin or a plough. Road vehicles fitted with it only; OFF turns traction control off too."
 
+const AUTO_HOLD_HELP := "Holds the brake when stopped in gear, with keys or on-screen pedals, until you press the accelerator. OFF lets it creep and roll back."
+
 const WIND_HELP := "Overrides the level's wind for this session."
 const CURRENT_HELP := "Overrides the level's water current for this session."
 const FROM_HELP := "Where the wind and water current come from. Applies to LIGHT and STRONG."
@@ -96,6 +101,7 @@ var _extended_debug_btn: Button
 var _key_response_btn: Button
 var _tcs_btn: Button
 var _esc_btn: Button
+var _auto_hold_btn: Button
 var _wind_btn: Button
 var _current_btn: Button
 var _from_btn: Button
@@ -108,6 +114,7 @@ var _extended_debug := false
 var _key_softening := KeyShaper.DEFAULT_SOFTENING
 var _tcs_off := false
 var _esc_off := false
+var _auto_hold := false
 var _wind_preset: int = WorldConditions.Preset.LEVEL
 var _current_preset: int = WorldConditions.Preset.LEVEL
 var _wind_from_deg := 0.0
@@ -126,6 +133,7 @@ func setup(caps: Dictionary, state := State.new()) -> void:
 	_key_softening = state.key_softening
 	_tcs_off = state.tcs_off
 	_esc_off = state.esc_off
+	_auto_hold = state.auto_hold
 	_wind_preset = state.wind_preset
 	_current_preset = state.current_preset
 	_wind_from_deg = state.wind_from_deg
@@ -281,6 +289,11 @@ func _build_settings() -> void:
 	_settings.add_child(_esc_btn)
 	_settings.add_child(_help(ESC_HELP))
 
+	_auto_hold_btn = _menu_button("", _on_auto_hold_pressed)
+	_relabel_auto_hold()
+	_settings.add_child(_auto_hold_btn)
+	_settings.add_child(_help(AUTO_HOLD_HELP))
+
 	_settings.add_child(_menu_button("BACK", func() -> void: _show_page(_root)))
 
 
@@ -412,6 +425,16 @@ func _on_esc_pressed() -> void:
 
 func _relabel_esc() -> void:
 	_esc_btn.text = "STABILITY CONTROL: %s" % ("OFF" if _esc_off else "ON")
+
+
+func _on_auto_hold_pressed() -> void:
+	_auto_hold = not _auto_hold
+	_relabel_auto_hold()
+	auto_hold_changed.emit(_auto_hold)
+
+
+func _relabel_auto_hold() -> void:
+	_auto_hold_btn.text = "AUTO HOLD: %s" % ("ON" if _auto_hold else "OFF")
 
 
 func _on_wind_pressed() -> void:

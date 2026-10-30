@@ -35,6 +35,7 @@ abs_equipped = true
 tcs_equipped = true
 esc_equipped = true
 esc_reference_k = PackedVector2Array(0.1718, 0.7005, 0.3186, 0.9283, 0.4334, 1.2508, 0.5207, 1.6302, 0.5569, 1.8298)
+esc_roll_lift_g = PackedVector2Array()
 hill_hold = 1
 hill_hold_s = 3.0
 brake_heat_capacity = 39300.0

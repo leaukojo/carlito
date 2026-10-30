@@ -429,6 +429,7 @@ func _open_pause() -> void:
 	state.key_softening = InputRouter.key_softening()
 	state.tcs_off = InputRouter.local_tcs_off()
 	state.esc_off = InputRouter.local_esc_off()
+	state.auto_hold = InputRouter.auto_hold_on()
 	state.wind_preset = _wind_preset
 	state.current_preset = _current_preset
 	state.wind_from_deg = _wind_from_deg
@@ -446,6 +447,7 @@ func _open_pause() -> void:
 	pause.key_softening_changed.connect(_on_key_softening_changed)
 	pause.tcs_off_changed.connect(_on_tcs_off_changed)
 	pause.esc_off_changed.connect(_on_esc_off_changed)
+	pause.auto_hold_changed.connect(_on_auto_hold_changed)
 	pause.conditions_changed.connect(_on_conditions_changed)
 	pause.night_toggled.connect(_on_night_toggled)
 	_push_overlay(pause)
@@ -459,6 +461,7 @@ func _apply_saved_settings() -> void:
 	InputRouter.set_key_softening(float(_settings.value("key_softening")))
 	InputRouter.set_local_tcs_off(bool(_settings.value("tcs_off")))
 	InputRouter.set_local_esc_off(bool(_settings.value("esc_off")))
+	InputRouter.set_auto_hold_on(bool(_settings.value("auto_hold")))
 
 
 ## SETTINGS picked a new cluster density. The menu owns nothing, so applying and remembering
@@ -497,6 +500,12 @@ func _on_tcs_off_changed(off: bool) -> void:
 func _on_esc_off_changed(off: bool) -> void:
 	InputRouter.set_local_esc_off(off)
 	_settings.set_value("esc_off", InputRouter.local_esc_off())
+
+
+## SETTINGS flipped AUTO HOLD.
+func _on_auto_hold_changed(on: bool) -> void:
+	InputRouter.set_auto_hold_on(on)
+	_settings.set_value("auto_hold", InputRouter.auto_hold_on())
 
 
 ## F2: cycles the same density setting the SETTINGS page's button does, so the menu and the key

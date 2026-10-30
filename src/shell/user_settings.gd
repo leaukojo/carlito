@@ -21,6 +21,7 @@ const DEFAULTS := {
 	"key_softening": KeyShaper.DEFAULT_SOFTENING,
 	"tcs_off": false,
 	"esc_off": false,
+	"auto_hold": false,
 	"tyres": {},  ## variant -> TyreClass id (`tyre_of`, `set_tyre`)
 }
 

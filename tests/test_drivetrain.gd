@@ -176,9 +176,9 @@ func test_engine_torque_is_the_curve_and_nothing_else() -> void:
 
 func test_limiter_cut_judges_the_unclamped_crank_speed() -> void:
 	var spec := _spec()   # redline 4000
-	assert_bool(DrivetrainScript.limiter_cut(spec, 3999.0)).is_false()
-	assert_bool(DrivetrainScript.limiter_cut(spec, 4000.0)).is_true()
-	assert_bool(DrivetrainScript.limiter_cut(spec, 6000.0)).is_true()
+	assert_bool(DrivetrainScript.limiter_cut(spec, 3999.0, 1)).is_false()
+	assert_bool(DrivetrainScript.limiter_cut(spec, 4000.0, 1)).is_true()
+	assert_bool(DrivetrainScript.limiter_cut(spec, 6000.0, 1)).is_true()
 
 
 func test_wheel_engine_rpm_is_unclamped_and_rpm_from_wheel_is_its_clamp() -> void:
@@ -245,6 +245,63 @@ func test_the_limiter_lands_the_crank_on_the_redline_and_never_fuels_past_it() -
 			cuts += 1
 		assert_float(dt.rpm).is_less_equal(spec.redline_rpm + 1e-6)
 	assert_int(cuts).is_between(3, 7)
+
+
+func test_the_limiter_line_is_the_free_rev_limit_only_in_n_or_p_with_no_pto_set_speed() -> void:
+	var spec := _spec()
+	assert_float(DrivetrainScript.limiter_line(spec, GEAR_N)).is_equal(spec.redline_rpm)
+	spec.free_rev_limit_rpm = 2500.0
+	for byte: int in [GEAR_N, GEAR_P]:
+		assert_float(DrivetrainScript.limiter_line(spec, byte)).is_equal(2500.0)
+		assert_float(DrivetrainScript.limiter_line(spec, byte, 1600.0)).is_equal(spec.redline_rpm)
+	for byte: int in [1, 3, GEAR_R]:
+		assert_float(DrivetrainScript.limiter_line(spec, byte)).is_equal(spec.redline_rpm)
+	# Held between idle and the redline.
+	spec.free_rev_limit_rpm = 5000.0
+	assert_float(DrivetrainScript.limiter_line(spec, GEAR_N)).is_equal(spec.redline_rpm)
+	spec.free_rev_limit_rpm = 500.0
+	assert_float(DrivetrainScript.limiter_line(spec, GEAR_N)).is_equal(spec.idle_rpm)
+
+
+func test_a_free_crank_in_n_or_p_lands_on_the_free_rev_limit_and_never_fuels_past_it() -> void:
+	var spec := _spec()
+	spec.engine_brake_frac = 0.1
+	spec.free_rev_limit_rpm = 2500.0
+	spec.ground_drive.park_pawl_torque = 1000.0
+	for byte: int in [GEAR_N, GEAR_P]:
+		for pedal: float in [0.5, 1.0]:
+			var dt: DrivetrainScript = DrivetrainScript.new(spec)
+			var reached := false
+			for i in 240:
+				_tick(dt, pedal, LumpedWheel.new(), byte)
+				assert_float(dt.rpm).is_less_equal(2500.0 + 1e-6)
+				reached = reached or dt.rpm >= 2500.0 - 1e-6
+			assert_bool(reached).is_true()
+
+
+func test_the_free_rev_limit_leaves_a_drive_gear_and_a_pto_set_speed_alone() -> void:
+	# A line just over idle: a stall rev in D1 against a held wheel, a downshift's blip and a PTO set
+	# speed in N each run the crank well past it, on the redline's limiter only.
+	var spec := _pto_spec()
+	spec.free_rev_limit_rpm = 900.0
+	var stall: DrivetrainScript = DrivetrainScript.new(spec)
+	for i in 120:
+		_tick(stall, 1.0, LumpedWheel.new(), 1)
+	assert_float(stall.applied_throttle).is_equal(1.0)
+	assert_float(stall.rpm).is_greater(spec.idle_rpm + 500.0)
+	var blip: DrivetrainScript = DrivetrainScript.new(spec)
+	var omega := 2000.0 / DrivetrainScript.RADS_TO_RPM / 8.0
+	for i in 60:
+		_tick(blip, 0.0, LumpedWheel.new(omega), 2)
+	for i in 30:
+		_tick(blip, 0.0, LumpedWheel.new(omega), 1)
+	assert_float(blip.rpm).is_equal_approx(DrivetrainScript.wheel_engine_rpm(spec, omega, 1), 1e-6)
+	var pto: DrivetrainScript = DrivetrainScript.new(spec)
+	pto.rpm = 800.0
+	pto.pto_set_rpm = 1600.0
+	for i in 120:
+		_tick(pto, 0.0, LumpedWheel.new(), GEAR_N)
+	assert_float(pto.rpm).is_equal_approx(1600.0, 1.0)
 
 
 func test_a_coupled_crank_lands_its_crossing_on_the_redline_too() -> void:
