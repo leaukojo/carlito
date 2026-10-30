@@ -289,3 +289,145 @@ func test_the_yaw_torque_survives_a_full_roll_application() -> void:
 	# No roll: exactly the yaw's.
 	assert_that(StabilityControl.corner_torques(0.0, Vector4(0.0, 400.0, 0.0, 0.0), BRAKE)) \
 			.is_equal(Vector4(0.0, 400.0, 0.0, 0.0))
+
+
+# --- trailer roll-over control -----------------------------------------------------------------
+
+const Stage := StabilityControl.TrailerStage
+const PULSE := Vector2(StabilityControl.TRAILER_PULSE, StabilityControl.TRAILER_PULSE)
+## Past the pulse window at 60 Hz.
+const PULSE_TICKS := 30
+
+
+## The crossing g at LIFT with nothing learned.
+static func _threshold() -> float:
+	return StabilityControl.trailer_roll_threshold(LIFT, 0.0)
+
+
+## `state` settled at `lat_g`: its rise rate 0, so the next tick's step there is a slow one.
+static func _settled(lat_g: float, state := StabilityControl.trailer_roll_state()) -> Dictionary:
+	var s := state.duplicate()
+	s["last_g"] = absf(lat_g)
+	s["rate"] = 0.0
+	return s
+
+
+## `ticks` steps at a held `lat_g` from `state`; the last result.
+static func _tr_hold(state: Dictionary, lat_g: float, ticks: int, left := SPEED, right := SPEED,
+		speed := SPEED, lift := LIFT) -> Dictionary:
+	var r := {"state": state, "cmd": Vector2.ZERO}
+	for i in ticks:
+		r = StabilityControl.trailer_roll_step(r["state"], speed, lat_g, lift, left, right, TICK)
+	return r
+
+
+func test_below_the_trailer_threshold_it_asks_nothing() -> void:
+	var g := _threshold() - 0.001
+	var r := _tr_hold(_settled(g), g, 120)
+	assert_that(r["cmd"]).is_equal(Vector2.ZERO)
+	assert_int(r["state"]["stage"]).is_equal(Stage.IDLE)
+
+
+func test_a_slow_crossing_fires_one_pulse() -> void:
+	var g := _threshold() + 0.001
+	var r := _tr_hold(_settled(g), g, 1)
+	assert_int(r["state"]["stage"]).is_equal(Stage.PULSE)
+	assert_that(r["cmd"]).is_equal(PULSE)
+	# Still wheels through the window: the crossing is spent.
+	r = _tr_hold(r["state"], g, PULSE_TICKS)
+	assert_int(r["state"]["stage"]).is_equal(Stage.SPENT)
+	assert_that(r["cmd"]).is_equal(Vector2.ZERO)
+	# Held above the threshold: no second pulse.
+	r = _tr_hold(r["state"], g, 120)
+	assert_that(r["cmd"]).is_equal(Vector2.ZERO)
+	# Under the release level it re-arms; the next crossing (past the learned raise) pulses again.
+	r = _tr_hold(r["state"], StabilityControl.TRAILER_RELEASE_SHARE * LIFT - 0.001, 1)
+	assert_int(r["state"]["stage"]).is_equal(Stage.IDLE)
+	var again := StabilityControl.trailer_roll_threshold(LIFT, r["state"]["raise"]) + 0.001
+	r = _tr_hold(_settled(again, r["state"]), again, 1)
+	assert_that(r["cmd"]).is_equal(PULSE)
+
+
+func test_inside_wheels_slowing_under_the_pulse_bring_the_full_outside_application() -> void:
+	var g := _threshold() + 0.001
+	# A left turn: the left wheels inside, the right outside.
+	var r := _tr_hold(_tr_hold(_settled(g), g, 1)["state"], g, 1, 0.9 * SPEED, SPEED)
+	assert_int(r["state"]["stage"]).is_equal(Stage.FULL)
+	assert_that(r["cmd"]).is_equal(Vector2(StabilityControl.TRAILER_PULSE, 1.0))
+	# A right turn mirrors it.
+	r = _tr_hold(_tr_hold(_settled(-g), -g, 1)["state"], -g, 1, SPEED, 0.9 * SPEED)
+	assert_that(r["cmd"]).is_equal(Vector2(1.0, StabilityControl.TRAILER_PULSE))
+	# The turn's own inside-wheel deficit, held from the crossing, is no reaction.
+	r = _tr_hold(_settled(g), g, PULSE_TICKS, 0.9 * SPEED, SPEED)
+	assert_int(r["state"]["stage"]).is_equal(Stage.SPENT)
+
+
+func test_still_wheels_raise_the_threshold_up_to_its_ceiling() -> void:
+	var g := _threshold() + 0.001
+	var r := _tr_hold(_settled(g), g, PULSE_TICKS)
+	assert_float(r["state"]["raise"]).is_equal_approx(StabilityControl.TRAILER_LEARN_G, 1e-6)
+	# A g back under the release level mid-pulse is no verdict: idle, nothing learned.
+	var brief := _tr_hold(_tr_hold(_settled(g), g, 1)["state"], 0.0, 1)
+	assert_int(brief["state"]["stage"]).is_equal(Stage.IDLE)
+	assert_float(brief["state"]["raise"]).is_equal(0.0)
+	# Re-armed, the g that fired before no longer does.
+	r = _tr_hold(r["state"], 0.0, 1)
+	r = _tr_hold(_settled(g, r["state"]), g, 60)
+	assert_int(r["state"]["stage"]).is_equal(Stage.IDLE)
+	# The learned raise stops at TRAILER_MAX_SHARE of the lift.
+	var ceiling := StabilityControl.TRAILER_MAX_SHARE * LIFT
+	assert_float(StabilityControl.trailer_roll_threshold(LIFT, 1.0)).is_equal_approx(ceiling, 1e-6)
+	var near := _settled(ceiling)
+	near["raise"] = ceiling - _threshold() - 0.01
+	r = _tr_hold(near, ceiling, PULSE_TICKS + 1)
+	assert_float(StabilityControl.trailer_roll_threshold(LIFT, r["state"]["raise"])) \
+			.is_equal_approx(ceiling, 1e-6)
+
+
+func test_a_rapid_rise_brakes_without_a_pulse() -> void:
+	# 3 g/s from straight running.
+	var r := {"state": StabilityControl.trailer_roll_state(), "cmd": Vector2.ZERO}
+	var g := 0.0
+	while r["state"]["stage"] == Stage.IDLE:
+		g += 3.0 * TICK
+		assert_float(g).is_less(LIFT)
+		r = StabilityControl.trailer_roll_step(r["state"], SPEED, g, LIFT, SPEED, SPEED, TICK)
+	assert_int(r["state"]["stage"]).is_equal(Stage.FULL)
+	assert_that(r["cmd"]).is_equal(Vector2(StabilityControl.TRAILER_PULSE, 1.0))
+
+
+func test_the_trailer_function_never_passes_the_declared_brake() -> void:
+	for start: Dictionary in [_settled(5.0), StabilityControl.trailer_roll_state()]:
+		var r := {"state": start, "cmd": Vector2.ZERO}
+		for i in 60:
+			var inside := SPEED if i < 3 else 0.5 * SPEED
+			r = StabilityControl.trailer_roll_step(r["state"], SPEED, 5.0, LIFT, inside, SPEED, TICK)
+			assert_float(maxf(r["cmd"].x, r["cmd"].y)).is_less_equal(1.0)
+
+
+func test_a_heavier_load_lowers_the_trailer_threshold() -> void:
+	var points := PackedVector2Array([Vector2(8000.0, 0.6), Vector2(14000.0, 0.45)])
+	var g := 0.36
+	var heavy := _tr_hold(_settled(g), g, 1, SPEED, SPEED, SPEED,
+			StabilityControl.roll_lift_g(points, 14000.0))
+	var light := _tr_hold(_settled(g), g, 1, SPEED, SPEED, SPEED,
+			StabilityControl.roll_lift_g(points, 8000.0))
+	assert_that(heavy["cmd"]).is_equal(PULSE)
+	assert_that(light["cmd"]).is_equal(Vector2.ZERO)
+
+
+func test_the_trailer_function_is_off_below_fifteen_kmh_and_releases_once_non_critical() -> void:
+	var g := _threshold() + 0.001
+	assert_that(_tr_hold(_settled(g), g, 1, SPEED, SPEED, 14.0 / 3.6)["cmd"]).is_equal(Vector2.ZERO)
+	assert_that(_tr_hold(_settled(g), g, 1, SPEED, SPEED, 16.0 / 3.6)["cmd"]).is_equal(PULSE)
+	# No lift table: off.
+	assert_that(_tr_hold(_settled(g), g, 1, SPEED, SPEED, SPEED, INF)["cmd"]).is_equal(Vector2.ZERO)
+	var full := _tr_hold(_tr_hold(_settled(g), g, 1)["state"], g, 1, 0.5 * SPEED, SPEED)
+	assert_int(full["state"]["stage"]).is_equal(Stage.FULL)
+	var release := StabilityControl.TRAILER_RELEASE_SHARE * LIFT
+	assert_int(_tr_hold(full["state"], release + 0.001, 1)["state"]["stage"]).is_equal(Stage.FULL)
+	var off := _tr_hold(full["state"], release - 0.001, 1)
+	assert_int(off["state"]["stage"]).is_equal(Stage.IDLE)
+	assert_that(off["cmd"]).is_equal(Vector2.ZERO)
+	# Slowing under the floor mid-application drops it at once (the chambers' lag is the release).
+	assert_that(_tr_hold(full["state"], g, 1, SPEED, SPEED, 14.0 / 3.6)["cmd"]).is_equal(Vector2.ZERO)

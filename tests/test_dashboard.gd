@@ -45,7 +45,7 @@ func test_compact_keeps_every_generated_telltale() -> void:
 		assert_bool(compact._reverser != null).is_equal(full._reverser != null)
 
 
-## The row is as wide as the contract makes it — fifteen lamps on a truck with a trailer — so it
+## The row is as wide as the contract makes it — a truck's, with its trailer bus, is the widest — so it
 ## has to WRAP or the ends leave the screen on a phone, which is the size COMPACT exists for.
 ## Pinned because an HBoxContainer looks identical on a desktop and fails only where it matters.
 func test_the_telltale_row_wraps() -> void:

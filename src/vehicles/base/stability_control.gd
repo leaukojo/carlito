@@ -188,3 +188,101 @@ static func corner_torques(roll_app: float, yaw: Vector4, brake: Vector2) -> Vec
 		out[2 * axle] += roll_t
 		out[2 * axle + 1] += roll_t
 	return out
+
+
+# --- trailer roll-over control -----------------------------------------------------------------
+
+## A semi-trailer EBS's own roll-over function, the makers' staged logic: past the
+## threshold a low-pressure test pulse on every wheel; the inside wheels slowing under it bring the
+## full application on the outside ones; a rapid rise skips the pulse; no reaction raises the
+## threshold and spends the crossing. One pulse per crossing, never cycling. Commands only (0..1 of
+## the trailer's declared brake per side): the chambers' lag (`TowedBody.lagged_brake`) is the
+## application and release rate.
+enum TrailerStage { IDLE, PULSE, FULL, SPENT }
+
+## Not active below it, not adjustable ([194]).
+const TRAILER_MIN_SPEED := 15.0 / 3.6
+## The test pulse's share of the declared brake: "low pressure" (estimate).
+const TRAILER_PULSE := 0.15
+## How long the pulse holds while the wheel reaction is read; the chambers reach it in ~0.05 s
+## (estimate).
+const TRAILER_PULSE_S := 0.3
+## The drop in the inside-over-outside wheel speed ratio under the pulse that reads as a lifting
+## inside wheel; under `RayWheel.ABS_SLIP`, or the ABS releases the wheel before the read (estimate).
+const TRAILER_LIFT_SLIP := 0.08
+## A lateral-g rise (g/s) at the crossing past which it brakes without a pulse (estimate).
+const TRAILER_RAPID_G_S := 1.0
+## The rise rate's low-pass (s): a raw 60 Hz derivative fakes a rapid rise (estimate).
+const TRAILER_RATE_FILTER_S := 0.1
+## What a crossing with no wheel reaction adds to the threshold (g) (estimate).
+const TRAILER_LEARN_G := 0.03
+## The learned threshold's ceiling, a share of the lift: learning never moves it onto the lift
+## (estimate).
+const TRAILER_MAX_SHARE := 0.9
+## Under this share of the lift the lateral g is non-critical: released and re-armed (estimate).
+const TRAILER_RELEASE_SHARE := 0.6
+
+
+## A fresh state for `trailer_roll_step`: idle, nothing learned.
+static func trailer_roll_state() -> Dictionary:
+	return {"stage": TrailerStage.IDLE, "timer": 0.0, "raise": 0.0, "rate": 0.0, "last_g": 0.0,
+			"ratio0": 1.0}
+
+
+## The lateral g (unsigned) the function crosses at: ROLL_SHARE of `lift_g` plus the learned
+## `raise`, held under TRAILER_MAX_SHARE of it.
+static func trailer_roll_threshold(lift_g: float, raise: float) -> float:
+	return minf(ROLL_SHARE * lift_g + raise, TRAILER_MAX_SHARE * lift_g)
+
+
+## One tick: `{ "state", "cmd": Vector2(left, right) }`, each side 0..1 of the declared brake.
+## `lat_g` signed (+ = left, so the right wheels are outside), `lift_g` the trailer's first lift at
+## its own load (`roll_lift_g`), `speed_left` / `speed_right` each side's mean wheel ground speed.
+## The reaction is the inside-over-outside ratio dropping from its value at the crossing, so the
+## turn's own geometry never reads as a lift; a g back under the release level before the read ends
+## learns nothing. Under TRAILER_MIN_SPEED, or with no lift (INF), idle
+## and 0 at once; the learned raise is kept.
+static func trailer_roll_step(state: Dictionary, speed: float, lat_g: float, lift_g: float,
+		speed_left: float, speed_right: float, delta: float) -> Dictionary:
+	var s := state.duplicate()
+	var g := absf(lat_g)
+	if delta > 0.0:
+		s["rate"] += ((g - s["last_g"]) / delta - s["rate"]) \
+				* minf(delta / TRAILER_RATE_FILTER_S, 1.0)
+	s["last_g"] = g
+	if speed < TRAILER_MIN_SPEED or not is_finite(lift_g) or lift_g <= 0.0:
+		s["stage"] = TrailerStage.IDLE
+		return {"state": s, "cmd": Vector2.ZERO}
+	var outside := speed_right if lat_g >= 0.0 else speed_left
+	var inside := speed_left if lat_g >= 0.0 else speed_right
+	var ratio := inside / outside if outside > 0.0 else 1.0
+	var release := TRAILER_RELEASE_SHARE * lift_g
+	match s["stage"]:
+		TrailerStage.IDLE:
+			if g >= trailer_roll_threshold(lift_g, s["raise"]):
+				s["timer"] = 0.0
+				s["ratio0"] = ratio
+				s["stage"] = TrailerStage.FULL if s["rate"] >= TRAILER_RAPID_G_S \
+						else TrailerStage.PULSE
+		TrailerStage.PULSE:
+			s["timer"] += delta
+			if s["ratio0"] - ratio > TRAILER_LIFT_SLIP:
+				s["stage"] = TrailerStage.FULL
+			elif g < release:
+				# Non-critical before the read ended: no verdict, nothing learned.
+				s["stage"] = TrailerStage.IDLE
+			elif s["timer"] >= TRAILER_PULSE_S:
+				s["raise"] = minf(s["raise"] + TRAILER_LEARN_G,
+						(TRAILER_MAX_SHARE - ROLL_SHARE) * lift_g)
+				s["stage"] = TrailerStage.SPENT
+		TrailerStage.FULL, TrailerStage.SPENT:
+			if g < release:
+				s["stage"] = TrailerStage.IDLE
+	var cmd := Vector2.ZERO
+	match s["stage"]:
+		TrailerStage.PULSE:
+			cmd = Vector2(TRAILER_PULSE, TRAILER_PULSE)
+		TrailerStage.FULL:
+			# The inside "largely unchanged" from the test pulse ([195]).
+			cmd = Vector2(TRAILER_PULSE, 1.0) if lat_g >= 0.0 else Vector2(1.0, TRAILER_PULSE)
+	return {"state": s, "cmd": cmd}

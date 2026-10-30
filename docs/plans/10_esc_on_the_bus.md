@@ -33,7 +33,8 @@ Follows `docs/handling.md` § Stability control (ESC and roll braking are not
 ## Phase 0 — Sources and decisions (effort: medium; mode: plan-mode-first)
 
 - From pages actually opened, or labelled estimates: the stop-lamp rule for braking a stability
-  function commands; VDC1's SPN 1813-1819 states and VDC2's layout (J1939-71 [159] is open);
+  function commands, the trailer's own included (WABCO's RSS requests none by default [195];
+  R13 5.2.2.22.1 not opened); VDC1's SPN 1813-1819 states and VDC2's layout (J1939-71 [159] is open);
   how a TCU treats ESC braking for the lock-up, if a source says.
 - The four decisions above, asked once, recorded here.
 

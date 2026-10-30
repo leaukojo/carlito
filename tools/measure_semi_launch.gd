@@ -6,7 +6,10 @@ extends Node3D
 ## holds the entry speed and winds the lock on slowly instead: the steady-state tip point.
 ## Optional `front_z=<float>` / `com_z=<float>` args (variant name is args[0]) apply an
 ## in-memory geometry override for what-if runs, without touching the shipped spec;
-## `trailer=<box|tipper|tanker|flatbed|bobtail>` picks what is on the back.
+## `trailer=<box|tipper|tanker|flatbed|bobtail>` picks what is on the back. `doc=trailer_roll` runs
+## the laden box rig's P7 step and ramp with the tractor's ESC and the trailer's roll-over control
+## each on and off (`DOC_CONFIGS`), re-spawning the rig per run, and writes the `trailer_roll_p7`
+## region of docs/vehicle_measurements.md.
 ##
 ## Driven through the BRIDGE rather than the keyboard: InputRouter.arbitrate_local latches
 ## GEAR_R the moment `brake_reverse` is held under REVERSE_ENGAGE_SPEED, which turns a
@@ -21,6 +24,12 @@ extends Node3D
 
 const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
 const MeasureRig := preload("res://tools/measure_rig.gd")
+const Measure := preload("res://tools/measure_vehicles.gd")
+const DocRegion := preload("res://tools/doc_region.gd")
+
+## doc=trailer_roll's configurations, [tractor ESC off, trailer roll-over control off]: both off
+## (the baseline), the trailer's alone, the tractor's alone, both.
+const DOC_CONFIGS := [[true, true], [true, false], [false, true], [false, false]]
 
 const STRIP_LENGTH := 6000.0
 const STRIP_WIDTH := 40.0
@@ -89,18 +98,22 @@ var _tip_speed := TIP_SPEED_MS   ## P7 entry speed, m/s
 var _ramp := false               ## `ramp`: P7 winds the lock on at a held speed instead of a step
 var _ramp_i := 0.0               ## the speed hold's integrated error, m
 var _ended_by := ""              ## what stopped P7: the hold running out or a body passing TIP_ROLL_DEG
-var _trailer_seen := 0           ## instance id of the trailer the two vars below belong to
-var _trailer_prev_v := Vector3.ZERO
-var _trailer_acc_lat := 0.0      ## m/s^2, smoothed like VehicleTelemetry.acc_lat
+var _args := PackedStringArray()
+## doc=trailer_roll: the runs still to drive ({esc_off, trsp_off, ramp}) and the finished ones.
+var _doc_runs: Array[Dictionary] = []
+var _doc_done: Array[Dictionary] = []
+var _watch := MeasureRig.TrailerWatch.new()  ## P7's trailer, from the steer on
 
 
 func _ready() -> void:
-	var args := OS.get_cmdline_user_args()
+	_args = OS.get_cmdline_user_args()
+	var args := _args
 	if args.size() > 0:
 		_variant = String(args[0])
 	_strict = args.has("strict")
 	_ramp = args.has("ramp")
 	MeasureRig.esc_off = args.has("noesc")
+	MeasureRig.trailer_roll_off = args.has("notrsp")
 	for a in args:
 		if String(a).begins_with("tip_kmh="):
 			_tip_speed = String(a).substr(8).to_float() / 3.6
@@ -108,18 +121,66 @@ func _ready() -> void:
 		printerr("unknown variant '%s'" % _variant)
 		get_tree().quit(1)
 		return
+	if args.has("doc=trailer_roll"):
+		if args.size() != 2 or _variant != "semi":
+			printerr("doc=trailer_roll sets the trailer, the flags and the steer itself: run"
+					+ " `-- semi doc=trailer_roll` alone")
+			get_tree().quit(1)
+			return
+		for ramp in [false, true]:
+			for cfg: Array in DOC_CONFIGS:
+				_doc_runs.append({"esc_off": cfg[0], "trsp_off": cfg[1], "ramp": ramp})
+		args = PackedStringArray(["semi", "trailer=box"])
+	_parse_trailer_arg(args)
 	MeasureRig.add_slab(self, "Strip", Vector3(STRIP_WIDTH, 2.0, STRIP_LENGTH))
 	# The P7 skid pad, beside the strip rather than part of it: the launch strip is 40 m wide and a
 	# rig at full lock leaves it in under a second.
 	MeasureRig.add_slab(self, "Pad", Vector3(PAD_SIZE, 2.0, PAD_SIZE), PAD_X)
+	if not _doc_runs.is_empty():
+		_next_doc_run()
+		return
+	_spawn()
+
+
+## The next doc=trailer_roll run: its configuration set, the run's state back to a fresh P1, the rig
+## spawned again.
+func _next_doc_run() -> void:
+	var run: Dictionary = _doc_runs.pop_front()
+	MeasureRig.esc_off = run["esc_off"]
+	MeasureRig.trailer_roll_off = run["trsp_off"]
+	_ramp = run["ramp"]
+	if _car != null:
+		remove_child(_car)
+		_car.queue_free()
+		_car = null
+	_phase = Ph.P1
+	_t = 0.0
+	_pt = 0.0
+	_ticks = 0
+	_prev_speed = 0.0
+	_sub = 0
+	_rows = PackedStringArray()
+	_stats.clear()
+	_static = {}
+	_trailer_pending = _trailer_requested
+	_ramp_i = 0.0
+	_ended_by = ""
+	print("\n=== doc=trailer_roll: P7 %s, tractor ESC %s, trailer roll-over control %s ===" % [
+			"ramp" if _ramp else "step", "off" if run["esc_off"] else "on",
+			"off" if run["trsp_off"] else "on"])
+	_doc_done.append(run)
+	_spawn()
+
+
+## The rig on the strip at a standstill, P1's settle about to start.
+func _spawn() -> void:
 	_car = load(Catalog.VARIANTS[_variant]["scene"]).instantiate() as SemiTractor
 	if _car == null:
 		printerr("'%s' is not a SemiTractor" % _variant)
 		get_tree().quit(1)
 		return
 	MeasureRig.unfit_esc(_car)
-	_apply_geometry_override(args)
-	_parse_trailer_arg(args)
+	_apply_geometry_override(_args)
 	add_child(_car)
 	# Strip top is y=0; wheels just touching, no spawn drop onto the springs.
 	_car.global_transform = Transform3D(Basis.IDENTITY, Vector3(0.0, _car.rest_ride_height(), START_Z))
@@ -243,6 +304,8 @@ func _physics_process(delta: float) -> void:
 	var s := _sample(delta)
 	_rows.append(_row(s))
 	_accumulate(_stats[_phase], s)
+	if _phase == Ph.P7 and _sub == 1:
+		_watch.tick(MeasureRig.towed(_car), _car.drive, delta)
 	if _phase == Ph.P5:
 		_static = s.duplicate(true)
 	_advance(s)
@@ -289,20 +352,12 @@ func _sample(delta: float) -> Dictionary:
 		trailer_roll = VehicleMath.roll_deg(trailer.global_transform.basis)
 		joint_roll = VehicleMath.roll_deg(
 				_car.global_transform.basis.inverse() * trailer.global_transform.basis)
-		# The trailer's own sideways acceleration, differentiated and smoothed exactly as the
-		# tractor's telemetry acc_lat is: once articulated it is not turning the tractor's circle,
-		# and in a step it is whipped sideways before its yaw rate builds.
-		if trailer.get_instance_id() != _trailer_seen:
-			_trailer_seen = trailer.get_instance_id()
-			_trailer_prev_v = trailer.linear_velocity
-			_trailer_acc_lat = 0.0
-		var tb := trailer.global_transform.basis
-		var ta := VehicleTelemetry.body_accel(trailer.linear_velocity, _trailer_prev_v, delta,
-				-tb.z, tb.x, tb.y)
-		_trailer_prev_v = trailer.linear_velocity
-		_trailer_acc_lat = lerpf(_trailer_acc_lat, ta.y,
-				1.0 - exp(-BaseVehicle.ACCEL_SMOOTH * delta))
-		trailer_lat_g = absf(_trailer_acc_lat) / 9.81
+		# Each coupling is a fresh trailer instance: `notrsp` unfits each one (a no-op once done).
+		MeasureRig.unfit_trailer_roll(trailer)
+		# The trailer's own sideways acceleration, its EBS's sensor (`TowedBody.accel_lat`), which
+		# its roll-over control reads: once articulated it is not turning the tractor's circle, and
+		# in a step it is whipped sideways before its yaw rate builds.
+		trailer_lat_g = absf(trailer.accel_lat) / StabilityControl.G
 		var tgd: GroundDriveSpec = trailer.spec.ground_drive
 		var n := 0
 		for w in trailer.wheels:
@@ -528,6 +583,7 @@ func _advance(s: Dictionary) -> void:
 					# which would stand as the first lift at 0 g.
 					_stats[Ph.P7] = _new_stats()
 					_stats[Ph.P7]["entry_speed"] = s["speed"]
+					_watch.begin()
 					if _ramp:
 						_ramp_i = 0.0
 						print("    winding to full lock over %.0f s at t=%.3f, holding %.2f m/s"
@@ -578,7 +634,62 @@ func _finish() -> void:
 				% ["\n" if i == Ph.P2 else "", PH_NAMES[i].substr(0, 2), floor_n, STEER_FLOOR_N,
 				"PASS" if phase_ok else "FAIL",
 				"" if phase_ok else " (a steer wheel goes light: wheelbase or COM, docs/truck.md)"])
+	if not _doc_done.is_empty():
+		_record_doc_run()
+		if not _doc_runs.is_empty():
+			_next_doc_run()
+			return
+		DocRegion.write("trailer_roll_p7", _trailer_roll_table())
 	get_tree().quit(1 if _strict and not ok else 0)
+
+
+## The P7 run just finished, kept on its doc=trailer_roll configuration and printed.
+func _record_doc_run() -> void:
+	var r: Dictionary = _doc_done[_doc_done.size() - 1]
+	var st: Dictionary = _stats[Ph.P7]
+	r["entry_kmh"] = float(st["entry_speed"]) * 3.6
+	r["peak_g"] = st["peak_lat_g"]
+	r["lift_g"] = _watch.lift_g
+	r["overturn_t"] = _watch.overturn_t
+	r["tractor_rolled"] = st["rolled_tractor"]
+	r["vdc_s"] = _watch.vdc_ticks * get_physics_process_delta_time()
+	r["trailer_chatter"] = Measure.chatter_runs(_watch.applied, Measure.ESC_CHATTER_EPS)
+	r["tractor_chatter"] = Measure.chatter_runs(_watch.tractor_roll, Measure.ESC_CHATTER_EPS)
+	print("doc=trailer_roll: %s" % _p7_cell(r))
+
+
+## A P7 cell: the trailer's first lift on its own sensor and when it passes TIP_ROLL_DEG after the
+## steer begins, else `holds` with the peak `v r` g; the time VDC reads active; chatter on the
+## trailer's own application / the tractor's roll stability.
+static func _p7_cell(r: Dictionary) -> String:
+	var outcome := "holds, peak %.2f g" % float(r["peak_g"])
+	if float(r["overturn_t"]) >= 0.0:
+		outcome = "lifts at %.3f g, over at %.2f s" % [r["lift_g"], r["overturn_t"]]
+	elif float(r["lift_g"]) >= 0.0:
+		outcome = "lifts at %.3f g, stays up" % float(r["lift_g"])
+	if bool(r["tractor_rolled"]):
+		outcome += ", tractor over"
+	return "%s; VDC %.2f s; chatter %d / %d" % [outcome, r["vdc_s"], r["trailer_chatter"],
+			r["tractor_chatter"]]
+
+
+## The `trailer_roll_p7` region: a row per DOC_CONFIGS entry, the step and the ramp as cells.
+func _trailer_roll_table() -> Array[String]:
+	var lines := DocRegion.wrap(("%s (`measure_semi_launch -- semi doc=trailer_roll`): the laden box"
+			+ " rig's P7 at %.0f km/h, a full-lock step (pedal lifted) and a %.0f s wind-on at a held"
+			+ " speed; cells as the corner's above, `holds` with the peak `v r` g, the time from the"
+			+ " steer.") % [DocRegion.measured(), TIP_SPEED_MS * 3.6, RAMP_S])
+	lines.append_array(["", "| Tractor ESC | Trailer's own | Full-lock step | Slow wind-on |",
+			"| --- | --- | --- | --- |"])
+	for cfg: Array in DOC_CONFIGS:
+		var cells: Array[String] = []
+		for ramp in [false, true]:
+			for r in _doc_done:
+				if r["esc_off"] == cfg[0] and r["trsp_off"] == cfg[1] and r["ramp"] == ramp:
+					cells.append(_p7_cell(r))
+		lines.append("| %s | %s | %s |" % ["off" if cfg[0] else "on", "off" if cfg[1] else "on",
+				" | ".join(cells)])
+	return lines
 
 
 func _write_csv() -> void:

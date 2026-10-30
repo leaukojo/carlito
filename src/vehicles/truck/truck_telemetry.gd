@@ -45,6 +45,7 @@ var trailer_connected := false      ## contract 'trailer_connected' (coupled AND
 var trailer_axle_load := 0.0        ## kg, contract 'trailer_axle_load' (off the bogie's springs)
 var trailer_brake_demand := 0       ## %, contract 'trailer_brake_demand' (EBS11, what was sent)
 var trailer_abs := false            ## contract 'trailer_abs' (EBS21, off the trailer's own slip)
+var trailer_vdc := false            ## contract 'trailer_vdc' (EBS21, its roll-over control's full application)
 
 
 # --- pure derivations (unit-tested in tests/test_truck.gd) -------------------------------
@@ -100,3 +101,4 @@ func clear_trailer_bus() -> void:
 	trailer_axle_load = 0.0
 	trailer_brake_demand = 0
 	trailer_abs = false
+	trailer_vdc = false

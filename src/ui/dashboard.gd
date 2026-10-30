@@ -122,8 +122,10 @@ const LAMP_TEXT := {
 	# is whether the body network is powered.
 	"body_inhibit": "INHIB", "body_bus": "BODY BUS",
 	# ISO 11992 trailer bus. TRLR is the coupling claim (dark with a trailer attached is valid,
-	# see contract desc); ABS/EBS come off the trailer.
-	"trailer_connected": "TRLR", "trailer_abs": "ABS", "trailer_ebs_fault": "EBS",
+	# see contract desc); ABS/VDC/EBS come off the trailer. VDC is R13 Annex 21 2.1.6's own warning,
+	# apart from the ESC lamp.
+	"trailer_connected": "TRLR", "trailer_abs": "ABS", "trailer_vdc": "VDC",
+	"trailer_ebs_fault": "EBS",
 	# SAE J2497 power line, the North American conventional's whole trailer protocol, beside
 	# rather than replacing the ISO 11992 lamps (dark on that unit).
 	"trailer_abs_lamp": "TRLR ABS",
@@ -152,6 +154,7 @@ const LAMP_COLOR := {
 	"protect_lamp": Color(1.0, 0.70, 0.15),
 	"body_inhibit": Color(1.0, 0.70, 0.15), "body_bus": Color(0.45, 0.72, 1.0),
 	"trailer_connected": Color(0.35, 0.85, 0.45), "trailer_abs": Color(1.0, 0.70, 0.15),
+	"trailer_vdc": Color(1.0, 0.70, 0.15),
 	"trailer_ebs_fault": Color(0.95, 0.35, 0.30),
 	"trailer_abs_lamp": Color(1.0, 0.70, 0.15),
 	"beacon": Color(0.95, 0.35, 0.30), "strobe": Color(1.0, 1.0, 1.0),

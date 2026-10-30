@@ -869,7 +869,8 @@ func test_a_coupled_trailer_on_the_north_american_unit_publishes_honest_zeros() 
 		t.trailer_axle_load = 19766.0
 		t.trailer_brake_demand = 55
 		t.trailer_abs = true
-		# The per-tick clear, and then the publish that never happens: SemiTractor writes the four
+		t.trailer_vdc = true
+		# The per-tick clear, and then the publish that never happens: SemiTractor writes the five
 		# fields ONLY under `if spec.trailer_bus_equipped`, and this unit does not have it.
 		t.clear_trailer_bus()
 		assert_bool(t.trailer_connected) \
@@ -879,9 +880,11 @@ func test_a_coupled_trailer_on_the_north_american_unit_publishes_honest_zeros() 
 		assert_float(t.trailer_axle_load).is_equal(0.0)
 		assert_int(t.trailer_brake_demand).is_equal(0)
 		assert_bool(t.trailer_abs).is_false()
+		assert_bool(t.trailer_vdc).is_false()
 		# Zeros, not absences: the bridge walks to_bridge_dict, so the cluster keeps its shape.
 		var d := t.to_bridge_dict()
-		for key in ["trailer_connected", "trailer_axle_load", "trailer_brake_demand", "trailer_abs"]:
+		for key in ["trailer_connected", "trailer_axle_load", "trailer_brake_demand", "trailer_abs",
+				"trailer_vdc"]:
 			assert_bool(d.has(key)) \
 				.override_failure_message("%s: to_bridge_dict drops '%s'" % [variant, key]) \
 				.is_true()

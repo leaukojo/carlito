@@ -30,7 +30,7 @@ func _real_contract() -> ContractScript.ContractData:
 func test_real_contract_is_valid() -> void:
 	var data := _real_contract()
 	assert_array(data.errors).is_empty()
-	assert_int(data.version).is_equal(57)
+	assert_int(data.version).is_equal(58)
 
 
 func _assert_core_signals_present(names: PackedStringArray, dir: String) -> void:
@@ -616,11 +616,12 @@ func test_iso11992_trailer_signals_are_truck_only_and_flavored() -> void:
 	var truck_out := data.signals_for_vehicle("truck", "out").map(
 			func(s: ContractScript.SignalDef) -> String: return s.name)
 	assert_array(truck_out).contains(["trailer_connected", "trailer_axle_load",
-			"trailer_brake_demand", "trailer_abs"])
+			"trailer_brake_demand", "trailer_abs", "trailer_vdc"])
 	# The trailer bus is a DIFFERENT flavor from the chassis it hangs off and from the body network
 	# on the other side of the same truck: three networks, three flavors.
 	for entry: Array in [["trailer_ebs_fault", "in"], ["trailer_connected", "out"],
-			["trailer_axle_load", "out"], ["trailer_brake_demand", "out"], ["trailer_abs", "out"]]:
+			["trailer_axle_load", "out"], ["trailer_brake_demand", "out"], ["trailer_abs", "out"],
+			["trailer_vdc", "out"]]:
 		var sig := data.get_signal_def(entry[0], entry[1])
 		assert_object(sig).override_failure_message("missing %s/%s" % entry).is_not_null()
 		assert_str(sig.flavor) \
@@ -646,11 +647,11 @@ func test_the_trailer_bus_is_bidirectional_and_carries_no_body_type() -> void:
 		.override_failure_message("the trailer bus must carry traffic in BOTH directions").is_true()
 
 
-func test_the_trailer_bus_display_assignment_is_two_bars_and_three_lamps() -> void:
+func test_the_trailer_bus_display_assignment_is_two_bars_and_four_lamps() -> void:
 	# The cluster layout is settled in advance (a 280 px column at 18 px per bar), so what the
 	# dashboard GENERATES from this metadata is pinned: ranged+flavored = a bar, bool = a tell-tale.
 	var data := _real_contract()
-	for sig_name in ["trailer_connected", "trailer_abs"]:
+	for sig_name in ["trailer_connected", "trailer_abs", "trailer_vdc"]:
 		assert_str(data.get_signal_def(sig_name, "out").type) \
 			.override_failure_message("%s must be a bool tell-tale" % sig_name).is_equal("bool")
 		assert_int(data.get_signal_def(sig_name, "out").range.size()) \

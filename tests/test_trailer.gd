@@ -657,6 +657,43 @@ func test_every_semi_trailer_carries_abs() -> void:
 		trailer.free()
 
 
+func test_every_semi_trailer_carries_its_own_roll_over_control_and_the_farm_trailer_none() -> void:
+	# EBS21's VDC active reports a device too, R13's minimum on an O4 semi-trailer; its lift table is
+	# one point at the trailer's own static bogie load (`measure_semi_launch` reads the same load).
+	for path in [FLATBED, BOX, TIPPER, TANKER]:
+		var trailer := _trailer(path)
+		var gd: GroundDriveSpec = (trailer.get("spec") as VehicleSpec).ground_drive
+		assert_bool(gd.trailer_roll_equipped) \
+			.override_failure_message("%s ships without roll-over control" % path).is_true()
+		var table := gd.trailer_roll_lift_g
+		assert_int(table.size()).override_failure_message("%s: table %s" % [path, table]).is_equal(1)
+		var spec: VehicleSpec = trailer.get("spec")
+		var bogie_kg: float = spec.mass * (1.0 - float(trailer.call("kingpin_share")))
+		assert_float(table[0].x).override_failure_message(
+				"%s: keyed at %.0f kg, the bogie is %.0f" % [path, table[0].x, bogie_kg]) \
+				.is_equal_approx(bogie_kg, 0.01 * bogie_kg)
+		assert_float(table[0].y).is_between(0.2, 1.0)
+		trailer.free()
+	var farm: Node3D = (load("res://src/vehicles/tractor/trailers/farm_tipper.tscn") as PackedScene) \
+			.instantiate()
+	var farm_gd: GroundDriveSpec = (farm.get("spec") as VehicleSpec).ground_drive
+	assert_bool(farm_gd.trailer_roll_equipped).is_false()
+	assert_bool(farm_gd.trailer_roll_lift_g.is_empty()).is_true()
+	farm.free()
+
+
+func test_vdc_active_reads_the_full_application_and_never_the_test_pulse() -> void:
+	# R13 Annex 21 2.2.4: "VDC active" is the intervention, never a learning one.
+	var trailer := _trailer(BOX) as TowedBody
+	var stage := StabilityControl.TrailerStage
+	for entry: Array in [[stage.IDLE, false], [stage.PULSE, false], [stage.FULL, true],
+			[stage.SPENT, false]]:
+		trailer._roll_state["stage"] = entry[0]
+		assert_bool(trailer.vdc_active()) \
+			.override_failure_message("stage %d" % entry[0]).is_equal(entry[1])
+	trailer.free()
+
+
 func test_abs_reads_any_wheel_held_back_and_not_an_average() -> void:
 	# ABS is a per-wheel device: one wheel at its limit is the event, and averaging it against the
 	# healthy ones would hide exactly the case worth showing.
@@ -828,14 +865,17 @@ func test_the_trailer_bus_publishes_real_zeros_rather_than_a_gap() -> void:
 	t.trailer_axle_load = 9000.0
 	t.trailer_brake_demand = 55
 	t.trailer_abs = true
+	t.trailer_vdc = true
 	t.clear_trailer_bus()
 	assert_bool(t.trailer_connected).is_false()
 	assert_float(t.trailer_axle_load).is_equal(0.0)
 	assert_int(t.trailer_brake_demand).is_equal(0)
 	assert_bool(t.trailer_abs).is_false()
+	assert_bool(t.trailer_vdc).is_false()
 	# ...and they are published rather than merely stored: the bridge walks this dict.
 	var d := t.to_bridge_dict()
-	for key in ["trailer_connected", "trailer_axle_load", "trailer_brake_demand", "trailer_abs"]:
+	for key in ["trailer_connected", "trailer_axle_load", "trailer_brake_demand", "trailer_abs",
+			"trailer_vdc"]:
 		assert_bool(d.has(key)) \
 			.override_failure_message("to_bridge_dict drops '%s'" % key).is_true()
 

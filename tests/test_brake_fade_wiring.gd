@@ -173,13 +173,43 @@ func test_a_towed_bodys_service_brake_fades_and_its_parking_brake_does_not() -> 
 	assert_float(_commanded(parked.wheels[0])).is_equal_approx(gd.handbrake_torque, 1e-6)
 
 
+func test_a_towed_bodys_own_roll_application_brakes_and_heats_its_side_alone() -> void:
+	# Each side takes the higher of the demand's lag and roll-over control's own, through the same
+	# service term, so the heat model sees it. Frozen at rest the function commands 0: the seeded
+	# right side vents at the chambers' rate, and is still the higher. A part application: a full
+	# one stops the bench's spin inside the tick, which heats nothing.
+	var trailer: TowedBody = await _trailer()
+	var gd := trailer.spec.ground_drive
+	var terrains: Array[Node] = []
+	trailer._roll_actual = Vector2(0.0, 0.3)
+	trailer.tick_towed(0.2, 0.0, TICK, terrains)
+	var demand := trailer.brake_applied()
+	var right := TowedBody.lagged_brake(0.3, 0.0, TICK)
+	# Vector2 is float32 (root CLAUDE.md).
+	assert_float(trailer._roll_actual.y).is_equal_approx(right, 1e-5)
+	for w in trailer.wheels:
+		var app := demand if w.anchor.x < 0.0 else right
+		assert_float(_commanded(w)).is_equal_approx(app * gd.brake_torque, 1e-5 * gd.brake_torque)
+		assert_float(w.brake_temp).is_greater(AMB)
+	var left_t := trailer.wheels.filter(func(w: RayWheel) -> bool: return w.anchor.x < 0.0)[0] \
+			.brake_temp as float
+	var right_t := trailer.wheels.filter(func(w: RayWheel) -> bool: return w.anchor.x > 0.0)[0] \
+			.brake_temp as float
+	assert_float(right_t).is_greater(left_t)
+
+
 func test_a_re_laid_towed_body_has_every_brake_at_ambient() -> void:
 	var trailer: TowedBody = await _trailer()
 	for w in trailer.wheels:
 		w.brake_temp = HOT
+	trailer._roll_actual = Vector2.ONE
+	trailer._roll_state["stage"] = StabilityControl.TrailerStage.FULL
 	trailer.reset_at(Transform3D(Basis.IDENTITY, Vector3(0.0, 100.0, 0.0)))
 	for w in trailer.wheels:
 		assert_float(w.brake_temp).is_equal(AMB)
+	# Its own roll application vents and its function re-arms with the rest.
+	assert_vector(trailer._roll_actual).is_equal(Vector2.ZERO)
+	assert_bool(trailer.vdc_active()).is_false()
 
 
 # --- the hand-built bodies' figures -----------------------------------------------

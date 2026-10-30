@@ -110,6 +110,7 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 		# The LAGGED application, not the demand: EBS11 reports what the trailer brakes with.
 		t.trailer_brake_demand = roundi(trailer.brake_applied() * 100.0)
 		t.trailer_abs = trailer.abs_active()
+		t.trailer_vdc = trailer.vdc_active()
 
 
 ## Couple `id`, or go bobtail for TrailerCatalog.BOBTAIL. Routing only: the pose, velocity match,

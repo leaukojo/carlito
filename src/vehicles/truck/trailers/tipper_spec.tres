@@ -77,6 +77,11 @@ load_sensitivity = 0.08
 brake_torque = 10928.0
 handbrake_torque = 2732.0
 abs_equipped = true
+; ROLL-OVER CONTROL: the trailer EBS's own, R13's minimum for an O4 semi-trailer.
+trailer_roll_equipped = true
+;   - its lift table: measured 2026-10-29, `measure_semi_launch -- semi trailer=tipper ramp noesc
+;     notrsp` --fixed-fps 60 (the trailer's first lift at its static bogie).
+trailer_roll_lift_g = PackedVector2Array(13874, 0.438)
 ; BRAKE HEAT (BrakeThermal; docs/sources.md § Brake heat): the 430 x 45 air disc's lump, every wheel.
 brake_heat_capacity = 18000.0
 brake_heat_capacity_rear = 18000.0

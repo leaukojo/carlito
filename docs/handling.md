@@ -270,3 +270,15 @@ the fuel; the yaw torque keeps its priority on a wheel (`corner_torques`).
 - **Limits.** The K table is held flat past its end and keeps the stock tyre and load; a coupled
   semi reads the unit's own K; ESC braking lights no brake lamp. Dead-band, gains, the modulator's
   rates and `ROLL_SHARE` are estimates (`docs/sources.md` § Stability control).
+- **The semi-trailer's own.** The four semi-trailers (`trailer_roll_equipped`; not `farm_tipper`)
+  carry R13's roll-over control in their EBS (`StabilityControl.trailer_roll_step`), off their own
+  sensors: lateral g (`TowedBody.accel_lat`), each side's wheel speed, the bogie load against their
+  own measured first lift (`trailer_roll_lift_g`). Past the threshold a test pulse; inside wheels
+  slowing under it, the full application on the outside ones; a rapid rise skips the pulse; no
+  reaction raises the threshold. Each side brakes the higher of the tractor's demand and its own,
+  through the chambers' lag, ABS and the heat model; `trailer_vdc` reads the full application, and
+  `esc_off` never reaches it. Alone it holds the slow wind-ons but only delays a step's tip, as
+  NHTSA found trailer-only systems weaker [184]; with the tractor's ESC nothing tips, though one
+  step cell lifts a trailer wheel and the corner pass rings once (both accepted;
+  `docs/vehicle_measurements.md` § Trailer roll-over control). Its threshold, pulse and learning are
+  estimates.

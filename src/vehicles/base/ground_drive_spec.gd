@@ -153,6 +153,14 @@ extends Resource
 ## unit's own sensor at its first wheel lift, measured (`measure_semi_launch -- <unit>
 ## trailer=<body> ramp`, "rig's first lift"). Empty = no roll stability (`StabilityControl.roll_lift_g`).
 @export var esc_roll_lift_g := PackedVector2Array()
+## A towed body's own roll-over control in its EBS (`StabilityControl.trailer_roll_step`, the
+## semi-trailers): it brakes itself off its own sensors, whatever the towing unit asks.
+@export var trailer_roll_equipped := false
+## Its lift table (x the bogie load in kg, ascending; y g): the trailer's own lateral g
+## (`TowedBody.accel_lat`) at its first wheel lift, measured (`measure_semi_launch -- semi
+## trailer=<body> ramp noesc notrsp`: "first wheel lift" trailer's, at its static "trailer bogie").
+## Empty = it never acts (`StabilityControl.roll_lift_g`).
+@export var trailer_roll_lift_g := PackedVector2Array()
 ## Foot-brake hold against roll-back on a grade pull-away (`HillHold`). ASSIST: hill-start assist;
 ## STANDSTILL: a powershift tractor's. COMPROMISE: a real tractor holds in the transmission; a
 ## gearbox-output lock here is solved before the coupling, so the drive would creep against it. A

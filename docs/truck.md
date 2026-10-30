@@ -230,7 +230,7 @@ the conventional carries none. No trailer of the four adds a signal to either.
 ### ISO 11992: brakes and running gear only
 
 Part 2 is the application layer for brakes and running gear only, riding pins 6/7 of the
-**ISO 7638** connector: coupling claim, demand out, ABS state back, axle load, one
+**ISO 7638** connector: coupling claim, demand out, ABS and VDC state back, axle load, one
 injectable fault. All `flavor: "iso11992"` — the one signal group in the contract that is
 bidirectional by design.
 
@@ -239,8 +239,9 @@ bidirectional by design.
 | `trailer_ebs_fault` | in | Injected trailer EBS fault. Mirrored verbatim like DM1; nothing in the game ever sets it |
 | `trailer_connected` | out | The coupling claim — see below |
 | `trailer_axle_load` | out | SPN 582 on the towed unit. Read out of the sim: trailer's own bogie suspension force |
-| `trailer_brake_demand` | out | EBS11, towing→towed. A report of the demand the tractor sent, and what the trailer's wheels really brake with |
+| `trailer_brake_demand` | out | EBS11, towing→towed. A report of the demand the tractor sent, and the least the trailer's wheels brake with |
 | `trailer_abs` | out | EBS21, towed→towing. Read out of the sim: the trailer's own ABS holding a wheel at `RayWheel.ABS_SLIP` this tick |
+| `trailer_vdc` | out | EBS21 byte 2 bits 1-2, VDC active. Read out of the sim: the semi-trailer's own roll-over control (`TowedBody.vdc_active`) in its full application this tick, never its test pulse; `esc_off` does not reach it. Tell-tale VDC (R13 Annex 21 2.1.6); SPN 5624 mirrors it |
 
 - `trailer_connected` is a claim, not "something is on the fifth wheel": needs the trailer
   coupled and `VehicleSpec.trailer_bus_equipped`. False with a trailer physically attached
@@ -249,8 +250,7 @@ bidirectional by design.
 - No `trailer_type`: ISO 11992 publishes no body type. Which trailer is on the back shows
   through mass and which tractor-side signals it moves; the tractor has `implement_type`
   because ISO 11783 carries a real device class.
-- A coupled trailer draws air through the chassis' reservoir model (AIR1/AIR2 dip ~3 bar). Both
-  read signals follow the trailer's wheel tick; bobtail publishes 0/false on all four (`clear_trailer_bus`).
+- A coupled trailer draws air through the chassis' reservoir model (AIR1/AIR2 dip ~3 bar).
 
 ### SAE J2497: the North American variant
 
@@ -263,7 +263,7 @@ numbers. Its content is a subtraction.
   `rear_diff_lockable` pattern): true on the cab-over, false here (Europe puts a CAN pair on
   pins 6/7 of ISO 7638; North America has no data pair on the connector at all).
 - With a trailer coupled, `trailer_connected` reads FALSE and `trailer_axle_load`/
-  `trailer_brake_demand`/`trailer_abs` read honest zeros — attached steel, bus silence. It
+  `trailer_brake_demand`/`trailer_abs`/`trailer_vdc` read honest zeros — attached steel, bus silence. It
   still tows and brakes the trailer (the pneumatic lines aren't the data pair); only
   publishing goes dark.
 - `trailer_abs_lamp` (in, bool, `flavor: "j2497"`, tell-tale TRLR ABS) is the entire North

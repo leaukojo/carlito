@@ -403,6 +403,9 @@ const DOC_STEER: Array[String] = ["sedan", "sedan-sports", "suv", "race", "van",
 const DOC_WIND: Array[String] = ["sedan", "delivery", "garbage-truck", "semi"]
 ## doc=freerev: one body per pedal map's free crank (PETROL, a light and a heavy LINEAR, ALL_SPEED).
 const DOC_FREEREV: Array[String] = ["sedan", "delivery", "semi", "tractor-kenney"]
+## doc=trailer_roll: the laden box rig's corner and step passes, [tractor ESC off, trailer roll-over
+## control off] per row: both off (the baseline), the trailer's alone, the tractor's alone, both.
+const DOC_TRAILER_ROLL_CONFIGS := [[true, true], [true, false], [false, true], [false, false]]
 const DOC_SECONDS := 60.0
 ## doc=tyres: a passenger car, a light truck and a heavy truck, each on every class its fit takes
 ## (`TyreCatalog.fitting`) over each of DOC_TYRE_SURFACES. A run is three passes: a `tc` launch to
@@ -556,6 +559,8 @@ var _sn_disp := NAN            ## lateral displacement (m) at SINE_DISP_S
 var _sn_rolled := false
 ## doc=esc: whether each queued body's run has stability control off (popped with the queue).
 var _esc_offs: Array[bool] = []
+## A coupled trailer over the corner pass's ramp and each step (doc=trailer_roll's figures).
+var _tr_watch := MeasureRig.TrailerWatch.new()
 ## `circle`: run only the full-lock circle (§ full-lock circle) on each body.
 var _circle := false
 var _ci_i := 0.0                      ## integral half of the circle's PI pedal
@@ -891,6 +896,7 @@ func _ready() -> void:
 	_tc = flags.has("tc")
 	_notc = flags.has("notc")
 	MeasureRig.esc_off = flags.has("noesc")
+	MeasureRig.trailer_roll_off = flags.has("notrsp")
 	_cruise = flags.has("cruise")
 	_kickdown = flags.has("kickdown")
 	_trace_contact = flags.has("contact")
@@ -1006,18 +1012,24 @@ func _ready() -> void:
 			_sine = true
 		elif _doc == "freerev":
 			_freerev = true
+		elif _doc == "trailer_roll":
+			# The laden box rig's corner and step passes per DOC_TRAILER_ROLL_CONFIGS (`_runs`).
+			_trailer = "box"
 		elif _doc != "cruise" and _doc != "wind":
 			printerr(("unknown doc preset '%s' — expected doc=braking, doc=cornering, doc=accel,"
-					+ " doc=cruise, doc=wind, doc=steer, doc=tyres, doc=esc or doc=freerev") % _doc)
+					+ " doc=cruise, doc=wind, doc=steer, doc=tyres, doc=esc, doc=freerev or"
+					+ " doc=trailer_roll") % _doc)
 			get_tree().quit(1)
 			return
-		# The chassis tables are recorded with stability control off: they measure the chassis.
+		# The chassis tables are recorded with stability control off, the trailer's own too: they
+		# measure the chassis.
 		var chassis := _doc in ["cornering", "steer", "tyres"]
-		if MeasureRig.esc_off and not chassis:
-			printerr("noesc changes what doc=%s tabulates: run it per body" % _doc)
+		if (MeasureRig.esc_off or MeasureRig.trailer_roll_off) and not chassis:
+			printerr("noesc / notrsp change what doc=%s tabulates: run it per body" % _doc)
 			get_tree().quit(1)
 			return
 		MeasureRig.esc_off = chassis
+		MeasureRig.trailer_roll_off = chassis
 		if _trace or _notc or _held_gear > 0 or not is_nan(_engine_inertia) \
 				or not is_nan(_rear_lat_grip) or not is_nan(_bar_rear) or not is_nan(_cornering_peak) \
 				or not is_nan(_bar_front) or not is_nan(_compliance) \
@@ -1044,11 +1056,11 @@ func _ready() -> void:
 	# Do not speed up with Engine.time_scale: it enlarges the physics step and breaks the
 	# locked-60-Hz tuning (default car's 0-100 went 5.30 s -> 6.40 s at time_scale 8).
 	MeasureRig.add_slab(self, "Strip", Vector3(STRIP_WIDTH, 2.0, STRIP_LENGTH))
-	if _corner:
+	if _corner or _doc == "trailer_roll":
 		# Skid pad: a wide square well off to the side, since a body at full lock circles in tens of
 		# metres (a hundred on ice) and the strip is only 40 m wide.
 		MeasureRig.add_slab(self, "Pad", Vector3(PAD_SIZE, 2.0, PAD_SIZE), PAD_X)
-	if _step or _circle or _sine:
+	if _step or _circle or _sine or _doc == "trailer_roll":
 		# Under the strip and either side of it, top face flush with the strip's.
 		MeasureRig.add_slab(self, "StepPad", Vector3(STEP_PAD_WIDTH, 2.0, STRIP_LENGTH))
 	if _surface >= 0 or _doc == "tyres":
@@ -1079,6 +1091,11 @@ func _ready() -> void:
 		for v in _sine_variants():
 			_queue.append_array([v, v])
 			_esc_offs.append_array([false, true])
+	elif _doc == "trailer_roll":
+		for cfg: Array in DOC_TRAILER_ROLL_CONFIGS:
+			for pass_name in ["corner", "step"]:
+				_queue.append("semi")
+				_runs.append({"esc_off": cfg[0], "trsp_off": cfg[1], "pass": pass_name})
 	elif _doc == "tyres":
 		for v in DOC_TYRES:
 			for cls in TyreCatalog.fitting(_tyre_fit(v)):
@@ -1186,19 +1203,30 @@ func _next_vehicle() -> void:
 			DocRegion.write(_doc, _esc_table())
 		elif _doc == "freerev":
 			DocRegion.write(_doc, _freerev_table())
+		elif _doc == "trailer_roll":
+			DocRegion.write(_doc, _trailer_roll_table())
 		get_tree().quit(1 if _strict and _failures > 0 else 0)
 		return
 	_variant = _queue.pop_front()
 	if not _runs.is_empty():
 		var run: Dictionary = _runs.pop_front()
-		_tyre = run["tyre"]
-		_surface = run["surface"]
+		if run.has("pass"):
+			# doc=trailer_roll: this run's configuration and its one pass.
+			MeasureRig.esc_off = run["esc_off"]
+			MeasureRig.trailer_roll_off = run["trsp_off"]
+			_corner = run["pass"] == "corner"
+			_track_only = _corner
+			_step = not _corner
+		else:
+			_tyre = run["tyre"]
+			_surface = run["surface"]
 	if _patch != null:
 		_patch.surface = _surface
 	_current = {"variant": _variant, "family": String(Catalog.VARIANTS[_variant]["family"])}
 	if not _esc_offs.is_empty():
 		MeasureRig.esc_off = _esc_offs.pop_front()
 	_current["noesc"] = MeasureRig.esc_off
+	_current["notrsp"] = MeasureRig.trailer_roll_off
 	_top_seen = 0.0
 	_brake_i = 0
 	_brake_rows = []
@@ -1401,6 +1429,9 @@ func _physics_process(delta: float) -> void:
 		return
 	_t += delta
 	MeasureRig.apply_angdamp(_car, _angdamp)
+	# A trailer couples after the spawn countdown: `notrsp` unfits it once it is there.
+	if MeasureRig.trailer_roll_off:
+		MeasureRig.towed(_car)
 	if _coast:
 		var n := _car.get_contact_count()
 		_contact_peak = maxi(_contact_peak, n)
@@ -2400,6 +2431,7 @@ func _tick_cornering(delta: float) -> void:
 			_corner_ramping = true
 			_corner_pedal_i = CORNER_PEDAL_START
 			_corner_xfer0 = _axle_transfer()
+			_tr_watch.begin()
 		elif _t >= _seconds:
 			print("  %-13s : never reached %.0f km/h, skipped"
 					% ["cornering", _corner_speed * 3.6])
@@ -2407,6 +2439,7 @@ func _tick_cornering(delta: float) -> void:
 		return
 	_corner_ramp_t += delta
 	MeasureRig.drive(pedal * 100.0, 0.0, minf(_corner_ramp_t / _corner_ramp_s, 1.0) * 100.0)
+	_tr_watch.tick(MeasureRig.towed(_car), _car.drive, delta)
 	# Lateral acceleration of the motion that actually happened: `v * yaw_rate` is the centripetal
 	# term of the body's own velocity and angular velocity, both read out of the sim (rule 3).
 	var lat := speed * absf(_car.angular_velocity.y)
@@ -2609,7 +2642,8 @@ func _report_cornering(skipped: bool) -> void:
 			"peak_g": _corner_peak / 9.81, "path_g": _corner_path_peak / 9.81, "front": first["front"],
 			"rear": first["rear"], "first_g": first["g"], "first_found": not _corner_first.is_empty(),
 			"axle": axle, "slid": _corner_slid, "roll_deg": _corner_roll, "lltd": _corner_lltd,
-			"wheels_lifted": _corner_lifted, "overturned": _car.is_overturned(), "pred": pred}
+			"wheels_lifted": _corner_lifted, "overturned": _car.is_overturned(), "pred": pred,
+			"trailer": _trailer_summary()}
 	_after_lateral_passes()
 
 
@@ -3174,6 +3208,7 @@ func _tick_step(delta: float) -> void:
 			_st_stage = Step.STEPPED
 			_st_t = 0.0
 			_st_run["v0_kmh"] = v_long * 3.6
+			_tr_watch.begin()
 			_st_xfer0 = _axle_transfer()
 			if not _current.has("yaw_index"):
 				_current["yaw_index"] = _yaw_index()
@@ -3182,6 +3217,7 @@ func _tick_step(delta: float) -> void:
 						% ["yaw index", yi["index"], yi["iyy"], yi["mab"]])
 		return
 	MeasureRig.drive(pedal * 100.0, 0.0, float(_st_run["lock"]))
+	_tr_watch.tick(MeasureRig.towed(_car), _car.drive, delta)
 	# Yaw rate in the steered direction about the road normal (the flat strip's world up; the rolled
 	# body's up reads it `cos(roll)` low): + steer is right, a clockwise turn seen from above.
 	_st_yaw.append(-_car.angular_velocity.y)
@@ -3502,6 +3538,7 @@ func _report_step_run(delta: float) -> void:
 	r["spin_t"] = _st_spin_t
 	r["roll_t"] = _st_roll_t
 	r["lifted_n"] = _st_lifted
+	r["trailer"] = _trailer_summary()
 	var tilt := "roll peak %.1f deg, up to %d wheel(s) lifted" % [_st_roll_peak, _st_lifted]
 	# A rolled body's yaw and slip are read off a body on its side: neither is a handling figure.
 	if _st_roll_t >= 0.0:
@@ -3728,6 +3765,34 @@ func _axle_roll_steer(turn_left: bool) -> Vector2:
 	var rear := sums.z / maxf(sums.w, 1.0)
 	# A left turn: out of it is right (-), into it left (+).
 	return Vector2(-front, rear) if turn_left else Vector2(front, -rear)
+
+
+## The coupled trailer over the pass just run (`_tr_watch`), printed: its first wheel lift on its
+## own sensor, when it passed `BaseVehicle.OVERTURNED_DEG`, the time it reported VDC active, and the
+## chatter on its own application and the tractor's roll stability. {} with nothing coupled.
+func _trailer_summary() -> Dictionary:
+	if MeasureRig.towed(_car) == null:
+		return {}
+	var s := {"lift_g": _tr_watch.lift_g, "overturn_t": _tr_watch.overturn_t,
+			"vdc_s": _tr_watch.vdc_ticks * get_physics_process_delta_time(),
+			"chatter": chatter_runs(_tr_watch.applied, ESC_CHATTER_EPS),
+			"tractor_chatter": chatter_runs(_tr_watch.tractor_roll, ESC_CHATTER_EPS)}
+	print("  %-26s : %s" % ["trailer", _trailer_cell(s, false)])
+	return s
+
+
+## A trailer cell (`_trailer_summary`'s figures): its first lift and the time it went over, else
+## `holds`; the time VDC read active; chatter on its own application / the tractor's roll stability.
+static func _trailer_cell(s: Dictionary, tractor_over: bool) -> String:
+	var outcome := "holds"
+	if float(s["overturn_t"]) >= 0.0:
+		outcome = "lifts at %.3f g, over at %.2f s" % [s["lift_g"], s["overturn_t"]]
+	elif float(s["lift_g"]) >= 0.0:
+		outcome = "lifts at %.3f g, stays up" % float(s["lift_g"])
+	if tractor_over:
+		outcome += ", tractor over"
+	return "%s; VDC %.2f s; chatter %d / %d" % [outcome, s["vdc_s"], s["chatter"],
+			s["tractor_chatter"]]
 
 
 ## Pure: the runs in `series` where the tick-to-tick change flips sign on CHATTER_FLIPS or more
@@ -5285,6 +5350,68 @@ func _steer_table() -> Array[String]:
 			lines.append("| %s | %.0f | %s |" % [label, kmh, " | ".join(cells)])
 			label = ""
 	return lines
+
+
+## The `trailer_roll` region: a row per DOC_TRAILER_ROLL_CONFIGS entry, the corner pass and the
+## step pass's cells summed.
+func _trailer_roll_table() -> Array[String]:
+	var lines := DocRegion.wrap(("%s (`measure_vehicles -- doc=trailer_roll`; per run `-- semi %.0f"
+			+ " track corner trailer=box` or `step`, `noesc` / `notrsp`): the laden box rig. Corner:"
+			+ " peak `v r` g, the trailer's first wheel lift (its own sensor) and when it passes %.0f"
+			+ " deg, or `holds`. Step, over its cells: trailer overturns (the slowest), trailer wheels"
+			+ " up, tractor rolls. Each: VDC's time; chatter on the trailer's application / the"
+			+ " tractor's roll stability.") % [DocRegion.measured(), _seconds,
+			BaseVehicle.OVERTURNED_DEG])
+	lines.append_array(["", "| Tractor ESC | Trailer's own | Corner | Step |",
+			"| --- | --- | --- | --- |"])
+	for cfg: Array in DOC_TRAILER_ROLL_CONFIGS:
+		var corner := ""
+		var step := ""
+		for e in _sweep:
+			if e["noesc"] != cfg[0] or e["notrsp"] != cfg[1]:
+				continue
+			var c: Dictionary = e.get("cornering", {})
+			if not c.is_empty() and not c.get("skipped", false) and not c["trailer"].is_empty():
+				corner = "%.2f g, %s" % [c["peak_g"], _trailer_cell(c["trailer"], c["overturned"])]
+			if e.has("step"):
+				step = _trailer_step_cell(e["step"])
+		lines.append("| %s | %s | %s | %s |" % ["off" if cfg[0] else "on", "off" if cfg[1] else "on",
+				corner, step])
+	return lines
+
+
+## doc=trailer_roll's step cell over one configuration's runs: trailer overturns of the cells run,
+## the slowest (then the least lock) of them, trailer lifts, tractor rolls, VDC's time and the chatter
+## summed.
+static func _trailer_step_cell(runs: Array) -> String:
+	var n := 0
+	var over := 0
+	var lifts := 0
+	var rolled := 0
+	var vdc_s := 0.0
+	var chatter := Vector2i.ZERO
+	var slowest := {}
+	for r: Dictionary in runs:
+		if r.get("skipped", false) or r.get("trailer", {}).is_empty():
+			continue
+		n += 1
+		var s: Dictionary = r["trailer"]
+		if float(s["overturn_t"]) >= 0.0:
+			over += 1
+			if slowest.is_empty() or float(r["kmh"]) < float(slowest["kmh"]) \
+					or (float(r["kmh"]) == float(slowest["kmh"])
+					and float(r["lock"]) < float(slowest["lock"])):
+				slowest = r
+		if float(s["lift_g"]) >= 0.0:
+			lifts += 1
+		if float(r["roll_t"]) >= 0.0:
+			rolled += 1
+		vdc_s += float(s["vdc_s"])
+		chatter += Vector2i(int(s["chatter"]), int(s["tractor_chatter"]))
+	var first := "" if slowest.is_empty() else " (slowest %.0f km/h %.0f %% %s)" % [slowest["kmh"],
+			slowest["lock"], "pedal lifted" if slowest["lifted"] else "held"]
+	return ("trailer over in %d of %d%s, a trailer wheel up in %d, tractor rolls in %d; VDC %.2f s;"
+			+ " chatter %d / %d") % [over, n, first, lifts, rolled, vdc_s, chatter.x, chatter.y]
 
 
 ## The `esc` region: per body in FMVSS 126's range with ESC, the sine-with-dwell series with ESC on

@@ -10,6 +10,9 @@ const Layers := preload("res://src/physics/collision_layers.gd")
 ## control left as fitted: the bridge's `esc_off` would take TC with it, and the chassis tables are
 ## recorded with TC on. Each tool sets it from its flags; a chassis table's doc preset sets it itself.
 static var esc_off := false
+## A towed body's own roll-over control off (`notrsp`): its lift table is measured on the bare
+## trailer, never one braking itself.
+static var trailer_roll_off := false
 
 
 ## Under `esc_off`, `car`'s ESC unfitted on a copy of its spec, in memory, never shipped (the ground
@@ -22,6 +25,69 @@ static func unfit_esc(car: Node) -> void:
 	spec.ground_drive = spec.ground_drive.duplicate()
 	spec.ground_drive.esc_equipped = false
 	car.set("spec", spec)
+
+
+## Under `trailer_roll_off`, `trailer`'s roll-over control unfitted on a copy of its spec, in memory,
+## as `unfit_esc` does. Its tick reads the spec each tick, so any time works.
+static func unfit_trailer_roll(trailer: TowedBody) -> void:
+	var spec := trailer.spec
+	if not trailer_roll_off or spec == null or spec.ground_drive == null \
+			or not spec.ground_drive.trailer_roll_equipped:
+		return
+	spec = spec.duplicate()
+	spec.ground_drive = spec.ground_drive.duplicate()
+	spec.ground_drive.trailer_roll_equipped = false
+	trailer.spec = spec
+
+
+## `body`'s coupled towed body, null with none; under `trailer_roll_off` its roll-over control is
+## unfitted first (`unfit_trailer_roll`, a no-op once done).
+static func towed(body: Node) -> TowedBody:
+	var host := coupled_host(body)
+	if host == null or host.trailer == null:
+		return null
+	unfit_trailer_roll(host.trailer)
+	return host.trailer
+
+
+## What a coupled trailer did over one pass, for the trailer roll-over tables: its first wheel lift
+## on its own sensor (`TowedBody.accel_lat`), whether it passed `BaseVehicle.OVERTURNED_DEG` and
+## when, the ticks it reported VDC active, and per tick its own application (the higher side's
+## chambers) and the towing unit's roll stability (`WheelDrive.roll_application`), the two series a
+## chatter count reads. `begin` at the pass's start, then `tick` once a physics tick with `towed`'s
+## trailer (null reads as nothing done).
+class TrailerWatch:
+	extends RefCounted
+
+	var lift_g := -1.0       ## the trailer's own g at its first wheel lift, -1 never
+	var overturn_t := -1.0   ## s into the pass the trailer passed OVERTURNED_DEG, -1 never
+	var vdc_ticks := 0
+	var applied := PackedFloat64Array()
+	var tractor_roll := PackedFloat64Array()
+	var _t := 0.0
+
+	func begin() -> void:
+		lift_g = -1.0
+		overturn_t = -1.0
+		vdc_ticks = 0
+		applied = PackedFloat64Array()
+		tractor_roll = PackedFloat64Array()
+		_t = 0.0
+
+	func tick(trailer: TowedBody, drive: WheelDrive, delta: float) -> void:
+		_t += delta
+		tractor_roll.append(drive.roll_application() if drive != null else 0.0)
+		if trailer == null:
+			applied.append(0.0)
+			return
+		applied.append(maxf(trailer._roll_actual.x, trailer._roll_actual.y))
+		if trailer.vdc_active():
+			vdc_ticks += 1
+		if lift_g < 0.0 and trailer.wheels.any(func(w: RayWheel) -> bool: return not w.in_contact):
+			lift_g = absf(trailer.accel_lat) / StabilityControl.G
+		if overturn_t < 0.0 \
+				and absf(VehicleMath.roll_deg(trailer.global_basis)) >= BaseVehicle.OVERTURNED_DEG:
+			overturn_t = _t
 
 
 ## One `Surface` everywhere, over a slab or a ramp: the duck-typed contract `HeightmapTerrain`

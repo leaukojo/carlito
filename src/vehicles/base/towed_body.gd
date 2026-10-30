@@ -2,7 +2,9 @@ class_name TowedBody
 extends RigidBody3D
 ## A towed trailer (semi or drawbar): a RigidBody3D on a joint carrying unmodified RayWheels,
 ## undriven and braked. Not a BaseVehicle and never registers with InputRouter; brake demand
-## arrives as a number, and `TowHost.tick_towing` ticks it to fix integration order.
+## arrives as a number, and `TowHost.tick_towing` ticks it to fix integration order. A body fitted
+## with roll-over control (`GroundDriveSpec.trailer_roll_equipped`) also brakes itself off its own
+## sensors, the higher of the two on each side.
 ##
 ## Geometry: origin at the kingpin, ground at y = -1.05, trailer-space z is distance back from
 ## the kingpin, wheel anchors at negative y. `consumers()` is declared in code, never exported
@@ -58,9 +60,20 @@ var valve_flow := 0.0
 var accel_fwd := 0.0
 
 var _last_fwd_speed := 0.0
+## Lateral acceleration on the level axis left of this body's nose (m/s^2, + = left): its EBS's
+## sensor, gravity-free and bank-compensated as `WheelDrive.esc_step` reads the unit's, smoothed as
+## telemetry `acc_lat` is (`BaseVehicle.ACCEL_SMOOTH`). Roll-over control and its lift table
+## (`measure_semi_launch`) read it.
+var accel_lat := 0.0
+## Last tick's velocity, NAN until a tick has one: a first difference off zero is a spike.
+var _last_velocity := Vector3(NAN, NAN, NAN)
 var _load_offset := Vector3.ZERO  ## metres the payload has moved from the spec's centre of mass
 ## Service-brake application the chambers have actually reached, 0..1, behind the commanded one.
 var _brake_actual := 0.0
+## Roll-over control's state (`StabilityControl.trailer_roll_step`) and the application each side's
+## chambers have reached (x left, y right), 0..1 behind its command.
+var _roll_state := StabilityControl.trailer_roll_state()
+var _roll_actual := Vector2.ZERO
 
 
 func _ready() -> void:
@@ -128,7 +141,9 @@ func apply_lamps(brake_on: bool, headlights: int, turn_left: bool, turn_right: b
 ## One physics tick of the trailer's running gear. `brake01` and `handbrake01` are computed by the
 ## towing unit (`handbrake01` is its parking brake: the lever or its air gate). The parking brake is
 ## on every axle of the bogie, not a rear pair: the tractor's two driven wheels alone hold the 32 t
-## rig on 18 % with a 1.2 margin, and only after it settles onto them (`box_spec.tres`).
+## rig on 18 % with a 1.2 margin, and only after it settles onto them (`box_spec.tres`). Roll-over
+## control, where fitted, runs here on the trailer's own sensors; the towing unit's `esc_off` never
+## reaches it (a trailer EBS is not switched from the cab).
 func tick_towed(brake01: float, handbrake01: float, delta: float,
 		grip_terrains: Array[Node]) -> void:
 	# Empty means _ready found no spec, so roll along as dead weight rather than erroring at 60 Hz.
@@ -139,14 +154,18 @@ func tick_towed(brake01: float, handbrake01: float, delta: float,
 		var fwd_speed := -global_transform.basis.z.dot(linear_velocity)
 		accel_fwd = (fwd_speed - _last_fwd_speed) / delta
 		_last_fwd_speed = fwd_speed
+		_sense_lateral(delta)
 	# The body model runs before the wheels, so a load shift this tick is under the springs now.
 	tick_body(delta)
 	var space := get_world_3d().direct_space_state
 	var gd := spec.ground_drive
 	_brake_actual = lagged_brake(_brake_actual, brake01, delta)
+	var roll_cmd := _roll_control_step(gd, delta)
+	_roll_actual = Vector2(lagged_brake(_roll_actual.x, roll_cmd.x, delta),
+			lagged_brake(_roll_actual.y, roll_cmd.y, delta))
 	# The service term fades with each wheel's brake (`RayWheel.brake_fade`); the parking term heats
-	# the same brake but never fades.
-	var service := _brake_actual * gd.brake_torque
+	# the same brake but never fades. Each side's service is the higher of the towing unit's demand
+	# and roll-over control's own ([194], [195]).
 	var parking := clampf(handbrake01, 0.0, 1.0) * gd.handbrake_torque
 	# The trailer's own ABS modulates the service brake; spring brakes are a mechanical hold.
 	var abs_slip := RayWheel.ABS_SLIP if gd.abs_equipped and handbrake01 <= 0.0 else 0.0
@@ -159,6 +178,8 @@ func tick_towed(brake01: float, handbrake01: float, delta: float,
 		# Unsteered: a spec's roll and compliance steer are the only angles a trailer wheel takes (0
 		# on every one).
 		w.steer_angle = w.roll_steer() + w.compliance_steer()
+		var own := _roll_actual.x if w.anchor.x < 0.0 else _roll_actual.y
+		var service := maxf(_brake_actual, own) * gd.brake_torque
 		w.tick(self, gd, space, 0.0, service * w.brake_fade() + parking, delta, grip_terrains,
 				abs_slip)
 		# Settled inside its own tick; no retarder, so `brake_friction_share` stays 1.
@@ -168,6 +189,43 @@ func tick_towed(brake01: float, handbrake01: float, delta: float,
 	# its bogie's rolling resistance acts at each contact (`RayWheel.force_roll`).
 	WheelDrive.apply_at(self, VehicleMath.air_force(linear_velocity, WindField.at(self),
 			global_basis, gd.drag_area, gd.side_area, mass, delta), gd.aero_centre)
+
+
+## The EBS's lateral sensor (`accel_lat`), one tick: this body's velocity differentiated on the level
+## axis left of its nose.
+func _sense_lateral(delta: float) -> void:
+	var velocity := linear_velocity
+	if is_finite(_last_velocity.x):
+		var gravity := get_gravity()
+		var level_up := -gravity.normalized() if gravity != Vector3.ZERO else Vector3.UP
+		var left := level_up.cross(-global_basis.z).normalized()
+		var raw := ((velocity - _last_velocity) / delta).dot(left)
+		accel_lat = lerpf(accel_lat, raw, 1.0 - exp(-BaseVehicle.ACCEL_SMOOTH * delta))
+	_last_velocity = velocity
+
+
+## Roll-over control's command this tick (x left, y right, 0..1 of the declared brake): off its own
+## lateral g, the forward speed, each side's mean wheel ground speed (last tick's) and the bogie
+## load its air springs sense, against its own lift table. Not fitted: 0 and idle.
+func _roll_control_step(gd: GroundDriveSpec, delta: float) -> Vector2:
+	if not gd.trailer_roll_equipped:
+		# Idle, so vdc_active is false; reset only once, not a fresh state every tick.
+		if _roll_state["stage"] != StabilityControl.TrailerStage.IDLE:
+			_roll_state = StabilityControl.trailer_roll_state()
+		return Vector2.ZERO
+	var side_speed := Vector2.ZERO
+	var side_count := Vector2.ZERO
+	for w in wheels:
+		var i := 0 if w.anchor.x < 0.0 else 1
+		side_speed[i] += w.omega * w.wheel_radius
+		side_count[i] += 1.0
+	var lift_g := StabilityControl.roll_lift_g(gd.trailer_roll_lift_g,
+			VehicleTelemetry.axle_load_kg(bogie_suspension_force()))
+	var out := StabilityControl.trailer_roll_step(_roll_state, _last_fwd_speed,
+			accel_lat / StabilityControl.G, lift_g, side_speed.x / maxf(side_count.x, 1.0),
+			side_speed.y / maxf(side_count.y, 1.0), delta)
+	_roll_state = out["state"]
+	return out["cmd"]
 
 
 ## One step of the brake chambers toward `cmd`, at whichever of the two rates this direction
@@ -198,6 +256,10 @@ func reset_at(pose: Transform3D) -> void:
 	_last_fwd_speed = 0.0
 	# Vent the chambers, or a respawn inherits the stop it was re-laid out of.
 	_brake_actual = 0.0
+	_roll_actual = Vector2.ZERO
+	_roll_state = StabilityControl.trailer_roll_state()
+	accel_lat = 0.0
+	_last_velocity = Vector3(NAN, NAN, NAN)
 	# Payload comes home too.
 	set_load_offset(0.0)
 	reset_body()
@@ -335,6 +397,12 @@ func bogie_suspension_force() -> float:
 	for w in wheels:
 		total += w.suspension_force
 	return total
+
+
+## Whether roll-over control is in its full application this tick, which trailer_vdc (EBS21 "VDC
+## active") reads: never on the test pulse (R13 Annex 21 2.2.4), nor where it is not fitted.
+func vdc_active() -> bool:
+	return _roll_state["stage"] == StabilityControl.TrailerStage.FULL
 
 
 ## Whether the trailer's ABS held any wheel's brake back this tick, which trailer_abs (EBS21)
