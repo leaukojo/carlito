@@ -66,6 +66,7 @@ engine_brake_frac = 0.12
 engine_friction_frac = 0.1
 fuel_type = 1
 engine_inertia = 0.4
+converter_stall_ratio = 2.0
 shift_handover_s = 0.3
 shift_up_rpm = 3300.0
 shift_down_rpm = 1400.0

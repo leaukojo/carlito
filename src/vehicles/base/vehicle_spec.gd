@@ -74,8 +74,7 @@ enum Coupling { CONVERTER, CLUTCH }
 ## locked, and the ceiling on a shift's slip (`shift_handover_s`).
 @export var clutch_reserve := 1.5
 ## A converter's torque ratio with the turbine held (`TorqueConverter.torque_ratio`), falling to 1.0
-## at the coupling point. COMPROMISE: 1.0 (a fluid coupling) ships; a real ~2.0 fails the foot
-## brake's stall hold on seven bodies until their brakes are sourced (docs/drivetrain.md § Converter).
+## at the coupling point; 1.0 is a fluid coupling (the shipped ratios: docs/drivetrain.md § Converter).
 @export var converter_stall_ratio := 1.0
 ## Lowest D gear a converter's lock-up closes in: 1 on a 6-speed car (the converter opens only for
 ## the launch), 2 on an Allison-class box (lock-up from 2nd range standard).

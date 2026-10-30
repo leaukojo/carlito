@@ -43,8 +43,9 @@ body behind its reference is fixed from its own data (curve, gearing), never by 
 
 *The converter:*
 - **Stall torque ratio:** about 2.0 on cars, ~2.5 on 1990s four-speeds [8], with a typical model
-  default of 2.23 [9]. Allison 3000 trucks: 1.98-2.20 [10, secondary]. It ships at 1.0
-  (`docs/drivetrain.md` § Converter).
+  default of 2.23 [9]. Allison's 3700-series converters: 1.77-2.71 by model, TC-417 2.20 and
+  TC-418 1.98 [139] (the same pair quoted on a forum [10]); per class: *Brake hardware* below. The
+  trucks take the TC-418's 1.98 (`docs/drivetrain.md` § Converter).
 - **Coupling point:** at a speed ratio of ~0.9. The ratio is 1.07 at 0.87, 1.02 at 0.92 and 1.00
   at 0.94 [9].
 - **Capacity:** K = speed / √torque. It is nearly flat to a speed ratio of 0.8 (12.3 to 14.6),
@@ -79,6 +80,53 @@ body behind its reference is fixed from its own data (curve, gearing), never by 
   [24]. It releases once the driver asks to drive and the engine torque passes what holds the grade
   [23, 24, 25].
 - **Tractor:** Valtra's HillHold holds a powershift tractor until the drive pedal is pressed [26].
+
+*Brake hardware* (`brake_torque`, the mean of a body's four wheels; `docs/vehicles.md` § Brake
+hardware): one reference vehicle per class that carries a converter body. A disc's full-pedal
+torque a wheel is `2 μ p A r_eff`: `A` the piston area on one side of the disc, `r_eff` the rotor's
+radius less half the pad's height. `p` is 100 bar, the top of the 80-100 bar wheel-locking limit
+[131]; full pedal at rest an estimate inside it (the torque is linear in it: 0.8x at 80 bar).
+`μ` is 0.40, the middle of SAE J866's F band (0.35-0.45), typical of passenger pads [132]; no fitted
+pad's edge code was found. The rear runs at line pressure, before any proportioning, so it is an
+upper bound. The drawn wheels are 0.36 m, so a real torque compares at equal force:
+`T × 0.36 / r_tyre`. Re-derived from the rounded columns, a mean differs by up to 0.2 %.
+
+| Class: reference | Rotor F / R, mm | Pistons on one side F / R, mm | Pad height F / R, mm | Torque F / R, N·m a wheel | Tyre; free radius, m | Mean at 0.36 m against shipped, N·m a wheel | Grade |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Saloon discs: VW Golf Mk7 1.4 TSI, PR 1ZE / 1KE [127] | 288 × 25 vented / 272 × 10 solid | 1 × 57 / 1 × 38 | 65 / not found (the front's `r_eff` share, 0.774) | 2276 / 955 | 205/55 R16; 0.316 | 1841 against 1450 | sizes, pistons, front pad sourced; tyre an estimate (the class's common fitment); torque computed |
+| Performance: BMW F30 330i, M Sport brakes (S2NHA) [129, 130] | 340 × 30 vented / 345 × 24 vented | 2 × 40 / 1 × 44 | 91 / 58 | 2503 / 1746 | 225/45 R18; 0.330 | 2319 against 1800 | sizes and piston counts sourced [129]; piston diameters and pads off Brembo's replacement calipers and pads for those discs [130]; tyre an estimate |
+| SUV / light commercial: Toyota Hilux AN120 (GUN135) [133] | 319 × 28 vented / drum 295.1 × 67 | 2 × 45 / wheel cylinder 22 | 77 / drum | 3079 / 1122 (drum: `C p A_wc r`, shoe factor `C` 2.0, a leading-trailing drum's at this `μ`) | 265/65 R17; 0.388 | 1948 against 2000 | sizes sourced; shoe factor and tyre estimates |
+| 3.5-5 t van: Ford Transit 350 HD DRW [135] | 308 × 31 vented / 280 solid | 2 × 48 / 1 × 54 | not found (0.774 share) | 3452 / 1986 | 195/75 R16C; 0.349 | 2801 against 5200 | secondary throughout (retail listings in search summaries; the front caliper's listing excludes the DRW): it does not settle the class |
+| 26 t chassis: Mack MD7, Meritor Q+ S-cam drums [136] | drum 16.5 × 5 in / 16.5 × 7 in | air chambers 24 / 30 (a Cummins table, not confirmed on the MD7) | drum | 19500 / 19500 (Meritor's one nominal rating for the 16.5 in Q-type, 173,000 lbf·in; pressure and slack unstated) [137] | 11R22.5; 0.523 | 13422 against 15500 | the brakes and the rating sourced; the radius off the size (a 0.85 section aspect), an estimate |
+
+The MD7 is a 33,000 lb GVWR chassis (axles 12,000 / 21,000 lb) [136], lighter than the class's
+26 t label.
+
+The bodies that fail the stall hold at 2.0, each against its own reference
+(`tools/vehicle_reference_specs.json`), on the same law:
+
+| Body (class): reference | Rotor F / R, mm | Pistons on one side F / R, mm | Pad height F / R, mm | Torque F / R, N·m a wheel | Tyre; free radius, m | Mean at 0.36 m against shipped, N·m a wheel | Grade |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `hatchback-sports` (Saloon): Golf GTI Mk7, base brakes [141, 127] | 312 × 25 vented / 272 × 10 solid | 1 × 57 / 1 × 38 | 65 / not found (0.774 share) | 2521 / 955 | 225/40 R18; 0.319 [142] | 1964 against 1450 | sizes and caliper type sourced [141]; pistons and pad by the 312 disc's PR codes [127]; the Performance Pack's 340 / 310 pistons not found |
+| `sedan-sports` (Performance): BMW M340i (G20), M Sport brakes [143, 144] | 348 × 36 vented / 345 × 24 vented | 40 + 44 / 1 × 42 | 95 / 66-73 | 2810 / 1524 | 225/45 R18, 255/40 R18; 0.330 | 2365 against 1800 | sizes, caliper types, pads, tyres sourced; front pistons a forum's reading of the caliper stamp [145], the rear's the F30's single-piston rear [130]: estimates |
+| `police` (Performance): Dodge Charger Pursuit, 2023 RWD [146, 147] | 368 / 351 | 2 × 48 / 1 × 44.5 | not found (0.774 share) | 4127 / 1688 | P245/55 R18; 0.363 | 2884 against 1800 | sizes and piston counts sourced; piston diameters secondary (retail listings, one unsure of its axle) [148] |
+| `van` (SUV / LC): Ford Transit, standard front axle [149] | 307 / 307, pad bands to 165 / 201 inner | 2 × 48 / 1 × 54 | the band | 3420 / 2336 | LT235/65 R16; 0.356 | 2911 against 2000 | sourced, Ford's 2026 sheet (the 2020-on van); `r_eff` the band's middle; tyre secondary |
+| `pickup` (SUV / LC): Ford F-150, 2020 [150] | 350 × 34 vented / 336 × 24 | 2 × 54 / 1 × 54 | 68 / not found (0.774 share) | 5167 / 2382 | 265/70 R17; 0.401 | 3385 against 2000 | rotors, pistons sourced; front pad secondary (a retail listing); tyre an estimate (no 2015-2020 OEM size opened) |
+| `pickup-flat` (SUV / LC): Ford F-250 Super Duty, 2016 [151] | 363 / 363 | 2 × 60 / not found | 71 / not found | 6605 / not found | LT245/75 R17; 0.400 | front alone 5950 against 2000 | rotors and caliper type sourced; front pistons and pad secondary; the generation before 2017 |
+
+Every reference sits past its class's shipped torque, and every one whose mass was found is
+heavier than its body: the GTI 1390-1454 kg [142], the M340i xDrive 1670 [144], the Charger 4,217-
+4,292 lb [146], the F-250 5,941 lb [151], against 1000-1500 kg.
+
+The fade record (`docs/plans/2_brake_fade.md`), masses as catalogue weights of one disc or drum:
+
+| Class | Front: size, mm; mass, kg | Rear: size, mm; mass, kg | Pad or lining | Stall torque ratio | Grade |
+| --- | --- | --- | --- | --- | --- |
+| Saloon discs | 288 × 25 vented; 7.585 | 272 × 10 solid; 4.751 | not found | about 2.0 [8] | sourced [127, 128]; the masses an aftermarket disc listed under the OE numbers (5Q0615301H, 5Q0615601D), possibly a shipping weight |
+| Performance | 340 × 30 vented; 11.6 (slotted, OE 34106797602) | 345 × 24 vented; 10.112 (other BMW OE numbers) | low-metallic or semi-metallic | about 2.0 [8]; no sports figure found | sizes sourced; masses size matches [128]; the pad secondary (retail titles in search summaries) |
+| SUV / light commercial | 319 × 28 vented; 8.4 | drum 295.1 × 67; mass not found | not found | not found; the cars' 2.0 [8] an estimate | sourced [133, 134]; the disc an aftermarket one listed for the GUN126 |
+| 3.5-5 t van | 308 × 31 vented; mass not found | 280 solid; not found | not found | 6R80 not found; the cars' 2.0 [8] an estimate | secondary [135] |
+| 26 t chassis | drum 16.5 × 5 in; 79-80 lb | drum 16.5 × 7 in; 90-99 lb | not found | 3000 RDS offered with TC-418 / 419 / 421 [140]: 1.98 / 2.02 / 1.77 [139] | drum masses sourced, Gunite GOLD lightweight cast (a standard cast drum heavier, not stated) [138]; the RDS's converters secondary, their ratios sourced |
 
 *Engine friction:* `docs/drivetrain.md` § Motoring and friction. The diesels' is Volvo Penta friction power, [5] and [7]; the petrol's is EPA's measured Malibu motoring curve [91].
 
@@ -447,3 +495,28 @@ understeer as above:
 124. US 4,061,364, "Leaf spring suspension system" (General Motors; R. R. Parks; 1977; the description read): https://patents.google.com/patent/US4061364A/en
 125. US 4,004,826, "Leaf spring suspension system" (General Motors; J. W. Subhedar; 1977; the description and claims 1-5 read): https://patents.google.com/patent/US4004826A/en
 126. RACE Software, "Compliance steer" (suspension designer library; a KPI overview, no figures): https://race.software/academy/suspension-designer-library/compliance-steer/
+127. Brembo catalogue, VW Golf VII (5G1) 1.4 TSI (discs, calipers and pads by PR code): https://www.bremboparts.com/europe/en/catalogue/vw-golf-vii-5g1-bq1-be1-be2-1-4-tsi/000105912-1
+128. Spareto product pages (weights): JAPKO 600906C, 288 × 25 vented, https://spareto.com/products/japko-brake-disc/600906c; JAPKO 610901C, 272 × 10 solid, https://spareto.com/products/japko-brake-disc/610901c; febi 105724, 340 × 30, https://spareto.com/products/febi-bilstein-brake-disc/105724; JAPKO 610142C, 345 × 24, https://spareto.com/products/japko-brake-disc/610142c
+129. BimmerWorld, "F30 M Sport Brakes" (rotor sizes and caliper piston counts by model and option code; revised 2025-07-15): https://www.bimmerworld.com/F30-M-Sport-Brakes/
+130. Brembo catalogue, BMW 3 (F30, F80) 340i (calipers' pistons, pads): https://www.bremboparts.com/europe/en/catalogue/bmw-3-f30-f80-340-i/000113409-1
+131. IPGATE AG, US 12,365,319, "Brake system" (the wheel-locking limit 80-100 bar; an ESP pump's maximum ~200 bar): https://trea.com/information/brake-system/patentgrant/7ccda4a2-ba43-4c9b-8802-5e2ee4b80603
+132. Sinobrake, "Brake pad friction ratings decoded: what the FF, GG and HH codes actually mean" (a supplier's article; SAE J866 itself paywalled): https://sinobrake.com/news/brake-pad-friction-ratings-decoded-what-the-ff-gg-and-hh-codes-actuall
+133. Brembo catalogue, Toyota Hilux VIII pickup 2.4 D (GUN135): https://www.bremboparts.com/europe/en/catalogue/toyota-hilux-viii-pickup-n1-2-4-d-gun135/000134324-1
+134. Probite PFPD0438 front disc (319 × 28, 8.4 kg; Hilux Mk8 GUN123 / 126 / 136): https://probite.co.uk/products/pfpd0438
+135. Retail listings for the 2015-2019 Transit 350 HD, seen only in search summaries: Detroit Axle front rotor 308 (https://detroitaxle.com/?p=904737); Dynamic Friction 600-54230, 308 × 31 vented, DRW (https://urotuning.com/products/dynamic-friction-2015-2025-ford-transit-350-hd-drw-front-brake-rotor-308x31-vented); calipers 18B5518 / 18B5519, two 1.89 in pistons (https://www.ebay.com/itm/175304825871); a 280 solid rear (https://pt.ebay.com/b/Disc-Brake-Rotors-for-2016-Ford-Transit/33564/bn_7064738254); Centric 141.65560, one 54 piston (https://www.partcatalog.com/products/centric-141-65560-disc-brake-caliper)
+136. Mack Trucks, MD7 sell sheet SS-OX-MD7-0222 (GVWR, axles, brakes, 11R22.5 tyres): https://www.macktrucks.com/media/files/info/mack-mdsellsheet-class7.pdf
+137. Cummins (Meritor), "Heavy-Duty S-Cam Drum Brake" (nominal torque by brake size): https://www.cummins.com/en-na/components/products/drivetrain-systems/brakes/heavy-duty-s-cam
+138. Accuride, Gunite GOLD quick reference spec sheet, WE1.002 Rev. 2 (drum weights): https://www.accuridecorp.com/sites/default/files/resources/2021-04/WE1.002%20Rev.2%20Gunite%20GOLD%20Quick%20Reference%20Spec%20Sheet_0.pdf
+139. Allison Transmission, 3700 Series specification sheet SA5343EN (2009/06), a distributor's copy (stall torque ratio by converter, TC-411 to TC-421): https://www.tdxltd.co.nz/app_docs/Allison%203700%20Series.pdf
+140. Battle Motors, Raider data book, transmission page (3000 RDS converters; seen only in a search summary, the page gone): https://battlemotors.com/2027_Raider_ICE_Data_Book/transmission.html
+141. FCP Euro, "The definitive guide to Mk7 Volkswagen GTI brakes" (312 / 272 base, 340 / 310 Performance Pack, single-piston sliding calipers): https://www.fcpeuro.com/blog/the-definitive-guide-to-mk7-volkswagen-gti-brakes
+142. auto motor und sport, VW Golf GTI Performance Supertest, technical data (225/40 R 18; 340 / 310 discs). The GTI's 1390 kg: openers.jp, the GTI Performance's spec table (https://openers.jp/en/car/car_news/796778); its 1454: Volkswagen India's GTI brochure, read by the research pass, not re-opened: https://www.auto-motor-und-sport.de/test/vw-golf-gti-performance-im-supertest-der-beste-golf-gti-aller-zeiten/technische-daten/
+143. Brembo catalogue, BMW 3 (G20) 318i, the M Sport discs and pads listed: https://www.bremboparts.com/america/en/catalogue/bmw-3-g20-g80-g28-318-i/000139215-1
+144. BMW Group PressClub, "BMW M340i xDrive" media information, 2019-10 (four-piston fixed front, single-piston floating rear; tyres; unladen DIN / EU 1670 / 1745 kg): https://press.bmwgroup.com/spain/article/attachment/T0302174ES/440751
+145. SupraMKV forum, "Big brake upgrades via the BMW G-series catalog" (the stamp 4x40-44/348/36 read as 40 and 44 pistons; the poster unsure): https://www.supramkv.com/threads/big-brake-upgrades-via-the-bmw-g-series-catalog.21024/post-341661
+146. Mopar Insiders, "Michigan State Police releases their results on 23MY Pursuit models" (brakes, tyres, curb weights): https://moparinsiders.com/michigan-state-police-releases-their-results-on-23my-pursuit-models/
+147. National Auto Fleet Group, 2023 Dodge Charger Police RWD options (rotor diameters 14.5 / 13.8 in): https://www.nationalautofleetgroup.com/Vehicle/Options/431870
+148. Charger Pursuit caliper listings, seen only in search summaries: Power Stop L15129, two 1.890 in pistons (https://www.americanmuscle.com/charger-front-brake-caliper-passenger-side-cla46995.html); Dynamic Friction 331-40642, one 44.5 piston, Pursuit rear (https://www.buybrakes.com/dynamic-friction-331-40642-premium-silver-zinc-coated-caliper)
+149. Ford, 2026 Transit technical specifications (rotors 12.1 in outer, 6.5 / 7.9 in inner; two 1.89 in / one 2.13 in pistons; swept area): https://www.fromtheroad.ford.com/content/dam/fordmediasite/us/en/library/2026/specs/2026_Ford_Transit_Specs.pdf
+150. Ford, 2020 F-150 technical specifications (rotors, `2 x 54mm Sliding Caliper`, `1X54 Sliding eIPB`): https://www.fromtheroad.ford.com/content/dam/fordmediasite/us/en/library/2020/specs/2020-F-150-Technical-Specs.pdf. The front pad's 194 × 68 × 18.5: a VEVOR listing in a search summary
+151. Ford, "2016 Super Duty Pickups" Source Book, 2015-02 (rotor diameter 14.29 / 14.29 in, dual-piston pin-slider calipers, curb weights): https://madocumentupload.marketingassociates.com/api/Document/GetFile?v1=4309947&v2=053118025341&v3=60&v4=2e19d89ae6f8d29d33aefe91e634462a04821c1d39a953b3d469eef6&v5=False. The 2.36 in pistons and Brembo P24215's 71 height: retail listings in search summaries

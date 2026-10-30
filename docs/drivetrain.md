@@ -138,14 +138,13 @@ inside the wheels' solve (`TorqueConverter.solve`):
   In overrun the turbine pumps at OVERRUN_CAPACITY 0.5 of drive, an estimate: no coast figure
   was found.
 - **Ratio.** The turbine passes `converter_stall_ratio` times the impeller's torque at stall,
-  falling to 1.0 at the coupling point (SR 0.9). COMPROMISE: it ships 1.0, a fluid coupling. A
-  real converter makes about 2.0 at stall (2.5 on the 1990s four-speeds, 1.98-2.20 on Allison
-  3000s), and at 2.0 five more bodies fail the foot brake's static stall hold
-  (`BrakeSizing.stall_hold_margin` reads `Drivetrain.stall_axle_torque`) and `police` sits on its
-  edge, 1.00: `sedan-sports` 0.94, `hatchback-sports` 0.77, `van` 0.95, `pickup` 0.85, `pickup-flat` 0.84
-  (the Kenney trucks hold, 1.40 / 4.31). It waits on a review of their brake classes against
-  sourced hardware. The torque ratio is read at the tick's start speed ratio, explicit where the
-  capacity is implicit: it varies slowly.
+  falling to 1.0 at the coupling point (SR 0.9): 2.0 on the cars and vans, 1.98 on the Kenney
+  trucks (a TC-418, one the 3000 RDS is offered with; `docs/sources.md`). COMPROMISE: 1.0, a
+  fluid coupling, on `hatchback-sports` (its reference car has no converter), `sedan-sports` and
+  `police` (their stall hold, `BrakeSizing.stall_hold_margin`, is grip-limited: 0.94 and exactly
+  1.00 at 2.0) and `suv-luxury` (the check passes it, 1.15, yet it creeps on both pedals): they wait
+  on that check against the sim. The torque ratio is read at the tick's start speed ratio, explicit
+  where the capacity is implicit: it varies slowly.
 - **Lock-up.** The lock-up clutch (rated `clutch_rating`) closes in parallel once the two sides
   turn within the coupling point of each other, from `lockup_gear`: 1 on the cars and the heavy
   vans (a 6-speed opens its converter only for the launch), 2 on the Allison-class trucks (lock-up
@@ -155,21 +154,21 @@ inside the wheels' solve (`TorqueConverter.solve`):
   converter: released, the converter would drag the `sedan`'s crank down from the redline with
   a torque several times the rating on the first tick.
 
-Drive reaches the wheels from the first tick of a pull-away (the trace's `H` column and `Tc`). At ratio 1.0 the converter passes no more than the engine makes, so the launches move little (`docs/vehicle_measurements.md` § Launches).
+Drive reaches the wheels from the first tick of a pull-away (the trace's `H` column and `Tc`; the launches: `docs/vehicle_measurements.md` § Launches).
 
 **Creep.** In gear the converter loads the idling crank, `coef * omega_idle^2`: small on the
 `sedan`, larger on the heavy vans, largest on the Kenney trucks. The idle controller fuels it, so the
-crank holds ~3-4 rpm under idle (~1 on the trucks), and `engine_load` reads 9-10 %: that fuel,
+crank holds ~2-4 rpm under idle, and `engine_load` reads 7-10 %: that fuel,
 against the converter's load and the engine's friction. Released in D1 with no pedal
 (`measure_grade -- all creep`; asphalt):
 
 | Body | Steepest grade held at idle |
 | --- | --- |
-| `sedan`, `taxi`, `suv`, `suv-luxury`, `police` | 7.0-9.4 % |
-| `sedan-sports`, `hatchback-sports` | 11.1-11.9 % |
-| `van`, `pickup`, `pickup-flat` | 6.1-7.0 % |
-| `delivery`, `delivery-flat`, `ambulance` | 7.4-9.0 % |
-| `garbage-truck`, `firetruck` | 10.7-11.5 % |
+| `sedan`, `taxi`, `suv` | 15.3-18.2 % |
+| `sedan-sports`, `hatchback-sports`, `police`, `suv-luxury` (ratio 1.0) | 10.3-12.7 % |
+| `van`, `pickup`, `pickup-flat` | 13.6-14.8 % |
+| `delivery`, `delivery-flat`, `ambulance` | 15.7-18.6 % |
+| `garbage-truck`, `firetruck` | 21.6-23.3 % |
 
 Every body creeps on the flat at a walking pace, within a few tenths of a km/h of the others.
 
@@ -182,7 +181,7 @@ What moves with the converter:
 - `pto_rpm` follows the rev, being a stub shaft off the crank;
 - `fuel_rate` reads the creep load: the idle fuel that nets it out burns its power (§ Fuel).
 
-**Hill hold.** Creep holds the cars and the heavy vans on 6-12 % and the Kenney trucks on 11 %. Past that, a released
+**Hill hold.** Creep holds the cars and the heavy vans on 10-19 % and the Kenney trucks on 22-23 %. Past that, a released
 brake rolls the body back while the coupling takes up, and a clutch body (nothing creeps there)
 rolls back on any grade. Three holds stop it:
 - **Hill-start assist** (`hill_hold` ASSIST, on every ABS body). The foot brake's last application
@@ -209,7 +208,7 @@ Released after a `SETTLE_S` foot-brake hold and floored `ROLL_DELAY_S` later, on
 (`measure_grade -- <variant> rollback`, with and without `nohold`, prints rollback, release time
 and time to move forward; asphalt, the tractor on mud with MFWD from its D1 launch). With the
 hold, the cars and Kenney trucks roll back a patch spring's worth on
-both grades, against hundreds of millimetres on 25 % without it, and the hold lets go inside a
+both grades, against 5-8 cm on 25 % without it, and the hold lets go inside a
 second. The `garbage-truck` is never held on 10 %: its creep carries the grade. The laden semis roll
 back far on 25 % with or without the hold, and with `nohold` never pull away. The tractor on mud
 (MFWD) rolls back a patch spring's worth on 10 %; with the farm tipper it pulls away much later.
@@ -365,7 +364,7 @@ pedal=<p>`, a fixed run or the ramp's top):
 | Climb | Result |
 | --- | --- |
 | `semi` + 24 t, 8 %, pedal 0.6 | D1 start, to D4 a gear at a time, then holds D4: 188 m |
-| `garbage-truck`, 15 %, 0.6 / 0.7 | 0.6 rolls back once the hold lets go: the converter passes less than the grade asks at that fuel; 0.7 holds D1 up the run: 203 m |
+| `garbage-truck`, 15 %, 0.6 / 0.7 | both hold D1 up the run: 197 / 243 m |
 | `tractor-kenney` + tipper, 8 %, 0.6 | D4 start (the box's), then a gear at a time to D14 on the governor's setting, each upshift two droops under it: 192 m |
 | `sedan`, 10 %, 0.5 | up to D5 by the top (half pedal is near full fuel on the petrol map); 336 m |
 | `semi` + 24 t, 4 %, 0.6 | D2 start, to D7 a gear at a time: 271 m |

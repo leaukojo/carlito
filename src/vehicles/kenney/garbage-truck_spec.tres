@@ -61,6 +61,7 @@ pto_mode_rpm = 1300.0
 fuel_type = 1
 engine_inertia = 1.5
 clutch_reserve = 2.0
+converter_stall_ratio = 1.98
 lockup_gear = 2
 shift_handover_s = 0.3
 shift_up_rpm = 2700.0

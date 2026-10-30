@@ -175,12 +175,12 @@ in 5.4 m, skidding for under a second.
 the drive back itself), `STALL_HOLD_S` (`measure_vehicles -- <variant> 30 stall`: a converter
 held on its stall speed, a clutch slipping on its launch target). Every
 body moves under 5 cm:
-- 0.000 m: `sedan`, `hatchback-sports`, `suv`, `suv-luxury`, `taxi`, `race-future`,
-  `tractor-kenney`, `delivery`, `delivery-flat`, `ambulance`, `garbage-truck`, `firetruck`;
-- 0.3-1.9 cm, a driven wheel turning slowly against its brake while the other axle's brakes hold
-  the body (a brake-stand burnout): `sedan-sports` (1.9), `race` (1.3), `police` (1.2),
-  `pickup-flat` (0.8), `van` (0.7), `semi`, `semi-conventional`
-  (0.6 each), `pickup` (0.4).
+- 0.000 m: `hatchback-sports`, `suv`, `suv-luxury`, `race-future`, `tractor-kenney`;
+- 0.1-2.5 cm, a driven wheel turning slowly against its brake while the other axle's brakes hold
+  the body (a brake-stand burnout): `delivery`, `delivery-flat` (2.5 each), `van` (2.3),
+  `pickup-flat`, `ambulance` (2.1 each), `sedan-sports` (1.9), `pickup`, `garbage-truck` (1.4 each),
+  `race` (1.3), `police` (1.1), `semi`, `semi-conventional` (0.6 each), `firetruck` (0.4), `taxi`
+  (0.3), `sedan` (0.1).
 
 On a body with both axles driven the brakes are solved with the differentials
 (`WheelDrive._couple_differentials`, `Differential.braked_coupling_torque`): a held wheel stays
@@ -189,9 +189,9 @@ held unless the torque a diff must pass it beats its brake, so the body holds on
 carries the excess to the fronts' spare brake. The tractor brakes only its rears; the pedal engages
 MFWD, and the rigid shaft carries the fronts' drive into the rears' spare brake (34 kNm in total
 against 23.6 kNm of gear 1 at stall). The static check is `BrakeSizing.stall_hold_margin`, and
-`test_vehicle_catalog` holds every body to it. On the heavy vans (a 470 N·m engine through 15.6:1)
-it reads unbounded on `delivery` and `delivery-flat`, whose driven rears' brakes alone outhold the
-drive, and 43.7 on `ambulance`.
+`test_vehicle_catalog` holds every body to it. On the heavy vans (a 470 N·m engine through 15.6:1 and
+a 2.0 converter) it reads 1.04 on `delivery`, 1.02 on `delivery-flat` and 1.26 on `ambulance`; the
+first two are the fleet's thinnest.
 
 *The solve order* (`WheelDrive._couple_differentials`), one pass a tick, each coupling solved off
 the wheels' own spin steps with every wheel's holds inside it:
@@ -258,7 +258,8 @@ grip in a tyre-limited stop. `BrakeSizing` is the arithmetic the generator repor
 | --- | --- | --- | --- | --- |
 | Saloon discs | `sedan`, `taxi`, `hatchback-sports` | 1450 (1.32-1.64) | 1400 | 3000 |
 | Performance | `sedan-sports`, `police` | 1800 (1.57-1.94) | 1400 | 3000 |
-| SUV / light commercial | `suv`, `suv-luxury`, `van`, `pickup`, `pickup-flat` | 2000 (1.42-1.51) | 1700 | 3000 |
+| SUV / light commercial | `suv`, `suv-luxury` | 2000 (1.42-1.51) | 1700 | 3000 |
+| Full-size light commercial, each its reference's | `van` (Transit), `pickup`, `pickup-flat` (F-150) | 2911; 3385 (2.06-2.56) | 1700 | 3000 |
 | Racing | `race`, `race-future` | 2000 (2.52-2.67) | 1400 | none |
 | 3.5-5 t van | `delivery`, `delivery-flat`, `ambulance` | 5200 (1.23-1.47) | 4800 | 8000 |
 | 26 t chassis, spring brakes | `garbage-truck`, `firetruck` | 15500 (2.20-2.34) | 6500 / 7000 | none |
@@ -359,8 +360,8 @@ Do not re-propose these without new evidence:
 - Open-diff friction (the open diff is an ideal 1.0): bodies that should fight one-wheel peel
   declare an LSD.
 - Fixing the floored 2WD tractor in mud: it is the open diff's peel (§ Open-diff peel).
-- Shipping converter torque multiplication before the brake-class review (`docs/drivetrain.md` § Converter); never a
-  bigger brake to make a body hold.
+- Converter torque multiplication on `hatchback-sports`, `sedan-sports`, `police` and `suv-luxury`
+  (`docs/drivetrain.md` § Converter); never a bigger brake to make a body hold.
 - Auto-respawn on overturn (`base_vehicle.gd`).
 - A cycling or peak-following ABS/TC: every tyre class shares the 0.12 peak, so `ABS_SLIP` /
   `TCS_SLIP` hold it ideally. Revisit when ABS/TC activity becomes a bus signal beyond
@@ -372,3 +373,6 @@ Do not re-propose these without new evidence:
   inner pair at the centreline. They draw one tyre per corner over `rear_twin_tyres` physics.
 - A predicted-slip or per-tick force-change cap instead of the slip floor (§ One-tick caps): on a
   one-contact pitch model the first alternates the force 0 / 2x, the second limit-cycles.
+- Refining `ShiftPolicy`, the `PETROL` map's fidelity, or Kenney handling past its existing gates
+  (the user's call): a learner sees a gear change and a torque request, and toy wheelbases make
+  finer K or drift figures false precision. A defect a driver notices is a fix, not a refinement.

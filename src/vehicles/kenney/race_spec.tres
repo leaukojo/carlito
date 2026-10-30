@@ -59,6 +59,7 @@ engine_friction_frac = 0.07
 pedal_map = 1
 engine_inertia = 0.06
 coupling = 1
+converter_stall_ratio = 2.0
 shift_cut_s = 0.15
 shift_up_rpm = 5900.0
 steer_speed = 7.0

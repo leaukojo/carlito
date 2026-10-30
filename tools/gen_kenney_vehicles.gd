@@ -245,10 +245,10 @@ const CAR_BASE := {
 	# Crank and coupling (docs/drivetrain.md § Crank and coupling): 0.20 kg·m² is a 1.2-2.0 L petrol's
 	# measured rotating assembly with a flexplate and a converter impeller (0.125-0.149 whole engine
 	# with flywheel and clutch, 0.092 impeller); an automatic's converter; a clutch rating 1.5x the
-	# peak, a car's OE margin. The converter ships as a fluid coupling (ratio 1.0, D4: a real one's
-	# ~2.0 waits on a brake review); a 6-speed's lock-up closes in every gear past the launch.
+	# peak, a car's OE margin. A car converter's ~2.0 stall torque ratio (docs/sources.md, the
+	# converter); a 6-speed's lock-up closes in every gear past the launch.
 	"engine_inertia": 0.20, "coupling": VehicleSpec.Coupling.CONVERTER, "clutch_reserve": 1.5,
-	"converter_stall_ratio": 1.0, "lockup_gear": 1,
+	"converter_stall_ratio": 2.0, "lockup_gear": 1,
 	"launch_rpm_over_idle": 0.0,
 	# Ackermann 1.0 (docs/handling.md § Steering geometry), an estimate: real road cars run partial
 	# (~40-60 %, a patent claim, for the loaded outer tyre at high g), but here the low-speed scrub is
@@ -315,10 +315,10 @@ const TRUCK_BASE := {
 	# ABS: mandatory on goods vehicles in the EU since 1991.
 	"abs_equipped": true,
 	# ASR, standard beside EBS on a goods vehicle: kept as equipment, whose work is on low grip. On
-	# dry asphalt gear 1 at converter stall pushes ~0.38 g, under the rear tyres' grip: `garbage-truck`
-	# notc reaches 50 km/h in the same 6.82 s (measure_vehicles trace, 2026-10-16).
+	# dry asphalt a floored launch peaks at ~0.39 g with the rears at 0.09 slip, under the grip peak:
+	# `garbage-truck` notc reaches 50 km/h in the same 6.43 s (measure_vehicles trace, 2026-10-24).
 	"tcs_equipped": true,
-	# Hill-start assist held 3 s (Volvo VN); the converter's creep alone holds ~11 % here.
+	# Hill-start assist held 3 s (Volvo VN); the converter's creep alone holds ~22 % here.
 	"hill_hold": HillHold.Kind.ASSIST, "hill_hold_s": 3.0,
 	# The stock M+S drive tyre on dry asphalt: it sets the brake split and the steering-taper margin;
 	# a garage swap scales it by the class factor only (src/vehicles/CLAUDE.md § Physics). The brake
@@ -368,9 +368,10 @@ const TRUCK_BASE := {
 	# A 6-9 L medium diesel behind an Allison-class converter box: 1.5 kg·m² at the crank (a 5.5 L
 	# industrial diesel's published total, Volvo Penta TD640VE); a truck clutch's 2x peak rating.
 	"engine_inertia": 1.5, "coupling": VehicleSpec.Coupling.CONVERTER, "clutch_reserve": 2.0,
-	# An Allison-class box: lock-up from 2nd range (1st-range lock-up is an option); the converter a
-	# fluid coupling, as CAR_BASE's.
-	"converter_stall_ratio": 1.0, "lockup_gear": 2,
+	# An Allison-class box: lock-up from 2nd range (1st-range lock-up is an option); a TC-418
+	# converter, stall torque ratio 1.98 on Allison's 3700-series sheet, one the 3000 RDS is offered
+	# with (secondary; docs/sources.md, the converter).
+	"converter_stall_ratio": 1.98, "lockup_gear": 2,
 	"launch_rpm_over_idle": 0.0,
 	# Ackermann 1.0, an estimate: trucks set close to full for steer-tyre wear (SAE 861975, 912693;
 	# no figure sourced).
@@ -423,7 +424,8 @@ const VAN_BASE := {
 	# Hill-start assist held 3 s, a truck's (Volvo VN).
 	"hill_hold": HillHold.Kind.ASSIST, "hill_hold_s": 3.0,
 	# A 3.5-5 t van's brakes: 5200 Nm a wheel is 1.4 g at 4.2 t, and they hold gear 1 at converter
-	# stall (BrakeSizing.stall_hold_margin). Handbrake: drum-in-hat rears, 4800 Nm a wheel, locks the
+	# stall (BrakeSizing.stall_hold_margin), the fleet's thinnest at 1.02-1.04 on `delivery-flat` /
+	# `delivery`, which rests on the converter ratio below, an estimate. Handbrake: drum-in-hat rears, 4800 Nm a wheel, locks the
 	# rears; the parking grade is the rear tyres' (`BrakeSizing.park_grade`).
 	"brake_torque": 5200.0, "handbrake_torque": 4800.0, "park_pawl_torque": 8000.0,
 	# Commercial radials, as TRUCK_BASE. Cornering stiffness peaks at 1.92x the static corner load, an
@@ -462,9 +464,10 @@ const VAN_BASE := {
 	# Crank 0.40 kg·m² (estimate, band 0.35-0.45): twice a 2.5 L petrol's measured 0.20 with its
 	# impeller (CAR_BASE's anchor), for a 3.2 L five-cylinder diesel's heavier crank and flywheel. A
 	# car-and-light-truck box, so the car OE clutch margin 1.5; a six-speed's lock-up closes in every
-	# gear past the launch. The converter a fluid coupling, as CAR_BASE's.
+	# gear past the launch. The converter's stall torque ratio: no 6R80 figure found, CAR_BASE's 2.0
+	# (an estimate).
 	"engine_inertia": 0.40, "coupling": VehicleSpec.Coupling.CONVERTER, "clutch_reserve": 1.5,
-	"converter_stall_ratio": 1.0, "lockup_gear": 1,
+	"converter_stall_ratio": 2.0, "lockup_gear": 1,
 	"launch_rpm_over_idle": 0.0,
 	# Ackermann 1.0, an estimate, as TRUCK_BASE.
 	"max_steer_deg": 26.0, "steer_speed": 2.0, "ackermann": 1.0,
@@ -657,10 +660,17 @@ const VARIANTS := {
 	# retire the rest on today's sources. No production multi-link rear was measured. As a what-if,
 	# +0.06 deg/kN of designed toe-in still leaves `suv` 3 and each pickup 1. The leaf's stock sign is
 	# toward oversteer, so it cannot retire the pickups'.
-	"sedan-sports": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "engine_inertia": 0.18, "mass": 1050.0, "torque_mul": 1.12, "final_drive": 4.1, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0},
+	# COMPROMISE (`sedan-sports`, `police`): converter ratio 1.0, a fluid coupling. At CAR_BASE's 2.0
+	# the stall hold is grip-limited (rears spinning at peak grip against fronts holding at theirs:
+	# 0.94 and exactly 1.00, `BrakeSizing.stall_hold_margin`), so no brake size moves it. Undoing it
+	# waits on whether that check should count a spinning wheel at peak grip.
+	"sedan-sports": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "engine_inertia": 0.18, "mass": 1050.0, "torque_mul": 1.12, "final_drive": 4.1, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0, "converter_stall_ratio": 1.0},
 	# Hot hatch: a helical front LSD (Quaife-class, ~2.5:1), so a front wheel a bump or a steer input
 	# peels still leaves its partner up to 2.5x its torque rather than an equal share.
-	"hatchback-sports": {"family": "car", "engine_inertia": 0.18, "mass": 1000.0, "torque_mul": 1.10, "final_drive": 4.2, "max_steer_deg": 42.0, "front_weight": 0.60, "diff_bias_front": 2.5},
+	# COMPROMISE: a converter held at ratio 1.0, a fluid coupling. Its reference, a Mk7 GTI, is a
+	# manual or DSG car (secondary), so no converter figure stands for it; at CAR_BASE's 2.0 it would
+	# hold only 0.77 at stall. Undoing it is a clutch coupling, which moves its creep, launch and shifts.
+	"hatchback-sports": {"family": "car", "engine_inertia": 0.18, "mass": 1000.0, "torque_mul": 1.10, "final_drive": 4.2, "max_steer_deg": 42.0, "front_weight": 0.60, "diff_bias_front": 2.5, "converter_stall_ratio": 1.0},
 	# Lever for SUV power is their own `torque_mul`, not the shared CAR_BASE curve: measured
 	# 0-100 goes as peak^-0.6 on the sedan, peak^-1.4 on the suv.
 	# Both SUVs: a Torsen-type centre (~3:1). Under launch squat the rear axle carries ~2x the
@@ -672,9 +682,13 @@ const VARIANTS := {
 	# +4.5 % front-first. CAR_BASE's 80/20 lifts the inner front in the corner pass (5.9 deg of roll),
 	# and 2:1 spins a lifted 100 km/h 20 % step (2026-10-19). Compliance steer from -0.0625 to +0.06
 	# deg/kN, as a what-if, neither adds nor clears a cell here or on `police` (2026-10-23).
-	"suv-luxury": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.62, "anti_roll_rate": 27000.0, "anti_roll_rate_rear": 9000.0, "mass": 1600.0, "torque_mul": 1.54, "mu_lat": 0.88, "max_steer_deg": 33.0, "driven_rear": true, "centre_diff_bias": 3.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
+	# COMPROMISE: converter ratio 1.0, a fluid coupling. At CAR_BASE's 2.0 the static stall hold
+	# reads 1.15 (the Torsen carrying what its bias allows), but both pedals floored creep 0.12 m in
+	# 10 s (`measure_vehicles -- suv-luxury 30 stall`, 2026-10-24): the check over-reads this body.
+	# Undoing it waits on the check agreeing with the coupled solve.
+	"suv-luxury": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.62, "anti_roll_rate": 27000.0, "anti_roll_rate_rear": 9000.0, "mass": 1600.0, "torque_mul": 1.54, "mu_lat": 0.88, "max_steer_deg": 33.0, "driven_rear": true, "centre_diff_bias": 3.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0, "converter_stall_ratio": 1.0},
 	"taxi": {"family": "car", "mass": 1250.0, "front_weight": 0.60},
-	"police": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "mass": 1300.0, "torque_mul": 1.18, "final_drive": 4.0, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0},
+	"police": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "mass": 1300.0, "torque_mul": 1.18, "final_drive": 4.0, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0, "converter_stall_ratio": 1.0},
 	# Open-wheelers: `wheel_x_out` measured per body against its own half-width at the wheel
 	# stations (re-drive after changing, it also steadies cornering). `cd` 0.70: exposed wheels +
 	# wing really do run ~2x a saloon's drag. `front_weight` 0.42: engine sits behind the driver;
@@ -720,13 +734,16 @@ const VARIANTS := {
 	# Bars: the 36 kN/m pair split 24 / 12 kN/m: the corner pass saturates the front first (0.98 /
 	# 0.83 at 0.72 g), LLTD 58 %, roll 4.0 deg, no wheel lifted; BalanceModel.corner_limit +20.4 %.
 	# 31 / 5 and 36 / 0 lift the inner front (4.8 / 6.1 deg). K at 0.15 g 0.98 with roll steer.
-	"van": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.58, "anti_roll_rate": 24000.0, "anti_roll_rate_rear": 12000.0, "mu_lat": 0.88, "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
+	# Full-size light-commercial brakes, each its own reference's at 100 bar, re-referred to the drawn
+	# 0.36 m (docs/sources.md, Brake hardware): the Transit's 2911 on `van`, the F-150's 3385 on both
+	# pickups. Handbrake and pawl stay the SUV class's (no parking hardware sourced).
+	"van": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.58, "anti_roll_rate": 24000.0, "anti_roll_rate_rear": 12000.0, "mu_lat": 0.88, "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2911.0, "handbrake_torque": 1700.0},
 	# `ride_lift` 0.08 on the flatbeds: their arches are drawn shallower than the tyre, so at the
 	# flush ride height the rear wheels broke through the bed floor.
 	# `yaw_index` 0.94, the measured pickups' median (docs/handling.md § Inertia): the empty bed
 	# leaves the mass forward.
-	"pickup": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 14000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "ride_lift": 0.08, "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
-	"pickup-flat": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 14000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "ride_lift": 0.08, "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
+	"pickup": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 14000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "ride_lift": 0.08, "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 3385.0, "handbrake_torque": 1700.0},
+	"pickup-flat": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 14000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "ride_lift": 0.08, "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 3385.0, "handbrake_torque": 1700.0},
 	# heavy vans: car family, van feel (VAN_BASE, not CAR_BASE) — these are 4-5 t vehicles
 	"delivery": {"family": "car", "base": "van", "mass": 4200.0},
 	"delivery-flat": {"family": "car", "base": "van", "com_y": 0.55, "ride_lift": 0.08, "mass": 4000.0},
@@ -991,7 +1008,7 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	spec.engine_inertia = get_f.call("engine_inertia")
 	spec.coupling = int(ov.get("coupling", b["coupling"])) as VehicleSpec.Coupling
 	spec.clutch_reserve = float(b["clutch_reserve"])
-	spec.converter_stall_ratio = float(b["converter_stall_ratio"])
+	spec.converter_stall_ratio = get_f.call("converter_stall_ratio")
 	spec.lockup_gear = int(b["lockup_gear"])
 	spec.launch_rpm_over_idle = float(b["launch_rpm_over_idle"])
 	spec.shift_up_rpm = float(b["shift_up_rpm"])

@@ -35,3 +35,5 @@ family doc, via `docs/overview.md`) before proposing a shared refactor: it lists
 - Free-body helpers live in `VehicleMath`, never a fourth copy.
 - Towing is shared (`TowHost`, `TowedBody`, `CouplingProfile` in `base/`): fix a towing bug in
   `TowHost`, never on one machine; no `trailer_type` accessor. E cycles the attachment, V the body.
+- Frozen: no new `ShiftPolicy` refinement, `PETROL` map fidelity or Kenney handling calibration
+  unless the user asks; a defect is a fix (`docs/vehicles.md` § Rejected designs).

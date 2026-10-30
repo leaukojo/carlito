@@ -549,12 +549,10 @@ static func handover_fuel(pred_base: float, pred_per_fuel: float, target: float,
 ## A converter body (`spec.coupling` CONVERTER) runs `TorqueConverter`'s law while it slips, with
 ## its lock-up clutch (rated `clutch_rating`) in parallel from `spec.lockup_gear` past the coupling
 ## point (`lockup_engages`), so it carries drive from the first tick of a pull-away and loads the
-## idling crank in gear: it creeps. COMPROMISE: the torque ratio is data and ships 1.0
-## (`spec.converter_stall_ratio`, a fluid coupling), where a real converter makes about 2.0 at stall
-## (docs/drivetrain.md § Converter): at 2.0, seven more bodies fail the foot brake's static stall hold
-## (`BrakeSizing.stall_hold_margin` reads `stall_axle_torque`), which waits on a review of their
-## brake classes against sourced hardware. A shift slips the gearbox's own clutch (the friction
-## path, `_inertia_phase`, at `handover_rate`), never the converter.
+## idling crank in gear: it creeps. The torque ratio is data (`spec.converter_stall_ratio`; 1.0
+## is a fluid coupling; the shipped ratios: docs/drivetrain.md § Converter). A shift slips the
+## gearbox's own clutch (the friction path, `_inertia_phase`, at `handover_rate`), never the
+## converter.
 
 ## Converter stall speed as a fraction of the engine's own usable band (idle -> redline): one
 ## derivation for every machine, not a per-spec knob. 0.25 puts every shipped stall below its

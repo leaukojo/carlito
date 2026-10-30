@@ -10,6 +10,7 @@ const StableSave := preload("res://tools/stable_save.gd")
 const SPEC_OVERRIDABLE := {
 	"mass": "mass", "final_drive": "final_drive", "steer_speed": "steer_speed",
 	"engine_inertia": "engine_inertia", "coupling": "coupling",
+	"converter_stall_ratio": "converter_stall_ratio",
 	"shift_up_light_rpm": "shift_up_light_rpm", "shift_down_light_rpm": "shift_down_light_rpm",
 	"kickdown_pedal": "kickdown_pedal", "shift_dwell_s": "shift_dwell_s",
 	"shift_handover_s": "shift_handover_s", "shift_cut_s": "shift_cut_s",
@@ -33,15 +34,13 @@ const DRIVE_OVERRIDABLE := {
 	"hill_hold": "hill_hold",
 }
 ## The stepped box's own fields a CVT variant clears (`Gen._cvt`): its ratio is drivetrain state.
-const CVT_CLEARED := {"launch_engage_s": 0.0, "skip_shifts": 0.0, "start_gear_max": 0.0}
-## Baseline-only fields: overrides silently dropped (test_no_variant_overrides catches this).
+const CVT_CLEARED := {"launch_engage_s": 0.0, "skip_shifts": 0.0, "start_gear_max": 0.0}## Baseline-only fields: overrides silently dropped (test_no_variant_overrides catches this).
 const SPEC_BASELINE_ONLY := {
 	"idle_rpm": "idle_rpm", "redline_rpm": "redline_rpm", "reverse_ratio": "reverse_ratio",
 	"efficiency": "efficiency", "engine_brake_frac": "engine_brake_frac",
 	"engine_friction_frac": "engine_friction_frac",
 	"launch_engage_s": "launch_engage_s",
 	"clutch_reserve": "clutch_reserve",
-	"converter_stall_ratio": "converter_stall_ratio",
 	"lockup_gear": "lockup_gear",
 	"launch_rpm_over_idle": "launch_rpm_over_idle",
 	"shift_up_rpm": "shift_up_rpm",
