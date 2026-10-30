@@ -1050,3 +1050,29 @@ func test_a_rigid_centre_only_on_a_front_axle_the_driver_can_disengage() -> void
 		assert_bool(spec.ground_drive.front_axle_engageable and not spec.ground_drive.driven_front) \
 				.override_failure_message("%s: a rigid centre on a front axle that is always driven"
 					% variant).is_true()
+
+
+func test_a_swinging_front_axle_is_one_bare_pair_about_the_centreline() -> void:
+	# The beam pivots mid-track on the pair's anchor line (`WheelDrive`) and turns both wheels as one:
+	# a bar or roll steer across it would read a roll the beam takes up.
+	for variant in VehicleCatalog.VARIANTS:
+		var spec := _spec_of(variant)
+		if spec == null or spec.ground_drive == null or not spec.ground_drive.has_swing_axle():
+			continue
+		var gd := spec.ground_drive
+		var front := PackedVector3Array()
+		for p in gd.wheel_positions:
+			if not RayWheel.is_rear_z(p.z):
+				front.append(p)
+		assert_int(front.size()).override_failure_message(
+				"%s: a swinging front axle needs one front pair" % variant).is_equal(2)
+		if front.size() != 2:
+			continue
+		assert_float(front[0].x + front[1].x).override_failure_message(
+				"%s: the swinging pair is off the centreline" % variant).is_equal_approx(0.0, 1e-4)
+		assert_float(front[0].y).is_equal_approx(front[1].y, 1e-4)
+		assert_float(front[0].z).is_equal_approx(front[1].z, 1e-4)
+		assert_float(gd.anti_roll_rate).override_failure_message(
+				"%s: a bar across a swinging front axle" % variant).is_equal(0.0)
+		assert_float(gd.roll_steer_front).override_failure_message(
+				"%s: roll steer on a swinging front axle" % variant).is_equal(0.0)

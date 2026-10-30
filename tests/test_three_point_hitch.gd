@@ -15,16 +15,16 @@ const JOINT_EPS := 0.002
 ## Where tractor-kenney.tscn hangs this scene: the hitch is authored in its own frame and mounted
 ## this far aft, so the tyre figures below are body coordinates MINUS this. Pinned by
 ## test_the_hitch_sits_where_these_clearances_assume.
-const MOUNT_Z := 0.3935
+const MOUNT_Z := 0.81
 ## The rear tyre as it is DRAWN, in body space: a cylinder on the axle line, standing on the road
 ## (so the axle height IS the visual radius). A box around it was close enough at the old 0.45 m
-## tyre and is not at 0.66: the corner region a box claims is where the spreader's hopper skirt
+## tyre and is not at 0.805: the corner region a box claims is where the spreader's hopper skirt
 ## passes, half a metre above the tread.
-const TYRE_AXLE_Y := 0.66
-const TYRE_AXLE_Z := 1.10922
-const TYRE_RADIUS := 0.66
-## Rear tyre inner face (station 0.74622 - tread half-width 0.4048), the gap between the tyres.
-const TYRE_INNER_X := 0.3418
+const TYRE_AXLE_Y := 0.805
+const TYRE_AXLE_Z := 1.35284
+const TYRE_RADIUS := 0.805
+## Rear tyre inner face (station 0.89606 - tread half-width 0.4937), the gap between the tyres.
+const TYRE_INNER_X := 0.4024
 
 
 func _hitch() -> ThreePointHitch:

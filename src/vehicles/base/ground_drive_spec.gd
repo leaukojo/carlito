@@ -80,6 +80,11 @@ extends Resource
 @export var anti_dive_slope := 0.0
 ## The rear axle's, signed the other way (`+F * anti_squat_slope`).
 @export var anti_squat_slope := 0.0
+## Oscillating front axle (a tractor's): the front pair hangs on a beam pivoted at mid-track on its
+## anchor line, free to swing this many degrees either way before its stop, so the two share the
+## front load with no roll stiffness until then (`RayWheel.swing_step`). 0 = independent corners.
+## The pivot's height is an estimate (no pin height sourced): the hub at full bump.
+@export var front_axle_swing_deg := 0.0
 @export var max_suspension_force := 30000.0  ## N; clamp against deep-penetration catapults
 
 @export_group("Tires")
@@ -231,6 +236,11 @@ func has_anti_roll_bar() -> bool:
 ## Either axle steers with its roll, so the wheels need their partners (`RayWheel.pair_axles`).
 func has_roll_steer() -> bool:
 	return roll_steer_front != 0.0 or roll_steer_rear != 0.0
+
+
+## The front axle swings on a pivot (`front_axle_swing_deg`, `WheelDrive.tick` steps it).
+func has_swing_axle() -> bool:
+	return front_axle_swing_deg > 0.0
 
 
 ## The rear steers with its side force, so the wheels need their partners (`RayWheel.pair_axles`).

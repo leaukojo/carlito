@@ -26,11 +26,6 @@ const TRAILER_GROUND_Y := -0.40
 ## Bogie centre and centre of mass, measured off farm_tipper_spec.tres.
 const BOGIE_Z := 3.625
 
-## Half the tread width of the tractor's rear tyre. MEASURED, not guessed: three_point_hitch.tscn's
-## header records the rear tyre inner faces at |x| = 0.253 against a 0.529 anchor, which is where
-## the draft arms' inboard run comes from.
-const REAR_TYRE_HALF_WIDTH := 0.276
-
 
 func _trailer() -> Node3D:
 	return (load(TRAILER) as PackedScene).instantiate() as Node3D
@@ -348,10 +343,11 @@ func _tractor_volumes() -> Array[AABB]:
 			continue
 		out.append(AABB(shape.position - box.size * 0.5, box.size))
 	var radius := spec.ground_drive.axle_radius(true)
+	var tread := spec.ground_drive.axle_half_width(true)
 	for p in spec.ground_drive.wheel_positions:
 		if p.z <= 0.0:
 			continue  # front axle; a trailer behind the pin can never reach it
-		var half := Vector3(REAR_TYRE_HALF_WIDTH, radius, radius)
+		var half := Vector3(tread, radius, radius)
 		var centre := Vector3(p.x, radius, p.z)
 		out.append(AABB(centre - half, half * 2.0))
 	tractor.free()

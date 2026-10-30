@@ -201,8 +201,9 @@ const SINE_MAX_KG := 4536.0
 ## CIRCLE_SETTLE_S to settle, then averaged over CIRCLE_HOLD_S: the rear axle centre's speed over
 ## the yaw rate (the radius driven) against `L / tan δ` off the bicycle angle, and each steered
 ## wheel's slip angle off its contact velocity (+ = it points further into the turn than its patch
-## travels): the front scrub Ackermann removes. Every body runs with no attachment unless `trailer=`
-## names one.
+## travels): the front scrub Ackermann removes. The outer steered wheel's contact patch speed over
+## the yaw rate is its path radius, the figure a tractor's turning circle quotes. Every body runs
+## with no attachment unless `trailer=` names one.
 const CIRCLE_SPEED := 1.39         ## m/s (5 km/h)
 const CIRCLE_LOCK := 100.0         ## % of lock, + = right
 const CIRCLE_SETTLE_S := 8.0
@@ -819,6 +820,7 @@ var _corner_first := {}
 var _corner_xfer0 := Vector2.ZERO  ## `_axle_transfer` as the lock starts winding on
 var _corner_lltd := NAN        ## front share of the lateral load transfer at the peak (`_lltd`)
 var _corner_lifted := 0        ## most wheels off the ground in any one tick of the pass
+var _corner_swing := 0.0       ## an oscillating front axle's largest beam swing (rad) in the pass
 ## Most wheels touching at no load in any one tick: an inner corner the bar has unloaded while its
 ## ray still reaches the road (the bar holds it at no load before it lifts, `RayWheel.bar_force`).
 var _corner_unloaded := 0
@@ -1376,6 +1378,7 @@ func _reset_pass(phase: Phase) -> void:
 	_corner_xfer0 = Vector2.ZERO
 	_corner_lltd = NAN
 	_corner_lifted = 0
+	_corner_swing = 0.0
 	_corner_unloaded = 0
 	_corner_tip = {}
 	_corner_prev_speed = NAN
@@ -2422,6 +2425,7 @@ func _tick_cornering(delta: float) -> void:
 			unloaded += 1
 		if not w.in_contact or w.suspension_force <= 0.0:
 			light[1 if w.is_rear else 0] += 1
+		_corner_swing = maxf(_corner_swing, absf(w.swing))
 	_corner_lifted = maxi(_corner_lifted, airborne)
 	_corner_unloaded = maxi(_corner_unloaded, unloaded)
 	_corner_tyre += (absf(across) / _car.mass - _corner_tyre) \
@@ -2597,6 +2601,9 @@ func _report_cornering(skipped: bool) -> void:
 			+ " of the load transfer, up to %d wheel(s) off the ground, %d touching at no load")
 			% ["", _corner_roll, roll_pred, _corner_peak_tyre / 9.81, _pct(_corner_lltd),
 			_pct(BalanceModel.lltd(model)), _corner_lifted, _corner_unloaded]
+			+ (", front beam up to %.1f deg (stop %.0f)" % [rad_to_deg(_corner_swing),
+			_car.spec.ground_drive.front_axle_swing_deg]
+			if _car.spec.ground_drive.has_swing_axle() else "")
 			+ ("  <-- OVERTURNED" if _car.is_overturned() else ""))
 	_current["cornering"] = {"skipped": false, "peak": _corner_peak, "speed_kmh": _corner_speed * 3.6,
 			"peak_g": _corner_peak / 9.81, "path_g": _corner_path_peak / 9.81, "front": first["front"],
@@ -3752,7 +3759,7 @@ func _start_circle() -> void:
 	_reset_pass(Phase.CIRCLE)
 	_ci_i = 0.0
 	_ci_sums = {"ticks": 0.0, "v": 0.0, "radius": 0.0, "mean": 0.0, "n_in": 0.0, "n_out": 0.0,
-			"angle_in": 0.0, "angle_out": 0.0, "slip_in": 0.0, "slip_out": 0.0}
+			"angle_in": 0.0, "angle_out": 0.0, "slip_in": 0.0, "slip_out": 0.0, "path_out": 0.0}
 	var probe := "" if is_nan(_ackermann) else " (not the spec's)"
 	print("=== %s (%s), full-lock circle, ackermann %.2f%s ===" % [_variant,
 			_drive_label(_car.spec), _car.spec.ground_drive.ackermann, probe])
@@ -3772,9 +3779,10 @@ func _tick_circle(delta: float) -> void:
 			float(BrakeSizing.axle_geometry(_car.spec)["rear_z"]))
 	var v_rear := VehicleMath.point_velocity(_car, rear)
 	v_rear -= b.y * v_rear.dot(b.y)
+	var yaw := maxf(absf(_car.angular_velocity.dot(b.y)), 1e-4)
 	s["ticks"] += 1.0
 	s["v"] += v_long
-	s["radius"] += v_rear.length() / maxf(absf(_car.angular_velocity.dot(b.y)), 1e-4)
+	s["radius"] += v_rear.length() / yaw
 	s["mean"] += absf(_car.drive.mean_steer_angle())
 	for w in _car.wheels:
 		if not w.steered or not w.in_contact:
@@ -3783,6 +3791,10 @@ func _tick_circle(delta: float) -> void:
 		s["n_" + side] += 1.0
 		s["angle_" + side] += rad_to_deg(absf(w.steer_angle))
 		s["slip_" + side] += _slip_angle_deg(w)
+		if side == "out":
+			var v_patch := VehicleMath.point_velocity(_car, w.contact_point)
+			v_patch -= b.y * v_patch.dot(b.y)
+			s["path_out"] += v_patch.length() / yaw
 	if _t < CIRCLE_SETTLE_S + CIRCLE_HOLD_S:
 		return
 	var n: float = s["ticks"]
@@ -3793,10 +3805,11 @@ func _tick_circle(delta: float) -> void:
 		var k := maxf(s["n_" + side], 1.0)
 		r["angle_" + side] = s["angle_" + side] / k
 		r["slip_" + side] = s["slip_" + side] / k
+	r["path_out"] = s["path_out"] / maxf(s["n_out"], 1.0)
 	print(("  %-13s : %.1f km/h, R %.2f m at the rear axle (L / tan δ %.2f, δ %.1f deg); inner"
-			+ " %.1f deg slip %+.2f deg, outer %.1f deg slip %+.2f deg") % ["circle", r["kmh"],
-			r["radius"], r["law_radius"], r["mean_deg"], r["angle_in"], r["slip_in"],
-			r["angle_out"], r["slip_out"]])
+			+ " %.1f deg slip %+.2f deg, outer %.1f deg slip %+.2f deg, path R %.2f m") % ["circle",
+			r["kmh"], r["radius"], r["law_radius"], r["mean_deg"], r["angle_in"], r["slip_in"],
+			r["angle_out"], r["slip_out"], r["path_out"]])
 	_current["circle"] = r
 	MeasureRig.drive(0.0, 0.0)
 	_finish_vehicle()

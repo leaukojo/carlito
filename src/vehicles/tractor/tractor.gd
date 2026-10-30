@@ -342,7 +342,7 @@ func get_camera_exclude_bodies() -> Array[RID]:
 ## Framed for the tractor-plus-trailer combination even with the trailer dropped, so the camera
 ## never jumps on an E press. look_height clears the scaled body's cab roof.
 func get_camera_framing() -> Dictionary:
-	return {"distance": 11.0, "height": 5.5, "look_height": 2.4, "top_height": 36.0, "iso_size": 38.0}
+	return {"distance": 11.8, "height": 5.9, "look_height": 2.9, "top_height": 36.0, "iso_size": 38.0}
 
 
 ## Articulation angle (rad, + = trailer to the right); 0 with nothing towed. Read by the F3 overlay.

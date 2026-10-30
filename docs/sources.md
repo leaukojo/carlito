@@ -271,6 +271,15 @@ creeps harder on them (computed) than a 30 % pedal asks.
 | Steering rate (`steer_speed`): a hydrostatic unit turns the wheels as fast as the hand winds | a Fendt 516 Vario takes 5 1/3 turns lock to lock [60]; a quick human hand ~720 deg/s, NHTSA's fishhook rate [61]; their ratio over the 960 deg centre to lock | sourced; secondary |
 | Brakes inboard of the final reduction | [Case IH Puma](https://www.ultimatespecs.com/tractor-specs/caseih/caseih-puma-155-2008): "differential" wet discs; on the differential shaft, upstream of the planetary reduction ([Dana US 4,646,880](https://patents.google.com/patent/US4646880)) | secondary, no workshop manual |
 
+| The tractor's chassis and limits (`gen_kenney_vehicles.gd`'s tractor recipe; `docs/tractor.md`) | Value | Grade |
+| --- | --- | --- |
+| Wheelbase and mass, the 6R 150 | 2.58 m; weighed 7180 kg with loader brackets and a full tank, 10 450 kg permissible; tyres up to 650/65R38 / 540/65R28 ([top agrar, 2022](https://www.topagrar.com/technik/news/john-deere-6r-150-mehr-leistung-ueberarbeitete-funktionen-13073894.html)) | sourced, a magazine's weighing |
+| Lock and turning radius (kept at 38 deg, a COMPROMISE in the recipe) | Fendt 716 Vario: 52 deg lock, 5.5 m radius without the steering brake, 2.70-2.78 m wheelbase ([Traktorenlexikon](https://de.wikibooks.org/wiki/Traktorenlexikon:_Fendt_716_Vario)) | secondary |
+| Front-axle swing stop (`front_axle_swing_deg` 10) | Claas Arion 420 10 deg ([Traktorenlexikon](https://de.wikibooks.org/wiki/Traktorenlexikon:_Claas_Arion_420)); Fendt 936 Vario 12 deg ([Traktorenlexikon](https://de.wikibooks.org/wiki/Traktorenlexikon:_Fendt_936_Vario)); the Fendt 200 Vario pages give a sprung travel, no angle; no 6R figure found | secondary |
+| R-1 lug on hard ground (the shipped ~1.0, no change) | OECD test 2136, 6175R, MFWD on R-1 480/80R46: max pull 8304 kg [93], about 0.98 of its 8466 kg test weight with operator, at 10.6 % slip (the test report; its PDF is gone from the lab's site) | sourced; the weight and slip from the report, not re-opened |
+| Launch, a ~200 hp powershift tractor (`tools/vehicle_reference_specs.json` keeps no tractor mark) | a seven-tractor 200 hp powershift group test (Koneviesti, TraktorTech, Bedre Gardsdrift, Trekker): "Obwohl der John Deere immer durch alle Gänge schalten muss, beschleunigt er dennoch am schnellsten. Bei Claas dauert es statt 12 fast 18 Sekunden" ([profi 6-2019, a dealer's reprint](https://mauch.at/wp-content/uploads/2019/10/PD_012_019_06_19.pdf)); the speed range and load are not stated (the boxes' road top speed or less). `tractor-kenney` reaches its top in about half the fastest time (`measure_vehicles -- tractor-kenney 40 trace`); the term carrying it is not yet identified. Not used: a maker's e-tractor record and an unattributed 30 t CVT Quadtrac figure (agrarheute); an LLM's typical range, whose cited page is a heavy-truck model | secondary; the range unstated |
+| Slope guideline (`docs/vehicle_measurements.md` § Gradeability) | "A 20 percent slope is the steepest grade most can handle"; its figure (Kansas State Extension): "designed to operate on hills with a grade of 20 percent or less" ([Ohio State Extension, AgProud 2018](https://agproud.com/articles/32313-take-care-while-planting-on-slopes)) | secondary, an extension guideline, not a tested limit |
+
 | Implement draft (`ImplementBase.draft_rating` / `draft_shape`); speeds in km/h, forces in kN | Value | Grade |
 | --- | --- | --- |
 | Mouldboard plough, ASABE D497.7's row (plough.gd `DRAFT_SHAPE`) | A 652, B 0, C 5.1, in N per m width per cm depth; soil texture factor fine 1.0, medium 0.70, coarse 0.45 [45] | secondary |
@@ -345,7 +354,7 @@ is a fitment law (the mobility number), a later `GroundDriveSpec` field.
 | Winter and Summer on ice | ice braking: winter 17.7, all-season 26.2, summer 35.5 m [71] | secondary |
 | Studded on ice | new studs about twice friction tyres on severe ice, worn studs as studless [72]; 1.6x a modern studless taken | secondary; the figure an estimate |
 | Mud on wet asphalt | wet-tar braking on a Hilux: mud-terrains 38.7 m, ~9 m past highway-terrains [73] | secondary |
-| Soil factors of every class (Mud, R-1W lug, slick ...) | no published lug-against-road-tread figure found; D497 carries no tread term | estimate |
+| Soil factors of every class (Mud, R-1W lug, slick ...) | on roads, an R-1 lug pulls about its weight on concrete (OECD 2136, the tractor's chassis table above); no lug-against-road-tread figure on soil found, and D497 carries no tread term | the road figure sourced; soil an estimate |
 | `crr_factor` | EU label C1 classes: A ≤ 6.5, B 6.6-7.7, C 7.8-9.0, D 9.1-10.5, E ≥ 10.6 N/kN [74]; summer B, all-season C, winter C's top, mud E's floor | sourced bands; each class's band an estimate |
 
 *Aero balance* (`downforce_front`, `race` and `race-future`; `docs/handling.md` § Aero balance):

@@ -169,25 +169,23 @@ the truck's `j1939` `axle_load` (lifting an implement moves its weight onto the 
   the rating, a held D7 poured the flare into the wheels in a tick (a spike of g, the front axle
   unloaded), and a held D4 flashed its rears into slip.
 - Flat strip (`measure_vehicles -- tractor-kenney 40 trace`):
-  - bobtail: D7, a clean close carrying the engine's torque, then two floored skip-shifts, D7>D13
-    and D13>D16, each gear held past the trace's dwell floor; rear slip low (~0.10), the front axle
+  - bobtail: D7, a clean close carrying the engine's torque, then three floored skip-shifts,
+    D7>D12, D12>D15 and D15>D16, each gear held past the trace's dwell floor; rear slip low (~0.10), the front axle
     kept loaded and every event inside its `front axle` gate (`docs/handling.md` § Pitch);
   - with the farm tipper: D6, then D10, D13, D15 and D16, each held longer.
 - Standing starts: `docs/vehicle_measurements.md` § Gradeability, `docs/drivetrain.md` § Hill hold; with the tipper on 10 %
   asphalt it picks D4 (`measure_grade -- tractor-kenney rollback tipper` times how soon it moves).
 - Reverse is the bus's single R byte, at ~D7's ratio (3.9); its top speed follows from that ratio and the governor.
 - Steady draft does not involve COM height: drag at the hitch and tyre reaction at ground form a
-  couple of `F × h_hitch`, a few kN off the static front load. The 0.83 m COM (`com_y_frac` 0.32:
-  the bare machine's 0.91 m with 1.5 t of liquid and hub ballast at ~0.55 m) matters for
-  transients and for rollover: over the 0.85 m mean half-track (1.62 / 1.79 m track, a real
-  tractor's) the static threshold is about 1 g, at the lug tyres' slide. Measured at
-  speed (`measure_semi_launch`'s tractor runs): the slow wind-on and a full-lock step steer both
-  run the fronts wide with only a few degrees of roll; on the 1.31 / 1.49 m track the same two runs
-  overturned.
-- Body scale 1.35 (2.99 × 2.17 m, 2.12 m wheelbase). It rides on its drawn tyres, 0.44 m front /
-  0.66 m rear. Suspension is the tyres: 330 / 420 kN/m, `rest_length` 0.12 m, ~33 / 42 % static sag.
-  A side jolt at speed rolls a couple of degrees and rebounds a fraction of it (roll damping ratio
-  ~0.37); the narrow track rolls further and rebounds more.
+  couple of `F × h_hitch`, a few kN off the static front load. The COM (`com_y_frac`, an estimate)
+  matters for transients and rollover. **The front axle is a beam on a pivot** (`GroundDriveSpec.
+  front_axle_swing_deg`, `docs/sources.md`): inside its stop the fronts share their load freely
+  (no front roll moment or damping), so the body rolls on the rears and the pivot, then on all four
+  at the stop; `BalanceModel` lifts the rear inner on that triangle. Its threshold sits under the
+  lugs' slide: a fast turn tips and overturns the tractor before it slides
+  (`docs/vehicle_measurements.md` § Cornering), and over bumps the beam keeps four wheels down.
+- Body `scale` 1.6465 (3.64 × 2.65 m, the 6R 150's 2.58 m wheelbase), on its drawn tyres.
+  Suspension is the tyres: 330 / 420 kN/m, `rest_length` 0.12 m, ~33 / 42 % static sag.
 
 ### The CVT tractor
 

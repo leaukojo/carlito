@@ -112,8 +112,8 @@
 		"top_speed_kmh": 105.0
 	},
 	"tractor-kenney": {
-		"label": "typical mid-size farm tractor (e.g. John Deere 6R class, road gear)",
-		"marks_s": {"50": 12.0},
+		"label": "typical mid-size farm tractor (e.g. John Deere 6R class, road gear); no launch mark: the sourced 12-18 s (docs/sources.md) states no speed range",
+		"marks_s": {},
 		"top_speed_kmh": 40.0
 	}
 }

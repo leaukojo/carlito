@@ -257,7 +257,7 @@ for (const f of gdFiles.filter((g) => /^(src|kit)\//.test(g))) {
 // Code comments are not scanned: their figures are mostly set tolerances, not measurements.
 // `(?!\d{4}s\b)`: a decade or product name ("1990s", "3000s"), not seconds.
 const MEASURED_FIGURE = /(?<![\w.])(?!\d{4}s\b)\d+(?:\.\d+)?\s?(?:s|ms|µs|g|km\/h|fps|mm|kN|N|°)(?![\w/²])/g;
-const MEASURED_FIGURE_CAP = 25;
+const MEASURED_FIGURE_CAP = 24;
 const figureHits = [];
 for (const f of docs.filter((d) => /^docs\/[^/]+\.md$/.test(d))) {
   let inRegion = false;

@@ -827,9 +827,16 @@ func _end_park() -> void:
 		"reg": _park_reg,
 	}
 	_park_rows.append(row)
-	print("  %-16s %4.1f %% %-5s along %+9.1f mm  across %+9.1f mm  peak %6.3f m/s%s" % [
+	# An oscillating front axle's beam off the body, as it settled (`RayWheel.swing`).
+	var beam := ""
+	if _car.spec.ground_drive.has_swing_axle():
+		for w in _car.wheels:
+			if not w.is_rear:
+				beam = "  beam %+.1f deg" % rad_to_deg(w.swing)
+				break
+	print("  %-16s %4.1f %% %-5s along %+9.1f mm  across %+9.1f mm  peak %6.3f m/s%s%s" % [
 		_variant, 100.0 * tan(deg_to_rad(_angle)), _park_mode,
-		1000.0 * float(row["along"]), 1000.0 * float(row["across"]), _park_peak,
+		1000.0 * float(row["along"]), 1000.0 * float(row["across"]), _park_peak, beam,
 		"  SLID (%.1f s)" % _t if row["slid"] else ""])
 	_phase = Ph.DONE
 	_next_park()

@@ -87,8 +87,8 @@ func test_wheel_kmh_is_spin_through_the_physics_radius() -> void:
 	# Unsigned: reversing still reports a speed (direction lives on 'gear' / 'speed').
 	assert_float(TractorT.wheel_kmh(-10.0, 0.5)).is_equal_approx(18.0, 1e-4)
 	assert_float(TractorT.wheel_kmh(0.0, 0.6)).is_equal(0.0)
-	# The shipped tractor's drive axle is its drawn 0.66 m rear.
-	assert_float(_tractor_spec().ground_drive.axle_radius(true)).is_equal_approx(0.66, 1e-4)
+	# The shipped tractor's drive axle is its drawn 0.805 m rear.
+	assert_float(_tractor_spec().ground_drive.axle_radius(true)).is_equal_approx(0.805, 1e-4)
 
 
 # --- ISO wheel slip -----------------------------------------------------------
@@ -615,19 +615,19 @@ func test_the_shipped_tractor_starts_in_d7_empty_on_the_flat_and_lower_laden_or_
 	# whose drive at the 1250 rpm launch line makes 2.0x the load or more:
 	var spec := _tractor_spec()
 	assert_int(spec.start_gear_max).is_equal(7)
-	# 26.5x on the flat; mud's 0.2 is still D7 bobtail (2.41x).
+	# 24.8x on the flat; mud's 0.2 is still D7 bobtail (2.26x).
 	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 0.0, 0.0))).is_equal(7)
 	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 0.0, 0.2))).is_equal(7)
 	# Laden with the 10 t tipper on mud no gear does (D1 1.79x): D1, the fallback.
 	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 0.0, 0.2, 10000.0))).is_equal(1)
-	# The tipper on 10 % asphalt takes D6 (2.02x); the 26 % mud climb D1 (2.05x), its measured best.
-	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 10.0, 0.0, 10000.0))).is_equal(6)
+	# The tipper on 10 % asphalt takes D5 (2.13x); the 26 % mud climb D1 (2.05x), its measured best.
+	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 10.0, 0.0, 10000.0))).is_equal(5)
 	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 26.4, 0.2))).is_equal(1)
 	# With the rig's mass and the rears' static grip the box also locks its launch within 1.5 s
-	# (`ShiftPolicy.launch_slip_s`, half the 0.8 s ramp included). Bobtail D7 locks in 0.84 s. The
+	# (`ShiftPolicy.launch_slip_s`, half the 0.8 s ramp included). Bobtail D7 locks in 0.90 s. The
 	# 10 t tipper (17 t all up, its 1200 kg nose weight on the rears, the pin behind them; its
-	# D4-D7 are engine-bound, so the grip only caps D1-D3) takes D6 on the flat, 1.32 s (D7 1.54 s),
-	# and D4 on 10 %, 1.36 s (D5 1.67 s), where the reserve alone picks D6.
+	# D4-D7 are engine-bound, so the grip only caps D1-D3) takes D6 on the flat, 1.44 s (D7 1.70 s),
+	# and D4 on 10 %, 1.45 s (D5 1.83 s), where the reserve alone picks D5.
 	var rear_n := BrakeSizing.wheel_loads(spec).y
 	var bare_grip := 2.0 * BrakeSizing.wheel_grip(spec, rear_n)
 	assert_int(ShiftPolicy.start_gear(spec, _standing_load(spec, 0.0, 0.0), 1.0, spec.mass,

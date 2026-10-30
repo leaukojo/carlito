@@ -3,13 +3,14 @@ extends TowHost
 ## The tractor's rear drawbar: a fixed pin, the coupler for whatever is hitched to it. The joint,
 ## gates and housekeeping are TowHost's; this class is the pin and its limits.
 
-## Pin in the chassis frame: the Drawbar node's +0.3935 mount plus `Pin`'s 1.60 (keep in step;
+## Pin in the chassis frame: the Drawbar node's +0.81 mount plus `Pin`'s 1.60 (keep in step;
 ## test_drawbar_trailer sweeps about it). Its 0.40 m height is farm_tipper's authoring datum.
-const PIN_LOCAL := Vector3(0.0, 0.40, 1.9935)
+const PIN_LOCAL := Vector3(0.0, 0.40, 2.41)
 
-## Yaw stop, deg each side: the trailer's front corners meet the rear tyres just past 80 on the
-## 1.79 m track (test_drawbar_trailer sweeps it); not Articulation's cab model.
-const SWING_MAX_DEG := 80.0
+## Yaw stop, deg each side: the tipper body's corners (|x| 0.90, 1.09 m aft of the pin) meet the
+## drawn 0.805 m rear tyres at ~61 on the 1.79 m track (test_drawbar_trailer sweeps it); 57 holds
+## ~4 deg back from contact for the joint's overshoot under load. Not Articulation's cab model.
+const SWING_MAX_DEG := 57.0
 
 ## Pitch stop, deg each side: covers the steepest grade break (the stop levers the drive axle up).
 const PITCH_LIMIT_DEG := 20.0

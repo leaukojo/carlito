@@ -803,3 +803,99 @@ func test_a_right_turn_is_not_modelled() -> void:
 	# `corner` is a left turn on a steer >= 0; the pass's right turn is its mirror.
 	var m := _driven(0.6, 0.1, "rear")
 	assert_bool(BalanceModel.corner(m, CORNER_V, -0.05).is_empty()).is_true()
+
+
+## `_spec` at 40 % front with no bar and a swinging front axle (stop `stop_deg`); `stiff` > 0 sets
+## both axles' springs to it (N/m), the rigid limit.
+func _swing_spec(stop_deg: float, stiff := 0.0) -> VehicleSpecScript:
+	var spec := _spec(0.4, 0.0, 0.0)
+	spec.ground_drive.front_axle_swing_deg = stop_deg
+	if stiff > 0.0:
+		spec.ground_drive.spring_rate = stiff
+		spec.ground_drive.spring_rate_rear = stiff
+	return spec
+
+
+## The front's share of the side force at `lat_g` (N), `m a_y b / L`.
+func _front_side_share(m: Dictionary, lat_g: float) -> float:
+	var wheelbase := float(m["wheelbase"])
+	return float(m["mass"]) * BalanceModel.G * lat_g * (wheelbase - float(m["front_arm"])) / wheelbase
+
+
+## The g (rigid limit) at which the rear inner wheel lifts on the stability triangle: the tip axis
+## from the rear outer patch to the pivot passes `(t_r / 2) a / L` outboard of the COM and
+## `h_p b / L` over the road under it.
+func _triangle_g(m: Dictionary) -> float:
+	var wheelbase := float(m["wheelbase"])
+	var a := float(m["front_arm"])
+	return float((m["rear"] as Dictionary)["track"]) / 2.0 * a / wheelbase \
+			/ (float(m["h"]) - float((m["front"] as Dictionary)["pivot_h"]) * (wheelbase - a) / wheelbase)
+
+
+func test_inside_its_stop_a_swinging_front_carries_only_its_pivots_moment() -> void:
+	var m := BalanceModel.axles(_swing_spec(10.0))
+	var f: Dictionary = m["front"]
+	var g := 0.1
+	var state := BalanceModel._roll_state(m, g)
+	var pivot_m := _front_side_share(m, g) * float(f["pivot_h"])
+	assert_float(float(state["front"])).is_equal_approx(2.0 * pivot_m / float(f["track"]), 1e-3)
+	# The rear's springs hold the rest of the moment, the rolled COM's weight with it.
+	var weight_h := float(m["mass"]) * BalanceModel.G * float(m["h"])
+	var phi := float(state["phi"])
+	assert_float(float(state["rear"]) * float((m["rear"] as Dictionary)["track"]) / 2.0) \
+			.is_equal_approx(weight_h * (g + phi) - pivot_m, 1e-2)
+	assert_float(BalanceModel.lltd(m)).is_less(BalanceModel.lltd(BalanceModel.axles(
+			_spec(0.4, 0.0, 0.0))))
+
+
+func test_the_front_takes_up_roll_without_a_step_at_its_stop() -> void:
+	var m := BalanceModel.axles(_swing_spec(0.5))
+	var f: Dictionary = m["front"]
+	var past := func(g: float) -> bool:
+		var front := float(BalanceModel._roll_state(m, g)["front"])
+		return front > 2.0 * _front_side_share(m, g) * float(f["pivot_h"]) / float(f["track"]) * (1.0 + 1e-6)
+	var lo := 0.0
+	var hi := 0.5
+	assert_bool(bool(past.call(hi))).is_true()
+	for _i in 50:
+		var mid := (lo + hi) / 2.0
+		if bool(past.call(mid)):
+			hi = mid
+		else:
+			lo = mid
+	var below := BalanceModel._roll_state(m, hi - 1e-5)
+	var above := BalanceModel._roll_state(m, hi + 1e-5)
+	assert_float(float(above["front"])).is_equal_approx(float(below["front"]),
+			1e-3 * float(below["front"]))
+	assert_float(float(above["phi"])).is_equal_approx(float(below["phi"]), 1e-3 * float(below["phi"]))
+
+
+func test_on_stiff_tyres_the_rear_inner_lifts_on_the_stability_triangle() -> void:
+	var m := BalanceModel.axles(_swing_spec(2.0, 1e9))
+	var cap_r := 2.0 * float((m["rear"] as Dictionary)["load"])
+	var lo := 0.0
+	var hi := 2.0
+	for _i in 50:
+		var mid := (lo + hi) / 2.0
+		var state := BalanceModel._roll_state(m, mid)
+		if is_finite(float(state["phi"])) and float(state["rear"]) < cap_r * (1.0 - 1e-9):
+			lo = mid
+		else:
+			hi = mid
+	assert_float(hi).is_equal_approx(_triangle_g(m), 1e-3)
+
+
+func test_past_its_stop_a_rolled_body_tips_on_the_wider_base() -> void:
+	# The rear inner lifted, the body rolls on to the stop and the front's outer patch takes over:
+	# it tips once both inner wheels are off, `(t_r a + t_f b) / (2 L h)` less the stop's own roll.
+	var m := BalanceModel.axles(_swing_spec(2.0, 1e9))
+	var wheelbase := float(m["wheelbase"])
+	var a := float(m["front_arm"])
+	var trapezoid := (float((m["rear"] as Dictionary)["track"]) * a
+			+ float((m["front"] as Dictionary)["track"]) * (wheelbase - a)) / (2.0 * wheelbase
+			* float(m["h"])) - deg_to_rad(2.0)
+	assert_float(trapezoid).is_greater(_triangle_g(m))
+	assert_float(BalanceModel.tip_g(m)).is_equal_approx(trapezoid, 2e-3)
+	# A stop wide enough to roll the COM past that base tips the body at the rear's first lift.
+	var wide := BalanceModel.axles(_swing_spec(10.0, 1e9))
+	assert_float(BalanceModel.tip_g(wide)).is_equal_approx(_triangle_g(wide), 2e-3)

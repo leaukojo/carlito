@@ -202,6 +202,17 @@ var wheel_radius := 0.0
 var wheel_inertia := 0.0
 ## This axle's tread half-width (m), `GroundDriveSpec.axle_half_width`: the contact cylinder's.
 var half_width := 0.0
+## An oscillating front axle's wheel (`on_beam`, set by its owner `WheelDrive`): the beam's angle
+## (rad, + = its right end up off the body; 0 on every other wheel), set before `tick`
+## (`swing_step`), and its pivot (body space). The mount, its cast, its steer axis and the drawn
+## wheel turn with the beam about body +Z through the pivot (`mount_anchor`, `mount_basis`).
+var on_beam := false
+var swing := 0.0
+var swing_pivot := Vector3.ZERO
+## A beam wheel's last contact force on the body (N) and its patch, both body space; zero off the
+## ground. The beam's moment reads them (`swing_moment`).
+var patch_force := Vector3.ZERO
+var patch_point := Vector3.ZERO
 
 var _prev_compression := 0.0
 ## Contact-patch deflection (m; x along the wheel's forward, y along its side), the static-friction
@@ -313,6 +324,21 @@ func reset() -> void:
 	lock_torque = 0.0
 	_stick = Vector2.ZERO
 	_spin_held = false
+	swing = 0.0
+	patch_force = Vector3.ZERO
+	patch_point = Vector3.ZERO
+
+
+## This wheel's mount (body space): its anchor turned with the beam (`swing`) about the pivot.
+func mount_anchor() -> Vector3:
+	if swing == 0.0:
+		return anchor
+	return swing_pivot + Basis(Vector3.BACK, swing) * (anchor - swing_pivot)
+
+
+## The mount's frame: `body_basis` turned with the beam (`swing`) about body +Z.
+func mount_basis(body_basis: Basis) -> Basis:
+	return body_basis * Basis(Vector3.BACK, swing) if swing != 0.0 else body_basis
 
 
 ## The one front/rear predicate: +Z is rearward in body space, so a station at exactly z == 0 is
@@ -346,14 +372,16 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		drive_torque: float, brake_torque: float, delta: float,
 		grip_terrains: Array[Node], abs_slip := 0.0, tcs_slip := 0.0, tcs_drive := 0.0) -> void:
 	var xform := body.global_transform
-	var up := xform.basis.y
-	var ray_from := xform * anchor
+	# The mount's frame: the body's, turned with an oscillating axle's beam (`swing`).
+	var mount := mount_basis(xform.basis)
+	var up := mount.y
+	var ray_from := xform * mount_anchor()
 	var ray_len := drive_spec.rest_length + wheel_radius
 	# The contact query: whether the tyre touches, how far below the anchor its hub sits touching
 	# plus the radius (`hit_dist`), and the contact normal.
 	var hit_dist := 0.0
 	var normal := Vector3.UP
-	in_contact = _contact_query(space, body, ray_from, up, Basis(up, steer_angle) * xform.basis,
+	in_contact = _contact_query(space, body, ray_from, up, Basis(up, steer_angle) * mount,
 			drive_spec.rest_length)
 	if in_contact:
 		hit_dist = _contact_drop + wheel_radius
@@ -374,12 +402,14 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		surface_grip = 1.0
 		surface_drag = 0.0
 		_stick = Vector2.ZERO
+		patch_force = Vector3.ZERO
+		patch_point = Vector3.ZERO
 		# ABS and TC compare wheel speed with vehicle speed and cannot see contact: off the ground they
 		# read the hub's own forward velocity. So a braked wheel that lifts (the rears in a hard stop)
 		# keeps turning near road speed and lands gripping, where a brake alone stops it dead in the air
 		# and it lands locked.
 		var hub_vel := VehicleMath.point_velocity(body, ray_from)
-		var hub_v_long := hub_vel.dot(Basis(up, steer_angle) * -xform.basis.z)
+		var hub_v_long := hub_vel.dot(Basis(up, steer_angle) * -mount.z)
 		_integrate_spin(drive_torque, 0.0, brake_torque, delta, 0.0,  ## airborne
 				hub_v_long, abs_slip, 0.0, tcs_slip, tcs_drive)
 		omega = free_spin_omega(omega, delta)
@@ -392,7 +422,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	# is the hub's disk touching along the contact normal, on the wheel's mid-plane: Jolt's own rest
 	# point wanders across the tread (9 cm on a steered wheel).
 	var hub := ray_from - up * (hit_dist - wheel_radius)
-	contact_point = hub + patch_offset(normal, up, Basis(up, steer_angle) * xform.basis.x,
+	contact_point = hub + patch_offset(normal, up, Basis(up, steer_angle) * mount.x,
 			wheel_radius)
 	var terrain := terrain_at(contact_point, grip_terrains)
 	# Bare ground (flatland, a deck off the terrain) is asphalt to the fitted tyre too.
@@ -416,7 +446,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 			0.0, drive_spec.max_suspension_force)
 	body.apply_force(normal * suspension_force, contact_point - body.global_position)
 
-	var wheel_forward := (Basis(up, steer_angle) * -xform.basis.z)
+	var wheel_forward := (Basis(up, steer_angle) * -mount.z)
 	var forward := (wheel_forward - normal * wheel_forward.dot(normal)).normalized()
 	var side := forward.cross(normal)
 
@@ -498,6 +528,10 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	force_roll = surface_drag_force(v_long, rolling_crr + surface_drag, suspension_force,
 			long_mass, delta)
 	body.apply_force(forward * force_roll, contact_point - body.global_position)
+	if on_beam:
+		patch_force = xform.basis.transposed() * (normal * suspension_force
+				+ forward * (f.x + force_roll) + side * f.y)
+		patch_point = xform.affine_inverse() * contact_point
 
 	var dv_long := road_change(body.linear_velocity, forward, _prev_com_long, v_long) \
 			if _prev_vel_valid else 0.0
@@ -591,6 +625,35 @@ func bar_force(rate: float) -> float:
 		return 0.0
 	var hang := VehicleMath.anti_roll_hang(_bar_compression, rate, partner.spring_rate)
 	return VehicleMath.anti_roll_force(_bar_compression, maxf(partner._bar_compression, hang), rate)
+
+
+## Pure: the moment (N·m, + = turning the beam's right end up) about body +Z through `pivot` of the
+## contact forces `forces` at the patches `points` (all body space, `patch_force` / `patch_point`):
+## what an oscillating axle's beam must balance (`swing_step`). The forces reach the body through
+## the beam, so it carries this moment only against its stop.
+static func swing_moment(points: PackedVector3Array, forces: PackedVector3Array,
+		pivot: Vector3) -> float:
+	var moment := 0.0
+	for i in points.size():
+		moment += (points[i] - pivot).cross(forces[i]).z
+	return moment
+
+
+## Pure: the beam's next angle (rad) off its angle `theta`, last tick's moment on it `moment` (N·m,
+## `swing_moment`) and its own turn into that tick `last_turn` (rad), within ±`stop`: implicit Euler
+## of a massless beam between its two tyres' springs `rate` (N/m) and dampers `damper` (N·s/m, the
+## pair's mean: one wheel bumps as the other rebounds) at ±`half_track` (m). The moment carries the
+## dampers' reaction to that turn, `damper / delta` per metre, which the beam does not push against
+## again: it is credited back, so the beam balances the dampers' share of the body's roll too and
+## passes none of it on. With the body held still it closes `rate / (rate + damper / delta)` of the
+## imbalance a tick, never past it.
+static func swing_step(theta: float, moment: float, last_turn: float, rate: float, damper: float,
+		half_track: float, delta: float, stop: float) -> float:
+	var arm := 2.0 * half_track * half_track
+	var stiffness := (rate + damper / delta) * arm
+	if stiffness <= 0.0:
+		return clampf(theta, -stop, stop)
+	return clampf(theta + (moment + damper / delta * arm * last_turn) / stiffness, -stop, stop)
 
 
 ## Effective mass (kg) each contact's force along body-space unit `axis` meets while every contact
@@ -718,10 +781,11 @@ static func size_cap_masses(wheels: Array[RayWheel], body: RigidBody3D,
 	var droop := Vector3(0.0, gd.rest_length, 0.0)
 	var arms := PackedVector3Array()
 	for w in wheels:
-		var normal := b.transposed() * w.contact_normal if w.in_contact else Vector3.UP
-		var patch := patch_offset(normal, Vector3.UP, Basis(Vector3.UP, w.steer_angle) * Vector3.RIGHT,
+		var beam := w.mount_basis(Basis.IDENTITY)
+		var normal := b.transposed() * w.contact_normal if w.in_contact else beam.y
+		var patch := patch_offset(normal, beam.y, Basis(beam.y, w.steer_angle) * beam.x,
 				w.wheel_radius)
-		arms.append(w.anchor - droop + patch - body.center_of_mass)
+		arms.append(w.mount_anchor() - beam * droop + patch - body.center_of_mass)
 	var along := contact_masses(arms, Vector3.BACK, body.mass, inv_inertia)
 	var across := contact_masses(arms, Vector3.RIGHT, body.mass, inv_inertia)
 	var floor_vel := LOW_SPEED_FLOOR
@@ -1030,8 +1094,9 @@ func update_visual(drive_spec: GroundDriveSpec, delta: float) -> void:
 	if _visual == null:
 		return
 	_spin_angle = wrapf(_spin_angle + omega * delta, -TAU, TAU)
-	var center := anchor + Vector3.DOWN * (drive_spec.rest_length - compression)
+	var beam := mount_basis(Basis.IDENTITY)
+	var center := mount_anchor() + beam * Vector3.DOWN * (drive_spec.rest_length - compression)
 	_visual.transform = Transform3D(
-			Basis(Vector3.UP, steer_angle) * Basis(Vector3.RIGHT, -_spin_angle)
+			beam * Basis(Vector3.UP, steer_angle) * Basis(Vector3.RIGHT, -_spin_angle)
 			* Basis(Vector3.BACK, PI / 2.0),
 			center)

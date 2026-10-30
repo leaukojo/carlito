@@ -5,13 +5,13 @@
 ; to match the kit's flat-shaded look, like every implement and trailer in the project.
 ;
 ; AUTHORED IN THE MOUNT'S OWN FRAME, shared with three_point_hitch.tscn: the tractor scene hangs
-; both at z = +0.3935, the offset that lands the hitch housing's back face on the hull's rear
-; face (chassis z 1.518). So a CHASSIS coordinate is a position below PLUS 0.3935 -- which is why
-; Drawbar.PIN_LOCAL reads 1.9935 against `Pin`'s 1.60, and TowHost composes the two
-; (`transform * marker.position`) rather than trusting either alone. Everything here is measured
-; against the hitch scene and the tractor body:
-;   - ground is y ~ 0 at ride height and the body ends near the centreline at z ~ 0.99 (mount
-;     frame; 1.38 chassis, which is inside the hull's 1.518 rear face);
+; both at z = +0.81, the offset that holds the implements clear of the rear tyres (see
+; three_point_hitch.tscn; the hull's rear face is chassis z 1.851). So a CHASSIS coordinate is a
+; position below PLUS 0.81 -- which is why Drawbar.PIN_LOCAL reads 2.41 against `Pin`'s 1.60, and
+; TowHost composes the two (`transform * marker.position`) rather than trusting either alone.
+; Everything here is measured against the hitch scene and the tractor body:
+;   - ground is y ~ 0 at ride height and within |x| 0.45 the body ends at z ~ 1.03 (mount
+;     frame; 1.84 chassis, inside the hull's 1.851 rear face);
 ;   - the hitch housing case occupies x +-0.20, y 0.335 .. 0.755, z 0.88 .. 1.12, so the bar starts
 ;     at z 1.15 rather than running through it;
 ;   - the PTO stub is on the centreline at y 0.60 out to z ~ 1.22, so the bar's top at y 0.45

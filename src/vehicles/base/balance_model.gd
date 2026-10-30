@@ -3,7 +3,8 @@ extends RefCounted
 ## A two-axle body's steady-state handling balance as pure arithmetic over its spec, which
 ## `tools/gen_kenney_vehicles.gd` reports and `measure_vehicles` prints beside its step and corner
 ## readings. RayWheel pushes at the patch, so the roll centre is the ground: an axle's roll stiffness
-## is `(k / 2 + bar) * t^2` and every newton of transfer goes through it. Below the grip curve's peak
+## is `(k / 2 + bar) * t^2` and every newton of transfer goes through it, except on a swinging
+## front axle inside its stop (`_roll_state`). Below the grip curve's peak
 ## a wheel's side force is exactly its cornering stiffness times its slip. The angular damping's yaw
 ## moment `I * c * r` is a term of its own, and so are roll and compliance steer, angles and not
 ## grips. `limit` is free-rolling at zero steer; the corner pass, steered and driven, has its own
@@ -11,6 +12,8 @@ extends RefCounted
 ## The model is a plain Dictionary (`axles`), so a what-if edits it.
 
 const G := BrakeSizing.G
+## The g a swinging front axle's LLTD is read at (`lltd`): elastic, every wheel down.
+const LLTD_G := 0.1
 
 
 ## The model of `spec` at `speed` (m/s), SI units; empty unless one front and one rear pair (no
@@ -31,6 +34,7 @@ static func axles(spec: VehicleSpec, speed := 0.0) -> Dictionary:
 	var rear_x := PackedFloat32Array()
 	var front_z := NAN
 	var rear_z := NAN
+	var front_y := 0.0
 	for p in gd.wheel_positions:
 		var on_rear := RayWheel.is_rear_z(p.z)
 		var z := rear_z if on_rear else front_z
@@ -42,6 +46,7 @@ static func axles(spec: VehicleSpec, speed := 0.0) -> Dictionary:
 		else:
 			front_z = p.z
 			front_x.append(p.x)
+			front_y += p.y / 2.0
 	if front_x.size() != 2 or rear_x.size() != 2:
 		return {}
 	var loads := BrakeSizing.wheel_loads(spec)
@@ -82,6 +87,12 @@ static func axles(spec: VehicleSpec, speed := 0.0) -> Dictionary:
 	if gd.steer_falloff_speed > 0.0:
 		taper = lerpf(1.0, gd.min_steer_frac, clampf(speed / gd.steer_falloff_speed, 0.0, 1.0))
 	var h := spec.center_of_mass.y + gd.rest_ride_height() - sag
+	# The front's `swing` and `pivot_h`, an oscillating axle's (`GroundDriveSpec.front_axle_swing_deg`):
+	# its beam's stop (rad; 0 = none), and its pivot (on the front anchor line, `WheelDrive`) over the
+	# road at the front's own sag.
+	front["swing"] = deg_to_rad(gd.front_axle_swing_deg) if gd.has_swing_axle() else 0.0
+	front["pivot_h"] = front_y + gd.rest_ride_height() \
+			- _sag(_normal(front), gd.spring_rate, gd) if gd.has_swing_axle() else 0.0
 	# The aero centre over the road and ahead of the COM; ZERO acts through the live COM
 	# (`WheelDrive.apply_at`).
 	var at_com := gd.aero_centre == Vector3.ZERO
@@ -128,32 +139,55 @@ static func roll_deg(m: Dictionary, lat_g: float) -> float:
 ## moment alone: the step pass's roll-steer angles, the corner pass's roll against its pred). An
 ## axle whose inner wheel lifts carries at most twice its wheel load (`_normal`) across it (moment
 ## `load * t`); the rest of the moment rolls the body on the other axle alone. Both lifted, or no
-## stiffness left over the weight's: the body is tipping, roll reads INF.
-static func _roll_state(m: Dictionary, lat_g: float) -> Dictionary:
+## stiffness left over the weight's: the body is tipping, roll reads INF. A swinging front axle
+## (`swing` > 0) carries no roll inside its stop: see the comments within. `side_g` is the tyres'
+## own side force over the weight where the air moves `lat_g` off it (`_corner_state`; NAN = it).
+static func _roll_state(m: Dictionary, lat_g: float, side_g := NAN) -> Dictionary:
 	var f: Dictionary = m["front"]
 	var r: Dictionary = m["rear"]
+	var t_f := float(f["track"])
+	var t_r := float(r["track"])
 	var weight_h := float(m["mass"]) * G * float(m["h"])
 	var moment := weight_h * absf(lat_g)
 	var k_f := _roll_stiffness(f)
 	var k_r := _roll_stiffness(r)
 	var cap_f := 2.0 * _normal(f)
 	var cap_r := 2.0 * _normal(r)
-	if k_f + k_r <= weight_h:
-		return {"phi": INF, "front": cap_f, "rear": cap_r}
-	var phi := moment / (k_f + k_r - weight_h)
-	var df := 2.0 * k_f * phi / float(f["track"])
-	var dr := 2.0 * k_r * phi / float(r["track"])
+	var stop := float(f.get("swing", 0.0))
+	var phi := INF
+	var df := 0.0
+	var free := false
+	if stop > 0.0 and k_r > weight_h:
+		# Inside the stop the beam carries only the front's share of the tyres' side force
+		# (`m a_y b / L`) entering at the pivot, `F_f h_p`, and the rear's springs hold the rest. The
+		# beam turns off the body by the roll less its tyres' own deflection, `F_f h_p / K_f`.
+		var wheelbase := float(m["wheelbase"])
+		var pivot_m := float(m["mass"]) * G * absf(lat_g if is_nan(side_g) else side_g) \
+				* (wheelbase - float(m["front_arm"])) / wheelbase * float(f["pivot_h"])
+		phi = (moment - pivot_m) / (k_r - weight_h)
+		df = 2.0 * pivot_m / t_f
+		free = phi - pivot_m / maxf(k_f, 1e-6) <= stop
+	if not free:
+		# Every corner elastic; a swinging front against its stop, rigid there, its tyres taking
+		# `K_f (phi - stop)`, continuous with the free beam.
+		if k_f + k_r <= weight_h:
+			return {"phi": INF, "front": cap_f, "rear": cap_r}
+		phi = (moment + k_f * stop) / (k_f + k_r - weight_h)
+		df = 2.0 * k_f * (phi - stop) / t_f
+	var dr := 2.0 * k_r * phi / t_r
 	if df > cap_f and dr > cap_r or (df > cap_f and k_r <= weight_h) \
 			or (dr > cap_r and k_f <= weight_h):
 		return {"phi": INF, "front": cap_f, "rear": cap_r}
 	if df > cap_f:
 		df = cap_f
-		phi = (moment - cap_f * float(f["track"]) / 2.0) / (k_r - weight_h)
-		dr = 2.0 * k_r * phi / float(r["track"])
+		phi = (moment - cap_f * t_f / 2.0) / (k_r - weight_h)
+		dr = 2.0 * k_r * phi / t_r
 	elif dr > cap_r:
+		# A swinging front's body rolls on to the stop (it lifted on the stability triangle, rear
+		# outer patch to pivot), and the front then holds what the lifted rear cannot.
 		dr = cap_r
-		phi = (moment - cap_r * float(r["track"]) / 2.0) / (k_f - weight_h)
-		df = 2.0 * k_f * phi / float(f["track"])
+		phi = (moment - cap_r * t_r / 2.0 + k_f * stop) / (k_f - weight_h)
+		df = 2.0 * k_f * (phi - stop) / t_f
 	if df > cap_f + 1e-3 or dr > cap_r + 1e-3:
 		return {"phi": INF, "front": cap_f, "rear": cap_r}
 	return {"phi": phi, "front": df, "rear": dr}
@@ -165,12 +199,16 @@ static func _transfer(m: Dictionary, key: String, lat_g: float) -> float:
 
 
 ## The front axle's share of the lateral load transfer (LLTD): `(k / 2 + bar) * t` per axle, as
-## `measure_vehicles` reads it off the corners' spring loads.
+## `measure_vehicles` reads it off the corners' spring loads. A swinging front axle's transfer is its
+## pivot's moment, so the shares are read off `_roll_state` at LLTD_G.
 static func lltd(m: Dictionary) -> float:
 	if m.is_empty():
 		return NAN
 	var f: Dictionary = m["front"]
 	var r: Dictionary = m["rear"]
+	if float(f.get("swing", 0.0)) > 0.0:
+		var roll := _roll_state(m, LLTD_G)
+		return float(roll["front"]) / (float(roll["front"]) + float(roll["rear"]))
 	var front := _roll_stiffness(f) / float(f["track"])
 	return front / (front + _roll_stiffness(r) / float(r["track"]))
 
@@ -598,7 +636,8 @@ static func _corner_state(m: Dictionary, speed: float, steer: float,
 	var aero_h := float(m.get("aero_h", m["h"]))
 	var h := float(m["h"])
 	var roll := _roll_state(m, absf(acc_lat) / G if aero_w == 0.0
-			else absf(mass * acc_lat * h - aero_w * aero_h) / (mass * G * h))
+			else absf(mass * acc_lat * h - aero_w * aero_h) / (mass * G * h),
+			absf(mass * acc_lat - aero_w) / (mass * G))
 	# Per front wheel; the rear sheds it.
 	var pitch := (-mass * acc_long * h + aero_u * aero_h) / wheelbase / 2.0
 	# Each axle's side force per patch (N, + = right as `force_lat`: a left turn pushes the body left)

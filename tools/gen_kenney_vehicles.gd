@@ -70,7 +70,7 @@ const WHEEL_BAND := 0.4   ## m z-window (body space) the body half-width is meas
 ## 0.36 is the kit wheel's native 0.30 m at KIT_SCALE.
 const WHEEL_DEFAULT := {"scene": OUT_DIR + "/wheel.tscn", "radius": 0.36, "half": 0.240}
 const WHEEL_TRUCK := {"scene": OUT_DIR + "/wheel-truck.tscn", "radius": 0.36, "half": 0.210}
-## The tractor's axles differ, and both sit on the tractor's own `scale` 1.35 body: these
+## The tractor's axles differ, and both sit on the tractor's own `scale` 1.6465 body: these
 ## are the model's 0.30 / 0.45 radii scaled with it AND by a further 1.086, taking the rear tyre's
 ## diameter to 0.62 of the wheelbase (the bare body scale left it at 0.57, reading as a small
 ## wheel under a big machine; a real field tractor is nearer 0.64, which is where the spreader's
@@ -78,9 +78,9 @@ const WHEEL_TRUCK := {"scene": OUT_DIR + "/wheel-truck.tscn", "radius": 0.36, "h
 ## `half` with the radius is what keeps the flush-X rule landing on the scaled authored station;
 ## the tyre growing inboard is what `wheel_x_out` pays back.
 const WHEEL_TRACTOR_FRONT := {
-	"scene": OUT_DIR + "/wheel-tractor-front.tscn", "radius": 0.44, "half": 0.3021}
+	"scene": OUT_DIR + "/wheel-tractor-front.tscn", "radius": 0.537, "half": 0.3684}
 const WHEEL_TRACTOR_REAR := {
-	"scene": OUT_DIR + "/wheel-tractor-rear.tscn", "radius": 0.66, "half": 0.4048}
+	"scene": OUT_DIR + "/wheel-tractor-rear.tscn", "radius": 0.805, "half": 0.4937}
 
 # Not const: Vector2 / NodePath / Array literals aren't constant expressions in GDScript.
 var _grip_curve := PackedVector2Array([
@@ -114,8 +114,8 @@ var _lens_overrides := {
 ## Lamp height for an end with no painted lens (the body-box fallback centre is wrong there).
 ## variant -> {front?: y, rear?: y}, BODY space — a figure on the SCALED body, so a `scale` edit
 ## has to bring it along. Tractor rear: the box centre lands too low there (verified driving);
-## 1.647 is the shipped height.
-var _fallback_lamp_y := {"tractor-kenney": {"rear": 1.647}}  ## keyed by model (`_model_of`)
+## 2.009 is the height verified on the `scale` 1.35 body (1.647) carried to 1.6465.
+var _fallback_lamp_y := {"tractor-kenney": {"rear": 2.009}}  ## keyed by model (`_model_of`)
 var _drag_report: Array = []  ## per-variant measured frontal area + derived drag area
 var _shape_report: Array = []  ## per-variant collision shape kind + hull vertex count
 var _lens_report: Array = []   ## per-variant lens detection, so a bad lamp is diagnosable
@@ -543,13 +543,17 @@ const TRACTOR_BASE := {
 	"anti_roll_rate_rear": -1.0,
 	# No roll or compliance steer: the "suspension" is the tyres, with no links to steer.
 	"roll_steer_front": 0.0, "roll_steer_rear": 0.0, "compliance_steer_rear": 0.0,
+	# The front axle oscillates on its centre pivot, 10 deg each way to its stop (Traktorenlexikon,
+	# secondary: Claas Arion 420 10 deg, Fendt 200 Vario 8 / 10 sprung, Fendt 936 12; no 6R figure
+	# found), so the body rolls on the rears and the pivot until then.
+	"front_axle_swing_deg": 10.0,
 	# No link geometry: the "suspension" is the tyres.
 	"anti_dive": 0.0, "anti_squat": 0.0,
 	# Per axle, I = m (kappa r)^2 at the drawn radius, tyre and rim (liquid ballast does not turn
-	# with the tyre): rear 367 kg x (0.75 x 0.66)^2 = 90, front 143 kg x (0.75 x 0.44)^2 = 16
+	# with the tyre): rear 367 kg x (0.75 x 0.805)^2 = 134, front 143 kg x (0.75 x 0.537)^2 = 23
 	# (docs/sources.md grades the masses and kappa). The spin step divides NET torque by 1 + reaction_stiffness, so a bigger inertia only slows
 	# spin-up.
-	"wheel_inertia": 16.0, "wheel_inertia_rear": 90.0, "driven_front": false, "driven_rear": true,
+	"wheel_inertia": 23.0, "wheel_inertia_rear": 134.0, "driven_front": false, "driven_rear": true,
 	# ISOBUS: only family with lockable diff / engageable front axle at runtime.
 	"rear_diff_lockable": true, "front_axle_engageable": true,
 	# Open rear with a lock; MFWD is a clutch into a rigid transfer to the front axle, no centre
@@ -560,8 +564,8 @@ const TRACTOR_BASE := {
 	# of their rating, `1 + load_sensitivity * log2(rated rear / rated front)`: 650/65R38 157D (4125 kg)
 	# over 540/65R28 142D (2650 kg), a ~180 hp tractor's fit (Michelin MultiBib). It scales the rear's
 	# peak and its cornering stiffness alike. BalanceModel.limit reads equal tyres -5.1 % (rear-first),
-	# these +2.1 % front-first; the corner pass saturates the front first (0.98 / 0.79 at 0.76 g),
-	# BalanceModel.corner_limit +22.3 %.
+	# these -2.1 %; on its swinging front axle the corner pass tips at 0.72 g before
+	# either axle saturates (BalanceModel.corner_limit unsaturated, 0.62 / 0.63).
 	"tyre_fit": TyreClass.Fit.TRACTOR, "tyre": "ag_lug",
 	"mu_long": 1.0, "mu_lat": 0.95, "rear_lat_grip": 1.077,
 	# No ABS: a farm tractor's service brakes are not anti-lock. They sit on the rear axle only, and
@@ -569,16 +573,16 @@ const TRACTOR_BASE := {
 	"abs_equipped": false, "brake_engages_front_axle": true,
 	# Wet multi-disc brakes on the rear axle: 8600 Nm a wheel on average at a 0.36 m wheel (17.2 kNm
 	# at each rear) is 1.4 g at 7 t, and the 34 kNm total beats gear 1 at stall (23.6 kNm over all
-	# four wheels through MFWD; 63 / 43.3 kNm re-referred below): the shaft carries the fronts'
+	# four wheels through MFWD; 76.9 / 52.8 kNm re-referred below): the shaft carries the fronts'
 	# drive into the rears' spare brake (`BrakeSizing.stall_hold_margin`). The parking brake on the
 	# rear axle, 8000 Nm a wheel at 0.36 m, locks the rears; the parking grade is the rear tyres'
 	# (`BrakeSizing.park_grade`). The powershift's park lock is the pawl, 15000 Nm at 0.36 m.
 	# All three sit inboard of the final reduction (the Case IH Puma's "differential" wet discs,
 	# secondary, off a spec listing, not a workshop manual; the parking brake and pawl in the
-	# transmission), so the re-derived reduction below (x 0.66 / 0.36 = 1.833) puts that much more
+	# transmission), so the re-derived reduction below (x 0.805 / 0.36 = 2.236) puts that much more
 	# of the same hardware at the wheel: re-referred, not enlarged, and every force (torque over
 	# radius) is unchanged.
-	"brake_torque": 15767.0, "handbrake_torque": 14667.0, "park_pawl_torque": 27500.0,
+	"brake_torque": 19231.0, "handbrake_torque": 17889.0, "park_pawl_torque": 33542.0,
 	"brake_heat": "tractor_wet",
 	# No TC either: MFWD and the diff lock are a tractor's traction aids. Nor ESC: no road ESC on
 	# the machine.
@@ -596,35 +600,35 @@ const TRACTOR_BASE := {
 	# An all-speed governor (Bosch's variable-speed governors, Governors for In-Line Pumps, 1975): the
 	# pedal or the hand throttle sets an engine speed from idle to the 2600 high idle, and the fuel
 	# holds it on a 7 % droop line, Deere's 6R (rated 2100, fast idle 2250). COMPROMISE: at the top
-	# setting the line is the curve's own 2200-2600 tail, an 18 % droop there; reshaping the tail to
-	# 7 % (high idle ~2350) drops the top speed from ~39 to ~35 km/h (docs/vehicles.md § Rejected
-	# designs, "torque-curve tails").
+	# setting the line is the curve's own 2200-2600 tail, an 18 % droop there. A 7 % tail (high idle
+	# ~2350) is the open fix: the road gear below makes 40 km/h at the 2200 rated speed, so the tail
+	# no longer sets the top speed (docs/vehicles.md § Rejected designs, "torque-curve tails").
 	"pedal_map": PedalMap.Kind.ALL_SPEED, "governor_droop": 0.07,
 	# Diesel: the road diesels' figure reads the OECD-tested 6175R's specific consumption at its
 	# PTO within 5 % (docs/sources.md § Fuel), so the tractor shares it.
 	"fuel_type": VehicleTelemetry.Fuel.DIESEL,
 	# A full powershift of 16 forward speeds, the John Deere 8R e16 class (16F, full powershift: OECD
-	# 2/2 682; docs/sources.md § Gearing), over a ~4.4:1 spread, 9 km/h first to a 40 km/h road gear,
-	# in even 1.103 steps. COMPROMISE: the e16 spans 22:1 (1.9-42.2 km/h at 2100 rpm) in ~1.15 field
-	# steps, and this span is only its gears 8-16; its count in our span is a step at the brief's
-	# 1.10-1.15 lower edge. Undoing it is a deeper D1, which moves the stall hold, creep,
-	# gradeability and every tractor launch. Reverse is the bus's one R byte, at ~D7's ratio: a
-	# shuttle reverses near its forward working speeds.
-	# `final_drive` 10.083 is 5.5 at a 0.36 m wheel re-referred to the drawn 0.66 m rear
-	# (x 0.66 / 0.36): G / r is unchanged, so every road speed per rpm, the force per N*m and the
+	# 2/2 682; docs/sources.md § Gearing), over a 5.2:1 spread, 7.8 km/h first to a 40 km/h road
+	# gear at the 2200 rated speed, in even 1.116 steps. COMPROMISE: the e16 spans 22:1 (1.9-42.2
+	# km/h at 2100 rpm) in ~1.15 field steps, and this span is only its gears 8-16; its count in our
+	# span is a step inside the brief's 1.10-1.15. Undoing it is a deeper D1, which moves the stall
+	# hold, creep, gradeability and every tractor launch. Reverse is the bus's one R byte, between
+	# D6's and D7's ratios: a shuttle reverses near its forward working speeds.
+	# `final_drive` 12.299 is 5.5 at a 0.36 m wheel re-referred to the drawn 0.805 m rear
+	# (x 0.805 / 0.36): G / r is unchanged, so every road speed per rpm, the force per N*m and the
 	# crank's reflected mass J (G / r)^2 / m are too. A radius re-referral, not a traction lever.
-	"gear_ratios": [7.0, 6.344, 5.75, 5.211, 4.722, 4.28, 3.879, 3.515, 3.186, 2.887, 2.617, 2.372,
-			2.149, 1.948, 1.765, 1.6], "reverse_ratio": 3.9,
-	"final_drive": 10.083, "efficiency": 0.9, "shift_up_rpm": 2200.0, "shift_down_rpm": 1000.0,
+	"gear_ratios": [7.0, 6.275, 5.625, 5.042, 4.52, 4.051, 3.632, 3.255, 2.918, 2.616, 2.345, 2.102,
+			1.884, 1.689, 1.514, 1.357], "reverse_ratio": 3.9,
+	"final_drive": 12.299, "efficiency": 0.9, "shift_up_rpm": 2200.0, "shift_down_rpm": 1000.0,
 	# The powershift's map (`ShiftPolicy`): light 1500, Massey Ferguson AutoDrive's Eco mode (its
 	# Power mode's 2100 is the full pair's 2200); the sourced 1200 downshift (Dynashift, both modes)
-	# sits over the full pair's 1000, so the coast stays at it (0). 1500 lands ~1360 on the 1.103
+	# sits over the full pair's 1000, so the coast stays at it (0). 1500 lands ~1345 on the 1.116
 	# steps, over the landing floor (1214). No pedal kickdown: AutoDrive shifts on engine speed and
 	# none is sourced for a powershift; with one, the six-speed bobtail kicked from D5 to D4 at 15 km/h
 	# and revved into its forced upshift 0.62 s later (cruise probe, 2026-10-13). A 1.5 s dwell, and
 	# skip-shifts: a lift from 2200 ripples four gears to land under the light point, and floored, a
 	# bobtail passes the gears it would not hold for the dwell (`ShiftPolicy.forced_upshift`).
-	# The start gear up to D7, 3.88 (`ShiftPolicy.start_gear`): a powershift's
+	# The start gear up to D7, 3.63 (`ShiftPolicy.start_gear`): a powershift's
 	# start gear is a driver preset, higher for an empty run and lower with a load; picked here as an
 	# AMT picks its own from gross weight and gradient: the highest that beats the standing load
 	# twice and locks a floored launch within 1.5 s on the rig's mass. D7 bare on the flat, D6 with
@@ -656,13 +660,19 @@ const TRACTOR_BASE := {
 	"launch_rpm_over_idle": 0.0,
 	# Ackermann 1.0, an estimate (no ag-tractor figure sourced): headland turns at full lock are the
 	# scrub case.
+	# COMPROMISE: 38 deg (the bicycle angle) turns the outer front tyre's patch on 5.08 m at 5 km/h
+	# (`measure_vehicles -- tractor-kenney 20 circle`), against 5.5 m on a Fendt 716's 2.70-2.78 m
+	# (Traktorenlexikon), ~5.2 m scaled to this 2.58 m wheelbase; its inner wheel reads 42.8 deg
+	# against the real 50-58 deg lock, the radius a real steering axis's offset adds being absent.
+	# Undoing it is a steering-axis offset in `WheelDrive`'s steer geometry; a bare 50 deg lock
+	# instead tightens the outer path to ~4.1 m (computed), under every sourced radius.
 	# `steer_speed` 0.75: a hydrostatic steering unit turns the wheels only as fast as the driver
 	# winds the wheel. A Fendt 516 Vario takes 5 1/3 turns lock to lock (topagrar test), 960 deg
 	# centre to lock, and a quick human hand runs ~720 deg/s (NHTSA's fishhook rate), so lock in
 	# ~1.3 s (docs/sources.md).
 	"max_steer_deg": 38.0, "steer_speed": 0.75, "ackermann": 1.0,
-	# steer_falloff_speed 11 m/s = 39.6 km/h is the tractor's own top speed, so the floor lock
-	# arrives exactly at type-approval road speed. 0.55 keeps field-work cost (8-12 km/h headland
+	# steer_falloff_speed 11 m/s = 39.6 km/h is type-approval road speed, so the floor lock
+	# arrives there, just past the 38.4 the body settles at on its limiter. 0.55 keeps field-work cost (8-12 km/h headland
 	# turns, a quarter of road speed) to ~11% while cutting 45% of road dartiness.
 	"min_steer_frac": 0.55, "steer_falloff_speed": 11.0,
 }
@@ -815,41 +825,44 @@ const VARIANTS := {
 	# rating, where the governor settles it (108.2 km/h).
 	"firetruck": {"family": "truck", "mass": 7500.0, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 110.0},
 	# tractor family (ISOBUS) — one drivable body.
-	# 40 km/h is type approval; gearing already lands on 39.6, so this limit never acts, but
-	# catches a future gearing change that would make the body road-illegal.
-	# `scale` 1.35 on the Kenney compact body: 2.99 x 2.17 m on a 2.12 m wheelbase, so the 5.5 t
-	# spec sits on something the size of a tractor. What bounds it is not any gate (the field
-	# fence leaves 13 m) but what does NOT scale with it: the three-point linkage, the four
-	# implements and the 1.90 m farm tipper.
-	# `mass` 7000 / `front_weight` 0.38 is a ballasted tractor: ~180 hp at ~39 kg/hp (a working
-	# tractor of this power is 40-50). Ballast is traction, not torque: gear-1 wheel force against
-	# rear axle grip is ~1.6x (4.3 t, 43 kN at mu 1.0), which the launch ramp meters. The torque
-	# curve and `final_drive` stay untouched — low-end torque is what pulls a drawbar trailer away.
-	# `com_y_frac` 0.32 of the body's AABB top (2.60 m on the scaled body) = 0.83 m over the road:
-	# the 5.5 t machine's 0.91 m with 1.5 t of ballast at ~0.55 m (liquid in the rear tyres, hub
-	# weights). A fraction, not a metre figure, because `scale` above may still move and the
-	# fraction survives it.
-	# `wheel_x_out` 0.214 sets the track: 1.62 m front / 1.79 m rear, a real tractor's 1.8-1.9 m
-	# (the flush fit alone left 1.31 / 1.49, and the body rolled ~3 deg per jolt and tipped at
-	# 0.84 g). Roll stiffness and roll damping both go as track squared, so this is the rocking
-	# and the rollover fix in one: rear half-track 0.90 over 0.83 m is a static threshold of
-	# ~1.08 g, at the lug tyres' slide. The tyres stand proud of the body, as a tractor's do.
+	# 40 km/h is type approval, and the limiter is what holds it: the road gear reaches 40 at the
+	# 2200 rated speed with the governor's tail still to run, and the body settles at 38.4 inside
+	# the limiter's fade (`Drivetrain.GOVERNOR_BAND`).
+	# `scale` 1.6465 on the Kenney compact body puts its wheels 2.58 m apart, a John Deere 6R 150's
+	# wheelbase (topagrar, "Der Radstand ... 2,58 m"): a 3.64 x 2.65 m hull, 3.17 m to the roof.
+	# What bounds it is not any gate (the field fence leaves 13 m) but what does NOT scale with it:
+	# the three-point linkage, the four implements and the 1.90 m farm tipper.
+	# `mass` 7000 / `front_weight` 0.38 is the 6R 150 lightly ballasted: its 6.5 t base (Masons Kings
+	# spec sheet) plus 0.5 t, under the 7.18 t topagrar weighed with loader brackets and a full tank.
+	# ~180 hp at ~39 kg/hp (a working tractor of this power is 40-50); the 6R 150's own maximum is
+	# 121 kW / 165 PS (topagrar), so the engine is the hotter of the two. Ballast is traction, not
+	# torque: gear-1 wheel force against rear axle grip is ~1.6x (4.3 t, 43 kN at mu 1.0), which the
+	# launch ramp meters. The torque curve stays untouched — low-end torque is what pulls a drawbar
+	# trailer away.
+	# `com_y_frac` 0.32 of the body's AABB top (3.17 m on the scaled body) = 1.01 m over the road,
+	# an estimate: the fraction set on the 1.35 body (0.83 m there, a 5.5 t machine's 0.91 m with
+	# 1.5 t of ballast at ~0.55 m) carried with the scale; no 6R COM height sourced. A fraction, not
+	# a metre figure, because `scale` above may still move and the fraction survives it.
+	# `wheel_x_out` 0.064 sets the track: 1.57 m front / 1.79 m rear, a real tractor's 1.8-1.9 m
+	# (the flush fit alone leaves 1.44 / 1.66). Roll stiffness and roll damping both go as track
+	# squared: rear half-track 0.90 over 1.01 m is a static threshold of ~0.89 g. The tyres stand
+	# proud of the body, as a tractor's do.
 	"tractor-kenney": {
 		"family": "tractor", "mass": 7000.0, "front_weight": 0.38, "speed_limit_kmh": 40.0,
-		"com_y_frac": 0.32, "scale": 1.35, "wheel_x_out": 0.214},
+		"com_y_frac": 0.32, "scale": 1.6465, "wheel_x_out": 0.064},
 	# The same tractor on a power-split CVT (`model`: the body, its hitch, drawbar and collision),
 	# the ZF Eccom class Deere fits as AutoPowr: four ranges changing synchronously as it drives,
 	# 0-6.4 / 6.4-13 / 13-26 / 26-51 km/h at 2300 rpm (Renius & Resch, ASAE Lecture 29, 2005,
-	# Fig. 39), re-derived through this body's 10.083 final drive and 0.66 m rear to ratios 0.1128 /
+	# Fig. 39), re-derived through this body's 12.299 final drive and 0.805 m rear to ratios 0.1128 /
 	# 0.229 / 0.4581 / 0.8986 (`_cvt`): 40 km/h at ~1800 rpm, the overdrive Renius asks of a CVT.
 	# Its ground-speed reference moves at 1.5 m/s², JCB's "high" demand band for a CVT tractor
-	# (US 11,994,210: 1-2 m/s²). The relief at the axle is `mass g r`, 45.3 kN·m:
-	# the powershift's brakes (63 kN·m) hold it, as they hold its D1 stall (43.3 kN·m).
+	# (US 11,994,210: 1-2 m/s²). The relief at the axle is `mass g r`, 55.2 kN·m:
+	# the powershift's brakes (76.9 kN·m) hold it, as they hold its D1 stall (52.8 kN·m).
 	# Hill hold NONE: active standstill holds it in the transmission (docs/tractor.md § The CVT
 	# tractor), the hold the powershift's STANDSTILL compromise stands in for.
 	"tractor-cvt": {
 		"family": "tractor", "model": "tractor-kenney", "mass": 7000.0, "front_weight": 0.38,
-		"speed_limit_kmh": 40.0, "com_y_frac": 0.32, "scale": 1.35, "wheel_x_out": 0.214,
+		"speed_limit_kmh": 40.0, "com_y_frac": 0.32, "scale": 1.6465, "wheel_x_out": 0.064,
 		"cvt_range_kmh": [6.4, 13.0, 26.0, 51.0], "cvt_range_rpm": 2300.0, "cvt_accel_ms2": 1.5,
 		"hill_hold": HillHold.Kind.NONE},
 }
@@ -1010,6 +1023,9 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	gd.roll_steer_front = get_f.call("roll_steer_front")
 	gd.roll_steer_rear = get_f.call("roll_steer_rear")
 	gd.compliance_steer_rear = get_f.call("compliance_steer_rear")
+	# Only the tractor's front axle swings: absent elsewhere.
+	gd.front_axle_swing_deg = float(ov.get("front_axle_swing_deg",
+			b.get("front_axle_swing_deg", 0.0)))
 	gd.max_suspension_force = float(b["max_suspension_force"])
 	gd.grip_curve = _grip_curve.duplicate()
 	# The stock class and the size it is fitted in; the figures below are that class on dry asphalt.

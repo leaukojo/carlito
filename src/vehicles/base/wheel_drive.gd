@@ -111,6 +111,10 @@ var _esc_velocity := Vector3(NAN, NAN, NAN)
 ## Half the track and the wheel radius per axle (x front, y rear; m), for ESC's torque.
 var _half_track := Vector2.ZERO
 var _axle_radius := Vector2.ZERO
+## The oscillating front axle's stop (rad, `GroundDriveSpec.front_axle_swing_deg`); 0 = none.
+var _swing_stop := 0.0
+## The beam's turn (rad) into the last tick, which `RayWheel.swing_step` credits back.
+var _swing_turn := 0.0
 
 
 ## Build the wheels and their visuals.
@@ -167,6 +171,14 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 		var axle := 1 if w.is_rear else 0
 		_corner.append(2 * axle + (0 if w.anchor.x < 0.0 else 1))
 		_half_track[axle] = maxf(_half_track[axle], absf(w.anchor.x))
+	# The beam's pivot: mid-track on the front pair's anchor line (`front_axle_swing_deg`).
+	if gd.has_swing_axle() and _front.size() == 2:
+		_swing_stop = deg_to_rad(gd.front_axle_swing_deg)
+		var a := wheels[_front[0]].anchor
+		var b := wheels[_front[1]].anchor
+		for i in _front:
+			wheels[i].on_beam = true
+			wheels[i].swing_pivot = (a + b) / 2.0
 	_retarder_rating = Drivetrain.retarder_rating(spec)
 	_brake_force = BrakeSizing.brake_force(gd)
 	_live_mass = spec.mass
@@ -500,6 +512,8 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 		wheels[i].lock_torque = pawl * _ratio[i] if wheels[i].driven else 0.0
 		if wheels[i].lock_torque > 0.0:
 			locked.append(i)
+	if _swing_stop > 0.0:
+		_step_swing(gd, delta)
 	RayWheel.size_cap_masses(wheels, body, gd)
 	# One anti-roll, roll- and compliance-steer snapshot for the whole body before any wheel ticks
 	# (`RayWheel.anti_roll_partner`).
@@ -559,6 +573,20 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 		w.update_visual(gd, delta)
 	_apply_resistance(body, gd, delta)
 	_apply_downforce(body, gd)
+
+
+## The oscillating front axle's beam, stepped once off last tick's front contact forces before any
+## wheel ticks (`RayWheel.swing_step`): both front wheels take the one angle.
+func _step_swing(gd: GroundDriveSpec, delta: float) -> void:
+	var a := wheels[_front[0]]
+	var b := wheels[_front[1]]
+	var moment := RayWheel.swing_moment(PackedVector3Array([a.patch_point, b.patch_point]),
+			PackedVector3Array([a.patch_force, b.patch_force]), a.swing_pivot)
+	var theta := RayWheel.swing_step(a.swing, moment, _swing_turn, gd.spring_rate,
+			(gd.damper_bump + gd.damper_rebound) / 2.0, _half_track.x, delta, _swing_stop)
+	_swing_turn = theta - a.swing
+	a.swing = theta
+	b.swing = theta
 
 
 ## The declared differentials, as coupling torques solved off each wheel's own spin step with every
@@ -893,6 +921,7 @@ func respawn() -> void:
 	_roll_app = 0.0
 	_esc_brake = Vector4.ZERO
 	esc_active = false
+	_swing_turn = 0.0
 	for w in wheels:
 		w.reset()
 	if _dust != null:

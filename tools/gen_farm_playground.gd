@@ -67,8 +67,8 @@ const PADDOCK_RECT := Rect2(-100, -16, 20, 44)    ## the haul ramp's destination
 ## for the field goes through it, though its west/east edges stay open to drive around.
 ## Its split traction is by LOAD, not paint: the ridges lift one rear wheel at a time, and the
 ## open rear diff spins it. A painted grip split cannot do this job. At level 1's 1 px/m splat,
-## blended and sharpened, a split line only puts the tractor's wheels (1.06 m apart) on
-## different surfaces while it holds a 1 m window of lateral position.
+## blended and sharpened, a split line only puts the tractor's rear wheels (1.79 m apart) on
+## different surfaces while the tractor holds the line between them.
 ## Measured on tractor_mud's line (`measure_rough -- course=tractor_mud`): floored, every driveline
 ## crosses in ~5 s, the open 2WD with a driven wheel past 0.3 slip on 16 % of the ticks, so the
 ## 30 s par separates none of them.
@@ -113,10 +113,9 @@ const APRON_MARGIN := 6.0                    ## flattened + gravelled ring aroun
 ## Apron-local layout, metres from its south-west corner (the apron is 36 x 24 m).
 const BUILDING_ROW_Z := 6.0                  ## shed + tank
 ## The parking row sits this far north so the tractor spawn has a trailer-length of clear
-## concrete behind it: drawbar pin 1.99 m aft of chassis origin + tipper reaching 5.3 m aft of
-## the pin needs ~7.3 m at -Z. 18.0 left only 6.1 m clear of the shed wall and the first E
-## press at spawn was refused by the fit check; 22.0 leaves 2.8 m of slack (3.2 before the
-## tractor's R0 scale pushed the pin 0.39 m further aft).
+## concrete behind it: drawbar pin 2.41 m aft of chassis origin + tipper reaching 5.3 m aft of
+## the pin needs ~7.7 m at -Z. 18.0 leaves too little clear of the shed wall, and the first E
+## press at spawn is refused by the fit check; 22.0 leaves ~2.4 m of slack.
 const PARKING_ROW_Z := 22.0                  ## implements + tractor spawn
 const SHED_X := 9.0
 const SHED_YAW := PI                         ## frontage faces +Z, into the yard
@@ -920,14 +919,14 @@ func _report(img: Image, splat: Image, splat2: Image, apron: Rect2, deck_y: floa
 			var h := _height_at(img, wx, wz)
 			lo = minf(lo, h)
 			hi = maxf(hi, h)
-			# 1.06 m is the tractor's rear track (kenney/tractor-kenney_spec.tres).
-			cross = maxf(cross, absf(_height_at(img, wx + 0.53, wz)
-					- _height_at(img, wx - 0.53, wz)))
+			# 1.79 m is the tractor's rear track (kenney/tractor-kenney_spec.tres).
+			cross = maxf(cross, absf(_height_at(img, wx + 0.896, wz)
+					- _height_at(img, wx - 0.896, wz)))
 			wx += 0.5
 		wz += 0.5
 	print("[farm] wallow floor %.2f..%.2f m (%.2f m under the plateau), ridges %.2f m peak-to-peak" % [
 			lo, hi, PLATEAU_Y - lo, hi - lo])
-	print("[farm] wallow max left/right ground step across the 1.06 m rear track: %.2f m" % cross)
+	print("[farm] wallow max left/right ground step across the 1.79 m rear track: %.2f m" % cross)
 
 	# The exit ramp onto the field is the wallow's blend ring. Report average grade over the
 	# climb alongside the worst single 1 m facet (the 8-bit floor at 0.2 m steps, not a design

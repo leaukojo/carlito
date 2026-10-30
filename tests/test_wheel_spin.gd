@@ -2435,3 +2435,172 @@ func test_esc_torque_adds_to_the_pedal_capped_at_the_declared_brake() -> void:
 	assert_float(WheelDrive.service_torque(0.2, 2000.0, 500.0)).is_equal_approx(900.0, 1e-9)
 	assert_float(WheelDrive.service_torque(0.9, 2000.0, 500.0)).is_equal(2000.0)
 	assert_float(WheelDrive.service_torque(0.0, 2000.0, 5000.0)).is_equal(2000.0)
+
+
+# --- oscillating front axle --------------------------------------------------
+
+func test_the_beam_swings_its_unloaded_end_down() -> void:
+	# The left wheel off the ground: the loaded right patch turns the beam right end up, so the left
+	# end drops toward the road.
+	var points := PackedVector3Array([Vector3(-0.8, -0.6, 0.0), Vector3(0.8, -0.6, 0.0)])
+	var forces := PackedVector3Array([Vector3.ZERO, Vector3(0.0, 10000.0, 0.0)])
+	var moment := RayWheel.swing_moment(points, forces, Vector3.ZERO)
+	assert_float(moment).is_equal_approx(8000.0, 1e-3)
+	assert_float(RayWheel.swing_step(0.0, moment, 0.0, 330000.0, 20300.0, 0.8, 1.0 / 60.0, 1.0)) \
+			.is_greater(0.0)
+
+
+func test_a_left_turns_side_force_balances_on_a_heavier_right_wheel() -> void:
+	# Side force at the patches, `drop` under the pivot, turns the beam: it balances where the right
+	# wheel carries `F drop / half` more than the left, the front's roll centre at the pivot.
+	var half := 0.8
+	var drop := 0.6
+	var side := -3000.0  ## each patch, + = right: a left turn pushes the body left
+	var shift := -2.0 * side * drop / (2.0 * half)
+	var points := PackedVector3Array([Vector3(-half, -drop, 0.0), Vector3(half, -drop, 0.0)])
+	var forces := PackedVector3Array([Vector3(side, 10000.0 - shift, 0.0),
+			Vector3(side, 10000.0 + shift, 0.0)])
+	assert_float(shift).is_greater(0.0)
+	assert_float(RayWheel.swing_moment(points, forces, Vector3.ZERO)).is_equal_approx(0.0, 1e-3)
+
+
+const BEAM_RATE := 330000.0
+const BEAM_DAMPER := 20300.0
+const BEAM_HALF := 0.78
+
+
+## Two tyre spring-dampers on a beam under a body that rolls their compressions apart at
+## `roll_rate` (m/s, the left in, the right out) from `c_left` / `c_right` (m), the beam stepped off
+## each tick's whole loads as `WheelDrive._step_swing` steps it. Per tick, the loads' difference
+## (left less right, N) from the springs alone and in all, then the beam's last angle.
+func _beam_toy(c_left: float, c_right: float, roll_rate: float, ticks: int) -> Array:
+	var theta := 0.0
+	var turn := 0.0
+	var prev := Vector2(c_left, c_right)
+	var springs := PackedFloat64Array()
+	var totals := PackedFloat64Array()
+	for tick in ticks:
+		var rolled := roll_rate * TICK * tick
+		var c := Vector2(c_left + rolled + BEAM_HALF * theta, c_right - rolled - BEAM_HALF * theta)
+		var loads := BEAM_RATE * c + BEAM_DAMPER * (c - prev) / TICK
+		prev = c
+		springs.append(BEAM_RATE * (c.x - c.y))
+		totals.append(loads.x - loads.y)
+		var points := PackedVector3Array([Vector3(-BEAM_HALF, -0.6, 0.0),
+				Vector3(BEAM_HALF, -0.6, 0.0)])
+		var forces := PackedVector3Array([Vector3(0.0, loads.x, 0.0), Vector3(0.0, loads.y, 0.0)])
+		var next := RayWheel.swing_step(theta, RayWheel.swing_moment(points, forces, Vector3.ZERO),
+				turn, BEAM_RATE, BEAM_DAMPER, BEAM_HALF, TICK, 1.0)
+		turn = next - theta
+		theta = next
+	return [springs, totals, theta]
+
+
+func test_with_the_body_held_the_beam_settles_to_equal_loads() -> void:
+	# A body held still at a roll: the beam closes the springs' difference by
+	# `rate / (rate + damper / delta)` a tick, never reversing it, its dampers' share balanced from
+	# the first step on, and settles where the compressions match.
+	var c_left := 0.05  ## the body rolled left: the left tyre carries more
+	var c_right := 0.03
+	var toy := _beam_toy(c_left, c_right, 0.0, 40)
+	var springs: PackedFloat64Array = toy[0]
+	var totals: PackedFloat64Array = toy[1]
+	var first := springs[0]
+	var keep := BEAM_DAMPER / TICK / (BEAM_RATE + BEAM_DAMPER / TICK)
+	for tick in springs.size():
+		assert_float(springs[tick]).is_equal_approx(first * pow(keep, tick), 1e-6 * first)
+		if tick > 0:
+			# Vector2's float32 loads: ~0.01 N of rounding on 16 kN.
+			assert_float(totals[tick]).is_equal_approx(0.0, 1e-5 * first)
+	assert_float(springs[springs.size() - 1]).is_less(1e-3 * first)
+	assert_float(float(toy[2])).is_equal_approx((c_right - c_left) / (2.0 * BEAM_HALF), 1e-5)
+
+
+func test_a_rolling_body_gets_no_front_roll_damping_off_the_beam() -> void:
+	# The beam balances its tyres' dampers too, so a steadily rolling body feels only the one tick
+	# the beam lags it, `2 rate v delta`, never the dampers' `2 damper v` a beam balancing its
+	# springs alone would pass on.
+	var v := 0.01
+	var totals: PackedFloat64Array = _beam_toy(0.04, 0.04, v, 120)[1]
+	var lag := 2.0 * BEAM_RATE * v * TICK
+	assert_float(totals[totals.size() - 1]).is_equal_approx(lag, 1e-2 * lag)
+	assert_float(lag).is_less(2.0 * BEAM_DAMPER * v)
+
+
+func test_the_beam_rests_on_its_stop() -> void:
+	var stop := deg_to_rad(10.0)
+	assert_float(RayWheel.swing_step(0.0, 1e9, 0.0, 330000.0, 20300.0, 0.78, 1.0 / 60.0, stop)) \
+			.is_equal(stop)
+	assert_float(RayWheel.swing_step(0.0, -1e9, 0.0, 330000.0, 20300.0, 0.78, 1.0 / 60.0, stop)) \
+			.is_equal(-stop)
+	assert_float(RayWheel.swing_step(stop, 0.0, 0.0, 330000.0, 20300.0, 0.78, 1.0 / 60.0, stop)) \
+			.is_equal(stop)
+
+
+## The wiring: the drive steps the beam off last tick's front contacts before its wheels tick, both
+## front wheels take the one angle, and a respawn re-centres it. A frozen body high above nothing,
+## so every wheel then ticks airborne.
+func test_the_drive_steps_the_beam_before_its_wheels_tick() -> void:
+	var spec := _bench_spec(2000.0)
+	var gd := spec.ground_drive
+	gd.front_axle_swing_deg = 10.0
+	gd.wheel_radius = 0.36
+	gd.tyre_half_width = 0.1
+	gd.rest_length = 0.3
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	var body := RigidBody3D.new()
+	body.freeze = true
+	body.collision_layer = 0
+	root.add_child(body)
+	body.global_position = Vector3(0.0, 100.0, 0.0)
+	await get_tree().physics_frame
+	var drive := WheelDrive.new(body, spec)
+	var front: Array[RayWheel] = []
+	for w in drive.wheels:
+		if not w.is_rear:
+			front.append(w)
+	# Last tick: the right front alone loaded.
+	for w in front:
+		w.patch_point = Vector3(w.anchor.x, -0.6, w.anchor.z)
+		w.patch_force = Vector3(0.0, 5000.0 if w.anchor.x > 0.0 else 0.0, 0.0)
+	var input := VehicleInput.new()
+	var terrains: Array[Node] = []
+	drive.drive_omega(gd, input)
+	drive.tick(body, spec, input, 0.0, 0.0, 0.0, TICK, terrains)
+	assert_float(front[0].swing).is_greater(0.0)
+	assert_float(front[1].swing).is_equal(front[0].swing)
+	for w in drive.wheels:
+		assert_bool(w.on_beam).is_equal(not w.is_rear)
+		if w.is_rear:
+			assert_float(w.swing).is_equal(0.0)
+		# Airborne, so this tick's contact force is none.
+		assert_vector(w.patch_force).is_equal(Vector3.ZERO)
+	drive.respawn()
+	for w in drive.wheels:
+		assert_float(w.swing).is_equal(0.0)
+
+
+func test_no_swing_axle_leaves_every_mount_on_its_anchor() -> void:
+	var drive := _drive_for(_bench_spec(2000.0))
+	var b := Basis(Vector3.UP, 0.3)
+	for w in drive.wheels:
+		assert_float(w.swing).is_equal(0.0)
+		assert_vector(w.mount_anchor()).is_equal(w.anchor)
+		assert_bool(w.mount_basis(b) == b).is_true()
+
+
+func test_the_beam_pivots_mid_track_on_the_front_anchor_line() -> void:
+	var spec := _bench_spec(2000.0)
+	spec.ground_drive.front_axle_swing_deg = 10.0
+	var drive := _drive_for(spec)
+	var theta := 0.1
+	for w in drive.wheels:
+		if w.is_rear:
+			continue
+		assert_vector(w.swing_pivot).is_equal_approx(Vector3(0.0, 0.0, -1.3), Vector3.ONE * 1e-6)
+		w.swing = theta
+		# Right end up: x + = right, so the right mount rises `half sin(theta)`.
+		assert_float(w.mount_anchor().y).is_equal_approx(signf(w.anchor.x) * 0.8 * sin(theta), 1e-6)
+		assert_vector(w.mount_basis(Basis.IDENTITY).y).is_equal_approx(
+				Vector3(-sin(theta), cos(theta), 0.0), Vector3.ONE * 1e-6)
