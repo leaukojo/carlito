@@ -54,3 +54,15 @@ missing (`tools/claude_hooks/session_check.mjs`).
 - `.godot/` (the import cache, and `godot_run.lock`) and `*.baked.scn`: gitignored build output.
 - `~/.claude/` (Claude's personal memory and global settings) does not travel. A rule that must
   hold on every machine goes in a CLAUDE.md, never only in memory.
+
+## Optional personal extras (in `~/.claude/`, copy by hand)
+
+None of these is needed by the repo; they make long sessions easier.
+
+- The `chrome-devtools-mcp` plugin (`/plugin`, marketplace `claude-plugins-official`): lets Claude
+  drive Chrome to load the web build and the sloppyCAN page, read the console and take traces.
+- `~/.claude/claude-notify.ps1`, hooked on Stop, Notification and `PreToolUse` of
+  `AskUserQuestion|ExitPlanMode`: a Windows toast when Claude finishes or needs an answer. It needs
+  the BurntToast module (`Install-Module BurntToast -Scope CurrentUser`).
+- `~/.claude/statusline-command.ps1` as `statusLine`: model, effort, context %, 5 h / 7 d usage and the
+  prompt-cache expiry time.

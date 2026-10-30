@@ -226,9 +226,11 @@ for (const f of docs.filter((d) => /(^|\/)CLAUDE\.md$/.test(d))) {
 }
 
 // Raw lines summed over the top-level docs/*.md (plans/ are temporary; sources.md is reference
-// data, read on demand; machine_setup.md is read once per machine). One cap, no per-doc caps.
-const DOCS_LINE_CAP = 3605;
-const UNCAPPED_DOCS = ['docs/sources.md', 'docs/machine_setup.md'];
+// data, read on demand; machine_setup.md is read once per machine; TODO.md, HUMAN_EXPLANATIONS.md
+// and making_a_level.md are the user's own). One cap, no per-doc caps.
+const DOCS_LINE_CAP = 3352;
+const UNCAPPED_DOCS = ['docs/sources.md', 'docs/machine_setup.md', 'docs/TODO.md',
+  'docs/HUMAN_EXPLANATIONS.md', 'docs/making_a_level.md'];
 const docSizes = docs.filter((d) => /^docs\/[^/]+\.md$/.test(d) && !UNCAPPED_DOCS.includes(d))
   .map((d) => [d, lineCount(d)]).sort((a, b) => b[1] - a[1]);
 const docsLines = docSizes.reduce((sum, [, n]) => sum + n, 0);

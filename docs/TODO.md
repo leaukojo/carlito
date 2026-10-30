@@ -1,5 +1,8 @@
 # TODO
 
+## Tractor: an R-4 industrial tyre class
+A TRACTOR-fit `TyreCatalog` class beside `ag_lug.tres` (the picker shows from two): better on
+asphalt/gravel, worse in field/mud; factors estimated (`docs/vehicles.md` § Tyres and surfaces).
 
 ## RAMN firmware: gear bytes past 6 (outside this repo)
 
