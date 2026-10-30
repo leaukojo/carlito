@@ -594,15 +594,14 @@ const TRACTOR_BASE := {
 	# peaks at 3.0x the static corner load, an estimate: no open ag-radial MF set (`PKY2 * Fz0 / ref`
 	# ~2.5-3.5).
 	"load_sensitivity": 0.12, "cornering_peak_load": 3.0,
-	# Max power at 2000, rated (the governor's break) at 2200; governed to nothing by 2600 (high idle).
-	"torque_curve": [800, 550, 1200, 680, 1600, 700, 2000, 640, 2200, 560, 2600, 0],
-	"idle_rpm": 800.0, "redline_rpm": 2600.0,
+	# Max power at 2000, rated (the governor's break) at 2200; governed to nothing by 2350 (high idle),
+	# the 6R's 7 % over the curve's 2200 rated speed.
+	"torque_curve": [800, 550, 1200, 680, 1600, 700, 2000, 640, 2200, 560, 2350, 0],
+	"idle_rpm": 800.0, "redline_rpm": 2350.0,
 	# An all-speed governor (Bosch's variable-speed governors, Governors for In-Line Pumps, 1975): the
-	# pedal or the hand throttle sets an engine speed from idle to the 2600 high idle, and the fuel
-	# holds it on a 7 % droop line, Deere's 6R (rated 2100, fast idle 2250). COMPROMISE: at the top
-	# setting the line is the curve's own 2200-2600 tail, an 18 % droop there. A 7 % tail (high idle
-	# ~2350) is the open fix: the road gear below makes 40 km/h at the 2200 rated speed, so the tail
-	# no longer sets the top speed (docs/vehicles.md § Rejected designs, "torque-curve tails").
+	# pedal or the hand throttle sets an engine speed from idle to the 2350 high idle, and the fuel
+	# holds it on a 7 % droop line, Deere's 6R (rated 2100, fast idle 2250); at the top setting the
+	# curve's 2200-2350 tail is that line.
 	"pedal_map": PedalMap.Kind.ALL_SPEED, "governor_droop": 0.07,
 	# Diesel: the road diesels' figure reads the OECD-tested 6175R's specific consumption at its
 	# PTO within 5 % (docs/sources.md § Fuel), so the tractor shares it.
@@ -821,7 +820,7 @@ const VARIANTS := {
 	"firetruck": {"family": "truck", "mass": 7500.0, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 110.0},
 	# tractor family (ISOBUS) — one drivable body.
 	# 40 km/h is type approval, and the limiter is what holds it: the road gear reaches 40 at the
-	# 2200 rated speed with the governor's tail still to run, and the body settles at 38.4 inside
+	# 2200 rated speed with the governor's tail still to run, and the body settles at 38.3 inside
 	# the limiter's fade (`Drivetrain.GOVERNOR_BAND`).
 	# `scale` 1.6465 on the Kenney compact body puts its wheels 2.58 m apart, a John Deere 6R 150's
 	# wheelbase (topagrar, "Der Radstand ... 2,58 m"): a 3.64 x 2.65 m hull, 3.17 m to the roof.

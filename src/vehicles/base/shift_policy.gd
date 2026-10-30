@@ -12,7 +12,7 @@ extends RefCounted
 
 ## Pedal at and under which the light pair applies (the Malibu map's ~20 % line).
 const LIGHT_PEDAL := 0.2
-## On an all-speed governor a part demand upshifts once the road speed's rpm reaches this many droops
+## On an all-speed governor a demand, full demand too, upshifts once the road speed's rpm reaches this many droops
 ## under the setting (`governed_up_rpm`): the line's full-fuel end, less a droop's width again for
 ## the drive tyres' slip on a pull, which the road speed reads and the crank does not, so a loaded
 ## pull still reaches it (an estimate; no governed shift schedule is sourced: docs/sources.md
@@ -43,7 +43,7 @@ const GRADE_LOGIC := 0.02
 
 ## The upshift rpm the map gives at this pedal, before the landing floor (`upshift_rpm`). On an
 ## all-speed governor (`PedalMap.Kind.ALL_SPEED`) the demand caps the engine at its setting, so a
-## part demand's point is held under it (`governed_up_rpm`).
+## demand's point is held under it (`governed_up_rpm`).
 static func up_rpm(spec: VehicleSpec, pedal: float) -> float:
 	var light := spec.shift_up_light_rpm if spec.shift_up_light_rpm > 0.0 else spec.shift_up_rpm
 	var up := _blend(light, spec.shift_up_rpm, pedal)
@@ -95,7 +95,8 @@ static func upshift_target(spec: VehicleSpec, byte: int, at_rpm: float, pedal: f
 	return mini(g, top)
 
 
-## The gear a forced upshift (at `shift_up_rpm`) from `byte` takes: `upshift_target`, then with
+## The gear a forced upshift (at `shift_up_rpm`, or at a governed cap under it whose setting is
+## over it: `next_gear`) from `byte` takes: `upshift_target`, then with
 ## `skip_shifts` and a road-load estimate on up while the gear it reached would not hold
 ## `shift_dwell_s` at full pedal (`time_to_upshift`, on the rig's mass and grip), as an AMT's or a
 ## powershift's skip-shift lets a floored, lightly loaded rig pass the gears it would rip through.
@@ -369,7 +370,13 @@ static func next_gear(spec: VehicleSpec, byte: int, at_rpm: float, pedal: float,
 			return k
 	var descent := descending(road, braking)
 	if byte < top and at_rpm >= upshift_rpm(spec, byte, pedal) and not descent:
-		var g := upshift_target(spec, byte, at_rpm, pedal)
+		# Where the crank can still reach `shift_up_rpm` (floored; on an all-speed governor, any
+		# demand whose setting is over it), the upshift passes as the forced point does a gear the
+		# rig would not hold `shift_dwell_s` in before reaching it.
+		var walk := PedalMap.setting_rpm(spec, pedal) > spec.shift_up_rpm \
+				if spec.pedal_map == PedalMap.Kind.ALL_SPEED else pedal >= 1.0
+		var g := forced_upshift(spec, byte, at_rpm, pedal, road, mass, grip) if walk \
+				else upshift_target(spec, byte, at_rpm, pedal)
 		while g > byte and grade and not holds_grade(spec, byte, g, at_rpm, pedal, road):
 			g -= 1
 		if g > byte:

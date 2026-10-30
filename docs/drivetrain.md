@@ -72,18 +72,18 @@ sourced.
   (`Drivetrain.fuel_to_land`): full fuel moves it ~90 rpm a tick, past an isochronous line ~1 rpm
   wide, which read at the tick's start it would jump both ways and cycle on. A road truck's PTO mode
   runs the same law at its set speed, isochronously (`docs/truck.md` § The refuse body: a second network across a gateway).
-  COMPROMISE: at the top setting the line is the curve's own 2200-2600 tail, an 18 % droop; the
-  sourced 7 % puts the high idle near 2350 and takes the top speed down to D16's road speed there
-  (`docs/vehicles.md` § Rejected designs, "torque-curve tails"). Full demand is full fuel to the
-  redline, so the floored figures (trace, roll-back, gradeability) do not depend on the governor.
-  Three consequences on the gearbox:
-  - the demand caps the engine at its setting, so a part demand's upshift point is held two droops
-    under it (`ShiftPolicy.governed_up_rpm`, `GOVERNED_UPSHIFT_DROOP`, an estimate): on the map's
-    own point the tractor at demand 0.5 (setting 1700) would never leave its start gear;
+  At the top setting the line is the curve's own 2200-2350 tail, the same 7 % over its 2200 rated
+  speed. Full demand is full fuel to rated speed. Three consequences on the gearbox:
+  - the demand caps the engine at its setting, so its upshift point is held two droops under it
+    (`ShiftPolicy.governed_up_rpm`, `GOVERNED_UPSHIFT_DROOP`, an estimate), full demand's too: the
+    floored tractor upshifts at 2052, under its 2200 pair. A demand whose setting is still over
+    that pair passes there, as a forced upshift does, the gears it would rev out of within the
+    dwell (`ShiftPolicy.forced_upshift`). On the map's own point the tractor at demand 0.5
+    (setting 1575) would never leave its start gear;
   - the downshift points stay the map's (`ShiftPolicy.down_rpm`), as a box that shifts on engine
     speed keeps them: a setting under the landing floor (the tractor: 1.1 x 1000 x its 1.10 step,
-    ~1214 rpm, a demand under ~0.23) holds its gear, and one under the coast line (1000 rpm, a demand
-    under ~0.11) steps down to a crawl in D1;
+    ~1214 rpm, a demand under ~0.27) holds its gear, and one under the coast line (1000 rpm, a demand
+    under ~0.13) steps down to a crawl in D1;
   - the hand throttle never pulls away alone: the start-up ramp and a clutch's opening at rest read
     the pedal (`Drivetrain.hand_throttle`), as a shuttle's release. Moving, a lifted pedal leaves
     the tractor driving in gear at the governed speed.
@@ -249,8 +249,8 @@ pedal, so no gearing hunts (`test_vehicle_catalog`). The full pair is unchanged 
   loads at rest, the coupled load and the surface included), plus the shift's own dead time on an
   AMT, its cut and half its torque ramp (`ShiftPolicy.shift_dead_s`, an estimate). Floored
   (`-- <variant> 60 trace`): the bobtail `semi` from its D6 start D6>D8, then singly; with the 24 t
-  box from D3, D3>D5, then singly; the bobtail tractor D7>D13>D16, with the tipper from D6,
-  D6>D10>D13>D15>D16. Every gear holds past the trace's dwell floor and every landing sits at 1.22x
+  box from D3, D3>D5, then singly; the bobtail tractor D7>D12>D15>D16, with the tipper from D6,
+  D6>D10>D12, then singly. Every gear holds past the trace's dwell floor and every landing sits at 1.22x
   its downshift point or more.
 - **Kickdown:** one shift to the lowest gear under `ShiftPolicy.kickdown_ceiling_rpm` that holds
   `KICKDOWN_HOLD_S` at full pedal before its forced upshift (`ShiftPolicy.time_to_upshift` on the

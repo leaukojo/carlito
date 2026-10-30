@@ -10,8 +10,8 @@ const PTO_RPM_MAX := 1300          ## contract 'pto_rpm' range max
 ## Engine rpm at which the PTO stub turns at its named speed, in either mode (the hand throttle's
 ## PTO preset sets it). Driveline gearing, not a feel knob: the 6175R turns 540 and 1000 at ~1950
 ## against its 2100 rated speed (docs/sources.md § Governor), 0.929 of rated, here on the curve's
-## 2200. At the shipped high idle (2600) the 1000 mode lands at 1272 rpm (`pto_shaft_rpm`
-## truncates 1272.7), inside PTO_RPM_MAX.
+## 2200. At the shipped high idle (2350) the 1000 mode lands at 1150 rpm (`pto_shaft_rpm`
+## truncates 1150.3), inside PTO_RPM_MAX.
 ## test_tractor pins it against the shipped spec.
 const PTO_RATED_RPM := 1950.0 / 2100.0 * 2200.0
 const PTO_MODE_540 := 0            ## contract 'pto_mode' enum

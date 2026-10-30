@@ -225,14 +225,19 @@ const HITCH_FRONT_MIN := 0.20
 const HITCH_STAGES: Array[float] = [0.0, 100.0, 0.0]
 ## --- draft (`plough`, instead of every other pass) ---
 ## The strip answers as level 1's field (`FieldStrip`), so draft acts. Per draft-relevant implement
-## (`trailer=` names one; else each), lowered at rest for HITCH_WAIT_S, then each of PLOUGH_KMH
+## (`trailer=` names one; else each), lowered at rest for HITCH_WAIT_S, then each of PLOUGH_HOLDS
 ## held on the circle's PI pedal for PLOUGH_SETTLE_S and averaged over PLOUGH_AVG_S: the draft (N,
 ## `TractorVehicle.draft_applied`; the `draft_force` dial beside it) against its D497 figure at the speed held, `engine_load`,
-## `wheel_slip`, `axle_load`, the front share, gear and rpm. Then braked to a stop, held
+## `wheel_slip`, `axle_load`, the front share, gear and rpm, and each rear tyre on the last tick
+## (`_rear_contacts`). Then braked to a stop, held
 ## PLOUGH_STOP_S, and floored from rest for PLOUGH_START_S with the implement down: every shift as
 ## it lands, a trace line every PLOUGH_TRACE_S, and the hunting gate. With `trace[=n]` the start's
 ## first `trace_s=` seconds print a line every n ticks instead (`_plough_trace_line`).
-const PLOUGH_KMH: Array[float] = [3.0, 7.0, 10.0]
+## Per hold, km/h and the rear diff lock (1 in): a ploughing driver locks it. The open pair first:
+## pushed from 3 to 7 on a saturated pedal, the lighter right rear (the plough's mass sits left)
+## peels past the grip peak; an open diff already under the peak at 7 holds there.
+const PLOUGH_HOLDS: Array[Vector2] = [Vector2(3.0, 0.0), Vector2(7.0, 0.0), Vector2(3.0, 1.0),
+		Vector2(7.0, 1.0), Vector2(10.0, 1.0)]
 const PLOUGH_SETTLE_S := 8.0
 const PLOUGH_AVG_S := 3.0
 const PLOUGH_STOP_S := 2.0
@@ -585,7 +590,7 @@ var _hi_bare := {}                    ## the bare reading: front kg, mass, COM, 
 var _plough_pass := false
 var _pl_ids: Array[String] = []       ## draft implements still to run, this body
 var _pl_stage := Plough.LOWER
-var _pl_speed := 0                    ## index into PLOUGH_KMH
+var _pl_speed := 0                    ## index into PLOUGH_HOLDS
 var _pl_i := 0.0                      ## integral half of the PI pedal
 var _pl_sums := {}                    ## the hold's figures summed (`_tick_plough`)
 var _pl_rating := 0.0                 ## N, the implement's `draft_rating()`
@@ -595,10 +600,13 @@ var _pl_gear := -1                    ## gear byte at the last tick, to catch a 
 var _pl_trace_t := 0.0                ## s of the start at the next trace line
 var _pl_moving_t := -1.0              ## s into the start the body first passed 0.5 km/h
 var _pl_ticks := 0                    ## ticks into the start, for `trace=n`
-var _pl_peak_slip := 0.0              ## the grip curve's peak slip (`_plough_trace_line`)
+var _pl_peak_slip := 0.0              ## the grip curve's peak slip, every hold and trace (`_rear_contacts`)
 ## `plough pto`: the PTO engaged throughout, in the 1000 mode the harrow trials ran; the parked
 ## line and each hold print its load on the crank (`Drivetrain.accessory_torque`).
 var _pto := false
+## `plough diff` / `plough mfwd`: the rear diff lock / MFWD engaged throughout (`_plough_extra`).
+var _diff_lock := false
+var _mfwd := false
 ## `plough course`: run the course (§ draft) instead of the held speeds and the start.
 var _course := false
 ## `plough governor`: run the governor's hold (§ draft) instead of the held speeds and the start.
@@ -904,6 +912,8 @@ func _ready() -> void:
 	_course = _plough_pass and flags.has("course")
 	_governor = _plough_pass and flags.has("governor")
 	_pto = _plough_pass and (flags.has("pto") or _governor)
+	_diff_lock = _plough_pass and flags.has("diff")
+	_mfwd = _plough_pass and flags.has("mfwd")
 	_kerb = flags.has("kerb")
 	_arm_pass = flags.has("arm")
 	_track_only = flags.has("track")
@@ -4256,6 +4266,12 @@ func _start_plough() -> void:
 		node.free()
 		if draft and (_trailer == "" or id.get_file().get_basename() == _trailer):
 			_pl_ids.append(id)
+	_pl_peak_slip = 0.0
+	var peak := 0.0
+	for pt in _car.spec.ground_drive.grip_curve:
+		if pt.y > peak:
+			peak = pt.y
+			_pl_peak_slip = pt.x
 	print("=== %s (%s), draft on the field, dial 100 %% = %.2f kN ===" % [_variant,
 			_drive_label(_car.spec), (_car as TractorVehicle).draft_max_force / 1000.0])
 	_next_plough_implement()
@@ -4309,16 +4325,24 @@ func _plough_drive(accel_pct: float, brake_pct: float, handbrake := false) -> vo
 	MeasureRig.drive(accel_pct, brake_pct, 0.0, handbrake, 1, false, 3, _plough_extra(0.0))
 
 
-## The pass's ISOBUS requests: the linkage at `hitch_pos`, and the PTO under `pto` (in 1000, the
-## harrow trials'; under `governor` in 540, with the hand throttle at the PTO preset).
+## The pass's ISOBUS requests: the linkage at `hitch_pos`; the rear diff lock under `diff`, on a
+## locked PLOUGH_HOLDS entry and on the course (tractor_plough's hint locks it); MFWD under `mfwd`;
+## the PTO under `pto` (in 1000, the harrow trials'; under `governor` in 540, with the hand
+## throttle at the PTO preset).
 func _plough_extra(hitch_pos: float) -> Dictionary:
-	var extra := {"hitch_pos": hitch_pos}
+	var extra := {"hitch_pos": hitch_pos,
+			"diff_lock": _diff_lock or _course or _plough_hold_locked(), "fwd_drive": _mfwd}
 	if _pto:
 		extra.merge({"pto": true, "pto_mode": TractorTelemetry.PTO_MODE_540 if _governor
 				else TractorTelemetry.PTO_MODE_1000})
 	if _governor:
 		extra["hand_throttle"] = TractorTelemetry.pto_hand_throttle(_car.spec) * 100.0
 	return extra
+
+
+## Whether the current PLOUGH_HOLDS entry holds with the rear diff lock in.
+func _plough_hold_locked() -> bool:
+	return _pl_stage == Plough.HOLD and PLOUGH_HOLDS[_pl_speed].y > 0.0
 
 
 func _tick_plough(delta: float) -> void:
@@ -4355,9 +4379,9 @@ func _tick_plough(delta: float) -> void:
 			_t = 0.0
 			_pl_sums = _plough_sums()
 		Plough.HOLD:
-			var err := PLOUGH_KMH[_pl_speed] / 3.6 - v_long
+			var err := PLOUGH_HOLDS[_pl_speed].x / 3.6 - v_long
 			_pl_i = clampf(_pl_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
-			var pedal := _pi_pedal(_pl_i + err * CORNER_PEDAL_KP, PLOUGH_KMH[_pl_speed] / 3.6)
+			var pedal := _pi_pedal(_pl_i + err * CORNER_PEDAL_KP, PLOUGH_HOLDS[_pl_speed].x / 3.6)
 			_plough_drive(pedal * 100.0, 0.0)
 			if _t < PLOUGH_SETTLE_S:
 				return
@@ -4386,7 +4410,7 @@ func _tick_plough(delta: float) -> void:
 			_pl_speed += 1
 			_t = 0.0
 			_pl_sums = _plough_sums()
-			if _pl_speed >= PLOUGH_KMH.size():
+			if _pl_speed >= PLOUGH_HOLDS.size():
 				_pl_stage = Plough.STOP
 		Plough.STOP:
 			_plough_drive(0.0, 100.0)
@@ -4403,12 +4427,6 @@ func _tick_plough(delta: float) -> void:
 			_pl_ticks = 0
 			print("    standing start, floored, implement down (from %s):" % _gear_label(_pl_gear))
 			if _trace:
-				_pl_peak_slip = 0.0
-				var peak := 0.0
-				for pt in _car.spec.ground_drive.grip_curve:
-					if pt.y > peak:
-						peak = pt.y
-						_pl_peak_slip = pt.x
 				print(("      trace: a line every %d tick(s) to %.1f s; c O(pen) S(lipping) L(ocked), ramp"
 						+ " the start-up ramp, clutch its commanded capacity, Tc at the crank (N·m); per rear"
 						+ " wheel the slip ratio, < / > the grip curve's rising / falling side of its %.2f"
@@ -4573,13 +4591,21 @@ func _report_plough_hold() -> void:
 			.get_file().get_basename(), "kmh": v * 3.6, "draft_n": draft_n, "d497_n": d497,
 			"engine_load": s["load"] / n, "wheel_slip": s["slip"] / n, "axle_load": s["axle"] / n,
 			"front_share": s["front"] / maxf(s["total"], 1e-6)})
-	print(("    %4.1f km/h (held %4.1f): draft %.2f kN (D497 %.2f, %+.1f %%), dial %.0f %%; engine_load"
+	print(("    %4.1f km/h %s (held %4.1f): draft %.2f kN (D497 %.2f, %+.1f %%), dial %.0f %%; engine_load"
 			+ " %.0f %%, wheel_slip %.1f %%, axle_load %.0f kg, front share %.1f %%; %s %.0f rpm,"
-			+ " pedal %.2f%s") % [PLOUGH_KMH[_pl_speed], v * 3.6, draft_n / 1000.0, d497 / 1000.0,
+			+ " pedal %.2f%s") % [PLOUGH_HOLDS[_pl_speed].x,
+			"locked" if _diff_lock or _plough_hold_locked() else "open  ", v * 3.6, draft_n / 1000.0,
+			d497 / 1000.0,
 			(draft_n / maxf(d497, 1.0) - 1.0) * 100.0, s["dial"] / n, s["load"] / n, s["slip"] / n,
 			s["axle"] / n, s["front"] / maxf(s["total"], 1e-6) * 100.0, _gear_label(int(s["gear"])),
 			s["rpm"] / n, s["pedal"] / n,
 			"; PTO %.1f N·m on the crank" % (s["pto"] / n) if _pto else ""])
+	var fx := 0.0
+	for w in _car.wheels:
+		fx += w.force_long
+	print("      last tick: draft %.2f kN, every tyre's Fx %.2f kN | rears %s" % [
+			absf((_car as TractorVehicle).draft_applied) / 1000.0, fx / 1000.0,
+			"  ".join(_rear_contacts(true))])
 
 
 ## The course's Row and light bands as distances ahead of its Spawn, laid on `strip` (§ draft).
@@ -4604,7 +4630,7 @@ func _load_course(strip: FieldStrip) -> void:
 		strip.bands.append(Vector2(minf(a, b), maxf(a, b)))
 		bands.append("%.0f-%.0f m" % [minf(a, b) - _co_row.x, maxf(a, b) - _co_row.x])
 	print("course: tractor_plough's Row %.0f-%.0f m ahead of its Spawn; light bands %s into it, Field"
-			% [_co_row.x, _co_row.y, ", ".join(bands)] + " %.2f (grip %.2f, drag %.3f), open diff"
+			% [_co_row.x, _co_row.y, ", ".join(bands)] + " %.2f (grip %.2f, drag %.3f), diff locked"
 			% [strip.field,
 			lerpf(Surface.ref_grip(Surface.SAND), Surface.ref_grip(Surface.FIELD), strip.field),
 			lerpf(Surface.drag(Surface.SAND), Surface.drag(Surface.FIELD), strip.field)])
@@ -4679,19 +4705,28 @@ func _report_course_run(s: float) -> void:
 ## rears' summed tyre force, and each rear tyre against its grip curve.
 func _plough_trace_line(v_long: float) -> String:
 	var dt: Drivetrain = _car.drivetrain
-	var rears: Array[String] = []
 	var fx := 0.0
 	for w in _car.wheels:
 		if w.is_rear:
 			fx += w.force_long
-			rears.append("%s %.3f %s %+.3f" % [_wheel_label(w), w.slip,
-					">" if w.slip > _pl_peak_slip else "<",
-					w.force_long / maxf(w.suspension_force, 1.0)])
 	return ("      %6.3f %5.2f km/h %s %4.0f rpm %s ramp %.2f clutch %.2f Tc %5.0f fuel %.2f | draft"
 			+ " %5.2f kN, rear Fx %5.2f kN | %s") % [_t, v_long * 3.6, _gear_label(dt.gear_byte),
 			dt.rpm, "OSL"[dt.coupling_state], dt.ramp, dt.clutch, dt.coupling_torque,
 			dt.applied_throttle, absf((_car as TractorVehicle).draft_applied) / 1000.0, fx / 1000.0,
-			"  ".join(rears)]
+			"  ".join(_rear_contacts(false))]
+
+
+## Each rear tyre against the grip curve: the slip ratio, < / > the rising / falling side of its
+## `_pl_peak_slip` peak, and Fx / Fz; `with_load` puts Fz in kg ahead of them.
+func _rear_contacts(with_load: bool) -> Array[String]:
+	var rears: Array[String] = []
+	for w in _car.wheels:
+		if w.is_rear:
+			rears.append("%s %s%.3f %s %+.3f" % [_wheel_label(w),
+					"%.0f kg, " % (w.suspension_force / 9.81) if with_load else "", w.slip,
+					">" if w.slip > _pl_peak_slip else "<",
+					w.force_long / maxf(w.suspension_force, 1.0)])
+	return rears
 
 
 ## The kerb runs (§ kerb) on this body, after the disk's prediction per axle: a disk of radius `r`

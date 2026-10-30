@@ -79,35 +79,39 @@ the truck's `j1939` `axle_load` (lifting an implement moves its weight onto the 
   (`TractorVehicle._apply_implement_mass`, `VehicleMath.carried_com`). At the bottom stop the
   ground carries `ground_share()` (depth wheel, roller, tail wheel), handed to the linkage across
   `support_lift()` (`ImplementBase.carried01`); the spreader never touches, so attaching it, not
-  lifting it, moves its load. Raised, the plough and the harrow take the front under John Deere's
-  ballasting minimum, ≥ 20 % of total weight on the front axle: reported, not enforced; that is
-  what front weights fix. `measure_vehicles -- tractor-kenney 20 hitch`, parked, per-axle kg off the
-  springs (every reading within 1.6 % of the statics `m e / L`):
+  lifting it, moves its load. Raised, the harrow takes the front under John Deere's ballasting
+  minimum, ≥ 20 % of total weight on the front axle, and the plough to its edge: reported, not
+  enforced; that is what front weights fix. `measure_vehicles -- tractor-kenney 20 hitch`, parked,
+  per-axle kg off the springs (every reading within 1.1 % of the statics `m e / L`):
 
   | Implement | Front / rear, bottom stop | Front / rear, raised | Front share, raised |
   |---|---|---|---|
-  | none | 2655 / 4345 | | 37.9 % |
-  | Plough | 1843 / 5742 | 1452 / 6448 | 18.4 % |
-  | Power harrow | 2419 / 4891 | 1538 / 7012 | 18.0 % |
-  | Rotary mower | 2283 / 5069 | 2027 / 5593 | 26.6 % |
-  | Spreader, full | 1987 / 5916 | 2141 / 5761 | 27.1 % |
+  | none | 2656 / 4344 | | 37.9 % |
+  | Plough | 1952 / 5634 | 1614 / 6286 | 20.4 % |
+  | Power harrow | 2441 / 4869 | 1638 / 6912 | 19.2 % |
+  | Rotary mower | 2328 / 5024 | 2101 / 5519 | 27.6 % |
+  | Spreader, full | 2050 / 5853 | 2176 / 5726 | 27.5 % |
 
   Carried full, the spreader barely moves the handling: the full-lock circle and the step-steer yaw
   rates stay within a few percent of bare, the yaw index read off the tensor 1.06 against 0.96. The
   light front shows as no extra understeer in the linear range (`20 circle`, `20 step`, with and
   without `trailer=spreader`).
   Held on full soil (`20 plough`), the measured draft sits on D497 at each speed held, to 0.0 %.
-  The harrow holds each of the pass's speeds. The plough holds the slowest at 15 % slip and the
-  reference speed in D1 at 10 %: the all-speed governor caps the crank, and with it the rears' spin,
-  on its line, so the lighter right rear (under the plough's left-of-centre mass) stays under the
-  slip peak. Past the reference speed D1's governed top holds it there. Floored from rest it peels
-  (~55 %, then 45 %), its lugged D7 taking D1 in two shifts. Ramped in as a driver does (`20 plough
-  course`), the course's reference-speed run reads `engine_load` 62 % on full soil and 42 % on the
-  light bands, inside tractor_plough's 25-70 %; at part pedal the PI driver's governed box shifts
-  through D1-D7 in the Row, its load spiking on the shift ticks. The lug's grip in soil (0.60 of
-  asphalt, `ag_lug.tres`) is an estimate, and D497's own traction at the slip peak is
-  lower still (0.49): an open-diff 2WD tractor ploughing is traction-limited, and the diff lock or
-  MFWD is the answer, as a ploughing driver engages it.
+  The harrow holds each of the pass's speeds, open or locked. The plough holds the slowest at 16 %
+  slip either way. With the diff open, pushed on to the reference speed on a floored pedal, it
+  peels: the lighter right rear (2709 of 5789 kg, under the plough's left-of-centre mass) passes
+  the grip peak and runs away at 122 % slip while the left turns at 9 %, the open diff giving the
+  left no more torque than the spinning right; it settles near half the reference speed in D1,
+  49 % slip. An open diff already under the peak at the reference speed stays there: the peel is
+  the falling side of the grip curve, reached by a heavy foot. Locked, it holds the reference
+  speed in D1 at 10 %, both rears at Fx/Fz ~0.5 under the peak; past it D1's governed top holds
+  it there. Floored from rest, open, it peels (~50-60 %), its lugged D7 taking D1 in two shifts.
+  Ramped in as a driver does, the diff locked as tractor_plough's hint asks (`20 plough course`),
+  the course's reference-speed run reads `engine_load` 63 % on full soil and 43 % on the light
+  bands, inside tractor_plough's 25-70 %; at part pedal the PI driver's governed box shifts
+  through D1-D6 in the Row, its load spiking on the shift ticks. The lug's grip in soil (0.60 of asphalt, `ag_lug.tres`) is an estimate, and D497's
+  own traction at the slip peak is lower still (0.49): an open-diff 2WD tractor ploughing is
+  traction-limited, and the diff lock or MFWD is the answer, as a ploughing driver engages it.
   Not modelled: draft control (the Ferguson hitch), a spreader that empties, a composite inertia
   declaration, front ballast as an attachment, a start gear that reads draft, skid drag.
 - The PTO is real load: a driven implement declares its shaft power

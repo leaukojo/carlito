@@ -36,6 +36,6 @@ attachment = "res://src/vehicles/tractor/implements/plough.tscn"
 arena = "level_1"
 course = "res://src/levels/island/level_1/courses/tractor_plough_course.tscn"
 briefing = "Lower the plough into the field, then hold a straight furrow with engine_load in band. The paler bands are light sandy soil."
-hint = "Lower the hitch all the way and keep it there: the shares bite over the lower part of its stroke. On a light band draft_force halves and engine_load falls with it; past the band both climb again. Much past 7 km/h and engine_load climbs out of the top."
+hint = "Lower the hitch all the way and keep it there: the shares bite over the lower part of its stroke. Lock the diff (diff_lock) before the Row: open, a heavy foot spins the lighter right rear past its grip and wheel_slip runs away. On a light band draft_force halves and engine_load falls with it; past the band both climb again. Much past 7 km/h and engine_load climbs out of the top."
 goals = Array[ExtResource("1_goal")]([SubResource("Resource_lower"), SubResource("Resource_row")])
 constraints = Array[ExtResource("5_cons")]([SubResource("Resource_down")])

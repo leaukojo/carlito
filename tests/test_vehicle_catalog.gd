@@ -168,28 +168,33 @@ static func _top_gear(spec: VehicleSpecScript) -> int:
 
 
 ## Full pedal is where the launches and top speeds are tuned: there the policy is the box's two fixed
-## thresholds, on every gear, and the landing floor moves no upshift point. A skip box takes in one
-## shift the gears a chain of forced shifts would: over-revved a step past `shift_up_rpm` (each
-## landing at or past the point forces the next), or lugged a step under the coast line.
+## thresholds, on every gear, and the landing floor moves no upshift point. An all-speed governor's
+## upshift is its full demand's cap where that sits under `shift_up_rpm` (`governed_up_rpm`). A skip
+## box takes in one shift the gears a chain of forced shifts would: over-revved a step past the
+## upshift point (each landing at or past the point forces the next), or lugged a step under the
+## coast line.
 func test_every_box_shifts_at_its_full_pedal_pair_at_full_pedal() -> void:
 	var specs := _gearbox_specs()
 	for variant: String in specs:
 		var spec: VehicleSpecScript = specs[variant]
 		var top := _top_gear(spec)
 		var coast := ShiftPolicy.down_rpm(spec, 0.0)
+		var up := spec.shift_up_rpm
+		if spec.pedal_map == PedalMap.Kind.ALL_SPEED:
+			up = minf(up, ShiftPolicy.governed_up_rpm(spec, 1.0))
 		for byte in range(1, top + 1):
 			if byte < top:
 				assert_float(ShiftPolicy.upshift_rpm(spec, byte, 1.0)).override_failure_message(
-						"%s: D%d's full-pedal upshift moved off shift_up_rpm" % [variant, byte]) \
-						.is_equal(spec.shift_up_rpm)
+						"%s: D%d's full-pedal upshift moved off its full-pedal point" % [variant,
+						byte]).is_equal(up)
 			var ratio := spec.gear_ratios[byte - 1]
 			var rpm := spec.idle_rpm
 			while rpm <= spec.redline_rpm:
 				var expected := byte
-				if rpm >= spec.shift_up_rpm and byte < top:
+				if rpm >= up and byte < top:
 					expected = byte + 1
 					while spec.skip_shifts and expected < top \
-							and rpm * spec.gear_ratios[expected - 1] / ratio >= spec.shift_up_rpm:
+							and rpm * spec.gear_ratios[expected - 1] / ratio >= up:
 						expected += 1
 				elif rpm <= spec.shift_down_rpm and byte > 1:
 					expected = byte - 1

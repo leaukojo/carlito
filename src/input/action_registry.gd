@@ -126,7 +126,7 @@ const ENTRIES: Array[Dictionary] = [
 		"id": &"diff_lock", "actions": ["diff_lock"], "group": Group.VEHICLE,
 		"label": "Rear diff lock", "signals": ["diff_lock"], "families": ["tractor"],
 		"capability": "diff_lock", "bridge_owned": true,
-		"touch": Touch.TAP, "touch_label": "DIFF", "poll_key": &"diff_lock_toggle",
+		"touch": Touch.TAP, "touch_label": "DIFF LOCK", "poll_key": &"diff_lock_toggle",
 		"touch_state": "diff_lock",
 	},
 	{

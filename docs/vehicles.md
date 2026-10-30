@@ -354,8 +354,8 @@ Do not re-propose these without new evidence:
   models, two of which gate.
 - Merging `TowedBody.Consumer` with `ImplementBase.Connection`: different sets (see the enum
   headers).
-- Torque-curve tails on the six curves ending at `(redline, 0)` (the heavy vans, the Kenney trucks,
-  `tractor-kenney`): they would move tuned top speeds for nothing.
+- Torque-curve tails on the five curves ending at `(redline, 0)` (the heavy vans, the Kenney
+  trucks): they would move tuned top speeds for nothing.
 - Open-diff friction (the open diff is an ideal 1.0): bodies that should fight one-wheel peel
   declare an LSD.
 - Fixing the floored 2WD tractor in mud: it is the open diff's peel (§ Open-diff peel).

@@ -603,7 +603,8 @@ func test_the_road_load_is_the_drive_less_the_mass_times_the_acceleration_filter
 
 func test_a_governed_part_demand_upshifts_under_its_setting() -> void:
 	# On an all-speed governor a part demand caps the engine at its setting, so the map's point is
-	# held two droops under it; a full demand keeps the map's (its setting is the redline).
+	# held two droops under it; a full demand keeps the map's where its cap (the redline's) sits
+	# over it, as this spec's does.
 	var spec := _light_spec()
 	spec.pedal_map = PedalMap.Kind.ALL_SPEED
 	spec.governor_droop = 0.07
@@ -614,8 +615,9 @@ func test_a_governed_part_demand_upshifts_under_its_setting() -> void:
 	assert_float(ShiftPolicy.up_rpm(spec, 0.0)).is_less_equal(spec.idle_rpm)
 
 
-## A tractor-like governed box: idle 800, high idle 2600, a 1.11 step, up 2200 / light 1500,
-## down 1000, a 7 % droop.
+## A governed box whose full-demand cap (2600 / 1.14 = 2281) sits over its 2200 pair: idle 800,
+## high idle 2600, a 1.11 step, up 2200 / light 1500, down 1000, a 7 % droop. The shipped tractor's
+## cap sits under its pair (the floored-cap test below).
 func _governed_spec() -> VehicleSpecScript:
 	var spec: VehicleSpecScript = VehicleSpecScript.new()
 	spec.idle_rpm = 800.0
@@ -660,3 +662,29 @@ func test_a_governed_full_demand_shifts_as_the_same_box_on_linear() -> void:
 			assert_int(ShiftPolicy.next_gear(spec, byte, rpm, 1.0, INF, false)) \
 					.override_failure_message("D%d at %d rpm, full demand" % [byte, rpm]) \
 					.is_equal(ShiftPolicy.next_gear(linear, byte, rpm, 1.0, INF, false))
+
+
+func test_a_floored_governed_cap_under_the_forced_point_skips_as_a_forced_upshift() -> void:
+	# High idle 3800: full demand's cap 3800 / 1.14 = 3333, under the 3500 forced point. Floored at
+	# 3400 after the dwell, the light rig passes the gears it would rev out of before 3500 (where a
+	# forced upshift skips the dwell), landing in one it holds for the dwell.
+	var spec := _close_ratio_spec()
+	spec.redline_rpm = 3800.0
+	spec.pedal_map = PedalMap.Kind.ALL_SPEED
+	spec.governor_droop = 0.07
+	assert_float(ShiftPolicy.upshift_rpm(spec, 1, 1.0)).is_less(spec.shift_up_rpm)
+	var g := ShiftPolicy.next_gear(spec, 1, 3400.0, 1.0, INF, false, 0.0, 1, false, true, 1000.0)
+	assert_int(g).is_equal(ShiftPolicy.forced_upshift(spec, 1, 3400.0, 1.0, 0.0, 1000.0))
+	assert_int(g).is_greater(2)
+	var landing := 3400.0 * spec.gear_ratios[g - 1] / spec.gear_ratios[0]
+	assert_float(ShiftPolicy.time_to_upshift(spec, g, landing, 0.0, 1000.0)) \
+			.is_greater_equal(spec.shift_dwell_s)
+	# A part demand whose setting is still over the forced point walks as floored does.
+	assert_float(PedalMap.setting_rpm(spec, 0.99)).is_greater(spec.shift_up_rpm)
+	assert_int(ShiftPolicy.next_gear(spec, 1, 3400.0, 0.99, INF, false, 0.0, 1, false, true,
+			1000.0)).is_equal(ShiftPolicy.forced_upshift(spec, 1, 3400.0, 0.99, 0.0, 1000.0))
+	# One whose setting is under it never reaches it: the map's target.
+	var under := PedalMap.demand_for_setting(spec, spec.shift_up_rpm - 50.0)
+	var at := ShiftPolicy.upshift_rpm(spec, 1, under) + 10.0
+	assert_int(ShiftPolicy.next_gear(spec, 1, at, under, INF, false, 0.0, 1, false, true, 1000.0)) \
+			.is_equal(ShiftPolicy.upshift_target(spec, 1, at, under))
