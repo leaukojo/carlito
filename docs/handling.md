@@ -98,10 +98,15 @@ under 5 points. A launch swings from parked; a shift, the larger of the steady s
 its handover and cut and its fall since. So a short, tall body is not failed for its footprint: the
 laden `semi`'s launch swings ~69 points and overshoots 5, `sedan-sports`' 43 and 6.
 
-Cars, vans, Kenney trucks, both semis and the bare tractor pass (`-- all 45 trace`). The tractor's floored skip-shifts pass on the
-powershift's torque reduction (`docs/drivetrain.md` § The shift's handover); without it, the
-crank's inertia reaches the wheels and D7>D13 overshoots 16 points. The AMT's cut returns over
+Cars, vans, Kenney trucks and both semis pass (`-- all 45 trace`). The AMT's cut returns over
 `shift_torque_ramp_s`, so its drive does not step into the pitch mode.
+
+The tractor's floored skip-shifts fail, and the gate is a report: the powershift reduces no torque
+(its source holds or raises it, `docs/drivetrain.md` § The shift's handover), so the crank's
+inertia reaches the wheels. Bobtail, D7>D12 overshoots 15.1 points of a 5.8 allowance and D12>D15
+6.8 of 5.0; with the tipper, D6>D10 8.2 of 5.0 (`-- tractor-kenney 60 trace trailer=bobtail` /
+`trailer=farm_tipper`). The 0.3 reference is the road band's; no tractor pitch damping is sourced
+(below), so these FAILs are not a damping defect.
 
 The bobtail semis are where the gate reads the steer axle's damping and the contact itself:
 - The cab-over's launch is the shortest wheelbase's largest swing, and its overshoot is the nose
@@ -114,13 +119,12 @@ The bobtail semis are where the gate reads the steer axle's damping and the cont
   (`docs/vehicles.md` § Physics derivations and figures, *Contact*). The trace's `contact` flag prints each wheel's
   load, compression, patch, normal and collider under its lines to find one.
 
-Of the coupled rigs, one event fails: `tractor-kenney` + farm tipper's launch from its D6 start
-(its `trace` run's `per event` line).
+Of the coupled rigs, beyond the powershift's skip-shifts above, one event fails: `tractor-kenney`
++ farm tipper's launch from its D6 start (its `trace` run's `per event` line).
 - The cause is the trailer's brake model, not the tractor's pitch: a one-tick jolt, back then
   forward, as the tipper's service brakes finish venting (`TowedBody.BRAKE_RELEASE_S`) under a
   floored pull-away.
 - Vented in three fifths of that time, the launch passes.
-- The tipper's shifts pass, and vented faster, too.
 - No tractor pitch damping is sourced. `GroundDriveSpec`'s rear fallback keeps the front's ζ at
   the front's corner mass: ≈ 0.31 bump / 0.38 rebound on the 2.17 t rear corner, against the
   front's 0.39 / 0.48. No failure traced here points at it.
@@ -204,9 +208,12 @@ Tractor `rear_lat_grip` 1.077 = `1 + s * log2(rated rear / rated front)` (650/65
 - **Stated shortfall: linear K.** Under a real car's 2-4 deg/g: roll camber (1.2 of an illustrative
   4.1 deg/g budget), aligning torque (0.4), front and aligning-torque compliance steer, and every rear
   left at 0, against roll steer's 1.0 (SAE 760713; `docs/sources.md` § Linear understeer).
-- **COMPROMISE:** `sedan-sports`, `suv`, `pickup`, `pickup-flat` and the semis keep even bars and
-  the law off (recipe comment): the class split, roll steer on, spins a lifted step at speed (0, 4,
-  1, 2 more cells), and compliance steer retires none (no multi-link figure; the leaf sign adds oversteer). `suv-luxury`: 27 / 9, the law on, equal tyres.
+- **COMPROMISE:** `suv` keeps even bars, the law off and `rear_lat_grip` 1.08 (recipe comment): on
+  equal tyres with the law on, no split keeps its slowest K inside the band without lifting a wheel
+  in a held step. Undoing it needs roll camber, not modelled. The semis keep the
+  law off for their trailers' roll (`semi_spec.tres`). Equal tyres, the law on: `sedan-sports` 15 / 5,
+  the pickups 19.6 / 8.4, `suv-luxury` 27 / 9; with ESC off a lifted 100 km/h step spins the first
+  three (1-2 cells each).
 
 ## Aero balance
 
@@ -261,7 +268,7 @@ the fuel; the yaw torque keeps its priority on a wheel (`corner_torques`).
   the semis stop under their tip; near-limit steady step cells slow (the bobtail's most).
 - **Chassis tables stay ESC-off.** `doc=steer`, `doc=cornering` and `doc=tyres` set `noesc`: K,
   the balance and the corner limit are the chassis's. ESC retires no handling COMPROMISE: the
-  lift-off `rear_lat_grip` patches stand for unmodelled chassis effects and are judged with it off.
+  lift-off `rear_lat_grip` patch on `suv` stands for unmodelled roll camber and is judged with it off.
 - **Limits.** Flat past the table's end (K is two-valued at the limit: `BOUND_MARGIN_G` caps it); a
   tyre swap keeps the stock table, a coupled semi its unit's K (under the dead-band off the limit).
   Dead-band, gains, rates, `ROLL_SHARE`: estimates (`docs/sources.md` § Stability control).

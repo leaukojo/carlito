@@ -1112,15 +1112,14 @@ func test_a_cut_box_hands_over_the_engines_torque_plus_the_cranks_inertia() -> v
 	assert_int(fuelled[0]).is_greater(8)
 
 
-func test_a_powershift_reduces_the_engine_so_the_shift_passes_the_drivers_torque() -> void:
-	# A clutch body with no cut (a powershift) shifts clutch to clutch as a converter automatic does:
-	# the engine is fuelled down so the clutch passes the pedal's torque, with no inertia surge.
+func test_a_powershift_hands_over_the_engines_torque_plus_the_cranks_inertia() -> void:
+	# A clutch body with no cut (a powershift): the engine stays at the pedal's fuel (Deere's TCU holds
+	# or raises it, US 2004/0014563), so the oncoming clutch carries its torque plus J x the rate.
 	var spec := _spec()
-	var ticks := _hand_over(spec, func(dt: DrivetrainScript, was: float, _rate: float) -> void:
-		var demand := DrivetrainScript.engine_torque(spec, was)
-		assert_float(dt.coupling_torque).is_equal_approx(demand, 1e-3 * demand)
-		assert_float(dt.applied_throttle).is_greater(0.0)
-		assert_float(dt.applied_throttle).is_less(1.0))
+	var ticks := _hand_over(spec, func(dt: DrivetrainScript, was: float, rate: float) -> void:
+		var law := DrivetrainScript.engine_torque(spec, was) + spec.engine_inertia * rate
+		assert_float(dt.coupling_torque).is_equal_approx(law, 0.05 * law)
+		assert_float(dt.applied_throttle).is_equal(1.0))
 	assert_int(ticks).is_between(15, 16)
 
 
@@ -1278,20 +1277,25 @@ func test_a_stall_rev_never_trips_the_limiter() -> void:
 
 
 func test_a_machine_that_drives_no_wheels_keeps_the_rigid_crank() -> void:
-	# Boat and drone carry no ground_drive; the plane's wheels are undriven. All three keep
-	# the crank the wheels alone turn, so a held one sits at idle however hard it is revved.
+	# Boat and drone carry no ground_drive; the plane's wheels are undriven. All three keep the
+	# rigid crank, whose speed no wheel sets: in gear as in N it runs the free-rev line, so a
+	# boat under way at half throttle reads half way to the redline, never idle.
 	var no_gd := _spec()
 	no_gd.ground_drive = null
 	var undriven := _spec()
 	undriven.ground_drive.driven_front = false
 	undriven.ground_drive.driven_rear = false
+	var half := lerpf(800.0, 4000.0, 0.5)
 	for spec: VehicleSpecScript in [no_gd, undriven]:
 		assert_bool(DrivetrainScript.drives_wheels(spec)).is_false()
 		assert_float(DrivetrainScript.converter_free_rpm(spec, 1.0)).is_equal(spec.idle_rpm)
-		var dt: DrivetrainScript = DrivetrainScript.new(spec)
-		for i in 120:
-			dt.process(1.0 / 60.0, 1.0, 0.0, 0.0, 1, false)
-		assert_float(dt.rpm).is_equal_approx(spec.idle_rpm, 0.001)
+		for byte: int in [DrivetrainScript.GEAR_N, 1, DrivetrainScript.GEAR_R]:
+			var dt: DrivetrainScript = DrivetrainScript.new(spec)
+			dt.running = true
+			for i in 120:
+				dt.process(1.0 / 60.0, 0.5, 0.0, 5.0, byte, false)
+			assert_float(dt.rpm).is_equal_approx(half, 1.0)
+			assert_bool(dt.on_limiter).is_false()
 
 
 # --- road-speed governor ------------------------------------------------------------

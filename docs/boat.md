@@ -8,9 +8,9 @@ Water & world bounds.
   `reset_session_state()` = `super()` + trim/autopilot reset. Its spec declares no ground drive,
   so `axle_torque` off `Drivetrain` is discarded.
 - Boat, drone and train run the whole engine model at 60 Hz for the gear byte (`auto_shift` on
-  the kept 6 `gear_ratios`, scale `DEFAULT_ROAD_RADIUS`); only the boat reads `drivetrain` in its
-  own file, for telemetry (`applied_throttle`, `rpm`) — accepted compromise,
-  `docs/vehicles.md` § Rejected designs.
+  the kept `gear_ratios`, scale `DEFAULT_ROAD_RADIUS`; the rigid crank's free-rev line in any
+  gear); only the boat reads `drivetrain` in its own file, for telemetry (`applied_throttle`,
+  `rpm`) — accepted compromise, `docs/vehicles.md` § Rejected designs.
 
 ## Buoyancy and knobs
 

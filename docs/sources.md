@@ -76,8 +76,8 @@ body behind its reference is fixed from its own data (curve, gearing), never by 
   through the inertia phase [44], or briefly cuts it there through the engine management, so the
   output does not rise on the crank's inertia [97]. A Deere powershift's controller requests an
   engine torque over the bus through the shift, held at a level such as 20 % over the present
-  torque and cancelled after the swap [98]; no tractor source reducing it was found. The tractor's
-  reduction is the road boxes' law (a COMPROMISE at `TRACTOR_BASE`).
+  torque and cancelled after the swap [98]; no tractor source reducing it was found, so the
+  tractor's powershift reduces nothing.
 
 *Idle and holds:*
 - **Loaded idle:** the ECU adds air when a drive range is selected, so idle stays put. Without that

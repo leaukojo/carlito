@@ -265,19 +265,16 @@ output torque, a little over the driver's demanded torque, the surplus taking ou
 inertia [42]; the phase lasts ~0.15-0.5 s on a converter automatic [41], and its TCU holds the
 engine's torque reduced through it [44]. The controller lands the crank on the new gear at an even
 rate over `shift_handover_s` (`Drivetrain.handover_rate`), never past the rating:
-- **Seamless boxes** (no `shift_cut_s`): the engine is fuelled down so the clutch passes the
-  driver's demand, the engine's torque at the pedal's fuel (`Drivetrain.handover_fuel`), and the
-  crank's inertia goes into the reduction. A lift upshift, with nothing to reduce, takes the surplus
-  on the clutch.
-  - **Converter automatic** (cars, vans, Kenney trucks; `shift_handover_s` mid of [41], an
-    estimate): an Allison-class or car automatic shifts clutch to clutch, with no torque
-    interruption.
-  - **Powershift** (the tractor; `shift_handover_s` at [43]'s overlap baseline). COMPROMISE: the
-    reduction is the road boxes' [44, 97]; the tractor source found holds or raises the engine's
-    torque through the shift instead [98]. The reduction also covers the pull-away's close onto
-    turning wheels. Without it, the crank's `J Δω / t` reaches the wheels: a floored skip D7>D13 hands
-    over several times the torque it held before and drops it on the lock tick, and the nose rings
-    16 points past the `front axle` gate (`docs/handling.md` § Pitch).
+- **Converter automatic** (cars, vans, Kenney trucks; `shift_handover_s` mid of [41], an
+  estimate): an Allison-class or car automatic shifts clutch to clutch, with no torque
+  interruption. The engine is fuelled down so the clutch passes the driver's demand, the engine's
+  torque at the pedal's fuel (`Drivetrain.handover_fuel`), and the crank's inertia goes into the
+  reduction. A lift upshift, with nothing to reduce, takes the surplus on the clutch.
+- **Powershift** (the tractor; `shift_handover_s` at [43]'s overlap baseline): no cut and no
+  reduction. The tractor source found holds or raises the engine's torque through the shift [98],
+  so the clutch carries the pedal's torque plus `J Δω / t`, on each shift and on the pull-away's
+  close onto turning wheels. A floored skip D7>D12 hands over ~1.7x the curve's peak and drops it
+  on the lock tick; the nose rings past the `front axle` gate (`docs/handling.md` § Pitch).
 - **AMT** (the semis; `shift_handover_s` within its `shift_cut_s`, an estimate): after its cut, the
   clutch carries the delivered torque plus `J Δω / t`. The cut is its interruption; its fuel returns
   over `shift_torque_ramp_s` (an estimate; a step rings).
@@ -293,7 +290,7 @@ the `each shift` line):
 | `delivery`, `ambulance` | the curve's peak | the handover |
 | `garbage-truck` | the curve near its peak | the handover |
 | `semi` + 24 t | over the curve's peak, the closing tick with its fuel back | the cut |
-| `tractor-kenney` | near the curve's peak | inside the handover |
+| `tractor-kenney` | over the curve's peak, the crank's inertia (~1.7x on D7>D12) | inside the handover |
 
 - The trace's dwell gate reads `race` D2 under `shift_dwell_s`:
   the policy never holds a full-pedal upshift (it is where the launches are tuned), so on a

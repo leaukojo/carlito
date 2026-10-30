@@ -635,12 +635,9 @@ const TRACTOR_BASE := {
 	"shift_up_light_rpm": 1500.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0,
 	"shift_dwell_s": 1.5, "skip_shifts": true, "start_gear_max": 7,
 	# The clutch overlap: 0.3 s, a simulated tractor powershift's baseline (YTO TX4A, Agriculture
-	# 14(2) 254, 2024). No cut, so the engine is fuelled down through the inertia phase and the clutch
-	# passes the pedal's torque (`Drivetrain.handover_fuel`). COMPROMISE: that reduction is sourced on
-	# road clutch-to-clutch boxes (US 9,327,733, US 7,086,989); the tractor source found has its TCU
-	# command engine torque over the bus through a powershift's shift, but held or raised (Deere,
-	# US 2004/0014563), with no reduction. Undone, the crank's `J Δω / t` reaches the wheels: a skip
-	# D7>D13 hands over ~1200 N·m against ~300 and drops it on the lock tick, and the nose rings.
+	# 14(2) 254, 2024). No cut and no torque reduction: the tractor source found has its TCU command
+	# engine torque over the bus through a powershift's shift, held or raised (Deere,
+	# US 2004/0014563), so the clutch carries the pedal's torque plus the crank's `J Δω / t`.
 	"shift_handover_s": 0.3,
 	"engine_brake_frac": 0.20, "shift_cut_s": 0.0,  ## powershift: no interruption
 	# Motoring at and below idle: 0.10 of peak, the same 5.5 L industrial diesel's friction power
@@ -702,18 +699,12 @@ const VARIANTS := {
 	# designed toe-in gives no size); the leaf rears' stock eye and shackle steer toward oversteer,
 	# with no size; nothing on the open-wheelers.
 	"sedan": {"family": "car", "front_weight": 0.60},
-	# COMPROMISE (`sedan-sports`, `suv`, `pickup`, `pickup-flat`): even bars, `rear_lat_grip` 1.08 and
-	# the cornering-stiffness law off, a rear grip bonus with no hardware behind it. These near-50/50
-	# rear-driven bodies spin lifted 60-100 km/h steps on equal tyres with a front-biased bar: with
-	# roll steer on, CAR_BASE's class split (80/20 of their bar total, `rear_lat_grip` 1.0, the law at
-	# 2.56) adds 0, 4, 1, 2 spun cells over the compromise (`measure_vehicles -- <v> 60 step`,
-	# 2026-10-23). On a lift the lightened rears reach their side peak at a smaller slip, which the
-	# steady BalanceModel margin cannot see. Undoing it costs those cells; `sedan-sports` passes the
-	# spin half of the retirement test, its BalanceModel.limit half unread. Compliance steer does not
-	# retire the rest on today's sources. No production multi-link rear was measured. As a what-if,
-	# +0.06 deg/kN of designed toe-in still leaves `suv` 3 and each pickup 1. The leaf's stock sign is
-	# toward oversteer, so it cannot retire the pickups'.
-	"sedan-sports": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "engine_inertia": 0.18, "mass": 1050.0, "torque_mul": 1.12, "final_drive": 4.1, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0, "brake_heat": "performance"},
+	# Bars on the near-50/50 rear-driven bodies (`sedan-sports`, the pickups): their CAR_BASE total
+	# at the most front-biased split that lifts no wheel in a held step, on equal tyres with the law on
+	# (`measure_vehicles -- <v> 30 step`, 2026-10-30): `sedan-sports` 15 / 5 kN/m (80/20 lifts a
+	# wheel at 100 km/h), the pickups 19.6 / 8.4 (75/25 lifts one on `pickup-flat`). With ESC off a
+	# lifted 100 km/h 20-30 % step spins them, 1-2 cells each; ESC catches every one.
+	"sedan-sports": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "anti_roll_rate": 15000.0, "anti_roll_rate_rear": 5000.0, "engine_inertia": 0.18, "mass": 1050.0, "torque_mul": 1.12, "final_drive": 4.1, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0, "brake_heat": "performance"},
 	# Hot hatch: a helical front LSD (Quaife-class, ~2.5:1), so a front wheel a bump or a steer input
 	# peels still leaves its partner up to 2.5x its torque rather than an equal share.
 	# COMPROMISE: a converter held at ratio 1.0, a fluid coupling. Its reference, a Mk7 GTI, is a
@@ -727,6 +718,13 @@ const VARIANTS := {
 	# 0-100 goes as peak^-0.6 on the sedan, peak^-1.4 on the suv.
 	# Both SUVs: a Torsen-type centre (~3:1). Under launch squat the rear axle carries ~2x the
 	# front (2412 / 4956 N measured), inside 3:1, so the heavy axle is no longer capped by the light one.
+	# COMPROMISE (`suv`): even bars, `rear_lat_grip` 1.08 and the cornering-stiffness law off, a rear
+	# grip bonus with no hardware behind it, standing in for the roll camber and aligning torque the
+	# sim lacks (docs/handling.md § Balance). On equal tyres with the law on no split serves
+	# (`measure_vehicles -- suv 30 step`, 2026-10-30): up to 70/30 the 30 km/h step reads K 0.48-0.63
+	# deg/g, under the sourced 0.7-8.2 band, and ESC off spins 5 or more lifted / held cells; 75/25 and
+	# up lift a wheel in held steps. As a what-if, +0.06 deg/kN of designed toe-in leaves 3.
+	# Undoing it needs roll camber, not modelled.
 	"suv": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.62, "anti_roll_rate": 18000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "mass": 1500.0, "torque_mul": 1.05, "mu_lat": 0.88, "max_steer_deg": 34.0, "driven_rear": true, "centre_diff_bias": 3.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0, "brake_heat": "suv_lc"},
 	# 1.54 is the biggest multiplier in the family: 285 Nm through an AWD 1600 kg body.
 	# Off the COMPROMISE: the 36 kN/m pair split 27 / 9, the law on, equal tyres. Under roll steer its
@@ -790,8 +788,8 @@ const VARIANTS := {
 	# flush ride height the rear wheels broke through the bed floor.
 	# `yaw_index` 0.94, the measured pickups' median (docs/handling.md § Inertia): the empty bed
 	# leaves the mass forward.
-	"pickup": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 14000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "ride_lift": 0.08, "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 3385.0, "handbrake_torque": 1700.0, "brake_heat": "pickup"},
-	"pickup-flat": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 14000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "ride_lift": 0.08, "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 3385.0, "handbrake_torque": 1700.0, "brake_heat": "pickup"},
+	"pickup": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 19600.0, "anti_roll_rate_rear": 8400.0, "ride_lift": 0.08, "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 3385.0, "handbrake_torque": 1700.0, "brake_heat": "pickup"},
+	"pickup-flat": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 19600.0, "anti_roll_rate_rear": 8400.0, "ride_lift": 0.08, "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 3385.0, "handbrake_torque": 1700.0, "brake_heat": "pickup"},
 	# heavy vans: car family, van feel (VAN_BASE, not CAR_BASE) — these are 4-5 t vehicles
 	"delivery": {"family": "car", "base": "van", "mass": 4200.0},
 	"delivery-flat": {"family": "car", "base": "van", "com_y": 0.55, "ride_lift": 0.08, "mass": 4000.0},
@@ -1034,8 +1032,8 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	gd.rear_twin_tyres = get_flag.call("rear_twin_tyres")
 	# Family number, not a per-variant knob: baseline only, pinned by test_kenney_variants.
 	gd.load_sensitivity = float(b["load_sensitivity"])
-	# A family tyre figure too; a variant overrides it only to hold the law off (VARIANTS' interim
-	# 1.08 bodies).
+	# A family tyre figure too; a variant overrides it only to hold the law off (VARIANTS' `suv`
+	# COMPROMISE).
 	gd.cornering_peak_load = get_f.call("cornering_peak_load")
 
 	var torque_mul := float(ov.get("torque_mul", 1.0))

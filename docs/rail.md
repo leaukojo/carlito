@@ -7,8 +7,8 @@ Rules sit at their site: `train.gd`, `train_sim.gd`.
   standard adopted — trains run IEC 61375, not CAN (CiA 421/rail practice is inspiration
   only). No `steer` (rail-guided); no `rpm`/`fuel`/`coolant` (electric). Reverser (N/D/R)
   rides `gear`.
-- `TrainVehicle extends BaseVehicle` (`src/vehicles/train/`): no ground drive, 6
-  `gear_ratios` kept, only the two seams. Consist is the Kenney bullet loco + wagons at
+- `TrainVehicle extends BaseVehicle` (`src/vehicles/train/`): no ground drive, one gear ratio
+  (the reverser's D never shifts, `test_train`), only the two seams. Consist is the Kenney bullet loco + wagons at
   world scale 2.4; self-places on a closed rail loop in `_ready`, ignores `VehicleSpawn`
   markers.
 - `TrainSim`, `TrainPlacement` and `TrainTelemetry`: their file headers in `src/vehicles/train/`

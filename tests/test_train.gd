@@ -276,3 +276,16 @@ func test_train_bridge_dict_has_real_values() -> void:
 	assert_bool(d["pantograph_state"]).is_true()
 	assert_bool(d.has("speed")).is_true()
 	assert_bool(d.has("status")).is_true()
+
+
+# --- the reverser -----------------------------------------------------------------------------
+
+## The reverser rides the gear byte, and an electric loco has no gearbox: the spec's one ratio keeps
+## the local driver's D on D1 at any speed, so `gear` and the REVERSER readout never shift.
+func test_the_reverser_never_leaves_d1() -> void:
+	var spec: VehicleSpec = load("res://src/vehicles/train/train_spec.tres")
+	var dt := Drivetrain.new(spec)
+	dt.running = true
+	for i in 600:
+		dt.process(DELTA, 1.0, 0.0, i * 0.1, 1, true)
+		assert_int(dt.gear_byte).is_equal(1)

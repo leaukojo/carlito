@@ -543,8 +543,8 @@ static func handover_rate(p_spec: VehicleSpec, rev_drop: float) -> float:
 	return absf(rev_drop) / p_spec.shift_handover_s
 
 
-## A seamless box's torque reduction through an inertia phase (a converter automatic's or a
-## powershift's, `spec.shift_cut_s` 0; the powershift's is a COMPROMISE at TRACTOR_BASE): the
+## A converter automatic's torque reduction through an inertia phase (never a powershift's: the
+## tractor's TCU holds or raises the engine's torque, US 2004/0014563): the
 ## fuel, at most the pedal's `fuel`, that lands the crank (predicted `pred_base + pred_per_fuel *
 ## f`, rad/s) on `target` while the clutch passes `demand` (N·m at the crank: the engine's net
 ## torque at the pedal's fuel, the driver's demand), so the output follows the pedal through the
@@ -1142,17 +1142,14 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 		_process_crank(delta, pedal, demand, drive_wheel_omega, ground_speed, prev_byte)
 		return 0.0
 
-	# The rigid crank. In N or P the wheels say nothing about crank speed, so a free-rev model
-	# stands in, built off the limiter's line so it can never trip the limiter.
+	# The rigid crank, on a body that turns no wheel (its prop, rotors or motors are its own): no
+	# driven wheel says anything about crank speed in any gear, so a free-rev model stands in,
+	# built off the limiter's line so it can never trip the limiter. The boat's oil pressure reads it.
 	var limiter_rpm := spec.idle_rpm
-	var target_rpm: float
-	if is_open(gear_byte):
-		target_rpm = lerpf(spec.idle_rpm, limiter_line(spec, gear_byte),
-				clampf(throttle, 0.0, 1.0))
-	else:
+	if not is_open(gear_byte):
 		limiter_rpm = wheel_engine_rpm(spec, drive_wheel_omega, gear_byte)
-		target_rpm = maxf(clampf(limiter_rpm, spec.idle_rpm, spec.redline_rpm),
-				converter_free_rpm(spec, throttle))
+	var target_rpm := lerpf(spec.idle_rpm, limiter_line(spec, gear_byte),
+			clampf(throttle, 0.0, 1.0))
 	rpm = lerpf(rpm, target_rpm, 1.0 - exp(-RPM_SMOOTH * delta))
 
 	# Wheels turning against the engaged gear (rolled back in D, forward in R) drive the crank
@@ -1160,7 +1157,7 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 	# wheel would trip the limiter and the overrun, signed against the gear, would spin it further
 	# back: a latch only the brake breaks.
 	var crank_forward := drive_wheel_omega * ratio_for_byte(spec, gear_byte) >= 0.0
-	# The limiter and governor cut between pedal and engine: rpm still follows the wheels.
+	# The limiter and governor cut between pedal and engine: rpm stays on its free-rev line.
 	applied_throttle = clampf(throttle, 0.0, 1.0) * governor_scale(spec, ground_speed, speed_cap_kmh)
 	on_limiter = crank_forward and limiter_cut(spec, limiter_rpm, gear_byte)
 	if on_limiter:
@@ -1358,15 +1355,16 @@ func _process_crank(delta: float, pedal: float, demand: float, drive_wheel_omega
 					_handover_rate = handover_rate(spec, omega - sync)
 				if _inertia_phase and _predict(fuel) >= sync and not is_inf(_handover_rate):
 					var target := maxf(omega - _handover_rate * delta, sync)
-					# A seamless box (no `shift_cut_s`: a converter automatic, a powershift) reduces
-					# the engine; a cut box's interruption is its cut.
-					if spec.shift_cut_s <= 0.0:
+					# A converter automatic's TCU reduces the engine; a cut box's interruption is its
+					# cut; a powershift's clutch carries the crank's inertia (Deere's TCU holds or
+					# raises the engine's torque through the shift, US 2004/0014563).
+					if spec.coupling == VehicleSpec.Coupling.CONVERTER:
 						fuel = handover_fuel(_pred_base, _pred_per_fuel, target,
 								crank_torque(spec, rpm, fuel, running) - accessory_torque, _compliance,
 								fuel)
 					# Nothing while the crank's own motoring already falls faster (a cut). The
 					# phase's last tick keeps the rating, so the solve closes the slip and locks
-					# (on a seamless box at the reduced fuel, so it passes the demand there too).
+					# (on a converter body at the reduced fuel, so it passes the demand there too).
 					if target > sync:
 						_capacity = landing_capacity(_predict(fuel), target, _compliance) \
 								if _predict(fuel) > target else 0.0

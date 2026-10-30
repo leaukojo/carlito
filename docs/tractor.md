@@ -161,16 +161,16 @@ the truck's `j1939` `axle_load` (lifting an implement moves its weight onto the 
   it toward the launch line, which holds a floored start near the grip peak (with the whole rating
   on the first tick the rears flash to heavy slip and the front axle unloads almost entirely); while
   the ramp is short of the engine's torque the crank flares over the line. The
-  close onto the wheels, like each shift, is a handover over `shift_handover_s` with the engine
-  fuelled down so the clutch passes the pedal's torque, not the flare's (`docs/drivetrain.md`
-  § The shift's handover), never the rating: closed at
+  close onto the wheels, like each shift, is a handover over `shift_handover_s`, the clutch passing
+  the pedal's torque plus the flare's inertia (`docs/drivetrain.md` § The shift's handover), never
+  the rating: closed at
   the rating, a held D7 poured the flare into the wheels in a tick (a spike of g, the front axle
   unloaded), and a held D4 flashed its rears into slip.
 - Flat strip (`measure_vehicles -- tractor-kenney 40 trace`):
   - bobtail: D7, a clean close carrying the engine's torque, then three floored skip-shifts,
     D7>D12, D12>D15 and D15>D16, each gear held past the trace's dwell floor; rear slip low (~0.10), the front axle
-    kept loaded and every event inside its `front axle` gate (`docs/handling.md` § Pitch);
-  - with the farm tipper: D6, then D10, D13, D15 and D16, each held longer.
+    kept loaded; D7>D12 and D12>D15 ring past their `front axle` gate (`docs/handling.md` § Pitch);
+  - with the farm tipper: D6, then D10, D12, D13, D14, D15 and D16, each held longer.
 - Standing starts: `docs/vehicle_measurements.md` § Gradeability, `docs/drivetrain.md` § Hill hold; with the tipper on 10 %
   asphalt it picks D4 (`measure_grade -- tractor-kenney rollback tipper` times how soon it moves).
 - Reverse is the bus's single R byte, at ~D7's ratio (3.9); its top speed follows from that ratio and the governor.
