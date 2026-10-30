@@ -19,11 +19,8 @@ curve's peak (1.5 on cars, 2.0 elsewhere) and solved as one more output of the w
   off, in N or P and on a direction change (at a stop it slips: creep, § Converter);
 - slips a clutch on a pull-away, landing the crank on `launch_target_rpm` (the line from idle to
   the stall speed, or 300 rpm over idle on the semis), and every coupling on a shift (on a
-  converter body, the gearbox's own clutch). An upshift's inertia phase brings the crank down to
-  the new gear at an even rate over `shift_handover_s` (`Drivetrain.handover_rate`), never past
-  the rating: a clutch carries the engine's delivered torque plus `J Δω / t`, and a converter
-  automatic's TCU fuels the engine down so its clutch passes the driver's demand (§ The shift
-  policy); a downshift's crank is blipped up to the wheels with the clutch open first;
+  converter body, the gearbox's own clutch). An upshift's inertia phase is the handover (§ The
+  shift policy); a downshift's crank is blipped up to the wheels with the clutch open first;
 - locks it the tick it carries less than its capacity. A clutch stays locked until a shift; a
   converter's lock-up lets go under the brake-light switch (`Drivetrain.braking`: the foot brake or
   roll stability's request, as an automatic's TCU reads it, so the brakes never slow the crank,
@@ -110,8 +107,7 @@ more slowly. Per class, at idle / at redline, as a share of peak:
   The linear law, fitted by least squares over 1000-6000 rpm on `CAR_BASE`'s idle and redline,
   lands within 0.025 of peak at every point: over by up to 0.023 mid-range, under by 0.024 at 6000.
 
-On the `sedan` a blip falls steadily to idle, and the key off stops an idling crank within about one
-and a half seconds. At idle the controller burns the fuel that nets the friction out (~12 % on the
+On the `sedan` a blip falls steadily to idle. At idle the controller burns the fuel that nets the friction out (~12 % on the
 `sedan`), so `engine_load` reads that fuel there.
 
 **Fuel.** The burn is read off the crank (`VehicleTelemetry.fuel_rate_lph`, a Willans line): the
@@ -177,8 +173,7 @@ share creep as a car does. A held wheel's brake holds the patch against its driv
 What moves with the converter:
 - `engine_load` samples the curve at `Drivetrain.rpm`, so a held truck at full pedal reads 83 %
   where it read 50 % at idle;
-- `pto_rpm` follows the rev, being a stub shaft off the crank;
-- `fuel_rate` reads the creep load: the idle fuel that nets it out burns its power (§ Fuel).
+- `pto_rpm` follows the rev, being a stub shaft off the crank.
 
 **Hill hold.** Creep holds the cars and the heavy vans on 10-19 % and the Kenney trucks on 22-23 %. Past that, a released
 brake rolls the body back while the coupling takes up, and a clutch body (nothing creeps there)
@@ -373,11 +368,8 @@ steps D1 to D7 a gear at a time, each gear holding the dwell on the drive axle's
 
 **The CVT.** `tractor-cvt` runs a power-split CVT (`spec.cvt_range_tops`, `Drivetrain.is_cvt`;
 the tour, sources and measured figures: `docs/tractor.md` § The CVT tractor). Its ratio is
-drivetrain state, moved by its controller before the spin solve and solved in it as the gear, at
-the overall speed ratio rather than its inverse, so a ratio of 0 holds: active standstill, the park
-pawl's path at the hydrostatic relief (`Drivetrain.standstill_hold`). The engine runs the all-speed
-governor's law (§ The pedal map), its demand managed in pedal mode (`cvt_managed_setting`); the
-pedal commands ground speed, held until the crank falls to its limit-load speed. No
+drivetrain state, solved as the gear, so a ratio of 0 holds (active standstill). The engine runs
+the all-speed governor's law (§ The pedal map); the pedal commands ground speed. No
 `ShiftPolicy`, no launch clutch, no shift: the gear byte publishes the mechanical range, which
 changes synchronously, and a CVT governs road speed through its ratio, not the fuel.
 
@@ -393,25 +385,15 @@ to 6784 rpm over 12 ticks. The equipment beside the limiter stands on its own me
 - The Kenney trucks' ASR does not act on dry asphalt, where gear 1 at converter stall pushes
   less than the rear tyres' grip (`garbage-truck` `notc` reaches the benchmark in the same time). It
   is kept as the EBS equipment it is, for low grip.
-- The tractor's launch ramp (`launch_engage_s`) is the powershift's modulation: with the
-  whole rating on the first tick its rears flash to high slip and the front axle unloads far more
-  than with the ramp. It pulls away in D1 (`docs/tractor.md` § Tractor,
-  implement & ISOBUS).
+- The tractor's launch ramp: `docs/tractor.md` § Tractor, implement & ISOBUS.
 
 **Engine braking under a fuel cut.** The governor fades `f` across `GOVERNOR_BAND`, and the
 unfuelled share motors, so a governed body settles where `f * curve + (1 - f) * motoring` meets
 the road load, a few km/h under the limit. A top speed reached at full fuel (`f = 1`, set by drag
 or by the curve running out at redline) is the curve's alone. Measured
 (`measure_vehicles -- <variant> 120`, `top (settled)`; the semis carry the catalog's first trailer):
-
-| Body (limit, km/h) | Settles |
-| --- | --- |
-| `van` / `pickup` / `pickup-flat` (180) | just under the limit |
-| `garbage-truck` (85) | just under the limit |
-| `semi` / `semi-conventional` (90 / 105) | under the limit |
-| `tractor-kenney` (40) | under the limit |
-| `ambulance` (150) | under the limit, in D6 |
-| `firetruck` (110) | just under the limit |
+every governed body settles under its limit; `van`, `pickup`, `pickup-flat`, `garbage-truck` and
+`firetruck` just under, `ambulance` in D6.
 
 A wheel spinning up drags the crank with it, so a peeling open pair is held by the engine's
 inertia as well as its grip: the floored 2WD tractor's asphalt climb (`docs/vehicle_measurements.md` § Gradeability) is ~9 points

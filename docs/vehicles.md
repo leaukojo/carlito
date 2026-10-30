@@ -52,21 +52,14 @@ Rules: `src/vehicles/CLAUDE.md`; derivations and figures: § Physics derivations
 | Drift | `handbrake_torque` locks the rears; the combined-slip tyre drops a locked wheel's side force |
 | Holds | `hill_hold` (`HillHold`, `WheelDrive.hold_step`): hill-start assist (ASSIST: the ABS bodies, `hill_hold_s` set per class: Honda's hold on the cars, Volvo VN's on the vans, trucks and semis, `docs/sources.md` [23, 24]) and the tractor's powershift hill hold (STANDSTILL); `InputRouter.auto_hold` for keys and touch. Tested `tests/test_hill_hold.gd`, `tests/test_input_arbitration.gd` |
 
-`ChaseCamera` follows `get_global_transform_interpolated()`. `LampSet`/`Horn`:
+`LampSet`/`Horn`:
 `docs/systems.md` § Lamps, horn & day/night.
 
 ### Physics derivations and figures
 
-**Differentials.** Declared in `gen_kenney_vehicles.gd`:
-
-| Body | Declaration |
-| --- | --- |
-| `suv`, `suv-luxury` | 3:1 Torsen-type centre |
-| `race-future` | the same centre, plus a 2.5 rear LSD |
-| `race` | 2.5 rear LSD |
-| `hatchback-sports` | 2.5 helical front LSD |
-| `tractor-kenney` | open rear with a lock; rigid MFWD |
-| everything else, semis and trailers included | open |
+**Differentials.** Declared in `gen_kenney_vehicles.gd`: a 3:1 Torsen-type centre on `suv`,
+`suv-luxury` and `race-future`; a 2.5 rear LSD on `race` and `race-future`; a 2.5 helical front LSD
+on `hatchback-sports`; `tractor-kenney`'s lockable rear and rigid MFWD; everything else open.
 
 A biasing diff caps the transfer at `|T_in|/2 · (b−1)/(b+1)`, so the slow side takes at most `b`×
 the fast. Against all-open diffs, the biasing centres launch faster (most on `race-future`), the
@@ -215,8 +208,6 @@ each axle solved inside the centre's solve. Likewise a biasing centre or axle mo
 wheels' mean after the gearbox output settled against it (the pawl: `LOCK_STUCK_SPIN`); a crank
 above a rigid one (MFWD, the rear lock) is solved nested (`WheelDrive._rigid_downstream`).
 
-`brake_override` stays as the modelled brake-throttle override every family carries.
-
 ### Tyres and surfaces
 
 A tyre is a **fitment** (the body's, on `GroundDriveSpec`: `mu_long` / `mu_lat` as the stock tyre
@@ -269,9 +260,7 @@ grip in a tyre-limited stop. `BrakeSizing` is the arithmetic the generator repor
 | Tractor unit, EBS discs | `semi`, `semi-conventional` | 15500 (2.2 bobtail) | 12000 | none |
 | Tractor wet discs (rear), inboard, at its 0.66 m rear | `tractor-kenney` | 15767 (1.39) | 14667 | 27500 |
 
-Spring brakes (the trucks' handbrake column) sit under the service brake on the same drum; a
-truck whose air drains cannot drive away because the box drops to N (`Drivetrain.drive_inhibit`).
-Every trailer's service brake is apportioned to its tractor: a full demand brakes its bogie load at
+Spring brakes (the handbrake column): `docs/truck.md` § Air, retarder, axle load. Every trailer's service brake is apportioned to its tractor: a full demand brakes its bogie load at
 the deceleration the tractor's brakes make on its coupled load (`box_spec.tres`), so neither end
 pushes the other.
 
@@ -283,8 +272,7 @@ more pedal. The retarder and engine braking heat nothing; parking brakes heat bu
 trailer heats and fades unpublished. Figures: `docs/sources.md` § Brake heat; runs and the check
 against field runs: `docs/vehicle_measurements.md` § Brake heat.
 
-**P (park).** Gear byte 0xFE, a value RAMN never sends. On a gearbox with a pawl
-(`park_pawl_torque` > 0) it engages P; on one without, N. Below `WheelDrive.PAWL_ENGAGE_SPEED`
+**P (park).** Gear byte 0xFE, a value RAMN never sends. Below `WheelDrive.PAWL_ENGAGE_SPEED`
 (1 m/s) the pawl locks the gearbox output to the case, and above it the pawl ratchets over the
 teeth and holds nothing. The lock is the first coupling `_couple_differentials` solves. It is
 `Differential.braked_coupling_torque` with the driven wheels on one side and a ground of no
@@ -303,8 +291,8 @@ an open diff counter-rotates off lost grip turns at rad/s. The `pawl` columns of
 below hold P alone, with no brake.
 
 **Handbrake turn.** A full handbrake at `HB_SPEED` with a `HB_STEER` step held `HB_HOLD_S`
-(`measure_vehicles.gd`; `measure_vehicles -- <variant> 30 handbrake`; `sedan`, `police`,
-`hatchback-sports`, `suv`, `race`; 2026-10-15): the rears lock for under a second and the body
+(`measure_vehicles -- <variant> 30 handbrake`; `sedan`, `police`, `hatchback-sports`, `suv`,
+`race`): the rears lock for under a second and the body
 turns about a half turn (integrated off the yaw rate, so a spin would read past it), ending
 backwards: a J-turn. On the steer alone it turns far less. The lock does it: the combined-slip tyre
 gives a locked wheel no side force.
@@ -341,7 +329,7 @@ damper:
   braking and cornering figures above a crawl never see it.
 
 A held body winds the spring up by `STICK_DEFLECTION * tan(a) / mu` and then stays
-put; without it every braked body creeps 1.0-1.5 m per minute on 10 %. Every handbrake holds 30 % (§ Brake hardware). Guard: `test_wheel_spin`
+put. Guard: `test_wheel_spin`
 (`test_a_braked_wheel_holds_at_rest_on_a_grade`).
 
 Side effects:

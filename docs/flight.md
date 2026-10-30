@@ -3,9 +3,8 @@
 - Protocols are flavors: plane `canaerospace` (`elevator`/`flaps`/`beacon`/`strobe` in;
   `altitude`/`vspeed`/`flaps_actual` out), drone `dronecan` (`climb`/`arm`/`node_fail`/
   `flight_mode`/`led`/`hardpoint_cmd`/`gimbal_pitch`/`gimbal_yaw` in; `altitude`/`vspeed`/
-  `rotor_rpm`/`armed` + ESC/pack/node/GNSS/mode/hardpoint/gimbal/air-data blocks out). Both
-  share `pitch`/`roll` and the IMU triple (`roll_rate`/`pitch_rate`/`acc_vert`), free
-  (`BaseVehicle` already computes all three).
+  `rotor_rpm`/`armed` + ESC/pack/node/GNSS/mode/hardpoint/gimbal/air-data blocks out); shared
+  attitude and IMU: § Drone: the cluster.
 - The plane and the plain `drone` are primitive low-poly builds; `drone-mk2` (family
   default) is Blender-modelled (`tools/gen_drone_model.py`): per-motor props/wash discs, a
   gimbal following `gimbal_*_actual`, hook jaws, a spotlight on the `lights` ladder,
@@ -62,8 +61,5 @@ pinned.
 
 ## Plane
 
-`PlaneVehicle` (`src/vehicles/plane/`): three RayWheels (steered nose wheel, two mains),
-base handles ground roll. `_tick_extras`: prop thrust (drivetrain rpm × throttle), lift with
-a stall fade, drag, control torques scaling with airspeed. Steer = roll+yaw; elevator =
-pitch; flaps slew toward the request. Force terms are pure statics through `VehicleMath`
-dampers, tested `tests/test_plane.gd` / `tests/test_drone.gd`.
+`PlaneVehicle` (`src/vehicles/plane/`; the force model: `plane.gd`'s header): three RayWheels,
+base handles ground roll. Steer = roll+yaw; elevator = pitch. Tested `tests/test_plane.gd`.

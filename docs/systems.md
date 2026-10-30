@@ -8,15 +8,13 @@ the nested `CLAUDE.md` files.
 ## Signal contract
 
 `contract/carlito_contract.json` defines every bridge signal: name, dir, type, unit,
-range, `warn`/`warn_side`, `count`, enum, vehicles, `flavor` (`isobus`, `j1939`, `iso11992`,
-`j2497`, `cleanopen`, `canaerospace`, `dronecan`, `train`, `nmea2000`). `Contract`
+range, `warn`/`warn_side`, `count`, enum, vehicles, `flavor` (the protocol family). `Contract`
 (`src/bridge/contract.gd`) parses/validates it into `Contract.data`;
 `tests/test_contract.gd` fails if a required signal is missing. Unique by (name, dir) —
 `battery` exists both ways (in = warning LED, out = voltage). `warn` needs `warn_side`
 (`"low"` | `"high"`); `todo` marks a signal unimplemented both sides; no `range` on an "out"
 signal makes a readout line, not a bar. `count` (>= 1, default 1) makes an Array of N,
-`range`/`warn` per element, zero-based: `esc_rpm`/`esc_current`/`esc_temp` (4),
-`node_health` (8), `slip` (2); rejected on `"in"`, `bool`, or with an `enum` —
+`range`/`warn` per element, zero-based; rejected on `"in"`, `bool`, or with an `enum` —
 `Bridge._publish` drops a wrong-shaped value with one warning.
 
 A version mismatch with sloppyCAN warns at runtime and raises a transient notice, once per session
@@ -69,12 +67,9 @@ Three paths, chosen per tick:
   action-registry context); `Bridge.is_active()` only says a peer is connected.
   `bridge_source.gd` normalizes contract-in fields (%->unit); `local_source.gd` reads the
   keyboard (edges from either device), `pad_source.gd` the gamepad's axes; touch registers via `InputRouter.set_touch_source()`.
-- Toggle state is owned by the router, never a source: headlight level `_lights`
-  (OFF->CLEARANCE->LOW->HIGH), tractor hitch/PTO/PTO-speed/diff-lock/MFWD, drone arm/cargo
-  hook/injected node failure/flight mode, plane flaps, train pantograph/doors, refuse body
-  command. Train pantograph defaults raised so a locally-driven train spawns able to move.
-  Sources report per-frame edges only, ORed by `merge_local`; the `var _*` block at top of
-  `input_router.gd` is the list.
+- Toggle state is owned by the router, never a source (the `var _*` block at top of
+  `input_router.gd` is the list); sources report per-frame edges only, ORed by `merge_local`.
+  Train pantograph defaults raised so a locally-driven train spawns able to move.
 - `VehicleInput` (`src/input/vehicle_input.gd`) fields are flat except `lamps` (the fourteen
   verbatim-mirrored lamp/warning bits). The raw-intent wire is `Dictionary[StringName,
   Variant]`. Rules for both: `src/input/CLAUDE.md`.
@@ -84,10 +79,8 @@ Three paths, chosen per tick:
 
 ### The action registry
 
-`src/input/action_registry.gd`: a static table keyed by row (a control on two keys —
-drive/reverse, steer, climb/descend — is one row), each carrying a label, a `group`
-(drive/vehicle/world/shell), a gate, and how touch offers it. No key string is typed there:
-`keys_for()` reads the live binding from `InputMap`.
+`src/input/action_registry.gd`: one row per control (a control on two keys is one row), each with
+a label, a group, a gate and how touch offers it; `keys_for()` reads the live binding.
 
 Two consumers: the pause menu's CONTROLS sheet (`src/ui/pause_menu.gd`) and the touch button
 stack (`src/ui/touch_controls.gd`). `tests/test_action_registry.gd` asserts every bound
@@ -111,27 +104,17 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
 - `VehicleTelemetry` (`src/vehicles/base/vehicle_telemetry.gd`) carries every contract "out"
   signal: motion straight from the sim, aux (fuel/coolant/battery) as simple models (the burn
   read off the crank, `fuel_rate_lph`).
-  Derivations are static pure fns (GPS `gps_lat`/`gps_lon` around Paris 48.8566/2.3522,
-  `heading_from_forward`, `odo_step`, `body_accel`, `impact_gate`, `pack_status`), tested in
-  `tests/test_telemetry.gd`. `BaseVehicle._update_telemetry(input, delta)` holds the only
+  Derivations are static pure fns, tested in `tests/test_telemetry.gd`.
+  `BaseVehicle._update_telemetry(input, delta)` holds the only
   per-tick state; a respawn reseeds the whole object in place from a fresh
   `_make_telemetry()` (`BaseVehicle._reseed_telemetry`), odometer and hour meter included —
   R hands back a machine as new. `status` bits (`ST_*`) are FROZEN (`contract/CLAUDE.md`).
   `to_bridge_dict()` maps fields
   to contract "out" names in contract units (throttle/steer as %, slip as ratio);
-  `test_telemetry` fails if it drops a non-todo "out" signal — `WIRE_*` tables hold the
-  renames, rounding rules, and the synthesised `slip`.
-- Dashboard (`src/ui/dashboard.gd`) generates repetitive parts by walking the contract;
-  instruments are hand-built. Plain text + color only.
-
-  | Layer | What |
-  |---|---|
-  | Tell-tale | lamp per bool "in", `key`/`lights` chips, lamp/chip per flavored bool/enum "out" |
-  | Bars | warn'd or flavored "out" signals with a `range`, via `dash_bar.gd` (`BAR_ROWS_MAX`-row, `WIDGET_SIGNALS` excluded) |
-  | Readout | "out" signals with no `range`, beside HDG/ODO/GPS (boat SOG/STW/DRIFT in m/s) |
-  | Hand-built | gauges (`gauge.gd`, `kmh`/`rpm`, text in the arc's bottom gap), attitude (`pitch`/`roll`), wind rose (`wind_rose.gd`, `awa`/`aws`/`twd`/`tws`/`cog`/`sog`; its compass face on `heading`/`twd`/`tws` alone, the land families), sounder (`depth_readout.gd`, `depth`, `---` for -1), `node_health`, train's `REVERSER N/D/R` |
-
-  Captions (`BAR_LABEL`, `LAMP_TEXT`) are hand-picked. `Dashboard.Density`: FULL, COMPACT (default, no signal drops: `tests/test_dashboard.gd`), OFF — SETTINGS/F2 (`toggle_dashboard`) cycles COMPACT -> FULL -> OFF, held for the session.
+  `test_telemetry` fails if it drops a non-todo "out" signal (`WIRE_*` tables).
+- Dashboard (`src/ui/dashboard.gd`; its layers and density: the header comments): generated from
+  the contract, instruments hand-built. SETTINGS/F2 (`toggle_dashboard`) cycles COMPACT -> FULL
+  -> OFF, held for the session.
 - Debug overlay (`debug_overlay.gd`): FPS/frame ms/draw calls/VRAM/node count via
   `Performance`, F3. Target: root CLAUDE.md perf target.
 
@@ -153,13 +136,9 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
 
 ## Lamps, horn & day/night
 
-- Lamp state rides `VehicleInput`, mirrored verbatim, no local blink timer; locally only `brake_lamp` is driven, from the foot brake
-  (`tests/test_lamps.gd` asserts no clock in `lamp_set.gd`). `LampSet`
-  (`src/vehicles/base/lamp_set.gd`) applies lamp state to nodes the `VehicleSpec` names by
-  NodePath (`headlight_paths`, `brake_lamp_paths`/`turn_*_paths`); rear lamps tri-state via
-  `LampSet.rear_tier(brake_on, headlights)`: STOP > TAIL > OFF (`tests/test_lamps.gd`).
-  `BaseVehicle` builds one in `_ready`, calls `apply()` each tick; a semi-trailer builds a
-  second off its own spec (`TowedBody`). Horn (`horn.gd`) is a synthesized loop in a shared
+- Lamp state rides `VehicleInput`, mirrored verbatim (`lamp_set.gd`'s header); locally only
+  `brake_lamp` is driven, from the foot brake. A semi-trailer builds a second `LampSet` off its
+  own spec (`TowedBody`). Horn (`horn.gd`) is a synthesized loop in a shared
   `AudioStreamWAV`, no asset.
 - Day/night is a `Level` concern: N (`toggle_day_night`) or the pause menu's CONDITIONS page
   (`set_night(on)`) flips between authored day values and a dim night preset (`level.gd`),
@@ -226,9 +205,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   `toggle_important`) / DRIVING (F4, `toggle_touch`) layers; `poll()` empty while hidden. A
   `touch_state` row reads "<label> ON" in amber. Pads scale by `DESKTOP_PAD_SCALE`
   (`MENU_BTN_SIZE` top-left), wrap via `_columns_for`/`STACK_TOP`, lattice unit `CELL_SIZE`.
-  Seven actions are keyboard-only: `next_vehicle`, `toggle_dashboard` (F2), `respawn` (R),
-  `day_night` (N), `debug_overlay` (F3), `toggle_touch` (F4), `toggle_important` (F5);
-  `LEVEL` also binds `level_select` (key 4), checked by `_shell_signals()` /
+  Keyboard-only actions: the registry's no-touch rows; `LEVEL` also binds `level_select` (key 4), checked by `_shell_signals()` /
   `tests/test_action_registry.gd`. Raw intent: `_held`/`_edges` keyed by `poll_key`, drained
   by `poll()`; a hidden pad emits its own release (`Pad._notification`).
 - Shader warmup (`src/shell/shader_warmup.gd`): gl_compatibility has no ubershader, so each
@@ -280,9 +257,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   `floor_depth`, axis-aligned. Set `extent` to the water `size` so sea wall and map wall
   match (`test_world_bounds` checks every level); default `ceiling_height` is 1500 m, clear of the
   contract's 0-500 m `altitude` scale.
-- Depth-fade shading (`water.gdshader`): samples `hint_depth_texture`, fades
-  `shallow_alpha`->`deep_alpha` / `water_color`->`deep_color` over `depth_fade_m`; `depth *
-  2.0 - 1.0` for gl_compatibility.
+- Depth-fade shading (`water.gdshader`) samples `hint_depth_texture`; `depth * 2.0 - 1.0` for gl_compatibility.
 
 ## Challenges
 

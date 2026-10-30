@@ -52,10 +52,7 @@ The editor rewrites this file on any UI export; CLI export reads it as-is.
 
 - Every island (`src/levels/island/`, `LevelPacks.PACK_ROOT`) ships in its own
   `c2-<sha>.<id>.pck` — the boot default `flatland` has no bake, so the boot download
-  carries none. First open, `src/shell/level_packs.gd` downloads it behind the loading
-  screen, keeps it in `user://level_packs/` (IndexedDB), mounts with
-  `ProjectSettings.load_resource_pack`. Packs of any other build are deleted on the next
-  fetch.
+  carries none. Fetch, cache and eviction: `src/shell/level_packs.gd`'s header.
 - Not in the service worker's cache list — an entry missing from it sends an offline
   navigation to the offline page.
 - A local export's build name is always `index`, so `LevelPacks` never reuses a cached pack
@@ -96,10 +93,7 @@ Measure gzipped, on the deployed build — raw and transferred size can move opp
 (compressing baked-mesh attributes cut the pck 6.2 MB raw but grew it 0.24 MB gzipped, since
 quantized attributes carry more entropy than gzip was exploiting).
 
-First load (2026-09-11, local export): wasm 10.1 MB + main pck 3.5 MB + js 0.07 MB gzipped,
-later visits from the service worker. Level packs (2026-09-12): 0.1-0.6 MB each, `level_3`
-3.3 MB, 5.1 MB for all seven. The wasm is most of it; only a custom export template would
-move that.
+The wasm is most of the first load; only a custom export template would move that.
 
 ### Head Include
 

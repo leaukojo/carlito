@@ -7,11 +7,8 @@ framework and the other families: `docs/vehicles.md`; shared plumbing: `docs/sys
 
 ## Tractor, implement & ISOBUS
 
-**Twenty ISOBUS signals, all `flavor: "isobus"`**, the widest cluster in the game. In (8):
-`hitch_pos`, `pto`, `pto_mode` (540/1000), `hand_throttle`, `diff_lock`, `fwd_drive`,
-`guidance_curvature`, `scv_flow`. Out (12): `hitch_pos_actual`, `pto_state`, `pto_rpm`,
-`engine_load`, `implement_connected`, `implement_type`, `diff_lock_state`, `fwd_drive_state`,
-`wheel_speed`, `ground_speed`, `wheel_slip`, `draft_force`. It also publishes the unflavored `engine_hours`,
+**Twenty ISOBUS signals (8 in, 12 out), all `flavor: "isobus"`**, the widest cluster in the
+game (names: the contract). It also publishes the unflavored `engine_hours`,
 the truck's `j1939` `axle_load` (lifting an implement moves its weight onto the rear axle) and
 `gear_ratio` (§ The CVT tractor).
 
@@ -21,11 +18,8 @@ the truck's `j1939` `axle_load` (lifting an implement moves its weight onto the 
   power harrow → mower → drawbar tipping trailer → detached — each teaching one of the five
   real tractor↔implement connections (three-point linkage, drawbar, PTO, SCV hydraulic
   remote, ISOBUS data). Absent functions publish a real zero, never a gap.
-- `TractorVehicle extends BaseVehicle` (`src/vehicles/tractor/tractor.gd`) owns hitch/PTO/
-  implement state in `_tick_extras`. Spawn: raised, PTO off, implement attached; respawn
-  re-raises but keeps the implement. `TractorTelemetry extends VehicleTelemetry` adds the
-  ISOBUS "out" fields; `engine_load` is a modeled honest value (`engine_load_pct`), the rest
-  read straight out of the sim.
+- Spawn: raised, PTO off, implement attached; respawn re-raises but keeps the implement.
+  `engine_load` is a modeled honest value (`engine_load_pct`), the rest read straight out of the sim.
 
 ### The signals that change how it drives
 
@@ -243,13 +237,9 @@ speed, the overdrive Renius asks of a CVT. `Drivetrain.is_cvt` gates it; `gear_r
 
 ### What an implement declares
 
-`ImplementBase` (`implement_base.gd`) declares which of the five connections it uses, its
-ISO 11783-1 device class, its A-frame (`mast_offset`), whether it works in soil
-(`draft_relevant()`) and reach lowered (`tool_depth()`), its draft (`draft_rating()` at
-`TractorTelemetry.DRAFT_S_REF_KMH`, full depth and soil; `draft_shape()`, D497's A, B, C and the top
-of its speed range), and its mass, centre, ground share and the `support_points()` it rests on.
-Implements are visual only — no CollisionShape, no joint; their weight reaches the chassis as live
-mass and COM (`TractorVehicle._apply_implement_mass`). The declared connections are load-bearing:
+`ImplementBase` (`implement_base.gd`, the declarations and why they are code: its comments)
+declares connections, device class, A-frame, draft, mass and support points; implements are
+visual only (no CollisionShape, no joint). The declared connections are load-bearing:
 `ISOBUS_DATA` decides whether `implement_connected`/ `implement_type` report anything; `PTO`/`SCV`
 decide whether drive/flow reach the machine. Attach/detach is a logical address claim —
 `ImplementCatalog` holds the cycle order with DETACHED a real entry; `E` cycles it via duck-typed
@@ -266,14 +256,9 @@ other machine may share (`test_implement_catalog`):
 | Power harrow, 3.0 m | + PTO | 3 secondary tillage | 0.10 m | tine rotor, transverse axis |
 | Rotary mower, 7 ft | + PTO | 9 forage | none | rotor, vertical axis |
 | Fertilizer spreader, ~800 L | + PTO, SCV | 5 fertilizer | none | disc + `scv_flow` hopper gate |
+| *Fifth entry, not an implement:* drawbar tipping trailer (§ The drawbar) | drawbar, SCV | 0 none (no bus claim) | none | tipping body + tailgate on one ram |
 
 Their masses, ground shares and draft ratings: `docs/sources.md`.
-
-And the fifth cycle entry, none of the above (§ The drawbar):
-
-| Attachment | Connections | `implement_type` | Draft | Moving part |
-|---|---|---|---|---|
-| Drawbar tipping trailer | drawbar, SCV | 0 none (no bus claim) | none | tipping body + tailgate on one ram |
 
 Each is authored lowered with the origin on the lower pin line (ground y = −0.21). Shared
 A-frame: `implements/headstock.tscn`. PTO-driven visuals go through
@@ -302,13 +287,9 @@ semi-trailers use. The tractor side is the same `TowHost` the semi's fifth wheel
 
 ### Pin, datum, profile
 
-- Pin is fixed, not swinging (`Drawbar.PIN_LOCAL`, runtime reads the `Pin` marker). Coupling
-  datum is 0.40 m, not the semi's 1.05 m (a fifth-wheel plate height); trailer origin is at
-  the drawbar eye, ground at y = −0.40.
-- Joint differs from a fifth wheel on three axes: pitch `Drawbar.PITCH_LIMIT_DEG` (fifth wheel's cover-the-grade
-  rule); yaw `Drawbar.SWING_MAX_DEG` (not `Articulation.JACKKNIFE_MAX_DEG` — the
-  trailer's front corners meet the rear tyres just past it); roll `Drawbar.ROLL_LIMIT_DEG` against the semi's
-  `FifthWheel.ROLL_LIMIT_DEG` (a pin through an eye doesn't lever the tractor over on a rut).
+- Pin, datum and the joint's three stops differ from a fifth wheel: `drawbar.gd`'s constants and
+  their reasons. Datum 0.40 m, not the semi's 1.05 m plate; trailer origin at the drawbar eye,
+  ground at y = −0.40.
 - A drawbar carries a nose weight, not a share: 12% against the fifth wheel's 27%.
 - **Laden on 10 % mud the rig is traction-bound.** That is `measure_grade -- tractor-kenney rollback
   grade=10 mud mfwd tipper verbose`: it first moves 0.1 m forward only after several seconds, the same from any
@@ -321,8 +302,6 @@ semi-trailers use. The tractor side is the same `TowHost` the semi's fifth wheel
     drawbar pulls its grade share plus its share of the drag.
   - The rig crawls instead of standing, because the drag's per-tick cap
     (`RayWheel.surface_drag_force`, a 60 Hz clamp) shrinks with speed.
-
-  A real 7 t tractor with 10 t on a 10 % mud bank sticks too.
 
 ### Tipping, collision, refusal
 

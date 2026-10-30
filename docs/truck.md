@@ -12,10 +12,6 @@ A chassis class, not a job: `garbage-truck`, `firetruck`, and the hand-built tra
 (`semi`, `semi-conventional`) only; heavy vans are `car`-family, proprietary CAN. J1939 is the
 parent of ISOBUS and NMEA 2000.
 
-`TruckVehicle extends BaseVehicle` (`src/vehicles/truck/truck.gd`) owns air reservoirs, PTO,
-refuse body network and the ISO 11992 trailer bus in `_tick_extras`. `TruckTelemetry extends
-VehicleTelemetry` adds chassis, body-network and trailer-bus "out" fields.
-
 ### The signal set
 
 | Signals | Flavor | Notes |
@@ -42,15 +38,8 @@ VehicleTelemetry` adds chassis, body-network and trailer-bus "out" fields.
   `TowHost.tick_towing` its parking brake (`parking01`, the lever or the air gate,
   `WheelDrive.parking_application`), on the gate tick. The auto-neutral engages at any speed
   (COMPROMISE in `drivetrain.gd`). `tools/measure_air_loss.tscn -- all strict` (CI) drives it live.
-  Per body, three passes: parked on 18 % with the air drained and no lever (`PARK_HOLD_S`), floored in D with the
-  air drained (drive goes to gear N, no creep), and the air cut while rolling (`ROLL_SPEED_MS`)
-  with the pedal floored. Every body holds within a millimetre or two and stops in roughly 10-14 m.
-
-  Floors: `FLOOR_MAX_M` held, `ROLL_MIN_DECEL` (UN R13 secondary braking, goods vehicles). With
-  the trailer left unbraked the semi settles about 2 cm onto the tractor's rears before they hold
-  it (a 1.2 margin, `box_spec.tres`) and stops well under the decel floor: both fail. `park` and `floor` drain
-  honestly (key off, brake pumped); `roll` writes `air_primary = 0` (a burst line, the model has
-  no leak).
+  Its three passes per body, their floors and the honest drain: the tool's header. Every body holds
+  within a millimetre or two and stops in roughly 10-14 m; a semi with its trailer left unbraked fails both.
 - Retarder is real driveline torque, not an indicator bit: math on `Drivetrain`, `WheelDrive` adds
   it to driven wheels' brake torque, `RayWheel` integrates it, `GroundDriveSpec.retarder_equipped`
   gates it to truck specs only. Can't skid the axle (`RETARDER_SLIP_TARGET` caps the one-tick spin
@@ -81,10 +70,8 @@ VehicleTelemetry` adds chassis, body-network and trailer-bus "out" fields.
   byte) are mirrored verbatim, no timer; `checkEngine` is DM1's MIL. Firetruck is the
   control case: same chassis class, identical generated cluster, no body network — DIN
   14700/14704 (firefighting CAN) would be the right profile and is not built.
-- One generated cluster for the family: 11 bars (FUEL, COOLANT, LOAD, AIR1, AIR2, RET, AXLE,
-  ARM, HOPPER, TRLR, TBRK), 18 tell-tales, 4 state chips (KEY, LIGHTS, BODY CMD in; BODY
-  out). Absent functions publish real zeros, never gaps. `engine_hours` is range-less, on
-  the readout line beside ODO.
+- One generated cluster for the family. Absent functions publish real zeros, never gaps.
+  `engine_hours` is range-less, on the readout line beside ODO.
 - INHIB doesn't simply show its signal: `body_inhibit` is true whenever the body network is
   down; `is_inhibited` takes `bus_up` so the interlock never claims an unpowered body may
   swing its arm. Dashboard suppresses INHIB while BODY BUS is dark.
@@ -120,8 +107,7 @@ Out (5): `body_state`, `body_pos`, `body_inhibit`, `body_bus`, `hopper_load`.
 - The interlock is a real refusal: while `body_inhibit` is set, the arm freezes and
   `body_cmd` is ignored. `Idle`/`Lower` and an unknown command byte all stow. `body_pos` is
   written onto the arm and read back off it (the `ball_lift()` discipline).
-- No `arm` mesh means no body unit — geometry is the declaration. Firetruck, semi and
-  conventional publish honest zeros on all five body signals. A front loader (no tailgate,
+- No `arm` mesh means no body unit — geometry is the declaration. A front loader (no tailgate,
   no packer cycle); respawn is the only way to empty the hopper.
 
 ## The towed body: tractor unit, fifth wheel, semi-trailer
@@ -129,7 +115,7 @@ Out (5): `body_state`, `body_pos`, `body_inhibit`, `body_bus`, `hopper_load`.
 The truck family's last two variants are hand-built tractor units — cab-over (`semi`) and
 North American conventional (`semi-conventional`) — each pulling one of four semi-trailers
 on a real joint between two RigidBody3Ds. The cab-over carries the ISO 11992 trailer bus;
-the conventional carries none. No trailer of the four adds a signal to either.
+the conventional carries none.
 
 ### The joint and the trailer's wheels
 
@@ -186,15 +172,9 @@ the conventional carries none. No trailer of the four adds a signal to either.
   over (at half that rate the flatbed's trailer lifted well below its own ceiling). A full-lock step
   (the rack reaches full lock in a fraction of a second) overshoots the roll. Measured with
   `measure_semi_launch -- semi trailer=<body>` (P7, `docs/vehicle_measurements.md` § Measure-tool
-  run lines; the conventional's slow tips agree between runs to a few hundredths of a g):
-
-  | Body | COM over road | rollover_g |
-  | --- | --- | --- |
-  | Box | 1.60 m | 0.45 |
-  | Tanker | 1.50 m | 0.48 |
-  | Tipper | 1.30 m (parked) | 0.55 |
-  | Flatbed | 0.90 m | 0.80 |
-  | Tractor unit (bobtail) | 1.10 m (1.03 coupled) | 0.65 |
+  run lines; the conventional's slow tips agree between runs to a few hundredths of a g). COM over
+  road → `rollover_g`: box 1.60 m → 0.45, tanker 1.50 → 0.48, tipper 1.30 (parked) → 0.55,
+  flatbed 0.90 → 0.80, tractor unit (bobtail) 1.10 (1.03 coupled) → 0.65.
 
   The measured tip points follow the same order. The tall bodies (box, tanker, tipper) lift a
   trailer wheel below their `rollover_g`: the lean is the trailer's, and the plate's roll stop
@@ -212,26 +192,17 @@ the conventional carries none. No trailer of the four adds a signal to either.
 
 ### TowHost, cycling and mass
 
-- `TowHost` (`src/vehicles/base/tow_host.gd`) is one class for truck and tractor: coupling
-  datum, joint, PTO/valve gates, spawn countdown, couple-at-speed refusal, reactive fit
-  check, raise interlock, lamps, respawn, showroom freeze, camera exclusion, teardown. A
-  `CouplingProfile` (joint angles, marker path, joint name, driver notices) distinguishes
-  fifth wheel (`FifthWheel`) from drawbar (`Drawbar`, `docs/tractor.md` § The drawbar). Towed half is shared too:
-  `TowedBody` (RigidBody3D on the joint's end) and `Articulation` (coupled pose, load split) —
+- `TowHost` (`src/vehicles/base/tow_host.gd`) is one class for truck and tractor; a
+  `CouplingProfile` distinguishes fifth wheel (`FifthWheel`) from drawbar (`Drawbar`,
+  `docs/tractor.md` § The drawbar). Towed half is shared too: `TowedBody` and `Articulation`,
   neither truck-specific; the tractor's drawbar and `FarmTipper` use them directly.
-- `E` cycles the combination, `V` the body: box → tipper → tanker → flatbed → bobtail via
-  the same duck-typed `cycle_implement()` the tractor uses (`TrailerCatalog`, `BOBTAIL` a
-  real entry).
-- Coupling is honest about weight (the plate share: § Truck sizing): `axle_load` reports it the
-  moment you couple.
 - Mass ratio: 8 t : 24 t shipped (3:1, the box), verified at 8 t : 25 t; `test_trailer` pins
   suspension travel per case.
 
 ### ISO 11992: brakes and running gear only
 
 Part 2 is the application layer for brakes and running gear only, riding pins 6/7 of the
-**ISO 7638** connector: coupling claim, demand out, ABS and VDC state back, axle load, one
-injectable fault. All `flavor: "iso11992"` — the one signal group in the contract that is
+**ISO 7638** connector. All `flavor: "iso11992"` — the one signal group in the contract that is
 bidirectional by design.
 
 | Signal | Dir | What it is |
@@ -254,27 +225,21 @@ bidirectional by design.
 
 ### SAE J2497: the North American variant
 
-`semi-conventional` — hood ahead of cab, sleeper behind, 6.10 m on a 4.40 m wheelbase
-against the cab-over's 5.45 m/3.60 m — is a variant of the cab-over: same `SemiTractor`
-script, frame rails, fifth wheel, wheels, coupling plane (y = 1.05), drivetrain and brake
-numbers. Its content is a subtraction.
+`semi-conventional` (hood ahead of cab, sleeper behind; 6.10 m long against the cab-over's 5.45 m)
+is a variant of the cab-over: same `SemiTractor` script, fifth wheel, wheels, coupling plane,
+drivetrain and brakes. Its content is a subtraction.
 
 - No trailer bus, via a `VehicleSpec` flag defaulting off (`trailer_bus_equipped`, the
   `rear_diff_lockable` pattern): true on the cab-over, false here (Europe puts a CAN pair on
   pins 6/7 of ISO 7638; North America has no data pair on the connector at all).
-- With a trailer coupled, `trailer_connected` reads FALSE and `trailer_axle_load`/
-  `trailer_brake_demand`/`trailer_abs`/`trailer_vdc` read honest zeros — attached steel, bus silence. It
-  still tows and brakes the trailer (the pneumatic lines aren't the data pair); only
-  publishing goes dark.
+- With a trailer coupled, `trailer_connected` reads FALSE and the other ISO 11992 outputs read
+  honest zeros (the third state, above). It still tows and brakes the trailer (the pneumatic
+  lines aren't the data pair); only publishing goes dark.
 - `trailer_abs_lamp` (in, bool, `flavor: "j2497"`, tell-tale TRLR ABS) is the entire North
   American trailer protocol: SAE J2497/PLC4TRUCKS modulates trailer ABS status onto the
   power line — LAMP ON/OFF, mirrored verbatim.
 
 ### Four trailers, and not one new signal
-
-Read the ISO 11992 table from the other side: the bus carries nothing about the body, so
-mass, what plugs into the towing unit, and which tractor-side signals move are what tell
-them apart.
 
 | Trailer | Mass | Consumes | What it teaches |
 | --- | --- | --- | --- |
@@ -286,27 +251,18 @@ them apart.
 - What a trailer consumes is declared in code (`TowedBody.consumers()`, the `ImplementBase`
   rule); gating lives in `TowHost.tick_towing`, never the subclass.
 - Every trailer control has a keyboard key and touch button: `E`/ATTACH cycles the
-  combination, `P`/PTO the chassis PTO (tipping pump), `I`/TIP the raise/lower valve (`H`
+  combination (box → tipper → tanker → flatbed → bobtail, `TrailerCatalog`), `P`/PTO the chassis PTO (tipping pump), `I`/TIP the raise/lower valve (`H`
   horn, `Space`/HAND parking brake). Offered by capability, not family:
   `SemiTractor.attachment_controls()` reads `TowedBody.consumers()`; hides while the bridge
   drives.
 
 #### Coupling, refusal, spawn countdown
 
-- Coupling refuses on one thing, the rig moving; the fit check is reactive
-  (`TowHost._watch_fresh_coupling`, `COUPLE_WATCH_TICKS`): "NO ROOM FOR A TRAILER - PULL
-  FORWARD" if the trailer body touches anything. Applies to a hitch, not a drop
-  (`TowHost.COUPLE_SPEED_MS` wants a standstill; a drop is never refused).
-- Spawn coupling is a plain countdown (`SPAWN_COUPLE_TICKS`, **12**), buying the moment the
-  chassis has risen on its own suspension. Garage freezes the trailer with the tractor
-  (`set_display_frozen`).
-- Tipper's interlock is chassis state, evaluated by the tractor:
-  `TowedBody.body_raise_allowed(speed, parking_brake)` wants parking brake set and
-  standstill, refuses the raise direction only. Naming reference, not implemented: ISO 25200
-  / CiA 408.
-- Both load models move a real centre of mass and nothing else. `set_load_offset` moves
-  the body's `center_of_mass`; `trailer_axle_load`/`axle_load` move as consequences. The
-  tipper moves it UP as well as back (the load rides the floor it is sitting on), which is
+- Coupling refuses on one thing, the rig moving (a hitch, never a drop); the fit check, spawn
+  countdown and showroom freeze: `tow_host.gd`'s constants and `set_display_frozen`.
+- Tipper's interlock: `TowedBody.body_raise_allowed`. Naming reference, not implemented: ISO
+  25200 / CiA 408.
+- Both load models move a real centre of mass and nothing else. The tipper moves it UP as well as back (the load rides the floor it is sitting on), which is
   why a raised body caps the rig at `TowHost.BODY_UP_CAP_KMH` (§ Truck sizing).
   Tanker's surge: a labelled model chasing longitudinal acceleration with a lag (travel a baffled
   tank's, lag an estimate; roll stability reads the parked load); fluid physics is a non-goal. Guards for § Coupling and

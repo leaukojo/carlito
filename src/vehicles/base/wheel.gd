@@ -155,7 +155,7 @@ var lock_torque := 0.0
 ## wheel ticks.
 ## Wheels tick in array order, so a latch inside `tick` gives the first wheel of a pair a partner
 ## value one tick staler than the second's: a phantom damper on the left wheels only
-## (docs/vehicles.md has the figures).
+## (docs/handling.md § Anti-roll latch has the figures).
 ## Held weakly: the pair refer to each other, and a RefCounted cycle is never freed (every spawn
 ## would leak its wheels). The owner's `wheels` array keeps both alive.
 var anti_roll_partner: RayWheel:

@@ -228,7 +228,7 @@ for (const f of docs.filter((d) => /(^|\/)CLAUDE\.md$/.test(d))) {
 // Raw lines summed over the top-level docs/*.md (plans/ are temporary; sources.md is reference
 // data, read on demand; machine_setup.md is read once per machine; TODO.md, HUMAN_EXPLANATIONS.md
 // and making_a_level.md are the user's own). One cap, no per-doc caps.
-const DOCS_LINE_CAP = 3517;
+const DOCS_LINE_CAP = 3400;
 const UNCAPPED_DOCS = ['docs/sources.md', 'docs/machine_setup.md', 'docs/TODO.md',
   'docs/HUMAN_EXPLANATIONS.md', 'docs/making_a_level.md'];
 const docSizes = docs.filter((d) => /^docs\/[^/]+\.md$/.test(d) && !UNCAPPED_DOCS.includes(d))
@@ -255,9 +255,10 @@ for (const f of gdFiles.filter((g) => /^(src|kit)\//.test(g))) {
 // region in docs/*.md; backticked spans (code values, run lines) are skipped. They go stale when
 // vehicle code moves; a region refreshes by re-running its tool. A ratchet: the cap only goes down.
 // Code comments are not scanned: their figures are mostly set tolerances, not measurements.
-// `(?!\d{4}s\b)`: a decade or product name ("1990s", "3000s"), not seconds.
-const MEASURED_FIGURE = /(?<![\w.])(?!\d{4}s\b)\d+(?:\.\d+)?\s?(?:s|ms|µs|g|km\/h|fps|mm|kN|N|°)(?![\w/²])/g;
-const MEASURED_FIGURE_CAP = 24;
+// `(?!\d{4}s\b)`: a decade or product name ("1990s", "3000s"), not seconds. `·`: a torque
+// ("470 N·m") is an engine spec, sourced, not a measured output.
+const MEASURED_FIGURE = /(?<![\w.])(?!\d{4}s\b)\d+(?:\.\d+)?\s?(?:s|ms|µs|g|km\/h|fps|mm|kN|N|°)(?![\w/²·])/g;
+const MEASURED_FIGURE_CAP = 14;
 const figureHits = [];
 for (const f of docs.filter((d) => /^docs\/[^/]+\.md$/.test(d))) {
   let inRegion = false;

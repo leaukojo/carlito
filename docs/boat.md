@@ -44,10 +44,8 @@ Flat-plate polar (`Cl = CL_MAX·sin 2a`, `Cd = CD_MIN + CD_STALL·(1 − cos 2a)
 - `sheet`/`sail_angle` are unflavored (no NMEA 2000 sail PGN; the `train` flavor is not a
   precedent, it borrows practice); `sail_angle` is range-less, on the readout line via
   `Dashboard.READOUT_EXTRAS`. Gates on `sail_area > 0`
-  (`BoatVehicle.vehicle_capabilities()["sail"]`, the `body_cmd` shape); `sail_area` 0 skips
-  the whole force block.
-- `thrust_force` / `drag_long` are one tuned pair (~5 hp outboard, 3.3 m/s top
-  speed); the § Autopilot gains table is untouched by the retune.
+  (`BoatVehicle.vehicle_capabilities()["sail"]`, the `body_cmd` shape).
+- `thrust_force` / `drag_long` are one tuned pair (~5 hp outboard, 3.3 m/s top speed).
 
 ## Tide
 

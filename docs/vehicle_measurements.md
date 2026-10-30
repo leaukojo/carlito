@@ -49,15 +49,10 @@ node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measu
 node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 60 circle ackermann=0
 node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- tractor-kenney 20 hitch
 node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- tractor-kenney 20 plough
-# launch trace + gates on the accel pass: trace[=<every n ticks>] trace_s=<s printed, 3>; notc (the
-# body's TC off), gear=<1-24> (manual, held in that byte), contact (each wheel's load and contact
-# under each line); not with a doc= preset
+# launch trace + gates on the accel pass (§ Launch trace): trace[=<n>] trace_s=<s, 3>; not with a doc= preset
 node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- semi 40 trace notc
-# the trace's launch held at a part pedal (its settle, gates and shift lines; `trace` adds the ticks)
 node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 90 pedal=0.3
-# part-pedal probes, instead of every other pass, at each speed of the family's set from a
-# standstill: cruise (PI pedal settled; gear=<1-24> holds it in that byte), kickdown (stepped to
-# 1), pulse[=<period s>] duty=<0..1>
+# part-pedal probes, instead of every other pass (§ Part pedal): cruise kickdown pulse[=<s>] duty=<0..1>
 node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 90 cruise kickdown pulse
 # wind (any pass): wind=<from_deg>:<m/s>, steady, FROM as CONDITIONS enters it (0 = out of the
 # north, -Z; the strip runs -Z, so wind=0:9 is a headwind). With cruise, one speed per family:
@@ -103,17 +98,8 @@ node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measu
 # lane= patch= verbose tyre=<id> rollsteer= compliance= angdamp=. Arg 1 `course=<challenge id>` instead drives
 # that reach-zone challenge's line (open / lock / MFWD / both, floored unless speed=) against its par
 node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_rough.tscn -- baseline
-# rewrite this doc's figure tables (each a few minutes)
-node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=braking
-node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=cornering
-node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=accel
+# rewrite one figure table (a few minutes): its region header names the tool and the doc=<id>
 node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=cruise
-node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=steer
-node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_vehicles.tscn -- doc=tyres
-node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_grade.tscn -- doc=grade
-node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_grade.tscn -- doc=park
-node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_grade.tscn -- doc=brake_fade
-node tools/godot_run.mjs -- --headless --path . --fixed-fps 60 res://tools/measure_rough.tscn -- doc=rough
 ```
 
 | Pass | Measures | Note |
@@ -527,8 +513,7 @@ In mud the bodies split by driveline:
   against 9.1, `pickup` 8.8 against 10.3, `garbage-truck` 7.4 against 8.2). The 2WD tractor
   floored gets about half its ceiling, because one rear peels past the grip peak (`docs/vehicles.md`
   § Open-diff peel).
-- The tyre answers the surface: `doc=tyres` (§ Measuring a vehicle) has the pickup's Mud tyre
-  stopping in 15.7 m in mud against the all-season's 17.9.
+- The tyre answers the surface: § Tyre classes by surface.
 
 `level=` mode instead walks every road curve in a level (the `carlito_road` group, so an
 untreed instance works) at 4 m steps and reports mean and worst grade, metres above the 10 /
@@ -668,4 +653,3 @@ What the matrix shows:
   at the grip peak in mud (.99); the suv and hatchback scrape out (`b`), every tractor crosses.
 - **Every tractor driveline crosses everything**, floored or under `tc`, and is rarely short of
   traction (`-`): the R-1W lug reads mud at 1.25 of the reference (`TyreClass`).
-- `baseline` omits `hatchback-sports`; `doc=rough` adds its floored row.

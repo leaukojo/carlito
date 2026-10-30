@@ -94,10 +94,7 @@ writes `src/ui/level_thumbs/<registry id>.png` via `tools/gen_level_thumbs.tscn`
 **baked** level (a side-car, never a node: the level `.tscn` is a bake input); all levels at once:
 `tools/gen_level_thumbs.tscn` (windowed).
 
-- **`palette_dock.gd`:** reads `kit/import/*.json`, buckets by family
-  (`KitRecipe.classify`).
-- **`placement_tool.gd`:** `arm(kit, name)` instances a ghost following the ground-snapped
-  cursor; left-click commits under AuthoringRoot (undoable).
+- **`palette_dock.gd`, `placement_tool.gd`:** their headers. Families come from `KitRecipe.classify`.
 - **Ground raycast fallback** (`ground_snap.gd`): physics ray → `HeightmapTerrain.height_at`
   bilinear sample (`tests/test_heightmap_terrain.gd`) → Y=0 plane.
 - **Palette tiles:** `select_tile` finds or creates (`cell_size`/origin/`cell_center_*`) the
@@ -166,9 +163,7 @@ ROOT, not `AuthoringRoot` (a bake input would weld them).
 
 ## Terrain brushes
 
-**`brush_chassis.gd`** (shared by terrain and scatter brushes): radius/strength/falloff,
-ground cursor, input loop (LMB press → stroke, motion → samples at `radius * 0.35`, `[`/`]`
-resize). `terrain_brush.gd`: sculpt raise/lower/smooth/flatten, cut a ramp, paint any of 8
+**`brush_chassis.gd`** (its header; samples at `radius * 0.35`). `terrain_brush.gd`: sculpt raise/lower/smooth/flatten, cut a ramp, paint any of 8
 splat channels. Per-pixel math (radial `weight`, `brush_dist`, `sculpt_value`, stamp fns):
 `kit/helpers/brush_ops.gd` (`tests/test_brush_ops.gd`).
 
@@ -188,22 +183,19 @@ Editor-only; PNGs stay the sole artifact, written only on scene save
 (`TerrainBrush.flush_all`), except lazily created `splatmap2`. Generate/Auto-splat/Conform
 emit `source_image_replaced(kind)`, nulling the brush's cached image.
 
-**Panel** (`brush_panel.gd`, "Terrain" tab): mode buttons index-matched to the brush enum (0
-= Off … 5 = Ramp, 6 = Paint), radius/strength/edge-softness spinners ("Edge softness" in UI,
-`falloff` in code), Shape picker + "12 m (GridMap cell)" preset.
+**Panel** (`brush_panel.gd`, "Terrain" tab): mode buttons index-matched to the brush enum;
+"Edge softness" in the UI is `falloff` in code.
 
 ## Scatter
 
 The stored transforms are the only artifact (no expansion at bake or runtime); ground snap drops
-un-snappable points (no Y=0 fallback); weld-mode prefabs in scatter are a bake error. Stored in the level `.tscn` (`stored_transforms`, stride 5: x, y, z, yaw,
+un-snappable points (no Y=0 fallback). Stored in the level `.tscn` (`stored_transforms`, stride 5: x, y, z, yaw,
 scale — `@export_storage`).
 
 - **`ScatterBase`** (`scatter_base.gd`): shared core — `items`/`stored_transforms`/
   `stored_ground_hash`, MultiMesh preview + dev-collision; baker treats a region and canvas
   identically (both `carlito_scatter`).
-- **`ScatterRegion`** (under Authoring): box/polygon footprint, density / `placement_seed` +
-  min_spacing / yaw+scale jitter / max_slope, `items: Array[ScatterItem]` (prefab, weight,
-  collision on/off, per-item threshold). **Regenerate** expands it (`generate_placements`,
+- **`ScatterRegion`** (under Authoring; its exports): **Regenerate** expands it (`generate_placements`,
   `tests/test_scatter.gd`).
 - **`ScatterCanvas`** (under Authoring): hand-painted, same contract, no
   footprint/Regenerate, plus `paint_density` / `paint_pattern` (random/grid) / `grid_step`

@@ -14,9 +14,8 @@ staler than the second's, a phantom damper of `rate / 60` N·s/m on the left whe
 open split turned into drift past the grip peak (1.07 m over 200 m on `hatchback-sports`). With the
 shared latch every bar-carrying body tracks 0.000 m, the semis 0.05 m. Ruled out as tracking causes:
 the COM heights, `mu_lat` and the axle pairing; body asymmetry; `load_scaled_mu`; a bar-driven
-load-transfer loop. An unloaded partner, touching or airborne, reads at its hang `K c / (k + K)`,
-where its spring balances the bar (`VehicleMath.anti_roll_hang`): the outer keeps the bar in series
-with that spring, with no step at the lift. A bar gated on the partner's contact instead hands the
+load-transfer loop. An unloaded partner reads at its hang (`RayWheel.bar_force`'s comment). A bar
+gated on the partner's contact instead hands the
 outer a lift no tyre carries while the partner touches at no load, then drops it in one tick: the
 lifting wheel chatters (the laden semi's inner front, five lifts in a second).
 
@@ -99,8 +98,7 @@ under 5 points. A launch swings from parked; a shift, the larger of the steady s
 its handover and cut and its fall since. So a short, tall body is not failed for its footprint: the
 laden `semi`'s launch swings ~69 points and overshoots 5, `sedan-sports`' 43 and 6.
 
-Every car, van and Kenney truck passes. So do both semis, bobtail and with the box, and the bare
-tractor on every event (`-- all 45 trace`; the gates print per body). The tractor's floored skip-shifts pass on the
+Cars, vans, Kenney trucks, both semis and the bare tractor pass (`-- all 45 trace`). The tractor's floored skip-shifts pass on the
 powershift's torque reduction (`docs/drivetrain.md` § The shift's handover); without it, the
 crank's inertia reaches the wheels and D7>D13 overshoots 16 points. The AMT's cut returns over
 `shift_torque_ramp_s`, so its drive does not step into the pitch mode.
@@ -146,10 +144,8 @@ Every wheeled family ships `f = 1.0` (`CAR_BASE`, `TRUCK_BASE`, `VAN_BASE`, `TRA
 semis), each an **estimate**: road cars run partial Ackermann (~40-60 %, a patent claim, not a
 textbook figure) for the loaded outer tyre at high g; trucks set close to full for steer-tyre wear
 (SAE 861975 and 912693, no figure); no ag-tractor figure was found. Here the low-speed scrub is the
-point: at road speed the split is second order (a fraction of a degree on `sedan`'s step at road speed). Against
-the parallel-steer table the step sweep's `K` rises 0.01-0.04 deg/g on every body (consistent with
-the outer, loaded tyre steering less), with no new spin, rollover or lifted wheel. Trailers and the plane
-have no steered pair.
+point: at road speed the split is second order (a fraction of a degree on `sedan`'s step at road
+speed). Trailers and the plane have no steered pair.
 
 Full lock at crawl speed (`circle`), parallel steer → `f = 1`: the radius driven at the rear
 axle over `L / tan δ`, and the inner / outer front slip angles (+ = the wheel points further into
@@ -240,8 +236,7 @@ gate reads the air, and the static hold resists it (`measure_grade -- <v> park=1
 wind=0:13` holds every `doc=park` body under a millimetre but the `semi`, whose known cross-slope
 creep grows). In a slide the across-air part takes `Cy*A` instead of drag's `Cd*A`, about seven
 times more on a car, at a point ahead of the COM. That lowers the step pass's steady K (`docs/vehicle_measurements.md` § Step steer) a little in
-its fastest row and tips its three largest lift-off overshoots there into spins; with the side term zeroed,
-the old table returns to within transient noise.
+its fastest row and tips its three largest lift-off overshoots there into spins.
 
 ## Stability control
 
@@ -260,8 +255,8 @@ the fuel; the yaw torque keeps its priority on a wheel (`corner_torques`).
   ESC lamp is steady while off and flashes while ESC acts. Only roll stability past `LAMP_DECEL`
   lights the brake lamp and opens the lock-up (bit 8; R13: yaw braking is selective braking). The
   handbrake leaves it on: a J-turn still turns, tamer, and ESC catches the spin at its end.
-- **Measured.** Every ESC body in FMVSS 126's range passes the sine with dwell with ESC on and
-  fails it off (`docs/vehicle_measurements.md` § Sine with dwell); the step pass's lifted spins go with ESC on; the accel and
+- **Measured** (sine with dwell: `docs/vehicle_measurements.md` § Sine with dwell). The step
+  pass's lifted spins go with ESC on; the accel and
   cruise tables do not move. ESC's inner-rear brake turns a ploughing car in (corner peaks rise);
   the semis stop under their tip; near-limit steady step cells slow (the bobtail's most).
 - **Chassis tables stay ESC-off.** `doc=steer`, `doc=cornering` and `doc=tyres` set `noesc`: K,
