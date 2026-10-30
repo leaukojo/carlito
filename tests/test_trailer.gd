@@ -1622,12 +1622,10 @@ func test_a_braking_tanker_puts_its_load_on_the_fifth_wheel() -> void:
 		tanker.call("tick_body", DELTA)
 	var pulling: float = tanker.call("live_kingpin_share")
 	assert_float(pulling).is_less(rest)
-	# Worth tonnes at each end, or it is a number nothing on the cluster could show.
+	# A baffled tank's share each way (SURGE_TRAVEL, docs/sources.md [200]), not a smooth bore's.
+	assert_float(braking / rest - 1.0).is_equal_approx(0.05, 0.005)
+	assert_float(1.0 - pulling / rest).is_equal_approx(0.05, 0.005)
 	var spec: VehicleSpec = tanker.get("spec")
-	assert_float(spec.mass * (braking - pulling)) \
-		.override_failure_message("the surge moves only %.0f kg between the axles"
-			% (spec.mass * (braking - pulling))) \
-		.is_greater(2000.0)
 	# And the bogie stays on its springs at both ends of the travel, which the spec's rate was sized
 	# for.
 	assert_float(_bogie_travel(spec, braking)).is_between(0.2, 0.6)
@@ -1646,7 +1644,7 @@ func test_the_tanker_is_a_load_model_and_not_a_body() -> void:
 	tanker.set("accel_fwd", -4.0)
 	for _i in roundi(TankerScript.SURGE_TIME / DELTA):
 		tanker.call("tick_body", DELTA)
-	assert_float(absf(tanker.call("load_shift_z"))).is_greater(0.1)
+	assert_float(absf(tanker.call("load_shift_z"))).is_greater(0.5 * TankerScript.SURGE_TRAVEL)
 	tanker.call("reset_at", Transform3D(Basis.IDENTITY, Vector3.ZERO))
 	assert_float(tanker.call("load_shift_z")).is_equal(0.0)
 	assert_float(tanker.get("accel_fwd")).is_equal(0.0)

@@ -5,13 +5,15 @@ extends TowedBody
 ## consequences; never add a tanker term to either signal. Braking throws the load forward;
 ## accelerating slumps it onto the bogie. Declares no consumers: its discharge pump is its own.
 
-## Metres the load slides each way from rest: ~1/10 of the 5.80 m barrel.
-const SURGE_TRAVEL := 0.55
+## Metres the load slides each way from rest: a baffled tank's kingpin load moves under 5 % ([200],
+## docs/sources.md), and the share moves by travel / (bogie_z - com_z) = travel / 1.402 m
+## (tanker_spec.tres), so 0.07 m is 5 %.
+const SURGE_TRAVEL := 0.07
 
 ## Longitudinal accel (m/s^2) for full travel: a firm but ordinary brake application.
 const SURGE_ACCEL_REF := 2.5
 
-## Seconds to cross full travel. The lag is the model: slower than the brake that causes it.
+## Seconds to cross full travel (estimate). The lag is the model: slower than the brake that causes it.
 const SURGE_TIME := 1.1
 
 var _surge := 0.0  ## metres the load has slid rearward (negative = forward)

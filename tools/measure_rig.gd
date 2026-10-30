@@ -13,6 +13,9 @@ static var esc_off := false
 ## A towed body's own roll-over control off (`notrsp`): its lift table is measured on the bare
 ## trailer, never one braking itself.
 static var trailer_roll_off := false
+## A coupled tanker's surge pinned at 0 (`nosurge`, `SurgePin`): the surge's share of a run, sized
+## against the same run with it.
+static var surge_off := false
 
 
 ## Under `esc_off`, `car`'s ESC unfitted on a copy of its spec, in memory, never shipped (the ground
@@ -88,6 +91,41 @@ class TrailerWatch:
 		if overturn_t < 0.0 \
 				and absf(VehicleMath.roll_deg(trailer.global_basis)) >= BaseVehicle.OVERTURNED_DEG:
 			overturn_t = _t
+
+
+## Under `surge_off`, `body`'s coupled tanker held at no surge, in memory: after every priority-0
+## tick (the rig's, which runs the surge model) it zeroes the model and the centre of mass before
+## the physics step. The residue is one tick's slew (`SURGE_TRAVEL / SURGE_TIME / 60`, ~1 mm) that
+## the unit's `brake_load_kg` reads inside its tick. A separate node, so a run without the flag
+## keeps its tick order; `add_surge_pin` once, then set `body` per spawn.
+class SurgePin:
+	extends Node
+
+	const Tanker := preload("res://src/vehicles/truck/trailers/tanker.gd")
+
+	var body: Node = null
+
+	func _physics_process(_delta: float) -> void:
+		if body == null or not is_instance_valid(body):
+			return
+		# `coupled_host`'s walk: an inner class cannot call the outer script's statics.
+		for node in body.find_children("*", "", true, false):
+			var host := node as TowHost
+			if host != null and host.is_coupled() and is_instance_valid(host.trailer) \
+					and host.trailer.get_script() == Tanker:
+				host.trailer.set("_surge", 0.0)
+				host.trailer.set_load_offset(0.0)
+
+
+## A `SurgePin` under `parent` under `surge_off`, else null.
+static func add_surge_pin(parent: Node) -> SurgePin:
+	if not surge_off:
+		return null
+	var pin := SurgePin.new()
+	pin.name = "SurgePin"
+	pin.process_physics_priority = 1
+	parent.add_child(pin)
+	return pin
 
 
 ## One `Surface` everywhere, over a slab or a ramp: the duck-typed contract `HeightmapTerrain`

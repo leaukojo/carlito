@@ -646,6 +646,8 @@ var _strict := false
 ## scene's file name (`box`, `flatbed`, `farm_tipper`...) or `bobtail` / `none` for nothing.
 ## Empty: the catalog's own first entry; the tractor's none.
 var _trailer := ""
+## `nosurge`: a coupled tanker's surge pinned at 0 (`MeasureRig.SurgePin`), else null.
+var _surge_pin: Node = null
 ## `doc=<braking|cornering|accel|cruise|steer|tyres>`: the preset that ran, its region rewritten at
 ## the end; empty otherwise.
 var _doc := ""
@@ -910,6 +912,8 @@ func _ready() -> void:
 	_notc = flags.has("notc")
 	MeasureRig.esc_off = flags.has("noesc")
 	MeasureRig.trailer_roll_off = flags.has("notrsp")
+	MeasureRig.surge_off = flags.has("nosurge")
+	_surge_pin = MeasureRig.add_surge_pin(self)
 	_cruise = flags.has("cruise")
 	_kickdown = flags.has("kickdown")
 	_trace_contact = flags.has("contact")
@@ -1039,8 +1043,8 @@ func _ready() -> void:
 		# The chassis tables are recorded with stability control off, the trailer's own too: they
 		# measure the chassis.
 		var chassis := _doc in ["cornering", "steer", "tyres"]
-		if (MeasureRig.esc_off or MeasureRig.trailer_roll_off) and not chassis:
-			printerr("noesc / notrsp change what doc=%s tabulates: run it per body" % _doc)
+		if MeasureRig.surge_off or ((MeasureRig.esc_off or MeasureRig.trailer_roll_off) and not chassis):
+			printerr("noesc / notrsp / nosurge change what doc=%s tabulates: run it per body" % _doc)
 			get_tree().quit(1)
 			return
 		MeasureRig.esc_off = chassis
@@ -1277,6 +1281,8 @@ func _next_vehicle() -> void:
 	_current["abs"] = _car.spec.ground_drive.abs_equipped
 	MeasureRig.unfit_esc(_car)
 	add_child(_car)
+	if _surge_pin != null:
+		_surge_pin.set("body", _car)
 	MeasureRig.apply_roll_steer(_car, _roll_steer)
 	MeasureRig.apply_compliance(_car, _compliance)
 	var tyre := MeasureRig.fit_tyre(_car, _tyre)
@@ -2746,6 +2752,8 @@ func _report_accel(capped: bool) -> void:
 		run.append("traction control off (notc)")
 	if MeasureRig.esc_off:
 		run.append("stability control off (noesc)")
+	if MeasureRig.surge_off:
+		run.append("tanker surge pinned at 0 (nosurge)")
 	if _held_gear > 0:
 		run.append("manual, held in D%d (gear=%d)" % [_held_gear, _held_gear])
 	if _pedal < 1.0:

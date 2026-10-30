@@ -11,10 +11,10 @@
 ;   - center_of_mass y 0.45 is 1.50 m above the road: the barrel's own centre is at y 0.66 (1.71 m
 ;     over the road) and a part-filled tank carries its load well up inside it. Half-track 0.72
 ;     over 1.50 m tips it at 0.48 g against mu_lat 0.75, so a laden tanker ROLLS BEFORE IT SLIDES.
-;   - THE SURGE MOVES IT, +-0.55 m along z (tanker.gd, a LABELLED HONEST MODEL, not fluid dynamics;
-;     read its header before changing anything here). The spring below covers both ends: the load
-;     fully rearward (z 4.80) sits the bogie at 41 % of travel, fully forward (z 3.70) at 31 %,
-;     against 36 % at rest. Z IS THE ONLY AXIS IT MOVES: a lateral slosh term is out of scope (a
+;   - THE SURGE MOVES IT, +-SURGE_TRAVEL along z (tanker.gd, a LABELLED HONEST MODEL, not fluid
+;     dynamics; read its header before changing anything here): 5 % of the plate's share, a baffled
+;     tank's. The bogie stays within a point of its 36 % of travel at rest at either end of it.
+;     Z IS THE ONLY AXIS IT MOVES: a lateral slosh term is out of scope (a
 ;     second labelled model feeding roll).
 ;   - spring_rate 218000 is sized off the load the bogie ACTUALLY carries at rest, 15 335 kg:
 ;     25 073 N per wheel compresses it 0.115 m of its 0.32 m travel (36 %), the flatbed's fraction.

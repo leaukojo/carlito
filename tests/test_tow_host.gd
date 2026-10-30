@@ -1005,6 +1005,31 @@ func test_the_shipped_trailers_clamp_only_within_a_hair_of_straight() -> void:
 				"%s: the one-tick cap binds below %f rad/s" % [id, crossing]).is_less(1.0e-2)
 
 
+func test_roll_stability_reads_the_parked_load_while_the_surge_moves_the_live_one() -> void:
+	# A tanker's surge under the rig's own braking moves the load-sensed `brake_load_kg`, never the
+	# load roll stability's lift table reads (`roll_load_kg`), or its braking lowers its own threshold.
+	var r: Rig = await _standing_rig(SEMI)
+	var tanker_id := ""
+	for id: String in TrailerCat.TRAILERS:
+		if id.get_file().get_basename() == "tanker":
+			tanker_id = id
+	r.vehicle.call("set_attachment", tanker_id)
+	await get_tree().physics_frame
+	var tanker := r.host.trailer
+	var surge: float = tanker.get_script().get("SURGE_TRAVEL")
+	# Thrown forward and held there: the model chases a firm stop's target.
+	tanker.set("_surge", -surge)
+	tanker.set_load_offset(-surge)
+	tanker.set("accel_fwd", -10.0)
+	await get_tree().physics_frame
+	var drive: WheelDrive = r.vehicle.get("drive")
+	var unit: float = (r.vehicle as RigidBody3D).mass
+	assert_float(drive.roll_load_kg).is_equal_approx(unit + r.host.parked_load_kg(), 1e-3)
+	assert_float(drive.roll_load_kg).is_equal_approx(unit + tanker.mass * tanker.kingpin_share(), 1e-3)
+	assert_float(drive.brake_load_kg - drive.roll_load_kg) \
+		.override_failure_message("the surge did not reach the sensed load").is_greater(100.0)
+
+
 # --- 4. teardown --------------------------------------------------------------------------------
 
 func test_tearing_the_level_down_takes_the_whole_rig_without_complaint() -> void:

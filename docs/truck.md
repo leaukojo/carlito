@@ -308,7 +308,7 @@ them apart.
   the body's `center_of_mass`; `trailer_axle_load`/`axle_load` move as consequences. The
   tipper moves it UP as well as back (the load rides the floor it is sitting on), which is
   why a raised body caps the rig at `TowHost.BODY_UP_CAP_KMH` (§ Truck sizing).
-  Tanker's surge is a labelled model chasing longitudinal acceleration with a lag — real
-  fluid physics is a non-goal, the rule that governs the boat's water too. Guards for § Coupling and
+  Tanker's surge: a labelled model chasing longitudinal acceleration with a lag (travel a baffled
+  tank's, lag an estimate; roll stability reads the parked load); fluid physics is a non-goal. Guards for § Coupling and
   § Four trailers: `tests/test_trailer.gd`, `tests/test_tow_host.gd`.
 

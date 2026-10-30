@@ -6,7 +6,8 @@ extends Node3D
 ## holds the entry speed and winds the lock on slowly instead: the steady-state tip point.
 ## Optional `front_z=<float>` / `com_z=<float>` args (variant name is args[0]) apply an
 ## in-memory geometry override for what-if runs, without touching the shipped spec;
-## `trailer=<box|tipper|tanker|flatbed|bobtail>` picks what is on the back. `doc=trailer_roll` runs
+## `trailer=<box|tipper|tanker|flatbed|bobtail>` picks what is on the back; `nosurge` pins a
+## tanker's surge at 0 (`MeasureRig.SurgePin`). `doc=trailer_roll` runs
 ## the laden box rig's P7 step and ramp with the tractor's ESC and the trailer's roll-over control
 ## each on and off (`DOC_CONFIGS`), re-spawning the rig per run, and writes the `trailer_roll_p7`
 ## region of docs/vehicle_measurements.md.
@@ -103,6 +104,7 @@ var _args := PackedStringArray()
 var _doc_runs: Array[Dictionary] = []
 var _doc_done: Array[Dictionary] = []
 var _watch := MeasureRig.TrailerWatch.new()  ## P7's trailer, from the steer on
+var _pin: Node = null  ## `nosurge`'s MeasureRig.SurgePin, else null
 
 
 func _ready() -> void:
@@ -114,6 +116,10 @@ func _ready() -> void:
 	_ramp = args.has("ramp")
 	MeasureRig.esc_off = args.has("noesc")
 	MeasureRig.trailer_roll_off = args.has("notrsp")
+	MeasureRig.surge_off = args.has("nosurge")
+	_pin = MeasureRig.add_surge_pin(self)
+	if _pin != null:
+		_csv_suffix += "_nosurge"
 	for a in args:
 		if String(a).begins_with("tip_kmh="):
 			_tip_speed = String(a).substr(8).to_float() / 3.6
@@ -182,6 +188,8 @@ func _spawn() -> void:
 	MeasureRig.unfit_esc(_car)
 	_apply_geometry_override(_args)
 	add_child(_car)
+	if _pin != null:
+		_pin.set("body", _car)
 	# Strip top is y=0; wheels just touching, no spawn drop onto the springs.
 	_car.global_transform = Transform3D(Basis.IDENTITY, Vector3(0.0, _car.rest_ride_height(), START_Z))
 	_car.spawn_transform = _car.global_transform
@@ -195,7 +203,8 @@ func _spawn() -> void:
 			+ "compFL_frac,compFR_frac,suspFL,suspFR,front_contact,"
 			+ "pitch_deg,trailer_pitch_deg,joint_pitch_deg,chassis_contacts,trailer_air,"
 			+ "bogie_comp_frac,rear_axle_kg,trailer_axle_kg,"
-			+ "roll_deg,trailer_roll_deg,joint_roll_deg,lat_g,wheels_up")
+			+ "roll_deg,trailer_roll_deg,joint_roll_deg,lat_g,wheels_up,"
+			+ "acc_lat_g,surge_m,coupled_kg,brake_load_kg,roll_app,roll_lift_g")
 	var gd: GroundDriveSpec = _car.spec.ground_drive
 	print("=== semi rear-drag probe: %s ===" % _variant)
 	print("  mass %.0f kg, com %s, wheelbase %.2f m" % [_car.spec.mass, _car.spec.center_of_mass,
@@ -292,6 +301,7 @@ func _new_stats() -> Dictionary:
 		"rolled_tractor": false, "rolled_trailer": false, "entry_speed": -1.0,
 		"lift_g": -1.0, "trailer_lift_g": -1.0, "rig_lift_g": -1.0, "max_trailer_wheels_up": 0,
 		"lean_roll": NAN, "lean_trailer_roll": NAN,
+		"min_surge": INF, "max_coupled_kg": 0.0, "max_roll_app": 0.0, "lift_at": {},
 	}
 
 
@@ -411,13 +421,21 @@ func _sample(delta: float) -> Dictionary:
 				if trailer != null and is_instance_valid(trailer) else 0.0),
 		"kingpin_y": kingpin_y,
 		"coupled": trailer != null and is_instance_valid(trailer),
+		# A load model's shift (+ rearward), what the unit load-senses off it, and the roll table's
+		# threshold at the load `WheelDrive` reads it at (`roll_load_kg`, else `brake_load_kg`).
+		"surge": (trailer.load_shift_z() if trailer != null and is_instance_valid(trailer) else 0.0),
+		"coupled_kg": _car._fifth_wheel.coupled_load_kg() if _car._fifth_wheel != null else 0.0,
+		"brake_load_kg": _car.drive.brake_load_kg,
+		"roll_app": _car.drive.roll_application(),
+		"roll_lift_g": StabilityControl.roll_lift_g(gd.esc_roll_lift_g, _car.drive.roll_load_kg
+				if _car.drive.roll_load_kg > 0.0 else _car.drive.brake_load_kg),
 	}
 
 
 func _row(s: Dictionary) -> String:
 	return ("%.4f,%s,%.4f,%d,%.1f,%.4f,%.4f,%.4f,%d,%.4f,%.4f,%.5f,%.5f,%.1f,%.1f,"
 			+ "%.5f,%.5f,%.1f,%.1f,%d,%.4f,%.4f,%.4f,%d,%.4f,%.5f,%.1f,%.1f,"
-			+ "%.4f,%.4f,%.4f,%.4f,%d") % [
+			+ "%.4f,%.4f,%.4f,%.4f,%d,%.4f,%.4f,%.1f,%.1f,%.4f,%.4f") % [
 		s["t"], s["phase"], s["speed"], s["gear"], s["rpm"], s["applied_throttle"],
 		s["air1"], s["air2"], 1 if s["gate"] else 0,
 		s["omegaRL"], s["omegaRR"], s["compRL"], s["compRR"], s["suspRL"], s["suspRR"],
@@ -425,6 +443,8 @@ func _row(s: Dictionary) -> String:
 		s["pitch"], s["trailer_pitch"], s["joint_pitch"], s["contacts"], s["trailer_air"],
 		s["bogie_comp"], s["rear_axle_kg"], s["trailer_axle_kg"],
 		s["roll"], s["trailer_roll"], s["joint_roll"], s["lat_g"], s["wheels_up"],
+		s["acc_lat_g"], s["surge"], s["coupled_kg"], s["brake_load_kg"], s["roll_app"],
+		s["roll_lift_g"],
 	]
 
 
@@ -490,6 +510,11 @@ func _accumulate(st: Dictionary, s: Dictionary) -> void:
 	# (`GroundDriveSpec.esc_roll_lift_g`).
 	if (up > 0 or trailer_up > 0) and float(st["rig_lift_g"]) < 0.0:
 		st["rig_lift_g"] = s["acc_lat_g"]
+		st["lift_at"] = {"surge": s["surge"], "coupled_kg": s["coupled_kg"],
+				"roll_app": s["roll_app"], "roll_lift_g": s["roll_lift_g"]}
+	st["min_surge"] = minf(st["min_surge"], s["surge"])
+	st["max_coupled_kg"] = maxf(st["max_coupled_kg"], s["coupled_kg"])
+	st["max_roll_app"] = maxf(st["max_roll_app"], s["roll_app"])
 	if absf(float(s["roll"])) >= TIP_ROLL_DEG:
 		st["rolled_tractor"] = true
 	if bool(s["coupled"]):
@@ -798,6 +823,14 @@ func _print_phase(i: int, spring_max: float, susp_cap: float) -> void:
 				% [_g_label(st["lift_g"]), _g_label(st["trailer_lift_g"]),
 				st["max_trailer_wheels_up"]])
 		print("   rig's first lift   : %s on the tractor's sensor" % _g_label(st["rig_lift_g"]))
+		var at: Dictionary = st["lift_at"]
+		if not at.is_empty():
+			print("   ...at that lift    : surge %.3f m, kingpin load %.0f kg, roll app %.3f,"
+					% [at["surge"], at["coupled_kg"], at["roll_app"]]
+					+ " live threshold %.3f g" % at["roll_lift_g"])
+		print("   surge / roll stab. : most forward %.3f m, kingpin load peak %.0f kg,"
+				% [st["min_surge"], st["max_coupled_kg"]]
+				+ " roll app peak %.3f%s" % [st["max_roll_app"], " (surge pinned)" if _pin != null else ""])
 		print("   lean at %.1f g     : tractor %s deg, trailer %s deg" % [LEAN_G,
 				_f(absf(float(st["lean_roll"]))), _f(absf(float(st["lean_trailer_roll"])))])
 		print("   run ended          : %s" % _ended_by)

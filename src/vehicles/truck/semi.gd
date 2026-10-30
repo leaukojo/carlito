@@ -85,6 +85,8 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	# EBS load sensing: the pedal anchors on the coupled load, for this tick's trailer demand and the
 	# unit's own next wheel tick (`WheelDrive.brake_load_kg`).
 	drive.brake_load_kg = mass + _fifth_wheel.coupled_load_kg()
+	# Roll stability's table reads the parked load: the surge its own braking causes cannot lower it.
+	drive.roll_load_kg = mass + _fifth_wheel.parked_load_kg()
 	drive.towed_kg = _fifth_wheel.towed_mass_kg()
 	# EBS11, towing to towed: the trailer is handed a number and never gates itself. The foot brake
 	# (the hill hold's included, so the rig holds as one); roll stability asks the trailer at least

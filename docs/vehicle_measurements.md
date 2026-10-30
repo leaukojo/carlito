@@ -41,8 +41,8 @@ region (`doc_region.gd`); refresh a figure by re-running, never by hand.
 # `angdamp=<1/s>`: the body's and a coupled trailer's angular damping REPLACEd (0 = none).
 # tyre=<id> (TyreCatalog class, else stock); surface=<name> (slabs painted, not plough); mass=<kg> (live).
 # `sine` (FMVSS 126's sine with dwell on a body within its mass range: A, then the series, left and
-# right) replaces the other passes. `noesc` (every measure tool): stability control unfitted in
-# memory, TC as fitted (`notc` for that); doc=steer / cornering / tyres set it, doc=esc runs both.
+# right) replaces the other passes. `noesc` (every measure tool): stability control unfitted in memory,
+# TC as fitted (`notc`); doc=steer / cornering / tyres set it, doc=esc runs both. `nosurge`: a tanker's surge at 0.
 node tools/godot_run.mjs -- --headless --path . res://tools/measure_vehicles.tscn -- sedan-sports 45
 node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 60 sine noesc
 node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 60 step
@@ -69,7 +69,7 @@ node tools/godot_run.mjs -- --headless --path . res://tools/measure_vehicles.tsc
 # drone: hover / climb / lean / endurance / one-motor-out (no args, ~1 min)
 node tools/godot_run.mjs -- --headless --path . res://tools/measure_drone.tscn
 # coupled semi launch: steer-axle load, pitch, air gate, step-steer rollover (~30 s; flags
-# trailer=<box|tanker|tipper|flatbed|bobtail> tip_kmh=<km/h> ramp front_z= com_z=; strict = the CI gate)
+# trailer=<box|tanker|tipper|flatbed|bobtail> tip_kmh=<km/h> ramp nosurge front_z= com_z=; strict = the CI gate)
 node tools/godot_run.mjs -- --headless --path . res://tools/measure_semi_launch.tscn -- semi
 # a truck losing its air: parked on 18 %, floored in D, cut at 30 km/h. Arg 1: garbage-truck,
 # semi, semi-conventional or `all`; `strict` = the CI gate (~1.5 min)

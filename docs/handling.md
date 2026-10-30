@@ -252,7 +252,7 @@ asks is the bicycle model's on the body's own steady K (`esc_reference_k`, the c
 against g; the refuse truck's per hopper level, `esc_laden_k`), bounded by the measured g plus a margin. Past a dead-band
 it brakes one wheel (the outer front against oversteer, the inner rear against understeer) inside
 the spin step with ABS on, and trims the delivered fuel in proportion. On the semis it adds roll
-stability: past `ROLL_SHARE` of the rig's measured first lift at its sensed coupled load
+stability: past `ROLL_SHARE` of the rig's measured first lift at its parked coupled load
 (`esc_roll_lift_g`), or as the steer asks that g, it brakes every wheel and the trailer and cuts
 the fuel; the yaw torque keeps its priority on a wheel (`corner_torques`).
 - **Switch and lamps.** `esc_off` (the bridge, or SETTINGS ▸ STABILITY CONTROL) takes TC with it;

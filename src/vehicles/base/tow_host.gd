@@ -102,6 +102,14 @@ func coupled_load_kg() -> float:
 	return trailer.mass * trailer.live_kingpin_share()
 
 
+## What the coupled trailer rests on the towing unit parked (kg), 0 uncoupled: `coupled_load_kg`
+## without a load model's shift, so the rig's own braking cannot move it (roll stability's table).
+func parked_load_kg() -> float:
+	if not is_instance_valid(trailer) or trailer.spec == null:
+		return 0.0
+	return trailer.mass * trailer.kingpin_share()
+
+
 ## The coupled trailer's whole mass (kg), 0 uncoupled: what hangs on the towing unit on a grade
 ## once the trailer's own brakes let go (`WheelDrive.towed_kg`, the hill hold's load).
 func towed_mass_kg() -> float:

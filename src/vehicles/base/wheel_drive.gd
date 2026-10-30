@@ -78,6 +78,10 @@ var _retarder_rating := 0.0  ## Nm a driven wheel (`Drivetrain.retarder_rating`)
 ## unit with EBS sets its coupled static load each tick (its mass plus what the trailer puts on the
 ## coupling): EBS load sensing, so half pedal asks the rig what it asks the bare unit.
 var brake_load_kg := 0.0
+## Load (kg) roll stability's lift table reads (`esc_roll_lift_g`), 0 = `brake_load_kg`'s. A towing
+## unit sets its parked coupled load each tick: a load model's shift under the rig's own braking
+## must not lower the threshold it is braking for.
+var roll_load_kg := 0.0
 var _brake_force := 0.0  ## full-pedal foot-brake force (N) over every wheel, cached in _init
 var _live_mass := 0.0    ## the body's mass (kg), kept by `set_corner_mass_from`
 ## The hill hold applies more than the driver's pedal this tick (`hold_step`).
@@ -365,7 +369,7 @@ func hold_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 ## (`Drivetrain.esc_cap`): off the sensors a real unit has (speed, the mean steer applied last
 ## tick, yaw rate, and a lateral acceleration off the body's velocity change, gravity-free as a
 ## bank-compensated reading is), one wheel's brake torque, which `tick` adds to the pedal's; with a
-## roll table, roll stability's application on every wheel, read on the sensed load (`_load_kg`).
+## roll table, roll stability's application on every wheel, its threshold read on `roll_load_kg`.
 ## Off (not fitted, or `esc_off`) it brakes nothing, caps nothing and forgets its slip estimate.
 ## Signs + = left. The speed is the ground-plane velocity's whole magnitude, signed by the nose
 ## (`ground_speed`): its forward part alone drops under MIN_SPEED in a spin ESC must catch. The
@@ -409,7 +413,8 @@ func esc_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 	var roll_g := maxf(absf(lat_acc) / StabilityControl.G,
 			StabilityControl.asked_lat_g(speed, _applied_steer, _wheelbase, k, lat_acc))
 	_roll_app = StabilityControl.roll_application(speed, roll_g,
-			StabilityControl.roll_lift_g(gd.esc_roll_lift_g, _load_kg()), _roll_app, delta)
+			StabilityControl.roll_lift_g(gd.esc_roll_lift_g,
+			roll_load_kg if roll_load_kg > 0.0 else _load_kg()), _roll_app, delta)
 	_esc_brake = StabilityControl.corner_torques(_roll_app, _esc_torque,
 			Vector2(_brake_front, _brake_rear))
 	esc_yaw_active = _esc_torque != Vector4.ZERO
