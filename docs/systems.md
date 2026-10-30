@@ -267,4 +267,3 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
 - `ChallengeRunner` (a child of the level root) overlays the course, spawns a fresh body at its
   marker and steps a pure-logic `ChallengeAttempt` with a `ChallengeFrame` each physics tick after
   the vehicles; PASS / FAIL end it, RESET respawns, any respawn restarts it.
-- A def stays unregistered while it has no par window: `car_ice_patch` on WET.

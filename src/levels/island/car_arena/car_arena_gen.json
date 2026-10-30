@@ -20,8 +20,7 @@
     "courses/car_turn_signals_course.tscn",
     "courses/car_speed_trap_course.tscn",
     "courses/car_lights_course.tscn",
-    "courses/car_reverse_park_course.tscn",
-    "courses/car_ice_patch_course.tscn"
+    "courses/car_reverse_park_course.tscn"
   ],
   "notes": [
     "gen_car_arena.gd owns this level AND its challenge courses end to end, and overwrites",
@@ -49,7 +48,7 @@
       "args": [
         "courses"
       ],
-      "why": "Packs the nine car course scenes from the saved curves."
+      "why": "Packs the eight car course scenes from the saved curves."
     },
     {
       "kind": "bake"

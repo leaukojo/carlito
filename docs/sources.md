@@ -356,7 +356,7 @@ tyre's 0.013 on asphalt [68]. A class scales grip per surface; drag is tyre-blin
 
 | Surface | Grip | Drag | Basis | Grade |
 | --- | --- | --- | --- | --- |
-| WET | 0.55 | 0 | the bottom of Wong's wet asphalt, 0.5-0.7 [63]; between Car 15's 0.6 (a clear slip spike, still controllable) and 0.5 (spins the car out), so it has no par | secondary |
+| WET | 0.55 | 0 | the bottom of Wong's wet asphalt, 0.5-0.7 [63]; between 0.6 (a clear slip spike on the wet bend, still controllable) and 0.5 (spins the car out) | secondary |
 | PAD | 0.95 | 0 | dry concrete grips as asphalt [63], less the skyport's paint | estimate |
 | GRAVEL | 0.71 | 0.01 | Wong's gravel 0.60 [63]; rolled gravel 0.02 [68] | secondary |
 | DIRT | 0.80 | 0.04 | Wong's dry earth road 0.68 [63]; unpaved road 0.05 [68] | secondary |

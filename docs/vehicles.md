@@ -78,11 +78,7 @@ open body sticks floored on bumps while a feathered pedal crosses. The tractor's
 mud climbs 16.7 % (9.5 deg) against a 17.7 deg traction ceiling. Held at the peak (`tc`) it climbs
 25.0 % (14.1 deg), so the floored shortfall is the peel, not the tractor. A real 2WD tractor bogs in
 mud too; MFWD and the diff lock are the answer. The same peel limits it ploughing (`docs/tractor.md`
-§ Draft, hitch, linkage). The `tractor_mud` challenge sets that lesson on level 1's wallow, but on
-its line (`measure_rough -- course=tractor_mud`) every driveline reaches the far zone floored in
-a sixth of its par (`par_s` in `tractor_mud.tres`), the open 2WD with a driven wheel past 0.3 slip
-on 16 % of the ticks: the par separates none of them.
-
+§ Draft, hitch, linkage).
 **Wheel radius.** Each axle runs its drawn tyre's radius (`GroundDriveSpec.axle_radius`): 0.36 m (the kit
 wheel at `KIT_SCALE`) on every Kenney body, semi and trailer, 0.44 / 0.66 m on the tractor, its `final_drive` and inboard
 brakes quoted at the rear. `WheelDrive` gears a wheel `n = r / drive_radius()` to the shaft: MFWD turns the fronts 1.5×.

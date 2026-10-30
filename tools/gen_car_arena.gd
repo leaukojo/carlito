@@ -16,7 +16,8 @@ extends Node
 ##   along, L L R, so the outside of every corner and both sides of every straight are a cliff.
 ##   No course uses it. The ridge is stamped from the road's own curve, so it moves with it.
 ## - CAUSEWAY, south: a gravel S across a lagoon carved below the sea (Car 5).
-## - WET, south-east: a run-up and one bend with the Wet channel painted under its deck (Car 15).
+## - WET, south-east: a run-up and one bend with the Wet channel painted under its deck. No
+##   course uses it.
 ## - APRON, north-west: a painted asphalt rectangle, no road (Car 11).
 ## - PAD: the tyre pad, no course: asphalt, wet and snow strips between STRIP and WINDING, and a
 ##   half-asphalt, half-snow skidpad inside the CORNERS U, each with its own VehicleSpawn.
@@ -27,7 +28,7 @@ extends Node
 ## BOX_GATE_X, BOX_GATE_TO_BOX, BOX_LENGTH, BOX_WIDTH, TRAP_FROM_X, TRAP_TO_X, SIGNAL_LENGTH,
 ## WINDING_R, the CORNER_TURNS order, BAY_WIDTH, BAY_LENGTH, BAY_HEADING, the bay's printed
 ## lat/lon, WET_R and WET_SWEEP: move one, edit the briefing (and re-measure the par of Car 7 for
-## START_UP_SPAWN_X / START_UP_FINISH_X, of Car 14 for WINDING_R, of Car 15 for the wet road).
+## START_UP_SPAWN_X / START_UP_FINISH_X and of Car 14 for WINDING_R).
 
 const DIR := "res://src/levels/island/car_arena"
 const COURSE_DIR := DIR + "/courses"
@@ -72,7 +73,6 @@ const MIN_RADIUS := 12.0       ## the scaffold fails on a tighter corner
 
 const RIDGE_ROAD := "car_arena_ridge_curve.tres"
 const CAUSEWAY_ROAD := "car_arena_causeway_curve.tres"
-## The file, its `IceRoad` node and the course keep the challenge id `car_ice_patch`.
 const WET_ROAD := "car_arena_ice_curve.tres"
 
 const STRIP_START_X := -160.0
@@ -215,8 +215,6 @@ const CORNER_ZONE_WIDTH := 24.0
 const FINISH_BEFORE_END := 15.0
 ## A fall volume's top sits this far under the deck it guards, so no body on the deck is in it.
 const FALL_BELOW := 2.0
-## Car 15: the spawn this far along the wet road, so none of the run-up is lost behind it.
-const RUN_UP_SPAWN := 4.0
 ## Car 11: the bay on the apron's north edge, open to the south; the car spawns in the aisle
 ## BAY_AISLE south of the bay's mouth, at the apron's west end, facing east.
 const BAY_WIDTH := 2.4
@@ -868,7 +866,6 @@ func _courses() -> int:
 		"car_speed_trap": _speed_trap(strip),
 		"car_lights": _lights(curves[CAUSEWAY_ROAD]),
 		"car_reverse_park": _reverse_park(),
-		"car_ice_patch": _ice_patch(curves[WET_ROAD]),
 	}
 	# All or none: a course that failed to build leaves the others unwritten too.
 	if built.values().has(null):
@@ -1029,19 +1026,6 @@ func _reverse_park() -> Node3D:
 	_spawn_in(root, _pose(aisle, 90.0))
 	print("[car-arena] car_reverse_park bay centre: lat %.7f, lon %.7f" % [
 			VehicleTelemetry.gps_lat(centre.z), VehicleTelemetry.gps_lon(centre.x)])
-	return root
-
-
-## Car 15: the wet road end to end. Nothing marks the wet bend.
-func _ice_patch(road: Curve3D) -> Node3D:
-	var root := _course_root("CarIcePatchCourse")
-	var mats := _materials()
-	_spawn(root, road, RUN_UP_SPAWN)
-	var at := road.get_baked_length() - FINISH_BEFORE_END
-	_zone(root, "Finish", road, at - 0.5, at + 0.5, _paved_width())
-	var markers := _markers(root)
-	_line(markers, road, at, 1.0, mats["white"], "FinishLine")
-	_posts(markers, road, at, mats["dark"], "Finish")
 	return root
 
 

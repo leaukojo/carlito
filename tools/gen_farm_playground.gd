@@ -69,9 +69,6 @@ const PADDOCK_RECT := Rect2(-100, -16, 20, 44)    ## the haul ramp's destination
 ## open rear diff spins it. A painted grip split cannot do this job. At level 1's 1 px/m splat,
 ## blended and sharpened, a split line only puts the tractor's rear wheels (1.79 m apart) on
 ## different surfaces while the tractor holds the line between them.
-## Measured on tractor_mud's line (`measure_rough -- course=tractor_mud`): floored, every driveline
-## crosses in ~5 s, the open 2WD with a driven wheel past 0.3 slip on 16 % of the ticks, so the
-## 30 s par separates none of them.
 const WALLOW_RECT := Rect2(-2, 4, 24, 14)
 ## The blend ring is the wallow's entry/exit ramp, so its width sets their grade: 8 m gives
 ## ~7.5% (half of a 4 m ring) so climbing out is a gentle roll, not a step.

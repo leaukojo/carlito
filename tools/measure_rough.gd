@@ -48,7 +48,7 @@ extends Node3D
 ## than real time: one 1/60 s tick per frame, the step itself unchanged (never Engine.time_scale,
 ## which enlarges the step — docs/vehicle_measurements.md).
 ##
-##   godot --headless --path . res://tools/measure_rough.tscn -- course=tractor_mud
+##   godot --headless --path . res://tools/measure_rough.tscn -- course=tractor_auto_steer
 ##
 ## `course=<challenge id>` drives a reach-zone challenge's own course instead of the lanes: its
 ## arena level with the course laid on it (as `ChallengeRunner` does), the def's variant and
