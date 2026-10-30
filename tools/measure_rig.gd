@@ -9,20 +9,21 @@ const Layers := preload("res://src/physics/collision_layers.gd")
 
 ## One `Surface` everywhere, over a slab or a ramp: the duck-typed contract `HeightmapTerrain`
 ## answers (`BaseVehicle._collect_grip_terrains`), nothing more. `height_at` is the plane through
-## the origin rising `tan_angle` toward -Z, so `RayWheel.terrain_at`'s reach finds it anywhere on a
-## climb. A body finds its terrains once: add the patch before its first tick, then change
+## (0, `lift`, 0) rising `tan_angle` toward -Z, so `RayWheel.terrain_at`'s reach finds it anywhere
+## on a climb. A body finds its terrains once: add the patch before its first tick, then change
 ## `surface` in place.
 class GripPatch:
 	extends Node3D
 
 	var surface := Surface.ASPHALT
 	var tan_angle := 0.0
+	var lift := 0.0  ## m, a ramp raised by `tilt_ramp`'s `lift`
 
 	func contains_xz(_world_pos: Vector3) -> bool:
 		return true
 
 	func height_at(world_pos: Vector3) -> float:
-		return -world_pos.z * tan_angle
+		return lift - world_pos.z * tan_angle
 
 	func grip_at(_world_pos: Vector3, response: PackedFloat32Array) -> float:
 		return Surface.grip_in(response, surface)
@@ -192,13 +193,15 @@ static func add_box(parent: Node, box_name: String, size: Vector3, xform: Transf
 
 
 ## `ramp` (built under `parent` from `size` when null) tilted `angle` rad about +X, so its -Z (the
-## body's forward) climbs and its top face passes through the origin. Returns the ramp.
-static func tilt_ramp(parent: Node, ramp: StaticBody3D, size: Vector3, angle: float) -> StaticBody3D:
+## body's forward) climbs and its top face passes through (0, `lift`, 0): a long ramp is raised so
+## its foot stays above `BaseVehicle.FALL_RESPAWN_Y`. Returns the ramp.
+static func tilt_ramp(parent: Node, ramp: StaticBody3D, size: Vector3, angle: float,
+		lift := 0.0) -> StaticBody3D:
 	if ramp == null:
 		ramp = _box_body("Ramp", size)
 		parent.add_child(ramp)
 	var tilt := Basis(Vector3.RIGHT, angle)
-	ramp.transform = Transform3D(tilt, tilt * Vector3(0.0, -size.y * 0.5, 0.0))
+	ramp.transform = Transform3D(tilt, tilt * Vector3(0.0, -size.y * 0.5, 0.0) + Vector3.UP * lift)
 	return ramp
 
 

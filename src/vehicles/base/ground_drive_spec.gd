@@ -148,6 +148,25 @@ extends Resource
 ## Pairs with `brake_bias_front` 0.
 @export var brake_engages_front_axle := false
 
+@export_subgroup("Brake heat")
+## One front friction brake's heat capacity `C` (J/K), `docs/sources.md` § Brake heat; 0 = no
+## thermal model, the brake never heats or fades (`BrakeThermal`). Every rear field is declared
+## on its own: a drum rear has no fallback to a disc front.
+@export var brake_heat_capacity := 0.0
+@export var brake_heat_capacity_rear := 0.0
+## Convective conductance `G0 + G1 v` (W/K, v in m/s).
+@export var brake_cooling_g0 := 0.0
+@export var brake_cooling_g0_rear := 0.0
+@export var brake_cooling_g1 := 0.0
+@export var brake_cooling_g1_rear := 0.0
+## Radiation `ε` and `A_r` (m²); 0 where the conductance carries it (GSRS drums).
+@export var brake_emissivity := 0.0
+@export var brake_emissivity_rear := 0.0
+@export var brake_radiating_area := 0.0
+@export var brake_radiating_area_rear := 0.0
+@export var brake_fade_curve := BrakeThermal.FadeCurve.NONE
+@export var brake_fade_curve_rear := BrakeThermal.FadeCurve.NONE
+
 @export_group("Resistance")
 ## Aerodynamic drag area in m^2 (Cd x frontal area); never scales with mass. 0 = the plane's own.
 @export var drag_area := 0.0
@@ -237,6 +256,16 @@ func axle_brake_torque(rear: bool) -> float:
 	if rear:
 		return total * (1.0 - brake_bias_front) / maxf(1.0, n_rear)
 	return total * brake_bias_front / maxf(1.0, n_front)
+
+
+## One friction brake's thermal figures on the front or rear axle (`BrakeThermal.Figures`).
+func axle_brake_figures(rear: bool) -> BrakeThermal.Figures:
+	if rear:
+		return BrakeThermal.Figures.new(brake_heat_capacity_rear, brake_cooling_g0_rear,
+				brake_cooling_g1_rear, brake_emissivity_rear, brake_radiating_area_rear,
+				brake_fade_curve_rear)
+	return BrakeThermal.Figures.new(brake_heat_capacity, brake_cooling_g0, brake_cooling_g1,
+			brake_emissivity, brake_radiating_area, brake_fade_curve)
 
 
 ## Physics radius (m) of a front or rear wheel: `wheel_radius_rear`, or the front's at 0.

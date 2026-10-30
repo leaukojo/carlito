@@ -169,6 +169,7 @@ const BAR_LABEL := {
 	"grade": "GRADE", "coupler_force": "COUPL",
 	"rudder_actual": "RUDDER", "current_set": "SET", "heading_target": "TARGET",
 	"tank_level": "TANKS",
+	"brake_temp": "BRK TEMP",
 }
 ## Cosmetic short captions for the generated enum "out" chips (like BAR_LABEL for bars). ARMING
 ## and FS avoid colliding with the ARM/ARMED tell-tale lamps above.

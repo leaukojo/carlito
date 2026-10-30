@@ -425,13 +425,18 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 		# `_couple_differentials` adds what a biasing, locked or rigid diff moves on top, once every
 		# wheel has integrated.
 		var drive_t := axle_torque / _driven_count * _ratio[i] if w.driven else 0.0
-		var brake_t := pedal * (_brake_rear if w.is_rear else _brake_front)
+		# The service brake fades with its temperature (`RayWheel.brake_fade`); the pedal map stays
+		# on the cold capacity, so a faded brake asks more pedal for the same deceleration.
+		var brake_t := pedal * (_brake_rear if w.is_rear else _brake_front) * w.brake_fade()
+		var friction_t := brake_t
 		# Anti-lock rides the foot brake and the retarder; a handbrake or spring brake is a
 		# mechanical hold no ABS modulates, so a wheel under one brakes without.
 		var abs_slip := RayWheel.ABS_SLIP if gd.abs_equipped else 0.0
 		if w.is_rear:
+			# Heats the drum but never fades: hot-drum parking is out of scope.
 			var parking := parking_torque(input.handbrake, spring_brake, gd)
 			brake_t += parking
+			friction_t += parking
 			if parking > 0.0:
 				abs_slip = 0.0
 			# Retarder (truck only): a brake on the driven axle, never a separate model. Its slip cap
@@ -447,12 +452,15 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 						_retarder_rating)
 				brake_t += ret
 				retarder_torque_applied += ret
+		w.brake_friction_share = friction_t / brake_t if brake_t > 0.0 else 1.0
 		w.tick(body, gd, space, drive_t, brake_t, delta, grip_terrains, abs_slip,
 				tcs_slip if w.driven else 0.0, tcs_drive * _ratio[i] if w.driven else 0.0)
 
 	_couple_differentials(gd, input, axle_torque, locked, pawl * locked.size(),
 			drivetrain if drivetrain != null and Drivetrain.drives_wheels(spec) else null)
+	# The reacted brake splits by the commanded shares; only the friction brakes' part heats.
 	for w in wheels:
+		w.heat_brake(ground_speed, delta)
 		w.update_visual(gd, delta)
 	_apply_resistance(body, gd, delta)
 	_apply_downforce(body, gd)
@@ -741,6 +749,14 @@ func fill_slip(t: VehicleTelemetry) -> void:
 			t.ground = false
 	t.slip_front = slip_sum[0] / maxi(1, count[0])
 	t.slip_rear = slip_sum[1] / maxi(1, count[1])
+
+
+## Brake temperature telemetry: the hottest of this drive's own wheels (a trailer's are its own).
+func fill_brake_temp(t: VehicleTelemetry) -> void:
+	var hottest := BrakeThermal.AMBIENT_C
+	for w in wheels:
+		hottest = maxf(hottest, w.brake_temp)
+	t.brake_temp = hottest
 
 
 ## Total suspension force carried by the rear axle this tick (N): what `axle_load` reads.

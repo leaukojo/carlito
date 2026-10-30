@@ -144,8 +144,10 @@ func tick_towed(brake01: float, handbrake01: float, delta: float,
 	var space := get_world_3d().direct_space_state
 	var gd := spec.ground_drive
 	_brake_actual = lagged_brake(_brake_actual, brake01, delta)
-	var brake_t := _brake_actual * gd.brake_torque \
-			+ clampf(handbrake01, 0.0, 1.0) * gd.handbrake_torque
+	# The service term fades with each wheel's brake (`RayWheel.brake_fade`); the parking term heats
+	# the same brake but never fades.
+	var service := _brake_actual * gd.brake_torque
+	var parking := clampf(handbrake01, 0.0, 1.0) * gd.handbrake_torque
 	# The trailer's own ABS modulates the service brake; spring brakes are a mechanical hold.
 	var abs_slip := RayWheel.ABS_SLIP if gd.abs_equipped and handbrake01 <= 0.0 else 0.0
 	RayWheel.size_cap_masses(wheels, self, gd)
@@ -157,7 +159,10 @@ func tick_towed(brake01: float, handbrake01: float, delta: float,
 		# Unsteered: a spec's roll and compliance steer are the only angles a trailer wheel takes (0
 		# on every one).
 		w.steer_angle = w.roll_steer() + w.compliance_steer()
-		w.tick(self, gd, space, 0.0, brake_t, delta, grip_terrains, abs_slip)
+		w.tick(self, gd, space, 0.0, service * w.brake_fade() + parking, delta, grip_terrains,
+				abs_slip)
+		# Settled inside its own tick; no retarder, so `brake_friction_share` stays 1.
+		w.heat_brake(_last_fwd_speed, delta)
 	# Resistance is a sum, not a multiple: this trailer's own drag and side area against the level's
 	# wind, at its own aero centre (the parent walk passes the towing vehicle to reach the level);
 	# its bogie's rolling resistance acts at each contact (`RayWheel.force_roll`).

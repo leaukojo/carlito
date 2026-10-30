@@ -131,6 +131,20 @@ func test_the_aux_models_and_the_life_meters_start_over() -> void:
 	assert_float(t.engine_hours).is_equal(0.0)
 
 
+## Brake heat lives on the wheels, outside the telemetry the sweep walks: every brake of a wheeled
+## family comes back at ambient.
+func test_respawn_returns_every_brake_to_ambient() -> void:
+	for family in ["car", "truck", "tractor"]:
+		var v: BaseVehicle = await _spawn(VehicleCatalog.first_in_family(family))
+		for w in v.drive.wheels:
+			w.brake_temp = 600.0
+		v.respawn()
+		for w in v.drive.wheels:
+			assert_float(w.brake_temp) \
+					.override_failure_message("%s: a brake survived a respawn hot" % family) \
+					.is_equal(BrakeThermal.AMBIENT_C)
+
+
 ## A respawn while rolling backwards used to come back still in R, because nothing rebuilt the
 ## gearbox — the direction latch `InputRouter.arbitrate_local` reads lives in `Drivetrain`.
 func test_respawn_hands_back_a_gearbox_in_neutral() -> void:

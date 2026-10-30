@@ -107,6 +107,22 @@ var spin_compliance := 0.0
 ## (`abs_floor_spin`; 0 = no floor, the brake may stop the wheel).
 var brake_spin := 0.0
 var abs_floor := 0.0
+## Torque (N·m, >= 0) the brake actually reacted at the last settle: the spin it took off over
+## `spin_compliance`, never more than commanded; a wheel it stopped reacts only what it took.
+var brake_reacted := 0.0
+## The spin (rad/s, >= 0) the brake left at the last settle, which `brake_reacted` works over: a
+## locked or held wheel dissipates nothing. COMPROMISE: the settled spin, not the mean over the
+## settle. The mean is exact on a free wheel, but on a gripping one it also counts the spin the road
+## lent the step and the brake took back, 5 % of an ABS stop's energy (`measure_grade` `stops`);
+## the settled spin closes that ledger and under-reads only a braked wheel off the ground.
+var brake_settled_spin := 0.0
+## The friction brakes' share of the brake commanded this tick, set by the owner before `tick`
+## (foot and parking over the whole; a retarder's part heats nothing here, `heat_brake`).
+var brake_friction_share := 1.0
+## This axle's friction-brake heat figures (`GroundDriveSpec.axle_brake_figures`, picked by
+## `apply_suspension`) and its one lumped temperature (°C, `BrakeThermal`); the default is no model.
+var brake_figures := BrakeThermal.Figures.new()
+var brake_temp := BrakeThermal.AMBIENT_C
 ## This tick's traction-control hold, latched by `_integrate_spin` and applied by `settle_spin`
 ## before the brake: the drive's own share of the step (`drive_torque * spin_compliance`, rad/s,
 ## signed with the drive; 0 = no hold), the most it takes back, and the signed spin it holds the
@@ -245,6 +261,7 @@ func apply_suspension(gd: GroundDriveSpec) -> void:
 	wheel_radius = gd.axle_radius(is_rear)
 	wheel_inertia = gd.axle_inertia(is_rear)
 	half_width = gd.axle_half_width(is_rear)
+	brake_figures = gd.axle_brake_figures(is_rear)
 	rolling_crr = gd.rolling_resistance
 	_query = null
 	if half_width > 0.0 and wheel_radius > 0.0:
@@ -286,6 +303,10 @@ func reset() -> void:
 	spin_compliance = 0.0
 	brake_spin = 0.0
 	abs_floor = 0.0
+	brake_reacted = 0.0
+	brake_settled_spin = 0.0
+	brake_friction_share = 1.0
+	brake_temp = BrakeThermal.AMBIENT_C
 	tcs_spin = 0.0
 	tcs_ceiling = 0.0
 	coupled_torque = 0.0
@@ -916,11 +937,27 @@ func settle_spin(torque: float, lock_part := 0.0) -> void:
 	tcs_active = tcs > 0.0
 	omega -= signf(tcs_spin) * tcs
 	abs_active = minf(brake_spin, absf(omega)) > brake_room(omega, abs_floor)
+	var unbraked := omega
 	omega = braked_spin(omega, brake_spin, abs_floor)
+	brake_reacted = absf(unbraked - omega) / spin_compliance if spin_compliance > 0.0 else 0.0
+	brake_settled_spin = absf(omega)
 	# Held when the brake had the torque to stop the spin outright: through the secant step that is
 	# `brake_torque >= |drive + reaction + coupling|`, a Coulomb check, so a weak brake lets the
 	# wheel turn.
 	_spin_held = brake_spin > 0.0 and omega == 0.0
+
+
+## One tick of this wheel's friction brake (`BrakeThermal.step`), after its settle: the
+## `brake_friction_share` of `brake_reacted` over `brake_settled_spin`, cooled at road speed `speed`
+## (m/s).
+func heat_brake(speed: float, delta: float) -> void:
+	brake_temp = BrakeThermal.step(brake_temp,
+			brake_reacted * brake_friction_share * brake_settled_spin, speed, delta, brake_figures)
+
+
+## The service brake's fade factor at this brake's temperature (`BrakeThermal.fade_factor`).
+func brake_fade() -> float:
+	return BrakeThermal.fade_factor(brake_temp, brake_figures)
 
 
 ## The park lock holds this wheel still (`WheelDrive._couple_differentials`): stopped and held as a

@@ -118,15 +118,117 @@ Every reference sits past its class's shipped torque, and every one whose mass w
 heavier than its body: the GTI 1390-1454 kg [142], the M340i xDrive 1670 [144], the Charger 4,217-
 4,292 lb [146], the F-250 5,941 lb [151], against 1000-1500 kg.
 
-The fade record (`docs/plans/2_brake_fade.md`), masses as catalogue weights of one disc or drum:
+The fade record (the brake heat model's hardware), masses as catalogue weights of one disc or drum:
 
 | Class | Front: size, mm; mass, kg | Rear: size, mm; mass, kg | Pad or lining | Stall torque ratio | Grade |
 | --- | --- | --- | --- | --- | --- |
-| Saloon discs | 288 × 25 vented; 7.585 | 272 × 10 solid; 4.751 | not found | about 2.0 [8] | sourced [127, 128]; the masses an aftermarket disc listed under the OE numbers (5Q0615301H, 5Q0615601D), possibly a shipping weight |
-| Performance | 340 × 30 vented; 11.6 (slotted, OE 34106797602) | 345 × 24 vented; 10.112 (other BMW OE numbers) | low-metallic or semi-metallic | about 2.0 [8]; no sports figure found | sizes sourced; masses size matches [128]; the pad secondary (retail titles in search summaries) |
-| SUV / light commercial | 319 × 28 vented; 8.4 | drum 295.1 × 67; mass not found | not found | not found; the cars' 2.0 [8] an estimate | sourced [133, 134]; the disc an aftermarket one listed for the GUN126 |
-| 3.5-5 t van | 308 × 31 vented; mass not found | 280 solid; not found | not found | 6R80 not found; the cars' 2.0 [8] an estimate | secondary [135] |
-| 26 t chassis | drum 16.5 × 5 in; 79-80 lb | drum 16.5 × 7 in; 90-99 lb | not found | 3000 RDS offered with TC-418 / 419 / 421 [140]: 1.98 / 2.02 / 1.77 [139] | drum masses sourced, Gunite GOLD lightweight cast (a standard cast drum heavier, not stated) [138]; the RDS's converters secondary, their ratios sourced |
+| Saloon discs | 288 × 25 vented; 7.585 | 272 × 10 solid; 4.751 | not found; PAD curve (*Brake heat*) | about 2.0 [8] | sourced [127, 128]; the masses an aftermarket disc listed under the OE numbers (5Q0615301H, 5Q0615601D), possibly a shipping weight; other makers' 7.64-7.87 / 4.19-5.39 [168], secondary |
+| Performance | 340 × 30 vented; 11.6 (slotted, OE 34106797602) | 345 × 24 vented; 10.112 (other BMW OE numbers) | low-metallic or semi-metallic; PAD curve | about 2.0 [8]; no sports figure found | sizes sourced; masses size matches [128]; the pad secondary (retail titles in search summaries); other makers' 12.35 / 9.08-9.9 [168], secondary |
+| SUV / light commercial | 319 × 28 vented; 8.4 | drum 295.1 × 67; 10.8 (Brembo 14.D637.10; Blue Print 11.31) [168] | not found; PAD front, DRUM rear | not found; the cars' 2.0 [8] an estimate | sourced [133, 134]; the disc an aftermarket one listed for the GUN126; the drum secondary |
+| Full-size LC: `van` (Transit V363) | 308 × 33 vented; 11.93 | 308 × 16 solid; 8.63 | not found; PAD | n/a | secondary [168] (Brembo 09.C243.10, 08.C539.11, the single-tyre axle) |
+| Full-size LC: `pickup(-flat)` (F-150) | 350 × 34 vented; about 13 | 336 × 24, taken vented; about 9 | not found; PAD | n/a | estimates: the front between a 330 × 32 at 11.72 and a 380 × 34 at 15.6 on diameter squared, the rear off the BMW 345 × 24 [168] |
+| Racing | taken 345 × 32 vented; about 12 | taken 320 vented; about 9 | RACE curve | n/a | estimate: one-piece iron (a 330 × 32 at 11.72 [168]); two-piece 9.5-10.5 |
+| 3.5-5 t van | 308 × 31 vented; 11.3 (Brembo 09.C644.11, the DRW axle) | the EU DRW's 308 × 18 solid (08.C540.11); 9.36, not the listed 280 | not found; PAD | 6R80 not found; the cars' 2.0 [8] an estimate | secondary [135, 168] |
+| 26 t chassis | drum 16.5 × 5 in; 79-80 lb | drum 16.5 × 7 in; 90-99 lb; a standard cast one 112 lb (Gunite 3600A) [153] | not found; DRUM curve | 3000 RDS offered with TC-418 / 419 / 421 [140]: 1.98 / 2.02 / 1.77 [139] | drum masses sourced, Gunite GOLD lightweight cast [138] and the standard 3600A [153]; the RDS's converters secondary, their ratios sourced |
+| Tractor unit, EBS discs | 430 × 45 (22.5 in air disc, Knorr SN7 class); about 34 | the same | not found; PAD | n/a | secondary: listings at 31-35 [156] |
+| Semi-trailers | 430 × 45 (BPW TS2) [157]; about 34, the tractor unit's | the same | not found; PAD | n/a | the size sourced, the mass secondary [156]; a 420 × 180 drum is 51.1 (lightweight 40) [156] |
+| `farm_tipper` | drum 406 × 120 (ADR agricultural class); about 32 | none | DRUM | n/a | estimate: off the 420 × 180 drum's 51.1 by width, plus a flange allowance |
+| Tractor wet discs | none (braked through MFWD) | inboard wet multi-discs in the rear-axle sump; a 6R's sump 71-81 (L) [167] | WET curve | n/a | the sump sourced; disc count and size not found |
+
+*Brake heat* (`BrakeThermal`): one lumped temperature per brake,
+`C dT/dt = P − (G0 + G1 v)(T − T_amb) − ε σ A_r (T⁴ − T_amb⁴)`, `v` the road speed, `P` the friction
+brake's reacted power. The model is FHWA's Grade Severity Rating System (GSRS) brake model, a
+first-order lumped model calibrated on a 33 t 3-S2 rig with thermocouples in every lining [152].
+- **Truck drums: GSRS.** `K1 = hA/(m C) = 1.23 + 0.0256 V` (1/hr) and `1/K2 = hA = 0.100 + 0.00208 V`
+  (hp/°F), `V` in mph [152, 154]. Over its ten brakes (five axles), a mean brake is `C` 39.3 kJ/K and
+  `G` 13.4 + 0.625 v W/K (v in m/s); computed, and `C` comes out the same at any speed (the two
+  slopes' ratio equals the intercepts'). Its `h` is effective: "these empirical values of K1 include
+  the effects of radiation" [152], so its classes take `ε` 0. A drum other than the 16.5 in S-cam
+  scales `C` and `G` by its mass against the standard 3600A's 112 lb [153]: an estimate. The
+  garbage-truck's narrower 16.5 × 5 in steer drums take the mean brake too, an estimate that flatters
+  them.
+- **Disc convection.** Still air: "typically between 3 W/(m2K) and 5 W/(m2K)" [164], so `h0` 4
+  W/m²K. Speed: a CFD friction face rises 20.12 → 63.25 (inner) and 17.07 → 50.24 (outer) W/m²K from
+  30 to 180 (km/h) [165], so `h1` 1.0 W/m²K per m/s (computed; the vane cavity 1.2). Wetted areas
+  scale with diameter squared from three measured discs: 321 × 188 × 25 vented 0.3086 m², 286 × 180 × 12
+  solid 0.1678 m² [164]; an estimate. `G0 = h0 A`, `G1 = h1 A`.
+- **Radiation.** In for discs: "at high disc temperatures (>400 °C), radiative losses in stable
+  conditions can be an order of the magnitude higher than convective" [164], and radiation carries
+  ~68 % of a truck solid disc's steady 2 kW at the lowest speed tested [166]. `ε` 0.82, an oxidised disc
+  [164]. `A_r` is the whole wetted area of a solid disc and half a vented one's (its vanes see each
+  other): an estimate. Cross-check: a 430 × 45 disc at 300 °C at rest sheds about 7 W/K this way,
+  against GSRS's 13.4 for a drum whose `G` covers shoes, hub and the drum's whole outside.
+- **Heat capacity.** Grey iron `c` 460 J/kgK cold [170], rising to about 605 at 400 °C (a chart read
+  by eye [169]); `c` 530, its 20-400 °C mean, an estimate. The disc takes "around 93.5% of energy"
+  [162]; the lump takes it all (the pads are inside it). Disc `C` is the rotor's mass times 530
+  alone; GSRS's drum `C` is about 1.5x its drum's own (shoes and hub in it).
+- **Tractor sump.** Each rear brake heats half a 75 (L) sump [167] at 880 kg/m³ [172] and 2.08 kJ/kgK
+  (an engine oil at 340 K [171]), plus about 100 kg of steel at 0.49 kJ/kgK [170] in the oil: `C`
+  about 93 kJ/K a brake, an estimate (the sump is "a continuous flow of oil from the central
+  transmission housing" [173]; the gearbox's own losses are not modelled). Its temperature is the
+  sump's, not the plates'. Cooling: about 1.0 m² of housing a side at the disc `h` and `ε`, an estimate.
+- **Fade curves**, a factor on the cold torque, linear between points (°C, factor), flat past the last:
+  - PAD (OE resin pad on an iron disc; also the trucks' and trailers' air discs, an estimate):
+    (400, 1.0), (465, 0.86), (615, 0.86), (750, 0.5). A bedded pad's SAE J2522 Fade 2 holds μ 0.41-0.43
+    to a 398 °C start, 0.39 at 422 and 0.36-0.38 from 446 to 550 °C starts, ending at 610 °C [160]; the
+    first fade section (Fade 1) falls harder, 0.41 → 0.28 at 330 °C. Past 615 an estimate: "over 500°C ... combustion
+    of the friction material resins ... dangerous loss of braking efficiency" [163].
+  - RACE: (650, 1.0), (850, 0.7). Ferodo DS3000: an average μ of 0.48 over its 200-650 °C working
+    range [161]; disc bulk normally 400-600 °C [176]. Past 650 an estimate.
+  - DRUM (S-cam, light-vehicle and agricultural drums): (177, 1.0), (316, 0.8), (480, 0.5). "Evidence
+    of fade onset above 350 deg" (°F) [152]; drums "start to fade at about 500°F to 600°F" [154]; a
+    drum at 472.7 °C still braking a 32.5 t truck down a 26 km descent [158]. Drum expansion is folded
+    in: "mechanical fade is the primary mode of brake failure in grade descents and
+    disproportionately affects drum brakes" [154]; a drum grows "about 0.01″ per 100 degrees
+    Fahrenheit", 0.40 in more pushrod stroke at 600 °F [155, secondary]. The points past onset are
+    estimates.
+  - WET (tractor sump): (90, 1.0), (190, 0.75). A paper clutch's μ "might vary 20-30% over a
+    one-hundred degree temperature change" [174], falling with oil temperature [175]; the onset an
+    estimate (a sump's working temperature). No measured curve found.
+- **Ambient** 20 °C, the coolant model's (`VehicleTelemetry.COOLANT_AMBIENT`); GSRS assumes 90 °F
+  [154]. A brake starts at ambient.
+- **Range.** A car's alpine descent reaches 490 °C (simulated, thermocouple-validated) [162]; J2522
+  fade ends at 615 °C [160]; a truck drum 472.7 °C [158]. The model spans 20-850 °C.
+- **Field runs** (the checks of the estimates): WY-1901F Table 10, field average brake temperatures
+  189-314 °F for 55,000-79,400 lb at 21-36 mph down 4.3-7.0 % grades of 3.98-5.5 mi, each row's
+  initial temperature stated; Table 12, a 74,000 lb five-axle rig at "an approximate speed of 45
+  mph" over eight sections (6.43 mi, downgrades 2-7.4 %), brakes 145.6 → 423.5 °F (the updated GSRS
+  predicted 399.2) [154]; both averaged over the brakes. Yaxi: a 32.5 t 6×4 truck, 26 km at a 2.28 %
+  mean grade, 10 °C ambient: with the service brake alone (braking 69.2 % of the time) the hottest
+  rear drum peaks at 472.7 °C, the light front at 100; with the engine brake, 149.7 [158].
+  Checked by `measure_grade -- doc=brake_check` (`docs/vehicle_measurements.md` § Brake heat): the
+  sim's power a brake lands on WY-1901F Table 11's, but Table 10's averages sit below the energy
+  balance (run 3 would need about 175 kJ/K a brake with no cooling at all, and the report's own
+  updated model gives 404 against the field's 244 °F, computed), so Table 10 checks no `C` or `G`
+  and the GSRS 1981 figures stay. Yaxi's service run swings in speed: its hottest drum sits on a
+  plateau of about 300-350 °C (Figure 3, read by eye) under spikes to the 472.7 peak, and the
+  steady hold lands on the plateau.
+- **J1939.** No brake temperature SPN in J1939-71 (MAR2011) [159]. Only SPN 3839 "Brake Temperature
+  Warning", 2 bits in EBC5 (PGN 64964): "the temperature warning value is vehicle manufacturer
+  specific". `brake_temp` is Carlito's own. J1939's 2-byte temperatures (SPN 242: 0.03125 °C/bit,
+  −273 offset) are its encoding model.
+- **`warn`** 260 °C: GSRS's limiting brake temperature (500 °F), "based on the fade temperatures of
+  brake linings, and a consideration of the typical degree of brake imbalance" [154]. One value for
+  every body: on a car it warns before the PAD onset, and the tractor's sump never reaches it.
+
+| Class | `C` F / R, kJ/K | Wetted `A` F / R, m² | `G0` + `G1` v F / R, W/K | `A_r` F / R, m² | Curve F / R |
+| --- | --- | --- | --- | --- | --- |
+| Saloon discs | 4.02 / 2.52 | 0.248 / 0.152 | 0.99 + 0.25 v / 0.61 + 0.15 v | 0.124 / 0.152 | PAD |
+| Performance | 6.15 / 5.36 | 0.346 / 0.356 | 1.38 + 0.35 v / 1.42 + 0.36 v | 0.173 / 0.178 | PAD |
+| SUV / LC | 4.45 / 8.36 (drum, GSRS-scaled) | 0.305 / drum | 1.22 + 0.31 v / 2.85 + 0.13 v | 0.153 / 0 | PAD / DRUM |
+| `van` | 6.32 / 4.57 | 0.284 / 0.195 | 1.14 + 0.28 v / 0.78 + 0.20 v | 0.142 / 0.195 | PAD |
+| `pickup(-flat)` | 6.89 / 4.77 | 0.367 / 0.338 | 1.47 + 0.37 v / 1.35 + 0.34 v | 0.183 / 0.169 | PAD |
+| Racing | 6.36 / 4.77 | 0.356 / 0.307 | 1.42 + 0.36 v / 1.23 + 0.31 v | 0.178 / 0.153 | RACE |
+| 3.5-5 t van | 6.00 / 4.96 | 0.284 / 0.195 | 1.14 + 0.28 v / 0.78 + 0.20 v | 0.142 / 0.195 | PAD |
+| 26 t chassis drums | 39.3 / 39.3 | GSRS | 13.4 + 0.625 v | 0 (in `G`) | DRUM |
+| Tractor unit EBS discs, semi-trailers | 18.0 | 0.554 | 2.22 + 0.55 v | 0.277 | PAD |
+| `farm_tipper` | 24.8 (GSRS-scaled) | GSRS | 8.44 + 0.39 v | 0 | DRUM |
+| Tractor wet discs (rear) | 93 | 1.0 (housing) | 4.0 + 1.0 v | 1.0 | WET |
+
+Grades: GSRS's coefficients, the J2522 run, `ε`, `h0`, the CFD slope, the wetted areas measured and
+the sump sourced; every per-class value is computed from those and the masses above, so it carries
+the worse of its inputs' grades, and every area scaled from another disc is an estimate. Time
+constants come out at minutes to an hour (GSRS's mean brake 49 min at rest), far from the 60 Hz step.
 
 *Engine friction:* `docs/drivetrain.md` § Motoring and friction. The diesels' is Volvo Penta friction power, [5] and [7]; the petrol's is EPA's measured Malibu motoring curve [91].
 
@@ -520,3 +622,28 @@ understeer as above:
 149. Ford, 2026 Transit technical specifications (rotors 12.1 in outer, 6.5 / 7.9 in inner; two 1.89 in / one 2.13 in pistons; swept area): https://www.fromtheroad.ford.com/content/dam/fordmediasite/us/en/library/2026/specs/2026_Ford_Transit_Specs.pdf
 150. Ford, 2020 F-150 technical specifications (rotors, `2 x 54mm Sliding Caliper`, `1X54 Sliding eIPB`): https://www.fromtheroad.ford.com/content/dam/fordmediasite/us/en/library/2020/specs/2020-F-150-Technical-Specs.pdf. The front pad's 194 × 68 × 18.5: a VEVOR listing in a search summary
 151. Ford, "2016 Super Duty Pickups" Source Book, 2015-02 (rotor diameter 14.29 / 14.29 in, dual-piston pin-slider calipers, curb weights): https://madocumentupload.marketingassociates.com/api/Document/GetFile?v1=4309947&v2=053118025341&v3=60&v4=2e19d89ae6f8d29d33aefe91e634462a04821c1d39a953b3d469eef6&v5=False. The 2.36 in pistons and Brembo P24215's 71 height: retail listings in search summaries
+152. J. A. Myers, I. L. Ashkenas, W. A. Johnson (Systems Technology Inc.), *Feasibility of a Grade Severity Rating System*, FHWA-RD-79-116, 1980 (the brake temperature model, Eq. 18-20, the 3-S2 test truck, the fade data; read via its OCR layer): https://rosap.ntl.bts.gov/view/dot/30251/dot_30251_DS1.pdf
+153. Accuride, Gunite 3600A brake drum spec sheet, WE1.000 Rev. 4 (16.5 × 7 in, 112 lb): https://Accuridecorp.com/sites/default/files/resources/2020-04/WE1.000%20Rev.%204%20Gunite%203600A%20Brake%20Drum.pdf
+154. University of Wyoming, *Improving the FHWA Grade Severity Rating System*, WY-1901F Vol. 1, 2018 (Myers 1981's Table 2 reprinted; the 425 → 500 °F limit; the fade modes; the updated coefficients): https://rosap.ntl.bts.gov/view/dot/42490/dot_42490_DS1.pdf
+155. Volvo Trucks North America, US 6,680,672 B2 (drum growth with temperature and the pushrod stroke it costs; no measurement cited): https://patents.google.com/patent/US6680672B2/en
+156. Truck disc and drum listings, secondary: 430 × 45 discs Ferodo FCR323A 34.85 kg (https://spareto.com/products/ferodo-brake-disc/fcr323a), Beral BCR201A 31 kg (https://spareto.com/products/beral-brake-disc/bcr201a), LPR M2551V 35.0 kg (https://spareto.com/products/lpr-brake-disc/m2551v); the BPW 420 × 180 drum DT 10.13214, 51.098 kg (https://partnerportal.dieseltechnic.com/en/products/dt-10-13214-brake-drum), a lightweight one 40 kg (https://maxiparts.com.au/BPW0310967870-brake-drum-10-285-b252-4218-light-weight)
+157. BPW, "New disc brake TS2" flyer (TS2 4309, 430 × 45): https://www.bpw.de/uploads/tx_szdownloadcenter/New-disc-brake-TS2-Flyer-18291701e.pdf
+158. Wang Jianbo, Chen Bin, Wang Hengkai, He Cao, "The security of medium truck with Engine brake (Jacobs) driving through the mountain highway long downhill slope", MMAT 2012, Atlantis Press (the Yaxi highway tests): https://www.atlantis-press.com/article/5248.pdf
+159. SAE J1939-71, MAR2011, a copy hosted on a CODESYS forum (SPN 3839, SPN 242): https://forge.codesys.com/forge/talk/CODESYS-V2/thread/e3add933b3/dbf2/attachment/SAEJ1939_71.pdf
+160. Link Transportation Testing Technology (Shanghai), SAE J2522 dynamometer report 210717, BYD F3 front, material P43, 2021 (the Fade 1 and Fade 2 tables): https://safetybrakepads.com/wp-content/uploads/2025/09/Brake-Dynamometer-Test-Report-on-BYD-F3-FRONT-210717.pdf
+161. Ferodo Racing, car racing catalogue (compounds' average μ and working ranges): https://www.ferodoracing.com/catalogues-brochures/download/37/ferodo-car-racing-en
+162. Vdovin, Gustafsson, Sebben, coupled CFD and thermal simulation of a Volvo vented disc on an alpine descent, Int. J. Thermal Sciences, 2018 (heat partition; disc peak): https://research.chalmers.se/publication/503736/file/503736_Fulltext.pdf
+163. Brembo, aftermarket disc brochure (mountain-pass disc temperatures): https://bremboparts.com/cs/media/page/documents/054b56c7-7526-46f9-aa8c-addcdb67b690
+164. Topouris, Stamenković, Olphe-Galliard, Popović, Tirović, stationary-disc cooling, Strojniški vestnik 66(2020)1, 15-28 (Table 2's wetted areas; still-air `h`; `ε` 0.82; radiation): https://www.sv-jme.eu?ns_articles_pdf=/ns_articles/files/ojs/6002/public/6002-34967-1-PB.pdf&id=6349
+165. Chandrasekar, MSc thesis, Chalmers, 2026 (Table A.4: a vented disc's surface-averaged HTC at two speeds, CFD): https://odr.chalmers.se/bitstreams/617e68cb-fcfb-4bdf-a2fb-9391d5e64394/download
+166. Zedi, MSc thesis, University of the Witwatersrand, 2018 (a truck solid disc's heat paths at 2 kW): https://wiredspace.wits.ac.za/server/api/core/bitstreams/9ae1b339-dedd-4f53-ab9a-99e803f5e069/content
+167. John Deere, 6R row-crop quick reference guide, 6140R-6210R, 2021-04 (transmission and hydraulics capacities): https://secured.deere.com/assets/pdfs/common/qrg/6r-series-row-crop-tractors-6140r-6150r-6150rh-6170r-6190r-6210r.pdf
+168. Car disc and drum listings on Spareto, secondary: ATE 24.0125-0145.1, Brembo 09.9145.11, ATE 24.0110-0356.1, Brembo 08.B413.11 (Golf 7); Ferodo DDF2403C-1, Blue Print ADB114379, ATE 24.0124-0250.2 (F30); Brembo 14.D637.10, Blue Print ADT34719 (Hilux drum); Brembo 09.C243.10, 08.C539.11, 09.C644.11, 08.C540.11 (Transit V363); NK 203392 (330 × 32), e.g. https://spareto.com/products/brembo-brake-drum/14-d637-10. The Mustang GT PP's 380 × 34 at 34.4 lb: https://www.fordmuscle.com/news/ap-racing-2-piece-j-hook-discs-for-2015-mustang-gtpp-available-now/
+169. Belhocine, Bouchetara, thermal analysis of a disc brake, Mechanika 17(3), 2011 (Fig. 3, grey iron `c` against temperature): https://mechanika.ktu.lt/index.php/Mech/article/view/502/786
+170. Engineering ToolBox, "Specific Heat of Metals" (cast iron 0.46, carbon steel 0.49 kJ/kgK): https://www.engineeringtoolbox.com/specific-heat-metals-d_152.html
+171. Engineering ToolBox, "Engine Oil: Density and Specific Heat vs. Temperature": https://www.engineeringtoolbox.com/engine-oil-density-specific-heat-vs-temperature-d_2227.html
+172. Liu et al., wet clutch thermal model, ICMEIT 2017 (oil density 880 kg/m³, the authors' assumption): https://www.atlantis-press.com/article/25876607.pdf
+173. Valtra (AGCO), US 2012/0318620 A1 (a tractor's brake housing fed oil from the transmission housing): https://patents.google.com/patent/US20120318620A1/en
+174. US 8,600,636 (determining wet clutch temperature; μ against temperature): https://patents.google.com/patent/US8600636
+175. Ma et al., Industrial Lubrication and Tribology, 2022 (abstract: μ falls with ATF temperature): https://www.emerald.com/insight/content/doi/10.1108/ILT-01-2022-0012/full/html
+176. AP Racing, "Disc temperatures": https://apracing.com/race-car/brake-discs/disc-temperatures

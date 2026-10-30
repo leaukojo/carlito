@@ -13,8 +13,8 @@ Serves: the oversteer / understeer and yaw lesson, made visible by switching ESC
 lamp and an ESC-off switch on the bus beside `tcs_off`.
 State: done — nothing; next — phase 0; open findings — none.
 
-Independent of `2_brake_fade.md`; if fade lands, ESC's brake use
-heats the brakes through it with no extra code.
+The brake heat model has landed (`BrakeThermal`, `docs/vehicles.md` § Brake hardware): ESC's
+brake use heats the brakes through it with no extra code.
 
 ## Decisions for the user (asked in phase 0)
 

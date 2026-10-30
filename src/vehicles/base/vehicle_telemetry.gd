@@ -112,6 +112,9 @@ var fuel := 100.0                ## % remaining (contract 'fuel')
 ## boat (`BoatTelemetry.fuel_rate_model`); 0 elsewhere, where the contract does not declare it.
 var fuel_rate := 0.0
 var coolant := COOLANT_AMBIENT   ## degC (contract 'coolant')
+## degC, contract 'brake_temp': the hottest of the powered unit's own wheels' brake models
+## (`WheelDrive.fill_brake_temp`); ambient where a body has no thermal model or no wheels.
+var brake_temp := BrakeThermal.AMBIENT_C
 var battery := BATTERY_RESTING   ## V (contract 'battery' out; distinct from the 'in' warning LED)
 var status := 0                  ## u16 bitfield (contract 'status')
 

@@ -122,6 +122,35 @@ var _lens_report: Array = []   ## per-variant lens detection, so a bad lamp is d
 var _brake_report: Array = []  ## per-variant brakes against the tyre, the stall and the grade
 var _balance_report: Array = []  ## per-variant predicted handling balance (BalanceModel)
 
+## Brake heat per hardware class (`GroundDriveSpec` "Brake heat", `BrakeThermal`), docs/sources.md
+## § Brake heat's table: [front, rear], each [C J/K, G0 W/K, G1 W/K per m/s, ε, A_r m², curve].
+## ε 0.82 on a disc (an oxidised one) and the tractor's housing; 0 on a GSRS drum, whose `G`
+## carries its radiation. A baseline's `brake_heat` names its class; a variant overrides it.
+const BRAKE_HEAT := {
+	"saloon": [[4020.0, 0.99, 0.25, 0.82, 0.124, BrakeThermal.FadeCurve.PAD],
+			[2520.0, 0.61, 0.15, 0.82, 0.152, BrakeThermal.FadeCurve.PAD]],
+	"performance": [[6150.0, 1.38, 0.35, 0.82, 0.173, BrakeThermal.FadeCurve.PAD],
+			[5360.0, 1.42, 0.36, 0.82, 0.178, BrakeThermal.FadeCurve.PAD]],
+	# SUV / light commercial: a drum rear, GSRS-scaled.
+	"suv_lc": [[4450.0, 1.22, 0.31, 0.82, 0.153, BrakeThermal.FadeCurve.PAD],
+			[8360.0, 2.85, 0.13, 0.0, 0.0, BrakeThermal.FadeCurve.DRUM]],
+	"van": [[6320.0, 1.14, 0.28, 0.82, 0.142, BrakeThermal.FadeCurve.PAD],
+			[4570.0, 0.78, 0.20, 0.82, 0.195, BrakeThermal.FadeCurve.PAD]],
+	"pickup": [[6890.0, 1.47, 0.37, 0.82, 0.183, BrakeThermal.FadeCurve.PAD],
+			[4770.0, 1.35, 0.34, 0.82, 0.169, BrakeThermal.FadeCurve.PAD]],
+	"racing": [[6360.0, 1.42, 0.36, 0.82, 0.178, BrakeThermal.FadeCurve.RACE],
+			[4770.0, 1.23, 0.31, 0.82, 0.153, BrakeThermal.FadeCurve.RACE]],
+	# 3.5-5 t van (VAN_BASE).
+	"heavy_van": [[6000.0, 1.14, 0.28, 0.82, 0.142, BrakeThermal.FadeCurve.PAD],
+			[4960.0, 0.78, 0.20, 0.82, 0.195, BrakeThermal.FadeCurve.PAD]],
+	# 26 t chassis S-cam drums: GSRS's mean brake on both axles (the narrower steer drums flattered).
+	"chassis_drums": [[39300.0, 13.4, 0.625, 0.0, 0.0, BrakeThermal.FadeCurve.DRUM],
+			[39300.0, 13.4, 0.625, 0.0, 0.0, BrakeThermal.FadeCurve.DRUM]],
+	# Wet multi-discs in the rear-axle sump; the front is braked through MFWD and has none.
+	"tractor_wet": [[0.0, 0.0, 0.0, 0.0, 0.0, BrakeThermal.FadeCurve.NONE],
+			[93000.0, 4.0, 1.0, 0.82, 1.0, BrakeThermal.FadeCurve.WET]],
+}
+
 # --- family baselines (spec fields) ---------------------------------------------------
 const CAR_BASE := {
 	# cd 0.32 is a modern saloon; crr 0.012 is a passenger radial on asphalt.
@@ -214,6 +243,7 @@ const CAR_BASE := {
 	# parking grade is the rear tyres' (`BrakeSizing.park_grade`), past the 20 % R13-H grade. The
 	# pawl is a steel tooth sized past the driven tyres, so they slip first.
 	"brake_torque": 1450.0, "handbrake_torque": 1400.0, "park_pawl_torque": 3000.0,
+	"brake_heat": "saloon",
 	# Sixth is the top-speed control: 0.925 settles the sedan at 6025 rpm / 219.9 km/h.
 	# Gears 2-5 re-spread: 1.550 / 1.470 / 1.380 / 1.290 / 1.199.
 	"gear_ratios": [4.5, 2.903, 1.975, 1.431, 1.109, 0.925],
@@ -312,6 +342,7 @@ const TRUCK_BASE := {
 	# neutral while they are on (`Drivetrain.drive_inhibit`, set by TruckVehicle), not because the
 	# drums out-hold the engine. No pawl: the box parks on the spring brakes.
 	"brake_torque": 15500.0, "handbrake_torque": 7000.0, "park_pawl_torque": 0.0,
+	"brake_heat": "chassis_drums",
 	# ABS: mandatory on goods vehicles in the EU since 1991.
 	"abs_equipped": true,
 	# ASR, standard beside EBS on a goods vehicle: kept as equipment, whose work is on low grip. On
@@ -425,9 +456,11 @@ const VAN_BASE := {
 	"hill_hold": HillHold.Kind.ASSIST, "hill_hold_s": 3.0,
 	# A 3.5-5 t van's brakes: 5200 Nm a wheel is 1.4 g at 4.2 t, and they hold gear 1 at converter
 	# stall (BrakeSizing.stall_hold_margin), the fleet's thinnest at 1.02-1.04 on `delivery-flat` /
-	# `delivery`, which rests on the converter ratio below, an estimate. Handbrake: drum-in-hat rears, 4800 Nm a wheel, locks the
-	# rears; the parking grade is the rear tyres' (`BrakeSizing.park_grade`).
+	# `delivery`, which rests on the converter ratio below, an estimate. Handbrake: drum-in-hat
+	# rears, 4800 Nm a wheel, locks the rears; the parking grade is the rear tyres'
+	# (`BrakeSizing.park_grade`).
 	"brake_torque": 5200.0, "handbrake_torque": 4800.0, "park_pawl_torque": 8000.0,
+	"brake_heat": "heavy_van",
 	# Commercial radials, as TRUCK_BASE. Cornering stiffness peaks at 1.92x the static corner load, an
 	# estimate: no open LT / C-load MF set; `PKY2` ~1.4-1.8 on a tyre rated ~12 kN over a 4.2 t van's
 	# ~10.3 kN corner.
@@ -537,6 +570,7 @@ const TRACTOR_BASE := {
 	# of the same hardware at the wheel: re-referred, not enlarged, and every force (torque over
 	# radius) is unchanged.
 	"brake_torque": 15767.0, "handbrake_torque": 14667.0, "park_pawl_torque": 27500.0,
+	"brake_heat": "tractor_wet",
 	# No TC either: MFWD and the diff lock are a tractor's traction aids.
 	"tcs_equipped": false,
 	# A powershift hill hold (Valtra HillHold): held at rest in gear until the drive pedal is down
@@ -664,7 +698,7 @@ const VARIANTS := {
 	# the stall hold is grip-limited (rears spinning at peak grip against fronts holding at theirs:
 	# 0.94 and exactly 1.00, `BrakeSizing.stall_hold_margin`), so no brake size moves it. Undoing it
 	# waits on whether that check should count a spinning wheel at peak grip.
-	"sedan-sports": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "engine_inertia": 0.18, "mass": 1050.0, "torque_mul": 1.12, "final_drive": 4.1, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0, "converter_stall_ratio": 1.0},
+	"sedan-sports": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "engine_inertia": 0.18, "mass": 1050.0, "torque_mul": 1.12, "final_drive": 4.1, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0, "converter_stall_ratio": 1.0, "brake_heat": "performance"},
 	# Hot hatch: a helical front LSD (Quaife-class, ~2.5:1), so a front wheel a bump or a steer input
 	# peels still leaves its partner up to 2.5x its torque rather than an equal share.
 	# COMPROMISE: a converter held at ratio 1.0, a fluid coupling. Its reference, a Mk7 GTI, is a
@@ -675,7 +709,7 @@ const VARIANTS := {
 	# 0-100 goes as peak^-0.6 on the sedan, peak^-1.4 on the suv.
 	# Both SUVs: a Torsen-type centre (~3:1). Under launch squat the rear axle carries ~2x the
 	# front (2412 / 4956 N measured), inside 3:1, so the heavy axle is no longer capped by the light one.
-	"suv": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.62, "anti_roll_rate": 18000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "mass": 1500.0, "torque_mul": 1.05, "mu_lat": 0.88, "max_steer_deg": 34.0, "driven_rear": true, "centre_diff_bias": 3.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0},
+	"suv": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.62, "anti_roll_rate": 18000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "mass": 1500.0, "torque_mul": 1.05, "mu_lat": 0.88, "max_steer_deg": 34.0, "driven_rear": true, "centre_diff_bias": 3.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0, "brake_heat": "suv_lc"},
 	# 1.54 is the biggest multiplier in the family: 285 Nm through an AWD 1600 kg body.
 	# Off the COMPROMISE: the 36 kN/m pair split 27 / 9, the law on, equal tyres. Under roll steer its
 	# step sweep spins only the 100 km/h 30 % lifted cell the compromise spins too; BalanceModel.limit
@@ -686,9 +720,9 @@ const VARIANTS := {
 	# reads 1.15 (the Torsen carrying what its bias allows), but both pedals floored creep 0.12 m in
 	# 10 s (`measure_vehicles -- suv-luxury 30 stall`, 2026-10-24): the check over-reads this body.
 	# Undoing it waits on the check agreeing with the coupled solve.
-	"suv-luxury": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.62, "anti_roll_rate": 27000.0, "anti_roll_rate_rear": 9000.0, "mass": 1600.0, "torque_mul": 1.54, "mu_lat": 0.88, "max_steer_deg": 33.0, "driven_rear": true, "centre_diff_bias": 3.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0, "converter_stall_ratio": 1.0},
+	"suv-luxury": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.62, "anti_roll_rate": 27000.0, "anti_roll_rate_rear": 9000.0, "mass": 1600.0, "torque_mul": 1.54, "mu_lat": 0.88, "max_steer_deg": 33.0, "driven_rear": true, "centre_diff_bias": 3.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0, "converter_stall_ratio": 1.0, "brake_heat": "suv_lc"},
 	"taxi": {"family": "car", "mass": 1250.0, "front_weight": 0.60},
-	"police": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "mass": 1300.0, "torque_mul": 1.18, "final_drive": 4.0, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0, "converter_stall_ratio": 1.0},
+	"police": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "mass": 1300.0, "torque_mul": 1.18, "final_drive": 4.0, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "brake_torque": 1800.0, "converter_stall_ratio": 1.0, "brake_heat": "performance"},
 	# Open-wheelers: `wheel_x_out` measured per body against its own half-width at the wheel
 	# stations (re-drive after changing, it also steadies cornering). `cd` 0.70: exposed wheels +
 	# wing really do run ~2x a saloon's drag. `front_weight` 0.42: engine sits behind the driver;
@@ -726,10 +760,10 @@ const VARIANTS := {
 	# Shifting: the full-pedal pair at any pedal (no light map, kickdown or dwell). The sequential
 	# cuts the ignition 0.15 s through a shift (the torque interruption CAR_BASE's converter has no
 	# need of) and closes at its rating: on J 0.06 the rev drop already spans ~2 ticks, a dog box's
-	# near-instant engagement (estimate).
+	# near-instant engagement (estimate). A clutch multiplies nothing: `converter_stall_ratio` 1.0.
 	# `yaw_index` 0: no measured open-wheeler, so Jolt's tensor (docs/handling.md § Inertia).
-	"race": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.25, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": true, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
-	"race-future": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": false, "brake_torque": 2000.0, "park_pawl_torque": 0.0},
+	"race": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "converter_stall_ratio": 1.0, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.25, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": true, "brake_torque": 2000.0, "park_pawl_torque": 0.0, "brake_heat": "racing"},
+	"race-future": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "converter_stall_ratio": 1.0, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": false, "brake_torque": 2000.0, "park_pawl_torque": 0.0, "brake_heat": "racing"},
 	# Commercial bodies: RWD, governed at 180 like the real things (measured 198-200 ungoverned).
 	# Bars: the 36 kN/m pair split 24 / 12 kN/m: the corner pass saturates the front first (0.98 /
 	# 0.83 at 0.72 g), LLTD 58 %, roll 4.0 deg, no wheel lifted; BalanceModel.corner_limit +20.4 %.
@@ -737,13 +771,13 @@ const VARIANTS := {
 	# Full-size light-commercial brakes, each its own reference's at 100 bar, re-referred to the drawn
 	# 0.36 m (docs/sources.md, Brake hardware): the Transit's 2911 on `van`, the F-150's 3385 on both
 	# pickups. Handbrake and pawl stay the SUV class's (no parking hardware sourced).
-	"van": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.58, "anti_roll_rate": 24000.0, "anti_roll_rate_rear": 12000.0, "mu_lat": 0.88, "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2911.0, "handbrake_torque": 1700.0},
+	"van": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.58, "anti_roll_rate": 24000.0, "anti_roll_rate_rear": 12000.0, "mu_lat": 0.88, "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2911.0, "handbrake_torque": 1700.0, "brake_heat": "van"},
 	# `ride_lift` 0.08 on the flatbeds: their arches are drawn shallower than the tyre, so at the
 	# flush ride height the rear wheels broke through the bed floor.
 	# `yaw_index` 0.94, the measured pickups' median (docs/handling.md § Inertia): the empty bed
 	# leaves the mass forward.
-	"pickup": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 14000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "ride_lift": 0.08, "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 3385.0, "handbrake_torque": 1700.0},
-	"pickup-flat": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 14000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "ride_lift": 0.08, "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 3385.0, "handbrake_torque": 1700.0},
+	"pickup": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 14000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "ride_lift": 0.08, "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 3385.0, "handbrake_torque": 1700.0, "brake_heat": "pickup"},
+	"pickup-flat": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 14000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "ride_lift": 0.08, "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 3385.0, "handbrake_torque": 1700.0, "brake_heat": "pickup"},
 	# heavy vans: car family, van feel (VAN_BASE, not CAR_BASE) — these are 4-5 t vehicles
 	"delivery": {"family": "car", "base": "van", "mass": 4200.0},
 	"delivery-flat": {"family": "car", "base": "van", "com_y": 0.55, "ride_lift": 0.08, "mass": 4000.0},
@@ -1044,7 +1078,8 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	if susp.has("ride_hz"):
 		_derive_springs(spec, gd, susp)
 	_derive_link_slopes(spec, gd, susp, sag)
-	_brakes(spec, gd, get_f, String(ov.get("_id", "")), sag)
+	_brakes(spec, gd, get_f, String(ov.get("_id", "")), sag,
+			String(ov.get("brake_heat", b["brake_heat"])))
 	_balance(spec, String(ov.get("_id", "")))
 
 	spec.headlight_paths.assign(_lamp_paths["headlight_paths"])
@@ -1122,9 +1157,24 @@ func _wheel_positions(geo: Dictionary, gd: GroundDriveSpec, sag: float, x_out: f
 ## The declared brake hardware (Nm per wheel; a variant overrides its baseline's class), with only
 ## the axle split derived (`_front_brake_share`). `_brake_report` prints what `BrakeSizing` makes
 ## of it: capacity against the tyre, the stall hold, the rear lock and the parking grade;
-## `test_vehicle_catalog` is the authoritative check.
+## `test_vehicle_catalog` is the authoritative check. `heat_class` names its `BRAKE_HEAT` figures.
 func _brakes(spec: VehicleSpec, gd: GroundDriveSpec, get_f: Callable, id: String,
-		sag: float) -> void:
+		sag: float, heat_class: String) -> void:
+	var heat: Array = BRAKE_HEAT[heat_class]
+	var f: Array = heat[0]
+	var r: Array = heat[1]
+	gd.brake_heat_capacity = f[0]
+	gd.brake_cooling_g0 = f[1]
+	gd.brake_cooling_g1 = f[2]
+	gd.brake_emissivity = f[3]
+	gd.brake_radiating_area = f[4]
+	gd.brake_fade_curve = f[5]
+	gd.brake_heat_capacity_rear = r[0]
+	gd.brake_cooling_g0_rear = r[1]
+	gd.brake_cooling_g1_rear = r[2]
+	gd.brake_emissivity_rear = r[3]
+	gd.brake_radiating_area_rear = r[4]
+	gd.brake_fade_curve_rear = r[5]
 	gd.brake_torque = get_f.call("brake_torque")
 	gd.handbrake_torque = get_f.call("handbrake_torque")
 	gd.park_pawl_torque = get_f.call("park_pawl_torque")

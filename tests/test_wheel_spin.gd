@@ -822,6 +822,104 @@ func test_brakes_decelerate_toward_zero_and_never_reverse_the_spin() -> void:
 	assert_float(w.omega).is_equal(0.0)
 
 
+# --- brake heat: the reacted torque and the lump it heats ----------------------------
+
+## A brake with cooling and radiation off, so the heat in is all `C ΔT`.
+static func _insulated_brake() -> BrakeThermal.Figures:
+	return BrakeThermal.Figures.new(4000.0, 0.0, 0.0, 0.0, 0.0, BrakeThermal.FadeCurve.PAD)
+
+
+func test_the_settle_reports_the_torque_the_brake_reacted() -> void:
+	# Too weak to stop the wheel: it reacts the whole commanded torque.
+	var w := _wheel()
+	w.omega = 50.0
+	w._integrate_spin(0.0, 0.0, 300.0, TICK, 0.0)
+	assert_float(w.brake_reacted).is_equal_approx(300.0, 1e-6)
+	# Strong enough to stop it: only the spin it took, over the compliance.
+	var stop := _wheel()
+	stop.omega = 1.0
+	stop._integrate_spin(0.0, 0.0, 1.0e6, TICK, 0.0)
+	assert_float(stop.omega).is_equal(0.0)
+	assert_float(stop.brake_reacted).is_equal_approx(1.0 / stop.spin_compliance, 1e-6)
+
+
+func test_a_brake_heats_by_its_reacted_torque_at_the_settled_spin() -> void:
+	var w := _wheel()
+	w.brake_figures = _insulated_brake()
+	w.omega = 50.0
+	w._integrate_spin(0.0, 0.0, 300.0, TICK, 0.0)
+	assert_float(w.brake_settled_spin).is_equal(absf(w.omega))
+	w.heat_brake(20.0, TICK)
+	assert_float((w.brake_temp - BrakeThermal.AMBIENT_C) * 4000.0) \
+			.is_equal_approx(300.0 * absf(w.omega) * TICK, 1e-6)
+	# Stopped by its brake this tick: it reacted torque, but at zero spin dissipates nothing.
+	var stop := _wheel()
+	stop.brake_figures = _insulated_brake()
+	stop.omega = 1.0
+	stop._integrate_spin(0.0, 0.0, 1.0e6, TICK, 0.0)
+	assert_float(stop.brake_reacted).is_greater(0.0)
+	stop.heat_brake(20.0, TICK)
+	assert_float(stop.brake_temp).is_equal(BrakeThermal.AMBIENT_C)
+
+
+func test_a_brake_takes_only_its_friction_share_as_heat() -> void:
+	var w := _wheel()
+	w.brake_figures = _insulated_brake()
+	w.brake_friction_share = 0.75
+	w.omega = 50.0
+	w._integrate_spin(0.0, 0.0, 300.0, TICK, 0.0)
+	var power := w.brake_reacted * 0.75 * w.brake_settled_spin
+	w.heat_brake(20.0, TICK)
+	assert_float((w.brake_temp - BrakeThermal.AMBIENT_C) * 4000.0).is_equal_approx(power * TICK, 1e-6)
+
+
+func test_a_retarders_share_and_a_still_wheel_heat_nothing() -> void:
+	var w := _wheel()
+	w.brake_figures = _insulated_brake()
+	w.brake_friction_share = 0.0
+	w.omega = 50.0
+	w._integrate_spin(0.0, 0.0, 300.0, TICK, 0.0)
+	w.heat_brake(20.0, TICK)
+	assert_float(w.brake_temp).is_equal(BrakeThermal.AMBIENT_C)
+	# Held still under its brake, nothing turning: it dissipates nothing.
+	var held := _wheel()
+	held.brake_figures = _insulated_brake()
+	held._integrate_spin(0.0, 0.0, 1.0e6, TICK, 0.0)
+	held.heat_brake(0.0, TICK)
+	assert_float(held.brake_temp).is_equal(BrakeThermal.AMBIENT_C)
+
+
+func test_a_reset_brake_is_back_at_ambient() -> void:
+	var w := _wheel()
+	w.brake_figures = _insulated_brake()
+	w.brake_temp = 700.0
+	w.brake_reacted = 5.0
+	w.brake_settled_spin = 5.0
+	w.brake_friction_share = 0.5
+	w.reset()
+	assert_float(w.brake_temp).is_equal(BrakeThermal.AMBIENT_C)
+	assert_float(w.brake_reacted).is_equal(0.0)
+	assert_float(w.brake_settled_spin).is_equal(0.0)
+	assert_float(w.brake_friction_share).is_equal(1.0)
+	assert_float(w.brake_fade()).is_equal(1.0)
+
+
+func test_each_axle_takes_its_own_brake_figures() -> void:
+	var gd := _spec()
+	gd.brake_heat_capacity = 4000.0
+	gd.brake_fade_curve = BrakeThermal.FadeCurve.PAD
+	gd.brake_heat_capacity_rear = 9000.0
+	gd.brake_fade_curve_rear = BrakeThermal.FadeCurve.DRUM
+	var front := WheelScript.new(Vector3(0.0, 0.0, -1.0), true, false, null, 300.0)
+	front.apply_suspension(gd)
+	var rear := WheelScript.new(Vector3(0.0, 0.0, 1.0), false, true, null, 300.0)
+	rear.apply_suspension(gd)
+	assert_float(front.brake_figures.capacity).is_equal(4000.0)
+	assert_float(rear.brake_figures.capacity).is_equal(9000.0)
+	assert_array(Array(rear.brake_figures.fade)) \
+			.is_equal(Array(BrakeThermal.curve_points(BrakeThermal.FadeCurve.DRUM)))
+
+
 func test_airborne_spin_is_pure_drive_and_brake() -> void:
 	# No contact = no reaction and no slip velocity; the wheel just spins up under drive.
 	var spec := _spec()

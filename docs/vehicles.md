@@ -272,6 +272,14 @@ Every trailer's service brake is apportioned to its tractor: a full demand brake
 the deceleration the tractor's brakes make on its coupled load (`box_spec.tres`), so neither end
 pushes the other.
 
+**Heat and fade.** Each friction brake is one lumped temperature (`BrakeThermal`, a simple model,
+labelled), heated by the work its reacted torque does on the wheel's spin (`RayWheel.heat_brake`,
+so a locked wheel heats nothing) and cooled by the air with road speed. Past its class's onset the
+foot brake loses torque by the curve's factor while the pedal map stays cold, so a faded brake asks
+more pedal. The retarder and engine braking heat nothing; parking brakes heat but never fade; a
+trailer heats and fades unpublished. Figures: `docs/sources.md` § Brake heat; runs and the check
+against field runs: `docs/vehicle_measurements.md` § Brake heat.
+
 **P (park).** Gear byte 0xFE, a value RAMN never sends. On a gearbox with a pawl
 (`park_pawl_torque` > 0) it engages P; on one without, N. Below `WheelDrive.PAWL_ENGAGE_SPEED`
 (1 m/s) the pawl locks the gearbox output to the case, and above it the pawl ratchets over the

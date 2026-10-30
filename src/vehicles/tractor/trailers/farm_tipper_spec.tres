@@ -89,6 +89,16 @@ mu_lat = 0.95
 load_sensitivity = 0.08
 brake_torque = 9229.0
 handbrake_torque = 2307.0
+; BRAKE HEAT (BrakeThermal; docs/sources.md § Brake heat): the 406 x 120 drum, GSRS's mean brake
+; scaled by mass (an estimate); its `G` carries the radiation, so no `ε`.
+brake_heat_capacity = 24800.0
+brake_heat_capacity_rear = 24800.0
+brake_cooling_g0 = 8.44
+brake_cooling_g0_rear = 8.44
+brake_cooling_g1 = 0.39
+brake_cooling_g1_rear = 0.39
+brake_fade_curve = 3
+brake_fade_curve_rear = 3
 
 [resource]
 script = ExtResource("1_spec")

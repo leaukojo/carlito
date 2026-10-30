@@ -276,6 +276,7 @@ func _update_telemetry(input: VehicleInput, delta: float) -> void:
 	telemetry.ground = true  # train/boat/drone overwrite ST_GROUND in their own _tick_extras
 	if drive != null:
 		drive.fill_slip(telemetry)
+		drive.fill_brake_temp(telemetry)
 
 	telemetry.pos_x = global_position.x
 	telemetry.pos_z = global_position.z

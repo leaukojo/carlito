@@ -34,7 +34,8 @@ const DRIVE_OVERRIDABLE := {
 	"hill_hold": "hill_hold",
 }
 ## The stepped box's own fields a CVT variant clears (`Gen._cvt`): its ratio is drivetrain state.
-const CVT_CLEARED := {"launch_engage_s": 0.0, "skip_shifts": 0.0, "start_gear_max": 0.0}## Baseline-only fields: overrides silently dropped (test_no_variant_overrides catches this).
+const CVT_CLEARED := {"launch_engage_s": 0.0, "skip_shifts": 0.0, "start_gear_max": 0.0}
+## Baseline-only fields: overrides silently dropped (test_no_variant_overrides catches this).
 const SPEC_BASELINE_ONLY := {
 	"idle_rpm": "idle_rpm", "redline_rpm": "redline_rpm", "reverse_ratio": "reverse_ratio",
 	"efficiency": "efficiency", "engine_brake_frac": "engine_brake_frac",
@@ -87,6 +88,7 @@ const META_KEYS := [
 	"ride_hz",        # spring derivation input over the baseline's (_suspension_recipe)
 	"model",          # the variant whose GLB, lamps and hand-authored scene it is built on
 	"cvt_range_kmh", "cvt_range_rpm", "cvt_accel_ms2",  # a CVT's ranges and rate (`_cvt`)
+	"brake_heat",     # the brake-heat class (`Gen.BRAKE_HEAT`), pinned by its own test
 	"_id",            # stamped in by `_ready`, never authored
 ]
 
@@ -226,6 +228,24 @@ func test_every_entry_that_sets_a_rears_roll_steer_sets_its_compliance_steer() -
 			assert_bool(entry.has("compliance_steer_rear")) \
 					.override_failure_message("%s sets roll_steer_rear without compliance_steer_rear"
 						% id).is_true()
+
+
+## Each body's brake heat figures are its class's (`Gen.BRAKE_HEAT`, the variant's `brake_heat` over
+## its baseline's), front and rear.
+func test_brake_heat_figures_are_the_bodys_class() -> void:
+	const FIELDS := ["brake_heat_capacity", "brake_cooling_g0", "brake_cooling_g1",
+			"brake_emissivity", "brake_radiating_area", "brake_fade_curve"]
+	for variant: String in Gen.VARIANTS:
+		var ov: Dictionary = Gen.VARIANTS[variant]
+		var b: Dictionary = Gen.BASELINES[String(ov.get("base", ov["family"]))]
+		var heat: Array = Gen.BRAKE_HEAT[String(ov.get("brake_heat", b["brake_heat"]))]
+		var gd := _spec_of(variant).ground_drive
+		for axle in 2:
+			for k in FIELDS.size():
+				var field: String = FIELDS[k] + ("_rear" if axle == 1 else "")
+				assert_float(float(gd.get(field))) \
+						.override_failure_message("%s_spec.tres %s" % [variant, field]) \
+						.is_equal(float(heat[axle][k]))
 
 
 ## Baseline-only overrides are silently dropped (same invisible drift, other direction).
