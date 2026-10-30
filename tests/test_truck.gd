@@ -252,8 +252,6 @@ func test_the_rating_is_the_gearbox_output_figure_through_the_final_drive() -> v
 	assert_float(DrivetrainScript.retarder_rating(semi)).is_equal_approx(2120.625, 1e-3)
 	var garbage: VehicleSpec = load("res://src/vehicles/kenney/garbage-truck_spec.tres")
 	assert_float(DrivetrainScript.retarder_rating(garbage)).is_equal_approx(1203.0, 1e-3)
-	# Its share of the whole foot brake, what the trailer is asked for: 2 x 2120.6 over 4 x 15500.
-	assert_float(DrivetrainScript.retarder_fraction(semi)).is_equal_approx(0.06841, 1e-4)
 	for spec in _truck_specs():
 		assert_float(spec.ground_drive.retarder_rating_nm).is_greater(0.0)
 
@@ -431,7 +429,6 @@ func test_every_truck_specs_retarder_stays_an_auxiliary_brake() -> void:
 			.override_failure_message("%s: the retarder has become a second service brake"
 				% spec.resource_path) \
 			.is_less(rear_brake)
-		assert_float(DrivetrainScript.retarder_fraction(spec)).is_between(0.0, 1.0)
 
 
 func test_only_the_truck_declares_a_retarder() -> void:
@@ -891,12 +888,9 @@ func test_a_coupled_trailer_on_the_north_american_unit_publishes_honest_zeros() 
 
 
 func test_the_trailer_still_brakes_on_the_unit_with_no_bus() -> void:
-	# The pneumatic lines are not the data pair: only the publishing goes dark, so the EBS11 blend the
-	# trailer's own wheels brake with is computed the same way on both units.
-	var frac := DrivetrainScript.retarder_fraction(
-			load("res://src/vehicles/truck/conventional_spec.tres") as VehicleSpec)
-	assert_float(TruckT.trailer_brake_blend(0.6, 0, frac)).is_equal_approx(0.6, 1e-6)
-	assert_float(TruckT.trailer_brake_blend(0.0, 100, frac)).is_equal_approx(frac, 1e-6)
+	# The pneumatic lines are not the data pair: only the publishing goes dark, so the EBS11 demand
+	# the trailer's own wheels brake with is computed the same way on both units.
+	assert_float(TruckT.ebs11_demand(0.6, 0.0)).is_equal_approx(0.6, 1e-6)
 	# ...and a coupled trailer draws air off either unit's reservoirs, for the same reason.
 	assert_float(TruckT.trailer_air_draw(true, 0.0)).is_greater(0.0)
 

@@ -51,26 +51,25 @@ VehicleTelemetry` adds chassis, body-network and trailer-bus "out" fields.
   it (a 1.2 margin, `box_spec.tres`) and stops well under the decel floor: both fail. `park` and `floor` drain
   honestly (key off, brake pumped); `roll` writes `air_primary = 0` (a burst line, the model has
   no leak).
-- Retarder is real driveline torque, not an indicator bit: math on `Drivetrain`,
-  `WheelDrive` adds it to driven wheels' brake torque, `RayWheel` integrates it,
-  `GroundDriveSpec.retarder_equipped` gates it to truck specs only. Can't skid the axle
-  (`RETARDER_SLIP_TARGET` caps the one-tick spin change at 0.10 slip). Rated by its own
-  hardware, `retarder_rating_nm` at the gearbox output, reaching each driven wheel through
-  `final_drive` (`Drivetrain.retarder_rating`): flat-road retardation at the body's own mass is
-  `rating * final_drive / r / m`.
+- Retarder is real driveline torque, not an indicator bit: math on `Drivetrain`, `WheelDrive` adds
+  it to driven wheels' brake torque, `RayWheel` integrates it, `GroundDriveSpec.retarder_equipped`
+  gates it to truck specs only. Can't skid the axle (`RETARDER_SLIP_TARGET` caps the one-tick spin
+  change at 0.10 slip). Rated by its own hardware, `retarder_rating_nm` at the gearbox output,
+  reaching each driven wheel through `final_drive` (`Drivetrain.retarder_rating`): flat-road
+  retardation at the body's own mass is `rating * final_drive / r / m`.
 
   | Body | Rating at the output | Per driven wheel | Retardation |
   | --- | --- | --- | --- |
   | `garbage-truck` / `firetruck` (8 / 7.5 t) | 600 Nm, medium-duty output retarder | 1203 Nm | 0.84 / 0.89 m/s² |
-  | `semi` / `semi-conventional` bobtail (8 t) | 1450 Nm, low end of the hydraulic class | 2120 Nm | 1.47 m/s² (0.81 coupled to the 24 t box, its trailer braking its share) |
+  | `semi` / `semi-conventional` bobtail (8 t) | 1450 Nm, low end of the hydraulic class | 2120 Nm | 1.47 m/s² (0.37 coupled to the 24 t box, which it leaves unbraked) |
 
   `test_truck` pins a **0.7-1.6 m/s²** band per shipped spec at its own mass (past ~1.6 an
   auxiliary brake stands in for the foot brake) and the retarder under its axle's service brake.
-  A trailer is asked for the same share of its brakes (`Drivetrain.retarder_fraction`, the
-  retarder's torque over the tractor's whole foot brake, 0.068 on the semis); every trailer's
-  service brake is apportioned to its tractor (`box_spec.tres`), so at that shared fraction both
-  ends decelerate alike. `retarder_state` reports torque applied, not the request (J1939 SPN 520
-  is negative; the contract publishes the magnitude).
+  The trailer is asked for nothing (`TruckTelemetry.ebs11_demand`): an endurance brake operates no
+  trailer service brake and its coupling force goes uncompensated (R13 5.2.1.21, 5.2.1.28.6;
+  `docs/sources.md` § The retarder and the trailer's brake). The pushed rig holds straight on snow;
+  ice jackknifes it on the foot brake alike (`docs/vehicle_measurements.md` § Brake heat: the
+  kingpin column). `retarder_state` is torque applied (SPN 520's magnitude).
 - `axle_load` is read out of the sim: summed `RayWheel.suspension_force` on the rear axle in
   kg (SPN 582, `WheelDrive.rear_suspension_force`), never a mass lookup. `warn` **11500** is the
   EU 11.5 t drive-axle limit, `warn_side: high`. The tractor publishes it too (its rear is the
@@ -240,7 +239,7 @@ bidirectional by design.
 | `trailer_ebs_fault` | in | Injected trailer EBS fault. Mirrored verbatim like DM1; nothing in the game ever sets it |
 | `trailer_connected` | out | The coupling claim — see below |
 | `trailer_axle_load` | out | SPN 582 on the towed unit. Read out of the sim: trailer's own bogie suspension force |
-| `trailer_brake_demand` | out | EBS11, towing→towed. A report of the blend the tractor sent, and what the trailer's wheels really brake with |
+| `trailer_brake_demand` | out | EBS11, towing→towed. A report of the demand the tractor sent, and what the trailer's wheels really brake with |
 | `trailer_abs` | out | EBS21, towed→towing. Read out of the sim: the trailer's own ABS holding a wheel at `RayWheel.ABS_SLIP` this tick |
 
 - `trailer_connected` is a claim, not "something is on the fifth wheel": needs the trailer
@@ -250,11 +249,8 @@ bidirectional by design.
 - No `trailer_type`: ISO 11992 publishes no body type. Which trailer is on the back shows
   through mass and which tractor-side signals it moves; the tractor has `implement_type`
   because ISO 11783 carries a real device class.
-- Brake demand blends foot brake with retarder arithmetically (a driveline brake acts on the
-  tractor's driven axle alone, so without a share on the bus the trailer would push 8 t of
-  tractor). A coupled trailer draws air through the chassis' reservoir model, dipping
-  AIR1/AIR2 by ~3 bar. Both read signals are read after the trailer's wheels integrate;
-  bobtail publishes a real 0/false on all four every tick (`clear_trailer_bus`).
+- A coupled trailer draws air through the chassis' reservoir model (AIR1/AIR2 dip ~3 bar). Both
+  read signals follow the trailer's wheel tick; bobtail publishes 0/false on all four (`clear_trailer_bus`).
 
 ### SAE J2497: the North American variant
 

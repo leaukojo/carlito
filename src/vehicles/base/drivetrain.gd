@@ -943,18 +943,6 @@ static func retarder_rating(p_spec: VehicleSpec) -> float:
 	return maxf(gd.retarder_rating_nm, 0.0) * p_spec.final_drive / maxf(1.0, _driven_rears(gd))
 
 
-## The retarder at full as a share of the whole foot brake's capacity (every wheel's): what it asks
-## of a towed trailer's brakes. A trailer apportioned to its tractor brakes like it at any shared
-## fraction (box_spec.tres), so the two ends decelerate alike
-## (`TruckTelemetry.trailer_brake_blend`).
-static func retarder_fraction(p_spec: VehicleSpec) -> float:
-	var gd := p_spec.ground_drive
-	if gd == null or gd.brake_torque <= 0.0 or gd.wheel_positions.is_empty():
-		return 0.0
-	return clampf(retarder_rating(p_spec) * _driven_rears(gd)
-			/ (gd.brake_torque * gd.wheel_positions.size()), 0.0, 1.0)
-
-
 static func _driven_rears(gd: GroundDriveSpec) -> int:
 	if not gd.driven_rear:
 		return 0

@@ -471,6 +471,16 @@ func wheel_steer_angle(w: RayWheel, gd: GroundDriveSpec) -> float:
 			if w.steered else 0.0) + w.roll_steer() + w.compliance_steer()
 
 
+## Pure: the hand-steering lock (deg) at `ground_speed` (m/s): `max_steer_deg` with the high-speed
+## falloff toward `min_steer_frac` by `steer_falloff_speed` (min_steer_frac == 1.0 disables it).
+static func steer_lock_deg(gd: GroundDriveSpec, ground_speed: float) -> float:
+	var steer_falloff := 1.0
+	if gd.steer_falloff_speed > 0.0:
+		steer_falloff = lerpf(1.0, gd.min_steer_frac,
+				clampf(absf(ground_speed) / gd.steer_falloff_speed, 0.0, 1.0))
+	return gd.max_steer_deg * steer_falloff
+
+
 ## The guidance path's slew TARGET, in the unit of `input.steer` ([-1, 1], + = right): the
 ## untapered lock angle for the commanded curvature over that lock, so `BaseVehicle` slews it at
 ## `spec.steer_speed` like hand-steering. NAN with no guidance command or no wheelbase, so the
@@ -496,12 +506,7 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 		# taper, so the driven radius tracks the command at any speed.
 		_applied_steer = -steer * deg_to_rad(gd.max_steer_deg)
 	else:
-		# High-speed steering falloff (min_steer_frac == 1.0 disables it).
-		var steer_falloff := 1.0
-		if gd.steer_falloff_speed > 0.0:
-			steer_falloff = lerpf(1.0, gd.min_steer_frac,
-					clampf(absf(ground_speed) / gd.steer_falloff_speed, 0.0, 1.0))
-		_applied_steer = -steer * deg_to_rad(gd.max_steer_deg * steer_falloff)
+		_applied_steer = -steer * deg_to_rad(steer_lock_deg(gd, ground_speed))
 
 	var space := body.get_world_3d().direct_space_state
 	retarder_torque_applied = 0.0

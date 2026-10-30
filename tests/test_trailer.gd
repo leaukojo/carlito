@@ -13,7 +13,6 @@ const SemiScript := preload("res://src/vehicles/truck/semi.gd")
 const FifthWheelScript := preload("res://src/vehicles/truck/fifth_wheel.gd")
 const CatalogScript := preload("res://src/vehicles/vehicle_catalog.gd")
 const TruckT := preload("res://src/vehicles/truck/truck_telemetry.gd")
-const DrivetrainScript := preload("res://src/vehicles/base/drivetrain.gd")
 const ContractScript := preload("res://src/bridge/contract.gd")
 const TowedBodyScript := preload("res://src/vehicles/base/towed_body.gd")
 const TipperScript := preload("res://src/vehicles/truck/trailers/tipper.gd")
@@ -573,60 +572,25 @@ func test_every_trailer_clears_the_cab_all_the_way_round() -> void:
 		trailer.free()
 
 
-# --- ISO 11992: the EBS11 brake-demand blend ----------------------------------
+# --- ISO 11992: the EBS11 brake demand ----------------------------------------
 
 func test_the_foot_brake_alone_is_the_whole_demand() -> void:
-	# With the retarder released the tractor sends the pedal and nothing else, so a driver who
-	# never touches the stalk sees TBRK track the brake exactly.
-	var frac := _retarder_frac()
-	assert_float(TruckT.trailer_brake_blend(0.0, 0, frac)).is_equal(0.0)
-	assert_float(TruckT.trailer_brake_blend(0.4, 0, frac)).is_equal_approx(0.4, 1e-9)
-	assert_float(TruckT.trailer_brake_blend(1.0, 0, frac)).is_equal_approx(1.0, 1e-9)
+	# The tractor sends the pedal and nothing else, so TBRK tracks the brake exactly; the retarder
+	# has no input here at all (R13 5.2.1.21: an endurance brake operates no trailer service brake).
+	assert_float(TruckT.ebs11_demand(0.0, 0.0)).is_equal(0.0)
+	assert_float(TruckT.ebs11_demand(0.4, 0.0)).is_equal_approx(0.4, 1e-9)
+	assert_float(TruckT.ebs11_demand(1.0, 0.0)).is_equal_approx(1.0, 1e-9)
 
 
-func test_the_retarder_asks_the_trailer_for_the_same_fraction_it_is_making_itself() -> void:
-	# The share is arithmetic: a retarder at full is `retarder_fraction` of the tractor's own brake
-	# capacity, so it asks the trailer for that same fraction of the trailer's brakes and the two ends
-	# scrub at matched fractions. Read off the shipped unit, so re-rating moves both together.
-	var frac := _retarder_frac()
-	assert_float(TruckT.trailer_brake_blend(0.0, 100, frac)).is_equal_approx(frac, 1e-9)
-	assert_float(TruckT.trailer_brake_blend(0.0, 50, frac)).is_equal_approx(frac * 0.5, 1e-9)
-	assert_float(TruckT.trailer_brake_blend(0.0, 100, frac)).is_greater(0.05)
-
-
-func test_the_blend_adds_and_saturates_at_a_full_application() -> void:
-	# Both consumers push the same channel, and it is monotone in each — a rig cannot brake the
-	# trailer harder than the trailer's own brakes.
-	var frac := _retarder_frac()
-	var pedal_only := TruckT.trailer_brake_blend(0.5, 0, frac)
-	assert_float(TruckT.trailer_brake_blend(0.5, 100, frac)).is_greater(pedal_only)
-	# An application within the retarder's share of full already saturates.
-	assert_float(TruckT.trailer_brake_blend(1.0 - frac * 0.5, 100, frac)).is_equal(1.0)
-	assert_float(TruckT.trailer_brake_blend(1.0, 100, frac)).is_equal(1.0)
+func test_roll_stability_asks_at_least_its_own_application() -> void:
+	# Stabilisation is the one automatic trailer application R13 5.2.1.21 allows: the higher of the
+	# two wins, they never add.
+	assert_float(TruckT.ebs11_demand(0.0, 0.3)).is_equal_approx(0.3, 1e-9)
+	assert_float(TruckT.ebs11_demand(0.5, 0.3)).is_equal_approx(0.5, 1e-9)
+	assert_float(TruckT.ebs11_demand(0.2, 0.6)).is_equal_approx(0.6, 1e-9)
 	# Garbage on either input is sanitized like every other request in this project.
-	assert_float(TruckT.trailer_brake_blend(-2.0, -50, frac)).is_equal(0.0)
-	assert_float(TruckT.trailer_brake_blend(9.0, 900, frac)).is_equal(1.0)
-
-
-func test_the_demand_inherits_the_retarders_speed_fade_for_free() -> void:
-	# The blend reads retarder_state (what actually ran, after the fade and the anti-lock cap), not the
-	# request — so at walking pace, where the retarder has faded to nothing, it stops asking the
-	# trailer for anything.
-	var semi := _semi()
-	var spec: VehicleSpec = semi.get("spec")
-	var rating := DrivetrainScript.retarder_rating(spec)
-	var frac := DrivetrainScript.retarder_fraction(spec)
-	var rated := rating * 2.0
-	var crawling := roundi(DrivetrainScript.retarder_pct(
-			DrivetrainScript.retarder_demand(1.0, 0.3, rating) * 2.0, rated))
-	assert_int(crawling).override_failure_message(
-			"the retarder should have faded out at walking pace").is_equal(0)
-	assert_float(TruckT.trailer_brake_blend(0.0, crawling, frac)).is_equal(0.0)
-	var rolling := roundi(DrivetrainScript.retarder_pct(
-			DrivetrainScript.retarder_demand(1.0, 20.0, rating) * 2.0, rated))
-	assert_int(rolling).is_equal(100)
-	assert_float(TruckT.trailer_brake_blend(0.0, rolling, frac)).is_greater(0.0)
-	semi.free()
+	assert_float(TruckT.ebs11_demand(-2.0, -0.5)).is_equal(0.0)
+	assert_float(TruckT.ebs11_demand(9.0, 0.0)).is_equal(1.0)
 
 
 # --- the trailer brake lag: chambers behind the pedal -------------------------
@@ -654,7 +618,7 @@ func test_the_chambers_fill_and_vent_at_their_two_stated_rates() -> void:
 
 
 func test_the_lag_never_leads_or_exceeds_the_command() -> void:
-	# A rate limit, not a filter with overshoot in it: the tractor's blend stays the ceiling on what
+	# A rate limit, not a filter with overshoot in it: the tractor's demand stays the ceiling on what
 	# the trailer brakes with, and a part application settles exactly there.
 	var dt := 1.0 / 60.0
 	var applied := 0.0
@@ -1743,9 +1707,3 @@ func test_a_trailers_lamps_light_from_the_bits_the_tractor_hands_down() -> void:
 			.override_failure_message("%s: the right indicator lit with the left" % path) \
 			.is_equal_approx(LampSet.TURN_OFF_ENERGY, 1e-5)
 		trailer.free()
-
-
-## The shipped cab-over's retarder share of its own brake (`Drivetrain.retarder_fraction`).
-func _retarder_frac() -> float:
-	return DrivetrainScript.retarder_fraction(
-			load("res://src/vehicles/truck/semi_spec.tres") as VehicleSpec)

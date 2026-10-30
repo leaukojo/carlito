@@ -196,6 +196,8 @@ var _dsc_row := {}
 var _dsc_rows: Array[Dictionary] = []
 var _dsc_doc := false                 ## `doc=brake_fade`: rewrite the region at the end
 var _dsc_trailer: TowedBody = null
+var _dsc_host: TowHost = null
+var _dsc_artic := 0.0                 ## rad, the hold's largest |articulation| (`TowHost.articulation`)
 var _dsc_check := false               ## `doc=brake_check`: rewrite that region at the end
 var _dsc_job := {}                    ## the current job, its flags (`DOC_CHECK_JOBS`' keys)
 var _dsc_shift := 0.0                 ## °C, the job's `amb` less the model's: on every reported brake
@@ -1250,7 +1252,10 @@ func _print_ascent(gain: float) -> void:
 ## box holds no fixed gear), `retarder` (a PI on the retarder, the foot brake topping up past
 ## TOPUP_BAND; trucks). Then a full-pedal stop in automatic D, retarder off, against the same stop
 ## from a fresh body after DESCENT_COLD_S on the hold (`cold`, run first). `mode=<m>` runs one;
-## `verbose` prints the hold every 10 s.
+## `verbose` prints the hold every 10 s; `surface=<name>` (`Surface.NAMES`, asphalt by default) lays
+## the ramp in it. A rig's hold also prints the kingpin's push along the grade, read off the
+## trailer's own balance (its momentum change less its patches' `RayWheel.contact_force`, gravity
+## and air: what is left is the joint's), and its largest articulation against ARTICULATION_BOUND_DEG.
 ## STOPS (`stops[=<n>]`, STOPS_DEFAULT): `n` full-pedal stops on the flat from `kmh=` (STOPS_KMH),
 ## back to back, floored in D between them.
 ## Each prints the hottest brake and the lowest fade factor of the powered unit and of a trailer,
@@ -1280,11 +1285,21 @@ const PEDAL_KI := 0.03
 const RETARDER_KP := 1.0
 const RETARDER_KI := 0.2
 const TOPUP_BAND := 0.5         ## m/s over the hold speed before the foot brake tops the retarder up
+## The hold's largest articulation (deg), set before any run: a straight hold swinging past it is
+## starting to jackknife.
+const ARTICULATION_BOUND_DEG := 5.0
 ## The energy check's tolerance on the heat over what the ledger leaves for it, set before any run.
 const ENERGY_TOLERANCE := 0.05
 ## `doc=brake_fade` (arg 1): each of these at the defaults in every mode, then `sedan`'s
 ## STOPS_DEFAULT stops; the `brake_fade` region of `docs/vehicle_measurements.md` is rewritten.
 const DOC_DESCENT_VARIANTS: Array[String] = ["semi", "garbage-truck"]
+## ...then the semi's holds on low grip, no stop after them: the retarder's pushing trailer against
+## the foot brake's braked one, the same hold.
+const DOC_LOW_GRIP: Array[Dictionary] = [
+	{"surface": "snow", "mode": "retarder"},
+	{"surface": "ice", "mode": "foot"},
+	{"surface": "ice", "mode": "retarder"},
+]
 const DOC_STOPS_VARIANT := "sedan"
 const DESCENT_MODES: Array[String] = ["cold", "foot", "gear", "retarder"]
 ## Flags on a descent or stops run: `mass=<kg>` (the body's live mass, `BaseVehicle.set_live_mass`,
@@ -1414,6 +1429,12 @@ func _start_descent(which: String, args: PackedStringArray) -> void:
 			kmh = String(a).substr(4).to_float()
 		elif String(a).begins_with("mode="):
 			only = String(a).substr(5)
+		elif String(a).begins_with("surface="):
+			if Surface.from_key(String(a).substr(8)) < 0:
+				printerr("surface=%s: expected one of %s" % [String(a).substr(8), ", ".join(Surface.NAMES)])
+				get_tree().quit(1)
+				return
+			flags["surface"] = String(a).substr(8).to_lower()
 		elif String(a).get_slice("=", 0) in ["mass", "per_brake", "t0", "amb", "decel", "to"]:
 			flags[String(a).get_slice("=", 0)] = String(a).get_slice("=", 1).to_float()
 		else:
@@ -1431,6 +1452,9 @@ func _start_descent(which: String, args: PackedStringArray) -> void:
 		for v in DOC_DESCENT_VARIANTS:
 			for m in DESCENT_MODES:
 				_dsc_queue.append({"variant": v, "mode": m, "kmh": DESCENT_KMH})
+		for g in DOC_LOW_GRIP:
+			_dsc_queue.append({"variant": "semi", "mode": g["mode"], "kmh": DESCENT_KMH,
+					"surface": g["surface"], "hold_only": true})
 		_dsc_queue.append({"variant": DOC_STOPS_VARIANT, "mode": "stops", "kmh": STOPS_KMH})
 	elif which == "doc=brake_check":
 		_dsc_check = true
@@ -1501,14 +1525,13 @@ func _next_descent() -> void:
 	_angle = 0.0 if _dsc_mode == "stops" else rad_to_deg(atan(_dsc_grade / 100.0))
 	var a := deg_to_rad(_angle)
 	_dsc_lift = _dsc_length * 0.5 * sin(a) + 5.0  ## the foot 5 m over the origin
-	# Wide as a tenth of its length: the wheel is held straight, and a semi's slow yaw drifts it
-	# 15 m sideways in 3 km, growing with the square of the distance.
+	# Wide as a tenth of its length: room for a rig that jackknifes off the steered line on low grip.
 	_ramp = MeasureRig.tilt_ramp(self, _ramp, Vector3(maxf(RAMP_WIDTH, 0.1 * _dsc_length),
 			RAMP_THICKNESS, _dsc_length), a, _dsc_lift)
 	_patch.tan_angle = tan(a)
 	_patch.lift = _dsc_lift
-	_surface = "asphalt"
-	_patch.surface = Surface.ASPHALT
+	_surface = String(job.get("surface", "asphalt"))
+	_patch.surface = Surface.from_key(_surface)
 	_spawn(_angle, PI, _dsc_length * 0.5 - SPAWN_UP, _dsc_lift)  ## facing down, near the top
 	var gd: GroundDriveSpec = _car.spec.ground_drive
 	if _dsc_mode == "gear":
@@ -1526,15 +1549,21 @@ func _next_descent() -> void:
 			"job": job}
 	_dsc_stop = 0
 	_dsc_trailer = null
+	_dsc_host = null
 	_phase = Ph.DESC_SETTLE
 	_t = 0.0
 	_dsc_drive(0.0, 100.0)
 
 
 ## Driven through the bridge as `_drive`, with the retarder request (0..1) and the gear byte (1: D,
-## or the held byte under `InputRouter.set_manual_gearbox`).
+## or the held byte under `InputRouter.set_manual_gearbox`), steered down the ramp's centre line
+## (`MeasureRig.pursuit_steer`): unsteered, a rig's slow yaw walks it off the ramp on low grip.
 func _dsc_drive(accel_pct: float, brake_pct: float, retarder01 := 0.0, gear := 1) -> void:
-	MeasureRig.drive(accel_pct, brake_pct, 0.0, false, gear, false, 3,
+	# The centre line on the ramp's top face (it passes through (0, lift, 0)), not under it: a line
+	# below the face reads the body's roll as a lateral error.
+	var steer := MeasureRig.pursuit_steer(_car, Vector3.UP * _dsc_lift, _downhill()) \
+			if _car != null else 0.0
+	MeasureRig.drive(accel_pct, brake_pct, steer * 100.0, false, gear, false, 3,
 			{"retarder": retarder01 * 100.0})
 
 
@@ -1544,8 +1573,8 @@ func _descent_step(delta: float) -> void:
 	if _phase == Ph.DESC_SETTLE:
 		_dsc_drive(0.0, 100.0)
 		if _t >= SETTLE_S:
-			var host := MeasureRig.coupled_host(_car)
-			_dsc_trailer = host.trailer if host != null else null
+			_dsc_host = MeasureRig.coupled_host(_car)
+			_dsc_trailer = _dsc_host.trailer if _dsc_host != null else null
 			_apply_job_mass()
 			_phase = Ph.DESC_RUNUP
 			_t = 0.0
@@ -1589,17 +1618,27 @@ func _descent_step(delta: float) -> void:
 		_dsc_gears = Vector2i(mini(_dsc_gears.x, byte), maxi(_dsc_gears.y, byte))
 	_dsc_speed_sum += v
 	_dsc_ticks += 1
+	if is_instance_valid(_dsc_trailer):
+		_dsc_artic = maxf(_dsc_artic, absf(_dsc_host.articulation()))
 	var dist := (_car.global_position - _dsc_x0).dot(down)
 	if _verbose:
 		_trace_t += delta
 		if _trace_t >= 10.0:
 			_trace_t = 0.0
-			print("      t %5.0f  %6.0f m  across %+6.2f m  y %6.1f  %5.1f km/h  pedal %.2f  ret %.2f  D%d  %s"
+			print("      t %5.0f  %6.0f m  across %+6.2f m  y %6.1f  %5.1f km/h  pedal %.2f  ret %.2f  D%d  %s%s"
 					% [_t, dist, _car.global_position.x, _car.global_position.y, v * 3.6, pedal.y,
-					ret.y, byte, _units_line()])
+					ret.y, byte, _units_line(), "" if not is_instance_valid(_dsc_trailer)
+					else "  articulation %+.2f°" % rad_to_deg(_dsc_host.articulation())])
 	if _t >= 3.0 * _dsc_dist / _dsc_speed or dist < -1.0:  ## stalled, or respawned off the ramp
-		print("  %-16s %-8s : the hold ended at %.0f m after %.0f s (%.1f km/h), not measured"
-				% [_variant, _dsc_mode, dist, _t, v * 3.6])
+		print("  %-16s %-8s : the hold ended at %.0f m after %.0f s (%.1f km/h), not measured%s"
+				% [_variant, _dsc_mode, dist, _t, v * 3.6, "" if not is_instance_valid(_dsc_trailer)
+				else "; articulation %.1f° at most" % rad_to_deg(_dsc_artic)])
+		if _dsc_job.has("hold_only"):  ## a low-grip row records the loss rather than vanishing
+			# Past a respawn the brakes, the ledger and the gear read the fresh body: only the
+			# articulation reached on the ramp is kept.
+			_dsc_row["lost"] = true
+			_dsc_row["hold"] = {"artic": rad_to_deg(_dsc_artic)}
+			_dsc_rows.append(_dsc_row)
 		_next_descent()
 		return
 	if not _dsc_row.has("onset") and _dsc_units.values().any(func(u: Dictionary) -> bool:
@@ -1618,6 +1657,7 @@ func _begin_hold() -> void:
 	_dsc_gears = Vector2i(Drivetrain.TOP_GEAR + 1, 0)
 	_dsc_speed_sum = 0.0
 	_dsc_ticks = 0
+	_dsc_artic = 0.0
 	_dsc_units = {}
 	_trace_t = 0.0
 	_ledger_start()
@@ -1637,15 +1677,22 @@ func _end_hold(dist: float, v: float) -> void:
 			else "D%d-D%d" % [_dsc_gears.x, _dsc_gears.y]
 	var n := maxi(int(_dsc_mean.get("n", 0)), 1)
 	_dsc_row["hold"] = {"units": _dsc_units.duplicate(true), "check": check, "gears": gears,
-			"mean": _dsc_mean.duplicate(), "power": float(check["brakes"]) / maxf(_t, 1e-6) / n}
+			"mean": _dsc_mean.duplicate(), "power": float(check["brakes"]) / maxf(_t, 1e-6) / n,
+			"artic": rad_to_deg(_dsc_artic)}
 	print("  %-16s %-8s : %.0f m in %.0f s at %.1f km/h mean, %s; %s; %s" % [_variant, _dsc_mode,
 			dist, _t, _dsc_speed_sum / maxi(_dsc_ticks, 1) * 3.6, gears, _units_line(),
 			"no fade" if not _dsc_row.has("onset") else "fades from %.0f m (%.0f m drop)" % [
 			_dsc_row["onset"], float(_dsc_row["onset"]) * sin(deg_to_rad(_angle))]])
 	print("    energy  : %s; %.1f kW a brake" % [_ledger_line(check),
 			float(_dsc_row["hold"]["power"]) / 1000.0])
+	if is_instance_valid(_dsc_trailer):
+		var artic := float(_dsc_row["hold"]["artic"])
+		print("    kingpin : push %.1f kN down the grade (+ = the trailer pushes); articulation %.1f°"
+				% [float(check["kingpin"]) / 1000.0, artic]
+				+ " at most, %s (under %.0f°)" % ["PASS" if artic < ARTICULATION_BOUND_DEG else "FAIL",
+				ARTICULATION_BOUND_DEG])
 	InputRouter.set_manual_gearbox(false)
-	if _dsc_job.has("check"):  ## a field run ends at the bottom: its figure is the hold's
+	if _dsc_job.has("check") or _dsc_job.has("hold_only"):  ## its figure is the hold's
 		_dsc_rows.append(_dsc_row)
 		_phase = Ph.DONE
 		_next_descent()
@@ -1844,18 +1891,42 @@ func _rig_energy() -> float:
 
 func _ledger_start() -> void:
 	_dsc_ledger = {"e0": _rig_energy(), "brakes": 0.0, "retarder": 0.0, "driveline": 0.0,
-			"rolling": 0.0, "air": 0.0, "slip": 0.0}
+			"rolling": 0.0, "air": 0.0, "slip": 0.0, "t": 0.0, "towed_ext": 0.0,
+			"towed_p0": _towed_momentum()}
+
+
+## The ramp's downhill direction (world).
+func _downhill() -> Vector3:
+	return Basis(Vector3.RIGHT, deg_to_rad(_angle)) * Vector3.BACK
+
+
+## The trailer's momentum down the grade (kg m/s), 0 bobtail.
+func _towed_momentum() -> float:
+	if not is_instance_valid(_dsc_trailer):
+		return 0.0
+	return _dsc_trailer.mass * _dsc_trailer.linear_velocity.dot(_downhill())
 
 
 ## One tick of the ledger, read before the bodies tick: last tick's forces and settles, on the
 ## motion they produced.
 func _ledger_tick(delta: float) -> void:
 	var l := _dsc_ledger
+	l["t"] += delta
 	for b in _rig_bodies():
 		var fwd := -b.global_basis.z
 		var right := b.global_basis.x
 		var gd: GroundDriveSpec = (b.get("spec") as VehicleSpec).ground_drive
+		# The trailer's forces besides the joint, down the grade: its patches, gravity, air (below).
+		# COMPROMISE: Jolt reports no joint force, so the joint's is the residual; a body touching the
+		# ground besides its patches would count in it. Reading the joint's impulse needs an engine API.
+		var towed := b == _dsc_trailer
+		var ext := Vector3.ZERO
+		if towed:
+			ext = Vector3.DOWN * b.mass * b.gravity_scale \
+					* float(ProjectSettings.get_setting("physics/3d/default_gravity"))
 		for w in _wheels_of(b):
+			if towed:
+				ext += w.contact_force
 			var work := w.brake_reacted * w.brake_settled_spin * delta
 			l["brakes"] += work * w.brake_friction_share
 			l["retarder"] += work * (1.0 - w.brake_friction_share)
@@ -1866,8 +1937,12 @@ func _ledger_tick(delta: float) -> void:
 			l["slip"] += slip_loss_w(w.force_long, w.omega, w.wheel_radius, vel.dot(fwd), w.force_lat,
 					vel.dot(right)) * delta
 		if gd.drag_area > 0.0 or b is TowedBody:  ## as `WheelDrive._apply_resistance` / `tick_towed`
-			l["air"] -= VehicleMath.air_force(b.linear_velocity, WindField.at(b), b.global_basis,
-					gd.drag_area, gd.side_area, b.mass, delta).dot(b.linear_velocity) * delta
+			var air := VehicleMath.air_force(b.linear_velocity, WindField.at(b), b.global_basis,
+					gd.drag_area, gd.side_area, b.mass, delta)
+			l["air"] -= air.dot(b.linear_velocity) * delta
+			ext += air
+		if towed:
+			l["towed_ext"] += ext.dot(_downhill()) * delta
 	var drive := _car.drive
 	var spin := 0.0
 	for i in drive.wheels.size():
@@ -1886,6 +1961,10 @@ func _ledger_result() -> Dictionary:
 	# Where the rest leaves the brakes nothing (a retarder hold), the share has no denominator: the
 	# ledger's closure on the drop is judged instead.
 	l["closure"] = (float(l["drop"]) - rest - float(l["brakes"])) / maxf(float(l["drop"]), 1.0)
+	# The joint's mean force on the trailer down the grade is its momentum change less the rest;
+	# the push on the tractor is its opposite (+ = the trailer pushes). NAN bobtail.
+	l["kingpin"] = NAN if not is_instance_valid(_dsc_trailer) else -(_towed_momentum()
+			- float(l["towed_p0"]) - float(l["towed_ext"])) / maxf(float(l["t"]), 1e-6)
 	return l
 
 
@@ -1944,27 +2023,50 @@ static func _unit_cell(units: Dictionary, unit: String) -> String:
 ## The `brake_fade` region: one row per descent, then the stop series across.
 func _descent_doc_table() -> Array[String]:
 	var lines := DocRegion.wrap(("%s (`measure_grade -- doc=brake_fade`): %.0f km down %.0f %% at"
-			+ " %.0f km/h on the foot brake, a held lower gear and it, or the retarder it tops up; the"
-			+ " hottest brake and its fade at the bottom, where fade starts, a full-pedal stop hot / cold,"
-			+ " the energy check on the descent / the stop (±%.0f %%):") % [
-			DocRegion.measured(), DESCENT_KM, DESCENT_GRADE, DESCENT_KMH, 100.0 * ENERGY_TOLERANCE])
-	lines.append_array(["", "| Run | Powered unit | Trailer | Fades from | Stop hot / cold | Energy check |",
-			"| --- | --- | --- | --- | --- | --- |"])
+			+ " %.0f km/h, steered, on the foot brake, a held lower gear and it, or the retarder it tops"
+			+ " up (last on low grip); the hottest brake and its fade, where fade starts, a full-pedal"
+			+ " stop hot / cold, the energy check (±%.0f %%), the kingpin's mean push (+ = the trailer"
+			+ " pushes) and largest articulation (past %.0f° it jackknifes):") % [
+			DocRegion.measured(), DESCENT_KM, DESCENT_GRADE, DESCENT_KMH, 100.0 * ENERGY_TOLERANCE,
+			ARTICULATION_BOUND_DEG])
+	lines.append_array(["", "| Run | Powered unit | Trailer | Fades from | Stop hot / cold | Energy check | Kingpin |",
+			"| --- | --- | --- | --- | --- | --- | --- |"])
 	var series: Dictionary = {}
+	var grip: Array[Dictionary] = []
 	for r in _dsc_rows:
 		if r["mode"] == "stops":
 			series = r
+			continue
+		if r["job"].has("hold_only"):
+			grip.append(r)
 			continue
 		if r["mode"] == "cold":
 			continue
 		var h: Dictionary = r["hold"]
 		var towed := "" if not h["units"].has("trailer") else " + %.0f t" % (_dsc_trailer_t(r) / 1000.0)
-		lines.append("| `%s`%s, %s (%s) | %s | %s | %s | %.1f / %.1f m | %s / %s |" % [
+		var kingpin := float(h["check"]["kingpin"])
+		lines.append("| `%s`%s, %s (%s) | %s | %s | %s | %.1f / %.1f m | %s / %s | %s |" % [
 				r["variant"], towed, r["mode"], h["gears"], _unit_cell(h["units"], "powered"),
 				_unit_cell(h["units"], "trailer"),
 				"none" if not r.has("onset") else "%.0f m" % r["onset"], r["stop"]["dist"],
 				_dsc_cold.get(r["variant"], NAN), _check_short(h["check"]),
-				_check_short(r["stop"]["check"])])
+				_check_short(r["stop"]["check"]), "none" if is_nan(kingpin)
+				else "%+.1f kN, %.1f°" % [kingpin / 1000.0, float(h["artic"])]])
+	for r in grip:  ## no stop after a low-grip hold
+		var h: Dictionary = r["hold"]
+		var artic := float(h["artic"])
+		if r.has("lost"):
+			lines.append("| `%s` + %.0f t, %s, %s | none | none | none | none | left the ramp | %.1f°, jackknifes |"
+					% [r["variant"], _dsc_trailer_t(r) / 1000.0, r["mode"], r["job"]["surface"], artic])
+			continue
+		var kingpin := float(h["check"]["kingpin"])
+		lines.append("| `%s` + %.0f t, %s (%s), %s | %s | %s | %s | none | %s / none | %s, %.1f°%s |" % [
+				r["variant"], _dsc_trailer_t(r) / 1000.0, r["mode"], h["gears"], r["job"]["surface"],
+				_unit_cell(h["units"], "powered"), _unit_cell(h["units"], "trailer"),
+				"none" if not r.has("onset") else "%.0f m" % r["onset"],
+				_check_short(h["check"]),
+				"none" if is_nan(kingpin) else "%+.1f kN" % (kingpin / 1000.0), artic,
+				"" if artic < ARTICULATION_BOUND_DEG else ", jackknifes"])
 	if series.is_empty():
 		return lines
 	var stops: Array = series["stops"]

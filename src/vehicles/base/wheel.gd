@@ -80,6 +80,9 @@ var force_roll := 0.0   ## last tick's rolling plus surface drag at the contact 
 ## Last tick's lateral tire force (N, post friction circle, + = right); the next tick's compliance
 ## steer reads it through the latch (`latch_bar`).
 var force_lat := 0.0
+## Last tick's whole force on the body at the patch (N, world): suspension, tyre and rolling; zero
+## off the ground. A coupling's force reads off the bodies' balance with it (`measure_grade`).
+var contact_force := Vector3.ZERO
 ## Hard-road rolling resistance coefficient of this wheel's tyre: the spec's stock
 ## (`apply_suspension`), or the fitted class's from its owner (`WheelDrive.fit_tyre`).
 var rolling_crr := 0.0
@@ -331,6 +334,7 @@ func reset() -> void:
 	_stick = Vector2.ZERO
 	_spin_held = false
 	swing = 0.0
+	contact_force = Vector3.ZERO
 	patch_force = Vector3.ZERO
 	patch_point = Vector3.ZERO
 
@@ -409,6 +413,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		surface_grip = 1.0
 		surface_drag = 0.0
 		_stick = Vector2.ZERO
+		contact_force = Vector3.ZERO
 		patch_force = Vector3.ZERO
 		patch_point = Vector3.ZERO
 		# ABS and TC compare wheel speed with vehicle speed and cannot see contact: off the ground they
@@ -536,9 +541,9 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	force_roll = surface_drag_force(v_long, rolling_crr + surface_drag, suspension_force,
 			long_mass, delta)
 	body.apply_force(forward * force_roll, contact_point - body.global_position)
+	contact_force = normal * suspension_force + forward * (f.x + force_roll) + side * f.y
 	if on_beam:
-		patch_force = xform.basis.transposed() * (normal * suspension_force
-				+ forward * (f.x + force_roll) + side * f.y)
+		patch_force = xform.basis.transposed() * contact_force
 		patch_point = xform.affine_inverse() * contact_point
 
 	var dv_long := road_change(body.linear_velocity, forward, _prev_com_long, v_long) \

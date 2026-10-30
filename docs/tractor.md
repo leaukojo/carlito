@@ -295,7 +295,7 @@ semi-trailers use. The tractor side is the same `TowHost` the semi's fifth wheel
   three-point linkage and `hitch_pos_actual` still reports the whole stroke; `draft_force`
   reads a clean zero.
 - The two couplings are the same code, not two implementations. What stays on the vehicle:
-  the brake demand (semi blends foot brake with its own retarder; tractor plain pedal); the
+  the brake demand (semi foot brake or roll stability, never its retarder; tractor plain pedal); the
   spool source (`input.scv_flow` gated on `running` here, `1.0 - input.hitch_request` on the
   truck); the attachment catalog; the semi's ISO 11992 publish and trailer air draw; camera
   framing.

@@ -4,7 +4,7 @@ extends TruckVehicle
 ## joint between two RigidBody3Ds. Coupling and two-body housekeeping live in TowHost, shared with
 ## the tractor's drawbar; `FifthWheel` is this unit's CouplingProfile.
 ##
-## What stays here is trailer catalog routing, the brake-demand blend, the ISO 11992 bus, the
+## What stays here is trailer catalog routing, the EBS11 brake demand, the ISO 11992 bus, the
 ## trailer's air draw, the spool source and camera framing.
 
 @export var fifth_wheel_path: NodePath = ^"FifthWheel"
@@ -86,12 +86,11 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	# unit's own next wheel tick (`WheelDrive.brake_load_kg`).
 	drive.brake_load_kg = mass + _fifth_wheel.coupled_load_kg()
 	drive.towed_kg = _fifth_wheel.towed_mass_kg()
-	# EBS11, towing to towed: the trailer is handed a number and never gates itself. Blends the foot
-	# brake (the hill hold's included, so the rig holds as one) with this tick's retarder_state (set
-	# by super() above). Roll stability asks the trailer at least its own application.
+	# EBS11, towing to towed: the trailer is handed a number and never gates itself. The foot brake
+	# (the hill hold's included, so the rig holds as one); roll stability asks the trailer at least
+	# its own application.
 	var foot := drive.pedal_application(drive.foot_pedal(input))
-	var demand01 := maxf(TruckTelemetry.trailer_brake_blend(foot,
-			t.retarder_state, Drivetrain.retarder_fraction(spec)), drive.roll_application())
+	var demand01 := TruckTelemetry.ebs11_demand(foot, drive.roll_application())
 	# Spool: hitch_request read in its transport sense (1 = tipping body down), not as a height.
 	var spool := 1.0 - clampf(input.hitch_request, 0.0, 1.0)
 	# The trailer's spring brakes follow the lever and this tick's air gate (set by super() above):
@@ -108,7 +107,7 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 		var trailer := _fifth_wheel.trailer
 		t.trailer_connected = true
 		t.trailer_axle_load = VehicleTelemetry.axle_load_kg(trailer.bogie_suspension_force())
-		# The LAGGED application, not the blend: EBS11 reports what the trailer brakes with.
+		# The LAGGED application, not the demand: EBS11 reports what the trailer brakes with.
 		t.trailer_brake_demand = roundi(trailer.brake_applied() * 100.0)
 		t.trailer_abs = trailer.abs_active()
 

@@ -86,12 +86,12 @@ static func spring_brake_notice_edge(applied: bool, was_applied: bool) -> bool:
 	return applied and not was_applied
 
 
-## EBS11 braking demand (0..1) down the trailer bus: foot brake plus the retarder's share
-## (`Drivetrain.retarder_fraction`), or the trailer would push a retarding tractor.
-static func trailer_brake_blend(brake01: float, retarder_pct: int, retarder_frac: float) -> float:
-	var retarder_share := clampf(float(retarder_pct) / 100.0, 0.0, 1.0) \
-			* clampf(retarder_frac, 0.0, 1.0)
-	return clampf(clampf(brake01, 0.0, 1.0) + retarder_share, 0.0, 1.0)
+## EBS11 braking demand (0..1) down the trailer bus: the foot brake, or roll stability's own
+## application if higher. No retarder input: an endurance brake operates no trailer service brake
+## and its coupling force is not compensated (UN R13 5.2.1.21, 5.2.1.28.6), so a retarding tractor
+## is pushed by its trailer (`docs/sources.md` § The retarder and the trailer's brake).
+static func ebs11_demand(foot01: float, roll01: float) -> float:
+	return clampf(maxf(foot01, roll01), 0.0, 1.0)
 
 
 ## Publish the bobtail state on the whole trailer bus: false/0 on every signal.

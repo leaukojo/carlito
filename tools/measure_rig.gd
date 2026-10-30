@@ -159,6 +159,28 @@ static func apply_angdamp(body: BaseVehicle, figure: float) -> void:
 		VehicleMath.declare_angular_damp(b, figure)
 
 
+const PURSUIT_LOOKAHEAD_S := 2.0   ## s of travel to the point the pursuit driver aims at
+const PURSUIT_LOOKAHEAD_MIN := 8.0  ## m, its floor at a crawl
+
+
+## A pure-pursuit driver's steer (-1..1, + = right) holding `body` on the line from `line_o` along
+## `line_dir` (unit; a grade's is not level): the bicycle angle `atan(2 L sin α / d)` onto a point
+## `d` ahead on the line, over the lock the body's speed leaves it (`WheelDrive.steer_lock_deg`).
+## Speed-scaled where a fixed-gain keeper set for a crawl snakes a rig at road speed.
+static func pursuit_steer(body: BaseVehicle, line_o: Vector3, line_dir: Vector3) -> float:
+	var gd := body.spec.ground_drive
+	var wheelbase := body.drive._wheelbase if body.drive != null else 0.0
+	if gd == null or wheelbase <= 0.0:
+		return 0.0
+	var xform := body.global_transform
+	var speed := absf(body.linear_velocity.dot(-xform.basis.z))
+	var ahead := maxf(PURSUIT_LOOKAHEAD_MIN, PURSUIT_LOOKAHEAD_S * speed)
+	var aim := line_o + line_dir * ((xform.origin - line_o).dot(line_dir) + ahead) - xform.origin
+	var alpha := atan2(aim.dot(xform.basis.x), aim.dot(-xform.basis.z))
+	var lock := deg_to_rad(WheelDrive.steer_lock_deg(gd, speed))
+	return clampf(atan(2.0 * wheelbase * sin(alpha) / ahead) / maxf(lock, 1e-6), -1.0, 1.0)
+
+
 ## `body`'s coupled hitch, or null with nothing coupled.
 static func coupled_host(body: Node) -> TowHost:
 	for node in body.find_children("*", "", true, false):

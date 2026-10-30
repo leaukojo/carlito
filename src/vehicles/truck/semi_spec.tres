@@ -72,8 +72,8 @@
 ;   drums out-hold the engine.
 ; - retarder_rating_nm 1450 at the gearbox output: a hydraulic retarder at the low end of its class
 ;   (2500-3500 Nm on a 40 t tractor), 2120 Nm a drive wheel through the 2.925 final drive,
-;   1.47 m/s^2 bobtail and 0.81 coupled to the 24 t box, whose brakes take the same share
-;   (Drivetrain.retarder_fraction; tests/test_truck.gd pins the band bobtail).
+;   1.47 m/s^2 bobtail and 0.37 coupled to the 24 t box, whose brakes it leaves off
+;   (TruckTelemetry.ebs11_demand; tests/test_truck.gd pins the band bobtail).
 ; tcs_equipped is the rig's ASR, standard beside EBS: gear 1 puts ~102 kN on a driven axle that grips
 ; ~70 kN. Held in D1 (measure_vehicles semi 40 trace gear=1, coupled to the 24 t box, 2026-10-20)
 ; with it the AMT's clutch slips on its 900 rpm target and the drive tyres hold ~0.12 slip; without

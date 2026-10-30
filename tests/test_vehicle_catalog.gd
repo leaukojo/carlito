@@ -867,6 +867,22 @@ func test_every_wheeled_variant_tapers_its_steering_at_speed() -> void:
 				"%s keeps its full lock at speed (min_steer_frac 1.0)" % variant).is_less(1.0)
 
 
+func test_the_steer_lock_tapers_linearly_to_its_floor() -> void:
+	# `WheelDrive.steer_lock_deg`: the full lock at rest, the floor fraction from
+	# steer_falloff_speed on, linear between, either direction of travel alike.
+	var gd := GroundDriveSpec.new()
+	gd.max_steer_deg = 30.0
+	gd.min_steer_frac = 0.2
+	gd.steer_falloff_speed = 20.0
+	assert_float(WheelDrive.steer_lock_deg(gd, 0.0)).is_equal_approx(30.0, 1e-5)
+	assert_float(WheelDrive.steer_lock_deg(gd, 10.0)).is_equal_approx(18.0, 1e-5)
+	assert_float(WheelDrive.steer_lock_deg(gd, -10.0)).is_equal_approx(18.0, 1e-5)
+	assert_float(WheelDrive.steer_lock_deg(gd, 20.0)).is_equal_approx(6.0, 1e-5)
+	assert_float(WheelDrive.steer_lock_deg(gd, 40.0)).is_equal_approx(6.0, 1e-5)
+	gd.steer_falloff_speed = 0.0  ## no taper speed: the full lock at any speed
+	assert_float(WheelDrive.steer_lock_deg(gd, 40.0)).is_equal_approx(30.0, 1e-5)
+
+
 func test_a_steering_taper_never_out_limits_the_tyres() -> void:
 	# The other half, and the one that is not obvious from the number. min_steer_frac is a
 	# fraction of each body's OWN max_steer_deg, so the same value means different degrees on a

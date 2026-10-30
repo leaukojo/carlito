@@ -236,6 +236,31 @@ the sump sourced; every per-class value is computed from those and the masses ab
 the worse of its inputs' grades, and every area scaled from another disc is an estimate. Time
 constants come out at minutes to an hour (GSRS's mean brake 49 min at rest), far from the 60 Hz step.
 
+*The retarder and the trailer's brake* (`trailer_brake_demand`): an endurance brake sends the
+trailer nothing.
+- **R13.** "the service braking system of the trailer may only be operated in conjunction with the
+  service, secondary or parking braking system of the towing vehicle", vehicle stabilisation the
+  one exception (5.2.1.21); coupling forces "resulting from the performance of endurance braking
+  systems shall not be compensated by the service braking system of either the motor vehicle or
+  trailer. It is considered that endurance braking systems are not part of the service braking
+  systems" (5.2.1.28.6) [179]. Carlito's retarder is an "independent endurance braking system", its
+  control separate from the service brake's (2.15.2.1; `VehicleInput.retarder`), not an integrated
+  one phased on the pedal (2.15.2.2). A 2022 proposal keeps 5.2.1.28.6 and lets only a trailer's
+  regenerative brake offset those forces, "activated by the towing vehicles endurance or service
+  braking system" [190]; its adoption not checked.
+- **EBS11** bytes 3-4 carry the "Service/secondary brake demand value"; none of the EBS11 or EBS12
+  parameters listed names a retarder [191] (the parameters ISO 11992-2:2003 defines that the EU's
+  agricultural-tractor regulation requires or lists; the rest are optional, the standard and R13's
+  Annex 16 not opened).
+- **Makers.** Mercedes-Benz's coupling force control takes, with the retarding unit alone, the
+  coupling force "by setting the retardation of the trailer to equal zero", or blanks the
+  regulation out [192]. WABCO's CFC factor trades a zero coupling force against "a more equalized
+  temperature level of the brakes"; at a small factor "the trailer presses the tractor vehicle
+  forward", a jackknife risk [193]. The makers' EBS manuals: not opened.
+- **Field run** with a trailer's brake temperatures on a retarder-held descent: not found.
+- **Measured** on the semi: `docs/vehicle_measurements.md` § Brake heat, the retarder row and its
+  kingpin column.
+
 *Engine friction:* `docs/drivetrain.md` § Motoring and friction. The diesels' is Volvo Penta friction power, [5] and [7]; the petrol's is EPA's measured Malibu motoring curve [91].
 
 *The heavy vans' drivetrain* (`VAN_BASE`: `delivery`, `delivery-flat`, `ambulance`): a Ford
@@ -696,7 +721,7 @@ understeer as above:
 176. AP Racing, "Disc temperatures": https://apracing.com/race-car/brake-discs/disc-temperatures
 177. FMVSS No. 126, electronic stability control, 49 CFR 571.126 (LII): https://www.law.cornell.edu/cfr/text/49/571.126
 178. UN Regulation No. 140/00 (ESC), reproduced verbatim as Appendix A of Australian Design Rule 88/00, F2017L01229: https://legislation.gov.au/F2017L01229/asmade/2017-09-21/text/original/pdf
-179. UN Regulation No. 13, 11 series, MLIT bilingual copy: 2.34, 5.2.1.32-33, 5.2.2.23 at https://www.mlit.go.jp/jidosha/un/UN_R013_01.pdf; Annex 21 at https://www.mlit.go.jp/jidosha/un/UN_R013_09.pdf
+179. UN Regulation No. 13, 11 series, MLIT bilingual copy: 2.15, 2.34, 5.2.1.21, 5.2.1.28, 5.2.1.32-33, 5.2.2.23 at https://www.mlit.go.jp/jidosha/un/UN_R013_01.pdf; Annex 21 at https://www.mlit.go.jp/jidosha/un/UN_R013_09.pdf
 180. FMVSS No. 136, ESC for heavy vehicles, 49 CFR 571.136 (LII): https://www.law.cornell.edu/cfr/text/49/571.136
 181. Singh, Sivaramakrishnan (Goodyear), "Extended Pacejka Tire Model for Enhanced Vehicle Stability Control", arXiv 2305.18422 (eqs 17-21, 24; the brake rules): https://arxiv.org/pdf/2305.18422
 182. Pitschi, Sagmeister, Werner, Lienkamp, Lohmann, "Stability Control for Real World Testing in Autonomous Racing", arXiv 2608.17779: https://arxiv.org/pdf/2608.17779
@@ -707,3 +732,7 @@ understeer as above:
 187. paultan.org, Volkswagen Golf GTI Advanced 5-Door (Mk7, 2015) spec page: https://paultan.org/research/volkswagen/golf-gti/mk7/advanced-5-door-2015/
 188. Wikipedia, "Direct-shift gearbox" (the D-mode paragraph; the DQ250 "Wet" row): https://en.wikipedia.org/wiki/Direct-shift_gearbox
 189. GoAuto, Volkswagen Golf GTI road test, 2018-01-24 (Golf 7.5, six-speed DSG): https://www.goauto.com.au/volkswagen/golf/gti/2018-01-24/68117.html
+190. ECE/TRANS/WP.29/GRVA/2023/3, CLCCR, 2022-11-11, a proposed supplement to R13's 11 series (5.2.1.21, 5.2.1.28.6-7, 5.2.2.3; the justification): https://indico.un.org/event/1002172/attachments/9642/27527/English.pdf
+191. Commission Delegated Regulation (EU) 2015/68, Annex XII, Appendix 1 (the ISO 11992-2:2003 messages a tractor and towed vehicle support): https://www.legislation.gov.uk/eur/2015/68/annex/XII/appendix/1/2018-06-09
+192. Mercedes-Benz, US 5,281,006 (trailer brake pressure from the coupling force; steps 605-607, the retarding unit): https://patents.google.com/patent/US5281006
+193. WABCO, US 8,897,985 (the CFC factor; the pushing trailer): https://patents.google.com/patent/US8897985
