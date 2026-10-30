@@ -140,7 +140,8 @@ inside the wheels' solve (`TorqueConverter.solve`):
 - **Ratio.** The turbine passes `converter_stall_ratio` times the impeller's torque at stall,
   falling to 1.0 at the coupling point (SR 0.9): 2.0 on the cars and vans, 1.98 on the Kenney
   trucks (a TC-418, one the 3000 RDS is offered with; `docs/sources.md`). COMPROMISE: 1.0, a
-  fluid coupling, on `hatchback-sports` (its reference car has no converter). The torque ratio is
+  fluid coupling, on `hatchback-sports`: its reference car's wet dual-clutch box creeps on its
+  clutch, which the fluid coupling stands in for (a clutch body opens at rest). The torque ratio is
   read at the tick's start speed ratio, explicit
   where the capacity is implicit: it varies slowly.
 - **Lock-up.** The lock-up clutch (rated `clutch_rating`) closes in parallel once the two sides

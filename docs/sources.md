@@ -46,6 +46,12 @@ body behind its reference is fixed from its own data (curve, gearing), never by 
   default of 2.23 [9]. Allison's 3700-series converters: 1.77-2.71 by model, TC-417 2.20 and
   TC-418 1.98 [139] (the same pair quoted on a forum [10]); per class: *Brake hardware* below. The
   trucks take the TC-418's 1.98 (`docs/drivetrain.md` § Converter).
+- **`hatchback-sports`' reference has none:** the Mk7 GTI's option is a "6-Speed DSG", a
+  "Dual-clutch Automatic (Wet)" [187], over a six-speed manual (Wikipedia's Golf Mk7 tables, read
+  through a model summary, not verbatim). The wet DSG creeps: with the brake released "the K2 clutch
+  clamping force is increased, allowing the transmission to drive the wheels" [188]; a GTI road test
+  has it "begin to creep forward" [189]. Its launch rpm, launch slip and shift time: not found (the
+  page calls the quoted upshift time "un-proven" [188]).
 - **Coupling point:** at a speed ratio of ~0.9. The ratio is 1.07 at 0.87, 1.02 at 0.92 and 1.00
   at 0.94 [9].
 - **Capacity:** K = speed / √torque. It is nearly flat to a speed ratio of 0.8 (12.3 to 14.6),
@@ -698,3 +704,6 @@ understeer as above:
 184. Soodoo, "Heavy Vehicle Stability Control: NHTSA Policy Issues", TRB 2011: https://www.ugpti.org/trb/truckandbus/meetings/2011/downloads/NHTSA_Policy.pdf
 185. Winkler, Ervin, "Rollover of Heavy Commercial Vehicles", UMTRI-99-19, 1999: https://comt.ca/english/programs/trucking/Stability/UMTRI%20Rollover%20of%20Heavy%20Commercial%20Vehicles%201999.pdf
 186. Wikipedia, "Burnout (vehicle)" (the RWD brakestand; its balance sentence tagged citation-needed): https://en.wikipedia.org/wiki/Burnout_(vehicle)
+187. paultan.org, Volkswagen Golf GTI Advanced 5-Door (Mk7, 2015) spec page: https://paultan.org/research/volkswagen/golf-gti/mk7/advanced-5-door-2015/
+188. Wikipedia, "Direct-shift gearbox" (the D-mode paragraph; the DQ250 "Wet" row): https://en.wikipedia.org/wiki/Direct-shift_gearbox
+189. GoAuto, Volkswagen Golf GTI road test, 2018-01-24 (Golf 7.5, six-speed DSG): https://www.goauto.com.au/volkswagen/golf/gti/2018-01-24/68117.html

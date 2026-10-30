@@ -718,8 +718,11 @@ const VARIANTS := {
 	# Hot hatch: a helical front LSD (Quaife-class, ~2.5:1), so a front wheel a bump or a steer input
 	# peels still leaves its partner up to 2.5x its torque rather than an equal share.
 	# COMPROMISE: a converter held at ratio 1.0, a fluid coupling. Its reference, a Mk7 GTI, is a
-	# manual or DSG car (secondary), so no converter figure stands for it; at CAR_BASE's 2.0 it would
-	# hold only 0.77 at stall. Undoing it is a clutch coupling, which moves its creep, launch and shifts.
+	# six-speed manual or a six-speed wet DSG whose clutch creeps off the brake (docs/sources.md, the
+	# converter), so no converter figure stands for it; at CAR_BASE's 2.0 it would hold only 0.77 at
+	# stall. The fluid coupling is the one coupling here that creeps, and its shifts already run with
+	# no cut; a CLUTCH body opens at rest. Undoing it is a clutch creep law (a spec flag), its creep
+	# torque, launch rpm and shift time not found.
 	"hatchback-sports": {"family": "car", "engine_inertia": 0.18, "mass": 1000.0, "torque_mul": 1.10, "final_drive": 4.2, "max_steer_deg": 42.0, "front_weight": 0.60, "diff_bias_front": 2.5, "converter_stall_ratio": 1.0},
 	# Lever for SUV power is their own `torque_mul`, not the shared CAR_BASE curve: measured
 	# 0-100 goes as peak^-0.6 on the sedan, peak^-1.4 on the suv.
