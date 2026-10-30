@@ -59,6 +59,12 @@ const ST_NEUTRAL := 1 << 4     ## engaged gear is N
 const ST_HANDBRAKE := 1 << 5   ## parking brake engaged
 const ST_HEADLIGHTS := 1 << 6  ## headlights at LOW or brighter
 const ST_ESC := 1 << 7         ## stability control braking for the yaw or the roll (`WheelDrive.esc_active`)
+## The stop-lamp request of braking the body commands itself: roll stability past
+## `StabilityControl.LAMP_DECEL` (`WheelDrive.brake_light_request`; a truck's VDC1 SPN 1815).
+const ST_BRAKE_LIGHT := 1 << 8
+const ST_ESC_OFF := 1 << 9      ## a fitted ESC switched off (`WheelDrive.esc_switched_off`; VDC1 SPN 1814)
+const ST_ESC_YAW := 1 << 10     ## the yaw controller braking (`WheelDrive.esc_yaw_active`; VDC1 YC)
+const ST_ESC_ROLL := 1 << 11    ## roll stability braking (`WheelDrive.esc_roll_active`; VDC1 ROP)
 
 # --- motion (measured from the sim) ---
 var speed := 0.0        ## signed longitudinal m/s (contract 'speed')
@@ -274,9 +280,11 @@ static func hours_step(prev_h: float, running: bool, delta: float) -> float:
 	return prev_h + delta / 3600.0 if running else prev_h
 
 
-## Pack the status bitfield from current vehicle state.
+## Pack the status bitfield from current vehicle state. ST_ESC is packed from the yaw and roll
+## flags, never passed, so bit 7 is always bit 10 or bit 11.
 static func pack_status(ignition: bool, ground_contact: bool, moving: bool,
-		gear_byte_: int, handbrake: bool, headlights: bool, esc_active := false) -> int:
+		gear_byte_: int, handbrake: bool, headlights: bool, esc_yaw := false, esc_roll := false,
+		brake_light := false, esc_off := false) -> int:
 	var s := 0
 	if ignition:
 		s |= ST_IGNITION
@@ -292,8 +300,16 @@ static func pack_status(ignition: bool, ground_contact: bool, moving: bool,
 		s |= ST_HANDBRAKE
 	if headlights:
 		s |= ST_HEADLIGHTS
-	if esc_active:
+	if esc_yaw or esc_roll:
 		s |= ST_ESC
+	if brake_light:
+		s |= ST_BRAKE_LIGHT
+	if esc_off:
+		s |= ST_ESC_OFF
+	if esc_yaw:
+		s |= ST_ESC_YAW
+	if esc_roll:
+		s |= ST_ESC_ROLL
 	return s
 
 

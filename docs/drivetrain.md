@@ -25,10 +25,10 @@ curve's peak (1.5 on cars, 2.0 elsewhere) and solved as one more output of the w
   automatic's TCU fuels the engine down so its clutch passes the driver's demand (§ The shift
   policy); a downshift's crank is blipped up to the wheels with the clutch open first;
 - locks it the tick it carries less than its capacity. A clutch stays locked until a shift; a
-  converter's lock-up lets go under the foot brake (`Drivetrain.braking`, as an automatic's TCU
-  does, so the brakes never slow the crank, where a clutch body keeps its clutch closed for
-  engine braking), under ABS, under `lockup_gear` and when the wheel side falls under
-  `converter_free_rpm` at the raw pedal (§ The pedal map's COMPROMISE).
+  converter's lock-up lets go under the brake-light switch (`Drivetrain.braking`: the foot brake or
+  roll stability's request, as an automatic's TCU reads it, so the brakes never slow the crank,
+  where a clutch body keeps its clutch closed for engine braking), under ABS, under `lockup_gear`
+  and when the wheel side falls under `converter_free_rpm` at the raw pedal (§ The pedal map's COMPROMISE).
 
 Locked, the crank reflects `J G²` onto the driven wheels: +41 % on the `sedan`'s gear-1 mass
 factor, +28 % on `garbage-truck`'s (`docs/sources.md`). A lifted driven pair spins up at

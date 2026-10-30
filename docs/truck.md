@@ -21,7 +21,7 @@ VehicleTelemetry` adds chassis, body-network and trailer-bus "out" fields.
 | Signals | Flavor | Notes |
 | --- | --- | --- |
 | In (4): `retarder`, `red_stop`/`amber_warn`/`protect_lamp` (J1939-73 DM1 lamp bits) | `j1939` | published FMS set — J1939-71 subset six European makers agreed to expose in 2002 |
-| Out (5): `air_primary`, `air_secondary`, `retarder_state`, `axle_load`, `gear_ratio` | `j1939` | — |
+| Out (5): `air_primary`, `air_secondary`, `retarder_state`, `axle_load`, `gear_ratio` | `j1939` | sloppyCAN also packs the stability unit's VDC1 (status bits 7-11: lamp, fully operational, brake-light request, YC / ROP) and VDC2 (`yaw`, `accLat`, `accLong`; no hand-wheel angle) from the brake controller, on air-braked bodies only; VDC2 at the telemetry rate, slower than J1939's (`docs/sources.md` § Stability control) |
 | `engine_load`, `pto`, `pto_state` | `isobus` | reused, not duplicated — listed on `truck` alongside `tractor` (ISO 11783 is built on J1939: `engine_load` = SPN 92); `engine_hours` (SPN 247) rides unflavored |
 
 `diff_lock`/`diff_lock_state` are not extended to the truck.

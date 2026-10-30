@@ -234,9 +234,25 @@ func test_pack_status_sets_expected_bits() -> void:
 	# Parked in N with handbrake and headlights on, engine off.
 	assert_int(T.pack_status(false, false, false, 0, true, true)) \
 			.is_equal(T.ST_NEUTRAL | T.ST_HANDBRAKE | T.ST_HEADLIGHTS)
-	# Stability control acting.
-	assert_int(T.pack_status(true, true, true, 3, false, false, true)) \
-			.is_equal(T.ST_IGNITION | T.ST_GROUND | T.ST_MOVING | T.ST_ESC)
+	# Stability control: bit 7 packs from the yaw or the roll (never passed), 10 / 11 name which;
+	# the brake-light request at 8, switched off at 9; the frozen 0-6 untouched.
+	assert_int(T.ST_BRAKE_LIGHT).is_equal(1 << 8)
+	assert_int(T.ST_ESC_OFF).is_equal(1 << 9)
+	assert_int(T.ST_ESC_YAW).is_equal(1 << 10)
+	assert_int(T.ST_ESC_ROLL).is_equal(1 << 11)
+	var base := T.ST_IGNITION | T.ST_GROUND | T.ST_MOVING
+	var yaw := true
+	var roll := true
+	var lamp := true
+	var off := true
+	assert_int(T.pack_status(true, true, true, 3, false, false, yaw)) \
+			.is_equal(base | T.ST_ESC | T.ST_ESC_YAW)
+	assert_int(T.pack_status(true, true, true, 3, false, false, false, roll, lamp)) \
+			.is_equal(base | T.ST_ESC | T.ST_ESC_ROLL | T.ST_BRAKE_LIGHT)
+	assert_int(T.pack_status(true, true, true, 3, false, false, false, false, false, off)) \
+			.is_equal(base | T.ST_ESC_OFF)
+	assert_int(T.pack_status(true, true, true, 3, false, false, yaw, roll, lamp)) \
+			.is_equal(base | T.ST_ESC | T.ST_ESC_YAW | T.ST_ESC_ROLL | T.ST_BRAKE_LIGHT)
 
 
 ## The seam a wheel-less vehicle answers ST_GROUND through (the drone's landed predicate

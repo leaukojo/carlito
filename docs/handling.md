@@ -255,10 +255,11 @@ the spin step with ABS on, and trims the delivered fuel in proportion. On the se
 stability: past `ROLL_SHARE` of the rig's measured first lift at its sensed coupled load
 (`esc_roll_lift_g`), or as the steer asks that g, it brakes every wheel and the trailer and cuts
 the fuel; the yaw torque keeps its priority on a wheel (`corner_torques`).
-- **Switch and lamp.** `esc_off` (the bridge, or SETTINGS ▸ STABILITY CONTROL) takes TC with it;
-  `tcs_off` leaves ESC on. Status bit 7 reports it acting (a truck's VDC1 YC / ROP); the cluster's
-  ESC lamp is steady while switched off and flashes while ESC acts. The handbrake leaves it on: a
-  J-turn still turns, tamer, and ESC catches the spin at its end.
+- **Switch and lamps.** `esc_off` (the bridge, or SETTINGS ▸ STABILITY CONTROL) takes TC with it;
+  `tcs_off` leaves ESC on. Status bits 7 and 9-11 report it (a truck's VDC1, `docs/truck.md`); the
+  ESC lamp is steady while off and flashes while ESC acts. Only roll stability past `LAMP_DECEL`
+  lights the brake lamp and opens the lock-up (bit 8; R13: yaw braking is selective braking). The
+  handbrake leaves it on: a J-turn still turns, tamer, and ESC catches the spin at its end.
 - **Measured.** Every ESC body in FMVSS 126's range passes the sine with dwell with ESC on and
   fails it off (`docs/vehicle_measurements.md` § Sine with dwell); the step pass's lifted spins go with ESC on; the accel and
   cruise tables do not move. ESC's inner-rear brake turns a ploughing car in (corner peaks rise);
@@ -267,9 +268,8 @@ the fuel; the yaw torque keeps its priority on a wheel (`corner_torques`).
   (every measure tool takes it): K, the balance and the corner limit are the chassis's. ESC retires
   no handling COMPROMISE: the lift-off `rear_lat_grip` patches stand for unmodelled chassis effects
   and are judged with it off.
-- **Limits.** The K table is held flat past its end and keeps the stock tyre and load; a coupled
-  semi reads the unit's own K; ESC braking lights no brake lamp. Dead-band, gains, the modulator's
-  rates and `ROLL_SHARE` are estimates (`docs/sources.md` § Stability control).
+- **Limits.** The K table holds flat past its end on the stock tyre and load; a coupled semi reads
+  its unit's K. Dead-band, gains, rates, `ROLL_SHARE`: estimates (`docs/sources.md` § Stability control).
 - **The semi-trailer's own.** The four semi-trailers (`trailer_roll_equipped`; not `farm_tipper`)
   carry R13's roll-over control in their EBS (`StabilityControl.trailer_roll_step`), off their own
   sensors: lateral g (`TowedBody.accel_lat`), each side's wheel speed, the bogie load against their

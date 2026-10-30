@@ -289,6 +289,10 @@ func test_local_lamp_bits_default_off_and_brake_lamp_follows_brake() -> void:
 	# Coasting: no brake -> no STOP.
 	var coasting: VehicleInput = RouterScript.arbitrate_local(_raw(1.0, 0.0), 10.0, GEAR_D1)
 	assert_bool(coasting.lamps.brake_lamp).is_false()
+	# The body's own brake-light request lights it with no pedal; it never darkens the pedal's.
+	assert_bool(RouterScript.local_brake_lamp(coasting.lamps.brake_lamp, true)).is_true()
+	assert_bool(RouterScript.local_brake_lamp(braking.lamps.brake_lamp, false)).is_true()
+	assert_bool(RouterScript.local_brake_lamp(coasting.lamps.brake_lamp, false)).is_false()
 
 
 func test_merge_local_combines_keyboard_and_touch() -> void:

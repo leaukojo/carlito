@@ -291,6 +291,55 @@ func test_the_yaw_torque_survives_a_full_roll_application() -> void:
 			.is_equal(Vector4(0.0, 400.0, 0.0, 0.0))
 
 
+# --- the brake-light request -------------------------------------------------------------------
+
+const LOAD_KG := 2000.0
+
+
+## The request roll stability's `roll_app` with the yaw's `yaw` asks on the car above.
+static func _request(roll_app: float, yaw := Vector4.ZERO) -> bool:
+	return StabilityControl.brake_light_request(_retardation(roll_app, yaw))
+
+
+static func _retardation(roll_app: float, yaw := Vector4.ZERO) -> float:
+	return StabilityControl.roll_retardation(StabilityControl.corner_torques(roll_app, yaw, BRAKE),
+			yaw, PackedInt32Array([FL, FR, RL, RR]), RADIUS, LOAD_KG)
+
+
+func test_idle_or_yaw_braking_alone_requests_no_brake_light() -> void:
+	assert_bool(_request(0.0)).is_false()
+	# Selective braking (R13 5.2.1.30.6): the whole brake on one corner, still no request.
+	assert_float(_retardation(0.0, Vector4(0.0, BRAKE.x, 0.0, 0.0))).is_equal(0.0)
+	assert_bool(_request(0.0, Vector4(0.0, BRAKE.x, 0.0, 0.0))).is_false()
+
+
+func test_roll_braking_requests_the_brake_light_from_the_lamp_floor() -> void:
+	# Full roll: every corner's brake over its radius, over the load.
+	var full := 2.0 * (BRAKE.x + BRAKE.y) / RADIUS.x / LOAD_KG
+	assert_float(_retardation(1.0)).is_equal_approx(full, 1e-4)
+	var at_floor := StabilityControl.LAMP_DECEL / full
+	assert_bool(_request(at_floor * 0.98)).is_false()
+	assert_bool(_request(at_floor * 1.02)).is_true()
+
+
+func test_a_lit_request_holds_down_to_the_release_floor() -> void:
+	var on := StabilityControl.LAMP_DECEL
+	var off := StabilityControl.LAMP_RELEASE_DECEL
+	assert_float(off).is_less(on)
+	# Dark, it waits for the lamp floor; lit, it holds under it until the release floor.
+	assert_bool(StabilityControl.brake_light_request(0.5 * (on + off), false)).is_false()
+	assert_bool(StabilityControl.brake_light_request(0.5 * (on + off), true)).is_true()
+	assert_bool(StabilityControl.brake_light_request(off * 0.99, true)).is_false()
+	assert_bool(StabilityControl.brake_light_request(on, false)).is_true()
+
+
+func test_the_yaw_priority_cap_lowers_the_roll_retardation() -> void:
+	# FR's yaw torque leaves the front axle's roll part short of the brake.
+	var yaw := Vector4(0.0, 400.0, 0.0, 0.0)
+	assert_float(_retardation(1.0, yaw)).is_equal_approx(
+			(2.0 * (BRAKE.x - 400.0) + 2.0 * BRAKE.y) / RADIUS.x / LOAD_KG, 1e-4)
+
+
 # --- trailer roll-over control -----------------------------------------------------------------
 
 const Stage := StabilityControl.TrailerStage

@@ -43,6 +43,13 @@ const TABLE_SNAP := 1e-4
 ## Roll stability starts braking at this share of the rig's first-lift g and reaches the full brake
 ## at the lift (estimate: no intervention point is published).
 const ROLL_SHARE := 0.7
+## The retardation (m/s²) under which automatically commanded braking may leave the stop lamps
+## dark (R13 5.2.1.30.5); selective braking, the yaw's, never lights them (5.2.1.30.6).
+const LAMP_DECEL := 0.7
+## Once lit, the request holds down to this retardation (m/s²), so a roll application hovering at
+## LAMP_DECEL neither flickers the lamp nor cycles the lock-up; under LAMP_DECEL R13 lets the
+## signal stand or go (estimate: no release point is published).
+const LAMP_RELEASE_DECEL := 0.5
 
 
 ## The corner model's K table of `spec` (`BalanceModel.k_curve` at REFERENCE_SPEED), snapped to
@@ -188,6 +195,33 @@ static func corner_torques(roll_app: float, yaw: Vector4, brake: Vector2) -> Vec
 		out[2 * axle] += roll_t
 		out[2 * axle + 1] += roll_t
 	return out
+
+
+## The retardation (m/s²) roll stability commands: each wheel's roll part of its corner's torque
+## (`corner_torques`' `esc_brake` less the `yaw`), over its axle's radius (x front, y rear), summed
+## and over the sensed load. The commanded torque, what the unit knows.
+## COMPROMISE: on a coupled semi the load is the unit's sensed one (`WheelDrive.brake_load_kg`:
+## the unit plus the kingpin share), never the rig's: the trailer's braking at the same demand
+## (`ebs11_demand`) and its bogie-borne mass are left out, so the figure is off the rig's by how
+## the trailer's brake-to-mass ratio differs from the unit's (a laden trailer's share of the kingpin
+## lowers it). Exact needs the trailer's applied force and towed mass summed here (`TowHost`).
+static func roll_retardation(esc_brake: Vector4, yaw: Vector4, corner: PackedInt32Array,
+		axle_radius: Vector2, load_kg: float) -> float:
+	if load_kg <= 0.0:
+		return 0.0
+	var force := 0.0
+	for c in corner:
+		@warning_ignore("integer_division")
+		var radius := axle_radius[c / 2]
+		if radius > 0.0:
+			force += (esc_brake[c] - yaw[c]) / radius
+	return force / load_kg
+
+
+## The stop-lamp request of braking the unit commands itself: roll stability's retardation at
+## LAMP_DECEL or more, held while `lit` (last tick's request) down to LAMP_RELEASE_DECEL.
+static func brake_light_request(retardation: float, lit := false) -> bool:
+	return retardation >= (LAMP_RELEASE_DECEL if lit else LAMP_DECEL)
 
 
 # --- trailer roll-over control -----------------------------------------------------------------

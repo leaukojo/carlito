@@ -279,6 +279,21 @@ func _physics_process(delta: float) -> void:
 	_current = blend_local_driving(bridge_raw, local, _manual_gearbox) if live else local
 	_apply_auto_hold()
 	_apply_brake_override()
+	_apply_brake_light_request()
+
+
+## Light the local STOP lamp on the body's own brake-light request (roll stability,
+## `BaseVehicle.brake_light_request`, last tick's), as the foot brake does. Never while the bridge
+## drives: sloppyCAN owns the lamp there and mirrors the request off the status bit.
+func _apply_brake_light_request() -> void:
+	if _vehicle != null and _vehicle.has_method(&"brake_light_request"):
+		_current.lamps.brake_lamp = local_brake_lamp(_current.lamps.brake_lamp,
+				bool(_vehicle.call(&"brake_light_request")))
+
+
+## The local STOP lamp, pure for tests: the foot brake's (or the auto hold's) or the request.
+static func local_brake_lamp(pedal_lamp: bool, request: bool) -> bool:
+	return pedal_lamp or request
 
 
 ## Cut the throttle while the brake override holds (BRAKE_OVERRIDE_SPEED). The cut rides

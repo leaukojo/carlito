@@ -96,6 +96,14 @@ var tyre: TyreClass
 var _crr := 0.0  ## the fitted class's hard-road rolling resistance (`rolling_resistance`)
 ## Stability control braked a wheel this tick, for the yaw or the roll (`esc_step`).
 var esc_active := false
+## Which part braked this tick, the yaw controller's or roll stability's (a truck's VDC1 YC / ROP),
+## and whether a fitted ESC is switched off (`esc_off`; VDC1 SPN 1814 not fully operational).
+var esc_yaw_active := false
+var esc_roll_active := false
+var esc_switched_off := false
+## Roll stability's stop-lamp request this tick (`StabilityControl.brake_light_request`); the yaw's
+## selective braking never sets it.
+var brake_light_request := false
 ## Roll stability's application this tick, 0..1 of every wheel's declared brake
 ## (`StabilityControl.roll_application`); a towing unit sends its trailer at least as much.
 var _roll_app := 0.0
@@ -354,8 +362,13 @@ func esc_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 		_roll_app = 0.0
 		_esc_brake = Vector4.ZERO
 		esc_active = false
+		esc_yaw_active = false
+		esc_roll_active = false
+		esc_switched_off = gd.esc_equipped and input.esc_off
+		brake_light_request = false
 		drivetrain.esc_cap = 1.0
 		return
+	esc_switched_off = false
 	var basis := body.global_basis
 	var gravity := body.get_gravity()
 	var level_up := -gravity.normalized() if gravity != Vector3.ZERO else Vector3.UP
@@ -379,7 +392,11 @@ func esc_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 			StabilityControl.roll_lift_g(gd.esc_roll_lift_g, _load_kg()), _roll_app, delta)
 	_esc_brake = StabilityControl.corner_torques(_roll_app, _esc_torque,
 			Vector2(_brake_front, _brake_rear))
-	esc_active = _esc_torque != Vector4.ZERO or _roll_app > 0.0
+	esc_yaw_active = _esc_torque != Vector4.ZERO
+	esc_roll_active = _roll_app > 0.0
+	esc_active = esc_yaw_active or esc_roll_active
+	brake_light_request = StabilityControl.brake_light_request(StabilityControl.roll_retardation(
+			_esc_brake, _esc_torque, _corner, _axle_radius, _load_kg()), brake_light_request)
 	drivetrain.esc_cap = minf(out["throttle_cap"], 1.0 - _roll_app)
 
 
@@ -930,6 +947,10 @@ func respawn() -> void:
 	_roll_app = 0.0
 	_esc_brake = Vector4.ZERO
 	esc_active = false
+	esc_yaw_active = false
+	esc_roll_active = false
+	esc_switched_off = false
+	brake_light_request = false
 	_swing_turn = 0.0
 	for w in wheels:
 		w.reset()

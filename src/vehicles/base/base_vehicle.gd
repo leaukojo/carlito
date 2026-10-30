@@ -150,7 +150,8 @@ func _physics_process(delta: float) -> void:
 		# Stability control before the drivetrain, which reads its fuel cap this tick.
 		drive.esc_step(self, spec.ground_drive, input, drivetrain, ground_speed, delta)
 	var drive_omega := drive.drive_omega(spec.ground_drive, input) if drive != null else 0.0
-	drivetrain.braking = foot > 0.0
+	# The lock-up reads the brake-light switch, which roll stability's request also closes.
+	drivetrain.braking = foot > 0.0 or brake_light_request()
 	var axle_torque := drivetrain.process(
 			delta, absf(input.throttle), drive_omega, ground_speed, input.gear_request, input.gear_auto)
 
@@ -320,7 +321,8 @@ func _update_telemetry(input: VehicleInput, delta: float) -> void:
 	telemetry.status = VehicleTelemetry.pack_status(
 			running, telemetry.ground, absf(telemetry.speed) > MOVING_SPEED,
 			telemetry.gear_byte, input.handbrake > 0.0, input.lights >= 3,
-			drive != null and drive.esc_active)
+			drive != null and drive.esc_yaw_active, drive != null and drive.esc_roll_active,
+			brake_light_request(), drive != null and drive.esc_switched_off)
 
 	_prev_velocity = linear_velocity
 
@@ -503,3 +505,9 @@ func key_auto_hold() -> bool:
 
 func get_gear_byte() -> int:
 	return drivetrain.gear_byte if drivetrain != null else Drivetrain.GEAR_N
+
+
+## Roll stability's stop-lamp request this tick (`WheelDrive.brake_light_request`): InputRouter
+## lights the local STOP lamp with it, the status bit carries it to sloppyCAN.
+func brake_light_request() -> bool:
+	return drive != null and drive.brake_light_request
