@@ -416,13 +416,61 @@ func test_every_esc_body_rides_on_abs_and_carries_its_fresh_reference_table() ->
 		var fresh := StabilityControl.reference_table(spec)
 		assert_bool(fresh.is_empty()).override_failure_message(
 				"%s: ESC with no corner model to calibrate on" % variant).is_false()
-		var stale := gd.esc_reference_k.size() != fresh.size()
-		for i in mini(fresh.size(), gd.esc_reference_k.size()):
-			# Two snaps of slack: another platform's float may round a point the other way.
-			var off := (gd.esc_reference_k[i] - fresh[i]).abs()
-			stale = stale or maxf(off.x, off.y) > 2.0 * StabilityControl.TABLE_SNAP
-		assert_bool(stale).override_failure_message(
+		assert_bool(_table_stale(gd.esc_reference_k, fresh)).override_failure_message(
 				"%s: esc_reference_k is stale; fresh: %s" % [variant, fresh]).is_false()
+		# Each laden table likewise, off a copy at its mass.
+		for i in mini(gd.esc_laden_kg.size(), gd.esc_laden_k.size()):
+			var laden := spec.duplicate() as VehicleSpecScript
+			laden.mass = gd.esc_laden_kg[i]
+			fresh = StabilityControl.reference_table(laden)
+			# An empty table switches ESC off at that load (`WheelDrive.esc_step`).
+			assert_bool(fresh.is_empty()).override_failure_message(
+					"%s: ESC with no corner model to calibrate on at %.0f kg"
+					% [variant, laden.mass]).is_false()
+			assert_bool(_table_stale(gd.esc_laden_k[i], fresh)).override_failure_message(
+					"%s: esc_laden_k at %.0f kg is stale; fresh: %s"
+					% [variant, laden.mass, fresh]).is_false()
+
+
+## Whether `shipped` is off `fresh`: another size, or a point past two snaps (another platform's
+## float may round a point the other way).
+static func _table_stale(shipped: PackedVector2Array, fresh: PackedVector2Array) -> bool:
+	var stale := shipped.size() != fresh.size()
+	for i in mini(fresh.size(), shipped.size()):
+		var off := (shipped[i] - fresh[i]).abs()
+		stale = stale or maxf(off.x, off.y) > 2.0 * StabilityControl.TABLE_SNAP
+	return stale
+
+
+func test_the_laden_esc_tables_are_the_refuse_hoppers_levels() -> void:
+	# An ESC truck carrying the refuse arm (`TruckVehicle._find_rig`) steps its mass with the
+	# hopper: it carries a table per laden level, so a hopper retune without a regen fails; every
+	# other body none.
+	var specs := _driven_specs()
+	for variant: String in specs:
+		var spec: VehicleSpecScript = specs[variant]
+		var gd := spec.ground_drive
+		var want := PackedFloat32Array()
+		var refuse := false
+		var state := (load(VehicleCatalog.scene_of(variant)) as PackedScene).get_state()
+		var arm := NodePath("./Model/" + TruckVehicle.ARM_NODE)
+		for i in state.get_node_count():
+			refuse = refuse or state.get_node_path(i) == arm
+		var script: Script = null
+		for i in state.get_node_property_count(0):
+			if state.get_node_property_name(0, i) == &"script":
+				script = state.get_node_property_value(0, i)
+		refuse = refuse and script != null and (script == TruckVehicle
+				or script.get_base_script() == TruckVehicle)
+		if refuse and gd.esc_equipped:
+			want = RefuseBody.laden_masses_kg(spec.mass)
+		assert_array(Array(gd.esc_laden_kg)).override_failure_message(
+				"%s: esc_laden_kg %s, the hopper's levels %s" % [variant, gd.esc_laden_kg, want]) \
+				.is_equal(Array(want))
+		assert_int(gd.esc_laden_k.size()).override_failure_message(
+				"%s: %d laden tables for %d masses"
+				% [variant, gd.esc_laden_k.size(), gd.esc_laden_kg.size()]) \
+				.is_equal(gd.esc_laden_kg.size())
 
 
 func test_roll_stability_rides_on_the_semis_from_their_bobtail_load() -> void:

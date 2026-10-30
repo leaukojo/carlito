@@ -544,6 +544,16 @@ var _st_cs: PackedVector2Array = []
 var _st_esc := PackedFloat64Array()
 ## Roll stability's application per tick of the step (`WheelDrive.roll_application`).
 var _st_roll := PackedFloat64Array()
+## The reference ESC would read (`_sample_reference`), on a body whose spec carries
+## `esc_reference_k`, with ESC on or off: per candidate K table (`_reference_k`), built once per
+## body (`_build_reference`), each tick of a step or the corner ramp's yaw error `ref − r` signed
+## into the turn (+ reads understeer) and the dead-band about that `ref`. `flat` is the table ESC
+## reads (`WheelDrive.esc_reference_k`: the shipped, or a laden one under `mass=`).
+var _rf_tables := {}               ## candidate -> PackedVector2Array
+var _rf_err := {}                  ## candidate -> Array of rad/s
+var _rf_band := {}                 ## candidate -> Array of rad/s
+var _rf_g: Array[float] = []       ## the sensed lateral g, unsigned
+var _rf_velocity := Vector3(NAN, NAN, NAN)
 ## `sine`: the sine-with-dwell series (§ sine with dwell) on each body in FMVSS 126's mass range.
 var _sine := false
 var _sn_runs: Array = []       ## the runs still to drive: {"amp", "k", "dir"} (the first finds A)
@@ -708,6 +718,9 @@ var _compliance := NAN
 ## `angdamp=<1/s>`: the body's angular damping REPLACEd with this, and every towed body's as it
 ## couples (`MeasureRig.apply_angdamp`); 0 = none (NAN: as the body sets it).
 var _angdamp := NAN
+## `mass=<kg>`: the body's live mass (`BaseVehicle.set_live_mass`, the spec COM, as the refuse
+## hopper's mass-only path) after every respawn (NAN: the spec's).
+var _live_kg := NAN
 ## `pedal=<0..1>`: the accel pass held at this pedal instead of floored (it implies the trace's
 ## settle and gates).
 var _pedal := 1.0
@@ -938,6 +951,8 @@ func _ready() -> void:
 			_pulse = true
 			if flag.length() > 5:
 				_pulse_period = maxf(float(flag.substr(6)), 0.1)
+		elif flag.begins_with("mass="):
+			_live_kg = maxf(float(flag.substr(5)), 1.0)
 		elif flag.begins_with("duty="):
 			_pulse_duty = clampf(float(flag.substr(5)), 0.0, 1.0)
 		elif flag == "headtail":
@@ -1276,6 +1291,7 @@ func _next_vehicle() -> void:
 	_car.spawn_transform = _car.global_transform
 	_car.reset_physics_interpolation()
 	_apply_trailer()
+	_build_reference()
 	if _coast:
 		_car.contact_monitor = true
 		_car.max_contacts_reported = 8
@@ -1352,6 +1368,12 @@ func _apply_trailer(body: BaseVehicle = null) -> void:
 
 
 func _reset_pass(phase: Phase) -> void:
+	# A respawn resets the live mass to the spec's.
+	if not is_nan(_live_kg) and _car != null and _car.is_inside_tree():
+		_car.set_live_mass(_live_kg)
+		if _rf_tables.has("flat") and _rf_tables["flat"] != _car.drive.esc_reference_k:
+			_rf_tables["flat"] = _car.drive.esc_reference_k
+			_print_reference_pick()
 	_phase = phase
 	_t = 0.0
 	_peak = 0.0
@@ -2427,11 +2449,13 @@ func _tick_cornering(delta: float) -> void:
 		MeasureRig.drive(pedal * 100.0, 0.0)
 		# Wait for the speed, but never past the budget — a body that cannot reach 40 km/h says so
 		# rather than silently reporting the transient.
+		_rf_velocity = vel
 		if speed >= _corner_speed:
 			_corner_ramping = true
 			_corner_pedal_i = CORNER_PEDAL_START
 			_corner_xfer0 = _axle_transfer()
 			_tr_watch.begin()
+			_rf_begin()
 		elif _t >= _seconds:
 			print("  %-13s : never reached %.0f km/h, skipped"
 					% ["cornering", _corner_speed * 3.6])
@@ -2440,6 +2464,7 @@ func _tick_cornering(delta: float) -> void:
 	_corner_ramp_t += delta
 	MeasureRig.drive(pedal * 100.0, 0.0, minf(_corner_ramp_t / _corner_ramp_s, 1.0) * 100.0)
 	_tr_watch.tick(MeasureRig.towed(_car), _car.drive, delta)
+	_sample_reference(delta)
 	# Lateral acceleration of the motion that actually happened: `v * yaw_rate` is the centripetal
 	# term of the body's own velocity and angular velocity, both read out of the sim (rule 3).
 	var lat := speed * absf(_car.angular_velocity.y)
@@ -2644,6 +2669,7 @@ func _report_cornering(skipped: bool) -> void:
 			"axle": axle, "slid": _corner_slid, "roll_deg": _corner_roll, "lltd": _corner_lltd,
 			"wheels_lifted": _corner_lifted, "overturned": _car.is_overturned(), "pred": pred,
 			"trailer": _trailer_summary()}
+	_report_reference(NAN, 0)
 	_after_lateral_passes()
 
 
@@ -3204,9 +3230,11 @@ func _tick_step(delta: float) -> void:
 	var pedal := 0.0 if lifted else _pi_pedal(_st_i + err * CORNER_PEDAL_KP, _st_target)
 	if _st_stage == Step.SETTLE:
 		MeasureRig.drive(pedal * 100.0, 0.0)
+		_rf_velocity = vel
 		if _st_t >= STEP_SETTLE_S:
 			_st_stage = Step.STEPPED
 			_st_t = 0.0
+			_rf_begin()
 			_st_run["v0_kmh"] = v_long * 3.6
 			_tr_watch.begin()
 			_st_xfer0 = _axle_transfer()
@@ -3218,6 +3246,7 @@ func _tick_step(delta: float) -> void:
 		return
 	MeasureRig.drive(pedal * 100.0, 0.0, float(_st_run["lock"]))
 	_tr_watch.tick(MeasureRig.towed(_car), _car.drive, delta)
+	_sample_reference(delta)
 	# Yaw rate in the steered direction about the road normal (the flat strip's world up; the rolled
 	# body's up reads it `cos(roll)` low): + steer is right, a clockwise turn seen from above.
 	_st_yaw.append(-_car.angular_velocity.y)
@@ -3627,7 +3656,7 @@ func _report_step_run(delta: float) -> void:
 
 ## The per-axle steer prints a body with roll or compliance steer carries (`_report_roll_steer`,
 ## `_report_compliance`), and stability control's on a body fitted with it (`_report_esc`); nothing
-## on a body with none.
+## on a body with none. The reference ESC reads on a body with a K table (`_report_reference`).
 func _report_axle_steer(r: Dictionary, model: Dictionary, ticks: int) -> void:
 	if _car.spec.ground_drive.has_roll_steer():
 		_report_roll_steer(r, model, ticks)
@@ -3635,6 +3664,7 @@ func _report_axle_steer(r: Dictionary, model: Dictionary, ticks: int) -> void:
 		_report_compliance(r, model, ticks)
 	if _car.spec.ground_drive.esc_equipped:
 		_report_esc(r)
+	_report_reference(float(r.get("k_dpg", NAN)), ticks)
 
 
 ## Stability control over the whole step: the share of ticks it braked, its peak moment share
@@ -3673,6 +3703,135 @@ func _esc_share() -> float:
 	var t: Vector4 = _car.drive._esc_torque
 	var brake := Vector2(gd.axle_brake_torque(false), gd.axle_brake_torque(true))
 	return (t.x - t.y) / maxf(brake.x, 1e-6) + (t.z - t.w) / maxf(brake.y, 1e-6)
+
+
+## The candidate K tables (`_rf_tables`) on spawn: `flat` the drive's (`_reset_pass` re-reads it
+## after a `mass=` write). Prints the shipped table's points, end and the stock rebuild's time (and
+## whether it matches the shipped).
+func _build_reference() -> void:
+	_rf_tables = {}
+	var gd := _car.spec.ground_drive
+	if gd == null or gd.esc_reference_k.is_empty() or _car.drive == null:
+		return
+	var shipped := gd.esc_reference_k
+	_rf_tables = {"flat": _car.drive.esc_reference_k}
+	var t0 := Time.get_ticks_usec()
+	var stock := StabilityControl.reference_table(_car.spec)
+	var stock_ms := (Time.get_ticks_usec() - t0) / 1000.0
+	var line := "%d points to %.2f g; the stock rebuild %.1f ms%s" % [shipped.size(),
+			shipped[shipped.size() - 1].x, stock_ms, "" if stock == shipped else " (DIFFERS)"]
+	print("  %-13s : %s" % ["reference K", line])
+
+
+## Which baked table ESC reads at the live mass (`WheelDrive.set_esc_mass`'s nearest level), and
+## how far that level's mass is off the live one.
+func _print_reference_pick() -> void:
+	var gd := _car.spec.ground_drive
+	var at := _car.spec.mass
+	for i in gd.esc_laden_k.size():
+		if gd.esc_laden_k[i] == _car.drive.esc_reference_k:
+			at = gd.esc_laden_kg[i]
+	print("  %-13s : ESC reads the table baked at %.0f kg (live %.0f kg, %+.0f kg)"
+			% ["reference K", at, _car.mass, at - _car.mass])
+
+
+## A fresh window of `_sample_reference` (the velocity kept: the last tick's carries on).
+func _rf_begin() -> void:
+	_rf_g = []
+	_rf_err = {}
+	_rf_band = {}
+	for cand: String in _rf_tables:
+		_rf_err[cand] = []
+		_rf_band[cand] = []
+
+
+## Candidate `cand`'s K (deg/g) at `lat_g` (`_rf_tables`).
+func _reference_k(cand: String, lat_g: float) -> float:
+	return StabilityControl.reference_k(_rf_tables[cand], lat_g)
+
+
+## One tick of the reference ESC would read, off the sensors `WheelDrive.esc_step` reads (the
+## lateral acceleration off the velocity change on the level left axis, the yaw rate about the body's
+## up, the ground-plane speed, the steer applied last tick), per candidate table. Under
+## `StabilityControl.MIN_SPEED` ESC is off: the error reads 0 against an infinite band.
+func _sample_reference(delta: float) -> void:
+	var velocity := _car.linear_velocity
+	var accel := (velocity - _rf_velocity) / delta if is_finite(_rf_velocity.x) else Vector3.ZERO
+	_rf_velocity = velocity
+	if _rf_tables.is_empty() or _car.drive == null:
+		return
+	var body_basis := _car.global_basis
+	var gravity := _car.get_gravity()
+	var up := -gravity.normalized() if gravity != Vector3.ZERO else Vector3.UP
+	var lat_acc := accel.dot(up.cross(-body_basis.z).normalized())
+	var yaw := _car.angular_velocity.dot(body_basis.y)
+	var speed := (velocity - up * velocity.dot(up)).length()
+	var steer: float = _car.drive._applied_steer
+	var g := absf(lat_acc) / StabilityControl.G
+	_rf_g.append(g)
+	for cand: String in _rf_tables:
+		if speed < StabilityControl.MIN_SPEED:
+			(_rf_err[cand] as Array).append(0.0)
+			(_rf_band[cand] as Array).append(INF)
+			continue
+		var ref := StabilityControl.reference_yaw(speed, steer, _car.drive._wheelbase,
+				_reference_k(cand, g), lat_acc)
+		(_rf_err[cand] as Array).append((ref - yaw) * signf(steer))
+		(_rf_band[cand] as Array).append(StabilityControl.deadband(ref))
+
+
+## The window's reference figures: its peak g against the read table's end and the share of
+## ticks past it; per candidate the share of ticks its error clears the dead-band (u: reads
+## understeer, o: oversteer); on a coupled unit the sensed load over its mass. With a measured
+## `k_measured` (a held step), each candidate's K and mean error over the last `tail` ticks beside
+## its band.
+func _report_reference(k_measured: float, tail: int) -> void:
+	var n := _rf_g.size()
+	if _rf_tables.is_empty() or n == 0:
+		return
+	var shipped: PackedVector2Array = _rf_tables["flat"]
+	var end := shipped[shipped.size() - 1].x
+	var peak := 0.0
+	var past := 0
+	for g in _rf_g:
+		peak = maxf(peak, g)
+		if g > end:
+			past += 1
+	var shares: Array[String] = []
+	for cand: String in _rf_tables:
+		var err: Array = _rf_err[cand]
+		var band: Array = _rf_band[cand]
+		var under := 0
+		var over := 0
+		for i in n:
+			if absf(err[i]) > band[i]:
+				if err[i] > 0.0:
+					under += 1
+				else:
+					over += 1
+		shares.append("%s u %.0f %% o %.0f %%" % [cand, 100.0 * under / n, 100.0 * over / n])
+	var sensed := ""
+	if _car.drive.brake_load_kg > 0.0:
+		sensed = "; sensed load %.2f of the unit" % (_car.drive.brake_load_kg / _car.mass)
+	print("  %-26s : reference: peak %.2f g, table to %.2f g, %.0f %% of ticks past it; past the band %s%s"
+			% ["", peak, end, 100.0 * past / n, ", ".join(shares), sensed])
+	if is_nan(k_measured) or tail <= 0 or tail > n:
+		return
+	var g_tail := 0.0
+	for i in range(n - tail, n):
+		g_tail += _rf_g[i]
+	g_tail /= tail
+	var steady: Array[String] = []
+	for cand: String in _rf_tables:
+		var e := 0.0
+		var b := 0.0
+		for i in range(n - tail, n):
+			e += float(_rf_err[cand][i])
+			b += float(_rf_band[cand][i])
+		steady.append("%s K %.2f %+.3f / %.3f" % [cand, _reference_k(cand, g_tail), e / tail,
+				b / tail])
+	print("  %-26s : steady at %.2f g, K %.2f measured: %s rad/s (error / band)"
+			% ["", g_tail, k_measured, ", ".join(steady)])
 
 
 ## The rear's compliance-steer angle over the steady tail beside two preds, the coefficient times

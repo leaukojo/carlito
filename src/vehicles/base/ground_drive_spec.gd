@@ -149,6 +149,12 @@ extends Resource
 ## carries it, and `test_vehicle_catalog` fails a stale one. Built offline: the sweep costs up to
 ## ~30 ms a body on desktop.
 @export var esc_reference_k := PackedVector2Array()
+## The laden bodies' K tables (`WheelDrive.set_esc_mass`): at each live mass of `esc_laden_kg` (kg,
+## ascending, over the spec's), `esc_laden_k` the same index's `StabilityControl.reference_table`
+## at the spec COM (the refuse hopper is mass only). Empty where the mass never steps. Generated,
+## and `test_vehicle_catalog` fails a stale one: a runtime build costs up to ~50 ms on the web.
+@export var esc_laden_kg := PackedFloat32Array()
+@export var esc_laden_k: Array[PackedVector2Array] = []
 ## ESC's roll stability table (x the coupled load in kg, ascending; y g): the rig's lateral g on the
 ## unit's own sensor at its first wheel lift, measured (`measure_semi_launch -- <unit>
 ## trailer=<body> ramp`, "rig's first lift"). Empty = no roll stability (`StabilityControl.roll_lift_g`).

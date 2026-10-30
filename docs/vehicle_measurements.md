@@ -39,7 +39,7 @@ region (`doc_region.gd`); refresh a figure by re-running, never by hand.
 # has roll steer; `rollsteer=<front>,<rear>` (deg/deg) overrides the spec's coefficients; 
 # `compliance=<deg/kN>` the rear compliance steer (`step` prints its angle, preds, chatter);
 # `angdamp=<1/s>`: the body's and a coupled trailer's angular damping REPLACEd (0 = none).
-# tyre=<id>: that TyreCatalog class (else stock); surface=<name>: the slabs painted (not plough).
+# tyre=<id> (TyreCatalog class, else stock); surface=<name> (slabs painted, not plough); mass=<kg> (live).
 # `sine` (FMVSS 126's sine with dwell on a body within its mass range: A, then the series, left and
 # right) replaces the other passes. `noesc` (every measure tool): stability control unfitted in
 # memory, TC as fitted (`notc` for that); doc=steer / cornering / tyres set it, doc=esc runs both.

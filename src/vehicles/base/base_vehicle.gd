@@ -416,6 +416,7 @@ func set_live_mass(kg: float, com := Vector3.INF) -> void:
 	_declare_yaw(kg)
 	if drive != null:
 		drive.set_corner_mass_from(kg)
+		drive.set_esc_mass(spec.ground_drive, spec.mass, kg)
 
 
 ## The declared yaw moment (`VehicleSpec.yaw_dynamic_index`) at `kg`, written to the y component

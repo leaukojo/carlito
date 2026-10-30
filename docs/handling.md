@@ -249,7 +249,7 @@ Every road body with ABS carries ESC (`GroundDriveSpec.esc_equipped`; not `race`
 the tractors). `StabilityControl` reads only what a real unit senses: speed, the mean steer, yaw
 rate and a bank-compensated lateral acceleration, with body slip estimated from them. The yaw it
 asks is the bicycle model's on the body's own steady K (`esc_reference_k`, the corner model's K
-against g, kept fresh by `test_vehicle_catalog`), bounded by the measured g plus a margin. Past a dead-band
+against g; the refuse truck's per hopper level, `esc_laden_k`), bounded by the measured g plus a margin. Past a dead-band
 it brakes one wheel (the outer front against oversteer, the inner rear against understeer) inside
 the spin step with ABS on, and trims the delivered fuel in proportion. On the semis it adds roll
 stability: past `ROLL_SHARE` of the rig's measured first lift at its sensed coupled load
@@ -264,12 +264,12 @@ the fuel; the yaw torque keeps its priority on a wheel (`corner_torques`).
   fails it off (`docs/vehicle_measurements.md` § Sine with dwell); the step pass's lifted spins go with ESC on; the accel and
   cruise tables do not move. ESC's inner-rear brake turns a ploughing car in (corner peaks rise);
   the semis stop under their tip; near-limit steady step cells slow (the bobtail's most).
-- **Chassis tables stay ESC-off.** `doc=steer`, `doc=cornering` and `doc=tyres` set `noesc`
-  (every measure tool takes it): K, the balance and the corner limit are the chassis's. ESC retires
-  no handling COMPROMISE: the lift-off `rear_lat_grip` patches stand for unmodelled chassis effects
-  and are judged with it off.
-- **Limits.** The K table holds flat past its end on the stock tyre and load; a coupled semi reads
-  its unit's K. Dead-band, gains, rates, `ROLL_SHARE`: estimates (`docs/sources.md` § Stability control).
+- **Chassis tables stay ESC-off.** `doc=steer`, `doc=cornering` and `doc=tyres` set `noesc`: K,
+  the balance and the corner limit are the chassis's. ESC retires no handling COMPROMISE: the
+  lift-off `rear_lat_grip` patches stand for unmodelled chassis effects and are judged with it off.
+- **Limits.** Flat past the table's end (K is two-valued at the limit: `BOUND_MARGIN_G` caps it); a
+  tyre swap keeps the stock table, a coupled semi its unit's K (under the dead-band off the limit).
+  Dead-band, gains, rates, `ROLL_SHARE`: estimates (`docs/sources.md` § Stability control).
 - **The semi-trailer's own.** The four semi-trailers (`trailer_roll_equipped`; not `farm_tipper`)
   carry R13's roll-over control in their EBS (`StabilityControl.trailer_roll_step`), off their own
   sensors: lateral g (`TowedBody.accel_lat`), each side's wheel speed, the bogie load against their

@@ -114,6 +114,8 @@ var _esc_brake := Vector4.ZERO
 ## (`StabilityControl.intervention`); each wheel's corner (0-3) in `_corner`, by axle and side.
 var _esc_torque := Vector4.ZERO
 var _corner := PackedInt32Array()
+## The K table `esc_step` reads: the spec's `esc_reference_k`, or a laden one (`set_esc_mass`).
+var esc_reference_k := PackedVector2Array()
 ## ESC's body-slip estimate (rad, `StabilityControl.slip_step`).
 var _slip_est := 0.0
 ## The body's velocity at the last `esc_step` (NAN: none since a respawn), its accelerometer.
@@ -192,6 +194,7 @@ func _init(body: Node3D, spec: VehicleSpec) -> void:
 	_retarder_rating = Drivetrain.retarder_rating(spec)
 	_brake_force = BrakeSizing.brake_force(gd)
 	_live_mass = spec.mass
+	esc_reference_k = gd.esc_reference_k
 	fit_tyre(gd, gd.tyre)
 
 
@@ -285,6 +288,23 @@ func set_corner_mass_from(live_mass: float) -> void:
 		w.corner_mass = corner_mass
 
 
+## Point ESC at the K table baked nearest the live mass `kg`: `gd.esc_reference_k` at the spec's
+## `spec_kg`, else the `esc_laden_k` of the closest `esc_laden_kg`. Never built here: a build costs
+## up to ~50 ms on the web.
+## COMPROMISE: picked by mass alone, never the COM: the refuse hopper, the one ESC body whose mass
+## steps, moves no COM, so every in-game load is exact; an off-level mass (a measure tool's `mass=`)
+## reads its nearest level's, off by up to half a level. A load with its own COM needs its tables
+## keyed by it too.
+func set_esc_mass(gd: GroundDriveSpec, spec_kg: float, kg: float) -> void:
+	esc_reference_k = gd.esc_reference_k
+	var best := absf(kg - spec_kg)
+	for i in mini(gd.esc_laden_kg.size(), gd.esc_laden_k.size()):
+		var off := absf(kg - gd.esc_laden_kg[i])
+		if off < best:
+			best = off
+			esc_reference_k = gd.esc_laden_k[i]
+
+
 ## Wheel-slip dust, built separately so the emitter keeps its place in the body's child order.
 func build_dust(body: Node3D, gd: GroundDriveSpec) -> void:
 	if gd.wheel_positions.is_empty():
@@ -356,7 +376,7 @@ func esc_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 	var velocity := body.linear_velocity
 	var accel := (velocity - _esc_velocity) / delta if is_finite(_esc_velocity.x) else Vector3.ZERO
 	_esc_velocity = velocity
-	if not gd.esc_equipped or input.esc_off or gd.esc_reference_k.is_empty():
+	if not gd.esc_equipped or input.esc_off or esc_reference_k.is_empty():
 		_esc_torque = Vector4.ZERO
 		_slip_est = 0.0
 		_roll_app = 0.0
@@ -377,7 +397,7 @@ func esc_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 	var yaw_rate := body.angular_velocity.dot(basis.y)
 	var speed := signf(ground_speed) * (velocity - level_up * velocity.dot(level_up)).length()
 	_slip_est = StabilityControl.slip_step(_slip_est, lat_acc, yaw_rate, speed, delta)
-	var k := StabilityControl.reference_k(gd.esc_reference_k, lat_acc / StabilityControl.G)
+	var k := StabilityControl.reference_k(esc_reference_k, lat_acc / StabilityControl.G)
 	var ref := StabilityControl.reference_yaw(speed, _applied_steer, _wheelbase, k, lat_acc)
 	var inverse := VehicleMath.inverse_moment(body, basis.y)
 	var out := StabilityControl.intervention(speed, ref, yaw_rate, _slip_est,

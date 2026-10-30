@@ -82,6 +82,17 @@ static func hopper_mass_kg(hopper_pct: float) -> float:
 	return clampf(hopper_pct, 0.0, 100.0) / 100.0 * HOPPER_PAYLOAD_KG
 
 
+## The live masses (kg) a body of `empty_kg` steps through as the hopper fills, cycle by cycle as
+## `step` fills it, empty excluded: the laden ESC tables' masses (`GroundDriveSpec.esc_laden_kg`).
+static func laden_masses_kg(empty_kg: float) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	var fill := 0.0
+	while fill < 100.0:
+		fill = minf(fill + HOPPER_PER_CYCLE, 100.0)
+		out.append(empty_kg + hopper_mass_kg(fill))
+	return out
+
+
 ## The pump's flow over its rated flow at `engine_rpm`, 0..1: a fixed displacement's flow is its
 ## speed's share of PUMP_RATED_ENGINE_RPM. The cap at 1 is an ESTIMATE, the body's flow control
 ## holding the arm's rated speed past it (no body's figure found). The torque stays the pump's

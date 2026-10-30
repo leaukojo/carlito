@@ -1107,6 +1107,14 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	# ESC's calibration, off the finished chassis (`GroundDriveSpec.esc_reference_k`).
 	if gd.esc_equipped:
 		gd.esc_reference_k = StabilityControl.reference_table(spec)
+		# A truck carrying the refuse arm steps its mass with the hopper (`TruckVehicle._find_rig`):
+		# one table per laden level (`GroundDriveSpec.esc_laden_k`).
+		if geo["refuse_arm"] and FAMILY_SCRIPTS.get(String(ov["family"])) == TRUCK_SCRIPT:
+			gd.esc_laden_kg = RefuseBody.laden_masses_kg(spec.mass)
+			for kg in gd.esc_laden_kg:
+				var laden := spec.duplicate() as VehicleSpec
+				laden.mass = kg
+				gd.esc_laden_k.append(StabilityControl.reference_table(laden))
 
 	spec.headlight_paths.assign(_lamp_paths["headlight_paths"])
 	spec.head_lamp_paths.assign(_lamp_paths["head_lamp_paths"])
@@ -1702,6 +1710,8 @@ func _analyze(path: String, wheel_models: Array, scale := 1.0) -> Dictionary:
 	var body_pairs: Array = []
 	var wheels: Array = []
 	_collect_body_wheels(inst, Transform3D.IDENTITY, body_pairs, wheels)
+	# The GLB's root children land under `Model` (`_build_scene`).
+	var refuse_arm := inst.get_node_or_null(NodePath(TruckVehicle.ARM_NODE)) != null
 	inst.free()
 	if body_pairs.is_empty() or wheels.size() != 4:
 		push_error("%s: body meshes=%d, wheel nodes=%d (expected 4)" %
@@ -1769,7 +1779,7 @@ func _analyze(path: String, wheel_models: Array, scale := 1.0) -> Dictionary:
 			[variant, _lens_line(lenses.get("front", {})),
 			_lens_line(lenses.get("rear", {}))])
 	return {"xform": xform, "wheel_xz": wheel_xz, "body_pairs": body_pairs, "box": box,
-			"lenses": lenses}
+			"lenses": lenses, "refuse_arm": refuse_arm}
 
 
 func _lens_line(lens: Dictionary) -> String:

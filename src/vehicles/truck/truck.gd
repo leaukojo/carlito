@@ -10,6 +10,10 @@ extends BaseVehicle
 ## the rears through the wheels' own spin step (`WheelDrive.spring_brake`), a mechanical hold like a
 ## pulled handbrake.
 
+## The front-loader arm's mesh under `Model` (the body GLB's root): a truck carrying it carries the
+## refuse body (`_find_rig`, and `gen_kenney_vehicles` bakes its laden ESC tables off the same).
+const ARM_NODE := "arm"
+
 ## CiA 422 refuse body unit, null on a truck with no body. See _find_rig.
 var _body: RefuseBody = null
 var _arm: MeshInstance3D = null      ## front-loader arm; body_pos reads back off its rotation
@@ -43,7 +47,7 @@ func _ready() -> void:
 ## Geometry is the declaration: no `arm` mesh means no body unit and zeros on all body signals.
 ## No spec flag claims a body without an arm (rule 3).
 func _find_rig() -> void:
-	_arm = get_node_or_null(^"Model/arm") as MeshInstance3D
+	_arm = get_node_or_null(NodePath("Model/" + ARM_NODE)) as MeshInstance3D
 	_trash = get_node_or_null(^"Model/body/trash") as MeshInstance3D
 	if _arm == null:
 		return
