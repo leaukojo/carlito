@@ -1,7 +1,7 @@
 class_name DebugOverlay
 extends Label
 ## Perf overlay, toggled with F3. Shows only FPS by default; SETTINGS' "Extended debug labels"
-## adds frame time, draw calls, primitives, VRAM, node count and the grip/artic/flow/UI-scale
+## adds frame time, draw calls, primitives, VRAM, node count and the grip/slip/artic/flow/UI-scale
 ## lines, read off engine Performance monitors so the 60 fps target can be checked while driving.
 ## Read on the deployed web build: draw calls are the first diagnostic, not a design budget.
 ## Plain text only.
@@ -87,6 +87,8 @@ func _refresh() -> void:
 	text += "  (%.1f ms)\ndraw calls %d\nprimitives %d\nVRAM %.1f MB\nnodes %d" % [
 		frame_ms, draw_calls, prims, vram, nodes]
 	text += _grip_line()
+	text += _slip_line()
+	text += _steer_line()
 	text += _attitude_line()
 	text += _articulation_line()
 	text += _flow_line("wind", "wind_vector")
@@ -115,6 +117,42 @@ func _grip_line() -> String:
 		drags.append("%.2f" % w.surface_drag)
 	return "\ntyre " + tyre + "\nsurf " + " ".join(surfaces) + "\ngrip " + " ".join(parts) \
 			+ "\ndrag " + " ".join(drags)
+
+
+## Per wheel, in `_grip_line`'s order, its signed longitudinal slip (`RayWheel.long_slip`, %; - =
+## braking, -100 locked), `*` where the anti-lock held its brake back this tick; "-" off the ground.
+## "" with no wheeled vehicle.
+func _slip_line() -> String:
+	if _level == null:
+		return ""
+	var vehicle: BaseVehicle = _level.get("vehicle")
+	if vehicle == null or vehicle.wheels.is_empty():
+		return ""
+	var parts := PackedStringArray()
+	for w in vehicle.wheels:
+		parts.append(slip_cell(w.in_contact, w.long_slip, w.abs_active))
+	return "\nslip " + " ".join(parts)
+
+
+## One wheel's `_slip_line` cell, pure for tests.
+static func slip_cell(in_contact: bool, long_slip: float, abs_active: bool) -> String:
+	if not in_contact:
+		return "-"
+	return "%+d%s" % [roundi(long_slip * 100.0), "*" if abs_active else ""]
+
+
+## Per wheel, in `_grip_line`'s order, its angle this tick (`RayWheel.steer_angle`, deg, + = left):
+## the Ackermann split plus roll and compliance steer. "" with no wheeled vehicle.
+func _steer_line() -> String:
+	if _level == null:
+		return ""
+	var vehicle: BaseVehicle = _level.get("vehicle")
+	if vehicle == null or vehicle.wheels.is_empty():
+		return ""
+	var parts := PackedStringArray()
+	for w in vehicle.wheels:
+		parts.append("%+.1f" % rad_to_deg(w.steer_angle))
+	return "\nsteer " + " ".join(parts)
 
 
 ## The surface name under `w`'s contact, as its grip reads it: bare ground is Asphalt; a duck-typed

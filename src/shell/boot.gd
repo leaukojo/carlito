@@ -165,7 +165,8 @@ func _refresh_attachment_controls() -> void:
 ## truck's from its own body, and neither may cancel the other out.
 func _capabilities() -> Dictionary:
 	var caps := {"tows": false, "pto": false, "lift": false,
-			"diff_lock": false, "fwd_drive": false, "body_cmd": false}
+			"diff_lock": false, "fwd_drive": false, "body_cmd": false, "abs": false,
+			"axle_diff": false, "ackermann": false}
 	if _level == null or _level.vehicle == null:
 		return caps
 	var v: BaseVehicle = _level.vehicle
@@ -430,6 +431,10 @@ func _open_pause() -> void:
 	state.tcs_off = InputRouter.local_tcs_off()
 	state.esc_off = InputRouter.local_esc_off()
 	state.auto_hold = InputRouter.auto_hold_on()
+	state.abs_off = InputRouter.lab_abs_off()
+	state.axle_diff = InputRouter.lab_axle_diff()
+	state.parallel_steer = InputRouter.lab_parallel_steer()
+	state.lab_locked = _challenge != null
 	state.wind_preset = _wind_preset
 	state.current_preset = _current_preset
 	state.wind_from_deg = _wind_from_deg
@@ -448,6 +453,9 @@ func _open_pause() -> void:
 	pause.tcs_off_changed.connect(_on_tcs_off_changed)
 	pause.esc_off_changed.connect(_on_esc_off_changed)
 	pause.auto_hold_changed.connect(_on_auto_hold_changed)
+	pause.abs_off_changed.connect(_on_abs_off_changed)
+	pause.axle_diff_changed.connect(_on_axle_diff_changed)
+	pause.parallel_steer_changed.connect(_on_parallel_steer_changed)
 	pause.conditions_changed.connect(_on_conditions_changed)
 	pause.night_toggled.connect(_on_night_toggled)
 	_push_overlay(pause)
@@ -506,6 +514,22 @@ func _on_esc_off_changed(off: bool) -> void:
 func _on_auto_hold_changed(on: bool) -> void:
 	InputRouter.set_auto_hold_on(on)
 	_settings.set_value("auto_hold", InputRouter.auto_hold_on())
+
+
+## LAB flipped ANTI-LOCK BRAKES. Session-only: never written to user://, so a later visit never
+## starts with ABS off unknowingly.
+func _on_abs_off_changed(off: bool) -> void:
+	InputRouter.set_lab_abs_off(off)
+
+
+## LAB cycled DIFFERENTIALS. Session-only, as ANTI-LOCK BRAKES.
+func _on_axle_diff_changed(mode: VehicleInput.AxleDiff) -> void:
+	InputRouter.set_lab_axle_diff(mode)
+
+
+## LAB flipped STEERING. Session-only, as ANTI-LOCK BRAKES.
+func _on_parallel_steer_changed(on: bool) -> void:
+	InputRouter.set_lab_parallel_steer(on)
 
 
 ## F2: cycles the same density setting the SETTINGS page's button does, so the menu and the key

@@ -149,7 +149,8 @@ semis), each an **estimate**: road cars run partial Ackermann (~40-60 %, a paten
 textbook figure) for the loaded outer tyre at high g; trucks set close to full for steer-tyre wear
 (SAE 861975 and 912693, no figure); no ag-tractor figure was found. Here the low-speed scrub is the
 point: at road speed the split is second order (a fraction of a degree on `sedan`'s step at road
-speed). Trailers and the plane have no steered pair.
+speed). Trailers and the plane have no steered pair. The pause menu's LAB ▸ STEERING: PARALLEL
+drives any body at `f = 0` (`WheelDrive.ackermann_fraction`; `docs/systems.md` § Input pipeline).
 
 Full lock at crawl speed (`circle`), parallel steer → `f = 1`: the radius driven at the rear
 axle over `L / tan δ`, and the inner / outer front slip angles (+ = the wheel points further into
@@ -160,7 +161,7 @@ the cornering force needs.
 | --- | --- |
 | `sedan` | 2.39 → 2.13 m / 2.10 |
 | `suv` | 2.65 → 2.48 m / 2.43 |
-| `tractor-kenney` | 3.24 → 2.97 m / 2.93 |
+| `tractor-kenney` | 3.80 → 3.63 m / 3.57 |
 | `delivery` | 4.33 → 4.23 m / 4.21 |
 | `semi` (bobtail) | 9.01 → 8.76 m / 8.50 |
 

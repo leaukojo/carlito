@@ -209,6 +209,9 @@ func vehicle_capabilities() -> Dictionary:
 	return {
 		"diff_lock": gd != null and gd.rear_diff_lockable,
 		"fwd_drive": gd != null and gd.front_axle_engageable,
+		"abs": gd != null and gd.abs_equipped,
+		"axle_diff": gd != null and drive != null and drive.lab_axle_diff_fitted(gd),
+		"ackermann": gd != null and gd.ackermann > 0.0,
 	}
 
 

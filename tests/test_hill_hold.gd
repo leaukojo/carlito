@@ -15,6 +15,36 @@ static func _step(kind: HillHold.Kind, held: Vector2, pedal := 0.0, throttle := 
 			drives, TICK)
 
 
+# --- the LAB's ABS switch -----------------------------------------------------------------------
+
+## ABS off takes the hill hold with it on a body with ABS; a body without ABS keeps its own hold.
+## The specs as shipped, never written.
+func test_abs_off_takes_the_hill_hold_only_where_abs_is_fitted() -> void:
+	var sedan := (load("res://src/vehicles/kenney/sedan_spec.tres") as VehicleSpec).ground_drive
+	var tractor := (load("res://src/vehicles/kenney/tractor-kenney_spec.tres") as VehicleSpec) \
+			.ground_drive
+	var on := VehicleInput.new()
+	var off := VehicleInput.new()
+	off.abs_off = true
+	assert_int(WheelDrive.hill_hold_kind(sedan, on)).is_equal(ASSIST)
+	assert_int(WheelDrive.hill_hold_kind(sedan, off)).is_equal(HillHold.Kind.NONE)
+	assert_bool(tractor.abs_equipped).is_false()
+	assert_int(WheelDrive.hill_hold_kind(tractor, off)).is_equal(STANDSTILL)
+	assert_int(sedan.hill_hold).is_equal(ASSIST)
+
+
+func test_abs_off_switches_the_anti_lock_off_without_touching_the_spec() -> void:
+	var sedan := (load("res://src/vehicles/kenney/sedan_spec.tres") as VehicleSpec).ground_drive
+	var race := (load("res://src/vehicles/kenney/race_spec.tres") as VehicleSpec).ground_drive
+	var on := VehicleInput.new()
+	var off := VehicleInput.new()
+	off.abs_off = true
+	assert_bool(WheelDrive.anti_lock_on(sedan, on)).is_true()
+	assert_bool(WheelDrive.anti_lock_on(sedan, off)).is_false()
+	assert_bool(sedan.abs_equipped).is_true()
+	assert_bool(WheelDrive.anti_lock_on(race, on)).is_false()
+
+
 # --- the grade ----------------------------------------------------------------------------------
 
 func test_level_ground_pulls_nothing_however_the_body_pitches() -> void:

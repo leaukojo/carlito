@@ -10,6 +10,11 @@ const Layers := preload("res://src/physics/collision_layers.gd")
 ## control left as fitted: the bridge's `esc_off` would take TC with it, and the chassis tables are
 ## recorded with TC on. Each tool sets it from its flags; a chassis table's doc preset sets it itself.
 static var esc_off := false
+## `noabs` (measure_vehicles): the LAB page's ANTI-LOCK BRAKES OFF (`apply_lab`).
+static var abs_off := false
+## `axle=open|locked` (measure_vehicles, measure_rough): the LAB page's DIFFERENTIALS switch
+## (`apply_lab`).
+static var axle_diff := VehicleInput.AxleDiff.STOCK
 ## A towed body's own roll-over control off (`notrsp`): its lift table is measured on the bare
 ## trailer, never one braking itself.
 static var trailer_roll_off := false
@@ -28,6 +33,56 @@ static func unfit_esc(car: Node) -> void:
 	spec.ground_drive = spec.ground_drive.duplicate()
 	spec.ground_drive.esc_equipped = false
 	car.set("spec", spec)
+
+
+
+## A tool's `axle=open|locked` flag into `axle_diff`; false (printed as an error) on any other
+## value, which the tool quits on. STOCK when absent.
+static func axle_flag(args: PackedStringArray) -> bool:
+	axle_diff = VehicleInput.AxleDiff.STOCK
+	for a in args:
+		if a.begins_with("axle="):
+			var mode: Variant = VehicleInput.AxleDiff.get(a.substr(5).to_upper())
+			if mode == null or mode == VehicleInput.AxleDiff.STOCK:
+				printerr("axle=%s: expected open or locked" % a.substr(5))
+				return false
+			axle_diff = mode
+	return true
+
+
+## Under `abs_off` / `axle_diff`, the LAB switches on this tick's input as the router sets them
+## (`InputRouter.lab_raw` on `car`'s hardware, then `lab_cascade`): the bridge stash these tools
+## drive through never carries them. The router builds a fresh struct every tick, so nothing leaks;
+## call it from the tool root's `_physics_process`, which runs after the router's and before its
+## vehicle child's.
+static func apply_lab(car: Node) -> void:
+	if (not abs_off and axle_diff == VehicleInput.AxleDiff.STOCK) or car == null:
+		return
+	var lab := lab_on(car)
+	var input := InputRouter.get_vehicle_input()
+	input.abs_off = bool(lab[&"abs_off"])
+	input.axle_diff = int(lab[&"axle_diff"]) as VehicleInput.AxleDiff
+	InputRouter.lab_cascade(input)
+
+
+## `abs_off` / `axle_diff` as they reach `car` (`InputRouter.lab_raw` on its hardware): stock on a
+## body without it, as the LAB page leaves it.
+static func lab_on(car: Node) -> Dictionary[StringName, Variant]:
+	var caps: Dictionary = car.call(&"vehicle_capabilities") \
+			if car != null and car.has_method(&"vehicle_capabilities") else {}
+	return InputRouter.lab_raw(abs_off, axle_diff, false, caps, false)
+
+
+## A report's note of `axle_diff` on `car`, e.g. ", driven axles locked (axle=, not the spec's)",
+## or that the body has no axle diff the switch acts on; empty at STOCK.
+static func axle_label(car: Node) -> String:
+	if axle_diff == VehicleInput.AxleDiff.STOCK:
+		return ""
+	if int(lab_on(car)[&"axle_diff"]) == VehicleInput.AxleDiff.STOCK:
+		return ", axle= ignored (no switchable axle diff)"
+	return ", driven axles %s%s (axle=, not the spec's)" % [
+			String(VehicleInput.AxleDiff.find_key(axle_diff)).to_lower(),
+			", with ESC and TC" if axle_diff == VehicleInput.AxleDiff.LOCKED else ""]
 
 
 ## Under `trailer_roll_off`, `trailer`'s roll-over control unfitted on a copy of its spec, in memory,

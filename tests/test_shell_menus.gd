@@ -284,7 +284,7 @@ func test_pause_menu_offers_the_shell_sections() -> void:
 	var labels := []
 	for b in _buttons(pause):
 		labels.append(b.text)
-	assert_array(labels).contains(["RESUME", "RESPAWN", "CONDITIONS", "CONTROLS", "SETTINGS"])
+	assert_array(labels).contains(["RESUME", "RESPAWN", "CONDITIONS", "LAB", "CONTROLS", "SETTINGS"])
 	# GARAGE and LEVEL are the on-screen important buttons' job, not this menu's.
 	assert_array(labels).not_contains(["GARAGE", "LEVEL"])
 
@@ -428,6 +428,128 @@ func test_pause_menu_conditions_page_locks_during_a_challenge() -> void:
 		if (l as Label).text == PauseMenu.LOCKED_HELP:
 			said += 1
 	assert_int(said).is_equal(4)
+
+
+## LAB's ABS switch cycles and emits like SETTINGS (rule 6), and SETTINGS' ESC and TC rows say they
+## went with it.
+func test_pause_menu_lab_page_flips_abs_and_relabels_esc_and_tc() -> void:
+	var pause: PauseMenu = auto_free(PauseMenu.new())
+	pause.setup({"abs": true})
+	add_child(pause)
+	_press(pause, "LAB")
+	var picked := []
+	pause.abs_off_changed.connect(func(off: bool) -> void: picked.append(off))
+	_press(pause, "ANTI-LOCK BRAKES: ON")
+	assert_array(picked).is_equal([true])
+	assert_array(_labels(pause)).contains(["ANTI-LOCK BRAKES: OFF",
+			"STABILITY CONTROL: OFF (WITH ABS)", "TRACTION CONTROL: OFF (WITH ABS)"])
+	assert_bool(pause.back()).is_true()
+	assert_bool(pause.back()).is_false()
+
+
+## The switch greys out (and says why) on a body without ABS, and in a challenge, which drives stock.
+func test_pause_menu_lab_page_greys_abs_without_it_and_in_a_challenge() -> void:
+	var bare: PauseMenu = auto_free(PauseMenu.new())
+	bare.setup({})
+	add_child(bare)
+	var locked: PauseMenu = auto_free(PauseMenu.new())
+	var state := PauseMenu.State.new()
+	state.lab_locked = true
+	state.abs_off = true
+	locked.setup({"abs": true}, state)
+	add_child(locked)
+	for pause: PauseMenu in [bare, locked]:
+		for b in _buttons(pause):
+			if (b as Button).text.begins_with("ANTI-LOCK BRAKES"):
+				assert_bool((b as Button).disabled).is_true()
+	var helps := locked.find_children("*", "Label", true, false).map(
+			func(l: Node) -> String: return (l as Label).text)
+	assert_array(helps).contains([PauseMenu.LOCKED_HELP])
+	# A stored OFF never reaches the attempt, so ESC reads its own setting there.
+	assert_array(_labels(locked)).contains(["STABILITY CONTROL: ON"])
+	# Nor a body without ABS: a switch kept from the last body leaves its ESC and TC on.
+	var race: PauseMenu = auto_free(PauseMenu.new())
+	var kept := PauseMenu.State.new()
+	kept.abs_off = true
+	race.setup({}, kept)
+	add_child(race)
+	assert_array(_labels(race)).contains(["STABILITY CONTROL: ON", "TRACTION CONTROL: ON"])
+
+
+## LAB's DIFFERENTIALS: LOCKED takes ESC and TC with it, and SETTINGS says so.
+func test_pause_menu_lab_locked_diffs_relabel_esc_and_tc() -> void:
+	var pause: PauseMenu = auto_free(PauseMenu.new())
+	pause.setup({"axle_diff": true})
+	add_child(pause)
+	_press(pause, "LAB")
+	_press(pause, "DIFFERENTIALS: STOCK")
+	assert_array(_labels(pause)).contains(["STABILITY CONTROL: ON"])
+	_press(pause, "DIFFERENTIALS: OPEN")
+	assert_array(_labels(pause)).contains(["STABILITY CONTROL: OFF (WITH LOCKED DIFFS)",
+			"TRACTION CONTROL: OFF (WITH LOCKED DIFFS)"])
+
+
+## LAB's DIFFERENTIALS cycles STOCK, OPEN, LOCKED and back, emitting each (rule 6).
+func test_pause_menu_lab_page_cycles_the_axle_diffs() -> void:
+	var pause: PauseMenu = auto_free(PauseMenu.new())
+	pause.setup({"axle_diff": true})
+	add_child(pause)
+	_press(pause, "LAB")
+	var picked := []
+	pause.axle_diff_changed.connect(func(mode: VehicleInput.AxleDiff) -> void: picked.append(mode))
+	for label in ["DIFFERENTIALS: STOCK", "DIFFERENTIALS: OPEN", "DIFFERENTIALS: LOCKED"]:
+		_press(pause, label)
+	assert_array(picked).is_equal([VehicleInput.AxleDiff.OPEN, VehicleInput.AxleDiff.LOCKED,
+			VehicleInput.AxleDiff.STOCK])
+	assert_array(_labels(pause)).contains(["DIFFERENTIALS: STOCK"])
+
+
+## The row greys out without an axle diff and in a challenge; a body with its own DIFF LOCK key
+## (the tractors) has no row at all.
+func test_pause_menu_lab_page_greys_or_hides_the_axle_diffs() -> void:
+	var bare: PauseMenu = auto_free(PauseMenu.new())
+	bare.setup({})
+	add_child(bare)
+	var locked: PauseMenu = auto_free(PauseMenu.new())
+	var state := PauseMenu.State.new()
+	state.lab_locked = true
+	locked.setup({"axle_diff": true}, state)
+	add_child(locked)
+	for pause: PauseMenu in [bare, locked]:
+		for b in _buttons(pause):
+			if (b as Button).text.begins_with("DIFFERENTIALS"):
+				assert_bool((b as Button).disabled).is_true()
+	var tractor: PauseMenu = auto_free(PauseMenu.new())
+	tractor.setup({"diff_lock": true, "fwd_drive": true})
+	add_child(tractor)
+	assert_array(_labels(tractor).filter(
+			func(t: String) -> bool: return t.begins_with("DIFFERENTIALS"))).is_empty()
+
+
+## LAB's STEERING flips STOCK and PARALLEL, emitting each (rule 6); greyed without Ackermann and in
+## a challenge.
+func test_pause_menu_lab_page_flips_the_steering() -> void:
+	var pause: PauseMenu = auto_free(PauseMenu.new())
+	pause.setup({"ackermann": true})
+	add_child(pause)
+	_press(pause, "LAB")
+	var picked := []
+	pause.parallel_steer_changed.connect(func(on: bool) -> void: picked.append(on))
+	_press(pause, "STEERING: STOCK")
+	_press(pause, "STEERING: PARALLEL")
+	assert_array(picked).is_equal([true, false])
+	var bare: PauseMenu = auto_free(PauseMenu.new())
+	bare.setup({})
+	add_child(bare)
+	var locked: PauseMenu = auto_free(PauseMenu.new())
+	var state := PauseMenu.State.new()
+	state.lab_locked = true
+	locked.setup({"ackermann": true}, state)
+	add_child(locked)
+	for menu: PauseMenu in [bare, locked]:
+		for b in _buttons(menu):
+			if (b as Button).text.begins_with("STEERING"):
+				assert_bool((b as Button).disabled).is_true()
 
 
 func test_vehicle_select_back_emits_closed() -> void:

@@ -41,6 +41,16 @@ static/pure, tested in `tests/test_input_arbitration.gd`.
 - `auto_hold` (SETTINGS ▸ AUTO HOLD, off by default): with keys or touch, a wheel-driving body stopped in D or R with no throttle holds
   its foot brake until the throttle asks to move (`docs/drivetrain.md` § Hill hold). It is
   off while the gamepad moved a pedal last, and never applies to the bridge.
+- LAB switches (pause ▸ LAB): session-only and unsaved, local only (no contract signal), stock
+  under the challenge lock, dev keys included, and on a body without the hardware, so a switch kept
+  through a body change never reaches the next (`InputRouter.lab_raw`). ANTI-LOCK BRAKES
+  (`abs_off`; drops hill-start assist and the auto hold), DIFFERENTIALS (`axle_diff` STOCK / OPEN /
+  LOCKED on every driven axle, the centre untouched; no row on a body with its own DIFF LOCK key),
+  STEERING (`parallel_steer`, Ackermann fraction 0). ABS off and LOCKED each set `esc_off`, so
+  `tcs_off` (`lab_cascade`: a locked axle passes ESC's one-wheel brake to its partner). Each is a pure
+  read at its `WheelDrive` use site (`anti_lock_on`, `hill_hold_kind`, `axle_diff_mode`,
+  `ackermann_fraction`), with no spec write; greyed per `BaseVehicle.vehicle_capabilities`. An ABS
+  cluster lamp lights while it is off; F3's `slip` and `steer` lines read each wheel.
 - `arbitrate_bridge`: the gear byte owns direction. Mode = `InputRouter.set_manual_gearbox`
   (vehicle selector, or `ChallengeDef.transmission`).
   - Automatic (default): PRND lever. R reverses, D1-D24 = D with auto-shift, 0 = D (RAMN
@@ -170,13 +180,14 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   `NoticeLine.NOTICE_DWELL_S`. First-run cue (`src/ui/coach_cue.gd`): dismissed by input or
   timeout, once per session (`CoachCue.maybe_coach`), via non-consuming `_input`.
 - Pause overlay (`src/ui/pause_menu.gd`, Esc or touch MENU):
-  RESUME/RESPAWN/CONDITIONS/CONTROLS/SETTINGS; GARAGE/LEVEL live on touch (hidden only by
+  RESUME/RESPAWN/CONDITIONS/LAB/CONTROLS/SETTINGS; GARAGE/LEVEL live on touch (hidden only by
   F5, never F4) and G / 4.
 
   | Page | Contents |
   |---|---|
   | CONTROLS | off `InputMap`; hidden if unusable (`ActionRegistry.relevant_entry`), greyed if bridge-owned. `setup(caps, density, ui_scale, wind_preset, current_preset, wind_from_deg, night_on)` before `add_child` |
   | SETTINGS | dashboard density + UI scale cycling buttons, session-held |
+  | LAB | ANTI-LOCK BRAKES, DIFFERENTIALS, STEERING (§ Input pipeline), session-held, greyed in a challenge |
   | CONDITIONS | WIND/CURRENT preset (`WorldConditions.Preset` LEVEL/CALM/LIGHT/STRONG), FROM direction, TIME -> greys per `WorldConditions.WIND_FAMILIES`/`CURRENT_FAMILIES` |
 
   Session-held, re-applied each load (`Boot._finish_load`, restoring `PAUSABLE`); night tracks `GameState.night_changed`. `Boot` is `PROCESS_MODE_ALWAYS`.

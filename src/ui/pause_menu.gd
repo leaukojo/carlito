@@ -1,12 +1,12 @@
 class_name PauseMenu
 extends Control
-## The pause overlay: RESUME / RESPAWN / SPAWN POINT / CONDITIONS / CONTROLS / SETTINGS. GARAGE,
+## The pause overlay: RESUME / RESPAWN / SPAWN POINT / CONDITIONS / LAB / CONTROLS / SETTINGS. GARAGE,
 ## LEVEL and CHALLENGES live on the on-screen important buttons (and G / 4 / 5), not here. Never
 ## tears the level down on its own. RESPAWN and SPAWN POINT are signals — respawning is the
 ## shell's to do (rule 6), SPAWN POINT lists names and hands back an index; this
-## menu never learns what a level or vehicle is. CONTROLS, SETTINGS and CONDITIONS own nothing either:
-## CONTROLS is generated from ActionRegistry (same source the touch overlay reads), SETTINGS and
-## CONDITIONS emit new values for the shell to apply/persist. Built in code, colour/type from the
+## menu never learns what a level or vehicle is. CONTROLS, SETTINGS, CONDITIONS and LAB own nothing
+## either: CONTROLS is generated from ActionRegistry (same source the touch overlay reads), SETTINGS,
+## CONDITIONS and LAB emit new values for the shell to apply/persist. Built in code, colour/type from the
 ## inherited theme. No emoji.
 
 const WorldConditions := preload("res://src/levels/base/world_conditions.gd")
@@ -31,6 +31,12 @@ signal tcs_off_changed(off: bool)
 signal esc_off_changed(off: bool)
 ## AUTO HOLD flipped; the shell hands it to InputRouter and writes it to user://.
 signal auto_hold_changed(on: bool)
+## LAB's ANTI-LOCK BRAKES flipped (true = off); the shell hands it to InputRouter for the session.
+signal abs_off_changed(off: bool)
+## LAB's DIFFERENTIALS cycled; the shell hands it to InputRouter for the session.
+signal axle_diff_changed(mode: VehicleInput.AxleDiff)
+## LAB's STEERING flipped (true = PARALLEL); the shell hands it to InputRouter for the session.
+signal parallel_steer_changed(on: bool)
 ## New wind/current preset or shared compass direction picked; the shell applies it to the
 ## current level and keeps it for the session.
 signal conditions_changed(wind_preset: int, current_preset: int, from_deg: float)
@@ -48,6 +54,10 @@ class State extends RefCounted:
 	var tcs_off := false
 	var esc_off := false
 	var auto_hold := false
+	var abs_off := false
+	var axle_diff := VehicleInput.AxleDiff.STOCK
+	var parallel_steer := false
+	var lab_locked := false  ## a challenge drives the stock hardware
 	var wind_preset: int = WorldConditions.Preset.LEVEL
 	var current_preset: int = WorldConditions.Preset.LEVEL
 	var wind_from_deg := 0.0
@@ -69,7 +79,7 @@ const DENSITY_HELP := "COMPACT keeps the gauges and tell-tales; FULL adds the ba
 const UI_SCALE_HELP := "Scales all on-screen controls and text. 100% is the automatic size."
 
 ## F3 shows only FPS by default; this is what turning it on buys back.
-const EXTENDED_DEBUG_HELP := "Adds frame time, draw calls, VRAM, grip and wind/current to the F3 overlay."
+const EXTENDED_DEBUG_HELP := "Adds frame time, draw calls, VRAM, grip, wheel slip and wind/current to the F3 overlay."
 
 const KEY_RESPONSE_HELP := "How driving keys and on-screen pedals ease in. RAW is instant; REALISTIC eases in like a driver."
 
@@ -78,6 +88,12 @@ const TCS_HELP := "Cuts engine power when a driven wheel spins. Cars fitted with
 const ESC_HELP := "Brakes one wheel to stop a spin or a plough. Road vehicles fitted with it only; OFF turns traction control off too."
 
 const AUTO_HOLD_HELP := "Holds the brake when stopped in gear, with keys or on-screen pedals, until you press the accelerator. OFF lets it creep and roll back."
+
+const ABS_HELP := "Keeps a braked wheel from locking, so the car still steers. OFF takes stability control, traction control, hill-start assist and auto hold with it. This session only."
+
+const AXLE_DIFF_HELP := "STOCK is the car's own. OPEN splits the torque evenly: a wheel on low grip or in the air spins and the other stops pushing. LOCKED turns a driven axle's wheels together: no spin, but the tyres scrub in a tight turn; it takes stability and traction control with it. Traction control brakes a spinning wheel and hides some of it. This session only."
+
+const STEERING_HELP := "STOCK turns the inner front wheel further than the outer, so both roll around one centre. PARALLEL turns them alike: at full lock the fronts fight each other and the circle grows. This session only."
 
 const WIND_HELP := "Overrides the level's wind for this session."
 const CURRENT_HELP := "Overrides the level's water current for this session."
@@ -92,6 +108,7 @@ var _root: VBoxContainer
 var _controls: VBoxContainer
 var _settings: VBoxContainer
 var _conditions: VBoxContainer
+var _lab: VBoxContainer
 var _spawn_page: VBoxContainer
 var _sheet: ScrollContainer  ## CONTROLS sheet's scroll area, driven by Up/Down (_unhandled_input)
 var _resume_btn: Button
@@ -102,6 +119,9 @@ var _key_response_btn: Button
 var _tcs_btn: Button
 var _esc_btn: Button
 var _auto_hold_btn: Button
+var _abs_btn: Button
+var _axle_diff_btn: Button
+var _steering_btn: Button
 var _wind_btn: Button
 var _current_btn: Button
 var _from_btn: Button
@@ -115,6 +135,10 @@ var _key_softening := KeyShaper.DEFAULT_SOFTENING
 var _tcs_off := false
 var _esc_off := false
 var _auto_hold := false
+var _abs_off := false
+var _axle_diff := VehicleInput.AxleDiff.STOCK
+var _parallel_steer := false
+var _lab_locked := false  ## a challenge drives the stock hardware: LAB greys out
 var _wind_preset: int = WorldConditions.Preset.LEVEL
 var _current_preset: int = WorldConditions.Preset.LEVEL
 var _wind_from_deg := 0.0
@@ -134,6 +158,10 @@ func setup(caps: Dictionary, state := State.new()) -> void:
 	_tcs_off = state.tcs_off
 	_esc_off = state.esc_off
 	_auto_hold = state.auto_hold
+	_abs_off = state.abs_off
+	_axle_diff = state.axle_diff
+	_parallel_steer = state.parallel_steer
+	_lab_locked = state.lab_locked
 	_wind_preset = state.wind_preset
 	_current_preset = state.current_preset
 	_wind_from_deg = state.wind_from_deg
@@ -161,6 +189,9 @@ func _ready() -> void:
 	_conditions = _page()
 	_conditions.visible = false
 	_build_conditions()
+	_lab = _page()
+	_lab.visible = false
+	_build_lab()
 	_spawn_page = _page()
 	_spawn_page.visible = false
 	_build_spawns()
@@ -186,6 +217,7 @@ func _build_root() -> void:
 	if _spawns.size() >= 2:
 		_root.add_child(_menu_button("SPAWN POINT", func() -> void: _show_page(_spawn_page)))
 	_root.add_child(_menu_button("CONDITIONS", func() -> void: _show_page(_conditions)))
+	_root.add_child(_menu_button("LAB", func() -> void: _show_page(_lab)))
 	_root.add_child(_menu_button("CONTROLS", func() -> void: _show_page(_controls)))
 	_root.add_child(_menu_button("SETTINGS", func() -> void: _show_page(_settings)))
 
@@ -344,6 +376,53 @@ func _build_conditions() -> void:
 	_conditions.add_child(_menu_button("BACK", func() -> void: _show_page(_root)))
 
 
+## The A/B switches on the machine's own hardware, session-only like CONDITIONS: each a cycling
+## button + short help. Disabled (with a reason) on a body without the hardware and in a challenge,
+## which drives stock. Nothing is applied here (rule 6).
+func _build_lab() -> void:
+	_lab.add_child(_title("LAB"))
+
+	_abs_btn = _menu_button("", _on_abs_pressed)
+	_relabel_abs()
+	_lab.add_child(_abs_btn)
+	var abs_help := _help(ABS_HELP)
+	if _lab_locked:
+		_abs_btn.disabled = true
+		abs_help.text = LOCKED_HELP
+	elif not bool(_caps.get("abs", false)):
+		_abs_btn.disabled = true
+		abs_help.text = "no ABS on the %s" % GameState.current_variant
+	_lab.add_child(abs_help)
+
+	# A body with its own DIFF LOCK key (the tractors) teaches the lesson there: no row.
+	if not bool(_caps.get("diff_lock", false)):
+		_axle_diff_btn = _menu_button("", _on_axle_diff_pressed)
+		_relabel_axle_diff()
+		_lab.add_child(_axle_diff_btn)
+		var diff_help := _help(AXLE_DIFF_HELP)
+		if _lab_locked:
+			_axle_diff_btn.disabled = true
+			diff_help.text = LOCKED_HELP
+		elif not bool(_caps.get("axle_diff", false)):
+			_axle_diff_btn.disabled = true
+			diff_help.text = "no axle diff on the %s" % GameState.current_variant
+		_lab.add_child(diff_help)
+
+	_steering_btn = _menu_button("", _on_steering_pressed)
+	_relabel_steering()
+	_lab.add_child(_steering_btn)
+	var steering_help := _help(STEERING_HELP)
+	if _lab_locked:
+		_steering_btn.disabled = true
+		steering_help.text = LOCKED_HELP
+	elif not bool(_caps.get("ackermann", false)):
+		_steering_btn.disabled = true
+		steering_help.text = "no Ackermann steering on the %s" % GameState.current_variant
+	_lab.add_child(steering_help)
+
+	_lab.add_child(_menu_button("BACK", func() -> void: _show_page(_root)))
+
+
 ## One button per spawn point, in the level's order (the first is its default).
 func _build_spawns() -> void:
 	_spawn_page.add_child(_title("SPAWN POINT"))
@@ -411,9 +490,11 @@ func _on_tcs_pressed() -> void:
 
 
 func _relabel_tcs() -> void:
-	# STABILITY CONTROL off takes TC with it (`InputRouter.arbitrate_local`), whatever this setting.
-	_tcs_btn.text = "TRACTION CONTROL: %s" % ("OFF (WITH ESC)" if _esc_off
-			else "OFF" if _tcs_off else "ON")
+	# LAB's ABS off or locked diffs take ESC with them and STABILITY CONTROL off takes TC with it
+	# (`InputRouter.arbitrate_local`), whatever this setting.
+	var lab := _lab_esc_cause()
+	_tcs_btn.text = "TRACTION CONTROL: %s" % ("OFF (WITH %s)" % lab if lab != ""
+			else "OFF (WITH ESC)" if _esc_off else "OFF" if _tcs_off else "ON")
 
 
 func _on_esc_pressed() -> void:
@@ -424,7 +505,9 @@ func _on_esc_pressed() -> void:
 
 
 func _relabel_esc() -> void:
-	_esc_btn.text = "STABILITY CONTROL: %s" % ("OFF" if _esc_off else "ON")
+	var lab := _lab_esc_cause()
+	_esc_btn.text = "STABILITY CONTROL: %s" % ("OFF (WITH %s)" % lab if lab != ""
+			else "OFF" if _esc_off else "ON")
 
 
 func _on_auto_hold_pressed() -> void:
@@ -435,6 +518,48 @@ func _on_auto_hold_pressed() -> void:
 
 func _relabel_auto_hold() -> void:
 	_auto_hold_btn.text = "AUTO HOLD: %s" % ("ON" if _auto_hold else "OFF")
+
+
+func _on_abs_pressed() -> void:
+	_abs_off = not _abs_off
+	_relabel_abs()
+	_relabel_esc()
+	_relabel_tcs()
+	abs_off_changed.emit(_abs_off)
+
+
+func _relabel_abs() -> void:
+	_abs_btn.text = "ANTI-LOCK BRAKES: %s" % ("OFF" if _abs_off else "ON")
+
+
+func _on_axle_diff_pressed() -> void:
+	_axle_diff = posmod(_axle_diff + 1, VehicleInput.AxleDiff.size()) as VehicleInput.AxleDiff
+	_relabel_axle_diff()
+	_relabel_esc()
+	_relabel_tcs()
+	axle_diff_changed.emit(_axle_diff)
+
+
+func _relabel_axle_diff() -> void:
+	_axle_diff_btn.text = "DIFFERENTIALS: %s" % VehicleInput.AxleDiff.find_key(_axle_diff)
+
+
+func _on_steering_pressed() -> void:
+	_parallel_steer = not _parallel_steer
+	_relabel_steering()
+	parallel_steer_changed.emit(_parallel_steer)
+
+
+func _relabel_steering() -> void:
+	_steering_btn.text = "STEERING: %s" % ("PARALLEL" if _parallel_steer else "STOCK")
+
+
+## What the LAB takes ESC off with on this body ("" for nothing), as the router gates it: never in a
+## challenge nor on a body without the hardware (`InputRouter.lab_raw`).
+func _lab_esc_cause() -> String:
+	var lab := InputRouter.lab_raw(_abs_off, _axle_diff, _parallel_steer, _caps, _lab_locked)
+	return InputRouter.lab_esc_cause(bool(lab[&"abs_off"]),
+			int(lab[&"axle_diff"]) as VehicleInput.AxleDiff)
 
 
 func _on_wind_pressed() -> void:
@@ -500,7 +625,7 @@ func _notification(what: int) -> void:
 	if what != NOTIFICATION_THEME_CHANGED or _root == null:
 		return
 	var margin := int(UiTheme.px(self, UiTheme.MARGIN))
-	for page: VBoxContainer in [_root, _controls, _settings, _conditions, _spawn_page]:
+	for page: VBoxContainer in [_root, _controls, _settings, _conditions, _lab, _spawn_page]:
 		page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT,
 				Control.PRESET_MODE_MINSIZE, margin)
 		for child in page.get_children():
@@ -522,6 +647,7 @@ func _show_page(page: VBoxContainer) -> void:
 	_controls.visible = page == _controls
 	_settings.visible = page == _settings
 	_conditions.visible = page == _conditions
+	_lab.visible = page == _lab
 	_spawn_page.visible = page == _spawn_page
 	# Focus follows the page, else a keyboard player is left driving an invisible button.
 	for child in page.get_children():

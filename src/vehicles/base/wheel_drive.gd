@@ -33,6 +33,8 @@ const LOCK_STUCK_SPIN := 0.01
 var wheels: Array[RayWheel] = []
 ## Rear diff state as actually run this tick, not the request bit; `diff_lock_state` reads this.
 var rear_diff_locked := false
+## Front diff state as actually run this tick: the LAB's LOCKED on a driven front pair.
+var front_diff_locked := false
 ## Retarder torque actually applied this tick (Nm), summed over driven rear wheels.
 var retarder_torque_applied := 0.0
 ## Spring-brake application on the rear wheels, 0..1, set by the owner for the next tick (a truck's
@@ -48,6 +50,7 @@ var standstill_lock := 0.0
 
 var _applied_steer := 0.0  ## steer angle applied to steered wheels this tick (rad)
 var _driven_count := 0     ## driven wheels as drive_omega() counted them THIS tick
+var _axle_diff := VehicleInput.AxleDiff.STOCK  ## `axle_diff_mode` as latched by `_couple_differentials`
 var _dust: GPUParticles3D  ## rear-slip dust; null until build_dust(), and on a drive with no wheels
 ## The wheels of each axle (indices into `wheels`), split once by `RayWheel.is_rear`: the
 ## differentials couple within and between these. Whether an axle is DRIVEN is read per tick (MFWD
@@ -359,10 +362,48 @@ func hold_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 		pull = HillHold.pull_torque(gravity, normal.normalized(), forward, lever)
 		drivetrain.standing_load = ShiftPolicy.standing_load(gravity, normal.normalized(), forward,
 				_crr + soil / touching, lever)
-	_hold = HillHold.step(gd.hill_hold, gd.hill_hold_s, _hold.x, _hold.y, input.brake,
+	_hold = HillHold.step(hill_hold_kind(gd, input), gd.hill_hold_s, _hold.x, _hold.y, input.brake,
 			absf(input.throttle), at_rest, in_gear,
 			HillHold.drive_holds(dir, _drive_torque, pull), delta)
 	hill_holding = _hold.x > input.brake
+
+
+## Whether the anti-lock modulates the foot brake: fitted, and not switched off on the LAB page
+## (`VehicleInput.abs_off`). Pure, so the switch never writes the shared spec.
+static func anti_lock_on(gd: GroundDriveSpec, input: VehicleInput) -> bool:
+	return gd.abs_equipped and not input.abs_off
+
+
+## The hill hold this tick: the spec's, or none while a fitted ABS is switched off (it holds through
+## the ABS modulator). A body without ABS keeps its own hold (the tractor's STANDSTILL).
+static func hill_hold_kind(gd: GroundDriveSpec, input: VehicleInput) -> HillHold.Kind:
+	return HillHold.Kind.NONE if gd.abs_equipped and input.abs_off else gd.hill_hold
+
+
+## The driven axles' diffs this tick (`VehicleInput.axle_diff`, the LAB switch): the request, or
+## STOCK on a body with its own rear lock (the tractors' DIFF LOCK key). Pure, so the switch never
+## writes the shared spec.
+static func axle_diff_mode(gd: GroundDriveSpec, input: VehicleInput) -> VehicleInput.AxleDiff:
+	return VehicleInput.AxleDiff.STOCK if gd.rear_diff_lockable else input.axle_diff
+
+
+## A driven axle's bias ratio under `mode` (`Differential.bias_capacity`): open (1) under OPEN, else
+## the spec's `stock`. LOCKED is the unbounded coupling, never a ratio (`_couple_downstream`).
+static func axle_bias(stock: float, mode: VehicleInput.AxleDiff) -> float:
+	return 1.0 if mode == VehicleInput.AxleDiff.OPEN else stock
+
+
+## The Ackermann fraction this tick (`VehicleInput.parallel_steer`, the LAB switch): 0 under
+## PARALLEL, else the spec's. Pure, so the switch never writes the shared spec.
+static func ackermann_fraction(gd: GroundDriveSpec, input: VehicleInput) -> float:
+	return 0.0 if input.parallel_steer else gd.ackermann
+
+
+## Whether the LAB's diff switch has an axle diff to act on: a driven two-wheel axle, on a body
+## without its own lock.
+func lab_axle_diff_fitted(gd: GroundDriveSpec) -> bool:
+	return not gd.rear_diff_lockable and ((gd.driven_front and _front.size() == 2)
+			or (gd.driven_rear and _rear.size() == 2))
 
 
 ## Stability control's tick (`StabilityControl`), before the drivetrain, which reads its fuel cap
@@ -504,12 +545,12 @@ func mean_steer_angle() -> float:
 	return _applied_steer
 
 
-## Wheel `w`'s angle this tick (rad, + = left): its Ackermann split of `mean_steer_angle` if it is
-## steered, plus its roll and compliance steer off the shared latch (`RayWheel.roll_steer`,
-## `RayWheel.compliance_steer`) on every axle. `mean_steer_angle` stays the driver's angle, without
-## either.
-func wheel_steer_angle(w: RayWheel, gd: GroundDriveSpec) -> float:
-	return (ackermann_angle(_applied_steer, w.anchor.x, _wheelbase, gd.ackermann)
+## Wheel `w`'s angle this tick (rad, + = left): its Ackermann split (`fraction`,
+## `ackermann_fraction`) of `mean_steer_angle` if it is steered, plus its roll and compliance steer
+## off the shared latch (`RayWheel.roll_steer`, `RayWheel.compliance_steer`) on every axle.
+## `mean_steer_angle` stays the driver's angle, without either.
+func wheel_steer_angle(w: RayWheel, fraction: float) -> float:
+	return (ackermann_angle(_applied_steer, w.anchor.x, _wheelbase, fraction)
 			if w.steered else 0.0) + w.roll_steer() + w.compliance_steer()
 
 
@@ -575,9 +616,10 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 	var tcs_drive := drivetrain.tcs_drive_torque() / maxf(1.0, _driven_count) \
 			if drivetrain != null and Drivetrain.drives_wheels(spec) else 0.0
 	var pedal := pedal_application(foot_pedal(input))
+	var fraction := ackermann_fraction(gd, input)
 	for i in wheels.size():
 		var w := wheels[i]
-		w.steer_angle = wheel_steer_angle(w, gd)
+		w.steer_angle = wheel_steer_angle(w, fraction)
 		# The nominal equal split (open-diff law) of the shaft torque, geared to the wheel;
 		# `_couple_differentials` adds what a biasing, locked or rigid diff moves on top, once every
 		# wheel has integrated.
@@ -589,7 +631,7 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 		var friction_t := brake_t
 		# Anti-lock rides the foot brake and the retarder; a handbrake or spring brake is a
 		# mechanical hold no ABS modulates, so a wheel under one brakes without.
-		var abs_slip := RayWheel.ABS_SLIP if gd.abs_equipped else 0.0
+		var abs_slip := RayWheel.ABS_SLIP if anti_lock_on(gd, input) else 0.0
 		if w.is_rear:
 			# Heats the drum but never fades: hot-drum parking is out of scope.
 			var parking := parking_torque(input.handbrake, spring_brake, gd)
@@ -652,8 +694,13 @@ func _couple_differentials(gd: GroundDriveSpec, input: VehicleInput, axle_torque
 	_lock_coupling.fill(0.0)
 	var front_driven := _axle_driven(_front)
 	var rear_driven := _axle_driven(_rear)
-	# A lock is one rigid shaft whether or not the axle is driven this tick.
-	rear_diff_locked = gd.rear_diff_lockable and input.diff_lock and _rear.size() == 2
+	# A lock is one rigid shaft whether or not the axle is driven this tick; the LAB's locks only
+	# the axles the spec drives.
+	_axle_diff = axle_diff_mode(gd, input)
+	var lab_locked := _axle_diff == VehicleInput.AxleDiff.LOCKED
+	front_diff_locked = lab_locked and gd.driven_front and _front.size() == 2
+	rear_diff_locked = ((gd.rear_diff_lockable and input.diff_lock) or (lab_locked and gd.driven_rear)) \
+			and _rear.size() == 2
 	var shaft_torque := axle_torque
 	_drive_torque = axle_torque
 	var lock_holds := false
@@ -728,15 +775,19 @@ func _couple_downstream(gd: GroundDriveSpec, shaft_torque: float, front_driven: 
 			_share(_front, t)
 			rear_in -= t
 			front_in += t
-	if front_driven:
-		_couple_axle(_front, Differential.bias_capacity(front_in, gd.diff_bias_front))
+	if front_diff_locked:
+		_couple_axle(_front, INF)
+	elif front_driven:
+		_couple_axle(_front, Differential.bias_capacity(front_in,
+				axle_bias(gd.diff_bias_front, _axle_diff)))
 	if rear_diff_locked:
 		_couple_axle(_rear, INF)
 	elif rear_driven:
-		_couple_axle(_rear, Differential.bias_capacity(rear_in, gd.diff_bias_rear))
+		_couple_axle(_rear, Differential.bias_capacity(rear_in,
+				axle_bias(gd.diff_bias_rear, _axle_diff)))
 
 
-## A rigid coupling sits under the gearbox output: MFWD's centre, or the rear lock on a driven rear.
+## A rigid coupling sits under the gearbox output: MFWD's centre, or an axle lock on a driven axle.
 ## The one-pass order shares the output's torque equally (the open-diff law) and lands the crank on
 ## the driven wheels' arithmetic mean; a rigid coupling then re-lands them on its compliance-weighted
 ## mean. A light, free wheel beside a loaded one (the tractor's fronts on a steep grade) sits far
@@ -744,7 +795,7 @@ func _couple_downstream(gd: GroundDriveSpec, shaft_torque: float, front_driven: 
 ## (docs/vehicles.md, "The solve order"). A biasing coupling moves no more than its capacity.
 func _rigid_downstream(gd: GroundDriveSpec, front_driven: bool, rear_driven: bool) -> bool:
 	return (front_driven and rear_driven and gd.centre_diff_rigid) \
-			or (rear_driven and rear_diff_locked)
+			or (front_driven and front_diff_locked) or (rear_driven and rear_diff_locked)
 
 
 ## The driven wheels' mean spin in the shaft frame (rad/s) once `torque` (N·m) more is shared over

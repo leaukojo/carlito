@@ -407,6 +407,114 @@ func test_esc_off_takes_tc_with_it_and_tc_off_leaves_esc_on() -> void:
 	assert_bool(bridged.tcs_off).is_true()
 
 
+func test_lab_abs_off_takes_esc_and_tc_with_it_on_local_input_only() -> void:
+	# Absent, ABS is on; the LAB's ABS off takes ESC with it, and ESC takes TC.
+	assert_bool(RouterScript.arbitrate_local(_raw(), 0.0, GEAR_D1).abs_off).is_false()
+	var raw := _raw()
+	raw["abs_off"] = true
+	var off := RouterScript.arbitrate_local(raw, 0.0, GEAR_D1)
+	assert_bool(off.abs_off).is_true()
+	assert_bool(off.esc_off).is_true()
+	assert_bool(off.tcs_off).is_true()
+	# No contract signal: the bridge never carries it, a stray key included, nor does fallback.
+	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
+	vals["abs_off"] = true
+	var bridged := RouterScript.arbitrate_bridge(vals)
+	assert_bool(bridged.abs_off).is_false()
+	assert_bool(bridged.esc_off).is_false()
+	assert_bool(RouterScript.blend_local_driving(vals, off).abs_off).is_false()
+
+
+const LAB_CAPS := {"abs": true, "axle_diff": true, "ackermann": true}
+
+
+func test_the_lab_switches_pass_on_a_fitted_body() -> void:
+	var lab := RouterScript.lab_raw(true, VehicleInput.AxleDiff.OPEN, true, LAB_CAPS, false)
+	assert_bool(lab[&"abs_off"]).is_true()
+	assert_int(lab[&"axle_diff"]).is_equal(VehicleInput.AxleDiff.OPEN)
+	assert_bool(lab[&"parallel_steer"]).is_true()
+	lab = RouterScript.lab_raw(false, VehicleInput.AxleDiff.STOCK, false, LAB_CAPS, false)
+	assert_bool(lab[&"abs_off"]).is_false()
+	assert_bool(lab[&"parallel_steer"]).is_false()
+
+
+func test_the_lab_switches_never_reach_a_challenge() -> void:
+	# Under the challenge lock (dev keys included) the attempt drives the stock hardware.
+	var lab := RouterScript.lab_raw(true, VehicleInput.AxleDiff.LOCKED, true, LAB_CAPS, true)
+	assert_bool(lab[&"abs_off"]).is_false()
+	assert_int(lab[&"axle_diff"]).is_equal(VehicleInput.AxleDiff.STOCK)
+	assert_bool(lab[&"parallel_steer"]).is_false()
+
+
+func test_a_lab_switch_kept_through_a_body_change_never_acts_on_missing_hardware() -> void:
+	# ABS off on the sedan, then the race (TC, no ABS): its TC stays on.
+	var lab := RouterScript.lab_raw(true, VehicleInput.AxleDiff.LOCKED, true, {}, false)
+	assert_bool(lab[&"abs_off"]).is_false()
+	assert_int(lab[&"axle_diff"]).is_equal(VehicleInput.AxleDiff.STOCK)
+	assert_bool(lab[&"parallel_steer"]).is_false()
+	var raw := _raw()
+	raw.merge(lab, true)
+	var out := RouterScript.arbitrate_local(raw, 0.0, GEAR_D1)
+	assert_bool(out.esc_off).is_false()
+	assert_bool(out.tcs_off).is_false()
+
+
+func test_a_lab_locked_axle_takes_esc_and_tc_with_it() -> void:
+	var raw := _raw()
+	raw["axle_diff"] = VehicleInput.AxleDiff.LOCKED
+	var locked := RouterScript.arbitrate_local(raw, 0.0, GEAR_D1)
+	assert_bool(locked.esc_off).is_true()
+	assert_bool(locked.tcs_off).is_true()
+	raw["axle_diff"] = VehicleInput.AxleDiff.OPEN
+	var open := RouterScript.arbitrate_local(raw, 0.0, GEAR_D1)
+	assert_bool(open.esc_off).is_false()
+	assert_bool(open.tcs_off).is_false()
+	assert_str(RouterScript.lab_esc_cause(true, VehicleInput.AxleDiff.LOCKED)).is_equal("ABS")
+	assert_str(RouterScript.lab_esc_cause(false, VehicleInput.AxleDiff.LOCKED)) \
+			.is_equal("LOCKED DIFFS")
+	assert_str(RouterScript.lab_esc_cause(false, VehicleInput.AxleDiff.OPEN)).is_empty()
+
+
+func test_the_lab_cascade_reaches_a_bridge_input_the_measure_tools_set() -> void:
+	var input := VehicleInput.new()
+	input.abs_off = true
+	RouterScript.lab_cascade(input)
+	assert_bool(input.esc_off).is_true()
+	assert_bool(input.tcs_off).is_true()
+	var stock := VehicleInput.new()
+	RouterScript.lab_cascade(stock)
+	assert_bool(stock.esc_off).is_false()
+	assert_bool(stock.tcs_off).is_false()
+
+
+func test_lab_axle_diff_reaches_local_input_only_and_never_a_challenge() -> void:
+	assert_int(RouterScript.arbitrate_local(_raw(), 0.0, GEAR_D1).axle_diff) \
+			.is_equal(VehicleInput.AxleDiff.STOCK)
+	var raw := _raw()
+	raw["axle_diff"] = VehicleInput.AxleDiff.LOCKED
+	var locked := RouterScript.arbitrate_local(raw, 0.0, GEAR_D1)
+	assert_int(locked.axle_diff).is_equal(VehicleInput.AxleDiff.LOCKED)
+	# No contract signal: the bridge never carries it, a stray key included, nor does fallback.
+	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
+	vals["axle_diff"] = VehicleInput.AxleDiff.LOCKED
+	assert_int(RouterScript.arbitrate_bridge(vals).axle_diff).is_equal(VehicleInput.AxleDiff.STOCK)
+	assert_int(RouterScript.blend_local_driving(vals, locked).axle_diff) \
+			.is_equal(VehicleInput.AxleDiff.STOCK)
+
+
+func test_lab_parallel_steer_reaches_local_input_only() -> void:
+	assert_bool(RouterScript.arbitrate_local(_raw(), 0.0, GEAR_D1).parallel_steer).is_false()
+	var raw := _raw()
+	raw["parallel_steer"] = true
+	var parallel := RouterScript.arbitrate_local(raw, 0.0, GEAR_D1)
+	assert_bool(parallel.parallel_steer).is_true()
+	# No contract signal: the bridge never carries it, a stray key included, nor does fallback.
+	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
+	vals["parallel_steer"] = true
+	assert_bool(RouterScript.arbitrate_bridge(vals).parallel_steer).is_false()
+	assert_bool(RouterScript.blend_local_driving(vals, parallel).parallel_steer).is_false()
+
+
 func test_fallback_takes_tcs_off_from_the_bridge() -> void:
 	# A live bridge with no driving control owns `tcs_off`: the local setting is not a driving field.
 	var raw := _raw()
@@ -1009,6 +1117,14 @@ func test_the_auto_hold_keeps_what_it_caught_until_the_throttle_asks_to_move() -
 	assert_bool(RouterScript.auto_hold(true, _idle(GEAR_D1, 0.1), 0.0, false)).is_false()
 	assert_bool(RouterScript.auto_hold(true, _idle(GEAR_R, -0.1), 0.0, false)).is_false()
 	assert_bool(RouterScript.auto_hold(true, _idle(GEAR_N), 0.0, false)).is_false()
+
+
+func test_the_auto_hold_stands_aside_with_the_lab_abs_off() -> void:
+	# It holds through the ABS modulator, as hill-start assist does; `abs_off` arrives fitment-gated.
+	var off := _idle()
+	off.abs_off = true
+	assert_bool(RouterScript.auto_hold(false, off, 0.0, false)).is_false()
+	assert_bool(RouterScript.auto_hold(true, off, 0.0, false)).is_false()
 
 
 func test_the_last_pedal_device_decides_whether_the_pad_drives() -> void:

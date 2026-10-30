@@ -45,6 +45,7 @@ region (`doc_region.gd`); refresh a figure by re-running, never by hand.
 # `sine` (FMVSS 126's sine with dwell on a body within its mass range: A, then the series, left and
 # right) replaces the other passes. `noesc` (every measure tool): stability control unfitted in memory,
 # TC as fitted (`notc`); doc=steer / cornering / tyres set it, doc=esc runs both. `nosurge`: a tanker's surge at 0.
+# The LAB switches: `noabs` (ABS off with ESC, TC and hill hold), `axle=open|locked` (also `measure_rough`).
 node tools/godot_run.mjs -- --headless --path . res://tools/measure_vehicles.tscn -- sedan-sports 45
 node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 60 sine noesc
 node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 60 step

@@ -68,6 +68,14 @@ var _key_softening := KeyShaper.DEFAULT_SOFTENING
 var _local_tcs_off := false
 ## The player's STABILITY CONTROL setting, set by the shell: local driving only, like `tcs_off`.
 var _local_esc_off := false
+## The LAB page's ANTI-LOCK BRAKES switch, set by the shell: session-only, local driving only, and
+## never in a challenge nor on a body without ABS (`lab_raw`). Driver state: a respawn and a body
+## change keep it.
+var _lab_abs_off := false
+## The LAB page's DIFFERENTIALS switch (`VehicleInput.AxleDiff`), as `_lab_abs_off`.
+var _lab_axle_diff := VehicleInput.AxleDiff.STOCK
+## The LAB page's STEERING switch (true = PARALLEL), as `_lab_abs_off`.
+var _lab_parallel_steer := false
 var _brake_override := false  ## latched by `brake_override`, both sources alike
 ## The player's AUTO HOLD setting, set by the shell. Off by default: a real car's auto hold is a
 ## button the driver turns on, and off is where converter creep and roll-back are felt.
@@ -184,6 +192,66 @@ func set_local_esc_off(off: bool) -> void:
 
 func local_esc_off() -> bool:
 	return _local_esc_off
+
+
+func set_lab_abs_off(off: bool) -> void:
+	_lab_abs_off = off
+
+
+func lab_abs_off() -> bool:
+	return _lab_abs_off
+
+
+func set_lab_axle_diff(mode: VehicleInput.AxleDiff) -> void:
+	_lab_axle_diff = mode
+
+
+func lab_axle_diff() -> VehicleInput.AxleDiff:
+	return _lab_axle_diff
+
+
+func set_lab_parallel_steer(on: bool) -> void:
+	_lab_parallel_steer = on
+
+
+func lab_parallel_steer() -> bool:
+	return _lab_parallel_steer
+
+
+## The LAB switches as they reach a tick's input (`abs_off`, `axle_diff`, `parallel_steer`), pure
+## for tests: stock under the challenge lock, dev keys included, so an attempt always drives the
+## stock hardware (`Boot._fit_tyre`'s rule), and stock on a body without the hardware (`caps`,
+## `BaseVehicle.vehicle_capabilities`), so a switch kept through a body change never acts, nor
+## cascades (`lab_cascade`), on hardware the new body lacks.
+static func lab_raw(abs_off: bool, axle_diff: VehicleInput.AxleDiff, parallel_steer: bool,
+		caps: Dictionary, bridge_only: bool) -> Dictionary[StringName, Variant]:
+	var live := not bridge_only
+	var out: Dictionary[StringName, Variant] = {
+		&"abs_off": live and abs_off and bool(caps.get("abs", false)),
+		&"axle_diff": axle_diff if live and bool(caps.get("axle_diff", false))
+				else VehicleInput.AxleDiff.STOCK,
+		&"parallel_steer": live and parallel_steer and bool(caps.get("ackermann", false)),
+	}
+	return out
+
+
+## What a LAB switch takes stability control (and so TC) off with, pure: "ABS" (a real ESC brakes
+## through the ABS modulator), "LOCKED DIFFS" (a locked axle passes ESC's one-wheel brake to its
+## partner, cancelling the yaw moment), else "". Read on `lab_raw`'s gated values.
+static func lab_esc_cause(abs_off: bool, axle_diff: VehicleInput.AxleDiff) -> String:
+	if abs_off:
+		return "ABS"
+	if axle_diff == VehicleInput.AxleDiff.LOCKED:
+		return "LOCKED DIFFS"
+	return ""
+
+
+## `out`'s ESC and TC off where its LAB switches take them (`lab_esc_cause`). Shared by
+## `arbitrate_local` and the measure tools, which set the switches on the bridge's input.
+static func lab_cascade(out: VehicleInput) -> void:
+	if lab_esc_cause(out.abs_off, out.axle_diff) != "":
+		out.esc_off = true
+		out.tcs_off = true
 
 
 func set_auto_hold_on(on: bool) -> void:
@@ -321,13 +389,14 @@ func _apply_auto_hold() -> void:
 
 ## Next tick's auto-hold latch, pure for tests: set at a standstill (REVERSE_ENGAGE_SPEED, the
 ## router's own) in a drive gear (D or R) with no throttle, kept until the throttle asks to move or
-## the box leaves gear. Never while the gamepad drives the pedals (`pad`). It holds what it caught,
-## so a body sliding on a grade its brakes cannot hold stays held. Hill-start assist
-## (`WheelDrive.hold_step`) takes the handover when the throttle lets it go.
+## the box leaves gear. Never while the gamepad drives the pedals (`pad`), nor with the LAB's ABS
+## off: it holds through the ABS modulator, as hill-start assist does (`WheelDrive.hill_hold_kind`).
+## It holds what it caught, so a body sliding on a grade its brakes cannot hold stays held.
+## Hill-start assist (`WheelDrive.hold_step`) takes the handover when the throttle lets it go.
 static func auto_hold(latched: bool, input: VehicleInput, speed: float, pad: bool) -> bool:
 	var in_gear := input.gear_request == GEAR_R \
 			or (input.gear_request >= GEAR_D1 and input.gear_request <= GEAR_TOP)
-	if pad or not in_gear or input.throttle != 0.0:
+	if pad or not in_gear or input.throttle != 0.0 or input.abs_off:
 		return false
 	return latched or absf(speed) <= REVERSE_ENGAGE_SPEED
 
@@ -444,6 +513,9 @@ func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 	raw[&"body_cmd"] = _body_cmd
 	raw[&"tcs_off"] = _local_tcs_off
 	raw[&"esc_off"] = _local_esc_off
+	var caps: Dictionary = _vehicle.call(&"vehicle_capabilities") \
+			if _vehicle != null and _vehicle.has_method(&"vehicle_capabilities") else {}
+	raw.merge(lab_raw(_lab_abs_off, _lab_axle_diff, _lab_parallel_steer, caps, _bridge_only), true)
 	return arbitrate_local(raw, speed, gear)
 
 
@@ -609,9 +681,16 @@ static func arbitrate_local(raw: Dictionary, speed: float, gear_byte: int,
 	out.diff_lock = bool(raw.get(&"diff_lock", false))
 	out.fwd_drive = bool(raw.get(&"fwd_drive", false))
 	# Traction control and stability control, from the player's settings (bodies fitted with them
-	# only). ESC off takes TC with it, as a car's long press does; TC off alone leaves ESC on.
+	# only). ESC off takes TC with it, as a car's long press does; TC off alone leaves ESC on. The LAB
+	# switches arrive gated (`lab_raw`); ABS off or a locked axle takes ESC and TC (`lab_cascade`).
+	out.abs_off = bool(raw.get(&"abs_off", false))
 	out.esc_off = bool(raw.get(&"esc_off", false))
 	out.tcs_off = bool(raw.get(&"tcs_off", false)) or out.esc_off
+	# The LAB's axle diff switch (`WheelDrive.axle_diff_mode` keeps a body with its own lock stock).
+	out.axle_diff = int(raw.get(&"axle_diff", VehicleInput.AxleDiff.STOCK)) as VehicleInput.AxleDiff
+	# The LAB's steering switch (`WheelDrive.ackermann_fraction`).
+	out.parallel_steer = bool(raw.get(&"parallel_steer", false))
+	lab_cascade(out)
 	# Refuse body command (garbage truck only). Has a key: a real stalk with four positions.
 	out.body_cmd = int(raw.get(&"body_cmd", 0))
 	# Hydraulic remote spool (tractor only). See _scv declaration for why it earns a key.

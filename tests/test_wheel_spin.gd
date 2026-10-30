@@ -1715,6 +1715,69 @@ func test_a_limited_slip_axle_moves_no_more_than_its_capacity() -> void:
 	assert_float((drive.wheels[3].omega - 5.0) / 0.0001).is_equal_approx(moved, 1e-6)
 
 
+func test_the_lab_axle_switch_keeps_opens_or_locks_the_driven_axle() -> void:
+	# FWD on a 2.5 Torsen front (`hatchback-sports`' layout), the rear undriven. A wide spread on
+	# stiff wheels asks far more torque than the Torsen carries at 1000 N·m in.
+	var spec := _bench_spec(1500.0)
+	var gd := spec.ground_drive
+	gd.driven_front = true
+	gd.driven_rear = false
+	gd.diff_bias_front = 2.5
+	var drive := _drive_for(spec)
+	var input := VehicleInput.new()
+	drive.drive_omega(gd, input)
+	var omegas := [60.0, 5.0, 30.0, 20.0]
+	var compliance := [0.0001, 0.0004, 0.001, 0.001]
+	assert_bool(drive.lab_axle_diff_fitted(gd)).is_true()
+	# STOCK: the spec's Torsen, at its capacity.
+	_set_spin(drive, omegas, compliance)
+	drive._couple_differentials(gd, input, 1000.0)
+	assert_float((60.0 - drive.wheels[0].omega) / 0.0001) \
+			.is_equal_approx(Differential.bias_capacity(1000.0, 2.5), 1e-6)
+	# OPEN: nothing moves, bit for bit.
+	input.axle_diff = VehicleInput.AxleDiff.OPEN
+	_set_spin(drive, omegas, compliance)
+	drive._couple_differentials(gd, input, 1000.0)
+	for i in drive.wheels.size():
+		assert_float(drive.wheels[i].omega).is_equal(omegas[i])
+	# LOCKED: one shaft, on the compliance-weighted mean; the undriven rear untouched.
+	input.axle_diff = VehicleInput.AxleDiff.LOCKED
+	_set_spin(drive, omegas, compliance)
+	drive._couple_differentials(gd, input, 1000.0)
+	var w := drive.wheels
+	assert_float(w[0].omega).is_equal_approx(w[1].omega, 1e-9)
+	assert_float(w[0].omega).is_equal_approx((0.0004 * 60.0 + 0.0001 * 5.0) / 0.0005, 1e-9)
+	assert_bool(drive.front_diff_locked).is_true()
+	assert_bool(drive.rear_diff_locked).is_false()
+	assert_float(w[2].omega).is_equal(30.0)
+	assert_float(w[3].omega).is_equal(20.0)
+
+
+func test_the_lab_lock_locks_a_driven_rear_and_never_a_tractor() -> void:
+	var spec := _bench_spec(1500.0)  # RWD, open
+	var drive := _drive_for(spec)
+	var input := VehicleInput.new()
+	input.axle_diff = VehicleInput.AxleDiff.LOCKED
+	drive.drive_omega(spec.ground_drive, input)
+	_set_spin(drive, SPREAD_OMEGAS, SPREAD_COMPLIANCE)
+	drive._couple_differentials(spec.ground_drive, input, 4000.0)
+	assert_float(drive.wheels[2].omega).is_equal_approx(drive.wheels[3].omega, 1e-9)
+	assert_bool(drive.rear_diff_locked).is_true()
+	assert_bool(drive.front_diff_locked).is_false()
+	# A body with its own DIFF LOCK key runs stock: the switch neither locks nor opens it.
+	var tractor := _mfwd_spec()
+	var t_drive := _drive_for(tractor)
+	assert_bool(t_drive.lab_axle_diff_fitted(tractor.ground_drive)).is_false()
+	assert_int(WheelDrive.axle_diff_mode(tractor.ground_drive, input)) \
+			.is_equal(VehicleInput.AxleDiff.STOCK)
+	t_drive.drive_omega(tractor.ground_drive, input)
+	_set_spin(t_drive, SPREAD_OMEGAS, SPREAD_COMPLIANCE)
+	t_drive._couple_differentials(tractor.ground_drive, input, 4000.0)
+	for i in t_drive.wheels.size():
+		assert_float(t_drive.wheels[i].omega).is_equal(SPREAD_OMEGAS[i])
+	assert_bool(t_drive.rear_diff_locked).is_false()
+
+
 ## Each wheel's latched traction-control hold, as if it had just ticked (FL, FR, RL, RR): the drive
 ## share it may take back and the spin it holds at.
 func _set_tcs(drive: WheelDrive, shares: Array, ceilings: Array) -> void:
@@ -1983,6 +2046,26 @@ func test_a_locked_crank_above_a_rigid_coupling_turns_with_its_wheels() -> void:
 		var g := Drivetrain.ratio_for_byte(spec, 1)
 		assert_int(dt.coupling_state).is_equal(Drivetrain.CouplingState.LOCKED)
 		assert_float(dt.rpm / Drivetrain.RADS_TO_RPM / g).is_equal_approx(_shaft_mean(drive), 1e-6)
+
+
+func test_a_locked_crank_above_a_lab_locked_front_turns_with_its_wheels() -> void:
+	# FWD (`sedan`'s layout), the LAB's lock on the front pair, a light free wheel beside a loaded
+	# one: the crank is solved nested, as above the rear lock.
+	var spec := _crank_spec()
+	var gd := spec.ground_drive
+	gd.driven_front = true
+	gd.driven_rear = false
+	var drive := _drive_for(spec)
+	var input := VehicleInput.new()
+	input.axle_diff = VehicleInput.AxleDiff.LOCKED
+	drive.drive_omega(gd, input)
+	var dt := _crank_in_d1(spec, Drivetrain.CouplingState.LOCKED, 20.0, 18.0, 1.0)
+	_set_spin(drive, [18.0, 18.0, 18.0, 18.0], [0.02, 0.001, 0.001, 0.001])
+	_set_brakes(drive, [0.0, 0.0, 0.0, 0.0])
+	drive._couple_differentials(gd, input, 0.0, PackedInt32Array(), 0.0, dt)
+	var g := Drivetrain.ratio_for_byte(spec, 1)
+	assert_int(dt.coupling_state).is_equal(Drivetrain.CouplingState.LOCKED)
+	assert_float(dt.rpm / Drivetrain.RADS_TO_RPM / g).is_equal_approx(_shaft_mean(drive), 1e-6)
 
 
 func test_the_falling_root_is_exact_on_a_line_and_finds_a_kinked_one() -> void:

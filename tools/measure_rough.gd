@@ -42,6 +42,7 @@ extends Node3D
 ## `rollsteer=<front>,<rear>` (deg/deg), `compliance=<deg/kN>` and `angdamp=<1/s>` are
 ## measure_vehicles.gd's probes, applied by the same `MeasureRig` calls: a rough-ground cell
 ## attributed to roll or compliance steer or to the body's angular damping without editing its spec.
+## `axle=open|locked` is the LAB page's DIFFERENTIALS switch (`MeasureRig.apply_lab`).
 ##
 ## `baseline` runs the set `docs/vehicle_measurements.md` § Rough and soft ground records: suv, tractor-kenney in
 ## 2WD / MFWD / MFWD + diff lock, sedan and pickup. Add `--fixed-fps 60` BEFORE `--` to run faster
@@ -173,6 +174,9 @@ func _ready() -> void:
 	_roll_steer = MeasureRig.roll_steer_flag(args)
 	_compliance = MeasureRig.compliance_flag(args)
 	_angdamp = MeasureRig.angdamp_flag(args)
+	if not MeasureRig.axle_flag(args):
+		get_tree().quit(1)
+		return
 	if which.begins_with("course="):
 		if not _load_course(which.substr(7)):
 			get_tree().quit(1)
@@ -190,8 +194,8 @@ func _ready() -> void:
 		return
 	if which == "doc=rough":
 		if _tyre != "" or not is_nan(_roll_steer.x) or not is_nan(_compliance) \
-				or not is_nan(_angdamp):
-			printerr("tyre= / rollsteer= / compliance= / angdamp= change the figures doc=rough"
+				or not is_nan(_angdamp) or MeasureRig.axle_diff != VehicleInput.AxleDiff.STOCK:
+			printerr("tyre= / rollsteer= / compliance= / angdamp= / axle= change the figures doc=rough"
 					+ " tabulates: run them per body")
 			get_tree().quit(1)
 			return
@@ -354,6 +358,7 @@ func _drive(accel_pct: float, brake_pct: float, steer_pct: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	MeasureRig.apply_lab(_car)
 	if _car == null or _phase == Ph.DONE:
 		return
 	MeasureRig.apply_angdamp(_car, _angdamp)
@@ -653,7 +658,7 @@ func _probe_label() -> String:
 		label += ", compliance steer %.4f deg/kN (not the spec's)" % _compliance
 	if not is_nan(_angdamp):
 		label += ", angular damping %.2f /s (not the body's)" % _angdamp
-	return label
+	return label + MeasureRig.axle_label(_car)
 
 
 ## The declared differentials that are not open (`GroundDriveSpec` § Driveline), e.g.

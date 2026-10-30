@@ -194,7 +194,7 @@ func test_each_wheel_angle_is_the_split_plus_its_roll_steer() -> void:
 				drive._wheelbase, 1.0) if w.steered else 0.0
 		var expected := split + (0.1 * phi if w.is_rear else -0.2 * phi)
 		# float32 anchors
-		assert_float(drive.wheel_steer_angle(w, spec_gd)).is_equal_approx(expected, 1e-7)
+		assert_float(drive.wheel_steer_angle(w, spec_gd.ackermann)).is_equal_approx(expected, 1e-7)
 	# The driver's angle never carries it.
 	assert_float(drive.mean_steer_angle()).is_equal(deg_to_rad(10.0))
 
@@ -208,7 +208,24 @@ func test_with_no_roll_steer_each_wheel_angle_is_the_split_bit_for_bit() -> void
 	for w in drive.wheels:
 		var split := WheelDriveScript.ackermann_angle(drive.mean_steer_angle(), w.anchor.x,
 				drive._wheelbase, 1.0) if w.steered else 0.0
-		assert_float(drive.wheel_steer_angle(w, spec_gd)).is_equal(split)
+		assert_float(drive.wheel_steer_angle(w, spec_gd.ackermann)).is_equal(split)
+
+
+func test_the_lab_parallel_switch_zeroes_the_fraction_and_leaves_the_spec() -> void:
+	var drive := _rs_drive(0.0, 0.0)
+	var spec_gd := GroundDriveSpec.new()
+	spec_gd.ackermann = 1.0
+	var input := VehicleInput.new()
+	assert_float(WheelDrive.ackermann_fraction(spec_gd, input)).is_equal(1.0)
+	input.parallel_steer = true
+	assert_float(WheelDrive.ackermann_fraction(spec_gd, input)).is_equal(0.0)
+	assert_float(spec_gd.ackermann).is_equal(1.0)
+	drive._applied_steer = deg_to_rad(30.0)
+	_roll_and_latch(drive)
+	for w in drive.wheels:
+		var expected := drive.mean_steer_angle() if w.steered else 0.0
+		assert_float(drive.wheel_steer_angle(w, WheelDrive.ackermann_fraction(spec_gd, input))) \
+				.is_equal(expected)
 
 
 # --- compliance steer (`RayWheel.compliance_steer`) -------------------------------------------------
@@ -242,7 +259,7 @@ func test_with_no_compliance_steer_each_angle_is_the_split_plus_its_roll_steer_b
 		assert_float(w.compliance_steer()).is_equal(0.0)
 		var split := WheelDriveScript.ackermann_angle(drive.mean_steer_angle(), w.anchor.x,
 				drive._wheelbase, 1.0) if w.steered else 0.0
-		assert_float(drive.wheel_steer_angle(w, spec_gd)).is_equal(split + w.roll_steer())
+		assert_float(drive.wheel_steer_angle(w, spec_gd.ackermann)).is_equal(split + w.roll_steer())
 
 
 func test_a_leftward_force_steers_an_understeering_rear_left_into_the_turn() -> void:
@@ -309,6 +326,6 @@ func test_compliance_steer_alone_pairs_the_axles_and_reaches_the_rear_angle() ->
 		assert_object(w.anti_roll_partner).is_not_null()
 		assert_float(w.bar_force(w.bar_rate)).is_equal(0.0)
 		if w.is_rear:
-			assert_float(drive.wheel_steer_angle(w, spec_gd)).is_equal(expected)
+			assert_float(drive.wheel_steer_angle(w, spec_gd.ackermann)).is_equal(expected)
 	# The driver's angle never carries it.
 	assert_float(drive.mean_steer_angle()).is_equal(0.0)

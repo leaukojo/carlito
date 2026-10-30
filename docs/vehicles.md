@@ -60,6 +60,8 @@ Rules: `src/vehicles/CLAUDE.md`; derivations and figures: § Physics derivations
 **Differentials.** Declared in `gen_kenney_vehicles.gd`: a 3:1 Torsen-type centre on `suv`,
 `suv-luxury` and `race-future`; a 2.5 rear LSD on `race` and `race-future`; a 2.5 helical front LSD
 on `hatchback-sports`; `tractor-kenney`'s lockable rear and rigid MFWD; everything else open.
+The pause menu's LAB ▸ DIFFERENTIALS opens or locks every driven axle (`WheelDrive.axle_diff_mode`).
+No headless fixture splits an axle's grip, so the open axle's peel is checked by driving.
 
 A biasing diff caps the transfer at `|T_in|/2 · (b−1)/(b+1)`, so the slow side takes at most `b`×
 the fast. Against all-open diffs, the biasing centres launch faster (most on `race-future`), the
@@ -147,7 +149,9 @@ shortest at that pedal. Full pedal, on ABS, is unaffected.
 Mean g is speed over time, so it reads under the peak. Full pedal asks the brake hardware's
 whole capacity (§ Brake hardware), more than any tyre gives, so every ABS body stops on ABS and
 `race` (no ABS) locks its wheels: it stops shorter at 60 % pedal than at 100 %, as a real non-ABS
-car does. The pedal is anchored per body (`WheelDrive.brake_application`): half pedal asks
+car does (LAB ▸ ANTI-LOCK BRAKES: OFF shows it on any ABS body, `noabs` headless; with it off the
+coupling stays shut on a locked driven wheel, so a manual stalls; `BrakeSizing` and ESC's K tables
+judge the stock hardware, and a trailer keeps its own ABS). The pedal is anchored per body (`WheelDrive.brake_application`): half pedal asks
 `BRAKE_HALF_PEDAL_G` of every body and full pedal its whole capacity, so 60 % reads
 about the same across the table whatever the hardware (`docs/vehicle_measurements.md` § Braking), and a body with more capacity is gentler in
 the first third and keeps the rest for the end of the travel. The semi anchors on its coupled load

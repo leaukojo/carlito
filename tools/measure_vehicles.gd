@@ -921,6 +921,7 @@ func _ready() -> void:
 	_tc = flags.has("tc")
 	_notc = flags.has("notc")
 	MeasureRig.esc_off = flags.has("noesc")
+	MeasureRig.abs_off = flags.has("noabs")
 	MeasureRig.trailer_roll_off = flags.has("notrsp")
 	MeasureRig.surge_off = flags.has("nosurge")
 	_surge_pin = MeasureRig.add_surge_pin(self)
@@ -988,6 +989,9 @@ func _ready() -> void:
 	if _tyre == "?":
 		get_tree().quit(1)
 		return
+	if not MeasureRig.axle_flag(flags):
+		get_tree().quit(1)
+		return
 	_wind_base = MeasureRig.wind_flag(flags)
 	if is_nan(_wind_base.x):
 		get_tree().quit(1)
@@ -1053,8 +1057,11 @@ func _ready() -> void:
 		# The chassis tables are recorded with stability control off, the trailer's own too: they
 		# measure the chassis.
 		var chassis := _doc in ["cornering", "steer", "tyres"]
-		if MeasureRig.surge_off or ((MeasureRig.esc_off or MeasureRig.trailer_roll_off) and not chassis):
-			printerr("noesc / notrsp / nosurge change what doc=%s tabulates: run it per body" % _doc)
+		if MeasureRig.surge_off or MeasureRig.abs_off \
+				or MeasureRig.axle_diff != VehicleInput.AxleDiff.STOCK \
+				or ((MeasureRig.esc_off or MeasureRig.trailer_roll_off) and not chassis):
+			printerr(("noesc / noabs / axle= / notrsp / nosurge change what doc=%s tabulates: run it"
+					+ " per body") % _doc)
 			get_tree().quit(1)
 			return
 		MeasureRig.esc_off = chassis
@@ -1459,6 +1466,7 @@ func _reset_pass(phase: Phase) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	MeasureRig.apply_lab(_car)
 	if _first_pending:
 		_first_pending = false
 		_next_vehicle()
@@ -2762,6 +2770,9 @@ func _report_accel(capped: bool) -> void:
 		run.append("traction control off (notc)")
 	if MeasureRig.esc_off:
 		run.append("stability control off (noesc)")
+	if MeasureRig.abs_off:
+		run.append("anti-lock off, with ESC, TC and hill hold (noabs)"
+				if bool(MeasureRig.lab_on(_car)[&"abs_off"]) else "noabs ignored (no ABS fitted)")
 	if MeasureRig.surge_off:
 		run.append("tanker surge pinned at 0 (nosurge)")
 	if _held_gear > 0:
@@ -5347,7 +5358,7 @@ func _drive_label(spec: VehicleSpec) -> String:
 	var layout := "AWD"
 	if not (gd.driven_front and gd.driven_rear):
 		layout = "FWD" if gd.driven_front else "RWD"
-	return layout + _diff_label(gd)
+	return layout + _diff_label(gd) + MeasureRig.axle_label(_car)
 
 
 ## The declared differentials that are not open (`GroundDriveSpec` § Driveline), e.g.

@@ -33,6 +33,11 @@ class LampInput extends RefCounted:
 	var trailer_abs_lamp := false   ## trailer ABS telltale off the power line (SAE J2497)
 
 
+## The LAB page's axle diff switch (`axle_diff`): the spec's diffs, every driven axle open, or every
+## driven axle locked. The centre diff is never switched.
+enum AxleDiff { STOCK, OPEN, LOCKED }
+
+
 var throttle := 0.0    ## -1..1, signed by direction (never from the brake)
 var brake := 0.0       ## 0..1 foot brake
 var steer := 0.0       ## -1..1, negative = left
@@ -50,6 +55,11 @@ var diff_lock := false    ## rear differential lock request
 var fwd_drive := false    ## MFWD front-axle engage request
 var tcs_off := false      ## traction control off request (bridge-only: local drives with TC on)
 var esc_off := false      ## stability control off request (bridge or local setting; arbitration sets tcs_off with it)
+var abs_off := false      ## anti-lock off, the local LAB switch only (no contract signal); arbitration sets esc_off with it
+## Driven axles' diffs, the local LAB switch only (no contract signal); arbitration sets esc_off
+## with LOCKED.
+var axle_diff := AxleDiff.STOCK
+var parallel_steer := false  ## Ackermann fraction 0, the local LAB switch only (no contract signal)
 var retarder := 0.0       ## 0..1 truck driveline brake request (bridge-only)
 # ISOBUS implement request (tractor; the semi reads hitch_request in its transport sense).
 var hitch_request := 1.0  ## 0..1 requested hitch height (1 = raised/transport)
