@@ -44,7 +44,7 @@ fi
 
 # 2. Contract edited -> synced sloppyCAN copy must be regenerated.
 if echo "$staged" | grep -q '^contract/carlito_contract\.json$'; then
-  out="../sloppycan/carlito_contract.js"
+  out="../sloppycan/js/carlito_contract.js"
   before=$(git hash-object "$out" 2>/dev/null || echo none)
   node tools/gen_js_contract.mjs
   after=$(git hash-object "$out" 2>/dev/null || echo regen-failed)

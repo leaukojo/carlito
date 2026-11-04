@@ -19,7 +19,7 @@ signal makes a readout line, not a bar. `count` (>= 1, default 1) makes an Array
 
 A version mismatch with sloppyCAN warns at runtime and raises a transient notice, once per session
 (`push_warning` is invisible in a web release). sloppyCAN reads a generated copy,
-`../sloppycan/carlito_contract.js` (`window.CARLITO_CONTRACT`). Edit ritual:
+`../sloppycan/js/carlito_contract.js` (`window.CARLITO_CONTRACT`). Edit ritual:
 `contract/CLAUDE.md`.
 
 ## Input pipeline

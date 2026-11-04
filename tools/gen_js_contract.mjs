@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Generates sloppycan/carlito_contract.js from the canonical contract JSON: sloppyCAN
+// Generates sloppycan/js/carlito_contract.js from the canonical contract JSON: sloppyCAN
 // consumes a committed JS-global copy so it loads from file:// (Web Serial forces that)
 // with no build step. Run after editing the contract:
 //     node tools/gen_js_contract.mjs
@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const srcPath = resolve(here, '../contract/carlito_contract.json');
 const outDir = resolve(here, '../../sloppycan');
-const outPath = resolve(outDir, 'carlito_contract.js');
+const outPath = resolve(outDir, 'js', 'carlito_contract.js');
 
 if (!existsSync(outDir)) {
   console.error(

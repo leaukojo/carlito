@@ -69,7 +69,7 @@ node tools/check_head_include.mjs
 if ($LASTEXITCODE -ne 0) { Fail 'head-include sync (export_presets.cfg vs src/bridge/web/head_include.html)' }
 
 Announce 'Contract sync check'
-$out = Join-Path $repo '..\sloppycan\carlito_contract.js'
+$out = Join-Path $repo '..\sloppycan\js\carlito_contract.js'
 if (Test-Path $out) {
     $before = (Get-FileHash $out).Hash
     node tools/gen_js_contract.mjs | Out-Null

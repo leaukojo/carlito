@@ -38,7 +38,7 @@ if (-not $bakePaths) { Block 'tools/git-hooks/bake_paths.txt is missing or empty
 
 # 1. Contract edited -> synced sloppyCAN copy must be regenerated.
 if ($touchContract) {
-    $out = Join-Path $repo '..\sloppycan\carlito_contract.js'
+    $out = Join-Path $repo '..\sloppycan\js\carlito_contract.js'
     if (Test-Path $out) {
         $before = (Get-FileHash $out).Hash
         node tools/gen_js_contract.mjs | Out-Null
