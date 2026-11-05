@@ -26,7 +26,7 @@ the two semi tractor units.
 | Brakes | [brakes.md](brakes.md) | brake hardware, bias, handbrake, heat and fade, retarder, spring brakes, air |
 | ABS, traction and stability control | [driver-aids.md](driver-aids.md) | ABS, TC/ASR, ESC, roll stability, their lamps |
 | Holding still | [holding.md](holding.md) | hill-start assist, auto hold, the tractor's hill hold, park pawl, CVT standstill |
-| Air and rolling resistance *(planned)* | resistance.md | drag, side force, downforce, rolling resistance |
+| Air and rolling resistance | [resistance.md](resistance.md) | drag, side force, downforce, rolling resistance |
 | Towing *(planned)* | towing.md | fifth wheel and drawbar, trailers, articulation, jackknife, trailer brakes, trailer bus |
 | Implements and the PTO *(planned)* | implements.md | three-point hitch, draft, PTO, hydraulic remote, ISOBUS |
 | Floating and boats *(planned)* | floating.md | buoyancy, propeller thrust, rudder, trim, windage, sailing, autopilot |

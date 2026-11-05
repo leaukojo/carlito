@@ -33,7 +33,7 @@ needs no brake to stay put on a slope.
 ### Aerodynamic drag
 The push of the air against a moving vehicle, pointing backwards. It grows with the square of the
 speed: twice as fast means four times the drag. Wind changes it, because what matters is the
-speed through the air, not over the ground.
+speed through the air, not over the ground. See [Air and rolling resistance](resistance.md).
 
 ### Air brakes
 Brakes worked by compressed air instead of oil, used on heavy trucks. The game's trucks keep two
@@ -289,6 +289,10 @@ squared and gives the tyres more grip. Only the two racing cars have it in the g
 The pull needed to drag a plough or harrow through the soil. In the game it is a real force at
 the tractor's hitch, depending on depth, soil and speed. The tractor publishes it as
 `draft_force`.
+
+### Drag area
+One number for how much air drag a vehicle makes: the area of its front times how smoothly the
+air flows round it (its drag coefficient). About 0.65 m² on the game's saloon.
 
 ### Drawbar
 A rigid bar at the back of a tractor that a trailer hooks onto with a single pin. It can only

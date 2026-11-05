@@ -8,6 +8,7 @@
     { "file": "surfaces.md", "title": "Ground and tyre types", "group": "Wheels and steering" },
     { "file": "suspension.md", "title": "Suspension", "group": "Wheels and steering" },
     { "file": "weight-transfer.md", "title": "Weight transfer and rollover", "group": "Wheels and steering" },
+    { "file": "resistance.md", "title": "Air and rolling resistance", "group": "Wheels and steering" },
     { "file": "engine.md", "title": "The engine", "group": "Engine and driveline" },
     { "file": "coupling.md", "title": "Clutch and torque converter", "group": "Engine and driveline" },
     { "file": "gearbox.md", "title": "Gearbox and shifting", "group": "Engine and driveline" },
