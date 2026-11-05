@@ -55,3 +55,17 @@ says meanwhile. Newest last.
   curvature is present.
 - **Guide meanwhile:** the steering page says the tightest command is a circle of about 8 m and
   does not call it full lock.
+
+## 6. Does traction control brake, or cut engine power?
+
+- **Code:** `RayWheel.tcs_take` (`wheel.gd`) says "TC removes drive, never brakes": the hold takes
+  drive away at each driven wheel inside the spin step, and the `TCS_SLIP` comment calls it an
+  ideal TC that "only ever removes drive". The engine's fuel is trimmed only by drag-torque control
+  in overrun (`Drivetrain.drag_control`) and by stability control (`Drivetrain.esc_cap`).
+- **UI text:** the pause menu's help for TRACTION CONTROL (`TCS_HELP` in `pause_menu.gd`) says it
+  "Cuts engine power when a driven wheel spins"; the help for DIFFERENTIALS (`AXLE_DIFF_HELP`) says
+  "Traction control brakes a spinning wheel and hides some of it". The two disagree with each
+  other and with the code's comment.
+- **Guide meanwhile:** the driver aids page says traction control takes away drive at the
+  spinning wheel and never brakes it, as the code's comment does, and does not say whether the
+  engine's power is cut.

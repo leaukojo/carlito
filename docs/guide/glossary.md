@@ -757,7 +757,8 @@ The distance between the left and right wheels of one axle.
 ### Traction control
 A system that stops the driven wheels spinning when the driver presses too hard, by holding back
 the drive. In the game it is ideal: it holds each driven wheel at the slip where the tyre pulls
-hardest. Called TC on cars and ASR on trucks.
+hardest. Called TC on cars and ASR on trucks. See
+[ABS, traction and stability control](driver-aids.md).
 
 ### Tractive effort
 The pulling force a locomotive makes at the rails. The game's train pulls with a constant force at

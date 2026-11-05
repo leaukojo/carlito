@@ -24,7 +24,7 @@ the two semi tractor units.
 | Gearbox and shifting | [gearbox.md](gearbox.md) | gear byte, automatic and manual, the shift policy, kickdown, AMT, powershift, CVT, park |
 | Differentials and four-wheel drive | [differentials.md](differentials.md) | open, limited-slip and Torsen diffs, diff lock, MFWD, centre diffs |
 | Brakes | [brakes.md](brakes.md) | brake hardware, bias, handbrake, heat and fade, retarder, spring brakes, air |
-| ABS, traction and stability control *(planned)* | driver-aids.md | ABS, TC/ASR, ESC, roll stability, their lamps |
+| ABS, traction and stability control | [driver-aids.md](driver-aids.md) | ABS, TC/ASR, ESC, roll stability, their lamps |
 | Holding still *(planned)* | holding.md | hill-start assist, auto hold, the tractor's hill hold, park pawl, CVT standstill |
 | Air and rolling resistance *(planned)* | resistance.md | drag, side force, downforce, rolling resistance |
 | Towing *(planned)* | towing.md | fifth wheel and drawbar, trailers, articulation, jackknife, trailer brakes, trailer bus |

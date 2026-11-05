@@ -13,6 +13,7 @@
     { "file": "gearbox.md", "title": "Gearbox and shifting", "group": "Engine and driveline" },
     { "file": "differentials.md", "title": "Differentials and four-wheel drive", "group": "Engine and driveline" },
     { "file": "brakes.md", "title": "Brakes", "group": "Brakes and control" },
+    { "file": "driver-aids.md", "title": "ABS, traction and stability control", "group": "Brakes and control" },
     { "file": "glossary.md", "title": "Glossary", "group": "Reference" },
     { "file": "template.md", "title": "The page template", "group": "For guide writers" },
     { "file": "inventory.md", "title": "Inventory of systems", "group": "For guide writers" },
