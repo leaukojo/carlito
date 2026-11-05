@@ -32,7 +32,7 @@ accelerator". Every page lists the signals that show its idea.
 
 ## How a page is laid out
 
-Every idea page follows the same pattern (the page template describes it in full):
+Every idea page follows the same pattern ([the page template](template.md) describes it in full):
 
 1. **A short summary**, then **which vehicles have this**, shown as badges:
    <span class="badge yes">has it</span> <span class="badge some">some of them</span>

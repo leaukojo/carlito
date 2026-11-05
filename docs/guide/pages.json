@@ -6,6 +6,7 @@
     { "file": "tyres.md", "title": "Tyres and slip", "group": "Wheels and steering" },
     { "file": "steering.md", "title": "Steering and Ackermann", "group": "Wheels and steering" },
     { "file": "glossary.md", "title": "Glossary", "group": "Reference" },
+    { "file": "template.md", "title": "The page template", "group": "For guide writers" },
     { "file": "inventory.md", "title": "Inventory of systems", "group": "For guide writers" },
     { "file": "open_questions.md", "title": "Open questions", "group": "For guide writers" }
   ]
