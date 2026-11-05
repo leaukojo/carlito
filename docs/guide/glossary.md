@@ -667,6 +667,10 @@ idle at 900 rpm.
 A hinged blade at the back of a boat (or the tail of a plane) that turns it. The boat's rudder
 works better the faster the water flows past it.
 
+### Running resistance
+Everything that holds a train back on level track: its wheels rolling, its bearings and flanges,
+and the air. See [Davis equation](#davis-equation).
+
 ## S
 
 ### Semi-trailer
@@ -798,7 +802,7 @@ hardest. Called TC on cars and ASR on trucks. See
 
 ### Tractive effort
 The pulling force a locomotive makes at the rails. The game's train pulls with a constant force at
-low speed and with constant power above that.
+low speed and with constant power above that. See [Trains](rail.md).
 
 ### Trailer bus
 The data link between a truck and its trailer. See [ISO 11992](#iso-11992).
