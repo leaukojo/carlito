@@ -220,7 +220,7 @@ h1:hover .anchor, h2:hover .anchor, h3:hover .anchor { opacity: 1; }
 .widget svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
 .widget .w-controls { display: grid; grid-template-columns: auto 1fr auto; gap: 0.5rem 0.75rem; align-items: center; margin-top: 0.75rem; }
 .widget .w-controls label { color: var(--muted); }
-.widget .w-controls output { font-variant-numeric: tabular-nums; min-width: 4.5rem; text-align: right; }
+.widget .w-controls output { font-variant-numeric: tabular-nums; min-width: 4.5rem; text-align: right; white-space: nowrap; }
 .widget input[type="range"] { width: 100%; accent-color: var(--accent); }
 .widget select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 5px; padding: 0.2rem 0.3rem; }
 .widget .w-readout { margin-top: 0.75rem; padding: 0.6rem 0.75rem; background: var(--code-bg); border-radius: 6px; font-variant-numeric: tabular-nums; }
