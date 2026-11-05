@@ -199,7 +199,7 @@ contact, divided by the force pressing them together. Written μ ([mu](#mu)).
 ### Combined slip
 A tyre doing two things at once: pushing along the road (driving or braking) and pushing sideways
 (cornering). Its grip has to be shared between the two, so hard braking leaves less grip for
-turning.
+turning. See [Tyres and slip](tyres.md).
 
 ### Compliance steer
 A small change in a wheel's angle caused by the rubber bushes in the suspension bending under

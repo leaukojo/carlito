@@ -29,3 +29,15 @@ says meanwhile. Newest last.
   ABS switched off in the LAB "the coupling stays shut on a locked driven wheel, so a manual
   stalls".
 - **Guide meanwhile:** the engine page will say the game has no stall, and leave the LAB case out.
+
+## 4. Does `slip` show a car running wide?
+
+- **Code:** `WheelDrive.fill_slip` publishes, per axle, the mean of `RayWheel.slip`, which is the
+  size of the longitudinal slip ratio only (`wheel.gd`, `slip = absf(slip_ratio)`). The sideways
+  slip, `v_lat / slip_denom`, is not in it.
+- **Contract:** the `slip` description says "slip on the front with the rear planted is a car
+  washing wide, slip on the rear alone is the back stepping out". A front axle washing wide on
+  rolling, unbraked wheels slides sideways with almost no longitudinal slip, so the published
+  value would stay near 0.
+- **Guide meanwhile:** the tyres page says `slip` is the slip ratio along the wheels and does not
+  include the slip angle.

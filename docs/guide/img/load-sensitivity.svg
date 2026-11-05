@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 250" width="420" height="250">
+<title>Load sensitivity: double the load, less than double the grip</title>
+<!-- RayWheel.load_scaled_mu with the cars' load_sensitivity 0.10: mu x (1 - 0.10 x log2(2)) = 0.9 mu,
+     so twice the load grips 2 x 0.9 = 1.8 times as hard. Bars: 70 px per unit of grip. -->
+<style>
+.ls-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.ls-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.ls-bar{fill:var(--fig-blue,#1d5ca8)}
+.ls-ghost{fill:none;stroke:var(--fig-muted,#6b6b75);stroke-width:1.5;stroke-dasharray:5 4}
+.ls-base{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5}
+.ls-load{fill:var(--fig-orange,#c45a12)}
+.ls-orange-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.ls-t{fill:var(--fig-ink,#e9e7e2)}.ls-s{fill:var(--fig-muted,#a6a6b0)}.ls-bar{fill:var(--fig-blue,#8ab6ff)}
+.ls-ghost{stroke:var(--fig-muted,#a6a6b0)}.ls-base{stroke:var(--fig-ink,#e9e7e2)}.ls-load{fill:var(--fig-orange,#f0a060)}
+.ls-orange-t{fill:var(--fig-orange,#f0a060)}}
+</style>
+<line class="ls-base" x1="40" y1="200" x2="380" y2="200"/>
+<!-- normal load -->
+<rect class="ls-load" x="105" y="22" width="50" height="14" rx="3"/>
+<text class="ls-orange-t" x="130" y="54" text-anchor="middle">load × 1</text>
+<rect class="ls-bar" x="100" y="130" width="60" height="70" rx="3"/>
+<text class="ls-t" x="130" y="122" text-anchor="middle">grip 1</text>
+<text class="ls-s" x="130" y="220" text-anchor="middle">normal load</text>
+<!-- double load -->
+<rect class="ls-load" x="275" y="6" width="50" height="14" rx="3"/>
+<rect class="ls-load" x="275" y="22" width="50" height="14" rx="3"/>
+<text class="ls-orange-t" x="300" y="54" text-anchor="middle">load × 2</text>
+<rect class="ls-ghost" x="270" y="60" width="60" height="140" rx="3"/>
+<rect class="ls-bar" x="270" y="74" width="60" height="126" rx="3"/>
+<text class="ls-t" x="300" y="98" text-anchor="middle" style="fill:var(--fig-fill,#f3f1ec)">grip 1.8</text>
+<text class="ls-s" x="338" y="68">2 if grip</text>
+<text class="ls-s" x="338" y="84">kept pace</text>
+<text class="ls-s" x="300" y="220" text-anchor="middle">double load</text>
+<text class="ls-s" x="210" y="244" text-anchor="middle">a car tyre in the game</text>
+</svg>
