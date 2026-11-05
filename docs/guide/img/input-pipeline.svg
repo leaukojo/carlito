@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 250" width="420" height="250">
+<title>Four input sources merge into one input for the vehicle</title>
+<!-- InputRouter: keyboard (shaped by KeyShaper), touch, gamepad and the sloppyCAN bridge merge into one
+     VehicleInput per tick (CLAUDE.md standing rule 5); the vehicle never knows which source drove. -->
+<style>
+.ip-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.ip-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.ip-box{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5}
+.ip-hub{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-blue,#1d5ca8);stroke-width:2.5}
+.ip-line{stroke:var(--fig-muted,#6b6b75);stroke-width:2;fill:none}
+.ip-head{fill:var(--fig-muted,#6b6b75)}
+.ip-blue-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+@media (prefers-color-scheme:dark){
+.ip-t{fill:var(--fig-ink,#e9e7e2)}.ip-s{fill:var(--fig-muted,#a6a6b0)}
+.ip-box{fill:var(--fig-fill,#22242a);stroke:var(--fig-ink,#e9e7e2)}.ip-hub{fill:var(--fig-fill,#22242a);stroke:var(--fig-blue,#8ab6ff)}
+.ip-line{stroke:var(--fig-muted,#a6a6b0)}.ip-head{fill:var(--fig-muted,#a6a6b0)}.ip-blue-t{fill:var(--fig-blue,#8ab6ff)}}
+</style>
+<rect class="ip-box" x="10" y="14" width="120" height="40" rx="6"/>
+<text class="ip-t" x="70" y="32" text-anchor="middle">keyboard</text>
+<text class="ip-s" x="70" y="48" text-anchor="middle">eased by key response</text>
+<rect class="ip-box" x="10" y="70" width="120" height="34" rx="6"/>
+<text class="ip-t" x="70" y="92" text-anchor="middle">touch screen</text>
+<rect class="ip-box" x="10" y="120" width="120" height="34" rx="6"/>
+<text class="ip-t" x="70" y="142" text-anchor="middle">gamepad</text>
+<rect class="ip-box" x="10" y="186" width="120" height="40" rx="6"/>
+<text class="ip-t" x="70" y="204" text-anchor="middle">sloppyCAN</text>
+<text class="ip-s" x="70" y="220" text-anchor="middle">over the bridge</text>
+<path class="ip-line" d="M130,34 L176,100"/><path class="ip-line" d="M130,87 L176,110"/>
+<path class="ip-line" d="M130,137 L176,122"/><path class="ip-line" d="M130,206 L176,134"/>
+<rect class="ip-hub" x="176" y="86" width="110" height="62" rx="8"/>
+<text class="ip-blue-t" x="231" y="112" text-anchor="middle">one input</text>
+<text class="ip-s" x="231" y="130" text-anchor="middle">who drives?</text>
+<path class="ip-line" d="M286,117 L330,117"/><path class="ip-head" d="M340,117 L328,110 L328,124 Z"/>
+<rect class="ip-box" x="342" y="94" width="70" height="46" rx="6"/>
+<text class="ip-t" x="377" y="122" text-anchor="middle">vehicle</text>
+</svg>

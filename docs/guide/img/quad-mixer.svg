@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 280" width="420" height="280">
+<title>The drone's four rotors seen from above, and how changing their speeds tilts and turns it</title>
+<!-- drone_propulsion.gd MOTORS table: FL spins +1, FR -1, RL -1, RR +1; diagonal pairs spin the same way,
+     so their drag torques cancel at equal speed. Yaw: speed up one diagonal pair, slow the other. -->
+<style>
+.qm-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.qm-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.qm-arm{stroke:var(--fig-ink,#1c1c1f);stroke-width:5;stroke-linecap:round}
+.qm-body{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-ink,#1c1c1f);stroke-width:2}
+.qm-cw{fill:none;stroke:var(--fig-blue,#1d5ca8);stroke-width:3}
+.qm-ccw{fill:none;stroke:var(--fig-orange,#c45a12);stroke-width:3}
+.qm-cw-f{fill:var(--fig-blue,#1d5ca8)}.qm-ccw-f{fill:var(--fig-orange,#c45a12)}
+.qm-blue-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.qm-or-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.qm-t{fill:var(--fig-ink,#e9e7e2)}.qm-s{fill:var(--fig-muted,#a6a6b0)}.qm-arm{stroke:var(--fig-ink,#e9e7e2)}
+.qm-body{fill:var(--fig-fill,#22242a);stroke:var(--fig-ink,#e9e7e2)}
+.qm-cw{stroke:var(--fig-blue,#8ab6ff)}.qm-ccw{stroke:var(--fig-orange,#f0a060)}
+.qm-cw-f{fill:var(--fig-blue,#8ab6ff)}.qm-ccw-f{fill:var(--fig-orange,#f0a060)}
+.qm-blue-t{fill:var(--fig-blue,#8ab6ff)}.qm-or-t{fill:var(--fig-orange,#f0a060)}}
+</style>
+<text class="qm-s" x="120" y="22" text-anchor="middle">front</text>
+<line class="qm-arm" x1="60" y1="60" x2="180" y2="180"/>
+<line class="qm-arm" x1="180" y1="60" x2="60" y2="180"/>
+<rect class="qm-body" x="100" y="100" width="40" height="40" rx="6"/>
+<!-- rotors: FL and RR one way (orange), FR and RL the other (blue) -->
+<circle class="qm-ccw" cx="60" cy="60" r="32"/><path class="qm-ccw-f" d="M60,28 L70,22 L70,34 Z"/>
+<circle class="qm-cw" cx="180" cy="60" r="32"/><path class="qm-cw-f" d="M180,28 L170,22 L170,34 Z"/>
+<circle class="qm-cw" cx="60" cy="180" r="32"/><path class="qm-cw-f" d="M60,212 L70,206 L70,218 Z"/>
+<circle class="qm-ccw" cx="180" cy="180" r="32"/><path class="qm-ccw-f" d="M180,212 L170,206 L170,218 Z"/>
+<text class="qm-t" x="60" y="65" text-anchor="middle">1</text>
+<text class="qm-t" x="180" y="65" text-anchor="middle">2</text>
+<text class="qm-t" x="60" y="185" text-anchor="middle">3</text>
+<text class="qm-t" x="180" y="185" text-anchor="middle">4</text>
+<text class="qm-or-t" x="120" y="248" text-anchor="middle">1 and 4 spin one way,</text>
+<text class="qm-blue-t" x="120" y="266" text-anchor="middle">2 and 3 the other</text>
+<!-- the rules -->
+<text class="qm-t" x="240" y="56">To climb</text>
+<text class="qm-s" x="240" y="74">all four faster</text>
+<text class="qm-t" x="240" y="106">To tilt forward</text>
+<text class="qm-s" x="240" y="124">rear pair faster, front slower</text>
+<text class="qm-t" x="240" y="156">To roll right</text>
+<text class="qm-s" x="240" y="174">left pair faster, right slower</text>
+<text class="qm-t" x="240" y="206">To turn</text>
+<text class="qm-s" x="240" y="224">one spinning pair faster,</text>
+<text class="qm-s" x="240" y="240">the other slower</text>
+</svg>

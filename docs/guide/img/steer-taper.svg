@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 300" width="420" height="300">
+<title>Steering lock against speed for three vehicles</title>
+<!-- WheelDrive.steer_lock_deg: max_steer_deg, falling linearly to min_steer_frac x max_steer_deg at
+     steer_falloff_speed, flat after. sedan_spec.tres 38 deg, 0.26 at 42 m/s (151 km/h);
+     semi_spec.tres 24 deg, 0.21 at 29 m/s (104 km/h); tractor-kenney_spec.tres 38 deg, 0.55 at
+     11 m/s (40 km/h). Plot: x = 56 + 2.15 x km/h, y = 230 - 4.75 x deg. -->
+<style>
+.st-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.st-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.st-axis{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:none}
+.st-grid{stroke:var(--fig-grid,#e3e0d8);stroke-width:1;fill:none}
+.st-car{stroke:var(--fig-blue,#1d5ca8);stroke-width:3.5;fill:none;stroke-linejoin:round}
+.st-semi{stroke:var(--fig-orange,#c45a12);stroke-width:3.5;fill:none;stroke-linejoin:round}
+.st-tractor{stroke:var(--fig-green,#2e7d32);stroke-width:3.5;fill:none;stroke-linejoin:round}
+.st-car-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.st-semi-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+.st-tractor-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-green,#2e7d32)}
+@media (prefers-color-scheme:dark){
+.st-t{fill:var(--fig-ink,#e9e7e2)}.st-s{fill:var(--fig-muted,#a6a6b0)}.st-axis{stroke:var(--fig-ink,#e9e7e2)}
+.st-grid{stroke:var(--fig-grid,#30323a)}.st-car{stroke:var(--fig-blue,#8ab6ff)}.st-semi{stroke:var(--fig-orange,#f0a060)}
+.st-tractor{stroke:var(--fig-green,#7cc884)}.st-car-t{fill:var(--fig-blue,#8ab6ff)}.st-semi-t{fill:var(--fig-orange,#f0a060)}
+.st-tractor-t{fill:var(--fig-green,#7cc884)}}
+</style>
+<line class="st-grid" x1="56" y1="40" x2="400" y2="40"/>
+<line class="st-grid" x1="56" y1="87.5" x2="400" y2="87.5"/>
+<line class="st-grid" x1="56" y1="135" x2="400" y2="135"/>
+<line class="st-grid" x1="56" y1="182.5" x2="400" y2="182.5"/>
+<line class="st-grid" x1="163.5" y1="40" x2="163.5" y2="230"/>
+<line class="st-grid" x1="271" y1="40" x2="271" y2="230"/>
+<line class="st-grid" x1="378.5" y1="40" x2="378.5" y2="230"/>
+<path class="st-axis" d="M56,32 L56,230 L404,230"/>
+<!-- car: 38 deg to 9.9 deg at 151 km/h -->
+<polyline class="st-car" points="56,49.5 381,183 400,183"/>
+<!-- semi: 24 deg to 5.0 deg at 104 km/h -->
+<polyline class="st-semi" points="56,116 280.5,206.1 400,206.1"/>
+<!-- tractor: 38 deg to 20.9 deg at 40 km/h, drawn to 50 km/h -->
+<polyline class="st-tractor" points="56,49.5 141,130.7 163.5,130.7"/>
+<text class="st-car-t" x="250" y="96">sedan</text>
+<text class="st-tractor-t" x="170" y="126">tractor</text>
+<text class="st-semi-t" x="150" y="186">semi</text>
+<!-- axes -->
+<text class="st-s" x="50" y="44" text-anchor="end">40°</text>
+<text class="st-s" x="50" y="139" text-anchor="end">20°</text>
+<text class="st-s" x="50" y="234" text-anchor="end">0°</text>
+<text class="st-s" x="56" y="248" text-anchor="middle">0</text>
+<text class="st-s" x="163.5" y="248" text-anchor="middle">50</text>
+<text class="st-s" x="271" y="248" text-anchor="middle">100</text>
+<text class="st-s" x="378.5" y="248" text-anchor="middle">150</text>
+<text class="st-t" x="228" y="274" text-anchor="middle">speed, km/h</text>
+<text class="st-t" x="14" y="135" text-anchor="middle" transform="rotate(-90 14 135)">steering lock</text>
+</svg>

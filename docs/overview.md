@@ -9,6 +9,7 @@ figure): `docs/vehicle_measurements.md`; sourced figures and references (read on
 change a sourced value): `docs/sources.md`. Open work, while any: docs/plans/; backlog: `docs/TODO.md`.
 What goes where (CLAUDE.md / code comment / `docs/`): root `CLAUDE.md` § Working style. A new
 machine or clone: `docs/machine_setup.md`.
+Player guide to the mechanics (a static site, plain language): `docs/guide/` (`npx serve docs/guide`).
 
 ## The big idea: one contract, everything flows through it
 

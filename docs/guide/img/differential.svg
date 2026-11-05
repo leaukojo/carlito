@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 250" width="420" height="250">
+<title>What each kind of differential lets an axle push with one wheel on ice</title>
+<!-- One driven axle, left wheel on ice (Surface.REF_GRIP Ice 0.12), right wheel on dry asphalt (1).
+     Open: equal torque, so the grippy wheel gets only what the ice wheel holds (Differential bias 1).
+     Limited-slip at bias ratio 2.5 (race, race-future rear, hatchback-sports front): the slow wheel up
+     to 2.5 x the fast one (Differential.bias_capacity). Locked: both at one speed, each to its own grip.
+     Bar length = push as a share of the dry wheel's grip; W = 250 units per 1. -->
+<style>
+.df-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.df-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.df-ice{fill:var(--fig-blue,#1d5ca8)}
+.df-dry{fill:var(--fig-orange,#c45a12)}
+.df-cap{fill:none;stroke:var(--fig-grid,#e3e0d8);stroke-width:1.5;stroke-dasharray:4 3}
+@media (prefers-color-scheme:dark){
+.df-t{fill:var(--fig-ink,#e9e7e2)}.df-s{fill:var(--fig-muted,#a6a6b0)}.df-ice{fill:var(--fig-blue,#8ab6ff)}
+.df-dry{fill:var(--fig-orange,#f0a060)}.df-cap{stroke:var(--fig-grid,#30323a)}}
+</style>
+<text class="df-t" x="10" y="40">Open</text>
+<text class="df-s" x="142" y="60" text-anchor="end">wheel on ice</text>
+<rect class="df-ice" x="150" y="49" width="30.0" height="14"/>
+<text class="df-s" x="142" y="80" text-anchor="end">wheel on dry road</text>
+<rect class="df-cap" x="150" y="69" width="250" height="14"/>
+<rect class="df-dry" x="150" y="69" width="30.0" height="14"/>
+<text class="df-t" x="10" y="110">Limited-slip, ratio 2.5</text>
+<text class="df-s" x="142" y="130" text-anchor="end">wheel on ice</text>
+<rect class="df-ice" x="150" y="119" width="30.0" height="14"/>
+<text class="df-s" x="142" y="150" text-anchor="end">wheel on dry road</text>
+<rect class="df-cap" x="150" y="139" width="250" height="14"/>
+<rect class="df-dry" x="150" y="139" width="75.0" height="14"/>
+<text class="df-t" x="10" y="180">Locked</text>
+<text class="df-s" x="142" y="200" text-anchor="end">wheel on ice</text>
+<rect class="df-ice" x="150" y="189" width="30.0" height="14"/>
+<text class="df-s" x="142" y="220" text-anchor="end">wheel on dry road</text>
+<rect class="df-cap" x="150" y="209" width="250" height="14"/>
+<rect class="df-dry" x="150" y="209" width="250.0" height="14"/>
+<text class="df-s" x="150" y="246">dashed box: what the dry wheel could push</text>
+</svg>

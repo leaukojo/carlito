@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 240" width="420" height="240">
+<title>A wind "from the north" blows toward the south</title>
+<!-- WorldConditions: the UI enters direction as meteorological FROM degrees; WindField and CurrentField store
+     the heading the flow goes TOWARD, from + 180. The contract's twd is FROM, current_set is TOWARD. -->
+<style>
+.wf-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.wf-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.wf-ring{stroke:var(--fig-grid,#e3e0d8);stroke-width:2;fill:none}
+.wf-arrow{stroke:var(--fig-blue,#1d5ca8);stroke-width:4;fill:none}
+.wf-head{fill:var(--fig-blue,#1d5ca8)}
+.wf-or-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+.wf-blue-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+@media (prefers-color-scheme:dark){
+.wf-t{fill:var(--fig-ink,#e9e7e2)}.wf-s{fill:var(--fig-muted,#a6a6b0)}.wf-ring{stroke:var(--fig-grid,#30323a)}
+.wf-arrow{stroke:var(--fig-blue,#8ab6ff)}.wf-head{fill:var(--fig-blue,#8ab6ff)}
+.wf-or-t{fill:var(--fig-orange,#f0a060)}.wf-blue-t{fill:var(--fig-blue,#8ab6ff)}}
+</style>
+<circle class="wf-ring" cx="120" cy="120" r="80"/>
+<text class="wf-t" x="120" y="30" text-anchor="middle">N</text>
+<text class="wf-t" x="120" y="222" text-anchor="middle">S</text>
+<text class="wf-t" x="20" y="125" text-anchor="middle">W</text>
+<text class="wf-t" x="220" y="125" text-anchor="middle">E</text>
+<path class="wf-arrow" d="M120,50 L120,176"/>
+<path class="wf-head" d="M120,192 L110,172 L130,172 Z"/>
+<text class="wf-or-t" x="250" y="70">comes FROM the north</text>
+<text class="wf-s" x="250" y="88">how CONDITIONS and the</text>
+<text class="wf-s" x="250" y="104">wind signal twd name it</text>
+<text class="wf-blue-t" x="250" y="150">blows TOWARD the south</text>
+<text class="wf-s" x="250" y="168">how a current's set,</text>
+<text class="wf-s" x="250" y="184">current_set, names it</text>
+</svg>
