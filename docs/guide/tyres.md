@@ -105,7 +105,8 @@ about 1.3.
 The ground and the tyre's tread change this number. Ice gives an ordinary all-season tyre only
 about a tenth of its dry grip; wet asphalt about half; snow a little under half. A winter tyre
 grips snow and ice better than an all-season tyre, a summer tyre grips dry roads better. The game
-has twelve kinds of ground and nine kinds of tyre; those are their own topic. Every one of them
+has twelve kinds of ground and nine kinds of tyre; [Ground and tyre types](surfaces.md) covers
+them. Every one of them
 changes only how high the peak is, never the shape of the curve.
 <!-- surface.gd REF_GRIP Wet 0.55, Snow 0.45, Ice 0.12, Surface.COUNT 12; src/vehicles/tyres/ holds nine TyreClass files -->
 

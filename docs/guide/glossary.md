@@ -680,8 +680,9 @@ The steering lock getting smaller as speed rises, so a full turn of the wheel at
 does not throw the car off the road. The game's cars, vans, trucks and tractors have it.
 
 ### Surface
-The kind of ground under a tyre: asphalt, wet road, gravel, dirt, grass, sand, rock, mud, field
-soil, snow or ice. Each gives a different grip and rolling resistance.
+The kind of ground under a tyre: asphalt, wet road, airfield pad, gravel, dirt, grass, sand, rock,
+mud, field soil, snow or ice. Each gives a different grip and rolling resistance. See
+[Ground and tyre types](surfaces.md).
 
 ### Suspension
 The springs, dampers and links between the wheels and the body. They let the wheels follow bumps
@@ -692,6 +693,10 @@ and keep the tyres pressed onto the road.
 ### Telemetry
 Measurements a vehicle sends out about itself: speed, engine speed, temperatures. In Carlito every
 "out" signal is telemetry, read from the simulation itself.
+
+### Terrain
+The painted ground of an island level: a surface shaped by a height map, painted in colours that
+each stand for a kind of ground. Anything that is not painted terrain counts as dry asphalt.
 
 ### Tide
 A current that changes direction and strength over time. Level 6 has one; CONDITIONS can set its
@@ -737,7 +742,8 @@ The smallest circle a vehicle can drive at full lock.
 
 ### Tyre class
 A type of tyre tread: all-season, summer, winter, studded winter, mud, and others. Each grips
-differently on each surface. Cars and trucks can change tyre class in the garage.
+differently on each surface. Cars and trucks can change tyre class in the garage. See
+[Ground and tyre types](surfaces.md).
 
 ## U
 

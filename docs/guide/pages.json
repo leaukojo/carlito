@@ -5,6 +5,7 @@
     { "file": "index.md", "title": "About this guide", "group": "Start" },
     { "file": "tyres.md", "title": "Tyres and slip", "group": "Wheels and steering" },
     { "file": "steering.md", "title": "Steering and Ackermann", "group": "Wheels and steering" },
+    { "file": "surfaces.md", "title": "Ground and tyre types", "group": "Wheels and steering" },
     { "file": "glossary.md", "title": "Glossary", "group": "Reference" },
     { "file": "template.md", "title": "The page template", "group": "For guide writers" },
     { "file": "inventory.md", "title": "Inventory of systems", "group": "For guide writers" },

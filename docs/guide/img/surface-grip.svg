@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 300" width="420" height="300">
+<title>Peak grip of four car tyres on five kinds of ground</title>
+<!-- Response = Surface.REF_GRIP x (class dry / all-season dry) x class surface_grip (TyreClass.grip_response).
+     REF_GRIP Asphalt 1, Wet 0.55, Snow 0.45, Ice 0.12, Mud 0.45; summer.tres dry 1.1, Mud 0.9 Snow 0.55 Ice 0.67;
+     winter.tres dry 0.97, Mud 1.05 Snow 1.2 Ice 1.53; studded.tres dry 0.94, Mud 1.05 Snow 1.25 Ice 2.5.
+     Bar height = 190/1.2 per unit of grip. -->
+<style>
+.sf-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.sf-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.sf-axis{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:none}
+.sf-grid{stroke:var(--fig-grid,#e3e0d8);stroke-width:1;fill:none}
+.sf-blue{fill:var(--fig-blue,#1d5ca8)}.sf-orange{fill:var(--fig-orange,#c45a12)}
+.sf-green{fill:var(--fig-green,#2e7d32)}.sf-red{fill:var(--fig-red,#b3261e)}
+@media (prefers-color-scheme:dark){
+.sf-t{fill:var(--fig-ink,#e9e7e2)}.sf-s{fill:var(--fig-muted,#a6a6b0)}.sf-axis{stroke:var(--fig-ink,#e9e7e2)}
+.sf-grid{stroke:var(--fig-grid,#30323a)}.sf-blue{fill:var(--fig-blue,#8ab6ff)}.sf-orange{fill:var(--fig-orange,#f0a060)}
+.sf-green{fill:var(--fig-green,#7cc884)}.sf-red{fill:var(--fig-red,#f08a80)}}
+</style>
+<line class="sf-grid" x1="58" y1="156.8" x2="406" y2="156.8"/>
+<text class="sf-s" x="52" y="160.8" text-anchor="end">0.5</text>
+<line class="sf-grid" x1="58" y1="77.7" x2="406" y2="77.7"/>
+<text class="sf-s" x="52" y="81.7" text-anchor="end">1</text>
+<text class="sf-s" x="52" y="240" text-anchor="end">0</text>
+<path class="sf-axis" d="M58,40 L58,236 L408,236"/>
+<text class="sf-t" x="14" y="141" text-anchor="middle" transform="rotate(-90 14 141)">peak grip</text>
+<rect class="sf-blue" x="68.0" y="77.7" width="11" height="158.3"><title>All-season on dry asphalt: 1.00</title></rect>
+<rect class="sf-orange" x="81.0" y="61.8" width="11" height="174.2"><title>Summer on dry asphalt: 1.10</title></rect>
+<rect class="sf-green" x="94.0" y="82.4" width="11" height="153.6"><title>Winter on dry asphalt: 0.97</title></rect>
+<rect class="sf-red" x="107.0" y="87.2" width="11" height="148.8"><title>Studded on dry asphalt: 0.94</title></rect>
+<text class="sf-s" x="93.0" y="254" text-anchor="middle">Dry</text>
+<rect class="sf-blue" x="136.0" y="148.9" width="11" height="87.1"><title>All-season on wet: 0.55</title></rect>
+<rect class="sf-orange" x="149.0" y="140.2" width="11" height="95.8"><title>Summer on wet: 0.61</title></rect>
+<rect class="sf-green" x="162.0" y="151.5" width="11" height="84.5"><title>Winter on wet: 0.53</title></rect>
+<rect class="sf-red" x="175.0" y="154.1" width="11" height="81.9"><title>Studded on wet: 0.52</title></rect>
+<text class="sf-s" x="161.0" y="254" text-anchor="middle">Wet</text>
+<rect class="sf-blue" x="204.0" y="164.8" width="11" height="71.2"><title>All-season on snow: 0.45</title></rect>
+<rect class="sf-orange" x="217.0" y="192.9" width="11" height="43.1"><title>Summer on snow: 0.27</title></rect>
+<rect class="sf-green" x="230.0" y="153.1" width="11" height="82.9"><title>Winter on snow: 0.52</title></rect>
+<rect class="sf-red" x="243.0" y="152.3" width="11" height="83.7"><title>Studded on snow: 0.53</title></rect>
+<text class="sf-s" x="229.0" y="254" text-anchor="middle">Snow</text>
+<rect class="sf-blue" x="272.0" y="217.0" width="11" height="19.0"><title>All-season on ice: 0.12</title></rect>
+<rect class="sf-orange" x="285.0" y="222.0" width="11" height="14.0"><title>Summer on ice: 0.09</title></rect>
+<rect class="sf-green" x="298.0" y="207.8" width="11" height="28.2"><title>Winter on ice: 0.18</title></rect>
+<rect class="sf-red" x="311.0" y="191.3" width="11" height="44.6"><title>Studded on ice: 0.28</title></rect>
+<text class="sf-s" x="297.0" y="254" text-anchor="middle">Ice</text>
+<rect class="sf-blue" x="340.0" y="164.8" width="11" height="71.2"><title>All-season on mud: 0.45</title></rect>
+<rect class="sf-orange" x="353.0" y="165.5" width="11" height="70.5"><title>Summer on mud: 0.45</title></rect>
+<rect class="sf-green" x="366.0" y="163.4" width="11" height="72.6"><title>Winter on mud: 0.46</title></rect>
+<rect class="sf-red" x="379.0" y="165.7" width="11" height="70.3"><title>Studded on mud: 0.44</title></rect>
+<text class="sf-s" x="365.0" y="254" text-anchor="middle">Mud</text>
+<rect class="sf-blue" x="62" y="270" width="12" height="12"/><text class="sf-s" x="79" y="281">All-season</text>
+<rect class="sf-orange" x="160" y="270" width="12" height="12"/><text class="sf-s" x="177" y="281">Summer</text>
+<rect class="sf-green" x="240" y="270" width="12" height="12"/><text class="sf-s" x="257" y="281">Winter</text>
+<rect class="sf-red" x="322" y="270" width="12" height="12"/><text class="sf-s" x="339" y="281">Studded</text>
+</svg>
