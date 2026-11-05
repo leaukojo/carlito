@@ -24,7 +24,7 @@ the `accel` signal, from 0 to 100 %.
 ### Ackermann steering
 A way of angling the two front wheels so that the inside wheel turns more sharply than the
 outside one in a corner. Both wheels then roll around the same centre point instead of fighting
-each other.
+each other. See [Steering and Ackermann](steering.md).
 
 ### Active standstill
 The CVT tractor's way of holding still: its gearbox holds the wheels at a ratio of zero, so it

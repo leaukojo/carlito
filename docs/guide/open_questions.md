@@ -41,3 +41,17 @@ says meanwhile. Newest last.
   value would stay near 0.
 - **Guide meanwhile:** the tyres page says `slip` is the slip ratio along the wheels and does not
   include the slip angle.
+
+## 5. Is 127 1/km of guidance curvature full lock?
+
+- **Code:** `WheelDrive.steer_angle_from_curvature` turns the curvature into an angle on the
+  tractor's own wheelbase, `atan(wheelbase * curvature)`, clamped to `max_steer_deg`. On
+  `tractor-kenney` (wheelbase about 2.58 m, lock 38°) 127 1/km gives about 18°, half the lock;
+  the tractor's full-lock circle is about 3.3 m, which the signal cannot ask for.
+- **Contract and comment:** the `guidance_curvature` description says "+-127 1/km is a 7.9 m
+  radius, which is full steering lock here", and `bridge_source.gd`'s `FULL_LOCK_CURVATURE`
+  comment says the same. The bridge's `guidance` steer unit (curvature over 127) is not what turns
+  the wheels: `base_vehicle.gd` slews to `WheelDrive.guidance_steer_unit` instead whenever a
+  curvature is present.
+- **Guide meanwhile:** the steering page says the tightest command is a circle of about 8 m and
+  does not call it full lock.

@@ -4,6 +4,7 @@
   "pages": [
     { "file": "index.md", "title": "About this guide", "group": "Start" },
     { "file": "tyres.md", "title": "Tyres and slip", "group": "Wheels and steering" },
+    { "file": "steering.md", "title": "Steering and Ackermann", "group": "Wheels and steering" },
     { "file": "glossary.md", "title": "Glossary", "group": "Reference" },
     { "file": "inventory.md", "title": "Inventory of systems", "group": "For guide writers" },
     { "file": "open_questions.md", "title": "Open questions", "group": "For guide writers" }

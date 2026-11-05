@@ -223,5 +223,5 @@ You need a car with ABS, such as the `sedan`.
 ## Related
 
 - [Glossary](glossary.md): every term on this page.
-- Next in this group: Steering and Ackermann, how the front wheels are angled to make the slip
-  angles a turn needs.
+- [Steering and Ackermann](steering.md): how the front wheels are angled to make the slip angles
+  a turn needs.
