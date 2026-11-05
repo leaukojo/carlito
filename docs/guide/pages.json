@@ -17,6 +17,7 @@
     { "file": "driver-aids.md", "title": "ABS, traction and stability control", "group": "Brakes and control" },
     { "file": "holding.md", "title": "Holding still", "group": "Brakes and control" },
     { "file": "towing.md", "title": "Towing", "group": "Towing and farm work" },
+    { "file": "implements.md", "title": "Implements and the PTO", "group": "Towing and farm work" },
     { "file": "glossary.md", "title": "Glossary", "group": "Reference" },
     { "file": "template.md", "title": "The page template", "group": "For guide writers" },
     { "file": "inventory.md", "title": "Inventory of systems", "group": "For guide writers" },

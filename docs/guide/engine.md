@@ -156,7 +156,8 @@ throttle keeps the tractor driving in gear with the pedal released.
 <!-- PedalMap.demand; contract hand_throttle: "pulling away from rest still takes the accelerator" -->
 
 A power take-off ([PTO](glossary.md#pto)) that drives an implement is a load on the crank like
-any other, and the governor answers it with fuel. The page on implements and the PTO covers it.
+any other, and the governor answers it with fuel. [Implements and the PTO](implements.md) covers
+it.
 
 ## The simpler engine on the boat and the plane
 

@@ -28,7 +28,7 @@ the two semi tractor units.
 | Holding still | [holding.md](holding.md) | hill-start assist, auto hold, the tractor's hill hold, park pawl, CVT standstill |
 | Air and rolling resistance | [resistance.md](resistance.md) | drag, side force, downforce, rolling resistance |
 | Towing | [towing.md](towing.md) | fifth wheel and drawbar, trailers, articulation, jackknife, trailer brakes, trailer bus |
-| Implements and the PTO *(planned)* | implements.md | three-point hitch, draft, PTO, hydraulic remote, ISOBUS |
+| Implements and the PTO | [implements.md](implements.md) | three-point hitch, draft, PTO, hydraulic remote, ISOBUS |
 | Floating and boats *(planned)* | floating.md | buoyancy, propeller thrust, rudder, trim, windage, sailing, autopilot |
 | Wind, current and conditions *(planned)* | conditions.md | wind field, tide, CONDITIONS presets, day and night |
 | Drone flight *(planned)* | drone-flight.md | rotors, mixer, arming, flight modes, failsafes, battery pack, sensors, bus nodes |
