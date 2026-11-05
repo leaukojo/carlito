@@ -129,6 +129,10 @@ The vehicle's electrical store. Every vehicle publishes a battery voltage, from 
 model. The drone has its own model of a flight battery pack, whose voltage falls as it drains and
 as it delivers current.
 
+### Bias ratio
+How unevenly a limited-slip or Torsen-type differential may split its torque: the slower wheel
+may take up to this many times the faster one's. 1 is an open differential.
+
 ### Bicycle angle
 The single steering angle the game works with before splitting it between the two front wheels.
 Imagine the car as a bicycle with one front wheel in the middle: that wheel's angle is the bicycle
@@ -270,7 +274,8 @@ axle (`diff_lock`).
 
 ### Differential
 The gears in the middle of an axle that let the left and right wheels turn at different speeds.
-In a corner the outside wheel travels further than the inside one, so it must turn faster.
+In a corner the outside wheel travels further than the inside one, so it must turn faster. See
+[Differentials and four-wheel drive](differentials.md).
 
 ### Downforce
 Air pushing a car down onto the road, made by wings and the body's shape. It grows with speed

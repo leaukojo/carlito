@@ -22,7 +22,7 @@ the two semi tractor units.
 | The engine | [engine.md](engine.md) | torque curve, rpm, idle, limiter, governor, pedal map, engine braking, fuel burn |
 | Clutch and torque converter | [coupling.md](coupling.md) | friction clutch, converter, creep, lock-up, launch |
 | Gearbox and shifting | [gearbox.md](gearbox.md) | gear byte, automatic and manual, the shift policy, kickdown, AMT, powershift, CVT, park |
-| Differentials and four-wheel drive *(planned)* | differentials.md | open, limited-slip and Torsen diffs, diff lock, MFWD, centre diffs |
+| Differentials and four-wheel drive | [differentials.md](differentials.md) | open, limited-slip and Torsen diffs, diff lock, MFWD, centre diffs |
 | Brakes *(planned)* | brakes.md | brake hardware, bias, handbrake, heat and fade, retarder, spring brakes, air |
 | ABS, traction and stability control *(planned)* | driver-aids.md | ABS, TC/ASR, ESC, roll stability, their lamps |
 | Holding still *(planned)* | holding.md | hill-start assist, auto hold, the tractor's hill hold, park pawl, CVT standstill |

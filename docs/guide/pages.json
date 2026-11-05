@@ -11,6 +11,7 @@
     { "file": "engine.md", "title": "The engine", "group": "Engine and driveline" },
     { "file": "coupling.md", "title": "Clutch and torque converter", "group": "Engine and driveline" },
     { "file": "gearbox.md", "title": "Gearbox and shifting", "group": "Engine and driveline" },
+    { "file": "differentials.md", "title": "Differentials and four-wheel drive", "group": "Engine and driveline" },
     { "file": "glossary.md", "title": "Glossary", "group": "Reference" },
     { "file": "template.md", "title": "The page template", "group": "For guide writers" },
     { "file": "inventory.md", "title": "Inventory of systems", "group": "For guide writers" },
