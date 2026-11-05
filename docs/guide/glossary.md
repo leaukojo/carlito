@@ -584,6 +584,11 @@ A control that cuts the fuel when the engine reaches its redline.
 On a train, the switch that chooses direction: forward, neutral or reverse. The game sends it on
 the same `gear` signal as a car's gearbox.
 
+### Ride frequency
+How many times a second a vehicle's body bounces up and down on its springs after a bump. Softer
+springs or a heavier load give a lower frequency and a gentler ride. The game's saloons bounce
+about 1.4 times a second.
+
 ### Roll
 A vehicle leaning to one side about its length, as a car body leans outwards in a corner.
 
@@ -686,7 +691,11 @@ mud, field soil, snow or ice. Each gives a different grip and rolling resistance
 
 ### Suspension
 The springs, dampers and links between the wheels and the body. They let the wheels follow bumps
-and keep the tyres pressed onto the road.
+and keep the tyres pressed onto the road. See [Suspension](suspension.md).
+
+### Swinging front axle
+A front axle built as one beam on a single pivot in the middle, so one wheel can rise as the other
+drops. Farm tractors use it; in the game it swings up to 10° each way before it meets its stop.
 
 ## T
 
