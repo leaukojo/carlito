@@ -147,7 +147,7 @@ tyres. The outside tyre gains grip, the inside tyre loses grip, and because of l
 the pair together ends up with less than before. The end of the car whose tyres carry the most
 uneven load loses grip first. That is how designers tune whether a car runs wide at the front or
 swings out at the back, and it is a topic of its own,
-[weight transfer](glossary.md#weight-transfer).
+[weight transfer](glossary.md#weight-transfer) ([Weight transfer and rollover](weight-transfer.md)).
 
 A heavily loaded tyre also reaches its sideways peak at a larger slip angle than a lightly
 loaded one. The game models this on the cars, the vans, the rigid trucks and the tractor, but not
@@ -226,3 +226,6 @@ You need a car with ABS, such as the `sedan`.
 - [Glossary](glossary.md): every term on this page.
 - [Steering and Ackermann](steering.md): how the front wheels are angled to make the slip angles
   a turn needs.
+- [Ground and tyre types](surfaces.md): how the ground and the tread scale the grip.
+- [ABS, traction and stability control](driver-aids.md): the aids that hold the tyres at the peak.
+- [Air and rolling resistance](resistance.md): rolling resistance beside the air's drag.

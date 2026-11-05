@@ -59,6 +59,8 @@ The short cuts fall into three kinds:
 - **Simplified: the fuel tank.** The burn is real; the tank is scaled down so its gauge moves in a
   session, and an empty tank does not stop the engine (open question 9).
 - **Not modelled: a clutch pedal.** The game works every clutch, even with manual gears.
+- **Not modelled: cruise control** on any road vehicle; only the tractor's hand throttle holds a
+  speed for you, through its governor.
 - **Not modelled: manual gears without sloppyCAN.** The keyboard always drives an automatic.
 - **Simplified: the differentials.** Each has one fixed bias ratio; none is electronically
   controlled.

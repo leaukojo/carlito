@@ -191,4 +191,7 @@ drives the curve it was asked for at any speed. The tightest command the signal 
 ## Related
 
 - [Tyres and slip](tyres.md): how an angled tyre makes its sideways force.
+- [Weight transfer and rollover](weight-transfer.md): understeer, oversteer and what the roll
+  steer tunes.
+- [Controls and who drives](controls.md): how a key press becomes the steering request.
 - [Glossary](glossary.md): every term on this page.
