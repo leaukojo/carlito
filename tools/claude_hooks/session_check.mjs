@@ -4,7 +4,7 @@
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import { lockHolder } from '../godot_lock.mjs';
+import { lockHolder, resolveGodot } from '../godot_lock.mjs';
 
 // Bump with tools/setup_machine.ps1's $SETUP_VERSION when the setup gains a step.
 const SETUP_VERSION = 1;
@@ -16,9 +16,9 @@ if (Number(git('config', '--get', 'carlito.setupversion') || 0) < SETUP_VERSION)
   issues.push(`setup version ${git('config', '--get', 'carlito.setupversion') || 'none'} < ${SETUP_VERSION} on this clone`);
 }
 if (git('config', '--get', 'core.hooksPath') !== 'tools/git-hooks') issues.push('core.hooksPath is not tools/git-hooks: the pre-commit gates never run');
-const godot = process.env.GODOT_BIN || git('config', '--get', 'carlito.godotbin');
-if (!godot) issues.push('no Godot binary configured (git config carlito.godotbin)');
-else if (!fs.existsSync(godot)) issues.push(`configured Godot binary is missing: ${godot}`);
+const godot = resolveGodot(repo);
+if (godot.error) issues.push(godot.error);
+else if (godot.source === 'path') issues.push('no Godot binary configured (git config carlito.godotbin)');
 if (!fs.existsSync(path.join(repo, '.godot', 'imported'))) issues.push('no import cache (.godot/imported): tests and runs fail to parse');
 
 function hasBake(dir) {

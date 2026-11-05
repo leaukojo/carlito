@@ -25,8 +25,8 @@ and, on a converter body, the impeller side:
 | Heavy diesel 11-13 L, AMT | both semis | 3.0 | estimate, between 1.50 at 5.5 L [5] and 4.20 for the 16.1 L TAD1641GE [7] |
 | Tractor diesel 4.5-7 L, powershift | `TRACTOR_BASE` | 1.5 | sourced anchor: the same 5.5 L, 1.50 [5] |
 
-*The gear-1 mass factor while locked* (computed; r = 0.36 m, the tractor's driven 0.66 m rear; G1
-is first gear times the final drive, D3 on the tractor). It is `J G1²` over the body's `m r²`:
+*The gear-1 mass factor while locked* (computed; r = 0.36 m, the tractor's driven 0.805 m rear; G1
+is first gear times the final drive, D3 on the tractor; `tractor-kenney_spec.tres`). It is `J G1²` over the body's `m r²`:
 
 | Body | G1 | J G1² (kg·m²) | Driven wheels' own I | Body m r² | Added |
 | --- | --- | --- | --- | --- | --- |
@@ -35,7 +35,7 @@ is first gear times the final drive, D3 on the tractor). It is `J G1²` over the
 | `delivery` | 15.56 | 97 | 6.0 | 544 | +18 % |
 | `garbage-truck` | 14.00 | 294 | 6.0 | 1037 | +28 % |
 | `semi` + 24 t | 19.01 | 1084 | 6.0 | 4147 | +26 % |
-| `tractor-kenney` | 39.32 | 2319 | 180 | 3049 | +76 % |
+| `tractor-kenney` | 69.18 | 7179 | 268 | 4536 | +158 % |
 
 In top gear it is small (+1.7 % on the `sedan`). A slipping coupling decouples the crank. A real
 vehicle has the same term, so a
@@ -297,7 +297,7 @@ creeps harder on them (computed) than a 30 % pedal asks.
 | The tractor's wheels, `I = m (κ r)²` at the drawn radius (tyre and rim; ballast does not turn) | Value | Grade |
 | --- | --- | --- |
 | Tyres, MultiBib 650/65R38 / 540/65R28; rims 20 × 38 / 16 × 28 | 207 / 83 kg ([rear](https://onlineshop.bohnenkamp.de/en/tyre-michelin-multibib-650-65-r-38-13327680), [front](https://onlineshop.bohnenkamp-benelux.com/en/tyre-michelin-multibib-540-65-r-28-13327620): light, other makes 106-135 kg); 160 kg ([Deere AL205108](https://shop.deere.com/us/product/AL205108%3A-Rim%2C-20-X-38/p/AL205108)) / ~60 kg (off [Deere's 16 × 30](https://shop.deere.com/us/product/0250282713%3A-Rim%2C-16-X-30/p/0250282713), 64 kg) | secondary / sourced, one retailer; secondary / estimate |
-| κ, then I rear / front | 0.75 (half the tyre at its tread, half over the sidewall annulus, the rim at 0.89 of its bead seat; no measured figure found); 367 kg × (0.75 × 0.66)² = 90, 143 kg × (0.75 × 0.44)² = 16 kg·m² | computed, estimate model |
+| κ, then I rear / front | 0.75 (half the tyre at its tread, half over the sidewall annulus, the rim at 0.89 of its bead seat; no measured figure found); 367 kg × (0.75 × 0.805)² = 134, 143 kg × (0.75 × 0.537)² = 23 kg·m² (`wheel_inertia_rear` / `wheel_inertia`) | computed, estimate model |
 | Rear tyre rate (`spring_rate_rear`), 650/65R38 157D at its rated 4127 kg, 1.6 bar | 72.8 in across, 32.6 in static loaded radius: 9.65 cm down, a secant 420 kN/m [62] | secondary, one retailer's data sheet; computed |
 | Steering rate (`steer_speed`): a hydrostatic unit turns the wheels as fast as the hand winds | a Fendt 516 Vario takes 5 1/3 turns lock to lock [60]; a quick human hand ~720 deg/s, NHTSA's fishhook rate [61]; their ratio over the 960 deg centre to lock | sourced; secondary |
 | Brakes inboard of the final reduction | [Case IH Puma](https://www.ultimatespecs.com/tractor-specs/caseih/caseih-puma-155-2008): "differential" wet discs; on the differential shaft, upstream of the planetary reduction ([Dana US 4,646,880](https://patents.google.com/patent/US4646880)) | secondary, no workshop manual |
@@ -491,7 +491,7 @@ understeer as above:
 | Semis' twelve, the I-Shift ATO2612 | overdrive, no crawler: 11.73 / 9.21 / 7.09 / 5.57 / 4.35 / 3.41 / 2.70 / 2.12 / 1.63 / 1.28 / 1.00 / 0.79, steps 1.26-1.30 [94] | sourced |
 | Fitted onto the shipped span | the steps' logarithms scaled by 0.8313 so 6.5 to 0.69 keeps D1 and the overdrive: 6.5 / 5.316 / 4.277 / 3.5 / 2.849 / 2.327 / 1.917 / 1.568 / 1.26 / 1.031 / 0.839 / 0.69, steps 1.21-1.24 | computed |
 | Tractor's sixteen, a full powershift | the John Deere 8R e16: Power Shift, 16 forward / 4 reverse, at rated speed 1.88 to 39.13 (km/h; OECD 2/2 682, the 8235R) [95]; its chart at 2100 rpm reads, in km/h, 1.9 / 2.4 / 3.2 / 4.5 / 5.0 / 5.8 / 6.8 / 7.7 / 9.0 / 10.3 / 12.1 / 13.8 / 16.3 / 21.7 / 29.0 / 42.2, field steps ~1.15 [96] | sourced; the chart secondary |
-| Even 1.103 steps over 7.0 to 1.6 | the shipped span is only the e16's gears 8-16, so sixteen ratios there step at the brief's 1.10 edge; its 22:1 span would deepen D1 past the stall hold (a COMPROMISE, `gen_kenney_vehicles.gd`) | computed |
+| Even 1.116 steps over 7.0 to 1.357 (`gear_ratios`) | the shipped span is only the e16's gears 8-16, so sixteen ratios there step inside the brief's 1.10-1.15; its 22:1 span would deepen D1 past the stall hold (a COMPROMISE, `gen_kenney_vehicles.gd`) | computed |
 | The start gear's slip time, `START_SLIP_S` | an automatic start-gear selection: the highest start gear, up to a programmed maximum (3rd or 5th in its example), whose estimated clutch slip time on tractive effort, rolling resistance, grade and gross weight stays under a reference, "say 1.5 seconds" (a quarter of a second to five acceptable) [99]; the I-Shift picks its own and lets the driver take a lower one [37] | sourced; the half-ramp dead time an estimate |
 
 *CVT* (`tractor-cvt`; `docs/tractor.md` § The CVT tractor):
@@ -499,7 +499,7 @@ understeer as above:
 | Figure | Basis | Grade |
 | --- | --- | --- |
 | Four ranges changing synchronously; in km/h at 2300 rpm, 0-6.4 / 6.4-13 / 13-26 / 26-51 | the ZF Eccom, an input-coupled hydrostatic power split shifted at synchronous speeds without a power interruption; John Deere fits it as AutoPowr on its 6000 line since 2001 [110] | sourced (a review of Pohlenz & Gruhle 2002) |
-| Ratio tops 0.1128 / 0.229 / 0.4581 / 0.8986 (gearbox output over input) | those speeds through `final_drive` 10.083 and the 0.66 m rear at 2300 rpm (`gen_kenney_vehicles.gd` `_cvt`): the road-speed limit at ~1800 rpm, the overdrive Renius asks of a CVT [110] | computed |
+| Ratio tops 0.1128 / 0.229 / 0.4581 / 0.8986 (gearbox output over input) | those speeds through `final_drive` 12.299 and the 0.805 m rear (`wheel_radius_rear`) at 2300 rpm (`gen_kenney_vehicles.gd` `_cvt`): the road-speed limit at ~1800 rpm, the overdrive Renius asks of a CVT [110] | computed |
 | Hydrostatic share +40 % at a range's bottom, -35 % at its top (`CVT_SHARE_BOTTOM` / `_TOP`) | the Eccom's hydrostatic power portion across each range, through zero at the lock-up [110] | sourced |
 | Variator 85 % (`CVT_VARIATOR_EFF`) | the analysis figure for 45-degree bent-axis units (gear pairs 97 %) [110] | sourced |
 | The efficiency linear in the share, `efficiency` at each lock-up | constant path efficiencies, as Renius's own analysis assumes; range I's near-zero-speed circulating power left out (a COMPROMISE at `Drivetrain.cvt_efficiency`) [110] | estimate |

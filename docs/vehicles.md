@@ -82,7 +82,7 @@ mud climbs 16.7 % (9.5 deg) against a 17.7 deg traction ceiling. Held at the pea
 mud too; MFWD and the diff lock are the answer. The same peel limits it ploughing (`docs/tractor.md`
 § Draft, hitch, linkage).
 **Wheel radius.** Each axle runs its drawn tyre's radius (`GroundDriveSpec.axle_radius`): 0.36 m (the kit
-wheel at `KIT_SCALE`) on every Kenney body, semi and trailer, 0.44 / 0.66 m on the tractor, its `final_drive` and inboard
+wheel at `KIT_SCALE`) on every Kenney body, semi and trailer, 0.537 / 0.805 m on the tractor (`wheel_radius` / `wheel_radius_rear`), its `final_drive` and inboard
 brakes quoted at the rear. `WheelDrive` gears a wheel `n = r / drive_radius()` to the shaft: MFWD turns the fronts 1.5×.
 
 **Contact.** Each wheel sweeps a cylinder of its tyre's radius and width down its travel from full
@@ -258,7 +258,7 @@ grip in a tyre-limited stop. `BrakeSizing` is the arithmetic the generator repor
 | 3.5-5 t van | `delivery`, `delivery-flat`, `ambulance` | 5200 (1.23-1.47) | 4800 | 8000 |
 | 26 t chassis, spring brakes | `garbage-truck`, `firetruck` | 15500 (2.20-2.34) | 6500 / 7000 | none |
 | Tractor unit, EBS discs | `semi`, `semi-conventional` | 15500 (2.2 bobtail) | 12000 | none |
-| Tractor wet discs (rear), inboard, at its 0.66 m rear | `tractor-kenney` | 15767 (1.39) | 14667 | 27500 |
+| Tractor wet discs (rear), inboard, at its 0.805 m rear | `tractor-kenney` | 19231 (1.39) | 17889 | 33542 |
 
 Spring brakes (the handbrake column): `docs/truck.md` § Air, retarder, axle load. Every trailer's service brake is apportioned to its tractor: a full demand brakes its bogie load at
 the deceleration the tractor's brakes make on its coupled load (`box_spec.tres`), so neither end

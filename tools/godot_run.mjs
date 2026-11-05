@@ -9,14 +9,15 @@
 //   node tools/godot_run.mjs --tests [--timeout=SECONDS] -- -a tests
 //   node tools/godot_run.mjs --kill-stale          # kill a Godot left behind by a killed caller
 //
-// Godot binary: $GODOT_BIN -> `git config carlito.godotbin` -> `godot` on PATH (godot_bin.ps1).
+// Godot binary: $GODOT_BIN -> `git config carlito.godotbin` -> `godot` on PATH (`resolveGodot`,
+// godot_lock.mjs).
 // The exit code is the child's (124 on timeout, 125 on a kill for a parse error). Judge a run by
 // its output anyway (root CLAUDE.md): the last line is always a `[godot_run]` summary.
 import { spawn, execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { lockPath, readLock, lockHolder, alive } from './godot_lock.mjs';
+import { lockPath, readLock, lockHolder, alive, resolveGodot } from './godot_lock.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WIN = process.platform === 'win32';
@@ -52,21 +53,8 @@ if (held) {
   process.exit(1);
 }
 
-function resolveGodot() {
-  let bin = process.env.GODOT_BIN;
-  if (!bin) { try { bin = execFileSync('git', ['config', '--get', 'carlito.godotbin'], { cwd: repo, encoding: 'utf8' }).trim(); } catch { /* unset */ } }
-  if (bin) {
-    if (!fs.existsSync(bin)) { say(`configured Godot binary does not exist: ${bin}`); process.exit(1); }
-  } else bin = 'godot';
-  // The plain Windows exe swallows print/push_error, so a headless run comes back silent.
-  if (WIN && /\.exe$/i.test(bin) && !/console/i.test(path.basename(bin))) {
-    say(`${bin} is not the _console build; set carlito.godotbin to Godot_v<ver>-stable_win64_console.exe (docs/machine_setup.md).`);
-    process.exit(1);
-  }
-  return bin;
-}
-
-const godot = resolveGodot();
+const { bin: godot, error: godotError } = resolveGodot(repo);
+if (godotError) { say(godotError); process.exit(1); }
 const tests = flag('--tests');
 if (!rest.includes('--import') && !fs.existsSync(path.join(repo, '.godot', 'imported'))) {
   say('no import cache in this checkout (fresh clone or worktree): run `node tools/godot_run.mjs -- --headless --path . --import` first.');

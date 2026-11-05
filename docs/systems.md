@@ -43,7 +43,8 @@ static/pure, tested in `tests/test_input_arbitration.gd`.
   off while the gamepad moved a pedal last, and never applies to the bridge.
 - LAB switches (pause ▸ LAB): session-only and unsaved, local only (no contract signal), stock
   under the challenge lock, dev keys included, and on a body without the hardware, so a switch kept
-  through a body change never reaches the next (`InputRouter.lab_raw`). ANTI-LOCK BRAKES
+  through a body change never reaches the next (`InputRouter.lab_raw`). A live bridge (fallback
+  included) ignores them too, though the page does not grey for it. ANTI-LOCK BRAKES
   (`abs_off`; drops hill-start assist and the auto hold), DIFFERENTIALS (`axle_diff` STOCK / OPEN /
   LOCKED on every driven axle, the centre untouched; no row on a body with its own DIFF LOCK key),
   STEERING (`parallel_steer`, Ackermann fraction 0). ABS off and LOCKED each set `esc_off`, so
@@ -53,8 +54,9 @@ static/pure, tested in `tests/test_input_arbitration.gd`.
   cluster lamp lights while it is off; F3's `slip` and `steer` lines read each wheel.
 - `arbitrate_bridge`: the gear byte owns direction. Mode = `InputRouter.set_manual_gearbox`
   (vehicle selector, or `ChallengeDef.transmission`).
-  - Automatic (default): PRND lever. R reverses, D1-D24 = D with auto-shift, 0 = D (RAMN
-    `0x077` never sends gear).
+  - Automatic (default): PRND lever. R reverses, D1-D24 = D with auto-shift, 0 = no gear
+    opinion (RAMN `0x077` never sends gear): D while the accelerator is pressed, else N, or P for
+    a body already parked.
   - Manual: byte taken exactly, 0 = N, no auto-shift. Local input is always automatic.
   - Absent bridge keys fall to rest state (lamps off, hitch raised, PTO off, 540, open diff,
     2WD, SCV shut, flaps up, disarmed, doors shut, LEDs black, body Idle).
@@ -79,6 +81,8 @@ Three paths, chosen per tick:
   keyboard (edges from either device), `pad_source.gd` the gamepad's axes; touch registers via `InputRouter.set_touch_source()`.
 - Toggle state is owned by the router, never a source (the `var _*` block at top of
   `input_router.gd` is the list); sources report per-frame edges only, ORed by `merge_local`.
+  The one exception: touch's HAND latches (`touch_controls.gd` `_latch_button`), a level the
+  overlay holds and reports each poll; the router cannot reset it, so it outlives a respawn.
   Train pantograph defaults raised so a locally-driven train spawns able to move.
 - `VehicleInput` (`src/input/vehicle_input.gd`) fields are flat except `lamps` (the fourteen
   verbatim-mirrored lamp/warning bits). The raw-intent wire is `Dictionary[StringName,
@@ -124,7 +128,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   `test_telemetry` fails if it drops a non-todo "out" signal (`WIRE_*` tables).
 - Dashboard (`src/ui/dashboard.gd`; its layers and density: the header comments): generated from
   the contract, instruments hand-built. SETTINGS/F2 (`toggle_dashboard`) cycles COMPACT -> FULL
-  -> OFF, held for the session.
+  -> OFF, saved to `user://` (`UserSettings`).
 - Debug overlay (`debug_overlay.gd`): FPS/frame ms/draw calls/VRAM/node count via
   `Performance`, F3. Target: root CLAUDE.md perf target.
 
@@ -180,19 +184,24 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   `NoticeLine.NOTICE_DWELL_S`. First-run cue (`src/ui/coach_cue.gd`): dismissed by input or
   timeout, once per session (`CoachCue.maybe_coach`), via non-consuming `_input`.
 - Pause overlay (`src/ui/pause_menu.gd`, Esc or touch MENU):
-  RESUME/RESPAWN/CONDITIONS/LAB/CONTROLS/SETTINGS; GARAGE/LEVEL live on touch (hidden only by
-  F5, never F4) and G / 4.
+  RESUME/RESPAWN/SPAWN POINT/CONDITIONS/LAB/CONTROLS/SETTINGS; GARAGE/LEVEL/CHALLENGES live on
+  touch (hidden only by F5, never F4) and G / 4 / 5. `setup(caps, state)` before `add_child`,
+  `state` a `PauseMenu.State` (named fields, filled by `Boot._open_pause`).
 
   | Page | Contents |
   |---|---|
-  | CONTROLS | off `InputMap`; hidden if unusable (`ActionRegistry.relevant_entry`), greyed if bridge-owned. `setup(caps, density, ui_scale, wind_preset, current_preset, wind_from_deg, night_on)` before `add_child` |
-  | SETTINGS | dashboard density + UI scale cycling buttons, session-held |
+  | SPAWN POINT | the level's spawns this body may use (`State.spawns`), shown from two up; a pick emits `spawn_picked(index)` |
+  | CONTROLS | off `InputMap`; hidden if unusable (`ActionRegistry.relevant_entry`), greyed if bridge-owned |
+  | SETTINGS | dashboard density, UI scale, extended debug, KEY RESPONSE, TRACTION CONTROL, STABILITY CONTROL, AUTO HOLD; saved to `user://` (`UserSettings`, re-applied by `Boot._apply_saved_settings`) |
   | LAB | ANTI-LOCK BRAKES, DIFFERENTIALS, STEERING (§ Input pipeline), session-held, greyed in a challenge |
   | CONDITIONS | WIND/CURRENT preset (`WorldConditions.Preset` LEVEL/CALM/LIGHT/STRONG), FROM direction, TIME -> greys per `WorldConditions.WIND_FAMILIES`/`CURRENT_FAMILIES` |
 
-  Session-held, re-applied each load (`Boot._finish_load`, restoring `PAUSABLE`); night tracks `GameState.night_changed`. `Boot` is `PROCESS_MODE_ALWAYS`.
+  Session-held, never saved: LAB, CONDITIONS and the garage's gearbox choice (`Boot._manual_gearbox`);
+  the garage's tyre choice is saved (`UserSettings.set_tyre`). CONDITIONS and night re-apply each
+  load (`Boot._finish_load`, restoring `PAUSABLE`); night tracks `GameState.night_changed`. `Boot` is `PROCESS_MODE_ALWAYS`.
 - Level select (`src/ui/level_select.gd`, touch LEVEL or 4): BACK + `closed` signal, reads
-  `LevelRegistry.LEVELS` (`{id, name, scene, desc}`); cards from
+  `LevelRegistry.LEVELS` (`{id, name, scene, desc}`, plus `dev: true`, hidden here but baked and
+  smoke-tested, or `arena: true`, a challenge arena); cards from
   `src/ui/level_thumbs/<id>.png` (`LevelShot.thumb_path`), framed by `<level>_shot.tres`.
 - Vehicle selector (`src/ui/vehicle_select.gd`, G or touch GARAGE): family column, variant
   cards, towing; one SubViewport turntable via `VehicleShot.spawn_display` (frozen
@@ -201,10 +210,13 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   `allowed_vehicles`/`Level.has_closed_rail()`/`Level.has_spawn_for(family)`). Attachments:
   `attachment_ids()`/`current_attachment()`/`set_attachment(id)`, duck-typed on
   `TractorVehicle`/`SemiTractor`, same setter as `cycle_implement()` (DETACHED/BOBTAIL =
-  NONE). Emits `vehicle_chosen(variant)` then `attachment_chosen(id)`;
+  NONE). Emits `vehicle_chosen(variant)` then `attachment_chosen(id)` (a towing machine),
+  `gearbox_chosen(manual)` (a gear-byte family) and `tyre_chosen(variant, id)` (a tyre choice);
   `Level.set_vehicle(variant)` only on a real change, respawns at a matching `VehicleSpawn`,
-  emits `Level.vehicle_changed(type)` (`Dashboard.bind` falls back to
-  `LevelInfo.default_vehicle`). Cards: `tools/gen_vehicle_thumbs.tscn` (windowed) ->
+  emits `Level.vehicle_changed(type)` (`Dashboard.bind` reads `GameState.current_vehicle`; the
+  shell binds after the spawn, and its pre-spawn fallback runs `LevelInfo.default_vehicle`, a
+  family, through `VehicleCatalog.family_of`, which yields "" unless the family is also a
+  variant key, as `drone` and `plane` are). Cards: `tools/gen_vehicle_thumbs.tscn` (windowed) ->
   `src/ui/vehicle_thumbs/<id>.png` via `src/ui/vehicle_shot.gd`; PNGs under `src/`,
   `tools/*`/`kit/thumbs/*` export-excluded.
 - Garage level (`src/levels/garage/`, id `garage`): frozen KINEMATIC vehicle,
@@ -236,7 +248,9 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   `VehicleSpawn`, wires `ChaseCamera`, handles respawn (variant -> scene via
   `VehicleCatalog`); the train gates on `has_closed_rail()` and self-places, else refuses
   DRIVE. `LevelInfo` (Resource: display name, allowed/default vehicles); `VehicleSpawn`
-  (`Marker3D`, vehicle-type filter + `is_water` for boat/drown-respawn spots). `level.tscn`
+  (`Marker3D`, vehicle-type filter + `is_water`, a bake-gate coverage flag read only by
+  `LevelBaker.validate_spawns`: `accepts` and `Level.pick_spawn` ignore it, and a drown respawns
+  at `spawn_transform`). `level.tscn`
   is the authoring template (env + sun + camera + one spawn); duplicate it.
   `HeightmapTerrain` (authoring: `docs/level_kit.md`): runtime greyscale image -> chunked
   welded grid mesh + `HeightMapShape3D`; `channel_surface` names each paint channel's
