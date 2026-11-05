@@ -190,7 +190,8 @@ vehicle lean more and tip over sooner.
 ### Clutch
 A pair of friction plates that connect the engine to the gearbox. Pressed together, they turn
 together. Slipping, they pass some turning force while turning at different speeds, which lets a
-vehicle pull away smoothly.
+vehicle pull away smoothly. In the game a controller works it; there is no clutch pedal. See
+[Clutch and torque converter](coupling.md).
 
 ### Coefficient of friction
 A number saying how grippy two surfaces are together: the most force they can pass along their
@@ -680,7 +681,12 @@ On the semis it also brakes the whole rig before it would tip over.
 
 ### Stall
 Two meanings. A wing stalls when the air stops flowing smoothly over it and its lift collapses,
-at too low a speed or too steep an angle. An engine stalls when the load slows it until it stops.
+at too low a speed or too steep an angle. An engine stalls when the load slows it until it stops;
+the game's engines never do.
+
+### Stall speed
+The engine speed a car with a [torque converter](#torque-converter) reaches when it is held still
+on the brakes with the accelerator fully pressed. About 2400 rpm on the game's cars.
 
 ### State of charge
 How full a battery is, as a percentage (`soc` on the drone).
@@ -727,7 +733,7 @@ resists it.
 ### Torque converter
 A fluid coupling between an engine and an automatic gearbox. Oil thrown by one half turns the
 other half, so the car can sit still in gear with the engine running. At low speed it also
-multiplies the engine's torque.
+multiplies the engine's torque. See [Clutch and torque converter](coupling.md).
 
 ### Torque curve
 A graph of how much torque an engine makes at each engine speed. See [The engine](engine.md).
