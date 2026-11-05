@@ -6,6 +6,7 @@
 //   G 9.8          physics/3d/default_gravity (Godot's default; train_sim.gd GRAVITY 9.8)
 //   RHO 1.225      vehicle_math.gd AIR_DENSITY
 //   grip curve     GroundDriveSpec.grip_curve: peak 1 at 0.12 slip, 0.8 when locked or spinning
+// Each view has one linear scale (newtons per pixel) with its own bar.
 // Body frame: x forward, y up (side view) or y to the left (top view). Both views face right, so
 // the side view shows the right-hand side; the left wheels are behind, drawn faint.
 (function () {
@@ -755,7 +756,7 @@
     var controls = addEl('div', 'w-controls', panels);
     var legend = addEl('fieldset', 'fx-legend', panels);
     var unused = addEl('p', 'w-note');
-    addEl('p', 'w-note', root, 'An illustration, not the physics: a simplified copy of the game\'s formulas at one instant, on dry asphalt. Arrows share one scale; untick the biggest forces to zoom in on the small ones.');
+    addEl('p', 'w-note', root, 'An illustration, not the physics: a simplified copy of the game\'s formulas at one instant, with wheels on dry asphalt. All arrows in a view share that view\'s scale bar; untick the biggest forces to zoom in on the small ones.');
 
     // sliders: [key, label, min, max, step, default]
     var SL = [
@@ -835,6 +836,7 @@
         if (reason) notes.push(labels[k].textContent + ': ' + reason);
       });
       windDir.disabled = inputs.wind.disabled;
+      wl.classList.toggle('fx-off', windDir.disabled);
       unused.textContent = notes.length ? 'Not used here. ' + notes.join(' ') : '';
       unused.hidden = !notes.length;
       buildLegend();
@@ -903,13 +905,15 @@
         else rows[id].textContent = fmtN(t) + (many ? ' in all' : '');
       });
 
-      // one scale for both views
-      var maxF = 0;
-      r.arrows.forEach(function (a) { if (shown[a.id]) maxF = Math.max(maxF, Math.hypot(a.fx, a.fy)); });
-      var k = maxF > 0 ? MAX_ARROW / maxF : 0;
-      var bar = maxF > 0 ? niceFloor(maxF / 2) : 0;
-      drawView(topSvg, 'top', V, r, s, k, bar);
-      drawView(sideSvg, 'side', V, r, s, k, bar);
+      // One linear scale per view, set by its longest ticked force: the side view is ruled by the
+      // weight, so the top view's level forces get their own, each with its bar.
+      ['top', 'side'].forEach(function (view) {
+        var maxF = 0;
+        r.arrows.forEach(function (a) { if (a.view === view && shown[a.id]) maxF = Math.max(maxF, Math.hypot(a.fx, a.fy)); });
+        var k = maxF > 0 ? MAX_ARROW / maxF : 0;
+        var bar = maxF > 0 ? niceFloor(maxF / 2) : 0;
+        drawView(view === 'top' ? topSvg : sideSvg, view, V, r, s, k, bar);
+      });
       writeReadout(V, r, s);
     }
     function maxCoupler(r) {
@@ -953,7 +957,7 @@
       var rp = pts.map(function (q) { return rotate(q[0], q[1], rot); });
       var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
       rp.forEach(function (q) { minX = Math.min(minX, q[0]); maxX = Math.max(maxX, q[0]); minY = Math.min(minY, q[1]); maxY = Math.max(maxY, q[1]); });
-      var mx = 62, my = view === 'side' ? 88 : 70;
+      var mx = MAX_ARROW + 6, my = view === 'side' ? 88 : 70;
       var km = Math.min((VIEW_W - 2 * mx) / (maxX - minX), (VIEW_H - 2 * my) / Math.max(maxY - minY, 0.1), 260);
       var cx = VIEW_W / 2 - (minX + maxX) / 2 * km, cy = VIEW_H / 2 + (minY + maxY) / 2 * km;
       function P(x, y) { var q = rotate(x, y, rot); return [cx + q[0] * km, cy - q[1] * km]; }
@@ -1038,7 +1042,9 @@
         'aria-label': F.name + ', ' + fmtN(mag) + ', at ' + a.where }, svg);
       if (a.far) g.setAttribute('transform', 'translate(5,-4)');
       el('title', {}, g).textContent = F.name + ': ' + fmtN(mag) + ' at ' + a.where;
-      var colour = a.sliding ? 'var(--fig-red)' : F.colour;
+      var colour = F.colour;
+      // A tyre past its grip: a red ring where it touches the ground.
+      if (a.sliding) el('circle', { cx: p0[0], cy: p0[1], r: 7, fill: 'none', stroke: 'var(--fig-red)', 'stroke-width': 2 }, g);
       if (len < TINY) {
         el('circle', { cx: p0[0], cy: p0[1], r: 2.5, fill: colour }, g);
       } else {
