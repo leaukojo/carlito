@@ -30,7 +30,7 @@ the two semi tractor units.
 | Towing | [towing.md](towing.md) | fifth wheel and drawbar, trailers, articulation, jackknife, trailer brakes, trailer bus |
 | Implements and the PTO | [implements.md](implements.md) | three-point hitch, draft, PTO, hydraulic remote, ISOBUS |
 | Floating and boats | [floating.md](floating.md) | buoyancy, propeller thrust, rudder, trim, windage, sailing, autopilot |
-| Wind, current and conditions *(planned)* | conditions.md | wind field, tide, CONDITIONS presets, day and night |
+| Wind, current and conditions | [conditions.md](conditions.md) | wind field, tide, CONDITIONS presets, day and night |
 | Drone flight *(planned)* | drone-flight.md | rotors, mixer, arming, flight modes, failsafes, battery pack, sensors, bus nodes |
 | Plane flight *(planned)* | plane-flight.md | lift, stall, drag, thrust, flaps, control surfaces |
 | Trains *(planned)* | rail.md | tractive effort, running resistance, couplers, brake pipe, reverser, pantograph |

@@ -91,7 +91,7 @@ The part of a boat above the water catches the wind. The game pushes it with a d
 air, much stronger from the side than from ahead. The side push acts above the water, so a wind
 from the side makes the boat heel. It acts a little behind the middle, so the boat tends to swing
 its bow into the wind, like a weathervane. Level 6 and Open Sea have wind of their own, and
-CONDITIONS can set it anywhere; the page on wind, current and conditions explains it.
+CONDITIONS can set it anywhere; [Wind, current and conditions](conditions.md) explains it.
 <!-- boat.gd windage_long, windage_lat at windage_offset (0, 0.55, 0.45): above the waterline and aft; docs/boat.md: "aft of COM -> weathercocks into wind" -->
 
 ## Current

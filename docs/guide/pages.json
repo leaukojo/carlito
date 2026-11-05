@@ -19,6 +19,7 @@
     { "file": "towing.md", "title": "Towing", "group": "Towing and farm work" },
     { "file": "implements.md", "title": "Implements and the PTO", "group": "Towing and farm work" },
     { "file": "floating.md", "title": "Floating and boats", "group": "Water and air" },
+    { "file": "conditions.md", "title": "Wind, current and conditions", "group": "Water and air" },
     { "file": "glossary.md", "title": "Glossary", "group": "Reference" },
     { "file": "template.md", "title": "The page template", "group": "For guide writers" },
     { "file": "inventory.md", "title": "Inventory of systems", "group": "For guide writers" },

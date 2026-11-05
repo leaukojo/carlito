@@ -412,6 +412,10 @@ peak at a small slip, then falls a little as the tyre slides more.
 The vehicle's true speed over the ground, whatever the wheels are doing. The tractor publishes it
 as `ground_speed`, beside the wheel-based [wheel speed](#wheel-speed).
 
+### Gust
+A short rise in the wind's strength. The game's gusts follow a fixed pattern of slow and quick
+waves, and never pass a set limit above the steady wind.
+
 ## H
 
 ### Handbrake
@@ -752,8 +756,9 @@ The painted ground of an island level: a surface shaped by a height map, painted
 each stand for a kind of ground. Anything that is not painted terrain counts as dry asphalt.
 
 ### Tide
-A current that changes direction and strength over time. Level 6 has one; CONDITIONS can set its
-strength and direction.
+A current that changes direction and strength over time. Level 6 has one, turning about every two
+minutes; CONDITIONS can replace it with a steady current. See
+[Wind, current and conditions](conditions.md).
 
 ### Torque
 Turning force: how hard something twists, in newton-metres. An engine makes torque; a brake
