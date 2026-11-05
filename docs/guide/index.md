@@ -25,9 +25,9 @@ have it, and how to see it for yourself.
 
 The game also talks to a second program, **sloppyCAN**. sloppyCAN is a simulator of the
 electronics inside a vehicle. Real vehicles pass messages between their parts over a wiring
-network called a CAN bus. The engine reports its speed, the brakes report
+network called a [CAN bus](glossary.md#can-bus). The engine reports its speed, the brakes report
 their temperature, the dashboard listens. Carlito sends sloppyCAN the same kind of messages,
-called signals, and sloppyCAN can send commands back, such as "press the
+called [signals](glossary.md#signal), and sloppyCAN can send commands back, such as "press the
 accelerator". Every page lists the signals that show its idea.
 
 ## How a page is laid out
@@ -41,7 +41,7 @@ Every idea page follows the same pattern (the page template describes it in full
 3. **What you see in sloppyCAN**: the signals that show the idea, with their names and units.
 4. **Try it in the game**: a short experiment.
 
-A word with a dotted underline is explained in the glossary. On a computer, hold
+A word with a dotted underline is explained in the [glossary](glossary.md). On a computer, hold
 the pointer over it to read the explanation without leaving the page.
 
 ## Numbers in this guide
