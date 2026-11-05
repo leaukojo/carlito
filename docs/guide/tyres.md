@@ -206,7 +206,7 @@ does not use any of the tyre's grip.
 
 You need a car with ABS, such as the `sedan`.
 
-1. Open SETTINGS and set EXTENDED DEBUG LABELS to ON, then press **F3**. The overlay now shows
+1. Open SETTINGS and set EXTENDED DEBUG LABELS to ON (**F3** shows or hides the overlay). It now shows
    a `slip` line: one number per wheel, the slip ratio in percent, with a star when ABS is
    holding that wheel.
 2. Open LEVEL and pick **Car Arena**. Pause, open SPAWN POINT and pick one of the tyre pad's

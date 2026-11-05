@@ -139,8 +139,8 @@ car's.
 <div class="box try">
 <p class="box-title">Try it in the game: find the stall</p>
 
-1. Pick the plane on **Flatland**, where there is room in every direction. Press **F2** for the
-   dashboard.
+1. Pick the plane on **Flatland**, where there is room in every direction. Press **F2** until the
+   dashboard shows FULL, with its altitude and climb bars.
 2. Open the throttle fully. As the speed passes about 90 km/h, press **R** briefly to raise the
    nose: the plane lifts off.
 3. Climb to a safe height, then close the throttle and hold the nose up with **R**. The speed

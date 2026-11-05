@@ -105,38 +105,55 @@
     root.appendChild(note);
 
     var v = VEHICLES[0];
-    function draw() {
+    // The chart for one vehicle is built once (`build`); a gear or rpm change only restyles two
+    // bars and moves the marker (`draw`).
+    var TOP = 14;
+    var bars = [], labels = [], row = 22, px = null, marker = null, guide = null, shown = -1;
+    function build() {
       while (svg.firstChild) svg.removeChild(svg.firstChild);
       var n = v.ratios.length;
-      var row = n > 8 ? 12 : 22;
-      var top = 14, h = top + n * row + 44;
+      row = n > 8 ? 12 : 22;
+      var h = TOP + n * row + 44;
       svg.setAttribute('viewBox', '0 0 420 ' + h);
       var vmax = niceMax(kmh(v, n - 1, v.red));
-      var gear = parseInt(gIn.value, 10) - 1;
-      var rpm = parseFloat(rIn.value);
-      function px(s) { return X0 + (X1 - X0) * s / vmax; }
-      var y0 = top + n * row;
+      px = function (s) { return X0 + (X1 - X0) * s / vmax; };
+      var y0 = TOP + n * row;
       for (var t = 0; t <= 4; t++) {
         var s = vmax * t / 4;
-        el('line', { x1: px(s), y1: top - 4, x2: px(s), y2: y0, stroke: 'var(--fig-grid)' }, svg);
+        el('line', { x1: px(s), y1: TOP - 4, x2: px(s), y2: y0, stroke: 'var(--fig-grid)' }, svg);
         text(svg, px(s), y0 + 16, String(Math.round(s)), { 'text-anchor': t === 4 ? 'end' : 'middle' });
       }
       text(svg, (X0 + X1) / 2, y0 + 34, 'road speed, km/h', { 'text-anchor': 'middle', fill: 'var(--fig-ink)', 'font-weight': 600 });
+      bars = []; labels = []; shown = -1;
       for (var g = 0; g < n; g++) {
-        var y = top + g * row;
+        var y = TOP + g * row;
         var a = kmh(v, g, v.idle), b = kmh(v, g, v.red);
-        var on = g === gear;
-        el('rect', { x: px(a), y: y + 2, width: Math.max(1, px(b) - px(a)), height: row - 4, rx: 2,
-          fill: on ? 'var(--fig-blue)' : 'var(--fig-fill)', stroke: on ? 'none' : 'var(--fig-grid)' }, svg);
-        if (n <= 8 || on || g === 0 || g === n - 1) {
-          text(svg, X0 - 8, y + row / 2 + 4, 'D' + (g + 1), { 'text-anchor': 'end', 'font-size': n > 8 ? 11 : 13,
-            fill: on ? 'var(--fig-ink)' : 'var(--fig-muted)', 'font-weight': on ? 600 : 400 });
-        }
+        bars.push(el('rect', { x: px(a), y: y + 2, width: Math.max(1, px(b) - px(a)), height: row - 4, rx: 2 }, svg));
+        labels.push(text(svg, X0 - 8, y + row / 2 + 4, 'D' + (g + 1), { 'text-anchor': 'end', 'font-size': n > 8 ? 11 : 13 }));
+        style(g, false);
+      }
+      guide = el('line', { y1: TOP - 4, y2: y0, stroke: 'var(--fig-orange)', 'stroke-width': 1.5, 'stroke-dasharray': '3 3' }, svg);
+      marker = el('circle', { r: 6, fill: 'var(--fig-orange)', stroke: 'var(--surface)', 'stroke-width': 2 }, svg);
+    }
+    function style(g, on) {
+      var n = v.ratios.length;
+      bars[g].setAttribute('fill', on ? 'var(--fig-blue)' : 'var(--fig-fill)');
+      bars[g].setAttribute('stroke', on ? 'none' : 'var(--fig-grid)');
+      labels[g].setAttribute('fill', on ? 'var(--fig-ink)' : 'var(--fig-muted)');
+      labels[g].setAttribute('font-weight', on ? 600 : 400);
+      labels[g].setAttribute('visibility', n <= 8 || on || g === 0 || g === n - 1 ? 'visible' : 'hidden');
+    }
+    function draw() {
+      var gear = parseInt(gIn.value, 10) - 1;
+      var rpm = parseFloat(rIn.value);
+      if (gear !== shown) {
+        if (shown >= 0) style(shown, false);
+        style(gear, true);
+        shown = gear;
       }
       var sp = kmh(v, gear, rpm);
-      var cy = top + gear * row + row / 2;
-      el('line', { x1: px(sp), y1: top - 4, x2: px(sp), y2: y0, stroke: 'var(--fig-orange)', 'stroke-width': 1.5, 'stroke-dasharray': '3 3' }, svg);
-      el('circle', { cx: px(sp), cy: cy, r: 6, fill: 'var(--fig-orange)', stroke: 'var(--surface)', 'stroke-width': 2 }, svg);
+      guide.setAttribute('x1', px(sp)); guide.setAttribute('x2', px(sp));
+      marker.setAttribute('cx', px(sp)); marker.setAttribute('cy', TOP + gear * row + row / 2);
 
       outs[0].textContent = 'D' + (gear + 1);
       outs[1].textContent = Math.round(rpm) + ' rpm';
@@ -157,6 +174,7 @@
       rIn.min = String(v.idle);
       rIn.max = String(v.red);
       rIn.value = String(Math.round((v.idle + v.red) / 2 / 10) * 10);
+      build();
       draw();
     }
     vSel.addEventListener('change', setVehicle);

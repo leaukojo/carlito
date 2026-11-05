@@ -156,7 +156,7 @@ the garbage truck's body is described on the truck's own page.
 
 1. Pick the `tractor-kenney` on **Level 1 - Island** and drive to the ploughable field in the
    middle of the island. Press **E** until the plough is on.
-2. Show the dashboard (**F2**). Press **I** to lower the plough and drive slowly across the field.
+2. Press **F2** until the dashboard shows FULL, with its LOAD and SLIP bars. Press **I** to lower the plough and drive slowly across the field.
    The engine load climbs and the rear wheels' slip rises.
 3. Press **K** to lock the rear diff and **M** for front-wheel drive. The slip falls and the
    tractor holds its speed.

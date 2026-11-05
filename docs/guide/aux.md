@@ -143,7 +143,8 @@ sends them. The game never lights them by itself.
 <div class="box try">
 <p class="box-title">Try it in the game: warm up and burn</p>
 
-1. Pick the `sedan` on **Flatland** with the dashboard showing (**F2**). The coolant starts at
+1. Pick the `sedan` on **Flatland** and press **F2** until the dashboard shows FULL: the coolant,
+   fuel and burn readings are only on the full dashboard. The coolant starts at
    20 °C. Watch it climb towards 90 °C as the engine idles.
 2. Drive at full throttle for a minute. The coolant rises a little higher, and the fuel gauge
    falls noticeably.

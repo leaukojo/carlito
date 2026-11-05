@@ -162,7 +162,7 @@ empty.
 <p class="box-title">Try it in the game: cook the brakes</p>
 
 1. Pick the `garbage-truck` and drive down the long grades of **Level 2 - Mountain**. Press **F2**
-   for the dashboard, which shows the brake temperature.
+   until the dashboard shows FULL, whose bars include the brake temperature.
 2. Ride the foot brake all the way down. The temperature climbs past 180 °C, and the same pedal
    slows the truck less and less: the drums are fading.
 3. Stop and let them cool. Now go down again with sloppyCAN holding the `retarder` on. The brake

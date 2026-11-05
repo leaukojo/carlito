@@ -34,7 +34,7 @@ Every car has:
 - [Steering](steering.md) with a speed taper and full Ackermann.
 - [Suspension](suspension.md) with anti-roll bars and anti-dive and anti-squat links, which shape
   its [weight transfer](weight-transfer.md).
-- A petrol [engine](engine.md) on the cars and a diesel on the vans, a six-speed automatic
+- A petrol [engine](engine.md), or a diesel on the heavy vans, a six-speed automatic
   [gearbox](gearbox.md) with a [torque converter](coupling.md), and
   [differentials](differentials.md).
 - [Brakes](brakes.md) sized from a real car of its class, with a handbrake and a park pawl.

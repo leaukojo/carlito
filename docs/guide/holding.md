@@ -131,14 +131,19 @@ Hill-start assist and auto hold have no signal of their own.
 <div class="box try">
 <p class="box-title">Try it in the game: a hill start</p>
 
+On the keyboard, holding the brake key at a standstill selects reverse
+([Gearbox and shifting](gearbox.md#driving-forwards-and-backwards-from-the-keyboard)), so you
+cannot sit still on the foot brake. These steps use the handbrake and auto hold instead.
+<!-- InputRouter.arbitrate_local: brake_reverse at a standstill (REVERSE_ENGAGE_SPEED 0.5 m/s) with no accel requests R; auto_hold: "the held brake never reads as S at a standstill" -->
+
 1. Find a steep road in **Level 2 - Mountain** with the `race` car. It has a clutch and no
    hill-start assist.
-2. Stop facing uphill on the brake. Release the brake and press the accelerator: the car rolls
-   back a little before it pulls away.
-3. Do the same in the `sedan`. Hill-start assist holds it for a moment, and it pulls away without
-   rolling back.
-4. Open SETTINGS and set AUTO HOLD on. Stop uphill and take your feet off: the AUTO HOLD lamp
-   lights and the car stays put until you press the accelerator.
+2. Stop facing uphill and hold the handbrake (**Space**). Let it go and press the accelerator: the
+   car rolls back a little before it pulls away.
+3. Open SETTINGS and set AUTO HOLD on, then do the same in the `sedan` without the handbrake. As
+   it stops, the AUTO HOLD lamp lights and the car stays put with your hands off the keys.
+4. Press the accelerator. Hill-start assist takes over from the auto hold for a moment, and the
+   car pulls away without rolling back.
 
 </div>
 

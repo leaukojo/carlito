@@ -179,7 +179,8 @@ aground.
 <div class="box try">
 <p class="box-title">Try it in the game: steer with and without flow</p>
 
-1. Pick `boat-speed-a` on **Open Sea**. Press **F2** for the dashboard.
+1. Pick `boat-speed-a` on **Open Sea**. Press **F2** until the dashboard shows FULL, with its
+   compass rose and heading readout.
 2. Stop the boat. Turn the steering fully with no throttle: almost nothing happens. Now add full
    throttle: the propeller's wash over the rudder turns the boat round almost on the spot.
 3. Press **2** for the autopilot and let go of the steering: the boat holds its heading.

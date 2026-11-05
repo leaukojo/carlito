@@ -131,8 +131,11 @@ No signal reports the clutch or converter directly. Their effect shows in:
 1. Pick the `sedan` on **Flatland**, with the dashboard showing (**F2**). From a standstill, tap
    the accelerator once and let go: that puts it in drive. The car keeps creeping forward at
    walking pace with no pedal pressed.
-2. Hold the brake fully and press the accelerator fully at the same time. The rev counter climbs
-   to about 2400 rpm and stops: the converter's stall speed. The car does not move.
+2. Stop with the handbrake (**Space**) and keep holding it. Press the accelerator fully, then the
+   brake fully as well, accelerator first: the brake key alone at a standstill selects reverse.
+   The rev counter climbs to about 2400 rpm and stops: the converter's stall speed. The car does
+   not move.
+   <!-- InputRouter.arbitrate_local: brake_reverse with no accel near standstill requests R; brake_override latches only past BRAKE_OVERRIDE_SPEED 1 m/s, so a standstill press still revs -->
 3. Now try the same with the `race` car. It has a clutch, not a converter: at rest with no pedal
    it does not creep at all.
 

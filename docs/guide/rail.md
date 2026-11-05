@@ -31,8 +31,8 @@ The locomotive weighs about 50 t and each wagon about 34 t, so the whole train w
 
 The locomotive's electric motors pull with a force called its
 [tractive effort](glossary.md#tractive-effort). In the game it is the same at every speed up to
-about 14 m/s, 50 km/h: a steady pull of 320 kN, enough to accelerate the whole train at almost
-2 m/s². Above that speed the motors reach the most power they can deliver, and the pull falls as
+about 14 m/s, 50 km/h: a steady pull of 320 kN, enough to accelerate the whole train at about
+1.7 m/s². Above that speed the motors reach the most power they can deliver, and the pull falls as
 the speed rises, so that pull times speed stays the same.
 <!-- TrainSim max_tractive 320000 N, base_speed 14 m/s, max_power 4480000 W (= max_tractive x base_speed); 320000 / 186000 = 1.72 m/s² -->
 
@@ -85,10 +85,10 @@ stops a slow train and keeps it still, so a parked train does not creep down a g
 ## Power from the wires
 
 The locomotive takes its power from an overhead wire, the [catenary](glossary.md#catenary),
-through a sprung arm on its roof, the [pantograph](glossary.md#pantograph). Press **U** to raise
-it. With the pantograph down, or the key not at Ignition, the motors get no power and the train
-cannot pull.
-<!-- train.gd: powered = key == KEY_IGNITION and input.pantograph; key pantograph U -->
+through a sprung arm on its roof, the [pantograph](glossary.md#pantograph). It starts raised;
+**U** lowers it and raises it again. With the pantograph down, or the key not at Ignition, the
+motors get no power and the train cannot pull.
+<!-- train.gd: powered = key == KEY_IGNITION and input.pantograph; key pantograph U; InputRouter _pantograph := true ("Raised by default so a locally-driven train spawns able to move") -->
 
 The game models the electrical side simply, and labels it so: the motor current is in proportion
 to the pull, and the line voltage starts at 25 000 V and sags as the current rises, by about
@@ -138,8 +138,8 @@ Press **O** to open the doors. They open only when the train is standing still.
 <div class="box try">
 <p class="box-title">Try it in the game: feel the slack</p>
 
-1. Pick the train on **Level 5 - Railway** and press **F2** for the dashboard. Press **U** to raise
-   the pantograph.
+1. Pick the train on **Level 5 - Railway** and press **F2** until the dashboard shows FULL, with
+   its bars. The pantograph is already up.
 2. Pull away with the accelerator. Watch the coupler force: it jumps up as the slack is taken up,
    swings, then settles as the train gathers speed.
 3. At speed, brake hard. Watch the brake pipe pressure fall as you brake and climb again when you

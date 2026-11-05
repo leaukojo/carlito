@@ -176,7 +176,7 @@ drives the curve it was asked for at any speed. The tightest command the signal 
 <div class="box try">
 <p class="box-title">Try it in the game: watch the inner wheel</p>
 
-1. Open SETTINGS and set EXTENDED DEBUG LABELS to ON, then press **F3**. The overlay's `steer`
+1. Open SETTINGS and set EXTENDED DEBUG LABELS to ON (**F3** shows or hides the overlay). Its `steer`
    line shows each wheel's angle in degrees (positive is left).
 2. Pick the `sedan` in the GARAGE and drive it on **Flatland**. At walking pace, hold full left
    lock. The front-left

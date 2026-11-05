@@ -94,10 +94,21 @@ horn sounds on **H** or sloppyCAN's `horn`.
 | **G**, **V**, **E** | Garage; next vehicle body; next implement or trailer |
 | **C** | Camera view |
 | **L**, **H**, **N** | Lights; horn; day and night |
-| **F2**, **F3**, **F4** | Dashboard; debug overlay; on-screen touch controls |
+| **F2** | Dashboard size: COMPACT, FULL, OFF, then COMPACT again |
+| **F3** | Show or hide the debug overlay (shown at the start) |
+| **F4** | On-screen touch controls |
 | **4**, **5** | Level select; challenges |
 | **Esc** | Pause menu |
-<!-- project.godot [input]: accel W / Up, brake_reverse S / Down, steer A D / Left Right, handbrake Space, respawn Backspace, garage G, next_vehicle V, next_attachment E, camera_view C, headlights L, horn H, day_night N, toggle_dashboard F2, debug_overlay F3, toggle_touch F4, level_select 4, challenge_select 5, to_menu Escape -->
+<!-- project.godot [input]: accel W / Up, brake_reverse S / Down, steer A D / Left Right, handbrake Space, respawn Backspace, garage G, next_vehicle V, next_attachment E, camera_view C, headlights L, horn H, day_night N, toggle_dashboard F2, debug_overlay F3, toggle_touch F4, level_select 4, challenge_select 5, to_menu Escape; boot.gd _toggle_dashboard cycles Dashboard.DENSITY_KEYS COMPACT -> FULL -> OFF; debug_overlay.gd _ready visible = true, the F3 action toggles it -->
+
+The dashboard starts COMPACT: the warning lamps, the speedometer and the rev counter. FULL adds
+the bars (fuel, coolant, brake temperature, a truck's air and the rest) and a line of readings
+(heading, odometer, position, fuel burn). The debug overlay, top right, shows only the frame rate
+until SETTINGS ▸ EXTENDED DEBUG LABELS is ON; then it adds each wheel's surface, grip, slip and
+angle, the body's pitch and roll, a trailer's angle and the wind.
+<!-- dashboard.gd: "COMPACT (the default) keeps the tell-tale row and gauges; FULL adds the bars, readout, wind rose and echo sounder"; readout "HDG ODO lat, lon" plus READOUT_EXTRAS BURN; debug_overlay.gd _refresh: FPS only unless _extended, then _grip_line, _slip_line, _steer_line, _attitude_line, _articulation_line, _flow_line -->
+
+
 
 Each vehicle adds its own keys, explained on its pages: the tractor's hitch, PTO, hand throttle,
 hydraulics, diff lock and front drive; the plane's flaps and climb; the drone's arming, modes and
@@ -111,7 +122,7 @@ CONTROLS page lists every key for the vehicle you are driving.
 | --- | --- | --- |
 | SETTINGS | KEY RESPONSE, TRACTION CONTROL, STABILITY CONTROL, AUTO HOLD | saved |
 | LAB | ANTI-LOCK BRAKES, DIFFERENTIALS, STEERING | this session; locked in a challenge |
-| CONDITIONS | WIND / CURRENT, FROM, TIME | this session |
+| CONDITIONS | WIND, WATER CURRENT, FROM, TIME | this session |
 | GARAGE | the gearbox (with sloppyCAN), the tyres | the gearbox this session, the tyres saved |
 <!-- docs/systems.md: SETTINGS saved to user://; LAB, CONDITIONS and the gearbox choice session-held; tyre choice saved -->
 
@@ -142,8 +153,8 @@ for auto hold, [Differentials](differentials.md#the-lab-switch) and
 <div class="box try">
 <p class="box-title">Try it in the game: key response</p>
 
-1. Pick the `sedan` on **Flatland**. Press **F3** with EXTENDED DEBUG LABELS on: the `steer` line
-   shows each wheel's angle.
+1. Pick the `sedan` on **Flatland**. Open SETTINGS and set EXTENDED DEBUG LABELS to ON: the
+   overlay's `steer` line shows each wheel's angle. (**F3** shows or hides the overlay.)
 2. At 100 km/h, tap **A**. The wheels turn only a few degrees, slowly.
 3. Open SETTINGS, set KEY RESPONSE to RAW, and tap **A** again at the same speed: the wheels turn
    further and faster, and the car darts.

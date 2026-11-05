@@ -136,7 +136,9 @@ No signal reports a spring's squeeze. Two signals read the suspension's forces:
 <div class="box try">
 <p class="box-title">Try it in the game: watch the body pitch and roll</p>
 
-1. Press **F3**. The overlay shows a `pitch` and `roll` line, in degrees, for any vehicle.
+1. Open SETTINGS and set EXTENDED DEBUG LABELS to ON. The overlay in the top right (**F3** shows
+   or hides it) now has a `pitch` and `roll` line, in degrees, for any vehicle.
+   <!-- debug_overlay.gd _refresh: _attitude_line only when _extended -->
 2. Pick the `sedan` on **Flatland**. Accelerate hard from a standstill: `pitch` goes positive as
    the nose rises. Brake hard: it goes negative as the nose dips, then settles back with a small
    overshoot as the dampers stop the bounce.

@@ -55,15 +55,16 @@ explains what it does to them.
 
 ## CONDITIONS
 
-The pause menu's CONDITIONS page has three settings, kept for the session and applied to every
+The pause menu's CONDITIONS page has four settings, kept for the session and applied to every
 level you load:
 
 | Setting | Choices | What it does |
 | --- | --- | --- |
-| WIND / CURRENT | LEVEL, CALM, LIGHT, STRONG | LEVEL keeps the level's own. CALM removes it. LIGHT is a breeze of 4 m/s with gusts of 1.5 more, and a current of 0.5 m/s. STRONG is 9 m/s with gusts of 4 more, and a current of 1.5 m/s. |
+| WIND | LEVEL, CALM, LIGHT, STRONG | LEVEL keeps the level's own. CALM removes it. LIGHT is a breeze of 4 m/s with gusts of 1.5 more. STRONG is 9 m/s with gusts of 4 more. Greyed out on the train. |
+| WATER CURRENT | LEVEL, CALM, LIGHT, STRONG | The same choices for the sea: LIGHT is a current of 0.5 m/s, STRONG 1.5 m/s. It works only on the boats, so it is greyed out on every other vehicle. |
 | FROM | the eight compass points | Where the LIGHT or STRONG wind and current come from. |
 | TIME | day or night | The same as the **N** key. |
-<!-- WorldConditions: WIND_LIGHT_SPEED 4, WIND_LIGHT_GUST 1.5, WIND_STRONG_SPEED 9, WIND_STRONG_GUST 4, CURRENT_LIGHT_DRIFT 0.5, CURRENT_STRONG_DRIFT 1.5, DIRECTION_STEP_DEG 45 -->
+<!-- pause_menu.gd _build_conditions: WIND and WATER CURRENT buttons (PRESET_LABELS), each disabled where WorldConditions.WIND_FAMILIES / CURRENT_FAMILIES lacks the family; FROM; TIME. WorldConditions: WIND_LIGHT_SPEED 4, WIND_LIGHT_GUST 1.5, WIND_STRONG_SPEED 9, WIND_STRONG_GUST 4, CURRENT_LIGHT_DRIFT 0.5, CURRENT_STRONG_DRIFT 1.5, DIRECTION_STEP_DEG 45 -->
 
 A chosen current is a steady stream for the whole session, not a tide that turns. The STRONG
 wind is hard but still flyable: the drone can still make headway into it.
@@ -102,7 +103,8 @@ need sloppyCAN, or the **L** key, to turn them on.
 
 1. Pick the `semi` with the box trailer on **Flatland**. Pause, open CONDITIONS and set WIND to
    STRONG, FROM to WEST.
-2. Press **F3**: the `wind` line shows the wind's speed and the direction it blows toward.
+2. Open SETTINGS and set EXTENDED DEBUG LABELS to ON: the overlay's `wind` line shows the wind's
+   speed and the direction it blows toward.
 3. Drive north at 80 km/h. You have to hold a little steering into the wind to stay straight,
    and the gusts tug at the rig every few seconds.
 4. Turn to drive west, into the wind: the same pedal now holds a lower speed.

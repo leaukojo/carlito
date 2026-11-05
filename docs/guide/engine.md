@@ -5,7 +5,7 @@ give depends on how fast it spins. The game models each engine's speed, its twis
 the friction that slows it, and the controls that keep it between idle and its limit.</p>
 
 <div class="badges"><span class="label">Which vehicles have this</span>
-<span class="badge yes" title="A petrol engine on every car; a diesel on the vans">Car</span>
+<span class="badge yes" title="A petrol engine on the cars, the van and the pickups; a diesel on the heavy vans">Car</span>
 <span class="badge yes" title="A diesel on every truck and semi">Truck</span>
 <span class="badge yes" title="A diesel with an all-speed governor and a hand throttle">Tractor</span>
 <span class="badge some" title="A simpler engine whose speed follows the throttle; its rpm is published">Plane</span>
@@ -71,12 +71,13 @@ engine gets. There are three kinds.
 - **Petrol cars: the pedal asks for torque.** Like a modern car's engine computer, a petrol car
   in the game reads the pedal as a request for a certain twist. A third of the pedal asks for
   about two thirds of the engine's best torque in the middle of its range. The table comes from
-  measurements of a real 1.5-litre petrol engine.
-- **Vans, trucks and semis: the pedal is the fuel.** Half the pedal gives half the fuel, as on a
-  simple road diesel.
+  measurements of a real 1.5-litre petrol engine. The `van` and the pickups are petrol too, and
+  work this way.
+- **Heavy vans, trucks and semis: the pedal is the fuel.** Half the pedal gives half the fuel, as
+  on a simple road diesel. The heavy vans are the `delivery`, `delivery-flat` and `ambulance`.
 - **The tractor: the pedal asks for an engine speed.** See
   [the tractor's governor](#the-tractors-governor), below.
-<!-- PedalMap.Kind: PETROL (car family), LINEAR (vans, Kenney trucks, semis), ALL_SPEED (tractor); docs/drivetrain.md The pedal map: EPA's map of a 2016 Honda L15B7 -->
+<!-- PedalMap.Kind: pedal_map 1 PETROL on every car-family spec but delivery, delivery-flat and ambulance (van, pickup, pickup-flat included; fuel_type default PETROL); the default LINEAR on those three (fuel_type 1 DIESEL), the Kenney trucks and the semis; 2 ALL_SPEED on the tractors; docs/drivetrain.md The pedal map: EPA's map of a 2016 Honda L15B7 -->
 
 Whatever the map, a fully pressed pedal always means full fuel.
 
@@ -129,8 +130,8 @@ as real cars' drag-torque control does, so the wheels roll again.
 - **The road-speed [governor](glossary.md#governor)** limits how fast the vehicle can go, as
   trucks and many vans are limited by law or by their owners. As the vehicle nears its limit the
   governor fades the fuel out over the last few km/h, so it settles a little under the limit
-  instead of surging. The semis are governed to 90 km/h, the garbage truck to 85, the fire truck
-  to 110, the tractor to 40; the vans, pickups and ambulance have higher limits, and the cars none.
+  instead of surging. The `semi` is governed to 90 km/h, the `semi-conventional` to 105, the
+  garbage truck to 85, the fire truck to 110, the tractor to 40; the vans, pickups and ambulance have higher limits, and the cars none.
   <!-- VehicleSpec.speed_limit_kmh: semi 90, semi-conventional 105, garbage-truck 85, firetruck 110, ambulance 150, van/pickup/pickup-flat 180, tractors 40; Drivetrain.GOVERNOR_BAND 1.5 m/s -->
 
 [Stability control](glossary.md#stability-control) can also trim the fuel while it catches a

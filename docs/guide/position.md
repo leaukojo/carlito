@@ -106,12 +106,16 @@ A vehicle that falls more than 20 m below sea level, off the edge of the world, 
 <div class="box try">
 <p class="box-title">Try it in the game: a lap of the compass</p>
 
-1. Pick any car on **Flatland**, with the dashboard showing (**F2**).
-2. Drive in a slow circle. The heading climbs through 90, 180 and 270 and back to 0 as you go
-   round.
+1. Pick any car on **Flatland** and press **F2** until the dashboard shows FULL. Its line of
+   readings starts with HDG (the heading), ODO (the odometer) and the latitude and longitude.
+   <!-- dashboard.gd readout "HDG %03d  ODO %.1f km  %.4f, %.4f" (FULL only) -->
+2. Drive in a slow circle to the right. The heading climbs through 90, 180 and 270 and back to 0
+   as you go round.
 3. Drive straight north for 100 m. The odometer gains 0.1 km, and the latitude grows by about a
    thousandth of a degree.
-4. Brake hard: the longitudinal acceleration goes strongly negative, then back to zero as you stop.
+4. Brake hard. The dashboard does not show the acceleration, but sloppyCAN's `accLong` goes
+   strongly negative, then back to zero as you stop.
+   <!-- dashboard.gd _build_bars: a bar needs a warn or a flavor; accLong has neither, and no overlay line reads it -->
 
 </div>
 
