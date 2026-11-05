@@ -147,7 +147,7 @@ front, because braking moves weight forward onto the front tyres.
 
 ### Brake fade
 Brakes getting weaker as they get very hot. In the game each brake has one temperature; past a
-point that depends on the brake type, the same pedal gives less braking.
+point that depends on the brake type, the same pedal gives less braking. See [Brakes](brakes.md).
 
 ### Brake pipe
 On a train, the air pipe that runs the length of the train and controls every carriage's brakes.

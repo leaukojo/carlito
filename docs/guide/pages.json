@@ -1,6 +1,6 @@
 {
   "about": "The guide's sidebar. groups: the sidebar headings in order. pages: one entry per page, file (a .md beside this file), title (the sidebar label) and group (one of groups; a group not listed there goes after the listed ones). A new page is one appended entry; pages show in the order of their group, then in the order they appear here. \"hidden\": true keeps a page reachable by link but out of the sidebar and the previous/next buttons.",
-  "groups": ["Start", "Wheels and steering", "Engine and driveline", "Reference", "For guide writers"],
+  "groups": ["Start", "Wheels and steering", "Engine and driveline", "Brakes and control", "Reference", "For guide writers"],
   "pages": [
     { "file": "index.md", "title": "About this guide", "group": "Start" },
     { "file": "tyres.md", "title": "Tyres and slip", "group": "Wheels and steering" },
@@ -12,6 +12,7 @@
     { "file": "coupling.md", "title": "Clutch and torque converter", "group": "Engine and driveline" },
     { "file": "gearbox.md", "title": "Gearbox and shifting", "group": "Engine and driveline" },
     { "file": "differentials.md", "title": "Differentials and four-wheel drive", "group": "Engine and driveline" },
+    { "file": "brakes.md", "title": "Brakes", "group": "Brakes and control" },
     { "file": "glossary.md", "title": "Glossary", "group": "Reference" },
     { "file": "template.md", "title": "The page template", "group": "For guide writers" },
     { "file": "inventory.md", "title": "Inventory of systems", "group": "For guide writers" },
