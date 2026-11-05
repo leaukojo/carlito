@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carlito Mechanics Guide</title>
+<meta name="description" content="How the vehicles in Carlito work: tyres, steering, engines, brakes, boats, aircraft and trains, explained in plain language.">
+<link rel="stylesheet" href="guide.css">
+<script>
+  // Apply a saved theme before first paint so the page does not flash.
+  try {
+    var t = localStorage.getItem('carlito-guide-theme');
+    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+  } catch (e) { /* storage blocked: follow the system */ }
+</script>
+</head>
+<body>
+<a class="skip" href="#content">Skip to the page</a>
+<header class="topbar">
+  <button class="menu-button" type="button" aria-controls="sidebar" aria-expanded="false">
+    <span class="menu-icon" aria-hidden="true"></span><span class="menu-label">Pages</span>
+  </button>
+  <a class="brand" href="#index">Carlito Mechanics Guide</a>
+  <button class="theme-button" type="button" title="Switch between light, dark and the system setting">
+    <span class="theme-label"><span class="theme-prefix">Theme: </span>system</span>
+  </button>
+</header>
+<div class="layout">
+  <nav id="sidebar" class="sidebar" aria-label="Guide pages"></nav>
+  <main id="content" class="content" tabindex="-1">
+    <noscript><p>This guide needs JavaScript to show its pages. The pages are also plain Markdown
+    files in this folder, readable in any text editor.</p></noscript>
+  </main>
+</div>
+<div class="scrim" hidden></div>
+<script src="vendor/marked.min.js"></script>
+<script src="guide.js"></script>
+</body>
+</html>

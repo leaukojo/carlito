@@ -1,0 +1,9 @@
+{
+  "about": "The guide's sidebar. groups: the sidebar headings in order. pages: one entry per page, file (a .md beside this file), title (the sidebar label) and group (one of groups; a group not listed there goes after the listed ones). A new page is one appended entry; pages show in the order of their group, then in the order they appear here. \"hidden\": true keeps a page reachable by link but out of the sidebar and the previous/next buttons.",
+  "groups": ["Start", "Wheels and steering", "Reference", "For guide writers"],
+  "pages": [
+    { "file": "index.md", "title": "About this guide", "group": "Start" },
+    { "file": "inventory.md", "title": "Inventory of systems", "group": "For guide writers" },
+    { "file": "open_questions.md", "title": "Open questions", "group": "For guide writers" }
+  ]
+}

@@ -1,0 +1,234 @@
+/* Carlito Mechanics Guide. Colours are tokens on :root, redefined for dark mode; the inlined SVG
+   figures and the widgets draw with the --fig-* tokens, so they follow the theme too. */
+:root {
+  --bg: #fbfaf7;
+  --surface: #ffffff;
+  --ink: #1c1c1f;
+  --muted: #5a5a64;
+  --rule: #dcd9d1;
+  --accent: #1d5ca8;
+  --accent-soft: #e6eef9;
+  --code-bg: #f1efe9;
+  --try-bg: #eef6ee;
+  --try-rule: #8bb98b;
+  --note-bg: #fbf3e2;
+  --note-rule: #d9b25f;
+  --badge-yes: #1d5ca8;
+  --badge-yes-ink: #ffffff;
+  --badge-no-ink: #8a8a93;
+  --fig-ink: #1c1c1f;
+  --fig-muted: #6b6b75;
+  --fig-grid: #e3e0d8;
+  --fig-fill: #f3f1ec;
+  --fig-blue: #1d5ca8;
+  --fig-orange: #c45a12;
+  --fig-green: #2e7d32;
+  --fig-red: #b3261e;
+  --side-w: 17rem;
+  --top-h: 3.25rem;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141518;
+    --surface: #1c1d21;
+    --ink: #e9e7e2;
+    --muted: #a6a6b0;
+    --rule: #34363c;
+    --accent: #8ab6ff;
+    --accent-soft: #1f2a3b;
+    --code-bg: #24262b;
+    --try-bg: #17261a;
+    --try-rule: #4f8a55;
+    --note-bg: #2a2416;
+    --note-rule: #9c7f3d;
+    --badge-yes: #8ab6ff;
+    --badge-yes-ink: #10131a;
+    --badge-no-ink: #6f7079;
+    --fig-ink: #e9e7e2;
+    --fig-muted: #a6a6b0;
+    --fig-grid: #30323a;
+    --fig-fill: #22242a;
+    --fig-blue: #8ab6ff;
+    --fig-orange: #f0a060;
+    --fig-green: #7cc884;
+    --fig-red: #f08a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141518;
+  --surface: #1c1d21;
+  --ink: #e9e7e2;
+  --muted: #a6a6b0;
+  --rule: #34363c;
+  --accent: #8ab6ff;
+  --accent-soft: #1f2a3b;
+  --code-bg: #24262b;
+  --try-bg: #17261a;
+  --try-rule: #4f8a55;
+  --note-bg: #2a2416;
+  --note-rule: #9c7f3d;
+  --badge-yes: #8ab6ff;
+  --badge-yes-ink: #10131a;
+  --badge-no-ink: #6f7079;
+  --fig-ink: #e9e7e2;
+  --fig-muted: #a6a6b0;
+  --fig-grid: #30323a;
+  --fig-fill: #22242a;
+  --fig-blue: #8ab6ff;
+  --fig-orange: #f0a060;
+  --fig-green: #7cc884;
+  --fig-red: #f08a80;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 17px/1.6 Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif;
+}
+a { color: var(--accent); }
+.skip { position: absolute; left: -9999px; }
+.skip:focus { left: 1rem; top: 0.5rem; z-index: 50; background: var(--surface); padding: 0.4rem 0.8rem; }
+
+/* ---- top bar ---- */
+.topbar {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: 0.75rem;
+  height: var(--top-h); padding: 0 1rem;
+  background: var(--surface); border-bottom: 1px solid var(--rule);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.brand { font-weight: 650; text-decoration: none; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.theme-button, .menu-button {
+  font: inherit; font-size: 0.85rem; color: var(--ink);
+  background: transparent; border: 1px solid var(--rule); border-radius: 6px;
+  padding: 0.3rem 0.6rem; cursor: pointer;
+}
+.theme-button { margin-left: auto; white-space: nowrap; }
+.theme-button:hover, .menu-button:hover { border-color: var(--accent); }
+.menu-button { display: none; align-items: center; gap: 0.4rem; }
+.menu-icon, .menu-icon::before, .menu-icon::after {
+  display: block; width: 14px; height: 2px; background: currentColor; position: relative;
+}
+.menu-icon::before, .menu-icon::after { content: ""; position: absolute; left: 0; }
+.menu-icon::before { top: -5px; }
+.menu-icon::after { top: 5px; }
+
+/* ---- layout ---- */
+.layout { display: flex; align-items: flex-start; }
+.sidebar {
+  position: sticky; top: var(--top-h);
+  flex: 0 0 var(--side-w); width: var(--side-w);
+  height: calc(100vh - var(--top-h)); overflow-y: auto;
+  padding: 1rem 0.75rem 2rem 1rem;
+  border-right: 1px solid var(--rule);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 0.92rem;
+}
+.nav-group {
+  font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); margin: 1.1rem 0 0.3rem; font-weight: 600;
+}
+.nav-group:first-child { margin-top: 0; }
+.sidebar ul { list-style: none; margin: 0; padding: 0; }
+.sidebar li a {
+  display: block; padding: 0.25rem 0.5rem; border-radius: 5px;
+  color: var(--ink); text-decoration: none; line-height: 1.35;
+}
+.sidebar li a:hover { background: var(--accent-soft); }
+.sidebar li a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.content { flex: 1 1 auto; min-width: 0; padding: 2rem 2.5rem 4rem; outline: none; }
+.page { max-width: 44rem; }
+.scrim { display: none; }
+
+@media (max-width: 860px) {
+  .menu-button { display: inline-flex; }
+  .sidebar {
+    position: fixed; z-index: 40; left: 0; top: var(--top-h); bottom: 0; height: auto;
+    background: var(--surface); transform: translateX(-100%); transition: transform 0.2s ease;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
+  }
+  body.menu-open .sidebar { transform: none; }
+  .scrim { display: block; position: fixed; inset: var(--top-h) 0 0 0; z-index: 35; background: rgba(0, 0, 0, 0.35); }
+  .scrim[hidden] { display: none; }
+  .content { padding: 1.25rem 1rem 3rem; }
+  body { font-size: 16.5px; }
+}
+@media (max-width: 420px) {
+  .brand { font-size: 0.95rem; }
+  .menu-label, .theme-prefix { display: none; }
+  .topbar { gap: 0.5rem; padding: 0 0.75rem; }
+}
+
+/* ---- page typography ---- */
+.page h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 0.5rem; }
+.page h2 { font-size: 1.4rem; line-height: 1.3; margin: 2.2rem 0 0.6rem; padding-top: 0.4rem; border-top: 1px solid var(--rule); }
+.page h3 { font-size: 1.12rem; margin: 1.6rem 0 0.4rem; }
+.page h1, .page h2, .page h3 { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-weight: 650; position: relative; scroll-margin-top: calc(var(--top-h) + 0.75rem); }
+.anchor { position: absolute; left: -1.1em; color: var(--muted); text-decoration: none; opacity: 0; font-weight: 400; }
+h1:hover .anchor, h2:hover .anchor, h3:hover .anchor { opacity: 1; }
+.page p, .page li { max-width: 40rem; }
+.page .lead { font-size: 1.12rem; color: var(--muted); margin-top: 0; }
+.page code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.86em; background: var(--code-bg); padding: 0.08em 0.3em; border-radius: 4px; overflow-wrap: anywhere; }
+.page pre { background: var(--code-bg); padding: 0.8rem 1rem; border-radius: 6px; overflow-x: auto; }
+.page pre code { background: none; padding: 0; }
+.page blockquote { margin: 1rem 0; padding: 0.2rem 1rem; border-left: 3px solid var(--rule); color: var(--muted); }
+.page hr { border: 0; border-top: 1px solid var(--rule); margin: 2rem 0; }
+.page a.term { text-decoration-style: dotted; text-underline-offset: 0.18em; }
+.page img { max-width: 100%; height: auto; }
+
+/* tables scroll sideways on a phone instead of widening the page */
+.page table { display: block; overflow-x: auto; border-collapse: collapse; margin: 1rem 0; font-size: 0.93rem; max-width: 100%; }
+.page th, .page td { border: 1px solid var(--rule); padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
+.page th { background: var(--code-bg); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-weight: 600; font-size: 0.88rem; }
+
+/* ---- figures ---- */
+.page figure { margin: 1.5rem 0; max-width: 40rem; }
+.page figure svg.figure-svg { display: block; width: 100%; height: auto; }
+.page figcaption { font-size: 0.9rem; color: var(--muted); margin-top: 0.4rem; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+/* ---- template blocks ---- */
+.badges { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.8rem 0 1.4rem; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.badges .label { font-size: 0.8rem; color: var(--muted); align-self: center; margin-right: 0.2rem; }
+.badge {
+  display: inline-block; font-size: 0.82rem; line-height: 1; padding: 0.38rem 0.6rem; border-radius: 999px;
+  border: 1.5px solid var(--badge-yes);
+}
+.badge.yes { background: var(--badge-yes); color: var(--badge-yes-ink); }
+.badge.some { background: transparent; color: var(--accent); border-style: dashed; }
+.badge.no { background: transparent; color: var(--badge-no-ink); border-color: var(--rule); text-decoration: line-through; }
+.badge-key { font-size: 0.85rem; color: var(--muted); margin-top: -0.9rem; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+.box { margin: 1.5rem 0; padding: 0.3rem 1.1rem 0.5rem; border-radius: 8px; border-left: 4px solid; max-width: 40rem; }
+.box > :first-child { margin-top: 0.6rem; }
+.box.try { background: var(--try-bg); border-color: var(--try-rule); }
+.box.note { background: var(--note-bg); border-color: var(--note-rule); }
+.box-title { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-weight: 650; font-size: 0.95rem; margin-bottom: 0.2rem; }
+.box ol, .box ul { padding-left: 1.3rem; }
+
+/* ---- widgets ---- */
+.widget {
+  margin: 1.5rem 0; padding: 1rem; max-width: 40rem;
+  border: 1px solid var(--rule); border-radius: 8px; background: var(--surface);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 0.92rem;
+}
+.widget .w-title { font-weight: 650; margin: 0 0 0.6rem; }
+.widget svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
+.widget .w-controls { display: grid; grid-template-columns: auto 1fr auto; gap: 0.5rem 0.75rem; align-items: center; margin-top: 0.75rem; }
+.widget .w-controls label { color: var(--muted); }
+.widget .w-controls output { font-variant-numeric: tabular-nums; min-width: 4.5rem; text-align: right; }
+.widget input[type="range"] { width: 100%; accent-color: var(--accent); }
+.widget select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 5px; padding: 0.2rem 0.3rem; }
+.widget .w-readout { margin-top: 0.75rem; padding: 0.6rem 0.75rem; background: var(--code-bg); border-radius: 6px; font-variant-numeric: tabular-nums; }
+.widget .w-readout strong { font-weight: 650; }
+.widget .w-note { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.85rem; }
+
+/* ---- pager ---- */
+.pager { display: flex; justify-content: space-between; gap: 1rem; max-width: 44rem; margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.pager a { text-decoration: none; display: flex; flex-direction: column; max-width: 48%; }
+.pager a span { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.pager .next { text-align: right; margin-left: auto; }
