@@ -37,7 +37,7 @@ the two semi tractor units.
 | Fuel, coolant, battery and air | [auxiliary.md](auxiliary.md) | the simple labelled models |
 | Position, heading and distance | [position.md](position.md) | GPS, heading, odometer, hour meter, acceleration and impact |
 | Controls and who drives | [controls.md](controls.md) | keyboard easing, ignition, bridge or local input, lamps and horn |
-| Forces *(planned, phase 3)* | forces.md | every force on a body, together |
+| Forces on a vehicle | [forces.md](forces.md) | every force on a body, together, in an interactive drawing |
 | Vehicle pages | [car.md](car.md), [truck.md](truck.md), [tractor.md](tractor.md), [boat.md](boat.md), [plane.md](plane.md), [drone.md](drone.md), [train.md](train.md) | which systems each family has |
 | What the game keeps simple | [simplifications.md](simplifications.md) | compromises and things not modelled |
 

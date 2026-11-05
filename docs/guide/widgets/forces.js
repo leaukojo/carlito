@@ -1,6 +1,6 @@
 // Forces on a vehicle: a top and a side view of one of the seven bodies, with each force drawn as
 // an arrow on one shared scale. AN ILLUSTRATION, NOT THE PHYSICS: a simplified, steady-instant
-// copy of the game's formulas (forces.html lists what it leaves out). Plain JS and SVG, no
+// copy of the game's formulas (forces.md lists what it leaves out). Plain JS and SVG, no
 // libraries. Every game figure is cited where it is set below, as file and code name; the
 // physics-wide ones:
 //   G 9.8          physics/3d/default_gravity (Godot's default; train_sim.gd GRAVITY 9.8)

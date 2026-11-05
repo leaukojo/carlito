@@ -105,3 +105,15 @@ says meanwhile. Newest last.
 - **Docs:** no doc says what an empty tank does.
 - **Guide meanwhile:** the aux page says an empty tank does not stop the engine, as the code
   does, and lists it under what the game leaves out.
+
+## 10. Gravity: 9.81 or 9.8?
+
+- **Code:** `src/vehicles/base/wheel.gd` (`tick`) sets the tyre's reference load as
+  `corner_mass * 9.81`, a constant written in place. The world's gravity is the project's
+  `physics/3d/default_gravity`, which `BaseVehicle` reads as 9.8 (`base_vehicle.gd`, `_gravity`),
+  and `train_sim.gd` declares `GRAVITY := 9.8` "matches the project default_gravity".
+- **Effect:** small. At rest a tyre's load is about 0.1 % under its reference, so
+  `load_scaled_mu` gives it about 0.015 % more grip than at exactly the reference (sedan,
+  `load_sensitivity` 0.1). The question is only whether the two figures should be one.
+- **Guide meanwhile:** the forces page uses 9.8 throughout and the guide quotes no figure that
+  depends on the difference.
