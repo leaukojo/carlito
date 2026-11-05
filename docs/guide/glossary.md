@@ -101,6 +101,10 @@ game does not model it: every wheeled vehicle steers with its front wheels.
 ### ASR
 Anti-slip regulation, the name for [traction control](#traction-control) on trucks.
 
+### Auto hold
+A setting that keeps the foot brake on whenever the vehicle stops in gear, until the accelerator
+is pressed. In the game it is SETTINGS ▸ AUTO HOLD, for keys and on-screen pedals only.
+
 ### Autopilot
 A controller that steers for the driver. The boat's autopilot holds a compass heading (HEADING
 HOLD). Moving the helm takes the rudder back; letting go holds the new heading.
@@ -416,7 +420,7 @@ A boat leaning to one side, from turning or from wind on its hull or sail.
 ### Hill-start assist
 A brake hold that stops a car rolling back when the driver moves a foot from the brake to the
 accelerator on a slope. It lets go as soon as the engine pulls hard enough to hold the car, or
-after a short time.
+after a short time. See [Holding still](holding.md).
 
 ### Hitch
 The coupling at the back of a tractor. The three-point hitch carries implements on two lower arms

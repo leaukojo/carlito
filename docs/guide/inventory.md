@@ -25,7 +25,7 @@ the two semi tractor units.
 | Differentials and four-wheel drive | [differentials.md](differentials.md) | open, limited-slip and Torsen diffs, diff lock, MFWD, centre diffs |
 | Brakes | [brakes.md](brakes.md) | brake hardware, bias, handbrake, heat and fade, retarder, spring brakes, air |
 | ABS, traction and stability control | [driver-aids.md](driver-aids.md) | ABS, TC/ASR, ESC, roll stability, their lamps |
-| Holding still *(planned)* | holding.md | hill-start assist, auto hold, the tractor's hill hold, park pawl, CVT standstill |
+| Holding still | [holding.md](holding.md) | hill-start assist, auto hold, the tractor's hill hold, park pawl, CVT standstill |
 | Air and rolling resistance *(planned)* | resistance.md | drag, side force, downforce, rolling resistance |
 | Towing *(planned)* | towing.md | fifth wheel and drawbar, trailers, articulation, jackknife, trailer brakes, trailer bus |
 | Implements and the PTO *(planned)* | implements.md | three-point hitch, draft, PTO, hydraulic remote, ISOBUS |
