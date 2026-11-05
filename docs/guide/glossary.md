@@ -639,7 +639,11 @@ pushes the sail out to it.
 
 ### Shift policy
 The rules an automatic gearbox uses to decide when to change gear: from the road speed, the
-pedal, and whether the vehicle is climbing.
+pedal, and whether the vehicle is climbing. See [Gearbox and shifting](gearbox.md).
+
+### Sequential gearbox
+A racing gearbox whose gears can only be taken in order, one up or one down. The game's two
+racing cars have one, worked by an automated clutch and a short ignition cut at each change.
 
 ### Signal
 One named value passed between Carlito and sloppyCAN, such as the engine speed `rpm` or the brake

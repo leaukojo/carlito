@@ -103,7 +103,7 @@ forward, the game cuts the throttle: a brake-throttle override.
 
 A gear change needs the coupling too. On a converter car, the gearbox's own internal clutches hand
 the drive from one gear to the next; the converter does not open. On the clutch vehicles the
-clutch slips through the change. The page on the gearbox and shifting explains how.
+clutch slips through the change. [Gearbox and shifting](gearbox.md) explains how.
 
 ## What the game leaves out
 
