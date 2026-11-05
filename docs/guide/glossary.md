@@ -168,7 +168,8 @@ Celsius, from a simple model heated by braking and cooled by the air.
 
 ### Buoyancy
 The upward push of water on a floating object. A boat floats when the push equals its weight. The
-game measures how deep four points of the hull sit in the water and pushes each one up.
+game measures how deep four points of the hull sit in the water and pushes each one up. See
+[Floating and boats](floating.md).
 
 ## C
 
@@ -240,6 +241,10 @@ A heavier load makes more force, but less per kilogram of load.
 The joint between two railway carriages. In the game each coupler is a stiff spring with a little
 free play. The train publishes the force in the first one as `coupler_force`, in kilonewtons:
 positive when pulling, negative when pushing.
+
+### Course over ground
+The direction a boat actually travels over the seabed (`cog`). It differs from its heading, where
+the bow points, when a current or the wind carries it sideways.
 
 ### Crank
 The engine's crankshaft, the part that turns. Its speed is the engine speed, in
@@ -449,6 +454,10 @@ The slowest speed an engine runs at by itself, with no pedal pressed.
 
 ### Implement
 A machine a tractor carries or pulls: a plough, a harrow, a mower, a spreader.
+
+### In irons
+A sailing boat pointed so close to the wind that its sail flaps and gives no push. In the game,
+when the wind meets the sail at less than about 12°.
 
 ### Inertia
 An object's resistance to changing how it moves. A heavy vehicle takes more force to speed up,

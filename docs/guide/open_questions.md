@@ -69,3 +69,13 @@ says meanwhile. Newest last.
 - **Guide meanwhile:** the driver aids page says traction control takes away drive at the
   spinning wheel and never brakes it, as the code's comment does, and does not say whether the
   engine's power is cut.
+
+## 7. Which levels have wind?
+
+- **Code:** both `src/levels/island/level_6/level_6.tscn` and `src/levels/open_sea/open_sea.tscn`
+  set a `wind` resource (`level_6_wind.tres`, `open_sea_wind.tres`), and the level list describes
+  Open Sea as "Endless open water under a steady wind".
+- **Docs:** `docs/boat.md` (Buoyancy and knobs) says "Level 6 is the only level with a
+  `WindField`; `Level.wind` defaults to null elsewhere."
+- **Guide meanwhile:** the floating page says Level 6 and Open Sea both have wind of their own, as
+  the level scenes do.
