@@ -28,34 +28,8 @@
   --top-h: 3.25rem;
   color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #141518;
-    --surface: #1c1d21;
-    --ink: #e9e7e2;
-    --muted: #a6a6b0;
-    --rule: #34363c;
-    --accent: #8ab6ff;
-    --accent-soft: #1f2a3b;
-    --code-bg: #24262b;
-    --try-bg: #17261a;
-    --try-rule: #4f8a55;
-    --note-bg: #2a2416;
-    --note-rule: #9c7f3d;
-    --badge-yes: #8ab6ff;
-    --badge-yes-ink: #10131a;
-    --badge-no-ink: #6f7079;
-    --fig-ink: #e9e7e2;
-    --fig-muted: #a6a6b0;
-    --fig-grid: #30323a;
-    --fig-fill: #22242a;
-    --fig-blue: #8ab6ff;
-    --fig-orange: #f0a060;
-    --fig-green: #7cc884;
-    --fig-red: #f08a80;
-    color-scheme: dark;
-  }
-}
+/* The one dark set: index.html and guide.js always resolve data-theme to light or dark, the
+   system choice included. */
 :root[data-theme="dark"] {
   --bg: #141518;
   --surface: #1c1d21;
@@ -181,8 +155,11 @@ h1:hover .anchor, h2:hover .anchor, h3:hover .anchor { opacity: 1; }
 .page a.term { text-decoration-style: dotted; text-underline-offset: 0.18em; }
 .page img { max-width: 100%; height: auto; }
 
-/* tables scroll sideways on a phone instead of widening the page */
-.page table { display: block; overflow-x: auto; border-collapse: collapse; margin: 1rem 0; font-size: 0.93rem; max-width: 100%; }
+/* tables scroll sideways on a phone inside their wrapper (guide.js), keeping table semantics */
+.page .table-wrap { overflow-x: auto; max-width: 100%; margin: 1rem 0; }
+.page table { border-collapse: collapse; font-size: 0.93rem; }
+.page td code, .page th code { white-space: nowrap; overflow-wrap: normal; }
+.page td:last-child { min-width: 13rem; }
 .page th, .page td { border: 1px solid var(--rule); padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
 .page th { background: var(--code-bg); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-weight: 600; font-size: 0.88rem; }
 

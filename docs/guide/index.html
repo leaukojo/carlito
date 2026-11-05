@@ -7,11 +7,15 @@
 <meta name="description" content="How the vehicles in Carlito work: tyres, steering, engines, brakes, boats, aircraft and trains, explained in plain language.">
 <link rel="stylesheet" href="guide.css">
 <script>
-  // Apply a saved theme before first paint so the page does not flash.
-  try {
-    var t = localStorage.getItem('carlito-guide-theme');
-    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
-  } catch (e) { /* storage blocked: follow the system */ }
+  // Resolve the theme before first paint so the page does not flash (guide.js keeps it current).
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem('carlito-guide-theme'); } catch (e) { /* storage blocked */ }
+    if (t !== 'light' && t !== 'dark') {
+      t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    document.documentElement.setAttribute('data-theme', t);
+  })();
 </script>
 </head>
 <body>

@@ -342,8 +342,12 @@ other. A tyre can use all its grip for braking, or all for turning, or a mix, bu
 goes outside the oval.
 
 ### Fuel rate
-How fast the engine burns fuel, in litres per hour (`fuel_rate`). In the game it is worked out
-from the engine's actual turning force and speed.
+How fast the engine burns fuel, in litres per hour (`fuel_rate`). On the car, truck and tractor
+the game works it out from the engine's actual turning force and speed; the boat uses a simpler
+labelled model that follows its throttle.
+<!-- VehicleTelemetry.fuel_rate_lph on a wheel-driving crank; BoatTelemetry.fuel_rate_model on the boat -->
+
+
 
 ## G
 
@@ -662,8 +666,7 @@ On the semis it also brakes the whole rig before it would tip over.
 
 ### Stall
 Two meanings. A wing stalls when the air stops flowing smoothly over it and its lift collapses,
-at too low a speed or too steep an angle. An engine stalls when it is slowed until it stops; the
-game's engines do not stall.
+at too low a speed or too steep an angle. An engine stalls when the load slows it until it stops.
 
 ### State of charge
 How full a battery is, as a percentage (`soc` on the drone).

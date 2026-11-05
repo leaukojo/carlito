@@ -18,20 +18,29 @@
   var current = null;      // id of the page on screen
 
   // ---- theme ------------------------------------------------------------------------------
+  // The choice is system, light or dark; data-theme on <html> always holds the resolved light or
+  // dark, so guide.css defines the dark tokens once. index.html resolves it before first paint.
   var THEMES = ['system', 'light', 'dark'];
+  var systemDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
   function readTheme() {
-    try { return localStorage.getItem('carlito-guide-theme') || 'system'; } catch (e) { return 'system'; }
+    var t = 'system';
+    try { t = localStorage.getItem('carlito-guide-theme') || 'system'; } catch (e) { /* blocked */ }
+    return THEMES.indexOf(t) < 0 ? 'system' : t;
+  }
+  function resolveTheme(t) {
+    return t === 'system' ? (systemDark && systemDark.matches ? 'dark' : 'light') : t;
   }
   function applyTheme(t) {
-    if (t === 'system') document.documentElement.removeAttribute('data-theme');
-    else document.documentElement.setAttribute('data-theme', t);
+    document.documentElement.setAttribute('data-theme', resolveTheme(t));
     themeButton.querySelector('.theme-label').innerHTML = '<span class="theme-prefix">Theme: </span>' + t;
     try { localStorage.setItem('carlito-guide-theme', t); } catch (e) { /* not kept */ }
   }
   themeButton.addEventListener('click', function () {
-    var t = THEMES[(THEMES.indexOf(readTheme()) + 1) % THEMES.length];
-    applyTheme(t);
+    applyTheme(THEMES[(THEMES.indexOf(readTheme()) + 1) % THEMES.length]);
   });
+  if (systemDark && systemDark.addEventListener) {
+    systemDark.addEventListener('change', function () { if (readTheme() === 'system') applyTheme('system'); });
+  }
   applyTheme(readTheme());
 
   // ---- sidebar drawer (phone width) -------------------------------------------------------
@@ -60,7 +69,8 @@
     return null;
   }
   function parseHash() {
-    var h = decodeURIComponent(location.hash.replace(/^#/, ''));
+    var h = location.hash.replace(/^#/, '');
+    try { h = decodeURIComponent(h); } catch (e) { /* a malformed escape: use it as written */ }
     var slash = h.indexOf('/');
     return slash < 0 ? { page: h || 'index', at: '' } : { page: h.slice(0, slash) || 'index', at: h.slice(slash + 1) };
   }
@@ -98,11 +108,28 @@
         a.setAttribute('href', '#' + m[1] + (m[2] ? '/' + m[2] : ''));
         if (m[1] === 'glossary' && m[2]) {
           a.classList.add('term');
-          if (glossary[m[2]]) a.setAttribute('title', glossary[m[2]]);
+          a.setAttribute('data-term', m[2]);
         }
         return;
       }
       if (href.charAt(0) === '#') a.setAttribute('href', '#' + pageId + '/' + href.slice(1));
+    });
+    applyTermTitles(root);
+  }
+  // Hover text on term links, once the glossary has arrived (it loads beside the first page).
+  function applyTermTitles(root) {
+    root.querySelectorAll('a[data-term]').forEach(function (a) {
+      var def = glossary[a.getAttribute('data-term')];
+      if (def) a.setAttribute('title', def);
+    });
+  }
+  // Tables scroll sideways inside a wrapper on a narrow screen, so they keep their table role.
+  function wrapTables(root) {
+    root.querySelectorAll('.page table').forEach(function (t) {
+      var wrap = document.createElement('div');
+      wrap.className = 'table-wrap';
+      t.parentNode.insertBefore(wrap, t);
+      wrap.appendChild(t);
     });
   }
 
@@ -223,7 +250,11 @@
     if (target) target.scrollIntoView();
     else window.scrollTo(0, 0);
   }
+  // Each navigation takes a number; a fetch that resolves after a newer navigation is dropped, so
+  // a slow page can never replace the one the reader moved on to.
+  var showSeq = 0;
   function show() {
+    var seq = ++showSeq;
     var route = parseHash();
     setMenu(false);
     if (route.page === current) { scrollToAnchor(route.at); return; }
@@ -239,15 +270,18 @@
       if (!r.ok) throw new Error(page.file + ': ' + r.status);
       return r.text();
     }).then(function (md) {
+      if (seq !== showSeq) return;
       var id = idOf(page.file);
       content.innerHTML = '<article class="page page-' + id + '">' + marked.parse(md) + '</article>' + pager(id);
       rewriteLinks(content, id);
+      wrapTables(content);
       current = id;
       markCurrent(id);
       document.title = page.title + ' | Carlito Mechanics Guide';
       startWidgets(content);
-      return upgradeFigures(content).then(function () { scrollToAnchor(route.at); });
+      return upgradeFigures(content).then(function () { if (seq === showSeq) scrollToAnchor(route.at); });
     }).catch(function (err) {
+      if (seq !== showSeq) return;
       content.innerHTML = '<h1>This page could not load</h1><p>' + escapeHtml(err.message) +
         '</p><p>The guide must be opened through a web server, not as a file. From the repository: ' +
         '<code>npx serve docs/guide</code>, then open the address it prints.</p>';
@@ -272,16 +306,23 @@
     }).catch(function () { /* tooltips are a convenience */ });
   }
 
+  // A link to the address already in the bar fires no hashchange; scroll to its target anyway.
+  content.addEventListener('click', function (e) {
+    var a = e.target.closest ? e.target.closest('a[href^="#"]') : null;
+    if (a && a.getAttribute('href') === location.hash) scrollToAnchor(parseHash().at);
+  });
+
+  // The glossary (for hover text only) loads beside the first page instead of ahead of it.
+  var glossaryReady = loadGlossary();
   fetch('pages.json').then(function (r) {
     if (!r.ok) throw new Error('pages.json: ' + r.status);
     return r.json();
   }).then(function (list) {
     pages = orderByGroup(list.pages, list.groups || []);
     buildSidebar();
-    return loadGlossary();
-  }).then(function () {
     window.addEventListener('hashchange', show);
     show();
+    glossaryReady.then(function () { applyTermTitles(content); });
   }).catch(function (err) {
     content.innerHTML = '<h1>The guide could not start</h1><p>' + escapeHtml(err.message) +
       '</p><p>Open it through a web server: <code>npx serve docs/guide</code>.</p>';
