@@ -273,7 +273,8 @@
       if (seq !== showSeq) return;
       var id = idOf(page.file);
       content.innerHTML = '<article class="page page-' + id + '">' + marked.parse(md) + '</article>' + pager(id);
-      rewriteLinks(content, id);
+      // The article only: the pager's links are already routes, and would read as anchors.
+      rewriteLinks(content.querySelector('article'), id);
       wrapTables(content);
       current = id;
       markCurrent(id);
