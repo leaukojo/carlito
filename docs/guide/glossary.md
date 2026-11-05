@@ -92,7 +92,7 @@ there is no fix.
 
 ### Articulation
 The angle between a towing vehicle and its trailer, seen from above. Zero when they are in a
-straight line. Too much articulation is a [jackknife](#jackknife).
+straight line. Too much articulation is a [jackknife](#jackknife). See [Towing](towing.md).
 
 ### Articulated steering
 Steering by bending the whole vehicle in the middle, as some large tractors and loaders do. The
@@ -141,6 +141,9 @@ may take up to this many times the faster one's. 1 is an open differential.
 The single steering angle the game works with before splitting it between the two front wheels.
 Imagine the car as a bicycle with one front wheel in the middle: that wheel's angle is the bicycle
 angle. Also called the mean steer angle.
+
+### Bobtail
+A semi tractor unit driving with no trailer.
 
 ### Bogie
 A group of axles close together that share the load, like the three rear axles of a semi-trailer.
