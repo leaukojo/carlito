@@ -77,7 +77,7 @@ That split matters for more than comfort. The axle with the stiffer bar moves mo
 its inside tyre to its outside tyre in a corner, and because of
 [load sensitivity](glossary.md#load-sensitivity) that axle loses grip first. A stiff front bar
 makes a car run wide at the front rather than swing out at the back, which is easier to control.
-The page on weight transfer and rollover explains this in full.
+[Weight transfer and rollover](weight-transfer.md) explains this in full.
 
 ## Links that resist dive and squat
 
@@ -148,5 +148,6 @@ No signal reports a spring's squeeze. Two signals read the suspension's forces:
 
 ## Related
 
+- [Weight transfer and rollover](weight-transfer.md): what the suspension does in a turn.
 - [Tyres and slip](tyres.md): why the load on each tyre matters.
 - [Glossary](glossary.md): every term on this page.

@@ -7,6 +7,7 @@
     { "file": "steering.md", "title": "Steering and Ackermann", "group": "Wheels and steering" },
     { "file": "surfaces.md", "title": "Ground and tyre types", "group": "Wheels and steering" },
     { "file": "suspension.md", "title": "Suspension", "group": "Wheels and steering" },
+    { "file": "weight-transfer.md", "title": "Weight transfer and rollover", "group": "Wheels and steering" },
     { "file": "glossary.md", "title": "Glossary", "group": "Reference" },
     { "file": "template.md", "title": "The page template", "group": "For guide writers" },
     { "file": "inventory.md", "title": "Inventory of systems", "group": "For guide writers" },

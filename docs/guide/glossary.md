@@ -601,9 +601,14 @@ suspension links. In the game it always turns the wheels towards steadier handli
 The small force that slows a rolling tyre, from the rubber flexing and the ground giving way. It
 is proportional to the load on the tyre. Soft ground like mud or sand adds much more.
 
+### Roll stability control
+The part of stability control that brakes a truck and its trailer before the sideways force could
+tip them over. In the game the semis carry it, and so do their semi-trailers, which brake
+themselves off their own sensors.
+
 ### Rollover threshold
 The sideways acceleration at which a vehicle tips over rather than sliding. A tall, narrow
-vehicle tips sooner.
+vehicle tips sooner. See [Weight transfer and rollover](weight-transfer.md).
 
 ### Rotor
 A drone's spinning propeller. The game's drone has four.
@@ -772,7 +777,8 @@ A plane's or boat's tendency to swing its nose into the airflow, like a weather 
 
 ### Weight transfer
 Weight moving from one set of wheels to another as a vehicle speeds up, brakes or corners. Braking
-moves weight to the front; cornering moves it to the outside wheels.
+moves weight to the front; cornering moves it to the outside wheels. See
+[Weight transfer and rollover](weight-transfer.md).
 
 ### Wheel speed
 The speed the wheels would be doing if they rolled perfectly: their spin times their radius. On

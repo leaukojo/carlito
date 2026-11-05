@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 300" width="420" height="300">
+<title>A car seen from behind in a left-hand turn: weight moves onto the outside wheel</title>
+<!-- A schematic, not to scale. In a steady turn the tyres push the car toward the turn centre at
+     ground level; the car's mass, at the centre of mass a height h above the road, resists, so
+     the outside wheel gains load and the inside wheel loses it: transfer = m a h / track. -->
+<style>
+.wt-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.wt-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.wt-line{stroke:var(--fig-ink,#1c1c1f);stroke-width:2;fill:none}
+.wt-thin{stroke:var(--fig-muted,#6b6b75);stroke-width:1.2;fill:none;stroke-dasharray:4 3}
+.wt-body{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-ink,#1c1c1f);stroke-width:2}
+.wt-tyre{fill:var(--fig-ink,#1c1c1f)}
+.wt-ground{stroke:var(--fig-grid,#e3e0d8);stroke-width:6}
+.wt-dot{fill:var(--fig-orange,#c45a12)}
+.wt-blue{stroke:var(--fig-blue,#1d5ca8);stroke-width:5;fill:none}
+.wt-blue-f{fill:var(--fig-blue,#1d5ca8)}
+.wt-or{stroke:var(--fig-orange,#c45a12);stroke-width:3;fill:none}
+.wt-or-f{fill:var(--fig-orange,#c45a12)}
+.wt-blue-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.wt-or-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.wt-t{fill:var(--fig-ink,#e9e7e2)}.wt-s{fill:var(--fig-muted,#a6a6b0)}.wt-line{stroke:var(--fig-ink,#e9e7e2)}
+.wt-thin{stroke:var(--fig-muted,#a6a6b0)}.wt-body{fill:var(--fig-fill,#22242a);stroke:var(--fig-ink,#e9e7e2)}
+.wt-tyre{fill:var(--fig-ink,#e9e7e2)}.wt-ground{stroke:var(--fig-grid,#30323a)}
+.wt-dot{fill:var(--fig-orange,#f0a060)}.wt-blue{stroke:var(--fig-blue,#8ab6ff)}.wt-blue-f{fill:var(--fig-blue,#8ab6ff)}
+.wt-or{stroke:var(--fig-orange,#f0a060)}.wt-or-f{fill:var(--fig-orange,#f0a060)}
+.wt-blue-t{fill:var(--fig-blue,#8ab6ff)}.wt-or-t{fill:var(--fig-orange,#f0a060)}}
+</style>
+<line class="wt-ground" x1="20" y1="214" x2="400" y2="214"/>
+<!-- body, leaning outward (to the right) a little -->
+<g transform="rotate(4 210 120)">
+<rect class="wt-body" x="100" y="70" width="220" height="90" rx="14"/>
+</g>
+<rect class="wt-tyre" x="108" y="150" width="30" height="64" rx="7"/>
+<rect class="wt-tyre" x="282" y="150" width="30" height="64" rx="7"/>
+<!-- centre of mass and its height -->
+<circle class="wt-dot" cx="214" cy="120" r="7"/>
+<text class="wt-or-t" x="202" y="125" text-anchor="end">centre of mass</text>
+<line class="wt-thin" x1="214" y1="128" x2="214" y2="214"/>
+<text class="wt-s" x="220" y="182">h</text>
+<!-- the car's mass wants to carry on straight: outward arrow at the COM -->
+<path class="wt-or" d="M214,120 L300,120"/>
+<path class="wt-or-f" d="M306,120 L294,113 L294,127 Z"/>
+<text class="wt-s" x="258" y="108" text-anchor="middle">keeps going</text>
+<!-- tyre side force inward at the ground -->
+<path class="wt-line" d="M300,228 L136,228"/>
+<path class="wt-tyre" d="M128,228 L140,221 L140,235 Z"/>
+<text class="wt-s" x="210" y="252" text-anchor="middle">the tyres push the car into the turn</text>
+<!-- loads: small on the inside (left), large on the outside (right) -->
+<path class="wt-blue" d="M123,40 L123,58"/>
+<path class="wt-blue-f" d="M123,68 L115,54 L131,54 Z"/>
+<text class="wt-blue-t" x="123" y="30" text-anchor="middle">inside: lighter</text>
+<path class="wt-blue" d="M297,6 L297,58"/>
+<path class="wt-blue-f" d="M297,68 L289,54 L305,54 Z"/>
+<text class="wt-blue-t" x="360" y="30" text-anchor="middle">outside:</text>
+<text class="wt-blue-t" x="360" y="46" text-anchor="middle">heavier</text>
+<text class="wt-t" x="20" y="282">← the turn's centre is this way</text>
+</svg>
