@@ -66,9 +66,8 @@ level you load:
 <!-- WorldConditions: WIND_LIGHT_SPEED 4, WIND_LIGHT_GUST 1.5, WIND_STRONG_SPEED 9, WIND_STRONG_GUST 4, CURRENT_LIGHT_DRIFT 0.5, CURRENT_STRONG_DRIFT 1.5, DIRECTION_STEP_DEG 45 -->
 
 A chosen current is a steady stream for the whole session, not a tide that turns. The STRONG
-wind is hard but still flyable: the drone can still make headway into it, and a plane on a slow
-approach feels its gusts eat into its margin above the stall.
-<!-- WorldConditions: CURRENT_PERIOD_S 0, "A player-picked current is one steady push for the session"; STRONG wind comment on the drone and the plane's stall_speed -->
+wind is hard but still flyable: the drone can still make headway into it.
+<!-- WorldConditions: CURRENT_PERIOD_S 0, "A player-picked current is one steady push for the session"; STRONG wind comment on the drone; its plane remark is open_questions.md 8 -->
 
 ## Day and night
 

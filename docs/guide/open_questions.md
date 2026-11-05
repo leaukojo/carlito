@@ -79,3 +79,19 @@ says meanwhile. Newest last.
   `WindField`; `Level.wind` defaults to null elsewhere."
 - **Guide meanwhile:** the floating page says Level 6 and Open Sea both have wind of their own, as
   the level scenes do.
+
+## 8. Does the wind change the plane's stall?
+
+- **Code:** `src/vehicles/plane/plane.gd` (`_tick_extras`) works out the lift, the angle of attack
+  and the sideslip from `linear_velocity`, the speed over the ground, and uses the wind only for
+  drag: "Lift and the flow angles stay on absolute velocity: wind is here to be flown against,
+  not to change the stall speed."
+- **Code comment elsewhere:** `src/levels/base/world_conditions.gd`, at `WIND_STRONG_SPEED`, says
+  "The plane's 13 m/s `stall_speed` (`plane.gd`) means a strong tailwind gust bites into margin
+  on a slow final — the intended bite, not a bug." With lift read over the ground, a tailwind gust
+  changes the lift only through the drag it removes, not through airspeed.
+- **Also:** a real wing's lift follows airspeed, so a headwind shortens a take-off run; the
+  game's does not. This may be intended (the plane.gd comment says so) but is worth confirming.
+- **Guide meanwhile:** the plane page says lift reads the speed over the ground, as the code
+  does, and lists it under what the game leaves out; the conditions page does not repeat the
+  tailwind remark.

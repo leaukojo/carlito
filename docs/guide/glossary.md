@@ -227,6 +227,11 @@ between the vehicle and the ground passes through the contact patches.
 The single list of every signal Carlito and sloppyCAN exchange: each signal's name, direction,
 unit and range. Both programs read it, so they always agree on what a message means.
 
+### Control surface
+A hinged panel that steers an aircraft by deflecting the air: the elevator (pitch), the ailerons
+(roll) and the rudder (yaw). In the game they work only with air flowing over them, fully from
+15 m/s.
+
 ### Coolant
 The liquid that carries heat away from an engine. The game publishes its temperature as
 `coolant`, in degrees Celsius, from a simple labelled model: cold when the engine is off, about
@@ -512,6 +517,7 @@ per second squared; 9.8 of them is one g, the pull of gravity.
 
 ### Lift
 The upward force a wing makes as air flows over it. It grows with the square of the airspeed.
+A sail makes it too, sideways. See [Plane flight](plane-flight.md).
 
 ### Limited-slip differential
 A differential that lets the two wheels turn at different speeds, but sends more turning force to

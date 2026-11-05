@@ -32,7 +32,7 @@ the two semi tractor units.
 | Floating and boats | [floating.md](floating.md) | buoyancy, propeller thrust, rudder, trim, windage, sailing, autopilot |
 | Wind, current and conditions | [conditions.md](conditions.md) | wind field, tide, CONDITIONS presets, day and night |
 | Drone flight | [drone-flight.md](drone-flight.md) | rotors, mixer, arming, flight modes, failsafes, battery pack, sensors, bus nodes |
-| Plane flight *(planned)* | plane-flight.md | lift, stall, drag, thrust, flaps, control surfaces |
+| Plane flight | [plane-flight.md](plane-flight.md) | lift, stall, drag, thrust, flaps, control surfaces |
 | Trains *(planned)* | rail.md | tractive effort, running resistance, couplers, brake pipe, reverser, pantograph |
 | Fuel, coolant, battery and air *(planned)* | aux.md | the simple labelled models |
 | Position, heading and distance *(planned)* | position.md | GPS, heading, odometer, hour meter, acceleration and impact |
