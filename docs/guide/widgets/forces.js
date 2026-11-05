@@ -8,7 +8,7 @@
 //   grip curve     GroundDriveSpec.grip_curve: peak 1 at 0.12 slip, 0.8 when locked or spinning
 // Each view has one linear scale (newtons per pixel) with its own bar.
 // Body frame: x forward, y up (side view) or y to the left (top view). Both views face right, so
-// the side view shows the right-hand side; the left wheels are behind, drawn faint.
+// the side view shows the right-hand side; the left wheels' arrows are drawn faint, offset.
 (function () {
   'use strict';
   var NS = 'http://www.w3.org/2000/svg';
@@ -265,7 +265,7 @@
   };
 
   // ---- models -------------------------------------------------------------------------------
-  // Each returns { arrows: [{ id, view: 'top'|'side', x, y, fx, fy, where, far }], curls, totals,
+  // Each returns { arrows: [{ id, view: 'top'|'side', x, y, fx, fy, where, far }], curls,
   // net: { x, y }, mass, notes, sideRot }. Positions in metres, forces in newtons, body frame.
 
   // Best-gear wheel force at speed v: torque_curve x gear x final_drive x efficiency / radius
@@ -337,12 +337,15 @@
     function solveWheels(ax) {
       // Moments about the front contact patch: weight, the slope pull and the inertia act at the
       // COM height, the drag at the aero centre's.
-      var Nr = (a * Wn + h * (-Wx + m * ax) - V.aeroH * drag) / L;
-      Nr = clamp(Nr, 0, Wn);
+      var NrRaw = (a * Wn + h * (-Wx + m * ax) - V.aeroH * drag) / L;
+      var Nr = clamp(NrRaw, 0, Wn);
+      var axleLift = NrRaw > Wn ? 'front' : NrRaw < 0 ? 'rear' : null;  // a whole axle unloaded in pitch
       var axleN = { front: Wn - Nr, rear: Nr };
       var out = [], sumX = 0, sumY = 0, lifted = false, slide = { front: false, rear: false };
+      var slideBrake = false, slideDrive = false;
       var reach = { front: 0, rear: 0 }, latSum = { front: 0, rear: 0 };
-      V.wheels.forEach(function (w) {
+      // Each wheel's load first: the standstill hold below shares the brakes by grip.
+      var loads = V.wheels.map(function (w) {
         var key = w.front ? 'front' : 'rear';
         var track = Math.abs(w.y) * 2;
         var Fy = latActual[key];
@@ -350,10 +353,47 @@
         var other = axleN[key] / 2 + sgn(w.y) * Fy * h / track;
         if (N < 0) { N = 0; lifted = true; }
         if (other < 0) N = axleN[key];
+        return N;
+      });
+      // Moving, the brakes share their full strength by capacity. Still, a wheel holds up to the
+      // lesser of its brake capacity and its grip, and what a wheel cannot take goes to the wheels
+      // with spare capacity; only when every wheel is at its limit does the vehicle move.
+      var brakeF = [], brakeSat = [];
+      if (moving) {
+        V.wheels.forEach(function (w) { brakeF.push(capTotal > 0 ? brakeTotal * (s.brake * w.brakeT / w.r) / capTotal : 0); });
+      } else {
+        var got = [], want = Math.abs(brakeTotal);
+        var capW = V.wheels.map(function (w) { return s.brake * w.brakeT / w.r; });
+        var room = function (i) { return Math.min(capW[i], V.muLong * loads[i]) - got[i]; };
+        V.wheels.forEach(function () { got.push(0); });
+        for (var pass = 0; pass < 4 && want > 1e-6; pass++) {
+          var open = 0, taken = 0;
+          capW.forEach(function (c, i) { if (room(i) > 1e-6) open += c; });
+          if (!(open > 0)) break;
+          var ask = want;
+          capW.forEach(function (c, i) {
+            if (room(i) <= 1e-6) return;
+            var add = Math.min(ask * c / open, room(i));
+            got[i] += add;
+            taken += add;
+          });
+          want -= taken;
+        }
+        got.forEach(function (g, i) {
+          brakeF.push(sgn(brakeTotal) * g);
+          brakeSat.push(want > 1 && capW[i] > 0 && room(i) <= 1e-6);
+        });
+      }
+      V.wheels.forEach(function (w, wi) {
+        var key = w.front ? 'front' : 'rear';
+        var N = loads[wi];
         var share = axleN[key] > 0 ? N / axleN[key] : 0;
-        var fDrive = w.driven ? drive / nDriven : 0;
-        var fBrake = capTotal > 0 ? brakeTotal * (s.brake * w.brakeT / w.r) / capTotal : 0;
-        var fLat = axleSide[key] * share;
+        // A wheel in the air makes no force at all; its share of the drive is lost, as with an open
+        // differential on a lifted wheel.
+        var grounded = N > 0;
+        var fDrive = w.driven && grounded ? drive / nDriven : 0;
+        var fBrake = grounded ? brakeF[wi] : 0;
+        var fLat = grounded ? axleSide[key] * share : 0;
         var fRoll = moving ? -V.crr * N : 0;  // RayWheel.surface_drag_force on asphalt
         var muL = V.muLong * N, muY = V.muLat * (w.front ? 1 : V.rearLatGrip) * N;
         var fx = fDrive + fBrake;
@@ -361,13 +401,19 @@
         var rch = Math.hypot(muL > 0 ? fx / muL : (fx ? 9 : 0), muY > 0 ? fLat / muY : (fLat ? 9 : 0));
         reach[key] = Math.max(reach[key], rch);
         var k = 1, sliding = false;
-        if (rch > 1) {
+        if (rch > 1 + 1e-6) {
           sliding = true;
           slide[key] = true;
+          if (Math.abs(fBrake) > Math.abs(fDrive)) slideBrake = true; else slideDrive = true;
           var longDominant = Math.abs(fx) / Math.max(muL, 1e-9) >= Math.abs(fLat) / Math.max(muY, 1e-9);
           var aid = Math.abs(fBrake) > Math.abs(fDrive) ? V.abs : V.tcs;
           // Past the grip peak the curve falls to 0.8; ABS or TCS hold the wheel at the peak.
           k = (longDominant && !aid ? 0.8 : 1) / rch;
+        } else if (brakeSat[wi]) {
+          // Still, and every wheel at its limit: the brakes cannot hold the vehicle.
+          sliding = true;
+          slide[key] = true;
+          slideBrake = true;
         }
         out.push({ w: w, N: N, drive: fDrive * k, brake: fBrake * k, lat: fLat * k, roll: fRoll,
           angle: wheelAngle(w), sliding: sliding });
@@ -377,7 +423,8 @@
       });
       accel = (sumX + drag + Wx) / m;
       latActual = latSum;
-      return { wheels: out, sumX: sumX, sumY: sumY, lifted: lifted, slide: slide, reach: reach };
+      return { wheels: out, sumX: sumX, sumY: sumY, lifted: lifted, axleLift: axleLift, slide: slide, reach: reach,
+        slideBrake: slideBrake, slideDrive: slideDrive };
     }
 
     var arrows = [];
@@ -402,7 +449,9 @@
     arrows.push({ id: 'net', view: 'side', x: xc, y: h, fx: netX, fy: 0, where: 'the centre of mass' });
     arrows.push({ id: 'net', view: 'top', x: xc, y: 0, fx: netX, fy: netY, where: 'the centre of mass' });
 
-    if (res.lifted) notes.push('A wheel has lifted off the ground: the vehicle is close to rolling over.');
+    if (res.axleLift) notes.push('The ' + res.axleLift + ' wheels have lifted off the ground: the vehicle is close to tipping over ' +
+      (res.axleLift === 'front' ? 'backwards' : 'forwards') + '.');
+    else if (res.lifted) notes.push('A wheel has lifted off the ground: the vehicle is close to rolling over.');
     var turning = Math.abs(ay) > 0.1;
     if (turning && (res.slide.front || res.slide.rear)) {
       notes.push(res.reach.front >= res.reach.rear
@@ -410,14 +459,16 @@
         : 'The rear tyres reach their grip first: the back steps out (oversteer).');
     }
     if ((res.slide.front || res.slide.rear) && !turning) {
-      var braking = s.brake > 0 && moving;
-      notes.push(braking ? (V.abs ? 'A tyre is at its grip limit: ABS holds it at the peak of the grip curve.'
-        : 'A tyre is past its grip limit: with no ABS it locks, and grip falls to 0.8 of the peak.')
+      // Brake or drive, by what the wheels that slid were asked for.
+      var braking = res.slideBrake;
+      notes.push(braking && !moving ? 'A braked tyre is past its grip: the brakes cannot hold the vehicle here.'
+        : braking ? (V.abs ? 'A tyre is at its grip limit: ABS holds it at the peak of the grip curve.'
+          : 'A tyre is past its grip limit: with no ABS it locks, and grip falls to 0.8 of the peak.')
         : (V.tcs ? 'A driven tyre is at its grip limit: traction control holds it at the peak.'
           : 'A driven tyre is past its grip limit: it spins, and grip falls to 0.8 of the peak.'));
     }
-    var held = Math.abs(netY) / m;  // the sideways acceleration the tyres (and wind) give
-    var turn = isFinite(R) && moving ? { radius: R, ay: Math.abs(ay), held: held, heldRadius: held > 1e-6 ? v * v / held : Infinity, pull: Math.abs(netY) } : null;
+    var held = Math.abs(res.sumY) / m;  // the sideways acceleration the tyres alone give
+    var turn = isFinite(R) && moving ? { radius: R, ay: Math.abs(ay), held: held, heldRadius: held > 1e-6 ? v * v / held : Infinity, pull: Math.abs(res.sumY) } : null;
     return { arrows: arrows, curls: [], net: { x: netX, y: netY }, mass: m, notes: notes, sideRot: th, turn: turn,
       steerAngles: res.wheels.map(function (r) { return r.angle; }) };
   }
@@ -510,7 +561,7 @@
     if (v < V.stall && v > 1) notes.push('Below the stall speed the wing gives no lift at all.');
     if (!onGround) notes.push('Lift is more than the weight: the plane leaves the ground.');
     else if (lift > 0) notes.push('The wing already carries ' + Math.round(lift / W * 100) + ' % of the weight; the wheels carry the rest.');
-    return { arrows: arrows, curls: [], net: { x: netX, y: netUp }, mass: m, notes: notes, sideRot: 0, airborne: !onGround, vertical: true };
+    return { arrows: arrows, curls: [], net: { x: netX, y: netUp }, mass: m, notes: notes, sideRot: 0, airborne: !onGround };
   }
 
   function modelDrone(V, s) {
@@ -552,7 +603,7 @@
     arrows.push({ id: 'net', view: 'side', x: 0, y: 0, fx: nb.x, fy: nb.y, where: 'the drone' });
     arrows.push({ id: 'net', view: 'top', x: 0, y: 0, fx: netX, fy: netY, where: 'the drone' });
     if (Math.abs(netUp) > 0.5) notes.push(netUp > 0 ? 'More thrust than weight: the drone climbs.' : 'Less thrust than weight: the drone sinks.');
-    return { arrows: arrows, curls: [], net: { x: netX, y: netUp }, mass: m, notes: notes, sideRot: tilt, tilt: tilt, vertical: true, hookLoad: s.load };
+    return { arrows: arrows, curls: [], net: { x: netX, y: netUp }, mass: m, notes: notes, sideRot: tilt, tilt: tilt, hookLoad: s.load };
   }
 
   function modelTrain(V, s) {
@@ -742,7 +793,7 @@
     function makeView(title) {
       var fig = addEl('div', 'fx-view', views);
       addEl('p', 'fx-view-title', fig, title);
-      return el('svg', { viewBox: '0 0 ' + VIEW_W + ' ' + VIEW_H, role: 'img', 'aria-label': title }, fig);
+      return el('svg', { viewBox: '0 0 ' + VIEW_W + ' ' + VIEW_H, role: 'group', 'aria-label': title }, fig);
     }
     var topSvg = makeView('From above');
     var sideSvg = makeView('From the side');
@@ -983,7 +1034,6 @@
 
       // the vehicle
       shp.forEach(function (p) {
-        var g;
         if (p.poly) {
           var pp = p.poly.map(function (q) { return p.world ? Pw(q) : P(q[0], q[1]); });
           el('polygon', { points: pp.map(function (q) { return q[0].toFixed(1) + ',' + q[1].toFixed(1); }).join(' '), class: 'fx-' + (p.cls || 'body') }, svg);
@@ -992,7 +1042,7 @@
           el('circle', { cx: c[0], cy: c[1], r: p.r * km, class: p.cls === 'rotor' ? 'fx-rotor' : 'fx-wheel' }, svg);
         } else if (p.wheel) {
           var wc = P(p.x, p.y);
-          g = el('rect', { x: wc[0] - p.len / 2 * km, y: wc[1] - p.wid / 2 * km, width: p.len * km, height: p.wid * km, rx: 2, class: 'fx-wheel',
+          el('rect', { x: wc[0] - p.len / 2 * km, y: wc[1] - p.wid / 2 * km, width: p.len * km, height: p.wid * km, rx: 2, class: 'fx-wheel',
             transform: 'rotate(' + (-p.angle * 180 / Math.PI).toFixed(2) + ' ' + wc[0].toFixed(1) + ' ' + wc[1].toFixed(1) + ')' }, svg);
         } else if (p.line) {
           var l0 = p.world ? Pw(p.line[0]) : P(p.line[0][0], p.line[0][1]);
