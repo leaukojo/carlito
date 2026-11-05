@@ -1,6 +1,6 @@
 {
   "about": "The guide's sidebar. groups: the sidebar headings in order. pages: one entry per page, file (a .md beside this file), title (the sidebar label) and group (one of groups; a group not listed there goes after the listed ones). A new page is one appended entry; pages show in the order of their group, then in the order they appear here. \"hidden\": true keeps a page reachable by link but out of the sidebar and the previous/next buttons.",
-  "groups": ["Start", "Wheels and steering", "Engine and driveline", "Brakes and control", "Towing and farm work", "Water, air and rail", "Reference", "For guide writers"],
+  "groups": ["Start", "Wheels and steering", "Engine and driveline", "Brakes and control", "Towing and farm work", "Water, air and rail", "Instruments and controls", "Reference", "For guide writers"],
   "pages": [
     { "file": "index.md", "title": "About this guide", "group": "Start" },
     { "file": "tyres.md", "title": "Tyres and slip", "group": "Wheels and steering" },
@@ -23,6 +23,7 @@
     { "file": "drone-flight.md", "title": "Drone flight", "group": "Water, air and rail" },
     { "file": "plane-flight.md", "title": "Plane flight", "group": "Water, air and rail" },
     { "file": "rail.md", "title": "Trains", "group": "Water, air and rail" },
+    { "file": "aux.md", "title": "Fuel, coolant, battery and air", "group": "Instruments and controls" },
     { "file": "glossary.md", "title": "Glossary", "group": "Reference" },
     { "file": "template.md", "title": "The page template", "group": "For guide writers" },
     { "file": "inventory.md", "title": "Inventory of systems", "group": "For guide writers" },

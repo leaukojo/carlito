@@ -95,3 +95,13 @@ says meanwhile. Newest last.
 - **Guide meanwhile:** the plane page says lift reads the speed over the ground, as the code
   does, and lists it under what the game leaves out; the conditions page does not repeat the
   tailwind remark.
+
+## 9. Should an empty tank stop the engine?
+
+- **Code:** `BaseVehicle` drains `telemetry.fuel` (`VehicleTelemetry.fuel_drain`, `fuel_step`) but
+  nothing reads it back: at 0 % the drivetrain still runs and burns, and the `fuel_rate` signal
+  still reads the burn. The tank itself is a labelled game-scale COMPROMISE
+  (`VehicleTelemetry.FUEL_TANK_FULL_LOAD_S`, about eight minutes at full load).
+- **Docs:** no doc says what an empty tank does.
+- **Guide meanwhile:** the aux page says an empty tank does not stop the engine, as the code
+  does, and lists it under what the game leaves out.
