@@ -358,6 +358,11 @@ how many times the engine turns for each turn of the wheels.
 Hinged panels on a wing that come down to make more lift at low speed, at the cost of more drag.
 The plane's `flaps` signal asks for them; `flaps_actual` reports where they are.
 
+### Flight mode
+How much a drone's flight controller does for the pilot: from STABILIZE (it only keeps level) to
+LOITER (it holds height and position) and the automatic RTL and LAND. See
+[Drone flight](drone-flight.md).
+
 ### Friction ellipse
 The limit on a tyre's total force, drawn as an oval: along the road on one axis, sideways on the
 other. A tyre can use all its grip for braking, or all for turning, or a mix, but the mix never
