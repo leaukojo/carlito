@@ -36,7 +36,7 @@ the two semi tractor units.
 | Trains | [rail.md](rail.md) | tractive effort, running resistance, couplers, brake pipe, reverser, pantograph |
 | Fuel, coolant, battery and air | [aux.md](aux.md) | the simple labelled models |
 | Position, heading and distance | [position.md](position.md) | GPS, heading, odometer, hour meter, acceleration and impact |
-| Controls and who drives *(planned)* | controls.md | keyboard easing, ignition, bridge or local input, lamps and horn |
+| Controls and who drives | [controls.md](controls.md) | keyboard easing, ignition, bridge or local input, lamps and horn |
 | Forces *(planned, phase 3)* | forces.md | every force on a body, together |
 | Vehicle pages *(planned)* | car.md, truck.md, tractor.md, boat.md, plane.md, drone.md, train.md | which systems each family has |
 | What the game simplifies *(planned)* | simplifications.md | compromises and things not modelled |

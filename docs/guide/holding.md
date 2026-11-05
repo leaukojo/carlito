@@ -94,10 +94,10 @@ against each other. So a car parked in P with one driven wheel on ice can slide 
 car in P holds only its front wheels.
 <!-- docs/vehicles.md P (park): "a car in P with one driven wheel on ice slides away" -->
 
-The keyboard never selects P. A vehicle goes into P when sloppyCAN sends the P gear byte. A
-vehicle that only sloppyCAN may drive also goes into P, with its key at Lock and its handbrake on,
-whenever sloppyCAN is not connected or stops sending, so a lost connection parks it rather than
-letting it roll.
+The keyboard never selects P. A vehicle goes into P when sloppyCAN sends the P gear byte. In a
+challenge, where only sloppyCAN may drive, the vehicle also goes into P, with its key at Lock and
+its handbrake on, whenever sloppyCAN is not connected or stops sending, so a lost connection
+parks it rather than letting it roll.
 <!-- InputRouter.locked_idle: key Lock, P, handbrake on: "a lost connection parks it rather than coasting" -->
 
 ### The handbrake and spring brakes

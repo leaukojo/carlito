@@ -25,6 +25,7 @@
     { "file": "rail.md", "title": "Trains", "group": "Water, air and rail" },
     { "file": "aux.md", "title": "Fuel, coolant, battery and air", "group": "Instruments and controls" },
     { "file": "position.md", "title": "Position, heading and distance", "group": "Instruments and controls" },
+    { "file": "controls.md", "title": "Controls and who drives", "group": "Instruments and controls" },
     { "file": "glossary.md", "title": "Glossary", "group": "Reference" },
     { "file": "template.md", "title": "The page template", "group": "For guide writers" },
     { "file": "inventory.md", "title": "Inventory of systems", "group": "For guide writers" },
