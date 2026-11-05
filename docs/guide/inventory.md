@@ -19,7 +19,7 @@ the two semi tractor units.
 | Ground and tyre types | [surfaces.md](surfaces.md) | surfaces, tyre classes, rolling resistance on soft ground |
 | Suspension | [suspension.md](suspension.md) | springs, dampers, anti-roll bars, anti-dive and anti-squat, the tractor's swinging front axle |
 | Weight transfer and rollover | [weight-transfer.md](weight-transfer.md) | load moving between wheels, understeer and oversteer, rollover thresholds |
-| The engine *(planned)* | engine.md | torque curve, rpm, idle, limiter, governor, pedal map, engine braking, fuel burn |
+| The engine | [engine.md](engine.md) | torque curve, rpm, idle, limiter, governor, pedal map, engine braking, fuel burn |
 | Clutch and torque converter *(planned)* | coupling.md | friction clutch, converter, creep, lock-up, launch |
 | Gearbox and shifting *(planned)* | gearbox.md | gear byte, automatic and manual, the shift policy, kickdown, AMT, powershift, CVT, park |
 | Differentials and four-wheel drive *(planned)* | differentials.md | open, limited-slip and Torsen diffs, diff lock, MFWD, centre diffs |

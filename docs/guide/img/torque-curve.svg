@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 290" width="420" height="290">
+<title>The sedan engine's torque and power against engine speed</title>
+<!-- sedan_spec.tres torque_curve (900,98) (2000,154) (3200,184) (4800,185) (6000,185) (6600,170) (6800,61) N·m,
+     linear between points; idle_rpm 900, redline_rpm 6800 (VehicleSpec defaults). Power = torque x rpm x 2pi/60.
+     Torque axis 0-200 N·m on the left, power 0-125 kW on the right. -->
+<style>
+.tq-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.tq-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.tq-axis{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:none}
+.tq-grid{stroke:var(--fig-grid,#e3e0d8);stroke-width:1;fill:none}
+.tq-zone{fill:var(--fig-fill,#f3f1ec)}
+.tq-blue{stroke:var(--fig-blue,#1d5ca8);stroke-width:3.5;fill:none;stroke-linejoin:round}
+.tq-orange{stroke:var(--fig-orange,#c45a12);stroke-width:2.5;fill:none;stroke-dasharray:6 4;stroke-linejoin:round}
+.tq-blue-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.tq-orange-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.tq-t{fill:var(--fig-ink,#e9e7e2)}.tq-s{fill:var(--fig-muted,#a6a6b0)}.tq-axis{stroke:var(--fig-ink,#e9e7e2)}
+.tq-grid{stroke:var(--fig-grid,#30323a)}.tq-zone{fill:var(--fig-fill,#22242a)}.tq-blue{stroke:var(--fig-blue,#8ab6ff)}
+.tq-orange{stroke:var(--fig-orange,#f0a060)}.tq-blue-t{fill:var(--fig-blue,#8ab6ff)}.tq-orange-t{fill:var(--fig-orange,#f0a060)}}
+</style>
+<rect class="tq-zone" x="56" y="40" width="42.2" height="186"/>
+<line class="tq-grid" x1="56" y1="133.0" x2="384" y2="133.0"/>
+<text class="tq-s" x="50" y="137.0" text-anchor="end">100</text>
+<line class="tq-grid" x1="56" y1="40.0" x2="384" y2="40.0"/>
+<text class="tq-s" x="50" y="44.0" text-anchor="end">200</text>
+<text class="tq-s" x="50" y="230" text-anchor="end">0</text>
+<text class="tq-s" x="390" y="155.6">50</text>
+<text class="tq-s" x="390" y="81.2">100</text>
+<text class="tq-s" x="102.9" y="244" text-anchor="middle">1000</text>
+<text class="tq-s" x="196.6" y="244" text-anchor="middle">3000</text>
+<text class="tq-s" x="290.3" y="244" text-anchor="middle">5000</text>
+<text class="tq-s" x="384.0" y="244" text-anchor="middle">7000</text>
+<path class="tq-axis" d="M56,34 L56,226 L384,226 L384,34"/>
+<polyline class="tq-blue" points="98.2,134.9 149.7,82.8 205.9,54.9 280.9,53.9 337.1,53.9 365.3,67.9 374.6,169.3"/>
+<polyline class="tq-orange" points="98.2,212.3 100.5,211.1 102.9,209.9 105.2,208.7 107.5,207.5 109.9,206.2 112.2,204.8 114.6,203.4 116.9,202.0 119.3,200.6 121.6,199.1 123.9,197.5 126.3,196.0 128.6,194.3 131.0,192.7 133.3,191.0 135.7,189.3 138.0,187.5 140.3,185.7 142.7,183.8 145.0,181.9 147.4,180.0 149.7,178.0 152.1,176.4 154.4,174.8 156.7,173.2 159.1,171.5 161.4,169.8 163.8,168.1 166.1,166.4 168.5,164.7 170.8,162.9 173.1,161.1 175.5,159.3 177.8,157.5 180.2,155.7 182.5,153.8 184.9,152.0 187.2,150.1 189.5,148.2 191.9,146.2 194.2,144.3 196.6,142.3 198.9,140.3 201.3,138.3 203.6,136.3 205.9,134.3 208.3,132.8 210.6,131.4 213.0,129.9 215.3,128.5 217.7,127.0 220.0,125.5 222.3,124.1 224.7,122.6 227.0,121.2 229.4,119.7 231.7,118.3 234.1,116.8 236.4,115.4 238.7,113.9 241.1,112.5 243.4,111.0 245.8,109.5 248.1,108.1 250.5,106.6 252.8,105.2 255.1,103.7 257.5,102.3 259.8,100.8 262.2,99.3 264.5,97.9 266.9,96.4 269.2,94.9 271.5,93.5 273.9,92.0 276.2,90.6 278.6,89.1 280.9,87.6 283.3,86.2 285.6,84.7 287.9,83.3 290.3,81.9 292.6,80.4 295.0,79.0 297.3,77.5 299.7,76.1 302.0,74.7 304.3,73.2 306.7,71.8 309.0,70.3 311.4,68.9 313.7,67.5 316.1,66.0 318.4,64.6 320.7,63.1 323.1,61.7 325.4,60.2 327.8,58.8 330.1,57.4 332.5,55.9 334.8,54.5 337.1,53.0 339.5,52.8 341.8,52.5 344.2,52.3 346.5,52.1 348.9,51.9 351.2,51.8 353.5,51.6 355.9,51.5 358.2,51.4 360.6,51.3 362.9,51.2 365.3,51.2 367.6,78.1 369.9,105.4 372.3,133.2 374.6,161.4"/>
+<line class="tq-grid" x1="374.6" y1="40" x2="374.6" y2="226" style="stroke-dasharray:3 3"/>
+<text class="tq-s" x="102.2" y="218">idle</text>
+<text class="tq-s" x="370.6" y="218" text-anchor="end">redline</text>
+<text class="tq-blue-t" x="177.8" y="44.9" text-anchor="middle">torque, N·m</text>
+<text class="tq-orange-t" x="299.7" y="127.0" text-anchor="middle">power, kW</text>
+<text class="tq-t" x="220.0" y="266" text-anchor="middle">engine speed, rpm</text>
+</svg>

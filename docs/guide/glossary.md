@@ -311,8 +311,8 @@ The slowing force of the engine when the driver lifts off the accelerator in gea
 own friction turns against the wheels.
 
 ### Engine load
-How hard the engine is working, as a percentage of what it could give at that speed. The truck and
-tractor publish it as `engine_load`.
+How hard the engine is working: the torque it is giving, as a percentage of the most it can give
+at any speed. The truck and tractor publish it as `engine_load`.
 
 ### ESC
 Two meanings. On cars and trucks: electronic [stability control](#stability-control). On the
@@ -395,6 +395,10 @@ as `ground_speed`, beside the wheel-based [wheel speed](#wheel-speed).
 ### Handbrake
 The parking brake, worked by a lever. In the game it brakes only the rear wheels, hard enough to
 lock them, which is what lets a car slide its rear round in a handbrake turn.
+
+### Hand throttle
+A lever that sets an engine speed and stays where it is put, so the driver's foot is free. The
+tractor has one (keys **-** and **=**, or sloppyCAN's `hand_throttle`). See [The engine](engine.md).
 
 ### Heading
 The compass direction the vehicle's nose points: 0 is north, 90 east, 180 south, 270 west
@@ -726,7 +730,7 @@ other half, so the car can sit still in gear with the engine running. At low spe
 multiplies the engine's torque.
 
 ### Torque curve
-A graph of how much torque an engine makes at each engine speed.
+A graph of how much torque an engine makes at each engine speed. See [The engine](engine.md).
 
 ### Torsen
 A kind of [limited-slip differential](#limited-slip-differential) using special gears. It can send
