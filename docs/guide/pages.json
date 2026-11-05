@@ -34,6 +34,7 @@
     { "file": "drone.md", "title": "The drones", "group": "The vehicles" },
     { "file": "train.md", "title": "The train", "group": "The vehicles" },
     { "file": "glossary.md", "title": "Glossary", "group": "Reference" },
+    { "file": "simplifications.md", "title": "What the game keeps simple", "group": "Reference" },
     { "file": "template.md", "title": "The page template", "group": "For guide writers" },
     { "file": "inventory.md", "title": "Inventory of systems", "group": "For guide writers" },
     { "file": "open_questions.md", "title": "Open questions", "group": "For guide writers" }

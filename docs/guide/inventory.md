@@ -39,7 +39,7 @@ the two semi tractor units.
 | Controls and who drives | [controls.md](controls.md) | keyboard easing, ignition, bridge or local input, lamps and horn |
 | Forces *(planned, phase 3)* | forces.md | every force on a body, together |
 | Vehicle pages | [car.md](car.md), [truck.md](truck.md), [tractor.md](tractor.md), [boat.md](boat.md), [plane.md](plane.md), [drone.md](drone.md), [train.md](train.md) | which systems each family has |
-| What the game simplifies *(planned)* | simplifications.md | compromises and things not modelled |
+| What the game keeps simple | [simplifications.md](simplifications.md) | compromises and things not modelled |
 
 ## Wheels and tyres
 
