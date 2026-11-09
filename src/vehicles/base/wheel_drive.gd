@@ -491,7 +491,7 @@ func esc_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 
 
 ## What the axles the body drives put down (N): each wheel's peak longitudinal force at its load
-## this tick, as its tyre solve scales it (`RayWheel.load_scaled_mu` on the surface's grip). Read at
+## this tick, as its tyre solve scales it (`RayWheel.long_budget`). Read at
 ## rest, that is the static share with the coupled load on it: the gearbox's grip (`hold_step`). The
 ## front counts when the spec or the MFWD switch drives it, never the brake's engagement of it.
 func static_drive_grip(gd: GroundDriveSpec, fwd_drive: bool) -> float:
@@ -500,8 +500,7 @@ func static_drive_grip(gd: GroundDriveSpec, fwd_drive: bool) -> float:
 		var driven := gd.driven_rear if w.is_rear else (gd.driven_front or fwd_drive)
 		if not w.in_contact or not driven:
 			continue
-		grip += w.suspension_force * RayWheel.load_scaled_mu(gd.mu_long * w.surface_grip,
-				w.suspension_force, w.reference_load, gd.load_sensitivity)
+		grip += w.long_budget(gd)
 	return grip
 
 

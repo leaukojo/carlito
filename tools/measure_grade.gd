@@ -496,7 +496,7 @@ func _end_trial(climbed: bool) -> void:
 			drag += w.surface_drag * w.suspension_force
 		print("      wheels: sum f_long %8.0f N, suspension %8.0f N, surface drag %8.0f N,"
 				% [f_long, susp, drag]
-				+ " weight-along-slope %8.0f N" % (_car.mass * 9.81 * sin(deg_to_rad(_angle))))
+				+ " weight-along-slope %8.0f N" % (_car.mass * BrakeSizing.G * sin(deg_to_rad(_angle))))
 		print("    %5.2f deg: %-7s gain %6.2f m, speed %5.2f m/s, rear slip %.2f, gear %d"
 				% [_angle, "CLIMB" if climbed else "fail", _gain, _car.telemetry.speed,
 				_car.telemetry.slip_rear, _car.telemetry.gear_byte])
@@ -602,7 +602,7 @@ func _driven_share() -> float:
 	for w in _car.drive.wheels:
 		if w.driven:
 			driven_load += w.suspension_force
-	return driven_load / ((_car.mass + MeasureRig.towed_mass(_car)) * 9.81
+	return driven_load / ((_car.mass + MeasureRig.towed_mass(_car)) * BrakeSizing.G
 			* cos(deg_to_rad(_angle)))
 
 
@@ -622,7 +622,7 @@ func _torque_limit_deg(spec: VehicleSpec, gd: GroundDriveSpec, crr: float, mass:
 	if spec.gear_ratios.is_empty() and not Drivetrain.is_cvt(spec):
 		return NAN
 	var force := Drivetrain.stall_axle_torque(spec) / gd.drive_radius()
-	var ratio := force / (mass * 9.81)
+	var ratio := force / (mass * BrakeSizing.G)
 	if ratio <= crr:
 		return 0.0
 	# sin a + crr cos a = ratio  ->  sin(a + atan(crr)) = ratio / sqrt(1 + crr^2)
@@ -1065,7 +1065,7 @@ func _print_roll_forces(gain: float) -> void:
 		for w: RayWheel in trailer.wheels:
 			if w.in_contact:
 				t_fx += w.force_long
-		var g_pull := trailer.mass * 9.81 * sin(deg_to_rad(_angle))
+		var g_pull := trailer.mass * BrakeSizing.G * sin(deg_to_rad(_angle))
 		line += "  | trailer Fx %6.0f N brake %.2f  drawbar %6.0f N (grade %6.0f)" % [t_fx,
 				trailer.brake_applied(), trailer.mass * trailer.accel_fwd + g_pull - t_fx, g_pull]
 	print(line)

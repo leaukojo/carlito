@@ -474,15 +474,13 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	var v_lat := vel.dot(side)
 
 	# Load-scaled BEFORE the tyre force below: its friction ellipse is drawn on this tick's budget.
-	var mu_long := load_scaled_mu(drive_spec.mu_long * surface_grip,
-			suspension_force, reference_load, drive_spec.load_sensitivity)
-	var mu_lat := load_scaled_mu(drive_spec.mu_lat * axle_lat_grip * surface_grip,
-			suspension_force * tyre_share, reference_load, drive_spec.load_sensitivity)
+	var budget_long := long_budget(drive_spec)
+	var budget_lat := lat_budget(drive_spec)
 
 	# Both slips on one denominator, so the slip vector points along the patch's slide; its floor
 	# keeps the curve's rise inside the one-tick cap below (`slip_floor_for`).
 	var long_mass := minf(corner_mass, long_cap_mass)
-	_own_slip_floor = slip_floor_for(mu_long * suspension_force, long_mass,
+	_own_slip_floor = slip_floor_for(budget_long, long_mass,
 			drive_spec.grip_curve, delta)
 	var floor_vel := maxf(slip_floor, _own_slip_floor)
 	var slip_denom := maxf(absf(v_long), floor_vel)
@@ -495,7 +493,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	var lat_peak := lateral_peak_slip(suspension_force * tyre_share, reference_load,
 			drive_spec.load_sensitivity, drive_spec.cornering_peak_load)
 	var tyre := combined_slip_force(slip_ratio, -v_lat / slip_denom,
-			mu_long * suspension_force, mu_lat * suspension_force, drive_spec.grip_curve, lat_peak)
+			budget_long, budget_lat, drive_spec.grip_curve, lat_peak)
 
 	# Each axis capped by the force that would cancel its slip velocity in one tick (the lateral cap
 	# kills parked-car jitter).
@@ -507,8 +505,6 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	# Static friction: the patch spring beside the slip force, which is its damper. Along the wheel
 	# only while the spin is held (`_spin_held`, last tick's settle).
 	var f := Vector2(f_long, f_lat)
-	var budget_long := mu_long * suspension_force
-	var budget_lat := mu_lat * suspension_force
 	var stick_w := clampf(1.0 - Vector2(v_long, v_lat).length() / STICK_SPEED, 0.0, 1.0)
 	# What the brake holds besides the patch: the drive and what the differentials pass the wheel.
 	var held_against := drive_torque + coupled_torque
@@ -823,6 +819,20 @@ static func size_cap_masses(wheels: Array[RayWheel], body: RigidBody3D,
 ## with load; what a heavier wheel loses is its share per newton, which lets transfer move the
 ## balance. The [0.5, 1.25] clamp and the ref*0.25 load floor bind on nothing shipped (0.12 at the
 ## floor reaches 1.24); they bound a suspension spike or a runtime mass rewrite.
+## This contact's longitudinal grip budget (N) under `gd`: `mu_long` on the surface's grip,
+## load-scaled (`load_scaled_mu`), times its spring load.
+func long_budget(gd: GroundDriveSpec) -> float:
+	return load_scaled_mu(gd.mu_long * surface_grip, suspension_force, reference_load,
+			gd.load_sensitivity) * suspension_force
+
+
+## Its lateral budget (N): `mu_lat` on the axle's and the surface's grip, scaled at one tyre's share of
+## the load (a twin pair at half each), times the whole spring load.
+func lat_budget(gd: GroundDriveSpec) -> float:
+	return load_scaled_mu(gd.mu_lat * axle_lat_grip * surface_grip, suspension_force * tyre_share,
+			reference_load, gd.load_sensitivity) * suspension_force
+
+
 static func load_scaled_mu(mu: float, normal_load: float, ref_load: float,
 		sensitivity: float) -> float:
 	if sensitivity <= 0.0 or ref_load <= 0.0 or mu <= 0.0:

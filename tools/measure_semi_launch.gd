@@ -356,7 +356,7 @@ func _sample(delta: float) -> Dictionary:
 	var kingpin_y: float = (_car.global_transform * FifthWheel.KINGPIN_LOCAL).y
 	# Lateral acceleration read out of the sim's own motion (v * yaw rate), not from the steer
 	# angle or a bicycle model — standing rule 3.
-	var lat_g := absf(speed) * absf(_car.angular_velocity.y) / 9.81
+	var lat_g := absf(speed) * absf(_car.angular_velocity.y) / BrakeSizing.G
 	return {
 		"t": _t,
 		"phase": PH_NAMES[_phase],
@@ -382,7 +382,7 @@ func _sample(delta: float) -> Dictionary:
 		"trailer_roll": trailer_roll,
 		"joint_roll": joint_roll,
 		"lat_g": lat_g,
-		"acc_lat_g": absf(t.acc_lat) / 9.81,
+		"acc_lat_g": absf(t.acc_lat) / BrakeSizing.G,
 		"trailer_lat_g": trailer_lat_g,
 		"wheels_up": ((0 if fl.in_contact else 1) + (0 if fr.in_contact else 1)
 				+ (0 if rl.in_contact else 1) + (0 if rr.in_contact else 1)),
