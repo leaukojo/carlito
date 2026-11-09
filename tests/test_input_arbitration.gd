@@ -1053,44 +1053,32 @@ static func _idle(gear := GEAR_D1, throttle := 0.0) -> VehicleInput:
 
 
 func test_the_auto_hold_latches_at_a_standstill_in_d_or_r_with_no_throttle() -> void:
-	assert_bool(RouterScript.auto_hold(false, _idle(), 0.0, false)).is_true()
-	assert_bool(RouterScript.auto_hold(false, _idle(GEAR_R), -0.2, false)).is_true()
-	assert_bool(RouterScript.auto_hold(false, _idle(3), RouterScript.REVERSE_ENGAGE_SPEED,
-			false)).is_true()
+	assert_bool(RouterScript.auto_hold(false, _idle(), 0.0)).is_true()
+	assert_bool(RouterScript.auto_hold(false, _idle(GEAR_R), -0.2)).is_true()
+	assert_bool(RouterScript.auto_hold(false, _idle(3), RouterScript.REVERSE_ENGAGE_SPEED)).is_true()
 
 
-func test_the_auto_hold_never_latches_moving_out_of_gear_or_under_the_pad() -> void:
+func test_the_auto_hold_never_latches_moving_or_out_of_gear() -> void:
 	var moving := RouterScript.REVERSE_ENGAGE_SPEED + 0.01
-	assert_bool(RouterScript.auto_hold(false, _idle(), moving, false)).is_false()
-	assert_bool(RouterScript.auto_hold(false, _idle(GEAR_N), 0.0, false)).is_false()
-	assert_bool(RouterScript.auto_hold(false, _idle(RouterScript.GEAR_P), 0.0, false)).is_false()
-	assert_bool(RouterScript.auto_hold(false, _idle(), 0.0, true)).is_false()
-	assert_bool(RouterScript.auto_hold(true, _idle(), 0.0, true)).is_false()
+	assert_bool(RouterScript.auto_hold(false, _idle(), moving)).is_false()
+	assert_bool(RouterScript.auto_hold(false, _idle(GEAR_N), 0.0)).is_false()
+	assert_bool(RouterScript.auto_hold(false, _idle(RouterScript.GEAR_P), 0.0)).is_false()
 
 
 func test_the_auto_hold_keeps_what_it_caught_until_the_throttle_asks_to_move() -> void:
 	# A body its brakes cannot hold slides, and stays held.
-	assert_bool(RouterScript.auto_hold(true, _idle(), 3.0, false)).is_true()
-	assert_bool(RouterScript.auto_hold(true, _idle(GEAR_D1, 0.1), 0.0, false)).is_false()
-	assert_bool(RouterScript.auto_hold(true, _idle(GEAR_R, -0.1), 0.0, false)).is_false()
-	assert_bool(RouterScript.auto_hold(true, _idle(GEAR_N), 0.0, false)).is_false()
+	assert_bool(RouterScript.auto_hold(true, _idle(), 3.0)).is_true()
+	assert_bool(RouterScript.auto_hold(true, _idle(GEAR_D1, 0.1), 0.0)).is_false()
+	assert_bool(RouterScript.auto_hold(true, _idle(GEAR_R, -0.1), 0.0)).is_false()
+	assert_bool(RouterScript.auto_hold(true, _idle(GEAR_N), 0.0)).is_false()
 
 
 func test_the_auto_hold_stands_aside_with_the_lab_abs_off() -> void:
 	# It holds through the ABS modulator, as hill-start assist does; `abs_off` arrives fitment-gated.
 	var off := _idle()
 	off.abs_off = true
-	assert_bool(RouterScript.auto_hold(false, off, 0.0, false)).is_false()
-	assert_bool(RouterScript.auto_hold(true, off, 0.0, false)).is_false()
-
-
-func test_the_last_pedal_device_decides_whether_the_pad_drives() -> void:
-	assert_bool(RouterScript.pad_drives_pedals(false, 0.0, 0.3)).is_true()
-	assert_bool(RouterScript.pad_drives_pedals(true, 0.5, 0.0)).is_false()
-	assert_bool(RouterScript.pad_drives_pedals(false, 0.5, 0.5)).is_true()
-	# Neither pedal down: the last device stands.
-	assert_bool(RouterScript.pad_drives_pedals(true, 0.0, 0.0)).is_true()
-	assert_bool(RouterScript.pad_drives_pedals(false, 0.0, 0.0)).is_false()
+	assert_bool(RouterScript.auto_hold(false, off, 0.0)).is_false()
+	assert_bool(RouterScript.auto_hold(true, off, 0.0)).is_false()
 
 
 ## A live bridge in D with every pedal up.
@@ -1134,6 +1122,33 @@ func test_the_local_path_holds_the_brake_at_a_standstill_and_the_bridge_creeps()
 	router._bridge_source = _IdleBridge.new()
 	router._physics_process(1.0 / 60.0)
 	assert_float(router.get_vehicle_input().brake).is_equal(0.0)
+
+
+## A pad holding its triggers where the test puts them, unshaped like the real one.
+class _TriggerPad extends RouterFixtures.IdlePad:
+	var accel := 0.0
+	var brake_reverse := 0.0
+	func poll() -> Dictionary[StringName, Variant]:
+		return {&"accel": accel, &"brake_reverse": brake_reverse}
+
+
+## The pad gets the auto hold like keys and touch, and lets it go the way a trigger is used: L2 at a
+## standstill selects R, and a feathered R2 is throttle all the same.
+func test_the_pad_holds_and_lets_go_on_l2_or_a_feathered_r2() -> void:
+	for trigger: String in ["brake_reverse", "accel"]:
+		var router := _router()
+		router.set_auto_hold_on(true)
+		var pad := _TriggerPad.new()
+		router._pad_source = pad
+		var body: _RollingBody = auto_free(_RollingBody.new())
+		router.register_vehicle(body)
+		router._physics_process(1.0 / 60.0)
+		assert_bool(router.auto_hold_holding()).is_true()
+		pad.set(trigger, 0.05)
+		router._physics_process(1.0 / 60.0)
+		assert_bool(router.auto_hold_holding()).override_failure_message(
+				"a feathered %s left the auto hold latched" % trigger).is_false()
+		assert_float(router.get_vehicle_input().brake).is_less(RouterScript.AUTO_HOLD_BRAKE)
 
 
 ## A body the test rolls by hand: the router reads only these off a registered vehicle.

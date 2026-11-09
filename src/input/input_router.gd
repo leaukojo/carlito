@@ -31,10 +31,10 @@ const REVERSE_ENGAGE_SPEED := 0.5
 ## test); past this speed the throttle cuts, and stays cut until either pedal lifts.
 const BRAKE_OVERRIDE_SPEED := 1.0
 
-## Auto hold, a keyboard-feel aid for keys and touch (`auto_hold`), on only by the AUTO HOLD
-## setting (`set_auto_hold_on`): at a standstill in a drive gear
-## with no throttle, the foot brake holds at this application until the throttle asks to move, so a
-## converter body never creeps off while the keys are up. The whole service brake.
+## Auto hold, for the local path: keys, touch and gamepad (`auto_hold`), on only by the AUTO HOLD
+## setting (`set_auto_hold_on`): at a standstill in a drive gear with no throttle, the foot brake
+## holds at this application until the throttle asks to move, so a converter body never creeps off
+## while the pedals are up. The whole service brake.
 const AUTO_HOLD_BRAKE := 1.0
 
 ## Cycle lengths, declared once in a leaf module (router must not depend on a vehicle
@@ -80,10 +80,7 @@ var _brake_override := false  ## latched by `brake_override`, both sources alike
 ## The player's AUTO HOLD setting, set by the shell. Off by default: a real car's auto hold is a
 ## button the driver turns on, and off is where converter creep and roll-back are felt.
 var _auto_hold_on := false
-var _auto_hold := false  ## latched by `auto_hold`, local key and touch pedals only
-## The gamepad moved a pedal last, not a key or a touch pedal: the auto hold stands aside, since an
-## analog trigger feathers the brake itself, as the bridge does.
-var _pad_pedals := false
+var _auto_hold := false  ## latched by `auto_hold`, local path only (keys, touch, gamepad)
 var _lights := 1  ## headlight level owned here so keyboard + touch share one state
 # Local tractor implement state, owned here so keyboard + touch share it; bridge path ignores these.
 var _hitch_up := true  ## true = raised (transport), toggled by the local hitch key
@@ -381,7 +378,7 @@ func _apply_auto_hold() -> void:
 	if not _auto_hold_on or _vehicle == null or not _vehicle.key_auto_hold():
 		_auto_hold = false
 		return
-	_auto_hold = auto_hold(_auto_hold, _current, _vehicle.get_speed(), _pad_pedals)
+	_auto_hold = auto_hold(_auto_hold, _current, _vehicle.get_speed())
 	if _auto_hold:
 		_current.brake = maxf(_current.brake, AUTO_HOLD_BRAKE)
 		_current.lamps.brake_lamp = true
@@ -389,14 +386,15 @@ func _apply_auto_hold() -> void:
 
 ## Next tick's auto-hold latch, pure for tests: set at a standstill (REVERSE_ENGAGE_SPEED, the
 ## router's own) in a drive gear (D or R) with no throttle, kept until the throttle asks to move or
-## the box leaves gear. Never while the gamepad drives the pedals (`pad`), nor with the LAB's ABS
-## off: it holds through the ABS modulator, as hill-start assist does (`WheelDrive.hill_hold_kind`).
-## It holds what it caught, so a body sliding on a grade its brakes cannot hold stays held.
-## Hill-start assist (`WheelDrive.hold_step`) takes the handover when the throttle lets it go.
-static func auto_hold(latched: bool, input: VehicleInput, speed: float, pad: bool) -> bool:
+## the box leaves gear: any throttle at all, so a feathered trigger lets go as a key does. Never with
+## the LAB's ABS off: it holds through the ABS modulator, as hill-start assist does
+## (`WheelDrive.hill_hold_kind`). It holds what it caught, so a body sliding on a grade its brakes
+## cannot hold stays held. Hill-start assist (`WheelDrive.hold_step`) takes the handover when the
+## throttle lets it go.
+static func auto_hold(latched: bool, input: VehicleInput, speed: float) -> bool:
 	var in_gear := input.gear_request == GEAR_R \
 			or (input.gear_request >= GEAR_D1 and input.gear_request <= GEAR_TOP)
-	if pad or not in_gear or input.throttle != 0.0 or input.abs_off:
+	if not in_gear or input.throttle != 0.0 or input.abs_off:
 		return false
 	return latched or absf(speed) <= REVERSE_ENGAGE_SPEED
 
@@ -441,10 +439,7 @@ func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 			brake_apply_s, delta, _key_softening)
 	raw[&"accel"] = _pedal_accel
 	raw[&"brake_reverse"] = _pedal_brake
-	var pad := _pad_source.poll()
-	_pad_pedals = pad_drives_pedals(_pad_pedals, _pedal_accel + _pedal_brake,
-			float(pad.get(&"accel", 0.0)) + float(pad.get(&"brake_reverse", 0.0)))
-	raw = merge_local(raw, pad)
+	raw = merge_local(raw, _pad_source.poll())
 	if driving_only:
 		raw = driving_edges_only(raw)
 	# Single headlight owner: either source's cycle edge advances the shared level.
@@ -629,16 +624,6 @@ static func locked_idle() -> VehicleInput:
 	out.gear_request = GEAR_P
 	out.handbrake = 1.0
 	return out
-
-
-## Whether the gamepad moved a pedal last, pure for tests: `keys` is the shaped key and touch pedals'
-## sum, `pad` the gamepad's. The pad wins a tie; with neither down the last device stands.
-static func pad_drives_pedals(was_pad: bool, keys: float, pad: float) -> bool:
-	if pad > 0.0:
-		return true
-	if keys > 0.0:
-		return false
-	return was_pad
 
 
 ## Local (keyboard/gamepad) arbitration, pure for tests. Throttle only from accel; brake

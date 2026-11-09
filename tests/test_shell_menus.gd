@@ -302,17 +302,39 @@ func test_pause_menu_offers_the_shell_sections() -> void:
 	var labels := []
 	for b in _buttons(pause):
 		labels.append(b.text)
-	assert_array(labels).contains(["RESUME", "RESPAWN", "CONDITIONS", "LAB", "CONTROLS", "SETTINGS"])
-	# GARAGE and LEVEL are the on-screen important buttons' job, not this menu's.
-	assert_array(labels).not_contains(["GARAGE", "LEVEL"])
+	assert_array(labels).contains(["RESUME", "RESPAWN", "LEVEL", "CHALLENGES", "CONDITIONS",
+			"LAB", "CONTROLS", "SETTINGS"])
+	# GARAGE is Create, G and the on-screen important buttons' job, not this menu's.
+	assert_array(labels).not_contains(["GARAGE"])
 
 	var fired := []
 	pause.resume_requested.connect(func() -> void: fired.append("RESUME"))
 	pause.respawn_requested.connect(func() -> void: fired.append("RESPAWN"))
+	pause.level_requested.connect(func() -> void: fired.append("LEVEL"))
+	pause.challenges_requested.connect(func() -> void: fired.append("CHALLENGES"))
 	for b in _buttons(pause):
-		if b.text in ["RESUME", "RESPAWN"]:
+		if b.text in ["RESUME", "RESPAWN", "LEVEL", "CHALLENGES"]:
 			b.pressed.emit()
-	assert_array(fired).contains(["RESUME", "RESPAWN"])
+	assert_array(fired).contains(["RESUME", "RESPAWN", "LEVEL", "CHALLENGES"])
+
+
+## The L1 legend lists the vehicle's layer by button name, without the "L1 + " its title says,
+## and a vehicle with nothing there says so.
+func test_pad_legend_lists_the_vehicle_layer() -> void:
+	var legend: PadLegend = auto_free(PadLegend.new())
+	add_child(legend)
+	legend.show_layer(ActionRegistry.context("drone", false, {}))
+	var texts := []
+	for label in legend.find_children("*", "Label", true, false):
+		texts.append((label as Label).text)
+	assert_bool(legend.visible).is_true()
+	assert_array(texts).contains(["Square", String(ActionRegistry.find(&"arm")["label"])])
+	legend.show_layer(ActionRegistry.context("car", false, {}))
+	texts.clear()
+	for label in legend.find_children("*", "Label", true, false):
+		texts.append((label as Label).text)
+	assert_array(texts).contains([PadLegend.EMPTY_TEXT])
+	assert_array(texts).not_contains(["Square"])
 
 
 ## CONTROLS is a second page of the same overlay, and back() is what the shell calls on Esc
@@ -341,7 +363,8 @@ func test_pause_menu_controls_page_is_generated_from_the_registry() -> void:
 	for label in pause.find_children("*", "Label", true, false):
 		texts.append((label as Label).text)
 	var entry := ActionRegistry.find(&"pantograph")
-	assert_array(texts).contains([String(entry["label"]), ActionRegistry.keys_for(entry)])
+	assert_array(texts).contains([String(entry["label"]), ActionRegistry.keys_for(entry),
+			ActionRegistry.pad_for(entry)])
 	# Every section heading is there, so no group of controls can go missing wholesale.
 	assert_array(texts).contains(ActionRegistry.GROUP_TITLES)
 	GameState.current_vehicle = saved_vehicle

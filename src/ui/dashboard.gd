@@ -254,7 +254,7 @@ var _bars := {}
 var _lamps := {}     ## signal name -> Label (input bool tell-tales)
 var _out_lamps := {} ## signal name -> Label (bool "out" ISOBUS tell-tales, driven from telemetry)
 var _lamp_colors := {}  ## Label -> Color last applied, see _set_lamp_color
-## InputRouter's auto hold, a keys and touch aid the bridge never gets, so it is no contract
+## InputRouter's auto hold, a local-path aid the bridge never gets, so it is no contract
 ## signal: shown only on a body it holds (`key_auto_hold`), while the setting is on and local
 ## input drives. Null on any other body.
 var _auto_hold_lamp: Label = null

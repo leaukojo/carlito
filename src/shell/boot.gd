@@ -16,6 +16,8 @@ const DEFAULT_LEVEL := "flatland"
 @onready var _dashboard: Dashboard = $UI/UiScale/Dashboard
 @onready var _touch: TouchControls = $UI/UiScale/TouchControls
 @onready var _debug: DebugOverlay = $UI/UiScale/DebugOverlay
+@onready var _pad: PadLayer = $PadLayer
+@onready var _pad_legend: PadLegend = $UI/UiScale/PadLegend
 
 ## Frames the loading screen stays up after the level enters the tree: gl_compatibility
 ## compiles each material's shader on its first draw, and ShaderWarmup makes that first draw
@@ -77,6 +79,8 @@ func _ready() -> void:
 	_touch.camera_pressed.connect(_cycle_camera)
 	_touch.retry_pressed.connect(_on_touch_retry)
 	_touch.info_pressed.connect(_show_challenge_info)
+	_pad.capabilities = _capabilities
+	_pad.layer_changed.connect(_on_pad_layer_changed)
 	GameState.attachment_changed.connect(_refresh_attachment_controls)
 	GameState.night_changed.connect(_on_level_night_changed)
 	_packs = LevelPacks.new()
@@ -148,6 +152,7 @@ func _cycle_attachment() -> void:
 		_level.vehicle.cycle_implement()
 		# New attachment may be driven where the old one wasn't (tipper vs. box).
 		_touch.set_capabilities(_capabilities())
+		_sync_pad_legend()  # L1+Triangle cycles with L1 still down
 
 
 ## Refresh for an attachment the sim changed on its own (GameState.attachment_changed — a
@@ -155,6 +160,7 @@ func _cycle_attachment() -> void:
 ## buttons for a trailer that's no longer there.
 func _refresh_attachment_controls() -> void:
 	_touch.set_capabilities(_capabilities())
+	_sync_pad_legend()
 
 
 ## What the active vehicle can do, driving the touch buttons and the pause menu's CONTROLS
@@ -182,6 +188,21 @@ func _capabilities() -> Dictionary:
 static func _or_into(caps: Dictionary, extra: Dictionary) -> void:
 	for k in extra:
 		caps[k] = bool(caps.get(k, false)) or bool(extra[k])
+
+
+## L1 held: the vehicle's layer on screen while driving, never under a menu (the layer is inert
+## there) nor with nothing to drive.
+func _on_pad_layer_changed(held: bool) -> void:
+	if held and _overlays.is_empty() and _level != null and _level.vehicle != null:
+		_pad_legend.show_layer(ActionRegistry.context(GameState.current_vehicle,
+				Bridge.is_active(), _capabilities(), InputRouter.bridge_drives()))
+	else:
+		_pad_legend.hide()
+
+
+## The legend as it should read now: after a menu closes or the machine changes under a held L1.
+func _sync_pad_legend() -> void:
+	_on_pad_layer_changed(_pad.layer_held())
 
 
 # --- challenge lock ------------------------------------------------------------
@@ -377,6 +398,7 @@ func _push_overlay(node: Control) -> void:
 	_overlays.append(node)
 	_ui.add_child(node)
 	_touch.set_active(false)
+	_pad_legend.hide()
 	get_tree().paused = true
 
 
@@ -416,6 +438,7 @@ func _sync_overlay_state() -> void:
 	var open := not _overlays.is_empty()
 	get_tree().paused = open
 	_touch.set_active(not open and _level != null)
+	_sync_pad_legend()  # back from a menu with L1 still down
 
 
 func _open_pause() -> void:
@@ -445,6 +468,8 @@ func _open_pause() -> void:
 	pause.setup(_capabilities(), state)
 	pause.resume_requested.connect(_close_all_overlays)
 	pause.respawn_requested.connect(_on_pause_respawn)
+	pause.level_requested.connect(_show_level_select)
+	pause.challenges_requested.connect(_show_challenge_select)
 	pause.spawn_picked.connect(_on_spawn_picked)
 	pause.dashboard_density_changed.connect(_on_density_changed)
 	pause.ui_scale_changed.connect(_on_ui_scale_changed)
@@ -769,6 +794,7 @@ func _bind_hud() -> void:
 	_dashboard.bind(_level)
 	_debug.set_level(_level)
 	_touch.set_capabilities(_capabilities())
+	_sync_pad_legend()
 	Bridge.bind(_level)
 
 
@@ -886,3 +912,5 @@ func _set_hud_visible(v: bool) -> void:
 	_dashboard.set_shown(v)
 	_touch.set_active(v)
 	_notice.set_shown(v)
+	if not v:
+		_pad_legend.hide()

@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://src/shell/boot.gd" id="1_boot"]
 [ext_resource type="Script" path="res://src/ui/dashboard.gd" id="2_dash"]
@@ -6,6 +6,8 @@
 [ext_resource type="Script" path="res://src/ui/touch_controls.gd" id="4_touch"]
 [ext_resource type="Script" path="res://src/ui/ui_scale.gd" id="5_uiscale"]
 [ext_resource type="Script" path="res://src/ui/notice_line.gd" id="6_notice"]
+[ext_resource type="Script" path="res://src/input/pad_layer.gd" id="7_pad"]
+[ext_resource type="Script" path="res://src/ui/pad_legend.gd" id="8_legend"]
 
 ; PROCESS_MODE_ALWAYS: the shell and its menus keep running while the world is paused. The
 ; level is a CHILD of this node, so boot.gd puts it back to PAUSABLE when it adds it —
@@ -13,6 +15,10 @@
 [node name="Boot" type="Node3D"]
 process_mode = 3
 script = ExtResource("1_boot")
+
+; Gamepad buttons -> game actions, by layer and vehicle. Inherits ALWAYS: Options works paused.
+[node name="PadLayer" type="Node" parent="."]
+script = ExtResource("7_pad")
 
 [node name="UI" type="CanvasLayer" parent="."]
 
@@ -48,6 +54,12 @@ script = ExtResource("2_dash")
 
 [node name="TouchControls" type="Control" parent="UI/UiScale"]
 script = ExtResource("4_touch")
+
+; The gamepad's hold-L1 layer, shown by boot.gd while L1 is held. Lays itself out (pad_legend.gd).
+[node name="PadLegend" type="PanelContainer" parent="UI/UiScale"]
+visible = false
+mouse_filter = 2
+script = ExtResource("8_legend")
 
 [node name="DebugOverlay" type="Label" parent="UI/UiScale"]
 mouse_filter = 2

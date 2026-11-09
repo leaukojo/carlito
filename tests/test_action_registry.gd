@@ -95,6 +95,157 @@ func _assert_survives_merge(key: StringName, who: String, sample: Variant = null
 			.is_equal(sample)
 
 
+# --- the gamepad -------------------------------------------------------------
+
+## InputMap cannot layer a button under L1, so a pad button bound there would fire beside the
+## action PadLayer resolves for it. Axes (triggers, sticks) stay in InputMap.
+func test_no_game_action_binds_a_pad_button() -> void:
+	for action in _bound_actions():
+		for ev in InputMap.action_get_events(action):
+			assert_bool(ev is InputEventJoypadButton) \
+				.override_failure_message("'%s' binds a pad button in project.godot; pad buttons "
+						% action + "live in ActionRegistry's `pad` field (PadLayer injects them)") \
+				.is_false()
+
+
+## One slot per action, each a button PadLayer knows, optionally on the L1 layer.
+func test_every_pad_slot_names_a_real_button() -> void:
+	var names: Array = PadLayer.BUTTONS.values()
+	for entry in Registry.ENTRIES:
+		if not entry.has("pad"):
+			continue
+		assert_int(entry["pad"].size()) \
+			.override_failure_message("row '%s' has %d pad slots for %d actions" % [
+				entry["id"], entry["pad"].size(), entry["actions"].size()]) \
+			.is_equal(entry["actions"].size())
+		for slot: String in entry["pad"]:
+			assert_bool(names.has(slot.trim_prefix(PadLayer.LAYER_PREFIX))) \
+				.override_failure_message("row '%s' pad slot '%s' is no PadLayer button"
+						% [entry["id"], slot]) \
+				.is_true()
+
+
+## A slot shared by two rows must never see both apply: every family under every capability set
+## (a superset of what any machine reports), so the resolver's first match is the only match.
+func test_no_two_rows_answer_one_pad_slot() -> void:
+	var caps_keys: Array = Registry.CAP_NOTE.keys()
+	var checked := 0
+	for family in _all_families():
+		for mask in 1 << caps_keys.size():
+			var caps := {}
+			for i in caps_keys.size():
+				caps[caps_keys[i]] = ((mask >> i) & 1) == 1
+			var ctx := _ctx(family, caps)
+			var seen := {}  # slot -> row id
+			for entry in Registry.ENTRIES:
+				if not Registry.applies_entry(entry, ctx):
+					continue
+				for slot: String in entry.get("pad", []):
+					assert_bool(seen.has(slot)) \
+						.override_failure_message("'%s' with %s: pad slot '%s' answers both '%s' and '%s'"
+								% [family, str(caps), slot, seen.get(slot), entry["id"]]) \
+						.is_false()
+					seen[slot] = entry["id"]
+					checked += 1
+	assert_int(checked).is_greater(1000)  # a silently-empty sweep would pass forever
+
+
+## The main / second / third L1 slots keep one role across vehicles.
+func test_the_l1_main_slot_follows_the_vehicle() -> void:
+	assert_str(_pad("l1+square", _ctx("tractor", {"lift": true}))).is_equal("hitch")
+	assert_str(_pad("l1+square", _ctx("drone"))).is_equal("arm")
+	assert_str(_pad("l1+square", _ctx("plane"))).is_equal("flaps")
+	assert_str(_pad("l1+square", _ctx("boat"))).is_equal("nav_mode")
+	assert_str(_pad("l1+square", _ctx("train"))).is_equal("pantograph")
+	assert_str(_pad("l1+square", _ctx("car"))).is_equal("")
+	assert_str(_pad("l1+cross", _ctx("truck", {"body_cmd": true}))) \
+			.is_equal("body_cmd")
+	assert_str(_pad("l1+dpad_up", _ctx("tractor"))).is_equal("hand_throttle_up")
+
+
+func test_the_base_layer_gates_like_the_sheet() -> void:
+	assert_str(_pad("cross", _ctx("car"))).is_equal("handbrake")
+	assert_str(_pad("cross", _ctx("boat"))).is_equal("")
+	assert_str(_pad("square", _ctx("car"))).is_equal("headlights")
+	# sloppyCAN driving takes the handbrake, never the camera.
+	var live := Registry.context("car", true, {})
+	assert_str(_pad("cross", live)).is_equal("")
+	assert_str(_pad("circle", live)).is_equal("camera_view")
+
+
+## The camera's pad buttons answer on every vehicle, and never under a menu (the D-pad scrolls
+## the CONTROLS sheet there).
+func test_the_camera_buttons_answer_everywhere() -> void:
+	for family in _all_families():
+		assert_str(_pad("r3", _ctx(family))).is_equal("camera_recenter")
+		assert_str(_pad("dpad_up", _ctx(family))).is_equal("camera_zoom_in")
+		assert_str(_pad("dpad_down", _ctx(family))).is_equal("camera_zoom_out")
+	assert_str(_pad("dpad_up", _ctx("car"), true)).is_equal("")
+	assert_str(Registry.pad_for(Registry.find(&"camera_look"))).is_equal("Right stick")
+
+
+## With L1 held, a button with nothing on the layer does its own job.
+func test_pad_press_falls_back_to_the_base_layer() -> void:
+	assert_str(String(Registry.pad_press("square", true, _ctx("drone")))).is_equal("arm")
+	assert_str(String(Registry.pad_press("square", true, _ctx("car")))).is_equal("headlights")
+	assert_str(String(Registry.pad_press("options", true, _ctx("car")))).is_equal("to_menu")
+	assert_str(String(Registry.pad_press("square", false, _ctx("drone")))).is_equal("headlights")
+	assert_str(String(Registry.pad_press("square", true, _ctx("drone"), true))).is_equal("")
+	# A role the vehicle has but sloppyCAN holds right now stays inert, never the button's own:
+	# fallback (live bridge, local driving) leaves the lights local but the hitch sloppyCAN's.
+	var fallback := Registry.context("tractor", true, {"lift": true}, false)
+	assert_str(String(Registry.pad_press("square", false, fallback))).is_equal("headlights")
+	assert_str(String(Registry.pad_press("square", true, fallback))).is_equal("")
+
+
+## Under a menu only the shell answers: Options closes it, nothing latches in the vehicle.
+func test_a_paused_pad_reaches_only_the_shell() -> void:
+	assert_str(_pad("options", _ctx("car"), true)).is_equal("to_menu")
+	assert_str(_pad("create", _ctx("car"), true)).is_equal("garage")
+	assert_str(_pad("cross", _ctx("car"), true)).is_equal("")
+	assert_str(_pad("l1+square", _ctx("drone"), true)).is_equal("")
+
+
+## Every slot a row names, and every slot PadLayer reads, has a name on screen.
+func test_every_pad_slot_has_a_name() -> void:
+	var slots: Array = PadLayer.BUTTONS.values()
+	for entry in Registry.ENTRIES:
+		for slot: String in entry.get("pad", []):
+			slots.append(slot.trim_prefix(PadLayer.LAYER_PREFIX))
+	for slot: String in slots:
+		assert_bool(PadLayer.SLOT_NAMES.has(slot)) \
+			.override_failure_message("pad slot '%s' has no PadLayer.SLOT_NAMES entry" % slot) \
+			.is_true()
+
+
+## The sheet's pad column: slots by name, the layer once, axes live from InputMap.
+func test_pad_for_names_the_binding() -> void:
+	assert_str(Registry.pad_for(Registry.find(&"handbrake"))).is_equal("Cross")
+	assert_str(Registry.pad_for(Registry.find(&"hitch"))).is_equal("L1 + Square")
+	assert_str(Registry.pad_for(Registry.find(&"hand_throttle"))) \
+			.is_equal("L1 + D-pad down / D-pad up")
+	assert_str(Registry.pad_for(Registry.find(&"drive"))).is_equal("R2 / L2")
+	assert_str(Registry.pad_for(Registry.find(&"steer"))).is_equal("Left stick")
+	assert_str(Registry.pad_for(Registry.find(&"climb"))).is_equal("Left stick up / down")
+	assert_str(Registry.pad_for(Registry.find(&"day_night"))).is_equal("")
+
+
+## The L1 legend: the vehicle's layer in main / second / third order, nothing it can never use,
+## and a bridge-owned row kept (the legend greys it).
+func test_pad_layer_rows_follow_the_vehicle() -> void:
+	var ids := func(ctx: Dictionary) -> Array:
+		return Registry.pad_layer_rows(ctx).map(func(e: Dictionary) -> String: return String(e["id"]))
+	assert_array(ids.call(_ctx("drone"))) \
+			.contains_exactly(["arm", "flight_mode", "hardpoint", "node_fail"])
+	assert_array(ids.call(_ctx("car"))).is_empty()
+	assert_array(ids.call(_ctx("car", {"tows": true}))).contains_exactly(["next_attachment"])
+	var tractor: Array = ids.call(_ctx("tractor", {"lift": true, "pto": true}))
+	assert_str(String(tractor[0])).is_equal("hitch")
+	assert_array(tractor).contains(["hand_throttle", "pto_mode", "hand_throttle_pto"])
+	assert_array(tractor).not_contains(["scv", "diff_lock"])
+	assert_array(ids.call(Registry.context("drone", true, {}))).contains(["arm"])
+
+
 ## A typo in a family name is a control that is never offered on any vehicle, and nothing else
 ## would notice: the gate just returns false forever.
 func test_gate_families_are_real_vehicle_families() -> void:
@@ -419,6 +570,10 @@ func test_level_select_is_bound_and_registered() -> void:
 
 func _ctx(family: String, caps := {}) -> Dictionary:
 	return Registry.context(family, false, caps)
+
+
+func _pad(slot: String, ctx: Dictionary, paused := false) -> String:
+	return String(Registry.pad_action(slot, ctx, paused))
 
 
 func _all_families() -> PackedStringArray:

@@ -57,8 +57,8 @@ Every vehicle with ABS has it. Switching ABS off in the LAB switches it off too.
 [Auto hold](glossary.md#auto-hold) goes further. With it on, a vehicle that has come to a stop in drive or reverse keeps
 its whole foot brake on, with no pedal pressed, until the driver presses the accelerator. Then
 hill-start assist takes over for the pull-away. It is a setting, SETTINGS ▸ AUTO HOLD, off at
-first, and it works only when you drive with the keys or the on-screen pedals: a gamepad and
-sloppyCAN get the real creep instead. The dashboard's AUTO HOLD lamp glows dim while it is on and
+first, and it works with the keys, the on-screen pedals and a gamepad: sloppyCAN gets the real
+creep instead. The dashboard's AUTO HOLD lamp glows dim while it is on and
 bright while it is holding.
 <!-- InputRouter.auto_hold; pause_menu.gd AUTO_HOLD_HELP; docs/drivetrain.md: "Gamepad and bridge: real creep"; dashboard.gd auto_hold "dim while switched on, lit while holding" -->
 

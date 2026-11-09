@@ -134,7 +134,7 @@ the two semi tractor units.
 | Dashboard lamps for the aids (ESC, TC, ABS OFF, trailer ABS, VDC) | as fitted | `src/ui/dashboard.gd` | driver-aids |
 | Hill-start assist | every ABS body | `src/vehicles/base/hill_hold.gd` | holding |
 | Tractor powershift hill hold | tractor-kenney | `HillHold.Kind` STANDSTILL | holding |
-| Auto hold (setting) | wheel-driving bodies, keys and touch only | `InputRouter.auto_hold` | holding |
+| Auto hold (setting) | wheel-driving bodies, keys, touch and gamepad | `InputRouter.auto_hold` | holding |
 | Active standstill | tractor-cvt | `Drivetrain.standstill_hold` | holding |
 | Cruise control | not modelled on any road vehicle (the word appears only in measure tools and the plane's notes) | none | simplifications |
 

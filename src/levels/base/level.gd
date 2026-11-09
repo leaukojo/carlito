@@ -24,6 +24,13 @@ const NIGHT_SKY_ENERGY := 0.05
 ## Camera orbit per pixel of a right-button drag. Negative on both axes so the drag carries the
 ## world with it (drag right and the vehicle swings right); flip a sign to invert that axis.
 const ORBIT_DEG_PER_PIXEL := Vector2(-0.3, -0.3)
+## Right-stick orbit at full deflection, degrees per second: a rate, so the turn is frame-rate
+## independent. Signed like ORBIT_DEG_PER_PIXEL (pushing right turns the view as dragging right
+## does). A starting value for feel, not a sourced one.
+const ORBIT_DEG_PER_SECOND := Vector2(-180.0, -90.0)
+## D-pad zoom while held, in mouse-wheel notches per second (ChaseCamera.ZOOM_STEP each).
+const ZOOM_STEPS_PER_SECOND := 6.0
+const PadSource := preload("res://src/input/sources/pad_source.gd")
 
 ## Fullscreen color-grade + vignette, built in code so every level gets it with no re-bake.
 const VIGNETTE_SHADER := preload("res://src/levels/base/vignette.gdshader")
@@ -110,6 +117,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		toggle_day_night()
 	elif event.is_action_pressed("camera_view"):
 		cycle_camera()
+	elif event.is_action_pressed("camera_recenter"):
+		recenter_camera()
 	elif event is InputEventMouseButton:
 		# Raw wheel/button, not an InputMap action: view controls with no bridge/touch twin, no
 		# arbitration needed.
@@ -373,10 +382,10 @@ func _warm_family(family: String, spawned: String) -> void:
 			continue
 		if ResourceLoader.load_threaded_request(path) == OK:
 			_warming.append(path)
-	set_process(not _warming.is_empty())
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_pad_view(delta)
 	for i in range(_warming.size() - 1, -1, -1):
 		var path := _warming[i]
 		if ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
@@ -385,8 +394,23 @@ func _process(_delta: float) -> void:
 		if res != null:
 			_warm.append(res)
 		_warming.remove_at(i)
-	if _warming.is_empty():
-		set_process(false)
+
+
+## The pad's view controls, per rendered frame as rates: the right stick orbits (read raw, like
+## the mouse's right-drag: view-only, nothing to arbitrate) and D-pad up / down zoom while held
+## (PadLayer's injected actions). The look stays where it is left; R3 recenters.
+func _pad_view(delta: float) -> void:
+	if camera == null:
+		return
+	var deadzone := InputMap.action_get_deadzone(&"steer_right")  # one deadzone for both sticks
+	var look := Vector2(PadSource.stick(JOY_AXIS_RIGHT_X, deadzone),
+			PadSource.stick(JOY_AXIS_RIGHT_Y, deadzone))
+	if look != Vector2.ZERO:
+		camera.orbit(look * ORBIT_DEG_PER_SECOND * delta)
+	var zoom := Input.get_action_strength(&"camera_zoom_in") \
+			- Input.get_action_strength(&"camera_zoom_out")
+	if zoom != 0.0:
+		camera.zoom(zoom * ZOOM_STEPS_PER_SECOND * delta)
 
 
 ## First VehicleSpawn accepting `family`; null if none.

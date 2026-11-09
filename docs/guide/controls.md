@@ -113,7 +113,49 @@ angle, the body's pitch and roll, a trailer's angle and the wind.
 Each vehicle adds its own keys, explained on its pages: the tractor's hitch, PTO, hand throttle,
 hydraulics, diff lock and front drive; the plane's flaps and climb; the drone's arming, modes and
 node failures; the boat's autopilot and sheet; the train's pantograph and doors. The pause menu's
-CONTROLS page lists every key for the vehicle you are driving.
+CONTROLS page lists every key and gamepad button for the vehicle you are driving.
+
+## The gamepad
+
+Any gamepad works. The names here are a PlayStation pad's; on an Xbox pad Cross is A, Circle is
+B, Square is X, Triangle is Y, L1 is LB, R2 / L2 are RT / LT, Create is View and Options is Menu.
+The layout puts the controls where racing and farming games put them.
+
+| Button | Does |
+| --- | --- |
+| **R2** / **L2** | Accelerator / brake; L2 held at a standstill selects reverse |
+| **Left stick** | Steer. Forward and back: the plane's elevator (pull back, nose up), the drone's climb (push, climb) |
+| **Right stick** | Look around the vehicle; the view stays where you leave it |
+| **R3** | Recenter the camera |
+| **D-pad ↑** / **↓** | Zoom in / out, while held |
+| **Cross** (✕) | Handbrake |
+| **Circle** (○) | Camera view |
+| **Triangle** (△) | Respawn |
+| **Square** (□) | Lights |
+| **L3** | Horn |
+| **Options** | Pause menu, and back out of it |
+| **Create** | Garage |
+<!-- ActionRegistry ENTRIES `pad` slots and PadLayer.BUTTONS; project.godot joypad axes accel R2 (axis 5), brake_reverse L2 (axis 4), steer left stick X; pad_source.gd elevator = stick Y (back +), climb = -Y; level.gd _pad_view: right stick orbit, camera_zoom held; camera_recenter R3 -->
+
+The vehicle's own controls sit on **L1**: hold it and press a face button. Each button keeps one
+role across vehicles, so the main control is always L1 + Square. While L1 is held, the left of the
+screen lists what it does on the vehicle you are driving; a button with nothing on L1 there does
+its usual job.
+
+| Hold L1 and | Tractor | Truck | Drone | Plane | Boat | Train |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Square** | hitch | tip the body | arm | flaps | autopilot | pantograph |
+| **Circle** | PTO | PTO | flight mode | | sheet | doors |
+| **Cross** | hydraulic remote | refuse body | cargo hook | | | |
+| **R1** | PTO speed | | fail a node | | | |
+| **D-pad ↑** / **↓** | hand throttle | | | | | |
+| **D-pad ←** / **→** | diff lock / front drive | | | | | |
+| **R3** | hand throttle to PTO speed | | | | | |
+
+L1 + Triangle cycles the implement or trailer on any vehicle that tows one. A control appears only
+on a machine that has it (a truck tips only with a tipper on). Level select and the challenges
+are rows in the pause menu.
+<!-- ActionRegistry pad slots l1+square/circle/cross/r1/dpad_*/r3/triangle, gated by families and capability (pad_action, pad_layer_rows); PadLegend; pause_menu.gd LEVEL and CHALLENGES rows -->
 <!-- ActionRegistry: every bound action, one row each, gated by family and capability; the CONTROLS sheet -->
 
 ## The settings and switches that change the physics

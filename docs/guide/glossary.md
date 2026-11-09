@@ -103,7 +103,7 @@ Anti-slip regulation, the name for [traction control](#traction-control) on truc
 
 ### Auto hold
 A setting that keeps the foot brake on whenever the vehicle stops in gear, until the accelerator
-is pressed. In the game it is SETTINGS ▸ AUTO HOLD, for keys and on-screen pedals only.
+is pressed. In the game it is SETTINGS ▸ AUTO HOLD, for keys, on-screen pedals and a gamepad.
 
 ### Autopilot
 A controller that steers for the driver. The boat's autopilot holds a compass heading (HEADING

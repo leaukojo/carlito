@@ -354,6 +354,13 @@ func test_a_pad_axis_reads_like_the_engines_action_strength() -> void:
 	assert_float(PadSourceScript.axis_strength(1.0, 1.0, 1.0)).is_equal(1.0)
 
 
+func test_a_signed_pad_axis_reads_both_ways() -> void:
+	assert_float(PadSourceScript.signed_axis(0.6, 0.2)).is_equal_approx(0.5, 1e-5)
+	assert_float(PadSourceScript.signed_axis(-0.6, 0.2)).is_equal_approx(-0.5, 1e-5)
+	assert_float(PadSourceScript.signed_axis(0.1, 0.2)).is_equal(0.0)
+	assert_float(PadSourceScript.signed_axis(-1.0, 0.2)).is_equal(-1.0)
+
+
 func test_the_keyboard_source_reads_keys_not_the_action() -> void:
 	# action_press holds the action with no key down, which is what a pad axis does to it.
 	Input.action_press("steer_right")

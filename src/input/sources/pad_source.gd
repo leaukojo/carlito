@@ -1,42 +1,58 @@
 extends RefCounted
 ## Gamepad source: the analog fields of the same project [input] actions LocalSource reads, from
-## their joypad events only. InputRouter merges it after the key shaping, so a stick and a trigger
-## drive exactly as held. Edges and the horn stay in LocalSource (they read the action, either
-## device). Reports only the analog keys, and tests/test_action_registry.gd pins each one as an
-## axis merge_local carries (any other key it would OR as a bit).
+## their joypad axes only. InputRouter merges it after the key shaping, so a stick and a trigger
+## drive exactly as held. Pad buttons are PadLayer's: it injects their actions, so edges and the
+## horn reach LocalSource, and the handbrake is read here off the action. Reports only the analog
+## keys, and tests/test_action_registry.gd pins each one as an axis merge_local carries (any other
+## key it would OR as a bit).
 
 
 func poll() -> Dictionary[StringName, Variant]:
-	# One vertical axis under two keys, as in LocalSource. + = up.
-	var vert := pad_strength("aircraft_up") - pad_strength("aircraft_down")
+	# Left stick Y is read here, not through an action pair: the two aircraft take it with opposite
+	# signs. Same stick as the steer, so the steer's deadzone. Stick back is +.
+	var y := stick(JOY_AXIS_LEFT_Y, InputMap.action_get_deadzone(&"steer_right"))
 	return {
 		&"accel": pad_strength("accel"),
 		&"brake_reverse": pad_strength("brake_reverse"),
 		&"steer": pad_strength("steer_right") - pad_strength("steer_left"),
-		&"handbrake": pad_strength("handbrake"),
-		&"elevator": vert,
-		&"climb": vert,
+		# PadLayer's injected action; it also reads the handbrake key, harmless under MERGE_MAX
+		# (that key is not shaped).
+		&"handbrake": Input.get_action_strength(&"handbrake"),
+		&"elevator": y,  # plane: pull back, nose up
+		&"climb": -y,  # drone: push up, climb
 	}
 
 
-## The strongest of `action`'s joypad bindings across the pads it names (device -1 = every
-## connected pad), 0..1. An axis reads `axis_strength`; a button reads 1.0.
+## `axis` on whichever connected pad pushes it furthest, signed, -1..1 (`signed_axis`).
+static func stick(axis: JoyAxis, deadzone: float) -> float:
+	var best := 0.0
+	for dev in Input.get_connected_joypads():
+		var v := signed_axis(Input.get_joy_axis(dev, axis), deadzone)
+		if absf(v) > absf(best):
+			best = v
+	return best
+
+
+## A raw axis reading as a signed strength: `axis_strength` either way, so zero inside the deadzone.
+static func signed_axis(value: float, deadzone: float) -> float:
+	return axis_strength(value, 1.0, deadzone) - axis_strength(value, -1.0, deadzone)
+
+
+## The strongest of `action`'s joypad axis bindings across the pads it names (device -1 = every
+## connected pad), 0..1, each read as `axis_strength`. No action binds a pad button (PadLayer's).
 static func pad_strength(action: StringName) -> float:
 	var deadzone := InputMap.action_get_deadzone(action)
 	var best := 0.0
 	for ev in InputMap.action_get_events(action):
-		if not (ev is InputEventJoypadMotion or ev is InputEventJoypadButton):
+		var motion := ev as InputEventJoypadMotion
+		if motion == null:
 			continue
 		var devices: Array[int] = Input.get_connected_joypads()
-		if ev.device >= 0:
-			devices = [ev.device]
+		if motion.device >= 0:
+			devices = [motion.device]
 		for dev in devices:
-			var motion := ev as InputEventJoypadMotion
-			if motion != null:
-				best = maxf(best, axis_strength(Input.get_joy_axis(dev, motion.axis),
-						motion.axis_value, deadzone))
-			elif Input.is_joy_button_pressed(dev, (ev as InputEventJoypadButton).button_index):
-				best = 1.0
+			best = maxf(best, axis_strength(Input.get_joy_axis(dev, motion.axis),
+					motion.axis_value, deadzone))
 	return best
 
 

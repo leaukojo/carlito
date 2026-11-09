@@ -39,9 +39,9 @@ static/pure, tested in `tests/test_input_arbitration.gd`.
 - `arbitrate_local`: ignition gates throttle; brake never throttles; S = brake, then reverse
   at standstill; foot brake drives `brake_lamp`; `tcs_off` is SETTINGS ▸ TRACTION CONTROL (a live
   bridge's own wins, fallback included), `esc_off` STABILITY CONTROL (local only; sets `tcs_off`).
-- `auto_hold` (SETTINGS ▸ AUTO HOLD, off by default): with keys or touch, a wheel-driving body stopped in D or R with no throttle holds
-  its foot brake until the throttle asks to move (`docs/drivetrain.md` § Hill hold). It is
-  off while the gamepad moved a pedal last, and never applies to the bridge.
+- `auto_hold` (SETTINGS ▸ AUTO HOLD, off by default): on the local path, a wheel-driving body stopped in D or R with no throttle holds
+  its foot brake until the throttle asks to move (`docs/drivetrain.md` § Hill hold); a feathered
+  trigger is throttle too. It never applies to the bridge.
 - LAB switches (pause ▸ LAB): session-only and unsaved, local only (no contract signal), stock
   under the challenge lock, dev keys included, and on a body without the hardware, so a switch kept
   through a body change never reaches the next (`InputRouter.lab_raw`). A live bridge (fallback
@@ -89,18 +89,21 @@ Three paths, chosen per tick:
 - `VehicleInput` (`src/input/vehicle_input.gd`) fields are flat except `lamps` (the fourteen
   verbatim-mirrored lamp/warning bits). The raw-intent wire is `Dictionary[StringName,
   Variant]`. Rules for both: `src/input/CLAUDE.md`.
-- Bindings live in `project.godot`'s InputMap, shown by the CONTROLS sheet generated from
-  the action registry. `tests/test_input_map.gd` asserts no two actions share a physical
-  key.
+- Keys and pad axes bind in `project.godot`'s InputMap (`tests/test_input_map.gd`: no shared key);
+  pad buttons bind only in the registry (InputMap cannot gate Cross on L1 being up): `PadLayer`
+  (`src/input/pad_layer.gd`, in `boot.tscn`) resolves each pad's L1 + slot to one row (`pad_press`:
+  the L1 row, else the button's own; paused, SHELL only), injected per `device` until it lifts.
+  Left stick Y is `pad_source.gd`'s (`elevator` / `climb`, opposite signs); the right stick and
+  D-pad zoom are `level.gd` `_pad_view`, view-only.
 
 ### The action registry
 
 `src/input/action_registry.gd`: one row per control (a control on two keys is one row), each with
 a label, a group, a gate and how touch offers it; `keys_for()` reads the live binding.
 
-Two consumers: the pause menu's CONTROLS sheet (`src/ui/pause_menu.gd`) and the touch button
-stack (`src/ui/touch_controls.gd`). `tests/test_action_registry.gd` asserts every bound
-(non-`ui_*`) action is in exactly one row.
+Consumers: the CONTROLS sheet (`pause_menu.gd`), the touch stack (`touch_controls.gd`), `PadLayer`
+and the L1 legend (`pad_legend.gd`). `tests/test_action_registry.gd`: every bound (non-`ui_*`)
+action in exactly one row, and no context answering one `pad` slot twice.
 
 `applies(id, ctx)` is the shared gate predicate; `gate_note()` gives the reason.
 
@@ -186,15 +189,15 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   (`src/ui/notice_line.gd`, `Notice` Label): `GameState.notice` text, dwelled
   `NoticeLine.NOTICE_DWELL_S`. First-run cue (`src/ui/coach_cue.gd`): dismissed by input or
   timeout, once per session (`CoachCue.maybe_coach`), via non-consuming `_input`.
-- Pause overlay (`src/ui/pause_menu.gd`, Esc or touch MENU):
-  RESUME/RESPAWN/SPAWN POINT/CONDITIONS/LAB/CONTROLS/SETTINGS; GARAGE/LEVEL/CHALLENGES live on
-  touch (hidden only by F5, never F4) and G / 4 / 5. `setup(caps, state)` before `add_child`,
+- Pause overlay (`src/ui/pause_menu.gd`, Esc, Options or touch MENU): RESUME/RESPAWN/SPAWN POINT/
+  LEVEL/CHALLENGES/CONDITIONS/LAB/CONTROLS/SETTINGS; GARAGE/LEVEL/CHALLENGES also live on touch
+  (hidden only by F5, never F4) and G / 4 / 5, GARAGE on Create. `setup(caps, state)` before `add_child`,
   `state` a `PauseMenu.State` (named fields, filled by `Boot._open_pause`).
 
   | Page | Contents |
   |---|---|
   | SPAWN POINT | the level's spawns this body may use (`State.spawns`), shown from two up; a pick emits `spawn_picked(index)` |
-  | CONTROLS | off `InputMap`; hidden if unusable (`ActionRegistry.relevant_entry`), greyed if bridge-owned |
+  | CONTROLS | off `InputMap` and the registry's `pad` (`pad_for`); hidden if unusable (`ActionRegistry.relevant_entry`), greyed if bridge-owned |
   | SETTINGS | dashboard density, UI scale, extended debug, KEY RESPONSE, TRACTION CONTROL, STABILITY CONTROL, AUTO HOLD; saved to `user://` (`UserSettings`, re-applied by `Boot._apply_saved_settings`) |
   | LAB | ANTI-LOCK BRAKES, DIFFERENTIALS, STEERING (§ Input pipeline), session-held, greyed in a challenge or under a live bridge |
   | CONDITIONS | WIND/CURRENT preset (`WorldConditions.Preset` LEVEL/CALM/LIGHT/STRONG), FROM direction, TIME -> greys per `WorldConditions.WIND_FAMILIES`/`CURRENT_FAMILIES` |
@@ -208,9 +211,8 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   `src/ui/level_thumbs/<id>.png` (`LevelShot.thumb_path`), framed by `<level>_shot.tres`.
 - Vehicle selector (`src/ui/vehicle_select.gd`, G or touch GARAGE): family column, variant
   cards, towing; one SubViewport turntable via `VehicleShot.spawn_display` (frozen
-  KINEMATIC, `display_only = true`, out of `InputRouter`'s slot). DRIVE alone refuses
-  (`_on_drive`, via
-  `allowed_vehicles`/`Level.has_closed_rail()`/`Level.has_spawn_for(family)`). Attachments:
+  KINEMATIC, `display_only = true`, out of `InputRouter`'s slot). DRIVE alone refuses (`_on_drive`,
+  via `allowed_vehicles`/`Level.has_closed_rail()`/`Level.has_spawn_for(family)`). Attachments:
   `attachment_ids()`/`current_attachment()`/`set_attachment(id)`, duck-typed on
   `TractorVehicle`/`SemiTractor`, same setter as `cycle_implement()` (DETACHED/BOBTAIL =
   NONE). Emits `vehicle_chosen(variant)` then `attachment_chosen(id)` (a towing machine),
@@ -220,9 +222,8 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   the shell binds only after a spawn). Cards: `tools/gen_vehicle_thumbs.tscn` (windowed) ->
   `src/ui/vehicle_thumbs/<id>.png` via `src/ui/vehicle_shot.gd`; PNGs under `src/`,
   `tools/*`/`kit/thumbs/*` export-excluded.
-- Garage level (`src/levels/garage/`, id `garage`): frozen KINEMATIC vehicle,
-  `_physics_process` still runs (wheels steer, engine revs, lamps toggle), `orbit_camera.gd`
-  inspects freely.
+- Garage level (`src/levels/garage/`, id `garage`): frozen KINEMATIC vehicle, `_physics_process`
+  still runs (wheels steer, engine revs, lamps toggle), `orbit_camera.gd` inspects freely.
 - Touch controls (`src/ui/touch_controls.gd`), a second input source: joystick, pedals,
   UP/DOWN flight pads, buttons generated from the registry (`ActionRegistry.is_universal`,
   `STACK_HEAD`; per-machine ones in the EQUIP drawer, `_fit_equip_drawer`). IMPORTANT (F5,

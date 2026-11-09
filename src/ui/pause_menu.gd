@@ -1,9 +1,10 @@
 class_name PauseMenu
 extends Control
-## The pause overlay: RESUME / RESPAWN / SPAWN POINT / CONDITIONS / LAB / CONTROLS / SETTINGS. GARAGE,
-## LEVEL and CHALLENGES live on the on-screen important buttons (and G / 4 / 5), not here. Never
-## tears the level down on its own. RESPAWN and SPAWN POINT are signals — respawning is the
-## shell's to do (rule 6), SPAWN POINT lists names and hands back an index; this
+## The pause overlay: RESUME / RESPAWN / SPAWN POINT / LEVEL / CHALLENGES / CONDITIONS / LAB /
+## CONTROLS / SETTINGS. LEVEL and CHALLENGES are here for the gamepad (touch also has them on the
+## important buttons, the keyboard on 4 / 5); GARAGE is on Create, G and touch, not here. Never
+## tears the level down on its own. RESPAWN, SPAWN POINT, LEVEL and CHALLENGES are signals —
+## respawning is the shell's to do (rule 6), SPAWN POINT lists names and hands back an index; this
 ## menu never learns what a level or vehicle is. CONTROLS, SETTINGS, CONDITIONS and LAB own nothing
 ## either: CONTROLS is generated from ActionRegistry (same source the touch overlay reads), SETTINGS,
 ## CONDITIONS and LAB emit new values for the shell to apply/persist. Built in code, colour/type from the
@@ -14,6 +15,9 @@ const KeyShaper := preload("res://src/input/key_shaper.gd")
 
 signal resume_requested
 signal respawn_requested
+## LEVEL / CHALLENGES picked: the shell opens that screen over this menu.
+signal level_requested
+signal challenges_requested
 ## A SPAWN POINT page pick: the index into `State.spawns`. Moving there is the shell's to do.
 signal spawn_picked(index: int)
 ## New Dashboard.Density setting picked; the shell applies it and writes it to user://.
@@ -70,7 +74,9 @@ class State extends RefCounted:
 const BUTTON_W := 260.0
 
 ## Row shows one key per action, else "W / Up / S / Down" becomes the widest thing on the page.
-const DRIVE_FOOTNOTE := "Arrow keys and a gamepad also drive."
+const DRIVE_FOOTNOTE := "Arrow keys also drive."
+## Each sheet group's column heads: what, key, gamepad, why not.
+const SHEET_HEADS := ["", "KEY", "GAMEPAD", ""]
 
 ## COMPACT is the default; this says what FULL buys back.
 const DENSITY_HELP := "COMPACT keeps the gauges and tell-tales; FULL adds the bars, wind rose and echo sounder."
@@ -87,7 +93,7 @@ const TCS_HELP := "Takes drive away from a driven wheel that spins; it never bra
 
 const ESC_HELP := "Brakes one wheel to stop a spin or a plough. Road vehicles fitted with it only; OFF turns traction control off too."
 
-const AUTO_HOLD_HELP := "Holds the brake when stopped in gear, with keys or on-screen pedals, until you press the accelerator. OFF lets it creep and roll back."
+const AUTO_HOLD_HELP := "Holds the brake when stopped in gear until you press the accelerator. OFF lets it creep and roll back."
 
 const ABS_HELP := "Keeps a braked wheel from locking, so the car still steers. OFF takes stability control, traction control, hill-start assist and auto hold with it. This session only."
 
@@ -216,6 +222,8 @@ func _build_root() -> void:
 	_root.add_child(_menu_button("RESPAWN", func() -> void: respawn_requested.emit()))
 	if _spawns.size() >= 2:
 		_root.add_child(_menu_button("SPAWN POINT", func() -> void: _show_page(_spawn_page)))
+	_root.add_child(_menu_button("LEVEL", func() -> void: level_requested.emit()))
+	_root.add_child(_menu_button("CHALLENGES", func() -> void: challenges_requested.emit()))
 	_root.add_child(_menu_button("CONDITIONS", func() -> void: _show_page(_conditions)))
 	_root.add_child(_menu_button("LAB", func() -> void: _show_page(_lab)))
 	_root.add_child(_menu_button("CONTROLS", func() -> void: _show_page(_controls)))
@@ -224,9 +232,9 @@ func _build_root() -> void:
 
 ## Generated from ActionRegistry: every row, grouping and gate comes from that table, and key
 ## strings are read live from InputMap, so a control can't exist without appearing here and a
-## rebinding can't go stale. Three columns: what it does, the key, and why not if it doesn't
-## apply. A row the current vehicle/attachment can never use (family/capability gate fails) is
-## HIDDEN outright — `ActionRegistry.relevant_entry` — and a group whose rows are all hidden
+## rebinding can't go stale. Four columns: what it does, the key, the gamepad button
+## (`ActionRegistry.pad_for`), and why not if it doesn't apply. A row the current
+## vehicle/attachment can never use (family/capability gate fails) is HIDDEN outright — `ActionRegistry.relevant_entry` — and a group whose rows are all hidden
 ## loses its heading; a row blocked only because the bridge owns it right now still shows,
 ## greyed, with its gate note, since that reason goes away on its own.
 func _build_controls() -> void:
@@ -258,8 +266,13 @@ func _build_controls() -> void:
 
 		# Centred as a block so pairs line up instead of drifting apart on a wide window.
 		var grid := GridContainer.new()
-		grid.columns = 3
+		grid.columns = SHEET_HEADS.size()
 		grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		for head: String in SHEET_HEADS:
+			var head_label := Label.new()
+			head_label.text = head
+			head_label.theme_type_variation = &"MutedSmall"
+			grid.add_child(head_label)
 		for entry in rows:
 			var applies := ActionRegistry.applies_entry(entry, ctx)
 			var what := Label.new()
@@ -270,6 +283,10 @@ func _build_controls() -> void:
 			key.text = ActionRegistry.keys_for(entry)
 			key.theme_type_variation = &"MutedSmall" if not applies else &"Dim"
 			grid.add_child(key)
+			var pad := Label.new()
+			pad.text = ActionRegistry.pad_for(entry)
+			pad.theme_type_variation = &"MutedSmall" if not applies else &"Dim"
+			grid.add_child(pad)
 			var note := Label.new()
 			note.text = ActionRegistry.gate_note(entry, ctx)
 			note.theme_type_variation = &"MutedSmall"
