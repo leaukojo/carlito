@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 300" width="420" height="300">
+<title>The friction ellipse: grip shared between braking and turning</title>
+<!-- Radii in proportion to the sedan's grip: mu_lat 0.97 across (rx 107), GroundDriveSpec mu_long 1.05 along (ry 115). -->
+<style>
+.fe-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.fe-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.fe-axis{stroke:var(--fig-muted,#6b6b75);stroke-width:1.2;stroke-dasharray:4 4;fill:none}
+.fe-ell{stroke:var(--fig-blue,#1d5ca8);stroke-width:3;fill:var(--fig-fill,#f3f1ec)}
+.fe-vec{stroke:var(--fig-orange,#c45a12);stroke-width:3;fill:none}
+.fe-dot{fill:var(--fig-orange,#c45a12)}
+.fe-blue-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+@media (prefers-color-scheme:dark){
+.fe-t{fill:var(--fig-ink,#e9e7e2)}.fe-s{fill:var(--fig-muted,#a6a6b0)}.fe-axis{stroke:var(--fig-muted,#a6a6b0)}
+.fe-ell{stroke:var(--fig-blue,#8ab6ff);fill:var(--fig-fill,#22242a)}.fe-vec{stroke:var(--fig-orange,#f0a060)}
+.fe-dot{fill:var(--fig-orange,#f0a060)}.fe-blue-t{fill:var(--fig-blue,#8ab6ff)}}
+</style>
+<ellipse class="fe-ell" cx="210" cy="150" rx="107" ry="115"/>
+<line class="fe-axis" x1="80" y1="150" x2="340" y2="150"/>
+<line class="fe-axis" x1="210" y1="26" x2="210" y2="274"/>
+<text class="fe-blue-t" x="318" y="62">grip limit</text>
+<text class="fe-t" x="210" y="20" text-anchor="middle">driving</text>
+<text class="fe-t" x="210" y="292" text-anchor="middle">braking</text>
+<text class="fe-t" x="72" y="155" text-anchor="end">turning</text>
+<text class="fe-t" x="348" y="155">turning</text>
+<!-- braking only -->
+<line class="fe-vec" x1="210" y1="150" x2="210" y2="258"/>
+<circle class="fe-dot" cx="210" cy="260" r="5"/>
+<text class="fe-s" x="198" y="274" text-anchor="end">braking only</text>
+<!-- turning only -->
+<line class="fe-vec" x1="210" y1="150" x2="312" y2="150"/>
+<circle class="fe-dot" cx="314" cy="150" r="5"/>
+<text class="fe-s" x="258" y="140" text-anchor="middle">turning only</text>
+<!-- both at once, on the limit -->
+<line class="fe-vec" x1="210" y1="150" x2="284" y2="230"/>
+<circle class="fe-dot" cx="285.5" cy="231.5" r="5"/>
+<text class="fe-s" x="296" y="244">both at once:</text>
+<text class="fe-s" x="296" y="260">less of each</text>
+</svg>

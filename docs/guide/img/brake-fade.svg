@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 310" width="420" height="310">
+<title>How much braking force is left as each kind of brake heats up</title>
+<!-- BrakeThermal fade curves (degC, factor on the cold torque), flat before the first point and after the last:
+     DRUM (177,1) (316,0.8) (480,0.5); PAD (400,1) (465,0.86) (615,0.86) (750,0.5); RACE (650,1) (850,0.7);
+     WET (90,1) (190,0.75), read off the sump. Factor axis 0.4..1, temperature 0..850 degC. -->
+<style>
+.fd-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.fd-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.fd-axis{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:none}
+.fd-grid{stroke:var(--fig-grid,#e3e0d8);stroke-width:1;fill:none}
+.fd-blue{stroke:var(--fig-blue,#1d5ca8)}.fd-orange{stroke:var(--fig-orange,#c45a12)}
+.fd-green{stroke:var(--fig-green,#2e7d32)}.fd-red{stroke:var(--fig-red,#b3261e)}
+.fd-c{stroke-width:3;fill:none;stroke-linejoin:round}
+.fd-blue-f{fill:var(--fig-blue,#1d5ca8)}.fd-orange-f{fill:var(--fig-orange,#c45a12)}
+.fd-green-f{fill:var(--fig-green,#2e7d32)}.fd-red-f{fill:var(--fig-red,#b3261e)}
+@media (prefers-color-scheme:dark){
+.fd-t{fill:var(--fig-ink,#e9e7e2)}.fd-s{fill:var(--fig-muted,#a6a6b0)}.fd-axis{stroke:var(--fig-ink,#e9e7e2)}
+.fd-grid{stroke:var(--fig-grid,#30323a)}.fd-blue{stroke:var(--fig-blue,#8ab6ff)}.fd-orange{stroke:var(--fig-orange,#f0a060)}
+.fd-green{stroke:var(--fig-green,#7cc884)}.fd-red{stroke:var(--fig-red,#f08a80)}
+.fd-blue-f{fill:var(--fig-blue,#8ab6ff)}.fd-orange-f{fill:var(--fig-orange,#f0a060)}
+.fd-green-f{fill:var(--fig-green,#7cc884)}.fd-red-f{fill:var(--fig-red,#f08a80)}}
+</style>
+<line class="fd-grid" x1="56" y1="178.3" x2="400" y2="178.3"/>
+<text class="fd-s" x="50" y="182.3" text-anchor="end">0.5</text>
+<line class="fd-grid" x1="56" y1="109.2" x2="400" y2="109.2"/>
+<text class="fd-s" x="50" y="113.2" text-anchor="end">0.75</text>
+<line class="fd-grid" x1="56" y1="40.0" x2="400" y2="40.0"/>
+<text class="fd-s" x="50" y="44.0" text-anchor="end">1</text>
+<text class="fd-s" x="56.0" y="224" text-anchor="middle">0</text>
+<text class="fd-s" x="136.9" y="224" text-anchor="middle">200</text>
+<text class="fd-s" x="217.9" y="224" text-anchor="middle">400</text>
+<text class="fd-s" x="298.8" y="224" text-anchor="middle">600</text>
+<text class="fd-s" x="379.8" y="224" text-anchor="middle">800</text>
+<path class="fd-axis" d="M56,34 L56,206 L404,206"/>
+<polyline class="fd-c fd-orange" points="56.0,40.0 127.6,40.0 183.9,95.3 250.3,178.3 400.0,178.3"/>
+<polyline class="fd-c fd-blue" points="56.0,40.0 217.9,40.0 244.2,78.7 304.9,78.7 359.5,178.3 400.0,178.3"/>
+<polyline class="fd-c fd-green" points="56.0,40.0 319.1,40.0 400.0,123.0 400.0,123.0"/>
+<polyline class="fd-c fd-red" points="56.0,40.0 92.4,40.0 132.9,109.2 400.0,109.2"/>
+<text class="fd-t" x="228.0" y="242" text-anchor="middle">brake temperature, °C</text>
+<text class="fd-t" x="14" y="123.0" text-anchor="middle" transform="rotate(-90 14 123.0)">braking force left</text>
+<rect class="fd-orange-f" x="62" y="264" width="14" height="4"/><text class="fd-s" x="82" y="270">Drums: rigid trucks</text>
+<rect class="fd-blue-f" x="232" y="264" width="14" height="4"/><text class="fd-s" x="252" y="270">Disc pads: cars, semis</text>
+<rect class="fd-green-f" x="62" y="286" width="14" height="4"/><text class="fd-s" x="82" y="292">Racing pads</text>
+<rect class="fd-red-f" x="232" y="286" width="14" height="4"/><text class="fd-s" x="252" y="292">Wet discs: tractor oil</text>
+</svg>

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 300" width="420" height="300">
+<title>Air drag and rolling resistance on the sedan against speed</title>
+<!-- sedan_spec.tres drag_area 0.65 m², rolling_resistance 0.012, mass 1150 kg; VehicleMath.AIR_DENSITY 1.225.
+     Drag = 0.5 rho CdA v² (VehicleMath.aero_drag); rolling = crr m g = 135 N on a flat road. Crossover near 66 km/h. -->
+<style>
+.rs-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.rs-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.rs-axis{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:none}
+.rs-grid{stroke:var(--fig-grid,#e3e0d8);stroke-width:1;fill:none}
+.rs-blue{stroke:var(--fig-blue,#1d5ca8);stroke-width:3.5;fill:none}
+.rs-orange{stroke:var(--fig-orange,#c45a12);stroke-width:3;fill:none;stroke-dasharray:7 4}
+.rs-blue-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.rs-orange-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.rs-t{fill:var(--fig-ink,#e9e7e2)}.rs-s{fill:var(--fig-muted,#a6a6b0)}.rs-axis{stroke:var(--fig-ink,#e9e7e2)}
+.rs-grid{stroke:var(--fig-grid,#30323a)}.rs-blue{stroke:var(--fig-blue,#8ab6ff)}.rs-orange{stroke:var(--fig-orange,#f0a060)}
+.rs-blue-t{fill:var(--fig-blue,#8ab6ff)}.rs-orange-t{fill:var(--fig-orange,#f0a060)}}
+</style>
+<line class="rs-grid" x1="60" y1="160.0" x2="396" y2="160.0"/>
+<text class="rs-s" x="54" y="164.0" text-anchor="end">400</text>
+<line class="rs-grid" x1="60" y1="100.0" x2="396" y2="100.0"/>
+<text class="rs-s" x="54" y="104.0" text-anchor="end">800</text>
+<line class="rs-grid" x1="60" y1="40.0" x2="396" y2="40.0"/>
+<text class="rs-s" x="54" y="44.0" text-anchor="end">1200</text>
+<text class="rs-s" x="54" y="224" text-anchor="end">0</text>
+<text class="rs-s" x="60.0" y="238" text-anchor="middle">0</text>
+<text class="rs-s" x="144.0" y="238" text-anchor="middle">50</text>
+<text class="rs-s" x="228.0" y="238" text-anchor="middle">100</text>
+<text class="rs-s" x="312.0" y="238" text-anchor="middle">150</text>
+<text class="rs-s" x="396.0" y="238" text-anchor="middle">200</text>
+<path class="rs-axis" d="M60,34 L60,220 L400,220"/>
+<polyline class="rs-blue" points="60.0,220.0 68.4,219.9 76.8,219.5 85.2,219.0 93.6,218.2 102.0,217.1 110.4,215.9 118.8,214.4 127.2,212.6 135.6,210.7 144.0,208.5 152.4,206.1 160.8,203.4 169.2,200.5 177.6,197.4 186.0,194.1 194.4,190.5 202.8,186.7 211.2,182.7 219.6,178.4 228.0,173.9 236.4,169.2 244.8,164.2 253.2,159.1 261.6,153.6 270.0,148.0 278.4,142.1 286.8,136.0 295.2,129.7 303.6,123.1 312.0,116.3 320.4,109.3 328.8,102.0 337.2,94.5 345.6,86.8 354.0,78.9 362.4,70.7 370.8,62.3 379.2,53.7 387.6,44.8"/>
+<line class="rs-orange" x1="60" y1="199.7" x2="396" y2="199.7"/>
+<text class="rs-blue-t" x="312.0" y="115.0" text-anchor="end">air drag</text>
+<text class="rs-orange-t" x="389.3" y="191.7" text-anchor="end">rolling resistance</text>
+<text class="rs-t" x="228.0" y="258" text-anchor="middle">speed, km/h</text>
+<text class="rs-t" x="16" y="130.0" text-anchor="middle" transform="rotate(-90 16 130.0)">force, N</text>
+</svg>

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 300" width="420" height="300">
+<title>Ackermann steering: the inner wheel turns more, both aim at one centre</title>
+<!-- The sedan's proportions: wheelbase 1.584 m, front track 1.26 m (sedan_spec.tres wheel_positions),
+     drawn at 150 px and 120 px. Bicycle angle 34 deg right; WheelDrive.ackermann_angle at fraction 1
+     gives the inner (right) wheel 42.7 deg and the outer (left) 28.0 deg; both perpendiculars meet
+     the rear-axle line at x = 382. -->
+<style>
+.ak-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.ak-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.ak-body{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-muted,#6b6b75);stroke-width:1.5}
+.ak-wheel{fill:var(--fig-ink,#1c1c1f)}
+.ak-dash{stroke:var(--fig-blue,#1d5ca8);stroke-width:1.8;stroke-dasharray:6 4;fill:none}
+.ak-axle{stroke:var(--fig-muted,#6b6b75);stroke-width:1.2;stroke-dasharray:2 4;fill:none}
+.ak-centre{fill:var(--fig-blue,#1d5ca8)}
+.ak-blue-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.ak-orange-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.ak-t{fill:var(--fig-ink,#e9e7e2)}.ak-s{fill:var(--fig-muted,#a6a6b0)}.ak-body{fill:var(--fig-fill,#22242a);stroke:var(--fig-muted,#a6a6b0)}
+.ak-wheel{fill:var(--fig-ink,#e9e7e2)}.ak-dash{stroke:var(--fig-blue,#8ab6ff)}.ak-axle{stroke:var(--fig-muted,#a6a6b0)}
+.ak-centre{fill:var(--fig-blue,#8ab6ff)}.ak-blue-t{fill:var(--fig-blue,#8ab6ff)}.ak-orange-t{fill:var(--fig-orange,#f0a060)}}
+</style>
+<rect class="ak-body" x="92" y="56" width="136" height="216" rx="26"/>
+<line class="ak-axle" x1="100" y1="240" x2="400" y2="240"/>
+<!-- perpendiculars from each front wheel -->
+<line class="ak-dash" x1="100" y1="90" x2="382" y2="240"/>
+<line class="ak-dash" x1="220" y1="90" x2="382" y2="240"/>
+<circle class="ak-centre" cx="382" cy="240" r="6"/>
+<text class="ak-blue-t" x="412" y="266" text-anchor="end">one turn centre</text>
+<!-- front wheels at their own angles, rear wheels straight -->
+<rect class="ak-wheel" x="93" y="72" width="14" height="36" rx="4" transform="rotate(28 100 90)"/>
+<rect class="ak-wheel" x="213" y="72" width="14" height="36" rx="4" transform="rotate(42.7 220 90)"/>
+<rect class="ak-wheel" x="93" y="222" width="14" height="36" rx="4"/>
+<rect class="ak-wheel" x="213" y="222" width="14" height="36" rx="4"/>
+<text class="ak-orange-t" x="86" y="40" text-anchor="end">outer wheel</text>
+<text class="ak-s" x="86" y="56" text-anchor="end">turns less</text>
+<text class="ak-orange-t" x="250" y="40">inner wheel</text>
+<text class="ak-s" x="250" y="56">turns more</text>
+<text class="ak-s" x="160" y="292" text-anchor="middle">turning right, seen from above</text>
+</svg>

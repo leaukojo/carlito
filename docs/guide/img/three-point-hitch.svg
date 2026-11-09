@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 260" width="420" height="260">
+<title>A tractor's three-point hitch and PTO seen from the side</title>
+<!-- A schematic, not to scale. Two lower links and one top link form a four-bar linkage
+     (HitchLinkage solves it as one); the PTO shaft runs from the tractor's rear to the implement. -->
+<style>
+.th-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.th-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.th-body{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-ink,#1c1c1f);stroke-width:2}
+.th-tyre{fill:none;stroke:var(--fig-ink,#1c1c1f);stroke-width:10}
+.th-link{stroke:var(--fig-blue,#1d5ca8);stroke-width:5;stroke-linecap:round;fill:none}
+.th-pto{stroke:var(--fig-orange,#c45a12);stroke-width:3;stroke-dasharray:7 4;fill:none}
+.th-ground{stroke:var(--fig-grid,#e3e0d8);stroke-width:6}
+.th-pin{fill:var(--fig-ink,#1c1c1f)}
+.th-blue-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.th-or-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.th-t{fill:var(--fig-ink,#e9e7e2)}.th-s{fill:var(--fig-muted,#a6a6b0)}
+.th-body{fill:var(--fig-fill,#22242a);stroke:var(--fig-ink,#e9e7e2)}.th-tyre{stroke:var(--fig-ink,#e9e7e2)}
+.th-link{stroke:var(--fig-blue,#8ab6ff)}.th-pto{stroke:var(--fig-orange,#f0a060)}
+.th-ground{stroke:var(--fig-grid,#30323a)}.th-pin{fill:var(--fig-ink,#e9e7e2)}
+.th-blue-t{fill:var(--fig-blue,#8ab6ff)}.th-or-t{fill:var(--fig-orange,#f0a060)}}
+</style>
+<line class="th-ground" x1="10" y1="236" x2="410" y2="236"/>
+<!-- tractor rear: body and big rear tyre -->
+<rect class="th-body" x="20" y="60" width="150" height="90" rx="10"/>
+<circle class="th-tyre" cx="110" cy="166" r="62"/>
+<text class="th-t" x="60" y="94">tractor</text>
+<!-- implement: a plough frame -->
+<path class="th-body" d="M260,118 L300,118 L300,190 L340,222 L300,222 L270,196 L260,196 Z"/>
+<text class="th-t" x="310" y="112">implement</text>
+<!-- links -->
+<path class="th-link" d="M168,96 L262,124"/>
+<path class="th-link" d="M168,176 L262,190"/>
+<circle class="th-pin" cx="168" cy="96" r="4"/><circle class="th-pin" cx="262" cy="124" r="4"/>
+<circle class="th-pin" cx="168" cy="176" r="4"/><circle class="th-pin" cx="262" cy="190" r="4"/>
+<text class="th-blue-t" x="200" y="88">top link</text>
+<text class="th-blue-t" x="186" y="212">two lower links</text>
+<!-- PTO shaft -->
+<path class="th-pto" d="M170,150 L262,160"/>
+<text class="th-or-t" x="200" y="146">PTO</text>
+<text class="th-s" x="210" y="40" text-anchor="middle">the links lift the implement and tip it back as it rises</text>
+<text class="th-s" x="356" y="252" text-anchor="middle">soil: draft pulls back</text>
+</svg>

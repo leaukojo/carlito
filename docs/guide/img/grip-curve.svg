@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 290" width="420" height="290">
+<title>The grip curve shared by every tyre in the game</title>
+<!-- GroundDriveSpec.grip_curve: (0,0) (0.12,1) (0.4,0.9) (1,0.8), linear between points.
+     Plot: x = 56 + 344*slip, y = 230 - 190*grip. -->
+<style>
+.gc-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.gc-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.gc-axis{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:none}
+.gc-grid{stroke:var(--fig-grid,#e3e0d8);stroke-width:1;fill:none}
+.gc-zone{fill:var(--fig-fill,#f3f1ec)}
+.gc-curve{stroke:var(--fig-blue,#1d5ca8);stroke-width:3.5;fill:none;stroke-linejoin:round}
+.gc-dot{fill:var(--fig-orange,#c45a12)}
+.gc-orange-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+.gc-lead{stroke:var(--fig-orange,#c45a12);stroke-width:1.5;fill:none}
+@media (prefers-color-scheme:dark){
+.gc-t{fill:var(--fig-ink,#e9e7e2)}.gc-s{fill:var(--fig-muted,#a6a6b0)}.gc-axis{stroke:var(--fig-ink,#e9e7e2)}
+.gc-grid{stroke:var(--fig-grid,#30323a)}.gc-zone{fill:var(--fig-fill,#22242a)}.gc-curve{stroke:var(--fig-blue,#8ab6ff)}
+.gc-dot{fill:var(--fig-orange,#f0a060)}.gc-orange-t{fill:var(--fig-orange,#f0a060)}.gc-lead{stroke:var(--fig-orange,#f0a060)}}
+</style>
+<rect class="gc-zone" x="56" y="40" width="41.3" height="190"/>
+<line class="gc-grid" x1="56" y1="40" x2="400" y2="40"/>
+<line class="gc-grid" x1="56" y1="135" x2="400" y2="135"/>
+<line class="gc-grid" x1="97.3" y1="40" x2="97.3" y2="230"/>
+<line class="gc-grid" x1="193.6" y1="40" x2="193.6" y2="230"/>
+<line class="gc-grid" x1="400" y1="40" x2="400" y2="230"/>
+<path class="gc-axis" d="M56,32 L56,230 L404,230"/>
+<polyline class="gc-curve" points="56,230 97.3,40 193.6,59 400,78"/>
+<!-- the peak -->
+<circle class="gc-dot" cx="97.3" cy="40" r="5.5"/>
+<path class="gc-lead" d="M103,38 L150,24"/>
+<text class="gc-orange-t" x="154" y="22">peak grip, at slip 0.12</text>
+<text class="gc-s" x="154" y="38">ABS and traction control hold here</text>
+<!-- the tail -->
+<text class="gc-s" x="396" y="98" text-anchor="end">locked or spinning hard:</text>
+<text class="gc-s" x="396" y="114" text-anchor="end">0.8 of the peak</text>
+<text class="gc-s" x="102" y="222">gripping ←</text>
+<text class="gc-s" x="300" y="222" text-anchor="middle">sliding</text>
+<!-- axes -->
+<text class="gc-s" x="50" y="44" text-anchor="end">full</text>
+<text class="gc-s" x="50" y="139" text-anchor="end">half</text>
+<text class="gc-s" x="50" y="234" text-anchor="end">0</text>
+<text class="gc-t" x="14" y="135" text-anchor="middle" transform="rotate(-90 14 135)">grip</text>
+<text class="gc-s" x="56" y="248" text-anchor="middle">0</text>
+<text class="gc-s" x="97.3" y="248" text-anchor="middle">0.12</text>
+<text class="gc-s" x="193.6" y="248" text-anchor="middle">0.4</text>
+<text class="gc-s" x="400" y="248" text-anchor="end">1</text>
+<text class="gc-t" x="228" y="276" text-anchor="middle">slip</text>
+</svg>
