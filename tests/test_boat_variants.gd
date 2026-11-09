@@ -89,7 +89,7 @@ func test_spec_mass_and_steer_speed_match_the_recipe() -> void:
 
 
 ## The curve is the ONE derived spec field cheap enough to re-derive honestly: the baseline
-## points with every y scaled by the variant's `torque_mul`, which is `_scaled_curve`.
+## points with every y scaled by the variant's `torque_mul`, which is `VehicleGenIO.scaled_curve`.
 func test_spec_torque_curve_is_the_baseline_scaled_by_torque_mul() -> void:
 	for variant: String in Gen.VARIANTS:
 		var ov: Dictionary = Gen.VARIANTS[variant]
