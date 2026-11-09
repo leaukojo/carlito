@@ -198,6 +198,7 @@ var _dsc_doc := false                 ## `doc=brake_fade`: rewrite the region at
 var _dsc_trailer: TowedBody = null
 var _dsc_host: TowHost = null
 var _dsc_artic := 0.0                 ## rad, the hold's largest |articulation| (`TowHost.articulation`)
+var _dsc_stop_artic := 0.0            ## rad, the same over the stop after it
 var _dsc_check := false               ## `doc=brake_check`: rewrite that region at the end
 var _dsc_job := {}                    ## the current job, its flags (`DOC_CHECK_JOBS`' keys)
 var _dsc_shift := 0.0                 ## °C, the job's `amb` less the model's: on every reported brake
@@ -1596,6 +1597,8 @@ func _descent_step(delta: float) -> void:
 	_ledger_tick(delta)
 	_track_units()
 	if _phase == Ph.DESC_STOP:
+		if is_instance_valid(_dsc_trailer):
+			_dsc_stop_artic = maxf(_dsc_stop_artic, absf(_dsc_host.articulation()))
 		for w in _thermal_brakes():
 			if not w.is_rear:
 				_dsc_front_loss += BrakeThermal.loss_w(w.brake_temp, _car.linear_velocity.length(),
@@ -1697,7 +1700,22 @@ func _end_hold(dist: float, v: float) -> void:
 		_phase = Ph.DONE
 		_next_descent()
 		return
+	if is_instance_valid(_dsc_trailer) and rad_to_deg(_dsc_artic) >= ARTICULATION_BOUND_DEG:
+		_lost_stop("jackknifed", _dsc_artic)
+		return
 	_begin_stop(v)
+
+
+## The stop after a hold, never run or ended by a lost rig (`why`: jackknifed, left the ramp, never
+## stopped): a distance and closure there read a folded, respawned or moving body, so the row
+## keeps only `why`.
+func _lost_stop(why: String, artic: float) -> void:
+	_dsc_row["stop"] = {"lost": why}
+	print("    stop    : none, the rig %s%s" % [why, "" if not is_instance_valid(_dsc_trailer)
+			else " (articulation %.1f° at most)" % rad_to_deg(artic)])
+	_dsc_rows.append(_dsc_row)
+	_phase = Ph.DONE
+	_next_descent()
 
 
 func _begin_stop(v: float) -> void:
@@ -1709,6 +1727,7 @@ func _begin_stop(v: float) -> void:
 	_ledger_start()
 	_dsc_front0 = float(_brake_means()["front"])
 	_dsc_front_loss = 0.0
+	_dsc_stop_artic = 0.0
 	if _dsc_job.has("decel"):
 		_dsc_v_prev = v
 		_dsc_a = float(_dsc_job["decel"]) * BrakeSizing.G
@@ -1745,6 +1764,15 @@ func _end_stop() -> void:
 			_t = 0.0
 			return
 	else:
+		# Off the ramp the body respawns at the top: the distance reads back up the grade. A stop the
+		# cap ended still moving has no distance to report either.
+		var lost := "left the ramp" if dist < -1.0 else "jackknifed" if is_instance_valid(_dsc_trailer) \
+				and rad_to_deg(_dsc_stop_artic) >= ARTICULATION_BOUND_DEG else "never stopped" \
+				if absf(_car.linear_velocity.dot(down)) >= maxf(STOP_SPEED,
+				float(_dsc_job.get("to", 0.0)) / 3.6) else ""
+		if lost != "":
+			_lost_stop(lost, _dsc_stop_artic)
+			return
 		_dsc_row["stop"] = stop
 		if _dsc_mode == "cold":
 			_dsc_cold[_variant] = dist
@@ -2008,9 +2036,11 @@ func _print_descent() -> void:
 		if not r.has("stop"):  ## a field run (`doc=brake_check`): its table follows
 			continue
 		var h: Dictionary = r["hold"]
-		print("%-16s %-8s %-8s %20s %20s %7.1f (%4.1f) %8s" % [r["variant"], r["mode"], h["gears"],
-				_unit_cell(h["units"], "powered"), _unit_cell(h["units"], "trailer"),
-				r["stop"]["dist"], _dsc_cold.get(r["variant"], NAN), _check_short(h["check"])])
+		var stop_m := String(r["stop"]["lost"]) if r["stop"].has("lost") \
+				else "%7.1f (%4.1f)" % [r["stop"]["dist"], _dsc_cold.get(r["variant"], NAN)]
+		print("%-16s %-8s %-8s %20s %20s %14s %8s" % [r["variant"], r["mode"], h["gears"],
+				_unit_cell(h["units"], "powered"), _unit_cell(h["units"], "trailer"), stop_m,
+				_check_short(h["check"])])
 
 
 ## "°C, factor" at the end of the hold or stop, "none" without that unit.
@@ -2045,12 +2075,15 @@ func _descent_doc_table() -> Array[String]:
 		var h: Dictionary = r["hold"]
 		var towed := "" if not h["units"].has("trailer") else " + %.0f t" % (_dsc_trailer_t(r) / 1000.0)
 		var kingpin := float(h["check"]["kingpin"])
-		lines.append("| `%s`%s, %s (%s) | %s | %s | %s | %.1f / %.1f m | %s / %s | %s |" % [
+		var lost: String = r["stop"].get("lost", "")
+		lines.append("| `%s`%s, %s (%s) | %s | %s | %s | %s / %s | %s / %s | %s |" % [
 				r["variant"], towed, r["mode"], h["gears"], _unit_cell(h["units"], "powered"),
 				_unit_cell(h["units"], "trailer"),
-				"none" if not r.has("onset") else "%.0f m" % r["onset"], r["stop"]["dist"],
-				_dsc_cold.get(r["variant"], NAN), _check_short(h["check"]),
-				_check_short(r["stop"]["check"]), "none" if is_nan(kingpin)
+				"none" if not r.has("onset") else "%.0f m" % r["onset"],
+				lost if lost != "" else "%.1f" % r["stop"]["dist"],
+				"%.1f m" % _dsc_cold[r["variant"]] if _dsc_cold.has(r["variant"]) else "none",
+				_check_short(h["check"]),
+				"none" if lost != "" else _check_short(r["stop"]["check"]), "none" if is_nan(kingpin)
 				else "%+.1f kN, %.1f°" % [kingpin / 1000.0, float(h["artic"])]])
 	for r in grip:  ## no stop after a low-grip hold
 		var h: Dictionary = r["hold"]

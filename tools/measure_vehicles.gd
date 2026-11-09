@@ -88,8 +88,10 @@ const PAD_X := -500.0              ## clear of the strip's +/- STRIP_WIDTH / 2 a
 # --- braking pass (opt-in: pass the `brake` flag) --------------------------
 ## Straight stops on the strip, one per pedal in BRAKE_PEDALS: full throttle up to BRAKE_SPEED (or
 ## 90 % of the top the accel pass found, whichever is lower), then throttle off and the pedal held
-## to a stop. Reports distance, mean deceleration, the seconds any wheel of the rig spent past
-## BRAKE_LOCK_SLIP (skidding rather than rolling), and the seconds any wheel's ABS held it back.
+## to a stop. Reports distance, mean deceleration (or, where the time cap ends a stop never
+## finished, the speed the rig still rolls at: a converter's creep can out-push a light pedal), the
+## seconds any wheel of the rig spent past BRAKE_LOCK_SLIP (skidding rather than rolling), and the
+## seconds any wheel's ABS held it back.
 const BRAKE_SPEED := 27.78         ## m/s (100 km/h)
 const BRAKE_PEDALS: Array[float] = [0.3, 0.6, 1.0]
 const BRAKE_LOCK_SLIP := 0.3
@@ -3014,11 +3016,12 @@ func _tick_braking(delta: float) -> void:
 	var dist := (_car.global_position - _brake_x0).length()
 	var row := {"pedal": _brake_pedals[_brake_i], "v0_kmh": _brake_v0 * 3.6, "t": _brake_t,
 			"dist": dist, "g": _brake_v0 / maxf(_brake_t, 1e-6) / 9.81, "skid_t": _brake_lock_t,
-			"abs_t": _brake_abs_t}
+			"abs_t": _brake_abs_t,
+			"rolling_kmh": absf(v) * 3.6 if absf(v) > BRAKE_STOP_SPEED else 0.0}
 	_brake_rows.append(row)
-	print("  %-13s : %3.0f%% from %.0f km/h: %.2f s, %.1f m, %.2f g mean; skidding %.2f s, ABS %.2f s"
-			% ["braking", row["pedal"] * 100.0, row["v0_kmh"], row["t"], row["dist"], row["g"],
-			row["skid_t"], row["abs_t"]])
+	print("  %-13s : %3.0f%% from %.0f km/h: %.2f s, %.1f m, %s; skidding %.2f s, ABS %.2f s"
+			% ["braking", row["pedal"] * 100.0, row["v0_kmh"], row["t"], row["dist"],
+			_brake_decel(row, " mean"), row["skid_t"], row["abs_t"]])
 	_brake_i += 1
 	if _brake_i < _brake_pedals.size():
 		_start_brake_run()
@@ -3026,6 +3029,14 @@ func _tick_braking(delta: float) -> void:
 	_current["braking"] = _brake_rows.duplicate(true)
 	MeasureRig.drive(100.0, 0.0)
 	_finish_vehicle()
+
+
+## A stop's mean deceleration, `suffix` after it; or, where the cap ended a stop that never
+## finished, the speed it still rolls at (a mean g there would be only the cap's).
+static func _brake_decel(row: Dictionary, suffix: String) -> String:
+	if float(row.get("rolling_kmh", 0.0)) > 0.0:
+		return "still rolling at %.1f km/h after %.0f s" % [row["rolling_kmh"], row["t"]]
+	return "%.2f g%s" % [row["g"], suffix]
 
 
 func _reset_probe() -> void:
@@ -5379,7 +5390,8 @@ static func _diff_label(gd: GroundDriveSpec) -> String:
 ## wheel's ABS acted or any wheel skidded (slip past BRAKE_LOCK_SLIP).
 func _braking_table() -> Array[String]:
 	var lines := DocRegion.wrap(("%s (`measure_vehicles -- doc=braking`; per body `-- <variant>"
-			+ " %.0f brake`): stops from 100 km/h, or 90 %% of the top where that is lower (`from`).")
+			+ " %.0f brake`): stops from 100 km/h, or 90 %% of the top where that is lower (`from`);"
+			+ " `still rolling`: the cap ended a stop the body never finished.")
 			% [DocRegion.measured(), _seconds])
 	lines.append_array(["", "| Body | 30 % pedal | 60 % | 100 % |", "| --- | --- | --- | --- |"])
 	for e in _sweep:
@@ -5395,7 +5407,7 @@ func _braking_table() -> Array[String]:
 			label += " (no ABS)"
 		var cells: Array[String] = []
 		for b: Dictionary in rows:
-			var cell := "%.2f g, %.1f m" % [b["g"], b["dist"]]
+			var cell := "%s, %.1f m" % [_brake_decel(b, ""), b["dist"]]
 			if float(b["abs_t"]) > 0.0:
 				cell += ", ABS"
 			if float(b["skid_t"]) >= 0.05:
@@ -5887,9 +5899,9 @@ func _report_lines(e: Dictionary) -> Array[String]:
 					% [c["peak"], c["peak_g"], c["speed_kmh"], first, "  (SLID)" if c["slid"] else ""])
 	if e.has("braking"):
 		for b: Dictionary in e["braking"]:
-			lines.append("| braking %.0f%% | from %.0f km/h: %.2f s, %.1f m, %.2f g mean; skidding %.2f s, ABS %.2f s | — |"
-					% [b["pedal"] * 100.0, b["v0_kmh"], b["t"], b["dist"], b["g"], b["skid_t"],
-					b["abs_t"]])
+			lines.append("| braking %.0f%% | from %.0f km/h: %.2f s, %.1f m, %s; skidding %.2f s, ABS %.2f s | — |"
+					% [b["pedal"] * 100.0, b["v0_kmh"], b["t"], b["dist"], _brake_decel(b, " mean"),
+					b["skid_t"], b["abs_t"]])
 	if e.has("coast"):
 		var c: Dictionary = e["coast"]
 		lines.append("| coast-down | %.1f -> %.1f km/h in %.1f s = %.3f m/s^2 (%.3f g), %.0f N on %.0f kg | — |"

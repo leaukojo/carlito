@@ -2203,7 +2203,7 @@ func test_a_converter_settles_its_crank_and_wheels_on_its_law() -> void:
 	var turbine := (w[2].omega + w[3].omega) / 2.0 * g
 	var coef := TorqueConverter.capacity_coefficient(spec)
 	assert_float(dt.coupling_torque).is_equal_approx(TorqueConverter.impeller_torque(coef,
-			dt.rpm / Drivetrain.RADS_TO_RPM, turbine), 1e-3)
+			dt.rpm / Drivetrain.RADS_TO_RPM, turbine, TorqueConverter.idle_band(spec)), 1e-3)
 	assert_float(dt.coupling_torque).is_greater(0.0)
 
 
@@ -2228,7 +2228,7 @@ func test_a_tc_held_wheel_behind_a_converter_stays_at_its_ceiling() -> void:
 	var turbine := (w[2].omega + w[3].omega) / 2.0 * g
 	var coef := TorqueConverter.capacity_coefficient(spec)
 	assert_float(dt.coupling_torque).is_equal_approx(TorqueConverter.impeller_torque(coef,
-			dt.rpm / Drivetrain.RADS_TO_RPM, turbine), 1e-3)
+			dt.rpm / Drivetrain.RADS_TO_RPM, turbine, TorqueConverter.idle_band(spec)), 1e-3)
 
 
 ## The axle torque a converter in D1 passes `drive`'s braked, stopped wheels this tick, its crank at

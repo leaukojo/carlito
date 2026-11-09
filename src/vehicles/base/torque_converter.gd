@@ -4,7 +4,7 @@ extends RefCounted
 ## statics beside `Differential`: what a converter body's coupling carries while its lock-up is open
 ## or closing (`Drivetrain.couple`, `spec.coupling` CONVERTER).
 ##
-## The impeller absorbs `coef * omega_p^2 * shape(SR)`, SR the speed ratio `omega_t / omega_p`, and
+## The impeller absorbs `coef * idle_scale * omega_p^2 * shape(SR)`, SR = `omega_t / omega_p`, and
 ## the turbine passes that times the torque ratio (`torque_ratio`, falling from the spec's
 ## `converter_stall_ratio` to 1.0 at the coupling point). `coef` puts the full-fuel balance against a
 ## held turbine on `Drivetrain.stall_rpm`. The law's speed slope through the gear ratio squared is far
@@ -26,6 +26,12 @@ const CAPACITY_SHAPE: Array[Vector2] = [
 const OVERRUN_CAPACITY := 0.5
 ## Bisection steps `solve` takes: the bracket's 2^-30, a few µN·m on a truck.
 const SOLVE_STEPS := 30
+## COMPROMISE: the impeller takes this share of the stall-speed law at idle, ramping to the whole
+## law at the stall speed (`idle_scale`). Fitted to measured creep: the law alone, the idle held,
+## creeps the cars at 0.13-0.19 g against a measured 0.03-0.07 g peak
+## (docs/sources.md § The converter). The stall speed stays the law's. Undoing it (1.0) costs the
+## creep, the roll-back and the part-pedal launch figures.
+const IDLE_CAPACITY := 1.0 / 3.0
 
 
 ## `CAPACITY_SHAPE` at speed ratio `sr`: 1 with the turbine held or turning back, 0 at 1.
@@ -50,15 +56,31 @@ static func capacity_coefficient(p_spec: VehicleSpec) -> float:
 	return Drivetrain.engine_torque(p_spec, stall) / maxf(omega * omega, 1e-6)
 
 
+## The body's idle and stall speeds (rad/s): the band `idle_scale` ramps over.
+static func idle_band(p_spec: VehicleSpec) -> Vector2:
+	return Vector2(p_spec.idle_rpm, Drivetrain.stall_rpm(p_spec)) / Drivetrain.RADS_TO_RPM
+
+
+## The share of the stall-speed law the impeller takes at `omega_p` (rad/s): IDLE_CAPACITY up to
+## `band.x`, the whole law from `band.y` on, linear between; 1 with no band (`band.y <= band.x`).
+## `scale * omega_p^2` still rises strictly with the impeller.
+static func idle_scale(omega_p: float, band: Vector2) -> float:
+	if band.y <= band.x:
+		return 1.0
+	return lerpf(IDLE_CAPACITY, 1.0, clampf((omega_p - band.x) / (band.y - band.x), 0.0, 1.0))
+
+
 ## The impeller's torque (N·m at the crank, + = the crank driving) at impeller spin `omega_p` (>= 0)
-## and turbine spin `omega_t` (rad/s, signed with the gear): `coef omega_p^2 shape(SR)` in drive,
-## `-OVERRUN_CAPACITY coef omega_t^2 shape(1 / SR)` in overrun. 0 at one speed; rising with the
-## impeller, falling with the turbine.
-static func impeller_torque(coef: float, omega_p: float, omega_t: float) -> float:
+## and turbine spin `omega_t` (rad/s, signed with the gear): `coef idle_scale omega_p^2 shape(SR)` in
+## drive (`band`: `idle_band`), `-OVERRUN_CAPACITY coef omega_t^2 shape(1 / SR)` in overrun. 0 at one
+## speed; rising with the impeller, falling with the turbine.
+static func impeller_torque(coef: float, omega_p: float, omega_t: float,
+		band: Vector2) -> float:
 	if omega_p >= omega_t:
 		if omega_p <= 0.0:
 			return 0.0
-		return coef * omega_p * omega_p * capacity_shape(omega_t / omega_p)
+		return coef * idle_scale(omega_p, band) * omega_p * omega_p \
+				* capacity_shape(omega_t / omega_p)
 	return -OVERRUN_CAPACITY * coef * omega_t * omega_t * capacity_shape(omega_p / omega_t)
 
 
@@ -73,12 +95,13 @@ static func torque_ratio(stall_ratio: float, sr: float) -> float:
 ## One tick of the converter with a parallel lock-up clutch (`lockup_capacity`, 0 open), solved for
 ## the impeller torque `T`: the crank ends at `pred - T crank_c`, the axle takes `T ratio g eta`
 ## driving or `T g / eta` in overrun, the turbine turns at `wheel_spin(axle torque) * g`.
-## `T - law - lockup * sgn(slip)` rises strictly with `T`, so bisection finds the one root.
-## Returns [T, axle torque, the crank's end spin, whether the lock-up closed the slip].
+## `T - law - lockup * sgn(slip)` rises strictly with `T`, so bisection finds the one root. `band`:
+## the law's `idle_band`. Returns [T, axle torque, the crank's end spin, whether the lock-up closed
+## the slip].
 static func solve(pred: float, crank_c: float, coef: float, g: float, eta: float, ratio: float,
-		lockup_capacity: float, wheel_spin: Callable) -> Array:
+		lockup_capacity: float, wheel_spin: Callable, band: Vector2) -> Array:
 	var cap := maxf(lockup_capacity, 0.0)
-	var at := _evaluate(0.0, pred, crank_c, coef, g, eta, ratio, cap, wheel_spin)
+	var at := _evaluate(0.0, pred, crank_c, coef, g, eta, ratio, cap, wheel_spin, band)
 	var residual: float = at[0]
 	if residual != 0.0:
 		var dir := -signf(residual)
@@ -88,7 +111,7 @@ static func solve(pred: float, crank_c: float, coef: float, g: float, eta: float
 		for i in SOLVE_STEPS:
 			var mid := (lo + hi) * 0.5
 			var f: float = _evaluate(dir * mid, pred, crank_c, coef, g, eta, ratio, cap,
-					wheel_spin)[0]
+					wheel_spin, band)[0]
 			if f == 0.0:
 				lo = mid
 				hi = mid
@@ -97,7 +120,8 @@ static func solve(pred: float, crank_c: float, coef: float, g: float, eta: float
 				lo = mid
 			else:
 				hi = mid
-		at = _evaluate(dir * (lo + hi) * 0.5, pred, crank_c, coef, g, eta, ratio, cap, wheel_spin)
+		at = _evaluate(dir * (lo + hi) * 0.5, pred, crank_c, coef, g, eta, ratio, cap, wheel_spin,
+				band)
 	var t: float = at[4]
 	var law: float = at[3]
 	return [t, at[1], at[2], cap > 0.0 and absf(t - law) < cap]
@@ -105,9 +129,9 @@ static func solve(pred: float, crank_c: float, coef: float, g: float, eta: float
 
 ## `solve`'s residual at impeller torque `t`: [residual, axle torque, crank spin, law, t].
 static func _evaluate(t: float, pred: float, crank_c: float, coef: float, g: float, eta: float,
-		ratio: float, cap: float, wheel_spin: Callable) -> Array:
+		ratio: float, cap: float, wheel_spin: Callable, band: Vector2) -> Array:
 	var axle := t * ratio * g * eta if t >= 0.0 else t * g / eta
 	var omega_p := maxf(pred - t * crank_c, 0.0)
 	var omega_t: float = wheel_spin.call(axle) * g
-	var law := impeller_torque(coef, omega_p, omega_t)
+	var law := impeller_torque(coef, omega_p, omega_t, band)
 	return [t - law - cap * signf(omega_p - omega_t), axle, omega_p, law, t]

@@ -65,6 +65,8 @@ body behind its reference is fixed from its own data (curve, gearing), never by 
     ZF 8HP decouples at a standstill in D [13].
 - **Stall speed:** typically 1800-2800 rpm [15]. An unverified AT545 owner report puts a truck at
   1300-1400 rpm [16], near the derived 1250 on the Kenney trucks.
+- **Creep:** nine automatics released in D on level asphalt peak at 0.03-0.07 g and creep at
+  3.0-5.7 mph; three earlier studies it cites agree [209]. No truck figure found.
 
 *The friction clutch:*
 - **Capacity:** about 1.5x the engine's peak on cars and 2x on trucks [17]; OE ratings carry a
@@ -285,14 +287,14 @@ torque on the droop (D1 > D2 ~3440 rpm, D5 > D6 ~3200), and lands the 1.78 D1 > 
 rpm, in the band. `shift_down_rpm` 1400 sits under the band's 1500 edge.
 
 *The Kenney trucks' drivetrain* (`TRUCK_BASE`), medium-duty for their 7.5-8 t: a Class 8 L9 (1695 N·m)
-creeps harder on them (computed) than a 30 % pedal asks.
+creeps harder on them (computed).
 
 | Figure | Value | Grade |
 | --- | --- | --- |
 | Engine | Cummins B6.7 (2021) 325 hp, 750 lb-ft (1017 N·m) at 1800 rpm, governed 2600 ([brochure](https://mart.cummins.com/imagelibrary/data/assetfiles/0064235.pdf)): 890 N·m rated. Idle 700 at half the peak, 0.81 of it at 1200, rated speed to nothing at 2900 | sourced; computed; estimate |
 | Ratios | Allison 3000 / 3200 close: 3.49 / 1.86 / 1.41 / 1.00 / 0.75 / 0.65, R 5.03 ([Allison](https://pprod.allisontransmission.com/en-gb/transmissions/models/3000-series)) | sourced |
 | Axle, tyre | 5.57 on a Mack MD7 rear loader, 6.7 L and 3000 RDS ([listing](https://www.brucknertruck.com/inventory/2026-mack-md7-base-68364/)); 315/80R22.5 at 0.500 m loaded ([Michelin](https://business.michelin.ca/en/tires/michelin-x-multi-z-315)); `firetruck` takes the same | secondary, search summaries; estimate |
-| At the drawn 0.36 m | `final_drive` 5.57 × 0.36 / 0.500 = 4.010, the same `G / r`: first 38.9 per metre, top 52.1 km/h per 1000 rpm. Creep at rest `T(stall) (idle / stall)² G η / r`, stall 1250 rpm: the creep of `docs/drivetrain.md` § Creep | computed |
+| At the drawn 0.36 m | `final_drive` 5.57 × 0.36 / 0.500 = 4.010, the same `G / r`: first 38.9 per metre, top 52.1 km/h per 1000 rpm. Creep at rest `IDLE_CAPACITY T(stall) (idle / stall)² G η / r`, stall 1250 rpm: the creep of `docs/drivetrain.md` § Creep | computed |
 
 | The tractor's wheels, `I = m (κ r)²` at the drawn radius (tyre and rim; ballast does not turn) | Value | Grade |
 | --- | --- | --- |
@@ -794,3 +796,4 @@ reads the pipe):
 206. Wikipedia, "British Rail Class 345", infobox (secondary): https://en.wikipedia.org/wiki/British_Rail_Class_345
 207. Wikipedia, "Hull speed", oldid 1383394222 (secondary; no inline citations): https://en.wikipedia.org/wiki/Hull_speed
 208. J. F. Hughes, boats FAQ, "What's a formula for top speed?", 1997 (secondary): https://cs.brown.edu/~jhughes/boats/FAQ/node42.html
+209. Timbario et al., "Testing and Modeling of Engine Idle Creep in Conventional Automatic-Equipped Vehicles", HVE-WP-2022-1, Table 2 and its introduction: https://www.edccorp.com/library/HveWpPdfs/HVE-WP-2022-1.pdf

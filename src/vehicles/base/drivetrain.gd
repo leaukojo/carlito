@@ -183,11 +183,13 @@ var _inertia_phase := false
 ## The inertia phase's rate (rad/s per s): the oncoming clutch brings the crank down to the wheels at
 ## it (`handover_rate`), latched on the phase's first tick; INF closes it at the rating.
 var _handover_rate := INF
-## The converter's capacity coefficient (`TorqueConverter.capacity_coefficient`), cached in `_init`;
-## this tick's torque ratio, read at the tick's start speed ratio; and what the converter could pass
-## at most this tick (N·m at the crank, the ratio times the law against a held turbine), which
-## bounds the traction control's share (`tcs_drive_torque`).
+## The converter's capacity coefficient (`TorqueConverter.capacity_coefficient`) and its idle band
+## (`TorqueConverter.idle_band`), cached in `_init`; this tick's torque ratio, read at the tick's
+## start speed ratio; and what the converter could pass at most this tick (N·m at the crank, the
+## ratio times the law against a held turbine), which bounds the traction control's share
+## (`tcs_drive_torque`).
 var _coef := 0.0
+var _band := Vector2.ZERO
 var _ratio := 1.0
 var _stall_bound := 0.0
 
@@ -201,6 +203,7 @@ func _init(p_spec: VehicleSpec) -> void:
 	ramp = 0.0 if spec.launch_engage_s > 0.0 else 1.0
 	if p_spec.coupling == VehicleSpec.Coupling.CONVERTER and drives_wheels(p_spec):
 		_coef = TorqueConverter.capacity_coefficient(p_spec)
+		_band = TorqueConverter.idle_band(p_spec)
 
 
 static func is_drive(byte: int) -> bool:
@@ -583,7 +586,7 @@ static func stall_rpm(p_spec: VehicleSpec) -> float:
 
 
 ## Crank speed the converter lets the engine reach with the turbine held (rpm) at `fuel`: where the
-## engine law meets the converter's N^2 load (`TorqueConverter.capacity_coefficient`), the stall
+## engine law meets the converter's load (`TorqueConverter.impeller_torque`, held turbine), the stall
 ## speed at full fuel, and never under idle (the idle controller fuels the converter's load there).
 ## `idle_rpm` on the rigid crank.
 static func converter_free_rpm(p_spec: VehicleSpec, fuel: float) -> float:
@@ -594,13 +597,14 @@ static func converter_free_rpm(p_spec: VehicleSpec, fuel: float) -> float:
 	if f >= 1.0:
 		return stall
 	var coef := TorqueConverter.capacity_coefficient(p_spec)
+	var band := TorqueConverter.idle_band(p_spec)
 	var lo := p_spec.idle_rpm
 	var hi := stall
-	if _held_turbine_balance(p_spec, lo, f, coef) <= 0.0:
+	if _held_turbine_balance(p_spec, lo, f, coef, band) <= 0.0:
 		return lo
 	for i in FREE_RPM_STEPS:
 		var mid := (lo + hi) * 0.5
-		if _held_turbine_balance(p_spec, mid, f, coef) > 0.0:
+		if _held_turbine_balance(p_spec, mid, f, coef, band) > 0.0:
 			lo = mid
 		else:
 			hi = mid
@@ -609,9 +613,9 @@ static func converter_free_rpm(p_spec: VehicleSpec, fuel: float) -> float:
 
 ## The crank's net torque (N·m) at `at_rpm` and fuel `f` against a held turbine.
 static func _held_turbine_balance(p_spec: VehicleSpec, at_rpm: float, f: float,
-		coef: float) -> float:
+		coef: float, band: Vector2) -> float:
 	var omega := at_rpm / RADS_TO_RPM
-	return crank_torque(p_spec, at_rpm, f) - coef * omega * omega
+	return crank_torque(p_spec, at_rpm, f) - TorqueConverter.impeller_torque(coef, omega, 0.0, band)
 
 
 ## The crank speed (rpm) a held body sits at, and a clutch's pull-away lands on: idle plus
@@ -1335,7 +1339,8 @@ func _process_crank(delta: float, pedal: float, demand: float, drive_wheel_omega
 					_capacity = ceiling
 				_ratio = TorqueConverter.torque_ratio(spec.converter_stall_ratio,
 						sync / maxf(omega, 1e-6))
-				_stall_bound = _ratio * TorqueConverter.impeller_torque(_coef, _predict(fuel), 0.0)
+				_stall_bound = _ratio * TorqueConverter.impeller_torque(_coef, _predict(fuel), 0.0,
+						_band)
 				_drives = _predict(fuel) >= sync
 			elif closing:
 				# Closing onto turning wheels: the whole rating; the solve carries only what closes
@@ -1524,7 +1529,7 @@ func _solve_output(wheel_solve: Callable, wheel_spin: Callable, fuel: float, g: 
 	var eta := maxf(spec.efficiency, 0.05)
 	if converting:
 		var r := TorqueConverter.solve(pred, _compliance, _coef, g, eta, _ratio, _capacity,
-				wheel_spin)
+				wheel_spin, _band)
 		return [r[1], r[2], r[3], r[0]]
 	var reflect := _compliance / (g * g)
 	var capacity := _capacity * absf(g) * eta

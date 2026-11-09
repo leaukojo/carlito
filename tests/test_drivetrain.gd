@@ -705,15 +705,17 @@ func test_the_crank_burns_the_mapped_fuel() -> void:
 
 func test_the_lock_up_line_reads_the_pedal_not_its_mapped_fuel() -> void:
 	# `lockup_holds`' COMPROMISE: the release line is the converter's free rev with the pedal read
-	# as the fuel, on any map. Read so, 0.3 cannot hold idle against the converter (30 N·m against
-	# its 40 at 800 rpm): the line is idle. Mapped, 0.3 asks past the curve from idle to the stall
-	# speed (0.765 x 300 N·m at 800 rpm against 100, 0.662 x 300 at 1600 against 160), so its fuel
-	# is full and its line the stall speed, 1600 rpm.
+	# as the fuel, on any map. Read so, 0.3 frees the crank only a little past idle, where the
+	# converter's ramped load (`TorqueConverter.idle_scale`) meets 0.3 of the curve's 100 N·m:
+	# 160 (1/3 + (N - 800) / 1200) (N / 1600)^2 = 30 at about 989 rpm.
+	# Mapped, 0.3 asks past the curve from idle to the stall speed (0.765 x 300 N·m at 800 rpm
+	# against 100, 0.662 x 300 at 1600 against 160), so its fuel is full and its line the stall
+	# speed, 1600 rpm.
 	var spec := _converter_spec()
 	spec.pedal_map = PedalMap.Kind.PETROL
 	assert_float(PedalMap.fuel(spec, 0.3, spec.idle_rpm)).is_equal(1.0)
 	assert_float(PedalMap.fuel(spec, 0.3, 1600.0)).is_equal_approx(1.0, 1e-12)
-	assert_float(DrivetrainScript.launch_target_rpm(spec, 0.3)).is_equal(spec.idle_rpm)
+	assert_float(DrivetrainScript.launch_target_rpm(spec, 0.3)).is_equal_approx(988.95, 0.01)
 	assert_float(DrivetrainScript.launch_target_rpm(spec, 1.0)).is_equal(1600.0)
 	# Locked in D3 at 1200 rpm, between the two lines, the lock-up holds at pedal 0.3: on the mapped
 	# fuel's line it would let go.
@@ -745,14 +747,16 @@ func test_a_crank_that_drives_no_wheels_keeps_the_pedal_on_any_map() -> void:
 # Fixture band is idle 800 -> redline 4000, so stall is 800 + 0.25 * 3200 = 1600 rpm.
 
 func test_converter_free_rpm_follows_the_n_squared_load_from_idle_to_stall() -> void:
-	# With the turbine held the converter loads the crank with coef * omega^2, which full fuel
-	# meets at the 1600 rpm stall (160 N·m there). The curve is N / 10 between 1000 and 2000 rpm, so
-	# at 0.75 fuel 0.075 N = 160 (N / 1600)^2: 1200 rpm. At 0.3 the fuelled curve (100 N·m flat under
-	# 1000) cannot hold even idle's 40 N·m load: the idle controller's floor.
+	# With the turbine held the converter loads the crank with coef * idle_scale * omega^2, which
+	# full fuel meets at the 1600 rpm stall (160 N·m there, the scale 1). At 1200 rpm the scale is
+	# 2/3 (IDLE_CAPACITY 1/3 at 800, linear to 1 at 1600): 160 * 2/3 * (1200 / 1600)^2 = 60 N·m,
+	# which 0.5 of the curve's 120 N·m meets. At 0.1 the fuelled curve (100 N·m flat under 1000)
+	# cannot hold even idle's 13.3 N·m load: the idle controller's floor.
 	var spec := _converter_spec()
+	assert_float(TorqueConverter.IDLE_CAPACITY).is_equal_approx(1.0 / 3.0, 1e-9)
 	assert_float(DrivetrainScript.converter_free_rpm(spec, 1.0)).is_equal(1600.0)
-	assert_float(DrivetrainScript.converter_free_rpm(spec, 0.75)).is_equal_approx(1200.0, 0.01)
-	assert_float(DrivetrainScript.converter_free_rpm(spec, 0.3)).is_equal(spec.idle_rpm)
+	assert_float(DrivetrainScript.converter_free_rpm(spec, 0.5)).is_equal_approx(1200.0, 0.01)
+	assert_float(DrivetrainScript.converter_free_rpm(spec, 0.1)).is_equal(spec.idle_rpm)
 	assert_float(DrivetrainScript.converter_free_rpm(spec, 0.0)).is_equal(spec.idle_rpm)
 	# Throttle is a 0..1 magnitude here as everywhere else.
 	assert_float(DrivetrainScript.converter_free_rpm(spec, -1.0)).is_equal(spec.idle_rpm)
@@ -761,7 +765,7 @@ func test_converter_free_rpm_follows_the_n_squared_load_from_idle_to_stall() -> 
 	var clutch := _spec()
 	assert_float(DrivetrainScript.launch_target_rpm(clutch, 0.5)).is_equal_approx(1200.0, 0.001)
 	assert_float(DrivetrainScript.launch_target_rpm(clutch, 1.0)).is_equal_approx(1600.0, 0.001)
-	assert_float(DrivetrainScript.launch_target_rpm(spec, 0.75)).is_equal_approx(1200.0, 0.01)
+	assert_float(DrivetrainScript.launch_target_rpm(spec, 0.5)).is_equal_approx(1200.0, 0.01)
 
 
 func test_a_held_wheel_revs_the_engine_to_stall_and_makes_more_torque_for_it() -> void:
@@ -933,9 +937,9 @@ func test_a_stall_torque_ratio_multiplies_the_held_drive_and_the_stall_the_brake
 
 
 func test_a_converter_in_gear_off_the_pedal_creeps() -> void:
-	# The wheels held, no pedal: the converter loads the idling crank with idle's ~40 N·m, which the
-	# idle controller fuels, so the crank holds a few rpm under idle, the coupling never opens, and
-	# the wheels feel the creep through the gear. Off the brake they turn.
+	# The wheels held, no pedal: the converter loads the idling crank with IDLE_CAPACITY of the law's
+	# ~40 N·m at idle, which the idle controller fuels, so the crank holds a few rpm under idle, the
+	# coupling never opens, and the wheels feel the creep through the gear. Off the brake they turn.
 	var spec := _converter_spec()
 	var neutral: DrivetrainScript = DrivetrainScript.new(spec)
 	for i in 120:
@@ -949,7 +953,8 @@ func test_a_converter_in_gear_off_the_pedal_creeps() -> void:
 	assert_float(torque).is_greater(0.0)
 	var coef := TorqueConverter.capacity_coefficient(spec)
 	var omega := dt.rpm / DrivetrainScript.RADS_TO_RPM
-	assert_float(torque).is_equal_approx(coef * omega * omega * 12.0 * 0.9, 1e-3)
+	assert_float(torque).is_equal_approx(TorqueConverter.impeller_torque(coef, omega, 0.0,
+			TorqueConverter.idle_band(spec)) * 12.0 * 0.9, 1e-3)
 	assert_float(dt.applied_throttle).is_greater(neutral.applied_throttle)
 	var wheel := LumpedWheel.new(0.0, 50.0)
 	for i in 60:

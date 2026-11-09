@@ -91,9 +91,9 @@ on its clutch.
 Because a converter always passes a little torque, even at idle, a car with an automatic gearbox
 in drive moves forward slowly on its own when you release the brake. This is
 [creep](glossary.md#creep). In the game every converter vehicle creeps at about walking pace on
-the flat. Creep is strong enough to hold most cars on a slope of about 15 to 20 %, and the
-garbage and fire trucks on more than 20 %, with no pedal pressed.
-<!-- docs/drivetrain.md Creep, the steepest-grade table: cars 15.3-23.3 %, vans 13.6-18.6 %, garbage-truck and firetruck 21.6-23.3 % -->
+the flat, as real automatics do. Creep is strong enough to hold most cars on a slope of about 5
+to 8 %, and the garbage and fire trucks on about 8 %, with no pedal pressed.
+<!-- docs/drivetrain.md Creep, the steepest-grade table: cars 5.3-8.6 %, vans 5.3-7.0 %, garbage-truck and firetruck 8.2-8.6 %; measured 4.8-6.5 km/h against 3.0-5.7 mph -->
 
 Pressing the brake and accelerator fully together holds a vehicle still. If it still creeps
 forward, the game cuts the throttle: a brake-throttle override.
@@ -121,7 +121,7 @@ No signal reports the clutch or converter directly. Their effect shows in:
 | `rpm` | out | rev/min | While the coupling slips, the engine runs faster than the wheels' gear would turn it. On a converter car held on the brakes at full pedal, it sits near the stall speed. |
 | `engine_load` | out | % | Truck and tractor: at idle in gear, a converter's creep load shows as a few percent of load. |
 | `speed` | out | m/s | Speed along the vehicle, in metres per second. With no pedal it rises slowly from 0 to a walking pace: creep. |
-<!-- contract/carlito_contract.json rpm, engine_load, speed; docs/drivetrain.md Creep: "engine_load reads 7-10 %" -->
+<!-- contract/carlito_contract.json rpm, engine_load, speed; docs/drivetrain.md Creep: "`engine_load` 7-11 %" -->
 
 ## Try it in the game
 

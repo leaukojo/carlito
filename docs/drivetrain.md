@@ -124,12 +124,12 @@ floored at `drag_fuel` (`fuel_rate_lph`). COMPROMISE: `fuel` drains a game-scale
 **Converter.** A converter body (`coupling` CONVERTER: the cars, the vans, `garbage-truck` and
 `firetruck`) slips through `TorqueConverter`'s law, solved with both sides' end-of-tick speeds
 inside the wheels' solve (`TorqueConverter.solve`):
-- **Capacity.** The impeller takes `coef * omega_p^2 * shape(SR)`, SR the speed ratio. The shape
+- **Capacity.** The impeller takes `coef * idle_scale * omega_p^2 * shape(SR)` (`idle_scale`: § Creep), SR the speed ratio. The shape
   is the MathWorks Powertrain Blockset's default capacity factor (K 12.3 at stall, 14.6 at 0.8,
   16.3 at 0.87, 22.1 at 0.94, 50 at 0.97), so it falls to nothing at one speed. `coef` puts full
   fuel against a held turbine on the stall speed (`Drivetrain.stall_rpm`, STALL_RPM_FRAC 0.25 of
   idle to redline: 2375 rpm on the cars, 1250 on the Kenney trucks, inside a car's typical
-  1800-2800). At part pedal the free rev follows the N² load at the pedal's fuel, never under idle
+  1800-2800). At part pedal the free rev follows that load at the pedal's fuel, never under idle
   (`converter_free_rpm` at a fuel; the lock-up's line reads it at the raw pedal, § The pedal map).
   In overrun the turbine pumps at OVERRUN_CAPACITY 0.5 of drive, an estimate: no coast figure
   was found.
@@ -151,21 +151,21 @@ inside the wheels' solve (`TorqueConverter.solve`):
 
 Drive reaches the wheels from the first tick of a pull-away (the trace's `H` column and `Tc`; the launches: `docs/vehicle_measurements.md` § Launches).
 
-**Creep.** In gear the converter loads the idling crank, `coef * omega_idle^2`: small on the
-`sedan`, larger on the heavy vans, largest on the Kenney trucks. The idle controller fuels it, so the
-crank holds ~2-4 rpm under idle, and `engine_load` reads 7-10 %: that fuel,
-against the converter's load and the engine's friction. Released in D1 with no pedal
-(`measure_grade -- all creep`; asphalt):
+**Creep.** In gear the converter loads the idling crank, `coef * omega_idle^2` times
+`IDLE_CAPACITY` (`TorqueConverter.idle_scale`). COMPROMISE: that share is fitted, so creep from rest
+peaks near the measured figure (`docs/sources.md` § The converter); the law alone held 13-23 %.
+The idle controller fuels the load: the crank holds 2-6 rpm under idle, `engine_load` 7-11 %.
+Released in D1 with no pedal (`measure_grade -- all creep`; asphalt; 2026-11-08):
 
 | Body | Steepest grade held at idle |
 | --- | --- |
-| `sedan`, `taxi`, `suv`, `police`, `suv-luxury`, `sedan-sports` | 15.3-23.3 % |
-| `hatchback-sports` (ratio 1.0) | 12.7 % |
-| `van`, `pickup`, `pickup-flat` | 13.6-14.8 % |
-| `delivery`, `delivery-flat`, `ambulance` | 15.7-18.6 % |
-| `garbage-truck`, `firetruck` | 21.6-23.3 % |
+| `sedan`, `taxi`, `suv`, `police`, `suv-luxury`, `sedan-sports` | 5.7-8.6 % |
+| `hatchback-sports` (ratio 1.0) | 5.3 % |
+| `van`, `pickup`, `pickup-flat` | 5.3-5.7 % |
+| `delivery`, `delivery-flat`, `ambulance` | 6.1-7.0 % |
+| `garbage-truck`, `firetruck` | 8.2-8.6 % |
 
-Every body creeps on the flat at a walking pace, within a few tenths of a km/h of the others.
+Every body creeps on the flat at a walking pace, inside the measured range (idle and gearing set it).
 
 The Kenney trucks' creep is ~1.3x a car's in g (`(idle / stall)²` 0.31 against the cars' 0.14,
 through a 14:1 first); a 30 % pedal out-holds it (`docs/vehicle_measurements.md` § Braking). The heavy vans' 15.6:1 first and 0.23
@@ -175,7 +175,7 @@ What moves with the converter:
   where it read 50 % at idle;
 - `pto_rpm` follows the rev, being a stub shaft off the crank.
 
-**Hill hold.** Creep holds the cars and the heavy vans on 10-19 % and the Kenney trucks on 22-23 %. Past that, a released
+**Hill hold.** Creep holds the cars and the vans on 5-9 % and the Kenney trucks on 8-9 %. Past that, a released
 brake rolls the body back while the coupling takes up, and a clutch body (nothing creeps there)
 rolls back on any grade. Three holds stop it:
 - **Hill-start assist** (`hill_hold` ASSIST, on every ABS body). The foot brake's last application
@@ -202,8 +202,8 @@ Released after a `SETTLE_S` foot-brake hold and floored `ROLL_DELAY_S` later, on
 (`measure_grade -- <variant> rollback`, with and without `nohold`, prints rollback, release time
 and time to move forward; asphalt, the tractor on mud with MFWD from its D1 launch). With the
 hold, the cars and Kenney trucks roll back a patch spring's worth on
-both grades, against 5-8 cm on 25 % without it, and the hold lets go inside a
-second. The `garbage-truck` is never held on 10 %: its creep carries the grade. The laden semis roll
+both grades, against 2-6 cm on 10 % and 0.3-0.4 m on 25 % without it (2026-11-08), and the hold
+lets go inside a second. The laden semis roll
 back far on 25 % with or without the hold, and with `nohold` never pull away. The tractor on mud
 (MFWD) rolls back a patch spring's worth on 10 %; with the farm tipper it pulls away much later.
 

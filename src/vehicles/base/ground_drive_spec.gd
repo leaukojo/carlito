@@ -157,7 +157,8 @@ extends Resource
 @export var esc_laden_k: Array[PackedVector2Array] = []
 ## ESC's roll stability table (x the coupled load in kg, ascending; y g): the rig's lateral g on the
 ## unit's own sensor at its first wheel lift, measured (`measure_semi_launch -- <unit>
-## trailer=<body> ramp`, "rig's first lift"). Empty = no roll stability (`StabilityControl.roll_lift_g`).
+## trailer=<body> ramp noesc notrsp`, "rig's first lift"; `trailer=bobtail` for the unit's own
+## mass, the first point). Empty = no roll stability (`StabilityControl.roll_lift_g`).
 @export var esc_roll_lift_g := PackedVector2Array()
 ## A towed body's own roll-over control in its EBS (`StabilityControl.trailer_roll_step`, the
 ## semi-trailers): it brakes itself off its own sensors, whatever the towing unit asks.

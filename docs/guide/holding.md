@@ -33,9 +33,9 @@ The harder problem is pulling away uphill. The moment the driver lifts off the b
 accelerator, nothing holds the vehicle until the drive takes up, so it rolls back.
 
 A car with an automatic gearbox is helped by [creep](glossary.md#creep): its torque converter
-pulls gently at idle, enough on its own to hold most cars on a slope of about 15 %. Past that, or
+pulls gently at idle, enough on its own to hold most cars on a slope of about 5 to 8 %. Past that, or
 on any vehicle with a clutch, which does not creep, the vehicle rolls back. Three systems stop it.
-<!-- docs/drivetrain.md Hill hold: "Creep holds the cars and the heavy vans on 10-19 % and the Kenney trucks on 22-23 %" -->
+<!-- docs/drivetrain.md Hill hold: "Creep holds the cars and the vans on 5-9 % and the Kenney trucks on 8-9 %" -->
 
 ### Hill-start assist
 

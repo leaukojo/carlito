@@ -118,7 +118,11 @@ func _ready() -> void:
 	# Static per-corner share of this trailer's own mass (`RayWheel.corner_mass`, the clamps), and
 	# of what its bogie carries, the coupling taking the rest (`RayWheel.reference_load`, the tyre laws).
 	var corner_mass := spec.mass / maxf(1.0, gd.wheel_positions.size())
-	var ref_load := corner_mass * (1.0 - kingpin_share()) * BrakeSizing.G
+	var share := kingpin_share()
+	if share >= 1.0:
+		push_error("%s: centre of mass at or ahead of the kingpin, the bogie carries nothing:"
+				% name + " reference_load 0 switches the tyre load laws off")
+	var ref_load := corner_mass * (1.0 - share) * BrakeSizing.G
 	for i in gd.wheel_positions.size():
 		var visual: Node3D = visuals[i] if i < visuals.size() else null
 		# Undriven and unsteered: a semi-trailer axle only ever brakes.
