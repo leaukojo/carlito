@@ -149,8 +149,9 @@ shortest at that pedal. Full pedal, on ABS, is unaffected.
 Mean g is speed over time, so it reads under the peak. Full pedal asks the brake hardware's
 whole capacity (§ Brake hardware), more than any tyre gives, so every ABS body stops on ABS and
 `race` (no ABS) locks its wheels: it stops shorter at 60 % pedal than at 100 %, as a real non-ABS
-car does (LAB ▸ ANTI-LOCK BRAKES: OFF shows it on any ABS body, `noabs` headless; with it off the
-coupling stays shut on a locked driven wheel, so a manual stalls; `BrakeSizing` and ESC's K tables
+car does (LAB ▸ ANTI-LOCK BRAKES: OFF shows it on any ABS body, `noabs` headless; with it off a
+manual's clutch no longer opens on the ABS event but once the wheel side drops under idle with the
+pedal up, or slips on anti-stall (`Drivetrain.coupling_step`), so nothing stalls; `BrakeSizing` and ESC's K tables
 judge the stock hardware, and a trailer keeps its own ABS). The pedal is anchored per body (`WheelDrive.brake_application`): half pedal asks
 `BRAKE_HALF_PEDAL_G` of every body and full pedal its whole capacity, so 60 % reads
 about the same across the table whatever the hardware (`docs/vehicle_measurements.md` § Braking), and a body with more capacity is gentler in

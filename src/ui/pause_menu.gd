@@ -83,7 +83,7 @@ const EXTENDED_DEBUG_HELP := "Adds frame time, draw calls, VRAM, grip, wheel sli
 
 const KEY_RESPONSE_HELP := "How driving keys and on-screen pedals ease in. RAW is instant; REALISTIC eases in like a driver."
 
-const TCS_HELP := "Cuts engine power when a driven wheel spins. Cars fitted with it only; OFF lets the tyres spin and the rear step out."
+const TCS_HELP := "Takes drive away from a driven wheel that spins; it never brakes it. Cars fitted with it only; OFF lets the tyres spin and the rear step out."
 
 const ESC_HELP := "Brakes one wheel to stop a spin or a plough. Road vehicles fitted with it only; OFF turns traction control off too."
 
@@ -91,7 +91,7 @@ const AUTO_HOLD_HELP := "Holds the brake when stopped in gear, with keys or on-s
 
 const ABS_HELP := "Keeps a braked wheel from locking, so the car still steers. OFF takes stability control, traction control, hill-start assist and auto hold with it. This session only."
 
-const AXLE_DIFF_HELP := "STOCK is the car's own. OPEN splits the torque evenly: a wheel on low grip or in the air spins and the other stops pushing. LOCKED turns a driven axle's wheels together: no spin, but the tyres scrub in a tight turn; it takes stability and traction control with it. Traction control brakes a spinning wheel and hides some of it. This session only."
+const AXLE_DIFF_HELP := "STOCK is the car's own. OPEN splits the torque evenly: a wheel on low grip or in the air spins and the other stops pushing. LOCKED turns a driven axle's wheels together: no spin, but the tyres scrub in a tight turn; it takes stability and traction control with it. Traction control takes drive from a spinning wheel and hides some of it. This session only."
 
 const STEERING_HELP := "STOCK turns the inner front wheel further than the outer, so both roll around one centre. PARALLEL turns them alike: at full lock the fronts fight each other and the circle grows. This session only."
 

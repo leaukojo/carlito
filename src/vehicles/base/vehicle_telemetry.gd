@@ -87,8 +87,8 @@ var roll := 0.0         ## deg, + = starboard/right side down (contract 'roll')
 var altitude := 0.0     ## m above sea level (contract 'altitude'; world Y, water is y=0)
 var vspeed := 0.0       ## m/s variometer, + = climbing (contract 'vspeed')
 ## Instanced signal 'slip' (count 2), per-axle so understeer and oversteer differ.
-var slip_front := 0.0   ## mean |slip ratio|, front axle (contract 'slip' element 0)
-var slip_rear := 0.0    ## mean |slip ratio|, rear axle (contract 'slip' element 1)
+var slip_front := 0.0   ## mean `RayWheel.slip_size`, front axle (contract 'slip' element 0)
+var slip_rear := 0.0    ## mean `RayWheel.slip_size`, rear axle (contract 'slip' element 1)
 var ground := false     ## all wheels in contact (contract 'ground')
 var impact := 0.0       ## impact event magnitude m/s^2, peak-held (contract 'impact')
 

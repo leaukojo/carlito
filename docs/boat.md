@@ -28,8 +28,8 @@ opposes in one tick). Tested `tests/test_boat.gd`.
 
 Above-waterline hull takes anisotropic drag from air-relative velocity (`windage_long`/
 `windage_lat`) via `WindField.at(self)`, not `VehicleMath.air_damper` (its `axis` masks
-WORLD space). Air is 1/800 water density. Level 6 is the only level with a `WindField`;
-`Level.wind` defaults to null elsewhere.
+WORLD space). Air is 1/800 water density. Level 6 and Open Sea carry a `WindField`
+(`level_6_wind.tres`, `open_sea_wind.tres`); `Level.wind` defaults to null elsewhere.
 
 ## Hull drag
 
@@ -60,8 +60,8 @@ duck-typed `at(node)`, sharing only `base_vector`):
 `set_deg`/`drift`/`tide_period_s`/`tide_offset_s`, signed sinusoid. `Level` carries it
 beside `wind` (`current` / `current_vector()`, both off `_env_time`). Hull drag is measured
 against the water: `through_water = linear_velocity - current`, feeding rudder authority
-through `v_long`. Level 6 is the only level with water under the boat rather than beside it
-(`gen_skyport.gd`'s `SEA_Y`); every other island's `Sea` is a 1 m column. Tested
+through `v_long`. Level 6 (`gen_skyport.gd`'s `SEA_Y`) and Open Sea (an infinite 10 m `Sea`)
+have water under the boat rather than beside it; every other island's `Sea` is a 1 m column. Tested
 `tests/test_current.gd`.
 
 ## NMEA 2000 signals

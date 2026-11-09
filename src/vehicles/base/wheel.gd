@@ -70,7 +70,8 @@ var omega := 0.0        ## wheel spin, rad/s, + = rolling forward
 var compression := 0.0
 var in_contact := false
 var suspension_force := 0.0
-var slip := 0.0         ## |longitudinal slip ratio|, for telemetry
+var slip := 0.0         ## |longitudinal slip ratio|, for dust and the measure tools
+var slip_size := 0.0    ## size of the (slip ratio, side slip) pair the tyre reads; contract 'slip'
 var long_slip := 0.0    ## signed longitudinal slip ratio this tick (+ = wheel faster than the road)
 var slide_speed := 0.0  ## m/s the tread moves over the road along the wheel this tick (tyre smoke)
 var abs_active := false ## the anti-lock held this wheel's brake back this tick
@@ -318,6 +319,7 @@ func reset() -> void:
 	in_contact = false
 	suspension_force = 0.0
 	slip = 0.0
+	slip_size = 0.0
 	long_slip = 0.0
 	slide_speed = 0.0
 	abs_active = false
@@ -410,6 +412,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		_prev_vel_valid = false
 		suspension_force = 0.0
 		slip = 0.0
+		slip_size = 0.0
 		long_slip = 0.0
 		slide_speed = 0.0
 		abs_active = false
@@ -489,10 +492,12 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	var slip_ratio := slip_vel / slip_denom
 	long_slip = slip_ratio
 	slip = absf(slip_ratio)
+	var slip_lat := -v_lat / slip_denom
+	slip_size = Vector2(slip_ratio, slip_lat).length()
 	# A twin pair at half load each: `mu(L / 2) * L` over `2 C(L / 2)` is this at `L / 2`.
 	var lat_peak := lateral_peak_slip(suspension_force * tyre_share, reference_load,
 			drive_spec.load_sensitivity, drive_spec.cornering_peak_load)
-	var tyre := combined_slip_force(slip_ratio, -v_lat / slip_denom,
+	var tyre := combined_slip_force(slip_ratio, slip_lat,
 			budget_long, budget_lat, drive_spec.grip_curve, lat_peak)
 
 	# Each axis capped by the force that would cancel its slip velocity in one tick (the lateral cap

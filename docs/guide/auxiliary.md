@@ -55,7 +55,7 @@ The burn is realistic, but the tank is not. A real car's tank lasts hours, so a 
 never move in a session. The game scales each tank so that it lasts a little over eight minutes
 at full power, and the gauge visibly falls. The low-fuel warning is at 15 %. An empty tank does
 not stop the engine.
-<!-- VehicleTelemetry FUEL_TANK_FULL_LOAD_S 500 s ("COMPROMISE: the tank is a game scale"); contract fuel warn 15; see open_questions.md 9 -->
+<!-- VehicleTelemetry FUEL_TANK_FULL_LOAD_S 500 s ("COMPROMISE: the tank is a game scale"); contract fuel warn 15 -->
 
 ## Coolant
 

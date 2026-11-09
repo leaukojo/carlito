@@ -2356,6 +2356,36 @@ func _spun_wheel(fitted: TyreClass, stock: TyreClass, terrains: Array[Node],
 	return w
 
 
+func test_a_side_slide_shows_in_slip_size_and_not_in_slip() -> void:
+	# A front axle washing wide: rolling, no spin, the contact sliding sideways. The contract's
+	# 'slip' (`slip_size`) must see it; the longitudinal `slip` must not.
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	_box(root, Vector3(4.0, 1.0, 4.0), Vector3(0.0, -0.5, 0.0))
+	var body := RigidBody3D.new()
+	body.freeze = true
+	body.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	body.collision_layer = 0
+	root.add_child(body)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var gd: GroundDriveSpecScript = GroundDriveSpecScript.new()
+	gd.wheel_radius = 0.36
+	gd.wheel_inertia = 1.0
+	gd.tyre_half_width = 0.1
+	gd.rest_length = 0.3
+	var w := WheelScript.new(Vector3(0.0, 0.6, 0.0), false, true, null, 300.0)
+	w.apply_suspension(gd)
+	# Forward is -Z: 10 m/s ahead, rolling at road speed, and 2 m/s to the side.
+	body.linear_velocity = Vector3(2.0, 0.0, -10.0)
+	w.omega = 10.0 / gd.wheel_radius
+	w.tick(body, gd, root.get_world_3d().direct_space_state, 0.0, 0.0, TICK, [] as Array[Node])
+	assert_bool(w.in_contact).is_true()
+	assert_float(w.slip).is_less(0.01)
+	# Side slip 2 / 10 over a zero slip ratio.
+	assert_float(w.slip_size).is_equal_approx(0.2, 0.01)
+
+
 ## `dry` 1.2 and 1.5 on snow, over the reference.
 static func _fixture_tyre() -> TyreClass:
 	var cls := TyreClass.new()

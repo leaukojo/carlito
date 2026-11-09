@@ -751,16 +751,16 @@ func test_bridge_steer_unchanged_without_guidance() -> void:
 	assert_float(out.steer).is_equal_approx(0.9, 1e-6)
 
 
-func test_bridge_guidance_curvature_scales_off_full_lock() -> void:
+func test_bridge_guidance_curvature_scales_off_the_wire_maximum() -> void:
 	# The 1/km → steer conversion belongs to bridge_source (the units step, like steer's
-	# %→unit): full-lock curvature is full lock, half of it is half lock, and the sign carries
+	# %→unit): the wire's maximum curvature is steer 1, half of it is 0.5, and the sign carries
 	# through (negative curvature = curving left = negative steer).
-	var full := BridgeSourceScript.FULL_LOCK_CURVATURE
+	var full := BridgeSourceScript.MAX_CURVATURE
 	assert_float(BridgeSourceScript.steer_from_curvature(full)).is_equal(1.0)
 	assert_float(BridgeSourceScript.steer_from_curvature(-full)).is_equal(-1.0)
 	assert_float(BridgeSourceScript.steer_from_curvature(full * 0.5)).is_equal_approx(0.5, 1e-6)
 	assert_float(BridgeSourceScript.steer_from_curvature(0.0)).is_equal(0.0)
-	# Saturates rather than asking for more lock than the tractor has.
+	# Saturates past the wire's maximum.
 	assert_float(BridgeSourceScript.steer_from_curvature(full * 3.0)).is_equal(1.0)
 
 
@@ -794,7 +794,7 @@ func test_bridge_guidance_curvature_carries_through_when_present() -> void:
 	assert_float(RouterScript.arbitrate_bridge(vals).guidance_curvature).is_equal(0.0)
 
 
-func test_bridge_source_clamps_guidance_curvature_to_full_lock() -> void:
+func test_bridge_source_clamps_guidance_curvature_to_the_wire_maximum() -> void:
 	# The raw curvature key is clamped to the wire's +-127 1/km i8, same ceiling as the
 	# steer-unit conversion, so WheelDrive never asks for more angle than sloppyCAN could
 	# legally have sent.
@@ -802,10 +802,10 @@ func test_bridge_source_clamps_guidance_curvature_to_full_lock() -> void:
 	Bridge.set("_active", true)
 	Bridge.set("_inbound", {"guidance_curvature": 500.0})
 	var out := src.poll()
-	assert_float(float(out["guidance_curvature"])).is_equal(BridgeSourceScript.FULL_LOCK_CURVATURE)
+	assert_float(float(out["guidance_curvature"])).is_equal(BridgeSourceScript.MAX_CURVATURE)
 	Bridge.set("_inbound", {"guidance_curvature": -500.0})
 	out = src.poll()
-	assert_float(float(out["guidance_curvature"])).is_equal(-BridgeSourceScript.FULL_LOCK_CURVATURE)
+	assert_float(float(out["guidance_curvature"])).is_equal(-BridgeSourceScript.MAX_CURVATURE)
 
 
 ## poll() normalizes the contract's "in" signals by hand, per name, so this pins the two lists

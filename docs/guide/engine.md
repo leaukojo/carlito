@@ -100,7 +100,7 @@ In a real car, letting the clutch out too fast in too high a gear drags the engi
 until it stops: it stalls. The game's engines do not stall. Their clutch controller opens the
 clutch before the engine can be dragged down, and the idle controller fuels any load a torque
 converter puts on it.
-<!-- drivetrain.gd header: "Nothing stalls: the controller opens a clutch first, and the idle controller fuels a converter's load." See open_questions.md 3 -->
+<!-- drivetrain.gd header: "Nothing stalls: the controller opens a clutch first, and the idle controller fuels a converter's load." -->
 
 ## Friction and engine braking
 

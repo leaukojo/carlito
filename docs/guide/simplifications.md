@@ -57,7 +57,7 @@ The short cuts fall into three kinds:
 - **Not modelled: stalling, a starter motor, turbo lag.** The engine is running whenever the key
   is at Ignition.
 - **Simplified: the fuel tank.** The burn is real; the tank is scaled down so its gauge moves in a
-  session, and an empty tank does not stop the engine (open question 9).
+  session, and an empty tank does not stop the engine.
 - **Not modelled: a clutch pedal.** The game works every clutch, even with manual gears.
 - **Not modelled: cruise control** on any road vehicle; only the tractor's hand throttle holds a
   speed for you, through its governor.

@@ -989,7 +989,7 @@ func fill_slip(t: VehicleTelemetry) -> void:
 	var count := [0, 0]
 	for w in wheels:
 		var axle := 1 if w.is_rear else 0
-		slip_sum[axle] += w.slip
+		slip_sum[axle] += w.slip_size
 		count[axle] += 1
 		if not w.in_contact:
 			t.ground = false
@@ -1021,7 +1021,12 @@ func update_dust(t: VehicleTelemetry) -> void:
 	var midpoint := Vector3.ZERO
 	var rear_contacts := 0
 	var slide := 0.0
+	var slip_sum := 0.0
+	var rear_count := 0
 	for w in wheels:
+		if w.is_rear:
+			slip_sum += w.slip
+			rear_count += 1
 		if w.is_rear and w.in_contact:
 			midpoint += w.contact_point
 			rear_contacts += 1
@@ -1029,8 +1034,9 @@ func update_dust(t: VehicleTelemetry) -> void:
 	var intensity := 0.0
 	if rear_contacts > 0 and maxf(absf(t.speed), slide) > DUST_MOVING:
 		_dust.global_position = midpoint / rear_contacts
+		var rear_slip := slip_sum / rear_count
 		intensity = clampf(
-				(t.slip_rear - DUST_SLIP_MIN) / (DUST_SLIP_FULL - DUST_SLIP_MIN), 0.0, 1.0)
+				(rear_slip - DUST_SLIP_MIN) / (DUST_SLIP_FULL - DUST_SLIP_MIN), 0.0, 1.0)
 	_dust.emitting = intensity > 0.01
 	_dust.amount_ratio = intensity
 

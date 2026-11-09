@@ -136,7 +136,7 @@ sloppyCAN can switch traction control and stability control off with `tcs_off` a
 | `status` | out | bitfield | Bit 7: stability control acting. Bit 8: its brake-lamp request. Bit 9: a fitted ESC switched off. Bit 10: yaw braking. Bit 11: roll stability braking. |
 | `trailer_abs` | out | flag | Truck: the trailer's ABS is holding a wheel back, reported by the trailer. |
 | `trailer_vdc` | out | flag | Truck: the trailer's roll control is braking it. |
-| `slip` | out | ratio, two values | Car, truck, tractor: each axle's mean slip ratio. Under ABS or traction control it sits near 0.12. |
+| `slip` | out | ratio, two values | Car, truck, tractor: each axle's mean slip, along the wheels and sideways together. Under ABS or traction control in a straight line it sits near 0.12. |
 <!-- contract/carlito_contract.json: tcs_off, esc_off, status bits 7-11, trailer_abs, trailer_vdc, slip -->
 
 ## Try it in the game

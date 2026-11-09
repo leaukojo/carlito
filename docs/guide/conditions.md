@@ -32,7 +32,7 @@ sideways.
 Only two levels have wind of their own: **Level 6 - Skyport**, about 5 m/s with gusts up to 3 more,
 and **Open Sea**, about 6 m/s with gusts up to 2 more. Everywhere else is calm unless CONDITIONS
 sets a wind.
-<!-- level_6_wind.tres speed 5, gust_speed 3; open_sea_wind.tres speed 6, gust_speed 2; see open_questions.md 7 -->
+<!-- level_6_wind.tres speed 5, gust_speed 3; open_sea_wind.tres speed 6, gust_speed 2 -->
 
 The wind does not change with height, and hills and buildings do not shelter anything from it.
 

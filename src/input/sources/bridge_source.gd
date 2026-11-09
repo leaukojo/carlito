@@ -7,9 +7,10 @@ extends RefCounted
 ## VehicleInput ranges (percent → unit). Lamp/warning bits pass through as bools, mirrored
 ## verbatim.
 
-## Curvature (1/km) at full steering lock: maps guidance_curvature to -1..1 steer.
-## 127 1/km (7.9 m turn radius) is the i8 maximum so the whole range is usable.
-const FULL_LOCK_CURVATURE := 127.0
+## The i8 maximum of guidance_curvature (1/km): 127 is a 7.9 m turn radius, not full lock. Scales
+## the curvature to the -1..1 steer this source reports; a vehicle with a wheelbase steers the
+## curvature itself instead (`WheelDrive.guidance_steer_unit`), which is about half lock at 127.
+const MAX_CURVATURE := 127.0
 
 
 func poll() -> Dictionary[StringName, Variant]:
@@ -97,7 +98,7 @@ func poll() -> Dictionary[StringName, Variant]:
 	# under its own key, clamped to the wire's +-127 1/km i8, for WheelDrive to derive the wheel
 	# angle from the tractor's own wheelbase rather than through the speed-tapered rack.
 	if v.has("guidance_curvature"):
-		var curvature := clampf(_num(v, "guidance_curvature", 0.0), -FULL_LOCK_CURVATURE, FULL_LOCK_CURVATURE)
+		var curvature := clampf(_num(v, "guidance_curvature", 0.0), -MAX_CURVATURE, MAX_CURVATURE)
 		out[&"guidance"] = steer_from_curvature(curvature)
 		out[&"guidance_curvature"] = curvature
 	# Boat autopilot course: same presence rule again, and here it is load-bearing rather than an
@@ -132,6 +133,6 @@ static func drive_sourced(v: Dictionary) -> bool:
 	return v.has("accel") or v.has("brake") or v.has("steer")
 
 
-## Guidance curvature 1/km → steer unit. Saturates at full lock.
+## Guidance curvature 1/km → steer unit, saturating at the i8 maximum.
 static func steer_from_curvature(curvature: float) -> float:
-	return clampf(curvature / FULL_LOCK_CURVATURE, -1.0, 1.0)
+	return clampf(curvature / MAX_CURVATURE, -1.0, 1.0)

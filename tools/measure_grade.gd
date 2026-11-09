@@ -444,7 +444,7 @@ func _physics_process(delta: float) -> void:
 		# Wheelspin is self-defeating here twice over: the grip curve falls away past its peak
 		# AND gear 1 drags the engine into the rev limiter, so a floored pedal measures the
 		# driver, not the tyre. Hold the slip at the peak and the measurement is the tyre's.
-		var slip_rate := (TC_TARGET_SLIP - _car.telemetry.slip_rear) * TC_GAIN
+		var slip_rate := (TC_TARGET_SLIP - _rear_slip()) * TC_GAIN
 		# Most force is not most climb: every newton past the weight accelerates the body and
 		# unloads the front axle by `m * a * h / L`, which flips a high-COM tractor backwards
 		# below its static tip angle. The driver also feathers as the front goes light, on the
@@ -465,7 +465,7 @@ func _physics_process(delta: float) -> void:
 			for w in _car.drive.wheels:
 				f_long += w.force_long
 			print("      t %4.1f  gain %6.2f  v %5.2f  slipR %5.2f  f_long %8.0f  rpm %6.0f"
-					% [_t, _gain, _car.telemetry.speed, _car.telemetry.slip_rear, f_long,
+					% [_t, _gain, _car.telemetry.speed, _rear_slip(), f_long,
 					_car.telemetry.rpm]
 					+ "  gear %d  thr %.2f  tc %.2f" % [_car.telemetry.gear_byte,
 					_car.drivetrain.applied_throttle, _tc_fuel])
@@ -499,7 +499,7 @@ func _end_trial(climbed: bool) -> void:
 				+ " weight-along-slope %8.0f N" % (_car.mass * BrakeSizing.G * sin(deg_to_rad(_angle))))
 		print("    %5.2f deg: %-7s gain %6.2f m, speed %5.2f m/s, rear slip %.2f, gear %d"
 				% [_angle, "CLIMB" if climbed else "fail", _gain, _car.telemetry.speed,
-				_car.telemetry.slip_rear, _car.telemetry.gear_byte])
+				_rear_slip(), _car.telemetry.gear_byte])
 	if climbed:
 		_best = _angle
 		_lo = _angle
@@ -613,6 +613,18 @@ func _front_load() -> float:
 		if not w.is_rear:
 			front += w.suspension_force
 	return front
+
+
+## The rear axle's mean |slip ratio| (`RayWheel.slip`): what TC_TARGET_SLIP is a target for. The
+## telemetry's `slip_rear` adds side slip.
+func _rear_slip() -> float:
+	var total := 0.0
+	var count := 0
+	for w in _car.drive.wheels:
+		if w.is_rear:
+			total += w.slip
+			count += 1
+	return total / count if count > 0 else 0.0
 
 
 ## Steepest grade first gear at full throttle can push `mass` (kg, the whole rig) up from rest, in
@@ -1040,34 +1052,40 @@ func _roll_step() -> void:
 	_next_roll()
 
 
-## `verbose` roll-back line, every 0.5 s: the tractor unit's tyre force and slip per axle, and with a
-## trailer its tyres' force, its brake and the drawbar's pull, read off the trailer's own balance
-## (`m a + m g sin - sum Fx` along the slope; its rolling resistance is a body force, so it lands in
-## the pull). Names what bounds a slow pull-away: traction, the drawbar, or the trailer.
+## `verbose` roll-back line, every 0.5 s: the tractor unit's tyre force and slip per axle and its
+## rolling force (`RayWheel.force_roll`, tyre plus surface drag), and with a trailer its tyres'
+## force, its rolling force, its brake and the drawbar's pull, read off the trailer's own balance
+## (`m a + m g sin - sum Fx - sum roll` along the slope). Names what bounds a slow pull-away:
+## traction, the drawbar, or the trailer.
 func _print_roll_forces(gain: float) -> void:
 	var fx := {true: 0.0, false: 0.0}
 	var slip := {true: 0.0, false: 0.0}
 	var n := {true: 0, false: 0}
+	var roll := 0.0
 	for w: RayWheel in _car.drive.wheels:
 		if w.in_contact:
 			fx[w.is_rear] += w.force_long
 			slip[w.is_rear] += w.long_slip
 			n[w.is_rear] += 1
-	var line := "    t %5.2f  %+7.3f m  %5.2f km/h  rpm %4.0f c %d  Fx front %6.0f rear %6.0f N  slip %+.2f / %+.2f" \
+			roll += w.force_roll
+	var line := "    t %5.2f  %+7.3f m  %5.2f km/h  rpm %4.0f c %d  Fx front %6.0f rear %6.0f N  roll %6.0f N  slip %+.2f / %+.2f" \
 			% [_t, gain, _car.telemetry.speed * 3.6, _car.drivetrain.rpm, _car.drivetrain.coupling_state,
-			fx[false], fx[true], slip[false] / maxi(n[false], 1), slip[true] / maxi(n[true], 1)]
+			fx[false], fx[true], roll, slip[false] / maxi(n[false], 1), slip[true] / maxi(n[true], 1)]
 	var host: Variant = _car.get("_drawbar")
 	if host == null:
 		host = _car.get("_fifth_wheel")
 	var trailer: TowedBody = host.get("trailer") if host != null else null
 	if trailer != null:
 		var t_fx := 0.0
+		var t_roll := 0.0
 		for w: RayWheel in trailer.wheels:
 			if w.in_contact:
 				t_fx += w.force_long
+				t_roll += w.force_roll
 		var g_pull := trailer.mass * BrakeSizing.G * sin(deg_to_rad(_angle))
-		line += "  | trailer Fx %6.0f N brake %.2f  drawbar %6.0f N (grade %6.0f)" % [t_fx,
-				trailer.brake_applied(), trailer.mass * trailer.accel_fwd + g_pull - t_fx, g_pull]
+		line += "  | trailer Fx %6.0f N roll %6.0f N brake %.2f  drawbar %6.0f N (grade %6.0f)" % [
+				t_fx, t_roll, trailer.brake_applied(),
+				trailer.mass * trailer.accel_fwd + g_pull - t_fx - t_roll, g_pull]
 	print(line)
 
 

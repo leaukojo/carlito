@@ -117,7 +117,7 @@ tyres:
 
 | Signal | Direction | Unit | What it shows |
 | --- | --- | --- | --- |
-| `slip` | out | ratio, two values | The front and rear axles' slip ratio. On low grip the same pedal makes much more slip. Car, truck, tractor. |
+| `slip` | out | ratio, two values | The front and rear axles' slip, along the wheels and sideways together. On low grip the same pedal makes much more slip. Car, truck, tractor. |
 | `accLong` | out | m/s² | Acceleration along the vehicle. In a full ABS stop it falls in step with the surface's grip. |
 | `wheel_slip` | out | % | Tractor only: how far the rear wheels run ahead of the ground. In mud or a field it climbs. |
 | `engine_load` | out | % | Truck and tractor: how much of the engine's torque is in use. Soft ground's drag raises it at a steady speed. |

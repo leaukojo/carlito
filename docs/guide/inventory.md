@@ -98,7 +98,7 @@ the two semi tractor units.
 | Pedal maps: petrol torque request, linear diesel, all-speed governor | petrol cars; diesel vans and trucks; tractor | `src/vehicles/base/pedal_map.gd` | engine |
 | Road-speed governor | vans, trucks, semis | `VehicleSpec.speed_limit_kmh`, `Drivetrain` | engine |
 | Hand throttle | tractor | `PedalMap.demand` | engine, implements |
-| Stall | not modelled as a game event: the controller opens the clutch first (see open questions) | `drivetrain.gd` header | engine |
+| Stall | not modelled as a game event: the controller opens the clutch first | `drivetrain.gd` header | engine |
 | Friction clutch, launch slip | racers, semis (AMT), tractor (powershift) | `Drivetrain.coupling_step` | coupling |
 | Torque converter, creep, lock-up | cars, vans, garbage truck, fire truck | `src/vehicles/base/torque_converter.gd` | coupling |
 | Gear byte, P/R/N/D, automatic or manual | car, truck, tractor, plane, train (reverser) | `Drivetrain`, `InputRouter.arbitrate_bridge` | gearbox |

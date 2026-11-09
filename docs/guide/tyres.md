@@ -190,7 +190,7 @@ does not use any of the tyre's grip.
 
 | Signal | Direction | Unit | What it shows |
 | --- | --- | --- | --- |
-| `slip` | out | ratio, two values | The size of the slip ratio along the wheels, averaged over each axle: the first value is the front axle, the second the rear. It ignores the direction (spinning and braking both read above 0) and it does not include the sideways slip angle. Car, truck, tractor. |
+| `slip` | out | ratio, two values | Each wheel's slip ratio and sideways slip taken together as one size, averaged over each axle: the first value is the front axle, the second the rear. It ignores the direction (spinning, braking and sliding wide all read above 0), so a front axle washing wide raises the first value and a rear stepping out the second. Car, truck, tractor. |
 | `accLong` | out | m/s² | Acceleration along the vehicle. In a full ABS stop it shows how hard the tyres are braking. |
 | `accLat` | out | m/s² | Sideways acceleration. Its highest value in a steady corner shows how much sideways grip the tyres had. |
 | `wheel_speed` | out | km/h | Tractor only: the rear wheels' spin times their radius. |

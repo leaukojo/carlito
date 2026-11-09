@@ -31,7 +31,7 @@ func _real_contract() -> ContractScript.ContractData:
 func test_real_contract_is_valid() -> void:
 	var data := _real_contract()
 	assert_array(data.errors).is_empty()
-	assert_int(data.version).is_equal(64)
+	assert_int(data.version).is_equal(65)
 
 
 ## The content hash is over the file's text with line endings normalized, so a CRLF checkout
@@ -697,16 +697,16 @@ func test_guidance_and_scv_are_tractor_only_and_flavored() -> void:
 			.override_failure_message("%s must be tractor-only" % sig_name).is_equal(["tractor"])
 
 
-func test_guidance_curvature_range_matches_the_full_lock_scale() -> void:
-	# bridge_source divides the command by FULL_LOCK_CURVATURE to reach the -1..1 steer channel, so
-	# the contract's range and that constant must be the same number: the signal saturates exactly at
-	# the steering stop, with no dead top end and no command asking for more lock than exists.
+func test_guidance_curvature_range_matches_the_bridge_scale() -> void:
+	# bridge_source clamps the command to MAX_CURVATURE and divides by it to reach the -1..1 steer
+	# channel, so the contract's range and that constant must be the same number: no dead top end
+	# and no command past what the wire can carry.
 	var sig := _real_contract().get_signal_def("guidance_curvature", "in")
 	assert_str(sig.type).is_equal("i8")
 	assert_str(sig.unit).is_equal("1/km")
 	assert_int(sig.range.size()).is_equal(2)
-	assert_float(sig.range[0]).is_equal(-BridgeSourceScript.FULL_LOCK_CURVATURE)
-	assert_float(sig.range[1]).is_equal(BridgeSourceScript.FULL_LOCK_CURVATURE)
+	assert_float(sig.range[0]).is_equal(-BridgeSourceScript.MAX_CURVATURE)
+	assert_float(sig.range[1]).is_equal(BridgeSourceScript.MAX_CURVATURE)
 
 
 func test_pto_mode_enum_decodes_shaft_speeds() -> void:
