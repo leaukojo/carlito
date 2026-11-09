@@ -70,15 +70,8 @@ func _ready() -> void:
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_child(row)
-	row.add_child(_btn("HINT", func() -> void: _hint_label.visible = not _hint_label.visible))
-	var close := _btn("CLOSE", func() -> void: closed.emit())
+	row.add_child(UiTheme.button(self, "HINT",
+			func() -> void: _hint_label.visible = not _hint_label.visible))
+	var close := UiTheme.button(self, "CLOSE", func() -> void: closed.emit())
 	row.add_child(close)
 	close.grab_focus()
-
-
-func _btn(text: String, on_press: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size = Vector2(UiTheme.px(self, 200.0), UiTheme.px(self, UiTheme.TOUCH_MIN))
-	b.pressed.connect(on_press)
-	return b

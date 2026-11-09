@@ -377,8 +377,8 @@ func _build_conditions() -> void:
 
 
 ## The A/B switches on the machine's own hardware, session-only like CONDITIONS: each a cycling
-## button + short help. Disabled (with a reason) on a body without the hardware and in a challenge,
-## which drives stock. Nothing is applied here (rule 6).
+## button + short help. Disabled (with a reason) on a body without the hardware, in a challenge,
+## which drives stock, and under a live bridge (`_lab_off_reason`). Nothing is applied here (rule 6).
 func _build_lab() -> void:
 	_lab.add_child(_title("LAB"))
 
@@ -386,9 +386,10 @@ func _build_lab() -> void:
 	_relabel_abs()
 	_lab.add_child(_abs_btn)
 	var abs_help := _help(ABS_HELP)
-	if _lab_locked:
+	var lab_off := _lab_off_reason()
+	if lab_off != "":
 		_abs_btn.disabled = true
-		abs_help.text = LOCKED_HELP
+		abs_help.text = lab_off
 	elif not bool(_caps.get("abs", false)):
 		_abs_btn.disabled = true
 		abs_help.text = "no ABS on the %s" % GameState.current_variant
@@ -400,9 +401,9 @@ func _build_lab() -> void:
 		_relabel_axle_diff()
 		_lab.add_child(_axle_diff_btn)
 		var diff_help := _help(AXLE_DIFF_HELP)
-		if _lab_locked:
+		if lab_off != "":
 			_axle_diff_btn.disabled = true
-			diff_help.text = LOCKED_HELP
+			diff_help.text = lab_off
 		elif not bool(_caps.get("axle_diff", false)):
 			_axle_diff_btn.disabled = true
 			diff_help.text = "no axle diff on the %s" % GameState.current_variant
@@ -412,15 +413,26 @@ func _build_lab() -> void:
 	_relabel_steering()
 	_lab.add_child(_steering_btn)
 	var steering_help := _help(STEERING_HELP)
-	if _lab_locked:
+	if lab_off != "":
 		_steering_btn.disabled = true
-		steering_help.text = LOCKED_HELP
+		steering_help.text = lab_off
 	elif not bool(_caps.get("ackermann", false)):
 		_steering_btn.disabled = true
 		steering_help.text = "no Ackermann steering on the %s" % GameState.current_variant
 	_lab.add_child(steering_help)
 
 	_lab.add_child(_menu_button("BACK", func() -> void: _show_page(_root)))
+
+
+## Why every LAB row is greyed ("" when none): a challenge drives stock, and the switches act on
+## local input only, so a live bridge (fallback included) leaves them acting on nothing. Read when
+## the page builds, like the CONTROLS sheet: a bridge that connects under the pause shows on reopen.
+func _lab_off_reason() -> String:
+	if _lab_locked:
+		return LOCKED_HELP
+	if Bridge.is_active():
+		return ActionRegistry.BRIDGE_SETS_NOTE
+	return ""
 
 
 ## One button per spawn point, in the level's order (the first is its default).
@@ -555,9 +567,10 @@ func _relabel_steering() -> void:
 
 
 ## What the LAB takes ESC off with on this body ("" for nothing), as the router gates it: never in a
-## challenge nor on a body without the hardware (`InputRouter.lab_raw`).
+## challenge, under a live bridge, nor on a body without the hardware (`InputRouter.lab_raw`).
 func _lab_esc_cause() -> String:
-	var lab := InputRouter.lab_raw(_abs_off, _axle_diff, _parallel_steer, _caps, _lab_locked)
+	var lab := InputRouter.lab_raw(_abs_off, _axle_diff, _parallel_steer, _caps,
+			_lab_off_reason() != "")
 	return InputRouter.lab_esc_cause(bool(lab[&"abs_off"]),
 			int(lab[&"axle_diff"]) as VehicleInput.AxleDiff)
 

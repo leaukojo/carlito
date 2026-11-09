@@ -1,5 +1,5 @@
 class_name DepthReadout
-extends Control
+extends Instrument
 ## Hand-built echo sounder, built like Gauge and AttitudeIndicator, shown only where the vehicle
 ## declares 'depth' (boat).
 ##
@@ -17,19 +17,12 @@ const MUTED_COLOR := Color(0.55, 0.58, 0.63)
 const TRACK_W := 16.0     ## logical px, the water column's width
 const BLANK := "---"      ## what an invalid sounding reads as
 
-var value := 0.0: set = _set_value  ## m under the transducer, contract 'depth'
+# `value` (Instrument): m under the transducer, contract 'depth'.
 var max_value := 10.0     ## scale bottom, contract range[1]
 var invalid := -1.0       ## contract range[0]: at or below this there is no bottom
 var warn := NAN           ## shoal threshold; NAN = none
 var warn_is_low := true   ## contract warn_side; low is the dangerous side for water
 var caption := ""
-
-
-func _set_value(v: float) -> void:
-	if v == value:
-		return
-	value = v
-	queue_redraw()
 
 
 func _notification(what: int) -> void:
@@ -63,7 +56,7 @@ func _draw() -> void:
 
 	var small := int(UiTheme.px(self, 10.0))
 	if not caption.is_empty():
-		_draw_centered(font, Vector2(size.x * 0.5, 12.0 * s), caption, small, MUTED_COLOR)
+		draw_centered(self, font, Vector2(size.x * 0.5, 12.0 * s), caption, small, MUTED_COLOR)
 
 	# The water column: the surface at the top, the bed where the sounding says it is.
 	var top := 22.0 * s
@@ -85,12 +78,7 @@ func _draw() -> void:
 
 	var text := BLANK if bad else "%.1f" % value
 	var col := MUTED_COLOR if bad else (WARN_COLOR if alarm else TEXT_COLOR)
-	_draw_centered(font, Vector2(size.x * 0.5, size.y - 20.0 * s), text,
+	draw_centered(self, font, Vector2(size.x * 0.5, size.y - 20.0 * s), text,
 			int(UiTheme.px(self, 20.0)), col)
-	_draw_centered(font, Vector2(size.x * 0.5, size.y - 6.0 * s), "m", small, MUTED_COLOR)
+	draw_centered(self, font, Vector2(size.x * 0.5, size.y - 6.0 * s), "m", small, MUTED_COLOR)
 
-
-func _draw_centered(font: Font, at: Vector2, text: String, font_size: int, color: Color) -> void:
-	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x
-	draw_string(font, at - Vector2(w * 0.5, 0.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1.0,
-			font_size, color)

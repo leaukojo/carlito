@@ -195,6 +195,19 @@ static func keycap(bg: Color, rim: Color, scale: float) -> StyleBoxFlat:
 	return s
 
 
+## A screen's action button (200 x TOUCH_MIN, scaled for `ref`), the theme keycap unless `rim`
+## names another (UiTheme.DANGER for a destructive one).
+static func button(ref: Control, text: String, on_press: Callable, rim := RIM) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.custom_minimum_size = Vector2(px(ref, 200.0), px(ref, TOUCH_MIN))
+	if rim != RIM:
+		b.add_theme_stylebox_override("normal", keycap(SURFACE, rim, scale_of(ref)))
+		b.add_theme_stylebox_override("hover", keycap(SURFACE_HI, rim, scale_of(ref)))
+	b.pressed.connect(on_press)
+	return b
+
+
 ## A keycap with a 2 px rim all round (focus, selection), keeping its bottom lip.
 static func _ringed(s: StyleBoxFlat, scale: float) -> StyleBoxFlat:
 	var w := maxi(2, int(roundf(2.0 * scale)))

@@ -1,5 +1,5 @@
 class_name Gauge
-extends Control
+extends Instrument
 ## Hand-built radial gauge. Exactly two on the dash (speedometer, tachometer), one bespoke
 ## widget instanced twice. The dashboard configures min/max and redline from the contract and
 ## feeds `value` every frame.
@@ -23,15 +23,7 @@ var redline := NAN         ## value where the red zone starts; NAN = no redline
 var units := ""            ## drawn small under the number (e.g. "km/h")
 var caption := ""          ## drawn above center (e.g. "RPM x1000") — static label
 var major_ticks := 8
-var value := 0.0: set = _set_value
 var center_text := "": set = _set_center_text  ## overrides the number when non-empty (e.g. gear)
-
-
-func _set_value(v: float) -> void:
-	if v == value:
-		return
-	value = v
-	queue_redraw()
 
 
 func _set_center_text(t: String) -> void:
@@ -88,14 +80,12 @@ func _draw() -> void:
 	var font := get_theme_default_font()
 	var small := int(UiTheme.px(self, 11.0))
 	if not caption.is_empty():
-		_draw_centered(font, center + Vector2(0.0, -r * 0.38), caption, small, UNITS_COLOR)
+		draw_centered(self, font, center + Vector2(0.0, -r * 0.38), caption, small, UNITS_COLOR)
 	# Value / gear text in the bottom gap.
 	var big := center_text if not center_text.is_empty() else str(roundi(value))
-	_draw_centered(font, center + Vector2(0.0, r * 0.44), big, int(UiTheme.px(self, 22.0)), VALUE_COLOR)
+	draw_centered(self, font, center + Vector2(0.0, r * 0.44), big, int(UiTheme.px(self, 22.0)),
+			VALUE_COLOR)
 	if center_text.is_empty() and not units.is_empty():
-		_draw_centered(font, center + Vector2(0.0, r * 0.44 + 15.0 * s), units, small, UNITS_COLOR)
+		draw_centered(self, font, center + Vector2(0.0, r * 0.44 + 15.0 * s), units, small,
+				UNITS_COLOR)
 
-
-func _draw_centered(font: Font, at: Vector2, text: String, font_size: int, color: Color) -> void:
-	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x
-	draw_string(font, at - Vector2(w * 0.5, 0.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size, color)

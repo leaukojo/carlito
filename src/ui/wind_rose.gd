@@ -119,8 +119,8 @@ func _draw() -> void:
 		draw_line(center + dir * inner, center + dir * r, CARD_COLOR,
 				(1.5 if cardinal.is_empty() else 2.5) * s)
 		if not cardinal.is_empty():
-			_draw_centered(font, center + dir * (r - 17.0 * s) + Vector2(0.0, 4.0 * s),
-					cardinal, small, CARD_TEXT)
+			Instrument.draw_centered(self, font,
+					center + dir * (r - 17.0 * s) + Vector2(0.0, 4.0 * s), cardinal, small, CARD_TEXT)
 	draw_arc(center, r, 0.0, TAU, 96, BEZEL_COLOR, 2.0 * s, true)
 
 	if not marine:
@@ -145,15 +145,17 @@ func _draw() -> void:
 	_draw_bow_index(center, r, s)
 
 	if not caption.is_empty():
-		_draw_centered(font, center + Vector2(0.0, -r * 0.62), caption, small, CARD_COLOR)
+		Instrument.draw_centered(self, font, center + Vector2(0.0, -r * 0.62), caption, small,
+				CARD_COLOR)
 	# Gauge's own stack: the number, then its unit a line under it.
-	_draw_centered(font, center + Vector2(0.0, r * 0.30), "%.1f" % aws,
+	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.30), "%.1f" % aws,
 			int(UiTheme.px(self, 17.0)), TEXT_COLOR)
-	_draw_centered(font, center + Vector2(0.0, r * 0.30 + 15.0 * s), "AWS m/s", small, CARD_COLOR)
+	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.30 + 15.0 * s), "AWS m/s",
+			small, CARD_COLOR)
 	var awa_text := ("%+d" % roundi(awa)) if has_wind(aws) else BLANK
-	_draw_centered(font, center + Vector2(0.0, r * 0.72),
+	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.72),
 			"AWA %s   TWS %.1f" % [awa_text, tws], small, CARD_TEXT)
-	_draw_centered(font, center + Vector2(0.0, r * 0.92),
+	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.92),
 			("CRAB %+d" % roundi(crab(cog, heading))) if has_track(sog) else "CRAB " + BLANK,
 			small, TRACK_COLOR if has_track(sog) else CARD_COLOR)
 
@@ -165,14 +167,17 @@ func _draw_compass_face(center: Vector2, r: float, s: float, font: Font, small: 
 		_draw_arrow(center, needle_dir(relative_bearing(twd, heading)), r, s, COMPASS_WIND_COLOR)
 	_draw_bow_index(center, r, s)
 	if not caption.is_empty():
-		_draw_centered(font, center + Vector2(0.0, -r * 0.62), caption, small, CARD_COLOR)
-	_draw_centered(font, center + Vector2(0.0, r * 0.30), "%.1f" % tws,
+		Instrument.draw_centered(self, font, center + Vector2(0.0, -r * 0.62), caption, small,
+				CARD_COLOR)
+	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.30), "%.1f" % tws,
 			int(UiTheme.px(self, 17.0)), TEXT_COLOR)
-	_draw_centered(font, center + Vector2(0.0, r * 0.30 + 15.0 * s), "TWS m/s", small, CARD_COLOR)
-	var twd_text := ("%03d" % (roundi(twd) % 360)) if has_wind(tws) else BLANK
-	_draw_centered(font, center + Vector2(0.0, r * 0.72), "TWD %s" % twd_text, small, CARD_TEXT)
-	_draw_centered(font, center + Vector2(0.0, r * 0.92), "HDG %03d" % (roundi(heading) % 360),
+	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.30 + 15.0 * s), "TWS m/s",
 			small, CARD_COLOR)
+	var twd_text := ("%03d" % (roundi(twd) % 360)) if has_wind(tws) else BLANK
+	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.72), "TWD %s" % twd_text,
+			small, CARD_TEXT)
+	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.92),
+			"HDG %03d" % (roundi(heading) % 360), small, CARD_COLOR)
 
 
 func _draw_arrow(center: Vector2, dir: Vector2, r: float, s: float, color: Color) -> void:
@@ -192,8 +197,3 @@ func _draw_bow_index(center: Vector2, r: float, s: float) -> void:
 		center + Vector2(5.0 * s, -r + 11.0 * s),
 	]), BOW_COLOR)
 
-
-func _draw_centered(font: Font, at: Vector2, text: String, font_size: int, color: Color) -> void:
-	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x
-	draw_string(font, at - Vector2(w * 0.5, 0.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1.0,
-			font_size, color)

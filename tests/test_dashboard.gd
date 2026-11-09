@@ -728,3 +728,30 @@ func test_every_flavored_enum_out_signal_becomes_a_chip_with_no_special_casing()
 	for sig_name in ["mode_actual", "arming_state", "fix_type", "failsafe"]:
 		assert_bool(drone._out_chips.has(sig_name)).override_failure_message(
 				"'%s' did not land as a generated chip" % sig_name).is_true()
+
+
+## Every bool "in" signal gets a generated lamp, so each needs a source in the cluster: a copied
+## VehicleInput field or one of the computed cases. One with neither errors every frame.
+func test_every_bool_in_signal_has_a_lamp_source() -> void:
+	var checked := 0
+	for sig in Contract.data.signals:
+		if sig.dir != "in" or sig.type != "bool":
+			continue
+		checked += 1
+		assert_bool(Dashboard.LAMP_INPUT_FIELDS.has(sig.name)
+				or Dashboard.LAMP_COMPUTED.has(sig.name)) \
+			.override_failure_message("bool 'in' signal '%s' is in neither " % sig.name
+					+ "Dashboard.LAMP_INPUT_FIELDS nor LAMP_COMPUTED") \
+			.is_true()
+	assert_int(checked).is_greater(20)  # a silently-empty sweep would pass forever
+
+
+## ...and each copied path names a real bool on VehicleInput: a typo reads null.
+func test_every_lamp_input_field_is_a_vehicle_input_bool() -> void:
+	var vi := VehicleInput.new()
+	for sig_name: String in Dashboard.LAMP_INPUT_FIELDS:
+		var path: NodePath = Dashboard.LAMP_INPUT_FIELDS[sig_name]
+		assert_int(typeof(vi.get_indexed(path))) \
+			.override_failure_message("lamp '%s' reads '%s', not a VehicleInput bool"
+					% [sig_name, path]) \
+			.is_equal(TYPE_BOOL)

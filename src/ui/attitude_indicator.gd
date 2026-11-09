@@ -160,7 +160,7 @@ func _draw() -> void:
 
 	var font := get_theme_default_font()
 	if not caption.is_empty():
-		_draw_centered(font, center + Vector2(0.0, -r * 0.72), caption,
+		Instrument.draw_centered(self, font, center + Vector2(0.0, -r * 0.72), caption,
 				int(UiTheme.px(self, 11.0)), MARK_COLOR)
 	# Each number goes danger on its own contract warn, so a boat past capsize roll says so
 	# without waiting for pitch.
@@ -171,11 +171,6 @@ func _draw() -> void:
 	var w := font.get_string_size(roll_text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, big).x
 	_draw_at(font, center + Vector2(r * 0.62 - w, r * 0.72), roll_text, big,
 			WARN_COLOR if past_warn(roll, roll_warn) else TEXT_COLOR)
-
-
-func _draw_centered(font: Font, at: Vector2, text: String, font_size: int, color: Color) -> void:
-	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x
-	_draw_at(font, at - Vector2(w * 0.5, 0.0), text, font_size, color)
 
 
 func _draw_at(font: Font, at: Vector2, text: String, font_size: int, color: Color) -> void:

@@ -40,74 +40,59 @@ func test_no_registry_row_names_an_unbound_action() -> void:
 					entry["id"], action])
 
 
-## Every touch button's raw-intent key survives the keyboard/touch merge. InputRouter.merge_local
-## builds its dict EXPLICITLY, so a key missing from it is not merely unmerged — it silently drops
-## the KEYBOARD's edge too, for as long as a touch source is registered. That failure is invisible
-## in game (the key just stops working on this one machine) and this is the cheap guard.
+## Every touch button's raw-intent key survives the keyboard/touch merge from either side. A key
+## the merge drops or mistypes stops working on this one machine only (a touch source is
+## registered), which is invisible in game; this is the cheap guard.
 func test_every_touch_poll_key_is_merged() -> void:
-	var merged := RouterScript.merge_local({}, {})
 	for entry in Registry.ENTRIES:
-		var key := String(entry.get("poll_key", ""))
-		if key == "":
-			continue
-		assert_bool(merged.has(key)) \
-			.override_failure_message("registry row '%s' polls '%s', which InputRouter.merge_local "
-					% [entry["id"], key] + "does not merge — the keyboard's edge would be dropped") \
-			.is_true()
+		var key := StringName(entry.get("poll_key", ""))
+		if key != &"":
+			_assert_survives_merge(key, "registry row '%s' polls" % entry["id"])
 
 
-## The half neither guard above covers: TouchControls.poll() also writes WIDGET_KEYS straight
-## into `_held`/`_edges` for the hand-built widgets (joystick, pedals, HAND, climb pads, HORN,
-## LIGHTS) — Touch.WIDGET registry rows with no `poll_key` of their own, so
-## test_every_touch_poll_key_is_merged (which only walks rows that HAVE one) never sees them. A
-## typo in one of those literals would silently drop the touch control with nothing to catch it.
+## The half the guard above misses: TouchControls.poll() also writes WIDGET_KEYS straight into
+## `_held`/`_edges` for the hand-built widgets (joystick, pedals, HAND, climb pads, HORN, LIGHTS),
+## Touch.WIDGET rows with no `poll_key` of their own.
 func test_every_widget_key_is_merged() -> void:
-	var merged := RouterScript.merge_local({}, {})
 	for key in TouchScript.WIDGET_KEYS:
-		assert_bool(merged.has(key)) \
-			.override_failure_message(("TouchControls.WIDGET_KEYS has '%s', which InputRouter." \
-					% key) + "merge_local does not merge — the touch control would be dropped") \
-			.is_true()
+		_assert_survives_merge(key, "TouchControls.WIDGET_KEYS has")
 
 
-## The other half of the guard above, and the half nothing covered: the keyboard source and
-## merge_local must carry EXACTLY the same key set. Both dicts are written out by hand, so a key
-## on one side and not the other is silent in both directions — a key only the source emits is
-## dropped the moment a touch source registers (the keyboard control just stops working), and a
-## key only the merge carries is a control no key can ever reach. StringName keys do not make
-## either a parse error; this test is the guard.
-func test_local_source_and_merge_local_carry_the_same_keys() -> void:
+## Every keyboard key survives the merge too: a key lost or turned from an axis into a bit there
+## drops the keyboard control the moment a touch source registers.
+func test_every_local_source_key_is_merged() -> void:
 	var polled := LocalSourceScript.new().poll(0.0).keys()
-	var merged := RouterScript.merge_local({}, {}).keys()
-	polled.sort()
-	merged.sort()
-	assert_array(polled) \
-		.override_failure_message("LocalSource.poll and InputRouter.merge_local disagree on the "
-				+ "raw-intent key set:
-  only in poll():       %s
-  only in merge_local(): %s" % [
-				_missing(polled, merged), _missing(merged, polled)]) \
-		.is_equal(merged)
+	assert_array(polled).is_not_empty()
+	for key: StringName in polled:
+		_assert_survives_merge(key, "LocalSource.poll writes")
 
 
-## The pad source reports only the analog keys, so it is a subset rather than the same set; a key
-## merge_local does not carry would drop the stick silently.
+## The pad source reports only analog keys: each must come out as the axis it went in as.
 func test_every_pad_key_is_merged() -> void:
 	var polled := PadSourceScript.new().poll().keys()
-	var merged := RouterScript.merge_local({}, {}).keys()
-	assert_array(_missing(polled, merged)) \
-		.override_failure_message("PadSource.poll writes keys InputRouter.merge_local does not "
-				+ "merge: %s" % [_missing(polled, merged)]) \
-		.is_empty()
 	assert_array(polled).is_not_empty()
+	for key: StringName in polled:
+		_assert_survives_merge(key, "PadSource.poll writes", 0.5)
 
 
-static func _missing(from: Array, other: Array) -> Array:
-	var out := []
-	for k in from:
-		if not other.has(k):
-			out.append(k)
-	return out
+## `key` is one the router reads (LocalSource's set: the merge ORs any name through, so a typo
+## would otherwise pass), and carried by one side of merge_local (either side) it comes out as
+## sent: 0.5 for a key LocalSource reports as an axis, else a set bit, so an axis the merge ORs as
+## a bit reads `true` and fails.
+func _assert_survives_merge(key: StringName, who: String, sample: Variant = null) -> void:
+	var rest := LocalSourceScript.new().poll(0.0)
+	assert_bool(rest.has(key)) \
+		.override_failure_message("%s '%s', which LocalSource does not report, so " % [who, key]
+				+ "InputRouter never reads it") \
+		.is_true()
+	if sample == null:
+		sample = 0.5 if typeof(rest.get(key)) == TYPE_FLOAT else true
+	var one: Dictionary[StringName, Variant] = {key: sample}
+	for merged in [RouterScript.merge_local(one, {}), RouterScript.merge_local({}, one)]:
+		assert_that(merged.get(key)) \
+			.override_failure_message("%s '%s', which InputRouter.merge_local does not carry as "
+					% [who, key] + "sent (%s in, %s out)" % [sample, merged.get(key)]) \
+			.is_equal(sample)
 
 
 ## A typo in a family name is a control that is never offered on any vehicle, and nothing else

@@ -2,8 +2,8 @@ extends RefCounted
 ## Gamepad source: the analog fields of the same project [input] actions LocalSource reads, from
 ## their joypad events only. InputRouter merges it after the key shaping, so a stick and a trigger
 ## drive exactly as held. Edges and the horn stay in LocalSource (they read the action, either
-## device). Reports only the analog keys: merge_local reads the rest at their defaults, and
-## tests/test_action_registry.gd pins every key here as one merge_local carries.
+## device). Reports only the analog keys, and tests/test_action_registry.gd pins each one as an
+## axis merge_local carries (any other key it would OR as a bit).
 
 
 func poll() -> Dictionary[StringName, Variant]:

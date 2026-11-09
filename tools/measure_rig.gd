@@ -351,12 +351,12 @@ static func coupled_host(body: Node) -> TowHost:
 
 ## Fit the `TyreCatalog` class `id` on `body` (in the tree, so its drive is built); "" keeps the
 ## stock. Returns the id on the wheels, with a note when `id` is not made in the body's `tyre_fit`
-## and the stock stayed (`WheelDrive.fit_tyre`).
+## and the stock stayed (`BaseVehicle.fit_tyre`).
 static func fit_tyre(body: BaseVehicle, id: String) -> String:
 	if body.drive == null:
 		return ""
 	var gd := body.spec.ground_drive
-	if id != "" and not body.drive.fit_tyre(gd, TyreCatalog.by_id(id)):
+	if id != "" and not body.fit_tyre(TyreCatalog.by_id(id)):
 		return "%s (%s is not made in its fit: stock)" % [_tyre_id(gd.tyre), id]
 	return _tyre_id(body.drive.tyre)
 

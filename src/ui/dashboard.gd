@@ -171,6 +171,36 @@ const LAMP_COLOR := {
 ## The ESC tell-tale's flash while stability control acts (status ST_ESC): the cluster's own, as a
 ## real one flashes it (Bendix's ATC/ESP lamp, `docs/sources.md` § Stability control).
 const ESC_FLASH_HZ := 2.5
+## Bool "in" tell-tales copied verbatim off VehicleInput: contract name -> property path. Every
+## bool "in" signal is here or in LAMP_COMPUTED (`test_dashboard.gd`).
+const LAMP_INPUT_FIELDS := {
+	"horn": ^"horn",
+	"turnL": ^"lamps:turn_left",
+	"turnR": ^"lamps:turn_right",
+	"brakeLamp": ^"lamps:brake_lamp",
+	"checkEngine": ^"lamps:check_engine",
+	"battery": ^"lamps:battery_warn",
+	"arm": ^"arm",
+	"pantograph": ^"pantograph",
+	"doors": ^"doors",
+	"diff_lock": ^"diff_lock",
+	"fwd_drive": ^"fwd_drive",
+	"red_stop": ^"lamps:red_stop",
+	"amber_warn": ^"lamps:amber_warn",
+	"protect_lamp": ^"lamps:protect_lamp",
+	"trailer_ebs_fault": ^"lamps:trailer_ebs_fault",
+	"trailer_abs_lamp": ^"lamps:trailer_abs_lamp",
+	# PTO request, beside the pto_state lamp telemetry drives: separates "commanded" from "engaged".
+	"pto": ^"pto",
+	"beep": ^"lamps:beep",
+	# Cargo hook request, beside hardpoint_state: separates "asked" from "caught something".
+	"hardpoint_cmd": ^"hardpoint_cmd",
+	"beacon": ^"lamps:beacon",
+	"strobe": ^"lamps:strobe",
+	"tcs_off": ^"tcs_off",
+}
+## Bool "in" tell-tales computed rather than copied, cased in `_update_telltales`.
+const LAMP_COMPUTED: PackedStringArray = ["handbrake", "esc_off"]
 ## Cosmetic short captions for the generated "out" bars (like LAMP_TEXT for lamps).
 const BAR_LABEL := {
 	"hitch_pos_actual": "HITCH", "pto_rpm": "PTO", "engine_load": "LOAD",
@@ -271,12 +301,8 @@ var _shown := false            ## the shell's HUD visibility, ANDed with the den
 ## Attach to a running Level and build the cluster for its active vehicle type.
 ## Called by the shell once the level has spawned its vehicle.
 func bind(level: Node) -> void:
-	# Prefer the vehicle actually spawned (a garage swap changes it); fall back to the
-	# level's default before the first spawn.
+	# The vehicle actually spawned (a garage swap changes it): the shell binds only after a spawn.
 	var vtype := GameState.current_vehicle
-	if vtype == "" and level != null and level.get("info") != null:
-		# default_vehicle is a VARIANT ("bullet"); the contract keys signals by FAMILY ("train").
-		vtype = VehicleCatalog.family_of(level.info.default_vehicle)
 	_built = true
 	# Resolve telemetry before building: _build ends by binding every widget to a field on it.
 	_telem = null
@@ -928,40 +954,18 @@ static func esc_flash_on(seconds: float) -> bool:
 
 func _update_telltales() -> void:
 	var vi := InputRouter.get_vehicle_input()
-	# Mirror every lamp/warning bit verbatim; sloppyCAN is the sole authority when the bridge
-	# is live, locally only handbrake/horn/brake_lamp are driven and the rest stay off.
-	var active := {
-		"handbrake": vi.handbrake > 0.0,
-		"horn": vi.horn,
-		"turnL": vi.lamps.turn_left,
-		"turnR": vi.lamps.turn_right,
-		"brakeLamp": vi.lamps.brake_lamp,
-		"checkEngine": vi.lamps.check_engine,
-		"battery": vi.lamps.battery_warn,
-		"arm": vi.arm,
-		"pantograph": vi.pantograph,
-		"doors": vi.doors,
-		"diff_lock": vi.diff_lock,
-		"fwd_drive": vi.fwd_drive,
-		"red_stop": vi.lamps.red_stop,
-		"amber_warn": vi.lamps.amber_warn,
-		"protect_lamp": vi.lamps.protect_lamp,
-		"trailer_ebs_fault": vi.lamps.trailer_ebs_fault,
-		"trailer_abs_lamp": vi.lamps.trailer_abs_lamp,
-		# PTO request, beside the pto_state lamp telemetry drives: separates "commanded" from
-		# "engaged".
-		"pto": vi.pto,
-		"beep": vi.lamps.beep,
-		# Cargo hook request, beside hardpoint_state: separates "asked" from "caught something".
-		"hardpoint_cmd": vi.hardpoint_cmd,
-		"beacon": vi.lamps.beacon,
-		"strobe": vi.lamps.strobe,
-		"esc_off": vi.esc_off or ((_telem.status & VehicleTelemetry.ST_ESC) != 0
-				and esc_flash_on(Time.get_ticks_msec() / 1000.0)),
-		"tcs_off": vi.tcs_off,
-	}
-	for sig_name in _lamps:
-		var on: bool = active.get(sig_name, false)
+	# Mirror every lamp/warning bit verbatim off VehicleInput, whoever filled it (the bridge, or
+	# the router's local keys and latches).
+	for sig_name: String in _lamps:
+		var on := false
+		match sig_name:
+			"handbrake":
+				on = vi.handbrake > 0.0
+			"esc_off":
+				on = vi.esc_off or ((_telem.status & VehicleTelemetry.ST_ESC) != 0
+						and esc_flash_on(Time.get_ticks_msec() / 1000.0))
+			_:
+				on = bool(vi.get_indexed(LAMP_INPUT_FIELDS[sig_name]))
 		var col: Color = LAMP_COLOR.get(sig_name, Color(1.0, 0.70, 0.15)) if on else LAMP_OFF
 		_set_lamp_color(_lamps[sig_name], col)
 	if _auto_hold_lamp != null:

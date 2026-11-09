@@ -157,7 +157,7 @@ static func validate_spawns(allowed: PackedStringArray, default_vehicle: String,
 	if spawns.is_empty():
 		errors.append("level has no VehicleSpawn markers")
 		return errors
-	# allowed_vehicles lists families; default_vehicle is a variant, which can differ (e.g. "train").
+	# allowed_vehicles and default_vehicle are families; family_of maps a variant name given instead.
 	var default_family := VehicleCatalog.family_of(default_vehicle)
 	if default_family == "":
 		default_family = default_vehicle

@@ -178,7 +178,7 @@ static func problems(d: ChallengeDef) -> PackedStringArray:
 	if family == "":
 		out.append("unknown variant '%s'" % d.variant)
 		return out
-	if d.transmission == ChallengeDef.Transmission.MANUAL and not VehicleSelect.has_gearbox(family):
+	if d.transmission == ChallengeDef.Transmission.MANUAL and not FamilyGearbox.has_gearbox(family):
 		out.append("a manual gearbox on the %s family, which takes no gear byte" % family)
 	out.append_array(_arena_problems(d))
 	out.append_array(_placement_problems(d))

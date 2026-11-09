@@ -449,7 +449,7 @@ func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 		raw = driving_edges_only(raw)
 	# Single headlight owner: either source's cycle edge advances the shared level.
 	if bool(raw.get(&"lights_cycle", false)):
-		_lights = _lights % 4 + 1
+		_lights = Cycles.lights(_lights)
 	raw[&"lights"] = _lights
 	# Local implement toggles owned here too (same pattern as the headlight level).
 	if bool(raw.get(&"hitch_toggle", false)):
@@ -492,8 +492,7 @@ func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 	if bool(raw.get(&"doors_toggle", false)):
 		_doors = not _doors
 	if bool(raw.get(&"body_cmd_toggle", false)):
-		# Four commands, so the stalk cycles rather than flips.
-		_body_cmd = (_body_cmd + 1) % BODY_CMD_COUNT
+		_body_cmd = Cycles.body_cmd(_body_cmd)
 	raw[&"hitch_request"] = 1.0 if _hitch_up else 0.0
 	raw[&"pto"] = _pto
 	raw[&"pto_mode"] = _pto_mode
@@ -597,45 +596,27 @@ static func sheet_fraction(detent: int) -> float:
 	return float(posmod(detent, SHEET_DETENT_COUNT)) / float(maxi(1, SHEET_DETENT_COUNT - 1))
 
 
-## Merge the keyboard and touch raw intents into one before arbitration:
-## analog axes take the stronger request, steer sums (clamped), momentary bits OR
-## together. Pure/static so it is unit-tested without the autoload. `lights` is not
-## merged here — InputRouter owns the level and reads the merged `lights_cycle` edge.
+## Analog axes merge_local takes the stronger of.
+const MERGE_MAX: Array[StringName] = [&"accel", &"brake_reverse", &"handbrake"]
+## Signed axes (-1..1) merge_local sums, clamped.
+const MERGE_SUM: Array[StringName] = [&"steer", &"elevator", &"climb"]
+
+
+## Merge two local raw-intent dicts (keyboard + touch, then + gamepad) before arbitration: the
+## MERGE_MAX / MERGE_SUM axes as named there (always present, 0 when neither side reports one),
+## every other key ORed over the union of both, so a new edge or held bit needs no entry here.
+## Pure/static so it is unit-tested without the autoload. `lights` is not merged here —
+## InputRouter owns the level and reads the merged `lights_cycle` edge.
 static func merge_local(a: Dictionary[StringName, Variant],
 		b: Dictionary[StringName, Variant]) -> Dictionary[StringName, Variant]:
-	var out: Dictionary[StringName, Variant] = {
-		&"accel": maxf(float(a.get(&"accel", 0.0)), float(b.get(&"accel", 0.0))),
-		&"brake_reverse": maxf(float(a.get(&"brake_reverse", 0.0)), float(b.get(&"brake_reverse", 0.0))),
-		&"steer": clampf(float(a.get(&"steer", 0.0)) + float(b.get(&"steer", 0.0)), -1.0, 1.0),
-		&"handbrake": maxf(float(a.get(&"handbrake", 0.0)), float(b.get(&"handbrake", 0.0))),
-		&"horn": bool(a.get(&"horn", false)) or bool(b.get(&"horn", false)),
-		&"lights_cycle": bool(a.get(&"lights_cycle", false)) or bool(b.get(&"lights_cycle", false)),
-		&"hitch_toggle": bool(a.get(&"hitch_toggle", false)) or bool(b.get(&"hitch_toggle", false)),
-		&"pto_toggle": bool(a.get(&"pto_toggle", false)) or bool(b.get(&"pto_toggle", false)),
-		&"pto_mode_toggle": bool(a.get(&"pto_mode_toggle", false)) or bool(b.get(&"pto_mode_toggle", false)),
-		&"hand_throttle_down_cycle": bool(a.get(&"hand_throttle_down_cycle", false)) or bool(b.get(&"hand_throttle_down_cycle", false)),
-		&"hand_throttle_up_cycle": bool(a.get(&"hand_throttle_up_cycle", false)) or bool(b.get(&"hand_throttle_up_cycle", false)),
-		&"hand_throttle_pto_toggle": bool(a.get(&"hand_throttle_pto_toggle", false)) or bool(b.get(&"hand_throttle_pto_toggle", false)),
-		&"scv_toggle": bool(a.get(&"scv_toggle", false)) or bool(b.get(&"scv_toggle", false)),
-		&"diff_lock_toggle": bool(a.get(&"diff_lock_toggle", false)) or bool(b.get(&"diff_lock_toggle", false)),
-		&"fwd_drive_toggle": bool(a.get(&"fwd_drive_toggle", false)) or bool(b.get(&"fwd_drive_toggle", false)),
-		# Flight axes (-1..1) sum-clamp like steer; toggles below edge OR like the others.
-		&"elevator": clampf(float(a.get(&"elevator", 0.0)) + float(b.get(&"elevator", 0.0)), -1.0, 1.0),
-		&"climb": clampf(float(a.get(&"climb", 0.0)) + float(b.get(&"climb", 0.0)), -1.0, 1.0),
-		&"arm_toggle": bool(a.get(&"arm_toggle", false)) or bool(b.get(&"arm_toggle", false)),
-		&"node_fail_cycle": bool(a.get(&"node_fail_cycle", false)) or bool(b.get(&"node_fail_cycle", false)),
-		&"flight_mode_cycle": bool(a.get(&"flight_mode_cycle", false)) or bool(b.get(&"flight_mode_cycle", false)),
-		&"nav_mode_cycle": bool(a.get(&"nav_mode_cycle", false)) or bool(b.get(&"nav_mode_cycle", false)),
-		&"sheet_cycle": bool(a.get(&"sheet_cycle", false)) or bool(b.get(&"sheet_cycle", false)),
-		&"flaps_toggle": bool(a.get(&"flaps_toggle", false)) or bool(b.get(&"flaps_toggle", false)),
-		&"hardpoint_toggle": bool(a.get(&"hardpoint_toggle", false)) or bool(b.get(&"hardpoint_toggle", false)),
-		# Train toggles edge the same way; InputRouter owns the latched state.
-		&"pantograph_toggle": bool(a.get(&"pantograph_toggle", false)) or bool(b.get(&"pantograph_toggle", false)),
-		&"doors_toggle": bool(a.get(&"doors_toggle", false)) or bool(b.get(&"doors_toggle", false)),
-		# Every key here is required, not belt-and-braces: this dict is built explicitly, so a
-		# missing key silently drops the keyboard's edge whenever a touch source is registered.
-		&"body_cmd_toggle": bool(a.get(&"body_cmd_toggle", false)) or bool(b.get(&"body_cmd_toggle", false)),
-	}
+	var out: Dictionary[StringName, Variant] = {}
+	for k: StringName in MERGE_MAX:
+		out[k] = maxf(float(a.get(k, 0.0)), float(b.get(k, 0.0)))
+	for k: StringName in MERGE_SUM:
+		out[k] = clampf(float(a.get(k, 0.0)) + float(b.get(k, 0.0)), -1.0, 1.0)
+	for k: StringName in a.keys() + b.keys():
+		if not out.has(k):
+			out[k] = bool(a.get(k, false)) or bool(b.get(k, false))
 	return out
 
 

@@ -27,7 +27,8 @@ A version mismatch with sloppyCAN warns at runtime and raises a transient notice
 `InputRouter` merges every source into one `VehicleInput` per tick. All arbitration is
 static/pure, tested in `tests/test_input_arbitration.gd`.
 
-- `merge_local`: keyboard + touch, then + gamepad (max analog, summed steer, OR'd bits).
+- `merge_local`: keyboard + touch, then + gamepad (`MERGE_MAX` / `MERGE_SUM` axes, the rest
+  OR'd).
 - `KeyShaper` (`key_shaper.gd`): an on/off key becomes a hand and a foot. The keyboard's steer
   ramps out ever more slowly with road speed while it turns road wheels (1 / v^2 above 10 m/s;
   `BaseVehicle.key_steer_speed`, 0 for a flying plane, drone and boat) and returns faster; pedals
@@ -44,7 +45,8 @@ static/pure, tested in `tests/test_input_arbitration.gd`.
 - LAB switches (pause ▸ LAB): session-only and unsaved, local only (no contract signal), stock
   under the challenge lock, dev keys included, and on a body without the hardware, so a switch kept
   through a body change never reaches the next (`InputRouter.lab_raw`). A live bridge (fallback
-  included) ignores them too, though the page does not grey for it. ANTI-LOCK BRAKES
+  included) ignores them too, so the page greys them "set by sloppyCAN", read when it opens.
+  ANTI-LOCK BRAKES
   (`abs_off`; drops hill-start assist and the auto hold), DIFFERENTIALS (`axle_diff` STOCK / OPEN /
   LOCKED on every driven axle, the centre untouched; no row on a body with its own DIFF LOCK key),
   STEERING (`parallel_steer`, Ackermann fraction 0). ABS off and LOCKED each set `esc_off`, so
@@ -127,7 +129,8 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   to contract "out" names in contract units (throttle/steer as %, slip as ratio);
   `test_telemetry` fails if it drops a non-todo "out" signal (`WIRE_*` tables).
 - Dashboard (`src/ui/dashboard.gd`; its layers and density: the header comments): generated from
-  the contract, instruments hand-built. SETTINGS/F2 (`toggle_dashboard`) cycles COMPACT -> FULL
+  the contract, instruments hand-built; bool "in" lamps read `LAMP_INPUT_FIELDS` /
+  `LAMP_COMPUTED` (`test_dashboard` pins both against the contract). SETTINGS/F2 (`toggle_dashboard`) cycles COMPACT -> FULL
   -> OFF, saved to `user://` (`UserSettings`).
 - Debug overlay (`debug_overlay.gd`): FPS/frame ms/draw calls/VRAM/node count via
   `Performance`, F3. Target: root CLAUDE.md perf target.
@@ -193,7 +196,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   | SPAWN POINT | the level's spawns this body may use (`State.spawns`), shown from two up; a pick emits `spawn_picked(index)` |
   | CONTROLS | off `InputMap`; hidden if unusable (`ActionRegistry.relevant_entry`), greyed if bridge-owned |
   | SETTINGS | dashboard density, UI scale, extended debug, KEY RESPONSE, TRACTION CONTROL, STABILITY CONTROL, AUTO HOLD; saved to `user://` (`UserSettings`, re-applied by `Boot._apply_saved_settings`) |
-  | LAB | ANTI-LOCK BRAKES, DIFFERENTIALS, STEERING (§ Input pipeline), session-held, greyed in a challenge |
+  | LAB | ANTI-LOCK BRAKES, DIFFERENTIALS, STEERING (§ Input pipeline), session-held, greyed in a challenge or under a live bridge |
   | CONDITIONS | WIND/CURRENT preset (`WorldConditions.Preset` LEVEL/CALM/LIGHT/STRONG), FROM direction, TIME -> greys per `WorldConditions.WIND_FAMILIES`/`CURRENT_FAMILIES` |
 
   Session-held, never saved: LAB, CONDITIONS and the garage's gearbox choice (`Boot._manual_gearbox`);
@@ -213,10 +216,8 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   NONE). Emits `vehicle_chosen(variant)` then `attachment_chosen(id)` (a towing machine),
   `gearbox_chosen(manual)` (a gear-byte family) and `tyre_chosen(variant, id)` (a tyre choice);
   `Level.set_vehicle(variant)` only on a real change, respawns at a matching `VehicleSpawn`,
-  emits `Level.vehicle_changed(type)` (`Dashboard.bind` reads `GameState.current_vehicle`; the
-  shell binds after the spawn, and its pre-spawn fallback runs `LevelInfo.default_vehicle`, a
-  family, through `VehicleCatalog.family_of`, which yields "" unless the family is also a
-  variant key, as `drone` and `plane` are). Cards: `tools/gen_vehicle_thumbs.tscn` (windowed) ->
+  emits `Level.vehicle_changed(type)` (`Dashboard.bind` reads `GameState.current_vehicle`, so
+  the shell binds only after a spawn). Cards: `tools/gen_vehicle_thumbs.tscn` (windowed) ->
   `src/ui/vehicle_thumbs/<id>.png` via `src/ui/vehicle_shot.gd`; PNGs under `src/`,
   `tools/*`/`kit/thumbs/*` export-excluded.
 - Garage level (`src/levels/garage/`, id `garage`): frozen KINEMATIC vehicle,

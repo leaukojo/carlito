@@ -288,7 +288,7 @@ func _refresh_cards() -> void:
 	_manual_gearbox_btn = null
 	_automatic_gearbox_btn = null
 	var reason := _refusal(_family)
-	if VehicleSelect.has_gearbox(_family):
+	if FamilyGearbox.has_gearbox(_family):
 		_cards.add_child(_gearbox_row())
 	_cards.add_child(_heading("BODY", reason))
 	_cards.add_child(_card_grid(VehicleCatalog.variants_in_family(_family), _variant,
@@ -361,7 +361,7 @@ func _refresh_tyres() -> void:
 		row.add_child(b)
 	box.add_child(row)
 	_cards.add_child(box)
-	_cards.move_child(box, 1 if VehicleSelect.has_gearbox(_family) else 0)
+	_cards.move_child(box, 1 if FamilyGearbox.has_gearbox(_family) else 0)
 
 
 func _on_tyre_pressed(id: String) -> void:
@@ -404,14 +404,10 @@ func _card_grid(ids: PackedStringArray, selected: String, reason: String,
 
 func _make_card(id: String, selected: bool, reason: String, on_press: Callable) -> Button:
 	var card_w := UiTheme.px(self, CARD_W)
-	var card := Button.new()
+	var card := CardGrid.card_button(self, BORDER_W, selected)
 	card.custom_minimum_size = Vector2(card_w, roundf(card_w * VehicleShot.CARD_ASPECT))
-	card.clip_contents = true
 	card.disabled = not reason.is_empty()
 	card.tooltip_text = reason
-	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
-		card.add_theme_stylebox_override(state,
-				CardGrid.card_box(self, BORDER_W, selected or state in ["hover", "focus"]))
 	card.pressed.connect(on_press.bind(id))
 
 	# The picture is inset by the border: a StyleBox is the button's background, so a full-rect
@@ -601,21 +597,6 @@ static func protocols_for(family: String) -> String:
 	return ", ".join(upper)
 
 
-## Whether the family's contract takes a gear byte, the only thing a gearbox mode acts on (rule 4:
-## read, not listed here). Plane and train still carry that byte on the wire (reverser N/D/R),
-## but their own code only ever reads it through Drivetrain.is_drive/is_reverse, which collapse
-## every D1-D24 alike — so manual vs. automatic (literal byte vs. auto-shifted) changes nothing
-## either can feel, and the picker would offer a choice with no effect (the plane is single-speed
-## by construction: plane_spec.tres, test_plane).
-static func has_gearbox(family: String) -> bool:
-	if family == "plane" or family == "train":
-		return false
-	if Contract.data == null or not Contract.data.is_valid():
-		return false
-	var gear := Contract.data.get_signal_def("gear", "in")
-	return gear != null and gear.vehicles.has(family)
-
-
 func _spec_text(variant: String) -> String:
 	var family := VehicleCatalog.family_of(variant)
 	var lines := PackedStringArray([
@@ -671,7 +652,7 @@ func _on_drive() -> void:
 	vehicle_chosen.emit(_variant)
 	if _preview != null and _preview.has_method("set_attachment"):
 		attachment_chosen.emit(_attachment)
-	if VehicleSelect.has_gearbox(VehicleCatalog.family_of(_variant)):
+	if FamilyGearbox.has_gearbox(VehicleCatalog.family_of(_variant)):
 		gearbox_chosen.emit(_manual_gearbox)
 	if not _tyre.is_empty():
 		tyre_chosen.emit(_variant, _tyre)

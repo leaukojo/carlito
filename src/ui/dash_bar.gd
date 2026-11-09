@@ -1,5 +1,5 @@
 class_name DashBar
-extends Control
+extends Instrument
 ## Labeled horizontal bar for one ranged value on the dashboard. The dashboard generates one
 ## per contract "out" signal with a range that's warn'd or flavored, and one per instance of a
 ## signal declaring 'count' N (N bars sharing one set of metadata). Driven entirely by that
@@ -22,14 +22,6 @@ var min_value := 0.0
 var max_value := 100.0
 var warn := NAN         ## danger threshold; NAN = no warn band
 var warn_is_low := false  ## true: warn when value <= warn (low fuel); false: value >= warn
-var value := 0.0: set = _set_value
-
-
-func _set_value(v: float) -> void:
-	if v == value:
-		return
-	value = v
-	queue_redraw()
 
 
 func _in_warn() -> bool:

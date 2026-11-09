@@ -100,7 +100,7 @@ func _build_grid_page() -> void:
 	_grid_page.add_child(intro_full)
 
 	var intro_btn: Button
-	intro_btn = _btn("MORE INFO", func() -> void:
+	intro_btn = UiTheme.button(self, "MORE INFO", func() -> void:
 		intro_full.visible = not intro_full.visible
 		intro_btn.text = "LESS INFO" if intro_full.visible else "MORE INFO")
 	_grid_page.add_child(intro_btn)
@@ -151,8 +151,8 @@ func _build_grid_page() -> void:
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	_grid_page.add_child(row)
-	row.add_child(_btn("RESET PROGRESS", _show_confirm, UiTheme.DANGER))
-	row.add_child(_btn("BACK", func() -> void: closed.emit()))
+	row.add_child(UiTheme.button(self, "RESET PROGRESS", _show_confirm, UiTheme.DANGER))
+	row.add_child(UiTheme.button(self, "BACK", func() -> void: closed.emit()))
 
 
 ## Fit as many cards across as the window allows, same rule as LevelSelect.
@@ -160,11 +160,8 @@ func _reflow_all() -> void:
 	for grid in _family_grids:
 		if grid.get_child_count() == 0:
 			continue
-		var card_w := UiTheme.px(self, CARD_W)
 		var gap := float(grid.get_theme_constant("h_separation", "GridContainer"))
-		var avail := size.x - UiTheme.px(self, UiTheme.MARGIN) * 2.0
-		var fits := int(floorf((avail + gap) / (card_w + gap)))
-		grid.columns = clampi(fits, 1, mini(MAX_COLUMNS, grid.get_child_count()))
+		grid.columns = CardGrid.columns_for(self, CARD_W, gap, MAX_COLUMNS, grid.get_child_count())
 
 
 ## One challenge card: the arena's screenshot behind, title on a bottom strip, DONE/best time
@@ -174,14 +171,9 @@ func _make_card(d: ChallengeDef) -> Button:
 	var card_w := UiTheme.px(self, CARD_W)
 	var done := _progress.is_done(d.id)
 
-	var card := Button.new()
+	var card := CardGrid.card_button(self, BORDER_W, done)
 	card.custom_minimum_size = Vector2(card_w, roundf(card_w * CARD_ASPECT))
-	card.clip_contents = true
 	card.tooltip_text = d.briefing
-	card.add_theme_stylebox_override("normal", CardGrid.card_box(self, BORDER_W, done))
-	card.add_theme_stylebox_override("hover", CardGrid.card_box(self, BORDER_W, true))
-	card.add_theme_stylebox_override("pressed", CardGrid.card_box(self, BORDER_W, true))
-	card.add_theme_stylebox_override("focus", CardGrid.card_box(self, BORDER_W, true))
 	card.pressed.connect(_show_briefing.bind(d))
 
 	var inset := UiTheme.px(self, BORDER_W)
@@ -308,14 +300,12 @@ func _show_briefing(d: ChallengeDef) -> void:
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	_briefing_page.add_child(row)
-	row.add_child(_btn("HINT", func() -> void: _hint_label.visible = not _hint_label.visible))
-	var start := Button.new()
-	start.text = "START"
+	row.add_child(UiTheme.button(self, "HINT",
+			func() -> void: _hint_label.visible = not _hint_label.visible))
+	var start := UiTheme.button(self, "START", func() -> void: challenge_chosen.emit(d.id))
 	start.theme_type_variation = &"Primary"
-	start.custom_minimum_size = Vector2(UiTheme.px(self, 200.0), UiTheme.px(self, UiTheme.TOUCH_MIN))
-	start.pressed.connect(func() -> void: challenge_chosen.emit(d.id))
 	row.add_child(start)
-	row.add_child(_btn("BACK", func() -> void: _show_page(_grid_page)))
+	row.add_child(UiTheme.button(self, "BACK", func() -> void: _show_page(_grid_page)))
 
 	_show_page(_briefing_page)
 	start.grab_focus()
@@ -337,8 +327,8 @@ func _build_confirm_page() -> void:
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	_confirm_page.add_child(row)
-	row.add_child(_btn("YES, RESET", _on_reset_confirmed, UiTheme.DANGER))
-	_confirm_no_btn = _btn("NO", func() -> void: _show_page(_grid_page))
+	row.add_child(UiTheme.button(self, "YES, RESET", _on_reset_confirmed, UiTheme.DANGER))
+	_confirm_no_btn = UiTheme.button(self, "NO", func() -> void: _show_page(_grid_page))
 	row.add_child(_confirm_no_btn)
 
 
@@ -365,14 +355,3 @@ func _show_page(page: VBoxContainer) -> void:
 	var buttons := page.find_children("*", "Button", true, false)
 	if not buttons.is_empty():
 		(buttons[0] as Button).grab_focus()
-
-
-func _btn(text: String, on_press: Callable, rim := UiTheme.RIM) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size = Vector2(UiTheme.px(self, 200.0), UiTheme.px(self, UiTheme.TOUCH_MIN))
-	if rim != UiTheme.RIM:
-		b.add_theme_stylebox_override("normal", UiTheme.keycap(UiTheme.SURFACE, rim, UiTheme.scale_of(self)))
-		b.add_theme_stylebox_override("hover", UiTheme.keycap(UiTheme.SURFACE_HI, rim, UiTheme.scale_of(self)))
-	b.pressed.connect(on_press)
-	return b

@@ -53,7 +53,7 @@ var lamps := LampInput.new()
 # Driveline requests (WheelDrive), inert unless the spec declares the hardware.
 var diff_lock := false    ## rear differential lock request
 var fwd_drive := false    ## MFWD front-axle engage request
-var tcs_off := false      ## traction control off request (bridge-only: local drives with TC on)
+var tcs_off := false      ## traction control off request (bridge or local setting)
 var esc_off := false      ## stability control off request (bridge or local setting; arbitration sets tcs_off with it)
 var abs_off := false      ## anti-lock off, the local LAB switch only (no contract signal); arbitration sets esc_off with it
 ## Driven axles' diffs, the local LAB switch only (no contract signal); arbitration sets esc_off

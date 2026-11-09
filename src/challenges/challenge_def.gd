@@ -44,6 +44,6 @@ func family() -> String:
 
 ## The line both briefing screens show, or "" for a family with no gear byte to read.
 func gearbox_text() -> String:
-	if not VehicleSelect.has_gearbox(family()):
+	if not FamilyGearbox.has_gearbox(family()):
 		return ""
 	return "GEARBOX: MANUAL" if transmission == Transmission.MANUAL else "GEARBOX: AUTOMATIC"

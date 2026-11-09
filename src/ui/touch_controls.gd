@@ -58,7 +58,7 @@ const RIM_ON := Color(0.90, 0.60, 0.15)
 ## Raw-intent keys the hand-built widgets (joystick, pedals, HAND, the UP/DOWN climb pads, HORN,
 ## LIGHTS) write straight into `_held`/`_edges` — the registry's `poll_key` rows cover every OTHER
 ## key `poll()` can emit, but these carry no row of their own (Touch.WIDGET with no `poll_key`), so
-## nothing pins them against `InputRouter.merge_local`'s key set. One source both the widget
+## no row pins them through `InputRouter.merge_local`. One source both the widget
 ## builders below and `test_action_registry.gd` read, so a typo on either side is caught.
 const KEY_ACCEL := &"accel"
 const KEY_BRAKE_REVERSE := &"brake_reverse"

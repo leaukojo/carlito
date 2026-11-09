@@ -3,8 +3,8 @@ extends RefCounted
 ## (interpretation happens in InputRouter). The analog fields read each action's KEY events only,
 ## since InputRouter shapes them as keys; the same actions' joypad events are pad_source.gd's.
 ## Edges and the horn read the action, so they come from either device. Headlights report
-## `lights_cycle` edge; InputRouter owns the OFF->CLEARANCE->LOW->HIGH state. Keys pinned equal
-## to InputRouter.merge_local by tests/test_action_registry.gd.
+## `lights_cycle` edge; InputRouter owns the OFF->CLEARANCE->LOW->HIGH state. Each key's survival
+## through InputRouter.merge_local is pinned by tests/test_action_registry.gd.
 
 
 func poll(_delta: float) -> Dictionary[StringName, Variant]:

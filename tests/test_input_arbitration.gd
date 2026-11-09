@@ -346,7 +346,7 @@ func test_merge_local_ors_implement_toggle_edges() -> void:
 	assert_bool(m["hitch_toggle"]).is_true()
 	assert_bool(m["pto_toggle"]).is_true()
 	# Neither pressed → both false.
-	var none := RouterScript.merge_local({}, {})
+	var none := RouterScript.merge_local(_intent({"hitch_toggle": false, "pto_toggle": false}), {})
 	assert_bool(none["hitch_toggle"]).is_false()
 	assert_bool(none["pto_toggle"]).is_false()
 
@@ -549,7 +549,8 @@ func test_merge_local_ors_the_driveline_toggle_edges() -> void:
 	assert_bool(m["diff_lock_toggle"]).is_true()
 	assert_bool(m["fwd_drive_toggle"]).is_true()
 	assert_bool(m["pto_mode_toggle"]).is_true()
-	var none := RouterScript.merge_local({}, {})
+	var none := RouterScript.merge_local({}, _intent({
+			"diff_lock_toggle": false, "fwd_drive_toggle": false, "pto_mode_toggle": false}))
 	assert_bool(none["diff_lock_toggle"]).is_false()
 	assert_bool(none["fwd_drive_toggle"]).is_false()
 	assert_bool(none["pto_mode_toggle"]).is_false()
@@ -615,7 +616,7 @@ func test_merge_local_combines_flight_axes_and_arm_edge() -> void:
 	assert_float(m["climb"]).is_equal_approx(-0.3, 1e-6)
 	assert_bool(m["arm_toggle"]).is_true()
 	# Neither pressed → axes 0, edge false.
-	var none := RouterScript.merge_local({}, {})
+	var none := RouterScript.merge_local(_intent({"arm_toggle": false}), {})
 	assert_float(none["elevator"]).is_equal(0.0)
 	assert_bool(none["arm_toggle"]).is_false()
 
@@ -652,7 +653,7 @@ func test_bridge_flaps_mirrored_clamped() -> void:
 func test_merge_local_combines_flaps_edge() -> void:
 	var m := RouterScript.merge_local(_intent({"flaps_toggle": false}), _intent({"flaps_toggle": true}))
 	assert_bool(m["flaps_toggle"]).is_true()
-	assert_bool(RouterScript.merge_local({}, {})["flaps_toggle"]).is_false()
+	assert_bool(RouterScript.merge_local(_intent({"flaps_toggle": false}), {})["flaps_toggle"]).is_false()
 
 
 func test_bridge_mirrors_lamp_bits_verbatim() -> void:
@@ -703,7 +704,7 @@ func test_merge_local_ors_train_toggle_edges() -> void:
 			_intent({"pantograph_toggle": false, "doors_toggle": true}))
 	assert_bool(m["pantograph_toggle"]).is_true()
 	assert_bool(m["doors_toggle"]).is_true()
-	var none := RouterScript.merge_local({}, {})
+	var none := RouterScript.merge_local({}, _intent({"pantograph_toggle": false, "doors_toggle": false}))
 	assert_bool(none["pantograph_toggle"]).is_false()
 	assert_bool(none["doors_toggle"]).is_false()
 
@@ -924,7 +925,7 @@ func test_the_local_stalk_cycles_through_every_command_and_wraps() -> void:
 	var pos := 0
 	for _i in RouterScript.BODY_CMD_COUNT:
 		seen[pos] = true
-		pos = (pos + 1) % RouterScript.BODY_CMD_COUNT
+		pos = RouterScript.Cycles.body_cmd(pos)
 	assert_int(seen.size()) \
 		.override_failure_message("the cycle does not reach every command").is_equal(
 			RouterScript.BODY_CMD_COUNT)
@@ -954,11 +955,11 @@ func test_bridge_owns_the_body_command_while_it_is_live() -> void:
 
 
 func test_the_body_command_edge_survives_merge_local() -> void:
-	# merge_local builds its dict EXPLICITLY, so a missing key drops the keyboard's edge for as
-	# long as a touch source is registered. That failure is silent, hence the assertion.
+	# A key the merge drops loses the keyboard's edge for as long as a touch source is registered.
+	# That failure is silent, hence the assertion.
 	assert_bool(RouterScript.merge_local(_intent({"body_cmd_toggle": true}), {})["body_cmd_toggle"]).is_true()
 	assert_bool(RouterScript.merge_local({}, _intent({"body_cmd_toggle": true}))["body_cmd_toggle"]).is_true()
-	assert_bool(RouterScript.merge_local({}, {})["body_cmd_toggle"]).is_false()
+	assert_bool(RouterScript.merge_local(_intent({"body_cmd_toggle": false}), {})["body_cmd_toggle"]).is_false()
 
 
 func test_local_node_fail_rides_the_vehicle_input() -> void:
@@ -982,11 +983,11 @@ func test_bridge_mirrors_node_fail_verbatim() -> void:
 
 
 func test_the_node_fail_edge_survives_merge_local() -> void:
-	# merge_local builds its dict EXPLICITLY, so a missing key drops the keyboard's Y edge for
-	# as long as a touch source is registered. That failure is silent, hence the assertion.
+	# A key the merge drops loses the keyboard's Y edge for as long as a touch source is
+	# registered. That failure is silent, hence the assertion.
 	assert_bool(RouterScript.merge_local(_intent({"node_fail_cycle": true}), {})["node_fail_cycle"]).is_true()
 	assert_bool(RouterScript.merge_local({}, _intent({"node_fail_cycle": true}))["node_fail_cycle"]).is_true()
-	assert_bool(RouterScript.merge_local({}, {})["node_fail_cycle"]).is_false()
+	assert_bool(RouterScript.merge_local(_intent({"node_fail_cycle": false}), {})["node_fail_cycle"]).is_false()
 
 
 func test_a_new_body_clears_the_node_failure_but_not_the_other_toggles() -> void:
@@ -1034,7 +1035,7 @@ func test_bridge_mirrors_the_autopilot_and_leaves_an_uncommanded_course_alone() 
 func test_the_autopilot_edge_survives_merge_local() -> void:
 	assert_bool(RouterScript.merge_local(_intent({"nav_mode_cycle": true}), {})["nav_mode_cycle"]).is_true()
 	assert_bool(RouterScript.merge_local({}, _intent({"nav_mode_cycle": true}))["nav_mode_cycle"]).is_true()
-	assert_bool(RouterScript.merge_local({}, {})["nav_mode_cycle"]).is_false()
+	assert_bool(RouterScript.merge_local(_intent({"nav_mode_cycle": false}), {})["nav_mode_cycle"]).is_false()
 
 
 func test_a_new_body_clears_the_autopilot() -> void:

@@ -89,11 +89,8 @@ func _ready() -> void:
 
 	# The only Button here that is not a card (tests tell them apart: a card's name is a
 	# child Label, never `text`).
-	var back := Button.new()
-	back.text = "BACK"
+	var back := UiTheme.button(self, "BACK", func() -> void: closed.emit())
 	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	back.custom_minimum_size = Vector2(UiTheme.px(self, 200.0), UiTheme.px(self, UiTheme.TOUCH_MIN))
-	back.pressed.connect(func() -> void: closed.emit())
 	col.add_child(back)
 
 	_reflow()
@@ -107,9 +104,7 @@ func _reflow() -> void:
 		return
 	var card_w := UiTheme.px(self, CARD_W)
 	var gap := float(_grid.get_theme_constant("h_separation"))
-	var avail := size.x - UiTheme.px(self, UiTheme.MARGIN) * 2.0
-	var fits := int(floorf((avail + gap) / (card_w + gap)))
-	var cols := clampi(fits, 1, mini(MAX_COLUMNS, _grid.get_child_count()))
+	var cols := CardGrid.columns_for(self, CARD_W, gap, MAX_COLUMNS, _grid.get_child_count())
 	# HFlowContainer wraps by width, not a column count, so constrain its width to fit exactly
 	# `cols` cards per line — ALIGNMENT_CENTER then centers a short last line instead of packing
 	# it against the left edge the way GridContainer's fixed column grid did.
@@ -122,15 +117,10 @@ func _make_card(entry: Dictionary) -> Button:
 	var desc := String(entry.get("desc", ""))
 	var card_w := UiTheme.px(self, CARD_W)
 
-	var card := Button.new()
-	card.custom_minimum_size = Vector2(card_w, roundf(card_w * CARD_ASPECT))
-	card.clip_contents = true
-	card.tooltip_text = desc
 	# The card IS the picture: the theme's button padding would inset the screenshot.
-	card.add_theme_stylebox_override("normal", CardGrid.card_box(self, BORDER_W, false))
-	card.add_theme_stylebox_override("hover", CardGrid.card_box(self, BORDER_W, true))
-	card.add_theme_stylebox_override("pressed", CardGrid.card_box(self, BORDER_W, true))
-	card.add_theme_stylebox_override("focus", CardGrid.card_box(self, BORDER_W, true))
+	var card := CardGrid.card_button(self, BORDER_W, false)
+	card.custom_minimum_size = Vector2(card_w, roundf(card_w * CARD_ASPECT))
+	card.tooltip_text = desc
 	card.pressed.connect(_on_level_pressed.bind(String(entry["scene"])))
 	card.mouse_entered.connect(_show_desc.bind(desc))
 	card.focus_entered.connect(_show_desc.bind(desc))

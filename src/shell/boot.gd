@@ -863,12 +863,9 @@ func _on_tyre_picked(variant: String, id: String) -> void:
 func _fit_tyre() -> void:
 	if _level == null or not (_level.vehicle is BaseVehicle):
 		return
-	var body: BaseVehicle = _level.vehicle
-	if body.drive == null:
-		return
 	var in_challenge := _challenge != null or _pending_challenge != null
 	var id := "" if in_challenge else _settings.tyre_of(GameState.current_variant)
-	body.drive.fit_tyre(body.spec.ground_drive, TyreCatalog.by_id(id) if id != "" else null)
+	(_level.vehicle as BaseVehicle).fit_tyre(TyreCatalog.by_id(id) if id != "" else null)
 
 
 func _cycle_camera() -> void:

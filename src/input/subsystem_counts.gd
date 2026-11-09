@@ -4,6 +4,9 @@ extends RefCounted
 ## pinned by tests — grow without the constant and the local key silently stops reaching the
 ## new position while the bridge can still command it.
 
+## Headlight levels (contract 'lights', VehicleInput 1..4): OFF, CLEARANCE, LOW, HIGH.
+const LIGHT_LEVELS := 4
+
 ## Positions on the refuse body's command stalk (contract 'body_cmd'): Idle, Lift, Dump, Lower.
 const BODY_CMD := 4
 

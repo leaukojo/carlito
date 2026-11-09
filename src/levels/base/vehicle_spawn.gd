@@ -10,7 +10,8 @@ const _FOOTPRINT := Vector3(1.9, 1.0, 4.4)  ## roughly the car's footprint
 
 ## Vehicle type ids this spawn accepts (e.g. "car", "boat"); empty = any type.
 @export var vehicle_types := PackedStringArray()
-## Chosen for boats and as the safe respawn after a car falls in.
+## Bake-gate coverage flag: marks a water spawn for `LevelBaker`'s coverage check. Spawn picking
+## and the drown respawn do not read it.
 @export var is_water := false:
 	set(value):
 		is_water = value

@@ -5,6 +5,17 @@ extends RefCounted
 const Counts := preload("res://src/input/subsystem_counts.gd")
 
 
+## L key, headlight walk over VehicleInput's 1-based levels: OFF -> CLEARANCE -> LOW -> HIGH -> OFF.
+static func lights(level: int) -> int:
+	return posmod(level, Counts.LIGHT_LEVELS) + 1
+
+
+## Refuse stalk walk: Idle -> Lift -> Dump -> Lower -> Idle (four commands, so it cycles rather
+## than flips).
+static func body_cmd(cmd: int) -> int:
+	return _ladder(cmd, Counts.BODY_CMD)
+
+
 ## Y key, node-failure walk: none -> node 0 -> node 1 -> ... -> last -> none. Shifts the mask one
 ## bit left, wrapping past the last back to none; handles any starting int (not just the normal
 ## DRONE_NODES states) so a multi-bit bus-commanded mask still terminates instead of sticking or

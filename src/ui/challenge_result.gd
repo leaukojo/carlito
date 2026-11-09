@@ -73,20 +73,12 @@ func _ready() -> void:
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_child(row)
 
-	var retry := _btn("RETRY", func() -> void: retry_requested.emit())
+	var retry := UiTheme.button(self, "RETRY", func() -> void: retry_requested.emit())
 	row.add_child(retry)
 	if _passed:
-		var next_btn := _btn("NEXT", func() -> void: next_requested.emit())
+		var next_btn := UiTheme.button(self, "NEXT", func() -> void: next_requested.emit())
 		next_btn.disabled = not _has_next
 		row.add_child(next_btn)
-		row.add_child(_btn("CHALLENGES", func() -> void: challenges_requested.emit()))
+		row.add_child(UiTheme.button(self, "CHALLENGES", func() -> void: challenges_requested.emit()))
 
 	retry.grab_focus()
-
-
-func _btn(text: String, on_press: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size = Vector2(UiTheme.px(self, 200.0), UiTheme.px(self, UiTheme.TOUCH_MIN))
-	b.pressed.connect(on_press)
-	return b

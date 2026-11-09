@@ -363,6 +363,12 @@ func _clear_overturned() -> void:
 		GameState.notice_cleared.emit(OVERTURNED_NOTICE)
 
 
+## Fit tyre class `cls` (null = the stock) on the wheeled drive (`WheelDrive.fit_tyre`). True when
+## `cls` itself was fitted; false on the stock, and on a body with no ground drive (no tyre to fit).
+func fit_tyre(cls: TyreClass) -> bool:
+	return drive != null and drive.fit_tyre(spec.ground_drive, cls)
+
+
 ## Reset to the last spawn transform with zeroed motion; also fired on a fall off the world. The
 ## teleport, then the reset seam, so `respawned` listeners see a finished machine at its final
 ## pose (a subclass that re-lays a second body does it in the seam).
