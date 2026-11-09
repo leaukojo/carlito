@@ -12,27 +12,20 @@ const CatalogScript := preload("res://src/vehicles/vehicle_catalog.gd")
 ## Plough is deeper draft machine; working depth is on implement, not draft model.
 const PloughScript := preload("res://src/vehicles/tractor/implements/plough.gd")
 const WheelDriveScript := preload("res://src/vehicles/base/wheel_drive.gd")
+const Specs := preload("res://tests/catalog_specs.gd")
 
 
 ## Spec read via scene (not path), follows catalog->scene->spec chain (orphan-spec lesson).
 func _tractor_spec() -> VehicleSpec:
-	var variant := CatalogScript.first_in_family("tractor")
-	var scene: PackedScene = load(CatalogScript.scene_of(variant))
-	var state := scene.get_state()
-	for i in state.get_node_property_count(0):
-		if state.get_node_property_name(0, i) == "spec":
-			return state.get_node_property_value(0, i) as VehicleSpec
-	return null
+	return Specs.spec_of(CatalogScript.first_in_family("tractor"))
 
 
 ## Draft max via catalog->scene chain (scene override or script default).
 func _tractor_draft_max() -> float:
-	var variant := CatalogScript.first_in_family("tractor")
-	var scene: PackedScene = load(CatalogScript.scene_of(variant))
-	var state := scene.get_state()
-	for i in state.get_node_property_count(0):
-		if state.get_node_property_name(0, i) == "draft_max_force":
-			return float(state.get_node_property_value(0, i))
+	var scene := CatalogScript.scene_of(CatalogScript.first_in_family("tractor"))
+	var stored: Variant = Specs.root_property(scene, &"draft_max_force")
+	if stored != null:
+		return float(stored)
 	var tractor: TractorVehicle = auto_free(TractorVehicle.new())
 	return tractor.draft_max_force
 
@@ -887,12 +880,7 @@ func _spec_paths(root: String) -> PackedStringArray:
 ## this body's gearing, its relief the ballasted weight's traction at the drive radius, held by the
 ## powershift's own brakes, and it carries no brake hill hold (active standstill is its hold).
 func test_the_cvt_tractor_reads_its_sourced_ranges_and_holds_on_its_relief() -> void:
-	var state := (load(CatalogScript.scene_of("tractor-cvt")) as PackedScene).get_state()
-	var cvt: VehicleSpec = null
-	for i in state.get_node_property_count(0):
-		if state.get_node_property_name(0, i) == "spec":
-			cvt = state.get_node_property_value(0, i) as VehicleSpec
-	assert_object(cvt).is_not_null()
+	var cvt := Specs.spec_of("tractor-cvt")
 	assert_bool(Drivetrain.is_cvt(cvt)).is_true()
 	assert_bool(Drivetrain.is_cvt(_tractor_spec())).is_false()
 	var gd := cvt.ground_drive

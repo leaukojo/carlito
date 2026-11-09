@@ -79,6 +79,9 @@ ISO 11992 trailer bus, or none): `docs/tractor.md`, `docs/truck.md`.
 ## Testing & CI
 
 - gdUnit4 covers the pure logic (root rule 8); run lines: root `CLAUDE.md` § Running.
+- Shared fixtures: `tests/catalog_specs.gd`, `tests/level_fixtures.gd`, `tests/router_fixtures.gd`;
+  per-key bridge mirrors are table rows (`tests/test_input_arbitration.gd`). A test reading a real
+  `.baked.scn` says so in its header and failure message; geometry pins golden values.
 - CI (`.github/workflows/ci.yml`): editor-type gate → head-include check → import →
   stale-bake check → bake → gdUnit4 → headless smoke → baked-level smoke → web export +
   level packs, plus a parallel tracking gate.

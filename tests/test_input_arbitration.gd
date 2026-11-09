@@ -5,8 +5,10 @@ extends GdUnitTestSuite
 
 const RouterScript := preload("res://src/input/input_router.gd")
 const BridgeSourceScript := preload("res://src/input/sources/bridge_source.gd")
-const PadSourceScript := preload("res://src/input/sources/pad_source.gd")
+const RouterFixtures := preload("res://tests/router_fixtures.gd")
+const LocalSourceScript := preload("res://src/input/sources/local_source.gd")
 const BodyScript := preload("res://src/vehicles/truck/refuse_body.gd")
+const ContractScript := preload("res://src/bridge/contract.gd")
 
 const GEAR_N := 0x00
 const GEAR_D1 := 0x01
@@ -24,18 +26,16 @@ static func _intent(d: Dictionary) -> Dictionary[StringName, Variant]:
 	return out
 
 
-## A pad at rest. A router polls every connected joypad (PadSource), so one built bare reads
-## whatever controller sits on the machine running the suite.
-class _IdlePad extends PadSourceScript:
-	func poll() -> Dictionary[StringName, Variant]:
-		return {}
+## The tests that drive BridgeSource through the Bridge autoload set its `_active` / `_inbound`;
+## put them back here, so a test that errors out before its end cannot leave the bridge live.
+func after_test() -> void:
+	Bridge.set("_active", false)
+	Bridge.set("_inbound", {})
 
 
-## A router on an idle pad (`_IdlePad`): every router a test here builds.
+## A router on an idle pad (`RouterFixtures`): every router a test here builds.
 func _router() -> Node:
-	var router: Node = auto_free(RouterScript.new())
-	router._pad_source = _IdlePad.new()
-	return router
+	return auto_free(RouterFixtures.idle_router())
 
 
 func _raw(accel := 0.0, brake_reverse := 0.0, steer := 0.0, handbrake := 0.0) -> Dictionary:
@@ -158,12 +158,11 @@ func test_manual_bridge_gear_is_exact_and_owns_direction() -> void:
 	assert_int(neu.gear_request).is_equal(GEAR_N)
 	assert_float(neu.throttle).is_equal(1.0)
 	assert_bool(neu.gear_auto).is_false()
-	# Every drive byte of the bus passes exactly; one past it is N.
-	var d12: VehicleInput = RouterScript.arbitrate_bridge(_bridge(1.0, 0.0, 0.0, 0.0, 12), true)
-	assert_int(d12.gear_request).is_equal(12)
-	var top: VehicleInput = RouterScript.arbitrate_bridge(
-			_bridge(1.0, 0.0, 0.0, 0.0, RouterScript.GEAR_TOP), true)
-	assert_int(top.gear_request).is_equal(RouterScript.GEAR_TOP)
+	# Every drive byte of the bus passes exactly and drives forward; one past it is N.
+	for g in range(GEAR_D1, RouterScript.GEAR_TOP + 1):
+		var out: VehicleInput = RouterScript.arbitrate_bridge(_bridge(0.5, 0.0, 0.0, 0.0, g), true)
+		assert_int(out.gear_request).override_failure_message("byte %d" % g).is_equal(g)
+		assert_float(out.throttle).override_failure_message("byte %d" % g).is_equal(0.5)
 	var past: VehicleInput = RouterScript.arbitrate_bridge(
 			_bridge(1.0, 0.0, 0.0, 0.0, RouterScript.GEAR_TOP + 1), true)
 	assert_int(past.gear_request).is_equal(GEAR_N)
@@ -210,13 +209,6 @@ func test_the_brake_override_never_latches_in_p() -> void:
 	input.throttle = 1.0
 	input.gear_request = RouterScript.GEAR_P
 	assert_bool(RouterScript.brake_override(false, input, 5.0)).is_false()
-
-
-func test_manual_bridge_all_forward_gears_drive_forward() -> void:
-	for g in [2, 3, 4, 5, 6]:
-		var out: VehicleInput = RouterScript.arbitrate_bridge(_bridge(0.5, 0.0, 0.0, 0.0, g), true)
-		assert_int(out.gear_request).is_equal(g)
-		assert_float(out.throttle).is_equal(0.5)
 
 
 ## Automatic is the default: the byte is a PRND lever, and the gearbox picks the gear.
@@ -310,20 +302,150 @@ func test_merge_local_combines_keyboard_and_touch() -> void:
 	assert_bool(m["lights_cycle"]).is_false()
 
 
+func test_every_toggle_and_cycle_edge_ors_across_the_merge() -> void:
+	# Every edge LocalSource reports, so a new toggle is covered the day it ships. That a key
+	# survives the merge from either side is test_action_registry's; this is the OR: a press on
+	# one side beats a release on the other, and a release on both stays released.
+	var edges := LocalSourceScript.new().poll(0.0).keys().filter(func(k: StringName) -> bool:
+		return String(k).ends_with("_toggle") or String(k).ends_with("_cycle"))
+	assert_array(edges).is_not_empty()
+	for k: StringName in edges:
+		for pressed in [[true, false], [false, true]]:
+			var m := RouterScript.merge_local(_intent({k: pressed[0]}), _intent({k: pressed[1]}))
+			assert_bool(m[k]).override_failure_message("'%s' lost a one-sided press" % k).is_true()
+		assert_bool(RouterScript.merge_local(_intent({k: false}), _intent({k: false}))[k]) \
+			.override_failure_message("'%s' fired with neither side pressed" % k).is_false()
+
+
+## What sloppyCAN mirrors verbatim through `arbitrate_bridge`: [key, sent, VehicleInput field
+## (a property path), the field with the key absent]. A sent value lands as sent, and an absent
+## key reads its rest state, never a hold of the last value. Rows with more than that (a scale, a
+## clamp, a sentinel's reason) keep it in their own test below.
+const BRIDGE_MIRRORS := [
+	# The horn: absent → silent.
+	["horn", true, "horn", false],
+	# ISOBUS (tractor): absent → off, open diff, 2WD, 540, valve closed.
+	["pto", true, "pto", false],
+	["diff_lock", true, "diff_lock", false],
+	["fwd_drive", true, "fwd_drive", false],
+	["pto_mode", 1, "pto_mode", 0],
+	["scv_flow", 0.5, "scv_flow", 0.0],
+	["hand_throttle", 0.5, "hand_throttle", 0.0],
+	# Flight: absent → neutral, disarmed (no local toggle on this path), retracted.
+	["elevator", 0.5, "elevator", 0.0],
+	["climb", -0.5, "climb", 0.0],
+	["arm", true, "arm", false],
+	["flaps", 0.25, "flaps", 0.0],
+	["flight_mode", 1, "flight_mode", 0],
+	["hardpoint_cmd", true, "hardpoint_cmd", false],
+	["gimbal_pitch", -30.0, "gimbal_pitch", 0.0],
+	["gimbal_yaw", 45.0, "gimbal_yaw", 0.0],
+	# A failure mask: no clamp, no debounce, and absent is a healthy bus.
+	["node_fail", 0b1000_0001, "node_fail", 0],
+	# Lamp and warning bits, no local timer: an absent bit is off.
+	["turnL", true, "lamps:turn_left", false],
+	["turnR", true, "lamps:turn_right", false],
+	["brakeLamp", true, "lamps:brake_lamp", false],
+	["checkEngine", true, "lamps:check_engine", false],
+	["battery", true, "lamps:battery_warn", false],
+	["beacon", true, "lamps:beacon", false],
+	["strobe", true, "lamps:strobe", false],
+	["led", 2, "lamps:led", 0],
+	["beep", true, "lamps:beep", false],
+	["red_stop", true, "lamps:red_stop", false],
+	["amber_warn", true, "lamps:amber_warn", false],
+	["protect_lamp", true, "lamps:protect_lamp", false],
+	["trailer_ebs_fault", true, "lamps:trailer_ebs_fault", false],
+	["trailer_abs_lamp", true, "lamps:trailer_abs_lamp", false],
+	# Train: absent → lowered, shut.
+	["pantograph", true, "pantograph", false],
+	["doors", true, "doors", false],
+	# J1939: absent → released. The refuse body (CiA 422): absent → Idle, the safe pose.
+	["retarder", 0.5, "retarder", 0.0],
+	["body_cmd", 2, "body_cmd", 0],
+	# Boat: absent → standing by with NO course commanded. 0 would be a bearing (due north) the
+	# pilot would silently steer to; that is why bridge_source writes the key only when sent.
+	["nav_mode", 1, "nav_mode", 0],
+	["sheet", 0.5, "sheet", 0.0],
+	["heading_cmd", 275.0, "heading_cmd", VehicleInput.HEADING_CMD_NONE],
+]
+
+
+func test_the_bridge_mirrors_each_key_as_sent_and_absent_reads_its_rest_state() -> void:
+	for row: Array in BRIDGE_MIRRORS:
+		var key: String = row[0]
+		var field := NodePath(row[2])
+		var absent := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
+		absent.erase(key)   # `_bridge` writes a few keys (the horn) itself
+		var bare: VehicleInput = RouterScript.arbitrate_bridge(absent)
+		assert_that(bare.get_indexed(field)) \
+			.override_failure_message("absent '%s': %s is %s, not its rest state %s"
+					% [key, field, bare.get_indexed(field), row[3]]) \
+			.is_equal(row[3])
+		var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
+		vals[key] = row[1]
+		var out: VehicleInput = RouterScript.arbitrate_bridge(vals)
+		assert_that(out.get_indexed(field)) \
+			.override_failure_message("sent '%s' = %s: %s is %s"
+					% [key, row[1], field, out.get_indexed(field)]) \
+			.is_equal(row[1])
+
+
+## Contract "in" signals that are not a plain mirror, each with its reason. bridge_source writes
+## every in-signal under its contract name, so a BRIDGE_MIRRORS key is that name.
+const BRIDGE_NOT_MIRRORS := {
+	"accel": "a driving field: gated by the key and owned by the gear's direction",
+	"brake": "a driving field: owned by the gear's direction and the brake override",
+	"steer": "a driving field, overridden by rudder or guidance when present",
+	"handbrake": "a driving field, clamped (test_bridge_steer_and_handbrake_pass_through)",
+	"key": "a driving field: it gates the throttle (test_throttle_zero_unless_key_ignition)",
+	"lights": "a driving field and a level, not a bit: absent reads 1",
+	"gear": "a driving field, read as PRND or an exact byte (test_manual_bridge_gear_*)",
+	"hitch_pos": "scaled /100, and absent is raised (test_bridge_maps_hitch_percent)",
+	"tcs_off": "folded with esc_off (test_tcs_off_absent_means_on_on_both_paths)",
+	"esc_off": "takes tcs_off with it (test_tcs_off_absent_means_on_on_both_paths)",
+	"rudder": "presence overrides steer (test_bridge_rudder_overrides_steer_when_present)",
+	"guidance_curvature": "presence overrides steer; absent is a sentinel (test_bridge_guidance_*)",
+}
+
+
+func test_every_contract_in_signal_is_a_mirror_row_or_a_named_exception() -> void:
+	var file := FileAccess.open(ContractScript.CONTRACT_PATH, FileAccess.READ)
+	assert_object(file).is_not_null()
+	var data := ContractScript.ContractData.parse(file.get_as_text())
+	var rows := {}
+	for row: Array in BRIDGE_MIRRORS:
+		rows[row[0]] = true
+	var seen := 0
+	for sig in data.signals:
+		if sig.dir != "in":
+			continue
+		seen += 1
+		assert_bool(rows.has(sig.name) or BRIDGE_NOT_MIRRORS.has(sig.name)) \
+			.override_failure_message("in-signal '%s' is neither a BRIDGE_MIRRORS row nor in " % sig.name
+					+ "BRIDGE_NOT_MIRRORS, so nothing pins what the bridge does with it") \
+			.is_true()
+		assert_bool(rows.has(sig.name) and BRIDGE_NOT_MIRRORS.has(sig.name)) \
+			.override_failure_message("'%s' is both a mirror row and an exception" % sig.name) \
+			.is_false()
+	assert_int(seen).is_greater(0)
+	# And the other way: a row or an exception naming no in-signal tests a key nobody sends.
+	for key: String in rows.keys() + BRIDGE_NOT_MIRRORS.keys():
+		assert_bool(data.has_signal_def(key, "in")) \
+			.override_failure_message("'%s' is not a contract in-signal" % key).is_true()
+
+
 # --- ISOBUS implement (tractor) -----------------------------------------------
 
-func test_bridge_maps_hitch_percent_and_mirrors_pto() -> void:
+func test_bridge_maps_hitch_percent() -> void:
 	# hitch_pos arrives 0..100 (bridge_source keeps contract units); arbitrate_bridge /100.
 	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
 	vals["hitch_pos"] = 40.0
-	vals["pto"] = true
 	var out: VehicleInput = RouterScript.arbitrate_bridge(vals)
 	assert_float(out.hitch_request).is_equal_approx(0.4, 1e-4)
-	assert_bool(out.pto).is_true()
-	# Absent → raised (1.0) / off, the §6 default-off convention.
+	# Absent → raised (1.0), the §6 default-off convention.
 	var bare: VehicleInput = RouterScript.arbitrate_bridge(_bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1))
 	assert_float(bare.hitch_request).is_equal(1.0)
-	assert_bool(bare.pto).is_false()
 
 
 func test_local_passes_hitch_and_pto_through() -> void:
@@ -339,36 +461,7 @@ func test_local_passes_hitch_and_pto_through() -> void:
 	assert_bool(bare.pto).is_false()
 
 
-func test_merge_local_ors_implement_toggle_edges() -> void:
-	var kbd: Dictionary[StringName, Variant] = {"hitch_toggle": true, "pto_toggle": false}
-	var touch: Dictionary[StringName, Variant] = {"hitch_toggle": false, "pto_toggle": true}
-	var m := RouterScript.merge_local(kbd, touch)
-	assert_bool(m["hitch_toggle"]).is_true()
-	assert_bool(m["pto_toggle"]).is_true()
-	# Neither pressed → both false.
-	var none := RouterScript.merge_local(_intent({"hitch_toggle": false, "pto_toggle": false}), {})
-	assert_bool(none["hitch_toggle"]).is_false()
-	assert_bool(none["pto_toggle"]).is_false()
-
-
 # --- ISOBUS driveline (tractor: diff lock, MFWD, PTO mode) ---------------------
-
-func test_bridge_mirrors_the_driveline_requests() -> void:
-	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
-	vals["diff_lock"] = true
-	vals["fwd_drive"] = true
-	vals["pto_mode"] = 1
-	var out: VehicleInput = RouterScript.arbitrate_bridge(vals)
-	assert_bool(out.diff_lock).is_true()
-	assert_bool(out.fwd_drive).is_true()
-	assert_int(out.pto_mode).is_equal(1)
-	# Absent → open diff, 2WD, 540: a real tractor's rest state, and the §6 default-off rule.
-	var bare: VehicleInput = RouterScript.arbitrate_bridge(
-			_bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1))
-	assert_bool(bare.diff_lock).is_false()
-	assert_bool(bare.fwd_drive).is_false()
-	assert_int(bare.pto_mode).is_equal(0)
-
 
 func test_tcs_off_absent_means_on_on_both_paths() -> void:
 	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
@@ -540,22 +633,6 @@ func test_local_passes_the_driveline_toggles_through() -> void:
 	assert_int(bare.pto_mode).is_equal(0)
 
 
-func test_merge_local_ors_the_driveline_toggle_edges() -> void:
-	var kbd: Dictionary[StringName, Variant] = {
-			"diff_lock_toggle": true, "fwd_drive_toggle": false, "pto_mode_toggle": false}
-	var touch: Dictionary[StringName, Variant] = {
-			"diff_lock_toggle": false, "fwd_drive_toggle": true, "pto_mode_toggle": true}
-	var m := RouterScript.merge_local(kbd, touch)
-	assert_bool(m["diff_lock_toggle"]).is_true()
-	assert_bool(m["fwd_drive_toggle"]).is_true()
-	assert_bool(m["pto_mode_toggle"]).is_true()
-	var none := RouterScript.merge_local({}, _intent({
-			"diff_lock_toggle": false, "fwd_drive_toggle": false, "pto_mode_toggle": false}))
-	assert_bool(none["diff_lock_toggle"]).is_false()
-	assert_bool(none["fwd_drive_toggle"]).is_false()
-	assert_bool(none["pto_mode_toggle"]).is_false()
-
-
 func test_bridge_rudder_overrides_steer_when_present() -> void:
 	# sloppyCAN driving a boat sends 'rudder' (bridge_source only includes the key
 	# when sent): it becomes the steer channel, whatever 'steer' says.
@@ -592,33 +669,23 @@ func test_local_flight_axes_pass_through_clamped() -> void:
 	assert_bool(bare.arm).is_false()
 
 
-func test_bridge_normalizes_flight_axes_and_mirrors_arm() -> void:
+func test_bridge_clamps_the_flight_axes() -> void:
 	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
-	vals["elevator"] = 0.5   # already %→unit normalized by bridge_source
 	vals["climb"] = 1.6      # out of range on purpose
-	vals["arm"] = true
+	vals["elevator"] = -2.0
 	var out: VehicleInput = RouterScript.arbitrate_bridge(vals)
-	assert_float(out.elevator).is_equal_approx(0.5, 1e-6)
-	assert_float(out.climb).is_equal(1.0)  # clamped
-	assert_bool(out.arm).is_true()
-	# Absent → neutral / disarmed (arm is authoritative from the bridge, no local toggle).
-	var bare: VehicleInput = RouterScript.arbitrate_bridge(_bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1))
-	assert_float(bare.elevator).is_equal(0.0)
-	assert_float(bare.climb).is_equal(0.0)
-	assert_bool(bare.arm).is_false()
+	assert_float(out.climb).is_equal(1.0)
+	assert_float(out.elevator).is_equal(-1.0)
 
 
-func test_merge_local_combines_flight_axes_and_arm_edge() -> void:
-	var kbd: Dictionary[StringName, Variant] = {"elevator": 0.5, "climb": 0.0, "arm_toggle": false}
-	var touch: Dictionary[StringName, Variant] = {"elevator": 0.8, "climb": -0.3, "arm_toggle": true}
+func test_merge_local_combines_flight_axes() -> void:
+	var kbd: Dictionary[StringName, Variant] = {"elevator": 0.5, "climb": 0.0}
+	var touch: Dictionary[StringName, Variant] = {"elevator": 0.8, "climb": -0.3}
 	var m := RouterScript.merge_local(kbd, touch)
 	assert_float(m["elevator"]).is_equal(1.0)  # 0.5 + 0.8 clamped
 	assert_float(m["climb"]).is_equal_approx(-0.3, 1e-6)
-	assert_bool(m["arm_toggle"]).is_true()
-	# Neither pressed → axes 0, edge false.
-	var none := RouterScript.merge_local(_intent({"arm_toggle": false}), {})
-	assert_float(none["elevator"]).is_equal(0.0)
-	assert_bool(none["arm_toggle"]).is_false()
+	# Neither sent → axes 0.
+	assert_float(RouterScript.merge_local({}, {})["elevator"]).is_equal(0.0)
 
 
 func test_local_flaps_pass_through_clamped() -> void:
@@ -636,37 +703,11 @@ func test_local_flaps_pass_through_clamped() -> void:
 	assert_float(bare.flaps).is_equal(0.0)
 
 
-func test_bridge_flaps_mirrored_clamped() -> void:
-	# Already %→unit normalized by bridge_source; the bridge value is authoritative
-	# (no local toggle on that path), absent → retracted.
+func test_bridge_flaps_clamped() -> void:
+	# Already %→unit normalized by bridge_source; the bridge value is authoritative.
 	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
-	vals["flaps"] = 0.4
-	var out: VehicleInput = RouterScript.arbitrate_bridge(vals)
-	assert_float(out.flaps).is_equal_approx(0.4, 1e-6)
 	vals["flaps"] = 1.7  # out of range on purpose
-	out = RouterScript.arbitrate_bridge(vals)
-	assert_float(out.flaps).is_equal(1.0)  # clamped
-	var bare: VehicleInput = RouterScript.arbitrate_bridge(_bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1))
-	assert_float(bare.flaps).is_equal(0.0)
-
-
-func test_merge_local_combines_flaps_edge() -> void:
-	var m := RouterScript.merge_local(_intent({"flaps_toggle": false}), _intent({"flaps_toggle": true}))
-	assert_bool(m["flaps_toggle"]).is_true()
-	assert_bool(RouterScript.merge_local(_intent({"flaps_toggle": false}), {})["flaps_toggle"]).is_false()
-
-
-func test_bridge_mirrors_lamp_bits_verbatim() -> void:
-	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
-	vals["turnL"] = true
-	vals["brakeLamp"] = true
-	vals["checkEngine"] = true
-	var out: VehicleInput = RouterScript.arbitrate_bridge(vals)
-	assert_bool(out.lamps.turn_left).is_true()
-	assert_bool(out.lamps.turn_right).is_false()   # absent bit stays off
-	assert_bool(out.lamps.brake_lamp).is_true()
-	assert_bool(out.lamps.check_engine).is_true()
-	assert_bool(out.lamps.battery_warn).is_false() # warning LED defaults off when not sent
+	assert_float(RouterScript.arbitrate_bridge(vals).flaps).is_equal(1.0)
 
 
 # --- train controls (pantograph + doors) --------------------------------------
@@ -684,29 +725,6 @@ func test_local_train_toggles_pass_through() -> void:
 	var bare: VehicleInput = RouterScript.arbitrate_local(_raw(), 0.0, GEAR_D1)
 	assert_bool(bare.pantograph).is_false()
 	assert_bool(bare.doors).is_false()
-
-
-func test_bridge_mirrors_train_bits_verbatim() -> void:
-	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
-	vals["pantograph"] = true
-	var out: VehicleInput = RouterScript.arbitrate_bridge(vals)
-	assert_bool(out.pantograph).is_true()
-	assert_bool(out.doors).is_false()  # absent bit stays off
-	var bare: VehicleInput = RouterScript.arbitrate_bridge(
-			_bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1))
-	assert_bool(bare.pantograph).is_false()
-	assert_bool(bare.doors).is_false()
-
-
-func test_merge_local_ors_train_toggle_edges() -> void:
-	var m := RouterScript.merge_local(
-			_intent({"pantograph_toggle": true, "doors_toggle": false}),
-			_intent({"pantograph_toggle": false, "doors_toggle": true}))
-	assert_bool(m["pantograph_toggle"]).is_true()
-	assert_bool(m["doors_toggle"]).is_true()
-	var none := RouterScript.merge_local({}, _intent({"pantograph_toggle": false, "doors_toggle": false}))
-	assert_bool(none["pantograph_toggle"]).is_false()
-	assert_bool(none["doors_toggle"]).is_false()
 
 
 func test_bridge_guidance_overrides_steer_when_present() -> void:
@@ -788,8 +806,6 @@ func test_bridge_source_clamps_guidance_curvature_to_full_lock() -> void:
 	Bridge.set("_inbound", {"guidance_curvature": -500.0})
 	out = src.poll()
 	assert_float(float(out["guidance_curvature"])).is_equal(-BridgeSourceScript.FULL_LOCK_CURVATURE)
-	Bridge.set("_active", false)
-	Bridge.set("_inbound", {})
 
 
 func test_bridge_source_survives_non_numeric_json() -> void:
@@ -805,8 +821,6 @@ func test_bridge_source_survives_non_numeric_json() -> void:
 	assert_bool(out["horn"]).is_false()
 	assert_int(out["gear"]).is_equal(0)
 	assert_int(out["key"]).is_equal(3)
-	Bridge.set("_active", false)
-	Bridge.set("_inbound", {})
 
 
 func test_bridge_runs_under_a_paused_tree_and_the_router_does_not() -> void:
@@ -814,16 +828,10 @@ func test_bridge_runs_under_a_paused_tree_and_the_router_does_not() -> void:
 	assert_int(InputRouter.process_mode).is_equal(Node.PROCESS_MODE_INHERIT)
 
 
-func test_bridge_mirrors_scv_flow_absent_is_closed() -> void:
+func test_bridge_scv_flow_clamped() -> void:
 	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
-	vals["scv_flow"] = 0.6   # bridge_source already did the %→unit
-	assert_float(RouterScript.arbitrate_bridge(vals).scv_flow).is_equal_approx(0.6, 1e-6)
-	vals["scv_flow"] = 1.8
+	vals["scv_flow"] = 1.8   # bridge_source already did the %→unit
 	assert_float(RouterScript.arbitrate_bridge(vals).scv_flow).is_equal(1.0)
-	# Absent → valve closed, the default-off convention.
-	var bare: VehicleInput = RouterScript.arbitrate_bridge(
-			_bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1))
-	assert_float(bare.scv_flow).is_equal(0.0)
 
 
 func test_local_scv_flow_is_the_routers_own_spool() -> void:
@@ -840,28 +848,10 @@ func test_local_scv_flow_is_the_routers_own_spool() -> void:
 	assert_float(RouterScript.arbitrate_local(raw, 0.0, GEAR_D1).scv_flow).is_equal(1.0)
 
 
-func test_the_scv_toggle_merges_across_keyboard_and_touch() -> void:
-	# Both sources report a per-frame EDGE and InputRouter owns the state, so a touch button and the
-	# key drive one spool rather than two. The merge is the same one the PTO and diff-lock edges use.
-	var kbd: Dictionary[StringName, Variant] = {"scv_toggle": true, "pto_toggle": false}
-	var touch: Dictionary[StringName, Variant] = {"scv_toggle": false, "pto_toggle": true}
-	var m := RouterScript.merge_local(kbd, touch)
-	assert_bool(m["scv_toggle"]).is_true()
-	assert_bool(m["pto_toggle"]).is_true()
-	var none := RouterScript.merge_local(_intent({"scv_toggle": false}), _intent({"scv_toggle": false}))
-	assert_bool(none["scv_toggle"]).is_false()
-
-
-func test_bridge_mirrors_retarder_absent_is_released() -> void:
+func test_bridge_retarder_clamped() -> void:
 	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
-	vals["retarder"] = 0.6   # bridge_source already did the %→unit
-	assert_float(RouterScript.arbitrate_bridge(vals).retarder).is_equal_approx(0.6, 1e-6)
-	vals["retarder"] = 1.8
+	vals["retarder"] = 1.8   # bridge_source already did the %→unit
 	assert_float(RouterScript.arbitrate_bridge(vals).retarder).is_equal(1.0)
-	# Absent → released, the default-off convention.
-	var bare: VehicleInput = RouterScript.arbitrate_bridge(
-			_bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1))
-	assert_float(bare.retarder).is_equal(0.0)
 
 
 func test_local_has_no_retarder() -> void:
@@ -869,18 +859,6 @@ func test_local_has_no_retarder() -> void:
 	var raw := _raw()
 	raw["retarder"] = 0.9   # even if a source invented the key
 	assert_float(RouterScript.arbitrate_local(raw, 0.0, GEAR_D1).retarder).is_equal(0.0)
-
-
-func test_bridge_mirrors_dm1_lamps_verbatim() -> void:
-	# The J1939-73 DM1 lamp status byte: mirrored exactly like turnL, with no local timer and
-	# no interpretation. An absent bit is off, which is its correct default.
-	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
-	vals["red_stop"] = true
-	vals["protect_lamp"] = true
-	var out: VehicleInput = RouterScript.arbitrate_bridge(vals)
-	assert_bool(out.lamps.red_stop).is_true()
-	assert_bool(out.lamps.amber_warn).is_false()   # absent bit stays off
-	assert_bool(out.lamps.protect_lamp).is_true()
 
 
 func test_local_dm1_lamps_stay_dark() -> void:
@@ -892,16 +870,10 @@ func test_local_dm1_lamps_stay_dark() -> void:
 	assert_bool(out.lamps.protect_lamp).is_false()
 
 
-func test_the_trailer_fault_lamp_is_mirrored_and_has_no_local_source() -> void:
+func test_the_trailer_fault_lamp_has_no_local_source() -> void:
 	# ISO 11992's only "in" signal, and it follows the DM1 rule exactly: sloppyCAN is the sole
-	# authority, an absent bit is off, and there is no key, no toggle and no timer behind it. A
-	# trailer fault the game invented for itself would be a fiction.
-	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
-	assert_bool(RouterScript.arbitrate_bridge(vals).lamps.trailer_ebs_fault) \
-		.override_failure_message("an absent trailer fault bit must read off").is_false()
-	vals["trailer_ebs_fault"] = true
-	assert_bool(RouterScript.arbitrate_bridge(vals).lamps.trailer_ebs_fault).is_true()
-	# No local path at all, even if a source invented the key.
+	# authority (BRIDGE_MIRRORS), and there is no key, no toggle and no timer behind it. A
+	# trailer fault the game invented for itself would be a fiction, even if a source invented the key.
 	var raw := _raw()
 	raw["trailer_ebs_fault"] = true
 	assert_bool(RouterScript.arbitrate_local(raw, 0.0, GEAR_D1).lamps.trailer_ebs_fault).is_false()
@@ -919,17 +891,36 @@ func test_the_stalk_position_count_matches_the_body_units_command_enum() -> void
 		.is_equal(BodyScript.Cmd.size())
 
 
+## A touch source pressing only the body-command stalk, one edge per poll.
+class _StalkTouch extends RefCounted:
+	func poll() -> Dictionary[StringName, Variant]:
+		return {&"body_cmd_toggle": true}
+
+
+## No bridge connected: the local sources drive.
+class _NoBridge extends BridgeSourceScript:
+	func poll() -> Dictionary[StringName, Variant]:
+		return {}
+
+
 func test_the_local_stalk_cycles_through_every_command_and_wraps() -> void:
 	# Cycled, not flipped: the whole reason InputRouter owns a byte here rather than a bool.
+	var router := _router()
+	router.set_touch_source(_StalkTouch.new())
+	router._bridge_source = _NoBridge.new()
 	var seen := {}
-	var pos := 0
-	for _i in RouterScript.BODY_CMD_COUNT:
-		seen[pos] = true
-		pos = RouterScript.Cycles.body_cmd(pos)
+	for i in RouterScript.BODY_CMD_COUNT:
+		router._physics_process(1.0 / 60.0)
+		var cmd: int = router.get_vehicle_input().body_cmd
+		assert_int(cmd).override_failure_message("press %d did not advance the stalk" % (i + 1)) \
+			.is_equal((i + 1) % RouterScript.BODY_CMD_COUNT)
+		seen[cmd] = true
 	assert_int(seen.size()) \
 		.override_failure_message("the cycle does not reach every command").is_equal(
 			RouterScript.BODY_CMD_COUNT)
-	assert_int(pos).override_failure_message("the cycle must wrap back to Idle").is_equal(0)
+	router._physics_process(1.0 / 60.0)
+	assert_int(router.get_vehicle_input().body_cmd) \
+		.override_failure_message("the cycle must wrap past Idle").is_equal(1)
 
 
 func test_local_body_command_rides_the_struct_from_the_router_owned_cycle() -> void:
@@ -944,24 +935,6 @@ func test_local_body_command_rides_the_struct_from_the_router_owned_cycle() -> v
 			BodyScript.Cmd.IDLE)
 
 
-func test_bridge_owns_the_body_command_while_it_is_live() -> void:
-	# CiA 422 reaches us across the gateway, and sloppyCAN is the sole authority while the bridge
-	# drives — so the local cycle cannot leak in, and an absent byte is Idle rather than a hold.
-	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
-	vals["body_cmd"] = BodyScript.Cmd.LIFT
-	assert_int(RouterScript.arbitrate_bridge(vals).body_cmd).is_equal(BodyScript.Cmd.LIFT)
-	assert_int(RouterScript.arbitrate_bridge(
-			_bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)).body_cmd).is_equal(BodyScript.Cmd.IDLE)
-
-
-func test_the_body_command_edge_survives_merge_local() -> void:
-	# A key the merge drops loses the keyboard's edge for as long as a touch source is registered.
-	# That failure is silent, hence the assertion.
-	assert_bool(RouterScript.merge_local(_intent({"body_cmd_toggle": true}), {})["body_cmd_toggle"]).is_true()
-	assert_bool(RouterScript.merge_local({}, _intent({"body_cmd_toggle": true}))["body_cmd_toggle"]).is_true()
-	assert_bool(RouterScript.merge_local(_intent({"body_cmd_toggle": false}), {})["body_cmd_toggle"]).is_false()
-
-
 func test_local_node_fail_rides_the_vehicle_input() -> void:
 	var raw := _raw()
 	raw["node_fail"] = 0b0100
@@ -969,25 +942,6 @@ func test_local_node_fail_rides_the_vehicle_input() -> void:
 	# Absent (every vehicle that is not the drone, and a drone with a healthy bus): 0, which
 	# is every node online — the same "absent = the harmless state" rule the lamp bits follow.
 	assert_int(RouterScript.arbitrate_local(_raw(), 0.0, GEAR_D1).node_fail).is_equal(0)
-
-
-func test_bridge_mirrors_node_fail_verbatim() -> void:
-	# sloppyCAN is the sole authority while it drives: the mask passes through untouched (no
-	# clamp, no timer, no debounce), the local latch cannot leak in, and an absent value is a
-	# healthy bus rather than a hold of whatever was failed last.
-	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
-	vals["node_fail"] = 0b1000_0001
-	assert_int(RouterScript.arbitrate_bridge(vals).node_fail).is_equal(0b1000_0001)
-	assert_int(RouterScript.arbitrate_bridge(
-			_bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)).node_fail).is_equal(0)
-
-
-func test_the_node_fail_edge_survives_merge_local() -> void:
-	# A key the merge drops loses the keyboard's Y edge for as long as a touch source is
-	# registered. That failure is silent, hence the assertion.
-	assert_bool(RouterScript.merge_local(_intent({"node_fail_cycle": true}), {})["node_fail_cycle"]).is_true()
-	assert_bool(RouterScript.merge_local({}, _intent({"node_fail_cycle": true}))["node_fail_cycle"]).is_true()
-	assert_bool(RouterScript.merge_local(_intent({"node_fail_cycle": false}), {})["node_fail_cycle"]).is_false()
 
 
 func test_a_new_body_clears_the_node_failure_but_not_the_other_toggles() -> void:
@@ -1017,27 +971,6 @@ func test_local_nav_mode_rides_the_vehicle_input() -> void:
 	assert_int(RouterScript.arbitrate_local(_raw(), 0.0, GEAR_D1).nav_mode).is_equal(0)
 
 
-func test_bridge_mirrors_the_autopilot_and_leaves_an_uncommanded_course_alone() -> void:
-	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
-	vals["nav_mode"] = 1
-	vals["heading_cmd"] = 275.0
-	var out: VehicleInput = RouterScript.arbitrate_bridge(vals)
-	assert_int(out.nav_mode).is_equal(1)
-	assert_float(out.heading_cmd).is_equal_approx(275.0, 1e-6)
-	# Absent: standing by, with NO course commanded — 0 would be a bearing (due north), and the
-	# pilot would silently steer to it. This is the `rudder` presence rule, and it is the whole
-	# reason bridge_source writes the key only when sloppyCAN sends it.
-	var quiet: VehicleInput = RouterScript.arbitrate_bridge(_bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1))
-	assert_int(quiet.nav_mode).is_equal(0)
-	assert_float(quiet.heading_cmd).is_equal(VehicleInput.HEADING_CMD_NONE)
-
-
-func test_the_autopilot_edge_survives_merge_local() -> void:
-	assert_bool(RouterScript.merge_local(_intent({"nav_mode_cycle": true}), {})["nav_mode_cycle"]).is_true()
-	assert_bool(RouterScript.merge_local({}, _intent({"nav_mode_cycle": true}))["nav_mode_cycle"]).is_true()
-	assert_bool(RouterScript.merge_local(_intent({"nav_mode_cycle": false}), {})["nav_mode_cycle"]).is_false()
-
-
 func test_a_new_body_clears_the_autopilot() -> void:
 	# A new hull must not spawn with an engaged pilot steering to the last boat's course.
 	var router := _router()
@@ -1058,7 +991,6 @@ class _CountingTouch extends RefCounted:
 		return {&"accel": 1.0}
 
 
-## A bridge that is live and sending full throttle in D1.
 # --- the brake override: both pedals held, the brake wins once the body moves -----------------
 
 static func _both(gear := GEAR_D1) -> VehicleInput:
@@ -1218,6 +1150,7 @@ func test_the_router_cuts_the_throttle_once_a_braked_body_creeps() -> void:
 	assert_float(router.get_vehicle_input().throttle).is_equal(0.0)
 
 
+## A bridge that is live and sending full throttle in D1.
 class _LiveBridge extends BridgeSourceScript:
 	func poll() -> Dictionary[StringName, Variant]:
 		return {&"active": true, &"drive_sourced": true, &"accel": 1.0, &"gear": GEAR_D1,

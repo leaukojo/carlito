@@ -62,8 +62,8 @@ func test_grade_force_holdback_sign() -> void:
 	assert_float(Sim.grade_force(100.0, 0.0, 10.0)).is_equal(0.0)
 	# Climbing (+grade in +s) retards; descending assists.
 	assert_float(Sim.grade_force(100.0, 0.05, 10.0)).is_equal_approx(-100.0 * 10.0 * sin(atan(0.05)), 1e-6)
-	assert_bool(Sim.grade_force(100.0, 0.05, 10.0) < 0.0).is_true()
-	assert_bool(Sim.grade_force(100.0, -0.05, 10.0) > 0.0).is_true()
+	assert_float(Sim.grade_force(100.0, 0.05, 10.0)).is_less(0.0)
+	assert_float(Sim.grade_force(100.0, -0.05, 10.0)).is_greater(0.0)
 
 
 # --- couplers: slack, spring, one-tick damper clamp, hard cap -------------------------------
@@ -77,7 +77,7 @@ func test_coupler_spring_beyond_slack_is_tension() -> void:
 	# Stretched 0.1 past rest, 0.05 slack -> 0.05 effective.
 	assert_float(Sim.coupler_force(6.1, 6.0, 0.05, 0.0, 1e6, 0.0, 50.0, DELTA, 1e9)) \
 			.is_equal_approx(1e6 * 0.05, 1e-3)
-	assert_bool(Sim.coupler_force(5.9, 6.0, 0.05, 0.0, 1e6, 0.0, 50.0, DELTA, 1e9) < 0.0).is_true()
+	assert_float(Sim.coupler_force(5.9, 6.0, 0.05, 0.0, 1e6, 0.0, 50.0, DELTA, 1e9)).is_less(0.0)
 
 
 func test_coupler_damper_clamped_to_one_tick_relative_reversal() -> void:
@@ -130,7 +130,7 @@ func test_full_service_brake_capacity_exceeds_traction() -> void:
 	var total_mass := 0.0
 	for m in sim.masses:
 		total_mass += m
-	assert_bool(float(n) * sim.max_brake > sim.adhesion_force()).is_true()
+	assert_float(float(n) * sim.max_brake).is_greater(sim.adhesion_force())
 	# ...and by a real margin: full service braking must hold back a meaningful fraction of a g,
 	# not an arithmetic coincidence that a heavier wagon could erase.
 	var decel_g: float = (float(n) * sim.max_brake) / total_mass / Sim.GRAVITY
@@ -146,7 +146,7 @@ func test_full_brake_beats_full_traction() -> void:
 		sim.v[i] = 10.0
 	for _t in 60:
 		sim.step(DELTA, 1.0, 1.0, 0.0, PackedFloat64Array([0.0, 0.0, 0.0, 0.0, 0.0]))
-	assert_bool(sim.v[0] < 10.0).is_true()
+	assert_float(sim.v[0]).is_less(10.0)
 
 
 func _stop_distance(sim: RefCounted, brake: float) -> float:
@@ -181,7 +181,7 @@ func test_a_weak_brake_lets_the_train_roll_down_a_grade() -> void:
 	var grades := PackedFloat64Array([0.05, 0.05, 0.05, 0.05, 0.05])
 	for _t in 600:
 		sim.step(DELTA, 0.0, 1.0, 0.0, grades)
-	assert_bool(sim.v[0] < -1.0).is_true()
+	assert_float(sim.v[0]).is_less(-1.0)
 
 
 func test_integrator_stable_over_bumpy_grades() -> void:
@@ -191,7 +191,7 @@ func test_integrator_stable_over_bumpy_grades() -> void:
 		sim.step(DELTA, 0.5, 0.0, 0.0, PackedFloat64Array([g, g, g]))
 	for i in sim.v.size():
 		assert_bool(is_finite(sim.v[i])).is_true()
-		assert_bool(absf(sim.v[i]) < 200.0).is_true()
+		assert_float(absf(sim.v[i])).override_failure_message("car %d" % i).is_less(200.0)
 
 
 func test_setup_spaces_cars_behind_the_head() -> void:
@@ -205,11 +205,11 @@ func test_traction_accelerates_and_grade_holds_back() -> void:
 	var flat := _straight_sim()
 	for _s in 120:
 		flat.step(DELTA, 1.0, 0.0, 0.0, PackedFloat64Array([0.0, 0.0, 0.0]))
-	assert_bool(flat.v[0] > 0.5).is_true()
+	assert_float(flat.v[0]).is_greater(0.5)
 	var hill := _straight_sim()
 	for _s in 120:
 		hill.step(DELTA, 1.0, 0.0, 0.0, PackedFloat64Array([0.04, 0.04, 0.04]))
-	assert_bool(hill.v[0] < flat.v[0]).is_true()
+	assert_float(hill.v[0]).is_less(flat.v[0])
 
 
 func test_adhesion_caps_the_head_pull() -> void:
@@ -225,7 +225,7 @@ func test_adhesion_caps_the_head_pull() -> void:
 		sim.v[i] = fast
 	sim.step(DELTA, 1.0, 0.0, 0.0, flat)
 	assert_float(sim.head_traction).is_equal_approx(sim.max_power() / fast, 1.0)
-	assert_bool(sim.head_traction < grip).is_true()
+	assert_float(sim.head_traction).is_less(grip)
 
 
 func test_a_grip_retune_after_setup_takes_effect() -> void:
@@ -268,7 +268,7 @@ func test_pose_from_bogies_midpoint_and_forward() -> void:
 func test_car_pose_is_right_handed_on_a_slope() -> void:
 	var t: Transform3D = Place.pose_from_bogies(Vector3(3, 1, 0), Vector3(-3, -1, 0))
 	assert_float(t.basis.determinant()).is_equal_approx(1.0, 1e-5)
-	assert_bool((-t.basis.z).y > 0.0).is_true()
+	assert_float((-t.basis.z).y).is_greater(0.0)
 
 
 func test_pose_from_bogies_lift_raises_origin() -> void:
@@ -308,9 +308,9 @@ func test_catenary_sags_with_current() -> void:
 
 func test_brake_pipe_vents_and_recharges() -> void:
 	var vented := TrainT.brake_pipe_step(5.0, 1.0, 1.0, 6.0, 1.5, 3.0)
-	assert_bool(vented < 5.0).is_true()
+	assert_float(vented).is_less(5.0)
 	var recharged := TrainT.brake_pipe_step(2.0, 0.0, 1.0, 6.0, 1.5, 3.0)
-	assert_bool(recharged > 2.0).is_true()
+	assert_float(recharged).is_greater(2.0)
 
 
 # --- the brake acts through the pipe ---------------------------------------------------------

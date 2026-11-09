@@ -100,19 +100,37 @@ func test_level_select_cards_show_the_bake_weight() -> void:
 			assert_array(texts).contains([weight])
 
 
-## Weight reads as MB (answer "how long will this wait?"), empty if no bake.
+const NO_BAKE := "no level_2.baked.scn: run tools/bake_levels.tscn"
+
+
+## Weight reads as MB (answer "how long will this wait?"), empty if no bake. Formatted off a
+## probe bake of a known size in user://, so it holds on an unbaked clone.
 func test_weight_text_reads_as_megabytes() -> void:
-	assert_str(LevelRegistry.weight_text(LevelRegistry.scene_of("level_2"))).ends_with(" MB")
-	assert_int(LevelRegistry.weight_bytes(LevelRegistry.scene_of("level_2"))).is_greater(0)
+	var probe := "user://weight_probe.tscn"
+	var bake := "user://weight_probe.baked.scn"
+	var bytes := PackedByteArray()
+	bytes.resize(1572864)   # 1.5 MiB
+	var f := FileAccess.open(bake, FileAccess.WRITE)
+	assert_object(f).override_failure_message("cannot write the probe bake " + bake).is_not_null()
+	if f == null:
+		return
+	f.store_buffer(bytes)
+	f.close()
+	assert_int(LevelRegistry.weight_bytes(probe)).is_equal(1572864)
+	assert_str(LevelRegistry.weight_text(probe)).is_equal("1.5 MB")
+	DirAccess.remove_absolute(bake)
+	assert_str(LevelRegistry.weight_text(probe)).is_empty()
 	assert_str(LevelRegistry.weight_text(LevelRegistry.scene_of("garage"))).is_empty()
 	assert_str(LevelRegistry.weight_text("res://nope/nope.tscn")).is_empty()
 
 
 ## The table the export ships for the web, where an island's bake is not on disk until its
-## level pack is mounted: the same bytes the card reads here.
+## level pack is mounted: the same bytes the card reads here. Reads the real level_2 bake: CI
+## bakes before the suite; locally, run tools/bake_levels.tscn first.
 func test_bake_weights_carry_every_baked_level() -> void:
 	var w := LevelRegistry.bake_weights()
 	var level_2 := LevelRegistry.scene_of("level_2")
+	assert_int(int(w.get(level_2, 0))).override_failure_message(NO_BAKE).is_greater(0)
 	assert_int(int(w.get(level_2, 0))).is_equal(LevelRegistry.weight_bytes(level_2))
 	assert_bool(w.has(LevelRegistry.scene_of("garage"))).is_false()
 

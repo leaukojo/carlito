@@ -5,6 +5,7 @@ extends GdUnitTestSuite
 const DrivetrainScript := preload("res://src/vehicles/base/drivetrain.gd")
 const VehicleSpecScript := preload("res://src/vehicles/base/vehicle_spec.gd")
 const Layers := preload("res://src/physics/collision_layers.gd")
+const Specs := preload("res://tests/catalog_specs.gd")
 
 
 # --- catalog structure --------------------------------------------------------
@@ -87,7 +88,7 @@ func test_every_variant_scene_has_a_hood_cam_marker() -> void:
 func test_every_variant_lamp_path_resolves_in_its_own_scene() -> void:
 	# The plain drone loads drone-mk2's spec and has none of its lamps, by design
 	# (test_drone_indicators pins them on the mk2); the skip holds only while the spec is shared.
-	assert_str(_spec_of("drone").resource_path).is_equal(_spec_of("drone-mk2").resource_path)
+	assert_str(Specs.spec_of("drone").resource_path).is_equal(Specs.spec_of("drone-mk2").resource_path)
 	for variant in VehicleCatalog.VARIANTS:
 		if variant == "drone":
 			continue
@@ -157,8 +158,8 @@ const SHIFT_PEDAL_STEPS := 20
 func _gearbox_specs() -> Dictionary:
 	var out := {}
 	for variant in VehicleCatalog.VARIANTS:
-		var spec := _spec_of(variant)
-		if spec != null and spec.gear_ratios.size() >= 2:
+		var spec := Specs.spec_of(variant)
+		if spec.gear_ratios.size() >= 2:
 			out[variant] = spec
 	return out
 
@@ -270,8 +271,8 @@ func _driven_specs() -> Dictionary:
 	for variant in VehicleCatalog.VARIANTS:
 		if not WHEELED_FAMILIES.has(VehicleCatalog.family_of(variant)):
 			continue
-		var spec := _spec_of(variant)
-		if spec != null and spec.ground_drive != null:
+		var spec := Specs.spec_of(variant)
+		if spec.ground_drive != null:
 			out[variant] = spec
 	return out
 
@@ -461,10 +462,7 @@ func test_the_laden_esc_tables_are_the_refuse_hoppers_levels() -> void:
 		var arm := NodePath("./Model/" + TruckVehicle.ARM_NODE)
 		for i in state.get_node_count():
 			refuse = refuse or state.get_node_path(i) == arm
-		var script: Script = null
-		for i in state.get_node_property_count(0):
-			if state.get_node_property_name(0, i) == &"script":
-				script = state.get_node_property_value(0, i)
+		var script := Specs.root_property(VehicleCatalog.scene_of(variant), &"script") as Script
 		refuse = refuse and script != null and (script == TruckVehicle
 				or script.get_base_script() == TruckVehicle)
 		if refuse and gd.esc_equipped:
@@ -543,7 +541,7 @@ func test_the_centre_carries_an_axles_shortfall_to_the_other_axles_brakes() -> v
 	# `suv-luxury`'s rear brakes are under their own drive at stall, its fronts' have spare. Its
 	# Torsen centre carries what its bias allows of the rears' shortfall forward, as the coupled
 	# solve does, and the rears push the rest against the fronts' hold; an open centre carries none.
-	var spec: VehicleSpecScript = _spec_of("suv-luxury").duplicate()
+	var spec: VehicleSpecScript = Specs.spec_of("suv-luxury").duplicate()
 	spec.ground_drive = spec.ground_drive.duplicate()
 	var gd := spec.ground_drive
 	assert_float(gd.axle_brake_torque(true)).is_less(absf(Drivetrain.stall_axle_torque(spec)) / 4.0)
@@ -560,7 +558,7 @@ func test_the_centre_carries_an_axles_shortfall_to_the_other_axles_brakes() -> v
 func test_a_rear_spinning_against_its_brake_pushes_at_the_grip_curves_tail() -> void:
 	# `sedan-sports`' rears out-drive their brakes past their grip at stall and spin; the standing
 	# body puts them past slip 1.0, the curve's tail. The fronts hold at their own grip.
-	var spec: VehicleSpecScript = _spec_of("sedan-sports").duplicate()
+	var spec: VehicleSpecScript = Specs.spec_of("sedan-sports").duplicate()
 	spec.ground_drive = spec.ground_drive.duplicate()
 	var gd := spec.ground_drive
 	var loads := BrakeSizing.wheel_loads(spec)
@@ -577,7 +575,7 @@ func test_a_rear_spinning_against_its_brake_pushes_at_the_grip_curves_tail() -> 
 func test_a_driven_wheel_under_its_grip_pushes_its_drive_past_its_brake() -> void:
 	# `van`'s rears out-drive their brakes but stay under their grip: they roll, never spin, and
 	# the tail never enters.
-	var spec: VehicleSpecScript = _spec_of("van").duplicate()
+	var spec: VehicleSpecScript = Specs.spec_of("van").duplicate()
 	spec.ground_drive = spec.ground_drive.duplicate()
 	var shipped := BrakeSizing.stall_hold_margin(spec)
 	assert_bool(is_finite(shipped)).is_true()
@@ -651,8 +649,7 @@ func test_every_wheeled_variant_declares_its_own_road_resistance() -> void:
 	for variant in VehicleCatalog.VARIANTS:
 		if not WHEELED_FAMILIES.has(VehicleCatalog.family_of(variant)):
 			continue
-		var spec := _spec_of(variant)
-		assert_object(spec).override_failure_message("no spec for " + variant).is_not_null()
+		var spec := Specs.spec_of(variant)
 		assert_float(spec.ground_drive.drag_area).override_failure_message(
 				"%s declares no drag_area — it would coast forever" % variant).is_greater(0.0)
 		assert_float(spec.ground_drive.rolling_resistance).override_failure_message(
@@ -668,7 +665,7 @@ func test_free_body_variants_declare_no_road_resistance() -> void:
 	for variant in VehicleCatalog.VARIANTS:
 		if WHEELED_FAMILIES.has(VehicleCatalog.family_of(variant)):
 			continue
-		var gd := _spec_of(variant).ground_drive
+		var gd := Specs.spec_of(variant).ground_drive
 		if gd == null:
 			continue  # no running gear, so no road resistance to declare
 		assert_float(gd.drag_area).override_failure_message(
@@ -698,7 +695,7 @@ func test_every_wheeled_variant_declares_a_ground_drive() -> void:
 	for variant in VehicleCatalog.VARIANTS:
 		if not WHEELED_FAMILIES.has(VehicleCatalog.family_of(variant)):
 			continue
-		var gd := _spec_of(variant).ground_drive
+		var gd := Specs.spec_of(variant).ground_drive
 		assert_object(gd).override_failure_message(
 				"%s is wheeled but declares no ground_drive" % variant).is_not_null()
 		assert_int(gd.wheel_positions.size()).override_failure_message(
@@ -716,7 +713,7 @@ func test_every_wheeled_spec_declares_a_fit_and_a_stock_class() -> void:
 	var specs := {}
 	for variant in VehicleCatalog.VARIANTS:
 		if WHEELED_FAMILIES.has(VehicleCatalog.family_of(variant)):
-			specs[variant] = _spec_of(variant)
+			specs[variant] = Specs.spec_of(variant)
 	for path: String in TRAILER_SPECS:
 		specs[path] = load(path)
 	for id: String in specs:
@@ -734,7 +731,7 @@ func test_every_ground_drive_declares_its_tyre_width() -> void:
 	# trips its assert on the first tick.
 	var specs := {}
 	for variant in VehicleCatalog.VARIANTS:
-		specs[variant] = _spec_of(variant)
+		specs[variant] = Specs.spec_of(variant)
 	for path: String in TRAILER_SPECS:
 		specs[path] = load(path)
 	for id: String in specs:
@@ -760,7 +757,7 @@ func test_free_body_variants_declare_no_ground_drive() -> void:
 	for variant in VehicleCatalog.VARIANTS:
 		if not WHEEL_LESS_FAMILIES.has(VehicleCatalog.family_of(variant)):
 			continue
-		assert_object(_spec_of(variant).ground_drive).override_failure_message(
+		assert_object(Specs.spec_of(variant).ground_drive).override_failure_message(
 				"%s has no running gear and must declare no ground_drive" % variant).is_null()
 
 
@@ -770,7 +767,7 @@ func test_the_planes_ground_drive_is_undriven_and_makes_no_road_resistance() -> 
 	# gear (three RayWheels, braked, nose wheel steered) is exercised only by flying it. Pin the
 	# shape here instead: it HAS a ground drive (it is not a free body on the ground), that
 	# drive is undriven, and its drag is the airframe's alone.
-	var gd := _spec_of("plane").ground_drive
+	var gd := Specs.spec_of("plane").ground_drive
 	assert_object(gd).override_failure_message(
 			"the plane stands on wheels and must declare a ground drive").is_not_null()
 	assert_int(gd.wheel_positions.size()).is_equal(3)
@@ -793,8 +790,8 @@ func test_a_declared_wing_declares_its_drag_too() -> void:
 	# the extra normal load, and the aero drag the same bodywork makes. A variant that shipped
 	# downforce_area with drag_area 0 would have the grip for free.
 	for variant in VehicleCatalog.VARIANTS:
-		var spec := _spec_of(variant)
-		if spec == null or spec.ground_drive == null or spec.ground_drive.downforce_area <= 0.0:
+		var spec := Specs.spec_of(variant)
+		if spec.ground_drive == null or spec.ground_drive.downforce_area <= 0.0:
 			continue
 		assert_float(spec.ground_drive.drag_area).override_failure_message(
 				("%s declares a wing (Cl*A %.2f) but no drag_area — downforce with no drag is"
@@ -809,8 +806,8 @@ func test_downforce_fits_inside_the_suspension_travel_it_acts_through() -> void:
 	# catalog carries a wing at all.
 	const TOP_SPEED := 80.0
 	for variant in VehicleCatalog.VARIANTS:
-		var spec := _spec_of(variant)
-		if spec == null or spec.ground_drive == null or spec.ground_drive.downforce_area <= 0.0:
+		var spec := Specs.spec_of(variant)
+		if spec.ground_drive == null or spec.ground_drive.downforce_area <= 0.0:
 			continue
 		var gd := spec.ground_drive
 		var loads := BrakeSizing.wheel_loads(spec)
@@ -834,8 +831,8 @@ func test_a_winged_body_stays_front_first_at_any_speed() -> void:
 	# so the limit must stay front-first (understeer, `BalanceModel.limit` margin > 0) from rest to
 	# the top end, not just at the static figure the generator reports.
 	for variant in VehicleCatalog.VARIANTS:
-		var spec := _spec_of(variant)
-		if spec == null or spec.ground_drive == null or spec.ground_drive.downforce_area <= 0.0:
+		var spec := Specs.spec_of(variant)
+		if spec.ground_drive == null or spec.ground_drive.downforce_area <= 0.0:
 			continue
 		for kmh: float in [0.0, 150.0, 280.0]:
 			var lim := BalanceModel.limit(BalanceModel.axles(spec, kmh / 3.6))
@@ -850,8 +847,8 @@ func test_every_compliance_steer_loop_settles_inside_three_ticks() -> void:
 	# in three ticks (0.27^3 = 0.0197), a loop that settles before a driver could see it ring
 	# (`BalanceModel.compliance_loop_gain`).
 	for variant in VehicleCatalog.VARIANTS:
-		var spec := _spec_of(variant)
-		if spec == null or spec.ground_drive == null:
+		var spec := Specs.spec_of(variant)
+		if spec.ground_drive == null:
 			continue
 		var m := BalanceModel.axles(spec)
 		if m.is_empty():
@@ -866,8 +863,8 @@ func test_every_body_with_drag_declares_its_aero_centre_and_side_area() -> void:
 	# which moves under load. A body with a drag area says where its shape's centre of pressure is,
 	# and how much side it shows a crosswind (0 would let wind push it only along its nose).
 	for variant in VehicleCatalog.VARIANTS:
-		var spec := _spec_of(variant)
-		if spec == null or spec.ground_drive == null or spec.ground_drive.drag_area <= 0.0:
+		var spec := Specs.spec_of(variant)
+		if spec.ground_drive == null or spec.ground_drive.drag_area <= 0.0:
 			continue
 		assert_bool(spec.ground_drive.aero_centre != Vector3.ZERO).override_failure_message(
 				"%s declares drag_area %.2f but no aero_centre"
@@ -911,8 +908,7 @@ func test_every_wheeled_variant_tapers_its_steering_at_speed() -> void:
 	for variant in VehicleCatalog.VARIANTS:
 		if not WHEELED_FAMILIES.has(VehicleCatalog.family_of(variant)):
 			continue
-		var spec := _spec_of(variant)
-		assert_object(spec).override_failure_message("no spec for " + variant).is_not_null()
+		var spec := Specs.spec_of(variant)
 		var gd := spec.ground_drive
 		assert_float(gd.steer_falloff_speed).override_failure_message(
 				"%s has no steer_falloff_speed — its taper is inert" % variant).is_greater(0.0)
@@ -949,7 +945,7 @@ func test_a_steering_taper_never_out_limits_the_tyres() -> void:
 	for variant in VehicleCatalog.VARIANTS:
 		if not WHEELED_FAMILIES.has(VehicleCatalog.family_of(variant)):
 			continue
-		var spec := _spec_of(variant)
+		var spec := Specs.spec_of(variant)
 		var wheelbase := _wheelbase_of(spec)
 		assert_float(wheelbase).override_failure_message(
 				"%s has no wheelbase to steer about" % variant).is_greater(0.0)
@@ -973,8 +969,8 @@ func test_every_inner_wheel_keeps_a_turn_centre_at_full_lock() -> void:
 	for variant in VehicleCatalog.VARIANTS:
 		if not WHEELED_FAMILIES.has(VehicleCatalog.family_of(variant)):
 			continue
-		var gd := _spec_of(variant).ground_drive
-		var wheelbase := _wheelbase_of(_spec_of(variant))
+		var gd := Specs.spec_of(variant).ground_drive
+		var wheelbase := _wheelbase_of(Specs.spec_of(variant))
 		var t := tan(deg_to_rad(gd.max_steer_deg))
 		for station in gd.wheel_positions:
 			if RayWheel.is_rear_z(station.z):
@@ -1007,8 +1003,7 @@ func _wheelbase_of(spec: VehicleSpecScript) -> float:
 func test_every_declared_speed_limit_fits_the_byte_it_is_published_in() -> void:
 	var governed := 0
 	for variant in VehicleCatalog.VARIANTS:
-		var spec := _spec_of(variant)
-		assert_object(spec).override_failure_message("no spec for " + variant).is_not_null()
+		var spec := Specs.spec_of(variant)
 		var limit := spec.speed_limit_kmh
 		assert_float(limit).override_failure_message(
 				"%s: speed_limit_kmh %f is negative" % [variant, limit]).is_greater_equal(0.0)
@@ -1073,30 +1068,17 @@ func test_the_attachment_axis_is_all_or_none_and_only_the_towing_variants_have_i
 
 
 ## Every method name reachable on a variant's root script, walking the GDScript inheritance chain
-## by hand. Read off the SCRIPT rather than an instance for the same reason as `_spec_of`: a
+## by hand. Read off the SCRIPT rather than an instance for the same reason as `Specs`: a
 ## vehicle scene instanced only to be asked a question leaves orphans behind, and `has_method` on
 ## a live node would answer the identical question.
 func _script_methods_of(variant: String) -> PackedStringArray:
 	var out := PackedStringArray()
-	var state := (load(VehicleCatalog.scene_of(variant)) as PackedScene).get_state()
-	var script: Script = null
-	for i in state.get_node_property_count(0):
-		if state.get_node_property_name(0, i) == &"script":
-			script = state.get_node_property_value(0, i) as Script
-			break
+	var script := Specs.root_property(VehicleCatalog.scene_of(variant), &"script") as Script
 	while script != null:
 		for m in script.get_script_method_list():
 			out.append(m["name"])
 		script = script.get_base_script()
 	return out
-
-
-func _spec_of(variant: String) -> VehicleSpecScript:
-	var state := (load(VehicleCatalog.scene_of(variant)) as PackedScene).get_state()
-	for i in state.get_node_property_count(0):
-		if state.get_node_property_name(0, i) == &"spec":
-			return state.get_node_property_value(0, i) as VehicleSpecScript
-	return null
 
 
 # --- the front/rear split -----------------------------------------------------
@@ -1108,8 +1090,8 @@ func test_no_wheel_station_sits_on_the_front_rear_boundary() -> void:
 	# asked, so no spec may have one.
 	var specs: Array[VehicleSpecScript] = []
 	for variant in VehicleCatalog.VARIANTS:
-		var spec := _spec_of(variant)
-		if spec != null and spec.ground_drive != null:
+		var spec := Specs.spec_of(variant)
+		if spec.ground_drive != null:
 			specs.append(spec)
 	for path: String in TRAILER_SPECS:
 		specs.append(load(path) as VehicleSpecScript)
@@ -1127,8 +1109,8 @@ func test_every_differential_bias_is_open_or_biasing() -> void:
 	# 1.0 is open and a bias ratio below it is no diff anyone builds; `Differential.bias_capacity`
 	# would read it as open, so a typo there would ship an open diff with nothing to show for it.
 	for variant in VehicleCatalog.VARIANTS:
-		var spec := _spec_of(variant)
-		if spec == null or spec.ground_drive == null:
+		var spec := Specs.spec_of(variant)
+		if spec.ground_drive == null:
 			continue
 		var gd := spec.ground_drive
 		for bias: float in [gd.diff_bias_front, gd.diff_bias_rear, gd.centre_diff_bias]:
@@ -1142,8 +1124,8 @@ func test_a_rigid_centre_only_on_a_front_axle_the_driver_can_disengage() -> void
 	# for field work; a permanently driven front axle geared rigidly to the rear would scrub every
 	# road corner.
 	for variant in VehicleCatalog.VARIANTS:
-		var spec := _spec_of(variant)
-		if spec == null or spec.ground_drive == null or not spec.ground_drive.centre_diff_rigid:
+		var spec := Specs.spec_of(variant)
+		if spec.ground_drive == null or not spec.ground_drive.centre_diff_rigid:
 			continue
 		assert_bool(spec.ground_drive.front_axle_engageable and not spec.ground_drive.driven_front) \
 				.override_failure_message("%s: a rigid centre on a front axle that is always driven"
@@ -1154,8 +1136,8 @@ func test_a_swinging_front_axle_is_one_bare_pair_about_the_centreline() -> void:
 	# The beam pivots mid-track on the pair's anchor line (`WheelDrive`) and turns both wheels as one:
 	# a bar or roll steer across it would read a roll the beam takes up.
 	for variant in VehicleCatalog.VARIANTS:
-		var spec := _spec_of(variant)
-		if spec == null or spec.ground_drive == null or not spec.ground_drive.has_swing_axle():
+		var spec := Specs.spec_of(variant)
+		if spec.ground_drive == null or not spec.ground_drive.has_swing_axle():
 			continue
 		var gd := spec.ground_drive
 		var front := PackedVector3Array()

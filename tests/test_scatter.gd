@@ -43,7 +43,7 @@ func test_same_seed_identical_output() -> void:
 	var a := Scatter.generate_placements(_params())
 	var b := Scatter.generate_placements(_params())
 	assert_that(a).is_equal(b)
-	assert_bool(_all_points(a).size() > 0).is_true()
+	assert_int(_all_points(a).size()).is_greater(0)
 
 
 func test_different_seed_differs() -> void:
@@ -61,10 +61,11 @@ func test_min_spacing_respected_across_items() -> void:
 		"min_spacing": 2.0,
 	}))
 	var pts := _all_points(placements)
-	assert_bool(pts.size() > 5).is_true()
+	assert_int(pts.size()).is_greater(5)
 	for i in pts.size():
 		for j in range(i + 1, pts.size()):
-			assert_bool(pts[i].distance_to(pts[j]) >= 2.0 - 0.0001).is_true()
+			assert_float(pts[i].distance_to(pts[j])).override_failure_message("points %d, %d" % [i, j]) \
+					.is_greater_equal(2.0 - 0.0001)
 
 
 func test_zero_spacing_reaches_density_target() -> void:
@@ -80,8 +81,7 @@ func test_tight_spacing_caps_below_target() -> void:
 	var placements := Scatter.generate_placements(_params({
 		"density": 10.0, "min_spacing": 2.0}))
 	var n := _all_points(placements).size()
-	assert_bool(n > 0).is_true()
-	assert_bool(n < 4000).is_true()
+	assert_int(n).is_between(1, 3999)
 
 
 # ------------------------------------------------------------------ containment
@@ -98,7 +98,7 @@ func test_points_inside_concave_polygon() -> void:
 			Vector2(0, 0), Vector2(0, 10), Vector2(-10, 10)])
 	var pts := _all_points(Scatter.generate_placements(_params({
 		"polygon": poly, "density": 0.2})))
-	assert_bool(pts.size() > 10).is_true()
+	assert_int(pts.size()).is_greater(10)
 	for p in pts:
 		assert_bool(Geometry2D.is_point_in_polygon(p, poly)).is_true()
 		assert_bool(p.x > 0.0 and p.y > 0.0).is_false()
@@ -116,7 +116,7 @@ func test_weights_bias_item_pick() -> void:
 	var light := placements[0].size() / 4
 	@warning_ignore("integer_division")
 	var heavy := placements[1].size() / 4
-	assert_bool(heavy > light * 2).is_true()
+	assert_int(heavy).is_greater(light * 2)
 
 
 func test_jitter_ranges_respected() -> void:
@@ -125,9 +125,11 @@ func test_jitter_ranges_respected() -> void:
 	var flat := placements[0]
 	@warning_ignore("integer_division")
 	for j in flat.size() / 4:
-		assert_bool(absf(flat[j * 4 + 2]) <= deg_to_rad(45.0) + 0.0001).is_true()
+		assert_float(absf(flat[j * 4 + 2])).override_failure_message("instance %d yaw" % j) \
+				.is_less_equal(deg_to_rad(45.0) + 0.0001)
 		var s := flat[j * 4 + 3]
-		assert_bool(s >= 0.5 - 0.0001 and s <= 0.6 + 0.0001).is_true()
+		assert_float(s).override_failure_message("instance %d scale" % j) \
+				.is_between(0.5 - 0.0001, 0.6 + 0.0001)
 
 
 # ------------------------------------------------------------------- degenerate
@@ -354,7 +356,7 @@ func test_grid_offset_rect_stays_on_the_same_lattice() -> void:
 	# A rectangle not aligned to the step still snaps to the world lattice.
 	var pts := _all_points(Scatter.generate_grid_placements(
 			_grid_params({"polygon": _rect(-3.3, -3.3, 1.2, 1.2)})))
-	assert_bool(pts.size() > 0).is_true()
+	assert_int(pts.size()).is_greater(0)
 	for p in pts:
 		assert_bool(is_equal_approx(fposmod(p.x, 1.0), 0.5)).is_true()
 

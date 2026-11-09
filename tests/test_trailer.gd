@@ -34,15 +34,16 @@ const TANKER := "res://src/vehicles/truck/trailers/tanker.tscn"
 
 
 func _flatbed() -> Node3D:
-	return _trailer(FLATBED)
+	return _instance(FLATBED)
 
 
-func _trailer(path: String) -> Node3D:
+## A loose (unfreed) instance of the scene at `path`.
+func _instance(path: String) -> Node3D:
 	return (load(path) as PackedScene).instantiate() as Node3D
 
 
 func _semi() -> Node3D:
-	return (load(CatalogScript.scene_of("semi")) as PackedScene).instantiate() as Node3D
+	return _instance(CatalogScript.scene_of("semi"))
 
 
 ## Yaw-only pose helper: the sign convention everywhere here is "+ = to the tractor's right", and a
@@ -74,7 +75,7 @@ func test_every_semi_trailer_declares_its_aero_centre_and_side_area() -> void:
 	# A towed body's drag is its own call (`TowedBody.tick_towed`), at its own aero centre: ZERO
 	# would fall back to the live COM, which moves with the load. Its side area is its full side.
 	for path in [FLATBED, BOX, TIPPER, TANKER]:
-		var trailer := _trailer(path)
+		var trailer := _instance(path)
 		var gd: GroundDriveSpec = (trailer.get("spec") as VehicleSpec).ground_drive
 		assert_bool(gd.drag_area > 0.0 and gd.aero_centre != Vector3.ZERO) \
 				.override_failure_message("%s declares no aero_centre" % path).is_true()
@@ -141,7 +142,6 @@ func test_the_coupled_pose_carries_the_tractors_attitude() -> void:
 
 func test_the_kingpin_and_the_bogie_carry_the_whole_trailer() -> void:
 	var share := Artic.kingpin_share(COM_Z, BOGIE_Z)
-	assert_float(share + (1.0 - share)).is_equal_approx(1.0, 1e-9)
 	# Load right over the bogie -> nothing on the plate; right on the plate -> all of it.
 	assert_float(Artic.kingpin_share(BOGIE_Z, BOGIE_Z)).is_equal_approx(0.0, 1e-9)
 	assert_float(Artic.kingpin_share(0.0, BOGIE_Z)).is_equal_approx(1.0, 1e-9)
@@ -158,7 +158,7 @@ func test_every_trailer_puts_a_realistic_load_on_the_fifth_wheel() -> void:
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
-		var trailer := _trailer(path)
+		var trailer := _instance(path)
 		var share: float = trailer.call("kingpin_share")
 		assert_float(share) \
 			.override_failure_message("%s puts %.1f%% on the plate" % [path, share * 100.0]) \
@@ -201,7 +201,7 @@ func test_both_tractor_units_are_front_heavy_bobtail_by_design() -> void:
 	# more than half its own weight on the steer axle -- why a real bobtail locks up so easily.
 	# Both land 50-55 %: front-heavy on purpose, not by drift.
 	for scene_path in [CatalogScript.scene_of("semi"), CatalogScript.scene_of("semi-conventional")]:
-		var unit := (load(scene_path) as PackedScene).instantiate() as Node3D
+		var unit := _instance(scene_path)
 		var spec: VehicleSpec = unit.get("spec")
 		var axles := _tractor_axles(spec)
 		var steer_share := 1.0 - Artic.rear_axle_share(spec.center_of_mass.z, axles.x, axles.y)
@@ -217,7 +217,7 @@ func test_the_plate_lands_mostly_on_the_drive_axle_on_both_units() -> void:
 	# conventional_spec.tres), so most of the box's plate load lands there on either one -- but the
 	# band differs per unit, because that fixed 0.50 m offset is a bigger fraction of the semi's
 	# shorter wheelbase, so relatively more of it reaches the semi's steer axle.
-	var box := _trailer(BOX)
+	var box := _instance(BOX)
 	var plate_share: float = box.call("kingpin_share")
 	box.free()
 	var bands := {
@@ -225,7 +225,7 @@ func test_the_plate_lands_mostly_on_the_drive_axle_on_both_units() -> void:
 		CatalogScript.scene_of("semi-conventional"): Vector2(0.87, 0.90),
 	}
 	for scene_path in bands:
-		var unit := (load(scene_path) as PackedScene).instantiate() as Node3D
+		var unit := _instance(scene_path)
 		var spec: VehicleSpec = unit.get("spec")
 		var axles := _tractor_axles(spec)
 		var kingpin_z: float = (unit.get_node("FifthWheel/Kingpin") as Node3D).position.z
@@ -245,12 +245,12 @@ func test_a_coupled_tractor_keeps_enough_steer_load_to_steer() -> void:
 	# front wheels left the road under throttle in a corner. 0.25 sits well under both units' ~33-35 %
 	# today, with room below that to catch a regression heading back toward that fifth before it gets
 	# there.
-	var box := _trailer(BOX)
+	var box := _instance(BOX)
 	var box_spec: VehicleSpec = box.get("spec")
 	var plate_kg: float = box_spec.mass * float(box.call("kingpin_share"))
 	box.free()
 	for scene_path in [CatalogScript.scene_of("semi"), CatalogScript.scene_of("semi-conventional")]:
-		var unit := (load(scene_path) as PackedScene).instantiate() as Node3D
+		var unit := _instance(scene_path)
 		var spec: VehicleSpec = unit.get("spec")
 		var axles := _tractor_axles(spec)
 		var kingpin_z: float = (unit.get_node("FifthWheel/Kingpin") as Node3D).position.z
@@ -363,12 +363,12 @@ func test_a_bobtail_unit_starts_higher_than_the_same_unit_coupled_to_the_box() -
 	# its own share plus the plate's (what `WheelDrive.static_drive_grip` reads off the sim at rest).
 	# On the flat the bobtail's 37 kN of drive-axle load holds D6 (D7 is engine-bound, 1.7 s); the
 	# box's 24 t behind ~66 kN of grip takes D3 (D4 2.1 s); on 8 % coupled, D1.
-	var box := _trailer(BOX)
+	var box := _instance(BOX)
 	var box_spec: VehicleSpec = box.get("spec")
 	var plate_kg: float = box_spec.mass * float(box.call("kingpin_share"))
 	box.free()
 	for scene_path in [CatalogScript.scene_of("semi"), CatalogScript.scene_of("semi-conventional")]:
-		var unit := (load(scene_path) as PackedScene).instantiate() as Node3D
+		var unit := _instance(scene_path)
 		var spec: VehicleSpec = unit.get("spec")
 		var axles := _tractor_axles(spec)
 		var kingpin_z: float = (unit.get_node("FifthWheel/Kingpin") as Node3D).position.z
@@ -436,7 +436,7 @@ func test_every_trailer_is_a_towed_body_with_its_wheels_authored_to_match_its_sp
 			continue
 		assert_bool(ResourceLoader.exists(path)) \
 			.override_failure_message("missing trailer scene: %s" % path).is_true()
-		var node := (load(path) as PackedScene).instantiate()
+		var node := _instance(path)
 		assert_object(node).is_instanceof(TowedBody)
 		var spec: VehicleSpec = node.get("spec")
 		assert_object(spec).override_failure_message("%s has no spec" % path).is_not_null()
@@ -471,7 +471,7 @@ func test_every_semi_trailer_pairs_its_bogie_under_a_bar_sized_off_its_own_sprin
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
-		var trailer := _trailer(path) as TowedBody
+		var trailer := _instance(path) as TowedBody
 		add_child(trailer)  # the pairing is built in _ready
 		var gd := trailer.spec.ground_drive
 		assert_float(gd.anti_roll_rate) \
@@ -499,7 +499,7 @@ func test_every_semi_trailer_brakes_like_the_tractor_unit_that_pulls_it() -> voi
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
-		var node := (load(path) as PackedScene).instantiate()
+		var node := _instance(path)
 		var spec: VehicleSpec = node.get("spec")
 		var gd := spec.ground_drive
 		var share := float(node.call("kingpin_share"))
@@ -558,7 +558,7 @@ func test_every_trailer_clears_the_cab_all_the_way_round() -> void:
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
-		var trailer := _trailer(path)
+		var trailer := _instance(path)
 		var worst: Array = [0.0, ""]
 		TrailerSwing.worst_forward_swing(trailer, Transform3D.IDENTITY, worst)
 		assert_float(worst[0]) \
@@ -650,7 +650,7 @@ func test_every_semi_trailer_carries_abs() -> void:
 	# EBS21 reports a device: a trailer without one could never set trailer_abs, and a real O4
 	# semi-trailer has carried ABS since 1998.
 	for path in [FLATBED, BOX, TIPPER, TANKER]:
-		var trailer: Node3D = (load(path) as PackedScene).instantiate()
+		var trailer := _instance(path)
 		var spec: VehicleSpec = trailer.get("spec")
 		assert_bool(spec.ground_drive.abs_equipped) \
 			.override_failure_message("%s ships without ABS" % path).is_true()
@@ -661,7 +661,7 @@ func test_every_semi_trailer_carries_its_own_roll_over_control_and_the_farm_trai
 	# EBS21's VDC active reports a device too, R13's minimum on an O4 semi-trailer; its lift table is
 	# one point at the trailer's own static bogie load (`measure_semi_launch` reads the same load).
 	for path in [FLATBED, BOX, TIPPER, TANKER]:
-		var trailer := _trailer(path)
+		var trailer := _instance(path)
 		var gd: GroundDriveSpec = (trailer.get("spec") as VehicleSpec).ground_drive
 		assert_bool(gd.trailer_roll_equipped) \
 			.override_failure_message("%s ships without roll-over control" % path).is_true()
@@ -674,8 +674,7 @@ func test_every_semi_trailer_carries_its_own_roll_over_control_and_the_farm_trai
 				.is_equal_approx(bogie_kg, 0.01 * bogie_kg)
 		assert_float(table[0].y).is_between(0.2, 1.0)
 		trailer.free()
-	var farm: Node3D = (load("res://src/vehicles/tractor/trailers/farm_tipper.tscn") as PackedScene) \
-			.instantiate()
+	var farm := _instance("res://src/vehicles/tractor/trailers/farm_tipper.tscn")
 	var farm_gd: GroundDriveSpec = (farm.get("spec") as VehicleSpec).ground_drive
 	assert_bool(farm_gd.trailer_roll_equipped).is_false()
 	assert_bool(farm_gd.trailer_roll_lift_g.is_empty()).is_true()
@@ -684,7 +683,7 @@ func test_every_semi_trailer_carries_its_own_roll_over_control_and_the_farm_trai
 
 func test_vdc_active_reads_the_full_application_and_never_the_test_pulse() -> void:
 	# R13 Annex 21 2.2.4: "VDC active" is the intervention, never a learning one.
-	var trailer := _trailer(BOX) as TowedBody
+	var trailer := _instance(BOX) as TowedBody
 	var stage := StabilityControl.TrailerStage
 	for entry: Array in [[stage.IDLE, false], [stage.PULSE, false], [stage.FULL, true],
 			[stage.SPENT, false]]:
@@ -896,7 +895,7 @@ func test_the_european_unit_declares_the_iso_7638_data_pair() -> void:
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
-		var node := (load(path) as PackedScene).instantiate()
+		var node := _instance(path)
 		var t_spec: VehicleSpec = node.get("spec")
 		assert_bool(t_spec.trailer_bus_equipped) \
 			.override_failure_message("%s claims a towing unit's connector" % path).is_false()
@@ -921,7 +920,7 @@ func test_no_two_trailers_report_the_same_mass() -> void:
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
-		var node := _trailer(path)
+		var node := _instance(path)
 		var spec: VehicleSpec = node.get("spec")
 		assert_bool(seen.has(spec.mass)) \
 			.override_failure_message("%s masses %.0f kg, already used by %s"
@@ -940,12 +939,12 @@ func test_the_box_is_the_heaviest_and_the_flatbed_the_lightest() -> void:
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
-		var node := _trailer(path)
+		var node := _instance(path)
 		var spec: VehicleSpec = node.get("spec")
 		heaviest = maxf(heaviest, spec.mass)
 		lightest = minf(lightest, spec.mass)
 		node.free()
-	var box := _trailer(BOX)
+	var box := _instance(BOX)
 	var flatbed := _flatbed()
 	assert_float((box.get("spec") as VehicleSpec).mass) \
 		.override_failure_message("the box must be the heaviest trailer").is_equal(heaviest)
@@ -966,7 +965,7 @@ func test_the_heaviest_trailer_holds_the_verified_mass_ratio() -> void:
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
-		var node := _trailer(path)
+		var node := _instance(path)
 		var spec: VehicleSpec = node.get("spec")
 		assert_float(spec.mass / tractor_kg) \
 			.override_failure_message("%s is %.2f : 1 against the tractor unit, past the verified 3 : 1"
@@ -982,7 +981,7 @@ func test_every_trailer_rides_on_its_springs_and_not_on_its_stops() -> void:
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
-		var node := _trailer(path)
+		var node := _instance(path)
 		var spec: VehicleSpec = node.get("spec")
 		var used := _bogie_travel(spec, float(node.call("kingpin_share")))
 		assert_float(used) \
@@ -1004,7 +1003,7 @@ func test_every_trailer_reads_inside_the_contracts_trailer_load_scale() -> void:
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
-		var node := _trailer(path)
+		var node := _instance(path)
 		var spec: VehicleSpec = node.get("spec")
 		var bogie_kg: float = spec.mass * (1.0 - float(node.call("kingpin_share")))
 		assert_float(bogie_kg) \
@@ -1023,7 +1022,7 @@ func test_hydraulics_imply_the_pto_that_drives_the_pump() -> void:
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
-		var node := _trailer(path)
+		var node := _instance(path)
 		if node.call("uses", TowedBody.Consumer.HYDRAULIC):
 			assert_bool(node.call("uses", TowedBody.Consumer.PTO)) \
 				.override_failure_message("%s claims a valve but no PTO to drive the pump" % path) \
@@ -1045,7 +1044,7 @@ func test_the_box_and_the_flatbed_are_the_same_trailer_to_the_towing_unit() -> v
 	# On the ISO 11992 bus a box is indistinguishable from a flatbed: the standard carries no body
 	# type, so the two declare identical consumers, run identical running gear and differ only in mass.
 	# A future trailer that breaks this by adding a signal to tell them apart fails here.
-	var box := _trailer(BOX)
+	var box := _instance(BOX)
 	var flatbed := _flatbed()
 	assert_int(box.call("consumers")) \
 		.override_failure_message("the box must plug nothing into the towing unit").is_equal(0)
@@ -1068,7 +1067,7 @@ func test_a_trailer_that_declares_nothing_does_nothing_with_drive_it_is_handed()
 	# ignore drive it never plugged in), but a subclass that quietly reacted to flow it never declared
 	# would make the declaration decorative, so every non-consumer gets a full PTO and an open valve.
 	for path in [BOX, TANKER, FLATBED]:
-		var node := _trailer(path)
+		var node := _instance(path)
 		if node.call("uses", TowedBody.Consumer.HYDRAULIC):
 			node.free()
 			continue
@@ -1124,7 +1123,7 @@ func test_no_two_boxes_share_a_face_plane_and_a_facing() -> void:
 			scenes.append(path)
 
 	for path in scenes:
-		var scene := (load(path) as PackedScene).instantiate()
+		var scene := _instance(path)
 		var boxes: Array = []
 		_axis_boxes(scene, Transform3D.IDENTITY, boxes)
 		assert_int(boxes.size()).override_failure_message("%s has no boxes" % path).is_greater(4)
@@ -1166,7 +1165,7 @@ func test_every_trailer_offers_its_authored_shapes_before_it_enters_the_world() 
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
-		var node := _trailer(path)
+		var node := _instance(path)
 		var probes: Array[Dictionary] = node.call("collision_probes")
 		# ENABLED shapes, not authored ones: the tipper authors its body twice (a lowered pose and a
 		# raised one) and keeps exactly one of the pair live, so a raw count would read the pose swap as
@@ -1202,7 +1201,7 @@ func test_the_probes_sit_where_the_trailer_does_and_clear_the_road() -> void:
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
-		var node := _trailer(path)
+		var node := _instance(path)
 		var lowest := INF
 		var frontmost := INF
 		for probe in node.call("collision_probes"):
@@ -1248,7 +1247,7 @@ func test_every_trailer_stands_on_RAYCASTS_so_a_body_contact_really_does_mean_st
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
-		var node := _trailer(path)
+		var node := _instance(path)
 		var spec: VehicleSpec = node.get("spec")
 		assert_int(spec.ground_drive.wheel_positions.size()) \
 			.override_failure_message("%s has no wheels" % path).is_greater(0)
@@ -1289,7 +1288,7 @@ func test_the_showroom_hook_is_duck_typed_and_pins_the_trailer_too() -> void:
 		.override_failure_message("the garage would not be able to pin the trailer").is_true()
 	var host := semi.get_node("FifthWheel")
 	semi.set("_fifth_wheel", host)
-	var trailer := _trailer(BOX)
+	var trailer := _instance(BOX)
 	host.set("trailer", trailer)
 	semi.call("set_display_frozen", true)
 	assert_bool(trailer.get("freeze")) \
@@ -1312,7 +1311,7 @@ func test_the_attachment_controls_are_the_trailers_own_declaration() -> void:
 	var host := semi.get_node("FifthWheel")
 	semi.set("_fifth_wheel", host)
 	for path in [TIPPER, BOX, TANKER, FLATBED]:
-		var trailer := _trailer(path)
+		var trailer := _instance(path)
 		host.set("trailer", trailer)
 		var controls: Dictionary = semi.call("attachment_controls")
 		assert_bool(controls.get("pto", false)) \
@@ -1322,7 +1321,7 @@ func test_the_attachment_controls_are_the_trailers_own_declaration() -> void:
 			.override_failure_message("%s: TIP button does not match its declaration" % path) \
 			.is_equal(trailer.call("uses", TowedBody.Consumer.HYDRAULIC))
 		trailer.free()
-	var tipper := _trailer(TIPPER)
+	var tipper := _instance(TIPPER)
 	host.set("trailer", tipper)
 	var tip_controls: Dictionary = semi.call("attachment_controls")
 	assert_bool(tip_controls["pto"]).is_true()
@@ -1341,7 +1340,7 @@ func test_the_shell_hook_is_duck_typed_and_the_semi_answers_it() -> void:
 	assert_bool(semi.has_method("attachment_controls")) \
 		.override_failure_message("the shell would find no attachment controls on the semi").is_true()
 	semi.free()
-	var bin := (load(CatalogScript.scene_of("garbage-truck")) as PackedScene).instantiate()
+	var bin := _instance(CatalogScript.scene_of("garbage-truck"))
 	assert_bool(bin.has_method("attachment_controls")) \
 		.override_failure_message("the garbage truck must not offer attachment controls").is_false()
 	bin.free()
@@ -1376,13 +1375,13 @@ func test_the_tipper_interlock_is_stricter_than_the_refuse_arms() -> void:
 
 
 func test_the_tipper_declares_the_pto_and_the_valve() -> void:
-	var tipper := _trailer(TIPPER)
+	var tipper := _instance(TIPPER)
 	assert_bool(tipper.call("uses", TowedBody.Consumer.PTO)) \
 		.override_failure_message("the tipping pump runs off the chassis PTO").is_true()
 	assert_bool(tipper.call("uses", TowedBody.Consumer.HYDRAULIC)).is_true()
 	# The only trailer that plugs anything in, which makes the other three's zero a declaration.
 	for path in [BOX, TANKER, FLATBED]:
-		var other := _trailer(path)
+		var other := _instance(path)
 		assert_int(other.call("consumers")) \
 			.override_failure_message("%s plugs something into the towing unit" % path).is_equal(0)
 		other.free()
@@ -1390,7 +1389,7 @@ func test_the_tipper_declares_the_pto_and_the_valve() -> void:
 
 
 func test_the_tipping_body_needs_the_pump_and_freezes_without_it() -> void:
-	var tipper := _trailer(TIPPER)
+	var tipper := _instance(TIPPER)
 	# Valve wide open, no PTO: no pump, so nothing moves however long it is left.
 	tipper.call("set_pto", false, 0)
 	tipper.call("set_valve", 1.0)
@@ -1415,7 +1414,7 @@ func test_the_tipping_body_needs_the_pump_and_freezes_without_it() -> void:
 
 
 func test_the_body_rises_and_lowers_in_its_stated_time() -> void:
-	var tipper := _trailer(TIPPER)
+	var tipper := _instance(TIPPER)
 	tipper.call("set_pto", true, 1800)
 	tipper.call("set_valve", 1.0)
 	for _i in roundi(TipperScript.TIP_TRAVEL_S / DELTA):
@@ -1439,7 +1438,7 @@ func test_the_raised_collision_is_the_LOWERED_box_swept_about_the_real_hinge() -
 	# What this pins is that the second pose is the same BoxShape3D, placed exactly where a full tip
 	# about TipBody's origin puts it: re-author the body, move the hinge or change TIP_MAX_DEG and this
 	# fails, instead of leaving a stale box floating over the trailer.
-	var tipper := _trailer(TIPPER)
+	var tipper := _instance(TIPPER)
 	var hinge: Node3D = tipper.get_node("TipBody")
 	var down: CollisionShape3D = tipper.get_node("CollisionTipBody")
 	var up: CollisionShape3D = tipper.get_node("CollisionTipBodyRaised")
@@ -1468,7 +1467,7 @@ func test_the_collision_swaps_ONCE_a_tip_and_will_not_dither_on_the_threshold() 
 	assert_float(TipperScript.RAISED_OFF).is_less(TipperScript.RAISED_ON)
 	assert_float(TipperScript.RAISED_OFF).is_between(0.05, 0.95)
 	assert_float(TipperScript.RAISED_ON).is_between(0.05, 0.95)
-	var tipper := _trailer(TIPPER)
+	var tipper := _instance(TIPPER)
 	var down: CollisionShape3D = auto_free(CollisionShape3D.new())
 	var up: CollisionShape3D = auto_free(CollisionShape3D.new())
 	up.disabled = true
@@ -1497,7 +1496,7 @@ func test_tipping_walks_the_load_off_the_fifth_wheel_and_onto_the_bogie() -> voi
 	# A real centre of mass rather than a term added to a signal. Tipping slides the payload toward the
 	# tailgate, so the fifth wheel's share falls and the bogie's rises: trailer_axle_load up and the
 	# tractor's axle_load down, both read out of springs that really carry the difference.
-	var tipper := _trailer(TIPPER)
+	var tipper := _instance(TIPPER)
 	var spec: VehicleSpec = tipper.get("spec")
 	var parked_share: float = tipper.call("live_kingpin_share")
 	assert_float(parked_share).is_equal_approx(tipper.call("kingpin_share"), 1e-9)
@@ -1542,7 +1541,7 @@ func test_tipping_walks_the_load_off_the_fifth_wheel_and_onto_the_bogie() -> voi
 func test_a_respawn_brings_the_body_and_its_load_home() -> void:
 	# reset_at re-lays the trailer; a body left up and a payload left shifted would make respawn a
 	# way to keep weight where the driver never put it (and to teleport four metres of steel).
-	var tipper := _trailer(TIPPER)
+	var tipper := _instance(TIPPER)
 	tipper.call("set_pto", true, 1800)
 	tipper.call("set_valve", 1.0)
 	for _i in roundi(TipperScript.TIP_TRAVEL_S / DELTA):
@@ -1605,7 +1604,7 @@ func test_a_braking_tanker_puts_its_load_on_the_fifth_wheel() -> void:
 	# The consequence, through a real centre of mass: brake and the fifth wheel's share climbs (the
 	# tractor's axle_load rises and its nose goes down), accelerate and the bogie takes it back.
 	# Neither signal has a tanker term in it; the weight is somewhere else and the springs report it.
-	var tanker := _trailer(TANKER)
+	var tanker := _instance(TANKER)
 	var rest: float = tanker.call("live_kingpin_share")
 	assert_float(rest).is_equal_approx(tanker.call("kingpin_share"), 1e-9)
 
@@ -1636,7 +1635,7 @@ func test_a_braking_tanker_puts_its_load_on_the_fifth_wheel() -> void:
 func test_the_tanker_is_a_load_model_and_not_a_body() -> void:
 	# It moves its own centre of mass and plugs nothing into the towing unit: no PTO, no valve, and
 	# nothing for the raise interlock to clamp.
-	var tanker := _trailer(TANKER)
+	var tanker := _instance(TANKER)
 	assert_int(tanker.call("consumers")).is_equal(0)
 	assert_float(tanker.call("body_pos01")).is_equal(0.0)
 	# A respawn puts the load back amidships, and the model's own state with it — otherwise the next
@@ -1662,7 +1661,7 @@ func test_every_trailer_declares_lamps_that_resolve_in_its_own_scene() -> void:
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
-		var trailer := _trailer(path)
+		var trailer := _instance(path)
 		var spec: VehicleSpec = trailer.get("spec")
 		assert_array(spec.head_lamp_paths) \
 			.override_failure_message("%s declares headlamps; a trailer has none" % path).is_empty()
@@ -1699,7 +1698,7 @@ func test_a_trailers_lamps_light_from_the_bits_the_tractor_hands_down() -> void:
 	for path in Catalog.TRAILERS:
 		if not Catalog.is_coupled(path):
 			continue
-		var trailer := _trailer(path)
+		var trailer := _instance(path)
 		var spec: VehicleSpec = trailer.get("spec")
 		var lamps := LampSet.new()
 		lamps.setup(trailer, spec)

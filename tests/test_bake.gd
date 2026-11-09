@@ -6,6 +6,7 @@ extends GdUnitTestSuite
 ## check (tools/check_bakes.gd), not here.
 
 const Baker := preload("res://kit/bake/level_baker.gd")
+const LevelFixtures := preload("res://tests/level_fixtures.gd")
 
 
 # ---------------------------------------------------------------- chunk keys
@@ -535,16 +536,8 @@ func _scatter_prefab(mode: String, with_mesh := true) -> PackedScene:
 ## stored transforms — the baker must consume the STORED data, nothing else.
 func _scatter_level(prefab: PackedScene, positions: Array, collision: bool,
 		threshold_override: int) -> Dictionary:
-	var root := Node3D.new()
-	root.name = "L"
-	var spawn := Marker3D.new()
-	spawn.name = "Spawn"
-	spawn.set_script(load("res://src/levels/base/vehicle_spawn.gd"))
-	root.add_child(spawn)
-	var authoring := Node3D.new()
-	authoring.name = "Authoring"
-	authoring.set_script(preload("res://kit/helpers/authoring_root.gd"))
-	root.add_child(authoring)
+	var root := LevelFixtures.bakeable_level()
+	var authoring := LevelFixtures.authoring_of(root)
 
 	var item: Resource = ScatterItemScript.new()
 	item.set("prefab", prefab)
@@ -648,16 +641,8 @@ func test_scatter_weld_prefab_is_a_bake_error() -> void:
 ## Bakeable level skeleton with a KitPiece tree under Authoring (never entered into the
 ## tree, the baker's own operating mode).
 func _piece_level(outer_mode: String, inner_mode: String) -> Node3D:
-	var root := Node3D.new()
-	root.name = "L"
-	var spawn := Marker3D.new()
-	spawn.name = "Spawn"
-	spawn.set_script(load("res://src/levels/base/vehicle_spawn.gd"))
-	root.add_child(spawn)
-	var authoring := Node3D.new()
-	authoring.name = "Authoring"
-	authoring.set_script(preload("res://kit/helpers/authoring_root.gd"))
-	root.add_child(authoring)
+	var root := LevelFixtures.bakeable_level()
+	var authoring := LevelFixtures.authoring_of(root)
 	var outer := _scatter_prefab(outer_mode).instantiate()
 	authoring.add_child(outer)
 	var inner := _scatter_prefab(inner_mode).instantiate()
@@ -688,16 +673,8 @@ func test_nested_kit_piece_keeps_its_own_collision_mode() -> void:
 ## A KitPiece MeshInstance3D recoloured via material_override in the editor must bake with
 ## that material, not revert to the mesh's own — get_active_material resolves it.
 func test_piece_mesh_material_override_survives_bake() -> void:
-	var root := Node3D.new()
-	root.name = "L"
-	var spawn := Marker3D.new()
-	spawn.name = "Spawn"
-	spawn.set_script(load("res://src/levels/base/vehicle_spawn.gd"))
-	root.add_child(spawn)
-	var authoring := Node3D.new()
-	authoring.name = "Authoring"
-	authoring.set_script(preload("res://kit/helpers/authoring_root.gd"))
-	root.add_child(authoring)
+	var root := LevelFixtures.bakeable_level()
+	var authoring := LevelFixtures.authoring_of(root)
 	var piece := _scatter_prefab("box").instantiate()
 	authoring.add_child(piece)
 	var mesh_node := piece.get_node("Mesh") as MeshInstance3D
@@ -720,17 +697,8 @@ func test_piece_mesh_material_override_survives_bake() -> void:
 ## Pieces that carry shapes but no mesh are legitimate authoring — the "nothing was
 ## collected" gate must not reject them for having zero vertices.
 func test_collision_only_authoring_is_bakeable() -> void:
-	var root := Node3D.new()
-	root.name = "L"
-	var spawn := Marker3D.new()
-	spawn.name = "Spawn"
-	spawn.set_script(load("res://src/levels/base/vehicle_spawn.gd"))
-	root.add_child(spawn)
-	var authoring := Node3D.new()
-	authoring.name = "Authoring"
-	authoring.set_script(preload("res://kit/helpers/authoring_root.gd"))
-	root.add_child(authoring)
-	authoring.add_child(_scatter_prefab("box", false).instantiate())
+	var root := LevelFixtures.bakeable_level()
+	LevelFixtures.authoring_of(root).add_child(_scatter_prefab("box", false).instantiate())
 	var result: Dictionary = Baker.bake(root)
 	assert_bool(result.ok).is_true()
 	assert_int(int((result.stats as Dictionary).shapes)).is_equal(1)
@@ -785,16 +753,8 @@ func test_scatter_ground_hash_gate() -> void:
 
 ## Root + spawn + AuthoringRoot holding `child`: the smallest level the gates below can judge.
 func _authoring_level(child: Node) -> Node3D:
-	var root := Node3D.new()
-	root.name = "L"
-	var spawn := Marker3D.new()
-	spawn.name = "Spawn"
-	spawn.set_script(load("res://src/levels/base/vehicle_spawn.gd"))
-	root.add_child(spawn)
-	var authoring := Node3D.new()
-	authoring.name = "Authoring"
-	authoring.set_script(preload("res://kit/helpers/authoring_root.gd"))
-	root.add_child(authoring)
+	var root := LevelFixtures.bakeable_level()
+	var authoring := LevelFixtures.authoring_of(root)
 	authoring.add_child(_scatter_prefab("box").instantiate())
 	authoring.add_child(child)
 	return root

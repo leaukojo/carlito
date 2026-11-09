@@ -5,6 +5,7 @@ extends GdUnitTestSuite
 
 const Gen := preload("res://tools/gen_kenney_vehicles.gd")
 const StableSave := preload("res://tools/stable_save.gd")
+const Specs := preload("res://tests/catalog_specs.gd")
 
 ## Scalars a variant may override (field -> recipe key mapping).
 const SPEC_OVERRIDABLE := {
@@ -147,7 +148,7 @@ func test_each_scene_runs_the_script_its_family_declares() -> void:
 	for variant: String in Gen.VARIANTS:
 		var family := String(Gen.VARIANTS[variant]["family"])
 		var expected := String(Gen.FAMILY_SCRIPTS.get(family, Gen.BASE_SCRIPT))
-		var script := _root_property(variant, &"script") as Script
+		var script := Specs.root_property(_scene(variant), &"script") as Script
 		assert_object(script).override_failure_message("%s.tscn has no script" % variant) \
 				.is_not_null()
 		assert_str(script.resource_path) \
@@ -526,19 +527,13 @@ func _suspension(gen: Node, variant: String) -> Dictionary:
 	return gen._suspension_recipe(_baseline(variant), Gen.VARIANTS[variant])
 
 
-## Spec via scene state (not instantiation, to avoid orphan sub-scenes).
+## The generator's own output scene for `variant`, read the way `Specs` reads every scene.
+static func _scene(variant: String) -> String:
+	return Gen.OUT_DIR.path_join(variant + ".tscn")
+
+
 func _spec_of(variant: String) -> VehicleSpec:
-	return _root_property(variant, &"spec") as VehicleSpec
-
-
-func _root_property(variant: String, prop: StringName) -> Variant:
-	var scene := load(Gen.OUT_DIR.path_join(variant + ".tscn")) as PackedScene
-	assert_object(scene).override_failure_message("cannot load " + variant).is_not_null()
-	var state := scene.get_state()
-	for i in state.get_node_property_count(0):
-		if state.get_node_property_name(0, i) == prop:
-			return state.get_node_property_value(0, i)
-	return null
+	return Specs.spec_in(_scene(variant))
 
 
 ## Check scalar field overrides (fields map spec field -> recipe key).

@@ -2,6 +2,7 @@ extends GdUnitTestSuite
 ## Tyre classes: the catalog's shape, every body's stock fit, and the identity a stock fit is.
 
 const VehicleSpecScript := preload("res://src/vehicles/base/vehicle_spec.gd")
+const Specs := preload("res://tests/catalog_specs.gd")
 
 const WHEELED_FAMILIES := ["car", "truck", "tractor"]
 ## Towed bodies are not catalog variants but run the same tyre seam (`TowedBody`).
@@ -14,20 +15,12 @@ const TRAILER_SPECS := [
 ]
 
 
-func _spec_of(variant: String) -> VehicleSpecScript:
-	var state := (load(VehicleCatalog.scene_of(variant)) as PackedScene).get_state()
-	for i in state.get_node_property_count(0):
-		if state.get_node_property_name(0, i) == &"spec":
-			return state.get_node_property_value(0, i) as VehicleSpecScript
-	return null
-
-
 ## Every wheeled body's spec, catalog variants and towed bodies, keyed by name.
 func _wheeled_specs() -> Dictionary:
 	var out := {}
 	for variant in VehicleCatalog.VARIANTS:
 		if WHEELED_FAMILIES.has(VehicleCatalog.family_of(variant)):
-			out[variant] = _spec_of(variant)
+			out[variant] = Specs.spec_of(variant)
 	for path: String in TRAILER_SPECS:
 		out[path] = load(path)
 	return out

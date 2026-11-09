@@ -4,6 +4,7 @@ extends GdUnitTestSuite
 
 const ContractScript := preload("res://src/bridge/contract.gd")
 const BridgeSourceScript := preload("res://src/input/sources/bridge_source.gd")
+const BridgeScript := preload("res://src/bridge/bridge.gd")
 
 ## Every core bridge signal (the original parity set). The contract must cover all of them.
 const CORE_IN_SIGNALS: PackedStringArray = [
@@ -1078,3 +1079,25 @@ func test_the_instanced_rules_still_hold_across_every_count_signal() -> void:
 		assert_str(sig.type) \
 			.override_failure_message("instanced '%s' may not be a bool" % sig.name) \
 			.is_not_equal("bool")
+
+
+# --- the outbound wire gate (Bridge) ----------------------------------------------
+# The only thing between telemetry and JavaScriptBridge.eval: one non-finite float serialises as
+# bare `nan`/`inf`, which throws inside eval and kills every publish.
+
+func test_the_wire_gate_passes_finite_values_and_stops_nan_and_inf() -> void:
+	for ok: Variant in [12.5, 0.0, -3.0, 7, true, [1.0, 2, -0.5], []]:
+		assert_bool(BridgeScript._all_finite(ok)).override_failure_message("%s" % [ok]).is_true()
+	for bad: Variant in [NAN, INF, -INF, [1.0, NAN], [INF, 2.0], [0, -INF]]:
+		assert_bool(BridgeScript._all_finite(bad)).override_failure_message("%s" % [bad]).is_false()
+
+
+func test_an_instanced_value_is_exactly_count_numbers() -> void:
+	assert_bool(BridgeScript._is_instance_array([1.0, 2.0, 3.0, 4.0], 4)).is_true()
+	assert_bool(BridgeScript._is_instance_array([1, 2.5, 3, 4], 4)).is_true()   # ints are numbers
+	assert_bool(BridgeScript._is_instance_array([1.0, 2.0, 3.0], 4)).is_false()  # short
+	assert_bool(BridgeScript._is_instance_array([1.0, 2.0, 3.0, 4.0, 5.0], 4)).is_false()
+	assert_bool(BridgeScript._is_instance_array([1.0, "2", 3.0, 4.0], 4)).is_false()
+	assert_bool(BridgeScript._is_instance_array([1.0, true, 3.0, 4.0], 4)).is_false()
+	assert_bool(BridgeScript._is_instance_array(4.0, 1)).is_false()   # a scalar is not an Array
+	assert_bool(BridgeScript._is_instance_array([], 0)).is_true()

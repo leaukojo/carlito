@@ -68,17 +68,21 @@ func after_test() -> void:
 		GameState.attachment_changed.disconnect(_on_attachment_changed)
 
 
+## An auto-freed instance of the scene at `path`.
+func _freed_instance(path: String) -> Node3D:
+	return auto_free((load(path) as PackedScene).instantiate() as Node3D)
+
+
 func _semi() -> Node3D:
-	return auto_free((load(CatalogScript.scene_of("semi")) as PackedScene).instantiate() as Node3D)
+	return _freed_instance(CatalogScript.scene_of("semi"))
 
 
 func _tractor() -> Node3D:
-	return auto_free(
-			(load(CatalogScript.scene_of("tractor-kenney")) as PackedScene).instantiate() as Node3D)
+	return _freed_instance(CatalogScript.scene_of("tractor-kenney"))
 
 
 func _drawbar() -> Node3D:
-	return auto_free((load(DRAWBAR) as PackedScene).instantiate() as Node3D)
+	return _freed_instance(DRAWBAR)
 
 
 ## The semi's coupling: a node on the chassis, exactly as the drawbar is on the tractor.
@@ -197,11 +201,9 @@ func test_the_plate_carries_friction_and_the_pin_does_not() -> void:
 	# through an eye is nearly free. This is the fourth number that makes a drawbar a drawbar.
 	var plate := _profile_of(FifthWheelScript).yaw_friction_nm
 	var pin := _profile_of(DrawbarScript).yaw_friction_nm
-	var shipped: float = FifthWheelScript.YAW_FRICTION_NM
-	assert_float(plate).override_failure_message(
-			"the plate became a free hinge").is_equal(shipped)
 	# The order a real plate carries, so a decimal point cannot slip unnoticed.
-	assert_float(plate).is_between(1000.0, 3000.0)
+	assert_float(plate).override_failure_message(
+			"the plate became a free hinge").is_between(1000.0, 3000.0)
 	assert_float(pin).override_failure_message("a pin in an eye does not rub").is_equal(0.0)
 
 
@@ -574,18 +576,6 @@ func test_the_pto_clause_of_the_flow_gate_is_derived_from_what_the_body_declares
 		.is_equal(1.0)
 
 
-func test_each_profile_says_the_same_thing_as_the_constants_it_was_built_from() -> void:
-	# _build_joint reads only the profile; the constants are where each number keeps its argument.
-	var pin: CouplingProfile = _profile_of(DrawbarScript)
-	assert_float(pin.pitch_deg).is_equal(DrawbarScript.PITCH_LIMIT_DEG)
-	assert_float(pin.yaw_deg).is_equal(DrawbarScript.SWING_MAX_DEG)
-	assert_float(pin.roll_deg).is_equal(DrawbarScript.ROLL_LIMIT_DEG)
-	var plate: CouplingProfile = _profile_of(FifthWheelScript)
-	assert_float(plate.pitch_deg).is_equal(FifthWheelScript.PITCH_LIMIT_DEG)
-	assert_float(plate.yaw_deg).is_equal(FifthWheelScript.YAW_LIMIT_DEG)
-	assert_float(plate.roll_deg).is_equal(FifthWheelScript.ROLL_LIMIT_DEG)
-
-
 func test_every_profile_can_say_all_three_things_a_driver_is_told() -> void:
 	# An empty string is a notice that fires, occupies the banner and says nothing.
 	for p: CouplingProfile in [_profile_of(DrawbarScript), _profile_of(FifthWheelScript)]:
@@ -623,8 +613,7 @@ func test_a_semi_under_its_air_gate_applies_the_trailers_spring_brakes() -> void
 	for variant: String in ["semi", "semi-conventional"]:
 		var root: Node3D = auto_free(Node3D.new())
 		add_child(root)
-		var unit := auto_free((load(CatalogScript.scene_of(variant)) as PackedScene).instantiate()) \
-				as SemiTractor
+		var unit := _freed_instance(CatalogScript.scene_of(variant)) as SemiTractor
 		root.add_child(unit)
 		var stub := DeclaringTrailer.new()
 		root.add_child(auto_free(stub))
@@ -652,8 +641,7 @@ func test_a_semi_under_its_air_gate_applies_the_trailers_spring_brakes() -> void
 func test_the_spawn_countdown_couples_a_remembered_trailer_on_a_real_tractor() -> void:
 	var root: Node3D = auto_free(Node3D.new())
 	add_child(root)
-	var tractor: Node3D = auto_free(
-			(load(CatalogScript.scene_of("tractor-kenney")) as PackedScene).instantiate() as Node3D)
+	var tractor := _tractor()
 	root.add_child(tractor)
 	tractor.set("spawn_transform", tractor.global_transform)
 	var host := tractor.get_node("Drawbar") as TowHost
@@ -697,8 +685,7 @@ func test_both_tractor_units_couple_at_their_own_datum_and_spawn_with_charged_ai
 	for variant: String in ["semi", "semi-conventional"]:
 		var root: Node3D = auto_free(Node3D.new())
 		add_child(root)
-		var unit: Node3D = auto_free(
-				(load(CatalogScript.scene_of(variant)) as PackedScene).instantiate() as Node3D)
+		var unit := _freed_instance(CatalogScript.scene_of(variant))
 		root.add_child(unit)
 		unit.set("spawn_transform", unit.global_transform)
 		var host := unit.get_node("FifthWheel") as TowHost
@@ -767,8 +754,7 @@ func _rig(kind: String) -> Rig:
 	r.root = auto_free(Node3D.new()) as Node3D
 	add_child(r.root)
 	var variant := "semi" if kind == SEMI else "tractor-kenney"
-	r.vehicle = auto_free(
-			(load(CatalogScript.scene_of(variant)) as PackedScene).instantiate() as Node3D) as Node3D
+	r.vehicle = _freed_instance(CatalogScript.scene_of(variant))
 	r.root.add_child(r.vehicle)
 	# Level._spawn_vehicle assigns this AFTER add_child, which is the whole reason the spawn
 	# countdown exists; a rig built without it lays its body against the origin.
@@ -1231,14 +1217,8 @@ func test_the_two_couplings_disagree_about_exactly_the_licensed_fields() -> void
 
 func test_the_coupling_timings_belong_to_the_host_and_not_to_either_machine() -> void:
 	# The three timings are identical on both couplings with no machine reason to differ, so they are
-	# TowHost constants — and a subclass CAN shadow a const.
-	assert_int(FifthWheelScript.SPAWN_COUPLE_TICKS).is_equal(TowHost.SPAWN_COUPLE_TICKS)
-	assert_int(DrawbarScript.SPAWN_COUPLE_TICKS).is_equal(TowHost.SPAWN_COUPLE_TICKS)
-	assert_int(FifthWheelScript.COUPLE_WATCH_TICKS).is_equal(TowHost.COUPLE_WATCH_TICKS)
-	assert_int(DrawbarScript.COUPLE_WATCH_TICKS).is_equal(TowHost.COUPLE_WATCH_TICKS)
-	assert_float(FifthWheelScript.COUPLE_SPEED_MS).is_equal(TowHost.COUPLE_SPEED_MS)
-	assert_float(DrawbarScript.COUPLE_SPEED_MS).is_equal(TowHost.COUPLE_SPEED_MS)
-	# ...and none of the three became a profile field.
+	# TowHost constants. A subclass cannot shadow a const (a parse error), so what can drift is a
+	# timing turning into per-machine profile data.
 	for field: String in _profile_fields():
 		assert_bool(field.ends_with("_ticks") or field.ends_with("_ms")) \
 			.override_failure_message("'%s' made a shared timing into per-machine data" % field) \

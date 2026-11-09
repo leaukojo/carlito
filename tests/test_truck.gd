@@ -16,6 +16,7 @@ const SemiScript := preload("res://src/vehicles/truck/semi.gd")
 const FifthWheelScript := preload("res://src/vehicles/truck/fifth_wheel.gd")
 const TrailerCatalogScript := preload("res://src/vehicles/truck/trailer_catalog.gd")
 const TrailerSwing := preload("res://tests/trailer_swing.gd")
+const Specs := preload("res://tests/catalog_specs.gd")
 ## The North American conventional — the variant whose whole content is a trailer bus it lacks.
 const CONVENTIONAL := "semi-conventional"
 ## Below the ~0.35 m the cab-over (the tighter of the two shipped units) clears today, so a
@@ -29,12 +30,7 @@ const SWING_MARGIN := 0.30
 func _truck_specs() -> Array[VehicleSpec]:
 	var out: Array[VehicleSpec] = []
 	for variant in CatalogScript.variants_in_family("truck"):
-		var scene: PackedScene = load(CatalogScript.scene_of(variant))
-		var state := scene.get_state()
-		for i in state.get_node_property_count(0):
-			if state.get_node_property_name(0, i) == "spec":
-				out.append(state.get_node_property_value(0, i) as VehicleSpec)
-				break
+		out.append(Specs.spec_of(variant))
 	return out
 
 

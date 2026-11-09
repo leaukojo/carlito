@@ -944,7 +944,7 @@ func test_a_free_wheel_sheds_spin_and_never_reverses_or_gains() -> void:
 
 # --- corner_mass sizes the one-tick contact clamps ----------------------------
 
-const CatalogScript := preload("res://src/vehicles/vehicle_catalog.gd")
+const Specs := preload("res://tests/catalog_specs.gd")
 const RefuseBodyScript := preload("res://src/vehicles/truck/refuse_body.gd")
 
 
@@ -1108,30 +1108,55 @@ func test_the_one_tick_caps_scale_with_a_rewritten_mass() -> void:
 	# All three RayWheel caps are `corner_mass * |v| / delta`, so re-sharing the LIVE mass is the
 	# whole of "the clamp follows what the body weighs". Nothing here weakens a clamp: the cap is
 	# recomputed from a bigger number, it is not widened by a factor.
-	var drive := _drive_for(_bench_spec(2000.0))
-	var cap_empty: float = drive.wheels[0].corner_mass * 3.0 / TICK   ## cap at 3 m/s of slip
+	# Read through the damper's cap: no spring and a damper far past it, so the load the wheel
+	# applies on its first touch is exactly `corner_mass * comp_vel / delta`.
+	var spec := _bench_spec(2000.0)
+	spec.ground_drive.tyre_half_width = 0.1
+	var drive := _drive_for(spec)
+	var w: RayWheel = drive.wheels[0]
+	# A frozen body over a flat, the wheel's hub 5 mm into its travel.
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	_box(root, Vector3(20.0, 1.0, 20.0), Vector3(0.0, -0.5, 0.0))
+	var body := RigidBody3D.new()
+	body.freeze = true
+	body.collision_layer = 0
+	root.add_child(body)
+	body.global_position = Vector3(0.0,
+			spec.ground_drive.rest_length + w.wheel_radius - 0.005 - w.anchor.y, 0.0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var cap_empty := _capped_damper_load(w, spec.ground_drive, body)
+	assert_float(cap_empty).is_greater(0.0)
 	drive.set_corner_mass_from(3000.0)
-	for w in drive.wheels:
-		assert_float(w.corner_mass).is_equal_approx(750.0, 1e-9)
-	var cap_laden: float = drive.wheels[0].corner_mass * 3.0 / TICK
+	for each in drive.wheels:
+		assert_float(each.corner_mass).is_equal_approx(750.0, 1e-9)
+	var cap_laden := _capped_damper_load(w, spec.ground_drive, body)
 	assert_float(cap_laden / cap_empty).override_failure_message(
-			"the one-tick cap did not follow the laden mass").is_equal_approx(1.5, 1e-9)
+			"the one-tick cap did not follow the laden mass").is_equal_approx(1.5, 1e-5)
 	# And it comes back down again, so a dumped hopper is not left over-clamped.
 	drive.set_corner_mass_from(2000.0)
-	assert_float(drive.wheels[0].corner_mass * 3.0 / TICK).is_equal_approx(cap_empty, 1e-9)
+	assert_float(_capped_damper_load(w, spec.ground_drive, body)) \
+			.is_equal_approx(cap_empty, cap_empty * 1e-5)
+
+
+## The load `w` applies on its first touch, ticked once on `body` (frozen, in the tree) with the
+## spring off and a damper that saturates the one-tick cap.
+func _capped_damper_load(w: RayWheel, gd: GroundDriveSpec, body: RigidBody3D) -> float:
+	w.spring_rate = 0.0
+	w.damper_bump = 1e7
+	w._prev_compression = 0.0
+	var terrains: Array[Node] = []
+	w.tick(body, gd, body.get_world_3d().direct_space_state, 0.0, 0.0, TICK, terrains)
+	assert_bool(w.in_contact).is_true()
+	assert_float(w.suspension_force).is_less(gd.max_suspension_force)
+	return w.suspension_force
 
 
 func test_a_full_refuse_hopper_moves_the_shipped_trucks_caps() -> void:
 	# The real path: TruckVehicle hands `spec.mass + payload` to BaseVehicle.set_live_mass, which
 	# calls set_corner_mass_from. Pinned on the shipped spec so a payload change is visible.
-	var scene: PackedScene = load(CatalogScript.scene_of("garbage-truck"))
-	var state := scene.get_state()
-	var spec: VehicleSpec = null
-	for i in state.get_node_property_count(0):
-		if state.get_node_property_name(0, i) == &"spec":
-			spec = state.get_node_property_value(0, i) as VehicleSpec
-			break
-	assert_object(spec).is_not_null()
+	var spec := Specs.spec_of("garbage-truck")
 	var drive := _drive_for(spec)
 	var empty: float = drive.wheels[0].corner_mass
 	assert_float(empty).is_equal_approx(

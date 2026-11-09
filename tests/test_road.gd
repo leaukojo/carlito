@@ -7,6 +7,7 @@ const Builder := preload("res://kit/helpers/road_builder.gd")
 const Profile := preload("res://kit/helpers/road_profile.gd")
 const Baker := preload("res://kit/bake/level_baker.gd")
 const RoadPathScript := preload("res://kit/helpers/road_path.gd")
+const LevelFixtures := preload("res://tests/level_fixtures.gd")
 
 
 func _straight(a: Vector3, b: Vector3) -> Curve3D:
@@ -56,7 +57,7 @@ func test_min_turn_radius_flags_hairpin_below_half_width() -> void:
 	c.add_point(Vector3(10.652, 19.256, 57.171),
 			Vector3(-1.389, 0.222, 0.468), Vector3(4.325, -0.690, -1.456))
 	c.add_point(Vector3(24, 21.12, 54), Vector3(-4, 0, 0), Vector3.ZERO)
-	assert_bool(Builder.min_turn_radius(c, 6.0, 6.0) < 3.0).is_true()
+	assert_float(Builder.min_turn_radius(c, 6.0, 6.0)).is_less(3.0)
 
 
 # --------------------------------------------------------------- adaptive sampling
@@ -70,7 +71,7 @@ func test_adaptive_straight_is_uniform_coarse() -> void:
 	assert_float(offsets[17]).is_equal_approx(100.0, 0.01)
 	var step := offsets[1] - offsets[0]
 	for i in range(1, offsets.size()):
-		assert_bool(offsets[i] > offsets[i - 1]).is_true()
+		assert_float(offsets[i]).override_failure_message("offset %d" % i).is_greater(offsets[i - 1])
 		assert_float(offsets[i] - offsets[i - 1]).is_equal_approx(step, 0.001)
 
 
@@ -80,7 +81,7 @@ func test_adaptive_arc_subdivides_and_bounds_angle() -> void:
 	var length := arc.get_baked_length()
 	var straight_offsets := Builder.adaptive_offsets(
 			_straight(Vector3.ZERO, Vector3(0, 0, length)), 6.0, 6.0)
-	assert_bool(arc_offsets.size() > straight_offsets.size()).is_true()
+	assert_int(arc_offsets.size()).is_greater(straight_offsets.size())
 	# every final segment's end tangents agree within the budget (or hit the MIN_SEG floor)
 	for i in range(1, arc_offsets.size()):
 		var a := arc_offsets[i - 1]
@@ -90,10 +91,15 @@ func test_adaptive_arc_subdivides_and_bounds_angle() -> void:
 		assert_bool(angle <= deg_to_rad(6.0) + 0.02 or b - a <= Builder.MIN_SEG + 0.001).is_true()
 
 
-func test_adaptive_is_deterministic() -> void:
+## Golden: the 31.42 m quarter arc samples as 24 equal segments (its curvature is uniform, so the
+## subdivision is too), ends on its ends.
+func test_adaptive_quarter_arc_golden() -> void:
 	var arc := _quarter_arc()
-	assert_that(Builder.adaptive_offsets(arc, 6.0, 6.0)) \
-			.is_equal(Builder.adaptive_offsets(arc, 6.0, 6.0))
+	var offsets := Builder.adaptive_offsets(arc, 6.0, 6.0)
+	assert_int(offsets.size()).is_equal(25)
+	assert_float(offsets[0]).is_equal(0.0)
+	assert_float(offsets[1]).is_equal_approx(1.309184, 1e-4)
+	assert_float(offsets[24]).is_equal_approx(arc.get_baked_length(), 1e-4)
 
 
 ## Zero-handle corner: offset lands on interior control point (miter ring angle bisector);
@@ -108,7 +114,7 @@ func test_adaptive_offsets_anchor_interior_control_points() -> void:
 	var offsets := Builder.adaptive_offsets(c, 6.0, 6.0)
 	var best := INF
 	for i in range(1, offsets.size()):
-		assert_bool(offsets[i] > offsets[i - 1]).is_true()
+		assert_float(offsets[i]).override_failure_message("offset %d" % i).is_greater(offsets[i - 1])
 		best = minf(best, absf(offsets[i] - corner))
 	assert_float(best).is_equal_approx(0.0, 0.01)
 	# the ring AT the corner frames along the bisector of the two segment directions
@@ -290,6 +296,9 @@ func test_asphalt_cross_section() -> void:
 	assert_float(points[3].y).is_equal(0.0)
 	assert_float(float(p.call("paved_half_width"))).is_equal_approx(4.25, 0.0001)
 	assert_float(float(p.call("full_half_width"))).is_equal_approx(4.75, 0.0001)
+	# The bridge base is opt-in: at base_depth 0 (the default, this profile) the section above is
+	# the plain road, so no existing bake changes; the base's material slot is present anyway.
+	assert_int((p.call("materials") as Array).size()).is_equal(4)
 
 
 func test_gravel_cross_section_drops_zero_width_strips() -> void:
@@ -298,17 +307,6 @@ func test_gravel_cross_section_drops_zero_width_strips() -> void:
 	var cs: Dictionary = p.call("cross_section")
 	assert_int((cs.points as PackedVector2Array).size()).is_equal(6)
 	assert_that(cs.mats).is_equal(PackedInt32Array([2, 2, 0, 2, 2]))
-
-
-func test_base_depth_zero_is_a_plain_road() -> void:
-	# The bridge base is opt-in: base_depth 0 (the default) leaves every non-bridge
-	# profile byte-identical, so no existing bake changes.
-	var p: Resource = Profile.new()
-	p.set("base_depth", 0.0)
-	var cs: Dictionary = p.call("cross_section")
-	assert_int((cs.points as PackedVector2Array).size()).is_equal(8)
-	assert_that(cs.mats).is_equal(PackedInt32Array([2, 2, 1, 0, 1, 2, 2]))
-	assert_int((p.call("materials") as Array).size()).is_equal(4)   # base slot present
 
 
 func test_base_depth_appends_box_below_outer_edges() -> void:
@@ -371,7 +369,7 @@ func test_extrude_flat_normals_up_and_drop_tilts_outward() -> void:
 	# shoulder slot holds the drop skirts: some normals lean sideways, all stay upward
 	var leaned := false
 	for n: Vector3 in (surfaces[2][Mesh.ARRAY_NORMAL] as PackedVector3Array):
-		assert_bool(n.y > 0.0).is_true()
+		assert_float(n.y).override_failure_message("normal %s" % n).is_greater(0.0)
 		if absf(n.x) > 0.1:
 			leaned = true
 	assert_bool(leaned).is_true()
@@ -393,7 +391,8 @@ func _assert_up_facing(surfaces: Dictionary) -> void:
 		for i in range(0, idx.size(), 3):
 			var cross := (pos[idx[i + 1]] - pos[idx[i]]).cross(pos[idx[i + 2]] - pos[idx[i]])
 			# CW seen from above = Godot front face up = geometric cross points DOWN
-			assert_bool(cross.y < -1e-6).is_true()
+			assert_float(cross.y).override_failure_message("slot %d triangle at index %d" % [slot, i]) \
+					.is_less(-1e-6)
 
 
 func test_extrude_winding_up_facing_both_directions() -> void:
@@ -410,7 +409,8 @@ func _assert_faces_outward(surfaces: Dictionary) -> void:
 		var idx: PackedInt32Array = surfaces[slot][Mesh.ARRAY_INDEX]
 		for i in range(0, idx.size(), 3):
 			var cross := (pos[idx[i + 1]] - pos[idx[i]]).cross(pos[idx[i + 2]] - pos[idx[i]])
-			assert_bool(cross.dot(nrm[idx[i]]) < -1e-6).is_true()
+			assert_float(cross.dot(nrm[idx[i]])) \
+					.override_failure_message("slot %d triangle at index %d" % [slot, i]).is_less(-1e-6)
 
 
 func test_extrude_bridge_base_all_faces_outward() -> void:
@@ -516,7 +516,8 @@ func test_extrude_tight_arc_inside_edge_never_reverses() -> void:
 				+ Builder.tangent_at(arc, offsets[i + 1], length)).normalized()
 		for side in 2:
 			var d := pos[(i + 1) * 2 + side] - pos[i * 2 + side]
-			assert_bool(d.dot(t_avg) >= -1e-6).is_true()
+			assert_float(d.dot(t_avg)).override_failure_message("ring %d side %d" % [i, side]) \
+					.is_greater_equal(-1e-6)
 	# the clamp actually engaged: some rings are narrower than the full 9.5 m
 	var narrowed := false
 	for i in offsets.size():
@@ -539,16 +540,23 @@ func test_extrude_wide_arc_is_not_clamped() -> void:
 		assert_float(pos[i * 2].distance_to(pos[i * 2 + 1])).is_equal_approx(9.5, 0.0001)
 
 
-func test_extrude_tight_arc_is_deterministic() -> void:
+## Golden: the tight arc's clamped ribbon. 17 rings; the inside edge is pulled in to the arc's
+## centre at both ends (x 2.857 at the start ring, z 0.143 at the end), and the clamped width
+## runs 7.57-7.63 m against the profile's 9.5, widest mid-arc.
+func test_extrude_tight_arc_golden() -> void:
 	var cs := _edge_cross_section()
-	var a_arc := _tight_arc()
-	var b_arc := _tight_arc()
-	var a := Builder.extrude(a_arc, cs.points, cs.mats,
-			Builder.adaptive_offsets(a_arc, 6.0, 6.0), false)
-	var b := Builder.extrude(b_arc, cs.points, cs.mats,
-			Builder.adaptive_offsets(b_arc, 6.0, 6.0), false)
-	assert_that(a[0][Mesh.ARRAY_VERTEX]).is_equal(b[0][Mesh.ARRAY_VERTEX])
-	assert_that(a[0][Mesh.ARRAY_INDEX]).is_equal(b[0][Mesh.ARRAY_INDEX])
+	var arc := _tight_arc()
+	var surfaces := Builder.extrude(arc, cs.points, cs.mats,
+			Builder.adaptive_offsets(arc, 6.0, 6.0), false)
+	var pos: PackedVector3Array = surfaces[0][Mesh.ARRAY_VERTEX]
+	assert_int(pos.size()).is_equal(34)
+	assert_int((surfaces[0][Mesh.ARRAY_INDEX] as PackedInt32Array).size()).is_equal(96)
+	var eps := Vector3.ONE * 1e-4
+	assert_vector(pos[0]).is_equal_approx(Vector3(2.857144, 0.0, 0.0), eps)
+	assert_vector(pos[1]).is_equal_approx(Vector3(-4.75, 0.0, 0.0), eps)
+	assert_vector(pos[32]).is_equal_approx(Vector3(3.0, 0.0, 0.142869), eps)
+	assert_vector(pos[33]).is_equal_approx(Vector3(3.0, 0.0, 7.75), eps)
+	assert_float(pos[16].distance_to(pos[17])).is_equal_approx(7.633753, 1e-4)
 
 
 ## Closed loop (first == last control position): both end rings get the bisector of
@@ -623,7 +631,7 @@ func test_extrude_wild_end_handle_falls_back_to_finite_difference() -> void:
 	assert_vector(right).is_equal_approx(expect.basis.x, Vector3.ONE * 0.001)
 	var handle_right: Vector3 = Builder.frame_from_tangent(
 			Vector3(1, 0, 0), Vector3.ZERO, 0.0, Vector3.RIGHT).basis.x
-	assert_bool(right.distance_to(handle_right) > 0.1).is_true()
+	assert_float(right.distance_to(handle_right)).is_greater(0.1)
 
 
 ## A handle that agrees with the curve still wins (the v6 behaviour this bounds, not undoes).
@@ -703,7 +711,8 @@ func test_transform_surface_arrays_preserves_winding_when_mirrored() -> void:
 	var idx: PackedInt32Array = out[Mesh.ARRAY_INDEX]
 	for i in range(0, idx.size(), 3):
 		var cross := (pos[idx[i + 1]] - pos[idx[i]]).cross(pos[idx[i + 2]] - pos[idx[i]])
-		assert_bool(cross.dot(nrm[idx[i]]) < -1e-6).is_true()
+		assert_float(cross.dot(nrm[idx[i]])).override_failure_message("triangle at index %d" % i) \
+				.is_less(-1e-6)
 
 
 # ------------------------------------------------------------------- conform math
@@ -716,8 +725,10 @@ func test_flatten_weight_shape() -> void:
 	assert_float(Builder.flatten_weight(5.0, 2.0, 3.0)).is_equal(0.0)
 	assert_float(Builder.flatten_weight(99.0, 2.0, 3.0)).is_equal(0.0)
 	# monotone non-increasing across the falloff band
-	assert_bool(Builder.flatten_weight(2.5, 2.0, 3.0) >= Builder.flatten_weight(3.0, 2.0, 3.0)).is_true()
-	assert_bool(Builder.flatten_weight(3.0, 2.0, 3.0) >= Builder.flatten_weight(4.0, 2.0, 3.0)).is_true()
+	assert_float(Builder.flatten_weight(2.5, 2.0, 3.0)) \
+			.is_greater_equal(Builder.flatten_weight(3.0, 2.0, 3.0))
+	assert_float(Builder.flatten_weight(3.0, 2.0, 3.0)) \
+			.is_greater_equal(Builder.flatten_weight(4.0, 2.0, 3.0))
 
 
 ## Centerline row of samples across a 16x16 image (span 15 m -> 1 px = 1 m). The line
@@ -742,7 +753,7 @@ func test_conform_heights_flattens_inner_and_blends_falloff() -> void:
 	for row in [5, 6, 7, 8, 9]:
 		var r := img.get_pixel(8, row).r
 		assert_float(r * 255.0).is_equal_approx(63.0, 1.0)   # floor(0.25*255) = 63
-		assert_bool(r <= 0.25 + 1e-6).is_true()
+		assert_float(r).override_failure_message("row %d" % row).is_less_equal(0.25 + 1e-6)
 	# mid-falloff (row 4, dist 3): strictly between target and original
 	var mid := img.get_pixel(8, 4).r
 	assert_bool(mid > img.get_pixel(8, 7).r and mid < orig).is_true()
@@ -753,12 +764,19 @@ func test_conform_heights_flattens_inner_and_blends_falloff() -> void:
 	assert_that(dirty).is_equal(Rect2i(0, 2, 16, 11))
 
 
-func test_conform_heights_is_deterministic() -> void:
-	var a := _conform_test_image()
-	var b := _conform_test_image()
-	Builder.conform_heights(a.img, a.samples, 2.5, 3.0, 15.0, 15.0)
-	Builder.conform_heights(b.img, b.samples, 2.5, 3.0, 15.0, 15.0)
-	assert_that((a.img as Image).get_data()).is_equal((b.img as Image).get_data())
+## Golden: the whole falloff profile across the line, byte for byte (every column alike, since the
+## line runs the image's width): 127 untouched, 63 flattened, the blend between symmetric.
+func test_conform_heights_golden_profile() -> void:
+	var setup := _conform_test_image()
+	var img: Image = setup.img
+	Builder.conform_heights(img, setup.samples, 2.5, 3.0, 15.0, 15.0)
+	var want := [127, 127, 122, 95, 67, 63, 63, 63, 63, 63, 67, 95, 122, 127, 127, 127]
+	var data := img.get_data()
+	for col: int in [0, 8, 15]:
+		var got := []
+		for row in 16:
+			got.append(data[row * 16 + col])
+		assert_array(got).override_failure_message("column %d: %s" % [col, got]).is_equal(want)
 
 
 func test_conform_heights_empty_inputs() -> void:
@@ -807,8 +825,8 @@ func test_conform_heights_sloped_road_stays_below_ribbon() -> void:
 			var lx := float(px) - 7.5
 			var t_proj := 0.05 + (lx + 7.5) / 15.0 * 0.9
 			var stored := img.get_pixel(px, pz).r
-			assert_bool(stored <= t_proj + 1e-4).is_true()
-			assert_bool(stored >= t_proj - step - 1e-4).is_true()
+			assert_float(stored).override_failure_message("px %d pz %d" % [px, pz]) \
+					.is_between(t_proj - step - 1e-4, t_proj + 1e-4)
 
 
 ## Over a crest (a road tipping over into a descent) the analytic curve rides ABOVE
@@ -843,7 +861,7 @@ func test_conform_at_ring_offsets_stays_below_crest_chords() -> void:
 	for i in rings.size() - 1:
 		var mid := curve.sample_baked((offsets[i] + offsets[i + 1]) * 0.5)
 		max_rise = maxf(max_rise, mid.y - (rings[i].y + rings[i + 1].y) * 0.5)
-	assert_bool(max_rise > eps + 1e-3).is_true()
+	assert_float(max_rise).is_greater(eps + 1e-3)
 
 	var fine := PackedVector3Array()   # the old fixed-0.5 m sampling
 	var count := maxi(2, int(ceil(length / 0.5)) + 1)
@@ -871,7 +889,9 @@ func test_conform_at_ring_offsets_stays_below_crest_chords() -> void:
 			var chord := _chord_height_along_z(rings, lz)
 			if is_nan(chord):
 				continue
-			assert_bool(img_new.get_pixel(px, pz).r * amp <= chord - eps + 1e-4).is_true()
+			assert_float(img_new.get_pixel(px, pz).r * amp) \
+					.override_failure_message("px %d pz %d" % [px, pz]) \
+					.is_less_equal(chord - eps + 1e-4)
 			if img_old.get_pixel(px, pz).r * amp > chord + 1e-4:
 				above_old += 1
 			if img_new.get_pixel(px, pz).r * amp > chord + 1e-4:
@@ -930,7 +950,9 @@ func test_conform_deck_raster_stays_below_ruled_surface_on_steep_bend() -> void:
 			if is_nan(expected):
 				continue
 			covered += 1
-			assert_bool(img_new.get_pixel(px, pz).r * amp <= expected - eps + 1e-3).is_true()
+			assert_float(img_new.get_pixel(px, pz).r * amp) \
+					.override_failure_message("px %d pz %d" % [px, pz]) \
+					.is_less_equal(expected - eps + 1e-3)
 			if img_old.get_pixel(px, pz).r * amp > expected + 1e-3:
 				above_old += 1
 			if img_new.get_pixel(px, pz).r * amp > expected + 1e-3:
@@ -1050,11 +1072,57 @@ func test_conform_rects_nearest_rect_wins_and_rounds_up() -> void:
 	assert_int(roundi(img.get_pixel(4, 8).r * 255.0)).is_equal(204)   # inside A
 	assert_int(roundi(img.get_pixel(11, 8).r * 255.0)).is_equal(52)   # inside B
 	# gap pixels: each side pulled toward ITS nearest rect's target
-	assert_bool(img.get_pixel(7, 8).r > 0.5).is_true()    # lx = -0.5, nearer A (0.8)
-	assert_bool(img.get_pixel(8, 8).r < 0.5).is_true()    # lx = +0.5, nearer B (0.2)
+	assert_float(img.get_pixel(7, 8).r).is_greater(0.5)    # lx = -0.5, nearer A (0.8)
+	assert_float(img.get_pixel(8, 8).r).is_less(0.5)    # lx = +0.5, nearer B (0.2)
 
 
 const TileConform := preload("res://addons/carlito_kit/tile_conform.gd")
+const GroundSnap := preload("res://addons/carlito_kit/ground_snap.gd")
+const RoadDrawTool := preload("res://addons/carlito_kit/road_draw_tool.gd")
+
+
+# --------------------------------------------------- draw tool: snap ray and world curve
+
+
+func test_ray_plane_meets_the_plane_and_refuses_parallel_and_away_rays() -> void:
+	var eps := Vector3.ONE * 1e-5
+	assert_vector(GroundSnap.ray_plane(Vector3(1, 10, 2), Vector3.DOWN, 0.0)) \
+			.is_equal_approx(Vector3(1, 0, 2), eps)
+	# Slanted: 45 deg down from 4 m over a plane at y 1 lands 3 m along x.
+	assert_vector(GroundSnap.ray_plane(Vector3(0, 4, 0), Vector3(1, -1, 0).normalized(), 1.0)) \
+			.is_equal_approx(Vector3(3, 1, 0), eps)
+	# From below, looking up, it still meets the plane ahead of it.
+	assert_vector(GroundSnap.ray_plane(Vector3(0, -2, 0), Vector3.UP, 0.0)) \
+			.is_equal_approx(Vector3.ZERO, eps)
+	# Starting on the plane: the origin itself (t = 0 is ahead, not behind).
+	assert_vector(GroundSnap.ray_plane(Vector3(5, 0, 5), Vector3.DOWN, 0.0)) \
+			.is_equal_approx(Vector3(5, 0, 5), eps)
+	assert_that(GroundSnap.ray_plane(Vector3(0, 10, 0), Vector3.FORWARD, 0.0)).is_null()   # parallel
+	assert_that(GroundSnap.ray_plane(Vector3(0, 10, 0), Vector3.UP, 0.0)).is_null()   # away
+
+
+## Through a translated, rotated, scaled (and then mirrored) transform the world curve is the
+## local one moved: positions as points, handles as directions (a handle given the translation
+## too bends every segment). Bezier is affine-invariant, so sampled points must match as well.
+func test_the_world_curve_moves_positions_as_points_and_handles_as_directions() -> void:
+	var local := Curve3D.new()
+	local.add_point(Vector3.ZERO, Vector3.ZERO, Vector3(0, 0, 4))
+	local.add_point(Vector3(5, 1, 10), Vector3(-3, 0, 0), Vector3(3, 0, 0))
+	local.add_point(Vector3(10, 0, 10), Vector3(0, 0, -2), Vector3.ZERO)
+	var turned := Basis(Vector3.UP, 0.7) * Basis.from_scale(Vector3(2.0, 1.0, 1.5))
+	for basis: Basis in [turned, turned * Basis.from_scale(Vector3(-1, 1, 1))]:
+		var xform := Transform3D(basis, Vector3(40, 3, -25))
+		var world: Curve3D = RoadDrawTool._to_world_curve(local, xform)
+		assert_int(world.point_count).is_equal(local.point_count)
+		var eps := Vector3.ONE * 1e-4
+		for i in local.point_count:
+			assert_vector(world.get_point_position(i)) \
+					.is_equal_approx(xform * local.get_point_position(i), eps)
+			assert_vector(world.get_point_in(i)).is_equal_approx(basis * local.get_point_in(i), eps)
+			assert_vector(world.get_point_out(i)).is_equal_approx(basis * local.get_point_out(i), eps)
+		for seg in local.point_count - 1:
+			for t: float in [0.25, 0.5, 0.75]:
+				assert_vector(world.sample(seg, t)).is_equal_approx(xform * local.sample(seg, t), eps)
 
 
 # --------------------------------------------------- tile conform footprints
@@ -1087,17 +1155,17 @@ func test_tile_footprint_rects_cover_cells_and_overhangs() -> void:
 
 	var r0: Rect2 = rects[0]   # straight at (0,0,0): 12x12 centered on (6, 6)
 	assert_bool(absf(r0.size.x - 12.0) < 0.6 and absf(r0.size.y - 12.0) < 0.6).is_true()
-	assert_bool(r0.get_center().distance_to(Vector2(6, 6)) < 0.6).is_true()
+	assert_float(r0.get_center().distance_to(Vector2(6, 6))).is_less(0.6)
 	assert_float(base_ys[0]).is_equal_approx(0.0, 1e-4)
 
 	var r1: Rect2 = rects[1]   # 2x2 curve at (0,0,4): ~24 m square, re-centered onto the
 	# clicked cell by the recipe's half-cell (+6 X / +6 Z) offset, so (6,54) -> (12,60)
 	assert_bool(absf(r1.size.x - 24.0) < 1.5 and absf(r1.size.y - 24.0) < 1.5).is_true()
-	assert_bool(r1.get_center().distance_to(Vector2(12, 60)) < 1.5).is_true()
+	assert_float(r1.get_center().distance_to(Vector2(12, 60))).is_less(1.5)
 
 	var r2: Rect2 = rects[2]   # yawed straight at (4,1,0): still its 12 m cell, base +3
 	assert_bool(absf(r2.size.x - 12.0) < 0.6 and absf(r2.size.y - 12.0) < 0.6).is_true()
-	assert_bool(r2.get_center().distance_to(Vector2(54, 6)) < 0.6).is_true()
+	assert_float(r2.get_center().distance_to(Vector2(54, 6))).is_less(0.6)
 	assert_float(base_ys[2]).is_equal_approx(3.0, 1e-4)
 
 
@@ -1129,7 +1197,8 @@ func test_road_path_reverse_swaps_handles_and_preserves_shape() -> void:
 	assert_float(curve.get_baked_length()).is_equal_approx(length, 0.01)
 	for i in 9:
 		var p := curve.sample_baked(curve.get_baked_length() * float(i) / 8.0)
-		assert_bool(p.distance_to(orig[8 - i]) < 0.01).is_true()
+		assert_float(p.distance_to(orig[8 - i])).override_failure_message("sample %d" % i) \
+				.is_less(0.01)
 	assert_bool(curve.get_point_out(0).is_equal_approx(Vector3(0, 0, -6))).is_true()
 	assert_bool(curve.get_point_in(2).is_equal_approx(Vector3(2, 0, 6))).is_true()
 	assert_bool(curve.get_point_in(1).is_equal_approx(Vector3(1, 0, 5))).is_true()
@@ -1148,16 +1217,8 @@ func test_road_path_reverse_swaps_handles_and_preserves_shape() -> void:
 ## Minimal bakeable level with one RoadPath (never enters the tree, so no _ready side
 ## effects — the baker's own operating mode).
 func _road_level(with_profile: bool) -> Dictionary:
-	var root := Node3D.new()
-	root.name = "L"
-	var spawn := Marker3D.new()
-	spawn.name = "Spawn"
-	spawn.set_script(load("res://src/levels/base/vehicle_spawn.gd"))
-	root.add_child(spawn)
-	var authoring := Node3D.new()
-	authoring.name = "Authoring"
-	authoring.set_script(preload("res://kit/helpers/authoring_root.gd"))
-	root.add_child(authoring)
+	var root := LevelFixtures.bakeable_level()
+	var authoring := LevelFixtures.authoring_of(root)
 	var road := Node3D.new()
 	road.name = "Road"
 	road.set_script(RoadPathScript)
@@ -1180,7 +1241,7 @@ func test_bake_collects_road_into_weld_and_chunks() -> void:
 	assert_bool(result.ok).is_true()
 	var stats: Dictionary = result.stats
 	assert_int(int(stats.roads)).is_equal(1)
-	assert_bool(int(stats.drivable_triangles) > 0).is_true()
+	assert_int(int(stats.drivable_triangles)).is_greater(0)
 	# a 60 m ribbon along z straddling x = 0 buckets into 4 chunks at chunk_size 48:
 	# x chunks -1/0 (triangle centroids either side of the centerline), z chunks 0/1
 	assert_int(int(stats.chunks)).is_equal(4)

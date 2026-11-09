@@ -25,9 +25,13 @@ func test_gps_lat_maps_north_to_higher_latitude() -> void:
 
 func test_gps_lon_shrinks_with_origin_latitude() -> void:
 	assert_float(T.gps_lon(0.0)).is_equal_approx(T.GPS_ORIGIN_LON, 1e-9)
-	var m_per_deg_lon := T.METERS_PER_DEG_LAT * cos(deg_to_rad(T.GPS_ORIGIN_LAT))
-	assert_float(T.gps_lon(m_per_deg_lon)).is_equal_approx(3.3522, 1e-6)
-	assert_float(T.gps_lon(-m_per_deg_lon)).is_equal_approx(1.3522, 1e-6)
+	# 1 deg of longitude at 48.8566 deg on WGS84: 73381.6 m, from the formula and the a, b given in
+	# en.wikipedia.org/wiki/Longitude § Length of a degree of longitude (it reproduces that page's
+	# table: 78.847 km at 45 deg, 55.800 km at 60 deg). The model is a sphere, 0.19 % short of it,
+	# so the band is 0.005 deg: wide for that, far inside a sin-for-cos (14 %) or a missing cos.
+	var m_per_deg_lon := 73381.6
+	assert_float(T.gps_lon(m_per_deg_lon)).is_equal_approx(3.3522, 0.005)
+	assert_float(T.gps_lon(-m_per_deg_lon)).is_equal_approx(1.3522, 0.005)
 
 
 # --- heading (0 = north/-Z, 90 = east/+X) ---
@@ -39,7 +43,14 @@ func test_heading_cardinals() -> void:
 	assert_float(T.heading_from_forward(Vector3(-1, 0, 0))).is_equal_approx(270.0, 1e-4)
 
 
-# --- odometer ---
+func test_heading_between_the_cardinals_and_across_the_north_wrap() -> void:
+	assert_float(T.heading_from_forward(Vector3(1, 0, -1))).is_equal_approx(45.0, 1e-4)
+	assert_float(T.heading_from_forward(Vector3(-1, 0, 1))).is_equal_approx(225.0, 1e-4)
+	# A hair west of north is just under 360, never a negative angle.
+	var west_of_north := T.heading_from_forward(Vector3(-0.001, 0, -1))
+	assert_float(west_of_north).is_equal_approx(360.0 - rad_to_deg(atan(0.001)), 1e-4)
+	assert_float(west_of_north).is_less(360.0)
+
 
 # --- true wind (contract 'twd' / 'tws', every family that publishes them) ---
 
@@ -67,6 +78,8 @@ func test_true_wind_ignores_the_vertical_and_reads_zero_in_a_calm() -> void:
 		assert_float(tw.x).is_equal(0.0)
 		assert_float(tw.y).is_equal(0.0)
 
+
+# --- odometer ---
 
 func test_odo_accumulates_absolute_distance_in_km() -> void:
 	assert_float(T.odo_step(0.0, 10.0, 0.1)).is_equal_approx(0.001, 1e-9)

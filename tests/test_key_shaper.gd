@@ -8,6 +8,7 @@ const RouterScript := preload("res://src/input/input_router.gd")
 const BridgeSourceScript := preload("res://src/input/sources/bridge_source.gd")
 const LocalSourceScript := preload("res://src/input/sources/local_source.gd")
 const PadSourceScript := preload("res://src/input/sources/pad_source.gd")
+const RouterFixtures := preload("res://tests/router_fixtures.gd")
 
 const TICK := 1.0 / 60.0
 
@@ -158,12 +159,9 @@ func test_the_router_applies_its_softening_to_the_keys() -> void:
 
 # --- the router wiring -------------------------------------------------------------------
 
-## A router on an idle pad (`_StubPad` holding nothing). A router polls every connected joypad
-## (PadSource), so one built bare reads whatever controller sits on the machine running the suite.
+## A router on an idle pad (`RouterFixtures`).
 func _router() -> Node:
-	var router: Node = auto_free(RouterScript.new())
-	router._pad_source = _StubPad.new()
-	return router
+	return auto_free(RouterFixtures.idle_router())
 
 
 ## A router running the full hand-and-foot model, whose timings these asserts read.

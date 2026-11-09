@@ -6,6 +6,7 @@ const RailProfileScript := preload("res://kit/helpers/rail_profile.gd")
 const Builder := preload("res://kit/helpers/road_builder.gd")
 const Baker := preload("res://kit/bake/level_baker.gd")
 const RoadPathScript := preload("res://kit/helpers/road_path.gd")
+const LevelFixtures := preload("res://tests/level_fixtures.gd")
 const RAIL_PRESET := "res://kit/roads/rail_profile.tres"
 const CITY_PRESET := "res://kit/roads/city_profile.tres"
 
@@ -221,21 +222,11 @@ func test_closed_predicate_agrees_with_road_builder() -> void:
 # ------------------------------------------------------------ baker emission
 
 
-## Minimal bakeable level with one road (never entered into the tree — the baker's own
-## operating mode). Mirrors test_road.gd's _road_level.
+## Minimal bakeable level with one road (`LevelFixtures`).
 func _level(preset: String) -> Dictionary:
-	var root := Node3D.new()
-	root.name = "L"
-	var spawn := Marker3D.new()
-	spawn.name = "Spawn"
-	spawn.set_script(load("res://src/levels/base/vehicle_spawn.gd"))
-	root.add_child(spawn)
-	var authoring := Node3D.new()
-	authoring.name = "Authoring"
-	authoring.set_script(preload("res://kit/helpers/authoring_root.gd"))
-	root.add_child(authoring)
+	var root := LevelFixtures.bakeable_level()
 	var road := _road(preset, _loop())
-	authoring.add_child(road)
+	LevelFixtures.authoring_of(root).add_child(road)
 	return {"root": root, "road": road}
 
 
