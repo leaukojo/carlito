@@ -16,9 +16,10 @@ var length := 0.0                  ## curve length (m); wrap modulus on closed l
 var closed := false
 
 # --- tuning (TrainVehicle never touches these; EMU-inspired honest defaults) ---
-var max_tractive := 320000.0   ## N, starting tractive effort (constant to base_speed)
-var base_speed := 14.0         ## m/s, corner speed where traction goes power-limited
-var max_power := 4480000.0     ## W, = max_tractive * base_speed above base_speed
+# The pull's two limits (`docs/sources.md`, The train's pull): the rails' grip on the head,
+# then constant power.
+var mu_adh := 0.35                     ## rail adhesion, the low end of the typical 0.35-0.5
+var power_to_mass := 17080.0 / 715.0   ## W/kg at the rail, the N700's (17,080 kW / 715 t)
 var max_brake := 90000.0       ## N per car at full brake application
 var davis_a := 400.0           ## N, rolling term (per car)
 var davis_b := 15.0            ## N*s/m, flange/bearing term (per car)
@@ -29,6 +30,7 @@ var coupler_slack := 0.05      ## m, free travel each side of rest before a coup
 var max_coupler := 500000.0    ## N, coupler force hard cap (the contract `coupler_force` range)
 
 # --- outputs, refreshed each step() ---
+var head_traction := 0.0       ## N, the loco's tractive effort this tick (signed by the reverser)
 var head_coupler_force := 0.0  ## N, coupler between loco and first wagon (+ = tension/draw, - = buff)
 var loco_accel := 0.0          ## m/s^2, net along-track acceleration of the loco
 
@@ -63,7 +65,8 @@ func step(delta: float, throttle: float, brake: float, parking: float,
 	for i in n:
 		var f := 0.0
 		if i == 0:
-			f += tractive_effort(v[i], throttle, base_speed, max_tractive, max_power)
+			head_traction = tractive_effort(v[i], throttle, adhesion_force(), max_power())
+			f += head_traction
 		# Davis alone is clamped to one tick's zeroing so it cannot sign-chatter; the brake is
 		# applied last, below, as Coulomb friction.
 		var resistive := davis_resistance(v[i], davis_a, davis_b, davis_c)
@@ -96,6 +99,19 @@ func step(delta: float, throttle: float, brake: float, parking: float,
 		s[i] = _wrap(s[i] + v[i] * delta)
 
 
+## N, the head's grip limit: mu_adh * head mass * g.
+func adhesion_force() -> float:
+	return mu_adh * masses[0] * GRAVITY if masses.size() > 0 else 0.0
+
+
+## W, the consist's power at the rail: power_to_mass * consist mass.
+func max_power() -> float:
+	var total := 0.0
+	for m in masses:
+		total += m
+	return power_to_mass * total
+
+
 ## Signed centre-to-centre gap between adjacent cars, wrapped so a coupler straddling the s = 0
 ## seam still reads its true separation.
 func _wrapped_gap(s_lead: float, s_follow: float) -> float:
@@ -113,16 +129,17 @@ func _wrap(arc: float) -> float:
 
 # --- pure force math ---
 
-## Tractive effort (N), signed by the reverser throttle: constant `max_force` up to `corner_speed`,
-## then power-limited (P/v). Direction follows the throttle sign (the reverser), never the speed.
-static func tractive_effort(speed: float, throttle: float, corner_speed: float,
-		max_force: float, power_cap: float) -> float:
+## Tractive effort (N), signed by the reverser throttle: the grip limit `max_force` at low speed,
+## then power-limited (P/v) past the corner where they meet. Direction follows the throttle sign
+## (the reverser), never the speed.
+static func tractive_effort(speed: float, throttle: float, max_force: float,
+		power_cap: float) -> float:
 	var mag := clampf(absf(throttle), 0.0, 1.0)
 	if mag <= 0.0:
 		return 0.0
 	var f := max_force
 	var spd := absf(speed)
-	if spd > corner_speed and spd > 0.0:
+	if spd > 0.0:
 		f = minf(max_force, power_cap / spd)
 	return signf(throttle) * mag * f
 

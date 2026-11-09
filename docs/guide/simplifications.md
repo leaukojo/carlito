@@ -72,7 +72,8 @@ The short cuts fall into three kinds:
   at the grip peak, with none of the pulsing of real systems.
 - **Simplified: brake heat.** Each brake is one lump of metal with one temperature.
 - **Simplified: truck air.** Two tanks that fill and empty; no pipes, valves or leaks.
-- **Simplified: the train's brake pipe.** A displayed model; the train's brakes act at once.
+- **Simplified: the train's brake pipe.** One steady delay stands in for the pipe, the valves and
+  the brake cylinders; the train's brakes follow it.
 <!-- driver-aids.md, brakes.md, rail.md -->
 
 ## Towing and farm work
@@ -103,7 +104,9 @@ The short cuts fall into three kinds:
 ## Rails
 
 - **Simplified: the train.** Five point masses along the track, joined by springs.
-- **Not modelled: wheel slip on the rails, points, signals, timetables or other trains.**
+- **Ideal: rail grip.** The pull stops at the rails' grip, which never changes; the wheels never
+  spin.
+- **Not modelled: points, signals, timetables or other trains.**
 <!-- rail.md -->
 
 ## Instruments

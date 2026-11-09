@@ -15,6 +15,15 @@ Rules sit at their site: `train.gd`, `train_sim.gd`.
   (tested `tests/test_train.gd`). The loco is kinematic; `BaseVehicle._update_telemetry` still
   reads honest motion. Traction live only with key Ignition + pantograph raised; doors open only
   at standstill.
+- Traction (`TrainSim.tractive_effort`): the lesser of the head's grip, `mu_adh` × head mass × g,
+  and constant power, `power_to_mass` × consist mass ÷ v (sourced: `docs/sources.md`, The train's
+  pull). From rest on the flat (Davis is zero there) the consist starts at `mu_adh` × head mass /
+  consist mass × g ≈ 0.92 m/s², inside the sourced 0.72–1.0
+  (`test_the_consist_starts_inside_the_sourced_range`). The reverser gates it: a bridge N with
+  `accel` held pulls nothing (`TrainVehicle.reverser_throttle`).
+- Brakes: the lever vents `brake_pipe` and the train brake reads the pipe
+  (`TrainTelemetry.pipe_brake_demand`); full service stays above the contract's warn, so the warn
+  means emergency (`docs/sources.md`, The train's brake pipe). The parking brake is off the pipe.
 
 ## Rail runtime
 

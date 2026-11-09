@@ -2,9 +2,9 @@ class_name TrainTelemetry
 extends VehicleTelemetry
 ## Train telemetry (flavor "train": rail practice / CiA 421 semantics, not a real train CAN
 ## standard); names match the contract signals. `grade` and `coupler_force` are real reads from the
-## consist sim; `pantograph_state` / `doors_state` are gate reads. `catenary_volts`, `motor_current`
-## and `brake_pipe` are labelled honest models (the train has no simulated electrical or pneumatic
-## circuit).
+## consist sim; `pantograph_state` / `doors_state` are gate reads. `catenary_volts` and
+## `motor_current` are labelled honest models (the train has no simulated electrical circuit);
+## `brake_pipe` is a labelled one-lag pipe model, and the train brake acts through it.
 
 const BRAKE_PIPE_CHARGED := 5.0  ## bar, fully released train brake pipe pressure
 const NOMINAL_CATENARY := 25000.0  ## V, 25 kV AC nominal line voltage (rail practice)
@@ -39,3 +39,9 @@ static func brake_pipe_step(current: float, brake: float, delta: float,
 	var target := BRAKE_PIPE_CHARGED - clampf(brake, 0.0, 1.0) * apply_range
 	var rate := drop_rate if target < current else charge_rate
 	return move_toward(current, target, rate * delta)
+
+
+## Train brake application (0..1) read out of the pipe: none at BRAKE_PIPE_CHARGED, full once the
+## pipe is `apply_range` below it (full service); a deeper pipe stays at full.
+static func pipe_brake_demand(pipe: float, apply_range: float) -> float:
+	return clampf((BRAKE_PIPE_CHARGED - pipe) / apply_range, 0.0, 1.0)

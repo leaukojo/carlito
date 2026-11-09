@@ -18,13 +18,18 @@ const COUPLER_GAP := 0.3   ## m between adjacent car bodies at rest
 const GRADE_EPS := 1.0      ## m along the curve for the finite-difference grade sample
 const DOOR_SPEED_EPS := 0.3 ## m/s below which a door-open request is honored
 
-# Aux-model tuning (labelled honest models; no real electrical or pneumatic circuit).
-const AMPS_PER_NEWTON := 1.0 / 320.0  ## 320 kN tractive -> ~1000 A
+# Aux-model tuning (labelled honest models; no real electrical circuit). The PIPE_* block below
+# is the train brake's own timing, not display tuning.
+const RATED_MOTOR_CURRENT := 1000.0   ## A at the head's full adhesion-limited pull
 const MAX_MOTOR_CURRENT := 1500.0
 const CATENARY_SAG_PER_AMP := 2.0     ## V of line sag per amp (1000 A -> 2 kV droop)
-const PIPE_APPLY_RANGE := 3.0         ## bar the pipe drops at full brake (5 -> 2, below the 2.5 warn)
-const PIPE_DROP_RATE := 6.0           ## bar/s venting on application
-const PIPE_CHARGE_RATE := 1.5         ## bar/s recharging on release
+# The brake acts through the pipe (UIC practice, `docs/sources.md`, The train's brake pipe):
+# full service 5 -> 3.5 bar, above the 2.5 emergency warn; P-position fill 3-5 s, release 15-20 s.
+# COMPROMISE: one linear pipe lag stands in for pipe, distributor and cylinder, timed on the
+# source's cylinder times; undoing it costs a cylinder pressure state per car.
+const PIPE_APPLY_RANGE := 1.5                       ## bar the pipe drops at full service
+const PIPE_DROP_RATE := PIPE_APPLY_RANGE / 4.0      ## bar/s venting: full service in 4 s
+const PIPE_CHARGE_RATE := PIPE_APPLY_RANGE / 17.5   ## bar/s recharging: release in 17.5 s
 
 @export var loco_mass := 50000.0   ## kg (the powered head)
 @export var wagon_mass := 34000.0  ## kg per trailer
@@ -100,14 +105,20 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 
 	# Traction needs the key in Ignition and the pantograph raised.
 	var powered := input.key == InputRouter.KEY_IGNITION and input.pantograph
-	var throttle := input.throttle if powered else 0.0
+	var throttle := reverser_throttle(input.throttle, drivetrain.gear_byte) if powered else 0.0
+
+	# The brake lever vents or recharges the pipe; the train brake reads the pipe. The parking
+	# brake is not on the pipe and acts directly.
+	_brake_pipe = TrainTelemetry.brake_pipe_step(_brake_pipe, input.brake, delta,
+			PIPE_DROP_RATE, PIPE_CHARGE_RATE, PIPE_APPLY_RANGE)
+	var brake := TrainTelemetry.pipe_brake_demand(_brake_pipe, PIPE_APPLY_RANGE)
 
 	# Per-car grade from the curve, then advance the consist.
 	var grades := PackedFloat64Array()
 	grades.resize(_sim.s.size())
 	for i in _sim.s.size():
 		grades[i] = _grade_at(_sim.s[i])
-	_sim.step(delta, throttle, input.brake, input.handbrake, grades)
+	_sim.step(delta, throttle, brake, input.handbrake, grades)
 
 	# The loco body follows the sim kinematically; velocities keep `_update_telemetry` honest.
 	var pose := TrainPlacement.car_pose(_curve, _rail_xform, _sim.s[0], BOGIE_HALF[0],
@@ -121,13 +132,10 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	_pose_wagons()
 
 	# Aux models are labelled honest models; grade and coupler read straight from the sim.
-	var traction := TrainSim.tractive_effort(_sim.v[0], throttle, _sim.base_speed,
-			_sim.max_tractive, _sim.max_power)
-	t.motor_current = TrainTelemetry.motor_current_amps(traction, AMPS_PER_NEWTON, MAX_MOTOR_CURRENT)
+	t.motor_current = TrainTelemetry.motor_current_amps(_sim.head_traction,
+			RATED_MOTOR_CURRENT / _sim.adhesion_force(), MAX_MOTOR_CURRENT)
 	t.catenary_volts = TrainTelemetry.catenary_volts_model(t.motor_current,
 			TrainTelemetry.NOMINAL_CATENARY if powered else 0.0, CATENARY_SAG_PER_AMP)
-	_brake_pipe = TrainTelemetry.brake_pipe_step(_brake_pipe, input.brake, delta,
-			PIPE_DROP_RATE, PIPE_CHARGE_RATE, PIPE_APPLY_RANGE)
 	t.brake_pipe = _brake_pipe
 	t.grade = clampi(roundi(grades[0] * 100.0), -10, 10)  # contract i8 %-grade range
 	t.coupler_force = _sim.head_coupler_force / 1000.0  # N -> kN (contract unit)
@@ -135,20 +143,34 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	t.doors_state = input.doors and absf(telemetry.speed) < DOOR_SPEED_EPS
 
 
+## The signed traction demand: the pedal's magnitude in the engaged reverser's direction (D +, R -,
+## N or P none), so a bridge N with the pedal down does not pull.
+static func reverser_throttle(throttle: float, gear_byte: int) -> float:
+	return absf(throttle) * Drivetrain.drive_sign(gear_byte)
+
+
 # --- consist setup / placement ---
 
 
 func _build_sim() -> void:
 	_sim = TrainSim.new()
-	var n := CAR_LENGTHS.size()
+	_sim.setup(car_masses(loco_mass, wagon_mass), rest_gaps(), _rail_length, _rail_closed, 0.0)
+
+
+## Per-car mass (kg), head first: the powered loco, then one trailer per remaining CAR_LENGTHS.
+static func car_masses(head: float, trailer: float) -> PackedFloat64Array:
 	var m := PackedFloat64Array()
+	for i in CAR_LENGTHS.size():
+		m.append(head if i == 0 else trailer)
+	return m
+
+
+## Rest centre-to-centre spacing (m) per adjacent pair: half of each body plus the coupler gap.
+static func rest_gaps() -> PackedFloat64Array:
 	var gaps := PackedFloat64Array()
-	m.resize(n)
-	for i in n:
-		m[i] = loco_mass if i == 0 else wagon_mass
-		if i < n - 1:
-			gaps.append((CAR_LENGTHS[i] + CAR_LENGTHS[i + 1]) * 0.5 + COUPLER_GAP)
-	_sim.setup(m, gaps, _rail_length, _rail_closed, 0.0)
+	for i in CAR_LENGTHS.size() - 1:
+		gaps.append((CAR_LENGTHS[i] + CAR_LENGTHS[i + 1]) * 0.5 + COUPLER_GAP)
+	return gaps
 
 
 ## Re-lays the consist at s = 0 with zeroed motion and snaps every car onto its arc position

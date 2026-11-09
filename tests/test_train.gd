@@ -6,27 +6,28 @@ const Sim := preload("res://src/vehicles/train/train_sim.gd")
 const Place := preload("res://src/vehicles/train/train_placement.gd")
 const TrainT := preload("res://src/vehicles/train/train_telemetry.gd")
 const TrainVeh := preload("res://src/vehicles/train/train.gd")
+const ContractScript := preload("res://src/bridge/contract.gd")
 
 const DELTA := 1.0 / 60.0
 
 
-# --- tractive effort: constant force then constant power ------------------------------------
+# --- tractive effort: the grip limit then constant power ------------------------------------
 
-func test_tractive_effort_constant_below_base_speed() -> void:
-	assert_float(Sim.tractive_effort(5.0, 1.0, 10.0, 1000.0, 10000.0)).is_equal_approx(1000.0, 1e-6)
-	assert_float(Sim.tractive_effort(0.0, 1.0, 10.0, 1000.0, 10000.0)).is_equal_approx(1000.0, 1e-6)
+func test_tractive_effort_grip_limited_at_low_speed() -> void:
+	assert_float(Sim.tractive_effort(5.0, 1.0, 1000.0, 10000.0)).is_equal_approx(1000.0, 1e-6)
+	assert_float(Sim.tractive_effort(0.0, 1.0, 1000.0, 10000.0)).is_equal_approx(1000.0, 1e-6)
 
 
-func test_tractive_effort_power_limited_above_base_speed() -> void:
-	# P/v = 10000/20 = 500 at twice base speed.
-	assert_float(Sim.tractive_effort(20.0, 1.0, 10.0, 1000.0, 10000.0)).is_equal_approx(500.0, 1e-6)
+func test_tractive_effort_power_limited_at_speed() -> void:
+	# P/v = 10000/20 = 500 at twice the 10 m/s corner where P/v meets the grip limit.
+	assert_float(Sim.tractive_effort(20.0, 1.0, 1000.0, 10000.0)).is_equal_approx(500.0, 1e-6)
 
 
 func test_tractive_effort_signed_by_reverser_not_speed() -> void:
-	assert_float(Sim.tractive_effort(5.0, -1.0, 10.0, 1000.0, 10000.0)).is_equal_approx(-1000.0, 1e-6)
-	assert_float(Sim.tractive_effort(-5.0, 1.0, 10.0, 1000.0, 10000.0)).is_equal_approx(1000.0, 1e-6)
-	assert_float(Sim.tractive_effort(5.0, 0.0, 10.0, 1000.0, 10000.0)).is_equal(0.0)
-	assert_float(Sim.tractive_effort(5.0, 0.5, 10.0, 1000.0, 10000.0)).is_equal_approx(500.0, 1e-6)
+	assert_float(Sim.tractive_effort(5.0, -1.0, 1000.0, 10000.0)).is_equal_approx(-1000.0, 1e-6)
+	assert_float(Sim.tractive_effort(-5.0, 1.0, 1000.0, 10000.0)).is_equal_approx(1000.0, 1e-6)
+	assert_float(Sim.tractive_effort(5.0, 0.0, 1000.0, 10000.0)).is_equal(0.0)
+	assert_float(Sim.tractive_effort(5.0, 0.5, 1000.0, 10000.0)).is_equal_approx(500.0, 1e-6)
 
 
 # --- davis resistance ----------------------------------------------------------------------
@@ -109,20 +110,30 @@ func _consist_sim() -> RefCounted:
 	return sim
 
 
-func test_full_service_brake_capacity_exceeds_traction() -> void:
-	# The real consist numbers (loco_mass, wagon_mass, CAR_LENGTHS.size()), not sim literals, so
-	# an edit to any of them moves this test with it — TrainSim's tuning is its own defaults,
-	# never set by TrainVehicle (train_sim.gd header). max_brake/max_tractive are read off a
-	# fresh TrainSim rather than retyped here for the same reason.
+## The consist TrainVehicle builds (`_build_sim`, through the same `car_masses` / `rest_gaps`) at
+## its loco_mass / wagon_mass defaults, so an edit to any of them moves the tests that use it.
+func _real_consist_sim() -> RefCounted:
 	var loco := TrainVeh.new()
-	var n := TrainVeh.CAR_LENGTHS.size()
-	var total_mass := loco.loco_mass + float(n - 1) * loco.wagon_mass
+	var m := TrainVeh.car_masses(loco.loco_mass, loco.wagon_mass)
 	loco.free()
-	var sim := Sim.new()
-	assert_bool(float(n) * sim.max_brake > sim.max_tractive).is_true()
+	var sim: RefCounted = Sim.new()
+	sim.setup(m, TrainVeh.rest_gaps(), 0.0, false, 0.0)
+	return sim
+
+
+func test_full_service_brake_capacity_exceeds_traction() -> void:
+	# The real consist (`_real_consist_sim`), not sim literals — TrainSim's tuning is its own
+	# defaults, never set by TrainVehicle (train_sim.gd header); max_brake and the grip limit are
+	# read off it rather than retyped here for the same reason.
+	var sim := _real_consist_sim()
+	var n: int = sim.masses.size()
+	var total_mass := 0.0
+	for m in sim.masses:
+		total_mass += m
+	assert_bool(float(n) * sim.max_brake > sim.adhesion_force()).is_true()
 	# ...and by a real margin: full service braking must hold back a meaningful fraction of a g,
 	# not an arithmetic coincidence that a heavier wagon could erase.
-	var decel_g := (float(n) * sim.max_brake) / total_mass / Sim.GRAVITY
+	var decel_g: float = (float(n) * sim.max_brake) / total_mass / Sim.GRAVITY
 	assert_float(decel_g).override_failure_message(
 			"full service brake only holds back %.3f g of the consist" % decel_g) \
 		.is_greater(0.05)
@@ -201,6 +212,48 @@ func test_traction_accelerates_and_grade_holds_back() -> void:
 	assert_bool(hill.v[0] < flat.v[0]).is_true()
 
 
+func test_adhesion_caps_the_head_pull() -> void:
+	var sim := _real_consist_sim()
+	var grip: float = sim.mu_adh * sim.masses[0] * Sim.GRAVITY
+	assert_float(sim.adhesion_force()).is_equal_approx(grip, 1e-6)
+	var flat := PackedFloat64Array([0.0, 0.0, 0.0, 0.0, 0.0])
+	sim.step(DELTA, 1.0, 0.0, 0.0, flat)
+	assert_float(sim.head_traction).is_equal_approx(grip, 1e-6)
+	# Past the corner (P / grip) the pull is the power's, under the grip limit.
+	var fast: float = 2.0 * sim.max_power() / grip
+	for i in sim.v.size():
+		sim.v[i] = fast
+	sim.step(DELTA, 1.0, 0.0, 0.0, flat)
+	assert_float(sim.head_traction).is_equal_approx(sim.max_power() / fast, 1.0)
+	assert_bool(sim.head_traction < grip).is_true()
+
+
+func test_a_grip_retune_after_setup_takes_effect() -> void:
+	var sim := _real_consist_sim()
+	sim.mu_adh = 0.2
+	sim.step(DELTA, 1.0, 0.0, 0.0, PackedFloat64Array([0.0, 0.0, 0.0, 0.0, 0.0]))
+	assert_float(sim.head_traction).is_equal_approx(0.2 * sim.masses[0] * Sim.GRAVITY, 1e-6)
+
+
+func test_the_consist_starts_inside_the_sourced_range() -> void:
+	# Starting acceleration: N700 0.72 m/s² (its maximum) to Class 345's 1 m/s² (docs/sources.md,
+	# The train's pull), the mean over the first 10 s of a full-throttle start on the flat. The
+	# consist's speed is its momentum over its mass, so the couplers' ringing does not move it.
+	var sim := _real_consist_sim()
+	var flat := PackedFloat64Array([0.0, 0.0, 0.0, 0.0, 0.0])
+	for _t in 600:
+		sim.step(DELTA, 1.0, 0.0, 0.0, flat)
+	var momentum := 0.0
+	var total_mass := 0.0
+	for i in sim.v.size():
+		momentum += sim.masses[i] * sim.v[i]
+		total_mass += sim.masses[i]
+	var mean_accel: float = momentum / total_mass / (600.0 * DELTA)
+	assert_float(mean_accel).override_failure_message(
+			"starting acceleration %.3f m/s² outside 0.72-1.0" % mean_accel) \
+		.is_between(0.72, 1.0)
+
+
 # --- placement: bogie-chord pose -----------------------------------------------------------
 
 func test_pose_from_bogies_midpoint_and_forward() -> void:
@@ -260,6 +313,49 @@ func test_brake_pipe_vents_and_recharges() -> void:
 	assert_bool(recharged > 2.0).is_true()
 
 
+# --- the brake acts through the pipe ---------------------------------------------------------
+
+func test_pipe_brake_demand_reads_the_pipe() -> void:
+	var charged := TrainT.BRAKE_PIPE_CHARGED
+	assert_float(TrainT.pipe_brake_demand(charged, 1.5)).is_equal(0.0)
+	assert_float(TrainT.pipe_brake_demand(charged - 0.75, 1.5)).is_equal_approx(0.5, 1e-9)
+	assert_float(TrainT.pipe_brake_demand(charged - 1.5, 1.5)).is_equal_approx(1.0, 1e-9)
+	# An emptied (emergency) pipe stays at full; an overcharged one brakes nothing.
+	assert_float(TrainT.pipe_brake_demand(0.0, 1.5)).is_equal(1.0)
+	assert_float(TrainT.pipe_brake_demand(charged + 0.5, 1.5)).is_equal(0.0)
+
+
+## Ticks (at DELTA) until the pipe-read brake demand from `pipe` under the lever `lever` reaches
+## `target`; -1 if it does not within 60 s.
+func _ticks_to_demand(pipe: float, lever: float, target: float) -> int:
+	for t in 3600:
+		if is_equal_approx(TrainT.pipe_brake_demand(pipe, TrainVeh.PIPE_APPLY_RANGE), target):
+			return t
+		pipe = TrainT.brake_pipe_step(pipe, lever, DELTA, TrainVeh.PIPE_DROP_RATE,
+				TrainVeh.PIPE_CHARGE_RATE, TrainVeh.PIPE_APPLY_RANGE)
+	return -1
+
+
+func test_full_service_builds_over_the_pipe_drop() -> void:
+	var expected := TrainVeh.PIPE_APPLY_RANGE / TrainVeh.PIPE_DROP_RATE / DELTA
+	var ticks := _ticks_to_demand(TrainT.BRAKE_PIPE_CHARGED, 1.0, 1.0)
+	assert_float(float(ticks)).is_equal_approx(expected, 1.0)
+
+
+func test_release_lets_go_over_the_pipe_recharge() -> void:
+	var expected := TrainVeh.PIPE_APPLY_RANGE / TrainVeh.PIPE_CHARGE_RATE / DELTA
+	var full := TrainT.BRAKE_PIPE_CHARGED - TrainVeh.PIPE_APPLY_RANGE
+	var ticks := _ticks_to_demand(full, 0.0, 0.0)
+	assert_float(float(ticks)).is_equal_approx(expected, 1.0)
+
+
+func test_full_service_stays_above_the_emergency_warn() -> void:
+	var file := FileAccess.open(ContractScript.CONTRACT_PATH, FileAccess.READ)
+	var data := ContractScript.ContractData.parse(file.get_as_text())
+	var warn := data.get_signal_def("brake_pipe", "out").warn
+	assert_float(TrainT.BRAKE_PIPE_CHARGED - TrainVeh.PIPE_APPLY_RANGE).is_greater(warn)
+
+
 func test_train_bridge_dict_has_real_values() -> void:
 	var t := TrainT.new()
 	t.motor_current = 800.0
@@ -289,3 +385,24 @@ func test_the_reverser_never_leaves_d1() -> void:
 	for i in 600:
 		dt.process(DELTA, 1.0, 0.0, i * 0.1, 1, true)
 		assert_int(dt.gear_byte).is_equal(1)
+
+
+## A bridge `gear` byte with `accel` held: the engaged reverser sets the pull, N gives none.
+func _bridge_traction(gear: int) -> float:
+	var spec: VehicleSpec = load("res://src/vehicles/train/train_spec.tres")
+	var dt := Drivetrain.new(spec)
+	dt.running = true
+	var input := InputRouter.arbitrate_bridge({"gear": gear, "accel": 1.0}, true)
+	for i in 30:
+		dt.process(DELTA, absf(input.throttle), 0.0, 0.0, input.gear_request, input.gear_auto)
+	var throttle := TrainVeh.reverser_throttle(input.throttle, dt.gear_byte)
+	return Sim.tractive_effort(0.0, throttle, 1000.0, 14000.0)
+
+
+func test_bridge_neutral_gives_no_traction() -> void:
+	assert_float(_bridge_traction(InputRouter.GEAR_N)).is_equal(0.0)
+
+
+func test_bridge_d_and_r_pull_their_own_way() -> void:
+	assert_float(_bridge_traction(InputRouter.GEAR_D1)).is_equal_approx(1000.0, 1e-6)
+	assert_float(_bridge_traction(InputRouter.GEAR_R)).is_equal_approx(-1000.0, 1e-6)

@@ -126,7 +126,7 @@ tyre means more grip.
 ### Bar
 A unit of pressure, about the pressure of the air around us at sea level. The game's truck air
 tanks fill up to 12 bar; the train's brake pipe sits at about 5.
-<!-- truck_telemetry.gd AIR_MAX_BAR 12; train.gd PIPE_APPLY_RANGE, 5 -> 2 bar -->
+<!-- truck_telemetry.gd AIR_MAX_BAR 12; train_telemetry.gd BRAKE_PIPE_CHARGED 5 -->
 
 ### Battery
 The vehicle's electrical store. Every vehicle publishes a battery voltage, from a simple labelled
@@ -159,8 +159,8 @@ point that depends on the brake type, the same pedal gives less braking. See [Br
 ### Brake pipe
 On a train, the air pipe that runs the length of the train and controls every carriage's brakes.
 Letting air out of it applies the brakes. The game publishes its pressure as `brake_pipe`, in bar:
-about 5 released, falling towards 2 at full brake.
-<!-- train.gd PIPE_APPLY_RANGE 3.0, 5 -> 2 bar -->
+about 5 released, falling towards 3.5 at full brake.
+<!-- train.gd PIPE_APPLY_RANGE 1.5, 5 -> 3.5 bar -->
 
 ### Brake temperature
 How hot a vehicle's brakes are. The game publishes the hottest brake as `brake_temp`, in degrees

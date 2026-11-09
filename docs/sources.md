@@ -560,6 +560,23 @@ understeer as above:
 | Expectation: tractor-based systems mitigated trailer wheel lift at higher speeds than trailer-only ones; box vans reached the highest speed before lift, the tanker similar | Soodoo, NHTSA [184] slide 6 | sourced |
 | Agricultural trailers: may brake themselves on on-board information; no requirement found | EU 2015/68 Annex I 2.2.2.19 [196] (Annexes II-XI, XIII not opened) | sourced (permissive); `farm_tipper` carries none (decision, the user, 2026-10-29) |
 
+*The train's brake pipe* (`train.gd` `PIPE_*`, `TrainTelemetry.pipe_brake_demand`; the train brake
+reads the pipe):
+
+| Figure | Basis | Grade |
+| --- | --- | --- |
+| Charged at 5 bar ("Regelbetriebsdruck von 5 bar"); full service at about 3.5 bar ("auf etwa 3,5 bar (Vollbremsung)"), so `PIPE_APPLY_RANGE` 1.5 bar, above the contract's 2.5 bar emergency warn; emergency empties it ("0 bar bei einer Schnell-, Not- oder Zwangsbremsung") | [202], section "Prinzipieller Aufbau und Wirkungsweise" | secondary (the page; UIC 540 not opened) |
+| Brake position P ("Bremszylinderfüllzeit" and "Lösezeit"): the cylinder fills in 3 to 5 seconds (to 95 % of its highest pressure) and releases in 15 to 20 seconds (below 0.3 / 0.4 bar); the pipe takes the middles (`PIPE_DROP_RATE`, `PIPE_CHARGE_RATE`) as one linear lag for pipe and cylinder | [202], section "Bremsstellungen und Umstelleinrichtungen" (citing UIC-Merkblatt 540, 2016) | secondary; the one-lag model an estimate (decision, the user, 2026-11-05) |
+
+*The train's pull* (`TrainSim.tractive_effort`, `mu_adh`, `power_to_mass`; `docs/rail.md`):
+
+| Figure | Basis | Grade |
+| --- | --- | --- |
+| The head's pull is capped at `Fmax = μW` with μ "typically on railways … between 0.35 and 0.5"; `mu_adh` takes 0.35, the low end (decision 1, the user, 2026-11-05); no figure there is labelled dry | [203], section "Effect of adhesion limits" (its EPFL source not opened) | secondary |
+| The curve's shape: "AB shows operation at the maximum tractive effort, the line BC shows continuous tractive effort that is inversely proportional to speed (constant power)"; the factor of adhesion μ·mg "determines the maximum torque that can be applied before the onset of wheelspin" | [204], sections "Tractive effort curves" and "Defining tractive effort" | secondary |
+| Power: the N700's "17,080 kW" for its "16-car set: 715 t", scaled per kilogram to the consist (`power_to_mass`, decision, the user, 2026-11-05); Class 345's "4,400 kW (at rail)" for "319 tonnes" is the weaker per-tonne alternative, not used | [205], [206] infoboxes | secondary |
+| Starting acceleration from 0.72 m/s² (N700, "maximum rate") to 1 m/s² (Class 345); the consist's is `mu_adh` × head mass / consist mass × g, about 0.92 m/s², pinned in range by `test_the_consist_starts_inside_the_sourced_range` | [205], [206] infoboxes | secondary (the range); computed (the consist's) |
+
 ## Reference list
 
 1. Ubysz, "Problems of rotational mass in passenger vehicles", Transport Problems 5(1), 2010, Table 1: http://transportproblems.polsl.pl/pl/archiwum/2010/zeszyt1/2010t5z1_04.pdf
@@ -763,3 +780,8 @@ understeer as above:
 199. Ervin, Barnes, Wolfe, "Liquid Cargo Shifting and the Stability of Cargo Tank Trucks", Vol. II, UMTRI-85-35/2, 1985: https://rosap.ntl.bts.gov/view/dot/88506/dot_88506_DS1.pdf
 200. Hong, Tran, Huynh, "A Study of the Effect of Baffles on Longitudinal Stability of Partly Filled Tank Truck Using CFD", Cao Thang Technical College: https://caothang.edu.vn/en/uploads//files/2020/Automotive%20engineering%20-%20A%20Study%20of%20the%20Effect%20of%20Baffles%20on%20Longitudinal%20Stability%20of%20Partly%20Filled%20Tank%20Truck%20Using%20CFD_revision.pdf
 201. TractorData, "John Deere 6175R Engine" (rated 2100 rpm, idle 850-2250 rpm): https://www.tractordata.com/farm-tractors/007/9/3/7930-john-deere-6175r-engine.html
+202. Wikipedia (de), "Druckluftbremse (Eisenbahn)", revision oldid 270202908, sections "Prinzipieller Aufbau und Wirkungsweise" and "Bremsstellungen und Umstelleinrichtungen" (secondary; cites UIC-Merkblatt 540, 7th ed., July 2016): https://de.wikipedia.org/wiki/Druckluftbremse_(Eisenbahn)
+203. Wikipedia, "Adhesion railway", section "Effect of adhesion limits" (secondary): https://en.wikipedia.org/wiki/Adhesion_railway
+204. Wikipedia, "Tractive effort", sections "Tractive effort curves" and "Defining tractive effort" (secondary): https://en.wikipedia.org/wiki/Tractive_effort
+205. Wikipedia, "N700 Series Shinkansen", infobox (secondary): https://en.wikipedia.org/wiki/N700_Series_Shinkansen
+206. Wikipedia, "British Rail Class 345", infobox (secondary): https://en.wikipedia.org/wiki/British_Rail_Class_345

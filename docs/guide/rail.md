@@ -30,13 +30,15 @@ The locomotive weighs about 50 t and each wagon about 34 t, so the whole train w
 ## Pulling: tractive effort
 
 The locomotive's electric motors pull with a force called its
-[tractive effort](glossary.md#tractive-effort). In the game it is the same at every speed up to
-about 14 m/s, 50 km/h: a steady pull of 320 kN, enough to accelerate the whole train at about
-1.7 m/s². Above that speed the motors reach the most power they can deliver, and the pull falls as
-the speed rises, so that pull times speed stays the same.
-<!-- TrainSim max_tractive 320000 N, base_speed 14 m/s, max_power 4480000 W (= max_tractive x base_speed); 320000 / 186000 = 1.72 m/s² -->
+[tractive effort](glossary.md#tractive-effort). At low speed the limit is the rails' grip: steel
+wheels on steel rails grip at about 0.35 times the weight on them, so the 50 t locomotive can pull
+with about 171.5 kN before its wheels would spin. That is enough to accelerate the whole train at
+about 0.9 m/s², like a real electric train. Above about 26 m/s, 93 km/h, the motors reach the most
+power they can deliver, about 4.4 MW, and the pull falls as the speed rises, so that pull times
+speed stays the same.
+<!-- TrainSim mu_adh 0.35, adhesion_force = mu_adh x loco mass x 9.8 = 171500 N; power_to_mass 17080/715 W/kg (N700) x 186000 kg = 4.44 MW; corner 4.44e6 / 171500 = 25.9 m/s; 171500 / 186000 = 0.92 m/s², test_the_consist_starts_inside_the_sourced_range 0.72-1.0 -->
 
-![A graph of force against speed. The pulling force is flat at 320 kN up to 14 m/s, then curves down. The running resistance of the five cars is a curve close to the bottom, about 11 kN at 40 m/s.](img/tractive-effort.svg "The locomotive's pull, and what the track and air take back. A train rolls very easily: its resistance is tiny beside its pull.")
+![A graph of force against speed. The pulling force is flat at about 171 kN up to 26 m/s, then curves down. The running resistance of the five cars is a curve close to the bottom, about 11 kN at 40 m/s.](img/tractive-effort.svg "The locomotive's pull, and what the track and air take back. A train rolls very easily: its resistance is tiny beside its pull.")
 <!-- img/tractive-effort.svg: TrainSim.tractive_effort and running resistance -->
 
 Only the locomotive pulls; the wagons are pulled.
@@ -73,10 +75,11 @@ the locomotive reports its force: positive when it is pulling, negative when it 
 
 A train's air brake works through a pipe that runs the length of the train. The pipe is kept
 full of air at about 5 bar; letting air out of it applies the brakes on every car. In the game,
-the brake lever brakes every car equally and at once, up to 90 kN each. The brake pipe's pressure
-is a separate, labelled model that drops as the brake is applied and recharges as it is released,
-so you can watch it; it does not delay the brakes.
-<!-- TrainSim max_brake 90000 N per car; train.gd _sim.step(delta, throttle, input.brake, ...) applies input.brake directly; TrainTelemetry.brake_pipe_step: PIPE_APPLY_RANGE 3 bar, PIPE_DROP_RATE 6 bar/s, PIPE_CHARGE_RATE 1.5 bar/s, charged 5 bar -->
+the brake lever lets air out of the pipe, and the brakes follow the pipe, every car equally, up
+to 90 kN each at full service, when the pipe is down to 3.5 bar. The pipe takes about 4 seconds
+to fall that far and about 17 seconds to fill back up, so a full brake builds over a few seconds
+and takes a while to let go: release early when you want to pull away.
+<!-- TrainSim max_brake 90000 N per car; train.gd: the pipe steps first (TrainTelemetry.brake_pipe_step), then _sim.step reads TrainTelemetry.pipe_brake_demand; PIPE_APPLY_RANGE 1.5 bar, PIPE_DROP_RATE = range / 4 s, PIPE_CHARGE_RATE = range / 17.5 s, charged 5 bar -->
 
 The parking brake holds the train on a slope, like a car's handbrake. It acts as friction: it
 stops a slow train and keeps it still, so a parked train does not creep down a grade.
@@ -93,7 +96,7 @@ motors get no power and the train cannot pull.
 The game models the electrical side simply, and labels it so: the motor current is in proportion
 to the pull, and the line voltage starts at 25 000 V and sags as the current rises, by about
 2000 V at 1000 A.
-<!-- train.gd AMPS_PER_NEWTON 1/320 (320 kN -> ~1000 A), MAX_MOTOR_CURRENT 1500, CATENARY_SAG_PER_AMP 2; TrainTelemetry.NOMINAL_CATENARY; contract catenary_volts "nominal 25 kV minus sag" -->
+<!-- train.gd RATED_MOTOR_CURRENT 1000 A at TrainSim.adhesion_force (full pull), MAX_MOTOR_CURRENT 1500, CATENARY_SAG_PER_AMP 2; TrainTelemetry.NOMINAL_CATENARY; contract catenary_volts "nominal 25 kV minus sag" -->
 
 ## The reverser and the doors
 
@@ -110,10 +113,12 @@ Press **O** to open the doors. They open only when the train is standing still.
 
 - **No points or junctions**: the loop has no branches.
 - **No signals, timetable or other trains.**
-- **No wheel slip**: the locomotive's pull is never limited by the rails' grip.
-- **No delay in the brakes**: a real air brake takes time to work along a long train.
+- **No wheel slip**: the pull stops at the rails' grip, and that grip is always the same; the
+  wheels never spin.
+- **One brake delay for the whole train**: on a real train the air takes time to travel along
+  the pipe, so the front cars brake a moment before the back ones.
 - **No wind**: the train ignores it.
-<!-- TrainSim has no adhesion term; WorldConditions.WIND_FAMILIES omits train; CLAUDE.md non-goals: traffic, spline-road junctions -->
+<!-- TrainSim.adhesion_force caps tractive_effort, mu_adh fixed, no wheelslip state; train.gd one _brake_pipe for every car; WorldConditions.WIND_FAMILIES omits train; CLAUDE.md non-goals: traffic, spline-road junctions -->
 
 ## What you see in sloppyCAN
 

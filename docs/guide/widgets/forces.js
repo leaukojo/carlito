@@ -255,11 +255,12 @@
     },
     train: {
       // train.gd loco_mass 50000, wagon_mass 34000, CAR_LENGTHS 6.72 then 4 x 6.24, COUPLER_GAP
-      // 0.3. train_sim.gd max_tractive 320000 to base_speed 14 m/s, then max_power 4.48 MW / v;
+      // 0.3. train_sim.gd tractive_effort: the grip limit mu_adh 0.35 x loco mass x g, then
+      // max_power() / v, max_power() = power_to_mass 17080/715 W/kg x consist mass (4.44 MW);
       // davis_a 400, davis_b 15, davis_c 0.8 per car; max_brake 90000 per car (Coulomb: holds at
       // rest); grade force -m g sin(atan grade). The game's train ignores wind (wind_field.gd).
       kind: 'train', label: 'Train', masses: [50000, 34000, 34000, 34000, 34000], lengths: [6.72, 6.24, 6.24, 6.24, 6.24],
-      gap: 0.3, maxTractive: 320000, baseSpeed: 14, maxPower: 4.48e6, davisA: 400, davisB: 15, davisC: 0.8, maxBrake: 90000,
+      gap: 0.3, muAdh: 0.35, powerToMass: 17080 / 715, davisA: 400, davisB: 15, davisC: 0.8, maxBrake: 90000,
       sliders: { speed: [0, 120, 50], slope: 4, steer: 'The rails do the steering.', load: 'The wagons carry no load in the game.', wind: 'The game\'s train ignores the wind.' }
     }
   };
@@ -613,7 +614,9 @@
     // Car centres, front (the loco) first, from x = 0 backwards.
     var centres = [], x = 0;
     V.lengths.forEach(function (len) { centres.push(x - len / 2); x -= len + V.gap; });
-    var te = s.throttle * (v <= V.baseSpeed ? V.maxTractive : Math.min(V.maxTractive, V.maxPower / v));
+    var grip = V.muAdh * V.masses[0] * G;
+    var power = V.powerToMass * M;
+    var te = s.throttle * (v > 0 ? Math.min(grip, power / v) : grip);
     var forces = [], arrows = [];
     var davis = moving ? -(V.davisA + V.davisB * v + V.davisC * v * v) : 0;
     var others = te, grades = [];
