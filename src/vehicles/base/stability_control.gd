@@ -55,9 +55,16 @@ const LAMP_RELEASE_DECEL := 0.5
 ## The corner model's K table of `spec` (`BalanceModel.k_curve` at REFERENCE_SPEED), snapped to
 ## TABLE_SNAP so a regen writes a stable file: `GroundDriveSpec.esc_reference_k`. Empty where the
 ## model is (no single front and rear pair). A point the snap lands on its neighbour's g is dropped.
-static func reference_table(spec: VehicleSpec) -> PackedVector2Array:
+## `laden_kg` > 0: the table at that live mass (`GroundDriveSpec.esc_laden_k`), its tyre laws still on
+## the spec's reference load (`RayWheel.reference_load`).
+static func reference_table(spec: VehicleSpec, laden_kg := 0.0) -> PackedVector2Array:
+	var at := spec
+	if laden_kg > 0.0:
+		at = spec.duplicate() as VehicleSpec
+		at.mass = laden_kg
 	var table := PackedVector2Array()
-	for p in BalanceModel.k_curve(BalanceModel.axles(spec, REFERENCE_SPEED), REFERENCE_SPEED):
+	for p in BalanceModel.k_curve(BalanceModel.axles(at, REFERENCE_SPEED, spec.mass),
+			REFERENCE_SPEED):
 		var point := Vector2(snappedf(p.x, TABLE_SNAP), snappedf(p.y, TABLE_SNAP))
 		if table.is_empty() or point.x > table[table.size() - 1].x:
 			table.append(point)

@@ -168,7 +168,9 @@ the cornering force needs.
 ## Balance
 
 Tyre load laws (`load_sensitivity`, `cornering_peak_load`: `GroundDriveSpec`
-comments), the bar split's LLTD and roll steer set the balance. `BalanceModel` predicts K, LLTD,
+comments), the bar split's LLTD and roll steer set the balance. The laws read a reference load
+fixed at spawn (`RayWheel.reference_load`: the even corner share, a trailer's its bogie's), so a
+hopper, an implement or a kingpin moves the tyre down its law. `BalanceModel` predicts K, LLTD,
 roll and the limit margin (rear capacity over front, less 1; + = front first), printed as `pred`.
 Its springs carry `m a h + m g h phi` (`BalanceModel._roll_state`): ~9 % more roll than the side
 force alone. Roll-steer angles read their `pred` within ~2 % at held steps below the limit; the

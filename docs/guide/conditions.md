@@ -68,7 +68,7 @@ level you load:
 
 A chosen current is a steady stream for the whole session, not a tide that turns. The STRONG
 wind is hard but still flyable: the drone can still make headway into it.
-<!-- WorldConditions: CURRENT_PERIOD_S 0, "A player-picked current is one steady push for the session"; STRONG wind comment on the drone; its plane remark is open_questions.md 8 -->
+<!-- WorldConditions: CURRENT_PERIOD_S 0, "A player-picked current is one steady push for the session"; STRONG wind comment on the drone -->
 
 ## Day and night
 

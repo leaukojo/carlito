@@ -26,7 +26,7 @@ const LLTD_G := 0.1
 ## `yaw_inertia` (declared `yaw_dynamic_index`; NAN where Jolt's: a caller fills it), `yaw_damp`
 ## (`angular_damping`; 0 = none); for `corner`, `grip_curve`, `crr`, `drag_area`, `side_area`,
 ## `aero_h` / `aero_arm`, `ackermann`, `lock` (the mean steer's at `speed`), `centre_bias`, `tcs`.
-static func axles(spec: VehicleSpec, speed := 0.0) -> Dictionary:
+static func axles(spec: VehicleSpec, speed := 0.0, ref_kg := 0.0) -> Dictionary:
 	var gd := spec.ground_drive
 	if gd == null or gd.wheel_positions.size() != 4 or spec.mass <= 0.0:
 		return {}
@@ -96,11 +96,12 @@ static func axles(spec: VehicleSpec, speed := 0.0) -> Dictionary:
 	# The aero centre over the road and ahead of the COM; ZERO acts through the live COM
 	# (`WheelDrive.apply_at`).
 	var at_com := gd.aero_centre == Vector3.ZERO
+	# `ref_kg` > 0: `ref` off that mass, a laden copy keeping its spec's (`RayWheel.reference_load`).
 	return {"front": front, "rear": rear, "mass": spec.mass, "h": h,
 			"side_area": gd.side_area,
 			"aero_h": h if at_com else gd.aero_centre.y + gd.rest_ride_height() - sag,
 			"aero_arm": 0.0 if at_com else spec.center_of_mass.z - gd.aero_centre.z,
-			"ref": spec.mass * G / 4.0, "sensitivity": gd.load_sensitivity,
+			"ref": (ref_kg if ref_kg > 0.0 else spec.mass) * G / 4.0, "sensitivity": gd.load_sensitivity,
 			"peak_slip": maxf(peak_slip, 1e-3), "peak_load": gd.cornering_peak_load,
 			"wheelbase": wheelbase, "yaw_inertia": yaw_inertia, "yaw_damp": yaw_damp,
 			"front_arm": a, "grip_curve": gd.grip_curve, "crr": gd.rolling_resistance,

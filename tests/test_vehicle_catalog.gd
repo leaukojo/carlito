@@ -424,18 +424,17 @@ func test_every_esc_body_rides_on_abs_and_carries_its_fresh_reference_table() ->
 				"%s: ESC with no corner model to calibrate on" % variant).is_false()
 		assert_bool(_table_stale(gd.esc_reference_k, fresh)).override_failure_message(
 				"%s: esc_reference_k is stale; fresh: %s" % [variant, fresh]).is_false()
-		# Each laden table likewise, off a copy at its mass.
+		# Each laden table likewise, at its mass on the spec's reference load.
 		for i in mini(gd.esc_laden_kg.size(), gd.esc_laden_k.size()):
-			var laden := spec.duplicate() as VehicleSpecScript
-			laden.mass = gd.esc_laden_kg[i]
-			fresh = StabilityControl.reference_table(laden)
+			var kg := gd.esc_laden_kg[i]
+			fresh = StabilityControl.reference_table(spec, kg)
 			# An empty table switches ESC off at that load (`WheelDrive.esc_step`).
 			assert_bool(fresh.is_empty()).override_failure_message(
 					"%s: ESC with no corner model to calibrate on at %.0f kg"
-					% [variant, laden.mass]).is_false()
+					% [variant, kg]).is_false()
 			assert_bool(_table_stale(gd.esc_laden_k[i], fresh)).override_failure_message(
 					"%s: esc_laden_k at %.0f kg is stale; fresh: %s"
-					% [variant, laden.mass, fresh]).is_false()
+					% [variant, kg, fresh]).is_false()
 
 
 ## Whether `shipped` is off `fresh`: another size, or a point past two snaps (another platform's
@@ -742,6 +741,30 @@ func test_every_ground_drive_declares_its_tyre_width() -> void:
 			assert_float(gd.axle_half_width(rear)).override_failure_message(
 					"%s declares no %s tyre_half_width" % [id, "rear" if rear else "front"]) \
 					.is_greater(0.0)
+
+
+func test_every_grip_curve_peaks_at_the_abs_and_tcs_slip() -> void:
+	# ABS and TC hold one fixed slip, not a peak-following one; `BalanceModel` (and the ESC tables
+	# built from it) read each curve's own peak. The two agree only while every curve peaks there.
+	var specs := {}
+	for variant in VehicleCatalog.VARIANTS:
+		specs[variant] = Specs.spec_of(variant)
+	for path: String in TRAILER_SPECS:
+		specs[path] = load(path)
+	for id: String in specs:
+		var gd: GroundDriveSpec = (specs[id] as VehicleSpecScript).ground_drive
+		if gd == null:
+			continue
+		var peak_slip := 0.0
+		var peak := -INF
+		for pt in gd.grip_curve:
+			if pt.y > peak:
+				peak = pt.y
+				peak_slip = pt.x
+		for held: float in [RayWheel.ABS_SLIP, RayWheel.TCS_SLIP]:
+			assert_float(peak_slip).override_failure_message(
+					"%s: grip curve peaks at slip %.3f, ABS/TC hold %.3f" % [id, peak_slip, held]) \
+					.is_equal_approx(held, 1e-5)
 
 
 ## The families with no running gear at all. The plane is deliberately NOT here: it stands on

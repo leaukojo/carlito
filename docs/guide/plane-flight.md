@@ -65,14 +65,16 @@ drops by itself, so the plane dives and gathers speed again. It never spins.
 lift more at a given speed, so the plane can fly slower for take-off and landing, at the price
 of much more drag. Press **B** to lower them fully, and again to raise them; sloppyCAN's `flaps`
 can set any position. They move slowly, taking about two and a half seconds to go fully down.
-<!-- plane.gd flap_lift_bonus 4 (on lift_coeff 13), flap_drag_bonus 40, flap_slew_rate 0.4 per s; key B -->
+<!-- plane.gd flap_lift_bonus 4 (on lift_coeff 13), flap_drag_bonus 2.0 (on drag_sq 10.5), flap_slew_rate 0.4 per s; key B -->
 
 ## Drag and the weathervane
 
-The air holds the plane back in proportion to its speed, and that drag sets its top speed,
-about 26 m/s, a little over 90 km/h. Sideways and up-and-down, the drag is much stronger, so the
-plane's path follows where its nose points within a fraction of a second.
-<!-- plane.gd drag_coeff 350 N per m/s ("sets top speed (~26 m/s)"), drag_lat and drag_vert 1600 -->
+The air holds the plane back. Like the lift, the drag grows with the square of the speed: twice
+the speed, four times the drag. That drag sets the top speed, about 26 m/s, a little over
+90 km/h. Slower, the drag falls away fast, so the plane has plenty of spare push for the take-off.
+Sideways and up-and-down, the game's drag is much stronger, so the plane's path follows where its
+nose points within a fraction of a second.
+<!-- plane.gd drag_coeff 80 N per m/s + drag_sq 10.5 N per (m/s)^2: 80v + 10.5v^2 = 9000 at 25.7 m/s (test_plane.gd); drag_lat and drag_vert 1600 N per m/s, linear -->
 
 The tail works like a weathervane's: if the nose points away from the direction of travel, the
 air pushes it back into line. That keeps the plane flying straight and makes it steady to fly.
@@ -104,13 +106,12 @@ a few degrees lifts it off. To land, close the throttle, lower the flaps to fly 
 the plane settle onto its main wheels. On the ground its brakes and parking brake work like a
 car's.
 
+The wing feels the speed through the air, not over the ground: taking off into a headwind
+shortens the run, and a tailwind gust on a slow approach eats into the margin above the stall.
+<!-- plane.gd _tick_extras: "Every aero term reads velocity relative to WindField: lift, stall and the flow angles are airspeed effects, so a headwind shortens the take-off and a crosswind crabs the nose." -->
+
 ## What the game leaves out
 
-- **Lift reads the speed over the ground, not through the air.** The game's code works out the
-  lift and the angle of attack from the plane's movement over the ground and uses the wind only
-  for drag, so a headwind does not shorten the take-off run or lower the stall speed as it would
-  in a real plane.
-  <!-- plane.gd _tick_extras: "Lift and the flow angles stay on absolute velocity: wind is here to be flown against, not to change the stall speed." See open_questions.md 8 -->
 - **No spins, no inverted flight**: below zero angle of attack the wing gives no lift, never
   negative lift.
 - **No fuel or engine failures**, no propeller torque that swings the nose.

@@ -167,8 +167,8 @@
 ; an UNSPECIFIED rear damper off the front-axle rule, which this axle's load outgrows.
 ;
 ; LOAD SENSITIVITY 0.08 IS WHERE THE PLATE LOAD SHOWS UP. RayWheel scales mu by
-; `1 - 0.08 * log2(load / corner_mass*g)`, and corner_mass excludes the fifth-wheel share
-; (truck/CLAUDE.md), so coupled to the box each drive wheel sits
+; `1 - 0.08 * log2(load / reference_load)`, and reference_load is the unit's own corner share
+; (`RayWheel.reference_load`), so coupled to the box each drive wheel sits
 ; ~2.35x its reference and holds ~90 % of mu_long while the steer axle is untouched: the laden
 ; drive axle really losing grip, the conservative direction. Re-measure with
 ; tools/measure_semi_launch.tscn.
@@ -240,10 +240,9 @@ tcs_equipped = true
 esc_equipped = true
 esc_reference_k = PackedVector2Array(0.1093, 0.4818, 0.2157, 0.543, 0.3166, 0.6446, 0.4098, 0.7866, 0.4928, 0.9797)
 ; Roll stability: the rig's first wheel lift on this unit's sensor at its coupled load (8000 kg +
-; the kingpin's 27.0 %: bobtail, flatbed, tipper, tanker, box), measured 2026-10-25 with
-; `measure_semi_launch -- semi trailer=<body> ramp` ("rig's first lift"), yaw ESC on and no roll
-; table: a re-measure empties this table first (`esc_off` drops the yaw too).
-esc_roll_lift_g = PackedVector2Array(8000, 0.6, 11775, 0.558, 13123, 0.515, 13662, 0.462, 14471, 0.437)
+; the kingpin's 27.0 %: bobtail, flatbed, tipper, tanker, box), measured 2026-11-06 with
+; `measure_semi_launch -- semi trailer=<body|bobtail> ramp noesc notrsp` ("rig's first lift").
+esc_roll_lift_g = PackedVector2Array(8000, 0.6, 11775, 0.556, 13123, 0.515, 13662, 0.466, 14471, 0.433)
 hill_hold = 1
 hill_hold_s = 3.0
 ; BRAKE HEAT (BrakeThermal; docs/sources.md § Brake heat): the 430 x 45 air disc's lump, every wheel.

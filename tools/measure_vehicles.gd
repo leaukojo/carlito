@@ -1664,12 +1664,12 @@ func _split_deficit(w: RayWheel, gd: GroundDriveSpec, budget: float, delta: floa
 	var slip_long := w.slip * signf(w.force_long)
 	var budget_lat: float = RayWheel.load_scaled_mu(
 			gd.mu_lat * w.axle_lat_grip * w.surface_grip,
-			w.suspension_force * w.tyre_share, w.corner_mass * 9.81, gd.load_sensitivity) \
+			w.suspension_force * w.tyre_share, w.reference_load, gd.load_sensitivity) \
 			* w.suspension_force
 	var curve := RayWheel.combined_slip_force(slip_long,
 			-vel.dot(forward.cross(w.contact_normal)) / slip_denom, budget, budget_lat,
 			gd.grip_curve, RayWheel.lateral_peak_slip(w.suspension_force * w.tyre_share,
-				w.corner_mass * 9.81, gd.load_sensitivity, gd.cornering_peak_load)).x
+				w.reference_load, gd.load_sensitivity, gd.cornering_peak_load)).x
 	var capped := curve - w.force_long if absf(curve) > w.long_cap else 0.0
 	_loss["tick_cap"] += capped * delta
 	_loss["under_peak" if w.slip < TcPedal.TARGET_SLIP else "past_peak"] += \
@@ -2579,11 +2579,10 @@ func _axle_saturation(rear: bool) -> float:
 	for w in _car.wheels:
 		if w.is_rear != rear or not w.in_contact:
 			continue
-		var ref_load: float = w.corner_mass * 9.81
 		var budget_long := _long_budget(w, gd)
 		var budget_lat: float = RayWheel.load_scaled_mu(
 				gd.mu_lat * w.axle_lat_grip * w.surface_grip,
-				w.suspension_force * w.tyre_share, ref_load, gd.load_sensitivity) * w.suspension_force
+				w.suspension_force * w.tyre_share, w.reference_load, gd.load_sensitivity) * w.suspension_force
 		total += Vector2(w.force_long / maxf(budget_long, 1.0),
 				w.force_lat / maxf(budget_lat, 1.0)).length() * budget_lat
 		weight += budget_lat
@@ -2593,7 +2592,7 @@ func _axle_saturation(rear: bool) -> float:
 ## A contact's longitudinal grip budget (N): load-scaled `mu_long` times its spring load.
 static func _long_budget(w: RayWheel, gd: GroundDriveSpec) -> float:
 	return RayWheel.load_scaled_mu(gd.mu_long * w.surface_grip, w.suspension_force,
-			w.corner_mass * 9.81, gd.load_sensitivity) * w.suspension_force
+			w.reference_load, gd.load_sensitivity) * w.suspension_force
 
 
 func _report_cornering(skipped: bool) -> void:

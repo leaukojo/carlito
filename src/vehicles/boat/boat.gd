@@ -10,6 +10,11 @@ extends BaseVehicle
 
 const RUDDER_SPEED_REF := 6.0   ## m/s of forward flow that gives full rudder authority
 const RUDDER_PROP_WASH := 0.5   ## authority contributed by full throttle prop wash
+## A displacement hull's wave-making wall: the Froude number where resistance climbs steeply
+## (docs/sources.md § Hull resistance), and how steeply. The exponent is a labelled honest model,
+## not a towing-tank curve: the `drag_sq` term doubles at hull speed and triples by Fn 0.48.
+const HULL_SPEED_FROUDE := 0.4
+const WAVE_EXPONENT := 4.0
 
 @export_group("Buoyancy")
 ## Float probe positions, body space (bow = -Z). 4-6 probes.
@@ -30,7 +35,12 @@ const RUDDER_PROP_WASH := 0.5   ## authority contributed by full throttle prop w
 @export var rudder_torque := 7000.0       ## N*m yaw torque at full rudder + full authority
 
 @export_group("Hull drag")
-@export var drag_long := 380.0            ## N per m/s forward (sets top speed vs thrust)
+## Forward resistance per law (docs/boat.md § Hull drag). A planing hull is linear (`drag_long`
+## alone sets top speed vs thrust); a displacement hull adds `drag_sq * v|v|` under the wave wall
+## its `waterline_length` places. 0 / 0 = planing.
+@export var drag_long := 380.0            ## N per m/s forward
+@export var drag_sq := 0.0                ## N per (m/s)^2 forward, under the wave wall
+@export var waterline_length := 0.0       ## m; sets hull speed (HULL_SPEED_FROUDE); 0 = no wall
 @export var drag_lat := 2600.0            ## N per m/s sideways (the keel)
 @export var drag_yaw := 5000.0            ## N*m per rad/s of yaw
 @export var keel_offset := -0.65          ## body-space Y where lateral drag acts (roll in turns)
@@ -84,7 +94,6 @@ var _nav_mode: int = BoatAutopilot.STANDBY  ## what the pilot is DOING (contract
 var _heading_target := 0.0              ## deg the pilot steers to (contract 'heading_target')
 ## The rudder this hull applied last tick, which the autopilot re-slews from. See _autopilot.
 var _helm := 0.0
-var _yaw_inertia := 1000.0
 var _waters: Array[WaterSurface] = []  ## the level's water bodies, collected once
 var _waters_found := false             ## one-shot guard for the water scan
 var _sail_node: Node3D = null          ## the mesh `sail_pivot` names, or null
@@ -96,13 +105,6 @@ func _make_telemetry() -> VehicleTelemetry:
 
 func _ready() -> void:
 	super._ready()
-	# Yaw inertia proxy from the footprint the probes span; sizes the yaw-damper clamp.
-	var length := 0.0
-	var width := 0.0
-	for p in probe_points:
-		length = maxf(length, absf(p.z) * 2.0)
-		width = maxf(width, absf(p.x) * 2.0)
-	_yaw_inertia = VehicleMath.inertia_of(spec.mass, length, width)
 	if not sail_pivot.is_empty():
 		_sail_node = get_node_or_null(sail_pivot) as Node3D
 
@@ -160,13 +162,15 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 		var v_long := through_water.dot(fwd)
 		# Hull drag: forward resistance at the COM, the keel's lateral resistance at keel_offset
 		# (the hull heels in turns). Both against the WATER, not the ground.
-		apply_central_force(fwd * VehicleMath.damped_force(v_long, drag_long, spec.mass, delta))
+		apply_central_force(fwd * VehicleMath.damped_force(v_long, drag_long, spec.mass, delta,
+				wave_drag_sq(v_long, drag_sq, waterline_length, _gravity)))
 		var v_lat := through_water.dot(right)
 		apply_force(right * VehicleMath.damped_force(v_lat, drag_lat, spec.mass, delta),
 				up * keel_offset)
 		# Yaw stays on the RAW angular velocity: a uniform stream exerts no yaw moment.
 		var yaw_rate := angular_velocity.dot(up)
-		apply_torque(up * VehicleMath.damped_force(yaw_rate, drag_yaw, _yaw_inertia, delta))
+		apply_torque(up * VehicleMath.damped_force(yaw_rate, drag_yaw,
+				VehicleMath.moment_about(self, up), delta))
 
 		# Windage against the air; the lateral term acts at windage_offset. Not
 		# VehicleMath.air_damper: its `axis` masks WORLD space, and this is a BODY-frame split.
@@ -336,6 +340,22 @@ static func aground_now(has_water: bool, mean_depth: float, vert_speed: float,
 ## Seconds the aground condition has held continuously; drops to zero the moment it breaks.
 static func aground_hold(prev_s: float, now: bool, delta: float) -> float:
 	return prev_s + maxf(delta, 0.0) if now else 0.0
+
+
+## Hull speed (m/s) of a displacement waterline: `HULL_SPEED_FROUDE * sqrt(g * L)`; 0 for a
+## planing hull (`waterline_length` 0).
+static func hull_speed(p_waterline_length: float, g: float) -> float:
+	return HULL_SPEED_FROUDE * sqrt(maxf(g * p_waterline_length, 0.0))
+
+
+## The forward `v|v|` coefficient at `speed`: `drag_sq`, raised past hull speed by the wave wall,
+## `(1 + (|v| / v_hull)^WAVE_EXPONENT)`. A planing hull (`waterline_length` 0) has no wall.
+static func wave_drag_sq(speed: float, p_drag_sq: float, p_waterline_length: float,
+		g: float) -> float:
+	var v_hull := hull_speed(p_waterline_length, g)
+	if v_hull <= 0.0:
+		return p_drag_sq
+	return p_drag_sq * (1.0 + pow(absf(speed) / v_hull, WAVE_EXPONENT))
 
 
 ## Signed thrust fraction: forward throttle passes through, reverse is scaled down.

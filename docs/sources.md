@@ -577,6 +577,13 @@ reads the pipe):
 | Power: the N700's "17,080 kW" for its "16-car set: 715 t", scaled per kilogram to the consist (`power_to_mass`, decision, the user, 2026-11-05); Class 345's "4,400 kW (at rail)" for "319 tonnes" is the weaker per-tonne alternative, not used | [205], [206] infoboxes | secondary |
 | Starting acceleration from 0.72 m/s² (N700, "maximum rate") to 1 m/s² (Class 345); the consist's is `mu_adh` × head mass / consist mass × g, about 0.92 m/s², pinned in range by `test_the_consist_starts_inside_the_sourced_range` | [205], [206] infoboxes | secondary (the range); computed (the consist's) |
 
+*Hull resistance* (`BoatVehicle.wave_drag_sq`, `HULL_SPEED_FROUDE`; `docs/boat.md` § Hull drag):
+
+| Figure | Basis | Grade |
+| --- | --- | --- |
+| The displacement wall at Fn 0.40: "When the Froude number grows to ~0.40 (speed/length ratio ~1.35), the wave-making resistance increases further", peaking "at a Froude number of ~0.50"; the rise is smooth, "often with no noticeable inflection at hull speed". The exponent 4 is not sourced | [207], sections on the Froude number and the lead | secondary; the exponent an estimate |
+| Planing hulls stay linear: Crouch's `V = C / (DISP/HP)^0.5` (knots, horsepower at the propeller), "it doesn't take into account the boat length, as that doesn't matter with planing boats"; V² ∝ power means resistance = power / V ∝ V | [208] | secondary (quoted "verbatim from mp"); the linear law computed |
+
 ## Reference list
 
 1. Ubysz, "Problems of rotational mass in passenger vehicles", Transport Problems 5(1), 2010, Table 1: http://transportproblems.polsl.pl/pl/archiwum/2010/zeszyt1/2010t5z1_04.pdf
@@ -785,3 +792,5 @@ reads the pipe):
 204. Wikipedia, "Tractive effort", sections "Tractive effort curves" and "Defining tractive effort" (secondary): https://en.wikipedia.org/wiki/Tractive_effort
 205. Wikipedia, "N700 Series Shinkansen", infobox (secondary): https://en.wikipedia.org/wiki/N700_Series_Shinkansen
 206. Wikipedia, "British Rail Class 345", infobox (secondary): https://en.wikipedia.org/wiki/British_Rail_Class_345
+207. Wikipedia, "Hull speed", oldid 1383394222 (secondary; no inline citations): https://en.wikipedia.org/wiki/Hull_speed
+208. J. F. Hughes, boats FAQ, "What's a formula for top speed?", 1997 (secondary): https://cs.brown.edu/~jhughes/boats/FAQ/node42.html

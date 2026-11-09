@@ -199,10 +199,7 @@ func _pose_rig() -> void:
 func _retarder_rating_total() -> float:
 	if spec.ground_drive == null or not spec.ground_drive.retarder_equipped:
 		return 0.0
-	var count := 0
-	for w in wheels:
-		if w.is_rear and w.driven:
-			count += 1
+	var count := int(BrakeSizing.axle_geometry(spec)["n_rear"]) if spec.ground_drive.driven_rear else 0
 	return Drivetrain.retarder_rating(spec) * count
 
 

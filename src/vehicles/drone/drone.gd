@@ -45,11 +45,6 @@ const ROTOR_VISUAL_SPIN := 0.005
 ## air that is velocity itself (`tests/test_wind.gd`).
 @export var horizontal_drag := 1.0
 
-## Body footprint (m); only used to derive the moment of inertia the torque clamps need.
-@export var body_extents := Vector3(1.1, 0.2, 1.1)
-
-var _inertia := 0.6   ## representative moment (kg*m^2) for the one-tick torque clamps
-
 ## The four motors (`drone_motors.gd`; chain is pure statics in `drone_propulsion.gd`). Built in _ready.
 var _motors: DroneMotors
 ## The pack's remembered values (coulomb accumulator, temperature); laws in `drone_pack.gd`.
@@ -155,15 +150,13 @@ func release_level_items() -> void:
 		_hook.reset(self)
 
 
-## Writes the current mass/COM onto the body and re-derives inertia and both collectives from
-## them: this is where a payload is FELT. Called at _ready and on every hook change, never per tick.
+## Writes the current mass/COM onto the body (the solver re-derives the tensor) and re-derives both
+## collectives from them: this is where a payload is FELT. Called at _ready and on every hook change, never per tick.
 func _apply_carried_mass() -> void:
 	var carried := DronePayload.carried_mass(_base_mass, _hook.payload_mass())
 	mass = carried
 	center_of_mass = DronePayload.carried_com(
 			_base_com, _hook.hook_local(), _base_mass, _hook.payload_mass())
-	# Box-footprint inertia, m (w^2 + d^2) / 12: the clamp basis for the torque dampers.
-	_inertia = VehicleMath.inertia_of(carried, body_extents.x, body_extents.z)
 	_hover_collective = clampf(
 			lift_thrust(carried, _gravity, 0.0, climb_force, max_thrust)
 			/ maxf(max_thrust, 1e-6), 0.0, 1.0)
@@ -430,7 +423,9 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 		var target_up := level_target_up(body_basis, tilt)
 		var perp := angular_velocity - up * angular_velocity.dot(up)
 		var att := (align_torque(up, target_up, attitude_stiffness)
-				+ VehicleMath.clamped_damper(perp, attitude_damping, _inertia, delta)).limit_length(max_attitude_torque)
+				+ VehicleMath.clamped_damper(perp, attitude_damping,
+						VehicleMath.moment_about(self, perp.normalized()), delta)) \
+				.limit_length(max_attitude_torque)
 		# Only the two axes the mixer can produce; `att` has no body-Y component to drop.
 		roll_demand = DroneProp.torque_to_demand(att.dot(body_basis.z), _motors.arm_x, max_thrust)
 		pitch_demand = DroneProp.torque_to_demand(att.dot(body_basis.x), _motors.arm_z, max_thrust)
@@ -438,7 +433,7 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 		# Yaw rate toward the commanded rate about body up; manual in every mode. steer negative =
 		# left but +Y torque yaws left, so the sign flips (the boat's rudder convention).
 		var yaw_t := VehicleMath.yaw_torque(-_steer * max_yaw_rate, angular_velocity.dot(up),
-				yaw_gain, _inertia, delta, max_yaw_torque)
+				yaw_gain, VehicleMath.moment_about(self, up), delta, max_yaw_torque)
 		yaw_demand = DroneProp.torque_to_demand(yaw_t, prop_torque_ratio, max_thrust)
 
 		if motors_cut:

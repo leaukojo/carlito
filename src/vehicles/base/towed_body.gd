@@ -115,12 +115,15 @@ func _ready() -> void:
 	if visuals.size() != gd.wheel_positions.size():
 		push_error("%s: %d wheel visuals for %d spec wheel positions" % [
 				name, visuals.size(), gd.wheel_positions.size()])
-	# Static per-corner share of this trailer's own mass (`RayWheel.corner_mass`).
+	# Static per-corner share of this trailer's own mass (`RayWheel.corner_mass`, the clamps), and
+	# of what its bogie carries, the coupling taking the rest (`RayWheel.reference_load`, the tyre laws).
 	var corner_mass := spec.mass / maxf(1.0, gd.wheel_positions.size())
+	var ref_load := corner_mass * (1.0 - kingpin_share()) * BrakeSizing.G
 	for i in gd.wheel_positions.size():
 		var visual: Node3D = visuals[i] if i < visuals.size() else null
 		# Undriven and unsteered: a semi-trailer axle only ever brakes.
 		var wheel := RayWheel.new(gd.wheel_positions[i], false, false, visual, corner_mass)
+		wheel.reference_load = ref_load
 		wheel.apply_suspension(gd)
 		# A towed body keeps its stock tyre: no swap reaches it.
 		wheel.apply_tyre(gd.tyre, gd.tyre)
@@ -196,10 +199,8 @@ func tick_towed(brake01: float, handbrake01: float, delta: float,
 func _sense_lateral(delta: float) -> void:
 	var velocity := linear_velocity
 	if is_finite(_last_velocity.x):
-		var gravity := get_gravity()
-		var level_up := -gravity.normalized() if gravity != Vector3.ZERO else Vector3.UP
-		var left := level_up.cross(-global_basis.z).normalized()
-		var raw := ((velocity - _last_velocity) / delta).dot(left)
+		var raw := VehicleMath.level_lateral_accel(velocity, _last_velocity, global_basis,
+				get_gravity(), delta)
 		accel_lat = lerpf(accel_lat, raw, 1.0 - exp(-BaseVehicle.ACCEL_SMOOTH * delta))
 	_last_velocity = velocity
 

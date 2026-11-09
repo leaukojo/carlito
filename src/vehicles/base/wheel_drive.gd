@@ -311,7 +311,8 @@ static func parking_application(handbrake01: float, spring01: float) -> float:
 ## Re-share the body's LIVE mass over the corners. The three one-tick RayWheel clamps are sized
 ## off `corner_mass`, so BaseVehicle.set_live_mass (the refuse truck's hopper) calls this, or the
 ## clamps stay sized for the empty vehicle and bite on forces the laden body legitimately makes.
-## The pedal map anchors on the same live mass (`pedal_application`).
+## The tyre laws' `reference_load` stays the spec's. The pedal map anchors on the live mass
+## (`pedal_application`).
 func set_corner_mass_from(live_mass: float) -> void:
 	_live_mass = live_mass
 	var corner_mass := live_mass / maxf(1.0, wheels.size())
@@ -443,7 +444,7 @@ func lab_axle_diff_fitted(gd: GroundDriveSpec) -> bool:
 func esc_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 		drivetrain: Drivetrain, ground_speed: float, delta: float) -> void:
 	var velocity := body.linear_velocity
-	var accel := (velocity - _esc_velocity) / delta if is_finite(_esc_velocity.x) else Vector3.ZERO
+	var prev_velocity := _esc_velocity
 	_esc_velocity = velocity
 	if not gd.esc_equipped or input.esc_off or esc_reference_k.is_empty():
 		_esc_torque = Vector4.ZERO
@@ -460,9 +461,8 @@ func esc_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 	esc_switched_off = false
 	var basis := body.global_basis
 	var gravity := body.get_gravity()
-	var level_up := -gravity.normalized() if gravity != Vector3.ZERO else Vector3.UP
-	var left := level_up.cross(-basis.z).normalized()
-	var lat_acc := accel.dot(left)
+	var level_up := VehicleMath.level_up(gravity)
+	var lat_acc := VehicleMath.level_lateral_accel(velocity, prev_velocity, basis, gravity, delta)
 	var yaw_rate := body.angular_velocity.dot(basis.y)
 	var speed := signf(ground_speed) * (velocity - level_up * velocity.dot(level_up)).length()
 	_slip_est = StabilityControl.slip_step(_slip_est, lat_acc, yaw_rate, speed, delta)
@@ -501,7 +501,7 @@ func static_drive_grip(gd: GroundDriveSpec, fwd_drive: bool) -> float:
 		if not w.in_contact or not driven:
 			continue
 		grip += w.suspension_force * RayWheel.load_scaled_mu(gd.mu_long * w.surface_grip,
-				w.suspension_force, w.corner_mass * 9.81, gd.load_sensitivity)
+				w.suspension_force, w.reference_load, gd.load_sensitivity)
 	return grip
 
 

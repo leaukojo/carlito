@@ -37,7 +37,7 @@ const BATTERY_RESTING := 12.6    ## V engine off
 const BATTERY_CHARGING := 14.2   ## V engine running (alternator), before the lamps' droop
 const BATTERY_LAMP_DROOP := 0.6  ## V the charging voltage sags with every fitted lamp lit (a game figure)
 
-const GRAVITY := 9.8  ## m/s^2, for the suspension-force -> kilograms read
+const GRAVITY := BrakeSizing.G  ## m/s^2, for the suspension-force -> kilograms read
 
 ## PTO power over the crank power it takes: ASAE D497.4's "PTO power ~0.90 of net flywheel power",
 ## the tractor's driveline figure, taken for the truck's gear PTO too (an estimate there). Sources:

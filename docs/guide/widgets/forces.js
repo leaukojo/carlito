@@ -104,7 +104,7 @@
     thrust: { name: 'Propeller thrust', colour: 'var(--fig-green)', page: 'plane-flight', pageTitle: 'Plane flight',
       text: 'The propeller pulls the plane forward. In the game it depends on the throttle only, not on the speed.' },
     airdrag: { name: 'Air drag', colour: 'var(--fig-muted)', page: 'plane-flight', pageTitle: 'Plane flight',
-      text: 'The air holds the plane back. In the game this grows in step with the airspeed, so a headwind adds to it.' },
+      text: 'The air holds the plane back. Like the lift, it grows with the square of the airspeed, so a headwind adds to it.' },
     rotor: { name: 'Rotor thrust', colour: 'var(--fig-green)', page: 'drone-flight', pageTitle: 'Drone flight',
       text: 'Each rotor pushes air down and is pushed up along its own axis. Tilting the drone tips that push, so part of it moves the drone along.' },
     dronedrag: { name: 'Air drag', colour: 'var(--fig-muted)', page: 'drone-flight', pageTitle: 'Drone flight',
@@ -234,12 +234,13 @@
       // (brake_bias_front -1), mu_long 1.05 (GroundDriveSpec default), rolling_resistance 0
       // (GroundDriveSpec default), no ABS. plane.gd lift_coeff 13, lift_cap 16000, stall_speed 13,
       // full_lift_speed 20 (lift_frac: smoothstep between), max_thrust 9000 (rpm lerps idle to
-      // redline with the throttle, so thrust = throttle x 9000 once spooled), drag_coeff 350,
-      // drag_lat 1600, body_extents (7, 1.5, 5.5). Lift uses the ground speed along the nose with
-      // the wings level (aoa_factor 1); drag uses the air speed (plane.gd: wind moves the drag,
-      // not the lift).
+      // redline with the throttle, so thrust = throttle x 9000 once spooled), drag_coeff 80 plus
+      // drag_sq 10.5 (forward: 80u + 10.5u|u|, VehicleMath.damped_force's coeff_sq), drag_lat 1600
+      // (linear); span 7 and length 5.5 size the drawing only. Lift and drag both use the air speed
+      // along the nose (plane.gd _tick_extras: every aero term reads velocity relative to
+      // WindField), with the wings level (aoa_factor 1).
       kind: 'plane', label: 'Plane', mass: 800, comY: -0.2,
-      liftCoeff: 13, liftCap: 16000, stall: 13, fullLift: 20, maxThrust: 9000, dragCoeff: 350, dragLat: 1600,
+      liftCoeff: 13, liftCap: 16000, stall: 13, fullLift: 20, maxThrust: 9000, dragCoeff: 80, dragSq: 10.5, dragLat: 1600,
       wheels: [{ name: 'nose wheel', x: 2, y: 0 }, { name: 'right main wheel', x: -0.6, y: -1.1 }, { name: 'left main wheel', x: -0.6, y: 1.1 }],
       wheelR: 0.22, groundY: -0.52, brakeT: 900, mu: 1.05, span: 7, length: 5.5,
       sliders: { speed: [0, 120, 70], steer: 'In the air, steering banks the plane; this page shows it flying straight.', slope: 'The page shows the plane level.', load: 'The plane carries no load in the game.' }
@@ -517,10 +518,11 @@
     var m = V.mass, W = m * G, v = s.speed / 3.6;
     var wind = windVector(s);
     var ux = v - wind.x, uy = -wind.y;
-    var t = clamp((v - V.stall) / (V.fullLift - V.stall), 0, 1);
-    var lift = Math.min(V.liftCoeff * v * v, V.liftCap) * t * t * (3 - 2 * t);  // PlaneVehicle.lift_force
+    var air = Math.max(ux, 0);
+    var t = clamp((air - V.stall) / (V.fullLift - V.stall), 0, 1);
+    var lift = Math.min(V.liftCoeff * air * air, V.liftCap) * t * t * (3 - 2 * t);  // PlaneVehicle.lift_force
     var thrust = s.throttle * V.maxThrust;
-    var drag = -V.dragCoeff * ux, dragY = -V.dragLat * uy;
+    var drag = -(V.dragCoeff + V.dragSq * Math.abs(ux)) * ux, dragY = -V.dragLat * uy;
     var onGround = lift < W;
     var gearLoad = onGround ? W - lift : 0;
     var xn = V.wheels[0].x, xm = V.wheels[1].x;
@@ -559,7 +561,7 @@
     arrows.push({ id: 'net', view: 'side', x: 0, y: V.comY, fx: netX, fy: netUp, where: 'the centre of mass' });
     arrows.push({ id: 'net', view: 'top', x: 0, y: 0, fx: netX, fy: dragY, where: 'the centre of mass' });
     if (locked) notes.push('A wheel locks: with no ABS, its grip falls to 0.8 of the peak.');
-    if (v < V.stall && v > 1) notes.push('Below the stall speed the wing gives no lift at all.');
+    if (air < V.stall && v > 1) notes.push('Below the stall speed the wing gives no lift at all.');
     if (!onGround) notes.push('Lift is more than the weight: the plane leaves the ground.');
     else if (lift > 0) notes.push('The wing already carries ' + Math.round(lift / W * 100) + ' % of the weight; the wheels carry the rest.');
     return { arrows: arrows, curls: [], net: { x: netX, y: netUp }, mass: m, notes: notes, sideRot: 0, airborne: !onGround };

@@ -114,6 +114,30 @@ func test_lift_force_capped_and_no_backward_lift() -> void:
 	assert_float(P.lift_force(-30.0, 10.0, 16000.0, 1.0)).is_equal(0.0)
 
 
+# --- forward drag: the shipped exports ------------------------------------------
+
+## Full thrust meets the forward drag (linear floor + v|v|) at the documented ~25.7 m/s top speed.
+func test_the_shipped_drag_tops_out_just_above_the_trim_speed() -> void:
+	var plane: PlaneVehicle = P.new()
+	var drag := func(v: float, flaps: float) -> float:
+		return -VehicleMath.damped_force(v, plane.drag_coeff, PlaneSpec.mass, DELTA,
+				plane.drag_sq + plane.flap_drag_bonus * flaps)
+	var lo := 0.0
+	var hi := 60.0
+	for _i in 60:
+		var v := (lo + hi) * 0.5
+		if drag.call(v, 0.0) < plane.max_thrust:
+			lo = v
+		else:
+			hi = v
+	assert_float(lo).is_between(25.4, 26.0)
+	# Full flaps cost 800 N at 20 m/s, the approach.
+	assert_float(drag.call(20.0, 1.0) - drag.call(20.0, 0.0)).is_equal_approx(800.0, 1.0)
+	# The square term carries most of the drag at cruise.
+	assert_float(plane.drag_sq * lo * lo / float(drag.call(lo, 0.0))).is_greater(0.75)
+	plane.free()
+
+
 # --- flow angles, AoA lift factor, weathervane ---------------------------------
 
 func test_flow_angle_zero_without_forward_flow() -> void:

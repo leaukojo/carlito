@@ -57,7 +57,7 @@ var retarder_torque_applied: float:
 var _steer := 0.0
 ## World gravity, read once at _ready. Read by the free bodies (boat, drone); a wheeled body gets
 ## weight via the springs.
-var _gravity := 9.8
+var _gravity := BrakeSizing.G
 var _grip_terrains: Array[Node] = []  ## painted terrains the wheels sample for surface grip
 var _terrains_found := false           ## one-shot guard for the terrain scan below
 var _prev_velocity := Vector3.ZERO  ## last tick's linear_velocity, for accel/impact
@@ -81,7 +81,7 @@ func _ready() -> void:
 	collision_mask = Layers.WORLD
 	telemetry = _make_telemetry()
 	telemetry.speed_limit = roundi(spec.speed_limit_kmh)  # copied once, not republished per tick
-	_gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8))
+	_gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity", BrakeSizing.G))
 	mass = spec.mass
 	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
 	center_of_mass = spec.center_of_mass
@@ -407,7 +407,8 @@ func reset_session_state() -> void:
 
 
 ## The one runtime `mass` write for a wheeled body: the RayWheel one-tick clamps are sized off
-## `corner_mass`, so the corners are re-shared in the same call (WheelDrive.set_corner_mass_from).
+## `corner_mass`, so the corners are re-shared in the same call (WheelDrive.set_corner_mass_from;
+## the tyre laws' reference stays the spec's, `RayWheel.reference_load`).
 ## `com` is the live centre of mass (body space) of a carried load (the tractor's implement);
 ## without one, the spec's. A body that declares its yaw refuses one: `index · m · a · b` is sized
 ## off the spec COM, and a rear load would shrink `b` and LOWER the yaw moment.

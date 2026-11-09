@@ -112,7 +112,7 @@ extends Resource
 ## only: the longitudinal budget, the brake split and the launch keep one tyre's figures.
 @export var rear_twin_tyres := false
 ## Fractional mu lost per DOUBLING of load past the corner's static share
-## (`RayWheel.corner_mass * g`); 0 = grip exactly linear in load, so weight transfer cannot move
+## (`RayWheel.reference_load`); 0 = grip exactly linear in load, so weight transfer cannot move
 ## the balance. Car 0.10, truck/van/trailers 0.08, tractor 0.12 (soft flotation tyres), plane 0.
 ## The cars' 0.10 reads low against sourced tyres (`docs/handling.md` § Balance); raising it
 ## re-derives the brake split.
@@ -283,11 +283,9 @@ func _rear_damper_scale() -> float:
 func axle_brake_torque(rear: bool) -> float:
 	if brake_bias_front < 0.0:
 		return brake_torque
-	var n_rear := 0
-	for p in wheel_positions:
-		if RayWheel.is_rear_z(p.z):
-			n_rear += 1
-	var n_front := wheel_positions.size() - n_rear
+	var ax := BrakeSizing.axle_geometry_of(self)
+	var n_rear := int(ax["n_rear"])
+	var n_front := int(ax["n_front"])
 	var total := brake_torque * wheel_positions.size()
 	if rear:
 		return total * (1.0 - brake_bias_front) / maxf(1.0, n_rear)

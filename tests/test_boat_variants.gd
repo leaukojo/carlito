@@ -10,9 +10,16 @@ const BoatScript := preload("res://src/vehicles/boat/boat.gd")
 ## Node `@export`s `_build_scene` copies VERBATIM out of a variant's `VARIANTS` entry. The rest of
 ## what it writes is derived (see the header).
 const SCENE_KNOBS := [
-	"float_depth", "thrust_force", "rudder_torque", "drag_long", "drag_lat", "drag_yaw",
-	"sail_area", "sheet_max_deg",
+	"float_depth", "thrust_force", "rudder_torque", "drag_long", "drag_sq", "waterline_length",
+	"drag_lat", "drag_yaw", "sail_area", "sheet_max_deg",
 ]
+const BoatSailScript := preload("res://src/vehicles/boat/boat_sail.gd")
+const BoatTelemetryScript := preload("res://src/vehicles/boat/boat_telemetry.gd")
+const VehicleMathScript := preload("res://src/vehicles/base/vehicle_math.gd")
+const WorldConditions := preload("res://src/levels/base/world_conditions.gd")
+const DELTA := 1.0 / 60.0
+const BOW := Vector3(0.0, 0.0, -1.0)
+const STBD := Vector3(1.0, 0.0, 0.0)
 ## `VehicleSpec` fields `_build_spec` copies straight out of `BOAT_BASE`, same for every variant.
 const SHARED_SPEC_FIELDS := [
 	"idle_rpm", "redline_rpm", "reverse_ratio", "final_drive", "efficiency",
@@ -125,6 +132,68 @@ func test_spec_shared_drivetrain_fields_match_the_baseline() -> void:
 				.is_equal_approx(float(Gen.BOAT_BASE[field]), 1e-4)
 
 
+# --- the hull law's shipped figures (docs/boat.md § Hull drag) ----------------------------------
+## Steady states solved in code, not driven: the forward balance only, no leeway, heel or pitch.
+
+## The speedboats are planing hulls: linear, so thrust / drag_long is their top speed.
+func test_the_speedboats_are_linear_planing_hulls() -> void:
+	for variant in ["boat-speed-a", "boat-speed-j"]:
+		var ov: Dictionary = Gen.VARIANTS[variant]
+		assert_float(float(ov["drag_sq"])).override_failure_message(variant).is_equal(0.0)
+		assert_float(float(ov["waterline_length"])).override_failure_message(variant).is_equal(0.0)
+
+
+## A ~5 hp outboard on a displacement hull tops out near hull speed, not past it.
+func test_the_sailboat_motors_at_about_hull_speed() -> void:
+	var ov: Dictionary = Gen.VARIANTS["boat-sail-a"]
+	var top := _settle(func(_v: float) -> float: return float(ov["thrust_force"]), ov)
+	assert_float(top).is_between(2.6, 2.8)
+	assert_float(top / BoatScript.hull_speed(float(ov["waterline_length"]), _g())) \
+		.is_between(1.0, 1.15)
+
+
+## A hard breeze (CONDITIONS STRONG, no gust) on the beam, the sheet trimmed for the most drive:
+## the rig grows with the wind squared, and the wave wall stops it near hull speed. A linear
+## hull runs it to 5.9 m/s here.
+func test_the_sailboat_on_a_strong_beam_reach_stays_near_hull_speed() -> void:
+	var ov: Dictionary = Gen.VARIANTS["boat-sail-a"]
+	var wind := -STBD * WorldConditions.WIND_STRONG_SPEED   # from starboard, blowing to port
+	var drive := func(v: float) -> float:
+		var aw := BoatTelemetryScript.apparent_wind(BOW * v, wind, Basis.IDENTITY)
+		var best := 0.0
+		for i in 101:
+			var boom := BoatSailScript.boom_angle(i / 100.0, aw.y, float(ov["sheet_max_deg"]))
+			best = maxf(best, BoatSailScript.force(aw, boom, float(ov["sail_area"]), BOW, STBD)
+					.dot(BOW))
+		return best
+	var top := _settle(drive, ov)
+	var vh := BoatScript.hull_speed(float(ov["waterline_length"]), _g())
+	assert_float(top).override_failure_message("settled at %.2f m/s" % top).is_less(vh * 1.3)
+	assert_float(top).is_greater(vh)   # a breeze that hard still sails her past it
+
+
+## The forward speed where `push(v)` meets the hull's forward drag plus the windage, by bisection.
+func _settle(push: Callable, ov: Dictionary) -> float:
+	var mass := float(ov["mass"])
+	var windage_long := float(_boat_defaults()["windage_long"])
+	var lo := 0.0
+	var hi := 20.0
+	for _i in 60:
+		var v := (lo + hi) * 0.5
+		var drag := VehicleMathScript.damped_force(v, float(ov["drag_long"]), mass, DELTA,
+				BoatScript.wave_drag_sq(v, float(ov["drag_sq"]), float(ov["waterline_length"]),
+				_g())) + VehicleMathScript.damped_force(v, windage_long, mass, DELTA)
+		if float(push.call(v)) + drag > 0.0:
+			lo = v
+		else:
+			hi = v
+	return lo
+
+
+func _g() -> float:
+	return float(ProjectSettings.get_setting("physics/3d/default_gravity"))
+
+
 # --- helpers ------------------------------------------------------------------
 
 ## Property name -> value for the scene's ROOT node (index 0), explicit overrides only.
@@ -146,6 +215,7 @@ func _boat_defaults() -> Dictionary:
 	for knob: String in SCENE_KNOBS:
 		out[knob] = boat.get(knob)
 	out["sail_center"] = boat.get("sail_center")
+	out["windage_long"] = boat.get("windage_long")
 	boat.free()
 	return out
 

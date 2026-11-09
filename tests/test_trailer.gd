@@ -488,6 +488,25 @@ func test_every_semi_trailer_pairs_its_bogie_under_a_bar_sized_off_its_own_sprin
 		trailer.free()
 
 
+func test_every_semi_trailers_tyre_laws_read_its_bogie_share() -> void:
+	# The tyre laws' reference is the static load a bogie corner carries, the kingpin taking the
+	# rest (`RayWheel.reference_load`); the clamps keep the whole mass over the wheels (`corner_mass`).
+	for path in Catalog.TRAILERS:
+		if not Catalog.is_coupled(path):
+			continue
+		var trailer := _instance(path) as TowedBody
+		add_child(trailer)  # the wheels are built in _ready
+		assert_int(trailer.wheels.size()).override_failure_message("%s: no wheels built" % path) \
+				.is_greater(0)
+		var n := float(trailer.wheels.size())
+		var bogie_n := trailer.spec.mass * (1.0 - trailer.kingpin_share()) * G / n
+		for w in trailer.wheels:
+			assert_float(w.reference_load).override_failure_message("%s: ref %.0f N against bogie %.0f N"
+					% [path, w.reference_load, bogie_n]).is_equal_approx(bogie_n, 1e-2)
+			assert_float(w.corner_mass).is_equal_approx(trailer.spec.mass / n, 1e-3)
+		trailer.free()
+
+
 func test_every_semi_trailer_brakes_like_the_tractor_unit_that_pulls_it() -> void:
 	# Load-apportioned against the towing unit (box_spec.tres): a full demand brakes the trailer's
 	# bogie load at the deceleration the tractor unit's brakes make on its own coupled static load

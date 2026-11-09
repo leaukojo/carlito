@@ -10,8 +10,8 @@ sit in. Their instruments speak NMEA 2000, the marine electronics standard.</p>
 | --- | --- | --- | --- |
 | `boat-speed-a` | Speedboat | 600 kg | 50 km/h |
 | `boat-speed-j` | Larger speedboat | 1.4 t | 60 km/h |
-| `boat-sail-a` | Sailing dinghy with a small motor | 500 kg | 12 km/h under motor |
-<!-- watercraft/*_spec.tres mass; thrust_force / drag_long: 5200/360, 11000/660, 500/150 = 3.3 m/s (docs/boat.md "~5 hp outboard, 3.3 m/s top speed") -->
+| `boat-sail-a` | Sailing dinghy with a small motor | 500 kg | 10 km/h under motor |
+<!-- watercraft/*_spec.tres mass; thrust_force / drag_long: 5200/360, 11000/660; boat-sail-a 2.66 m/s under its wave wall (docs/boat.md § Hull drag) -->
 
 ## What a boat has
 

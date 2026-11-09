@@ -207,6 +207,19 @@ func test_a_drawbar_carries_a_NOSE_WEIGHT_and_not_a_share() -> void:
 	trailer.free()
 
 
+func test_the_tyre_laws_read_the_bogies_share_and_the_clamps_the_whole_mass() -> void:
+	# `RayWheel.reference_load`: what a bogie corner carries at rest, the pin taking its nose weight.
+	var trailer := _trailer() as TowedBody
+	add_child(trailer)  # the wheels are built in _ready
+	var n := float(trailer.wheels.size())
+	assert_float(n).override_failure_message("no wheels built").is_greater(0.0)
+	var bogie_n := trailer.spec.mass * (1.0 - trailer.kingpin_share()) * G / maxf(n, 1.0)
+	for w in trailer.wheels:
+		assert_float(w.reference_load).is_equal_approx(bogie_n, 1e-2)
+		assert_float(w.corner_mass).is_equal_approx(trailer.spec.mass / n, 1e-3)
+	trailer.free()
+
+
 func test_the_combination_holds_the_verified_mass_ratio() -> void:
 	# 3 : 1 is what the semi verified and re-tuned around; past it a rig is a re-tune, not a free
 	# number. The tractor is 4 t, so this is the ceiling that matters here.

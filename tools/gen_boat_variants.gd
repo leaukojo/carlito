@@ -37,15 +37,17 @@ const BOAT_BASE := {
 	"steer_speed": 2.2,
 }
 
-## Hull drag numbers include each hull's own `mass * 0.1` folded into drag_long/drag_lat; drop it and top speed gains ~20%.
+## Hull drag numbers include each hull's own `mass * 0.1` folded into drag_lat and a planing hull's drag_long; drop it and top speed gains ~20%.
 ##
-## variant id -> overrides. draft_frac is share of hull height below the waterline. Top
-## speed is roughly thrust_force / drag_long m/s (hand-built boat: 5200/380 = 13.7).
+## variant id -> overrides. draft_frac is share of hull height below the waterline. A planing
+## hull (`drag_sq` and `waterline_length` 0) tops out at thrust_force / drag_long m/s; a
+## displacement hull's forward drag is `BoatVehicle.wave_drag_sq` (docs/boat.md § Hull drag).
 const VARIANTS := {
 	# light and quick: least mass, eager rudder, modest power
 	"boat-speed-a": {
 		"mass": 600.0, "torque_mul": 1.0, "draft_frac": 0.22, "float_depth": 0.30,
 		"thrust_force": 5200.0, "drag_long": 360.0, "drag_lat": 2060.0, "drag_yaw": 3800.0,
+		"drag_sq": 0.0, "waterline_length": 0.0,
 		"rudder_torque": 6500.0, "keel_extra": 0.15, "com_frac": 0.8,
 		"steer_speed": 2.8,
 		"sail_area": 0.0, "sail_center": Vector3.ZERO, "sheet_max_deg": 0.0,
@@ -54,19 +56,22 @@ const VARIANTS := {
 	"boat-speed-j": {
 		"mass": 1400.0, "torque_mul": 1.6, "draft_frac": 0.26, "float_depth": 0.34,
 		"thrust_force": 11000.0, "drag_long": 660.0, "drag_lat": 4340.0, "drag_yaw": 12000.0,
+		"drag_sq": 0.0, "waterline_length": 0.0,
 		"rudder_torque": 11000.0, "keel_extra": 0.25, "com_frac": 0.8,
 		"steer_speed": 1.6,
 		"sail_area": 0.0, "sail_center": Vector3.ZERO, "sheet_max_deg": 0.0,
 	},
-	# sailboat: the RIG is the drive (BoatSail) and the outboard is auxiliary. `thrust_force` and
-	# `drag_long` are sized TOGETHER and cannot be moved apart: 500 N is a ~5 hp outboard on a
-	# 4.5 m, 500 kg hull, and 150 N per m/s puts its top speed at 3.3 m/s (6.5 kt), which is what
-	# that outboard does. The old 2200 / 380 pair was a 40 hp outdrive against a hull three times
-	# too draggy to sail — a plausible rig made 0.5 m/s against it. Deep keel and slippery flanks
-	# are what turn the rig's side force into leeway rather than a slide.
+	# sailboat: the RIG is the drive (BoatSail) and the outboard is auxiliary. A displacement
+	# hull: `drag_sq` 24 under the wave wall of a 4.1 m waterline (an estimate, ~0.9 of the 4.52 m
+	# LOA; hull speed 2.54 m/s), `drag_long` 40 the low-speed floor. 500 N, a ~5 hp outboard on a
+	# 4.5 m, 500 kg hull, tops out at 2.66 m/s (5.2 kt), just over hull speed; a 9 m/s beam reach
+	# settles at ~3.1 m/s (1.24x), both pinned by test_boat_variants. A linear hull lets the rig,
+	# which grows with the wind squared, run away (5.9 m/s on that reach). Deep keel and slippery
+	# flanks are what turn the rig's side force into leeway rather than a slide.
 	"boat-sail-a": {
 		"mass": 500.0, "torque_mul": 0.55, "draft_frac": 0.20, "float_depth": 0.28,
-		"thrust_force": 500.0, "drag_long": 150.0, "drag_lat": 1250.0, "drag_yaw": 3200.0,
+		"thrust_force": 500.0, "drag_long": 40.0, "drag_lat": 1250.0, "drag_yaw": 3200.0,
+		"drag_sq": 24.0, "waterline_length": 4.1,
 		"rudder_torque": 4200.0, "keel_extra": 0.60, "com_frac": 0.3,
 		"steer_speed": 2.0,
 		# 14 m^2 on a 4.52 m LOA / 2.14 m beam hull, the centre of effort 2.0 m above the
@@ -173,6 +178,8 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec,
 	root.set("thrust_force", float(ov["thrust_force"]))
 	root.set("rudder_torque", float(ov["rudder_torque"]))
 	root.set("drag_long", float(ov["drag_long"]))
+	root.set("drag_sq", float(ov["drag_sq"]))
+	root.set("waterline_length", float(ov["waterline_length"]))
 	root.set("drag_lat", float(ov["drag_lat"]))
 	root.set("drag_yaw", float(ov["drag_yaw"]))
 	root.set("keel_offset", -(draft + float(ov["keel_extra"])))

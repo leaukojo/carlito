@@ -96,8 +96,7 @@ The short cuts fall into three kinds:
 - **Simplified: the air.** It has one density everywhere, with no change for height or weather.
 - **Simplified: the wind.** The same everywhere on a level, with no shelter behind hills or
   buildings and no change with height.
-- **Simplified: the plane's lift**, worked out from its speed over the ground rather than through
-  the air (open question 8). No inverted flight and no spins.
+- **Not modelled: inverted flight and spins** on the plane.
 - **Not modelled: sideways flight from the keys** on the drone.
 <!-- floating.md, conditions.md, plane-flight.md, drone-flight.md; CLAUDE.md non-goals: real wave physics -->
 

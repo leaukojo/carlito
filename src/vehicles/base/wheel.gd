@@ -165,13 +165,19 @@ var anti_roll_partner: RayWheel:
 		_partner_ref = weakref(value) if value != null else null
 var _partner_ref: WeakRef = null
 ## Body mass share this corner carries (kg): `mass / wheel count`, sizing the three 60 Hz clamps
-## below. Constructor-required: a wheel built with zero applies no damping or tire force and just
-## slides. It tracks the body's LIVE mass (every runtime `mass` write is `BaseVehicle.set_live_mass`).
+## below, never a tyre law (`reference_load`). Constructor-required: a wheel built with zero applies no
+## damping or tire force and just slides. It tracks the body's LIVE mass (every runtime `mass` write
+## is `BaseVehicle.set_live_mass`).
 ## COMPROMISE: a semi tractor's kingpin load is NOT folded in (it rides the rear axle without
 ## touching `mass`), so this corner mass is understated there. That is the safe way round, since a
 ## clamp sized under the true load can only be tighter; widening it to chase the load undoes the
 ## stability (src/vehicles/truck/CLAUDE.md).
 var corner_mass: float
+## The load laws' reference load (N), fixed at spawn: the spec's even corner share
+## (`corner_mass * g` as built, as `BrakeSizing.wheel_grip` reads it), a towed body's its bogie's
+## static share (`TowedBody`). A hopper's, an implement's or a kingpin's load moves the tyre along
+## its law (Pacejka's fixed nominal load, `docs/handling.md` § Balance), never the reference.
+var reference_load: float
 ## Tighten the one-tick caps and the patch spring below `corner_mass` where the body's own tensor
 ## says the contacts move less mass, across the wheel (roll, yaw) and along it (pitch, yaw):
 ## `size_cap_masses`, every tick; INF leaves `corner_mass` alone. The patch velocity is read about
@@ -262,6 +268,7 @@ func _init(p_anchor: Vector3, p_steered: bool, p_driven: bool, p_visual: Node3D,
 	is_rear = is_rear_z(p_anchor.z)
 	_visual = p_visual
 	corner_mass = p_corner_mass
+	reference_load = p_corner_mass * BrakeSizing.G
 
 
 ## Pick this axle's spring, dampers, links, side grip, radius and inertia off the spec, and build
@@ -467,11 +474,10 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	var v_lat := vel.dot(side)
 
 	# Load-scaled BEFORE the tyre force below: its friction ellipse is drawn on this tick's budget.
-	var ref_load := corner_mass * 9.81
 	var mu_long := load_scaled_mu(drive_spec.mu_long * surface_grip,
-			suspension_force, ref_load, drive_spec.load_sensitivity)
+			suspension_force, reference_load, drive_spec.load_sensitivity)
 	var mu_lat := load_scaled_mu(drive_spec.mu_lat * axle_lat_grip * surface_grip,
-			suspension_force * tyre_share, ref_load, drive_spec.load_sensitivity)
+			suspension_force * tyre_share, reference_load, drive_spec.load_sensitivity)
 
 	# Both slips on one denominator, so the slip vector points along the patch's slide; its floor
 	# keeps the curve's rise inside the one-tick cap below (`slip_floor_for`).
@@ -486,7 +492,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	long_slip = slip_ratio
 	slip = absf(slip_ratio)
 	# A twin pair at half load each: `mu(L / 2) * L` over `2 C(L / 2)` is this at `L / 2`.
-	var lat_peak := lateral_peak_slip(suspension_force * tyre_share, ref_load,
+	var lat_peak := lateral_peak_slip(suspension_force * tyre_share, reference_load,
 			drive_spec.load_sensitivity, drive_spec.cornering_peak_load)
 	var tyre := combined_slip_force(slip_ratio, -v_lat / slip_denom,
 			mu_long * suspension_force, mu_lat * suspension_force, drive_spec.grip_curve, lat_peak)

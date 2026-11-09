@@ -46,7 +46,11 @@ static func brake_force(gd: GroundDriveSpec) -> float:
 ## The axle pair off the wheel stations (front = -Z, `RayWheel.is_rear_z`): the foremost front and
 ## rearmost rear station z and each axle's wheel count.
 static func axle_geometry(spec: VehicleSpec) -> Dictionary:
-	var gd := spec.ground_drive
+	return axle_geometry_of(spec.ground_drive)
+
+
+## `axle_geometry` off the ground drive alone, for a reader holding no spec.
+static func axle_geometry_of(gd: GroundDriveSpec) -> Dictionary:
 	var front_z := INF
 	var rear_z := -INF
 	var n_rear := 0

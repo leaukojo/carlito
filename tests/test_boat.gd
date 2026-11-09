@@ -1,8 +1,9 @@
 extends GdUnitTestSuite
 ## Boat buoyancy/thrust/rudder, the wind instruments and the track/tide ones. 60 Hz one-tick
 ## clamp: probe damper never reverses velocity, buoyancy hard-capped. Hull drag, windage and
-## attitude are all VehicleMath calls made inline in _tick_extras, so they are tested there, not
-## here (test_vehicle_math.gd, test_wind.gd, test_current.gd).
+## attitude are VehicleMath calls made inline in _tick_extras, so they are tested there, not
+## here (test_vehicle_math.gd, test_wind.gd, test_current.gd); the forward law's wave wall
+## (`wave_drag_sq`) is here, its shipped figures in test_boat_variants.gd.
 
 const B := preload("res://src/vehicles/boat/boat.gd")
 const BoatT := preload("res://src/vehicles/boat/boat_telemetry.gd")
@@ -216,6 +217,34 @@ func test_rudder_authority_needs_flow() -> void:
 	assert_float(B.rudder_authority(30.0, 1.0)).is_equal(1.0)
 	# Reverse flow works the blade too.
 	assert_float(B.rudder_authority(-B.RUDDER_SPEED_REF, 0.0)).is_equal(1.0)
+
+
+# --- the forward hull law (wave_drag_sq) ----------------------------------------
+
+func test_hull_speed_is_the_froude_speed_of_the_waterline() -> void:
+	# Fn 0.4 on a 4 m waterline at g 10: 0.4 * sqrt(40).
+	assert_float(B.hull_speed(4.0, G)).is_equal_approx(0.4 * sqrt(40.0), 1e-5)
+	assert_float(B.hull_speed(0.0, G)).is_equal(0.0)
+
+
+func test_a_planing_hull_has_no_wave_wall() -> void:
+	for v in [0.0, 3.0, 15.0, -6.0]:
+		assert_float(B.wave_drag_sq(v, 24.0, 0.0, G)).is_equal(24.0)
+
+
+func test_the_wave_wall_doubles_the_square_term_at_hull_speed() -> void:
+	var vh := B.hull_speed(4.0, G)
+	assert_float(B.wave_drag_sq(0.0, 24.0, 4.0, G)).is_equal(24.0)
+	assert_float(B.wave_drag_sq(vh, 24.0, 4.0, G)).is_equal_approx(48.0, 1e-4)
+	assert_float(B.wave_drag_sq(-vh, 24.0, 4.0, G)).is_equal_approx(48.0, 1e-4)
+
+
+func test_the_wave_wall_climbs_with_speed() -> void:
+	var prev := 0.0
+	for i in 12:
+		var c := B.wave_drag_sq(i * 0.5, 24.0, 4.0, G)
+		assert_float(c).override_failure_message("at %s m/s" % (i * 0.5)).is_greater_equal(prev)
+		prev = c
 
 
 # --- trim model (modeled honest value, like engine_load) ------------------------

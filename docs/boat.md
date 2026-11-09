@@ -31,6 +31,13 @@ Above-waterline hull takes anisotropic drag from air-relative velocity (`windage
 WORLD space). Air is 1/800 water density. Level 6 is the only level with a `WindField`;
 `Level.wind` defaults to null elsewhere.
 
+## Hull drag
+
+Forward, through the water, one clamp (`docs/sources.md` § Hull resistance): planing hulls (both
+speedboats) are linear, Crouch's V² ∝ power (the hump is not modelled); displacement `boat-sail-a`
+adds `v|v|` under `BoatVehicle.wave_drag_sq`'s wall past Fn 0.4, else its STRONG beam reach runs
+2.3× hull speed. `drag_lat`, `drag_yaw` and windage stay linear (the autopilot table holds).
+
 ## Sailing: `boat-sail-a`
 
 `BoatSail`: lift/drag force at `sail_center` above COM, resisted by `keel_extra` 0.60.
@@ -45,7 +52,6 @@ Flat-plate polar (`Cl = CL_MAX·sin 2a`, `Cd = CD_MIN + CD_STALL·(1 − cos 2a)
   precedent, it borrows practice); `sail_angle` is range-less, on the readout line via
   `Dashboard.READOUT_EXTRAS`. Gates on `sail_area > 0`
   (`BoatVehicle.vehicle_capabilities()["sail"]`, the `body_cmd` shape).
-- `thrust_force` / `drag_long` are one tuned pair (~5 hp outboard, 3.3 m/s top speed).
 
 ## Tide
 
@@ -107,22 +113,22 @@ through `v_long`. Level 6 is the only level with water under the boat rather tha
 ### Autopilot gains
 
 Linearize the hull about its heading: `I * theta_dd = rudder_torque * A * u - drag_yaw * theta_d`,
-with `I` from `VehicleMath.inertia_of(mass, probe span)` and `A` the rudder authority. With
-`u = KP * e - KD * e_d` (per-radian units): `wn = sqrt(rudder_torque * A * KP / I)` and
-`zeta = (drag_yaw + rudder_torque * A * KD) / (2 * wn * I)`. Over authorities 0.4 to 1.0:
+with `I` the solver's yaw moment (`VehicleMath.moment_about`, measured on the spawned hull) and
+`A` the rudder authority. With `u = KP * e - KD * e_d` (per-radian units):
+`wn = sqrt(rudder_torque * A * KP / I)` and `zeta = (drag_yaw + rudder_torque * A * KD) / (2 * wn * I)`.
+Over authorities 0.4 to 1.0:
 
 | Hull | I | wn | zeta |
 |---|---|---|---|
-| boat-speed-a | 685 | 2.8-4.4 | 1.79-1.88 |
-| boat-speed-j | 2338 | 1.9-3.1 | 1.71-1.88 |
-| boat-sail-a | 681 | 2.2-3.5 | 1.64-1.69 |
+| boat-speed-a | 1047 | 2.2-3.5 | 1.45-1.52 |
+| boat-speed-j | 3598 | 1.6-2.5 | 1.38-1.51 |
+| boat-sail-a | 1044 | 1.8-2.8 | 1.35-1.37 |
 
-Overdamped on every hull (wn * dt under 0.08 at 60 Hz), and `drag_yaw` alone carries zeta
-0.6-1.3, so there is no per-variant knob. The linear plant is the shipped one: rudder torque is
+Overdamped on every hull (wn * dt under 0.06 at 60 Hz), and `drag_yaw` alone carries zeta
+0.5-1.1, so there is no per-variant knob. The linear plant is the shipped one: rudder torque is
 applied raw, and the yaw damper's one-tick clamp (`VehicleMath.damped_force`) binds only when
-`drag_yaw > I / delta` (`drag_yaw` on boat-speed-a against its `I / delta`; every hull clears it by
-11-13x). Raising `drag_yaw`, or cutting mass or probe span, toward `I / delta` puts the clamp in
-the loop and invalidates the zetas.
+`drag_yaw > I / delta` (every hull clears it by 16-20x). Raising `drag_yaw`, or cutting mass or
+the hull's collision shape, toward `I / delta` puts the clamp in the loop and invalidates the zetas.
 
 ## The level-6 playground
 

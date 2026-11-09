@@ -21,7 +21,7 @@ const HELM_DEADBAND := 0.05
 ## Rudder fraction per DEGREE of heading error: full rudder at 28.6 deg off course.
 const KP := 0.035
 ## Rudder fraction per deg/s of turn rate (damping): full rudder against a 50 deg/s swing.
-## Derivation (zeta 1.6-1.9 on every hull; raising `drag_yaw` toward `I / delta` voids it):
+## Derivation (zeta 1.35-1.52 on every hull; raising `drag_yaw` toward `I / delta` voids it):
 ## docs/boat.md § Autopilot gains.
 const KD := 0.02
 

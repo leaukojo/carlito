@@ -1109,9 +1109,7 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 		if geo["refuse_arm"] and FAMILY_SCRIPTS.get(String(ov["family"])) == TRUCK_SCRIPT:
 			gd.esc_laden_kg = RefuseBody.laden_masses_kg(spec.mass)
 			for kg in gd.esc_laden_kg:
-				var laden := spec.duplicate() as VehicleSpec
-				laden.mass = kg
-				gd.esc_laden_k.append(StabilityControl.reference_table(laden))
+				gd.esc_laden_k.append(StabilityControl.reference_table(spec, kg))
 
 	spec.headlight_paths.assign(_lamp_paths["headlight_paths"])
 	spec.head_lamp_paths.assign(_lamp_paths["head_lamp_paths"])
@@ -1258,7 +1256,7 @@ func _front_brake_share(spec: VehicleSpec, gd: GroundDriveSpec, sag: float) -> f
 	var n_rear: int = ax["n_rear"]
 	var h := _com_height(spec, gd, sag)
 	var weight := spec.mass * GRAVITY
-	var ref_load := weight / gd.wheel_positions.size()  # RayWheel's: corner_mass * g
+	var ref_load := weight / gd.wheel_positions.size()  # `RayWheel.reference_load`
 	var static_front: float = ax["static_front"]
 	var asked := gd.brake_torque * (n_front / gd.axle_radius(false)
 			+ n_rear / gd.axle_radius(true)) / weight  # in g

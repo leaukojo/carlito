@@ -64,10 +64,13 @@ ground:
 - **Turning**, which slows the boat's spin.
 <!-- boat.gd drag_long, drag_lat at keel_offset, drag_yaw; thrust over drag_long: 5200 / 360 = 14.4 m/s (52 km/h), 11000 / 660 = 16.7 m/s (60 km/h) -->
 
-The game makes each drag grow in proportion to the speed. Real water drag grows faster than
-that, with the square of the speed, so the game's boats reach their top speed more gently than a
-real one.
-<!-- VehicleMath.damped_force: N per m/s, linear (boat.gd drag_long "N per m/s forward") -->
+The forward drag follows the kind of hull. A speedboat skims on top of the water, or
+[planes](glossary.md#planing). Its drag grows in proportion to its speed, which is close to how a
+real planing boat behaves once it is up. The sailing dinghy sits in the water and pushes it
+aside. Its drag grows with the square of its speed, and then much faster near its
+[hull speed](glossary.md#hull-speed), about 2.5 m/s. Past that the boat climbs its own bow
+wave, so neither its motor nor a hard breeze can push it much faster.
+<!-- docs/boat.md § Hull drag: planing linear (Crouch, docs/sources.md § Hull resistance); boat-sail-a drag_sq 24 x (1 + (v / v_hull)^4), v_hull = 0.4 sqrt(g x 4.1) = 2.54 m/s -->
 
 ### The rudder
 

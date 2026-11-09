@@ -27,6 +27,23 @@ func test_damped_force_clamped_to_one_tick_zeroing() -> void:
 	assert_float(M.damped_force(v, 1e12, MASS, DELTA)).is_equal_approx(-tick_cap, 1e-3)
 
 
+func test_damped_force_quadratic_term_opposes_with_the_square() -> void:
+	# 100 N per m/s plus 10 N per (m/s)^2 at 3 m/s: 300 + 90.
+	assert_float(M.damped_force(3.0, 100.0, MASS, DELTA, 10.0)).is_equal_approx(-390.0, 1e-4)
+	assert_float(M.damped_force(-3.0, 100.0, MASS, DELTA, 10.0)).is_equal_approx(390.0, 1e-4)
+	assert_float(M.damped_force(3.0, 0.0, MASS, DELTA, 10.0) * 4.0) \
+		.is_equal_approx(M.damped_force(6.0, 0.0, MASS, DELTA, 10.0), 1e-3)
+
+
+func test_damped_force_one_clamp_holds_the_sum() -> void:
+	# Each term alone under the cap, their sum over it: the sum is clamped, never each part, or a
+	# tick could take twice the velocity it opposes.
+	var v := 1.0
+	var tick_cap := MASS * v / DELTA
+	var f := M.damped_force(v, tick_cap * 0.8, MASS, DELTA, tick_cap * 0.8)
+	assert_float(f).is_equal_approx(-tick_cap, 1e-3)
+
+
 func test_damped_force_used_as_a_torque() -> void:
 	# The plane applies the same fn to rotation rates against an inertia.
 	assert_float(M.damped_force(2.0, 3.0, INERTIA, DELTA)).is_equal_approx(-6.0, 1e-4)
@@ -164,21 +181,6 @@ func test_yaw_torque_capped_and_one_tick_clamped() -> void:
 	var p_cap := INERTIA * p_err / DELTA
 	assert_float(M.yaw_torque(p_err, 0.0, 1e9, INERTIA, DELTA, 6000.0)) \
 			.is_equal_approx(p_cap, 1e-4)
-
-
-# --- inertia_of: box footprint, symmetric in its two dimensions ----------------
-
-func test_inertia_of_box_footprint() -> void:
-	# m (a^2 + b^2) / 12 with round numbers: 12 * (4 + 2) / 12 = 6.
-	assert_float(M.inertia_of(12.0, 2.0, sqrt(2.0))).is_equal_approx(6.0, 1e-5)
-	# The boat's hull footprint: 1200 * (16 + 4) / 12 = 2000.
-	assert_float(M.inertia_of(1200.0, 4.0, 2.0)).is_equal_approx(2000.0, 1e-6)
-
-
-func test_inertia_of_is_symmetric_in_its_dimensions() -> void:
-	# Why the boat may pass length/width and the flyers width/depth.
-	assert_float(M.inertia_of(1200.0, 4.0, 2.0)) \
-			.is_equal_approx(M.inertia_of(1200.0, 2.0, 4.0), 1e-6)
 
 
 # --- carried_com: a load's mass-weighted pull on the centre of mass ---------------
@@ -478,3 +480,18 @@ func test_no_bar_hangs_nothing() -> void:
 	assert_float(M.anti_roll_hang(0.10, 0.0, 22000.0)).is_equal(0.0)
 	assert_float(M.anti_roll_hang(0.10, -5000.0, 22000.0)).is_equal(0.0)
 	assert_float(M.anti_roll_hang(-0.01, 10000.0, 22000.0)).is_equal(0.0)
+
+
+func test_level_lateral_accel_reads_left_on_the_level_axis() -> void:
+	var g := Vector3(0, -9.8, 0)
+	var dt := 1.0 / 60.0
+	# Nose -Z, so left is -X: a 0.1 m/s gain to the left over one tick is +6 m/s^2.
+	var left_gain := M.level_lateral_accel(Vector3(-0.1, 0, 0), Vector3.ZERO, Basis.IDENTITY, g, dt)
+	assert_float(left_gain).is_equal_approx(6.0, 1e-4)
+	# Rolled 30 degrees: a vertical change (heave) reads as no side force.
+	var rolled := Basis(Vector3(0, 0, -1), deg_to_rad(30.0))
+	assert_float(M.level_lateral_accel(Vector3(0, 0.1, 0), Vector3.ZERO, rolled, g, dt)) \
+			.is_equal_approx(0.0, 1e-5)
+	# No previous velocity: no reading.
+	assert_float(M.level_lateral_accel(Vector3(-0.1, 0, 0), Vector3(NAN, NAN, NAN),
+			Basis.IDENTITY, g, dt)).is_equal(0.0)

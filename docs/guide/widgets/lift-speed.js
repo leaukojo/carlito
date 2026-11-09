@@ -4,7 +4,8 @@
 //   plane.gd       lift_coeff 13 N per (m/s)^2, flap_lift_bonus 4 at full flaps, lift_cap 16000 N,
 //                  aoa_lift_slope 5.7 per rad, aoa_lift_max 1.8 (aoa_factor clamps 1 + slope x aoa
 //                  to [0, 1.8]), stall_speed 13 m/s, full_lift_speed 20 m/s (lift_frac: smoothstep
-//                  between them), max_thrust 9000 N, drag_coeff 350 N per m/s
+//                  between them), max_thrust 9000 N, drag_coeff 80 N per m/s + drag_sq 10.5 N
+//                  per (m/s)^2
 //   plane_spec.tres mass 800 kg
 // lift = min(coeff x aoa_factor x v^2, cap) x lift_frac(v)  (PlaneVehicle.lift_force)
 (function () {

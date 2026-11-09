@@ -142,7 +142,7 @@ func test_a_dead_run_with_the_boom_square_is_pure_drag_down_the_bow() -> void:
 
 func test_the_force_grows_with_the_square_of_the_apparent_wind() -> void:
 	# Why a gust is felt: doubling the wind quadruples the rig. Nothing clamps this — the hull's
-	# own drag_long is what terminates it.
+	# own forward drag, under its wave wall, is what terminates it (boat.gd wave_drag_sq).
 	var one := S.force(Vector2(5.0, 90.0), 45.0, AREA, BOW, STBD).length()
 	var two := S.force(Vector2(10.0, 90.0), 45.0, AREA, BOW, STBD).length()
 	assert_float(two).is_equal_approx(one * 4.0, one * 4.0 * 1e-5)

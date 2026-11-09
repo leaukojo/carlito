@@ -940,17 +940,8 @@ static func retarder_rating(p_spec: VehicleSpec) -> float:
 	var gd := p_spec.ground_drive
 	if gd == null:
 		return 0.0
-	return maxf(gd.retarder_rating_nm, 0.0) * p_spec.final_drive / maxf(1.0, _driven_rears(gd))
-
-
-static func _driven_rears(gd: GroundDriveSpec) -> int:
-	if not gd.driven_rear:
-		return 0
-	var n := 0
-	for p in gd.wheel_positions:
-		if RayWheel.is_rear_z(p.z):
-			n += 1
-	return n
+	var driven_rears := int(BrakeSizing.axle_geometry_of(gd)["n_rear"]) if gd.driven_rear else 0
+	return maxf(gd.retarder_rating_nm, 0.0) * p_spec.final_drive / maxf(1.0, driven_rears)
 
 
 ## Fraction of rating a driveline retarder can make at this road speed, 0..1. Falls off to

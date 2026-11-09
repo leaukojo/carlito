@@ -8,11 +8,13 @@ extends RefCounted
 ## free-body form (src/vehicles/CLAUDE.md § Physics).
 
 
-## Linear damping force (or torque) against `vel`, clamped so one tick can at most zero it.
-## `moment` is the mass or inertia the impulse acts on.
-static func damped_force(vel: float, coeff: float, moment: float, delta: float) -> float:
+## Damping force (or torque) against `vel`: linear `coeff` plus an optional `coeff_sq * v|v|`,
+## the two summed under ONE clamp so one tick can at most zero it. `moment` is the mass or inertia
+## the impulse acts on.
+static func damped_force(vel: float, coeff: float, moment: float, delta: float,
+		coeff_sq := 0.0) -> float:
 	var tick_cap := moment * absf(vel) / delta
-	return clampf(-coeff * vel, -tick_cap, tick_cap)
+	return clampf(-(coeff + coeff_sq * absf(vel)) * vel, -tick_cap, tick_cap)
 
 
 ## `damped_force` in three dimensions, opposing `vel_vec`.
@@ -50,9 +52,11 @@ static func yaw_torque(target_rate: float, current_rate: float, gain: float,
 	return clampf(clampf(gain * err, -tick_cap, tick_cap), -max_torque, max_torque)
 
 
-## Moment of inertia (kg*m^2) of a box footprint: the clamp basis for the torque dampers above.
-static func inertia_of(body_mass: float, dim_a: float, dim_b: float) -> float:
-	return body_mass * (dim_a * dim_a + dim_b * dim_b) / 12.0
+## Moment of inertia (kg*m^2) of `body` about world `axis` through its COM, off the solver's
+## tensor: the clamp basis for the torque dampers above. 0 for a body the space does not hold.
+static func moment_about(body: RigidBody3D, axis: Vector3) -> float:
+	var inverse := inverse_moment(body, axis)
+	return 1.0 / inverse if inverse > 0.0 else 0.0
 
 
 ## Yaw moment of inertia (kg*m^2) off a dynamic index `k² / (a·b)`: `front_arm` and `rear_arm`
@@ -106,6 +110,23 @@ static func is_inverted(b: Basis, threshold_deg: float) -> bool:
 static func point_velocity(body: RigidBody3D, point: Vector3) -> Vector3:
 	return body.linear_velocity \
 			+ body.angular_velocity.cross(point - body.global_transform * body.center_of_mass)
+
+
+## The up a level sensor reads against: opposite `gravity`, or world up where there is none.
+static func level_up(gravity: Vector3) -> Vector3:
+	return -gravity.normalized() if gravity != Vector3.ZERO else Vector3.UP
+
+
+## Lateral acceleration (m/s^2, + = left) off one tick's velocity change, gravity-free as a
+## bank-compensated sensor reads, on the level axis left of the nose (up x the nose), so a rolled
+## body's heave never reads as side force. Raw: a reader filters it itself. 0 with no previous
+## velocity (`v_prev` not finite).
+static func level_lateral_accel(v_now: Vector3, v_prev: Vector3, basis: Basis, gravity: Vector3,
+		delta: float) -> float:
+	if not is_finite(v_prev.x):
+		return 0.0
+	var left := level_up(gravity).cross(-basis.z).normalized()
+	return ((v_now - v_prev) / delta).dot(left)
 
 
 # --- road resistance (wheeled vehicles) --------------------------------------------------

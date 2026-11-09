@@ -1,10 +1,10 @@
 class_name PlaneVehicle
 extends BaseVehicle
-## Light aircraft (CANaerospace flavor). Prop thrust with rpm chasing throttle; lift ~ forward speed
-## squared times an angle-of-attack factor, fading below stall speed; a weathervane moment on
-## AoA and sideslip keeps the nose on the velocity vector; drag is body-frame anisotropic (lateral
-## and vertical far stiffer than forward) so the velocity follows the nose; control authority
-## scales with airspeed. Force terms are one-tick clamped (the 60 Hz tick: `src/vehicles/CLAUDE.md`).
+## Light aircraft (CANaerospace flavor). Prop thrust with rpm chasing throttle; lift ~ forward
+## airspeed squared times an angle-of-attack factor, fading below stall airspeed; a weathervane
+## moment on AoA and sideslip keeps the nose on the relative wind (`WindField`); forward drag grows
+## with airspeed squared like the lift, and the lateral and vertical dampers (linear, far stiffer)
+## make the air velocity follow the nose; control authority scales with airspeed. Force terms are one-tick clamped (the 60 Hz tick: `src/vehicles/CLAUDE.md`).
 ## Single-speed by construction (shift_up_rpm 6000 above redline 5400): do not "fix" the shift
 ## point. Wheel stations (`plane_spec.tres`): 0 = nose, 1 = left main, 2 = right main.
 
@@ -22,16 +22,19 @@ extends BaseVehicle
 @export var aoa_lift_max := 1.8         ## cap on the angle-of-attack lift factor (the stall fade is separate)
 @export var stall_speed := 13.0         ## m/s below which lift is fully gone
 @export var full_lift_speed := 20.0     ## m/s at which the lift fraction reaches 1
-## N per m/s of forward speed, including the removed default_linear_damp (mass * 0.1 = 80 N/m/s).
-## With max_thrust it sets top speed (~26 m/s), sized just above the zero-AoA trim speed (~25 m/s)
-## so full throttle does not balloon.
-@export var drag_coeff := 350.0
+## Forward drag: `drag_coeff * v + drag_sq * v|v|`. The square term is the parasitic drag, in
+## `lift_coeff`'s units, so lift over drag at a fixed AoA holds with speed. `drag_coeff` is a
+## low-speed floor (mass * 0.1). With max_thrust they set top speed (80v + 10.5v^2 = 9000 at
+## 25.7 m/s), just above the zero-AoA trim speed (~25 m/s) so full throttle does not balloon.
+## At zero AoA, lift over drag is under 1: a toy airframe, left as it is.
+@export var drag_coeff := 80.0          ## N per m/s of forward airspeed
+@export var drag_sq := 10.5             ## N per (m/s)^2 of forward airspeed
 ## N per m/s sideways / vertical through the air: far stiffer than forward, so the velocity vector
 ## follows the nose within a fraction of a second.
 @export var drag_lat := 1600.0
 @export var drag_vert := 1600.0
 @export var flap_lift_bonus := 4.0      ## extra lift_coeff at full flaps
-@export var flap_drag_bonus := 40.0     ## extra drag_coeff at full flaps
+@export var flap_drag_bonus := 2.0      ## extra drag_sq at full flaps (800 N at 20 m/s)
 @export var flap_slew_rate := 0.4       ## flap travel fraction per second (contract flaps_actual)
 
 @export_group("Control")
@@ -61,17 +64,11 @@ extends BaseVehicle
 ## Prop rpm above which the blades swap for the translucent disc (readable at 60 fps).
 @export var prop_disc_rpm := 4000.0
 
-## Body footprint (m); derives the moment of inertia for the torque clamps.
-@export var body_extents := Vector3(7.0, 1.5, 5.5)
-
 ## Shaft rad/s per prop rpm. Cosmetic, far below the real rev rate; published rpm stays honest.
 const PROP_VISUAL_SPIN := 0.012
 
 var _prop_rpm := 0.0   ## modeled prop rpm the thrust is computed from (published as rpm)
 var _flap_pos := 0.0   ## 0..1 actual flap extension, slewed toward the request
-var _inertia := 5000.0       ## yaw moment (kg*m^2), about body up, for the yaw torque clamp
-var _inertia_pitch := 5000.0 ## pitch moment (kg*m^2), about body right, for the pitch torque clamp
-var _inertia_roll := 5000.0  ## roll moment (kg*m^2), about body forward, for the roll torque clamp
 var _elevator_cmd := 0.0 ## VISUAL mirror of the pitch command (physics reads input directly)
 var _elevator_pos := 0.0 ## slewed elevator deflection the surface is drawn at
 
@@ -126,9 +123,6 @@ func _ready() -> void:
 	# Omits WorldBounds: an aircraft flies out over the containment box (as drone.gd).
 	collision_mask = Layers.SOLID
 	_prop_rpm = 0.0
-	_inertia = VehicleMath.inertia_of(spec.mass, body_extents.x, body_extents.z)
-	_inertia_pitch = VehicleMath.inertia_of(spec.mass, body_extents.y, body_extents.z)
-	_inertia_roll = VehicleMath.inertia_of(spec.mass, body_extents.x, body_extents.y)
 
 
 ## A flight body: its landing gear is a `ground_drive`, but in the air only pitch and roll carry
@@ -157,20 +151,19 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	# Contract `flaps_actual` is the slewed position, not the request.
 	_flap_pos = flap_slew(_flap_pos, clampf(input.flaps, 0.0, 1.0), flap_slew_rate, delta)
 
-	# Drag opposes velocity relative to WindField, split in the BODY frame (not
-	# VehicleMath.air_damper, whose axis mask is world-space). Lift and the flow angles stay on
-	# absolute velocity: wind is here to be flown against, not to change the stall speed.
-	var wind := WindField.at(self)
-	var v_fwd := linear_velocity.dot(fwd)
-	var aoa := flow_angle(-linear_velocity.dot(up), v_fwd)
-	var sideslip := flow_angle(linear_velocity.dot(right), v_fwd)
+	# Every aero term reads velocity relative to WindField: lift, stall and the flow angles are
+	# airspeed effects, so a headwind shortens the take-off and a crosswind crabs the nose. Drag is
+	# split in the BODY frame (not VehicleMath.air_damper, whose axis mask is world-space).
+	var air := linear_velocity - WindField.at(self)
+	var v_fwd := air.dot(fwd)
+	var aoa := flow_angle(-air.dot(up), v_fwd)
+	var sideslip := flow_angle(air.dot(right), v_fwd)
 	var frac := lift_frac(v_fwd, stall_speed, full_lift_speed)
 	var coeff := (lift_coeff + flap_lift_bonus * _flap_pos) \
 			* aoa_factor(aoa, aoa_lift_slope, aoa_lift_max)
 	apply_central_force(up * lift_force(v_fwd, coeff, lift_cap, frac))
-	var air := linear_velocity - wind
-	apply_central_force(fwd * VehicleMath.damped_force(air.dot(fwd),
-			drag_coeff + flap_drag_bonus * _flap_pos, spec.mass, delta))
+	apply_central_force(fwd * VehicleMath.damped_force(air.dot(fwd), drag_coeff, spec.mass, delta,
+			drag_sq + flap_drag_bonus * _flap_pos))
 	apply_central_force(right * VehicleMath.damped_force(air.dot(right), drag_lat, spec.mass, delta))
 	apply_central_force(up * VehicleMath.damped_force(air.dot(up), drag_vert, spec.mass, delta))
 
@@ -185,14 +178,16 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	_elevator_cmd = clampf(input.elevator, -1.0, 1.0)
 	# Elevator: + = nose up = +torque about body right.
 	apply_torque(right * pitch_torque(clampf(input.elevator, -1.0, 1.0), pitch_gain, auth,
-			angular_velocity.dot(right), pitch_damping, _inertia_pitch, delta, max_pitch_torque))
+			angular_velocity.dot(right), pitch_damping, VehicleMath.moment_about(self, right), delta,
+			max_pitch_torque))
 	# Steer + = right; +torque about body forward rolls right-side-down. The spring always acts, so
 	# the wings self-level.
 	apply_torque(fwd * roll_torque(_steer * max_bank_deg, VehicleMath.roll_deg(body), roll_stiffness,
-			auth, angular_velocity.dot(fwd), roll_damping, _inertia_roll, delta, max_roll_torque))
+			auth, angular_velocity.dot(fwd), roll_damping, VehicleMath.moment_about(self, fwd), delta,
+			max_roll_torque))
 	# Steer negative = left but +Y torque yaws left, so the sign flips.
 	apply_torque(up * VehicleMath.yaw_torque(-_steer * max_yaw_rate * auth, angular_velocity.dot(up),
-			yaw_gain, _inertia, delta, max_yaw_torque))
+			yaw_gain, VehicleMath.moment_about(self, up), delta, max_yaw_torque))
 
 	# Airborne only: the nose drops as lift fades (recover by diving, never a spin).
 	if _airborne():

@@ -5,7 +5,7 @@ extends RefCounted
 ## so the sim runs headless. The coupler damper and the brake are one-tick clamped and the coupler
 ## force is hard-capped (the 60 Hz tick: `src/vehicles/CLAUDE.md`).
 
-const GRAVITY := 9.8  ## m/s^2; matches the project default_gravity
+const GRAVITY := BrakeSizing.G  ## m/s^2; matches the project default_gravity
 
 # --- consist state (head = index 0) ---
 var s := PackedFloat64Array()      ## arc position per car (m), modulo L on a closed loop

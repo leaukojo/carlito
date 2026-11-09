@@ -456,6 +456,11 @@ and one top link and can raise and lower them (`hitch_pos`).
 A counter of how long the engine has run, in hours (`engine_hours`). Machines that work standing
 still, like tractors and boats, are serviced by hours rather than distance.
 
+### Hull speed
+The speed at which a boat sitting in the water rides on its own bow wave, about 0.4 × √(g × the
+waterline length). Above it the drag climbs steeply. A boat that [planes](#planing) gets past it
+by rising onto the water. See [Floating and boats](floating.md).
+
 ### Hydraulic remote
 A tractor outlet that sends oil under pressure to a trailer or implement, to work a ram. Also
 called an SCV (selective control valve). In the game it opens the spreader's hopper gate and
@@ -597,6 +602,10 @@ Petrol cars, diesel trucks and the tractor each use a different rule.
 
 ### Pitch
 The nose of a vehicle tipping up or down. A car pitches forward when it brakes.
+
+### Planing
+A fast boat rising onto the water and skimming over it instead of pushing through it. Once a
+boat is planing, its drag grows only about in proportion to its speed.
 
 ### Powershift
 A tractor gearbox that changes gear under load without the driver pressing a clutch, using

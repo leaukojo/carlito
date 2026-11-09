@@ -1167,6 +1167,11 @@ func test_a_full_refuse_hopper_moves_the_shipped_trucks_caps() -> void:
 			"a full hopper left the caps sized for the empty truck") \
 			.is_equal_approx(laden / float(spec.ground_drive.wheel_positions.size()), 1e-6)
 	assert_float(drive.wheels[0].corner_mass).is_greater(empty)
+	# The tyre laws' reference stays the spec's: the laden corner reads down its load law.
+	for w in drive.wheels:
+		assert_float(w.reference_load).override_failure_message(
+				"a full hopper moved the tyre's reference load").is_equal_approx(
+				empty * BrakeSizing.G, 1e-3)
 
 
 # --- the foot brake split by axle ----------------------------------------------------------

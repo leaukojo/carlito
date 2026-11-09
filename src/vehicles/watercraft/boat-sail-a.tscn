@@ -84,14 +84,16 @@ _surfaces = [{
 blend_shape_mode = 0
 shadow_mesh = SubResource("ArrayMesh_ek7yk")
 
-[node name="BoatSailA" type="RigidBody3D" unique_id=949470905]
+[node name="BoatSailA" type="RigidBody3D" unique_id=331947701]
 script = ExtResource("1_c3efg")
 probe_points = PackedVector3Array(-0.8996402, -0.28, -1.8096001, 0.8996402, -0.28, -1.8096001, -0.8996402, -0.28, 1.8096001, 0.8996402, -0.28, 1.8096001)
 float_depth = 0.28
 thrust_force = 500.0
 prop_offset = Vector3(0, -0.24084, 2.0358)
 rudder_torque = 4200.0
-drag_long = 150.0
+drag_long = 40.0
+drag_sq = 24.0
+waterline_length = 4.1
 drag_lat = 1250.0
 drag_yaw = 3200.0
 keel_offset = -1.0014000034332275
@@ -101,27 +103,27 @@ sheet_max_deg = 90.0
 sail_pivot = NodePath("Model/boat-sail-a/sail")
 spec = ExtResource("2_uak7i")
 
-[node name="CollisionLower" type="CollisionShape3D" parent="." unique_id=1906153052]
+[node name="CollisionLower" type="CollisionShape3D" parent="." unique_id=96339951]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0203, 0)
 shape = SubResource("BoxLower")
 
-[node name="CollisionUpper" type="CollisionShape3D" parent="." unique_id=253856902]
+[node name="CollisionUpper" type="CollisionShape3D" parent="." unique_id=1504792178]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.8638, 0)
 shape = SubResource("BoxUpper")
 
-[node name="Model" type="Node3D" parent="." unique_id=127661309]
+[node name="Model" type="Node3D" parent="." unique_id=1028191796]
 transform = Transform3D(-1.2, 0, -1.04907336e-07, 0, 1.2, 0, 1.04907336e-07, 0, -1.2, 0, -0.4014, 0.12000003)
 
-[node name="boat-sail-a" type="MeshInstance3D" parent="Model" unique_id=1940409055]
+[node name="boat-sail-a" type="MeshInstance3D" parent="Model" unique_id=1145154023]
 mesh = SubResource("ArrayMesh_mr30l")
 
-[node name="sail" type="MeshInstance3D" parent="Model/boat-sail-a" unique_id=599203714]
+[node name="sail" type="MeshInstance3D" parent="Model/boat-sail-a" unique_id=1955098354]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.2128112e-13, 0.8725, 0.5753332)
 mesh = SubResource("ArrayMesh_041rx")
 
-[node name="Lamps" type="Node3D" parent="." unique_id=442648667]
+[node name="Lamps" type="Node3D" parent="." unique_id=2059509760]
 
-[node name="Headlight" type="SpotLight3D" parent="Lamps" unique_id=43484469]
+[node name="Headlight" type="SpotLight3D" parent="Lamps" unique_id=635245396]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.30105004, -2.0358)
 visible = false
 light_energy = 0.0

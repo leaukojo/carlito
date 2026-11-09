@@ -80,22 +80,6 @@ says meanwhile. Newest last.
 - **Guide meanwhile:** the floating page says Level 6 and Open Sea both have wind of their own, as
   the level scenes do.
 
-## 8. Does the wind change the plane's stall?
-
-- **Code:** `src/vehicles/plane/plane.gd` (`_tick_extras`) works out the lift, the angle of attack
-  and the sideslip from `linear_velocity`, the speed over the ground, and uses the wind only for
-  drag: "Lift and the flow angles stay on absolute velocity: wind is here to be flown against,
-  not to change the stall speed."
-- **Code comment elsewhere:** `src/levels/base/world_conditions.gd`, at `WIND_STRONG_SPEED`, says
-  "The plane's 13 m/s `stall_speed` (`plane.gd`) means a strong tailwind gust bites into margin
-  on a slow final — the intended bite, not a bug." With lift read over the ground, a tailwind gust
-  changes the lift only through the drag it removes, not through airspeed.
-- **Also:** a real wing's lift follows airspeed, so a headwind shortens a take-off run; the
-  game's does not. This may be intended (the plane.gd comment says so) but is worth confirming.
-- **Guide meanwhile:** the plane page says lift reads the speed over the ground, as the code
-  does, and lists it under what the game leaves out; the conditions page does not repeat the
-  tailwind remark.
-
 ## 9. Should an empty tank stop the engine?
 
 - **Code:** `BaseVehicle` drains `telemetry.fuel` (`VehicleTelemetry.fuel_drain`) but
@@ -105,15 +89,3 @@ says meanwhile. Newest last.
 - **Docs:** no doc says what an empty tank does.
 - **Guide meanwhile:** the aux page says an empty tank does not stop the engine, as the code
   does, and lists it under what the game leaves out.
-
-## 10. Gravity: 9.81 or 9.8?
-
-- **Code:** `src/vehicles/base/wheel.gd` (`tick`) sets the tyre's reference load as
-  `corner_mass * 9.81`, a constant written in place. The world's gravity is the project's
-  `physics/3d/default_gravity`, which `BaseVehicle` reads as 9.8 (`base_vehicle.gd`, `_gravity`),
-  and `train_sim.gd` declares `GRAVITY := 9.8` "matches the project default_gravity".
-- **Effect:** small. At rest a tyre's load is about 0.1 % under its reference, so
-  `load_scaled_mu` gives it about 0.015 % more grip than at exactly the reference (sedan,
-  `load_sensitivity` 0.1). The question is only whether the two figures should be one.
-- **Guide meanwhile:** the forces page uses 9.8 throughout and the guide quotes no figure that
-  depends on the difference.
