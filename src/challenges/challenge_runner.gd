@@ -163,10 +163,7 @@ func _build_course() -> void:
 	_course = node as Node3D
 	_level.add_child(_course)
 	var family := def.family()
-	for n in _course.find_children("*", "VehicleSpawn", true, false):
-		if (n as VehicleSpawn).accepts(family):
-			_spawn = n as VehicleSpawn
-			break
+	_spawn = VehicleSpawn.first_under(_course, family)
 	if _spawn == null:
 		_course_error = "course '%s' has no spawn for the %s family" % [def.course, family]
 		push_error("ChallengeRunner: %s" % _course_error)

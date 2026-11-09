@@ -28,7 +28,6 @@ extends Node3D
 ##
 ##   godot --headless --fixed-fps 60 --path . res://tools/measure_air_loss.tscn -- all strict
 
-const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
 const MeasureRig := preload("res://tools/measure_rig.gd")
 
 ## `all`: the Kenney truck and both tractor units, each with the trailer it spawns coupled to.
@@ -90,14 +89,10 @@ var _stop_at := Vector3.ZERO  ## roll: where it first came under STOPPED_MS
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	_strict = args.has("strict")
-	MeasureRig.esc_off = args.has("noesc")
+	MeasureRig.common_flags(args)
 	var which := String(args[0]) if args.size() > 0 else "all"
-	if which == "all":
-		_variants = ALL_VARIANTS.duplicate()
-	elif Catalog.VARIANTS.has(which):
-		_variants = [which]
-	else:
-		printerr("unknown variant '%s'" % which)
+	_variants.assign(MeasureRig.variants_arg(which, ALL_VARIANTS))
+	if _variants.is_empty():
 		get_tree().quit(1)
 		return
 	for v in _variants:
@@ -125,30 +120,20 @@ func _next_job() -> void:
 	if _pass == "park":
 		var angle := atan(BrakeSizing.regulation_grade(MeasureRig.rig_mass(_variant)))
 		_ramp = MeasureRig.tilt_ramp(self, _ramp, RAMP_SIZE, angle)
-		var tilt := Basis(Vector3.RIGHT, angle)
-		_spawn(func(car: TruckVehicle) -> Transform3D:
-			return Transform3D(tilt, tilt * Vector3(0.0, 0.0, -SPAWN_UP)
-					+ tilt.y * car.rest_ride_height()))
+		_spawn()
+		MeasureRig.place(_car, MeasureRig.slope_pose(_car, angle, SPAWN_UP))
 	else:
-		_spawn(func(car: TruckVehicle) -> Transform3D:
-			return Transform3D(Basis.IDENTITY,
-					Vector3(FLAT_X, car.rest_ride_height(), FLAT_START_Z)))
+		_spawn()
+		MeasureRig.place(_car, Transform3D(Basis.IDENTITY,
+				Vector3(FLAT_X, _car.rest_ride_height(), FLAT_START_Z)))
 	_to(Ph.SETTLE)
 
 
 ## A fresh body per pass: removing the unit takes its trailer with it, and a new one starts on spawn
 ## air with the trailer coupled by the host's countdown during the settle.
-func _spawn(pose: Callable) -> void:
-	if _car != null:
-		remove_child(_car)
-		_car.queue_free()
-		_car = null
-	_car = load(Catalog.VARIANTS[_variant]["scene"]).instantiate() as TruckVehicle
-	MeasureRig.unfit_esc(_car)
-	add_child(_car)
-	_car.global_transform = pose.call(_car)
-	_car.spawn_transform = _car.global_transform
-	_car.reset_physics_interpolation()
+func _spawn() -> void:
+	MeasureRig.free_body(self, _car)
+	_car = MeasureRig.spawn(self, _variant) as TruckVehicle
 	_ticks = 0
 
 

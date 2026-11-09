@@ -22,7 +22,7 @@
     "    exists to catch, and it was invisible until the chain became runnable.",
     "  - The SCULPT half does NOT converge exactly. Each replay moves ~150-250 heightmap px",
     "    by 1-3 of the 8-bit height steps (0.2-0.6 m), always in the farm's blend rims, never",
-    "    in a flat. _flatten re-lerps its rim on already-flat ground and _smooth runs 4 passes",
+    "    in a flat. TerrainGrid.flatten re-lerps its rim on already-flat ground and _smooth runs 4 passes",
     "    over an already-smoothed rim; neither is idempotent, and the tool header says so.",
     "    It is not material: the farm's own acceptance report is byte-identical across replays",
     "    (ramp grades 8.1 / 13.7 / 24.2 deg, wallow floor 26.00..26.60, worst exit facet",

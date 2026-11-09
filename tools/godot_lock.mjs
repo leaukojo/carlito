@@ -1,5 +1,5 @@
 // The per-checkout Godot run lock, shared by tools/godot_run.mjs (writer), the Claude PreToolUse
-// guard, the Stop hook and pre-commit (readers). It lives in .godot/, which is gitignored and per
+// guard, the SessionStart check and preflight.ps1 (readers). It lives in .godot/, which is gitignored and per
 // checkout, so two clones or worktrees never see each other's lock. Also the one Node resolver
 // of the Godot binary (`resolveGodot`), for godot_run.mjs and the SessionStart check.
 //   node tools/godot_lock.mjs    # prints the live holder and exits 1, or exits 0 when free
@@ -39,7 +39,7 @@ export function lockHolder(repo) {
 // The Godot binary: $GODOT_BIN -> `git config carlito.godotbin` -> `godot` on PATH (`source`
 // 'env' / 'git' / 'path'). `error` is set for a configured binary that does not exist, or on
 // Windows one that is not the _console build: the plain exe swallows print/push_error, so a
-// headless run comes back silent. tools/godot_bin.ps1 is the PowerShell copy.
+// headless run comes back silent.
 export function resolveGodot(repo) {
   let bin = process.env.GODOT_BIN, source = 'env';
   if (!bin) {

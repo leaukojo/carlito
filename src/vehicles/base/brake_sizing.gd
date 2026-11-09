@@ -65,7 +65,7 @@ static func axle_geometry_of(gd: GroundDriveSpec) -> Dictionary:
 
 
 ## Share of the static weight on the front axle (1 with no rear axle, 0 with no front one).
-static func _static_front_share(spec: VehicleSpec, ax: Dictionary) -> float:
+static func static_front_share(spec: VehicleSpec, ax: Dictionary) -> float:
 	if int(ax["n_rear"]) == 0:
 		return 1.0
 	if int(ax["n_front"]) == 0:
@@ -80,7 +80,7 @@ static func _static_front_share(spec: VehicleSpec, ax: Dictionary) -> float:
 static func wheel_loads(spec: VehicleSpec) -> Vector2:
 	var ax := axle_geometry(spec)
 	var weight := spec.mass * G
-	var front_share := _static_front_share(spec, ax)
+	var front_share := static_front_share(spec, ax)
 	return Vector2(weight * front_share / maxf(1.0, int(ax["n_front"])),
 			weight * (1.0 - front_share) / maxf(1.0, int(ax["n_rear"])))
 
@@ -187,7 +187,7 @@ static func park_grade(spec: VehicleSpec) -> float:
 	if n_rear == 0 or gd.axle_radius(true) <= 0.0 or spec.mass <= 0.0:
 		return 0.0
 	var weight := spec.mass * G
-	var rear_share := 1.0 - _static_front_share(spec, ax)
+	var rear_share := 1.0 - static_front_share(spec, ax)
 	var h_over_l := 0.0
 	if int(ax["n_front"]) > 0:
 		h_over_l = com_height(spec) / maxf(float(ax["rear_z"]) - float(ax["front_z"]), 1e-3)

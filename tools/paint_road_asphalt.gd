@@ -7,6 +7,7 @@ extends Node
 ## road or profile edit without a re-paint fails the stale-bake gate.
 
 const Groups := preload("res://src/levels/base/carlito_groups.gd")
+const GenIO := preload("res://tools/level_gen_io.gd")
 
 const CENTERLINE_STEP := 0.5   ## m between centerline samples (short segments = smooth stamp)
 const TOOL_PATH := "res://tools/paint_road_asphalt.tscn"
@@ -46,7 +47,7 @@ func _ready() -> void:
 
 	var code := 0
 	for t in terrains:
-		if _paint_terrain(t, roads, true) < 0:
+		if _paint_terrain(t, roads, true, level_path.get_base_dir()) < 0:
 			code = 1
 	root.free()
 	get_tree().quit(code)
@@ -104,8 +105,8 @@ static func _collect(node: Node, xform: Transform3D, roads: Array, terrains: Arr
 
 
 ## Stamps every road into one terrain's splats; returns the pixels that changed, -1 on error.
-## `write` false is the dry run: nothing is saved.
-static func _paint_terrain(t: Dictionary, roads: Array, write: bool) -> int:
+## `write` false is the dry run: nothing is saved. A write is refused outside `level_dir`.
+static func _paint_terrain(t: Dictionary, roads: Array, write: bool, level_dir := "") -> int:
 	var terrain: Node = t["node"]
 	var txform: Transform3D = t["xform"]
 	var splat_tex: Texture2D = terrain.get("splatmap")
@@ -166,13 +167,10 @@ static func _paint_terrain(t: Dictionary, roads: Array, write: bool) -> int:
 		print("[paint-asphalt] '%s': paint already current — nothing written." % terrain.name)
 		return 0
 
-	var err := splat.save_png(splat_tex.resource_path)
-	err = err | splat2.save_png(splat2_path)
-	if err != OK:
+	if not GenIO.write_png(splat, splat_tex.resource_path, "paint-asphalt", level_dir) \
+			or not GenIO.write_png(splat2, splat2_path, "paint-asphalt", level_dir):
 		printerr("[paint-asphalt] PNG write failed for '%s'" % terrain.name)
 		return -1
-	TerrainGen.ensure_import_settings(splat_tex.resource_path)
-	TerrainGen.ensure_import_settings(splat2_path)
 	print("[paint-asphalt] '%s': painted %d new asphalt pixels -> %s + %s" % [
 			terrain.name, changed, splat_tex.resource_path.get_file(), splat2_path.get_file()])
 	return changed

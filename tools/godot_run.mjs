@@ -53,7 +53,7 @@ if (held) {
   process.exit(1);
 }
 
-const { bin: godot, error: godotError } = resolveGodot(repo);
+const { bin: godot, source: godotSource, error: godotError } = resolveGodot(repo);
 if (godotError) { say(godotError); process.exit(1); }
 const tests = flag('--tests');
 if (!rest.includes('--import') && !fs.existsSync(path.join(repo, '.godot', 'imported'))) {
@@ -69,7 +69,11 @@ const child = spawn(cmd, args, {
   cwd: repo, stdio: ['ignore', 'pipe', 'pipe'], detached: !WIN, windowsHide: true,
   env: { ...process.env, GODOT_BIN: godot },
 });
-child.on('error', e => { say(`could not start ${cmd}: ${e.message}`); process.exit(1); });
+child.on('error', e => {
+  say(`could not start ${cmd}: ${e.message}`);
+  if (godotSource === 'path') say("no Godot configured; set it once for this clone: git config carlito.godotbin '<path>/Godot_v4.7.1-stable_win64_console.exe'");
+  process.exit(1);
+});
 if (!child.pid) await new Promise(() => {}); // the 'error' handler exits; no lock for a failed spawn
 const started = new Date();
 fs.mkdirSync(path.join(repo, '.godot'), { recursive: true });

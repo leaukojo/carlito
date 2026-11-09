@@ -109,8 +109,8 @@ annotation in a runtime-loaded `@tool` script.
 
 ## Publishing to dev
 
-Push to `dev`. `.github/workflows/ci.yml` runs `build` (editor-type gate → head-include
-check → import → stale-bake check → bake → gdUnit4 → headless smoke → baked-level smoke →
+Push to `dev`. `.github/workflows/ci.yml` runs `build` (head-include check → GDScript
+text check, editor-type gate included → import → stale-bake check → bake → gdUnit4 → headless smoke → baked-level smoke →
 web export + level packs) beside a parallel `tracking` job, then `publish-dev` copies
 `build/web/` into `gh-pages:/dev/`. Steps are judged by output, not exit code — headless
 Godot can finish and still die in teardown — so each step requires its tool's completion
@@ -166,5 +166,5 @@ no service worker: stable is `https://leaukojo.github.io/sloppycan/`, dev is
 ## Before you push
 
 `powershell -File tools/preflight.ps1` runs the CI gates locally except tracking, bake and
-export (and adds `check_orphans` / `check_docs`, which CI does not run); the pre-commit hook
+export (and adds the contract sync check, which needs the sibling sloppycan); the pre-commit hook
 covers the cheap ones. Stale bakes are the most common failure.

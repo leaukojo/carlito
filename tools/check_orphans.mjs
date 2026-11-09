@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Finds public (non-underscore) GDScript functions under src/ and kit/ with zero call sites
+// Finds public (non-underscore) GDScript functions under src/, kit/ and tools/ with zero call sites
 // anywhere in real code — same file included. Text search, not the class graph: a call,
 // `call("name")`/`call(&"name")`, a signal `.connect(name)`, and `has_method("name")` all
 // count as callers, since it's a whole-word search over the source with `#` comments stripped
@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 const here = fileURLToPath(new URL('.', import.meta.url));
 const repoRoot = join(here, '..');
 
-const DEFINITION_DIRS = ['src', 'kit'];
+const DEFINITION_DIRS = ['src', 'kit', 'tools'];
 // Callers can live anywhere real code does; tests/ is excluded on purpose (a function called
 // only from its own test suite is exactly the "never wired" case this looks for).
 const CALLER_EXCLUDE_DIRS = new Set(['tests', '.git', '.godot', 'build', 'reports', 'tmp']);

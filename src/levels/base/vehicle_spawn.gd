@@ -25,6 +25,14 @@ func accepts(type: String) -> bool:
 	return vehicle_types.is_empty() or vehicle_types.has(type)
 
 
+## The first VehicleSpawn under `root`, in tree order, that accepts `family`; null when none does.
+static func first_under(root: Node, family: String) -> VehicleSpawn:
+	for n in root.find_children("*", "VehicleSpawn", true, false):
+		if (n as VehicleSpawn).accepts(family):
+			return n as VehicleSpawn
+	return null
+
+
 func _ready() -> void:
 	if not Engine.is_editor_hint():
 		return

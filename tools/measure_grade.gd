@@ -75,7 +75,6 @@ const LEVEL_STEP := 4.0   ## m between road-curve samples in level mode
 ## `docs/vehicle_measurements.md` is rewritten (`doc_region.gd`). The flags are per job here, not per run.
 const DocRegion := preload("res://tools/doc_region.gd")
 const MeasureRig := preload("res://tools/measure_rig.gd")
-const MeasureVehicles := preload("res://tools/measure_vehicles.gd")
 const DOC_SURFACES: Array[String] = ["asphalt", "mud"]
 const DOC_JOBS: Array[Dictionary] = [
 	{"variant": "sedan", "mfwd": false, "diff": false, "tc": false},
@@ -153,7 +152,7 @@ var _tipper := false                  ## `tipper`: the tractor spawns with its d
 ## `cornering_peak=<x>`: the tyre's cornering-stiffness law (`GroundDriveSpec.cornering_peak_load`)
 ## on a copy of the spec, in memory (NAN: the spec's).
 var _cornering_peak := NAN
-## climb mode: the shifts so far, each {t, kmh, from, to, before, landing, load}; the byte engaged
+## climb mode: the shifts so far, each a `MeasureRig.shift_record` plus `load`; the byte engaged
 ## last tick; the run's grade, %
 var _ascent_shifts: Array[Dictionary] = []
 var _ascent_byte := 0
@@ -181,8 +180,8 @@ var _dsc_dist := 0.0
 var _dsc_length := 0.0                ## m, the ramp's, sized once for every job of the run
 var _dsc_lift := 0.0                  ## m, the ramp's raise (`MeasureRig.tilt_ramp`)
 var _dsc_gear := 0                    ## the `gear` mode's held byte
-var _dsc_pedal_i := 0.0               ## the PIs' integrals: foot brake, retarder
-var _dsc_ret_i := 0.0
+var _dsc_pedal_hold := MeasureRig.PiHold.new(PEDAL_KP, PEDAL_KI)  ## the PIs: foot brake, retarder
+var _dsc_ret_hold := MeasureRig.PiHold.new(RETARDER_KP, RETARDER_KI)
 var _dsc_x0 := Vector3.ZERO           ## where the hold or the stop began
 var _dsc_v0 := 0.0                    ## m/s, the stop's entry speed
 var _dsc_gap := 0.0                   ## s, the run-up before the stop
@@ -203,7 +202,8 @@ var _dsc_check := false               ## `doc=brake_check`: rewrite that region 
 var _dsc_job := {}                    ## the current job, its flags (`DOC_CHECK_JOBS`' keys)
 var _dsc_shift := 0.0                 ## °C, the job's `amb` less the model's: on every reported brake
 var _dsc_mean := {}                   ## the rig's thermal brakes now: {mean, front, n} (`_track_units`)
-var _dsc_decel_i := 0.0               ## the deceleration PI's integral, its filtered reading (m/s²)
+## The deceleration PI, its filtered reading (m/s²).
+var _dsc_decel_hold := MeasureRig.PiHold.new(DECEL_KP, DECEL_KI)
 var _dsc_a := 0.0
 var _dsc_v_prev := 0.0
 var _dsc_front0 := 0.0                ## °C, the front discs' mean as the stop began
@@ -234,30 +234,23 @@ func wind_vector() -> Vector3:
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
-	MeasureRig.esc_off = args.has("noesc")
-	for a in args:
-		if String(a).begins_with("level="):
-			_report_level(String(a).substr(6))
-			get_tree().quit(0)
-			return
+	MeasureRig.common_flags(args)
+	var level_id := MeasureRig.flag(args, "level=")
+	if level_id != "":
+		_report_level(level_id)
+		get_tree().quit(0)
+		return
 	var which := String(args[0]) if args.size() > 0 else "suv"
 	_mfwd = args.has("mfwd")
 	_verbose = args.has("verbose")
 	_tc = args.has("tc")
-	for a in args:
-		if String(a).begins_with("pedal="):
-			_pedal = String(a).substr(6).to_float()
-		if String(a).begins_with("hold="):
-			_hold = String(a).substr(5).to_float()
-		if String(a).begins_with("cornering_peak="):
-			_cornering_peak = String(a).substr(15).to_float()
-		if String(a).begins_with("gear="):
-			_held_gear = String(a).substr(5).to_int()
-			if _held_gear < 1 or _held_gear > Drivetrain.TOP_GEAR:
-				printerr("gear=%s: expected a drive byte 1-%d" % [String(a).substr(5),
-						Drivetrain.TOP_GEAR])
-				get_tree().quit(1)
-				return
+	_pedal = MeasureRig.float_flag(args, "pedal=", _pedal)
+	_hold = MeasureRig.float_flag(args, "hold=", NAN)
+	_cornering_peak = MeasureRig.float_flag(args, "cornering_peak=", NAN)
+	_held_gear = MeasureRig.gear_flag(args)
+	if _held_gear < 0:
+		get_tree().quit(1)
+		return
 	_tyre = MeasureRig.tyre_flag(args)
 	if _tyre == "?":
 		get_tree().quit(1)
@@ -282,10 +275,7 @@ func _ready() -> void:
 	_patch = MeasureRig.GripPatch.new()
 	_patch.name = "GripPatch"
 	add_child(_patch)
-	var park := NAN
-	for a in args:
-		if String(a).begins_with("park="):
-			park = String(a).substr(5).to_float()
+	var park := MeasureRig.float_flag(args, "park=", NAN)
 	if _held_gear > 0 and (args.has("creep") or which == "doc=park" or not is_nan(park)):
 		printerr("gear= holds a start gear for the climbs and the roll-back; creep is D1, park is"
 				+ " the hold")
@@ -315,16 +305,12 @@ func _ready() -> void:
 		_doc = true
 		_queue = DOC_JOBS.duplicate(true)
 		_surface_list = DOC_SURFACES.duplicate()
-	elif which == "all":
-		for v in _wheel_driven_variants():
-			_queue.append({"variant": v, "mfwd": _mfwd, "diff": _diff, "tc": _tc})
-	elif Catalog.VARIANTS.has(which):
-		_queue = [{"variant": which, "mfwd": _mfwd, "diff": _diff, "tc": _tc}]
 	else:
-		printerr("unknown variant '%s' — expected 'all' or one of: %s"
-				% [which, ", ".join(_wheel_driven_variants())])
-		get_tree().quit(1)
-		return
+		for v in MeasureRig.variants_arg(which, MeasureRig.wheel_driven_variants()):
+			_queue.append({"variant": v, "mfwd": _mfwd, "diff": _diff, "tc": _tc})
+		if _queue.is_empty():
+			get_tree().quit(1)
+			return
 	print("=== grade climb: standing start, %.0f s per trial ===" % CLIMB_S)
 	print("  surfaces: %s" % ", ".join(_surface_list))
 	print("  throttle: %s" % ("slip-limited (tc)" if _tc else "full"))
@@ -335,21 +321,6 @@ func _ready() -> void:
 	if _mfwd or _diff:
 		print("  tractor toggles: %s%s" % ["MFWD " if _mfwd else "", "diff-lock" if _diff else ""])
 	_next_variant()
-
-
-## Every catalog variant with a driven axle, same filter measure_vehicles.gd uses.
-func _wheel_driven_variants() -> Array[String]:
-	var out: Array[String] = []
-	for id: String in Catalog.VARIANTS:
-		var scene: PackedScene = load(Catalog.VARIANTS[id]["scene"])
-		var body := scene.instantiate()
-		if body is BaseVehicle:
-			var spec: VehicleSpec = (body as BaseVehicle).spec
-			var gd: GroundDriveSpec = spec.ground_drive if spec != null else null
-			if gd != null and (gd.driven_front or gd.driven_rear):
-				out.append(id)
-		body.free()
-	return out
 
 
 # ------------------------------------------------------------------ ramp mode
@@ -407,35 +378,28 @@ func _build_ramp(angle_deg: float) -> void:
 ## `yaw` turns the body about the ramp's normal: PI / 2 parks it across the slope. `lift`: the
 ## ramp's (`MeasureRig.tilt_ramp`).
 func _spawn(angle_deg: float, yaw := 0.0, up := SPAWN_UP, lift := 0.0) -> void:
-	if _car != null:
-		remove_child(_car)
-		_car.queue_free()
-		_car = null
-	var tilt := Basis(Vector3.RIGHT, deg_to_rad(angle_deg))
-	_car = load(Catalog.VARIANTS[_variant]["scene"]).instantiate()
-	MeasureRig.unfit_esc(_car)
-	if _nohold:
-		# On a copy, in memory, never shipped: the ground drive is a sub-resource the copy shares.
-		_car.spec = _car.spec.duplicate()
-		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
-		_car.spec.ground_drive.hill_hold = HillHold.Kind.NONE
-	if not is_nan(_cornering_peak):
-		_car.spec = _car.spec.duplicate()
-		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
-		_car.spec.ground_drive.cornering_peak_load = _cornering_peak
-	add_child(_car)
+	MeasureRig.free_body(self, _car)
+	_car = MeasureRig.spawn(self, _variant, _spec_overrides) as BaseVehicle
 	_tyre_label = MeasureRig.fit_tyre(_car, _tyre)
 	if _tipper and _car.has_method(&"set_attachment"):
 		# Remembered until the drawbar's spawn countdown has run, then coupled (TowHost).
 		_car.call(&"set_attachment", ImplementCatalog.TOWED[0])
 	elif _car is TractorVehicle:
 		_car.call(&"set_attachment", AttachmentCatalog.NONE)  ## bare: an implement's weight moves the axles
-	var surface := tilt * Vector3(0.0, 0.0, -up) + Vector3.UP * lift  ## `up` metres up the slope from origin
-	_car.global_transform = Transform3D(tilt * Basis(Vector3.UP, yaw),
-			surface + tilt.y * _car.rest_ride_height())
-	_car.spawn_transform = _car.global_transform
-	_car.reset_physics_interpolation()
+	MeasureRig.place(_car, MeasureRig.slope_pose(_car, deg_to_rad(angle_deg), up, yaw, lift))
 	_start = _car.global_position
+
+
+## `spawn`'s prep: `nohold` and `cornering_peak=` on `car`'s own spec; neither leaves the shipped
+## one.
+func _spec_overrides(car: BaseVehicle) -> void:
+	if not _nohold and is_nan(_cornering_peak):
+		return
+	var gd := MeasureRig.own_ground_drive(car)
+	if _nohold:
+		gd.hill_hold = HillHold.Kind.NONE
+	if not is_nan(_cornering_peak):
+		gd.cornering_peak_load = _cornering_peak
 
 
 ## Drive through the bridge, not the keyboard: `InputRouter.arbitrate_local` latches reverse on
@@ -555,7 +519,7 @@ func _record() -> void:
 	var sid := Surface.from_key(_surface)
 	# The fitted tyre's grip there (`RayWheel.tyre_grip`), the reference tyre's on no class.
 	var s := Vector2(Surface.grip_in(_car.drive.wheels[0].tyre_grip, sid), Surface.drag(sid))
-	var coupled := _coupled_mass()
+	var coupled := MeasureRig.towed_mass(_car)
 	var traction := _traction_limit_deg(spec, gd, s.x, s.y)
 	if coupled > 0.0:
 		# The kingpin load on the drive axle has no static figure here: read it off the springs.
@@ -638,7 +602,8 @@ func _driven_share() -> float:
 	for w in _car.drive.wheels:
 		if w.driven:
 			driven_load += w.suspension_force
-	return driven_load / ((_car.mass + _coupled_mass()) * 9.81 * cos(deg_to_rad(_angle)))
+	return driven_load / ((_car.mass + MeasureRig.towed_mass(_car)) * 9.81
+			* cos(deg_to_rad(_angle)))
 
 
 ## Spring load on the front axle right now, N.
@@ -667,18 +632,6 @@ func _torque_limit_deg(spec: VehicleSpec, gd: GroundDriveSpec, crr: float, mass:
 	return rad_to_deg(asin(s) - atan(crr))
 
 
-## Total towed mass hanging off the body right now (kg), 0 when nothing is coupled. The semi
-## couples a 24 t box the moment it spawns, which is exactly the case the single-body
-## predictions above do not describe.
-func _coupled_mass() -> float:
-	var host: Variant = _car.get("_fifth_wheel")
-	if host == null:
-		host = _car.get("_drawbar")
-	if host == null:
-		return 0.0
-	return float(host.call(&"towed_mass_kg"))
-
-
 func _print_table() -> void:
 	print("\n%-16s %-8s %8s %8s %10s %10s %10s  %s"
 			% ["variant", "surface", "measured", "grade", "traction", "torque", "tip", "note"])
@@ -698,11 +651,11 @@ func _print_table() -> void:
 ## "`variant` (layout, toggles, mass)" for the doc table: the tractor reads 2WD / MFWD by its
 ## engageable front axle, a coupled rig its towed mass.
 func _doc_label(spec: VehicleSpec, gd: GroundDriveSpec, coupled: float) -> String:
-	var layout := "AWD" if gd.driven_front and gd.driven_rear else ("FWD" if gd.driven_front else "RWD")
+	var layout := MeasureRig.layout_label(gd)
 	if gd.front_axle_engageable:
 		layout = "MFWD" if _mfwd else "2WD"
 	if _mfwd or not gd.front_axle_engageable:  ## a disengaged front axle leaves no centre to declare
-		layout += MeasureVehicles._diff_label(gd)
+		layout += MeasureRig.diff_label(gd)
 	if _diff:
 		layout += ", diff lock"
 	if _tc:
@@ -902,18 +855,15 @@ const CREEP_BISECT_HI := 30.0
 
 
 func _start_creep(which: String) -> void:
-	for v in (_wheel_driven_variants() if which == "all" else [which]):
-		if not Catalog.VARIANTS.has(v):
-			printerr("unknown variant '%s'" % v)
-			get_tree().quit(1)
-			return
-		var body: Node = (load(Catalog.VARIANTS[v]["scene"]) as PackedScene).instantiate()
-		var spec := body.get("spec") as VehicleSpec
-		if spec.coupling == VehicleSpec.Coupling.CONVERTER:
+	var variants := MeasureRig.variants_arg(which, MeasureRig.wheel_driven_variants())
+	if variants.is_empty():
+		get_tree().quit(1)
+		return
+	for v in variants:
+		if Catalog.spec_of(v).coupling == VehicleSpec.Coupling.CONVERTER:
 			_creep_queue.append(v)
 		elif which != "all":
 			print("%s has no converter (a clutch opens at a stop): nothing creeps" % v)
-		body.free()
 	print("=== creep: released in D1 with no pedal on asphalt, after a %.1f s settle ===" % SETTLE_S)
 	_surface = "asphalt"
 	_next_creep()
@@ -1017,21 +967,20 @@ const ROLL_LOST_M := 4.0  ## m rolled back that ends it
 
 
 func _start_rollback(which: String, args: PackedStringArray) -> void:
-	var grades := ROLL_GRADES.duplicate()
-	_roll_delay = ROLL_DELAY_S
+	var grade := MeasureRig.float_flag(args, "grade=", NAN)
+	var grades: Array[float] = ROLL_GRADES.duplicate()  # a typed-array ternary fails at runtime
+	if not is_nan(grade):
+		grades = [grade]
+	_roll_delay = MeasureRig.float_flag(args, "delay=", ROLL_DELAY_S)
 	_surface = "asphalt"
 	for a in args:
-		if String(a).begins_with("grade="):
-			grades = [String(a).substr(6).to_float()]
-		elif String(a).begins_with("delay="):
-			_roll_delay = String(a).substr(6).to_float()
-		elif Surface.from_key(String(a)) >= 0:
+		if Surface.from_key(String(a)) >= 0:
 			_surface = String(a)
-	for v in (_wheel_driven_variants() if which == "all" else [which]):
-		if not Catalog.VARIANTS.has(v):
-			printerr("unknown variant '%s'" % v)
-			get_tree().quit(1)
-			return
+	var variants := MeasureRig.variants_arg(which, MeasureRig.wheel_driven_variants())
+	if variants.is_empty():
+		get_tree().quit(1)
+		return
+	for v in variants:
 		for g: float in grades:
 			_roll_queue.append({"variant": v, "grade": g})
 	print("=== rollback: released on %s after a %.1f s settle, pedal %.0f %% after %.2f s; hold %s%s ==="
@@ -1081,7 +1030,7 @@ func _roll_step() -> void:
 	if _t < ROLL_S and gain < ROLL_DONE_M and gain > -ROLL_LOST_M:
 		return
 	var row := {"variant": _variant, "grade": _roll_grade, "back": -_roll_min, "go": _roll_go,
-			"held": _roll_held, "towed": _coupled_mass()}
+			"held": _roll_held, "towed": MeasureRig.towed_mass(_car)}
 	_roll_rows.append(row)
 	print("  %-16s %4.1f %%  rolled back %7.1f mm  forward %s  held %.2f s%s" % [_variant,
 			_roll_grade, 1000.0 * float(row["back"]),
@@ -1152,12 +1101,10 @@ func _start_ascent(which: String, args: PackedStringArray) -> void:
 		get_tree().quit(1)
 		return
 	_variant = which
-	_ascent_grade = ASCENT_GRADE
+	_ascent_grade = MeasureRig.float_flag(args, "grade=", ASCENT_GRADE)
 	_surface = "asphalt"
 	for a in args:
-		if String(a).begins_with("grade="):
-			_ascent_grade = String(a).substr(6).to_float()
-		elif Surface.from_key(String(a)) >= 0:
+		if Surface.from_key(String(a)) >= 0:
 			_surface = String(a)
 	_angle = rad_to_deg(atan(_ascent_grade / 100.0))
 	_build_ramp(_angle)
@@ -1195,14 +1142,11 @@ func _ascent_step(delta: float) -> void:
 		return
 	_drive(_ascent_pedal() * 100.0, 0.0)
 	var dt: Drivetrain = _car.drivetrain
-	var road_omega := _car.telemetry.speed / dt.road_radius
 	if dt.gear_byte != _ascent_byte and Drivetrain.is_drive(_ascent_byte) \
 			and Drivetrain.is_drive(dt.gear_byte):
-		_ascent_shifts.append({"t": _t, "kmh": _car.telemetry.speed * 3.6, "from": _ascent_byte,
-				"to": dt.gear_byte,
-				"before": Drivetrain.rpm_from_wheel(dt.spec, road_omega, _ascent_byte),
-				"landing": Drivetrain.rpm_from_wheel(dt.spec, road_omega, dt.gear_byte),
-				"load": _ascent_load()})
+		var shift := MeasureRig.shift_record(_car, _t, _ascent_byte, dt.gear_byte)
+		shift["load"] = _ascent_load()
+		_ascent_shifts.append(shift)
 	_ascent_byte = dt.gear_byte
 	_trace_t += delta
 	if _trace_t >= 1.0 - 1e-6:
@@ -1223,12 +1167,8 @@ func _ascent_step(delta: float) -> void:
 func _print_ascent(gain: float) -> void:
 	print("  end           : %.2f s, %.1f m up, %.1f km/h in D%d" % [_t, gain,
 			_car.telemetry.speed * 3.6, _car.drivetrain.gear_byte])
-	var lines: Array[String] = []
-	for s in _ascent_shifts:
-		lines.append("D%d>D%d %.2f s %.1f km/h %.0f>%.0f rpm%s" % [s["from"], s["to"], s["t"],
-				s["kmh"], s["before"], s["landing"],
-				"" if is_nan(float(s["load"])) else " load %.0f" % s["load"]])
-	print("  each shift    : %s" % (", ".join(lines) if not lines.is_empty() else "none"))
+	print("  each shift    : %s" % (MeasureRig.shifts_label(_ascent_shifts, true)
+			if not _ascent_shifts.is_empty() else "none"))
 	var falls: Array[String] = []
 	for i in _ascent_shifts.size():
 		var up: Dictionary = _ascent_shifts[i]
@@ -1378,13 +1318,6 @@ static func _stops_flag(args: PackedStringArray) -> int:
 		if a.begins_with("stops="):
 			return maxi(a.substr(6).to_int(), 1)
 	return 0
-
-
-## One tick of a hold's PI on its overspeed `over` (m/s): the integral and the demand, both 0..1.
-static func overspeed_hold(integral: float, over: float, delta: float, kp: float,
-		ki: float) -> Vector2:
-	var i := clampf(integral + over * ki * delta, 0.0, 1.0)
-	return Vector2(i, clampf(i + over * kp, 0.0, 1.0))
 
 
 ## The lowest drive byte whose engine speed at `wheel_omega` (rad/s at the drive radius) stays at or
@@ -1609,13 +1542,11 @@ func _descent_step(delta: float) -> void:
 		return
 	var over := v - _dsc_speed
 	var pedal_over := over - TOPUP_BAND if _dsc_mode == "retarder" else over
-	var pedal := overspeed_hold(_dsc_pedal_i, pedal_over, delta, PEDAL_KP, PEDAL_KI)
-	_dsc_pedal_i = pedal.x
-	var ret := Vector2.ZERO
+	var pedal := _dsc_pedal_hold.step(pedal_over, delta)
+	var ret := 0.0
 	if _dsc_mode == "retarder":
-		ret = overspeed_hold(_dsc_ret_i, over, delta, RETARDER_KP, RETARDER_KI)
-		_dsc_ret_i = ret.x
-	_dsc_drive(0.0, pedal.y * 100.0, ret.y, _dsc_gear if _dsc_mode == "gear" else 1)
+		ret = _dsc_ret_hold.step(over, delta)
+	_dsc_drive(0.0, pedal * 100.0, ret, _dsc_gear if _dsc_mode == "gear" else 1)
 	var byte := _car.drivetrain.gear_byte
 	if _t >= 1.0:  ## past the shift into a held gear, which reads the last request's byte a tick
 		_dsc_gears = Vector2i(mini(_dsc_gears.x, byte), maxi(_dsc_gears.y, byte))
@@ -1629,8 +1560,8 @@ func _descent_step(delta: float) -> void:
 		if _trace_t >= 10.0:
 			_trace_t = 0.0
 			print("      t %5.0f  %6.0f m  across %+6.2f m  y %6.1f  %5.1f km/h  pedal %.2f  ret %.2f  D%d  %s%s"
-					% [_t, dist, _car.global_position.x, _car.global_position.y, v * 3.6, pedal.y,
-					ret.y, byte, _units_line(), "" if not is_instance_valid(_dsc_trailer)
+					% [_t, dist, _car.global_position.x, _car.global_position.y, v * 3.6, pedal,
+					ret, byte, _units_line(), "" if not is_instance_valid(_dsc_trailer)
 					else "  articulation %+.2f°" % rad_to_deg(_dsc_host.articulation())])
 	if _t >= 3.0 * _dsc_dist / _dsc_speed or dist < -1.0:  ## stalled, or respawned off the ramp
 		print("  %-16s %-8s : the hold ended at %.0f m after %.0f s (%.1f km/h), not measured%s"
@@ -1655,8 +1586,8 @@ func _begin_hold() -> void:
 	_phase = Ph.DESC_HOLD
 	_t = 0.0
 	_dsc_x0 = _car.global_position
-	_dsc_pedal_i = 0.0
-	_dsc_ret_i = 0.0
+	_dsc_pedal_hold.integral = 0.0
+	_dsc_ret_hold.integral = 0.0
 	_dsc_gears = Vector2i(Drivetrain.TOP_GEAR + 1, 0)
 	_dsc_speed_sum = 0.0
 	_dsc_ticks = 0
@@ -1731,8 +1662,8 @@ func _begin_stop(v: float) -> void:
 	if _dsc_job.has("decel"):
 		_dsc_v_prev = v
 		_dsc_a = float(_dsc_job["decel"]) * BrakeSizing.G
-		_dsc_decel_i = _decel_feedforward()
-		_dsc_drive(0.0, _dsc_decel_i * 100.0)
+		_dsc_decel_hold.integral = _decel_feedforward()
+		_dsc_drive(0.0, _dsc_decel_hold.integral * 100.0)
 	else:
 		_dsc_drive(0.0, 100.0)
 
@@ -1825,7 +1756,7 @@ func _units_line() -> String:
 ## Every friction brake on the rig with a thermal model (the trailer's too).
 func _thermal_brakes() -> Array[RayWheel]:
 	var out: Array[RayWheel] = []
-	for b in _rig_bodies():
+	for b in MeasureRig.rig_bodies(_car):
 		for w in _wheels_of(b):
 			if w.brake_figures.capacity > 0.0:
 				out.append(w)
@@ -1867,9 +1798,7 @@ func _apply_job_mass() -> void:
 func _decel_pedal(v: float, delta: float) -> float:
 	_dsc_a = lerpf(_dsc_a, (_dsc_v_prev - v) / delta, DECEL_FILTER)
 	_dsc_v_prev = v
-	var err := float(_dsc_job["decel"]) * BrakeSizing.G - _dsc_a
-	_dsc_decel_i = clampf(_dsc_decel_i + err * DECEL_KI * delta, 0.0, 1.0)
-	return clampf(_dsc_decel_i + err * DECEL_KP, 0.0, 1.0)
+	return _dsc_decel_hold.step(float(_dsc_job["decel"]) * BrakeSizing.G - _dsc_a, delta)
 
 
 ## The pedal the job's `decel` asks on the cold brake: `WheelDrive.brake_application` inverted.
@@ -1895,13 +1824,6 @@ static func front_brake_share(gd: GroundDriveSpec) -> float:
 	return front / maxf(all, 1e-6)
 
 
-func _rig_bodies() -> Array[RigidBody3D]:
-	var out: Array[RigidBody3D] = [_car]
-	if is_instance_valid(_dsc_trailer) and _dsc_trailer.is_inside_tree():
-		out.append(_dsc_trailer)
-	return out
-
-
 func _wheels_of(b: RigidBody3D) -> Array[RayWheel]:
 	return (b as BaseVehicle).drive.wheels if b is BaseVehicle else (b as TowedBody).wheels
 
@@ -1910,7 +1832,7 @@ func _wheels_of(b: RigidBody3D) -> Array[RayWheel]:
 func _rig_energy() -> float:
 	var g := float(ProjectSettings.get_setting("physics/3d/default_gravity"))
 	var e := 0.0
-	for b in _rig_bodies():
+	for b in MeasureRig.rig_bodies(_car):
 		e += 0.5 * b.mass * b.linear_velocity.length_squared() + b.mass * g * b.global_position.y
 		for w in _wheels_of(b):
 			e += 0.5 * w.wheel_inertia * w.omega * w.omega
@@ -1940,7 +1862,7 @@ func _towed_momentum() -> float:
 func _ledger_tick(delta: float) -> void:
 	var l := _dsc_ledger
 	l["t"] += delta
-	for b in _rig_bodies():
+	for b in MeasureRig.rig_bodies(_car):
 		var fwd := -b.global_basis.z
 		var right := b.global_basis.x
 		var gd: GroundDriveSpec = (b.get("spec") as VehicleSpec).ground_drive
@@ -2124,10 +2046,7 @@ func _descent_doc_table() -> Array[String]:
 
 ## The towed mass (kg) behind a doc row's variant: `MeasureRig.rig_mass` less the body's.
 func _dsc_trailer_t(r: Dictionary) -> float:
-	var body: Node = (load(Catalog.VARIANTS[r["variant"]]["scene"]) as PackedScene).instantiate()
-	var own := (body.get("spec") as VehicleSpec).mass
-	body.free()
-	return MeasureRig.rig_mass(r["variant"]) - own
+	return MeasureRig.rig_mass(r["variant"]) - Catalog.spec_of(r["variant"]).mass
 
 
 ## WY-1901F Table 11's power into one of the rig's 10 brakes (W): `HP_B = (Wθ − F_drag) V / 375 −

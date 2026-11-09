@@ -21,16 +21,18 @@ const TITLE := "Level 6 - Skyport"
 const LOG_TAG := "skyport"
 
 const GenIO := preload("res://tools/level_gen_io.gd")
+const GenProps := preload("res://tools/level_gen_props.gd")
+const RoadGen := preload("res://tools/road_gen.gd")
+const TerrainGrid := preload("res://tools/terrain_grid.gd")
 const BrushOps := preload("res://kit/helpers/brush_ops.gd")
-const SplatPaint := preload("res://kit/helpers/splat_paint.gd")
 
 # --- the island ------------------------------------------------------------------------
 const SIZE := 512.0            ## world extent (X and Z), matching the other islands
 const HEIGHT := 51.0           ## white-pixel amplitude; 765/15, so 3 m levels store exactly
-## A sample is [0,1] over the terrain's Y and _norm clamps, so the seabed floors at 0 whatever
-## _floor_y asks for: this IS the basin depth. Ceiling 6.6 — _repaint walks from REACHES[0].x,
-## where _floor_y is 6.6, and skips columns under the sea, so a higher sea drops the westernmost
-## reach's paint; Y_FLOOR (9) is where it floods the gorge outright.
+## A sample is [0,1] over the terrain's Y and TerrainGrid.norm clamps, so the seabed floors at 0
+## whatever _floor_y asks for: this IS the basin depth. Ceiling 6.6 — _repaint walks from
+## REACHES[0].x, where _floor_y is 6.6, and skips columns under the sea, so a higher sea drops the
+## westernmost reach's paint; Y_FLOOR (9) is where it floods the gorge outright.
 const SEA_Y := 6.0
 const SEA_DEPTH := SEA_Y + 3.0   ## kill box, measured DOWN: it must reach the basin floor at 0
 ## classify_splat's sand weight crosses 0.5 — the line you SEE — at 1.25x sand_height. 7.0 puts it
@@ -133,12 +135,7 @@ const NAVIGABLE_MIN := 1.5
 
 # --- roads --------------------------------------------------------------------------------
 const ASPHALT_PROFILE := "res://kit/roads/asphalt_profile.tres"
-const CONFORM_EPSILON := 0.05
 const CONFORM_FALLOFF := 8.0
-const MAX_SEG_LEN := 6.0
-const MAX_SEG_ANGLE := 6.0
-## RoadPath.SPLAT_PAINT_INSET, reproduced — that node's paint button is editor-only.
-const SPLAT_PAINT_INSET := 1.0
 
 ## RoadLoop: apron shelf, west and south onto the highland, east along the north rim, ending
 ## pointed at the viaduct. Asphalt roads keep clear of the canyon rim by (half-width +
@@ -281,10 +278,7 @@ const CURRENT_PERIOD_S := 240.0
 const CURRENT_OFFSET_S := 60.0
 
 # --- working state (world <-> pixel) ---------------------------------------------------------
-var _iw := 0
-var _ih := 0
-var _sx := 1.0
-var _sz := 1.0
+var _grid: TerrainGrid
 
 
 func _ready() -> void:
@@ -310,20 +304,17 @@ func _ready() -> void:
 func _scaffold() -> int:
 	DirAccess.make_dir_recursive_absolute(DIR)
 	var cells := int(SIZE) + 1
-	_iw = cells
-	_ih = cells
-	_sx = float(cells - 1) / SIZE
-	_sz = _sx
+	_grid = TerrainGrid.new(Vector2(SIZE, SIZE), Vector3.ZERO, HEIGHT, cells, cells)
 
 	var heights := TerrainGen.generate_heights(TerrainGen.Preset.ISLAND, GEN_SEED,
 			FEATURE_SCALE, OCTAVES, FALLOFF_START, FALLOFF_END, cells, cells,
 			float(TERRACE_LEVELS) * 3.0 / HEIGHT, 0.6, COAST_ROUGHNESS)
 
 	# --- sculpt: flats first, then the cut through them, then the roads' own shelves -----
-	_flatten(heights, HIGHLAND, Y_HIGHLAND)
-	_flatten(heights, MESA_B, Y_MESA_B)
-	_flatten(heights, MESA_A, Y_MESA_A)
-	_flatten(heights, APRON_SHELF, Y_APRON)
+	_grid.flatten(heights, HIGHLAND, Y_HIGHLAND, FLATTEN_MARGIN)
+	_grid.flatten(heights, MESA_B, Y_MESA_B, FLATTEN_MARGIN)
+	_grid.flatten(heights, MESA_A, Y_MESA_A, FLATTEN_MARGIN)
+	_grid.flatten(heights, APRON_SHELF, Y_APRON, FLATTEN_MARGIN)
 	_carve_canyon(heights)
 	_carve_ramp(heights, SLIP_RAMP_A, SLIP_RAMP_B)
 	# Before the splat pass, so the bar is classified sand by height like any other beach.
@@ -384,18 +375,6 @@ func _scaffold() -> int:
 # ------------------------------------------------------------------------------- sculpting
 
 
-## Flatten `rect` to `target_y` with a soft blend ring, using the square brush stamp. Falloff
-## derives from the longer half-extent since the square brush measures one Chebyshev distance
-## against per-axis radii (same reasoning as gen_farm_playground's _flatten).
-func _flatten(img: Image, rect: Rect2, target_y: float, margin := FLATTEN_MARGIN) -> void:
-	var half_x := rect.size.x * 0.5 + margin
-	var half_z := rect.size.y * 0.5 + margin
-	var falloff := margin / maxf(half_x, half_z)
-	var c := rect.get_center()
-	BrushOps.stamp_height(img, _px_x(c.x), _px_z(c.y), half_x * _sx, half_z * _sz,
-			BrushOps.FLATTEN, 1.0, falloff, _norm(target_y), true)
-
-
 ## The sandbar off the slipway: the round brush's FLATTEN, exactly as the flats above use it and
 ## for the same reason — FLATTEN lerps toward a target and RAISE accumulates, so this one is the
 ## op a scaffold replay lands on the same bytes.
@@ -408,9 +387,9 @@ func _shoal(img: Image) -> void:
 	var half_x := SHOAL_HALF.x + SHOAL_MARGIN
 	var half_z := SHOAL_HALF.y + SHOAL_MARGIN
 	var falloff := SHOAL_MARGIN / maxf(half_x, half_z)
-	BrushOps.stamp_height(img, _px_x(SHOAL_CENTRE.x), _px_z(SHOAL_CENTRE.y),
-			half_x * _sx, half_z * _sz,
-			BrushOps.FLATTEN, 1.0, falloff, _norm(SHOAL_CREST), false)
+	BrushOps.stamp_height(img, _grid.px_x(SHOAL_CENTRE.x), _grid.px_z(SHOAL_CENTRE.y),
+			half_x * _grid.sx, half_z * _grid.sz,
+			BrushOps.FLATTEN, 1.0, falloff, _grid.norm(SHOAL_CREST), false)
 
 
 ## The canyon, written straight into the working image (no "cut a tapering slot" brush exists,
@@ -418,13 +397,13 @@ func _shoal(img: Image) -> void:
 ## cell per world unit makes a 33 m drop a near-vertical face at zero extra baked vertices,
 ## which is what makes this level's headline feature affordable.
 func _carve_canyon(img: Image) -> void:
-	for pxi in range(_px_x(INLET_X1), _px_x(REACHES[REACHES.size() - 1].x) + 1):
-		var wx := _world_x(pxi)
+	for pxi in range(_grid.px_x(INLET_X1), _grid.px_x(REACHES[REACHES.size() - 1].x) + 1):
+		var wx := _grid.world_x(pxi)
 		var w := _half_width(wx)
 		if w <= 0.0:
 			continue
-		var nv := _norm(_floor_y(wx))
-		for pzi in range(_px_z(CANYON_Z - w), _px_z(CANYON_Z + w) + 1):
+		var nv := _grid.norm(_floor_y(wx))
+		for pzi in range(_grid.px_z(CANYON_Z - w), _grid.px_z(CANYON_Z + w) + 1):
 			if img.get_pixel(pxi, pzi).r > nv:
 				img.set_pixel(pxi, pzi, Color(nv, nv, nv))
 
@@ -433,9 +412,9 @@ func _carve_canyon(img: Image) -> void:
 ## wall with the terrain brush's own ramp stamp, exactly as level 1's haul ramp is cut.
 func _carve_ramp(img: Image, a: Vector3, b: Vector3) -> void:
 	BrushOps.stamp_ramp(img,
-			Vector2i(_px_x(a.x), _px_z(a.z)), _norm(a.y),
-			Vector2i(_px_x(b.x), _px_z(b.z)), _norm(b.y),
-			RAMP_HALF_WIDTH * _sx, RAMP_HALF_WIDTH * _sz, 1.0, 0.4)
+			Vector2i(_grid.px_x(a.x), _grid.px_z(a.z)), _grid.norm(a.y),
+			Vector2i(_grid.px_x(b.x), _grid.px_z(b.z)), _grid.norm(b.y),
+			RAMP_HALF_WIDTH * _grid.sx, RAMP_HALF_WIDTH * _grid.sz, 1.0, 0.4)
 
 
 ## Where the slipway ramp crosses world height `y`. The apron piece belongs at the waterline, and
@@ -486,51 +465,14 @@ func _curve(points: Array[Vector3]) -> Curve3D:
 	return curve
 
 
-## RoadPath._conform_terrain reproduced (editor-only, EditorUndoRedoManager) — a headless tool
-## calls the pure core directly, same as tools/gen_rail_level.gd for level 5.
 func _conform(heights: Image, curve: Curve3D, profile: Resource) -> void:
-	var offsets := RoadBuilder.adaptive_offsets(curve, MAX_SEG_LEN, MAX_SEG_ANGLE)
-	var fw: float = profile.call("full_half_width")
-	var samples := PackedVector3Array()
-	for o in offsets:
-		var w := curve.sample_baked(o)
-		samples.append(Vector3(w.x, w.z, _norm(w.y - CONFORM_EPSILON)))
-	var deck_surfaces: Dictionary = RoadBuilder.extrude(curve,
-			PackedVector2Array([Vector2(-fw, 0), Vector2(fw, 0)]),
-			PackedInt32Array([0]), offsets, false)
-	var deck := PackedVector3Array()
-	for v in RoadBuilder.faces_from_surfaces(deck_surfaces):
-		deck.append(Vector3(v.x, v.z, _norm(v.y - CONFORM_EPSILON)))
-	var dirty := RoadBuilder.conform_heights(heights, samples, fw, CONFORM_FALLOFF,
-			SIZE, SIZE, deck)
-	if not dirty.has_area():
+	if not RoadGen.conform(heights, curve, profile, CONFORM_FALLOFF, SIZE, HEIGHT).has_area():
 		printerr("[skyport] a conform changed nothing — the road missed the terrain")
 
 
-## RoadPath._paint_splat reproduced, for the same reason and at the same INSET paved width,
-## so a conformed road grips like asphalt instead of like the grass under its deck.
 func _paint_road_splat(splat: Image, splat2: Image, curve: Curve3D, profile: Resource) -> void:
-	var channel: int = profile.get("splat_channel")
-	var pw: float = float(profile.call("paved_half_width")) - SPLAT_PAINT_INSET
-	if pw <= 0.0:
+	if not RoadGen.paint(splat, splat2, curve, profile, SIZE):
 		printerr("[skyport] profile too narrow to paint under")
-		return
-	var offsets := RoadBuilder.adaptive_offsets(curve, MAX_SEG_LEN, MAX_SEG_ANGLE)
-	var samples := PackedVector2Array()
-	for o in offsets:
-		var w := curve.sample_baked(o)
-		samples.append(Vector2(w.x, w.z))
-	var deck_surfaces: Dictionary = RoadBuilder.extrude(curve,
-			PackedVector2Array([Vector2(-pw, 0), Vector2(pw, 0)]),
-			PackedInt32Array([0]), offsets, false)
-	var deck := PackedVector2Array()
-	for v in RoadBuilder.faces_from_surfaces(deck_surfaces):
-		deck.append(Vector2(v.x, v.z))
-	var images: Array[Image] = [splat, splat2]
-	var units: Array[Color] = [
-		BrushOps.unit_slice(channel, 0), BrushOps.unit_slice(channel, 1),
-	]
-	SplatPaint.paint_strip(images, units, samples, pw, SIZE, SIZE, deck)
 
 
 # -------------------------------------------------------------------------------- painting
@@ -542,11 +484,11 @@ func _paint_road_splat(splat: Image, splat2: Image, curve: Curve3D, profile: Res
 ## full surface grip, with none of the low-grip apron a feathered edge would leave.
 func _paint(splat: Image, splat2: Image, rect: Rect2, channel: int) -> void:
 	var c := rect.get_center()
-	BrushOps.stamp_splat(splat, _px_x(c.x), _px_z(c.y),
-			rect.size.x * 0.5 * _sx, rect.size.y * 0.5 * _sz,
+	BrushOps.stamp_splat(splat, _grid.px_x(c.x), _grid.px_z(c.y),
+			rect.size.x * 0.5 * _grid.sx, rect.size.y * 0.5 * _grid.sz,
 			BrushOps.unit_slice(channel, 0), 1.0, 0.0, true)
-	BrushOps.stamp_splat(splat2, _px_x(c.x), _px_z(c.y),
-			rect.size.x * 0.5 * _sx, rect.size.y * 0.5 * _sz,
+	BrushOps.stamp_splat(splat2, _grid.px_x(c.x), _grid.px_z(c.y),
+			rect.size.x * 0.5 * _grid.sx, rect.size.y * 0.5 * _grid.sz,
 			BrushOps.unit_slice(channel, 1), 1.0, 0.0, true)
 
 
@@ -559,15 +501,15 @@ func _repaint(splat: Image, splat2: Image) -> void:
 	# difference, and a wall one cell wide has exactly one differing pixel row, so it painted a
 	# single rock line with grass either side — a grass-to-rock fade down a 33 m cliff. A painted
 	# band gives the crisp high-contrast border the low-poly look needs.
-	for pxi in range(_px_x(REACHES[0].x), _px_x(REACHES[REACHES.size() - 1].x) + 1):
-		var wx := _world_x(pxi)
+	for pxi in range(_grid.px_x(REACHES[0].x), _grid.px_x(REACHES[REACHES.size() - 1].x) + 1):
+		var wx := _grid.world_x(pxi)
 		var w := _half_width(wx)
 		if w <= 0.0 or _floor_y(wx) < SEA_Y:
 			continue
-		_stamp_both(splat, splat2, pxi, _px_z(CANYON_Z), 0.5, (w - 1.0) * _sz, CH_DIRT)
+		_stamp_both(splat, splat2, pxi, _grid.px_z(CANYON_Z), 0.5, (w - 1.0) * _grid.sz, CH_DIRT)
 		for side: float in [-1.0, 1.0]:
-			_stamp_both(splat, splat2, pxi, _px_z(CANYON_Z + side * w), 0.5,
-					WALL_BAND * _sz, CH_ROCK)
+			_stamp_both(splat, splat2, pxi, _grid.px_z(CANYON_Z + side * w), 0.5,
+					WALL_BAND * _grid.sz, CH_ROCK)
 	_paint_ramp(splat, splat2, SLIP_RAMP_A, SLIP_RAMP_B)
 	for pad: Array in pads():
 		_paint(splat, splat2, pad_rect(pad[0]), CH_PAD)
@@ -588,9 +530,9 @@ func _paint_ramp(splat: Image, splat2: Image, a: Vector3, b: Vector3) -> void:
 	var half := RAMP_HALF_WIDTH - 1.0
 	for i in steps + 1:
 		var p := a.lerp(b, float(i) / float(steps))
-		BrushOps.stamp_splat(splat, _px_x(p.x), _px_z(p.z), half * _sx, half * _sz,
+		BrushOps.stamp_splat(splat, _grid.px_x(p.x), _grid.px_z(p.z), half * _grid.sx, half * _grid.sz,
 				BrushOps.unit_slice(CH_GRAVEL, 0), 1.0, 0.0, false)
-		BrushOps.stamp_splat(splat2, _px_x(p.x), _px_z(p.z), half * _sx, half * _sz,
+		BrushOps.stamp_splat(splat2, _grid.px_x(p.x), _grid.px_z(p.z), half * _grid.sx, half * _grid.sz,
 				BrushOps.unit_slice(CH_GRAVEL, 1), 1.0, 0.0, false)
 
 
@@ -618,7 +560,7 @@ func pad_rect(centre: Vector2) -> Rect2:
 ## Seabed elevation at a world XZ, straight off the working image — the same sample
 ## HeightmapTerrain.height_at will return once this is written.
 func _seabed(img: Image, wx: float, wz: float) -> float:
-	return img.get_pixel(_px_x(wx), _px_z(wz)).r * HEIGHT
+	return img.get_pixel(_grid.px_x(wx), _grid.px_z(wz)).r * HEIGHT
 
 
 ## The boat playground's numbers, MEASURED off the sculpted image rather than asserted from the
@@ -731,7 +673,7 @@ func _report_probe(pattern: PackedVector3Array, wx: float, craft_y: float,
 
 func _report_road(curve: Curve3D, label: String) -> void:
 	var length := curve.get_baked_length()
-	var radius := RoadBuilder.min_turn_radius(curve, MAX_SEG_LEN, MAX_SEG_ANGLE)
+	var radius := RoadBuilder.min_turn_radius(curve, RoadGen.MAX_SEG_LEN, RoadGen.MAX_SEG_ANGLE)
 	var worst := 0.0
 	var step := 4.0
 	var o := 0.0
@@ -805,7 +747,8 @@ func _build_props(root: Node) -> int:
 		root.remove_child(stale_payloads)
 		stale_payloads.free()
 
-	var built := _build_apron_gridmap()
+	var built := GenProps.apron_gridmap(ROADS_MESHLIB, APRON_TILE, APRON_DECK_CENTER, Y_APRON,
+			Vector2i(APRON_CELLS_X, APRON_CELLS_Z), LOG_TAG)
 	if built.is_empty():
 		return 1
 	var grid: GridMap = built["grid"]
@@ -868,54 +811,6 @@ func _build_payloads(root: Node) -> void:
 		crate.owner = root
 	print("[skyport] %d payload crates on the pickup pad at x %.0f, z %.0f" % [
 			PAYLOAD_COUNT, PAD_APRON.x, PAD_APRON.y])
-
-
-## The apron: a real roads-palette GridMap, cell indices from asking the GridMap where
-## APRON_DECK_CENTER falls (never a hand-guessed offset). Returns {} on failure.
-func _build_apron_gridmap() -> Dictionary:
-	var ml := ResourceLoader.load(ROADS_MESHLIB) as MeshLibrary
-	if ml == null:
-		printerr("[skyport] cannot load %s" % ROADS_MESHLIB)
-		return {}
-	var item := ml.find_item_by_name(APRON_TILE)
-	if item < 0:
-		printerr("[skyport] roads palette has no '%s' tile" % APRON_TILE)
-		return {}
-	var mesh := ml.get_item_mesh(item)
-	if mesh == null:
-		printerr("[skyport] roads palette tile '%s' has no mesh" % APRON_TILE)
-		return {}
-
-	var grid := GridMap.new()
-	grid.name = "RoadsTiles"
-	grid.mesh_library = ml
-	grid.cell_size = Vector3(12, 3, 12)
-	grid.cell_center_y = false
-	# Level 3's tile city uses exactly this offset: the tile deck is 0.24 m thick and sits on
-	# the cell base, so dropping the map 0.22 m lands the driving surface 0.02 m above the
-	# plateau instead of behind a 24 cm lip.
-	grid.position = Vector3(0, -0.22, 0)
-
-	var y_cell := int(round(Y_APRON / grid.cell_size.y))
-	var origin := grid.local_to_map(Vector3(APRON_DECK_CENTER.x, Y_APRON, APRON_DECK_CENTER.y))
-	var i0 := origin.x - int((APRON_CELLS_X - 1) / 2.0)
-	var j0 := origin.z - int((APRON_CELLS_Z - 1) / 2.0)
-	var mesh_xform := ml.get_item_mesh_transform(item)
-	var bounds := AABB()
-	var first := true
-	for di in APRON_CELLS_X:
-		for dj in APRON_CELLS_Z:
-			var cell := Vector3i(i0 + di, y_cell, j0 + dj)
-			grid.set_cell_item(cell, item)
-			var placed := Transform3D(Basis.IDENTITY, grid.map_to_local(cell))
-			var world: AABB = grid.transform * placed * mesh_xform * mesh.get_aabb()
-			bounds = world if first else bounds.merge(world)
-			first = false
-	return {
-		"grid": grid,
-		"rect": Rect2(bounds.position.x, bounds.position.z, bounds.size.x, bounds.size.z),
-		"deck_y": bounds.end.y,
-	}
 
 
 ## The tower course: a gated mast slalom on the highland, north of the canyon and clear of every
@@ -987,23 +882,12 @@ func _add(parent: Node, child: Node, root: Node) -> void:
 	child.owner = root
 
 
-## Instance a kit prefab, yaw it, and sit it on the ground at `at`, positioned from its measured
-## merged mesh AABB (rotated centre on target XZ, base on target Y). Measuring after rotation
-## matters: a prefab whose origin isn't its centre would walk sideways when yawed.
+## A kit prefab stood on the ground at `at` (`GenProps.place`), and its height logged.
 func _place(parent: Node, root: Node, path: String, node_name: String, at: Vector3,
 		yaw := 0.0) -> void:
-	var scene := ResourceLoader.load(path) as PackedScene
-	if scene == null:
-		printerr("[skyport] cannot load %s" % path)
-		return
-	var piece := scene.instantiate() as Node3D
-	var turn := Basis(Vector3.UP, yaw)
-	var aabb: AABB = Transform3D(turn, Vector3.ZERO) * _merged_aabb(piece, Transform3D.IDENTITY)
-	piece.name = node_name
-	piece.transform = Transform3D(turn,
-			at - Vector3(aabb.get_center().x, aabb.position.y, aabb.get_center().z))
-	_add(parent, piece, root)
-	if not (node_name.begins_with("Mast") or node_name.begins_with("PadFlag")):
+	var aabb := GenProps.place(parent, root, path, node_name, at, yaw, LOG_TAG)
+	if aabb.size != Vector3.ZERO \
+			and not (node_name.begins_with("Mast") or node_name.begins_with("PadFlag")):
 		print("[skyport]   %s: %.1f x %.1f x %.1f m, base y %.2f, top y %.2f" % [
 				node_name, aabb.size.x, aabb.size.y, aabb.size.z, at.y, at.y + aabb.size.y])
 
@@ -1024,26 +908,9 @@ func _place_afloat(parent: Node, root: Node, path: String, node_name: String,
 	piece.position = Vector3(xz.x, SEA_Y, xz.y)
 	_add(parent, piece, root)
 	if node_name.ends_with("0"):
-		var aabb := _merged_aabb(piece, Transform3D.IDENTITY)
+		var aabb := GenProps.merged_aabb(piece, Transform3D.IDENTITY)
 		print("[skyport]   %s: %.1f x %.1f x %.1f m, %.1f m of it above the water" % [
 				node_name, aabb.size.x, aabb.size.y, aabb.size.z, aabb.end.y])
-
-
-func _merged_aabb(node: Node, xform: Transform3D) -> AABB:
-	var aabb := AABB()
-	var first := true
-	if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
-		aabb = xform * (node as MeshInstance3D).mesh.get_aabb()
-		first = false
-	for child in node.get_children():
-		var cx := xform
-		if child is Node3D:
-			cx = xform * (child as Node3D).transform
-		var ca := _merged_aabb(child, cx)
-		if ca.size != Vector3.ZERO or ca.position != Vector3.ZERO:
-			aabb = ca if first else aabb.merge(ca)
-			first = false
-	return aabb
 
 
 # --- the probe points (stage `probe`) -----------------------------------------------------
@@ -1309,32 +1176,9 @@ curve = ExtResource("17_rim")
 		"falloff_start": FALLOFF_START, "falloff_end": FALLOFF_END,
 		"coast_roughness": COAST_ROUGHNESS, "terrace_levels": TERRACE_LEVELS,
 		"channel_surface": GenIO.surface_list(CHANNEL_SURFACE),
-		"conform_falloff": CONFORM_FALLOFF, "conform_epsilon": CONFORM_EPSILON,
+		"conform_falloff": CONFORM_FALLOFF, "conform_epsilon": RoadGen.CONFORM_EPSILON,
 		"pad_r": PAD_COLOR.r, "pad_g": PAD_COLOR.g, "pad_b": PAD_COLOR.b,
 		"sx": SPAWN_LAND.x, "sy": SPAWN_LAND.y + 0.6, "sz": SPAWN_LAND.z,
 		"px": SPAWN_PLANE.x, "py": SPAWN_PLANE.y + 0.6, "pz": SPAWN_PLANE.z,
 		"wx": SPAWN_WATER.x, "wy": SPAWN_WATER.y, "wz": SPAWN_WATER.z,
 	})
-
-
-# ==================================================================================== helpers
-
-
-# World <-> pixel, HeightmapTerrain's own convention: the grid spans [-span/2, +span/2] in
-# the terrain's local frame at one cell per world unit, and this terrain sits at the origin.
-
-
-func _norm(world_y: float) -> float:
-	return clampf(world_y / HEIGHT, 0.0, 1.0)
-
-
-func _px_x(world_x: float) -> int:
-	return clampi(int(round((world_x + SIZE * 0.5) * _sx)), 0, _iw - 1)
-
-
-func _px_z(world_z: float) -> int:
-	return clampi(int(round((world_z + SIZE * 0.5) * _sz)), 0, _ih - 1)
-
-
-func _world_x(px: int) -> float:
-	return float(px) / _sx - SIZE * 0.5

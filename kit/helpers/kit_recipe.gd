@@ -1,11 +1,63 @@
 class_name KitRecipe
 extends RefCounted
-## Pure, unit-tested logic for the kit asset generator (tools/gen_kit_assets.gd).
+## Recipe loading and the pure, unit-tested logic for the kit generators (tools/gen_kit_assets.gd,
+## tools/gen_thumbs.gd).
 ## Families-driven: one ordered `families` list per kit/import/<kit>.json classifies
 ## every GLB. First matching family wins, so ordering resolves overlaps (put "barrier"
 ## before "road"). A family: { name, label, match:[regex...],
 ## pipeline: "palette"|"prefab"|"exclude", collision_mode?, reason?(exclude only),
 ## assets:{ <name>:{...overrides} } }
+
+
+## The recipe files in `dir`, sorted, cut to the kits named in `only` (basenames; empty = every
+## one). Null (push_error) when `dir` will not open.
+static func recipe_paths(dir: String, only: PackedStringArray) -> Variant:
+	var d := DirAccess.open(dir)
+	if d == null:
+		push_error("cannot open " + dir)
+		return null
+	var out: Array[String] = []
+	for f in d.get_files():
+		if f.ends_with(".json") and (only.is_empty() or only.has(f.get_basename())):
+			out.append(dir.path_join(f))
+	out.sort()
+	return out
+
+
+## One recipe parsed, validated (`validate_families`) and run against its source GLBs under the
+## coverage gate: {recipe, kit, source, families, classified (`classify`), fam_by_name}, or
+## {errors: [...]} (the kit name prefixed) on a bad file, a bad family, an unopenable source or an
+## unaccounted GLB.
+static func load_recipe(path: String) -> Dictionary:
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if parsed == null or not parsed is Dictionary:
+		return {"errors": ["bad recipe json: " + path]}
+	var recipe: Dictionary = parsed
+	var kit := String(recipe.get("kit", path.get_file().get_basename()))
+	var source := String(recipe.get("source", ""))
+	var families: Array = recipe.get("families", [])
+	var errors: Array[String] = []
+	for e in validate_families(families):
+		errors.append("%s: %s" % [kit, e])
+	if not errors.is_empty():
+		return {"errors": errors}
+	var dir := DirAccess.open(source)
+	if dir == null:
+		return {"errors": ["%s: cannot open source '%s'" % [kit, source]]}
+	var names: Array[String] = []
+	for f in dir.get_files():
+		if f.ends_with(".glb"):
+			names.append(f.get_basename())
+	names.sort()
+	var c := classify(names, families)
+	if not (c.unaccounted as Array).is_empty():
+		return {"errors": ["%s: %d unaccounted GLB(s) — add to a family or an explicit exclude: %s" %
+				[kit, c.unaccounted.size(), ", ".join(c.unaccounted)]]}
+	var fam_by_name := {}
+	for fam: Dictionary in families:
+		fam_by_name[String(fam.get("name", ""))] = fam
+	return {"recipe": recipe, "kit": kit, "source": source, "families": families,
+			"classified": c, "fam_by_name": fam_by_name}
 
 
 ## Assign each name to the first family whose any `match` regex matches. Returns

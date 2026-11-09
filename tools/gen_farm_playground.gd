@@ -14,6 +14,9 @@ const LEVEL_PATH := "res://src/levels/island/level_1/level_1.tscn"
 
 const BrushOps := preload("res://kit/helpers/brush_ops.gd")
 const SplatPaint := preload("res://kit/helpers/splat_paint.gd")
+const GenIO := preload("res://tools/level_gen_io.gd")
+const GenProps := preload("res://tools/level_gen_props.gd")
+const TerrainGrid := preload("res://tools/terrain_grid.gd")
 
 const ROADS_MESHLIB := "res://kit/palettes/roads.meshlib"
 const APRON_TILE := "tile-low"           ## plain 12 m concrete slab, 0.24 m deck
@@ -135,15 +138,9 @@ const OWNED_NODES: PackedStringArray = [
 ]
 const SPAWN_NODE := "FarmSpawn"
 
-# --- terrain mapping, filled in by _read_terrain ---------------------------------------
+# --- the terrain, found by _read_terrain, and its mapping onto the working images ----------
 var _terrain: Node = null
-var _theight := 51.0
-var _span := Vector2(512, 512)
-var _torigin := Vector3.ZERO
-var _iw := 0
-var _ih := 0
-var _sx := 1.0    ## height/splat pixels per metre on X
-var _sz := 1.0
+var _grid: TerrainGrid
 
 
 func _ready() -> void:
@@ -189,17 +186,15 @@ func _build(root: Node) -> int:
 		return 1
 	if height_img.get_format() != Image.FORMAT_L8:
 		height_img.convert(Image.FORMAT_L8)
-	_iw = height_img.get_width()
-	_ih = height_img.get_height()
-	_sx = float(_iw - 1) / maxf(_span.x, 0.001)
-	_sz = float(_ih - 1) / maxf(_span.y, 0.001)
+	_grid = _make_grid(height_img)
 	if splat.get_size() != height_img.get_size() or splat2.get_size() != splat.get_size():
 		printerr("[farm] heightmap and splatmap sizes disagree — refusing to paint")
 		return 1
 
 	# The apron is a real GridMap; build it first, measure the world rect its cells occupy,
 	# and derive the yard pad, props and spawn from that.
-	var built := _build_apron_gridmap()
+	var built := GenProps.apron_gridmap(ROADS_MESHLIB, APRON_TILE, APRON_CENTER, PLATEAU_Y,
+			Vector2i(APRON_CELLS_X, APRON_CELLS_Z), "farm")
 	if built.is_empty():
 		return 1
 	var grid: GridMap = built["grid"]
@@ -210,11 +205,11 @@ func _build(root: Node) -> int:
 			apron.position.x, apron.end.x, apron.position.y, apron.end.y, deck_y])
 
 	# --- sculpt (authoring order: terrain first, everything else reads it back) ---------
-	_flatten(height_img, FIELD_RECT, PLATEAU_Y)
-	_flatten(height_img, PADDOCK_RECT, TERRACE_Y)
-	_flatten(height_img, yard_pad, PLATEAU_Y)
+	_grid.flatten(height_img, FIELD_RECT, PLATEAU_Y, FLATTEN_MARGIN)
+	_grid.flatten(height_img, PADDOCK_RECT, TERRACE_Y, FLATTEN_MARGIN)
+	_grid.flatten(height_img, yard_pad, PLATEAU_Y, FLATTEN_MARGIN)
 	_ramp(height_img)
-	_flatten(height_img, WALLOW_RECT, WALLOW_Y, WALLOW_MARGIN)
+	_grid.flatten(height_img, WALLOW_RECT, WALLOW_Y, WALLOW_MARGIN)
 	_ridges(height_img)
 	_smooth(height_img, _wallow_rim_rect(), RIM_SMOOTH_PASSES)
 
@@ -270,11 +265,13 @@ func _build(root: Node) -> int:
 		canvas.set("stored_ground_hash", "")
 	print("[farm] scatter: %d instances erased inside the farm, %d re-snapped" % [cleared, moved])
 
-	if not _write(height_img, _terrain.get("heightmap")):
+	# Back over the pngs the terrain textures came from, refused outside the level's directory.
+	var level_dir := LEVEL_PATH.get_base_dir()
+	if not GenIO.write_png(height_img, _terrain.get("heightmap").resource_path, "farm", level_dir):
 		return 1
-	if not _write(splat, _terrain.get("splatmap")):
+	if not GenIO.write_png(splat, _terrain.get("splatmap").resource_path, "farm", level_dir):
 		return 1
-	if not _write(splat2, _terrain.get("splatmap2")):
+	if not GenIO.write_png(splat2, _terrain.get("splatmap2").resource_path, "farm", level_dir):
 		return 1
 
 	_report(height_img, splat, splat2, apron, deck_y)
@@ -282,18 +279,6 @@ func _build(root: Node) -> int:
 
 
 # -------------------------------------------------------------------------- sculpting
-
-
-## Flatten `rect` to `target_y` with a soft blend ring `margin` wide, using the square brush
-## stamp. Falloff derives from the longer half-extent so the hard core covers both axes
-## (BrushOps' square brush measures one Chebyshev distance against per-axis radii).
-func _flatten(img: Image, rect: Rect2, target_y: float, margin := FLATTEN_MARGIN) -> void:
-	var half_x := rect.size.x * 0.5 + margin
-	var half_z := rect.size.y * 0.5 + margin
-	var falloff := margin / maxf(half_x, half_z)
-	var c := rect.get_center()
-	BrushOps.stamp_height(img, _px_x(c.x), _px_z(c.y), half_x * _sx, half_z * _sz,
-			BrushOps.FLATTEN, 1.0, falloff, _norm(target_y), true)
 
 
 ## The band the wallow's exit ramp onto the field occupies — the blend ring on its north
@@ -311,8 +296,8 @@ func _wallow_rim_rect() -> Rect2:
 func _smooth(img: Image, rect: Rect2, passes: int) -> void:
 	var c := rect.get_center()
 	for _i in passes:
-		BrushOps.stamp_height(img, _px_x(c.x), _px_z(c.y),
-				rect.size.x * 0.5 * _sx, rect.size.y * 0.5 * _sz,
+		BrushOps.stamp_height(img, _grid.px_x(c.x), _grid.px_z(c.y),
+				rect.size.x * 0.5 * _grid.sx, rect.size.y * 0.5 * _grid.sz,
 				BrushOps.SMOOTH, 1.0, 0.0, 0.0, true)
 
 
@@ -323,9 +308,9 @@ func _ramp(img: Image) -> void:
 		var a := RAMP_PROFILE[i]
 		var b := RAMP_PROFILE[i + 1]
 		BrushOps.stamp_ramp(img,
-				Vector2i(_px_x(a.x), _px_z(RAMP_Z)), _norm(a.y),
-				Vector2i(_px_x(b.x), _px_z(RAMP_Z)), _norm(b.y),
-				RAMP_HALF_WIDTH * _sx, RAMP_HALF_WIDTH * _sz, 1.0, 0.45)
+				Vector2i(_grid.px_x(a.x), _grid.px_z(RAMP_Z)), _grid.norm(a.y),
+				Vector2i(_grid.px_x(b.x), _grid.px_z(RAMP_Z)), _grid.norm(b.y),
+				RAMP_HALF_WIDTH * _grid.sx, RAMP_HALF_WIDTH * _grid.sz, 1.0, 0.45)
 
 
 ## The cross-axle course in the wallow floor: a sine whose wavefronts run at 45 degrees to the
@@ -335,12 +320,12 @@ func _ramp(img: Image) -> void:
 ## so no step forms at the wallow rim. Written straight into the working image (no ridge brush
 ## mode exists in the kit) rather than through BrushOps, the only such exception here.
 func _ridges(img: Image) -> void:
-	var amp := RIDGE_AMPLITUDE / _theight
+	var amp := RIDGE_AMPLITUDE / _grid.height
 	var wavelength := RIDGE_PITCH * sqrt(2.0)
-	for pz in range(_px_z(WALLOW_RECT.position.y), _px_z(WALLOW_RECT.end.y) + 1):
-		var wz := _world_z(pz)
-		for px in range(_px_x(WALLOW_RECT.position.x), _px_x(WALLOW_RECT.end.x) + 1):
-			var wx := _world_x(px)
+	for pz in range(_grid.px_z(WALLOW_RECT.position.y), _grid.px_z(WALLOW_RECT.end.y) + 1):
+		var wz := _grid.world_z(pz)
+		for px in range(_grid.px_x(WALLOW_RECT.position.x), _grid.px_x(WALLOW_RECT.end.x) + 1):
+			var wx := _grid.world_x(px)
 			var edge := minf(minf(wx - WALLOW_RECT.position.x, WALLOW_RECT.end.x - wx),
 					minf(wz - WALLOW_RECT.position.y, WALLOW_RECT.end.y - wz))
 			var k := clampf(edge / RIDGE_TAPER, 0.0, 1.0)
@@ -362,10 +347,10 @@ func _ridges(img: Image) -> void:
 ## what is already there across the whole rect, still inside a hard border.
 func _paint(splat: Image, splat2: Image, rect: Rect2, channel: int, strength := 1.0) -> void:
 	var c := rect.get_center()
-	var cx := _px_x(c.x)
-	var cz := _px_z(c.y)
-	var rx := rect.size.x * 0.5 * _sx
-	var rz := rect.size.y * 0.5 * _sz
+	var cx := _grid.px_x(c.x)
+	var cz := _grid.px_z(c.y)
+	var rx := rect.size.x * 0.5 * _grid.sx
+	var rz := rect.size.y * 0.5 * _grid.sz
 	BrushOps.stamp_splat(splat, cx, cz, rx, rz, BrushOps.unit_slice(channel, 0), strength, 0.0,
 			true)
 	BrushOps.stamp_splat(splat2, cx, cz, rx, rz, BrushOps.unit_slice(channel, 1), strength, 0.0,
@@ -406,54 +391,6 @@ func _farm_footprint(apron: Rect2) -> Array[Rect2]:
 
 
 # ---------------------------------------------------------------------- authoring nodes
-
-
-## The yard apron as a real roads-palette GridMap. Cell indices come from asking the GridMap
-## where APRON_CENTER lands (local_to_map); the world rect is measured back off the item mesh
-## and palette transform, never a hand-guessed offset. Returns {} on failure.
-func _build_apron_gridmap() -> Dictionary:
-	var ml := load(ROADS_MESHLIB) as MeshLibrary
-	if ml == null:
-		printerr("[farm] cannot load %s" % ROADS_MESHLIB)
-		return {}
-	var item := ml.find_item_by_name(APRON_TILE)
-	if item < 0:
-		printerr("[farm] roads palette has no '%s' tile" % APRON_TILE)
-		return {}
-	var mesh := ml.get_item_mesh(item)
-	if mesh == null:
-		printerr("[farm] roads palette tile '%s' has no mesh" % APRON_TILE)
-		return {}
-
-	var grid := GridMap.new()
-	grid.name = "RoadsTiles"
-	grid.mesh_library = ml
-	grid.cell_size = Vector3(12, 3, 12)
-	grid.cell_center_y = false
-	# Level 3's tile city uses the same offset: deck is 0.24 m thick, dropping the map 0.22 m
-	# lands the driving surface 0.02 m above the plateau instead of behind a 24 cm lip.
-	grid.position = Vector3(0, -0.22, 0)
-
-	var y_cell := int(round(PLATEAU_Y / grid.cell_size.y))
-	var origin := grid.local_to_map(Vector3(APRON_CENTER.x, PLATEAU_Y, APRON_CENTER.y))
-	var i0 := origin.x - int((APRON_CELLS_X - 1) / 2.0)
-	var j0 := origin.z - int((APRON_CELLS_Z - 1) / 2.0)
-	var mesh_xform := ml.get_item_mesh_transform(item)
-	var bounds := AABB()
-	var first := true
-	for di in APRON_CELLS_X:
-		for dj in APRON_CELLS_Z:
-			var cell := Vector3i(i0 + di, y_cell, j0 + dj)
-			grid.set_cell_item(cell, item)
-			var placed := Transform3D(Basis.IDENTITY, grid.map_to_local(cell))
-			var world: AABB = grid.transform * placed * mesh_xform * mesh.get_aabb()
-			bounds = world if first else bounds.merge(world)
-			first = false
-	return {
-		"grid": grid,
-		"rect": Rect2(bounds.position.x, bounds.position.z, bounds.size.x, bounds.size.z),
-		"deck_y": bounds.end.y,
-	}
 
 
 ## Shed, tank and the field fence. Every piece positioned from its measured merged mesh AABB
@@ -609,10 +546,7 @@ func _resnap(root: Node) -> int:
 	if img == null:
 		printerr("[farm] cannot decode the terrain heightmap")
 		return 1
-	_iw = img.get_width()
-	_ih = img.get_height()
-	_sx = float(_iw - 1) / maxf(_span.x, 0.001)
-	_sz = float(_ih - 1) / maxf(_span.y, 0.001)
+	_grid = _make_grid(img)
 	var canvases := _scatter_canvases(root)
 	if canvases.is_empty():
 		printerr("[farm] no scatter canvases found")
@@ -642,8 +576,8 @@ func _drop_off_terrain(canvas: Node) -> int:
 		for j in instances:
 			var o := j * ScatterBase.STRIDE
 			var world := to_world * Vector3(flat[o], flat[o + 1], flat[o + 2])
-			if absf(world.x - _torigin.x) > _span.x * 0.5 \
-					or absf(world.z - _torigin.z) > _span.y * 0.5:
+			if absf(world.x - _grid.origin.x) > _grid.span.x * 0.5 \
+					or absf(world.z - _grid.origin.z) > _grid.span.y * 0.5:
 				removed += 1
 				continue
 			kept.append_array(flat.slice(o, o + ScatterBase.STRIDE))
@@ -662,10 +596,13 @@ func _read_terrain(root: Node) -> bool:
 		printerr("[farm] level has no HeightmapTerrain")
 		return false
 	_terrain = terrains[0]
-	_theight = float(_terrain.get("height"))
-	_span = _terrain.get("terrain_size")
-	_torigin = (_terrain as Node3D).position
 	return true
+
+
+## The terrain's mapping onto `img`, the working copy of its heightmap.
+func _make_grid(img: Image) -> TerrainGrid:
+	return TerrainGrid.new(_terrain.get("terrain_size"), (_terrain as Node3D).position,
+			float(_terrain.get("height")), img.get_width(), img.get_height())
 
 
 func _scatter_canvases(root: Node) -> Array[Node]:
@@ -688,44 +625,16 @@ func _add(parent: Node, child: Node, root: Node) -> void:
 	child.owner = root
 
 
-## Instance a kit prefab, yaw it, and sit it on the ground at `at`, positioned from its measured
-## merged mesh AABB (rotated centre on target XZ, base on target Y) — measuring after rotation
-## matters, a prefab whose origin isn't its centre would walk sideways when yawed.
+## A kit prefab stood on the ground at `at` (`GenProps.place`), and its footprint logged.
 func _place(parent: Node, root: Node, path: String, node_name: String, at: Vector3,
 		yaw := 0.0) -> void:
-	var scene := load(path) as PackedScene
-	if scene == null:
-		printerr("[farm] cannot load %s" % path)
-		return
-	var piece := scene.instantiate() as Node3D
-	var turn := Basis(Vector3.UP, yaw)
-	var aabb: AABB = Transform3D(turn, Vector3.ZERO) * _merged_aabb(piece, Transform3D.IDENTITY)
-	piece.name = node_name
-	piece.transform = Transform3D(turn,
-			at - Vector3(aabb.get_center().x, aabb.position.y, aabb.get_center().z))
-	_add(parent, piece, root)
-	if not node_name.begins_with("Fence"):   # the fence run is 10 identical sections
+	var aabb := GenProps.place(parent, root, path, node_name, at, yaw, "farm")
+	# The fence run is 10 identical sections.
+	if aabb.size != Vector3.ZERO and not node_name.begins_with("Fence"):
 		print("[farm]   %s: %.1f x %.1f x %.1f m at (%.1f, %.1f), footprint x %.1f..%.1f z %.1f..%.1f" % [
 				node_name, aabb.size.x, aabb.size.y, aabb.size.z, at.x, at.z,
 				at.x - aabb.size.x * 0.5, at.x + aabb.size.x * 0.5,
 				at.z - aabb.size.z * 0.5, at.z + aabb.size.z * 0.5])
-
-
-func _merged_aabb(node: Node, xform: Transform3D) -> AABB:
-	var aabb := AABB()
-	var first := true
-	if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
-		aabb = xform * (node as MeshInstance3D).mesh.get_aabb()
-		first = false
-	for child in node.get_children():
-		var cx := xform
-		if child is Node3D:
-			cx = xform * (child as Node3D).transform
-		var ca := _merged_aabb(child, cx)
-		if ca.size != Vector3.ZERO or ca.position != Vector3.ZERO:
-			aabb = ca if first else aabb.merge(ca)
-			first = false
-	return aabb
 
 
 ## Drop every stored instance of `canvas` whose world XZ falls inside any of `rects` — the
@@ -794,30 +703,6 @@ func _decode(tex: Texture2D) -> Image:
 	return img
 
 
-## Write a working image back over the png the terrain texture came from.
-##
-## Checked against the level's own directory first — load-bearing: a copy of these pngs left
-## anywhere in the project brings a `.import` sidecar claiming the same uid://, so Godot's
-## import scan resolves the level's texture to the copy and this function sculpts the backup
-## while the real level stays untouched, silently. Fail loudly here instead.
-func _write(img: Image, tex: Texture2D) -> bool:
-	var path := tex.resource_path
-	if path.is_empty():
-		printerr("[farm] a terrain texture has no source png")
-		return false
-	var expected := LEVEL_PATH.get_base_dir()
-	if path.get_base_dir() != expected:
-		printerr("[farm] '%s' resolves to %s, outside %s — a duplicate uid:// is hijacking it"
-				% [path.get_file(), path, expected])
-		return false
-	if img.save_png(path) != OK:
-		printerr("[farm] failed to write %s" % path)
-		return false
-	TerrainGen.ensure_import_settings(path)
-	print("[farm] wrote %s" % path)
-	return true
-
-
 func _save(root: Node) -> int:
 	var packed := PackedScene.new()
 	if packed.pack(root) != OK:
@@ -830,44 +715,22 @@ func _save(root: Node) -> int:
 	return 0
 
 
-# --- world <-> pixel mapping (HeightmapTerrain's own convention: the grid spans
-# [-span/2, +span/2] in the terrain's local frame, one cell per world unit) ---
-
-
-func _norm(world_y: float) -> float:
-	return clampf(world_y / maxf(_theight, 0.001), 0.0, 1.0)
-
-
-func _px_x(world_x: float) -> int:
-	return clampi(int(round((world_x - _torigin.x + _span.x * 0.5) * _sx)), 0, _iw - 1)
-
-
-func _px_z(world_z: float) -> int:
-	return clampi(int(round((world_z - _torigin.z + _span.y * 0.5) * _sz)), 0, _ih - 1)
-
-
-func _world_x(px: int) -> float:
-	return float(px) / _sx - _span.x * 0.5 + _torigin.x
-
-
-func _world_z(pz: int) -> float:
-	return float(pz) / _sz - _span.y * 0.5 + _torigin.z
-
-
 ## Bilinear world height off the working image — HeightmapTerrain.height_at, but reading the
 ## image we are in the middle of sculpting rather than the exported texture.
 func _height_at(img: Image, world_x: float, world_z: float) -> float:
-	var u := clampf((world_x - _torigin.x + _span.x * 0.5) / _span.x, 0.0, 1.0) * float(_iw - 1)
-	var v := clampf((world_z - _torigin.z + _span.y * 0.5) / _span.y, 0.0, 1.0) * float(_ih - 1)
+	var u := clampf((world_x - _grid.origin.x + _grid.span.x * 0.5) / _grid.span.x, 0.0, 1.0) \
+			* float(_grid.iw - 1)
+	var v := clampf((world_z - _grid.origin.z + _grid.span.y * 0.5) / _grid.span.y, 0.0, 1.0) \
+			* float(_grid.ih - 1)
 	var x0 := int(u)
 	var y0 := int(v)
-	var x1 := mini(x0 + 1, _iw - 1)
-	var y1 := mini(y0 + 1, _ih - 1)
+	var x1 := mini(x0 + 1, _grid.iw - 1)
+	var y1 := mini(y0 + 1, _grid.ih - 1)
 	var tx := u - float(x0)
 	var ty := v - float(y0)
 	var top := lerpf(img.get_pixel(x0, y0).r, img.get_pixel(x1, y0).r, tx)
 	var bot := lerpf(img.get_pixel(x0, y1).r, img.get_pixel(x1, y1).r, tx)
-	return _torigin.y + lerpf(top, bot, ty) * _theight
+	return _grid.origin.y + lerpf(top, bot, ty) * _grid.height
 
 
 # ------------------------------------------------------------------- acceptance report
@@ -970,8 +833,8 @@ func _grip_at(splat: Image, splat2: Image, p: Vector2) -> float:
 	var mat := _terrain.get("material") as ShaderMaterial
 	var sharp: Variant = mat.get_shader_parameter(&"blend_sharpness") if mat != null else null
 	var exponent := float(sharp) if sharp != null else 8.0
-	var c0 := splat.get_pixel(_px_x(p.x), _px_z(p.y))
-	var c1 := splat2.get_pixel(_px_x(p.x), _px_z(p.y))
+	var c0 := splat.get_pixel(_grid.px_x(p.x), _grid.px_z(p.y))
+	var c1 := splat2.get_pixel(_grid.px_x(p.x), _grid.px_z(p.y))
 	var total := 0.0
 	var grip := 0.0
 	for i in 8:

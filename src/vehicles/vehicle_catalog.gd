@@ -66,6 +66,30 @@ static func scene_of(variant: String) -> String:
 	return String(VARIANTS[variant]["scene"]) if VARIANTS.has(variant) else ""
 
 
+## The value `scene_path`'s ROOT node stores for `prop`, read off the PackedScene state, never an
+## instance (a scene instanced only to be asked a question leaves orphan sub-scenes behind); null
+## when the root leaves it unset or the scene does not load.
+static func root_property(scene_path: String, prop: StringName) -> Variant:
+	var scene := load(scene_path) as PackedScene
+	if scene == null:
+		return null
+	var state := scene.get_state()
+	for i in state.get_node_property_count(0):
+		if state.get_node_property_name(0, i) == prop:
+			return state.get_node_property_value(0, i)
+	return null
+
+
+## The VehicleSpec on `scene_path`'s root (`root_property`); null when unset.
+static func spec_in(scene_path: String) -> VehicleSpec:
+	return root_property(scene_path, &"spec") as VehicleSpec
+
+
+## `variant`'s shipped spec (`spec_in`); null if unknown.
+static func spec_of(variant: String) -> VehicleSpec:
+	return spec_in(scene_of(variant)) if VARIANTS.has(variant) else null
+
+
 ## Variants in `family`, in cycle (insertion) order.
 static func variants_in_family(family: String) -> PackedStringArray:
 	var out := PackedStringArray()

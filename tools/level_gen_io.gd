@@ -5,7 +5,20 @@
 
 ## Saves `img` as a lossless terrain PNG and writes its import settings; false (and a printed
 ## error) when the save fails.
-static func write_png(img: Image, path: String, tag: String) -> bool:
+##
+## `expected_dir` is for a `path` read off a loaded texture's `resource_path`: the write is
+## refused unless the path resolves inside it. Load-bearing: a copy of the png left anywhere in
+## the project brings a `.import` sidecar claiming the same uid://, so Godot's import scan
+## resolves the level's texture to the copy and the tool edits the backup while the real level
+## stays untouched, silently. Fail loudly here instead.
+static func write_png(img: Image, path: String, tag: String, expected_dir := "") -> bool:
+	if path.is_empty():
+		printerr("[%s] a texture has no source png" % tag)
+		return false
+	if not expected_dir.is_empty() and path.get_base_dir() != expected_dir:
+		printerr("[%s] '%s' resolves to %s, outside %s — a duplicate uid:// is hijacking it"
+				% [tag, path.get_file(), path, expected_dir])
+		return false
 	if img.save_png(path) != OK:
 		printerr("[%s] failed to write %s" % [tag, path])
 		return false

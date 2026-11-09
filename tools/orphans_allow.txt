@@ -12,3 +12,4 @@ src/vehicles/base/towed_body.gd:load_shift_z    # documented test accessor, no r
 src/vehicles/base/towed_body.gd:load_shift_y    # documented test accessor, no runtime caller
 src/vehicles/base/towed_body.gd:collision_probes # documented test accessor; test_trailer is its consumer
 src/vehicles/base/towed_body.gd:live_kingpin_share # test accessor for the load model's kingpin share; test_trailer / test_drawbar_trailer read it
+tools/measure_vehicles.gd:tail_settled          # the step pass's steady-tail gate as one bool for test_measure_settle; the pass reads unsettled_gates itself to print which gate failed

@@ -73,16 +73,10 @@ func _shoot(id: String, scene_path: String) -> bool:
 	VehicleShot.frame(_camera, bounds, VehicleShot.VIEW_YAW_DEG)
 	# Give the viewport two more frames to draw from where the camera now stands.
 	await ShotStage.settle(get_tree(), 2)
-	var out := VehicleShot.thumb_path(id)
-	var ok := ShotStage.save_capture(_viewport, out)
+	var ok := ShotStage.save_card(_viewport, VehicleShot.thumb_path(id), "[vehicle thumbs] %s" % id)
 
 	_free_subject(inst)
-
-	if not ok:
-		return false
-	CardImport.ensure_import_settings(out)
-	print("[vehicle thumbs] %s -> %s" % [id, out])
-	return true
+	return ok
 
 
 ## Take the subject out before the next arrives: `remove_child` first, `queue_free` after

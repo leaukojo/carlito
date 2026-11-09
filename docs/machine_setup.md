@@ -45,7 +45,7 @@ missing (`tools/claude_hooks/session_check.mjs`).
 - `tools/godot_run.mjs`: the headless-Godot wrapper (a lock per checkout, a timeout,
   kill-on-parse-error).
 - The pre-commit hook, `tools/preflight.ps1` and CI, which share their gates, including
-  `tools/check_gd_text.mjs`.
+  `tools/check_gd_text.mjs` and `tools/godot_verdict.mjs` (a Godot log's verdict).
 
 ## Per machine, by design
 

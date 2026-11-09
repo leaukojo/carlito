@@ -38,6 +38,8 @@ const TITLE := "Car Arena"
 const LOG_TAG := "car-arena"
 
 const GenIO := preload("res://tools/level_gen_io.gd")
+const RoadGen := preload("res://tools/road_gen.gd")
+const TerrainGrid := preload("res://tools/terrain_grid.gd")
 const BrushOps := preload("res://kit/helpers/brush_ops.gd")
 const SplatPaint := preload("res://kit/helpers/splat_paint.gd")
 
@@ -63,12 +65,7 @@ const PLATEAU_BLEND := 18.0    ## blend ring outside it
 
 # --- roads ---------------------------------------------------------------------------------------
 const ASPHALT_PROFILE := "res://kit/roads/asphalt_profile.tres"
-const CONFORM_EPSILON := 0.05
 const CONFORM_FALLOFF := 8.0
-const MAX_SEG_LEN := 6.0
-const MAX_SEG_ANGLE := 6.0
-## RoadPath.SPLAT_PAINT_INSET, reproduced — that node's paint button is editor-only.
-const SPLAT_PAINT_INSET := 1.0
 const MIN_RADIUS := 12.0       ## the scaffold fails on a tighter corner
 
 const RIDGE_ROAD := "car_arena_ridge_curve.tres"
@@ -242,10 +239,7 @@ const AMBER := Color(1.0, 0.5, 0.05)
 const DARK := Color(0.12, 0.12, 0.12)
 
 # --- working state (world <-> pixel) ---------------------------------------------------------------
-var _iw := 0
-var _ih := 0
-var _sx := 1.0
-var _sz := 1.0
+var _grid: TerrainGrid
 
 
 func _ready() -> void:
@@ -424,10 +418,7 @@ func _falloff(file_name: String) -> float:
 func _scaffold() -> int:
 	DirAccess.make_dir_recursive_absolute(DIR)
 	var cells := int(SIZE) + 1
-	_iw = cells
-	_ih = cells
-	_sx = float(cells - 1) / SIZE
-	_sz = _sx
+	_grid = TerrainGrid.new(Vector2(SIZE, SIZE), Vector3.ZERO, HEIGHT, cells, cells)
 
 	var heights := TerrainGen.generate_heights(TerrainGen.Preset.ISLAND, GEN_SEED,
 			FEATURE_SCALE, OCTAVES, FALLOFF_START, FALLOFF_END, cells, cells,
@@ -435,13 +426,15 @@ func _scaffold() -> int:
 	# The plateau: the round brush's FLATTEN, which lerps to a target, so a replay lands on the
 	# same bytes.
 	var half := PLATEAU_R + PLATEAU_BLEND
-	BrushOps.stamp_height(heights, _px_x(0.0), _px_z(0.0), half * _sx, half * _sz,
-			BrushOps.FLATTEN, 1.0, PLATEAU_BLEND / half, _norm(Y_PLATEAU), false)
+	BrushOps.stamp_height(heights, _grid.px_x(0.0), _grid.px_z(0.0), half * _grid.sx,
+			half * _grid.sz,
+			BrushOps.FLATTEN, 1.0, PLATEAU_BLEND / half, _grid.norm(Y_PLATEAU), false)
 	# The lagoon: the ramp brush at one height is a flatten round a segment, banked by its falloff.
 	var lagoon := LAGOON_R + LAGOON_BLEND
-	BrushOps.stamp_ramp(heights, Vector2i(_px_x(-LAGOON_HALF), _px_z(LAGOON_Z)),
-			_norm(LAGOON_BED_Y), Vector2i(_px_x(LAGOON_HALF), _px_z(LAGOON_Z)),
-			_norm(LAGOON_BED_Y), lagoon * _sx, lagoon * _sz, 1.0, LAGOON_BLEND / lagoon)
+	BrushOps.stamp_ramp(heights, Vector2i(_grid.px_x(-LAGOON_HALF), _grid.px_z(LAGOON_Z)),
+			_grid.norm(LAGOON_BED_Y), Vector2i(_grid.px_x(LAGOON_HALF), _grid.px_z(LAGOON_Z)),
+			_grid.norm(LAGOON_BED_Y), lagoon * _grid.sx, lagoon * _grid.sz, 1.0,
+			LAGOON_BLEND / lagoon)
 
 	var asphalt := ResourceLoader.load(ASPHALT_PROFILE)
 	if asphalt == null:
@@ -505,57 +498,23 @@ func _scaffold() -> int:
 	return 0
 
 
-## RoadPath._conform_terrain reproduced (editor-only, EditorUndoRedoManager) — a headless tool
-## calls the pure core directly, same as tools/gen_skyport.gd.
 func _conform(heights: Image, curve: Curve3D, profile: Resource, falloff: float) -> void:
-	var offsets := RoadBuilder.adaptive_offsets(curve, MAX_SEG_LEN, MAX_SEG_ANGLE)
-	var fw: float = profile.call("full_half_width")
-	var samples := PackedVector3Array()
-	for o in offsets:
-		var w := curve.sample_baked(o)
-		samples.append(Vector3(w.x, w.z, _norm(w.y - CONFORM_EPSILON)))
-	var deck_surfaces: Dictionary = RoadBuilder.extrude(curve,
-			PackedVector2Array([Vector2(-fw, 0), Vector2(fw, 0)]),
-			PackedInt32Array([0]), offsets, false)
-	var deck := PackedVector3Array()
-	for v in RoadBuilder.faces_from_surfaces(deck_surfaces):
-		deck.append(Vector3(v.x, v.z, _norm(v.y - CONFORM_EPSILON)))
-	var dirty := RoadBuilder.conform_heights(heights, samples, fw, falloff,
-			SIZE, SIZE, deck)
-	if not dirty.has_area():
+	if not RoadGen.conform(heights, curve, profile, falloff, SIZE, HEIGHT).has_area():
 		printerr("[car-arena] a conform changed nothing — the road missed the terrain")
 
 
-## RoadPath._paint_splat reproduced, for the same reason and at the same INSET paved width,
-## so a conformed road grips like asphalt instead of like the grass under its deck.
 func _paint_road_splat(splat: Image, splat2: Image, curve: Curve3D, profile: Resource) -> void:
-	var channel: int = profile.get("splat_channel")
-	var pw: float = float(profile.call("paved_half_width")) - SPLAT_PAINT_INSET
-	var offsets := RoadBuilder.adaptive_offsets(curve, MAX_SEG_LEN, MAX_SEG_ANGLE)
-	var samples := PackedVector2Array()
-	for o in offsets:
-		var w := curve.sample_baked(o)
-		samples.append(Vector2(w.x, w.z))
-	var deck_surfaces: Dictionary = RoadBuilder.extrude(curve,
-			PackedVector2Array([Vector2(-pw, 0), Vector2(pw, 0)]),
-			PackedInt32Array([0]), offsets, false)
-	var deck := PackedVector2Array()
-	for v in RoadBuilder.faces_from_surfaces(deck_surfaces):
-		deck.append(Vector2(v.x, v.z))
-	var images: Array[Image] = [splat, splat2]
-	var units: Array[Color] = [
-		BrushOps.unit_slice(channel, 0), BrushOps.unit_slice(channel, 1),
-	]
-	SplatPaint.paint_strip(images, units, samples, pw, SIZE, SIZE, deck)
+	if not RoadGen.paint(splat, splat2, curve, profile, SIZE):
+		printerr("[car-arena] profile too narrow to paint under")
 
 
 ## Length and tightest radius, and FALSE when a corner is under MIN_RADIUS or the road's full
 ## width leaves the plateau disc anywhere.
 func _report_road(curve: Curve3D, label: String, profile: Resource) -> bool:
 	var fw: float = profile.call("full_half_width")
-	var radius := RoadBuilder.min_turn_radius(curve, MAX_SEG_LEN, MAX_SEG_ANGLE)
+	var radius := RoadBuilder.min_turn_radius(curve, RoadGen.MAX_SEG_LEN, RoadGen.MAX_SEG_ANGLE)
 	var reach := 0.0
-	for o in RoadBuilder.adaptive_offsets(curve, MAX_SEG_LEN, MAX_SEG_ANGLE):
+	for o in RoadBuilder.adaptive_offsets(curve, RoadGen.MAX_SEG_LEN, RoadGen.MAX_SEG_ANGLE):
 		var w := curve.sample_baked(o)
 		reach = maxf(reach, Vector2(w.x, w.z).length() + fw)
 	print("[car-arena] %s: %.0f m, min turn radius %.1f m, reaches r %.1f of the %.0f m plateau" % [
@@ -764,11 +723,11 @@ func _ridge_shape(ridge: Turtle, profile: Resource) -> RidgeShape:
 ## RIDGE_Y on the footprint, then a cliff CLIFF_RUN wide down to whatever is there. False if any
 ## of it leaves the plateau: a cliff foot on the blend would land a fall on a slope.
 func _stamp_ridge(heights: Image, ridge: RidgeShape) -> bool:
-	var top := _norm(RIDGE_Y)
+	var top := _grid.norm(RIDGE_Y)
 	var outside := false
-	for pz in range(_px_z(ridge.box.position.y), _px_z(ridge.box.end.y) + 1):
-		for px in range(_px_x(ridge.box.position.x), _px_x(ridge.box.end.x) + 1):
-			var w := Vector2(_world_x(px), _world_z(pz))
+	for pz in range(_grid.px_z(ridge.box.position.y), _grid.px_z(ridge.box.end.y) + 1):
+		for px in range(_grid.px_x(ridge.box.position.x), _grid.px_x(ridge.box.end.x) + 1):
+			var w := Vector2(_grid.world_x(px), _grid.world_z(pz))
 			var d := ridge.sd(w)
 			if d >= CLIFF_RUN:
 				continue
@@ -787,7 +746,7 @@ func _stamp_ridge(heights: Image, ridge: RidgeShape) -> bool:
 ## deck hides it. Samples dense enough that the centreline sweep alone covers the strip.
 func _paint_wet(splat: Image, splat2: Image, wet: Turtle, profile: Resource) -> void:
 	var curve := wet.curve()
-	var pw: float = float(profile.call("paved_half_width")) - SPLAT_PAINT_INSET
+	var pw: float = float(profile.call("paved_half_width")) - RoadPath.SPLAT_PAINT_INSET
 	var samples := _samples_xz(curve, curve.get_closest_offset(wet.marks["wet_in"]),
 			curve.get_closest_offset(wet.marks["wet_out"]), 0.5)
 	var images: Array[Image] = [splat, splat2]
@@ -799,8 +758,8 @@ func _paint_wet(splat: Image, splat2: Image, wet: Turtle, profile: Resource) -> 
 
 ## Car 11's apron: pure `channel`, hard-edged, on every pixel centre inside APRON.
 func _paint_apron(splat: Image, splat2: Image, channel: int) -> void:
-	for pz in range(_px_z(APRON.position.y), _px_z(APRON.end.y) + 1):
-		for px in range(_px_x(APRON.position.x), _px_x(APRON.end.x) + 1):
+	for pz in range(_grid.px_z(APRON.position.y), _grid.px_z(APRON.end.y) + 1):
+		for px in range(_grid.px_x(APRON.position.x), _grid.px_x(APRON.end.x) + 1):
 			splat.set_pixel(px, pz, BrushOps.unit_slice(channel, 0))
 			splat2.set_pixel(px, pz, BrushOps.unit_slice(channel, 1))
 
@@ -818,9 +777,9 @@ func _paint_pad(splat: Image, splat2: Image) -> void:
 		SplatPaint.paint_strip(images, units,
 				PackedVector2Array([Vector2(PAD_FROM_X, z), Vector2(PAD_TO_X, z)]), PAD_HALF,
 				SIZE, SIZE)
-	for pz in range(_px_z(SKIDPAD_C.y - SKIDPAD_R), _px_z(SKIDPAD_C.y + SKIDPAD_R) + 1):
-		for px in range(_px_x(SKIDPAD_C.x - SKIDPAD_R), _px_x(SKIDPAD_C.x + SKIDPAD_R) + 1):
-			var w := Vector2(_world_x(px), _world_z(pz))
+	for pz in range(_grid.px_z(SKIDPAD_C.y - SKIDPAD_R), _grid.px_z(SKIDPAD_C.y + SKIDPAD_R) + 1):
+		for px in range(_grid.px_x(SKIDPAD_C.x - SKIDPAD_R), _grid.px_x(SKIDPAD_C.x + SKIDPAD_R) + 1):
+			var w := Vector2(_grid.world_x(px), _grid.world_z(pz))
 			if w.distance_to(SKIDPAD_C) > SKIDPAD_R:
 				continue
 			# North is -Z: the asphalt half.
@@ -1411,36 +1370,12 @@ metadata/_custom_type_script = "uid://cpl5vh8pdc04w"
 
 [node name="Path" type="Path3D" parent="AuthoringRoot/%s"]
 curve = ExtResource("%s")
-""" % [node_name, profile_ids[_profile_path(file_name)], _falloff(file_name), CONFORM_EPSILON,
+""" % [node_name, profile_ids[_profile_path(file_name)], _falloff(file_name), RoadGen.CONFORM_EPSILON,
 				node_name, nodes[file_name][1]]
 	return text
 
 
 # ==================================================================================== helpers
-
-
-# World <-> pixel, HeightmapTerrain's own convention: the grid spans [-span/2, +span/2] in
-# the terrain's local frame at one cell per world unit, and this terrain sits at the origin.
-
-
-func _norm(world_y: float) -> float:
-	return clampf(world_y / HEIGHT, 0.0, 1.0)
-
-
-func _px_x(world_x: float) -> int:
-	return clampi(int(round((world_x + SIZE * 0.5) * _sx)), 0, _iw - 1)
-
-
-func _px_z(world_z: float) -> int:
-	return clampi(int(round((world_z + SIZE * 0.5) * _sz)), 0, _ih - 1)
-
-
-func _world_x(px: int) -> float:
-	return float(px) / _sx - SIZE * 0.5
-
-
-func _world_z(pz: int) -> float:
-	return float(pz) / _sz - SIZE * 0.5
 
 
 func _xz(v: Vector3) -> Vector2:

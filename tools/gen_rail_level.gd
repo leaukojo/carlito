@@ -12,6 +12,7 @@ const HEIGHT := 51.0           ## white-pixel amplitude; stores the 3 m road lev
 const TITLE := "Level 5 - Railway"
 const RAIL_PROFILE := "res://kit/roads/rail_profile.tres"
 const GenIO := preload("res://tools/level_gen_io.gd")
+const RoadGen := preload("res://tools/road_gen.gd")
 
 # --- terrain: the loop climbs from a coastal shelf onto a terraced plateau.
 const GEN_SEED := 50807
@@ -39,11 +40,8 @@ const SEA_Y := 1.0             ## the Sea Area3D's height
 const SEA_CLEARANCE := 4.0     ## lowest rail must sit this far above the water
 const CREST_MARGIN := 3.0      ## highest rail must stay this far under the terrain ceiling
 
-# --- conform (RoadPath's own defaults, so re-running Conform in the editor is a no-op)
-const CONFORM_EPSILON := 0.05
+# --- conform (the rest is RoadGen's, RoadPath's own defaults)
 const CONFORM_FALLOFF := 14.0  ## railway earthworks slope out further than a road's verge
-const MAX_SEG_LEN := 6.0
-const MAX_SEG_ANGLE := 6.0
 
 # --- car spawn: searched inward from the loop so the rails are visible on spawn
 const SPAWN_INSET_MIN := 14.0
@@ -252,7 +250,7 @@ func _build_curve(positions: PackedVector3Array) -> Curve3D:
 ## Acceptance numbers: loop above the fold limit, grades bounded, clears the sea, earthworks within the conform falloff.
 func _report(curve: Curve3D, positions: PackedVector3Array, heights: Image) -> void:
 	var length := curve.get_baked_length()
-	var radius := RoadBuilder.min_turn_radius(curve, MAX_SEG_LEN, MAX_SEG_ANGLE)
+	var radius := RoadBuilder.min_turn_radius(curve, RoadGen.MAX_SEG_LEN, RoadGen.MAX_SEG_ANGLE)
 	var lo := INF
 	var hi := -INF
 	var steepest := 0.0
@@ -286,30 +284,11 @@ func _report(curve: Curve3D, positions: PackedVector3Array, heights: Image) -> v
 # ---------------------------------------------------------------- conform
 
 
-## RoadPath._conform_terrain's math, headless: centreline samples at the ring offsets plus a full-width deck strip.
 func _conform(heights: Image, curve: Curve3D, profile: Resource) -> void:
-	var offsets := RoadBuilder.adaptive_offsets(curve, MAX_SEG_LEN, MAX_SEG_ANGLE)
-	var fw: float = profile.call("full_half_width")
-	var samples := PackedVector3Array()
-	for o in offsets:
-		var w := curve.sample_baked(o)
-		samples.append(Vector3(w.x, w.z, _norm_height(w.y)))
-	var deck_surfaces: Dictionary = RoadBuilder.extrude(curve,
-			PackedVector2Array([Vector2(-fw, 0), Vector2(fw, 0)]),
-			PackedInt32Array([0]), offsets, false)
-	var deck := PackedVector3Array()
-	for v in RoadBuilder.faces_from_surfaces(deck_surfaces):
-		deck.append(Vector3(v.x, v.z, _norm_height(v.y)))
-	var dirty := RoadBuilder.conform_heights(heights, samples, fw, CONFORM_FALLOFF,
-			SIZE, SIZE, deck)
-	print("[gen-rail] conform: %d ring samples, dirty rect %s" % [samples.size(), dirty])
+	var dirty := RoadGen.conform(heights, curve, profile, CONFORM_FALLOFF, SIZE, HEIGHT)
+	print("[gen-rail] conform: dirty rect %s" % dirty)
 	if not dirty.has_area():
 		printerr("[gen-rail] conform changed nothing — the loop missed the terrain")
-
-
-## World Y -> heightmap's 0..1 storage, minus the z-fight epsilon (the ribbon rides on top).
-func _norm_height(y: float) -> float:
-	return clampf((y - CONFORM_EPSILON) / HEIGHT, 0.0, 1.0)
 
 
 # ---------------------------------------------------------------- sampling

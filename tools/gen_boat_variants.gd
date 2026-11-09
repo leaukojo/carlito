@@ -7,13 +7,13 @@ extends Node
 ## convex hull. Game-mode tool scene, not --script: boat.gd needs the InputRouter/
 ## Bridge autoloads to compile.
 
-const StableSave := preload("res://tools/stable_save.gd")
+const VehicleGenIO := preload("res://tools/vehicle_gen_io.gd")
 const OUT_DIR := "res://src/vehicles/watercraft"
 const MODELS := "res://kit/raw/watercraft"   ## raw glbs; the packed .tscn embeds the
 ## meshes, so the glb is export-excluded and not needed at runtime.
 const BOAT_SCRIPT := "res://src/vehicles/boat/boat.gd"
 ## Direct children this generator writes and may replace on regen. Everything else in the scene
-## is hand-authored and transplanted (see _existing_children): the collision box pair.
+## is hand-authored and transplanted (see VehicleGenIO.existing_children): the collision box pair.
 const GENERATED_CHILDREN := ["Model", "Lamps"]
 
 const BOAT_SCALE := 1.2  ## Kenney kit scale: speed-a lands at 2.1 m beam x 4.0 m LOA
@@ -94,17 +94,10 @@ func _ready() -> void:
 		var geo := _analyze(MODELS.path_join(variant + ".glb"), float(ov["draft_frac"]))
 		if geo.is_empty():
 			continue
-		var spec := _build_spec(ov, geo)
-		var spec_path := OUT_DIR.path_join(variant + "_spec.tres")
-		if StableSave.save(spec, spec_path) != OK:
-			push_error("failed to save " + spec_path)
-			continue
-		var scene := _build_scene(variant, boat_script, load(spec_path), ov, geo)
-		var scene_path := OUT_DIR.path_join(variant + ".tscn")
-		if StableSave.save(scene, scene_path) != OK:
-			push_error("failed to save " + scene_path)
-			continue
-		ok += 1
+		if VehicleGenIO.write_variant(OUT_DIR, variant, _build_spec(ov, geo),
+				func(s: VehicleSpec) -> PackedScene:
+					return _build_scene(variant, boat_script, s, ov, geo)):
+			ok += 1
 	print("gen_boat_variants: wrote %d/%d variants" % [ok, VARIANTS.size()])
 	print("collision shapes: ", ", ".join(_shape_report))
 	get_tree().quit(0 if ok == VARIANTS.size() else 1)
@@ -118,7 +111,7 @@ func _build_spec(ov: Dictionary, geo: Dictionary) -> VehicleSpec:
 	# COM below the waterline (origin), as a share of the draft: the boats' righting moment.
 	spec.center_of_mass = Vector3(0, -float(geo["draft"]) * float(ov["com_frac"]), 0)
 	# No ground drive: the gear byte it still publishes is scaled by Drivetrain.DEFAULT_ROAD_RADIUS.
-	spec.torque_curve = _scaled_curve(BOAT_BASE["torque_curve"], float(ov["torque_mul"]))
+	spec.torque_curve = VehicleGenIO.scaled_curve(BOAT_BASE["torque_curve"], float(ov["torque_mul"]))
 	spec.idle_rpm = float(BOAT_BASE["idle_rpm"])
 	spec.redline_rpm = float(BOAT_BASE["redline_rpm"])
 	spec.engine_friction_frac = float(BOAT_BASE["engine_friction_frac"])
@@ -140,14 +133,6 @@ func _build_spec(ov: Dictionary, geo: Dictionary) -> VehicleSpec:
 	spec.steer_speed = float(ov.get("steer_speed", BOAT_BASE["steer_speed"]))
 	spec.headlight_paths.assign([NodePath("Lamps/Headlight")])
 	return spec
-
-
-func _scaled_curve(flat: Array, mul: float) -> PackedVector2Array:
-	var out := PackedVector2Array()
-	@warning_ignore("integer_division")
-	for i in flat.size() / 2:
-		out.append(Vector2(float(flat[i * 2]), float(flat[i * 2 + 1]) * mul))
-	return out
 
 
 # --- scene -----------------------------------------------------------------------------
@@ -190,51 +175,22 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec,
 	root.set("sheet_max_deg", float(ov["sheet_max_deg"]))
 	root.set("sail_pivot", NodePath(String(ov.get("sail_pivot", ""))))
 
-	# Collision is hand-authored (CollisionLower/CollisionUpper box pairs) and transplanted
-	# verbatim on regen rather than overwritten; only a brand-new variant gets the generated
-	# convex hull as a starting point.
-	var kept := _existing_children(variant)
-	var kept_collision: Array = kept["collision"]
-	if kept_collision.is_empty():
-		var col := _body_shape(variant, geo)
-		var cs := CollisionShape3D.new()
-		cs.name = "CollisionShape3D"
-		cs.shape = col["shape"]
-		cs.position = col["pos"]
-		_add(root, root, cs)
-	else:
-		for cs in kept_collision:
-			_add(root, root, cs)
-		_shape_report.append("%s=kept(%d)" % [variant, kept_collision.size()])
+	var kept := VehicleGenIO.existing_children(OUT_DIR, variant, GENERATED_CHILDREN)
+	VehicleGenIO.add_collision(root, variant, kept["collision"], _body_shape.bind(variant, geo),
+			_shape_report)
 
 	# Body model: GLB children stolen into a Model node (180 deg Y flip, kit scale, centring, waterline drop).
-	var glb := (load(MODELS.path_join(variant + ".glb")) as PackedScene).instantiate()
-	var model := Node3D.new()
-	model.name = "Model"
-	model.transform = geo["xform"]
-	_add(root, root, model)
-	for child in glb.get_children():
-		glb.remove_child(child)
-		child.owner = null  # drop the glb's ownership before re-parenting (quiets a warning)
-		model.add_child(child)
-		_own(child, root)
-	glb.free()
+	VehicleGenIO.steal_model(root, MODELS.path_join(variant + ".glb"), geo["xform"])
 
 	var lamps := Node3D.new()
 	lamps.name = "Lamps"
-	_add(root, root, lamps)
-	var spot := SpotLight3D.new()
-	spot.name = "Headlight"
-	spot.position = Vector3(0, hull.size.y * 0.15, -loa * 0.45)
-	spot.visible = false
-	spot.light_energy = 0.0
-	spot.spot_range = 28.0
-	spot.spot_angle = 38.0
-	_add(root, lamps, spot)
+	VehicleGenIO.add(root, root, lamps)
+	VehicleGenIO.add(root, lamps, VehicleGenIO.headlight("Headlight",
+			Vector3(0, hull.size.y * 0.15, -loa * 0.45)))
 
 	# Hand-authored children (e.g. "HoodCam"), transplanted last to match editor child order.
 	for extra: Node in kept["extras"]:
-		_add(root, root, extra)
+		VehicleGenIO.add(root, root, extra)
 
 	var packed := PackedScene.new()
 	packed.pack(root)
@@ -242,68 +198,18 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec,
 	return packed
 
 
-## Everything in the existing scene the generator does not rebuild: collision boxes plus any
-## other hand-added node. Returns {collision, extras}: collision goes back in first (before
-## Model), extras last (after Lamps), matching authored child order so a no-op regen stays
-## byte-identical. Extras are reparented (not duplicated) out of an instance loaded with
-## GEN_EDIT_STATE_INSTANCE — plain `duplicate()` loses scene-instance state, so `pack()` would
-## write an instanced child's properties back out explicitly, pinning the vehicle scene to
-## today's version of that child's script. Collision shapes are plain nodes and stay a plain
-## duplicate.
-func _existing_children(variant: String) -> Dictionary:
-	var kept := {"collision": [], "extras": []}
-	var path := OUT_DIR.path_join(variant + ".tscn")
-	if not ResourceLoader.exists(path):
-		return kept
-	var scene := load(path) as PackedScene
-	if scene == null:
-		return kept
-	var inst := scene.instantiate(PackedScene.GEN_EDIT_STATE_INSTANCE)
-	for child in inst.get_children():
-		if child is CollisionShape3D:
-			(kept["collision"] as Array).append(child.duplicate())
-		elif not (String(child.name) in GENERATED_CHILDREN):
-			(kept["extras"] as Array).append(child)
-	for extra: Node in kept["extras"]:
-		inst.remove_child(extra)
-	inst.free()
-	return kept
-
-
-## Set owner recursively so pack() serialises the stolen GLB subtree into the vehicle scene.
-func _own(node: Node, scene_owner: Node) -> void:
-	node.owner = scene_owner
-	for c in node.get_children():
-		_own(c, scene_owner)
-
-
 ## Convex hull of the HULL meshes (rigging excluded); box fallback if degenerate.
 func _body_shape(variant: String, geo: Dictionary) -> Dictionary:
-	var xform: Transform3D = geo["xform"]
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var n := 0
-	for pair: Array in geo["hull_pairs"]:
-		var full := xform * (pair[1] as Transform3D)
-		for v in (pair[0] as Mesh).get_faces():
-			st.add_vertex(full * v)
-			n += 1
-	if n >= 12:
-		var shape := (st.commit() as ArrayMesh).create_convex_shape(true, true)
-		if shape != null and shape.points.size() >= 4:
-			_shape_report.append("%s=hull(%d)" % [variant, shape.points.size()])
-			return {"shape": shape, "pos": Vector3.ZERO}
+	var shape := VehicleGenIO.hull_shape(geo["hull_pairs"], geo["xform"])
+	if shape != null:
+		_shape_report.append("%s=hull(%d)" % [variant, shape.points.size()])
+		return {"shape": shape, "pos": Vector3.ZERO}
 	push_warning("%s: convex hull degenerate, falling back to box" % variant)
 	var hull: AABB = geo["hull"]
 	var box := BoxShape3D.new()
 	box.size = hull.size
 	_shape_report.append("%s=box" % variant)
 	return {"shape": box, "pos": hull.get_center()}
-
-
-func _add(scene_owner: Node, parent: Node, child: Node) -> void:
-	parent.add_child(child)
-	child.owner = scene_owner
 
 
 # --- geometry --------------------------------------------------------------------------
@@ -345,7 +251,7 @@ func _analyze(path: String, draft_frac: float) -> Dictionary:
 	var xform := Transform3D(basis, Vector3(
 			BOAT_SCALE * c.x, -BOAT_SCALE * native.position.y - draft, BOAT_SCALE * c.z))
 	return {"xform": xform, "hull_pairs": hull_pairs, "draft": draft,
-			"hull": _xform_aabb(native, xform)}
+			"hull": xform * native}
 
 
 ## Collect hull mesh pairs; EXCLUDE_COLLISION subtrees are skipped.
@@ -359,14 +265,3 @@ func _collect_hull(node: Node, xform: Transform3D, hull_pairs: Array) -> void:
 		hull_pairs.append([(node as MeshInstance3D).mesh, nx])
 	for child in node.get_children():
 		_collect_hull(child, nx, hull_pairs)
-
-
-## AABB of `aabb` after `xform` (8 corners; xform is rotation+uniform-scale+translation).
-func _xform_aabb(aabb: AABB, xform: Transform3D) -> AABB:
-	var out := AABB(xform * aabb.position, Vector3.ZERO)
-	for i in 8:
-		out = out.expand(xform * (aabb.position + Vector3(
-				aabb.size.x if (i & 1) else 0.0,
-				aabb.size.y if (i & 2) else 0.0,
-				aabb.size.z if (i & 4) else 0.0)))
-	return out

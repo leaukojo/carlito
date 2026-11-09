@@ -16,7 +16,6 @@ param(
 $ErrorActionPreference = 'Continue'
 $repo = Split-Path -Parent $PSScriptRoot
 Set-Location $repo
-. (Join-Path $PSScriptRoot 'godot_bin.ps1')
 
 function Fail($msg) { Write-Host "REBUILD FAILED: $msg" -ForegroundColor Red; exit 1 }
 function Announce($msg) { Write-Host "`n== $msg" -ForegroundColor Cyan }
@@ -60,8 +59,6 @@ if (-not $m.replayable) {
 
 if ($DryRun) { Write-Host "`n-DryRun: nothing was run." -ForegroundColor Green; exit 0 }
 
-$GODOT = Resolve-GodotBin
-
 # --- snapshot ----------------------------------------------------------------------------
 # Backups go under tmp/, which carries a committed .gdignore, or Godot imports the copies and the generator sculpts the backup instead.
 $snapDir = Join-Path $repo "tmp/${Level}_before"
@@ -84,21 +81,26 @@ if (-not $NoSnapshot) {
 }
 
 # --- run ----------------------------------------------------------------------------------
-# A script error fails every step. --import hands back an unreliable process code, so it fails on
-# any ERROR: line too; a tool step's verdict is its exit code (every chain tool ends in
+# Every run goes through godot_run.mjs (lock, parse-kill; a step may take minutes, hence the long
+# timeout), which passes the child's exit code through. A script error, or a wrapper refusal,
+# timeout or parse kill, fails every step. --import hands back an unreliable process code, so it
+# fails on any ERROR: line too; a tool step's verdict is its exit code (every chain tool ends in
 # quit(code)), and an engine ERROR: line it logs while exiting 0 is shown, not fatal.
+function Invoke-GodotRun($godotArgs) {
+    return (node tools/godot_run.mjs --timeout=3600 -- @godotArgs 2>&1 | Out-String)
+}
 function Invoke-Godot($label, $godotArgs, [switch]$ByExitCode) {
     Announce "$label"
-    $out = & $GODOT @godotArgs 2>&1 | Out-String
+    $out = Invoke-GodotRun $godotArgs
     $code = $LASTEXITCODE
     Write-Host $out
-    $lines = ($out -split "`n") | Where-Object { $_ -notmatch 'still in use at exit|leaked at exit|Pages in use exist at exit' }
-    $scriptErrors = $lines | Select-String -Pattern 'SCRIPT ERROR|Failed to load|Compile Error'
-    if ($scriptErrors) { $scriptErrors; Fail $label }
-    $engineErrors = $lines | Select-String -Pattern 'ERROR:'
-    if (-not $ByExitCode) { if ($engineErrors) { $engineErrors; Fail $label }; return }
+    $out | node tools/godot_verdict.mjs --script-errors
+    if ($LASTEXITCODE -ne 0) { Fail $label }
+    $engineErrors = $out | node tools/godot_verdict.mjs --errors
+    $engineFailed = $LASTEXITCODE -ne 0
+    if (-not $ByExitCode) { if ($engineFailed) { $engineErrors; Fail $label }; return }
     if ($code -ne 0) { Fail "$label (exit code $code)" }
-    if ($engineErrors) { Write-Host 'engine errors logged, tool exited 0:' -ForegroundColor Yellow; $engineErrors }
+    if ($engineFailed) { Write-Host 'engine errors logged, tool exited 0:' -ForegroundColor Yellow; $engineErrors }
 }
 
 $i = 0
@@ -128,7 +130,7 @@ foreach ($step in $m.steps) {
 
 # Returns $null when the two PNGs cannot be compared (size/format change - that is real drift).
 function Get-PngDrift($beforePath, $afterPath) {
-    $out = & $GODOT '--headless' '--path' '.' '--script' 'res://tools/png_drift.gd' '--' $beforePath $afterPath 2>&1 | Out-String
+    $out = Invoke-GodotRun @('--headless', '--path', '.', '--script', 'res://tools/png_drift.gd', '--', $beforePath, $afterPath)
     $mm = [regex]::Match($out, 'DRIFT px=(\d+) max=(\d+) total=(\d+)')
     if (-not $mm.Success) { return $null }
     return @{ px = [int]$mm.Groups[1].Value; max = [int]$mm.Groups[2].Value; total = [int]$mm.Groups[3].Value }

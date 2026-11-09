@@ -1,22 +1,15 @@
 extends RefCounted
-## Shared read of a vehicle scene's ROOT node off its PackedScene state, never an instance: a
-## scene instanced only to be asked a question leaves orphan sub-scenes behind. Asserts through
-## gdUnit, so a sweep over `spec_of` fails on a missing spec instead of passing on zero variants.
+## `VehicleCatalog`'s root reads (`root_property`, `spec_in`) with gdUnit asserts, so a sweep over
+## `spec_of` fails on a missing spec instead of passing on zero variants.
 
 const _ObjectAssert := preload("res://addons/gdUnit4/src/asserts/GdUnitObjectAssertImpl.gd")
 
 
 ## The value `scene_path`'s root stores for `prop`, or null when the scene leaves it unset.
 static func root_property(scene_path: String, prop: StringName) -> Variant:
-	var scene := load(scene_path) as PackedScene
-	_ObjectAssert.new(scene).override_failure_message("cannot load " + scene_path).is_not_null()
-	if scene == null:
-		return null
-	var state := scene.get_state()
-	for i in state.get_node_property_count(0):
-		if state.get_node_property_name(0, i) == prop:
-			return state.get_node_property_value(0, i)
-	return null
+	_ObjectAssert.new(load(scene_path) as PackedScene).override_failure_message(
+			"cannot load " + scene_path).is_not_null()
+	return VehicleCatalog.root_property(scene_path, prop)
 
 
 ## The VehicleSpec on `scene_path`'s root, asserted present.

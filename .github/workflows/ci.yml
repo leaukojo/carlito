@@ -34,17 +34,6 @@ jobs:
           unzip -q templates.tpz -d /tmp/templates
           mv /tmp/templates/templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
 
-      # Editor-only classes used as type annotations outside addons/ parse-fail in
-      # exported builds (the node silently does nothing) — hard gate. The [^#]* prefix
-      # skips comment-only mentions.
-      - name: Editor-type annotation gate
-        shell: bash
-        run: |
-          if grep -rnE '^[^#]*((:|->)[[:space:]]*|Array\[|[[:space:]]as[[:space:]]+)Editor[A-Z][A-Za-z0-9]*' --include='*.gd' src kit tools tests; then
-            echo "editor-only type annotation outside addons/ (breaks exported builds)"
-            exit 1
-          fi
-
       # export_presets.cfg's pasted Head Include must match its source file verbatim
       # (docs/deploying.md § The web export). GitHub-hosted ubuntu runners ship node.
       - name: Head-include sync check
@@ -58,7 +47,9 @@ jobs:
       - name: Doc reference check
         run: node tools/check_docs.mjs
 
-      # A `\` outside a string that is not a line continuation: scripted-edit damage that parses.
+      # A `\` outside a string that is not a line continuation (scripted-edit damage that parses),
+      # and editor-only classes as type annotations outside addons/, which parse-fail in exported
+      # builds (the node silently does nothing).
       - name: GDScript text check
         run: node tools/check_gd_text.mjs
 
@@ -80,14 +71,7 @@ jobs:
           set +e
           godot --headless res://tools/check_bakes.tscn 2>&1 | tee check_bakes.log
           set -e
-          if grep -qE '\[check-bakes\].*: (stale|missing|error)' check_bakes.log; then
-            echo "stale bakes: lines above"
-            exit 1
-          fi
-          if ! grep -q '\[check-bakes\] complete:' check_bakes.log; then
-            echo "check-bakes produced no completion sentinel — the run did not finish"
-            exit 1
-          fi
+          node tools/godot_verdict.mjs --bakes < check_bakes.log
 
       # The .baked.scn is build output, not a committed artifact (root CLAUDE.md
       # rule 1). Bake every registered level with an AuthoringRoot (seven) here, before the
@@ -124,19 +108,15 @@ jobs:
       # Boot the real main scene headless. Judged by output, not exit code: the exit code is
       # ignored (leak-at-exit noise makes it meaningless). Any SCRIPT ERROR / ERROR fails, and so
       # does a missing "Carlito level OK:" line, which boot.gd prints once the first vehicle has
-      # spawned — a crash or a hang before that leaves no line. "still in use" / "leaked at
-      # exit" / "Pages in use exist at exit" (PagedAllocator, Linux-only) are known-harmless
-      # leak-at-exit noise emitted after the run's real work.
+      # spawned — a crash or a hang before that leaves no line. godot_verdict.mjs passes the
+      # known-harmless leak-at-exit noise emitted after the run's real work.
       - name: Headless smoke
         shell: bash
         run: |
           set +e
           godot --headless --quit-after 120 2>&1 | tee smoke.log
           set -e
-          if grep -E "SCRIPT ERROR|ERROR:" smoke.log | grep -vE "still in use at exit|leaked at exit|Pages in use exist at exit"; then
-            echo "smoke failed: errors above"
-            exit 1
-          fi
+          node tools/godot_verdict.mjs --errors < smoke.log
           if ! grep -q "^Carlito level OK: " smoke.log; then
             echo "smoke failed: no level-OK line — the level never finished loading"
             exit 1
@@ -154,10 +134,7 @@ jobs:
           set +e
           godot --headless --quit-after 120 2>&1 | tee baked.log
           set -e
-          if grep -E "SCRIPT ERROR|ERROR:" baked.log | grep -vE "still in use at exit|leaked at exit|Pages in use exist at exit"; then
-            echo "baked smoke failed: errors above"
-            exit 1
-          fi
+          node tools/godot_verdict.mjs --errors < baked.log
           if ! grep -qE "^Carlito level OK: level_1 \(.*, baked: true\)" baked.log; then
             echo "baked smoke failed: no 'Carlito level OK: level_1 (..., baked: true)' line"
             exit 1
@@ -197,10 +174,7 @@ jobs:
             grep -qE "DONE.*savepack" "patch-${id}.log" && [ -f "build/web/c2-${SHORT_SHA}.${id}.pck" ] \
               || { echo "level pack ${id} was not written"; exit 1; }
           done
-          if grep -E "ERROR:" export.log | grep -vE "still in use at exit|leaked at exit|Pages in use exist at exit|Attempting to parent and popup a dialog"; then
-            echo "export failed: errors above"
-            exit 1
-          fi
+          node tools/godot_verdict.mjs --errors --allow='Attempting to parent and popup a dialog' < export.log
           cp "build/web/c2-${SHORT_SHA}.html" build/web/index.html
           touch build/web/.nojekyll
           ls -la build/web

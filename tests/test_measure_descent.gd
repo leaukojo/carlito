@@ -1,31 +1,46 @@
 extends GdUnitTestSuite
-## `measure_grade`'s descent pass helpers: the hold's PI, the held gear, and the energy check's
-## slip term and share.
+## `measure_grade`'s descent pass helpers: the hold's PI (`MeasureRig.PiHold`), the held gear, and
+## the energy check's slip term and share.
 
 const Measure := preload("res://tools/measure_grade.gd")
+const MeasureRig := preload("res://tools/measure_rig.gd")
 const DT := 1.0 / 60.0
 
 
+## A foot-brake hold's PI with its integral at `integral`.
+static func _hold(integral: float) -> MeasureRig.PiHold:
+	var hold := MeasureRig.PiHold.new(0.15, 0.03)
+	hold.integral = integral
+	return hold
+
+
 func test_the_hold_asks_nothing_under_its_speed() -> void:
-	var out := Measure.overspeed_hold(0.0, -2.0, DT, 0.15, 0.03)
-	assert_float(out.x).is_equal(0.0)
-	assert_float(out.y).is_equal(0.0)
+	var hold := _hold(0.0)
+	assert_float(hold.step(-2.0, DT)).is_equal(0.0)
+	assert_float(hold.integral).is_equal(0.0)
 
 
 func test_the_hold_answers_overspeed_in_proportion_and_integrates_it() -> void:
-	var out := Measure.overspeed_hold(0.2, 1.0, DT, 0.15, 0.03)
-	assert_float(out.x).is_equal_approx(0.2 + 0.03 * DT, 1e-6)
-	assert_float(out.y).is_equal_approx(out.x + 0.15, 1e-6)
+	var hold := _hold(0.2)
+	var demand := hold.step(1.0, DT)
+	assert_float(hold.integral).is_equal_approx(0.2 + 0.03 * DT, 1e-12)
+	assert_float(demand).is_equal_approx(hold.integral + 0.15, 1e-12)
 
 
 func test_the_hold_clamps_its_demand_and_its_integral() -> void:
-	var out := Measure.overspeed_hold(0.999, 100.0, 1.0, 0.15, 0.03)
-	assert_float(out.x).is_equal(1.0)
-	assert_float(out.y).is_equal(1.0)
+	var hold := _hold(0.999)
+	assert_float(hold.step(100.0, 1.0)).is_equal(1.0)
+	assert_float(hold.integral).is_equal(1.0)
 	# An integral wound to 1 bleeds off once under speed, the demand with it.
-	out = Measure.overspeed_hold(1.0, -1.0, 1.0, 0.15, 0.03)
-	assert_float(out.x).is_equal_approx(0.97, 1e-6)
-	assert_float(out.y).is_equal_approx(0.82, 1e-6)
+	hold = _hold(1.0)
+	assert_float(hold.step(-1.0, 1.0)).is_equal_approx(0.82, 1e-12)
+	assert_float(hold.integral).is_equal_approx(0.97, 1e-12)
+
+
+func test_a_frozen_hold_keeps_its_integral() -> void:
+	var hold := _hold(0.4)
+	assert_float(hold.step(1.0, 1.0, true)).is_equal_approx(0.55, 1e-12)
+	assert_float(hold.integral).is_equal(0.4)
 
 
 func test_the_held_gear_is_the_lowest_under_the_upshift_point() -> void:

@@ -269,12 +269,7 @@ static func _course_problems(d: ChallengeDef, family: String) -> PackedStringArr
 		return PackedStringArray(["course '%s' is not a scene with a Node3D root" % d.course])
 	var course := node as Node3D
 	var out := PackedStringArray()
-	var spawn_ok := false
-	for n in course.find_children("*", "", true, false):
-		if n is VehicleSpawn and (n as VehicleSpawn).accepts(family):
-			spawn_ok = true
-			break
-	if not spawn_ok:
+	if VehicleSpawn.first_under(course, family) == null:
 		out.append("course has no VehicleSpawn accepting the %s family" % family)
 	for n in course.find_children("*", "ArenaPreview", true, false):
 		var shown := (n as ArenaPreview).arena

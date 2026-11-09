@@ -9,7 +9,7 @@ extends Node
 ## Deterministic and destructive-by-run: a hand-tune driven into a shipped .tres must be folded
 ## back into the recipe here before the next run, or the rerun silently discards it.
 
-const StableSave := preload("res://tools/stable_save.gd")
+const VehicleGenIO := preload("res://tools/vehicle_gen_io.gd")
 const OUT_DIR := "res://src/vehicles/kenney"
 const MODELS := OUT_DIR + "/models"
 const BASE_SCRIPT := "res://src/vehicles/base/base_vehicle.gd"
@@ -22,7 +22,7 @@ const FAMILY_SCRIPTS := {"tractor": TRACTOR_SCRIPT, "truck": TRUCK_SCRIPT}
 
 const KIT_SCALE := 1.2
 ## Direct children this generator writes and may replace on regen. Everything else in the scene
-## is hand-authored and transplanted (see _existing_children): the collision box pair, the
+## is hand-authored and transplanted (see VehicleGenIO.existing_children): the collision box pair, the
 ## tractor's ThreePointHitch, and the hand-placed "HoodCam" marker.
 const GENERATED_CHILDREN := ["Model", "Lamps"]
 const COLORMAP := OUT_DIR + "/models/Textures/colormap.png"
@@ -59,7 +59,6 @@ const SIDE_FILL := 0.82
 ## COMPROMISE: one fixed point; the real centre moves back toward the side's centroid as yaw grows.
 ## Undoing it means a yaw-dependent point in `WheelDrive._apply_resistance`.
 const SIDE_CP_FRAC := 0.25
-const GRAVITY := 9.8
 const MIN_CLEARANCE := 0.12  ## m the collision hull floor is held above the wheel-contact plane
 const BALANCE_G := 0.15  ## side g `_balance` reads K at: the 10 % held step at 30 km/h (0.1-0.26 g)
 const WHEEL_BAND := 0.4   ## m z-window (body space) the body half-width is measured over per axle
@@ -885,17 +884,11 @@ func _ready() -> void:
 		var recipe := ov.duplicate()
 		recipe["_id"] = variant
 		var spec := _build_spec(String(ov.get("base", family)), recipe, geo, wheels)
-		var spec_path := OUT_DIR.path_join(variant + "_spec.tres")
-		if StableSave.save(spec, spec_path) != OK:
-			push_error("failed to save " + spec_path)
-			continue
 		var scene_script: Variant = load(String(FAMILY_SCRIPTS.get(family, BASE_SCRIPT)))
-		var scene := _build_scene(variant, scene_script, load(spec_path), geo)
-		var scene_path := OUT_DIR.path_join(variant + ".tscn")
-		if StableSave.save(scene, scene_path) != OK:
-			push_error("failed to save " + scene_path)
-			continue
-		ok += 1
+		if VehicleGenIO.write_variant(OUT_DIR, variant, spec,
+				func(s: VehicleSpec) -> PackedScene:
+					return _build_scene(variant, scene_script, s, geo)):
+			ok += 1
 	print("gen_kenney_vehicles: wrote %d/%d variants" % [ok, VARIANTS.size()])
 	print("collision shapes: ", ", ".join(_shape_report))
 	print("resistance (frontal area measured off the body AABB, see FRONTAL_FILL):")
@@ -1037,7 +1030,7 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	gd.cornering_peak_load = get_f.call("cornering_peak_load")
 
 	var torque_mul := float(ov.get("torque_mul", 1.0))
-	spec.torque_curve = _scaled_curve(b["torque_curve"], torque_mul)
+	spec.torque_curve = VehicleGenIO.scaled_curve(b["torque_curve"], torque_mul)
 	spec.idle_rpm = float(b["idle_rpm"])
 	spec.redline_rpm = float(b["redline_rpm"])
 	spec.free_rev_limit_rpm = float(b.get("free_rev_limit_rpm", 0.0))
@@ -1154,8 +1147,8 @@ func _suspension_recipe(b: Dictionary, ov: Dictionary) -> Dictionary:
 ## `ride_hz` baseline, where every axle sags alike, else the even corner's `mass / 4 * g /
 ## spring_rate`. Held under 0.8 of the travel.
 func _static_sag(b: Dictionary, spec: VehicleSpec, gd: GroundDriveSpec) -> float:
-	var sag := GRAVITY / pow(TAU * float(b["ride_hz"]), 2.0) if b.has("ride_hz") \
-			else spec.mass / 4.0 * GRAVITY / gd.spring_rate
+	var sag := BrakeSizing.G / pow(TAU * float(b["ride_hz"]), 2.0) if b.has("ride_hz") \
+			else spec.mass / 4.0 * BrakeSizing.G / gd.spring_rate
 	return clampf(sag, 0.0, gd.rest_length * 0.8)
 
 
@@ -1248,14 +1241,14 @@ func _balance(spec: VehicleSpec, id: String) -> void:
 ## asks, held to what the tyres can give, settled by a few passes. So both axles reach their limit
 ## together: an even split under-brakes the front and locks the rear first.
 func _front_brake_share(spec: VehicleSpec, gd: GroundDriveSpec, sag: float) -> float:
-	var ax := _axles(spec, gd)
+	var ax := _axles(spec)
 	if ax.is_empty():
 		return -1.0  # no axle pair: every wheel alike
 	var wheelbase: float = ax["wheelbase"]
 	var n_front: int = ax["n_front"]
 	var n_rear: int = ax["n_rear"]
 	var h := _com_height(spec, gd, sag)
-	var weight := spec.mass * GRAVITY
+	var weight := spec.mass * BrakeSizing.G
 	var ref_load := weight / gd.wheel_positions.size()  # `RayWheel.reference_load`
 	var static_front: float = ax["static_front"]
 	var asked := gd.brake_torque * (n_front / gd.axle_radius(false)
@@ -1276,24 +1269,17 @@ func _front_brake_share(spec: VehicleSpec, gd: GroundDriveSpec, sag: float) -> f
 	return roundf(clampf(share, 0.05, 0.95) * 1000.0) / 1000.0
 
 
-## The axle pair off the wheel stations (front = -Z): `wheelbase`, wheels per axle and the static
-## share of weight on the front (`static_front`, off COM.z). Empty when there is no pair.
-func _axles(spec: VehicleSpec, gd: GroundDriveSpec) -> Dictionary:
-	var front_z := INF
-	var rear_z := -INF
-	var n_rear := 0
-	for p in gd.wheel_positions:
-		if RayWheel.is_rear_z(p.z):
-			rear_z = maxf(rear_z, p.z)
-			n_rear += 1
-		else:
-			front_z = minf(front_z, p.z)
-	var n_front := gd.wheel_positions.size() - n_rear
-	var wheelbase := rear_z - front_z
-	if not is_finite(wheelbase) or wheelbase <= 0.0 or n_front == 0 or n_rear == 0:
+## `BrakeSizing.axle_geometry` plus the `wheelbase` and the static share of weight on the front
+## (`static_front`, off COM.z). Empty when there is no axle pair.
+func _axles(spec: VehicleSpec) -> Dictionary:
+	var ax := BrakeSizing.axle_geometry(spec)
+	var wheelbase: float = ax["rear_z"] - ax["front_z"]
+	if not is_finite(wheelbase) or wheelbase <= 0.0 or int(ax["n_front"]) == 0 \
+			or int(ax["n_rear"]) == 0:
 		return {}
-	return {"wheelbase": wheelbase, "n_front": n_front, "n_rear": n_rear,
-			"static_front": (rear_z - spec.center_of_mass.z) / wheelbase}
+	ax["wheelbase"] = wheelbase
+	ax["static_front"] = BrakeSizing.static_front_share(spec, ax)
+	return ax
 
 
 ## The COM's height over the road at rest (m): each anchor sits its axle's `radius + rest_length -
@@ -1310,7 +1296,7 @@ func _com_height(spec: VehicleSpec, gd: GroundDriveSpec, sag: float) -> float:
 ## in its bump travel; every axle sagging alike keeps the body level (`_static_sag`).
 func _derive_springs(spec: VehicleSpec, gd: GroundDriveSpec, b: Dictionary) -> void:
 	var omega := TAU * float(b["ride_hz"])
-	var ax := _axles(spec, gd)
+	var ax := _axles(spec)
 	var front_m := spec.mass / maxf(gd.wheel_positions.size(), 1.0)
 	var rear_m := front_m
 	if not ax.is_empty():
@@ -1328,20 +1314,12 @@ func _derive_springs(spec: VehicleSpec, gd: GroundDriveSpec, b: Dictionary) -> v
 ## `anti_squat` shares: 100 % is the slope `h / wheelbase` at which that axle's links carry its
 ## whole load transfer and its springs none. Thousandths, so a regen writes a stable file.
 func _derive_link_slopes(spec: VehicleSpec, gd: GroundDriveSpec, b: Dictionary, sag: float) -> void:
-	var ax := _axles(spec, gd)
+	var ax := _axles(spec)
 	if ax.is_empty():
 		return
 	var full := _com_height(spec, gd, sag) / float(ax["wheelbase"])
 	gd.anti_dive_slope = roundf(float(b["anti_dive"]) * full * 1000.0) / 1000.0
 	gd.anti_squat_slope = roundf(float(b["anti_squat"]) * full * 1000.0) / 1000.0
-
-
-func _scaled_curve(flat: Array, mul: float) -> PackedVector2Array:
-	var out := PackedVector2Array()
-	@warning_ignore("integer_division")
-	for i in flat.size() / 2:
-		out.append(Vector2(float(flat[i * 2]), float(flat[i * 2 + 1]) * mul))
-	return out
 
 
 # --- scene -----------------------------------------------------------------------------
@@ -1354,39 +1332,17 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec, geo
 	root.set_script(scene_script)
 	root.set("spec", spec)
 
-	# Collision is hand-authored (CollisionLower/CollisionUpper box pairs) and transplanted
-	# verbatim on regen rather than overwritten; only a brand-new variant gets the generated
-	# convex hull as a starting point.
-	var kept := _existing_children(variant)
-	var kept_collision: Array = kept["collision"]
-	if kept_collision.is_empty():
-		var col := _body_shape(variant, geo)
-		var cs := CollisionShape3D.new()
-		cs.name = "CollisionShape3D"
-		cs.shape = col["shape"]
-		cs.position = col["pos"]
-		_add(root, root, cs)
-	else:
-		for cs in kept_collision:
-			_add(root, root, cs)
-		_shape_report.append("%s=kept(%d)" % [variant, kept_collision.size()])
+	# A new variant on another's model starts from that model's scene (its hand-authored collision
+	# and subsystem nodes), then keeps its own.
+	var kept := VehicleGenIO.existing_children(OUT_DIR, variant, GENERATED_CHILDREN,
+			OUT_DIR.path_join(_model_of(variant) + ".tscn"))
+	VehicleGenIO.add_collision(root, variant, kept["collision"], _body_shape.bind(variant, geo),
+			_shape_report)
 
-	# Body model: instance the GLB, steal its non-wheel children into a Model node under the body
-	# transform (180deg Y flip: Kenney +Z front -> project -Z, + kit scale + x/z centring).
-	var glb := (load(MODELS.path_join(_model_of(variant) + ".glb")) as PackedScene).instantiate()
-	var model := Node3D.new()
-	model.name = "Model"
-	model.transform = geo["xform"]
-	_add(root, root, model)
-	for child in glb.get_children():
-		var lname := String(child.name).to_lower()
-		if lname.begins_with("wheel") and (lname.ends_with("left") or lname.ends_with("right")):
-			continue  # a driven corner wheel — RayWheel provides these
-		glb.remove_child(child)
-		child.owner = null
-		model.add_child(child)
-		_own(child, root)
-	glb.free()
+	# Body model: the GLB's non-wheel children stolen into a Model node under the body transform
+	# (180deg Y flip: Kenney +Z front -> project -Z, + kit scale + x/z centring).
+	var model := VehicleGenIO.steal_model(root, MODELS.path_join(_model_of(variant) + ".glb"),
+			geo["xform"], _is_corner_wheel)
 
 	_apply_body_material(model)
 
@@ -1394,7 +1350,7 @@ func _build_scene(variant: String, scene_script: Variant, spec: VehicleSpec, geo
 
 	# Hand-authored subsystem nodes (tractor's ThreePointHitch), added last to match editor order.
 	for extra: Node in kept["extras"]:
-		_add(root, root, extra)
+		VehicleGenIO.add(root, root, extra)
 
 	var packed := PackedScene.new()
 	packed.pack(root)
@@ -1427,11 +1383,10 @@ func _set_material_override(node: Node, mat: StandardMaterial3D) -> void:
 		_set_material_override(c, mat)
 
 
-## Set owner recursively so pack() serialises the stolen GLB subtree into the vehicle scene.
-func _own(node: Node, scene_owner: Node) -> void:
-	node.owner = scene_owner
-	for c in node.get_children():
-		_own(c, scene_owner)
+## A driven corner wheel of the GLB, left out of the Model: RayWheel provides these.
+static func _is_corner_wheel(child: Node) -> bool:
+	var lname := String(child.name).to_lower()
+	return lname.begins_with("wheel") and (lname.ends_with("left") or lname.ends_with("right"))
 
 
 ## The GLB (and its lamp tables and hand-authored scene) a variant is built on: its own, or the
@@ -1440,60 +1395,14 @@ static func _model_of(variant: String) -> String:
 	return String(VARIANTS[variant].get("model", variant))
 
 
-## Everything in the existing scene the generator does not rebuild, kept so it survives the old
-## instance being freed. A whitelist of what the generator writes (GENERATED_CHILDREN plus
-## collision), not a list of what to save, so a hand-added node is preserved by default.
-##
-## Returns {collision, extras}: collision goes back in first (before Model), extras last (after
-## Lamps), matching authored child order so a no-op regen stays byte-identical. Extras are
-## reparented (not duplicated) out of an instance loaded with GEN_EDIT_STATE_INSTANCE — plain
-## `duplicate()` loses scene-instance state, so `pack()` would write the hitch's properties back
-## out explicitly (including `script=`), pinning the vehicle scene to today's hitch script.
-## Collision shapes are plain nodes and stay a plain duplicate.
-func _existing_children(variant: String) -> Dictionary:
-	var kept := {"collision": [], "extras": []}
-	var path := OUT_DIR.path_join(variant + ".tscn")
-	# A new variant on another's model starts from that model's scene (its hand-authored collision
-	# and subsystem nodes), then keeps its own.
-	if not ResourceLoader.exists(path):
-		path = OUT_DIR.path_join(_model_of(variant) + ".tscn")
-	if not ResourceLoader.exists(path):
-		return kept
-	var scene := load(path) as PackedScene
-	if scene == null:
-		return kept
-	var inst := scene.instantiate(PackedScene.GEN_EDIT_STATE_INSTANCE)
-	for child in inst.get_children():
-		if child is CollisionShape3D:
-			(kept["collision"] as Array).append(child.duplicate())
-		elif not (String(child.name) in GENERATED_CHILDREN):
-			(kept["extras"] as Array).append(child)
-	for extra: Node in kept["extras"]:
-		inst.remove_child(extra)
-	inst.free()
-	return kept
-
-
 ## Convex hull of the wheel-less body (verts clamped up to MIN_CLEARANCE for a flat floor
 ## above the wheel-contact plane), simplified by QuickHull. Box fallback if degenerate.
 ## Returns {shape, pos}. Verts already sit in body space, so pos is the origin for a hull.
 func _body_shape(variant: String, geo: Dictionary) -> Dictionary:
-	var xform: Transform3D = geo["xform"]
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var n := 0
-	for pair: Array in geo["body_pairs"]:
-		var full := xform * (pair[1] as Transform3D)
-		for v in (pair[0] as Mesh).get_faces():
-			var p := full * v
-			p.y = maxf(p.y, MIN_CLEARANCE)
-			st.add_vertex(p)
-			n += 1
-	if n >= 12:
-		var hull := (st.commit() as ArrayMesh).create_convex_shape(true, true)
-		if hull != null and hull.points.size() >= 4:
-			_shape_report.append("%s=hull(%d)" % [variant, hull.points.size()])
-			return {"shape": hull, "pos": Vector3.ZERO}
+	var hull := VehicleGenIO.hull_shape(geo["body_pairs"], geo["xform"], MIN_CLEARANCE)
+	if hull != null:
+		_shape_report.append("%s=hull(%d)" % [variant, hull.points.size()])
+		return {"shape": hull, "pos": Vector3.ZERO}
 	push_warning("%s: convex hull degenerate, falling back to box" % variant)
 	_shape_report.append("%s=box" % variant)
 	return _box_shape(geo)
@@ -1517,7 +1426,7 @@ func _box_shape(geo: Dictionary) -> Dictionary:
 func _add_lamps(root: RigidBody3D, variant: String, box: AABB, lenses: Dictionary) -> void:
 	var lamps := Node3D.new()
 	lamps.name = "Lamps"
-	_add(root, root, lamps)
+	VehicleGenIO.add(root, root, lamps)
 
 	var ctr := box.get_center()
 	var hw := box.size.x * 0.5
@@ -1531,15 +1440,15 @@ func _add_lamps(root: RigidBody3D, variant: String, box: AABB, lenses: Dictionar
 	# --- front: spot light + head lens on the main part, indicator on the split-off part ---
 	var f: Dictionary = lenses.get("front", {})
 	if f.is_empty():
-		_add(root, lamps, _spot("HeadlightL", Vector3(-hw * 0.6, fb_y_front, fb_front)))
-		_add(root, lamps, _spot("HeadlightR", Vector3(hw * 0.6, fb_y_front, fb_front)))
+		VehicleGenIO.add(root, lamps, VehicleGenIO.headlight("HeadlightL", Vector3(-hw * 0.6, fb_y_front, fb_front)))
+		VehicleGenIO.add(root, lamps, VehicleGenIO.headlight("HeadlightR", Vector3(hw * 0.6, fb_y_front, fb_front)))
 		_pair(root, lamps, "HeadLens", Vector3(hw * 0.6, fb_y_front, fb_front), fb_mesh)
 		_pair(root, lamps, "TurnLF", Vector3(hw * 0.86, fb_y_front, fb_front), fb_mesh, "TurnRF")
 	else:
 		var fs := _split(f, -1.0)
 		var sp: Vector3 = fs["spot_pos"]
-		_add(root, lamps, _spot("HeadlightL", Vector3(-sp.x, sp.y, sp.z)))
-		_add(root, lamps, _spot("HeadlightR", sp))
+		VehicleGenIO.add(root, lamps, VehicleGenIO.headlight("HeadlightL", Vector3(-sp.x, sp.y, sp.z)))
+		VehicleGenIO.add(root, lamps, VehicleGenIO.headlight("HeadlightR", sp))
 		_pair(root, lamps, "HeadLens", fs["main_pos"], fs["main_mesh"])
 		_pair(root, lamps, "TurnLF", fs["turn_pos"], fs["turn_mesh"], "TurnRF")
 
@@ -1652,19 +1561,8 @@ func _pair(scene_owner: Node, parent: Node, right_name: String, pos: Vector3, me
 		left_name := "") -> void:
 	var l_name := right_name + "L" if left_name.is_empty() else right_name
 	var r_name := right_name + "R" if left_name.is_empty() else left_name
-	_add(scene_owner, parent, _lens(l_name, Vector3(-pos.x, pos.y, pos.z), mesh))
-	_add(scene_owner, parent, _lens(r_name, pos, mesh))
-
-
-func _spot(spot_name: String, pos: Vector3) -> SpotLight3D:
-	var s := SpotLight3D.new()
-	s.name = spot_name
-	s.position = pos
-	s.visible = false
-	s.light_energy = 0.0
-	s.spot_range = 28.0
-	s.spot_angle = 38.0
-	return s
+	VehicleGenIO.add(scene_owner, parent, _lens(l_name, Vector3(-pos.x, pos.y, pos.z), mesh))
+	VehicleGenIO.add(scene_owner, parent, _lens(r_name, pos, mesh))
 
 
 func _lens(lens_name: String, pos: Vector3, mesh: Mesh) -> MeshInstance3D:
@@ -1676,11 +1574,6 @@ func _lens(lens_name: String, pos: Vector3, mesh: Mesh) -> MeshInstance3D:
 		mi.basis = Basis(Vector3.RIGHT, PI * 0.5)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return mi
-
-
-func _add(scene_owner: Node, parent: Node, child: Node) -> void:
-	parent.add_child(child)
-	child.owner = scene_owner
 
 
 # --- geometry --------------------------------------------------------------------------
@@ -2012,6 +1905,8 @@ func _axle_span(geo: Dictionary) -> Vector2:
 
 
 ## AABB of `aabb` after `xform` (8 corners; xform is rotation+uniform-scale+translation).
+## Godot's `xform * aabb` rounds differently: it moves the tractors' rear lamps by 1 ulp, a diff in
+## two shipped scenes.
 func _xform_aabb(aabb: AABB, xform: Transform3D) -> AABB:
 	var out := AABB(xform * aabb.position, Vector3.ZERO)
 	for i in 8:

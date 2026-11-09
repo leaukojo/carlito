@@ -1,9 +1,11 @@
 extends RefCounted
 ## Offscreen-capture sequence shared by the PNG-writing generators (gen_thumbs.gd,
-## gen_level_thumbs.gd, gen_vehicle_thumbs.gd): build the capture SubViewport, let it settle
-## for N frames, then read back and write the image. Framing and subject setup are per-
-## generator (kit prefabs, level overviews and vehicle turntables each pick their own camera
-## and lighting) and stay there.
+## gen_level_thumbs.gd, gen_challenge_thumbs.gd, gen_vehicle_thumbs.gd): build the capture
+## SubViewport, let it settle for N frames, then read back and write the image. Framing and subject
+## setup are per-generator (kit prefabs, level overviews and vehicle turntables each pick their own
+## camera and lighting) and stay there.
+
+const FOG_HAZE := 0.25  ## fog_density * shot distance — see thin_fog
 
 
 ## A SubViewport sized and dressed for offscreen capture: isolated world, opaque, redrawn every
@@ -40,3 +42,25 @@ static func save_capture(vp: SubViewport, out_path: String) -> bool:
 		push_error("cannot write " + out_path)
 		return false
 	return true
+
+
+## A selector card: `save_capture`, then the card's import settings (`CardImport`) and a
+## "<tag> -> <out_path>" line. False as `save_capture`.
+static func save_card(vp: SubViewport, out_path: String, tag: String) -> bool:
+	if not save_capture(vp, out_path):
+		return false
+	CardImport.ensure_import_settings(out_path)
+	print("%s -> %s" % [tag, out_path])
+	return true
+
+
+## Fog is tuned for ground-level driving, so a wide shot reads as a white sheet; thin `level`'s to a
+## fixed haze at the shot's own distance `dist` (m). Safe to mutate: Environment is duplicated per
+## level.
+static func thin_fog(level: Node3D, dist: float) -> void:
+	for node in level.find_children("*", "WorldEnvironment", true, false):
+		var env := (node as WorldEnvironment).environment
+		if env == null or not env.fog_enabled:
+			continue
+		env.fog_density = minf(env.fog_density, FOG_HAZE / maxf(dist, 1.0))
+		return

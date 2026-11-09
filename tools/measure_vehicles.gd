@@ -78,8 +78,9 @@ const CORNER_FIRST_AFTER_S := 1.0
 ## send the whole engine to the slower wheel or axle, and the pass then reads power-on oversteer
 ## instead of grip (`race` spun at a reported 1.62 g; the SUV's rear saturated first).
 ## The PI's output is a fuel fraction, fed through `_pi_pedal`: one loop gain on every pedal map.
-const CORNER_PEDAL_KP := 0.8       ## fuel per m/s of speed error
-const CORNER_PEDAL_KI := 0.5       ## fuel per second per m/s of speed error
+## Every pass's speed hold shares the gains (`MeasureRig.PiHold`).
+const SPEED_HOLD_KP := 0.8       ## fuel per m/s of speed error
+const SPEED_HOLD_KI := 0.5       ## fuel per second per m/s of speed error
 const CORNER_PEDAL_START := 0.35   ## integral seed when the ramp begins, roughly a car's cruise
 ## On ice (grip 0.12) the run-up to CORNER_SPEED takes ~50 m and the circle is ~100 m in radius.
 const PAD_SIZE := 600.0
@@ -124,7 +125,7 @@ const HB_HOLD_S := 1.0
 const HB_AFTER_S := 1.5
 ## --- step steer (`step`, instead of every other pass) ---
 ## At each speed of the body's STEP_SETS row (run up floored, then STEP_SETTLE_S on the PI pedal,
-## CORNER_PEDAL_KP / _KI), the bridge steer is stepped in one tick to each of STEP_LOCKS and held
+## SPEED_HOLD_KP / _KI), the bridge steer is stepped in one tick to each of STEP_LOCKS and held
 ## STEP_HOLD_S: once with the PI pedal still holding the entry speed, once with the pedal lifted on
 ## the step. The body's own `steer_speed` slews the wheels behind the input, as for a driver. A held
 ## run that neither spins nor rolls holds on until its last STEP_STEADY_S settles (`tail_settled`),
@@ -149,17 +150,6 @@ const STEP_HOLD_MAX_S := 8.0
 const STEP_SETTLE_ACCEL := 0.02    ## m/s^2
 const STEP_SETTLE_SHARE := 0.003   ## of the turn's side force (beta' / r) and its yaw rate
 const STEP_SETTLE_ENDS := 6        ## ticks averaged at each end of the tail
-## `chatter_runs`: the consecutive sign flips that count as a tick-rate oscillation, and the
-## smallest tick-to-tick change read as a direction: CHATTER_EPS (rad), or CHATTER_REL of the
-## angle. Contact noise in the latched compressions flips at 0.1-2 µrad on a 2-5 mrad angle
-## (`sedan`, 2026-10-19) and does not grow with the coefficient; a ringing loop's swing scales with it.
-const CHATTER_FLIPS := 3
-const CHATTER_EPS := 1e-7
-const CHATTER_REL := 0.01
-## ESC's floor, in its moment share (`_esc_share`): a change under 0.5 % of a wheel's brake (~7 N·m
-## on `van`) is the sensors' per-tick noise on a held touch, no direction; a modulator dump's ring
-## swings from 0 to the whole share.
-const ESC_CHATTER_EPS := 0.005
 const STEP_RISE := 0.9
 const STEP_SPIN_DEG := 20.0
 const STEP_ROLL_DEG := 45.0
@@ -199,7 +189,7 @@ const SINE_DISP_FROM_A := 5.0
 ## FMVSS 126's scope (kg GVWR), read on the spec mass: Carlito carries no rating (an estimate).
 const SINE_MAX_KG := 4536.0
 ## --- full-lock circle (`circle`, instead of every other pass) ---
-## Full right lock from a standstill on the PI pedal (CORNER_PEDAL_KP / _KI) at CIRCLE_SPEED,
+## Full right lock from a standstill on the PI pedal (SPEED_HOLD_KP / _KI) at CIRCLE_SPEED,
 ## CIRCLE_SETTLE_S to settle, then averaged over CIRCLE_HOLD_S: the rear axle centre's speed over
 ## the yaw rate (the radius driven) against `L / tan δ` off the bicycle angle, and each steered
 ## wheel's slip angle off its contact velocity (+ = it points further into the turn than its patch
@@ -357,7 +347,7 @@ const PITCH_TRIM := 0.25
 
 # --- part-pedal probes (`cruise`, `kickdown`, `pulse`, instead of every other pass) ----------
 ## Each runs at every speed of the body's CRUISE_SETS row, from a standstill, in automatic D: the
-## PI pedal (CORNER_PEDAL_KP / _KI, a fuel command through `_pi_pedal`) follows a setpoint ramped
+## PI pedal (SPEED_HOLD_KP / _KI, a fuel command through `_pi_pedal`) follows a setpoint ramped
 ## from the speed it is at to the target at the row's m/s², then holds it until the speed stays
 ## within CRUISE_TOL for CRUISE_SETTLE_S with no shift; that settle prints the cruise line (gear,
 ## rpm, pedal and `engine_load` averaged over it; a hold whose mean fuel command reaches
@@ -410,9 +400,6 @@ const DOC_STEER: Array[String] = ["sedan", "sedan-sports", "suv", "race", "van",
 const DOC_WIND: Array[String] = ["sedan", "delivery", "garbage-truck", "semi"]
 ## doc=freerev: one body per pedal map's free crank (PETROL, a light and a heavy LINEAR, ALL_SPEED).
 const DOC_FREEREV: Array[String] = ["sedan", "delivery", "semi", "tractor-kenney"]
-## doc=trailer_roll: the laden box rig's corner and step passes, [tractor ESC off, trailer roll-over
-## control off] per row: both off (the baseline), the trailer's alone, the tractor's alone, both.
-const DOC_TRAILER_ROLL_CONFIGS := [[true, true], [true, false], [false, true], [false, false]]
 const DOC_SECONDS := 60.0
 ## doc=tyres: a passenger car, a light truck and a heavy truck, each on every class its fit takes
 ## (`TyreCatalog.fitting`) over each of DOC_TYRE_SURFACES. A run is three passes: a `tc` launch to
@@ -524,7 +511,7 @@ var _st_run := {}                     ## the run in progress
 var _st_stage := Step.RUN_UP
 var _st_t := 0.0                      ## s into the current stage
 var _st_target := 0.0                 ## m/s held into the step
-var _st_i := 0.0                      ## integral half of the PI pedal
+var _st_hold := MeasureRig.PiHold.new(SPEED_HOLD_KP, SPEED_HOLD_KI)  ## the PI pedal
 ## One per tick of the step: the yaw rate about the road normal (rad/s, in the steered direction),
 ## `v_long` (m/s), the bicycle steer (rad, its size), the COM's speed (m/s), the body slip (rad).
 var _st_yaw: PackedFloat32Array = []
@@ -567,8 +554,7 @@ var _sn_runs: Array = []       ## the runs still to drive: {"amp", "k", "dir"} (
 var _sn_run: Dictionary = {}
 var _sn_stage := Sine.RUN_UP
 var _sn_t := 0.0
-var _sn_i := 0.0               ## the PI pedal's integral
-var _sn_a := NAN               ## A (share of full lock)
+var _sn_hold := MeasureRig.PiHold.new(SPEED_HOLD_KP, SPEED_HOLD_KI)  ## the PI pedal
 var _sn_yaw := PackedFloat32Array()  ## yaw rate per tick of the steer, rad/s, + = right
 var _sn_origin := Vector3.ZERO
 var _sn_left := Vector3.ZERO
@@ -580,7 +566,7 @@ var _esc_offs: Array[bool] = []
 var _tr_watch := MeasureRig.TrailerWatch.new()
 ## `circle`: run only the full-lock circle (§ full-lock circle) on each body.
 var _circle := false
-var _ci_i := 0.0                      ## integral half of the circle's PI pedal
+var _ci_hold := MeasureRig.PiHold.new(SPEED_HOLD_KP, SPEED_HOLD_KI)  ## the circle's PI pedal
 var _ci_sums := {}                    ## the circle's figures summed over the hold (`_tick_circle`)
 ## `hitch`: run only the hitch statics (§ hitch statics) on each body.
 var _hitch_pass := false
@@ -593,11 +579,11 @@ var _plough_pass := false
 var _pl_ids: Array[String] = []       ## draft implements still to run, this body
 var _pl_stage := Plough.LOWER
 var _pl_speed := 0                    ## index into PLOUGH_HOLDS
-var _pl_i := 0.0                      ## integral half of the PI pedal
+var _pl_hold := MeasureRig.PiHold.new(SPEED_HOLD_KP, SPEED_HOLD_KI)  ## the PI pedal
 var _pl_sums := {}                    ## the hold's figures summed (`_tick_plough`)
 var _pl_rating := 0.0                 ## N, the implement's `draft_rating()`
 var _pl_shape := Vector4.ZERO         ## its `draft_shape()`
-var _pl_shifts: Array = []            ## the standing start's shifts (`_shift_record`)
+var _pl_shifts: Array = []            ## the standing start's shifts (`MeasureRig.shift_record`)
 var _pl_gear := -1                    ## gear byte at the last tick, to catch a shift
 var _pl_trace_t := 0.0                ## s of the start at the next trace line
 var _pl_moving_t := -1.0              ## s into the start the body first passed 0.5 km/h
@@ -634,7 +620,7 @@ var _arm_sums := Vector3.ZERO         ## rpm summed, ticks, least rpm over the s
 var _kb_runs: Array[Dictionary] = []  ## {h, coast, oblique} still to run, this body
 var _kb_run := {}                     ## the run in progress
 var _kb_box: StaticBody3D = null      ## the plateau, once laid
-var _kb_i := 0.0                      ## integral half of the crawl's PI pedal
+var _kb_hold := MeasureRig.PiHold.new(SPEED_HOLD_KP, SPEED_HOLD_KI)  ## the crawl's PI pedal
 var _kb_t := 0.0                      ## s since the plateau was laid
 var _kb_heading := Vector3.ZERO       ## the body's heading as the plateau was laid
 var _kb_n := Vector3.ZERO             ## the edges' normal, toward the approach
@@ -749,7 +735,7 @@ var _cr_stage := Cruise.APPROACH
 var _cr_target := 0.0              ## m/s
 var _cr_set := 0.0                 ## m/s, the ramped setpoint
 var _cr_ramp := 1.0                ## m/s²
-var _cr_i := 0.0                   ## integral half of the PI pedal
+var _cr_hold := MeasureRig.PiHold.new(SPEED_HOLD_KP, SPEED_HOLD_KI)  ## the PI pedal
 var _cr_pedal := 0.0               ## the pedal that drove the last tick
 var _cr_fuel := 0.0                ## the PI's fuel command behind it (`_cruise_pi`)
 var _cr_settled := false           ## this speed's cruise line printed
@@ -760,7 +746,7 @@ var _cr_fuel_sum := 0.0            ## the fuel command summed over the hold: the
 var _cr_burn_sum := 0.0            ## `fuel_rate` (L/h) summed over the hold
 var _cr_fuel_peak := 0.0           ## the approach's highest fuel command: 1.00 is floored
 var _cr_gear := -1                 ## gear byte at the last tick, to catch a shift
-var _cr_shifts: Array = []         ## this window's shifts (`_shift_record`)
+var _cr_shifts: Array = []         ## this window's shifts (`MeasureRig.shift_record`)
 var _cr_limiter := 0               ## limiter ticks this window
 var _cr_v0 := 0.0                  ## m/s at the start of this window
 var _cr_g0 := 0                    ## gear at the start of a window (a kick's cruise gear)
@@ -861,7 +847,7 @@ var _corner_tip := {}
 var _corner_prev_speed := NAN  ## last tick's horizontal speed, for the latch's dv/dt
 ## `ramp=<s>`: the wind-on from zero to full lock (CORNER_RAMP_S), a probe of the pass's lag.
 var _corner_ramp_s := CORNER_RAMP_S
-var _corner_pedal_i := 0.0     ## integral half of the PI speed hold
+var _corner_hold := MeasureRig.PiHold.new(SPEED_HOLD_KP, SPEED_HOLD_KI)  ## the PI speed hold
 ## `telemetry.acc_lat` (the path's own lateral acceleration) under the same smoothing, and its peak
 ## below the slip-angle gate. `v * yaw_rate` also counts the yaw a body overshoots into a slip
 ## angle: on ice (`sedan`, `surface=ice`) it peaks at 0.22 g against a 0.10 g path.
@@ -922,68 +908,46 @@ func _ready() -> void:
 	_strict = flags.has("strict")
 	_tc = flags.has("tc")
 	_notc = flags.has("notc")
-	MeasureRig.esc_off = flags.has("noesc")
-	MeasureRig.abs_off = flags.has("noabs")
-	MeasureRig.trailer_roll_off = flags.has("notrsp")
-	MeasureRig.surge_off = flags.has("nosurge")
+	MeasureRig.common_flags(flags)
 	_surge_pin = MeasureRig.add_surge_pin(self)
 	_cruise = flags.has("cruise")
 	_kickdown = flags.has("kickdown")
 	_trace_contact = flags.has("contact")
-	for f in flags:
-		var flag := String(f)
-		if flag.begins_with("trailer="):
-			_trailer = flag.substr(8).to_lower()
-		elif flag.begins_with("surface="):
-			_surface = Surface.from_key(flag.substr(8))
-			if _surface < 0:
-				printerr("surface=%s: expected one of %s" % [flag.substr(8), ", ".join(Surface.NAMES)])
-				get_tree().quit(1)
-				return
-		elif flag == "trace" or flag.begins_with("trace="):
-			_trace = true
-			_trace_every = maxi(1, int(flag.substr(6))) if flag.length() > 5 else 1
-		elif flag.begins_with("trace_s="):
-			_trace_s = float(flag.substr(8))
-		elif flag.begins_with("j="):
-			_engine_inertia = float(flag.substr(2))
-		elif flag.begins_with("rear_lat_grip="):
-			_rear_lat_grip = float(flag.substr(14))
-		elif flag.begins_with("bar_rear="):
-			_bar_rear = float(flag.substr(9))
-		elif flag.begins_with("bar_front="):
-			_bar_front = float(flag.substr(10))
-		elif flag.begins_with("cornering_peak="):
-			_cornering_peak = float(flag.substr(15))
-		elif flag.begins_with("speeds="):
-			for kmh in flag.substr(7).split(",", false):
-				_step_speeds.append(float(kmh))
-		elif flag.begins_with("ackermann="):
-			_ackermann = clampf(float(flag.substr(10)), 0.0, 1.0)
-		elif flag.begins_with("ramp="):
-			_corner_ramp_s = maxf(float(flag.substr(5)), 1.0)
-		elif flag.begins_with("pedal="):
-			_pedal = clampf(float(flag.substr(6)), 0.05, 1.0)
-		elif flag == "pulse" or flag.begins_with("pulse="):
-			_pulse = true
-			if flag.length() > 5:
-				_pulse_period = maxf(float(flag.substr(6)), 0.1)
-		elif flag.begins_with("mass="):
-			_live_kg = maxf(float(flag.substr(5)), 1.0)
-		elif flag.begins_with("duty="):
-			_pulse_duty = clampf(float(flag.substr(5)), 0.0, 1.0)
-		elif flag == "headtail":
-			_headtail = true
-		elif flag == "xwind" or flag.begins_with("xwind="):
-			_xwind = true
-			if flag.length() > 5:
-				_xwind_speed = maxf(float(flag.substr(6)), 0.0)
-		elif flag.begins_with("gear="):
-			_held_gear = int(flag.substr(5))
-			if _held_gear < 1 or _held_gear > Drivetrain.TOP_GEAR:
-				printerr("gear=%s: expected a drive byte 1-%d" % [flag.substr(5), Drivetrain.TOP_GEAR])
-				get_tree().quit(1)
-				return
+	_trailer = MeasureRig.flag(flags, "trailer=").to_lower()
+	var surface := MeasureRig.flag(flags, "surface=")
+	if surface != "":
+		_surface = Surface.from_key(surface)
+		if _surface < 0:
+			printerr("surface=%s: expected one of %s" % [surface, ", ".join(Surface.NAMES)])
+			get_tree().quit(1)
+			return
+	_trace = flags.has("trace") or MeasureRig.flag(flags, "trace=") != ""
+	_trace_every = maxi(1, int(MeasureRig.float_flag(flags, "trace=", 1.0)))
+	_trace_s = MeasureRig.float_flag(flags, "trace_s=", _trace_s)
+	_engine_inertia = MeasureRig.float_flag(flags, "j=", NAN)
+	_rear_lat_grip = MeasureRig.float_flag(flags, "rear_lat_grip=", NAN)
+	_bar_rear = MeasureRig.float_flag(flags, "bar_rear=", NAN)
+	_bar_front = MeasureRig.float_flag(flags, "bar_front=", NAN)
+	_cornering_peak = MeasureRig.float_flag(flags, "cornering_peak=", NAN)
+	for kmh in MeasureRig.flag(flags, "speeds=").split(",", false):
+		_step_speeds.append(float(kmh))
+	if MeasureRig.flag(flags, "ackermann=") != "":
+		_ackermann = clampf(MeasureRig.float_flag(flags, "ackermann=", NAN), 0.0, 1.0)
+	_corner_ramp_s = maxf(MeasureRig.float_flag(flags, "ramp=", _corner_ramp_s), 1.0)
+	_pedal = clampf(MeasureRig.float_flag(flags, "pedal=", _pedal), 0.05, 1.0)
+	_pulse = flags.has("pulse") or MeasureRig.flag(flags, "pulse=") != ""
+	_pulse_period = maxf(MeasureRig.float_flag(flags, "pulse=", _pulse_period), 0.1)
+	if MeasureRig.flag(flags, "mass=") != "":
+		_live_kg = maxf(MeasureRig.float_flag(flags, "mass=", NAN), 1.0)
+	if MeasureRig.flag(flags, "duty=") != "":
+		_pulse_duty = clampf(MeasureRig.float_flag(flags, "duty=", NAN), 0.0, 1.0)
+	_headtail = flags.has("headtail")
+	_xwind = flags.has("xwind") or MeasureRig.flag(flags, "xwind=") != ""
+	_xwind_speed = maxf(MeasureRig.float_flag(flags, "xwind=", _xwind_speed), 0.0)
+	_held_gear = MeasureRig.gear_flag(flags)
+	if _held_gear < 0:
+		get_tree().quit(1)
+		return
 	_roll_steer = MeasureRig.roll_steer_flag(flags)
 	_compliance = MeasureRig.compliance_flag(flags)
 	_angdamp = MeasureRig.angdamp_flag(flags)
@@ -1048,7 +1012,8 @@ func _ready() -> void:
 		elif _doc == "freerev":
 			_freerev = true
 		elif _doc == "trailer_roll":
-			# The laden box rig's corner and step passes per DOC_TRAILER_ROLL_CONFIGS (`_runs`).
+			# The laden box rig's corner and step passes per `MeasureRig.TRAILER_ROLL_CONFIGS`
+			# (`_runs`).
 			_trailer = "box"
 		elif _doc != "cruise" and _doc != "wind":
 			printerr(("unknown doc preset '%s' — expected doc=braking, doc=cornering, doc=accel,"
@@ -1114,7 +1079,7 @@ func _ready() -> void:
 			_load_course(strip)
 		add_child(strip)
 	if which == "all" or _doc == "cornering" or _doc == "accel":
-		_queue.assign(_wheel_driven_variants())
+		_queue.assign(MeasureRig.wheel_driven_variants())
 	elif _doc == "braking":
 		_queue = DOC_BRAKING.duplicate()
 	elif _doc == "cruise":
@@ -1130,7 +1095,7 @@ func _ready() -> void:
 			_queue.append_array([v, v])
 			_esc_offs.append_array([false, true])
 	elif _doc == "trailer_roll":
-		for cfg: Array in DOC_TRAILER_ROLL_CONFIGS:
+		for cfg: Array in MeasureRig.TRAILER_ROLL_CONFIGS:
 			for pass_name in ["corner", "step"]:
 				_queue.append("semi")
 				_runs.append({"esc_off": cfg[0], "trsp_off": cfg[1], "pass": pass_name})
@@ -1140,16 +1105,11 @@ func _ready() -> void:
 				for s in DOC_TYRE_SURFACES:
 					_queue.append(v)
 					_runs.append({"tyre": cls.id, "surface": s})
-	elif Catalog.VARIANTS.has(which):
-		_queue = [which]
-	elif which.contains(",") and Array(which.split(",")).all(
-			func(v: String) -> bool: return Catalog.VARIANTS.has(v)):
-		_queue.assign(which.split(","))
 	else:
-		printerr("unknown variant '%s' — expected 'all' or one of: %s" %
-				[which, ", ".join(_wheel_driven_variants())])
-		get_tree().quit(1)
-		return
+		_queue.assign(MeasureRig.variants_arg(which, MeasureRig.wheel_driven_variants()))
+		if _queue.is_empty():
+			get_tree().quit(1)
+			return
 	if _circle and _trailer == "":
 		_trailer = "bobtail"
 	if _course and _trailer == "":
@@ -1171,29 +1131,11 @@ func _ready() -> void:
 	_first_pending = true
 
 
-## Every catalog variant with a driven axle; boat/drone/plane/train declare none.
-func _wheel_driven_variants() -> Array[String]:
-	var out: Array[String] = []
-	for id: String in Catalog.VARIANTS:
-		var scene: PackedScene = load(Catalog.VARIANTS[id]["scene"])
-		var body := scene.instantiate()
-		if body is BaseVehicle:
-			var spec: VehicleSpec = (body as BaseVehicle).spec
-			var gd: GroundDriveSpec = spec.ground_drive if spec != null else null
-			if gd != null and (gd.driven_front or gd.driven_rear):
-				out.append(id)
-		body.free()
-	return out
-
-
 ## `variant`'s `GroundDriveSpec.tyre_fit` (`TyreClass.Fit.NONE` on a body with no ground drive).
 static func _tyre_fit(variant: String) -> int:
-	var body: Node = (load(Catalog.VARIANTS[variant]["scene"]) as PackedScene).instantiate()
-	var spec: VehicleSpec = body.get("spec")
-	var fit: int = spec.ground_drive.tyre_fit if spec != null and spec.ground_drive != null \
+	var spec := Catalog.spec_of(variant)
+	return spec.ground_drive.tyre_fit if spec != null and spec.ground_drive != null \
 			else TyreClass.Fit.NONE
-	body.free()
-	return fit
 
 
 ## What the slabs are painted: per run under doc=tyres, else `surface=` or bare ground.
@@ -1206,11 +1148,32 @@ func _surface_label() -> String:
 	return "bare (the tyre's asphalt)"
 
 
+## `spawn`'s prep: the spec flags (`j=`, `rear_lat_grip=`, `bar_rear=`, `bar_front=`,
+## `cornering_peak=`, `ackermann=`) on `car`'s own spec; none set leaves the shipped one.
+func _spec_overrides(car: BaseVehicle) -> void:
+	if [_engine_inertia, _rear_lat_grip, _bar_rear, _bar_front, _cornering_peak, _ackermann].all(
+			func(f: float) -> bool: return is_nan(f)):
+		return
+	var gd := MeasureRig.own_ground_drive(car)
+	if not is_nan(_engine_inertia):
+		car.spec.engine_inertia = _engine_inertia
+	if not is_nan(_rear_lat_grip):
+		gd.rear_lat_grip = _rear_lat_grip
+	if not is_nan(_bar_rear):
+		gd.anti_roll_rate_rear = _bar_rear
+	if not is_nan(_bar_front):
+		# A rear that follows the front (-1) keeps the spec's rate: the flag moves the front alone.
+		gd.anti_roll_rate_rear = gd.rear_anti_roll_rate()
+		gd.anti_roll_rate = _bar_front
+	if not is_nan(_cornering_peak):
+		gd.cornering_peak_load = _cornering_peak
+	if not is_nan(_ackermann):
+		gd.ackermann = _ackermann
+
+
 func _next_vehicle() -> void:
-	if _car != null:
-		remove_child(_car)
-		_car.queue_free()
-		_car = null
+	MeasureRig.free_body(self, _car)
+	_car = null
 	if _queue.is_empty():
 		if _failures > 0:
 			print("%d vehicle(s) with a tracking FAIL" % _failures)
@@ -1268,38 +1231,9 @@ func _next_vehicle() -> void:
 	_top_seen = 0.0
 	_brake_i = 0
 	_brake_rows = []
-	_car = load(Catalog.VARIANTS[_variant]["scene"]).instantiate()
 	_body_overlaps = RayWheel.start_overlaps
-	if not is_nan(_engine_inertia):
-		_car.spec = _car.spec.duplicate()
-		_car.spec.engine_inertia = _engine_inertia
-		_current["engine_inertia"] = _engine_inertia
-	if not is_nan(_rear_lat_grip):
-		_car.spec = _car.spec.duplicate()
-		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
-		_car.spec.ground_drive.rear_lat_grip = _rear_lat_grip
-	if not is_nan(_bar_rear):
-		_car.spec = _car.spec.duplicate()
-		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
-		_car.spec.ground_drive.anti_roll_rate_rear = _bar_rear
-	if not is_nan(_bar_front):
-		_car.spec = _car.spec.duplicate()
-		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
-		var bars := _car.spec.ground_drive
-		# A rear that follows the front (-1) keeps the spec's rate: the flag moves the front alone.
-		bars.anti_roll_rate_rear = bars.rear_anti_roll_rate()
-		bars.anti_roll_rate = _bar_front
-	if not is_nan(_cornering_peak):
-		_car.spec = _car.spec.duplicate()
-		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
-		_car.spec.ground_drive.cornering_peak_load = _cornering_peak
-	if not is_nan(_ackermann):
-		_car.spec = _car.spec.duplicate()
-		_car.spec.ground_drive = _car.spec.ground_drive.duplicate()
-		_car.spec.ground_drive.ackermann = _ackermann
+	_car = MeasureRig.spawn(self, _variant, _spec_overrides) as BaseVehicle
 	_current["abs"] = _car.spec.ground_drive.abs_equipped
-	MeasureRig.unfit_esc(_car)
-	add_child(_car)
 	if _surge_pin != null:
 		_surge_pin.set("body", _car)
 	MeasureRig.apply_roll_steer(_car, _roll_steer)
@@ -1312,9 +1246,7 @@ func _next_vehicle() -> void:
 		print("--- %s: tyre %s, on %s ---" % [_variant, tyre,
 				Surface.display_name(_surface) if _surface >= 0 else "bare ground"])
 	# Strip top is y=0; wheels just touching, no spawn drop onto the springs.
-	_car.global_transform = Transform3D(Basis.IDENTITY, Vector3(0.0, _car.rest_ride_height(), START_Z))
-	_car.spawn_transform = _car.global_transform
-	_car.reset_physics_interpolation()
+	MeasureRig.place(_car, Transform3D(Basis.IDENTITY, Vector3(0.0, _car.rest_ride_height(), START_Z)))
 	_apply_trailer()
 	_build_reference()
 	if _coast:
@@ -1457,7 +1389,7 @@ func _reset_pass(phase: Phase) -> void:
 	_corner_unloaded = 0
 	_corner_tip = {}
 	_corner_prev_speed = NAN
-	_corner_pedal_i = 0.0
+	_corner_hold.integral = 0.0
 	_corner_path = 0.0
 	_corner_path_peak = 0.0
 	_brake_on = false
@@ -1749,7 +1681,7 @@ func _sample_gates() -> void:
 		if dwell < float(_gate["dwell_min"]):
 			_gate["dwell_min"] = dwell
 			_gate["dwell_gear"] = from
-		var rec := _shift_record(from, gear)
+		var rec := MeasureRig.shift_record(_car, _t, from, gear)
 		rec["slip_ticks"] = 0
 		rec["tc_peak"] = 0.0
 		(_gate["shifts"] as Array).append(rec)
@@ -1790,7 +1722,8 @@ func _sample_gates() -> void:
 	if _inst_a > 0.0 and not is_nan(over) and over > float(_gate[key]["over"]):
 		_gate[key] = {"over": over, "gap": xfer - share, "t": _t, "share": share,
 				"a": _inst_a, "split": split,
-				"shift": "%s>%s" % [_gear_label(handover["from"]), _gear_label(handover["to"])]
+				"shift": "%s>%s" % [MeasureRig.gear_label(handover["from"]),
+						MeasureRig.gear_label(handover["to"])]
 				if not handover.is_empty() else "a shift cut"}
 	# Each event (the launch, then each shift's settle) is judged on its own swing: the largest step
 	# the steady share has taken within it, as a two-tick mean like `over`. The launch's runs from
@@ -1807,7 +1740,7 @@ func _sample_gates() -> void:
 	if key == "gap" and _inst_a > 0.0 and not is_nan(over):
 		var shifts: Array = _gate["shifts"]
 		var event := "launch" if shifts.is_empty() else "%s>%s" % [
-				_gear_label(shifts[-1]["from"]), _gear_label(shifts[-1]["to"])]
+				MeasureRig.gear_label(shifts[-1]["from"]), MeasureRig.gear_label(shifts[-1]["to"])]
 		var events: Array = _gate["events"]
 		if events.is_empty() or events[-1]["event"] != event:
 			var launch := shifts.is_empty()
@@ -1857,7 +1790,7 @@ func _trace_line(wheel_rpm: float, front_share: float, xfer: float) -> String:
 	var slips: Array[String] = []
 	for w in _car.wheels:
 		if w.driven:
-			slips.append("%s %+.2f%s" % [_wheel_label(w), w.slip * signf(w.force_long),
+			slips.append("%s %+.2f%s" % [MeasureRig.wheel_label(_car,w), w.slip * signf(w.force_long),
 					"*" if w.tcs_active else " "])
 	# `c`: O(pen), S(lipping), L(ocked), or H while the converter's (hydrodynamic) law carries it.
 	var state := "H" if dt.converting else "OSL"[dt.coupling_state]
@@ -1865,7 +1798,7 @@ func _trace_line(wheel_rpm: float, front_share: float, xfer: float) -> String:
 		slips.append("| i %.4f" % dt.cvt_i)
 	return ("  %7.3f %6.1f %4s %5.0f %7.0f %s %5.0f %6.2f %6.0f %5.2f %4s %5s %5.0f%% %4.0f%% %+5.2f"
 			+ " | %s") % [_t,
-			_car.telemetry.speed * 3.6, _gear_label(dt.gear_byte), _car.telemetry.rpm, wheel_rpm,
+			_car.telemetry.speed * 3.6, MeasureRig.gear_label(dt.gear_byte), _car.telemetry.rpm, wheel_rpm,
 			state, _car.telemetry.rpm - wheel_rpm, dt.clutch, dt.coupling_torque, dt.applied_throttle,
 			"CUT" if _limiter_cut else "-", "CUT" if _shift_cut else "-", front_share * 100.0,
 			xfer * 100.0, _inst_a / 9.81, " ".join(slips)]
@@ -1878,13 +1811,13 @@ func _trace_line(wheel_rpm: float, front_share: float, xfer: float) -> String:
 func _print_contacts() -> void:
 	for w in _car.wheels:
 		if not w.in_contact:
-			print("      %-4s off the ground" % _wheel_label(w))
+			print("      %-4s off the ground" % MeasureRig.wheel_label(_car,w))
 			continue
 		var collider: Node = null
 		if w.contact_collider != 0:
 			collider = instance_from_id(w.contact_collider) as Node
 		print("      %-4s %6.2f kN %6.2f mm  at (%+.3f, %+.3f, %.3f)  n (%+.4f, %+.4f, %+.4f)  %s" % [
-				_wheel_label(w), w.suspension_force / 1000.0, w.compression * 1000.0,
+				MeasureRig.wheel_label(_car,w), w.suspension_force / 1000.0, w.compression * 1000.0,
 				w.contact_point.x, w.contact_point.y, w.contact_point.z, w.contact_normal.x,
 				w.contact_normal.y, w.contact_normal.z,
 				collider.name if collider != null else "no rest contact"])
@@ -1917,17 +1850,18 @@ func _print_gates() -> void:
 	for s: Dictionary in shifts:
 		if int(s["to"]) < int(s["from"]):
 			downs += 1
-		steps.append("%s>%s %.2f s" % [_gear_label(s["from"]), _gear_label(s["to"]), s["t"]])
+		steps.append("%s>%s %.2f s" % [MeasureRig.gear_label(s["from"]),
+				MeasureRig.gear_label(s["to"]), s["t"]])
 	if Drivetrain.is_cvt(spec):
 		_print_cvt_gates(spec, steps)
 		return
 	_gate_line("shifts", downs == 0, "%d%s%s" % [shifts.size(), ", %d down" % downs if downs > 0
 			else "", ": " + ", ".join(steps) if not steps.is_empty() else ""])
 	if not shifts.is_empty():
-		print("  %-13s : %s" % ["  each shift", _shifts_label(shifts)])
+		print("  %-13s : %s" % ["  each shift", MeasureRig.shifts_label(shifts)])
 	var dwell: float = _gate["dwell_min"]
 	_gate_line("gear dwell", dwell >= GATE_MIN_GEAR_S, "no gear left" if is_inf(dwell)
-			else "shortest %.2f s in %s, floor %.2f s" % [dwell, _gear_label(_gate["dwell_gear"]),
+			else "shortest %.2f s in %s, floor %.2f s" % [dwell, MeasureRig.gear_label(_gate["dwell_gear"]),
 			GATE_MIN_GEAR_S])
 	var cuts: Array = _gate["cuts"]
 	var limiter := "%d ticks" % _gate["limiter"]
@@ -2054,37 +1988,6 @@ func _wheel_rpm(omega: float, byte: int) -> float:
 	return absf(omega * g) * Drivetrain.RADS_TO_RPM if g != 0.0 else _car.spec.idle_rpm
 
 
-## One shift as the gates judge it, read on the tick the byte changed: when, from and to, the road
-## speed, the crank rpm that road speed gives in the gear left (`before`) and the gear taken
-## (`land`), and the pedal the shift policy read (`Drivetrain.last_pedal`).
-func _shift_record(from: int, to: int) -> Dictionary:
-	var spec: VehicleSpec = _car.spec
-	var v: float = _car.telemetry.speed
-	var road_omega := v / _car.drivetrain.road_radius
-	return {"t": _t, "from": from, "to": to, "kmh": v * 3.6,
-			"before": _wheel_rpm(road_omega, from) if not Drivetrain.is_cvt(spec)
-					else _car.telemetry.rpm,
-			"land": _wheel_rpm(road_omega, to) if not Drivetrain.is_cvt(spec)
-					else _car.telemetry.rpm,
-			"pedal": _car.drivetrain.last_pedal}
-
-
-## "D1>D2 46.1 km/h 5900>3800 rpm, ...": each `_shift_record` on road speed; on the launch trace
-## also its slip ("slip 0.30 s Tc 412": the time until the coupling locked and the peak torque it
-## carried at the crank, the shift's handover).
-static func _shifts_label(shifts: Array) -> String:
-	var out: Array[String] = []
-	for s: Dictionary in shifts:
-		var slip := ""
-		if s.has("slip_s"):
-			slip = " slip %.2f s Tc %.0f" % [s["slip_s"], s["tc_peak"]]
-		elif s.has("slip_ticks"):
-			slip = " slip open, Tc %.0f" % s["tc_peak"]
-		out.append("%s>%s %.1f km/h %.0f>%.0f rpm%s" % [_gear_label(s["from"]), _gear_label(s["to"]),
-				s["kmh"], s["before"], s["land"], slip])
-	return ", ".join(out)
-
-
 ## Every upshift lands at GATE_LANDING_MARGIN x the downshift point at its pedal or more, or the box
 ## would hunt back down. [pass, detail]
 static func _landing_gate(shifts: Array, spec: VehicleSpec) -> Array:
@@ -2096,7 +1999,7 @@ static func _landing_gate(shifts: Array, spec: VehicleSpec) -> Array:
 		if int(s["to"]) > int(s["from"]) and land < land_low:
 			land_low = land
 			label = "lowest %.2fx (%s>%s lands %.0f rpm over %.0f)" % [land,
-					_gear_label(s["from"]), _gear_label(s["to"]), s["land"], down]
+					MeasureRig.gear_label(s["from"]), MeasureRig.gear_label(s["to"]), s["land"], down]
 	return [land_low >= GATE_LANDING_MARGIN, label + ", floor %.2fx the downshift point"
 			% GATE_LANDING_MARGIN]
 
@@ -2114,8 +2017,8 @@ static func _hunting_gate(shifts: Array) -> Array:
 		if (int(a["to"]) > int(a["from"])) != (int(b["to"]) > int(b["from"])) and dt < gap:
 			gap = dt
 			label = "shortest %.2f s between opposite shifts (%s>%s, %s>%s at %.2f s)" % [dt,
-					_gear_label(a["from"]), _gear_label(a["to"]), _gear_label(b["from"]),
-					_gear_label(b["to"]), b["t"]]
+					MeasureRig.gear_label(a["from"]), MeasureRig.gear_label(a["to"]),
+					MeasureRig.gear_label(b["from"]), MeasureRig.gear_label(b["to"]), b["t"]]
 	return [gap >= GATE_MIN_GEAR_S, label + ", floor %.2f s" % GATE_MIN_GEAR_S]
 
 
@@ -2353,26 +2256,6 @@ static func _split_label(split: Dictionary) -> String:
 	return "%s kN; %s points" % [", ".join(front), ", ".join(terms)]
 
 
-## "FL", "RR": a wheel's axle (F / R, or A1, A2... front to back past two axles) and side.
-func _wheel_label(w: RayWheel) -> String:
-	var axles: Array[float] = []
-	for o in _car.wheels:
-		if not axles.any(func(z: float) -> bool: return is_equal_approx(z, o.anchor.z)):
-			axles.append(o.anchor.z)
-	axles.sort()
-	var i := axles.find_custom(func(z: float) -> bool: return is_equal_approx(z, w.anchor.z))
-	var axle := ("F" if i == 0 else "R") if axles.size() == 2 else "A%d" % (i + 1)
-	return axle + ("L" if w.anchor.x < 0.0 else "R")
-
-
-static func _gear_label(byte: int) -> String:
-	if Drivetrain.is_drive(byte):
-		return "D%d" % byte
-	if Drivetrain.is_reverse(byte):
-		return "R"
-	return "P" if byte == Drivetrain.GEAR_P else "N"
-
-
 ## doc=accel: one launch is done. The body runs floored first, then slip-limited, then the next
 ## body; no top speed, tracking or other pass.
 func _end_launch_run() -> void:
@@ -2461,16 +2344,14 @@ static func _corner_target(spec: VehicleSpec) -> float:
 
 
 ## Hold `_corner_speed` on the pad, then wind the lock on from zero over CORNER_RAMP_S and watch
-## what the tyres will hold. Full pedal up to the speed, then a PI hold (CORNER_PEDAL_KP / _KI)
+## what the tyres will hold. Full pedal up to the speed, then a PI hold (SPEED_HOLD_KP / _KI)
 ## through the ramp; a governed or slow body simply sits on the pedal.
 func _tick_cornering(delta: float) -> void:
 	var vel: Vector3 = _car.linear_velocity
 	# Horizontal: a body off the pad edge would otherwise reach the speed by falling.
 	var speed := Vector2(vel.x, vel.z).length()
 	var err := _corner_speed - speed
-	if _corner_ramping:
-		_corner_pedal_i = clampf(_corner_pedal_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
-	var pedal := _pi_pedal(_corner_pedal_i + err * CORNER_PEDAL_KP, _corner_speed) if _corner_ramping else 1.0
+	var pedal := _pi_pedal(_corner_hold.step(err, delta), _corner_speed) if _corner_ramping else 1.0
 	if not _corner_ramping:
 		MeasureRig.drive(pedal * 100.0, 0.0)
 		# Wait for the speed, but never past the budget — a body that cannot reach 40 km/h says so
@@ -2478,7 +2359,7 @@ func _tick_cornering(delta: float) -> void:
 		_rf_velocity = vel
 		if speed >= _corner_speed:
 			_corner_ramping = true
-			_corner_pedal_i = CORNER_PEDAL_START
+			_corner_hold.integral = CORNER_PEDAL_START
 			_corner_xfer0 = _axle_transfer()
 			_tr_watch.begin()
 			_rf_begin()
@@ -2720,24 +2601,10 @@ static func _num(d: Dictionary, key: String) -> float:
 	return float(d[key]) if d.has(key) else NAN
 
 
-## Mass of everything this run accelerates (chassis + coupled sub-bodies), in kg. Not
-## `spec.mass`: a semi couples its trailer as a sibling, never a child (TowHost.couple).
-func _rig_bodies() -> Array:
-	var out: Array = [_car]
-	for child in get_children():
-		var body := child as RigidBody3D
-		if body != null and body != _car and body.get("wheels") != null:
-			out.append(body)
-	return out
-
-
+## Mass of everything this run accelerates (chassis + coupled trailer, `MeasureRig.rig_bodies`), in
+## kg. Not `spec.mass`: a semi couples its trailer as a sibling, never a child (TowHost.couple).
 func _combination_mass() -> float:
-	var total: float = _car.mass
-	for child in get_children():
-		var body := child as RigidBody3D
-		if body != null and body != _car:
-			total += body.mass
-	return total
+	return _car.mass + MeasureRig.towed_mass(_car)
 
 
 ## `capped`: the time cap ended the pass, not the settle test, so the top figure is a floor.
@@ -2822,7 +2689,6 @@ func _report_accel(capped: bool) -> void:
 			"  <-- LEFT THE STRIP, nothing after that is a measurement" if off_edge else ""])
 	_current["dist"] = _dist
 	_current["run_length"] = RUN_LENGTH
-	_current["speed_now_kmh"] = v * 3.6
 	_current["ran_out"] = ran_out
 	# Force balance vs. the body's own acceleration: `resistance` matches the spec's declared
 	# `0.5*rho*Cd*A*v^2 + crr*N`, `tyres` matches `axle_torque / r`, `rake` is the suspension
@@ -2833,7 +2699,7 @@ func _report_accel(capped: bool) -> void:
 	var applied := 0.0
 	var declared := 0.0
 	var rake := 0.0
-	for body in _rig_bodies():
+	for body in MeasureRig.rig_bodies(_car):
 		var bs: GroundDriveSpec = body.spec.ground_drive
 		var body_load := 0.0
 		var vdir: Vector3 = body.linear_velocity.normalized()
@@ -2879,7 +2745,7 @@ func _report_accel(capped: bool) -> void:
 
 ## Throttle is already released; just watch it slow down.
 func _tick_coast() -> void:
-	for body in _rig_bodies():
+	for body in MeasureRig.rig_bodies(_car):
 		var bs: GroundDriveSpec = body.spec.ground_drive
 		_coast_declared += VehicleMath.aero_drag(body.linear_velocity.length(), bs.drag_area) \
 				+ VehicleMath.rolling_drag(MeasureRig.crr(body), body.mass * 9.81)
@@ -3001,7 +2867,7 @@ func _tick_braking(delta: float) -> void:
 	_brake_t += delta
 	var skidding := false
 	var anti_lock := false
-	for body in _rig_bodies():
+	for body in MeasureRig.rig_bodies(_car):
 		for w in body.wheels:
 			if w.in_contact and w.slip > BRAKE_LOCK_SLIP:
 				skidding = true
@@ -3079,8 +2945,6 @@ func _tick_stall(delta: float) -> void:
 			% ["stall", "HOLDS" if held else "CREEPS", moved, STALL_HOLD_S, _probe_v_peak,
 			_probe_spin_peak, ", brake_override latched" if _probe_override else "",
 			_car.drivetrain.gear_byte, _car.drivetrain.rpm, _car.drivetrain.applied_throttle])
-	_current["stall"] = {"held": held, "moved": moved, "v_peak": _probe_v_peak,
-			"spin_peak": _probe_spin_peak, "override": _probe_override}
 	InputRouter.set_manual_gearbox(false)
 	MeasureRig.drive(100.0, 0.0)
 	_finish_vehicle()
@@ -3167,8 +3031,6 @@ func _tick_handbrake(delta: float) -> void:
 	print(("  %-13s : rears locked %.2f of %.1f s, yaw rate peak %.0f deg/s, turned %.0f deg%s,"
 			+ " %.0f km/h left") % [label, _probe_lock_t, HB_HOLD_S, _probe_yaw_peak, turned,
 			" (spun)" if turned > 180.0 else "", _car.telemetry.speed * 3.6])
-	_current["handbrake_pulled" if _hb_pulled else "handbrake_steer"] = {"lock_t": _probe_lock_t,
-			"yaw_peak": _probe_yaw_peak, "turned": turned}
 	if not _hb_pulled:
 		_hb_pulled = true
 		_start_handbrake_run()
@@ -3225,7 +3087,7 @@ func _next_step_run() -> void:
 	_st_stage = Step.RUN_UP
 	_st_t = 0.0
 	_st_target = float(_st_run["kmh"]) / 3.6
-	_st_i = CORNER_PEDAL_START
+	_st_hold.integral = CORNER_PEDAL_START
 	_st_yaw = PackedFloat32Array()
 	_st_v = PackedFloat32Array()
 	_st_delta = PackedFloat32Array()
@@ -3265,8 +3127,8 @@ func _tick_step(delta: float) -> void:
 		return
 	var lifted := bool(_st_run["lifted"]) and _st_stage == Step.STEPPED
 	var err := _st_target - v_long
-	_st_i = clampf(_st_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
-	var pedal := 0.0 if lifted else _pi_pedal(_st_i + err * CORNER_PEDAL_KP, _st_target)
+	var u := _st_hold.step(err, delta)
+	var pedal := 0.0 if lifted else _pi_pedal(u, _st_target)
 	if _st_stage == Step.SETTLE:
 		MeasureRig.drive(pedal * 100.0, 0.0)
 		_rf_velocity = vel
@@ -3337,7 +3199,6 @@ func _start_sine() -> void:
 		_current["sine"]["skipped"] = true
 		_finish_vehicle()
 		return
-	_sn_a = NAN
 	_sn_runs = [{"find_a": true}]
 	_next_sine_run()
 
@@ -3356,7 +3217,7 @@ func _next_sine_run() -> void:
 	_reset_pass(Phase.SINE)
 	_sn_stage = Sine.RUN_UP
 	_sn_t = 0.0
-	_sn_i = CORNER_PEDAL_START
+	_sn_hold.integral = CORNER_PEDAL_START
 	_sn_yaw = PackedFloat32Array()
 	_sn_disp = NAN
 	_sn_rolled = false
@@ -3379,8 +3240,7 @@ func _tick_sine(delta: float) -> void:
 			_next_sine_run()
 		return
 	var err := target - v_long
-	_sn_i = clampf(_sn_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
-	var pedal := _pi_pedal(_sn_i + err * CORNER_PEDAL_KP, target)
+	var pedal := _pi_pedal(_sn_hold.step(err, delta), target)
 	if _sn_stage == Sine.SETTLE:
 		MeasureRig.drive(pedal * 100.0, 0.0)
 		if _sn_t >= SINE_SETTLE_S:
@@ -3393,7 +3253,6 @@ func _tick_sine(delta: float) -> void:
 		var lock := minf(_sn_t * SINE_RAMP_RATE, 1.0)
 		MeasureRig.drive(pedal * 100.0, 0.0, lock * 100.0)
 		if absf(_car.telemetry.acc_lat) / 9.81 >= SINE_A_G:
-			_sn_a = lock
 			_current["sine"]["a"] = lock
 			_sn_runs = sine_series(lock)
 			print("  %-13s : %.3f of full lock for %.2f g at %.0f km/h, %d runs"
@@ -3528,12 +3387,10 @@ static func sine_verdict(yaw: PackedFloat32Array, delta: float, dir: float, k: f
 ## Every wheel-driven variant with ESC inside FMVSS 126's mass range: doc=esc's bodies.
 func _sine_variants() -> Array[String]:
 	var out: Array[String] = []
-	for id in _wheel_driven_variants():
-		var body: Node = (load(Catalog.VARIANTS[id]["scene"]) as PackedScene).instantiate()
-		var spec: VehicleSpec = body.get("spec")
+	for id in MeasureRig.wheel_driven_variants():
+		var spec := Catalog.spec_of(id)
 		if spec.ground_drive.esc_equipped and spec.mass <= SINE_MAX_KG:
 			out.append(id)
-		body.free()
 	return out
 
 
@@ -3717,7 +3574,7 @@ func _report_esc(r: Dictionary) -> void:
 		if s != 0.0:
 			acting += 1
 		peak = maxf(peak, absf(s))
-	r["esc_chatter"] = chatter_runs(_st_esc, ESC_CHATTER_EPS)
+	r["esc_chatter"] = MeasureRig.chatter_runs(_st_esc, MeasureRig.ESC_CHATTER_EPS)
 	print("  %-26s : ESC braking %.0f %% of the step, peak %.2f of a wheel's brake; chatter %d"
 			% ["", 100.0 * acting / maxf(_st_esc.size(), 1.0), peak, r["esc_chatter"]])
 	if _car.spec.ground_drive.esc_roll_lift_g.is_empty():
@@ -3728,7 +3585,7 @@ func _report_esc(r: Dictionary) -> void:
 		if s > 0.0:
 			acting += 1
 		peak = maxf(peak, s)
-	r["roll_chatter"] = chatter_runs(_st_roll, ESC_CHATTER_EPS)
+	r["roll_chatter"] = MeasureRig.chatter_runs(_st_roll, MeasureRig.ESC_CHATTER_EPS)
 	print("  %-26s : roll braking %.0f %% of the step, peak %.2f of every brake; chatter %d"
 			% ["", 100.0 * acting / maxf(_st_roll.size(), 1.0), peak, r["roll_chatter"]])
 
@@ -3889,7 +3746,7 @@ func _report_compliance(r: Dictionary, model: Dictionary, ticks: int) -> void:
 	for v in _st_cs:
 		angles.append(v.x)
 	r["compliance"] = rad_to_deg(tail.x)
-	r["compliance_chatter"] = chatter_runs(angles)
+	r["compliance_chatter"] = MeasureRig.chatter_runs(angles)
 	var by_model := "- off the model"
 	var turn: Dictionary = r.get("turn", {})
 	if not turn.is_empty():
@@ -3942,7 +3799,7 @@ func _report_roll_steer(r: Dictionary, model: Dictionary, ticks: int) -> void:
 		fronts.append(v.x)
 		rears.append(v.y)
 	r["roll_steer"] = Vector2(rad_to_deg(tail.x), rad_to_deg(tail.y))
-	r["chatter"] = chatter_runs(fronts) + chatter_runs(rears)
+	r["chatter"] = MeasureRig.chatter_runs(fronts) + MeasureRig.chatter_runs(rears)
 	var pred := func(coeff: float) -> String: return "-" if is_nan(roll) else "%+.3f" % (coeff * roll)
 	print(("  %-26s : roll steer front %+.3f deg (pred %s), rear %+.3f deg (pred %s),"
 			+ " + = toward understeer; chatter %d") % ["", rad_to_deg(tail.x),
@@ -3971,56 +3828,15 @@ func _axle_roll_steer(turn_left: bool) -> Vector2:
 func _trailer_summary() -> Dictionary:
 	if MeasureRig.towed(_car) == null:
 		return {}
-	var s := {"lift_g": _tr_watch.lift_g, "overturn_t": _tr_watch.overturn_t,
-			"vdc_s": _tr_watch.vdc_ticks * get_physics_process_delta_time(),
-			"chatter": chatter_runs(_tr_watch.applied, ESC_CHATTER_EPS),
-			"tractor_chatter": chatter_runs(_tr_watch.tractor_roll, ESC_CHATTER_EPS)}
-	print("  %-26s : %s" % ["trailer", _trailer_cell(s, false)])
+	var s := MeasureRig.trailer_summary(_tr_watch, get_physics_process_delta_time())
+	print("  %-26s : %s" % ["trailer", MeasureRig.trailer_cell(s, false)])
 	return s
-
-
-## A trailer cell (`_trailer_summary`'s figures): its first lift and the time it went over, else
-## `holds`; the time VDC read active; chatter on its own application / the tractor's roll stability.
-static func _trailer_cell(s: Dictionary, tractor_over: bool) -> String:
-	var outcome := "holds"
-	if float(s["overturn_t"]) >= 0.0:
-		outcome = "lifts at %.3f g, over at %.2f s" % [s["lift_g"], s["overturn_t"]]
-	elif float(s["lift_g"]) >= 0.0:
-		outcome = "lifts at %.3f g, stays up" % float(s["lift_g"])
-	if tractor_over:
-		outcome += ", tractor over"
-	return "%s; VDC %.2f s; chatter %d / %d" % [outcome, s["vdc_s"], s["chatter"],
-			s["tractor_chatter"]]
-
-
-## Pure: the runs in `series` where the tick-to-tick change flips sign on CHATTER_FLIPS or more
-## consecutive ticks, a tick-rate oscillation. A change under CHATTER_EPS (rad) or CHATTER_REL of
-## the angle is no direction and ends the run: a one-tick contact blip and its return, ticks apart
-## from the next, are not a ringing loop. `eps`: another series' floor in its own unit.
-static func chatter_runs(series: PackedFloat64Array, eps := CHATTER_EPS) -> int:
-	var runs := 0
-	var flips := 0
-	var last := 0.0
-	for i in range(1, series.size()):
-		var d := series[i] - series[i - 1]
-		if absf(d) < maxf(eps, CHATTER_REL * absf(series[i])):
-			flips = 0
-			last = 0.0
-			continue
-		if last != 0.0 and signf(d) != signf(last):
-			flips += 1
-			if flips == CHATTER_FLIPS:
-				runs += 1
-		else:
-			flips = 0
-		last = d
-	return runs
 
 
 ## The full-lock circle (§ full-lock circle) on this body, from where `_next_vehicle` spawned it.
 func _start_circle() -> void:
 	_reset_pass(Phase.CIRCLE)
-	_ci_i = 0.0
+	_ci_hold.integral = 0.0
 	_ci_sums = {"ticks": 0.0, "v": 0.0, "radius": 0.0, "mean": 0.0, "n_in": 0.0, "n_out": 0.0,
 			"angle_in": 0.0, "angle_out": 0.0, "slip_in": 0.0, "slip_out": 0.0, "path_out": 0.0}
 	var probe := "" if is_nan(_ackermann) else " (not the spec's)"
@@ -4033,8 +3849,7 @@ func _tick_circle(delta: float) -> void:
 	var b := _car.global_transform.basis
 	var v_long := _car.linear_velocity.dot(-b.z)
 	var err := CIRCLE_SPEED - v_long
-	_ci_i = clampf(_ci_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
-	MeasureRig.drive(_pi_pedal(_ci_i + err * CORNER_PEDAL_KP, CIRCLE_SPEED) * 100.0, 0.0, CIRCLE_LOCK)
+	MeasureRig.drive(_pi_pedal(_ci_hold.step(err, delta), CIRCLE_SPEED) * 100.0, 0.0, CIRCLE_LOCK)
 	if _t < CIRCLE_SETTLE_S:
 		return
 	var s := _ci_sums
@@ -4327,7 +4142,7 @@ func _next_plough_implement() -> void:
 			+ " g(0) %.2f" % TractorTelemetry.draft_speed01(0.0, _pl_shape))
 	_pl_stage = Plough.LOWER
 	_pl_speed = 0
-	_pl_i = 0.0
+	_pl_hold.integral = 0.0
 	_t = 0.0
 	_plough_drive(0.0, 100.0, true)
 
@@ -4381,8 +4196,7 @@ func _tick_plough(delta: float) -> void:
 		Plough.COURSE_RUN:
 			_co_set = minf(_co_set + COURSE_RAMP * delta, _co_run.x / 3.6)
 			var err := _co_set - v_long
-			_pl_i = clampf(_pl_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
-			_course_drive(_pi_pedal(_pl_i + err * CORNER_PEDAL_KP, _co_set) * 100.0, 0.0)
+			_course_drive(_pi_pedal(_pl_hold.step(err, delta), _co_set) * 100.0, 0.0)
 			var s := _co_strip.ahead(_car.global_position)
 			if s > _co_row.y or _t > COURSE_TIMEOUT_S:
 				_report_course_run(s)
@@ -4401,8 +4215,7 @@ func _tick_plough(delta: float) -> void:
 			_pl_sums = _plough_sums()
 		Plough.HOLD:
 			var err := PLOUGH_HOLDS[_pl_speed].x / 3.6 - v_long
-			_pl_i = clampf(_pl_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
-			var pedal := _pi_pedal(_pl_i + err * CORNER_PEDAL_KP, PLOUGH_HOLDS[_pl_speed].x / 3.6)
+			var pedal := _pi_pedal(_pl_hold.step(err, delta), PLOUGH_HOLDS[_pl_speed].x / 3.6)
 			_plough_drive(pedal * 100.0, 0.0)
 			if _t < PLOUGH_SETTLE_S:
 				return
@@ -4446,7 +4259,7 @@ func _tick_plough(delta: float) -> void:
 			_pl_trace_t = 0.0
 			_pl_moving_t = -1.0
 			_pl_ticks = 0
-			print("    standing start, floored, implement down (from %s):" % _gear_label(_pl_gear))
+			print("    standing start, floored, implement down (from %s):" % MeasureRig.gear_label(_pl_gear))
 			if _trace:
 				print(("      trace: a line every %d tick(s) to %.1f s; c O(pen) S(lipping) L(ocked), ramp"
 						+ " the start-up ramp, clutch its commanded capacity, Tc at the crank (N·m); per rear"
@@ -4456,9 +4269,9 @@ func _tick_plough(delta: float) -> void:
 			_plough_drive(100.0, 0.0)
 			var gear: int = _car.drivetrain.gear_byte
 			if gear != _pl_gear:
-				var s := _shift_record(_pl_gear, gear)
+				var s := MeasureRig.shift_record(_car, _t, _pl_gear, gear)
 				_pl_shifts.append(s)
-				print("      %5.2f s  %s" % [_t, _shifts_label([s])])
+				print("      %5.2f s  %s" % [_t, MeasureRig.shifts_label([s])])
 				_pl_gear = gear
 			if _pl_moving_t < 0.0 and absf(v_long) * 3.6 > 0.5:
 				_pl_moving_t = _t
@@ -4470,12 +4283,12 @@ func _tick_plough(delta: float) -> void:
 			elif _t >= _pl_trace_t:
 				_pl_trace_t += PLOUGH_TRACE_S
 				print("      %5.2f s  %4.1f km/h %s %4.0f rpm, draft %3d %%, wheel_slip %2d %%, engine_load %3d %%"
-						% [_t, v_long * 3.6, _gear_label(gear), _car.drivetrain.rpm, tel.draft_force,
+						% [_t, v_long * 3.6, MeasureRig.gear_label(gear), _car.drivetrain.rpm, tel.draft_force,
 						tel.wheel_slip, tel.engine_load])
 			if _t < PLOUGH_START_S:
 				return
 			print("      moving (0.5 km/h) at %s; %s" % ["%.2f s" % _pl_moving_t if _pl_moving_t >= 0.0
-					else "never", _shifts_label(_pl_shifts) if not _pl_shifts.is_empty() else "no shift"])
+					else "never", MeasureRig.shifts_label(_pl_shifts) if not _pl_shifts.is_empty() else "no shift"])
 			var hunt := _hunting_gate(_pl_shifts)
 			_gate_line("hunting", hunt[0], hunt[1])
 			_next_plough_implement()
@@ -4529,7 +4342,7 @@ func _governor_line(v_long: float, tel: TractorTelemetry) -> String:
 	var dt: Drivetrain = _car.drivetrain
 	var setting := PedalMap.setting_rpm(_car.spec, dt.governor_demand)
 	return ("%4.1f km/h %s %4.0f rpm (setting %4.0f, droop %4.1f %%), PTO %4d rpm, engine_load %3d %%,"
-			+ " draft %3d %%") % [v_long * 3.6, _gear_label(dt.gear_byte), dt.rpm, setting,
+			+ " draft %3d %%") % [v_long * 3.6, MeasureRig.gear_label(dt.gear_byte), dt.rpm, setting,
 			(setting - dt.rpm) / setting * 100.0, tel.pto_rpm, tel.engine_load, tel.draft_force]
 
 
@@ -4618,7 +4431,7 @@ func _report_plough_hold() -> void:
 			"locked" if _diff_lock or _plough_hold_locked() else "open  ", v * 3.6, draft_n / 1000.0,
 			d497 / 1000.0,
 			(draft_n / maxf(d497, 1.0) - 1.0) * 100.0, s["dial"] / n, s["load"] / n, s["slip"] / n,
-			s["axle"] / n, s["front"] / maxf(s["total"], 1e-6) * 100.0, _gear_label(int(s["gear"])),
+			s["axle"] / n, s["front"] / maxf(s["total"], 1e-6) * 100.0, MeasureRig.gear_label(int(s["gear"])),
 			s["rpm"] / n, s["pedal"] / n,
 			"; PTO %.1f N·m on the crank" % (s["pto"] / n) if _pto else ""])
 	var fx := 0.0
@@ -4676,7 +4489,7 @@ func _next_course_run() -> void:
 	_co_shifts = []
 	_co_gear = -1
 	_co_set = 0.0
-	_pl_i = 0.0
+	_pl_hold.integral = 0.0
 	_t = 0.0
 	_pl_stage = Plough.COURSE_SET
 	_course_drive(0.0, 100.0, true)
@@ -4687,7 +4500,7 @@ func _course_sample(d: float, tel: TractorTelemetry) -> void:
 	var dt: Drivetrain = _car.drivetrain
 	var hitch := _car.get_node((_car as TractorVehicle).hitch_path) as ThreePointHitch
 	var soil := "band" if _co_strip.field_at(hitch.hitch_point()) < 1.0 else "full"
-	var at := "%4.1f m, %s %4.0f rpm" % [d, _gear_label(dt.gear_byte), dt.rpm]
+	var at := "%4.1f m, %s %4.0f rpm" % [d, MeasureRig.gear_label(dt.gear_byte), dt.rpm]
 	for sig: String in ["engine_load", "draft_force"]:
 		var v := float(tel.get(sig))
 		var key := "%s, %s soil" % [sig, soil]
@@ -4703,7 +4516,8 @@ func _course_sample(d: float, tel: TractorTelemetry) -> void:
 			ext[2] = v
 			ext[3] = at
 	if _co_gear >= 0 and dt.gear_byte != _co_gear:
-		_co_shifts.append("%s>%s at %.1f m" % [_gear_label(_co_gear), _gear_label(dt.gear_byte), d])
+		_co_shifts.append("%s>%s at %.1f m" % [MeasureRig.gear_label(_co_gear),
+				MeasureRig.gear_label(dt.gear_byte), d])
 	_co_gear = dt.gear_byte
 
 
@@ -4731,7 +4545,7 @@ func _plough_trace_line(v_long: float) -> String:
 		if w.is_rear:
 			fx += w.force_long
 	return ("      %6.3f %5.2f km/h %s %4.0f rpm %s ramp %.2f clutch %.2f Tc %5.0f fuel %.2f | draft"
-			+ " %5.2f kN, rear Fx %5.2f kN | %s") % [_t, v_long * 3.6, _gear_label(dt.gear_byte),
+			+ " %5.2f kN, rear Fx %5.2f kN | %s") % [_t, v_long * 3.6, MeasureRig.gear_label(dt.gear_byte),
 			dt.rpm, "OSL"[dt.coupling_state], dt.ramp, dt.clutch, dt.coupling_torque,
 			dt.applied_throttle, absf((_car as TractorVehicle).draft_applied) / 1000.0, fx / 1000.0,
 			"  ".join(_rear_contacts(false))]
@@ -4743,7 +4557,7 @@ func _rear_contacts(with_load: bool) -> Array[String]:
 	var rears: Array[String] = []
 	for w in _car.wheels:
 		if w.is_rear:
-			rears.append("%s %s%.3f %s %+.3f" % [_wheel_label(w),
+			rears.append("%s %s%.3f %s %+.3f" % [MeasureRig.wheel_label(_car,w),
 					"%.0f kg, " % (w.suspension_force / 9.81) if with_load else "", w.slip,
 					">" if w.slip > _pl_peak_slip else "<",
 					w.force_long / maxf(w.suspension_force, 1.0)])
@@ -4787,7 +4601,7 @@ func _next_kerb_run() -> void:
 			Vector3(0.0, _car.rest_ride_height(), START_Z))
 	_car.respawn()
 	_reset_pass(Phase.KERB)
-	_kb_i = 0.0
+	_kb_hold.integral = 0.0
 	_kb_t = 0.0
 	_kb_edges = []
 	_kb_overlaps = RayWheel.start_overlaps
@@ -4834,8 +4648,7 @@ func _tick_kerb(delta: float) -> void:
 ## The crawl's speed hold: the circle's PI pedal at KERB_CRAWL, and the brake past it.
 func _kerb_crawl(v_long: float, delta: float) -> void:
 	var err := KERB_CRAWL - v_long
-	_kb_i = clampf(_kb_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
-	MeasureRig.drive(_pi_pedal(_kb_i + err * CORNER_PEDAL_KP, KERB_CRAWL) * 100.0,
+	MeasureRig.drive(_pi_pedal(_kb_hold.step(err, delta), KERB_CRAWL) * 100.0,
 			clampf(-err * KERB_BRAKE_GAIN, 0.0, 1.0) * 100.0)
 
 
@@ -4947,7 +4760,7 @@ func _report_kerb_run(verdict: String) -> void:
 			var x: float = edge["x"][i]
 			var peak: float = edge["peak"][i]
 			print(("      %-4s on the new level %s ahead, lean %s (peak %.0f deg), largest tick %.0f mm,"
-					+ " peak %.1f of %.1f kN%s") % [_wheel_label(_car.wheels[i]),
+					+ " peak %.1f of %.1f kN%s") % [MeasureRig.wheel_label(_car,_car.wheels[i]),
 					"-" if is_nan(x) else "%+.2f m" % x,
 					"-" if is_nan(x) else "%.0f deg" % float(edge["lean"][i]),
 					float(edge["lean_peak"][i]), float(edge["jump"][i]) * 1000.0, peak / 1000.0,
@@ -5043,7 +4856,7 @@ func _next_cruise_speed() -> void:
 	# Each speed from a fresh standstill: its line never depends on what the last speed left in
 	# the box, and the strip holds every window.
 	_car.respawn()
-	_cr_i = 0.0
+	_cr_hold.integral = 0.0
 	_cr_target = _cr_speeds.pop_front() / 3.6
 	_cr_air = _cr_airs.pop_front()
 	_cr_settled = false
@@ -5122,7 +4935,7 @@ func _tick_cruise(delta: float) -> void:
 	var gear := dt.gear_byte
 	var shifted := gear != _cr_gear
 	if Drivetrain.is_shift(_cr_gear, gear):
-		_cr_shifts.append(_shift_record(_cr_gear, gear))
+		_cr_shifts.append(MeasureRig.shift_record(_car, _t, _cr_gear, gear))
 	_cr_gear = gear
 	if dt.on_limiter:
 		_cr_limiter += 1
@@ -5179,7 +4992,7 @@ func _tick_cruise_hold(delta: float, v: float, shifted: bool, window: float) -> 
 		return
 	if window >= _seconds:
 		print("  %-13s : %.0f km/h not held in %.0f s (%.1f km/h now, pedal %.2f, %s)" % ["cruise",
-				_cr_target * 3.6, _seconds, v * 3.6, _cr_pedal, _gear_label(dt.gear_byte)])
+				_cr_target * 3.6, _seconds, v * 3.6, _cr_pedal, MeasureRig.gear_label(dt.gear_byte)])
 		if not _cr_settled:
 			(_current["cruise"] as Array).append({"kmh": _cr_target * 3.6, "held": false,
 					"now_kmh": v * 3.6})
@@ -5193,14 +5006,11 @@ func _tick_cruise_hold(delta: float, v: float, shifted: bool, window: float) -> 
 	_drive_probe(_cr_pedal)
 
 
-## One tick of the PI's fuel command on the setpoint (CORNER_PEDAL_KP / _KI); `_pi_pedal` turns it
+## One tick of the PI's fuel command on the setpoint (SPEED_HOLD_KP / _KI); `_pi_pedal` turns it
 ## into the pedal, and the pulse takes it as its duty at full pedal (its mean fuel). The integral is
 ## held through a shift cut, as TcPedal holds it: the drive drops there, and it would wind up.
 func _cruise_pi(delta: float, v: float) -> float:
-	var err := _cr_set - v
-	if not _car.drivetrain.shift_cut_active():
-		_cr_i = clampf(_cr_i + err * CORNER_PEDAL_KI * delta, 0.0, 1.0)
-	return clampf(_cr_i + err * CORNER_PEDAL_KP, 0.0, 1.0)
+	return _cr_hold.step(_cr_set - v, delta, _car.drivetrain.shift_cut_active())
 
 
 ## The pedal a PI's fuel command `u` takes at the crank's rpm (`PedalMap.pedal_for`): the pedal on a
@@ -5232,7 +5042,7 @@ func _report_cruise_hold(window: float) -> void:
 		label = "with %.0f m/s" % WIND_HEADTAIL
 	print(("  %-13s : %.0f km/h in %s at %.0f rpm, pedal %.2f, engine_load %.0f %%, burn %.2f L/h;"
 			+ " settled after %.1f s,") % [label, _cr_target * 3.6,
-			_gear_label(_car.drivetrain.gear_byte), m.y, m.x, m.z, burn, window]
+			MeasureRig.gear_label(_car.drivetrain.gear_byte), m.y, m.x, m.z, burn, window]
 			+ " approach fuel peak %.2f, %d shift(s)" % [_cr_fuel_peak, _cr_shifts.size()])
 	if floored:
 		print("  %-13s : floored: the body's top, not a cruise" % "")
@@ -5268,7 +5078,8 @@ func _report_kick(v: float, window: float) -> void:
 		gain = "+%.0f km/h not reached in %.0f s (%.1f km/h)" % [KICK_GAIN_KMH, _seconds,
 				v * 3.6]
 	print("  %-13s : from %.1f km/h in %s, pedal stepped to 1: %s, %d gear(s) down to %s; %s" % [
-			"kickdown", _cr_v0 * 3.6, _gear_label(_cr_g0), down, _cr_g0 - low, _gear_label(low), gain])
+			"kickdown", _cr_v0 * 3.6, MeasureRig.gear_label(_cr_g0), down, _cr_g0 - low,
+			MeasureRig.gear_label(low), gain])
 	_cruise_gates()
 	_next_cruise_window()
 
@@ -5282,7 +5093,7 @@ func _report_pulse() -> void:
 			_cr_duty_sum / maxf(1.0, _cr_periods),
 			_cr_v0 * 3.6, _cr_band.x * 3.6, _cr_band.y * 3.6, _cr_shifts.size(),
 			_cr_shifts.size() * 60.0 / PULSE_S,
-			_gear_label(int(gears.min())), _gear_label(int(gears.max()))])
+			MeasureRig.gear_label(int(gears.min())), MeasureRig.gear_label(int(gears.max()))])
 	_cruise_gates()
 	_next_cruise_window()
 
@@ -5323,7 +5134,7 @@ func _next_cruise_window() -> void:
 ## The window's shifts, then its gates on one line: hunting, landing, the limiter.
 func _cruise_gates() -> void:
 	if not _cr_shifts.is_empty():
-		print("  %-13s : %s" % ["  each shift", _shifts_label(_cr_shifts)])
+		print("  %-13s : %s" % ["  each shift", MeasureRig.shifts_label(_cr_shifts)])
 	if Drivetrain.is_cvt(_car.spec):
 		# A CVT's range changes are synchronous and its limiter is the governor's high idle: no
 		# gearbox's call to judge (`_print_cvt_gates`).
@@ -5365,25 +5176,7 @@ func _contact_label(pass_name: String) -> String:
 
 func _drive_label(spec: VehicleSpec) -> String:
 	var gd := spec.ground_drive
-	var layout := "AWD"
-	if not (gd.driven_front and gd.driven_rear):
-		layout = "FWD" if gd.driven_front else "RWD"
-	return layout + _diff_label(gd) + MeasureRig.axle_label(_car)
-
-
-## The declared differentials that are not open (`GroundDriveSpec` § Driveline), e.g.
-## ", centre 3.0:1, rear LSD 2.5:1"; empty when every diff is open.
-static func _diff_label(gd: GroundDriveSpec) -> String:
-	var label := ""
-	if gd.centre_diff_rigid:
-		label += ", centre rigid"
-	elif gd.centre_diff_bias > 1.0:
-		label += ", centre %.1f:1" % gd.centre_diff_bias
-	if gd.diff_bias_front > 1.0:
-		label += ", front LSD %.1f:1" % gd.diff_bias_front
-	if gd.diff_bias_rear > 1.0:
-		label += ", rear LSD %.1f:1" % gd.diff_bias_rear
-	return label
+	return MeasureRig.layout_label(gd) + MeasureRig.diff_label(gd) + MeasureRig.axle_label(_car)
 
 
 ## The `braking` region: one row per body, a cell per pedal (mean g, distance), noting where any
@@ -5470,7 +5263,7 @@ func _cruise_table() -> Array[String]:
 				cells.append("%.0f: not held (%.1f)" % [c["kmh"], c["now_kmh"]])
 			else:
 				cells.append("%.0f: %s %.0f rpm, %.2f, %.0f %%, %.1f L/h%s" % [c["kmh"],
-						_gear_label(c["gear"]), c["rpm"], c["pedal"], c["load"], c["burn"],
+						MeasureRig.gear_label(c["gear"]), c["rpm"], c["pedal"], c["load"], c["burn"],
 						" (floored: its top)" if c["floored"] else ""])
 		lines.append("| %s | %s |" % [label, "; ".join(cells)])
 	return lines
@@ -5576,8 +5369,8 @@ func _steer_table() -> Array[String]:
 	return lines
 
 
-## The `trailer_roll` region: a row per DOC_TRAILER_ROLL_CONFIGS entry, the corner pass and the
-## step pass's cells summed.
+## The `trailer_roll` region: a row per `MeasureRig.TRAILER_ROLL_CONFIGS` entry, the corner pass and
+## the step pass's cells summed.
 func _trailer_roll_table() -> Array[String]:
 	var lines := DocRegion.wrap(("%s (`measure_vehicles -- doc=trailer_roll`; per run `-- semi %.0f"
 			+ " track corner trailer=box` or `step`, `noesc` / `notrsp`): the laden box rig. Corner:"
@@ -5588,7 +5381,7 @@ func _trailer_roll_table() -> Array[String]:
 			BaseVehicle.OVERTURNED_DEG])
 	lines.append_array(["", "| Tractor ESC | Trailer's own | Corner | Step |",
 			"| --- | --- | --- | --- |"])
-	for cfg: Array in DOC_TRAILER_ROLL_CONFIGS:
+	for cfg: Array in MeasureRig.TRAILER_ROLL_CONFIGS:
 		var corner := ""
 		var step := ""
 		for e in _sweep:
@@ -5596,7 +5389,8 @@ func _trailer_roll_table() -> Array[String]:
 				continue
 			var c: Dictionary = e.get("cornering", {})
 			if not c.is_empty() and not c.get("skipped", false) and not c["trailer"].is_empty():
-				corner = "%.2f g, %s" % [c["peak_g"], _trailer_cell(c["trailer"], c["overturned"])]
+				corner = "%.2f g, %s" % [c["peak_g"], MeasureRig.trailer_cell(c["trailer"],
+						c["overturned"])]
 			if e.has("step"):
 				step = _trailer_step_cell(e["step"])
 		lines.append("| %s | %s | %s | %s |" % ["off" if cfg[0] else "on", "off" if cfg[1] else "on",

@@ -18,61 +18,31 @@ var _exit_code := 0
 
 
 func _init() -> void:
-	var only := OS.get_cmdline_user_args()
-	var dir := DirAccess.open(RECIPE_DIR)
-	if dir == null:
-		push_error("cannot open " + RECIPE_DIR)
+	var recipes: Variant = Recipe.recipe_paths(RECIPE_DIR, OS.get_cmdline_user_args())
+	if recipes == null:
 		quit(1)
 		return
-	var recipes := []
-	for f in dir.get_files():
-		if f.ends_with(".json") and (only.is_empty() or only.has(f.get_basename())):
-			recipes.append(RECIPE_DIR.path_join(f))
-	recipes.sort()
-	for path in recipes:
+	for path: String in recipes:
 		_run_recipe(path)
 	quit(_exit_code)
 
 
 func _run_recipe(recipe_path: String) -> void:
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(recipe_path))
-	if parsed == null or not parsed is Dictionary:
-		_error("bad recipe json: " + recipe_path)
+	var loaded := Recipe.load_recipe(recipe_path)  # validation and the coverage gate inside
+	if loaded.has("errors"):
+		for e in loaded.errors:
+			_error(e)
 		return
-	var recipe: Dictionary = parsed
-	var kit := String(recipe.get("kit", recipe_path.get_file().get_basename()))
-	var source := String(recipe.get("source", ""))
+	var recipe: Dictionary = loaded.recipe
+	var kit: String = loaded.kit
+	var source: String = loaded.source
 	var scale := float(recipe.get("scale", 1.0))
 	var palette_block: Dictionary = recipe.get("palette", {})
-	var families: Array = recipe.get("families", [])
-
-	var verrs := Recipe.validate_families(families)
-	if not verrs.is_empty():
-		for e in verrs:
-			_error("%s: %s" % [kit, e])
-		return
-
-	var dir := DirAccess.open(source)
-	if dir == null:
-		_error("%s: cannot open source '%s'" % [kit, source])
-		return
-	var names: Array[String] = []
-	for f in dir.get_files():
-		if f.ends_with(".glb"):
-			names.append(f.get_basename())
-	names.sort()
-
-	# --- coverage gate ---
-	var c := Recipe.classify(names, families)
-	if not c.unaccounted.is_empty():
-		_error("%s: %d unaccounted GLB(s) — add to a family or an explicit exclude: %s" %
-				[kit, c.unaccounted.size(), ", ".join(c.unaccounted)])
-		return
+	var families: Array = loaded.families
+	var c: Dictionary = loaded.classified
+	var fam_by_name: Dictionary = loaded.fam_by_name
 
 	# --- route accounted assets by their family's pipeline ---
-	var fam_by_name := {}
-	for fam: Dictionary in families:
-		fam_by_name[String(fam.get("name", ""))] = fam
 	var default_output := String(palette_block.get("output", ""))
 	var palette_groups := {}                     # meshlib output -> {items:[], overrides:{}}
 	var prefab_items := {}                       # name -> {mode, ov}

@@ -14,27 +14,20 @@ const BACKDROP := Color(0.16, 0.17, 0.20)  # neutral dark slate (reads in editor
 
 var _viewport: SubViewport
 var _camera: Camera3D
+var _exit_code := 0
 
 
 func _ready() -> void:
 	_build_stage()
-	var only := OS.get_cmdline_user_args()
-	var code := 0
 	var total := 0
-	var dir := DirAccess.open(RECIPE_DIR)
-	if dir == null:
-		push_error("cannot open " + RECIPE_DIR)
+	var recipes: Variant = Recipe.recipe_paths(RECIPE_DIR, OS.get_cmdline_user_args())
+	if recipes == null:
 		get_tree().quit(1)
 		return
-	var recipes := []
-	for f in dir.get_files():
-		if f.ends_with(".json") and (only.is_empty() or only.has(f.get_basename())):
-			recipes.append(RECIPE_DIR.path_join(f))
-	recipes.sort()
-	for path in recipes:
+	for path: String in recipes:
 		total += await _run_recipe(path)
 	print("[thumbs] wrote %d image(s)" % total)
-	get_tree().quit(code)
+	get_tree().quit(_exit_code)
 
 
 ## One neutral stage reused across every asset: isolated world, backdrop env, key light,
@@ -64,29 +57,16 @@ func _build_stage() -> void:
 
 
 func _run_recipe(recipe_path: String) -> int:
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(recipe_path))
-	if parsed == null or not parsed is Dictionary:
-		push_error("bad recipe json: " + recipe_path)
+	var loaded := Recipe.load_recipe(recipe_path)  # a recipe gen_kit_assets would refuse renders none
+	if loaded.has("errors"):
+		for e in loaded.errors:
+			push_error(e)
+		_exit_code = 1
 		return 0
-	var recipe: Dictionary = parsed
-	var kit := String(recipe.get("kit", recipe_path.get_file().get_basename()))
-	var source := String(recipe.get("source", ""))
-	var families: Array = recipe.get("families", [])
-
-	var src := DirAccess.open(source)
-	if src == null:
-		push_error("%s: cannot open source '%s'" % [kit, source])
-		return 0
-	var names: Array[String] = []
-	for f in src.get_files():
-		if f.ends_with(".glb"):
-			names.append(f.get_basename())
-	names.sort()
-
-	var c := Recipe.classify(names, families)
-	var fam_by_name := {}
-	for fam: Dictionary in families:
-		fam_by_name[String(fam.get("name", ""))] = fam
+	var kit: String = loaded.kit
+	var source: String = loaded.source
+	var c: Dictionary = loaded.classified
+	var fam_by_name: Dictionary = loaded.fam_by_name
 
 	var out_dir := THUMB_DIR.path_join(kit)
 	DirAccess.open("res://").make_dir_recursive(out_dir.trim_prefix("res://"))

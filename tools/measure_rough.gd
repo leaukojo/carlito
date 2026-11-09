@@ -60,7 +60,6 @@ extends Node3D
 ## SPIN_SLIP.
 
 const Layout := preload("res://tools/rough_ground_layout.gd")
-const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
 
 const BASELINE: Array[Dictionary] = [
 	{"variant": "suv", "mfwd": false, "diff": false},
@@ -156,17 +155,11 @@ func _ready() -> void:
 	var which := String(args[0]) if args.size() > 0 else "suv"
 	_verbose = args.has("verbose")
 	_tc = args.has("tc")
-	MeasureRig.esc_off = args.has("noesc")
-	var lane_filter := ""
-	var patch_filter := ""
-	for a in args:
-		var s := String(a)
-		if s.begins_with("speed="):
-			_crawl = maxf(0.5, s.substr(6).to_float())
-		elif s.begins_with("lane="):
-			lane_filter = s.substr(5)
-		elif s.begins_with("patch="):
-			patch_filter = s.substr(6)
+	MeasureRig.common_flags(args)
+	var speed_set := MeasureRig.flag(args, "speed=") != ""
+	_crawl = maxf(0.5, MeasureRig.float_flag(args, "speed=", _crawl))
+	var lane_filter := MeasureRig.flag(args, "lane=")
+	var patch_filter := MeasureRig.flag(args, "patch=")
 	_tyre = MeasureRig.tyre_flag(args)
 	if _tyre == "?":
 		get_tree().quit(1)
@@ -181,7 +174,7 @@ func _ready() -> void:
 		if not _load_course(which.substr(7)):
 			get_tree().quit(1)
 			return
-		if not "speed=" in " ".join(args):
+		if not speed_set:
 			_crawl = COURSE_FLOORED
 		for c: Dictionary in COURSE_CONFIGS:
 			var config := c.duplicate()
@@ -208,19 +201,16 @@ func _ready() -> void:
 			_configs.append(tc)
 	elif which == "baseline":
 		_configs = BASELINE.duplicate(true)
-	elif Catalog.VARIANTS.has(which):
-		_configs = [{"variant": which, "mfwd": args.has("mfwd"), "diff": args.has("diff")}]
 	else:
-		printerr("unknown variant '%s' — expected 'baseline' or a catalog variant" % which)
-		get_tree().quit(1)
-		return
-	for i in Layout.LANES.size():
-		if lane_filter == "" or String(Layout.LANES[i]["name"]) == lane_filter:
-			_lanes.append(i)
-	for i in Layout.PATCHES.size():
-		if patch_filter == "" or String(Layout.PATCHES[i]["name"]) == patch_filter:
-			_patches.append(i)
-	if _lanes.is_empty() or _patches.is_empty():
+		for v in MeasureRig.variants_arg(which, []):
+			_configs.append({"variant": v, "mfwd": args.has("mfwd"), "diff": args.has("diff")})
+		if _configs.is_empty():
+			get_tree().quit(1)
+			return
+	_lanes.assign(range(Layout.LANES.size()) if lane_filter == "" else [Layout.lane_index(lane_filter)])
+	_patches.assign(range(Layout.PATCHES.size()) if patch_filter == ""
+			else [Layout.patch_index(patch_filter)])
+	if _lanes.has(-1) or _patches.has(-1):
 		printerr("no lane/patch matches lane=%s patch=%s" % [lane_filter, patch_filter])
 		get_tree().quit(1)
 		return
@@ -250,11 +240,7 @@ func _load_course(id: String) -> bool:
 	add_child(_level)
 	var course := (load(_course.course) as PackedScene).instantiate() as Node3D
 	_level.add_child(course)
-	var spawn: VehicleSpawn = null
-	for n in course.find_children("*", "VehicleSpawn", true, false):
-		if (n as VehicleSpawn).accepts(_course.family()):
-			spawn = n as VehicleSpawn
-			break
+	var spawn := VehicleSpawn.first_under(course, _course.family())
 	var zone := (_course.goals[0] as ReachZoneGoal).zone
 	# The level root sits at the world origin: the zones and the spawn are world space.
 	_course_goal = ChallengeZone.zones_of(course).get(zone) as ZoneShape
@@ -499,7 +485,7 @@ func _end(result: String) -> void:
 		var w: RayWheel = _car.drive.wheels[i]
 		var c := int(s["contact"][i])
 		(row["wheels"] as Array).append({
-			"label": _wheel_label(w), "driven": w.driven,
+			"label": MeasureRig.wheel_label(_car, w), "driven": w.driven,
 			"mean": float(s["slip_sum"][i]) / float(c) if c > 0 else 0.0,
 			"peak": float(s["slip_peak"][i]),
 			"air": float(s["air"][i]) / float(n),
@@ -547,8 +533,8 @@ func _trace(delta: float) -> void:
 			_car.drivetrain.applied_throttle, _car.telemetry.gear_byte, _car.telemetry.rpm,
 			_car.drivetrain.coupling_state]
 	for w in _car.drive.wheels:
-		line += "  %s N %6.0f s %5.2f fx %6.0f" % [_wheel_label(w), w.suspension_force, w.slip,
-				w.force_long]
+		line += "  %s N %6.0f s %5.2f fx %6.0f" % [MeasureRig.wheel_label(_car, w),
+				w.suspension_force, w.slip, w.force_long]
 	print(line)
 
 
@@ -641,12 +627,12 @@ func _config_label(c: Dictionary) -> String:
 
 func _drive_label() -> String:
 	var gd := _car.spec.ground_drive
-	var label := "AWD" if gd.driven_front and gd.driven_rear else ("FWD" if gd.driven_front else "RWD")
+	var label := MeasureRig.layout_label(gd)
 	if gd.front_axle_engageable:
 		label += " + MFWD %s" % ("on" if bool(_config["mfwd"]) else "off")
 	if gd.rear_diff_lockable:
 		label += ", rear diff %s" % ("locked" if bool(_config["diff"]) else "open")
-	return label + _diff_label(gd)
+	return label + MeasureRig.diff_label(gd)
 
 
 ## The probes on the body, e.g. ", roll steer 0.00 / 0.20 deg/deg (not the spec's)"; empty with none.
@@ -659,24 +645,3 @@ func _probe_label() -> String:
 	if not is_nan(_angdamp):
 		label += ", angular damping %.2f /s (not the body's)" % _angdamp
 	return label + MeasureRig.axle_label(_car)
-
-
-## The declared differentials that are not open (`GroundDriveSpec` § Driveline), e.g.
-## ", centre 3.0:1, rear LSD 2.5:1"; empty when every diff is open.
-static func _diff_label(gd: GroundDriveSpec) -> String:
-	var label := ""
-	if gd.centre_diff_rigid:
-		label += ", centre rigid"
-	elif gd.centre_diff_bias > 1.0:
-		label += ", centre %.1f:1" % gd.centre_diff_bias
-	if gd.diff_bias_front > 1.0:
-		label += ", front LSD %.1f:1" % gd.diff_bias_front
-	if gd.diff_bias_rear > 1.0:
-		label += ", rear LSD %.1f:1" % gd.diff_bias_rear
-	return label
-
-
-## FL/FR/RL/RR from the anchor (body +Z is rearward, -X is left); a third axle reads as a
-## second R pair, which is all a trial table needs.
-static func _wheel_label(w: RayWheel) -> String:
-	return ("R" if w.is_rear else "F") + ("L" if w.anchor.x < 0.0 else "R")

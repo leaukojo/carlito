@@ -5,7 +5,6 @@ extends Node3D
 ## (`InputRouter.set_touch_source`) rather than pressing Input actions, since arming/
 ## node-failure are per-frame edges and autoloads tick before scene nodes.
 
-const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
 const MeasureRig := preload("res://tools/measure_rig.gd")
 
 ## The strip: a rangefinder floor, a collision floor, enough width for the translate pass.
@@ -91,11 +90,8 @@ var _failed := false         ## the ESC1 edge has been sent this pass
 
 func _ready() -> void:
 	MeasureRig.add_slab(self, "Strip", STRIP_SIZE)
-	_drone = load(Catalog.VARIANTS["drone"]["scene"]).instantiate()
-	add_child(_drone)
-	_drone.global_transform = Transform3D(Basis.IDENTITY, SPAWN)
-	_drone.spawn_transform = _drone.global_transform
-	_drone.reset_physics_interpolation()
+	_drone = MeasureRig.spawn(self, "drone") as DroneVehicle
+	MeasureRig.place(_drone, Transform3D(Basis.IDENTITY, SPAWN))
 	InputRouter.set_touch_source(_source)
 	var spec: VehicleSpec = _drone.spec
 	print("strip: %.0f x %.0f m flat, still air, STABILIZE, %.1f s of centred-stick arming per pass"

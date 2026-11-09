@@ -1,8 +1,8 @@
 extends GdUnitTestSuite
-## `measure_vehicles.chatter_runs`, the step pass's roll-steer ringing probe: it counts a swing that
+## `MeasureRig.chatter_runs`, the step pass's roll-steer ringing probe: it counts a swing that
 ## scales with the angle, never the latched compressions' contact noise under it.
 
-const Measure := preload("res://tools/measure_vehicles.gd")
+const Measure := preload("res://tools/measure_rig.gd")
 
 
 ## `n` ticks about `level` (rad), alternating by `swing` (rad) from the second tick on.

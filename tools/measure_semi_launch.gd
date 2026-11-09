@@ -9,8 +9,8 @@ extends Node3D
 ## `trailer=<box|tipper|tanker|flatbed|bobtail>` picks what is on the back; `nosurge` pins a
 ## tanker's surge at 0 (`MeasureRig.SurgePin`). `doc=trailer_roll` runs
 ## the laden box rig's P7 step and ramp with the tractor's ESC and the trailer's roll-over control
-## each on and off (`DOC_CONFIGS`), re-spawning the rig per run, and writes the `trailer_roll_p7`
-## region of docs/vehicle_measurements.md.
+## each on and off (`MeasureRig.TRAILER_ROLL_CONFIGS`), re-spawning the rig per run, and writes the
+## `trailer_roll_p7` region of docs/vehicle_measurements.md.
 ##
 ## Driven through the BRIDGE rather than the keyboard: InputRouter.arbitrate_local latches
 ## GEAR_R the moment `brake_reverse` is held under REVERSE_ENGAGE_SPEED, which turns a
@@ -25,12 +25,7 @@ extends Node3D
 
 const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
 const MeasureRig := preload("res://tools/measure_rig.gd")
-const Measure := preload("res://tools/measure_vehicles.gd")
 const DocRegion := preload("res://tools/doc_region.gd")
-
-## doc=trailer_roll's configurations, [tractor ESC off, trailer roll-over control off]: both off
-## (the baseline), the trailer's alone, the tractor's alone, both.
-const DOC_CONFIGS := [[true, true], [true, false], [false, true], [false, false]]
 
 const STRIP_LENGTH := 6000.0
 const STRIP_WIDTH := 40.0
@@ -114,15 +109,12 @@ func _ready() -> void:
 		_variant = String(args[0])
 	_strict = args.has("strict")
 	_ramp = args.has("ramp")
-	MeasureRig.esc_off = args.has("noesc")
-	MeasureRig.trailer_roll_off = args.has("notrsp")
-	MeasureRig.surge_off = args.has("nosurge")
+	MeasureRig.common_flags(args)
 	_pin = MeasureRig.add_surge_pin(self)
 	if _pin != null:
 		_csv_suffix += "_nosurge"
-	for a in args:
-		if String(a).begins_with("tip_kmh="):
-			_tip_speed = String(a).substr(8).to_float() / 3.6
+	if MeasureRig.flag(args, "tip_kmh=") != "":
+		_tip_speed = MeasureRig.float_flag(args, "tip_kmh=", NAN) / 3.6
 	if not Catalog.VARIANTS.has(_variant):
 		printerr("unknown variant '%s'" % _variant)
 		get_tree().quit(1)
@@ -134,7 +126,7 @@ func _ready() -> void:
 			get_tree().quit(1)
 			return
 		for ramp in [false, true]:
-			for cfg: Array in DOC_CONFIGS:
+			for cfg: Array in MeasureRig.TRAILER_ROLL_CONFIGS:
 				_doc_runs.append({"esc_off": cfg[0], "trsp_off": cfg[1], "ramp": ramp})
 		args = PackedStringArray(["semi", "trailer=box"])
 	_parse_trailer_arg(args)
@@ -155,10 +147,8 @@ func _next_doc_run() -> void:
 	MeasureRig.esc_off = run["esc_off"]
 	MeasureRig.trailer_roll_off = run["trsp_off"]
 	_ramp = run["ramp"]
-	if _car != null:
-		remove_child(_car)
-		_car.queue_free()
-		_car = null
+	MeasureRig.free_body(self, _car)
+	_car = null
 	_phase = Ph.P1
 	_t = 0.0
 	_pt = 0.0
@@ -180,20 +170,16 @@ func _next_doc_run() -> void:
 
 ## The rig on the strip at a standstill, P1's settle about to start.
 func _spawn() -> void:
-	_car = load(Catalog.VARIANTS[_variant]["scene"]).instantiate() as SemiTractor
+	_car = MeasureRig.spawn(self, _variant,
+			func(body: Node) -> void: _apply_geometry_override(body, _args)) as SemiTractor
 	if _car == null:
 		printerr("'%s' is not a SemiTractor" % _variant)
 		get_tree().quit(1)
 		return
-	MeasureRig.unfit_esc(_car)
-	_apply_geometry_override(_args)
-	add_child(_car)
 	if _pin != null:
 		_pin.set("body", _car)
 	# Strip top is y=0; wheels just touching, no spawn drop onto the springs.
-	_car.global_transform = Transform3D(Basis.IDENTITY, Vector3(0.0, _car.rest_ride_height(), START_Z))
-	_car.spawn_transform = _car.global_transform
-	_car.reset_physics_interpolation()
+	MeasureRig.place(_car, Transform3D(Basis.IDENTITY, Vector3(0.0, _car.rest_ride_height(), START_Z)))
 	_car.contact_monitor = true
 	_car.max_contacts_reported = 8
 	for i in PH_NAMES.size():
@@ -225,23 +211,15 @@ func _spawn() -> void:
 
 
 ## Optional in-memory geometry override, driven by extra command-line args of the form
-## front_z=<float> / com_z=<float> (variant name is args[0]). Applied BEFORE add_child so
-## BaseVehicle._ready / WheelDrive._init build the wheels from the overridden spec. spec is
-## a shared Resource loaded straight from the .tres, so it is duplicated first — nothing is
-## written back to it.
-func _apply_geometry_override(args: PackedStringArray) -> void:
-	var front_z := NAN
-	var com_z := NAN
-	for i in range(1, args.size()):
-		var a := String(args[i])
-		if a.begins_with("front_z="):
-			front_z = a.substr(8).to_float()
-		elif a.begins_with("com_z="):
-			com_z = a.substr(6).to_float()
+## front_z=<float> / com_z=<float> (variant name is args[0]), on `car`'s own spec
+## (`MeasureRig.own_ground_drive`, nothing written back to the shipped one). `spawn`'s prep: BEFORE
+## add_child, so BaseVehicle._ready / WheelDrive._init build the wheels from the overridden spec.
+func _apply_geometry_override(car: Node, args: PackedStringArray) -> void:
+	var front_z := MeasureRig.float_flag(args, "front_z=", NAN)
+	var com_z := MeasureRig.float_flag(args, "com_z=", NAN)
 	if is_nan(front_z) and is_nan(com_z):
 		return
-	_car.spec = _car.spec.duplicate(true)
-	var gd: GroundDriveSpec = _car.spec.ground_drive
+	var gd := MeasureRig.own_ground_drive(car)
 	if not is_nan(front_z):
 		var positions := gd.wheel_positions
 		for i in positions.size():
@@ -250,8 +228,8 @@ func _apply_geometry_override(args: PackedStringArray) -> void:
 		gd.wheel_positions = positions
 		_csv_suffix += "_fz%.2f" % front_z
 	if not is_nan(com_z):
-		var com := _car.spec.center_of_mass
-		_car.spec.center_of_mass = Vector3(com.x, com.y, com_z)
+		var spec: VehicleSpec = car.get("spec")
+		spec.center_of_mass = Vector3(spec.center_of_mass.x, spec.center_of_mass.y, com_z)
 		_csv_suffix += "_comz%.2f" % com_z
 
 
@@ -261,27 +239,24 @@ func _apply_geometry_override(args: PackedStringArray) -> void:
 ## host's spawn countdown has run — SemiTractor.attachment_spawn_ready re-couples the remembered
 ## id, so anything written before that is overwritten.
 func _parse_trailer_arg(args: PackedStringArray) -> void:
-	for i in range(1, args.size()):
-		var a := String(args[i])
-		if not a.begins_with("trailer="):
-			continue
-		var want := a.substr(8).to_lower()
-		if want == "bobtail":
-			_trailer_want = TrailerCatalog.BOBTAIL
+	var want := MeasureRig.flag(args, "trailer=").to_lower()
+	if want == "":
+		return
+	if want == "bobtail":
+		_trailer_want = TrailerCatalog.BOBTAIL
+		_trailer_requested = true
+		_trailer_pending = true
+		_csv_suffix += "_bobtail"
+		return
+	for id in TrailerCatalog.TRAILERS:
+		if TrailerCatalog.is_coupled(id) and id.get_file().get_basename() == want:
+			_trailer_want = id
 			_trailer_requested = true
 			_trailer_pending = true
-			_csv_suffix += "_bobtail"
+			_csv_suffix += "_" + want
 			return
-		for id in TrailerCatalog.TRAILERS:
-			if TrailerCatalog.is_coupled(id) and id.get_file().get_basename() == want:
-				_trailer_want = id
-				_trailer_requested = true
-				_trailer_pending = true
-				_csv_suffix += "_" + want
-				return
-		printerr("unknown trailer '%s'" % want)
-		get_tree().quit(1)
-		return
+	printerr("unknown trailer '%s'" % want)
+	get_tree().quit(1)
 
 
 func _new_stats() -> Dictionary:
@@ -674,31 +649,21 @@ func _record_doc_run() -> void:
 	var st: Dictionary = _stats[Ph.P7]
 	r["entry_kmh"] = float(st["entry_speed"]) * 3.6
 	r["peak_g"] = st["peak_lat_g"]
-	r["lift_g"] = _watch.lift_g
-	r["overturn_t"] = _watch.overturn_t
 	r["tractor_rolled"] = st["rolled_tractor"]
-	r["vdc_s"] = _watch.vdc_ticks * get_physics_process_delta_time()
-	r["trailer_chatter"] = Measure.chatter_runs(_watch.applied, Measure.ESC_CHATTER_EPS)
-	r["tractor_chatter"] = Measure.chatter_runs(_watch.tractor_roll, Measure.ESC_CHATTER_EPS)
+	r.merge(MeasureRig.trailer_summary(_watch, get_physics_process_delta_time()), true)
 	print("doc=trailer_roll: %s" % _p7_cell(r))
 
 
-## A P7 cell: the trailer's first lift on its own sensor and when it passes TIP_ROLL_DEG after the
-## steer begins, else `holds` with the peak `v r` g; the time VDC reads active; chatter on the
-## trailer's own application / the tractor's roll stability.
+## A P7 cell (`MeasureRig.trailer_cell`): the trailer's first lift on its own sensor and when it
+## passes TIP_ROLL_DEG after the steer begins, else `holds` with the peak `v r` g; the time VDC reads
+## active; chatter on the trailer's own application / the tractor's roll stability.
 static func _p7_cell(r: Dictionary) -> String:
-	var outcome := "holds, peak %.2f g" % float(r["peak_g"])
-	if float(r["overturn_t"]) >= 0.0:
-		outcome = "lifts at %.3f g, over at %.2f s" % [r["lift_g"], r["overturn_t"]]
-	elif float(r["lift_g"]) >= 0.0:
-		outcome = "lifts at %.3f g, stays up" % float(r["lift_g"])
-	if bool(r["tractor_rolled"]):
-		outcome += ", tractor over"
-	return "%s; VDC %.2f s; chatter %d / %d" % [outcome, r["vdc_s"], r["trailer_chatter"],
-			r["tractor_chatter"]]
+	return MeasureRig.trailer_cell(r, bool(r["tractor_rolled"]),
+			"holds, peak %.2f g" % float(r["peak_g"]))
 
 
-## The `trailer_roll_p7` region: a row per DOC_CONFIGS entry, the step and the ramp as cells.
+## The `trailer_roll_p7` region: a row per `MeasureRig.TRAILER_ROLL_CONFIGS` entry, the step and the
+## ramp as cells.
 func _trailer_roll_table() -> Array[String]:
 	var lines := DocRegion.wrap(("%s (`measure_semi_launch -- semi doc=trailer_roll`): the laden box"
 			+ " rig's P7 at %.0f km/h, a full-lock step (pedal lifted) and a %.0f s wind-on at a held"
@@ -706,7 +671,7 @@ func _trailer_roll_table() -> Array[String]:
 			+ " steer.") % [DocRegion.measured(), TIP_SPEED_MS * 3.6, RAMP_S])
 	lines.append_array(["", "| Tractor ESC | Trailer's own | Full-lock step | Slow wind-on |",
 			"| --- | --- | --- | --- |"])
-	for cfg: Array in DOC_CONFIGS:
+	for cfg: Array in MeasureRig.TRAILER_ROLL_CONFIGS:
 		var cells: Array[String] = []
 		for ramp in [false, true]:
 			for r in _doc_done:

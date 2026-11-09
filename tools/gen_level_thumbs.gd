@@ -12,7 +12,6 @@ const SETTLE_FRAMES := 40  # terrain mesh build + sky/water shader compile befor
 const SETTLE_FRAMES_VEHICLE := 90  # a kept vehicle also needs to drop/float onto ground or water
 const NEAR := 0.25
 const FAR := 6000.0  # islands sit inside a 1900 m far-sea ring
-const FOG_HAZE := 0.25  # fog_density * shot distance — see _thin_fog
 
 var _viewport: SubViewport
 var _camera: Camera3D
@@ -73,32 +72,15 @@ func _shoot(id: String, scene_path: String) -> bool:
 		print("[level thumbs] %s: no saved view, framed an overview" % id)
 	_viewport.add_child(_camera)
 	_camera.current = true  # set after the level, so it wins over the ChaseCamera
-	_thin_fog(level, _camera.global_position.distance_to(subject.get_center()))
+	ShotStage.thin_fog(level, _camera.global_position.distance_to(subject.get_center()))
 
 	await ShotStage.settle(get_tree(), SETTLE_FRAMES_VEHICLE if keep_vehicle else SETTLE_FRAMES)
-	var out := LevelShot.thumb_path(id)
-	var ok := ShotStage.save_capture(_viewport, out)
+	var ok := ShotStage.save_card(_viewport, LevelShot.thumb_path(id), "[level thumbs] %s" % id)
 
 	_viewport.queue_free()
 	_viewport = null
 	_camera = null
-
-	if not ok:
-		return false
-	CardImport.ensure_import_settings(out)
-	print("[level thumbs] %s -> %s" % [id, out])
-	return true
-
-
-## Fog is tuned for ground-level driving, so a 700 m shot is a white sheet; thin to a fixed
-## haze at the shot's own distance. Safe to mutate — Environment is duplicated per level.
-func _thin_fog(level: Node3D, dist: float) -> void:
-	for node in level.find_children("*", "WorldEnvironment", true, false):
-		var env := (node as WorldEnvironment).environment
-		if env == null or not env.fog_enabled:
-			continue
-		env.fog_density = minf(env.fog_density, FOG_HAZE / maxf(dist, 1.0))
-		return
+	return ok
 
 
 ## No-saved-view overview frames the terrain, not the whole level (the sea plane stretches
