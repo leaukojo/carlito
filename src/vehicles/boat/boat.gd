@@ -200,8 +200,6 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 
 	# Engine room and instruments below are ungated by buoyancy: gauges read out of the water too.
 	var running := input.key == InputRouter.KEY_IGNITION
-	var load_frac := clampf(drivetrain.applied_throttle, 0.0, 1.0)
-	t.fuel_rate = BoatTelemetry.fuel_rate_model(load_frac, running)
 	t.oil_press = BoatTelemetry.oil_press_model(drivetrain.rpm, spec.idle_rpm, running)
 	t.tank_level = BoatTelemetry.tank_step(t.tank_level, running, delta)
 

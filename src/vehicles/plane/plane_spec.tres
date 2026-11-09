@@ -30,6 +30,10 @@ ground_drive = SubResource("Resource_grounddrive")
 torque_curve = PackedVector2Array(700, 140, 2500, 230, 4500, 250, 5400, 190)
 idle_rpm = 700.0
 redline_rpm = 5400.0
+; The motoring law the burn nets out at idle (Drivetrain.drag_fuel): the car-petrol class figure
+; (docs/drivetrain.md § Motoring and friction), an estimate for an aero engine.
+engine_brake_frac = 0.25
+engine_friction_frac = 0.07
 gear_ratios = PackedFloat32Array(2.8, 2, 1.5, 1.2, 1, 0.85)
 reverse_ratio = 2.0
 final_drive = 2.0

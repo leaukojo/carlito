@@ -130,16 +130,6 @@ func test_impact_gate_thresholds() -> void:
 
 # --- fuel model ---
 
-func test_fuel_burns_only_while_running_and_clamps() -> void:
-	assert_float(T.fuel_step(80.0, 1.0, false, 1.0)).is_equal(80.0)  # engine off: no burn
-	assert_float(T.fuel_step(100.0, 0.0, true, 1.0)).is_equal_approx(99.98, 1e-6)  # idle
-	assert_float(T.fuel_step(100.0, 1.0, true, 1.0)).is_equal_approx(99.8, 1e-6)   # full load
-	# Never goes below empty.
-	assert_float(T.fuel_step(0.05, 1.0, true, 1.0)).is_equal(0.0)
-	# Load monotonically increases burn.
-	assert_float(T.fuel_step(50.0, 1.0, true, 1.0)).is_less(T.fuel_step(50.0, 0.0, true, 1.0))
-
-
 ## A flat 100 N·m engine from 1000 to 5000 rpm whose motoring is 10 N·m throughout: every figure
 ## below is arithmetic on it, never a tuned body's.
 func _flat_engine(kind: VehicleTelemetry.Fuel) -> VehicleSpec:
@@ -216,10 +206,18 @@ func test_coolant_step_chases_target_without_overshoot() -> void:
 
 # --- battery model ---
 
-func test_battery_charges_when_running_droops_under_load() -> void:
+func test_battery_charges_when_running_and_droops_on_the_lamps_lit() -> void:
 	assert_float(T.battery_volts(false, 1.0)).is_equal(T.BATTERY_RESTING)
 	assert_float(T.battery_volts(true, 0.0)).is_equal(T.BATTERY_CHARGING)
-	assert_float(T.battery_volts(true, 1.0)).is_equal_approx(T.BATTERY_CHARGING - 0.6, 1e-6)
+	assert_float(T.battery_volts(true, 1.0)) \
+		.is_equal_approx(T.BATTERY_CHARGING - T.BATTERY_LAMP_DROOP, 1e-6)
+	assert_float(T.battery_volts(true, 0.5)) \
+		.is_equal_approx(T.BATTERY_CHARGING - 0.5 * T.BATTERY_LAMP_DROOP, 1e-6)
+
+
+func test_the_trains_battery_charges_off_the_line_only_with_the_pantograph_up() -> void:
+	assert_float(T.aux_supply_volts(true)).is_equal(T.BATTERY_CHARGING)
+	assert_float(T.aux_supply_volts(false)).is_equal(T.BATTERY_RESTING)
 
 
 # --- status bitfield ---

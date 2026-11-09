@@ -238,7 +238,7 @@ static func lagged_brake(actual: float, cmd: float, delta: float) -> float:
 
 
 ## What the trailer's service brakes are really applying, 0..1 — the lagged value, which is what
-## `trailer_brake_demand` reports (ISO 11992 EBS11 is a report of the application, not the pedal).
+## `trailer_brake_applied` reports (`trailer_brake_demand` is what the towing unit sent).
 func brake_applied() -> float:
 	return _brake_actual
 
@@ -405,7 +405,7 @@ func vdc_active() -> bool:
 	return _roll_state["stage"] == StabilityControl.TrailerStage.FULL
 
 
-## Whether the trailer's ABS held any wheel's brake back this tick, which trailer_abs (EBS21)
+## Whether the trailer's ABS held any wheel's brake back this tick, which trailer_abs (EBS22)
 ## reads. Any, not most: ABS is per wheel, so one wheel at its limit is the event.
 func abs_active() -> bool:
 	for w in wheels:

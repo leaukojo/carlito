@@ -726,7 +726,8 @@ func test_the_lock_up_line_reads_the_pedal_not_its_mapped_fuel() -> void:
 
 
 func test_a_crank_that_drives_no_wheels_keeps_the_pedal_on_any_map() -> void:
-	# The rigid crank burns the pedal (`Drivetrain.process`), so the map passes it through there,
+	# The rigid crank burns the pedal over its friction floor (`Drivetrain.process`), so the map
+	# passes it through there,
 	# and its inverse the fuel: no ground drive, or one with no driven axle.
 	var no_gd := _spec()
 	no_gd.ground_drive = null
@@ -1276,6 +1277,34 @@ func test_a_machine_that_drives_no_wheels_keeps_the_rigid_crank() -> void:
 				dt.process(TICK, 0.5, 0.0, 5.0, byte, false)
 			assert_float(dt.rpm).is_equal_approx(half, 1.0)
 			assert_bool(dt.on_limiter).is_false()
+
+
+func test_a_running_rigid_crank_burns_at_least_the_fuel_that_holds_its_speed() -> void:
+	# At idle, friction 0.1 of the 300 peak is 30 N·m against the curve's 100 at 800 rpm (the
+	# sample clamps below 1000): the floor is the fuel that nets zero, 30 / 130, as the
+	# wheel-driving idle controller burns. Above it the pedal's own fuel; key off, nothing.
+	var spec := _spec()
+	spec.ground_drive = null
+	spec.engine_friction_frac = 0.1
+	spec.engine_brake_frac = 0.2
+	var dt: DrivetrainScript = DrivetrainScript.new(spec)
+	dt.running = true
+	dt.rpm = spec.idle_rpm
+	dt.process(TICK, 0.0, 0.0, 0.0, GEAR_N, false)
+	assert_float(dt.applied_throttle).is_equal_approx(30.0 / 130.0, 1e-6)
+	assert_float(dt.applied_throttle).is_equal_approx(DrivetrainScript.drag_fuel(spec, dt.rpm), 1e-9)
+	dt.process(TICK, 0.9, 0.0, 0.0, GEAR_N, false)
+	assert_float(dt.applied_throttle).is_equal_approx(0.9, 1e-6)
+	dt.running = false
+	dt.process(TICK, 0.0, 0.0, 0.0, GEAR_N, false)
+	assert_float(dt.applied_throttle).is_equal(0.0)
+	# A frictionless crank (the drone's, the train's) has no floor.
+	var bare := _spec()
+	bare.ground_drive = null
+	var free: DrivetrainScript = DrivetrainScript.new(bare)
+	free.running = true
+	free.process(TICK, 0.0, 0.0, 0.0, GEAR_N, false)
+	assert_float(free.applied_throttle).is_equal(0.0)
 
 
 # --- road-speed governor ------------------------------------------------------------

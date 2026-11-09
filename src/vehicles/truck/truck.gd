@@ -23,7 +23,7 @@ var _trash_empty_y := 0.0            ## measured off the pile's own mesh
 var _mass_applied := 0.0             ## payload currently written into `mass`
 var _last_body_cmd := 0              ## previous tick's body_cmd, for the notice edge
 var _spring_brakes_were_applied := false  ## last tick's gate, for the notice edge
-var _prev_brake := 0.0               ## last tick's brake pedal: air is drawn on its rise
+var _prev_service := 0.0             ## last tick's applied service level: air is drawn on its rise
 
 ## Told to the driver when the body stalk is worked with the PTO out or the parking brake off.
 ## Fires on the press, not while inhibited.
@@ -76,14 +76,17 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 
 	# Air first: this tick's pressures feed the spring-brake gate below. The aux consumer is asked
 	# BEFORE the step, so a trailer coupled this tick pays for its charge the same tick.
+	# The chambers fill to the service level the wheels applied this tick: the driver's, and the
+	# braking stability control commands with no pedal.
 	var aux_air := _aux_air_draw(delta)
-	t.air_primary = TruckTelemetry.air_step(t.air_primary, input.brake, _prev_brake, running,
+	var service := drive.service_level(input) if drive != null else input.brake
+	t.air_primary = TruckTelemetry.air_step(t.air_primary, service, _prev_service, running,
 			delta, TruckTelemetry.AIR_CHARGE_RATE, TruckTelemetry.AIR_PRESS_PRIMARY,
 			TruckTelemetry.AIR_DRAW_PRIMARY, aux_air)
-	t.air_secondary = TruckTelemetry.air_step(t.air_secondary, input.brake, _prev_brake, running,
+	t.air_secondary = TruckTelemetry.air_step(t.air_secondary, service, _prev_service, running,
 			delta, TruckTelemetry.AIR_CHARGE_RATE, TruckTelemetry.AIR_PRESS_SECONDARY,
 			TruckTelemetry.AIR_DRAW_SECONDARY, aux_air)
-	_prev_brake = input.brake
+	_prev_service = service
 
 	var pto_on := input.pto and running
 	t.pto_state = pto_on
@@ -209,7 +212,7 @@ func reset_session_state() -> void:
 	super.reset_session_state()
 	_last_body_cmd = RefuseBody.Cmd.IDLE
 	_spring_brakes_were_applied = false
-	_prev_brake = 0.0
+	_prev_service = 0.0
 	if drive != null:
 		drive.spring_brake = 0.0
 	drivetrain.drive_inhibit = false

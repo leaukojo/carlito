@@ -1159,6 +1159,10 @@ func process(delta: float, throttle: float, drive_wheel_omega: float,
 	var crank_forward := drive_wheel_omega * ratio_for_byte(spec, gear_byte) >= 0.0
 	# The limiter and governor cut between pedal and engine: rpm stays on its free-rev line.
 	applied_throttle = clampf(throttle, 0.0, 1.0) * governor_scale(spec, ground_speed, speed_cap_kmh)
+	# Running, the crank burns at least the fuel that holds its free-rev speed against its friction
+	# (`drag_fuel`), as the wheel-driving idle controller does; a cut below still burns nothing.
+	if running:
+		applied_throttle = maxf(applied_throttle, drag_fuel(spec, rpm))
 	on_limiter = crank_forward and limiter_cut(spec, limiter_rpm, gear_byte)
 	if on_limiter:
 		applied_throttle = 0.0

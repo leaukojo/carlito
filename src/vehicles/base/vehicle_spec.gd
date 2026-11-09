@@ -26,8 +26,9 @@ extends Resource
 @export var trailer_bus_equipped := false
 
 @export_group("Drivetrain")
-## Showroom decoration only: `Drivetrain` runs for every family (the gear byte is the direction
-## latch). Not `ground_drive == null`: a boat's outdrive has gears but no wheels.
+## A combustion engine: its figures in the showroom, and a tank it burns (`BaseVehicle`'s fuel
+## chain). `Drivetrain` runs for every family regardless (the gear byte is the direction latch).
+## Not `ground_drive == null`: a boat's outdrive has gears but no wheels.
 @export var has_engine := true
 ## rpm -> engine Nm at full throttle. It may end nonzero at the redline, since
 ## `Drivetrain.limiter_cut` is the fuel cut that stops the engine; ending at zero is a droop.
@@ -63,7 +64,7 @@ extends Resource
 ## § PTO power.
 @export var pto_mode_rpm := 0.0
 ## What the engine burns: its indicated efficiency, heating value and density
-## (`VehicleTelemetry.fuel_rate_lph`). Read on a wheel-driving crank only.
+## (`VehicleTelemetry.fuel_rate_lph`). Read wherever `has_engine`.
 @export var fuel_type: VehicleTelemetry.Fuel = VehicleTelemetry.Fuel.PETROL
 ## Rotating inertia at the crank (kg·m²), on wheel-driving bodies only (`Drivetrain.drives_wheels`).
 ## Sourced per class: docs/drivetrain.md § Crank and coupling.

@@ -31,7 +31,7 @@ func _real_contract() -> ContractScript.ContractData:
 func test_real_contract_is_valid() -> void:
 	var data := _real_contract()
 	assert_array(data.errors).is_empty()
-	assert_int(data.version).is_equal(60)
+	assert_int(data.version).is_equal(63)
 
 
 func _assert_core_signals_present(names: PackedStringArray, dir: String) -> void:
@@ -353,7 +353,7 @@ func test_tier1_isobus_signals_are_tractor_only_and_flavored() -> void:
 
 func test_shared_engine_signals_are_reused_by_the_truck_not_duplicated() -> void:
 	# Rule 4: engine_load / pto / pto_state are one signal each, listing both families. They keep
-	# the isobus flavor because ISO 11783 is built on J1939 — engine_load is SPN 92 whoever reads
+	# the isobus flavor because ISO 11783 is built on J1939 — engine_load is one J1939 torque percentage whoever reads
 	# it. If a truck-flavored copy ever appears beside these, this fails.
 	var data := _real_contract()
 	for entry: Array in [["engine_load", "out"], ["pto", "in"], ["pto_state", "out"]]:
@@ -617,12 +617,12 @@ func test_iso11992_trailer_signals_are_truck_only_and_flavored() -> void:
 	var truck_out := data.signals_for_vehicle("truck", "out").map(
 			func(s: ContractScript.SignalDef) -> String: return s.name)
 	assert_array(truck_out).contains(["trailer_connected", "trailer_axle_load",
-			"trailer_brake_demand", "trailer_abs", "trailer_vdc"])
+			"trailer_brake_demand", "trailer_brake_applied", "trailer_abs", "trailer_vdc"])
 	# The trailer bus is a DIFFERENT flavor from the chassis it hangs off and from the body network
 	# on the other side of the same truck: three networks, three flavors.
 	for entry: Array in [["trailer_ebs_fault", "in"], ["trailer_connected", "out"],
-			["trailer_axle_load", "out"], ["trailer_brake_demand", "out"], ["trailer_abs", "out"],
-			["trailer_vdc", "out"]]:
+			["trailer_axle_load", "out"], ["trailer_brake_demand", "out"],
+			["trailer_brake_applied", "out"], ["trailer_abs", "out"], ["trailer_vdc", "out"]]:
 		var sig := data.get_signal_def(entry[0], entry[1])
 		assert_object(sig).override_failure_message("missing %s/%s" % entry).is_not_null()
 		assert_str(sig.flavor) \
@@ -633,7 +633,7 @@ func test_iso11992_trailer_signals_are_truck_only_and_flavored() -> void:
 
 func test_the_trailer_bus_is_bidirectional_and_carries_no_body_type() -> void:
 	# ISO 11992-2 is the application layer for brakes and running gear only, and it runs both ways:
-	# EBS11 towing-to-towed, EBS21 towed-to-towing. None of it says what the trailer IS, so the
+	# EBS11-12 towing-to-towed, EBS21-25 towed-to-towing. None of it says what the trailer IS, so the
 	# absence of a trailer_type is asserted rather than merely intended.
 	var data := _real_contract()
 	assert_bool(data.has_signal_def("trailer_type", "out")).is_false()
@@ -648,7 +648,7 @@ func test_the_trailer_bus_is_bidirectional_and_carries_no_body_type() -> void:
 		.override_failure_message("the trailer bus must carry traffic in BOTH directions").is_true()
 
 
-func test_the_trailer_bus_display_assignment_is_two_bars_and_four_lamps() -> void:
+func test_the_trailer_bus_display_assignment_is_three_bars_and_four_lamps() -> void:
 	# The cluster layout is settled in advance (a 280 px column at 18 px per bar), so what the
 	# dashboard GENERATES from this metadata is pinned: ranged+flavored = a bar, bool = a tell-tale.
 	var data := _real_contract()
@@ -664,12 +664,13 @@ func test_the_trailer_bus_display_assignment_is_two_bars_and_four_lamps() -> voi
 	assert_float(load_sig.warn).is_equal_approx(24000.0, 1e-6)
 	assert_bool(load_sig.warn_is_low()) \
 		.override_failure_message("trailer_axle_load warn must read as a HIGH-side danger").is_false()
-	# The demand bar is a plain percentage: a hard brake application is not a fault.
-	var demand := data.get_signal_def("trailer_brake_demand", "out")
-	assert_array(demand.range).is_equal([0.0, 100.0])
-	assert_str(demand.unit).is_equal("%")
-	assert_bool(demand.has_warn()) \
-		.override_failure_message("trailer_brake_demand must not carry a warn").is_false()
+	# The demand and applied bars are plain percentages: a hard brake application is not a fault.
+	for sig_name in ["trailer_brake_demand", "trailer_brake_applied"]:
+		var brake := data.get_signal_def(sig_name, "out")
+		assert_array(brake.range).is_equal([0.0, 100.0])
+		assert_str(brake.unit).is_equal("%")
+		assert_bool(brake.has_warn()) \
+			.override_failure_message("%s must not carry a warn" % sig_name).is_false()
 
 
 func test_guidance_and_scv_are_tractor_only_and_flavored() -> void:

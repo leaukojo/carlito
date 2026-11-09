@@ -138,12 +138,13 @@ data stays dark.
 | `trailer_connected` | out | flag | Truck: a trailer is coupled and has answered on the trailer link. False on the `semi-conventional`, which has no link, even with a trailer on. |
 | `trailer_axle_load` | out | kg | Truck: the weight on the trailer's axles, from its own springs. |
 | `trailer_brake_demand` | out | % | Truck: the brake demand sent to the trailer. Not the retarder. |
+| `trailer_brake_applied` | out | % | Truck: how hard the trailer's brakes have actually applied. It trails the demand. |
 | `trailer_abs` | out | flag | Truck: the trailer's ABS is holding a wheel. |
 | `trailer_vdc` | out | flag | Truck: the trailer's roll control is braking it. |
 | `trailer_ebs_fault` | in | flag | Truck: a trailer brake fault set by sloppyCAN, for the dashboard. |
 | `trailer_abs_lamp` | in | flag | Truck: the American trailer ABS lamp, set by sloppyCAN. |
 | `air_primary`, `air_secondary` | out | bar | Truck: the brake tanks, which a coupled trailer draws on too. |
-<!-- contract/carlito_contract.json: trailer_connected, trailer_axle_load, trailer_brake_demand, trailer_abs, trailer_vdc, trailer_ebs_fault, trailer_abs_lamp, air_primary, air_secondary -->
+<!-- contract/carlito_contract.json: trailer_connected, trailer_axle_load, trailer_brake_demand, trailer_brake_applied, trailer_abs, trailer_vdc, trailer_ebs_fault, trailer_abs_lamp, air_primary, air_secondary -->
 
 The farm tipper on the tractor has no trailer link of its own.
 

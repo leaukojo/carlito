@@ -140,6 +140,8 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	t.grade = clampi(roundi(grades[0] * 100.0), -10, 10)  # contract i8 %-grade range
 	t.coupler_force = _sim.head_coupler_force / 1000.0  # N -> kN (contract unit)
 	t.pantograph_state = powered
+	# No alternator: the line charges the battery while the pantograph is up.
+	t.battery = VehicleTelemetry.aux_supply_volts(powered)
 	t.doors_state = input.doors and absf(telemetry.speed) < DOOR_SPEED_EPS
 
 

@@ -52,8 +52,8 @@ this way. Under load the speed sags a little, a few percent, which is called dro
 
 ### Alternator
 The generator the engine turns to charge the battery. In the game, while the engine runs, the
-battery reads about 14 volts, sagging a little under load; with the engine off it reads its
-resting voltage, about 12.6 volts.
+battery reads about 14 volts, sagging a little as more lamps are lit; with the engine off it
+reads its resting voltage, about 12.6 volts.
 <!-- vehicle_telemetry.gd BATTERY_CHARGING 14.2, BATTERY_RESTING 12.6 -->
 
 ### AMT
@@ -374,10 +374,10 @@ other. A tyre can use all its grip for braking, or all for turning, or a mix, bu
 goes outside the oval.
 
 ### Fuel rate
-How fast the engine burns fuel, in litres per hour (`fuel_rate`). On the car, truck and tractor
-the game works it out from the engine's actual turning force and speed; the boat uses a simpler
-labelled model that follows its throttle.
-<!-- VehicleTelemetry.fuel_rate_lph on a wheel-driving crank; BoatTelemetry.fuel_rate_model on the boat -->
+How fast the engine burns fuel, in litres per hour (`fuel_rate`). The game works it out from
+the engine's actual turning force and speed. On the boat, that speed is a simple line set by the
+throttle.
+<!-- VehicleTelemetry.fuel_rate_lph on every engined crank; the rigid crank reads its free-rev rpm -->
 
 
 

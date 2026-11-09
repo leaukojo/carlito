@@ -18,15 +18,15 @@ parent of ISOBUS and NMEA 2000.
 | --- | --- | --- |
 | In (4): `retarder`, `red_stop`/`amber_warn`/`protect_lamp` (J1939-73 DM1 lamp bits) | `j1939` | published FMS set — J1939-71 subset six European makers agreed to expose in 2002 |
 | Out (5): `air_primary`, `air_secondary`, `retarder_state`, `axle_load`, `gear_ratio` | `j1939` | sloppyCAN also packs the stability unit's VDC1 (status bits 7-11: lamp, fully operational, brake-light request, YC / ROP) and VDC2 (`yaw`, `accLat`, `accLong`; no hand-wheel angle) from the brake controller, on air-braked bodies only; VDC2 at the telemetry rate, slower than J1939's (`docs/sources.md` § Stability control) |
-| `engine_load`, `pto`, `pto_state` | `isobus` | reused, not duplicated — listed on `truck` alongside `tractor` (ISO 11783 is built on J1939: `engine_load` = SPN 92); `engine_hours` (SPN 247) rides unflavored |
+| `engine_load`, `pto`, `pto_state` | `isobus` | reused, not duplicated — listed on `truck` alongside `tractor` (ISO 11783 is built on J1939: `engine_load` is SPN 513-like); `engine_hours` (SPN 247) rides unflavored |
 
 `diff_lock`/`diff_lock_state` are not extended to the truck.
 
 ### Air, retarder, axle load
 
 - Air gates the brakes: two reservoirs (SPN 1087/1088) charge while the engine runs, draw
-  down per brake press (**0.70 / 0.55 bar** a full press; a held pedal draws nothing more, so
-  pumping drains and holding does not); circuit 2 is smaller so the pair diverges. Below
+  down on the rise of the service level applied (`WheelDrive.service_level`: pedal plus ESC;
+  **0.70 / 0.55 bar** a full one; held, nothing more); circuit 2 is smaller so the pair diverges. Below
   `TruckTelemetry.AIR_SPRING_BRAKE_BAR` (**3 bar**) on either circuit, spring brakes apply
   from the next tick: `handbrake_torque` on the rears through the spin step
   (`WheelDrive.spring_brake`), a parking brake no stronger than the service brake on its drum
@@ -210,8 +210,8 @@ bidirectional by design.
 | `trailer_ebs_fault` | in | Injected trailer EBS fault. Mirrored verbatim like DM1; nothing in the game ever sets it |
 | `trailer_connected` | out | The coupling claim — see below |
 | `trailer_axle_load` | out | SPN 582 on the towed unit. Read out of the sim: trailer's own bogie suspension force |
-| `trailer_brake_demand` | out | EBS11, towing→towed. A report of the demand the tractor sent, and the least the trailer's wheels brake with |
-| `trailer_abs` | out | EBS21, towed→towing. Read out of the sim: the trailer's own ABS holding a wheel at `RayWheel.ABS_SLIP` this tick |
+| `trailer_brake_demand`, `trailer_brake_applied` | out | Demand: EBS11, towing→towed, what the tractor sends this tick (`TruckTelemetry.ebs11_demand`). Applied: towed→towing, read out of the sim, the trailer's rate-limited application (`TowedBody.brake_applied`) trailing it, the least its wheels brake with |
+| `trailer_abs` | out | EBS22 byte 1 bits 1-2 (R13 Annex 16 2.4.2), towed→towing. Read out of the sim: the trailer's own ABS holding a wheel at `RayWheel.ABS_SLIP` this tick |
 | `trailer_vdc` | out | EBS21 byte 2 bits 1-2, VDC active. Read out of the sim: the semi-trailer's own roll-over control (`TowedBody.vdc_active`) in its full application this tick, never its test pulse; `esc_off` does not reach it. Tell-tale VDC (R13 Annex 21 2.1.6); SPN 5624 mirrors it |
 
 - `trailer_connected` is a claim, not "something is on the fifth wheel": needs the trailer

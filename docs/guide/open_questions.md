@@ -98,7 +98,7 @@ says meanwhile. Newest last.
 
 ## 9. Should an empty tank stop the engine?
 
-- **Code:** `BaseVehicle` drains `telemetry.fuel` (`VehicleTelemetry.fuel_drain`, `fuel_step`) but
+- **Code:** `BaseVehicle` drains `telemetry.fuel` (`VehicleTelemetry.fuel_drain`) but
   nothing reads it back: at 0 % the drivetrain still runs and burns, and the `fuel_rate` signal
   still reads the burn. The tank itself is a labelled game-scale COMPROMISE
   (`VehicleTelemetry.FUEL_TANK_FULL_LOAD_S`, about eight minutes at full load).

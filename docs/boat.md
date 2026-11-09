@@ -66,7 +66,7 @@ through `v_long`. Level 6 is the only level with water under the boat rather tha
 | `depth` | 128267 Water Depth | `HeightmapTerrain.height_at` under the transducer vs the `WaterSurface` plane |
 | `awa` / `aws` / `twd` / `tws` | 130306 Wind Data | `BoatTelemetry.apparent_wind` off the wind vector and hull velocity; `VehicleTelemetry.true_wind` (shared with the land families) off the wind vector |
 | `rudder` / `rudder_actual` / `trim` | 127245 Rudder, 127488 Engine Parameters Rapid | slewed `_steer` (%) / `trim_step` chasing throttle |
-| `fuel_rate` / `oil_press` | 127489 Engine Parameters, Dynamic | labelled models off `applied_throttle` / `Drivetrain.rpm` |
+| `fuel_rate` / `oil_press` | 127489 Engine Parameters, Dynamic | labelled models: the crank's burn (`fuel_rate_lph` on `applied_throttle` at `Drivetrain.rpm`) / `Drivetrain.rpm` |
 | `tank_level` | 127505 Fluid Level | fresh/waste ramp, `count` 3 (fresh water / waste / live-well) |
 | `engine_hours` | 127489 (also J1939 SPN 247) | `running` predicate; drops the `isobus` flavor it carries on truck/tractor, like `speed_limit`/`wheel_slip` |
 | `nav_mode` / `nav_mode_actual` / `heading_cmd` / `heading_target` | 127237 Heading/Track Control | `BoatAutopilot` |

@@ -8,9 +8,6 @@ extends VehicleTelemetry
 const TRIM_RATE := 40.0            ## %/s the trim chases its target
 const DEPTH_INVALID := -1.0        ## no bottom under the transducer; never 0 (see `sounding`)
 
-const FUEL_RATE_IDLE := 1.5        ## L/h burned just running, no load
-const FUEL_RATE_LOAD := 8.5        ## L/h added at full load_frac, on top of idle
-
 const OIL_PRESS_IDLE := 80.0       ## kPa floor, right at idle_rpm (the low-idle droop)
 const OIL_PRESS_NOMINAL := 350.0   ## kPa plateau, reached at OIL_PRESS_PLATEAU_FRAC of idle_rpm
 const OIL_PRESS_PLATEAU_FRAC := 1.5
@@ -78,14 +75,6 @@ static func sounding(has_bottom: bool, transducer_y: float, seabed_y: float) -> 
 	if not has_bottom:
 		return DEPTH_INVALID
 	return maxf(0.0, transducer_y - seabed_y)
-
-
-## Modeled fuel burn rate, contract 'fuel_rate': idle burn plus a load term, zero with the key not
-## at Ignition. A labelled honest model; it does not reconcile with the 'fuel' tank drain.
-static func fuel_rate_model(load_frac: float, running: bool) -> float:
-	if not running:
-		return 0.0
-	return FUEL_RATE_IDLE + FUEL_RATE_LOAD * clampf(load_frac, 0.0, 1.0)
 
 
 ## Modeled oil pressure, contract 'oil_press': zero with the key not at Ignition, otherwise a

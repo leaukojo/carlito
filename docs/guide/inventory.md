@@ -208,7 +208,7 @@ the two semi tractor units.
 
 | System | Vehicles | Code | Page |
 | --- | --- | --- | --- |
-| Fuel burn from the crank, game-scale tank | car, truck, tractor (boat and plane: a throttle model) | `VehicleTelemetry.fuel_rate_lph` | aux |
+| Fuel burn from the crank, game-scale tank | car, truck, tractor, boat, plane (boat and plane on their free-rev rpm) | `VehicleTelemetry.fuel_rate_lph` | aux |
 | Coolant temperature | car, truck, tractor, boat, plane | `VehicleTelemetry.coolant_target` | aux |
 | Battery voltage and alternator | every family; the drone has its own pack | `VehicleTelemetry.battery_volts` | aux |
 | Engine load | tractor, truck | `VehicleTelemetry.engine_load_pct` | engine, aux |

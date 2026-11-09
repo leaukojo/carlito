@@ -76,6 +76,56 @@ func test_a_brake_press_draws_on_the_rise_and_a_held_pedal_draws_nothing() -> vo
 	assert_float(TruckT.air_step(7.0, 1.0, 1.0, true, 1.0, 0.45, 0.7, 1.10)).is_greater(7.0)
 
 
+func test_a_stability_intervention_with_no_pedal_fills_the_chambers_and_draws_air() -> void:
+	# Four wheels, FL FR RL RR, 4000 / 6000 N·m each. The yaw controller brakes the outer front
+	# with 2000 N·m: half its hardware, an eighth of the four chambers' level.
+	var corners := PackedInt32Array([0, 1, 2, 3])
+	var hw := Vector2(4000.0, 6000.0)
+	var yaw := Vector4(2000.0, 0.0, 0.0, 0.0)
+	assert_float(WheelDrive.mean_service_level(0.0, Vector4.ZERO, corners, hw)).is_equal(0.0)
+	var level := WheelDrive.mean_service_level(0.0, yaw, corners, hw)
+	assert_float(level).is_equal_approx(0.125, 1e-6)
+	assert_float(TruckT.air_step(7.0, level, 0.0, false, 1.0 / 60.0, 0.45, 0.7, 1.10)) \
+		.is_less(7.0)
+	# Roll stability's every-wheel application draws like the driver's same application.
+	var roll := Vector4(2000.0, 2000.0, 3000.0, 3000.0)
+	assert_float(WheelDrive.mean_service_level(0.0, roll, corners, hw)) \
+		.is_equal_approx(WheelDrive.mean_service_level(0.5, Vector4.ZERO, corners, hw), 1e-6)
+	# Capped at the hardware: the pedal and ESC together never ask more than full.
+	assert_float(WheelDrive.mean_service_level(1.0, roll, corners, hw)).is_equal(1.0)
+
+
+## The published applied level is the trailer's chambers, a rate limit behind what EBS11 sent: on
+## a pedal step the demand is there the first tick, the application climbs to it.
+func test_the_trailer_brake_applied_lags_the_demand_on_a_step() -> void:
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	var unit := (load(CatalogScript.scene_of("semi")) as PackedScene).instantiate() as SemiTractor
+	root.add_child(unit)
+	var host := unit.get_node("FifthWheel") as TowHost
+	var t := unit.telemetry as TruckTelemetry
+	var input := VehicleInput.new()
+	# The spawn countdown first: its end re-lays the unit's remembered trailer, chambers vented.
+	for _i in TowHost.SPAWN_COUPLE_TICKS:
+		unit.call("_tick_extras", input, DT)
+	if not host.is_coupled():
+		assert_bool(host.couple(
+				load("res://src/vehicles/truck/trailers/flatbed.tscn") as PackedScene)).is_true()
+	unit.call("_tick_extras", input, DT)
+	assert_int(t.trailer_brake_applied).is_equal(0)
+	input.brake = 1.0
+	unit.call("_tick_extras", input, DT)
+	assert_int(t.trailer_brake_demand).is_equal(100)
+	assert_int(t.trailer_brake_applied).is_less(t.trailer_brake_demand)
+	var ticks := 1
+	while t.trailer_brake_applied < 100 and ticks < 600:
+		unit.call("_tick_extras", input, DT)
+		assert_int(t.trailer_brake_applied).is_less_equal(t.trailer_brake_demand)
+		ticks += 1
+	assert_float(ticks * DT).is_equal_approx(TowedBody.BRAKE_APPLY_S, 2.0 * DT)
+	host.uncouple()
+
+
 func test_pumping_about_once_a_second_beats_the_compressor_on_both_circuits() -> void:
 	# The press is what drains: one full press a second (half a second down, half up) at the locked
 	# 60 Hz must still net-drain each circuit, or no driving can ever reach the gate.
@@ -864,6 +914,7 @@ func test_a_coupled_trailer_on_the_north_american_unit_publishes_honest_zeros() 
 		t.trailer_connected = true
 		t.trailer_axle_load = 19766.0
 		t.trailer_brake_demand = 55
+		t.trailer_brake_applied = 40
 		t.trailer_abs = true
 		t.trailer_vdc = true
 		# The per-tick clear, and then the publish that never happens: SemiTractor writes the five
@@ -875,12 +926,13 @@ func test_a_coupled_trailer_on_the_north_american_unit_publishes_honest_zeros() 
 			.is_false()
 		assert_float(t.trailer_axle_load).is_equal(0.0)
 		assert_int(t.trailer_brake_demand).is_equal(0)
+		assert_int(t.trailer_brake_applied).is_equal(0)
 		assert_bool(t.trailer_abs).is_false()
 		assert_bool(t.trailer_vdc).is_false()
 		# Zeros, not absences: the bridge walks to_bridge_dict, so the cluster keeps its shape.
 		var d := t.to_bridge_dict()
-		for key in ["trailer_connected", "trailer_axle_load", "trailer_brake_demand", "trailer_abs",
-				"trailer_vdc"]:
+		for key in ["trailer_connected", "trailer_axle_load", "trailer_brake_demand",
+				"trailer_brake_applied", "trailer_abs", "trailer_vdc"]:
 			assert_bool(d.has(key)) \
 				.override_failure_message("%s: to_bridge_dict drops '%s'" % [variant, key]) \
 				.is_true()

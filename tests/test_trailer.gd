@@ -644,10 +644,10 @@ func test_the_first_tick_of_an_application_is_still_almost_nothing() -> void:
 	assert_float(first).is_greater(0.0)
 
 
-# --- ISO 11992: EBS21, the trailer's own ABS at work ----------------------------
+# --- ISO 11992: EBS22, the trailer's own ABS at work ----------------------------
 
 func test_every_semi_trailer_carries_abs() -> void:
-	# EBS21 reports a device: a trailer without one could never set trailer_abs, and a real O4
+	# EBS22 reports a device: a trailer without one could never set trailer_abs, and a real O4
 	# semi-trailer has carried ABS since 1998.
 	for path in [FLATBED, BOX, TIPPER, TANKER]:
 		var trailer := _instance(path)
@@ -863,18 +863,20 @@ func test_the_trailer_bus_publishes_real_zeros_rather_than_a_gap() -> void:
 	t.trailer_connected = true
 	t.trailer_axle_load = 9000.0
 	t.trailer_brake_demand = 55
+	t.trailer_brake_applied = 40
 	t.trailer_abs = true
 	t.trailer_vdc = true
 	t.clear_trailer_bus()
 	assert_bool(t.trailer_connected).is_false()
 	assert_float(t.trailer_axle_load).is_equal(0.0)
 	assert_int(t.trailer_brake_demand).is_equal(0)
+	assert_int(t.trailer_brake_applied).is_equal(0)
 	assert_bool(t.trailer_abs).is_false()
 	assert_bool(t.trailer_vdc).is_false()
 	# ...and they are published rather than merely stored: the bridge walks this dict.
 	var d := t.to_bridge_dict()
-	for key in ["trailer_connected", "trailer_axle_load", "trailer_brake_demand", "trailer_abs",
-			"trailer_vdc"]:
+	for key in ["trailer_connected", "trailer_axle_load", "trailer_brake_demand",
+			"trailer_brake_applied", "trailer_abs", "trailer_vdc"]:
 		assert_bool(d.has(key)) \
 			.override_failure_message("to_bridge_dict drops '%s'" % key).is_true()
 

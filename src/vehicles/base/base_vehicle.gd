@@ -69,7 +69,7 @@ var _overturned_t := 0.0   ## seconds the body has been tilted past OVERTURNED_D
 var _overturned := false   ## edge latch for the notice; the public read is `is_overturned()`
 var _horn_fade: Tween  ## the release fade; killed if the horn is pressed again mid-fade
 ## The burn at full fuel at rated speed (L/h) and the tank it drains (L), off the spec at _ready;
-## 0 on the rigid crank, which keeps the throttle model (`VehicleTelemetry.fuel_step`).
+## 0 on a body with no engine (`VehicleSpec.has_engine`), whose fuel holds.
 var _rated_burn := 0.0
 var _tank_l := 0.0
 
@@ -97,7 +97,7 @@ func _ready() -> void:
 	if declares_angular_damp() or spec.angular_damping > 0.0:
 		VehicleMath.declare_angular_damp(self, spec.angular_damping)
 	drivetrain = Drivetrain.new(spec)
-	if Drivetrain.drives_wheels(spec):
+	if spec.has_engine:
 		_rated_burn = VehicleTelemetry.rated_fuel_rate_lph(spec)
 		_tank_l = VehicleTelemetry.tank_litres(spec)
 	if spec.ground_drive != null:  # optional: boat/drone/train declare none
@@ -306,11 +306,12 @@ func _update_telemetry(input: VehicleInput, delta: float) -> void:
 		telemetry.fuel = VehicleTelemetry.fuel_drain(telemetry.fuel, telemetry.fuel_rate, _tank_l,
 				delta)
 		heat_frac = telemetry.fuel_rate / _rated_burn
-	else:
-		telemetry.fuel = VehicleTelemetry.fuel_step(telemetry.fuel, load_frac, running, delta)
 	telemetry.coolant = VehicleTelemetry.coolant_step(
 			telemetry.coolant, VehicleTelemetry.coolant_target(running, heat_frac), COOLANT_RATE, delta)
-	telemetry.battery = VehicleTelemetry.battery_volts(running, load_frac)
+	var lamp_bits := input.lamps
+	telemetry.battery = VehicleTelemetry.battery_volts(running, _lamps.load_share(
+			lamp_bits.brake_lamp, input.lights, lamp_bits.turn_left, lamp_bits.turn_right,
+			lamp_bits.beacon, lamp_bits.strobe))
 	telemetry.engine_hours = VehicleTelemetry.hours_step(telemetry.engine_hours, running, delta)
 
 	# Gate the raw acceleration spike, then peak-hold with decay so a one-tick collision stays

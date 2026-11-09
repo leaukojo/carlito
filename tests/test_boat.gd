@@ -369,14 +369,6 @@ func test_stemming_the_tide_holds_the_log_up_while_the_track_stops() -> void:
 
 # --- engine room & tanks (PGN 127489 / 127505, modeled honest values) -----------
 
-func test_fuel_rate_is_zero_off_and_rises_with_load() -> void:
-	assert_float(BoatT.fuel_rate_model(1.0, false)).is_equal(0.0)
-	assert_float(BoatT.fuel_rate_model(0.0, true)).is_equal_approx(BoatT.FUEL_RATE_IDLE, 1e-6)
-	assert_float(BoatT.fuel_rate_model(1.0, true)) \
-			.is_equal_approx(BoatT.FUEL_RATE_IDLE + BoatT.FUEL_RATE_LOAD, 1e-6)
-	assert_float(BoatT.fuel_rate_model(1.0, true)).is_greater(BoatT.fuel_rate_model(0.0, true))
-
-
 func test_oil_press_is_zero_off_low_at_idle_nominal_above_it() -> void:
 	# Off (key not at Ignition) reads zero even at a plausible idle rpm — the gate is `running`,
 	# not `rpm <= 0`, because the boat's inert engine model never actually zeros rpm off-ignition.

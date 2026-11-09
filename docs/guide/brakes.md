@@ -120,8 +120,9 @@ whole rig slows much less. sloppyCAN works it with the `retarder` signal; there 
 Big trucks brake with air pressure. A compressor driven by the engine fills tanks, and the brake
 pedal lets that air into the brakes. The game models two tanks, one for each brake circuit. They
 fill while the engine runs, and each full press of the pedal draws some air out. Holding the
-pedal down costs nothing more; pumping it drains the tanks.
-<!-- docs/truck.md: two reservoirs, 0.70 / 0.55 bar a full press, a held pedal draws nothing more -->
+pedal down costs nothing more; pumping it drains the tanks. Stability control's own braking
+draws air in the same way.
+<!-- docs/truck.md: two reservoirs, 0.70 / 0.55 bar a full application, a held one draws nothing more; WheelDrive.service_level -->
 
 A truck's parking brakes are [spring brakes](glossary.md#spring-brake): strong springs that put
 the brakes on, held off by air. If the air runs out, the springs win. That makes them fail-safe:

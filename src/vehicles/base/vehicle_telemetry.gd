@@ -24,21 +24,18 @@ const FUEL_HEATING_MJ_KG: Array[float] = [41.05, 42.7]
 ## Density (kg/L) per Fuel, the same two fuels.
 const FUEL_DENSITY_KG_L: Array[float] = [0.757, 0.84]
 ## COMPROMISE: the tank is a game scale. A body's tank lasts this long at full fuel at its rated
-## speed (`tank_litres`), as long as the rigid crank's tank at full throttle (FUEL_IDLE_BURN plus
-## FUEL_LOAD_BURN, 0.20 %/s); the burn that drains it is real. A real tank (a saloon's ~50 L lasts about an hour flat out) never visibly
-## moves in a session: undoing it is a litre figure per body, and a gauge that sits at full.
+## speed (`tank_litres`); the burn that drains it is real. A real tank (a saloon's ~50 L lasts
+## about an hour flat out) never visibly moves in a session: undoing it is a litre figure per body,
+## and a gauge that sits at full.
 const FUEL_TANK_FULL_LOAD_S := 500.0
-## The rigid crank's throttle model (boat, plane): their engines turn at the wheel's or the prop's
-## speed and carry no crank torque law to read the burn from.
-const FUEL_IDLE_BURN := 0.02   ## %/s burned at idle while running
-const FUEL_LOAD_BURN := 0.18   ## extra %/s at full throttle
 
 # --- auxiliary-system model constants ---
 const COOLANT_AMBIENT := 20.0    ## degC cold-start / engine-off resting temp
 const COOLANT_OPERATING := 90.0  ## degC steady running temp at no load
 const COOLANT_HOT := 108.0       ## degC steady running temp at full load
 const BATTERY_RESTING := 12.6    ## V engine off
-const BATTERY_CHARGING := 14.2   ## V engine running (alternator), before load droop
+const BATTERY_CHARGING := 14.2   ## V engine running (alternator), before the lamps' droop
+const BATTERY_LAMP_DROOP := 0.6  ## V the charging voltage sags with every fitted lamp lit (a game figure)
 
 const GRAVITY := 9.8  ## m/s^2, for the suspension-force -> kilograms read
 
@@ -115,8 +112,8 @@ var engine_hours := 0.0 ## h, contract 'engine_hours' (J1939 SPN 247)
 
 # --- auxiliary systems (modeled, not measured) ---
 var fuel := 100.0                ## % remaining (contract 'fuel')
-## L/h, contract 'fuel_rate': `fuel_rate_lph` on a wheel-driving crank, the boat's own model on the
-## boat (`BoatTelemetry.fuel_rate_model`); 0 elsewhere, where the contract does not declare it.
+## L/h, contract 'fuel_rate': `fuel_rate_lph` on every engined crank (the plane burns it unpublished);
+## 0 on a body with no engine.
 var fuel_rate := 0.0
 var coolant := COOLANT_AMBIENT   ## degC (contract 'coolant')
 ## degC, contract 'brake_temp': the hottest of the powered unit's own wheels' brake models
@@ -178,12 +175,15 @@ static func impact_gate(accel_mag: float, threshold: float) -> float:
 	return accel_mag if accel_mag >= threshold else 0.0
 
 
-## The burn (L/h) on a wheel-driving crank at the `delivered` fuel (`Drivetrain.applied_throttle`):
+## The burn (L/h) on a crank at the `delivered` fuel (`Drivetrain.applied_throttle`):
 ## it adds `delivered * (curve - motoring)` to the crank over its motoring law
 ## (`Drivetrain.crank_torque`), and its chemical power is that torque's power over the fuel's
 ## indicated efficiency. 0 at zero fuel (a cut burns nothing) and with the key off. At idle the
 ## controller's fuel nets out the friction (and any creep or PTO load), so idle burn is that power
 ## over the efficiency, and brake-specific consumption rises at part load on its own.
+## COMPROMISE: the rigid crank (boat, plane) is read at its free-rev rpm, which reaches the redline
+## at full throttle. Where a curve droops there (the boats', 90 of 210 N·m) the burn peaks short of
+## full throttle and reads ~10 % lower at it. Undoing it is a prop load law on the crank.
 static func fuel_rate_lph(spec: VehicleSpec, at_rpm: float, delivered: float,
 		running: bool) -> float:
 	if not running:
@@ -214,16 +214,8 @@ static func fuel_drain(prev_pct: float, burn_lph: float, tank_l: float, delta: f
 	return clampf(prev_pct - burn_lph * delta / 3600.0 / tank_l * 100.0, 0.0, 100.0)
 
 
-## The rigid crank's fuel step (%): idle burn plus a load term, only while running.
-static func fuel_step(prev_pct: float, load_frac: float, running: bool, delta: float) -> float:
-	if not running:
-		return prev_pct
-	var burn := (FUEL_IDLE_BURN + FUEL_LOAD_BURN * clampf(load_frac, 0.0, 1.0)) * delta
-	return clampf(prev_pct - burn, 0.0, 100.0)
-
-
-## Steady-state coolant target: ambient when off, warming toward the hot end with load (on a
-## wheel-driving crank the fuel power's share of its rated figure: the heat the cooling rejects
+## Steady-state coolant target: ambient when off, warming toward the hot end with load (on an
+## engined crank the fuel power's share of its rated figure: the heat the cooling rejects
 ## follows the fuel's energy, not the pedal).
 static func coolant_target(running: bool, load_frac: float) -> float:
 	if not running:
@@ -236,12 +228,20 @@ static func coolant_step(prev_c: float, target_c: float, rate: float, delta: flo
 	return move_toward(prev_c, target_c, rate * delta)
 
 
-## Battery terminal voltage: resting when off, alternator-charged and drooping under load when
-## running.
-static func battery_volts(running: bool, load_frac: float) -> float:
+## Battery terminal voltage: resting when off; running, the alternator's charging voltage, sagging
+## with the electrical load, the share of the body's lamp load lit (`LampSet.load_share`). A
+## regulated alternator holds its set voltage whatever the engine does, so neither fuel nor speed
+## is in it.
+static func battery_volts(running: bool, lamp_share: float) -> float:
 	if not running:
 		return BATTERY_RESTING
-	return BATTERY_CHARGING - 0.6 * clampf(load_frac, 0.0, 1.0)
+	return BATTERY_CHARGING - BATTERY_LAMP_DROOP * clampf(lamp_share, 0.0, 1.0)
+
+
+## An electric train's battery: its auxiliary converter charges it off the line while the
+## pantograph is up, held at the charging voltage; down, it rests.
+static func aux_supply_volts(pantograph_up: bool) -> float:
+	return BATTERY_CHARGING if pantograph_up else BATTERY_RESTING
 
 
 ## Axle load (kg) from the summed suspension force (N) on that axle, not a mass lookup. Shared
@@ -250,10 +250,11 @@ static func axle_load_kg(suspension_force_n: float) -> float:
 	return maxf(suspension_force_n, 0.0) / GRAVITY
 
 
-## Engine load, J1939 SPN 92: delivered torque over peak torque. Shared by the tractor (ISOBUS) and
-## the truck (J1939). A driven PTO is in it as the fuel its crank load takes
-## (`Drivetrain.accessory_torque`). The denominator is the peak, not the torque at the current rpm,
-## which would cancel to throttle.
+## Engine load, J1939 SPN 513-like: delivered torque over peak torque (the SPN 544 reference).
+## Shared by the tractor (ISOBUS) and the truck (J1939). A driven PTO is in it as the fuel its crank
+## load takes (`Drivetrain.accessory_torque`). The denominator is the peak, not the torque at the
+## current rpm (SPN 92), which would cancel to throttle. J1939-71 (through December 2001), printed
+## pages: SPN 92 p. 35, SPN 513 pp. 55-56, SPN 544 p. 68.
 static func engine_load_pct(engine_rpm: float, throttle_in: float, spec: VehicleSpec) -> float:
 	var peak := Drivetrain.peak_torque(spec)
 	if peak <= 0.0:

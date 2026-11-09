@@ -300,3 +300,55 @@ func test_the_boom_keeps_reading_with_the_hull_out_of_the_water() -> void:
 	var why := "the hull is meant to be out of the water"
 	assert_float(r.t.depth).override_failure_message(why).is_equal(BoatTelemetry.DEPTH_INVALID)
 	assert_float(r.t.sail_angle).is_equal_approx(r.boat.sheet_max_deg * 0.5, 0.5)
+
+
+# --- the fuel chain's call site ------------------------------------------------
+# The laws are in test_telemetry.gd and test_drivetrain.gd. What only shows up here is that the
+# boat's tank, burn and coolant read ONE chain off its crank, set here as `process` leaves it.
+
+func test_the_tank_drains_the_published_burn_and_the_coolant_follows_it() -> void:
+	var r := _rig()
+	r.input.key = InputRouter.KEY_IGNITION
+	r.boat.drivetrain.rpm = r.boat.spec.redline_rpm   # full throttle on the free-rev line
+	r.boat.drivetrain.applied_throttle = 1.0
+	r.t.coolant = 100.0
+	var litres := 0.0
+	for _i in 600:
+		r.tick()
+		litres += r.t.fuel_rate * DELTA / 3600.0
+	assert_float(r.t.fuel_rate).is_greater(0.0)
+	assert_float((100.0 - r.t.fuel) / 100.0 * r.boat._tank_l).is_equal_approx(litres, 1e-4)
+	# On the burn's share of its rated figure, not on the delivered fuel (1.0 here).
+	var heat := r.t.fuel_rate / r.boat._rated_burn
+	assert_float(r.t.coolant) \
+		.is_equal_approx(VehicleTelemetry.coolant_target(true, heat), 1e-3)
+	assert_float(heat).is_less(1.0)
+
+
+func test_the_alternator_sags_on_the_lamps_lit_and_not_on_the_throttle() -> void:
+	var r := _rig()
+	r.input.key = InputRouter.KEY_IGNITION
+	r.boat.drivetrain.applied_throttle = 1.0
+	r.tick()
+	assert_float(r.t.battery).is_equal(VehicleTelemetry.BATTERY_CHARGING)
+	r.input.lights = LampSet.HL_HIGH
+	r.tick()
+	assert_float(r.t.battery).is_less(VehicleTelemetry.BATTERY_CHARGING)
+	assert_float(r.t.battery) \
+		.is_greater_equal(VehicleTelemetry.BATTERY_CHARGING - VehicleTelemetry.BATTERY_LAMP_DROOP)
+
+
+func test_an_idling_boat_burns_its_friction_and_a_stopped_one_nothing() -> void:
+	var r := _rig()
+	r.input.key = InputRouter.KEY_IGNITION
+	var dt := r.boat.drivetrain
+	dt.rpm = r.boat.spec.idle_rpm
+	dt.applied_throttle = Drivetrain.drag_fuel(r.boat.spec, dt.rpm)   # the floor `process` sets
+	r.tick(60)
+	assert_float(r.t.fuel_rate).is_greater(0.0)
+	assert_float(r.t.fuel).is_less(100.0)
+	r.input.key = InputRouter.KEY_IGNITION - 1
+	var held := r.t.fuel
+	r.tick(60)
+	assert_float(r.t.fuel_rate).is_equal(0.0)
+	assert_float(r.t.fuel).is_equal(held)

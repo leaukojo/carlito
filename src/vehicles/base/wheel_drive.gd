@@ -262,6 +262,30 @@ func roll_application() -> float:
 	return _roll_app
 
 
+## The service level the brake chambers hold this tick, 0..1: each wheel's cold `service_torque`
+## over its hardware, meaned over the wheels. The foot pedal's application plus stability
+## control's corner torques (roll's every-wheel share, the yaw's selective one), as `tick` applies
+## them. What a truck's air draws on (`TruckTelemetry.air_step`).
+func service_level(input: VehicleInput) -> float:
+	return mean_service_level(pedal_application(foot_pedal(input)), _esc_brake, _corner,
+			Vector2(_brake_front, _brake_rear))
+
+
+## `service_level`'s pure half: `corner` is each wheel's corner (0-3: FL, FR, RL, RR), `hardware`
+## the front and rear wheel's declared brake (N·m). Meaned over the braked wheels only: an axle
+## with no brake has no chamber to fill.
+static func mean_service_level(application: float, esc_brake: Vector4, corner: PackedInt32Array,
+		hardware: Vector2) -> float:
+	var sum := 0.0
+	var braked := 0
+	for c in corner:
+		var hw := hardware.y if c >= 2 else hardware.x
+		if hw > 0.0:
+			sum += service_torque(application, hw, esc_brake[c]) / hw
+			braked += 1
+	return sum / braked if braked > 0 else 0.0
+
+
 ## The park pawl's rating (Nm) per driven wheel: `park_pawl_torque` while the gearbox is in P and
 ## the body under PAWL_ENGAGE_SPEED (above it a real pawl ratchets over the parking gear's teeth),
 ## else 0. The lock on the gearbox output holds that times the driven wheels, reaching each wheel

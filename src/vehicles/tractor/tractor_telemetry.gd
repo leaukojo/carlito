@@ -49,7 +49,7 @@ var draft_force := 0               ## %, contract 'draft_force' (of rated draft;
 var axle_load := 0.0               ## kg, contract 'axle_load' (rear axle, off the suspension)
 
 
-## engine_load_pct and hours_step live on VehicleTelemetry: engine_load (SPN 92) is a shared
+## engine_load_pct and hours_step live on VehicleTelemetry: engine_load (SPN 513-like) is a shared
 ## tractor/truck signal, so there is one model.
 
 ## Shaft speed the selected PTO mode names, rev/min. Falls back to 540 for any byte but 1000.

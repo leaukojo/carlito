@@ -26,6 +26,9 @@ const EXCLUDE_COLLISION := ["sail"]
 const BOAT_BASE := {
 	"torque_curve": [800, 120, 2500, 200, 4200, 210, 5200, 90],
 	"idle_rpm": 800.0, "redline_rpm": 5200.0,
+	# The motoring law the burn nets out at idle (`Drivetrain.drag_fuel`): the car-petrol class
+	# figure (docs/drivetrain.md § Motoring and friction), an estimate for an outboard.
+	"engine_friction_frac": 0.07, "engine_brake_frac": 0.25,
 	"gear_ratios": [2.6, 1.9, 1.4, 1.05, 0.8, 0.62], "reverse_ratio": 2.0,
 	"final_drive": 2.1, "efficiency": 0.9, "shift_up_rpm": 4400.0, "shift_down_rpm": 1800.0,
 	# The part-pedal shift policy (`ShiftPolicy`) declared neutral: the full-pedal pair at any pedal.
@@ -113,6 +116,8 @@ func _build_spec(ov: Dictionary, geo: Dictionary) -> VehicleSpec:
 	spec.torque_curve = _scaled_curve(BOAT_BASE["torque_curve"], float(ov["torque_mul"]))
 	spec.idle_rpm = float(BOAT_BASE["idle_rpm"])
 	spec.redline_rpm = float(BOAT_BASE["redline_rpm"])
+	spec.engine_friction_frac = float(BOAT_BASE["engine_friction_frac"])
+	spec.engine_brake_frac = float(BOAT_BASE["engine_brake_frac"])
 	spec.gear_ratios = PackedFloat32Array(BOAT_BASE["gear_ratios"])
 	spec.reverse_ratio = float(BOAT_BASE["reverse_ratio"])
 	spec.final_drive = float(BOAT_BASE["final_drive"])

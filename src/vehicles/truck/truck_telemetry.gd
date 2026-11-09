@@ -31,7 +31,7 @@ var air_secondary := AIR_SPAWN_BAR  ## bar, contract 'air_secondary' (SPN 1088)
 var retarder_state := 0             ## %, contract 'retarder_state' (magnitude; see the contract desc)
 var axle_load := 0.0                ## kg, contract 'axle_load' (SPN 582, off the suspension)
 var pto_state := false              ## contract 'pto_state' (PTO request and engine running)
-var engine_load := 0                ## %, contract 'engine_load' (J1939 SPN 92)
+var engine_load := 0                ## %, contract 'engine_load' (J1939 SPN 513-like)
 
 # --- CiA 422 body network (across the CiA 413 gateway; zeros without a refuse body) -----
 var body_state := 0                 ## contract 'body_state' (RefuseBody.State)
@@ -44,13 +44,16 @@ var hopper_load := 0                ## %, contract 'hopper_load' (adds real chas
 var trailer_connected := false      ## contract 'trailer_connected' (coupled AND the bus claimed)
 var trailer_axle_load := 0.0        ## kg, contract 'trailer_axle_load' (off the bogie's springs)
 var trailer_brake_demand := 0       ## %, contract 'trailer_brake_demand' (EBS11, what was sent)
-var trailer_abs := false            ## contract 'trailer_abs' (EBS21, off the trailer's own slip)
+var trailer_brake_applied := 0      ## %, contract 'trailer_brake_applied' (the trailer's lagged brakes)
+var trailer_abs := false            ## contract 'trailer_abs' (EBS22, off the trailer's own slip)
 var trailer_vdc := false            ## contract 'trailer_vdc' (EBS21, its roll-over control's full application)
 
 
 # --- pure derivations (unit-tested in tests/test_truck.gd) -------------------------------
 
-## One reservoir's step (bar). `aux01` (a coupled trailer) draws `draw_rate` bar/s per unit.
+## One reservoir's step (bar). `brake01` is the service level applied (`WheelDrive.service_level`):
+## its rise fills the chambers at `press_bar` per unit. `aux01` (a coupled trailer) draws
+## `draw_rate` bar/s per unit.
 static func air_step(current: float, brake01: float, prev_brake01: float, running: bool,
 		delta: float, charge_rate: float, press_bar: float, draw_rate: float, aux01 := 0.0) -> float:
 	var rise := maxf(0.0, clampf(brake01, 0.0, 1.0) - clampf(prev_brake01, 0.0, 1.0))
@@ -100,5 +103,6 @@ func clear_trailer_bus() -> void:
 	trailer_connected = false
 	trailer_axle_load = 0.0
 	trailer_brake_demand = 0
+	trailer_brake_applied = 0
 	trailer_abs = false
 	trailer_vdc = false

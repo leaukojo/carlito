@@ -8,7 +8,7 @@ models, and it says so: each one is a labelled model, not a measurement of a sim
 <span class="badge yes" title="Fuel, coolant and battery">Car</span>
 <span class="badge yes" title="Fuel, coolant, battery and the two air tanks">Truck</span>
 <span class="badge yes" title="Fuel, coolant, battery and an hour meter">Tractor</span>
-<span class="badge yes" title="Fuel, coolant and battery, from a simpler throttle model">Plane</span>
+<span class="badge yes" title="Fuel, coolant and battery">Plane</span>
 <span class="badge yes" title="Fuel, coolant, battery, oil pressure and three tanks">Boat</span>
 <span class="badge some" title="Its battery pack has its own model, on the drone page">Drone</span>
 <span class="badge some" title="A battery voltage; its power comes from the overhead wire">Train</span>
@@ -42,9 +42,12 @@ That simple rule gives realistic results by itself:
   `sedan` at one cruising speed burns about half as much in sixth as in third.
 <!-- docs/drivetrain.md Fuel: "the sedan idles at 0.34 L/h ... the semi at 1.62 L/h"; "the sedan held in D6 burns about half what it does in D3" -->
 
-The boat and the plane use a simpler rule, because their engines carry no torque law: a small
-idle burn plus an extra burn in proportion to the throttle.
-<!-- VehicleTelemetry FUEL_IDLE_BURN, FUEL_LOAD_BURN (the rigid crank); BoatTelemetry.fuel_rate_model FUEL_RATE_IDLE 1.5 L/h, FUEL_RATE_LOAD 8.5 L/h -->
+The boat and the plane burn by the same rule. Their engine speed follows the throttle on a
+simple line, though, with no propeller load on the engine. They burn at least the fuel that holds
+that speed against the engine's friction, so an idling boat still burns a little. At full
+throttle the line reaches the redline, where the boats' engines have lost torque, so their burn
+tops out just short of full throttle.
+<!-- VehicleTelemetry.fuel_rate_lph COMPROMISE (the rigid crank's free-rev rpm); Drivetrain.process rigid branch: applied_throttle floored at drag_fuel while running; boat and plane engine_friction_frac 0.07 / engine_brake_frac 0.25 (the car-petrol class figure, an estimate) -->
 
 ### The tank
 
@@ -63,8 +66,7 @@ towards its working temperature, about 90 °C, and higher the harder the engine 
 with the engine off. The warning is at 110 °C, which the model on its own never quite reaches.
 <!-- VehicleTelemetry COOLANT_AMBIENT 20, COOLANT_OPERATING 90, COOLANT_HOT 108; BaseVehicle COOLANT_RATE 2 °C/s; contract coolant warn 110 -->
 
-On the cars, trucks and tractors, the load that heats the coolant is the fuel's energy, not the
-pedal: a governed truck holding its speed with the pedal down, but little fuel flowing, stays
+The load that heats the coolant is the fuel's energy, not the pedal: a governed truck holding its speed with the pedal down, but little fuel flowing, stays
 cool.
 <!-- VehicleTelemetry.coolant_target: "the heat the cooling rejects follows the fuel's energy, not the pedal" -->
 
@@ -72,8 +74,15 @@ cool.
 
 With the engine off, a car's battery rests at about 12.6 V. With it running, the
 [alternator](glossary.md#alternator), a small generator driven by the engine, charges it at
-about 14.2 V, a little less under heavy load.
-<!-- VehicleTelemetry BATTERY_RESTING 12.6, BATTERY_CHARGING 14.2, battery_volts: minus 0.6 x load -->
+about 14.2 V. The voltage sags a little as more lamps are lit, up to 0.6 V with every lamp on.
+How hard the engine works makes no difference, since the alternator's regulator holds its set
+voltage. Each lamp counts by its bulb's rating: a headlamp's 55 or 60 W far outweighs a tail
+lamp's 5 W.
+<!-- VehicleTelemetry BATTERY_RESTING 12.6, BATTERY_CHARGING 14.2, BATTERY_LAMP_DROOP 0.6 x LampSet.load_share; LampSet BULB_* (UN ECE R37 categories) -->
+
+The electric train has no alternator. While its pantograph is up, the overhead line charges its
+battery, which holds at 14.2 V. With the pantograph down, the battery rests at 12.6 V.
+<!-- VehicleTelemetry.aux_supply_volts; train.gd _tick_extras -->
 
 The drone has no alternator: its battery pack has a model of its own, on the
 [drone page](drone-flight.md#the-battery). The `battery` signal carries the pack's voltage there.
@@ -81,8 +90,8 @@ The drone has no alternator: its battery pack has a model of its own, on the
 ## A truck's air
 
 The trucks' brakes work on compressed air, kept in two tanks. In the game the engine's compressor
-fills them, each full press of the brake pedal draws some air out, and holding the pedal costs
-nothing more. The second tank loses a little less per press, so the two readings drift apart,
+fills them, each full brake application draws some air out, and holding it costs nothing more.
+That holds whether the driver applies the brakes or stability control does it with no pedal. The second tank loses a little less per press, so the two readings drift apart,
 and a fault in one is not hidden by the other. A trailer being coupled takes about 3 bar
 from the first tank while it fills its own. Below 5 bar the low-air warning is due; below 3 bar the
 spring brakes apply. [Brakes](brakes.md#air-and-spring-brakes) explains why.

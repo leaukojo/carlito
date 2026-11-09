@@ -91,6 +91,25 @@ var _led_mat: StandardMaterial3D = null
 var _aircraft := false
 ## Every lens mesh _bind / _bind_scene_colored touched (see bound_meshes).
 var _bound: Array[Node] = []
+## Lamps fitted per group, as `lit_watts` reads them: head beams, rear lenses, left turn, right
+## turn, steady markers, beacons, strobes.
+var _counts := PackedInt32Array([0, 0, 0, 0, 0, 0, 0])
+## `lit_watts` with every fitted lamp lit at high beam, fixed at setup: `load_share`'s denominator.
+var _full_w := 0.0
+
+## Bulb ratings (W at 12 V) by lamp role: the UN ECE R37 categories, from
+## en.wikipedia.org/wiki/List_of_automotive_light_bulb_types (edited 2026-09-18): H4 60 / 55 W
+## (high / low), P21/5W 21 / 5 W (stop / tail), P21W 21 W (turn), W5W 5 W (position). The plane's
+## lamps take the road bulb of their role (nav W5W, beacon and strobe P21W): an estimate there.
+const BULB_HIGH_W := 60.0
+const BULB_LOW_W := 55.0
+const BULB_STOP_W := 21.0
+const BULB_TAIL_W := 5.0
+const BULB_TURN_W := 21.0
+const BULB_POSITION_W := 5.0
+const BULB_FLASH_W := 21.0
+## The rear lens's filament per `rear_tier`.
+const REAR_BULB_W := {Rear.OFF: 0.0, Rear.TAIL: BULB_TAIL_W, Rear.STOP: BULB_STOP_W}
 
 
 # --- pure decision (unit-tested) --------------------------------------------
@@ -124,6 +143,29 @@ static func beam_splay(aircraft: bool, headlights: int, side: float) -> Vector2:
 	return Vector2(LOW_LEFT_EXTRA_PITCH if side < 0.0 else 0.0, -side * LOW_OUTWARD_YAW)
 
 
+## The lamps' electrical load (W) at this lamp state, off `counts` (the `_counts` groups) and the
+## BULB_* ratings. Only what the scene lights draws: a head beam at clearance is its position lamp
+## (dark on an aircraft), a rear lens its stop or tail filament (`rear_tier`), a marker, beacon or
+## strobe nothing with the master switch off.
+static func lit_watts(counts: PackedInt32Array, aircraft: bool, brake_on: bool, headlights: int,
+		turn_left: bool, turn_right: bool, beacon: bool, strobe: bool) -> float:
+	var head := 0.0
+	if headlights >= HL_HIGH:
+		head = BULB_HIGH_W
+	elif headlights == HL_LOW:
+		head = BULB_LOW_W
+	elif headlights == HL_CLEARANCE and not aircraft:
+		head = BULB_POSITION_W
+	var rear: float = REAR_BULB_W[rear_tier(brake_on, headlights)]
+	var powered := headlights >= HL_CLEARANCE
+	return counts[0] * head + counts[1] * rear \
+			+ (counts[2] * BULB_TURN_W if turn_left else 0.0) \
+			+ (counts[3] * BULB_TURN_W if turn_right else 0.0) \
+			+ (counts[4] * BULB_POSITION_W if powered else 0.0) \
+			+ (counts[5] * BULB_FLASH_W if powered and beacon else 0.0) \
+			+ (counts[6] * BULB_FLASH_W if powered and strobe else 0.0)
+
+
 # --- setup + application (scene) --------------------------------------------
 
 ## Every lens mesh setup() bound, as a copy. StaticMeshMerge callers pass it as a skip list: a lens
@@ -149,14 +191,36 @@ func setup(vehicle: Node, spec: VehicleSpec) -> void:
 			var head_x := (n as SpotLight3D).position.x
 			_head_side.append(0.0 if absf(head_x) < 0.01 else signf(head_x))
 	_head_mat = _bind(vehicle, spec.head_lamp_paths, HEAD_LENS_COLOR, HEAD_LENS_ENERGY[HL_OFF])
+	var bound := _bound.size()
 	_rear_mat = _bind(vehicle, spec.brake_lamp_paths, REAR_COLOR, REAR_ENERGY[Rear.OFF])
+	_counts[1] = _bound.size() - bound
+	bound = _bound.size()
 	_turn_l_mat = _bind(vehicle, spec.turn_left_paths, TURN_COLOR, TURN_OFF_ENERGY)
+	_counts[2] = _bound.size() - bound
+	bound = _bound.size()
 	_turn_r_mat = _bind(vehicle, spec.turn_right_paths, TURN_COLOR, TURN_OFF_ENERGY)
+	_counts[3] = _bound.size() - bound
 	_steady_mats = _bind_scene_colored(vehicle, spec.steady_lamp_paths, STEADY_ENERGY[HL_OFF])
 	_flash_mats = _bind_scene_colored(vehicle, spec.flash_lamp_paths, BEACON_OFF_ENERGY)
 	_strobe_mats = _bind_scene_colored(vehicle, spec.strobe_lamp_paths, STROBE_OFF_ENERGY)
+	_counts[0] = _heads.size()
+	_counts[4] = _steady_mats.size()
+	_counts[5] = _flash_mats.size()
+	_counts[6] = _strobe_mats.size()
+	_full_w = lit_watts(_counts, _aircraft, true, HL_HIGH, true, true, true, true)
 	# The bus writes the LED colour each tick; the bind colour is the dark housing until commanded.
 	_led_mat = _bind(vehicle, spec.led_lamp_paths, Color(0.05, 0.05, 0.05), LED_OFF_ENERGY)
+
+
+## The share (0..1) of this body's fitted lamp load the lamp state lights (`lit_watts` over every
+## lamp lit at high beam); 0 with no lamps. What the alternator's droop reads
+## (`VehicleTelemetry.battery_volts`). The same arguments as `apply`.
+func load_share(brake_on: bool, headlights: int, turn_left: bool, turn_right: bool,
+		beacon := false, strobe := false) -> float:
+	if _full_w <= 0.0:
+		return 0.0
+	return lit_watts(_counts, _aircraft, brake_on, headlights, turn_left, turn_right, beacon,
+			strobe) / _full_w
 
 
 ## One shared emissive material assigned as material_override to every mesh in `paths`; null if

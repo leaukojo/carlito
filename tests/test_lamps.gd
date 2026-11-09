@@ -18,6 +18,36 @@ func test_tail_only_when_headlights_at_clearance_or_brighter() -> void:
 	assert_int(LampSet.rear_tier(false, LampSet.HL_HIGH)).is_equal(LampSet.Rear.TAIL)
 
 
+## Counts: heads, rear lenses, left turn, right turn, steady, beacons, strobes.
+const CAR_LAMPS := [2, 2, 2, 2, 0, 0, 0]
+
+
+func _watts(brake: bool, lights: int, left := false, right := false, aircraft := false,
+		counts := CAR_LAMPS, beacon := false, strobe := false) -> float:
+	return LampSet.lit_watts(PackedInt32Array(counts), aircraft, brake, lights, left, right,
+			beacon, strobe)
+
+
+func test_the_lamp_load_is_the_bulbs_the_scene_lights() -> void:
+	assert_float(_watts(false, LampSet.HL_OFF)).is_equal(0.0)
+	# Clearance: two position lamps and two tails, 4 x 5 W.
+	assert_float(_watts(false, LampSet.HL_CLEARANCE)).is_equal_approx(20.0, 1e-6)
+	# Dipped: 2 x 55 + 2 x 5; high: 2 x 60 + 2 x 5.
+	assert_float(_watts(false, LampSet.HL_LOW)).is_equal_approx(120.0, 1e-6)
+	assert_float(_watts(false, LampSet.HL_HIGH)).is_equal_approx(130.0, 1e-6)
+	# The stop filament replaces the tail; a turn adds its side's P21W lenses.
+	assert_float(_watts(true, LampSet.HL_OFF)).is_equal_approx(42.0, 1e-6)
+	assert_float(_watts(false, LampSet.HL_OFF, true)).is_equal_approx(42.0, 1e-6)
+	# An aircraft's clearance step leaves its landing light dark; its markers are lit.
+	var plane := [1, 0, 0, 0, 3, 1, 2]
+	assert_float(_watts(false, LampSet.HL_CLEARANCE, false, false, true, plane)) \
+		.is_equal_approx(15.0, 1e-6)
+	# Beacon and strobes need the master switch.
+	assert_float(_watts(false, LampSet.HL_OFF, false, false, true, plane, true, true)).is_equal(0.0)
+	assert_float(_watts(false, LampSet.HL_CLEARANCE, false, false, true, plane, true, true)) \
+		.is_equal_approx(15.0 + 3.0 * LampSet.BULB_FLASH_W, 1e-6)
+
+
 func test_off_tier_is_never_dark() -> void:
 	assert_float(LampSet.REAR_ENERGY[LampSet.Rear.OFF]).is_greater(0.0)
 

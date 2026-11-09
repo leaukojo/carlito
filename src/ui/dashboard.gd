@@ -85,7 +85,7 @@ const BAR_H := 18.0
 ## Max bar rows (bars + group captions) per column before spilling into a second; a third column
 ## pushes the gauges off a 1280-wide window. 14 is the smallest cap that packs the drone's three
 ## unsplittable 5-row ESC groups into two columns, and must stay >= the tallest scalar cluster
-## (truck, 12); `test_dashboard` pins both. The drone fills 26 of 28 rows: a new drone range
+## (truck, 14); `test_dashboard` pins both. The drone fills 26 of 28 rows: a new drone range
 ## needs this re-derived (`esc_fault`, `node_health`, `node_online` stay range-less for it).
 const BAR_ROWS_MAX := 14
 ## Enum "in" signals shown as small state chips rather than a lamp or a bar (gear rides the tacho
@@ -209,6 +209,7 @@ const BAR_LABEL := {
 	"air_primary": "AIR1", "air_secondary": "AIR2", "retarder_state": "RET",
 	"axle_load": "AXLE", "body_pos": "ARM", "hopper_load": "HOPPER",
 	"trailer_axle_load": "TRLR", "trailer_brake_demand": "TBRK",
+	"trailer_brake_applied": "TAPP",
 	"altitude": "ALT", "vspeed": "V/S", "flaps_actual": "FLAPS", "rotor_rpm": "ROTOR",
 	"esc_rpm": "ESC RPM", "esc_current": "ESC AMP", "esc_temp": "ESC TEMP",
 	# 'battery' is VOLTS not BATT: BATT is already the 'in' warning lamp in the tell-tale row.
