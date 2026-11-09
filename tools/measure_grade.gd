@@ -1312,12 +1312,10 @@ const DOC_CHECK_DEFAULTS := {"variant": "garbage-truck", "mode": "foot", "brakes
 
 ## `stops` / `stops=<n>`: the series' length, 0 when absent.
 static func _stops_flag(args: PackedStringArray) -> int:
-	for a in args:
-		if a == "stops":
-			return STOPS_DEFAULT
-		if a.begins_with("stops="):
-			return maxi(a.substr(6).to_int(), 1)
-	return 0
+	if args.has("stops"):
+		return STOPS_DEFAULT
+	var n := MeasureRig.flag(args, "stops=")
+	return maxi(n.to_int(), 1) if n != "" else 0
 
 
 ## The lowest drive byte whose engine speed at `wheel_omega` (rad/s at the drive radius) stays at or
@@ -1347,33 +1345,24 @@ static func heat_share(drop: float, heat: float, rest: float) -> float:
 
 func _start_descent(which: String, args: PackedStringArray) -> void:
 	InputRouter.set_manual_gearbox(false)  ## per job: only the `gear` hold is manual
-	_dsc_grade = DESCENT_GRADE
-	_dsc_dist = DESCENT_KM * 1000.0
+	_dsc_grade = MeasureRig.float_flag(args, "grade=", DESCENT_GRADE)
+	_dsc_dist = MeasureRig.float_flag(args, "km=", DESCENT_KM) * 1000.0
 	_dsc_stops = _stops_flag(args)
-	var kmh := NAN
-	var only := ""
-	var tuned := false
+	var kmh := MeasureRig.float_flag(args, "kmh=", NAN)
+	var only := MeasureRig.flag(args, "mode=")
 	var flags := {}  ## the job flags (`mass=`, `per_brake=`, `t0=`, `amb=`, `decel=`, `to=`)
-	for a in args:
-		if String(a).begins_with("grade="):
-			_dsc_grade = String(a).substr(6).to_float()
-		elif String(a).begins_with("km="):
-			_dsc_dist = String(a).substr(3).to_float() * 1000.0
-		elif String(a).begins_with("kmh="):
-			kmh = String(a).substr(4).to_float()
-		elif String(a).begins_with("mode="):
-			only = String(a).substr(5)
-		elif String(a).begins_with("surface="):
-			if Surface.from_key(String(a).substr(8)) < 0:
-				printerr("surface=%s: expected one of %s" % [String(a).substr(8), ", ".join(Surface.NAMES)])
-				get_tree().quit(1)
-				return
-			flags["surface"] = String(a).substr(8).to_lower()
-		elif String(a).get_slice("=", 0) in ["mass", "per_brake", "t0", "amb", "decel", "to"]:
-			flags[String(a).get_slice("=", 0)] = String(a).get_slice("=", 1).to_float()
-		else:
-			continue
-		tuned = true
+	var surface := MeasureRig.flag(args, "surface=")
+	if surface != "":
+		if Surface.from_key(surface) < 0:
+			printerr("surface=%s: expected one of %s" % [surface, ", ".join(Surface.NAMES)])
+			get_tree().quit(1)
+			return
+		flags["surface"] = surface.to_lower()
+	for key: String in ["mass", "per_brake", "t0", "amb", "decel", "to"]:
+		if MeasureRig.flag(args, key + "=") != "":
+			flags[key] = MeasureRig.float_flag(args, key + "=", 0.0)
+	var tuned := not flags.is_empty() or ["grade=", "km=", "kmh=", "mode="].any(
+			func(prefix: String) -> bool: return MeasureRig.flag(args, prefix) != "")
 	if which in ["doc=brake_fade", "doc=brake_check"]:
 		if tuned or _dsc_stops > 0:
 			printerr("%s runs its own set: no grade= / km= / kmh= / mode= / stops / mass= / per_brake="

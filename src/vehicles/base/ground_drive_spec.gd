@@ -335,3 +335,18 @@ func rest_ride_height() -> float:
 	for p in wheel_positions:
 		height = maxf(height, axle_radius(RayWheel.is_rear_z(p.z)) + rest_length - p.y)
 	return height
+
+
+## The driveline as the garage wall and the vehicle picker print it: "AWD", "FWD", "RWD", or
+## "RWD/MFWD" for a front axle that engages at runtime (plain RWD would hide half the tractor's
+## driveline); "none" without a ground drive.
+static func layout_text(gd: GroundDriveSpec) -> String:
+	if gd == null:
+		return "none"
+	if gd.driven_front and gd.driven_rear:
+		return "AWD"
+	if gd.driven_front:
+		return "FWD"
+	if gd.driven_rear:
+		return "RWD/MFWD" if gd.front_axle_engageable else "RWD"
+	return "none"

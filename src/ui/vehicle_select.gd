@@ -606,7 +606,7 @@ func _spec_text(variant: String) -> String:
 	])
 	var spec: VehicleSpec = _preview.spec if "spec" in _preview else null
 	if spec != null:
-		lines.append("Drive: %s" % _drive_text(spec))
+		lines.append("Drive: %s" % GroundDriveSpec.layout_text(spec.ground_drive))
 		lines.append("Mass: %d kg" % roundi(spec.mass))
 		if spec.has_engine:  # drone/train have no crank to quote
 			lines.append("Gears: %s   Redline: %d rpm" % [Drivetrain.gears_label(spec),
@@ -617,21 +617,6 @@ func _spec_text(variant: String) -> String:
 		lines.append("Size: %.1f x %.1f x %.1f m" % [_bounds.size.z, _bounds.size.x,
 				_bounds.size.y])
 	return "\n".join(lines)
-
-
-## Same reading garage.gd's wall screen uses: the tractor spawns rear-drive but engages its
-## front axle at runtime, so plain RWD would hide half the driveline.
-static func _drive_text(spec: VehicleSpec) -> String:
-	var gd := spec.ground_drive
-	if gd == null:
-		return "none"
-	if gd.driven_front and gd.driven_rear:
-		return "AWD"
-	if gd.driven_front:
-		return "FWD"
-	if gd.driven_rear:
-		return "RWD/MFWD" if gd.front_axle_engageable else "RWD"
-	return "none"
 
 
 # --- footer / layout ----------------------------------------------------------

@@ -40,7 +40,7 @@ func _refresh_stats() -> void:
 	var left: Array = [
 		["Family", GameState.current_vehicle],
 		["Mass", "%d kg" % roundi(spec.mass)],
-		["Drive", _drive_text(spec)],
+		["Drive", GroundDriveSpec.layout_text(spec.ground_drive)],
 	]
 	var right: Array = []
 	# has_engine gates engine figures (the gearbox runs on every family, but a quadcopter has no crank).
@@ -66,17 +66,3 @@ func _set_column(keys: Label3D, values: Label3D, rows: Array) -> void:
 		v.append(row[1])
 	keys.text = "\n".join(k)
 	values.text = "\n".join(v)
-
-
-func _drive_text(spec: VehicleSpec) -> String:
-	var gd := spec.ground_drive
-	if gd == null:
-		return "none"
-	if gd.driven_front and gd.driven_rear:
-		return "AWD"
-	if gd.driven_front:
-		return "FWD"
-	if gd.driven_rear:
-		# The tractor's front axle engages at runtime; plain RWD would hide half the driveline.
-		return "RWD/MFWD" if gd.front_axle_engageable else "RWD"
-	return "none"

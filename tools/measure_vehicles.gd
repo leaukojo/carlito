@@ -81,7 +81,7 @@ const CORNER_FIRST_AFTER_S := 1.0
 ## Every pass's speed hold shares the gains (`MeasureRig.PiHold`).
 const SPEED_HOLD_KP := 0.8       ## fuel per m/s of speed error
 const SPEED_HOLD_KI := 0.5       ## fuel per second per m/s of speed error
-const CORNER_PEDAL_START := 0.35   ## integral seed when the ramp begins, roughly a car's cruise
+const SPEED_HOLD_SEED := 0.35      ## integral seed when a hold begins, roughly a car's cruise
 ## On ice (grip 0.12) the run-up to CORNER_SPEED takes ~50 m and the circle is ~100 m in radius.
 const PAD_SIZE := 600.0
 const PAD_X := -500.0              ## clear of the strip's +/- STRIP_WIDTH / 2 and the step pad
@@ -470,6 +470,7 @@ var _queue: Array[String] = []
 ## 3.62 / 3.63 / 3.63 s).
 var _first_pending := false
 var _seconds := DEFAULT_SECONDS
+var _strip_text := ""  ## the run's strip, surface, steer and cap, for the console and the report
 var _car: BaseVehicle
 var _variant := ""
 var _phase := Phase.ACCEL
@@ -1124,9 +1125,10 @@ func _ready() -> void:
 	elif _plough_pass:
 		steer_label = "level 1's field (grip %.2f, drag %.2f) under it" % [Surface.ref_grip(Surface.FIELD),
 				Surface.drag(Surface.FIELD)]
-	print("strip: %.0f x %.0f m flat, %s, %s, %.0f s cap per pass\n" %
-			[STEP_PAD_WIDTH if _step or _sine else STRIP_WIDTH, STRIP_LENGTH, _surface_label(), steer_label,
-			_seconds])
+	_strip_text = "%.0f x %.0f m flat, %s, %s, %.0f s cap per pass" % [
+			STEP_PAD_WIDTH if _step or _sine else STRIP_WIDTH, STRIP_LENGTH, _surface_label(), steer_label,
+			_seconds]
+	print("strip: %s\n" % _strip_text)
 	MeasureRig.drive(100.0, 0.0)
 	_first_pending = true
 
@@ -2126,9 +2128,7 @@ func _predicted_pitch(a: float) -> float:
 
 ## N on the foremost axle's springs (the axle `_front_lifted` judges).
 func _front_axle_load() -> float:
-	var front_z := INF
-	for w in _car.wheels:
-		front_z = minf(front_z, w.anchor.z)
+	var front_z := _front_z()
 	var total := 0.0
 	for w in _car.wheels:
 		if is_equal_approx(w.anchor.z, front_z):
@@ -2356,7 +2356,7 @@ func _tick_cornering(delta: float) -> void:
 		_rf_velocity = vel
 		if speed >= _corner_speed:
 			_corner_ramping = true
-			_corner_hold.integral = CORNER_PEDAL_START
+			_corner_hold.integral = SPEED_HOLD_SEED
 			_corner_xfer0 = _axle_transfer()
 			_tr_watch.begin()
 			_rf_begin()
@@ -3075,7 +3075,7 @@ func _next_step_run() -> void:
 	_st_stage = Step.RUN_UP
 	_st_t = 0.0
 	_st_target = float(_st_run["kmh"]) / 3.6
-	_st_hold.integral = CORNER_PEDAL_START
+	_st_hold.integral = SPEED_HOLD_SEED
 	_st_yaw = PackedFloat32Array()
 	_st_v = PackedFloat32Array()
 	_st_delta = PackedFloat32Array()
@@ -3205,7 +3205,7 @@ func _next_sine_run() -> void:
 	_reset_pass(Phase.SINE)
 	_sn_stage = Sine.RUN_UP
 	_sn_t = 0.0
-	_sn_hold.integral = CORNER_PEDAL_START
+	_sn_hold.integral = SPEED_HOLD_SEED
 	_sn_yaw = PackedFloat32Array()
 	_sn_disp = NAN
 	_sn_rolled = false
@@ -5600,8 +5600,7 @@ func _write_report() -> void:
 	var lines: Array[String] = []
 	lines.append("# Vehicle spec sweep — %s" % stamp)
 	lines.append("")
-	lines.append("Strip: %.0f x %.0f m flat, %s, zero steer input, %.0f s cap per pass."
-			% [STRIP_WIDTH, STRIP_LENGTH, _surface_label(), _seconds])
+	lines.append("Strip: %s." % _strip_text)
 	lines.append("Reference figures are real-world comparison numbers, not measured — see "
 			+ "`tools/vehicle_reference_specs.json`.")
 	lines.append("")

@@ -8,6 +8,10 @@ Editor/CI scripts. Kit/bake rules: `kit/CLAUDE.md`; a level generator's manifest
   `--fixed-fps 60` before `--`, same tick and output, ~10x faster.
 - A new measurement is a scenario in an existing tool; shared setup goes in `measure_rig.gd`.
   Run lines, flags, `doc=` presets: `docs/vehicle_measurements.md` § Measure-tool run lines.
+- Generator code shared by two generators goes in its home, not a copy: `level_gen_io.gd`,
+  `terrain_grid.gd`, `level_gen_props.gd`, `road_gen.gd` (levels), `vehicle_gen_io.gd` (bodies).
+  `tools/` code is no bake input, but generator output is: a refactor's replay
+  (`rebuild_level.ps1 -Level <id>`) must be byte-identical, or that level's bake goes stale.
 
 ## Rare generators
 

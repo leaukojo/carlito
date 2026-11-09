@@ -194,7 +194,7 @@ func _spawn() -> void:
 	var gd: GroundDriveSpec = _car.spec.ground_drive
 	print("=== semi rear-drag probe: %s ===" % _variant)
 	print("  mass %.0f kg, com %s, wheelbase %.2f m" % [_car.spec.mass, _car.spec.center_of_mass,
-			absf(gd.wheel_positions[2].z - gd.wheel_positions[0].z)])
+			_wheelbase()])
 	print("  wheel_positions %s" % [gd.wheel_positions])
 	if _csv_suffix != "":
 		print("  run overrides applied:%s" % _csv_suffix)
@@ -682,6 +682,12 @@ func _trailer_roll_table() -> Array[String]:
 	return lines
 
 
+## Foremost front to rearmost rear station (`BrakeSizing.axle_geometry`), whatever the array order.
+func _wheelbase() -> float:
+	var ax := BrakeSizing.axle_geometry(_car.spec)
+	return float(ax["rear_z"]) - float(ax["front_z"])
+
+
 func _write_csv() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(REPORT_DIR))
 	var path := "%s%s%s.csv" % [REPORT_DIR, _variant, _csv_suffix]
@@ -704,8 +710,7 @@ func _print_summary() -> void:
 	var spring_max := gd.rear_spring_rate() * gd.rest_length
 	print("\n===== SUMMARY: %s =====" % _variant)
 	print("spec: mass %.0f kg, com %s, wheelbase %.2f m, rest_length %.3f m,"
-			% [_car.spec.mass, _car.spec.center_of_mass,
-			absf(gd.wheel_positions[2].z - gd.wheel_positions[0].z), gd.rest_length]
+			% [_car.spec.mass, _car.spec.center_of_mass, _wheelbase(), gd.rest_length]
 			+ " spring_rate %.0f N/m (front), %.0f N/m (rear)" % [gd.spring_rate, gd.rear_spring_rate()])
 	print("       rear dampers: bump %.0f, rebound %.0f N*s/m"
 			% [gd.rear_damper_bump(), gd.rear_damper_rebound()])

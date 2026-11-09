@@ -873,6 +873,8 @@ static func arbitrate_bridge(vals: Dictionary, manual := false,
 	var gear := int(vals.get("gear", GEAR_N))
 	var accel := clampf(float(vals.get("accel", 0.0)), 0.0, 1.0)
 	out.gear_auto = not manual
+	# The contract gives the boat no `gear` in, so a bridge-driven boat never goes astern; astern is
+	# local-only (`brake_reverse`), the user's call. A boat `gear` in would make it a paired change.
 	out.throttle = -accel if gear == GEAR_R else accel
 	if manual:
 		# Exact byte: 0 is a real N (free revs), and nothing ever shifts on its own.
