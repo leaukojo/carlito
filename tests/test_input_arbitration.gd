@@ -808,6 +808,30 @@ func test_bridge_source_clamps_guidance_curvature_to_full_lock() -> void:
 	assert_float(float(out["guidance_curvature"])).is_equal(-BridgeSourceScript.FULL_LOCK_CURVATURE)
 
 
+## poll() normalizes the contract's "in" signals by hand, per name, so this pins the two lists
+## together: a new "in" signal with no poll() key, or a key left behind by a removed signal, fails.
+## `guidance` is the one derived key (guidance_curvature's steer unit).
+func test_bridge_source_polls_every_contract_in_signal() -> void:
+	var in_names: Array[String] = []
+	for sig in Contract.data.signals:
+		if sig.dir == "in":
+			in_names.append(sig.name)
+	var inbound := {}
+	for n in in_names:
+		inbound[n] = 0
+	Bridge.set("_active", true)
+	Bridge.set("_inbound", inbound)
+	var out := BridgeSourceScript.new().poll()
+	for n in in_names:
+		assert_bool(out.has(StringName(n))) \
+			.override_failure_message("contract 'in' signal '%s' has no poll() key" % n).is_true()
+	for key: StringName in out:
+		if key in [&"active", &"drive_sourced", &"guidance"]:
+			continue
+		assert_bool(String(key) in in_names) \
+			.override_failure_message("poll() key '%s' is no contract 'in' signal" % key).is_true()
+
+
 func test_bridge_source_survives_non_numeric_json() -> void:
 	# JSON.stringify turns a NaN into null, and the inbound side is not origin-gated, so a value
 	# can arrive as null or an Array. Each reads as the field's default, with no engine error.

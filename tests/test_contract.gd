@@ -31,7 +31,20 @@ func _real_contract() -> ContractScript.ContractData:
 func test_real_contract_is_valid() -> void:
 	var data := _real_contract()
 	assert_array(data.errors).is_empty()
-	assert_int(data.version).is_equal(63)
+	assert_int(data.version).is_equal(64)
+
+
+## The content hash is over the file's text with line endings normalized, so a CRLF checkout
+## (core.autocrlf) and an LF one stamp the same hash, as tools/gen_js_contract.mjs does.
+func test_the_content_hash_ignores_line_endings() -> void:
+	var lf := '{\n\t"version": 3,\n\t"signals": []\n}\n'
+	var a := ContractScript.ContractData.parse(lf)
+	var b := ContractScript.ContractData.parse(lf.replace("\n", "\r\n"))
+	assert_int(a.content_hash.length()).is_equal(64)
+	assert_str(b.content_hash).is_equal(a.content_hash)
+	assert_str(a.content_hash).is_equal(lf.strip_edges().sha256_text())
+	var other := ContractScript.ContractData.parse(lf.replace("3", "4"))
+	assert_str(other.content_hash).is_not_equal(a.content_hash)
 
 
 func _assert_core_signals_present(names: PackedStringArray, dir: String) -> void:
@@ -816,6 +829,76 @@ func test_node_fail_is_the_first_inbound_bitfield() -> void:
 	assert_str(packed[0].name).is_equal("node_fail")
 
 
+# --- 'bits': the bitfield layouts (v64) -----------------------------------------
+# The contract's bit table is what sloppyCAN reads; the constants below are what the game sets.
+# Each pin ties one to the other, so a bit added on one side alone fails here.
+
+func test_fixture_bad_bits_fail() -> void:
+	# Each fixture against the one error it exists for.
+	var expected := {
+		"bad_bits_width": "must be a bit index 0-7",
+		"bad_bits_duplicate": "is used twice",
+		"bad_bits_missing": "requires a 'bits' table",
+		"bad_bits_orphan": "only valid on a 'bitfield' signal",
+	}
+	for fixture: String in expected:
+		var data := _parse_file("res://tests/fixtures/%s.json" % fixture)
+		assert_bool(data.is_valid()) \
+			.override_failure_message("%s should not parse" % fixture).is_false()
+		assert_str("\n".join(data.errors)) \
+			.override_failure_message("%s: wrong error" % fixture).contains(expected[fixture])
+
+
+## `prefix` constants of `script` (minus `skip`) as {bit index: lower-case name}, each a single bit.
+func _bit_constants(script: Script, prefix: String, skip: PackedStringArray = []) -> Dictionary:
+	var out := {}
+	var consts := script.get_script_constant_map()
+	for key: String in consts:
+		if not key.begins_with(prefix) or key in skip:
+			continue
+		var mask: int = consts[key]
+		assert_bool(mask > 0 and (mask & (mask - 1)) == 0) \
+			.override_failure_message("%s is not a single bit" % key).is_true()
+		var i := 0
+		while i < 32 and (1 << i) != mask:
+			i += 1
+		out[i] = key.trim_prefix(prefix).to_lower()
+	return out
+
+
+func test_status_bits_are_the_st_constants() -> void:
+	var sig := _real_contract().get_signal_def("status", "out")
+	assert_dict(sig.bits).is_equal(_bit_constants(VehicleTelemetry, "ST_"))
+
+
+func test_prearm_fail_bits_are_the_pa_constants() -> void:
+	var sig := _real_contract().get_signal_def("prearm_fail", "out")
+	assert_dict(sig.bits).is_equal(_bit_constants(DroneArming, "PA_", ["PA_ALL"]))
+
+
+func test_node_bits_are_the_roster_in_order() -> void:
+	var data := _real_contract()
+	var roster := {}
+	var escs := {}
+	for i in DroneBus.NODES.size():
+		var node_name := String(DroneBus.NODES[i]["name"]).to_lower()
+		roster[i] = node_name
+		var esc := int(DroneBus.NODES[i]["esc"])
+		if esc >= 0:
+			escs[esc] = node_name
+	assert_dict(data.get_signal_def("node_fail", "in").bits).is_equal(roster)
+	assert_dict(data.get_signal_def("node_online", "out").bits).is_equal(roster)
+	# esc_fault is indexed by esc_index, not by roster index (see its desc).
+	assert_dict(data.get_signal_def("esc_fault", "out").bits).is_equal(escs)
+
+
+func test_bit_looks_a_name_up() -> void:
+	var sig := _real_contract().get_signal_def("status", "out")
+	assert_int(sig.bit("brake_light")).is_equal(8)
+	assert_int(sig.bit("ignition")).is_equal(0)
+	assert_int(sig.bit("no_such_bit")).is_equal(-1)
+
+
 # --- the drone's sensors (v25) -------------------------------------------------
 # The laws behind these (the sky pattern, the fix thresholds, the HDOP spread model, the landed
 # predicate) live in tests/test_drone_sensors.gd beside the code they pin, including the pins that
@@ -1091,6 +1174,19 @@ func test_the_wire_gate_passes_finite_values_and_stops_nan_and_inf() -> void:
 		assert_bool(BridgeScript._all_finite(ok)).override_failure_message("%s" % [ok]).is_true()
 	for bad: Variant in [NAN, INF, -INF, [1.0, NAN], [INF, 2.0], [0, -INF]]:
 		assert_bool(BridgeScript._all_finite(bad)).override_failure_message("%s" % [bad]).is_false()
+
+
+## Same version, different content: the drift a version-only check lets through.
+func test_a_version_matched_hash_mismatched_peer_warns() -> void:
+	var ours := _real_contract()
+	var v := ours.version
+	var h := ours.content_hash
+	assert_str(BridgeScript.contract_mismatch(v, h, v, h)).is_empty()
+	assert_str(BridgeScript.contract_mismatch(v, "0".repeat(64), v, h)).contains("content mismatch")
+	assert_str(BridgeScript.contract_mismatch(v - 1, "0".repeat(64), v, h)).contains("version mismatch")
+	# An older peer stamps neither (or only the version): not reported as content drift.
+	assert_str(BridgeScript.contract_mismatch(0, "", v, h)).is_empty()
+	assert_str(BridgeScript.contract_mismatch(v, "", v, h)).is_empty()
 
 
 func test_an_instanced_value_is_exactly_count_numbers() -> void:

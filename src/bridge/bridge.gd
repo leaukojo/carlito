@@ -33,7 +33,9 @@ func _ready() -> void:
 	_web = OS.has_feature("web")
 	if _web:
 		var version := Contract.data.version if Contract.data != null else 0
-		JavaScriptBridge.eval("if(window.__carlito)window.__carlito.outVer=%d;" % version, true)
+		var content_hash := Contract.data.content_hash if Contract.data != null else ""
+		JavaScriptBridge.eval("if(window.__carlito){window.__carlito.outVer=%d;window.__carlito.outHash=%s;}" % [
+			version, JSON.stringify(content_hash)], true)
 
 
 func _physics_process(delta: float) -> void:
@@ -80,7 +82,7 @@ func _poll_inbound() -> void:
 	if not _web:
 		return
 	# Freshness gate in JS: stash only while fresh, else "".
-	var code := "(function(){var c=window.__carlito;return (c && performance.now()-c.inT < %d) ? JSON.stringify({v:c.ver,d:c.in}) : '';})();" % FRESHNESS_MS
+	var code := "(function(){var c=window.__carlito;return (c && performance.now()-c.inT < %d) ? JSON.stringify({v:c.ver,h:c.hash,d:c.in}) : '';})();" % FRESHNESS_MS
 	var raw: Variant = JavaScriptBridge.eval(code, true)
 	if typeof(raw) != TYPE_STRING or (raw as String).is_empty():
 		_active = false
@@ -95,11 +97,28 @@ func _poll_inbound() -> void:
 	# Agrees with bridge_source.poll(), which reports inactive on an empty value dict.
 	_active = not _inbound.is_empty()
 	_inbound_version = int(parsed.get("v", 0))
-	if _inbound_version != 0 and _inbound_version != Contract.data.version and not _version_warned:
+	if _version_warned:
+		return
+	var peer_hash: Variant = parsed.get("h", "")
+	var mismatch := contract_mismatch(_inbound_version, str(peer_hash) if peer_hash != null else "",
+			Contract.data.version, Contract.data.content_hash)
+	if not mismatch.is_empty():
 		_version_warned = true
-		push_warning("Bridge: contract version mismatch — sloppyCAN v%d vs game v%d" % [
-			_inbound_version, Contract.data.version])
-		GameState.notice.emit("SLOPPYCAN CONTRACT VERSION MISMATCH", 0.0)
+		push_warning("Bridge: %s" % mismatch)
+		# The kind is the message's second word ("contract version …" / "contract content …").
+		GameState.notice.emit("SLOPPYCAN CONTRACT %s MISMATCH" % mismatch.split(" ")[1].to_upper(), 0.0)
+
+
+## What disagrees between the peer's contract stamp and ours ("" when nothing does). A version
+## mismatch wins; a content (hash) mismatch is reported only at the same version. An absent stamp
+## (0 / "") is an older peer and is not reported.
+static func contract_mismatch(peer_version: int, peer_hash: String, version: int, content_hash: String) -> String:
+	if peer_version != 0 and peer_version != version:
+		return "contract version mismatch — sloppyCAN v%d vs game v%d" % [peer_version, version]
+	if peer_version == version and not peer_hash.is_empty() and peer_hash != content_hash:
+		return "contract content mismatch at v%d — sloppyCAN %s vs game %s (a copy was edited without a version bump, or not regenerated)" % [
+			version, peer_hash.left(12), content_hash.left(12)]
+	return ""
 
 
 func _publish() -> void:

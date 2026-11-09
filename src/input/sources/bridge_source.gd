@@ -70,7 +70,8 @@ func poll() -> Dictionary[StringName, Variant]:
 		&"beep": _flag(v, "beep"),
 		# Cargo hook: mirrored verbatim; absent → false = released.
 		&"hardpoint_cmd": _flag(v, "hardpoint_cmd"),
-		# Gimbal contract degrees; absent → 0 rest pose.
+		# Gimbal contract degrees; absent → 0 rest pose. Not clamped here: the mount clamps to the
+		# contract ranges, its stops (`DroneGimbalMount._read_stops`, `DroneGimbal.slew`).
 		&"gimbal_pitch": _num(v, "gimbal_pitch", 0.0),
 		&"gimbal_yaw": _num(v, "gimbal_yaw", 0.0),
 		# Train: absent → lowered/shut.

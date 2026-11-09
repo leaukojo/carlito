@@ -45,7 +45,8 @@ const GRAVITY := 9.8  ## m/s^2, for the suspension-force -> kilograms read
 const PTO_EFFICIENCY := 0.90
 
 # --- status bitfield (contract 'status', u16) ---
-## FROZEN wire layout: a new flag appends at bit 8 or above, never renumbering (contract-edit skill).
+## FROZEN wire layout: a new flag appends at bit 12 or above with its contract `status.bits` entry,
+## never renumbering (contract-edit skill; pinned by tests/test_contract.gd).
 const ST_IGNITION := 1 << 0    ## engine running (key in Ignition)
 ## Wheels in contact, or the wheel-less body's own landed predicate (drone and boat overwrite
 ## this in `_tick_extras` via `with_status_bit`).

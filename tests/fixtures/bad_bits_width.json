@@ -1,0 +1,6 @@
+{
+	"version": 3,
+	"signals": [
+		{ "name": "faults", "dir": "out", "type": "u8", "unit": "bitfield", "bits": { "0": "first", "8": "past_the_byte" } }
+	]
+}

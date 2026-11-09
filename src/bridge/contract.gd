@@ -13,6 +13,8 @@ const DIRS: PackedStringArray = ["in", "out"]
 const TYPES: PackedStringArray = ["bool", "u8", "i8", "u16", "i16", "u32", "i32", "f32", "f64"]
 ## Which side of warn threshold is dangerous: declared per signal, never inferred from range.
 const WARN_SIDES: PackedStringArray = ["low", "high"]
+## Bit width of each type a `bits` table may index (a bitfield is unsigned).
+const BIT_WIDTHS := {"u8": 8, "u16": 16, "u32": 32}
 
 
 ## One validated signal definition.
@@ -26,6 +28,7 @@ class SignalDef:
 	var warn := NAN                    ## optional danger threshold; NAN = none
 	var warn_side := ""                ## "low" or "high", required whenever warn is set
 	var enum_entries := []             ## [lo, hi, label, interp_prefix]; interp_prefix null or "D"
+	var bits := {}                     ## bit index (int) -> name; present exactly on unit "bitfield"
 	var vehicles: PackedStringArray = []
 	var flavor := ""                   ## e.g. "isobus"
 	var count := 1                     ## 1 = scalar; > 1 = array of count elements
@@ -38,6 +41,13 @@ class SignalDef:
 	## True when the value is an Array of `count` elements rather than a scalar.
 	func is_instanced() -> bool:
 		return count > 1
+
+	## The index of the bit called `bit_name`, or -1 when this signal declares no such bit.
+	func bit(bit_name: String) -> int:
+		for i: int in bits:
+			if bits[i] == bit_name:
+				return i
+		return -1
 
 	func has_warn() -> bool:
 		return not is_nan(warn)
@@ -61,6 +71,10 @@ class SignalDef:
 ## The parsed contract. Build via ContractData.parse(); check is_valid() before use.
 class ContractData:
 	var version := 0
+	## SHA-256 of the contract text (CRLF -> LF, ends trimmed): the bytes
+	## tools/gen_js_contract.mjs hashes, so two copies that share a version but differ in content
+	## disagree here.
+	var content_hash := ""
 	var signals: Array[SignalDef] = []
 	var errors: PackedStringArray = []
 
@@ -94,6 +108,7 @@ class ContractData:
 	## Parse + validate contract JSON. Never throws; collects all problems in .errors.
 	static func parse(json_text: String) -> ContractData:
 		var data := ContractData.new()
+		data.content_hash = json_text.replace("\r\n", "\n").strip_edges().sha256_text()
 		var json := JSON.new()
 		if json.parse(json_text) != OK:
 			data.errors.append("invalid JSON: %s (line %d)" % [json.get_error_message(), json.get_error_line()])
@@ -262,6 +277,38 @@ class ContractData:
 							and int(lm.get_string(2)) == lo and int(lm.get_string(4)) == hi:
 						interp_prefix = lm.get_string(1)
 				sig.enum_entries.append([lo, hi, label, interp_prefix])
+
+		# The machine-readable bit layout: required on a bitfield and refused anywhere else, so a
+		# reader can always look a bit up by name and never meets a table it cannot apply.
+		var bits_v: Variant = entry.get("bits")
+		if sig.unit == "bitfield" and bits_v == null:
+			errors.append("%s: a 'bitfield' signal requires a 'bits' table" % where)
+			return null
+		if bits_v != null:
+			if sig.unit != "bitfield":
+				errors.append("%s: 'bits' is only valid on a 'bitfield' signal" % where)
+				return null
+			if not BIT_WIDTHS.has(sig.type):
+				errors.append("%s: 'bits' needs an unsigned type, one of %s" % [where, BIT_WIDTHS.keys()])
+				return null
+			if typeof(bits_v) != TYPE_DICTIONARY or sig.has_enum() or sig.count > 1:
+				errors.append("%s: 'bits' must be an object, on a scalar with no 'enum'" % where)
+				return null
+			var width: int = BIT_WIDTHS[sig.type]
+			var index_re := RegEx.create_from_string("^(0|[1-9]\\d*)$")   # no leading zero: "0" and "00" would collide
+			var name_re := RegEx.create_from_string("^[a-z][a-z0-9_]*$")
+			for key: Variant in (bits_v as Dictionary):
+				var bit_name: Variant = bits_v[key]
+				if index_re.search(str(key)) == null or int(str(key)) >= width:
+					errors.append("%s: bits key '%s' must be a bit index 0-%d" % [where, key, width - 1])
+					return null
+				if typeof(bit_name) != TYPE_STRING or name_re.search(bit_name) == null:
+					errors.append("%s: bit %s must be named in snake_case" % [where, key])
+					return null
+				if sig.bit(bit_name) != -1:
+					errors.append("%s: bit name '%s' is used twice" % [where, bit_name])
+					return null
+				sig.bits[int(str(key))] = bit_name
 		return sig
 
 
@@ -279,5 +326,6 @@ func _ready() -> void:
 	for err in data.errors:
 		push_error("Contract: %s" % err)
 	if data.is_valid():
-		print("Contract: loaded v%d, %d signals (%d in / %d out)" % [
-			data.version, data.signals.size(), data.count_by_dir("in"), data.count_by_dir("out")])
+		print("Contract: loaded v%d (%s), %d signals (%d in / %d out)" % [
+			data.version, data.content_hash.left(12), data.signals.size(), data.count_by_dir("in"),
+			data.count_by_dir("out")])

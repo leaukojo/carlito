@@ -151,8 +151,8 @@ there on purpose, before touching the live site.
 
 ## Contract changes are a paired deploy
 
-Game and sloppyCAN agree by contract version number, so a contract edit lands on `dev` in
-both [`carlito`](https://github.com/leaukojo/carlito) and
+Game and sloppyCAN agree by contract version number and content hash, so a contract edit lands
+on `dev` in both [`carlito`](https://github.com/leaukojo/carlito) and
 [`sloppycan`](https://github.com/leaukojo/sloppycan) and both promote together. Promoting
 one alone puts a live stable pair on mismatched versions.
 

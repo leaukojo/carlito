@@ -7,7 +7,8 @@ Rules: `contract/CLAUDE.md`. Steps:
 
 1. Edit `contract/carlito_contract.json`; bump `version`.
 2. Re-number the version assert in `tests/test_contract.gd`'s `test_real_contract_is_valid`.
-3. A new `ST_*` bit appends at bit 8+ in `src/vehicles/base/vehicle_telemetry.gd`; never renumber.
+3. A new `ST_*` bit appends at bit 12+ in `src/vehicles/base/vehicle_telemetry.gd` and gets its
+   `status.bits` entry (a new `PA_*` / roster bit likewise); never renumber.
 4. A new "out" signal needs a matching telemetry member var (`to_bridge_dict` walks the property
    list); a new "in" signal needs its `bridge_source.gd` key and arbitration in `src/input/`.
 5. `node tools/gen_js_contract.mjs` (the pre-commit hook also runs it and fails until the copy is

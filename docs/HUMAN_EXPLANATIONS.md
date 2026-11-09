@@ -24,8 +24,8 @@ smooth rendering.
 `contract/carlito_contract.json` lists every signal crossing the game-simulator boundary (name,
 direction, type, unit, range, warning threshold, vehicles). Nothing else hand-maintains a list: the
 `Contract` autoload validates it, the dashboard and bridge walk it, the simulator uses a generated
-JS copy (`tools/gen_js_contract.mjs`). Both sides stamp a contract version on every message and
-warn on mismatch. Detail: `docs/overview.md`, `docs/systems.md`.
+JS copy (`tools/gen_js_contract.mjs`). Both sides stamp a contract version and content hash on
+every message and warn on mismatch. Detail: `docs/overview.md`, `docs/systems.md`.
 
 ## How input flows, start to finish
 

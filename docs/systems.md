@@ -7,10 +7,10 @@ the nested `CLAUDE.md` files.
 
 ## Signal contract
 
-`contract/carlito_contract.json` defines every bridge signal: name, dir, type, unit,
-range, `warn`/`warn_side`, `count`, enum, vehicles, `flavor` (the protocol family). `Contract`
-(`src/bridge/contract.gd`) parses/validates it into `Contract.data`;
-`tests/test_contract.gd` fails if a required signal is missing. Unique by (name, dir) —
+`contract/carlito_contract.json` defines every bridge signal: name, dir, type, unit, range,
+`warn`/`warn_side`, `count`, enum, `bits` (index -> name; required on, and only on, a `"bitfield"`),
+vehicles, `flavor` (protocol family). `Contract` (`src/bridge/contract.gd`) validates it into
+`Contract.data`; `tests/test_contract.gd` fails if a required signal is missing. Unique by (name, dir) —
 `battery` exists both ways (in = warning LED, out = voltage). `warn` needs `warn_side`
 (`"low"` | `"high"`); `todo` marks a signal unimplemented both sides; no `range` on an "out"
 signal makes a readout line, not a bar. `count` (>= 1, default 1) makes an Array of N,
@@ -18,9 +18,9 @@ signal makes a readout line, not a bar. `count` (>= 1, default 1) makes an Array
 `Bridge._publish` drops a wrong-shaped value with one warning.
 
 A version mismatch with sloppyCAN warns at runtime and raises a transient notice, once per session
-(`push_warning` is invisible in a web release). sloppyCAN reads a generated copy,
-`../sloppycan/js/carlito_contract.js` (`window.CARLITO_CONTRACT`). Edit ritual:
-`contract/CLAUDE.md`.
+(`push_warning` is invisible in a web release); so does a same-version content-hash mismatch
+(`Bridge.contract_mismatch`). sloppyCAN reads a generated copy, `../sloppycan/js/carlito_contract.js`
+(`window.CARLITO_CONTRACT`). Edit ritual: `contract/CLAUDE.md`.
 
 ## Input pipeline
 
@@ -145,7 +145,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   freshness-gated `Bridge.FRESHNESS_MS` in JS on `performance.now()` (monotonic); runs while the tree is
   paused (menus open) so the link never goes silent, unlike `InputRouter`; publishes at `PUBLISH_HZ` (20) via
   `Contract.data.signals_for_vehicle(GameState.current_vehicle, "out")` ×
-  `telemetry.to_bridge_dict()`, both sides stamping contract version. `carlitoOutput` also
+  `telemetry.to_bridge_dict()`, both sides stamping contract version and hash. `carlitoOutput` also
   carries `challenge` (bool, `Bridge.set_challenge` from `boot.gd`), not a contract signal —
   sloppyCAN mutes its RAMN demo traffic on the rising edge, restores on the falling one.
   `boot.gd` calls `Bridge.bind(level)` (mirrors `Dashboard.bind`); both rebind on
