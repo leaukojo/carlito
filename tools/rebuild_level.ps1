@@ -60,7 +60,7 @@ if (-not $m.replayable) {
 if ($DryRun) { Write-Host "`n-DryRun: nothing was run." -ForegroundColor Green; exit 0 }
 
 # --- snapshot ----------------------------------------------------------------------------
-# Backups go under tmp/, which carries a committed .gdignore, or Godot imports the copies and the generator sculpts the backup instead.
+# Backups go under tmp/ (untracked), which needs the .gdignore written here, or Godot imports the copies and the generator sculpts the backup instead.
 $snapDir = Join-Path $repo "tmp/${Level}_before"
 $tracked = @($sceneRel) + @($m.sources | ForEach-Object { "$levelRel/$_" })
 if (-not $NoSnapshot) {

@@ -6,16 +6,18 @@ build/
 
 *.tmp
 
-# Scratch copies (rebuild_level.ps1 snapshots land in tmp/<level>_before/).
-# .gdignore is COMMITTED: without it Godot imports the backup PNGs, whose .import
-# sidecars claim the originals' uid:// and hijack them (root CLAUDE.md § Gotchas, "copy of an imported asset").
-tmp/*
-!tmp/.gdignore
+# Scratch copies (rebuild_level.ps1 snapshots land in tmp/<level>_before/). The script writes
+# tmp/.gdignore: without it Godot imports the backup PNGs, whose .import sidecars claim the
+# originals' uid:// and hijack them (root CLAUDE.md § Gotchas, "copy of an imported asset").
+tmp/
 
-# gdUnit4 output and the measure tools' CSVs. .gdignore is COMMITTED: without it Godot
-# imports every CSV as a translation.
-reports/*
-!reports/.gdignore
+# gdUnit4 output and the measure tools' CSVs. godot_run.mjs --tests, CI and measure_rig.gd
+# write reports/.gdignore: without it Godot imports every CSV as a translation.
+reports/
+
+# Claude Code per-user files (the shared settings.json and skills/ are committed)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
 
 # scratch measurement scenes (not shipped)
 tools/claude/

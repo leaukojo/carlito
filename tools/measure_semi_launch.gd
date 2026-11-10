@@ -689,7 +689,7 @@ func _wheelbase() -> float:
 
 
 func _write_csv() -> void:
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(REPORT_DIR))
+	MeasureRig.make_report_dir(REPORT_DIR)
 	var path := "%s%s%s.csv" % [REPORT_DIR, _variant, _csv_suffix]
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:

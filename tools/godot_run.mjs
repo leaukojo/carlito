@@ -60,6 +60,11 @@ if (!rest.includes('--import') && !fs.existsSync(path.join(repo, '.godot', 'impo
   say('no import cache in this checkout (fresh clone or worktree): run `node tools/godot_run.mjs -- --headless --path . --import` first.');
   process.exit(1);
 }
+// gdUnit4 writes reports/ (untracked); its .gdignore keeps Godot from importing the output.
+if (tests) {
+  fs.mkdirSync(path.join(repo, 'reports'), { recursive: true });
+  fs.writeFileSync(path.join(repo, 'reports', '.gdignore'), '');
+}
 const [cmd, args] = tests
   ? (WIN ? ['cmd.exe', ['/d', '/c', path.join('addons', 'gdUnit4', 'runtest.cmd'), ...rest]]
          : ['sh', [path.join('addons', 'gdUnit4', 'runtest.sh'), ...rest]])

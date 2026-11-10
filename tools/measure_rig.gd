@@ -84,6 +84,15 @@ static func slope_pose(body: Node, angle: float, up: float, yaw := 0.0, lift := 
 
 
 
+## Makes `dir` (under res://reports/) and reports/.gdignore: reports/ is untracked, and without
+## the .gdignore Godot imports every CSV as a translation.
+static func make_report_dir(dir: String) -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
+	var guard := ProjectSettings.globalize_path("res://reports/.gdignore")
+	if not FileAccess.file_exists(guard):
+		FileAccess.open(guard, FileAccess.WRITE)
+
+
 ## A tool's `<prefix><value>` flag (prefix e.g. "pedal="): the value of the last one, "" when absent.
 static func flag(args: PackedStringArray, prefix: String) -> String:
 	var value := ""

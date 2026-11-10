@@ -103,7 +103,7 @@ jobs:
       # and this suite is pure logic. The --remote-debug port-0 errors it prints are
       # intentional (disables the interactive CLI debugger; see runtest.sh).
       - name: Unit tests (gdUnit4)
-        run: godot --headless --path . -s -d --remote-debug tcp://127.0.0.1:0 res://addons/gdUnit4/bin/GdUnitCmdTool.gd --ignoreHeadlessMode -a tests
+        run: mkdir -p reports && touch reports/.gdignore && godot --headless --path . -s -d --remote-debug tcp://127.0.0.1:0 res://addons/gdUnit4/bin/GdUnitCmdTool.gd --ignoreHeadlessMode -a tests
 
       # Boot the real main scene headless. Judged by output, not exit code: the exit code is
       # ignored (leak-at-exit noise makes it meaningless). Any SCRIPT ERROR / ERROR fails, and so

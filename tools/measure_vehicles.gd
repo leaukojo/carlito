@@ -5595,7 +5595,7 @@ static func _secs(v: Variant, fmt := "%.2f") -> String:
 ## One markdown file per sweep, measured figures beside REFERENCE_SPECS_PATH's real-world
 ## comparison figures. Named by timestamp so a re-run never overwrites the last one.
 func _write_report() -> void:
-	DirAccess.make_dir_recursive_absolute(REPORT_DIR)
+	MeasureRig.make_report_dir(REPORT_DIR)
 	var stamp := Time.get_datetime_string_from_system().replace(":", "-").replace("T", "_")
 	var lines: Array[String] = []
 	lines.append("# Vehicle spec sweep — %s" % stamp)

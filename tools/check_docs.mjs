@@ -36,6 +36,8 @@ for (const raw of read('tools/docs_allow.txt').split('\n')) {
   if (line) allow.add(line);
 }
 
+// The project-wide CLAUDE.md. Claude Code reads it from .claude/, which keeps the repo root short.
+const ROOT_CLAUDE = '.claude/CLAUDE.md';
 const SCAN_GD = /^(src|kit|tools|tests|addons\/carlito_kit)\//;
 const docs = files.filter((f) => /(^|\/)CLAUDE\.md$/.test(f) && !f.startsWith('addons/gdUnit4/')
   || /^docs\/.*\.md$/.test(f));
@@ -163,9 +165,10 @@ function checkAnchors(text, file, isDoc, lineAt) {
   let chainEnd = -1;
   for (const m of flat.matchAll(/`?([\w./-]+\.md)`?|§ /g)) {
     if (m[1]) {
-      // "root `CLAUDE.md`" names the repo root's, not the nearest one.
+      // "root `CLAUDE.md`" names the project-wide one (ROOT_CLAUDE), not the nearest one.
       const root = /root\s+`?$/.test(flat.slice(Math.max(0, m.index - 6), m.index));
-      chainDoc = /^\.\./.test(m[1]) ? undefined : resolveDoc(m[1], root ? '.' : posix.dirname(file));
+      chainDoc = /^\.\./.test(m[1]) ? undefined
+        : root && m[1] === 'CLAUDE.md' ? ROOT_CLAUDE : resolveDoc(m[1], root ? '.' : posix.dirname(file));
       chainEnd = m.index + m[0].length;
       continue;
     }
@@ -213,7 +216,7 @@ for (const key of allow) {
 }
 
 // Raw lines per CLAUDE.md. Raising a cap is a decision made in this diff, not a side effect.
-const CLAUDE_MD_BUDGET = { 'CLAUDE.md': 98 };
+const CLAUDE_MD_BUDGET = { [ROOT_CLAUDE]: 98 };
 const NESTED_CLAUDE_MD_CAP = 40;
 const overBudget = [];
 const lineCount = (f) => read(f).replace(/\n$/, '').split('\n').length;
@@ -221,7 +224,7 @@ let rootClaudeLines = 0;
 for (const f of docs.filter((d) => /(^|\/)CLAUDE\.md$/.test(d))) {
   const cap = CLAUDE_MD_BUDGET[f] ?? NESTED_CLAUDE_MD_CAP;
   const n = lineCount(f);
-  if (f === 'CLAUDE.md') rootClaudeLines = n;
+  if (f === ROOT_CLAUDE) rootClaudeLines = n;
   if (n > cap) overBudget.push(`  ${f}: ${n} lines, cap ${cap}`);
 }
 
@@ -275,7 +278,7 @@ if (figureHits.length > MEASURED_FIGURE_CAP) {
 if (problems.length === 0 && overBudget.length === 0 && longComments.length === 0) {
   console.log('check_docs: every reference resolves; every CLAUDE.md, docs/ and comment block is within budget.');
   // Headroom up front, so a doc edit is sized to fit instead of trimmed by trial afterwards.
-  console.log(`check_docs: headroom: CLAUDE.md ${rootClaudeLines}/${CLAUDE_MD_BUDGET['CLAUDE.md']}, ` +
+  console.log(`check_docs: headroom: CLAUDE.md ${rootClaudeLines}/${CLAUDE_MD_BUDGET[ROOT_CLAUDE]}, ` +
     `docs/*.md ${docsLines}/${DOCS_LINE_CAP}, measured figures ${figureHits.length}/${MEASURED_FIGURE_CAP}.`);
   process.exit(0);
 }
