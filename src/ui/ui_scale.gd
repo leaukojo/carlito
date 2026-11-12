@@ -42,11 +42,24 @@ signal device_changed(used: Device)
 var _scale := 0.0
 var _user := USER_DEFAULT
 var _device := Device.POINTER
+## Every device used since the page opened (Device -> true), for the CONTROLS sheet's columns.
+var _used := {}
+## A finger touched the screen this session: POINTER alone cannot tell it from the mouse.
+var _touched := false
 
 
 ## The device last used. Read, never set, by the overlays.
 func device() -> Device:
 	return _device
+
+
+## Whether `d` has been used since the page opened (POINTER: a mouse or a finger, `has_touched`).
+func has_used(d: Device) -> bool:
+	return _used.has(d)
+
+
+func has_touched() -> bool:
+	return _touched
 
 
 ## Pointer motion hands the highlight to the cursor (keyboard focus is dropped, so two controls
@@ -63,6 +76,7 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton or event is InputEventScreenTouch \
 			or event is InputEventScreenDrag:
+		_touched = _touched or not event is InputEventMouseButton
 		_set_device(Device.POINTER)
 		return
 	var used := _nav_device_of(event)
@@ -102,6 +116,7 @@ static func _is_nav_press(event: InputEvent) -> bool:
 
 
 func _set_device(used: Device) -> void:
+	_used[used] = true
 	if used == _device:
 		return
 	_device = used

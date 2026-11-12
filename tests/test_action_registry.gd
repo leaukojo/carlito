@@ -436,6 +436,21 @@ func test_labels_are_present_and_plain_ascii() -> void:
 					.is_less(128)
 
 
+## A hand-built widget reads its caption here too, so the CONTROLS sheet's touch column names every
+## on-screen control as the overlay shows it; a two-action row captions its two pads in order.
+func test_every_touch_row_is_named_for_the_sheet() -> void:
+	for entry in Registry.ENTRIES:
+		if int(entry.get("touch", Registry.Touch.NONE)) == Registry.Touch.NONE:
+			assert_str(Registry.touch_for(entry)).is_empty()
+			continue
+		assert_str(Registry.touch_for(entry)) \
+			.override_failure_message("row '%s' has no name on the touch sheet" % entry["id"]) \
+			.is_not_empty()
+	assert_str(Registry.touch_for(Registry.find(&"drive"))).is_equal("GAS / BRAKE REV")
+	assert_str(Registry.touch_caption(&"drive", 1)).is_equal("BRAKE\nREV")
+	assert_str(Registry.touch_caption(&"climb", 0)).is_equal("UP")
+
+
 ## Every button kind the stack builds needs the field it is built from, or the loop reads a
 ## missing key and the button silently does nothing.
 func test_touch_rows_carry_what_their_kind_needs() -> void:

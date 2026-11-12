@@ -48,9 +48,15 @@ signal conditions_changed(wind_preset: int, current_preset: int, from_deg: float
 ## GameState.night_changed, which is the level's own broadcast of the result.
 signal night_toggled(on: bool)
 
+## A CONTROLS sheet column after the row's name: the key, the gamepad button, the on-screen
+## button. In sheet order.
+enum Column { KEY, PAD, TOUCH }
+
 ## What the shell hands over for the pages to open on: the SETTINGS values as applied and the
 ## CONDITIONS state. Named fields, so a call site cannot transpose them.
 class State extends RefCounted:
+	## The CONTROLS sheet's columns (`sheet_columns`); every one when nothing is known.
+	var columns: Array[Column] = [Column.KEY, Column.PAD, Column.TOUCH]
 	var density: int = Dashboard.Density.COMPACT
 	var ui_scale := UiScale.USER_DEFAULT
 	var extended_debug := false
@@ -75,8 +81,12 @@ const BUTTON_W := 260.0
 
 ## Row shows one key per action, else "W / Up / S / Down" becomes the widest thing on the page.
 const DRIVE_FOOTNOTE := "Arrow keys also drive."
-## Each sheet group's column heads: what, key, gamepad, why not.
-const SHEET_HEADS := ["", "KEY", "GAMEPAD", ""]
+## Each Column's head on the sheet, in Column order; the sheet adds what (first) and why not (last).
+const COLUMN_HEADS := ["KEY", "GAMEPAD", "TOUCH"]
+## The drawn pad's two sets: the plain buttons (COLUMN_HEADS' GAMEPAD), then with L1 held.
+const PAD_LAYER_HEAD := "HOLD L1"
+## Under a drawn pad with greyed callouts, before their reasons.
+const GREYED_PREFIX := "Greyed: "
 
 ## COMPACT is the default; this says what FULL buys back.
 const DENSITY_HELP := "COMPACT keeps the gauges and tell-tales; FULL adds the bars, wind rose and echo sounder."
@@ -117,6 +127,11 @@ var _conditions: VBoxContainer
 var _lab: VBoxContainer
 var _spawn_page: VBoxContainer
 var _sheet: ScrollContainer  ## CONTROLS sheet's scroll area, driven by Up/Down (_unhandled_input)
+var _sheet_ctx := {}  ## ActionRegistry.context the sheet was built for
+var _pad_box: VBoxContainer  ## the drawn pad's sets, above the table; hidden when it does not fit
+var _pad_diagrams: Array[PadDiagram] = []
+var _pad_drawn := false  ## the pad is drawn, so the table has no GAMEPAD column
+var _table: VBoxContainer  ## the sheet's groups, rebuilt when the pad is drawn or stops fitting
 var _resume_btn: Button
 var _density_btn: Button
 var _ui_scale_btn: Button
@@ -151,6 +166,24 @@ var _wind_from_deg := 0.0
 var _night := false
 var _conditions_locked := false  ## a challenge owns wind, current and lighting: CONDITIONS greys out
 var _spawns := PackedStringArray()
+var _columns: Array[Column] = State.new().columns
+
+
+## The CONTROLS columns for the devices used this session (UiScale): the keyboard's, the pad's and
+## touch's, each once used. With none of them (only the mouse so far), the keyboard's, or touch's
+## on a touch display.
+static func sheet_columns(keyboard: bool, pad: bool, touched: bool,
+		touch_display: bool) -> Array[Column]:
+	var out: Array[Column] = []
+	if keyboard:
+		out.append(Column.KEY)
+	if pad:
+		out.append(Column.PAD)
+	if touched:
+		out.append(Column.TOUCH)
+	if out.is_empty():
+		out.append(Column.TOUCH if touch_display else Column.KEY)
+	return out
 
 
 ## Called by the shell before add_child; pages build in _ready. Optional: with nothing handed
@@ -174,6 +207,7 @@ func setup(caps: Dictionary, state := State.new()) -> void:
 	_night = state.night
 	_conditions_locked = state.conditions_locked
 	_spawns = state.spawns
+	_columns = state.columns
 
 
 func _ready() -> void:
@@ -232,15 +266,18 @@ func _build_root() -> void:
 
 ## Generated from ActionRegistry: every row, grouping and gate comes from that table, and key
 ## strings are read live from InputMap, so a control can't exist without appearing here and a
-## rebinding can't go stale. Four columns: what it does, the key, the gamepad button
-## (`ActionRegistry.pad_for`), and why not if it doesn't apply. A row the current
-## vehicle/attachment can never use (family/capability gate fails) is HIDDEN outright — `ActionRegistry.relevant_entry` — and a group whose rows are all hidden
-## loses its heading; a row blocked only because the bridge owns it right now still shows,
-## greyed, with its gate note, since that reason goes away on its own.
+## rebinding can't go stale. Columns: what it does, then one per device used this session
+## (`_columns`: the key, the gamepad button `ActionRegistry.pad_for`, the on-screen button
+## `ActionRegistry.touch_for`), and why not if it doesn't apply. A row the current
+## vehicle/attachment can never use (family/capability gate fails) is HIDDEN outright —
+## `ActionRegistry.relevant_entry` — and so is one none of those devices reaches; a group whose
+## rows are all hidden loses its heading. A row blocked only because the bridge owns it right now
+## still shows, greyed, with its gate note, since that reason goes away on its own. GAMEPAD is
+## drawn above the table (PadDiagram) where it fits, else a text column (`_fit_pad`).
 func _build_controls() -> void:
 	_controls.add_child(_title("CONTROLS"))
 
-	var ctx := ActionRegistry.context(GameState.current_vehicle, Bridge.is_active(), _caps,
+	_sheet_ctx = ActionRegistry.context(GameState.current_vehicle, Bridge.is_active(), _caps,
 			InputRouter.bridge_drives())
 	# Scrolls: every bound action doesn't fit a phone.
 	_sheet = ScrollContainer.new()
@@ -250,57 +287,143 @@ func _build_controls() -> void:
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_sheet.add_child(body)
 	_controls.add_child(_sheet)
+	_pad_box = VBoxContainer.new()
+	body.add_child(_pad_box)
+	_table = VBoxContainer.new()
+	body.add_child(_table)
+	if _columns.has(Column.PAD):
+		_build_pad()
+	_pad_drawn = _pad_fits(_sheet_width())
+	_pad_box.visible = _pad_drawn
+	_fill_table()
 
+	_controls.add_child(_menu_button("BACK", func() -> void: _show_page(_root)))
+
+
+## The plain set, then the L1 set when the vehicle has one, each under its heading and above a
+## line saying why its greyed callouts are greyed.
+func _build_pad() -> void:
+	for layer in [false, true]:
+		if layer and PadDiagram.callouts(_sheet_ctx, true).is_empty():
+			continue
+		var heading := Label.new()
+		heading.text = PAD_LAYER_HEAD if layer else COLUMN_HEADS[Column.PAD]
+		heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		heading.theme_type_variation = &"Title"
+		_pad_box.add_child(heading)
+		var diagram := PadDiagram.new()
+		diagram.setup(_sheet_ctx, layer)
+		_pad_box.add_child(diagram)
+		_pad_diagrams.append(diagram)
+		var notes := diagram.greyed_notes()
+		if not notes.is_empty():
+			var note := Label.new()
+			note.text = GREYED_PREFIX + ", ".join(notes)
+			note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			note.theme_type_variation = &"MutedSmall"
+			_pad_box.add_child(note)
+
+
+## The width the sheet lays out in: the page between its margins, less the scroll bar.
+func _sheet_width() -> float:
+	return size.x - 2.0 * UiTheme.px(self, UiTheme.MARGIN) \
+			- _sheet.get_v_scroll_bar().get_combined_minimum_size().x
+
+
+func _pad_fits(available: float) -> bool:
+	if _pad_diagrams.is_empty():
+		return false
+	for diagram in _pad_diagrams:
+		if diagram.needed_width() > available:
+			return false
+	return true
+
+
+## Draw the pad, or fall back to the text column, as `available` px now allow.
+func _fit_pad(available: float) -> void:
+	var drawn := _pad_fits(available)
+	if drawn == _pad_drawn:
+		return
+	_pad_drawn = drawn
+	_pad_box.visible = drawn
+	_fill_table()
+
+
+func _fill_table() -> void:
+	for child in _table.get_children():
+		_table.remove_child(child)
+		child.queue_free()
+	var ctx := _sheet_ctx
+	var columns := _columns.duplicate()
+	if _pad_drawn:
+		columns.erase(Column.PAD)
 	for group in ActionRegistry.Group.values():
 		var rows: Array[Dictionary] = []
+		var cells: Array[PackedStringArray] = []  ## per row, its text in each of `columns`
 		for entry in ActionRegistry.in_group(group):
-			if ActionRegistry.relevant_entry(entry, ctx):
-				rows.append(entry)
+			if not ActionRegistry.relevant_entry(entry, ctx):
+				continue
+			var texts := PackedStringArray()
+			for column in columns:
+				texts.append(_sheet_cell(entry, column))
+			if "".join(texts) == "":
+				continue
+			rows.append(entry)
+			cells.append(texts)
 		if rows.is_empty():
 			continue
 		var heading := Label.new()
 		heading.text = ActionRegistry.GROUP_TITLES[group]
 		heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		heading.theme_type_variation = &"Title"
-		body.add_child(heading)
+		_table.add_child(heading)
 
 		# Centred as a block so pairs line up instead of drifting apart on a wide window.
 		var grid := GridContainer.new()
-		grid.columns = SHEET_HEADS.size()
+		grid.columns = columns.size() + 2
 		grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		for head: String in SHEET_HEADS:
+		var heads := [""]
+		for column in columns:
+			heads.append(COLUMN_HEADS[column])
+		heads.append("")
+		for head: String in heads:
 			var head_label := Label.new()
 			head_label.text = head
 			head_label.theme_type_variation = &"MutedSmall"
 			grid.add_child(head_label)
-		for entry in rows:
+		for r in rows.size():
+			var entry := rows[r]
 			var applies := ActionRegistry.applies_entry(entry, ctx)
 			var what := Label.new()
 			what.text = String(entry["label"])
 			what.theme_type_variation = &"Muted" if not applies else &""
 			grid.add_child(what)
-			var key := Label.new()
-			key.text = ActionRegistry.keys_for(entry)
-			key.theme_type_variation = &"MutedSmall" if not applies else &"Dim"
-			grid.add_child(key)
-			var pad := Label.new()
-			pad.text = ActionRegistry.pad_for(entry)
-			pad.theme_type_variation = &"MutedSmall" if not applies else &"Dim"
-			grid.add_child(pad)
+			for text in cells[r]:
+				var cell := Label.new()
+				cell.text = text
+				cell.theme_type_variation = &"MutedSmall" if not applies else &"Dim"
+				grid.add_child(cell)
 			var note := Label.new()
 			note.text = ActionRegistry.gate_note(entry, ctx)
 			note.theme_type_variation = &"MutedSmall"
 			grid.add_child(note)
-		body.add_child(grid)
+		_table.add_child(grid)
 
-		if group == ActionRegistry.Group.DRIVE:
+		if group == ActionRegistry.Group.DRIVE and _columns.has(Column.KEY):
 			var footnote := Label.new()
 			footnote.text = DRIVE_FOOTNOTE
 			footnote.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			footnote.theme_type_variation = &"Small"
-			body.add_child(footnote)
+			_table.add_child(footnote)
 
-	_controls.add_child(_menu_button("BACK", func() -> void: _show_page(_root)))
+
+static func _sheet_cell(entry: Dictionary, column: Column) -> String:
+	match column:
+		Column.KEY:
+			return ActionRegistry.keys_for(entry)
+		Column.PAD:
+			return ActionRegistry.pad_for(entry)
+	return ActionRegistry.touch_for(entry)
 
 
 ## Two settings, one button each, cycling their steps. Neither value is applied here — both
@@ -652,6 +775,9 @@ func _unhandled_input(event: InputEvent) -> void:
 ## must be re-applied when UI SIZE changes the scale from inside this menu, else the open
 ## menu keeps stale sizes. Theme-driven parts relayout on their own.
 func _notification(what: int) -> void:
+	# A resize need not change the theme (UiScale keeps a scale it already has): refit on both.
+	if (what == NOTIFICATION_RESIZED or what == NOTIFICATION_THEME_CHANGED) and _pad_box != null:
+		_fit_pad(_sheet_width())
 	if what != NOTIFICATION_THEME_CHANGED or _root == null:
 		return
 	var margin := int(UiTheme.px(self, UiTheme.MARGIN))

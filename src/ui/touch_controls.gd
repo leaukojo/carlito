@@ -364,9 +364,10 @@ func _unhandled_input(event: InputEvent) -> void:
 ## the key, R1 and the dashboard's BRAKE lamp). Sits at the QUICK row's GAS end, so the left side
 ## holds only the joystick.
 func _build_handbrake() -> Pad:
-	var pad := _tap_button("HAND", &"parking_brake_toggle")
+	var caption := ActionRegistry.touch_caption(&"parking_brake")
+	var pad := _tap_button(caption, &"parking_brake_toggle")
 	_gated.append({"node": pad, "id": &"parking_brake"})
-	_track_state(pad, "HAND", &"parking_brake")
+	_track_state(pad, caption, &"parking_brake")
 	return pad
 
 
@@ -453,18 +454,19 @@ func _build_pedals() -> void:
 	row.alignment = BoxContainer.ALIGNMENT_END
 	row.add_theme_constant_override("separation", gap)
 
-	var panto := _tap_button("PANTO", &"pantograph_toggle")
+	var panto_caption := ActionRegistry.touch_caption(&"pantograph")
+	var panto := _tap_button(panto_caption, &"pantograph_toggle")
 	panto.custom_minimum_size = pedal
 	row.add_child(panto)
 	_gated.append({"node": panto, "id": &"pantograph"})
-	_track_state(panto, "PANTO", &"pantograph")
+	_track_state(panto, panto_caption, &"pantograph")
 
-	var brake := _hold_button("BRAKE\nREV", KEY_BRAKE_REVERSE)
+	var brake := _hold_button(ActionRegistry.touch_caption(&"drive", 1), KEY_BRAKE_REVERSE)
 	brake.custom_minimum_size = pedal
 	brake.add_theme_stylebox_override("panel", _pad_style(COL_BRAKE, RIM_BRAKE))
 	row.add_child(brake)
 
-	var gas := _hold_button("GAS", KEY_ACCEL)
+	var gas := _hold_button(ActionRegistry.touch_caption(&"drive", 0), KEY_ACCEL)
 	gas.custom_minimum_size = pedal
 	gas.add_theme_stylebox_override("panel", _pad_style(COL_GAS, RIM_GAS))
 	row.add_child(gas)
@@ -474,22 +476,22 @@ func _build_pedals() -> void:
 	# safety latch (HAND / ARM) above GAS. The families make each slot hold at most one button.
 	var quick := HBoxContainer.new()
 	quick.add_theme_constant_override("separation", gap)
-	var lights := _tap_button("LIGHTS", KEY_LIGHTS_CYCLE)
+	var lights := _tap_button(ActionRegistry.touch_caption(&"headlights"), KEY_LIGHTS_CYCLE)
 	_gated.append({"node": lights, "id": &"headlights"})
-	var horn := _hold_button("HORN", KEY_HORN)
+	var horn := _hold_button(ActionRegistry.touch_caption(&"horn"), KEY_HORN)
 	_gated.append({"node": horn, "id": &"horn"})
 	# Cycles the ladder rather than latching; the cluster's MODE chip is the FC's own answer.
-	var mode := _tap_button("MODE", &"flight_mode_cycle")
+	var mode := _tap_button(ActionRegistry.touch_caption(&"flight_mode"), &"flight_mode_cycle")
 	_gated.append({"node": mode, "id": &"flight_mode"})
-	var flaps := _tap_button("FLAPS", &"flaps_toggle")
+	var flaps := _tap_button(ActionRegistry.touch_caption(&"flaps"), &"flaps_toggle")
 	_gated.append({"node": flaps, "id": &"flaps"})
-	_track_state(flaps, "FLAPS", &"flaps")
-	var doors := _tap_button("DOORS", &"doors_toggle")
+	_track_state(flaps, ActionRegistry.touch_caption(&"flaps"), &"flaps")
+	var doors := _tap_button(ActionRegistry.touch_caption(&"doors"), &"doors_toggle")
 	_gated.append({"node": doors, "id": &"doors"})
-	_track_state(doors, "DOORS", &"doors")
-	var arm := _tap_button("ARM", &"arm_toggle")
+	_track_state(doors, ActionRegistry.touch_caption(&"doors"), &"doors")
+	var arm := _tap_button(ActionRegistry.touch_caption(&"arm"), &"arm_toggle")
 	_gated.append({"node": arm, "id": &"arm"})
-	_track_state(arm, "ARM", &"arm")
+	_track_state(arm, ActionRegistry.touch_caption(&"arm"), &"arm")
 	for pad: Pad in [lights, horn, mode, flaps, doors, _build_handbrake(), arm]:
 		pad.custom_minimum_size = Vector2(_px(QUICK_MIN_W), flight.y)
 		pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -500,10 +502,11 @@ func _build_pedals() -> void:
 	# One vertical axis published under two keys (plane elevator / drone climb), like local_source.gd.
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", gap)
-	var up := _hold_pad("UP", func(down: bool) -> void: _set_vert(1.0 if down else minf(_vert(), 0.0)))
+	var up := _hold_pad(ActionRegistry.touch_caption(&"climb", 0),
+			func(down: bool) -> void: _set_vert(1.0 if down else minf(_vert(), 0.0)))
 	up.custom_minimum_size = flight
 	col.add_child(up)
-	var down_pad := _hold_pad("DOWN",
+	var down_pad := _hold_pad(ActionRegistry.touch_caption(&"climb", 1),
 			func(down: bool) -> void: _set_vert(-1.0 if down else maxf(_vert(), 0.0)))
 	down_pad.custom_minimum_size = flight
 	col.add_child(down_pad)

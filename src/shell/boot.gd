@@ -459,6 +459,8 @@ func _open_pause() -> void:
 	var pause := PauseMenu.new()
 	# Before add_child: CONTROLS sheet greys what the machine lacks, off the same capability read.
 	var state := PauseMenu.State.new()
+	state.columns = PauseMenu.sheet_columns(_ui.has_used(UiScale.Device.KEYBOARD),
+			_ui.has_used(UiScale.Device.PAD), _ui.has_touched(), UiScale.is_touch_display())
 	state.density = _dashboard.density_setting()
 	state.ui_scale = _ui.user_scale()
 	state.extended_debug = _debug.is_extended()

@@ -197,7 +197,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   | Page | Contents |
   |---|---|
   | SPAWN POINT | the level's spawns this body may use (`State.spawns`), shown from two up; a pick emits `spawn_picked(index)` |
-  | CONTROLS | off `InputMap` and the registry's `pad` (`pad_for`); hidden if unusable (`ActionRegistry.relevant_entry`), greyed if bridge-owned |
+  | CONTROLS | off `InputMap` and the registry's `pad` (`pad_for`); hidden if unusable (`ActionRegistry.relevant_entry`), greyed if bridge-owned; the pad drawn (`pad_diagram.gd`, plain and L1 sets, the L1 set from `pad_layer_rows`) where it fits, else the text column |
   | SETTINGS | dashboard density, UI scale, extended debug, KEY RESPONSE, TRACTION CONTROL, STABILITY CONTROL, AUTO HOLD; saved to `user://` (`UserSettings`, re-applied by `Boot._apply_saved_settings`) |
   | LAB | ANTI-LOCK BRAKES, DIFFERENTIALS, STEERING (§ Input pipeline), session-held, greyed in a challenge or under a live bridge |
   | CONDITIONS | WIND/CURRENT preset (`WorldConditions.Preset` LEVEL/CALM/LIGHT/STRONG), FROM direction, TIME -> greys per `WorldConditions.WIND_FAMILIES`/`CURRENT_FAMILIES` |

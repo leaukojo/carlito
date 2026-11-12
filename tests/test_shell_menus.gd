@@ -125,6 +125,29 @@ func test_ui_scale_tracks_the_device_and_focuses_on_a_nav_press() -> void:
 	assert_int(ui.device()).is_equal(UiScale.Device.POINTER)
 
 
+## Every device used this session is remembered past the last one (the CONTROLS sheet's columns),
+## and a finger is told apart from the mouse.
+func test_ui_scale_remembers_every_device_used() -> void:
+	var ui: UiScale = auto_free(UiScale.new())
+	add_child(ui)
+	assert_bool(ui.has_used(UiScale.Device.KEYBOARD)).is_false()
+	var key := InputEventKey.new()
+	key.keycode = KEY_W
+	key.pressed = true
+	ui._input(key)
+	var click := InputEventMouseButton.new()
+	click.pressed = true
+	ui._input(click)
+	assert_bool(ui.has_used(UiScale.Device.KEYBOARD)).is_true()
+	assert_bool(ui.has_used(UiScale.Device.PAD)).is_false()
+	assert_bool(ui.has_touched()).is_false()
+	var touch := InputEventScreenTouch.new()
+	touch.pressed = true
+	ui._input(touch)
+	assert_bool(ui.has_touched()).is_true()
+	assert_bool(ui.has_used(UiScale.Device.KEYBOARD)).is_true()
+
+
 func test_level_select_hides_dev_fixtures() -> void:
 	var sel: LevelSelect = auto_free(LevelSelect.new())
 	add_child(sel)
@@ -612,6 +635,7 @@ func test_pause_menu_controls_page_is_generated_from_the_registry() -> void:
 	var pause: PauseMenu = auto_free(PauseMenu.new())
 	pause.setup({"tows": true, "pto": true, "lift": true})
 	add_child(pause)
+	pause._fit_pad(0.0)  # the text column, not the drawn pad
 	var texts := []
 	for label in pause.find_children("*", "Label", true, false):
 		texts.append((label as Label).text)
@@ -636,6 +660,89 @@ func test_pause_menu_controls_page_hides_rows_the_vehicle_can_never_use() -> voi
 	var entry := ActionRegistry.find(&"pantograph")
 	assert_array(texts).not_contains([String(entry["label"])])
 	GameState.current_vehicle = saved_vehicle
+
+
+## One column per device used this session; the mouse alone reads as the keyboard, or as touch on
+## a touch display.
+func test_pause_menu_sheet_columns_follow_the_devices_used() -> void:
+	var C := PauseMenu.Column
+	assert_array(PauseMenu.sheet_columns(true, false, false, false)).is_equal([C.KEY])
+	assert_array(PauseMenu.sheet_columns(false, true, false, false)).is_equal([C.PAD])
+	assert_array(PauseMenu.sheet_columns(true, true, false, true)).is_equal([C.KEY, C.PAD])
+	assert_array(PauseMenu.sheet_columns(false, false, true, true)).is_equal([C.TOUCH])
+	assert_array(PauseMenu.sheet_columns(false, false, false, false)).is_equal([C.KEY])
+	assert_array(PauseMenu.sheet_columns(false, false, false, true)).is_equal([C.TOUCH])
+
+
+## The sheet carries only the columns handed over, and drops a row none of them reaches: on the
+## keyboard no GAMEPAD head and no pad-only recenter; on touch HAND by its caption, no F-key rows
+## and no arrow-key footnote.
+func test_pause_menu_controls_sheet_shows_only_the_devices_used() -> void:
+	var saved_vehicle := GameState.current_vehicle
+	GameState.current_vehicle = "car"
+	var recenter := String(ActionRegistry.find(&"camera_recenter")["label"])
+	var debug := ActionRegistry.find(&"debug_overlay")
+	var hand := ActionRegistry.find(&"parking_brake")
+
+	var state := PauseMenu.State.new()
+	state.columns = [PauseMenu.Column.KEY]
+	var keys := _sheet_texts(state)
+	assert_array(keys).contains(["KEY", String(debug["label"]), ActionRegistry.keys_for(debug),
+			PauseMenu.DRIVE_FOOTNOTE])
+	assert_array(keys).not_contains(["GAMEPAD", "TOUCH", recenter, ActionRegistry.pad_for(hand)])
+
+	state.columns = [PauseMenu.Column.TOUCH]
+	var touch := _sheet_texts(state)
+	assert_array(touch).contains(["TOUCH", String(hand["label"]), ActionRegistry.touch_for(hand),
+			ActionRegistry.touch_for(ActionRegistry.find(&"drive"))])
+	assert_array(touch).not_contains(["KEY", "GAMEPAD", String(debug["label"]),
+			PauseMenu.DRIVE_FOOTNOTE])
+	GameState.current_vehicle = saved_vehicle
+
+
+## With the pad in use the GAMEPAD column is drawn where it fits, and is the text column where it
+## does not (a narrow window): the table loses or regains the pad's names, the drawing hides or
+## shows. On the pad alone a car has no L1 set, so one drawing.
+func test_pause_menu_draws_the_pad_where_it_fits() -> void:
+	var saved_vehicle := GameState.current_vehicle
+	GameState.current_vehicle = "car"
+	var hand := ActionRegistry.pad_for(ActionRegistry.find(&"parking_brake"))
+	var state := PauseMenu.State.new()
+	state.columns = [PauseMenu.Column.KEY, PauseMenu.Column.PAD]
+	var pause: PauseMenu = auto_free(PauseMenu.new())
+	pause.setup({}, state)
+	add_child(pause)
+	assert_int(pause._pad_diagrams.size()).is_equal(1)
+	pause._fit_pad(100000.0)
+	assert_bool(pause._pad_box.visible).is_true()
+	assert_array(_table_texts(pause)).not_contains([hand])
+	pause._fit_pad(0.0)
+	assert_bool(pause._pad_box.visible).is_false()
+	assert_array(_table_texts(pause)).contains([hand, "GAMEPAD"])
+
+	state.columns = [PauseMenu.Column.KEY]
+	var keys: PauseMenu = auto_free(PauseMenu.new())
+	keys.setup({}, state)
+	add_child(keys)
+	assert_bool(keys._pad_diagrams.is_empty()).is_true()
+	GameState.current_vehicle = saved_vehicle
+
+
+func _table_texts(pause: PauseMenu) -> Array:
+	var texts := []
+	for label in pause._table.find_children("*", "Label", true, false):
+		texts.append((label as Label).text)
+	return texts
+
+
+func _sheet_texts(state: PauseMenu.State) -> Array:
+	var pause: PauseMenu = auto_free(PauseMenu.new())
+	pause.setup({}, state)
+	add_child(pause)
+	var texts := []
+	for label in pause._controls.find_children("*", "Label", true, false):
+		texts.append((label as Label).text)
+	return texts
 
 
 ## SETTINGS is a page of this overlay like CONTROLS, and its one button CYCLES: it relabels

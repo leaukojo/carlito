@@ -14,7 +14,8 @@ enum Group { DRIVE, VEHICLE, WORLD, SHELL }
 ##  HOLD         - a stack button holding a level under `poll_key` while pressed
 ##  SHELL_SIGNAL - a stack button emitting one of the overlay's shell signals
 ##  WIDGET       - not a stack button: the joystick, the pedals, the flight pads. The overlay
-##                 builds those by hand and only asks this table whether to SHOW them.
+##                 builds those by hand and asks this table whether to SHOW them and, by
+##                 `touch_label` (" / " between a row's two pads), what to caption them.
 enum Touch { NONE, TAP, HOLD, SHELL_SIGNAL, WIDGET }
 
 ## Why a capability-gated row does not apply right now, for the sheet's third column. Derived
@@ -42,17 +43,20 @@ const BRIDGE_SETS_NOTE := "set by sloppyCAN"
 ## truthy while an on/off switch is engaged (the button reads "<label> ON" in amber). pad: the
 ## gamepad button per action, parallel to `actions` (PadLayer.BUTTONS names, "l1+" = held with
 ## L1); rows share a slot only where no context applies two of them (tests/test_action_registry.gd).
-## pad_axis: the pad's name for a stick InputMap does not carry (`pad_for`).
+## pad_axis: the pad's name for a stick InputMap does not carry (`pad_for`); touch_widget: the
+## sheet's name for an uncaptioned touch widget (`touch_for`).
 ## Pedals/joystick are not flagged on purpose: greying them with bridge freshness reads as broken.
 const ENTRIES: Array[Dictionary] = [
 	# --- drive ---------------------------------------------------------------
 	{
 		"id": &"drive", "actions": ["accel", "brake_reverse"], "group": Group.DRIVE,
 		"label": "Drive / reverse", "signals": ["accel", "brake"], "touch": Touch.WIDGET,
+		"touch_label": "GAS / BRAKE\nREV",
 	},
 	{
 		"id": &"steer", "actions": ["steer_left", "steer_right"], "group": Group.DRIVE,
 		"label": "Steer", "signals": ["steer"], "excludes": ["train"], "touch": Touch.WIDGET,
+		"touch_widget": "Joystick",
 	},
 	{
 		# Excluded where there's nothing to hold: boat/drone have no wheels for brake torque.
@@ -70,7 +74,8 @@ const ENTRIES: Array[Dictionary] = [
 		"id": &"parking_brake", "actions": ["parking_brake"], "pad": ["r1"], "group": Group.DRIVE,
 		"label": "Parking brake (on / off)", "signals": ["handbrake"],
 		"excludes": ["boat", "drone"], "bridge_owned": true, "driving": true,
-		"touch": Touch.WIDGET, "poll_key": &"parking_brake_toggle", "touch_state": "handbrake",
+		"touch": Touch.WIDGET, "touch_label": "HAND", "poll_key": &"parking_brake_toggle",
+		"touch_state": "handbrake",
 	},
 	{
 		"id": &"climb", "actions": ["aircraft_up", "aircraft_down"], "group": Group.DRIVE,
@@ -78,20 +83,20 @@ const ENTRIES: Array[Dictionary] = [
 		"families": ["plane", "drone"], "bridge_owned": true, "driving": true,
 		# Not in InputMap: PadSource reads the stick itself (plane pull-back and drone push are
 		# both "up"), so the sheet's name for it is typed here.
-		"pad_axis": "Left stick up / down", "touch": Touch.WIDGET,
+		"pad_axis": "Left stick up / down", "touch": Touch.WIDGET, "touch_label": "UP / DOWN",
 	},
 	# --- the vehicle's own controls ------------------------------------------
 	{
 		"id": &"horn", "actions": ["horn"], "pad": ["l3"], "group": Group.VEHICLE,
 		# WIDGET: sits in the QUICK row on the pedals, not in the EQUIP drawer.
 		"label": "Horn", "signals": ["horn"], "bridge_owned": true, "driving": true,
-		"touch": Touch.WIDGET,
+		"touch": Touch.WIDGET, "touch_label": "HORN",
 	},
 	{
 		"id": &"headlights", "actions": ["headlights"], "pad": ["square"], "group": Group.VEHICLE,
 		# WIDGET, same reason as horn: lives in the QUICK row.
 		"label": "Lights (off / clearance / low / high)", "signals": ["lights"],
-		"bridge_owned": true, "driving": true, "touch": Touch.WIDGET,
+		"bridge_owned": true, "driving": true, "touch": Touch.WIDGET, "touch_label": "LIGHTS",
 	},
 	{
 		# No `signals`, deliberately: on a semi this reads the same local toggle as a tipper
@@ -162,7 +167,7 @@ const ENTRIES: Array[Dictionary] = [
 		"label": "Arm the motors", "signals": ["arm"], "families": ["drone"], "bridge_owned": true,
 		"driving": true,
 		# WIDGET: the QUICK row's latch slot above GAS, where HAND sits on wheeled machines.
-		"touch": Touch.WIDGET, "poll_key": &"arm_toggle", "touch_state": "arm",
+		"touch": Touch.WIDGET, "touch_label": "ARM", "poll_key": &"arm_toggle", "touch_state": "arm",
 	},
 	{
 		# Key is Z: Q (the letter originally assumed free) has been the tractor's SCV spool
@@ -173,7 +178,7 @@ const ENTRIES: Array[Dictionary] = [
 		"signals": ["flight_mode"], "families": ["drone"], "bridge_owned": true,
 		# WIDGET like ARM, not TAP like FAIL below: reached for while flying, so it sits in the
 		# QUICK row rather than in the EQUIP drawer.
-		"touch": Touch.WIDGET, "poll_key": &"flight_mode_cycle",
+		"touch": Touch.WIDGET, "touch_label": "MODE", "poll_key": &"flight_mode_cycle",
 	},
 	{
 		"id": &"node_fail", "actions": ["node_fail"], "pad": ["l1+r1"], "group": Group.VEHICLE,
@@ -216,7 +221,8 @@ const ENTRIES: Array[Dictionary] = [
 		"id": &"flaps", "actions": ["flaps"], "pad": ["l1+square"], "group": Group.VEHICLE,
 		"label": "Flaps", "signals": ["flaps"], "families": ["plane"], "bridge_owned": true,
 		# WIDGET, same reason as ARM: in the QUICK row, not the EQUIP drawer.
-		"touch": Touch.WIDGET, "poll_key": &"flaps_toggle", "touch_state": "flaps",
+		"touch": Touch.WIDGET, "touch_label": "FLAPS", "poll_key": &"flaps_toggle",
+		"touch_state": "flaps",
 	},
 	{
 		"id": &"pantograph", "actions": ["pantograph"], "pad": ["l1+square"],
@@ -224,13 +230,15 @@ const ENTRIES: Array[Dictionary] = [
 		"label": "Pantograph up / down", "signals": ["pantograph"], "families": ["train"],
 		"bridge_owned": true,
 		# WIDGET: built in the pedal row beside BRAKE, where the driving hand is.
-		"touch": Touch.WIDGET, "poll_key": &"pantograph_toggle", "touch_state": "pantograph",
+		"touch": Touch.WIDGET, "touch_label": "PANTO", "poll_key": &"pantograph_toggle",
+		"touch_state": "pantograph",
 	},
 	{
 		"id": &"doors", "actions": ["doors"], "pad": ["l1+circle"], "group": Group.VEHICLE,
 		"label": "Doors", "signals": ["doors"], "families": ["train"], "bridge_owned": true,
 		# WIDGET, same reason as PANTO: sits in the QUICK row beside LIGHTS.
-		"touch": Touch.WIDGET, "poll_key": &"doors_toggle", "touch_state": "doors",
+		"touch": Touch.WIDGET, "touch_label": "DOORS", "poll_key": &"doors_toggle",
+		"touch_state": "doors",
 	},
 	{
 		"id": &"body_cmd", "actions": ["body_cmd"], "pad": ["l1+cross"], "group": Group.VEHICLE,
@@ -516,6 +524,12 @@ static func pad_for(entry: Dictionary) -> String:
 			names.append(slot_name if all_layered or bare == slot
 					else PadLayer.LAYER_NAME + slot_name)
 		return (PadLayer.LAYER_NAME if all_layered else "") + " / ".join(names)
+	return " / ".join(pad_axes(entry))
+
+
+## The row's sticks and triggers by name: its joypad axes read live out of InputMap ("R2", "L2"),
+## else its `pad_axis`; empty when no axis reaches it. The CONTROLS diagram places each one.
+static func pad_axes(entry: Dictionary) -> PackedStringArray:
 	var axes := PackedStringArray()
 	for action in entry.get("actions", []):
 		var action_name := StringName(action)
@@ -529,9 +543,23 @@ static func pad_for(entry: Dictionary) -> String:
 			if axis_name != "" and not axes.has(axis_name):
 				axes.append(axis_name)
 			break
-	if not axes.is_empty():
-		return " / ".join(axes)
-	return String(entry.get("pad_axis", ""))
+	if axes.is_empty() and entry.has("pad_axis"):
+		axes.append(String(entry["pad_axis"]))
+	return axes
+
+
+## The row's on-screen control as the touch overlay captions it ("GAS / BRAKE REV"), else its
+## `touch_widget`; "" when touch does not reach it.
+static func touch_for(entry: Dictionary) -> String:
+	if int(entry.get("touch", Touch.NONE)) == Touch.NONE:
+		return ""
+	var caption := String(entry.get("touch_label", "")).replace("\n", " ")
+	return caption if caption != "" else String(entry.get("touch_widget", ""))
+
+
+## Caption `i` of row `id`'s hand-built touch widget (`touch_label`, " / " between two pads).
+static func touch_caption(id: StringName, i := 0) -> String:
+	return String(find(id).get("touch_label", "")).split(" / ")[i]
 
 
 ## The hold-L1 layer for `ctx`, for the legend shown while L1 is held: each row on it the vehicle

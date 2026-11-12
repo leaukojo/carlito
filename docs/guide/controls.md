@@ -115,7 +115,10 @@ angle, the body's pitch and roll, a trailer's angle and the wind.
 Each vehicle adds its own keys, explained on its pages: the tractor's hitch, PTO, hand throttle,
 hydraulics, diff lock and front drive; the plane's flaps and climb; the drone's arming, modes and
 node failures; the boat's autopilot and sheet; the train's pantograph and doors. The pause menu's
-CONTROLS page lists every key and gamepad button for the vehicle you are driving.
+CONTROLS page lists the controls of the vehicle you are driving for each device you have used
+this visit: its keys, its gamepad buttons, its on-screen buttons. The gamepad's are drawn on a
+pad, once as pressed and once with L1 held, so any make of pad reads the same; on a narrow window
+they are a column of button names instead.
 
 ## The gamepad
 
