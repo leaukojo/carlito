@@ -12,6 +12,9 @@ extends Control
 ## bearing), so each is gated on its own speed and reads "---".
 
 const DISC_INSET := 6.0        ## disc inset from the widget's short edge, for the bezel stroke
+## The readings that do not fit inside the card ride text lines under the disc, logical px each:
+## inside it they ran over the cardinals and the bezel.
+const LINE_H := 13.0
 const CARD_STEP := 30          ## compass card ticks, degrees
 const CARDINALS := {0: "N", 90: "E", 180: "S", 270: "W"}
 ## Speed over ground below which there is no course to draw (contract: 'cog' reads 0 there).
@@ -40,7 +43,7 @@ var tws := 0.0      ## m/s, contract 'tws'
 var cog := 0.0      ## deg, contract 'cog' (the bearing actually travelled)
 var sog := 0.0      ## m/s, contract 'sog'
 var heading := 0.0  ## deg, shared 'heading' — what the card is turned by
-var caption := ""   ## static label drawn under the top bezel
+var caption := ""   ## static label drawn over the hub
 var marine := true  ## false = the compass face: card, true wind, heading; awa/aws/cog/sog unread
 
 
@@ -59,6 +62,11 @@ func set_reading(awa_deg: float, aws_ms: float, twd_deg: float, tws_ms: float,
 	sog = sog_ms
 	heading = heading_deg
 	queue_redraw()
+
+
+## Text lines under the disc: the marine face's AWA/TWS and CRAB, the compass face's TWD/HDG.
+func strip_lines() -> int:
+	return 2 if marine else 1
 
 
 ## Redraw when the UI scale changes — every stroke/font size below is logical px, like Gauge.
@@ -106,10 +114,14 @@ static func has_wind(speed_ms: float) -> bool:
 
 func _draw() -> void:
 	var s := UiTheme.scale_of(self)
-	var center := size * 0.5
-	var r := minf(size.x, size.y) * 0.5 - DISC_INSET * s
+	var disc_h := size.y - strip_lines() * LINE_H * s
+	var center := Vector2(size.x * 0.5, disc_h * 0.5)
+	var r := minf(size.x, disc_h) * 0.5 - DISC_INSET * s
 	var font := get_theme_default_font()
 	var small := int(UiTheme.px(self, 10.0))
+	# Baselines of the strip's lines.
+	var line1 := disc_h + (LINE_H - 2.0) * s
+	var line2 := line1 + LINE_H * s
 
 	# The card: ticks every CARD_STEP of TRUE bearing, turned under the fixed bow index.
 	for deg in range(0, 360, CARD_STEP):
@@ -124,7 +136,7 @@ func _draw() -> void:
 	draw_arc(center, r, 0.0, TAU, 96, BEZEL_COLOR, 2.0 * s, true)
 
 	if not marine:
-		_draw_compass_face(center, r, s, font, small)
+		_draw_compass_face(center, r, s, font, small, line1)
 		return
 
 	# True wind: a short outer tick, so it cannot be mistaken for the apparent needle.
@@ -144,40 +156,39 @@ func _draw() -> void:
 
 	_draw_bow_index(center, r, s)
 
-	if not caption.is_empty():
-		Instrument.draw_centered(self, font, center + Vector2(0.0, -r * 0.62), caption, small,
-				CARD_COLOR)
-	# Gauge's own stack: the number, then its unit a line under it.
-	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.30), "%.1f" % aws,
-			int(UiTheme.px(self, 17.0)), TEXT_COLOR)
-	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.30 + 15.0 * s), "AWS m/s",
-			small, CARD_COLOR)
+	_draw_middle(center, r, s, font, small, aws, "AWS m/s")
 	var awa_text := ("%+d" % roundi(awa)) if has_wind(aws) else BLANK
-	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.72),
+	Instrument.draw_centered(self, font, Vector2(center.x, line1),
 			"AWA %s   TWS %.1f" % [awa_text, tws], small, CARD_TEXT)
-	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.92),
+	Instrument.draw_centered(self, font, Vector2(center.x, line2),
 			("CRAB %+d" % roundi(crab(cog, heading))) if has_track(sog) else "CRAB " + BLANK,
 			small, TRACK_COLOR if has_track(sog) else CARD_COLOR)
 
 
+## Inside the card, clear of the cardinals: the caption over the hub, Gauge's own stack (the
+## number, then its unit a line under it) below it.
+func _draw_middle(center: Vector2, r: float, s: float, font: Font, small: int, speed: float,
+		unit: String) -> void:
+	if not caption.is_empty():
+		Instrument.draw_centered(self, font, center + Vector2(0.0, -r * 0.30), caption, small,
+				CARD_COLOR)
+	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.24), "%.1f" % speed,
+			int(UiTheme.px(self, 17.0)), TEXT_COLOR)
+	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.24 + 14.0 * s), unit,
+			small, CARD_COLOR)
+
+
 ## The land face: true wind is the only needle, so it takes the apparent needle's arrow (flying
 ## FROM its bearing into the middle: a body drifts away from the side it comes from).
-func _draw_compass_face(center: Vector2, r: float, s: float, font: Font, small: int) -> void:
+func _draw_compass_face(center: Vector2, r: float, s: float, font: Font, small: int,
+		line1: float) -> void:
 	if has_wind(tws):
 		_draw_arrow(center, needle_dir(relative_bearing(twd, heading)), r, s, COMPASS_WIND_COLOR)
 	_draw_bow_index(center, r, s)
-	if not caption.is_empty():
-		Instrument.draw_centered(self, font, center + Vector2(0.0, -r * 0.62), caption, small,
-				CARD_COLOR)
-	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.30), "%.1f" % tws,
-			int(UiTheme.px(self, 17.0)), TEXT_COLOR)
-	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.30 + 15.0 * s), "TWS m/s",
-			small, CARD_COLOR)
+	_draw_middle(center, r, s, font, small, tws, "TWS m/s")
 	var twd_text := ("%03d" % (roundi(twd) % 360)) if has_wind(tws) else BLANK
-	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.72), "TWD %s" % twd_text,
-			small, CARD_TEXT)
-	Instrument.draw_centered(self, font, center + Vector2(0.0, r * 0.92),
-			"HDG %03d" % (roundi(heading) % 360), small, CARD_COLOR)
+	Instrument.draw_centered(self, font, Vector2(center.x, line1),
+			"TWD %s   HDG %03d" % [twd_text, roundi(heading) % 360], small, CARD_TEXT)
 
 
 func _draw_arrow(center: Vector2, dir: Vector2, r: float, s: float, color: Color) -> void:

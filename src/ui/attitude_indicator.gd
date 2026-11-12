@@ -12,6 +12,8 @@ extends Control
 ## Plain text + color only, no emoji.
 
 const DISC_INSET := 6.0  ## disc inset from the widget's short edge, for the bezel stroke
+## The caption's line under the disc, logical px: inside it, it ran over the pitch ladder.
+const LINE_H := 13.0
 ## Degrees of pitch that displace the horizon by the full disc radius. 45 keeps the ladder
 ## readable in the aircraft's usual +/-20 deg without pinning the drone's 32 deg tilt to the rim.
 const PITCH_FULL_SCALE := 45.0
@@ -33,7 +35,7 @@ var pitch := 0.0: set = _set_pitch  ## deg, + = nose/bow up (contract 'pitch')
 var roll := 0.0: set = _set_roll    ## deg, + = starboard/right side down (contract 'roll')
 var pitch_warn := NAN               ## |pitch| at or past which the readout goes danger; NAN = none
 var roll_warn := NAN                ## same for |roll|
-var caption := ""                   ## static label drawn under the top bezel
+var caption := ""                   ## static label drawn on a line under the disc (LINE_H)
 
 
 func _set_pitch(v: float) -> void:
@@ -108,8 +110,9 @@ static func past_warn(value: float, warn: float) -> bool:
 
 func _draw() -> void:
 	var s := UiTheme.scale_of(self)
-	var center := size * 0.5
-	var r := minf(size.x, size.y) * 0.5 - DISC_INSET * s
+	var disc_h := size.y - (0.0 if caption.is_empty() else LINE_H * s)
+	var center := Vector2(size.x * 0.5, disc_h * 0.5)
+	var r := minf(size.x, disc_h) * 0.5 - DISC_INSET * s
 	if r <= 0.0:
 		return
 
@@ -160,8 +163,8 @@ func _draw() -> void:
 
 	var font := get_theme_default_font()
 	if not caption.is_empty():
-		Instrument.draw_centered(self, font, center + Vector2(0.0, -r * 0.72), caption,
-				int(UiTheme.px(self, 11.0)), MARK_COLOR)
+		Instrument.draw_centered(self, font, Vector2(center.x, disc_h + (LINE_H - 2.0) * s),
+				caption, int(UiTheme.px(self, 11.0)), MARK_COLOR)
 	# Each number goes danger on its own contract warn, so a boat past capsize roll says so
 	# without waiting for pitch.
 	var big := int(UiTheme.px(self, 13.0))

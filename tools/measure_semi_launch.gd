@@ -7,7 +7,9 @@ extends Node3D
 ## Optional `front_z=<float>` / `com_z=<float>` args (variant name is args[0]) apply an
 ## in-memory geometry override for what-if runs, without touching the shipped spec;
 ## `trailer=<box|tipper|tanker|flatbed|bobtail>` picks what is on the back; `nosurge` pins a
-## tanker's surge at 0 (`MeasureRig.SurgePin`). `doc=trailer_roll` runs
+## tanker's surge at 0 (`MeasureRig.SurgePin`). `steady` replaces P2 onward with a straight hold
+## at `tip_kmh` on the strip and reports the axle-load signals' spread at rest and in the hold
+## (what the dashboard's AXLE and TRLR bars draw). `doc=trailer_roll` runs
 ## the laden box rig's P7 step and ramp with the tractor's ESC and the trailer's roll-over control
 ## each on and off (`MeasureRig.TRAILER_ROLL_CONFIGS`), re-spawning the rig per run, and writes the
 ## `trailer_roll_p7` region of docs/vehicle_measurements.md.
@@ -62,6 +64,15 @@ const RAMP_KI := 0.2      ## pedal per m of integrated speed error
 const RAMP_I_MAX := 5.0   ## anti-windup clamp on the integral, m
 ## Lateral g the lean is read at: a brisk but ordinary corner.
 const LEAN_G := 0.2
+# `steady`: the hold window, after the speed first comes within STEADY_BAND of `tip_kmh`.
+const STEADY_S := 20.0
+const STEADY_BAND := 0.3   ## m/s
+## P1's settle under `steady`, long enough for the spawn's bounce to die out, and its last REST_S
+## sampled as the rest reading.
+const STEADY_SETTLE_S := 10.0
+const REST_S := 3.0
+## Display time constants the steady report tries on the hold's trace, s.
+const STEADY_TAUS: Array[float] = [0.1, 0.25, 0.5, 1.0]
 
 ## Least force (N) a single steer wheel may carry through a launch (P2, and P6 after the
 ## recouple): the shipped wheelbases' margin (docs/truck.md § Truck sizing). It catches a
@@ -93,6 +104,9 @@ var _strict := false             ## `strict`: exit 1 when P2 or P6 breaks STEER_
 var _tip_speed := TIP_SPEED_MS   ## P7 entry speed, m/s
 var _ramp := false               ## `ramp`: P7 winds the lock on at a held speed instead of a step
 var _ramp_i := 0.0               ## the speed hold's integrated error, m
+var _steady := false             ## `steady`: a straight speed hold on the strip after P1, then quit
+## `steady`'s samples: {"rest_axle", "rest_trailer", "hold_axle", "hold_trailer"} -> kg per tick.
+var _steady_kg := {"rest_axle": [], "rest_trailer": [], "hold_axle": [], "hold_trailer": []}
 var _ended_by := ""              ## what stopped P7: the hold running out or a body passing TIP_ROLL_DEG
 var _args := PackedStringArray()
 ## doc=trailer_roll: the runs still to drive ({esc_off, trsp_off, ramp}) and the finished ones.
@@ -109,6 +123,7 @@ func _ready() -> void:
 		_variant = String(args[0])
 	_strict = args.has("strict")
 	_ramp = args.has("ramp")
+	_steady = args.has("steady")
 	MeasureRig.common_flags(args)
 	_pin = MeasureRig.add_surge_pin(self)
 	if _pin != null:
@@ -510,6 +525,11 @@ func _to_phase(next: int) -> void:
 func _advance(s: Dictionary) -> void:
 	match _phase:
 		Ph.P1:
+			var settle_s := STEADY_SETTLE_S if _steady else SETTLE_S
+			if _steady and not _trailer_pending and _ticks >= TowHost.SPAWN_COUPLE_TICKS \
+					and _pt >= settle_s - REST_S:
+				_steady_kg["rest_axle"].append(s["rear_axle_kg"])
+				_steady_kg["rest_trailer"].append(s["trailer_axle_kg"])
 			# The countdown has run, so the swap sticks; restart the settle so the run always
 			# reports a static pose the trailer it is measuring actually made.
 			if _trailer_pending and _ticks >= TowHost.SPAWN_COUPLE_TICKS:
@@ -517,9 +537,31 @@ func _advance(s: Dictionary) -> void:
 				_car.set_attachment(_trailer_want)
 				_pt = 0.0
 				return
-			if _ticks >= TowHost.SPAWN_COUPLE_TICKS and _pt >= SETTLE_S:
+			if _ticks >= TowHost.SPAWN_COUPLE_TICKS and _pt >= settle_s:
 				_to_phase(Ph.P2)
-				MeasureRig.drive(100.0, 0.0)
+				if _steady:
+					_ramp_i = 0.0
+					print("    holding %.1f km/h straight" % (_tip_speed * 3.6))
+				else:
+					MeasureRig.drive(100.0, 0.0)
+		Ph.P2 when _steady:
+			_hold_speed(float(s["speed"]), 0.0)
+			if _sub == 0 and absf(float(s["speed"]) - _tip_speed) < STEADY_BAND:
+				_sub = 1
+				_pt = 0.0
+				print("    at speed t=%.3f, sampling %.0f s" % [_t, STEADY_S])
+			elif _sub == 1:
+				_steady_kg["hold_axle"].append(s["rear_axle_kg"])
+				_steady_kg["hold_trailer"].append(s["trailer_axle_kg"])
+				if _pt >= STEADY_S:
+					MeasureRig.drive(0.0, 0.0)
+					_phase = Ph.DONE
+					_write_csv()
+					_print_steady()
+					get_tree().quit(0)
+			elif _pt >= TIP_SPINUP_TIMEOUT_S * 3.0:
+				printerr("steady: never reached %.1f km/h" % (_tip_speed * 3.6))
+				get_tree().quit(1)
 		Ph.P2:
 			if _pt >= THROTTLE_S:
 				_to_phase(Ph.P3)
@@ -614,11 +656,74 @@ func _advance(s: Dictionary) -> void:
 ## One tick of the P7 ramp: the lock a straight line in time, the pedals a PI loop on the entry
 ## speed. One pedal at a time, so the router's brake-over-throttle latch never enters.
 func _ramp_step(speed: float) -> void:
+	_hold_speed(speed, clampf(_pt / RAMP_S, 0.0, 1.0) * 100.0)
+
+
+## The PI speed hold on `_tip_speed` (P7's ramp, `steady`), the wheel at `steer_pct`.
+func _hold_speed(speed: float, steer_pct: float) -> void:
 	var err := _tip_speed - speed
 	_ramp_i = clampf(_ramp_i + err * get_physics_process_delta_time(), -RAMP_I_MAX, RAMP_I_MAX)
 	var u := RAMP_KP * err + RAMP_KI * _ramp_i
-	MeasureRig.drive(clampf(u, 0.0, 1.0) * 100.0, clampf(-u, 0.0, 1.0) * 100.0,
-			clampf(_pt / RAMP_S, 0.0, 1.0) * 100.0)
+	MeasureRig.drive(clampf(u, 0.0, 1.0) * 100.0, clampf(-u, 0.0, 1.0) * 100.0, steer_pct)
+
+
+## `steady`'s report: per signal at rest and in the hold, the mean, the peak-to-peak spread, the
+## standard deviation, the mean and largest change per tick, how often the whole-kg number the bar
+## prints changes, how often the trace crosses its mean (twice the oscillation rate), and the
+## peak-to-peak left after a first-order lag of each STEADY_TAUS.
+func _print_steady() -> void:
+	var dt := get_physics_process_delta_time()
+	print("\n===== STEADY: %s, %s, %.1f km/h, %.0f Hz physics =====" % [_variant,
+			_csv_suffix.trim_prefix("_") if _csv_suffix != "" else "default trailer",
+			_tip_speed * 3.6, 1.0 / dt])
+	for key: String in ["rest_axle", "rest_trailer", "hold_axle", "hold_trailer"]:
+		var xs: Array = _steady_kg[key]
+		if xs.is_empty():
+			print("  %-12s no samples" % key)
+			continue
+		var n := float(xs.size())
+		var mean := 0.0
+		for x: float in xs:
+			mean += x
+		mean /= n
+		var lo := INF
+		var hi := -INF
+		var sq := 0.0
+		var dsum := 0.0
+		var dmax := 0.0
+		var number_changes := 0
+		var crossings := 0
+		for i in xs.size():
+			var x: float = xs[i]
+			lo = minf(lo, x)
+			hi = maxf(hi, x)
+			sq += (x - mean) * (x - mean)
+			if i > 0:
+				var prev: float = xs[i - 1]
+				dsum += absf(x - prev)
+				dmax = maxf(dmax, absf(x - prev))
+				if roundi(x) != roundi(prev):
+					number_changes += 1
+				if signf(x - mean) != signf(prev - mean):
+					crossings += 1
+		var lagged := PackedStringArray()
+		for tau: float in STEADY_TAUS:
+			var a := dt / (tau + dt)
+			var y: float = xs[0]
+			var ylo := INF
+			var yhi := -INF
+			for i in xs.size():
+				y += a * (float(xs[i]) - y)
+				# The lag's own settling from xs[0] is not ripple: read it after 3 tau.
+				if i * dt >= 3.0 * tau:
+					ylo = minf(ylo, y)
+					yhi = maxf(yhi, y)
+			lagged.append(("%.2fs %.0f" % [tau, yhi - ylo]) if yhi >= ylo else ("%.2fs -" % tau))
+		print(("  %-12s mean %.0f kg, p-p %.0f kg, sd %.1f kg, |d|/tick mean %.1f max %.0f kg,"
+				+ " number changes %.0f %% of ticks, mean crossings %.1f /s; p-p after a lag: %s")
+				% [key, mean, hi - lo, sqrt(sq / n), dsum / maxf(n - 1.0, 1.0), dmax,
+				100.0 * number_changes / maxf(n - 1.0, 1.0), crossings / (n * dt),
+				", ".join(lagged)])
 
 
 func _finish() -> void:

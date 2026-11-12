@@ -13,21 +13,64 @@ const WARN_COLOR := Color(0.90, 0.35, 0.18)
 const LABEL_COLOR := Color(0.72, 0.75, 0.80)
 const VALUE_COLOR := Color(0.92, 0.94, 0.98)
 
-const LABEL_W := 58.0   ## logical px reserved on the left for the caption
+const LABEL_W := 58.0   ## least logical px reserved on the left for the caption
+const LABEL_PAD := 8.0  ## logical px between the widest caption and the track
 const VALUE_W := 52.0   ## logical px reserved on the right for the number
+const FONT_SIZE := 13.0  ## logical px, caption and number
+## The fill and number follow `value` with a first-order lag of LAG_S, and the number changes
+## only once the lagged value moves HOLD_FRAC of the span from it: an axle load parked on its
+## springs alternates by 5-100 kg every physics tick (`measure_semi_launch -- semi steady`), which
+## printed a new number every frame. The track cannot draw finer than HOLD_FRAC either (~0.7 % a
+## pixel). Display only: the signal and the bridge carry the raw value.
+const LAG_S := 0.25
+const HOLD_FRAC := 0.001
 
 var label := ""
+var label_w := LABEL_W  ## logical px; the dashboard widens it to its widest caption
 var units := ""
 var min_value := 0.0
 var max_value := 100.0
 var warn := NAN         ## danger threshold; NAN = no warn band
 var warn_is_low := false  ## true: warn when value <= warn (low fuel); false: value >= warn
 
+var _shown := NAN    ## the lagged value the fill draws; NAN until the first frame snaps it
+var _printed := NAN  ## the number drawn, held within HOLD_FRAC of `_shown`
+
+
+## `shown` one frame of `dt` nearer `target` through the LAG_S lag.
+static func lag_step(shown: float, target: float, dt: float) -> float:
+	return shown + (target - shown) * (1.0 - exp(-dt / LAG_S))
+
+
+## The number to print: `printed` kept until `shown` moves HOLD_FRAC of `span` from it.
+static func held(printed: float, shown: float, span: float) -> float:
+	return shown if absf(shown - printed) >= HOLD_FRAC * absf(span) else printed
+
+
+func _process(dt: float) -> void:
+	if is_nan(_shown):
+		_shown = value
+		_printed = value
+		queue_redraw()
+		return
+	if _shown == value:
+		return
+	var span := max_value - min_value
+	# Snapped once within a ten-thousandth of the span, so a still value stops redrawing.
+	_shown = value if absf(value - _shown) <= 1e-4 * absf(span) else lag_step(_shown, value, dt)
+	_printed = held(_printed, _shown, span)
+	queue_redraw()
+
+
+## What the fill draws: the lagged value, or `value` before the first frame.
+func _display() -> float:
+	return value if is_nan(_shown) else _shown
+
 
 func _in_warn() -> bool:
 	if is_nan(warn):
 		return false
-	return value <= warn if warn_is_low else value >= warn
+	return _display() <= warn if warn_is_low else _display() >= warn
 
 
 ## Redraw when the UI scale changes — the metrics below are logical px through the theme.
@@ -41,17 +84,18 @@ func _draw() -> void:
 	# proportions against the text beside it at any UI scale.
 	var s := UiTheme.scale_of(self)
 	var font := get_theme_default_font()
-	var fs := int(UiTheme.px(self, 13.0))
-	var label_w := LABEL_W * s
+	var fs := int(UiTheme.px(self, FONT_SIZE))
+	var gutter := label_w * s
 	var value_w := VALUE_W * s
 	var mid := size.y * 0.5
-	draw_string(font, Vector2(0.0, mid + 5.0 * s), label, HORIZONTAL_ALIGNMENT_LEFT, label_w, fs, LABEL_COLOR)
+	draw_string(font, Vector2(0.0, mid + 5.0 * s), label, HORIZONTAL_ALIGNMENT_LEFT, gutter, fs, LABEL_COLOR)
 
-	var track := Rect2(label_w, mid - 5.0 * s, size.x - label_w - value_w, 10.0 * s)
+	var track := Rect2(gutter, mid - 5.0 * s, size.x - gutter - value_w, 10.0 * s)
 	draw_rect(track, TRACK_COLOR)
 
 	var span := max_value - min_value
-	var n := clampf((value - min_value) / span, 0.0, 1.0) if span > 0.0 else 0.0
+	var shown := _display()
+	var n := clampf((shown - min_value) / span, 0.0, 1.0) if span > 0.0 else 0.0
 	var fill := Rect2(track.position, Vector2(track.size.x * n, track.size.y))
 	draw_rect(fill, WARN_COLOR if _in_warn() else FILL_COLOR)
 
@@ -62,7 +106,7 @@ func _draw() -> void:
 		draw_line(Vector2(wx, track.position.y - 2.0 * s), Vector2(wx, track.end.y + 2.0 * s),
 				WARN_COLOR, 1.5 * s)
 
-	var txt := "%d%s" % [roundi(value), units]
+	var txt := "%d%s" % [roundi(value if is_nan(_printed) else _printed), units]
 	var col := WARN_COLOR if _in_warn() else VALUE_COLOR
 	draw_string(font, Vector2(size.x - value_w, mid + 5.0 * s), txt,
 			HORIZONTAL_ALIGNMENT_RIGHT, value_w, fs, col)

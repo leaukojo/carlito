@@ -8,7 +8,7 @@ extends Control
 ## column through WIDGET_SIGNALS.
 ## Density (FULL/COMPACT/OFF) drops whole sections only, never individual signals: COMPACT
 ## (the default) keeps the tell-tale row and gauges; FULL adds the bars, readout, wind rose and
-## echo sounder; OFF hides the cluster. Plain text + color only.
+## echo sounder; OFF hides the cluster. Plain text + color only. Every family's FULL: dash_shots.
 
 ## Signals rendered as bespoke radial gauges (never as generated bars).
 const GAUGE_SIGNALS: PackedStringArray = ["kmh", "rpm"]
@@ -70,23 +70,24 @@ const PANEL_PAD_X := 14.0
 const PANEL_PAD_Y := 8.0
 const SECTION_GAP := 6.0   ## between the tell-tale row and the cluster below it
 const LAMP_GAP := 10.0     ## between tell-tales
-const CLUSTER_GAP := 24.0  ## between speedo, middle column and tacho
-const MID_W := 280.0       ## middle column (bars + readout) minimum width
+const CLUSTER_GAP := 24.0  ## between speedo, middle column and tacho; between bar columns
+const MID_W := 280.0       ## one bar column's width
 const MID_GAP := 8.0       ## between the bars stacked in it
 const GAUGE_W := 150.0
 const GAUGE_W_COMPACT := 112.0
-## The sounder is a column of water, not a dial, so it takes a fraction of a gauge's width —
-## the boat carries the most cluster elements (speedo, bars, horizon, rose, sounder) and this is
-## where the slack came from. Measured at scale 1: 150 + 280 + 150 + 150 + 90 + four 24 px gaps
-## + the panel's own padding = 944 logical px, against the drone's shipped two-bar-column 984.
-## The boat is not the widest thing here; a THIRD bar column (~1236, see BAR_ROWS_MAX) is.
+## The sounder is a column of water, not a dial, so it takes a fraction of a gauge's width: the
+## boat carries the most cluster elements (speedo, bars, horizon, rose, sounder).
 const SOUNDER_W_FRAC := 0.6
 const BAR_H := 18.0
-## Max bar rows (bars + group captions) per column before spilling into a second; a third column
-## pushes the gauges off a 1280-wide window. 14 is the smallest cap that packs the drone's three
-## unsplittable 5-row ESC groups into two columns, and must stay >= the tallest scalar cluster
-## (truck, 14); `test_dashboard` pins both. The drone fills 26 of 28 rows: a new drone range
-## needs this re-derived (`esc_fault`, `node_health`, `node_online` stay range-less for it).
+## Bar rows (bars + group captions) that stand no taller than a FULL gauge (5 x 18 + 4 x 8 = 122
+## of 150): up to here one column; past it two, halving the panel's height where the window
+## has the width (`bar_columns`).
+const BAR_ROWS_ONE_COLUMN := 5
+## Most rows one column takes when two do not fit the window, past which there are two anyway.
+## 14 is the smallest cap that packs the drone's three unsplittable 5-row ESC groups into two
+## columns, and must stay >= the tallest scalar cluster (truck, 14); `test_dashboard` pins both.
+## The drone fills 26 of 28 rows: a new drone range needs this re-derived (`esc_fault`,
+## `node_health`, `node_online` stay range-less for it).
 const BAR_ROWS_MAX := 14
 ## Enum "in" signals shown as small state chips rather than a lamp or a bar (gear rides the tacho
 ## instead).
@@ -293,6 +294,12 @@ var _has_payload := false      ## ...'payload_weight'
 var _field_warned := {}        ## field names already reported unresolved, so the warning is once
 var _reverser: Label = null  ## reverser (N/D/R) readout for a gear-out vehicle with no tacho (train)
 
+## FULL's instruments beside the bar column, gaps included (px): what a second column must fit
+## next to.
+var _beside_w := 0.0
+## FULL's bars were built allowing two columns (`_two_bar_cols_fit` at build).
+var _two_bar_cols := false
+
 var _density: int = Density.COMPACT  ## what the player asked for; always shown as given
 var _vehicle_type := ""        ## the family the current cluster was built for
 var _built := false            ## bind() has run at least once
@@ -361,10 +368,21 @@ func _apply_visible() -> void:
 
 ## A window resize rebuilds the theme (UiScale), which changes every metric below, so the
 ## cluster is rebuilt here too.
+## A width change that does not move the scale still decides whether a second bar column fits.
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_THEME_CHANGED and _built:
 		_build(_vehicle_type)
 		_apply_visible()
+	elif what == NOTIFICATION_RESIZED and _built and _density == Density.FULL \
+			and _two_bar_cols_fit() != _two_bar_cols:
+		_build(_vehicle_type)
+		_apply_visible()
+
+
+## Two bar columns fit beside the instruments inside the window.
+func _two_bar_cols_fit() -> bool:
+	var avail := get_viewport_rect().size.x - 2.0 * UiTheme.px(self, PANEL_PAD_X)
+	return _beside_w + 2.0 * UiTheme.px(self, MID_W) + UiTheme.px(self, CLUSTER_GAP) <= avail
 
 
 func _build(vehicle_type: String) -> void:
@@ -443,10 +461,13 @@ func _build(vehicle_type: String) -> void:
 			var entry: Array = READOUT_EXTRAS[extra_name]
 			_readout_extras.append([extra_name, entry[0], entry[1]])
 	var wants_reverser := out_names.has("gear") and not out_names.has("rpm")
-	# The middle column (bars + readout) is what COMPACT drops, so on a train it holds only the
-	# reverser and on everything else in COMPACT it isn't built at all.
-	if _density == Density.FULL or wants_reverser:
-		var mid := VBoxContainer.new()
+	var full := _density == Density.FULL
+	# The middle column is what COMPACT drops, so on a train it holds only the reverser and on
+	# everything else in COMPACT it isn't built at all. Its bars are built last, once the
+	# instruments beside them say how much width is left.
+	var mid: VBoxContainer = null
+	if full or wants_reverser:
+		mid = VBoxContainer.new()
 		mid.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		mid.add_theme_constant_override("separation", int(UiTheme.px(self, MID_GAP)))
 		cluster.add_child(mid)
@@ -455,17 +476,6 @@ func _build(vehicle_type: String) -> void:
 			_reverser.theme_type_variation = &"Title"
 			_reverser.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			mid.add_child(_reverser)
-		if _density == Density.FULL:
-			mid.custom_minimum_size = Vector2(UiTheme.px(self, MID_W), 0)
-			_build_bars(vehicle_type, mid)
-			_readout = Label.new()
-			_readout.theme_type_variation = &"Small"
-			# Wraps inside the middle column: the boat's line carries six marine readings on top
-			# of HDG/ODO/GPS, and an unwrapped Label would widen the whole cluster past the panel
-			# instead of growing it downward. A shorter line never wraps.
-			_readout.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			_readout.custom_minimum_size = Vector2(UiTheme.px(self, MID_W), 0)
-			mid.add_child(_readout)
 
 	_tach = null
 	if out_names.has("rpm"):
@@ -494,6 +504,21 @@ func _build(vehicle_type: String) -> void:
 		if out_names.has(DEPTH_SIGNAL):
 			_sounder = _make_sounder()
 			cluster.add_child(_sounder)
+
+	_beside_w = 0.0
+	if full:
+		for c: Control in cluster.get_children():
+			if c != mid:
+				_beside_w += c.custom_minimum_size.x + UiTheme.px(self, CLUSTER_GAP)
+		_two_bar_cols = _two_bar_cols_fit()
+		_build_bars(vehicle_type, mid)
+		# Under the cluster, the panel's whole width: the boat's line carries six marine readings
+		# on top of HDG/ODO/GPS, and wraps only past that.
+		_readout = Label.new()
+		_readout.theme_type_variation = &"Small"
+		_readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_readout.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		col.add_child(_readout)
 
 	# Every widget above is new, so field bindings are stale; a density change or theme rebuild
 	# comes back through here too.
@@ -576,24 +601,31 @@ func _set_lamp_color(lamp: Label, col: Color) -> void:
 ## plus one bar per instance, labelled with its zero-based index — that index is the esc_index
 ## on the wire and the bit position in esc_fault, so it must match the bus's own numbering.
 ##
-## Bars flow into columns of at most BAR_ROWS_MAX rows; a group is never split across a column
-## break.
+## Bars flow into `bar_columns` columns of `column_cap` rows; a group is never split across a
+## column break.
 func _build_bars(vehicle_type: String, into: Node) -> void:
 	var cols := HBoxContainer.new()
 	cols.add_theme_constant_override("separation", int(UiTheme.px(self, CLUSTER_GAP)))
 	into.add_child(cols)
+	var sigs := bar_signals(vehicle_type)
+	var sizes := bar_rows(sigs)
+	var cap := column_cap(sizes, bar_columns(sizes, _two_bar_cols))
+	# One caption gutter for every bar, the widest caption's: a fixed gutter crops BRK TEMP.
+	var font := get_theme_default_font()
+	var label_w := DashBar.LABEL_W
+	for sig: RefCounted in sigs:
+		var text: String = BAR_LABEL.get(sig.name, sig.name.to_upper())
+		label_w = maxf(label_w, font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0,
+				int(UiTheme.px(self, DashBar.FONT_SIZE))).x / UiTheme.scale_of(self)
+				+ DashBar.LABEL_PAD)
 	var col: VBoxContainer = null
 	var col_rows := 0
-	for sig in Contract.data.signals_for_vehicle(vehicle_type, "out"):
-		if sig.name in GAUGE_SIGNALS or sig.name in WIDGET_SIGNALS or sig.range.size() != 2:
-			continue
-		if not sig.has_warn() and sig.flavor == "":
-			continue
+	for sig: RefCounted in sigs:
 		var caption: String = BAR_LABEL.get(sig.name, sig.name.to_upper())
 		# `col_rows > 0` guard: a group taller than the cap gets its own column rather than an
 		# empty one first.
 		var rows: int = sig.count + (1 if sig.is_instanced() else 0)
-		if col == null or (col_rows > 0 and col_rows + rows > BAR_ROWS_MAX):
+		if col == null or (col_rows > 0 and col_rows + rows > cap):
 			col = _new_bar_column()
 			cols.add_child(col)
 			col_rows = 0
@@ -610,6 +642,7 @@ func _build_bars(vehicle_type: String, into: Node) -> void:
 			var bar := DashBar.new()
 			bar.custom_minimum_size = Vector2(0, UiTheme.px(self, BAR_H))
 			bar.label = str(i) if sig.is_instanced() else caption
+			bar.label_w = label_w
 			bar.units = _short_unit(sig.unit)
 			bar.min_value = float(sig.range[0])
 			bar.max_value = float(sig.range[1])
@@ -618,6 +651,62 @@ func _build_bars(vehicle_type: String, into: Node) -> void:
 			col.add_child(bar)
 			group.append(bar)
 		_bars[sig.name] = group
+
+
+## The "out" signals that become bars: ranged and warn'd or flavored, short of a widget's. The
+## ranged ones on no display are so on purpose: `speed` (the speedo's), `throttle` and `steer`
+## (the driver's own), the motion set (`yaw`, `accLong`, `accLat`, `slip`, `impact`, the flight
+## families' rates and `acc_vert`), sloppyCAN's to show.
+static func bar_signals(vehicle_type: String) -> Array:
+	return Contract.data.signals_for_vehicle(vehicle_type, "out").filter(
+			func(sig: RefCounted) -> bool:
+				return not (sig.name in GAUGE_SIGNALS or sig.name in WIDGET_SIGNALS) \
+						and sig.range.size() == 2 and (sig.has_warn() or sig.flavor != ""))
+
+
+## Rows each bar signal takes: one per instance, plus an instanced group's caption.
+static func bar_rows(sigs: Array) -> Array[int]:
+	var sizes: Array[int] = []
+	for sig: RefCounted in sigs:
+		sizes.append(sig.count + (1 if sig.is_instanced() else 0))
+	return sizes
+
+
+## How many bar columns groups of `sizes` rows take: one while they stand no taller than a gauge,
+## else two where `two_fit` (beside the instruments inside the window), else one up to
+## BAR_ROWS_MAX rows, past which two whatever the width (the drone).
+static func bar_columns(sizes: Array[int], two_fit: bool) -> int:
+	var total := 0
+	for n in sizes:
+		total += n
+	if total <= BAR_ROWS_ONE_COLUMN or (not two_fit and total <= BAR_ROWS_MAX):
+		return 1
+	return 2
+
+
+## Rows per bar column for groups of `sizes` rows (in order, never split) in at most `max_cols`
+## columns: the least cap that fits, so the columns come out as even as the groups allow.
+static func column_cap(sizes: Array[int], max_cols: int) -> int:
+	var cols := maxi(max_cols, 1)
+	var total := 0
+	var largest := 0
+	for n in sizes:
+		total += n
+		largest = maxi(largest, n)
+	# Ends by `total` at the latest: one column holds everything.
+	var cap := maxi(largest, ceili(float(total) / float(cols)))
+	while cap < total:
+		var used := 1
+		var rows := 0
+		for n in sizes:
+			if rows > 0 and rows + n > cap:
+				used += 1
+				rows = 0
+			rows += n
+		if used <= cols:
+			return cap
+		cap += 1
+	return cap
 
 
 ## One bar column, MID_W wide with MID_GAP stacking. Top-aligned: a short second column
@@ -697,7 +786,8 @@ static func declares_compass_rose(out_names: Array) -> bool:
 func _make_horizon() -> AttitudeIndicator:
 	var h := AttitudeIndicator.new()
 	var edge := UiTheme.px(self, GAUGE_W if _density == Density.FULL else GAUGE_W_COMPACT)
-	h.custom_minimum_size = Vector2(edge, edge)
+	h.custom_minimum_size = Vector2(edge, edge + UiTheme.px(self, AttitudeIndicator.LINE_H))
+	h.size_flags_vertical = Control.SIZE_SHRINK_CENTER  # the caption line sits under the disc
 	h.caption = "ATTITUDE"
 	var pitch_def := Contract.data.get_signal_def("pitch", "out")
 	if pitch_def != null and pitch_def.has_warn():
@@ -713,8 +803,10 @@ func _make_horizon() -> AttitudeIndicator:
 func _make_wind_rose(marine: bool) -> WindRose:
 	var w := WindRose.new()
 	var edge := UiTheme.px(self, GAUGE_W)  # FULL only, so there is no COMPACT size to pick
-	w.custom_minimum_size = Vector2(edge, edge)
 	w.marine = marine
+	w.custom_minimum_size = Vector2(edge, edge + UiTheme.px(self, WindRose.LINE_H * w.strip_lines()))
+	# Its own height, not a tall bar column's: the text lines sit under the disc.
+	w.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	w.caption = "WIND" if marine else "COMPASS"
 	return w
 

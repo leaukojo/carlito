@@ -148,7 +148,7 @@ Marks are `buoy`/`buoy-flag`, `collision_mode: "none"`, placed `raw` by `_place_
 
 Boat declares more ranged flavored "out" signals than any family; hand-built widgets claim
 their own via `Dashboard.WIDGET_SIGNALS` (sibling of `GAUGE_SIGNALS`), holding it to eleven
-bar rows in one column.
+bar rows: two columns, or one where the window lacks the width.
 
 | Widget | Gated on | Note |
 | --- | --- | --- |

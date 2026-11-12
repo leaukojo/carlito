@@ -100,16 +100,12 @@ func test_an_instanced_signal_generates_one_bar_per_instance() -> void:
 	assert_int(checked).is_greater(0)
 
 
-## The bars flow into columns past BAR_ROWS_MAX rows, and no group is split across a break —
-## four ESC bars under one caption, half in each column, would read as two different signals.
-## Counted off the contract, so this covers whatever instanced signal lands next.
-func test_bar_columns_respect_the_row_cap_and_never_split_a_group() -> void:
+## No group is split across a column break — four ESC bars under one caption, half in each
+## column, would read as two different signals. Counted off the contract, so this covers whatever
+## instanced signal lands next.
+func test_bar_columns_never_split_a_group() -> void:
 	for family in FAMILIES:
 		var dash := _dash(family, Dashboard.Density.FULL)
-		var rows := 0
-		for sig_name: String in dash._bars:
-			var sig := Contract.data.get_signal_def(sig_name, "out")
-			rows += sig.count + (1 if sig.is_instanced() else 0)
 		# Every bar lives in some column; the columns are the DashBars' parents.
 		var columns := {}
 		for sig_name: String in dash._bars:
@@ -121,17 +117,48 @@ func test_bar_columns_respect_the_row_cap_and_never_split_a_group() -> void:
 			assert_int(parents.size()) \
 				.override_failure_message("%s: '%s' was split across columns" % [family, sig_name]) \
 				.is_equal(1)
-		if rows == 0:
-			continue
-		# One column until the cap is exceeded, and never more columns than the rows need.
-		var wanted := int(ceil(float(rows) / float(Dashboard.BAR_ROWS_MAX)))
+		var sizes := Dashboard.bar_rows(Dashboard.bar_signals(family))
 		assert_int(columns.size()) \
-			.override_failure_message("%s: %d rows landed in %d columns" % [family, rows, columns.size()]) \
-			.is_between(maxi(wanted, 1), maxi(wanted + 1, 1))
-		if rows <= Dashboard.BAR_ROWS_MAX:
-			assert_int(columns.size()) \
-				.override_failure_message("%s: %d rows should stay in one column" % [family, rows]) \
-				.is_equal(1)
+			.override_failure_message("%s: %d columns built" % [family, columns.size()]) \
+			.is_equal(_packed_columns(sizes, Dashboard.column_cap(sizes,
+					Dashboard.bar_columns(sizes, dash._two_bar_cols))) if not sizes.is_empty() else 0)
+
+
+## The column rule: a short list stays in one column (as tall as a gauge); a long one splits in
+## two where they fit beside the instruments, evenly as the groups allow; without the width a
+## scalar family keeps one column and only the drone (past BAR_ROWS_MAX) still splits.
+func test_bars_take_two_even_columns_where_they_fit() -> void:
+	for family in FAMILIES:
+		var sizes := Dashboard.bar_rows(Dashboard.bar_signals(family))
+		var total := 0
+		for n in sizes:
+			total += n
+		if total <= Dashboard.BAR_ROWS_ONE_COLUMN:
+			assert_int(Dashboard.bar_columns(sizes, true)).is_equal(1)
+			continue
+		assert_int(Dashboard.bar_columns(sizes, true)).is_equal(2)
+		var cap := Dashboard.column_cap(sizes, 2)
+		assert_int(_packed_columns(sizes, cap)).is_equal(2)
+		# Even: the taller column is no more than the largest group past half.
+		var largest := 0
+		for n in sizes:
+			largest = maxi(largest, n)
+		assert_int(cap).override_failure_message("%s: %d rows packed %d to a column"
+				% [family, total, cap]).is_less_equal(ceili(total / 2.0) + largest - 1)
+	# The truck's fourteen scalar rows: seven and seven.
+	assert_int(Dashboard.column_cap(Dashboard.bar_rows(Dashboard.bar_signals("truck")), 2)).is_equal(7)
+
+
+## How many columns `_build_bars`' greedy packing makes of `sizes` at `cap` rows.
+func _packed_columns(sizes: Array[int], cap: int) -> int:
+	var used := 1
+	var rows := 0
+	for n in sizes:
+		if rows > 0 and rows + n > cap:
+			used += 1
+			rows = 0
+		rows += n
+	return used
 
 
 ## The instance bars are labelled with the ESC index on the wire — zero-based, matching the
@@ -250,46 +277,80 @@ func test_the_node_bus_publishes_but_draws_nothing() -> void:
 				.override_failure_message("'%s' grew a widget" % sig_name).is_false()
 
 
-## The bar budget, from both ends. `BAR_ROWS_MAX` is bounded below by the tallest scalar cluster
-## (the truck's — below it, a family with no instanced signal splits) and ABOVE by nothing at all
-## except panel height, so the number is chosen by the bound that actually bites: NO CLUSTER MAY
-## NEED A THIRD COLUMN. The cluster is a full-width panel with a 280 px middle between two 150 px
-## gauges, so there is room to spill sideways exactly ONCE; a third column is ~1236 px across and
-## pushes the gauges off the panel on a 1280-wide or UI-scaled window.
-##
-## This is the test that has to exist, because the arithmetic lies: packing is greedy first-fit
-## over groups that may not be split, so column count ≠ ceil(rows / cap). Drone's 27 rows as
-## three unsplittable 5-row ESC groups take three columns at every cap ≤ 14 (27/14 reads as 2).
+## The bar budget: NO CLUSTER MAY NEED A THIRD COLUMN, with or without the width for two (a third
+## pushes the gauges off a 1280-wide or UI-scaled window), and without it a column stays within
+## BAR_ROWS_MAX. Packing is greedy first-fit over groups that may not be split, so column count
+## ≠ ceil(rows / cap): the drone's three unsplittable 5-row ESC groups take three columns at every
+## cap under 14.
 func test_no_cluster_needs_a_third_bar_column() -> void:
 	for family in FAMILIES:
-		var columns := _bar_columns(family)
-		assert_int(columns) \
-			.override_failure_message("%s needs %d bar columns" % [family, columns]) \
-			.is_less_equal(2)
-
-
-## ...and the OTHER end of the budget: a SCALAR family stays in one column. The drone is the only
-## vehicle with instanced signals and the only one that may split — the truck spilling
-## `trailer_brake_demand` alone into a 280 px column of its own is the regression this catches,
-## and it is the one that already happened.
-func test_only_the_instanced_family_splits_its_bars() -> void:
-	for family in FAMILIES:
-		if family == "drone":
+		var sizes := Dashboard.bar_rows(Dashboard.bar_signals(family))
+		if sizes.is_empty():
 			continue
-		assert_int(_bar_columns(family)) \
-			.override_failure_message("%s split its bars across %d columns" % [family, _bar_columns(family)]) \
-			.is_equal(1)
+		for fit in [true, false]:
+			var cols := Dashboard.bar_columns(sizes, fit)
+			var cap := Dashboard.column_cap(sizes, cols)
+			assert_int(_packed_columns(sizes, cap)) \
+				.override_failure_message("%s (two fit: %s) needs %d bar columns"
+						% [family, fit, _packed_columns(sizes, cap)]) \
+				.is_less_equal(2)
+			assert_int(cap) \
+				.override_failure_message("%s (two fit: %s): %d rows to a column" % [family, fit, cap]) \
+				.is_less_equal(Dashboard.BAR_ROWS_MAX)
 
 
-## How many columns a family's generated bars actually land in — the DashBars' distinct parents,
-## read off the built cluster rather than recomputed from the contract.
-func _bar_columns(family: String) -> int:
-	var dash := _dash(family, Dashboard.Density.FULL)
-	var columns := {}
-	for sig_name: String in dash._bars:
-		for bar: DashBar in (dash._bars[sig_name] as Array):
-			columns[bar.get_parent()] = true
-	return columns.size()
+## Without the width for two, a SCALAR family keeps one column: the drone is the only vehicle with
+## instanced signals and the only one that splits regardless.
+func test_without_the_width_only_the_instanced_family_splits_its_bars() -> void:
+	for family in FAMILIES:
+		var sizes := Dashboard.bar_rows(Dashboard.bar_signals(family))
+		assert_int(Dashboard.bar_columns(sizes, false)) \
+			.override_failure_message("%s splits without the width" % family) \
+			.is_equal(2 if family == "drone" else 1)
+
+
+## Every bar's caption fits its gutter: one gutter per cluster, the widest caption's.
+func test_every_bar_caption_fits_its_gutter() -> void:
+	for family in FAMILIES:
+		var dash := _dash(family, Dashboard.Density.FULL)
+		for sig_name: String in dash._bars:
+			for bar: DashBar in (dash._bars[sig_name] as Array):
+				var w := bar.get_theme_default_font().get_string_size(bar.label,
+						HORIZONTAL_ALIGNMENT_LEFT, -1.0, int(DashBar.FONT_SIZE)).x
+				assert_float(w).override_failure_message("%s: '%s' is %.0f px in a %.0f px gutter"
+						% [family, bar.label, w, bar.label_w]).is_less_equal(bar.label_w)
+
+
+# --- a bar's lag and held number ----------------------------------------------
+
+## A parked axle alternating every physics tick (30 Hz, here ±50 kg on AXLE's 0-20000 span, the
+## bobtail's) prints ONE number once the lag has settled, where the raw value printed a new one
+## every frame.
+func test_a_value_chattering_every_tick_prints_one_number() -> void:
+	var dt := 1.0 / 60.0
+	var span := 20000.0
+	var shown := 9400.0
+	var printed := shown
+	var seen := {}
+	for i in 240:
+		var raw := 9400.0 + (50.0 if i % 2 == 0 else -50.0)
+		shown = DashBar.lag_step(shown, raw, dt)
+		printed = DashBar.held(printed, shown, span)
+		if i * dt >= 1.0:
+			seen[roundi(printed)] = true
+	assert_int(seen.size()).is_equal(1)
+
+
+## ...and a real move still arrives: 63 % of a step after LAG_S, and the number follows it.
+func test_the_lag_follows_a_step() -> void:
+	var dt := 1.0 / 60.0
+	var shown := 0.0
+	for i in roundi(DashBar.LAG_S / dt):
+		shown = DashBar.lag_step(shown, 1000.0, dt)
+	assert_float(shown).is_equal_approx(1000.0 * (1.0 - exp(-1.0)), 1.0)
+	assert_float(DashBar.held(0.0, shown, 20000.0)).is_equal(shown)
+	# Inside the hold the printed number stays.
+	assert_float(DashBar.held(500.0, 510.0, 20000.0)).is_equal(500.0)
 
 
 # --- the artificial horizon (hand-built, contract-gated) -----------------------
@@ -393,11 +454,13 @@ func test_every_widget_signal_keeps_a_display() -> void:
 	assert_int(checked).is_greater_equal(Dashboard.WIDGET_SIGNALS.size())
 
 
-## ...and the number the exclusion list exists for: the boat's cluster fits ONE bar column. It
-## is the family with the most ranged flavored "out" signals and the only one close to the cap,
-## so it is pinned here rather than left to the generic column cases.
+## ...and the number the exclusion list exists for: the boat's bars fit ONE column where two do
+## not fit the window. It is the family with the most ranged flavored "out" signals and the only
+## one close to the cap, so it is pinned here rather than left to the generic column cases.
 func test_the_boat_bars_fit_one_column() -> void:
-	assert_int(_bar_columns("boat")).is_equal(1)
+	var sizes := Dashboard.bar_rows(Dashboard.bar_signals("boat"))
+	assert_int(Dashboard.bar_columns(sizes, false)).is_equal(1)
+	assert_int(Dashboard.column_cap(sizes, 1)).is_less_equal(Dashboard.BAR_ROWS_MAX)
 
 
 # --- the wind/track rose (hand-built, contract-gated) -------------------------
