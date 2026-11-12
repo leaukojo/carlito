@@ -72,6 +72,23 @@ func test_challenge_pads_show_only_while_an_attempt_runs() -> void:
 		assert_bool((p as Control).visible).is_false()
 
 
+## HAND taps InputRouter's latch (one edge per press) and holds no level of its own, so the
+## router's reset and the other devices' presses all reach the same brake.
+func test_hand_taps_the_routers_parking_brake() -> void:
+	var t := _touch()
+	var hand: Control = null
+	for s in t._stateful:
+		if s["text"] == "HAND":
+			hand = s["pad"]
+	assert_object(hand).is_not_null()
+	hand.held.emit(true)
+	var first := t.poll()
+	assert_bool(bool(first.get(&"parking_brake_toggle", false))).is_true()
+	assert_bool(first.has(&"handbrake")).is_false()
+	hand.held.emit(false)
+	assert_bool(bool(t.poll().get(&"parking_brake_toggle", false))).is_false()
+
+
 func test_challenge_pads_emit_retry_and_info() -> void:
 	var t := _touch()
 	var fired := []

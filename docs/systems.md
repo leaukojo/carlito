@@ -75,16 +75,16 @@ Three paths, chosen per tick:
 | Local | no fresh bridge | `arbitrate_local` |
 
 - J1939 / ISO 11783 traffic drives (EEC2/EBC1/VDC2/TC1/CCVS decode to pedals/steer/gear).
-- Fallback raises `NO DRIVING CONTROLS FROM SLOPPYCAN - KEYBOARD DRIVES`; only the driving
-  group's toggles (lights, arm) advance there. Never under `set_bridge_only`.
+- Fallback raises `NO DRIVING CONTROLS FROM SLOPPYCAN - LOCAL CONTROLS DRIVE`; only the driving
+  group's toggles (lights, arm, parking brake) advance there. Never under `set_bridge_only`.
 - `InputRouter.bridge_drives()` is the "who drives" predicate (touch driving layer,
   action-registry context); `Bridge.is_active()` only says a peer is connected.
   `bridge_source.gd` normalizes contract-in fields (%->unit); `local_source.gd` reads the
   keyboard (edges from either device), `pad_source.gd` the gamepad's axes; touch registers via `InputRouter.set_touch_source()`.
 - Toggle state is owned by the router, never a source (the `var _*` block at top of
   `input_router.gd` is the list); sources report per-frame edges only, ORed by `merge_local`.
-  The one exception: touch's HAND latches (`touch_controls.gd` `_latch_button`), a level the
-  overlay holds and reports each poll; the router cannot reset it, so it outlives a respawn.
+  The parking brake too (Shift, R1, touch HAND): `handbrake` is the stronger of its latch and
+  the held control, and the latch is airframe state (`reset_vehicle_cycles` releases it).
   Train pantograph defaults raised so a locally-driven train spawns able to move.
 - `VehicleInput` (`src/input/vehicle_input.gd`) fields are flat except `lamps` (the fourteen
   verbatim-mirrored lamp/warning bits). The raw-intent wire is `Dictionary[StringName,

@@ -160,6 +160,23 @@ func test_l1_reports_the_layer() -> void:
 	assert_array(seen).contains_exactly([true, false, true, false])
 
 
+## The first L1 press ends the shell's hint for the session; releases and lost pads never undo it.
+func test_l1_is_used_from_its_first_press() -> void:
+	var layer := _layer()
+	_button(layer, JOY_BUTTON_X, true)
+	_button(layer, JOY_BUTTON_X, false)
+	assert_bool(layer.layer_used()).is_false()
+	layer.paused = true  # under a menu the layer is inert and unseen: not a use
+	_button(layer, JOY_BUTTON_LEFT_SHOULDER, true)
+	_button(layer, JOY_BUTTON_LEFT_SHOULDER, false)
+	assert_bool(layer.layer_used()).is_false()
+	layer.paused = false
+	_button(layer, JOY_BUTTON_LEFT_SHOULDER, true)
+	_button(layer, JOY_BUTTON_LEFT_SHOULDER, false)
+	layer._on_joy_connection_changed(0, false)
+	assert_bool(layer.layer_used()).is_true()
+
+
 ## A pad lost mid-hold sends no release: the layer lets go itself, and the next press is fresh.
 func test_a_lost_pad_lets_go_of_what_it_held() -> void:
 	var layer := _layer()

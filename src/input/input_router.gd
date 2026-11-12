@@ -82,6 +82,9 @@ var _brake_override := false  ## latched by `brake_override`, both sources alike
 var _auto_hold_on := false
 var _auto_hold := false  ## latched by `auto_hold`, local path only (keys, touch, gamepad)
 var _lights := 1  ## headlight level owned here so keyboard + touch share one state
+## Local parking-brake latch, flipped by its key, the pad's R1 and touch HAND; `handbrake` reads the
+## stronger of it and the held control. Airframe state: `reset_vehicle_cycles` releases it.
+var _parking_brake := false
 # Local tractor implement state, owned here so keyboard + touch share it; bridge path ignores these.
 var _hitch_up := true  ## true = raised (transport), toggled by the local hitch key
 var _pto := false      ## local PTO engage, toggled by the local PTO key
@@ -130,7 +133,7 @@ const IGNITION_NOTICE_TEXT := "IGNITION OFF - MOVE THE ENGINE KEY"
 ## Edge latch for the "ignition off" notice — see _warn_if_ignition_off.
 var _ignition_warned := false
 ## Raised sticky and cleared by text match, like the ignition notice.
-const FALLBACK_NOTICE_TEXT := "NO DRIVING CONTROLS FROM SLOPPYCAN - KEYBOARD DRIVES"
+const FALLBACK_NOTICE_TEXT := "NO DRIVING CONTROLS FROM SLOPPYCAN - LOCAL CONTROLS DRIVE"
 ## Edge latch for the fallback notice — see _set_fallback_notice.
 var _fallback_warned := false
 ## This tick's answer to "who drives": true while the bridge's values drive the vehicle outright.
@@ -144,8 +147,9 @@ var _bridge_only := false
 ## so a course can be authored and checked without sloppyCAN. Never true in a release export.
 var _dev_keys := false
 const DEV_KEYS_NOTICE_TEXT := "DEV: KEYBOARD DRIVES THIS CHALLENGE"
-const KEYS_LOCKED_NOTICE_TEXT := "KEYBOARD DISABLED IN CHALLENGES - DRIVE OVER SLOPPYCAN"
-## The keyboard driving actions whose press raises KEYS_LOCKED_NOTICE_TEXT under the lock.
+const KEYS_LOCKED_NOTICE_TEXT := "LOCAL DRIVING OFF IN CHALLENGES - DRIVE OVER SLOPPYCAN"
+## The driving actions (keys and the pad's axes) whose press raises KEYS_LOCKED_NOTICE_TEXT under
+## the lock.
 const DRIVING_ACTIONS: Array[StringName] = [&"accel", &"brake_reverse", &"steer_left", &"steer_right"]
 ## Gearbox mode, set by the shell (vehicle selector in free play, ChallengeDef.transmission in an
 ## attempt). Bridge-only: it decides how `arbitrate_bridge` reads the gear byte; local input has no
@@ -286,6 +290,8 @@ func reset_vehicle_cycles() -> void:
 	_sheet = 0
 	# Cargo hook clears for the same reason: global key, no local indication.
 	_hardpoint = false
+	# A respawned or new body starts with its parking brake off, whatever held the old one.
+	_parking_brake = false
 	# A machine starting over starts with the wheel centred and the feet off the pedals.
 	_reset_key_shaping()
 	_brake_override = false
@@ -446,6 +452,9 @@ func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 	if bool(raw.get(&"lights_cycle", false)):
 		_lights = Cycles.lights(_lights)
 	raw[&"lights"] = _lights
+	if bool(raw.get(&"parking_brake_toggle", false)):
+		_parking_brake = not _parking_brake
+	raw[&"handbrake"] = maxf(float(raw.get(&"handbrake", 0.0)), 1.0 if _parking_brake else 0.0)
 	# Local implement toggles owned here too (same pattern as the headlight level).
 	if bool(raw.get(&"hitch_toggle", false)):
 		_hitch_up = not _hitch_up
@@ -720,7 +729,7 @@ static func arbitrate_local(raw: Dictionary, speed: float, gear_byte: int,
 
 
 ## The toggle/cycle edges whose latched field `blend_local_driving` takes from local.
-const DRIVING_EDGES: Array[StringName] = [&"lights_cycle", &"arm_toggle"]
+const DRIVING_EDGES: Array[StringName] = [&"lights_cycle", &"arm_toggle", &"parking_brake_toggle"]
 
 
 ## Drop every toggle/cycle edge outside DRIVING_EDGES. Keyed on the edge naming (`*_toggle`,

@@ -576,6 +576,20 @@ func test_pad_legend_lists_the_vehicle_layer() -> void:
 	assert_array(texts).not_contains(["Square"])
 
 
+## The hint is one line and nothing else (no title); the layer brings its title back.
+func test_pad_legend_hint_is_one_line() -> void:
+	var legend: PadLegend = auto_free(PadLegend.new())
+	add_child(legend)
+	legend.show_hint()
+	var shown := []
+	for label in legend.find_children("*", "Label", true, false):
+		if (label as Label).is_visible_in_tree():
+			shown.append((label as Label).text)
+	assert_array(shown).contains_exactly([PadLegend.HINT_TEXT])
+	legend.show_layer(ActionRegistry.context("drone", false, {}))
+	assert_bool(legend._title.visible).is_true()
+
+
 ## CONTROLS is a second page of the same overlay, and back() is what the shell calls on Esc
 ## before it decides to resume — so Esc walks the overlay out the way it came in.
 func test_pause_menu_controls_page_is_backed_out_of() -> void:
@@ -979,6 +993,69 @@ func test_boot_clearing_a_notice_removes_only_its_own_text() -> void:
 	assert_bool(boot._notice.visible).is_true()
 	GameState.notice_cleared.emit("BRIEF")
 	assert_bool(boot._notice.visible).is_false()
+
+
+## The L1 hint in the running shell: up once the pad is the device in use on a body with an L1
+## layer, not on one without (a car), never under a menu, and gone for good after L1's first press.
+func test_boot_shows_the_l1_hint_while_the_pad_drives() -> void:
+	var boot := _booted()
+	boot._level.set_vehicle("tractor-kenney")
+	boot._ui._set_device(UiScale.Device.KEYBOARD)
+	assert_bool(boot._pad_legend.visible).is_false()
+	boot._ui._set_device(UiScale.Device.PAD)
+	assert_bool(boot._pad_legend.visible).is_true()
+	assert_bool(boot._pad_legend._title.visible).is_false()
+	boot._level.set_vehicle("sedan")
+	assert_bool(boot._pad_legend.visible).is_false()
+	boot._level.set_vehicle("tractor-kenney")
+	assert_bool(boot._pad_legend.visible).is_true()
+	boot._open_pause()
+	assert_bool(boot._pad_legend.visible).is_false()
+	boot._close_all_overlays()
+	assert_bool(boot._pad_legend.visible).is_true()
+	boot._pad._set_l1(0, true)
+	boot._pad._set_l1(0, false)
+	assert_bool(boot._pad_legend.visible).is_false()
+
+
+## The overturned notice names the respawn control of the device in use, read from the registry;
+## a sloppyCAN driver is sent to the pause menu; the pointer gets the RESPAWN button.
+func test_the_overturned_notice_names_the_devices_respawn() -> void:
+	var D := UiScale.Device
+	var cases := [
+		[D.KEYBOARD, false, false, "OVERTURNED - PRESS BACKSPACE TO RESPAWN", false],
+		[D.PAD, false, false, "OVERTURNED - PRESS TRIANGLE TO RESPAWN", false],
+		[D.POINTER, false, false, "OVERTURNED - PRESS BACKSPACE TO RESPAWN", true],
+		[D.POINTER, false, true, "OVERTURNED", true],
+		[D.PAD, true, false, "OVERTURNED - RESPAWN FROM THE PAUSE MENU", false],
+	]
+	for c: Array in cases:
+		var shown := Boot.overturned_notice(c[0], c[1], c[2])
+		assert_str(String(shown["text"])).is_equal(c[3])
+		assert_bool(bool(shown["button"])).is_equal(c[4])
+
+
+## Raised by the vehicle with its fixed text, shown with the shell's words and button, cleared by
+## that same fixed text; the button respawns.
+func test_boot_overturned_notice_shows_and_clears_with_its_button() -> void:
+	var boot := _booted()
+	boot._ui._set_device(UiScale.Device.PAD)
+	GameState.notice.emit(BaseVehicle.OVERTURNED_NOTICE, GameState.NOTICE_STICKY)
+	assert_str(boot._notice.text).contains("TRIANGLE")
+	var button: Button = boot._notice._actions[BaseVehicle.OVERTURNED_NOTICE]["button"]
+	assert_bool(button.visible).is_false()
+	boot._ui._set_device(UiScale.Device.POINTER)
+	boot._notice._process(0.0)
+	assert_bool(button.visible).is_true()
+	assert_int(button.focus_mode).is_equal(Control.FOCUS_NONE)
+	var body: BaseVehicle = boot._level.vehicle
+	var spawn := body.spawn_transform.origin
+	body.global_position += Vector3(30.0, 0.0, 0.0)
+	button.pressed.emit()
+	assert_float(body.global_position.distance_to(spawn)).is_less(0.01)
+	GameState.notice_cleared.emit(BaseVehicle.OVERTURNED_NOTICE)
+	assert_bool(boot._notice.visible).is_false()
+	assert_bool(button.visible).is_false()
 
 
 ## LEVEL then CHALLENGES: Esc closes the top of the stack (CHALLENGES) only, and the world

@@ -81,6 +81,10 @@ func _ready() -> void:
 	_touch.info_pressed.connect(_show_challenge_info)
 	_pad.capabilities = _capabilities
 	_pad.layer_changed.connect(_on_pad_layer_changed)
+	_ui.device_changed.connect(func(_used: UiScale.Device) -> void: _sync_pad_legend())
+	_notice.add_action(BaseVehicle.OVERTURNED_NOTICE, func() -> Dictionary:
+		return overturned_notice(_ui.device(), InputRouter.bridge_drives(),
+				UiScale.is_touch_display()), "RESPAWN", _on_pause_respawn)
 	GameState.attachment_changed.connect(_refresh_attachment_controls)
 	GameState.night_changed.connect(_on_level_night_changed)
 	_packs = LevelPacks.new()
@@ -191,11 +195,19 @@ static func _or_into(caps: Dictionary, extra: Dictionary) -> void:
 
 
 ## L1 held: the vehicle's layer on screen while driving, never under a menu (the layer is inert
-## there) nor with nothing to drive.
+## there) nor with nothing to drive. Not held: while the pad is in use and L1 has never been
+## pressed, one line saying the layer exists, on a vehicle with something on it.
 func _on_pad_layer_changed(held: bool) -> void:
-	if held and _overlays.is_empty() and _level != null and _level.vehicle != null:
-		_pad_legend.show_layer(ActionRegistry.context(GameState.current_vehicle,
-				Bridge.is_active(), _capabilities(), InputRouter.bridge_drives()))
+	if not _overlays.is_empty() or _level == null or _level.vehicle == null:
+		_pad_legend.hide()
+		return
+	var ctx := ActionRegistry.context(GameState.current_vehicle, Bridge.is_active(),
+			_capabilities(), InputRouter.bridge_drives())
+	if held:
+		_pad_legend.show_layer(ctx)
+	elif _ui.device() == UiScale.Device.PAD and not _pad.layer_used() \
+			and not ActionRegistry.pad_layer_rows(ctx).is_empty():
+		_pad_legend.show_hint()
 	else:
 		_pad_legend.hide()
 
@@ -563,7 +575,8 @@ func _toggle_dashboard() -> void:
 	_on_density_changed(Dashboard.next_setting(_dashboard.density_setting()))
 
 
-## RESPAWN on the pause menu: close the overlay first, or the respawn happens under a paused tree.
+## RESPAWN on the pause menu or the overturned notice: close any overlay first, or the respawn
+## happens under a paused tree.
 func _on_pause_respawn() -> void:
 	_close_all_overlays()
 	_respawn()
@@ -902,6 +915,25 @@ func _cycle_camera() -> void:
 func _respawn() -> void:
 	if _level != null and _level.vehicle != null:
 		_level.vehicle.respawn()
+
+
+## The overturned notice as `NoticeLine` shows it (`add_action`): the vehicle's fixed text plus the
+## respawn control of the device in use, read from ActionRegistry; a sloppyCAN driver has none of
+## them, so the pause menu. The RESPAWN button is for the pointer (mouse or touch).
+static func overturned_notice(device: UiScale.Device, bridge_drives: bool,
+		touch_display: bool) -> Dictionary:
+	var respawn := ActionRegistry.find(&"respawn")
+	var how := ""
+	if bridge_drives:
+		how = "RESPAWN FROM THE PAUSE MENU"
+	elif device == UiScale.Device.PAD:
+		how = "PRESS %s TO RESPAWN" % ActionRegistry.pad_for(respawn).to_upper()
+	elif device == UiScale.Device.KEYBOARD or not touch_display:
+		how = "PRESS %s TO RESPAWN" % ActionRegistry.keys_for(respawn).to_upper()
+	var text := BaseVehicle.OVERTURNED_NOTICE
+	if how != "":
+		text += " - " + how
+	return {"text": text, "button": device == UiScale.Device.POINTER}
 
 
 # --- helpers -----------------------------------------------------------------

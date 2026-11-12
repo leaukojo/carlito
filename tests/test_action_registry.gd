@@ -51,7 +51,7 @@ func test_every_touch_poll_key_is_merged() -> void:
 
 
 ## The half the guard above misses: TouchControls.poll() also writes WIDGET_KEYS straight into
-## `_held`/`_edges` for the hand-built widgets (joystick, pedals, HAND, climb pads, HORN, LIGHTS),
+## `_held`/`_edges` for the hand-built widgets (joystick, pedals, climb pads, HORN, LIGHTS),
 ## Touch.WIDGET rows with no `poll_key` of their own.
 func test_every_widget_key_is_merged() -> void:
 	for key in TouchScript.WIDGET_KEYS:
@@ -400,10 +400,27 @@ func test_universal_rows_are_the_ungated_ones() -> void:
 	assert_bool(Registry.is_universal(Registry.find(&"pto"))).is_false()
 	assert_bool(Registry.is_universal(Registry.find(&"steer"))).is_false()
 	# HAND sits in the vehicle column, not beside MENU: the boat and the drone have no handbrake.
-	assert_bool(Registry.is_universal(Registry.find(&"handbrake"))).is_false()
-	assert_bool(Registry.applies(&"handbrake", _ctx("plane"))).is_true()
-	assert_bool(Registry.applies(&"handbrake", _ctx("boat"))).is_false()
-	assert_bool(Registry.applies(&"handbrake", _ctx("drone"))).is_false()
+	for id: StringName in [&"handbrake", &"parking_brake"]:
+		assert_bool(Registry.is_universal(Registry.find(id))).is_false()
+		assert_bool(Registry.applies(id, _ctx("plane"))).is_true()
+		assert_bool(Registry.applies(id, _ctx("boat"))).is_false()
+		assert_bool(Registry.applies(id, _ctx("drone"))).is_false()
+
+
+## The parking-brake latch is plain R1 on every wheeled body (R1 has no role without L1); L1 + R1
+## stays the tractor's PTO speed and falls through to the latch where L1 has nothing there.
+func test_r1_is_the_parking_brake_latch() -> void:
+	for family in ["car", "truck", "tractor", "plane", "train"]:
+		assert_str(_pad("r1", _ctx(family))).is_equal("parking_brake")
+	assert_str(_pad("r1", _ctx("boat"))).is_equal("")
+	assert_str(_pad("r1", _ctx("drone"))).is_equal("")
+	assert_str(_pad("r1", _ctx("car"), true)).is_equal("")  # a menu is up
+	assert_str(_pad("r1", Registry.context("car", true, {}))).is_equal("")  # sloppyCAN drives
+	assert_str(String(Registry.pad_press("r1", true, _ctx("car")))).is_equal("parking_brake")
+	assert_str(String(Registry.pad_press("r1", true, _ctx("tractor")))).is_equal("pto_mode")
+	assert_str(Registry.pad_for(Registry.find(&"parking_brake"))).is_equal("R1")
+	# Touch's HAND reads the router's handbrake, the field the dashboard's BRAKE lamp reads.
+	assert_str(String(Registry.find(&"parking_brake").get("touch_state", ""))).is_equal("handbrake")
 
 
 ## The web font has no emoji glyphs, so anything non-ASCII on a button renders as tofu.

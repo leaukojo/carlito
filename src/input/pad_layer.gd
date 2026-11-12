@@ -59,6 +59,9 @@ var capabilities: Callable
 var _held := {}
 ## Devices whose L1 is down, as a set: the legend shows while any pad holds it.
 var _l1_devices := {}
+## Some pad has pressed L1 outside a menu this session: the shell's "L1: more controls" hint
+## stops for good.
+var _layer_used := false
 
 
 func _ready() -> void:
@@ -106,11 +109,18 @@ func layer_held() -> bool:
 	return not _l1_devices.is_empty()
 
 
+## Whether L1 has been pressed this session (the shell's hint reads it).
+func layer_used() -> bool:
+	return _layer_used
+
+
 ## Record `device`'s L1 and tell the shell when "some pad holds L1" flips.
 func _set_l1(device: int, down: bool) -> void:
 	var was := not _l1_devices.is_empty()
 	if down:
 		_l1_devices[device] = true
+		# Under a menu the layer is inert and its legend never shows: the press taught nothing.
+		_layer_used = _layer_used or not _paused()
 	else:
 		_l1_devices.erase(device)
 	if was != (not _l1_devices.is_empty()):

@@ -7,6 +7,5 @@ Input arbitration lives here (standing rule 5). Protocol tour: `docs/systems.md`
   the bridge are never shaped. A measure tool that drives through `Input` measures the shaper:
   drive the bridge stash instead.
 - Toggle owners (`_lights`, `_hitch_up`, `_pto`, `_scv`, `_body_cmd`, …) live in InputRouter so
-  keyboard and touch share one owner; sources only report per-frame edges, bar touch's HAND latch
-  (`_latch_button`, a held level the router cannot reset: `docs/systems.md`). Airframe cycles reset
+  keyboard and touch share one owner; sources only report per-frame edges. Airframe cycles reset
   in `reset_vehicle_cycles()`. Local latches only: what a bridge sends is sloppyCAN's to say.

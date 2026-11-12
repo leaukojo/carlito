@@ -31,8 +31,8 @@ const OVERTURNED_S := 1.5
 ## ...and slow: a body on its roof is near-stationary, a diving plane or tumbling drone is not.
 const OVERTURNED_MAX_SPEED := 2.0  ## m/s
 ## Raised sticky (GameState.NOTICE_STICKY) and cleared by exact text match, so it stays up until the body is back
-## on its wheels.
-const OVERTURNED_NOTICE := "OVERTURNED - PRESS BACKSPACE TO RESPAWN"
+## on its wheels. Fixed text: the shell adds the respawn control of the device in use at display.
+const OVERTURNED_NOTICE := "OVERTURNED"
 
 @export var spec: VehicleSpec
 

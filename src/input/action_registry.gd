@@ -59,10 +59,18 @@ const ENTRIES: Array[Dictionary] = [
 		# Plane's tricycle gear takes it; train's is read by TrainSim rather than wheels.
 		"id": &"handbrake", "actions": ["handbrake"], "pad": ["cross"], "group": Group.DRIVE,
 		"label": "Handbrake", "signals": ["handbrake"], "excludes": ["boat", "drone"],
+		# Momentary on the key and the pad; touch has only the latch below (a parking brake held
+		# with a finger is not one).
 		"bridge_owned": true, "driving": true,
-		# WIDGET: sits beside the steering joystick; on touch it latches (a parking brake
-		# held with a finger is not one). Key stays momentary.
-		"touch": Touch.WIDGET,
+	},
+	{
+		# The latch InputRouter owns (`_parking_brake`); `handbrake` reads the stronger of it and the
+		# held control. Plain R1: no role without L1 on a wheeled body. WIDGET: touch's HAND, the
+		# QUICK row's latch slot above GAS.
+		"id": &"parking_brake", "actions": ["parking_brake"], "pad": ["r1"], "group": Group.DRIVE,
+		"label": "Parking brake (on / off)", "signals": ["handbrake"],
+		"excludes": ["boat", "drone"], "bridge_owned": true, "driving": true,
+		"touch": Touch.WIDGET, "poll_key": &"parking_brake_toggle", "touch_state": "handbrake",
 	},
 	{
 		"id": &"climb", "actions": ["aircraft_up", "aircraft_down"], "group": Group.DRIVE,

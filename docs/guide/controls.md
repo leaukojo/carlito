@@ -69,10 +69,11 @@ PTO off, flaps up, drone disarmed, doors shut.
 
 ### Challenges
 
-Challenges teach CAN, so in a challenge only sloppyCAN may drive. The keyboard is switched off for
-driving, and the game says so if you press a driving key. If sloppyCAN is not connected, or stops
-sending, the vehicle parks: key at Lock, gear in P, handbrake on.
-<!-- InputRouter._bridge_only, KEYS_LOCKED_NOTICE_TEXT "KEYBOARD DISABLED IN CHALLENGES - DRIVE OVER SLOPPYCAN", locked_idle -->
+Challenges teach CAN, so in a challenge only sloppyCAN may drive. The keyboard, touch screen and
+gamepad are switched off for driving, and the game says so if you press a driving key or trigger.
+If sloppyCAN is not connected, or stops sending, the vehicle parks: key at Lock, gear in P,
+handbrake on.
+<!-- InputRouter._bridge_only, KEYS_LOCKED_NOTICE_TEXT "LOCAL DRIVING OFF IN CHALLENGES - DRIVE OVER SLOPPYCAN" raised on DRIVING_ACTIONS (keys and the pad's axes), locked_idle; TouchControls.set_driving_locked -->
 
 ## Lamps and horn
 
@@ -89,7 +90,8 @@ horn sounds on **H** or sloppyCAN's `horn`.
 | **W** or **↑** | Accelerator; from a standstill in reverse, selects drive |
 | **S** or **↓** | Brake; held at a standstill, selects reverse |
 | **A**, **D** or **←**, **→** | Steer |
-| **Space** | Handbrake |
+| **Space** | Handbrake, while held |
+| **Shift** | Parking brake on or off (also R1 on the gamepad, HAND on the touch screen) |
 | **Backspace** | Respawn |
 | **G**, **V**, **E** | Garage; next vehicle body; next implement or trailer |
 | **C** | Camera view |
@@ -99,7 +101,7 @@ horn sounds on **H** or sloppyCAN's `horn`.
 | **F4** | On-screen touch controls |
 | **4**, **5** | Level select; challenges |
 | **Esc** | Pause menu |
-<!-- project.godot [input]: accel W / Up, brake_reverse S / Down, steer A D / Left Right, handbrake Space, respawn Backspace, garage G, next_vehicle V, next_attachment E, camera_view C, headlights L, horn H, day_night N, toggle_dashboard F2, debug_overlay F3, toggle_touch F4, level_select 4, challenge_select 5, to_menu Escape; boot.gd _toggle_dashboard cycles Dashboard.DENSITY_KEYS COMPACT -> FULL -> OFF; debug_overlay.gd _ready visible = true, the F3 action toggles it -->
+<!-- project.godot [input]: accel W / Up, brake_reverse S / Down, steer A D / Left Right, handbrake Space, parking_brake Shift, respawn Backspace, garage G, next_vehicle V, next_attachment E, camera_view C, headlights L, horn H, day_night N, toggle_dashboard F2, debug_overlay F3, toggle_touch F4, level_select 4, challenge_select 5, to_menu Escape; boot.gd _toggle_dashboard cycles Dashboard.DENSITY_KEYS COMPACT -> FULL -> OFF; debug_overlay.gd _ready visible = true, the F3 action toggles it -->
 
 The dashboard starts COMPACT: the warning lamps, the speedometer and the rev counter. FULL adds
 the bars (fuel, coolant, brake temperature, a truck's air and the rest) and a line of readings
@@ -128,7 +130,8 @@ The layout puts the controls where racing and farming games put them.
 | **Right stick** | Look around the vehicle; the view stays where you leave it |
 | **R3** | Recenter the camera |
 | **D-pad ↑** / **↓** | Zoom in / out, while held |
-| **Cross** (✕) | Handbrake |
+| **Cross** (✕) | Handbrake, while held |
+| **R1** | Parking brake on or off |
 | **Circle** (○) | Camera view |
 | **Triangle** (△) | Respawn |
 | **Square** (□) | Lights |
@@ -140,7 +143,7 @@ The layout puts the controls where racing and farming games put them.
 The vehicle's own controls sit on **L1**: hold it and press a face button. Each button keeps one
 role across vehicles, so the main control is always L1 + Square. While L1 is held, the left of the
 screen lists what it does on the vehicle you are driving; a button with nothing on L1 there does
-its usual job.
+its usual job. Until you first press L1, a line there says it holds more controls.
 
 | Hold L1 and | Tractor | Truck | Drone | Plane | Boat | Train |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -155,7 +158,7 @@ its usual job.
 L1 + Triangle cycles the implement or trailer on any vehicle that tows one. A control appears only
 on a machine that has it (a truck tips only with a tipper on). Level select and the challenges
 are rows in the pause menu.
-<!-- ActionRegistry pad slots l1+square/circle/cross/r1/dpad_*/r3/triangle, gated by families and capability (pad_action, pad_layer_rows); PadLegend; pause_menu.gd LEVEL and CHALLENGES rows -->
+<!-- ActionRegistry pad slots l1+square/circle/cross/r1/dpad_*/r3/triangle, gated by families and capability (pad_action, pad_layer_rows); PadLegend, PadLegend.show_hint while the pad is in use until PadLayer.layer_used; pause_menu.gd LEVEL and CHALLENGES rows -->
 <!-- ActionRegistry: every bound action, one row each, gated by family and capability; the CONTROLS sheet -->
 
 ## The settings and switches that change the physics

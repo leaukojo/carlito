@@ -1378,6 +1378,77 @@ func test_the_dev_override_lets_local_drive_under_the_lock_with_a_merely_connect
 	assert_float(router.get_vehicle_input().throttle).is_greater(0.0)
 
 
+# --- the parking brake ------------------------------------------------------------------------
+
+## A touch stand-in: `tap` fires the latch's edge on the next poll only; `held` is a held handbrake.
+class _HandTouch extends RefCounted:
+	var tap := false
+	var held := 0.0
+	func poll() -> Dictionary[StringName, Variant]:
+		var out: Dictionary[StringName, Variant] = {&"parking_brake_toggle": tap, &"handbrake": held}
+		tap = false
+		return out
+
+
+func _tap_tick(router: Node, touch: _HandTouch) -> float:
+	touch.tap = true
+	router._physics_process(1.0 / 60.0)
+	return router.get_vehicle_input().handbrake
+
+
+func test_the_parking_brake_latches_on_one_edge_and_releases_on_the_next() -> void:
+	var router := _router()
+	var touch := _HandTouch.new()
+	router.set_touch_source(touch)
+	router._bridge_source = _NoBridge.new()
+	assert_float(_tap_tick(router, touch)).is_equal(1.0)
+	for i in 3:
+		router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().handbrake).override_failure_message(
+			"the latch let go without a second edge").is_equal(1.0)
+	assert_bool(router.get_vehicle_input().lamps.brake_lamp).is_false()  # STOP is the foot brake's
+	assert_float(_tap_tick(router, touch)).is_equal(0.0)
+	# Released, a held handbrake passes as held; latched, the stronger of the two.
+	touch.held = 0.4
+	router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().handbrake).is_equal_approx(0.4, 1e-6)
+	assert_float(_tap_tick(router, touch)).is_equal(1.0)
+
+
+func test_a_respawn_or_a_new_body_releases_the_parking_brake() -> void:
+	var router := _router()
+	var touch := _HandTouch.new()
+	router.set_touch_source(touch)
+	router._bridge_source = _NoBridge.new()
+	_tap_tick(router, touch)
+	router.reset_vehicle_cycles()
+	router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().handbrake).is_equal(0.0)
+	_tap_tick(router, touch)
+	router.register_vehicle(null)
+	router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().handbrake).is_equal(0.0)
+
+
+func test_the_parking_brake_is_local_in_fallback_and_untouched_while_the_bridge_drives() -> void:
+	var router := _router()
+	var touch := _HandTouch.new()
+	router.set_touch_source(touch)
+	# Fallback: the handbrake is the local driver's, so its edge advances and its level drives.
+	router._bridge_source = _QuietBridge.new()
+	assert_float(_tap_tick(router, touch)).is_equal(1.0)
+	assert_bool(RouterScript.driving_edges_only(_intent({"parking_brake_toggle": true})) \
+			.has(&"parking_brake_toggle")).is_true()
+	# The bridge drives: its handbrake (none sent); the latch is kept for when it goes away.
+	router._bridge_source = _LiveBridge.new()
+	router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().handbrake).is_equal(0.0)
+	router._bridge_source = _NoBridge.new()
+	router._physics_process(1.0 / 60.0)
+	assert_float(router.get_vehicle_input().handbrake).override_failure_message(
+			"the bridge driving dropped the latch").is_equal(1.0)
+
+
 # --- the hand throttle ------------------------------------------------------------------------
 
 func test_the_hand_throttle_steps_clamp_and_the_preset_sets_and_clears() -> void:

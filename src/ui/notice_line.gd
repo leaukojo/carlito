@@ -32,6 +32,10 @@ const NOTICE_DWELL_S := 3.0
 var _laying_out := false
 ## Sticky notice texts still up, oldest first; the newest shows whenever no transient one does.
 var _sticky_notices: Array[String] = []
+## The notice text raised (what a clear matches), whatever `text` the line shows for it.
+var _raised := ""
+## Raised text -> {line, button} (`add_action`).
+var _actions: Dictionary[String, Dictionary] = {}
 
 
 func _ready() -> void:
@@ -40,6 +44,29 @@ func _ready() -> void:
 	var parent := get_parent() as Control
 	if parent != null:
 		parent.resized.connect(_layout)  # the inset is a share of the width available
+	set_process(false)
+	_layout()
+
+
+## The shell's say over one notice: while `notice_text` is up, the line shows `line.call()`'s
+## "text" and a `button_text` button (pressed: `on_press`) while its "button" is true. Re-read each
+## frame it is up, since what it names (the device in use, who drives) can change meanwhile. The
+## button takes no focus, so Space (handbrake and `ui_accept`) never presses it.
+func add_action(notice_text: String, line: Callable, button_text: String,
+		on_press: Callable) -> void:
+	var b := Button.new()
+	b.text = button_text
+	b.focus_mode = Control.FOCUS_NONE
+	b.visible = false
+	b.anchor_left = 0.5
+	b.anchor_right = 0.5
+	b.anchor_top = 1.0
+	b.anchor_bottom = 1.0
+	b.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	b.grow_vertical = Control.GROW_DIRECTION_END
+	b.pressed.connect(on_press)
+	add_child(b)
+	_actions[notice_text] = {"line": line, "button": b}
 	_layout()
 
 
@@ -49,13 +76,33 @@ func set_shown(v: bool) -> void:
 		_restore_sticky_notice()
 	else:
 		visible = false
+		set_process(false)
+
+
+func _process(_dt: float) -> void:
+	_render()
+
+
+## Show `_raised`, through its action if it has one; per-frame only while an action's notice is up.
+func _render() -> void:
+	for raised: String in _actions:
+		(_actions[raised]["button"] as Button).visible = false
+	if not _actions.has(_raised):
+		text = _raised
+		set_process(false)
+		return
+	var shown: Dictionary = (_actions[_raised]["line"] as Callable).call()
+	text = String(shown.get("text", _raised))
+	(_actions[_raised]["button"] as Button).visible = bool(shown.get("button", false))
+	set_process(true)
 
 
 ## Show a message from the sim (GameState.notice). Re-showing restarts the dwell instead of
 ## queueing, so holding E against a wall reads as one steady message. A sticky one starts no
 ## timer and stays listed until cleared; a transient one hands back to it when its dwell ends.
 func _show_notice(notice_text: String, dwell_s: float) -> void:
-	text = notice_text
+	_raised = notice_text
+	_render()
 	visible = true
 	var token := notice_text + str(Time.get_ticks_msec())
 	set_meta("token", token)
@@ -73,7 +120,7 @@ func _show_notice(notice_text: String, dwell_s: float) -> void:
 ## ever hides its own message; a later notice keeps the rest of its dwell.
 func _clear_notice(notice_text: String) -> void:
 	_sticky_notices.erase(notice_text)
-	if visible and text == notice_text:
+	if visible and _raised == notice_text:
 		_restore_sticky_notice()
 
 
@@ -81,8 +128,11 @@ func _clear_notice(notice_text: String) -> void:
 func _restore_sticky_notice() -> void:
 	if _sticky_notices.is_empty():
 		visible = false
+		_raised = ""
+		_render()
 		return
-	text = _sticky_notices.back()
+	_raised = _sticky_notices.back()
+	_render()
 	visible = true
 	set_meta("token", "")
 
@@ -118,4 +168,10 @@ func _layout() -> void:
 	var font := get_theme_font(&"font")
 	var line_h := 0.0 if font == null else font.get_height(get_theme_font_size(&"font_size"))
 	offset_bottom = offset_top + roundf(maxf(line_h, TOP) * float(LINES)) + pad_y * 2.0
+	for raised: String in _actions:  # an action's button hangs under the box, centred
+		var b: Button = _actions[raised]["button"]
+		b.offset_top = pad_y
+		b.offset_bottom = pad_y
+		b.offset_left = 0.0
+		b.offset_right = 0.0
 	_laying_out = false

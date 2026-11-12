@@ -55,7 +55,7 @@ const RIM_GAS := Color(0.30, 0.68, 0.40)
 const RIM_BRAKE := Color(0.80, 0.30, 0.26)
 const RIM_ON := Color(0.90, 0.60, 0.15)
 
-## Raw-intent keys the hand-built widgets (joystick, pedals, HAND, the UP/DOWN climb pads, HORN,
+## Raw-intent keys the hand-built widgets (joystick, pedals, the UP/DOWN climb pads, HORN,
 ## LIGHTS) write straight into `_held`/`_edges` — the registry's `poll_key` rows cover every OTHER
 ## key `poll()` can emit, but these carry no row of their own (Touch.WIDGET with no `poll_key`), so
 ## no row pins them through `InputRouter.merge_local`. One source both the widget
@@ -63,27 +63,21 @@ const RIM_ON := Color(0.90, 0.60, 0.15)
 const KEY_ACCEL := &"accel"
 const KEY_BRAKE_REVERSE := &"brake_reverse"
 const KEY_STEER := &"steer"
-const KEY_HANDBRAKE := &"handbrake"
 const KEY_CLIMB := &"climb"
 const KEY_ELEVATOR := &"elevator"
 const KEY_HORN := &"horn"
 const KEY_LIGHTS_CYCLE := &"lights_cycle"
 const WIDGET_KEYS: Array[StringName] = [
-	KEY_ACCEL, KEY_BRAKE_REVERSE, KEY_STEER, KEY_HANDBRAKE, KEY_CLIMB, KEY_ELEVATOR, KEY_HORN,
-	KEY_LIGHTS_CYCLE,
+	KEY_ACCEL, KEY_BRAKE_REVERSE, KEY_STEER, KEY_CLIMB, KEY_ELEVATOR, KEY_HORN, KEY_LIGHTS_CYCLE,
 ]
-## Keys of every `_latch_button` (a switch that stays set until tapped again, unlike a held
-## pedal): `_build_widgets` snapshots these around its `_held.clear()` so a rebuild (resize, UI
-## scale change) cannot release one.
-const LATCH_KEYS: Array[StringName] = [KEY_HANDBRAKE]
 
 var _scale := 1.0  ## cached UI scale; a change to it rebuilds the widgets
 var _pad_scale := 1.0  ## cached desktop pad multiplier (see DESKTOP_PAD_SCALE); rebuilds the widgets
 var _capacity := 0  ## buttons one important column holds at the size last built for
 var _equip_rows := 0  ## ...and rows the EQUIP drawer holds above the cluster before it widens
 ## The two layers (see the header), rebuilt with the widgets. Their shown flags outlive a
-## rebuild, so a resize never brings back a layer F4/F5 put away; the drawer's open flag and
-## the handbrake latch (LATCH_KEYS) survive one too.
+## rebuild, so a resize never brings back a layer F4/F5 put away; the drawer's open flag
+## survives one too.
 var _important: Control
 var _driving: Control
 var _important_shown := true
@@ -101,7 +95,6 @@ var _drive_block: VBoxContainer  ## EQUIP button, QUICK row, pedal row
 var _equip_grid: GridContainer
 var _equip_toggle: Pad
 var _equip_pads: Array[Pad] = []
-var _handbrake_pad: Pad  ## see LATCH_KEYS
 ## {pad, text, field, on}: switches whose caption shows the router's state (registry `touch_state`)
 var _stateful: Array[Dictionary] = []
 
@@ -222,9 +215,6 @@ func _build_widgets() -> void:
 	_equip_pads.clear()
 	_challenge_pads.clear()
 	_stateful.clear()
-	var latched := {}
-	for k in LATCH_KEYS:
-		latched[k] = float(_held.get(k, 0.0)) > 0.0
 	_held.clear()
 	_edges.clear()
 	_joy_y = 0.0
@@ -234,8 +224,6 @@ func _build_widgets() -> void:
 	_driving = _layer(_driving_shown and not _driving_locked)
 	_build_joystick()
 	_build_pedals()
-	if latched.get(KEY_HANDBRAKE, false):
-		_set_latch(_handbrake_pad, "HAND", KEY_HANDBRAKE, true)
 	_build_button_stack()
 
 
@@ -370,14 +358,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		_important.visible = _important_shown
 
 
-# --- handbrake (latching) ----------------------------------------------------
+# --- parking brake -------------------------------------------------------------
 
-## Latches (a parking brake stays set). Sits at the QUICK row's GAS end, so the left side
+## A tap on InputRouter's parking-brake latch, showing the router's `handbrake` (so it agrees with
+## the key, R1 and the dashboard's BRAKE lamp). Sits at the QUICK row's GAS end, so the left side
 ## holds only the joystick.
 func _build_handbrake() -> Pad:
-	var pad := _latch_button("HAND", KEY_HANDBRAKE)
-	_handbrake_pad = pad
-	_gated.append({"node": pad, "id": &"handbrake"})
+	var pad := _tap_button("HAND", &"parking_brake_toggle")
+	_gated.append({"node": pad, "id": &"parking_brake"})
+	_track_state(pad, "HAND", &"parking_brake")
 	return pad
 
 
@@ -706,29 +695,6 @@ func _stack_column() -> VBoxContainer:
 func _hold_button(text: String, key: StringName) -> Pad:
 	_held[key] = 0.0
 	return _hold_pad(text, func(down: bool) -> void: _held[key] = 1.0 if down else 0.0)
-
-
-## An on/off switch, not a pedal: level stays 1.0 until tapped again. Not the toggle-edge form
-## (_tap_button) — InputRouter owns that edge's state, while this level is read straight out of
-## the merged intent. Amber panel + "HAND ON" caption while engaged, colour and text both.
-func _latch_button(text: String, key: StringName) -> Pad:
-	_held[key] = 0.0
-	var pad := _make_button(text)
-	pad.held.connect(func(down: bool) -> void:
-		if down:
-			_set_latch(pad, text, key, float(_held.get(key, 0.0)) <= 0.0)
-	)
-	# Gated off, it must not leave the level held down for whatever is driven next.
-	pad.visibility_changed.connect(func() -> void:
-		if not pad.visible:
-			_set_latch(pad, text, key, false)
-	)
-	return pad
-
-
-func _set_latch(pad: Pad, text: String, key: StringName, on: bool) -> void:
-	_held[key] = 1.0 if on else 0.0
-	_show_on(pad, text, on)
 
 
 ## One look for every engaged switch: amber panel and an " ON" caption, colour and text both.

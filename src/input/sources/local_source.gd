@@ -16,6 +16,7 @@ func poll(_delta: float) -> Dictionary[StringName, Variant]:
 		&"brake_reverse": key_strength("brake_reverse"),
 		&"steer": key_strength("steer_right") - key_strength("steer_left"),
 		&"handbrake": key_strength("handbrake"),
+		&"parking_brake_toggle": Input.is_action_just_pressed("parking_brake"),
 		&"horn": Input.is_action_pressed("horn"),
 		&"lights_cycle": Input.is_action_just_pressed("headlights"),
 		&"hitch_toggle": Input.is_action_just_pressed("hitch"),
