@@ -259,7 +259,7 @@ var _lamp_colors := {}  ## Label -> Color last applied, see _set_lamp_color
 ## input drives. Null on any other body.
 var _auto_hold_lamp: Label = null
 var _auto_hold_body := false  ## the bound vehicle's `key_auto_hold()`, read at bind
-## The LAB page's ABS switch, local like the auto hold: shown only on a body with ABS fitted while
+## The LAB's ABS switch, local like the auto hold: shown only on a body with ABS fitted while
 ## local input drives, lit while switched off (`VehicleInput.abs_off`). Null on any other body.
 var _abs_lamp: Label = null
 var _abs_body := false  ## the bound vehicle's `vehicle_capabilities()["abs"]`, read at bind

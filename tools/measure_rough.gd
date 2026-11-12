@@ -42,7 +42,7 @@ extends Node3D
 ## `rollsteer=<front>,<rear>` (deg/deg), `compliance=<deg/kN>` and `angdamp=<1/s>` are
 ## measure_vehicles.gd's probes, applied by the same `MeasureRig` calls: a rough-ground cell
 ## attributed to roll or compliance steer or to the body's angular damping without editing its spec.
-## `axle=open|locked` is the LAB page's DIFFERENTIALS switch (`MeasureRig.apply_lab`).
+## `axle=open|locked` is the LAB's DIFFERENTIALS switch (`MeasureRig.apply_lab`).
 ##
 ## `baseline` runs the set `docs/vehicle_measurements.md` § Rough and soft ground records: suv, tractor-kenney in
 ## 2WD / MFWD / MFWD + diff lock, sedan and pickup. Add `--fixed-fps 60` BEFORE `--` to run faster

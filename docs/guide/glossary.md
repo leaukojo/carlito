@@ -15,7 +15,7 @@ skidding one, and it can still steer.
 
 In the game ABS is ideal: it knows the true road speed and holds each wheel at the slip where the
 tyre brakes hardest, without the pulsing a real system has. Every car, van and truck has it
-except the two racing cars, and so do the trailers; the tractor has none. LAB ▸ ANTI-LOCK BRAKES can switch it off.
+except the two racing cars, and so do the trailers; the tractor has none. SANDBOX ▸ ANTI-LOCK BRAKES can switch it off.
 
 ### Accelerator
 The pedal that asks the engine for more power. Also called the throttle pedal. In sloppyCAN it is
@@ -103,7 +103,7 @@ Anti-slip regulation, the name for [traction control](#traction-control) on truc
 
 ### Auto hold
 A setting that keeps the foot brake on whenever the vehicle stops in gear, until the accelerator
-is pressed. In the game it is SETTINGS ▸ AUTO HOLD, for keys, on-screen pedals and a gamepad.
+is pressed. In the game it is SANDBOX ▸ AUTO HOLD, for keys, on-screen pedals and a gamepad.
 
 ### Autopilot
 A controller that steers for the driver. The boat's autopilot holds a compass heading (HEADING
@@ -263,7 +263,7 @@ idling engine's turning force to the wheels.
 
 ### Crosswind
 Wind blowing across a vehicle's path. It pushes the vehicle sideways and turns its nose a little.
-CONDITIONS can set the wind's strength and direction.
+SANDBOX can set the wind's strength and direction.
 
 ### Current
 Moving water, such as a tide. A boat in a current moves over the ground differently from how it
@@ -781,7 +781,7 @@ each stand for a kind of ground. Anything that is not painted terrain counts as 
 
 ### Tide
 A current that changes direction and strength over time. Level 6 has one, turning about every two
-minutes; CONDITIONS can replace it with a steady current. See
+minutes; SANDBOX can replace it with a steady current. See
 [Wind, current and conditions](conditions.md).
 
 ### Torque

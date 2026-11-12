@@ -153,7 +153,7 @@ func _build_grid_page() -> void:
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	_grid_page.add_child(row)
 	row.add_child(UiTheme.button(self, "RESET PROGRESS", _show_confirm, UiTheme.DANGER))
-	row.add_child(UiTheme.button(self, "BACK", func() -> void: closed.emit()))
+	row.add_child(UiTheme.back_button(self, func() -> void: closed.emit()))
 
 
 ## Fit as many cards across as the window allows, same rule as LevelSelect.
@@ -294,7 +294,7 @@ func _show_briefing(d: ChallengeDef) -> void:
 	var start := UiTheme.button(self, "START", func() -> void: challenge_chosen.emit(d.id))
 	start.theme_type_variation = &"Primary"
 	row.add_child(start)
-	row.add_child(UiTheme.button(self, "BACK", func() -> void: _show_page(_grid_page)))
+	row.add_child(UiTheme.back_button(self, func() -> void: _show_page(_grid_page)))
 
 	_show_page(_briefing_page)
 	start.grab_focus()

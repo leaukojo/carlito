@@ -1,11 +1,11 @@
 class_name UserSettings
 extends RefCounted
-## The SETTINGS page's choices and the garage's tyre class per variant, in `user://settings.cfg`
-## (IndexedDB on web), so a reload keeps them. CONDITIONS and the gearbox stay session-only
-## (boot.gd).
+## The SETTINGS page's choices, SANDBOX's driver aids and the garage's tyre class per variant, in
+## `user://settings.cfg` (IndexedDB on web), so a reload keeps them. SANDBOX's WORLD and LAB rows
+## and the gearbox stay session-only (boot.gd).
 ##
 ## Read back by type only: a value whose type is not its default's is ignored (and dropped on the
-## next write). Range is its owner's job (Dashboard, UiScale, DebugOverlay, InputRouter), whose
+## next write). Range is its owner's job (Dashboard, UiScale, InputRouter), whose
 ## setter validates a saved value exactly as it does a press; a stored tyre is judged when it is
 ## fitted (`WheelDrive.fit_tyre`: an unknown or unfitting class reads as the stock).
 
@@ -17,7 +17,6 @@ const SECTION := "settings"
 const DEFAULTS := {
 	"density": Dashboard.Density.COMPACT,
 	"ui_scale": UiScale.USER_DEFAULT,
-	"extended_debug": false,
 	"key_softening": KeyShaper.DEFAULT_SOFTENING,
 	"tcs_off": false,
 	"esc_off": false,

@@ -64,7 +64,7 @@ about 1 along the wheel.
 <p class="box-title">Try it in the game: a short name for the experiment</p>
 
 1. Where to go and which vehicle.
-2. What to switch on (F3, a LAB switch, a CONDITIONS preset).
+2. What to switch on (F3, a SANDBOX switch or WORLD preset).
 3. What to do.
 4. What to look for, and what it shows.
 

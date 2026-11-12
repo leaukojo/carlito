@@ -29,6 +29,7 @@ const HOVER := Color(0.95, 0.96, 1.00)           ## a picture card's or choice's
 const WARN := Color(1.00, 0.70, 0.15)
 const DANGER := Color(0.95, 0.35, 0.30)
 const OK := Color(0.35, 0.85, 0.45)
+const BACK := Color(0.92, 0.66, 0.32)            ## a BACK button's text and rim (`Back`)
 
 # --- type scale (logical px at scale 1.0) -------------------------------------
 
@@ -160,6 +161,16 @@ static func _build_button(t: Theme, scale: float) -> void:
 		t.set_color(state, &"Primary", BG)
 	t.set_color("font_disabled_color", &"Primary", TEXT_MUTED)
 
+	# `Back`: the way out of a screen, amber so it is found at a glance and never mistaken for a
+	# row. Focus keeps the shared ACCENT ring, so the keyboard/pad cursor reads the same on it.
+	t.set_type_variation(&"Back", "Button")
+	var back_rim := BACK.darkened(0.35)
+	t.set_stylebox("normal", &"Back", keycap(SURFACE, back_rim, scale))
+	t.set_stylebox("hover", &"Back", keycap(SURFACE_HI, BACK, scale))
+	t.set_stylebox("pressed", &"Back", _pushed(keycap(SURFACE_LO, back_rim, scale)))
+	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		t.set_color(state, &"Back", BACK)
+
 
 static func _build_panel(t: Theme, scale: float) -> void:
 	t.set_stylebox("panel", "PanelContainer", _box(SURFACE, scale))
@@ -213,6 +224,13 @@ static func button(ref: Control, text: String, on_press: Callable, rim := RIM) -
 		b.add_theme_stylebox_override("hover", keycap(SURFACE_HI, rim, scale_of(ref)))
 	if on_press.is_valid():  # a caller whose handler needs the button connects it afterwards
 		b.pressed.connect(on_press)
+	return b
+
+
+## A screen's BACK (`button`, in the `Back` look).
+static func back_button(ref: Control, on_press: Callable) -> Button:
+	var b := button(ref, "BACK", on_press)
+	b.theme_type_variation = &"Back"
 	return b
 
 

@@ -194,7 +194,7 @@ rolls back on any grade. Three holds stop it:
   `GroundDriveSpec.hill_hold`): the real one holds in the transmission. The brake is the hold
   solved with the crank's coupling, where a lock of the gearbox output is solved before it. The
   CVT tractor has none: its active standstill is that transmission hold (§ The CVT below).
-- **Auto hold** (`InputRouter.auto_hold`, keys, touch and gamepad; SETTINGS ▸ AUTO HOLD, off by
+- **Auto hold** (`InputRouter.auto_hold`, keys, touch and gamepad; SANDBOX ▸ AUTO HOLD, off by
   default; a local lamp). On, a body stopped in D or R with no throttle keeps the whole foot brake
   on until the throttle asks to move; hill-start assist takes the handover. Bridge: real creep.
 

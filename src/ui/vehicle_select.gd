@@ -248,6 +248,7 @@ func _build_footer() -> Control:
 
 	_back_btn = Button.new()
 	_back_btn.text = "BACK"
+	_back_btn.theme_type_variation = &"Back"
 	_back_btn.pressed.connect(func() -> void: closed.emit())
 	row.add_child(_back_btn)
 

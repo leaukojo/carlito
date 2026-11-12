@@ -131,7 +131,7 @@ No signal reports the drag itself. It shows in:
 2. Lift right off and let the car coast. It slows quickly at first, while the air is pushing hard,
    then more and more gently as the speed falls and only the tyres and the engine are left
    holding it back.
-3. Pause, open CONDITIONS and set the wind to STRONG. Drive into it and then away from it at a
+3. Pause, open SANDBOX and set the wind to STRONG. Drive into it and then away from it at a
    steady pedal: the speed you settle at differs a lot between the two directions.
 
 </div>

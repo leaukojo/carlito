@@ -153,8 +153,8 @@ The farm tipper on the tractor has no trailer link of its own.
 <div class="box try">
 <p class="box-title">Try it in the game: watch the trailer follow</p>
 
-1. Pick the `semi` and press **E** until the box trailer is on. Open SETTINGS and set EXTENDED
-   DEBUG LABELS to ON: the overlay's `artic` line shows the articulation angle in degrees.
+1. Pick the `semi` and press **E** until the box trailer is on. The `artic` line of
+   the debug overlay (**F3**) shows the articulation angle in degrees.
 2. Drive a tight circle at walking pace. The angle grows as the trailer cuts inside the truck's
    path.
 3. On a straight at 60 km/h, steer quickly left and right. The trailer follows a moment later,

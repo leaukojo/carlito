@@ -93,14 +93,17 @@ vehicles.
 
 The game drives first: the page loads straight into a car on a flat plain, standalone or inside
 sloppyCAN (`?level=&vehicle=` picks others). Five top-left buttons (MENU, VEHICLE, LEVEL, CAMERA,
-CHALLENGE; F5 hides them); Esc/MENU opens RESUME, RESPAWN, CONDITIONS, LAB, CONTROLS, SETTINGS.
+CHALLENGE; F5 hides them); Esc/MENU opens RESUME, RESPAWN, SANDBOX, CONTROLS, SETTINGS
+(and LEVEL while a gamepad is in use).
 
 - **GARAGE**: families, bodies, a live 3D preview with specs; unspawnable machines show the reason.
 - **LEVEL**: screenshot cards with the download weight (each island is a separate download).
 - **CONTROLS** is generated from one table (`ActionRegistry`), as are the touch buttons.
-- **CONDITIONS**: wind, current, day/night; session-wide, not saved.
-- **LAB**: switch off ABS, open or lock the axle diffs, or steer the front wheels parallel, to feel each with and without; session-wide, not saved, stock in a challenge.
-- **SETTINGS** (saved): cluster COMPACT/FULL/OFF (F2), UI size, F3 readouts, KEY RESPONSE, traction control.
+- **SANDBOX**: WORLD (wind, current, day/night; session-wide, not saved) and VEHICLE (traction
+  control, stability control, auto hold, saved; then switch off ABS, open or lock the axle diffs,
+  or steer the front wheels parallel, to feel each with and without; session-wide, not saved,
+  stock in a challenge).
+- **SETTINGS** (saved): cluster COMPACT/FULL/OFF (F2), UI size, KEY RESPONSE.
 
 Any size: one theme is rebuilt at a scale from the window's short edge; screens and grids reflow.
 

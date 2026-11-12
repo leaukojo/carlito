@@ -33,8 +33,8 @@ class LampInput extends RefCounted:
 	var trailer_abs_lamp := false   ## trailer ABS telltale off the power line (SAE J2497)
 
 
-## The LAB page's axle diff switch (`axle_diff`): the spec's diffs, every driven axle open, or every
-## driven axle locked. The centre diff is never switched.
+## The LAB's axle diff switch (pause ▸ SANDBOX; `axle_diff`): the spec's diffs, every driven axle
+## open, or every driven axle locked. The centre diff is never switched.
 enum AxleDiff { STOCK, OPEN, LOCKED }
 
 

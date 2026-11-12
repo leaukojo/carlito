@@ -12,9 +12,9 @@ const Layers := preload("res://src/physics/collision_layers.gd")
 ## control left as fitted: the bridge's `esc_off` would take TC with it, and the chassis tables are
 ## recorded with TC on. Each tool sets it from its flags; a chassis table's doc preset sets it itself.
 static var esc_off := false
-## `noabs` (measure_vehicles): the LAB page's ANTI-LOCK BRAKES OFF (`apply_lab`).
+## `noabs` (measure_vehicles): the LAB's ANTI-LOCK BRAKES OFF (`apply_lab`).
 static var abs_off := false
-## `axle=open|locked` (measure_vehicles, measure_rough): the LAB page's DIFFERENTIALS switch
+## `axle=open|locked` (measure_vehicles, measure_rough): the LAB's DIFFERENTIALS switch
 ## (`apply_lab`).
 static var axle_diff := VehicleInput.AxleDiff.STOCK
 ## A towed body's own roll-over control off (`notrsp`): its lift table is measured on the bare
@@ -174,7 +174,7 @@ static func apply_lab(car: Node) -> void:
 
 
 ## `abs_off` / `axle_diff` as they reach `car` (`InputRouter.lab_raw` on its hardware): stock on a
-## body without it, as the LAB page leaves it.
+## body without it, as the LAB switch leaves it.
 static func lab_on(car: Node) -> Dictionary[StringName, Variant]:
 	var caps: Dictionary = car.call(&"vehicle_capabilities") \
 			if car != null and car.has_method(&"vehicle_capabilities") else {}
@@ -420,8 +420,8 @@ static func tyre_flag(args: PackedStringArray) -> String:
 
 
 ## A tool's `wind=<from_deg>:<m/s>` flag as a steady world wind vector: FROM degrees as the
-## CONDITIONS page enters them (0 = out of the north, -Z), turned into the heading it blows toward
-## as `WorldConditions.wind_for` does. ZERO when absent; a malformed flag is printed as an error
+## SANDBOX's FROM row enters them (0 = out of the north, -Z), turned into the heading it blows
+## toward as `WorldConditions.wind_for` does. ZERO when absent; a malformed flag is printed as an error
 ## and returned as NAN, which the tool quits on. The tool's root answers it as `wind_vector()`.
 static func wind_flag(args: PackedStringArray) -> Vector3:
 	var value := flag(args, "wind=")

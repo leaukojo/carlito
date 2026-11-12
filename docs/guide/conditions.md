@@ -1,7 +1,7 @@
 # Wind, current and conditions
 
 <p class="lead">A level can have its own wind and, on Level 6, a tide in the sea. The pause
-menu's CONDITIONS page can replace them for the session and switch between day and night. This
+menu's SANDBOX page can replace them for the session and switch between day and night. This
 page explains what each one does, and what the game's weather leaves out.</p>
 
 <div class="badges"><span class="label">Which vehicles have this</span>
@@ -30,7 +30,7 @@ sideways.
 <!-- WorldConditions.WIND_FAMILIES drone, plane, boat, car, truck, tractor; "The train ignores it" -->
 
 Only two levels have wind of their own: **Level 6 - Skyport**, about 5 m/s with gusts up to 3 more,
-and **Open Sea**, about 6 m/s with gusts up to 2 more. Everywhere else is calm unless CONDITIONS
+and **Open Sea**, about 6 m/s with gusts up to 2 more. Everywhere else is calm unless SANDBOX
 sets a wind.
 <!-- level_6_wind.tres speed 5, gust_speed 3; open_sea_wind.tres speed 6, gust_speed 2 -->
 
@@ -41,7 +41,7 @@ The wind does not change with height, and hills and buildings do not shelter any
 ![A compass. An arrow runs from the north side to the south side. A wind from the north blows toward the south.](img/wind-from.svg "Weather reports name a wind by where it comes from. A current is named by where it flows to.")
 
 Weather forecasts and sailors name a wind by where it comes **from**: a north wind blows from the
-north towards the south. CONDITIONS and the wind signals use that habit. A current is named the
+north towards the south. SANDBOX and the wind signals use that habit. A current is named the
 other way, by the direction it flows **to**, its set, as sailors do.
 <!-- WorldConditions header: "The UI enters direction as meteorological FROM degrees"; contract twd (FROM), current_set (TOWARD) -->
 
@@ -53,9 +53,9 @@ boats feel it: their hulls are dragged along with the water. [Floating and boats
 explains what it does to them.
 <!-- level_6_current.tres set_deg 110, drift 1.5, tide_period_s 240; CurrentField.rate_at: peak x sin(2 pi t / period); WorldConditions.CURRENT_FAMILIES ["boat"] -->
 
-## CONDITIONS
+## SANDBOX ▸ WORLD
 
-The pause menu's CONDITIONS page has four settings, kept for the session and applied to every
+The pause menu's SANDBOX page has four WORLD settings, kept for the session and applied to every
 level you load:
 
 | Setting | Choices | What it does |
@@ -75,7 +75,7 @@ wind is hard but still flyable: the drone can still make headway into it.
 Night darkens the level and lights the lamps' beams. It changes nothing in the physics: tyres,
 engines and air behave the same. The vehicles' lights follow the lamp signal, so at night you
 need sloppyCAN, or the **L** key, to turn them on.
-<!-- GameState.night_changed; pause_menu.gd NIGHT_HELP "Day/night, same as the N key"; lights key L -->
+<!-- GameState.night_changed; pause_menu.gd NIGHT_HELP "The N key does this too"; lights key L -->
 
 ## What the game leaves out
 
@@ -101,9 +101,9 @@ need sloppyCAN, or the **L** key, to turn them on.
 <div class="box try">
 <p class="box-title">Try it in the game: a crosswind on the motorway</p>
 
-1. Pick the `semi` with the box trailer on **Flatland**. Pause, open CONDITIONS and set WIND to
+1. Pick the `semi` with the box trailer on **Flatland**. Pause, open SANDBOX and set WIND to
    STRONG, FROM to WEST.
-2. Open SETTINGS and set EXTENDED DEBUG LABELS to ON: the overlay's `wind` line shows the wind's
+2. Press **F3** if the debug overlay is hidden: its `wind` line shows the wind's
    speed and the direction it blows toward.
 3. Drive north at 80 km/h. You have to hold a little steering into the wind to stay straight,
    and the gusts tug at the rig every few seconds.

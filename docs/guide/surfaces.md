@@ -128,8 +128,7 @@ tyres:
 <div class="box try">
 <p class="box-title">Try it in the game: the same stop on three surfaces</p>
 
-1. Open SETTINGS and set EXTENDED DEBUG LABELS to ON. The overlay in the top right (**F3** shows
-   or hides it) now shows a
+1. The debug overlay in the top right (**F3** shows or hides it) shows a
    `tyre` line (the class fitted), a `surf` line (the surface under each wheel), a `grip` line
    (each wheel's grip on it) and a `drag` line (the ground's added drag).
 2. In the GARAGE pick the `sedan` with ALL-SEASON tyres. Open LEVEL, pick **Car Arena**, then

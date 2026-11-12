@@ -1,8 +1,8 @@
 class_name DebugOverlay
 extends Label
-## Perf overlay, toggled with F3. Shows only FPS by default; SETTINGS' "Extended debug labels"
-## adds frame time, draw calls, primitives, VRAM, node count and the grip/slip/artic/flow/UI-scale
-## lines, read off engine Performance monitors so the 60 fps target can be checked while driving.
+## Perf overlay, toggled with F3: FPS, frame time, draw calls, primitives, VRAM, node count and the
+## grip/slip/steer/attitude/artic/flow lines, read off engine Performance monitors so the 60 fps
+## target can be checked while driving.
 ## Read on the deployed web build: draw calls are the first diagnostic, not a design budget.
 ## Plain text only.
 
@@ -12,8 +12,6 @@ const WIDTH := 260.0
 
 var _accum := 0.0
 var _level: Node  ## active level, for the per-wheel surface-grip readout (set by the shell)
-## SETTINGS' "Extended debug labels": grip/artic/flow/UI-scale lines beyond the FPS one.
-var _extended := false
 
 
 ## The shell rebinds this whenever it swaps the level/vehicle (mirrors Dashboard.bind).
@@ -21,19 +19,8 @@ func set_level(level: Node) -> void:
 	_level = level
 
 
-## SETTINGS applies this (mirrors Dashboard.set_density_setting).
-func set_extended(on: bool) -> void:
-	_extended = on
-	if visible:
-		_refresh()
-
-
-func is_extended() -> bool:
-	return _extended
-
-
 func _ready() -> void:
-	visible = true
+	visible = false  # the full readout is a dev tool: F3 asks for it
 	set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -75,17 +62,14 @@ func _process(delta: float) -> void:
 
 
 func _refresh() -> void:
-	text = "FPS %d" % Engine.get_frames_per_second()
-	if not _extended:
-		return
 	var draw_calls := int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 	var prims := int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
 	var vram := Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0
 	var nodes := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
 	var frame_ms := (Performance.get_monitor(Performance.TIME_PROCESS)
 			+ Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)) * 1000.0
-	text += "  (%.1f ms)\ndraw calls %d\nprimitives %d\nVRAM %.1f MB\nnodes %d" % [
-		frame_ms, draw_calls, prims, vram, nodes]
+	text = "FPS %d  (%.1f ms)\ndraw calls %d\nprimitives %d\nVRAM %.1f MB\nnodes %d" % [
+		Engine.get_frames_per_second(), frame_ms, draw_calls, prims, vram, nodes]
 	text += _grip_line()
 	text += _slip_line()
 	text += _steer_line()

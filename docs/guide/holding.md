@@ -50,14 +50,14 @@ and it holds the trailer's brakes too. It ignores rolling resistance, so it lets
 never early. On the flat or pointing downhill it lets go at once.
 <!-- hill_hold.gd: "The grade is the wheels' contact plane, never body pitch"; drive_holds: "Rolling resistance is left out: the hold lets go late, never early"; docs/drivetrain.md: WheelDrive.towed_kg, foot_pedal -->
 
-Every vehicle with ABS has it. Switching ABS off in the LAB switches it off too.
+Every vehicle with ABS has it. Switching ABS off in SANDBOX switches it off too.
 
 ### Auto hold
 
 [Auto hold](glossary.md#auto-hold) goes further. With it on, a vehicle that has come to a stop in drive or reverse keeps
 its whole foot brake on, with no pedal pressed, until the driver presses the accelerator. Then
-hill-start assist takes over for the pull-away. It is a setting, SETTINGS ▸ AUTO HOLD, off at
-first, and it works with the keys, the on-screen pedals and a gamepad: sloppyCAN gets the real
+hill-start assist takes over for the pull-away. It is a setting, SANDBOX ▸ AUTO HOLD, off at
+first and saved, and it works with the keys, the on-screen pedals and a gamepad: sloppyCAN gets the real
 creep instead. The dashboard's AUTO HOLD lamp glows dim while it is on and
 bright while it is holding.
 <!-- InputRouter.auto_hold; pause_menu.gd AUTO_HOLD_HELP; docs/drivetrain.md: "Gamepad and bridge: real creep"; dashboard.gd auto_hold "dim while switched on, lit while holding" -->
@@ -140,7 +140,7 @@ cannot sit still on the foot brake. These steps use the handbrake and auto hold 
    hill-start assist.
 2. Stop facing uphill and hold the handbrake (**Space**). Let it go and press the accelerator: the
    car rolls back a little before it pulls away.
-3. Open SETTINGS and set AUTO HOLD on, then do the same in the `sedan` without the handbrake. As
+3. Open SANDBOX and set AUTO HOLD on, then do the same in the `sedan` without the handbrake. As
    it stops, the AUTO HOLD lamp lights and the car stays put with your hands off the keys.
 4. Press the accelerator. Hill-start assist takes over from the auto hold for a moment, and the
    car pulls away without rolling back.

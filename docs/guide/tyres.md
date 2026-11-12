@@ -206,14 +206,13 @@ does not use any of the tyre's grip.
 
 You need a car with ABS, such as the `sedan`.
 
-1. Open SETTINGS and set EXTENDED DEBUG LABELS to ON (**F3** shows or hides the overlay). It now shows
-   a `slip` line: one number per wheel, the slip ratio in percent, with a star when ABS is
+1. The debug overlay (**F3** shows or hides it) has a `slip` line: one number per wheel, the slip ratio in percent, with a star when ABS is
    holding that wheel.
 2. Open LEVEL and pick **Car Arena**. Pause, open SPAWN POINT and pick one of the tyre pad's
    strips. The pad has strips of dry asphalt, wet road and snow side by side.
 3. Drive onto the dry strip at about 50 km/h and brake as hard as you can. Watch the `slip` line:
    each wheel settles near −12, with a star. That is the peak of the grip curve.
-4. Pause, open LAB and switch ANTI-LOCK BRAKES off. Do the same stop. The wheels go to −100, the
+4. Pause, open SANDBOX and switch ANTI-LOCK BRAKES off. Do the same stop. The wheels go to −100, the
    car stops in a longer distance, and turning the steering does almost nothing until you let the
    brake off.
 5. Repeat both stops on the snow strip. The slip numbers look the same; the stopping distance is

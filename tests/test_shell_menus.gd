@@ -557,27 +557,96 @@ func test_tyre_choices_put_the_stock_first_in_catalog_order() -> void:
 	assert_array(VehicleSelect.tyre_choices(null)).is_empty()
 
 
-## Pause overlay: all entries reachable, each reaches shell.
+## Pause overlay: all entries reachable, each reaches shell. LEVEL only while the pad is in use.
 func test_pause_menu_offers_the_shell_sections() -> void:
 	var pause: PauseMenu = auto_free(PauseMenu.new())
+	var state := PauseMenu.State.new()
+	state.level_row = true
+	pause.setup({}, state)
 	add_child(pause)
 	var labels := []
 	for b in _buttons(pause):
 		labels.append(b.text)
-	assert_array(labels).contains(["RESUME", "RESPAWN", "LEVEL", "CHALLENGES", "CONDITIONS",
-			"LAB", "CONTROLS", "SETTINGS"])
-	# GARAGE is Create, G and the on-screen important buttons' job, not this menu's.
-	assert_array(labels).not_contains(["GARAGE"])
+	assert_array(labels).contains(["RESUME", "RESPAWN", "LEVEL", "SANDBOX", "CONTROLS",
+			"SETTINGS"])
+	# GARAGE is Create, G and touch's job; CHALLENGES is 5 and touch's; neither is this menu's.
+	assert_array(labels).not_contains(["GARAGE", "CHALLENGES", "CONDITIONS", "LAB"])
 
 	var fired := []
 	pause.resume_requested.connect(func() -> void: fired.append("RESUME"))
 	pause.respawn_requested.connect(func() -> void: fired.append("RESPAWN"))
 	pause.level_requested.connect(func() -> void: fired.append("LEVEL"))
-	pause.challenges_requested.connect(func() -> void: fired.append("CHALLENGES"))
 	for b in _buttons(pause):
-		if b.text in ["RESUME", "RESPAWN", "LEVEL", "CHALLENGES"]:
+		if b.text in ["RESUME", "RESPAWN", "LEVEL"]:
 			b.pressed.emit()
-	assert_array(fired).contains(["RESUME", "RESPAWN", "LEVEL", "CHALLENGES"])
+	assert_array(fired).contains(["RESUME", "RESPAWN", "LEVEL"])
+
+	var keyboard: PauseMenu = auto_free(PauseMenu.new())
+	keyboard.setup({})
+	add_child(keyboard)
+	assert_array(_labels(keyboard)).not_contains(["LEVEL"])
+
+
+## The shell builds LEVEL from the device in use as the menu opens.
+func test_boot_pause_menu_has_level_only_on_the_pad() -> void:
+	var boot := _booted()
+	boot._ui._set_device(UiScale.Device.KEYBOARD)
+	boot._open_pause()
+	assert_array(_labels(boot._find_pause())).not_contains(["LEVEL"])
+	boot._close_all_overlays()
+	boot._ui._set_device(UiScale.Device.PAD)
+	boot._open_pause()
+	assert_array(_labels(boot._find_pause())).contains(["LEVEL"])
+
+
+## SANDBOX: WORLD then VEHICLE, each headed; the driver aids say they are saved, the LAB switches
+## that they are session-only; SETTINGS keeps only its three and no debug-label row.
+func test_pause_menu_sandbox_holds_world_and_vehicle() -> void:
+	var pause: PauseMenu = auto_free(PauseMenu.new())
+	pause.setup({"abs": true, "axle_diff": true, "ackermann": true})
+	add_child(pause)
+	_press(pause, "SANDBOX")
+	var texts := []  # the page's headings and buttons, in tree order
+	for node in pause.find_children("*", "", true, false):
+		if (node is Button or node is Label) and (node as Control).is_visible_in_tree():
+			texts.append(node.get("text"))
+	var order := ["WORLD", "WIND: LEVEL", "TIME: DAY", "VEHICLE", "TRACTION CONTROL: ON",
+			"STABILITY CONTROL: ON", "AUTO HOLD: OFF", "ANTI-LOCK BRAKES: ON",
+			"DIFFERENTIALS: STOCK", "STEERING: STOCK"]
+	var at := -1
+	for t: String in order:
+		var i := texts.find(t)
+		assert_int(i).override_failure_message(t).is_greater(at)
+		at = i
+	for help: String in [PauseMenu.TCS_HELP, PauseMenu.ESC_HELP, PauseMenu.AUTO_HOLD_HELP]:
+		assert_str(help).ends_with(PauseMenu.SAVED)
+	for help: String in [PauseMenu.ABS_HELP, PauseMenu.AXLE_DIFF_HELP, PauseMenu.STEERING_HELP]:
+		assert_str(help).ends_with(PauseMenu.SESSION)
+	# Every help line wraps at TEXT_W, so no row's help runs the width of the window.
+	var widest := UiTheme.px(pause, PauseMenu.TEXT_W) + 0.5
+	for l in pause.find_children("*", "Label", true, false):
+		if (l as Label).theme_type_variation == &"Small" \
+				and (l as Label).text != PauseMenu.DRIVE_FOOTNOTE:  # one short line
+			assert_int((l as Label).autowrap_mode).override_failure_message((l as Label).text) \
+					.is_equal(TextServer.AUTOWRAP_WORD_SMART)
+			assert_float((l as Label).get_combined_minimum_size().x) \
+					.override_failure_message((l as Label).text).is_less_equal(widest)
+	# Every page's BACK wears the `Back` look.
+	var backs := _buttons(pause).filter(func(b: Button) -> bool: return b.text == "BACK")
+	assert_int(backs.size()).is_equal(4)  # CONTROLS, SETTINGS, SANDBOX, SPAWN POINT
+	for b: Button in backs:
+		assert_str(String(b.theme_type_variation)).is_equal("Back")
+	# Focus lands on the page's first row, inside its scroll.
+	assert_str((get_viewport().gui_get_focus_owner() as Button).text).is_equal("WIND: LEVEL")
+	assert_bool(pause.back()).is_true()
+	_press(pause, "SETTINGS")
+	var settings := _buttons(pause).filter(func(b: Button) -> bool: return b.is_visible_in_tree()) \
+			.map(func(b: Button) -> String: return b.text)
+	assert_int(settings.size()).is_equal(4)  # DASHBOARD, UI SIZE, KEY RESPONSE, BACK
+	assert_array(settings.filter(func(t: String) -> bool: return t.begins_with("EXTENDED"))) \
+			.is_empty()
+	assert_array(settings.filter(func(t: String) -> bool: return t.begins_with("TRACTION"))) \
+			.is_empty()
 
 
 ## The L1 legend lists the vehicle's layer by button name, without the "L1 + " its title says,
@@ -767,13 +836,13 @@ func test_pause_menu_settings_cycles_the_dashboard_density() -> void:
 	assert_bool(pause.back()).is_false()
 
 
-## CONDITIONS is a page like SETTINGS: cycling buttons that emit new values and apply nothing
+## SANDBOX's WORLD rows are like SETTINGS: cycling buttons that emit new values and apply nothing
 ## themselves (rule 6) — what is asserted is what reaches the shell.
 func test_pause_menu_conditions_page_cycles_and_emits() -> void:
 	var pause: PauseMenu = auto_free(PauseMenu.new())
 	pause.setup({})
 	add_child(pause)
-	_press(pause, "CONDITIONS")
+	_press(pause, "SANDBOX")
 
 	var picked := []
 	pause.conditions_changed.connect(func(w: int, c: int, d: float) -> void: picked.append([w, c, d]))
@@ -799,7 +868,7 @@ func test_pause_menu_conditions_page_greys_wind_and_current_off_family() -> void
 	GameState.current_vehicle = "train"  # neither a WIND nor a CURRENT family
 	var pause: PauseMenu = auto_free(PauseMenu.new())
 	add_child(pause)
-	_press(pause, "CONDITIONS")
+	_press(pause, "SANDBOX")
 	var disabled := {}
 	for b in _buttons(pause):
 		if (b as Button).text.begins_with("WIND") or (b as Button).text.begins_with("WATER CURRENT"):
@@ -808,14 +877,14 @@ func test_pause_menu_conditions_page_greys_wind_and_current_off_family() -> void
 	GameState.current_vehicle = saved_vehicle
 
 
-## A challenge owns wind, current and lighting: every CONDITIONS button greys out and says so.
+## A challenge owns wind, current and lighting: every WORLD button greys out and says so.
 func test_pause_menu_conditions_page_locks_during_a_challenge() -> void:
 	var pause: PauseMenu = auto_free(PauseMenu.new())
 	var state := PauseMenu.State.new()
 	state.conditions_locked = true
 	pause.setup({}, state)
 	add_child(pause)
-	_press(pause, "CONDITIONS")
+	_press(pause, "SANDBOX")
 	var locked := 0
 	for b in _buttons(pause):
 		var text := (b as Button).text
@@ -831,13 +900,13 @@ func test_pause_menu_conditions_page_locks_during_a_challenge() -> void:
 	assert_int(said).is_equal(4)
 
 
-## LAB's ABS switch cycles and emits like SETTINGS (rule 6), and SETTINGS' ESC and TC rows say they
+## LAB's ABS switch cycles and emits like SETTINGS (rule 6), and the ESC and TC rows say they
 ## went with it.
 func test_pause_menu_lab_page_flips_abs_and_relabels_esc_and_tc() -> void:
 	var pause: PauseMenu = auto_free(PauseMenu.new())
 	pause.setup({"abs": true})
 	add_child(pause)
-	_press(pause, "LAB")
+	_press(pause, "SANDBOX")
 	var picked := []
 	pause.abs_off_changed.connect(func(off: bool) -> void: picked.append(off))
 	_press(pause, "ANTI-LOCK BRAKES: ON")
@@ -877,12 +946,12 @@ func test_pause_menu_lab_page_greys_abs_without_it_and_in_a_challenge() -> void:
 	assert_array(_labels(race)).contains(["STABILITY CONTROL: ON", "TRACTION CONTROL: ON"])
 
 
-## LAB's DIFFERENTIALS: LOCKED takes ESC and TC with it, and SETTINGS says so.
+## LAB's DIFFERENTIALS: LOCKED takes ESC and TC with it, and their rows say so.
 func test_pause_menu_lab_locked_diffs_relabel_esc_and_tc() -> void:
 	var pause: PauseMenu = auto_free(PauseMenu.new())
 	pause.setup({"axle_diff": true})
 	add_child(pause)
-	_press(pause, "LAB")
+	_press(pause, "SANDBOX")
 	_press(pause, "DIFFERENTIALS: STOCK")
 	assert_array(_labels(pause)).contains(["STABILITY CONTROL: ON"])
 	_press(pause, "DIFFERENTIALS: OPEN")
@@ -895,7 +964,7 @@ func test_pause_menu_lab_page_cycles_the_axle_diffs() -> void:
 	var pause: PauseMenu = auto_free(PauseMenu.new())
 	pause.setup({"axle_diff": true})
 	add_child(pause)
-	_press(pause, "LAB")
+	_press(pause, "SANDBOX")
 	var picked := []
 	pause.axle_diff_changed.connect(func(mode: VehicleInput.AxleDiff) -> void: picked.append(mode))
 	for label in ["DIFFERENTIALS: STOCK", "DIFFERENTIALS: OPEN", "DIFFERENTIALS: LOCKED"]:
@@ -933,7 +1002,7 @@ func test_pause_menu_lab_page_flips_the_steering() -> void:
 	var pause: PauseMenu = auto_free(PauseMenu.new())
 	pause.setup({"ackermann": true})
 	add_child(pause)
-	_press(pause, "LAB")
+	_press(pause, "SANDBOX")
 	var picked := []
 	pause.parallel_steer_changed.connect(func(on: bool) -> void: picked.append(on))
 	_press(pause, "STEERING: STOCK")

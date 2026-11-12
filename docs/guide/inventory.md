@@ -30,7 +30,7 @@ the two semi tractor units.
 | Towing | [towing.md](towing.md) | fifth wheel and drawbar, trailers, articulation, jackknife, trailer brakes, trailer bus |
 | Implements and the PTO | [implements.md](implements.md) | three-point hitch, draft, PTO, hydraulic remote, ISOBUS |
 | Floating and boats | [floating.md](floating.md) | buoyancy, propeller thrust, rudder, trim, windage, sailing, autopilot |
-| Wind, current and conditions | [conditions.md](conditions.md) | wind field, tide, CONDITIONS presets, day and night |
+| Wind, current and conditions | [conditions.md](conditions.md) | wind field, tide, SANDBOX ▸ WORLD presets, day and night |
 | Drone flight | [drone-flight.md](drone-flight.md) | rotors, mixer, arming, flight modes, failsafes, battery pack, sensors, bus nodes |
 | Plane flight | [plane-flight.md](plane-flight.md) | lift, stall, drag, thrust, flaps, control surfaces |
 | Trains | [rail.md](rail.md) | tractive effort, running resistance, couplers, brake pipe, reverser, pantograph |
@@ -69,7 +69,7 @@ the two semi tractor units.
 | Lock and its speed taper | car, truck, tractor | `WheelDrive.steer_lock_deg` | steering |
 | Bicycle (mean) angle and turn radius | car, truck, tractor | `WheelDrive.mean_steer_angle` | steering |
 | Ackermann split (inner wheel turns more) | car, truck, tractor (every one ships full Ackermann) | `WheelDrive.ackermann_angle` | steering |
-| Parallel steer switch (LAB ▸ STEERING) | car, truck, tractor | `WheelDrive.ackermann_fraction` | steering |
+| Parallel steer switch (SANDBOX ▸ STEERING) | car, truck, tractor | `WheelDrive.ackermann_fraction` | steering |
 | Roll steer (body roll turns the wheels a little) | cars, vans, trucks, semis (0 on racers and tractor) | `RayWheel.roll_steer` | steering |
 | Compliance steer (side force bends the rear a little) | the front-drive saloons' twist beam only | `RayWheel.compliance_steer` | steering |
 | Auto-steer from a curvature command | tractor | `WheelDrive.steer_angle_from_curvature`, `guidance_steer_unit` | steering |
@@ -113,7 +113,7 @@ the two semi tractor units.
 | --- | --- | --- | --- |
 | Open differential (and one-wheel peel) | most bodies | `src/vehicles/base/differential.gd` | differentials |
 | Limited-slip and Torsen-type diffs | `race`, `race-future`, `hatchback-sports`; centre on `suv`, `suv-luxury`, `race-future` | `Differential.bias_capacity` | differentials |
-| Rear diff lock | tractor (also LAB ▸ DIFFERENTIALS on any driven axle) | `WheelDrive._couple_differentials` | differentials |
+| Rear diff lock | tractor (also SANDBOX ▸ DIFFERENTIALS on any driven axle) | `WheelDrive._couple_differentials` | differentials |
 | Front-wheel drive engagement (MFWD) | tractor | `GroundDriveSpec.front_axle_engageable` | differentials |
 
 ## Brakes and driver aids
@@ -218,7 +218,7 @@ the two semi tractor units.
 | Acceleration, yaw rate, impact | every family | `BaseVehicle._update_telemetry` | position |
 | Axle load read off the springs | truck, tractor | `VehicleTelemetry.axle_load_kg` | truck, implements |
 | Wind field with gusts | every family but the train | `src/levels/base/wind_field.gd` | conditions |
-| CONDITIONS presets (wind, current, direction, time of day) | session-wide | `src/levels/base/world_conditions.gd` | conditions |
+| SANDBOX ▸ WORLD presets (wind, current, direction, time of day) | session-wide | `src/levels/base/world_conditions.gd` | conditions |
 | Rain or weather | not modelled; a painted "Wet" ground exists | `Surface` | surfaces, simplifications |
 
 ## Input

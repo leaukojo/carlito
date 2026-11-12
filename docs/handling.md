@@ -149,7 +149,7 @@ semis), each an **estimate**: road cars run partial Ackermann (~40-60 %, a paten
 textbook figure) for the loaded outer tyre at high g; trucks set close to full for steer-tyre wear
 (SAE 861975 and 912693, no figure); no ag-tractor figure was found. Here the low-speed scrub is the
 point: at road speed the split is second order (a fraction of a degree on `sedan`'s step at road
-speed). Trailers and the plane have no steered pair. The pause menu's LAB ▸ STEERING: PARALLEL
+speed). Trailers and the plane have no steered pair. The pause menu's SANDBOX ▸ STEERING: PARALLEL
 drives any body at `f = 0` (`WheelDrive.ackermann_fraction`; `docs/systems.md` § Input pipeline).
 
 Full lock at crawl speed (`circle`), parallel steer → `f = 1`: the radius driven at the rear
@@ -234,7 +234,7 @@ measured balance at speed: `measure_vehicles -- race 90 step speeds=150,200`, it
 ## Crosswind
 
 The wheeled bodies read the level's wind (`WindField.at`, as the boat and the flight
-bodies do), so CONDITIONS' LIGHT and STRONG reach car, truck and tractor (`WorldConditions.WIND_FAMILIES`;
+bodies do), so SANDBOX's WIND LIGHT and STRONG reach car, truck and tractor (`WorldConditions.WIND_FAMILIES`;
 the train has no aero term). `level_6` authors its own breeze, so a car there feels it at LEVEL.
 `VehicleMath.air_force` reads the air in the body frame: drag on its along-nose part, side force
 `Cy*A` on its across part, both scaled by the air speed, so the side term is `q * Cy*A * sin(yaw)`
@@ -260,7 +260,7 @@ the spin step with ABS on, and trims the delivered fuel in proportion. On the se
 stability: past `ROLL_SHARE` of the rig's measured first lift at its parked coupled load
 (`esc_roll_lift_g`), or as the steer asks that g, it brakes every wheel and the trailer and cuts
 the fuel; the yaw torque keeps its priority on a wheel (`corner_torques`).
-- **Switch and lamps.** `esc_off` (the bridge, or SETTINGS ▸ STABILITY CONTROL) takes TC with it;
+- **Switch and lamps.** `esc_off` (the bridge, or SANDBOX ▸ STABILITY CONTROL) takes TC with it;
   `tcs_off` leaves ESC on. Status bits 7 and 9-11 report it (a truck's VDC1, `docs/truck.md`); the
   ESC lamp is steady while off and flashes while ESC acts. Only roll stability past `LAMP_DECEL`
   lights the brake lamp and opens the lock-up (bit 8; R13: yaw braking is selective braking). The

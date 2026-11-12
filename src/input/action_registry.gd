@@ -280,8 +280,8 @@ const ENTRIES: Array[Dictionary] = [
 		"label": "Respawn",
 	},
 	{
-		# Keyboard-only, same reason as RESPAWN — the CONDITIONS page carries the day/night
-		# toggle for touch.
+		# Keyboard-only, same reason as RESPAWN — the pause menu's SANDBOX ▸ TIME carries the
+		# day/night toggle for touch.
 		"id": &"day_night", "actions": ["day_night"], "group": Group.WORLD,
 		"label": "Day / night",
 	},

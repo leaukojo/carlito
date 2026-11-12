@@ -108,7 +108,7 @@ func _build(focus_scene := "", grab := true) -> void:
 
 	# The only Button here that is not a card (tests tell them apart: a card's name is a
 	# child Label, never `text`).
-	var back := UiTheme.button(self, "BACK", func() -> void: closed.emit())
+	var back := UiTheme.back_button(self, func() -> void: closed.emit())
 	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	col.add_child(back)
 

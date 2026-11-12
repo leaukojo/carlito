@@ -98,13 +98,14 @@ the truck in front is doing.
 
 | Switch | Where | What it does |
 | --- | --- | --- |
-| TRACTION CONTROL | SETTINGS | Off lets the cars' driven wheels spin. |
-| STABILITY CONTROL | SETTINGS | Off switches ESC off, and traction control with it. |
-| ANTI-LOCK BRAKES | pause menu, LAB | Off lets the wheels lock. It takes stability control, traction control, hill-start assist and auto hold with it. This session only. |
-| DIFFERENTIALS: LOCKED | pause menu, LAB | Also switches stability and traction control off, because a locked axle cancels ESC's one-wheel braking. |
+| TRACTION CONTROL | pause menu, SANDBOX | Off lets the cars' driven wheels spin. Saved. |
+| STABILITY CONTROL | pause menu, SANDBOX | Off switches ESC off, and traction control with it. Saved. |
+| ANTI-LOCK BRAKES | pause menu, SANDBOX | Off lets the wheels lock. It takes stability control, traction control, hill-start assist and auto hold with it. This session only. |
+| DIFFERENTIALS: LOCKED | pause menu, SANDBOX | Also switches stability and traction control off, because a locked axle cancels ESC's one-wheel braking. |
 <!-- pause_menu.gd TCS_HELP, ESC_HELP, ABS_HELP; InputRouter.lab_esc_cause; docs/systems.md -->
 
-The settings are saved; the LAB switches last for the session and are locked during a challenge.
+Traction and stability control are saved; ANTI-LOCK BRAKES and DIFFERENTIALS last for the
+session and are locked during a challenge.
 sloppyCAN can switch traction control and stability control off with `tcs_off` and `esc_off`.
 
 ## The dashboard lamps
@@ -113,7 +114,7 @@ sloppyCAN can switch traction control and stability control off with `tcs_off` a
 | --- | --- |
 | ESC | Steady: stability control is switched off. Flashing: it is acting now. |
 | TC | Traction control is switched off, by its own switch or with ESC or ABS. |
-| ABS OFF | The LAB switch has turned ABS off. |
+| ABS OFF | SANDBOX ▸ ANTI-LOCK BRAKES has turned ABS off. |
 | ABS (on a semi) | The trailer's ABS is acting, reported back by the trailer. |
 | VDC | The trailer's own roll control is acting. |
 | TRLR ABS | The trailer's ABS warning lamp on the `semi-conventional`'s American trailer link, set by sloppyCAN. |
@@ -147,9 +148,9 @@ sloppyCAN can switch traction control and stability control off with `tcs_off` a
 1. Pick the `police` car on **Flatland**. It is rear-wheel drive and quick.
 2. Drive at about 80 km/h, steer hard one way and then the other. ESC's lamp flashes on the
    dashboard as it brakes single wheels, and the car stays pointing where you steer.
-3. Open SETTINGS and set STABILITY CONTROL off. Repeat: the tail now swings out much further, and
+3. Open SANDBOX and set STABILITY CONTROL off. Repeat: the tail now swings out much further, and
    may spin the car round.
-4. Turn it back on. In the LAB, switch ANTI-LOCK BRAKES off and stop hard while steering: the car
+4. Turn it back on. In SANDBOX, switch ANTI-LOCK BRAKES off and stop hard while steering: the car
    ploughs straight on. The ESC and TC lamps light too, because ABS took them with it.
 
 </div>

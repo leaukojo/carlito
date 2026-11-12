@@ -37,12 +37,12 @@ static/pure, tested in `tests/test_input_arbitration.gd`.
   Those timings are the full model (SETTINGS ▸ KEY RESPONSE: REALISTIC); the player's softening
   scales every one of them, from RAW (0, the key as pressed) up, and defaults to ARCADE (0.15).
 - `arbitrate_local`: ignition gates throttle; brake never throttles; S = brake, then reverse
-  at standstill; foot brake drives `brake_lamp`; `tcs_off` is SETTINGS ▸ TRACTION CONTROL (a live
+  at standstill; foot brake drives `brake_lamp`; `tcs_off` is SANDBOX ▸ TRACTION CONTROL (a live
   bridge's own wins, fallback included), `esc_off` STABILITY CONTROL (local only; sets `tcs_off`).
-- `auto_hold` (SETTINGS ▸ AUTO HOLD, off by default): on the local path, a wheel-driving body stopped in D or R with no throttle holds
+- `auto_hold` (SANDBOX ▸ AUTO HOLD, off by default): on the local path, a wheel-driving body stopped in D or R with no throttle holds
   its foot brake until the throttle asks to move (`docs/drivetrain.md` § Hill hold); a feathered
   trigger is throttle too. It never applies to the bridge.
-- LAB switches (pause ▸ LAB): session-only and unsaved, local only (no contract signal), stock
+- LAB switches (pause ▸ SANDBOX, under VEHICLE's driver aids): session-only and unsaved, local only (no contract signal), stock
   under the challenge lock, dev keys included, and on a body without the hardware, so a switch kept
   through a body change never reaches the next (`InputRouter.lab_raw`). A live bridge (fallback
   included) ignores them too, so the page greys them "set by sloppyCAN", read when it opens.
@@ -160,7 +160,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   `brake_lamp` is driven, from the foot brake. A semi-trailer builds a second `LampSet` off its
   own spec (`TowedBody`). Horn (`horn.gd`) is a synthesized loop in a shared
   `AudioStreamWAV`, no asset.
-- Day/night is a `Level` concern: N (`toggle_day_night`) or the pause menu's CONDITIONS page
+- Day/night is a `Level` concern: N (`toggle_day_night`) or the pause menu's SANDBOX ▸ TIME
   (`set_night(on)`) flips between authored day values and a dim night preset (`level.gd`),
   read back by `is_night()`, emitting `GameState.night_changed` (tracked by the shell so key
   and menu agree). Wind/current overrides (`src/levels/base/world_conditions.gd`,
@@ -190,20 +190,20 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   `NoticeLine.NOTICE_DWELL_S`. First-run cue (`src/ui/coach_cue.gd`): dismissed by input or
   timeout, once per session (`CoachCue.maybe_coach`), via non-consuming `_input`.
 - Pause overlay (`src/ui/pause_menu.gd`, Esc, Options or touch MENU): RESUME/RESPAWN/SPAWN POINT/
-  LEVEL/CHALLENGES/CONDITIONS/LAB/CONTROLS/SETTINGS; GARAGE/LEVEL/CHALLENGES also live on touch
-  (hidden only by F5, never F4) and G / 4 / 5, GARAGE on Create. `setup(caps, state)` before `add_child`,
+  LEVEL/SANDBOX/CONTROLS/SETTINGS, LEVEL only while the pad is the device in use as it opens
+  (`State.level_row`); GARAGE/LEVEL/CHALLENGES live on touch (hidden only by F5, never F4) and
+  G / 4 / 5, GARAGE on Create; the pad does not reach CHALLENGES. `setup(caps, state)` before `add_child`,
   `state` a `PauseMenu.State` (named fields, filled by `Boot._open_pause`).
 
   | Page | Contents |
   |---|---|
   | SPAWN POINT | the level's spawns this body may use (`State.spawns`), shown from two up; a pick emits `spawn_picked(index)` |
   | CONTROLS | off `InputMap` and the registry's `pad` (`pad_for`); hidden if unusable (`ActionRegistry.relevant_entry`), greyed if bridge-owned; the pad drawn (`pad_diagram.gd`, plain and L1 sets, the L1 set from `pad_layer_rows`) where it fits, else the text column |
-  | SETTINGS | dashboard density, UI scale, extended debug, KEY RESPONSE, TRACTION CONTROL, STABILITY CONTROL, AUTO HOLD; saved to `user://` (`UserSettings`, re-applied by `Boot._apply_saved_settings`) |
-  | LAB | ANTI-LOCK BRAKES, DIFFERENTIALS, STEERING (§ Input pipeline), session-held, greyed in a challenge or under a live bridge |
-  | CONDITIONS | WIND/CURRENT preset (`WorldConditions.Preset` LEVEL/CALM/LIGHT/STRONG), FROM direction, TIME -> greys per `WorldConditions.WIND_FAMILIES`/`CURRENT_FAMILIES` |
+  | SETTINGS | dashboard density, UI scale, KEY RESPONSE; saved to `user://` (`UserSettings`, re-applied by `Boot._apply_saved_settings`) |
+  | SANDBOX | one scrolling page in two headed sections. WORLD: WIND/CURRENT preset (`WorldConditions.Preset` LEVEL/CALM/LIGHT/STRONG), FROM direction, TIME -> greys per `WorldConditions.WIND_FAMILIES`/`CURRENT_FAMILIES`, all greyed in a challenge. VEHICLE: TRACTION CONTROL, STABILITY CONTROL, AUTO HOLD (saved, as SETTINGS), then the LAB switches ANTI-LOCK BRAKES, DIFFERENTIALS, STEERING (§ Input pipeline), session-held, greyed in a challenge or under a live bridge |
 
-  Session-held, never saved: LAB, CONDITIONS and the garage's gearbox choice (`Boot._manual_gearbox`);
-  the garage's tyre choice is saved (`UserSettings.set_tyre`). CONDITIONS and night re-apply each
+  Session-held, never saved: WORLD, the LAB switches and the garage's gearbox choice (`Boot._manual_gearbox`);
+  the garage's tyre choice is saved (`UserSettings.set_tyre`). WORLD and night re-apply each
   load (`Boot._finish_load`, restoring `PAUSABLE`); night tracks `GameState.night_changed`. `Boot` is `PROCESS_MODE_ALWAYS`.
 - Level select (`src/ui/level_select.gd`, touch LEVEL or 4): BACK + `closed` signal, reads
   `LevelRegistry.LEVELS` (`{id, name, scene, desc}`, plus `dev: true`, hidden here but baked and

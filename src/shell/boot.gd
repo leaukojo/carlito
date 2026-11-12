@@ -36,13 +36,13 @@ var _fetching := false  # _loading_path's level pack is downloading; the load st
 var _hold_frames := 0  # see HOLD_FRAMES
 var _warmup: ShaderWarmup = null  # in effect for exactly the HOLD_FRAMES
 var _next_variant := ""  # variant the level now loading should spawn ("" = its own default)
-## CONDITIONS page state, kept for the session only and re-applied to
+## SANDBOX's WORLD state, kept for the session only and re-applied to
 ## every level this loads (`_finish_load`) and on change (`_on_conditions_changed`).
 var _wind_preset: int = WorldConditions.Preset.LEVEL
 var _current_preset: int = WorldConditions.Preset.LEVEL
 var _wind_from_deg := 0.0
-## Tracks GameState.night_changed rather than being written independently, so the N key and the
-## CONDITIONS page can never disagree about which one is true.
+## Tracks GameState.night_changed rather than being written independently, so the N key and
+## SANDBOX's TIME row can never disagree about which one is true.
 var _night := false
 ## The attempt in progress, or null for free play. While set, driving is bridge-only and nothing
 ## that would undo the attempt (vehicle swap, attachment cycle, day/night, CONDITIONS) is honoured.
@@ -459,11 +459,11 @@ func _open_pause() -> void:
 	var pause := PauseMenu.new()
 	# Before add_child: CONTROLS sheet greys what the machine lacks, off the same capability read.
 	var state := PauseMenu.State.new()
+	state.level_row = _ui.device() == UiScale.Device.PAD
 	state.columns = PauseMenu.sheet_columns(_ui.has_used(UiScale.Device.KEYBOARD),
 			_ui.has_used(UiScale.Device.PAD), _ui.has_touched(), UiScale.is_touch_display())
 	state.density = _dashboard.density_setting()
 	state.ui_scale = _ui.user_scale()
-	state.extended_debug = _debug.is_extended()
 	state.key_softening = InputRouter.key_softening()
 	state.tcs_off = InputRouter.local_tcs_off()
 	state.esc_off = InputRouter.local_esc_off()
@@ -483,11 +483,9 @@ func _open_pause() -> void:
 	pause.resume_requested.connect(_close_all_overlays)
 	pause.respawn_requested.connect(_on_pause_respawn)
 	pause.level_requested.connect(_show_level_select)
-	pause.challenges_requested.connect(_show_challenge_select)
 	pause.spawn_picked.connect(_on_spawn_picked)
 	pause.dashboard_density_changed.connect(_on_density_changed)
 	pause.ui_scale_changed.connect(_on_ui_scale_changed)
-	pause.extended_debug_changed.connect(_on_extended_debug_changed)
 	pause.key_softening_changed.connect(_on_key_softening_changed)
 	pause.tcs_off_changed.connect(_on_tcs_off_changed)
 	pause.esc_off_changed.connect(_on_esc_off_changed)
@@ -504,7 +502,6 @@ func _open_pause() -> void:
 func _apply_saved_settings() -> void:
 	_dashboard.set_density_setting(int(_settings.value("density")))
 	_ui.set_user_scale(float(_settings.value("ui_scale")))
-	_debug.set_extended(bool(_settings.value("extended_debug")))
 	InputRouter.set_key_softening(float(_settings.value("key_softening")))
 	InputRouter.set_local_tcs_off(bool(_settings.value("tcs_off")))
 	InputRouter.set_local_esc_off(bool(_settings.value("esc_off")))
@@ -525,48 +522,42 @@ func _on_ui_scale_changed(factor: float) -> void:
 	_settings.set_value("ui_scale", _ui.user_scale())
 
 
-## SETTINGS picked "Extended debug labels".
-func _on_extended_debug_changed(on: bool) -> void:
-	_debug.set_extended(on)
-	_settings.set_value("extended_debug", _debug.is_extended())
-
-
 ## SETTINGS picked a new KEY RESPONSE step.
 func _on_key_softening_changed(amount: float) -> void:
 	InputRouter.set_key_softening(amount)
 	_settings.set_value("key_softening", InputRouter.key_softening())
 
 
-## SETTINGS flipped TRACTION CONTROL.
+## SANDBOX flipped TRACTION CONTROL.
 func _on_tcs_off_changed(off: bool) -> void:
 	InputRouter.set_local_tcs_off(off)
 	_settings.set_value("tcs_off", InputRouter.local_tcs_off())
 
 
-## SETTINGS flipped STABILITY CONTROL.
+## SANDBOX flipped STABILITY CONTROL.
 func _on_esc_off_changed(off: bool) -> void:
 	InputRouter.set_local_esc_off(off)
 	_settings.set_value("esc_off", InputRouter.local_esc_off())
 
 
-## SETTINGS flipped AUTO HOLD.
+## SANDBOX flipped AUTO HOLD.
 func _on_auto_hold_changed(on: bool) -> void:
 	InputRouter.set_auto_hold_on(on)
 	_settings.set_value("auto_hold", InputRouter.auto_hold_on())
 
 
-## LAB flipped ANTI-LOCK BRAKES. Session-only: never written to user://, so a later visit never
+## SANDBOX flipped ANTI-LOCK BRAKES. Session-only: never written to user://, so a later visit never
 ## starts with ABS off unknowingly.
 func _on_abs_off_changed(off: bool) -> void:
 	InputRouter.set_lab_abs_off(off)
 
 
-## LAB cycled DIFFERENTIALS. Session-only, as ANTI-LOCK BRAKES.
+## SANDBOX cycled DIFFERENTIALS. Session-only, as ANTI-LOCK BRAKES.
 func _on_axle_diff_changed(mode: VehicleInput.AxleDiff) -> void:
 	InputRouter.set_lab_axle_diff(mode)
 
 
-## LAB flipped STEERING. Session-only, as ANTI-LOCK BRAKES.
+## SANDBOX flipped STEERING. Session-only, as ANTI-LOCK BRAKES.
 func _on_parallel_steer_changed(on: bool) -> void:
 	InputRouter.set_lab_parallel_steer(on)
 
@@ -601,7 +592,7 @@ func _on_spawn_picked(index: int) -> void:
 		_level.respawn_at(spawns[index])
 
 
-## CONDITIONS picked a new wind/current preset or compass direction. Kept for the session
+## SANDBOX picked a new wind/current preset or compass direction. Kept for the session
 ## and applied to the current level; `_finish_load` re-applies it to
 ## whatever loads next.
 func _on_conditions_changed(wind_preset: int, current_preset: int, from_deg: float) -> void:
@@ -612,7 +603,7 @@ func _on_conditions_changed(wind_preset: int, current_preset: int, from_deg: flo
 		_level.set_conditions(_wind_preset, _current_preset, _wind_from_deg)
 
 
-## CONDITIONS picked day/night directly (as opposed to the N key, which flips it). `_night`
+## SANDBOX picked day/night directly (as opposed to the N key, which flips it). `_night`
 ## itself is written from GameState.night_changed (`_on_level_night_changed`), not here, so it
 ## can never disagree with what the level actually did.
 func _on_night_toggled(on: bool) -> void:
@@ -621,7 +612,7 @@ func _on_night_toggled(on: bool) -> void:
 
 
 ## Keeps the shell's remembered night state in lock-step with the level's, whether it changed
-## from the N key, the CONDITIONS page, or a freshly loaded level's first-frame capture.
+## from the N key, SANDBOX's TIME row, or a freshly loaded level's first-frame capture.
 func _on_level_night_changed(is_night: bool) -> void:
 	_night = is_night
 
@@ -652,9 +643,9 @@ func _on_level_chosen(scene_path: String) -> void:
 
 # --- challenge selector --------------------------------------------------------
 
-## CHALLENGES: reachable from the pause menu or the on-screen rail with no pause menu underneath,
-## mirroring _show_level_select. Reachable during an attempt too (like LEVEL) — picking a
-## challenge there ends the one in progress the same way picking a level does.
+## CHALLENGES: reachable from key 5 or the on-screen rail, with or without the pause menu
+## underneath, mirroring _show_level_select. Reachable during an attempt too (like LEVEL) —
+## picking a challenge there ends the one in progress the same way picking a level does.
 ## `open_id` opens the screen on that challenge's briefing instead of the grid.
 func _show_challenge_select(open_id := "") -> void:
 	if _level == null or _loading_path != "":

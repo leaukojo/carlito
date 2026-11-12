@@ -133,9 +133,9 @@ reports it.
 <div class="box try">
 <p class="box-title">Try it in the game: lift a wheel</p>
 
-1. In the GARAGE pick the `semi` tractor unit and choose NONE for its trailer. Open SETTINGS and
-   set STABILITY CONTROL off, so roll stability control does not step in, and EXTENDED DEBUG
-   LABELS on, so the overlay shows `roll` and `pitch`. Drive on **Flatland**.
+1. In the GARAGE pick the `semi` tractor unit and choose NONE for its trailer. Open SANDBOX and
+   set STABILITY CONTROL off, so roll stability control does not step in; the debug overlay
+   (**F3**) shows `roll` and `pitch`. Drive on **Flatland**.
 2. Get up to about 50 km/h and turn the steering hard, then hold it. Watch the `roll` number on the
    overlay grow, and watch the inside wheels: they leave the ground before the tyres slide.
 3. Now do the same in the `sedan` at the same speed. `roll` stays small, and the car slides wide

@@ -108,7 +108,7 @@ outer to about 31°.
 
 ### Parallel steering, for comparison
 
-The pause menu's LAB page has a STEERING switch. Set to PARALLEL, it turns both front wheels to
+The pause menu's SANDBOX page has a STEERING switch. Set to PARALLEL, it turns both front wheels to
 the bicycle angle on any car, truck or tractor, for the rest of the session. The difference is
 easiest to see at full lock and walking pace: the two front tyres now fight, each slipping
 sideways against the other, and the vehicle drives a wider circle. The `sedan`, for example,
@@ -176,12 +176,11 @@ drives the curve it was asked for at any speed. The tightest command the signal 
 <div class="box try">
 <p class="box-title">Try it in the game: watch the inner wheel</p>
 
-1. Open SETTINGS and set EXTENDED DEBUG LABELS to ON (**F3** shows or hides the overlay). Its `steer`
-   line shows each wheel's angle in degrees (positive is left).
+1. The debug overlay's `steer` line (**F3** shows or hides the overlay) shows each wheel's angle in degrees (positive is left).
 2. Pick the `sedan` in the GARAGE and drive it on **Flatland**. At walking pace, hold full left
    lock. The front-left
    (inner) wheel reads about 49° and the front-right (outer) about 31°.
-3. Pause, open LAB and set STEERING to PARALLEL. Hold full lock again: both front wheels read the
+3. Pause, open SANDBOX and set STEERING to PARALLEL. Hold full lock again: both front wheels read the
    same angle, and the circle you drive is wider.
 4. Set STEERING back, drive at about 100 km/h on a straight, and press full left for a moment.
    The `steer` numbers are far smaller than at walking pace: that is the speed taper.

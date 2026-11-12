@@ -58,7 +58,7 @@ node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measu
 node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 90 pedal=0.3
 # part-pedal probes, instead of every other pass (§ Part pedal): cruise kickdown pulse[=<s>] duty=<0..1>
 node tools/godot_run.mjs -- --headless --fixed-fps 60 --path . res://tools/measure_vehicles.tscn -- sedan 90 cruise kickdown pulse
-# wind (any pass): wind=<from_deg>:<m/s>, steady, FROM as CONDITIONS enters it (0 = out of the
+# wind (any pass): wind=<from_deg>:<m/s>, steady, FROM as SANDBOX enters it (0 = out of the
 # north, -Z; the strip runs -Z, so wind=0:9 is a headwind). With cruise, one speed per family:
 # headtail (two more runs from a standstill, into then with 9 m/s along the heading), xwind[=<m/s>]
 # (13 m/s from the right, pedal held, wheel straight: drift, heading, yaw rate and roll at 1 s, 2 s)

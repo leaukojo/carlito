@@ -68,13 +68,13 @@ var _key_softening := KeyShaper.DEFAULT_SOFTENING
 var _local_tcs_off := false
 ## The player's STABILITY CONTROL setting, set by the shell: local driving only, like `tcs_off`.
 var _local_esc_off := false
-## The LAB page's ANTI-LOCK BRAKES switch, set by the shell: session-only, local driving only, and
-## never in a challenge nor on a body without ABS (`lab_raw`). Driver state: a respawn and a body
-## change keep it.
+## The LAB's ANTI-LOCK BRAKES switch (pause ▸ SANDBOX), set by the shell: session-only, local
+## driving only, and never in a challenge nor on a body without ABS (`lab_raw`). Driver state: a
+## respawn and a body change keep it.
 var _lab_abs_off := false
-## The LAB page's DIFFERENTIALS switch (`VehicleInput.AxleDiff`), as `_lab_abs_off`.
+## The LAB's DIFFERENTIALS switch (`VehicleInput.AxleDiff`), as `_lab_abs_off`.
 var _lab_axle_diff := VehicleInput.AxleDiff.STOCK
-## The LAB page's STEERING switch (true = PARALLEL), as `_lab_abs_off`.
+## The LAB's STEERING switch (true = PARALLEL), as `_lab_abs_off`.
 var _lab_parallel_steer := false
 var _brake_override := false  ## latched by `brake_override`, both sources alike
 ## The player's AUTO HOLD setting, set by the shell. Off by default: a real car's auto hold is a

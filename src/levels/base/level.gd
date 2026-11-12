@@ -213,7 +213,7 @@ func toggle_day_night() -> void:
 	set_night(not _is_night)
 
 
-## Sets day/night directly (the pause-menu CONDITIONS page); a no-op below the same state, so a
+## Sets day/night directly (the pause menu's SANDBOX ▸ TIME); a no-op below the same state, so a
 ## re-selected value costs nothing and does not re-emit.
 func set_night(on: bool) -> void:
 	if on == _is_night:
@@ -252,7 +252,7 @@ func _capture_conditions() -> void:
 	_authored_current = current
 
 
-## Applies the pause-menu CONDITIONS choice (wind/current preset, shared compass direction),
+## Applies the pause menu's SANDBOX ▸ WORLD choice (wind/current preset, shared direction),
 ## replacing `wind`/`current` for every reader (`WindField.at`/`CurrentField.at` sample them
 ## live, never a cached copy). LEVEL restores the authored side-cars captured in `_ready`.
 func set_conditions(wind_preset: int, current_preset: int, from_deg: float) -> void:

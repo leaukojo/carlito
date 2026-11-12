@@ -97,18 +97,18 @@ horn sounds on **H** or sloppyCAN's `horn`.
 | **C** | Camera view |
 | **L**, **H**, **N** | Lights; horn; day and night |
 | **F2** | Dashboard size: COMPACT, FULL, OFF, then COMPACT again |
-| **F3** | Show or hide the debug overlay (shown at the start) |
+| **F3** | Show or hide the debug overlay (hidden at the start) |
 | **F4** | On-screen touch controls |
 | **4**, **5** | Level select; challenges |
 | **Esc** | Pause menu |
-<!-- project.godot [input]: accel W / Up, brake_reverse S / Down, steer A D / Left Right, handbrake Space, parking_brake Shift, respawn Backspace, garage G, next_vehicle V, next_attachment E, camera_view C, headlights L, horn H, day_night N, toggle_dashboard F2, debug_overlay F3, toggle_touch F4, level_select 4, challenge_select 5, to_menu Escape; boot.gd _toggle_dashboard cycles Dashboard.DENSITY_KEYS COMPACT -> FULL -> OFF; debug_overlay.gd _ready visible = true, the F3 action toggles it -->
+<!-- project.godot [input]: accel W / Up, brake_reverse S / Down, steer A D / Left Right, handbrake Space, parking_brake Shift, respawn Backspace, garage G, next_vehicle V, next_attachment E, camera_view C, headlights L, horn H, day_night N, toggle_dashboard F2, debug_overlay F3, toggle_touch F4, level_select 4, challenge_select 5, to_menu Escape; boot.gd _toggle_dashboard cycles Dashboard.DENSITY_KEYS COMPACT -> FULL -> OFF; debug_overlay.gd _ready visible = false, the F3 action toggles it -->
 
 The dashboard starts COMPACT: the warning lamps, the speedometer and the rev counter. FULL adds
 the bars (fuel, coolant, brake temperature, a truck's air and the rest) and a line of readings
-(heading, odometer, position, fuel burn). The debug overlay, top right, shows only the frame rate
-until SETTINGS ▸ EXTENDED DEBUG LABELS is ON; then it adds each wheel's surface, grip, slip and
-angle, the body's pitch and roll, a trailer's angle and the wind.
-<!-- dashboard.gd: "COMPACT (the default) keeps the tell-tale row and gauges; FULL adds the bars, readout, wind rose and echo sounder"; readout "HDG ODO lat, lon" plus READOUT_EXTRAS BURN; debug_overlay.gd _refresh: FPS only unless _extended, then _grip_line, _slip_line, _steer_line, _attitude_line, _articulation_line, _flow_line -->
+(heading, odometer, position, fuel burn). The debug overlay, top right, shows the frame rate and
+draw calls, each wheel's surface, grip, slip and angle, the body's pitch and roll, a trailer's
+angle and the wind.
+<!-- dashboard.gd: "COMPACT (the default) keeps the tell-tale row and gauges; FULL adds the bars, readout, wind rose and echo sounder"; readout "HDG ODO lat, lon" plus READOUT_EXTRAS BURN; debug_overlay.gd _refresh: FPS and the Performance monitors, then _grip_line, _slip_line, _steer_line, _attitude_line, _articulation_line, _flow_line -->
 
 
 
@@ -159,26 +159,27 @@ its usual job. Until you first press L1, a line there says it holds more control
 | **R3** | hand throttle to PTO speed | | | | | |
 
 L1 + Triangle cycles the implement or trailer on any vehicle that tows one. A control appears only
-on a machine that has it (a truck tips only with a tipper on). Level select and the challenges
-are rows in the pause menu.
-<!-- ActionRegistry pad slots l1+square/circle/cross/r1/dpad_*/r3/triangle, gated by families and capability (pad_action, pad_layer_rows); PadLegend, PadLegend.show_hint while the pad is in use until PadLayer.layer_used; pause_menu.gd LEVEL and CHALLENGES rows -->
+on a machine that has it (a truck tips only with a tipper on). Level select is a row in the pause
+menu while the gamepad is in use; the challenges are on **5** and the touch buttons only.
+<!-- ActionRegistry pad slots l1+square/circle/cross/r1/dpad_*/r3/triangle, gated by families and capability (pad_action, pad_layer_rows); PadLegend, PadLegend.show_hint while the pad is in use until PadLayer.layer_used; pause_menu.gd LEVEL row (State.level_row, Boot._open_pause: UiScale.device() is PAD) -->
 <!-- ActionRegistry: every bound action, one row each, gated by family and capability; the CONTROLS sheet -->
 
 ## The settings and switches that change the physics
 
 | Where | Setting | Kept |
 | --- | --- | --- |
-| SETTINGS | KEY RESPONSE, TRACTION CONTROL, STABILITY CONTROL, AUTO HOLD | saved |
-| LAB | ANTI-LOCK BRAKES, DIFFERENTIALS, STEERING | this session; locked in a challenge |
-| CONDITIONS | WIND, WATER CURRENT, FROM, TIME | this session |
+| SETTINGS | KEY RESPONSE | saved |
+| SANDBOX ▸ WORLD | WIND, WATER CURRENT, FROM, TIME | this session |
+| SANDBOX ▸ VEHICLE | TRACTION CONTROL, STABILITY CONTROL, AUTO HOLD | saved |
+| SANDBOX ▸ VEHICLE | ANTI-LOCK BRAKES, DIFFERENTIALS, STEERING | this session; locked in a challenge |
 | GARAGE | the gearbox (with sloppyCAN), the tyres | the gearbox this session, the tyres saved |
-<!-- docs/systems.md: SETTINGS saved to user://; LAB, CONDITIONS and the gearbox choice session-held; tyre choice saved -->
+<!-- docs/systems.md: SETTINGS and SANDBOX's driver aids saved to user://; WORLD, the LAB switches and the gearbox choice session-held; tyre choice saved -->
 
 Each is explained where it matters: [Ground and tyre types](surfaces.md) for tyres,
 [ABS, traction and stability control](driver-aids.md) for the aids, [Holding still](holding.md)
-for auto hold, [Differentials](differentials.md#the-lab-switch) and
-[Steering](steering.md#parallel-steering-for-comparison) for the LAB switches,
-[Wind, current and conditions](conditions.md) for CONDITIONS.
+for auto hold, [Differentials](differentials.md#the-sandbox-switch) and
+[Steering](steering.md#parallel-steering-for-comparison) for the session-only switches,
+[Wind, current and conditions](conditions.md) for WORLD.
 
 ## What you see in sloppyCAN
 
@@ -201,8 +202,8 @@ for auto hold, [Differentials](differentials.md#the-lab-switch) and
 <div class="box try">
 <p class="box-title">Try it in the game: key response</p>
 
-1. Pick the `sedan` on **Flatland**. Open SETTINGS and set EXTENDED DEBUG LABELS to ON: the
-   overlay's `steer` line shows each wheel's angle. (**F3** shows or hides the overlay.)
+1. Pick the `sedan` on **Flatland**. The debug overlay's `steer` line shows each wheel's
+   angle. (**F3** shows or hides the overlay.)
 2. At 100 km/h, tap **A**. The wheels turn only a few degrees, slowly.
 3. Open SETTINGS, set KEY RESPONSE to RAW, and tap **A** again at the same speed: the wheels turn
    further and faster, and the car darts.

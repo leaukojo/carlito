@@ -393,7 +393,7 @@ func hold_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 	hill_holding = _hold.x > input.brake
 
 
-## Whether the anti-lock modulates the foot brake: fitted, and not switched off on the LAB page
+## Whether the anti-lock modulates the foot brake: fitted, and not switched off by the LAB switch
 ## (`VehicleInput.abs_off`). Pure, so the switch never writes the shared spec.
 static func anti_lock_on(gd: GroundDriveSpec, input: VehicleInput) -> bool:
 	return gd.abs_equipped and not input.abs_off

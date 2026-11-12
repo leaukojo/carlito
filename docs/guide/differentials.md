@@ -98,9 +98,9 @@ The tractor's brakes sit on the rear axle. When the foot brake is pressed, the t
 front-wheel drive by itself, so the drive shaft brakes the front wheels too.
 <!-- contract fwd_drive_state: "Also true while the foot brake is down ... the pedal engages MFWD so the shaft brakes the fronts"; GroundDriveSpec.brake_engages_front_axle -->
 
-## The LAB switch
+## The SANDBOX switch
 
-The pause menu's LAB page has a DIFFERENTIALS switch for any car or truck, for the rest of the
+The pause menu's SANDBOX page has a DIFFERENTIALS switch for any car or truck, for the rest of the
 session:
 
 - **STOCK**: the vehicle's own differentials.
@@ -134,13 +134,12 @@ The tractors ignore the switch: they keep their own diff lock on its key.
 <div class="box try">
 <p class="box-title">Try it in the game: one-wheel peel</p>
 
-1. Pick the `police` car (rear-wheel drive, open diff) and set EXTENDED DEBUG LABELS to ON in
-   SETTINGS. The overlay's `slip` line shows each wheel's slip. (**F3** shows or hides the
-   overlay.)
-2. Open SETTINGS and set TRACTION CONTROL off, so it does not catch the spin.
+1. Pick the `police` car (rear-wheel drive, open diff). The debug overlay's `slip`
+   line shows each wheel's slip. (**F3** shows or hides the overlay.)
+2. Open SANDBOX and set TRACTION CONTROL off, so it does not catch the spin.
 3. Turn tightly and floor the accelerator. The inside rear wheel, with the least load, spins far
    ahead of the outside one.
-4. Pause, open LAB and set DIFFERENTIALS to LOCKED. Repeat: both rear wheels now show the same
+4. Pause, open SANDBOX and set DIFFERENTIALS to LOCKED. Repeat: both rear wheels now show the same
    slip, and the tyres scrub through the turn.
 
 </div>
