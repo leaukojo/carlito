@@ -1,8 +1,9 @@
 class_name RayWheel
 extends RefCounted
 ## One cast-suspension wheel: the tyre's cylinder swept down its travel, slip-based grip. Ticked by
-## WheelDrive each physics frame, casting the tyre, applying spring and damper force plus slip
-## friction at the contact, and integrating spin from drive, brake and road-reaction torque.
+## its owner (WheelDrive, TowedBody) each physics frame, casting the tyre, applying spring and damper
+## force plus slip friction at the contact, and integrating spin from drive, brake and road-reaction
+## torque.
 ##
 ## Tuned for the locked 60 Hz tick: the clamps below plus the semi-implicit spin step in
 ## _integrate_spin keep it stable (src/vehicles/CLAUDE.md § Physics). Retune
@@ -32,8 +33,8 @@ const TCS_SLIP := 0.12
 ## Rate (1/s) at which a wheel off the ground sheds spin to bearing, tyre and driveline losses (an
 ## honest model): what stops a lifted undriven wheel, or one in N. A driven wheel in gear turns
 ## with the crank through its coupling (`Drivetrain.couple`), so it never passes the limiter (the
-## crank lands on the redline) and the engine's own overrun slows it. Well under a jump's air
-## time, so landing spin-up is unaffected.
+## crank lands on the redline) and the engine's own overrun slows it. A 4 s time constant, well
+## over a jump's air time, so landing spin-up is unaffected.
 const FREE_SPIN_DECAY := 0.25
 
 ## Static friction (`stick_step`, `stick_stiffness`, `stick_saturate`): the contact patch's deflection (m) at which its
@@ -165,9 +166,10 @@ var anti_roll_partner: RayWheel:
 	set(value):
 		_partner_ref = weakref(value) if value != null else null
 var _partner_ref: WeakRef = null
-## Body mass share this corner carries (kg): `mass / wheel count`, sizing the three 60 Hz clamps
-## below, never a tyre law (`reference_load`). Constructor-required: a wheel built with zero applies no
-## damping or tire force and just slides. It tracks the body's LIVE mass (every runtime `mass` write
+## Body mass share this corner carries (kg): `mass / wheel count`, sizing `tick`'s 60 Hz clamps
+## (the damper, the two one-tick caps, the patch spring, rolling drag), never a tyre law
+## (`reference_load`). Constructor-required: a wheel built with zero applies no damping or tire force
+## and just slides. It tracks the body's LIVE mass (every runtime `mass` write
 ## is `BaseVehicle.set_live_mass`).
 ## COMPROMISE: a semi tractor's kingpin load is NOT folded in (it rides the rear axle without
 ## touching `mass`), so this corner mass is understated there. That is the safe way round, since a
@@ -452,7 +454,6 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 			else Surface.grip_in(tyre_grip, Surface.ASPHALT)
 	surface_drag = terrain.drag_at(contact_point) if terrain != null else 0.0
 
-	# Along the contact normal, never the chassis up axis, which would push a pitched body along.
 	compression = clampf(ray_len - hit_dist, 0.0, drive_spec.rest_length)
 	var comp_vel := (compression - _prev_compression) / delta
 	_prev_compression = compression
@@ -466,6 +467,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	suspension_force = clampf(spring_rate * compression + damper_force
 			+ bar_force(bar_rate) + link_slope * force_long,
 			0.0, drive_spec.max_suspension_force)
+	# Along the contact normal, never the chassis up axis, which would push a pitched body along.
 	body.apply_force(normal * suspension_force, contact_point - body.global_position)
 
 	var wheel_forward := (Basis(up, steer_angle) * -mount.z)
@@ -817,13 +819,6 @@ static func size_cap_masses(wheels: Array[RayWheel], body: RigidBody3D,
 		wheels[i].slip_floor = floor_vel
 
 
-## Tyre mu at a load off the corner's static reference: `mu * (1 - sensitivity * log2(load / ref))`,
-## so grip grows SLOWER than load above the reference. Identity at the reference and at
-## sensitivity 0, so every brake figure checked at the even static load (`BrakeSizing`,
-## `test_vehicle_catalog`) holds. Capacity `mu(L) * L` still RISES
-## with load; what a heavier wheel loses is its share per newton, which lets transfer move the
-## balance. The [0.5, 1.25] clamp and the ref*0.25 load floor bind on nothing shipped (0.12 at the
-## floor reaches 1.24); they bound a suspension spike or a runtime mass rewrite.
 ## This contact's longitudinal grip budget (N) under `gd`: `mu_long` on the surface's grip,
 ## load-scaled (`load_scaled_mu`), times its spring load.
 func long_budget(gd: GroundDriveSpec) -> float:
@@ -838,6 +833,13 @@ func lat_budget(gd: GroundDriveSpec) -> float:
 			reference_load, gd.load_sensitivity) * suspension_force
 
 
+## Tyre mu at a load off the corner's static reference: `mu * (1 - sensitivity * log2(load / ref))`,
+## so grip grows SLOWER than load above the reference. Identity at the reference and at
+## sensitivity 0, so every brake figure checked at the even static load (`BrakeSizing`,
+## `test_vehicle_catalog`) holds. Capacity `mu(L) * L` still RISES
+## with load; what a heavier wheel loses is its share per newton, which lets transfer move the
+## balance. The [0.5, 1.25] clamp and the ref*0.25 load floor bind on nothing shipped (0.12 at the
+## floor reaches 1.24); they bound a suspension spike or a runtime mass rewrite.
 static func load_scaled_mu(mu: float, normal_load: float, ref_load: float,
 		sensitivity: float) -> float:
 	if sensitivity <= 0.0 or ref_load <= 0.0 or mu <= 0.0:
@@ -944,19 +946,21 @@ static func friction_ellipse(f: Vector2, budget_long: float, budget_lat: float) 
 
 
 ## Spin a wheel off the ground keeps after one tick of `FREE_SPIN_DECAY` (rad/s): exponential
-## toward zero, never reversing it. The one torque on a wheel out of contact.
+## toward zero, never reversing it. The one loss on a wheel out of contact; its drive, brake and
+## coupling still go through the spin step.
 static func free_spin_omega(omega_in: float, delta: float) -> float:
 	return move_toward(omega_in, 0.0, absf(omega_in) * FREE_SPIN_DECAY * delta)
 
 
 ## Rolling-resistance force (N, along the wheel's forward), the tyre's and a painted surface's
 ## together: `crr * load` opposing the contact's longitudinal velocity, capped at the force that would zero that
-## velocity in one tick so it can stop the wheel and never push it backward. 0 at rest.
-static func surface_drag_force(v_long: float, crr: float, normal_load: float, moment: float,
+## velocity in one tick on the `mass` (kg) the contact moves, so it can stop the wheel and never push
+## it backward. 0 at rest.
+static func surface_drag_force(v_long: float, crr: float, normal_load: float, mass: float,
 		delta: float) -> float:
 	if crr <= 0.0 or normal_load <= 0.0:
 		return 0.0
-	var tick_cap := moment * absf(v_long) / delta
+	var tick_cap := mass * absf(v_long) / delta
 	return clampf(-signf(v_long) * crr * normal_load, -tick_cap, tick_cap)
 
 

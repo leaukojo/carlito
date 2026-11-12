@@ -1,12 +1,14 @@
 ---
 name: review-continue
-description: Continue the ongoing project review ("continue reviewing"): pick the next unit from .claude/review_journal/summary.md, review it, fix what is cheap and proven, queue the rest.
+description: Continue the ongoing project review ("continue reviewing"): pick the next unit from .claude/review_journal/summary.md, review it, fix or simplify what is cheap and proven, queue the rest.
 ---
 
 The journal is `.claude/review_journal/`: `summary.md` (unit map, queue, things for the user to
 verify), `proposals.md` (changes that need the user's decision), `suggestions.md` (feature
 ideas), `sessions/` (one short file per session). Read `summary.md` first; read nothing else in
 the journal unless the picked item points there.
+
+The project wants no new features: the review trims, fixes and simplifies.
 
 ## One session
 
@@ -16,9 +18,10 @@ the journal unless the picked item points there.
    (`git log --oneline <hash>..HEAD -- <paths> | wc -l`). BETA units (boat, drone, plane,
    train) only when no land unit qualifies. One item per session; a unit too large to read in
    one session is split in the map first, and one part is reviewed.
-2. **Review it** for: bloat (dead code, unreferenced files, duplicated logic), bad design,
-   false `COMPROMISE` labels, useless tests, stale docs, and wrong comments or explanations. A
-   unit's tests and its `docs/` pages are reviewed with it.
+2. **Review it** for: bloat (dead code, unreferenced files, duplicated logic), an implementation
+   more complicated than its job, bad design, false `COMPROMISE` labels, useless tests, stale
+   docs, and wrong comments or explanations. A unit's tests and its `docs/` pages are reviewed
+   with it.
 3. **Prove each finding before acting on it.**
    - Dead code: no reference in `.gd`, `.tscn`, `.tres`, `project.godot`, tools or CI.
    - Useless test: break the code it covers and the test still passes (undo the break at
@@ -26,13 +29,20 @@ the journal unless the picked item points there.
    - Wrong comment or doc: checked against the code it describes, quoted in the session file.
    - Bad design: name the concrete cost (a bug it caused, a duplicate it forces, a rule it
      breaks), not a preference.
+   - Simpler implementation: the session file names what goes (lines, a branch, an argument, a
+     piece of state, a special case, a second copy) and why the behaviour stays the same. A
+     rewrite of the same size and shape, a rename for taste and moved code are not findings.
 4. **Size each finding, then fix cheapest-first.**
    - S (minutes, one file) and M (under about an hour, tests cover it): fix now.
+   - A simplification is S or M only when its results are the same to the bit, or the unit's
+     tests cover every path it touches. One that changes float arithmetic inside the physics
+     tick (wheel, drivetrain, towing) can move measured figures: queue it with the before and
+     after run it needs.
    - L (crosses units, or needs a design choice): do not start. Add a Queue line with a
      three-line brief so a later session can do it alone.
-   - Every Queue line ends with the effort level it wants, in brackets: `[medium]` for
-     mechanical work (deletions, relabels, doc sync), `[high]` for a unit review or a fix that
-     needs judgement, `[xhigh]` for a design change in the drivetrain, wheels or towing.
+   - Every Queue line ends with what it wants, in brackets: effort, mode, and the model when
+     Fable is not needed, e.g. `[medium, auto, Sonnet]` or `[xhigh, plan]` (§ Recommending the
+     next session).
    - Whatever is left when the session runs low goes to the Queue. An unfinished fix is
      reverted, never left half-done.
    - The session file is created before the first fix and gains each finding and each commit
@@ -55,8 +65,30 @@ the journal unless the picked item points there.
    is `sessions/<YYYY-MM-DD>-<unit>.md`: findings with their evidence, what was fixed (commit
    hashes), what was deferred and why. Keep the ten newest session files; delete older ones.
 9. **Report to the user** in a few lines: what changed, what needs their decision, what to
-   verify. The last line names the next session's item and its effort level (a map unit is
-   `high`); the same goes on the `Next session:` line of `summary.md`.
+   verify. The report ends with the next session's item and how to run it (§ Recommending the
+   next session); the same goes on the `Next session:` line of `summary.md`.
+
+## Recommending the next session
+
+Each report ends with four things for the next `/review-continue`, judged from the item it will
+pick, never assumed. A queued item's tag was written by the session that understood it: the
+report copies it, and a later session may raise a tag but never lowers one it did not write. A
+session unsure how to rate an item it queues takes the higher level.
+
+- **Effort.**
+  - `low`: a relabel, a doc sync or a deletion whose every step the Queue line already spells
+    out.
+  - `medium`: mechanical work that needs checking, not judgement (a sweep, dead-code removal,
+    duplicate tests), and a unit of docs, guide pages, agent instructions or CI and build tools.
+  - `high`: a unit of code with logic in it, or a fix that needs judgement.
+  - `xhigh`: a design change or a restructuring in the drivetrain, wheels or towing.
+- **Mode.** Plan mode when the item restructures code, crosses units or will end in a proposal:
+  the plan is what the user approves. Auto mode for a unit review and for mechanical fixes.
+- **Model.** The session's own model (`/model`), never a subagent doing the item for Fable.
+  Fable for the vehicle physics (map units 2 to 7) and for any `xhigh` item; say when Sonnet is
+  enough (mechanical items, and units of docs, tools and tests with no physics).
+- **Context.** `/clear` first, as a rule: the journal carries everything. Keep the context only
+  when the next item is a fix in a file this session read whole and the session was short.
 
 ## COMPROMISE triage
 
@@ -72,7 +104,7 @@ Each one found is sorted into:
 
 ## Limits
 
-- No refactor for taste: every change traces to a proven finding.
+- Every change traces to a proven finding. Simplifying is wanted, restyling is not.
 - `addons/gdUnit4/` is third-party and is not reviewed.
 - The existing skills still apply: `contract-edit`, `level-edit`, `vehicle-feel`.
 - A bake-hashed file (`LevelBaker.BAKE_CODE_INPUTS`) edited beyond whole-line comments re-stales
