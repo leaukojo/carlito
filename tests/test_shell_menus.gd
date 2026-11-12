@@ -385,6 +385,30 @@ func test_vehicle_select_footer_fits_a_narrow_window() -> void:
 			UiTheme.px(sel, VehicleSelect.FOOTER_W))
 
 
+## The stat panel: heading, the catalog's line, the attachment's line on a towing body, then
+## key / value rows; a body with no engine quotes no crank; a phone-width window keeps the line.
+func test_vehicle_select_stat_panel() -> void:
+	var sel := _selector(PackedStringArray(["truck", "drone"]), "semi", false, TrailerCatalog.first())
+	assert_str(sel._about_name.text).is_equal("SEMI")
+	assert_str(sel._about_desc.text).is_equal(VehicleCatalog.desc_of("semi"))
+	assert_str(sel._about_attachment.text).is_equal("BOX: " + TrailerCatalog.DESC[TrailerCatalog.first()])
+	var keys := sel._spec_rows().map(func(r: Array) -> String: return r[0])
+	assert_array(keys).contains(["Drive", "Mass", "Gears", "Redline", "Power", "Governed to", "Bus"])
+	assert_int(sel._stats.get_child_count()).is_equal(keys.size() * 2)
+	sel._on_attachment_pressed(TrailerCatalog.BOBTAIL)
+	assert_str(sel._about_attachment.text).is_equal("NONE: " + TrailerCatalog.DESC[TrailerCatalog.BOBTAIL])
+	_press(sel, "DRONE (beta)")
+	assert_bool(sel._about_attachment.visible).is_false()
+	keys = sel._spec_rows().map(func(r: Array) -> String: return r[0])
+	assert_array(keys).not_contains(["Gears", "Redline", "Power", "Drive"])
+	sel.size = Vector2(380, 720)
+	assert_bool(sel._preview_panel.visible).is_false()
+	assert_bool(sel._narrow_about.visible).is_true()
+	assert_object(sel._about.get_parent()).is_same(sel._narrow_about)
+	sel.size = Vector2(1600, 900)
+	assert_object(sel._about.get_parent()).is_same(sel._about_home)
+
+
 ## The refusal survives only on the family's own home level, when even that cannot place it.
 func test_vehicle_select_refuses_only_on_the_home_level_itself() -> void:
 	var sel: VehicleSelect = auto_free(VehicleSelect.new())

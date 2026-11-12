@@ -8,55 +8,89 @@ extends RefCounted
 const KENNEY := "res://src/vehicles/kenney/"
 const WATERCRAFT := "res://src/vehicles/watercraft/"
 
-## variant id -> { scene: String, family: String }. Insertion order is the cycle order.
+## variant id -> { scene: String, family: String, desc: String }. Insertion order is the cycle
+## order. `desc` is the garage's one line on the body; a guide family page's "What it is" column
+## repeats it word for word (`test_vehicle_catalog` checks).
 const VARIANTS := {
 	# -- hand-built bodies, first in their family. Car / boat / tractor have none: they default
 	# to their first generated variant below. The truck family's hand-built semis are listed after
 	# the Kenney trucks. --
-	"drone-mk2": {"scene": "res://src/vehicles/drone/drone_mk2.tscn", "family": "drone"},
-	"plane": {"scene": "res://src/vehicles/plane/plane.tscn", "family": "plane"},
-	"bullet": {"scene": "res://src/vehicles/train/train.tscn", "family": "train"},
+	"drone-mk2": {"scene": "res://src/vehicles/drone/drone_mk2.tscn", "family": "drone",
+		"desc": "Quadcopter with per-motor props, a camera gimbal, a cargo hook, a spotlight, a rangefinder beam and status LEDs"},
+	"plane": {"scene": "res://src/vehicles/plane/plane.tscn", "family": "plane",
+		"desc": "Light aircraft with a propeller at the nose and three landing wheels"},
+	"bullet": {"scene": "res://src/vehicles/train/train.tscn", "family": "train",
+		"desc": "High-speed-style electric locomotive and four wagons, on a closed loop of rail"},
 	# -- Watercraft pack: boat family --
-	"boat-speed-a": {"scene": WATERCRAFT + "boat-speed-a.tscn", "family": "boat"},
-	"boat-speed-j": {"scene": WATERCRAFT + "boat-speed-j.tscn", "family": "boat"},
-	"boat-sail-a": {"scene": WATERCRAFT + "boat-sail-a.tscn", "family": "boat"},
+	"boat-speed-a": {"scene": WATERCRAFT + "boat-speed-a.tscn", "family": "boat",
+		"desc": "Speedboat"},
+	"boat-speed-j": {"scene": WATERCRAFT + "boat-speed-j.tscn", "family": "boat",
+		"desc": "Larger speedboat"},
+	"boat-sail-a": {"scene": WATERCRAFT + "boat-sail-a.tscn", "family": "boat",
+		"desc": "Sailing dinghy with a small motor"},
 	# -- Kenney car kit: car family (sedan-sports first = the default car) --
-	"sedan-sports": {"scene": KENNEY + "sedan-sports.tscn", "family": "car"},
-	"sedan": {"scene": KENNEY + "sedan.tscn", "family": "car"},
-	"hatchback-sports": {"scene": KENNEY + "hatchback-sports.tscn", "family": "car"},
-	"suv": {"scene": KENNEY + "suv.tscn", "family": "car"},
-	"suv-luxury": {"scene": KENNEY + "suv-luxury.tscn", "family": "car"},
-	"taxi": {"scene": KENNEY + "taxi.tscn", "family": "car"},
-	"police": {"scene": KENNEY + "police.tscn", "family": "car"},
-	"race": {"scene": KENNEY + "race.tscn", "family": "car"},
-	"race-future": {"scene": KENNEY + "race-future.tscn", "family": "car"},
-	"van": {"scene": KENNEY + "van.tscn", "family": "car"},
-	"pickup": {"scene": KENNEY + "pickup.tscn", "family": "car"},
-	"pickup-flat": {"scene": KENNEY + "pickup-flat.tscn", "family": "car"},
+	"sedan-sports": {"scene": KENNEY + "sedan-sports.tscn", "family": "car",
+		"desc": "Sports saloon"},
+	"sedan": {"scene": KENNEY + "sedan.tscn", "family": "car",
+		"desc": "Family saloon"},
+	"hatchback-sports": {"scene": KENNEY + "hatchback-sports.tscn", "family": "car",
+		"desc": "Hot hatchback, limited-slip front diff"},
+	"suv": {"scene": KENNEY + "suv.tscn", "family": "car",
+		"desc": "SUV, Torsen-type centre diff"},
+	"suv-luxury": {"scene": KENNEY + "suv-luxury.tscn", "family": "car",
+		"desc": "Luxury SUV, Torsen-type centre diff"},
+	"taxi": {"scene": KENNEY + "taxi.tscn", "family": "car",
+		"desc": "Saloon taxi"},
+	"police": {"scene": KENNEY + "police.tscn", "family": "car",
+		"desc": "Police saloon"},
+	"race": {"scene": KENNEY + "race.tscn", "family": "car",
+		"desc": "Open-wheel racing car: slicks, wings, limited-slip rear"},
+	"race-future": {"scene": KENNEY + "race-future.tscn", "family": "car",
+		"desc": "Futuristic racer: slicks, wings, all-wheel drive, no traction control"},
+	"van": {"scene": KENNEY + "van.tscn", "family": "car",
+		"desc": "Full-size van, governed to 180 km/h"},
+	"pickup": {"scene": KENNEY + "pickup.tscn", "family": "car",
+		"desc": "Pickup, governed to 180 km/h"},
+	"pickup-flat": {"scene": KENNEY + "pickup-flat.tscn", "family": "car",
+		"desc": "Single-cab pickup, governed to 180 km/h"},
 	# Heavy vans: `car` family (family is the chassis class, not the job), proprietary CAN, not
 	# J1939. Truck-chassis feel: VAN_BASE in tools/gen_kenney_vehicles.gd.
-	"delivery": {"scene": KENNEY + "delivery.tscn", "family": "car"},
-	"delivery-flat": {"scene": KENNEY + "delivery-flat.tscn", "family": "car"},
-	"ambulance": {"scene": KENNEY + "ambulance.tscn", "family": "car"},
+	"delivery": {"scene": KENNEY + "delivery.tscn", "family": "car",
+		"desc": "3.5 to 5 t box truck, twin rear tyres"},
+	"delivery-flat": {"scene": KENNEY + "delivery-flat.tscn", "family": "car",
+		"desc": "3.5 to 5 t flatbed truck, twin rear tyres"},
+	"ambulance": {"scene": KENNEY + "ambulance.tscn", "family": "car",
+		"desc": "5 t ambulance, twin rear tyres, governed to 150 km/h"},
 	# -- Kenney car kit: truck family (J1939) — garbage-truck first = the default truck --
-	"garbage-truck": {"scene": KENNEY + "garbage-truck.tscn", "family": "truck"},
-	"firetruck": {"scene": KENNEY + "firetruck.tscn", "family": "truck"},
+	"garbage-truck": {"scene": KENNEY + "garbage-truck.tscn", "family": "truck",
+		"desc": "Refuse truck with a front-loading arm"},
+	"firetruck": {"scene": KENNEY + "firetruck.tscn", "family": "truck",
+		"desc": "Fire engine"},
 	# Hand-built cab-over tractor unit (the kit ships no semi). What it tows is E's business, not
 	# this file's (boot.gd `_cycle_attachment`).
-	"semi": {"scene": "res://src/vehicles/truck/semi.tscn", "family": "truck"},
+	"semi": {"scene": "res://src/vehicles/truck/semi.tscn", "family": "truck",
+		"desc": "Cab-over tractor unit with a trailer data link"},
 	# North American conventional: a body variant, not a different trailer. Tows the same trailers
 	# but has no ISO 11992 data pair (contract 'j2497' note).
-	"semi-conventional": {"scene": "res://src/vehicles/truck/conventional.tscn", "family": "truck"},
+	"semi-conventional": {"scene": "res://src/vehicles/truck/conventional.tscn", "family": "truck",
+		"desc": "Bonneted tractor unit, no trailer data link"},
 	# -- Kenney car kit: tractor family (ISOBUS) --
-	"tractor-kenney": {"scene": KENNEY + "tractor-kenney.tscn", "family": "tractor"},
+	"tractor-kenney": {"scene": KENNEY + "tractor-kenney.tscn", "family": "tractor",
+		"desc": "Farm tractor on a 16-speed powershift, with a park pawl and a hill hold"},
 	# The same body on a power-split CVT; the powershift above stays the family's default.
-	"tractor-cvt": {"scene": KENNEY + "tractor-cvt.tscn", "family": "tractor"},
+	"tractor-cvt": {"scene": KENNEY + "tractor-cvt.tscn", "family": "tractor",
+		"desc": "Farm tractor on a stepless CVT, holding itself still at a ratio of zero"},
 }
 
 
 ## The contract family a variant belongs to; "" if the variant is unknown.
 static func family_of(variant: String) -> String:
 	return String(VARIANTS[variant]["family"]) if VARIANTS.has(variant) else ""
+
+
+## The variant's one-line description; "" if unknown.
+static func desc_of(variant: String) -> String:
+	return String(VARIANTS[variant]["desc"]) if VARIANTS.has(variant) else ""
 
 
 ## Scene path for a variant; "" if unknown.

@@ -49,7 +49,7 @@ cab: real articulated trucks fold to between 70° and 90° before they touch.
 | Box | the semis | 24 t | A full load in a tall box: the most side area for a crosswind. |
 | Tipper | the semis | 19 t | A body that tips up to empty, worked by the truck's PTO. |
 | Tanker | the semis | 21 t | Its liquid surges forward and back as the rig brakes and accelerates. |
-| Flatbed | the semis | 14 t | The lightest. |
+| Flatbed | the semis | 14 t | The lightest: an open deck. |
 | Farm tipper | the tractors | 10 t | A tipping farm trailer on a drawbar, worked by the tractor's hydraulics. |
 <!-- docs/truck.md Four trailers: box 24 000, tipper 19 000, tanker 21 000, flatbed 14 000 kg; docs/tractor.md: farm_tipper "a 10 t towed body" -->
 

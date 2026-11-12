@@ -6,10 +6,10 @@ machinery network. It is the family with the most to switch and the most to watc
 
 ## The family
 
-| Vehicle | Gearbox | Weight, about |
+| Vehicle | What it is | Weight, about |
 | --- | --- | --- |
-| `tractor-kenney` | 16-speed powershift, with a park pawl and a hill hold | 7 t |
-| `tractor-cvt` | Stepless CVT, holding itself still at a ratio of zero | 7 t |
+| `tractor-kenney` | Farm tractor on a 16-speed powershift, with a park pawl and a hill hold | 7 t |
+| `tractor-cvt` | Farm tractor on a stepless CVT, holding itself still at a ratio of zero | 7 t |
 <!-- tractor-kenney_spec.tres mass 7000, 16 gear_ratios, hill_hold 2; tractor-cvt_spec.tres mass 7000, cvt_range_tops; docs/tractor.md: V cycles the gearbox -->
 
 Both are the same tractor otherwise. Press **V** to switch between them, and **E** to cycle the

@@ -18,6 +18,20 @@ const TRAILERS: PackedStringArray = [
 	BOBTAIL,
 ]
 
+## TRAILERS entry -> the garage's one line on it, BOBTAIL included. A trailer's is the guide towing
+## table's "What is special" cell (`test_vehicle_catalog` checks both ways).
+const DESC := {
+	"res://src/vehicles/truck/trailers/box.tscn":
+		"A full load in a tall box: the most side area for a crosswind.",
+	"res://src/vehicles/truck/trailers/tipper.tscn":
+		"A body that tips up to empty, worked by the truck's PTO.",
+	"res://src/vehicles/truck/trailers/tanker.tscn":
+		"Its liquid surges forward and back as the rig brakes and accelerates.",
+	"res://src/vehicles/truck/trailers/flatbed.tscn":
+		"The lightest: an open deck.",
+	BOBTAIL: "No trailer: the tractor unit alone, its trailer signals reading zero.",
+}
+
 
 ## What the tractor unit spawns coupled to.
 static func first() -> String:

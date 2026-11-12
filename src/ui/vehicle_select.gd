@@ -72,7 +72,15 @@ var _preview_panel: PanelContainer
 var _viewport: SubViewport
 var _camera: Camera3D
 var _preview: Node3D = null
-var _spec_label: Label
+## The body's heading, description and attachment line: under the picture, or in `_narrow_about`
+## while the preview column is dropped, so a phone-width window still says what it is.
+var _about: VBoxContainer
+var _about_home: VBoxContainer
+var _narrow_about: PanelContainer
+var _about_name: Label
+var _about_desc: Label
+var _about_attachment: Label
+var _stats: GridContainer   ## two columns, key and value
 var _drive_btn: Button
 var _back_btn: Button
 var _confirm: ColorRect       ## the home-level question, over the whole screen while up
@@ -131,6 +139,9 @@ func _ready() -> void:
 	_preview_panel = _build_preview()
 	body.add_child(_preview_panel)
 
+	_narrow_about = PanelContainer.new()
+	_narrow_about.visible = false
+	col.add_child(_narrow_about)
 	col.add_child(_build_footer())
 	_confirm = _build_confirm()
 	add_child(_confirm)  # last: drawn over everything, and its scrim takes every click
@@ -250,10 +261,34 @@ func _build_preview() -> PanelContainer:
 	_preview_frame.add_child(_viewport)
 	_camera = VehicleShot.build_stage(_viewport)
 
-	_spec_label = Label.new()
-	_spec_label.theme_type_variation = &"Dim"
-	_spec_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	stack.add_child(_spec_label)
+	# Scrolls rather than grows: a body with an attachment line and every row is taller than the
+	# room left above the footer on a 900 px window.
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stack.add_child(scroll)
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(info)
+	_about_home = VBoxContainer.new()
+	info.add_child(_about_home)
+	_about = VBoxContainer.new()
+	_about_home.add_child(_about)
+	_about_name = Label.new()
+	_about_name.theme_type_variation = &"Title"
+	_about.add_child(_about_name)
+	_about_desc = Label.new()
+	_about_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_about.add_child(_about_desc)
+	_about_attachment = Label.new()
+	_about_attachment.theme_type_variation = &"Dim"
+	_about_attachment.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_about.add_child(_about_attachment)
+
+	_stats = GridContainer.new()
+	_stats.columns = 2
+	_stats.add_theme_constant_override(&"v_separation", 0)
+	info.add_child(_stats)
 	return panel
 
 
@@ -576,7 +611,11 @@ func _on_attachment_pressed(id: String) -> void:
 	if _preview != null and _preview.has_method("set_attachment"):
 		_preview.set_attachment(id)
 		VehicleShot.pin_display(_preview)
+		# Re-measured: the size row is the combination's, and the camera frames it.
+		_settle = SETTLE_FRAMES
+		_bounds = AABB()
 	_refresh_attachments()
+	_show_spec()
 	_refocus(key)
 
 
@@ -608,7 +647,7 @@ func _show_preview(variant: String) -> void:
 	_variant = variant
 	_free_preview()
 	_tyre = ""  # a body that fails to show offers no TYRES row, so DRIVE sends none
-	_spec_label.text = ""
+	_show_spec()
 	_update_drive_button()
 	var scene_path := VehicleCatalog.scene_of(variant)
 	if scene_path.is_empty():
@@ -632,7 +671,7 @@ func _show_preview(variant: String) -> void:
 	_refresh_attachments()
 	_settle = SETTLE_FRAMES
 	_bounds = AABB()
-	_spec_label.text = _spec_text(variant)
+	_show_spec()
 
 
 func _free_preview() -> void:
@@ -660,7 +699,7 @@ func _process(delta: float) -> void:
 		_settle -= 1
 		_bounds = VehicleShot.subject_bounds(_preview)
 		if _settle == 0:
-			_spec_label.text = _spec_text(_variant)
+			_show_spec()
 	if _bounds.size == Vector3.ZERO:
 		return
 	VehicleShot.frame(_camera, _bounds, _yaw)
@@ -703,26 +742,64 @@ static func protocols_for(family: String) -> String:
 	return ", ".join(upper)
 
 
-func _spec_text(variant: String) -> String:
-	var family := VehicleCatalog.family_of(variant)
-	var lines := PackedStringArray([
-		_pretty(variant),
-		"Family: %s" % family,
-		"Bus: %s" % VehicleSelect.protocols_for(family),
-	])
-	var spec: VehicleSpec = _preview.spec if "spec" in _preview else null
+## The panel under the picture: what the body is and what it carries, then its figures.
+func _show_spec() -> void:
+	_about_name.text = _pretty(_variant)
+	_about_desc.text = VehicleCatalog.desc_of(_variant)
+	_about_attachment.text = ""
+	if _tows():
+		var id := _attachment
+		var plate := _pretty(VehicleShot.id_for_scene(id)) if not id.is_empty() else "NONE"
+		_about_attachment.text = "%s: %s" % [plate,
+				attachment_desc(VehicleCatalog.family_of(_variant), id)]
+	_about_attachment.visible = not _about_attachment.text.is_empty()
+	_clear(_stats)
+	for row in _spec_rows():
+		var key := Label.new()
+		key.text = row[0]
+		key.theme_type_variation = &"Small"
+		_stats.add_child(key)
+		var value := Label.new()
+		value.text = row[1]
+		value.theme_type_variation = &"Dim"
+		value.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART  # the bus list is wider than the column
+		value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_stats.add_child(value)
+
+
+## The attachment's line from its family's catalog: the tractor's implements, else the semi's
+## trailers (the empty id is each catalog's own NONE, so the family picks which).
+static func attachment_desc(family: String, id: String) -> String:
+	var desc: Dictionary = ImplementCatalog.DESC if family == "tractor" else TrailerCatalog.DESC
+	return String(desc.get(id, ""))
+
+
+## [key, value] pairs, read off the spec on the body on show; power is the curve's own peak
+## (`Drivetrain.peak_power`), and a top speed only where a governor declares one.
+func _spec_rows() -> Array:
+	var rows := []
+	var spec: VehicleSpec = _preview.spec if _preview != null and "spec" in _preview else null
 	if spec != null:
-		lines.append("Drive: %s" % GroundDriveSpec.layout_text(spec.ground_drive))
-		lines.append("Mass: %d kg" % roundi(spec.mass))
+		if spec.ground_drive != null:
+			rows.append(["Drive", GroundDriveSpec.layout_text(spec.ground_drive)])
+		rows.append(["Mass", "%d kg" % roundi(spec.mass)])
 		if spec.has_engine:  # drone/train have no crank to quote
-			lines.append("Gears: %s   Redline: %d rpm" % [Drivetrain.gears_label(spec),
-					roundi(spec.redline_rpm)])
+			rows.append(["Gears", Drivetrain.gears_label(spec)])
+			rows.append(["Redline", "%d rpm" % roundi(spec.redline_rpm)])
+			var power := Drivetrain.peak_power(spec)
+			if power.x > 0.0:
+				rows.append(["Power", "%d kW at %d rpm" % [roundi(power.x),
+						roundi(power.y / 100.0) * 100]])
+		if spec.speed_limit_kmh > 0.0:
+			rows.append(["Governed to", "%d km/h" % roundi(spec.speed_limit_kmh)])
 	# Measured off the settled body, not a spec number, so an artic reports the combination's
 	# length, not its cab's.
 	if _bounds.size != Vector3.ZERO:
-		lines.append("Size: %.1f x %.1f x %.1f m" % [_bounds.size.z, _bounds.size.x,
-				_bounds.size.y])
-	return "\n".join(lines)
+		var rig := _tows() and AttachmentCatalog.is_attached(_attachment)
+		rows.append(["Rig size" if rig else "Size", "%.1f x %.1f x %.1f m" % [
+				_bounds.size.z, _bounds.size.x, _bounds.size.y]])
+	rows.append(["Bus", VehicleSelect.protocols_for(VehicleCatalog.family_of(_variant))])
+	return rows
 
 
 # --- footer / layout ----------------------------------------------------------
@@ -826,6 +903,10 @@ func _reflow() -> void:
 	_fit_pair(_back_btn, _drive_btn, room)
 	_fit_pair(_confirm_load, _confirm_cancel, inner)
 	_preview_panel.visible = size.x >= UiTheme.px(self, NARROW_W)
+	_narrow_about.visible = not _preview_panel.visible
+	var home: Container = _about_home if _preview_panel.visible else _narrow_about
+	if _about.get_parent() != home:
+		_about.reparent(home, false)
 	# The body still exists while the panel is hidden; only the rendering is switched off.
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if _preview_panel.visible \
 			else SubViewport.UPDATE_DISABLED

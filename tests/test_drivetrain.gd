@@ -1893,6 +1893,26 @@ func test_peak_torque_is_the_highest_point_on_the_curve() -> void:
 	assert_float(DrivetrainScript.peak_torque(empty)).is_equal(0.0)
 
 
+func test_peak_power_is_torque_times_speed_at_its_best_rpm() -> void:
+	# A flat 100 N·m from idle to redline peaks at the redline: 100 * 6000 / 9549.3 = 62.8 kW.
+	var flat: VehicleSpecScript = VehicleSpecScript.new()
+	flat.torque_curve = PackedVector2Array([Vector2(1000, 100), Vector2(6000, 100)])
+	flat.idle_rpm = 1000.0
+	flat.redline_rpm = 6000.0
+	var p := DrivetrainScript.peak_power(flat)
+	assert_float(p.x).is_equal_approx(62.83, 0.01)
+	assert_float(p.y).is_equal(6000.0)
+	# 200 -> 0 N·m over 1000-5000 rpm (slope s = -0.05): T*rpm peaks inside the segment, at
+	# (s*r0 - t0) / 2s = 2500 rpm, 125 N·m, 32.7 kW (between the points, not on one).
+	var droop: VehicleSpecScript = VehicleSpecScript.new()
+	droop.torque_curve = PackedVector2Array([Vector2(1000, 200), Vector2(5000, 0)])
+	droop.idle_rpm = 1000.0
+	droop.redline_rpm = 5000.0
+	p = DrivetrainScript.peak_power(droop)
+	assert_float(p.x).is_equal_approx(32.72, 0.01)
+	assert_float(p.y).is_equal_approx(2500.0, 10.0)
+
+
 # --- the brake pedal's map (WheelDrive.brake_application) ------------------------
 
 func test_half_pedal_asks_the_same_deceleration_of_every_body_and_full_pedal_its_capacity() -> void:

@@ -260,6 +260,19 @@ static func peak_torque(p_spec: VehicleSpec) -> float:
 	return peak
 
 
+## Peak of torque x crank speed over the curve from idle to the redline: Vector2(kW, at rpm),
+## sampled every 10 rpm (a segment's peak can sit between its points). Gross, before accessories.
+static func peak_power(p_spec: VehicleSpec) -> Vector2:
+	var best := Vector2.ZERO
+	var at := p_spec.idle_rpm
+	while at <= p_spec.redline_rpm:
+		var kw := engine_torque(p_spec, at) * at / RADS_TO_RPM / 1000.0
+		if kw > best.x:
+			best = Vector2(kw, at)
+		at += 10.0
+	return best
+
+
 ## Full-throttle torque at rpm, off the curve. Redline is not handled here: the limiter is a fuel
 ## cut (`limiter_cut`, via `applied_throttle`).
 static func engine_torque(p_spec: VehicleSpec, at_rpm: float) -> float:

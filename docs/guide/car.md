@@ -16,8 +16,10 @@ between them is the hardware each one carries.</p>
 | `suv` | SUV, Torsen-type centre diff | 1.5 t | all four |
 | `suv-luxury` | Luxury SUV, Torsen-type centre diff | 1.6 t | all four |
 | `van` | Full-size van, governed to 180 km/h | 1.6 t | rear |
-| `pickup`, `pickup-flat` | Pickups, governed to 180 km/h | 1.5 t | rear |
-| `delivery`, `delivery-flat` | 3.5 to 5 t delivery vans, twin rear tyres | 4 t | rear |
+| `pickup` | Pickup, governed to 180 km/h | 1.5 t | rear |
+| `pickup-flat` | Single-cab pickup, governed to 180 km/h | 1.5 t | rear |
+| `delivery` | 3.5 to 5 t box truck, twin rear tyres | 4 t | rear |
+| `delivery-flat` | 3.5 to 5 t flatbed truck, twin rear tyres | 4 t | rear |
 | `ambulance` | 5 t ambulance, twin rear tyres, governed to 150 km/h | 4.8 t | rear |
 | `race` | Open-wheel racing car: slicks, wings, limited-slip rear | 0.9 t | rear |
 | `race-future` | Futuristic racer: slicks, wings, all-wheel drive, no traction control | 0.85 t | all four |

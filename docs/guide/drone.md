@@ -6,9 +6,9 @@ electronics.</p>
 
 ## The family
 
-| Vehicle | What it has |
+| Vehicle | What it is |
 | --- | --- |
-| `drone-mk2` | Per-motor props, a camera gimbal, a cargo hook, a spotlight, a rangefinder beam and status LEDs, all drawn |
+| `drone-mk2` | Quadcopter with per-motor props, a camera gimbal, a cargo hook, a spotlight, a rangefinder beam and status LEDs |
 <!-- vehicle_catalog.gd: "drone-mk2" the family's only variant; docs/flight.md: drone-mk2 draws per-motor props, gimbal, hook jaws, spotlight, rangefinder beam, status LEDs; drone_spec.tres mass 5 -->
 
 ## What a drone has

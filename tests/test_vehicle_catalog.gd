@@ -49,6 +49,67 @@ func test_the_modelled_drone_is_the_drone_family_default() -> void:
 	assert_array(Array(VehicleCatalog.variants_in_family("drone"))).is_equal(["drone-mk2"])
 
 
+## The garage's one line per body and per attachment: declared for every entry, NONE included.
+func test_every_body_and_attachment_has_a_description() -> void:
+	for variant in VehicleCatalog.VARIANTS:
+		assert_str(VehicleCatalog.desc_of(variant)).override_failure_message(
+				"%s has no desc" % variant).is_not_empty()
+	for pair in [[ImplementCatalog.IMPLEMENTS, ImplementCatalog.DESC],
+			[TrailerCatalog.TRAILERS, TrailerCatalog.DESC]]:
+		var desc: Dictionary = pair[1]
+		assert_array(desc.keys()).contains_exactly_in_any_order(Array(pair[0]))
+		for id in desc:
+			assert_str(String(desc[id])).is_not_empty()
+
+
+## The guide repeats those lines, never a second wording: a family page's "What it is" cell is the
+## variant's desc (and lists every variant), the towing table's "What is special" the trailer's.
+func test_the_guide_tables_repeat_the_catalog_descriptions() -> void:
+	var listed := {}
+	for page in ["car", "truck", "tractor", "boat", "drone"]:
+		var rows := _guide_rows("res://docs/guide/%s.md" % page, "What it is")
+		assert_array(rows).override_failure_message("%s.md has no What it is table" % page) \
+				.is_not_empty()
+		for row: PackedStringArray in rows:
+			var id := row[0].trim_prefix("`").trim_suffix("`")
+			assert_str(row[1]).override_failure_message("%s.md, %s: \"%s\" is not the catalog's \"%s\"" % [
+					page, id, row[1], VehicleCatalog.desc_of(id)]).is_equal(VehicleCatalog.desc_of(id))
+			listed[id] = true
+	for variant in VehicleCatalog.VARIANTS:
+		if VehicleCatalog.family_of(variant) in ["plane", "train"]:
+			continue  # one body each: their pages have no family table
+		assert_bool(listed.has(variant)).override_failure_message(
+				"no guide family table lists %s" % variant).is_true()
+	var towed := {}
+	for row: PackedStringArray in _guide_rows("res://docs/guide/towing.md", "What is special"):
+		towed[row[0].to_lower().replace(" ", "_")] = row[1]
+	var trailers := Array(TrailerCatalog.TRAILERS) + Array(ImplementCatalog.TOWED)
+	for scene: String in trailers:
+		if scene.is_empty():
+			continue  # BOBTAIL is no row
+		var row_name := scene.get_file().get_basename()
+		var desc := TrailerCatalog.DESC.get(scene, ImplementCatalog.DESC.get(scene, "")) as String
+		assert_str(String(towed.get(row_name, ""))).override_failure_message(
+				"towing.md, %s: not the catalog's \"%s\"" % [row_name, desc]).is_equal(desc)
+
+
+## [first cell, `column` cell] of each row of the guide table at `path` whose header has `column`.
+static func _guide_rows(path: String, column: String) -> Array[PackedStringArray]:
+	var out: Array[PackedStringArray] = []
+	var at := -1
+	for line in FileAccess.get_file_as_string(path).split("\n"):
+		var cells := PackedStringArray()
+		for c in line.strip_edges().trim_prefix("|").trim_suffix("|").split("|"):
+			cells.append(c.strip_edges())
+		if not line.begins_with("|"):
+			at = -1
+		elif at < 0:
+			at = cells.find(column)
+		elif not cells[0].begins_with("---"):
+			out.append(PackedStringArray([cells[0], cells[at]]))
+	return out
+
+
 func test_next_in_family_wraps() -> void:
 	var car := VehicleCatalog.variants_in_family("car")
 	# cycling from the last variant returns to the first.
