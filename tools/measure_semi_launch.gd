@@ -223,7 +223,7 @@ func _apply_geometry_override(car: Node, args: PackedStringArray) -> void:
 	if not is_nan(front_z):
 		var positions := gd.wheel_positions
 		for i in positions.size():
-			if positions[i].z < 0.0:
+			if not RayWheel.is_rear_z(positions[i].z):
 				positions[i] = Vector3(positions[i].x, positions[i].y, front_z)
 		gd.wheel_positions = positions
 		_csv_suffix += "_fz%.2f" % front_z

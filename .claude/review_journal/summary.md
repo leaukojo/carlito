@@ -5,47 +5,32 @@ Protocol: `.claude/skills/review-continue/SKILL.md`. Launch with "continue revie
 `COMPROMISE` mentions after unit 3a: 33 in `src kit tools tests`, 21 in `docs` (count with
 `grep -rI COMPROMISE <dirs> | wc -l`). Goal: only real ones keep the label.
 
-Next session: the Queue's top item (the mechanical sweep): effort `medium`, auto mode, Sonnet,
-after `/clear`.
+Next session: the Queue's top item (the engine law's three inversions): effort `high`, auto mode,
+Fable (the drivetrain's engine law), after `/clear`.
+
+The slip floor's two sites ran in `sessions/2026-11-12-slip-floor-sites.md`: a lifted wheel's ABS
+floor and TC ceiling read the body's `slip_floor` (`suv-luxury`'s lone grade run unchanged);
+`road_change`'s fade keeps `LOW_SPEED_FLOOR` and its comment, doc and test say so.
+
+The shared-law audit ran in `sessions/2026-11-12-shared-law-audit.md`: one tool bug (the descent
+ledger's contact velocity on the origin lever) and eight inline copies of a shared predicate,
+helper or constant fixed; no site that changes driving, so no proposal; 1 item queued.
 
 Units 1 to 3a were read before the skill asked for simpler implementations: they come back
 through the most-commits rule, or sooner on the user's word.
 
+The mechanical sweep ran in `sessions/2026-11-12-sweep-1.md`: one dead test const removed; the
+guards (`check_orphans`, `check_docs`) already cover public funcs and citations. Duplicate
+tests with different bodies are left to each unit's review.
+
 ## Queue (top first)
 
-- Mechanical sweep of the whole repo: no design judgement, so it runs cheap. Over every `.gd`
-  in `src kit addons/carlito_kit tools tests` (never `addons/gdUnit4`):
-  1. Unreferenced symbols and files: each `func`, `var`, `const`, `signal` and `class_name`
-     grepped as a word across `.gd`, `.tscn`, `.tres`, `project.godot`, `tools`, `.github`;
-     list the names with no hit outside their own file and only the definition inside (engine
-     virtuals excluded), and the files nothing loads.
-  2. Duplicate tests: test functions with the same body, or the same asserts on the same call.
-  3. Citations that do not resolve, in comments and `docs/`: `` `Class.member` ``, repo paths,
-     `docs/x.md` § sections.
-  Each hit is proven as the skill's step 3 says before it is touched (a `has_method` guard or a
-  method whose absence is behaviour is not dead: `src/vehicles/CLAUDE.md`). Fix the S ones;
-  queue the rest under their unit. If part 3 finds more than a handful, propose the check as a
-  guard in `tools/check_docs.mjs` instead of fixing by hand. May take two sessions: the Queue
-  line then says which directory to resume at. [medium, auto, Sonnet]
-- Shared-law audit (one session, read-only but for S fixes). Both behaviour bugs the review
-  found were one call site reading a constant or a second formula where its neighbours read the
-  shared one (`ShiftPolicy.start_gear` off the engine law; the airborne wheel off the body's
-  slip floor). For each rule in `CLAUDE.md` and `src/vehicles/CLAUDE.md` that names one law, one
-  predicate or one accessor (`Drivetrain.applied_throttle`, `InputRouter.bridge_drives()`,
-  `RayWheel.is_rear_z`, `Layers.SOLID`, `VehicleMath`'s free-body helpers, `slip_floor`), list
-  every site that computes the same thing another way. A site that changes driving when fixed
-  is a proposal. [high, auto]
-- The slip floor's two sites (`sessions/2026-11-12-wheels-3a.md`, finding 8 and § Decision;
-  decided with the user on 2026-11-12, so it is ready). Two parts, one commit each:
-  1. Airborne wheel: `RayWheel.tick`'s off-the-ground `_integrate_spin` call passes the body's
-     `slip_floor` as `floor_vel` (it takes the default `LOW_SPEED_FLOOR`), with a
-     `test_wheel_spin` case that fails without it. Before and after, one lone gradeability run
-     on a TC body (`suv-luxury`, the one `docs/vehicles.md` § One-tick caps names); a figure
-     that moves goes under "Please verify" and into the doc.
-  2. `road_change` keeps the constant: its comment, `docs/vehicles.md` § Following the body and
-     the `test_wheel_spin` case's comment say `LOW_SPEED_FLOOR`, not "the slip floor". No code
-     change. Reopen only if a run shows a tick-rate ring between 1.5 m/s and a raised floor.
-  [high, auto]
+- The engine law's three inversions (`sessions/2026-11-12-shared-law-audit.md`, finding 9).
+  `Drivetrain.fuel_to_land`, `Drivetrain.drag_fuel` and `PedalMap._row_fuel` each compute
+  `(net - motoring) / span`; one "fuel for a net crank torque" function serves all three.
+  They differ where `span <= 0` (`drag_fuel` gives 0, the others 1 above the motoring law):
+  pick one answer, show no shipped curve reaches it, keep the results the same to the bit
+  elsewhere (`test_drivetrain`, `test_telemetry`'s idle case). [high, auto]
 
 Deferred until units 3 and 4 are reviewed (it touches both):
 

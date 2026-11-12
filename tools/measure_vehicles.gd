@@ -2184,8 +2184,7 @@ func _gap_split(kin: Dictionary, prev: Dictionary, gap: float) -> Dictionary:
 	var ahead: Vector3 = prev["ahead"]
 	var a := ((kin["vel"] as Vector3) - (prev["vel"] as Vector3)).dot(ahead) / delta
 	var right := _car.global_transform.basis.x
-	var state := PhysicsServer3D.body_get_direct_state(_car.get_rid())
-	var i_pitch := 1.0 / right.dot(state.inverse_inertia_tensor * right)
+	var i_pitch := VehicleMath.moment_about(_car, right)
 	var tyres := 0.0
 	# N·m: the loads' moment from their patches sitting off the stations, against the pose the
 	# patches were found in (last sample's: the body has moved a tick on since).
@@ -4790,12 +4789,10 @@ static func _pct(share: float) -> String:
 
 
 ## The yaw dynamic index k² / (a·b) the body runs with, off the live tensor: the moment about the
-## body's up axis through the world-space inverse tensor (`TowHost`'s axis read; `inverse_inertia`
-## is in the principal frame), over `m a b` from the axle stations and the COM.
+## body's up axis through the world-space inverse tensor (`VehicleMath.moment_about`;
+## `inverse_inertia` is in the principal frame), over `m a b` from the axle stations and the COM.
 func _yaw_index() -> Dictionary:
-	var state := PhysicsServer3D.body_get_direct_state(_car.get_rid())
-	var up := _car.global_transform.basis.y
-	var iyy := 1.0 / up.dot(state.inverse_inertia_tensor * up)
+	var iyy := VehicleMath.moment_about(_car, _car.global_transform.basis.y)
 	var ax := BrakeSizing.axle_geometry(_car.spec)
 	var com_z := _car.spec.center_of_mass.z
 	var mab := _car.mass * (com_z - float(ax["front_z"])) * (float(ax["rear_z"]) - com_z)

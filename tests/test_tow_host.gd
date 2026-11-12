@@ -1234,9 +1234,6 @@ func test_the_coupling_timings_belong_to_the_host_and_not_to_either_machine() ->
 # ("own-speed-notice") instead of the literal, so the licensed differences cancel by construction
 # and anything left is unlicensed. On failure, the first line that differs names the step.
 
-const STEP_OK := "ok"
-
-
 ## Say whether `got` is the machine's own word for `expect_own`. A mismatch keeps the real text,
 ## because a trace that says only "wrong" is a trace you cannot debug from.
 func _own(got: String, expect_own: String, label: String) -> String:

@@ -202,6 +202,6 @@ func _flow_line(label: String, method: String) -> String:
 		return ""
 	var v: Vector3 = _level.call(method)
 	var speed := Vector2(v.x, v.z).length()
-	# atan2(x, -z): the inverse of WindField.base_vector, so 0 deg is -Z and 90 deg is +X.
-	var heading := fposmod(rad_to_deg(atan2(v.x, -v.z)), 360.0)
+	# The inverse of WindField.base_vector: 0 deg is -Z and 90 deg is +X.
+	var heading := VehicleTelemetry.heading_from_forward(v)
 	return "\n%s %.1f m/s @ %03d deg" % [label, speed, int(round(heading))]

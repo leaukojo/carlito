@@ -103,7 +103,7 @@ The trucks and the tractor publish their [engine load](glossary.md#engine-load):
 engine is giving as a share of the most it can ever give. A plough's draft, a PTO, a hill or a
 headwind all show in it. At idle in gear it reads a few percent, the fuel that beats the friction
 and the converter's creep.
-<!-- VehicleTelemetry.engine_load_pct: "delivered torque over peak torque"; docs/drivetrain.md Creep: engine_load 7-11 % at idle in gear -->
+<!-- VehicleTelemetry.engine_load_pct: "the full-load curve at the delivered fuel ... over peak torque"; docs/drivetrain.md Creep: engine_load 7-11 % at idle in gear -->
 
 ## The boat's engine room
 

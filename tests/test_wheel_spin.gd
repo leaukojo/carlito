@@ -557,7 +557,7 @@ func test_the_road_change_is_the_body_s_along_the_wheel_faded_at_a_crawl() -> vo
 	var v := 30.0
 	assert_float(WheelScript.road_change(Vector3.FORWARD * (v - a * TICK), Vector3.FORWARD, v, v)) \
 			.is_equal_approx(-a * TICK, 1e-5)
-	# Twice the slip floor and up it is followed whole; at the floor and under, not at all.
+	# Twice LOW_SPEED_FLOOR and up it is followed whole; at it and under, not at all.
 	var floor_v := WheelScript.LOW_SPEED_FLOOR
 	assert_float(WheelScript.road_change(Vector3.FORWARD * 0.9, Vector3.FORWARD, 1.0, floor_v)) \
 			.is_equal(0.0)
@@ -793,6 +793,27 @@ func test_tcs_holds_an_airborne_wheel_at_the_body_speed_plus_the_peak() -> void:
 	w._integrate_spin(2000.0, 0.0, 0.0, TICK, 0.0, v, 0.0, 0.0, WheelScript.TCS_SLIP)
 	assert_float(w.omega).is_equal_approx(
 			(v + WheelScript.TCS_SLIP * WheelScript.LOW_SPEED_FLOOR) / spec.wheel_radius, 1e-6)
+	assert_bool(w.tcs_active).is_true()
+
+
+func test_tcs_holds_a_lifted_wheel_on_the_body_s_slip_floor() -> void:
+	# A driven wheel off the ground on a body at rest whose floor is raised (`size_cap_masses`): its
+	# ceiling sits at the peak over that floor, where its grounded partners' sit.
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	var body := RigidBody3D.new()
+	body.freeze = true
+	root.add_child(body)
+	var gd := _spec()
+	gd.tyre_half_width = 0.1
+	var w := _wheel()
+	w.apply_suspension(gd)
+	w.slip_floor = 4.0
+	w.tick(body, gd, root.get_world_3d().direct_space_state, 2000.0, 0.0, TICK, [] as Array[Node],
+			0.0, WheelScript.TCS_SLIP)
+	assert_bool(w.in_contact).is_false()
+	assert_float(w.omega).is_equal_approx(WheelScript.free_spin_omega(
+			WheelScript.TCS_SLIP * 4.0 / gd.wheel_radius, TICK), 1e-6)
 	assert_bool(w.tcs_active).is_true()
 
 

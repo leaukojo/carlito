@@ -435,7 +435,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		var hub_vel := VehicleMath.point_velocity(body, ray_from)
 		var hub_v_long := hub_vel.dot(Basis(up, steer_angle) * -mount.z)
 		_integrate_spin(drive_torque, 0.0, brake_torque, delta, 0.0,  ## airborne
-				hub_v_long, abs_slip, 0.0, tcs_slip, tcs_drive)
+				hub_v_long, abs_slip, 0.0, tcs_slip, tcs_drive, slip_floor)
 		omega = free_spin_omega(omega, delta)
 		if not coupled_spin:
 			update_visual(drive_spec, delta)
@@ -989,9 +989,10 @@ static func slip_floor_for(budget: float, mass: float, grip_curve: PackedVector2
 ## this one: the centre of mass's velocity `com_vel` along this tick's `forward`, less last tick's
 ## along last tick's (`prev_com_long`). Both factors move, so a steady turn, whose acceleration is
 ## all the path's turning, feeds nothing; `Δv · forward` alone would feed a wheel at angle β to the
-## path `a sin β`, and spin it past the road. Faded out from twice the slip floor down to it, by
-## `v_long`: below the floor slip is read against the floor, the tyre's slope sits at the one-tick
-## cap, and following the body rings it at the tick rate.
+## path `a sin β`, and spin it past the road. Faded out from twice LOW_SPEED_FLOOR down to it, by
+## `v_long` (the constant: a body's raised `slip_floor` does not widen the fade): below it slip is
+## read against a floor, the tyre's slope sits at the one-tick cap, and following the body rings it
+## at the tick rate.
 static func road_change(com_vel: Vector3, forward: Vector3, prev_com_long: float,
 		v_long: float) -> float:
 	return (com_vel.dot(forward) - prev_com_long) \

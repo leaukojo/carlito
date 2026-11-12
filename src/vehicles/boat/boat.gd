@@ -320,9 +320,8 @@ static func probe_force(depth: float, vert_vel: float, k: float, damp: float,
 		probe_mass: float, delta: float, max_force: float) -> float:
 	if depth <= 0.0:
 		return 0.0
-	var tick_cap := probe_mass * absf(vert_vel) / delta
-	var damper := clampf(-damp * vert_vel, -tick_cap, tick_cap)
-	return clampf(k * depth + damper, 0.0, max_force)
+	return clampf(k * depth + VehicleMath.damped_force(vert_vel, damp, probe_mass, delta), 0.0,
+			max_force)
 
 
 ## Aground this tick: the hull is settled, with vertical speed under vspeed_max to filter wave

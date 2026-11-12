@@ -122,8 +122,8 @@ pushes). 0-100 times and full-pedal stops land within 4 % of 480 Hz; spin alone 
 
 The follow reads the centre of mass, never the contact. The contact also carries the pitch that
 the tyre's own force rocks in one tick, and following it rings the body at the tick rate. Below
-twice the slip floor the follow fades out (there it rings too, and buys nothing), which is the
-launches' remaining 1-3 %.
+twice `LOW_SPEED_FLOOR` (the constant, not a body's raised slip floor) the follow fades out (there
+it rings too, and buys nothing), which is the launches' remaining 1-3 %.
 
 **One-tick caps and the slip floor.** Each tyre force is capped at what cancels its slip velocity
 in one tick, on the mass the body's tensor gives each contact (`RayWheel.size_cap_masses`): the

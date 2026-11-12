@@ -250,7 +250,8 @@ static func axle_load_kg(suspension_force_n: float) -> float:
 	return maxf(suspension_force_n, 0.0) / GRAVITY
 
 
-## Engine load, J1939 SPN 513-like: delivered torque over peak torque (the SPN 544 reference).
+## Engine load, J1939 SPN 513-like: the full-load curve at the delivered fuel (the motoring share
+## of `Drivetrain.crank_torque` left out) over peak torque (the SPN 544 reference).
 ## Shared by the tractor (ISOBUS) and the truck (J1939). A driven PTO is in it as the fuel its crank
 ## load takes (`Drivetrain.accessory_torque`). The denominator is the peak, not the torque at the
 ## current rpm (SPN 92), which would cancel to throttle. J1939-71 (through December 2001), printed

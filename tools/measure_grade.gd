@@ -1889,7 +1889,7 @@ func _ledger_tick(delta: float) -> void:
 			l["retarder"] += work * (1.0 - w.brake_friction_share)
 			if not w.in_contact:
 				continue
-			var vel := b.linear_velocity + b.angular_velocity.cross(w.contact_point - b.global_position)
+			var vel := VehicleMath.point_velocity(b, w.contact_point)
 			l["rolling"] -= w.force_roll * vel.dot(fwd) * delta
 			l["slip"] += slip_loss_w(w.force_long, w.omega, w.wheel_radius, vel.dot(fwd), w.force_lat,
 					vel.dot(right)) * delta

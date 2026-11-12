@@ -30,7 +30,7 @@ const DRIFT_PERIOD := 240.0
 ## of dynamic pressure (~69 Pa / ~6 m at 15 m/s).
 const PORT_ERROR_K := 0.5
 ## Air density for that dynamic pressure (kg/m^3): sea-level ISA, constant (~1% over 0-120 m).
-const AIR_DENSITY := 1.225
+const AIR_DENSITY := VehicleMath.AIR_DENSITY
 
 
 ## The level's ACTUAL sea-level pressure at `t` seconds elapsed (Pa).

@@ -145,7 +145,7 @@ func _guidance_wheelbase(gd: GroundDriveSpec) -> float:
 	var front_z := INF
 	var rear_z := -INF
 	for pos in gd.wheel_positions:
-		if pos.z < 0.0:
+		if not RayWheel.is_rear_z(pos.z):
 			front_z = minf(front_z, pos.z)
 		else:
 			rear_z = maxf(rear_z, pos.z)
@@ -293,7 +293,7 @@ func test_wheelbase_is_measured_off_the_shipped_tractor_wheels() -> void:
 	var front_z := INF
 	var rear_z := -INF
 	for pos in gd.wheel_positions:
-		if pos.z < 0.0:
+		if not RayWheel.is_rear_z(pos.z):
 			front_z = minf(front_z, pos.z)
 		else:
 			rear_z = maxf(rear_z, pos.z)

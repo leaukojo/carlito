@@ -39,7 +39,7 @@ func _truck_specs() -> Array[VehicleSpec]:
 func _rear_count(spec: VehicleSpec) -> int:
 	var n := 0
 	for p in spec.ground_drive.wheel_positions:
-		if p.z > 0.0:
+		if RayWheel.is_rear_z(p.z):
 			n += 1
 	return n
 
@@ -415,7 +415,7 @@ func test_the_slip_cap_stays_a_backstop_and_not_the_operating_point() -> void:
 		var front_z := 0.0
 		var rear_z := 0.0
 		for p in gd.wheel_positions:
-			if p.z > 0.0:
+			if RayWheel.is_rear_z(p.z):
 				rear_z = maxf(rear_z, p.z)
 			else:
 				front_z = minf(front_z, p.z)

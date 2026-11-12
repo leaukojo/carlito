@@ -314,7 +314,7 @@ func test_the_semis_drive_axle_carries_the_fifth_wheel_load_without_bottoming() 
 	for p in spec.ground_drive.wheel_positions:
 		front_z = minf(front_z, p.z)
 		rear_z = maxf(rear_z, p.z)
-		if p.z > 0.0:
+		if RayWheel.is_rear_z(p.z):
 			rear_wheels += 1
 		else:
 			front_wheels += 1

@@ -190,9 +190,8 @@ func couple(scene: PackedScene) -> bool:
 	# Match velocity to the towing unit before the joint exists, treating the pair as one rigid
 	# body for that instant. Otherwise the solver gets tens of tonnes with the whole road speed as
 	# relative velocity, an impulse big enough to throw the towing unit.
-	var lever := trailer.global_transform * trailer.center_of_mass \
-			- chassis.global_transform * chassis.center_of_mass
-	trailer.linear_velocity = chassis.linear_velocity + chassis.angular_velocity.cross(lever)
+	trailer.linear_velocity = VehicleMath.point_velocity(chassis,
+			trailer.global_transform * trailer.center_of_mass)
 	trailer.angular_velocity = chassis.angular_velocity
 	trailer.reset_physics_interpolation()
 	_joint = _build_joint()

@@ -1167,7 +1167,7 @@ func _wheel_positions(geo: Dictionary, gd: GroundDriveSpec, sag: float, x_out: f
 	for xz: Vector2 in geo["wheel_xz"]:
 		var y := gd.axle_radius(RayWheel.is_rear_z(xz.y)) + gd.rest_length - sag - ride_lift
 		var p := Vector3(xz.x + signf(xz.x) * x_out, y, xz.y)  # body space (front = -Z, right = +X)
-		if p.z < 0.0:
+		if not RayWheel.is_rear_z(p.z):
 			if p.x < 0.0: fl = p
 			else: fr = p
 		else:
@@ -1638,7 +1638,7 @@ func _analyze(path: String, wheel_models: Array, scale := 1.0) -> Dictionary:
 			var tv: Vector3 = xform * v
 			if absf(tv.z - tw.z) < WHEEL_BAND:
 				body_half = maxf(body_half, absf(tv.x))
-		var half: float = wheel_models[0 if tw.z < 0.0 else 1]["half"]
+		var half: float = wheel_models[1 if RayWheel.is_rear_z(tw.z) else 0]["half"]
 		var flush := body_half - half
 		var x := signf(tw.x) * maxf(flush, absf(tw.x))
 		wheel_xz.append(Vector2(x, tw.z))
