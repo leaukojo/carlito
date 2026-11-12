@@ -191,6 +191,10 @@ func test_pad_press_falls_back_to_the_base_layer() -> void:
 	assert_str(String(Registry.pad_press("options", true, _ctx("car")))).is_equal("to_menu")
 	assert_str(String(Registry.pad_press("square", false, _ctx("drone")))).is_equal("headlights")
 	assert_str(String(Registry.pad_press("square", true, _ctx("drone"), true))).is_equal("")
+	# L1 down under a menu: a tractor's L1+Cross is the remote, but a menu's Cross still accepts.
+	var tractor := Registry.context("tractor", false, {"scv": true})
+	assert_str(String(Registry.pad_press("cross", true, tractor, true))).is_equal("ui_accept")
+	assert_str(String(Registry.pad_press("cross", true, tractor))).is_not_equal("ui_accept")
 	# A role the vehicle has but sloppyCAN holds right now stays inert, never the button's own:
 	# fallback (live bridge, local driving) leaves the lights local but the hitch sloppyCAN's.
 	var fallback := Registry.context("tractor", true, {"lift": true}, false)
@@ -202,7 +206,9 @@ func test_pad_press_falls_back_to_the_base_layer() -> void:
 func test_a_paused_pad_reaches_only_the_shell() -> void:
 	assert_str(_pad("options", _ctx("car"), true)).is_equal("to_menu")
 	assert_str(_pad("create", _ctx("car"), true)).is_equal("garage")
-	assert_str(_pad("cross", _ctx("car"), true)).is_equal("")
+	assert_str(_pad("cross", _ctx("car"), true)).is_equal("ui_accept")
+	assert_str(_pad("circle", _ctx("car"), true)).is_equal("to_menu")
+	assert_str(_pad("circle", _ctx("car"))).is_not_equal("to_menu")  # driving: Circle is the vehicle's
 	assert_str(_pad("l1+square", _ctx("drone"), true)).is_equal("")
 
 

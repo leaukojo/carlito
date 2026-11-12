@@ -53,6 +53,58 @@ func test_level_select_back_emits_closed() -> void:
 	assert_bool(closed[0]).is_true()
 
 
+## MORE INFO toggles the long intro and relabels itself (its handler once saw a null button).
+func test_challenge_select_more_info_toggles_and_relabels() -> void:
+	var sel: ChallengeSelect = auto_free(ChallengeSelect.new())
+	sel.setup(ChallengeProgress.new("", ChallengeRegistry.ids()))
+	add_child(sel)
+	_press(sel, "MORE INFO")
+	assert_array(_labels(sel)).contains(["LESS INFO"])
+	_press(sel, "LESS INFO")
+	assert_array(_labels(sel)).contains(["MORE INFO"])
+
+
+## The last device used is the UI's one input mode: pointer motion drops keyboard focus, and a
+## navigation press with nothing focused focuses the first usable control (the hovered one, when
+## there is one) instead of doing nothing.
+func test_ui_scale_tracks_the_device_and_focuses_on_a_nav_press() -> void:
+	var ui: UiScale = auto_free(UiScale.new())
+	add_child(ui)
+	var overlay := Control.new()
+	ui.add_child(overlay)
+	var gone := Button.new()
+	gone.disabled = true
+	var first := Button.new()
+	var second := Button.new()
+	for b in [gone, first, second]:
+		overlay.add_child(b)
+	assert_int(ui.device()).is_equal(UiScale.Device.POINTER)
+
+	var down := InputEventKey.new()
+	down.keycode = KEY_DOWN
+	down.pressed = true
+	ui._input(down)
+	assert_int(ui.device()).is_equal(UiScale.Device.KEYBOARD)
+	assert_bool(first.has_focus()).is_true()  # not the disabled one, not the second
+
+	var pad := InputEventJoypadButton.new()
+	pad.button_index = JOY_BUTTON_DPAD_DOWN
+	pad.pressed = true
+	ui._input(pad)
+	assert_int(ui.device()).is_equal(UiScale.Device.PAD)
+
+	var move := InputEventMouseMotion.new()
+	move.relative = Vector2(3.0, 0.0)
+	ui._input(move)
+	assert_int(ui.device()).is_equal(UiScale.Device.POINTER)
+	assert_bool(first.has_focus()).is_false()
+
+	var rest := InputEventJoypadMotion.new()  # a resting stick is not the pad being used
+	rest.axis_value = 0.1
+	ui._input(rest)
+	assert_int(ui.device()).is_equal(UiScale.Device.POINTER)
+
+
 func test_level_select_hides_dev_fixtures() -> void:
 	var sel: LevelSelect = auto_free(LevelSelect.new())
 	add_child(sel)

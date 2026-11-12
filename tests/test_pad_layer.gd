@@ -124,6 +124,30 @@ func test_paused_only_options_and_create_answer() -> void:
 		.contains_exactly(["+to_menu", "-to_menu", "+garage", "-garage"])
 
 
+## Under a menu Cross accepts the focused control and Circle backs out, and neither is the handbrake.
+func test_paused_cross_accepts_and_circle_goes_back() -> void:
+	var layer := _layer()
+	layer.paused = true
+	_button(layer, JOY_BUTTON_A, true)
+	_button(layer, JOY_BUTTON_A, false)
+	_button(layer, JOY_BUTTON_B, true)
+	_button(layer, JOY_BUTTON_B, false)
+	assert_array(layer.emitted) \
+		.contains_exactly(["+ui_accept", "-ui_accept", "+to_menu", "-to_menu"])
+
+
+## A Cross that closed the menu is still held when the game resumes: its release lets go of the
+## accept it pressed, and it never becomes a handbrake press.
+func test_a_cross_held_across_the_menu_closing_is_not_a_handbrake() -> void:
+	var layer := _layer()
+	layer.paused = true
+	_button(layer, JOY_BUTTON_A, true)
+	layer.paused = false
+	_button(layer, JOY_BUTTON_A, true)  # key repeat / a second event while held
+	_button(layer, JOY_BUTTON_A, false)
+	assert_array(layer.emitted).contains_exactly(["+ui_accept", "-ui_accept"])
+
+
 ## L1 is the layer, reported for the legend: down, up, and up again when its pad goes.
 func test_l1_reports_the_layer() -> void:
 	var layer := _layer()

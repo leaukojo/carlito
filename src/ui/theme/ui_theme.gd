@@ -204,7 +204,8 @@ static func button(ref: Control, text: String, on_press: Callable, rim := RIM) -
 	if rim != RIM:
 		b.add_theme_stylebox_override("normal", keycap(SURFACE, rim, scale_of(ref)))
 		b.add_theme_stylebox_override("hover", keycap(SURFACE_HI, rim, scale_of(ref)))
-	b.pressed.connect(on_press)
+	if on_press.is_valid():  # a caller whose handler needs the button connects it afterwards
+		b.pressed.connect(on_press)
 	return b
 
 

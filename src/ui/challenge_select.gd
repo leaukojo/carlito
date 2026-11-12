@@ -99,8 +99,9 @@ func _build_grid_page() -> void:
 	intro_full.visible = false
 	_grid_page.add_child(intro_full)
 
-	var intro_btn: Button
-	intro_btn = UiTheme.button(self, "MORE INFO", func() -> void:
+	# Not a lambda over `intro_btn`: a lambda captures a local by value, so it would see null here.
+	var intro_btn := UiTheme.button(self, "MORE INFO", Callable())
+	intro_btn.pressed.connect(func() -> void:
 		intro_full.visible = not intro_full.visible
 		intro_btn.text = "LESS INFO" if intro_full.visible else "MORE INFO")
 	_grid_page.add_child(intro_btn)

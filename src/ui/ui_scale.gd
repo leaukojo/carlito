@@ -28,8 +28,99 @@ const EPSILON := 0.02
 const USER_STEPS: Array[float] = [0.7, 0.85, 1.0, 1.15, 1.35, 1.6]
 const USER_DEFAULT := 1.0
 
+## The device that sent the last UI-relevant event. One owner for every overlay: none tracks
+## devices itself. Pointer = mouse or touch; the highlight follows the cursor. Keyboard / Pad =
+## navigation; the highlight follows keyboard focus.
+enum Device { POINTER, KEYBOARD, PAD }
+const NAV_ACTIONS: Array[StringName] = [&"ui_up", &"ui_down", &"ui_left", &"ui_right",
+		&"ui_accept", &"ui_focus_next", &"ui_focus_prev"]
+## A stick must pass this to count as the pad being used (rest drift never does).
+const STICK_USE := 0.5
+
+signal device_changed(used: Device)
+
 var _scale := 0.0
 var _user := USER_DEFAULT
+var _device := Device.POINTER
+
+
+## The device last used. Read, never set, by the overlays.
+func device() -> Device:
+	return _device
+
+
+## Pointer motion hands the highlight to the cursor (keyboard focus is dropped, so two controls
+## never read as selected); a navigation press with nothing focused focuses the hovered control,
+## else the first one, and is spent doing so.
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		if (event as InputEventMouseMotion).relative != Vector2.ZERO:
+			_set_device(Device.POINTER)
+			get_viewport().gui_release_focus()
+		return
+	if event is InputEventMouseButton or event is InputEventScreenTouch \
+			or event is InputEventScreenDrag:
+		_set_device(Device.POINTER)
+		return
+	var used := _nav_device_of(event)
+	if used < 0:
+		return
+	_set_device(used as Device)
+	if get_viewport().gui_get_focus_owner() != null or not _is_nav_press(event):
+		return
+	var target := _focus_target()
+	if target != null:
+		target.grab_focus()
+		get_viewport().set_input_as_handled()
+
+
+## Which non-pointer device `event` came from, or -1 for none (releases, a resting stick).
+static func _nav_device_of(event: InputEvent) -> int:
+	if event is InputEventKey:
+		return Device.KEYBOARD if (event as InputEventKey).pressed else -1
+	if event is InputEventJoypadButton:
+		return Device.PAD if (event as InputEventJoypadButton).pressed else -1
+	if event is InputEventJoypadMotion:
+		return Device.PAD if absf((event as InputEventJoypadMotion).axis_value) > STICK_USE else -1
+	if event is InputEventAction:  # PadLayer's injected Cross
+		return Device.PAD if (event as InputEventAction).pressed else -1
+	return -1
+
+
+static func _is_nav_press(event: InputEvent) -> bool:
+	for action in NAV_ACTIONS:
+		if event.is_action_pressed(action):
+			return true
+	return false
+
+
+func _set_device(used: Device) -> void:
+	if used == _device:
+		return
+	_device = used
+	device_changed.emit(used)
+
+
+## The control a navigation press lands on with nothing focused: the hovered button, else the
+## first usable one in the topmost overlay.
+func _focus_target() -> Button:
+	var hovered := get_viewport().gui_get_hovered_control()
+	while hovered != null and not hovered is Button:
+		hovered = hovered.get_parent() as Control
+	if hovered != null and _usable(hovered as Button):
+		return hovered as Button
+	for i in range(get_child_count() - 1, -1, -1):
+		var child := get_child(i)
+		if not child is Control or not (child as Control).is_visible_in_tree():
+			continue
+		for b in child.find_children("*", "Button", true, false):
+			if _usable(b as Button):
+				return b as Button
+	return null
+
+
+static func _usable(b: Button) -> bool:
+	return b.is_visible_in_tree() and not b.disabled and b.focus_mode == Control.FOCUS_ALL
 
 
 func _ready() -> void:

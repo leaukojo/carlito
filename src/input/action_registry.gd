@@ -30,6 +30,8 @@ const CAP_NOTE := {
 	"sail": "no rig on this hull",
 }
 
+## Pad slots that mean something only under a menu: accept the focused control, and go back.
+const MENU_PAD := {"cross": &"ui_accept", "circle": &"to_menu"}
 const BRIDGE_NOTE := "sloppyCAN is driving"
 ## A live bridge that carries no driving control: the keyboard drives, sloppyCAN still sets this.
 const BRIDGE_SETS_NOTE := "set by sloppyCAN"
@@ -391,8 +393,12 @@ static func applies_entry(entry: Dictionary, ctx: Dictionary) -> bool:
 
 ## The action a gamepad `slot` ("cross", "l1+square", ...) presses in `ctx`, or &"" for none: the
 ## one row whose `pad` holds it and that applies. While `paused` (a menu is up) only SHELL rows
-## answer, so Options still closes the menu and no vehicle control latches under it.
+## answer, so Options still closes the menu and no vehicle control latches under it; Cross presses
+## the focused control (`ui_accept`) and Circle backs out like Esc (`to_menu`), which Godot's
+## built-in `ui_*` map gives no pad button.
 static func pad_action(slot: String, ctx: Dictionary, paused := false) -> StringName:
+	if paused and MENU_PAD.has(slot):
+		return MENU_PAD[slot]
 	for e in ENTRIES:
 		var i: int = e.get("pad", []).find(slot)
 		if i < 0 or (paused and int(e["group"]) != Group.SHELL):
@@ -407,7 +413,7 @@ static func pad_action(slot: String, ctx: Dictionary, paused := false) -> String
 ## A role the vehicle has but that is inert right now (sloppyCAN owns it, a menu is up) does not
 ## fall through: L1+Square on a tractor whose hitch sloppyCAN sets must not cycle the lights.
 static func pad_press(slot: String, l1: bool, ctx: Dictionary, paused := false) -> StringName:
-	if l1:
+	if l1 and not (paused and MENU_PAD.has(slot)):  # L1 down in a menu must not kill Cross / Circle
 		var layered := PadLayer.LAYER_PREFIX + slot
 		for e in ENTRIES:
 			if e.get("pad", []).has(layered) and relevant_entry(e, ctx):
