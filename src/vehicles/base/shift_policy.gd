@@ -284,16 +284,16 @@ static func descending(road: float, braking: bool) -> bool:
 
 
 ## The gear a pull-away takes: the highest up to `start_gear_max` whose launch drive on `pedal`'s
-## fuel beats `road` (`standing_load` at rest) by START_RESERVE, the grade's floor, and which, with
-## the rig's `mass` (kg) and the driven tyres' `grip` (N), a floored launch locks within
-## START_SLIP_S (`launch_slip_s`: the box's picture of the rig, at full pedal whatever the driver's,
-## as an AMT picks from gross weight and grade). D1 when none does; no slip test with no mass.
+## fuel (`drive_at` on the launch line) beats `road` (`standing_load` at rest) by START_RESERVE, the
+## grade's floor, and which, with the rig's `mass` (kg) and the driven tyres' `grip` (N), a floored
+## launch locks within START_SLIP_S (`launch_slip_s`: the box's picture of the rig, at full pedal
+## whatever the driver's, as an AMT picks from gross weight and grade). D1 when none does; no slip
+## test with no mass.
 static func start_gear(spec: VehicleSpec, road: float, pedal := 1.0, mass := 0.0,
 		grip := INF) -> int:
 	var line := Drivetrain.launch_target_rpm(spec, pedal)
 	for g in range(mini(spec.start_gear_max, _top(spec)), 1, -1):
-		if Drivetrain.wheel_torque(spec, line, PedalMap.fuel(spec, pedal, line), g) \
-				< START_RESERVE * road:
+		if drive_at(spec, g, line, pedal) < START_RESERVE * road:
 			continue
 		if mass <= 0.0 or launch_slip_s(spec, g, road, mass, grip) <= START_SLIP_S:
 			return g

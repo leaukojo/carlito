@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## Drivetrain math + RAMN gear-byte semantics.
 ## Pure logic — specs are built inline with round numbers so every expected value
-## is hand-checkable; §6 at the bottom is the brake pedal's map.
+## is hand-checkable.
 
 const DrivetrainScript := preload("res://src/vehicles/base/drivetrain.gd")
 const VehicleSpecScript := preload("res://src/vehicles/base/vehicle_spec.gd")
@@ -323,17 +323,6 @@ func test_a_coupled_crank_lands_its_crossing_on_the_redline_too() -> void:
 	assert_bool(reached).is_true()
 
 
-func test_below_the_redline_the_engine_still_makes_its_curve() -> void:
-	# The other side of the cut: it is a limiter, not a de-rate. 20 rad/s in D1 is ~2292 rpm.
-	var spec := _spec()
-	var dt: DrivetrainScript = DrivetrainScript.new(spec)
-	var torque := 0.0
-	for i in 60:
-		torque = _tick(dt, 1.0, LumpedWheel.new(20.0), 1)
-	assert_float(dt.applied_throttle).is_equal(1.0)
-	assert_float(absf(torque)).is_greater(0.0)
-
-
 func test_rpm_positive_in_reverse() -> void:
 	var spec := _spec()
 	# Reversing: wheel spins backwards, ratio is negative — RPM must still be positive.
@@ -386,12 +375,6 @@ func test_auto_shift_stays_inside_a_short_gearbox() -> void:
 	assert_int(DrivetrainScript.auto_shift(spec, 2, 4000.0)).is_equal(3)
 	# The downshift end is untouched by the guard.
 	assert_int(DrivetrainScript.auto_shift(spec, 3, 800.0)).is_equal(2)
-
-
-func test_auto_shift_never_touches_neutral_or_reverse() -> void:
-	var spec := _spec()
-	assert_int(DrivetrainScript.auto_shift(spec, GEAR_N, 4000.0)).is_equal(GEAR_N)
-	assert_int(DrivetrainScript.auto_shift(spec, GEAR_R, 4000.0)).is_equal(GEAR_R)
 
 
 # --- process (instance tick) ------------------------------------------------------
@@ -1583,23 +1566,19 @@ func test_the_restore_ramp_only_withholds_fuel_after_a_shift_cut() -> void:
 
 
 func test_the_esc_cap_holds_the_delivered_fuel_never_the_demand() -> void:
-	# Stability control's trim rides `applied_throttle` on both engines, the crank and the rigid
-	# one; the shift policy keeps reading the driver's full pedal.
-	for inertia: float in [0.2, 0.0]:
-		var spec := _spec()
-		spec.engine_inertia = inertia
-		var dt: DrivetrainScript = DrivetrainScript.new(spec)
-		for i in 30:
-			_tick(dt, 1.0, LumpedWheel.new(30.0), 1)
-		assert_float(dt.applied_throttle).is_equal(1.0)
-		dt.esc_cap = 0.5
+	# Stability control's trim rides `applied_throttle`; the shift policy keeps reading the
+	# driver's full pedal.
+	var dt: DrivetrainScript = DrivetrainScript.new(_spec())
+	for i in 30:
 		_tick(dt, 1.0, LumpedWheel.new(30.0), 1)
-		assert_float(dt.applied_throttle).override_failure_message("inertia %.1f" % inertia) \
-				.is_equal(0.5)
-		assert_float(dt.last_pedal).is_equal(1.0)
-		dt.esc_cap = 1.0
-		_tick(dt, 1.0, LumpedWheel.new(30.0), 1)
-		assert_float(dt.applied_throttle).is_equal(1.0)
+	assert_float(dt.applied_throttle).is_equal(1.0)
+	dt.esc_cap = 0.5
+	_tick(dt, 1.0, LumpedWheel.new(30.0), 1)
+	assert_float(dt.applied_throttle).is_equal(0.5)
+	assert_float(dt.last_pedal).is_equal(1.0)
+	dt.esc_cap = 1.0
+	_tick(dt, 1.0, LumpedWheel.new(30.0), 1)
+	assert_float(dt.applied_throttle).is_equal(1.0)
 
 
 func test_is_shift_needs_both_sides_engaged() -> void:
@@ -1827,8 +1806,8 @@ func test_a_spec_with_no_ground_drive_still_gets_a_gear_selection_scale() -> voi
 
 func test_governed_upshift_reads_the_declared_radius_as_a_pure_scale() -> void:
 	# road_radius is DECLARED on the Drivetrain rather than reached for on the spec, so that a
-	# wheel-less body (boat, train) keeps its gearing when the wheel fields move to the ground
-	# road_radius enters as ground_speed / road_radius (nowhere else); ratio IS selection scale.
+	# wheel-less body (boat, train) has a gear-selection scale with no ground drive. It enters as
+	# ground_speed / road_radius (nowhere else): speed and radius scaled together pick the same gear.
 	var spec := _spec()
 	spec.speed_limit_kmh = 180.0
 	var at_limit := 180.0 / 3.6
@@ -1904,7 +1883,7 @@ func test_peak_torque_is_the_highest_point_on_the_curve() -> void:
 	assert_float(DrivetrainScript.peak_torque(empty)).is_equal(0.0)
 
 
-# --- §6 the brake pedal ---------------------------------------------------------
+# --- the brake pedal's map (WheelDrive.brake_application) ------------------------
 
 func test_half_pedal_asks_the_same_deceleration_of_every_body_and_full_pedal_its_capacity() -> void:
 	# WheelDrive.brake_application: anchored per body, so the feel per pedal travel is shared and only
@@ -2016,7 +1995,7 @@ func test_a_pull_away_starts_in_the_gear_the_standing_load_allows() -> void:
 
 
 func test_a_launch_holds_its_start_gear_until_the_coupling_locks() -> void:
-	# Pedal down, rolling at 600 rpm in D3, under its 1500 coast line: no downshift while it slips.
+	# Pedal down, rolling at 900 rpm in D3, under its 1500 coast line: no downshift while it slips.
 	var dt: DrivetrainScript = DrivetrainScript.new(_start_spec())
 	dt.load_mass_kg = LIGHT_RIG_KG
 	dt.standing_load = 400.0

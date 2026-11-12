@@ -34,7 +34,7 @@ func test_the_capacity_is_blind_to_the_torque_sign_and_zero_when_unloaded() -> v
 # --- coupling -----------------------------------------------------------------------
 
 func test_zero_capacity_is_an_exact_no_op() -> void:
-	# The open diff: nothing moves, so an all-open body is today's equal split bit for bit.
+	# The open diff: nothing moves, so an all-open body keeps the equal split bit for bit.
 	assert_float(DiffScript.coupling_torque(40.0, 10.0, 0.01, 0.002, 0.0)).is_equal(0.0)
 
 

@@ -8,11 +8,11 @@ measured tables: `docs/vehicle_measurements.md`.
 
 **Crank and coupling.** On every wheel-driving body the crank is a rotating mass
 (`engine_inertia`, kg·m² at the crank: 0.20 on the cars, 0.18 on the sports pair, 0.06 on the
-open-wheelers, 1.5 on the vans, trucks and tractor, 3.0 on the semis; sourced per class in
+open-wheelers, 0.40 on the heavy vans, 1.5 on the Kenney trucks and tractor, 3.0 on the semis; sourced per class in
 `docs/sources.md`). It meets the driven wheels through one
 coupling (`coupling`: a converter on the cars, vans and Kenney trucks, a friction clutch on the
 open-wheelers, the semis' AMT and the tractor's powershift), rated `clutch_reserve` times the
-curve's peak (1.5 on cars, 2.0 elsewhere) and solved as one more output of the wheels' spin solve
+curve's peak (1.5 on the cars and vans, 2.0 elsewhere) and solved as one more output of the wheels' spin solve
 (`Drivetrain.couple`). The transmission controller (`coupling_step`):
 - opens a clutch with the key off, in N or P, under ABS on a driven wheel, on a direction change
   and with the pedal up once the wheel side is under idle; a converter opens only with the key
@@ -21,7 +21,7 @@ curve's peak (1.5 on cars, 2.0 elsewhere) and solved as one more output of the w
   the stall speed, or 300 rpm over idle on the semis), and every coupling on a shift (on a
   converter body, the gearbox's own clutch). An upshift's inertia phase is the handover (§ The
   shift policy); a downshift's crank is blipped up to the wheels with the clutch open first;
-- locks it the tick it carries less than its capacity. A clutch stays locked until a shift; a
+- locks it the tick it carries less than its capacity. A clutch stays locked until a shift, an opening above or anti-stall (the crank and the wheel side both under idle slip it again); a
   converter's lock-up lets go under the brake-light switch (`Drivetrain.braking`: the foot brake or
   roll stability's request, as an automatic's TCU reads it, so the brakes never slow the crank,
   where a clutch body keeps its clutch closed for engine braking), under ABS, under `lockup_gear`
@@ -76,7 +76,7 @@ sourced.
   speed. Full demand is full fuel to rated speed. Three consequences on the gearbox:
   - the demand caps the engine at its setting, so its upshift point is held two droops under it
     (`ShiftPolicy.governed_up_rpm`, `GOVERNED_UPSHIFT_DROOP`, an estimate), full demand's too: the
-    floored tractor upshifts at 2052, under its 2200 pair. A demand whose setting is still over
+    floored tractor upshifts at 2061, under its 2200 pair. A demand whose setting is still over
     that pair passes there, as a forced upshift does, the gears it would rev out of within the
     dwell (`ShiftPolicy.forced_upshift`). On the map's own point the tractor at demand 0.5
     (setting 1575) would never leave its start gear;
@@ -93,7 +93,7 @@ sourced.
 `engine_brake_frac` at redline. The friction is what brings a blipped free crank back to idle and
 stops a key-off one. Without it the law reaches 0 at idle, and a lifted crank falls toward idle ever
 more slowly. Per class, at idle / at redline, as a share of peak:
-- **Medium diesel** (Kenney trucks and vans) and **tractor:** 0.10 / 0.15 and 0.20. The 0.10 is
+- **Medium diesel** (Kenney trucks; the heavy vans 0.10 / 0.12) and **tractor:** 0.10 / 0.15 and 0.20. The 0.10 is
   sourced. The Volvo Penta TD640VE (5.48 L) publishes its friction power: 17, 20, 23 and 26 kW at
   1800, 2000, 2200 and 2400 rpm. That is 90-104 N·m, FMEP 2.1-2.4 bar, 14-16 % of its 658 N·m. Run
   linearly down to idle, it gives ~66 N·m, 0.10. At redline it gives ~0.16 to 0.19, against the

@@ -7,16 +7,14 @@ const TICK := 1.0 / 60.0
 const NO_BAND := Vector2.ZERO
 
 
-## `test_drivetrain`'s round-number engine behind a converter: stall at 1600 rpm, 160 N·m there.
+## `test_drivetrain`'s round-number engine: stall at 1600 rpm, 160 N·m there. The statics read only
+## the curve, the idle and the redline.
 func _spec() -> VehicleSpec:
 	var spec := VehicleSpec.new()
-	spec.ground_drive = GroundDriveSpec.new()
 	spec.torque_curve = PackedVector2Array([
 		Vector2(1000, 100), Vector2(2000, 200), Vector2(3000, 300), Vector2(4000, 200)])
 	spec.idle_rpm = 800.0
 	spec.redline_rpm = 4000.0
-	spec.coupling = VehicleSpec.Coupling.CONVERTER
-	spec.engine_inertia = 0.2
 	return spec
 
 

@@ -31,7 +31,7 @@ func _light_spec() -> VehicleSpecScript:
 	return spec
 
 
-## The fixed-threshold rule the box ran before the policy, the reference for the defaults.
+## The fixed two-threshold rule a spec with no map reduces to, the reference for the defaults.
 static func _threshold_rule(spec: VehicleSpecScript, byte: int, at_rpm: float) -> int:
 	if at_rpm >= spec.shift_up_rpm and byte < mini(DrivetrainScript.TOP_GEAR, spec.gear_ratios.size()):
 		return byte + 1
@@ -282,7 +282,7 @@ func test_no_map_upshift_lands_in_a_gear_that_cannot_hold_the_road_speed() -> vo
 	assert_int(ShiftPolicy.next_gear(spec, 3, 2600.0, 0.5, 10.0, false, 400.0)).is_equal(4)
 	assert_int(ShiftPolicy.next_gear(spec, 3, 2600.0, 0.5, 10.0, false, 450.0)).is_equal(3)
 	assert_bool(ShiftPolicy.holds_grade(spec, 3, 4, 2600.0, 0.5, 450.0)).is_false()
-	# No estimate is today's map.
+	# With no estimate the map alone decides.
 	assert_int(ShiftPolicy.next_gear(spec, 3, 2600.0, 0.5, 10.0, false)).is_equal(4)
 	# A lift upshift is the driver letting the speed go: never held.
 	assert_int(ShiftPolicy.next_gear(spec, 3, 2600.0, 0.0, 10.0, false, 450.0)).is_equal(4)
@@ -529,6 +529,18 @@ func test_the_start_gear_is_the_highest_whose_launch_drive_beats_the_load_twice(
 	spec.start_gear_max = 6
 	spec.gear_ratios = PackedFloat32Array([3.0, 2.0, 1.5])
 	assert_int(ShiftPolicy.start_gear(spec, 0.0)).is_equal(3)
+
+
+func test_the_start_gears_launch_drive_nets_the_motoring_out_at_part_pedal() -> void:
+	# A tenth of the 200 N·m peak in friction: at half pedal the crank nets 0.5 x 200 - 0.5 x 20 = 90,
+	# so D3 makes 540 and D2 720. A 290 N·m load asks 580: D2, where the fuelled share alone (600 in
+	# D3) reads D3. With no friction the two are one, and D3 holds it.
+	var spec := _loaded_spec()
+	spec.start_gear_max = 3
+	spec.engine_friction_frac = 0.1
+	assert_int(ShiftPolicy.start_gear(spec, 290.0, 0.5)).is_equal(2)
+	spec.engine_friction_frac = 0.0
+	assert_int(ShiftPolicy.start_gear(spec, 290.0, 0.5)).is_equal(3)
 
 
 func test_the_start_gear_locks_its_clutch_within_the_slip_time_on_the_rigs_mass() -> void:

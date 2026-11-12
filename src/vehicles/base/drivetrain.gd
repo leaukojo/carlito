@@ -5,7 +5,7 @@ extends RefCounted
 ## meeting the wheels through a clutch (`coupling_step`) or a converter (`TorqueConverter`) solved
 ## inside the spin step (`couple`). Nothing stalls: the controller opens a clutch first, and the
 ## idle controller fuels a converter's load. Every other body keeps the rigid crank (rpm follows
-## the wheels, clamped [idle, redline]). Informed by Dechode/Godot-Advanced-Vehicle and
+## the throttle between idle and the limiter's line). Informed by Dechode/Godot-Advanced-Vehicle and
 ## Tobalation/GDCustomRaycastVehicle (credited in README).
 
 ## RAMN gear byte: 0x00 = N, 0x01..0x18 = D1-D24, 0xFF = R, plus 0xFE = P, a value RAMN never
@@ -19,8 +19,8 @@ const GEAR_P := 0xFE
 const TOP_GEAR := 24
 
 const RADS_TO_RPM := 60.0 / TAU
-## 1/s exponential rate the rigid crank's rpm tracks the wheels (the wheel-less bodies and the
-## plane only; a wheel-driving crank is integrated).
+## 1/s exponential rate the rigid crank's rpm tracks its throttle target (the wheel-less bodies and
+## the plane only; a wheel-driving crank is integrated).
 const RPM_SMOOTH := 8.0
 
 ## m/s below speed_limit_kmh over which the governor fades throttle out, so the vehicle settles
@@ -275,8 +275,8 @@ static func wheel_engine_rpm(p_spec: VehicleSpec, wheel_omega: float, byte: int)
 	return absf(wheel_omega * ratio) * RADS_TO_RPM
 
 
-## RPM clamped [idle, redline]; idle in N: the road-speed scale gear selection reads, and the rigid
-## crank's target. Never gate fuel on this: the smoothing lerp settles an epsilon short of redline.
+## RPM clamped [idle, redline]; idle in N: the road-speed scale gear selection reads. Never gate
+## fuel on this: the limiter reads the crank (`limiter_cut`).
 static func rpm_from_wheel(p_spec: VehicleSpec, wheel_omega: float, byte: int) -> float:
 	return clampf(wheel_engine_rpm(p_spec, wheel_omega, byte), p_spec.idle_rpm, p_spec.redline_rpm)
 
@@ -360,8 +360,8 @@ const LIMITER_LANDING_STEPS := 16
 
 
 ## Whether the engine drives wheels: then the crank is a rotating mass behind a coupling. Boat,
-## drone, train (no `ground_drive`) and plane (undriven wheels) keep the rigid crank, where wheel
-## speed alone sets rpm.
+## drone, train (no `ground_drive`) and plane (undriven wheels) keep the rigid crank, where the
+## throttle alone sets rpm.
 static func drives_wheels(p_spec: VehicleSpec) -> bool:
 	var gd := p_spec.ground_drive
 	return gd != null and (gd.driven_front or gd.driven_rear)
