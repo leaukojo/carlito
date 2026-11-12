@@ -1,7 +1,7 @@
 {
 	"baker_version": 14,
 	"chunk_size": 64.0,
-	"input_hash": "20dc5fcd8cbce19422c8683ff8e1122f5363b6f3940a7722de5f65972cb8d3c3",
+	"input_hash": "4d7e56be4692bbad737b4436186a3ffc47eed18ba5ddce112c3e4548af6fda2a",
 	"level": "res://src/levels/island/car_arena/car_arena.tscn",
 	"output_hash": "bda99068d53f069630d90a4a138487fb598acc4e7f7668af6b15dbf1e51e55f5",
 	"stats": {

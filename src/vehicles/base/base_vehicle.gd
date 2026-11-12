@@ -300,8 +300,8 @@ func _update_telemetry(input: VehicleInput, delta: float) -> void:
 	# the limiter is not burning fuel for a request it never made.
 	var load_frac := clampf(drivetrain.applied_throttle, 0.0, 1.0)
 	var heat_frac := load_frac
-	# COMPROMISE: an empty tank does not stop the engine; nothing reads `fuel` back. Stopping it
-	# needs a refuel path, and the game-scale tank would end a full-load drive within minutes.
+	# A design choice: an empty tank does not stop the engine; nothing reads `fuel` back. There is
+	# no refuel path, and the game-scale tank would end a full-load drive within minutes.
 	if _tank_l > 0.0:
 		telemetry.fuel_rate = VehicleTelemetry.fuel_rate_lph(spec, drivetrain.rpm,
 				drivetrain.applied_throttle, running)

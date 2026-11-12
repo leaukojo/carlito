@@ -23,10 +23,9 @@ const FUEL_INDICATED_EFFICIENCY: Array[float] = [0.41, 0.45]
 const FUEL_HEATING_MJ_KG: Array[float] = [41.05, 42.7]
 ## Density (kg/L) per Fuel, the same two fuels.
 const FUEL_DENSITY_KG_L: Array[float] = [0.757, 0.84]
-## COMPROMISE: the tank is a game scale. A body's tank lasts this long at full fuel at its rated
-## speed (`tank_litres`); the burn that drains it is real. A real tank (a saloon's ~50 L lasts
-## about an hour flat out) never visibly moves in a session: undoing it is a litre figure per body,
-## and a gauge that sits at full.
+## A design choice: the tank is a game scale. A body's tank lasts this long at full fuel at its
+## rated speed (`tank_litres`); the burn that drains it is real. A real tank (a saloon's ~50 L
+## lasts about an hour flat out) never visibly moves in a session: its gauge would sit at full.
 const FUEL_TANK_FULL_LOAD_S := 500.0
 
 # --- auxiliary-system model constants ---
@@ -203,7 +202,7 @@ static func rated_fuel_rate_lph(spec: VehicleSpec) -> float:
 	return fuel_rate_lph(spec, PedalMap.rated_rpm(spec), 1.0, true)
 
 
-## The tank (L): FUEL_TANK_FULL_LOAD_S at the rated burn (the COMPROMISE at the constant).
+## The tank (L): FUEL_TANK_FULL_LOAD_S at the rated burn (a game scale: the choice at the constant).
 static func tank_litres(spec: VehicleSpec) -> float:
 	return rated_fuel_rate_lph(spec) * FUEL_TANK_FULL_LOAD_S / 3600.0
 

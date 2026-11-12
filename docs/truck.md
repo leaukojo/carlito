@@ -37,7 +37,7 @@ parent of ISOBUS and NMEA 2000.
 - A coupled trailer's spring brakes apply on the same event: the towing unit hands
   `TowHost.tick_towing` its parking brake (`parking01`, the lever or the air gate,
   `WheelDrive.parking_application`), on the gate tick. The auto-neutral engages at any speed
-  (COMPROMISE in `drivetrain.gd`). `tools/measure_air_loss.tscn -- all strict` (CI) drives it live.
+  (a design choice, `Drivetrain.drive_inhibit`). `tools/measure_air_loss.tscn -- all strict` (CI) drives it live.
   Its three passes per body, their floors and the honest drain: the tool's header. Every body holds
   within a millimetre or two and stops in roughly 10-14 m; a semi with its trailer left unbraked fails both.
 - Retarder is real driveline torque, not an indicator bit: math on `Drivetrain`, `WheelDrive` adds

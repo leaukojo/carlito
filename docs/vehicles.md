@@ -350,7 +350,7 @@ Do not re-propose these without new evidence:
   (`test_boat_variants` guards the boat's recipe copy).
 - A polymorphic `spec.drive`: retires no `null` guard and adds a downcast to each.
 - Splitting `Drivetrain` into gearbox and rpm: the gearbox is load-bearing on every family.
-  COMPROMISE: the wheel-less bodies run the gearbox and a free-rev crank at 60 Hz for the gear
+  The cost: the wheel-less bodies run the gearbox and a free-rev crank at 60 Hz for the gear
   byte. The boat's oil pressure reads the crank's rpm, the boat's and plane's fuel and coolant
   its `applied_throttle`; the plane publishes its own prop rpm, and the train's one ratio keeps
   its reverser on D1.

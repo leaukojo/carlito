@@ -319,7 +319,7 @@ const TRUCK_BASE := {
 	"spring_rate_rear": 0.0, "damper_bump_rear": 0.0, "damper_rebound_rear": 0.0,
 	"anti_roll_rate": 0.0,
 	"anti_roll_rate_rear": -1.0,
-	# COMPROMISE: rear roll steer 0.10, the leaf rear's figure (VAN_BASE), fitted rather than sourced.
+	# An estimate: rear roll steer 0.10, the leaf rear's figure (VAN_BASE), fitted rather than sourced.
 	# The leaf axle's roll understeer and its sign are sourced (US 4,919,449); no truck size was found
 	# (docs/sources.md § Roll steer). 0.10 lands the tractor criterion, 0.5-2.0 deg/g at 0.15 g
 	# (Woodrooffe & El-Gindy), on `garbage-truck`: K 0.60 / 0.71 deg/g at the 30 / 50 km/h steps,

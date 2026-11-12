@@ -119,7 +119,7 @@ sources (`docs/sources.md` § Fuel): the `sedan` idles at 0.34 L/h and bottoms a
 `semi` at 1.62 L/h and 201 g/kWh. At one road speed the `sedan` held in D6 burns about half what it
 does in D3 (`-- sedan 90 cruise gear=6`, `gear=3`). Coolant chases the burn's share of its rated
 figure; battery reads the lamps lit (`LampSet.load_share`). The rigid crank (boat, plane) burns at its free-rev rpm,
-floored at `drag_fuel` (`fuel_rate_lph`). COMPROMISE: `fuel` drains a game-scale tank.
+floored at `drag_fuel` (`fuel_rate_lph`). By choice `fuel` drains a game-scale tank, so the gauge moves in a session.
 
 **Converter.** A converter body (`coupling` CONVERTER: the cars, the vans, `garbage-truck` and
 `firetruck`) slips through `TorqueConverter`'s law, solved with both sides' end-of-tick speeds

@@ -41,7 +41,7 @@ func is_rail_closed() -> bool:
 
 
 ## First closed rail loop under `root`, duck-typed; null if none. Shared by Level and TrainVehicle so the two never disagree.
-## One loop per level is an accepted COMPROMISE: a second closed loop is never found, and supporting
+## One loop per level is a design choice: a second closed loop is never found, and supporting
 ## one means choosing which loop a train spawns on.
 static func find_closed_rail(root: Node) -> Node:
 	if root.has_method("get_rail_curve") and root.call("get_rail_curve") != null \

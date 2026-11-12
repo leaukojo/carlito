@@ -37,7 +37,7 @@
 ; rear corner carries about 3.5-4.7 t depending on the trailer. See semi_spec.tres for the
 ; derivation and damping ratios.
 ;
-; ROLL STEER 0.10 ON THE DRIVE AXLE IS THE SEMI'S COMPROMISE (see semi_spec.tres): the step pass
+; ROLL STEER 0.10 ON THE DRIVE AXLE IS THE SEMI'S ESTIMATE (see semi_spec.tres): the step pass
 ; reads K 0.27 > 0.50 deg/g at 0.05 g bobtail, -0.59 > -0.22 at 0.12 g laden (box), no new rolled
 ; cell (measure_vehicles -- semi-conventional 60 step trailer=<bobtail|box>, 2026-10-23).
 ;

@@ -29,7 +29,7 @@ backup: a reference, not a source.
 - CLAUDE.md: the constraint, a ≤1-line why, its guard; only what binds work in its directory and
   is not readable from the code or a guard's message (budgets: `tools/check_docs.mjs`). Exit
   rule: a line goes once a guard enforces it with a clear message before commit.
-- Code comment: the constraint at its site. A COMPROMISE states what is true and what undoing it costs.
+- Code comment: the constraint at its site. A COMPROMISE (never a design choice) states what is true and its undo cost.
 - `docs/`: derivations and tours. A finished plan is distilled there (plus at most one CLAUDE.md
   line), then deleted.
 - Everywhere: present tense, no history ("used to", "Phase N adds"), no restating code. "Never"

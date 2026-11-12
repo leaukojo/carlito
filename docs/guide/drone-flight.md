@@ -100,7 +100,7 @@ trims for it; LOITER does not, so in a steady wind it holds a little downwind of
 The drone may fly up to 400 m from home and 120 m above it. Crossing either limit makes it
 return home by itself. The fence is soft: the drone can overshoot it a little before it turns
 back.
-<!-- drone_modes.gd GEOFENCE_RADIUS 400, GEOFENCE_CEILING 120; "COMPROMISE: the fence is soft" -->
+<!-- drone_modes.gd GEOFENCE_RADIUS 400, GEOFENCE_CEILING 120; "The fence is soft by design" -->
 
 ## Failsafes
 

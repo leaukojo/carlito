@@ -104,7 +104,7 @@ Drop a `VehicleSpawn` marker for every allowed vehicle. Set its `vehicle_types` 
    `"sculpt_drift"` entry (`{"<source>.png": {"max_px": N, "max_step": N}}`), and
    `rebuild_level.ps1` classifies a changed PNG with `tools/png_drift.gd` (no entry = byte
    equality). Level 1's flatten and `_smooth` passes move ~150-250 heightmap pixels by 1-3 steps each run;
-   COMPROMISE: bit-equality would cost ~184 KB of baseline PNG to buy a guarantee nothing consumes.
+   A choice: bit-equality would cost ~184 KB of baseline PNG to buy a guarantee nothing consumes.
 
 ## 9. Perf check
 

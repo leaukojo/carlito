@@ -178,7 +178,7 @@ func test_full_fuel_burn_reads_the_computed_figure() -> void:
 	assert_float(T.fuel_rate_lph(_flat_engine(T.Fuel.DIESEL), 3000.0, 1.0, true)) 		.is_equal_approx(7.708, 2e-3)
 
 
-## The tank is the COMPROMISE's: the rated burn empties it in FUEL_TANK_FULL_LOAD_S.
+## The tank is a game scale: the rated burn empties it in FUEL_TANK_FULL_LOAD_S.
 func test_the_tank_lasts_its_full_load_time_at_the_rated_burn() -> void:
 	var spec := _flat_engine(T.Fuel.PETROL)
 	var tank := T.tank_litres(spec)

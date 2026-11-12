@@ -15,7 +15,7 @@ extends Node3D
 const DEFAULT_PROFILE_PATH := "res://kit/roads/city_profile.tres"
 
 const Groups := preload("res://src/levels/base/carlito_groups.gd")
-const BrushOps := preload("res://kit/helpers/brush_ops.gd")
+const RoadTerrain := preload("res://kit/helpers/road_terrain.gd")
 const SplatPaint := preload("res://kit/helpers/splat_paint.gd")
 
 ## Lateral inset (m) Paint splat keeps inside the paved edge, so bilinear bleed stays
@@ -410,8 +410,8 @@ func _apply_reverse() -> void:
 
 
 # --------------------------------------------------------------- conform terrain
-# Editor-only, destructive-by-button. Heavy lifting is pure (RoadBuilder.conform_
-# heights); PNG write / undo reuses HeightmapTerrain._commit_generated verbatim.
+# Editor-only, destructive-by-button. Heavy lifting is pure (RoadTerrain.
+# conform); PNG write / undo reuses HeightmapTerrain._commit_generated verbatim.
 
 
 func _conform_terrain() -> void:
@@ -434,30 +434,17 @@ func _conform_terrain() -> void:
 		push_warning("RoadPath: the curve has no length.")
 		return
 
-	# Samples at the extrusion's ring offsets target the ribbon's chordal surface, not
-	# the analytic curve, which sits above the chords over a crest.
-	var to_world := global_transform * path.transform
-	var offsets := RoadBuilder.adaptive_offsets(curve, max_segment_length,
-			max_segment_angle_deg)
-	var world := PackedVector3Array()
-	for o in offsets:
-		world.append(to_world * curve.sample_baked(o))
-	# Deck extruded on the ribbon's own frames; conform_heights rasterizes it as the
-	# plateau, since the centerline projection alone mis-heights steep + yawing segments.
+	# The plateau spans the full ribbon half-width including skirt.
 	var fw: float = profile.full_half_width()
-	var deck_surfaces: Dictionary = RoadBuilder.extrude(curve,
-			PackedVector2Array([Vector2(-fw, 0), Vector2(fw, 0)]),
-			PackedInt32Array([0]), offsets, banking)
-	var deck_world := PackedVector3Array()
-	for v in RoadBuilder.faces_from_surfaces(deck_surfaces):
-		deck_world.append(to_world * v)
+	var fp := RoadTerrain.footprint(curve, fw, banking, max_segment_length,
+			max_segment_angle_deg, global_transform * path.transform)
 
 	var terrains: Array[Node] = []
 	ScatterBase.find_terrains_under(owner if owner != null else self, terrains)
-	var reach: float = profile.full_half_width() + conform_falloff
+	var reach: float = fw + conform_falloff
 	var touched := 0
 	for t in terrains:
-		if not _overlaps_terrain(t, world, reach):
+		if not _overlaps_terrain(t, fp["samples"], reach):
 			continue
 		var img: Image = t._read_image()
 		if img == null:
@@ -469,27 +456,11 @@ func _conform_terrain() -> void:
 		var height_step := amp / 255.0
 		if profile.edge_drop < conform_epsilon + height_step:
 			push_warning("RoadPath '%s': profile edge_drop %.2f < conform_epsilon %.2f + terrain '%s' height step %.3f — raise the profile's edge_drop (or lower the terrain height) or the skirt seam can open." % [name, profile.edge_drop, conform_epsilon, t.name, height_step])
-		var clamped := false
-		var samples := PackedVector3Array()
-		for w in world:
-			var tn := (w.y - conform_epsilon - t3d.global_position.y) / amp
-			if tn < 0.0 or tn > 1.0:
-				clamped = true
-			samples.append(Vector3(w.x - t3d.global_position.x,
-					w.z - t3d.global_position.z, clampf(tn, 0.0, 1.0)))
-		if clamped:
+		if RoadTerrain.leaves_height_range(fp, t3d.global_position.y, amp, conform_epsilon):
 			push_warning("RoadPath: parts of '%s' sit outside terrain '%s's height range — the flatten clamps there." % [name, t.name])
-		var deck := PackedVector3Array()
-		for w in deck_world:
-			deck.append(Vector3(w.x - t3d.global_position.x,
-					w.z - t3d.global_position.z,
-					clampf((w.y - conform_epsilon - t3d.global_position.y) / amp,
-							0.0, 1.0)))
 		var dims: Vector2i = t._grid_dims()
-		# Plateau spans the full ribbon half-width including skirt.
-		var dirty := RoadBuilder.conform_heights(img, samples,
-				profile.full_half_width(), conform_falloff,
-				float(dims.x - 1), float(dims.y - 1), deck)
+		var dirty := RoadTerrain.conform(img, fp, fw, conform_falloff, t3d.global_position,
+				Vector2(dims.x - 1, dims.y - 1), amp, conform_epsilon)
 		if not dirty.has_area():
 			continue
 		t._commit_generated("Conform terrain to road '%s'" % name,
@@ -505,7 +476,7 @@ func _conform_terrain() -> void:
 # Editor-only, destructive-by-button. Same footprint as Conform, but writes the
 # terrain's splat images across the paved half-width minus SPLAT_PAINT_INSET (never
 # the skirted full width, so the paint stays hidden under the deck). Pure pixel work
-# is SplatPaint (tested); the PNG write / undo reuses _commit_generated verbatim.
+# is RoadTerrain.paint (tested); the PNG write / undo reuses _commit_generated verbatim.
 
 
 func _paint_splat() -> void:
@@ -532,24 +503,14 @@ func _paint_splat() -> void:
 	if pw <= 0.0:
 		push_warning("RoadPath '%s': profile too narrow to paint under (paved half-width %.2f m <= %.1f m inset)." % [name, profile.paved_half_width(), SPLAT_PAINT_INSET])
 		return
-	var to_world := global_transform * path.transform
-	var offsets := RoadBuilder.adaptive_offsets(curve, max_segment_length,
-			max_segment_angle_deg)
-	var world := PackedVector3Array()
-	for o in offsets:
-		world.append(to_world * curve.sample_baked(o))
-	var deck_surfaces: Dictionary = RoadBuilder.extrude(curve,
-			PackedVector2Array([Vector2(-pw, 0), Vector2(pw, 0)]),
-			PackedInt32Array([0]), offsets, banking)
-	var deck_world := PackedVector3Array()
-	for v in RoadBuilder.faces_from_surfaces(deck_surfaces):
-		deck_world.append(to_world * v)
+	var fp := RoadTerrain.footprint(curve, pw, banking, max_segment_length,
+			max_segment_angle_deg, global_transform * path.transform)
 
 	var terrains: Array[Node] = []
 	ScatterBase.find_terrains_under(owner if owner != null else self, terrains)
 	var touched := 0
 	for t in terrains:
-		if not _overlaps_terrain(t, world, pw):
+		if not _overlaps_terrain(t, fp["samples"], pw):
 			continue
 		var img: Image = SplatPaint.decode(t.get("splatmap"))
 		if img == null:
@@ -564,23 +525,11 @@ func _paint_splat() -> void:
 		if img2 != null and img2.get_size() != img.get_size():
 			push_warning("RoadPath: terrain '%s's splatmap2 size differs from splatmap — repaint it at the base size first (see the terrain's config warning)." % t.name)
 			continue
-		var t3d := t as Node3D
-		var samples := PackedVector2Array()
-		for w in world:
-			samples.append(Vector2(w.x - t3d.global_position.x,
-					w.z - t3d.global_position.z))
-		var deck := PackedVector2Array()
-		for w in deck_world:
-			deck.append(Vector2(w.x - t3d.global_position.x,
-					w.z - t3d.global_position.z))
 		var images: Array[Image] = [img]
-		var units: Array[Color] = [BrushOps.unit_slice(channel, 0)]
 		if img2 != null:
 			images.append(img2)
-			units.append(BrushOps.unit_slice(channel, 1))
-		var size: Vector2 = t.get("terrain_size")
-		var dirty := SplatPaint.paint_strip(images, units, samples, pw,
-				size.x, size.y, deck)
+		var dirty := RoadTerrain.paint(images, channel, fp, pw,
+				(t as Node3D).global_position, t.get("terrain_size"))
 		if not dirty.has_area():
 			continue
 		var splat_path: String = t.png_path_for("splat")

@@ -72,9 +72,9 @@ var pto_engaged := false
 var pto_set_rpm := 0.0
 ## A transmission interlock set by the owner, like `speed_cap_kmh`: while on, a D or R request is
 ## engaged as N (the park-brake auto-neutral of an Allison-class box or an AMT; `TruckVehicle` sets
-## it while the spring brakes are on). N and P requests pass unchanged. COMPROMISE: it engages at
-## any speed, where a real auto-neutral waits for the vehicle to stop; air lost at speed sets the
-## spring brakes, which are stopping it anyway, so only the drive into them differs.
+## it while the spring brakes are on). N and P requests pass unchanged. A design choice: it engages
+## at any speed, where a real auto-neutral waits for the vehicle to stop. The spring brakes are not
+## sized to out-hold the engine, so this is what makes air lost at speed always end in a stop.
 var drive_inhibit := false
 ## Ticks left in the post-shift throttle cut (`spec.shift_cut_s`), 0 when driving through.
 var _shift_cut_ticks := 0

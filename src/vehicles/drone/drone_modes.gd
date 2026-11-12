@@ -60,7 +60,7 @@ const LAND_RATE := 1.0
 
 # --- the soft geofence ---
 
-## COMPROMISE: the fence is soft; a breach latches a forced RTL, so a craft can overshoot it.
+## The fence is soft by design: a breach latches a forced RTL, so a craft can overshoot it.
 ## Horizontal radius (m) around home; also the contract's `home_dist` range top (pinned by test).
 const GEOFENCE_RADIUS := 400.0
 ## Ceiling (m) ABOVE HOME, not sea level, so a mountain home gets the same air.

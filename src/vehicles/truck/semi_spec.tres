@@ -130,7 +130,7 @@
 ; step's K also falls away from the criterion below (flatbed, 40 km/h, roll steer on: 0.72 > 0.02
 ; deg/g at 0.18 g).
 ;
-; COMPROMISE: roll_steer_rear 0.10 on the leaf drive axle is TRUCK_BASE's fitted figure
+; AN ESTIMATE: roll_steer_rear 0.10 on the leaf drive axle is TRUCK_BASE's fitted figure
 ; (gen_kenney_vehicles; docs/sources.md § Roll steer): the leaf axle's roll understeer is sourced,
 ; its size is not. Without it the step pass reads the bobtail at K 0.22 deg/g at 0.06 g, under the
 ; tractor criterion's 0.5-2.0 at 0.15 g (Woodrooffe & El-Gindy); with it 0.47-0.50 at 0.12-0.16 g,

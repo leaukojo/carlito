@@ -736,7 +736,7 @@ static func settled_drop(safe_drop: float, unsafe_drop: float, gap: float, norma
 ## normal is the rest contact's where the sweep stops, the face's on a face and radial at an edge.
 ## A start inside something reads full bump (`start_overlaps`). Sets `_contact_drop`,
 ## `_contact_normal` and `contact_collider`; false when nothing is under the tyre.
-## COMPROMISE: `cast_motion` bisects to 1/256 of the motion, a step the hub flickers across that
+## An engine limit: `cast_motion` bisects to 1/256 of the motion, a step the hub flickers across that
 ## the dampers turn into load spikes. `settled_drop` closes it off the touching stop's contact
 ## (the raw fraction costs that noise on every body); a touching stop the rest test reads clear
 ## is a free one, so the bracket moves a step on (`docs/vehicles.md` § Physics derivations and
