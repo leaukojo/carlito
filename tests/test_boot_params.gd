@@ -28,6 +28,14 @@ func test_vehicle_is_the_variant_axis() -> void:
 	assert_bool(BootParams.is_vehicle("truck")).is_false()
 
 
+## ...but a link naming a family falls to its default variant: `?vehicle=drone` is drone-mk2.
+func test_a_family_link_falls_to_the_family_default() -> void:
+	assert_bool(BootParams.is_vehicle("drone")).is_false()
+	assert_str(String(BootParams.parse_query("vehicle=drone")["vehicle"])).is_equal("drone-mk2")
+	assert_str(String(BootParams.parse_query("vehicle=truck")["vehicle"])) \
+			.is_equal(VehicleCatalog.first_in_family("truck"))
+
+
 ## The keyboard-drives-a-challenge override: either the user arg or the env var asks for it.
 func test_challenge_keys_come_from_the_arg_or_the_env() -> void:
 	assert_bool(BootParams.wants_challenge_keys(PackedStringArray(["--challenge-keys"]), "")).is_true()

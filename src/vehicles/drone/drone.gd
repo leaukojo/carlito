@@ -30,7 +30,7 @@ const ROTOR_VISUAL_SPIN := 0.005
 @export var attitude_damping := 3.0          ## N*m per rad/s of off-axis (non-yaw) angular velocity
 ## N*m cap on the leveling torque demand: the mixer's real roll authority at hover,
 ## arm_x * max_thrust * (m*g/max_thrust) = 0.407 * 150 * 0.327 = 20 N*m. Moving a rotor in
-## drone.tscn rescales it (`tests/test_drone.gd` pins it).
+## drone_mk2.tscn rescales it (`tests/test_drone.gd` pins it).
 @export var max_attitude_torque := 20.0
 ## rad/s at full steer, sized to what the props can actually make.
 @export var max_yaw_rate := 1.0

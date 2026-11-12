@@ -168,8 +168,7 @@ func test_every_rig_node_sits_on_its_model_pivot() -> void:
 
 
 func test_every_lamp_the_shared_spec_names_is_on_the_mk2() -> void:
-	# Both drones load drone_spec.tres, and LampSet skips a missing node silently: right for the
-	# plain drone, which has no spotlight, and a hidden failure for a renamed lamp here.
+	# LampSet skips a missing node silently: a renamed lamp here would be a hidden failure.
 	var drone := auto_free((load(MK2) as PackedScene).instantiate()) as DroneVehicle
 	var spec := drone.spec
 	assert_int(spec.lamp_style).is_equal(VehicleSpec.LampStyle.AIRCRAFT)

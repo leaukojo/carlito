@@ -14,7 +14,7 @@ const Gimbal := preload("res://src/vehicles/drone/drone_gimbal.gd")
 const Power := preload("res://src/vehicles/drone/drone_power.gd")
 const Payload := preload("res://src/vehicles/drone/drone_payload.gd")
 
-const DRONE := "res://src/vehicles/drone/drone.tscn"
+const DRONE := "res://src/vehicles/drone/drone_mk2.tscn"
 const CRATE := "res://src/levels/base/cargo_payload.tscn"
 const DELTA := 1.0 / 60.0
 
@@ -547,7 +547,7 @@ func test_the_hook_latches_only_over_a_payload_and_the_craft_really_gets_heavier
 ## ray meets only the crate, which sits just below the hook: a ray starting inside a box misses it). Returns [level, crate].
 func _latched_in_a_level() -> Array:
 	var level := (load(LevelRegistry.scene_of(Boot.DEFAULT_LEVEL)) as PackedScene).instantiate() as Level
-	level.initial_variant = "drone"
+	level.initial_variant = "drone-mk2"
 	add_child(level)
 	await get_tree().physics_frame
 	var drone := level.vehicle as DroneVehicle

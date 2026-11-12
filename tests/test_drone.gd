@@ -15,7 +15,7 @@ const CLIMB_FORCE := 30.0
 const MAX_THRUST := 150.0
 const DELTA := 1.0 / 60.0
 const TAU_SPOOL := 0.05
-const ARM := 0.407          ## the rotor lever drone.tscn authors, on both x and z
+const ARM := 0.407          ## the rotor lever drone_mk2.tscn authors, on both x and z
 
 # Motor indices are DroneCAN esc_index, and DroneVehicle.MOTORS is the mapping.
 const FL := 0

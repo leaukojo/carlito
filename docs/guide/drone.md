@@ -1,16 +1,15 @@
-# The drones
+# The drone
 
-<p class="lead">The drone family is one quadcopter of 5 kg in two bodies: the plain `drone` and the
-more detailed `drone-mk2`, which adds a working cargo hook, a camera gimbal, lights and status
-LEDs. They fly the same. Their signals follow DroneCAN, a standard for drone electronics.</p>
+<p class="lead">The drone family is one quadcopter of 5 kg, `drone-mk2`, with a working cargo
+hook, a camera gimbal, lights and status LEDs. Its signals follow DroneCAN, a standard for drone
+electronics.</p>
 
 ## The family
 
-| Vehicle | What it adds |
+| Vehicle | What it has |
 | --- | --- |
-| `drone-mk2` | The family's default: per-motor props, a camera gimbal, a cargo hook, a spotlight, a rangefinder beam and status LEDs, all drawn |
-| `drone` | A plain build with the same flight model |
-<!-- vehicle_catalog.gd: "drone-mk2" first, "same flight numbers as drone"; docs/flight.md: drone-mk2 draws per-motor props, gimbal, hook jaws, spotlight, rangefinder beam, status LEDs; drone_spec.tres mass 5 -->
+| `drone-mk2` | Per-motor props, a camera gimbal, a cargo hook, a spotlight, a rangefinder beam and status LEDs, all drawn |
+<!-- vehicle_catalog.gd: "drone-mk2" the family's only variant; docs/flight.md: drone-mk2 draws per-motor props, gimbal, hook jaws, spotlight, rangefinder beam, status LEDs; drone_spec.tres mass 5 -->
 
 ## What a drone has
 

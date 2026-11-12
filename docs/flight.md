@@ -5,8 +5,8 @@
   `flight_mode`/`led`/`hardpoint_cmd`/`gimbal_pitch`/`gimbal_yaw` in; `altitude`/`vspeed`/
   `rotor_rpm`/`armed` + ESC/pack/node/GNSS/mode/hardpoint/gimbal/air-data blocks out); shared
   attitude and IMU: § Drone: the cluster.
-- The plane and the plain `drone` are primitive low-poly builds; `drone-mk2` (family
-  default) is Blender-modelled (`tools/gen_drone_model.py`): per-motor props/wash discs, a
+- The plane is a primitive low-poly build; `drone-mk2` (the drone family's one body) is
+  Blender-modelled (`tools/gen_drone_model.py`): per-motor props/wash discs, a
   gimbal following `gimbal_*_actual`, hook jaws, a spotlight on the `lights` ladder,
   rangefinder beam, status LEDs.
 
@@ -23,7 +23,7 @@ on the vehicle: `lift_thrust`, `heading_frame`, `level_target_up`, `align_torque
 
 | File | Owns |
 | --- | --- |
-| `drone_propulsion.gd` | quad-X mixer in thrust-fraction space, command = sqrt (`thrust ~ ω²`); yaw = summed `prop_torque_ratio` N·m per N thrust; per-motor clamp, no rescaling; `MOTORS` (array → `esc_index`) pinned to `drone.tscn` by test; `rotor_rpm` = mean `esc_rpm` |
+| `drone_propulsion.gd` | quad-X mixer in thrust-fraction space, command = sqrt (`thrust ~ ω²`); yaw = summed `prop_torque_ratio` N·m per N thrust; per-motor clamp, no rescaling; `MOTORS` (array → `esc_index`) pinned to `drone_mk2.tscn` by test; `rotor_rpm` = mean `esc_rpm` |
 | `drone_bus.gd` | DroneCAN roster (`uavcan.protocol.NodeStatus`), 4 ESCs (ids 11-14) + GNSS/POWER/AHRS/RANGE (20-23); Y key / `node_fail` drops one, drops out of `node_online`, holds last telemetry, health derived |
 | `drone_power.gd` | DroneCAN `power.BatteryInfo`, replaces the shared `battery` model: `V = V_oc(soc) - I * R_internal`; `pack_current` sums four `esc_current` + avionics draw; `soc`/`pack_temp` |
 | `drone_sensors.gd` | `sats` sixteen-ray golden-angle spiral (`SKY_MASK_DEG` mask); `fix_type` = DroneCAN `Fix2.status`; `hdop`; `agl` one ray, `-1` invalid; masks `Layers.SOLID`, omits `Containment` |
@@ -38,7 +38,7 @@ pattern) hold what the static files cannot: `DroneMotors` (rotors, `_omega`, ESC
 discs), `DroneSensorSuite` (sky pattern, `agl`, the shared ray query), `DroneHook` (Hardpoint
 marker, crate, latch, jaws), `DroneGimbalMount` (HoodCam marker, angles, stops), `DronePack`
 (`soc`, pack temperature), `DroneIndicators` (status LEDs, rangefinder beam). A drawn part hangs
-off the object owning its state and is optional (`drone.tscn` has none of `drone-mk2`'s). The
+off the object owning its state and is optional (a body without one flies the same). The
 flight controller and arming state machine are not extractable: ~18 values cross stage
 boundaries.
 

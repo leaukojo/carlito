@@ -46,7 +46,7 @@ func test_variants_in_family_grouping() -> void:
 func test_the_modelled_drone_is_the_drone_family_default() -> void:
 	# Levels and the garage name a FAMILY and spawn its first variant, so this order IS the default.
 	assert_str(VehicleCatalog.first_in_family("drone")).is_equal("drone-mk2")
-	assert_array(Array(VehicleCatalog.variants_in_family("drone"))).is_equal(["drone-mk2", "drone"])
+	assert_array(Array(VehicleCatalog.variants_in_family("drone"))).is_equal(["drone-mk2"])
 
 
 func test_next_in_family_wraps() -> void:
@@ -86,12 +86,7 @@ func test_every_variant_scene_has_a_hood_cam_marker() -> void:
 ## renamed in a scene or a regen is a dark lamp with nothing to say so. Resolved on an instance
 ## that never enters the tree: the paths name scene-authored nodes, not ones `_ready` builds.
 func test_every_variant_lamp_path_resolves_in_its_own_scene() -> void:
-	# The plain drone loads drone-mk2's spec and has none of its lamps, by design
-	# (test_drone_indicators pins them on the mk2); the skip holds only while the spec is shared.
-	assert_str(Specs.spec_of("drone").resource_path).is_equal(Specs.spec_of("drone-mk2").resource_path)
 	for variant in VehicleCatalog.VARIANTS:
-		if variant == "drone":
-			continue
 		var body := (load(VehicleCatalog.scene_of(variant)) as PackedScene).instantiate()
 		var spec: VehicleSpecScript = body.get("spec")
 		for p in spec.headlight_paths:

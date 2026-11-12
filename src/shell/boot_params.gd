@@ -10,7 +10,8 @@ const NONE := {"level": "", "vehicle": ""}
 
 
 ## Parse a query string ("?level=x&vehicle=y", leading '?' optional) into {level, vehicle},
-## dropping ids that no longer exist.
+## dropping ids that no longer exist. A vehicle naming a family ("drone") falls to that family's
+## default variant.
 static func parse_query(query: String) -> Dictionary:
 	var out := NONE.duplicate()
 	for pair in query.trim_prefix("?").split("&", false):
@@ -24,8 +25,7 @@ static func parse_query(query: String) -> Dictionary:
 				if is_level(value):
 					out["level"] = value
 			"vehicle":
-				if is_vehicle(value):
-					out["vehicle"] = value
+				out["vehicle"] = value if is_vehicle(value) else VehicleCatalog.first_in_family(value)
 	return out
 
 

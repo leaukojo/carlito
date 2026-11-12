@@ -18,7 +18,7 @@ const BLUR_ALPHA_MAX := 0.35
 const BLUR_COLOR := Color(0.75, 0.77, 0.8, 0.0)
 
 ## Mean |x|/|z| levers of the four rotors (m): the roll/pitch torque arms, MEASURED off the scene in
-## `_init`. Defaults are what `drone.tscn` ships.
+## `_init`. Defaults are what `drone_mk2.tscn` ships.
 var arm_x := 0.407
 var arm_z := 0.407
 

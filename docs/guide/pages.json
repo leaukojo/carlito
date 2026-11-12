@@ -31,7 +31,7 @@
     { "file": "tractor.md", "title": "The tractors", "group": "The vehicles" },
     { "file": "boat.md", "title": "The boats", "group": "The vehicles" },
     { "file": "plane.md", "title": "The plane", "group": "The vehicles" },
-    { "file": "drone.md", "title": "The drones", "group": "The vehicles" },
+    { "file": "drone.md", "title": "The drone", "group": "The vehicles" },
     { "file": "train.md", "title": "The train", "group": "The vehicles" },
     { "file": "glossary.md", "title": "Glossary", "group": "Reference" },
     { "file": "simplifications.md", "title": "What the game keeps simple", "group": "Reference" },

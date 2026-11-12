@@ -66,8 +66,7 @@ cull_mode = 2
 shading_mode = 0
 albedo_color = Color(1, 0.12, 0.08, 0.55)
 
-; drone.tscn's airframe numbers exactly (same script, spec, exports and collision box), so every
-; pinned flight figure holds; only the body differs. tools/gen_drone_model.py builds the parts, and
+; tools/gen_drone_model.py builds the parts, and
 ; every rig node below sits on the Body's Pivot_<name> empty (test_drone_indicators pins them).
 [node name="DroneMk2" type="RigidBody3D"]
 physics_material_override = SubResource("HullPhysMat")

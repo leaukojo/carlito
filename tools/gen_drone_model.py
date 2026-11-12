@@ -13,9 +13,9 @@ rig that places them. The body GLB carries one empty per rig node, named `Pivot_
 tests/test_drone_indicators.gd pins every one against the scene, so a number changed here and not
 there (or the reverse) fails CI.
 
-The flight numbers are drone.tscn's and not this file's to change: rotor centres at
+The flight numbers are drone_mk2.tscn's and not this file's to change: rotor centres at
 (+-0.407, 0.15, +-0.407) (DroneProp.MOTORS, pinned by test_drone), a 0.44 m prop, and the whole
-airframe inside the collision box both drones share, y in [-0.06, 0.18]; the feet stand on its
+airframe inside the collision box, y in [-0.06, 0.18]; the feet stand on its
 floor.
 """
 import math

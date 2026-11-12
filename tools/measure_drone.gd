@@ -90,7 +90,7 @@ var _failed := false         ## the ESC1 edge has been sent this pass
 
 func _ready() -> void:
 	MeasureRig.add_slab(self, "Strip", STRIP_SIZE)
-	_drone = MeasureRig.spawn(self, "drone") as DroneVehicle
+	_drone = MeasureRig.spawn(self, "drone-mk2") as DroneVehicle
 	MeasureRig.place(_drone, Transform3D(Basis.IDENTITY, SPAWN))
 	InputRouter.set_touch_source(_source)
 	var spec: VehicleSpec = _drone.spec

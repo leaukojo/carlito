@@ -7,7 +7,7 @@ extends RefCounted
 
 # ---------------------------------------------------------------- the airframe
 
-## The airframe in DroneCAN esc_index order. Do not renumber; tests pin it to drone.tscn (a moved
+## The airframe in DroneCAN esc_index order. Do not renumber; tests pin it to drone_mk2.tscn (a moved
 ## rotor inverts a control axis). Sign conventions for roll/pitch/yaw torque and blade spin:
 ##
 ## | idx | node     | x | z | spin | roll | pitch | yaw |

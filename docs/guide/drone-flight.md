@@ -11,7 +11,7 @@ links its parts.</p>
 <span class="badge no" title="It drives">Tractor</span>
 <span class="badge no" title="It flies on wings, on its own page">Plane</span>
 <span class="badge no" title="It floats">Boat</span>
-<span class="badge yes" title="Both drones, drone and drone-mk2">Drone</span>
+<span class="badge yes" title="The drone, drone-mk2">Drone</span>
 <span class="badge no" title="It runs on rails">Train</span>
 </div>
 
