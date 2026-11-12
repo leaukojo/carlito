@@ -33,9 +33,9 @@ region (`doc_region.gd`); refresh a figure by re-running, never by hand.
 # 7 / 9 km/h and raised at 7 / 16; `pto` engages the PTO at 1000 throughout and prints its crank
 # load, parked lowered and per hold; `governor` instead holds the all-speed governor at the hand
 # throttle's PTO preset, PTO in at 540: parked in N raised then lowered, then in D2 (`gear=` another)
-# raised, then lowered, with a `droop` gate on the shaft), `kerb` (12 / 20 cm steps) and `arm` (the
-# refuse body's lift and lower, parked in N on the handbrake with the PTO in: rpm against the PTO
-# mode's set speed, `engine_load`, the fuel, each stroke's time) replace the other passes.
+# raised, then lowered, with a `droop` gate on the shaft), `kerb` (12 / 20 cm steps), `side` (laid on each side
+# and its roof in D: wheel contact, hold and lamp flips per second) and `arm` (the refuse body's lift and lower,
+# parked in N on the handbrake with the PTO in: rpm against the PTO mode's set speed, `engine_load`, the fuel, each stroke's time) replace the other passes.
 # `rear_lat_grip=` / `bar_front=` / `bar_rear=` / `cornering_peak=` / `ackermann=<x>`: that spec field, in memory;
 # `j=<kg·m²>` the crank inertia (`engine_inertia`) the same way.
 # `step` prints each axle's roll-steer angle, its pred and a chatter count on every body whose spec

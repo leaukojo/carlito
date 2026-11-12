@@ -1475,6 +1475,105 @@ func test_the_cast_reads_a_face_with_its_hub_on_a_sweep_stop() -> void:
 	assert_float(worst).is_less(1e-5)
 
 
+# --- lying_on: a wheel on its side or its back has no tyre contact --------------------
+
+func test_a_wheel_lies_on_the_ground_past_the_overturned_tilt() -> void:
+	assert_float(WheelScript.LYING_DEG).is_equal(BaseVehicle.OVERTURNED_DEG)
+	# On the level, the body turned `deg` about its nose, then about its axle: [deg, lying].
+	for c: Array in [[0.0, false], [45.0, false], [-45.0, false], [75.0, true], [-75.0, true],
+			[90.0, true], [150.0, true], [180.0, true]]:
+		var roll := Basis(Vector3.BACK, deg_to_rad(c[0]))
+		assert_bool(WheelScript.lying_on(Vector3.UP, roll * Vector3.UP, roll * Vector3.RIGHT,
+				Vector3.UP)).override_failure_message("rolled %.0f" % c[0]).is_equal(c[1])
+	# Pitched onto its nose the ground is in the wheel's plane, the tread's to meet; on its back it
+	# is over the travel.
+	for c: Array in [[90.0, false], [180.0, true]]:
+		var pitch := Basis(Vector3.RIGHT, deg_to_rad(c[0]))
+		assert_bool(WheelScript.lying_on(Vector3.UP, pitch * Vector3.UP, Vector3.RIGHT,
+				Vector3.UP)).override_failure_message("pitched %.0f" % c[0]).is_equal(c[1])
+	# A wall in an upright wheel's side, and a ceiling over it, are not ground to lie on.
+	assert_bool(WheelScript.lying_on(Vector3.LEFT, Vector3.UP, Vector3.RIGHT, Vector3.UP)).is_false()
+	assert_bool(WheelScript.lying_on(Vector3.DOWN, Vector3.UP, Vector3.RIGHT, Vector3.UP)).is_false()
+	# On its side across a 30 degree slope it lies on the slope.
+	var slope := Basis(Vector3.BACK, deg_to_rad(30.0)) * Vector3.UP
+	assert_bool(WheelScript.lying_on(slope, Vector3.RIGHT, slope, Vector3.UP)).is_true()
+
+
+## One wheel (radius 0.36, 0.3 m of travel) ticked once on a frozen body rolled `roll_deg` about its
+## nose over a flat at y 0, its anchor at `anchor_at` (world). `wall_x`: a wall's near face, to the
+## body's right (NAN: none).
+func _wheel_on_a_rolled_body(roll_deg: float, anchor_at: Vector3, wall_x := NAN) -> WheelScript:
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	_box(root, Vector3(4.0, 1.0, 20.0), Vector3(0.0, -0.5, 0.0))
+	if not is_nan(wall_x):
+		_box(root, Vector3(1.0, 2.0, 20.0), Vector3(wall_x + 0.5, 1.0, 0.0))
+	var body := RigidBody3D.new()
+	body.freeze = true
+	body.collision_layer = 0
+	root.add_child(body)
+	body.global_transform = Transform3D(Basis(Vector3.BACK, deg_to_rad(roll_deg)), anchor_at)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var gd: GroundDriveSpecScript = GroundDriveSpecScript.new()
+	gd.wheel_radius = 0.36
+	gd.wheel_inertia = 1.0
+	gd.tyre_half_width = 0.1
+	gd.rest_length = 0.3
+	var w := WheelScript.new(Vector3.ZERO, false, false, null, 300.0)
+	w.apply_suspension(gd)
+	var terrains: Array[Node] = []
+	w.tick(body, gd, root.get_world_3d().direct_space_state, 0.0, 0.0, TICK, terrains)
+	return w
+
+
+func test_a_wheel_lying_on_its_side_is_off_the_ground() -> void:
+	# The body on its side, the wheel's flat face 5 cm into the ground: under the travel (level
+	# here) all the way, so the cast starts and ends inside it.
+	var overlaps := WheelScript.start_overlaps
+	var w: WheelScript = await _wheel_on_a_rolled_body(90.0, Vector3(0.0, 0.05, 0.0))
+	assert_bool(w.in_contact).is_false()
+	assert_float(w.compression).is_equal(0.0)
+	assert_int(WheelScript.start_overlaps).is_equal(overlaps)
+
+
+func test_a_wheel_landing_on_its_side_is_off_the_ground() -> void:
+	# Rolled 80 degrees, the wheel's lower rim 2 cm clear at full bump (it hangs
+	# `r cos 80 + half_width sin 80` under the hub) and 5 cm of drop along the travel: the sweep
+	# lands the wheel's side on the flat.
+	var hang := 0.36 * cos(deg_to_rad(80.0)) + 0.1 * sin(deg_to_rad(80.0))
+	var w: WheelScript = await _wheel_on_a_rolled_body(80.0, Vector3(0.0, hang + 0.02, 0.0))
+	assert_bool(w.in_contact).is_false()
+	assert_float(w.compression).is_equal(0.0)
+
+
+func test_a_wheel_on_its_back_is_off_the_ground() -> void:
+	# The body on its roof, the tyre at full bump 5 cm into the ground from over its travel.
+	var w: WheelScript = await _wheel_on_a_rolled_body(180.0, Vector3(0.0, 0.31, 0.0))
+	assert_bool(w.in_contact).is_false()
+	assert_float(w.compression).is_equal(0.0)
+
+
+func test_a_wall_in_the_wheels_side_leaves_its_contact_as_it_reads() -> void:
+	# Upright, the tread 6 cm into its travel on the flat, the wheel's right face 3 cm into a wall:
+	# the sweep still stops on the flat. Off the ground beside the same wall the start reads a bump.
+	var w: WheelScript = await _wheel_on_a_rolled_body(0.0, Vector3(0.0, 0.6, 0.0), 0.07)
+	assert_bool(w.in_contact).is_true()
+	assert_float(w.compression).is_equal_approx(0.06, 2e-3)
+	var clear: WheelScript = await _wheel_on_a_rolled_body(0.0, Vector3(0.0, 0.9, 0.0), 0.07)
+	assert_bool(clear.in_contact).is_true()
+
+
+func test_a_wheel_on_a_leaning_body_still_carries_on_its_tread() -> void:
+	# Rolled 45 degrees: the tread's lower corner hangs `(r + half_width) cos 45` under the hub, so
+	# it meets the flat that far short of the anchor's height, measured down the leaning travel.
+	var w: WheelScript = await _wheel_on_a_rolled_body(45.0, Vector3(0.0, 0.45, 0.0))
+	var lean := cos(deg_to_rad(45.0))
+	assert_bool(w.in_contact).is_true()
+	assert_float(w.compression).is_equal_approx(0.3 - (0.45 - 0.46 * lean) / lean, 0.01)
+	assert_vector(w.contact_normal).is_equal_approx(Vector3.UP, Vector3.ONE * 1e-3)
+
+
 # --- patch_offset: where a disk on the hub touches the road --------------------------
 
 func test_a_level_wheel_touches_straight_below_its_hub() -> void:

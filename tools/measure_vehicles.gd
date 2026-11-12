@@ -295,6 +295,18 @@ const KERB_CLEAR := 0.5            ## m past the edge that counts a hub as over 
 const KERB_STUCK_S := 5.0
 const KERB_STUCK_PROGRESS := 0.25  ## m of progress that resets the stuck clock
 const KERB_TIMEOUT_S := 60.0
+## --- side (`side`, instead of every other pass) ---
+## The body laid at rest off its wheels: at each of SIDE_ROLLS (deg about its nose: its left side,
+## its right side, its roof) its hull SIDE_CLEAR over the strip, engine running in D with the pedals
+## up. SIDE_SETTLE_S, then SIDE_LOG_S read every tick. Per wheel (a coupled towed body's too, `T<n>`):
+## the share of ticks in contact and how often that flips, the contact normal's mean part along its
+## body's up and along the axle, the compression's range, the peak spring force and spin. Per rig:
+## the unit's tilt, the peak speeds, and how often `hill_holding`, the front axle's `driven`, the ABS
+## and TC lamps and the dust flip. `trace` prints the ticks.
+const SIDE_ROLLS: Array[float] = [90.0, -90.0, 180.0]
+const SIDE_CLEAR := 0.02           ## m
+const SIDE_SETTLE_S := 2.0
+const SIDE_LOG_S := 5.0
 ## --- arm (`arm`, instead of every other pass) ---
 ## The refuse body's arm cycle, parked: in N on the handbrake with the PTO in, ARM_SETTLE_S idle, then
 ## LIFT to the top and LOWER to the stow, each to ARM_TIMEOUT_S. A line every ARM_LINE_S: the arm's
@@ -414,7 +426,7 @@ const REFERENCE_SPECS_PATH := "res://tools/vehicle_reference_specs.json"
 const REPORT_DIR := "res://reports/specs_sweep/"
 
 enum Phase { ACCEL, COAST, TRACKING, CORNERING, BRAKING, STALL, HANDBRAKE, STEP, CRUISE, CIRCLE,
-		KERB, HITCH, PLOUGH, ARM, SINE, FREEREV, DONE }
+		KERB, SIDE, HITCH, PLOUGH, ARM, SINE, FREEREV, DONE }
 ## Where a step-steer run is (`_tick_step`).
 enum Step { RUN_UP, SETTLE, STEPPED }
 ## Where a sine-with-dwell run is (`_tick_sine`): RAMP finds A, STEER is a run of the series.
@@ -633,6 +645,15 @@ var _kb_origin := Vector3.ZERO
 var _kb_best := 0.0                   ## furthest progress along the heading, m
 var _kb_best_t := 0.0
 var _kb_overlaps := 0                 ## `RayWheel.start_overlaps` as the run began
+## `side`: run only the laid-over holds (§ side) on each body.
+var _side_pass := false
+var _sd_rolls: Array[float] = []      ## SIDE_ROLLS still to run, this body
+var _sd_roll := 0.0                   ## the roll in progress, deg
+var _sd_overlaps := 0                 ## `RayWheel.start_overlaps` as the log began
+var _sd_ticks := 0                    ## ticks logged
+var _sd_wheels: Array[Dictionary] = [] ## per wheel, the log's sums (`_side_wheel`)
+var _sd_flags := {}                   ## flag -> [ticks on, flips, last]
+var _sd_peak := Vector3.ZERO          ## peak linear (x) and angular (y) speed, tilt summed (z)
 ## `RayWheel.start_overlaps` as this body spawned (`_finish_vehicle` prints any since).
 var _body_overlaps := 0
 ## `track`: skip the accel/top-speed pass — CI only needs the tracking gate.
@@ -904,6 +925,7 @@ func _ready() -> void:
 	_diff_lock = _plough_pass and flags.has("diff")
 	_mfwd = _plough_pass and flags.has("mfwd")
 	_kerb = flags.has("kerb")
+	_side_pass = flags.has("side")
 	_arm_pass = flags.has("arm")
 	_track_only = flags.has("track")
 	_strict = flags.has("strict")
@@ -1039,12 +1061,13 @@ func _ready() -> void:
 				or not is_nan(_bar_front) or not is_nan(_compliance) \
 				or not is_nan(_ackermann) or not is_nan(_roll_steer.x) or not is_nan(_angdamp) \
 				or _corner_ramp_s != CORNER_RAMP_S \
-				or _circle or _hitch_pass or _plough_pass or _kerb or _arm_pass or _cruise_probe() \
+				or _circle or _hitch_pass or _plough_pass or _kerb or _side_pass or _arm_pass \
+				or _cruise_probe() \
 				or _tyre != "" or _surface >= 0 or not _step_speeds.is_empty() or _xwind or _headtail \
 				or _wind_base != Vector3.ZERO:
 			printerr("trace / notc / gear= / j= / rear_lat_grip= / bar_rear= / bar_front= /"
 					+ " cornering_peak= / speeds= / ackermann= / rollsteer= / compliance= / angdamp= /"
-					+ " ramp= / circle / hitch / plough / kerb /"
+					+ " ramp= / circle / hitch / plough / kerb / side /"
 					+ " pedal= / cruise /"
 					+ " kickdown / pulse / xwind / headtail / wind= / tyre= / surface= change the passes a"
 					+ " doc preset tabulates:"
@@ -1276,6 +1299,8 @@ func _next_vehicle() -> void:
 		_start_plough()
 	elif _kerb:
 		_start_kerb()
+	elif _side_pass:
+		_start_side()
 	elif _arm_pass:
 		_start_arm()
 	elif _track_only:
@@ -1450,6 +1475,8 @@ func _physics_process(delta: float) -> void:
 		_tick_circle(delta)
 	elif _phase == Phase.KERB:
 		_tick_kerb(delta)
+	elif _phase == Phase.SIDE:
+		_tick_side()
 	elif _phase == Phase.ARM:
 		_tick_arm()
 	else:
@@ -4758,6 +4785,151 @@ func _report_kerb_run(verdict: String) -> void:
 
 ## Wheelbase (m) off the axle stations, foremost front to rearmost rear. A tandem's effective
 ## wheelbase is shorter, so a semi's ratio to neutral reads low: compare it only with itself.
+## The laid-over holds (§ side) on this body.
+func _start_side() -> void:
+	_sd_rolls = SIDE_ROLLS.duplicate()
+	print("=== %s (%s), side ===" % [_variant, _drive_label(_car.spec)])
+	_next_side_roll()
+
+
+func _next_side_roll() -> void:
+	if _sd_rolls.is_empty():
+		MeasureRig.drive(0.0, 0.0)
+		_finish_vehicle()
+		return
+	_sd_roll = _sd_rolls.pop_front()
+	var laid := Basis(Vector3.BACK, deg_to_rad(_sd_roll))
+	MeasureRig.place(_car, Transform3D(laid,
+			Vector3(0.0, SIDE_CLEAR - _hull_lowest(laid), START_Z)))
+	_car.respawn()
+	_reset_pass(Phase.SIDE)
+	_sd_ticks = 0
+	MeasureRig.drive(0.0, 0.0)
+
+
+## The lowest point (m, <= 0) of the body's own collision shapes about its origin, turned by `turn`.
+func _hull_lowest(turn: Basis) -> float:
+	var low := 0.0
+	for child in _car.get_children():
+		var cs := child as CollisionShape3D
+		if cs == null or cs.shape == null or cs.disabled:
+			continue
+		var box := cs.shape.get_debug_mesh().get_aabb()
+		for i in 8:
+			low = minf(low, (turn * (cs.transform * box.get_endpoint(i))).y)
+	return low
+
+
+func _side_wheel() -> Dictionary:
+	return {"contact": 0, "flips": 0, "last": false, "up": 0.0, "axle": 0.0, "lo": INF, "hi": -INF,
+			"force": 0.0, "omega": 0.0, "abs": 0, "tcs": 0}
+
+
+func _side_flag(flag: String, on: bool) -> void:
+	var row: Array = _sd_flags.get(flag, [0, 0, on])
+	row[0] += int(on)
+	row[1] += int(on != row[2])
+	row[2] = on
+	_sd_flags[flag] = row
+
+
+func _tick_side() -> void:
+	if _t < SIDE_SETTLE_S:
+		return
+	# The unit's wheels, then a coupled towed body's: each read in its own body's frame.
+	var towed := MeasureRig.towed(_car)
+	var wheels: Array[RayWheel] = _car.drive.wheels.duplicate()
+	var own := wheels.size()
+	if towed != null:
+		wheels.append_array(towed.wheels)
+	if _sd_ticks == 0:
+		_sd_overlaps = RayWheel.start_overlaps
+		_sd_wheels = []
+		for i in wheels.size():
+			var fresh := _side_wheel()
+			fresh["label"] = MeasureRig.wheel_label(_car, wheels[i]) if i < own else "T%d" % (i - own)
+			_sd_wheels.append(fresh)
+		_sd_flags = {}
+		_sd_peak = Vector3.ZERO
+	_sd_ticks += 1
+	var b := _car.global_transform.basis
+	var any_abs := false
+	var any_tcs := false
+	var cells := PackedStringArray()
+	for i in mini(wheels.size(), _sd_wheels.size()):
+		var w := wheels[i]
+		var row := _sd_wheels[i]
+		var frame := b if i < own else towed.global_transform.basis
+		var up := w.contact_normal.dot(frame.y)
+		var axle := w.contact_normal.dot(frame.x)
+		if _sd_ticks > 1 and w.in_contact != row["last"]:
+			row["flips"] += 1
+		row["last"] = w.in_contact
+		if w.in_contact:
+			row["contact"] += 1
+			row["up"] += up
+			row["axle"] += absf(axle)
+		row["lo"] = minf(row["lo"], w.compression)
+		row["hi"] = maxf(row["hi"], w.compression)
+		row["force"] = maxf(row["force"], w.suspension_force)
+		row["omega"] = maxf(row["omega"], absf(w.omega))
+		row["abs"] += int(w.abs_active)
+		row["tcs"] += int(w.tcs_active)
+		any_abs = any_abs or w.abs_active
+		any_tcs = any_tcs or w.tcs_active
+		cells.append("%s %s" % [row["label"], ("c%.3f F%.0f n.up %+.2f n.ax %+.2f"
+				% [w.compression, w.suspension_force, up, axle]) if w.in_contact else "-"])
+	var input := InputRouter.get_vehicle_input()
+	var front_driven := false
+	for w in _car.drive.wheels:
+		if not w.is_rear:
+			front_driven = w.driven
+			break
+	var dust: GPUParticles3D = _car.drive.get("_dust")
+	_side_flag("hill_holding", _car.drive.hill_holding)
+	_side_flag("front driven", front_driven)
+	if _car.telemetry is TractorTelemetry:
+		_side_flag("fwd_drive_state", (_car.telemetry as TractorTelemetry).fwd_drive_state)
+	_side_flag("abs", any_abs)
+	_side_flag("tcs", any_tcs)
+	_side_flag("dust", dust != null and dust.emitting)
+	_side_flag("overturned", _car.is_overturned())
+	var tilt := rad_to_deg(b.y.angle_to(Vector3.UP))
+	_sd_peak.x = maxf(_sd_peak.x, _car.linear_velocity.length())
+	_sd_peak.y = maxf(_sd_peak.y, _car.angular_velocity.length())
+	if towed != null:
+		_sd_peak.x = maxf(_sd_peak.x, towed.linear_velocity.length())
+		_sd_peak.y = maxf(_sd_peak.y, towed.angular_velocity.length())
+	_sd_peak.z += tilt
+	if _trace:
+		print("    t %.3f tilt %.1f v %.3f w %.3f pedal %.2f fd %d | %s" % [_t - SIDE_SETTLE_S, tilt,
+				_car.linear_velocity.length(), _car.angular_velocity.length(),
+				_car.drive.foot_pedal(input), int(front_driven), " | ".join(cells)])
+	if _t >= SIDE_SETTLE_S + SIDE_LOG_S:
+		_report_side()
+		_next_side_roll()
+
+
+func _report_side() -> void:
+	var n := float(_sd_ticks)
+	print("  roll %+.0f deg: rests at %.1f deg tilt; peak %.3f m/s, %.3f rad/s; %d cast start overlaps"
+			% [_sd_roll, _sd_peak.z / n, _sd_peak.x, _sd_peak.y,
+			RayWheel.start_overlaps - _sd_overlaps])
+	for i in _sd_wheels.size():
+		var row := _sd_wheels[i]
+		var c := maxf(float(row["contact"]), 1.0)
+		print(("    %-3s contact %3.0f %% (%.1f flips/s), n.up %+.2f, |n.axle| %.2f, compression"
+				+ " %.3f..%.3f m, peak %.0f N, %.1f rad/s, abs %d tcs %d ticks") % [
+				row["label"], 100.0 * row["contact"] / n,
+				row["flips"] / SIDE_LOG_S, row["up"] / c, row["axle"] / c, row["lo"], row["hi"],
+				row["force"], row["omega"], row["abs"], row["tcs"]])
+	var parts := PackedStringArray()
+	for flag: String in _sd_flags:
+		var row: Array = _sd_flags[flag]
+		parts.append("%s %.0f %% (%.1f flips/s)" % [flag, 100.0 * row[0] / n, row[1] / SIDE_LOG_S])
+	print("    " + ", ".join(parts))
+
+
 func _wheelbase() -> float:
 	var ax := BrakeSizing.axle_geometry(_car.spec)
 	return maxf(float(ax["rear_z"]) - float(ax["front_z"]), 1e-3)

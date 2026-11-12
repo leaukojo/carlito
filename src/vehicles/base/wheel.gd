@@ -56,6 +56,11 @@ const STICK_TICK_STIFFNESS := 0.25
 ## settle's Coulomb check, and no more, since a held wheel's spare brake can be small beside its
 ## drive (an AWD centre passing the fronts most of their brake at stall).
 const HELD_SHARE := 0.998
+## Tilt (deg) of the wheel off the ground it touches past which it lies on that ground and no
+## longer stands on it (`lying_on`): `BaseVehicle.OVERTURNED_DEG`, read per contact. COMPROMISE: no
+## sidewall, so an overturned body lies on its hull with a wheel's side in the ground; a tyre that
+## carries on its side is a collision shape per wheel.
+const LYING_DEG := 70.0
 
 ## Contact casts that started inside something, read as full bump (`_contact_query`), process-wide:
 ## a diagnostic the measure tools read (an attachment under a hub shows here).
@@ -733,11 +738,31 @@ static func settled_drop(safe_drop: float, unsafe_drop: float, gap: float, norma
 	return clampf(unsafe_drop + gap / maxf(normal_up, 0.1), safe_drop, unsafe_drop)
 
 
+## Whether the wheel lies on a contact of `normal`: ground (within LYING_DEG of `level_up`) met
+## with the wheel's side (the normal past LYING_DEG out of its plane, spin axis `axle`) or from
+## over its travel (past it against `up`). The spring cannot carry either: read as a contact, it
+## kicks an overturned body off the ground it lies on. A wall in an upright wheel's side is none.
+static func lying_on(normal: Vector3, up: Vector3, axle: Vector3, level_up: Vector3) -> bool:
+	return off_tread(normal, up, axle) and normal.dot(level_up) > cos(deg_to_rad(LYING_DEG))
+
+
+## `lying_on`'s wheel half: a contact on the wheel's side or from over its travel.
+static func off_tread(normal: Vector3, up: Vector3, axle: Vector3) -> bool:
+	return normal.dot(up) < -cos(deg_to_rad(LYING_DEG)) \
+			or absf(normal.dot(axle)) > sin(deg_to_rad(LYING_DEG))
+
+
+## `lying_on` for `body`'s wheel, its level read only for a contact off the tread.
+func _lies_on(body: RigidBody3D, normal: Vector3, up: Vector3, axle: Vector3) -> bool:
+	return off_tread(normal, up, axle) \
+			and lying_on(normal, up, axle, VehicleMath.level_up(body.get_gravity()))
+
+
 ## The contact: a cylinder of the wheel's radius and `2 half_width` across, its axis on the steered
 ## axle (`wheel_basis`'s x), swept from full bump (the hub at the anchor) down the travel; the
 ## normal is the rest contact's where the sweep stops, the face's on a face and radial at an edge.
-## A start inside something reads full bump (`start_overlaps`). Sets `_contact_drop`,
-## `_contact_normal` and `contact_collider`; false when nothing is under the tyre.
+## A start inside something reads full bump (`start_overlaps`). Sets `_contact_drop`, `_contact_normal`
+## and `contact_collider`; false when nothing is under the tyre, or the wheel lies on it (`lying_on`).
 ## An engine limit: `cast_motion` bisects to 1/256 of the motion, a step the hub flickers across that
 ## the dampers turn into load spikes. `settled_drop` closes it off the touching stop's contact
 ## (the raw fraction costs that noise on every body); a touching stop the rest test reads clear
@@ -760,15 +785,13 @@ func _contact_query(space: PhysicsDirectSpaceState3D, body: RigidBody3D, ray_fro
 		# Jolt's sweep ignores what the shape already overlaps at its start, so "no hit" is either a
 		# free wheel or one already past full bump: the rest test at the start tells them apart.
 		var start := space.get_rest_info(_query)
-		if start.is_empty():
+		if start.is_empty() or _lies_on(body, start.get("normal", up), up, wheel_basis.x):
 			return false
 		start_overlaps += 1
 		_contact_drop = 0.0
 		_contact_normal = start.get("normal", up)
 		contact_collider = start.get("collider_id", 0)
 		return true
-	if fractions[1] <= 0.0:
-		start_overlaps += 1
 	var safe_drop := rest_length * fractions[0]
 	var unsafe_drop := rest_length * fractions[1]
 	_query.transform.origin = ray_from + motion * fractions[1]
@@ -778,6 +801,10 @@ func _contact_query(space: PhysicsDirectSpaceState3D, body: RigidBody3D, ray_fro
 		unsafe_drop += rest_length * (fractions[1] - fractions[0])
 		_query.transform.origin = ray_from - up * unsafe_drop
 		rest = space.get_rest_info(_query)
+	if not rest.is_empty() and _lies_on(body, rest["normal"], up, wheel_basis.x):
+		return false
+	if fractions[1] <= 0.0:
+		start_overlaps += 1
 	contact_collider = rest.get("collider_id", 0)
 	_contact_drop = safe_drop
 	_contact_normal = up
