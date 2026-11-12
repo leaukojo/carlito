@@ -64,23 +64,38 @@ one a real vehicle network uses:
 
 ### Driving forwards and backwards from the keyboard
 
-On the keyboard the gearbox is always automatic, and there is no gear lever. Pressing the
+With the AUTOMATIC gearbox there is no gear lever. Pressing the
 accelerator from a standstill selects drive. Holding the brake at a standstill selects reverse:
 the brake key then drives the vehicle backwards, and the accelerator key becomes the brake.
 Pressing the accelerator again at a standstill selects drive.
 <!-- InputRouter local arbitration: brake_reverse at a standstill (REVERSE_ENGAGE_SPEED) requests R with throttle -brake_rev and brake = accel; accel at a standstill in R requests D1 -->
 
+### Shifting by hand
+
+With MANUAL chosen in the GARAGE and sloppyCAN not connected, you change gear yourself: **,** and
+**.** on the keyboard, D-pad down and up on a gamepad, GEAR - and GEAR + on the touch screen.
+Each press moves one step along R, N, 1, 2 and up to the top gear. The vehicle starts in N after
+a spawn or a respawn, and when MANUAL is picked while it stands still; picked on the move, it
+keeps the gear it is in. The accelerator drives in whichever direction the gear points, and the
+brake only brakes: holding it at a standstill never selects reverse. With the accelerator held
+down in N, the message NEUTRAL GEAR SELECTED names the button to shift up.
+<!-- InputRouter.shift_step (the ladder, no wrap), reset_vehicle_cycles (_local_gear = N), arbitrate_local's manual branch; neutral_warning (NEUTRAL_NOTICE_PEDAL 0.9), Boot.neutral_notice; Drivetrain.top_gear; keys project.godot shift_down Comma, shift_up Period; ActionRegistry row "shift" pad dpad_down / dpad_up -->
+
+While sloppyCAN is connected, its gearbox wins: the shift buttons do nothing, and the gear is
+sloppyCAN's byte when it drives, or automatic when it sends no driving controls.
+<!-- InputRouter._local_tick: the local gear acts only with `_manual_gearbox` and no bridge live; ActionRegistry "shift" bridge_owned -->
+
 ### Manual gears from sloppyCAN
 
 sloppyCAN sends the gear byte as its `gear` signal. The GARAGE has a GEARBOX row: AUTOMATIC or
-MANUAL. MANUAL can only be chosen while sloppyCAN is connected.
+MANUAL.
 
 - **Automatic**: the byte works like an automatic's lever. P parks, R reverses, and any drive
   gear means "drive", with the gearbox choosing the gear itself. A byte of 0 means no opinion: the
   vehicle drives forward when the accelerator is pressed.
 - **Manual**: the byte is taken exactly. D3 means third gear, 0 means neutral, and the gearbox
   never changes gear by itself. The clutch is still worked for you.
-<!-- InputRouter.arbitrate_bridge; VehicleSelect._gearbox_row: "with no bridge connected there is no gear byte to read, so MANUAL is disabled" -->
+<!-- InputRouter.arbitrate_bridge (manual: the exact byte) -->
 
 ## How the automatic chooses a gear
 
@@ -143,7 +158,8 @@ slope. The gear byte it publishes is the mechanical range in use, D1 to D4.
 
 ## What the game leaves out
 
-- **No gear lever or paddles for local play**, and no manual gears without sloppyCAN.
+- **No gear lever or paddles**: shifting by hand is one step per button press, and there is no P
+  on the manual ladder (the parking brake holds instead).
 - **No clutch pedal**, so no stalling or slipping the clutch by hand.
 - **No crunching gears or missed shifts.**
 - **No range or splitter buttons** on the semis' twelve gears: the automated gearbox chooses.

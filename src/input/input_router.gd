@@ -17,6 +17,8 @@ const GEAR_R := 0xFF
 ## P: a byte RAMN never sends, so every byte it does send keeps its meaning (`Drivetrain.GEAR_P`;
 ## a body without a park pawl reads it as N).
 const GEAR_P := 0xFE
+## `arbitrate_local`'s `manual_gear` when the local driver drives automatic (no byte is ever -1).
+const LOCAL_AUTOMATIC := -1
 
 ## One press of a hand-throttle step key moves it this far (0..1).
 const HAND_THROTTLE_STEP := 0.1
@@ -136,6 +138,13 @@ var _ignition_warned := false
 const FALLBACK_NOTICE_TEXT := "NO DRIVING CONTROLS FROM SLOPPYCAN - LOCAL CONTROLS DRIVE"
 ## Edge latch for the fallback notice — see _set_fallback_notice.
 var _fallback_warned := false
+## Raised sticky while the local manual box sits in N under a near-full accelerator, cleared by
+## text match; the shell names the device's shift-up control beside it (`Boot.neutral_notice`).
+const NEUTRAL_NOTICE_TEXT := "NEUTRAL GEAR SELECTED"
+## The accelerator past which N reads as a mistake rather than a blip of the throttle.
+const NEUTRAL_NOTICE_PEDAL := 0.9
+## Edge latch for the neutral notice — see _set_neutral_notice.
+var _neutral_warned := false
 ## This tick's answer to "who drives": true while the bridge's values drive the vehicle outright.
 ## False with no bridge and in fallback (a live bridge carrying no driving control).
 var _bridge_drives := false
@@ -152,9 +161,16 @@ const KEYS_LOCKED_NOTICE_TEXT := "LOCAL DRIVING OFF IN CHALLENGES - DRIVE OVER S
 ## the lock.
 const DRIVING_ACTIONS: Array[StringName] = [&"accel", &"brake_reverse", &"steer_left", &"steer_right"]
 ## Gearbox mode, set by the shell (vehicle selector in free play, ChallengeDef.transmission in an
-## attempt). Bridge-only: it decides how `arbitrate_bridge` reads the gear byte; local input has no
-## shift keys and always drives automatic.
+## attempt). It decides how `arbitrate_bridge` reads the gear byte and, with no bridge live, whether
+## the local driver shifts by hand (`_local_gear`). A live bridge's gearbox wins: in fallback local
+## input drives automatic.
 var _manual_gearbox := false
+## The local driver's manual gear (R, N, D1 .. the body's top), stepped by the shift edges while
+## `_manual_gearbox` holds and no bridge is live. Airframe state: `reset_vehicle_cycles` puts it in N.
+var _local_gear := GEAR_N
+## The local manual gear acted last tick: on the tick it starts to (MANUAL picked, the bridge gone)
+## it is seeded afresh (`local_gear_seed`), so the box never jumps to a stale gear.
+var _local_gear_live := false
 
 
 func _ready() -> void:
@@ -169,6 +185,10 @@ func set_bridge_only(on: bool) -> void:
 
 func set_manual_gearbox(on: bool) -> void:
 	_manual_gearbox = on
+
+
+func manual_gearbox() -> bool:
+	return _manual_gearbox
 
 
 func set_key_softening(amount: float) -> void:
@@ -292,6 +312,8 @@ func reset_vehicle_cycles() -> void:
 	_hardpoint = false
 	# A respawned or new body starts with its parking brake off, whatever held the old one.
 	_parking_brake = false
+	# And with its manual gearbox in N, as the drivetrain itself comes back.
+	_local_gear = GEAR_N
 	# A machine starting over starts with the wheel centred and the feet off the pedals.
 	_reset_key_shaping()
 	_brake_override = false
@@ -333,6 +355,8 @@ func _physics_process(delta: float) -> void:
 		_warn_if_keys_locked()
 	if _bridge_drives:
 		_reset_key_shaping()
+		_local_gear_live = false
+		_set_neutral_notice(false)
 		_set_fallback_notice(false)
 		_current = arbitrate_bridge(bridge_raw, _manual_gearbox,
 				_vehicle.get_gear_byte() if _vehicle != null else GEAR_N)
@@ -344,9 +368,12 @@ func _physics_process(delta: float) -> void:
 	if not live and _bridge_only and not _dev_keys:
 		# Neither local source is polled, so no router toggle advances under the lock either.
 		_reset_key_shaping()
+		_local_gear_live = false
+		_set_neutral_notice(false)
 		_current = locked_idle()
 		return
 	var local := _local_tick(delta, live)
+	_set_neutral_notice(neutral_warning(_local_gear_live, local))
 	_current = blend_local_driving(bridge_raw, local, _manual_gearbox) if live else local
 	_apply_auto_hold()
 	_apply_brake_override()
@@ -519,7 +546,18 @@ func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 	var caps: Dictionary = _vehicle.call(&"vehicle_capabilities") \
 			if _vehicle != null and _vehicle.has_method(&"vehicle_capabilities") else {}
 	raw.merge(lab_raw(_lab_abs_off, _lab_axle_diff, _lab_parallel_steer, caps, _bridge_only), true)
-	return arbitrate_local(raw, speed, gear)
+	# The local manual gearbox, only with no bridge live (a live bridge's gearbox wins, D2).
+	var manual_gear := LOCAL_AUTOMATIC
+	if _manual_gearbox and not driving_only:
+		if not _local_gear_live:
+			_local_gear = local_gear_seed(gear, speed)
+		var top: int = _vehicle.call(&"top_gear") \
+				if _vehicle != null and _vehicle.has_method(&"top_gear") else 0
+		_local_gear = shift_step(_local_gear, bool(raw.get(&"shift_down_cycle", false)),
+				bool(raw.get(&"shift_up_cycle", false)), top)
+		manual_gear = _local_gear
+	_local_gear_live = manual_gear != LOCAL_AUTOMATIC
+	return arbitrate_local(raw, speed, gear, KEY_IGNITION, manual_gear)
 
 
 ## Tell the driver why throttle does nothing: `arbitrate_bridge` zeroes it silently whenever
@@ -564,6 +602,25 @@ func _set_fallback_notice(on: bool) -> void:
 		GameState.notice_cleared.emit(FALLBACK_NOTICE_TEXT)
 
 
+## Whether the local manual box sits in N under a near-full accelerator, pure for tests: the
+## engine revs free and nothing moves, which reads as broken to a driver used to the automatic.
+static func neutral_warning(manual_live: bool, input: VehicleInput) -> bool:
+	return manual_live and not input.gear_auto and input.gear_request == GEAR_N \
+			and input.throttle >= NEUTRAL_NOTICE_PEDAL
+
+
+## Raise the neutral notice on the edge and hold it sticky while it applies (re-raising each tick
+## would restart its dwell); dropped the moment the pedal lifts or the box leaves N.
+func _set_neutral_notice(on: bool) -> void:
+	if on == _neutral_warned:
+		return
+	_neutral_warned = on
+	if on:
+		GameState.notice.emit(NEUTRAL_NOTICE_TEXT, GameState.NOTICE_STICKY)
+	else:
+		GameState.notice_cleared.emit(NEUTRAL_NOTICE_TEXT)
+
+
 ## Whether the bridge drives the vehicle outright this tick — the "who drives" question, where
 ## `Bridge.is_active()` only says a peer is connected. False in fallback, where the driving
 ## group (see `blend_local_driving`) is local and every other bridge-owned field is not.
@@ -592,6 +649,31 @@ static func hand_throttle_step(current: float, down: bool, up: bool, preset_edge
 	if preset_edge and not is_nan(preset):
 		out = 0.0 if is_equal_approx(current, preset) else preset
 	return clampf(out, 0.0, 1.0)
+
+
+## Next local manual gear, pure for tests: one rung per edge on the ladder R, N, D1 .. `top`, held
+## at both ends (no wrap, so a held key never runs from top gear into R); both edges in one tick
+## cancel. P is not on the ladder: the parking-brake latch parks.
+static func shift_step(gear: int, down: bool, up: bool, top: int) -> int:
+	var high := maxi(top, 0)
+	var rung := 0  # N, and P (off the ladder) reads as N
+	if gear == GEAR_R:
+		rung = -1
+	elif gear >= GEAR_D1 and gear <= GEAR_TOP:
+		rung = mini(gear, high)
+	rung = clampi(rung + int(up) - int(down), -1, high)
+	return GEAR_R if rung < 0 else rung
+
+
+## The local manual gear as it starts to act, pure for tests: N at a standstill
+## (REVERSE_ENGAGE_SPEED, the router's own), as after a respawn; rolling, the engaged drive gear or
+## R, so the drive is never cut nor the engine over-revved mid-run. N or P engaged gives N.
+static func local_gear_seed(engaged: int, speed: float) -> int:
+	if absf(speed) <= REVERSE_ENGAGE_SPEED:
+		return GEAR_N
+	if engaged == GEAR_R or (engaged >= GEAR_D1 and engaged <= GEAR_TOP):
+		return engaged
+	return GEAR_N
 
 
 ## The detent as the 0..1 the wire and VehicleInput carry. Spread across the whole range so the
@@ -637,15 +719,17 @@ static func locked_idle() -> VehicleInput:
 
 ## Local (keyboard/gamepad) arbitration, pure for tests. Throttle only from accel; brake
 ## never throttle; full accel + full brake both pass through (the router's `brake_override`
-## settles them); key gates throttle. Reverse UX: S brakes while moving, engages R near standstill;
-## W in R brakes, then re-engages D1 near standstill.
+## settles them); key gates throttle. Reverse UX (automatic): S brakes while moving, engages R near
+## standstill; W in R brakes, then re-engages D1 near standstill. A `manual_gear` (the router's local
+## manual gear, else LOCAL_AUTOMATIC) is taken exactly, as the bridge's manual byte is: W is the
+## accelerator signed by the gear, S only the brake.
 static func arbitrate_local(raw: Dictionary, speed: float, gear_byte: int,
-		key: int = KEY_IGNITION) -> VehicleInput:
+		key: int = KEY_IGNITION, manual_gear := LOCAL_AUTOMATIC) -> VehicleInput:
 	var out := VehicleInput.new()
 	out.steer = clampf(float(raw.get(&"steer", 0.0)), -1.0, 1.0)
 	out.handbrake = clampf(float(raw.get(&"handbrake", 0.0)), 0.0, 1.0)
 	out.key = key  # local key is always Ignition until the bridge owns it
-	out.gear_auto = true
+	out.gear_auto = manual_gear == LOCAL_AUTOMATIC
 	out.horn = bool(raw.get(&"horn", false))
 	out.lights = int(raw.get(&"lights", 1))  # local headlight cycle (turn/warning bits stay off)
 	# Implement request from the InputRouter-owned local toggles (tractor only; ignored elsewhere).
@@ -698,7 +782,11 @@ static func arbitrate_local(raw: Dictionary, speed: float, gear_byte: int,
 	var brake_rev := clampf(float(raw.get(&"brake_reverse", 0.0)), 0.0, 1.0)
 	var near_standstill := absf(speed) <= REVERSE_ENGAGE_SPEED
 
-	if gear_byte == GEAR_R:
+	if not out.gear_auto:
+		out.gear_request = manual_gear
+		out.throttle = -accel if manual_gear == GEAR_R else accel
+		out.brake = brake_rev
+	elif gear_byte == GEAR_R:
 		if accel > 0.0 and near_standstill and brake_rev <= 0.0:
 			out.gear_request = GEAR_D1
 			out.throttle = accel

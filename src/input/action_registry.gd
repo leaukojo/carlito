@@ -29,6 +29,7 @@ const CAP_NOTE := {
 	"fwd_drive": "no engageable front axle",
 	"body_cmd": "no refuse body",
 	"sail": "no rig on this hull",
+	"manual_gearbox": "automatic gearbox (GARAGE)",
 }
 
 ## Pad slots that mean something only under a menu: accept the focused control, and go back.
@@ -76,6 +77,17 @@ const ENTRIES: Array[Dictionary] = [
 		"excludes": ["boat", "drone"], "bridge_owned": true, "driving": true,
 		"touch": Touch.WIDGET, "touch_label": "HAND", "poll_key": &"parking_brake_toggle",
 		"touch_state": "handbrake",
+	},
+	{
+		# InputRouter's local manual gear (`_local_gear`), stepped R / N / 1 .. top. No `signals`
+		# nor `families`: the contract's `gear` reaches the plane and the train, which have no gearbox
+		# mode (FamilyGearbox), so the shell's capability is the gate. Not `driving`: a live bridge's
+		# gearbox wins even in fallback, where the local driver drives automatic. WIDGET: the GEAR
+		# column at the pedal row's left end.
+		"id": &"shift", "actions": ["shift_down", "shift_up"],
+		"pad": ["dpad_down", "dpad_up"], "group": Group.DRIVE,
+		"label": "Shift down / up (manual gearbox)", "capability": "manual_gearbox",
+		"bridge_owned": true, "touch": Touch.WIDGET, "touch_label": "GEAR - / GEAR +",
 	},
 	{
 		"id": &"climb", "actions": ["aircraft_up", "aircraft_down"], "group": Group.DRIVE,
@@ -272,7 +284,7 @@ const ENTRIES: Array[Dictionary] = [
 	{
 		# Held: level.gd zooms while the action is down, not a step per press like the wheel.
 		"id": &"camera_zoom", "actions": ["camera_zoom_in", "camera_zoom_out"],
-		"pad": ["dpad_up", "dpad_down"], "group": Group.WORLD, "label": "Camera zoom in / out",
+		"pad": ["dpad_right", "dpad_left"], "group": Group.WORLD, "label": "Camera zoom in / out",
 	},
 	{
 		# Keyboard and pad only: the pause menu's RESPAWN row reaches touch.

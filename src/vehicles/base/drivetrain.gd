@@ -915,6 +915,14 @@ static func gears_label(p_spec: VehicleSpec) -> String:
 	return "%d" % p_spec.gear_ratios.size()
 
 
+## The tallest drive byte an exact (manual) request can select: the stepped box's last ratio within
+## TOP_GEAR, or a CVT's last range (the exact byte caps the range, `cvt_top_ratio`); 0 with neither.
+static func top_gear(p_spec: VehicleSpec) -> int:
+	if is_cvt(p_spec):
+		return p_spec.cvt_range_tops.size()
+	return mini(p_spec.gear_ratios.size(), TOP_GEAR)
+
+
 ## This tick's SPN 526 ratio (`gear_ratio_of`).
 func gearbox_ratio() -> float:
 	return gear_ratio_of(spec, gear_byte, cvt_i)
@@ -1066,8 +1074,8 @@ static func auto_shift(p_spec: VehicleSpec, byte: int, at_rpm: float, pedal := 1
 ## drive-axle torque (Nm), or, on a body that drives wheels, run the controller and the crank's
 ## predictor and return 0: there the drive reaches the wheels only through `couple`, which the
 ## wheels' solve calls this same tick, so the wheels' own steps carry none.
-## auto=true (local input): request is a direction (N/enter-D/R), box auto-shifts within D1-D24.
-## auto=false (bridge): byte is exact, auto-shift bypassed.
+## auto=true (automatic): request is a direction (N/enter-D/R), box auto-shifts within D1-D24.
+## auto=false (manual, the bridge's byte or the local driver's gear): byte is exact, no auto-shift.
 ## `ground_speed` (not `drive_wheel_omega`) drives auto-shift so wheelspin can't fake a high rpm.
 func process(delta: float, throttle: float, drive_wheel_omega: float,
 		ground_speed: float, requested_byte: int, auto: bool) -> float:

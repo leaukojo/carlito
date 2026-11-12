@@ -86,6 +86,8 @@ func _ready() -> void:
 	_notice.add_action(BaseVehicle.OVERTURNED_NOTICE, func() -> Dictionary:
 		return overturned_notice(_ui.device(), InputRouter.bridge_drives(),
 				UiScale.is_touch_display()), "RESPAWN", _on_pause_respawn)
+	_notice.add_action(InputRouter.NEUTRAL_NOTICE_TEXT, func() -> Dictionary:
+		return neutral_notice(_ui.device(), UiScale.is_touch_display()), "", func() -> void: pass)
 	GameState.attachment_changed.connect(_refresh_attachment_controls)
 	GameState.night_changed.connect(_on_level_night_changed)
 	_packs = LevelPacks.new()
@@ -177,9 +179,10 @@ func _refresh_attachment_controls() -> void:
 func _capabilities() -> Dictionary:
 	var caps := {"tows": false, "pto": false, "lift": false,
 			"diff_lock": false, "fwd_drive": false, "body_cmd": false, "abs": false,
-			"axle_diff": false, "ackermann": false}
+			"axle_diff": false, "ackermann": false, "manual_gearbox": false}
 	if _level == null or _level.vehicle == null:
 		return caps
+	caps["manual_gearbox"] = InputRouter.manual_gearbox()  # `_apply_gearbox` gates the family
 	var v: BaseVehicle = _level.vehicle
 	# `tows`/`attachment_controls` stay duck-typed: method absence means "does not tow"
 	# (src/vehicles/CLAUDE.md). `vehicle_capabilities` is defined on BaseVehicle itself.
@@ -236,7 +239,7 @@ func _begin_challenge(def: ChallengeDef) -> void:
 	_challenge = def
 	InputRouter.set_bridge_only(true)
 	Bridge.set_challenge(true)
-	InputRouter.set_manual_gearbox(def.transmission == ChallengeDef.Transmission.MANUAL)
+	_apply_gearbox()
 	_touch.set_driving_locked(true)
 	_touch.set_challenge_mode(true)
 	if _level != null:
@@ -264,7 +267,8 @@ func _end_challenge() -> void:
 	_challenge = null
 	InputRouter.set_bridge_only(false)
 	Bridge.set_challenge(false)
-	InputRouter.set_manual_gearbox(_manual_gearbox)
+	_apply_gearbox()
+	_refresh_attachment_controls()  # the shift pads follow the gearbox mode back
 	_touch.set_driving_locked(false)
 	_touch.set_challenge_mode(false)
 	_close_challenge_info()
@@ -818,6 +822,7 @@ func _unbind_hud() -> void:
 
 func _on_vehicle_changed(type: String) -> void:
 	_fit_tyre()  # emitted on the spawn tick, before the body's first physics tick
+	_apply_gearbox()  # before the bind: the touch pads read the mode as a capability
 	_bind_hud()
 	CoachCue.maybe_coach(type, _ui)  # vehicle_changed carries the family
 
@@ -903,7 +908,19 @@ func _on_attachment_picked(id: String) -> void:
 ## an attempt, so this never overrides a challenge's own gearbox.
 func _on_gearbox_picked(manual: bool) -> void:
 	_manual_gearbox = manual
-	InputRouter.set_manual_gearbox(manual)
+	_apply_gearbox()
+	_refresh_attachment_controls()  # after the spawn's bind: the shift pads follow the pick
+
+
+## The router's gearbox mode: the attempt's own, else the garage's pick on a family with a gearbox
+## mode (FamilyGearbox), so a MANUAL picked on a car never hands a plane or a boat a local manual
+## box with no shift control. The bridge feels no difference on those families (FamilyGearbox).
+func _apply_gearbox() -> void:
+	if _challenge != null:
+		InputRouter.set_manual_gearbox(_challenge.transmission == ChallengeDef.Transmission.MANUAL)
+	else:
+		InputRouter.set_manual_gearbox(_manual_gearbox
+				and FamilyGearbox.has_gearbox(GameState.current_vehicle))
 
 
 ## Fires on DRIVE, after the body is (re)spawned, for a variant that fits more than its stock.
@@ -951,6 +968,22 @@ static func overturned_notice(device: UiScale.Device, bridge_drives: bool,
 	if how != "":
 		text += " - " + how
 	return {"text": text, "button": device == UiScale.Device.POINTER}
+
+
+## The neutral notice as `NoticeLine` shows it: the router's fixed text plus the device's shift-up
+## control, read from ActionRegistry's `shift` row (its second action and pad slot). No button: the
+## touch screen's GEAR + is already on screen.
+static func neutral_notice(device: UiScale.Device, touch_display: bool) -> Dictionary:
+	var shift := ActionRegistry.find(&"shift")
+	var up := ""
+	if device == UiScale.Device.PAD:
+		up = ActionRegistry.pad_for({"pad": [shift["pad"][1]]})
+	elif device == UiScale.Device.KEYBOARD or not touch_display:
+		up = ActionRegistry.keys_for({"actions": [shift["actions"][1]]})
+	else:
+		up = ActionRegistry.touch_caption(&"shift", 1)
+	return {"text": "%s - PRESS %s TO SHIFT UP" % [InputRouter.NEUTRAL_NOTICE_TEXT, up.to_upper()],
+			"button": false}
 
 
 # --- helpers -----------------------------------------------------------------

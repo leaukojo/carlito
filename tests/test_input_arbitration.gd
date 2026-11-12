@@ -1518,3 +1518,171 @@ func test_the_preset_edge_asks_the_machine_and_the_latch_is_driver_state() -> vo
 	touch.taps = 1
 	router._physics_process(1.0 / 60.0)
 	assert_float(router.get_vehicle_input().hand_throttle).is_equal(0.0)
+
+
+# --- the local manual gearbox -----------------------------------------------------------------
+
+func test_the_shift_ladder_steps_one_rung_and_holds_its_ends() -> void:
+	assert_int(RouterScript.shift_step(GEAR_N, false, true, 6)).is_equal(GEAR_D1)
+	assert_int(RouterScript.shift_step(GEAR_D1, false, true, 6)).is_equal(2)
+	assert_int(RouterScript.shift_step(GEAR_D1, true, false, 6)).is_equal(GEAR_N)
+	assert_int(RouterScript.shift_step(GEAR_N, true, false, 6)).is_equal(GEAR_R)
+	assert_int(RouterScript.shift_step(GEAR_R, false, true, 6)).is_equal(GEAR_N)
+	# No wrap: a held key never runs from top gear into R, nor from R past it.
+	assert_int(RouterScript.shift_step(GEAR_R, true, false, 6)).is_equal(GEAR_R)
+	assert_int(RouterScript.shift_step(6, false, true, 6)).is_equal(6)
+	assert_int(RouterScript.shift_step(16, false, true, 16)).is_equal(16)
+	# Both edges in one tick cancel; no edge holds the gear.
+	assert_int(RouterScript.shift_step(3, true, true, 6)).is_equal(3)
+	assert_int(RouterScript.shift_step(3, false, false, 6)).is_equal(3)
+	# P is off the ladder and reads as N; a body with no gears has only R and N.
+	assert_int(RouterScript.shift_step(RouterScript.GEAR_P, false, true, 6)).is_equal(GEAR_D1)
+	assert_int(RouterScript.shift_step(GEAR_N, false, true, 0)).is_equal(GEAR_N)
+
+
+## Stopped, the manual gear starts in N whatever the automatic held; rolling, it keeps the drive.
+func test_the_local_gear_starts_in_n_stopped_and_takes_over_the_gear_rolling() -> void:
+	assert_int(RouterScript.local_gear_seed(GEAR_D1, 0.0)).is_equal(GEAR_N)
+	assert_int(RouterScript.local_gear_seed(3, 0.2)).is_equal(GEAR_N)
+	assert_int(RouterScript.local_gear_seed(5, 15.0)).is_equal(5)
+	assert_int(RouterScript.local_gear_seed(GEAR_R, -2.0)).is_equal(GEAR_R)
+	assert_int(RouterScript.local_gear_seed(GEAR_N, 15.0)).is_equal(GEAR_N)
+	assert_int(RouterScript.local_gear_seed(RouterScript.GEAR_P, 15.0)).is_equal(GEAR_N)
+
+
+## A manual gear is taken exactly, as the bridge's manual byte: W is the accelerator signed by the
+## gear, S only the brake, and nothing selects R or D on its own.
+func test_a_manual_local_gear_is_exact_and_s_only_brakes() -> void:
+	var held := RouterScript.arbitrate_local(_intent({&"brake_reverse": 1.0}), 0.0, GEAR_D1,
+			RouterScript.KEY_IGNITION, GEAR_D1)
+	assert_bool(held.gear_auto).is_false()
+	assert_int(held.gear_request).is_equal(GEAR_D1)
+	assert_float(held.brake).is_equal(1.0)
+	assert_float(held.throttle).is_equal(0.0)
+	var third := RouterScript.arbitrate_local(_intent({&"accel": 0.5}), 10.0, 3,
+			RouterScript.KEY_IGNITION, 3)
+	assert_int(third.gear_request).is_equal(3)
+	assert_float(third.throttle).is_equal(0.5)
+	var astern := RouterScript.arbitrate_local(_intent({&"accel": 0.5}), 0.0, GEAR_R,
+			RouterScript.KEY_IGNITION, GEAR_R)
+	assert_int(astern.gear_request).is_equal(GEAR_R)
+	assert_float(astern.throttle).is_equal(-0.5)
+	assert_float(astern.brake).is_equal(0.0)
+	var free_rev := RouterScript.arbitrate_local(_intent({&"accel": 1.0}), 0.0, GEAR_N,
+			RouterScript.KEY_IGNITION, GEAR_N)
+	assert_int(free_rev.gear_request).is_equal(GEAR_N)
+	assert_float(free_rev.throttle).is_equal(1.0)
+
+
+## The neutral warning: only the live local manual box, only in N, only past the pedal threshold.
+func test_the_neutral_warning_wants_a_manual_n_under_a_near_full_pedal() -> void:
+	var full := RouterScript.arbitrate_local(_intent({&"accel": 1.0}), 0.0, GEAR_N,
+			RouterScript.KEY_IGNITION, GEAR_N)
+	assert_bool(RouterScript.neutral_warning(true, full)).is_true()
+	assert_bool(RouterScript.neutral_warning(false, full)).is_false()
+	var blip := RouterScript.arbitrate_local(_intent({&"accel": 0.5}), 0.0, GEAR_N,
+			RouterScript.KEY_IGNITION, GEAR_N)
+	assert_bool(RouterScript.neutral_warning(true, blip)).is_false()
+	var first := RouterScript.arbitrate_local(_intent({&"accel": 1.0}), 0.0, GEAR_N,
+			RouterScript.KEY_IGNITION, GEAR_D1)
+	assert_bool(RouterScript.neutral_warning(true, first)).is_false()
+	var auto := RouterScript.arbitrate_local(_intent({&"accel": 1.0}), 0.0, GEAR_N)
+	assert_bool(RouterScript.neutral_warning(true, auto)).is_false()
+
+
+## Raised once on the edge, sticky, and cleared the moment the box leaves N.
+func test_the_neutral_notice_rises_once_and_clears_on_a_shift() -> void:
+	var router := _router()
+	router._bridge_source = _NoBridge.new()
+	var body: _GearBody = auto_free(_GearBody.new())
+	router.register_vehicle(body)
+	var touch := _ShiftTouch.new()
+	touch.accel = 1.0
+	router.set_touch_source(touch)
+	router.set_manual_gearbox(true)
+	var raised := []
+	var cleared := []
+	var on_raise := func(t: String, _d: float) -> void: raised.append(t)
+	var on_clear := func(t: String) -> void: cleared.append(t)
+	GameState.notice.connect(on_raise)
+	GameState.notice_cleared.connect(on_clear)
+	for i in 60:  # the keyboard pedal's ramp, then held
+		_gear_after(router, touch, false, false)
+	assert_array(raised).is_equal([RouterScript.NEUTRAL_NOTICE_TEXT])
+	_gear_after(router, touch, false, true)
+	assert_array(cleared).contains([RouterScript.NEUTRAL_NOTICE_TEXT])
+	GameState.notice.disconnect(on_raise)
+	GameState.notice_cleared.disconnect(on_clear)
+
+
+## A touch stand-in: each count fires that shift edge on the next poll only.
+class _ShiftTouch extends RefCounted:
+	var down := false
+	var up := false
+	var accel := 0.0  ## a held GAS
+	func poll() -> Dictionary[StringName, Variant]:
+		var out: Dictionary[StringName, Variant] = {&"shift_down_cycle": down, &"shift_up_cycle": up,
+				&"accel": accel}
+		down = false
+		up = false
+		return out
+
+
+## `_RollingBody` with a gearbox of `top` gears, engaged in `engaged`.
+class _GearBody extends _RollingBody:
+	var engaged := RouterScript.GEAR_N
+	var top := 6
+	func get_gear_byte() -> int:
+		return engaged
+	func top_gear() -> int:
+		return top
+
+
+func _gear_after(router: Node, touch: _ShiftTouch, down: bool, up: bool) -> VehicleInput:
+	touch.down = down
+	touch.up = up
+	router._physics_process(1.0 / 60.0)
+	return router.get_vehicle_input()
+
+
+func test_the_local_driver_shifts_by_hand_in_manual_with_no_bridge() -> void:
+	var router := _router()
+	router._bridge_source = _NoBridge.new()
+	var body: _GearBody = auto_free(_GearBody.new())
+	router.register_vehicle(body)
+	var touch := _ShiftTouch.new()
+	router.set_touch_source(touch)
+	# Automatic: the edges do nothing and the box auto-shifts.
+	assert_bool(_gear_after(router, touch, false, true).gear_auto).is_true()
+	body.engaged = GEAR_D1  # the automatic's gear at rest: MANUAL picked stopped starts in N
+	router.set_manual_gearbox(true)
+	var first := _gear_after(router, touch, false, false)
+	assert_bool(first.gear_auto).is_false()
+	assert_int(first.gear_request).is_equal(GEAR_N)
+	assert_int(_gear_after(router, touch, false, true).gear_request).is_equal(GEAR_D1)
+	assert_int(_gear_after(router, touch, false, true).gear_request).is_equal(2)
+	assert_int(_gear_after(router, touch, true, false).gear_request).is_equal(GEAR_D1)
+	# A respawn or a new body starts in N.
+	router.reset_vehicle_cycles()
+	assert_int(_gear_after(router, touch, false, false).gear_request).is_equal(GEAR_N)
+	assert_int(_gear_after(router, touch, true, false).gear_request).is_equal(GEAR_R)
+
+
+func test_a_connected_bridge_turns_the_local_shift_off_and_its_loss_takes_over_the_gear() -> void:
+	var router := _router()
+	router._bridge_source = _QuietBridge.new()
+	var body: _GearBody = auto_free(_GearBody.new())
+	body.engaged = 4
+	body.speed = 12.0  # rolling: the gear is taken over, not dropped to N
+	router.register_vehicle(body)
+	var touch := _ShiftTouch.new()
+	router.set_touch_source(touch)
+	router.set_manual_gearbox(true)
+	# Fallback: the local driver drives automatic and the shift edges are dropped.
+	assert_bool(_gear_after(router, touch, false, true).gear_auto).is_true()
+	# The bridge gone, the local gear takes the engaged byte rather than a stale one.
+	router._bridge_source = _NoBridge.new()
+	var taken := _gear_after(router, touch, false, false)
+	assert_bool(taken.gear_auto).is_false()
+	assert_int(taken.gear_request).is_equal(4)
+	assert_int(_gear_after(router, touch, false, true).gear_request).is_equal(5)

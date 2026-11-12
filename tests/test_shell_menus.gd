@@ -424,6 +424,10 @@ func test_vehicle_select_emits_the_attachment_behind_the_body() -> void:
 func test_vehicle_select_offers_the_gearbox_only_where_the_family_takes_a_gear() -> void:
 	var car := _selector(PackedStringArray(["car"]), "sedan-sports")
 	assert_array(_labels(car)).contains(["AUTOMATIC", "MANUAL"])
+	# Live with no bridge too: MANUAL is then the local driver's own shift control.
+	for b in _buttons(car):
+		if (b as Button).text == "MANUAL":
+			assert_bool((b as Button).disabled).is_false()
 	var chosen := []
 	car.gearbox_chosen.connect(func(m: bool) -> void: chosen.append(m))
 	_press(car, "DRIVE")
@@ -1330,6 +1334,21 @@ func test_the_overturned_notice_names_the_devices_respawn() -> void:
 		var shown := Boot.overturned_notice(c[0], c[1], c[2])
 		assert_str(String(shown["text"])).is_equal(c[3])
 		assert_bool(bool(shown["button"])).is_equal(c[4])
+
+
+## The neutral notice names the device's shift-up control, read from the registry's `shift` row.
+func test_the_neutral_notice_names_the_devices_shift_up() -> void:
+	var D := UiScale.Device
+	var cases := [
+		[D.KEYBOARD, false, "NEUTRAL GEAR SELECTED - PRESS PERIOD TO SHIFT UP"],
+		[D.PAD, false, "NEUTRAL GEAR SELECTED - PRESS D-PAD UP TO SHIFT UP"],
+		[D.POINTER, false, "NEUTRAL GEAR SELECTED - PRESS PERIOD TO SHIFT UP"],
+		[D.POINTER, true, "NEUTRAL GEAR SELECTED - PRESS GEAR + TO SHIFT UP"],
+	]
+	for c: Array in cases:
+		var shown := Boot.neutral_notice(c[0], c[1])
+		assert_str(String(shown["text"])).is_equal(c[2])
+		assert_bool(bool(shown["button"])).is_false()
 
 
 ## Raised by the vehicle with its fixed text, shown with the shell's words and button, cleared by

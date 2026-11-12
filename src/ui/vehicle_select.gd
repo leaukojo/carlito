@@ -57,8 +57,6 @@ var _attachment := ""                  ## seeded from the driven machine, then o
 ## DETACHED, both real choices; without this a car's "" browsed to the semi would show bobtail.
 var _attachment_of := ""
 var _manual_gearbox := false  ## seeded from the shell's free-play choice
-var _manual_gearbox_btn: Button      ## disabled live when the bridge drops (null with no gearbox row)
-var _automatic_gearbox_btn: Button   ## pressed live when the bridge drops and forces AUTOMATIC
 var _tyres := {}  ## variant -> TyreClass id, seeded from the shell's store; a pick updates it
 var _tyre := ""   ## the class picked for the variant on show; "" with no TYRES row or a lone class
 
@@ -406,8 +404,6 @@ func _on_family_pressed(family: String) -> void:
 
 func _refresh_cards() -> void:
 	_clear(_cards)
-	_manual_gearbox_btn = null
-	_automatic_gearbox_btn = null
 	var reason := _refusal(_family)
 	var home := _redirect(_family)
 	var note := reason
@@ -424,12 +420,9 @@ func _refresh_cards() -> void:
 	_refresh_attachments()
 
 
-## AUTOMATIC | MANUAL as one ButtonGroup. The choice only changes how the bridge gear byte is
-## read (InputRouter.set_manual_gearbox); with no bridge connected there is no gear byte to
-## read, so MANUAL is disabled and the choice is forced to AUTOMATIC.
+## AUTOMATIC | MANUAL as one ButtonGroup (InputRouter.set_manual_gearbox): MANUAL is sloppyCAN's
+## gear byte while a bridge is connected, else the local driver's shift control.
 func _gearbox_row() -> Control:
-	if not Bridge.is_active():
-		_manual_gearbox = false
 	var box := VBoxContainer.new()
 	box.add_child(_heading("GEARBOX"))
 	var row := HBoxContainer.new()
@@ -443,11 +436,6 @@ func _gearbox_row() -> Control:
 		b.theme_type_variation = &"Choice"
 		b.button_pressed = manual == _manual_gearbox
 		b.pressed.connect(_on_gearbox_pressed.bind(manual))
-		if manual:
-			b.disabled = not Bridge.is_active()
-			_manual_gearbox_btn = b
-		else:
-			_automatic_gearbox_btn = b
 		row.add_child(b)
 	box.add_child(row)
 	return box
@@ -665,12 +653,6 @@ func _free_preview() -> void:
 ## clock here.
 func _process(delta: float) -> void:
 	_pulse_drive(delta)
-	if is_instance_valid(_manual_gearbox_btn):
-		var active := Bridge.is_active()
-		_manual_gearbox_btn.disabled = not active
-		if not active and _manual_gearbox:
-			_manual_gearbox = false
-			_automatic_gearbox_btn.button_pressed = true
 	if _preview == null or not is_instance_valid(_preview) or not _preview_panel.visible:
 		return
 	_yaw = fmod(_yaw + TURNTABLE_DEG_PER_S * delta, 360.0)

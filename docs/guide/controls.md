@@ -92,6 +92,7 @@ horn sounds on **H** or sloppyCAN's `horn`.
 | **A**, **D** or **←**, **→** | Steer |
 | **Space** | Handbrake, while held |
 | **Shift** | Parking brake on or off (also R1 on the gamepad, HAND on the touch screen) |
+| **,** and **.** | Shift down and up with the MANUAL gearbox (also D-pad down and up, GEAR - and GEAR +) |
 | **Backspace** | Respawn |
 | **G**, **V**, **E** | Garage; next vehicle body; next implement or trailer |
 | **C** | Camera view |
@@ -101,7 +102,7 @@ horn sounds on **H** or sloppyCAN's `horn`.
 | **F4** | On-screen touch controls |
 | **4**, **5** | Level select; challenges |
 | **Esc** | Pause menu |
-<!-- project.godot [input]: accel W / Up, brake_reverse S / Down, steer A D / Left Right, handbrake Space, parking_brake Shift, respawn Backspace, garage G, next_vehicle V, next_attachment E, camera_view C, headlights L, horn H, day_night N, toggle_dashboard F2, debug_overlay F3, toggle_touch F4, level_select 4, challenge_select 5, to_menu Escape; boot.gd _toggle_dashboard cycles Dashboard.DENSITY_KEYS COMPACT -> FULL -> OFF; debug_overlay.gd _ready visible = false, the F3 action toggles it -->
+<!-- project.godot [input]: accel W / Up, brake_reverse S / Down, steer A D / Left Right, handbrake Space, parking_brake Shift, shift_down Comma, shift_up Period, respawn Backspace, garage G, next_vehicle V, next_attachment E, camera_view C, headlights L, horn H, day_night N, toggle_dashboard F2, debug_overlay F3, toggle_touch F4, level_select 4, challenge_select 5, to_menu Escape; boot.gd _toggle_dashboard cycles Dashboard.DENSITY_KEYS COMPACT -> FULL -> OFF; debug_overlay.gd _ready visible = false, the F3 action toggles it -->
 
 The dashboard starts COMPACT: the warning lamps, the speedometer and the rev counter. FULL adds
 the bars (fuel, coolant, brake temperature, a truck's air and the rest) and a line of readings
@@ -132,7 +133,8 @@ The layout puts the controls where racing and farming games put them.
 | **Left stick** | Steer. Forward and back: the plane's elevator (pull back, nose up), the drone's climb (push, climb) |
 | **Right stick** | Look around the vehicle; the view stays where you leave it |
 | **R3** | Recenter the camera |
-| **D-pad ↑** / **↓** | Zoom in / out, while held |
+| **D-pad ↑** / **↓** | Shift up / down, with the MANUAL gearbox and sloppyCAN not connected |
+| **D-pad →** / **←** | Zoom in / out, while held |
 | **Cross** (✕) | Handbrake, while held |
 | **R1** | Parking brake on or off |
 | **Circle** (○) | Camera view |
@@ -172,7 +174,7 @@ menu while the gamepad is in use; the challenges are on **5** and the touch butt
 | SANDBOX ▸ WORLD | WIND, WATER CURRENT, FROM, TIME | this session |
 | SANDBOX ▸ VEHICLE | TRACTION CONTROL, STABILITY CONTROL, AUTO HOLD | saved |
 | SANDBOX ▸ VEHICLE | ANTI-LOCK BRAKES, DIFFERENTIALS, STEERING | this session; locked in a challenge |
-| GARAGE | the gearbox (with sloppyCAN), the tyres | the gearbox this session, the tyres saved |
+| GARAGE | the gearbox, the tyres | the gearbox this session, the tyres saved |
 <!-- docs/systems.md: SETTINGS and SANDBOX's driver aids saved to user://; WORLD, the LAB switches and the gearbox choice session-held; tyre choice saved -->
 
 Each is explained where it matters: [Ground and tyre types](surfaces.md) for tyres,

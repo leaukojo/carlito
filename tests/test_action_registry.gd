@@ -178,9 +178,9 @@ func test_the_base_layer_gates_like_the_sheet() -> void:
 func test_the_camera_buttons_answer_everywhere() -> void:
 	for family in _all_families():
 		assert_str(_pad("r3", _ctx(family))).is_equal("camera_recenter")
-		assert_str(_pad("dpad_up", _ctx(family))).is_equal("camera_zoom_in")
-		assert_str(_pad("dpad_down", _ctx(family))).is_equal("camera_zoom_out")
-	assert_str(_pad("dpad_up", _ctx("car"), true)).is_equal("")
+		assert_str(_pad("dpad_right", _ctx(family))).is_equal("camera_zoom_in")
+		assert_str(_pad("dpad_left", _ctx(family))).is_equal("camera_zoom_out")
+	assert_str(_pad("dpad_right", _ctx("car"), true)).is_equal("")
 	assert_str(Registry.pad_for(Registry.find(&"camera_look"))).is_equal("Right stick")
 
 
@@ -421,6 +421,23 @@ func test_r1_is_the_parking_brake_latch() -> void:
 	assert_str(Registry.pad_for(Registry.find(&"parking_brake"))).is_equal("R1")
 	# Touch's HAND reads the router's handbrake, the field the dashboard's BRAKE lamp reads.
 	assert_str(String(Registry.find(&"parking_brake").get("touch_state", ""))).is_equal("handbrake")
+
+
+## The local manual gearbox's shift is plain D-pad down / up, there only in MANUAL (the shell's
+## `manual_gearbox` capability) and greyed under any live bridge, fallback included (D2).
+func test_the_dpad_shifts_only_a_local_manual_gearbox() -> void:
+	var manual := {"manual_gearbox": true}
+	assert_str(_pad("dpad_down", _ctx("car", manual))).is_equal("shift_down")
+	assert_str(_pad("dpad_up", _ctx("tractor", manual))).is_equal("shift_up")
+	assert_str(_pad("dpad_down", _ctx("car"))).is_equal("")  # automatic
+	assert_str(_pad("dpad_down", _ctx("car", manual), true)).is_equal("")  # a menu navigates
+	var fallback := Registry.context("car", true, manual, false)
+	assert_str(_pad("dpad_up", fallback)).is_equal("")
+	var shift := Registry.find(&"shift")
+	assert_str(Registry.gate_note(shift, fallback)).is_equal(Registry.BRIDGE_SETS_NOTE)
+	assert_bool(Registry.relevant_entry(shift, _ctx("car"))).is_false()
+	assert_str(Registry.keys_for(shift)).is_equal("Comma / Period")
+	assert_str(Registry.pad_for(shift)).is_equal("D-pad down / D-pad up")
 
 
 ## The web font has no emoji glyphs, so anything non-ASCII on a button renders as tofu.

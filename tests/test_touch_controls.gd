@@ -98,3 +98,30 @@ func test_challenge_pads_emit_retry_and_info() -> void:
 		p.held.emit(true)
 		p.held.emit(false)
 	assert_array(fired).contains_exactly_in_any_order(["retry", "info"])
+
+
+## GEAR + / GEAR - show only with the local manual gearbox (the shell's `manual_gearbox`
+## capability), and each tap is one shift edge.
+func test_the_gear_pads_follow_the_manual_gearbox() -> void:
+	var saved := GameState.current_vehicle
+	GameState.current_vehicle = "car"
+	var t := _touch()
+	var gears: Control = null
+	for g in t._gated:
+		if g["id"] == &"shift":
+			gears = g["node"]
+	assert_object(gears).is_not_null()
+	t.set_capabilities({})
+	t._process(0.0)
+	assert_bool(gears.visible).is_false()
+	t.set_capabilities({"manual_gearbox": true})
+	t._process(0.0)
+	assert_bool(gears.visible).is_true()
+	var up: TouchControls.Pad = gears.get_child(0)
+	up.held.emit(true)
+	up.held.emit(false)
+	var out := t.poll()
+	assert_bool(bool(out.get(TouchControls.KEY_SHIFT_UP, false))).is_true()
+	assert_bool(bool(out.get(TouchControls.KEY_SHIFT_DOWN, false))).is_false()
+	assert_bool(bool(t.poll().get(TouchControls.KEY_SHIFT_UP, false))).is_false()  # one edge
+	GameState.current_vehicle = saved

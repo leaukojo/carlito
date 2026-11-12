@@ -67,8 +67,11 @@ const KEY_CLIMB := &"climb"
 const KEY_ELEVATOR := &"elevator"
 const KEY_HORN := &"horn"
 const KEY_LIGHTS_CYCLE := &"lights_cycle"
+const KEY_SHIFT_DOWN := &"shift_down_cycle"
+const KEY_SHIFT_UP := &"shift_up_cycle"
 const WIDGET_KEYS: Array[StringName] = [
 	KEY_ACCEL, KEY_BRAKE_REVERSE, KEY_STEER, KEY_CLIMB, KEY_ELEVATOR, KEY_HORN, KEY_LIGHTS_CYCLE,
+	KEY_SHIFT_DOWN, KEY_SHIFT_UP,
 ]
 
 var _scale := 1.0  ## cached UI scale; a change to it rebuilds the widgets
@@ -514,6 +517,20 @@ func _build_pedals() -> void:
 	row.move_child(col, 0)
 	_set_vert(0.0)
 	_gated.append({"node": col, "id": &"climb"})
+
+	# The manual gearbox's GEAR + over GEAR -, in the same slot: a family with a gearbox mode never
+	# flies, so the two columns never show together.
+	var gears := VBoxContainer.new()
+	gears.add_theme_constant_override("separation", gap)
+	var shift_up := _tap_button(ActionRegistry.touch_caption(&"shift", 1), KEY_SHIFT_UP)
+	shift_up.custom_minimum_size = flight
+	gears.add_child(shift_up)
+	var shift_down := _tap_button(ActionRegistry.touch_caption(&"shift", 0), KEY_SHIFT_DOWN)
+	shift_down.custom_minimum_size = flight
+	gears.add_child(shift_down)
+	row.add_child(gears)
+	row.move_child(gears, 0)
+	_gated.append({"node": gears, "id": &"shift"})
 
 
 func _vert() -> float:

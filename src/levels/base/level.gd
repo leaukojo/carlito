@@ -397,7 +397,7 @@ func _process(delta: float) -> void:
 
 
 ## The pad's view controls, per rendered frame as rates: the right stick orbits (read raw, like
-## the mouse's right-drag: view-only, nothing to arbitrate) and D-pad up / down zoom while held
+## the mouse's right-drag: view-only, nothing to arbitrate) and D-pad right / left zoom while held
 ## (PadLayer's injected actions). The look stays where it is left; R3 recenters.
 func _pad_view(delta: float) -> void:
 	if camera == null:

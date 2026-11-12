@@ -162,6 +162,16 @@ func test_ratio_for_byte_clamps_to_a_short_gearbox() -> void:
 	assert_float(DrivetrainScript.ratio_for_byte(spec, 1)).is_equal(0.0)
 
 
+## The local manual ladder's top: the stepped box's last ratio, a CVT's last range.
+func test_top_gear_is_the_last_ratio_or_the_last_cvt_range() -> void:
+	var spec := _spec()
+	spec.gear_ratios = PackedFloat32Array([3.0, 2.0, 1.5])
+	assert_int(DrivetrainScript.top_gear(spec)).is_equal(3)
+	spec.gear_ratios = PackedFloat32Array()
+	assert_int(DrivetrainScript.top_gear(spec)).is_equal(0)
+	assert_int(DrivetrainScript.top_gear(_cvt_spec())).is_equal(4)
+
+
 # --- engine torque ------------------------------------------------------------
 
 func test_engine_torque_is_the_curve_and_nothing_else() -> void:

@@ -524,6 +524,11 @@ func get_gear_byte() -> int:
 	return drivetrain.gear_byte if drivetrain != null else Drivetrain.GEAR_N
 
 
+## The top of InputRouter's local manual ladder (`Drivetrain.top_gear`).
+func top_gear() -> int:
+	return Drivetrain.top_gear(spec) if drivetrain != null else 0
+
+
 ## Roll stability's stop-lamp request this tick (`WheelDrive.brake_light_request`): InputRouter
 ## lights the local STOP lamp with it, the status bit carries it to sloppyCAN.
 func brake_light_request() -> bool:

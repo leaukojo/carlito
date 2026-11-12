@@ -37,7 +37,7 @@ static/pure, tested in `tests/test_input_arbitration.gd`.
   Those timings are the full model (SETTINGS ▸ KEY RESPONSE: REALISTIC); the player's softening
   scales every one of them, from RAW (0, the key as pressed) up, and defaults to ARCADE (0.15).
 - `arbitrate_local`: ignition gates throttle; brake never throttles; S = brake, then reverse
-  at standstill; foot brake drives `brake_lamp`; `tcs_off` is SANDBOX ▸ TRACTION CONTROL (a live
+  at standstill (manual, no bridge live: `_local_gear` exact, `shift_step`, N on reset; S brakes); foot brake drives `brake_lamp`; `tcs_off` is SANDBOX ▸ TRACTION CONTROL (a live
   bridge's own wins, fallback included), `esc_off` STABILITY CONTROL (local only; sets `tcs_off`).
 - `auto_hold` (SANDBOX ▸ AUTO HOLD, off by default): on the local path, a wheel-driving body stopped in D or R with no throttle holds
   its foot brake until the throttle asks to move (`docs/drivetrain.md` § Hill hold); a feathered
@@ -55,11 +55,11 @@ static/pure, tested in `tests/test_input_arbitration.gd`.
   `ackermann_fraction`), with no spec write; greyed per `BaseVehicle.vehicle_capabilities`. An ABS
   cluster lamp lights while it is off; F3's `slip` and `steer` lines read each wheel.
 - `arbitrate_bridge`: the gear byte owns direction. Mode = `InputRouter.set_manual_gearbox`
-  (vehicle selector, or `ChallengeDef.transmission`).
+  (vehicle selector on a `FamilyGearbox` family, or `ChallengeDef.transmission`; `Boot._apply_gearbox`).
   - Automatic (default): PRND lever. R reverses, D1-D24 = D with auto-shift, 0 = no gear
     opinion (RAMN `0x077` never sends gear): D while the accelerator is pressed, else N, or P for
     a body already parked.
-  - Manual: byte taken exactly, 0 = N, no auto-shift. Local input is always automatic.
+  - Manual: byte taken exactly, 0 = N, no auto-shift. Fallback's local input drives automatic.
   - Absent bridge keys fall to rest state (lamps off, hitch raised, PTO off, 540, open diff,
     2WD, SCV shut, flaps up, disarmed, doors shut, LEDs black, body Idle).
   - `rudder` (boat) and `guidance_curvature` (tractor) override `steer` when the key is

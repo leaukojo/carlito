@@ -61,7 +61,6 @@ The short cuts fall into three kinds:
 - **Not modelled: a clutch pedal.** The game works every clutch, even with manual gears.
 - **Not modelled: cruise control** on any road vehicle; only the tractor's hand throttle holds a
   speed for you, through its governor.
-- **Not modelled: manual gears without sloppyCAN.** The keyboard always drives an automatic.
 - **Simplified: the differentials.** Each has one fixed bias ratio; none is electronically
   controlled.
 <!-- engine.md, auxiliary.md, coupling.md, gearbox.md, differentials.md -->
