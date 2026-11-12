@@ -73,8 +73,8 @@ The editor rewrites this file on any UI export; CLI export reads it as-is.
   - `HTTPRequest.accept_gzip = false`: GitHub Pages gzips `.pck`, and HTTPRequest would gunzip
     an already-decompressed body (`RESULT_BODY_DECOMPRESS_FAILED`). No `download_file` either:
     on web it reports success and writes nothing.
-  - An island's level-select size comes from `res://src/shell/level_weights.json`
-    (`LevelRegistry.SHIPPED_WEIGHTS`).
+  - An island's level-select size and families: `res://src/shell/level_weights.json`,
+    `res://src/shell/level_vehicles.json` (`LevelRegistry.SHIPPED_*`).
   - 4.7.1 occasionally segfaults on exit after writing a patch, so CI judges by the `savepack`
     DONE line, not exit code.
 - A new island needs a `Web <id>` preset: copy a sibling's two sections, let the test name

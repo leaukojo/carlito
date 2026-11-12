@@ -26,8 +26,9 @@ const FAMILY_W := 190.0
 const CARD_W := 176.0
 const PREVIEW_W := 380.0
 const FOOTER_W := 240.0  ## larger than a default button: DRIVE is the screen's whole purpose
-const PULSE_DEPTH := 0.16  ## DRIVE button attention pulse: brightness swing
-const PULSE_HZ := 0.9      ## ...and speed
+const PULSE_S := 1.1       ## the DRIVE button's one pulse, triggered by a press on the picked card
+## What the DRIVE button's modulate reaches at the pulse's peak: the accent fill turns green.
+const PULSE_TINT := Color(0.55, 1.35, 0.6)
 const BORDER_W := 3.0
 ## Width the three columns need (family list + preview + two cards + margins); below this the
 ## preview column is dropped since it's the phone-unfriendly one and cards are what you can't
@@ -53,13 +54,16 @@ var _manual_gearbox := false  ## seeded from the shell's free-play choice
 var _manual_gearbox_btn: Button      ## disabled live when the bridge drops (null with no gearbox row)
 var _automatic_gearbox_btn: Button   ## pressed live when the bridge drops and forces AUTOMATIC
 var _tyres := {}  ## variant -> TyreClass id, seeded from the shell's store; a pick updates it
-var _tyre := ""   ## the class picked for the variant on show; "" while it has no TYRES row
+var _tyre := ""   ## the class picked for the variant on show; "" with no TYRES row or a lone class
 
-var _pulse_t := 0.0  ## phase of the DRIVE button's attention pulse, in turns
+var _pulse_left := 0.0  ## seconds left of the DRIVE button's pulse (0 = at rest)
 
 var _family := ""
+var _col: VBoxContainer
+var _families_scroll: ScrollContainer
 var _families: VBoxContainer
 var _cards: VBoxContainer
+var _preview_frame: SubViewportContainer
 var _preview_panel: PanelContainer
 var _viewport: SubViewport
 var _camera: Camera3D
@@ -67,7 +71,6 @@ var _preview: Node3D = null
 var _spec_label: Label
 var _drive_btn: Button
 var _back_btn: Button
-var _reason_label: Label
 var _yaw := VehicleShot.VIEW_YAW_DEG
 var _bounds := AABB()
 var _settle := 0
@@ -99,9 +102,8 @@ func _ready() -> void:
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(bg)
 
-	var col := VBoxContainer.new()
-	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE,
-			int(UiTheme.px(self, UiTheme.MARGIN)))
+	_col = VBoxContainer.new()
+	var col := _col
 	add_child(col)
 
 	var title := Label.new()
@@ -127,10 +129,62 @@ func _ready() -> void:
 	_refresh_cards()
 	_show_preview(_variant)
 	resized.connect(_reflow)
-	_reflow()
+	_apply_sizes()
 	set_process(true)
 	var entry := _drive_btn if not _drive_btn.disabled else _back_btn
 	entry.grab_focus()
+
+
+## Every pixel size, from the theme's scale. Run on build and again on a theme change (a window
+## resize or UI SIZE), when the fonts have grown and these would otherwise stay as they were.
+func _apply_sizes() -> void:
+	_col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE,
+			int(UiTheme.px(self, UiTheme.MARGIN)))
+	_families_scroll.custom_minimum_size.x = UiTheme.px(self, FAMILY_W)
+	_preview_panel.custom_minimum_size.x = UiTheme.px(self, PREVIEW_W)
+	var inner := PREVIEW_W - UiTheme.PAD_X * 2.0
+	_preview_frame.custom_minimum_size = Vector2(UiTheme.px(self, inner),
+			UiTheme.px(self, inner * VehicleShot.CARD_ASPECT))
+	var footer_size := Vector2(UiTheme.px(self, FOOTER_W), UiTheme.px(self, UiTheme.TOUCH_MIN * 1.5))
+	_back_btn.custom_minimum_size = footer_size
+	_drive_btn.custom_minimum_size = footer_size
+	_reflow()
+
+
+## The theme is rebuilt on a resize: lay the page out again. Deferred, as the cards it replaces are
+## still being walked by the propagation that fired this.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_THEME_CHANGED and _drive_btn != null:
+		_relayout.call_deferred()
+
+
+func _relayout() -> void:
+	var key := _focus_key()
+	_apply_sizes()
+	_refresh_families()
+	_refresh_cards()
+	_refresh_tyres()
+	_refocus(key)
+
+
+## Rebuilding a column frees the button the pad was on. Each family button and card carries a
+## "pick" key, so the rebuild can put focus back on its twin: left / right / down then go on from
+## where the player was, not from nothing.
+func _focus_key() -> String:
+	var focus := get_viewport().gui_get_focus_owner() if is_inside_tree() else null
+	return String(focus.get_meta("pick", "")) if focus != null else ""
+
+
+## Focus the control keyed `key`, for a keyboard or pad. A mouse needs none: the picked card is
+## already marked, and a focus rim would only echo the hover one.
+func _refocus(key: String) -> void:
+	if key.is_empty() or _pointer_in_use():
+		return
+	for column: Control in [_families, _cards]:
+		for b in column.find_children("*", "Button", true, false):
+			if String(b.get_meta("pick", "")) == key:
+				(b as Button).grab_focus()
+				return
 
 
 ## Wipe a container now rather than at end of frame: `queue_free` alone leaves the old children
@@ -147,7 +201,7 @@ func _build_families() -> Control:
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.follow_focus = true
-	scroll.custom_minimum_size.x = UiTheme.px(self, FAMILY_W)
+	_families_scroll = scroll
 	_families = VBoxContainer.new()
 	_families.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_families)
@@ -169,19 +223,16 @@ func _build_cards() -> Control:
 ## The SubViewport is built once and outlives every selection; only the body inside it swaps.
 func _build_preview() -> PanelContainer:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size.x = UiTheme.px(self, PREVIEW_W)
 	var stack := VBoxContainer.new()
 	panel.add_child(stack)
 
-	var frame := SubViewportContainer.new()
-	frame.stretch = true
-	frame.custom_minimum_size = Vector2(UiTheme.px(self, PREVIEW_W - UiTheme.PAD_X * 2.0),
-			UiTheme.px(self, (PREVIEW_W - UiTheme.PAD_X * 2.0) * VehicleShot.CARD_ASPECT))
-	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stack.add_child(frame)
+	_preview_frame = SubViewportContainer.new()
+	_preview_frame.stretch = true
+	_preview_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stack.add_child(_preview_frame)
 
 	_viewport = SubViewport.new()
-	frame.add_child(_viewport)
+	_preview_frame.add_child(_viewport)
 	_camera = VehicleShot.build_stage(_viewport)
 
 	_spec_label = Label.new()
@@ -195,27 +246,18 @@ func _build_footer() -> Control:
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 
-	var footer_size := Vector2(UiTheme.px(self, FOOTER_W),
-			UiTheme.px(self, UiTheme.TOUCH_MIN * 1.5))
-
 	_back_btn = Button.new()
 	_back_btn.text = "BACK"
-	_back_btn.custom_minimum_size = footer_size
 	_back_btn.pressed.connect(func() -> void: closed.emit())
 	row.add_child(_back_btn)
 
-	# Breathes while live, see _process.
+	# Pulses once on a press on the picked card, see _pulse_drive.
 	_drive_btn = Button.new()
 	_drive_btn.text = "DRIVE"
 	_drive_btn.theme_type_variation = &"Primary"
-	_drive_btn.custom_minimum_size = footer_size
 	_drive_btn.pressed.connect(_on_drive)
 	row.add_child(_drive_btn)
 
-	_reason_label = Label.new()
-	_reason_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_reason_label.theme_type_variation = &"MutedSmall"
-	row.add_child(_reason_label)
 	return row
 
 
@@ -225,6 +267,8 @@ func _build_footer() -> Control:
 ## missing from FAMILY_ORDER still lists (catalog order, after the named ones).
 const FAMILY_ORDER := ["car", "truck", "tractor", "boat", "drone", "plane", "train"]
 
+## Ends every refusal: DRIVE is dead, and the BODY heading says what to do about it.
+const CHOOSE_ANOTHER := " - choose another level"
 const BETA_FAMILIES := ["train", "boat", "plane", "drone"]  ## rougher than road vehicles, labelled so
 
 func _all_families() -> PackedStringArray:
@@ -247,11 +291,11 @@ func _all_families() -> PackedStringArray:
 ## than hand-written prose, so this stays the one place the truth about a level lives.
 func _refusal(family: String) -> String:
 	if not _allowed.is_empty() and not _allowed.has(family):
-		return "no spawn for it in %s" % _level_name
+		return "cannot spawn in %s%s" % [_level_name, CHOOSE_ANOTHER]
 	if family == "train":
-		return "" if _has_rail else "no closed rail loop here"
+		return "" if _has_rail else "no closed rail loop here" + CHOOSE_ANOTHER
 	if _has_spawn.is_valid() and not bool(_has_spawn.call(family)):
-		return "no spawn for it here"
+		return "cannot spawn here" + CHOOSE_ANOTHER
 	return ""
 
 
@@ -267,16 +311,20 @@ func _refresh_families() -> void:
 		b.theme_type_variation = &"Choice"
 		b.button_pressed = family == _family
 		b.tooltip_text = VehicleSelect.protocols_for(family)
+		b.set_meta("pick", "family:" + family)
 		b.pressed.connect(_on_family_pressed.bind(family))
 		_families.add_child(b)
 
 
 func _on_family_pressed(family: String) -> void:
+	var key := _focus_key()
 	if family == _family:
 		_refresh_families()  # toggle buttons un-toggle themselves; this is a radio group
+		_refocus(key)
 		return
 	_family = family
 	_refresh_families()
+	_refocus(key)
 	_refresh_cards()
 	_show_preview(VehicleCatalog.first_in_family(family))
 
@@ -329,8 +377,8 @@ func _on_gearbox_pressed(manual: bool) -> void:
 	_manual_gearbox = manual
 
 
-## The classes the previewed body may fit, as one ButtonGroup between GEARBOX and BODY; none when
-## only the stock fits. Read off the preview's spec, so it is rebuilt on every preview swap.
+## The classes the previewed body may fit, as one ButtonGroup between GEARBOX and BODY; none only
+## for a body with no ground drive. Read off the preview's spec, so it is rebuilt on every preview swap.
 func _refresh_tyres() -> void:
 	for child in _cards.get_children():
 		if child.has_meta("tyres"):
@@ -343,7 +391,9 @@ func _refresh_tyres() -> void:
 		return
 	var ids := choices.map(func(c: TyreClass) -> String: return c.id)
 	var stored := String(_tyres.get(_variant, ""))
-	_tyre = stored if ids.has(stored) else choices[0].id
+	# One class is no choice: the row shows it picked, and DRIVE sends no tyre.
+	var single := choices.size() < 2
+	_tyre = "" if single else (stored if ids.has(stored) else choices[0].id)
 	var box := VBoxContainer.new()
 	box.set_meta("tyres", true)
 	box.add_child(_heading("TYRES"))
@@ -356,8 +406,9 @@ func _refresh_tyres() -> void:
 		b.toggle_mode = true
 		b.button_group = group
 		b.theme_type_variation = &"Choice"
-		b.button_pressed = cls.id == _tyre
-		b.pressed.connect(_on_tyre_pressed.bind(cls.id))
+		b.button_pressed = single or cls.id == _tyre
+		if not single:  # the lone class is shown picked, and there is nothing to pick instead
+			b.pressed.connect(_on_tyre_pressed.bind(cls.id))
 		row.add_child(b)
 	box.add_child(row)
 	_cards.add_child(box)
@@ -369,8 +420,8 @@ func _on_tyre_pressed(id: String) -> void:
 	_tyres[_variant] = id
 
 
-## The classes a body of `gd` may fit, its stock first and then `TyreCatalog`'s order; empty with
-## no ground drive or when the stock is all that fits (no choice to offer).
+## The classes a body of `gd` may fit, its stock first and then `TyreCatalog`'s order; empty only
+## with no ground drive (a boat). A body that fits only its stock lists that one class.
 static func tyre_choices(gd: GroundDriveSpec) -> Array[TyreClass]:
 	var out: Array[TyreClass] = []
 	if gd == null or gd.tyre == null:
@@ -379,8 +430,6 @@ static func tyre_choices(gd: GroundDriveSpec) -> Array[TyreClass]:
 	for cls in TyreCatalog.fitting(gd.tyre_fit):
 		if cls.id != gd.tyre.id:
 			out.append(cls)
-	if out.size() < 2:
-		out.clear()
 	return out
 
 
@@ -403,51 +452,16 @@ func _card_grid(ids: PackedStringArray, selected: String, reason: String,
 
 
 func _make_card(id: String, selected: bool, reason: String, on_press: Callable) -> Button:
-	var card_w := UiTheme.px(self, CARD_W)
-	var card := CardGrid.card_button(self, BORDER_W, selected)
-	card.custom_minimum_size = Vector2(card_w, roundf(card_w * VehicleShot.CARD_ASPECT))
-	card.disabled = not reason.is_empty()
-	card.tooltip_text = reason
-	card.pressed.connect(on_press.bind(id))
-
-	# The picture is inset by the border: a StyleBox is the button's background, so a full-rect
-	# child would paint over it and hide the selection border entirely.
-	var inset := UiTheme.px(self, BORDER_W)
-
 	var thumb_id := VehicleShot.id_for_scene(id) if id.contains("/") else id
-	var thumb_path := VehicleShot.thumb_path(thumb_id)
-	if not thumb_id.is_empty() and ResourceLoader.exists(thumb_path):
-		var thumb := TextureRect.new()
-		thumb.texture = ResourceLoader.load(thumb_path)
-		thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-		thumb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		thumb.modulate = Color(1, 1, 1, 0.45) if card.disabled else Color.WHITE
-		thumb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		thumb.offset_left = inset
-		thumb.offset_top = inset
-		thumb.offset_right = -inset
-		thumb.offset_bottom = -inset
-		card.add_child(thumb)
-
-	var strip := ColorRect.new()
-	strip.color = UiTheme.SCRIM
-	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	strip.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	strip.offset_left = inset
-	strip.offset_right = -inset
-	strip.offset_top = -UiTheme.px(self, 28.0)
-	strip.offset_bottom = -inset
-	card.add_child(strip)
-
-	var label := Label.new()
-	label.text = _pretty(thumb_id) if not thumb_id.is_empty() else "NONE"
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.theme_type_variation = &"MutedSmall" if card.disabled else &"Dim"
-	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	label.offset_left = UiTheme.px(self, 8.0)
-	strip.add_child(label)
+	var thumb_path := VehicleShot.thumb_path(thumb_id) if not thumb_id.is_empty() else ""
+	var refused := not reason.is_empty()
+	var card := CardGrid.picture_card(self, CARD_W, VehicleShot.CARD_ASPECT, BORDER_W, selected,
+			thumb_path, _pretty(thumb_id) if not thumb_id.is_empty() else "NONE",
+			&"MutedSmall" if refused else &"Dim", "", Color.TRANSPARENT, refused)
+	card.disabled = refused
+	card.tooltip_text = reason
+	card.set_meta("pick", "card:" + id)
+	card.pressed.connect(on_press.bind(id))
 	return card
 
 
@@ -457,19 +471,43 @@ static func _pretty(id: String) -> String:
 
 func _on_variant_pressed(variant: String) -> void:
 	if variant == _variant:
+		_point_at_drive()
 		return
+	var key := _focus_key()
 	_variant = variant
 	_refresh_cards()
 	_show_preview(variant)
+	_refocus(key)
+
+
+## A press on what is already picked means "this one": DRIVE pulses once. Focus stays on the card,
+## so a pad can still step to the next body. A refused body has no live DRIVE to point at.
+func _point_at_drive() -> void:
+	if not _drive_btn.disabled:
+		_pulse_left = PULSE_S
+
+
+## Whether the mouse or a finger was the last device used (UiScale owns that). Unknown (no
+## UiScale above, as in a bare test) reads as no.
+func _pointer_in_use() -> bool:
+	var node := get_parent()
+	while node != null and not node is UiScale:
+		node = node.get_parent()
+	return node != null and (node as UiScale).device() == UiScale.Device.POINTER
 
 
 func _on_attachment_pressed(id: String) -> void:
+	if id == _attachment and _attachment_of == _variant:
+		_point_at_drive()
+		return
+	var key := _focus_key()
 	_attachment = id
 	_attachment_of = _variant
 	if _preview != null and _preview.has_method("set_attachment"):
 		_preview.set_attachment(id)
 		VehicleShot.pin_display(_preview)
 	_refresh_attachments()
+	_refocus(key)
 
 
 ## Exists only when the previewed machine says it tows (duck-type, same as the shell uses for
@@ -569,11 +607,15 @@ func _process(delta: float) -> void:
 func _pulse_drive(delta: float) -> void:
 	if _drive_btn.disabled:
 		_drive_btn.modulate = Color.WHITE
-		_pulse_t = 0.0
+		_pulse_left = 0.0
 		return
-	_pulse_t = fmod(_pulse_t + delta * PULSE_HZ, 1.0)
-	var k := 1.0 + PULSE_DEPTH * sin(_pulse_t * TAU)
-	_drive_btn.modulate = Color(k, k, k)
+	if _pulse_left <= 0.0:
+		_drive_btn.modulate = Color.WHITE
+		return
+	_pulse_left = maxf(_pulse_left - delta, 0.0)
+	# A hue change, not a brightness swing: the blue fill goes green and back, holding near full.
+	var swell := clampf(sin((1.0 - _pulse_left / PULSE_S) * PI) * 1.4, 0.0, 1.0)
+	_drive_btn.modulate = Color.WHITE.lerp(PULSE_TINT, swell)
 
 
 # --- spec line ----------------------------------------------------------------
@@ -624,7 +666,6 @@ func _spec_text(variant: String) -> String:
 func _update_drive_button() -> void:
 	var reason := _refusal(VehicleCatalog.family_of(_variant))
 	_drive_btn.disabled = not reason.is_empty()
-	_reason_label.text = reason.to_upper()
 	if _drive_btn.disabled and _drive_btn.has_focus() and _back_btn != null:
 		_back_btn.grab_focus()  # must not strand the focus ring on a button that just went dead
 

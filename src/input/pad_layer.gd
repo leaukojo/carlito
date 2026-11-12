@@ -5,10 +5,9 @@ extends Node
 ## button event, picks the layer by L1, resolves the slot against the current vehicle
 ## (`ActionRegistry.pad_press`) and injects that action as an InputEventAction, which every
 ## consumer (LocalSource, boot.gd, level.gd) already reads. The raw event is never consumed, so
-## menus keep Godot's built-in `ui_*` pad navigation (D-pad, stick); Godot gives no pad button to
-## accept or back, so while a menu is up Cross and Circle are injected as `ui_accept` / `to_menu`.
-## Shell-composed (it needs the shell's capability dict) and runs while paused, so Options closes
-## the menu it opened.
+## menus keep Godot's `ui_*` D-pad and stick navigation; under a menu Cross and Circle are injected
+## as `ui_accept` / `to_menu` (Godot binds no pad button to either). Shell-composed (it needs the
+## shell's capability dict) and runs while paused, so Options closes the menu it opened.
 ## Per pad throughout: each pad has its own L1, and an injected action carries its pad's `device`,
 ## so Input holds the action until every pad pressing it lets go.
 

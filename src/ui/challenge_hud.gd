@@ -5,6 +5,8 @@ extends Control
 ## `_begin_challenge`, freed in `_end_challenge` — and hands it the runner to read each frame.
 ## No emoji; colour/type from the theme.
 
+const HUD_TOP := 150.0  ## logical px from the top edge, below the Notice line and the coach banner
+
 var _runner: ChallengeRunner
 var _panel: PanelContainer
 var _label: Label
@@ -19,7 +21,7 @@ func _ready() -> void:
 	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	# Below both the top-edge Notice line (RESET's warning included) and CoachCue's banner
 	# (offset_top 90) — an attempt can show either at the same time as this.
-	_panel.offset_top = UiTheme.px(self, 150.0)
+	_panel.offset_top = UiTheme.px(self, HUD_TOP)
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel.visible = false
 	add_child(_panel)
@@ -28,6 +30,11 @@ func _ready() -> void:
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_label.theme_type_variation = &"Title"
 	_panel.add_child(_label)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_THEME_CHANGED and _panel != null:
+		_panel.offset_top = UiTheme.px(self, HUD_TOP)
 
 
 func set_runner(runner: ChallengeRunner) -> void:

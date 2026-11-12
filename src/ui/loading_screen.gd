@@ -58,8 +58,7 @@ func _ready() -> void:
 	col.add_child(_title)
 
 	_bar = ProgressBar.new()
-	_bar.custom_minimum_size = Vector2(
-			UiTheme.px(self, BAR_SIZE.x), UiTheme.px(self, BAR_SIZE.y))
+	_size_bar()
 	_bar.min_value = 0.0
 	_bar.max_value = 1.0
 	_bar.show_percentage = false
@@ -70,6 +69,16 @@ func _ready() -> void:
 	_weight.theme_type_variation = &"Dim"
 	_weight.visible = false
 	col.add_child(_weight)
+
+
+func _size_bar() -> void:
+	_bar.custom_minimum_size = Vector2(UiTheme.px(self, BAR_SIZE.x), UiTheme.px(self, BAR_SIZE.y))
+
+
+## The bar's pixel size follows the theme's scale, so a resize mid-load re-applies it.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_THEME_CHANGED and _bar != null:
+		_size_bar()
 
 
 ## Dress the screen for the level loading: name, card picture as backdrop, and the same

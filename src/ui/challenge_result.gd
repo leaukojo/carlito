@@ -19,6 +19,7 @@ var _message := ""
 var _best_time := INF
 var _is_new_best := false
 var _has_next := false
+var _col: VBoxContainer
 
 
 ## Called by the shell before add_child.
@@ -42,8 +43,7 @@ func _ready() -> void:
 	add_child(bg)
 
 	var col := VBoxContainer.new()
-	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE,
-			int(UiTheme.px(self, UiTheme.MARGIN)))
+	_col = col
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	add_child(col)
 
@@ -81,4 +81,18 @@ func _ready() -> void:
 		row.add_child(next_btn)
 		row.add_child(UiTheme.button(self, "CHALLENGES", func() -> void: challenges_requested.emit()))
 
+	_apply_sizes()
 	retry.grab_focus()
+
+
+## Pixel sizes follow the theme's scale, so a resize re-applies them.
+func _apply_sizes() -> void:
+	_col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE,
+			int(UiTheme.px(self, UiTheme.MARGIN)))
+	for b in _col.find_children("*", "Button", true, false):
+		UiTheme.size_button(self, b as Button)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_THEME_CHANGED and _col != null:
+		_apply_sizes()

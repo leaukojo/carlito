@@ -56,7 +56,10 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		if (event as InputEventMouseMotion).relative != Vector2.ZERO:
 			_set_device(Device.POINTER)
-			get_viewport().gui_release_focus()
+			# Never mid-click: a button that loses focus while pressed cancels the press, so a
+			# click whose cursor drifted a pixel between down and up would be eaten.
+			if not _mouse_held():
+				get_viewport().gui_release_focus()
 		return
 	if event is InputEventMouseButton or event is InputEventScreenTouch \
 			or event is InputEventScreenDrag:
@@ -72,6 +75,10 @@ func _input(event: InputEvent) -> void:
 	if target != null:
 		target.grab_focus()
 		get_viewport().set_input_as_handled()
+
+
+func _mouse_held() -> bool:
+	return Input.get_mouse_button_mask() != 0
 
 
 ## Which non-pointer device `event` came from, or -1 for none (releases, a resting stick).

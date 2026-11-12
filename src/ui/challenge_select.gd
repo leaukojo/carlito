@@ -15,7 +15,6 @@ const CardGrid := preload("res://src/ui/card_grid.gd")
 
 const CARD_W := 280.0
 const CARD_ASPECT := 0.594  ## matches LevelSelect: the arena screenshot's shape
-const STRIP_H := 34.0
 const STATUS_W := 120.0  ## top-left DONE badge width, over the screenshot
 const BORDER_W := 3.0
 const MAX_COLUMNS := 4
@@ -23,6 +22,7 @@ const MAX_COLUMNS := 4
 var _progress: ChallengeProgress
 var _open_id := ""  ## a challenge whose briefing the screen opens on; "" = the grid
 
+var _briefing_def: ChallengeDef  ## the briefing page's challenge, to lay it out again on a resize
 var _grid_page: VBoxContainer
 var _briefing_page: VBoxContainer
 var _confirm_page: VBoxContainer
@@ -165,49 +165,24 @@ func _reflow_all() -> void:
 		grid.columns = CardGrid.columns_for(self, CARD_W, gap, MAX_COLUMNS, grid.get_child_count())
 
 
-## One challenge card: the arena's screenshot behind, title on a bottom strip, DONE/best time
+## One challenge card: the arena's screenshot with the title under it, DONE/best time
 ## top-left over the screenshot (nothing shown until done). The whole card is the Button;
 ## pressing it opens the briefing.
 func _make_card(d: ChallengeDef) -> Button:
-	var card_w := UiTheme.px(self, CARD_W)
 	var done := _progress.is_done(d.id)
-
-	var card := CardGrid.card_button(self, BORDER_W, done)
-	card.custom_minimum_size = Vector2(card_w, roundf(card_w * CARD_ASPECT))
-	card.tooltip_text = d.briefing
-	card.pressed.connect(_show_briefing.bind(d))
-
-	var inset := UiTheme.px(self, BORDER_W)
 	# The challenge's own spawn shot (gen_challenge_thumbs.gd) if generated, else the arena's
 	# shared landscape shot — never neither, so an ungenerated challenge still shows something.
 	var thumb_path := CardImport.challenge_thumb_path(d.id)
 	if not ResourceLoader.exists(thumb_path):
 		thumb_path = LevelShot.thumb_path(d.arena)
-	if ResourceLoader.exists(thumb_path):
-		var thumb := TextureRect.new()
-		thumb.texture = load(thumb_path)
-		thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-		thumb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		thumb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		thumb.offset_left = inset
-		thumb.offset_top = inset
-		thumb.offset_right = -inset
-		thumb.offset_bottom = -inset
-		card.add_child(thumb)
-	else:
-		var missing := Label.new()
-		missing.text = "no screenshot"
-		missing.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		missing.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		missing.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		missing.theme_type_variation = &"Dim"
-		missing.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		card.add_child(missing)
+	var card := CardGrid.picture_card(self, CARD_W, CARD_ASPECT, BORDER_W, done, thumb_path, d.title)
+	card.tooltip_text = d.briefing
+	card.pressed.connect(_show_briefing.bind(d))
 
+	var inset := UiTheme.px(self, BORDER_W)
 	if done:
-		# Top-left, over the screenshot: the bottom strip is title-only, and a long title
-		# would otherwise run under a status label sharing that strip.
+		# Top-left, over the screenshot: the caption row is title-only, and a long title
+		# would otherwise run under a status label sharing it.
 		var status_scrim := ColorRect.new()
 		status_scrim.color = UiTheme.SCRIM
 		status_scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -215,7 +190,7 @@ func _make_card(d: ChallengeDef) -> Button:
 		status_scrim.offset_left = inset
 		status_scrim.offset_top = inset
 		status_scrim.offset_right = inset + UiTheme.px(self, STATUS_W)
-		status_scrim.offset_bottom = inset + UiTheme.px(self, STRIP_H)
+		status_scrim.offset_bottom = inset + UiTheme.px(self, CardGrid.CAPTION_H)
 		card.add_child(status_scrim)
 
 		var status := Label.new()
@@ -228,29 +203,42 @@ func _make_card(d: ChallengeDef) -> Button:
 		status.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		status_scrim.add_child(status)
 
-	var strip := ColorRect.new()
-	strip.color = UiTheme.SCRIM
-	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	strip.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	strip.offset_left = inset
-	strip.offset_right = -inset
-	strip.offset_top = -UiTheme.px(self, STRIP_H)
-	strip.offset_bottom = -inset
-	card.add_child(strip)
-
-	var label := Label.new()
-	label.text = d.title
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.theme_type_variation = &"Title"
-	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	label.offset_left = UiTheme.px(self, 10.0)
-	strip.add_child(label)
-
 	return card
 
 
+## Card, margin and text-width pixel sizes are fixed when built; a theme rebuild (a window resize,
+## UI SIZE) leaves them stale, so the open pages are laid out again. Deferred: this fires while
+## the theme is still propagating through the children it would free.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_THEME_CHANGED and _confirm_page != null:
+		_relayout.call_deferred()
+
+
+func _relayout() -> void:
+	var margin := int(UiTheme.px(self, UiTheme.MARGIN))
+	for page: VBoxContainer in [_grid_page, _briefing_page, _confirm_page]:
+		page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE,
+				margin)
+	var up := _confirm_page if _confirm_page.visible \
+			else (_briefing_page if _briefing_page.visible else _grid_page)
+	_build_grid_page()
+	for c in _confirm_page.get_children():
+		c.free()
+	_build_confirm_page()
+	if _briefing_def != null:
+		_show_briefing(_briefing_def)  # rebuilt, and focused on START when it is the page up
+	# Each rebuild grabbed focus on its own page: put back the page that was up, and its focus.
+	_grid_page.visible = up == _grid_page
+	_briefing_page.visible = up == _briefing_page
+	_confirm_page.visible = up == _confirm_page
+	if up == _confirm_page:
+		_confirm_no_btn.grab_focus()
+	elif up == _grid_page and not _family_grids.is_empty():
+		_family_grids[0].get_child(0).grab_focus()
+
+
 func _show_briefing(d: ChallengeDef) -> void:
+	_briefing_def = d
 	for c in _briefing_page.get_children():
 		c.free()
 

@@ -89,11 +89,11 @@ table above, is the same whatever the tread.
 
 ### Choosing tyres
 
-In the GARAGE, a vehicle that can take more than one class shows a TYRES row of buttons, its
-stock tyre first. The game remembers the choice for that vehicle, and a respawn keeps it. A
-challenge always uses the stock tyre. Trailers, the tractors and the racing cars have only one
-class each, so they show no row.
-<!-- VehicleSelect.tyre_choices (empty when only the stock fits); UserSettings.set_tyre; docs/vehicles.md: "the stock in a challenge" -->
+In the GARAGE, a vehicle with wheels shows a TYRES row of buttons, its stock tyre first. The game
+remembers the choice for that vehicle, and a respawn keeps it. A challenge always uses the stock
+tyre. Trailers, the tractors and the racing cars have only one class each, so their row shows
+that class shown as chosen.
+<!-- VehicleSelect.tyre_choices (empty only with no ground drive); UserSettings.set_tyre; docs/vehicles.md: "the stock in a challenge" -->
 
 Changing the tread changes only the grip numbers and the rolling resistance. The vehicle's brakes,
 its ABS and its traction control stay as they were: they still aim for the same point on the

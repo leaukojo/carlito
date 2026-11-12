@@ -230,14 +230,14 @@ func test_guidance_target_needs_several_ticks_at_steer_speed_not_a_jump() -> voi
 
 ## The one exception to this suite's "no physics body" discipline: BaseVehicle's target
 ## selection (guidance vs. plain `input.steer`) is three lines inline in `_physics_process`, so
-## exercising it for real means a real tractor scene. `InputRouter._current` is set directly,
+## exercising it for real means a real tractor scene. The display body's own input is set directly,
 ## bypassing registration/arbitration, since only the target-selection and slew are under test.
 func _guidance_test_tractor() -> Node3D:
 	var root: Node3D = auto_free(Node3D.new())
 	add_child(root)
 	var tractor: Node3D = auto_free(
 			(load(CatalogScript.scene_of("tractor-kenney")) as PackedScene).instantiate() as Node3D)
-	tractor.set("display_only", true)  # skip InputRouter registration; _current is set by hand
+	tractor.set("display_only", true)  # skip InputRouter registration; its input is set by hand
 	root.add_child(tractor)
 	return tractor
 
@@ -249,7 +249,7 @@ func test_guidance_wheel_angle_matches_the_slewed_steer_with_no_taper() -> void:
 	var drive: WheelDrive = tractor.get("drive")
 	var input := VehicleInput.new()
 	input.guidance_curvature = 20.0
-	InputRouter.set("_current", input)
+	tractor.set("_display_input", input)
 	var dt := 1.0 / 60.0
 	var target := drive.guidance_steer_unit(input, gd)
 	var ticks := int(ceil(absf(target) / (spec.steer_speed * dt))) + 2
@@ -277,7 +277,7 @@ func test_guidance_absent_still_slews_toward_plain_input_steer() -> void:
 	var spec: VehicleSpec = tractor.get("spec")
 	var input := VehicleInput.new()
 	input.steer = 0.4
-	InputRouter.set("_current", input)
+	tractor.set("_display_input", input)
 	var dt := 1.0 / 60.0
 	var ticks := int(ceil(0.4 / (spec.steer_speed * dt))) + 2
 	for i in ticks:
@@ -814,9 +814,8 @@ func test_a_respawn_with_the_plough_on_carries_it_again_one_tick_later() -> void
 	assert_float(t.mass).is_equal_approx(t.spec.mass + t._hitch.implement.mass_kg(), 1e-3)
 
 
-## `axle_load` is the rear springs' force, so it needs a floor and real ticks. `InputRouter`
-## re-arbitrates every tick, so the hitch is commanded over the bridge (`MeasureRig.drive`'s inbound),
-## parked on the foot brake and the lever as the `hitch` pass is.
+## `axle_load` is the rear springs' force, so it needs a floor and real ticks. The display body
+## ticks on its own input, set here: parked on the foot brake, the hitch on the lever.
 func test_axle_load_reads_the_rear_springs_and_rises_when_the_plough_is_raised() -> void:
 	var root: Node3D = auto_free(Node3D.new())
 	add_child(root)
@@ -837,21 +836,22 @@ func test_axle_load_reads_the_rear_springs_and_rises_when_the_plough_is_raised()
 	await get_tree().physics_frame
 	t.global_position = Vector3(0.0, 2.0, 0.0)
 	t.set_attachment(PLOUGH_PATH)
-	var inbound := {"key": 3, "gear": 1, "accel": 0.0, "brake": 100.0, "steer": 0.0,
-			"handbrake": 1.0, "hitch_pos": 0.0}
-	Bridge.set("_active", true)
-	Bridge.set("_inbound", inbound)
+	var input := VehicleInput.new()
+	input.key = InputRouter.KEY_IGNITION
+	input.gear_request = 1
+	input.brake = 1.0
+	input.handbrake = 1.0
+	input.hitch_request = 0.0
+	t.set("_display_input", input)
 	for i in 240:
 		await get_tree().physics_frame
 	var tel := t.telemetry as TractorTelemetry
 	assert_float(tel.axle_load).is_equal_approx(
 			t.drive.rear_suspension_force() / VehicleTelemetry.GRAVITY, 1e-3)
 	var lowered := tel.axle_load
-	inbound["hitch_pos"] = 100.0
+	input.hitch_request = 1.0
 	for i in 240:
 		await get_tree().physics_frame
-	Bridge.set("_active", false)
-	Bridge.set("_inbound", {})
 	# The ground's share moves onto the linkage, hung behind the rear axle: the rear takes more
 	# than the share itself (`m (L + e) / L`).
 	var plough := t._hitch.implement

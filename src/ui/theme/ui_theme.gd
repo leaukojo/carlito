@@ -25,6 +25,7 @@ const TEXT := Color(0.90, 0.93, 0.98)
 const TEXT_DIM := Color(0.62, 0.67, 0.74)
 const TEXT_MUTED := Color(0.42, 0.46, 0.52)      ## disabled
 const ACCENT := Color(0.42, 0.72, 1.00)          ## focus ring, progress fill, selection
+const HOVER := Color(0.95, 0.96, 1.00)           ## a picture card's or choice's hover/cursor rim, never ACCENT (what is picked)
 const WARN := Color(1.00, 0.70, 0.15)
 const DANGER := Color(0.95, 0.35, 0.30)
 const OK := Color(0.35, 0.85, 0.45)
@@ -137,6 +138,7 @@ static func _build_button(t: Theme, scale: float) -> void:
 	# a press.
 	t.set_type_variation(&"Choice", "Button")
 	var chosen := _ringed(keycap(SURFACE_LO, ACCENT, scale), scale)
+	t.set_stylebox("hover", &"Choice", keycap(SURFACE_HI, HOVER, scale))  # not the selected rim
 	t.set_stylebox("pressed", &"Choice", chosen)
 	t.set_stylebox("hover_pressed", &"Choice", chosen)
 	t.set_color("font_pressed_color", &"Choice", ACCENT)
@@ -195,12 +197,17 @@ static func keycap(bg: Color, rim: Color, scale: float) -> StyleBoxFlat:
 	return s
 
 
+## `button`'s minimum size at `ref`'s scale; an overlay re-applies it to its buttons on a theme change.
+static func size_button(ref: Control, b: Button) -> void:
+	b.custom_minimum_size = Vector2(px(ref, 200.0), px(ref, TOUCH_MIN))
+
+
 ## A screen's action button (200 x TOUCH_MIN, scaled for `ref`), the theme keycap unless `rim`
 ## names another (UiTheme.DANGER for a destructive one).
 static func button(ref: Control, text: String, on_press: Callable, rim := RIM) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(px(ref, 200.0), px(ref, TOUCH_MIN))
+	size_button(ref, b)
 	if rim != RIM:
 		b.add_theme_stylebox_override("normal", keycap(SURFACE, rim, scale_of(ref)))
 		b.add_theme_stylebox_override("hover", keycap(SURFACE_HI, rim, scale_of(ref)))

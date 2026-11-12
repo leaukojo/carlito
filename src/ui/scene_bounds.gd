@@ -1,5 +1,6 @@
 extends RefCounted
-## World-space AABB of a subtree's visible geometry. Shared by VehicleShot (the live
+## World-space AABB of a subtree's geometry: meshes, not lights or particles (a headlight's
+## range or an emitter's visibility box is not the subject's size). Shared by VehicleShot (the live
 ## turntable + vehicle card thumbnails), gen_thumbs.gd (kit prefab thumbnails) and
 ## gen_level_thumbs.gd (level card overview framing). Runtime-safe (no editor APIs) so it
 ## stays reachable from src/ui at runtime as well as from tools/ generators.
@@ -31,7 +32,7 @@ static func world_aabb(roots: Array[Node3D]) -> AABB:
 
 static func visuals(node: Node) -> Array[VisualInstance3D]:
 	var found: Array[VisualInstance3D] = []
-	if node is VisualInstance3D:
+	if node is GeometryInstance3D and not (node is GPUParticles3D or node is CPUParticles3D):
 		found.append(node)
 	for child in node.get_children():
 		found.append_array(visuals(child))

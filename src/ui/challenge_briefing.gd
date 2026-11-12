@@ -9,6 +9,8 @@ signal closed
 
 var _def: ChallengeDef
 var _hint_label: Label
+var _col: VBoxContainer
+var _wrapped: Array[Label] = []  ## the paragraphs held to a fixed reading width
 
 
 ## Called by the shell before add_child.
@@ -25,8 +27,7 @@ func _ready() -> void:
 	add_child(bg)
 
 	var col := VBoxContainer.new()
-	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE,
-			int(UiTheme.px(self, UiTheme.MARGIN)))
+	_col = col
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	add_child(col)
 
@@ -41,7 +42,7 @@ func _ready() -> void:
 	briefing.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	briefing.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	briefing.theme_type_variation = &"Lead"
-	briefing.custom_minimum_size.x = UiTheme.px(self, 480.0)
+	_wrapped.append(briefing)
 	col.add_child(briefing)
 
 	if _def.par_s > 0.0:
@@ -62,7 +63,7 @@ func _ready() -> void:
 	_hint_label.text = _def.hint
 	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint_label.custom_minimum_size.x = UiTheme.px(self, 480.0)
+	_wrapped.append(_hint_label)
 	_hint_label.theme_type_variation = &"LeadDim"
 	_hint_label.visible = false
 	col.add_child(_hint_label)
@@ -74,4 +75,21 @@ func _ready() -> void:
 			func() -> void: _hint_label.visible = not _hint_label.visible))
 	var close := UiTheme.button(self, "CLOSE", func() -> void: closed.emit())
 	row.add_child(close)
+	_apply_sizes()
 	close.grab_focus()
+
+
+## Pixel sizes follow the theme's scale, so a resize re-applies them (buttons take theirs from
+## `UiTheme.size_button`).
+func _apply_sizes() -> void:
+	_col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE,
+			int(UiTheme.px(self, UiTheme.MARGIN)))
+	for label in _wrapped:
+		label.custom_minimum_size.x = UiTheme.px(self, 480.0)
+	for b in _col.find_children("*", "Button", true, false):
+		UiTheme.size_button(self, b as Button)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_THEME_CHANGED and _col != null:
+		_apply_sizes()

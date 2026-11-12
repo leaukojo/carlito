@@ -2,6 +2,7 @@ extends GdUnitTestSuite
 ## Shell menus: level-select, vehicle selector. PREVIEW not tested (needs renderer).
 
 const WorldConditions := preload("res://src/levels/base/world_conditions.gd")
+const CardGrid := preload("res://src/ui/card_grid.gd")
 
 func _buttons(node: Node) -> Array:
 	var out := []
@@ -11,7 +12,7 @@ func _buttons(node: Node) -> Array:
 
 
 ## Cards: name on child Label, text empty (picture card convention).
-func _cards(sel: LevelSelect) -> Array:
+func _cards(sel: Control) -> Array:
 	var out := []
 	for b in _buttons(sel):
 		if (b as Button).text.is_empty():
@@ -62,6 +63,25 @@ func test_challenge_select_more_info_toggles_and_relabels() -> void:
 	assert_array(_labels(sel)).contains(["LESS INFO"])
 	_press(sel, "LESS INFO")
 	assert_array(_labels(sel)).contains(["MORE INFO"])
+
+
+## Moving the mouse with a button down (a click that drifts) must not drop focus: the pressed
+## button would cancel the click.
+class _HeldMouse extends UiScale:
+	func _mouse_held() -> bool:
+		return true
+
+
+func test_ui_scale_keeps_focus_while_a_mouse_button_is_down() -> void:
+	var ui: UiScale = auto_free(_HeldMouse.new())
+	add_child(ui)
+	var button := Button.new()
+	ui.add_child(button)
+	button.grab_focus()
+	var move := InputEventMouseMotion.new()
+	move.relative = Vector2(2.0, 0.0)
+	ui._input(move)
+	assert_bool(button.has_focus()).is_true()
 
 
 ## The last device used is the UI's one input mode: pointer motion drops keyboard focus, and a
@@ -185,6 +205,23 @@ func test_bake_weights_carry_every_baked_level() -> void:
 	assert_int(int(w.get(level_2, 0))).override_failure_message(NO_BAKE).is_greater(0)
 	assert_int(int(w.get(level_2, 0))).is_equal(LevelRegistry.weight_bytes(level_2))
 	assert_bool(w.has(LevelRegistry.scene_of("garage"))).is_false()
+
+
+## The families table the export ships, and the level select's read of it where a level's LevelInfo
+## is not loadable (an island on the web before its pack is mounted).
+func test_allowed_families_come_from_level_info_else_the_shipped_table() -> void:
+	var table := LevelRegistry.vehicle_table()
+	assert_array(table.get(LevelRegistry.scene_of("open_sea"), [])).contains_exactly(["boat"])
+	assert_bool(table.has(LevelRegistry.scene_of("level_2"))).is_true()
+	assert_array(Array(LevelRegistry.allowed_vehicles_of(LevelRegistry.scene_of("open_sea")))) \
+			.contains_exactly(["boat"])
+	var packed_away := "res://src/levels/island/not_mounted/not_mounted.tscn"
+	LevelRegistry._shipped[LevelRegistry.SHIPPED_VEHICLES] = {packed_away: ["car", "boat"]}
+	var got: Variant = LevelRegistry.allowed_vehicles_of(packed_away)
+	var unknown: Variant = LevelRegistry.allowed_vehicles_of("res://nope/nope.tscn")
+	LevelRegistry._shipped.erase(LevelRegistry.SHIPPED_VEHICLES)
+	assert_array(Array(got)).contains_exactly(["car", "boat"])
+	assert_bool(unknown == null).is_true()
 
 
 ## Selector on level with allowed families; emits VARIANT not family.
@@ -329,15 +366,165 @@ func test_vehicle_select_puts_the_tyres_between_gearbox_and_body() -> void:
 	assert_array(titles).is_equal(["GEARBOX", "TYRES", "BODY"])
 
 
-## Only the stock fits (slicks) or no tyre at all (a boat): no row, and DRIVE sends no tyre.
-func test_vehicle_select_hides_the_tyres_when_only_the_stock_fits() -> void:
+## Only the stock fits (slicks): the row stays with that one class shown picked, so nothing below
+## moves; no tyre at all (a boat): no row. Neither sends a tyre on DRIVE.
+func test_vehicle_select_shows_the_lone_tyre_picked_and_none_for_a_boat() -> void:
 	for pick: Array in [["car", "race"], ["boat", "boat-speed-a"]]:
 		var sel := _selector(PackedStringArray([pick[0]]), pick[1])
-		assert_array(_labels(sel)).not_contains(["SLICK"])
 		var chosen := []
 		sel.tyre_chosen.connect(func(_v: String, id: String) -> void: chosen.append(id))
 		_press(sel, "DRIVE")
 		assert_array(chosen).is_empty()
+		var slick: Array = _buttons(sel).filter(func(b: Button) -> bool: return b.text == "SLICK")
+		if pick[0] == "car":
+			assert_int(slick.size()).is_equal(1)
+			assert_bool((slick[0] as Button).disabled).is_false()
+			assert_bool((slick[0] as Button).button_pressed).is_true()
+			(slick[0] as Button).pressed.emit()  # nothing else to pick: still no tyre sent
+			_press(sel, "DRIVE")
+			assert_array(chosen).is_empty()
+		else:
+			assert_array(slick).is_empty()
+
+
+## What the cursor is on and what is picked wear different rims, on a card and on a choice button.
+func test_hover_and_selection_use_different_rims() -> void:
+	var host: Control = auto_free(Control.new())
+	add_child(host)
+	var plain: Button = auto_free(CardGrid.card_button(host, 3.0, false))
+	var picked: Button = auto_free(CardGrid.card_button(host, 3.0, true))
+	assert_object(plain.get_theme_stylebox("hover").get("border_color")).is_not_equal(
+			picked.get_theme_stylebox("normal").get("border_color"))
+	assert_object(plain.get_theme_stylebox("hover").get("border_color")).is_equal(UiTheme.HOVER)
+	assert_object(picked.get_theme_stylebox("hover").get("border_color")).is_equal(UiTheme.ACCENT)
+	var theme := UiTheme.build(1.0)
+	assert_object(theme.get_stylebox("hover", &"Choice").get("border_color")).is_equal(UiTheme.HOVER)
+	assert_object(theme.get_stylebox("hover_pressed", &"Choice").get("border_color")).is_equal(UiTheme.ACCENT)
+
+
+## A press on the body already picked pulses DRIVE once and leaves focus on the card, so a pad can
+## still step to the next body.
+func test_vehicle_select_a_press_on_the_picked_body_pulses_drive() -> void:
+	var sel := _selector(PackedStringArray(["car"]), "sedan")
+	var drive: Button = _buttons(sel).filter(func(b: Button) -> bool: return b.text == "DRIVE")[0]
+	var picked: Button = _buttons(sel).filter(func(b: Button) -> bool:
+			return b.text.is_empty() and b.get_theme_stylebox("normal").get("border_color") == UiTheme.ACCENT)[0]
+	picked.grab_focus()
+	picked.pressed.emit()
+	assert_bool(drive.has_focus()).is_false()
+	assert_bool(picked.has_focus()).is_true()
+	assert_float(sel._pulse_left).is_equal(VehicleSelect.PULSE_S)
+	var idle := _selector(PackedStringArray(["car"]), "sedan")
+	idle._process(0.3)
+	assert_object(idle._drive_btn.modulate).is_equal(Color.WHITE)  # no pulse until asked for
+
+
+## Pressing a different body rebuilds the cards; a pad keeps its place on that body's new card (a
+## mouse needs no focus there), so right / left go on from it.
+func test_vehicle_select_keeps_the_pad_on_the_card_it_pressed() -> void:
+	var ui: UiScale = auto_free(UiScale.new())
+	add_child(ui)
+	var sel: VehicleSelect = VehicleSelect.new()
+	sel.setup(PackedStringArray(["car"]), "T", false, "sedan", "")
+	ui.add_child(sel)
+	var other: Button = _cards(sel)[1]
+	var key := InputEventKey.new()
+	key.pressed = true
+	key.keycode = KEY_RIGHT
+	ui._input(key)  # a key or pad is the device in use
+	other.grab_focus()
+	var pick := String(other.get_meta("pick"))
+	other.pressed.emit()
+	var focus := sel.get_viewport().gui_get_focus_owner()
+	assert_object(focus).is_not_null()
+	assert_str(String(focus.get_meta("pick", ""))).is_equal(pick)
+	ui._input(InputEventMouseButton.new())  # now the mouse: no focus is put back
+	var third: Button = _cards(sel)[2]
+	third.grab_focus()
+	third.pressed.emit()
+	assert_object(sel.get_viewport().gui_get_focus_owner()).is_null()
+
+
+## A card's caption sits under its picture, never over it, and the picture keeps its whole frame.
+func test_picture_card_puts_the_caption_below_the_picture() -> void:
+	var host: Control = auto_free(Control.new())
+	add_child(host)
+	var path := LevelShot.thumb_path("flatland")
+	var card := CardGrid.picture_card(host, 320.0, 0.594, 3.0, false, path, "NAME")
+	host.add_child(card)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var thumb: TextureRect = card.find_children("*", "TextureRect", true, false)[0] \
+			if ResourceLoader.exists(path) else null
+	var caption: Label = card.find_children("*", "Label", true, false).filter(
+			func(l: Label) -> bool: return l.text == "NAME")[0]
+	if thumb != null:
+		assert_float(caption.global_position.y).is_greater_equal(
+				thumb.global_position.y + thumb.size.y - 0.5)
+		assert_int(thumb.stretch_mode).is_equal(TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
+	assert_float(card.size.y).is_greater_equal(card.custom_minimum_size.y - 0.5)
+
+
+## Every registered level has the LevelInfo the description panel reads its families from.
+func test_every_level_has_an_info_beside_its_scene() -> void:
+	for entry in LevelRegistry.LEVELS:
+		var info := LevelRegistry.info_of(String(entry["scene"]))
+		assert_object(info).override_failure_message(String(entry["id"])).is_not_null()
+	assert_object(LevelRegistry.info_of("res://nope/nope.tscn")).is_null()
+
+
+## The panel under the grid names the focused level and lists the families it allows.
+func test_level_select_describes_the_focused_level_with_its_families() -> void:
+	var sel: LevelSelect = auto_free(LevelSelect.new())
+	add_child(sel)
+	var open_sea := LevelRegistry.entry_of(LevelRegistry.scene_of("open_sea"))
+	sel._show_entry(open_sea)
+	var texts := sel.find_children("*", "Label", true, false).map(
+			func(l: Node) -> String: return (l as Label).text)
+	assert_array(texts).contains(["OPEN SEA", String(open_sea["desc"]), "VEHICLES: BOAT"])
+
+
+## A theme rebuild (a resize) lays the cards out again at the new scale instead of keeping the old.
+func test_selectors_rebuild_their_cards_on_a_theme_change() -> void:
+	var host: Control = auto_free(Control.new())
+	add_child(host)
+	var sel: LevelSelect = LevelSelect.new()
+	host.add_child(sel)
+	var narrow: float = _cards(sel)[0].custom_minimum_size.x
+	host.theme = UiTheme.build(2.0)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_float(_cards(sel)[0].custom_minimum_size.x).is_greater(narrow * 1.5)
+	var garage: VehicleSelect = auto_free(VehicleSelect.new())
+	garage.setup(PackedStringArray(["car"]), "T", false, "sedan", "")
+	host.add_child(garage)
+	var card_w: float = _cards(garage)[0].custom_minimum_size.x
+	host.theme = UiTheme.build(1.0)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_float(_cards(garage)[0].custom_minimum_size.x).is_less(card_w * 0.7)
+
+
+## The challenge panels and the loading screen re-apply their pixel sizes on a theme change.
+func test_panels_resize_their_buttons_and_bar_on_a_theme_change() -> void:
+	var host: Control = auto_free(Control.new())
+	add_child(host)
+	var def := ChallengeRegistry.def_of(ChallengeRegistry.ids()[0])
+	var briefing: ChallengeBriefing = ChallengeBriefing.new()
+	briefing.setup(def)
+	host.add_child(briefing)
+	var result: ChallengeResult = ChallengeResult.new()
+	result.setup(def, true, 3.0, "", 2.0, false, true)
+	host.add_child(result)
+	var loading: LoadingScreen = LoadingScreen.new()
+	host.add_child(loading)
+	var widths := [_buttons(briefing)[0].custom_minimum_size.x,
+			_buttons(result)[0].custom_minimum_size.x, loading._bar.custom_minimum_size.x]
+	host.theme = UiTheme.build(2.0)
+	await get_tree().process_frame
+	assert_float(_buttons(briefing)[0].custom_minimum_size.x).is_greater(widths[0] * 1.5)
+	assert_float(_buttons(result)[0].custom_minimum_size.x).is_greater(widths[1] * 1.5)
+	assert_float(loading._bar.custom_minimum_size.x).is_greater(widths[2] * 1.5)
 
 
 func test_tyre_choices_put_the_stock_first_in_catalog_order() -> void:

@@ -37,8 +37,10 @@ const OVERTURNED_NOTICE := "OVERTURNED - PRESS BACKSPACE TO RESPAWN"
 @export var spec: VehicleSpec
 
 ## Preview-only body (vehicle selector, thumbnail tool). Set before entering the tree: _ready then
-## skips InputRouter registration, which a preview would use to steal the driven body's slot.
+## skips InputRouter registration, which a preview would use to steal the driven body's slot, and
+## each tick reads a neutral input, never the driven body's.
 var display_only := false
+var _display_input := VehicleInput.new()  ## the neutral input a display_only body ticks on
 
 var drivetrain: Drivetrain
 var drive: WheelDrive            ## the wheeled ground drive, or null on a spec that declares none
@@ -129,7 +131,8 @@ func release_level_items() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	var input := InputRouter.get_vehicle_input()
+	# A preview is posed at rest: the router's input is the driven body's (held steer, lamps, PTO).
+	var input := _display_input if display_only else InputRouter.get_vehicle_input()
 	# ISOBUS guidance (tractor) picks its own slew target, in `_steer`'s unit, off the commanded
 	# curvature rather than `input.steer`.
 	var guidance_unit := drive.guidance_steer_unit(input, spec.ground_drive) if drive != null else NAN

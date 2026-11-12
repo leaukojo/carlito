@@ -3,8 +3,8 @@ extends EditorExportPlugin
 ## Export-time counterpart of Level._setup_baked: strips each exported scene's
 ## AuthoringRoot subtree (GridMap palettes + KitPiece prefabs) so the pck ships only
 ## baked geometry. export_presets.cfg's exclude_filter drops the raw kit assets too.
-## Also ships the bake weights table (LevelRegistry.SHIPPED_WEIGHTS), since an island's bake
-## is not in the main pack for the level-select card to measure.
+## Also ships the bake weights and allowed-families tables (LevelRegistry.SHIPPED_WEIGHTS,
+## SHIPPED_VEHICLES), since an island's bake and LevelInfo are not in the main pack.
 
 const Groups := preload("res://src/levels/base/carlito_groups.gd")
 
@@ -22,6 +22,8 @@ func _export_begin(_features: PackedStringArray, _is_debug: bool, _path: String,
 		_flags: int) -> void:
 	add_file(LevelRegistry.SHIPPED_WEIGHTS,
 			JSON.stringify(LevelRegistry.bake_weights(), "", true).to_utf8_buffer(), false)
+	add_file(LevelRegistry.SHIPPED_VEHICLES,
+			JSON.stringify(LevelRegistry.vehicle_table(), "", true).to_utf8_buffer(), false)
 
 
 func _begin_customize_scenes(_platform: EditorExportPlatform, _features: PackedStringArray) -> bool:

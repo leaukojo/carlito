@@ -58,13 +58,42 @@ static func entry_of(scene_path: String) -> Dictionary:
 	return {}
 
 
+## The level's LevelInfo, read off the `<scene>_info.tres` beside the scene (the resource its root
+## points `info` at) so the shell can ask without loading the level. null when there is none.
+static func info_of(scene_path: String) -> LevelInfo:
+	var path := scene_path.get_basename() + "_info.tres"
+	return ResourceLoader.load(path) as LevelInfo if ResourceLoader.exists(path) else null
+
+
+## The families a level allows (empty = all), or null when unknown. An island's LevelInfo travels
+## in its level pack, so until that is mounted the export's SHIPPED_VEHICLES table answers.
+static func allowed_vehicles_of(scene_path: String) -> Variant:
+	var info := info_of(scene_path)
+	if info != null:
+		return info.allowed_vehicles
+	var shipped: Variant = _shipped_table(SHIPPED_VEHICLES).get(scene_path)
+	return PackedStringArray(shipped) if shipped is Array else null
+
+
+## What the export ships as SHIPPED_VEHICLES: scene path -> allowed families, for every
+## registered level with a LevelInfo.
+static func vehicle_table() -> Dictionary:
+	var out := {}
+	for entry in LEVELS:
+		var info := info_of(String(entry["scene"]))
+		if info != null:
+			out[String(entry["scene"])] = Array(info.allowed_vehicles)
+	return out
+
+
 ## Every level's bake weight as the export saw it, written into the main pack by the kit's
 ## export plugin (addons/carlito_kit/strip_export.gd). An island's .baked.scn travels in its
 ## own level pack (LevelPacks), so until that pack is mounted this table is the only place its
 ## size can be read. Never on disk: the editor and a desktop run read the bakes themselves.
 const SHIPPED_WEIGHTS := "res://src/shell/level_weights.json"
+const SHIPPED_VEHICLES := "res://src/shell/level_vehicles.json"  ## the same, for allowed families
 
-static var _shipped: Variant = null  # SHIPPED_WEIGHTS parsed on first use
+static var _shipped := {}  # shipped table path -> its parsed Dictionary, read on first use
 
 
 ## Bytes of a level's baked scene, the artifact that dominates load wait. 0 when there is no
@@ -75,7 +104,7 @@ static func weight_bytes(scene_path: String) -> int:
 	var n := _bake_file_bytes(scene_path)
 	if n > 0:
 		return n
-	return int(_shipped_weights().get(scene_path, 0))
+	return int(_shipped_table(SHIPPED_WEIGHTS).get(scene_path, 0))
 
 
 ## What the export ships as SHIPPED_WEIGHTS: scene path -> bake bytes, read from disk, for
@@ -98,13 +127,13 @@ static func _bake_file_bytes(scene_path: String) -> int:
 	return n
 
 
-static func _shipped_weights() -> Dictionary:
-	if _shipped == null:
+static func _shipped_table(path: String) -> Dictionary:
+	if not _shipped.has(path):
 		var parsed: Variant = null
-		if FileAccess.file_exists(SHIPPED_WEIGHTS):
-			parsed = JSON.parse_string(FileAccess.get_file_as_string(SHIPPED_WEIGHTS))
-		_shipped = parsed if parsed is Dictionary else {}
-	return _shipped
+		if FileAccess.file_exists(path):
+			parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
+		_shipped[path] = parsed if parsed is Dictionary else {}
+	return _shipped[path]
 
 
 ## That weight as menu text ("0.7 MB", "14 MB"); "" when there is no bake to report.
