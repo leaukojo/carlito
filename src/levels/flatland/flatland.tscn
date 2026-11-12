@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://src/levels/base/level.gd" id="1_level"]
 [ext_resource type="Resource" path="res://src/levels/flatland/flatland_info.tres" id="2_info"]
@@ -6,6 +6,8 @@
 [ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="4_spawn"]
 [ext_resource type="Environment" path="res://src/levels/base/default_env.tres" id="5_env"]
 [ext_resource type="Script" path="res://src/levels/base/infinite_ground.gd" id="6_ground"]
+[ext_resource type="PackedScene" path="res://src/levels/base/cargo_payload.tscn" id="7_payload"]
+[ext_resource type="Script" path="res://src/levels/base/family_content.gd" id="8_family"]
 
 [node name="Flatland" type="Node3D"]
 script = ExtResource("1_level")
@@ -31,3 +33,16 @@ script = ExtResource("4_spawn")
 
 [node name="Ground" type="StaticBody3D" parent="."]
 script = ExtResource("6_ground")
+
+[node name="Payloads" type="Node3D" parent="."]
+script = ExtResource("8_family")
+families = PackedStringArray("drone")
+
+[node name="Payload0" parent="Payloads" instance=ExtResource("7_payload")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, -3)
+
+[node name="Payload1" parent="Payloads" instance=ExtResource("7_payload")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, 0)
+
+[node name="Payload2" parent="Payloads" instance=ExtResource("7_payload")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, 3)

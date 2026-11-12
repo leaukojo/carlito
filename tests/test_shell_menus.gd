@@ -296,24 +296,107 @@ func test_vehicle_select_lists_every_family_and_emits_the_variant() -> void:
 	assert_str(picked[0]).is_equal("sedan-sports")
 
 
-## Refused families browsable with reason; DRIVE refused per allow-list and runtime checks.
-func test_vehicle_select_shows_a_refused_family_with_its_reason() -> void:
-	var sel := _selector(PackedStringArray(["car", "train"]), "sedan-sports")
-	_press(sel, "TRUCK")
-	var refused := [""]
-	sel.vehicle_chosen.connect(func(v: String) -> void: refused[0] = v)
-	_press(sel, "DRIVE")
-	assert_str(refused[0]).is_empty()
+func _texts(node: Node) -> String:
+	var out := PackedStringArray()
+	for l in node.find_children("*", "Label", true, false):
+		out.append((l as Label).text)
+	return "\n".join(out)
 
+
+## Every family has a home level that allows it and can place it: a spawn marker that accepts it,
+## or (the train) a closed rail loop.
+func test_every_family_has_a_home_level_that_spawns_it() -> void:
+	var families := {}
+	for variant: String in VehicleCatalog.VARIANTS:
+		families[VehicleCatalog.family_of(variant)] = true
+	for family: String in families:
+		var home := LevelRegistry.home_of(family)
+		assert_str(home).override_failure_message("no home level for " + family).is_not_empty()
+		assert_bool(bool(LevelRegistry.entry_of(home).get("dev", false))).is_false()
+		assert_bool(LevelRegistry.info_of(home).allows(VehicleCatalog.first_in_family(family))) \
+				.override_failure_message(family + " not allowed in its home").is_true()
+		var root := (load(home) as PackedScene).instantiate()
+		if family == "train":
+			assert_object(RailTrack.find_closed_rail(root)) \
+					.override_failure_message("no closed rail in the train's home").is_not_null()
+		else:
+			assert_object(VehicleSpawn.first_under(root, family)) \
+					.override_failure_message("no spawn for %s in its home" % family).is_not_null()
+		root.free()
+
+
+## A family this level refuses is not refused: DRIVE names its home level and asks first. CANCEL
+## and back() put the question away; LOAD sends the body after its gearbox, with no attachment
+## for a body that tows nothing.
+func test_vehicle_select_offers_the_home_level_for_a_refused_family() -> void:
+	var sel := _selector(PackedStringArray(["car"]), "sedan")
+	_press(sel, "BOAT (beta)")
+	assert_array(_labels(sel)).contains(["DRIVE IN OPEN SEA"])
+	assert_str(_texts(sel)).contains("NOT IN TEST LEVEL: DRIVES IN OPEN SEA")
+	var got := []
+	sel.vehicle_chosen.connect(func(v: String) -> void: got.append("vehicle:" + v))
+	sel.level_drive_chosen.connect(func(scene: String, v: String, att: Variant) -> void:
+			got.append([scene, v, att]))
+	_press(sel, "DRIVE IN OPEN SEA")
+	assert_array(got).is_empty()
+	assert_bool(sel._confirm.visible).is_true()
+	assert_str(sel._confirm_title.text).is_equal("NOT AVAILABLE IN TEST LEVEL")
+	_press(sel, "CANCEL")
+	assert_bool(sel._confirm.visible).is_false()
+	_press(sel, "DRIVE IN OPEN SEA")
+	assert_bool(sel.back()).is_true()
+	assert_bool(sel._confirm.visible).is_false()
+	assert_bool(sel.back()).is_false()  # nothing of its own left: the shell closes the garage
+	_press(sel, "DRIVE IN OPEN SEA")
+	_press(sel, "LOAD OPEN SEA")
+	assert_array(got).is_equal([[LevelRegistry.scene_of("open_sea"), sel._variant, null]])
+	assert_str(VehicleCatalog.family_of(sel._variant)).is_equal("boat")
+
+
+## A towing body carries its attachment to its home level; gearbox and tyre go first.
+func test_vehicle_select_takes_the_trailer_to_the_home_level() -> void:
+	var sel := _selector(PackedStringArray(["boat"]), "semi", false, TrailerCatalog.TRAILERS[1])
+	assert_str(sel._tyre).is_not_empty()  # the semi offers a tyre choice, so one rides DRIVE
+	var order := []
+	sel.gearbox_chosen.connect(func(_m: bool) -> void: order.append("gearbox"))
+	sel.tyre_chosen.connect(func(_v: String, _id: String) -> void: order.append("tyre"))
+	sel.level_drive_chosen.connect(func(scene: String, v: String, att: Variant) -> void:
+			order.append([scene, v, att]))
+	_press(sel, "DRIVE IN FLATLAND")
+	_press(sel, "LOAD FLATLAND")
+	assert_array(order).is_equal(["gearbox", "tyre",
+			[LevelRegistry.scene_of("flatland"), "semi", TrailerCatalog.TRAILERS[1]]])
+
+
+## A phone-width window: the footer and the question's buttons narrow to fit, the longest DRIVE
+## text wrapping rather than pushing them off the edge.
+func test_vehicle_select_footer_fits_a_narrow_window() -> void:
+	var sel := _selector(PackedStringArray(["car"]), "sedan")
 	_press(sel, "TRAIN (beta)")
-	var texts := []
-	for l in sel.find_children("*", "Label", true, false):
-		texts.append((l as Label).text)
-	var said_why := false
-	for t: String in texts:
-		if t.contains("NO CLOSED RAIL LOOP HERE"):
-			said_why = true
-	assert_bool(said_why).is_true()
+	_press(sel, "DRIVE IN LEVEL 5 - RAILWAY")
+	sel.size = Vector2(380, 720)
+	var room := 380.0 - UiTheme.px(sel, UiTheme.MARGIN * 2.0)
+	for row: Control in [sel._drive_btn.get_parent(), sel._confirm_load.get_parent()]:
+		assert_float(row.get_combined_minimum_size().x).is_less_equal(room)
+	assert_float(sel._confirm_line.get_parent().get_parent().get_combined_minimum_size().x) \
+			.is_less_equal(room)
+	sel.size = Vector2(1600, 900)
+	assert_float(sel._drive_btn.custom_minimum_size.x).is_equal(
+			UiTheme.px(sel, VehicleSelect.FOOTER_W))
+
+
+## The refusal survives only on the family's own home level, when even that cannot place it.
+func test_vehicle_select_refuses_only_on_the_home_level_itself() -> void:
+	var sel: VehicleSelect = auto_free(VehicleSelect.new())
+	sel.setup(PackedStringArray(), "Flatland", false, "sedan", "", false,
+			func(_f) -> bool: return false, {}, LevelRegistry.scene_of("flatland"))
+	add_child(sel)
+	assert_bool(sel._drive_btn.disabled).is_true()
+	assert_str(sel._drive_btn.text).is_equal("DRIVE")
+	assert_str(_texts(sel)).contains("CANNOT SPAWN HERE")
+	_press(sel, "TRAIN (beta)")  # its home is elsewhere: offered, not refused
+	assert_bool(sel._drive_btn.disabled).is_false()
+	assert_str(sel._drive_btn.text).is_equal("DRIVE IN LEVEL 5 - RAILWAY")
 
 
 ## Attachment row appears only for towing machines (semi yes, garbage truck no).
@@ -1057,6 +1140,44 @@ func _run_challenge(boot: Boot, id: String) -> void:
 
 func after_test() -> void:
 	get_tree().paused = false
+
+
+## A home-level load spawns the picked body with the picked attachment, then forgets it.
+func test_a_home_level_load_fits_the_picked_attachment() -> void:
+	var boot := _booted()
+	boot._next_variant = "semi"
+	boot._next_attachment = TrailerCatalog.TRAILERS[1]
+	boot._level.queue_free()
+	boot._finish_load(load(LevelRegistry.scene_of("flatland")) as PackedScene)
+	assert_str(GameState.current_variant).is_equal("semi")
+	assert_str(String(boot._level.vehicle.current_attachment())).is_equal(TrailerCatalog.TRAILERS[1])
+	assert_object(boot._next_attachment).is_null()
+
+
+func _crates(level: Node) -> Array:
+	return level.find_children("*", "CargoPayload", true, false)
+
+
+## Flatland's three crates are there only while a drone is driven, and each drone spawn finds them
+## back at their authored poses, one the drone left elsewhere in the level included.
+func test_flatland_crates_come_with_the_drone() -> void:
+	var boot := _booted()
+	var level := boot._level
+	assert_array(_crates(level)).is_empty()  # a car: no crates
+	level.set_vehicle(VehicleCatalog.first_in_family("drone"))
+	var crates := _crates(level)
+	assert_int(crates.size()).is_equal(3)
+	var home := (crates[0] as Node3D).global_position
+	var moved := crates[0] as CargoPayload
+	moved.get_parent().remove_child(moved)  # as a drop does: a child of the level, elsewhere
+	level.add_child(moved)
+	moved.global_position = home + Vector3(40, 0, 0)
+	level.set_vehicle("sedan")
+	assert_array(_crates(level)).is_empty()
+	level.set_vehicle(VehicleCatalog.first_in_family("drone"))
+	assert_int(_crates(level).size()).is_equal(3)
+	assert_object(moved.get_parent()).is_same(level.get_node(^"Payloads"))
+	assert_float(moved.global_position.distance_to(home)).is_less(1e-4)
 
 
 func _action_event(action: String) -> InputEventAction:

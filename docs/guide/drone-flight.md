@@ -155,9 +155,10 @@ lands it; losing the GPS loses the fix.
 ## Cargo hook and camera
 
 The `drone-mk2` can carry a crate on a hook, up to 4 kg, which adds its weight below the drone.
-Press **1** to close the hook: it latches only if a crate is within reach. Its camera gimbal can
-be pointed by sloppyCAN.
-<!-- drone_payload.gd MAX_PAYLOAD_KG 4, CAPTURE_RANGE 1.2 m; hardpoint key 1; drone_gimbal.gd bridge-only -->
+Press **1** to close the hook: it latches only if a crate is within reach. In Flatland three
+crates wait beside the start while a drone is out; Level 6 has three on its apron. Its camera
+gimbal can be pointed by sloppyCAN.
+<!-- drone_payload.gd MAX_PAYLOAD_KG 4, CAPTURE_RANGE 1.2 m; hardpoint key 1; drone_gimbal.gd bridge-only; flatland.tscn Payloads (FamilyContent, drone) and level_6.tscn Payloads -->
 
 ## What the game leaves out
 

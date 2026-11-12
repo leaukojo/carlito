@@ -301,6 +301,7 @@ func test_a_ring_lap_fails_again_after_a_retry() -> void:
 
 func test_the_frame_holds_the_body_and_only_the_free_payloads() -> void:
 	var r := _rig(_def([_reach(&"Finish")]))
+	var own := ChallengeRunner.free_payloads(r.level)  # the level's own crates (Flatland's, with a drone)
 	var loose := (load(CRATE) as PackedScene).instantiate() as CargoPayload
 	r.level.add_child(loose)
 	loose.global_position = Vector3(5, 1, 5)
@@ -310,8 +311,9 @@ func test_the_frame_holds_the_body_and_only_the_free_payloads() -> void:
 	var elsewhere := auto_free((load(CRATE) as PackedScene).instantiate()) as CargoPayload
 	add_child(elsewhere)
 	var frame := ChallengeRunner.build_frame(r.level.vehicle, r.level, Vector3.INF)
-	assert_int(frame.payloads.size()).is_equal(1)
-	assert_float(frame.payloads[0].distance_to(Vector3(5, 1, 5))).is_less(1e-4)
+	assert_int(frame.payloads.size()).is_equal(own.size() + 1)
+	assert_bool(Array(frame.payloads).any(func(p: Vector3) -> bool:
+			return p.distance_to(Vector3(5, 1, 5)) < 1e-4)).is_true()
 	assert_int(frame.wheel_count).is_equal(4)
 	assert_bool(frame.signals.has("heading")).is_true()
 	assert_bool(frame.prev_origin.is_finite()).is_false()

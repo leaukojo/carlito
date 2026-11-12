@@ -32,6 +32,24 @@ const LEVELS: Array[Dictionary] = [
 		"dev": true },
 ]
 
+## Where each family drives when the garage is on a level that cannot spawn it: DRIVE loads this
+## level instead (VehicleSelect asks first). Tested against each level's LevelInfo and spawns.
+## Flatland has no rail on purpose: a rail would give the one bake-free level a bake.
+const HOME_LEVELS := {
+	"car": "flatland", "truck": "flatland", "tractor": "flatland", "drone": "flatland",
+	"plane": "flatland", "boat": "open_sea", "train": "level_5",
+}
+
+
+## Scene path of `family`'s home level, "" when it has none.
+static func home_of(family: String) -> String:
+	return scene_of(String(HOME_LEVELS.get(family, "")))
+
+
+## The level's menu name (what LEVEL shows), "" when unregistered.
+static func name_of(scene_path: String) -> String:
+	return String(entry_of(scene_path).get("name", ""))
+
 
 ## Scene path for a level id, "" if unknown. The id is the stable name a deep link
 ## (`?level=`), saved session, and CARLITO_LEVEL all carry.

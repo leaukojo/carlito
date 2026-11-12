@@ -96,7 +96,7 @@ sloppyCAN (`?level=&vehicle=` picks others). Five top-left buttons (MENU, VEHICL
 CHALLENGE; F5 hides them); Esc/MENU opens RESUME, RESPAWN, SANDBOX, CONTROLS, SETTINGS
 (and LEVEL while a gamepad is in use).
 
-- **GARAGE**: families, bodies, a live 3D preview with specs; unspawnable machines show the reason.
+- **GARAGE**: families, bodies, a live 3D preview with specs; a machine this level cannot spawn offers to load the level it drives in.
 - **LEVEL**: screenshot cards with the download weight (each island is a separate download).
 - **CONTROLS** is generated from one table (`ActionRegistry`), as are the touch buttons.
 - **SANDBOX**: WORLD (wind, current, day/night; session-wide, not saved) and VEHICLE (traction

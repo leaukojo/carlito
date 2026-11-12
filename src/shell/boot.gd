@@ -36,6 +36,7 @@ var _fetching := false  # _loading_path's level pack is downloading; the load st
 var _hold_frames := 0  # see HOLD_FRAMES
 var _warmup: ShaderWarmup = null  # in effect for exactly the HOLD_FRAMES
 var _next_variant := ""  # variant the level now loading should spawn ("" = its own default)
+var _next_attachment: Variant = null  # what that body should tow (null = its own default)
 ## SANDBOX's WORLD state, kept for the session only and re-applied to
 ## every level this loads (`_finish_load`) and on change (`_on_conditions_changed`).
 var _wind_preset: int = WorldConditions.Preset.LEVEL
@@ -392,8 +393,8 @@ func _on_menu_key() -> void:
 		_open_pause()
 		return
 	var top: Control = _overlays.back()
-	if top is PauseMenu and (top as PauseMenu).back():
-		return  # paged back within the pause menu itself, not a stack pop
+	if top.has_method("back") and top.back():
+		return  # paged back within the overlay itself (a pause page, the garage's question)
 	_pop_overlay()
 
 
@@ -667,9 +668,10 @@ func _on_challenge_picked(id: String) -> void:
 
 
 ## Kick off a threaded level load behind a loading screen; _process polls progress.
-## `variant` is the body to spawn instead of the level's default ("" = default).
+## `variant` is the body to spawn instead of the level's default ("" = default); `attachment`
+## what it tows (null = its own default; "" is BOBTAIL / DETACHED).
 ## Headless (CI smoke) keeps the synchronous path — nobody watches a bar there.
-func _load_level(scene_path: String, variant := "") -> void:
+func _load_level(scene_path: String, variant := "", attachment: Variant = null) -> void:
 	if _level != null:
 		# Unbind before free: a threaded load takes frames, else HUD/bridge hold a freed level.
 		_unbind_hud()
@@ -677,6 +679,7 @@ func _load_level(scene_path: String, variant := "") -> void:
 		_level = null
 	_set_hud_visible(false)
 	_next_variant = variant
+	_next_attachment = attachment
 	if DisplayServer.get_name() == "headless":
 		var packed := load(scene_path) as PackedScene
 		if packed == null:
@@ -782,6 +785,7 @@ func _finish_load(scene: PackedScene) -> void:
 	_level.set_night(night)
 	_level.vehicle_changed.connect(_on_vehicle_changed)
 	_fit_tyre()  # the level's _ready spawned before vehicle_changed was connected
+	_fit_next_attachment()
 	_bind_hud()
 	_set_hud_visible(true)
 	CoachCue.maybe_coach(GameState.current_vehicle, _ui)
@@ -838,8 +842,10 @@ func _open_vehicle_select() -> void:
 	# pre-filtered roster, so the screen can say why it can't spawn something.
 	vehicles.setup(_level.info.allowed_vehicles, String(_level.info.display_name),
 			_level.has_closed_rail(), GameState.current_variant, _current_attachment(),
-			_manual_gearbox, _level.has_spawn_for, _settings.value("tyres"))
+			_manual_gearbox, _level.has_spawn_for, _settings.value("tyres"),
+			_level.scene_file_path)
 	vehicles.vehicle_chosen.connect(_on_vehicle_picked)
+	vehicles.level_drive_chosen.connect(_on_level_drive_chosen)
 	vehicles.attachment_chosen.connect(_on_attachment_picked)
 	vehicles.gearbox_chosen.connect(_on_gearbox_picked)
 	vehicles.tyre_chosen.connect(_on_tyre_picked)
@@ -862,6 +868,24 @@ func _on_vehicle_picked(variant: String) -> void:
 	_close_all_overlays()  # back to driving, not back to the menu
 	if variant != GameState.current_variant:
 		_level.set_vehicle(variant)
+
+
+## The garage's confirmed DRIVE on a family this level cannot spawn: load its home level with the
+## body on it. The gearbox and tyre picks arrived just before (`_on_gearbox_picked`,
+## `_on_tyre_picked`) and outlive the level.
+func _on_level_drive_chosen(scene_path: String, variant: String, attachment: Variant) -> void:
+	_close_all_overlays()  # unpauses: the level about to load must not spawn into a paused tree
+	_load_level(scene_path, variant, attachment)
+
+
+## The attachment `_load_level` was given, on the body the level just spawned (a towing one).
+func _fit_next_attachment() -> void:
+	var id: Variant = _next_attachment
+	_next_attachment = null
+	if id == null or _level.vehicle == null or not _level.vehicle.has_method("set_attachment"):
+		return
+	if String(_level.vehicle.current_attachment()) != String(id):
+		_level.vehicle.set_attachment(String(id))
 
 
 ## Fires straight after _on_vehicle_picked, only for a machine that tows.

@@ -211,8 +211,8 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   `src/ui/level_thumbs/<id>.png` (`LevelShot.thumb_path`), framed by `<level>_shot.tres`.
 - Vehicle selector (`src/ui/vehicle_select.gd`, G or touch GARAGE): family column, variant
   cards, towing; one SubViewport turntable via `VehicleShot.spawn_display` (frozen
-  KINEMATIC, `display_only = true`, out of `InputRouter`'s slot). DRIVE alone refuses (`_on_drive`,
-  via `allowed_vehicles`/`Level.has_closed_rail()`/`Level.has_spawn_for(family)`). Attachments:
+  KINEMATIC, `display_only = true`, out of `InputRouter`'s slot). DRIVE on a family the level
+  cannot spawn asks, then loads its `LevelRegistry.home_of` (`level_drive_chosen`). Attachments:
   `attachment_ids()`/`current_attachment()`/`set_attachment(id)`, duck-typed on
   `TractorVehicle`/`SemiTractor`, same setter as `cycle_implement()` (DETACHED/BOBTAIL =
   NONE). Emits `vehicle_chosen(variant)` then `attachment_chosen(id)` (a towing machine),
@@ -248,8 +248,8 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
 
 - `src/levels/base/`: `Level` reads a `LevelInfo`, spawns at the first matching
   `VehicleSpawn`, wires `ChaseCamera`, handles respawn (variant -> scene via
-  `VehicleCatalog`); the train gates on `has_closed_rail()` and self-places, else refuses
-  DRIVE. `LevelInfo` (Resource: display name, allowed/default vehicles); `VehicleSpawn`
+  `VehicleCatalog`); the train gates on `has_closed_rail()` and self-places, else the garage
+  sends it to Level 5. `LevelInfo` (Resource: display name, allowed/default vehicles); `VehicleSpawn`
   (`Marker3D`, vehicle-type filter + `is_water`, a bake-gate coverage flag read only by
   `LevelBaker.validate_spawns`: `accepts` and `Level.pick_spawn` ignore it, and a drown respawns
   at `spawn_transform`). `level.tscn`

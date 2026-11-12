@@ -3,9 +3,9 @@ extends Control
 ## Vehicle selector: family list (left), variant + attachment cards (middle), one live turntable
 ## preview + spec (right, one SubViewport reused rather than one per card).
 ##
-## Nothing is hidden: a family this level won't spawn is still browsable and carries the reason
-## on its cards. Only DRIVE is refused. No emoji; never touches the scene tree it is picking
-## for — it emits, and the shell respawns (standing rule 6).
+## Nothing is hidden or refused: DRIVE on a family this level won't spawn offers its home level
+## (`LevelRegistry.home_of`) behind a confirmation. No emoji; never touches the scene tree it is
+## picking for — it emits, and the shell respawns or loads (standing rule 6).
 
 ## Emitted on DRIVE. `attachment_chosen` follows immediately after, and only when the picked
 ## machine tows — so a sentinel is never needed for "no attachment" (DETACHED and BOBTAIL are
@@ -17,6 +17,10 @@ signal gearbox_chosen(manual: bool)
 ## Also follows DRIVE, and only for a variant that fits more than its stock class (`tyre_choices`).
 ## Carries the variant: the level may refuse the body, and the choice is still that variant's.
 signal tyre_chosen(variant: String, id: String)
+## Confirmed DRIVE on a family this level cannot spawn: load `scene_path` with `variant` on it.
+## Follows `gearbox_chosen` and `tyre_chosen` (neither needs the level). `attachment` is null when
+## the body tows nothing; "" is a real choice (BOBTAIL, DETACHED).
+signal level_drive_chosen(scene_path: String, variant: String, attachment: Variant)
 signal closed
 
 const CardGrid := preload("res://src/ui/card_grid.gd")
@@ -26,6 +30,7 @@ const FAMILY_W := 190.0
 const CARD_W := 176.0
 const PREVIEW_W := 380.0
 const FOOTER_W := 240.0  ## larger than a default button: DRIVE is the screen's whole purpose
+const CONFIRM_W := 520.0  ## the home-level question's wrap width
 const PULSE_S := 1.1       ## the DRIVE button's one pulse, triggered by a press on the picked card
 ## What the DRIVE button's modulate reaches at the pulse's peak: the accent fill turns green.
 const PULSE_TINT := Color(0.55, 1.35, 0.6)
@@ -41,6 +46,7 @@ const SETTLE_FRAMES := 20
 
 var _allowed: PackedStringArray = []   ## the level's LevelInfo.allowed_vehicles, unfiltered
 var _level_name := "this level"
+var _level_scene := ""  ## the level open under the garage; a family whose home it is never redirects
 var _has_rail := false
 ## `Level.has_spawn_for`, bound by the shell; invalid (unset) reads as "assume a spawn exists" so
 ## a caller that doesn't pass it keeps the old behaviour rather than refusing everything.
@@ -71,6 +77,11 @@ var _preview: Node3D = null
 var _spec_label: Label
 var _drive_btn: Button
 var _back_btn: Button
+var _confirm: ColorRect       ## the home-level question, over the whole screen while up
+var _confirm_title: Label
+var _confirm_line: Label
+var _confirm_load: Button
+var _confirm_cancel: Button
 var _yaw := VehicleShot.VIEW_YAW_DEG
 var _bounds := AABB()
 var _settle := 0
@@ -79,13 +90,15 @@ var _settle := 0
 ## `allowed` is the level's raw allow-list, `rail` its runtime closed-loop answer — both rather
 ## than a pre-filtered roster, since the screen shows what it cannot spawn and must say why.
 ## `has_spawn` is `Level.has_spawn_for`, invalid (default) when the caller has none to offer.
-## `tyres` is the stored class per variant (`UserSettings.tyre_of`).
+## `tyres` is the stored class per variant (`UserSettings.tyre_of`). `level_scene` is the open
+## level's path.
 func setup(allowed: PackedStringArray, level_name: String, rail: bool,
 		variant: String, attachment: String, manual_gearbox := false,
-		has_spawn := Callable(), tyres := {}) -> void:
+		has_spawn := Callable(), tyres := {}, level_scene := "") -> void:
 	_tyres = tyres.duplicate()
 	_allowed = allowed
 	_level_name = level_name
+	_level_scene = level_scene
 	_has_rail = rail
 	_variant = variant if VehicleCatalog.VARIANTS.has(variant) else ""
 	_attachment = attachment
@@ -121,6 +134,8 @@ func _ready() -> void:
 	body.add_child(_preview_panel)
 
 	col.add_child(_build_footer())
+	_confirm = _build_confirm()
+	add_child(_confirm)  # last: drawn over everything, and its scrim takes every click
 
 	if _variant.is_empty():
 		_variant = _first_available_variant()
@@ -148,6 +163,8 @@ func _apply_sizes() -> void:
 	var footer_size := Vector2(UiTheme.px(self, FOOTER_W), UiTheme.px(self, UiTheme.TOUCH_MIN * 1.5))
 	_back_btn.custom_minimum_size = footer_size
 	_drive_btn.custom_minimum_size = footer_size
+	_confirm_load.custom_minimum_size = footer_size
+	_confirm_cancel.custom_minimum_size = footer_size
 	_reflow()
 
 
@@ -258,8 +275,53 @@ func _build_footer() -> Control:
 	_drive_btn.theme_type_variation = &"Primary"
 	_drive_btn.pressed.connect(_on_drive)
 	row.add_child(_drive_btn)
-
+	_wrap(row)
 	return row
+
+
+## A footer button's text wraps rather than widening it past a narrow window (`_fit_pair`):
+## "DRIVE IN LEVEL 5 - RAILWAY" is the longest.
+static func _wrap(row: Node) -> void:
+	for b in row.get_children():
+		(b as Button).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+
+## The home-level question: a scrim over the whole screen with a centred panel, hidden until DRIVE
+## is pressed on a family this level cannot spawn. Texts are written as it opens (`_show_confirm`).
+func _build_confirm() -> ColorRect:
+	var scrim := ColorRect.new()
+	scrim.color = UiTheme.SCRIM
+	scrim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+	scrim.visible = false
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	scrim.add_child(center)
+	var panel := PanelContainer.new()
+	center.add_child(panel)
+	var box := VBoxContainer.new()
+	panel.add_child(box)
+
+	_confirm_title = Label.new()
+	_confirm_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_confirm_title.theme_type_variation = &"Title"
+	box.add_child(_confirm_title)
+	_confirm_line = Label.new()
+	_confirm_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_confirm_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_confirm_line)
+
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_child(row)
+	_confirm_load = UiTheme.button(self, "", _on_load_home)
+	_confirm_load.theme_type_variation = &"Primary"
+	row.add_child(_confirm_load)
+	_confirm_cancel = UiTheme.button(self, "CANCEL", _hide_confirm)
+	_confirm_cancel.theme_type_variation = &"Back"
+	row.add_child(_confirm_cancel)
+	_wrap(row)
+	return scrim
 
 
 # --- family column ------------------------------------------------------------
@@ -268,7 +330,8 @@ func _build_footer() -> Control:
 ## missing from FAMILY_ORDER still lists (catalog order, after the named ones).
 const FAMILY_ORDER := ["car", "truck", "tractor", "boat", "drone", "plane", "train"]
 
-## Ends every refusal: DRIVE is dead, and the BODY heading says what to do about it.
+## Ends every refusal: DRIVE is dead, and the BODY heading says what to do about it. Only reached
+## by a family whose home level is the one open (`_redirect`), so a level that has lost its spawn.
 const CHOOSE_ANOTHER := " - choose another level"
 const BETA_FAMILIES := ["train", "boat", "plane", "drone"]  ## rougher than road vehicles, labelled so
 
@@ -298,6 +361,15 @@ func _refusal(family: String) -> String:
 	if _has_spawn.is_valid() and not bool(_has_spawn.call(family)):
 		return "cannot spawn here" + CHOOSE_ANOTHER
 	return ""
+
+
+## The scene DRIVE loads for `family` instead: its home level, when this level refuses it and is
+## not that home. "" when the family drives here, or is refused with no elsewhere to go.
+func _redirect(family: String) -> String:
+	if _refusal(family).is_empty():
+		return ""
+	var home := LevelRegistry.home_of(family)
+	return home if home != _level_scene else ""
 
 
 func _refresh_families() -> void:
@@ -337,11 +409,18 @@ func _refresh_cards() -> void:
 	_manual_gearbox_btn = null
 	_automatic_gearbox_btn = null
 	var reason := _refusal(_family)
+	var home := _redirect(_family)
+	var note := reason
+	var tip := ""
+	if not home.is_empty():  # not refused: DRIVE goes to the home level
+		tip = "drives in " + LevelRegistry.name_of(home)
+		note = "not in %s: %s" % [_level_name, tip]
+		reason = ""
 	if FamilyGearbox.has_gearbox(_family):
 		_cards.add_child(_gearbox_row())
-	_cards.add_child(_heading("BODY", reason))
+	_cards.add_child(_heading("BODY", note))
 	_cards.add_child(_card_grid(VehicleCatalog.variants_in_family(_family), _variant,
-			reason, _on_variant_pressed))
+			reason, _on_variant_pressed, tip))
 	_refresh_attachments()
 
 
@@ -442,17 +521,19 @@ func _heading(text: String, reason := "") -> Label:
 
 
 ## `ids` are thumbnail ids (a variant id, or an attachment scene path resolved through
-## VehicleShot.id_for_scene); the empty id is a real catalog entry, plated NONE.
+## VehicleShot.id_for_scene); the empty id is a real catalog entry, plated NONE. `reason` refuses
+## the cards; `tip` is the tooltip of a live one.
 func _card_grid(ids: PackedStringArray, selected: String, reason: String,
-		on_press: Callable) -> Control:
+		on_press: Callable, tip := "") -> Control:
 	var grid := HFlowContainer.new()
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for id in ids:
-		grid.add_child(_make_card(id, id == selected, reason, on_press))
+		grid.add_child(_make_card(id, id == selected, reason, on_press, tip))
 	return grid
 
 
-func _make_card(id: String, selected: bool, reason: String, on_press: Callable) -> Button:
+func _make_card(id: String, selected: bool, reason: String, on_press: Callable,
+		tip := "") -> Button:
 	var thumb_id := VehicleShot.id_for_scene(id) if id.contains("/") else id
 	var thumb_path := VehicleShot.thumb_path(thumb_id) if not thumb_id.is_empty() else ""
 	var refused := not reason.is_empty()
@@ -460,7 +541,7 @@ func _make_card(id: String, selected: bool, reason: String, on_press: Callable) 
 			thumb_path, _pretty(thumb_id) if not thumb_id.is_empty() else "NONE",
 			&"MutedSmall" if refused else &"Dim", "", Color.TRANSPARENT, refused)
 	card.disabled = refused
-	card.tooltip_text = reason
+	card.tooltip_text = reason if refused else tip
 	card.set_meta("pick", "card:" + id)
 	card.pressed.connect(on_press.bind(id))
 	return card
@@ -665,33 +746,115 @@ func _spec_text(variant: String) -> String:
 # --- footer / layout ----------------------------------------------------------
 
 func _update_drive_button() -> void:
-	var reason := _refusal(VehicleCatalog.family_of(_variant))
-	_drive_btn.disabled = not reason.is_empty()
+	var family := VehicleCatalog.family_of(_variant)
+	var home := _redirect(family)
+	_drive_btn.text = "DRIVE" if home.is_empty() \
+			else "DRIVE IN " + LevelRegistry.name_of(home).to_upper()
+	_drive_btn.disabled = home.is_empty() and not _refusal(family).is_empty()
 	if _drive_btn.disabled and _drive_btn.has_focus() and _back_btn != null:
 		_back_btn.grab_focus()  # must not strand the focus ring on a button that just went dead
 
 
 ## Checked here too, not only via the button's `disabled`: the level is the authority on what
-## may spawn.
+## may spawn. A family it refuses goes to its home level, after asking.
 func _on_drive() -> void:
-	if not _refusal(VehicleCatalog.family_of(_variant)).is_empty():
+	var family := VehicleCatalog.family_of(_variant)
+	if not _redirect(family).is_empty():
+		_show_confirm()
+		return
+	if not _refusal(family).is_empty():
 		return
 	vehicle_chosen.emit(_variant)
-	if _preview != null and _preview.has_method("set_attachment"):
+	if _tows():
 		attachment_chosen.emit(_attachment)
-	if FamilyGearbox.has_gearbox(VehicleCatalog.family_of(_variant)):
+	_emit_fit(family)
+
+
+## The gearbox and tyre picks, which neither the level nor the body on show needs to apply.
+func _emit_fit(family: String) -> void:
+	if FamilyGearbox.has_gearbox(family):
 		gearbox_chosen.emit(_manual_gearbox)
 	if not _tyre.is_empty():
 		tyre_chosen.emit(_variant, _tyre)
 
 
+func _tows() -> bool:
+	return _preview != null and _preview.has_method("set_attachment")
+
+
+## Leaving the level is a bigger step than a respawn (the position and the level's state go), so
+## the redirect asks. LOAD takes the focus: DRIVE was already a deliberate press.
+func _show_confirm() -> void:
+	var home := _redirect(VehicleCatalog.family_of(_variant))
+	var level := LevelRegistry.name_of(home)
+	var weight := LevelRegistry.weight_text(home)
+	_confirm_title.text = "NOT AVAILABLE IN " + _level_name.to_upper()
+	_confirm_line.text = "Leave %s and load %s%s to drive the %s?" % [_level_name, level,
+			" (%s)" % weight if not weight.is_empty() else "", _pretty(_variant)]
+	_confirm_load.text = "LOAD " + level.to_upper()
+	# The pair keeps the focus: the cards under the scrim must not be reachable on a pad.
+	for b: Button in [_confirm_load, _confirm_cancel]:
+		var other := _confirm_cancel if b == _confirm_load else _confirm_load
+		b.focus_neighbor_left = b.get_path_to(other)
+		b.focus_neighbor_right = b.get_path_to(other)
+		b.focus_neighbor_top = b.get_path_to(b)
+		b.focus_neighbor_bottom = b.get_path_to(b)
+		b.focus_next = b.get_path_to(other)
+		b.focus_previous = b.get_path_to(other)
+	_confirm.visible = true
+	_confirm_load.grab_focus()
+
+
+func _hide_confirm() -> void:
+	_confirm.visible = false
+	if not _pointer_in_use():
+		_drive_btn.grab_focus()
+
+
+func _on_load_home() -> void:
+	var family := VehicleCatalog.family_of(_variant)
+	var home := _redirect(family)
+	_hide_confirm()
+	if home.is_empty():
+		return
+	_emit_fit(family)
+	level_drive_chosen.emit(home, _variant, _attachment if _tows() else null)
+
+
+## Circle / Esc (the shell's back): closes the question first, the garage only after. True when it
+## closed something here.
+func back() -> bool:
+	if _confirm != null and _confirm.visible:
+		_hide_confirm()
+		return true
+	return false
+
+
 func _reflow() -> void:
 	if _preview_panel == null:
 		return
+	# The footer and the question narrow, and their texts wrap, inside a phone-width window
+	# rather than running off its edges.
+	var room := size.x - UiTheme.px(self, UiTheme.MARGIN * 2.0)
+	if room <= 0.0:  # not laid out yet: the full sizes
+		room = INF
+	var panel := _confirm_line.get_parent().get_parent() as PanelContainer
+	var inner := room - panel.get_theme_stylebox(&"panel").get_minimum_size().x
+	_confirm_line.custom_minimum_size.x = minf(UiTheme.px(self, CONFIRM_W), inner)
+	_fit_pair(_back_btn, _drive_btn, room)
+	_fit_pair(_confirm_load, _confirm_cancel, inner)
 	_preview_panel.visible = size.x >= UiTheme.px(self, NARROW_W)
 	# The body still exists while the panel is hidden; only the rendering is switched off.
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if _preview_panel.visible \
 			else SubViewport.UPDATE_DISABLED
+
+
+## Two buttons side by side at FOOTER_W each, or half of `room` each when that is less.
+func _fit_pair(a: Button, b: Button, room: float) -> void:
+	var gap := float((a.get_parent() as Control).get_theme_constant(&"separation"))
+	var w := minf(UiTheme.px(self, FOOTER_W), (room - gap) * 0.5)
+	a.custom_minimum_size.x = w
+	b.custom_minimum_size.x = w
 
 
 func _first_available_variant() -> String:
