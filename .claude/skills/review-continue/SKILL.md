@@ -1,6 +1,6 @@
 ---
 name: review-continue
-description: Continue the ongoing project review ("continue reviewing"): pick the next unit from .claude/review_journal/summary.md, review it, fix or simplify what is cheap and proven, queue the rest.
+description: Continue the ongoing project review ("continue reviewing"): pick the next item from .claude/review_journal/summary.md for the session's model, then diagnose it and write its brief (Fable), or fix it from its brief (Opus, Sonnet).
 ---
 
 The journal is `.claude/review_journal/`: `summary.md` (unit map, queue, things for the user to
@@ -12,7 +12,8 @@ The project wants no new features: the review trims, fixes and simplifies.
 
 ## One session
 
-1. **Pick one item.** The top of the Queue if it holds a ready item (approved proposal, or a
+1. **Pick one item**, among those tagged for the session's own model (a Fable session:
+   § Diagnose only). The top of the Queue if it holds a ready item (approved proposal, or a
    deferred fix); otherwise the first unit in the map whose `Reviewed at` is empty; otherwise
    the unit with the most commits since its `Reviewed at`
    (`git log --oneline <hash>..HEAD -- <paths> | wc -l`). BETA units (boat, drone, plane,
@@ -40,9 +41,9 @@ The project wants no new features: the review trims, fixes and simplifies.
      after run it needs.
    - L (crosses units, or needs a design choice): do not start. Add a Queue line with a
      three-line brief so a later session can do it alone.
-   - Every Queue line ends with what it wants, in brackets: effort, mode, and the model when
-     Fable is not needed, e.g. `[medium, auto, Sonnet]` or `[xhigh, plan]` (§ Recommending the
-     next session).
+   - Every Queue line ends with what it wants, in brackets: effort, mode and model, e.g.
+     `[medium, auto, Sonnet]`, `[high, plan, Opus]` or `[diagnose, high, Fable]` (§ Recommending
+     the next session).
    - Whatever is left when the session runs low goes to the Queue. An unfinished fix is
      reverted, never left half-done.
    - The session file is created before the first fix and gains each finding and each commit
@@ -68,6 +69,23 @@ The project wants no new features: the review trims, fixes and simplifies.
    verify. The report ends with the next session's item and how to run it (§ Recommending the
    next session); the same goes on the `Next session:` line of `summary.md`.
 
+## Diagnose only
+
+A Fable session finds causes and writes briefs; it fixes nothing, so that a cheaper model can.
+
+- **Pick.** The top Queue item tagged `diagnose`; with none, the first vehicle-physics unit
+  (map units 2 to 7) whose `Reviewed at` is empty, read for findings only. An item tagged for
+  Opus or Sonnet is left for a session on that model, which picks the top item tagged for it.
+- **Do.** Read the code, trace the fault to what produces it, and prove it with the one run or
+  the one test that shows it (a failing test is not committed: its fixture goes in the session
+  file). No fix, not even an S one; no full suite, no before-and-after matrix, no doc sync.
+- **Write.** The session file (cause, evidence quoted), and one Queue line per finding that a
+  session with no memory of this one can execute: the file and function, what is wrong and
+  why, the fix in words, the test or run that fails now and passes after, the runs to compare,
+  when to stop and hand back, and its tag. A fix that changes driving says "ends in a proposal".
+- **Commit** the journal only. Effort `high` at most, auto mode: nothing is changed, so there
+  is no plan to approve.
+
 ## Recommending the next session
 
 Each report ends with four things for the next `/review-continue`, judged from the item it will
@@ -81,12 +99,14 @@ session unsure how to rate an item it queues takes the higher level.
   - `medium`: mechanical work that needs checking, not judgement (a sweep, dead-code removal,
     duplicate tests), and a unit of docs, guide pages, agent instructions or CI and build tools.
   - `high`: a unit of code with logic in it, or a fix that needs judgement.
-  - `xhigh`: a design change or a restructuring in the drivetrain, wheels or towing.
+  - `xhigh`: only on the user's word. A design change or a restructuring in the drivetrain,
+    wheels or towing is diagnosed first (§ Diagnose only), then fixed from its brief at `high`.
 - **Mode.** Plan mode when the item restructures code, crosses units or will end in a proposal:
   the plan is what the user approves. Auto mode for a unit review and for mechanical fixes.
 - **Model.** The session's own model (`/model`), never a subagent doing the item for Fable.
-  Fable for the vehicle physics (map units 2 to 7) and for any `xhigh` item; say when Sonnet is
-  enough (mechanical items, and units of docs, tools and tests with no physics).
+  Fable only for `diagnose` items (§ Diagnose only): its credits are scarce. A fix with a brief
+  is Opus's where it touches the vehicle physics (map units 2 to 7) or needs judgement, Sonnet's
+  where it is mechanical or in docs, tools and tests with no physics. Every tag names its model.
 - **Context.** `/clear` first, as a rule: the journal carries everything. Keep the context only
   when the next item is a fix in a file this session read whole and the session was short.
 

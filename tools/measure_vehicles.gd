@@ -317,6 +317,24 @@ const SIDE_ROLLS: Array[float] = [90.0, -90.0, 180.0]
 const SIDE_CLEAR := 0.02           ## m
 const SIDE_SETTLE_S := 2.0
 const SIDE_LOG_S := 5.0
+## --- scrape (`scrape`, instead of every other pass) ---
+## The body driven along a wall: spawned SCRAPE_DEG off the strip's line toward a SCRAPE_HIGH wall
+## on its right, the wall's face SCRAPE_GAP out from its widest tyre, held at SCRAPE_SPEED with the
+## wheel straight for SCRAPE_S; `steer=<pct>` holds the wheel there from SCRAPE_STEER_S on, the body
+## by then along the wall. `onebody` makes the wall a shape of the strip's body (a parapet
+## welded to its deck). Per wheel (a coupled towed body's too, `T<n>`): how far its cylinder
+## reached past the wall's face (at full bump, so to within the body's roll), the share of ticks in
+## contact, the ticks its contact was one the spring cannot carry (`RayWheel.carries`), and the peak
+## spring force across its travel. Per body: the speed it ends at, the peak acceleration across it
+## and yaw rate, the peak tilt. `trace` prints the ticks.
+const SCRAPE_DEG := 5.0
+const SCRAPE_SPEED := 5.0          ## m/s
+const SCRAPE_S := 10.0
+const SCRAPE_STEER_S := 6.0
+const SCRAPE_GAP := 1.0            ## m
+const SCRAPE_HIGH := 2.0           ## m
+const SCRAPE_LONG := 120.0         ## m of wall, from SCRAPE_BEHIND behind the spawn
+const SCRAPE_BEHIND := 20.0        ## m
 ## --- arm (`arm`, instead of every other pass) ---
 ## The refuse body's arm cycle, parked: in N on the handbrake with the PTO in, ARM_SETTLE_S idle, then
 ## LIFT to the top and LOWER to the stow, each to ARM_TIMEOUT_S. A line every ARM_LINE_S: the arm's
@@ -439,7 +457,7 @@ const REFERENCE_SPECS_PATH := "res://tools/vehicle_reference_specs.json"
 const REPORT_DIR := "res://reports/specs_sweep/"
 
 enum Phase { ACCEL, COAST, TRACKING, CORNERING, BRAKING, STALL, HANDBRAKE, STEP, CRUISE, CIRCLE,
-		KERB, SIDE, HITCH, PLOUGH, ARM, SINE, FREEREV, REST, DONE }
+		KERB, SIDE, SCRAPE, HITCH, PLOUGH, ARM, SINE, FREEREV, REST, DONE }
 ## Where a step-steer run is (`_tick_step`).
 enum Step { RUN_UP, SETTLE, STEPPED }
 ## Where a sine-with-dwell run is (`_tick_sine`): RAMP finds A, STEER is a run of the series.
@@ -675,8 +693,19 @@ var _sd_ticks := 0                    ## ticks logged
 var _sd_wheels: Array[Dictionary] = [] ## per wheel, the log's sums (`_side_wheel`)
 var _sd_flags := {}                   ## flag -> [ticks on, flips, last]
 var _sd_peak := Vector3.ZERO          ## peak linear (x) and angular (y) speed, tilt summed (z)
+## `scrape`: run only the drive along a wall (§ scrape) on each body; `onebody`: the wall a shape
+## of the strip's body.
+var _scrape := false
+var _scrape_one := false
+var _sc_steer := 0.0                  ## `steer=`: the wheel held there (%) once SCRAPE_STEER_S in
+var _sc_wall: Node3D = null           ## the wall: a body, or the strip's second shape
+var _sc_wall_x := 0.0                 ## its face, m
+var _sc_wheels: Array[Dictionary] = [] ## per wheel, the run's figures (`_tick_scrape`)
+var _sc_peak := Vector3.ZERO          ## peak acceleration across (x, m/s2), yaw rate (y), tilt (z, deg)
+var _sc_prev_v := Vector3.ZERO
 ## `RayWheel.start_overlaps` as this body spawned (`_finish_vehicle` prints any since).
 var _body_overlaps := 0
+var _body_sweeps := 0                 ## `RayWheel.contact_sweeps`, the same
 ## `track`: skip the accel/top-speed pass — CI only needs the tracking gate.
 var _track_only := false
 ## `strict`: exit nonzero on a tracking FAIL. Off by default so dev invocation stays a report.
@@ -954,6 +983,9 @@ func _ready() -> void:
 	_mfwd = _plough_pass and flags.has("mfwd")
 	_kerb = flags.has("kerb")
 	_side_pass = flags.has("side")
+	_scrape = flags.has("scrape")
+	_scrape_one = flags.has("onebody")
+	_sc_steer = clampf(MeasureRig.float_flag(flags, "steer=", 0.0), -100.0, 100.0)
 	_arm_pass = flags.has("arm")
 	_track_only = flags.has("track")
 	_strict = flags.has("strict")
@@ -1091,13 +1123,14 @@ func _ready() -> void:
 				or not is_nan(_bar_front) or not is_nan(_compliance) \
 				or not is_nan(_ackermann) or not is_nan(_roll_steer.x) or not is_nan(_angdamp) \
 				or _corner_ramp_s != CORNER_RAMP_S \
-				or _circle or _hitch_pass or _plough_pass or _kerb or _side_pass or _arm_pass \
+				or _circle or _hitch_pass or _plough_pass or _kerb or _side_pass or _scrape \
+				or _arm_pass \
 				or _rest or _cruise_probe() \
 				or _tyre != "" or _surface >= 0 or not _step_speeds.is_empty() or _xwind or _headtail \
 				or _wind_base != Vector3.ZERO:
 			printerr("trace / notc / gear= / j= / rear_lat_grip= / bar_rear= / bar_front= /"
 					+ " cornering_peak= / speeds= / ackermann= / rollsteer= / compliance= / angdamp= /"
-					+ " ramp= / circle / hitch / plough / kerb / side / rest /"
+					+ " ramp= / circle / hitch / plough / kerb / side / scrape / rest /"
 					+ " pedal= / cruise /"
 					+ " kickdown / pulse / xwind / headtail / wind= / tyre= / surface= change the passes a"
 					+ " doc preset tabulates:"
@@ -1289,6 +1322,7 @@ func _next_vehicle() -> void:
 	_brake_i = 0
 	_brake_rows = []
 	_body_overlaps = RayWheel.start_overlaps
+	_body_sweeps = RayWheel.contact_sweeps
 	_car = MeasureRig.spawn(self, _variant, _spec_overrides) as BaseVehicle
 	_current["abs"] = _car.spec.ground_drive.abs_equipped
 	if _surge_pin != null:
@@ -1335,6 +1369,8 @@ func _next_vehicle() -> void:
 		_start_kerb()
 	elif _side_pass:
 		_start_side()
+	elif _scrape:
+		_start_scrape()
 	elif _arm_pass:
 		_start_arm()
 	elif _track_only:
@@ -1513,6 +1549,8 @@ func _physics_process(delta: float) -> void:
 		_tick_kerb(delta)
 	elif _phase == Phase.SIDE:
 		_tick_side()
+	elif _phase == Phase.SCRAPE:
+		_tick_scrape(delta)
 	elif _phase == Phase.ARM:
 		_tick_arm()
 	else:
@@ -4879,11 +4917,11 @@ func _tick_kerb(delta: float) -> void:
 		_next_kerb_run()
 
 
-## The crawl's speed hold: the circle's PI pedal at KERB_CRAWL, and the brake past it.
-func _kerb_crawl(v_long: float, delta: float) -> void:
-	var err := KERB_CRAWL - v_long
-	MeasureRig.drive(_pi_pedal(_kb_hold.step(err, delta), KERB_CRAWL) * 100.0,
-			clampf(-err * KERB_BRAKE_GAIN, 0.0, 1.0) * 100.0)
+## The crawl's speed hold: the circle's PI pedal at `v_set`, and the brake past it.
+func _kerb_crawl(v_long: float, delta: float, v_set := KERB_CRAWL, steer_pct := 0.0) -> void:
+	var err := v_set - v_long
+	MeasureRig.drive(_pi_pedal(_kb_hold.step(err, delta), v_set) * 100.0,
+			clampf(-err * KERB_BRAKE_GAIN, 0.0, 1.0) * 100.0, steer_pct)
 
 
 ## The plateau, its near edge `lead` ahead of the foremost hub along the heading, square to it or
@@ -5148,6 +5186,94 @@ func _report_side() -> void:
 		var row: Array = _sd_flags[flag]
 		parts.append("%s %.0f %% (%.1f flips/s)" % [flag, 100.0 * row[0] / n, row[1] / SIDE_LOG_S])
 	print("    " + ", ".join(parts))
+
+
+## The drive along a wall (§ scrape) on this body.
+func _start_scrape() -> void:
+	if _sc_wall != null:
+		_sc_wall.get_parent().remove_child(_sc_wall)
+		_sc_wall.queue_free()
+	var reach := 0.0
+	for w in _car.wheels:
+		reach = maxf(reach, absf(w.anchor.x) + w.half_width)
+	_sc_wall_x = reach + SCRAPE_GAP
+	var size := Vector3(1.0, SCRAPE_HIGH, SCRAPE_LONG)
+	var centre := Vector3(_sc_wall_x + 0.5, SCRAPE_HIGH * 0.5,
+			START_Z + SCRAPE_BEHIND - SCRAPE_LONG * 0.5)
+	if _scrape_one:
+		var strip: StaticBody3D = get_node("Strip")
+		var shape := CollisionShape3D.new()
+		shape.shape = BoxShape3D.new()
+		(shape.shape as BoxShape3D).size = size
+		shape.position = centre - strip.position
+		strip.add_child(shape)
+		_sc_wall = shape
+	else:
+		_sc_wall = MeasureRig.add_box(self, "Wall", size, Transform3D(Basis.IDENTITY, centre))
+	print("=== %s (%s), scrape, the wall %s ===" % [_variant, _drive_label(_car.spec),
+			"a shape of the strip's body" if _scrape_one else "a body of its own"])
+	MeasureRig.place(_car, Transform3D(Basis(Vector3.UP, -deg_to_rad(SCRAPE_DEG)),
+			Vector3(0.0, _car.rest_ride_height(), START_Z)))
+	_car.respawn()
+	_reset_pass(Phase.SCRAPE)
+	_kb_hold.integral = 0.0
+	_sc_wheels = []
+	_sc_peak = Vector3.ZERO
+	_sc_prev_v = Vector3.ZERO
+	MeasureRig.drive(0.0, 0.0)
+
+
+func _tick_scrape(delta: float) -> void:
+	var b := _car.global_transform.basis
+	var v_long := _car.linear_velocity.dot(-b.z)
+	_kerb_crawl(v_long, delta, SCRAPE_SPEED, _sc_steer if _t >= SCRAPE_STEER_S else 0.0)
+	# The unit's wheels, then a coupled towed body's (it couples after the spawn countdown).
+	var towed := MeasureRig.towed(_car)
+	var wheels: Array[RayWheel] = _car.drive.wheels.duplicate()
+	var own := wheels.size()
+	if towed != null:
+		wheels.append_array(towed.wheels)
+	while _sc_wheels.size() < wheels.size():
+		var i := _sc_wheels.size()
+		_sc_wheels.append({"deep": -INF, "contact": 0, "off": 0, "across": 0.0, "ticks": 0,
+				"label": MeasureRig.wheel_label(_car, wheels[i]) if i < own else "T%d" % (i - own)})
+	var cells := PackedStringArray()
+	for i in wheels.size():
+		var w := wheels[i]
+		var row := _sc_wheels[i]
+		var xf := _car.global_transform if i < own else towed.global_transform
+		var mount := w.mount_basis(xf.basis)
+		var axle := Basis(mount.y, w.steer_angle) * mount.x
+		var deep := (xf * w.mount_anchor()).x + RayWheel.cylinder_support(Vector3.RIGHT, axle,
+				w.wheel_radius, w.half_width) - _sc_wall_x
+		row["deep"] = maxf(row["deep"], deep)
+		row["ticks"] += 1
+		if not w.in_contact:
+			cells.append("%s %+.0f mm -" % [row["label"], deep * 1000.0])
+			continue
+		var along := w.contact_normal.dot(mount.y)
+		var off := not RayWheel.carries(w.contact_normal, mount.y)
+		row["contact"] += 1
+		row["off"] += int(off)
+		row["across"] = maxf(row["across"], w.suspension_force * sqrt(maxf(1.0 - along * along, 0.0)))
+		cells.append("%s %+.0f mm c%.3f F%.0f n.up %+.2f n.ax %+.2f%s" % [row["label"], deep * 1000.0,
+				w.compression, w.suspension_force, along, w.contact_normal.dot(axle),
+				" OFF" if off else ""])
+	var accel := (_car.linear_velocity - _sc_prev_v) / delta
+	_sc_prev_v = _car.linear_velocity
+	var tilt := rad_to_deg(b.y.angle_to(Vector3.UP))
+	_sc_peak = _sc_peak.max(Vector3(absf(accel.dot(b.x)), absf(_car.angular_velocity.dot(b.y)), tilt))
+	if _trace:
+		print("    t %.3f v %.2f tilt %.1f | %s" % [_t, v_long, tilt, " | ".join(cells)])
+	if _t >= SCRAPE_S:
+		print("  ends at %.2f m/s; peak %.2f g across, %.1f deg/s yaw, %.1f deg tilt" % [v_long,
+				_sc_peak.x / BrakeSizing.G, rad_to_deg(_sc_peak.y), _sc_peak.z])
+		for row in _sc_wheels:
+			print(("    %-3s %+4.0f mm past the wall's face, contact %3.0f %%, off its travel %d ticks,"
+					+ " peak %.0f N across its travel") % [row["label"], float(row["deep"]) * 1000.0,
+					100.0 * row["contact"] / maxf(float(row["ticks"]), 1.0), row["off"], row["across"]])
+		MeasureRig.drive(0.0, 0.0)
+		_finish_vehicle()
 
 
 func _wheelbase() -> float:
@@ -5538,6 +5664,10 @@ func _finish_vehicle() -> void:
 		# A wheel's cast started inside something: read as full bump. On the flat strip that is an
 		# attachment (or its own trailer) under a hub, never the ground.
 		print("  contact: %d cast start overlaps, a hub inside something" % overlaps)
+	if RayWheel.contact_sweeps > _body_sweeps:
+		# A wheel's cast did not stop on its tread (`RayWheel._carried_sweep`): on the flat strip that
+		# is a wall in a wheel's side, never the ground.
+		print("  contact: %d sweeps by contact" % (RayWheel.contact_sweeps - _body_sweeps))
 	_current["start_overlaps"] = overlaps
 	print("")
 	_sweep.append(_current)

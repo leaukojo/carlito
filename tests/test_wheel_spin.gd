@@ -1461,6 +1461,40 @@ func test_a_cylinder_rests_on_its_tread_or_its_end() -> void:
 	var n := Vector3(sin(deg_to_rad(10.0)), cos(deg_to_rad(10.0)), 0.0)
 	assert_float(WheelScript.cylinder_support(n, Vector3.RIGHT, 0.36, 0.1)) \
 			.is_equal_approx(0.36 * cos(deg_to_rad(10.0)) + 0.1 * sin(deg_to_rad(10.0)), 1e-6)
+	# A rim rounded by 1 cm: the tread and the end face as before, the corner nearer by the
+	# rounding's part, `c + (r - c) cos + (w - c) sin`.
+	assert_float(WheelScript.cylinder_support(Vector3.UP, Vector3.RIGHT, 0.36, 0.1, 0.01)) \
+			.is_equal_approx(0.36, 1e-6)
+	assert_float(WheelScript.cylinder_support(n, Vector3.RIGHT, 0.36, 0.1, 0.01)).is_equal_approx(
+			0.01 + 0.35 * cos(deg_to_rad(10.0)) + 0.09 * sin(deg_to_rad(10.0)), 1e-6)
+
+
+func test_the_cylinder_support_is_where_the_engine_touches_across_the_axle() -> void:
+	# The wheel's own query cylinder rolled on a flat: the rest test finds the flat 0.2 mm inside
+	# `cylinder_support` and nothing 0.2 mm outside it, at every lean, the rim's rounded corner
+	# included (the sharp rim's support is up to 3.3 mm further out on this wheel).
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	_box(root, Vector3(4.0, 1.0, 4.0), Vector3(0.0, -0.5, 0.0))
+	await get_tree().physics_frame
+	var space := root.get_world_3d().direct_space_state
+	var gd: GroundDriveSpecScript = GroundDriveSpecScript.new()
+	gd.wheel_radius = 0.36
+	gd.wheel_inertia = 1.0
+	gd.tyre_half_width = 0.1
+	gd.rest_length = 0.3
+	var w := WheelScript.new(Vector3.ZERO, false, false, null, 300.0)
+	w.apply_suspension(gd)
+	var query: PhysicsShapeQueryParameters3D = w._query
+	for roll: float in [0.0, 10.0, 30.0, 45.0, 60.0, 90.0]:
+		var wheel_basis := Basis(Vector3.BACK, deg_to_rad(roll))
+		var support := WheelScript.cylinder_support(Vector3.UP, wheel_basis.x, 0.36, 0.1,
+				w._convex_radius)
+		for off: float in [-2e-4, 2e-4]:
+			query.transform = Transform3D(wheel_basis * Basis(Vector3.BACK, PI / 2.0),
+					Vector3(0.0, support + off, 0.0))
+			assert_bool(space.get_rest_info(query).is_empty()) \
+					.override_failure_message("rolled %.0f, %+.4f off" % [roll, off]).is_equal(off > 0.0)
 
 
 func test_the_settled_drop_backs_the_touching_stop_out_of_its_overlap() -> void:
@@ -1474,7 +1508,7 @@ func test_the_settled_drop_backs_the_touching_stop_out_of_its_overlap() -> void:
 
 
 ## A static box on TERRAIN, `size` at `center`, under `root`.
-func _box(root: Node3D, size: Vector3, center: Vector3) -> void:
+func _box(root: Node3D, size: Vector3, center: Vector3) -> StaticBody3D:
 	var body := StaticBody3D.new()
 	body.collision_layer = 1  # TERRAIN, inside Layers.SOLID
 	var shape := CollisionShape3D.new()
@@ -1483,6 +1517,7 @@ func _box(root: Node3D, size: Vector3, center: Vector3) -> void:
 	body.add_child(shape)
 	root.add_child(body)
 	body.global_position = center
+	return body
 
 
 ## One wheel (radius `r`, 0.3 m of travel, anchor 0.6 m up) ticked once on a frozen body whose hub
@@ -1577,39 +1612,138 @@ func test_the_cast_reads_a_face_with_its_hub_on_a_sweep_stop() -> void:
 	assert_float(worst).is_less(1e-5)
 
 
-# --- lying_on: a wheel on its side or its back has no tyre contact --------------------
+# --- carries: a contact across the wheel's travel is not the spring's -----------------
 
-func test_a_wheel_lies_on_the_ground_past_the_overturned_tilt() -> void:
+func test_the_spring_carries_no_contact_past_the_overturned_tilt() -> void:
 	assert_float(WheelScript.LYING_DEG).is_equal(BaseVehicle.OVERTURNED_DEG)
 	# On the level, the body turned `deg` about its nose, then about its axle: [deg, lying].
 	for c: Array in [[0.0, false], [45.0, false], [-45.0, false], [75.0, true], [-75.0, true],
 			[90.0, true], [150.0, true], [180.0, true]]:
 		var roll := Basis(Vector3.BACK, deg_to_rad(c[0]))
-		assert_bool(WheelScript.lying_on(Vector3.UP, roll * Vector3.UP, roll * Vector3.RIGHT,
-				Vector3.UP)).override_failure_message("rolled %.0f" % c[0]).is_equal(c[1])
-	# Pitched onto its nose the ground is in the wheel's plane, the tread's to meet; on its back it
-	# is over the travel.
-	for c: Array in [[90.0, false], [180.0, true]]:
+		assert_bool(WheelScript.carries(Vector3.UP, roll * Vector3.UP)) \
+				.override_failure_message("rolled %.0f" % c[0]).is_equal(not c[1])
+	# Pitched the same: on its nose the ground is ahead of the tyre, across its travel.
+	for c: Array in [[45.0, false], [75.0, true], [90.0, true], [180.0, true]]:
 		var pitch := Basis(Vector3.RIGHT, deg_to_rad(c[0]))
-		assert_bool(WheelScript.lying_on(Vector3.UP, pitch * Vector3.UP, Vector3.RIGHT,
-				Vector3.UP)).override_failure_message("pitched %.0f" % c[0]).is_equal(c[1])
-	# A wall in an upright wheel's side, and a ceiling over it, are not ground to lie on.
-	assert_bool(WheelScript.lying_on(Vector3.LEFT, Vector3.UP, Vector3.RIGHT, Vector3.UP)).is_false()
-	assert_bool(WheelScript.lying_on(Vector3.DOWN, Vector3.UP, Vector3.RIGHT, Vector3.UP)).is_false()
+		assert_bool(WheelScript.carries(Vector3.UP, pitch * Vector3.UP)) \
+				.override_failure_message("pitched %.0f" % c[0]).is_equal(not c[1])
+	# A wall in an upright wheel's side or ahead of it, and a ceiling over it, are not the spring's.
+	for wall: Vector3 in [Vector3.LEFT, Vector3.BACK, Vector3.DOWN]:
+		assert_bool(WheelScript.carries(wall, Vector3.UP)).is_false()
 	# On its side across a 30 degree slope it lies on the slope.
 	var slope := Basis(Vector3.BACK, deg_to_rad(30.0)) * Vector3.UP
-	assert_bool(WheelScript.lying_on(slope, Vector3.RIGHT, slope, Vector3.UP)).is_true()
+	assert_bool(WheelScript.carries(slope, Vector3.RIGHT)).is_false()
+
+
+## `collide_shape`'s two points at `margin` for a contact of `normal`, `depth` m in (< 0: clear),
+## on the test wheel (radius 0.36, 0.2 across, its axle along x) with its hub at `hub`.
+func _pair(hub: Vector3, normal: Vector3, depth: float, margin: float) -> Array[Vector3]:
+	var reach := WheelScript.cylinder_support(normal, Vector3.RIGHT, 0.36, 0.1)
+	return [hub - normal * (reach + margin), hub - normal * (reach - depth)]
+
+
+func _first_carried(pairs: Array[Vector3], hub: Vector3) -> int:
+	return WheelScript.first_carried(pairs, 0.05, Vector3.UP, hub, Vector3.RIGHT, 0.36, 0.1)
+
+
+func test_the_first_contact_the_spring_carries_is_read_off_the_pairs() -> void:
+	var hub := Vector3(300.0, 20.0, -250.0)
+	var wall := _pair(hub, Vector3.LEFT, 0.03, 0.05)
+	var flat := _pair(hub, Vector3.UP, -0.02, 0.05)
+	var bank := _pair(hub, Basis(Vector3.BACK, deg_to_rad(30.0)) * Vector3.UP, -0.01, 0.05)
+	var none: Array[Vector3] = []
+	assert_int(_first_carried(none, hub)).is_equal(-1)
+	# A wall 3 cm into the wheel's side is not the spring's, however deep.
+	assert_int(_first_carried(wall, hub)).is_equal(-1)
+	assert_int(_first_carried(wall + flat, hub)).is_equal(2)
+	# The bank is 1 cm off along its normal, 1 / cos 30 cm down the travel: before the flat's 2.
+	assert_int(_first_carried(wall + flat + bank, hub)).is_equal(4)
+	assert_int(_first_carried(bank + wall + flat, hub)).is_equal(0)
+	# A flat the tread is 2 mm into comes before either.
+	assert_int(_first_carried(bank + flat + _pair(hub, Vector3.UP, 0.002, 0.05), hub)).is_equal(4)
+
+
+func test_a_pair_off_an_inactive_edge_is_no_contact() -> void:
+	# Read off the engine (hub at (0, 0.6, 0), a wall of two triangles in the wheel's side): the
+	# wall's diagonal, 3.8 cm over the tread, with the wall's normal for an axis. The pair's line
+	# leans 37 degrees off the travel and is longer than the margin, so it reads as 1.3 cm in.
+	var edge: Array[Vector3] = [Vector3(0.120001, 0.958213, 0.035822), Vector3(0.070001, 0.99604, 0.039605)]
+	var hub := Vector3(0.0, 0.6, 0.0)
+	assert_int(_first_carried(edge, hub)).is_equal(-1)
+	assert_int(_first_carried(edge + _pair(hub, Vector3.UP, -0.02, 0.05), hub)).is_equal(2)
+
+
+func test_the_engines_pairs_give_each_contact_its_own_normal_and_depth() -> void:
+	# The fact `first_carried` stands on, far from the origin where float32 is coarse: the wheel's
+	# cylinder 2 mm into a flat and 3 cm into a wall that is a shape of the flat's body. The rest
+	# test names the wall; the pairs hold the flat's contact too, its normal and its depth.
+	var at := Vector3(300.0, 20.0, -250.0)
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	var flat := _box(root, Vector3(4.0, 1.0, 20.0), at + Vector3(0.0, -0.5, 0.0))
+	var wall := CollisionShape3D.new()
+	wall.shape = BoxShape3D.new()
+	(wall.shape as BoxShape3D).size = Vector3(1.0, 2.0, 20.0)
+	flat.add_child(wall)
+	wall.global_position = at + Vector3(0.57, 1.0, 0.0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = CylinderShape3D.new()
+	(query.shape as CylinderShape3D).radius = 0.36
+	(query.shape as CylinderShape3D).height = 0.2
+	var hub := at + Vector3(0.0, 0.358, 0.0)
+	query.transform = Transform3D(Basis(Vector3.BACK, PI / 2.0), hub)
+	query.margin = WheelScript.PAIR_MARGIN
+	var space := root.get_world_3d().direct_space_state
+	assert_vector(space.get_rest_info(query)["normal"]).is_equal_approx(Vector3.LEFT, Vector3.ONE * 1e-3)
+	var pairs := space.collide_shape(query, WheelScript.PAIR_MAX)
+	var first := _first_carried(pairs, hub)
+	assert_int(first).is_greater_equal(0)
+	var across := pairs[first + 1] - pairs[first]
+	assert_vector(across.normalized()).is_equal_approx(Vector3.UP, Vector3.ONE * 1e-3)
+	assert_float(across.length() - WheelScript.PAIR_MARGIN).is_equal_approx(0.002, 1e-4)
 
 
 ## One wheel (radius 0.36, 0.3 m of travel) ticked once on a frozen body rolled `roll_deg` about its
 ## nose over a flat at y 0, its anchor at `anchor_at` (world). `wall_x`: a wall's near face, to the
-## body's right (NAN: none).
-func _wheel_on_a_rolled_body(roll_deg: float, anchor_at: Vector3, wall_x := NAN) -> WheelScript:
+## body's right (NAN: none), a body of its own or, `one_body`, a second shape of the flat's;
+## `welded`, the flat's top and the wall's face are one single-sided trimesh, the kind the bake's
+## `Drivable` is.
+func _wheel_on_a_rolled_body(roll_deg: float, anchor_at: Vector3, wall_x := NAN,
+		one_body := false, welded := false) -> WheelScript:
 	var root: Node3D = auto_free(Node3D.new())
 	add_child(root)
-	_box(root, Vector3(4.0, 1.0, 20.0), Vector3(0.0, -0.5, 0.0))
-	if not is_nan(wall_x):
-		_box(root, Vector3(1.0, 2.0, 20.0), Vector3(wall_x + 0.5, 1.0, 0.0))
+	if welded:
+		# Clockwise seen from its front, as Godot's trimesh takes it: the deck from above, the wall
+		# from the wheel's side.
+		var mesh := ConcavePolygonShape3D.new()
+		mesh.set_faces(PackedVector3Array([
+			Vector3(-2.0, 0.0, -10.0), Vector3(2.0, 0.0, -10.0), Vector3(2.0, 0.0, 10.0),
+			Vector3(-2.0, 0.0, -10.0), Vector3(2.0, 0.0, 10.0), Vector3(-2.0, 0.0, 10.0),
+			Vector3(wall_x, 0.0, -10.0), Vector3(wall_x, 2.0, -10.0), Vector3(wall_x, 0.0, 10.0),
+			Vector3(wall_x, 2.0, -10.0), Vector3(wall_x, 2.0, 10.0), Vector3(wall_x, 0.0, 10.0)]))
+		var deck := StaticBody3D.new()
+		deck.collision_layer = 1  # TERRAIN, inside Layers.SOLID
+		var deck_shape := CollisionShape3D.new()
+		deck_shape.shape = mesh
+		deck.add_child(deck_shape)
+		root.add_child(deck)
+	else:
+		var flat := _box(root, Vector3(4.0, 1.0, 20.0), Vector3(0.0, -0.5, 0.0))
+		if one_body:
+			var wall := CollisionShape3D.new()
+			wall.shape = BoxShape3D.new()
+			(wall.shape as BoxShape3D).size = Vector3(1.0, 2.0, 20.0)
+			flat.add_child(wall)
+			wall.global_position = Vector3(wall_x + 0.5, 1.0, 0.0)
+		elif not is_nan(wall_x):
+			_box(root, Vector3(1.0, 2.0, 20.0), Vector3(wall_x + 0.5, 1.0, 0.0))
+	return await _tick_one_wheel(root, roll_deg, anchor_at)
+
+
+## The wheel of `_wheel_on_a_rolled_body`, ticked once over whatever ground `root` holds.
+func _tick_one_wheel(root: Node3D, roll_deg: float, anchor_at: Vector3) -> WheelScript:
 	var body := RigidBody3D.new()
 	body.freeze = true
 	body.collision_layer = 0
@@ -1656,23 +1790,82 @@ func test_a_wheel_on_its_back_is_off_the_ground() -> void:
 	assert_float(w.compression).is_equal(0.0)
 
 
-func test_a_wall_in_the_wheels_side_leaves_its_contact_as_it_reads() -> void:
+func test_a_wall_in_the_wheels_side_leaves_the_tread_on_the_ground() -> void:
 	# Upright, the tread 6 cm into its travel on the flat, the wheel's right face 3 cm into a wall:
-	# the sweep still stops on the flat. Off the ground beside the same wall the start reads a bump.
+	# the wall is the deeper contact, and the flat's is the one the tread carries.
 	var w: WheelScript = await _wheel_on_a_rolled_body(0.0, Vector3(0.0, 0.6, 0.0), 0.07)
 	assert_bool(w.in_contact).is_true()
 	assert_float(w.compression).is_equal_approx(0.06, 2e-3)
-	var clear: WheelScript = await _wheel_on_a_rolled_body(0.0, Vector3(0.0, 0.9, 0.0), 0.07)
-	assert_bool(clear.in_contact).is_true()
+	assert_vector(w.contact_normal).is_equal_approx(Vector3.UP, Vector3.ONE * 1e-3)
+
+
+func test_a_wall_in_the_side_of_a_wheel_off_the_ground_is_no_bump() -> void:
+	# The same wall, the tread 24 cm clear of the flat at full droop: nothing under the tyre.
+	var w: WheelScript = await _wheel_on_a_rolled_body(0.0, Vector3(0.0, 0.9, 0.0), 0.07)
+	assert_bool(w.in_contact).is_false()
+	assert_float(w.suspension_force).is_equal(0.0)
+
+
+func test_a_wall_of_the_grounds_own_body_leaves_the_tread_on_the_ground() -> void:
+	# The wall a shape of the flat's body, then welded to it in one trimesh: the engine's sweep
+	# leaves out a body it starts inside, the flat with it (`cast_motion`), and the tread still
+	# reads the flat.
+	for welded: bool in [false, true]:
+		var w: WheelScript = await _wheel_on_a_rolled_body(0.0, Vector3(0.0, 0.6, 0.0), 0.07, true,
+				welded)
+		assert_bool(w.in_contact).override_failure_message("welded %s" % welded).is_true()
+		assert_float(w.compression).is_equal_approx(0.06, 2e-3)
+		assert_vector(w.contact_normal).is_equal_approx(Vector3.UP, Vector3.ONE * 1e-3)
+		# Off the ground beside the same wall: nothing under the tyre.
+		w = await _wheel_on_a_rolled_body(0.0, Vector3(0.0, 0.9, 0.0), 0.07, true, welded)
+		assert_bool(w.in_contact).override_failure_message("welded %s, in the air" % welded).is_false()
+		assert_float(w.suspension_force).is_equal(0.0)
+
+
+func test_a_cliff_of_the_heightmap_leaves_the_tread_on_its_foot() -> void:
+	# A heightmap of metre cells, level at 0 up to x 0, then 3 m up in one cell: a face 71.6 degrees
+	# steep, past LYING_DEG. The wheel on the level at its foot, its right face 3 cm past x 0: from
+	# 0.6 up the travel takes its corner into the face, from 0.4 it starts inside it.
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	var heights := PackedFloat32Array()
+	for z in 5:
+		heights.append_array(PackedFloat32Array([0.0, 0.0, 0.0, 3.0, 3.0]))
+	var map := HeightMapShape3D.new()
+	map.map_width = 5
+	map.map_depth = 5
+	map.map_data = heights
+	var terrain := StaticBody3D.new()
+	terrain.collision_layer = 1  # TERRAIN, inside Layers.SOLID
+	var terrain_shape := CollisionShape3D.new()
+	terrain_shape.shape = map
+	terrain.add_child(terrain_shape)
+	root.add_child(terrain)
+	for c: Array in [[0.6, 0.06], [0.4, 0.26]]:
+		var w: WheelScript = await _tick_one_wheel(root, 0.0, Vector3(-0.07, c[0], 0.0))
+		assert_bool(w.in_contact).override_failure_message("anchor at %.1f" % c[0]).is_true()
+		assert_float(w.compression).is_equal_approx(c[1], 2e-3)
+		assert_vector(w.contact_normal).is_equal_approx(Vector3.UP, Vector3.ONE * 1e-3)
+
+
+func test_a_welded_deck_with_no_wall_in_the_wheels_side_reads_as_a_flat() -> void:
+	# The trimesh fixture's own check: the wall 1.4 m off, the tread 6 cm into its travel.
+	var w: WheelScript = await _wheel_on_a_rolled_body(0.0, Vector3(0.0, 0.6, 0.0), 1.5, true, true)
+	assert_bool(w.in_contact).is_true()
+	assert_float(w.compression).is_equal_approx(0.06, 2e-3)
+	assert_vector(w.contact_normal).is_equal_approx(Vector3.UP, Vector3.ONE * 1e-3)
 
 
 func test_a_wheel_on_a_leaning_body_still_carries_on_its_tread() -> void:
-	# Rolled 45 degrees: the tread's lower corner hangs `(r + half_width) cos 45` under the hub, so
-	# it meets the flat that far short of the anchor's height, measured down the leaning travel.
+	# Rolled 45 degrees: the tread's lower corner hangs its support (`cylinder_support`, the rim
+	# rounded) under the hub, so it meets the flat that far short of the anchor's height, measured
+	# down the leaning travel.
 	var w: WheelScript = await _wheel_on_a_rolled_body(45.0, Vector3(0.0, 0.45, 0.0))
 	var lean := cos(deg_to_rad(45.0))
+	var hang := WheelScript.cylinder_support(Vector3.UP, Basis(Vector3.BACK, deg_to_rad(45.0)).x,
+			0.36, 0.1, w._convex_radius)
 	assert_bool(w.in_contact).is_true()
-	assert_float(w.compression).is_equal_approx(0.3 - (0.45 - 0.46 * lean) / lean, 0.01)
+	assert_float(w.compression).is_equal_approx(0.3 - (0.45 - hang) / lean, 1e-4)
 	assert_vector(w.contact_normal).is_equal_approx(Vector3.UP, Vector3.ONE * 1e-3)
 
 

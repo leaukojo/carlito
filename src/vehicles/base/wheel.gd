@@ -56,15 +56,28 @@ const STICK_TICK_STIFFNESS := 0.25
 ## settle's Coulomb check, and no more, since a held wheel's spare brake can be small beside its
 ## drive (an AWD centre passing the fronts most of their brake at stall).
 const HELD_SHARE := 0.998
-## Tilt (deg) of the wheel off the ground it touches past which it lies on that ground and no
-## longer stands on it (`lying_on`): `BaseVehicle.OVERTURNED_DEG`, read per contact. COMPROMISE: no
-## sidewall, so an overturned body lies on its hull with a wheel's side in the ground; a tyre that
-## carries on its side is a collision shape per wheel.
+## Angle (deg) between a contact's normal and the wheel's travel past which the spring cannot
+## carry it (`carries`): `BaseVehicle.OVERTURNED_DEG`, read per contact. COMPROMISE: no sidewall,
+## so an overturned body lies on its hull with a wheel's side in the ground and a wheel's side
+## passes into a wall as far as the hull lets it; a tyre that carries on its side is a collision
+## shape per wheel.
 const LYING_DEG := 70.0
+## `_carried_sweep`'s query margin (m). `collide_shape` gives a contact as two points `depth +
+## margin` apart along its normal, float32 in the world: the margin is the lever the normal is read
+## over, and how far ahead of the tyre a probe sees a contact, so the sweep's step.
+const PAIR_MARGIN := 0.05
+const PAIR_MAX := 64  ## point pairs a probe asks for
+const PAIR_SEAT := 1e-3  ## m a touching pair's ground point may sit off the tyre (`first_carried`)
+## `_carried_sweep` stops after this many probes, or once two in a row agree to SWEEP_TOL (m of drop).
+const SWEEP_PROBES := 16
+const SWEEP_TOL := 1e-4
 
 ## Contact casts that started inside something, read as full bump (`_contact_query`), process-wide:
 ## a diagnostic the measure tools read (an attachment under a hub shows here).
 static var start_overlaps := 0
+## Contacts read by the sweep by contact (`_carried_sweep`), process-wide: a diagnostic the measure
+## tools read (a wheel against a wall).
+static var contact_sweeps := 0
 
 var anchor: Vector3     ## hub anchor, body space
 var steered: bool
@@ -263,9 +276,12 @@ var _visual: Node3D
 ## (hot allocation). Null until then.
 var _query: PhysicsShapeQueryParameters3D = null
 var _query_body := RID()  ## body `_query.exclude` was built for
+var _convex_radius := 0.0  ## m Jolt rounds `_query`'s rim by (`jolt_convex_radius`)
 ## `_contact_query`'s result: the hub's drop below the anchor (m) and the contact normal.
 var _contact_drop := 0.0
 var _contact_normal := Vector3.UP
+## `_contact_pass` read a contact the spring cannot carry: `_carried_sweep` reads the tread's.
+var _swept_past := false
 
 
 func _init(p_anchor: Vector3, p_steered: bool, p_driven: bool, p_visual: Node3D,
@@ -306,6 +322,7 @@ func apply_suspension(gd: GroundDriveSpec) -> void:
 		_query.shape = cylinder
 		_query.collision_mask = Layers.SOLID  ## Containment left out — see collision_layers.gd
 		_query_body = RID()
+		_convex_radius = jolt_convex_radius(cylinder)
 
 
 ## Fit a tyre class on a body whose spec describes `stock` (`TyreClass.grip_response`): once per
@@ -725,11 +742,24 @@ static func patch_offset(normal: Vector3, up: Vector3, axle: Vector3, radius: fl
 
 
 ## Distance (m) from a cylinder's centre to its support plane of `normal`: radius `radius`, axis
-## `axle`, `half_len` either side. Exact for Jolt's cylinder but where its convex radius rounds the
-## rim (a normal with a part along the axle).
-static func cylinder_support(normal: Vector3, axle: Vector3, radius: float, half_len: float) -> float:
+## `axle`, `half_len` either side, its rim rounded by `convex_radius` (0: the sharp cylinder). Jolt
+## collides a cylinder shrunk by its convex radius with a sphere of it swept over
+## (`CylinderShape::GetSupportFunction`, `ExcludeConvexRadius`), so a contact across the axle
+## touches up to `0.414 convex_radius` nearer the centre than the sharp rim; the manifold's points
+## lie on the sharp rim all the same (`first_carried` reads those, with 0).
+static func cylinder_support(normal: Vector3, axle: Vector3, radius: float, half_len: float,
+		convex_radius := 0.0) -> float:
 	var along := absf(normal.dot(axle))
-	return radius * sqrt(maxf(1.0 - along * along, 0.0)) + half_len * along
+	return convex_radius + (radius - convex_radius) * sqrt(maxf(1.0 - along * along, 0.0)) \
+			+ (half_len - convex_radius) * along
+
+
+## The convex radius Jolt rounds `cylinder`'s rim by: Godot's `JoltCylinderShape3D::_build()`,
+## `MIN(margin, MIN(half_height, radius) * collision_margin_fraction)`, copied.
+static func jolt_convex_radius(cylinder: CylinderShape3D) -> float:
+	var fraction: float = ProjectSettings.get_setting(
+			"physics/jolt_physics_3d/collisions/collision_margin_fraction")
+	return minf(cylinder.margin, minf(cylinder.height / 2.0, cylinder.radius) * fraction)
 
 
 ## The hub's drop (m) where the tyre just touches, between the sweep's last free stop `safe_drop`
@@ -741,36 +771,53 @@ static func settled_drop(safe_drop: float, unsafe_drop: float, gap: float, norma
 	return clampf(unsafe_drop + gap / maxf(normal_up, 0.1), safe_drop, unsafe_drop)
 
 
-## Whether the wheel lies on a contact of `normal`: ground (within LYING_DEG of `level_up`) met
-## with the wheel's side (the normal past LYING_DEG out of its plane, spin axis `axle`) or from
-## over its travel (past it against `up`). The spring cannot carry either: read as a contact, it
-## kicks an overturned body off the ground it lies on. A wall in an upright wheel's side is none.
-static func lying_on(normal: Vector3, up: Vector3, axle: Vector3, level_up: Vector3) -> bool:
-	return off_tread(normal, up, axle) and normal.dot(level_up) > cos(deg_to_rad(LYING_DEG))
+## Whether the spring can carry a contact of `normal`: one within LYING_DEG of the wheel's travel
+## (`up`). Past it the contact is in the wheel's side, ahead of the tyre or over it (a wall, the
+## ground under a wheel on its side or its back), where the travel takes the wheel neither into it
+## nor out: read as the spring's, the whole load pushes the body off it.
+static func carries(normal: Vector3, up: Vector3) -> bool:
+	return normal.dot(up) >= cos(deg_to_rad(LYING_DEG))
 
 
-## `lying_on`'s wheel half: a contact on the wheel's side or from over its travel.
-static func off_tread(normal: Vector3, up: Vector3, axle: Vector3) -> bool:
-	return normal.dot(up) < -cos(deg_to_rad(LYING_DEG)) \
-			or absf(normal.dot(axle)) > sin(deg_to_rad(LYING_DEG))
-
-
-## `lying_on` for `body`'s wheel, its level read only for a contact off the tread.
-func _lies_on(body: RigidBody3D, normal: Vector3, up: Vector3, axle: Vector3) -> bool:
-	return off_tread(normal, up, axle) \
-			and lying_on(normal, up, axle, VehicleMath.level_up(body.get_gravity()))
+## Index in `pairs` of the contact the spring can carry (`carries`) that a wheel going down `up`
+## touches first, -1 with none in reach. `pairs` are `collide_shape`'s at a query margin `margin`:
+## a contact's two points lie `depth + margin` apart along its normal (the engine moves the first
+## out by the margin along the penetration axis), so each contact gives its own normal and depth
+## where the rest test gives the deepest one's. Not on a trimesh's inactive edge, which the engine
+## gives its triangle's normal for an axis: a pair that reads as touching with its second point
+## (the contact's, on the ground) clear of the tyre is one of those and is passed over. The tyre is
+## the cylinder at `hub`, axis `axle`, `radius`, `half_len` either side.
+static func first_carried(pairs: Array[Vector3], margin: float, up: Vector3, hub: Vector3,
+		axle: Vector3, radius: float, half_len: float) -> int:
+	var first := -1
+	var least := INF
+	for i in range(0, pairs.size(), 2):
+		var across := pairs[i + 1] - pairs[i]
+		var length := across.length()
+		if length <= 0.0 or not carries(across / length, up):
+			continue
+		var to_touch := (margin - length) * length / across.dot(up)
+		if to_touch <= SWEEP_TOL:
+			var from_hub := pairs[i + 1] - hub
+			var along := from_hub.dot(axle)
+			if absf(along) > half_len + PAIR_SEAT \
+					or (from_hub - axle * along).length() > radius + PAIR_SEAT:
+				continue
+		if to_touch < least:
+			least = to_touch
+			first = i
+	return first
 
 
 ## The contact: a cylinder of the wheel's radius and `2 half_width` across, its axis on the steered
 ## axle (`wheel_basis`'s x), swept from full bump (the hub at the anchor) down the travel; the
 ## normal is the rest contact's where the sweep stops, the face's on a face and radial at an edge.
 ## A start inside something reads full bump (`start_overlaps`). Sets `_contact_drop`, `_contact_normal`
-## and `contact_collider`; false when nothing is under the tyre, or the wheel lies on it (`lying_on`).
-## An engine limit: `cast_motion` bisects to 1/256 of the motion, a step the hub flickers across that
-## the dampers turn into load spikes. `settled_drop` closes it off the touching stop's contact
-## (the raw fraction costs that noise on every body); a touching stop the rest test reads clear
-## is a free one, so the bracket moves a step on (`docs/vehicles.md` § Physics derivations and
-## figures).
+## and `contact_collider`; false when nothing the spring can carry is under the tyre (`carries`).
+## The engine's sweep leaves out, whole, a body it starts inside, and its rest test names the
+## deepest contact of all: where that is one the spring cannot carry (`_contact_pass`), the wheel
+## sweeps again by contact (`_carried_sweep`). `settled_drop` closes the sweep's bisection step
+## (`docs/vehicles.md` § Physics derivations and figures).
 func _contact_query(space: PhysicsDirectSpaceState3D, body: RigidBody3D, ray_from: Vector3,
 		up: Vector3, wheel_basis: Basis, rest_length: float) -> bool:
 	assert(_query != null, "the contact needs GroundDriveSpec.tyre_half_width and apply_suspension")
@@ -778,17 +825,70 @@ func _contact_query(space: PhysicsDirectSpaceState3D, body: RigidBody3D, ray_fro
 	if _query_body != body.get_rid():
 		_query_body = body.get_rid()
 		_query.exclude = [_query_body]
+	contact_collider = 0
+	_swept_past = false
+	var found := _contact_pass(space, ray_from, up, wheel_basis, rest_length)
+	if _swept_past:
+		found = _carried_sweep(space, ray_from, up, rest_length)
+	return found
+
+
+## The sweep by contact, from full bump down the travel, `_query` posed by `_contact_pass`: each
+## probe reads every contact within PAIR_MARGIN of the tyre (`first_carried`) and moves to where
+## the first one the spring carries just touches, never further than the margin it sees ahead. A
+## wall in the wheel's side is read past whatever body it is of, the ground's own included.
+## `contact_collider` stays 0: the pairs name no body.
+func _carried_sweep(space: PhysicsDirectSpaceState3D, ray_from: Vector3, up: Vector3,
+		rest_length: float) -> bool:
+	contact_sweeps += 1
+	contact_collider = 0
+	_query.margin = PAIR_MARGIN
+	var axle := _query.transform.basis.y
+	var drop := 0.0
+	var found := false
+	for _probe in SWEEP_PROBES:
+		var hub := ray_from - up * drop
+		_query.transform.origin = hub
+		var pairs := space.collide_shape(_query, PAIR_MAX)
+		var at := first_carried(pairs, PAIR_MARGIN, up, hub, axle, wheel_radius, half_width)
+		var to_touch := PAIR_MARGIN
+		if at >= 0:
+			var across := pairs[at + 1] - pairs[at]
+			var length := across.length()
+			_contact_normal = across / length
+			to_touch = minf((PAIR_MARGIN - length) / _contact_normal.dot(up), PAIR_MARGIN)
+		var next := clampf(drop + to_touch, 0.0, rest_length)
+		var settled := absf(next - drop) < SWEEP_TOL
+		# A carried contact within the travel. Settled on it, the tyre touches here, or is already
+		# in it at full bump.
+		found = at >= 0 and drop + to_touch <= rest_length + SWEEP_TOL
+		if settled and found and drop + to_touch < -SWEEP_TOL:
+			start_overlaps += 1
+		drop = next
+		if settled:
+			break
+	_query.margin = 0.0
+	_contact_drop = drop
+	return found
+
+
+## The engine's sweep and the rest test where it stops. A contact the spring cannot carry is not
+## the tread's: it is no contact, and sets `_swept_past`.
+func _contact_pass(space: PhysicsDirectSpaceState3D, ray_from: Vector3, up: Vector3,
+		wheel_basis: Basis, rest_length: float) -> bool:
 	var motion := -up * rest_length
 	_query.transform = Transform3D(wheel_basis * Basis(Vector3.BACK, PI / 2.0), ray_from)
 	_query.motion = motion
 	var fractions := space.cast_motion(_query)
 	_query.motion = Vector3.ZERO
-	contact_collider = 0
 	if fractions.size() < 2 or fractions[1] >= 1.0:
 		# Jolt's sweep ignores what the shape already overlaps at its start, so "no hit" is either a
 		# free wheel or one already past full bump: the rest test at the start tells them apart.
 		var start := space.get_rest_info(_query)
-		if start.is_empty() or _lies_on(body, start.get("normal", up), up, wheel_basis.x):
+		if start.is_empty():
+			return false
+		if not carries(start.get("normal", up), up):
+			_swept_past = true
 			return false
 		start_overlaps += 1
 		_contact_drop = 0.0
@@ -804,7 +904,8 @@ func _contact_query(space: PhysicsDirectSpaceState3D, body: RigidBody3D, ray_fro
 		unsafe_drop += rest_length * (fractions[1] - fractions[0])
 		_query.transform.origin = ray_from - up * unsafe_drop
 		rest = space.get_rest_info(_query)
-	if not rest.is_empty() and _lies_on(body, rest["normal"], up, wheel_basis.x):
+	if not rest.is_empty() and not carries(rest["normal"], up):
+		_swept_past = true
 		return false
 	if fractions[1] <= 0.0:
 		start_overlaps += 1
@@ -814,7 +915,8 @@ func _contact_query(space: PhysicsDirectSpaceState3D, body: RigidBody3D, ray_fro
 	if not rest.is_empty():
 		_contact_normal = rest["normal"]
 		var gap := (_query.transform.origin - (rest["point"] as Vector3)).dot(_contact_normal) \
-				- cylinder_support(_contact_normal, wheel_basis.x, wheel_radius, half_width)
+				- cylinder_support(_contact_normal, wheel_basis.x, wheel_radius, half_width,
+						_convex_radius)
 		_contact_drop = settled_drop(safe_drop, unsafe_drop, gap, _contact_normal.dot(up))
 	return true
 
