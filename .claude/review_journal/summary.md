@@ -22,24 +22,7 @@ are short and may not last the review). A Fable session takes the top one. Each 
 as findings only, what it sees in the source files it reads whole, so that unit's review on Opus
 starts from them and Fable never reads a file twice.
 
-- The wheel and the body exchange one force: the diagnosis that decides the proposal
-  (`proposals.md`, same title; `sessions/2026-11-13-f1-standing-rock.md`,
-  `sessions/2026-11-13-f1-rest-guard.md`). It is the one source behind `road_change`'s fade, the
-  gate's two-tick means, `REST_FLIPS_S` / `REST_STEP_KG`, the AXLE digit under "Please verify",
-  the tractor's launch ring on `accLong`, and maybe `SLIP_FLOOR_KMH` (cover sweep 2, 5, 7). In
-  the session file, write a free wheel's tick as a map of two speeds (the contact's and the
-  rim's), as `RayWheel.tick` and `settle_spin` compute it under `LOW_SPEED_FLOOR`, and show it
-  gives the measured ring (the slip reverses each tick and decays about 5 %). Write the same map
-  with the body taking the tyre's force at the slip the settled spin step ends on, and show
-  whether it settles, free, driven and braked, without the 0 / 2x alternation of the rejected
-  predicted-slip cap (7b6d3be, `docs/vehicles.md` § Rejected designs). Prove with one uncommitted
-  prototype, reverted: `measure_semi_launch -- semi trailer=bobtail steady`'s `rest reading:` and
-  one `tractor-kenney` pull-away trace, before and after. Then the brief Opus fixes from at
-  `high`: the reordered tick in `wheel.gd`, what `wheel_drive.gd` and `towed_body.gd` change,
-  the tests to read again, the runs to compare. Where the map alternates: say so, and what it
-  rules out. Reads `wheel.gd` and `wheel_drive.gd` whole: unit 3b's findings go in the session
-  file. The fix changes driving: its line ends in the proposal. [diagnose, high, Fable]
-- One-tick caps that do not see the coupling's other force, two cases of one fault, read
+- One-tick caps that do not see the coupling's other force: two cases of one fault and a step, read
   together (`tow_host.gd`, `towed_body.gd`, `articulation.gd` whole: unit 5's findings go in the
   session file).
   (a) The shared cap's `taken` on a towing wheel (`sessions/2026-11-13-f1-rest-guard.md`,
@@ -56,8 +39,13 @@ starts from them and Fable never reads a file twice.
   `test_a_coupled_rig_standing_still_stays_mirror_symmetric`'s peak rate per kind; at 0.5 log the
   relative yaw rate per tick after a yaw kick on a standing `semi` + `box`, and on a slow
   full-lock turn how often the cap binds under the declared `friction_nm`.
+  (c) The laden `semi`'s `axle_load` steps 0.7 kg a tick standing in D with no speed sign change
+  (`measure_vehicles -- semi 20 rest`, "springs: rear axle"), and still 0.6 with the wheel's ring
+  taken out (`sessions/2026-11-14-wheel-body-one-force.md` finding 2): not the wheel's. Log per
+  tick what alternates on the tractor unit's rear axle with the box coupled and not bobtail (the
+  coupling's force on the kingpin, the yaw cap of (b), the rear wheels' `suspension_force`).
   Write the cause and one brief per case (what `taken` is across two bodies, and in which order
-  `TowHost` and the towed wheels tick); fix nothing. Both fixes change a force: each line ends
+  `TowHost` and the towed wheels tick); fix nothing. The fixes change a force: each line ends
   in a proposal. [diagnose, high, Fable]
 - `scrape onebody`'s `firetruck` FR peaks at 501 N across where the two-body run reads 217 N, the
   same wall at +0 mm, 100 % contact (`sessions/2026-11-14-deck-start-test.md` § Measured). f7bac55
@@ -73,6 +61,47 @@ starts from them and Fable never reads a file twice.
 
 Opus's and Sonnet's items:
 
+- (PROPOSED, not approved: skip it until the user approves `proposals.md` "The wheel and the body
+  exchange one force") The body takes the tyre's force at the settled slip. Cause, the map, the
+  prototype's shape and its figures: `sessions/2026-11-14-wheel-body-one-force.md`, read first.
+  Wrong now: `RayWheel.tick` applies the force of the slip the tick starts on (`wheel.gd:514-561`)
+  while `_integrate_spin` reacts the force of the slip its step ends on; free, the slip reverses
+  every tick, and driven under `LOW_SPEED_FLOOR` the body gets `1 / (1 + a)` of the drive.
+  Do, in `wheel.gd`: (1) `tick` computes the start-slip force as now, only to size the spin step,
+  steps `_stick` once, and stores what the force needs (the contact's `v_long` / `v_lat`,
+  `forward`, `side`, the arm, `slip_denom`, both budgets, `lat_peak`, both cap masses, the patch
+  spring's force, `held` and its range); (2) a new method applies the patch after `settle_spin`:
+  slip off the settled `omega`, `combined_slip_force` (the curve, never the step's secant), both
+  one-tick caps on that slip, the stored spring force, `friction_ellipse`, the held range, then
+  `surface_drag_force` with its `taken`, `contact_force` and the beam's `patch_force`; it sets
+  `force_long`, `force_lat`, `force_roll`, `long_cap`, `long_slip`, `slip`, `slip_size` and
+  `slide_speed`; (3) a wheel that is not `coupled_spin` calls it at the end of `tick` (so
+  `towed_body.gd` does not change); (4) `_integrate_spin` takes the stiffness at zero slip,
+  `min(budget * rise0 / slip_denom, long_mass / dt) * r^2 * dt / I` with `rise0` the grip curve's
+  first slope, where `null_slip_torque` is under its floor (never a `max` at speed: a saturated
+  tyre's secant is under it); (5) `road_change`, `_prev_com_long`, `_prev_vel_valid` and
+  `dv_long` go, and ABS's floor and TC's ceiling read `v_long`. In `wheel_drive.gd`: `tick` calls
+  the new method on every wheel after `_couple_differentials`, and `_report_to_controller` runs
+  after that loop (it reads `long_slip`). No clamp is removed or widened, no filter or fade added.
+  Tests: one that fails now, on a body in N kicked to 0.05 m/s: a free wheel's slip never changes
+  sign tick to tick; one on a constant drive torque under 1.5 m/s: the driven wheels'
+  `force_long` sum reaches 0.95 of `T / r` (HEAD: about 0.75 with two of four wheels driven); one
+  pure, a wheel at exactly zero slip under a drive torque gains `tau / (1 + k0)`, not `tau`;
+  `test_wheel_spin`'s 56 `_integrate_spin` / `settle_spin` / `road_change` sites read again
+  (`test_the_road_change_is_the_body_s_along_the_wheel_faded_at_a_crawl` goes with its function).
+  Runs, at HEAD first then after (the session file has the prototype's figures to land near):
+  `measure_semi_launch -- semi trailer=bobtail steady` and `-- semi steady strict`;
+  `measure_vehicles -- tractor-kenney 8 trace trace_s=2.5` (no tick-to-tick alternation of `a g`
+  in the take-up; 0.45 g at 694 N·m); `-- sedan 45 brake`; `-- semi 20 rest` and `rest
+  trailer=bobtail`; `measure_grade -- doc=park`, `all creep`, `sedan rollback` and `semi rollback`
+  with and without `nohold`; `measure_vehicles -- all 45 track strict`; the suite. Stop and hand
+  back, with the trace and the change undone, if: a parked cell moves over 1 mm or creep loses a
+  bisect step on more than one body; any stop gets longer; a launch's `a g` alternates; a body
+  that tracked straight no longer does. Then every `doc=` table re-run, `docs/vehicles.md` § Spin
+  step, § Following the body, § One-tick caps and the Rejected designs line (say how this differs),
+  and "Please verify": every body pulls away about a quarter of a second sooner, the tractor's
+  pull-away ring on `accLong` is gone. After it: cover sweep (2) lands, (5) is re-proved, the
+  bobtail's `rest reading:` sizes new limits. [high, plan, Opus]
 - (approved, user 2026-11-14: raw) `accLong` / `accLat` / `acc_vert` leave the sim unfiltered
   (`sessions/2026-11-14-accel-smooth-proof.md`: evidence, consumers, the probe). Do:
   `base_vehicle.gd:280-283` writes `body_accel` straight to `telemetry`, and
@@ -199,8 +228,9 @@ Deferred until units 3 and 4 are reviewed (it touches both):
 - F1, a standing body: a parked `semi` (bobtail and laden) on FULL. Expected: the AXLE and TRLR
   bars still in D, in N and on each brake; any body in N on a slight slope rolls off as before,
   and on the flat comes to rest. Known, not fixed: on the `semi` in D or N the AXLE number's last
-  digit still moves by 1 kg (3 at most) on half to three quarters of ticks, the free wheel's ring
-  (`proposals.md`). Anything larger, or on TRLR, is a new finding.
+  digit still moves by 1 kg (3 at most) on some ticks: bobtail, the free wheel's ring
+  (`proposals.md`); with a trailer, a step that is not the wheel's (Queue, the towing item).
+  Anything larger, or on TRLR, is a new finding.
 - A laden `semi` on a grade near its limit (about 25 %), if the hill hold can be off in play:
   released and floored, it rolls back about a quarter further than before F1's fix (Queue).
 - Flatland's crates on a respawn: `drone-mk2` in Flatland, carry one crate away and drop it, pick
@@ -228,7 +258,7 @@ Sizes are GDScript lines at 716bf06, rounded. A unit's tests and `docs/` pages g
 | 2b | Drivetrain: its tests and doc | `tests/test_drivetrain.gd`, `docs/drivetrain.md` | 2.8k tests + 0.4k doc | 1f85257 | 1 hollow test case and 1 duplicate test removed, 3 wrong test comments and 5 wrong doc figures fixed (heavy vans' inertia, reserve and motoring; the tractor's governed upshift; anti-stall); the doc's measured figures not re-run |
 | 2c | Drivetrain: the small files | `differential.gd`, `torque_converter.gd`, `shift_policy.gd`, `pedal_map.gd` in `src/vehicles/base/`; `tests/test_differential.gd`, `test_shift_policy.gd`, `test_torque_converter.gd` | 1.0k + 1.2k tests | dd8dd5e | `start_gear` put on the one engine law (it read the drive without the motoring share; the semis' part-pedal start gear moves); 1 duplicate test and 3 dead fixture lines removed, 3 history-worded test comments fixed; no dead symbol, no wrong comment, the one `COMPROMISE` real |
 | 3a | Wheels: the wheel | `src/vehicles/base/wheel.gd` | 1.1k | 8294fee | 6 wrong or misplaced comments fixed, 1 misnamed parameter renamed (`surface_drag_force`'s `mass`); no dead symbol; the 3 `COMPROMISE` labels real; 1 item queued (two readings of "the slip floor") |
-| 3b | Wheels: the owner | `src/vehicles/base/wheel_drive.gd` | 1.1k | | |
+| 3b | Wheels: the owner | `src/vehicles/base/wheel_drive.gd` | 1.1k | | not reviewed; Fable's findings to start from: `sessions/2026-11-14-wheel-body-one-force.md` § Unit 3b |
 | 3c | Wheels: the tests | `tests/test_wheel_spin.gd` | 2.8k tests | | |
 | 4 | Vehicle base, rest | `src/vehicles/base/` minus units 2, 3, 5; `src/vehicles/tyres/`; `docs/vehicles.md`, `docs/handling.md` | about 4k | | |
 | 5 | Towing | `tow_host`, `towed_body`, `articulation`, `coupling_profile` in `src/vehicles/base/`; `tests/test_trailer.gd`, `test_tow_host.gd`, `test_drawbar_trailer.gd` | 3.2k tests | | |
