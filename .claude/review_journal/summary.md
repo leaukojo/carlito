@@ -22,9 +22,17 @@ may not last the review). What earns the tag, "prepared first" and the hand-back
 § Diagnose only. A Fable session takes the top READY item and skips one marked "after" or
 "needs". The user names more items: each is added here with the reason it is worth Fable.
 
-1. Hand-backs: none now. A fix on Opus that hits its stop condition puts its line here, above
-   the rest. The wheel fix below is the likeliest (Fable has read `wheel.gd` and `wheel_drive.gd`
-   whole: `sessions/2026-11-14-wheel-body-one-force.md`).
+1. Hand-back (2026-11-15): the wheel fix hit its stop condition. Read
+   `sessions/2026-11-15-wheel-settled-slip.md` (the figures, HEAD against the patch, are there)
+   and its `.patch` (the fix as built; `git apply` clean at 4447d29). (a) Step 4, the spin step's
+   stiffness at zero slip as the curve's first slope, lets `suv` slide 5 m off P on 30 %; HEAD's
+   `|reaction| / 1e-6` there holds every park cell. Derive what the step's stiffness must be at
+   zero slip when the patch spring, not the curve, carries the reaction (a held or locked wheel),
+   and whether step 4 is needed at all. (b) With step 4 dropped, `sedan rollback nohold` rolls back
+   further (25 %: 333 -> 504 mm): derive whether HEAD's figure carried the spin step's false wheel
+   inertia under the predictor's fade (the session file's finding 2), so the new one is honest.
+   (c) after the gather below: the laden `semi` on 25 % pulls away later (3.10 -> 4.27 s). Each:
+   a brief an Opus session can land, or a reason the fix is wrong. [diagnose, high, Fable]
 2. (after the wheel fix lands) What else the wheel's two forces explained. With the tick
    reordered, re-derive from `wheel.gd` alone and say for each: gone, still there, or its own
    brief. `surface_drag_force`'s `taken` and the laden roll-back (the towing item's (a)); the
@@ -46,7 +54,15 @@ towing item and `scrape onebody` (both below).
 
 Opus's and Sonnet's items:
 
-- (approved, user 2026-11-14) The body takes the tyre's force at the settled slip. Cause, the map, the
+- (gather for the hand-back's (c)) `git apply` the patch
+  (`sessions/2026-11-15-wheel-settled-slip.patch`) with step 4 dropped (`_integrate_spin`'s
+  stiffness back to `absf(reaction_torque) / maxf(null_slip_torque, 1e-6)`); with an uncommitted
+  probe, reverted, log per tick `measure_grade -- semi rollback grade=25` (and `verbose`) from the
+  release to 0.1 m forward, at HEAD then patched: the hill hold's state and brake, the drive
+  wheels' `omega`, `force_long`, `long_slip`, `abs_active`, `tcs_active`, the drivetrain's
+  `abs_release` and `drag_control`, the gear and crank rpm. Name the first tick the two differ and
+  what differs. A session file; no cause guessed. Undo the patch after. [medium, auto, Sonnet]
+- (approved, user 2026-11-14; HANDED BACK 2026-11-15, waits on Fable's item 1) The body takes the tyre's force at the settled slip. Cause, the map, the
   prototype's shape and its figures: `sessions/2026-11-14-wheel-body-one-force.md`, read first.
   Wrong now: `RayWheel.tick` applies the force of the slip the tick starts on (`wheel.gd:514-561`)
   while `_integrate_spin` reacts the force of the slip its step ends on; free, the slip reverses
