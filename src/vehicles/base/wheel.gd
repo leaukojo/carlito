@@ -746,7 +746,8 @@ static func patch_offset(normal: Vector3, up: Vector3, axle: Vector3, radius: fl
 ## collides a cylinder shrunk by its convex radius with a sphere of it swept over
 ## (`CylinderShape::GetSupportFunction`, `ExcludeConvexRadius`), so a contact across the axle
 ## touches up to `0.414 convex_radius` nearer the centre than the sharp rim; the manifold's points
-## lie on the sharp rim all the same (`first_carried` reads those, with 0).
+## lie on the sharp rim all the same (`first_carried` reads those, with 0). On a box whose far corner
+## is past the engine's switch to sharp shapes it touches on the sharp rim (`docs/vehicles.md`).
 static func cylinder_support(normal: Vector3, axle: Vector3, radius: float, half_len: float,
 		convex_radius := 0.0) -> float:
 	var along := absf(normal.dot(axle))
@@ -765,10 +766,10 @@ static func jolt_convex_radius(cylinder: CylinderShape3D) -> float:
 ## The hub's drop (m) where the tyre just touches, between the sweep's last free stop `safe_drop`
 ## and its first touching one `unsafe_drop`: the touching stop backed out by `gap` (m, the
 ## centre's height over the contact's support plane less the cylinder's support; < 0 overlapping)
-## along `up`, whose part along the normal is `normal_up`. Exact on a face, to first order over
-## the step at an edge.
+## along `up`, whose part along the normal is `normal_up` (a carried contact's: `carries` keeps it
+## at cos(LYING_DEG) or more). Exact on a face, to first order over the step at an edge.
 static func settled_drop(safe_drop: float, unsafe_drop: float, gap: float, normal_up: float) -> float:
-	return clampf(unsafe_drop + gap / maxf(normal_up, 0.1), safe_drop, unsafe_drop)
+	return clampf(unsafe_drop + gap / normal_up, safe_drop, unsafe_drop)
 
 
 ## Whether the spring can carry a contact of `normal`: one within LYING_DEG of the wheel's travel

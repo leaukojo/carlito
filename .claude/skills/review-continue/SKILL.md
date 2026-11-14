@@ -55,19 +55,22 @@ The project wants no new features: the review trims, fixes and simplifies.
    A new player-visible feature is never built here: it goes to `suggestions.md`.
 6. **Verify.** Run the unit's tests after each fix; run the full suite (about a minute) before
    the last commit: `node tools/godot_run.mjs --tests -- -a tests`, judged by its output. A
-   change the user must check by driving is listed under "Please verify" in `summary.md`.
+   session that changed only docs, the journal or a `.mjs` tool runs that file's guard instead
+   (`node tools/check_docs.mjs`). A change the user must check by driving is listed under "Please verify" in `summary.md`.
 7. **Commit to `dev`, never push.** One purpose per commit, message prefixed `review:`. Stage
    by path, never `git add -A`: files already modified when the session starts are the user's
    and stay out of every commit. The pre-commit hook is never skipped. The journal update is
    the session's last commit.
 8. **Update the journal.** In `summary.md`: the unit's `Result` (one line), the Queue, "Please
    verify", and the `COMPROMISE` count. `Reviewed at` (HEAD's short hash) is set only when the
-   whole unit was read; otherwise the Queue's top line says where to resume. The session file
+   whole unit was read; otherwise the Queue's top line says where to resume. `summary.md`
+   takes no paragraph about the session: every session reads it whole. The session file
    is `sessions/<YYYY-MM-DD>-<unit>.md`: findings with their evidence, what was fixed (commit
-   hashes), what was deferred and why. Keep the ten newest session files; delete older ones.
+   hashes), what was deferred and why. Keep the ten newest session files and any that
+   `summary.md` or `proposals.md` names; delete the others.
 9. **Report to the user** in a few lines: what changed, what needs their decision, what to
    verify. The report ends with the next session's item and how to run it (§ Recommending the
-   next session); the same goes on the `Next session:` line of `summary.md`.
+   next session). `summary.md` holds no copy of it: the Queue's order and tags are the record.
 
 ## Diagnose only
 

@@ -82,7 +82,7 @@ Only where the readings are essentially the same:
   rows unless phases 2-4 make them differ; `doc=top` keeps every body.
 - `trailer_roll_p7` against `trailer_roll`'s corner column: confirm the two agree per config,
   then keep one.
-- Lower `DOCS_LINE_CAP` by the lines removed.
+- Lower `DOCS_CHAR_CAP` by the characters removed.
 
 ## Missing tables (a later plan, not this one)
 

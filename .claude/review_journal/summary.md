@@ -6,54 +6,12 @@ Protocol: `.claude/skills/review-continue/SKILL.md`. Launch with "continue revie
 `RayWheel._contact_query`'s with its cause), 21 in `docs` (count with
 `grep -rI COMPROMISE <dirs> | wc -l`). Goal: only real ones keep the label.
 
-Next session, by model (`/clear` first; the skill's § Diagnose only):
-- Fable: "ground under a deck", why the sweep's safe stop and the rest test disagree, diagnose only (high, auto).
-- Fable, after it: the towing wheel's `taken`, diagnose only (high, auto).
-- Sonnet: `RayWheel.settled_drop`'s `maxf(normal_up, 0.1)` floor (medium, auto).
-- Opus: the engine law's three inversions (high, auto).
-
-Tags retagged 2026-11-14 on the user's word: Fable's credits go to finding causes and writing
-briefs, never to fixing; no `xhigh` session without the user asking.
-
-"Ground under a deck", step 2, in `sessions/2026-11-14-deck-gap-exact.md` (6964c1e): Jolt rounds
-the wheel cylinder's rim by its convex radius (8 mm on a 0.36 x 0.2 tyre) and `cylinder_support`
-now does too, so a stop across the axle no longer reads millimetres deep. Stopped at the plan's
-step 3 rule on two unexplained readings (Queue, diagnose).
-
-F2's remainder fixed in `sessions/2026-11-14-f2-own-body-wall.md` (af471cd): where the rest test
-names a contact the spring cannot carry, the wheel sweeps again by contact
-(`RayWheel._carried_sweep`, `collide_shape`'s pairs), so a wall of the ground's own body (level_3's
-welded barriers, a cliff of any island heightmap) leaves the tread on the ground. Left: ground
-under a deck the engine's sweep left out (Queue).
-
-F2 fixed in `sessions/2026-11-13-f2-wall-contact.md` (22f042d): a contact more than `LYING_DEG`
-off a wheel's travel is not the spring's (`RayWheel.carries`).
-`measure_vehicles -- <bodies> 45 scrape [steer=<pct>] [onebody]` is its guard run.
-
-F1 closed in `sessions/2026-11-13-f1-rest-guard.md`: `measure_semi_launch -- <unit> steady strict`
-fails on a standing rig's rocking (proven against the fix reverted) and CI runs it; the plan's
-missing runs done (park, stops, creep, roll-back, the three CI measure gates) and the plan
-distilled and deleted. Left: the free wheel's ring (`proposals.md`) and one roll-back that moved
-(Queue).
-
-The ui_and_gamepad_fixes plan's commits (d8e5afa..f78f937) were reviewed on the user's request in
-`sessions/2026-11-13-ui-gamepad-plan-review.md`: the dashboard bars' display lag removed (it hid
-F1 on every bar; `test_no_instrument_smooths_its_value` guards it), `FamilyContent` tested and
-its crates put back on a respawn as the plan says, a held stick no longer searching the HUD every
-motion event, and the plan's two open findings queued as F1 and F2.
-
-The slip floor's two sites ran in `sessions/2026-11-12-slip-floor-sites.md`: a lifted wheel's ABS
-floor and TC ceiling read the body's `slip_floor` (`suv-luxury`'s lone grade run unchanged);
-`road_change`'s fade keeps `LOW_SPEED_FLOOR` and its comment, doc and test say so.
-
-The shared-law audit ran in `sessions/2026-11-12-shared-law-audit.md`: one tool bug (the descent
-ledger's contact velocity on the origin lever) and eight inline copies of a shared predicate,
-helper or constant fixed; no site that changes driving, so no proposal; 1 item queued.
+Past sessions: `sessions/`, each named by its date and item.
 
 Units 1 to 3a were read before the skill asked for simpler implementations: they come back
 through the most-commits rule, or sooner on the user's word.
 
-The mechanical sweep ran in `sessions/2026-11-12-sweep-1.md`: one dead test const removed; the
+The mechanical sweep ran (its session file pruned): one dead test const removed; the
 guards (`check_orphans`, `check_docs`) already cover public funcs and citations. Duplicate
 tests with different bodies are left to each unit's review.
 
@@ -65,25 +23,31 @@ tests with different bodies are left to each unit's review.
   the lower ground; the rest test there names the deck, which the spring carries, so
   `_carried_sweep` never runs and `settled_drop`'s clamp to `safe_drop` hides the deck's depth: the
   wheel rides low by the gap (proved: 0.0108 of compression for 0.06 over a 5 cm gap; the fixture
-  is in the session file). Step 1 done (`sessions/2026-11-14-level3-deck-gap.md`). Step 2 in
-  `sessions/2026-11-14-deck-gap-exact.md`: the rounded rim fixed (6964c1e), the deep-gap count on
-  `sedan,semi 45 kerb` 889 -> 24; the 22 ticks inside the 20 cm kerb are real (this class); the
-  fixture fails at HEAD at 0.05 and at 0.18 m (its body in the session file). Stopped on two
-  unexplained readings: 2 to 3 square-edge ticks 2 to 4 mm deep with no axle part (the kerb box's
-  convex radius refuted), and 126 kerb-run ticks whose `safe_drop` pose already has a rest contact,
-  mostly on the flat strip. Next: find why Godot's `cast_motion` safe stop and `get_rest_info`
-  disagree (`_cast_motion_impl`'s `collides()` against `get_rest_info`'s settings in
-  `modules/jolt_physics/spaces/jolt_physics_direct_space_state_3d.cpp`; and float32 on the 6 km
-  strip, `docs/vehicles.md` § Contact: rerun the probe with the kerb near the strip's centre).
-  Write the cause and which trigger it allows (deep gap, or a rest test at `safe_drop`); fix
-  nothing. No wider clamp and no tolerance tuned. [diagnose, high, Fable]
-- The deck trigger itself, after the diagnosis above: from its brief, the fixture test committed
-  once it passes; `kerb`, `side`, `scrape` and the three CI gates before and after. It ends in a
-  proposal (a plan the user approves). [high, plan, Opus]
-- `RayWheel.settled_drop`'s `maxf(normal_up, 0.1)` (same file, deferred): since 22f042d a kept
-  contact has `normal_up >= cos(LYING_DEG)`, so the floor cannot bind in `_contact_query`. Check
-  `settled_drop`'s other callers and its tests, then remove the floor (same to the bit) or say
-  what still needs it. [medium, auto, Sonnet]
+  is in the session file). Steps 1 and 2 done (`sessions/2026-11-14-level3-deck-gap.md`,
+  `2026-11-14-deck-gap-exact.md`, 6964c1e); diagnosed in
+  `sessions/2026-11-14-sweep-rest-disagree.md` § Which trigger. The brief:
+  - Where: `RayWheel._contact_pass` (`src/vehicles/base/wheel.gd`), the branch after a sweep that
+    hit (`fractions[1] < 1.0`).
+  - Wrong: `cast_motion` leaves out every body the cylinder overlaps at the start pose, and that
+    branch never asks whether one was. A depth or a rest test at `safe_drop` cannot tell: on sound
+    contacts both read up to 3 mm off (the session file's cause).
+  - Fix, in words: with the query at `ray_from` and no motion, `get_rest_info` first (the engine's
+    own skip test, same call, so it is true exactly when a body is skipped). Empty: the sweep as
+    now. Not empty and the sweep hits nothing: the full-bump branch as now. Not empty and the
+    sweep hits: set `_swept_past` and return false, so `_carried_sweep` reads every contact from
+    full bump. One more rest query a wheel a tick: read `kerb`'s cost line
+    (`docs/vehicle_measurements.md`) before and after.
+  - Fails now, passes after: the fixture in `sessions/2026-11-14-deck-gap-exact.md` finding 1
+    (`_wheel_on_a_rolled_body` with a box `under` the deck; compression `c` to 2e-3, normal UP, both
+    welded flags, `[0.06, 0.05]` and `[0.24, 0.18]`), committed once it passes.
+  - Runs before and after (`--fixed-fps 60`): `sedan,semi 45 kerb`, `side`, `scrape` (two bodies,
+    `steer=60`, `onebody`: re-read `firetruck` FR there), the three CI measure gates. Expected to
+    move: the 22 `kerb` ticks inside the 20 cm kerb (to full bump), `scrape`'s sweeps by contact
+    (up). Kerb-run figures carry the tool's own 1 to 3 mm of contact noise (80 m kerb, 6 km strip).
+  - Stop and hand back if: the fixture still fails with the start test in, any gate fails, or a
+    `scrape` force across moves by more than the run-to-run 30 N. No tolerance, no wider clamp, no
+    shape margin set to 0 (it makes every touching query an EPA one: 1 of 2000 read upside down).
+  It ends in a proposal (a plan the user approves). [high, plan, Opus]
 - (user, 2026-11-13) The cover sweep (the skill's § Covers), across every unit at once and not
   waiting for each unit's turn. Search `src kit tools tests` for the section's "where they sit"
   list (`lerp`, `move_toward`, `smooth`, `hyster`, `deadband`, `snapped`, `is_zero_approx`,
@@ -93,8 +57,21 @@ tests with different bodies are left to each unit's review.
   the source to trace and the proving run (take it out, measure, undo) as that line's first step,
   tagged for Opus or Sonnet; it proves and fixes none. One hit already measured: `BaseVehicle.ACCEL_SMOOTH`, a
   10 /s lag on the contract's `accLong` / `accLat` / `acc_vert`, passed 0.202 of a 2.435 m/s2
-  tick-rate alternation on a standing bobtail (`sessions/2026-11-13-f1-standing-rock.md`): sort it
-  as a sender's filter with a source, or a cover. [diagnose, high, Fable]
+  tick-rate alternation on a standing bobtail (`sessions/2026-11-13-f1-standing-rock.md`): sorted
+  as a cover, next line. [diagnose, high, Fable]
+- `BaseVehicle.ACCEL_SMOOTH` is a cover on the contract's `accLong` / `accLat` / `acc_vert`: no
+  source, its one stated reason is "so a single bump does not swamp them"
+  (`sessions/2026-11-14-accel-smooth.md`). First step, the proving run: at
+  `src/vehicles/base/base_vehicle.gd:280` set `s := 1.0` (leave `towed_body.gd:208`: roll-over
+  control reads it), run `node tools/godot_run.mjs -- --headless --path . --fixed-fps 60
+  res://tools/measure_vehicles.tscn -- <variant> 20 rest` for `semi` and `tractor-kenney`, plus one
+  driving run per body (add the `accLong` p-p column to it if only `rest` prints one), record the
+  p-p as sent per state, undo. Then trace what in `VehicleTelemetry.body_accel`'s first difference
+  produces the tick-rate content while driving; the standing part is F1's
+  (`docs/plans/parked_rocking.md`). Ends in a proposal: send raw, or keep it as a sender's filter
+  with a sourced time constant declared in the three contract descriptions (`/contract-edit`) and
+  `docs/guide/position.md`; say whether `TowedBody.accel_lat` keeps its own sourced rate. Never a
+  new filter. [medium, plan, Opus]
 - The engine law's three inversions (`sessions/2026-11-12-shared-law-audit.md`, finding 9).
   `Drivetrain.fuel_to_land`, `Drivetrain.drag_fuel` and `PedalMap._row_fuel` each compute
   `(net - motoring) / span`; one "fuel for a net crank torque" function serves all three.
@@ -110,10 +87,27 @@ tests with different bodies are left to each unit's review.
   wheel through that roll-back, bobtail against laden) and read the steady 0.04 to 0.2 mm/s
   drift of a standing rig; write the cause and the fix's brief, fix nothing. The fix changes a
   force: its line ends in a proposal. [diagnose, high, Fable]
-- A doc check (same file, finding 4): `docs/drivetrain.md` says "The laden semis roll back far on
-  25 % with or without the hold"; `measure_grade -- semi rollback` prints 0.1 mm with the hold.
-  Run both units with and without `nohold`, read what the tool's figure covers
-  (`tools/measure_grade.gd`), fix the paragraph. [medium, auto, Sonnet]
+- (to consider, user 2026-11-14: not now) The measure tool's bodies past Jolt's switch to sharp
+  shapes (`sessions/2026-11-14-sweep-rest-disagree.md` § Cause, § Evidence). `measure_vehicles`'
+  `KERB_WIDTH` 80 m kerb and its 6 km `Strip` slab put 1 to 3 mm of contact noise into kerb-run
+  figures that level geometry does not have; with the kerb 20 m wide its deep ticks went 4 -> 0.
+  Options: a kerb narrow enough that its far corner stays under 37 m (check the oblique pass still
+  crosses it), the strip laid as slabs under about 190 m (corner under 139 m), or leave both and
+  say so beside the kerb figures. Any change moves the committed `doc=` tables: decide with the
+  user first, then baseline at HEAD and rerun. Flatland's `InfiniteGround` (4 km box) is in the
+  same regime in play, a leaned wheel reading up to about 3 mm off: note only, no fix proposed.
+  [high, plan, Opus]
+- (user 2026-11-14) A kept contact probe (`sessions/2026-11-14-sweep-rest-disagree.md`, the tally
+  in § Evidence). Two sessions each wrote and deleted a probe inside `RayWheel._contact_pass`, and
+  their "deep gap" counts cannot be compared. Wanted: the tally per rest collider (passes, rest
+  empty at unsafe, rest at `safe_drop`, deep, start inside) behind a `measure_vehicles` flag, read
+  from outside `_contact_pass` where it can be, with no cost when off. A tool feature: propose it
+  (`proposals.md`) before building. [high, plan, Opus]
+- (user 2026-11-14) `tools/measure_vehicles.gd` is 6256 lines in one file, and
+  `tools/CLAUDE.md` ("a new measurement is a scenario in an existing tool") keeps it growing.
+  Unit 16's review splits the unit in the map first; it then says whether passes move to files
+  of their own (`kerb`, `scrape`, `side` are self-contained: `_start_kerb` to `_report_kerb_run`)
+  and whether the rule changes. No split before that review. [high, plan, Opus]
 
 Deferred until units 3 and 4 are reviewed (it touches both):
 

@@ -13,7 +13,7 @@
 // to tools/docs_allow.txt (a rejected design named on purpose, a generated file) with a reason;
 // an allow entry that no longer matches anything fails too, so the list cannot rot.
 // Also fails a CLAUDE.md over its line budget (CLAUDE_MD_BUDGET; nested files default to 40), the
-// top-level docs/*.md over their one shared DOCS_LINE_CAP, and a run of whole-line comments in src/
+// top-level docs/*.md over their one shared DOCS_CHAR_CAP, and a run of whole-line comments in src/
 // or kit/ GDScript longer than COMMENT_BLOCK_CAP.
 
 import { execSync } from 'node:child_process';
@@ -228,17 +228,17 @@ for (const f of docs.filter((d) => /(^|\/)CLAUDE\.md$/.test(d))) {
   if (n > cap) overBudget.push(`  ${f}: ${n} lines, cap ${cap}`);
 }
 
-// Raw lines summed over the top-level docs/*.md (plans/ are temporary; sources.md is reference
+// Characters, so merging lines frees nothing, summed over the top-level docs/*.md (plans/ are temporary; sources.md is reference
 // data, read on demand; machine_setup.md is read once per machine; TODO.md, HUMAN_EXPLANATIONS.md
 // and making_a_level.md are the user's own). One cap, no per-doc caps.
-const DOCS_LINE_CAP = 3450;
+const DOCS_CHAR_CAP = 269723;
 const UNCAPPED_DOCS = ['docs/sources.md', 'docs/machine_setup.md', 'docs/TODO.md',
   'docs/HUMAN_EXPLANATIONS.md', 'docs/making_a_level.md'];
 const docSizes = docs.filter((d) => /^docs\/[^/]+\.md$/.test(d) && !UNCAPPED_DOCS.includes(d))
-  .map((d) => [d, lineCount(d)]).sort((a, b) => b[1] - a[1]);
-const docsLines = docSizes.reduce((sum, [, n]) => sum + n, 0);
-if (docsLines > DOCS_LINE_CAP) {
-  overBudget.push(`  docs/*.md: ${docsLines} lines in total, cap ${DOCS_LINE_CAP} (largest: ` +
+  .map((d) => [d, read(d).length]).sort((a, b) => b[1] - a[1]);
+const docsChars = docSizes.reduce((sum, [, n]) => sum + n, 0);
+if (docsChars > DOCS_CHAR_CAP) {
+  overBudget.push(`  docs/*.md: ${docsChars} characters in total, cap ${DOCS_CHAR_CAP} (largest: ` +
     `${docSizes.slice(0, 5).map(([d, n]) => `${d.slice(5)} ${n}`).join(', ')})`);
 }
 
@@ -279,7 +279,7 @@ if (problems.length === 0 && overBudget.length === 0 && longComments.length === 
   console.log('check_docs: every reference resolves; every CLAUDE.md, docs/ and comment block is within budget.');
   // Headroom up front, so a doc edit is sized to fit instead of trimmed by trial afterwards.
   console.log(`check_docs: headroom: CLAUDE.md ${rootClaudeLines}/${CLAUDE_MD_BUDGET[ROOT_CLAUDE]}, ` +
-    `docs/*.md ${docsLines}/${DOCS_LINE_CAP}, measured figures ${figureHits.length}/${MEASURED_FIGURE_CAP}.`);
+    `docs/*.md ${docsChars}/${DOCS_CHAR_CAP} characters, measured figures ${figureHits.length}/${MEASURED_FIGURE_CAP}.`);
   process.exit(0);
 }
 if (problems.length > 0) {
@@ -288,13 +288,13 @@ if (problems.length > 0) {
   console.log('\nEach hit: fix the doc, or add "<span>" or "<file>:<span>  # reason" to tools/docs_allow.txt.');
 }
 if (overBudget.length > 0) {
-  console.log(`${problems.length > 0 ? '\n' : ''}check_docs: CLAUDE.md or docs/ over its line budget:\n`);
+  console.log(`${problems.length > 0 ? '\n' : ''}check_docs: CLAUDE.md or docs/ over its budget:\n`);
   console.log(overBudget.join('\n'));
   console.log('\nA line stays only if it binds work in its directory, cannot be read from the code or a');
   console.log("guard's failure message, and still matches the code (root CLAUDE.md § Where things go).");
   console.log('Cut it, or move a derivation to docs/. In docs/, a figure has one home (elsewhere a');
   console.log('pointer) and only its latest value. Raising a cap is a decision: edit CLAUDE_MD_BUDGET or');
-  console.log('DOCS_LINE_CAP in tools/check_docs.mjs.');
+  console.log('DOCS_CHAR_CAP in tools/check_docs.mjs.');
 }
 if (figureHits.length > MEASURED_FIGURE_CAP) {
   console.log(`\ncheck_docs: measured figures outside a measure region:\n`);

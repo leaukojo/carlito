@@ -203,8 +203,8 @@ Released after a `SETTLE_S` foot-brake hold and floored `ROLL_DELAY_S` later, on
 and time to move forward; asphalt, the tractor on mud with MFWD from its D1 launch). With the
 hold, the cars and Kenney trucks roll back a patch spring's worth on
 both grades, against 2-6 cm on 10 % and 0.3-0.4 m on 25 % without it (2026-11-08), and the hold
-lets go inside a second. The laden semis roll
-back far on 25 % with or without the hold, and with `nohold` never pull away. The tractor on mud
+lets go inside a second. On 25 % the laden `semi` holds and pulls away with its hold; the laden
+`semi-conventional` rolls back with it, and neither pulls away with `nohold`. The tractor on mud
 (MFWD) rolls back a patch spring's worth on 10 %; with the farm tipper it pulls away much later.
 
 What remains with the hold is the static patch spring (`docs/vehicles.md` § Holding at rest). On 25 % the semis' hold

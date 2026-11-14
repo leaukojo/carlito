@@ -85,22 +85,37 @@ mud too; MFWD and the diff lock are the answer. The same peel limits it ploughin
 wheel at `KIT_SCALE`) on every Kenney body, semi and trailer, 0.537 / 0.805 m on the tractor (`wheel_radius` / `wheel_radius_rear`), its `final_drive` and inboard
 brakes quoted at the rear. `WheelDrive` gears a wheel `n = r / drive_radius()` to the shaft: MFWD turns the fronts 1.5×.
 
-**Contact.** Each wheel sweeps a cylinder of its tyre's radius and width down its travel from full bump; the
-normal is the face's, or radial at an edge. A start inside something reads full bump. A contact past `RayWheel.LYING_DEG` off the wheel's travel is not the spring's (`RayWheel.carries`):
-the ground under a wheel on its side or its back (read as one, its spring kicks an overturned body off the ground it lies on, a tractor's hill hold and
-`fwd_drive_state` flipping with the contact: `side`), and a wall in the wheel's side or ahead of it (`scrape`). The wheel then sweeps again by contact (`RayWheel._carried_sweep`): Jolt's sweep skips, whole, a body it
-starts inside (a barrier welded to its deck, a cliff of the heightmap the wheel stands on) and its rest test names only the deepest contact of all, so the second sweep reads each contact's own normal and depth off `collide_shape`'s point pairs and stops on the first one the spring carries (`scrape onebody`). At a square step (`kerb`, 12 / 20 cm) a tyre first touches the face ahead of its hub, partway
-up its arc (a disk touches a little further out, steeper); a crawl's largest tick binds no clamp and peaks at a
-gentle g. A ray jumps the whole step in one tick (several g, clamp-bound) and, tilted with the body, pushes
-sideways off the face; parallel rays strand the trucks on 20 cm. Cost, `semi` + `box`: the cast costs an order of magnitude over the ray, natively and on web (`kerb`, `docs/vehicle_measurements.md` § Measure-tool run lines).
+**Contact.** Each wheel sweeps a cylinder of its tyre's radius and width down its travel from full
+bump; the normal is the face's, or radial at an edge. A start inside something reads full bump. A
+contact past `RayWheel.LYING_DEG` off the wheel's travel is not the spring's (`RayWheel.carries`):
+the ground under a wheel on its side or its back (read as one, its spring kicks an overturned body
+off the ground it lies on, a tractor's hill hold and `fwd_drive_state` flipping with the contact:
+`side`), and a wall in the wheel's side or ahead of it (`scrape`). The wheel then sweeps again by
+contact (`RayWheel._carried_sweep`): Jolt's sweep skips, whole, a body it starts inside (a barrier
+welded to its deck, a cliff of the heightmap the wheel stands on) and its rest test names only the
+deepest contact of all, so the second sweep reads each contact's own normal and depth off
+`collide_shape`'s point pairs and stops on the first one the spring carries (`scrape onebody`). At
+a square step (`kerb`, 12 / 20 cm) a tyre first touches the face ahead of its hub, partway up its
+arc (a disk touches a little further out, steeper); a crawl's largest tick binds no clamp and peaks
+at a gentle g. A ray jumps the whole step in one tick (several g, clamp-bound) and, tilted with the
+body, pushes sideways off the face; parallel rays strand the trucks on 20 cm. Cost, `semi` + `box`:
+the cast costs an order of magnitude over the ray, natively and on web (`kerb`,
+`docs/vehicle_measurements.md` § Measure-tool run lines).
 
 The sweep bisects to 1/256 of the travel, so the hub's drop is read between its last free stop and
 its first touching one: `settled_drop` backs the touching stop out by the rest contact's overlap.
 Without it the hub flickers across a step at rest, which the dampers turn into load spikes (a
-semi's steer wheel lost about a kilonewton at launch). With the face micrometres past a stop on a
-pitched body, the sweep can call that stop touching where the rest test still reads it clear, more
-often far from a large collider's centre (float32 precision; `measure_vehicles`' strip is one 6 km
-box). That stop is a free one, so the bracket moves a step on and the contact is read there.
+semi's steer wheel lost about a kilonewton at launch). On a pitched or leaned body the sweep can
+call a stop touching where the rest test still reads it clear, or the reverse: Jolt answers a
+touching query from the shapes rounded by their convex radius, or, once a box's far corner lies
+about 2900 times the two radii from the wheel (`GJKClosestPoint.h`, the
+`FLT_EPSILON * GetMaxYLengthSq()` exit), from the sharp ones, and near that distance from either,
+call by call. For a 0.36 x 0.2 tyre that is 139 m on a slab and 46 / 37 m on a 20 / 12 cm kerb; the
+two answers differ by the sharp shape's reach, millimetres at most (a rim on a face under a leaned
+wheel, a tread on a box's edge). Past it: `measure_vehicles`' 6 km strip and 80 m kerb, and
+Flatland's `InfiniteGround`; heightmaps and welded meshes are under it. Float32 of the rest pose
+adds a fraction of a millimetre far from the world's origin.
+A stop the rest test reads clear is a free one, so the bracket moves a step on and the contact is read there.
 Settling on the stop before it puts a whole step into one tick's compression: on a semi's steer
 axle at a steady pull, a one-tick swing of about ten points of its parked load, up and back
 (`test_wheel_spin`'s hub-on-a-sweep-stop case; the trace's `contact` lines).

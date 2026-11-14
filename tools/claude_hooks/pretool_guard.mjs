@@ -47,7 +47,9 @@ function checkShell(cmd) {
 
   // 3. Scripted edits of repo source files.
   const editHint = 'Edit repo files with the Edit/Write tools (they keep line endings, escapes and ' +
-    'non-ASCII intact). Scratch output goes to the scratchpad directory.';
+    'non-ASCII intact). Scratch output goes to the scratchpad directory, named by its absolute ' +
+    'path in the command itself: a relative target, or one behind a `cd` or a variable, is read ' +
+    'as a repo file.';
   if (/\bsed\b[^|;&\n]*\s(-i|--in-place)\b|\bperl\b[^|;&\n]*\s-[a-z]*i/.test(cmd) &&
       [...cmd.matchAll(/[^\s"'|;&<>]+/g)].some(m => isRepoSource(m[0]))) {
     block(`in-place sed/perl on a repo file. ${editHint}`);
