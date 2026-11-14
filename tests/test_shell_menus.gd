@@ -1427,6 +1427,35 @@ func test_boot_overturned_notice_shows_and_clears_with_its_button() -> void:
 	assert_bool(button.visible).is_false()
 
 
+## A real click (press, frames, release) on an action's button lands: the line re-renders every
+## frame its notice is up, and hiding the button between press and release drops the press.
+func test_notice_action_button_takes_a_real_click() -> void:
+	var host: Control = auto_free(Control.new())
+	add_child(host)
+	host.size = get_viewport().get_visible_rect().size
+	var line := NoticeLine.new()
+	host.add_child(line)
+	var presses := [0]
+	line.add_action("CLICK TEST", func() -> Dictionary: return {"button": true}, "GO",
+			func() -> void: presses[0] += 1)
+	GameState.notice.emit("CLICK TEST", GameState.NOTICE_STICKY)
+	await get_tree().process_frame
+	var button: Button = line._actions["CLICK TEST"]["button"]
+	assert_bool(button.is_visible_in_tree()).is_true()
+	var at := button.get_global_rect().get_center()
+	for down: bool in [true, false]:
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = down
+		ev.position = at
+		ev.global_position = at
+		get_viewport().push_input(ev)
+		await get_tree().process_frame
+		await get_tree().process_frame
+	GameState.notice_cleared.emit("CLICK TEST")
+	assert_int(presses[0]).is_equal(1)
+
+
 ## LEVEL then CHALLENGES: Esc closes the top of the stack (CHALLENGES) only, and the world
 ## stays paused underneath since LEVEL is still open.
 func test_boot_esc_closes_the_top_overlay_only() -> void:
