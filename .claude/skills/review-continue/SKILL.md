@@ -75,13 +75,31 @@ The project wants no new features: the review trims, fixes and simplifies.
 ## Diagnose only
 
 A Fable session finds causes and writes briefs; it fixes nothing, so that a cheaper model can.
+Its credits are scarce: it derives, and never gathers, sweeps or reads a unit for its own sake.
 
-- **Pick.** The top Queue item tagged `diagnose`; with none, the first vehicle-physics unit
-  (map units 2 to 7) whose `Reviewed at` is empty, read for findings only. An item tagged for
-  Opus or Sonnet is left for a session on that model, which picks the top item tagged for it.
+- **Worth Fable** (a Queue line takes the `Fable` tag only when one of these holds):
+  - a hand-back: a fix on Opus hit its stop condition and left its trace in a session file;
+  - figures that break a law the code should keep (one contact with two forces, power or
+    momentum from nowhere, a mode that grows), where the tests are written from the same
+    derivation and pass;
+  - a restructuring of the wheel's, the drivetrain's or the towing's tick, before it is fixed;
+  - a derivation in `src/` checked against its `docs/` page and the code it stands on.
+  Never worth it: a logging run, a sweep, a unit's read, tests, docs, tools, a measure tool's
+  own setting, or anything whose steps a Queue line can spell out. Those are Opus's or Sonnet's.
+- **Prepared first.** Where an item needs figures (a per-tick log, a baseline at HEAD, a run
+  line shown to work), a cheaper session gathers them into a session file under a Queue line
+  "gather for <item>" tagged for Sonnet or Opus, and the Fable line names that file. An item
+  whose figures are missing is not ready: a Fable session skips it.
+- **Hand-back.** An Opus or Sonnet session that hits a fix's stop condition undoes the fix, writes
+  the trace and what it tried, and puts one `diagnose` line at the top of Fable's list.
+- **Pick.** The top ready Queue item tagged `diagnose`. With none ready, stop and say which
+  gather item unblocks the next one: no unit is read in its place. An item tagged for Opus or
+  Sonnet is left for a session on that model, which picks the top item tagged for it.
 - **Do.** Read the code, trace the fault to what produces it, and prove it with the one run or
   the one test that shows it (a failing test is not committed: its fixture goes in the session
   file). No fix, not even an S one; no full suite, no before-and-after matrix, no doc sync.
+  Findings seen in a source file read whole go in the session file for that unit's review, so
+  Fable never reads a file twice.
 - **Write.** The session file (cause, evidence quoted), and one Queue line per finding that a
   session with no memory of this one can execute: the file and function, what is wrong and
   why, the fix in words, the test or run that fails now and passes after, the runs to compare,
