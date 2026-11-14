@@ -1445,6 +1445,13 @@ func test_notice_action_button_takes_a_real_click() -> void:
 	var button: Button = line._actions["CLICK TEST"]["button"]
 	assert_bool(button.is_visible_in_tree()).is_true()
 	var at := button.get_global_rect().get_center()
+	# The pointer moves onto the button first, as a real one does: a display-less Linux runner
+	# never reports the mouse entering the window, and a press with no motion before it is dropped.
+	var move := InputEventMouseMotion.new()
+	move.position = at
+	move.global_position = at
+	get_viewport().push_input(move)
+	await get_tree().process_frame
 	for down: bool in [true, false]:
 		var ev := InputEventMouseButton.new()
 		ev.button_index = MOUSE_BUTTON_LEFT
