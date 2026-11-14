@@ -112,3 +112,11 @@ None proved. Finding 1 is the candidate.
 ## Fixed
 
 Nothing (diagnose only).
+
+## After the report (user, same session)
+
+- `ACCEL_SMOOTH`: approved, raw. Its proposal left `proposals.md` for the Queue (Opus).
+- Fable's credits are short: the Queue now opens with Fable's items in order of worth (the wheel
+  and body exchange first, as the source behind covers 2, 5 and 7; then the coupling's caps,
+  which takes cover 6 with the towing wheel's `taken`; then `scrape onebody`). Each reads its
+  unit's source files whole and leaves that unit's findings, so no unit is read on Fable twice.
