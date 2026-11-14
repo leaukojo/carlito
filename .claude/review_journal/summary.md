@@ -25,13 +25,7 @@ may not last the review). What earns the tag, "prepared first" and the hand-back
 1. Hand-backs: none now. A fix on Opus that hits its stop condition puts its line here, above
    the rest. The wheel fix below is the likeliest (Fable has read `wheel.gd` and `wheel_drive.gd`
    whole: `sessions/2026-11-14-wheel-body-one-force.md`).
-2. (ready) Unit 4's derivations: `balance_model.gd` (920 lines) and `stability_control.gd` (329),
-   each derivation checked against `docs/handling.md` and against what `wheel.gd` computes (a
-   wrong derivation passes the tests written from it, which is how the wheel's lost drive stayed
-   hidden). Where one reads the tyre's force along the wheel, check it against the tick as the
-   wheel fix leaves it (its brief below). Findings and one brief each; the rest of unit 4 is
-   Opus's. [diagnose, high, Fable]
-3. (after the wheel fix lands) What else the wheel's two forces explained. With the tick
+2. (after the wheel fix lands) What else the wheel's two forces explained. With the tick
    reordered, re-derive from `wheel.gd` alone and say for each: gone, still there, or its own
    brief. `surface_drag_force`'s `taken` and the laden roll-back (the towing item's (a)); the
    rolling resistance `COMPROMISE` (`wheel.gd:571-573`: a torque inside the spin step would now
@@ -39,7 +33,7 @@ may not last the review). What earns the tag, "prepared first" and the hand-back
    (`:142-145`, "the spin the road lent the step"); the retarder's (`wheel_drive.gd:667-669`);
    the links' force off last tick's `force_long` (`:490`); `TractorTelemetry.SLIP_FLOOR_KMH`.
    [diagnose, high, Fable]
-4. (needs "gather for the high-speed swerve", below) `race` and `race-future` leave the 40 m
+3. (needs "gather for the high-speed swerve", below) `race` and `race-future` leave the 40 m
    strip sideways near 280-290 km/h with zero steer (`docs/plans/realism_gaps.md` phase 4;
    `doc=top` prints `left the strip`). From the gathered trace and the spec's figures, derive the
    yaw mode at that speed (each axle's cornering stiffness at its load with the downforce on, the
@@ -94,7 +88,7 @@ Opus's and Sonnet's items:
   and "Please verify": every body pulls away about a quarter of a second sooner, the tractor's
   pull-away ring on `accLong` is gone. After it: cover sweep (2) lands, (5) is re-proved, the
   bobtail's `rest reading:` sizes new limits. [high, plan, Opus]
-- (gather for the high-speed swerve: Fable's item 4) Reproduce `race` and `race-future` leaving
+- (gather for the high-speed swerve: Fable's item 3) Reproduce `race` and `race-future` leaving
   the strip (`measure_vehicles -- race,race-future 60`, the top-speed pass; `--fixed-fps 60`
   and without, and say whether both leave). With an uncommitted probe in the tool, reverted, log
   per tick from 240 km/h until the body leaves: speed, heading, yaw rate, the centre of mass's
@@ -197,7 +191,34 @@ Opus's and Sonnet's items:
     session file gives its size and the wheel's speed trace; it is the free wheel's ring, so the
     floor stays with a comment naming the wheel fix (run this after it lands). A radar unit's minimum speed, from a page
     opened, would make it a model instead. Ends in a proposal. [high, auto, Opus]
-  - (6) `Articulation.YAW_CAP_SHARE`: Fable's second item, above.
+  - (6) `Articulation.YAW_CAP_SHARE`: the towing item's (b), above.
+- A swinging front axle's roll takes the weight on the wrong lever
+  (`sessions/2026-11-15-unit4-derivations.md` finding 1: the derivation, the forms, the figures;
+  read first). `BalanceModel._roll_state` (`balance_model.gd:146-194`): inside the stop the body
+  rolls about the line from the rear's ground centre to the pivot; the side force is taken on that
+  lever (`moment - pivot_m`) and the rolled body's weight on the full `h` (`- weight_h`). The
+  tractors' predicted roll reads 2.7 % high, their front transfer 4 % low, `tip_g` 0.635 for about
+  0.652. Do, with `pivot_w = cap_f * pivot_h` (the front's whole load enters at the pivot):
+  free, `phi = (moment - pivot_m) / (k_r - weight_h + pivot_w)`, the beam's tilt
+  `psi = pivot_m / (k_f - pivot_w)`, `df = 2 * k_f * psi / t_f`, `free = phi - psi <= stop`, and
+  the branch's gate `k_r > weight_h - pivot_w` with `k_f > pivot_w`; on the stop (`:176`) and with
+  the rear lifted (`:190`) `k_f * stop` becomes `(k_f - pivot_w) * stop`; with the front lifted
+  (`:184`) the numerator loses `pivot_w * stop`. `stop = 0` leaves every form as it is. Then
+  `_corner_wheels`' `shift` (`:700`, `:719`) for a swinging front's two patches:
+  `(h - pivot_h) * sin(phi) + pivot_h * sin(psi)`, `psi = min(roll.front, cap_f) * t_f / (2 * k_f)`.
+  The doc comments of `_roll_state` and the file's header follow. Tests
+  (`tests/test_balance_model.gd`): new, the session file's fixture (fails now by 2.66 % on
+  `tractor-kenney`); `:835` and `:851` are written from the old forms and take the new ones
+  (`front == 2 pivot_m k_f / ((k_f - pivot_w) t_f)`, `rear * t_r / 2 == (weight_h - pivot_w) *
+  (g + phi)`); `:888`'s tip becomes `trapezoid - stop * (1 - pivot_w / weight_h)`; `:873`, the rigid
+  triangle, does not change and is the independent check. Runs: `test_balance_model`, the suite
+  (`test_vehicle_catalog` fails a moved ESC table: none may move, no ESC body swings);
+  `gen_kenney_vehicles` leaves `git status` clean; `measure_vehicles -- tractor-kenney 60 track
+  corner` and `tractor-cvt`, HEAD then after, for the `Pred` cell and "model tips at": where a
+  printed figure moves, the two rows of `docs/vehicle_measurements.md` § Cornering, the recipe
+  comment (`gen_kenney_vehicles.gd:565-567`) and `docs/tractor.md:179-183` follow. Stop and hand
+  back, the change undone, if `:873` fails or any body without a swinging axle reads a different
+  figure. Prediction only: no proposal. [high, auto, Opus]
 - The engine law's three inversions (`sessions/2026-11-12-shared-law-audit.md`, finding 9).
   `Drivetrain.fuel_to_land`, `Drivetrain.drag_fuel` and `PedalMap._row_fuel` each compute
   `(net - motoring) / span`; one "fuel for a net crank torque" function serves all three.
@@ -239,7 +260,7 @@ changes only with the user's OK). Where they meet this Queue:
   about a quarter of a second and the stops by up to 1 m, so the plan's targets are judged on
   figures that hold. Phase 1's "investigate" is a power ledger on Opus (fuel to crank to wheels at
   70 km/h), Fable's only on a hand-back. Phase 4's `race` / `race-future` swerve waits on Fable's
-  item 4; its other bullets do not.
+  item 3; its other bullets do not.
 - `handbrake_fade.md` (2 phases, not started, Opus): either side of the wheel fix. Its phase 1
   edits `wheel_drive.gd:658-662`, inside the loop the wheel fix adds a call after: the second to
   land goes on top of the first.
@@ -306,7 +327,7 @@ Sizes are GDScript lines at 716bf06, rounded. A unit's tests and `docs/` pages g
 | 3a | Wheels: the wheel | `src/vehicles/base/wheel.gd` | 1.1k | 8294fee | 6 wrong or misplaced comments fixed, 1 misnamed parameter renamed (`surface_drag_force`'s `mass`); no dead symbol; the 3 `COMPROMISE` labels real; 1 item queued (two readings of "the slip floor") |
 | 3b | Wheels: the owner | `src/vehicles/base/wheel_drive.gd` | 1.1k | | not reviewed; Fable's findings to start from: `sessions/2026-11-14-wheel-body-one-force.md` § Unit 3b |
 | 3c | Wheels: the tests | `tests/test_wheel_spin.gd` | 2.8k tests | | |
-| 4 | Vehicle base, rest | `src/vehicles/base/` minus units 2, 3, 5; `src/vehicles/tyres/`; `docs/vehicles.md`, `docs/handling.md` | about 4k | | |
+| 4 | Vehicle base, rest | `src/vehicles/base/` minus units 2, 3, 5; `src/vehicles/tyres/`; `docs/vehicles.md`, `docs/handling.md` | about 4k | | not reviewed; the derivations of `balance_model.gd` and `stability_control.gd` are checked (1 fix queued, the swinging axle's lever) and Fable's notes to start from: `sessions/2026-11-15-unit4-derivations.md` § For unit 4's review |
 | 5 | Towing | `tow_host`, `towed_body`, `articulation`, `coupling_profile` in `src/vehicles/base/`; `tests/test_trailer.gd`, `test_tow_host.gd`, `test_drawbar_trailer.gd` | 3.2k tests | | |
 | 6 | Truck | `src/vehicles/truck/`, `tests/test_truck.gd`, `docs/truck.md` | 1.0k | | |
 | 7 | Tractor | `src/vehicles/tractor/`, `tests/test_tractor.gd`, `docs/tractor.md` | 1.7k | | |
