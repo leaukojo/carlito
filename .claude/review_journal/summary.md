@@ -17,37 +17,6 @@ tests with different bodies are left to each unit's review.
 
 ## Queue (top first)
 
-- Ground under a deck the sweep left out (`sessions/2026-11-14-f2-own-body-wall.md`, finding 3
-  and § The second trigger). With a wheel's side in a barrier welded to its deck and other ground
-  within the travel under the deck, the engine's sweep skips the deck with its wall and stops on
-  the lower ground; the rest test there names the deck, which the spring carries, so
-  `_carried_sweep` never runs and `settled_drop`'s clamp to `safe_drop` hides the deck's depth: the
-  wheel rides low by the gap (proved: 0.0108 of compression for 0.06 over a 5 cm gap; the fixture
-  is in the session file). Steps 1 and 2 done (`sessions/2026-11-14-level3-deck-gap.md`,
-  `2026-11-14-deck-gap-exact.md`, 6964c1e); diagnosed in
-  `sessions/2026-11-14-sweep-rest-disagree.md` § Which trigger. The brief:
-  - Where: `RayWheel._contact_pass` (`src/vehicles/base/wheel.gd`), the branch after a sweep that
-    hit (`fractions[1] < 1.0`).
-  - Wrong: `cast_motion` leaves out every body the cylinder overlaps at the start pose, and that
-    branch never asks whether one was. A depth or a rest test at `safe_drop` cannot tell: on sound
-    contacts both read up to 3 mm off (the session file's cause).
-  - Fix, in words: with the query at `ray_from` and no motion, `get_rest_info` first (the engine's
-    own skip test, same call, so it is true exactly when a body is skipped). Empty: the sweep as
-    now. Not empty and the sweep hits nothing: the full-bump branch as now. Not empty and the
-    sweep hits: set `_swept_past` and return false, so `_carried_sweep` reads every contact from
-    full bump. One more rest query a wheel a tick: read `kerb`'s cost line
-    (`docs/vehicle_measurements.md`) before and after.
-  - Fails now, passes after: the fixture in `sessions/2026-11-14-deck-gap-exact.md` finding 1
-    (`_wheel_on_a_rolled_body` with a box `under` the deck; compression `c` to 2e-3, normal UP, both
-    welded flags, `[0.06, 0.05]` and `[0.24, 0.18]`), committed once it passes.
-  - Runs before and after (`--fixed-fps 60`): `sedan,semi 45 kerb`, `side`, `scrape` (two bodies,
-    `steer=60`, `onebody`: re-read `firetruck` FR there), the three CI measure gates. Expected to
-    move: the 22 `kerb` ticks inside the 20 cm kerb (to full bump), `scrape`'s sweeps by contact
-    (up). Kerb-run figures carry the tool's own 1 to 3 mm of contact noise (80 m kerb, 6 km strip).
-  - Stop and hand back if: the fixture still fails with the start test in, any gate fails, or a
-    `scrape` force across moves by more than the run-to-run 30 N. No tolerance, no wider clamp, no
-    shape margin set to 0 (it makes every touching query an EPA one: 1 of 2000 read upside down).
-  It ends in a proposal (a plan the user approves). [high, plan, Opus]
 - (user, 2026-11-13) The cover sweep (the skill's § Covers), across every unit at once and not
   waiting for each unit's turn. Search `src kit tools tests` for the section's "where they sit"
   list (`lerp`, `move_toward`, `smooth`, `hyster`, `deadband`, `snapped`, `is_zero_approx`,
@@ -108,6 +77,18 @@ tests with different bodies are left to each unit's review.
   Unit 16's review splits the unit in the map first; it then says whether passes move to files
   of their own (`kerb`, `scrape`, `side` are self-contained: `_start_kerb` to `_report_kerb_run`)
   and whether the rule changes. No split before that review. [high, plan, Opus]
+- `docs/vehicles.md` § Contact's "Cost, `semi` + `box`: the cast costs an order of magnitude over
+  the ray, natively and on web" cites a `kerb` cost readout no tool prints
+  (`sessions/2026-11-14-deck-start-test.md` finding 2). Find where the figure came from
+  (`git log -S "order of magnitude" -- docs/vehicles.md`); with a run behind it, cite that run;
+  with none, cut the claim (the docs are at their character cap, so cutting helps). A native
+  figure for the cast alone is in the session file. [medium, auto, Sonnet]
+- `scrape onebody`'s `firetruck` FR peaks at 501 N across where the two-body run reads 217 N, the
+  same wall at +0 mm, 100 % contact (`sessions/2026-11-14-deck-start-test.md` § Measured). f7bac55
+  left it byte-equal, so the skipped body is not its cause. Trace which contact the sweep by contact
+  reads on the grazing ticks with the wall a shape of the strip's body against a body of its own,
+  and why that doubles the force across; write the cause and the brief, fix nothing. [diagnose,
+  high, Fable]
 
 Deferred until units 3 and 4 are reviewed (it touches both):
 
@@ -128,8 +109,10 @@ Deferred until units 3 and 4 are reviewed (it touches both):
 - F2's remainder, a wall that is part of the ground: on Level 3 - City, `race` or a tractor along
   a road barrier, straight and then steered into it; on any island level, the same along the foot
   of a cliff. Expected: it scrapes on its hull and the wall-side corner stays up, where it used to
-  drop. Known, not fixed: beside a barrier the wall-side wheels can ride a few cm low where other
-  ground lies just under the road (Queue).
+  drop, and the wall-side wheels ride at the road's height, not a few cm low (f7bac55).
+- A `semi` over a high step at speed (f7bac55): about 30 km/h over a 20 cm kerb or step.
+  Expected: the rear wheels meet it at full bump and the jolt is softer than before (the `kerb`
+  run's peak vertical 4.77 -> 2.89 g); crawling over it is as before.
 
 - The FULL dashboard's bars with no lag: any body, F2 to FULL. Expected: every bar and its number
   follow the value at once. Any number that flickers on a body standing still is a new finding:
