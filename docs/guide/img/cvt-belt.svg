@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 270" width="420" height="270">
+<title>A belt CVT: in a low ratio the belt runs on a small circle at the engine and a big one at the wheels; in a high ratio the other way round</title>
+<!-- Drawn, not game data: no vehicle in the game has a belt CVT. Belt radii 14 and 36 on pulleys of radius 40 (a ratio of about 2.6 each way). Bottom row: each pulley cut edge-on above its shaft. -->
+<style>
+.cv-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.cv-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.cv-k{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.cv-p{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-muted,#6b6b75);stroke-width:1.5}
+.cv-belt{fill:none;stroke:var(--fig-orange,#c45a12);stroke-width:5;stroke-linejoin:round}
+.cv-bx{fill:var(--fig-orange,#c45a12)}
+.cv-pin{fill:var(--fig-ink,#1c1c1f)}
+.cv-cone{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;stroke-linejoin:round}
+.cv-shaft{fill:var(--fig-muted,#6b6b75)}
+.cv-sep{stroke:var(--fig-grid,#e3e0d8);stroke-width:1.5}
+@media (prefers-color-scheme:dark){
+.cv-t{fill:var(--fig-ink,#e9e7e2)}.cv-s{fill:var(--fig-muted,#a6a6b0)}.cv-k{fill:var(--fig-ink,#e9e7e2)}.cv-p{fill:var(--fig-fill,#22242a);stroke:var(--fig-muted,#a6a6b0);stroke-width:1.5}.cv-belt{fill:none;stroke:var(--fig-orange,#f0a060);stroke-width:5;stroke-linejoin:round}.cv-bx{fill:var(--fig-orange,#f0a060)}.cv-pin{fill:var(--fig-ink,#e9e7e2)}.cv-cone{fill:var(--fig-fill,#22242a);stroke:var(--fig-ink,#e9e7e2);stroke-width:1.5;stroke-linejoin:round}.cv-shaft{fill:var(--fig-muted,#a6a6b0)}.cv-sep{stroke:var(--fig-grid,#30323a);stroke-width:1.5}}
+</style>
+<text class="cv-t" x="100" y="18" text-anchor="middle">Like a low gear</text>
+<circle class="cv-p" cx="52" cy="92" r="40"/><circle class="cv-p" cx="148" cy="92" r="40"/>
+<path class="cv-belt" d="M48.8,78.4 L139.8,57 A36,36 0 1,1 139.8,127 L48.8,105.6 A14,14 0 0,1 48.8,78.4 Z"/>
+<circle class="cv-pin" cx="52" cy="92" r="3"/><circle class="cv-pin" cx="148" cy="92" r="3"/>
+<text class="cv-k" x="52" y="150" text-anchor="middle">engine</text>
+<text class="cv-k" x="148" y="150" text-anchor="middle">wheels</text>
+<text class="cv-s" x="100" y="170" text-anchor="middle">slow and strong</text>
+<path class="cv-cone" d="M22,254 L22,222 L34.2,222 L43.8,254 Z"/><path class="cv-cone" d="M82,254 L82,222 L69.8,222 L60.2,254 Z"/><path class="cv-bx" d="M43.8,254 L60.2,254 L63.8,242 L40.2,242 Z"/><rect class="cv-shaft" x="20" y="254" width="64" height="8"/>
+<path class="cv-cone" d="M118,254 L118,222 L136.8,222 L146.4,254 Z"/><path class="cv-cone" d="M178,254 L178,222 L159.2,222 L149.6,254 Z"/><path class="cv-bx" d="M139.8,232 L156.2,232 L159.8,220 L136.2,220 Z"/><rect class="cv-shaft" x="116" y="254" width="64" height="8"/>
+<text class="cv-s" x="52" y="214" text-anchor="middle">apart</text>
+<text class="cv-s" x="148" y="214" text-anchor="middle">together</text>
+<line class="cv-sep" x1="210" y1="8" x2="210" y2="266"/>
+<text class="cv-t" x="320" y="18" text-anchor="middle">Like a high gear</text>
+<circle class="cv-p" cx="272" cy="92" r="40"/><circle class="cv-p" cx="368" cy="92" r="40"/>
+<path class="cv-belt" d="M280.3,57 L371.2,78.4 A14,14 0 0,1 371.2,105.6 L280.3,127 A36,36 0 1,1 280.3,57 Z"/>
+<circle class="cv-pin" cx="272" cy="92" r="3"/><circle class="cv-pin" cx="368" cy="92" r="3"/>
+<text class="cv-k" x="272" y="150" text-anchor="middle">engine</text>
+<text class="cv-k" x="368" y="150" text-anchor="middle">wheels</text>
+<text class="cv-s" x="320" y="170" text-anchor="middle">fast</text>
+<path class="cv-cone" d="M242,254 L242,222 L260.8,222 L270.4,254 Z"/><path class="cv-cone" d="M302,254 L302,222 L283.2,222 L273.6,254 Z"/><path class="cv-bx" d="M263.8,232 L280.2,232 L283.8,220 L260.2,220 Z"/><rect class="cv-shaft" x="240" y="254" width="64" height="8"/>
+<path class="cv-cone" d="M338,254 L338,222 L350.2,222 L359.8,254 Z"/><path class="cv-cone" d="M398,254 L398,222 L385.8,222 L376.2,254 Z"/><path class="cv-bx" d="M359.8,254 L376.2,254 L379.8,242 L356.2,242 Z"/><rect class="cv-shaft" x="336" y="254" width="64" height="8"/>
+<text class="cv-s" x="272" y="214" text-anchor="middle">together</text>
+<text class="cv-s" x="368" y="214" text-anchor="middle">apart</text>
+</svg>

@@ -12,6 +12,7 @@
     { "file": "engine.md", "title": "The engine", "group": "Engine and driveline" },
     { "file": "coupling.md", "title": "Clutch and torque converter", "group": "Engine and driveline" },
     { "file": "gearbox.md", "title": "Gearbox and shifting", "group": "Engine and driveline" },
+    { "file": "gearbox-kinds.md", "title": "Kinds of gearbox", "group": "Engine and driveline" },
     { "file": "differentials.md", "title": "Differentials and four-wheel drive", "group": "Engine and driveline" },
     { "file": "brakes.md", "title": "Brakes", "group": "Brakes and control" },
     { "file": "driver-aids.md", "title": "ABS, traction and stability control", "group": "Brakes and control" },

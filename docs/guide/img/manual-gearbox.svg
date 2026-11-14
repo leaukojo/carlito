@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 312" width="420" height="312">
+<title>Inside a simple two-shaft gearbox, in second gear</title>
+<!-- Drawn, not game data: two gear pairs seen edge-on, ratios 3 (1st) and 1.4 (2nd). Top gears are fixed to the engine shaft; bottom gears (dashed) spin freely until the collar locks one. -->
+<style>
+.mg-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.mg-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.mg-k{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.mg-sh{stroke:var(--fig-ink,#1c1c1f);stroke-width:5;stroke-linecap:round}
+.mg-g{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5}
+.mg-gf{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;stroke-dasharray:4 2}
+.mg-tt{fill:var(--fig-muted,#6b6b75)}
+.mg-col{fill:var(--fig-blue,#1d5ca8)}
+.mg-cl{fill:var(--fig-ink,#1c1c1f)}
+.mg-pw{fill:none;stroke:var(--fig-orange,#c45a12);stroke-width:7;stroke-opacity:0.55;stroke-linejoin:round}
+.mg-arr{fill:none;stroke:var(--fig-muted,#6b6b75);stroke-width:1.5}
+.mg-ah{fill:var(--fig-muted,#6b6b75)}
+@media (prefers-color-scheme:dark){
+.mg-t{fill:var(--fig-ink,#e9e7e2)}.mg-s{fill:var(--fig-muted,#a6a6b0)}.mg-k{fill:var(--fig-ink,#e9e7e2)}.mg-sh{stroke:var(--fig-ink,#e9e7e2);stroke-width:5;stroke-linecap:round}.mg-g{fill:var(--fig-fill,#22242a);stroke:var(--fig-ink,#e9e7e2);stroke-width:1.5}.mg-gf{fill:var(--fig-fill,#22242a);stroke:var(--fig-ink,#e9e7e2);stroke-width:1.5;stroke-dasharray:4 2}.mg-tt{fill:var(--fig-muted,#a6a6b0)}.mg-col{fill:var(--fig-blue,#8ab6ff)}.mg-cl{fill:var(--fig-ink,#e9e7e2)}.mg-pw{fill:none;stroke:var(--fig-orange,#f0a060);stroke-width:7;stroke-opacity:0.55;stroke-linejoin:round}.mg-arr{fill:none;stroke:var(--fig-muted,#a6a6b0);stroke-width:1.5}.mg-ah{fill:var(--fig-muted,#a6a6b0)}}
+</style>
+<defs><marker id="mg-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mg-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<line class="mg-sh" x1="62" y1="80" x2="290" y2="80"/>
+<line class="mg-sh" x1="110" y1="200" x2="392" y2="200"/>
+<path class="mg-arr" marker-end="url(#mg-a)" d="M392,200 H410"/>
+<path class="mg-arr" marker-end="url(#mg-a)" d="M10,80 H40"/>
+<text class="mg-s" x="10" y="50">engine</text>
+<rect class="mg-cl" x="44" y="56" width="5" height="48"/><rect class="mg-cl" x="53" y="56" width="5" height="48"/>
+<text class="mg-s" x="51" y="124" text-anchor="middle">clutch</text>
+<rect class="mg-g" x="142" y="50" width="16" height="60" rx="2"/><rect class="mg-tt" x="142" y="50" width="16" height="6" rx="2"/><rect class="mg-tt" x="142" y="104" width="16" height="6" rx="2"/><rect class="mg-gf" x="142" y="110" width="16" height="180" rx="2"/><rect class="mg-tt" x="142" y="110" width="16" height="6" rx="2"/><rect class="mg-tt" x="142" y="284" width="16" height="6" rx="2"/>
+<rect class="mg-g" x="242" y="30" width="16" height="100" rx="2"/><rect class="mg-tt" x="242" y="30" width="16" height="6" rx="2"/><rect class="mg-tt" x="242" y="124" width="16" height="6" rx="2"/><rect class="mg-gf" x="242" y="130" width="16" height="140" rx="2"/><rect class="mg-tt" x="242" y="130" width="16" height="6" rx="2"/><rect class="mg-tt" x="242" y="264" width="16" height="6" rx="2"/>
+<text class="mg-t" x="150" y="42" text-anchor="middle">1st</text>
+<text class="mg-t" x="250" y="22" text-anchor="middle">2nd</text>
+<rect class="mg-col" x="219" y="184" width="22" height="32" rx="2"/>
+<rect class="mg-col" x="241" y="188" width="5" height="6"/><rect class="mg-col" x="241" y="206" width="5" height="6"/>
+<rect class="mg-col" x="214" y="188" width="5" height="6"/><rect class="mg-col" x="214" y="206" width="5" height="6"/>
+<text class="mg-k" x="208" y="178" text-anchor="end">collar</text>
+<path class="mg-arr" marker-start="url(#mg-a)" marker-end="url(#mg-a)" d="M176,234 H226"/>
+<text class="mg-s" x="201" y="252" text-anchor="middle">slides</text>
+<path class="mg-pw" d="M14,80 H250 V200 M232,200 H404"/>
+<text class="mg-s" x="298" y="76">fixed to</text>
+<text class="mg-s" x="298" y="92">the shaft</text>
+<text class="mg-s" x="282" y="164">spin freely</text>
+<text class="mg-s" x="282" y="180">on the shaft</text>
+<text class="mg-s" x="410" y="224" text-anchor="end">to the wheels</text>
+<line class="mg-pw" x1="180" y1="300" x2="204" y2="300"/>
+<text class="mg-s" x="210" y="304">the drive's path in 2nd gear</text>
+</svg>

@@ -105,6 +105,12 @@ Anti-slip regulation, the name for [traction control](#traction-control) on truc
 A setting that keeps the foot brake on whenever the vehicle stops in gear, until the accelerator
 is pressed. In the game it is SANDBOX ▸ AUTO HOLD, for keys, on-screen pedals and a gamepad.
 
+### Automatic gearbox
+A gearbox that changes gear by itself, built from [planetary gear sets](#planetary-gear-set)
+whose parts are held or released by clutches worked by oil pressure. It changes clutch to clutch,
+so the drive never stops. Every car except the racing cars, the vans, the garbage truck and the
+fire truck have one. See [Kinds of gearbox](gearbox-kinds.md).
+
 ### Autopilot
 A controller that steers for the driver. The boat's autopilot holds a compass heading (HEADING
 HOLD). Moving the helm takes the rudder back; letting go holds the new heading.
@@ -294,6 +300,10 @@ The gears in the middle of an axle that let the left and right wheels turn at di
 In a corner the outside wheel travels further than the inside one, so it must turn faster. See
 [Differentials and four-wheel drive](differentials.md).
 
+### Dog clutch
+A collar that slides along a shaft, with stubby teeth on its side (the dogs). Slid against a gear,
+its dogs lock the gear to the shaft. See [Kinds of gearbox](gearbox-kinds.md).
+
 ### Downforce
 Air pushing a car down onto the road, made by wings and the body's shape. It grows with speed
 squared and gives the tyres more grip. Only the two racing cars have it in the game.
@@ -326,6 +336,11 @@ GPS, the power module, the attitude sensor) is its own node on the bus and sends
 How much a governed engine's speed falls below its setting under full load, as a share of the
 setting. The tractor's governor droops about 7 %.
 <!-- tractor-kenney_spec.tres governor_droop 0.07 -->
+
+### Dual-clutch gearbox
+Two gearboxes in one case, one for the odd gears and one for the even gears, each with its own
+clutch. The next gear waits on the other half, so a change is one clutch opening as the other
+closes. No vehicle in the game has one. See [Kinds of gearbox](gearbox-kinds.md).
 
 ## E
 
@@ -382,6 +397,11 @@ throttle.
 
 
 ## G
+
+### Gear
+A wheel with teeth around its edge. Two gears whose teeth fit together turn each other; a small
+one turns a big one more slowly but with more [torque](#torque). See
+[Kinds of gearbox](gearbox-kinds.md).
 
 ### Gear ratio
 How many times the engine turns for each turn of the gearbox output. A low gear has a large
@@ -466,6 +486,11 @@ A tractor outlet that sends oil under pressure to a trailer or implement, to wor
 called an SCV (selective control valve). In the game it opens the spreader's hopper gate and
 tips the farm trailer (`scv_flow`).
 
+### Hydrostatic drive
+A drive through oil: a pump turned by the engine pushes oil to a motor that turns the output. Its
+speed can be set to anything, including zero and backwards. The `tractor-cvt`'s [CVT](#cvt) uses
+one for part of its power. See [Kinds of gearbox](gearbox-kinds.md).
+
 ## I
 
 ### Idle
@@ -541,6 +566,11 @@ no power is lost to slip.
 
 ## M
 
+### Manual gearbox
+A gearbox whose gears the driver chooses with a lever and a clutch pedal. No vehicle in the game
+has a clutch pedal: MANUAL in the GARAGE picks the gears, and the game works the clutch. See
+[Kinds of gearbox](gearbox-kinds.md).
+
 ### MFWD
 Mechanical front-wheel drive: a tractor's switchable drive to its front axle (`fwd_drive`). With
 it on, all four wheels pull.
@@ -602,6 +632,11 @@ Petrol cars, diesel trucks and the tractor each use a different rule.
 
 ### Pitch
 The nose of a vehicle tipping up or down. A car pitches forward when it brakes.
+
+### Planetary gear set
+A sun gear in the middle, planet gears around it on a carrier, and a ring gear around the outside
+with its teeth facing inwards. Holding one part still and driving another gives a different ratio
+for each choice. Automatic gearboxes are built from them. See [Kinds of gearbox](gearbox-kinds.md).
 
 ### Planing
 A fast boat rising onto the water and skimming over it instead of pushing through it. Once a
@@ -768,6 +803,11 @@ and keep the tyres pressed onto the road. See [Suspension](suspension.md).
 ### Swinging front axle
 A front axle built as one beam on a single pivot in the middle, so one wheel can rise as the other
 drops. Farm tractors use it; in the game it swings up to 10° each way before it meets its stop.
+
+### Synchroniser
+A small cone beside each gear in a manual gearbox that rubs on the gear, like a brake, until gear
+and shaft turn at the same speed, so the [dog clutch](#dog-clutch) can slide in without
+crunching. See [Kinds of gearbox](gearbox-kinds.md).
 
 ## T
 

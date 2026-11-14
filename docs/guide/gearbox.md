@@ -45,7 +45,8 @@ The game's gearboxes:
 | `tractor-kenney` | 16 | Powershift |
 | `tractor-cvt` | none | CVT |
 
-Each kind is explained further down this page.
+Each kind is explained further down this page; [Kinds of gearbox](gearbox-kinds.md) shows what
+is inside each.
 <!-- gear_ratios lengths: sedan 6, race 6, semi_spec.tres 12, tractor-kenney_spec.tres 16; tractor-cvt cvt_range_tops -->
 
 ## The gear byte: P, R, N and D
@@ -192,6 +193,8 @@ slope. The gear byte it publishes is the mechanical range in use, D1 to D4.
 
 ## Related
 
+- [Kinds of gearbox](gearbox-kinds.md): what is inside a manual, an automatic, a CVT and the
+  others.
 - [The engine](engine.md): the torque the gears multiply.
 - [Clutch and torque converter](coupling.md): what slips while the gears change and the vehicle
   pulls away.
