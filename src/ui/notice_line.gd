@@ -84,17 +84,17 @@ func _process(_dt: float) -> void:
 
 
 ## Show `_raised`, through its action if it has one; per-frame only while an action's notice is up.
+## Each button's visibility is assigned once, to its final value: hiding it even for an instant
+## drops a press in progress (Godot releases mouse focus on hide), so the click never lands.
 func _render() -> void:
-	for raised: String in _actions:
-		(_actions[raised]["button"] as Button).visible = false
-	if not _actions.has(_raised):
-		text = _raised
-		set_process(false)
-		return
-	var shown: Dictionary = (_actions[_raised]["line"] as Callable).call()
+	var shown: Dictionary = {}
+	if _actions.has(_raised):
+		shown = (_actions[_raised]["line"] as Callable).call()
 	text = String(shown.get("text", _raised))
-	(_actions[_raised]["button"] as Button).visible = bool(shown.get("button", false))
-	set_process(true)
+	for raised: String in _actions:
+		(_actions[raised]["button"] as Button).visible = \
+				raised == _raised and bool(shown.get("button", false))
+	set_process(_actions.has(_raised))
 
 
 ## Show a message from the sim (GameState.notice). Re-showing restarts the dwell instead of
