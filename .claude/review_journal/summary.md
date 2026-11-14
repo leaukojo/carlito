@@ -17,17 +17,61 @@ tests with different bodies are left to each unit's review.
 
 ## Queue (top first)
 
-- (user, 2026-11-13) The cover sweep (the skill's § Covers), across every unit at once and not
-  waiting for each unit's turn. Search `src kit tools tests` for the section's "where they sit"
-  list (`lerp`, `move_toward`, `smooth`, `hyster`, `deadband`, `snapped`, `is_zero_approx`,
-  `maxf(…, 1e-`, body or level names in an `if`, widened test tolerances; comments with "avoid",
-  "hide", "flicker", "jitter", "workaround", "stability"), sort each hit into model / cover / dead,
-  with the reason quoted. This session only sorts: it writes one Queue line per cover found, with
-  the source to trace and the proving run (take it out, measure, undo) as that line's first step,
-  tagged for Opus or Sonnet; it proves and fixes none. One hit already measured: `BaseVehicle.ACCEL_SMOOTH`, a
-  10 /s lag on the contract's `accLong` / `accLat` / `acc_vert`, passed 0.202 of a 2.435 m/s2
-  tick-rate alternation on a standing bobtail (`sessions/2026-11-13-f1-standing-rock.md`): sorted
-  as a cover, next line. [diagnose, high, Fable]
+- The cover sweep's findings (`sessions/2026-11-14-cover-sweep.md`, numbered as there; its
+  § How it was searched lists what the sweep left to each unit's review). Each line starts with
+  its proving run (take the cover out, measure, undo). Run lines: `docs/vehicle_measurements.md`
+  § Measure-tool run lines. Never a new filter, on a reading or a signal.
+  - (1) `VehicleMath.RESIST_EPS`, `air_force`'s `airspeed < RESIST_EPS` gate
+    (`vehicle_math.gd:138`, `:200`): "stops jitter" with nothing named, and each axis is already
+    one-tick clamped. Prove: gate on `delta <= 0.0` alone, run `test_vehicle_math`,
+    `test_tow_host` (the standing-rig test) and `measure_vehicles -- semi 20 rest` plus
+    `tractor-kenney 20 rest`, against the same at HEAD. With the rest readings equal to the
+    digit printed: delete the constant and its clause (dead). With any reading moved: undo, and
+    write what moved in the session file and a Queue line for its source. [high, auto, Opus]
+  - (3) `measure_vehicles.CORNER_SMOOTH_S` (`:64`; `:2475`, `:2493`, `:2502`): a 0.25 s lag
+    before the cornering peak is taken, no reason given, and `acc_lat` smoothed a second time.
+    Prove: beside each smoothed peak keep the raw one (`lat`, `across / mass`, `acc_lat`) and
+    print both for `sedan`, `suv`, `semi`, `tractor-kenney` on `corner`. Raw within 0.02 g of
+    smoothed on every body: remove the lag and re-run `doc=cornering`. Further apart: do not
+    remove; the session file names the tick and what `v * yaw_rate` did on it (a yaw swing past
+    saturation is the slip-angle gate's job, a tick-rate alternation is a source to queue).
+    [high, auto, Sonnet]
+  - (2) `measure_vehicles._sample_gates`' two-tick means (`:1812-1822` `over`, `:1828-1833`
+    `xfer_mean`): they average out the take-up's drive force alternating at the tick rate under
+    `LOW_SPEED_FLOOR`, whose source is `proposals.md` "The wheel and the body exchange one
+    force". Prove: judge on the tick's own value, run the launch pass on `sedan`, `semi`,
+    `tractor-kenney`, and record per body the `front axle` gate's overshoot with and without
+    the mean. Do not land the removal while that proposal is open (the gate would fail on a
+    known fault): add the figures to the proposal's Evidence, and a line to its Cost that the
+    means, `docs/handling.md:94` and the report's "(two-tick mean)" go with it.
+    [medium, auto, Sonnet]
+  - (4) `MeasureRig.ESC_CHATTER_EPS` (`tools/measure_rig.gd:272`,
+    `tests/test_measure_chatter.gd:42`): the ESC's moment share flips ±0.0003 a tick on `van`'s
+    held touch, called "the sensors' per-tick noise". Prove and trace: on `van`'s step pass log
+    per tick, through a held touch, `WheelDrive.esc_step`'s inputs (speed, steer mean,
+    `yaw_rate`, `lat_acc`, `_slip_est`) and say which alternates and what writes it (the
+    `acc_lat` path is the `ACCEL_SMOOTH` proposal's; `angular_velocity.y` leads to the tyres'
+    side caps). Fix nothing in `StabilityControl`: write the source's brief as a Queue line; the
+    eps comes down in the fix that removes the source. [high, auto, Opus]
+  - (5) `TractorTelemetry.SLIP_FLOOR_KMH` (`tractor_telemetry.gd:21`, `slip_pct`): contract
+    `wheel_slip` snapped to 0 under 0.5 km/h of wheel speed because "the ratio is noise". Prove:
+    floor at 0 (keep the `wheel_speed_kmh <= 0.0` guard), log `wheel_speed`, `ground_speed` and
+    `wheel_slip` per tick on `tractor-kenney` and `tractor-cvt` standing in D, in N, on the hill
+    hold, and through a pull-away. Quiet at rest and the only non-zero readings are real spin:
+    propose removal (`proposals.md`, a contract signal's behaviour). Non-zero at rest: the
+    session file gives its size and the wheel's speed trace; it is the free wheel's ring, so the
+    floor stays with a comment naming that proposal. A radar unit's minimum speed, from a page
+    opened, would make it a model instead. Ends in a proposal. [high, auto, Opus]
+  - (6) `Articulation.YAW_CAP_SHARE` (`articulation.gd:9-12`, `yaw_friction_torque`,
+    `TowHost`'s plate friction at `tow_host.gd:369-376`): half of the one-tick stop, because
+    the towed tyres' lateral caps stop the same relative yaw in the same tick; a guess where
+    d849de9's `taken` is the exact form. Prove: with the share at 1.0 read
+    `test_a_coupled_rig_standing_still_stays_mirror_symmetric`'s peak rate per kind, then at 0.5
+    log the relative yaw rate per tick after a yaw kick on a standing `semi` + `box` (the
+    overshoot's ratio tick to tick), and on a slow full-lock turn how often the cap binds under
+    the declared `friction_nm`. Then plan the plate's torque sharing one cap with the bogie's
+    side forces (what `taken` would be here, and in which order `TowHost` and the towed wheels
+    tick). It changes a force on every coupled rig: ends in a proposal. [high, plan, Opus]
 - `BaseVehicle.ACCEL_SMOOTH`: measured, awaiting the user's decision (`proposals.md`, "accLong /
   accLat / acc_vert: raw or a declared sensor filter"; `sessions/2026-11-14-accel-smooth-proof.md`).
 - The engine law's three inversions (`sessions/2026-11-12-shared-law-audit.md`, finding 9).
