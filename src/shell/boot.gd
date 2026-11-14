@@ -953,12 +953,15 @@ func _respawn() -> void:
 
 ## The overturned notice as `NoticeLine` shows it (`add_action`): the vehicle's fixed text plus the
 ## respawn control of the device in use, read from ActionRegistry; a sloppyCAN driver has none of
-## them, so the pause menu. The RESPAWN button is for the pointer (mouse or touch).
+## them, so the pause menu, unless the pointer is in use: then the button says it all. The RESPAWN
+## button is for the pointer (mouse or touch).
 static func overturned_notice(device: UiScale.Device, bridge_drives: bool,
 		touch_display: bool) -> Dictionary:
 	var respawn := ActionRegistry.find(&"respawn")
 	var how := ""
-	if bridge_drives:
+	if bridge_drives and device == UiScale.Device.POINTER:
+		pass
+	elif bridge_drives:
 		how = "RESPAWN FROM THE PAUSE MENU"
 	elif device == UiScale.Device.PAD:
 		how = "PRESS %s TO RESPAWN" % ActionRegistry.pad_for(respawn).to_upper()

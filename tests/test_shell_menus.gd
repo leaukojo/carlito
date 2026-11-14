@@ -1373,7 +1373,7 @@ func test_boot_shows_the_l1_hint_while_the_pad_drives() -> void:
 
 
 ## The overturned notice names the respawn control of the device in use, read from the registry;
-## a sloppyCAN driver is sent to the pause menu; the pointer gets the RESPAWN button.
+## a sloppyCAN driver is sent to the pause menu unless on the pointer, which gets the RESPAWN button.
 func test_the_overturned_notice_names_the_devices_respawn() -> void:
 	var D := UiScale.Device
 	var cases := [
@@ -1382,6 +1382,8 @@ func test_the_overturned_notice_names_the_devices_respawn() -> void:
 		[D.POINTER, false, false, "OVERTURNED - PRESS BACKSPACE TO RESPAWN", true],
 		[D.POINTER, false, true, "OVERTURNED", true],
 		[D.PAD, true, false, "OVERTURNED - RESPAWN FROM THE PAUSE MENU", false],
+		[D.KEYBOARD, true, false, "OVERTURNED - RESPAWN FROM THE PAUSE MENU", false],
+		[D.POINTER, true, false, "OVERTURNED", true],
 	]
 	for c: Array in cases:
 		var shown := Boot.overturned_notice(c[0], c[1], c[2])
