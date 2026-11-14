@@ -28,19 +28,8 @@ tests with different bodies are left to each unit's review.
   10 /s lag on the contract's `accLong` / `accLat` / `acc_vert`, passed 0.202 of a 2.435 m/s2
   tick-rate alternation on a standing bobtail (`sessions/2026-11-13-f1-standing-rock.md`): sorted
   as a cover, next line. [diagnose, high, Fable]
-- `BaseVehicle.ACCEL_SMOOTH` is a cover on the contract's `accLong` / `accLat` / `acc_vert`: no
-  source, its one stated reason is "so a single bump does not swamp them"
-  (`sessions/2026-11-14-accel-smooth.md`). First step, the proving run: at
-  `src/vehicles/base/base_vehicle.gd:280` set `s := 1.0` (leave `towed_body.gd:208`: roll-over
-  control reads it), run `node tools/godot_run.mjs -- --headless --path . --fixed-fps 60
-  res://tools/measure_vehicles.tscn -- <variant> 20 rest` for `semi` and `tractor-kenney`, plus one
-  driving run per body (add the `accLong` p-p column to it if only `rest` prints one), record the
-  p-p as sent per state, undo. Then trace what in `VehicleTelemetry.body_accel`'s first difference
-  produces the tick-rate content while driving; the standing part is F1's
-  (`docs/plans/parked_rocking.md`). Ends in a proposal: send raw, or keep it as a sender's filter
-  with a sourced time constant declared in the three contract descriptions (`/contract-edit`) and
-  `docs/guide/position.md`; say whether `TowedBody.accel_lat` keeps its own sourced rate. Never a
-  new filter. [medium, plan, Opus]
+- `BaseVehicle.ACCEL_SMOOTH`: measured, awaiting the user's decision (`proposals.md`, "accLong /
+  accLat / acc_vert: raw or a declared sensor filter"; `sessions/2026-11-14-accel-smooth-proof.md`).
 - The engine law's three inversions (`sessions/2026-11-12-shared-law-audit.md`, finding 9).
   `Drivetrain.fuel_to_land`, `Drivetrain.drag_fuel` and `PedalMap._row_fuel` each compute
   `(net - motoring) / span`; one "fuel for a net crank torque" function serves all three.

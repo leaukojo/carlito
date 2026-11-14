@@ -28,3 +28,27 @@ entry moves to the Queue in `summary.md`; a refused one is deleted.
   predicted-slip cap alternates the force 0 / 2x, 7b6d3be): this one must be shown not to, on a
   crawl trace, before anything lands. Prototype first, uncommitted, with before and after runs.
   [xhigh, plan]
+
+## accLong / accLat / acc_vert: raw or a declared sensor filter (2026-11-14)
+
+- **What.** `BaseVehicle.ACCEL_SMOOTH` (10 /s lag, `base_vehicle.gd:280`) has no source; its one
+  reason is "so a single bump does not swamp them" (`docs/guide/position.md`). Either (a) send
+  `body_accel` raw and drop the constant, or (b) keep a lag as the accelerometer's own filter,
+  with a time constant from a sensor datasheet page actually opened, declared in the three
+  contract descriptions (`/contract-edit`) and `position.md`. Either way `TowedBody.accel_lat`
+  stops borrowing it: it takes (b)'s figure, or its own sourced EBS sensor rate. Recommended:
+  (a), unless a source is found, since nothing is left for it to hide.
+- **Evidence.** `sessions/2026-11-14-accel-smooth-proof.md`. Standing at HEAD, raw p-p 0.001
+  m/s2 (`semi`, `tractor-kenney`). Driving, tick-rate amplitude 0.000 to 0.015 m/s2 at held
+  speeds on `sedan-sports`, `semi`, `tractor-kenney`; the large raw-vs-sent gaps are real jolts
+  (landings, shifts) cut to about half. One source left: the tractor's launch under 3 m/s,
+  0.11 to 0.28 m/s2, the speed band of `road_change`'s fade (the proposal above).
+- **Cost.** (a): three lines and a constant; `position.md`'s "smoothed a little" sentence and its
+  citation; `acc_vert`'s contract `desc` ("smoothed at the same rate", `/contract-edit`) and the
+  `vehicle_telemetry.gd:80-81` comments; `measure_vehicles` corner and sine passes and `measure_semi_launch`'s `acc_lat_g`
+  read it, so the `doc=cornering` table re-runs. (b) adds the contract edit and the source hunt.
+- **Risk.** Player-visible: a raw `accLat` reads a shift or kerb jolt at full size, and
+  `car_corner_budget`'s 4.0 m/s2 limit fails on the first such tick (the steady corner itself
+  moves by under 0.1 m/s2). The challenge's limit or hint may want a look after (a). A bridge
+  consumer sees the tractor's launch ring at full size until the proposal above lands.
+  [medium, plan, Opus]
