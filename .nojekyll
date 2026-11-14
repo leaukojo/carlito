@@ -1,0 +1,2 @@
+Presence of this file disables Jekyll on GitHub Pages. Godot emits underscore-prefixed
+filenames, which Jekyll silently drops from the published site.

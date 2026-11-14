@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Carlito</title>
+<!--
+  gh-pages root. Deliberately a plain redirect: it registers NO service worker, so
+  the stable and dev builds keep two sibling, non-overlapping worker scopes
+  (/carlito/stable/ and /carlito/dev/). A build served from this directory would
+  scope a worker over both and could serve a cached stable page for a dev URL.
+  Rewritten from .github/pages-root/ on every publish - edit it here, not on gh-pages.
+-->
+<meta http-equiv="refresh" content="0; url=./stable/">
+<link rel="canonical" href="https://leaukojo.github.io/carlito/stable/">
+<script>window.location.replace('./stable/');</script>
+</head>
+<body>
+<p>Redirecting to <a href="./stable/">Carlito</a> &mdash; the latest development build is at <a href="./dev/">dev</a>.</p>
+</body>
+</html>
