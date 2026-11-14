@@ -17,52 +17,42 @@ tests with different bodies are left to each unit's review.
 
 ## Queue (top first)
 
-Fable's items come first, in the order they are worth its credits (user, 2026-11-14: the credits
-are short and may not last the review). A Fable session takes the top one. Each also writes down,
-as findings only, what it sees in the source files it reads whole, so that unit's review on Opus
-starts from them and Fable never reads a file twice.
+Fable's list comes first and is short on purpose (user, 2026-11-14: its credits are scarce and
+may not last the review). What earns the tag, "prepared first" and the hand-back: the skill's
+§ Diagnose only. A Fable session takes the top READY item and skips one marked "after" or
+"needs". The user names more items: each is added here with the reason it is worth Fable.
 
-- One-tick caps that do not see the coupling's other force: two cases of one fault and a step, read
-  together (`tow_host.gd`, `towed_body.gd`, `articulation.gd` whole: unit 5's findings go in the
-  session file).
-  (a) The shared cap's `taken` on a towing wheel (`sessions/2026-11-13-f1-rest-guard.md`,
-  finding 3). Since d849de9 a laden `semi` released on 25 % with the hill hold off rolls back
-  927 mm, 685 before (`measure_grade -- semi rollback nohold`, against `wheel.gd` at d849de9~1);
-  every other roll-back is within 1 mm. Derived, not measured: `RayWheel.tick` takes gravity's
-  pull on the contact's own mass out of `taken`, never the trailer's pull through the coupling,
-  so a drive wheel holding a trailer loses its rolling drag under about 0.1 m/s. Trace it (the
-  drag per wheel through that roll-back, bobtail against laden) and read the steady 0.04 to
-  0.2 mm/s drift of a standing rig.
-  (b) `Articulation.YAW_CAP_SHARE` (cover sweep 6; `articulation.gd:9-12`, `yaw_friction_torque`,
-  `tow_host.gd:369-376`): half of the one-tick stop, a guess, because the towed tyres' lateral
-  caps stop the same relative yaw in the same tick. With the share at 1.0 read
-  `test_a_coupled_rig_standing_still_stays_mirror_symmetric`'s peak rate per kind; at 0.5 log the
-  relative yaw rate per tick after a yaw kick on a standing `semi` + `box`, and on a slow
-  full-lock turn how often the cap binds under the declared `friction_nm`.
-  (c) The laden `semi`'s `axle_load` steps 0.7 kg a tick standing in D with no speed sign change
-  (`measure_vehicles -- semi 20 rest`, "springs: rear axle"), and still 0.6 with the wheel's ring
-  taken out (`sessions/2026-11-14-wheel-body-one-force.md` finding 2): not the wheel's. Log per
-  tick what alternates on the tractor unit's rear axle with the box coupled and not bobtail (the
-  coupling's force on the kingpin, the yaw cap of (b), the rear wheels' `suspension_force`).
-  Write the cause and one brief per case (what `taken` is across two bodies, and in which order
-  `TowHost` and the towed wheels tick); fix nothing. The fixes change a force: each line ends
-  in a proposal. [diagnose, high, Fable]
-- `scrape onebody`'s `firetruck` FR peaks at 501 N across where the two-body run reads 217 N, the
-  same wall at +0 mm, 100 % contact (`sessions/2026-11-14-deck-start-test.md` § Measured). f7bac55
-  left it byte-equal, so the skipped body is not its cause. Trace which contact the sweep by contact
-  reads on the grazing ticks with the wall a shape of the strip's body against a body of its own,
-  and why that doubles the force across; write the cause and the brief, fix nothing. [diagnose,
-  high, Fable]
-- Only with credits left, and not judged from the code yet: unit 4's `balance_model.gd` and
-  `stability_control.gd` read for findings, each derivation checked against `docs/handling.md`
-  and against what `wheel.gd` computes (a wrong derivation passes tests written from it). No
-  other unit read is worth Fable: tests, docs, tools and the family units go to Opus or Sonnet.
-  [diagnose, high, Fable]
+1. Hand-backs: none now. A fix on Opus that hits its stop condition puts its line here, above
+   the rest. The wheel fix below is the likeliest (Fable has read `wheel.gd` and `wheel_drive.gd`
+   whole: `sessions/2026-11-14-wheel-body-one-force.md`).
+2. (ready) Unit 4's derivations: `balance_model.gd` (920 lines) and `stability_control.gd` (329),
+   each derivation checked against `docs/handling.md` and against what `wheel.gd` computes (a
+   wrong derivation passes the tests written from it, which is how the wheel's lost drive stayed
+   hidden). Where one reads the tyre's force along the wheel, check it against the tick as the
+   wheel fix leaves it (its brief below). Findings and one brief each; the rest of unit 4 is
+   Opus's. [diagnose, high, Fable]
+3. (after the wheel fix lands) What else the wheel's two forces explained. With the tick
+   reordered, re-derive from `wheel.gd` alone and say for each: gone, still there, or its own
+   brief. `surface_drag_force`'s `taken` and the laden roll-back (the towing item's (a)); the
+   rolling resistance `COMPROMISE` (`wheel.gd:571-573`: a torque inside the spin step would now
+   reach the body whole, and `taken` would go); `brake_settled_spin`'s `COMPROMISE`
+   (`:142-145`, "the spin the road lent the step"); the retarder's (`wheel_drive.gd:667-669`);
+   the links' force off last tick's `force_long` (`:490`); `TractorTelemetry.SLIP_FLOOR_KMH`.
+   [diagnose, high, Fable]
+4. (needs "gather for the high-speed swerve", below) `race` and `race-future` leave the 40 m
+   strip sideways near 280-290 km/h with zero steer (`docs/plans/realism_gaps.md` phase 4;
+   `doc=top` prints `left the strip`). From the gathered trace and the spec's figures, derive the
+   yaw mode at that speed (each axle's cornering stiffness at its load with the downforce on, the
+   aero centre, the yaw inertia), what seeds it and what makes it grow. The brief feeds the
+   plan's phase 4: no tune before the cause. [diagnose, high, Fable]
+
+Not Fable's unless handed back: the `semi`'s fuel and load under-reading
+(`docs/plans/realism_gaps.md` phase 1: a ledger of power from the fuel to the wheels, Opus), the
+towing item and `scrape onebody` (both below).
 
 Opus's and Sonnet's items:
 
-- (PROPOSED, not approved: skip it until the user approves `proposals.md` "The wheel and the body
-  exchange one force") The body takes the tyre's force at the settled slip. Cause, the map, the
+- (approved, user 2026-11-14) The body takes the tyre's force at the settled slip. Cause, the map, the
   prototype's shape and its figures: `sessions/2026-11-14-wheel-body-one-force.md`, read first.
   Wrong now: `RayWheel.tick` applies the force of the slip the tick starts on (`wheel.gd:514-561`)
   while `_integrate_spin` reacts the force of the slip its step ends on; free, the slip reverses
@@ -89,7 +79,9 @@ Opus's and Sonnet's items:
   pure, a wheel at exactly zero slip under a drive torque gains `tau / (1 + k0)`, not `tau`;
   `test_wheel_spin`'s 56 `_integrate_spin` / `settle_spin` / `road_change` sites read again
   (`test_the_road_change_is_the_body_s_along_the_wheel_faded_at_a_crawl` goes with its function).
-  Runs, at HEAD first then after (the session file has the prototype's figures to land near):
+  Runs, at HEAD first then after (the session file has the prototype's figures to land near;
+  `sessions/2026-11-13-f1-standing-rock.md` § Phase 2 has the parking and creep cells that moved
+  the last time this tick changed):
   `measure_semi_launch -- semi trailer=bobtail steady` and `-- semi steady strict`;
   `measure_vehicles -- tractor-kenney 8 trace trace_s=2.5` (no tick-to-tick alternation of `a g`
   in the take-up; 0.45 g at 694 N·m); `-- sedan 45 brake`; `-- semi 20 rest` and `rest
@@ -97,11 +89,54 @@ Opus's and Sonnet's items:
   with and without `nohold`; `measure_vehicles -- all 45 track strict`; the suite. Stop and hand
   back, with the trace and the change undone, if: a parked cell moves over 1 mm or creep loses a
   bisect step on more than one body; any stop gets longer; a launch's `a g` alternates; a body
-  that tracked straight no longer does. Then every `doc=` table re-run, `docs/vehicles.md` § Spin
+  that tracked straight no longer does (the hand-back is a line at the top of Fable's list). Then every `doc=` table re-run, `docs/vehicles.md` § Spin
   step, § Following the body, § One-tick caps and the Rejected designs line (say how this differs),
   and "Please verify": every body pulls away about a quarter of a second sooner, the tractor's
   pull-away ring on `accLong` is gone. After it: cover sweep (2) lands, (5) is re-proved, the
   bobtail's `rest reading:` sizes new limits. [high, plan, Opus]
+- (gather for the high-speed swerve: Fable's item 4) Reproduce `race` and `race-future` leaving
+  the strip (`measure_vehicles -- race,race-future 60`, the top-speed pass; `--fixed-fps 60`
+  and without, and say whether both leave). With an uncommitted probe in the tool, reverted, log
+  per tick from 240 km/h until the body leaves: speed, heading, yaw rate, the centre of mass's
+  speed across, each wheel's `force_lat`, side slip and `suspension_force`, the aero side force
+  and the downforce; and once: the yaw inertia off the solver, `aero_centre`, `downforce_front`,
+  `rear_lat_grip`, the wheelbase and the centre of mass. Name the first tick the speed across
+  passes 1 mm/s and what moved on it. A session file with the tables; no cause guessed, no tune.
+  It does not wait on the wheel fix. [medium, auto, Sonnet]
+- (retagged for Opus, user 2026-11-14; after the wheel fix lands, which rewrites the tick (a)
+  is measured in; (c)'s logging run first) One-tick caps that do not see the coupling's other
+  force: two cases of one fault and a step, read together (`tow_host.gd`, `towed_body.gd`,
+  `articulation.gd` whole: unit 5's findings go in the session file).
+  (a) The shared cap's `taken` on a towing wheel (`sessions/2026-11-13-f1-rest-guard.md`,
+  finding 3). Since d849de9 a laden `semi` released on 25 % with the hill hold off rolls back
+  927 mm, 685 before (`measure_grade -- semi rollback nohold`, against `wheel.gd` at d849de9~1);
+  every other roll-back is within 1 mm. Derived, not measured: `RayWheel.tick` takes gravity's
+  pull on the contact's own mass out of `taken`, never the trailer's pull through the coupling,
+  so a drive wheel holding a trailer loses its rolling drag under about 0.1 m/s. Trace it (the
+  drag per wheel through that roll-back, bobtail against laden) and read the steady 0.04 to
+  0.2 mm/s drift of a standing rig.
+  (b) `Articulation.YAW_CAP_SHARE` (cover sweep 6; `articulation.gd:9-12`, `yaw_friction_torque`,
+  `tow_host.gd:369-376`): half of the one-tick stop, a guess, because the towed tyres' lateral
+  caps stop the same relative yaw in the same tick. With the share at 1.0 read
+  `test_a_coupled_rig_standing_still_stays_mirror_symmetric`'s peak rate per kind; at 0.5 log the
+  relative yaw rate per tick after a yaw kick on a standing `semi` + `box`, and on a slow
+  full-lock turn how often the cap binds under the declared `friction_nm`.
+  (c) The laden `semi`'s `axle_load` steps 0.7 kg a tick standing in D with no speed sign change
+  (`measure_vehicles -- semi 20 rest`, "springs: rear axle"), and still 0.6 with the wheel's ring
+  taken out (`sessions/2026-11-14-wheel-body-one-force.md` finding 2): not the wheel's. Log per
+  tick what alternates on the tractor unit's rear axle with the box coupled and not bobtail (the
+  coupling's force on the kingpin, the yaw cap of (b), the rear wheels' `suspension_force`).
+  Write the cause and one brief per case (what `taken` is across two bodies, and in which order
+  `TowHost` and the towed wheels tick); fix nothing. The fixes change a force: each line ends
+  in a proposal. Where the logs do not explain a case, hand that case back to Fable with them.
+  [high, auto, Opus]
+- (retagged for Opus, user 2026-11-14: a measure tool's own setting) `scrape onebody`'s
+  `firetruck` FR peaks at 501 N across where the two-body run reads 217 N, the
+  same wall at +0 mm, 100 % contact (`sessions/2026-11-14-deck-start-test.md` § Measured). f7bac55
+  left it byte-equal, so the skipped body is not its cause. Trace which contact the sweep by contact
+  reads on the grazing ticks with the wall a shape of the strip's body against a body of its own,
+  and why that doubles the force across; write the cause and the brief, fix nothing. [high, auto,
+  Opus]
 - (approved, user 2026-11-14: raw) `accLong` / `accLat` / `acc_vert` leave the sim unfiltered
   (`sessions/2026-11-14-accel-smooth-proof.md`: evidence, consumers, the probe). Do:
   `base_vehicle.gd:280-283` writes `body_accel` straight to `telemetry`, and
@@ -139,12 +174,11 @@ Opus's and Sonnet's items:
     [high, auto, Sonnet]
   - (2) `measure_vehicles._sample_gates`' two-tick means (`:1812-1822` `over`, `:1828-1833`
     `xfer_mean`): they average out the take-up's drive force alternating at the tick rate under
-    `LOW_SPEED_FLOOR`, whose source is `proposals.md` "The wheel and the body exchange one
-    force". Prove: judge on the tick's own value, run the launch pass on `sedan`, `semi`,
-    `tractor-kenney`, and record per body the `front axle` gate's overshoot with and without
-    the mean. Do not land the removal while that proposal is open (the gate would fail on a
-    known fault): add the figures to the proposal's Evidence, and a line to its Cost that the
-    means, `docs/handling.md:94` and the report's "(two-tick mean)" go with it.
+    `LOW_SPEED_FLOOR`, whose source is the wheel fix above. After that fix lands: judge on the
+    tick's own value, run the launch pass on `sedan`, `semi`, `tractor-kenney`, and record per
+    body the `front axle` gate's overshoot with and without the mean. Equal: the means,
+    `docs/handling.md:94` and the report's "(two-tick mean)" go. Not equal: the session file
+    names the tick and what alternates on it, and the means stay with a Queue line for it.
     [medium, auto, Sonnet]
   - (4) `MeasureRig.ESC_CHATTER_EPS` (`tools/measure_rig.gd:272`,
     `tests/test_measure_chatter.gd:42`): the ESC's moment share flips ±0.0003 a tick on `van`'s
@@ -161,7 +195,7 @@ Opus's and Sonnet's items:
     hold, and through a pull-away. Quiet at rest and the only non-zero readings are real spin:
     propose removal (`proposals.md`, a contract signal's behaviour). Non-zero at rest: the
     session file gives its size and the wheel's speed trace; it is the free wheel's ring, so the
-    floor stays with a comment naming that proposal. A radar unit's minimum speed, from a page
+    floor stays with a comment naming the wheel fix (run this after it lands). A radar unit's minimum speed, from a page
     opened, would make it a model instead. Ends in a proposal. [high, auto, Opus]
   - (6) `Articulation.YAW_CAP_SHARE`: Fable's second item, above.
 - The engine law's three inversions (`sessions/2026-11-12-shared-law-audit.md`, finding 9).
@@ -198,6 +232,18 @@ Opus's and Sonnet's items:
   with none, cut the claim (the docs are at their character cap, so cutting helps). A native
   figure for the cast alone is in the session file. [medium, auto, Sonnet]
 
+The user's plans (`docs/plans/`, each run from its own file, never as a review item; a plan
+changes only with the user's OK). Where they meet this Queue:
+
+- `realism_gaps.md` (5 phases, not started): after the wheel fix, which moves every launch by
+  about a quarter of a second and the stops by up to 1 m, so the plan's targets are judged on
+  figures that hold. Phase 1's "investigate" is a power ledger on Opus (fuel to crank to wheels at
+  70 km/h), Fable's only on a hand-back. Phase 4's `race` / `race-future` swerve waits on Fable's
+  item 4; its other bullets do not.
+- `handbrake_fade.md` (2 phases, not started, Opus): either side of the wheel fix. Its phase 1
+  edits `wheel_drive.gd:658-662`, inside the loop the wheel fix adds a call after: the second to
+  land goes on top of the first.
+
 Deferred until units 3 and 4 are reviewed (it touches both):
 
 - Rigid crank's dead outputs (finding 2 of `sessions/2026-11-11-drivetrain-2a.md`, pruned: read
@@ -229,7 +275,7 @@ Deferred until units 3 and 4 are reviewed (it touches both):
   bars still in D, in N and on each brake; any body in N on a slight slope rolls off as before,
   and on the flat comes to rest. Known, not fixed: on the `semi` in D or N the AXLE number's last
   digit still moves by 1 kg (3 at most) on some ticks: bobtail, the free wheel's ring
-  (`proposals.md`); with a trailer, a step that is not the wheel's (Queue, the towing item).
+  (Queue, the wheel fix); with a trailer, a step that is not the wheel's (Queue, the towing item).
   Anything larger, or on TRLR, is a new finding.
 - A laden `semi` on a grade near its limit (about 25 %), if the hill hold can be off in play:
   released and floored, it rolls back about a quarter further than before F1's fix (Queue).
