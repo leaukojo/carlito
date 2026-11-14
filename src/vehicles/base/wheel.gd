@@ -548,12 +548,15 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	# Rolling resistance: the tyre's hysteresis (`rolling_crr`) and the ground deforming
 	# (`surface_drag`) share one force and one tick clamp, outside the friction circle and the spin
 	# step (a wheel in mud keeps rolling at road speed; the body slows). Two separately clamped
-	# terms could take twice the cap.
+	# terms could take twice the cap. The tyre's force along the wheel, less the part that holds
+	# a slope, is a third term on that speed: the drag takes what it leaves of the cap
+	# (`docs/vehicles.md` § One-tick caps).
 	# COMPROMISE: real rolling resistance is a moment on the wheel (the patch's pressure centre sits
 	# ahead of the axle); here it is a contact force outside the spin step. Undoing that is a torque
 	# inside the spin step and a re-check of the static hold (`docs/vehicles.md` § Holding at rest).
 	force_roll = surface_drag_force(v_long, rolling_crr + surface_drag, suspension_force,
-			long_mass, delta)
+			long_mass, delta, maxf(-signf(v_long)
+			* (f.x + long_mass * body.get_gravity().dot(forward)), 0.0))
 	body.apply_force(forward * force_roll, contact_point - body.global_position)
 	contact_force = normal * suspension_force + forward * (f.x + force_roll) + side * f.y
 	if on_beam:
@@ -982,12 +985,13 @@ static func free_spin_omega(omega_in: float, delta: float) -> float:
 ## Rolling-resistance force (N, along the wheel's forward), the tyre's and a painted surface's
 ## together: `crr * load` opposing the contact's longitudinal velocity, capped at the force that would zero that
 ## velocity in one tick on the `mass` (kg) the contact moves, so it can stop the wheel and never push
-## it backward. 0 at rest.
+## it backward. 0 at rest. `taken` (N, >= 0) is what another force of this tick already opposes that
+## velocity with (the tyre's own): it comes off the cap, which the two share.
 static func surface_drag_force(v_long: float, crr: float, normal_load: float, mass: float,
-		delta: float) -> float:
+		delta: float, taken := 0.0) -> float:
 	if crr <= 0.0 or normal_load <= 0.0:
 		return 0.0
-	var tick_cap := mass * absf(v_long) / delta
+	var tick_cap := maxf(mass * absf(v_long) / delta - taken, 0.0)
 	return clampf(-signf(v_long) * crr * normal_load, -tick_cap, tick_cap)
 
 

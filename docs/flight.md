@@ -42,9 +42,9 @@ off the object owning its state and is optional (a body without one flies the sa
 flight controller and arming state machine are not extractable: ~18 values cross stage
 boundaries.
 
-Payloads are level nodes at the level root, never under `AuthoringRoot`. Wind
-(`src/levels/base/wind_field.gd`): base flow + seeded gusts, horizontal only, `test_wind.gd`
-pinned.
+Payloads are level nodes, never under `AuthoringRoot`; Flatland's sit under a `FamilyContent`
+(there with a drone, put back on a spawn or respawn). Wind (`src/levels/base/wind_field.gd`):
+base flow + seeded gusts, horizontal only, `test_wind.gd` pinned.
 
 ## Drone: the cluster
 

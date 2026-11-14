@@ -155,7 +155,7 @@ Drive reaches the wheels from the first tick of a pull-away (the trace's `H` col
 `IDLE_CAPACITY` (`TorqueConverter.idle_scale`). COMPROMISE: that share is fitted, so creep from rest
 peaks near the measured figure (`docs/sources.md` § The converter); the law alone held 13-23 %.
 The idle controller fuels the load: the crank holds 2-6 rpm under idle, `engine_load` 7-11 %.
-Released in D1 with no pedal (`measure_grade -- all creep`; asphalt; 2026-11-08):
+Released in D1 with no pedal (`measure_grade -- all creep`; asphalt; 2026-11-13):
 
 | Body | Steepest grade held at idle |
 | --- | --- |
@@ -163,7 +163,7 @@ Released in D1 with no pedal (`measure_grade -- all creep`; asphalt; 2026-11-08)
 | `hatchback-sports` (ratio 1.0) | 5.3 % |
 | `van`, `pickup`, `pickup-flat` | 5.3-5.7 % |
 | `delivery`, `delivery-flat`, `ambulance` | 6.1-7.0 % |
-| `garbage-truck`, `firetruck` | 8.2-8.6 % |
+| `garbage-truck`, `firetruck` | 7.8-8.6 % |
 
 Every body creeps on the flat at a walking pace, inside the measured range (idle and gearing set it).
 

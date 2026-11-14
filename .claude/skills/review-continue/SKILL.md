@@ -19,9 +19,9 @@ The project wants no new features: the review trims, fixes and simplifies.
    train) only when no land unit qualifies. One item per session; a unit too large to read in
    one session is split in the map first, and one part is reviewed.
 2. **Review it** for: bloat (dead code, unreferenced files, duplicated logic), an implementation
-   more complicated than its job, bad design, false `COMPROMISE` labels, useless tests, stale
-   docs, and wrong comments or explanations. A unit's tests and its `docs/` pages are reviewed
-   with it.
+   more complicated than its job, bad design, covers over a fault (§ Covers), false `COMPROMISE`
+   labels, useless tests, stale docs, and wrong comments or explanations. A unit's tests and
+   its `docs/` pages are reviewed with it.
 3. **Prove each finding before acting on it.**
    - Dead code: no reference in `.gd`, `.tscn`, `.tres`, `project.godot`, tools or CI.
    - Useless test: break the code it covers and the test still passes (undo the break at
@@ -101,6 +101,44 @@ Each one found is sorted into:
 - **Code debt** (better code would remove it): fix it under the S/M/L rule, or queue it.
 - **Real compromise** (a modelling limit or a non-goal): the label stays, and states what is
   true and what undoing it costs.
+
+## Covers
+
+A cover is code that makes a fault stop showing instead of removing it: the fault is still
+produced upstream, and the cover sits between it and whoever would notice. The model case: a
+lag and a hysteresis on the dashboard's bars so the AXLE number does not flicker, while the truck
+rocks every tick and the bridge carries it.
+
+A review never checks that a cover is well made. It asks what the cover hides.
+
+- **Where they sit.** Smoothing, lag, hysteresis, a deadband, a rate limit, rounding or a snap
+  to zero on a readout, a signal or a state; a clamp, an epsilon or a `max(x, small)` guarding
+  a value that should not get there; a special case for one body, one level or one frame
+  ("skip the first tick"); a retry or a re-run; a test tolerance, settle time or skip widened
+  until the test passed; a comment that says "avoids", "hides", "prevents flicker / jitter /
+  a glitch", "workaround", "for stability" without saying what produces the thing avoided.
+- **Tell a cover from a model.** It is a model when it stands for something in the real machine
+  or the real driver and says so (`KeyShaper` is a hand on a wheel; a sender's filter with a
+  sourced time constant; the 60 Hz clamps `src/vehicles/CLAUDE.md` forbids weakening). It is a
+  cover when the only reason it gives, or the commit that added it gives (`git log -S`), is a
+  symptom.
+- **Prove it.** Take the cover out (undo at once) and measure what appears: which value, how
+  large, in which state, on which bodies. The session file records that, and the source as far
+  as the session traced it. A cover with nothing behind it any more is dead code: remove it.
+- **Fix the source, then remove the cover.** Both are one finding, sized by the source's fix
+  under the S/M/L rule and bound by step 5: a fix that changes driving is a proposal. Where the
+  fix is queued or proposed, the cover's own removal is judged apart:
+  - on a display, or in a test or a tool: it goes now, and the fault it showed is listed under
+    "Please verify" as known (a visible fault gets fixed; a hidden one ships);
+  - on a contract signal or in the sim: a proposal, recommending removal, with the measured
+    fault as its evidence;
+  - where removing it would break driving (a clamp holding a body together): it stays until
+    the fix, with a comment naming the Queue item.
+- **Add the guard.** A test that fails on the fault itself (the body's value is steady), and,
+  where a whole class of cover can be forbidden, one that forbids it
+  (`test_no_instrument_smooths_its_value`).
+- **Never propose a new cover**, here or as the fix of another finding: a Queue line or proposal
+  for a symptom names the source to find, and says "no filter on the display or the signal".
 
 ## Limits
 

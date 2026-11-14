@@ -125,6 +125,31 @@ func test_ui_scale_tracks_the_device_and_focuses_on_a_nav_press() -> void:
 	assert_int(ui.device()).is_equal(UiScale.Device.POINTER)
 
 
+## A stick held over is one navigation press, not one per motion event: its crossing looks for a
+## control to focus, the events that follow while it stays over do not look again.
+func test_ui_scale_takes_a_held_stick_as_one_press() -> void:
+	var ui: UiScale = auto_free(UiScale.new())
+	add_child(ui)
+	var overlay := Control.new()
+	ui.add_child(overlay)
+	var button := Button.new()
+	overlay.add_child(button)
+	var push := InputEventJoypadMotion.new()
+	push.axis = JOY_AXIS_LEFT_Y
+	push.axis_value = 0.9
+	ui._input(push)
+	assert_bool(button.has_focus()).is_true()
+	button.release_focus()
+	ui._input(push)  # still over: no second search
+	assert_bool(button.has_focus()).is_false()
+	assert_int(ui.device()).is_equal(UiScale.Device.PAD)
+	var back := InputEventJoypadMotion.new()
+	back.axis = JOY_AXIS_LEFT_Y
+	ui._input(back)
+	ui._input(push)  # a new push
+	assert_bool(button.has_focus()).is_true()
+
+
 ## Every device used this session is remembered past the last one (the CONTROLS sheet's columns),
 ## and a finger is told apart from the mouse.
 func test_ui_scale_remembers_every_device_used() -> void:
@@ -1166,8 +1191,12 @@ func _run_challenge(boot: Boot, id: String) -> void:
 	boot._finish_load(load(LevelRegistry.scene_of(def.arena)) as PackedScene)
 
 
+## A test that leaves an attempt running leaves the autoloads' challenge lock on: under it a
+## driving press from a connected pad raises the lock's notice in the next test.
 func after_test() -> void:
 	get_tree().paused = false
+	InputRouter.set_bridge_only(false)
+	Bridge.set_challenge(false)
 
 
 ## A home-level load spawns the picked body with the picked attachment, then forgets it.

@@ -115,6 +115,16 @@ const FREEREV_PEDALS: Array[float] = [0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0]
 const FREEREV_SETTLE_S := 1.5
 const FREEREV_HOLD_S := 4.0
 const FREEREV_AVG_S := 1.0
+## --- standing still (`rest[=n|brake|handbrake]`, instead of every other pass) ---
+## Stood on the strip for REST_SETTLE_S in D with the pedals up (`rest`), in N, on a REST_BRAKE_PCT
+## foot brake or on the handbrake, the last REST_SAMPLE_S read per tick: how often the body's speed
+## changes sign, its swing and drift, the rear springs' swing, and per axle whether the wheel's rim
+## lands on the road's speed while the contact lands on the rim's (wheel and body swapping speeds),
+## the tyre force against its one-tick cap and how often the rolling drag flips. `crr=<x>` sets
+## every wheel's rolling resistance for the pass, the coupled trailer's too.
+const REST_SETTLE_S := 10.0
+const REST_SAMPLE_S := 3.0
+const REST_BRAKE_PCT := 30.0
 ## --- handbrake turn (`handbrake`, instead of every other pass) ---
 ## Up to HB_SPEED on the strip, then a HB_STEER step with the throttle lifted, held HB_HOLD_S and
 ## released straight for HB_AFTER_S: once with the steer alone, once with the handbrake pulled
@@ -396,7 +406,7 @@ const XWIND_MARKS: Array[float] = [1.0]
 # --- doc presets (`doc=<id>` as arg 1) -------------------------------------
 ## Each runs a fixed set and rewrites its `docs/vehicle_measurements.md` region (`doc_region.gd`). Cornering
 ## and accel run every wheel-driven variant (accel twice, floored then `tc`, each only to
-## 100 km/h); braking the set below, heavies from 90 % of their top.
+## 100 km/h), top the same once to its settled speed; braking the set below, heavies from 90 % of their top.
 const DocRegion := preload("res://tools/doc_region.gd")
 const DOC_BRAKING: Array[String] = ["sedan", "pickup", "delivery", "garbage-truck", "semi", "race"]
 ## doc=cruise: one body per shift map (the car's, the sports car's, the governed light
@@ -413,6 +423,9 @@ const DOC_WIND: Array[String] = ["sedan", "delivery", "garbage-truck", "semi"]
 ## doc=freerev: one body per pedal map's free crank (PETROL, a light and a heavy LINEAR, ALL_SPEED).
 const DOC_FREEREV: Array[String] = ["sedan", "delivery", "semi", "tractor-kenney"]
 const DOC_SECONDS := 60.0
+## doc=top: every wheel-driven variant floored until its speed settles; the cap leaves a body at
+## 250 km/h inside RUN_LENGTH.
+const DOC_TOP_SECONDS := 90.0
 ## doc=tyres: a passenger car, a light truck and a heavy truck, each on every class its fit takes
 ## (`TyreCatalog.fitting`) over each of DOC_TYRE_SURFACES. A run is three passes: a `tc` launch to
 ## TYRES_LAUNCH_KMH, the cornering pass, and a full-pedal stop from TYRES_STOP_KMH.
@@ -426,7 +439,7 @@ const REFERENCE_SPECS_PATH := "res://tools/vehicle_reference_specs.json"
 const REPORT_DIR := "res://reports/specs_sweep/"
 
 enum Phase { ACCEL, COAST, TRACKING, CORNERING, BRAKING, STALL, HANDBRAKE, STEP, CRUISE, CIRCLE,
-		KERB, SIDE, HITCH, PLOUGH, ARM, SINE, FREEREV, DONE }
+		KERB, SIDE, HITCH, PLOUGH, ARM, SINE, FREEREV, REST, DONE }
 ## Where a step-steer run is (`_tick_step`).
 enum Step { RUN_UP, SETTLE, STEPPED }
 ## Where a sine-with-dwell run is (`_tick_sine`): RAMP finds A, STEER is a run of the series.
@@ -506,6 +519,14 @@ var _freerev_rpm := 0.0       ## rpm summed over the step's averaging window
 var _freerev_ticks := 0
 var _freerev_cut := false     ## the limiter cut inside the step's averaging window
 var _freerev_rows: Array[Dictionary] = []
+var _rest := false
+var _rest_state := ""         ## "" (D, pedals up), "n", "brake" or "handbrake"
+var _rest_crr := NAN          ## `crr=`: every wheel's rolling resistance for the pass
+var _rest_rows: Array[Dictionary] = []          ## one per tick of the sampled window
+var _rest_steps := PackedFloat64Array()         ## mean |speed step| a tick, per second of the pass
+var _rest_step_sum := 0.0
+var _rest_step_n := 0
+var _rest_prev_v := NAN
 var _probe_on := false        ## past the settle / run-up, into the measured window
 var _probe_t := 0.0
 var _probe_x0 := Vector3.ZERO
@@ -914,6 +935,13 @@ func _ready() -> void:
 	_stall = flags.has("stall")
 	_hb_turn = flags.has("handbrake")
 	_freerev = flags.has("freerev")
+	_rest_state = MeasureRig.flag(flags, "rest=").to_lower()
+	_rest = flags.has("rest") or _rest_state != ""
+	if not _rest_state in ["", "n", "brake", "handbrake"]:
+		printerr("rest=%s: expected rest, rest=n, rest=brake or rest=handbrake" % _rest_state)
+		get_tree().quit(1)
+		return
+	_rest_crr = MeasureRig.float_flag(flags, "crr=", NAN)
 	_step = flags.has("step")
 	_sine = flags.has("sine")
 	_circle = flags.has("circle")
@@ -1020,6 +1048,8 @@ func _ready() -> void:
 			_corner = true
 		elif _doc == "accel":
 			_tc = false  # the preset runs each body floored, then `tc`
+		elif _doc == "top":
+			_seconds = DOC_TOP_SECONDS
 		elif _doc == "steer":
 			_step = true
 		elif _doc == "tyres":
@@ -1040,7 +1070,7 @@ func _ready() -> void:
 			_trailer = "box"
 		elif _doc != "cruise" and _doc != "wind":
 			printerr(("unknown doc preset '%s' — expected doc=braking, doc=cornering, doc=accel,"
-					+ " doc=cruise, doc=wind, doc=steer, doc=tyres, doc=esc, doc=freerev or"
+					+ " doc=top, doc=cruise, doc=wind, doc=steer, doc=tyres, doc=esc, doc=freerev or"
 					+ " doc=trailer_roll") % _doc)
 			get_tree().quit(1)
 			return
@@ -1062,12 +1092,12 @@ func _ready() -> void:
 				or not is_nan(_ackermann) or not is_nan(_roll_steer.x) or not is_nan(_angdamp) \
 				or _corner_ramp_s != CORNER_RAMP_S \
 				or _circle or _hitch_pass or _plough_pass or _kerb or _side_pass or _arm_pass \
-				or _cruise_probe() \
+				or _rest or _cruise_probe() \
 				or _tyre != "" or _surface >= 0 or not _step_speeds.is_empty() or _xwind or _headtail \
 				or _wind_base != Vector3.ZERO:
 			printerr("trace / notc / gear= / j= / rear_lat_grip= / bar_rear= / bar_front= /"
 					+ " cornering_peak= / speeds= / ackermann= / rollsteer= / compliance= / angdamp= /"
-					+ " ramp= / circle / hitch / plough / kerb / side /"
+					+ " ramp= / circle / hitch / plough / kerb / side / rest /"
 					+ " pedal= / cruise /"
 					+ " kickdown / pulse / xwind / headtail / wind= / tyre= / surface= change the passes a"
 					+ " doc preset tabulates:"
@@ -1102,7 +1132,7 @@ func _ready() -> void:
 			_co_strip = strip
 			_load_course(strip)
 		add_child(strip)
-	if which == "all" or _doc == "cornering" or _doc == "accel":
+	if which == "all" or _doc == "cornering" or _doc == "accel" or _doc == "top":
 		_queue.assign(MeasureRig.wheel_driven_variants())
 	elif _doc == "braking":
 		_queue = DOC_BRAKING.duplicate()
@@ -1217,6 +1247,8 @@ func _next_vehicle() -> void:
 			DocRegion.write(_doc, _cornering_table())
 		elif _doc == "accel":
 			DocRegion.write(_doc, _accel_table())
+		elif _doc == "top":
+			DocRegion.write(_doc, _top_table())
 		elif _doc == "cruise":
 			DocRegion.write(_doc, _cruise_table())
 		elif _doc == "wind":
@@ -1282,6 +1314,8 @@ func _next_vehicle() -> void:
 		_start_stall()
 	elif _freerev:
 		_start_freerev()
+	elif _rest:
+		_start_rest()
 	elif _cruise_probe():
 		_start_cruise()
 	elif _hb_turn:
@@ -1459,6 +1493,8 @@ func _physics_process(delta: float) -> void:
 		_tick_stall(delta)
 	elif _phase == Phase.FREEREV:
 		_tick_freerev()
+	elif _phase == Phase.REST:
+		_tick_rest(delta)
 	elif _phase == Phase.HANDBRAKE:
 		_tick_handbrake(delta)
 	elif _phase == Phase.STEP:
@@ -2704,6 +2740,7 @@ func _report_accel(capped: bool) -> void:
 	_current["dist"] = _dist
 	_current["run_length"] = RUN_LENGTH
 	_current["ran_out"] = ran_out
+	_current["off_edge"] = off_edge
 	# Force balance vs. the body's own acceleration: `resistance` matches the spec's declared
 	# `0.5*rho*Cd*A*v^2 + crr*N`, `tyres` matches `axle_torque / r`, `rake` is the suspension
 	# force along travel (~0 on flat ground). Summed over the whole combination so a
@@ -2744,6 +2781,9 @@ func _report_accel(capped: bool) -> void:
 		print("  %-13s : tops out in gear %d of %d — the taller ratios never engage"
 				% ["note", top_gear, spec.gear_ratios.size()])
 		_current["gear_note"] = "tops out in gear %d of %d" % [top_gear, spec.gear_ratios.size()]
+	if _doc == "top":
+		_finish_vehicle()  # the accel pass alone
+		return
 	if _coast:
 		print("  %-13s : %s" % ["hull contacts", _contact_label("accel")])
 		_current["accel_contacts"] = _contact_label("accel")
@@ -3009,6 +3049,186 @@ func _next_freerev_step() -> void:
 	_freerev_ticks = 0
 	_freerev_cut = false
 	MeasureRig.drive(FREEREV_PEDALS[_freerev_step] * 100.0, 100.0, 0.0, false, InputRouter.GEAR_N)
+
+
+func _start_rest() -> void:
+	_reset_pass(Phase.REST)
+	_rest_rows = []
+	_rest_steps = PackedFloat64Array()
+	_rest_step_sum = 0.0
+	_rest_step_n = 0
+	_rest_prev_v = NAN
+	InputRouter.set_manual_gearbox(_rest_state == "n")
+	MeasureRig.drive(0.0, REST_BRAKE_PCT if _rest_state == "brake" else 0.0, 0.0,
+			_rest_state == "handbrake", InputRouter.GEAR_N if _rest_state == "n" else 1)
+
+
+## Sampled BEFORE the body's own tick (a parent ticks first): the rim and contact speeds a row holds
+## are the pair that tick is about to read; its forces are the tick before's.
+func _tick_rest(delta: float) -> void:
+	var towed := MeasureRig.towed(_car)
+	if not is_nan(_rest_crr):
+		for w in _car.wheels:
+			w.rolling_crr = _rest_crr
+		if towed != null:
+			for w in towed.wheels:
+				w.rolling_crr = _rest_crr
+	var forward := -_car.global_basis.z
+	var v := _car.linear_velocity.dot(forward)
+	if not is_nan(_rest_prev_v):
+		_rest_step_sum += absf(v - _rest_prev_v)
+		_rest_step_n += 1
+	_rest_prev_v = v
+	if _rest_step_n >= Engine.physics_ticks_per_second:
+		_rest_steps.append(_rest_step_sum / _rest_step_n)
+		_rest_step_sum = 0.0
+		_rest_step_n = 0
+	if _t >= REST_SETTLE_S - REST_SAMPLE_S:
+		var rim := PackedFloat64Array()
+		var road := PackedFloat64Array()
+		var force := PackedFloat64Array()
+		var cap := PackedFloat64Array()
+		var roll := PackedFloat64Array()
+		var held := 0
+		for w in _car.wheels:
+			rim.append(w.omega * w.wheel_radius)
+			road.append(VehicleMath.point_velocity(_car, w.contact_point).dot(forward)
+					if w.in_contact else NAN)
+			force.append(w.force_long)
+			cap.append(w.long_cap)
+			roll.append(w.force_roll)
+			if w._spin_held:
+				held += 1
+		_rest_rows.append({"v": v, "acc": _car.telemetry.acc_long, "held": held,
+				"rear_kg": VehicleTelemetry.axle_load_kg(_car.drive.rear_suspension_force()),
+				"towed_kg": VehicleTelemetry.axle_load_kg(towed.bogie_suspension_force())
+						if towed != null else 0.0,
+				"rim": rim, "road": road, "force": force, "cap": cap, "roll": roll})
+	if _t < REST_SETTLE_S:
+		return
+	_print_rest(delta, towed != null)
+	InputRouter.set_manual_gearbox(false)
+	MeasureRig.drive(100.0, 0.0)
+	_finish_vehicle()
+
+
+func _print_rest(delta: float, has_towed: bool) -> void:
+	var window := _rest_rows.size() * delta
+	var states := {"": "D, pedals up", "n": "N", "brake": "D, foot brake %.0f %%" % REST_BRAKE_PCT,
+			"handbrake": "D, handbrake"}
+	var held: int = _rest_rows[_rest_rows.size() - 1]["held"]
+	print("  %-13s : %s, %s%s%s; clutch %s, gear %d, hill hold %s, %d of %d wheels held" % ["rest",
+			_variant, states[_rest_state], ", " + _trailer if _trailer != "" else "",
+			"" if is_nan(_rest_crr) else ", crr %.4f" % _rest_crr,
+			Drivetrain.CouplingState.keys()[_car.drivetrain.coupling_state],
+			_car.drivetrain.gear_byte, "on" if _car.drive.hill_holding else "off", held,
+			_car.wheels.size()])
+	var speeds := _rest_series("v")
+	var speed := _swing(speeds, window)
+	var raw := PackedFloat64Array()
+	for i in range(1, speeds.size()):
+		raw.append((speeds[i] - speeds[i - 1]) / delta)
+	print(("  %-13s : speed: sign changes %.1f /s, p-p %.2f mm/s, mean %+.2f mm/s; raw accel p-p"
+			+ " %.3f m/s2, accLong as sent p-p %.3f m/s2") % ["", speed["flips"],
+			float(speed["pp"]) * 1000.0, float(speed["mean"]) * 1000.0, _swing(raw, window)["pp"],
+			_swing(_rest_series("acc"), window)["pp"]])
+	var rear := _swing(_rest_series("rear_kg"), window)
+	var bogie := _swing(_rest_series("towed_kg"), window)
+	print("  %-13s : springs: rear axle p-p %.1f kg, %.1f kg a tick%s" % ["", rear["pp"],
+			rear["step"], ("; towed bogie p-p %.1f kg, %.1f kg a tick" % [bogie["pp"], bogie["step"]])
+			if has_towed else ""])
+	for is_rear: bool in [false, true]:
+		print("  %-13s : %s" % ["", _rest_axle(is_rear, window)])
+	var steps := PackedStringArray()
+	for s in _rest_steps:
+		steps.append("%.2f" % (s * 1000.0))
+	print("  %-13s : speed step a tick, by second (mm/s): %s" % ["", " ".join(steps)])
+
+
+## `key`'s value on every row of the sampled window.
+func _rest_series(key: String) -> PackedFloat64Array:
+	var xs := PackedFloat64Array()
+	for row in _rest_rows:
+		xs.append(float(row[key]))
+	return xs
+
+
+## A series over `window` s: peak to peak (`pp`), `mean`, sign changes a second (`flips`) and the
+## mean change from one tick to the next (`step`).
+static func _swing(xs: PackedFloat64Array, window: float) -> Dictionary:
+	var lo := INF
+	var hi := -INF
+	var sum := 0.0
+	var flips := 0
+	var step := 0.0
+	for i in xs.size():
+		lo = minf(lo, xs[i])
+		hi = maxf(hi, xs[i])
+		sum += xs[i]
+		if i > 0:
+			step += absf(xs[i] - xs[i - 1])
+			if signf(xs[i]) != signf(xs[i - 1]):
+				flips += 1
+	if xs.is_empty():
+		return {"pp": 0.0, "mean": 0.0, "flips": 0.0, "step": 0.0}
+	return {"pp": hi - lo, "mean": sum / xs.size(), "flips": flips / maxf(window, 1e-9),
+			"step": step / maxi(xs.size() - 1, 1)}
+
+
+## One axle's wheels over the sampled window: the contact's mean speed; how far the rim lands from
+## the road's speed of the tick before, and the contact from the rim's, each over that speed's mean
+## size (0 = lands on it: both near 0 is the wheel and the body swapping speeds); the tyre force
+## over its one-tick cap; the rolling drag and its sign changes a second.
+func _rest_axle(rear: bool, window: float) -> String:
+	var road_sum := 0.0
+	var rim_sum := 0.0
+	var rim_off := 0.0
+	var road_off := 0.0
+	var force_sum := 0.0
+	var cap_sum := 0.0
+	var drag_sum := 0.0
+	var flips := 0
+	var pairs := 0
+	var wheels := 0
+	for wi in _car.wheels.size():
+		if _car.wheels[wi].is_rear != rear:
+			continue
+		wheels += 1
+		for i in _rest_rows.size():
+			var force: PackedFloat64Array = _rest_rows[i]["force"]
+			var cap: PackedFloat64Array = _rest_rows[i]["cap"]
+			var roll: PackedFloat64Array = _rest_rows[i]["roll"]
+			force_sum += absf(force[wi])
+			cap_sum += cap[wi]
+			drag_sum += absf(roll[wi])
+			if i == 0:
+				continue
+			var prev_roll: PackedFloat64Array = _rest_rows[i - 1]["roll"]
+			if signf(roll[wi]) != signf(prev_roll[wi]):
+				flips += 1
+			var prev_road: PackedFloat64Array = _rest_rows[i - 1]["road"]
+			var prev_rim: PackedFloat64Array = _rest_rows[i - 1]["rim"]
+			var road: PackedFloat64Array = _rest_rows[i]["road"]
+			var rim: PackedFloat64Array = _rest_rows[i]["rim"]
+			if is_nan(prev_road[wi]) or is_nan(road[wi]):
+				continue
+			pairs += 1
+			road_sum += absf(prev_road[wi])
+			rim_sum += absf(prev_rim[wi])
+			rim_off += absf(rim[wi] - prev_road[wi])
+			road_off += absf(road[wi] - prev_rim[wi])
+	if wheels == 0 or pairs == 0:
+		return "%s axle: no wheel on the ground" % ("rear" if rear else "front")
+	var samples := float(wheels * _rest_rows.size())
+	# A ratio over a speed under a micrometre a second says nothing: the wheel or the body is still.
+	var still := 1e-6 * pairs
+	return ("%s axle: contact speed %.2f mm/s; the rim lands %s off the road's speed, the contact"
+			+ " %s off the rim's; tyre force %.2f of its cap; drag %.0f N a wheel, flips %.1f /s") % [
+			"rear" if rear else "front", road_sum / pairs * 1000.0,
+			"%.2f" % (rim_off / road_sum) if road_sum > still else "- (road still)",
+			"%.2f" % (road_off / rim_sum) if rim_sum > still else "- (rim still)",
+			force_sum / maxf(cap_sum, 1e-9), drag_sum / samples,
+			flips / (wheels * maxf(window, 1e-9))]
 
 
 func _start_handbrake_run() -> void:
@@ -5745,6 +5965,48 @@ func _accel_table() -> Array[String]:
 		var tc_loss: Dictionary = e.get("launch_tc", {}).get("loss", {}).get(LAUNCH_MARKS[0], {})
 		cells.append("%s / %s" % [_grip_cell(loss), _grip_cell(tc_loss)])
 		lines.append("| %s | %s |" % [label, " | ".join(cells)])
+	return lines
+
+
+## The `top` region: every wheel-driven variant's floored top speed beside the real-world
+## reference's, and the quarter mile.
+func _top_table() -> Array[String]:
+	var lines := DocRegion.wrap(("%s (`measure_vehicles -- doc=top`; per body `-- <variant> %.0f`):"
+			+ " floored from a standstill on the strip until the speed gains under %.1f %% in %.0f s"
+			+ " (`settled`), or the cap (`time cap`: a floor, not the top) or the strip (`strip ran"
+			+ " out`, or `left the strip` over its side: the peak before it) ends the run; `lost`: the"
+			+ " body fell back from its peak. Beside it the gear and"
+			+ " rpm there, the real-world reference (`tools/vehicle_reference_specs.json`), the"
+			+ " measured top over it, and the quarter mile against the reference's.")
+			% [DocRegion.measured(), _seconds, SETTLE_REL * 100.0, SETTLE_WINDOW])
+	lines.append_array(["", "| Body | Top | Gear, rpm | Ref | Of ref | Quarter mile / ref |",
+			"| --- | --- | --- | --- | --- | --- |"])
+	for e in _sweep:
+		if not e.has("top_kmh"):
+			continue
+		var label := "`%s`" % e["variant"]
+		if float(e.get("towed_kg", 0.0)) > 1.0:
+			label += " + %.0f t towed" % (float(e["towed_kg"]) / 1000.0)
+		var ref: Dictionary = _reference.get(e["variant"], {})
+		var how := str(e["top_label"]).trim_prefix("top (").trim_suffix(")")
+		if e["off_edge"]:
+			how = "left the strip"
+		elif e["ran_out"]:
+			how = "strip ran out"
+		var quarter := "-"
+		if (e["marks"] as Dictionary).has("quarter"):
+			var q: Vector2 = e["marks"]["quarter"]
+			quarter = "%.1f s at %.0f km/h" % [q.x, q.y]
+		if ref.has("quarter_mile_s"):
+			quarter += " / %.1f s at %.0f km/h" % [ref["quarter_mile_s"],
+					ref.get("quarter_mile_kmh", 0.0)]
+		var ref_top := "-"
+		var of_ref := "-"
+		if ref.has("top_speed_kmh"):
+			ref_top = "%.0f km/h" % ref["top_speed_kmh"]
+			of_ref = "%.2f" % (float(e["top_kmh"]) / float(ref["top_speed_kmh"]))
+		lines.append("| %s | %.0f km/h, %s | D%d, %.0f rpm | %s | %s | %s |" % [label, e["top_kmh"],
+				how, e["top_gear"], e["top_rpm"], ref_top, of_ref, quarter])
 	return lines
 
 

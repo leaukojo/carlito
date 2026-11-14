@@ -49,6 +49,108 @@ func test_rolling_and_surface_drag_share_one_clamp() -> void:
 			.is_equal_approx(-1800.0, 1e-6)
 
 
+func test_the_drag_takes_what_another_force_leaves_of_the_cap() -> void:
+	# The same 1800 N cap with 1000 N of it already taken against the motion: 800 N are left.
+	assert_float(WheelScript.surface_drag_force(0.1, 1.0, 5000.0, 300.0, TICK, 1000.0)) \
+			.is_equal_approx(-800.0, 1e-6)
+	assert_float(WheelScript.surface_drag_force(-0.1, 1.0, 5000.0, 300.0, TICK, 1000.0)) \
+			.is_equal_approx(800.0, 1e-6)
+	# All of it taken, or more: no drag, and never a push the other way.
+	assert_float(WheelScript.surface_drag_force(0.1, 1.0, 5000.0, 300.0, TICK, 1800.0)).is_equal(0.0)
+	assert_float(WheelScript.surface_drag_force(0.1, 1.0, 5000.0, 300.0, TICK, 9000.0)).is_equal(0.0)
+	# At speed the cap is far off: a full brake's force takes nothing off the drag, to the bit.
+	assert_float(WheelScript.surface_drag_force(10.0, 0.2, 5000.0, 300.0, TICK, 5000.0)) \
+			.is_equal(WheelScript.surface_drag_force(10.0, 0.2, 5000.0, 300.0, TICK))
+
+
+## One wheel on a 300 kg corner, its spin at 0, ticked once on a kinematic body moving `v` m/s
+## along the wheel over flat ground: a locked wheel's contact at that speed.
+func _sliding_wheel(v: float) -> WheelScript:
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	_box(root, Vector3(4.0, 1.0, 4.0), Vector3(0.0, -0.5, 0.0))
+	var body := RigidBody3D.new()
+	body.freeze = true
+	body.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	body.collision_layer = 0
+	root.add_child(body)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var gd: GroundDriveSpecScript = GroundDriveSpecScript.new()
+	gd.wheel_radius = 0.36
+	gd.wheel_inertia = 1.0
+	gd.tyre_half_width = 0.1
+	gd.rest_length = 0.3
+	gd.spring_rate = 100000.0
+	gd.rolling_resistance = 0.02
+	var w := WheelScript.new(Vector3(0.0, 0.6, 0.0), false, true, null, 300.0)
+	w.apply_suspension(gd)
+	body.linear_velocity = Vector3(0.0, 0.0, -v)  # forward is -Z
+	w.tick(body, gd, root.get_world_3d().direct_space_state, 0.0, 0.0, TICK, [] as Array[Node])
+	return w
+
+
+func test_the_tyre_force_and_the_drag_together_never_carry_a_contact_through_zero() -> void:
+	# A crawl the tyre's force alone stops inside the tick (it sits at its one-tick cap): the drag
+	# has none of the cap left. Each under a cap of its own, the two stop the contact twice over and
+	# send it backward, every tick: a standing body rocking at the tick rate.
+	for v: float in [0.01, -0.01, 0.002]:
+		var w: WheelScript = await _sliding_wheel(v)
+		var cap := 300.0 * absf(v) / TICK
+		assert_bool(w.in_contact).is_true()
+		assert_float(w.force_long * v).is_less(0.0)
+		assert_float(absf(w.force_long)).is_greater(0.9 * cap)
+		assert_float(w.force_roll * v).is_less_equal(0.0)
+		assert_float(absf(w.force_long + w.force_roll)).is_less_equal(cap * (1.0 + 1e-6))
+	# A slide from speed is far inside the cap: the whole drag beside the tyre's force.
+	var fast: WheelScript = await _sliding_wheel(10.0)
+	assert_float(fast.force_roll).is_equal_approx(-0.02 * fast.suspension_force, 1e-6)
+
+
+## A free wheel and the `mass` (kg) its contact moves, on `fz` N at `crr`, rolling together at
+## `v0` m/s and left alone: the contact's speed after each of `ticks`, stepped the way
+## `RayWheel.tick` builds the force (the slip force under its one-tick cap, the drag on what that
+## leaves, then the spin step).
+func _free_pair_speeds(mass: float, fz: float, crr: float, v0: float,
+		ticks: int) -> PackedFloat64Array:
+	var w := _wheel()
+	var r := _spec().wheel_radius
+	w.omega = v0 / r
+	var v := v0
+	var speeds := PackedFloat64Array()
+	for i in ticks:
+		var floor_vel := WheelScript.slip_floor_for(fz, mass, _curve(), TICK)
+		var slip_vel := w.omega * r - v
+		var cap := mass * absf(slip_vel) / TICK
+		var f := clampf(WheelScript.combined_slip_force(slip_vel / maxf(absf(v), floor_vel), 0.0,
+				fz, fz, _curve()).x, -cap, cap)
+		var drag := WheelScript.surface_drag_force(v, crr, fz, mass, TICK,
+				maxf(-signf(v) * f, 0.0))
+		w._integrate_spin(0.0, -f * r, 0.0, TICK, slip_vel, v)
+		v += (f + drag) / mass * TICK
+		speeds.append(v)
+	return speeds
+
+
+func test_a_free_wheel_and_its_body_roll_to_rest_and_never_back() -> void:
+	# A semi's drive corner (19 kN on a 1500 kg cap mass, the force under its cap) and a heavier one
+	# on the raised floor (the force at the cap), on a commercial radial and in mud.
+	for fz: float in [19000.0, 30000.0]:
+		for crr: float in [0.007, 0.007 + 0.2]:
+			var speeds := _free_pair_speeds(1500.0, fz, crr, 0.05, 900)
+			var label := "%.0f N, crr %.3f" % [fz, crr]
+			var worst_back := 0.0
+			var last := 0.0
+			for i in speeds.size():
+				worst_back = minf(worst_back, speeds[i])
+				if i >= speeds.size() - 30:
+					last = maxf(last, absf(speeds[i]))
+			assert_float(worst_back).override_failure_message("%s: rolled back at %.6f m/s"
+					% [label, worst_back]).is_greater_equal(-1e-9)
+			assert_float(last).override_failure_message("%s: still %.6f m/s after 15 s"
+					% [label, last]).is_less(1e-4)
+
+
 func test_a_wheel_carries_the_specs_rolling_resistance_and_none_on_a_side_slide() -> void:
 	var gd := _spec()
 	gd.rolling_resistance = 0.012

@@ -2,11 +2,17 @@
 
 Protocol: `.claude/skills/review-continue/SKILL.md`. Launch with "continue reviewing".
 
-`COMPROMISE` mentions after unit 3a: 33 in `src kit tools tests`, 21 in `docs` (count with
+`COMPROMISE` mentions at f78f937: 34 in `src kit tools tests` (6cd404f added
+`RayWheel.LYING_DEG`'s: a real one, it stays), 21 in `docs` (count with
 `grep -rI COMPROMISE <dirs> | wc -l`). Goal: only real ones keep the label.
 
-Next session: the Queue's top item (the engine law's three inversions): effort `high`, auto mode,
-Fable (the drivetrain's engine law), after `/clear`.
+Next session: the Queue's top item (F1's rest, then F2).
+
+The ui_and_gamepad_fixes plan's commits (d8e5afa..f78f937) were reviewed on the user's request in
+`sessions/2026-11-13-ui-gamepad-plan-review.md`: the dashboard bars' display lag removed (it hid
+F1 on every bar; `test_no_instrument_smooths_its_value` guards it), `FamilyContent` tested and
+its crates put back on a respawn as the plan says, a held stick no longer searching the HUD every
+motion event, and the plan's two open findings queued as F1 and F2.
 
 The slip floor's two sites ran in `sessions/2026-11-12-slip-floor-sites.md`: a lifted wheel's ABS
 floor and TC ceiling read the body's `slip_floor` (`suv-luxury`'s lone grade run unchanged);
@@ -25,6 +31,28 @@ tests with different bodies are left to each unit's review.
 
 ## Queue (top first)
 
+- F1's rest (`docs/plans/parked_rocking.md`, State): the fix is in (`wheel.gd`, the drag shares
+  the tyre force's one-tick cap; `test_wheel_spin`). Left of phase 3: `measure_semi_launch
+  steady`'s rest reading failing `strict`, then the plan distilled and deleted. [high, auto]
+- HIGH PRIORITY (user, 2026-11-13). F2: a wheel on the ground with its side in a wall reads the
+  wall's normal (`sessions/2026-11-13-ui-gamepad-plan-review.md` § F2: the mechanism, the test
+  that pins the pose, three directions). `RayWheel._contact_query` takes the deepest rest
+  contact's normal, so that tick the whole spring load pushes the body off the wall and the corner
+  carries nothing. Start with a failing test that asserts the ground's normal in
+  `test_a_wall_in_the_wheels_side_leaves_its_contact_as_it_reads`'s pose and a `measure_vehicles`
+  pass scraping a wall; the fix changes a contact, so it ends in a proposal. [xhigh, plan]
+- (user, 2026-11-13) The cover sweep (the skill's § Covers), across every unit at once and not
+  waiting for each unit's turn. Search `src kit tools tests` for the section's "where they sit"
+  list (`lerp`, `move_toward`, `smooth`, `hyster`, `deadband`, `snapped`, `is_zero_approx`,
+  `maxf(…, 1e-`, body or level names in an `if`, widened test tolerances; comments with "avoid",
+  "hide", "flicker", "jitter", "workaround", "stability"), sort each hit into model / cover / dead,
+  with the reason quoted. This session only sorts and proves (take it out, measure, undo): it
+  writes one Queue line per cover found, with the source to trace, and fixes only S ones. Too
+  many hits for one session: sort them all, prove the vehicle physics' first, and leave a Queue
+  line saying where the proving resumes. One hit already measured: `BaseVehicle.ACCEL_SMOOTH`, a
+  10 /s lag on the contract's `accLong` / `accLat` / `acc_vert`, passed 0.202 of a 2.435 m/s2
+  tick-rate alternation on a standing bobtail (`sessions/2026-11-13-f1-standing-rock.md`): sort it
+  as a sender's filter with a source, or a cover. [high, auto]
 - The engine law's three inversions (`sessions/2026-11-12-shared-law-audit.md`, finding 9).
   `Drivetrain.fuel_to_land`, `Drivetrain.drag_fuel` and `PedalMap._row_fuel` each compute
   `(net - motoring) / span`; one "fuel for a net crank torque" function serves all three.
@@ -43,6 +71,18 @@ Deferred until units 3 and 4 are reviewed (it touches both):
   `crank_forward` (`sessions/2026-11-12-drivetrain-2b.md` § Deferred). [high, plan]
 
 ## Please verify (user, by driving)
+
+- The FULL dashboard's bars with no lag: any body, F2 to FULL. Expected: every bar and its number
+  follow the value at once. Any number that flickers on a body standing still is a new finding:
+  say which.
+- F1, a standing body: a parked `semi` (bobtail and laden) on FULL. Expected: AXLE and TRLR steady
+  in D, in N and on each brake; any body in N on a slight slope rolls off as before, and on the
+  flat comes to rest.
+- Flatland's crates on a respawn: `drone-mk2` in Flatland, carry one crate away and drop it, pick
+  up another, press respawn. Expected: all three are back beside the start, none on the hook.
+- The pad's stick in menus after the held-stick change: with the mouse moved (nothing lit), push
+  the left stick once on the pause menu, LEVEL and the garage. Expected: the first push lights a
+  control, and holding the stick then moves on as before.
 
 - RoadPath's editor buttons after the fold (ebea62a): on a scratch copy of a level, select a
   RoadPath and press "Conform terrain" then "Paint splat under road". Expected: the terrain

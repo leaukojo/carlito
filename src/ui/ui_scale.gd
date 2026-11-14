@@ -46,6 +46,8 @@ var _device := Device.POINTER
 var _used := {}
 ## A finger touched the screen this session: POINTER alone cannot tell it from the mouse.
 var _touched := false
+## Sticks now past STICK_USE, as Vector2i(device, axis) -> true (`_stick_crossed`).
+var _stick_over := {}
 
 
 ## The device last used. Read, never set, by the overlays.
@@ -79,11 +81,12 @@ func _input(event: InputEvent) -> void:
 		_touched = _touched or not event is InputEventMouseButton
 		_set_device(Device.POINTER)
 		return
+	var held_stick := event is InputEventJoypadMotion and not _stick_crossed(event)
 	var used := _nav_device_of(event)
 	if used < 0:
 		return
 	_set_device(used as Device)
-	if get_viewport().gui_get_focus_owner() != null or not _is_nav_press(event):
+	if held_stick or get_viewport().gui_get_focus_owner() != null or not _is_nav_press(event):
 		return
 	var target := _focus_target()
 	if target != null:
@@ -93,6 +96,21 @@ func _input(event: InputEvent) -> void:
 
 func _mouse_held() -> bool:
 	return Input.get_mouse_button_mask() != 0
+
+
+## Whether this motion takes its stick past STICK_USE (true once, until it comes back). A stick
+## held over sends an event per frame and each one reads as a navigation press: while driving
+## nothing is focused, so each would search the whole HUD for a button (`_focus_target`, 27-37 us
+## natively over the FULL cluster) every frame the wheel is turned. Only the crossing searches.
+func _stick_crossed(motion: InputEventJoypadMotion) -> bool:
+	var key := Vector2i(motion.device, motion.axis)
+	var over := absf(motion.axis_value) > STICK_USE
+	var was := _stick_over.has(key)
+	if over:
+		_stick_over[key] = true
+	else:
+		_stick_over.erase(key)
+	return over and not was
 
 
 ## Which non-pointer device `event` came from, or -1 for none (releases, a resting stick).

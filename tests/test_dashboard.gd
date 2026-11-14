@@ -321,36 +321,18 @@ func test_every_bar_caption_fits_its_gutter() -> void:
 						% [family, bar.label, w, bar.label_w]).is_less_equal(bar.label_w)
 
 
-# --- a bar's lag and held number ----------------------------------------------
+# --- an instrument draws the value it is given ----------------------------------
 
-## A parked axle alternating every physics tick (30 Hz, here ±50 kg on AXLE's 0-20000 span, the
-## bobtail's) prints ONE number once the lag has settled, where the raw value printed a new one
-## every frame.
-func test_a_value_chattering_every_tick_prints_one_number() -> void:
-	var dt := 1.0 / 60.0
-	var span := 20000.0
-	var shown := 9400.0
-	var printed := shown
-	var seen := {}
-	for i in 240:
-		var raw := 9400.0 + (50.0 if i % 2 == 0 else -50.0)
-		shown = DashBar.lag_step(shown, raw, dt)
-		printed = DashBar.held(printed, shown, span)
-		if i * dt >= 1.0:
-			seen[roundi(printed)] = true
-	assert_int(seen.size()).is_equal(1)
-
-
-## ...and a real move still arrives: 63 % of a step after LAG_S, and the number follows it.
-func test_the_lag_follows_a_step() -> void:
-	var dt := 1.0 / 60.0
-	var shown := 0.0
-	for i in roundi(DashBar.LAG_S / dt):
-		shown = DashBar.lag_step(shown, 1000.0, dt)
-	assert_float(shown).is_equal_approx(1000.0 * (1.0 - exp(-1.0)), 1.0)
-	assert_float(DashBar.held(0.0, shown, 20000.0)).is_equal(shown)
-	# Inside the hold the printed number stays.
-	assert_float(DashBar.held(500.0, 510.0, 20000.0)).is_equal(500.0)
+## No instrument keeps per-frame state between the telemetry and its draw (a lag, a held number):
+## a reading that flickers shows the sim flickering, which is how such a fault is found.
+func test_no_instrument_smooths_its_value() -> void:
+	for script: Script in [DashBar, Gauge, DepthReadout, Instrument, AttitudeIndicator, WindRose]:
+		for method in script.get_script_method_list():
+			assert_bool(String(method["name"]) in ["_process", "_physics_process"]) \
+				.override_failure_message(("%s has a per-frame step: an instrument draws `value` "
+						+ "as given. A real sender's filter is a labelled model on the signal, with "
+						+ "a sourced figure.") % script.resource_path.get_file()) \
+				.is_false()
 
 
 # --- the artificial horizon (hand-built, contract-gated) -----------------------

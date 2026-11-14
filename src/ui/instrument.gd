@@ -2,6 +2,9 @@ class_name Instrument
 extends Control
 ## A cluster instrument fed one `value` per frame (Gauge, DashBar, DepthReadout): it redraws only
 ## when the value moves. Also the cluster's one centred-text draw, for any instrument.
+## It draws the value as given, with no lag or held number: a reading that flickers shows the sim
+## flickering. A real sender's filter is a labelled model on the signal, with a sourced figure
+## (`test_no_instrument_smooths_its_value`).
 
 var value := 0.0: set = _set_value
 

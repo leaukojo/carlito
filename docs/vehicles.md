@@ -132,6 +132,11 @@ and a parked `semi` slides 5 m off its hand brake on 16.7 deg. The body's slip f
 (`slip_floor_for`) keeps the grip curve inside those caps, so a crawl reaches the full budget and
 the cap takes nothing off any launch (`doc=accel`'s tick cap 0.00); per-wheel floors held
 `suv-luxury` at 66.8 % against 81.0 % (both at a 1.0 converter). Guard: `test_wheel_spin` (`contact_masses`, `slip_floor_for`).
+The rolling drag takes what the tyre's force along the wheel leaves of that cap (`surface_drag_force`'s
+`taken`): each under its own, the two carry a standing contact through zero every tick and the body
+rocks (`measure_vehicles -- <v> 20 rest`; a bobtail `semi`'s drive axle swung 101 kg). Gravity's pull on the contact's mass comes out of `taken` first: counted whole, a slow roll-back loses its drag and creep holds 0.4 points less grade (`all creep`).
+Still there: a free wheel and the body swap the contact's speed tick to tick, a ring nothing feeds (a standing `semi`'s `axle_load` steps up to 1 kg a tick).
+Guards: `test_wheel_spin` (`test_the_tyre_force_and_the_drag_together_never_carry_a_contact_through_zero`), and CI's `measure_semi_launch -- <unit> steady strict` (`REST_STEP_KG`).
 
 **Braking.**
 

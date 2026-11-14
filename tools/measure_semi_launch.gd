@@ -21,7 +21,8 @@ extends Node3D
 ## explicitly, so `brake` stays a brake.
 ##
 ## A dev report that exits 0, except with `strict`: then a P2 or P6 launch that drops a steer wheel
-## under STEER_FLOOR_N exits 1 (the CI gate on wheelbase and COM edits).
+## under STEER_FLOOR_N exits 1 (the CI gate on wheelbase and COM edits), and so does a `steady` run
+## whose rest reading breaks REST_FLIPS_S or REST_STEP_KG (the CI gate on a standing rig's rocking).
 ##
 ##   godot --headless --path . res://tools/measure_semi_launch.tscn -- semi
 
@@ -71,7 +72,14 @@ const STEADY_BAND := 0.3   ## m/s
 ## sampled as the rest reading.
 const STEADY_SETTLE_S := 10.0
 const REST_S := 3.0
-## Display time constants the steady report tries on the hold's trace, s.
+## `steady`'s rest gate: over the rest reading the rig's speed changes sign at most REST_FLIPS_S
+## times a second, and `axle_load` and `trailer_axle_load` each step at most REST_STEP_KG a tick on
+## average. The fault it catches reads 60 /s and 8 kg or more: the rolling drag and the tyre force
+## each under its own one-tick cap (docs/vehicles.md § One-tick caps). Neither limit is 0: a free
+## wheel and the body still swap the contact's speed tick to tick, which reads up to 7 /s and 1 kg.
+const REST_FLIPS_S := 20.0
+const REST_STEP_KG := 2.0
+## First-order lags the steady report tries on each trace (a sender filter's candidates), s.
 const STEADY_TAUS: Array[float] = [0.1, 0.25, 0.5, 1.0]
 
 ## Least force (N) a single steer wheel may carry through a launch (P2, and P6 after the
@@ -100,13 +108,14 @@ var _csv_suffix := ""   ## set by the override args; keeps override runs' CSVs d
 var _trailer_want := ""     ## trailer= id; "" is a valid value (bobtail), hence the flag below
 var _trailer_requested := false  ## an arg named a trailer (stays true for the whole run)
 var _trailer_pending := false    ## ...and it has not been coupled yet
-var _strict := false             ## `strict`: exit 1 when P2 or P6 breaks STEER_FLOOR_N
+var _strict := false             ## `strict`: exit 1 when P2 or P6 breaks STEER_FLOOR_N, or `steady`'s rest gate
 var _tip_speed := TIP_SPEED_MS   ## P7 entry speed, m/s
 var _ramp := false               ## `ramp`: P7 winds the lock on at a held speed instead of a step
 var _ramp_i := 0.0               ## the speed hold's integrated error, m
 var _steady := false             ## `steady`: a straight speed hold on the strip after P1, then quit
 ## `steady`'s samples: {"rest_axle", "rest_trailer", "hold_axle", "hold_trailer"} -> kg per tick.
 var _steady_kg := {"rest_axle": [], "rest_trailer": [], "hold_axle": [], "hold_trailer": []}
+var _rest_speed := PackedFloat64Array()  ## `steady`'s rest reading: the speed per tick, m/s
 var _ended_by := ""              ## what stopped P7: the hold running out or a body passing TIP_ROLL_DEG
 var _args := PackedStringArray()
 ## doc=trailer_roll: the runs still to drive ({esc_off, trsp_off, ramp}) and the finished ones.
@@ -530,6 +539,7 @@ func _advance(s: Dictionary) -> void:
 					and _pt >= settle_s - REST_S:
 				_steady_kg["rest_axle"].append(s["rear_axle_kg"])
 				_steady_kg["rest_trailer"].append(s["trailer_axle_kg"])
+				_rest_speed.append(s["speed"])
 			# The countdown has run, so the swap sticks; restart the settle so the run always
 			# reports a static pose the trailer it is measuring actually made.
 			if _trailer_pending and _ticks >= TowHost.SPAWN_COUPLE_TICKS:
@@ -558,7 +568,7 @@ func _advance(s: Dictionary) -> void:
 					_phase = Ph.DONE
 					_write_csv()
 					_print_steady()
-					get_tree().quit(0)
+					get_tree().quit(1 if not _rest_ok() and _strict else 0)
 			elif _pt >= TIP_SPINUP_TIMEOUT_S * 3.0:
 				printerr("steady: never reached %.1f km/h" % (_tip_speed * 3.6))
 				get_tree().quit(1)
@@ -724,6 +734,28 @@ func _print_steady() -> void:
 				% [key, mean, hi - lo, sqrt(sq / n), dsum / maxf(n - 1.0, 1.0), dmax,
 				100.0 * number_changes / maxf(n - 1.0, 1.0), crossings / (n * dt),
 				", ".join(lagged)])
+
+
+## `steady`'s rest gate (REST_FLIPS_S, REST_STEP_KG), printed as the `rest reading:` line. A run
+## that sampled no rest reading fails it.
+func _rest_ok() -> bool:
+	var flips := 0
+	for i in range(1, _rest_speed.size()):
+		if _rest_speed[i] * _rest_speed[i - 1] < 0.0:
+			flips += 1
+	var flips_s := flips / maxf(_rest_speed.size() * get_physics_process_delta_time(), 1e-9)
+	var step := 0.0
+	for key: String in ["rest_axle", "rest_trailer"]:
+		var xs: Array = _steady_kg[key]
+		var sum := 0.0
+		for i in range(1, xs.size()):
+			sum += absf(float(xs[i]) - float(xs[i - 1]))
+		step = maxf(step, sum / maxf(xs.size() - 1.0, 1.0))
+	var ok := not _rest_speed.is_empty() and flips_s <= REST_FLIPS_S and step <= REST_STEP_KG
+	print(("rest reading: speed sign changes %.1f /s against %.0f, axle-load step %.2f kg a tick"
+			+ " against %.0f, over %d ticks: %s") % [flips_s, REST_FLIPS_S, step, REST_STEP_KG,
+			_rest_speed.size(), "PASS" if ok else "FAIL"])
+	return ok
 
 
 func _finish() -> void:

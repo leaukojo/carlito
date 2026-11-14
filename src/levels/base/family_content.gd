@@ -1,15 +1,18 @@
 class_name FamilyContent
 extends Node3D
 ## Level content that is there only while one of `families` is driven (Flatland's drone crates).
-## On any other body its children leave the tree; on a matching spawn they come back at their
-## authored poses, a crate the drone left elsewhere in the level included, so each spawn starts
-## with a fresh set. A respawn is not a spawn and moves nothing.
-## Hooked to `Level.vehicle_changed`, which fires after a swap has handed a carried crate back.
+## On any other body its children leave the tree; on a matching spawn, and on that body's every
+## respawn, they come back at their authored poses, a crate the drone left elsewhere in the level
+## included: a respawn starts over, crates and all.
+## Hooked to `Level.vehicle_changed`, which fires after a swap has handed a carried crate back, and
+## to the body's `respawned`, which fires after the drone's own `respawn` has dropped one.
 
 @export var families := PackedStringArray()
 
 var _items: Array[Node3D] = []
 var _poses: Array[Transform3D] = []
+var _level: Level
+var _present := false
 
 
 ## Runs before the level's own `_ready`, so the first spawn's `vehicle_changed` is heard.
@@ -21,19 +24,28 @@ func _ready() -> void:
 	var node := get_parent()
 	while node != null and not node is Level:
 		node = node.get_parent()
-	if node != null:
-		(node as Level).vehicle_changed.connect(_on_vehicle_changed)
+	_level = node as Level
+	if _level != null:
+		_level.vehicle_changed.connect(_on_vehicle_changed)
 
 
+## The outgoing body is freed with its connection, so each matching spawn connects its own.
 func _on_vehicle_changed(family: String) -> void:
-	var present := families.has(family)
+	_present = families.has(family)
+	_place()
+	if _present and _level.vehicle != null and not _level.vehicle.respawned.is_connected(_place):
+		_level.vehicle.respawned.connect(_place)
+
+
+## Every item out of wherever it is, and back at its authored pose while a family is driven.
+func _place() -> void:
 	for i in _items.size():
 		var item := _items[i]
 		if not is_instance_valid(item):
 			continue
 		if item.get_parent() != null:
 			item.get_parent().remove_child(item)
-		if not present:
+		if not _present:
 			continue
 		add_child(item)
 		item.transform = _poses[i]
