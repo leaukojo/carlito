@@ -1709,11 +1709,13 @@ func test_the_engines_pairs_give_each_contact_its_own_normal_and_depth() -> void
 ## nose over a flat at y 0, its anchor at `anchor_at` (world). `wall_x`: a wall's near face, to the
 ## body's right (NAN: none), a body of its own or, `one_body`, a second shape of the flat's;
 ## `welded`, the flat's top and the wall's face are one single-sided trimesh, the kind the bake's
-## `Drivable` is.
+## `Drivable` is. `under`: other ground, a body of its own, that many m below the flat (NAN: none).
 func _wheel_on_a_rolled_body(roll_deg: float, anchor_at: Vector3, wall_x := NAN,
-		one_body := false, welded := false) -> WheelScript:
+		one_body := false, welded := false, under := NAN) -> WheelScript:
 	var root: Node3D = auto_free(Node3D.new())
 	add_child(root)
+	if not is_nan(under):
+		_box(root, Vector3(4.0, 0.5, 20.0), Vector3(0.0, -under - 0.25, 0.0))
 	if welded:
 		# Clockwise seen from its front, as Godot's trimesh takes it: the deck from above, the wall
 		# from the wheel's side.
@@ -1820,6 +1822,21 @@ func test_a_wall_of_the_grounds_own_body_leaves_the_tread_on_the_ground() -> voi
 		w = await _wheel_on_a_rolled_body(0.0, Vector3(0.0, 0.9, 0.0), 0.07, true, welded)
 		assert_bool(w.in_contact).override_failure_message("welded %s, in the air" % welded).is_false()
 		assert_float(w.suspension_force).is_equal(0.0)
+
+
+func test_ground_under_a_deck_leaves_the_tread_on_the_deck() -> void:
+	# The wall of the deck's own body in the wheel's side, other ground `under` m below the deck
+	# and within the travel: the engine's sweep leaves the deck out with its wall and stops on the
+	# lower ground, and the tread still reads the deck, `c` into its travel.
+	for welded: bool in [false, true]:
+		for c: Array in [[0.06, 0.05], [0.24, 0.18]]:
+			var w: WheelScript = await _wheel_on_a_rolled_body(0.0, Vector3(0.0, 0.66 - c[0], 0.0),
+					0.07, true, welded, c[1])
+			var at := "welded %s, %.2f over %.2f" % [welded, c[0], c[1]]
+			assert_bool(w.in_contact).override_failure_message(at).is_true()
+			assert_float(w.compression).append_failure_message(at).is_equal_approx(c[0], 2e-3)
+			assert_vector(w.contact_normal).append_failure_message(at) \
+					.is_equal_approx(Vector3.UP, Vector3.ONE * 1e-3)
 
 
 func test_a_cliff_of_the_heightmap_leaves_the_tread_on_its_foot() -> void:

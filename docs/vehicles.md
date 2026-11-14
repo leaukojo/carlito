@@ -91,9 +91,9 @@ contact past `RayWheel.LYING_DEG` off the wheel's travel is not the spring's (`R
 the ground under a wheel on its side or its back (read as one, its spring kicks an overturned body
 off the ground it lies on, a tractor's hill hold and `fwd_drive_state` flipping with the contact:
 `side`), and a wall in the wheel's side or ahead of it (`scrape`). The wheel then sweeps again by
-contact (`RayWheel._carried_sweep`): Jolt's sweep skips, whole, a body it starts inside (a barrier
-welded to its deck, a cliff of the heightmap the wheel stands on) and its rest test names only the
-deepest contact of all, so the second sweep reads each contact's own normal and depth off
+contact (`RayWheel._carried_sweep`), as after a hit past a skipped body: Jolt's sweep skips,
+whole, a body it starts inside (a deck and its barrier, a heightmap's cliff) and its rest test
+names only the deepest contact, so the second sweep reads each contact's own normal and depth off
 `collide_shape`'s point pairs and stops on the first one the spring carries (`scrape onebody`). At
 a square step (`kerb`, 12 / 20 cm) a tyre first touches the face ahead of its hub, partway up its
 arc (a disk touches a little further out, steeper); a crawl's largest tick binds no clamp and peaks

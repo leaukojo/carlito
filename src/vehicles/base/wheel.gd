@@ -816,8 +816,9 @@ static func first_carried(pairs: Array[Vector3], margin: float, up: Vector3, hub
 ## A start inside something reads full bump (`start_overlaps`). Sets `_contact_drop`, `_contact_normal`
 ## and `contact_collider`; false when nothing the spring can carry is under the tyre (`carries`).
 ## The engine's sweep leaves out, whole, a body it starts inside, and its rest test names the
-## deepest contact of all: where that is one the spring cannot carry (`_contact_pass`), the wheel
-## sweeps again by contact (`_carried_sweep`). `settled_drop` closes the sweep's bisection step
+## deepest contact of all: where the sweep hit past a body it left out, or the rest test names a
+## contact the spring cannot carry (`_contact_pass`), the wheel sweeps again by contact
+## (`_carried_sweep`). `settled_drop` closes the sweep's bisection step
 ## (`docs/vehicles.md` § Physics derivations and figures).
 func _contact_query(space: PhysicsDirectSpaceState3D, body: RigidBody3D, ray_from: Vector3,
 		up: Vector3, wheel_basis: Basis, rest_length: float) -> bool:
@@ -874,7 +875,8 @@ func _carried_sweep(space: PhysicsDirectSpaceState3D, ray_from: Vector3, up: Vec
 
 
 ## The engine's sweep and the rest test where it stops. A contact the spring cannot carry is not
-## the tread's: it is no contact, and sets `_swept_past`.
+## the tread's: it is no contact, and sets `_swept_past`; so does a sweep that hit past a body the
+## tyre starts inside.
 func _contact_pass(space: PhysicsDirectSpaceState3D, ray_from: Vector3, up: Vector3,
 		wheel_basis: Basis, rest_length: float) -> bool:
 	var motion := -up * rest_length
@@ -882,10 +884,11 @@ func _contact_pass(space: PhysicsDirectSpaceState3D, ray_from: Vector3, up: Vect
 	_query.motion = motion
 	var fractions := space.cast_motion(_query)
 	_query.motion = Vector3.ZERO
+	# Jolt's sweep leaves out, whole, every body the shape overlaps at its start: this rest test at
+	# the start is the engine's own skip test (the sweep's hull at no motion is the shape).
+	var start := space.get_rest_info(_query)
 	if fractions.size() < 2 or fractions[1] >= 1.0:
-		# Jolt's sweep ignores what the shape already overlaps at its start, so "no hit" is either a
-		# free wheel or one already past full bump: the rest test at the start tells them apart.
-		var start := space.get_rest_info(_query)
+		# "No hit" is either a free wheel or one already past full bump.
 		if start.is_empty():
 			return false
 		if not carries(start.get("normal", up), up):
@@ -896,6 +899,11 @@ func _contact_pass(space: PhysicsDirectSpaceState3D, ray_from: Vector3, up: Vect
 		_contact_normal = start.get("normal", up)
 		contact_collider = start.get("collider_id", 0)
 		return true
+	if not start.is_empty():
+		# The stop is past a body the sweep left out (a deck welded to the wall in the wheel's side,
+		# a kerb the tyre is already in): the rest test there cannot see that body's depth.
+		_swept_past = true
+		return false
 	var safe_drop := rest_length * fractions[0]
 	var unsafe_drop := rest_length * fractions[1]
 	_query.transform.origin = ray_from + motion * fractions[1]
