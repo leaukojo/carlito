@@ -1,10 +1,9 @@
 # Kinds of gearbox
 
-<p class="lead">Every gearbox does the same job: it lets one engine pull hard at walking pace and
-still run fast on a motorway, by changing which gears join the engine to the wheels. What differs
-is how the change is made: by the driver's hand, by a computer, by oil pressure, or by a belt that
-slides smoothly from one size to another. This page starts from a single pair of gears, builds up
-each kind of gearbox, and says which vehicle in the game has which.</p>
+<p class="lead">Every gearbox lets one engine pull hard at walking pace and still run fast on a
+motorway, by changing which gears join the engine to the wheels. The kinds differ in how they make
+that change: by hand, by computer, by oil pressure, or with a belt that slides smoothly from one
+size to another.</p>
 
 <div class="badges"><span class="label">Which vehicles have this</span>
 <span class="badge yes" title="An automatic with a torque converter; the two racing cars a sequential gearbox">Car</span>
@@ -164,8 +163,8 @@ has a six-speed automatic.
 
 ## The powershift
 
-A [powershift](glossary.md#powershift) is a tractor gearbox. Like a manual, it has gear pairs on
-shafts, but instead of collars it has wet clutches: packs of thin plates running in oil, which
+A [powershift](glossary.md#powershift) is a tractor gearbox. Like a manual, it is usually built
+from gear pairs on shafts, but instead of collars it has wet clutches: packs of thin plates running in oil, which
 oil pressure squeezes together. Like an automatic, it changes gear clutch to clutch, so the
 tractor keeps pulling through each change. That matters when a tractor drags a plough through the
 soil: in a gap in the drive, the plough would slow it down sharply. Tractors have many gears close
@@ -223,6 +222,7 @@ road speed and the gearbox finds the ratio that gives it:
 - **The boat**'s outdrive has forward and reverse, but no gears to change.
 - **The plane**'s propeller is turned directly by its engine. It reads the gear byte only for
   forward, neutral and reverse thrust.
+<!-- gearbox.md and coupling.md badges; rail.md The reverser and the doors -->
 
 ## Which vehicle has which
 

@@ -59,11 +59,13 @@ The short cuts fall into three kinds:
 - **Simplified: the fuel tank.** The burn is real; the tank is scaled down so its gauge moves in a
   session, and an empty tank does not stop the engine.
 - **Not modelled: a clutch pedal.** The game works every clutch, even with manual gears.
+- **Simplified: the gearbox's insides.** Each gearbox is a list of ratios and a way of handing the
+  drive from one to the next; no tooth, collar, planet or belt is simulated.
 - **Not modelled: cruise control** on any road vehicle; only the tractor's hand throttle holds a
   speed for you, through its governor.
 - **Simplified: the differentials.** Each has one fixed bias ratio; none is electronically
   controlled.
-<!-- engine.md, auxiliary.md, coupling.md, gearbox.md, differentials.md -->
+<!-- engine.md, auxiliary.md, coupling.md, gearbox.md, gearbox-kinds.md, differentials.md -->
 
 ## Brakes and driver aids
 

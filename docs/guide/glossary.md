@@ -108,8 +108,8 @@ is pressed. In the game it is SANDBOX ▸ AUTO HOLD, for keys, on-screen pedals 
 ### Automatic gearbox
 A gearbox that changes gear by itself, built from [planetary gear sets](#planetary-gear-set)
 whose parts are held or released by clutches worked by oil pressure. It changes clutch to clutch,
-so the drive never stops. Every car except the racing cars, the vans, the garbage truck and the
-fire truck have one. See [Kinds of gearbox](gearbox-kinds.md).
+so the drive never stops. The vans, the garbage truck, the fire truck and every car except the
+racing cars have one. See [Kinds of gearbox](gearbox-kinds.md).
 
 ### Autopilot
 A controller that steers for the driver. The boat's autopilot holds a compass heading (HEADING
@@ -488,8 +488,8 @@ tips the farm trailer (`scv_flow`).
 
 ### Hydrostatic drive
 A drive through oil: a pump turned by the engine pushes oil to a motor that turns the output. Its
-speed can be set to anything, including zero and backwards. The `tractor-cvt`'s [CVT](#cvt) uses
-one for part of its power. See [Kinds of gearbox](gearbox-kinds.md).
+speed can be set to anything, including zero and backwards. The `tractor-cvt` is modelled on a
+[CVT](#cvt) that uses one for part of its power. See [Kinds of gearbox](gearbox-kinds.md).
 
 ## I
 
@@ -805,8 +805,8 @@ A front axle built as one beam on a single pivot in the middle, so one wheel can
 drops. Farm tractors use it; in the game it swings up to 10° each way before it meets its stop.
 
 ### Synchroniser
-A small cone beside each gear in a manual gearbox that rubs on the gear, like a brake, until gear
-and shaft turn at the same speed, so the [dog clutch](#dog-clutch) can slide in without
+A small cone on each collar of a manual gearbox that rubs on the gear first, like a brake, until
+gear and shaft turn at the same speed, so the [dog clutch](#dog-clutch) can slide in without
 crunching. See [Kinds of gearbox](gearbox-kinds.md).
 
 ## T
