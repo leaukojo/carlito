@@ -45,6 +45,8 @@ Against its stop the front patches' mid-point sits `h phi - pivot_h stop` off th
 
 The free and the stop forms meet at `phi - psi = stop` (put `pivot_m = (k_f - pivot_w)(phi - stop)`
 in the free one). With `stop = 0` (`pivot_h = 0`, `pivot_w = 0`) every form is the code's as it is.
+The front-lifted form is not in the fix: `:184` cannot tell a beam on its stop from a free one, and
+a swinging front's inner lifts only past `t_f / (2 pivot_h)` of side force, 1.27 g on the tractors.
 
 Evidence that the lever is `h'` and not a preference: the test file's own rigid limit,
 `_triangle_g` (`tests/test_balance_model.gd:828-832`), divides by
@@ -68,19 +70,26 @@ The fixture, for the fix's first test (it fails now):
     assert: _roll_state(m, g)["phi"] == phi_one within 1e-4 of it, g in 0.1, 0.3, 0.5
 
 Size and reach. The tractors' predicted roll reads 2.7 % high and their front transfer 4 % low
-inside the stop; the rear's first lift, which is their `tip_g`, 0.635 g where one lever gives about
-0.652 (hand figure: the rear lifts at `phi = N_r t_r / (2 k_r)` either way). Not checked against the
+inside the stop. The rear's first lift, which is their `tip_g` now (0.6354 g), moves to 0.652 g
+(hand figure: the rear lifts at `phi = N_r t_r / (2 k_r)` either way). The tip itself may leave
+that lift: at HEAD the body rolled on to the stop asks the front for 28.5 kN across it, over its
+26.1 kN cap, so it tips there; with `(k_f - pivot_w) stop` it asks 25.98 kN, 0.4 % under the cap,
+holds at about 12.9 deg, and tips near 0.653 g when the front's inner lifts too (hand figures, the
+margin too thin to call: the fix's run decides, and `corner_limit`'s sweep may end differently on
+the tractors). Not checked against the
 sim: no pass prints a held turn's roll finer than 0.1 deg on a body with no roll steer, and the
 corner pass's tip (0.72 g, `docs/vehicle_measurements.md` § Cornering) is a ramp's, not a steady
-figure. Consumers: `measure_vehicles`' `pred` columns and `gen_kenney_vehicles`' report. No ESC body
-swings (`esc_reference_k` is empty on both tractors), so nothing the player drives reads it: no
-proposal. `balance_model.gd` is not a bake input.
+figure. Consumers: `measure_vehicles`' `pred` columns and `gen_kenney_vehicles`' printed report
+(`_balance`). Only `tractor-kenney` and `tractor-cvt` declare `front_axle_swing_deg`, and
+`esc_reference_k` is empty on both, so nothing the player drives reads it: no proposal. `balance_model.gd` is not a bake input.
 
 The same lever once more, in the yaw arms: `_corner_wheels` (`:698-700`, `:719`) moves every patch
 `h sin(phi)` inboard of the centre of mass. A swinging front's patches move
 `(h - pivot_h) sin(phi) + pivot_h sin(psi)`, with `psi = min(roll.front, cap_f) t_f / (2 k_f)`:
 3.0 cm where the model has 4.4 at 0.5 g on `tractor-kenney`. It reaches the yaw balance only through
-the fore-aft forces across the track.
+the fore-aft forces on the front axle: about 1.7 kN there (rolling drag, and the side force's part
+along the body at 5 deg of steer) on 1.4 cm is 23 N·m, against the front's 21 kN·m about the centre
+of mass. Sized and left: not in the fix.
 
 ## Checked and sound
 
@@ -137,6 +146,10 @@ Each against the code named, by hand; figures where one was worked.
   peak, said nowhere. `test_every_grip_curve_peaks_at_the_abs_and_tcs_slip`
   (`tests/test_vehicle_catalog.gd:802`) is the place to check whether a knee before the peak is
   already refused; if not, a line in the comment.
+- `axles`' `h` and `pivot_h` take both axles to touch at one origin height unloaded
+  (`rest_ride_height` is the larger of the two). Only the two tractors have unequal radii
+  (`wheel_radius_rear`), and theirs agree (0.052 m front and rear on `tractor-kenney`); whether a
+  catalog test holds that was not looked for.
 - `yaw_damping_gradient`, `yaw_damp` and `yaw_inertia` in the model: exactly 0 on every shipped
   body (`angular_damping` 0). Their readers are the generator's report, one `measure_vehicles` print
   (`:3808`) and tests; `docs/handling.md`'s "the default 0.1 /s would add 0.10-0.20 deg/g" is what

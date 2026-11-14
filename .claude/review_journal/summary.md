@@ -197,28 +197,31 @@ Opus's and Sonnet's items:
   read first). `BalanceModel._roll_state` (`balance_model.gd:146-194`): inside the stop the body
   rolls about the line from the rear's ground centre to the pivot; the side force is taken on that
   lever (`moment - pivot_m`) and the rolled body's weight on the full `h` (`- weight_h`). The
-  tractors' predicted roll reads 2.7 % high, their front transfer 4 % low, `tip_g` 0.635 for about
-  0.652. Do, with `pivot_w = cap_f * pivot_h` (the front's whole load enters at the pivot):
-  free, `phi = (moment - pivot_m) / (k_r - weight_h + pivot_w)`, the beam's tilt
+  tractors' predicted roll reads 2.7 % high, their front transfer 4 % low, the rear's first lift
+  0.635 g for 0.652. Do, with `pivot_w = cap_f * pivot_h` (the front's whole load enters at the
+  pivot): free, `phi = (moment - pivot_m) / (k_r - weight_h + pivot_w)`, the beam's tilt
   `psi = pivot_m / (k_f - pivot_w)`, `df = 2 * k_f * psi / t_f`, `free = phi - psi <= stop`, and
   the branch's gate `k_r > weight_h - pivot_w` with `k_f > pivot_w`; on the stop (`:176`) and with
-  the rear lifted (`:190`) `k_f * stop` becomes `(k_f - pivot_w) * stop`; with the front lifted
-  (`:184`) the numerator loses `pivot_w * stop`. `stop = 0` leaves every form as it is. Then
-  `_corner_wheels`' `shift` (`:700`, `:719`) for a swinging front's two patches:
-  `(h - pivot_h) * sin(phi) + pivot_h * sin(psi)`, `psi = min(roll.front, cap_f) * t_f / (2 * k_f)`.
-  The doc comments of `_roll_state` and the file's header follow. Tests
+  the rear lifted (`:190`) `k_f * stop` becomes `(k_f - pivot_w) * stop`. `stop = 0` leaves every
+  form as it is. `:184` (the front lifted) and `_corner_wheels`' `shift` stay: sized and left in
+  the session file. The doc comment of `_roll_state` follows. Tests
   (`tests/test_balance_model.gd`): new, the session file's fixture (fails now by 2.66 % on
   `tractor-kenney`); `:835` and `:851` are written from the old forms and take the new ones
   (`front == 2 pivot_m k_f / ((k_f - pivot_w) t_f)`, `rear * t_r / 2 == (weight_h - pivot_w) *
-  (g + phi)`); `:888`'s tip becomes `trapezoid - stop * (1 - pivot_w / weight_h)`; `:873`, the rigid
-  triangle, does not change and is the independent check. Runs: `test_balance_model`, the suite
-  (`test_vehicle_catalog` fails a moved ESC table: none may move, no ESC body swings);
-  `gen_kenney_vehicles` leaves `git status` clean; `measure_vehicles -- tractor-kenney 60 track
-  corner` and `tractor-cvt`, HEAD then after, for the `Pred` cell and "model tips at": where a
-  printed figure moves, the two rows of `docs/vehicle_measurements.md` § Cornering, the recipe
-  comment (`gen_kenney_vehicles.gd:565-567`) and `docs/tractor.md:179-183` follow. Stop and hand
-  back, the change undone, if `:873` fails or any body without a swinging axle reads a different
-  figure. Prediction only: no proposal. [high, auto, Opus]
+  (g + phi)`); `:888`'s tip becomes `trapezoid - stop * (1 - pivot_w / weight_h)`, and its `wide`
+  half (the tip at the rear's first lift) is re-derived on that figure, not assumed; `:873`, the
+  rigid triangle, does not change and is the independent check. Runs: `test_balance_model`, the
+  suite (`test_vehicle_catalog` fails a moved ESC table: none may move, no ESC body swings);
+  `gen_kenney_vehicles` writes no spec differently (its printed balance line for the tractors
+  moves); `measure_vehicles -- tractor-kenney 60 track corner` and `tractor-cvt`, HEAD then after,
+  for the `Pred` cell and "model tips at". Expect the tractors' tip to leave the rear's first lift
+  by a hair (by hand the front then holds 0.4 % under its cap, to about 0.653 g) and
+  `corner_limit`'s sweep perhaps to end differently: report what it prints, and where a printed
+  figure moves, the two rows of `docs/vehicle_measurements.md` § Cornering, the recipe comment
+  (`gen_kenney_vehicles.gd:565-567`) and `docs/tractor.md:179-183` follow. Stop and hand back, the
+  change undone, if `:873` fails, any body without a swinging axle reads a different figure, or a
+  tractor's `corner_limit` returns empty where it returned a turn. Prediction only: no proposal.
+  [high, auto, Opus]
 - The engine law's three inversions (`sessions/2026-11-12-shared-law-audit.md`, finding 9).
   `Drivetrain.fuel_to_land`, `Drivetrain.drag_fuel` and `PedalMap._row_fuel` each compute
   `(net - motoring) / span`; one "fuel for a net crank torque" function serves all three.
