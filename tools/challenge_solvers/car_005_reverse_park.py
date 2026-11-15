@@ -2,7 +2,9 @@
 south of the bay. Then reverse north slowly, steering to hold that line, and stop on the bay's
 centre (z = -83.7). The bay is only 0.4 m wider than the wheels on each side, so the position
 comes from the GPS (centimetre precision)."""
-from carlito_can import connect, CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG, arc, clamp, D, R, IGNITION
+from carlito_can import (
+    connect, STEER_PROPORTIONAL, STEER_BANGBANG, CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG,
+    arc, clamp, D, R, IGNITION)
 
 BAY_X, BAY_Z = -125.0, -83.7
 
@@ -15,7 +17,7 @@ car.key = IGNITION
 car.gear = D
 while car.running and car.z < -62:
     car.cruise(8, CRUISE_CONTROL_PI)  # also try CRUISE_CONTROL_BANGBANG
-    car.follow(APPROACH, lookahead=4)
+    car.follow(APPROACH, STEER_PROPORTIONAL, lookahead=4)  # also try STEER_BANGBANG
     car.tick()
 car.accel = 0
 car.brake = 100

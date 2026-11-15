@@ -58,6 +58,8 @@ OFF, LOW, HIGH = 1, 3, 4
 
 # How cruise() holds a speed.
 CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG = "PI", "bang-bang"
+# How steer_to() and follow() steer.
+STEER_PROPORTIONAL, STEER_BANGBANG = "proportional", "bang-bang"
 
 # The game's GPS: world X/Z around a Paris origin (VehicleTelemetry.gps_lat / gps_lon).
 GPS_LAT0, GPS_LON0, M_PER_DEG = 48.8566, 2.3522, 111320.0
@@ -261,20 +263,32 @@ class Car:
     def distance_to(self, x, z):
         return math.hypot(x - self.x, z - self.z)
 
-    def steer_to(self, x, z, gain=2.0):
-        """Steer towards the world point (x, z). Returns the distance to it."""
+    def steer_to(self, x, z, method=None, gain=2.0):
+        """Steer towards the world point (x, z). Returns the distance to it. STEER_PROPORTIONAL
+        (the default) steers more the further off the point is; STEER_BANGBANG is the beginner's
+        version: a fixed amount left or right, or straight."""
         bearing = math.degrees(math.atan2(x - self.x, self.z - z))   # compass: north is -z
         error = (bearing - self.heading + 540) % 360 - 180            # + means "to the right"
-        self.steer = clamp(error * gain, -100, 100)
+        if method == STEER_BANGBANG:
+            if error > 3:
+                self.steer = 15      # the point is on the right: steer right
+            elif error < -3:
+                self.steer = -15     # on the left: steer left
+            else:
+                self.steer = 0       # straight ahead
+        else:
+            self.steer = clamp(error * gain, -100, 100)
         return self.distance_to(x, z)
 
-    def follow(self, path, lookahead=8.0):
-        """Steer along a list of (x, z) points. True once the last one is close."""
+    def follow(self, path, method=None, lookahead=8.0):
+        """Steer along a list of (x, z) points with steer_to (same `method`). True once the last
+        one is close."""
         if self._path is not path:
             self._path, self._path_i = path, 0
         while self._path_i < len(path) - 1 and self.distance_to(*path[self._path_i]) < lookahead:
             self._path_i += 1
-        return self.steer_to(*path[self._path_i]) < lookahead and self._path_i == len(path) - 1
+        return (self.steer_to(*path[self._path_i], method) < lookahead
+                and self._path_i == len(path) - 1)
 
     def cruise(self, kmh, method=None):
         """Hold a speed with accel and brake. CRUISE_CONTROL_PI (the default) is a small PI

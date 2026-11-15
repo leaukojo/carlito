@@ -1,6 +1,8 @@
 """Easy turns: follow the winding road at 25 km/h. The road is four 35 m bends that touch,
 right, left, right, left, around four centre points; the finish line is at the end of the last."""
-from carlito_can import connect, CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG, arc, D, IGNITION
+from carlito_can import (
+    connect, STEER_PROPORTIONAL, STEER_BANGBANG, CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG,
+    arc, D, IGNITION)
 
 # The road's centre line: arc(centre x, centre z, radius, from bearing, to bearing).
 ROAD = (arc(-135.0, 90.0, 35, 0, 70)            # right
@@ -15,5 +17,5 @@ car.key = IGNITION
 car.gear = D
 while car.tick():
     car.cruise(25, CRUISE_CONTROL_PI)  # also try CRUISE_CONTROL_BANGBANG
-    car.follow(ROAD)
+    car.follow(ROAD, STEER_PROPORTIONAL)  # also try STEER_BANGBANG
 car.finish()
