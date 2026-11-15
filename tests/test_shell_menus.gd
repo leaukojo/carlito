@@ -1082,6 +1082,37 @@ func test_pause_menu_lab_page_greys_abs_without_it_and_in_a_challenge() -> void:
 	assert_array(_labels(race)).contains(["STABILITY CONTROL: ON", "TRACTION CONTROL: ON"])
 
 
+## A driver aid the router ignores greys out with the reason: TC and ESC under a live bridge (it
+## sends its own), all three in a challenge. The LAB switches act under the bridge, so stay live.
+func test_pause_menu_greys_the_driver_aids_the_router_ignores() -> void:
+	Bridge._active = true
+	var bridged: PauseMenu = auto_free(PauseMenu.new())
+	bridged.setup({"abs": true})
+	add_child(bridged)
+	Bridge._active = false
+	var locked: PauseMenu = auto_free(PauseMenu.new())
+	var state := PauseMenu.State.new()
+	state.lab_locked = true
+	locked.setup({"abs": true}, state)
+	add_child(locked)
+	var greyed := func(pause: PauseMenu, prefix: String) -> bool:
+		for b in _buttons(pause):
+			if (b as Button).text.begins_with(prefix):
+				return (b as Button).disabled
+		return false
+	var helps := func(pause: PauseMenu) -> Array:
+		return pause.find_children("*", "Label", true, false).map(
+				func(l: Node) -> String: return (l as Label).text)
+	for prefix in ["TRACTION CONTROL", "STABILITY CONTROL"]:
+		assert_bool(greyed.call(bridged, prefix)).is_true()
+	# Nobody drives from the bridge here (fallback): the keys still drive, and the auto hold holds.
+	assert_bool(greyed.call(bridged, "AUTO HOLD")).is_false()
+	assert_bool(greyed.call(bridged, "ANTI-LOCK BRAKES")).is_false()
+	assert_array(helps.call(bridged)).contains([ActionRegistry.BRIDGE_SETS_NOTE])
+	for prefix in ["TRACTION CONTROL", "STABILITY CONTROL", "AUTO HOLD", "ANTI-LOCK BRAKES"]:
+		assert_bool(greyed.call(locked, prefix)).is_true()
+
+
 ## LAB's DIFFERENTIALS: LOCKED takes ESC and TC with it, and their rows say so.
 func test_pause_menu_lab_locked_diffs_relabel_esc_and_tc() -> void:
 	var pause: PauseMenu = auto_free(PauseMenu.new())

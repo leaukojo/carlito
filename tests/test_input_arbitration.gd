@@ -500,7 +500,7 @@ func test_esc_off_takes_tc_with_it_and_tc_off_leaves_esc_on() -> void:
 	assert_bool(bridged.tcs_off).is_true()
 
 
-func test_lab_abs_off_takes_esc_and_tc_with_it_on_local_input_only() -> void:
+func test_lab_abs_off_takes_esc_and_tc_with_it_and_rides_no_bridge_key() -> void:
 	# Absent, ABS is on; the LAB's ABS off takes ESC with it, and ESC takes TC.
 	assert_bool(RouterScript.arbitrate_local(_raw(), 0.0, GEAR_D1).abs_off).is_false()
 	var raw := _raw()
@@ -509,7 +509,8 @@ func test_lab_abs_off_takes_esc_and_tc_with_it_on_local_input_only() -> void:
 	assert_bool(off.abs_off).is_true()
 	assert_bool(off.esc_off).is_true()
 	assert_bool(off.tcs_off).is_true()
-	# No contract signal: the bridge never carries it, a stray key included, nor does fallback.
+	# No contract signal: a bridge key never carries it, in fallback either; the router lays the LAB
+	# switch on afterwards (`_apply_lab`).
 	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
 	vals["abs_off"] = true
 	var bridged := RouterScript.arbitrate_bridge(vals)
@@ -580,14 +581,15 @@ func test_the_lab_cascade_reaches_a_bridge_input_the_measure_tools_set() -> void
 	assert_bool(stock.tcs_off).is_false()
 
 
-func test_lab_axle_diff_reaches_local_input_only_and_never_a_challenge() -> void:
+func test_lab_axle_diff_rides_no_bridge_key_and_never_a_challenge() -> void:
 	assert_int(RouterScript.arbitrate_local(_raw(), 0.0, GEAR_D1).axle_diff) \
 			.is_equal(VehicleInput.AxleDiff.STOCK)
 	var raw := _raw()
 	raw["axle_diff"] = VehicleInput.AxleDiff.LOCKED
 	var locked := RouterScript.arbitrate_local(raw, 0.0, GEAR_D1)
 	assert_int(locked.axle_diff).is_equal(VehicleInput.AxleDiff.LOCKED)
-	# No contract signal: the bridge never carries it, a stray key included, nor does fallback.
+	# No contract signal: a bridge key never carries it, in fallback either; the router lays the LAB
+	# switch on afterwards (`_apply_lab`).
 	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
 	vals["axle_diff"] = VehicleInput.AxleDiff.LOCKED
 	assert_int(RouterScript.arbitrate_bridge(vals).axle_diff).is_equal(VehicleInput.AxleDiff.STOCK)
@@ -595,13 +597,14 @@ func test_lab_axle_diff_reaches_local_input_only_and_never_a_challenge() -> void
 			.is_equal(VehicleInput.AxleDiff.STOCK)
 
 
-func test_lab_parallel_steer_reaches_local_input_only() -> void:
+func test_lab_parallel_steer_rides_no_bridge_key() -> void:
 	assert_bool(RouterScript.arbitrate_local(_raw(), 0.0, GEAR_D1).parallel_steer).is_false()
 	var raw := _raw()
 	raw["parallel_steer"] = true
 	var parallel := RouterScript.arbitrate_local(raw, 0.0, GEAR_D1)
 	assert_bool(parallel.parallel_steer).is_true()
-	# No contract signal: the bridge never carries it, a stray key included, nor does fallback.
+	# No contract signal: a bridge key never carries it, in fallback either; the router lays the LAB
+	# switch on afterwards (`_apply_lab`).
 	var vals := _bridge(0.0, 0.0, 0.0, 0.0, GEAR_D1)
 	vals["parallel_steer"] = true
 	assert_bool(RouterScript.arbitrate_bridge(vals).parallel_steer).is_false()
@@ -1211,6 +1214,38 @@ func _locked_router(touch: _CountingTouch) -> Node:
 	router.set_touch_source(touch)
 	router.set_bridge_only(true)
 	return router
+
+
+## A body fitted with every piece of hardware a LAB switch acts on.
+class _LabBody extends _RollingBody:
+	func vehicle_capabilities() -> Dictionary:
+		return LAB_CAPS
+
+
+## The LAB switches are the machine's hardware, so they act whoever drives: the bridge, fallback,
+## and the cascade with them. A challenge still drives stock.
+func test_the_lab_switches_act_while_sloppycan_drives() -> void:
+	for bridge: BridgeSourceScript in [_LiveBridge.new(), _QuietBridge.new()]:
+		var router := _router()
+		router.register_vehicle(auto_free(_LabBody.new()))
+		router.set_lab_abs_off(true)
+		router.set_lab_axle_diff(VehicleInput.AxleDiff.OPEN)
+		router.set_lab_parallel_steer(true)
+		router._bridge_source = bridge
+		router._physics_process(1.0 / 60.0)
+		var out: VehicleInput = router.get_vehicle_input()
+		assert_bool(out.abs_off).is_true()
+		assert_int(out.axle_diff).is_equal(VehicleInput.AxleDiff.OPEN)
+		assert_bool(out.parallel_steer).is_true()
+		assert_bool(out.esc_off).is_true()
+		assert_bool(out.tcs_off).is_true()
+	var locked := _locked_router(_CountingTouch.new())
+	locked.register_vehicle(auto_free(_LabBody.new()))
+	locked.set_lab_abs_off(true)
+	locked._bridge_source = _LiveBridge.new()
+	locked._physics_process(1.0 / 60.0)
+	assert_bool(locked.get_vehicle_input().abs_off).is_false()
+	assert_bool(locked.get_vehicle_input().esc_off).is_false()
 
 
 func test_the_locked_idle_is_key_lock_in_p_with_the_handbrake_on() -> void:

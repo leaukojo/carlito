@@ -70,9 +70,9 @@ var _key_softening := KeyShaper.DEFAULT_SOFTENING
 var _local_tcs_off := false
 ## The player's STABILITY CONTROL setting, set by the shell: local driving only, like `tcs_off`.
 var _local_esc_off := false
-## The LAB's ANTI-LOCK BRAKES switch (pause ▸ SANDBOX), set by the shell: session-only, local
-## driving only, and never in a challenge nor on a body without ABS (`lab_raw`). Driver state: a
-## respawn and a body change keep it.
+## The LAB's ANTI-LOCK BRAKES switch (pause ▸ SANDBOX), set by the shell: session-only, whoever
+## drives (`_apply_lab`), and never in a challenge nor on a body without ABS (`lab_raw`). Driver
+## state: a respawn and a body change keep it.
 var _lab_abs_off := false
 ## The LAB's DIFFERENTIALS switch (`VehicleInput.AxleDiff`), as `_lab_abs_off`.
 var _lab_axle_diff := VehicleInput.AxleDiff.STOCK
@@ -256,6 +256,22 @@ static func lab_raw(abs_off: bool, axle_diff: VehicleInput.AxleDiff, parallel_st
 	return out
 
 
+## The LAB switches onto a bridge-arbitrated `_current`, cascade included: they are the machine's
+## hardware, not a driver's control, so they act whoever drives.
+func _apply_lab() -> void:
+	var lab := lab_raw(_lab_abs_off, _lab_axle_diff, _lab_parallel_steer, _vehicle_caps(),
+			_bridge_only)
+	_current.abs_off = bool(lab[&"abs_off"])
+	_current.axle_diff = int(lab[&"axle_diff"]) as VehicleInput.AxleDiff
+	_current.parallel_steer = bool(lab[&"parallel_steer"])
+	lab_cascade(_current)
+
+
+func _vehicle_caps() -> Dictionary:
+	return _vehicle.call(&"vehicle_capabilities") \
+			if _vehicle != null and _vehicle.has_method(&"vehicle_capabilities") else {}
+
+
 ## What a LAB switch takes stability control (and so TC) off with, pure: "ABS" (a real ESC brakes
 ## through the ABS modulator), "LOCKED DIFFS" (a locked axle passes ESC's one-wheel brake to its
 ## partner, cancelling the yaw moment), else "". Read on `lab_raw`'s gated values.
@@ -360,6 +376,7 @@ func _physics_process(delta: float) -> void:
 		_set_fallback_notice(false)
 		_current = arbitrate_bridge(bridge_raw, _manual_gearbox,
 				_vehicle.get_gear_byte() if _vehicle != null else GEAR_N)
+		_apply_lab()
 		_apply_brake_override()
 		_warn_if_ignition_off(bridge_raw)
 		return
@@ -375,6 +392,8 @@ func _physics_process(delta: float) -> void:
 	var local := _local_tick(delta, live)
 	_set_neutral_notice(neutral_warning(_local_gear_live, local))
 	_current = blend_local_driving(bridge_raw, local, _manual_gearbox) if live else local
+	if live:
+		_apply_lab()  # the local path's arrive through `arbitrate_local`
 	_apply_auto_hold()
 	_apply_brake_override()
 	_apply_brake_light_request()
@@ -543,9 +562,8 @@ func _local_tick(delta: float, driving_only := false) -> VehicleInput:
 	raw[&"body_cmd"] = _body_cmd
 	raw[&"tcs_off"] = _local_tcs_off
 	raw[&"esc_off"] = _local_esc_off
-	var caps: Dictionary = _vehicle.call(&"vehicle_capabilities") \
-			if _vehicle != null and _vehicle.has_method(&"vehicle_capabilities") else {}
-	raw.merge(lab_raw(_lab_abs_off, _lab_axle_diff, _lab_parallel_steer, caps, _bridge_only), true)
+	raw.merge(lab_raw(_lab_abs_off, _lab_axle_diff, _lab_parallel_steer, _vehicle_caps(),
+			_bridge_only), true)
 	# The local manual gearbox, only with no bridge live (a live bridge's gearbox wins, D2).
 	var manual_gear := LOCAL_AUTOMATIC
 	if _manual_gearbox and not driving_only:

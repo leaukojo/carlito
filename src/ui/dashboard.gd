@@ -260,8 +260,8 @@ var _lamp_colors := {}  ## Label -> Color last applied, see _set_lamp_color
 ## input drives. Null on any other body.
 var _auto_hold_lamp: Label = null
 var _auto_hold_body := false  ## the bound vehicle's `key_auto_hold()`, read at bind
-## The LAB's ABS switch, local like the auto hold: shown only on a body with ABS fitted while
-## local input drives, lit while switched off (`VehicleInput.abs_off`). Null on any other body.
+## The LAB's ABS switch, no contract signal like the auto hold: shown only on a body with ABS
+## fitted, whoever drives, lit while switched off (`VehicleInput.abs_off`). Null on any other body.
 var _abs_lamp: Label = null
 var _abs_body := false  ## the bound vehicle's `vehicle_capabilities()["abs"]`, read at bind
 var _chips := {}     ## signal name -> [Label, SignalDef] (enum "in" requests)
@@ -1066,7 +1066,6 @@ func _update_telltales() -> void:
 		_set_lamp_color(_auto_hold_lamp, LAMP_COLOR["auto_hold"] if InputRouter.auto_hold_holding()
 				else LAMP_OFF)
 	if _abs_lamp != null:
-		_abs_lamp.visible = not InputRouter.bridge_drives()
 		_set_lamp_color(_abs_lamp, LAMP_COLOR["abs_off"] if vi.abs_off else LAMP_OFF)
 
 	var enums := {

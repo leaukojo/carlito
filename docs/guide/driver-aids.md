@@ -105,8 +105,9 @@ the truck in front is doing.
 <!-- pause_menu.gd TCS_HELP, ESC_HELP, ABS_HELP; InputRouter.lab_esc_cause; docs/systems.md -->
 
 Traction and stability control are saved; ANTI-LOCK BRAKES and DIFFERENTIALS last for the
-session and are locked during a challenge.
-sloppyCAN can switch traction control and stability control off with `tcs_off` and `esc_off`.
+session and are locked during a challenge; they act while sloppyCAN drives too.
+sloppyCAN can switch traction control and stability control off with `tcs_off` and `esc_off`;
+while it is connected, those two SANDBOX switches are greyed out.
 
 ## The dashboard lamps
 

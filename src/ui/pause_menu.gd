@@ -114,6 +114,7 @@ const CURRENT_HELP := "Changes how the sea flows." + SESSION
 const FROM_HELP := "Where the wind and the sea come from, for LIGHT and STRONG."
 const NIGHT_HELP := "Day or night. The N key does this too."
 const LOCKED_HELP := "Locked during a challenge."
+const AUTO_HOLD_BRIDGE_HELP := "keys and touch only: sloppyCAN drives the brake itself"
 
 ## How far Up/Down move the CONTROLS sheet, in logical px (scaled). About two rows.
 const SHEET_STEP := 64.0
@@ -505,26 +506,31 @@ func _build_world(box: VBoxContainer) -> void:
 			help.text = LOCKED_HELP
 
 
-## The driver aids (saved), then the LAB switches on the machine's own hardware (session-only):
-## A/B switches, disabled (with a reason) on a body without the hardware, in a challenge, which
-## drives stock, and under a live bridge (`_lab_off_reason`).
+## The driver aids (saved), disabled (with a reason) where the router ignores them
+## (`_aid_off_reason`), then the LAB switches on the machine's own hardware (session-only): A/B
+## switches, disabled on a body without the hardware and in a challenge, which drives stock
+## (`_lab_off_reason`).
 func _build_vehicle(box: VBoxContainer) -> void:
 	box.add_child(_heading(VEHICLE_HEAD))
 
+	# A live bridge sets TC and ESC, fallback included (`InputRouter.arbitrate_bridge`).
+	var tc_off := _aid_off_reason(Bridge.is_active(), ActionRegistry.BRIDGE_SETS_NOTE)
 	_tcs_btn = _menu_button("", _on_tcs_pressed)
 	_relabel_tcs()
 	box.add_child(_tcs_btn)
-	box.add_child(_help(TCS_HELP))
+	box.add_child(_aid_help(_tcs_btn, TCS_HELP, tc_off))
 
 	_esc_btn = _menu_button("", _on_esc_pressed)
 	_relabel_esc()
 	box.add_child(_esc_btn)
-	box.add_child(_help(ESC_HELP))
+	box.add_child(_aid_help(_esc_btn, ESC_HELP, tc_off))
 
+	# The auto hold is the local path's: in fallback the keys still drive and it holds.
 	_auto_hold_btn = _menu_button("", _on_auto_hold_pressed)
 	_relabel_auto_hold()
 	box.add_child(_auto_hold_btn)
-	box.add_child(_help(AUTO_HOLD_HELP))
+	box.add_child(_aid_help(_auto_hold_btn, AUTO_HOLD_HELP,
+			_aid_off_reason(InputRouter.bridge_drives(), AUTO_HOLD_BRIDGE_HELP)))
 
 	_abs_btn = _menu_button("", _on_abs_pressed)
 	_relabel_abs()
@@ -566,15 +572,27 @@ func _build_vehicle(box: VBoxContainer) -> void:
 	box.add_child(steering_help)
 
 
-## Why every LAB switch is greyed ("" when none): a challenge drives stock, and the switches act on
-## local input only, so a live bridge (fallback included) leaves them acting on nothing. Read when
-## the page builds, like the CONTROLS sheet: a bridge that connects under the pause shows on reopen.
+## Why every LAB switch is greyed ("" when none): a challenge drives stock. The switches are the
+## machine's hardware, so they act whoever drives (`InputRouter._apply_lab`).
 func _lab_off_reason() -> String:
+	return LOCKED_HELP if _lab_locked else ""
+
+
+## Why a driver aid is greyed ("" when none): a challenge, where only sloppyCAN drives, or
+## `bridge_case`, with `bridge_note` as the reason. Read when the page builds, like the CONTROLS
+## sheet: a bridge that connects under the pause shows on reopen.
+func _aid_off_reason(bridge_case: bool, bridge_note: String) -> String:
 	if _lab_locked:
 		return LOCKED_HELP
-	if Bridge.is_active():
-		return ActionRegistry.BRIDGE_SETS_NOTE
-	return ""
+	return bridge_note if bridge_case else ""
+
+
+## A driver aid's help line, the button greyed with `off_reason` in its place when there is one.
+func _aid_help(btn: Button, help: String, off_reason: String) -> Label:
+	if off_reason != "":
+		btn.disabled = true
+		return _help(off_reason)
+	return _help(help)
 
 
 ## One button per spawn point, in the level's order (the first is its default).
@@ -725,10 +743,9 @@ func _relabel_steering() -> void:
 
 
 ## What the LAB takes ESC off with on this body ("" for nothing), as the router gates it: never in a
-## challenge, under a live bridge, nor on a body without the hardware (`InputRouter.lab_raw`).
+## challenge nor on a body without the hardware (`InputRouter.lab_raw`).
 func _lab_esc_cause() -> String:
-	var lab := InputRouter.lab_raw(_abs_off, _axle_diff, _parallel_steer, _caps,
-			_lab_off_reason() != "")
+	var lab := InputRouter.lab_raw(_abs_off, _axle_diff, _parallel_steer, _caps, _lab_locked)
 	return InputRouter.lab_esc_cause(bool(lab[&"abs_off"]),
 			int(lab[&"axle_diff"]) as VehicleInput.AxleDiff)
 

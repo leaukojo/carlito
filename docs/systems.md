@@ -42,11 +42,10 @@ static/pure, tested in `tests/test_input_arbitration.gd`.
 - `auto_hold` (SANDBOX ▸ AUTO HOLD, off by default): on the local path, a wheel-driving body stopped in D or R with no throttle holds
   its foot brake until the throttle asks to move (`docs/drivetrain.md` § Hill hold); a feathered
   trigger is throttle too. It never applies to the bridge.
-- LAB switches (pause ▸ SANDBOX, under VEHICLE's driver aids): session-only and unsaved, local only (no contract signal), stock
-  under the challenge lock, dev keys included, and on a body without the hardware, so a switch kept
-  through a body change never reaches the next (`InputRouter.lab_raw`). A live bridge (fallback
-  included) ignores them too, so the page greys them "set by sloppyCAN", read when it opens.
-  ANTI-LOCK BRAKES
+- LAB switches (pause ▸ SANDBOX, under VEHICLE's driver aids): session-only and unsaved, no contract signal, act
+  whoever drives (`_apply_lab`), stock under the challenge lock, dev keys included, and on a body
+  without the hardware, so a switch kept through a body change never reaches the next
+  (`InputRouter.lab_raw`). ANTI-LOCK BRAKES
   (`abs_off`; drops hill-start assist and the auto hold), DIFFERENTIALS (`axle_diff` STOCK / OPEN /
   LOCKED on every driven axle, the centre untouched; no row on a body with its own DIFF LOCK key),
   STEERING (`parallel_steer`, Ackermann fraction 0). ABS off and LOCKED each set `esc_off`, so
@@ -200,7 +199,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   | SPAWN POINT | the level's spawns this body may use (`State.spawns`), shown from two up; a pick emits `spawn_picked(index)` |
   | CONTROLS | off `InputMap` and the registry's `pad` (`pad_for`); hidden if unusable (`ActionRegistry.relevant_entry`), greyed if bridge-owned; the pad drawn (`pad_diagram.gd`, plain and L1 sets, the L1 set from `pad_layer_rows`) where it fits, else the text column |
   | SETTINGS | dashboard density, UI scale, KEY RESPONSE; saved to `user://` (`UserSettings`, re-applied by `Boot._apply_saved_settings`) |
-  | SANDBOX | one scrolling page in two headed sections. WORLD: WIND/CURRENT preset (`WorldConditions.Preset` LEVEL/CALM/LIGHT/STRONG), FROM direction, TIME -> greys per `WorldConditions.WIND_FAMILIES`/`CURRENT_FAMILIES`, all greyed in a challenge. VEHICLE: TRACTION CONTROL, STABILITY CONTROL, AUTO HOLD (saved, as SETTINGS), then the LAB switches ANTI-LOCK BRAKES, DIFFERENTIALS, STEERING (§ Input pipeline), session-held, greyed in a challenge or under a live bridge |
+  | SANDBOX | one scrolling page in two headed sections. WORLD: WIND/CURRENT preset (`WorldConditions.Preset` LEVEL/CALM/LIGHT/STRONG), FROM direction, TIME -> greys per `WorldConditions.WIND_FAMILIES`/`CURRENT_FAMILIES`, all greyed in a challenge. VEHICLE: TRACTION CONTROL, STABILITY CONTROL, AUTO HOLD (saved, as SETTINGS; greyed where the router ignores them), then the LAB switches ANTI-LOCK BRAKES, DIFFERENTIALS, STEERING (§ Input pipeline), session-held, greyed in a challenge |
 
   Session-held, never saved: WORLD, the LAB switches and the garage's gearbox choice (`Boot._manual_gearbox`);
   the garage's tyre choice is saved (`UserSettings.set_tyre`). WORLD and night re-apply each
