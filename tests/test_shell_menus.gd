@@ -1113,6 +1113,28 @@ func test_pause_menu_greys_the_driver_aids_the_router_ignores() -> void:
 		assert_bool(greyed.call(locked, prefix)).is_true()
 
 
+## Greyed for a live bridge, the TC and ESC rows read what it sends, not the saved setting it
+## overrides: a saved TC OFF under a bridge sending nothing reads ON; its ESC off reads through.
+func test_pause_menu_driver_aids_read_the_bridge_under_a_live_one() -> void:
+	var saved := PauseMenu.State.new()
+	saved.tcs_off = true
+	Bridge._active = true
+	var quiet: PauseMenu = auto_free(PauseMenu.new())
+	quiet.setup({}, saved)
+	add_child(quiet)
+	Bridge._inbound = {"esc_off": 1}
+	var esc: PauseMenu = auto_free(PauseMenu.new())
+	esc.setup({}, saved)
+	add_child(esc)
+	_press(quiet, "SANDBOX")
+	_press(esc, "SANDBOX")
+	assert_array(_labels(quiet)).contains(["TRACTION CONTROL: ON", "STABILITY CONTROL: ON"])
+	assert_array(_labels(esc)).contains(["TRACTION CONTROL: OFF (WITH ESC)",
+			"STABILITY CONTROL: OFF"])
+	Bridge._inbound = {}
+	Bridge._active = false
+
+
 ## LAB's DIFFERENTIALS: LOCKED takes ESC and TC with it, and their rows say so.
 func test_pause_menu_lab_locked_diffs_relabel_esc_and_tc() -> void:
 	var pause: PauseMenu = auto_free(PauseMenu.new())

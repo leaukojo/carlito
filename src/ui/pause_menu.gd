@@ -12,6 +12,7 @@ extends Control
 
 const WorldConditions := preload("res://src/levels/base/world_conditions.gd")
 const KeyShaper := preload("res://src/input/key_shaper.gd")
+const BridgeSourceScript := preload("res://src/input/sources/bridge_source.gd")
 
 signal resume_requested
 signal respawn_requested
@@ -114,7 +115,7 @@ const CURRENT_HELP := "Changes how the sea flows." + SESSION
 const FROM_HELP := "Where the wind and the sea come from, for LIGHT and STRONG."
 const NIGHT_HELP := "Day or night. The N key does this too."
 const LOCKED_HELP := "Locked during a challenge."
-const AUTO_HOLD_BRIDGE_HELP := "keys and touch only: sloppyCAN drives the brake itself"
+const AUTO_HOLD_BRIDGE_HELP := "sloppyCAN is driving: it works the brake itself"
 
 ## How far Up/Down move the CONTROLS sheet, in logical px (scaled). About two rows.
 const SHEET_STEP := 64.0
@@ -158,6 +159,9 @@ var _abs_off := false
 var _axle_diff := VehicleInput.AxleDiff.STOCK
 var _parallel_steer := false
 var _lab_locked := false  ## a challenge drives the stock hardware: the LAB switches grey out
+## A live bridge sets TC and ESC (`InputRouter.arbitrate_bridge`): their rows read its values, not
+## the saved settings it overrides. Read when the page builds.
+var _aids_bridged := false
 var _wind_preset: int = WorldConditions.Preset.LEVEL
 var _current_preset: int = WorldConditions.Preset.LEVEL
 var _wind_from_deg := 0.0
@@ -514,7 +518,8 @@ func _build_vehicle(box: VBoxContainer) -> void:
 	box.add_child(_heading(VEHICLE_HEAD))
 
 	# A live bridge sets TC and ESC, fallback included (`InputRouter.arbitrate_bridge`).
-	var tc_off := _aid_off_reason(Bridge.is_active(), ActionRegistry.BRIDGE_SETS_NOTE)
+	_aids_bridged = Bridge.is_active()
+	var tc_off := _aid_off_reason(_aids_bridged, ActionRegistry.BRIDGE_SETS_NOTE)
 	_tcs_btn = _menu_button("", _on_tcs_pressed)
 	_relabel_tcs()
 	box.add_child(_tcs_btn)
@@ -682,7 +687,19 @@ func _relabel_tcs() -> void:
 	# (`InputRouter.arbitrate_local`), whatever this setting.
 	var lab := _lab_esc_cause()
 	_tcs_btn.text = "TRACTION CONTROL: %s" % ("OFF (WITH %s)" % lab if lab != ""
-			else "OFF (WITH ESC)" if _esc_off else "OFF" if _tcs_off else "ON")
+			else "OFF (WITH ESC)" if _esc_shown() else "OFF" if _tcs_shown() else "ON")
+
+
+## The ESC / TC off state in force: the bridge's under a live one, parsed as the router's source
+## parses it (absent = on), else the saved setting.
+func _esc_shown() -> bool:
+	return BridgeSourceScript._flag(Bridge.get_input_values(), "esc_off") if _aids_bridged \
+			else _esc_off
+
+
+func _tcs_shown() -> bool:
+	return BridgeSourceScript._flag(Bridge.get_input_values(), "tcs_off") if _aids_bridged \
+			else _tcs_off
 
 
 func _on_esc_pressed() -> void:
@@ -695,7 +712,7 @@ func _on_esc_pressed() -> void:
 func _relabel_esc() -> void:
 	var lab := _lab_esc_cause()
 	_esc_btn.text = "STABILITY CONTROL: %s" % ("OFF (WITH %s)" % lab if lab != ""
-			else "OFF" if _esc_off else "ON")
+			else "OFF" if _esc_shown() else "ON")
 
 
 func _on_auto_hold_pressed() -> void:
