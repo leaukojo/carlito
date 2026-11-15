@@ -36,6 +36,14 @@ func test_a_family_link_falls_to_the_family_default() -> void:
 			.is_equal(VehicleCatalog.first_in_family("truck"))
 
 
+## `?challenge=` names a listed challenge; a dev fixture or an unknown id is dropped.
+func test_challenge_link_takes_listed_challenges_only() -> void:
+	assert_str(String(BootParams.parse_query("?challenge=car_start_up")["challenge"])).is_equal("car_start_up")
+	assert_str(String(BootParams.parse_query("?challenge=dev_box_stop")["challenge"])).is_equal("")
+	assert_str(String(BootParams.parse_query("?challenge=car_nope")["challenge"])).is_equal("")
+	assert_str(String(BootParams.parse_query("?level=level_3")["challenge"])).is_equal("")
+
+
 ## The keyboard-drives-a-challenge override: either the user arg or the env var asks for it.
 func test_challenge_keys_come_from_the_arg_or_the_env() -> void:
 	assert_bool(BootParams.wants_challenge_keys(PackedStringArray(["--challenge-keys"]), "")).is_true()

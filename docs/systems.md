@@ -175,7 +175,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
 
   | Authority | Source | Notes |
   |---|---|---|
-  | Deep link | `?level=<id>&vehicle=<variant>`, `--level=`/`--vehicle=`, or `CARLITO_LEVEL` | `src/shell/boot_params.gd`: unknown ids dropped; `vehicle` names a VARIANT |
+  | Deep link | `?challenge=`, `?level=&vehicle=`, `--level=`/`--vehicle=`, `CARLITO_LEVEL` | `src/shell/boot_params.gd`: unknown ids dropped; `vehicle` names a VARIANT |
   | `boot.gd`'s `DEFAULT_LEVEL` | `flatland` (no bake) | keeps every island pack out of the boot download |
 
   Variant reaches the level via `Level.initial_variant`, read before `_ready` spawns it.

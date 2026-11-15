@@ -100,8 +100,8 @@ func _ready() -> void:
 	_boot()
 
 
-## Two authorities in order: deep link (`?level=&vehicle=` web, `--level=`/`--vehicle=`/
-## CARLITO_LEVEL local), then DEFAULT_LEVEL. BootParams validates every id, so
+## Two authorities in order: deep link (`?challenge=` or `?level=&vehicle=` web,
+## `--level=`/`--vehicle=`/CARLITO_LEVEL local), then DEFAULT_LEVEL. BootParams validates every id, so
 ## an unknown level falls back instead of booting into nothing. Also the headless CI
 ## path: reaching a level never requires a menu.
 func _boot() -> void:
@@ -111,6 +111,9 @@ func _boot() -> void:
 		_start_challenge(ChallengeRegistry.def_of(challenge_id, true))
 		return
 	var params := BootParams.resolve()
+	if String(params["challenge"]) != "":
+		_start_challenge(ChallengeRegistry.def_of(params["challenge"]))
+		return
 	var level_id := String(params["level"])
 	var variant := String(params["vehicle"])
 	if level_id.is_empty():

@@ -1,17 +1,18 @@
 class_name BootParams
 extends RefCounted
-## Deep link boot params: web reads page query string; local reads --level/--vehicle or
+## Deep link boot params: web reads page query string (`challenge` too); local reads --level/--vehicle or
 ## CARLITO_LEVEL env. Parsing and validation together; unknown ids dropped (not clamped) —
 ## {} means "no opinion" for the caller's next authority. Also the debug-only challenge-keys flag
 ## and challenge boot.
 
-## Empty result, i.e. no deep link. Both fields are always present so callers never guess.
-const NONE := {"level": "", "vehicle": ""}
+## Empty result, i.e. no deep link. Every field is always present so callers never guess.
+const NONE := {"level": "", "vehicle": "", "challenge": ""}
 
 
-## Parse a query string ("?level=x&vehicle=y", leading '?' optional) into {level, vehicle},
-## dropping ids that no longer exist. A vehicle naming a family ("drone") falls to that family's
-## default variant.
+## Parse a query string ("?level=x&vehicle=y", leading '?' optional) into {level, vehicle,
+## challenge}, dropping ids that no longer exist. A vehicle naming a family ("drone") falls to that
+## family's default variant. `challenge` names a listed challenge, never a dev fixture: sloppyCAN
+## reloads the game with it when a script asks for one.
 static func parse_query(query: String) -> Dictionary:
 	var out := NONE.duplicate()
 	for pair in query.trim_prefix("?").split("&", false):
@@ -26,6 +27,9 @@ static func parse_query(query: String) -> Dictionary:
 					out["level"] = value
 			"vehicle":
 				out["vehicle"] = value if is_vehicle(value) else VehicleCatalog.first_in_family(value)
+			"challenge":
+				if ChallengeRegistry.def_of(value) != null:
+					out["challenge"] = value
 	return out
 
 
