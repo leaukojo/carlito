@@ -35,7 +35,8 @@ towing item and `scrape onebody` (both below).
 
 Opus's and Sonnet's items:
 
-- The rolling resistance is a moment on the wheel, solved as a brake inside the spin step
+- (approved, user 2026-11-15: variant A, the ground's share a moment too) The rolling resistance
+  is a moment on the wheel, solved as a brake inside the spin step
   (`sessions/2026-11-15-wheel-leftovers.md` finding 1: the derivation, what goes, what moves;
   read first). Wrong now: `RayWheel.apply_patch` (`wheel.gd:604-616`) pushes the body with the
   drag as a second force under a cap of its own, less `taken`, one contact's guess at what
@@ -55,11 +56,11 @@ Opus's and Sonnet's items:
   `test_wheel_spin.gd:30-63`, the drag line of `_free_pair_speeds`, the `taken` paragraph of
   `docs/vehicles.md` § One-tick caps; the comments that name `surface_drag_force` follow
   (`vehicle_math.gd:182`, `:193`, `towed_body.gd:196`, `wheel_drive.gd:958`,
-  `gen_kenney_vehicles.gd:41`). The plan settles one choice with the user, the ground's share:
-  (A, recommended) one moment for both, the soil's share labelled a `COMPROMISE` (a driven
-  wheel's own soil drag costs no slip); (B) only `rolling_crr` moves and `surface_drag` keeps
-  the capped force and `taken`. For (A) measure `wheel_slip` on FIELD at no draft, before and
-  after, on `tractor-kenney` (estimated 2 points to about 0). New tests, failing now: a free wheel
+  `gen_kenney_vehicles.gd:41`). The soil's share takes a `COMPROMISE` label at its site (a driven
+  wheel's own soil drag costs engine torque and no slip; undoing it is a capped force at the
+  contact with the stick test this item removes), and `surface.gd`'s header follows. Measure
+  `wheel_slip` on FIELD at no draft, before and after, on `tractor-kenney` (estimated 2 points to
+  about 0) and report it. New tests, failing now: a free wheel
   rolling up a 25 % grade at 0.03 m/s reports `force_roll` within 5 % of `-crr N`; a free
   wheel coasting on the flat loses speed at `crr N` over its mass and its inertia, to 1 %. The
   run that fails now: `measure_grade -- semi rollback grade=25 verbose`, steady lines, `roll
@@ -71,8 +72,11 @@ Opus's and Sonnet's items:
   about 41.2 m), the laden `semi`'s 25 % cells. Stop and hand back, the change undone, if a
   standing body's `rest reading:` rises, a `doc=park` held cell moves over 1 mm, an undriven
   wheel reads `omega == 0` on a rolling body, or cruise and top speed move by more than a digit.
-  Ends in a proposal (stops and roll-backs move). The rest-gates item below sizes its limits after
-  this lands, not before. [high, plan, Opus]
+  The plan shows the user the measured moves (stops, roll-backs, `wheel_slip` on FIELD) before
+  the commit; "Please verify" gains: full stops about 1 % longer, a tractor's `wheel_slip` in a
+  field at no draft near 0, a laden `semi` rolling back less on a steep grade. The `COMPROMISE`
+  count stays (one goes, one comes). The rest-gates item below sizes its limits after this lands,
+  not before. [high, plan, Opus]
 - `brake_settled_spin`'s `COMPROMISE` is a design choice (`wheel.gd:141-146`;
   `sessions/2026-11-15-wheel-leftovers.md` finding 2). Relabel, no code: the settled spin is the
   angle the wheel turns in the tick, so the brake's heat on it is the step's own work, and with

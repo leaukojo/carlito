@@ -112,6 +112,9 @@ costs no slip; undoing it is the force below): one path, everything above goes. 
 slip reading keeps its 2 points, and the fault of this finding stays on painted ground only, where
 nothing measures it; two paths, nothing deleted.
 
+**Decided, user 2026-11-15: (A).** The Queue line is approved on it; the plan still shows the
+measured moves before the commit.
+
 ## 2. `brake_settled_spin`'s `COMPROMISE` is a false label
 
 `wheel.gd:141-146`. The reorder did not touch it: "the spin the road lent the step" is the
@@ -175,8 +178,8 @@ A real unit's minimum speed (a page opened) is then the only thing that keeps a 
 
 ## Deferred
 
-Everything: this session fixes nothing. Queue: the rolling moment (Opus, plan, ends in a
-proposal), the relabel (Sonnet); the towing item's (a) and cover sweep (5) amended.
+Everything: this session fixes nothing. Queue: the rolling moment (Opus, plan, approved on
+variant A), the relabel (Sonnet); the towing item's (a) and cover sweep (5) amended.
 
 ## Commits
 
