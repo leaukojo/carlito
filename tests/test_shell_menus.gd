@@ -1082,12 +1082,15 @@ func test_pause_menu_lab_page_greys_abs_without_it_and_in_a_challenge() -> void:
 	assert_array(_labels(race)).contains(["STABILITY CONTROL: ON", "TRACTION CONTROL: ON"])
 
 
-## A driver aid the router ignores greys out with the reason: TC and ESC under a live bridge (it
-## sends its own), all three in a challenge. The LAB switches act under the bridge, so stay live.
+## A driver aid the router ignores greys out with the reason: all three under a live bridge (it
+## sends its own TC and ESC and implements its own auto hold) and in a challenge. The LAB switches
+## act under the bridge, so stay live.
 func test_pause_menu_greys_the_driver_aids_the_router_ignores() -> void:
 	Bridge._active = true
+	var saved := PauseMenu.State.new()
+	saved.auto_hold = true
 	var bridged: PauseMenu = auto_free(PauseMenu.new())
-	bridged.setup({"abs": true})
+	bridged.setup({"abs": true}, saved)
 	add_child(bridged)
 	Bridge._active = false
 	var locked: PauseMenu = auto_free(PauseMenu.new())
@@ -1103,12 +1106,13 @@ func test_pause_menu_greys_the_driver_aids_the_router_ignores() -> void:
 	var helps := func(pause: PauseMenu) -> Array:
 		return pause.find_children("*", "Label", true, false).map(
 				func(l: Node) -> String: return (l as Label).text)
-	for prefix in ["TRACTION CONTROL", "STABILITY CONTROL"]:
+	for prefix in ["TRACTION CONTROL", "STABILITY CONTROL", "AUTO HOLD"]:
 		assert_bool(greyed.call(bridged, prefix)).is_true()
-	# Nobody drives from the bridge here (fallback): the keys still drive, and the auto hold holds.
-	assert_bool(greyed.call(bridged, "AUTO HOLD")).is_false()
 	assert_bool(greyed.call(bridged, "ANTI-LOCK BRAKES")).is_false()
-	assert_array(helps.call(bridged)).contains([ActionRegistry.BRIDGE_SETS_NOTE])
+	assert_array(helps.call(bridged)).contains([ActionRegistry.BRIDGE_SETS_NOTE,
+			PauseMenu.AUTO_HOLD_BRIDGE_HELP])
+	# A saved ON is not in force under the bridge: the row reads OFF.
+	assert_array(_labels(bridged)).contains(["AUTO HOLD: OFF"])
 	for prefix in ["TRACTION CONTROL", "STABILITY CONTROL", "AUTO HOLD", "ANTI-LOCK BRAKES"]:
 		assert_bool(greyed.call(locked, prefix)).is_true()
 

@@ -41,7 +41,7 @@ static/pure, tested in `tests/test_input_arbitration.gd`.
   bridge's own wins, fallback included), `esc_off` STABILITY CONTROL (local only; sets `tcs_off`).
 - `auto_hold` (SANDBOX ▸ AUTO HOLD, off by default): on the local path, a wheel-driving body stopped in D or R with no throttle holds
   its foot brake until the throttle asks to move (`docs/drivetrain.md` § Hill hold); a feathered
-  trigger is throttle too. It never applies to the bridge.
+  trigger is throttle too. Off under a live bridge, fallback included: sloppyCAN implements its own.
 - LAB switches (pause ▸ SANDBOX, under VEHICLE's driver aids): session-only and unsaved, no contract signal, act
   whoever drives (`_apply_lab`), stock under the challenge lock, dev keys included, and on a body
   without the hardware, so a switch kept through a body change never reaches the next

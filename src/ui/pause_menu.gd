@@ -115,7 +115,7 @@ const CURRENT_HELP := "Changes how the sea flows." + SESSION
 const FROM_HELP := "Where the wind and the sea come from, for LIGHT and STRONG."
 const NIGHT_HELP := "Day or night. The N key does this too."
 const LOCKED_HELP := "Locked during a challenge."
-const AUTO_HOLD_BRIDGE_HELP := "sloppyCAN is driving: it works the brake itself"
+const AUTO_HOLD_BRIDGE_HELP := "off while sloppyCAN is connected"
 
 ## How far Up/Down move the CONTROLS sheet, in logical px (scaled). About two rows.
 const SHEET_STEP := 64.0
@@ -159,8 +159,8 @@ var _abs_off := false
 var _axle_diff := VehicleInput.AxleDiff.STOCK
 var _parallel_steer := false
 var _lab_locked := false  ## a challenge drives the stock hardware: the LAB switches grey out
-## A live bridge sets TC and ESC (`InputRouter.arbitrate_bridge`): their rows read its values, not
-## the saved settings it overrides. Read when the page builds.
+## A live bridge sets TC and ESC (`InputRouter.arbitrate_bridge`) and switches the auto hold off:
+## their rows read what is in force, not the saved settings it overrides. Read when the page builds.
 var _aids_bridged := false
 var _wind_preset: int = WorldConditions.Preset.LEVEL
 var _current_preset: int = WorldConditions.Preset.LEVEL
@@ -530,12 +530,12 @@ func _build_vehicle(box: VBoxContainer) -> void:
 	box.add_child(_esc_btn)
 	box.add_child(_aid_help(_esc_btn, ESC_HELP, tc_off))
 
-	# The auto hold is the local path's: in fallback the keys still drive and it holds.
+	# The auto hold is off under a live bridge, fallback included (`InputRouter._apply_auto_hold`).
 	_auto_hold_btn = _menu_button("", _on_auto_hold_pressed)
 	_relabel_auto_hold()
 	box.add_child(_auto_hold_btn)
 	box.add_child(_aid_help(_auto_hold_btn, AUTO_HOLD_HELP,
-			_aid_off_reason(InputRouter.bridge_drives(), AUTO_HOLD_BRIDGE_HELP)))
+			_aid_off_reason(_aids_bridged, AUTO_HOLD_BRIDGE_HELP)))
 
 	_abs_btn = _menu_button("", _on_abs_pressed)
 	_relabel_abs()
@@ -722,7 +722,8 @@ func _on_auto_hold_pressed() -> void:
 
 
 func _relabel_auto_hold() -> void:
-	_auto_hold_btn.text = "AUTO HOLD: %s" % ("ON" if _auto_hold else "OFF")
+	# Off in force under a live bridge, whatever the saved setting, which returns once it goes.
+	_auto_hold_btn.text = "AUTO HOLD: %s" % ("ON" if _auto_hold and not _aids_bridged else "OFF")
 
 
 func _on_abs_pressed() -> void:

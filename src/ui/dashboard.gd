@@ -256,8 +256,8 @@ var _lamps := {}     ## signal name -> Label (input bool tell-tales)
 var _out_lamps := {} ## signal name -> Label (bool "out" ISOBUS tell-tales, driven from telemetry)
 var _lamp_colors := {}  ## Label -> Color last applied, see _set_lamp_color
 ## InputRouter's auto hold, a local-path aid the bridge never gets, so it is no contract
-## signal: shown only on a body it holds (`key_auto_hold`), while the setting is on and local
-## input drives. Null on any other body.
+## signal: shown only on a body it holds (`key_auto_hold`), while the setting is on and no bridge
+## is live (fallback included). Null on any other body.
 var _auto_hold_lamp: Label = null
 var _auto_hold_body := false  ## the bound vehicle's `key_auto_hold()`, read at bind
 ## The LAB's ABS switch, no contract signal like the auto hold: shown only on a body with ABS
@@ -1062,7 +1062,7 @@ func _update_telltales() -> void:
 		var col: Color = LAMP_COLOR.get(sig_name, Color(1.0, 0.70, 0.15)) if on else LAMP_OFF
 		_set_lamp_color(_lamps[sig_name], col)
 	if _auto_hold_lamp != null:
-		_auto_hold_lamp.visible = InputRouter.auto_hold_on() and not InputRouter.bridge_drives()
+		_auto_hold_lamp.visible = InputRouter.auto_hold_on() and not Bridge.is_active()
 		_set_lamp_color(_auto_hold_lamp, LAMP_COLOR["auto_hold"] if InputRouter.auto_hold_holding()
 				else LAMP_OFF)
 	if _abs_lamp != null:

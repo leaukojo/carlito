@@ -82,7 +82,7 @@ var _brake_override := false  ## latched by `brake_override`, both sources alike
 ## The player's AUTO HOLD setting, set by the shell. Off by default: a real car's auto hold is a
 ## button the driver turns on, and off is where converter creep and roll-back are felt.
 var _auto_hold_on := false
-var _auto_hold := false  ## latched by `auto_hold`, local path only (keys, touch, gamepad)
+var _auto_hold := false  ## latched by `auto_hold`, local path only (keys, touch, gamepad; no bridge live)
 var _lights := 1  ## headlight level owned here so keyboard + touch share one state
 ## Local parking-brake latch, flipped by its key, the pad's R1 and touch HAND; `handbrake` reads the
 ## stronger of it and the held control. Airframe state: `reset_vehicle_cycles` releases it.
@@ -394,7 +394,7 @@ func _physics_process(delta: float) -> void:
 	_current = blend_local_driving(bridge_raw, local, _manual_gearbox) if live else local
 	if live:
 		_apply_lab()  # the local path's arrive through `arbitrate_local`
-	_apply_auto_hold()
+	_apply_auto_hold(live)
 	_apply_brake_override()
 	_apply_brake_light_request()
 
@@ -424,10 +424,11 @@ func _apply_brake_override() -> void:
 
 ## Hold the foot brake while the auto hold is latched (`auto_hold`), on a body whose engine drives
 ## road wheels (`key_auto_hold`: a drone's pedals are a stick). After `arbitrate_local`, so the held
-## brake never reads as S at a standstill (which selects R). The bridge never gets it: it drives the
-## real creep.
-func _apply_auto_hold() -> void:
-	if not _auto_hold_on or _vehicle == null or not _vehicle.key_auto_hold():
+## brake never reads as S at a standstill (which selects R). Off while a bridge is `live`, fallback
+## included: an auto hold is the car's own function, so sloppyCAN implements it; the game's never
+## stacks on the bus.
+func _apply_auto_hold(live: bool) -> void:
+	if live or not _auto_hold_on or _vehicle == null or not _vehicle.key_auto_hold():
 		_auto_hold = false
 		return
 	_auto_hold = auto_hold(_auto_hold, _current, _vehicle.get_speed())

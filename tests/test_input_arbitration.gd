@@ -1125,6 +1125,11 @@ func test_the_local_path_holds_the_brake_at_a_standstill_and_the_bridge_creeps()
 	router._bridge_source = _IdleBridge.new()
 	router._physics_process(1.0 / 60.0)
 	assert_float(router.get_vehicle_input().brake).is_equal(0.0)
+	# Fallback too: the keys drive, but sloppyCAN is connected and implements its own.
+	router._bridge_source = _QuietBridge.new()
+	router._physics_process(1.0 / 60.0)
+	assert_bool(router.auto_hold_holding()).is_false()
+	assert_float(router.get_vehicle_input().brake).is_equal(0.0)
 
 
 ## A pad holding its triggers where the test puts them, unshaped like the real one.
