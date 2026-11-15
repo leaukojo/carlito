@@ -18,7 +18,7 @@ solvers (car_005_reverse_park is the risky one). Open findings: none.
 - **D2** One solver per challenge, in tools/challenge_solvers. The script asks for the challenge
   (D5), or with `--no-open` you start it in the game; it waits for the start line, then drives.
 - **D5** A solver opens its challenge (default on): `#challenge open <id>` on the relay →
-  sloppyCAN reloads Carlito with `?challenge=<id>` (`BootParams`). `--can` keeps the Enter prompt.
+  sloppyCAN posts a live `carlitoCommand` (no reload), or opens a shut window with `?challenge=`. `--can` keeps the Enter prompt.
 - **D6** A script's name starts with its place in the car list: `car_001_start_up.py`.
 - **D7** First-course Python, one-line comments welcome; each solver self-contained.
 - **D3** The RAMN ECUs are silenced first with UDS routine 0x0200 (`31 01 02 00`) on 0x7E1,
