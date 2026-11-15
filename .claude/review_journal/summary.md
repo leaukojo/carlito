@@ -22,7 +22,19 @@ may not last the review). What earns the tag, "prepared first" and the hand-back
 § Diagnose only. A Fable session takes the top READY item and skips one marked "after" or
 "needs". The user names more items: each is added here with the reason it is worth Fable.
 
-1. (needs "gather for the high-speed swerve", below) `race` and `race-future` leave the 40 m
+1. (hand-back, 2026-11-15; needs "gather for the rolling moment's hand-back", below) The rolling
+   moment (`sessions/2026-11-15-rolling-moment.md`: the patch, every figure HEAD -> patch, the
+   derived cause of stop 1). Three stops fired: (1) a drive wheel TC holds at its slip pays its
+   rolling resistance out of traction, since `settle_spin` / `settled_spin` apply TC and then the
+   brake law that carries the moment (laden `semi` 25 % nohold rolls back 887 -> 1578 mm, with the
+   hold never pulls away); (2) bobtail `rest reading:` axle step 0.11 -> 0.34 kg a tick; (3)
+   `doc=park` `semi` 18 % hand 1.7 mm across; and converter creep holds 0.4 to 1.3 points less
+   grade on every body. From the gathered logs: confirm (1)'s cause and write the settle law with
+   the moment as a stage before the TC hold (what it does to `Differential`'s piecewise
+   composition, the ABS floor, the `roll_share` split, `_spin_held`); say what produces (2), (3)
+   and the creep loss and whether that stage removes them. One brief for Opus that re-applies the
+   patch with the fix and re-runs the session file's list. [diagnose, high, Fable]
+2. (needs "gather for the high-speed swerve", below) `race` and `race-future` leave the 40 m
    strip sideways near 280-290 km/h with zero steer (`docs/plans/realism_gaps.md` phase 4;
    `doc=top` prints `left the strip`). From the gathered trace and the spec's figures, derive the
    yaw mode at that speed (each axle's cornering stiffness at its load with the downforce on, the
@@ -35,7 +47,20 @@ towing item and `scrape onebody` (both below).
 
 Opus's and Sonnet's items:
 
-- (approved, user 2026-11-15: variant A, the ground's share a moment too) The rolling resistance
+- (gather for the rolling moment's hand-back: Fable's item 1) `git apply
+  sessions/2026-11-15-rolling-moment.patch` at 55d25e1 or later (re-read `wheel.gd` if it fails),
+  add an uncommitted per-tick probe, run `--fixed-fps 60`, then `git checkout` every patched file.
+  Log: (i) `measure_semi_launch -- semi steady strict trailer=bobtail`, over the rest window, each
+  wheel's `omega`, `_spin_held`, `brake_spin`, `roll_share`, `long_slip`, `force_long`,
+  `suspension_force`, and the rear axle load, at HEAD and on the patch; name the first quantity
+  that alternates on the patch and not at HEAD. (ii) `measure_grade -- sedan creep` released on
+  7.0 % (HEAD's held grade) on the patch: per tick for 3 s, each wheel's `omega`, `force_long`,
+  `force_roll`, `_spin_held`, the converter's output torque and the body's speed. (iii) `doc=park`'s
+  `semi` 18 % hand cell alone: the body's speed across and each wheel's `force_lat` per tick at
+  HEAD and on the patch. A session file with the tables; no cause guessed, no fix. [medium, auto,
+  Opus]
+- (approved, user 2026-11-15: variant A, the ground's share a moment too; handed back 2026-11-15,
+  waits on Fable's item 1: its brief replaces the "Do" below) The rolling resistance
   is a moment on the wheel, solved as a brake inside the spin step
   (`sessions/2026-11-15-wheel-leftovers.md` finding 1: the derivation, what goes, what moves;
   read first). Wrong now: `RayWheel.apply_patch` (`wheel.gd:604-616`) pushes the body with the
@@ -101,7 +126,7 @@ Opus's and Sonnet's items:
   on (`git log -S`), size new ones on today's figures with the margin the old ones had, keep the
   laden step's limit above the towing item's (c) until that lands; `test_measure_*` and
   `docs/vehicles.md` § One-tick caps follow. [medium, auto, Sonnet]
-- (gather for the high-speed swerve: Fable's item 1) Reproduce `race` and `race-future` leaving
+- (gather for the high-speed swerve: Fable's item 2) Reproduce `race` and `race-future` leaving
   the strip (`measure_vehicles -- race,race-future 60`, the top-speed pass; `--fixed-fps 60`
   and without, and say whether both leave). With an uncommitted probe in the tool, reverted, log
   per tick from 240 km/h until the body leaves: speed, heading, yaw rate, the centre of mass's
@@ -121,7 +146,7 @@ Opus's and Sonnet's items:
   pull on the contact's own mass out of `taken`, never the trailer's pull through the coupling,
   so a drive wheel holding a trailer loses its rolling drag under about 0.3 m/s. Explained
   (`sessions/2026-11-15-wheel-leftovers.md` finding 1): no trace and no brief here, its fix is
-  the rolling-moment item at the top of this list. Left for this item, once that has landed: read
+  the rolling-moment item (handed back: Fable's item 1). Left for this item, once that has landed: read
   the steady 0.04 to 0.2 mm/s drift of a standing rig again; still there, it is (c)'s.
   (b) `Articulation.YAW_CAP_SHARE` (cover sweep 6; `articulation.gd:9-12`, `yaw_friction_torque`,
   `tow_host.gd:369-376`): half of the one-tick stop, a guess, because the towed tyres' lateral
@@ -280,7 +305,7 @@ changes only with the user's OK). Where they meet this Queue:
   quarter of a second sooner, stops up to 1 m shorter): judge the plan's targets on the `doc=`
   tables re-run after it. Phase 1's "investigate" is a power ledger on Opus (fuel to crank to wheels at
   70 km/h), Fable's only on a hand-back. Phase 4's `race` / `race-future` swerve waits on Fable's
-  item 1; its other bullets do not.
+  item 2; its other bullets do not.
 - `handbrake_fade.md` (2 phases, not started, Opus): its phase 1 edits the brake loop of
   `WheelDrive.tick` (cited as `wheel_drive.gd:658-662`, before the wheel fix), which now has
   `apply_patch`'s loop after it (d22b3ee): re-read the lines before editing.
