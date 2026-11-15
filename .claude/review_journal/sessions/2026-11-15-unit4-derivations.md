@@ -165,6 +165,32 @@ Each against the code named, by hand; figures where one was worked.
 - `slip_step` reads the body's lateral acceleration as the path's, exact only at small body slip.
   A real unit's limit too: a note for the comment, no fix.
 
-## Deferred
+## Finding 1's brief (the Queue line's "Do", kept here since 2026-11-16)
 
-Finding 1's fix: one Queue line, tagged for Opus.
+`BalanceModel._roll_state` (`balance_model.gd:146-194`). Do, with `pivot_w = cap_f * pivot_h` (the
+front's whole load enters at the pivot): free, `phi = (moment - pivot_m) / (k_r - weight_h +
+pivot_w)`, the beam's tilt `psi = pivot_m / (k_f - pivot_w)`, `df = 2 * k_f * psi / t_f`,
+`free = phi - psi <= stop`, and the branch's gate `k_r > weight_h - pivot_w` with `k_f > pivot_w`;
+on the stop (`:176`) and with the rear lifted (`:190`) `k_f * stop` becomes
+`(k_f - pivot_w) * stop`. `stop = 0` leaves every form as it is. `:184` (the front lifted) and
+`_corner_wheels`' `shift` stay: sized and left above. The doc comment of `_roll_state` follows.
+
+Tests (`tests/test_balance_model.gd`): new, the fixture above (fails now by 2.66 % on
+`tractor-kenney`); `:835` and `:851` are written from the old forms and take the new ones
+(`front == 2 pivot_m k_f / ((k_f - pivot_w) t_f)`, `rear * t_r / 2 == (weight_h - pivot_w) *
+(g + phi)`); `:888`'s tip becomes `trapezoid - stop * (1 - pivot_w / weight_h)`, and its `wide`
+half (the tip at the rear's first lift) is re-derived on that figure, not assumed; `:873`, the
+rigid triangle, does not change and is the independent check.
+
+Runs: `test_balance_model`, the suite (`test_vehicle_catalog` fails a moved ESC table: none may
+move, no ESC body swings); `gen_kenney_vehicles` writes no spec differently (its printed balance
+line for the tractors moves); `measure_vehicles -- tractor-kenney 60 track corner` and
+`tractor-cvt`, HEAD then after, for the `Pred` cell and "model tips at". Expect the tractors' tip
+to leave the rear's first lift by a hair (by hand the front then holds 0.4 % under its cap, to
+about 0.653 g) and `corner_limit`'s sweep perhaps to end differently: report what it prints, and
+where a printed figure moves, the two rows of `docs/vehicle_measurements.md` § Cornering, the
+recipe comment (`gen_kenney_vehicles.gd:565-567`) and `docs/tractor.md:179-183` follow.
+
+Stop and hand back, the change undone, if `:873` fails, any body without a swinging axle reads a
+different figure, or a tractor's `corner_limit` returns empty where it returned a turn.
+Prediction only: no proposal.

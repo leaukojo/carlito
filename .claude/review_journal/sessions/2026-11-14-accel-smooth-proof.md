@@ -60,3 +60,20 @@ At HEAD the lag hides no fault standing and almost none driving; it attenuates r
 choice is between sending raw and declaring a sourced sensor filter: a proposal
 (`proposals.md`, "accLong / accLat / acc_vert: raw or a declared sensor filter"). The tractor's
 low-speed content is the existing proposal's, not a new Queue line.
+
+## The brief (approved, user 2026-11-14: raw; the Queue line's "Do", kept here since 2026-11-16)
+
+- `base_vehicle.gd:280-283` writes `body_accel` straight to `telemetry`, and
+  `BaseVehicle.ACCEL_SMOOTH` goes; `TowedBody._sense_lateral` (`towed_body.gd:208`) takes `raw`
+  too, and its comment (`:62-65`) follows; the "smoothed" comments at `vehicle_telemetry.gd:80-82`
+  and `:163`; `acc_vert`'s contract `desc` ("smoothed at the same rate") through `/contract-edit`;
+  `docs/guide/position.md`'s "smoothed a little" sentence and its citation.
+- Run `test_trailer`, `test_stability_control`, `test_tow_host`, the suite; re-run
+  `doc=cornering`, `doc=trailer_roll` and `measure_semi_launch`'s `acc_lat_g` rows, baseline at
+  HEAD first (the tractor's pull-away ring is gone with d22b3ee: re-read it in the baseline).
+- Stop and hand back, with the trace and that half undone, if the trailer's roll-over control (it
+  reads `accel_lat` and its rise through `TRAILER_RATE_FILTER_S`) brakes on a jolt or chatters:
+  no filter is added back.
+- Report, do not change: `car_corner_budget`'s 4.0 m/s2 limit against a shift or kerb jolt's raw
+  `accLat`.
+- "Please verify" gains: `accLat` and `accLong` on FULL show shift and kerb jolts at full size.

@@ -59,7 +59,7 @@ is the spawn's rail placement).
    `test_tractor.gd:101` repeats it. A snap to zero on a contract signal with a symptom for a
    reason. Two things can be behind it: the ratio's own 0/0 at rest (a floor a real radar unit
    also has, and then it is a model wanting a source), and a standing tractor's wheel speed
-   moving against a still body (the free wheel's ring of `proposals.md`), which would read up to
+   moving against a still body (the free wheel's ring, gone with d22b3ee), which would read up to
    100 %.
 6. **`Articulation.YAW_CAP_SHARE`** (`articulation.gd:9-12`). "the towed tyres' caps stop the same
    yaw in the same tick, so a whole share makes a standing rig buzz". The cause is named and
@@ -69,13 +69,12 @@ is the spawn's rail placement).
    the rolling drag and the tyre force with `taken`. With the tyres deadbeat and the plate at
    half, the pair still overshoots by half each tick (derived, not measured); and a turning rig's
    plate friction is cut to half its declared torque wherever the cap binds.
-7. **`RayWheel.road_change`'s fade** (`wheel.gd:1134-1141`). "following the body rings it at the
-   tick rate" below `LOW_SPEED_FLOOR`. Already in `proposals.md` (same proposal as 2): no new
-   line.
+7. **`RayWheel.road_change`'s fade**: gone with the wheel fix (d22b3ee), and with it the source
+   behind 2 (the take-up's alternation) and the wheel's part of 5.
 
-Already recorded, no new line: `BaseVehicle.ACCEL_SMOOTH` and `TowedBody.accel_lat`'s borrow of
-it (`proposals.md`); `measure_semi_launch`'s `REST_FLIPS_S` / `REST_STEP_KG`, sized over the free
-wheel's ring and due down with it (`proposals.md`).
+Already recorded, no line here: `BaseVehicle.ACCEL_SMOOTH` and `TowedBody.accel_lat`'s borrow of
+it (approved raw: Queue); `measure_semi_launch`'s `REST_FLIPS_S` / `REST_STEP_KG` (Queue, the
+rest gates).
 
 ## Models (the reason names the machine, the driver or the integrator)
 
@@ -113,10 +112,39 @@ None proved. Finding 1 is the candidate.
 
 Nothing (diagnose only).
 
-## After the report (user, same session)
+## Proving runs (the Queue's lines, kept here since 2026-11-16)
 
-- `ACCEL_SMOOTH`: approved, raw. Its proposal left `proposals.md` for the Queue (Opus).
-- Fable's credits are short: the Queue now opens with Fable's items in order of worth (the wheel
-  and body exchange first, as the source behind covers 2, 5 and 7; then the coupling's caps,
-  which takes cover 6 with the towing wheel's `taken`; then `scrape onebody`). Each reads its
-  unit's source files whole and leaves that unit's findings, so no unit is read on Fable twice.
+Each starts by taking the cover out, measuring, and undoing. Run lines:
+`docs/vehicle_measurements.md` § Measure-tool run lines. Never a new filter, on a reading or a
+signal. (6) is the towing item's (b), in `summary.md`.
+
+- **(1) `RESIST_EPS`.** Gate `air_force` on `delta <= 0.0` alone, run `test_vehicle_math`,
+  `test_tow_host` (the standing-rig test) and `measure_vehicles -- semi 20 rest` plus
+  `tractor-kenney 20 rest`, against the same at HEAD. With the rest readings equal to the digit
+  printed: delete the constant and its clause (dead). With any reading moved: undo, and write
+  what moved in the session file and a Queue line for its source.
+- **(2) `_sample_gates`' two-tick means.** Their source went with the wheel fix (the tractor's
+  trace no longer alternates). Judge on the tick's own value, run the launch pass on `sedan`,
+  `semi`, `tractor-kenney`, and record per body the `front axle` gate's overshoot with and
+  without the mean. Equal: the means, `docs/handling.md:94` and the report's "(two-tick mean)"
+  go. Not equal: the session file names the tick and what alternates on it, and the means stay
+  with a Queue line for it.
+- **(3) `CORNER_SMOOTH_S`.** Beside each smoothed peak keep the raw one (`lat`, `across / mass`,
+  `acc_lat`) and print both for `sedan`, `suv`, `semi`, `tractor-kenney` on `corner`. Raw within
+  0.02 g of smoothed on every body: remove the lag and re-run `doc=cornering`. Further apart: do
+  not remove; the session file names the tick and what `v * yaw_rate` did on it (a yaw swing past
+  saturation is the slip-angle gate's job, a tick-rate alternation is a source to queue).
+- **(4) `ESC_CHATTER_EPS`.** On `van`'s step pass log per tick, through a held touch,
+  `WheelDrive.esc_step`'s inputs (speed, steer mean, `yaw_rate`, `lat_acc`, `_slip_est`) and say
+  which alternates and what writes it (the `acc_lat` path is the raw-`accLat` item's;
+  `angular_velocity.y` leads to the tyres' side caps). Fix nothing in `StabilityControl`: write
+  the source's brief as a Queue line; the eps comes down in the fix that removes the source.
+- **(5) `SLIP_FLOOR_KMH`.** Floor at 0 (keep the `wheel_speed_kmh <= 0.0` guard), log
+  `wheel_speed`, `ground_speed`, `wheel_slip` and the body's pitch rate per tick on
+  `tractor-kenney` and `tractor-cvt` standing in D, in N, on the hill hold, and through a
+  pull-away. Quiet at rest and the only non-zero readings are real spin: propose removal
+  (`proposals.md`, a contract signal's behaviour). Non-zero at rest: the session file gives its
+  size and the wheel's speed trace, and the floor stays: what is left at rest is a free wheel
+  following its contact while `ground_speed` reads the body (`2026-11-15-wheel-leftovers.md`
+  finding 5), a quotient of two points' speeds, not a fault in the wheel. A radar unit's minimum
+  speed, from a page opened, would make it a model instead. Ends in a proposal.

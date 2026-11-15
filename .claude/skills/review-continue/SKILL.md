@@ -18,7 +18,8 @@ The project wants no new features: the review trims, fixes and simplifies.
    the unit with the most commits since its `Reviewed at`
    (`git log --oneline <hash>..HEAD -- <paths> | wc -l`). BETA units (boat, drone, plane,
    train) only when no land unit qualifies. One item per session; a unit too large to read in
-   one session is split in the map first, and one part is reviewed.
+   one session is split in the map first, and one part is reviewed. Where the Queue sets stages
+   or a pause, its own rules win: a session they stop picks no unit in its place.
 2. **Review it** for: bloat (dead code, unreferenced files, duplicated logic), an implementation
    more complicated than its job, bad design, covers over a fault (§ Covers), false `COMPROMISE`
    labels, useless tests, stale docs, and wrong comments or explanations. A unit's tests and

@@ -4,7 +4,7 @@ Started at d547176. Read whole: `wheel.gd`. Read in part: `WheelDrive.tick`, the
 (`drivetrain.gd:950-1009`), `TractorTelemetry.slip_pct` and its caller, `surface.gd`'s table,
 `measure_grade`'s stop ledger. Nothing fixed, nothing run: every verdict is derived from the code
 at HEAD, and the one measured figure it leans on is already in
-`2026-11-15-wheel-handback-diagnosis.md` (c), taken on the fixed tick.
+`2026-11-15-wheel-fix-landed.md` § Still open (the 25 % coast cell), taken on the fixed tick.
 
 Symbols: `s` slip velocity, `C` the tyre's slope (N per m/s), `k = C r^2 dt / I`, `A` the body's
 gain a tick, `T_r = crr N r` the rolling moment, `tau_r = T_r r dt / I`.
@@ -39,7 +39,7 @@ the air. Three faces of the one fault, all from the two lines above:
   whatever the mass. Gravity is counted against a contact whose gravity the drive wheels' tyres
   already hold. Fixture: `RayWheel.surface_drag_force(0.03, 0.007, 54400.0, m, 1.0 / 60.0,
   m * 9.8 * 0.2425)` is 0 for any `m`, where the wheel owes -381 N. Measured on the fixed tick
-  (the hand-back diagnosis, (c)): the laden `semi` crawling up 25 % prints `roll -762 N`, its two
+  (`2026-11-15-wheel-fix-landed.md` § Still open): the laden `semi` crawling up 25 % prints `roll -762 N`, its two
   drive wheels' alone; eight wheels of ten carry none.
 - **A drive wheel holding more than its own cap mass** (the towing item's (a)). Rolling back
   (`v < 0`) while it drives at the budget, `taken = f.x - long_mass * g sin`: 38.4 kN less a few

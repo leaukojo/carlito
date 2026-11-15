@@ -133,3 +133,20 @@ Boxes `Vector3(side, 2, side)` centred 1 m under y 0, 1500 m apart; a `CylinderS
 PI / 2), from)` with `wb = Basis(BACK, deg_to_rad(4))`; from the fourth `_physics_process` on,
 per start height bisect the least `d` with `get_rest_info` non-empty at `from - wb.y * d`, and
 print it less `(from.y - support) / wb.y.y`, `support` the rounded `cylinder_support` along UP.
+
+## To consider (user, 2026-11-14: not now; the Queue's two lines, kept here since 2026-11-16)
+
+- **The measure tool's bodies past Jolt's switch to sharp shapes** (§ Cause, § Evidence).
+  `measure_vehicles`' `KERB_WIDTH` 80 m kerb and its 6 km `Strip` slab put 1 to 3 mm of contact
+  noise into kerb-run figures that level geometry does not have; with the kerb 20 m wide its deep
+  ticks went 4 -> 0. Options: a kerb narrow enough that its far corner stays under 37 m (check
+  the oblique pass still crosses it), the strip laid as slabs under about 190 m (corner under
+  139 m), or leave both and say so beside the kerb figures. Any change moves the committed
+  `doc=` tables: decide with the user first, then baseline at HEAD and rerun. Flatland's
+  `InfiniteGround` (4 km box) is in the same regime in play, a leaned wheel reading up to about
+  3 mm off: note only, no fix proposed.
+- **A kept contact probe** (the tally in § Evidence). Two sessions each wrote and deleted a probe
+  inside `RayWheel._contact_pass`, and their "deep gap" counts cannot be compared. Wanted: the
+  tally per rest collider (passes, rest empty at unsafe, rest at `safe_drop`, deep, start inside)
+  behind a `measure_vehicles` flag, read from outside `_contact_pass` where it can be, with no
+  cost when off. A tool feature: propose it (`proposals.md`) before building.
