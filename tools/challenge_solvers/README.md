@@ -21,9 +21,12 @@ Python 3.8+ and nothing to install.
 ## Real hardware
 
 `python car_001_start_up.py --can slcan COM5` (any python-can interface and channel;
-`--bitrate`, default 500000). Needs `pip install python-can`. The script first silences the RAMN
-ECUs (UDS `31 01 02 00` to 0x7E1-0x7E3), so their own pedal and steering frames stop competing,
-and gives them back at exit (`31 02 02 00`). sloppyCAN's demo plays the same routine.
+`--bitrate`, default 500000). Needs `pip install python-can`. The script first silences RAMN's
+ECUs B and C (UDS `31 01 02 00` to 0x7E1 and 0x7E2), so their own pedal, steering and light
+frames stop competing, and gives them back at exit (`31 02 02 00`). ECU D stays on: it lights the
+LEDs from the script's light commands (0x150, 0x1A7), flashes the turn lamps, and reports them
+on 0x1BB. Its engine key (0x1B8) is not sent either: turn the RAMN's key to Ignition.
+sloppyCAN's demo plays the same routine, and silences B and C itself when a challenge starts.
 sloppyCAN must put the telemetry on the bus (a bus that is not listen-only). Hardware carries no
 challenge info lines and no open request: start the challenge yourself, press Enter when it has
 started, and Ctrl+C to stop.

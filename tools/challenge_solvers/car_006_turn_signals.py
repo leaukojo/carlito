@@ -1,9 +1,9 @@
 """Signal your turns: follow the road's four corners (left, right, right, left) at 25 km/h. The
-lamp for the next corner flashes through the 30 m straight before it and stops at the
-corner, well before the "lamp off" window that starts after it."""
+lamp for the next corner is on through the 30 m straight before it and off at the corner, well
+before the "lamp off" window that starts after it. It is commanded steady: RAMN's ECU D flashes it."""
 from carlito_can import (
     connect, STEER_PROPORTIONAL, STEER_BANGBANG, CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG,
-    arc, D, IGNITION)
+    arc, D)
 
 # The road's centre line: straights joined by 15 m corners.
 ROAD = (arc(-85.0, -50.0, 15, 180, 90)          # corner 1, left
@@ -20,7 +20,6 @@ def inside(x_min, x_max, z_min, z_max):
 
 car = connect()
 car.wait_start("car_turn_signals")
-car.key = IGNITION
 car.gear = D
 while car.tick():
     car.cruise(25, CRUISE_CONTROL_PI)  # also try CRUISE_CONTROL_BANGBANG
@@ -30,6 +29,6 @@ while car.tick():
     before_2 = inside(-82, -58, -110, -75)
     before_3 = inside(-30, 5, -137, -113)
     before_4 = inside(8, 32, -85, -50)
-    car.turn_left = (before_1 or before_4) and car.blink()    # flashing, not steady
-    car.turn_right = (before_2 or before_3) and car.blink()
+    car.turn_left = before_1 or before_4
+    car.turn_right = before_2 or before_3
 car.finish()

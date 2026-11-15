@@ -2,7 +2,7 @@
 right, left, right, left, around four centre points; the finish line is at the end of the last."""
 from carlito_can import (
     connect, STEER_PURE_PURSUIT, STEER_BANGBANG, CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG,
-    arc, D, IGNITION)
+    arc, D)
 
 # The road's centre line: arc(centre x, centre z, radius, from bearing, to bearing).
 ROAD = (arc(-135.0, 90.0, 35, 0, 70)            # right
@@ -13,7 +13,6 @@ ROAD = (arc(-135.0, 90.0, 35, 0, 70)            # right
 
 car = connect()
 car.wait_start("car_easy_turns")
-car.key = IGNITION
 car.gear = D
 while car.tick():
     car.cruise(25, CRUISE_CONTROL_PI)  # also try CRUISE_CONTROL_BANGBANG

@@ -12,7 +12,6 @@ A solver looks like this:
 
     car = connect()                  # reads the command line above
     car.wait_start("car_start_up")   # asks Carlito to open the challenge, then waits for it
-    car.key = IGNITION
     car.gear = D
     car.accel = 40
     while car.tick():                # every 50 ms, until the challenge ends
@@ -20,14 +19,18 @@ A solver looks like this:
     car.finish()                     # prints the result, then parks the car
 
 What the car is told (sent every 20 ms, or 10 ms on hardware, as RAMN frames):
-    key      LOCK / ON / IGNITION                 0x1B8
     gear     P / R / N / D, or 1-6 in a manual    0x077
     accel    0..100 %                             0x039
     brake    0..100 %                             0x024
     steer    -100 (full left) .. 100 (full right) 0x062
     handbrake  True / False                       0x1D3
-    lights   OFF / LOW / HIGH                     0x1BB (with the two turn lamps)
-    turn_left, turn_right  True / False           0x1BB
+    lights   OFF / LOW / HIGH                     0x150 (light command)
+    turn_left, turn_right  True / False           0x1A7 (turn command: steady, ECU D flashes it)
+
+The lights are commands, as RAMN's ECUs B and C send them: ECU D stays on the bus, lights its
+LEDs from them and reports the lamps on 0x1BB, which is what Carlito shows. The engine key
+(0x1B8) is ECU D's too, so it is not sent: turn the RAMN's key to Ignition (in sloppyCAN's
+demo, the Control panel's key, which starts at Ignition).
 
 What the car reports (the telemetry frames sloppyCAN puts on the bus):
     kmh, speed (m/s, negative in reverse), rpm, gear_now     0x520, 0x521
@@ -51,9 +54,8 @@ import sys
 import threading
 import time
 
-# Gear byte (0x077), key (0x1B8) and headlight values.
+# Gear byte (0x077) and light switch position (0x150) values.
 P, R, N, D = 0xFE, 0xFF, 0, 1
-LOCK, ON, IGNITION = 1, 2, 3
 OFF, LOW, HIGH = 1, 3, 4
 
 # How cruise() holds a speed.
@@ -66,19 +68,17 @@ STEER_PROPORTIONAL, STEER_PURE_PURSUIT, STEER_BANGBANG = "proportional", "pure p
 # MIN_LOCK_FRAC of it at LOCK_FALLOFF_MS.
 WHEELBASE_M, FULL_LOCK_DEG, MIN_LOCK_FRAC, LOCK_FALLOFF_MS = 1.58, 38.0, 0.26, 42.0
 
-# A turn signal's flash rate (the challenges accept 1 to 2 Hz).
-BLINK_HZ = 1.5
-
 # The game's GPS: world X/Z around a Paris origin (VehicleTelemetry.gps_lat / gps_lon).
 GPS_LAT0, GPS_LON0, M_PER_DEG = 48.8566, 2.3522, 111320.0
 
 # UDS RoutineControl 0x0200 ("Request Silence", RAMN firmware ramn_uds.c): start (31 01 02 00)
 # makes a RAMN ECU stop sending its own periodic frames, so they don't fight ours; stop
-# (31 02 02 00) brings them back. Sent to each ECU on connect and at exit. sloppyCAN's demo
-# plays the same routine for its simulated RAMN traffic.
+# (31 02 02 00) brings them back. Sent on connect and at exit to ECUs B and C, the ones whose
+# frames we send. Never ECU D: it lights the LEDs from our light commands and reports them on
+# 0x1BB. sloppyCAN's demo plays the same routine for its simulated RAMN traffic.
 RAMN_SILENCE = [0x04, 0x31, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00]
 RAMN_RESUME = [0x04, 0x31, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00]
-RAMN_ECUS = (0x7E1, 0x7E2, 0x7E3)
+RAMN_ECUS = (0x7E1, 0x7E2)
 
 
 def clamp(v, lo, hi):
@@ -197,7 +197,6 @@ class Car:
         self.link = link
         self._open_it = open_it
         # Commands, sent every `period` seconds.
-        self.key = IGNITION
         self.gear = P
         self.accel = 0.0
         self.brake = 0.0
@@ -308,12 +307,6 @@ class Car:
         return (self.steer_to(*path[self._path_i], method) < lookahead
                 and self._path_i == len(path) - 1)
 
-    def blink(self):
-        """True, then False, BLINK_HZ times a second: a turn signal's rhythm. Use it as
-        `car.turn_left = want_left and car.blink()`."""
-        period = 1 / BLINK_HZ
-        return time.monotonic() % period < period / 2
-
     def cruise(self, kmh, method=None):
         """Hold a speed with accel and brake. CRUISE_CONTROL_PI (the default) is a small PI
         controller; CRUISE_CONTROL_BANGBANG is the beginner's version, easier to read."""
@@ -401,16 +394,14 @@ class Car:
 
         s = clamp(self.steer, -100, 100)
         steer = round(0x7FF + s / 100 * (0x800 if s > 0 else 0x7FF))
-        lamps = {LOW: 0x08 | 0x10, HIGH: 0x08 | 0x10 | 0x20}.get(self.lights, 0)
-        lamps |= (0x40 if self.turn_left else 0) | (0x80 if self.turn_right else 0)
         return [
-            (0x1B8, [self.key, 0]),
             (0x077, [self.gear, 1]),
             (0x039, pedal(self.accel)),
             (0x024, pedal(self.brake)),
             (0x062, [steer >> 8, steer & 0xFF]),
             (0x1D3, [1 if self.handbrake else 0, 0]),
-            (0x1BB, [lamps, 0]),
+            (0x150, [self.lights, 0]),
+            (0x1A7, [1 if self.turn_left else 0, 1 if self.turn_right else 0]),
         ]
 
     def _send_loop(self, period):

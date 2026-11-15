@@ -2,11 +2,10 @@
 6800 rpm redline. The finish line is 200 m down the straight."""
 import time
 
-from carlito_can import connect, STEER_PROPORTIONAL, STEER_BANGBANG, IGNITION
+from carlito_can import connect, STEER_PROPORTIONAL, STEER_BANGBANG
 
 car = connect()
 car.wait_start("car_manual_gearbox")
-car.key = IGNITION
 car.gear = 1
 car.accel = 100
 while car.tick():

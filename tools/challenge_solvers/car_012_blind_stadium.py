@@ -3,7 +3,7 @@ The car starts in the middle of one straight, heading 30 degrees, and drives one
 at 20 km/h, steering from the GPS position."""
 from carlito_can import (
     connect, STEER_PURE_PURSUIT, STEER_BANGBANG, CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG,
-    arc, D, IGNITION)
+    arc, D)
 
 # The track's centre line. The half circles' centres are 20 m either side of the stadium's centre
 # (60, -60), along the straights; the first point of the first half circle is the hint's first GPS
@@ -15,7 +15,6 @@ TRACK = (arc(70.0, -77.3, 15, 120, -60)         # first half circle, left
 
 car = connect()
 car.wait_start("car_blind_stadium")
-car.key = IGNITION
 car.gear = D
 while car.tick():
     car.cruise(20, CRUISE_CONTROL_PI)  # also try CRUISE_CONTROL_BANGBANG

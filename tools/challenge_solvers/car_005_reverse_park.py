@@ -4,7 +4,7 @@ centre (z = -83.7). The bay is only 0.4 m wider than the wheels on each side, so
 comes from the GPS (centimetre precision)."""
 from carlito_can import (
     connect, STEER_PURE_PURSUIT, STEER_BANGBANG, CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG,
-    arc, clamp, D, R, IGNITION)
+    arc, clamp, D, R)
 
 BAY_X, BAY_Z = -125.0, -83.7
 
@@ -13,7 +13,6 @@ APPROACH = arc(-133.0, -68.4, 8, 0, 90) + [(BAY_X, -50.0)]
 
 car = connect()
 car.wait_start("car_reverse_park")
-car.key = IGNITION
 car.gear = D
 while car.running and car.z < -62:
     car.cruise(8, CRUISE_CONTROL_PI)  # also try CRUISE_CONTROL_BANGBANG

@@ -21,8 +21,9 @@ solvers (car_005_reverse_park is the risky one). Open findings: none.
   sloppyCAN posts a live `carlitoCommand` (no reload), or opens a shut window with `?challenge=`. `--can` keeps the Enter prompt.
 - **D6** A script's name starts with its place in the car list: `car_001_start_up.py`.
 - **D7** First-course Python, one-line comments welcome; each solver self-contained.
-- **D3** The RAMN ECUs are silenced first with UDS routine 0x0200 (`31 01 02 00`) on 0x7E1,
-  0x7E2 and 0x7E3, and resumed at exit (`31 02 02 00`, per the firmware; `31 01 02 01` is Erase
+- **D3** RAMN's ECUs B and C are silenced first with UDS routine 0x0200 (`31 01 02 00`) on 0x7E1
+  and 0x7E2, never ECU D (0x7E3): it lights the LEDs from the light commands and reports 0x1BB,
+  and its key (0x1B8) is the player's. Resumed at exit (`31 02 02 00`, per the firmware; `31 01 02 01` is Erase
   EEPROM). sloppyCAN's demo plays the routine too. Driving uses the RAMN ids, the ones the car
   challenges teach.
 - **D4** Solvers are short and plain: good enough to pass, not the most accurate solution.
@@ -99,11 +100,12 @@ only for hardware.
   - A reader decodes frames and `#challenge` lines.
   - A sender repeats the RAMN command frames every 20 ms (relay) or 10 ms (hardware). The RAMN
     values latch, and sloppyCAN clears them at a challenge start, so they are re-sent.
-- **Commands (attributes):** `key`, `gear` (`N`/`D`/`R`/`P`, 1-6 in manual), `accel`, `brake`,
+- **Commands (attributes):** `gear` (`N`/`D`/`R`/`P`, 1-6 in manual), `accel`, `brake`,
   `steer` (-100 left .. 100 right), `handbrake`, `lights` (`OFF`/`LOW`/`HIGH`), `turn_left`,
   `turn_right`. They map to RAMN ids:
-  - 0x039 accel, 0x024 brake, 0x062 steer, 0x077 gear, 0x1B8 key, 0x1D3 handbrake.
-  - 0x1BB holds the lamp bits: low 0x10, high 0x20, left 0x40, right 0x80.
+  - 0x039 accel, 0x024 brake, 0x062 steer, 0x077 gear, 0x1D3 handbrake.
+  - 0x150 light switch position (byte 0: 1 off, 3 low, 4 high), 0x1A7 turn command (byte 0
+    left, byte 1 right, steady: ECU D flashes it).
   - Encodings come from `../sloppycan/js/ramn.js:511-555`.
 - **Telemetry (attributes):**
   - `kmh`, `speed`, `rpm`, `gear_now` (0x520/0x521), `acc_lat` (0x522), `heading` (0x524),
@@ -125,8 +127,8 @@ only for hardware.
 - A `.gitignore` entry for `__pycache__/`.
 
 First solvers, to prove the pipeline before the harder ones:
-- car_001_start_up: key on, D, accel 40 %, steer to the Finish line.
-- car_007_hazards: stand still and blink both lamps together at 1.5 Hz until it passes.
+- car_001_start_up: D, accel 40 %, steer to the Finish line (the player turns the key).
+- car_007_hazards: stand still with both turn lamps commanded on until it passes.
 - car_008_speed_trap: `cruise(60)`, steering on the start heading.
 
 The user runs these three. Phase 3 starts only once they pass.
