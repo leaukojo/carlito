@@ -22,8 +22,9 @@ var _missing_warned := {}           ## out-signal names already warned as absent
 var _shape_warned := {}             ## out-signal names already warned as the wrong VALUE SHAPE
 var _nonfinite_warned := {}         ## out-signal names already warned as a non-finite value
 ## The challenge in progress, or null. Rides the carlitoOutput ENVELOPE, not the contract: it is no
-## CAN value. sloppyCAN turns its RAMN demo traffic off while it is set, so hand-sent frames are
-## not overwritten, and tells scripts when an attempt starts and ends.
+## CAN value. sloppyCAN silences its RAMN demo ECUs B and C while it is set, so hand-sent frames
+## are not overwritten (ECU D stays on to light the lamps), and tells scripts when an attempt
+## starts and ends.
 var _runner: ChallengeRunner = null
 
 
