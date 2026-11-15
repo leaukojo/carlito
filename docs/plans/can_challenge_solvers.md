@@ -105,7 +105,7 @@ only for hardware.
   `turn_right`. They map to RAMN ids:
   - 0x039 accel, 0x024 brake, 0x062 steer, 0x077 gear, 0x1D3 handbrake.
   - 0x150 light switch position (byte 0: 1 off, 3 low, 4 high), 0x1A7 turn command (byte 0
-    left, byte 1 right, steady: ECU D flashes it).
+    right, byte 1 left, steady: ECU D flashes it).
   - Encodings come from `../sloppycan/js/ramn.js:511-555`.
 - **Telemetry (attributes):**
   - `kmh`, `speed`, `rpm`, `gear_now` (0x520/0x521), `acc_lat` (0x522), `heading` (0x524),

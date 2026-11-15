@@ -401,7 +401,7 @@ class Car:
             (0x062, [steer >> 8, steer & 0xFF]),
             (0x1D3, [1 if self.handbrake else 0, 0]),
             (0x150, [self.lights, 0]),
-            (0x1A7, [1 if self.turn_left else 0, 1 if self.turn_right else 0]),
+            (0x1A7, [1 if self.turn_right else 0, 1 if self.turn_left else 0]),  # byte 0 is RIGHT
         ]
 
     def _send_loop(self, period):
