@@ -258,13 +258,25 @@ var _stick := Vector2.ZERO
 ## equivalent mass, which a spring would ring at 60 Hz; and an unbraked wheel should roll down a
 ## grade.
 var _spin_held := false
-## The body's velocity at its centre of mass last tick along last tick's `forward` (m/s), valid only
-## while this wheel was on the ground: its change is the next step's predictor of how far the road
-## moves under the wheel (`road_change`). The centre of mass, not the contact: the contact also
-## carries the pitch the tyre's own force rocks in one tick, and following that rings the body at the
-## tick rate.
-var _prev_com_long := 0.0
-var _prev_vel_valid := false
+## This tick's patch, stored by `tick` for `apply_patch`: the tyre's axes (world), the contact's
+## speed along and across them (m/s), the slip denominator, both budgets and cap masses, the side
+## slip's peak, the patch spring's force (N; `_patch_sticks` while it acts) and a held wheel's
+## force range, and the tick's grip curve and step.
+var _patch_forward := Vector3.ZERO
+var _patch_side := Vector3.ZERO
+var _patch_v_long := 0.0
+var _patch_v_lat := 0.0
+var _patch_denom := LOW_SPEED_FLOOR
+var _patch_budget := Vector2.ZERO
+var _patch_long_mass := 0.0
+var _patch_lat_mass := 0.0
+var _patch_lat_peak := 1.0
+var _patch_spring := Vector2.ZERO
+var _patch_sticks := false
+var _patch_held := false
+var _patch_hold := Vector2.ZERO
+var _patch_curve := PackedVector2Array()
+var _patch_delta := 0.0
 ## Last tick's `compression`, latched by `latch_bar` for the whole body before any wheel ticks, so
 ## both wheels of an axle read the same snapshot. See `anti_roll_partner`.
 var _bar_compression := 0.0
@@ -335,7 +347,6 @@ func reset() -> void:
 	omega = 0.0
 	compression = 0.0
 	_prev_compression = 0.0
-	_prev_vel_valid = false
 	_own_slip_floor = LOW_SPEED_FLOOR
 	slip_floor = LOW_SPEED_FLOOR
 	_bar_compression = 0.0
@@ -433,7 +444,6 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	if not in_contact:
 		compression = 0.0
 		_prev_compression = 0.0
-		_prev_vel_valid = false
 		suspension_force = 0.0
 		slip = 0.0
 		slip_size = 0.0
@@ -457,7 +467,7 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		var hub_vel := VehicleMath.point_velocity(body, ray_from)
 		var hub_v_long := hub_vel.dot(Basis(up, steer_angle) * -mount.z)
 		_integrate_spin(drive_torque, 0.0, brake_torque, delta, 0.0,  ## airborne
-				hub_v_long, abs_slip, 0.0, tcs_slip, tcs_drive, slip_floor)
+				hub_v_long, abs_slip, tcs_slip, tcs_drive, slip_floor)
 		omega = free_spin_omega(omega, delta)
 		if not coupled_spin:
 			update_visual(drive_spec, delta)
@@ -505,60 +515,89 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	var budget_lat := lat_budget(drive_spec)
 
 	# Both slips on one denominator, so the slip vector points along the patch's slide; its floor
-	# keeps the curve's rise inside the one-tick cap below (`slip_floor_for`).
+	# keeps the curve's rise inside the one-tick cap (`slip_floor_for`).
 	var long_mass := minf(corner_mass, long_cap_mass)
 	_own_slip_floor = slip_floor_for(budget_long, long_mass,
 			drive_spec.grip_curve, delta)
 	var floor_vel := maxf(slip_floor, _own_slip_floor)
 	var slip_denom := maxf(absf(v_long), floor_vel)
 	var slip_vel := omega * wheel_radius - v_long
-	slide_speed = absf(slip_vel)
-	var slip_ratio := slip_vel / slip_denom
-	long_slip = slip_ratio
-	slip = absf(slip_ratio)
-	var slip_lat := -v_lat / slip_denom
-	slip_size = Vector2(slip_ratio, slip_lat).length()
-	# A twin pair at half load each: `mu(L / 2) * L` over `2 C(L / 2)` is this at `L / 2`.
-	var lat_peak := lateral_peak_slip(suspension_force * tyre_share, reference_load,
-			drive_spec.load_sensitivity, drive_spec.cornering_peak_load)
-	var tyre := combined_slip_force(slip_ratio, slip_lat,
-			budget_long, budget_lat, drive_spec.grip_curve, lat_peak)
-
-	# Each axis capped by the force that would cancel its slip velocity in one tick (the lateral cap
-	# kills parked-car jitter).
-	long_cap = long_mass * absf(slip_vel) / delta
-	var f_long := clampf(tyre.x, -long_cap, long_cap)
 	var lat_mass := minf(corner_mass, lateral_cap_mass)
-	var f_lat := clampf(tyre.y, -lat_mass * absf(v_lat) / delta, lat_mass * absf(v_lat) / delta)
+	_patch_forward = forward
+	_patch_side = side
+	_patch_v_long = v_long
+	_patch_v_lat = v_lat
+	_patch_denom = slip_denom
+	_patch_budget = Vector2(budget_long, budget_lat)
+	_patch_long_mass = long_mass
+	_patch_lat_mass = lat_mass
+	# A twin pair at half load each: `mu(L / 2) * L` over `2 C(L / 2)` is this at `L / 2`.
+	_patch_lat_peak = lateral_peak_slip(suspension_force * tyre_share, reference_load,
+			drive_spec.load_sensitivity, drive_spec.cornering_peak_load)
+	_patch_curve = drive_spec.grip_curve
+	_patch_delta = delta
+	# The start slip's force sizes the spin step (its reaction) and nothing else: the body takes the
+	# force at the slip the step settles on (`apply_patch`).
+	var f := _slip_force(slip_vel)
 
 	# Static friction: the patch spring beside the slip force, which is its damper. Along the wheel
 	# only while the spin is held (`_spin_held`, last tick's settle).
-	var f := Vector2(f_long, f_lat)
 	var stick_w := clampf(1.0 - Vector2(v_long, v_lat).length() / STICK_SPEED, 0.0, 1.0)
 	# What the brake holds besides the patch: the drive and what the differentials pass the wheel.
 	var held_against := drive_torque + coupled_torque
-	if stick_w > 0.0 and budget_long > 0.0 and budget_lat > 0.0:
+	_patch_sticks = stick_w > 0.0 and budget_long > 0.0 and budget_lat > 0.0
+	_patch_held = false
+	if _patch_sticks:
 		# A brake released (or out-driven) this tick holds nothing, whatever last tick latched.
 		var hold_torque := brake_torque + lock_torque
-		var held := _spin_held and hold_torque > absf(held_against)
-		_stick = stick_step(_stick, Vector2(slip_vel if held else 0.0, -v_lat),
+		_patch_held = _spin_held and hold_torque > absf(held_against)
+		_stick = stick_step(_stick, Vector2(slip_vel if _patch_held else 0.0, -v_lat),
 				absf(omega * wheel_radius), delta)
-		if not held:
+		if not _patch_held:
 			_stick.x = 0.0
 		var k := Vector2(stick_stiffness(budget_long, long_mass, delta),
 				stick_stiffness(budget_lat, lat_mass, delta))
 		_stick = stick_saturate(_stick, k, budget_long, budget_lat)
-		f = friction_ellipse(f + stick_w * k * _stick, budget_long, budget_lat)
-		if held:
+		_patch_spring = stick_w * k * _stick
+		if _patch_held:
 			# Along the wheel only, so a brake-limited hold costs the patch no side grip.
-			var hold := held_force_range(budget_long, hold_torque, held_against, wheel_radius)
+			_patch_hold = held_force_range(budget_long, hold_torque, held_against, wheel_radius)
 			var stiffness := maxf(k.x, 1e-6)
-			_stick.x = clampf(_stick.x, hold.x / stiffness, hold.y / stiffness)
-			f.x = clampf(f.x, hold.x, hold.y)
+			_stick.x = clampf(_stick.x, _patch_hold.x / stiffness, _patch_hold.y / stiffness)
+		f = _with_spring(f)
 	else:
 		_stick = Vector2.ZERO
 
-	body.apply_force(forward * f.x + side * f.y, contact_point - body.global_position)
+	# The step's stiffness at zero slip, where the secant has none: the curve's first slope under the
+	# one-tick cap.
+	var zero_slip_k := minf(budget_long * zero_slip_rise(drive_spec.grip_curve) / slip_denom,
+			long_mass / delta) * wheel_radius * wheel_radius * delta / wheel_inertia
+	_integrate_spin(drive_torque, -f.x * wheel_radius, brake_torque, delta, slip_vel, v_long, abs_slip,
+			tcs_slip, tcs_drive, floor_vel, zero_slip_k)
+	if not coupled_spin:
+		apply_patch(body)
+		update_visual(drive_spec, delta)
+
+
+## Push the body with this tick's tyre force at the slip the spin step settled on, and the rolling
+## drag: after `settle_spin` (and `hold_by_lock`), so the body and the wheel's step exchange one
+## force. `tick` stores the patch; a `coupled_spin` wheel's owner calls this once its differentials
+## have settled, any other wheel at the end of its own `tick`. Nothing off the ground. Sets the
+## tick's tyre readouts (`force_long`, `force_lat`, `force_roll`, `long_slip`, `slip`, `slip_size`,
+## `slide_speed`, `contact_force`).
+func apply_patch(body: RigidBody3D) -> void:
+	if not in_contact:
+		return
+	var slip_vel := omega * wheel_radius - _patch_v_long
+	slide_speed = absf(slip_vel)
+	long_slip = slip_vel / _patch_denom
+	slip = absf(long_slip)
+	slip_size = Vector2(long_slip, -_patch_v_lat / _patch_denom).length()
+	var f := _slip_force(slip_vel)
+	if _patch_sticks:
+		f = _with_spring(f)
+	var at := contact_point - body.global_position
+	body.apply_force(_patch_forward * f.x + _patch_side * f.y, at)
 	force_long = f.x
 	force_lat = f.y
 
@@ -571,23 +610,36 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	# COMPROMISE: real rolling resistance is a moment on the wheel (the patch's pressure centre sits
 	# ahead of the axle); here it is a contact force outside the spin step. Undoing that is a torque
 	# inside the spin step and a re-check of the static hold (`docs/vehicles.md` § Holding at rest).
-	force_roll = surface_drag_force(v_long, rolling_crr + surface_drag, suspension_force,
-			long_mass, delta, maxf(-signf(v_long)
-			* (f.x + long_mass * body.get_gravity().dot(forward)), 0.0))
-	body.apply_force(forward * force_roll, contact_point - body.global_position)
-	contact_force = normal * suspension_force + forward * (f.x + force_roll) + side * f.y
+	force_roll = surface_drag_force(_patch_v_long, rolling_crr + surface_drag, suspension_force,
+			_patch_long_mass, _patch_delta, maxf(-signf(_patch_v_long)
+			* (f.x + _patch_long_mass * body.get_gravity().dot(_patch_forward)), 0.0))
+	body.apply_force(_patch_forward * force_roll, at)
+	contact_force = contact_normal * suspension_force + _patch_forward * (f.x + force_roll) \
+			+ _patch_side * f.y
 	if on_beam:
-		patch_force = xform.basis.transposed() * contact_force
-		patch_point = xform.affine_inverse() * contact_point
+		patch_force = body.global_transform.basis.transposed() * contact_force
+		patch_point = body.global_transform.affine_inverse() * contact_point
 
-	var dv_long := road_change(body.linear_velocity, forward, _prev_com_long, v_long) \
-			if _prev_vel_valid else 0.0
-	_prev_com_long = body.linear_velocity.dot(forward)
-	_prev_vel_valid = true
-	_integrate_spin(drive_torque, -f.x * wheel_radius, brake_torque, delta, slip_vel, v_long, abs_slip,
-			dv_long, tcs_slip, tcs_drive, floor_vel)
-	if not coupled_spin:
-		update_visual(drive_spec, delta)
+
+## The tyre's slip force (N; x along the wheel, y across) at slip velocity `slip_vel` (m/s) along
+## the wheel on this tick's patch: the grip curve (`combined_slip_force`), each axis capped by the
+## force that would cancel its slip velocity in one tick (the lateral cap kills parked-car jitter).
+## Sets `long_cap`.
+func _slip_force(slip_vel: float) -> Vector2:
+	var tyre := combined_slip_force(slip_vel / _patch_denom, -_patch_v_lat / _patch_denom,
+			_patch_budget.x, _patch_budget.y, _patch_curve, _patch_lat_peak)
+	long_cap = _patch_long_mass * absf(slip_vel) / _patch_delta
+	var lat_cap := _patch_lat_mass * absf(_patch_v_lat) / _patch_delta
+	return Vector2(clampf(tyre.x, -long_cap, long_cap), clampf(tyre.y, -lat_cap, lat_cap))
+
+
+## `f` with this tick's patch spring beside it, inside the friction ellipse, and a held wheel's
+## along the wheel within what its brake holds (`held_force_range`).
+func _with_spring(f: Vector2) -> Vector2:
+	f = friction_ellipse(f + _patch_spring, _patch_budget.x, _patch_budget.y)
+	if _patch_held:
+		f.x = clampf(f.x, _patch_hold.x, _patch_hold.y)
+	return f
 
 
 ## Pair each wheel with the one across its axle (same z, opposite side) for the anti-roll bar and
@@ -1127,43 +1179,42 @@ static func slip_floor_for(budget: float, mass: float, grip_curve: PackedVector2
 	return maxf(LOW_SPEED_FLOOR, budget * rise * delta / mass)
 
 
-## Pure: the road's change along the wheel over the last tick (m/s), the spin step's predictor for
-## this one: the centre of mass's velocity `com_vel` along this tick's `forward`, less last tick's
-## along last tick's (`prev_com_long`). Both factors move, so a steady turn, whose acceleration is
-## all the path's turning, feeds nothing; `Δv · forward` alone would feed a wheel at angle β to the
-## path `a sin β`, and spin it past the road. Faded out from twice LOW_SPEED_FLOOR down to it, by
-## `v_long` (the constant: a body's raised `slip_floor` does not widen the fade): below it slip is
-## read against a floor, the tyre's slope sits at the one-tick cap, and following the body rings it
-## at the tick rate.
-static func road_change(com_vel: Vector3, forward: Vector3, prev_com_long: float,
-		v_long: float) -> float:
-	return (com_vel.dot(forward) - prev_com_long) \
-			* clampf(absf(v_long) / LOW_SPEED_FLOOR - 1.0, 0.0, 1.0)
+## The grip curve's slope per unit slip from the origin to its first vertex: the tyre's stiffness
+## at zero slip, where the step's secant has none (`_integrate_spin`). 0 for a curve with no vertex
+## past the origin.
+static func zero_slip_rise(grip_curve: PackedVector2Array) -> float:
+	for p in grip_curve:
+		if p.x > 0.0:
+			return minf(p.y, 1.0) / p.x
+	return 0.0
 
 
 ## Wheel spin from drive plus road-reaction torque, semi-implicit (an explicit step rings at the
 ## tick rate): the net torque is divided by (1 + `reaction_stiffness`), never the reaction clamped.
-## It solves for SLIP: the road's change under the wheel is followed in proportion `k / (1 + k)`.
-## The brake (`brake_spin`, ABS floor `abs_floor`) and the TC hold (`tcs_spin`, `tcs_ceiling`: TC
-## removes drive, never brakes) are latched by the step and applied by `settle_spin`, after the
+## The stiffness is the reaction's secant over the slip; at zero slip `zero_slip_stiffness` (`tick`
+## passes the curve's first slope; 0 off the ground) stands in only where the secant gives less (a
+## held wheel's patch spring does not fall with the slip, so it stays rigid). The body takes the
+## force at the slip this step settles on (`apply_patch`), so the two exchange one force. The brake
+## (`brake_spin`, ABS floor `abs_floor`) and the TC hold (`tcs_spin`, `tcs_ceiling`: TC removes
+## drive, never brakes) are latched by the step and applied by `settle_spin`, after the
 ## differentials on a `coupled_spin` wheel. Derivation and figures: docs/vehicles.md, "Spin step".
 func _integrate_spin(drive_torque: float, reaction_torque: float, brake_torque: float,
-		delta: float, slip_vel: float, v_long := 0.0, abs_slip := 0.0, dv_long := 0.0,
-		tcs_slip := 0.0, tcs_drive := 0.0, floor_vel := LOW_SPEED_FLOOR) -> void:
+		delta: float, slip_vel: float, v_long := 0.0, abs_slip := 0.0, tcs_slip := 0.0,
+		tcs_drive := 0.0, floor_vel := LOW_SPEED_FLOOR, zero_slip_stiffness := 0.0) -> void:
 	var null_slip_torque := wheel_inertia * absf(slip_vel) / (delta * wheel_radius)
 	var reaction_stiffness := absf(reaction_torque) / maxf(null_slip_torque, 1e-6)
+	if null_slip_torque <= 1e-6:
+		reaction_stiffness = maxf(reaction_stiffness, zero_slip_stiffness)
 	spin_compliance = delta / (wheel_inertia * (1.0 + reaction_stiffness))
-	omega += (drive_torque + reaction_torque) / (1.0 + reaction_stiffness) / wheel_inertia * delta \
-			+ dv_long / wheel_radius * reaction_stiffness / (1.0 + reaction_stiffness)
+	omega += (drive_torque + reaction_torque) / (1.0 + reaction_stiffness) / wheel_inertia * delta
 	tcs_spin = 0.0
 	tcs_ceiling = 0.0
 	var held_drive := drive_torque + tcs_drive
 	if tcs_slip > 0.0 and held_drive != 0.0 and wheel_radius > 0.0:
 		tcs_spin = held_drive * spin_compliance
-		tcs_ceiling = tcs_ceiling_spin(v_long + dv_long, signf(held_drive), wheel_radius, tcs_slip,
-				floor_vel)
+		tcs_ceiling = tcs_ceiling_spin(v_long, signf(held_drive), wheel_radius, tcs_slip, floor_vel)
 	brake_spin = brake_torque * spin_compliance
-	abs_floor = abs_floor_spin(v_long + dv_long, wheel_radius, abs_slip, floor_vel)
+	abs_floor = abs_floor_spin(v_long, wheel_radius, abs_slip, floor_vel)
 	abs_active = false
 	if not coupled_spin:
 		settle_spin(0.0)

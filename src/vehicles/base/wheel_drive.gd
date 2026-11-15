@@ -679,8 +679,14 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 		w.tick(body, gd, space, drive_t, brake_t, delta, grip_terrains, abs_slip,
 				tcs_slip if w.driven else 0.0, tcs_drive * _ratio[i] if w.driven else 0.0)
 
-	_couple_differentials(gd, input, axle_torque, locked, pawl * locked.size(),
-			drivetrain if drivetrain != null and Drivetrain.drives_wheels(spec) else null)
+	var coupled := drivetrain if drivetrain != null and Drivetrain.drives_wheels(spec) else null
+	_couple_differentials(gd, input, axle_torque, locked, pawl * locked.size(), coupled)
+	# The body takes each tyre's force at its settled spin (`RayWheel.apply_patch`); the controller
+	# reads the slip that leaves.
+	for w in wheels:
+		w.apply_patch(body)
+	if coupled != null:
+		_report_to_controller(gd, input, coupled)
 	# The reacted brake splits by the commanded shares; only the friction brakes' part heats.
 	for w in wheels:
 		w.heat_brake(ground_speed, delta)
@@ -769,8 +775,6 @@ func _couple_differentials(gd: GroundDriveSpec, input: VehicleInput, axle_torque
 	_couple_downstream(gd, shaft_torque, front_driven, rear_driven)
 	for i in wheels.size():
 		wheels[i].settle_spin(_coupling[i], _lock_coupling[i])
-	if drivetrain != null:
-		_report_to_controller(gd, input, drivetrain)
 	# The pawl holds the whole driveline still, or none of it: one wheel turning is the lock slipping
 	# or an open diff counter-rotating off it.
 	if lock_holds:

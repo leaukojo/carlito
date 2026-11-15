@@ -63,8 +63,8 @@ func test_the_drag_takes_what_another_force_leaves_of_the_cap() -> void:
 			.is_equal(WheelScript.surface_drag_force(10.0, 0.2, 5000.0, 300.0, TICK))
 
 
-## One wheel on a 300 kg corner, its spin at 0, ticked once on a kinematic body moving `v` m/s
-## along the wheel over flat ground: a locked wheel's contact at that speed.
+## One wheel on a 300 kg corner, its spin at 0 and its brake locking it, ticked once on a kinematic
+## body moving `v` m/s along the wheel over flat ground: a locked wheel's contact at that speed.
 func _sliding_wheel(v: float) -> WheelScript:
 	var root: Node3D = auto_free(Node3D.new())
 	add_child(root)
@@ -86,7 +86,7 @@ func _sliding_wheel(v: float) -> WheelScript:
 	var w := WheelScript.new(Vector3(0.0, 0.6, 0.0), false, true, null, 300.0)
 	w.apply_suspension(gd)
 	body.linear_velocity = Vector3(0.0, 0.0, -v)  # forward is -Z
-	w.tick(body, gd, root.get_world_3d().direct_space_state, 0.0, 0.0, TICK, [] as Array[Node])
+	w.tick(body, gd, root.get_world_3d().direct_space_state, 0.0, 1.0e6, TICK, [] as Array[Node])
 	return w
 
 
@@ -109,8 +109,8 @@ func test_the_tyre_force_and_the_drag_together_never_carry_a_contact_through_zer
 
 ## A free wheel and the `mass` (kg) its contact moves, on `fz` N at `crr`, rolling together at
 ## `v0` m/s and left alone: the contact's speed after each of `ticks`, stepped the way
-## `RayWheel.tick` builds the force (the slip force under its one-tick cap, the drag on what that
-## leaves, then the spin step).
+## `RayWheel.tick` and `apply_patch` build it (the start slip's force, under its one-tick cap,
+## sizes the spin step; the body takes the settled slip's, then the drag on what that leaves).
 func _free_pair_speeds(mass: float, fz: float, crr: float, v0: float,
 		ticks: int) -> PackedFloat64Array:
 	var w := _wheel()
@@ -120,13 +120,20 @@ func _free_pair_speeds(mass: float, fz: float, crr: float, v0: float,
 	var speeds := PackedFloat64Array()
 	for i in ticks:
 		var floor_vel := WheelScript.slip_floor_for(fz, mass, _curve(), TICK)
+		var denom := maxf(absf(v), floor_vel)
 		var slip_vel := w.omega * r - v
 		var cap := mass * absf(slip_vel) / TICK
-		var f := clampf(WheelScript.combined_slip_force(slip_vel / maxf(absf(v), floor_vel), 0.0,
+		var start := clampf(WheelScript.combined_slip_force(slip_vel / denom, 0.0,
+				fz, fz, _curve()).x, -cap, cap)
+		var k0 := minf(fz * WheelScript.zero_slip_rise(_curve()) / denom, mass / TICK) \
+				* r * r * TICK / w.wheel_inertia
+		w._integrate_spin(0.0, -start * r, 0.0, TICK, slip_vel, v, 0.0, 0.0, 0.0, floor_vel, k0)
+		var settled := w.omega * r - v
+		cap = mass * absf(settled) / TICK
+		var f := clampf(WheelScript.combined_slip_force(settled / denom, 0.0,
 				fz, fz, _curve()).x, -cap, cap)
 		var drag := WheelScript.surface_drag_force(v, crr, fz, mass, TICK,
 				maxf(-signf(v) * f, 0.0))
-		w._integrate_spin(0.0, -f * r, 0.0, TICK, slip_vel, v)
 		v += (f + drag) / mass * TICK
 		speeds.append(v)
 	return speeds
@@ -149,6 +156,154 @@ func test_a_free_wheel_and_its_body_roll_to_rest_and_never_back() -> void:
 					% [label, worst_back]).is_greater_equal(-1e-9)
 			assert_float(last).override_failure_message("%s: still %.6f m/s after 15 s"
 					% [label, last]).is_less(1e-4)
+
+
+## A 1500 kg four-wheel bench (rear drive, no drivetrain) settled on flat ground, ticked by its
+## `WheelDrive` once per physics frame: [body, drive, spec].
+func _settled_bench(crr: float) -> Array:
+	var spec := _bench_spec(1500.0)
+	var gd := spec.ground_drive
+	gd.wheel_radius = 0.36
+	gd.tyre_half_width = 0.1
+	gd.rest_length = 0.3
+	gd.spring_rate = 40000.0
+	gd.damper_bump = 3000.0
+	gd.damper_rebound = 4000.0
+	gd.rolling_resistance = crr
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	_box(root, Vector3(40.0, 1.0, 200.0), Vector3(0.0, -0.5, 0.0))
+	var body := RigidBody3D.new()
+	body.mass = 1500.0
+	body.collision_layer = 0
+	body.collision_mask = 0
+	var hull := CollisionShape3D.new()
+	hull.shape = BoxShape3D.new()
+	(hull.shape as BoxShape3D).size = Vector3(1.8, 0.6, 4.0)
+	body.add_child(hull)
+	root.add_child(body)
+	body.global_position = Vector3(0.0, 0.58, 0.0)
+	var drive := WheelDrive.new(body, spec)
+	await _bench_ticks(body, drive, spec, 0.0, 90)
+	return [body, drive, spec]
+
+
+func _bench_ticks(body: RigidBody3D, drive: WheelDrive, spec: VehicleSpec, axle_torque: float,
+		ticks: int) -> void:
+	var input := VehicleInput.new()
+	for _i in ticks:
+		await get_tree().physics_frame
+		drive.drive_omega(spec.ground_drive, input)
+		drive.tick(body, spec, input, 0.0, axle_torque, body.linear_velocity.length(), TICK,
+				[] as Array[Node])
+
+
+func test_a_free_wheel_s_slip_never_reverses_tick_to_tick() -> void:
+	# A body coasting at a crawl: the body takes the tyre's force at the slip the spin step settles
+	# on, so the slip decays toward the road's without crossing it. Pushed with the start slip's
+	# force while the step reacts the settled one's, it reverses every tick (`(1 / (1 + k) - a) s`).
+	# Read from the kick's third tick: the kick finds the wheels still, and the slip of the coast
+	# that follows has the other sign (the wheels' spin outlasts the body's rolling drag).
+	var bench: Array = await _settled_bench(0.012)
+	var body: RigidBody3D = bench[0]
+	var drive: WheelDrive = bench[1]
+	body.linear_velocity = Vector3(0.0, 0.0, -0.05)  # forward is -Z
+	await _bench_ticks(body, drive, bench[2], 0.0, 2)
+	var last := PackedFloat64Array([0.0, 0.0, 0.0, 0.0])
+	var reversals := 0
+	for _tick in 30:
+		await _bench_ticks(body, drive, bench[2], 0.0, 1)
+		for i in drive.wheels.size():
+			var w := drive.wheels[i]
+			var s := w.long_slip
+			if absf(s) > 1e-5 and absf(last[i]) > 1e-5 and signf(s) != signf(last[i]):
+				reversals += 1
+			last[i] = s
+	assert_int(reversals).override_failure_message("a free wheel's slip reversed %d times"
+			% reversals).is_equal(0)
+
+
+func test_a_crawl_s_drive_reaches_the_body() -> void:
+	# A constant drive under LOW_SPEED_FLOOR, two of four wheels driven: the body takes the drive
+	# less the wheels' own share of the acceleration (`k / (k + a)`, about 0.97 here). Pushed with
+	# the start slip's force it took about `1 / (1 + a)` of it, a quarter lost.
+	var bench: Array = await _settled_bench(0.0)
+	var body: RigidBody3D = bench[0]
+	var drive: WheelDrive = bench[1]
+	var spec: VehicleSpec = bench[2]
+	var torque := 1080.0  ## N·m over the axle: 3 kN at the rims, 2 m/s^2
+	var push := torque / spec.ground_drive.wheel_radius
+	await _bench_ticks(body, drive, spec, torque, 5)
+	var least := INF
+	for _tick in 30:
+		await _bench_ticks(body, drive, spec, torque, 1)
+		var sum := 0.0
+		for w in drive.wheels:
+			if w.driven:
+				sum += w.force_long
+		least = minf(least, sum)
+	assert_float(body.linear_velocity.length()).is_less(WheelScript.LOW_SPEED_FLOOR)
+	assert_float(least / push).override_failure_message("the body took %.3f of the drive"
+			% (least / push)).is_greater(0.95)
+
+
+func test_a_pushed_body_gains_speed_on_its_mass_and_its_wheels_inertia() -> void:
+	# A constant push on a body in N under LOW_SPEED_FLOOR: it gains `F / (M + sum I / r^2)`. Pushed
+	# with the start slip's force, each contact carried its tyre's slope times the tick (`C dt` kg,
+	# up to its cap mass) beside the body, and the body gained about a third less.
+	var bench: Array = await _settled_bench(0.0)
+	var body: RigidBody3D = bench[0]
+	var drive: WheelDrive = bench[1]
+	var spec: VehicleSpec = bench[2]
+	var push := 1500.0
+	body.linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE  # the default 0.1 / s takes 5 % here
+	body.linear_damp = 0.0
+	body.add_constant_central_force(Vector3(0.0, 0.0, -push))  # forward is -Z
+	await _bench_ticks(body, drive, spec, 0.0, 10)
+	var v0 := -body.linear_velocity.z
+	var ticks := 40
+	await _bench_ticks(body, drive, spec, 0.0, ticks)
+	var v1 := -body.linear_velocity.z
+	var inertia := 0.0
+	for w in drive.wheels:
+		inertia += w.wheel_inertia / (w.wheel_radius * w.wheel_radius)
+	var expected := push / (spec.mass + inertia)
+	assert_float(v1).is_less(WheelScript.LOW_SPEED_FLOOR)
+	assert_float((v1 - v0) / (ticks * TICK) / expected).override_failure_message(
+			"gained %.4f of F / (M + sum I / r^2)" % ((v1 - v0) / (ticks * TICK) / expected)) \
+			.is_equal_approx(1.0, 0.01)
+
+
+func test_a_wheel_at_zero_slip_steps_on_the_curve_s_first_slope() -> void:
+	# At exactly zero slip the secant has no stiffness: the step takes the one it is given, so a
+	# drive gains the wheel `tau / (1 + k0)`, never the whole `tau`. None given (off the ground):
+	# the whole `tau`.
+	var spec := _spec()
+	var tau := 400.0 * TICK / spec.wheel_inertia
+	var k0 := 12.0
+	var w := _wheel()
+	w._integrate_spin(400.0, 0.0, 0.0, TICK, 0.0, 0.0, 0.0, 0.0, 0.0,
+			WheelScript.LOW_SPEED_FLOOR, k0)
+	assert_float(w.omega).is_equal_approx(tau / (1.0 + k0), 1e-9)
+	var free := _wheel()
+	free._integrate_spin(400.0, 0.0, 0.0, TICK, 0.0)
+	assert_float(free.omega).is_equal_approx(tau, 1e-9)
+	# The curve's first slope: the shipped curve's rise to its peak.
+	assert_float(WheelScript.zero_slip_rise(_curve())).is_equal_approx(1.0 / 0.12, 1e-6)
+
+
+func test_a_held_wheel_at_zero_slip_stays_rigid_under_its_patch_spring() -> void:
+	# A wheel the brake or the pawl holds stands at zero slip with its patch spring carrying the
+	# load: the spring's reaction does not fall with the slip, so its secant stays near-rigid and
+	# the curve's first slope must not replace it (`suv` held on 30 % in P turned its wheels
+	# 0.26 rad/s in one tick that way, and the lock let go).
+	var spec := _spec()
+	spec.wheel_inertia = 1.2
+	var w := WheelScript.new(Vector3(0.0, 0.0, 1.0), false, true, null, 300.0)
+	w.apply_suspension(spec)
+	w._integrate_spin(0.0, -480.0, 0.0, TICK, 0.0, 0.0, 0.0, 0.0, 0.0,
+			WheelScript.LOW_SPEED_FLOOR, 24.56)
+	assert_float(absf(w.omega)).is_less(1e-6)
 
 
 func test_a_wheel_carries_the_specs_rolling_resistance_and_none_on_a_side_slide() -> void:
@@ -634,9 +789,10 @@ func test_a_brake_under_the_tyre_settles_where_the_road_carries_it() -> void:
 
 
 func test_a_wheel_on_a_decelerating_body_pays_only_its_own_inertia() -> void:
-	# The same linear tyre under a body slowing at a steady 9 m/s^2: the road carries the brake less
-	# the wheel's own `I * a / r`. Solved for spin alone (no `dv_long`), the road speed's drop each
-	# tick reads as slip the step must buy back, and the road carries `(1 + k)` times that less.
+	# The same linear tyre under a body slowing at a steady 9 m/s^2: the body takes the force at the
+	# slip the step settles on (`RayWheel.apply_patch`), which carries the brake less the wheel's own
+	# `I * a / r` with no predictor of the road. Settled, `s* = (a dt + tau) / k`, so `C s*` is
+	# `I a / r^2 - brake / r`.
 	var spec := _spec()
 	var c := 20000.0
 	var brake := 2000.0
@@ -647,52 +803,10 @@ func test_a_wheel_on_a_decelerating_body_pays_only_its_own_inertia() -> void:
 	var road := 0.0
 	for _i in 120:
 		var slip_vel := w.omega * spec.wheel_radius - v
-		road = -c * slip_vel * spec.wheel_radius
-		w._integrate_spin(0.0, road, brake, TICK, slip_vel, v, 0.0, -a * TICK)
+		w._integrate_spin(0.0, -c * slip_vel * spec.wheel_radius, brake, TICK, slip_vel, v)
+		road = -c * (w.omega * spec.wheel_radius - v) * spec.wheel_radius
 		v -= a * TICK
 	assert_float(road).is_equal_approx(brake - spec.wheel_inertia * a / spec.wheel_radius, 1.0)
-
-
-func test_the_road_change_is_the_body_s_along_the_wheel_faded_at_a_crawl() -> void:
-	# Straight, slowing at 9 m/s^2: the predictor the decelerating-body case above is fed.
-	var a := 9.0
-	var v := 30.0
-	assert_float(WheelScript.road_change(Vector3.FORWARD * (v - a * TICK), Vector3.FORWARD, v, v)) \
-			.is_equal_approx(-a * TICK, 1e-5)
-	# Twice LOW_SPEED_FLOOR and up it is followed whole; at it and under, not at all.
-	var floor_v := WheelScript.LOW_SPEED_FLOOR
-	assert_float(WheelScript.road_change(Vector3.FORWARD * 0.9, Vector3.FORWARD, 1.0, floor_v)) \
-			.is_equal(0.0)
-	assert_float(WheelScript.road_change(Vector3.FORWARD * 0.9, Vector3.FORWARD, 1.0, 1.5 * floor_v)) \
-			.is_equal_approx(-0.05, 1e-5)
-
-
-func test_a_free_wheel_in_a_steady_turn_carries_no_drive() -> void:
-	# 20 m/s round a 1.2 g turn, the wheel 5 deg off the path and yawing with it: the road speed
-	# along the wheel never changes. Read as `Δv · forward` alone, the turn's acceleration feeds the
-	# wheel `a sin β` (~1 m/s^2), and it settles one tick of that ahead of the road: ~130 N·m of
-	# push on this tyre. Started 5 cm/s off the road so the tyre's stiffness is in the step.
-	var spec := _spec()
-	var c := 20000.0
-	var v := 20.0
-	var yaw_rate := 1.2 * 9.81 / v
-	var beta := deg_to_rad(5.0)
-	var v_long := v * cos(beta)
-	var w := _wheel()
-	w.omega = (v_long + 0.05) / spec.wheel_radius
-	var prev_long := v_long
-	var road := 0.0
-	for i in 120:
-		var heading := yaw_rate * TICK * (i + 1)
-		var com_vel := Vector3.FORWARD.rotated(Vector3.UP, heading) * v
-		var forward := Vector3.FORWARD.rotated(Vector3.UP, heading + beta)
-		var dv := WheelScript.road_change(com_vel, forward, prev_long, v_long)
-		prev_long = com_vel.dot(forward)
-		var slip_vel := w.omega * spec.wheel_radius - v_long
-		road = -c * slip_vel * spec.wheel_radius
-		w._integrate_spin(0.0, road, 0.0, TICK, slip_vel, v_long, 0.0, dv)
-	assert_float(absf(road)).is_less(1.0)
-	assert_float(w.omega).is_equal_approx(v_long / spec.wheel_radius, 1e-3)
 
 
 func test_abs_holds_an_over_strong_brake_at_its_slip() -> void:
@@ -804,7 +918,7 @@ func test_tcs_holds_a_floored_drive_at_its_slip() -> void:
 	var held := _wheel()
 	held.omega = (v + slip_vel) / spec.wheel_radius
 	held._integrate_spin(1.0e6, -c * slip_vel * spec.wheel_radius, 0.0, TICK, slip_vel, v,
-			0.0, 0.0, WheelScript.TCS_SLIP)
+			0.0, WheelScript.TCS_SLIP)
 	assert_float(held.omega).is_equal_approx(v * (1.0 + WheelScript.TCS_SLIP) / spec.wheel_radius,
 			1e-6)
 	assert_bool(held.tcs_active).is_true()
@@ -812,7 +926,7 @@ func test_tcs_holds_a_floored_drive_at_its_slip() -> void:
 	var light := _wheel()
 	light.omega = (v + slip_vel) / spec.wheel_radius
 	light._integrate_spin(50.0, -c * slip_vel * spec.wheel_radius, 0.0, TICK, slip_vel, v,
-			0.0, 0.0, WheelScript.TCS_SLIP)
+			0.0, WheelScript.TCS_SLIP)
 	var plain := _wheel()
 	plain.omega = (v + slip_vel) / spec.wheel_radius
 	plain._integrate_spin(50.0, -c * slip_vel * spec.wheel_radius, 0.0, TICK, slip_vel, v)
@@ -822,9 +936,9 @@ func test_tcs_holds_a_floored_drive_at_its_slip() -> void:
 
 func test_tcs_reverse_mirrors_forward() -> void:
 	var fwd := _wheel()
-	fwd._integrate_spin(1.0e6, 0.0, 0.0, TICK, 0.0, 5.0, 0.0, 0.0, WheelScript.TCS_SLIP)
+	fwd._integrate_spin(1.0e6, 0.0, 0.0, TICK, 0.0, 5.0, 0.0, WheelScript.TCS_SLIP)
 	var rev := _wheel()
-	rev._integrate_spin(-1.0e6, 0.0, 0.0, TICK, 0.0, -5.0, 0.0, 0.0, WheelScript.TCS_SLIP)
+	rev._integrate_spin(-1.0e6, 0.0, 0.0, TICK, 0.0, -5.0, 0.0, WheelScript.TCS_SLIP)
 	assert_float(rev.omega).is_equal_approx(-fwd.omega, 1e-6)
 	assert_bool(rev.tcs_active).is_true()
 
@@ -841,7 +955,7 @@ func test_tcs_takes_back_no_more_than_the_drive_share() -> void:
 	plain._integrate_spin(20.0, reaction, 0.0, TICK, slip_vel, v)
 	var capped := _wheel()
 	capped.omega = (v + slip_vel) / spec.wheel_radius
-	capped._integrate_spin(20.0, reaction, 0.0, TICK, slip_vel, v, 0.0, 0.0,
+	capped._integrate_spin(20.0, reaction, 0.0, TICK, slip_vel, v, 0.0,
 			WheelScript.TCS_SLIP)
 	assert_float(capped.omega).is_equal_approx(plain.omega - 20.0 * plain.spin_compliance, 1e-9)
 	assert_bool(capped.tcs_active).is_true()
@@ -857,7 +971,7 @@ func test_tcs_only_removes_drive_and_never_brakes() -> void:
 	var slip_vel := 0.5 * v
 	var held := _wheel()
 	held.omega = (v + slip_vel) / spec.wheel_radius
-	held._integrate_spin(0.0, -400.0, 0.0, TICK, slip_vel, v, 0.0, 0.0,
+	held._integrate_spin(0.0, -400.0, 0.0, TICK, slip_vel, v, 0.0,
 			WheelScript.TCS_SLIP, 1.0e6)
 	var ceiling := WheelScript.tcs_ceiling_spin(v, 1.0, spec.wheel_radius, WheelScript.TCS_SLIP)
 	assert_float(held.omega).is_equal_approx(ceiling, 1e-9)
@@ -866,7 +980,7 @@ func test_tcs_only_removes_drive_and_never_brakes() -> void:
 	# Under its ceiling a wheel loses nothing to the hold, however big the share.
 	var slow := _wheel()
 	slow.omega = (v + 0.05 * v) / spec.wheel_radius
-	slow._integrate_spin(0.0, -100.0, 0.0, TICK, 0.05 * v, v, 0.0, 0.0,
+	slow._integrate_spin(0.0, -100.0, 0.0, TICK, 0.05 * v, v, 0.0,
 			WheelScript.TCS_SLIP, 1.0e6)
 	var plain := _wheel()
 	plain.omega = (v + 0.05 * v) / spec.wheel_radius
@@ -878,10 +992,10 @@ func test_tcs_only_removes_drive_and_never_brakes() -> void:
 func test_tcs_off_is_todays_step_bit_for_bit() -> void:
 	var a := _wheel()
 	a.omega = 30.0
-	a._integrate_spin(800.0, -300.0, 0.0, TICK, 2.0, 10.0, 0.0, 0.1)
+	a._integrate_spin(800.0, -300.0, 0.0, TICK, 2.0, 10.0, 0.0)
 	var b := _wheel()
 	b.omega = 30.0
-	b._integrate_spin(800.0, -300.0, 0.0, TICK, 2.0, 10.0, 0.0, 0.1, 0.0)
+	b._integrate_spin(800.0, -300.0, 0.0, TICK, 2.0, 10.0, 0.0, 0.0)
 	assert_float(b.omega).is_equal(a.omega)
 	assert_bool(b.tcs_active).is_false()
 
@@ -892,7 +1006,7 @@ func test_tcs_holds_an_airborne_wheel_at_the_body_speed_plus_the_peak() -> void:
 	var spec := _spec()
 	var v := 0.5
 	var w := _wheel()
-	w._integrate_spin(2000.0, 0.0, 0.0, TICK, 0.0, v, 0.0, 0.0, WheelScript.TCS_SLIP)
+	w._integrate_spin(2000.0, 0.0, 0.0, TICK, 0.0, v, 0.0, WheelScript.TCS_SLIP)
 	assert_float(w.omega).is_equal_approx(
 			(v + WheelScript.TCS_SLIP * WheelScript.LOW_SPEED_FLOOR) / spec.wheel_radius, 1e-6)
 	assert_bool(w.tcs_active).is_true()
@@ -923,10 +1037,10 @@ func test_tc_drives_through_settle_spin() -> void:
 	# A coupled wheel leaves its step with the hold latched, not applied: the differentials solve it
 	# first. Settled with no coupling torque it lands exactly where a lone wheel's own step does.
 	var lone := _wheel()
-	lone._integrate_spin(1.0e6, 0.0, 0.0, TICK, 0.0, 5.0, 0.0, 0.0, WheelScript.TCS_SLIP)
+	lone._integrate_spin(1.0e6, 0.0, 0.0, TICK, 0.0, 5.0, 0.0, WheelScript.TCS_SLIP)
 	var coupled := _wheel()
 	coupled.coupled_spin = true
-	coupled._integrate_spin(1.0e6, 0.0, 0.0, TICK, 0.0, 5.0, 0.0, 0.0, WheelScript.TCS_SLIP)
+	coupled._integrate_spin(1.0e6, 0.0, 0.0, TICK, 0.0, 5.0, 0.0, WheelScript.TCS_SLIP)
 	assert_float(coupled.omega).is_greater(lone.omega)
 	assert_bool(coupled.tcs_active).is_false()
 	coupled.settle_spin(0.0)

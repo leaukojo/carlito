@@ -128,17 +128,16 @@ tractor. The brake rides the same step: applied after it, a held brake needs the
 pedal past ~30 % locks; measured that way, the sedan at 30 % stopped with a wheel past 0.3
 slip for seconds.
 
-**Following the body.** Solved for spin with the road speed frozen, the step reads each tick's
-change in road speed as slip to buy back: an accelerating body costs its wheels `I * a * k / r`,
-about `dv per tick / slip velocity` of the torque, a sizeable share of a full brake mid-stop. So
-the step follows the centre of mass's speed change along the wheel, both turning, in proportion
-`k / (1 + k)` (`RayWheel.road_change`: `dv . f` alone feeds a turn's `a sin β`, and a free wheel
-pushes). 0-100 times and full-pedal stops land within 4 % of 480 Hz; spin alone ran 6-11 % long.
-
-The follow reads the centre of mass, never the contact. The contact also carries the pitch that
-the tyre's own force rocks in one tick, and following it rings the body at the tick rate. Below
-twice `LOW_SPEED_FLOOR` (the constant, not a body's raised slip floor) the follow fades out (there
-it rings too, and buys nothing), which is the launches' remaining 1-3 %.
+**One force at the patch.** The step reacts the tyre's force at the slip it ends on, and the body
+takes the curve's force at that same settled slip (`RayWheel.apply_patch`, once the differentials
+and brakes have settled): one force between them. A free wheel's slip dies in a tick without
+reversing, and the body accelerates on `M + sum I / r^2` at any speed, with no predictor of the
+road. Pushed with the start slip's force, the wheel and the body swap the contact's speed every
+tick, and each contact adds `C dt` kg (its tyre's slope times the tick, up to its cap mass) to the
+body: half as heavy again under `LOW_SPEED_FLOOR`. At zero slip the curve's first slope stands in
+for the secant only where it gives less (a held wheel's patch spring stays rigid). Guards:
+`test_wheel_spin` (`test_a_free_wheel_s_slip_never_reverses_tick_to_tick`,
+`test_a_pushed_body_gains_speed_on_its_mass_and_its_wheels_inertia`).
 
 **One-tick caps and the slip floor.** Each tyre force is capped at what cancels its slip velocity
 in one tick, on the mass the body's tensor gives each contact (`RayWheel.size_cap_masses`): the
@@ -150,7 +149,6 @@ the cap takes nothing off any launch (`doc=accel`'s tick cap 0.00); per-wheel fl
 The rolling drag takes what the tyre's force along the wheel leaves of that cap (`surface_drag_force`'s
 `taken`): each under its own, the two carry a standing contact through zero every tick and the body
 rocks (`measure_vehicles -- <v> 20 rest`; a bobtail `semi`'s drive axle swung 101 kg). Gravity's pull on the contact's mass comes out of `taken` first: counted whole, a slow roll-back loses its drag and creep holds 0.4 points less grade (`all creep`).
-Still there: a free wheel and the body swap the contact's speed tick to tick, a ring nothing feeds (a standing `semi`'s `axle_load` steps up to 1 kg a tick).
 Guards: `test_wheel_spin` (`test_the_tyre_force_and_the_drag_together_never_carry_a_contact_through_zero`), and CI's `measure_semi_launch -- <unit> steady strict` (`REST_STEP_KG`).
 
 **Braking.**
@@ -395,7 +393,9 @@ Do not re-propose these without new evidence:
 - Drawing the heavy vans' twin rears: the kit tyre (0.42 m) on their 1.26 m rear track puts the
   inner pair at the centreline. They draw one tyre per corner over `rear_twin_tyres` physics.
 - A predicted-slip or per-tick force-change cap instead of the slip floor (§ One-tick caps): on a
-  one-contact pitch model the first alternates the force 0 / 2x, the second limit-cycles.
+  one-contact pitch model the first alternates the force 0 / 2x, the second limit-cycles. The
+  settled slip's force (§ One force at the patch) is no prediction: the force and its caps read the
+  one slip the step settled on.
 - Refining `ShiftPolicy`, the `PETROL` map's fidelity, or Kenney handling past its existing gates
   (the user's call): a learner sees a gear change and a torque request, and toy wheelbases make
   finer K or drift figures false precision. A defect a driver notices is a fix, not a refinement.
