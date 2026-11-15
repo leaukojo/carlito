@@ -7,7 +7,7 @@
 [sub_resource type="Resource" id="Resource_hazards"]
 script = ExtResource("2_flash")
 lamps = Array[StringName]([&"turn_left", &"turn_right"])
-min_hz = 1.0
+min_hz = 0.8
 max_hz = 2.0
 hold_s = 5.0
 
@@ -18,6 +18,6 @@ title = "Hazard lights"
 variant = "sedan-sports"
 arena = "car_arena"
 course = "res://src/levels/island/car_arena/courses/car_start_up_course.tscn"
-briefing = "Flash the hazards (both turn indicators) for 5 s (any frequency between 1 and 2 Hz accepted)."
+briefing = "Flash the hazards (both turn indicators) for 5 s (any frequency between 0.8 and 2 Hz accepted)."
 hint = "There is no hazard signal, you'll need to manually flash Left Turn and Right Turn at the same time."
 goals = Array[ExtResource("1_goal")]([SubResource("Resource_hazards")])
