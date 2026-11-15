@@ -296,8 +296,17 @@ func test_flow_height_wraps_as_a_flow_container_does() -> void:
 
 
 ## AUTO decides before layout, where a FlowContainer reads 0 tall, so the measure must equal the
-## laid-out panel: a short one put FULL on windows it does not fit.
+## laid-out panel: a short one put FULL on windows it does not fit. Also in a window narrower than
+## the cluster (Linux headless is 64 px), where the panel stretches past it and wraps at its own width.
 func test_the_full_measure_is_the_laid_out_size() -> void:
+	var root_size := get_tree().root.size
+	for window: Vector2i in [root_size, Vector2i(64, 64)]:
+		get_tree().root.size = window
+		await _assert_full_measures()
+	get_tree().root.size = root_size
+
+
+func _assert_full_measures() -> void:
 	for family in FAMILIES:
 		var dash: Dashboard = auto_free(Dashboard.new())
 		add_child(dash)
@@ -310,8 +319,8 @@ func test_the_full_measure_is_the_laid_out_size() -> void:
 		var measured := dash._measure_full(panel)
 		await get_tree().process_frame
 		await get_tree().process_frame
-		assert_vector(measured).override_failure_message("'%s': measured %s, laid out %s"
-				% [family, measured, panel.get_combined_minimum_size()]) \
+		assert_vector(measured).override_failure_message("'%s' in %s: measured %s, laid out %s"
+				% [family, get_tree().root.size, measured, panel.get_combined_minimum_size()]) \
 			.is_equal_approx(panel.get_combined_minimum_size(), Vector2(0.5, 0.5))
 
 

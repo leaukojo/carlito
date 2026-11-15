@@ -466,10 +466,11 @@ func _build(vehicle_type: String) -> void:
 
 ## A just-built panel's size once laid out. Its minimum size is read before layout, where a
 ## FlowContainer reports no height until its first sort: the tell-tale row and node strip get
-## theirs from `flow_height` at the window's width. The readout counts one line however it wraps.
+## theirs from `flow_height` at the panel's width: the window's, or the cluster's where that is
+## wider and stretches the panel. The readout counts one line however it wraps.
 func _measure_full(panel: PanelContainer) -> Vector2:
 	var s := panel.get_combined_minimum_size()
-	var avail := get_viewport_rect().size.x - 2.0 * UiTheme.px(self, PANEL_PAD_X)
+	var avail := maxf(get_viewport_rect().size.x, s.x) - 2.0 * UiTheme.px(self, PANEL_PAD_X)
 	for row: FlowContainer in panel.find_children("*", "FlowContainer", true, false):
 		var sizes: Array[Vector2] = []
 		for c: Control in row.get_children():
