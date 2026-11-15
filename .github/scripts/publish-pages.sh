@@ -2,7 +2,7 @@
 #
 # Republishes the gh-pages branch as a single orphan commit.
 #
-#   publish-pages.sh dev <build-dir>   replace gh-pages:/dev/ with <build-dir>
+#   publish-pages.sh dev <build-dir>   replace gh-pages:/dev/ with <build-dir>, /guide/ with docs/guide
 #   publish-pages.sh promote           copy gh-pages:/dev/ over gh-pages:/stable/
 #
 # gh-pages is ALWAYS rewritten as one orphan commit and force-pushed: a web build
@@ -63,6 +63,9 @@ if [ "$MODE" = dev ]; then
   rm -rf "$GHP/dev"
   mkdir -p "$GHP/dev"
   cp -r "$SRC/." "$GHP/dev/"
+  # The mechanics guide is a static site already (docs/guide/index.html); it follows dev.
+  rm -rf "$GHP/guide"
+  cp -r "$REPO_ROOT/docs/guide" "$GHP/guide"
   MSG="deploy dev @ ${SITE_SHA}"
 else
   [ -f "$GHP/dev/index.html" ] || { echo "gh-pages:/dev/ is empty - push to dev and let CI publish before promoting"; exit 1; }

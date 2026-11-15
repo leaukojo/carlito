@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Open questions
 
 Places where the code and the developer docs disagree, or where the code looks wrong to a

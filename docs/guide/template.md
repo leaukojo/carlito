@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # The page template
 
 <p class="lead">Every idea page in this guide follows the same pattern, so a reader always knows

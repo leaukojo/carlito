@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Controls and who drives
 
 <p class="lead">A vehicle in the game can be driven from the keyboard, a touch screen, a gamepad

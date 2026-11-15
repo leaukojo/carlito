@@ -1,9 +1,11 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # About this guide
 
 <div class="box note">
 
-**To read this guide** as a website, run `npx serve docs/guide` from the top folder of the
-repository and open the address it prints (usually http://localhost:3000). It needs a web server
+**To read this guide** online, open <https://leaukojo.github.io/carlito/guide/>. To read a
+local copy as a website, run `npx serve docs/guide` from the top folder of the repository and open the address it prints (usually http://localhost:3000). It needs a web server
 because the pages are loaded as separate files. Without one, every page is still a plain
 Markdown file in `docs/guide/`, readable in any editor.
 

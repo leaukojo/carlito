@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Fuel, coolant, battery and air
 
 <p class="lead">A vehicle's dashboard shows more than speed: how much fuel is left, how hot the

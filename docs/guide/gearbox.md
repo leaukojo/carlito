@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Gearbox and shifting
 
 <p class="lead">An engine is strong only in a narrow band of speeds, but a vehicle has to crawl

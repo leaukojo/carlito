@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Brakes
 
 <p class="lead">Brakes turn a vehicle's speed into heat. Each vehicle in the game has its own

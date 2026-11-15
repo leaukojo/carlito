@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Ground and tyre types
 
 <p class="lead">A tyre grips dry asphalt far better than ice. How far better depends on the tyre:

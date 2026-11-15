@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Trains
 
 <p class="lead">A train cannot steer: its rails choose the way. What the game models is what

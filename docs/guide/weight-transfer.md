@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Weight transfer and rollover
 
 <p class="lead">A vehicle's weight does not stay spread evenly over its wheels. Braking pushes it

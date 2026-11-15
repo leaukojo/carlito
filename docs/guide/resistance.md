@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Air and rolling resistance
 
 <p class="lead">A vehicle on a level road still needs its engine to keep moving, because two

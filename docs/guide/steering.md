@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Steering and Ackermann
 
 <p class="lead">Steering does not push a car sideways. It angles the front tyres so they slip a

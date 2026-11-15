@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Towing
 
 <p class="lead">A semi-trailer or a farm trailer is a second vehicle with its own wheels and

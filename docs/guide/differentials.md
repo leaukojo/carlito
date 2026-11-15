@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Differentials and four-wheel drive
 
 <p class="lead">In a turn the outside wheels travel further than the inside ones, so a driven

@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Kinds of gearbox
 
 <p class="lead">Every gearbox lets one engine pull hard at walking pace and still run fast on a

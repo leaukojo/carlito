@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Inventory of modelled systems
 
 This is the guide's checklist, not a player page. Each row is one mechanical system the game

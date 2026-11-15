@@ -20,6 +20,7 @@ gh-pages/
   .nojekyll
   stable/
   dev/
+  guide/       <- docs/guide, with dev
 ```
 
 Siblings because Godot's PWA worker scopes to its own directory — a stable build at

@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # The boats
 
 <p class="lead">The boat family is two speedboats and a sailing dinghy. They float on four

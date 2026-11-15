@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Glossary
 
 Every technical word the guide uses, in alphabetical order. The first sentence or two under each

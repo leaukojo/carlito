@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # What the game keeps simple
 
 <p class="lead">Every model leaves something out. This page gathers, in one place, what Carlito

@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Forces on a vehicle
 
 <p class="lead">Everything a vehicle does comes from pushes and pulls: gravity, the ground, the

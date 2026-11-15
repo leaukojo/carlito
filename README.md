@@ -4,6 +4,8 @@ Ultra-lightweight, general-purpose vehicle simulator that runs in a web browser.
 
 **Try it:** [leaukojo.github.io/carlito](https://leaukojo.github.io/carlito/)
 
+**Mechanics guide:** [leaukojo.github.io/carlito/guide](https://leaukojo.github.io/carlito/guide/), how each vehicle works, in plain language.
+
 <table>
 <tr>
 <td><img src="docs/img/screenshot_1.jpg" alt="Carlito screenshot 1"></td>

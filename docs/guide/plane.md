@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # The plane
 
 <p class="lead">The plane is a single light aircraft of about 800 kg, with a propeller at the

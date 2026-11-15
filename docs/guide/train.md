@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # The train
 
 <p class="lead">The train is a high-speed-style electric locomotive and four wagons, about

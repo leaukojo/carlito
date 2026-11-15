@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Floating and boats
 
 <p class="lead">A boat has no wheels to push against. Water holds it up, its propeller pushes

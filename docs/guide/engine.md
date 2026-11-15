@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # The engine
 
 <p class="lead">An engine turns fuel into a twisting force on a spinning shaft. How much it can

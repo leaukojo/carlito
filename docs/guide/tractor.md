@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # The tractors
 
 <p class="lead">The tractor is one 7-tonne farm tractor with two gearboxes to choose from. It

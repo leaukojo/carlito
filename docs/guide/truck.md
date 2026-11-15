@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # The trucks
 
 <p class="lead">The truck family is two rigid trucks and two semi tractor units, the cab-over

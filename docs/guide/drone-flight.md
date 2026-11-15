@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Drone flight
 
 <p class="lead">A drone has no wings, no rudder and no wheels. It flies on four spinning rotors

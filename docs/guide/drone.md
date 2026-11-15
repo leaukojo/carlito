@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # The drone
 
 <p class="lead">The drone family is one quadcopter of 5 kg, `drone-mk2`, with a working cargo

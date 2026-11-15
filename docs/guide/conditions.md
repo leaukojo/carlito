@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Wind, current and conditions
 
 <p class="lead">A level can have its own wind and, on Level 6, a tide in the sea. The pause

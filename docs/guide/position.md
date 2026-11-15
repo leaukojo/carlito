@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Position, heading and distance
 
 <p class="lead">Every vehicle reports where it is, which way it points, how far it has gone and

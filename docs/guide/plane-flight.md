@@ -1,3 +1,5 @@
+[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
+
 # Plane flight
 
 <p class="lead">A plane's wing holds it up only while it moves fast enough. Too slow, and the
