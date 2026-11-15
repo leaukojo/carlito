@@ -1,10 +1,10 @@
 # Carlito
 
-Ultra-lightweight, general-purpose vehicle simulator that runs in a web browser.
+An ultra-lightweight, general-purpose vehicle simulator that runs in a web browser.
 
 **Try it:** [leaukojo.github.io/carlito](https://leaukojo.github.io/carlito/)
 
-**Mechanics guide:** [leaukojo.github.io/carlito/guide](https://leaukojo.github.io/carlito/guide/), how each vehicle works, in plain language.
+**Mechanics guide:** [leaukojo.github.io/carlito/guide](https://leaukojo.github.io/carlito/guide/): how each vehicle works, in plain language.
 
 <table>
 <tr>
@@ -23,15 +23,15 @@ Ultra-lightweight, general-purpose vehicle simulator that runs in a web browser.
 
 ## Why
 
-Open-source vehicle simulations like [CARLA](https://carla.org/) and [AWSIM](https://github.com/tier4/AWSIM) require installing heavy software on a PC with good specs. Sometimes you just want a quick simulator in a web browser: classrooms, workshops, competitions. Carlito targets 60 fps on a smartphone's web browser, with no install necessary.
+Open-source vehicle simulations like [CARLA](https://carla.org/) and [AWSIM](https://github.com/tier4/AWSIM) require installing heavy software on a PC with good specs. Sometimes you just want a quick simulator in a web browser, for classrooms, workshops or competitions. Carlito targets 60 fps in a smartphone's web browser, with no install necessary.
 
 It is built with the open-source game engine Godot using CC0 assets, so levels and vehicles are easy to add.
 
 ## Instrumentation
 
-Carlito can interact with external tools using a javascript bridge.
-The main use case of Carlito is to facilitate the learning of standard CAN (Controller Area Network) protocols (J1939, ISOBUS, NMEA2000, etc.).
-You can interact with simulated CAN buses using [sloppyCAN](https://github.com/leaukojo/sloppycan) or [RAMN](https://github.com/ToyotaInfoTech/RAMN), directly from your web browser (see below). Carlito features some simple CAN challenges (e.g., accelerate to reach the finish line, maintain a fixed speed, follow a GPS route, etc.)
+Carlito can interact with external tools using a JavaScript bridge.
+The main use case of Carlito is to help people learn standard CAN-based (Controller Area Network) protocols (J1939, ISOBUS, NMEA2000, etc.).
+You can interact with simulated CAN buses using [sloppyCAN](https://github.com/leaukojo/sloppycan) or [RAMN](https://github.com/ToyotaInfoTech/RAMN), directly from your web browser (links below). Carlito features some simple CAN challenges (e.g., accelerate to reach the finish line, maintain a fixed speed, follow a GPS route).
 
 ## Deployed builds
 
@@ -67,7 +67,7 @@ For a local web build:
 ```
 godot --headless --path . --export-release "Web" build/web/index.html
 ```
-The project is well documented for AI agents, so you should be able to make requests such as "add a level" or "add a vehicle" with minimal token usage.
+The project is well-documented for AI agents, so you should be able to make requests such as "add a level" or "add a vehicle" with minimal token usage.
 
 If you want to contribute, see `docs/TODO.md` for a list of current issues. If you want to make a new level, see `docs/making_a_level.md`. If you want to understand how the simulation works, see `docs/HUMAN_EXPLANATIONS.md`.
 
