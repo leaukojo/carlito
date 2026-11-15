@@ -31,52 +31,57 @@ pause**, where the review stops and the plans run; **B**, what waits until they 
 
 ### Stage A: before the plans
 
-The rolling moment (A1 to A3) holds `handbrake_fade.md`; A1 to A7 hold `realism_gaps.md`.
+The rolling moment (A2, A3) holds `handbrake_fade.md`; A2 to A7 hold `realism_gaps.md`. A1 (the
+gather) and the hand-back's diagnosis are done: `sessions/2026-11-16-gather-rolling-moment.md`,
+`sessions/2026-11-16-rolling-moment-diagnosis.md`.
 
-- **A1** (gather for A2; started 2026-11-16 by a subagent of the maintenance session: done when
-  `sessions/2026-11-16-gather-rolling-moment.md` exists, to run again only if it is missing or
-  says "Not gathered") In two detached worktrees outside the repo (`.godot/` copied), HEAD and
-  HEAD with `git apply sessions/2026-11-15-rolling-moment.patch`, an uncommitted per-tick probe,
-  `--fixed-fps 60`. Log per wheel `omega`, `_spin_held`, `brake_spin`, `roll_share`, `long_slip`,
-  `force_long`, `force_roll`, `suspension_force` on: (i) `measure_semi_launch -- semi steady strict
-  trailer=bobtail` over the rest window, with the rear axle load; name the first quantity that
-  alternates on the patch and not at HEAD. (ii) `measure_grade -- sedan creep` pinned at 7.0 % and
-  5.7 %, 3 s from the release, with the converter's output torque and the body's speed. (iii)
-  `doc=park`'s `semi` 18 % hand cell alone: the body's speed across and each wheel's `force_lat`.
-  (iv) `measure_grade -- semi rollback grade=25 nohold verbose`, t 2.0 to 3.5 s, the driven
-  wheels with the TC hold's state and the drive torque. A session file with the tables; no cause
-  guessed, no fix. [medium, auto, Opus]
-- **A2** (hand-back, 2026-11-15; needs A1) The rolling moment's three stops
-  (`sessions/2026-11-15-rolling-moment.md`: the patch, every figure HEAD -> patch, the derived
-  cause of stop 1). (1) A drive wheel TC holds at its slip pays its rolling resistance out of
-  traction, since `settle_spin` / `settled_spin` apply TC and then the brake law that carries the
-  moment (laden `semi` 25 % nohold rolls back 887 -> 1578 mm; with the hold it never pulls away,
-  on a cell that sits 18 N under its limit: `sessions/2026-11-15-wheel-fix-landed.md` § Still
-  open); (2) bobtail `rest reading:` axle step 0.11 -> 0.34 kg a tick; (3) `doc=park` `semi` 18 %
-  hand 1.7 mm across; and converter creep holds 0.4 to 1.3 points less grade on every body. From
-  A1's logs: confirm (1)'s cause and write the settle law with the moment as a stage before the TC
-  hold (what it does to `Differential`'s piecewise composition, the ABS floor, the `roll_share`
-  split, `_spin_held`); say what produces (2), (3) and the creep loss and whether that stage
-  removes them. One brief for Opus (it becomes A3's "Do") that re-applies the patch with the fix
-  and re-runs A3's list. [diagnose, high, Fable]
+- **A2** (ready) Standing bodies alternate with the rolling moment's patch on
+  (`sessions/2026-11-16-rolling-moment-diagnosis.md` § 4, read first: the bobtail's `rest
+  reading:` 0.11 -> 0.34 kg, a 3-tick cycle of ±90 N in the front suspension of a `semi` parked
+  across 10 %, what the two share, the hypothesis). In detached worktrees outside the repo
+  (`.godot/` copied), HEAD and HEAD with `git apply sessions/2026-11-15-rolling-moment.patch`,
+  with the gather's probe (its file's appendix; it adds `park_cell=`) and, per wheel, the terms it
+  lacked: `compression`, its difference a tick, the spring, damper, bar and link terms of
+  `suspension_force`, `_stick.x`, `_patch_spring.x`, `long_cap`, and `a`, the slip force's slope
+  over `m_cap / delta`. Runs, `--fixed-fps 60`: `measure_semi_launch -- semi steady strict
+  trailer=bobtail`, ticks 430 to 450; `measure_grade -- doc=park park_cell=semi:cross:5.7`, ticks
+  760 to 790. Name the term that steps first in each, and say whether the wheels that alternate
+  are those with the lowest `a`. Then the test, on the patch only: in `_slip_force` a wheel with
+  `omega == 0.0` takes along the wheel `clampf(m_cap * slip_vel / delta, -budget, budget)` where
+  it takes the curve; re-read the bobtail's `rest reading:` and the cross cell's front-left
+  `suspension_force`. Both back at HEAD's: write that law into A3's brief (what a standing
+  wheel's force along the wheel is and why, its tests, `semi 20 rest`, laden `steady strict` and
+  `tractor-kenney 20 rest` re-read, `sedan creep`'s slide unchanged by it). Not back: undo, the
+  session file gives the first term to step, and the case goes to Fable with it. Never a filter,
+  a lag or a deadband; nothing is fixed at HEAD. [high, auto, Opus]
 - **A3** (approved, user 2026-11-15: variant A, the ground's share a moment too; handed back
-  2026-11-15; after A2) The rolling resistance is a moment on the wheel, solved as a brake inside
-  the spin step. Why, what goes and what moves: `sessions/2026-11-15-wheel-leftovers.md` finding 1
-  (read first). The change as built, its tests and its figures:
-  `sessions/2026-11-15-rolling-moment.md` and `.patch` (`git apply`; re-read `wheel.gd` if it
-  fails). Do: the patch, then A2's brief. The moment is never part of `hold_torque`. Runs, HEAD
+  2026-11-15; after A2 and the user's answer on the creep, `proposals.md`) The rolling resistance
+  is a moment on the wheel, a stage of the settle law before the TC hold. Why, what goes and what
+  moves: `sessions/2026-11-15-wheel-leftovers.md` finding 1 (read first). The change as built, its
+  tests and its figures: `sessions/2026-11-15-rolling-moment.md` and `.patch` (`git apply`;
+  re-read `wheel.gd` if it fails). Do: the patch, then
+  `sessions/2026-11-16-rolling-moment-diagnosis.md` § Brief (the stage, `Differential`'s kinks,
+  `roll_share` gone, the three tests that fail on the patch), then A2's law where it proved. The
+  moment is never part of `hold_torque`. Runs, HEAD
   then after, `--fixed-fps 60`: `test_wheel_spin`, the suite; `doc=park`; `all creep`; `sedan
   rollback [nohold]`, `semi rollback [nohold]`; `sedan 45 brake`; `measure_semi_launch` `steady
   strict` bobtail and laden; `measure_vehicles -- semi 20 rest` and `tractor-kenney 20 rest`;
   `wheel_slip` on FIELD at no draft on `tractor-kenney` (the session file's probe); `all 45 track
   strict`; then the `doc=` tables. Measured on the patch: `sedan` 100 % stop 40.7 -> 41.1 m, FIELD
-  `wheel_slip` 2.9 -> 1.0 %. Stop and hand back, the change undone, if a standing body's `rest
-  reading:` rises, a `doc=park` held cell moves over 1 mm, an undriven wheel reads `omega == 0` on
-  a rolling body, or cruise and top speed move by more than a digit. The plan shows the user the
-  measured moves (stops, roll-backs, creep, `wheel_slip` on FIELD) before the commit; "Please
-  verify" gains: full stops about 1 % longer, a tractor's `wheel_slip` in a field at no draft
-  near 1 %, the laden `semi`'s roll-back on a steep grade as measured. The `COMPROMISE` count
-  stays (one goes, the soil's share comes). [high, plan, Opus]
+  `wheel_slip` 2.9 -> 1.0 %. Expected after the stage, and no stop: laden `semi` 25 % `nohold` back
+  at HEAD's 887 mm (1578 on the patch as built), the same cell with the hold never forward (it
+  sits 18 N under its limit at HEAD), the creep table as the user's answer says. Stop and hand
+  back, the change undone, if a standing body's `rest reading:` rises over HEAD's, any held
+  wheel's `suspension_force` alternates over 2 N a tick in `doc=park`'s `semi` 10 % cross cell
+  after its first 15 s (HEAD: under 1 N), a
+  `doc=park` held cell moves over 1 mm along (or across with the cell run alone in both trees:
+  the `semi`'s across figure moves about 1 mm with what ran before it), an undriven wheel reads
+  `omega == 0` on a rolling body, or cruise and top speed move by more than a digit. The plan
+  shows the user the measured moves (stops, roll-backs, creep, `wheel_slip` on FIELD) before the
+  commit; "Please verify" gains: full stops about 1 % longer, a tractor's `wheel_slip` in a field
+  at no draft near 1 %, a laden `semi` crawling up a steep grade stops sooner when the pedal is
+  lifted, the creep as decided. The `COMPROMISE` count stays (one goes, the soil's share comes).
+  [high, plan, Opus]
 - **A4** (approved, user 2026-11-14: raw; ready, it touches no line of the kept patch)
   `accLong` / `accLat` / `acc_vert` leave the sim unfiltered: `BaseVehicle.ACCEL_SMOOTH` goes,
   `TowedBody._sense_lateral` takes `raw` too, the contract's `acc_vert` `desc` and the guide
@@ -132,7 +137,7 @@ record, and it changes only with the user's OK. The pause is over when both plan
 1. `docs/plans/handbrake_fade.md` (2 phases, Opus, medium): from A3 landed or dropped. Its
    phase 1 edits `WheelDrive.tick`'s brake loop and `towed_body.gd:173-190`, lines the kept patch
    sits on (`towed_body.gd:193`); its cited lines predate the wheel fix: re-read them.
-2. `docs/plans/realism_gaps.md` (5 phases): from A1 to A7 done, so its targets are judged on
+2. `docs/plans/realism_gaps.md` (5 phases): from A2 to A7 done, so its targets are judged on
    `doc=` tables that no review item is about to move. Phase 1's "investigate" is a ledger of
    power from the fuel to the wheels at 70 km/h, on Opus (Fable only on a hand-back); phase 4's
    `race` bullet waits on A9, its other bullets do not. `doc=grade`'s `suv` cell is under
