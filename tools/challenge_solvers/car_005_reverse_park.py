@@ -2,7 +2,7 @@
 south of the bay. Then reverse north slowly, steering to hold that line, and stop on the bay's
 centre (z = -83.7). The bay is only 0.4 m wider than the wheels on each side, so the position
 comes from the GPS (centimetre precision)."""
-from carlito_can import connect, arc, clamp, D, R, IGNITION
+from carlito_can import connect, CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG, arc, clamp, D, R, IGNITION
 
 BAY_X, BAY_Z = -125.0, -83.7
 
@@ -14,7 +14,7 @@ car.wait_start("car_reverse_park")
 car.key = IGNITION
 car.gear = D
 while car.running and car.z < -62:
-    car.cruise(8)
+    car.cruise(8, CRUISE_CONTROL_PI)  # also try CRUISE_CONTROL_BANGBANG
     car.follow(APPROACH, lookahead=4)
     car.tick()
 car.accel = 0
@@ -26,7 +26,7 @@ while car.running and car.kmh > 0.1:
 car.gear = R
 car.brake = 0
 while car.running and car.z > BAY_Z + 0.2:      # stop a little early: the car needs time to stop
-    car.cruise(3)
+    car.cruise(3, CRUISE_CONTROL_PI)  # also try CRUISE_CONTROL_BANGBANG
     # Too far east? Point the nose a little east, so backing up moves the car west (and the
     # other way round). 10 degrees per metre off the line, at most 15 degrees.
     off_line = car.x - BAY_X

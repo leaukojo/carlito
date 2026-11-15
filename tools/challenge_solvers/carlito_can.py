@@ -56,6 +56,9 @@ P, R, N, D = 0xFE, 0xFF, 0, 1
 LOCK, ON, IGNITION = 1, 2, 3
 OFF, LOW, HIGH = 1, 3, 4
 
+# How cruise() holds a speed.
+CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG = "PI", "bang-bang"
+
 # The game's GPS: world X/Z around a Paris origin (VehicleTelemetry.gps_lat / gps_lon).
 GPS_LAT0, GPS_LON0, M_PER_DEG = 48.8566, 2.3522, 111320.0
 
@@ -273,8 +276,16 @@ class Car:
             self._path_i += 1
         return self.steer_to(*path[self._path_i]) < lookahead and self._path_i == len(path) - 1
 
-    def cruise(self, kmh):
-        """Hold a speed with accel and brake (a small PI controller)."""
+    def cruise(self, kmh, method=None):
+        """Hold a speed with accel and brake. CRUISE_CONTROL_PI (the default) is a small PI
+        controller; CRUISE_CONTROL_BANGBANG is the beginner's version, easier to read."""
+        if method == CRUISE_CONTROL_BANGBANG:
+            if self.kmh < kmh:
+                self.accel = 50     # too slow: half throttle
+            else:
+                self.accel = 0      # fast enough: foot off, the car slows down by itself
+            self.brake = 0
+            return
         now = time.monotonic()
         dt = 0.0 if self._cruise_t is None else min(now - self._cruise_t, 0.2)
         self._cruise_t = now
