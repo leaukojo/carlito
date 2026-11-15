@@ -18,3 +18,10 @@ Raise it to 0x18, then check the joystick step and top clamp (`ramn_sensors.c`),
 
 Flash it only after Carlito's gear contract is on stable: an older Carlito reads a manual-mode
 drive byte past 6 as N (`Drivetrain.normalize_byte`).
+
+## ISOBUS
+
+SloppyCAN side: **The trailer's ISO 11992 frames are not built from the standard.** ISO 11992-2 is paywalled,
+  so the two identifiers (EBS21 = PGN 768, EBS22 = PGN 65220) come from secondary sources only.
+  The trailer's axle load and brake demand aren't sent at all: no available source gives their
+  scaling. If you have the standard, a correction is very welcome.
