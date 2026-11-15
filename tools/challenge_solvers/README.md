@@ -11,8 +11,8 @@ every command and telemetry value.
 2. In sloppyCAN, click **Script**, then **Connect** (a bus or Demo mode must be live).
 3. Run the solver: `python tools/challenge_solvers/car_001_start_up.py`.
 
-The script asks sloppyCAN to open the challenge: Carlito's window opens if it is shut, and the
-game reloads straight into the challenge. The script drives as soon as it starts, and prints
+The script asks sloppyCAN to open the challenge: a running game switches to it at once, and a
+shut Carlito window opens straight into it. The script drives as soon as it starts, and prints
 `PASSED in ... s` or `FAILED ...`. With `--no-open` it waits for you to start the challenge in
 the game instead.
 

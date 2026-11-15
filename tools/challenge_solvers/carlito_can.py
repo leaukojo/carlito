@@ -38,8 +38,8 @@ What the car reports (the telemetry frames sloppyCAN puts on the bus):
     status (bitfield)                                        0x527
 
 Challenge state comes from sloppyCAN's "#challenge start / pass / fail / exit" info lines, and
-wait_start sends "#challenge open <id>", which makes sloppyCAN reload Carlito straight into the
-challenge. Real hardware has neither: there you start the challenge, press Enter once it has
+wait_start sends "#challenge open <id>", which makes sloppyCAN start the challenge in
+Carlito (opening its window if shut). Real hardware has neither: there you start the challenge, press Enter once it has
 started, and Ctrl+C when you are done.
 """
 
@@ -226,7 +226,7 @@ class Car:
         if self.link.has_info:
             if self._open_it:
                 self.link.send_line("#challenge open " + challenge_id)
-                print("Asked Carlito to open '%s' (the game reloads)..." % challenge_id)
+                print("Asked Carlito to open '%s'..." % challenge_id)
             else:
                 print("Start '%s' in the game (or press RETRY)..." % challenge_id)
             hint_at = time.monotonic() + 20

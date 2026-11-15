@@ -674,6 +674,15 @@ func _on_challenge_picked(id: String) -> void:
 	_start_challenge(ChallengeRegistry.def_of(id))
 
 
+## sloppyCAN's live request (a solver script's `#challenge open`), taken only once a level is up
+## and no load is in flight, so a request sent while the game boots waits for it. As if picked on
+## the CHALLENGES screen; an id that is not listed is dropped.
+func _take_challenge_request() -> void:
+	var id := Bridge.take_challenge_request()
+	if id != "" and ChallengeRegistry.def_of(id) != null:
+		_on_challenge_picked(id)
+
+
 ## Kick off a threaded level load behind a loading screen; _process polls progress.
 ## `variant` is the body to spawn instead of the level's default ("" = default); `attachment`
 ## what it tows (null = its own default; "" is BOBTAIL / DETACHED).
@@ -727,6 +736,8 @@ func _process(_delta: float) -> void:
 			_drop_loading_screen()
 		return
 	if _loading_path == "":
+		if _level != null:
+			_take_challenge_request()
 		return
 	if _fetching:
 		_loading.set_download(_packs.downloaded_bytes())

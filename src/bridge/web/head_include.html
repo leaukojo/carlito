@@ -11,15 +11,18 @@
           (`hash` is the contract's content SHA-256: same version, different hash = drift)
           (`challenge` is envelope, not a contract signal: false, or {id, state, t, msg}
           while a challenge is on: state running / passed / failed, t the attempt clock)
+    CMD : parent posts {type:'carlitoCommand', challenge:'<id>'} -> stashed on __carlito.cmd
+          until Bridge.take_challenge_request() reads it (a solver script asking for a challenge)
 
   Inbound is intentionally not origin-gated on the game side: it only drives the local
-  car (no sensitive sink). The dangerous direction — telemetry reaching a live CAN bus —
+  car or starts a challenge (no sensitive sink). The dangerous direction — telemetry reaching a live CAN bus —
   is origin-gated on the sloppyCAN side (carlito.js checks e.origin === GAME_ORIGIN).
 -->
 <script>
-  window.__carlito = { in: {}, inT: -1e9, ver: 0, hash: '', outVer: 0, outHash: '', publish: null };
+  window.__carlito = { in: {}, inT: -1e9, ver: 0, hash: '', outVer: 0, outHash: '', publish: null, cmd: '' };
   window.addEventListener('message', function (e) {
     var d = e.data;
+    if (d && d.type === 'carlitoCommand' && typeof d.challenge === 'string') { window.__carlito.cmd = d.challenge.slice(0, 64); return; }
     if (!d || d.type !== 'carlitoInput') return;
     if (typeof d.values !== 'object' || d.values === null || Array.isArray(d.values)) return;
     window.__carlito.in = d.values;

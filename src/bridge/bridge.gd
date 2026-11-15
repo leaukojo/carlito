@@ -91,6 +91,16 @@ func _challenge_value() -> Variant:
 	return challenge_envelope(_runner.def.id, attempt.status, attempt.elapsed, attempt.message)
 
 
+## The challenge id the embedding page asked for since the last call (a `carlitoCommand` message,
+## stashed by the head-include), or "". Reading it clears it. The shell starts it.
+func take_challenge_request() -> String:
+	if not _web:
+		return ""
+	var id: Variant = JavaScriptBridge.eval(
+			"(function(){var c=window.__carlito;if(!c||!c.cmd)return '';var v=c.cmd;c.cmd='';return v;})();", true)
+	return id if typeof(id) == TYPE_STRING else ""
+
+
 ## Register Level's telemetry source. Resolved once per vehicle change, not per publish.
 func bind(level: Node) -> void:
 	_telem = null
