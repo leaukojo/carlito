@@ -451,19 +451,53 @@ func _two_bar_cols_fit() -> bool:
 	return _beside_w + 2.0 * UiTheme.px(self, MID_W) + UiTheme.px(self, CLUSTER_GAP) <= avail
 
 
-## Build the cluster for `vehicle_type` at the wanted layout. AUTO builds FULL, measures it and
-## falls back to COMPACT where it does not fit (`full_fits`). The measure is the panel's minimum
-## size, taken before layout: the tell-tale row and the readout count one line each however they
-## will wrap, so a narrow window's FULL reads a line or two short.
+## Build the cluster for `vehicle_type` at the wanted layout. AUTO builds FULL, measures it
+## (`_measure_full`) and falls back to COMPACT where it does not fit (`full_fits`).
 func _build(vehicle_type: String) -> void:
 	_vehicle_type = vehicle_type
 	var want := _wanted_layout()
 	if want != Density.AUTO:
 		_build_layout(want)
 		return
-	_full_size = _build_layout(Density.FULL).get_combined_minimum_size()
+	_full_size = _measure_full(_build_layout(Density.FULL))
 	if not full_fits(_full_size, get_viewport_rect().size):
 		_build_layout(Density.COMPACT)
+
+
+## A just-built panel's size once laid out. Its minimum size is read before layout, where a
+## FlowContainer reports no height until its first sort: the tell-tale row and node strip get
+## theirs from `flow_height` at the window's width. The readout counts one line however it wraps.
+func _measure_full(panel: PanelContainer) -> Vector2:
+	var s := panel.get_combined_minimum_size()
+	var avail := get_viewport_rect().size.x - 2.0 * UiTheme.px(self, PANEL_PAD_X)
+	for row: FlowContainer in panel.find_children("*", "FlowContainer", true, false):
+		var sizes: Array[Vector2] = []
+		for c: Control in row.get_children():
+			if c.visible:
+				sizes.append(c.get_combined_minimum_size())
+		var h := flow_height(sizes, avail, row.get_theme_constant(&"h_separation"),
+				row.get_theme_constant(&"v_separation"))
+		s.y += maxf(0.0, h - row.get_combined_minimum_size().y)
+	return s
+
+
+## Height of children `sizes` packed as a FlowContainer packs them: left to right, a new line when
+## the next would pass `avail_w`, each line as tall as its tallest child.
+static func flow_height(sizes: Array[Vector2], avail_w: float, h_sep: float, v_sep: float) -> float:
+	var height := 0.0
+	var line_w := 0.0
+	var line_h := 0.0
+	var in_line := 0
+	for s in sizes:
+		if in_line > 0 and line_w + h_sep + s.x > avail_w:
+			height += line_h + v_sep
+			line_w = 0.0
+			line_h = 0.0
+			in_line = 0
+		line_w += (h_sep if in_line > 0 else 0.0) + s.x
+		line_h = maxf(line_h, s.y)
+		in_line += 1
+	return height + line_h
 
 
 ## Build the cluster at `want` (FULL, COMPACT or OFF, which builds COMPACT's widgets hidden);
@@ -622,6 +656,8 @@ func _make_size_tab(panel: PanelContainer) -> Button:
 	b.text = "LESS" if _layout == Density.FULL else "MORE"
 	b.focus_mode = Control.FOCUS_NONE
 	b.add_theme_font_size_override("font_size", int(UiTheme.px(self, UiTheme.FS_SMALL)))
+	if UiScale.is_touch_display():  # small for a cursor, never under a fingertip
+		b.custom_minimum_size.y = UiTheme.px(self, UiTheme.TOUCH_MIN)
 	b.anchor_left = 0.5
 	b.anchor_right = 0.5
 	b.anchor_top = 1.0

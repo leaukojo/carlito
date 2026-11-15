@@ -285,11 +285,42 @@ func test_full_fits_is_width_and_a_share_of_the_height() -> void:
 	assert_bool(Dashboard.full_fits(Vector2(830.0, 214.0), Vector2(390.0, 844.0))).is_false()
 
 
+## FlowContainer packing: a new line when the next child would pass the width, each line as tall
+## as its tallest child.
+func test_flow_height_wraps_as_a_flow_container_does() -> void:
+	var sizes: Array[Vector2] = [Vector2(40, 20), Vector2(40, 24), Vector2(40, 20)]
+	assert_float(Dashboard.flow_height(sizes, 140.0, 10.0, 6.0)).is_equal(24.0)  # 140 wide: one line
+	assert_float(Dashboard.flow_height(sizes, 139.0, 10.0, 6.0)).is_equal(24.0 + 6.0 + 20.0)
+	assert_float(Dashboard.flow_height(sizes, 10.0, 10.0, 6.0)).is_equal(20.0 + 24.0 + 20.0 + 12.0)
+	assert_float(Dashboard.flow_height([] as Array[Vector2], 100.0, 10.0, 6.0)).is_equal(0.0)
+
+
+## AUTO decides before layout, where a FlowContainer reads 0 tall, so the measure must equal the
+## laid-out panel: a short one put FULL on windows it does not fit.
+func test_the_full_measure_is_the_laid_out_size() -> void:
+	for family in FAMILIES:
+		var dash: Dashboard = auto_free(Dashboard.new())
+		add_child(dash)
+		dash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		dash.set_shown(true)  # a hidden Control is never laid out
+		dash.set_density_setting(Dashboard.Density.FULL)
+		GameState.current_vehicle = family
+		dash.bind(null)
+		var panel := _panel(dash)
+		var measured := dash._measure_full(panel)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		assert_vector(measured).override_failure_message("'%s': measured %s, laid out %s"
+				% [family, measured, panel.get_combined_minimum_size()]) \
+			.is_equal_approx(panel.get_combined_minimum_size(), Vector2(0.5, 0.5))
+
+
 ## AUTO (the default) builds FULL exactly where the measured FULL panel fits the window, and the
 ## drone's (26 bar rows) fits no desktop share: it is COMPACT here.
 func test_auto_builds_full_where_it_fits_else_compact() -> void:
 	for family in FAMILIES:
-		var full_size := _panel(_dash(family, Dashboard.Density.FULL)).get_combined_minimum_size()
+		var full := _dash(family, Dashboard.Density.FULL)
+		var full_size := full._measure_full(_panel(full))
 		var auto := _dash(family, Dashboard.Density.AUTO)
 		var want := Dashboard.Density.FULL \
 				if Dashboard.full_fits(full_size, auto.get_viewport_rect().size) \

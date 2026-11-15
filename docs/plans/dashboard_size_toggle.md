@@ -7,7 +7,8 @@ the window, else COMPACT.
 Written 2026-11-15. Status: **in progress.**
 Serves: the FULL bars (engine_load, temps, air, ...) that levels exist to show, seen on screens
 where they fit. No contract signal changes.
-State: done: phases 1-3 (suite 2521 pass, smoke and check_docs clean). Next: the user drives
+State: done: phases 1-3, review fixes (AUTO's measure counts the wrapped flow rows; touch-sized
+tab). Next: the user drives
 (Verification); then distil into docs and delete this plan. Open findings: none.
 
 ## Context
