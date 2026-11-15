@@ -1,6 +1,6 @@
 class_name ChallengeResult
 extends Control
-## The pass/fail result overlay: RETRY, plus NEXT and CHALLENGES on a pass, replacing the plain
+## The pass/fail result overlay: RETRY and CHALLENGES, plus NEXT on a pass, replacing the plain
 ## pass/fail notice. `setup()` stashes what to show; `_ready()` builds it once in the tree (theme
 ## scale needs a Control ancestor). RETRY is the same respawn the R key already performs
 ## mid-attempt — a challenge's runner resets the attempt on ANY respawn, so this button owns no
@@ -79,7 +79,9 @@ func _ready() -> void:
 		var next_btn := UiTheme.button(self, "NEXT", func() -> void: next_requested.emit())
 		next_btn.disabled = not _has_next
 		row.add_child(next_btn)
-		row.add_child(UiTheme.button(self, "CHALLENGES", func() -> void: challenges_requested.emit()))
+	# On a fail too: a def whose course never started has no attempt to resume, so RETRY only
+	# fails again and this is the way out.
+	row.add_child(UiTheme.button(self, "CHALLENGES", func() -> void: challenges_requested.emit()))
 
 	_apply_sizes()
 	retry.grab_focus()

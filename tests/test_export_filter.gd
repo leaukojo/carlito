@@ -202,3 +202,31 @@ func test_no_baked_level_depends_on_an_export_excluded_file() -> void:
 	assert_array(offenders).override_failure_message(
 			"baked levels depend on files the Web preset's exclude_filter drops:\n%s"
 			% "\n".join(offenders)).is_empty()
+
+
+## A challenge course is instanced at runtime, unbaked, so it may not reach an authoring-only file
+## (a kit prefab) either: on the web its load fails and the challenge never starts.
+func test_no_challenge_course_depends_on_an_export_excluded_file() -> void:
+	var filters := _web_exclude_filters()
+	var offenders: Array[String] = []
+	for id in ChallengeRegistry.ids():
+		var def := ChallengeRegistry.def_of(id)
+		var course := def.course
+		# A course on an island ships in that island's pack, under its level's folder.
+		var own := LevelRegistry.scene_of(def.arena).get_base_dir() + "/" \
+				if LevelPacks.is_packed(course) else ""
+		var seen := {course: true}
+		var queue: Array[String] = [course]
+		while not queue.is_empty():
+			var p: String = queue.pop_back()
+			for dep in ResourceLoader.get_dependencies(p):
+				var dp := Baker._dep_path(String(dep))
+				if dp.is_empty() or seen.has(dp):
+					continue
+				seen[dp] = true
+				queue.append(dp)
+				if _excluded(dp, filters) and (own.is_empty() or not dp.begins_with(own)):
+					offenders.append("%s -> %s" % [course, dp])
+	assert_array(offenders).override_failure_message(
+			"challenge courses depend on files the Web preset's exclude_filter drops:\n%s"
+			% "\n".join(offenders)).is_empty()

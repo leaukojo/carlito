@@ -3,7 +3,14 @@
 [ext_resource type="Script" path="res://src/challenges/arena_preview.gd" id="1_prev"]
 [ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="2_spawn"]
 [ext_resource type="Script" path="res://src/challenges/challenge_zone.gd" id="3_zone"]
-[ext_resource type="PackedScene" path="res://kit/prefabs/nature/crops_dirtDoubleRow.tscn" id="4_crop"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_row"]
+albedo_color = Color(0.36, 0.25, 0.16, 1)
+roughness = 1.0
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_row"]
+material = SubResource("StandardMaterial3D_row")
+size = Vector2(2.5, 2.5)
 
 [node name="TractorAutoSteerCourse" type="Node3D"]
 
@@ -36,23 +43,37 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.0, 27.5, 85.98)
 script = ExtResource("3_zone")
 size = Vector3(8, 4, 8)
 
-[node name="RowMark0" parent="." instance=ExtResource("4_crop")]
+[node name="RowMark0" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 27.05, 60)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_row")
 
-[node name="RowMark1" parent="." instance=ExtResource("4_crop")]
+[node name="RowMark1" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.54, 27.05, 65.21)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_row")
 
-[node name="RowMark2" parent="." instance=ExtResource("4_crop")]
+[node name="RowMark2" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.19, 27.05, 70.26)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_row")
 
-[node name="RowMark3" parent="." instance=ExtResource("4_crop")]
+[node name="RowMark3" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.98, 27.05, 75.0)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_row")
 
-[node name="RowMark4" parent="." instance=ExtResource("4_crop")]
+[node name="RowMark4" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.98, 27.05, 79.28)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_row")
 
-[node name="RowMark5" parent="." instance=ExtResource("4_crop")]
+[node name="RowMark5" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.72, 27.05, 82.98)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_row")
 
-[node name="RowMark6" parent="." instance=ExtResource("4_crop")]
+[node name="RowMark6" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.0, 27.05, 85.98)
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_row")

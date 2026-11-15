@@ -1,9 +1,8 @@
 class_name CoachCue
 extends Control
-## The one-line "you can drive this" cue, shown over the first frames of a session — the
-## game opens straight into a level with no menu in front of it, so this teaches it once.
-## One line, dismissed by the first input of any kind or a short timeout, never shown again
-## within a session (`maybe_coach`).
+## The one-line aircraft cue: climb/descend has no ground-vehicle equivalent and nothing else
+## names its keys. One line, dismissed by the first input of any kind or a short timeout
+## (`maybe_coach`).
 ##
 ## Listens on `_input`, which sees events without consuming them, so the press that dismisses
 ## the cue is also the press that drives the car. No emoji; colour/type from the theme.
@@ -12,39 +11,27 @@ extends Control
 const DWELL_S := 8.0
 const FADE_S := 0.6
 
-## Families with a control axis ground vehicles don't have; get a cue every time you climb
-## into one this session.
+## Families with a control axis ground vehicles don't have: the only ones coached.
 const COACH_FAMILIES := ["plane", "drone"]
 
-## Session state: static, since a run boots one shell and it lives as long as the run does.
-static var _coach_shown := false
-## Families coached this session (see maybe_coach): the aircraft cue teaches a control set only
-## relevant while flying, so it reappears each new flight of a session.
+## Families coached this session: static, since a run boots one shell and it lives as long as
+## the run does.
 static var _coached_families := {}
 
-## Vehicle family this cue is for, or "" for the first-visit line. Aircraft get their own
-## because climb/descend has no ground-vehicle equivalent and nothing else names its keys.
+## Vehicle family this cue is for (one of COACH_FAMILIES).
 var family := ""
 
 var _dismissed := false
 
 
-## Two cues: the first-visit line (first level of a session only) and the aircraft line (once per
-## family per session, since climb/descend is undiscoverable). Aircraft takes precedence on a
-## session's first body; the first-visit line is left unseen for the next ground vehicle.
+## Once per aircraft family per session; nothing for a ground vehicle.
 static func maybe_coach(for_family: String, parent: Control) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
-	if for_family in COACH_FAMILIES:
-		if _coached_families.has(for_family):
-			return
-		_coached_families[for_family] = true
-		_show_coach(for_family, parent)
+	if not for_family in COACH_FAMILIES or _coached_families.has(for_family):
 		return
-	if _coach_shown:
-		return
-	_coach_shown = true
-	_show_coach("", parent)
+	_coached_families[for_family] = true
+	_show_coach(for_family, parent)
 
 
 static func _show_coach(for_family: String, parent: Control) -> void:
@@ -74,24 +61,19 @@ func _ready() -> void:
 	_dismiss()
 
 
-## What to say depends on input mode and family. Aircraft lines lead with R/F (climb), the
+## What to say depends on input mode and family. The plane leads with R/F (climb), the
 ## otherwise-undiscoverable axis; the drone leads with ARM, since a disarmed quad answers
 ## nothing and reads as broken. Keys are named here, not pulled from ActionRegistry: that
 ## registry's labels are the settings sheet's sentences, this is its own short line.
 func _text() -> String:
 	var touch := UiScale.is_touch_display()
-	match family:
-		"plane":
-			if touch:
-				return "Hold GAS for throttle  -  UP / DOWN to climb and descend  -  MENU for everything else"
-			return "W for throttle  -  R to climb, F to descend  -  A / D to steer  -  Esc for the menu"
-		"drone":
-			if touch:
-				return "ARM the motors first  -  UP / DOWN to rise and sink  -  MODE for alt hold"
-			return "T to arm  -  R / F to go up and down  -  W A S D to fly  -  Z for flight mode"
+	if family == "drone":
+		if touch:
+			return "ARM the motors first  -  UP / DOWN to rise and sink  -  MODE for alt hold"
+		return "T to arm  -  R / F to go up and down  -  W A S D to fly  -  Z for flight mode"
 	if touch:
-		return "Hold GAS to drive  -  drag the stick to steer  -  MENU for everything else"
-	return "W to drive  -  A / D to steer  -  Esc for the menu"
+		return "Hold GAS for throttle  -  UP / DOWN to climb and descend  -  MENU for everything else"
+	return "W for throttle  -  R to climb, F to descend  -  A / D to steer  -  Esc for the menu"
 
 
 func _input(event: InputEvent) -> void:

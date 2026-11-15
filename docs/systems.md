@@ -187,8 +187,8 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   are unused (also resize the 3D target on 4.7.1, rule 9); `focus`/`Choice`/`follow_focus`
   cover keyboard/gamepad, CONTROLS scrolls on Up/Down instead. Notice line
   (`src/ui/notice_line.gd`, `Notice` Label): `GameState.notice` text, dwelled
-  `NoticeLine.NOTICE_DWELL_S`. First-run cue (`src/ui/coach_cue.gd`): dismissed by input or
-  timeout, once per session (`CoachCue.maybe_coach`), via non-consuming `_input`.
+  `NoticeLine.NOTICE_DWELL_S`. Aircraft cue (`src/ui/coach_cue.gd`): dismissed by input or
+  timeout, once a session (`CoachCue.maybe_coach`), via non-consuming `_input`.
 - Pause overlay (`src/ui/pause_menu.gd`, Esc, Options or touch MENU): RESUME/RESPAWN/SPAWN POINT/
   LEVEL/SANDBOX/CONTROLS/SETTINGS, LEVEL only while the pad is the device in use as it opens
   (`State.level_row`); GARAGE/LEVEL/CHALLENGES live on touch (hidden only by F5, never F4) and
