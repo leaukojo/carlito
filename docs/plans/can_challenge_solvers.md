@@ -8,16 +8,19 @@ Written 2026-11-15. Status: **in progress.**
 Serves: the 12 car `ChallengeDef`s (`ChallengeRegistry.DEFS`), as a repeatable "can this be
 solved over CAN" check. The contract is unchanged: the new state rides the `carlitoOutput`
 envelope, as `challenge` already does.
-State: done: phase 1 (carlito 1835ff8, sloppycan 6b507d9), phase 2 code. Next: the user runs
-the three phase-2 solvers; phase 3 once they pass. Open findings: none.
+State: done: phase 1 (carlito 1835ff8, sloppycan 6b507d9), phase 2 code, the demo's RAMN
+silence routine (sloppycan 19f718f). Next: the user runs the three phase-2 solvers; phase 3
+once they pass. Open findings: none.
 
 ## Decisions (user, 2026-11-15)
 
 - **D1** Car challenges only (the 12 car defs). Truck/tractor wait until they are tested.
 - **D2** One solver per challenge, in tools/challenge_solvers. You pick the challenge in the
   game; the script waits for its start line, then drives.
-- **D3** On real hardware the RAMN ECUs are silenced first with the UDS frame `04 31 01 02 00`
-  on 0x7E1, 0x7E2 and 0x7E3. Driving then uses the RAMN ids, the ones the car challenges teach.
+- **D3** The RAMN ECUs are silenced first with UDS routine 0x0200 (`31 01 02 00`) on 0x7E1,
+  0x7E2 and 0x7E3, and resumed at exit (`31 02 02 00`, per the firmware; `31 01 02 01` is Erase
+  EEPROM). sloppyCAN's demo plays the routine too. Driving uses the RAMN ids, the ones the car
+  challenges teach.
 - **D4** Solvers are short and plain: good enough to pass, not the most accurate solution.
 
 ## Why the game must change too (pushback)
@@ -87,7 +90,7 @@ only for hardware.
   - The default is the relay at `127.0.0.1:29541`; `--relay host:port` overrides it.
   - `--can INTERFACE CHANNEL [--bitrate N]` uses python-can. Example: `--can pcan PCAN_USBBUS1`,
     or `--can slcan COM5`.
-  - On connect it sends the D3 silence frames (harmless in Demo).
+  - On connect it sends the D3 silence frames, and the resume frames at exit.
 - **Threads:**
   - A reader decodes frames and `#challenge` lines.
   - A sender repeats the RAMN command frames every 20 ms (relay) or 10 ms (hardware). The RAMN

@@ -57,9 +57,12 @@ OFF, LOW, HIGH = 1, 3, 4
 # The game's GPS: world X/Z around a Paris origin (VehicleTelemetry.gps_lat / gps_lon).
 GPS_LAT0, GPS_LON0, M_PER_DEG = 48.8566, 2.3522, 111320.0
 
-# UDS RoutineControl that makes a real RAMN ECU stop sending its own periodic frames, so they
-# don't fight ours. Sent once to each ECU on connect; nothing listens to it in sloppyCAN's demo.
+# UDS RoutineControl 0x0200 ("Request Silence", RAMN firmware ramn_uds.c): start (31 01 02 00)
+# makes a RAMN ECU stop sending its own periodic frames, so they don't fight ours; stop
+# (31 02 02 00) brings them back. Sent to each ECU on connect and at exit. sloppyCAN's demo
+# plays the same routine for its simulated RAMN traffic.
 RAMN_SILENCE = [0x04, 0x31, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00]
+RAMN_RESUME = [0x04, 0x31, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00]
 RAMN_ECUS = (0x7E1, 0x7E2, 0x7E3)
 
 
@@ -189,7 +192,7 @@ class Car:
         threading.Thread(target=link.receive, args=(self._on_frame, self._on_info),
                          daemon=True).start()
         threading.Thread(target=self._send_loop, args=(period,), daemon=True).start()
-        atexit.register(self._park)
+        atexit.register(self._exit)
 
     # -- challenge ------------------------------------------------------------------------
 
@@ -198,7 +201,8 @@ class Car:
         self._challenge = challenge_id
         if self.link.has_info:
             print("Start '%s' in the game (or press RETRY)..." % challenge_id)
-            self._started.wait()
+            while not self._started.wait(0.2):   # a timeout keeps Ctrl+C working on Windows
+                pass
         else:
             input("Start '%s' in the game, then press Enter here..." % challenge_id)
             self._restart()
@@ -336,10 +340,15 @@ class Car:
         ]
 
     def _send_loop(self, period):
-        while True:
-            for can_id, data in self._frames():
-                self.link.send(can_id, data)
-            time.sleep(period)
+        try:
+            while True:
+                for can_id, data in self._frames():
+                    self.link.send(can_id, data)
+                time.sleep(period)
+        except OSError as e:
+            print("carlito_can: sending failed (%s); the car is no longer driven" % e,
+                  file=sys.stderr)
+            self.running = False
 
     def _park(self):
         """Foot off, brakes on: what sloppyCAN keeps (RAMN values latch) once we stop sending."""
@@ -347,5 +356,14 @@ class Car:
         try:
             for can_id, data in self._frames():
                 self.link.send(can_id, data)
+        except OSError:
+            pass
+
+    def _exit(self):
+        """At exit: park, then give the RAMN ECUs their periodic frames back."""
+        self._park()
+        try:
+            for ecu in RAMN_ECUS:
+                self.link.send(ecu, RAMN_RESUME)
         except OSError:
             pass
