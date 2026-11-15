@@ -57,7 +57,7 @@ class State extends RefCounted:
 	var level_row := false
 	## The CONTROLS sheet's columns (`sheet_columns`); every one when nothing is known.
 	var columns: Array[Column] = [Column.KEY, Column.PAD, Column.TOUCH]
-	var density: int = Dashboard.Density.COMPACT
+	var density: int = Dashboard.Density.AUTO
 	var ui_scale := UiScale.USER_DEFAULT
 	var key_softening := KeyShaper.DEFAULT_SOFTENING
 	var tcs_off := false
@@ -95,7 +95,7 @@ const GREYED_PREFIX := "Greyed: "
 const SAVED := " Kept next time."
 const SESSION := " Resets when you reload."
 
-const DENSITY_HELP := "COMPACT shows speed, revs and warning lights. FULL adds more gauges."
+const DENSITY_HELP := "COMPACT shows speed, revs and warning lights. FULL adds more gauges. AUTO picks FULL when it fits the screen. MORE and LESS on the dashboard change one vehicle; this button resets them."
 const UI_SCALE_HELP := "Makes buttons and text bigger or smaller. 100% is the normal size."
 const KEY_RESPONSE_HELP := "How fast the keys and on-screen pedals react. RAW is instant. REALISTIC is smooth."
 
@@ -149,7 +149,7 @@ var _night_btn: Button
 ## Active vehicle's capabilities from the shell — same read the touch buttons gate on.
 var _caps := {}
 var _level_row := false
-var _density: int = Dashboard.Density.COMPACT
+var _density: int = Dashboard.Density.AUTO
 var _ui_scale := UiScale.USER_DEFAULT
 var _key_softening := KeyShaper.DEFAULT_SOFTENING
 var _tcs_off := false

@@ -132,8 +132,8 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   `test_telemetry` fails if it drops a non-todo "out" signal (`WIRE_*` tables).
 - Dashboard (`src/ui/dashboard.gd`; its layers and density: the header comments): generated from
   the contract, instruments hand-built; bool "in" lamps read `LAMP_INPUT_FIELDS` /
-  `LAMP_COMPUTED` (`test_dashboard` pins both against the contract). SETTINGS/F2 (`toggle_dashboard`) cycles COMPACT -> FULL
-  -> OFF, saved to `user://` (`UserSettings`). Instruments draw values as given, never lagged or held: a flicker is the sim's.
+  `LAMP_COMPUTED` (`test_dashboard` pins both against the contract). SETTINGS/F2 (`toggle_dashboard`) cycles AUTO -> COMPACT
+  -> FULL -> OFF, saved to `user://` (`UserSettings`), as the panel's per-family MORE/LESS pins. Instruments draw values as given, never lagged or held: a flicker is the sim's.
 - Debug overlay (`debug_overlay.gd`): FPS/frame ms/draw calls/VRAM/node count via
   `Performance`, F3. Target: root CLAUDE.md perf target.
 

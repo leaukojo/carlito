@@ -1,6 +1,7 @@
 class_name UserSettings
 extends RefCounted
-## The SETTINGS page's choices, SANDBOX's driver aids and the garage's tyre class per variant, in
+## The SETTINGS page's choices, SANDBOX's driver aids, the garage's tyre class per variant and the
+## dashboard tab's size per family, in
 ## `user://settings.cfg` (IndexedDB on web), so a reload keeps them. SANDBOX's WORLD and LAB rows
 ## and the gearbox stay session-only (boot.gd).
 ##
@@ -15,7 +16,10 @@ const PATH := "user://settings.cfg"
 const SECTION := "settings"
 ## Every key the store keeps, with its default, which also fixes its type.
 const DEFAULTS := {
-	"density": Dashboard.Density.COMPACT,
+	# Not "density": every file that key was saved to holds the old COMPACT default, which would
+	# hide AUTO from every returning player.
+	"dashboard": Dashboard.Density.AUTO,
+	"dash_pins": {},  ## family -> Dashboard.DENSITY_KEYS value, the MORE/LESS tab's (`set_pin`)
 	"ui_scale": UiScale.USER_DEFAULT,
 	"key_softening": KeyShaper.DEFAULT_SOFTENING,
 	"tcs_off": false,
@@ -73,6 +77,13 @@ func set_tyre(variant: String, id: String) -> void:
 	set_value("tyres", tyres)
 
 
+## Record the dashboard tab's `key` (a Dashboard.DENSITY_KEYS value) for `family` and write the file.
+func set_pin(family: String, key: String) -> void:
+	var pins := (_values["dash_pins"] as Dictionary).duplicate()
+	pins[family] = key
+	set_value("dash_pins", pins)
+
+
 func _load() -> void:
 	if _path == "":
 		return
@@ -84,6 +95,7 @@ func _load() -> void:
 		if _fits(key, v):
 			_values[key] = type_convert(v, typeof(DEFAULTS[key]))
 	_values["tyres"] = _strings_only(_values["tyres"])
+	_values["dash_pins"] = _strings_only(_values["dash_pins"])
 
 
 func _save() -> void:

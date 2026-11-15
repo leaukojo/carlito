@@ -253,16 +253,83 @@ func test_an_explicit_setting_is_what_is_shown() -> void:
 		assert_int(_dash("car", setting).density_setting()).is_equal(setting)
 
 
-## The SETTINGS page (and F2) is one button, cycling COMPACT -> FULL -> OFF -> COMPACT, so every
-## mode has to be reachable by pressing it repeatedly and the cycle has to come back round.
+## The SETTINGS page (and F2) is one button, cycling AUTO -> COMPACT -> FULL -> OFF -> AUTO, so
+## every mode has to be reachable by pressing it repeatedly and the cycle has to come back round.
 func test_next_setting_cycles_every_mode() -> void:
 	var seen := []
-	var setting: int = Dashboard.Density.COMPACT
+	var setting: int = Dashboard.Density.AUTO
 	for _i in Dashboard.DENSITY_KEYS.size():
 		seen.append(setting)
 		setting = Dashboard.next_setting(setting)
-	assert_int(setting).is_equal(Dashboard.Density.COMPACT)  # back to the start
-	assert_array(seen).is_equal([Dashboard.Density.COMPACT, Dashboard.Density.FULL, Dashboard.Density.OFF])
+	assert_int(setting).is_equal(Dashboard.Density.AUTO)  # back to the start
+	assert_array(seen).is_equal([Dashboard.Density.AUTO, Dashboard.Density.COMPACT,
+			Dashboard.Density.FULL, Dashboard.Density.OFF])
+
+
+## The panel `dash` built last (its earlier ones are queued for deletion).
+func _panel(dash: Dashboard) -> PanelContainer:
+	for c in dash.get_children():
+		if c is PanelContainer and not c.is_queued_for_deletion():
+			return c
+	return null
+
+
+## AUTO's rule: no wider than the window, no taller than AUTO_MAX_H of it.
+func test_full_fits_is_width_and_a_share_of_the_height() -> void:
+	var view := Vector2(1280.0, 720.0)
+	# A pixel either side of the boundary: Vector2 is float32 (CLAUDE.md gotcha).
+	assert_bool(Dashboard.full_fits(Vector2(1000.0, 720.0 * Dashboard.AUTO_MAX_H - 1.0), view)).is_true()
+	assert_bool(Dashboard.full_fits(Vector2(1000.0, 720.0 * Dashboard.AUTO_MAX_H + 1.0), view)).is_false()
+	assert_bool(Dashboard.full_fits(Vector2(1281.0, 100.0), view)).is_false()
+	# A phone held upright: a FULL cluster is wider than it.
+	assert_bool(Dashboard.full_fits(Vector2(830.0, 214.0), Vector2(390.0, 844.0))).is_false()
+
+
+## AUTO (the default) builds FULL exactly where the measured FULL panel fits the window, and the
+## drone's (26 bar rows) fits no desktop share: it is COMPACT here.
+func test_auto_builds_full_where_it_fits_else_compact() -> void:
+	for family in FAMILIES:
+		var full_size := _panel(_dash(family, Dashboard.Density.FULL)).get_combined_minimum_size()
+		var auto := _dash(family, Dashboard.Density.AUTO)
+		var want := Dashboard.Density.FULL \
+				if Dashboard.full_fits(full_size, auto.get_viewport_rect().size) \
+				else Dashboard.Density.COMPACT
+		assert_int(auto.shown_layout()).override_failure_message(
+				"'%s': AUTO built %d, FULL is %s" % [family, auto.shown_layout(), full_size]) \
+			.is_equal(want)
+		assert_int(auto.density_setting()).is_equal(Dashboard.Density.AUTO)
+	assert_int(_dash("drone", Dashboard.Density.AUTO).shown_layout()).is_equal(Dashboard.Density.COMPACT)
+
+
+## A family's pin beats AUTO and an explicit setting, for that family only; OFF beats a pin.
+func test_a_pin_overrides_the_setting_for_its_family_only() -> void:
+	var drone := _dash("drone", Dashboard.Density.AUTO)
+	drone.set_pins({"drone": "full"})
+	assert_int(drone.shown_layout()).is_equal(Dashboard.Density.FULL)
+	drone.set_density_setting(Dashboard.Density.COMPACT)
+	assert_int(drone.shown_layout()).is_equal(Dashboard.Density.FULL)
+	drone.set_density_setting(Dashboard.Density.OFF)
+	assert_int(drone.shown_layout()).is_equal(Dashboard.Density.OFF)
+	var car := _dash("car", Dashboard.Density.COMPACT)
+	car.set_pins({"drone": "full"})
+	assert_int(car.shown_layout()).is_equal(Dashboard.Density.COMPACT)
+
+
+## The MORE/LESS tab: present unless OFF, never takes focus (Space and the pad would press it),
+## and a press flips FULL/COMPACT for this family and says so for the shell to save.
+func test_the_size_tab_pins_the_other_layout() -> void:
+	var dash := _dash("car", Dashboard.Density.COMPACT)
+	var pinned := []
+	dash.size_pinned.connect(func(family: String, layout: int) -> void: pinned.append([family, layout]))
+	assert_object(dash._size_btn).is_not_null()
+	assert_int(dash._size_btn.focus_mode).is_equal(Control.FOCUS_NONE)
+	assert_str(dash._size_btn.text).is_equal("MORE")
+	dash._size_btn.pressed.emit()
+	assert_int(dash.shown_layout()).is_equal(Dashboard.Density.FULL)
+	assert_str(dash._size_btn.text).is_equal("LESS")
+	assert_array(pinned).is_equal([["car", Dashboard.Density.FULL]])
+	assert_int(dash.density_setting()).is_equal(Dashboard.Density.COMPACT)  # the setting is untouched
+	assert_object(_dash("car", Dashboard.Density.OFF)._size_btn).is_null()
 
 
 ## The whole node bus renders nowhere, and that is a decision rather than an omission, so it is

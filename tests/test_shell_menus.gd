@@ -961,8 +961,8 @@ func test_pause_menu_settings_cycles_the_dashboard_density() -> void:
 
 	var picked := []
 	pause.dashboard_density_changed.connect(func(s: int) -> void: picked.append(s))
-	var expected := Dashboard.next_setting(Dashboard.Density.COMPACT)
-	_press(pause, "DASHBOARD: COMPACT")
+	var expected := Dashboard.next_setting(Dashboard.Density.AUTO)
+	_press(pause, "DASHBOARD: AUTO")
 	assert_array(picked).is_equal([expected])
 	# The button says what it now is, so a second press cycles on from there rather than repeating.
 	assert_array(_labels(pause)).contains(["DASHBOARD: %s" % Dashboard.key_of(expected).to_upper()])

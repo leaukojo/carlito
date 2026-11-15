@@ -95,6 +95,8 @@ func _ready() -> void:
 	add_child(_packs)
 	_progress = ChallengeProgress.open()
 	_settings = UserSettings.open()
+	_dashboard.size_pinned.connect(func(family: String, pinned: int) -> void:
+		_settings.set_pin(family, Dashboard.key_of(pinned)))
 	_apply_saved_settings()
 	_set_hud_visible(false)  # nothing to bind to until the level is up
 	_boot()
@@ -508,7 +510,8 @@ func _open_pause() -> void:
 
 ## The SETTINGS choices saved by an earlier visit, through the same setters a press uses.
 func _apply_saved_settings() -> void:
-	_dashboard.set_density_setting(int(_settings.value("density")))
+	_dashboard.set_density_setting(int(_settings.value("dashboard")))
+	_dashboard.set_pins(_settings.value("dash_pins"))
 	_ui.set_user_scale(float(_settings.value("ui_scale")))
 	InputRouter.set_key_softening(float(_settings.value("key_softening")))
 	InputRouter.set_local_tcs_off(bool(_settings.value("tcs_off")))
@@ -517,10 +520,13 @@ func _apply_saved_settings() -> void:
 
 
 ## SETTINGS picked a new cluster density. The menu owns nothing, so applying and remembering
-## it is this file's job: each handler below saves what its owner actually applied.
+## it is this file's job: each handler below saves what its owner actually applied. A pick is for
+## every family, so it clears the dashboard tab's per-family pins.
 func _on_density_changed(setting: int) -> void:
+	_dashboard.set_pins({})
+	_settings.set_value("dash_pins", {})
 	_dashboard.set_density_setting(setting)
-	_settings.set_value("density", _dashboard.density_setting())
+	_settings.set_value("dashboard", _dashboard.density_setting())
 
 
 ## SETTINGS picked a new UI size. Handed to UiScale, which rebuilds the theme so every

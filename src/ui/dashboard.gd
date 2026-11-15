@@ -6,9 +6,10 @@ extends Control
 ## rose, the depth readout and the node health strip are HAND-BUILT, reading only
 ## scale/redline/warn/sentinel from the contract; the signals they draw leave the generated bar
 ## column through WIDGET_SIGNALS.
-## Density (FULL/COMPACT/OFF) drops whole sections only, never individual signals: COMPACT
-## (the default) keeps the tell-tale row and gauges; FULL adds the bars, readout, wind rose and
-## echo sounder; OFF hides the cluster. Plain text + color only. Every family's FULL: dash_shots.
+## Density drops whole sections only, never signals: COMPACT keeps the tell-tale row and gauges;
+## FULL adds the bars, readout, wind rose and echo sounder; OFF hides the cluster; AUTO (the
+## default) is FULL where it fits the window. The MORE/LESS tab pins one family's size over the
+## setting. Plain text + color only. Every family's FULL: dash_shots.
 
 ## Signals rendered as bespoke radial gauges (never as generated bars).
 const GAUGE_SIGNALS: PackedStringArray = ["kmh", "rpm"]
@@ -56,13 +57,19 @@ const READOUT_EXTRAS := {
 	"sail_angle": ["SAIL", "%+.0f"], "gear_ratio": ["RATIO", "%.2f"],
 }
 
-## What is on screen.
-enum Density {FULL, COMPACT, OFF}
-## Persisted setting ids (cfg file a human may open) and the SETTINGS page cycle order:
-## COMPACT -> FULL -> OFF -> COMPACT.
+## What is on screen. AUTO is a setting only: it resolves to FULL or COMPACT (`full_fits`).
+enum Density {FULL, COMPACT, OFF, AUTO}
+## Setting ids (the SETTINGS button text, and a pin's stored value) and the SETTINGS page cycle
+## order: AUTO -> COMPACT -> FULL -> OFF -> AUTO.
 const DENSITY_KEYS := {
-	Density.COMPACT: "compact", Density.FULL: "full", Density.OFF: "off",
+	Density.AUTO: "auto", Density.COMPACT: "compact", Density.FULL: "full", Density.OFF: "off",
 }
+## AUTO keeps FULL while its panel stands no taller than this share of the window (and no wider
+## than it): a third leaves the road in view.
+const AUTO_MAX_H := 0.34
+
+## The MORE/LESS tab pinned `pinned` (FULL or COMPACT) for `family`; the shell saves it.
+signal size_pinned(family: String, pinned: int)
 
 # --- layout metrics (logical px at scale 1.0, scaled through UiTheme.px) -------
 
@@ -300,7 +307,13 @@ var _beside_w := 0.0
 ## FULL's bars were built allowing two columns (`_two_bar_cols_fit` at build).
 var _two_bar_cols := false
 
-var _density: int = Density.COMPACT  ## what the player asked for; always shown as given
+var _density: int = Density.AUTO  ## the SETTINGS / F2 setting
+var _layout: int = Density.COMPACT  ## what is built: FULL, COMPACT or OFF, never AUTO
+var _pins := {}  ## family -> DENSITY_KEYS value ("compact"/"full"), set by the tab (`set_pins`)
+## FULL's panel size as last measured for AUTO (`_build`), kept while COMPACT is shown, so a resize
+## knows whether FULL would fit now without building it.
+var _full_size := Vector2.ZERO
+var _size_btn: Button = null  ## the MORE/LESS tab, null at OFF
 var _vehicle_type := ""        ## the family the current cluster was built for
 var _built := false            ## bind() has run at least once
 var _shown := false            ## the shell's HUD visibility, ANDed with the density
@@ -330,7 +343,7 @@ func bind(level: Node) -> void:
 
 ## Setting -> its label key (the SETTINGS button text).
 static func key_of(setting: int) -> String:
-	return String(DENSITY_KEYS.get(setting, DENSITY_KEYS[Density.COMPACT]))
+	return String(DENSITY_KEYS.get(setting, DENSITY_KEYS[Density.AUTO]))
 
 
 ## Next setting in the cycle, for the SETTINGS page's one button (and F2).
@@ -339,19 +352,60 @@ static func next_setting(setting: int) -> int:
 	return int(order[(maxi(order.find(setting), 0) + 1) % order.size()])
 
 
-## What the player picked, which is exactly what is on screen.
+## What the player picked in SETTINGS / F2 (AUTO included); `shown_layout` is what is on screen.
 func density_setting() -> int:
 	return _density
 
 
+## What is built: FULL, COMPACT or OFF.
+func shown_layout() -> int:
+	return _layout
+
+
 ## Set the setting (from the pause menu / F2 / saved prefs) and rebuild if it differs.
 func set_density_setting(setting: int) -> void:
-	var next := setting if setting in DENSITY_KEYS else Density.COMPACT
+	var next := setting if setting in DENSITY_KEYS else Density.AUTO
 	if next == _density and _built:
 		return
 	_density = next
 	if _built:
 		_build(_vehicle_type)
+	_apply_visible()
+
+
+## The tab's saved pins (family -> "compact"/"full"), from the shell; {} clears them.
+func set_pins(pins: Dictionary) -> void:
+	if pins == _pins:
+		return
+	_pins = pins.duplicate()
+	if _built:
+		_build(_vehicle_type)
+	_apply_visible()
+
+
+## Does a FULL panel of `full_size` fit a window of `view`: no wider, and no taller than
+## AUTO_MAX_H of it. Static so the test pins the rule AUTO builds from.
+static func full_fits(full_size: Vector2, view: Vector2) -> bool:
+	return full_size.x <= view.x and full_size.y <= view.y * AUTO_MAX_H
+
+
+## The layout asked for, before AUTO's fit: OFF wins, then the family's pin, then the setting.
+func _wanted_layout() -> int:
+	if _density == Density.OFF:
+		return Density.OFF
+	var pin := String(_pins.get(_vehicle_type, ""))
+	for d: int in [Density.COMPACT, Density.FULL]:
+		if DENSITY_KEYS[d] == pin:
+			return d
+	return _density
+
+
+## The tab: pin the other of FULL / COMPACT for this family.
+func _on_size_pressed() -> void:
+	var next := Density.COMPACT if _layout == Density.FULL else Density.FULL
+	_pins[_vehicle_type] = DENSITY_KEYS[next]
+	size_pinned.emit(_vehicle_type, next)
+	_build(_vehicle_type)
 	_apply_visible()
 
 
@@ -363,20 +417,32 @@ func set_shown(shown: bool) -> void:
 
 
 func _apply_visible() -> void:
-	visible = _shown and _density != Density.OFF
+	visible = _shown and _layout != Density.OFF
 
 
 ## A window resize rebuilds the theme (UiScale), which changes every metric below, so the
 ## cluster is rebuilt here too.
-## A width change that does not move the scale still decides whether a second bar column fits.
+## A width change that does not move the scale still decides whether a second bar column fits,
+## and under AUTO whether FULL fits at all.
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_THEME_CHANGED and _built:
 		_build(_vehicle_type)
 		_apply_visible()
-	elif what == NOTIFICATION_RESIZED and _built and _density == Density.FULL \
-			and _two_bar_cols_fit() != _two_bar_cols:
+	elif what == NOTIFICATION_RESIZED and _built and _resize_rebuilds():
 		_build(_vehicle_type)
 		_apply_visible()
+
+
+## Whether the window's new size changes what `_build` would build. Under AUTO, `_beside_w` and
+## `_two_bar_cols` are the last FULL build's (AUTO measures one each time), COMPACT shown or not.
+func _resize_rebuilds() -> bool:
+	match _wanted_layout():
+		Density.FULL:
+			return _two_bar_cols_fit() != _two_bar_cols
+		Density.AUTO:
+			return _two_bar_cols_fit() != _two_bar_cols \
+					or full_fits(_full_size, get_viewport_rect().size) != (_layout == Density.FULL)
+	return false
 
 
 ## Two bar columns fit beside the instruments inside the window.
@@ -385,8 +451,26 @@ func _two_bar_cols_fit() -> bool:
 	return _beside_w + 2.0 * UiTheme.px(self, MID_W) + UiTheme.px(self, CLUSTER_GAP) <= avail
 
 
+## Build the cluster for `vehicle_type` at the wanted layout. AUTO builds FULL, measures it and
+## falls back to COMPACT where it does not fit (`full_fits`). The measure is the panel's minimum
+## size, taken before layout: the tell-tale row and the readout count one line each however they
+## will wrap, so a narrow window's FULL reads a line or two short.
 func _build(vehicle_type: String) -> void:
 	_vehicle_type = vehicle_type
+	var want := _wanted_layout()
+	if want != Density.AUTO:
+		_build_layout(want)
+		return
+	_full_size = _build_layout(Density.FULL).get_combined_minimum_size()
+	if not full_fits(_full_size, get_viewport_rect().size):
+		_build_layout(Density.COMPACT)
+
+
+## Build the cluster at `want` (FULL, COMPACT or OFF, which builds COMPACT's widgets hidden);
+## returns its panel.
+func _build_layout(want: int) -> PanelContainer:
+	_layout = want
+	var vehicle_type := _vehicle_type
 	for c in get_children():
 		c.queue_free()
 	_bars.clear()
@@ -424,7 +508,7 @@ func _build(vehicle_type: String) -> void:
 		var err := Label.new()
 		err.text = "dashboard: contract unavailable"
 		col.add_child(err)
-		return
+		return panel
 	_gear_def = Contract.data.get_signal_def("gear", "out")
 
 	col.add_child(_build_telltale_row(vehicle_type))
@@ -461,7 +545,7 @@ func _build(vehicle_type: String) -> void:
 			var entry: Array = READOUT_EXTRAS[extra_name]
 			_readout_extras.append([extra_name, entry[0], entry[1]])
 	var wants_reverser := out_names.has("gear") and not out_names.has("rpm")
-	var full := _density == Density.FULL
+	var full := _layout == Density.FULL
 	# The middle column is what COMPACT drops, so on a train it holds only the reverser and on
 	# everything else in COMPACT it isn't built at all. Its bars are built last, once the
 	# instruments beside them say how much width is left.
@@ -497,7 +581,7 @@ func _build(vehicle_type: String) -> void:
 	# density that drops bars has no room for their replacements either.
 	_rose = null
 	_sounder = null
-	if _density == Density.FULL:
+	if full:
 		if declares_wind_rose(out_names) or declares_compass_rose(out_names):
 			_rose = _make_wind_rose(declares_wind_rose(out_names))
 			cluster.add_child(_rose)
@@ -505,8 +589,9 @@ func _build(vehicle_type: String) -> void:
 			_sounder = _make_sounder()
 			cluster.add_child(_sounder)
 
-	_beside_w = 0.0
+	# Kept through a COMPACT build: AUTO's resize check reads the last FULL build's (`_resize_rebuilds`).
 	if full:
+		_beside_w = 0.0
 		for c: Control in cluster.get_children():
 			if c != mid:
 				_beside_w += c.custom_minimum_size.x + UiTheme.px(self, CLUSTER_GAP)
@@ -523,6 +608,33 @@ func _build(vehicle_type: String) -> void:
 	# Every widget above is new, so field bindings are stale; a density change or theme rebuild
 	# comes back through here too.
 	_resolve_fields()
+	_size_btn = null
+	if want != Density.OFF:
+		_size_btn = _make_size_tab(panel)
+	return panel
+
+
+## The MORE/LESS tab, centred on the panel's top edge: the bottom corners are under the touch
+## joystick and pedals. Takes no focus, so Space (handbrake and `ui_accept`) and the pad's
+## navigation never press it (`NoticeLine.add_action`'s button, the same).
+func _make_size_tab(panel: PanelContainer) -> Button:
+	var b := Button.new()
+	b.text = "LESS" if _layout == Density.FULL else "MORE"
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_font_size_override("font_size", int(UiTheme.px(self, UiTheme.FS_SMALL)))
+	b.anchor_left = 0.5
+	b.anchor_right = 0.5
+	b.anchor_top = 1.0
+	b.anchor_bottom = 1.0
+	b.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	b.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	b.pressed.connect(_on_size_pressed)
+	add_child(b)
+	# The panel's height is known only once laid out; it follows each relayout.
+	panel.resized.connect(func() -> void:
+		b.offset_top = -panel.size.y
+		b.offset_bottom = -panel.size.y)
+	return b
 
 
 ## Build the tell-tale row: state chips for the enum inputs, then a lamp per bool input —
@@ -785,7 +897,7 @@ static func declares_compass_rose(out_names: Array) -> bool:
 ## Hand-built like the two gauges: only the two warn thresholds are read from the contract.
 func _make_horizon() -> AttitudeIndicator:
 	var h := AttitudeIndicator.new()
-	var edge := UiTheme.px(self, GAUGE_W if _density == Density.FULL else GAUGE_W_COMPACT)
+	var edge := UiTheme.px(self, GAUGE_W if _layout == Density.FULL else GAUGE_W_COMPACT)
 	h.custom_minimum_size = Vector2(edge, edge + UiTheme.px(self, AttitudeIndicator.LINE_H))
 	h.size_flags_vertical = Control.SIZE_SHRINK_CENTER  # the caption line sits under the disc
 	h.caption = "ATTITUDE"
@@ -831,7 +943,7 @@ func _make_sounder() -> DepthReadout:
 
 func _make_gauge(signal_name: String, caption: String, ticks: int) -> Gauge:
 	var g := Gauge.new()
-	var edge := UiTheme.px(self, GAUGE_W if _density == Density.FULL else GAUGE_W_COMPACT)  # smaller in COMPACT to fit a phone
+	var edge := UiTheme.px(self, GAUGE_W if _layout == Density.FULL else GAUGE_W_COMPACT)  # smaller in COMPACT to fit a phone
 	g.custom_minimum_size = Vector2(edge, edge)
 	g.caption = caption
 	g.major_ticks = ticks
