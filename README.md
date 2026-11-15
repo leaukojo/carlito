@@ -23,7 +23,7 @@ Ultra-lightweight, general-purpose vehicle simulator that runs in a web browser.
 
 Open-source vehicle simulations like [CARLA](https://carla.org/) and [AWSIM](https://github.com/tier4/AWSIM) require installing heavy software on a PC with good specs. Sometimes you just want a quick simulator in a web browser: classrooms, workshops, competitions. Carlito targets 60 fps on a smartphone's web browser, with no install necessary.
 
-It is built with the open-source game engine Godot using CC0 assets, so levels and vehicles are easy to add. Six levels ship (island, mountain, city, racing circuit, railway, skyport) plus a garage for inspecting the vehicles.
+It is built with the open-source game engine Godot using CC0 assets, so levels and vehicles are easy to add.
 
 ## Instrumentation
 
