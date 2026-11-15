@@ -1,8 +1,8 @@
 """Signal your turns: follow the road's four corners (left, right, right, left) at 25 km/h. The
-lamp for the next corner is held on through the 30 m straight before it and switched off at the
-corner, well before the "lamp off" window that starts after it. A steady lamp counts as on."""
+lamp for the next corner flashes through the 30 m straight before it and stops at the
+corner, well before the "lamp off" window that starts after it."""
 from carlito_can import (
-    connect, STEER_PROPORTIONAL, STEER_BANGBANG, CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG,
+    connect, STEER_PURE_PURSUIT, STEER_BANGBANG, CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG,
     arc, D, IGNITION)
 
 # The road's centre line: straights joined by 15 m corners.
@@ -24,12 +24,12 @@ car.key = IGNITION
 car.gear = D
 while car.tick():
     car.cruise(25, CRUISE_CONTROL_PI)  # also try CRUISE_CONTROL_BANGBANG
-    car.follow(ROAD, STEER_PROPORTIONAL)  # also try STEER_BANGBANG
+    car.follow(ROAD, STEER_PURE_PURSUIT)  # also try STEER_BANGBANG
     # The 30 m straight before each corner, a little longer at its start.
     before_1 = inside(-120, -85, -47, -23)
     before_2 = inside(-82, -58, -110, -75)
     before_3 = inside(-30, 5, -137, -113)
     before_4 = inside(8, 32, -85, -50)
-    car.turn_left = before_1 or before_4
-    car.turn_right = before_2 or before_3
+    car.turn_left = (before_1 or before_4) and car.blink()    # flashing, not steady
+    car.turn_right = (before_2 or before_3) and car.blink()
 car.finish()

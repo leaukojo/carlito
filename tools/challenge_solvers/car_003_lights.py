@@ -1,7 +1,7 @@
 """Lights: low beams on first, then follow the causeway at 30 km/h. The causeway is a gentle S
 of three 70 m bends across the lagoon: driving straight would end in the water."""
 from carlito_can import (
-    connect, STEER_PROPORTIONAL, STEER_BANGBANG, CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG,
+    connect, STEER_PURE_PURSUIT, STEER_BANGBANG, CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG,
     arc, D, IGNITION, LOW)
 
 # The causeway's centre line, from the start to past the finish line at x = 59.3.
@@ -18,5 +18,5 @@ car.key = IGNITION
 car.gear = D
 while car.tick():
     car.cruise(30, CRUISE_CONTROL_PI)  # also try CRUISE_CONTROL_BANGBANG
-    car.follow(CAUSEWAY, STEER_PROPORTIONAL)  # also try STEER_BANGBANG
+    car.follow(CAUSEWAY, STEER_PURE_PURSUIT)  # also try STEER_BANGBANG
 car.finish()

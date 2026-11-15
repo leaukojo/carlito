@@ -59,7 +59,15 @@ OFF, LOW, HIGH = 1, 3, 4
 # How cruise() holds a speed.
 CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG = "PI", "bang-bang"
 # How steer_to() and follow() steer.
-STEER_PROPORTIONAL, STEER_BANGBANG = "proportional", "bang-bang"
+STEER_PROPORTIONAL, STEER_PURE_PURSUIT, STEER_BANGBANG = "proportional", "pure pursuit", "bang-bang"
+
+# The sedan-sports' steering, for pure pursuit (tools/gen_kenney_vehicles.gd, gen_car_arena.gd):
+# wheelbase, full lock, and the lock falling linearly (an approximation of the game's lerp) to
+# MIN_LOCK_FRAC of it at LOCK_FALLOFF_MS.
+WHEELBASE_M, FULL_LOCK_DEG, MIN_LOCK_FRAC, LOCK_FALLOFF_MS = 1.58, 38.0, 0.26, 42.0
+
+# A turn signal's flash rate (the challenges accept 1 to 2 Hz).
+BLINK_HZ = 1.5
 
 # The game's GPS: world X/Z around a Paris origin (VehicleTelemetry.gps_lat / gps_lon).
 GPS_LAT0, GPS_LON0, M_PER_DEG = 48.8566, 2.3522, 111320.0
@@ -265,11 +273,21 @@ class Car:
 
     def steer_to(self, x, z, method=None, gain=2.0):
         """Steer towards the world point (x, z). Returns the distance to it. STEER_PROPORTIONAL
-        (the default) steers more the further off the point is; STEER_BANGBANG is the beginner's
-        version: a fixed amount left or right, or straight."""
+        (the default) steers more the further off the point is; STEER_PURE_PURSUIT steers along
+        the circle through the car and the point; STEER_BANGBANG is the beginner's version: a
+        fixed amount left or right, or straight."""
         bearing = math.degrees(math.atan2(x - self.x, self.z - z))   # compass: north is -z
         error = (bearing - self.heading + 540) % 360 - 180            # + means "to the right"
-        if method == STEER_BANGBANG:
+        distance = self.distance_to(x, z)
+        if method == STEER_PURE_PURSUIT:
+            # The circle tangent to the heading through the point has curvature 2 sin(error) / d;
+            # a bicycle model turns that into a wheel angle, then a share of the lock at this speed.
+            curvature = 2 * math.sin(math.radians(error)) / max(distance, 1.0)
+            wheel_deg = math.degrees(math.atan(WHEELBASE_M * curvature))
+            speed_frac = min(abs(self.speed or 0.0) / LOCK_FALLOFF_MS, 1.0)
+            lock_deg = FULL_LOCK_DEG * (1 - (1 - MIN_LOCK_FRAC) * speed_frac)
+            self.steer = clamp(wheel_deg / lock_deg * 100, -100, 100)
+        elif method == STEER_BANGBANG:
             if error > 3:
                 self.steer = 15      # the point is on the right: steer right
             elif error < -3:
@@ -278,17 +296,23 @@ class Car:
                 self.steer = 0       # straight ahead
         else:
             self.steer = clamp(error * gain, -100, 100)
-        return self.distance_to(x, z)
+        return distance
 
-    def follow(self, path, method=None, lookahead=8.0):
-        """Steer along a list of (x, z) points with steer_to (same `method`). True once the last
-        one is close."""
+    def follow(self, path, method=STEER_PURE_PURSUIT, lookahead=8.0):
+        """Steer along a list of (x, z) points: steer_to (with `method`) the first point at least
+        `lookahead` metres away. True once the last one is close."""
         if self._path is not path:
             self._path, self._path_i = path, 0
         while self._path_i < len(path) - 1 and self.distance_to(*path[self._path_i]) < lookahead:
             self._path_i += 1
         return (self.steer_to(*path[self._path_i], method) < lookahead
                 and self._path_i == len(path) - 1)
+
+    def blink(self):
+        """True, then False, BLINK_HZ times a second: a turn signal's rhythm. Use it as
+        `car.turn_left = want_left and car.blink()`."""
+        period = 1 / BLINK_HZ
+        return time.monotonic() % period < period / 2
 
     def cruise(self, kmh, method=None):
         """Hold a speed with accel and brake. CRUISE_CONTROL_PI (the default) is a small PI

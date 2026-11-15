@@ -2,7 +2,7 @@
 The car starts in the middle of one straight, heading 30 degrees, and drives one lap anticlockwise
 at 20 km/h, steering from the GPS position."""
 from carlito_can import (
-    connect, STEER_PROPORTIONAL, STEER_BANGBANG, CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG,
+    connect, STEER_PURE_PURSUIT, STEER_BANGBANG, CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG,
     arc, D, IGNITION)
 
 # The track's centre line. The half circles' centres are 20 m either side of the stadium's centre
@@ -19,5 +19,5 @@ car.key = IGNITION
 car.gear = D
 while car.tick():
     car.cruise(20, CRUISE_CONTROL_PI)  # also try CRUISE_CONTROL_BANGBANG
-    car.follow(TRACK, STEER_PROPORTIONAL)  # also try STEER_BANGBANG
+    car.follow(TRACK, STEER_PURE_PURSUIT)  # also try STEER_BANGBANG
 car.finish()
