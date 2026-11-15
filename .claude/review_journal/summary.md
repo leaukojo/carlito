@@ -55,7 +55,7 @@ gather) and the hand-back's diagnosis are done: `sessions/2026-11-16-gather-roll
   session file gives the first term to step, and the case goes to Fable with it. Never a filter,
   a lag or a deadband; nothing is fixed at HEAD. [high, auto, Opus]
 - **A3** (approved, user 2026-11-15: variant A, the ground's share a moment too; handed back
-  2026-11-15; after A2 and the user's answer on the creep, `proposals.md`) The rolling resistance
+  2026-11-15; after A2; the creep lands as measured, user 2026-11-16) The rolling resistance
   is a moment on the wheel, a stage of the settle law before the TC hold. Why, what goes and what
   moves: `sessions/2026-11-15-wheel-leftovers.md` finding 1 (read first). The change as built, its
   tests and its figures: `sessions/2026-11-15-rolling-moment.md` and `.patch` (`git apply`;
@@ -70,7 +70,9 @@ gather) and the hand-back's diagnosis are done: `sessions/2026-11-16-gather-roll
   strict`; then the `doc=` tables. Measured on the patch: `sedan` 100 % stop 40.7 -> 41.1 m, FIELD
   `wheel_slip` 2.9 -> 1.0 %. Expected after the stage, and no stop: laden `semi` 25 % `nohold` back
   at HEAD's 887 mm (1578 on the patch as built), the same cell with the hold never forward (it
-  sits 18 N under its limit at HEAD), the creep table as the user's answer says. Stop and hand
+  sits 18 N under its limit at HEAD), the creep table's held grade down 0.4 to 1.3 points
+  (`sessions/2026-11-16-rolling-moment-diagnosis.md` § 2: the table and `docs/drivetrain.md` then
+  say the figure is a slide speed against a 0.25 m gate, not a static hold). Stop and hand
   back, the change undone, if a standing body's `rest reading:` rises over HEAD's, any held
   wheel's `suspension_force` alternates over 2 N a tick in `doc=park`'s `semi` 10 % cross cell
   after its first 15 s (HEAD: under 1 N), a
@@ -80,7 +82,8 @@ gather) and the hand-back's diagnosis are done: `sessions/2026-11-16-gather-roll
   shows the user the measured moves (stops, roll-backs, creep, `wheel_slip` on FIELD) before the
   commit; "Please verify" gains: full stops about 1 % longer, a tractor's `wheel_slip` in a field
   at no draft near 1 %, a laden `semi` crawling up a steep grade stops sooner when the pedal is
-  lifted, the creep as decided. The `COMPROMISE` count stays (one goes, the soil's share comes).
+  lifted, a `sedan` in D on a 6 to 7 % grade rolls back about 30 cm in 10 s where it was under
+  20. The `COMPROMISE` count stays (one goes, the soil's share comes).
   [high, plan, Opus]
 - **A4** (approved, user 2026-11-14: raw; ready, it touches no line of the kept patch)
   `accLong` / `accLat` / `acc_vert` leave the sim unfiltered: `BaseVehicle.ACCEL_SMOOTH` goes,
@@ -241,46 +244,10 @@ record, and it changes only with the user's OK. The pause is over when both plan
 
 ## Please verify (user, by driving)
 
-- F2, along a wall: slide a car (`race`, a tractor, the `firetruck`) along a building or barrier
-  at a shallow angle, then steer into it. Expected: it scrapes on its hull with no kick off the
-  wall; steered hard into the wall it grinds to a stop nose-in where it used to bounce along.
-- F2's remainder, a wall that is part of the ground: on Level 3 - City, `race` or a tractor along
-  a road barrier, straight and then steered into it; on any island level, the same along the foot
-  of a cliff. Expected: it scrapes on its hull and the wall-side corner stays up, where it used to
-  drop, and the wall-side wheels ride at the road's height, not a few cm low (f7bac55).
-- A `semi` over a high step at speed (f7bac55): about 30 km/h over a 20 cm kerb or step.
-  Expected: the rear wheels meet it at full bump and the jolt is softer than before (the `kerb`
-  run's peak vertical 4.77 -> 2.89 g); crawling over it is as before.
-
-- The FULL dashboard's bars with no lag: any body, F2 to FULL. Expected: every bar and its number
-  follow the value at once. Any number that flickers on a body standing still is a new finding:
-  say which.
-- F1, a standing body: a parked `semi` (bobtail and laden) on FULL. Expected: the AXLE and TRLR
-  bars still in D, in N and on each brake; any body in N on a slight slope rolls off as before,
-  and on the flat comes to rest. Known, not fixed: with a trailer the AXLE number's last digit
-  still moves by 1 kg (3 at most) on some ticks, a step that is not the wheel's (Queue, the
-  towing item). On the bobtail, since the wheel fix (d22b3ee), it should barely move. Anything
-  larger, or on TRLR, is a new finding.
-- A laden `semi` on a grade near its limit (about 25 %), if the hill hold can be off in play:
-  released and floored, it rolls back about 30 % further than before F1's fix (886 mm against 685; Queue).
-- The wheel fix (d22b3ee), any body: a standing start pulls away about a quarter of a second
-  sooner (`sedan` 0-50 3.47 -> 3.20 s), and full stops are a little shorter. The tractor's
-  pull-away no longer rings on `accLong` (FULL). With the hill hold off on a steep grade, a body
-  rolls back about half as far again as before (the honest mass); one let roll in N gathers its
-  first 5 km/h sooner. Parked bodies hold as before.
-- Flatland's crates on a respawn: `drone-mk2` in Flatland, carry one crate away and drop it, pick
-  up another, press respawn. Expected: all three are back beside the start, none on the hook.
-- The pad's stick in menus after the held-stick change: with the mouse moved (nothing lit), push
-  the left stick once on the pause menu, LEVEL and the garage. Expected: the first push lights a
-  control, and holding the stick then moves on as before.
-
-- RoadPath's editor buttons after the fold (ebea62a): on a scratch copy of a level, select a
-  RoadPath and press "Conform terrain" then "Paint splat under road". Expected: the terrain
-  flattens under the road and the road's channel paints, as before, and Ctrl+Z undoes each.
-- The semis' part-pedal start gear (dd8dd5e): `semi` or `semi-conventional`, bobtail and with a
-  loaded trailer, stopped nose-up on a grade or on soft ground; pull away at a third to half
-  pedal. Expected: on some grades it holds one start gear lower than before and pulls away
-  without bogging; a floored launch and any launch on flat tarmac are as before.
+Nothing open: the user verified every entry on 2026-11-16 (the wall scrapes, the `semi`'s step,
+the FULL bars, the standing `semi`, the wheel fix, the crates, the pad's stick, RoadPath's
+buttons, the semis' start gear). Known and queued, not a verify item: a laden `semi`'s AXLE
+number still moves by 1 kg (3 at most) on some ticks (stage B, the towing item's (c)).
 
 ## Unit map
 
