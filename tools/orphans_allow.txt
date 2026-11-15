@@ -7,6 +7,7 @@ src/challenges/challenge_attempt.gd:current_goal # test accessor mirroring goal_
 src/input/action_registry.gd:families_of        # doc comment: for the contract cross-check in tests/test_action_registry.gd, not the runtime gate
 src/levels/base/heightmap_terrain.gd:get_splat_weights # test accessor for the splat-paint friction path; production grip/drag reads the internal weight cache
 src/shell/challenge_registry.gd:duplicate_ids   # registry integrity check exercised by tests/test_challenge_registry.gd's ship gate; nothing at runtime needs it
+src/ui/dashboard.gd:shown_layout               # test accessor for _layout (what AUTO resolved to); test_dashboard asserts it, the dashboard reads _layout itself
 src/vehicles/base/drivetrain.gd:shift_cut_active # test accessor for _shift_cut_ticks; no dashboard/telemetry consumer
 src/vehicles/base/towed_body.gd:load_shift_z    # documented test accessor, no runtime caller
 src/vehicles/base/towed_body.gd:load_shift_y    # documented test accessor, no runtime caller
