@@ -8,15 +8,19 @@ Written 2026-11-15. Status: **in progress.**
 Serves: the 12 car `ChallengeDef`s (`ChallengeRegistry.DEFS`), as a repeatable "can this be
 solved over CAN" check. The contract is unchanged: the new state rides the `carlitoOutput`
 envelope, as `challenge` already does.
-State: done: phase 1 (carlito 1835ff8, sloppycan 6b507d9), phase 2 code, the demo's RAMN
-silence routine (sloppycan 19f718f). Next: the user runs the three phase-2 solvers; phase 3
-once they pass. Open findings: none.
+State: done: phase 1 (carlito 1835ff8, sloppycan 6b507d9), phase 2, the demo's RAMN silence
+routine (sloppycan 19f718f), the D5-D7 feedback, phase 3 code. Next: the user runs the twelve
+solvers (car_005_reverse_park is the risky one). Open findings: none.
 
 ## Decisions (user, 2026-11-15)
 
 - **D1** Car challenges only (the 12 car defs). Truck/tractor wait until they are tested.
-- **D2** One solver per challenge, in tools/challenge_solvers. You pick the challenge in the
-  game; the script waits for its start line, then drives.
+- **D2** One solver per challenge, in tools/challenge_solvers. The script asks for the challenge
+  (D5), or with `--no-open` you start it in the game; it waits for the start line, then drives.
+- **D5** A solver opens its challenge (default on): `#challenge open <id>` on the relay →
+  sloppyCAN reloads Carlito with `?challenge=<id>` (`BootParams`). `--can` keeps the Enter prompt.
+- **D6** A script's name starts with its place in the car list: `car_001_start_up.py`.
+- **D7** First-course Python, one-line comments welcome; each solver self-contained.
 - **D3** The RAMN ECUs are silenced first with UDS routine 0x0200 (`31 01 02 00`) on 0x7E1,
   0x7E2 and 0x7E3, and resumed at exit (`31 02 02 00`, per the firmware; `31 01 02 01` is Erase
   EEPROM). sloppyCAN's demo plays the routine too. Driving uses the RAMN ids, the ones the car
@@ -117,16 +121,13 @@ only for hardware.
   - `steer_to(x, z)`: the bearing error times a gain, as steer %.
   - `follow(path)`: aim at the path point a lookahead ahead; returns True at the end.
   - `cruise(kmh)`: P control onto accel/brake.
-  - `stop_in(metres)`: brake to the speed `sqrt(2·a·d)`.
-- `README.md` in the folder covers setup, both backends and the run line
-  (`python car_start_up.py`).
+- `README.md` in the folder covers setup, both backends and the run line.
 - A `.gitignore` entry for `__pycache__/`.
 
 First solvers, to prove the pipeline before the harder ones:
-- car_start_up.py: key on, D, accel 40 %, steer to the Finish line.
-- car_hazards.py: stand still and blink left and right together at 1.5 Hz until the challenge
-  passes.
-- car_speed_trap.py: `cruise(60)`, steering on the start heading.
+- car_001_start_up: key on, D, accel 40 %, steer to the Finish line.
+- car_007_hazards: stand still and blink both lamps together at 1.5 Hz until it passes.
+- car_008_speed_trap: `cruise(60)`, steering on the start heading.
 
 The user runs these three. Phase 3 starts only once they pass.
 
@@ -137,17 +138,17 @@ Coordinates come from the course scenes (spawn jitter is 0 in every def).
 
 | Script | Approach |
 |---|---|
-| car_easy_turns | `follow(ROAD)`. `ROAD` is the four touching r=35 arcs around the `Cut0..3` centres, alternating right/left, 25 km/h. |
-| car_corner_budget | Imports `ROAD`, at 38 km/h (35 m bends at 4 m/s² allow 42). The Cut zones sit 9.5 m inside the lane. |
-| car_lights | `lights = LOW`, then `steer_to` the 6 m Finish across the causeway. |
-| car_manual_gearbox | Gear 1, full accel, shift up past a fixed rpm; steer on heading. A 200 m run inside 11.5 s. |
-| car_turn_signals | `follow` the window centres in order. The left/right lamp is steadily on while inside its Signal box, off otherwise (a steady lamp meets "never dark > 1.05 s"). |
-| car_box_stop | `cruise(60)` until past the gate (odometer +170 m), then `stop_in` to the box centre (+187 m), then handbrake. |
-| car_box_blind | The same solve, imported. The fog does not matter to CAN. |
-| car_blind_stadium | The stadium built from the start pose: 20 m straight, left semicircle r=15, 40 m, semicircle, 20 m. `follow` at 15 km/h. |
-| car_reverse_park | Forward east, turn right to face south at x≈-125, roll to z≈-62. Then reverse north at ~3 km/h holding x=-125 / heading 180, stop at the bay centre z=-83.7, handbrake. The bay is 1.98 m wide, which is why x,z come from GPS. |
+| car_002_easy_turns | `follow(ROAD)`. `ROAD` is the four touching r=35 arcs around the `Cut0..3` centres, alternating right/left (helper `arc()`), 25 km/h. |
+| car_009_corner_budget | The same `ROAD` (repeated, D7), at 38 km/h (35 m bends at 4 m/s² allow 42). The Cut zones sit 9.5 m inside the lane. |
+| car_003_lights | `lights = LOW`, then `follow` the causeway, an S of three r=70 arcs (`CAUSEWAY_*` in `tools/gen_car_arena.gd`), 30 km/h. |
+| car_004_manual_gearbox | Gear 1, full accel, shift up past 6300 rpm (redline 6800); steer on the line. A 200 m run inside 11.5 s. |
+| car_006_turn_signals | `follow` the corners road (r=15 arcs). The left/right lamp is steadily on inside the 30 m before its corner (started 5 m early), off otherwise (a steady lamp meets "never dark > 1.05 s"). |
+| car_010_box_stop | `cruise(55)` until just past the gate (GPS x > 20.5), then full brake (the generator sizes the box for that, up to ~65 km/h), then handbrake. |
+| car_011_box_blind | The same solve, the gate from the odometer (+171 m). The fog does not matter to CAN. |
+| car_012_blind_stadium | The stadium centre line: two left semicircles r=15 round (70, -77.3) and (50, -42.7), the hint's GPS points on them. `follow` at 20 km/h. |
+| car_005_reverse_park | Forward east, an r=8 right turn onto x=-125 facing south, roll to z=-62. Then reverse north at 3 km/h holding x=-125 / heading 180, stop at the bay centre z=-83.7, handbrake. The bay is 1.98 m wide, which is why x,z come from GPS. |
 
-`car_reverse_park` is the riskiest (a ±0.24 m lateral margin). If it fails twice, write a
+`car_005_reverse_park` is the riskiest (a ±0.42 m lateral margin at the wheels: track 1.14 m). If it fails twice, write a
 symptoms/hypotheses handoff rather than tune blind (global rule).
 
 ## Verification

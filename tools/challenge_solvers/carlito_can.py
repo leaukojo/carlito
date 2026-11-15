@@ -2,15 +2,16 @@
 
 Every solver script runs the same way:
 
-    python car_start_up.py                      sloppyCAN's script relay on 127.0.0.1:29541
-    python car_start_up.py --relay HOST:PORT    a relay somewhere else
-    python car_start_up.py --can slcan COM5     real hardware through python-can
-                                                (--bitrate N, default 500000)
+    python car_001_start_up.py                    sloppyCAN's script relay on 127.0.0.1:29541
+    python car_001_start_up.py --relay HOST:PORT  a relay somewhere else
+    python car_001_start_up.py --no-open          don't open the challenge: start it yourself
+    python car_001_start_up.py --can slcan COM5   real hardware through python-can
+                                                  (--bitrate N, default 500000)
 
 A solver looks like this:
 
     car = connect()                  # reads the command line above
-    car.wait_start("car_start_up")   # you start the challenge in the game; this waits for it
+    car.wait_start("car_start_up")   # asks Carlito to open the challenge, then waits for it
     car.key = IGNITION
     car.gear = D
     car.accel = 40
@@ -36,9 +37,10 @@ What the car reports (the telemetry frames sloppyCAN puts on the bus):
     odo (metres)                                             0x526
     status (bitfield)                                        0x527
 
-Challenge state comes from sloppyCAN's "#challenge start / pass / fail / exit" info lines.
-Real hardware has no such lines: there you press Enter once the challenge has started, and
-Ctrl+C when you are done.
+Challenge state comes from sloppyCAN's "#challenge start / pass / fail / exit" info lines, and
+wait_start sends "#challenge open <id>", which makes sloppyCAN reload Carlito straight into the
+challenge. Real hardware has neither: there you start the challenge, press Enter once it has
+started, and Ctrl+C when you are done.
 """
 
 import argparse
@@ -70,6 +72,18 @@ def clamp(v, lo, hi):
     return max(lo, min(hi, v))
 
 
+def arc(cx, cz, radius, from_deg, to_deg, step=10):
+    """Points (x, z) on a circle round (cx, cz), for follow(). The angles are compass bearings
+    seen from the centre (0: the point north of it, 90: east of it). Going from a smaller to a
+    larger bearing runs clockwise (a right turn); larger to smaller runs anticlockwise (left)."""
+    n = max(1, round(abs(to_deg - from_deg) / step))
+    points = []
+    for i in range(n + 1):
+        b = math.radians(from_deg + (to_deg - from_deg) * i / n)
+        points.append((cx + radius * math.sin(b), cz - radius * math.cos(b)))
+    return points
+
+
 def connect():
     """Open the link named on the command line and start talking to the car."""
     ap = argparse.ArgumentParser(description="Solve a Carlito challenge over CAN.")
@@ -78,12 +92,14 @@ def connect():
     ap.add_argument("--can", nargs=2, metavar=("INTERFACE", "CHANNEL"),
                     help="real hardware via python-can, e.g. --can slcan COM5")
     ap.add_argument("--bitrate", type=int, default=500000)
+    ap.add_argument("--no-open", action="store_true",
+                    help="don't ask Carlito to open the challenge: start it yourself in the game")
     args = ap.parse_args()
     sys.excepthook = _quiet_ctrl_c
     if args.can:
-        return Car(_CanLink(args.can[0], args.can[1], args.bitrate), period=0.01)
+        return Car(_CanLink(args.can[0], args.can[1], args.bitrate), period=0.01, open_it=False)
     host, _, port = args.relay.rpartition(":")
-    return Car(_RelayLink(host or "127.0.0.1", int(port)), period=0.02)
+    return Car(_RelayLink(host or "127.0.0.1", int(port)), period=0.02, open_it=not args.no_open)
 
 
 def _quiet_ctrl_c(kind, value, tb):
@@ -108,9 +124,11 @@ class _RelayLink:
         self.lock = threading.Lock()
 
     def send(self, can_id, data):
-        line = "%03X#%s\n" % (can_id, bytes(data).hex().upper())
+        self.send_line("%03X#%s" % (can_id, bytes(data).hex().upper()))
+
+    def send_line(self, line):
         with self.lock:
-            self.sock.sendall(line.encode("ascii"))
+            self.sock.sendall((line + "\n").encode("ascii"))
 
     def receive(self, on_frame, on_info):
         buf = b""
@@ -162,8 +180,9 @@ class _CanLink:
 
 
 class Car:
-    def __init__(self, link, period):
+    def __init__(self, link, period, open_it):
         self.link = link
+        self._open_it = open_it
         # Commands, sent every `period` seconds.
         self.key = IGNITION
         self.gear = P
@@ -197,19 +216,27 @@ class Car:
     # -- challenge ------------------------------------------------------------------------
 
     def wait_start(self, challenge_id):
-        """Wait for the challenge to start in the game, then for fresh telemetry."""
+        """Open the challenge (unless --no-open), wait for it to start, then for fresh telemetry."""
         self._challenge = challenge_id
         if self.link.has_info:
-            print("Start '%s' in the game (or press RETRY)..." % challenge_id)
+            if self._open_it:
+                self.link.send_line("#challenge open " + challenge_id)
+                print("Asked Carlito to open '%s' (the game reloads)..." % challenge_id)
+            else:
+                print("Start '%s' in the game (or press RETRY)..." % challenge_id)
+            hint_at = time.monotonic() + 20
             while not self._started.wait(0.2):   # a timeout keeps Ctrl+C working on Windows
-                pass
+                if self._open_it and time.monotonic() > hint_at:
+                    hint_at = float("inf")
+                    print("Still waiting: is sloppyCAN connected (Script -> Connect)? An older "
+                          "Carlito build ignores the request: start the challenge by hand.")
         else:
             input("Start '%s' in the game, then press Enter here..." % challenge_id)
             self._restart()
         deadline = time.monotonic() + 3
-        while not (self._fresh_pos and self._fresh_heading) and time.monotonic() < deadline:
+        while not self._have_telemetry() and time.monotonic() < deadline:
             time.sleep(0.02)
-        if not (self._fresh_pos and self._fresh_heading):
+        if not self._have_telemetry():
             sys.exit("No telemetry from the car: is Carlito open in sloppyCAN (and, on hardware, "
                      "sloppyCAN's bus not listen-only)?")
         print("Started.")
@@ -258,13 +285,11 @@ class Car:
         self.accel = clamp(out, 0, 100)
         self.brake = clamp(-out, 0, 100)
 
-    def stop_in(self, metres, decel=3.0):
-        """Brake so as to stop `metres` ahead: never faster than sqrt(2 * decel * metres)."""
-        allowed = math.sqrt(2 * decel * max(metres, 0)) * 3.6
-        self.accel = 0
-        self.brake = clamp((self.kmh - allowed) * 10, 0, 100) if metres > 0.3 else 100
-
     # -- internals --------------------------------------------------------------------------
+
+    def _have_telemetry(self):
+        return (self._fresh_pos and self._fresh_heading and self.kmh is not None
+                and self.rpm is not None and self.odo is not None)
 
     def _restart(self):
         self._fresh_pos = self._fresh_heading = False   # a fresh car spawns: wait_start waits for it

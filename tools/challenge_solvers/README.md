@@ -1,24 +1,29 @@
 # Challenge solvers
 
 One Python script per car challenge, which solves it over CAN. They test that a challenge can
-be passed by a script, end to end. `carlito_can.py` is the shared helper; its header lists
+be passed by a script, end to end. The number in a script's name is the challenge's place in the
+car list (`ChallengeRegistry.DEFS`). `carlito_can.py` is the shared helper; its header lists
 every command and telemetry value.
 
 ## Run one (sloppyCAN)
 
 1. Start the relay from the sloppyCAN repo: `python scripting/sloppycan_relay.py`.
-2. In sloppyCAN, click **Script**, then **Connect**. Open Carlito (Demo mode is fine).
-3. Run the solver: `python tools/challenge_solvers/car_start_up.py`.
-4. Start the same challenge in the game. The script drives as soon as it starts, and prints
-   `PASSED in ... s` or `FAILED ...`. RETRY in the game runs it again.
+2. In sloppyCAN, click **Script**, then **Connect** (a bus or Demo mode must be live).
+3. Run the solver: `python tools/challenge_solvers/car_001_start_up.py`.
+
+The script asks sloppyCAN to open the challenge: Carlito's window opens if it is shut, and the
+game reloads straight into the challenge. The script drives as soon as it starts, and prints
+`PASSED in ... s` or `FAILED ...`. With `--no-open` it waits for you to start the challenge in
+the game instead.
 
 Python 3.8+ and nothing to install.
 
 ## Real hardware
 
-`python car_start_up.py --can slcan COM5` (any python-can interface and channel; `--bitrate`,
-default 500000). Needs `pip install python-can`. The script first silences the RAMN ECUs
-(UDS `31 01 02 00` to 0x7E1-0x7E3), so their own pedal and steering frames stop competing,
+`python car_001_start_up.py --can slcan COM5` (any python-can interface and channel;
+`--bitrate`, default 500000). Needs `pip install python-can`. The script first silences the RAMN
+ECUs (UDS `31 01 02 00` to 0x7E1-0x7E3), so their own pedal and steering frames stop competing,
 and gives them back at exit (`31 02 02 00`). sloppyCAN's demo plays the same routine.
-sloppyCAN must put the telemetry on the bus (a bus that is not listen-only). There are no
-challenge info lines on hardware: press Enter when the challenge has started, and Ctrl+C to stop.
+sloppyCAN must put the telemetry on the bus (a bus that is not listen-only). Hardware carries no
+challenge info lines and no open request: start the challenge yourself, press Enter when it has
+started, and Ctrl+C to stop.
