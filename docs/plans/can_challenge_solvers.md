@@ -8,7 +8,8 @@ Written 2026-11-15. Status: **in progress.**
 Serves: the 12 car `ChallengeDef`s (`ChallengeRegistry.DEFS`), as a repeatable "can this be
 solved over CAN" check. The contract is unchanged: the new state rides the `carlitoOutput`
 envelope, as `challenge` already does.
-State: done: phase 1 game half. Next: phase 1 sloppyCAN half. Open findings: none.
+State: done: phase 1 (carlito 1835ff8, sloppycan 6b507d9), phase 2 code. Next: the user runs
+the three phase-2 solvers; phase 3 once they pass. Open findings: none.
 
 ## Decisions (user, 2026-11-15)
 

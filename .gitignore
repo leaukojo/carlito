@@ -27,3 +27,6 @@ tools/claude/
 # it is the input-hash record the stale-bake gate reads. Run tools/bake_levels.tscn once
 # after cloning.
 *.baked.scn
+
+# Python bytecode (tools/challenge_solvers)
+__pycache__/
