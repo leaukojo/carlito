@@ -22,29 +22,17 @@ may not last the review). What earns the tag, "prepared first" and the hand-back
 § Diagnose only. A Fable session takes the top READY item and skips one marked "after" or
 "needs". The user names more items: each is added here with the reason it is worth Fable.
 
-1. Hand-back (2026-11-15): the wheel fix hit its stop condition. Read
-   `sessions/2026-11-15-wheel-settled-slip.md` (the figures, HEAD against the patch, are there)
-   and its `.patch` (the fix as built; `git apply` clean at 4447d29). (a) Step 4, the spin step's
-   stiffness at zero slip as the curve's first slope, lets `suv` slide 5 m off P on 30 %; HEAD's
-   `|reaction| / 1e-6` there holds every park cell. Derive what the step's stiffness must be at
-   zero slip when the patch spring, not the curve, carries the reaction (a held or locked wheel),
-   and whether step 4 is needed at all. (b) With step 4 dropped, `sedan rollback nohold` rolls back
-   further (25 %: 333 -> 504 mm): derive whether HEAD's figure carried the spin step's false wheel
-   inertia under the predictor's fade (the session file's finding 2), so the new one is honest.
-   (c) gathered, `sessions/2026-11-15-gather-semi-rollback.md` (every flag equal; the patch's force
-   reads the settled slip from the release tick; after the 1.0 to 1.5 s dip its `omega` settles
-   2 % lower, creep 15 against 25 mm/s at the same force; one more log across the dip is named
-   there): the laden `semi` on 25 % pulls away later (3.10 -> 4.27 s). Each:
-   a brief an Opus session can land, or a reason the fix is wrong. [diagnose, high, Fable]
-2. (after the wheel fix lands) What else the wheel's two forces explained. With the tick
+1. (after the wheel fix lands) What else the wheel's two forces explained. With the tick
    reordered, re-derive from `wheel.gd` alone and say for each: gone, still there, or its own
-   brief. `surface_drag_force`'s `taken` and the laden roll-back (the towing item's (a)); the
+   brief. `surface_drag_force`'s `taken` and the laden roll-back (the towing item's (a); a free
+   wheel going uphill under `g sin * dt` has no drag at all, 39.6 mm/s on 25 %:
+   `sessions/2026-11-15-wheel-handback-diagnosis.md` § For other items); the
    rolling resistance `COMPROMISE` (`wheel.gd:571-573`: a torque inside the spin step would now
    reach the body whole, and `taken` would go); `brake_settled_spin`'s `COMPROMISE`
    (`:142-145`, "the spin the road lent the step"); the retarder's (`wheel_drive.gd:667-669`);
    the links' force off last tick's `force_long` (`:490`); `TractorTelemetry.SLIP_FLOOR_KMH`.
    [diagnose, high, Fable]
-3. (needs "gather for the high-speed swerve", below) `race` and `race-future` leave the 40 m
+2. (needs "gather for the high-speed swerve", below) `race` and `race-future` leave the 40 m
    strip sideways near 280-290 km/h with zero steer (`docs/plans/realism_gaps.md` phase 4;
    `doc=top` prints `left the strip`). From the gathered trace and the spec's figures, derive the
    yaw mode at that speed (each axle's cornering stiffness at its load with the downforce on, the
@@ -57,8 +45,44 @@ towing item and `scrape onebody` (both below).
 
 Opus's and Sonnet's items:
 
-- (approved, user 2026-11-14; HANDED BACK 2026-11-15, waits on Fable's item 1) The body takes the tyre's force at the settled slip. Cause, the map, the
-  prototype's shape and its figures: `sessions/2026-11-14-wheel-body-one-force.md`, read first.
+- (approved, user 2026-11-14; handed back 2026-11-15 and diagnosed: READY) The body takes the
+  tyre's force at the settled slip. Read first `sessions/2026-11-15-wheel-handback-diagnosis.md`
+  (the fix is right; one line of it was wrong), then the hand-back
+  (`sessions/2026-11-15-wheel-settled-slip.md`: what the patch does, its figures). Start from
+  `sessions/2026-11-15-wheel-settled-slip.patch` (`git apply` clean at 88cb664; the steps below
+  as built, tests and `docs/vehicles.md` included), then three amendments, which the plan shows
+  the user:
+  (i) Step 4's guard, `RayWheel._integrate_spin`. Wrong as built: under `null_slip_torque <= 1e-6`
+  it swaps the stiffness for the curve's first slope even when the reaction is a held wheel's
+  patch spring, whose secant has no limit there; `suv` on 30 % in P then turns its held wheels
+  0.3 rad/s in one tick (tick 538), the pawl's `LOCK_STUCK_SPIN` gate lets go and it slides for
+  good. Fix: `var reaction_stiffness := absf(reaction_torque) / maxf(null_slip_torque, 1e-6)`,
+  then `if null_slip_torque <= 1e-6: reaction_stiffness = maxf(reaction_stiffness,
+  zero_slip_stiffness)`; the doc comment says the curve's slope stands in only where the secant
+  gives less. New pure test, failing on the patch as built: a wheel (`I` 1.2, `r` 0.36) at `omega`
+  0, `_integrate_spin(0.0, -480.0, 0.0, 1/60, 0.0)` with `zero_slip_stiffness` 24.56 ends under
+  1e-6 rad/s (as built: -0.26); the patch's
+  `test_a_wheel_at_zero_slip_steps_on_the_curve_s_first_slope` still passes. First run:
+  `measure_grade -- suv park=16.7 pawl` reads `along +0.2 mm` (as built `-5000.2 mm SLID`;
+  measured with this guard: +0.2 mm, peak 0.006 m/s), then `doc=park` within 1 mm of HEAD.
+  (ii) The roll-back with the hold off grows, and is not a stop condition: under the floor HEAD's
+  body carried `C dt` kg per contact beside its own mass (the tyre's slope times the tick, up to
+  the contact's cap mass; 693 kg on the sedan's 1187 on 25 %, a ratio of 1.58 for the measured
+  1.51). Expect `sedan rollback nohold` near 48 mm and 504 mm, forward at the same time. One more
+  bench test of that law is wanted: the patch's 1500 kg bench in N under a constant push, under
+  1.5 m/s, gains speed at `F / (M + sum I / r^2)` within 3 % (HEAD: low by about a third).
+  `docs/vehicles.md` § One force at the patch states the law in one sentence (the page is at its
+  character cap, 4 of headroom at 88cb664: it replaces text, and the patch's own doc hunk is
+  re-checked with `check_docs`). "Please verify" gains: with the hill hold off a body rolls
+  back about half as far again on a steep grade, and one let roll in N gathers its first 5 km/h
+  sooner.
+  (iii) `semi rollback` on 25 % is no launch cell: the laden rig is 18 N of 76.8 kN under its
+  traction limit and coasts on what the launch left, before and after (forward at 3.1 s or 4.3 s
+  is that coast passing 0.1 m). Its `forward at` moving is not a stop condition; judge the laden
+  pull-away on `semi rollback grade=15` and `grade=20`, HEAD then after: later there by more than
+  a tick is a hand-back, with the `verbose` lines. Where `docs/vehicle_measurements.md` prints
+  the 25 % row, it says the rig is at its limit.
+  The original brief, for reference (cause, map, prototype: `sessions/2026-11-14-wheel-body-one-force.md`).
   Wrong now: `RayWheel.tick` applies the force of the slip the tick starts on (`wheel.gd:514-561`)
   while `_integrate_spin` reacts the force of the slip its step ends on; free, the slip reverses
   every tick, and driven under `LOW_SPEED_FLOOR` the body gets `1 / (1 + a)` of the drive.
@@ -99,7 +123,7 @@ Opus's and Sonnet's items:
   and "Please verify": every body pulls away about a quarter of a second sooner, the tractor's
   pull-away ring on `accLong` is gone. After it: cover sweep (2) lands, (5) is re-proved, the
   bobtail's `rest reading:` sizes new limits. [high, plan, Opus]
-- (gather for the high-speed swerve: Fable's item 3) Reproduce `race` and `race-future` leaving
+- (gather for the high-speed swerve: Fable's item 2) Reproduce `race` and `race-future` leaving
   the strip (`measure_vehicles -- race,race-future 60`, the top-speed pass; `--fixed-fps 60`
   and without, and say whether both leave). With an uncommitted probe in the tool, reverted, log
   per tick from 240 km/h until the body leaves: speed, heading, yaw rate, the centre of mass's
@@ -274,7 +298,7 @@ changes only with the user's OK). Where they meet this Queue:
   about a quarter of a second and the stops by up to 1 m, so the plan's targets are judged on
   figures that hold. Phase 1's "investigate" is a power ledger on Opus (fuel to crank to wheels at
   70 km/h), Fable's only on a hand-back. Phase 4's `race` / `race-future` swerve waits on Fable's
-  item 3; its other bullets do not.
+  item 2; its other bullets do not.
 - `handbrake_fade.md` (2 phases, not started, Opus): either side of the wheel fix. Its phase 1
   edits `wheel_drive.gd:658-662`, inside the loop the wheel fix adds a call after: the second to
   land goes on top of the first.
@@ -339,7 +363,7 @@ Sizes are GDScript lines at 716bf06, rounded. A unit's tests and `docs/` pages g
 | 2b | Drivetrain: its tests and doc | `tests/test_drivetrain.gd`, `docs/drivetrain.md` | 2.8k tests + 0.4k doc | 1f85257 | 1 hollow test case and 1 duplicate test removed, 3 wrong test comments and 5 wrong doc figures fixed (heavy vans' inertia, reserve and motoring; the tractor's governed upshift; anti-stall); the doc's measured figures not re-run |
 | 2c | Drivetrain: the small files | `differential.gd`, `torque_converter.gd`, `shift_policy.gd`, `pedal_map.gd` in `src/vehicles/base/`; `tests/test_differential.gd`, `test_shift_policy.gd`, `test_torque_converter.gd` | 1.0k + 1.2k tests | dd8dd5e | `start_gear` put on the one engine law (it read the drive without the motoring share; the semis' part-pedal start gear moves); 1 duplicate test and 3 dead fixture lines removed, 3 history-worded test comments fixed; no dead symbol, no wrong comment, the one `COMPROMISE` real |
 | 3a | Wheels: the wheel | `src/vehicles/base/wheel.gd` | 1.1k | 8294fee | 6 wrong or misplaced comments fixed, 1 misnamed parameter renamed (`surface_drag_force`'s `mass`); no dead symbol; the 3 `COMPROMISE` labels real; 1 item queued (two readings of "the slip floor") |
-| 3b | Wheels: the owner | `src/vehicles/base/wheel_drive.gd` | 1.1k | | not reviewed; Fable's findings to start from: `sessions/2026-11-14-wheel-body-one-force.md` § Unit 3b |
+| 3b | Wheels: the owner | `src/vehicles/base/wheel_drive.gd` | 1.1k | | not reviewed; Fable's findings to start from: `sessions/2026-11-14-wheel-body-one-force.md` § Unit 3b, and the pawl's second steady state in `sessions/2026-11-15-wheel-handback-diagnosis.md` § For other items |
 | 3c | Wheels: the tests | `tests/test_wheel_spin.gd` | 2.8k tests | | |
 | 4 | Vehicle base, rest | `src/vehicles/base/` minus units 2, 3, 5; `src/vehicles/tyres/`; `docs/vehicles.md`, `docs/handling.md` | about 4k | | not reviewed; the derivations of `balance_model.gd` and `stability_control.gd` are checked (1 fix queued, the swinging axle's lever) and Fable's notes to start from: `sessions/2026-11-15-unit4-derivations.md` § For unit 4's review |
 | 5 | Towing | `tow_host`, `towed_body`, `articulation`, `coupling_profile` in `src/vehicles/base/`; `tests/test_trailer.gd`, `test_tow_host.gd`, `test_drawbar_trailer.gd` | 3.2k tests | | |
