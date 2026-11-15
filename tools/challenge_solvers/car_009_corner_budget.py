@@ -1,5 +1,5 @@
-"""Perfect turns: the Easy turns road again, at 38 km/h. On a 35 m bend that is
-(38 / 3.6)^2 / 35 = 3.2 m/s^2 sideways, under the 4.0 limit, and fast enough for the time limit."""
+"""Perfect turns: the Easy turns road again, at 36 km/h. On a 35 m bend that is
+(36 / 3.6)^2 / 35 = 2.9 m/s^2 sideways, under the 4.0 limit, and fast enough for the time limit."""
 from carlito_can import (
     connect, STEER_PURE_PURSUIT, STEER_BANGBANG, CRUISE_CONTROL_PI, CRUISE_CONTROL_BANGBANG,
     arc, D, IGNITION)
@@ -16,6 +16,6 @@ car.wait_start("car_corner_budget")
 car.key = IGNITION
 car.gear = D
 while car.tick():
-    car.cruise(38, CRUISE_CONTROL_PI)  # also try CRUISE_CONTROL_BANGBANG
+    car.cruise(36, CRUISE_CONTROL_PI)  # also try CRUISE_CONTROL_BANGBANG
     car.follow(ROAD, STEER_PURE_PURSUIT)  # also try STEER_BANGBANG
 car.finish()
