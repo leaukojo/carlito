@@ -148,8 +148,8 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   paused (menus open) so the link never goes silent, unlike `InputRouter`; publishes at `PUBLISH_HZ` (20) via
   `Contract.data.signals_for_vehicle(GameState.current_vehicle, "out")` ×
   `telemetry.to_bridge_dict()`, both sides stamping contract version and hash. `carlitoOutput` also
-  carries `challenge` (bool, `Bridge.set_challenge` from `boot.gd`), not a contract signal —
-  sloppyCAN mutes its RAMN demo traffic on the rising edge, restores on the falling one.
+  carries `challenge` (`false` or `{id, state, t, msg}`, `Bridge.set_challenge` from `boot.gd`),
+  no contract signal: sloppyCAN mutes its demo traffic while set; scripts get its edges.
   `boot.gd` calls `Bridge.bind(level)` (mirrors `Dashboard.bind`); both rebind on
   `Level.vehicle_changed`.
 

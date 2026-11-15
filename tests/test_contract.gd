@@ -1189,6 +1189,20 @@ func test_a_version_matched_hash_mismatched_peer_warns() -> void:
 	assert_str(BridgeScript.contract_mismatch(v, "", v, h)).is_empty()
 
 
+## The envelope's `challenge`: false outside one, else the id, state and clock; why only on a fail.
+func test_the_challenge_envelope_carries_id_state_and_clock() -> void:
+	var run := ChallengeCheck.Status.RUNNING
+	var ok := ChallengeCheck.Status.PASS
+	var bad := ChallengeCheck.Status.FAIL
+	assert_bool(BridgeScript.challenge_envelope("", run, 0.0, "") == false).is_true()
+	assert_dict(BridgeScript.challenge_envelope("car_box_stop", run, 3.14159, "")) \
+			.is_equal({"id": "car_box_stop", "state": "running", "t": 3.14})
+	assert_dict(BridgeScript.challenge_envelope("car_box_stop", ok, 12.0, "")) \
+			.is_equal({"id": "car_box_stop", "state": "passed", "t": 12.0})
+	assert_dict(BridgeScript.challenge_envelope("car_box_stop", bad, 9.8, "Ran past the box")) \
+			.is_equal({"id": "car_box_stop", "state": "failed", "t": 9.8, "msg": "Ran past the box"})
+
+
 func test_an_instanced_value_is_exactly_count_numbers() -> void:
 	assert_bool(BridgeScript._is_instance_array([1.0, 2.0, 3.0, 4.0], 4)).is_true()
 	assert_bool(BridgeScript._is_instance_array([1, 2.5, 3, 4], 4)).is_true()   # ints are numbers

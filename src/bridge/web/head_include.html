@@ -9,7 +9,8 @@
     OUT : game calls __carlito.publish(values, challenge)
           -> posts {type:'carlitoOutput', version, hash, values, challenge}
           (`hash` is the contract's content SHA-256: same version, different hash = drift)
-          (`challenge` is envelope, not a contract signal: true while an attempt runs)
+          (`challenge` is envelope, not a contract signal: false, or {id, state, t, msg}
+          while a challenge is on: state running / passed / failed, t the attempt clock)
 
   Inbound is intentionally not origin-gated on the game side: it only drives the local
   car (no sensitive sink). The dangerous direction — telemetry reaching a live CAN bus —
@@ -27,6 +28,6 @@
     if (typeof d.hash === 'string') window.__carlito.hash = d.hash;
   });
   window.__carlito.publish = function (values, challenge) {
-    parent.postMessage({ type: 'carlitoOutput', version: window.__carlito.outVer, hash: window.__carlito.outHash, values: values, challenge: !!challenge }, '*');
+    parent.postMessage({ type: 'carlitoOutput', version: window.__carlito.outVer, hash: window.__carlito.outHash, values: values, challenge: challenge || false }, '*');
   };
 </script>

@@ -238,7 +238,6 @@ func _start_challenge(def: ChallengeDef) -> void:
 func _begin_challenge(def: ChallengeDef) -> void:
 	_challenge = def
 	InputRouter.set_bridge_only(true)
-	Bridge.set_challenge(true)
 	_apply_gearbox()
 	_touch.set_driving_locked(true)
 	_touch.set_challenge_mode(true)
@@ -254,6 +253,7 @@ func _begin_challenge(def: ChallengeDef) -> void:
 		_runner.setup(def)
 		_runner.finished.connect(_on_challenge_finished)
 		_level.add_child(_runner)
+		Bridge.set_challenge(_runner)
 		_challenge_hud = ChallengeHud.new()
 		_challenge_hud.set_runner(_runner)
 		_ui.add_child(_challenge_hud)
@@ -266,7 +266,7 @@ func _end_challenge() -> void:
 		return
 	_challenge = null
 	InputRouter.set_bridge_only(false)
-	Bridge.set_challenge(false)
+	Bridge.set_challenge(null)
 	_apply_gearbox()
 	_refresh_attachment_controls()  # the shift pads follow the gearbox mode back
 	_touch.set_driving_locked(false)

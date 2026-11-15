@@ -21,10 +21,10 @@ var _version_warned := false
 var _missing_warned := {}           ## out-signal names already warned as absent from telemetry
 var _shape_warned := {}             ## out-signal names already warned as the wrong VALUE SHAPE
 var _nonfinite_warned := {}         ## out-signal names already warned as a non-finite value
-## A challenge attempt is running. Rides the carlitoOutput ENVELOPE, not the contract: it is no
-## CAN value, and sloppyCAN turns its RAMN demo traffic off on the rising edge so hand-sent frames
-## are not overwritten.
-var _challenge := false
+## The challenge in progress, or null. Rides the carlitoOutput ENVELOPE, not the contract: it is no
+## CAN value. sloppyCAN turns its RAMN demo traffic off while it is set, so hand-sent frames are
+## not overwritten, and tells scripts when an attempt starts and ends.
+var _runner: ChallengeRunner = null
 
 
 func _ready() -> void:
@@ -59,9 +59,36 @@ func get_input_values() -> Dictionary:
 	return _inbound if _active else {}
 
 
-## Set by the shell on entering / leaving a challenge attempt.
-func set_challenge(on: bool) -> void:
-	_challenge = on
+## Set by the shell on entering (the attempt's runner) / leaving (null) a challenge.
+func set_challenge(runner: ChallengeRunner) -> void:
+	_runner = runner
+
+
+## The envelope's `challenge` value: false outside a challenge, else the attempt's state. `t` is
+## the attempt clock, which restarts on a retry or a respawn; `msg` says why an attempt failed.
+static func challenge_envelope(id: String, status: ChallengeCheck.Status, elapsed: float,
+		message: String) -> Variant:
+	if id == "":
+		return false
+	var out := {"id": id, "t": snappedf(elapsed, 0.01)}
+	match status:
+		ChallengeCheck.Status.PASS:
+			out["state"] = "passed"
+		ChallengeCheck.Status.FAIL:
+			out["state"] = "failed"
+			out["msg"] = message
+		_:
+			out["state"] = "running"
+	return out
+
+
+func _challenge_value() -> Variant:
+	if not is_instance_valid(_runner) or _runner.def == null:
+		return false
+	var attempt := _runner.attempt
+	if attempt == null:  # the course never started: the runner already reported it as a fail
+		return challenge_envelope(_runner.def.id, ChallengeCheck.Status.FAIL, 0.0, "did not start")
+	return challenge_envelope(_runner.def.id, attempt.status, attempt.elapsed, attempt.message)
 
 
 ## Register Level's telemetry source. Resolved once per vehicle change, not per publish.
@@ -150,7 +177,7 @@ func _publish() -> void:
 		values[sig.name] = value
 	# JSON valid in JS object-literal syntax, embeds directly to publish() with no escaping.
 	JavaScriptBridge.eval("if(window.__carlito&&window.__carlito.publish)window.__carlito.publish(%s,%s);" % [
-		JSON.stringify(values), "true" if _challenge else "false"], true)
+		JSON.stringify(values), JSON.stringify(_challenge_value())], true)
 
 
 func _warn_shape(sig_name: String, expected: String, got: Variant) -> void:

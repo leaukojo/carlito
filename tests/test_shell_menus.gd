@@ -1253,7 +1253,7 @@ func _run_challenge(boot: Boot, id: String) -> void:
 func after_test() -> void:
 	get_tree().paused = false
 	InputRouter.set_bridge_only(false)
-	Bridge.set_challenge(false)
+	Bridge.set_challenge(null)
 
 
 ## A home-level load spawns the picked body with the picked attachment, then forgets it.
