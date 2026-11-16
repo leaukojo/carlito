@@ -39,7 +39,18 @@ A2's fix, done 2026-11-16: `sessions/2026-11-16-contact-fix.md`; A3, the rolling
 a stage before the TC hold, done 2026-11-16: `sessions/2026-11-16-rolling-moment-stage.md`.
 
 A4, the three accelerations raw, done 2026-11-16 (b76f263): `sessions/2026-11-16-accel-raw.md`.
-Its open proposal (the trailers' lift tables): `proposals.md`.
+
+- **A4b** (approved, user 2026-11-16; ready) The trailers' roll-over lift tables follow the raw
+  `TowedBody.accel_lat`. For each of box, flatbed, tanker and tipper, run
+  `measure_semi_launch -- semi trailer=<t> ramp noesc notrsp` (`--fixed-fps 60`) and write its
+  "first wheel lift" trailer's g into `trailer_roll_lift_g` (`src/vehicles/truck/trailers/<t>_spec.tres`,
+  the bogie load unchanged); then re-run `measure_vehicles -- doc=trailer_roll` and
+  `measure_semi_launch -- semi doc=trailer_roll`. The raw readings at b76f263: 0.342, 0.556, 0.378,
+  0.434 (`sessions/2026-11-16-accel-raw.md` § Runs). The goal is realistic behaviour, not the old
+  figures (user): a brief wheel lift with full protection is acceptable. Stop and hand back if,
+  with ESC and roll-over both on, a trailer goes over or chatter rises above that session's
+  figures; no other knob is tuned. `test_trailer`, `test_stability_control`, the suite.
+  [medium, auto, Opus]
 
 - **A5** (ready) Cover sweep (3),
   `measure_vehicles.CORNER_SMOOTH_S` (`:64`; `:2475`, `:2493`, `:2502`): a 0.25 s lag before the
