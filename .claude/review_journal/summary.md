@@ -47,14 +47,10 @@ stays (`sedan` 0.023 g apart: a real yaw swing, not a tick alternation) and carr
 A6, `brake_settled_spin` relabelled a design choice, done 2026-11-16 (3c9c2fb):
 `sessions/2026-11-16-brake-settled-spin.md`.
 
-- **A7** (after A3) The standing rig's rest gates. `measure_semi_launch`'s `rest reading:` judges
-  sign changes against 20 /s (`REST_FLIPS_S`) and the axle step against 2 kg (`REST_STEP_KG`);
-  after A2 and A3 a bobtail reads 0.3 /s and 0.02 kg, a laden rig 0.0 /s and 0.01 kg. What
-  each limit was sized on and its margin: `sessions/2026-11-13-f1-rest-guard.md`. Size new ones on
-  the figures A3 leaves, with the margin the old ones had; keep the laden step's limit above the
-  towing item's (c) until that lands; the constants' comment (`measure_semi_launch.gd:75-79`)
-  names § One-tick caps' `taken` paragraph, which A3 removes; `test_measure_*` and
-  `docs/vehicles.md` § One-tick caps follow. [medium, auto, Sonnet]
+A7, the standing rig's rest gates, done 2026-11-16 (a16a944): `sessions/2026-11-16-rest-gates.md`.
+`REST_FLIPS_S` 3 /s, `REST_STEP_KG` 1 kg (held above the towing item's (c); tighten to about 0.1 kg
+when (c) lands).
+
 - **A8** (gather for A9; ready; holds only `realism_gaps.md` phase 4's first bullet) Reproduce
   `race` and `race-future` leaving the strip (`measure_vehicles -- race,race-future 60`, the
   top-speed pass; `--fixed-fps 60` and without, and say whether both leave). With an uncommitted
@@ -107,7 +103,7 @@ record, and it changes only with the user's OK. The pause is over when both plan
   `test_a_coupled_rig_standing_still_stays_mirror_symmetric`'s peak rate per kind; at 0.5 log the
   relative yaw rate per tick after a yaw kick on a standing `semi` + `box`, and on a slow
   full-lock turn how often the cap binds under the declared `friction_nm`.
-  (c) The laden `semi`'s `axle_load` steps 0.6 to 0.95 kg a tick standing in D with no speed sign
+  (c) (when it lands, tighten `REST_STEP_KG`) The laden `semi`'s `axle_load` steps 0.6 to 0.95 kg a tick standing in D with no speed sign
   change (`measure_vehicles -- semi 20 rest`, "springs: rear axle"), with or without the wheel's
   ring: not the wheel's. Log per tick what alternates on the tractor unit's rear axle with the
   box coupled and not bobtail (the coupling's force on the kingpin, the yaw cap of (b), the rear
