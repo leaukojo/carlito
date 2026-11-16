@@ -35,41 +35,9 @@ The rolling moment (A2, A3) holds `handbrake_fade.md`; A2 to A7 hold `realism_ga
 gather) and the hand-back's diagnosis are done: `sessions/2026-11-16-gather-rolling-moment.md`,
 `sessions/2026-11-16-rolling-moment-diagnosis.md`; A2's gather and diagnosis:
 `sessions/2026-11-16-standing-alternation.md`, `sessions/2026-11-16-contact-reading-steps.md`;
-A2's fix, done 2026-11-16: `sessions/2026-11-16-contact-fix.md`.
+A2's fix, done 2026-11-16: `sessions/2026-11-16-contact-fix.md`; A3, the rolling moment landed as
+a stage before the TC hold, done 2026-11-16: `sessions/2026-11-16-rolling-moment-stage.md`.
 
-- **A3** (approved, user 2026-11-15: variant A, the ground's share a moment too; handed back
-  2026-11-15; after A2; the creep lands as measured, user 2026-11-16) The rolling resistance
-  is a moment on the wheel, a stage of the settle law before the TC hold. Why, what goes and what
-  moves: `sessions/2026-11-15-wheel-leftovers.md` finding 1 (read first). The change as built, its
-  tests and its figures: `sessions/2026-11-15-rolling-moment.md` and `.patch` (`git apply`;
-  re-read `wheel.gd` if it fails). Do: the patch, then
-  `sessions/2026-11-16-rolling-moment-diagnosis.md` § Brief (the stage, `Differential`'s kinks,
-  `roll_share` gone, the three tests that fail on the patch); A2's fix is already in the tree
-  (the patch over it: `git apply -3`), and its last stop condition is checked here (the bobtail's
-  `rest reading:` and the cross cell's FL on the patch). The moment is never part of
-  `hold_torque`. Runs, HEAD
-  then after, `--fixed-fps 60`: `test_wheel_spin`, the suite; `doc=park`; `all creep`; `sedan
-  rollback [nohold]`, `semi rollback [nohold]`; `sedan 45 brake`; `measure_semi_launch` `steady
-  strict` bobtail and laden; `measure_vehicles -- semi 20 rest` and `tractor-kenney 20 rest`;
-  `wheel_slip` on FIELD at no draft on `tractor-kenney` (the session file's probe); `all 45 track
-  strict`; then the `doc=` tables. Measured on the patch: `sedan` 100 % stop 40.7 -> 41.1 m, FIELD
-  `wheel_slip` 2.9 -> 1.0 %. Expected after the stage, and no stop: laden `semi` 25 % `nohold` back
-  at HEAD's 887 mm (1578 on the patch as built), the same cell with the hold never forward (it
-  sits 18 N under its limit at HEAD), the creep table's held grade down 0.4 to 1.3 points
-  (`sessions/2026-11-16-rolling-moment-diagnosis.md` § 2: the table and `docs/drivetrain.md` then
-  say the figure is a slide speed against a 0.25 m gate, not a static hold). Stop and hand
-  back, the change undone, if a standing body's `rest reading:` rises over HEAD's, any held
-  wheel's `suspension_force` alternates over 2 N a tick in `doc=park`'s `semi` 10 % cross cell
-  after its first 15 s (HEAD: under 1 N), a
-  `doc=park` held cell moves over 1 mm along (or across with the cell run alone in both trees:
-  the `semi`'s across figure moves about 1 mm with what ran before it), an undriven wheel reads
-  `omega == 0` on a rolling body, or cruise and top speed move by more than a digit. The plan
-  shows the user the measured moves (stops, roll-backs, creep, `wheel_slip` on FIELD) before the
-  commit; "Please verify" gains: full stops about 1 % longer, a tractor's `wheel_slip` in a field
-  at no draft near 1 %, a laden `semi` crawling up a steep grade stops sooner when the pedal is
-  lifted, a `sedan` in D on a 6 to 7 % grade rolls back about 30 cm in 10 s where it was under
-  20. The `COMPROMISE` count stays (one goes, the soil's share comes).
-  [high, plan, Opus]
 - **A4** (approved, user 2026-11-14: raw; ready, it touches no line of the kept patch)
   `accLong` / `accLat` / `acc_vert` leave the sim unfiltered: `BaseVehicle.ACCEL_SMOOTH` goes,
   `TowedBody._sense_lateral` takes `raw` too, the contract's `acc_vert` `desc` and the guide
@@ -92,7 +60,7 @@ A2's fix, done 2026-11-16: `sessions/2026-11-16-contact-fix.md`.
   file; `check_docs`; the `COMPROMISE` count drops by 1. [low, auto, Sonnet]
 - **A7** (after A3) The standing rig's rest gates. `measure_semi_launch`'s `rest reading:` judges
   sign changes against 20 /s (`REST_FLIPS_S`) and the axle step against 2 kg (`REST_STEP_KG`);
-  since the wheel fix a bobtail reads 0.7 /s and 0.11 kg, a laden rig 0.0 /s and 0.95 kg. What
+  after A2 and A3 a bobtail reads 0.3 /s and 0.02 kg, a laden rig 0.0 /s and 0.01 kg. What
   each limit was sized on and its margin: `sessions/2026-11-13-f1-rest-guard.md`. Size new ones on
   the figures A3 leaves, with the margin the old ones had; keep the laden step's limit above the
   towing item's (c) until that lands; the constants' comment (`measure_semi_launch.gd:75-79`)
@@ -229,10 +197,16 @@ record, and it changes only with the user's OK. The pause is over when both plan
 
 ## Please verify (user, by driving)
 
-Nothing open: the user verified every entry on 2026-11-16 (the wall scrapes, the `semi`'s step,
-the FULL bars, the standing `semi`, the wheel fix, the crates, the pad's stick, RoadPath's
-buttons, the semis' start gear). Known and queued, not a verify item: a laden `semi`'s AXLE
-number still moves by 1 kg (3 at most) on some ticks (stage B, the towing item's (c)).
+The rolling moment (A3, 2026-11-16):
+- A full stop from 100 km/h is about 1 % longer (`sedan` 40.6 -> 41.0 m).
+- A tractor cruising in a field with no implement reads `wheel_slip` near 1 % (was near 3 %).
+- A laden `semi` crawling up a steep grade stops sooner when the pedal is lifted; on 25 % with
+  the hold it pulls away later (9.5 s, was 4.3).
+- A `sedan` in D with no pedal slides back on a 6 to 7 % grade (it held about 7 % before; the
+  creep table now reads 5.7 %).
+
+Known and queued, not a verify item: a laden `semi`'s AXLE number still moves by 1 kg (3 at most)
+on some ticks (stage B, the towing item's (c)).
 
 ## Unit map
 
