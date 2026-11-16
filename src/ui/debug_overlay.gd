@@ -19,8 +19,18 @@ func set_level(level: Node) -> void:
 	_level = level
 
 
+## Whether the overlay opens shown on the page at `page_path` (`window.location.pathname`): only
+## on the dev channel. Stable serves dev's very bytes (docs/deploying.md), so only the URL tells
+## the two apart.
+static func shown_by_default(page_path: String) -> bool:
+	return "/dev/" in page_path
+
+
 func _ready() -> void:
-	visible = false  # the full readout is a dev tool: F3 asks for it
+	# The full readout is a dev tool: F3 asks for it, except on the dev site.
+	var path: Variant = JavaScriptBridge.eval("window.location.pathname", true) \
+			if OS.has_feature("web") else ""
+	visible = typeof(path) == TYPE_STRING and shown_by_default(path)
 	set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -30,6 +40,8 @@ func _ready() -> void:
 	_apply_metrics()
 	# Keep updating (to toggle) even if the tree is paused.
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if visible:
+		_refresh()
 
 
 ## Persistent overlay, so it re-reads its footprint when UiScale rebuilds the theme.

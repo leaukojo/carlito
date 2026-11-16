@@ -10,7 +10,7 @@ Two channels, one repo, no manual uploads.
 | **stable** | <https://leaukojo.github.io/carlito/> → `/carlito/stable/` | only on the manual promote workflow |
 
 `dev` is the default branch. `main` records what is currently stable; never commit to it
-directly — the promote workflow fast-forwards it.
+directly — the promote workflow fast-forwards it. Dev opens with F3 shown (`DebugOverlay`).
 
 Both channels live on `gh-pages` as sibling directories under a redirect-only root page:
 

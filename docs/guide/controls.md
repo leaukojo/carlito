@@ -100,11 +100,11 @@ horn sounds on **H** or sloppyCAN's `horn`.
 | **C** | Camera view |
 | **L**, **H**, **N** | Lights; horn; day and night |
 | **F2** | Hide or show the dashboard |
-| **F3** | Show or hide the debug overlay (hidden at the start) |
+| **F3** | Show or hide the debug overlay (hidden at the start, except on the dev site) |
 | **F4** | On-screen touch controls |
 | **4**, **5** | Level select; challenges |
 | **Esc** | Pause menu |
-<!-- project.godot [input]: accel W / Up, brake_reverse S / Down, steer A D / Left Right, handbrake Space, parking_brake Shift, shift_down Comma, shift_up Period, respawn Backspace, garage G, next_vehicle V, next_attachment E, camera_view C, headlights L, horn H, day_night N, toggle_dashboard F2, debug_overlay F3, toggle_touch F4, level_select 4, challenge_select 5, to_menu Escape; boot.gd _toggle_dashboard flips Dashboard.set_hidden; debug_overlay.gd _ready visible = false, the F3 action toggles it -->
+<!-- project.godot [input]: accel W / Up, brake_reverse S / Down, steer A D / Left Right, handbrake Space, parking_brake Shift, shift_down Comma, shift_up Period, respawn Backspace, garage G, next_vehicle V, next_attachment E, camera_view C, headlights L, horn H, day_night N, toggle_dashboard F2, debug_overlay F3, toggle_touch F4, level_select 4, challenge_select 5, to_menu Escape; boot.gd _toggle_dashboard flips Dashboard.set_hidden; debug_overlay.gd _ready visible = shown_by_default (a "/dev/" page path), the F3 action toggles it -->
 
 COMPACT shows the warning lamps, the speedometer and the rev counter. FULL adds the bars (fuel,
 coolant, brake temperature, a truck's air and the rest) and a line of readings (heading, odometer,
