@@ -47,20 +47,13 @@ stays (`sedan` 0.023 g apart: a real yaw swing, not a tick alternation) and carr
 A6, `brake_settled_spin` relabelled a design choice, done 2026-11-16 (3c9c2fb):
 `sessions/2026-11-16-brake-settled-spin.md`.
 
+A8, the gather for A9, done 2026-11-16: `sessions/2026-11-16-race-strip-gather.md` (both leave, with
+and without `--fixed-fps 60`; the speed across grows smoothly from about 1e-5 m/s, no step).
 A7, the standing rig's rest gates, done 2026-11-16 (a16a944): `sessions/2026-11-16-rest-gates.md`.
 `REST_FLIPS_S` 3 /s, `REST_STEP_KG` 1 kg (held above the towing item's (c); tighten to about 0.1 kg
 when (c) lands).
 
-- **A8** (gather for A9; ready; holds only `realism_gaps.md` phase 4's first bullet) Reproduce
-  `race` and `race-future` leaving the strip (`measure_vehicles -- race,race-future 60`, the
-  top-speed pass; `--fixed-fps 60` and without, and say whether both leave). With an uncommitted
-  probe in the tool, reverted, log per tick from 240 km/h until the body leaves: speed, heading,
-  yaw rate, the centre of mass's speed across, each wheel's `force_lat`, side slip and
-  `suspension_force`, the aero side force and the downforce; and once: the yaw inertia off the
-  solver, `aero_centre`, `downforce_front`, `rear_lat_grip`, the wheelbase and the centre of mass.
-  Name the first tick the speed across passes 1 mm/s and what moved on it. A session file with
-  the tables; no cause guessed, no tune. [medium, auto, Sonnet]
-- **A9** (needs A8; holds only phase 4's first bullet) `race` and `race-future` leave the 40 m strip sideways near
+- **A9** (A8 done: `sessions/2026-11-16-race-strip-gather.md`; holds only phase 4's first bullet) `race` and `race-future` leave the 40 m strip sideways near
   280-290 km/h with zero steer (`doc=top` prints `left the strip`). From the gathered trace and
   the spec's figures, derive the yaw mode at that speed (each axle's cornering stiffness at its
   load with the downforce on, the aero centre, the yaw inertia), what seeds it and what makes it
