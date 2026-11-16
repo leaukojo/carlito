@@ -42,11 +42,9 @@ A4, the three accelerations raw, done 2026-11-16 (b76f263): `sessions/2026-11-16
 A4b, the trailers' lift tables on the raw sensor, done 2026-11-16 (65cfd41):
 `sessions/2026-11-16-trailer-lift-tables.md`.
 
-- **A5** (ready) Cover sweep (3),
-  `measure_vehicles.CORNER_SMOOTH_S` (`:64`; `:2475`, `:2493`, `:2502`): a 0.25 s lag before the
-  cornering peak is taken, no reason given, and `acc_lat` smoothed a second time. Print raw
-  beside smoothed on four bodies; within 0.02 g the lag goes and `doc=cornering` is re-run. The
-  proving run: `sessions/2026-11-14-cover-sweep.md` § Proving runs (3). [high, auto, Sonnet]
+A5, `CORNER_SMOOTH_S`, done 2026-11-16 (1b4c144): `sessions/2026-11-16-corner-smooth.md`. The lag
+stays (`sedan` 0.023 g apart: a real yaw swing, not a tick alternation) and carries its reason now.
+
 - **A6** (after A3: `wheel.gd` is the patch's file) `brake_settled_spin`'s `COMPROMISE` is a
   design choice (`wheel.gd:141-146`; `sessions/2026-11-15-wheel-leftovers.md` finding 2). Relabel,
   no code: the settled spin is the angle the wheel turns in the tick, so the brake's heat on it is
@@ -133,9 +131,16 @@ record, and it changes only with the user's OK. The pause is over when both plan
   0.635 g for 0.652. The forms to write, the tests that change, the runs and the stop condition:
   the same file, § Finding 1's brief. Prediction only (two rows of `doc=cornering` may move): no
   proposal. [high, auto, Opus]
+- `tractor-kenney`'s raw `acc_lat` reads 10.5 g on one tick as the body tips on `corner` (t=6.700,
+  8.5 g the tick before, 3.2 m/s, slip 0.45 inside the gate); the pass's "path 1.77 g at most" is
+  that spike under `CORNER_SMOOTH_S` (`sessions/2026-11-16-corner-smooth.md`). Trace what
+  produces it (a contact impact as the tractor tips, or a velocity step in
+  `base_vehicle.gd:280`'s `accel`), say whether it is real; a brief, no filter on the signal or
+  the display. A fix that changes the signal ends in a proposal. [high, auto, Opus]
 - The cover sweep's other findings, one session each. What each cover is, and its proving run
   (take the cover out, measure, undo): `sessions/2026-11-14-cover-sweep.md` § Covers and
   § Proving runs, numbered as here. Never a new filter, on a reading or a signal.
+  - (3) done: A5, above.
   - (1) `VehicleMath.RESIST_EPS` (`vehicle_math.gd:138`, `:200`): "stops jitter" with nothing
     named; probably dead. [high, auto, Opus]
   - (2) `measure_vehicles._sample_gates`' two-tick means (`:1812-1833`): their source went with
