@@ -1586,7 +1586,8 @@ func test_a_cylinder_rests_on_its_tread_or_its_end() -> void:
 func test_the_cylinder_support_is_where_the_engine_touches_across_the_axle() -> void:
 	# The wheel's own query cylinder rolled on a flat: the rest test finds the flat 0.2 mm inside
 	# `cylinder_support` and nothing 0.2 mm outside it, at every lean, the rim's rounded corner
-	# included (the sharp rim's support is up to 3.3 mm further out on this wheel).
+	# included (the sharp rim's support is up to 3.3 mm further out on this wheel). On this 4 m slab
+	# only: a box past the engine's switch to sharp shapes answers on the sharp rim.
 	var root: Node3D = auto_free(Node3D.new())
 	add_child(root)
 	_box(root, Vector3(4.0, 1.0, 4.0), Vector3(0.0, -0.5, 0.0))
@@ -1766,6 +1767,9 @@ func _stepped_across_a_stop(slab: Vector3, on: Vector3, grade: float, lean: floa
 	var seen := {}
 	var last := NAN
 	var last_touch := NAN
+	# One tick in place first: the query's frame takes the slab's up from the tick after a touch.
+	w.anchor = tilt.inverse() * (slope.y * sharp + tilt.y * (0.32 * 166.0 / 256.0 + step * 120))
+	w.tick(body, gd, space, 0.0, 0.0, TICK, terrains)
 	for i in 240:
 		w.anchor = tilt.inverse() * (slope.y * sharp
 				+ tilt.y * (0.32 * 166.0 / 256.0 + step * (120 - i)))
@@ -1799,6 +1803,36 @@ func test_a_leaned_wheel_reads_no_step_at_a_sweep_stop() -> void:
 	var small: Array = await _stepped_across_a_stop(Vector3(8.0, 1.0, 8.0), Vector3(-0.3, 0.0, 0.2),
 			0.0, 0.00621, 0.0, 2e-6)
 	assert_float(small[0]).is_less(1e-6)
+
+
+func test_the_query_turns_about_its_axle_onto_the_frame_up() -> void:
+	var wb := Basis(Vector3.RIGHT, -0.2) * Basis(Vector3.BACK, 0.05) * Basis(Vector3.UP, 0.3)
+	var b := WheelScript.query_basis(wb, Vector3.UP)
+	assert_vector(b.y).is_equal_approx(-wb.x, Vector3.ONE * 1e-6)
+	assert_float(b.determinant()).is_equal_approx(1.0, 1e-5)
+	assert_float(b.x.dot(b.z)).is_equal_approx(0.0, 1e-6)
+	# x is the up's part across the axle: z, the third axis, has none of it.
+	assert_float(b.z.dot(Vector3.UP)).is_equal_approx(0.0, 1e-6)
+	# The wheel on its side keeps its own basis.
+	var lying := Basis(Vector3.BACK, PI / 2.0)
+	assert_bool(WheelScript.query_basis(lying, Vector3.UP)
+			.is_equal_approx(lying * Basis(Vector3.BACK, PI / 2.0))).is_true()
+
+
+func test_a_raked_wheel_reads_a_long_box_off_no_grid() -> void:
+	# The tools' 6 km strip at its centre, the body raked as a parked semi's. A query posed with the
+	# body's pitch puts the strip's far corners 27.5 m up its frame, where float32 holds 2^-19 m,
+	# and the reading comes back on that grid (26 to 32 readings in 240); posed level about the
+	# axle on the box's up, it follows the hub.
+	var strip: Array = await _stepped_across_a_stop(Vector3(40.0, 2.0, 6000.0),
+			Vector3(0.72, 0.0, 0.0), 0.0, 0.0, deg_to_rad(-0.525532), 2.4e-7)
+	assert_int(strip[1]).override_failure_message("%d distinct readings" % strip[1]) \
+			.is_greater_equal(200)
+	# The ramp pitched 10 %, the body leaned and raked on it: the hub's own float32 floor, 6 m up.
+	var ramp: Array = await _stepped_across_a_stop(Vector3(30.0, 2.0, 400.0),
+			Vector3(0.0, 0.0, -60.0), atan(0.1), 0.00621, deg_to_rad(-0.525532), 2.4e-7)
+	assert_float(ramp[0]).override_failure_message("ramp: %.3f um, %d distinct" % [ramp[0] * 1e6,
+			ramp[1]]).is_less(1e-6)
 
 
 # --- carries: a contact across the wheel's travel is not the spring's -----------------

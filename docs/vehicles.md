@@ -110,11 +110,11 @@ call a stop touching where the rest test still reads it clear, or the reverse: J
 touching query from the shapes rounded by their convex radius, or, once a box's far corner lies
 about 2900 times the two radii from the wheel (`GJKClosestPoint.h`, the
 `FLT_EPSILON * GetMaxYLengthSq()` exit), from the sharp ones, and near that distance from either,
-call by call. For a 0.36 x 0.2 tyre that is 139 m on a slab and 46 / 37 m on a 20 / 12 cm kerb; the
-two answers differ by the sharp shape's reach, millimetres at most (a rim on a face under a leaned
-wheel, a tread on a box's edge). Past it: `measure_vehicles`' 6 km strip and 80 m kerb, and
-Flatland's `InfiniteGround`; heightmaps and welded meshes are under it. Float32 of the rest pose
-adds a fraction of a millimetre far from the world's origin.
+call by call. For a 0.36 x 0.2 tyre that is 139 m on a slab and 46 / 37 m on a 20 / 12 cm kerb: so
+`measure_vehicles`' 6 km strip and 80 m kerb and Flatland's `InfiniteGround`, not heightmaps or
+welded meshes. A sharp sweep stops up to the rim's reach short of the rounded touch;
+`settled_drop` reads past it. Posed level about its axle (`query_basis`), the query reads a long
+box off a coarse float32 grid; far out, the hub's float32 still grids it.
 A stop the rest test reads clear is a free one, so the bracket moves a step on and the contact is read there.
 Settling on the stop before it puts a whole step into one tick's compression: on a semi's steer
 axle at a steady pull, a one-tick swing of about ten points of its parked load, up and back

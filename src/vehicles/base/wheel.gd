@@ -289,6 +289,10 @@ var _visual: Node3D
 var _query: PhysicsShapeQueryParameters3D = null
 var _query_body := RID()  ## body `_query.exclude` was built for
 var _convex_radius := 0.0  ## m Jolt rounds `_query`'s rim by (`jolt_convex_radius`)
+## The up `_query` is posed about its axle on (`query_basis`): the collider's of `_frame_collider`,
+## the last contact's, read when it changes; world up with none or a freed one.
+var _frame_up := Vector3.UP
+var _frame_collider := 0
 ## `_contact_query`'s result: the hub's drop below the anchor (m) and the contact normal.
 var _contact_drop := 0.0
 var _contact_normal := Vector3.UP
@@ -799,7 +803,8 @@ static func patch_offset(normal: Vector3, up: Vector3, axle: Vector3, radius: fl
 ## (`CylinderShape::GetSupportFunction`, `ExcludeConvexRadius`), so a contact across the axle
 ## touches up to `0.414 convex_radius` nearer the centre than the sharp rim; the manifold's points
 ## lie on the sharp rim all the same (`first_carried` reads those, with 0). On a box whose far corner
-## is past the engine's switch to sharp shapes it touches on the sharp rim (`docs/vehicles.md`).
+## is past the engine's switch to sharp shapes it touches on the sharp rim (`docs/vehicles.md`;
+## `settled_drop`'s `reach`).
 static func cylinder_support(normal: Vector3, axle: Vector3, radius: float, half_len: float,
 		convex_radius := 0.0) -> float:
 	var along := absf(normal.dot(axle))
@@ -866,7 +871,7 @@ static func first_carried(pairs: Array[Vector3], margin: float, up: Vector3, hub
 
 
 ## The contact: a cylinder of the wheel's radius and `2 half_width` across, its axis on the steered
-## axle (`wheel_basis`'s x), swept from full bump (the hub at the anchor) down the travel; the
+## axle (`query_basis`), swept from full bump (the hub at the anchor) down the travel; the
 ## normal is the rest contact's where the sweep stops, the face's on a face and radial at an edge.
 ## A start inside something reads full bump (`start_overlaps`). Sets `_contact_drop`, `_contact_normal`
 ## and `contact_collider`; false when nothing the spring can carry is under the tyre (`carries`).
@@ -887,6 +892,10 @@ func _contact_query(space: PhysicsDirectSpaceState3D, body: RigidBody3D, ray_fro
 	var found := _contact_pass(space, ray_from, up, wheel_basis, rest_length)
 	if _swept_past:
 		found = _carried_sweep(space, ray_from, up, rest_length)
+	if contact_collider != _frame_collider:
+		_frame_collider = contact_collider
+		var collider := instance_from_id(contact_collider) as Node3D
+		_frame_up = collider.global_basis.y.normalized() if collider != null else Vector3.UP
 	return found
 
 
@@ -929,13 +938,28 @@ func _carried_sweep(space: PhysicsDirectSpaceState3D, ray_from: Vector3, up: Vec
 	return found
 
 
+## The contact cylinder's basis: its axis (y) on minus the axle (`wheel_basis`'s x), turned about it
+## so x is `frame_up`'s part across the axle. The cylinder is a solid of revolution, so the turn
+## moves no contact; it keeps the query's frame level with the ground's: in a frame tilted `t` off a
+## box's axes, a corner `L` along its face sits `L sin t` up, and the contact's height comes back on
+## that coordinate's float32 grid (2^-19 m on a 6 km strip under a semi's rake). The wheel's own
+## basis when the axle is along `frame_up` (the wheel on its side).
+static func query_basis(wheel_basis: Basis, frame_up: Vector3) -> Basis:
+	var axle := wheel_basis.x
+	var across := frame_up - axle * axle.dot(frame_up)
+	if across.length_squared() < 1e-6:
+		return wheel_basis * Basis(Vector3.BACK, PI / 2.0)
+	across = across.normalized()
+	return Basis(across, -axle, across.cross(-axle))
+
+
 ## The engine's sweep and the rest test where it stops. A contact the spring cannot carry is not
 ## the tread's: it is no contact, and sets `_swept_past`; so does a sweep that hit past a body the
 ## tyre starts inside.
 func _contact_pass(space: PhysicsDirectSpaceState3D, ray_from: Vector3, up: Vector3,
 		wheel_basis: Basis, rest_length: float) -> bool:
 	var motion := -up * rest_length
-	_query.transform = Transform3D(wheel_basis * Basis(Vector3.BACK, PI / 2.0), ray_from)
+	_query.transform = Transform3D(query_basis(wheel_basis, _frame_up), ray_from)
 	_query.motion = motion
 	var fractions := space.cast_motion(_query)
 	_query.motion = Vector3.ZERO
