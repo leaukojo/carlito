@@ -74,11 +74,13 @@ const STEADY_SETTLE_S := 10.0
 const REST_S := 3.0
 ## `steady`'s rest gate: over the rest reading the rig's speed changes sign at most REST_FLIPS_S
 ## times a second, and `axle_load` and `trailer_axle_load` each step at most REST_STEP_KG a tick on
-## average. The fault it catches reads 60 /s and 8 kg or more: the rolling drag and the tyre force
-## each under its own one-tick cap (docs/vehicles.md § One-tick caps). Neither limit is 0: a free
-## wheel and the body still swap the contact's speed tick to tick, which reads up to 7 /s and 1 kg.
-const REST_FLIPS_S := 20.0
-const REST_STEP_KG := 2.0
+## average. The fault it catches reads 60 /s and 8 kg or more: a second force at the contact (the
+## rolling drag) that no stick test sees (docs/vehicles.md § One-tick caps). Neither limit is 0: a
+## free wheel and the body still swap the contact's speed tick to tick, which reads up to 1 /s and
+## 0.03 kg. REST_FLIPS_S is 3 times that reading; REST_STEP_KG stays above the laden `semi`'s
+## whole-kg AXLE steps (up to 1 kg, the Queue's towing item (c)) until that lands.
+const REST_FLIPS_S := 3.0
+const REST_STEP_KG := 1.0
 ## First-order lags the steady report tries on each trace (a sender filter's candidates), s.
 const STEADY_TAUS: Array[float] = [0.1, 0.25, 0.5, 1.0]
 
