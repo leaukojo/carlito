@@ -61,9 +61,8 @@ var accel_fwd := 0.0
 
 var _last_fwd_speed := 0.0
 ## Lateral acceleration on the level axis left of this body's nose (m/s^2, + = left): its EBS's
-## sensor, gravity-free and bank-compensated as `WheelDrive.esc_step` reads the unit's, smoothed as
-## telemetry `acc_lat` is (`BaseVehicle.ACCEL_SMOOTH`). Roll-over control and its lift table
-## (`measure_semi_launch`) read it.
+## sensor, gravity-free and bank-compensated as `WheelDrive.esc_step` reads the unit's. Roll-over
+## control and its lift table (`measure_semi_launch`) read it.
 var accel_lat := 0.0
 ## Last tick's velocity, NAN until a tick has one: a first difference off zero is a spike.
 var _last_velocity := Vector3(NAN, NAN, NAN)
@@ -205,7 +204,7 @@ func _sense_lateral(delta: float) -> void:
 	if is_finite(_last_velocity.x):
 		var raw := VehicleMath.level_lateral_accel(velocity, _last_velocity, global_basis,
 				get_gravity(), delta)
-		accel_lat = lerpf(accel_lat, raw, 1.0 - exp(-BaseVehicle.ACCEL_SMOOTH * delta))
+		accel_lat = raw
 	_last_velocity = velocity
 
 

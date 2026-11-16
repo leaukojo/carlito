@@ -31,7 +31,7 @@ func _real_contract() -> ContractScript.ContractData:
 func test_real_contract_is_valid() -> void:
 	var data := _real_contract()
 	assert_array(data.errors).is_empty()
-	assert_int(data.version).is_equal(65)
+	assert_int(data.version).is_equal(66)
 
 
 ## The content hash is over the file's text with line endings normalized, so a CRLF checkout

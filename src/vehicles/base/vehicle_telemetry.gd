@@ -77,9 +77,9 @@ var steer := 0.0        ## -1..1 as applied (contract 'steer')
 var yaw := 0.0          ## yaw rate rad/s about the body up axis (contract 'yaw')
 var roll_rate := 0.0    ## roll rate rad/s about the body forward axis, + = right side down (contract 'roll_rate')
 var pitch_rate := 0.0   ## pitch rate rad/s about the body right axis, + = nose up (contract 'pitch_rate')
-var acc_long := 0.0     ## longitudinal accel m/s^2, smoothed (contract 'accLong')
-var acc_lat := 0.0      ## lateral accel m/s^2, smoothed (contract 'accLat')
-var acc_vert := 0.0     ## vertical accel m/s^2 along body up, smoothed (contract 'acc_vert')
+var acc_long := 0.0     ## longitudinal accel m/s^2 (contract 'accLong')
+var acc_lat := 0.0      ## lateral accel m/s^2 (contract 'accLat')
+var acc_vert := 0.0     ## vertical accel m/s^2 along body up (contract 'acc_vert')
 ## Attitude/height.
 var pitch := 0.0        ## deg, + = nose/bow up (contract 'pitch')
 var roll := 0.0         ## deg, + = starboard/right side down (contract 'roll')
@@ -160,7 +160,7 @@ static func odo_step(prev_km: float, speed_ms: float, delta: float) -> float:
 
 ## Body-frame acceleration (long, lat, vert) m/s^2 from the velocity change over the tick,
 ## projected onto forward/right/up. Kinematic, with no gravity term, so a body at rest and one in
-## free fall both read zero. The caller smooths.
+## free fall both read zero.
 static func body_accel(v_now: Vector3, v_prev: Vector3, delta: float,
 		forward: Vector3, right: Vector3, up: Vector3) -> Vector3:
 	if delta <= 0.0:

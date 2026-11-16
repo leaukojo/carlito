@@ -17,7 +17,6 @@ const FALL_RESPAWN_Y := -20.0
 const EMPTY_WHEELS: Array[RayWheel] = []
 
 ## Telemetry derivation tuning, the same for every vehicle (not feel knobs, so off VehicleSpec).
-const ACCEL_SMOOTH := 10.0      ## 1/s exp rate the reported long/lat accel tracks raw
 const COOLANT_RATE := 2.0       ## degC/s the coolant chases its steady-state target
 const IMPACT_THRESHOLD := 25.0  ## m/s^2 acceleration spike that counts as an impact
 const IMPACT_DECAY := 40.0      ## m/s^2 per s the held impact value bleeds off
@@ -277,10 +276,9 @@ func _update_telemetry(input: VehicleInput, delta: float) -> void:
 
 	var accel := VehicleTelemetry.body_accel(
 			linear_velocity, _prev_velocity, delta, forward, xform.basis.x, up)
-	var s := 1.0 - exp(-ACCEL_SMOOTH * delta)
-	telemetry.acc_long = lerpf(telemetry.acc_long, accel.x, s)
-	telemetry.acc_lat = lerpf(telemetry.acc_lat, accel.y, s)
-	telemetry.acc_vert = lerpf(telemetry.acc_vert, accel.z, s)
+	telemetry.acc_long = accel.x
+	telemetry.acc_lat = accel.y
+	telemetry.acc_vert = accel.z
 
 	telemetry.ground = true  # train/boat/drone overwrite ST_GROUND in their own _tick_extras
 	if drive != null:

@@ -105,7 +105,7 @@ No signal sends a force itself. These show what the forces do:
 | `payload_weight` | out | N | The weight hanging on the drone's hook. |
 | `draft_force` | out | % | The pull of an implement working in the soil. Tractor. |
 
-<!-- contract/carlito_contract.json: accLong, accLat (all seven, m/s^2), acc_vert (plane, drone), axle_load (tractor, truck, kg), payload_weight (drone, N), draft_force (tractor, %); base_vehicle.gd: acc_long and acc_lat are VehicleTelemetry.body_accel of the velocity change, smoothed -->
+<!-- contract/carlito_contract.json: accLong, accLat (all seven, m/s^2), acc_vert (plane, drone), axle_load (tractor, truck, kg), payload_weight (drone, N), draft_force (tractor, %); base_vehicle.gd: acc_long and acc_lat are VehicleTelemetry.body_accel of the velocity change -->
 
 ## Try it in the game
 

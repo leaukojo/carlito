@@ -63,8 +63,8 @@ The game measures how fast each vehicle's movement changes, the way an accelerom
 
 A real accelerometer also feels gravity, so it reads 1 g upwards even standing still. The game's
 does not: it reads only the change in motion, so a parked car reads zero, and so does a falling
-one. The readings are smoothed a little, so a single bump does not swamp them.
-<!-- VehicleTelemetry.body_accel: "Kinematic, with no gravity term, so a body at rest and one in free fall both read zero"; BaseVehicle ACCEL_SMOOTH 10 /s -->
+one.
+<!-- VehicleTelemetry.body_accel: "Kinematic, with no gravity term, so a body at rest and one in free fall both read zero" -->
 
 The yaw rate is how fast the vehicle turns, seen from above, in radians per second. The plane and
 the drone also publish their roll and pitch rates.
