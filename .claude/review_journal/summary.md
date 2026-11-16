@@ -38,14 +38,10 @@ gather) and the hand-back's diagnosis are done: `sessions/2026-11-16-gather-roll
 A2's fix, done 2026-11-16: `sessions/2026-11-16-contact-fix.md`; A3, the rolling moment landed as
 a stage before the TC hold, done 2026-11-16: `sessions/2026-11-16-rolling-moment-stage.md`.
 
-- **A4** (approved, user 2026-11-14: raw; ready, it touches no line of the kept patch)
-  `accLong` / `accLat` / `acc_vert` leave the sim unfiltered: `BaseVehicle.ACCEL_SMOOTH` goes,
-  `TowedBody._sense_lateral` takes `raw` too, the contract's `acc_vert` `desc` and the guide
-  follow. Evidence, the edits by site, the runs, the stop condition (the trailer's roll-over
-  control chatters: no filter is added back) and the "Please verify" line:
-  `sessions/2026-11-14-accel-smooth-proof.md` § The brief. [medium, plan, Opus]
-- **A5** (after A4, which re-runs `doc=cornering`; after A3 too, or re-apply its patch with
-  `git apply -3`: both edit `measure_vehicles.gd`) Cover sweep (3),
+A4, the three accelerations raw, done 2026-11-16 (b76f263): `sessions/2026-11-16-accel-raw.md`.
+Its open proposal (the trailers' lift tables): `proposals.md`.
+
+- **A5** (ready) Cover sweep (3),
   `measure_vehicles.CORNER_SMOOTH_S` (`:64`; `:2475`, `:2493`, `:2502`): a 0.25 s lag before the
   cornering peak is taken, no reason given, and `acc_lat` smoothed a second time. Print raw
   beside smoothed on four bodies; within 0.02 g the lag goes and `doc=cornering` is re-run. The
@@ -143,8 +139,7 @@ record, and it changes only with the user's OK. The pause is over when both plan
     named; probably dead. [high, auto, Opus]
   - (2) `measure_vehicles._sample_gates`' two-tick means (`:1812-1833`): their source went with
     the wheel fix. [medium, auto, Sonnet]
-  - (4) `MeasureRig.ESC_CHATTER_EPS` (`tools/measure_rig.gd:272`; after A4, which changes the
-    `acc_lat` input): trace which ESC input alternates on `van`'s held touch; a brief, no fix.
+  - (4) `MeasureRig.ESC_CHATTER_EPS` (`tools/measure_rig.gd:272`): trace which ESC input alternates on `van`'s held touch; a brief, no fix.
     [high, auto, Opus]
   - (5) `TractorTelemetry.SLIP_FLOOR_KMH` (`tractor_telemetry.gd:21`; after A3, which moves
     `wheel_slip`): a contract signal snapped to 0. Ends in a proposal. [high, auto, Opus]
@@ -202,6 +197,11 @@ The rolling moment (A3, 2026-11-16):
   the hold it pulls away later (9.5 s, was 4.3).
 - A `sedan` in D with no pedal slides back on a 6 to 7 % grade (it held about 7 % before; the
   creep table now reads 5.7 %).
+
+The raw accelerations (A4, 2026-11-16):
+- `accLat` and `accLong` on FULL show shift and kerb jolts at full size.
+- `car_corner_budget` ("Perfect turns"): a kerb or shift jolt near 4.0 m/s² can fail the run a
+  tick sooner. Is the limit still fair?
 
 Known and queued, not a verify item: a laden `semi`'s AXLE number still moves by 1 kg (3 at most)
 on some ticks (stage B, the towing item's (c)).
