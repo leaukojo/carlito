@@ -1619,6 +1619,11 @@ func test_the_settled_drop_backs_the_touching_stop_out_of_its_overlap() -> void:
 	# Never outside the bracket the sweep measured.
 	assert_float(WheelScript.settled_drop(0.2, 0.2012, -0.01, 1.0)).is_equal(0.2)
 	assert_float(WheelScript.settled_drop(0.2, 0.2012, 0.01, 1.0)).is_equal_approx(0.2012, 1e-7)
+	# But for the reach past the touching stop: a tyre the gap reads 0.1 mm clear of it sits there.
+	assert_float(WheelScript.settled_drop(0.2, 0.2012, 0.0001, 1.0, 0.0003)) \
+			.is_equal_approx(0.2013, 1e-7)
+	assert_float(WheelScript.settled_drop(0.2, 0.2012, 0.01, 1.0, 0.0003)) \
+			.is_equal_approx(0.2015, 1e-7)
 
 
 ## A static box on TERRAIN, `size` at `center`, under `root`.
@@ -1724,6 +1729,76 @@ func test_the_cast_reads_a_face_with_its_hub_on_a_sweep_stop() -> void:
 			var hub_y := (body.global_transform * w.anchor).y
 			worst = maxf(worst, absf(w.compression - (0.32 - (hub_y - 0.36) / up.y)))
 	assert_float(worst).is_less(1e-5)
+
+
+## A slab whose top face passes through the origin, pitched `grade` rad; a frozen body on it
+## leaned `lean` and pitched `rake` more, its wheel (a semi's) over the face's point `on` (slab
+## frame); the hub lowered `step` m at a time, 240 times, across the sweep's stop at 166/256 of the
+## travel. Returns [the worst move of the read drop less its hub's own (m), the distinct readings].
+## One slab in the world at a time: one left behind answers the next case's queries.
+func _stepped_across_a_stop(slab: Vector3, on: Vector3, grade: float, lean: float, rake: float,
+		step: float) -> Array:
+	var root := Node3D.new()
+	add_child(root)
+	var slope := Basis(Vector3.RIGHT, grade)
+	var ground := _box(root, slab, Vector3.ZERO)
+	ground.global_transform = Transform3D(slope, slope * Vector3(0.0, -slab.y * 0.5, 0.0))
+	var body := RigidBody3D.new()
+	body.freeze = true
+	body.collision_layer = 0
+	root.add_child(body)
+	var tilt := Basis(Vector3.RIGHT, grade + rake) * Basis(Vector3.BACK, lean)
+	body.global_transform = Transform3D(tilt, slope * on)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var gd: GroundDriveSpecScript = GroundDriveSpecScript.new()
+	gd.wheel_radius = 0.36
+	gd.wheel_inertia = 1.0
+	gd.tyre_half_width = 0.21
+	gd.rest_length = 0.32
+	var w := WheelScript.new(Vector3(0.0, 0.6, 0.0), false, false, null, 300.0)
+	w.apply_suspension(gd)
+	var terrains: Array[Node] = []
+	var space := root.get_world_3d().direct_space_state
+	# The drop where the sharp tyre touches the face: the rounded one's is a constant further.
+	var sharp := WheelScript.cylinder_support(slope.y, tilt.x, 0.36, 0.21)
+	var worst := 0.0
+	var seen := {}
+	var last := NAN
+	var last_touch := NAN
+	for i in 240:
+		w.anchor = tilt.inverse() * (slope.y * sharp
+				+ tilt.y * (0.32 * 166.0 / 256.0 + step * (120 - i)))
+		w.tick(body, gd, space, 0.0, 0.0, TICK, terrains)
+		var touch := ((body.global_transform * w.anchor).dot(slope.y) - sharp) / tilt.y.dot(slope.y)
+		var read := 0.32 - w.compression
+		if not is_nan(last):
+			worst = maxf(worst, absf((read - last) - (touch - last_touch)))
+		last = read
+		last_touch = touch
+		seen[snappedf(read, 1e-9)] = true
+	remove_child(root)
+	root.free()
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	return [worst, seen.size()]
+
+
+func test_a_leaned_wheel_reads_no_step_at_a_sweep_stop() -> void:
+	# `measure_grade`'s ramp, past the engine's switch to sharp shapes, the wheel 60 m along it:
+	# the sweep stops on the sharp rim and the gap reads the rounded one, 0.1 mm further at a
+	# parked semi's 6.21 mrad and more than a whole stop at 0.1 rad. The hub going down 2 um at a
+	# time, the read drop follows it through the stop: no 0.1 mm or 1.2 mm in one move.
+	var ramp := Vector3(30.0, 2.0, 400.0)
+	for lean: float in [0.00621, 0.035, 0.1]:
+		var r: Array = await _stepped_across_a_stop(ramp, Vector3(0.0, 0.0, -60.0), 0.0, lean,
+				0.0, 2e-6)
+		assert_float(r[0]).override_failure_message("lean %.5f: a %.1f um step" % [lean, r[0] * 1e6]) \
+				.is_less(1e-6)
+	# An 8 m slab, where the engine answers from the rounded shapes, reads the same way.
+	var small: Array = await _stepped_across_a_stop(Vector3(8.0, 1.0, 8.0), Vector3(-0.3, 0.0, 0.2),
+			0.0, 0.00621, 0.0, 2e-6)
+	assert_float(small[0]).is_less(1e-6)
 
 
 # --- carries: a contact across the wheel's travel is not the spring's -----------------

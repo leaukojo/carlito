@@ -819,9 +819,12 @@ static func jolt_convex_radius(cylinder: CylinderShape3D) -> float:
 ## and its first touching one `unsafe_drop`: the touching stop backed out by `gap` (m, the
 ## centre's height over the contact's support plane less the cylinder's support; < 0 overlapping)
 ## along `up`, whose part along the normal is `normal_up` (a carried contact's: `carries` keeps it
-## at cos(LYING_DEG) or more). Exact on a face, to first order over the step at an edge.
-static func settled_drop(safe_drop: float, unsafe_drop: float, gap: float, normal_up: float) -> float:
-	return clampf(unsafe_drop + gap / normal_up, safe_drop, unsafe_drop)
+## at cos(LYING_DEG) or more). Exact on a face, to first order over the step at an edge. `reach`
+## (m of drop): how far past its touching stop the tyre can still be clear, the sweep having
+## touched on the sharp cylinder where `gap` is the rounded one's (`_contact_pass`).
+static func settled_drop(safe_drop: float, unsafe_drop: float, gap: float, normal_up: float,
+		reach := 0.0) -> float:
+	return clampf(unsafe_drop + gap / normal_up, safe_drop, unsafe_drop + reach)
 
 
 ## Whether the spring can carry a contact of `normal`: one within LYING_DEG of the wheel's travel
@@ -975,10 +978,18 @@ func _contact_pass(space: PhysicsDirectSpaceState3D, ray_from: Vector3, up: Vect
 	_contact_normal = up
 	if not rest.is_empty():
 		_contact_normal = rest["normal"]
+		var support := cylinder_support(_contact_normal, wheel_basis.x, wheel_radius, half_width,
+				_convex_radius)
 		var gap := (_query.transform.origin - (rest["point"] as Vector3)).dot(_contact_normal) \
-				- cylinder_support(_contact_normal, wheel_basis.x, wheel_radius, half_width,
-						_convex_radius)
-		_contact_drop = settled_drop(safe_drop, unsafe_drop, gap, _contact_normal.dot(up))
+				- support
+		# On a face the rest test's point and normal are the same from either of the engine's
+		# shapes, so `gap` is the rounded tyre's; a sweep that touched on the sharp one stops up to
+		# the two supports' difference short of it. Clamped at the stop, the reading steps by that
+		# difference each time a leaned wheel sinks through one.
+		var normal_up := _contact_normal.dot(up)
+		var reach := (cylinder_support(_contact_normal, wheel_basis.x, wheel_radius, half_width)
+				- support) / normal_up
+		_contact_drop = settled_drop(safe_drop, unsafe_drop, gap, normal_up, reach)
 	return true
 
 
