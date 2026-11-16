@@ -2,7 +2,7 @@
 
 Protocol: `.claude/skills/review-continue/SKILL.md`. Launch with "continue reviewing".
 
-`COMPROMISE` mentions at c903d45: 34 in `src kit tools tests`, 22 in `docs` (count with
+`COMPROMISE` mentions at 3c9c2fb: 33 in `src kit tools tests`, 22 in `docs` (count with
 `grep -rI COMPROMISE <dirs> | wc -l`). Goal: only real ones keep the label.
 
 Past sessions: `sessions/`, each named by its date and item. A file compressed on 2026-11-16
@@ -44,15 +44,9 @@ A4b, the trailers' lift tables on the raw sensor, done 2026-11-16 (65cfd41):
 
 A5, `CORNER_SMOOTH_S`, done 2026-11-16 (1b4c144): `sessions/2026-11-16-corner-smooth.md`. The lag
 stays (`sedan` 0.023 g apart: a real yaw swing, not a tick alternation) and carries its reason now.
+A6, `brake_settled_spin` relabelled a design choice, done 2026-11-16 (3c9c2fb):
+`sessions/2026-11-16-brake-settled-spin.md`.
 
-- **A6** (after A3: `wheel.gd` is the patch's file) `brake_settled_spin`'s `COMPROMISE` is a
-  design choice (`wheel.gd:141-146`; `sessions/2026-11-15-wheel-leftovers.md` finding 2). Relabel,
-  no code: the settled spin is the angle the wheel turns in the tick, so the brake's heat on it is
-  the step's own work, and with the tyres' slip read on the same spin the ledger closes to second
-  order; the mean over the settle counts the spin the road lent the step (5 % of an ABS stop).
-  Keep, as its known edge: a wheel the brake stops off the ground inside one tick heats nothing.
-  Run `measure_grade -- sedan stops` once and quote the energy check's residual in the session
-  file; `check_docs`; the `COMPROMISE` count drops by 1. [low, auto, Sonnet]
 - **A7** (after A3) The standing rig's rest gates. `measure_semi_launch`'s `rest reading:` judges
   sign changes against 20 /s (`REST_FLIPS_S`) and the axle step against 2 kg (`REST_STEP_KG`);
   after A2 and A3 a bobtail reads 0.3 /s and 0.02 kg, a laden rig 0.0 /s and 0.01 kg. What
