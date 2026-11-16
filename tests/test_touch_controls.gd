@@ -125,3 +125,24 @@ func test_the_gear_pads_follow_the_manual_gearbox() -> void:
 	assert_bool(bool(out.get(TouchControls.KEY_SHIFT_DOWN, false))).is_false()
 	assert_bool(bool(t.poll().get(TouchControls.KEY_SHIFT_UP, false))).is_false()  # one edge
 	GameState.current_vehicle = saved
+
+
+## sloppyCAN taking the wheel hides the driving pads; a stale moment handing it back (a vehicle
+## change or level load stalls the frame past Bridge.FRESHNESS_MS) must not flash them up, and
+## F4 still brings them back.
+func test_the_bridge_taking_over_hides_the_pads_and_a_stale_moment_does_not_show_them() -> void:
+	var saved: bool = InputRouter._bridge_drives
+	var t := _touch()
+	assert_bool(t._driving.visible).is_true()
+	InputRouter._bridge_drives = true
+	t._gate_context()
+	assert_bool(t._driving.visible).is_false()
+	InputRouter._bridge_drives = false  # stale for a frame
+	t._gate_context()
+	assert_bool(t._driving.visible).is_false()
+	InputRouter._bridge_drives = true
+	t._gate_context()
+	assert_bool(t._driving.visible).is_false()
+	t._unhandled_input(_toggle_touch_event())
+	assert_bool(t._driving.visible).is_true()
+	InputRouter._bridge_drives = saved

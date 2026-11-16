@@ -16,9 +16,6 @@ signal next_attachment_pressed
 signal camera_pressed
 signal retry_pressed
 signal info_pressed
-## px from the overlay's right edge to the drive block's left, 0 while the pedals are hidden: what a
-## bottom-right control beside them keeps clear of (the dashboard's ^/v button).
-signal pedal_reach_changed(reach: float)
 
 ## Widget metrics in logical px, put through UiTheme.px before use.
 const JOY_RADIUS := 90.0
@@ -98,7 +95,6 @@ var _challenge_mode := false
 var _challenge_pads: Array[Pad] = []
 var _pedal_cluster: HBoxContainer  ## bottom-right: the EQUIP drawer, then the drive block
 var _drive_block: VBoxContainer  ## EQUIP button, QUICK row, pedal row
-var _pedal_reach := -1.0  ## last `pedal_reach_changed` value; -1 before the first
 var _equip_grid: GridContainer
 var _equip_toggle: Pad
 var _equip_pads: Array[Pad] = []
@@ -318,12 +314,6 @@ func _process(_dt: float) -> void:
 	for g in _gated:
 		g["node"].visible = ActionRegistry.applies(g["id"], ctx)
 	_fit_equip_drawer()
-	var reach := 0.0
-	if is_visible_in_tree() and _driving.visible:
-		reach = global_position.x + size.x - _drive_block.global_position.x
-	if reach != _pedal_reach:
-		_pedal_reach = reach
-		pedal_reach_changed.emit(reach)
 	var vi := InputRouter.get_vehicle_input()
 	for s in _stateful:
 		var on := bool(vi.get(s["field"]))
@@ -350,10 +340,13 @@ func _gate_context() -> Dictionary:
 	var family: String = GameState.current_vehicle
 	var bridge := Bridge.is_active()
 	var drives := InputRouter.bridge_drives()
-	if drives != _ctx_drives:
-		# Driving pads default to hidden while sloppyCAN drives; F4 still toggles from there.
-		_driving_shown = not drives
-		_driving.visible = _driving_shown and not _driving_locked
+	if drives and not _ctx_drives:
+		# sloppyCAN taking the wheel hides the driving pads; F4 still toggles from there. Its
+		# handing back does not show them: a stalled frame (a vehicle change, a level load) leaves
+		# the bridge stale past Bridge.FRESHNESS_MS and hands back for that moment, which would
+		# flash the pads up.
+		_driving_shown = false
+		_driving.visible = false
 	if _ctx.is_empty() or family != _ctx_family or bridge != _ctx_bridge or drives != _ctx_drives:
 		_ctx_family = family
 		_ctx_bridge = bridge
