@@ -34,26 +34,9 @@ pause**, where the review stops and the plans run; **B**, what waits until they 
 The rolling moment (A2, A3) holds `handbrake_fade.md`; A2 to A7 hold `realism_gaps.md`. A1 (the
 gather) and the hand-back's diagnosis are done: `sessions/2026-11-16-gather-rolling-moment.md`,
 `sessions/2026-11-16-rolling-moment-diagnosis.md`; A2's gather and diagnosis:
-`sessions/2026-11-16-standing-alternation.md`, `sessions/2026-11-16-contact-reading-steps.md`.
+`sessions/2026-11-16-standing-alternation.md`, `sessions/2026-11-16-contact-reading-steps.md`;
+A2's fix, done 2026-11-16: `sessions/2026-11-16-contact-fix.md`.
 
-- **A2** (diagnosed 2026-11-16: `sessions/2026-11-16-contact-reading-steps.md`, read first; its
-  § Brief is the work, its § Fixture the tests; lands on HEAD, before A3's patch) The standing
-  alternation is two steps in the contact's reading, both in `RayWheel._contact_pass`
-  (`wheel.gd:932-982`), neither the patch's. (a) On ground past the engine's switch to sharp
-  shapes (the tools' ramp, strip and kerb, Flatland's `InfiniteGround`) a leaned wheel's gap
-  gives the rounded touch, `e = convex_radius * (sin a + cos a - 1)` deeper than the sharp sweep's
-  bracket, and `settled_drop`'s clamp cuts it at every stop: a step of `e` (0.104 mm at the
-  `semi`'s 6.21 mrad, a whole 1.25 mm stop past 0.08 rad). Fix: the clamp's touching bound takes
-  `reach = e / n_up` (a new `settled_drop` argument); same to the bit where today's clamp does not
-  bind there. (b) The query is posed with the body's pitch in its basis, and a long box's corners
-  lose float32 in that frame: the reading sits on a grid of `ulp(L * sin(tilt))` (2^-19 m on the
-  6 km strip under the `semi`'s 0.53 deg rake). Fix: pose the cylinder about its axle on the
-  collider's up, after the brief's heightmap measurement says whether levels have it (if not, the
-  plan asks the user: the frame, or a shorter strip). Tests that fail now: a wheel leaned
-  6.21 mrad on a 400 m slab stepped across a stop (102 um in one 2 um move), a raked wheel on a
-  6 km slab (26 to 32 distinct readings in 240). Runs, HEAD then after, and the stop conditions:
-  the brief. Never a filter on `compression`, the damper or a reading; not the sharp support in
-  the gap (it moves every leaned wheel's height on every level). [high, plan, Opus]
 - **A3** (approved, user 2026-11-15: variant A, the ground's share a moment too; handed back
   2026-11-15; after A2; the creep lands as measured, user 2026-11-16) The rolling resistance
   is a moment on the wheel, a stage of the settle law before the TC hold. Why, what goes and what
