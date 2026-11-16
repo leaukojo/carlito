@@ -142,10 +142,12 @@ var abs_floor := 0.0
 ## `spin_compliance`, never more than commanded; a wheel it stopped reacts only what it took.
 var brake_reacted := 0.0
 ## The spin (rad/s, >= 0) the brake left at the last settle, which `brake_reacted` works over: a
-## locked or held wheel dissipates nothing. COMPROMISE: the settled spin, not the mean over the
-## settle. The mean is exact on a free wheel, but on a gripping one it also counts the spin the road
-## lent the step and the brake took back, 5 % of an ABS stop's energy (`measure_grade` `stops`);
-## the settled spin closes that ledger and under-reads only a braked wheel off the ground.
+## locked or held wheel dissipates nothing. The settled spin, not the mean over the settle: the
+## spin is the angle the wheel turns in the tick, so the brake's heat on it is the step's own work,
+## and with the tyres' slip read on the same spin the ledger closes to second order. The mean also
+## counts the spin the road lent the step and the brake took back, 5 % of an ABS stop's energy
+## (`measure_grade` `stops`). Known edge: a wheel the brake stops off the ground inside one tick
+## heats nothing.
 var brake_settled_spin := 0.0
 ## The friction brakes' share of the brake commanded this tick, set by the owner before `tick`
 ## (foot and parking over the whole; a retarder's part heats nothing here, `heat_brake`).
