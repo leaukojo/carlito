@@ -5,6 +5,23 @@ be passed by a script, end to end. The number in a script's name is the challeng
 car list (`ChallengeRegistry.DEFS`). `carlito_can.py` is the shared helper; its header lists
 every command and telemetry value.
 
+## The scripts
+
+| Script | How it solves |
+|---|---|
+| `car_001_start_up.py` | D, 40 % accel, steer to the Finish line (you turn the key). |
+| `car_002_easy_turns.py` | Follows the four touching r=35 arcs round the `Cut0..3` centres at 25 km/h. |
+| `car_003_lights.py` | Low beam, then follows the causeway's three r=70 arcs at 30 km/h. |
+| `car_004_manual_gearbox.py` | Gear 1, full accel, shifts up past 6300 rpm; 200 m inside 11.5 s. |
+| `car_005_reverse_park.py` | Turns onto x=-125 facing south, then reverses north at 3 km/h into the bay (GPS-held: ±0.42 m to spare). |
+| `car_006_turn_signals.py` | Follows the corners road, each lamp steady on in the 30 m before its corner. |
+| `car_007_hazards.py` | Stands still with both turn lamps on until it passes. |
+| `car_008_speed_trap.py` | Cruises at 60 km/h on the start heading. |
+| `car_009_corner_budget.py` | The same road as `car_002`, at 36 km/h. |
+| `car_010_box_stop.py` | 55 km/h to just past the gate (GPS x > 20.5), full brake, handbrake. |
+| `car_011_box_blind.py` | The same stop, the gate from the odometer (+171 m). |
+| `car_012_blind_stadium.py` | Follows the stadium centre line (two r=15 left semicircles) at 20 km/h. |
+
 ## Run one (sloppyCAN)
 
 1. Start the relay from the sloppyCAN repo: `python scripting/sloppycan_relay.py`.
