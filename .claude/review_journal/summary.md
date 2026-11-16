@@ -33,27 +33,25 @@ pause**, where the review stops and the plans run; **B**, what waits until they 
 
 The rolling moment (A2, A3) holds `handbrake_fade.md`; A2 to A7 hold `realism_gaps.md`. A1 (the
 gather) and the hand-back's diagnosis are done: `sessions/2026-11-16-gather-rolling-moment.md`,
-`sessions/2026-11-16-rolling-moment-diagnosis.md`.
+`sessions/2026-11-16-rolling-moment-diagnosis.md`; A2's gather and test:
+`sessions/2026-11-16-standing-alternation.md`.
 
-- **A2** (ready) Standing bodies alternate with the rolling moment's patch on
-  (`sessions/2026-11-16-rolling-moment-diagnosis.md` § 4, read first: the bobtail's `rest
-  reading:` 0.11 -> 0.34 kg, a 3-tick cycle of ±90 N in the front suspension of a `semi` parked
-  across 10 %, what the two share, the hypothesis). In detached worktrees outside the repo
-  (`.godot/` copied), HEAD and HEAD with `git apply sessions/2026-11-15-rolling-moment.patch`,
-  with the gather's probe (its file's appendix; it adds `park_cell=`) and, per wheel, the terms it
-  lacked: `compression`, its difference a tick, the spring, damper, bar and link terms of
-  `suspension_force`, `_stick.x`, `_patch_spring.x`, `long_cap`, and `a`, the slip force's slope
-  over `m_cap / delta`. Runs, `--fixed-fps 60`: `measure_semi_launch -- semi steady strict
-  trailer=bobtail`, ticks 430 to 450; `measure_grade -- doc=park park_cell=semi:cross:5.7`, ticks
-  760 to 790. Name the term that steps first in each, and say whether the wheels that alternate
-  are those with the lowest `a`. Then the test, on the patch only: in `_slip_force` a wheel with
-  `omega == 0.0` takes along the wheel `clampf(m_cap * slip_vel / delta, -budget, budget)` where
-  it takes the curve; re-read the bobtail's `rest reading:` and the cross cell's front-left
-  `suspension_force`. Both back at HEAD's: write that law into A3's brief (what a standing
-  wheel's force along the wheel is and why, its tests, `semi 20 rest`, laden `steady strict` and
-  `tractor-kenney 20 rest` re-read, `sedan creep`'s slide unchanged by it). Not back: undo, the
-  session file gives the first term to step, and the case goes to Fable with it. Never a filter,
-  a lag or a deadband; nothing is fixed at HEAD. [high, auto, Opus]
+- **A2** (hand-back, 2026-11-16; figures gathered: `sessions/2026-11-16-standing-alternation.md`,
+  read first; its logs and probe diff in `C:/Users/Ccamy/AppData/Local/Temp/claude/rm-logs/a2/`)
+  Standing bodies alternate with the rolling moment's patch on, and the A2 law (a standing
+  wheel's force along the wheel stops its contact in one tick) does not cure it: the bobtail's
+  `rest reading:` 0.11 / 0.34 / 0.59 kg (HEAD / patch / law). In both cases the first term to
+  step is `compression`, read by the damper's finite difference. Derive: (a) the `semi` parked
+  across 10 % (`doc=park park_cell=semi:cross:5.7`): why the front left's drop jumps 0.107 mm
+  across a `cast_motion` bracket edge (166/256 of the travel) when `settled_drop` (`wheel.gd:823`)
+  says it is exact on a face (`_contact_pass`'s gap, the rest test's point and normal,
+  `cylinder_support` with `_convex_radius`); (b) the bobtail (`measure_semi_launch -- semi steady
+  strict trailer=bobtail`): why each contact's drop steps 1.8 µm (rears) and 3.4 to 3.9 µm
+  (fronts) with nothing between while the body pitches about 1 µm a tick, 2800 m from the origin;
+  (c) whether each is the whole of the patch's alternation (its standing wheels answer the
+  contact's speed about 80 times harder than HEAD's free ones). The one run or test that shows
+  each, and a brief per cause: a contact-query fix is unit 3a's code and an item of its own; never
+  a filter on `compression`, the damper or a reading. A3 waits on it. [diagnose, high, Fable]
 - **A3** (approved, user 2026-11-15: variant A, the ground's share a moment too; handed back
   2026-11-15; after A2; the creep lands as measured, user 2026-11-16) The rolling resistance
   is a moment on the wheel, a stage of the settle law before the TC hold. Why, what goes and what
@@ -61,7 +59,7 @@ gather) and the hand-back's diagnosis are done: `sessions/2026-11-16-gather-roll
   tests and its figures: `sessions/2026-11-15-rolling-moment.md` and `.patch` (`git apply`;
   re-read `wheel.gd` if it fails). Do: the patch, then
   `sessions/2026-11-16-rolling-moment-diagnosis.md` § Brief (the stage, `Differential`'s kinks,
-  `roll_share` gone, the three tests that fail on the patch), then A2's law where it proved. The
+  `roll_share` gone, the three tests that fail on the patch), then what A2's brief gives. The
   moment is never part of `hold_torque`. Runs, HEAD
   then after, `--fixed-fps 60`: `test_wheel_spin`, the suite; `doc=park`; `all creep`; `sedan
   rollback [nohold]`, `semi rollback [nohold]`; `sedan 45 brake`; `measure_semi_launch` `steady
