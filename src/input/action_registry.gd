@@ -324,7 +324,7 @@ const ENTRIES: Array[Dictionary] = [
 	},
 	{
 		# F2 hides the cluster and shows it again; its size is the dashboard's ^/v button.
-		# Keyboard-only — the pause menu is one tap away on touch.
+		# Keyboard-only: touch and the pad have no hide.
 		"id": &"toggle_dashboard", "actions": ["toggle_dashboard"], "group": Group.SHELL,
 		"label": "Dashboard on / off",
 	},

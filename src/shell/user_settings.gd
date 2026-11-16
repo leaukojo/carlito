@@ -16,7 +16,7 @@ const PATH := "user://settings.cfg"
 const SECTION := "settings"
 ## Every key the store keeps, with its default, which also fixes its type.
 const DEFAULTS := {
-	# Never "density" or "dashboard": an old file's size setting, which the ^/v pins replace. Unknown
+	# Not "density" or "dashboard": an old file's size setting, which the ^/v pins replace. Unknown
 	# here, so ignored and dropped on the next write.
 	"dash_off": false,  ## F2 hid the dashboard
 	"dash_pins": {},  ## family -> Dashboard.DENSITY_KEYS value, the ^/v button's (`set_pin`)

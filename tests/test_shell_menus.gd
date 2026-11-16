@@ -951,7 +951,7 @@ func _sheet_texts(state: PauseMenu.State) -> Array:
 	return texts
 
 
-## SETTINGS is a page of this overlay like CONTROLS, and its one button CYCLES: it relabels
+## SETTINGS is a page of this overlay like CONTROLS, and each of its buttons CYCLES: it relabels
 ## itself and emits the new value, which the shell applies and persists. The menu applies
 ## nothing itself (standing rule 6), so what is asserted is what reaches the shell.
 func test_pause_menu_settings_cycles_the_key_response() -> void:
