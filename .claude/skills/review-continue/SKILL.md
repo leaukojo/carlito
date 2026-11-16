@@ -58,6 +58,9 @@ The project wants no new features: the review trims, fixes and simplifies.
    the last commit: `node tools/godot_run.mjs --tests -- -a tests`, judged by its output. A
    session that changed only docs, the journal or a `.mjs` tool runs that file's guard instead
    (`node tools/check_docs.mjs`). A change the user must check by driving is listed under "Please verify" in `summary.md`.
+   A fix meant to change behaviour passes when what it measures stays realistic, not when it
+   matches the figures from before (user, 2026-11-16); a simplification still keeps them to the
+   bit (step 4).
 7. **Commit to `dev`, never push.** One purpose per commit, message prefixed `review:`. Stage
    by path, never `git add -A`: files already modified when the session starts are the user's
    and stay out of every commit. The pre-commit hook is never skipped. The journal update is
