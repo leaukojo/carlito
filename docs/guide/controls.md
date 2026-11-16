@@ -99,22 +99,22 @@ horn sounds on **H** or sloppyCAN's `horn`.
 | **G**, **V**, **E** | Garage; next vehicle body; next implement or trailer |
 | **C** | Camera view |
 | **L**, **H**, **N** | Lights; horn; day and night |
-| **F2** | Dashboard size: AUTO, COMPACT, FULL, OFF, then AUTO again |
+| **F2** | Hide or show the dashboard |
 | **F3** | Show or hide the debug overlay (hidden at the start) |
 | **F4** | On-screen touch controls |
 | **4**, **5** | Level select; challenges |
 | **Esc** | Pause menu |
-<!-- project.godot [input]: accel W / Up, brake_reverse S / Down, steer A D / Left Right, handbrake Space, parking_brake Shift, shift_down Comma, shift_up Period, respawn Backspace, garage G, next_vehicle V, next_attachment E, camera_view C, headlights L, horn H, day_night N, toggle_dashboard F2, debug_overlay F3, toggle_touch F4, level_select 4, challenge_select 5, to_menu Escape; boot.gd _toggle_dashboard cycles Dashboard.DENSITY_KEYS AUTO -> COMPACT -> FULL -> OFF; debug_overlay.gd _ready visible = false, the F3 action toggles it -->
+<!-- project.godot [input]: accel W / Up, brake_reverse S / Down, steer A D / Left Right, handbrake Space, parking_brake Shift, shift_down Comma, shift_up Period, respawn Backspace, garage G, next_vehicle V, next_attachment E, camera_view C, headlights L, horn H, day_night N, toggle_dashboard F2, debug_overlay F3, toggle_touch F4, level_select 4, challenge_select 5, to_menu Escape; boot.gd _toggle_dashboard flips Dashboard.set_hidden; debug_overlay.gd _ready visible = false, the F3 action toggles it -->
 
 COMPACT shows the warning lamps, the speedometer and the rev counter. FULL adds the bars (fuel,
 coolant, brake temperature, a truck's air and the rest) and a line of readings (heading, odometer,
-position, fuel burn). The dashboard starts on AUTO: FULL when it fits on the screen, COMPACT when
-it would cover too much of it, as on a phone or with the drone's long list of bars. The **MORE**
-or **LESS** tab on top of the dashboard switches the vehicle you are driving and remembers it;
-**F2** or SETTINGS sets every vehicle again. The debug overlay, top right, shows the frame rate
-and draw calls, each wheel's surface, grip, slip and angle, the body's pitch and roll, a
+position, fuel burn). The dashboard picks FULL when it fits on the screen, COMPACT when it would
+cover too much of it, as on a phone or with the drone's long list of bars. The small **^** or
+**v** in its top-right corner switches the vehicle you are driving and remembers it; pressing it
+back to the size the screen would pick lets that vehicle follow the screen again. The debug
+overlay, top right, shows the frame rate and draw calls, each wheel's surface, grip, slip and angle, the body's pitch and roll, a
 trailer's angle and the wind.
-<!-- dashboard.gd: "COMPACT keeps the tell-tale row and gauges; FULL adds the bars, readout, wind rose and echo sounder"; "AUTO (the default) is FULL where it fits the window"; AUTO_MAX_H; _make_size_tab "MORE"/"LESS"; boot.gd _on_density_changed clears the pins; readout "HDG ODO lat, lon" plus READOUT_EXTRAS BURN; debug_overlay.gd _refresh: FPS and the Performance monitors, then _grip_line, _slip_line, _steer_line, _attitude_line, _articulation_line, _flow_line -->
+<!-- dashboard.gd: "COMPACT keeps the tell-tale row and gauges; FULL adds the bars, readout, wind rose and echo sounder"; "AUTO is FULL where it fits the window"; AUTO_MAX_H; _make_size_tab "^"/"v"; _on_size_pressed clears the pin on AUTO's pick; readout "HDG ODO lat, lon" plus READOUT_EXTRAS BURN; debug_overlay.gd _refresh: FPS and the Performance monitors, then _grip_line, _slip_line, _steer_line, _attitude_line, _articulation_line, _flow_line -->
 
 
 

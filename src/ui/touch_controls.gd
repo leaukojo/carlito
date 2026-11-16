@@ -16,6 +16,9 @@ signal next_attachment_pressed
 signal camera_pressed
 signal retry_pressed
 signal info_pressed
+## px from the overlay's right edge to the drive block's left, 0 while the pedals are hidden: what a
+## bottom-right control beside them keeps clear of (the dashboard's ^/v button).
+signal pedal_reach_changed(reach: float)
 
 ## Widget metrics in logical px, put through UiTheme.px before use.
 const JOY_RADIUS := 90.0
@@ -95,6 +98,7 @@ var _challenge_mode := false
 var _challenge_pads: Array[Pad] = []
 var _pedal_cluster: HBoxContainer  ## bottom-right: the EQUIP drawer, then the drive block
 var _drive_block: VBoxContainer  ## EQUIP button, QUICK row, pedal row
+var _pedal_reach := -1.0  ## last `pedal_reach_changed` value; -1 before the first
 var _equip_grid: GridContainer
 var _equip_toggle: Pad
 var _equip_pads: Array[Pad] = []
@@ -314,6 +318,12 @@ func _process(_dt: float) -> void:
 	for g in _gated:
 		g["node"].visible = ActionRegistry.applies(g["id"], ctx)
 	_fit_equip_drawer()
+	var reach := 0.0
+	if is_visible_in_tree() and _driving.visible:
+		reach = global_position.x + size.x - _drive_block.global_position.x
+	if reach != _pedal_reach:
+		_pedal_reach = reach
+		pedal_reach_changed.emit(reach)
 	var vi := InputRouter.get_vehicle_input()
 	for s in _stateful:
 		var on := bool(vi.get(s["field"]))

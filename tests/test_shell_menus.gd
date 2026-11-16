@@ -3,6 +3,7 @@ extends GdUnitTestSuite
 
 const WorldConditions := preload("res://src/levels/base/world_conditions.gd")
 const CardGrid := preload("res://src/ui/card_grid.gd")
+const KeyShaper := preload("res://src/input/key_shaper.gd")
 
 func _buttons(node: Node) -> Array:
 	var out := []
@@ -778,7 +779,7 @@ func test_pause_menu_sandbox_holds_world_and_vehicle() -> void:
 	_press(pause, "SETTINGS")
 	var settings := _buttons(pause).filter(func(b: Button) -> bool: return b.is_visible_in_tree()) \
 			.map(func(b: Button) -> String: return b.text)
-	assert_int(settings.size()).is_equal(4)  # DASHBOARD, UI SIZE, KEY RESPONSE, BACK
+	assert_int(settings.size()).is_equal(3)  # UI SIZE, KEY RESPONSE, BACK
 	assert_array(settings.filter(func(t: String) -> bool: return t.begins_with("EXTENDED"))) \
 			.is_empty()
 	assert_array(settings.filter(func(t: String) -> bool: return t.begins_with("TRACTION"))) \
@@ -953,19 +954,19 @@ func _sheet_texts(state: PauseMenu.State) -> Array:
 ## SETTINGS is a page of this overlay like CONTROLS, and its one button CYCLES: it relabels
 ## itself and emits the new value, which the shell applies and persists. The menu applies
 ## nothing itself (standing rule 6), so what is asserted is what reaches the shell.
-func test_pause_menu_settings_cycles_the_dashboard_density() -> void:
+func test_pause_menu_settings_cycles_the_key_response() -> void:
 	var pause: PauseMenu = auto_free(PauseMenu.new())
 	pause.setup({})
 	add_child(pause)
 	_press(pause, "SETTINGS")
 
 	var picked := []
-	pause.dashboard_density_changed.connect(func(s: int) -> void: picked.append(s))
-	var expected := Dashboard.next_setting(Dashboard.Density.AUTO)
-	_press(pause, "DASHBOARD: AUTO")
+	pause.key_softening_changed.connect(func(s: float) -> void: picked.append(s))
+	var expected := KeyShaper.next_softening(KeyShaper.DEFAULT_SOFTENING)
+	_press(pause, "KEY RESPONSE: %s" % KeyShaper.softening_label(KeyShaper.DEFAULT_SOFTENING))
 	assert_array(picked).is_equal([expected])
 	# The button says what it now is, so a second press cycles on from there rather than repeating.
-	assert_array(_labels(pause)).contains(["DASHBOARD: %s" % Dashboard.key_of(expected).to_upper()])
+	assert_array(_labels(pause)).contains(["KEY RESPONSE: %s" % KeyShaper.softening_label(expected)])
 
 	# Esc walks back out of this page the same way it does out of CONTROLS.
 	assert_bool(pause.back()).is_true()

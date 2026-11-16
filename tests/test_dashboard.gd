@@ -19,11 +19,14 @@ func after_test() -> void:
 	GameState.current_vehicle = _saved_vehicle
 
 
-## A dashboard bound to `family` with no level, at an explicit density.
-func _dash(family: String, setting: int) -> Dashboard:
+## A dashboard bound to `family` with no level, at `layout`: FULL/COMPACT pinned, OFF hidden,
+## AUTO left to fit.
+func _dash(family: String, layout: int) -> Dashboard:
 	var dash: Dashboard = auto_free(Dashboard.new())
 	add_child(dash)
-	dash.set_density_setting(setting)
+	dash.set_hidden(layout == Dashboard.Density.OFF)
+	if Dashboard.key_of(layout) != "":
+		dash.set_pins({family: Dashboard.key_of(layout)})
 	GameState.current_vehicle = family
 	dash.bind(null)
 	return dash
@@ -237,33 +240,14 @@ func test_off_hides_the_cluster_even_when_the_shell_shows_the_hud() -> void:
 	dash.set_shown(true)
 	assert_bool(dash.visible).is_false()
 
-	# ...and turning it back on from SETTINGS restores it without another bind.
-	dash.set_density_setting(Dashboard.Density.FULL)
+	# ...and F2 showing it again restores it without another bind.
+	dash.set_hidden(false)
 	assert_bool(dash.visible).is_true()
 	assert_dict(dash._lamps).is_not_empty()
 
-	# No level bound: the HUD stays down whatever the density says.
+	# No level bound: the HUD stays down whatever F2 says.
 	dash.set_shown(false)
 	assert_bool(dash.visible).is_false()
-
-
-## An explicit pick is honoured as given.
-func test_an_explicit_setting_is_what_is_shown() -> void:
-	for setting in [Dashboard.Density.FULL, Dashboard.Density.COMPACT, Dashboard.Density.OFF]:
-		assert_int(_dash("car", setting).density_setting()).is_equal(setting)
-
-
-## The SETTINGS page (and F2) is one button, cycling AUTO -> COMPACT -> FULL -> OFF -> AUTO, so
-## every mode has to be reachable by pressing it repeatedly and the cycle has to come back round.
-func test_next_setting_cycles_every_mode() -> void:
-	var seen := []
-	var setting: int = Dashboard.Density.AUTO
-	for _i in Dashboard.DENSITY_KEYS.size():
-		seen.append(setting)
-		setting = Dashboard.next_setting(setting)
-	assert_int(setting).is_equal(Dashboard.Density.AUTO)  # back to the start
-	assert_array(seen).is_equal([Dashboard.Density.AUTO, Dashboard.Density.COMPACT,
-			Dashboard.Density.FULL, Dashboard.Density.OFF])
 
 
 ## The panel `dash` built last (its earlier ones are queued for deletion).
@@ -312,7 +296,7 @@ func _assert_full_measures() -> void:
 		add_child(dash)
 		dash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		dash.set_shown(true)  # a hidden Control is never laid out
-		dash.set_density_setting(Dashboard.Density.FULL)
+		dash.set_pins({family: "full"})
 		GameState.current_vehicle = family
 		dash.bind(null)
 		var panel := _panel(dash)
@@ -337,39 +321,62 @@ func test_auto_builds_full_where_it_fits_else_compact() -> void:
 		assert_int(auto.shown_layout()).override_failure_message(
 				"'%s': AUTO built %d, FULL is %s" % [family, auto.shown_layout(), full_size]) \
 			.is_equal(want)
-		assert_int(auto.density_setting()).is_equal(Dashboard.Density.AUTO)
 	assert_int(_dash("drone", Dashboard.Density.AUTO).shown_layout()).is_equal(Dashboard.Density.COMPACT)
 
 
-## A family's pin beats AUTO and an explicit setting, for that family only; OFF beats a pin.
-func test_a_pin_overrides_the_setting_for_its_family_only() -> void:
+## A family's pin beats AUTO, for that family only; F2's hide beats a pin.
+func test_a_pin_overrides_auto_for_its_family_only() -> void:
 	var drone := _dash("drone", Dashboard.Density.AUTO)
 	drone.set_pins({"drone": "full"})
 	assert_int(drone.shown_layout()).is_equal(Dashboard.Density.FULL)
-	drone.set_density_setting(Dashboard.Density.COMPACT)
-	assert_int(drone.shown_layout()).is_equal(Dashboard.Density.FULL)
-	drone.set_density_setting(Dashboard.Density.OFF)
+	drone.set_hidden(true)
 	assert_int(drone.shown_layout()).is_equal(Dashboard.Density.OFF)
-	var car := _dash("car", Dashboard.Density.COMPACT)
-	car.set_pins({"drone": "full"})
-	assert_int(car.shown_layout()).is_equal(Dashboard.Density.COMPACT)
+	var car := _dash("car", Dashboard.Density.AUTO)
+	var auto_layout := car.shown_layout()
+	car.set_pins({"drone": "compact" if auto_layout == Dashboard.Density.FULL else "full"})
+	assert_int(car.shown_layout()).is_equal(auto_layout)
 
 
-## The MORE/LESS tab: present unless OFF, never takes focus (Space and the pad would press it),
-## and a press flips FULL/COMPACT for this family and says so for the shell to save.
-func test_the_size_tab_pins_the_other_layout() -> void:
-	var dash := _dash("car", Dashboard.Density.COMPACT)
-	var pinned := []
-	dash.size_pinned.connect(func(family: String, layout: int) -> void: pinned.append([family, layout]))
-	assert_object(dash._size_btn).is_not_null()
-	assert_int(dash._size_btn.focus_mode).is_equal(Control.FOCUS_NONE)
-	assert_str(dash._size_btn.text).is_equal("MORE")
-	dash._size_btn.pressed.emit()
-	assert_int(dash.shown_layout()).is_equal(Dashboard.Density.FULL)
-	assert_str(dash._size_btn.text).is_equal("LESS")
-	assert_array(pinned).is_equal([["car", Dashboard.Density.FULL]])
-	assert_int(dash.density_setting()).is_equal(Dashboard.Density.COMPACT)  # the setting is untouched
+## The ^/v button: present unless OFF, never takes focus (Space and the pad would press it). A
+## press flips FULL/COMPACT for this family and says so for the shell to save: a pin away from
+## AUTO's pick, "" (cleared) back onto it.
+func test_the_size_button_pins_away_from_auto_and_clears_back_onto_it() -> void:
+	var root_size := get_tree().root.size
+	# The car's FULL fits the big window and not the small one, so both directions run.
+	for case: Array in [[Vector2i(2560, 1440), Dashboard.Density.FULL],
+			[Vector2i(640, 360), Dashboard.Density.COMPACT]]:
+		get_tree().root.size = case[0]
+		var dash := _dash("car", Dashboard.Density.AUTO)
+		var auto_layout: int = case[1]
+		var other := Dashboard.Density.COMPACT if auto_layout == Dashboard.Density.FULL \
+				else Dashboard.Density.FULL
+		assert_int(dash.shown_layout()).override_failure_message("AUTO in %s" % [case[0]]) \
+			.is_equal(auto_layout)
+		var pinned := []
+		dash.size_pinned.connect(func(f: String, key: String) -> void: pinned.append([f, key]))
+		assert_object(dash._size_btn).is_not_null()
+		assert_int(dash._size_btn.focus_mode).is_equal(Control.FOCUS_NONE)
+		assert_str(dash._size_btn.text).is_equal("v" if auto_layout == Dashboard.Density.FULL else "^")
+		dash._size_btn.pressed.emit()
+		assert_int(dash.shown_layout()).is_equal(other)
+		assert_str(dash._size_btn.text).is_equal("v" if other == Dashboard.Density.FULL else "^")
+		dash._size_btn.pressed.emit()
+		assert_int(dash.shown_layout()).is_equal(auto_layout)
+		assert_array(pinned).override_failure_message("in %s: %s" % [case[0], pinned]) \
+			.is_equal([["car", Dashboard.key_of(other)], ["car", ""]])
+		assert_dict(dash._pins).is_empty()
+	get_tree().root.size = root_size
 	assert_object(_dash("car", Dashboard.Density.OFF)._size_btn).is_null()
+
+
+## The button keeps clear of the touch pedals: the shell's inset moves it without a rebuild.
+func test_the_size_button_moves_left_by_the_tab_inset() -> void:
+	var dash := _dash("car", Dashboard.Density.COMPACT)
+	var btn := dash._size_btn
+	var right := btn.offset_right
+	dash.set_tab_inset(200.0)
+	assert_object(dash._size_btn).is_same(btn)
+	assert_float(btn.offset_right).is_equal_approx(right - 200.0, 0.01)
 
 
 ## The whole node bus renders nowhere, and that is a decision rather than an omission, so it is

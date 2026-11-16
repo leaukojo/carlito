@@ -95,8 +95,8 @@ func _ready() -> void:
 	add_child(_packs)
 	_progress = ChallengeProgress.open()
 	_settings = UserSettings.open()
-	_dashboard.size_pinned.connect(func(family: String, pinned: int) -> void:
-		_settings.set_pin(family, Dashboard.key_of(pinned)))
+	_dashboard.size_pinned.connect(_settings.set_pin)
+	_touch.pedal_reach_changed.connect(_dashboard.set_tab_inset)
 	_apply_saved_settings()
 	_set_hud_visible(false)  # nothing to bind to until the level is up
 	_boot()
@@ -472,7 +472,6 @@ func _open_pause() -> void:
 	state.level_row = _ui.device() == UiScale.Device.PAD
 	state.columns = PauseMenu.sheet_columns(_ui.has_used(UiScale.Device.KEYBOARD),
 			_ui.has_used(UiScale.Device.PAD), _ui.has_touched(), UiScale.is_touch_display())
-	state.density = _dashboard.density_setting()
 	state.ui_scale = _ui.user_scale()
 	state.key_softening = InputRouter.key_softening()
 	state.tcs_off = InputRouter.local_tcs_off()
@@ -494,7 +493,6 @@ func _open_pause() -> void:
 	pause.respawn_requested.connect(_on_pause_respawn)
 	pause.level_requested.connect(_show_level_select)
 	pause.spawn_picked.connect(_on_spawn_picked)
-	pause.dashboard_density_changed.connect(_on_density_changed)
 	pause.ui_scale_changed.connect(_on_ui_scale_changed)
 	pause.key_softening_changed.connect(_on_key_softening_changed)
 	pause.tcs_off_changed.connect(_on_tcs_off_changed)
@@ -510,7 +508,7 @@ func _open_pause() -> void:
 
 ## The SETTINGS choices saved by an earlier visit, through the same setters a press uses.
 func _apply_saved_settings() -> void:
-	_dashboard.set_density_setting(int(_settings.value("dashboard")))
+	_dashboard.set_hidden(bool(_settings.value("dash_off")))
 	_dashboard.set_pins(_settings.value("dash_pins"))
 	_ui.set_user_scale(float(_settings.value("ui_scale")))
 	InputRouter.set_key_softening(float(_settings.value("key_softening")))
@@ -519,18 +517,9 @@ func _apply_saved_settings() -> void:
 	InputRouter.set_auto_hold_on(bool(_settings.value("auto_hold")))
 
 
-## SETTINGS picked a new cluster density. The menu owns nothing, so applying and remembering
-## it is this file's job: each handler below saves what its owner actually applied. A pick is for
-## every family, so it clears the dashboard tab's per-family pins.
-func _on_density_changed(setting: int) -> void:
-	_dashboard.set_pins({})
-	_settings.set_value("dash_pins", {})
-	_dashboard.set_density_setting(setting)
-	_settings.set_value("dashboard", _dashboard.density_setting())
-
-
-## SETTINGS picked a new UI size. Handed to UiScale, which rebuilds the theme so every
-## Control relayouts.
+## SETTINGS picked a new UI size. The menu owns nothing, so applying and remembering it is this
+## file's job: each handler below saves what its owner actually applied. Handed to UiScale, which
+## rebuilds the theme so every Control relayouts.
 func _on_ui_scale_changed(factor: float) -> void:
 	_ui.set_user_scale(factor)
 	_settings.set_value("ui_scale", _ui.user_scale())
@@ -576,10 +565,10 @@ func _on_parallel_steer_changed(on: bool) -> void:
 	InputRouter.set_lab_parallel_steer(on)
 
 
-## F2: cycles the same density setting the SETTINGS page's button does, so the menu and the key
-## can never disagree about dashboard state.
+## F2: hides or shows the dashboard, saved. Its size is the ^/v button's (`Dashboard.size_pinned`).
 func _toggle_dashboard() -> void:
-	_on_density_changed(Dashboard.next_setting(_dashboard.density_setting()))
+	_dashboard.set_hidden(not _dashboard.is_hidden())
+	_settings.set_value("dash_off", _dashboard.is_hidden())
 
 
 ## RESPAWN on the pause menu or the overturned notice: close any overlay first, or the respawn

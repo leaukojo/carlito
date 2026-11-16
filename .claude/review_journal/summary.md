@@ -98,8 +98,6 @@ record, and it changes only with the user's OK. The pause is over when both plan
    `race` bullet waits on A9, its other bullets do not. `doc=grade`'s `suv` cell is under
    diagnosis (stage B's first line): phases 2 and 4 do not tune against it.
 
-`docs/plans/dashboard_size_toggle.md` waits on the user's drive and is not the review's.
-
 ### Stage B: after the plans
 
 - The `suv`'s asphalt climb fell 79.0 -> 71.3 % with the wheel fix (`doc=grade`, 7a7cd9f; every

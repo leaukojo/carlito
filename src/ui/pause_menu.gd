@@ -20,8 +20,6 @@ signal respawn_requested
 signal level_requested
 ## A SPAWN POINT page pick: the index into `State.spawns`. Moving there is the shell's to do.
 signal spawn_picked(index: int)
-## New Dashboard.Density setting picked; the shell applies it and writes it to user://.
-signal dashboard_density_changed(setting: int)
 ## New UI-size multiplier picked; the shell applies it to UiScale and writes it to user://.
 signal ui_scale_changed(factor: float)
 ## New KEY RESPONSE step picked (KeyShaper softening, 0..1); the shell hands it to InputRouter and
@@ -57,7 +55,6 @@ class State extends RefCounted:
 	var level_row := false
 	## The CONTROLS sheet's columns (`sheet_columns`); every one when nothing is known.
 	var columns: Array[Column] = [Column.KEY, Column.PAD, Column.TOUCH]
-	var density: int = Dashboard.Density.AUTO
 	var ui_scale := UiScale.USER_DEFAULT
 	var key_softening := KeyShaper.DEFAULT_SOFTENING
 	var tcs_off := false
@@ -95,7 +92,6 @@ const GREYED_PREFIX := "Greyed: "
 const SAVED := " Kept next time."
 const SESSION := " Resets when you reload."
 
-const DENSITY_HELP := "COMPACT shows speed, revs and warning lights. FULL adds more gauges. AUTO picks FULL when it fits the screen. MORE and LESS on the dashboard change one vehicle; this button resets them."
 const UI_SCALE_HELP := "Makes buttons and text bigger or smaller. 100% is the normal size."
 const KEY_RESPONSE_HELP := "How fast the keys and on-screen pedals react. RAW is instant. REALISTIC is smooth."
 
@@ -133,7 +129,6 @@ var _pad_drawn := false  ## the pad is drawn, so the table has no GAMEPAD column
 var _table: VBoxContainer  ## the sheet's groups, rebuilt when the pad is drawn or stops fitting
 var _wrapped: Array[Label] = []  ## help lines and notes, re-fitted on a resize (`_fit_text`)
 var _resume_btn: Button
-var _density_btn: Button
 var _ui_scale_btn: Button
 var _key_response_btn: Button
 var _tcs_btn: Button
@@ -149,7 +144,6 @@ var _night_btn: Button
 ## Active vehicle's capabilities from the shell — same read the touch buttons gate on.
 var _caps := {}
 var _level_row := false
-var _density: int = Dashboard.Density.AUTO
 var _ui_scale := UiScale.USER_DEFAULT
 var _key_softening := KeyShaper.DEFAULT_SOFTENING
 var _tcs_off := false
@@ -193,7 +187,6 @@ static func sheet_columns(keyboard: bool, pad: bool, touched: bool,
 func setup(caps: Dictionary, state := State.new()) -> void:
 	_caps = caps
 	_level_row = state.level_row
-	_density = state.density
 	_ui_scale = state.ui_scale
 	_key_softening = state.key_softening
 	_tcs_off = state.tcs_off
@@ -424,15 +417,10 @@ static func _sheet_cell(entry: Dictionary, column: Column) -> String:
 	return ActionRegistry.touch_for(entry)
 
 
-## Three settings, one button each, cycling their steps. No value is applied here — each is
+## Two settings, one button each, cycling their steps. No value is applied here — each is
 ## emitted and the shell applies/persists it (rule 6). Each button relabels in place.
 func _build_settings() -> void:
 	_settings.add_child(_title("SETTINGS"))
-
-	_density_btn = _menu_button("", _on_density_pressed)
-	_relabel_density()
-	_settings.add_child(_density_btn)
-	_settings.add_child(_help(DENSITY_HELP))
 
 	_ui_scale_btn = _menu_button("", _on_ui_scale_pressed)
 	_relabel_ui_scale()
@@ -641,16 +629,6 @@ func _fit_text(label: Label) -> void:
 	var room := size.x - 2.0 * UiTheme.px(self, UiTheme.MARGIN)
 	label.custom_minimum_size.x = clampf(room, UiTheme.px(self, BUTTON_W),
 			UiTheme.px(self, TEXT_W))
-
-
-func _on_density_pressed() -> void:
-	_density = Dashboard.next_setting(_density)
-	_relabel_density()
-	dashboard_density_changed.emit(_density)
-
-
-func _relabel_density() -> void:
-	_density_btn.text = "DASHBOARD: %s" % Dashboard.key_of(_density).to_upper()
 
 
 ## The press rebuilds the theme, relayouting this menu under the finger that pressed it, so

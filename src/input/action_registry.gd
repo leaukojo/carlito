@@ -323,7 +323,7 @@ const ENTRIES: Array[Dictionary] = [
 		"label": "Menu / back", "touch": Touch.SHELL_SIGNAL, "touch_label": "MENU",
 	},
 	{
-		# Same setting the SETTINGS page cycles; F2 drops the cluster to OFF and back.
+		# F2 hides the cluster and shows it again; its size is the dashboard's ^/v button.
 		# Keyboard-only — the pause menu is one tap away on touch.
 		"id": &"toggle_dashboard", "actions": ["toggle_dashboard"], "group": Group.SHELL,
 		"label": "Dashboard on / off",

@@ -18,14 +18,14 @@ func test_an_unset_store_reads_the_defaults() -> void:
 
 func test_every_setting_round_trips_through_the_file() -> void:
 	var s := UserSettings.new(SCRATCH)
-	s.set_value("dashboard", Dashboard.Density.FULL)
+	s.set_value("dash_off", true)
 	s.set_value("ui_scale", 1.35)
 	s.set_value("key_softening", 0.65)
 	s.set_value("tcs_off", true)
 	s.set_value("esc_off", true)
 	s.set_value("auto_hold", true)
 	var again := UserSettings.new(SCRATCH)
-	assert_int(again.value("dashboard")).is_equal(Dashboard.Density.FULL)
+	assert_bool(again.value("dash_off")).is_true()
 	assert_float(again.value("ui_scale")).is_equal_approx(1.35, 1e-6)
 	assert_float(again.value("key_softening")).is_equal_approx(0.65, 1e-6)
 	assert_bool(again.value("tcs_off")).is_true()
@@ -40,7 +40,8 @@ func test_a_hand_edited_file_keeps_only_what_fits() -> void:
 	cfg.set_value(UserSettings.SECTION, "tcs_off", "yes")
 	cfg.set_value(UserSettings.SECTION, "ghost", 3)
 	cfg.set_value(UserSettings.SECTION, "extended_debug", true)  # a retired key: an older file
-	cfg.set_value(UserSettings.SECTION, "density", Dashboard.Density.COMPACT)  # retired: AUTO wins
+	cfg.set_value(UserSettings.SECTION, "density", Dashboard.Density.COMPACT)  # retired
+	cfg.set_value(UserSettings.SECTION, "dashboard", Dashboard.Density.OFF)  # retired: not a hide
 	cfg.save(SCRATCH)
 	var s := UserSettings.new(SCRATCH)
 	assert_float(s.value("ui_scale")).is_equal(1.0)
@@ -48,13 +49,14 @@ func test_a_hand_edited_file_keeps_only_what_fits() -> void:
 	s.set_value("ghost", 4)
 	s.set_value("auto_hold", "on")
 	assert_bool(s.value("auto_hold")).is_false()
-	assert_int(s.value("dashboard")).is_equal(Dashboard.Density.AUTO)
-	s.set_value("dashboard", Dashboard.Density.OFF)
+	assert_bool(s.value("dash_off")).is_false()
+	s.set_value("dash_off", true)
 	var written := ConfigFile.new()
 	written.load(SCRATCH)
 	assert_bool(written.has_section_key(UserSettings.SECTION, "ghost")).is_false()
 	assert_bool(written.has_section_key(UserSettings.SECTION, "extended_debug")).is_false()
 	assert_bool(written.has_section_key(UserSettings.SECTION, "density")).is_false()
+	assert_bool(written.has_section_key(UserSettings.SECTION, "dashboard")).is_false()
 	assert_bool(written.get_value(UserSettings.SECTION, "tcs_off")).is_false()
 
 
@@ -101,12 +103,15 @@ func test_a_hand_edited_tyre_store_keeps_only_strings() -> void:
 	assert_str(UserSettings.new(SCRATCH).tyre_of("sedan")).is_empty()
 
 
-## The dashboard tab's pin per family survives a reload; a hand-edited non-String entry is dropped.
+## The dashboard button's pin per family survives a reload and "" clears it; a hand-edited
+## non-String entry is dropped.
 func test_the_dashboard_pins_round_trip_and_keep_only_strings() -> void:
 	var s := UserSettings.new(SCRATCH)
 	s.set_pin("car", "full")
 	s.set_pin("drone", "compact")
 	s.set_pin("car", "compact")
+	s.set_pin("boat", "full")
+	s.set_pin("boat", "")
 	assert_dict(UserSettings.new(SCRATCH).value("dash_pins")) \
 		.is_equal({"car": "compact", "drone": "compact"})
 

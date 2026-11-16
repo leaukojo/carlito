@@ -132,8 +132,8 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   `test_telemetry` fails if it drops a non-todo "out" signal (`WIRE_*` tables).
 - Dashboard (`src/ui/dashboard.gd`; its layers and density: the header comments): generated from
   the contract, instruments hand-built; bool "in" lamps read `LAMP_INPUT_FIELDS` /
-  `LAMP_COMPUTED` (`test_dashboard` pins both against the contract). SETTINGS/F2 (`toggle_dashboard`) cycles AUTO -> COMPACT
-  -> FULL -> OFF, saved to `user://` (`UserSettings`), as the panel's per-family MORE/LESS pins. Instruments draw values as given, never lagged or held: a flicker is the sim's.
+  `LAMP_COMPUTED` (`test_dashboard` pins both against the contract). Size is AUTO unless the
+  panel's ^/v button pins a family's; F2 (`toggle_dashboard`) hides it; both saved to `user://` (`UserSettings`). Instruments draw values as given, never lagged or held: a flicker is the sim's.
 - Debug overlay (`debug_overlay.gd`): FPS/frame ms/draw calls/VRAM/node count via
   `Performance`, F3. Target: root CLAUDE.md perf target.
 
@@ -198,7 +198,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
   |---|---|
   | SPAWN POINT | the level's spawns this body may use (`State.spawns`), shown from two up; a pick emits `spawn_picked(index)` |
   | CONTROLS | off `InputMap` and the registry's `pad` (`pad_for`); hidden if unusable (`ActionRegistry.relevant_entry`), greyed if bridge-owned; the pad drawn (`pad_diagram.gd`, plain and L1 sets, the L1 set from `pad_layer_rows`) where it fits, else the text column |
-  | SETTINGS | dashboard density, UI scale, KEY RESPONSE; saved to `user://` (`UserSettings`, re-applied by `Boot._apply_saved_settings`) |
+  | SETTINGS | UI scale, KEY RESPONSE; saved to `user://` (`UserSettings`, re-applied by `Boot._apply_saved_settings`) |
   | SANDBOX | one scrolling page in two headed sections. WORLD: WIND/CURRENT preset (`WorldConditions.Preset` LEVEL/CALM/LIGHT/STRONG), FROM direction, TIME -> greys per `WorldConditions.WIND_FAMILIES`/`CURRENT_FAMILIES`, all greyed in a challenge. VEHICLE: TRACTION CONTROL, STABILITY CONTROL, AUTO HOLD (saved, as SETTINGS; greyed where the router ignores them), then the LAB switches ANTI-LOCK BRAKES, DIFFERENTIALS, STEERING (§ Input pipeline), session-held, greyed in a challenge |
 
   Session-held, never saved: WORLD, the LAB switches and the garage's gearbox choice (`Boot._manual_gearbox`);

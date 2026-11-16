@@ -53,7 +53,10 @@ func _ready() -> void:
 	_dash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_dash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ui.add_child(_dash)
-	_dash.set_density_setting(Dashboard.Density.FULL)
+	var pins := {}
+	for family in families:
+		pins[family] = Dashboard.key_of(Dashboard.Density.FULL)
+	_dash.set_pins(pins)
 	_dash.set_shown(true)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
 	for family in families:

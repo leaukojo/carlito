@@ -7,9 +7,9 @@ extends Control
 ## scale/redline/warn/sentinel from the contract; the signals they draw leave the generated bar
 ## column through WIDGET_SIGNALS.
 ## Density drops whole sections only, never signals: COMPACT keeps the tell-tale row and gauges;
-## FULL adds the bars, readout, wind rose and echo sounder; OFF hides the cluster; AUTO (the
-## default) is FULL where it fits the window. The MORE/LESS tab pins one family's size over the
-## setting. Plain text + color only. Every family's FULL: dash_shots.
+## FULL adds the bars, readout, wind rose and echo sounder; OFF hides the cluster (F2); AUTO is
+## FULL where it fits the window. The ^/v corner button pins one family's size over AUTO.
+## Plain text + color only. Every family's FULL: dash_shots.
 
 ## Signals rendered as bespoke radial gauges (never as generated bars).
 const GAUGE_SIGNALS: PackedStringArray = ["kmh", "rpm"]
@@ -57,19 +57,17 @@ const READOUT_EXTRAS := {
 	"sail_angle": ["SAIL", "%+.0f"], "gear_ratio": ["RATIO", "%.2f"],
 }
 
-## What is on screen. AUTO is a setting only: it resolves to FULL or COMPACT (`full_fits`).
+## What is on screen. AUTO is never built: it resolves to FULL or COMPACT (`full_fits`).
 enum Density {FULL, COMPACT, OFF, AUTO}
-## Setting ids (the SETTINGS button text, and a pin's stored value) and the SETTINGS page cycle
-## order: AUTO -> COMPACT -> FULL -> OFF -> AUTO.
-const DENSITY_KEYS := {
-	Density.AUTO: "auto", Density.COMPACT: "compact", Density.FULL: "full", Density.OFF: "off",
-}
+## A pin's stored value per pinnable layout.
+const DENSITY_KEYS := {Density.COMPACT: "compact", Density.FULL: "full"}
 ## AUTO keeps FULL while its panel stands no taller than this share of the window (and no wider
 ## than it): a third leaves the road in view.
 const AUTO_MAX_H := 0.34
 
-## The MORE/LESS tab pinned `pinned` (FULL or COMPACT) for `family`; the shell saves it.
-signal size_pinned(family: String, pinned: int)
+## The ^/v button pinned `key` (a DENSITY_KEYS value) for `family`, or "" where the press landed
+## on AUTO's own pick and cleared the pin; the shell saves it.
+signal size_pinned(family: String, key: String)
 
 # --- layout metrics (logical px at scale 1.0, scaled through UiTheme.px) -------
 
@@ -307,13 +305,16 @@ var _beside_w := 0.0
 ## FULL's bars were built allowing two columns (`_two_bar_cols_fit` at build).
 var _two_bar_cols := false
 
-var _density: int = Density.AUTO  ## the SETTINGS / F2 setting
+var _hidden := false  ## F2's: the cluster is OFF
 var _layout: int = Density.COMPACT  ## what is built: FULL, COMPACT or OFF, never AUTO
-var _pins := {}  ## family -> DENSITY_KEYS value ("compact"/"full"), set by the tab (`set_pins`)
-## FULL's panel size as last measured for AUTO (`_build`), kept while COMPACT is shown, so a resize
-## knows whether FULL would fit now without building it.
+var _pins := {}  ## family -> DENSITY_KEYS value ("compact"/"full"), set by the button (`set_pins`)
+## The last FULL build's panel size (`_measure_full`), kept while COMPACT is shown, so a resize or
+## a press knows whether FULL would fit now without building it.
 var _full_size := Vector2.ZERO
-var _size_btn: Button = null  ## the MORE/LESS tab, null at OFF
+var _size_btn: Button = null  ## the ^/v corner button, null at OFF
+## px the button keeps clear of the window's right edge past the panel's padding: the touch
+## pedals' reach, from the shell (`set_tab_inset`).
+var _tab_inset := 0.0
 var _vehicle_type := ""        ## the family the current cluster was built for
 var _built := false            ## bind() has run at least once
 var _shown := false            ## the shell's HUD visibility, ANDed with the density
@@ -341,20 +342,14 @@ func bind(level: Node) -> void:
 
 # --- density -----------------------------------------------------------------
 
-## Setting -> its label key (the SETTINGS button text).
-static func key_of(setting: int) -> String:
-	return String(DENSITY_KEYS.get(setting, DENSITY_KEYS[Density.AUTO]))
+## A pinnable layout -> its stored pin value; "" for any other.
+static func key_of(layout: int) -> String:
+	return String(DENSITY_KEYS.get(layout, ""))
 
 
-## Next setting in the cycle, for the SETTINGS page's one button (and F2).
-static func next_setting(setting: int) -> int:
-	var order: Array = DENSITY_KEYS.keys()
-	return int(order[(maxi(order.find(setting), 0) + 1) % order.size()])
-
-
-## What the player picked in SETTINGS / F2 (AUTO included); `shown_layout` is what is on screen.
-func density_setting() -> int:
-	return _density
+## F2's choice (from the key / saved prefs); `shown_layout` is what is on screen.
+func is_hidden() -> bool:
+	return _hidden
 
 
 ## What is built: FULL, COMPACT or OFF.
@@ -362,18 +357,25 @@ func shown_layout() -> int:
 	return _layout
 
 
-## Set the setting (from the pause menu / F2 / saved prefs) and rebuild if it differs.
-func set_density_setting(setting: int) -> void:
-	var next := setting if setting in DENSITY_KEYS else Density.AUTO
-	if next == _density and _built:
+## Hide (OFF) or show the cluster, rebuilding if it changes.
+func set_hidden(off: bool) -> void:
+	if off == _hidden and _built:
 		return
-	_density = next
+	_hidden = off
 	if _built:
 		_build(_vehicle_type)
 	_apply_visible()
 
 
-## The tab's saved pins (family -> "compact"/"full"), from the shell; {} clears them.
+## Keep the ^/v button `px` further from the window's right edge (the touch pedals); moves the
+## live button, no rebuild.
+func set_tab_inset(px: float) -> void:
+	_tab_inset = px
+	if _size_btn != null:
+		_place_size_tab(_size_btn)
+
+
+## The button's saved pins (family -> "compact"/"full"), from the shell; {} clears them.
 func set_pins(pins: Dictionary) -> void:
 	if pins == _pins:
 		return
@@ -389,23 +391,28 @@ static func full_fits(full_size: Vector2, view: Vector2) -> bool:
 	return full_size.x <= view.x and full_size.y <= view.y * AUTO_MAX_H
 
 
-## The layout asked for, before AUTO's fit: OFF wins, then the family's pin, then the setting.
+## The layout asked for, before AUTO's fit: OFF wins, then the family's pin, then AUTO.
 func _wanted_layout() -> int:
-	if _density == Density.OFF:
+	if _hidden:
 		return Density.OFF
 	var pin := String(_pins.get(_vehicle_type, ""))
-	for d: int in [Density.COMPACT, Density.FULL]:
+	for d: int in DENSITY_KEYS:
 		if DENSITY_KEYS[d] == pin:
 			return d
-	return _density
+	return Density.AUTO
 
 
-## The tab: pin the other of FULL / COMPACT for this family.
+## The button: show the other of FULL / COMPACT for this family, pinned unless it is AUTO's own
+## pick. `_full_size` is the FULL panel either just shown or just built.
 func _on_size_pressed() -> void:
 	var next := Density.COMPACT if _layout == Density.FULL else Density.FULL
 	_pins[_vehicle_type] = DENSITY_KEYS[next]
-	size_pinned.emit(_vehicle_type, next)
 	_build(_vehicle_type)
+	var auto := Density.FULL if full_fits(_full_size, get_viewport_rect().size) else Density.COMPACT
+	var key := "" if next == auto else String(DENSITY_KEYS[next])
+	if key == "":
+		_pins.erase(_vehicle_type)
+	size_pinned.emit(_vehicle_type, key)
 	_apply_visible()
 
 
@@ -459,7 +466,7 @@ func _build(vehicle_type: String) -> void:
 	if want != Density.AUTO:
 		_build_layout(want)
 		return
-	_full_size = _measure_full(_build_layout(Density.FULL))
+	_build_layout(Density.FULL)
 	if not full_fits(_full_size, get_viewport_rect().size):
 		_build_layout(Density.COMPACT)
 
@@ -643,35 +650,48 @@ func _build_layout(want: int) -> PanelContainer:
 	# Every widget above is new, so field bindings are stale; a density change or theme rebuild
 	# comes back through here too.
 	_resolve_fields()
+	if full:
+		_full_size = _measure_full(panel)
 	_size_btn = null
 	if want != Density.OFF:
 		_size_btn = _make_size_tab(panel)
 	return panel
 
 
-## The MORE/LESS tab, centred on the panel's top edge: the bottom corners are under the touch
-## joystick and pedals. Takes no focus, so Space (handbrake and `ui_accept`) and the pad's
+## The ^/v button, flat in the panel's top-right corner, left of the touch pedals where they show
+## (`set_tab_inset`). Takes no focus, so Space (handbrake and `ui_accept`) and the pad's
 ## navigation never press it (`NoticeLine.add_action`'s button, the same).
 func _make_size_tab(panel: PanelContainer) -> Button:
 	var b := Button.new()
-	b.text = "LESS" if _layout == Density.FULL else "MORE"
+	var full := _layout == Density.FULL
+	b.text = "v" if full else "^"
+	b.tooltip_text = "Fewer gauges" if full else "More gauges"
+	b.flat = true
 	b.focus_mode = Control.FOCUS_NONE
 	b.add_theme_font_size_override("font_size", int(UiTheme.px(self, UiTheme.FS_SMALL)))
+	b.add_theme_color_override("font_color", UiTheme.TEXT_DIM)
 	if UiScale.is_touch_display():  # small for a cursor, never under a fingertip
-		b.custom_minimum_size.y = UiTheme.px(self, UiTheme.TOUCH_MIN)
-	b.anchor_left = 0.5
-	b.anchor_right = 0.5
+		b.custom_minimum_size = Vector2.ONE * UiTheme.px(self, UiTheme.TOUCH_MIN)
+	b.anchor_left = 1.0
+	b.anchor_right = 1.0
 	b.anchor_top = 1.0
 	b.anchor_bottom = 1.0
-	b.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	b.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	b.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	b.grow_vertical = Control.GROW_DIRECTION_END
 	b.pressed.connect(_on_size_pressed)
 	add_child(b)
+	_place_size_tab(b)
 	# The panel's height is known only once laid out; it follows each relayout.
 	panel.resized.connect(func() -> void:
 		b.offset_top = -panel.size.y
 		b.offset_bottom = -panel.size.y)
 	return b
+
+
+## The button's right edge: the panel's padding, plus the pedals' reach.
+func _place_size_tab(b: Button) -> void:
+	b.offset_right = -(UiTheme.px(self, PANEL_PAD_X) + _tab_inset)
+	b.offset_left = b.offset_right
 
 
 ## Build the tell-tale row: state chips for the enum inputs, then a lamp per bool input —
