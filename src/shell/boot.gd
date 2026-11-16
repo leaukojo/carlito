@@ -96,7 +96,6 @@ func _ready() -> void:
 	_progress = ChallengeProgress.open()
 	_settings = UserSettings.open()
 	_dashboard.size_pinned.connect(_settings.set_pin)
-	_touch.pedal_reach_changed.connect(_dashboard.set_tab_inset)
 	_apply_saved_settings()
 	_set_hud_visible(false)  # nothing to bind to until the level is up
 	_boot()
@@ -565,7 +564,7 @@ func _on_parallel_steer_changed(on: bool) -> void:
 	InputRouter.set_lab_parallel_steer(on)
 
 
-## F2: hides or shows the dashboard, saved. Its size is the ^/v button's (`Dashboard.size_pinned`).
+## F2: hides or shows the dashboard, saved. Its size is the MORE/LESS button's (`Dashboard.size_pinned`).
 func _toggle_dashboard() -> void:
 	_dashboard.set_hidden(not _dashboard.is_hidden())
 	_settings.set_value("dash_off", _dashboard.is_hidden())

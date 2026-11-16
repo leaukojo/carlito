@@ -171,6 +171,18 @@ static func _build_button(t: Theme, scale: float) -> void:
 	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		t.set_color(state, &"Back", BACK)
 
+	# `SmallButton`: a key beside live content rather than on a menu (the dashboard's MORE/LESS):
+	# the same keycap at FS_SMALL with half the padding.
+	t.set_type_variation(&"SmallButton", "Button")
+	t.set_font_size("font_size", &"SmallButton", _fs(FS_SMALL, scale))
+	t.set_stylebox("normal", &"SmallButton", _half_padded(keycap(SURFACE, RIM, scale)))
+	t.set_stylebox("hover", &"SmallButton", _half_padded(keycap(SURFACE_HI, ACCENT, scale)))
+	t.set_stylebox("pressed", &"SmallButton", _half_padded(_pushed(keycap(SURFACE_LO, RIM, scale))))
+	t.set_stylebox("disabled", &"SmallButton",
+			_half_padded(_pushed(keycap(SURFACE_LO, BORDER, scale))))
+	t.set_stylebox("focus", &"SmallButton",
+			_half_padded(_ringed(keycap(SURFACE_HI, ACCENT, scale), scale)))
+
 
 static func _build_panel(t: Theme, scale: float) -> void:
 	t.set_stylebox("panel", "PanelContainer", _box(SURFACE, scale))
@@ -240,6 +252,13 @@ static func _ringed(s: StyleBoxFlat, scale: float) -> StyleBoxFlat:
 	var lip := s.border_width_bottom
 	s.set_border_width_all(w)
 	s.border_width_bottom = maxi(w, lip)
+	return s
+
+
+## `s` with half its content margins (`SmallButton`).
+static func _half_padded(s: StyleBoxFlat) -> StyleBoxFlat:
+	for side in [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]:
+		s.set_content_margin(side, roundf(s.get_content_margin(side) * 0.5))
 	return s
 
 

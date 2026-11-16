@@ -8,7 +8,7 @@ extends Control
 ## column through WIDGET_SIGNALS.
 ## Density drops whole sections only, never signals: COMPACT keeps the tell-tale row and gauges;
 ## FULL adds the bars, readout, wind rose and echo sounder; OFF hides the cluster (F2); AUTO is
-## FULL where it fits the window. The ^/v corner button pins one family's size over AUTO.
+## FULL where it fits the window. The MORE/LESS button pins one family's size over AUTO.
 ## Plain text + color only. Every family's FULL: dash_shots.
 
 ## Signals rendered as bespoke radial gauges (never as generated bars).
@@ -65,7 +65,7 @@ const DENSITY_KEYS := {Density.COMPACT: "compact", Density.FULL: "full"}
 ## than it): a third leaves the road in view.
 const AUTO_MAX_H := 0.34
 
-## The ^/v button pinned `key` (a DENSITY_KEYS value) for `family`, or "" where the press landed
+## The MORE/LESS button pinned `key` (a DENSITY_KEYS value) for `family`, or "" where the press landed
 ## on AUTO's own pick and cleared the pin; the shell saves it.
 signal size_pinned(family: String, key: String)
 
@@ -311,10 +311,7 @@ var _pins := {}  ## family -> DENSITY_KEYS value ("compact"/"full"), set by the 
 ## The last FULL build's panel size (`_measure_full`), kept while COMPACT is shown, so a resize or
 ## a press knows whether FULL would fit now without building it.
 var _full_size := Vector2.ZERO
-var _size_btn: Button = null  ## the ^/v corner button, null at OFF
-## px the button keeps clear of the window's right edge past the panel's padding: the touch
-## pedals' reach, from the shell (`set_tab_inset`).
-var _tab_inset := 0.0
+var _size_btn: Button = null  ## the MORE/LESS button, null at OFF
 var _vehicle_type := ""        ## the family the current cluster was built for
 var _built := false            ## bind() has run at least once
 var _shown := false            ## the shell's HUD visibility, ANDed with the density
@@ -365,14 +362,6 @@ func set_hidden(off: bool) -> void:
 	if _built:
 		_build(_vehicle_type)
 	_apply_visible()
-
-
-## Keep the ^/v button `px` further from the window's right edge (the touch pedals); moves the
-## live button, no rebuild.
-func set_tab_inset(px: float) -> void:
-	_tab_inset = px
-	if _size_btn != null:
-		_place_size_tab(_size_btn)
 
 
 ## The button's saved pins (family -> "compact"/"full"), from the shell; {} clears them.
@@ -654,44 +643,36 @@ func _build_layout(want: int) -> PanelContainer:
 		_full_size = _measure_full(panel)
 	_size_btn = null
 	if want != Density.OFF:
-		_size_btn = _make_size_tab(panel)
+		_size_btn = _make_size_tab()
 	return panel
 
 
-## The ^/v button, flat in the panel's top-right corner, left of the touch pedals where they show
-## (`set_tab_inset`). Takes no focus, so Space (handbrake and `ui_accept`) and the pad's
-## navigation never press it (`NoticeLine.add_action`'s button, the same).
-func _make_size_tab(panel: PanelContainer) -> Button:
+## The MORE/LESS button, in the panel's bottom-left padding: the gauges sit centred, and the touch
+## joystick's disc stands clear above that corner (its EDGE inset). Takes no focus, so Space
+## (handbrake and `ui_accept`) and the pad's navigation never press it (`NoticeLine.add_action`'s
+## button, the same).
+func _make_size_tab() -> Button:
 	var b := Button.new()
 	var full := _layout == Density.FULL
-	b.text = "v" if full else "^"
+	b.text = "LESS" if full else "MORE"
 	b.tooltip_text = "Fewer gauges" if full else "More gauges"
-	b.flat = true
+	b.theme_type_variation = &"SmallButton"
 	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_font_size_override("font_size", int(UiTheme.px(self, UiTheme.FS_SMALL)))
-	b.add_theme_color_override("font_color", UiTheme.TEXT_DIM)
 	if UiScale.is_touch_display():  # small for a cursor, never under a fingertip
-		b.custom_minimum_size = Vector2.ONE * UiTheme.px(self, UiTheme.TOUCH_MIN)
-	b.anchor_left = 1.0
-	b.anchor_right = 1.0
+		b.custom_minimum_size.y = UiTheme.px(self, UiTheme.TOUCH_MIN)
+	b.anchor_left = 0.0
+	b.anchor_right = 0.0
 	b.anchor_top = 1.0
 	b.anchor_bottom = 1.0
-	b.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	b.grow_vertical = Control.GROW_DIRECTION_END
+	b.grow_horizontal = Control.GROW_DIRECTION_END
+	b.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	b.offset_left = UiTheme.px(self, PANEL_PAD_X)
+	b.offset_right = b.offset_left
+	b.offset_top = -UiTheme.px(self, PANEL_PAD_Y)
+	b.offset_bottom = b.offset_top
 	b.pressed.connect(_on_size_pressed)
 	add_child(b)
-	_place_size_tab(b)
-	# The panel's height is known only once laid out; it follows each relayout.
-	panel.resized.connect(func() -> void:
-		b.offset_top = -panel.size.y
-		b.offset_bottom = -panel.size.y)
 	return b
-
-
-## The button's right edge: the panel's padding, plus the pedals' reach.
-func _place_size_tab(b: Button) -> void:
-	b.offset_right = -(UiTheme.px(self, PANEL_PAD_X) + _tab_inset)
-	b.offset_left = b.offset_right
 
 
 ## Build the tell-tale row: state chips for the enum inputs, then a lamp per bool input —

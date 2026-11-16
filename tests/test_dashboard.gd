@@ -337,7 +337,7 @@ func test_a_pin_overrides_auto_for_its_family_only() -> void:
 	assert_int(car.shown_layout()).is_equal(auto_layout)
 
 
-## The ^/v button: present unless OFF, never takes focus (Space and the pad would press it). A
+## The MORE/LESS button: present unless OFF, never takes focus (Space and the pad would press it). A
 ## press flips FULL/COMPACT for this family and says so for the shell to save: a pin away from
 ## AUTO's pick, "" (cleared) back onto it.
 func test_the_size_button_pins_away_from_auto_and_clears_back_onto_it() -> void:
@@ -356,10 +356,10 @@ func test_the_size_button_pins_away_from_auto_and_clears_back_onto_it() -> void:
 		dash.size_pinned.connect(func(f: String, key: String) -> void: pinned.append([f, key]))
 		assert_object(dash._size_btn).is_not_null()
 		assert_int(dash._size_btn.focus_mode).is_equal(Control.FOCUS_NONE)
-		assert_str(dash._size_btn.text).is_equal("v" if auto_layout == Dashboard.Density.FULL else "^")
+		assert_str(dash._size_btn.text).is_equal("LESS" if auto_layout == Dashboard.Density.FULL else "MORE")
 		dash._size_btn.pressed.emit()
 		assert_int(dash.shown_layout()).is_equal(other)
-		assert_str(dash._size_btn.text).is_equal("v" if other == Dashboard.Density.FULL else "^")
+		assert_str(dash._size_btn.text).is_equal("LESS" if other == Dashboard.Density.FULL else "MORE")
 		dash._size_btn.pressed.emit()
 		assert_int(dash.shown_layout()).is_equal(auto_layout)
 		assert_array(pinned).override_failure_message("in %s: %s" % [case[0], pinned]) \
@@ -369,14 +369,30 @@ func test_the_size_button_pins_away_from_auto_and_clears_back_onto_it() -> void:
 	assert_object(_dash("car", Dashboard.Density.OFF)._size_btn).is_null()
 
 
-## The button keeps clear of the touch pedals: the shell's inset moves it without a rebuild.
-func test_the_size_button_moves_left_by_the_tab_inset() -> void:
-	var dash := _dash("car", Dashboard.Density.COMPACT)
-	var btn := dash._size_btn
-	var right := btn.offset_right
-	dash.set_tab_inset(200.0)
-	assert_object(dash._size_btn).is_same(btn)
-	assert_float(btn.offset_right).is_equal_approx(right - 200.0, 0.01)
+## The button in the bottom-left padding stands clear of the touch joystick's disc above that
+## corner, on desktop (pads at DESKTOP_PAD_SCALE) and on a touchscreen (full-size pads, the button
+## TOUCH_MIN tall). Its far corner is the point nearest the disc's centre.
+func test_the_size_button_clears_the_touch_joystick() -> void:
+	var ui: UiScale = auto_free(UiScale.new())  # the game's theme, so SmallButton is the real one
+	add_child(ui)
+	var dash: Dashboard = auto_free(Dashboard.new())
+	ui.add_child(dash)
+	GameState.current_vehicle = "car"
+	dash.bind(null)
+	var s := UiTheme.scale_of(dash)
+	assert_str(String(dash._size_btn.theme_type_variation)).is_equal("SmallButton")
+	assert_bool(ui.theme.is_type_variation(&"SmallButton", &"Button")).is_true()
+	var btn_size := dash._size_btn.get_combined_minimum_size()
+	for touch: bool in [false, true]:
+		var k := s * (1.0 if touch else TouchControls.DESKTOP_PAD_SCALE)
+		var h := maxf(btn_size.y, UiTheme.px(dash, UiTheme.TOUCH_MIN)) if touch else btn_size.y
+		var corner := Vector2(UiTheme.px(dash, Dashboard.PANEL_PAD_X) + btn_size.x,
+				UiTheme.px(dash, Dashboard.PANEL_PAD_Y) + h)  # from the window's bottom-left
+		var radius := TouchControls.JOY_RADIUS * k
+		var centre := Vector2.ONE * (TouchControls.EDGE * k + radius)
+		assert_float(corner.distance_to(centre)) \
+			.override_failure_message("touch %s: corner %s, disc %s r %.0f" % [touch, corner, centre, radius]) \
+			.is_greater(radius)
 
 
 ## The whole node bus renders nowhere, and that is a decision rather than an omission, so it is

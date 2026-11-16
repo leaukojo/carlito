@@ -133,7 +133,7 @@ is `hitch` (tractor `hitch_pos`, semi tipper valve — shared local toggle).
 - Dashboard (`src/ui/dashboard.gd`; its layers and density: the header comments): generated from
   the contract, instruments hand-built; bool "in" lamps read `LAMP_INPUT_FIELDS` /
   `LAMP_COMPUTED` (`test_dashboard` pins both against the contract). Size is AUTO unless the
-  panel's ^/v button pins a family's; F2 (`toggle_dashboard`) hides it; both saved to `user://` (`UserSettings`). Instruments draw values as given, never lagged or held: a flicker is the sim's.
+  panel's MORE/LESS button pins a family's; F2 (`toggle_dashboard`) hides it; both saved to `user://` (`UserSettings`). Instruments draw values as given, never lagged or held: a flicker is the sim's.
 - Debug overlay (`debug_overlay.gd`): FPS/frame ms/draw calls/VRAM/node count via
   `Performance`, F3. Target: root CLAUDE.md perf target.
 

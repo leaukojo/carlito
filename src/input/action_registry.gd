@@ -323,7 +323,7 @@ const ENTRIES: Array[Dictionary] = [
 		"label": "Menu / back", "touch": Touch.SHELL_SIGNAL, "touch_label": "MENU",
 	},
 	{
-		# F2 hides the cluster and shows it again; its size is the dashboard's ^/v button.
+		# F2 hides the cluster and shows it again; its size is the dashboard's MORE/LESS.
 		# Keyboard-only: touch and the pad have no hide.
 		"id": &"toggle_dashboard", "actions": ["toggle_dashboard"], "group": Group.SHELL,
 		"label": "Dashboard on / off",

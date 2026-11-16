@@ -109,12 +109,12 @@ horn sounds on **H** or sloppyCAN's `horn`.
 COMPACT shows the warning lamps, the speedometer and the rev counter. FULL adds the bars (fuel,
 coolant, brake temperature, a truck's air and the rest) and a line of readings (heading, odometer,
 position, fuel burn). The dashboard picks FULL when it fits on the screen, COMPACT when it would
-cover too much of it, as on a phone or with the drone's long list of bars. The small **^** or
-**v** in its top-right corner switches the vehicle you are driving and remembers it; pressing it
+cover too much of it, as on a phone or with the drone's long list of bars. The small **MORE**
+or **LESS** in its bottom-left corner switches the vehicle you are driving and remembers it; pressing it
 back to the size the screen would pick lets that vehicle follow the screen again. The debug
 overlay, top right, shows the frame rate and draw calls, each wheel's surface, grip, slip and angle, the body's pitch and roll, a
 trailer's angle and the wind.
-<!-- dashboard.gd: "COMPACT keeps the tell-tale row and gauges; FULL adds the bars, readout, wind rose and echo sounder"; "AUTO is FULL where it fits the window"; AUTO_MAX_H; _make_size_tab "^"/"v"; _on_size_pressed clears the pin on AUTO's pick; readout "HDG ODO lat, lon" plus READOUT_EXTRAS BURN; debug_overlay.gd _refresh: FPS and the Performance monitors, then _grip_line, _slip_line, _steer_line, _attitude_line, _articulation_line, _flow_line -->
+<!-- dashboard.gd: "COMPACT keeps the tell-tale row and gauges; FULL adds the bars, readout, wind rose and echo sounder"; "AUTO is FULL where it fits the window"; AUTO_MAX_H; _make_size_tab "MORE"/"LESS"; _on_size_pressed clears the pin on AUTO's pick; readout "HDG ODO lat, lon" plus READOUT_EXTRAS BURN; debug_overlay.gd _refresh: FPS and the Performance monitors, then _grip_line, _slip_line, _steer_line, _attitude_line, _articulation_line, _flow_line -->
 
 
 

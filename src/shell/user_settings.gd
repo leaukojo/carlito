@@ -1,7 +1,7 @@
 class_name UserSettings
 extends RefCounted
 ## The SETTINGS page's choices, SANDBOX's driver aids, the garage's tyre class per variant, F2's
-## dashboard hide and the dashboard ^/v button's size per family, in
+## dashboard hide and the dashboard MORE/LESS button's size per family, in
 ## `user://settings.cfg` (IndexedDB on web), so a reload keeps them. SANDBOX's WORLD and LAB rows
 ## and the gearbox stay session-only (boot.gd).
 ##
@@ -16,10 +16,10 @@ const PATH := "user://settings.cfg"
 const SECTION := "settings"
 ## Every key the store keeps, with its default, which also fixes its type.
 const DEFAULTS := {
-	# Not "density" or "dashboard": an old file's size setting, which the ^/v pins replace. Unknown
+	# Not "density" or "dashboard": an old file's size setting, which the MORE/LESS pins replace. Unknown
 	# here, so ignored and dropped on the next write.
 	"dash_off": false,  ## F2 hid the dashboard
-	"dash_pins": {},  ## family -> Dashboard.DENSITY_KEYS value, the ^/v button's (`set_pin`)
+	"dash_pins": {},  ## family -> Dashboard.DENSITY_KEYS value, the MORE/LESS button's (`set_pin`)
 	"ui_scale": UiScale.USER_DEFAULT,
 	"key_softening": KeyShaper.DEFAULT_SOFTENING,
 	"tcs_off": false,
