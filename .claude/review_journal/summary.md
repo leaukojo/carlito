@@ -39,18 +39,8 @@ A2's fix, done 2026-11-16: `sessions/2026-11-16-contact-fix.md`; A3, the rolling
 a stage before the TC hold, done 2026-11-16: `sessions/2026-11-16-rolling-moment-stage.md`.
 
 A4, the three accelerations raw, done 2026-11-16 (b76f263): `sessions/2026-11-16-accel-raw.md`.
-
-- **A4b** (approved, user 2026-11-16; ready) The trailers' roll-over lift tables follow the raw
-  `TowedBody.accel_lat`. For each of box, flatbed, tanker and tipper, run
-  `measure_semi_launch -- semi trailer=<t> ramp noesc notrsp` (`--fixed-fps 60`) and write its
-  "first wheel lift" trailer's g into `trailer_roll_lift_g` (`src/vehicles/truck/trailers/<t>_spec.tres`,
-  the bogie load unchanged); then re-run `measure_vehicles -- doc=trailer_roll` and
-  `measure_semi_launch -- semi doc=trailer_roll`. The raw readings at b76f263: 0.342, 0.556, 0.378,
-  0.434 (`sessions/2026-11-16-accel-raw.md` § Runs). The goal is realistic behaviour, not the old
-  figures (user): a brief wheel lift with full protection is acceptable. Stop and hand back if,
-  with ESC and roll-over both on, a trailer goes over or chatter rises above that session's
-  figures; no other knob is tuned. `test_trailer`, `test_stability_control`, the suite.
-  [medium, auto, Opus]
+A4b, the trailers' lift tables on the raw sensor, done 2026-11-16 (65cfd41):
+`sessions/2026-11-16-trailer-lift-tables.md`.
 
 - **A5** (ready) Cover sweep (3),
   `measure_vehicles.CORNER_SMOOTH_S` (`:64`; `:2475`, `:2493`, `:2502`): a 0.25 s lag before the
@@ -213,6 +203,10 @@ The raw accelerations (A4, 2026-11-16):
 - `accLat` and `accLong` on FULL show shift and kerb jolts at full size.
 - `car_corner_budget` ("Perfect turns"): a kerb or shift jolt near 4.0 m/s² can fail the run a
   tick sooner. Is the limit still fair?
+
+The trailers' lift tables (A4b, 2026-11-16):
+- A laden box rig's trailer roll-over control brakes from a slightly lower g (0.342, was 0.355):
+  on a hard step at speed it brakes for longer (6.2 s, was 3.4 s), with no trailer over.
 
 Known and queued, not a verify item: a laden `semi`'s AXLE number still moves by 1 kg (3 at most)
 on some ticks (stage B, the towing item's (c)).
