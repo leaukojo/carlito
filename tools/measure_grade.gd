@@ -1053,9 +1053,9 @@ func _roll_step() -> void:
 
 
 ## `verbose` roll-back line, every 0.5 s: the tractor unit's tyre force and slip per axle and its
-## rolling force (`RayWheel.force_roll`, tyre plus surface drag), and with a trailer its tyres'
-## force, its rolling force, its brake and the drawbar's pull, read off the trailer's own balance
-## (`m a + m g sin - sum Fx - sum roll` along the slope). Names what bounds a slow pull-away:
+## rolling resistance (`RayWheel.force_roll`, tyre plus surface drag, inside the tyre force), and
+## with a trailer its tyres' force, its rolling resistance, its brake and the drawbar's pull, read
+## off the trailer's own balance (`m a + m g sin - sum Fx` along the slope). Names what bounds a slow pull-away:
 ## traction, the drawbar, or the trailer.
 func _print_roll_forces(gain: float) -> void:
 	var fx := {true: 0.0, false: 0.0}
@@ -1085,7 +1085,7 @@ func _print_roll_forces(gain: float) -> void:
 		var g_pull := trailer.mass * BrakeSizing.G * sin(deg_to_rad(_angle))
 		line += "  | trailer Fx %6.0f N roll %6.0f N brake %.2f  drawbar %6.0f N (grade %6.0f)" % [
 				t_fx, t_roll, trailer.brake_applied(),
-				trailer.mass * trailer.accel_fwd + g_pull - t_fx - t_roll, g_pull]
+				trailer.mass * trailer.accel_fwd + g_pull - t_fx, g_pull]
 	print(line)
 
 
@@ -1218,10 +1218,10 @@ func _print_ascent(gain: float) -> void:
 ## STOPS (`stops[=<n>]`, STOPS_DEFAULT): `n` full-pedal stops on the flat from `kmh=` (STOPS_KMH),
 ## back to back, floored in D between them.
 ## Each prints the hottest brake and the lowest fade factor of the powered unit and of a trailer,
-## and the energy check: the friction brakes' heat (the per-tick `brake_reacted *
-## brake_friction_share * brake_settled_spin`, never C·ΔT, which cooling empties) against the rig's
-## drop in kinetic, wheel-spin and potential energy less what the sim's own forces took: rolling
-## (`force_roll` at the patch), air (`VehicleMath.air_force`), the driveline (the shaft torque
+## and the energy check: the friction brakes' heat (the per-tick `brake_reacted
+## * brake_friction_share * brake_settled_spin`, never C·ΔT, which cooling empties) against the
+## rig's drop in kinetic, wheel-spin and potential energy less what the sim's own forces took:
+## rolling (`roll_reacted` over the same spin), air (`VehicleMath.air_force`), the driveline (the shaft torque
 ## `WheelDrive._drive_torque` on the driven wheels' spin: engine braking and coupling slip), the
 ## retarder's share of the reacted brake and the tyres' slip (their force on the patch's slip
 ## velocity). Straight-line: the patch velocity is read along the body's axes, not a steered wheel's.
@@ -1884,13 +1884,14 @@ func _ledger_tick(delta: float) -> void:
 		for w in _wheels_of(b):
 			if towed:
 				ext += w.contact_force
+			# The rolling moment and the brake each work over the settled spin.
+			l["rolling"] += w.roll_reacted * w.brake_settled_spin * delta
 			var work := w.brake_reacted * w.brake_settled_spin * delta
 			l["brakes"] += work * w.brake_friction_share
 			l["retarder"] += work * (1.0 - w.brake_friction_share)
 			if not w.in_contact:
 				continue
 			var vel := VehicleMath.point_velocity(b, w.contact_point)
-			l["rolling"] -= w.force_roll * vel.dot(fwd) * delta
 			l["slip"] += slip_loss_w(w.force_long, w.omega, w.wheel_radius, vel.dot(fwd), w.force_lat,
 					vel.dot(right)) * delta
 		if gd.drag_area > 0.0 or b is TowedBody:  ## as `WheelDrive._apply_resistance` / `tick_towed`

@@ -96,11 +96,14 @@ var slide_speed := 0.0  ## m/s the tread moves over the road along the wheel thi
 var abs_active := false ## the anti-lock held this wheel's brake back this tick
 var tcs_active := false ## traction control held this wheel's drive back this tick
 var force_long := 0.0   ## last tick's longitudinal tire force (N, +=forward); the next tick's link force reads it (`link_slope`)
-var force_roll := 0.0   ## last tick's rolling plus surface drag at the contact (N, +=forward; `surface_drag_force`)
+## Last tick's rolling resistance (N, + = forward), the tyre's and the ground's: the torque the
+## rolling moment reacted (`roll_reacted`) over the radius. A readout: the tyre's `force_long`
+## carries it to the body.
+var force_roll := 0.0
 ## Last tick's lateral tire force (N, post friction circle, + = right); the next tick's compliance
 ## steer reads it through the latch (`latch_bar`).
 var force_lat := 0.0
-## Last tick's whole force on the body at the patch (N, world): suspension, tyre and rolling; zero
+## Last tick's whole force on the body at the patch (N, world): suspension and tyre; zero
 ## off the ground. A coupling's force reads off the bodies' balance with it (`measure_grade`).
 var contact_force := Vector3.ZERO
 ## Hard-road rolling resistance coefficient of this wheel's tyre: the spec's stock
@@ -147,6 +150,12 @@ var brake_settled_spin := 0.0
 ## The friction brakes' share of the brake commanded this tick, set by the owner before `tick`
 ## (foot and parking over the whole; a retarder's part heats nothing here, `heat_brake`).
 var brake_friction_share := 1.0
+## The spin (rad/s, >= 0) this tick's rolling moment can take off (`roll_torque * spin_compliance`),
+## latched by `_integrate_spin` and applied by `settle_spin` as the settle law's first stage; 0 off
+## the ground. `roll_reacted`: the torque (N·m, >= 0) it reacted there, a stopped wheel's only what
+## it took.
+var roll_spin := 0.0
+var roll_reacted := 0.0
 ## This axle's friction-brake heat figures (`GroundDriveSpec.axle_brake_figures`, picked by
 ## `apply_suspension`) and its one lumped temperature (°C, `BrakeThermal`); the default is no model.
 var brake_figures := BrakeThermal.Figures.new()
@@ -185,7 +194,7 @@ var anti_roll_partner: RayWheel:
 		_partner_ref = weakref(value) if value != null else null
 var _partner_ref: WeakRef = null
 ## Body mass share this corner carries (kg): `mass / wheel count`, sizing `tick`'s 60 Hz clamps
-## (the damper, the two one-tick caps, the patch spring, rolling drag), never a tyre law
+## (the damper, the two one-tick caps, the patch spring), never a tyre law
 ## (`reference_load`). Constructor-required: a wheel built with zero applies no damping or tire force
 ## and just slides. It tracks the body's LIVE mass (every runtime `mass` write
 ## is `BaseVehicle.set_live_mass`).
@@ -374,6 +383,8 @@ func reset() -> void:
 	brake_reacted = 0.0
 	brake_settled_spin = 0.0
 	brake_friction_share = 1.0
+	roll_spin = 0.0
+	roll_reacted = 0.0
 	brake_temp = BrakeThermal.AMBIENT_C
 	tcs_spin = 0.0
 	tcs_ceiling = 0.0
@@ -576,18 +587,28 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	# one-tick cap.
 	var zero_slip_k := minf(budget_long * zero_slip_rise(drive_spec.grip_curve) / slip_denom,
 			long_mass / delta) * wheel_radius * wheel_radius * delta / wheel_inertia
-	_integrate_spin(drive_torque, -f.x * wheel_radius, brake_torque, delta, slip_vel, v_long, abs_slip,
-			tcs_slip, tcs_drive, floor_vel, zero_slip_k)
+	# Rolling resistance, the tyre's hysteresis (`rolling_crr`) and the ground deforming
+	# (`surface_drag`): a moment on the wheel (the patch's pressure centre sits ahead of the axle),
+	# the settle law's first stage (`settle_spin`), so it stops a wheel and never reverses it and the
+	# tyre carries it to the road under its one cap. Never in `hold_torque`: every undriven wheel
+	# would stand held through the first STICK_SPEED of a launch.
+	# COMPROMISE: the ground's share is a force on the wheel in a real soil (its pressure passes
+	# through the axle) and costs a driven wheel slip; as a moment, a driven wheel's own soil drag
+	# costs engine torque and no slip. Undoing it is a capped force at the contact, with a stick test
+	# that sees every other force on the contact's speed.
+	var roll_torque := (rolling_crr + surface_drag) * suspension_force * wheel_radius
+	_integrate_spin(drive_torque, -f.x * wheel_radius, brake_torque, delta, slip_vel, v_long,
+			abs_slip, tcs_slip, tcs_drive, floor_vel, zero_slip_k, roll_torque)
 	if not coupled_spin:
 		apply_patch(body)
 		update_visual(drive_spec, delta)
 
 
-## Push the body with this tick's tyre force at the slip the spin step settled on, and the rolling
-## drag: after `settle_spin` (and `hold_by_lock`), so the body and the wheel's step exchange one
-## force. `tick` stores the patch; a `coupled_spin` wheel's owner calls this once its differentials
+## Push the body with this tick's tyre force at the slip the spin step settled on: after
+## `settle_spin` (and `hold_by_lock`), so the body and the wheel's step exchange one force.
+## `tick` stores the patch; a `coupled_spin` wheel's owner calls this once its differentials
 ## have settled, any other wheel at the end of its own `tick`. Nothing off the ground. Sets the
-## tick's tyre readouts (`force_long`, `force_lat`, `force_roll`, `long_slip`, `slip`, `slip_size`,
+## tick's tyre readouts (`force_long`, `force_lat`, `long_slip`, `slip`, `slip_size`,
 ## `slide_speed`, `contact_force`).
 func apply_patch(body: RigidBody3D) -> void:
 	if not in_contact:
@@ -604,22 +625,7 @@ func apply_patch(body: RigidBody3D) -> void:
 	body.apply_force(_patch_forward * f.x + _patch_side * f.y, at)
 	force_long = f.x
 	force_lat = f.y
-
-	# Rolling resistance: the tyre's hysteresis (`rolling_crr`) and the ground deforming
-	# (`surface_drag`) share one force and one tick clamp, outside the friction circle and the spin
-	# step (a wheel in mud keeps rolling at road speed; the body slows). Two separately clamped
-	# terms could take twice the cap. The tyre's force along the wheel, less the part that holds
-	# a slope, is a third term on that speed: the drag takes what it leaves of the cap
-	# (`docs/vehicles.md` § One-tick caps).
-	# COMPROMISE: real rolling resistance is a moment on the wheel (the patch's pressure centre sits
-	# ahead of the axle); here it is a contact force outside the spin step. Undoing that is a torque
-	# inside the spin step and a re-check of the static hold (`docs/vehicles.md` § Holding at rest).
-	force_roll = surface_drag_force(_patch_v_long, rolling_crr + surface_drag, suspension_force,
-			_patch_long_mass, _patch_delta, maxf(-signf(_patch_v_long)
-			* (f.x + _patch_long_mass * body.get_gravity().dot(_patch_forward)), 0.0))
-	body.apply_force(_patch_forward * force_roll, at)
-	contact_force = contact_normal * suspension_force + _patch_forward * (f.x + force_roll) \
-			+ _patch_side * f.y
+	contact_force = contact_normal * suspension_force + _patch_forward * f.x + _patch_side * f.y
 	if on_beam:
 		patch_force = body.global_transform.basis.transposed() * contact_force
 		patch_point = body.global_transform.affine_inverse() * contact_point
@@ -1180,19 +1186,6 @@ static func free_spin_omega(omega_in: float, delta: float) -> float:
 	return move_toward(omega_in, 0.0, absf(omega_in) * FREE_SPIN_DECAY * delta)
 
 
-## Rolling-resistance force (N, along the wheel's forward), the tyre's and a painted surface's
-## together: `crr * load` opposing the contact's longitudinal velocity, capped at the force that would zero that
-## velocity in one tick on the `mass` (kg) the contact moves, so it can stop the wheel and never push
-## it backward. 0 at rest. `taken` (N, >= 0) is what another force of this tick already opposes that
-## velocity with (the tyre's own): it comes off the cap, which the two share.
-static func surface_drag_force(v_long: float, crr: float, normal_load: float, mass: float,
-		delta: float, taken := 0.0) -> float:
-	if crr <= 0.0 or normal_load <= 0.0:
-		return 0.0
-	var tick_cap := maxf(mass * absf(v_long) / delta - taken, 0.0)
-	return clampf(-signf(v_long) * crr * normal_load, -tick_cap, tick_cap)
-
-
 ## Slip-ratio denominator floor (m/s) for a tyre of longitudinal budget `budget` (N) whose one-tick
 ## cap moves `mass`: LOW_SPEED_FLOOR, or higher where the grip curve's steepest rise, `budget * rise
 ## / floor` N per m/s of slip, would pass the cap's `mass / delta`. On that floor the curve sits
@@ -1230,12 +1223,14 @@ static func zero_slip_rise(grip_curve: PackedVector2Array) -> float:
 ## passes the curve's first slope; 0 off the ground) stands in only where the secant gives less (a
 ## held wheel's patch spring does not fall with the slip, so it stays rigid). The body takes the
 ## force at the slip this step settles on (`apply_patch`), so the two exchange one force. The brake
-## (`brake_spin`, ABS floor `abs_floor`) and the TC hold (`tcs_spin`, `tcs_ceiling`: TC removes
-## drive, never brakes) are latched by the step and applied by `settle_spin`, after the
-## differentials on a `coupled_spin` wheel. Derivation and figures: docs/vehicles.md, "Spin step".
+## (`brake_spin`, ABS floor `abs_floor`), the TC hold (`tcs_spin`, `tcs_ceiling`: TC removes
+## drive, never brakes) and the rolling moment (`roll_spin`) are latched by the step and applied by
+## `settle_spin`, after the differentials on a `coupled_spin` wheel. Derivation and figures:
+## docs/vehicles.md, "Spin step".
 func _integrate_spin(drive_torque: float, reaction_torque: float, brake_torque: float,
 		delta: float, slip_vel: float, v_long := 0.0, abs_slip := 0.0, tcs_slip := 0.0,
-		tcs_drive := 0.0, floor_vel := LOW_SPEED_FLOOR, zero_slip_stiffness := 0.0) -> void:
+		tcs_drive := 0.0, floor_vel := LOW_SPEED_FLOOR, zero_slip_stiffness := 0.0,
+		roll_torque := 0.0) -> void:
 	var null_slip_torque := wheel_inertia * absf(slip_vel) / (delta * wheel_radius)
 	var reaction_stiffness := absf(reaction_torque) / maxf(null_slip_torque, 1e-6)
 	if null_slip_torque <= 1e-6:
@@ -1249,6 +1244,7 @@ func _integrate_spin(drive_torque: float, reaction_torque: float, brake_torque: 
 		tcs_spin = held_drive * spin_compliance
 		tcs_ceiling = tcs_ceiling_spin(v_long, signf(held_drive), wheel_radius, tcs_slip, floor_vel)
 	brake_spin = brake_torque * spin_compliance
+	roll_spin = roll_torque * spin_compliance
 	abs_floor = abs_floor_spin(v_long, wheel_radius, abs_slip, floor_vel)
 	abs_active = false
 	if not coupled_spin:
@@ -1256,14 +1252,21 @@ func _integrate_spin(drive_torque: float, reaction_torque: float, brake_torque: 
 
 
 ## Settle this tick's spin: `torque` (N·m) from the differentials through the step
-## (`* spin_compliance`), then the latched holds, the traction control's and then the brake's
-## (`settled_spin`). The owner of a `coupled_spin` wheel calls it once per tick after solving its
-## differentials with those holds inside (`Differential.braked_coupling_torque`); any other wheel
-## settles at the end of its own step. `lock_part` is the park lock's share of `torque`: a hold like
-## the brake's, so the patch is held against the rest (`coupled_torque`) and never against it.
+## (`* spin_compliance`), then the latched stages, the rolling moment's, the traction control's and
+## then the brake's (`settled_spin`). The owner of a `coupled_spin` wheel calls it once per tick
+## after solving its differentials with those stages inside (`Differential.braked_coupling_torque`);
+## any other wheel settles at the end of its own step. `lock_part` is the park lock's share of
+## `torque`: a hold like the brake's, so the patch is held against the rest (`coupled_torque`) and
+## never against it.
 func settle_spin(torque: float, lock_part := 0.0) -> void:
 	coupled_torque = torque - lock_part
 	omega += torque * spin_compliance
+	# The rolling moment first, with every wheel torque in: a TC hold reads the spin it leaves, so
+	# the drive, not the tyre's slip, pays it (a real TC trims the engine to its slip target).
+	var rolling := omega
+	omega = move_toward(omega, 0.0, roll_spin)
+	roll_reacted = absf(rolling - omega) / spin_compliance if spin_compliance > 0.0 else 0.0
+	force_roll = -signf(rolling) * roll_reacted / wheel_radius if wheel_radius > 0.0 else 0.0
 	var tcs := tcs_take(omega, tcs_spin, tcs_ceiling)
 	tcs_active = tcs > 0.0
 	omega -= signf(tcs_spin) * tcs
@@ -1346,12 +1349,14 @@ static func tcs_take(spin: float, share: float, ceiling: float) -> float:
 	return maxf(absf(share) - room, 0.0)
 
 
-## A wheel's settle law: `spin` (rad/s, before its holds) after the traction-control hold
-## (`tcs_take`) and then the brake (`braked_spin`). Each is monotone and piecewise linear in `spin`,
-## so their composition is too, which is what lets `Differential` solve a coupling with both inside.
+## A wheel's settle law: `spin` (rad/s, before its stages) after the rolling moment (`roll_take`
+## toward zero, never past it), the traction-control hold (`tcs_take`) and then the brake
+## (`braked_spin`). Each is monotone and piecewise linear in `spin`, so their composition is too,
+## which is what lets `Differential` solve a coupling with all three inside.
 static func settled_spin(spin: float, can_take: float, stop_at: float, tcs_share: float,
-		tcs_at: float) -> float:
-	return braked_spin(spin - signf(tcs_share) * tcs_take(spin, tcs_share, tcs_at), can_take,
+		tcs_at: float, roll_take := 0.0) -> float:
+	var rolled := move_toward(spin, 0.0, roll_take)
+	return braked_spin(rolled - signf(tcs_share) * tcs_take(rolled, tcs_share, tcs_at), can_take,
 			stop_at)
 
 

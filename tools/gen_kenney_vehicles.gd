@@ -38,7 +38,7 @@ const LENS_MIN_H := 0.06       ## m floor on lens height (some are a single flat
 const TURN_FRAC := 0.35        ## outboard share of a lens' width that becomes the indicator
 const DISC_MIN_TRIS := 12      ## a lens this dense with square extents is a disc, not a box
 
-## --- resistance (VehicleMath.air_force; rolling: RayWheel.surface_drag_force) ---
+## --- resistance (VehicleMath.air_force; rolling: the moment in RayWheel.tick) ---
 ## Frontal area is derived from each body's own AABB (not listed per variant) at FRONTAL_FILL,
 ## the standard A ~ 0.8 * width * height rule of thumb for a non-rectangular silhouette. Wheels
 ## are outside the AABB and not added; they're already inside the Cd this multiplies.

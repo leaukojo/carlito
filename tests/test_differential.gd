@@ -88,22 +88,24 @@ func test_the_torque_never_exceeds_the_capacity() -> void:
 # --- the coupling with its outputs' brakes inside -------------------------------------
 
 ## One output a side (an axle diff): `[spin, compliance, can_take, stop_at]` each, plus
-## `[tcs_share, tcs_at]` for a TC-held one.
+## `[tcs_share, tcs_at]` for a TC-held one and `[roll_take]` after them for a rolling moment.
 func _axle_torque(a: Array, b: Array, capacity: float) -> float:
 	return DiffScript.braked_coupling_torque(PackedFloat64Array([a[0], b[0]]),
 			PackedFloat64Array([a[1], b[1]]), PackedFloat64Array([a[2], b[2]]),
 			PackedFloat64Array([a[3], b[3]]), PackedFloat64Array([_tc(a, 4), _tc(b, 4)]),
-			PackedFloat64Array([_tc(a, 5), _tc(b, 5)]), 1, capacity)
+			PackedFloat64Array([_tc(a, 5), _tc(b, 5)]), PackedFloat64Array([_tc(a, 6), _tc(b, 6)]),
+			1, capacity)
 
 
-## An output's TC entry `k`, 0 (no hold) where it declares none.
+## An output's optional entry `k` (TC or the rolling moment), 0 (none) where it declares none.
 func _tc(o: Array, k: int) -> float:
 	return o[k] if o.size() > k else 0.0
 
 
 ## Output `o`'s spin once `t` is applied on `side` (-1 a, +1 b) and its holds have acted.
 func _after(o: Array, t: float, side: float) -> float:
-	return WheelScript.settled_spin(o[0] + side * t * o[1], o[2], o[3], _tc(o, 4), _tc(o, 5))
+	return WheelScript.settled_spin(o[0] + side * t * o[1], o[2], o[3], _tc(o, 4), _tc(o, 5),
+			_tc(o, 6))
 
 
 func test_with_no_brake_it_is_the_plain_coupling() -> void:
@@ -116,7 +118,8 @@ func test_with_no_brake_it_is_the_plain_coupling() -> void:
 	var c := PackedFloat64Array([0.003, 0.001, 0.0015, 0.002])
 	var none := PackedFloat64Array([0.0, 0.0, 0.0, 0.0])
 	for cap: float in [10.0, INF]:
-		assert_float(DiffScript.braked_coupling_torque(omega, c, none, none, none, none, 2, cap)) \
+		assert_float(DiffScript.braked_coupling_torque(omega, c, none, none, none, none, none, 2,
+				cap)) \
 				.is_equal_approx(DiffScript.coupling_torque(28.0, 6.0, 0.004 / 4.0, 0.0035 / 4.0,
 				cap), 1e-9)
 
@@ -154,6 +157,11 @@ func test_a_braked_coupling_never_reverses_the_braked_spread() -> void:
 		# TC-held: past the ceiling, inside the share, overrun under its floor, braked as well.
 		[12.0, 0.01, 0.0, 0.0, 1.5, 10.0], [8.0, 0.004, 0.5, 0.0, 1.0, 6.0],
 		[-4.0, 0.01, 0.0, 0.0, -2.0, -2.5], [3.0, 0.02, 4.0, 0.0, 3.0, 1.0],
+		# A rolling moment: inside the TC's share and past it, with a brake, stopping a slow wheel,
+		# and alone.
+		[12.0, 0.01, 0.0, 0.0, 1.5, 10.0, 0.3], [3.0, 0.02, 4.0, 0.0, 3.0, 1.0, 2.5],
+		[-4.0, 0.01, 0.0, 0.0, -2.0, -2.5, 3.0], [0.2, 0.01, 0.0, 0.0, 0.0, 0.0, 0.5],
+		[5.0, 0.002, 0.0, 0.0, 0.0, 0.0, 0.1],
 	]
 	for a: Array in outputs:
 		for b: Array in outputs:
@@ -181,24 +189,28 @@ func test_an_abs_floor_stops_the_brake_short_of_zero_inside_the_coupling() -> vo
 
 # --- the traction-control hold inside the coupling -------------------------------------
 
-## Settle laws `[can_take, stop_at, tcs_share, tcs_at]`: TC alone each way, a brake kink past the
-## ceiling, an ABS floor under it, a reversing brake against an overrun hold, mixed signs.
+## Settle laws `[can_take, stop_at, tcs_share, tcs_at]`, plus `[roll_take]` for a rolling moment:
+## TC alone each way, a brake kink past the ceiling, an ABS floor under it, a reversing brake
+## against an overrun hold, mixed signs; then each kind with a moment, smaller and larger than its
+## other kinks, and the moment alone.
 const LAWS := [
 	[0.0, 0.0, 2.0, 5.0], [0.0, 0.0, -2.0, -5.0], [3.0, 0.0, 2.0, 1.0], [1.0, 8.0, 1.5, 10.0],
 	[4.0, 6.0, 2.0, 7.0], [2.0, 0.0, -1.5, -1.0], [0.5, -3.0, 1.0, 2.0], [2.0, 0.0, 0.0, 0.0],
+	[0.0, 0.0, 2.0, 5.0, 0.5], [1.0, 8.0, 1.5, 10.0, 0.3], [2.0, 0.0, -1.5, -1.0, 2.5],
+	[0.5, -3.0, 1.0, 2.0, 4.0], [3.0, 0.0, 2.0, 1.0, 1.0], [0.0, 0.0, 0.0, 0.0, 1.0],
 ]
 
 
 func test_the_settle_law_is_monotone_and_linear_between_its_kinks() -> void:
 	for law: Array in LAWS:
 		var f := func(x: float) -> float:
-			return WheelScript.settled_spin(x, law[0], law[1], law[2], law[3])
+			return WheelScript.settled_spin(x, law[0], law[1], law[2], law[3], _tc(law, 4))
 		var x := -20.0
 		while x < 20.0:
 			assert_float(f.call(x + 0.05)).is_greater_equal(f.call(x) - 1e-12)
 			x += 0.05
 		# Every slope change is a listed kink: between two neighbours the law is a straight line.
-		var points := DiffScript._settle_kinks(law[0], law[1], law[2], law[3])
+		var points := DiffScript._settle_kinks(law[0], law[1], law[2], law[3], _tc(law, 4))
 		points.append_array([-20.0, 20.0])
 		points.sort()
 		for i in points.size() - 1:
@@ -221,6 +233,10 @@ func test_the_tc_hold_takes_only_the_drive_share() -> void:
 	# Overrun mirrors it: up to the floor, never more than the (negative) share.
 	assert_float(WheelScript.settled_spin(-5.5, 0.0, 0.0, -2.0, -5.0)).is_equal(-5.0)
 	assert_float(WheelScript.settled_spin(-9.0, 0.0, 0.0, -2.0, -5.0)).is_equal(-7.0)
+	# A rolling moment acts first: a drive past its ceiling still settles on it, the drive paying
+	# the moment, never the slip (a moment after the hold would leave the wheel 0.0126 under it).
+	assert_float(WheelScript.settled_spin(31.0, 0.0, 0.0, 1.65, 30.0, 0.0126)) \
+			.is_equal_approx(30.0, 1e-9)
 
 
 func test_a_tc_held_output_stays_at_its_ceiling_under_a_biasing_coupling() -> void:
@@ -246,16 +262,16 @@ func test_a_ground_side_takes_the_mean_to_zero_within_its_capacity() -> void:
 	var omega := PackedFloat64Array([0.4, 0.2, 0.0])
 	var c := PackedFloat64Array([0.01, 0.01, 0.0])
 	var none := PackedFloat64Array([0.0, 0.0, 0.0])
-	var t := DiffScript.braked_coupling_torque(omega, c, none, none, none, none, 2, INF)
+	var t := DiffScript.braked_coupling_torque(omega, c, none, none, none, none, none, 2, INF)
 	assert_float(t).is_equal_approx(0.3 / (0.02 / 4.0), 1e-9)
 	assert_float((0.4 - t * 0.01 / 2.0) + (0.2 - t * 0.01 / 2.0)).is_equal_approx(0.0, 1e-12)
 	# Bounded under it, the capacity is all it carries.
-	assert_float(DiffScript.braked_coupling_torque(omega, c, none, none, none, none, 2, 10.0)) \
-			.is_equal(10.0)
+	assert_float(DiffScript.braked_coupling_torque(omega, c, none, none, none, none, none, 2,
+			10.0)).is_equal(10.0)
 	# A brake on one output holds it at zero over the whole range the ground's share swings it
 	# through, so the ground stops the other alone: 0.4 / 0.005.
 	var brake := PackedFloat64Array([0.0, 0.2, 0.0])
-	t = DiffScript.braked_coupling_torque(omega, c, brake, none, none, none, 2, INF)
+	t = DiffScript.braked_coupling_torque(omega, c, brake, none, none, none, none, 2, INF)
 	assert_float(t).is_equal_approx(80.0, 1e-9)
 	assert_float(WheelScript.braked_spin(0.4 - t * 0.005, 0.0, 0.0)).is_equal_approx(0.0, 1e-12)
 	assert_float(WheelScript.braked_spin(0.2 - t * 0.005, 0.2, 0.0)).is_equal(0.0)
@@ -268,24 +284,28 @@ func test_the_settled_mean_shares_a_torque_and_settles_each_output_on_its_holds(
 	var omega := PackedFloat64Array([1.0, 3.0])
 	var c := PackedFloat64Array([0.01, 0.01])
 	var none := PackedFloat64Array([0.0, 0.0])
-	assert_float(DiffScript.settled_mean_spin(omega, c, none, none, none, none, 100.0)) \
+	assert_float(DiffScript.settled_mean_spin(omega, c, none, none, none, none, none, 100.0)) \
 			.is_equal_approx(2.5, 1e-12)
 	# A TC hold on the second (share 0.4, ceiling 3.2) takes it back to its ceiling.
 	var share := PackedFloat64Array([0.0, 0.4])
 	var ceiling := PackedFloat64Array([0.0, 3.2])
-	assert_float(DiffScript.settled_mean_spin(omega, c, none, none, share, ceiling, 100.0)) \
+	assert_float(DiffScript.settled_mean_spin(omega, c, none, none, share, ceiling, none, 100.0)) \
 			.is_equal_approx((1.5 + 3.2) / 2.0, 1e-12)
 	# A brake on the first that can take 2 rad/s holds it at zero.
 	var brake := PackedFloat64Array([2.0, 0.0])
-	assert_float(DiffScript.settled_mean_spin(omega, c, brake, none, none, none, 100.0)) \
+	assert_float(DiffScript.settled_mean_spin(omega, c, brake, none, none, none, none, 100.0)) \
 			.is_equal_approx(3.5 / 2.0, 1e-12)
+	# A rolling moment of 0.3 rad/s on each, the TC's ceiling still held on the second.
+	var roll := PackedFloat64Array([0.3, 0.3])
+	assert_float(DiffScript.settled_mean_spin(omega, c, none, none, share, ceiling, roll, 100.0)) \
+			.is_equal_approx((1.2 + 3.2) / 2.0, 1e-12)
 	# Never falling as the torque rises, holds or none.
 	var prev := -INF
 	for i in 81:
-		var at := DiffScript.settled_mean_spin(omega, c, brake, none, share, ceiling,
+		var at := DiffScript.settled_mean_spin(omega, c, brake, none, share, ceiling, roll,
 				-400.0 + i * 10.0)
 		assert_float(at).is_greater_equal(prev)
 		prev = at
 	assert_float(DiffScript.settled_mean_spin(PackedFloat64Array(), PackedFloat64Array(),
 			PackedFloat64Array(), PackedFloat64Array(), PackedFloat64Array(), PackedFloat64Array(),
-			100.0)).is_equal(0.0)
+			PackedFloat64Array(), 100.0)).is_equal(0.0)

@@ -179,7 +179,7 @@ static func declare_angular_damp(body: RigidBody3D, figure: float) -> void:
 
 
 ## Rolling-resistance magnitude (N): `crr * N`. Pass the suspension force the springs reported
-## this tick as `normal_load`, never `mass * g`. Applied per contact (`RayWheel.surface_drag_force`).
+## this tick as `normal_load`, never `mass * g`. Applied per wheel as a moment (`RayWheel.tick`).
 static func rolling_drag(crr: float, normal_load: float) -> float:
 	return maxf(crr, 0.0) * maxf(normal_load, 0.0)
 
@@ -189,8 +189,8 @@ static func rolling_drag(crr: float, normal_load: float) -> float:
 ## Drag is `cda` on `u`, side force `cya` on `w`, both scaled by `|(u, w)|`, so the side term is
 ## `q * cya * sin(yaw)`. Each axis is one-tick clamped on `body_mass`, which never enters the force.
 ## Gated on the AIR speed, so a parked body in wind is pushed. Still air and straight running give
-## `w = 0`: the plain drag term. Rolling resistance is not here: it acts at each contact
-## (`RayWheel.surface_drag_force`).
+## `w = 0`: the plain drag term. Rolling resistance is not here: it is a moment on each wheel
+## (`RayWheel.tick`).
 static func air_force(vel: Vector3, wind: Vector3, basis: Basis, cda: float, cya: float,
 		body_mass: float, delta: float) -> Vector3:
 	var air := vel - wind

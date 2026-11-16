@@ -41,14 +41,15 @@ static func coupling_torque(omega_a: float, omega_b: float, compliance_a: float,
 
 
 ## Coupling torque (N·m) moved from side a (outputs `[0, n_a)`) to side b, positive when a runs
-## faster, with every output's holds solved in the same step: brake (`can_take`, `stop_at`) and TC
-## (`tcs_share`, `tcs_at`; 0 share = none). One output a side is an axle diff; an axle a side, the
-## centre. The settled spread is piecewise linear and never rises with `t`, so its root (clamped to
-## `capacity`) is walked off the holds' kinks exactly; the torque never reverses a spread and needs
-## no 60 Hz clamp of its own.
+## faster, with every output's holds solved in the same step: brake (`can_take`, `stop_at`), TC
+## (`tcs_share`, `tcs_at`; 0 share = none) and the rolling moment (`roll_take`). One output a side is
+## an axle diff; an axle a side, the centre. The settled spread is piecewise linear and never rises
+## with `t`, so its root (clamped to `capacity`) is walked off the holds' kinks exactly; the torque
+## never reverses a spread and needs no 60 Hz clamp of its own.
 static func braked_coupling_torque(omega: PackedFloat64Array, compliance: PackedFloat64Array,
 		can_take: PackedFloat64Array, stop_at: PackedFloat64Array, tcs_share: PackedFloat64Array,
-		tcs_at: PackedFloat64Array, n_a: int, capacity: float) -> float:
+		tcs_at: PackedFloat64Array, roll_take: PackedFloat64Array, n_a: int,
+		capacity: float) -> float:
 	var n_b := omega.size() - n_a
 	if capacity <= 0.0 or n_a <= 0 or n_b <= 0:
 		return 0.0
@@ -59,7 +60,7 @@ static func braked_coupling_torque(omega: PackedFloat64Array, compliance: Packed
 	var spin_b := 0.0
 	var held := false
 	for i in omega.size():
-		held = held or can_take[i] > 0.0 or tcs_share[i] != 0.0
+		held = held or can_take[i] > 0.0 or tcs_share[i] != 0.0 or roll_take[i] > 0.0
 		if i < n_a:
 			sum_a += compliance[i]
 			spin_a += omega[i]
@@ -73,7 +74,8 @@ static func braked_coupling_torque(omega: PackedFloat64Array, compliance: Packed
 	var slope := c_a + c_b
 	if slope <= 0.0:
 		return 0.0
-	var g0 := _settled_spread(omega, compliance, can_take, stop_at, tcs_share, tcs_at, n_a, 0.0)
+	var g0 := _settled_spread(omega, compliance, can_take, stop_at, tcs_share, tcs_at, roll_take,
+			n_a, 0.0)
 	if g0 == 0.0:
 		return 0.0
 	# Walk `s = dir * t` up from 0, where `h(s) = dir * g(dir * s)` starts positive and falls.
@@ -85,7 +87,8 @@ static func braked_coupling_torque(omega: PackedFloat64Array, compliance: Packed
 		var rate := -compliance[i] / n_a if i < n_a else compliance[i] / n_b
 		if rate == 0.0:
 			continue
-		for kink: float in _settle_kinks(can_take[i], stop_at[i], tcs_share[i], tcs_at[i]):
+		for kink: float in _settle_kinks(can_take[i], stop_at[i], tcs_share[i], tcs_at[i],
+				roll_take[i]):
 			var at := dir * (kink - omega[i]) / rate
 			if at >= capacity:
 				beyond_cap = true
@@ -95,8 +98,8 @@ static func braked_coupling_torque(omega: PackedFloat64Array, compliance: Packed
 	var prev_s := 0.0
 	var prev_h := absf(g0)
 	for s: float in kinks:
-		var h := dir * _settled_spread(omega, compliance, can_take, stop_at, tcs_share, tcs_at, n_a,
-				dir * s)
+		var h := dir * _settled_spread(omega, compliance, can_take, stop_at, tcs_share, tcs_at,
+				roll_take, n_a, dir * s)
 		if h <= 0.0:
 			return dir * (prev_s + prev_h / (prev_h - h) * (s - prev_s))
 		if h <= SPREAD_EPS:
@@ -105,11 +108,11 @@ static func braked_coupling_torque(omega: PackedFloat64Array, compliance: Packed
 		prev_s = s
 		prev_h = h
 	if not beyond_cap:
-		# Past the last kink every output turns with its full compliance: both holds have slope 1
-		# beyond their outer kinks.
+		# Past the last kink every output turns with its full compliance: all three stages have
+		# slope 1 beyond their outer kinks.
 		return dir * minf(prev_s + prev_h / slope, capacity)
 	var h_cap := dir * _settled_spread(omega, compliance, can_take, stop_at, tcs_share, tcs_at,
-			n_a, dir * capacity)
+			roll_take, n_a, dir * capacity)
 	if h_cap > 0.0:
 		return dir * capacity
 	return dir * (prev_s + prev_h / (prev_h - h_cap) * (capacity - prev_s))
@@ -159,41 +162,56 @@ static func falling_root(spread: Callable, capacity: float) -> float:
 ## (`TorqueConverter.solve`). Never falls as the torque rises.
 static func settled_mean_spin(omega: PackedFloat64Array, compliance: PackedFloat64Array,
 		can_take: PackedFloat64Array, stop_at: PackedFloat64Array, tcs_share: PackedFloat64Array,
-		tcs_at: PackedFloat64Array, torque: float) -> float:
+		tcs_at: PackedFloat64Array, roll_take: PackedFloat64Array, torque: float) -> float:
 	var n := omega.size()
 	if n == 0:
 		return 0.0
 	var sum := 0.0
 	for i in n:
 		sum += RayWheel.settled_spin(omega[i] + torque * compliance[i] / n, can_take[i], stop_at[i],
-				tcs_share[i], tcs_at[i])
+				tcs_share[i], tcs_at[i], roll_take[i])
 	return sum / n
 
 
 ## Side a's mean settled spin less side b's with `t` applied (`braked_coupling_torque`).
 static func _settled_spread(omega: PackedFloat64Array, compliance: PackedFloat64Array,
 		can_take: PackedFloat64Array, stop_at: PackedFloat64Array, tcs_share: PackedFloat64Array,
-		tcs_at: PackedFloat64Array, n_a: int, t: float) -> float:
+		tcs_at: PackedFloat64Array, roll_take: PackedFloat64Array, n_a: int, t: float) -> float:
 	var n_b := omega.size() - n_a
 	var sum_a := 0.0
 	var sum_b := 0.0
 	for i in omega.size():
 		if i < n_a:
 			sum_a += RayWheel.settled_spin(omega[i] - t * compliance[i] / n_a, can_take[i],
-					stop_at[i], tcs_share[i], tcs_at[i])
+					stop_at[i], tcs_share[i], tcs_at[i], roll_take[i])
 		else:
 			sum_b += RayWheel.settled_spin(omega[i] + t * compliance[i] / n_b, can_take[i],
-					stop_at[i], tcs_share[i], tcs_at[i])
+					stop_at[i], tcs_share[i], tcs_at[i], roll_take[i])
 	return sum_a / n_a - sum_b / n_b
 
 
-## The spins (rad/s, before the holds) where `RayWheel.settled_spin`'s slope changes: the TC hold's
-## own, where the spin reaches its ceiling `tcs_at` and where it has taken its whole `tcs_share`,
-## and each of the brake's (`_brake_kinks`) mapped back through the hold. A brake kink short of the
-## ceiling on the drive's side stays put; past it the hold has already taken the share, so it sits
-## that share further out; one at the ceiling exactly lies on the hold's flat, whose ends are kinks
-## already.
-static func _settle_kinks(can_take: float, stop_at: float, tcs_share: float,
+## The spins (rad/s, before the stages) where `RayWheel.settled_spin`'s slope changes. The rolling
+## moment's own, `±roll_take`, and each of the TC-and-brake law's (`_held_kinks`) mapped out through
+## it: past zero the moment has taken `roll_take`, so a kink `k` sits that much further from zero;
+## one at zero lies on the moment's flat, whose ends are kinks already.
+static func _settle_kinks(can_take: float, stop_at: float, tcs_share: float, tcs_at: float,
+		roll_take: float) -> PackedFloat64Array:
+	var kinks := _held_kinks(can_take, stop_at, tcs_share, tcs_at)
+	if roll_take <= 0.0:
+		return kinks
+	var out := PackedFloat64Array([-roll_take, roll_take])
+	for k in kinks:
+		if k != 0.0:
+			out.append(k + signf(k) * roll_take)
+	return out
+
+
+## The TC hold's kinks, where the spin reaches its ceiling `tcs_at` and where it has taken its whole
+## `tcs_share`, and each of the brake's (`_brake_kinks`) mapped back through the hold. A brake kink
+## short of the ceiling on the drive's side stays put; past it the hold has already taken the share,
+## so it sits that share further out; one at the ceiling exactly lies on the hold's flat, whose ends
+## are kinks already.
+static func _held_kinks(can_take: float, stop_at: float, tcs_share: float,
 		tcs_at: float) -> PackedFloat64Array:
 	var kinks := _brake_kinks(can_take, stop_at)
 	if tcs_share == 0.0:

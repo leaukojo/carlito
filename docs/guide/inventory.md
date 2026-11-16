@@ -61,7 +61,7 @@ the two semi tractor units.
 | Wheel radius per axle | every wheeled body | `GroundDriveSpec.axle_radius` | tyres |
 | Surfaces (grip and added drag per painted ground) | every wheeled body | `src/levels/base/surface.gd`, `HeightmapTerrain.grip_at` / `drag_at` | surfaces |
 | Tyre classes (all-season, summer, winter, studded, mud, M+S drive, lug, slick, trailer) | car, truck, tractor, trailers | `src/vehicles/base/tyre_class.gd`, `src/vehicles/tyres/` | surfaces |
-| Rolling resistance (tyre's own plus the ground's) | every wheeled body | `RayWheel.surface_drag_force`, `GroundDriveSpec.rolling_resistance` | resistance, surfaces |
+| Rolling resistance (tyre's own plus the ground's) | every wheeled body | `RayWheel.tick` (a moment on the wheel), `GroundDriveSpec.rolling_resistance` | resistance, surfaces |
 
 ## Steering
 

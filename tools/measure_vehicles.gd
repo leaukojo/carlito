@@ -2258,7 +2258,8 @@ func _body_kinematics() -> Dictionary:
 ## `N_f L = m (g + z'') b - F h + T (h - h_k) + I θ'' - Σ N d` (F the tyres' summed drive force, at
 ## the road; T a trailer's pull at the hitch's height h_k). Against `_transfer_share`'s
 ## `m a h + T h_k` (since parked: a pull held at rest is in `N_f` already), the gap is then:
-## - `resistance`: `R (h - h_k) / L`, drag and rolling at the COM (R = F - m a with no trailer);
+## - `resistance`: `R (h - h_k) / L`, the drag (R = F - m a with no trailer; the wheels' rolling
+##   moment is in the tyres' F, at the road);
 ## - `a lag`: `m (a - a_trace) (h - h_k) / L`, the trace's acceleration (off the telemetry) a tick
 ##   behind;
 ## - `heave`: `-z'' / g`, the body rising or settling;
@@ -2314,10 +2315,7 @@ func _gap_split(kin: Dictionary, prev: Dictionary, gap: float) -> Dictionary:
 	var aero := -VehicleMath.air_force(prev["vel"], _wind, _car.global_basis, gd.drag_area,
 			gd.side_area, _car.mass, delta).dot(ahead)
 	if hitch_y >= 0.0:
-		var rolling := 0.0  ## each contact's own, along its wheel (`RayWheel.force_roll`)
-		for w in _car.wheels:
-			rolling += w.force_roll
-		resistance = aero - rolling
+		resistance = aero
 	# Drag acts at the aero centre (`WheelDrive.apply_at`), not the COM: its own lever.
 	var aero_y := h if gd.aero_centre == Vector3.ZERO \
 			else (_car.global_transform * gd.aero_centre).y
@@ -2794,7 +2792,8 @@ func _report_accel(capped: bool) -> void:
 		var vdir: Vector3 = body.linear_velocity.normalized()
 		for w in body.wheels:
 			body_load += w.suspension_force
-			tyre += w.force_long
+			# The tyre's force carries the rolling moment: its drive part is the force less it.
+			tyre += w.force_long - w.force_roll
 			applied += absf(w.force_roll)
 			# Per wheel: the four contacts of a body straddling a crest do not share one normal.
 			rake += w.suspension_force * w.contact_normal.dot(vdir)

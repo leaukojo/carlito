@@ -47,7 +47,7 @@ Rules: `src/vehicles/CLAUDE.md`; derivations and figures: § Physics derivations
 | Governor | `spec.speed_limit_kmh` (0 = ungoverned, J1939 SPN 74) fades throttle via `governor_scale` over `GOVERNOR_BAND` m/s; `governed_upshift` stops it stranding a gear. Wire: `speed_limit` (u8, 1 km/h/bit, 0-250), range-less |
 | `RayWheel` | one cylinder cast per wheel (the tyre's radius and width, down its travel), spring-damper + slip tires. Grip: `HeightmapTerrain.grip_at()` into `mu_long`/`mu_lat`, nearest surface within `SURFACE_GRIP_REACH` |
 | `BaseVehicle` | consumes `InputRouter.get_vehicle_input()`, runs wheels/drivetrain, publishes telemetry, lamps, horn. No `ground_drive` → no `WheelDrive`. Seams: `_make_telemetry()`, `_tick_extras(input, delta)` |
-| Road resistance | `VehicleMath.air_force` (`WheelDrive._apply_resistance` / `TowedBody.tick_towed`) against the level's wind (`WindField.at`), read in the body frame: drag `0.5 * rho * |air| * Cd*A * u` off `drag_area` along the nose and side force `0.5 * rho * |air| * Cy*A * w` off `side_area` across it, both at `aero_centre` (body space from the origin, never the live COM; generated: the body AABB's mid-height, a quarter wheelbase ahead of the axles' midpoint; hand-built: derived in each header; `docs/handling.md` § Aero balance, § Crosswind). Still air and straight running is the plain drag term. Rolling: `crr * N` per contact along the wheel (`RayWheel.surface_drag_force`, one clamp with surface drag; `rolling_crr` = the fitted class's `rolling_resistance`, N = suspension force, not `mass * g`). On a steered front the force has a side component (`crr * N * sin(steer)`) that the front tyres must also carry (`BalanceModel.corner` carries it: `docs/handling.md` § Balance). `DAMP_MODE_REPLACE` at 0, not `physics/3d/default_linear_damp`. Kenney Cd*A derived (`gen_kenney_vehicles`: `cd * FRONTAL_FILL * w * h`, its own `cd`), Cy*A likewise (`CY_SIDE * SIDE_FILL * l * h`). Tested `tests/test_vehicle_math.gd` / `tests/test_vehicle_catalog.gd` |
+| Road resistance | `VehicleMath.air_force` (`WheelDrive._apply_resistance` / `TowedBody.tick_towed`) against the level's wind (`WindField.at`), read in the body frame: drag `0.5 * rho * |air| * Cd*A * u` off `drag_area` along the nose and side force `0.5 * rho * |air| * Cy*A * w` off `side_area` across it, both at `aero_centre` (body space from the origin, never the live COM; generated: the body AABB's mid-height, a quarter wheelbase ahead of the axles' midpoint; hand-built: derived in each header; `docs/handling.md` § Aero balance, § Crosswind). Still air and straight running is the plain drag term. Rolling: a moment `crr * N * r` on each wheel, the surface's drag added to `crr`, the spin settle's first stage (before TC and the brake), so the tyre carries it to the road (`RayWheel.tick`; `rolling_crr` = the fitted class's `rolling_resistance`, N = suspension force, not `mass * g`). On a steered front the force has a side component (`crr * N * sin(steer)`) that the front tyres must also carry (`BalanceModel.corner` carries it: `docs/handling.md` § Balance). `DAMP_MODE_REPLACE` at 0, not `physics/3d/default_linear_damp`. Kenney Cd*A derived (`gen_kenney_vehicles`: `cd * FRONTAL_FILL * w * h`, its own `cd`), Cy*A likewise (`CY_SIDE * SIDE_FILL * l * h`). Tested `tests/test_vehicle_math.gd` / `tests/test_vehicle_catalog.gd` |
 | Downforce | `VehicleMath.aero_downforce`, `WheelDrive._apply_downforce`: `0.5 * rho * C*A * v^2` off `downforce_area` (Cl*A), through the suspension, split between the axle stations by `downforce_front` (`VehicleMath.downforce_point`; unset = through the live COM). Open-wheelers only (`cl`); lifts `race`'s top speed (`docs/vehicle_measurements.md` § Cruise) |
 | Drift | `handbrake_torque` locks the rears; the combined-slip tyre drops a locked wheel's side force |
 | Holds | `hill_hold` (`HillHold`, `WheelDrive.hold_step`): hill-start assist (ASSIST: the ABS bodies, `hill_hold_s` set per class: Honda's hold on the cars, Volvo VN's on the vans, trucks and semis, `docs/sources.md` [23, 24]) and the tractor's powershift hill hold (STANDSTILL); `InputRouter.auto_hold` for the local path. Tested `tests/test_hill_hold.gd`, `tests/test_input_arbitration.gd` |
@@ -146,10 +146,12 @@ and a parked `semi` slides 5 m off its hand brake on 16.7 deg. The body's slip f
 (`slip_floor_for`) keeps the grip curve inside those caps, so a crawl reaches the full budget and
 the cap takes nothing off any launch (`doc=accel`'s tick cap 0.00); per-wheel floors held
 `suv-luxury` at 66.8 % against 81.0 % (both at a 1.0 converter). Guard: `test_wheel_spin` (`contact_masses`, `slip_floor_for`).
-The rolling drag takes what the tyre's force along the wheel leaves of that cap (`surface_drag_force`'s
-`taken`): each under its own, the two carry a standing contact through zero every tick and the body
-rocks (`measure_vehicles -- <v> 20 rest`; a bobtail `semi`'s drive axle swung 101 kg). Gravity's pull on the contact's mass comes out of `taken` first: counted whole, a slow roll-back loses its drag and creep holds 0.4 points less grade (`all creep`).
-Guards: `test_wheel_spin` (`test_the_tyre_force_and_the_drag_together_never_carry_a_contact_through_zero`), and CI's `measure_semi_launch -- <unit> steady strict` (`REST_STEP_KG`).
+The rolling resistance has no cap of its own: a moment on the wheel that never reverses it, it
+reaches the body through the tyre's one force under that force's cap, on every wheel at every
+speed, coupled or not. A second force at the contact needs a stick test that sees every other force
+on the contact's speed, which one contact cannot. Guards: `test_wheel_spin`
+(`test_a_free_wheel_crawling_uphill_pays_its_whole_rolling_resistance`), and CI's
+`measure_semi_launch -- <unit> steady strict` (`REST_STEP_KG`).
 
 **Braking.**
 
@@ -330,7 +332,8 @@ damper:
   driveline still (§ P (park)), to the pawl's rating on top of the brake. An unbraked wheel rolls
   down a grade, and a free wheel's few kilograms of spin inertia would ring a spring at 60 Hz. The
   test is last tick's settle (`RayWheel.settle_spin`), where the brake is solved with the
-  differentials.
+  differentials. A free wheel the rolling moment stopped is settled still but holds no patch: the
+  hold counts the brake and the pawl only.
 - **Brake limit.** A held wheel's longitudinal force is capped at what its brake holds against
   its drive and what the differentials pass it, each with its sign (`held_force_range`: a creep up
   the grade widens the hold). Past that the body slides at the brake's

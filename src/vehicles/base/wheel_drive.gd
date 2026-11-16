@@ -767,7 +767,7 @@ func _couple_differentials(gd: GroundDriveSpec, input: VehicleInput, axle_torque
 						return -_coupling_torque(driven, PackedInt32Array(), capacity, spin, compliance),
 					func(torque: float) -> float:
 						return Differential.settled_mean_spin(held[0], held[1], held[2], held[3],
-								held[4], held[5], torque))
+								held[4], held[5], held[6], torque))
 		_drive_torque += drive
 		if drive != 0.0:
 			_share(driven, drive)
@@ -839,7 +839,7 @@ func _settled_drive_spin(gd: GroundDriveSpec, driven: PackedInt32Array, base: fl
 		var w := wheels[i]
 		# `settled_spin` is positively homogeneous: gearing the settled spin settles the geared one.
 		sum += _ratio[i] * RayWheel.settled_spin(w.omega + _coupling[i] * w.spin_compliance,
-				w.brake_spin, w.abs_floor, w.tcs_spin, w.tcs_ceiling)
+				w.brake_spin, w.abs_floor, w.tcs_spin, w.tcs_ceiling, w.roll_spin)
 	_coupling = saved
 	return sum / maxf(1.0, driven.size())
 
@@ -889,6 +889,7 @@ func _coupling_torque(side_a: PackedInt32Array, side_b: PackedInt32Array, capaci
 	var stop_at: PackedFloat64Array = outputs[3]
 	var tcs_share: PackedFloat64Array = outputs[4]
 	var tcs_at: PackedFloat64Array = outputs[5]
+	var roll_take: PackedFloat64Array = outputs[6]
 	if not is_nan(far_spin):
 		omega.append(far_spin)
 		compliance.append(far_compliance)
@@ -896,13 +897,14 @@ func _coupling_torque(side_a: PackedInt32Array, side_b: PackedInt32Array, capaci
 		stop_at.append(0.0)
 		tcs_share.append(0.0)
 		tcs_at.append(0.0)
+		roll_take.append(0.0)
 	return Differential.braked_coupling_torque(omega, compliance, can_take, stop_at, tcs_share,
-			tcs_at, side_a.size(), capacity)
+			tcs_at, roll_take, side_a.size(), capacity)
 
 
 ## The wheels at `indices` as a solve's outputs in the shaft frame (`shaft_frame`), each entering
 ## with what the diffs passed it so far this tick: [spin, compliance, `brake_spin`, `abs_floor`,
-## `tcs_spin`, `tcs_ceiling`].
+## `tcs_spin`, `tcs_ceiling`, `roll_spin`].
 func _outputs(indices: PackedInt32Array) -> Array[PackedFloat64Array]:
 	var omega := PackedFloat64Array()
 	var compliance := PackedFloat64Array()
@@ -910,6 +912,7 @@ func _outputs(indices: PackedInt32Array) -> Array[PackedFloat64Array]:
 	var stop_at := PackedFloat64Array()
 	var tcs_share := PackedFloat64Array()
 	var tcs_at := PackedFloat64Array()
+	var roll_take := PackedFloat64Array()
 	var ratios := PackedFloat64Array()
 	for i in indices:
 		var w := wheels[i]
@@ -919,8 +922,10 @@ func _outputs(indices: PackedInt32Array) -> Array[PackedFloat64Array]:
 		stop_at.append(w.abs_floor)
 		tcs_share.append(w.tcs_spin)
 		tcs_at.append(w.tcs_ceiling)
+		roll_take.append(w.roll_spin)
 		ratios.append(_ratio[i])
-	var outputs: Array[PackedFloat64Array] = [omega, compliance, can_take, stop_at, tcs_share, tcs_at]
+	var outputs: Array[PackedFloat64Array] = [omega, compliance, can_take, stop_at, tcs_share, tcs_at,
+			roll_take]
 	shaft_frame(outputs, ratios)
 	return outputs
 
@@ -955,7 +960,7 @@ func _axle_driven(axle: PackedInt32Array) -> bool:
 
 
 ## Aero drag and side force against the level's wind (`WindField.at`); the drag, with each
-## contact's rolling resistance (`RayWheel.force_roll`), sets top speed. Both act at the declared
+## wheel's rolling moment (`RayWheel.tick`), sets top speed. Both act at the declared
 ## aero centre: its height gives drag a pitch moment and the side force a roll moment, its z the
 ## side force a yaw moment. Inert when no drag area is declared.
 func _apply_resistance(body: RigidBody3D, gd: GroundDriveSpec, delta: float) -> void:

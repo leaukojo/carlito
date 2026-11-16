@@ -23,50 +23,15 @@ func _wheel() -> WheelScript:
 	return w
 
 
-# --- surface drag: a body force at the contact, outside the circle ----------------
+# --- rolling resistance: a moment on the wheel, inside the spin step -------------
 
-func test_surface_drag_opposes_motion_scales_with_load_and_is_zero_at_rest() -> void:
-	# crr 0.2 on 5000 N = 1000 N against a forward-rolling contact.
-	assert_float(WheelScript.surface_drag_force(10.0, 0.2, 5000.0, 300.0, TICK)) \
-			.is_equal_approx(-1000.0, 1e-6)
-	assert_float(WheelScript.surface_drag_force(-10.0, 0.2, 5000.0, 300.0, TICK)) \
-			.is_equal_approx(1000.0, 1e-6)
-	assert_float(WheelScript.surface_drag_force(0.0, 0.2, 5000.0, 300.0, TICK)).is_equal(0.0)
-	assert_float(WheelScript.surface_drag_force(10.0, 0.0, 5000.0, 300.0, TICK)).is_equal(0.0)
-	assert_float(WheelScript.surface_drag_force(10.0, 0.2, 0.0, 300.0, TICK)).is_equal(0.0)
-
-
-func test_surface_drag_never_exceeds_the_one_tick_stop() -> void:
-	# 300 kg at 0.1 m/s can lose at most 300 * 0.1 / TICK = 1800 N this tick; crr asks 5000.
-	assert_float(WheelScript.surface_drag_force(0.1, 1.0, 5000.0, 300.0, TICK)) \
-			.is_equal_approx(-1800.0, 1e-6)
-
-
-func test_rolling_and_surface_drag_share_one_clamp() -> void:
-	# The tyre's 0.5 and the ground's 0.5 go through one call: the sum stops at the one cap
-	# (1800 N), where two calls would each take it.
-	assert_float(WheelScript.surface_drag_force(0.1, 0.5 + 0.5, 5000.0, 300.0, TICK)) \
-			.is_equal_approx(-1800.0, 1e-6)
-
-
-func test_the_drag_takes_what_another_force_leaves_of_the_cap() -> void:
-	# The same 1800 N cap with 1000 N of it already taken against the motion: 800 N are left.
-	assert_float(WheelScript.surface_drag_force(0.1, 1.0, 5000.0, 300.0, TICK, 1000.0)) \
-			.is_equal_approx(-800.0, 1e-6)
-	assert_float(WheelScript.surface_drag_force(-0.1, 1.0, 5000.0, 300.0, TICK, 1000.0)) \
-			.is_equal_approx(800.0, 1e-6)
-	# All of it taken, or more: no drag, and never a push the other way.
-	assert_float(WheelScript.surface_drag_force(0.1, 1.0, 5000.0, 300.0, TICK, 1800.0)).is_equal(0.0)
-	assert_float(WheelScript.surface_drag_force(0.1, 1.0, 5000.0, 300.0, TICK, 9000.0)).is_equal(0.0)
-	# At speed the cap is far off: a full brake's force takes nothing off the drag, to the bit.
-	assert_float(WheelScript.surface_drag_force(10.0, 0.2, 5000.0, 300.0, TICK, 5000.0)) \
-			.is_equal(WheelScript.surface_drag_force(10.0, 0.2, 5000.0, 300.0, TICK))
-
-
-## One wheel on a 300 kg corner, its spin at 0 and its brake locking it, ticked once on a kinematic
-## body moving `v` m/s along the wheel over flat ground: a locked wheel's contact at that speed.
-func _sliding_wheel(v: float) -> WheelScript:
+func test_a_free_wheel_crawling_uphill_pays_its_whole_rolling_resistance() -> void:
+	# A free wheel rolling at its contact's speed up 25 %, at 0.03 m/s: the rolling moment is a stage
+	# of the wheel's settle, so the wheel pays `crr N` whatever the grade and the speed. A drag force capped per
+	# contact less gravity on the contact's own mass paid nothing under `g sin * dt` (39.6 mm/s here).
+	var grade := atan(0.25)
 	var root: Node3D = auto_free(Node3D.new())
+	root.basis = Basis(Vector3.RIGHT, grade)  # body -Z, the wheel's forward, points uphill
 	add_child(root)
 	_box(root, Vector3(4.0, 1.0, 4.0), Vector3(0.0, -0.5, 0.0))
 	var body := RigidBody3D.new()
@@ -85,32 +50,54 @@ func _sliding_wheel(v: float) -> WheelScript:
 	gd.rolling_resistance = 0.02
 	var w := WheelScript.new(Vector3(0.0, 0.6, 0.0), false, true, null, 300.0)
 	w.apply_suspension(gd)
-	body.linear_velocity = Vector3(0.0, 0.0, -v)  # forward is -Z
-	w.tick(body, gd, root.get_world_3d().direct_space_state, 0.0, 1.0e6, TICK, [] as Array[Node])
-	return w
+	var v := 0.03
+	body.linear_velocity = root.basis * Vector3(0.0, 0.0, -v)
+	w.omega = v / gd.wheel_radius
+	w.tick(body, gd, root.get_world_3d().direct_space_state, 0.0, 0.0, TICK, [] as Array[Node])
+	assert_bool(w.in_contact).is_true()
+	assert_float(w.force_roll).is_equal_approx(-0.02 * w.suspension_force,
+			0.05 * 0.02 * w.suspension_force)
+	# The moment is not the brake's: no brake reacts or heats on it, and the wheel is not brake-held.
+	assert_float(w.brake_reacted).is_equal(0.0)
+	assert_bool(w._spin_held).is_false()
+	assert_float(w.roll_reacted).is_equal_approx(-w.force_roll * gd.wheel_radius, 1e-6)
 
 
-func test_the_tyre_force_and_the_drag_together_never_carry_a_contact_through_zero() -> void:
-	# A crawl the tyre's force alone stops inside the tick (it sits at its one-tick cap): the drag
-	# has none of the cap left. Each under a cap of its own, the two stop the contact twice over and
-	# send it backward, every tick: a standing body rocking at the tick rate.
-	for v: float in [0.01, -0.01, 0.002]:
-		var w: WheelScript = await _sliding_wheel(v)
-		var cap := 300.0 * absf(v) / TICK
-		assert_bool(w.in_contact).is_true()
-		assert_float(w.force_long * v).is_less(0.0)
-		assert_float(absf(w.force_long)).is_greater(0.9 * cap)
-		assert_float(w.force_roll * v).is_less_equal(0.0)
-		assert_float(absf(w.force_long + w.force_roll)).is_less_equal(cap * (1.0 + 1e-6))
-	# A slide from speed is far inside the cap: the whole drag beside the tyre's force.
-	var fast: WheelScript = await _sliding_wheel(10.0)
-	assert_float(fast.force_roll).is_equal_approx(-0.02 * fast.suspension_force, 1e-6)
+func test_a_coasting_body_loses_speed_at_its_rolling_resistance() -> void:
+	# Four free wheels at 3 m/s on the flat, nothing else slowing the body: it loses `sum crr N` over
+	# its mass and its wheels' inertia, every wheel's rolling reaching the body through its tyre.
+	var bench: Array = await _settled_bench(0.012)
+	var body: RigidBody3D = bench[0]
+	var drive: WheelDrive = bench[1]
+	var spec: VehicleSpec = bench[2]
+	body.linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+	body.linear_damp = 0.0
+	body.linear_velocity = Vector3(0.0, 0.0, -3.0)  # forward is -Z
+	for w in drive.wheels:
+		w.omega = 3.0 / w.wheel_radius
+	await _bench_ticks(body, drive, spec, 0.0, 10)
+	var v0 := -body.linear_velocity.z
+	var ticks := 60
+	var load_sum := 0.0
+	for _i in ticks:
+		await _bench_ticks(body, drive, spec, 0.0, 1)
+		for w in drive.wheels:
+			load_sum += w.suspension_force
+	var v1 := -body.linear_velocity.z
+	var inertia := 0.0
+	for w in drive.wheels:
+		inertia += w.wheel_inertia / (w.wheel_radius * w.wheel_radius)
+	var expected := 0.012 * load_sum / ticks / (spec.mass + inertia)
+	assert_float((v0 - v1) / (ticks * TICK) / expected).override_failure_message(
+			"lost %.4f of crr N / (M + sum I / r^2)" % ((v0 - v1) / (ticks * TICK) / expected)) \
+			.is_equal_approx(1.0, 0.01)
 
 
 ## A free wheel and the `mass` (kg) its contact moves, on `fz` N at `crr`, rolling together at
 ## `v0` m/s and left alone: the contact's speed after each of `ticks`, stepped the way
 ## `RayWheel.tick` and `apply_patch` build it (the start slip's force, under its one-tick cap,
-## sizes the spin step; the body takes the settled slip's, then the drag on what that leaves).
+## sizes the spin step, the rolling moment `crr fz r` its settle's first stage; the body takes the
+## settled slip's).
 func _free_pair_speeds(mass: float, fz: float, crr: float, v0: float,
 		ticks: int) -> PackedFloat64Array:
 	var w := _wheel()
@@ -127,14 +114,13 @@ func _free_pair_speeds(mass: float, fz: float, crr: float, v0: float,
 				fz, fz, _curve()).x, -cap, cap)
 		var k0 := minf(fz * WheelScript.zero_slip_rise(_curve()) / denom, mass / TICK) \
 				* r * r * TICK / w.wheel_inertia
-		w._integrate_spin(0.0, -start * r, 0.0, TICK, slip_vel, v, 0.0, 0.0, 0.0, floor_vel, k0)
+		w._integrate_spin(0.0, -start * r, 0.0, TICK, slip_vel, v, 0.0, 0.0, 0.0, floor_vel, k0,
+				crr * fz * r)
 		var settled := w.omega * r - v
 		cap = mass * absf(settled) / TICK
 		var f := clampf(WheelScript.combined_slip_force(settled / denom, 0.0,
 				fz, fz, _curve()).x, -cap, cap)
-		var drag := WheelScript.surface_drag_force(v, crr, fz, mass, TICK,
-				maxf(-signf(v) * f, 0.0))
-		v += (f + drag) / mass * TICK
+		v += f / mass * TICK
 		speeds.append(v)
 	return speeds
 
@@ -306,15 +292,12 @@ func test_a_held_wheel_at_zero_slip_stays_rigid_under_its_patch_spring() -> void
 	assert_float(absf(w.omega)).is_less(1e-6)
 
 
-func test_a_wheel_carries_the_specs_rolling_resistance_and_none_on_a_side_slide() -> void:
+func test_a_wheel_carries_the_specs_rolling_resistance() -> void:
 	var gd := _spec()
 	gd.rolling_resistance = 0.012
 	var w := _wheel()
 	w.apply_suspension(gd)
 	assert_float(w.rolling_crr).is_equal(0.012)
-	# A pure side slide has no longitudinal velocity at the contact, so no rolling force.
-	assert_float(WheelScript.surface_drag_force(0.0, w.rolling_crr, 5000.0, 300.0, TICK)) \
-			.is_equal(0.0)
 
 
 func test_an_airborne_wheel_makes_no_rolling_force() -> void:
@@ -922,6 +905,14 @@ func test_tcs_holds_a_floored_drive_at_its_slip() -> void:
 	assert_float(held.omega).is_equal_approx(v * (1.0 + WheelScript.TCS_SLIP) / spec.wheel_radius,
 			1e-6)
 	assert_bool(held.tcs_active).is_true()
+	# With a rolling moment on it the hold still ends on the peak's slip: the drive pays the moment,
+	# which acts before the hold, and the moment's whole torque is reacted.
+	var rolling := _wheel()
+	rolling.omega = (v + slip_vel) / spec.wheel_radius
+	rolling._integrate_spin(1.0e6, -c * slip_vel * spec.wheel_radius, 0.0, TICK, slip_vel, v,
+			0.0, WheelScript.TCS_SLIP, 0.0, WheelScript.LOW_SPEED_FLOOR, 0.0, 300.0)
+	assert_float(rolling.omega).is_equal_approx(held.omega, 1e-9)
+	assert_float(rolling.roll_reacted).is_equal_approx(300.0, 1e-6)
 	# A light drive under the peak is the plain step, and TC does not claim it.
 	var light := _wheel()
 	light.omega = (v + slip_vel) / spec.wheel_radius

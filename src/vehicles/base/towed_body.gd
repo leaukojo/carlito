@@ -193,7 +193,7 @@ func tick_towed(brake01: float, handbrake01: float, delta: float,
 		w.heat_brake(_last_fwd_speed, delta)
 	# Resistance is a sum, not a multiple: this trailer's own drag and side area against the level's
 	# wind, at its own aero centre (the parent walk passes the towing vehicle to reach the level);
-	# its bogie's rolling resistance acts at each contact (`RayWheel.force_roll`).
+	# its bogie's rolling resistance is a moment on each wheel (`RayWheel.tick`).
 	WheelDrive.apply_at(self, VehicleMath.air_force(linear_velocity, WindField.at(self),
 			global_basis, gd.drag_area, gd.side_area, mass, delta), gd.aero_centre)
 

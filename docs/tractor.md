@@ -296,12 +296,10 @@ semi-trailers use. The tractor side is the same `TowHost` the semi's fifth wheel
   ground at y = −0.40.
 - A drawbar carries a nose weight, not a share: 12% against the fifth wheel's 27%.
 - **Laden on 10 % mud, floored, the rig is wheelspin-bound.** That is `measure_grade --
-  tractor-kenney rollback grade=10 mud mfwd tipper verbose`: it first moves 0.1 m forward only after
-  several seconds, the same from any start gear and with or without the hold.
+  tractor-kenney rollback grade=10 mud mfwd tipper verbose`: it moves off within two seconds and
+  crawls.
   - It asks both units' grade pull plus the whole rig's tyre and mud drag (`Surface.DRAG`), the
     tipper's through the drawbar; floored, all four tyres spin far past the peak and push less.
-  - The rig crawls instead of standing, because the drag's per-tick cap
-    (`RayWheel.surface_drag_force`, a 60 Hz clamp) shrinks with speed.
   - Grip is not the bound: with the slip held at the peak (`measure_grade -- tractor-kenney mud
     mfwd tc tipper`) the same rig climbs a steeper grade than 10 %.
 

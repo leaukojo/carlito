@@ -396,7 +396,7 @@
         var fDrive = w.driven && grounded ? drive / nDriven : 0;
         var fBrake = grounded ? brakeF[wi] : 0;
         var fLat = grounded ? axleSide[key] * share : 0;
-        var fRoll = moving ? -V.crr * N : 0;  // RayWheel.surface_drag_force on asphalt
+        var fRoll = moving ? -V.crr * N : 0;  // RayWheel.tick's rolling moment on asphalt
         var muL = V.muLong * N, muY = V.muLat * (w.front ? 1 : V.rearLatGrip) * N;
         var fx = fDrive + fBrake;
         // RayWheel.friction_ellipse: the along and across demands share one grip budget.
