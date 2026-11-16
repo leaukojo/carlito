@@ -61,7 +61,10 @@ const COAST_SECONDS := 5.0
 ## saturated first. Off by default: CI needs only the tracking gate.
 const CORNER_SPEED := 11.11        ## m/s (~40 km/h) held through the pass
 const CORNER_RAMP_S := 10.0        ## s from zero steer to full lock
-const CORNER_SMOOTH_S := 0.25      ## exponential smoothing on the lateral-g reading
+## A 0.25 s mean on the lateral-g, tyre-force and `acc_lat` peaks: once the front axle saturates the
+## body hunts in yaw (`sedan`: raw `v r` swings 0.80 to 0.93 g over ~0.6 s, the peak 0.03 g above the
+## smoothed one), and the pass reports the swing's mean, not its crest.
+const CORNER_SMOOTH_S := 0.25
 ## Past this slip angle the body is sliding, not cornering: `v * yaw_rate` there measures a spin,
 ## not a grip limit, so the peak stops being sampled and the report says the gate tripped.
 const CORNER_MAX_SLIP_ANGLE := 0.5  ## |v_lat| / |v|
