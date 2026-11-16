@@ -33,25 +33,27 @@ pause**, where the review stops and the plans run; **B**, what waits until they 
 
 The rolling moment (A2, A3) holds `handbrake_fade.md`; A2 to A7 hold `realism_gaps.md`. A1 (the
 gather) and the hand-back's diagnosis are done: `sessions/2026-11-16-gather-rolling-moment.md`,
-`sessions/2026-11-16-rolling-moment-diagnosis.md`; A2's gather and test:
-`sessions/2026-11-16-standing-alternation.md`.
+`sessions/2026-11-16-rolling-moment-diagnosis.md`; A2's gather and diagnosis:
+`sessions/2026-11-16-standing-alternation.md`, `sessions/2026-11-16-contact-reading-steps.md`.
 
-- **A2** (hand-back, 2026-11-16; figures gathered: `sessions/2026-11-16-standing-alternation.md`,
-  read first; its logs and probe diff in `C:/Users/Ccamy/AppData/Local/Temp/claude/rm-logs/a2/`)
-  Standing bodies alternate with the rolling moment's patch on, and the A2 law (a standing
-  wheel's force along the wheel stops its contact in one tick) does not cure it: the bobtail's
-  `rest reading:` 0.11 / 0.34 / 0.59 kg (HEAD / patch / law). In both cases the first term to
-  step is `compression`, read by the damper's finite difference. Derive: (a) the `semi` parked
-  across 10 % (`doc=park park_cell=semi:cross:5.7`): why the front left's drop jumps 0.107 mm
-  across a `cast_motion` bracket edge (166/256 of the travel) when `settled_drop` (`wheel.gd:823`)
-  says it is exact on a face (`_contact_pass`'s gap, the rest test's point and normal,
-  `cylinder_support` with `_convex_radius`); (b) the bobtail (`measure_semi_launch -- semi steady
-  strict trailer=bobtail`): why each contact's drop steps 1.8 µm (rears) and 3.4 to 3.9 µm
-  (fronts) with nothing between while the body pitches about 1 µm a tick, 2800 m from the origin;
-  (c) whether each is the whole of the patch's alternation (its standing wheels answer the
-  contact's speed about 80 times harder than HEAD's free ones). The one run or test that shows
-  each, and a brief per cause: a contact-query fix is unit 3a's code and an item of its own; never
-  a filter on `compression`, the damper or a reading. A3 waits on it. [diagnose, high, Fable]
+- **A2** (diagnosed 2026-11-16: `sessions/2026-11-16-contact-reading-steps.md`, read first; its
+  § Brief is the work, its § Fixture the tests; lands on HEAD, before A3's patch) The standing
+  alternation is two steps in the contact's reading, both in `RayWheel._contact_pass`
+  (`wheel.gd:932-982`), neither the patch's. (a) On ground past the engine's switch to sharp
+  shapes (the tools' ramp, strip and kerb, Flatland's `InfiniteGround`) a leaned wheel's gap
+  gives the rounded touch, `e = convex_radius * (sin a + cos a - 1)` deeper than the sharp sweep's
+  bracket, and `settled_drop`'s clamp cuts it at every stop: a step of `e` (0.104 mm at the
+  `semi`'s 6.21 mrad, a whole 1.25 mm stop past 0.08 rad). Fix: the clamp's touching bound takes
+  `reach = e / n_up` (a new `settled_drop` argument); same to the bit where today's clamp does not
+  bind there. (b) The query is posed with the body's pitch in its basis, and a long box's corners
+  lose float32 in that frame: the reading sits on a grid of `ulp(L * sin(tilt))` (2^-19 m on the
+  6 km strip under the `semi`'s 0.53 deg rake). Fix: pose the cylinder about its axle on the
+  collider's up, after the brief's heightmap measurement says whether levels have it (if not, the
+  plan asks the user: the frame, or a shorter strip). Tests that fail now: a wheel leaned
+  6.21 mrad on a 400 m slab stepped across a stop (102 um in one 2 um move), a raked wheel on a
+  6 km slab (26 to 32 distinct readings in 240). Runs, HEAD then after, and the stop conditions:
+  the brief. Never a filter on `compression`, the damper or a reading; not the sharp support in
+  the gap (it moves every leaned wheel's height on every level). [high, plan, Opus]
 - **A3** (approved, user 2026-11-15: variant A, the ground's share a moment too; handed back
   2026-11-15; after A2; the creep lands as measured, user 2026-11-16) The rolling resistance
   is a moment on the wheel, a stage of the settle law before the TC hold. Why, what goes and what
@@ -59,8 +61,10 @@ gather) and the hand-back's diagnosis are done: `sessions/2026-11-16-gather-roll
   tests and its figures: `sessions/2026-11-15-rolling-moment.md` and `.patch` (`git apply`;
   re-read `wheel.gd` if it fails). Do: the patch, then
   `sessions/2026-11-16-rolling-moment-diagnosis.md` § Brief (the stage, `Differential`'s kinks,
-  `roll_share` gone, the three tests that fail on the patch), then what A2's brief gives. The
-  moment is never part of `hold_torque`. Runs, HEAD
+  `roll_share` gone, the three tests that fail on the patch); A2's fix is already in the tree
+  (the patch over it: `git apply -3`), and its last stop condition is checked here (the bobtail's
+  `rest reading:` and the cross cell's FL on the patch). The moment is never part of
+  `hold_torque`. Runs, HEAD
   then after, `--fixed-fps 60`: `test_wheel_spin`, the suite; `doc=park`; `all creep`; `sedan
   rollback [nohold]`, `semi rollback [nohold]`; `sedan 45 brake`; `measure_semi_launch` `steady
   strict` bobtail and laden; `measure_vehicles -- semi 20 rest` and `tractor-kenney 20 rest`;
@@ -230,7 +234,8 @@ record, and it changes only with the user's OK. The pause is over when both plan
 
 - The measure tool's 80 m kerb and 6 km strip are past Jolt's switch to sharp shapes: 1 to 3 mm
   of contact noise in kerb-run figures that level geometry does not have. Options and what moves:
-  `sessions/2026-11-14-sweep-rest-disagree.md` § To consider. Decide with the user first.
+  `sessions/2026-11-14-sweep-rest-disagree.md` § To consider. Decide with the user first, and
+  re-measure after A2's fix: part of that noise is A2's (a), whole stops under a leaned wheel.
   [high, plan, Opus]
 - A kept contact probe behind a `measure_vehicles` flag (same section). A tool feature: propose
   it (`proposals.md`) before building. [high, plan, Opus]
@@ -257,7 +262,7 @@ Sizes are GDScript lines at 716bf06, rounded. A unit's tests and `docs/` pages g
 | 2a | Drivetrain: the class | `src/vehicles/base/drivetrain.gd` | 1.6k | ab672ce | 4 wrong comments on the rigid crank fixed; no dead symbol; both `COMPROMISE` labels real; 1 fix queued (the rigid branch's dead outputs) |
 | 2b | Drivetrain: its tests and doc | `tests/test_drivetrain.gd`, `docs/drivetrain.md` | 2.8k tests + 0.4k doc | 1f85257 | 1 hollow test case and 1 duplicate test removed, 3 wrong test comments and 5 wrong doc figures fixed (heavy vans' inertia, reserve and motoring; the tractor's governed upshift; anti-stall); the doc's measured figures not re-run |
 | 2c | Drivetrain: the small files | `differential.gd`, `torque_converter.gd`, `shift_policy.gd`, `pedal_map.gd` in `src/vehicles/base/`; `tests/test_differential.gd`, `test_shift_policy.gd`, `test_torque_converter.gd` | 1.0k + 1.2k tests | dd8dd5e | `start_gear` put on the one engine law (it read the drive without the motoring share; the semis' part-pedal start gear moves); 1 duplicate test and 3 dead fixture lines removed, 3 history-worded test comments fixed; no dead symbol, no wrong comment, the one `COMPROMISE` real |
-| 3a | Wheels: the wheel | `src/vehicles/base/wheel.gd` | 1.1k | 8294fee | 6 wrong or misplaced comments fixed, 1 misnamed parameter renamed (`surface_drag_force`'s `mass`); no dead symbol; the 3 `COMPROMISE` labels real; notes for its next read: `sessions/2026-11-15-wheel-leftovers.md` § For unit 3a's next read |
+| 3a | Wheels: the wheel | `src/vehicles/base/wheel.gd` | 1.1k | 8294fee | 6 wrong or misplaced comments fixed, 1 misnamed parameter renamed (`surface_drag_force`'s `mass`); no dead symbol; the 3 `COMPROMISE` labels real; notes for its next read: `sessions/2026-11-15-wheel-leftovers.md` and `sessions/2026-11-16-contact-reading-steps.md`, § For unit 3a's next read |
 | 3b | Wheels: the owner | `src/vehicles/base/wheel_drive.gd` | 1.1k | | not reviewed; Fable's findings to start from: `sessions/2026-11-15-wheel-fix-landed.md` § Unit 3b |
 | 3c | Wheels: the tests | `tests/test_wheel_spin.gd` | 2.8k tests | | |
 | 4 | Vehicle base, rest | `src/vehicles/base/` minus units 2, 3, 5; `src/vehicles/tyres/`; `docs/vehicles.md`, `docs/handling.md` | about 4k | | not reviewed; the derivations of `balance_model.gd` and `stability_control.gd` are checked (1 fix queued, the swinging axle's lever) and Fable's notes to start from: `sessions/2026-11-15-unit4-derivations.md` § For unit 4's review |
