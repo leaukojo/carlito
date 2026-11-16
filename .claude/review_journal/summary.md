@@ -23,8 +23,8 @@ pause**, where the review stops and the plans run; **B**, what waits until they 
   says which line, on which model, is next: it never reaches below the pause for work, and reads
   no unit in its place.
 - Stage B and the unit map open when the pause is over.
-- Fable (user, 2026-11-14: its credits are scarce and may not last the review) takes only lines
-  tagged `diagnose ... Fable`; what earns the tag, "prepared first" and the hand-back: the skill's
+- Fable is not used (user, 2026-11-16): every line is Opus's or Sonnet's. A `diagnose` line is
+  Opus's and fixes nothing; what earns the tag, "prepared first" and the hand-back: the skill's
   § Diagnose only. A hand-back goes to the top of the stage it came from.
 - A new item goes to stage B unless it moves a figure the plans tune against or edits lines a
   kept patch touches.
@@ -124,12 +124,11 @@ gather) and the hand-back's diagnosis are done: `sessions/2026-11-16-gather-roll
   solver, `aero_centre`, `downforce_front`, `rear_lat_grip`, the wheelbase and the centre of mass.
   Name the first tick the speed across passes 1 mm/s and what moved on it. A session file with
   the tables; no cause guessed, no tune. [medium, auto, Sonnet]
-- **A9** (needs A8; holds only phase 4's first bullet, which an Opus session takes over from
-  A8's file if Fable is out) `race` and `race-future` leave the 40 m strip sideways near
+- **A9** (needs A8; holds only phase 4's first bullet) `race` and `race-future` leave the 40 m strip sideways near
   280-290 km/h with zero steer (`doc=top` prints `left the strip`). From the gathered trace and
   the spec's figures, derive the yaw mode at that speed (each axle's cornering stiffness at its
   load with the downforce on, the aero centre, the yaw inertia), what seeds it and what makes it
-  grow. The brief feeds the plan's phase 4: no tune before the cause. [diagnose, high, Fable]
+  grow. The brief feeds the plan's phase 4: no tune before the cause. [diagnose, high, Opus]
 
 ### The pause: the user's plans
 
@@ -144,7 +143,7 @@ record, and it changes only with the user's OK. The pause is over when both plan
    sits on (`towed_body.gd:193`); its cited lines predate the wheel fix: re-read them.
 2. `docs/plans/realism_gaps.md` (5 phases): from A2 to A7 done, so its targets are judged on
    `doc=` tables that no review item is about to move. Phase 1's "investigate" is a ledger of
-   power from the fuel to the wheels at 70 km/h, on Opus (Fable only on a hand-back); phase 4's
+   power from the fuel to the wheels at 70 km/h, on Opus; phase 4's
    `race` bullet waits on A9, its other bullets do not. `doc=grade`'s `suv` cell is under
    diagnosis (stage B's first line): phases 2 and 4 do not tune against it.
 
@@ -177,8 +176,8 @@ record, and it changes only with the user's OK. The pause is over when both plan
   wheels' `suspension_force`).
   Write the cause and one brief per case (in which order `TowHost` and the towed wheels tick, and
   what each one-tick stop knows of the other); fix nothing. The fixes change a force: each line
-  ends in a proposal. Where the logs do not explain a case, hand that case back to Fable with
-  them. [high, auto, Opus]
+  ends in a proposal. Where the logs do not explain a case, queue a `diagnose` line for that case
+  with them. [high, auto, Opus]
 - A swinging front axle's roll takes the weight on the wrong lever
   (`sessions/2026-11-15-unit4-derivations.md` finding 1: the derivation, the forms, the figures;
   read first). `BalanceModel._roll_state` (`balance_model.gd:146-194`): inside the stop the body

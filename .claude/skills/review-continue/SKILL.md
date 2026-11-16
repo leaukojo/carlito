@@ -1,6 +1,6 @@
 ---
 name: review-continue
-description: Continue the ongoing project review ("continue reviewing"): pick the next item from .claude/review_journal/summary.md for the session's model, then diagnose it and write its brief (Fable), or fix it from its brief (Opus, Sonnet).
+description: Continue the ongoing project review ("continue reviewing"): pick the next item from .claude/review_journal/summary.md for the session's model (Opus or Sonnet), then review or fix it, or diagnose it and write its brief (a `diagnose` item, Opus).
 ---
 
 The journal is `.claude/review_journal/`: `summary.md` (unit map, queue, things for the user to
@@ -12,8 +12,8 @@ The project wants no new features: the review trims, fixes and simplifies.
 
 ## One session
 
-1. **Pick one item**, among those tagged for the session's own model (a Fable session:
-   § Diagnose only). The top of the Queue if it holds a ready item (approved proposal, or a
+1. **Pick one item**, among those tagged for the session's own model (an item tagged
+   `diagnose`: § Diagnose only). The top of the Queue if it holds a ready item (approved proposal, or a
    deferred fix); otherwise the first unit in the map whose `Reviewed at` is empty; otherwise
    the unit with the most commits since its `Reviewed at`
    (`git log --oneline <hash>..HEAD -- <paths> | wc -l`). BETA units (boat, drone, plane,
@@ -43,7 +43,7 @@ The project wants no new features: the review trims, fixes and simplifies.
    - L (crosses units, or needs a design choice): do not start. Add a Queue line with a
      three-line brief so a later session can do it alone.
    - Every Queue line ends with what it wants, in brackets: effort, mode and model, e.g.
-     `[medium, auto, Sonnet]`, `[high, plan, Opus]` or `[diagnose, high, Fable]` (§ Recommending
+     `[medium, auto, Sonnet]`, `[high, plan, Opus]` or `[diagnose, high, Opus]` (§ Recommending
      the next session).
    - Whatever is left when the session runs low goes to the Queue. An unfinished fix is
      reverted, never left half-done.
@@ -75,32 +75,33 @@ The project wants no new features: the review trims, fixes and simplifies.
 
 ## Diagnose only
 
-A Fable session finds causes and writes briefs; it fixes nothing, so that a cheaper model can.
-Its credits are scarce: it derives, and never gathers, sweeps or reads a unit for its own sake.
+A diagnose session (Opus) finds a cause and writes its brief; it fixes nothing: the fix is a
+later session's, from the brief, so a fix that failed is never retried in the context that
+failed it. It derives, and never sweeps or reads a unit for its own sake.
 
-- **Worth Fable** (a Queue line takes the `Fable` tag only when one of these holds):
-  - a hand-back: a fix on Opus hit its stop condition and left its trace in a session file;
+- **Worth a diagnose line** (a Queue line takes the `diagnose` tag only when one of these holds):
+  - a hand-back: a fix hit its stop condition and left its trace in a session file;
   - figures that break a law the code should keep (one contact with two forces, power or
     momentum from nowhere, a mode that grows), where the tests are written from the same
     derivation and pass;
   - a restructuring of the wheel's, the drivetrain's or the towing's tick, before it is fixed;
   - a derivation in `src/` checked against its `docs/` page and the code it stands on.
   Never worth it: a logging run, a sweep, a unit's read, tests, docs, tools, a measure tool's
-  own setting, or anything whose steps a Queue line can spell out. Those are Opus's or Sonnet's.
+  own setting, or anything whose steps a Queue line can spell out. Those are plain fix items.
 - **Prepared first.** Where an item needs figures (a per-tick log, a baseline at HEAD, a run
-  line shown to work), a cheaper session gathers them into a session file under a Queue line
-  "gather for <item>" tagged for Sonnet or Opus, and the Fable line names that file. An item
-  whose figures are missing is not ready: a Fable session skips it.
-- **Hand-back.** An Opus or Sonnet session that hits a fix's stop condition undoes the fix, writes
-  the trace and what it tried, and puts one `diagnose` line at the top of Fable's list.
-- **Pick.** The top ready Queue item tagged `diagnose`. With none ready, stop and say which
-  gather item unblocks the next one: no unit is read in its place. An item tagged for Opus or
-  Sonnet is left for a session on that model, which picks the top item tagged for it.
+  line shown to work), a Sonnet session gathers them into a session file under a Queue line
+  "gather for <item>", and the diagnose line names that file. An item whose figures are missing
+  is not ready: it is skipped.
+- **Hand-back.** A session that hits a fix's stop condition undoes the fix, writes the trace and
+  what it tried, and puts one `diagnose` line at the top of the stage it came from.
+- **Pick.** A `diagnose` line is picked in Queue order like any other line tagged for Opus. With
+  only unready ones left, stop and say which gather item unblocks the next one: no unit is read
+  in its place.
 - **Do.** Read the code, trace the fault to what produces it, and prove it with the one run or
   the one test that shows it (a failing test is not committed: its fixture goes in the session
   file). No fix, not even an S one; no full suite, no before-and-after matrix, no doc sync.
   Findings seen in a source file read whole go in the session file for that unit's review, so
-  Fable never reads a file twice.
+  the file is not read twice.
 - **Write.** The session file (cause, evidence quoted), and one Queue line per finding that a
   session with no memory of this one can execute: the file and function, what is wrong and
   why, the fix in words, the test or run that fails now and passes after, the runs to compare,
@@ -125,10 +126,11 @@ session unsure how to rate an item it queues takes the higher level.
     wheels or towing is diagnosed first (§ Diagnose only), then fixed from its brief at `high`.
 - **Mode.** Plan mode when the item restructures code, crosses units or will end in a proposal:
   the plan is what the user approves. Auto mode for a unit review and for mechanical fixes.
-- **Model.** The session's own model (`/model`), never a subagent doing the item for Fable.
-  Fable only for `diagnose` items (§ Diagnose only): its credits are scarce. A fix with a brief
-  is Opus's where it touches the vehicle physics (map units 2 to 7) or needs judgement, Sonnet's
-  where it is mechanical or in docs, tools and tests with no physics. Every tag names its model.
+- **Model.** The session's own model (`/model`), never a subagent doing the item. Opus or
+  Sonnet: Fable is never used or recommended. A `diagnose` item is Opus's (§ Diagnose only). A
+  fix with a brief is Opus's where it touches the vehicle physics (map units 2 to 7) or needs
+  judgement, Sonnet's where it is mechanical or in docs, tools and tests with no physics. Every
+  tag names its model.
 - **Context.** `/clear` first, as a rule: the journal carries everything. Keep the context only
   when the next item is a fix in a file this session read whole and the session was short.
 
