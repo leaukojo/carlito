@@ -30,7 +30,10 @@ ungraded 0-50 and top, their 0-100 marks (under the energy bound) dropped. Left,
 2026-11-18: `sedan-sports` (its 15/5 bars load the front; a summer stock tyre needs its OE
 sourced, none opened); the semi hot stop (grip-bound, so fade eats only the margin; FMVSS 121,
 opened, tests a tractor on an unbraked control trailer, no laden-artic figure). Open: the
-pickups' brakes are an F-150's hardware on the compact class. Next: phase 4's re-runs, then 5. Open findings: the Winter-over-all-season 1.2
+pickups' brakes are an F-150's hardware on the compact class; the `pickup`'s 80 % RWD grade is
+unchecked (a 50/50 body at `mu_long` 1.05 and h/L ~0.2 computes ~66 %); the vans' cruise fuel is
+not re-sourced. Re-run `doc=accel`, `top`, `grade`; `cornering` and `cruise` hold no moved spec.
+Phase 4 done. Next: phase 5. Open findings: the Winter-over-all-season 1.2
 on snow rests on unopened pages ([66], [67]; [215] has no all-season); AutoBild's summer stops
 1.8x the winters' on snow [215] against VTI's 1.28-1.54 (Summer's factor keeps VTI's); the
 600 Nm retarder is an unsourced estimate (Allison 3000: 1490-2170 Nm per a search summary; the
@@ -62,22 +65,7 @@ Symptom: `garbage-truck` (8 t) and `firetruck` (7.5 t) launch 0-50 in ~6 s (real
 
 ## Phase 3 — Surface grip: done (see State)
 
-## Phase 4 — Cars near the line (effort: medium, mode: tune)
-
-One spec at a time, each against a sourced target:
-- `race`, `race-future`: both leave the 40 m strip sideways near 280-290 km/h with zero steer
-  (`doc=top`: `left the strip`). Find why (tracking pass at speed, aero balance) before any tune.
-- `race-future`: 0-100 3.3 s and 293 km/h against its hypercar reference; torque-bound with a
-  converter stall. Raise power or relabel the reference.
-- `pickup`: 0-100 9.6 s (ref 7.0); 78 % RWD grade (real 35-40 %): check the axle load split and
-  `com_y`; the grade may be the short tall Kenney body (then say so).
-- `sedan-sports`: skid pad 0.80 g, under `sedan`'s 0.85: tyre fit or balance.
-- `delivery`, `delivery-flat`, `ambulance`: 0-100 18-21 s (ref 12-13) and cruise fuel ~40 % low
-  (`drag_area` 1.2 m², real box van ~2); raising drag also brings the 171-176 km/h tops down.
-- `suv`: 223 km/h and gaining (class ~180): a governor (`speed_limit_kmh`) or gearing.
-- Semi hot stop: 545 °C lengthens the stop 1 %: check the fade curve against its source.
-- ESC leaves 0 % yaw on every body: leave (ideal controller, labelled).
-- Re-run: `doc=accel`, `doc=top`, `doc=cornering`, `doc=cruise`, `doc=grade`.
+## Phase 4 — Cars near the line: done (see State)
 
 ## Phase 5 — Trim redundant measurements (effort: low, mode: edit)
 
