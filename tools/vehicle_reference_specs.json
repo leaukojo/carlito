@@ -92,13 +92,13 @@
 		"top_speed_kmh": 150.0
 	},
 	"garbage-truck": {
-		"label": "typical rear-loader refuse truck, laden (e.g. Mack LR class)",
-		"marks_s": {"50": 8.0},
+		"label": "front-loader refuse truck on a narrow-cab chassis, empty (8 t; 13 t at a full hopper, inside the Volvo FL 814's 14 t GVW, docs/sources.md); no launch figure sourced",
+		"marks_s": {},
 		"top_speed_kmh": 90.0
 	},
 	"firetruck": {
-		"label": "typical Type I structural fire engine (e.g. Pierce Enforcer class)",
-		"marks_s": {"50": 6.0, "96.56": 14.0, "100": 15.0},
+		"label": "pumping appliance on a narrow-cab 12 t chassis at its operational weight (Volvo FL 812 class, 250-280 hp, docs/sources.md); no launch figure sourced",
+		"marks_s": {},
 		"top_speed_kmh": 110.0
 	},
 	"semi": {

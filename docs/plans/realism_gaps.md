@@ -12,7 +12,16 @@ State: done: `doc=top` table (top speed, quarter mile); phase 4's first bullet (
 `race-future`: the side force's centre behind the COM, user's choice 2026-11-17,
 `.claude/review_journal/sessions/2026-11-17-race-yaw-mode.md`); phase 1's fault was the cruise
 hold (a laden rig coasting through the band; `CRUISE_DRIFT`), the rig keeps 2.78 m² (its
-silhouette's; user's choice 2026-11-18); phase 1 done. Next: phase 2. Open findings: the fixed hold
+silhouette's; user's choice 2026-11-18); phase 1 done. Phase 2 done but the drive test: the
+bodies are car-width, so the narrow-cab 12-14 t class that carries the driveline (user's choice
+2026-11-18; `docs/sources.md` § The Kenney trucks' class): `firetruck` 12 t, `com_y` 0.90 (0-50
+8.6 s, tips after the front saturates at 0.62 g, K 0.57 / 0.70); `garbage-truck` unchanged (8 t
+empty, 13 t full); springs and brakes stay; the handbrake-lock guard and the retarder floor
+narrowed (user's choices). Next: the firetruck drive test, then phase 3. Open findings: the
+600 Nm retarder is an unsourced estimate (Allison 3000: 1490-2170 Nm per a search summary; the
+1.6 ceiling then binds the empty garbage truck); the laden firetruck rolls in the 70 km/h 30 %
+step with ESC on: the Kenney trucks carry no `esc_roll_lift_g` (R13 roll-over control); the
+garbage truck's tables are its empty 8 t. The fixed hold
 moved every body's cruise burn up 10-40 % (`delivery` 90 km/h 7.8 L/100 km): phase 4's "cruise
 fuel ~40 % low" on the vans is re-judged against the new table before any drag change.
 

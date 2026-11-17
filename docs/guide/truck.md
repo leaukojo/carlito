@@ -12,10 +12,10 @@ network.</p>
 | Vehicle | What it is | Weight, about | Gearbox | Governed to |
 | --- | --- | --- | --- | --- |
 | `garbage-truck` | Refuse truck with a front-loading arm | 8 t | 6-speed automatic | 85 km/h |
-| `firetruck` | Fire engine | 7.5 t | 6-speed automatic | 110 km/h |
+| `firetruck` | Fire engine | 12 t | 6-speed automatic | 110 km/h |
 | `semi` | Cab-over tractor unit with a trailer data link | 8 t | 12-speed AMT | 90 km/h |
 | `semi-conventional` | Bonneted tractor unit, no trailer data link | 8 t | 12-speed AMT | 105 km/h |
-<!-- garbage-truck_spec.tres mass 8000, speed_limit_kmh 85; firetruck_spec.tres 7500, 110; semi_spec.tres 8000, 90; conventional_spec.tres 8000, 105; gear_ratios 6 / 12 -->
+<!-- garbage-truck_spec.tres mass 8000, speed_limit_kmh 85; firetruck_spec.tres 12000, 110; semi_spec.tres 8000, 90; conventional_spec.tres 8000, 105; gear_ratios 6 / 12 -->
 
 All four drive their rear wheels through an open differential.
 

@@ -286,7 +286,7 @@ Transit 350 HD. The ambulance is a van-based box ambulance on the same drivetrai
 torque on the droop (D1 > D2 ~3440 rpm, D5 > D6 ~3200), and lands the 1.78 D1 > D2 step at 1850
 rpm, in the band. `shift_down_rpm` 1400 sits under the band's 1500 edge.
 
-*The Kenney trucks' drivetrain* (`TRUCK_BASE`), medium-duty for their 7.5-8 t: a Class 8 L9 (1695 N·m)
+*The Kenney trucks' drivetrain* (`TRUCK_BASE`), medium-duty for their 8-13 t: a Class 8 L9 (1695 N·m)
 creeps harder on them (computed).
 
 | Figure | Value | Grade |
@@ -295,6 +295,16 @@ creeps harder on them (computed).
 | Ratios | Allison 3000 / 3200 close: 3.49 / 1.86 / 1.41 / 1.00 / 0.75 / 0.65, R 5.03 ([Allison](https://pprod.allisontransmission.com/en-gb/transmissions/models/3000-series)) | sourced |
 | Axle, tyre | 5.57 on a Mack MD7 rear loader, 6.7 L and 3000 RDS ([listing](https://www.brucknertruck.com/inventory/2026-mack-md7-base-68364/)); 315/80R22.5 at 0.500 m loaded ([Michelin](https://business.michelin.ca/en/tires/michelin-x-multi-z-315)); `firetruck` takes the same | secondary, search summaries; estimate |
 | At the drawn 0.36 m | `final_drive` 5.57 × 0.36 / 0.500 = 4.010, the same `G / r`: first 38.9 per metre, top 52.1 km/h per 1000 rpm. Creep at rest `IDLE_CAPACITY T(stall) (idle / stall)² G η / r`, stall 1250 rpm: the creep of `docs/drivetrain.md` § Creep | computed |
+
+*The Kenney trucks' class*: the bodies are car-width (1.92 / 1.80 m), too small for a 2.5 m-wide
+15-25 t truck; the light truck of that size has 0.6x this driveline's torque, so the driveline sets
+the class, the narrow-cab 12-14 t chassis that carries it.
+
+| Figure | Value | Grade |
+| --- | --- | --- |
+| Light truck of the bodies' size | Isuzu NRR: 2.07 m wide, 2.36 m tall, 8.85 t GVWR; 215 hp, 613 N·m; hydraulic discs [211] | sourced |
+| Narrow-cab fire chassis | Volvo FL 812 12 t GVW, 250-280 hp; FL 814 14 t [212]: `firetruck` 12 t laden, `garbage-truck` 8 t empty, 13 t full | sourced; the masses an estimate |
+| Fire apparatus stability | NFPA 1901 (2009) 4.13.1.1, laden: ESC, a tilt-table pass, or the COM at most 80 % of the rear track [213]. `firetruck` `com_y` sits at 65 % | secondary; the COM an estimate |
 
 | The tractor's wheels, `I = m (κ r)²` at the drawn radius (tyre and rim; ballast does not turn) | Value | Grade |
 | --- | --- | --- |
@@ -425,7 +435,7 @@ and the front opposite.
 | Leaf-sprung solid rear 0.10 | a rigid axle on semi-elliptic springs, front eyes below the rear ones, moves each wheel forward in jounce and rearward in rebound, so roll steers the rear wheels the way the fronts are turned: "the conventional roll understeer condition" [87]. It gives no size; 0.10 is the upper half of the compilation's rear band [84] | the sign sourced; the figure an estimate |
 | The rear band's + end is understeer | the twist beam [83] and the leaf axle [87] both steer the rear into the turn as the body rolls, a positive rear coefficient in MRA's convention [82]. The compilation names no turn or roll direction [84] | sourced on both axles; the compilation's own convention unread |
 | Open-wheelers, tractor 0 | no figure found; race kinematics are laid out for minimal toe change | estimate |
-| Kenney trucks and the semis' drive axle: rear 0.10, front 0 | a truck's leaf axle shares [87]'s mechanism, its sign set by its spring eyes' heights; no size found. 0.10 is the leaf figure above, kept because it lands `garbage-truck` inside the tractor criterion [120] at the truck family's two slowest steps (`docs/vehicle_measurements.md` § Step steer); the rear-heavy `firetruck` and the laden semis stay under it, as load on the rear axles cuts K [121] (the semis' figures: `src/vehicles/truck/semi_spec.tres` header). The likely primaries, UMTRI's heavy-truck component factbook and *Descriptive parameters ... Vol. 4: steering and suspension systems* (UM-HSRI-81-19-4), are on Deep Blue, which refuses automated fetching | the sign sourced; the figure an estimate fitted to a criterion |
+| Kenney trucks and the semis' drive axle: rear 0.10, front 0 | a truck's leaf axle shares [87]'s mechanism, its sign set by its spring eyes' heights; no size found. 0.10 is the leaf figure above, kept because it lands both Kenney trucks inside the tractor criterion [120] at the truck family's two slowest steps (`docs/vehicle_measurements.md` § Step steer); the laden semis stay under it, as load on the rear axles cuts K [121] (the semis' figures: `src/vehicles/truck/semi_spec.tres` header). The likely primaries, UMTRI's heavy-truck component factbook and *Descriptive parameters ... Vol. 4: steering and suspension systems* (UM-HSRI-81-19-4), are on Deep Blue, which refuses automated fetching | the sign sourced; the figure an estimate fitted to a criterion |
 | Primaries not opened | Gillespie, *Fundamentals of Vehicle Dynamics*, ch. 6 (no copy reachable); SAE 1999-01-1323 (Erdogan, Guenther, Heydinger: its abstract reads roll steer against body roll on a side-pull rig, no figure); NHTSA's SPMD / VRTC reports (nhtsa.gov refuses automated fetching) | — |
 
 *Compliance steer* (`GroundDriveSpec.compliance_steer_rear`; `docs/handling.md` § Balance), + = toward
@@ -798,3 +808,6 @@ reads the pipe):
 208. J. F. Hughes, boats FAQ, "What's a formula for top speed?", 1997 (secondary): https://cs.brown.edu/~jhughes/boats/FAQ/node42.html
 209. Timbario et al., "Testing and Modeling of Engine Idle Creep in Conventional Automatic-Equipped Vehicles", HVE-WP-2022-1, Table 2 and its introduction: https://www.edccorp.com/library/HveWpPdfs/HVE-WP-2022-1.pdf
 210. C. Casiraghi (Tatuus Racing), "Race Car Aerodynamics", KTH lecture, 2011-04-08, slide 16: https://www.mech.kth.se/courses/5C1211/Externals_2011/Casiraghi.pdf
+211. Isuzu Commercial Truck of America, N-Series diesel specifications (NRR column, standard cab): https://isuzucv.com/nseries/nseries_diesel_specifications
+212. Volvo Trucks UK, "Fire and Rescue" brochure, 08/22, p. 15 (chassis table): https://www.volvotrucks.co.uk/content/dam/volvo-trucks/markets/uk/trucks/Volvo-Fire-and-Rescue-Brochure.pdf
+213. A. K. Rosenhan, "How to tilt-test fire apparatus", Trailer/Body Builders, 2013-06-01 (secondary, quoting NFPA 1901-2009 4.13): https://www.trailer-bodybuilders.com/truck-bodies/how-tilt-test-fire-apparatus

@@ -94,8 +94,8 @@ Because a converter always passes a little torque, even at idle, a car with an a
 in drive moves forward slowly on its own when you release the brake. This is
 [creep](glossary.md#creep). In the game every converter vehicle creeps at about walking pace on
 the flat, as real automatics do. Creep is strong enough to hold most cars on a slope of about 5
-to 8 %, and the garbage and fire trucks on about 8 %, with no pedal pressed.
-<!-- docs/drivetrain.md Creep, the steepest-grade table: cars 5.3-8.6 %, vans 5.3-7.0 %, garbage-truck and firetruck 8.2-8.6 %; measured 4.8-6.5 km/h against 3.0-5.7 mph -->
+to 8 %, the garbage truck on about 7 % and the laden fire truck on about 5 %, with no pedal pressed.
+<!-- docs/drivetrain.md Creep, the steepest-grade table: cars 5.3-8.6 %, vans 5.3-7.0 %, garbage-truck 7.4 %, firetruck 4.9 %; measured 4.8-6.5 km/h against 3.0-5.7 mph -->
 
 Pressing the brake and accelerator fully together holds a vehicle still. If it still creeps
 forward, the game cuts the throttle: a brake-throttle override.

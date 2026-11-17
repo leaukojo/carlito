@@ -30,7 +30,7 @@ parent of ISOBUS and NMEA 2000.
   `TruckTelemetry.AIR_SPRING_BRAKE_BAR` (**3 bar**) on either circuit, spring brakes apply
   from the next tick: `handbrake_torque` on the rears through the spin step
   (`WheelDrive.spring_brake`), a parking brake no stronger than the service brake on its drum
-  (6.5 kNm a wheel on `garbage-truck`, 7 on `firetruck`, 12 on the semis), and the box drops to N
+  (`docs/vehicles.md` § Brake hardware), and the box drops to N
   (`Drivetrain.drive_inhibit`, an Allison-class park-brake auto-neutral), so the truck can't
   drive away; `warn` (**5 bar**) is a band to stop in first. Gate reads the
   minimum of the two circuits; losing air has no ramp.
@@ -49,10 +49,10 @@ parent of ISOBUS and NMEA 2000.
 
   | Body | Rating at the output | Per driven wheel | Retardation |
   | --- | --- | --- | --- |
-  | `garbage-truck` / `firetruck` (8 / 7.5 t) | 600 Nm, medium-duty output retarder | 1203 Nm | 0.84 / 0.89 m/s² |
+  | `garbage-truck` / `firetruck` (8 / 12 t) | 600 Nm, medium-duty output retarder | 1203 Nm | 0.84 / 0.56 m/s² |
   | `semi` / `semi-conventional` bobtail (8 t) | 1450 Nm, low end of the hydraulic class | 2120 Nm | 1.47 m/s² (0.37 coupled to the 24 t box, which it leaves unbraked) |
 
-  `test_truck` pins a **0.7-1.6 m/s²** band per shipped spec at its own mass (past ~1.6 an
+  `test_truck` pins a **0.5-1.6 m/s²** band per shipped spec at its own mass (past ~1.6 an
   auxiliary brake stands in for the foot brake) and the retarder under its axle's service brake.
   The trailer is asked for nothing (`TruckTelemetry.ebs11_demand`): an endurance brake operates no
   trailer service brake and its coupling force goes uncompensated (R13 5.2.1.21, 5.2.1.28.6;

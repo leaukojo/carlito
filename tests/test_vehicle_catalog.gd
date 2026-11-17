@@ -642,12 +642,18 @@ func test_a_driven_wheel_under_its_grip_pushes_its_drive_past_its_brake() -> voi
 func test_every_handbrake_locks_the_rears_and_parks_on_its_regulation_grade() -> void:
 	# A parking brake that can lock the rears makes the handbrake turn (the combined-slip tyre drops a
 	# locked wheel's side force), and it parks the laden body on UN R13-H's 20 % or R13's 18 %. A
-	# semi-trailer rig adds the trailer's spring brakes (test_trailer).
+	# semi-trailer rig adds the trailer's spring brakes (test_trailer). A truck's spring brake shares
+	# its service drum and never out-torques it (test_truck), so it must lock only where that drum's
+	# share could: a laden truck's rear tyre can out-hold both.
 	var specs := _driven_specs()
 	for variant: String in specs:
 		var spec: VehicleSpecScript = specs[variant]
-		assert_float(BrakeSizing.rear_lock_ratio(spec)).override_failure_message(
-				"%s: the handbrake cannot lock the rears" % variant).is_greater(1.0)
+		var gd := spec.ground_drive
+		var rear_grip_nm := BrakeSizing.wheel_grip(spec, BrakeSizing.wheel_loads(spec).y) \
+				* gd.axle_radius(true)
+		if VehicleCatalog.family_of(variant) != "truck" or gd.axle_brake_torque(true) > rear_grip_nm:
+			assert_float(BrakeSizing.rear_lock_ratio(spec)).override_failure_message(
+					"%s: the handbrake cannot lock the rears" % variant).is_greater(1.0)
 		var need := BrakeSizing.regulation_grade(spec.mass)
 		assert_float(BrakeSizing.park_grade(spec)).override_failure_message(
 				"%s parks on %.0f %%, under the %.0f %% regulation grade"

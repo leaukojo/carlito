@@ -193,8 +193,8 @@ body moves under 5 cm:
 - 0.1-4.9 cm, a driven wheel turning or spinning against its brake while the other axle's brakes
   hold the body (a brake-stand burnout): `sedan-sports` (4.9), `delivery`, `delivery-flat` (2.5
   each), `police` (2.4), `van` (2.3), `pickup-flat`, `ambulance` (2.1 each), `pickup`,
-  `garbage-truck` (1.4 each), `race` (1.3), `semi`, `semi-conventional` (0.6 each), `firetruck`
-  (0.4), `taxi` (0.3), `suv-luxury` (0.2), `sedan` (0.1).
+  `garbage-truck` (1.4 each), `race` (1.3), `firetruck` (0.8), `semi`, `semi-conventional` (0.6
+  each), `taxi` (0.3), `suv-luxury` (0.2), `sedan` (0.1).
 
 On a body with both axles driven the brakes are solved with the differentials
 (`WheelDrive._couple_differentials`, `Differential.braked_coupling_torque`): a held wheel stays
@@ -264,9 +264,10 @@ grip in a tyre-limited stop. `BrakeSizing` is the arithmetic the generator repor
   fit takes (`taxi` on Summer keeps 1.14x);
 - it holds gear 1 at converter stall (§ Both pedals);
 - the handbrake locks the static rear wheel and parks the laden body on 20 % (UN R13-H, to
-  3.5 t) or 18 % (R13). Because it locks, the parking grade is the rear tyres' (`park_grade`,
+  3.5 t) or 18 % (R13). Where it locks, the parking grade is the rear tyres' (`park_grade`,
   facing either way on the slope's weight transfer): 32-46 % on the road cars and vans (58-62 on
-  the racers), 32 % on `garbage-truck` and 36 % on `firetruck`, 45 % on the tractor;
+  the racers), 32 % on `garbage-truck`, 45 % on the tractor; the laden `firetruck`'s
+  cannot lock and parks on 34 %;
 - a pawl outholds its driven tyres.
 
 | Class | Bodies | Foot brake, Nm a wheel (g at mass) | Handbrake, Nm a rear wheel | Pawl, Nm a driven wheel |
@@ -277,7 +278,7 @@ grip in a tyre-limited stop. `BrakeSizing` is the arithmetic the generator repor
 | Full-size light commercial, each its reference's | `van` (Transit), `pickup`, `pickup-flat` (F-150) | 2911; 3385 (2.06-2.56) | 1700 | 3000 |
 | Racing | `race`, `race-future` | 2000 (2.52-2.67) | 1400 | none |
 | 3.5-5 t van | `delivery`, `delivery-flat`, `ambulance` | 5200 (1.23-1.47) | 4800 | 8000 |
-| 26 t chassis, spring brakes | `garbage-truck`, `firetruck` | 15500 (2.20-2.34) | 6500 / 7000 | none |
+| 26 t chassis, spring brakes | `garbage-truck`, `firetruck` | 15500 (1.46-2.20) | 6500 / 7000 | none |
 | Tractor unit, EBS discs | `semi`, `semi-conventional` | 15500 (2.2 bobtail) | 12000 | none |
 | Tractor wet discs (rear), inboard, at its 0.805 m rear | `tractor-kenney` | 19231 (1.39) | 17889 | 33542 |
 

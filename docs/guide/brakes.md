@@ -36,7 +36,7 @@ can give.
 | SUV and light commercial | `suv`, `suv-luxury`, `van`, the pickups | 1.4 to 2.6 g |
 | Racing | `race`, `race-future` | 2.5 to 2.7 g |
 | Heavy van | `delivery`, `delivery-flat`, `ambulance` | 1.2 to 1.5 g |
-| Truck air brakes | `garbage-truck`, `firetruck`, the semis | about 2.2 g unladen |
+| Truck air brakes | `garbage-truck`, `firetruck`, the semis | about 2.2 g unladen, 1.5 g on the laden `firetruck` |
 | Tractor wet discs | `tractor-kenney` | about 1.4 g |
 <!-- docs/vehicles.md Brake hardware table: foot brake as g at the body's mass -->
 

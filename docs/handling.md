@@ -189,7 +189,7 @@ Tractor `rear_lat_grip` 1.077 = `1 + s * log2(rated rear / rated front)` (650/65
   Shipped (`docs/sources.md` § Roll steer): front 0.10 on the car family; rear 0.036 twist beam on
   the FWD saloons, 0.05 multi-link on the RWD / AWD cars, 0.10 leaf on `van`, the pickups,
   `VAN_BASE`, `TRUCK_BASE` and the semis; 0 on open-wheelers, tractor. The slowest step reads the
-  cars and `garbage-truck` inside their K bands, `firetruck` and laden semis under.
+  cars and both Kenney trucks inside their K bands, the laden semis under.
 - **Compliance steer.** A rear steers `compliance_steer_rear` deg per kN at each patch (+ =
   understeer), both wheels off half the axle's latched side force (a both-wheels K&C figure as
   published). Only `CAR_BASE`'s twist beam ships one (`docs/sources.md` § Compliance steer); every

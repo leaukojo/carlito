@@ -163,7 +163,7 @@ Released in D1 with no pedal (`measure_grade -- all creep`; asphalt; 2026-11-16)
 | `hatchback-sports` (ratio 1.0) | 4.9 % |
 | `van`, `pickup`, `pickup-flat` | 5.3 % |
 | `delivery`, `delivery-flat`, `ambulance` | 5.7-6.1 % |
-| `garbage-truck`, `firetruck` | 7.4-7.8 % |
+| `garbage-truck`; `firetruck` (12 t) | 7.4 %; 4.9 % |
 
 Every body creeps on the flat at a walking pace, inside the measured range (idle and gearing set it).
 

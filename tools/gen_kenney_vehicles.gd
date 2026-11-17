@@ -296,7 +296,7 @@ const CAR_BASE := {
 	# needs ~2.8x less lock at that speed.
 	"min_steer_frac": 0.26, "steer_falloff_speed": 42.0,
 }
-## The Kenney trucks' driveline is a medium-duty class, sized to the 7.5-8 t these bodies carry (a
+## The Kenney trucks' driveline is a medium-duty class, sized to the 8-13 t these bodies carry (a
 ## Class 7 rear loader, the Mack MD7's): a Cummins B6.7 behind an Allison 3000-family close-ratio
 ## six-speed, into a 5.57 axle on a 315/80R22.5 (docs/sources.md). Its diesel
 ## curve ends at zero at the redline: the governor droops to nothing above rated speed.
@@ -309,8 +309,7 @@ const TRUCK_BASE := {
 	# damper's 0.2-0.4 (Gillespie): a road band rings the D1>D2 shift's pitch harder (an estimate:
 	# not re-measured on the medium-duty gearing).
 	# com_y 0.75 is a working truck's real height, ~0.30 of the AABB on these bodies: a hopper or a
-	# pump deck sits high and the cab above it. Half-track 0.66-0.69 over 0.75 m tips at ~0.88 g,
-	# clear of mu_lat 0.75, so the firetruck slides before it rolls (the garbage truck overrides).
+	# pump deck sits high and the cab above it. Each truck overrides it with its own load.
 	"mass": 4000.0, "com_y": 0.75, "spring_rate": 400000.0, "damper_bump": 31000.0,
 	"damper_rebound": 41000.0, "max_suspension_force": 120000.0, "rest_length": 0.32,
 	# Yaw index 0: Jolt's uniform-density tensor; no measured heavy truck (docs/handling.md § Inertia).
@@ -323,8 +322,7 @@ const TRUCK_BASE := {
 	# The leaf axle's roll understeer and its sign are sourced (US 4,919,449); no truck size was found
 	# (docs/sources.md § Roll steer). 0.10 lands the tractor criterion, 0.5-2.0 deg/g at 0.15 g
 	# (Woodrooffe & El-Gindy), on `garbage-truck`: K 0.60 / 0.71 deg/g at the 30 / 50 km/h steps,
-	# from -0.01 / 0.13 without it. The rear-heavy `firetruck` reads 0.07 / 0.20; the band's +0.13 cap
-	# cannot lift it. UMTRI's factbook or UM-HSRI-81-19-4, once read, replaces the figure; the semis'
+	# from -0.01 / 0.13 without it; the laden 12 t `firetruck` reads 0.57 / 0.70 (2026-11-18). UMTRI's factbook or UM-HSRI-81-19-4, once read, replaces the figure; the semis'
 	# hand-authored specs carry the same 0.10 (semi_spec.tres), so a new figure re-measures `doc=steer`
 	# and both semis' steps. Front 0: no steer-axle figure found. Compliance steer 0: the stock eye and
 	# shackle steer toward oversteer (docs/sources.md § Compliance steer, the sign only) and no truck
@@ -367,9 +365,9 @@ const TRUCK_BASE := {
 	# Commercial radials, a touch less load-sensitive than a passenger tyre. Cornering stiffness peaks
 	# at 3.33x the static corner load: MF `PKY2` 3.33 on a 315/80R22.5 (projectchrono
 	# `CityBus_Pac02Tire.tir`), a truck tyre running at its rated `Fz0` as a loaded truck's does.
-	# Without a bar the corner pass saturates the front first on both (firetruck 0.98 / 0.84 at
-	# 0.62 g, garbage-truck 0.98 / 0.83 at 0.61 g; the garbage truck's rear follows to 0.99 as the
-	# lock winds on), and BalanceModel.corner_limit calls +15.1 / +6.9 % front-first: the garbage
+	# Without a bar the corner pass saturates the front first on both (firetruck 0.98 / 0.82 at
+	# 0.62 g, then overturns as the lock winds on; garbage-truck 0.98 / 0.83 at 0.61 g, its rear
+	# following to 0.99), and BalanceModel.corner_limit calls +14.1 / +6.9 % front-first: the garbage
 	# truck's call is the fleet's closest (docs/handling.md § Balance).
 	"load_sensitivity": 0.08, "cornering_peak_load": 3.33,
 	# The 2021 B6.7's top Performance rating (Cummins): 325 hp, 750 lb-ft (1017 N·m) at 1800, governed
@@ -819,7 +817,12 @@ const VARIANTS := {
 	"garbage-truck": {"family": "truck", "pto_mode_rpm": 1300.0, "mass": 8000.0, "com_y": 0.85, "front_weight": 0.465, "handbrake_torque": 6500.0, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 85.0},
 	# Emergency vehicles are exempt from the goods-vehicle limiter; 110 is the appliance's own
 	# rating, where the governor settles it (108.2 km/h).
-	"firetruck": {"family": "truck", "mass": 7500.0, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 110.0},
+	# `mass` 12000: a pumping appliance runs at its operational weight (water, kit, crew), here the
+	# 12 t GVW of the narrow-cab chassis its car-width body matches (Volvo FL 812, docs/sources.md).
+	# `com_y` 0.90 is an estimate: TRUCK_BASE's 7.5 t at 0.75 plus 4.5 t of tank and lockers at the
+	# body's mid-height (1.14). It is 0.65 of the 1.38 m track, under NFPA 1901's 0.80 ceiling
+	# (docs/sources.md § The Kenney trucks' class).
+	"firetruck": {"family": "truck", "mass": 12000.0, "com_y": 0.90, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 110.0},
 	# tractor family (ISOBUS) — one drivable body.
 	# 40 km/h is type approval, and the limiter is what holds it: the road gear reaches 40 at the
 	# 2200 rated speed with the governor's tail still to run, and the body settles at 38.3 inside
