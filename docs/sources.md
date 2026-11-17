@@ -378,7 +378,7 @@ tyre's 0.013 on asphalt [68]. A class scales grip per surface; drag is tyre-blin
 | ROCK | 0.70 | 0.01 | none found; drag as setts, 0.015 [68] | estimate |
 | MUD | 0.45 | 0.10 | grip under Wong's wet earth road (0.55, so 0.65) [63], for deep soft mud; drag below | grip estimate, drag computed |
 | FIELD | 0.50 | 0.06 | grip a road tread in tilled soil, none found; drag below | grip estimate, drag computed |
-| SNOW | 0.40 | 0.02 | packed snow: a winter tyre's measured peak, 0.40 braking and 0.38 cornering at the nominal load [214], 0.39 between them, is 0.46 of the 0.85 dry, the Winter class's 0.97 x 1.2 over this; drag none found | primary (a 2006 central-European winter tyre); drag estimate |
+| SNOW | 0.34 | 0.02 | packed snow: a winter tyre's measured peak, 0.40 braking and 0.38 cornering [214], over a body's dry mu of about 1 (`GroundDriveSpec.mu_long`), is the Winter class's 0.97 x 1.2 over this; AutoBild's 31 winter tyres stop from fifty in 27.1-32.6 m (ABS) [215]; drag none found | primary; drag estimate |
 | ICE | 0.12 | 0 | Wong's 0.10 [63]; black ice at most 0.10 in Bosch [68] | secondary |
 
 MUD and FIELD drag: Zoz and Grisso's radial motion resistance `1.2/Bn + 0.5 s/sqrt(Bn) + 0.03` [45]
@@ -813,4 +813,5 @@ reads the pipe):
 211. Isuzu Commercial Truck of America, N-Series diesel specifications (NRR column, standard cab): https://isuzucv.com/nseries/nseries_diesel_specifications
 212. Volvo Trucks UK, "Fire and Rescue" brochure, 08/22, p. 15 (chassis table): https://www.volvotrucks.co.uk/content/dam/volvo-trucks/markets/uk/trucks/Volvo-Fire-and-Rescue-Brochure.pdf
 213. A. K. Rosenhan, "How to tilt-test fire apparatus", Trailer/Body Builders, 2013-06-01 (secondary, quoting NFPA 1901-2009 4.13): https://www.trailer-bodybuilders.com/truck-bodies/how-tilt-test-fire-apparatus
-214. J. Svendenius, "Validation of the Brush Model towards VTI-measurement data recorded in Arjeplog 2006", TFRT-7617, Lund University, 2007, Tables 4 and 7 (brush-model friction, longitudinal and lateral, on a VTI test truck; ContiSportContact 225/45R17, ContiWinterContact TS810 and Gislaved Nordfrost 3 215/55R16): https://lup.lub.lu.se/search/files/4590032/8627412.pdf
+214. J. Svendenius, "Validation of the Brush Model towards VTI-measurement data recorded in Arjeplog 2006", TFRT-7617, Lund University, 2007, Tables 4 and 7 (brush-model friction on a VTI test truck; a summer, a central-European winter and a studded tyre): https://lup.lub.lu.se/search/files/4590032/8627412.pdf
+215. Tyre Reviews, "2025 Winter Tyre Braking Test - 52 Sets!" (AutoBild, 225/40 R18; wet from eighty, snow from fifty, to rest; a saved copy read): https://www.tyrereviews.com/Tyre-Tests/2025-Winter-Tyre-Braking-Test---52-Sets.htm

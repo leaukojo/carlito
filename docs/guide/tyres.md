@@ -105,12 +105,12 @@ about 1.3.
 <!-- sedan_spec.tres mu_long 1.05 (GroundDriveSpec default), mu_lat 0.97; semi_spec.tres mu_long 0.8, mu_lat 0.75; race mu_long 1.35, race-future 1.25 (gen_kenney_vehicles.gd) -->
 
 The ground and the tyre's tread change this number. Ice gives an ordinary all-season tyre only
-about a tenth of its dry grip; wet asphalt three quarters; snow four tenths. A winter tyre
+about a tenth of its dry grip; wet asphalt three quarters; snow a third. A winter tyre
 grips snow and ice better than an all-season tyre, a summer tyre grips dry roads better. The game
 has twelve kinds of ground and nine kinds of tyre; [Ground and tyre types](surfaces.md) covers
 them. Every one of them
 changes only how high the peak is, never the shape of the curve.
-<!-- surface.gd REF_GRIP Wet 0.75, Snow 0.4, Ice 0.12, Surface.COUNT 12; src/vehicles/tyres/ holds nine TyreClass files -->
+<!-- surface.gd REF_GRIP Wet 0.75, Snow 0.34, Ice 0.12, Surface.COUNT 12; src/vehicles/tyres/ holds nine TyreClass files -->
 
 ## Sharing grip between braking and turning
 

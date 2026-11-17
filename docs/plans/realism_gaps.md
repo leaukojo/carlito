@@ -19,9 +19,12 @@ bodies are car-width, so the 12-14 t class that carries the driveline (user's ch
 8.6 s, tips after the front saturates at 0.62 g, K 0.57 / 0.70); `garbage-truck` unchanged (8 t
 empty, 13 t full); springs and brakes stay; the handbrake-lock guard and the retarder floor
 narrowed (user's choices). Phase 3 done (drive test OK 2026-11-18): `Surface` wet 0.75 (Bosch [68]), snow
-0.40 and Summer / Studded snow factors from VTI's measured peaks (`docs/sources.md` [214]); `sedan`
-wet 0.65 g, snow 0.30 / 0.36 / 0.42 / 0.51 g summer to studded; `doc=grade` unmoved; the mud tyre's
-0.78 g on ice read 0.07 g since becd1d6. Next: phase 4. Open findings: the Winter-over-all-season 1.2 on snow rests on unopened pages ([66], [67]); the
+0.34 and Summer / Studded snow factors from VTI's measured peaks (`docs/sources.md` [214]; the
+review moved snow from 0.40, which had divided by Wong's 0.85 dry, not the bodies' mu ~1; AutoBild
+[215] confirms); `doc=grade` unmoved; the mud tyre's 0.78 g on ice read 0.07 g since becd1d6.
+Next: a snow-strip re-drive at 0.34, then phase 4. Open findings: the Winter-over-all-season 1.2
+on snow rests on unopened pages ([66], [67]; [215] has no all-season); AutoBild's summer stops
+1.8x the winters' on snow [215] against VTI's 1.28-1.54 (Summer's factor keeps VTI's); the
 600 Nm retarder is an unsourced estimate (Allison 3000: 1490-2170 Nm per a search summary; the
 1.6 ceiling then binds the empty garbage truck); the laden firetruck rolls in the 70 km/h 30 %
 step with ESC on: the Kenney trucks carry no `esc_roll_lift_g` (R13 roll-over control); the

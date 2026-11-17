@@ -25,8 +25,8 @@ field (ploughed soil), snow and ice. Each one carries two numbers.
 - **Grip.** How much of a tyre's dry-road grip is left on this ground. It is measured against
   one reference tyre, an ordinary all-season car tyre, which keeps all its grip on dry asphalt
   (1), three quarters of it on wet asphalt and about half on grass or mud. On snow it keeps
-  four tenths, and on ice only about a tenth.
-  <!-- surface.gd REF_GRIP: Asphalt 1, Wet 0.75, Pad 0.95, Gravel 0.71, Dirt 0.8, Grass 0.5, Sand 0.6, Rock 0.7, Mud 0.45, Field 0.5, Snow 0.4, Ice 0.12 -->
+  a third, and on ice only about a tenth.
+  <!-- surface.gd REF_GRIP: Asphalt 1, Wet 0.75, Pad 0.95, Gravel 0.71, Dirt 0.8, Grass 0.5, Sand 0.6, Rock 0.7, Mud 0.45, Field 0.5, Snow 0.34, Ice 0.12 -->
 - **Drag.** How much harder the ground is to roll over than a hard road. Hard ground (asphalt,
   pad, ice) adds nothing. Gravel and rock add a little. Soft ground adds much more, because the
   tyre sinks in and has to climb out of its own rut all the time: mud adds the most, about ten
@@ -66,7 +66,7 @@ tread, which the game calls the [tyre class](glossary.md#tyre-class). A class sa
 tread differs from the reference all-season tyre, as a factor per surface. That way one winter
 class serves a small car and an eight-tonne truck alike.
 
-![A bar chart of peak grip for four car tyres on five kinds of ground. On dry asphalt: all-season 1, summer 1.1, winter 0.97, studded 0.94. On ice: all-season 0.12, summer about 0.09, winter about 0.18, studded about 0.28. On snow: summer about 0.33, all-season 0.4, winter about 0.47, studded about 0.57.](img/surface-grip.svg "Peak grip of the four car tyres, as a share of the all-season tyre's grip on dry asphalt.")
+![A bar chart of peak grip for four car tyres on five kinds of ground. On dry asphalt: all-season 1, summer 1.1, winter 0.97, studded 0.94. On ice: all-season 0.12, summer about 0.09, winter about 0.18, studded about 0.28. On snow: summer about 0.28, all-season 0.34, winter about 0.4, studded about 0.49.](img/surface-grip.svg "Peak grip of the four car tyres, as a share of the all-season tyre's grip on dry asphalt.")
 <!-- TyreClass.grip_response = REF_GRIP x (dry / stock dry) x surface_grip; the four PASSENGER classes -->
 
 The nine classes are:
