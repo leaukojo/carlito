@@ -133,8 +133,8 @@ as real cars' drag-torque control does, so the wheels roll again.
   trucks and many vans are limited by law or by their owners. As the vehicle nears its limit the
   governor fades the fuel out over the last few km/h, so it settles a little under the limit
   instead of surging. The `semi` is governed to 90 km/h, the `semi-conventional` to 105, the
-  garbage truck to 85, the fire truck to 110, the tractor to 40; the vans, pickups and ambulance have higher limits, and the cars none.
-  <!-- VehicleSpec.speed_limit_kmh: semi 90, semi-conventional 105, garbage-truck 85, firetruck 110, ambulance 150, van/pickup/pickup-flat 180, tractors 40; Drivetrain.GOVERNOR_BAND 1.5 m/s -->
+  garbage truck to 85, the fire truck to 110, the tractor to 40; the vans, pickups, ambulance and `suv` have higher limits, the other cars none.
+  <!-- VehicleSpec.speed_limit_kmh: semi 90, semi-conventional 105, garbage-truck 85, firetruck 110, ambulance 150, suv/van/pickup/pickup-flat 180, tractors 40; Drivetrain.GOVERNOR_BAND 1.5 m/s -->
 
 [Stability control](glossary.md#stability-control) can also trim the fuel while it catches a
 slide.

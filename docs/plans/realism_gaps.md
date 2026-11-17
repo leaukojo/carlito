@@ -24,10 +24,13 @@ review moved snow from 0.40, which had divided by Wong's 0.85 dry, not the bodie
 [215] confirms); `doc=grade` unmoved; the mud tyre's 0.78 g on ice read 0.07 g since becd1d6.
 Snow re-drive at 0.34 OK. Phase 4: `suv` governed at 180 (5cd6a11); user's choices 2026-11-18:
 `pickup` relabelled a compact pickup, the heavy vans' refs replaced (drag stays the silhouette's),
-`race-future` relabelled a formula car, doc room by trimming (net zero). `race-future` a Gen3 at 350 kW (a56a966). Next:
-the pickup and van refs (pages the user saves: the sites refuse fetches), `sedan-sports` (bars
-80/20 overload the front; a summer stock tyre if its OE is sourced), the semi hot stop (grip-bound
-at 0.73 g: is a laden artic's brake margin real? check FMVSS 121). Open findings: the Winter-over-all-season 1.2
+`race-future` relabelled a formula car, doc room by trimming (net zero). `race-future` a Gen3 at 350 kW (a56a966).
+The pickups' ref a Hilux 2.7 2WD class with no launch mark (no test page opens); the vans keep an
+ungraded 0-50 and top, their 0-100 marks (under the energy bound) dropped. Left, user's OK
+2026-11-18: `sedan-sports` (its 15/5 bars load the front; a summer stock tyre needs its OE
+sourced, none opened); the semi hot stop (grip-bound, so fade eats only the margin; FMVSS 121,
+opened, tests a tractor on an unbraked control trailer, no laden-artic figure). Open: the
+pickups' brakes are an F-150's hardware on the compact class. Next: phase 4's re-runs, then 5. Open findings: the Winter-over-all-season 1.2
 on snow rests on unopened pages ([66], [67]; [215] has no all-season); AutoBild's summer stops
 1.8x the winters' on snow [215] against VTI's 1.28-1.54 (Summer's factor keeps VTI's); the
 600 Nm retarder is an unsourced estimate (Allison 3000: 1490-2170 Nm per a search summary; the

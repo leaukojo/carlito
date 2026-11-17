@@ -245,11 +245,11 @@ off.
 | `race` | 1.58 / 1.58 / 1.6 | 3.60 / 3.60 / 3.7 | 0.00 / 0.00 / 0.00 / 1.48 / 0.08 (0.08) | 1.00 (0.00 / -0.00 / 0.00) / 1.00 (0.00 / 0.00 / 0.00) |
 | `race-future` | 1.23 / 1.55 / - | 2.63 / 2.90 / - | 0.17 / 0.00 / 0.00 / 0.00 / 0.22 (0.22) | 0.96 (0.03 / 0.01 / 0.00) / 0.76 (0.23 / 0.01 / 0.00) |
 | `van` | 3.58 / 3.57 / 4.3 | 10.17 / 10.15 / 10.2 | 0.00 / 0.00 / 0.00 / 0.02 / 3.55 (1.08) | 0.62 (0.38 / 0.00 / 0.00) / 0.63 (0.37 / -0.00 / 0.00) |
-| `pickup` | 3.33 / 3.32 / 3.0 | 9.37 / 9.35 / 7.0 | 0.00 / 0.00 / 0.00 / 0.02 / 3.30 (1.00) | 0.65 (0.35 / 0.00 / 0.00) / 0.65 (0.35 / 0.00 / 0.00) |
-| `pickup-flat` | 3.25 / 3.23 / 3.5 | 9.10 / 9.08 / 8.1 | 0.00 / 0.00 / 0.00 / 0.02 / 3.22 (0.98) | 0.64 (0.36 / 0.00 / 0.00) / 0.65 (0.35 / -0.00 / 0.00) |
-| `delivery` | 4.95 / 4.93 / 5.0 | 17.72 / 17.70 / 11.8 | 0.00 / 0.00 / 0.00 / 0.00 / 4.93 (0.78) | 0.42 (0.58 / 0.00 / 0.00) / 0.42 (0.58 / -0.00 / 0.00) |
-| `delivery-flat` | 4.73 / 4.72 / 5.3 | 16.70 / 16.68 / 12.3 | 0.00 / 0.00 / 0.00 / 0.02 / 4.70 (0.73) | 0.43 (0.57 / -0.00 / 0.00) / 0.44 (0.56 / -0.00 / 0.00) |
-| `ambulance` | 5.62 / 5.60 / 5.5 | 20.38 / 20.38 / 12.9 | 0.00 / 0.00 / 0.00 / 0.02 / 5.58 (0.83) | 0.44 (0.56 / 0.00 / 0.00) / 0.44 (0.56 / 0.00 / 0.00) |
+| `pickup` | 3.33 / 3.32 / - | 9.37 / 9.35 / - | 0.00 / 0.00 / 0.00 / 0.02 / 3.30 (1.00) | 0.65 (0.35 / 0.00 / 0.00) / 0.65 (0.35 / 0.00 / 0.00) |
+| `pickup-flat` | 3.25 / 3.23 / - | 9.10 / 9.08 / - | 0.00 / 0.00 / 0.00 / 0.02 / 3.22 (0.98) | 0.64 (0.36 / 0.00 / 0.00) / 0.65 (0.35 / -0.00 / 0.00) |
+| `delivery` | 4.95 / 4.93 / 5.0 | 17.72 / 17.70 / - | 0.00 / 0.00 / 0.00 / 0.00 / 4.93 (0.78) | 0.42 (0.58 / 0.00 / 0.00) / 0.42 (0.58 / -0.00 / 0.00) |
+| `delivery-flat` | 4.73 / 4.72 / 5.3 | 16.70 / 16.68 / - | 0.00 / 0.00 / 0.00 / 0.02 / 4.70 (0.73) | 0.43 (0.57 / -0.00 / 0.00) / 0.44 (0.56 / -0.00 / 0.00) |
+| `ambulance` | 5.62 / 5.60 / 5.5 | 20.38 / 20.38 / - | 0.00 / 0.00 / 0.00 / 0.02 / 5.58 (0.83) | 0.44 (0.56 / 0.00 / 0.00) / 0.44 (0.56 / 0.00 / 0.00) |
 | `garbage-truck` | 6.12 / 6.12 / - | - / - / - | 0.00 / 0.00 / 0.00 / 0.00 / 6.10 (0.80) | 0.48 (0.52 / 0.00 / 0.00) / 0.48 (0.52 / 0.00 / 0.00) |
 | `firetruck` | 8.62 / 8.60 / - | 30.92 / 30.92 / - | 0.00 / 0.00 / 0.00 / 0.00 / 8.60 (1.10) | 0.32 (0.68 / 0.00 / 0.00) / 0.32 (0.68 / 0.00 / 0.00) |
 | `semi` + 24 t towed | 15.67 / 15.22 / 16.0 | - / - / - | 0.00 / 0.00 / 2.02 / 0.02 / 13.62 (1.30) | 0.41 (0.59 / -0.00 / 0.00) / 0.43 (0.57 / 0.00 / 0.00) |
@@ -267,10 +267,10 @@ grip to spare and run 0-50 a little under a loaded diesel rig's typical time. En
 (½mv² of the rig's mass at the engine's peak power, 90 % efficient, no shifts); a loaded diesel
 needs far longer to 60 mph.
 
-The heavy vans run 0-100 slower than `ref` and 0-50 within half a second of theirs (the table above). The
-`ref` figures are ungraded "typical" values with no road test of the class behind them (none of a
-Transit 3.2 automatic was found), and they sit at or under the energy bound: ½mv² to the 0-100 speed at
-the class's 147 kW, 90 % efficient, no shifts, per van mass. The vans are torque-bound through 0-50
+The heavy vans run 0-50 within half a second of `ref` (the table above), an ungraded "typical"
+value with no road test of the class behind it (none of a Transit 3.2 automatic was found). They
+carry no 0-100 `ref`: the typical ones sat at or under the energy bound (½mv² to the 0-100 speed at
+the class's 147 kW, 90 % efficient, no shifts, per van mass). The vans are torque-bound through 0-50
 (a brief shift, no spin) and run 0-100 in D1-D4, upshifting at `shift_up_rpm`. Their top speed is
 drag's: `delivery` settles in D6 above `ref` (no governor declared), and `ambulance` is governed
 (`docs/drivetrain.md` § Engine braking under a fuel cut).
@@ -297,11 +297,11 @@ and the quarter mile against the reference's.
 | `race` | 292 km/h, settled | D6, 6109 rpm | 300 km/h | 0.97 | 11.6 s at 198 km/h / 11.5 s at 200 km/h |
 | `race-future` | 320 km/h, settled | D6, 6642 rpm | 322 km/h | 0.99 | 10.1 s at 229 km/h |
 | `van` | 176 km/h, settled | D6, 4744 rpm | 160 km/h | 1.10 | 17.4 s at 132 km/h / 17.5 s at 122 km/h |
-| `pickup` | 176 km/h, settled | D6, 4748 rpm | 180 km/h | 0.98 | 16.9 s at 136 km/h / 15.4 s at 145 km/h |
-| `pickup-flat` | 176 km/h, settled | D6, 4749 rpm | 170 km/h | 1.04 | 16.7 s at 138 km/h / 16.1 s at 138 km/h |
-| `delivery` | 171 km/h, time cap | D6, 3281 rpm | 150 km/h | 1.14 | 20.7 s at 107 km/h / 18.5 s at 112 km/h |
-| `delivery-flat` | 177 km/h, time cap | D6, 3378 rpm | 145 km/h | 1.22 | 20.3 s at 109 km/h / 19.0 s at 108 km/h |
-| `ambulance` | 147 km/h, settled | D6, 2805 rpm | 150 km/h | 0.98 | 21.7 s at 103 km/h / 19.5 s at 105 km/h |
+| `pickup` | 176 km/h, settled | D6, 4748 rpm | - | - | 16.9 s at 136 km/h |
+| `pickup-flat` | 176 km/h, settled | D6, 4749 rpm | - | - | 16.7 s at 138 km/h |
+| `delivery` | 171 km/h, time cap | D6, 3281 rpm | 150 km/h | 1.14 | 20.7 s at 107 km/h |
+| `delivery-flat` | 177 km/h, time cap | D6, 3378 rpm | 145 km/h | 1.22 | 20.3 s at 109 km/h |
+| `ambulance` | 147 km/h, settled | D6, 2805 rpm | 150 km/h | 0.98 | 21.7 s at 103 km/h |
 | `garbage-truck` | 83 km/h, settled | D6, 1608 rpm | 90 km/h | 0.93 | 22.9 s at 83 km/h |
 | `firetruck` | 108 km/h, settled | D6, 2079 rpm | 110 km/h | 0.98 | 25.0 s at 91 km/h |
 | `semi` + 24 t towed | 88 km/h, settled | D12, 1315 rpm | 90 km/h | 0.98 | 31.4 s at 74 km/h |

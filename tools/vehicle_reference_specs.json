@@ -61,33 +61,26 @@
 		"top_speed_kmh": 160.0
 	},
 	"pickup": {
-		"label": "typical full-size pickup (e.g. Ford F-150 class)",
-		"marks_s": {"50": 3.0, "96.56": 6.5, "100": 7.0},
-		"quarter_mile_s": 15.4, "quarter_mile_kmh": 145.0,
-		"top_speed_kmh": 180.0
+		"label": "compact rear-drive pickup (Toyota Hilux 2.7 petrol 2WD automatic class: 122 kW, 245 Nm, 1755 kg; GoAuto pricing page, 2015-10); no launch figure or top speed sourced",
+		"marks_s": {}
 	},
 	"pickup-flat": {
-		"label": "typical full-size pickup with flatbed/utility body (e.g. Ford F-250 class)",
-		"marks_s": {"50": 3.5, "96.56": 7.5, "100": 8.1},
-		"quarter_mile_s": 16.1, "quarter_mile_kmh": 138.0,
-		"top_speed_kmh": 170.0
+		"label": "compact rear-drive pickup with a flatbed (Toyota Hilux 2.7 petrol 2WD automatic class, as `pickup`); no launch figure or top speed sourced",
+		"marks_s": {}
 	},
 	"delivery": {
-		"label": "heavy van class (Ford Transit 350 HD, 3.2 diesel + 6R80); ungraded typical figures, no road test of that van found",
-		"marks_s": {"50": 5.0, "96.56": 11.0, "100": 11.8},
-		"quarter_mile_s": 18.5, "quarter_mile_kmh": 112.0,
+		"label": "heavy van class (Ford Transit 350 HD, 3.2 diesel + 6R80); ungraded typical 0-50 and top, no road test of that van found; its 0-100 marks sat under the energy bound and are dropped",
+		"marks_s": {"50": 5.0},
 		"top_speed_kmh": 150.0
 	},
 	"delivery-flat": {
-		"label": "heavy box van class, laden (Ford Transit 350 HD, 3.2 diesel + 6R80); ungraded typical figures",
-		"marks_s": {"50": 5.3, "96.56": 11.5, "100": 12.3},
-		"quarter_mile_s": 19.0, "quarter_mile_kmh": 108.0,
+		"label": "heavy box van class, laden (Ford Transit 350 HD, 3.2 diesel + 6R80); ungraded typical 0-50 and top; 0-100 marks dropped (under the energy bound)",
+		"marks_s": {"50": 5.3},
 		"top_speed_kmh": 145.0
 	},
 	"ambulance": {
-		"label": "van-based box ambulance on the heavy van class (Ford Transit 350 HD, 3.2 diesel + 6R80); ungraded typical figures",
-		"marks_s": {"50": 5.5, "96.56": 12.0, "100": 12.9},
-		"quarter_mile_s": 19.5, "quarter_mile_kmh": 105.0,
+		"label": "van-based box ambulance on the heavy van class (Ford Transit 350 HD, 3.2 diesel + 6R80); ungraded typical 0-50 and top; 0-100 marks dropped (under the energy bound)",
+		"marks_s": {"50": 5.5},
 		"top_speed_kmh": 150.0
 	},
 	"garbage-truck": {
