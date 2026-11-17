@@ -1,5 +1,5 @@
 {
-	"_comment": "Reference/comparison figures only — NOT measured. Real-world figures for a vehicle of similar type/class to each catalog variant, used by measure_vehicles.gd to put a plausible real-world number beside each measured one in the sweep report. `marks_s` keys match the km/h marks the tool times (50, 96.56 = 0-60 mph, 100, 150, 200); a missing key means that speed is not realistic for the class and prints as 'not reached'.",
+	"_comment": "Reference/comparison figures only — NOT measured. Real-world figures for a vehicle of similar type/class to each catalog variant, used by measure_vehicles.gd to put a plausible real-world number beside each measured one in the sweep report. `marks_s` keys match the km/h marks the tool times (50, 96.56 = 0-60 mph, 100, 150, 200); a missing key means that speed is not realistic for the class, or no figure is sourced (the label says so), and prints as 'not reached'.",
 
 	"sedan-sports": {
 		"label": "typical mid-size sports sedan (e.g. BMW M340i class)",
@@ -92,12 +92,12 @@
 		"top_speed_kmh": 150.0
 	},
 	"garbage-truck": {
-		"label": "front-loader refuse truck on a narrow-cab chassis, empty (8 t; 13 t at a full hopper, inside the Volvo FL 814's 14 t GVW, docs/sources.md); no launch figure sourced",
+		"label": "front-loader refuse truck on a 12-14 t chassis, empty (8 t; 13 t at a full hopper, inside the Volvo FL 814's 14 t GVW, docs/sources.md); no launch figure sourced",
 		"marks_s": {},
 		"top_speed_kmh": 90.0
 	},
 	"firetruck": {
-		"label": "pumping appliance on a narrow-cab 12 t chassis at its operational weight (Volvo FL 812 class, 250-280 hp, docs/sources.md); no launch figure sourced",
+		"label": "pumping appliance on a 12 t chassis at its operational weight (Volvo FL 812 class, 250-280 hp, docs/sources.md); no launch figure sourced",
 		"marks_s": {},
 		"top_speed_kmh": 110.0
 	},

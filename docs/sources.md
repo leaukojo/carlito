@@ -298,12 +298,13 @@ creeps harder on them (computed).
 
 *The Kenney trucks' class*: the bodies are car-width (1.92 / 1.80 m), too small for a 2.5 m-wide
 15-25 t truck; the light truck of that size has 0.6x this driveline's torque, so the driveline sets
-the class, the narrow-cab 12-14 t chassis that carries it.
+the class, a 12-14 t chassis of its power. The bodies stay narrower than such a truck (its width
+not sourced): their narrow track is the footprint's.
 
 | Figure | Value | Grade |
 | --- | --- | --- |
 | Light truck of the bodies' size | Isuzu NRR: 2.07 m wide, 2.36 m tall, 8.85 t GVWR; 215 hp, 613 N·m; hydraulic discs [211] | sourced |
-| Narrow-cab fire chassis | Volvo FL 812 12 t GVW, 250-280 hp; FL 814 14 t [212]: `firetruck` 12 t laden, `garbage-truck` 8 t empty, 13 t full | sourced; the masses an estimate |
+| Fire chassis of that power | Volvo FL 812 12 t GVW, 250-280 hp; FL 814 14 t [212]: `firetruck` 12 t laden, `garbage-truck` 8 t empty, 13 t full | sourced; the masses an estimate |
 | Fire apparatus stability | NFPA 1901 (2009) 4.13.1.1, laden: ESC, a tilt-table pass, or the COM at most 80 % of the rear track [213]. `firetruck` `com_y` sits at 65 % | secondary; the COM an estimate |
 
 | The tractor's wheels, `I = m (κ r)²` at the drawn radius (tyre and rim; ballast does not turn) | Value | Grade |

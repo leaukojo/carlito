@@ -13,8 +13,9 @@ State: done: `doc=top` table (top speed, quarter mile); phase 4's first bullet (
 `.claude/review_journal/sessions/2026-11-17-race-yaw-mode.md`); phase 1's fault was the cruise
 hold (a laden rig coasting through the band; `CRUISE_DRIFT`), the rig keeps 2.78 m² (its
 silhouette's; user's choice 2026-11-18); phase 1 done. Phase 2 done but the drive test: the
-bodies are car-width, so the narrow-cab 12-14 t class that carries the driveline (user's choice
-2026-11-18; `docs/sources.md` § The Kenney trucks' class): `firetruck` 12 t, `com_y` 0.90 (0-50
+bodies are car-width, so the 12-14 t class that carries the driveline (user's choice
+2026-11-18; `docs/sources.md` § The Kenney trucks' class; `doc=grade` / `braking` / `brake_fade`
+/ `brake_check` carry no firetruck row, so not re-run): `firetruck` 12 t, `com_y` 0.90 (0-50
 8.6 s, tips after the front saturates at 0.62 g, K 0.57 / 0.70); `garbage-truck` unchanged (8 t
 empty, 13 t full); springs and brakes stay; the handbrake-lock guard and the retarder floor
 narrowed (user's choices). Next: the firetruck drive test, then phase 3. Open findings: the

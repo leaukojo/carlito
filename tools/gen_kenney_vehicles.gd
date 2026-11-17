@@ -322,9 +322,10 @@ const TRUCK_BASE := {
 	# The leaf axle's roll understeer and its sign are sourced (US 4,919,449); no truck size was found
 	# (docs/sources.md § Roll steer). 0.10 lands the tractor criterion, 0.5-2.0 deg/g at 0.15 g
 	# (Woodrooffe & El-Gindy), on `garbage-truck`: K 0.60 / 0.71 deg/g at the 30 / 50 km/h steps,
-	# from -0.01 / 0.13 without it; the laden 12 t `firetruck` reads 0.57 / 0.70 (2026-11-18). UMTRI's factbook or UM-HSRI-81-19-4, once read, replaces the figure; the semis'
-	# hand-authored specs carry the same 0.10 (semi_spec.tres), so a new figure re-measures `doc=steer`
-	# and both semis' steps. Front 0: no steer-axle figure found. Compliance steer 0: the stock eye and
+	# from -0.01 / 0.13 without it; the laden 12 t `firetruck` reads 0.57 / 0.70 (2026-11-18).
+	# UMTRI's factbook or UM-HSRI-81-19-4, once read, replaces the figure; the semis' hand-authored
+	# specs carry the same 0.10 (semi_spec.tres), so a new figure re-measures `doc=steer` and both
+	# semis' steps. Front 0: no steer-axle figure found. Compliance steer 0: the stock eye and
 	# shackle steer toward oversteer (docs/sources.md § Compliance steer, the sign only) and no truck
 	# size was found, so the fitted roll steer above stands; a measured size moves both together.
 	"roll_steer_front": 0.0, "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0,
@@ -818,10 +819,11 @@ const VARIANTS := {
 	# Emergency vehicles are exempt from the goods-vehicle limiter; 110 is the appliance's own
 	# rating, where the governor settles it (108.2 km/h).
 	# `mass` 12000: a pumping appliance runs at its operational weight (water, kit, crew), here the
-	# 12 t GVW of the narrow-cab chassis its car-width body matches (Volvo FL 812, docs/sources.md).
-	# `com_y` 0.90 is an estimate: TRUCK_BASE's 7.5 t at 0.75 plus 4.5 t of tank and lockers at the
-	# body's mid-height (1.14). It is 0.65 of the 1.38 m track, under NFPA 1901's 0.80 ceiling
-	# (docs/sources.md § The Kenney trucks' class).
+	# 12 t GVW of a fire chassis that carries this driveline's power (Volvo FL 812); the car-width
+	# body is narrower than such a truck (docs/sources.md § The Kenney trucks' class).
+	# `com_y` 0.90 is an estimate: an unladen 7.5 t at TRUCK_BASE's 0.75 plus 4.5 t of tank and
+	# lockers at the body's mid-height (1.14). It is 0.65 of the 1.38 m track, under NFPA 1901's
+	# 0.80 ceiling.
 	"firetruck": {"family": "truck", "mass": 12000.0, "com_y": 0.90, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 110.0},
 	# tractor family (ISOBUS) — one drivable body.
 	# 40 km/h is type approval, and the limiter is what holds it: the road gear reaches 40 at the

@@ -64,7 +64,8 @@ has.
 
 The [handbrake](glossary.md#handbrake) works the rear wheels only, and ABS does not control it.
 It is meant to park the vehicle: with its brakes cold, every vehicle's handbrake holds it on the
-slope the law requires, and more. Pulled while moving, it locks the rear wheels. A locked
+slope the law requires, and more. Pulled while moving, it locks the rear wheels (not on the
+laden fire truck, whose heavy rear tyres grip harder than its spring brakes can pull). A locked
 tyre has no sideways grip, so the back of the car swings round. Pulled hard at speed with a turn
 of the wheel, it spins the car about half a turn: a handbrake turn.
 <!-- GroundDriveSpec.handbrake_torque; BrakeSizing: parks the laden body on 20 % (R13-H) or 18 % (R13); docs/vehicles.md Handbrake turn: "the body turns about a half turn" -->
@@ -167,10 +168,10 @@ paddle wheel in oil that slows the drive shaft without touching the wheel brakes
 heat in the brakes, so it can hold a truck back down a long hill without fading them.
 
 The garbage truck, the fire truck and the semis have one. It slows a bare truck by about a tenth
-of a g. It acts only on the driven wheels, fades away at walking pace, and is capped so it can
+of a g, the laden fire truck by about half that. It acts only on the driven wheels, fades away at walking pace, and is capped so it can
 never lock a wheel. On a semi it brakes only the tractor unit: a heavy trailer pushes on, so the
 whole rig slows much less. sloppyCAN works it with the `retarder` signal; there is no key for it.
-<!-- docs/truck.md Air, retarder, axle load: 0.84-0.89 m/s² on the Kenney trucks, 1.47 on the bobtail semis (0.37 coupled to the 24 t box); RETARDER_SLIP_TARGET; contract retarder: "No local key" -->
+<!-- docs/truck.md Air, retarder, axle load: 0.84 m/s² on the garbage truck, 0.56 on the 12 t firetruck, 1.47 on the bobtail semis (0.37 coupled to the 24 t box); RETARDER_SLIP_TARGET; contract retarder: "No local key" -->
 
 ## Air and spring brakes
 
