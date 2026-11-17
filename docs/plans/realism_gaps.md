@@ -12,13 +12,13 @@ State: done: `doc=top` table (top speed, quarter mile); phase 4's first bullet (
 `race-future`: the side force's centre behind the COM, user's choice 2026-11-17,
 `.claude/review_journal/sessions/2026-11-17-race-yaw-mode.md`); phase 1's fault was the cruise
 hold (a laden rig coasting through the band; `CRUISE_DRIFT`), the rig keeps 2.78 m² (its
-silhouette's; user's choice 2026-11-18); phase 1 done. Phase 2 done but the drive test: the
+silhouette's; user's choice 2026-11-18); phase 1 done. Phase 2 done (drive test OK 2026-11-18): the
 bodies are car-width, so the 12-14 t class that carries the driveline (user's choice
 2026-11-18; `docs/sources.md` § The Kenney trucks' class; `doc=grade` / `braking` / `brake_fade`
 / `brake_check` carry no firetruck row, so not re-run): `firetruck` 12 t, `com_y` 0.90 (0-50
 8.6 s, tips after the front saturates at 0.62 g, K 0.57 / 0.70); `garbage-truck` unchanged (8 t
 empty, 13 t full); springs and brakes stay; the handbrake-lock guard and the retarder floor
-narrowed (user's choices). Next: the firetruck drive test, then phase 3. Open findings: the
+narrowed (user's choices). Next: phase 3. Open findings: the
 600 Nm retarder is an unsourced estimate (Allison 3000: 1490-2170 Nm per a search summary; the
 1.6 ceiling then binds the empty garbage truck); the laden firetruck rolls in the 70 km/h 30 %
 step with ESC on: the Kenney trucks carry no `esc_roll_lift_g` (R13 roll-over control); the
@@ -33,7 +33,7 @@ before tuning to it (root CLAUDE.md: a sourced figure cites a page actually open
 
 ## Phase 1 — Semi road load: done (see State)
 
-## Phase 2 — Kenney trucks: mass and centre of mass (effort: high, mode: tune)
+## Phase 2 — Kenney trucks: mass and centre of mass: done (see State)
 
 Symptom: `garbage-truck` (8 t) and `firetruck` (7.5 t) launch 0-50 in ~6 s (real 12-15 s), climb
 60.8 % from rest (real 20-30 %), corner 0.71 / 0.68 g without tipping (real 0.4-0.55 g).
