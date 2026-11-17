@@ -5977,7 +5977,7 @@ static func _trailer_step_cell(runs: Array) -> String:
 func _esc_table() -> Array[String]:
 	var lines := DocRegion.wrap(("%s (`measure_vehicles -- doc=esc`; per body `-- <variant> %.0f"
 			+ " sine`, `noesc` for ESC off): every ESC body within FMVSS 126's %.0f kg (on its spec"
-			+ " mass). A is the steer (share of full lock) for a steady %.2f g at %.0f km/h; each run"
+			+ " mass) but a twin that reads alike (`DOC_ESC_SKIP`). A is the steer (share of full lock) for a steady %.2f g at %.0f km/h; each run"
 			+ " coasts from %.0f km/h into a %.1f Hz sine with a %.1f s dwell, %.1fA to %.1fA (or %.0f %%"
 			+ " of lock) in %.1fA steps, left then right. Each cell: the worst yaw rate %.2f s and %.2f s"
 			+ " after the steer as a share of its first peak (pass at most %.0f %% and %.0f %%), the"

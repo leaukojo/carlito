@@ -58,21 +58,9 @@ downforce; brief and lever table there).
 
 Stage A is done.
 
-### The pause: the user's plans
-
-The review stops here. A session that finds stage A done for its model takes no review item: its
-report names the next plan phase with the effort, mode and model the plan file gives it, and
-ends. A plan runs from its own file (never as `/review-continue`), its `State:` line is its
-record, and it changes only with the user's OK. The pause is over when both plans read
-`Status: done` or the user says so; this section then goes.
-
-1. `handbrake_fade.md`: done 2026-11-17 (f93789e, 44872c6), verified by the user; distilled into
-   `docs/vehicles.md` § Heat and fade and `docs/guide/brakes.md`, and deleted.
-2. `docs/plans/realism_gaps.md` (5 phases): from A2 to A7 done, so its targets are judged on
-   `doc=` tables that no review item is about to move. Phase 1's "investigate" is a ledger of
-   power from the fuel to the wheels at 70 km/h, on Opus; phase 4's
-   `race` bullet is done (A9's lever (a), the user's choice, eacd286). `doc=grade`'s `suv` cell is under
-   diagnosis (stage B's first line): phases 2 and 4 do not tune against it.
+The pause for the user's plans is over: `handbrake_fade.md` and `realism_gaps.md` are done,
+distilled into `docs/` and deleted (realism_gaps: 2026-11-18; its open findings are stage B's
+last line).
 
 ### Stage B: after the plans
 
@@ -166,6 +154,25 @@ record, and it changes only with the user's OK. The pause is over when both plan
   the free-rev rpm, `applied_throttle` and the gearbox. Also check the branch's `esc_cap` line
   (untested, maybe dead) and reword the one test comment that describes `crank_forward`.
   [high, plan, Opus]
+- `docs/vehicle_measurements.md` § Gradeability's prose quotes figures the `doc=grade` table no
+  longer reads (the semi's 23.7 % against 24.4; the SUV's 57.5 % against 72.3, its 19.3 deg in mud
+  against a 24.6 deg cell; `sedan` / `pickup` / `garbage-truck` 7.7 / 8.8 / 7.4 deg in mud against
+  cells of 10.9 / 13.3 / 12.0 deg). Re-run each
+  body's ceiling (`measure_grade -- <variant> mud`) and cite it, or cut the figure. [medium, auto,
+  Sonnet]
+- `realism_gaps.md`'s open findings (the deleted plan: `git show 4672937:docs/plans/realism_gaps.md`), each a source to
+  open or a check to run before any tuning; no fix without the user's OK:
+  (a) the pickups' brakes are an F-150's hardware on the compact Hilux class;
+  (b) the `pickup`'s 80 % RWD asphalt grade: a 50/50 body at `mu_long` 1.05 and h/L ~0.2 computes
+  ~66 %;
+  (c) the vans' cruise fuel is not re-sourced (the fixed cruise hold moved every body's burn up
+  10-40 %: `delivery` 90 km/h 7.8 L/100 km);
+  (d) Winter's 1.2 over all-season on snow rests on unopened pages ([66], [67]); AutoBild [215]
+  puts summer stops at 1.8x the winters' on snow against VTI's 1.28-1.54 (Summer keeps VTI's);
+  (e) the 600 Nm retarder is an unsourced estimate (Allison 3000 1490-2170 Nm per a search
+  summary, unopened; with it the 1.6 ceiling binds the empty garbage truck);
+  (f) the Kenney trucks carry no `esc_roll_lift_g` (R13 roll-over control): the laden firetruck
+  rolls in the 70 km/h 30 % step with ESC on. [high, plan, Opus]
 
 ### To consider (user, 2026-11-14: not now; no session picks these)
 
