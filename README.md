@@ -4,7 +4,7 @@ An ultra-lightweight, general-purpose vehicle simulator that runs in a web brows
 
 **Try it:** [leaukojo.github.io/carlito](https://leaukojo.github.io/carlito/)
 
-**Mechanics guide:** [leaukojo.github.io/carlito/guide](https://leaukojo.github.io/carlito/guide/): how each vehicle works, in plain language.
+**Mechanics guide:** [leaukojo.github.io/carlito/guide](https://leaukojo.github.io/carlito/guide/)
 
 <table>
 <tr>
