@@ -52,12 +52,11 @@ and without `--fixed-fps 60`; the speed across grows smoothly from about 1e-5 m/
 A7, the standing rig's rest gates, done 2026-11-16 (a16a944): `sessions/2026-11-16-rest-gates.md`.
 `REST_FLIPS_S` 3 /s, `REST_STEP_KG` 1 kg (held above the towing item's (c); tighten to about 0.1 kg
 when (c) lands).
+A9, the race bodies' yaw divergence diagnosed, done 2026-11-17: `sessions/2026-11-17-race-yaw-mode.md`
+(the side force 0.60 m ahead of the COM, and the rear tyre's stiffness flat at its peak load under
+downforce; brief and lever table there).
 
-- **A9** (A8 done: `sessions/2026-11-16-race-strip-gather.md`; holds only phase 4's first bullet) `race` and `race-future` leave the 40 m strip sideways near
-  280-290 km/h with zero steer (`doc=top` prints `left the strip`). From the gathered trace and
-  the spec's figures, derive the yaw mode at that speed (each axle's cornering stiffness at its
-  load with the downforce on, the aero centre, the yaw inertia), what seeds it and what makes it
-  grow. The brief feeds the plan's phase 4: no tune before the cause. [diagnose, high, Opus]
+Stage A is done.
 
 ### The pause: the user's plans
 
@@ -73,7 +72,8 @@ record, and it changes only with the user's OK. The pause is over when both plan
 2. `docs/plans/realism_gaps.md` (5 phases): from A2 to A7 done, so its targets are judged on
    `doc=` tables that no review item is about to move. Phase 1's "investigate" is a ledger of
    power from the fuel to the wheels at 70 km/h, on Opus; phase 4's
-   `race` bullet waits on A9, its other bullets do not. `doc=grade`'s `suv` cell is under
+   `race` bullet works from A9's brief (`sessions/2026-11-17-race-yaw-mode.md` § Brief: lever (a),
+   ends in a proposal). `doc=grade`'s `suv` cell is under
    diagnosis (stage B's first line): phases 2 and 4 do not tune against it.
 
 ### Stage B: after the plans
@@ -84,6 +84,13 @@ record, and it changes only with the user's OK. The pause is over when both plan
   `sum f_long` 3940 N, 36.56 fails standing; `sessions/2026-11-15-wheel-fix-landed.md` § The
   `suv`'s climb, with the run to make). A cause and a brief; fix nothing; a fix ends in a
   proposal. [high, auto, Opus]
+- (after `realism_gaps.md` phase 4) The rear tyre's cornering-stiffness peak load ignores
+  `rear_lat_grip`: every corner's `reference_load` is `mass / 4 * g` and `cornering_peak_load`
+  one figure, so a wider rear (1.15 on the race bodies) saturates in stiffness at the front's load
+  (`sessions/2026-11-17-race-yaw-mode.md` § Cause 2, lever (b)). Source whether a tyre's
+  peak-stiffness load scales with its width; if so, a `wheel.gd` model change on every body with
+  `rear_lat_grip` != 1, `doc=cornering` and the skid pad re-run. Ends in a proposal.
+  [high, plan, Opus]
 - One-tick caps that do not see the coupling's other force (`tow_host.gd`, `towed_body.gd`,
   `articulation.gd` read whole: unit 5's findings go in the session file; (c)'s logging run
   first).
