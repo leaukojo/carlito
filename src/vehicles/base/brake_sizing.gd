@@ -168,7 +168,7 @@ static func stall_hold_margin(spec: VehicleSpec) -> float:
 
 
 ## The handbrake against one rear wheel's static grip: > 1 locks the rears at speed (they unload
-## further under the stop).
+## further under the stop). Cold, as is `park_grade`: a hot brake fades (`RayWheel.brake_fade`).
 static func rear_lock_ratio(spec: VehicleSpec) -> float:
 	var gd := spec.ground_drive
 	var grip := wheel_grip(spec, wheel_loads(spec).y)

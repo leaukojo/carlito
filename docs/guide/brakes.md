@@ -116,9 +116,6 @@ turns. The air takes heat away in proportion to how much hotter than the air the
 the faster the vehicle moves; a disc also radiates heat, which counts most when it is very hot.
 <!-- RayWheel.heat_brake; BrakeThermal.loss_w: (g0 + g1 * speed) * (T - ambient) + emissivity * sigma * A_r * (T^4 - ambient^4); drums: emissivity 0 -->
 
-The hot brake is the same lining for the pedal and the handbrake, so when it heats from one it
-weakens for both.
-
 When a brake gets hot enough, its lining grips less and the brake
 [fades](glossary.md#brake-fade): the same pedal gives less braking, so you have to press harder.
 Where that begins depends on the hardware:

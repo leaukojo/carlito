@@ -31,7 +31,7 @@ pause**, where the review stops and the plans run; **B**, what waits until they 
 
 ### Stage A: before the plans
 
-The rolling moment (A2, A3) holds `handbrake_fade.md`; A2 to A7 hold `realism_gaps.md`. A1 (the
+A2 to A7 hold `realism_gaps.md` (`handbrake_fade.md`, held by A2 and A3, is done). A1 (the
 gather) and the hand-back's diagnosis are done: `sessions/2026-11-16-gather-rolling-moment.md`,
 `sessions/2026-11-16-rolling-moment-diagnosis.md`; A2's gather and diagnosis:
 `sessions/2026-11-16-standing-alternation.md`, `sessions/2026-11-16-contact-reading-steps.md`;
@@ -66,9 +66,8 @@ ends. A plan runs from its own file (never as `/review-continue`), its `State:` 
 record, and it changes only with the user's OK. The pause is over when both plans read
 `Status: done` or the user says so; this section then goes.
 
-1. `docs/plans/handbrake_fade.md` (2 phases, Opus, medium): from A3 landed or dropped. Its
-   phase 1 edits `WheelDrive.tick`'s brake loop and `towed_body.gd:173-190`, lines the kept patch
-   sits on (`towed_body.gd:193`); its cited lines predate the wheel fix: re-read them.
+1. `handbrake_fade.md`: done 2026-11-17 (f93789e, 44872c6), verified by the user; distilled into
+   `docs/vehicles.md` § Heat and fade and `docs/guide/brakes.md`, and deleted.
 2. `docs/plans/realism_gaps.md` (5 phases): from A2 to A7 done, so its targets are judged on
    `doc=` tables that no review item is about to move. Phase 1's "investigate" is a ledger of
    power from the fuel to the wheels at 70 km/h, on Opus; phase 4's
