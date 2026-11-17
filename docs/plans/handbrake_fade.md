@@ -6,10 +6,11 @@ driver who has cooked the brakes on a descent still has a full-strength handbrak
 real vehicles do not give. This plan applies the brake's fade to its parking torque, and gives the
 player guide a section that explains the two ways one brake is applied.
 
-Written 2026-11-13. Status: **not started.**
+Written 2026-11-13. Status: **phase 1 done (2026-11-17), awaiting the user's drive.**
 Serves: `brake_temp` and `handbrake` behaving as on a real vehicle (standing rule 3: a simple
 honest model). No contract signal is added or retyped; `handbrake`'s description is reworded.
-State: done: nothing. Next: phase 1. Open findings: none.
+State: done: phase 1 (D3 confirmed; no run-time reader predicts a hold from the cold torque).
+Next: the user's phase 1 drive (`suv`), then phase 2. Open findings: none.
 
 Each phase is one session and ends with the suite (`node tools/godot_run.mjs --tests -- -a tests`)
 and a short "please verify" list for the user. Phase 2 needs phase 1 merged: it describes the code.
@@ -55,9 +56,9 @@ decides something at run time from a torque the wheel no longer gets is a findin
 it, do not patch around it. `BrakeSizing`'s gates are cold sizing and stay (D3).
 
 Tests (`tests/test_brake_fade_wiring.gd`):
-- `test_a_hot_parking_brake_commands_its_whole_torque` becomes its opposite: at `HOT` the rear
+- `test_a_hot_parking_brake_commands_its_fade_of_the_cold_torque`: at `HOT` the rear
   wheels command `handbrake_torque * 0.5`, and still heat.
-- `test_a_towed_bodys_service_brake_fades_and_its_parking_brake_does_not`: both fade.
+- `test_a_towed_bodys_service_and_parking_brakes_both_fade`.
 - New: foot brake and handbrake together on a hot rear wheel command
   `(service + parking) * factor`; a cold wheel commands the whole of both (the regression guard
   for every cold figure in `docs/`).

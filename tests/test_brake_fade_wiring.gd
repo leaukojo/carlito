@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 ## Brake heat wired into the spin step (`WheelDrive.tick`, `TowedBody.tick_towed`): the service
-## brake fades with its wheel's temperature, the parking brake heats but never fades, and only the
+## and parking brakes push one lining and fade together with its wheel's temperature, and only the
 ## friction brakes' share of the reacted torque heats. Bodies are frozen far above nothing, so every
 ## wheel ticks airborne: its step's compliance is `delta / I` and `brake_spin / spin_compliance` is
 ## exactly the torque commanded.
@@ -78,7 +78,7 @@ func test_a_hot_service_brake_commands_its_fade_of_the_cold_torque() -> void:
 		assert_float(_commanded(w)).is_equal_approx(cold * (1.0 if w.is_rear else 0.5), 1e-6)
 
 
-func test_a_hot_parking_brake_commands_its_whole_torque() -> void:
+func test_a_hot_parking_brake_commands_its_fade_of_the_cold_torque() -> void:
 	var spec := _bench_spec()
 	var rig: Array = await _rig(spec)
 	var drive: WheelDrive = rig[1]
@@ -89,9 +89,32 @@ func test_a_hot_parking_brake_commands_its_whole_torque() -> void:
 	_tick(rig, spec, input)
 	for w in drive.wheels:
 		if w.is_rear:
-			assert_float(_commanded(w)).is_equal_approx(spec.ground_drive.handbrake_torque, 1e-6)
-			# It heats the drum all the same.
+			assert_float(_commanded(w)) \
+					.is_equal_approx(spec.ground_drive.handbrake_torque * 0.5, 1e-6)
+			# It heats the brake all the same.
 			assert_float(w.brake_temp).is_greater(HOT)
+
+
+func test_foot_brake_and_handbrake_together_fade_as_one_sum() -> void:
+	var spec := _bench_spec()
+	var gd := spec.ground_drive
+	var rig: Array = await _rig(spec)
+	var drive: WheelDrive = rig[1]
+	var hot: RayWheel = null
+	for w in drive.wheels:
+		if w.is_rear and hot == null:
+			w.brake_temp = HOT
+			hot = w
+	var input := VehicleInput.new()
+	input.brake = 1.0
+	input.handbrake = 1.0
+	_tick(rig, spec, input)
+	var both := WheelDrive.service_torque(drive.pedal_application(1.0), drive._brake_rear, 0.0) \
+			+ gd.handbrake_torque
+	for w in drive.wheels:
+		if w.is_rear:
+			# A cold wheel commands the whole of both: every cold figure in `docs/` stands.
+			assert_float(_commanded(w)).is_equal_approx(both * (0.5 if w == hot else 1.0), 1e-6)
 
 
 func test_the_retarder_alone_heats_nothing() -> void:
@@ -155,7 +178,7 @@ func _trailer() -> TowedBody:
 	return trailer
 
 
-func test_a_towed_bodys_service_brake_fades_and_its_parking_brake_does_not() -> void:
+func test_a_towed_bodys_service_and_parking_brakes_both_fade() -> void:
 	var trailer: TowedBody = await _trailer()
 	var gd := trailer.spec.ground_drive
 	var terrains: Array[Node] = []
@@ -166,11 +189,12 @@ func test_a_towed_bodys_service_brake_fades_and_its_parking_brake_does_not() -> 
 	assert_float(_commanded(trailer.wheels[0])).is_equal_approx(applied * gd.brake_torque * 0.5, 1e-6)
 	assert_float(_commanded(trailer.wheels[1])).is_equal_approx(applied * gd.brake_torque, 1e-6)
 	assert_float(trailer.wheels[1].brake_temp).is_greater(AMB)
-	# The parking brake on a hot wheel: its whole torque.
+	# The parking brake on a hot wheel: its fade of the cold torque; on a cold one, the whole.
 	var parked: TowedBody = await _trailer()
 	parked.wheels[0].brake_temp = HOT
 	parked.tick_towed(0.0, 1.0, TICK, terrains)
-	assert_float(_commanded(parked.wheels[0])).is_equal_approx(gd.handbrake_torque, 1e-6)
+	assert_float(_commanded(parked.wheels[0])).is_equal_approx(gd.handbrake_torque * 0.5, 1e-6)
+	assert_float(_commanded(parked.wheels[1])).is_equal_approx(gd.handbrake_torque, 1e-6)
 
 
 func test_a_towed_bodys_own_roll_application_brakes_and_heats_its_side_alone() -> void:

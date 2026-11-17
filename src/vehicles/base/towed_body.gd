@@ -169,9 +169,9 @@ func tick_towed(brake01: float, handbrake01: float, delta: float,
 	var roll_cmd := _roll_control_step(gd, delta)
 	_roll_actual = Vector2(lagged_brake(_roll_actual.x, roll_cmd.x, delta),
 			lagged_brake(_roll_actual.y, roll_cmd.y, delta))
-	# The service term fades with each wheel's brake (`RayWheel.brake_fade`); the parking term heats
-	# the same brake but never fades. Each side's service is the higher of the towing unit's demand
-	# and roll-over control's own ([194], [195]).
+	# The service and parking terms push the same lining and fade with each wheel's brake
+	# (`RayWheel.brake_fade`). Each side's service is the higher of the towing unit's demand and
+	# roll-over control's own ([194], [195]).
 	var parking := clampf(handbrake01, 0.0, 1.0) * gd.handbrake_torque
 	# The trailer's own ABS modulates the service brake; spring brakes are a mechanical hold.
 	var abs_slip := RayWheel.ABS_SLIP if gd.abs_equipped and handbrake01 <= 0.0 else 0.0
@@ -186,7 +186,7 @@ func tick_towed(brake01: float, handbrake01: float, delta: float,
 		w.steer_angle = w.roll_steer() + w.compliance_steer()
 		var own := _roll_actual.x if w.anchor.x < 0.0 else _roll_actual.y
 		var service := maxf(_brake_actual, own) * gd.brake_torque
-		w.tick(self, gd, space, 0.0, service * w.brake_fade() + parking, delta, grip_terrains,
+		w.tick(self, gd, space, 0.0, (service + parking) * w.brake_fade(), delta, grip_terrains,
 				abs_slip)
 		# Settled inside its own tick; no retarder, so `brake_friction_share` stays 1.
 		w.heat_brake(_last_fwd_speed, delta)

@@ -656,8 +656,8 @@ func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: floa
 		# mechanical hold no ABS modulates, so a wheel under one brakes without.
 		var abs_slip := RayWheel.ABS_SLIP if anti_lock_on(gd, input) else 0.0
 		if w.is_rear:
-			# Heats the drum but never fades: hot-drum parking is out of scope.
-			var parking := parking_torque(input.handbrake, spring_brake, gd)
+			# The same lining as the foot brake: it heats the brake and fades with it.
+			var parking := parking_torque(input.handbrake, spring_brake, gd) * w.brake_fade()
 			brake_t += parking
 			friction_t += parking
 			if parking > 0.0:

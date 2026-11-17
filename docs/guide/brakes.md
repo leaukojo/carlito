@@ -98,8 +98,8 @@ Where that begins depends on the hardware:
   temperature. They fade from about 90 °C.
 
 A locked wheel does not heat its brake at all: the brake is not turning, so it does no work. The
-tyre is doing the slowing then. The retarder and engine braking heat nothing, and the handbrake
-heats but never fades. A trailer's brakes heat and fade too, but their temperature is not
+tyre is doing the slowing then. The retarder and engine braking heat nothing. The handbrake
+pulls the same pads or shoes as the pedal, so it heats and fades with them. A trailer's brakes heat and fade too, but their temperature is not
 published.
 <!-- docs/vehicles.md Heat and fade -->
 
