@@ -392,10 +392,10 @@ const PITCH_TRIM := 0.25
 ## Each runs at every speed of the body's CRUISE_SETS row, from a standstill, in automatic D: the
 ## PI pedal (SPEED_HOLD_KP / _KI, a fuel command through `_pi_pedal`) follows a setpoint ramped
 ## from the speed it is at to the target at the row's m/s², then holds it until the speed stays
-## within CRUISE_TOL for CRUISE_SETTLE_S with no shift and under CRUISE_DRIFT; that settle prints the cruise line (gear,
-## rpm, pedal and `engine_load` averaged over it; a hold whose mean fuel command reaches
-## LAUNCH_FLOORED is flagged as the body's top). `kickdown` then steps the pedal to 1 until
-## KICK_GAIN_KMH more; `pulse` (re-settled first) drives the hold's PI pedal as on/off for PULSE_S,
+## within CRUISE_TOL for CRUISE_SETTLE_S with no shift and under CRUISE_DRIFT; that settle prints
+## the cruise line (gear, rpm, pedal and `engine_load` averaged over it; a hold whose mean fuel
+## command reaches LAUNCH_FLOORED is flagged as the body's top). `kickdown` then steps the pedal
+## to 1 until KICK_GAIN_KMH more; `pulse` (re-settled first) drives the hold's PI pedal as on/off for PULSE_S,
 ## its duty latched at each period's start (or fixed by `duty=`): a keyboard holding a speed, the
 ## worst case. A row's speeds within GOVERNOR_BAND of a governor are dropped (its fade would hold
 ## them, not the pedal). Every window (approach and hold, kick, pulse) gets the hunting, landing and
