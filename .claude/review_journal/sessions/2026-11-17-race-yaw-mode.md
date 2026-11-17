@@ -95,6 +95,23 @@ filter, yaw damping or steer correction (that is a cover over `N_beta < 0`).
 Recommendation: (a), sourced, for both bodies. (b) is the deeper question (a real tyre's nominal
 load is the tyre's, not the car's mean corner load) but crosses every body and is stage B's.
 
+## Lever (a) landed (user's choice, same day)
+
+Source opened: Casiraghi (Tatuus Racing), "Race Car Aerodynamics", KTH 2011, slide 16: "Unlike most
+road cars, race cars have their CP behind the CG in order to have a good lateral stability at high
+speeds where aerodynamic forces are significant." Direction only: the distance is an estimate.
+- Recipe: `side_cp_frac` -0.25 on both race bodies (a quarter wheelbase behind the axles' midpoint,
+  mirroring `SIDE_CP_FRAC`); regen moved only `aero_centre.z` (`race` -0.31 -> 0.60, `race-future`
+  -0.25 -> 0.66: 0.31 m behind the COM).
+- Guard: `test_vehicle_catalog.gd` `test_a_winged_body_holds_its_heading_to_its_top_end` (the
+  brief's model, with drag's pitch). Failed before the regen on both bodies at 250 and 300 km/h;
+  passes after.
+- `measure_vehicles -- race,race-future 60` (`--fixed-fps 60`): `race` 291.1 km/h at the cap, still
+  gaining, 0.0 m lateral; `race-future` 300.6 km/h settled, 0.0 m lateral. Was 283.2 / 294.5, left.
+- `doc=top`, `doc=steer`, `doc=cornering` re-run: only the race rows moved (top 292 / 301 km/h
+  settled; steer K at 100 km/h 0.52 -> 0.60 deg/g; cornering margin +0.2 %). Suite 2525 / 0
+  failures. Commit eacd286.
+
 ## Not traced
 
 - Why the divergence always goes the same way (positive `vx`, negative yaw rate, both bodies,

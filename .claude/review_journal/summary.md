@@ -72,8 +72,7 @@ record, and it changes only with the user's OK. The pause is over when both plan
 2. `docs/plans/realism_gaps.md` (5 phases): from A2 to A7 done, so its targets are judged on
    `doc=` tables that no review item is about to move. Phase 1's "investigate" is a ledger of
    power from the fuel to the wheels at 70 km/h, on Opus; phase 4's
-   `race` bullet works from A9's brief (`sessions/2026-11-17-race-yaw-mode.md` § Brief: lever (a),
-   ends in a proposal). `doc=grade`'s `suv` cell is under
+   `race` bullet is done (A9's lever (a), the user's choice, eacd286). `doc=grade`'s `suv` cell is under
    diagnosis (stage B's first line): phases 2 and 4 do not tune against it.
 
 ### Stage B: after the plans
@@ -202,6 +201,11 @@ The raw accelerations (A4, 2026-11-16):
 The trailers' lift tables (A4b, 2026-11-16):
 - A laden box rig's trailer roll-over control brakes from a slightly lower g (0.342, was 0.355):
   on a hard step at speed it brakes for longer (6.2 s, was 3.4 s), with no trailer over.
+
+The race bodies' side force behind the COM (eacd286, 2026-11-17):
+- `race` / `race-future` flat out on a long straight: they hold the line past 290 km/h (they
+  wandered off from about 250). In a crosswind at speed the nose now turns into the wind where
+  it turned away from it.
 
 Known and queued, not a verify item: a laden `semi`'s AXLE number still moves by 1 kg (3 at most)
 on some ticks (stage B, the towing item's (c)).

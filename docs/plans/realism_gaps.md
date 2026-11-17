@@ -8,7 +8,9 @@ A gap stays only where the Kenney body's proportions force it, and is then said 
 Written 2026-11-13. Status: **not started.**
 Serves: standing rule 3 (telemetry out of an honest sim): `fuel_rate`, `engine_load`, `speed`,
 grip and brake figures a learner can compare with a real vehicle's.
-State: done: `doc=top` table (top speed, quarter mile). Next: phase 1. Open findings: none.
+State: done: `doc=top` table (top speed, quarter mile); phase 4's first bullet (`race`,
+`race-future`: the side force's centre behind the COM, user's choice 2026-11-17,
+`.claude/review_journal/sessions/2026-11-17-race-yaw-mode.md`). Next: phase 1. Open findings: none.
 
 Each phase is one session, ends with the suite and the `vehicle-feel` skill's steps where a spec
 moves, and re-runs only the `doc=` tables it names (background, `--fixed-fps 60`). The plane is
