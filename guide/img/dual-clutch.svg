@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 196" width="420" height="196">
+<title>A dual-clutch gearbox driving in second gear, with third already chosen on the other half</title>
+<!-- Drawn, not game data: no vehicle in the game has a dual-clutch gearbox. Odd gears on one clutch, even gears on the other. -->
+<style>
+.dc-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.dc-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.dc-k{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.dc-b{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5}
+.dc-pw{fill:none;stroke:var(--fig-orange,#c45a12);stroke-width:3;stroke-linejoin:round}
+.dc-idle{fill:none;stroke:var(--fig-muted,#6b6b75);stroke-width:2;stroke-dasharray:5 3;stroke-linejoin:round}
+.dc-on{fill:var(--fig-orange,#c45a12)}
+.dc-off{fill:var(--fig-muted,#6b6b75)}
+.dc-ah{fill:var(--fig-orange,#c45a12)}
+.dc-ih{fill:var(--fig-muted,#6b6b75)}
+.dc-go{font:700 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+.dc-wait{font:700 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.dc-dim{font:14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+@media (prefers-color-scheme:dark){
+.dc-t{fill:var(--fig-ink,#e9e7e2)}.dc-s{fill:var(--fig-muted,#a6a6b0)}.dc-k{fill:var(--fig-ink,#e9e7e2)}.dc-b{fill:var(--fig-fill,#22242a);stroke:var(--fig-ink,#e9e7e2);stroke-width:1.5}.dc-pw{fill:none;stroke:var(--fig-orange,#f0a060);stroke-width:3;stroke-linejoin:round}.dc-idle{fill:none;stroke:var(--fig-muted,#a6a6b0);stroke-width:2;stroke-dasharray:5 3;stroke-linejoin:round}.dc-on{fill:var(--fig-orange,#f0a060)}.dc-off{fill:var(--fig-muted,#a6a6b0)}.dc-ah{fill:var(--fig-orange,#f0a060)}.dc-ih{fill:var(--fig-muted,#a6a6b0)}.dc-go{fill:var(--fig-orange,#f0a060)}.dc-wait{fill:var(--fig-blue,#8ab6ff)}.dc-dim{fill:var(--fig-muted,#a6a6b0)}}
+</style>
+<defs><marker id="dc-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dc-ah" d="M0,0 L10,5 L0,10 z"/></marker><marker id="dc-i" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="dc-ih" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="dc-b" x="6" y="80" width="64" height="40" rx="6"/><text class="dc-k" x="38" y="105" text-anchor="middle">engine</text>
+<path class="dc-idle" d="M70,100 H84 V50 H100"/>
+<path class="dc-pw" d="M70,100 H84 V150 H100"/>
+<rect class="dc-off" x="100" y="32" width="5" height="36"/><rect class="dc-off" x="113" y="32" width="5" height="36"/>
+<text class="dc-s" x="109" y="24" text-anchor="middle">open</text>
+<rect class="dc-on" x="100" y="132" width="5" height="36"/><rect class="dc-on" x="105" y="132" width="5" height="36"/>
+<text class="dc-s" x="105" y="186" text-anchor="middle">closed</text>
+<path class="dc-idle" d="M118,50 H142" marker-end="url(#dc-i)"/>
+<path class="dc-pw" d="M110,150 H142" marker-end="url(#dc-a)"/>
+<rect class="dc-b" x="146" y="30" width="126" height="40" rx="6"/>
+<text x="170" y="55" text-anchor="middle" class="dc-dim">1st</text><text x="209" y="55" text-anchor="middle" class="dc-wait">3rd</text><text x="248" y="55" text-anchor="middle" class="dc-dim">5th</text>
+<rect class="dc-b" x="146" y="130" width="126" height="40" rx="6"/>
+<text x="170" y="155" text-anchor="middle" class="dc-go">2nd</text><text x="209" y="155" text-anchor="middle" class="dc-dim">4th</text><text x="248" y="155" text-anchor="middle" class="dc-dim">6th</text>
+<text class="dc-s" x="209" y="88" text-anchor="middle">3rd chosen, waiting</text>
+<text class="dc-s" x="209" y="122" text-anchor="middle">driving in 2nd</text>
+<path class="dc-idle" d="M272,50 H300 V96"/>
+<path class="dc-pw" d="M272,150 H300 V100 H332" marker-end="url(#dc-a)"/>
+<text class="dc-k" x="338" y="105">wheels</text>
+</svg>

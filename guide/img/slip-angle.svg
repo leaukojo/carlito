@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 250" width="420" height="250">
+<title>Slip angle, seen from above</title>
+<style>
+.sa-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.sa-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.sa-tyrefill{fill:var(--fig-ink,#1c1c1f)}
+.sa-tread{stroke:var(--fig-fill,#f3f1ec);stroke-width:2}
+.sa-dash{stroke:var(--fig-muted,#6b6b75);stroke-width:2;stroke-dasharray:6 5;fill:none}
+.sa-blue-l{stroke:var(--fig-blue,#1d5ca8);stroke-width:3;fill:none}
+.sa-orange-l{stroke:var(--fig-orange,#c45a12);stroke-width:4;fill:none}
+.sa-blue{fill:var(--fig-blue,#1d5ca8)}.sa-orange{fill:var(--fig-orange,#c45a12)}
+.sa-arc{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:none}
+.sa-blue-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.sa-orange-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.sa-t{fill:var(--fig-ink,#e9e7e2)}.sa-s{fill:var(--fig-muted,#a6a6b0)}.sa-tyrefill{fill:var(--fig-ink,#e9e7e2)}
+.sa-tread{stroke:var(--fig-fill,#22242a)}.sa-dash{stroke:var(--fig-muted,#a6a6b0)}.sa-arc{stroke:var(--fig-ink,#e9e7e2)}
+.sa-blue-l{stroke:var(--fig-blue,#8ab6ff)}.sa-orange-l{stroke:var(--fig-orange,#f0a060)}
+.sa-blue{fill:var(--fig-blue,#8ab6ff)}.sa-orange{fill:var(--fig-orange,#f0a060)}
+.sa-blue-t{fill:var(--fig-blue,#8ab6ff)}.sa-orange-t{fill:var(--fig-orange,#f0a060)}}
+</style>
+<defs>
+<marker id="sa-blue" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="sa-blue"/></marker>
+<marker id="sa-orange" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="sa-orange"/></marker>
+</defs>
+<!-- where it points: the tyre's own axis, 12 degrees into a left turn -->
+<line class="sa-dash" x1="243" y1="295" x2="183" y2="13"/>
+<text class="sa-s" x="176" y="20" text-anchor="end">where the tyre points</text>
+<!-- where it travels -->
+<line class="sa-blue-l" x1="210" y1="140" x2="210" y2="26" marker-end="url(#sa-blue)"/>
+<text class="sa-blue-t" x="218" y="34">where it travels</text>
+<!-- the angle between them -->
+<path class="sa-arc" d="M210,70 A70,70 0 0 0 195.4,71.5"/>
+<text class="sa-t" x="188" y="92" text-anchor="end">slip angle</text>
+<!-- the tyre -->
+<g transform="rotate(-12 210 140)">
+<rect class="sa-tyrefill" x="193" y="100" width="34" height="80" rx="7"/>
+<line class="sa-tread" x1="197" y1="115" x2="223" y2="115"/><line class="sa-tread" x1="197" y1="130" x2="223" y2="130"/>
+<line class="sa-tread" x1="197" y1="145" x2="223" y2="145"/><line class="sa-tread" x1="197" y1="160" x2="223" y2="160"/>
+</g>
+<!-- the force it makes -->
+<line class="sa-orange-l" x1="190" y1="140" x2="70" y2="140" marker-end="url(#sa-orange)"/>
+<text class="sa-orange-t" x="62" y="164">sideways force,</text>
+<text class="sa-orange-t" x="62" y="181">into the turn</text>
+<text class="sa-s" x="300" y="210" text-anchor="middle">seen from above,</text>
+<text class="sa-s" x="300" y="227" text-anchor="middle">turning left</text>
+</svg>

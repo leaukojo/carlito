@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 270" width="420" height="270">
+<title>Stability control brakes one wheel: the outer front against a spin, the inner rear against running wide</title>
+<!-- StabilityControl: "the outer front against oversteer, the inner rear against understeer" (docs/handling.md
+     Stability control). Both cars turn left, seen from above, nose up. A schematic. -->
+<style>
+.es-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.es-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.es-body{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-ink,#1c1c1f);stroke-width:2}
+.es-tyre{fill:var(--fig-ink,#1c1c1f)}
+.es-hot{fill:var(--fig-red,#b3261e)}
+.es-path{stroke:var(--fig-blue,#1d5ca8);stroke-width:2.5;fill:none;stroke-dasharray:6 4}
+.es-turn{stroke:var(--fig-orange,#c45a12);stroke-width:2.5;fill:none}
+.es-turn-f{fill:var(--fig-orange,#c45a12)}
+.es-red-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-red,#b3261e)}
+@media (prefers-color-scheme:dark){
+.es-t{fill:var(--fig-ink,#e9e7e2)}.es-s{fill:var(--fig-muted,#a6a6b0)}
+.es-body{fill:var(--fig-fill,#22242a);stroke:var(--fig-ink,#e9e7e2)}.es-tyre{fill:var(--fig-ink,#e9e7e2)}
+.es-hot{fill:var(--fig-red,#f08a80)}.es-path{stroke:var(--fig-blue,#8ab6ff)}
+.es-turn{stroke:var(--fig-orange,#f0a060)}.es-turn-f{fill:var(--fig-orange,#f0a060)}.es-red-t{fill:var(--fig-red,#f08a80)}}
+</style>
+<!-- left: oversteer, the tail swings out to the right; brake the outer (right) front -->
+<text class="es-t" x="105" y="20" text-anchor="middle">Spinning (oversteer)</text>
+<path class="es-path" d="M150,240 Q150,120 60,60"/>
+<g transform="rotate(-35 105 140)">
+<rect class="es-body" x="80" y="95" width="50" height="95" rx="12"/>
+<rect class="es-tyre" x="70" y="105" width="10" height="22" rx="3"/>
+<rect class="es-hot" x="130" y="105" width="10" height="22" rx="3"/>
+<rect class="es-tyre" x="70" y="160" width="10" height="22" rx="3"/>
+<rect class="es-tyre" x="130" y="160" width="10" height="22" rx="3"/>
+</g>
+<text class="es-red-t" x="105" y="250" text-anchor="middle">brake the outer front</text>
+<text class="es-s" x="105" y="266" text-anchor="middle">to turn the nose back out</text>
+<!-- right: understeer, the car runs wide; brake the inner (left) rear -->
+<text class="es-t" x="315" y="20" text-anchor="middle">Running wide (understeer)</text>
+<path class="es-path" d="M330,240 Q330,140 250,70"/>
+<g transform="rotate(-10 320 140)">
+<rect class="es-body" x="295" y="95" width="50" height="95" rx="12"/>
+<rect class="es-tyre" x="285" y="105" width="10" height="22" rx="3"/>
+<rect class="es-tyre" x="345" y="105" width="10" height="22" rx="3"/>
+<rect class="es-hot" x="285" y="160" width="10" height="22" rx="3"/>
+<rect class="es-tyre" x="345" y="160" width="10" height="22" rx="3"/>
+</g>
+<text class="es-red-t" x="315" y="250" text-anchor="middle">brake the inner rear</text>
+<text class="es-s" x="315" y="266" text-anchor="middle">to turn the nose into the bend</text>
+</svg>

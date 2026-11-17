@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 262" width="420" height="262">
+<title>Slip ratio: rolling, spinning and locked</title>
+<style>
+.sr-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.sr-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.sr-tyre{fill:none;stroke:var(--fig-ink,#1c1c1f);stroke-width:9}
+.sr-hub{fill:var(--fig-muted,#6b6b75)}
+.sr-road{fill:var(--fig-muted,#6b6b75)}
+.sr-blue{fill:var(--fig-blue,#1d5ca8)}
+.sr-orange{fill:var(--fig-orange,#c45a12)}
+.sr-blue-t{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.sr-orange-t{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+.sr-spin{fill:none;stroke:var(--fig-orange,#c45a12);stroke-width:3}
+@media (prefers-color-scheme:dark){
+.sr-t{fill:var(--fig-ink,#e9e7e2)}.sr-s{fill:var(--fig-muted,#a6a6b0)}.sr-tyre{stroke:var(--fig-ink,#e9e7e2)}
+.sr-hub,.sr-road{fill:var(--fig-muted,#a6a6b0)}.sr-blue{fill:var(--fig-blue,#8ab6ff)}.sr-orange{fill:var(--fig-orange,#f0a060)}
+.sr-blue-t{fill:var(--fig-blue,#8ab6ff)}.sr-orange-t{fill:var(--fig-orange,#f0a060)}.sr-spin{stroke:var(--fig-orange,#f0a060)}}
+</style>
+<defs>
+<marker id="sr-head" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="sr-orange"/></marker>
+</defs>
+<!-- three panels: rolling, spinning, locked -->
+<g>
+<text class="sr-t" x="70" y="20" text-anchor="middle">Rolling</text>
+<circle class="sr-tyre" cx="70" cy="76" r="34"/><circle class="sr-hub" cx="70" cy="76" r="10"/>
+<path class="sr-spin" d="M70,30 A46,46 0 0 1 113,62" marker-end="url(#sr-head)"/>
+<rect class="sr-road" x="10" y="115" width="120" height="4" rx="2"/>
+<rect class="sr-blue" x="14" y="138" width="80" height="10" rx="3"/>
+<rect class="sr-orange" x="14" y="164" width="80" height="10" rx="3"/>
+<text class="sr-t" x="70" y="204" text-anchor="middle">slip 0</text>
+<text class="sr-s" x="70" y="222" text-anchor="middle">the same speed</text>
+</g>
+<g>
+<text class="sr-t" x="210" y="20" text-anchor="middle">Spinning</text>
+<circle class="sr-tyre" cx="210" cy="76" r="34"/><circle class="sr-hub" cx="210" cy="76" r="10"/>
+<path class="sr-spin" d="M210,30 A46,46 0 1 1 164,76" marker-end="url(#sr-head)"/>
+<rect class="sr-road" x="150" y="115" width="120" height="4" rx="2"/>
+<rect class="sr-blue" x="154" y="138" width="80" height="10" rx="3"/>
+<rect class="sr-orange" x="154" y="164" width="116" height="10" rx="3"/>
+<text class="sr-t" x="210" y="204" text-anchor="middle">slip above 0</text>
+<text class="sr-s" x="210" y="222" text-anchor="middle">tyre faster than car</text>
+</g>
+<g>
+<text class="sr-t" x="350" y="20" text-anchor="middle">Locked</text>
+<circle class="sr-tyre" cx="350" cy="76" r="34"/><circle class="sr-hub" cx="350" cy="76" r="10"/>
+<rect class="sr-road" x="290" y="115" width="120" height="4" rx="2"/>
+<rect class="sr-blue" x="294" y="138" width="80" height="10" rx="3"/>
+<circle class="sr-orange" cx="299" cy="169" r="5"/>
+<text class="sr-t" x="350" y="204" text-anchor="middle">slip −1</text>
+<text class="sr-s" x="350" y="222" text-anchor="middle">tyre not turning</text>
+</g>
+<!-- legend -->
+<rect class="sr-blue" x="14" y="242" width="18" height="8" rx="2"/>
+<text class="sr-blue-t" x="38" y="250">speed of the car</text>
+<rect class="sr-orange" x="190" y="242" width="18" height="8" rx="2"/>
+<text class="sr-orange-t" x="214" y="250">speed of the tyre's surface</text>
+</svg>

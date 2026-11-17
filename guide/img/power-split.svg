@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 210" width="420" height="210">
+<title>The tractor's power-split CVT: the engine's power goes partly through gears and partly through an oil pump and motor, and a planetary gear set adds the two</title>
+<!-- Drawn, not game data: the idea of the power-split CVT (docs/tractor.md The CVT tractor). The game simulates the resulting ratio, not the two paths. -->
+<style>
+.ps-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.ps-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.ps-k{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.ps-b{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5}
+.ps-me{fill:none;stroke:var(--fig-blue,#1d5ca8);stroke-width:3;stroke-linejoin:round}
+.ps-hy{fill:none;stroke:var(--fig-green,#2e7d32);stroke-width:3;stroke-linejoin:round}
+.ps-out{fill:none;stroke:var(--fig-ink,#1c1c1f);stroke-width:3}
+.ps-mh{fill:var(--fig-blue,#1d5ca8)}
+.ps-hh{fill:var(--fig-green,#2e7d32)}
+.ps-oh{fill:var(--fig-ink,#1c1c1f)}
+.ps-sb{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.ps-sg{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-green,#2e7d32)}
+@media (prefers-color-scheme:dark){
+.ps-t{fill:var(--fig-ink,#e9e7e2)}.ps-s{fill:var(--fig-muted,#a6a6b0)}.ps-k{fill:var(--fig-ink,#e9e7e2)}.ps-b{fill:var(--fig-fill,#22242a);stroke:var(--fig-ink,#e9e7e2);stroke-width:1.5}.ps-me{fill:none;stroke:var(--fig-blue,#8ab6ff);stroke-width:3;stroke-linejoin:round}.ps-hy{fill:none;stroke:var(--fig-green,#7cc884);stroke-width:3;stroke-linejoin:round}.ps-out{fill:none;stroke:var(--fig-ink,#e9e7e2);stroke-width:3}.ps-mh{fill:var(--fig-blue,#8ab6ff)}.ps-hh{fill:var(--fig-green,#7cc884)}.ps-oh{fill:var(--fig-ink,#e9e7e2)}.ps-sb{fill:var(--fig-blue,#8ab6ff)}.ps-sg{fill:var(--fig-green,#7cc884)}}
+</style>
+<defs><marker id="ps-m" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ps-mh" d="M0,0 L10,5 L0,10 z"/></marker><marker id="ps-h" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ps-hh" d="M0,0 L10,5 L0,10 z"/></marker><marker id="ps-o" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ps-oh" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="ps-b" x="6" y="80" width="64" height="40" rx="6"/><text class="ps-k" x="38" y="105" text-anchor="middle">engine</text>
+<path class="ps-me" d="M70,100 H90 V40 H112" marker-end="url(#ps-m)"/>
+<path class="ps-hy" d="M90,100 V160 H100" marker-end="url(#ps-h)"/>
+<rect class="ps-b" x="116" y="20" width="96" height="40" rx="6"/><text class="ps-k" x="164" y="45" text-anchor="middle">gears</text>
+<text class="ps-sb" x="164" y="78" text-anchor="middle">a fixed ratio</text>
+<rect class="ps-b" x="104" y="140" width="76" height="40" rx="6"/><text class="ps-k" x="142" y="165" text-anchor="middle">oil pump</text>
+<path class="ps-hy" d="M180,160 H196" marker-end="url(#ps-h)"/>
+<rect class="ps-b" x="200" y="140" width="76" height="40" rx="6"/><text class="ps-k" x="238" y="165" text-anchor="middle">oil motor</text>
+<text class="ps-sg" x="190" y="200" text-anchor="middle">any speed: fast, slow, zero or backwards</text>
+<path class="ps-me" d="M212,40 H316 V66" marker-end="url(#ps-m)"/>
+<path class="ps-hy" d="M276,160 H316 V134" marker-end="url(#ps-h)"/>
+<rect class="ps-b" x="280" y="70" width="72" height="60" rx="6"/><text class="ps-k" x="316" y="97" text-anchor="middle">planetary</text><text class="ps-k" x="316" y="113" text-anchor="middle">gear set</text>
+<path class="ps-out" d="M352,100 H372" marker-end="url(#ps-o)"/>
+<text class="ps-k" x="378" y="105">wheels</text>
+</svg>

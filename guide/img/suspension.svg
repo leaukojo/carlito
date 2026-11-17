@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 280" width="420" height="280">
+<title>One axle seen from behind: body, springs, dampers and an anti-roll bar</title>
+<!-- A schematic, not to scale. Each corner: a spring and a damper between body and hub
+     (RayWheel.tick: spring_rate x compression + damper x compression speed, never below 0).
+     The bar joins the two hubs of an axle (RayWheel.bar_force). -->
+<style>
+.su-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.su-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.su-line{stroke:var(--fig-ink,#1c1c1f);stroke-width:2;fill:none}
+.su-thin{stroke:var(--fig-muted,#6b6b75);stroke-width:1.2;fill:none}
+.su-body{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-ink,#1c1c1f);stroke-width:2}
+.su-tyre{fill:var(--fig-ink,#1c1c1f)}
+.su-spring{stroke:var(--fig-blue,#1d5ca8);stroke-width:2.5;fill:none;stroke-linejoin:round}
+.su-damp{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-green,#2e7d32);stroke-width:2.5}
+.su-bar{stroke:var(--fig-orange,#c45a12);stroke-width:4;fill:none;stroke-linecap:round}
+.su-ground{stroke:var(--fig-grid,#e3e0d8);stroke-width:6}
+.su-blue-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.su-green-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-green,#2e7d32)}
+.su-orange-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.su-t{fill:var(--fig-ink,#e9e7e2)}.su-s{fill:var(--fig-muted,#a6a6b0)}.su-line{stroke:var(--fig-ink,#e9e7e2)}
+.su-thin{stroke:var(--fig-muted,#a6a6b0)}.su-body{fill:var(--fig-fill,#22242a);stroke:var(--fig-ink,#e9e7e2)}
+.su-tyre{fill:var(--fig-ink,#e9e7e2)}.su-spring{stroke:var(--fig-blue,#8ab6ff)}
+.su-damp{fill:var(--fig-fill,#22242a);stroke:var(--fig-green,#7cc884)}.su-bar{stroke:var(--fig-orange,#f0a060)}
+.su-ground{stroke:var(--fig-grid,#30323a)}.su-blue-t{fill:var(--fig-blue,#8ab6ff)}
+.su-green-t{fill:var(--fig-green,#7cc884)}.su-orange-t{fill:var(--fig-orange,#f0a060)}}
+</style>
+<!-- ground -->
+<line class="su-ground" x1="20" y1="254" x2="400" y2="254"/>
+<!-- body -->
+<rect class="su-body" x="70" y="30" width="280" height="62" rx="10"/>
+<text class="su-t" x="210" y="66" text-anchor="middle">body</text>
+<!-- tyres -->
+<rect class="su-tyre" x="58" y="170" width="34" height="84" rx="8"/>
+<rect class="su-tyre" x="328" y="170" width="34" height="84" rx="8"/>
+<!-- hubs and uprights -->
+<line class="su-line" x1="92" y1="212" x2="112" y2="212"/>
+<line class="su-line" x1="112" y1="160" x2="112" y2="222"/>
+<line class="su-line" x1="328" y1="212" x2="308" y2="212"/>
+<line class="su-line" x1="308" y1="160" x2="308" y2="222"/>
+<!-- springs (left, right) -->
+<polyline class="su-spring" points="102,92 102,100 90,106 114,114 90,122 114,130 90,138 114,146 102,152 102,160"/>
+<polyline class="su-spring" points="318,92 318,100 306,106 330,114 306,122 330,130 306,138 330,146 318,152 318,160"/>
+<!-- dampers -->
+<line class="su-line" x1="132" y1="92" x2="132" y2="116"/>
+<rect class="su-damp" x="125" y="114" width="14" height="30"/>
+<line class="su-line" x1="132" y1="144" x2="132" y2="160"/>
+<line class="su-line" x1="112" y1="160" x2="132" y2="160"/>
+<line class="su-line" x1="288" y1="92" x2="288" y2="116"/>
+<rect class="su-damp" x="281" y="114" width="14" height="30"/>
+<line class="su-line" x1="288" y1="144" x2="288" y2="160"/>
+<line class="su-line" x1="308" y1="160" x2="288" y2="160"/>
+<!-- anti-roll bar -->
+<path class="su-bar" d="M112,196 L150,196 L170,180 L250,180 L270,196 L308,196"/>
+<!-- labels -->
+<text class="su-blue-t" x="20" y="118">spring</text>
+<path class="su-thin" d="M66,114 L86,114"/>
+<text class="su-green-t" x="148" y="124">damper</text>
+<text class="su-orange-t" x="210" y="172" text-anchor="middle">anti-roll bar</text>
+<text class="su-s" x="210" y="218" text-anchor="middle">twists when one side</text>
+<text class="su-s" x="210" y="234" text-anchor="middle">rises more than the other</text>
+<text class="su-s" x="75" y="274" text-anchor="middle">tyre</text>
+<text class="su-s" x="345" y="274" text-anchor="middle">tyre</text>
+</svg>

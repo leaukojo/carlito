@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 250" width="420" height="250">
+<title>A small gear with 10 teeth turning a big gear with 30 teeth</title>
+<!-- Drawn, not game data: module 5, 10 and 30 teeth, a ratio of 3. The orange dots mark one tooth on each gear. -->
+<style>
+.gp-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.gp-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.gp-k{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.gp-g{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;stroke-linejoin:round}
+.gp-hub{fill:var(--fig-ink,#1c1c1f)}
+.gp-dot{fill:var(--fig-orange,#c45a12)}
+.gp-arr{fill:none;stroke:var(--fig-blue,#1d5ca8);stroke-width:2}
+.gp-ah{fill:var(--fig-blue,#1d5ca8)}
+@media (prefers-color-scheme:dark){
+.gp-t{fill:var(--fig-ink,#e9e7e2)}.gp-s{fill:var(--fig-muted,#a6a6b0)}.gp-k{fill:var(--fig-ink,#e9e7e2)}.gp-g{fill:var(--fig-fill,#22242a);stroke:var(--fig-ink,#e9e7e2);stroke-width:1.5;stroke-linejoin:round}.gp-hub{fill:var(--fig-ink,#e9e7e2)}.gp-dot{fill:var(--fig-orange,#f0a060)}.gp-arr{fill:none;stroke:var(--fig-blue,#8ab6ff);stroke-width:2}.gp-ah{fill:var(--fig-blue,#8ab6ff)}}
+</style>
+<defs><marker id="gp-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="gp-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<path class="gp-g" d="M217.8,114.2 L218.5,117.1 L229.9,117.7 L229.9,122.3 L218.5,122.9 L217.8,125.8 L216.7,128.5 L225.5,135.8 L222.9,139.4 L213.3,133.3 L211,135.2 L208.5,136.7 L211.4,147.8 L207.1,149.1 L202.9,138.5 L200,138.8 L197.1,138.5 L192.9,149.1 L188.6,147.8 L191.5,136.7 L189,135.2 L186.7,133.3 L177.1,139.4 L174.5,135.8 L183.3,128.5 L182.2,125.8 L181.5,122.9 L170.1,122.3 L170.1,117.7 L181.5,117.1 L182.2,114.2 L183.3,111.5 L174.5,104.2 L177.1,100.6 L186.7,106.7 L189,104.8 L191.5,103.3 L188.6,92.2 L192.9,90.9 L197.1,101.5 L200,101.3 L202.9,101.5 L207.1,90.9 L211.4,92.2 L208.5,103.3 L211,104.8 L213.3,106.7 L222.9,100.6 L225.5,104.2 L216.7,111.5 Z"/>
+<path class="gp-g" d="M231.3,120 L231.3,116.4 L220.3,113.6 L220.7,109.6 L232.1,109.2 L232.8,105.7 L233.6,102.2 L223.3,97.2 L224.6,93.4 L235.8,95.4 L237.2,92 L238.7,88.8 L229.7,81.8 L231.7,78.3 L242.3,82.6 L244.4,79.6 L246.6,76.7 L239.2,68 L241.9,65 L251.4,71.4 L254,68.9 L256.7,66.6 L251.4,56.5 L254.6,54.1 L262.6,62.3 L265.6,60.5 L268.8,58.7 L265.6,47.8 L269.3,46.1 L275.4,55.8 L278.8,54.6 L282.2,53.6 L281.4,42.2 L285.3,41.4 L289.2,52.1 L292.8,51.6 L296.4,51.3 L298,40 L302,40 L303.6,51.3 L307.2,51.6 L310.8,52.1 L314.7,41.4 L318.6,42.2 L317.8,53.6 L321.2,54.6 L324.6,55.8 L330.7,46.1 L334.4,47.8 L331.2,58.7 L334.4,60.5 L337.4,62.3 L345.4,54.1 L348.6,56.5 L343.3,66.6 L346,68.9 L348.6,71.4 L358.1,65 L360.8,68 L353.4,76.7 L355.6,79.6 L357.7,82.6 L368.3,78.3 L370.3,81.8 L361.3,88.8 L362.8,92 L364.2,95.4 L375.4,93.4 L376.7,97.2 L366.4,102.2 L367.2,105.7 L367.9,109.2 L379.3,109.6 L379.7,113.6 L368.7,116.4 L368.8,120 L368.7,123.6 L379.7,126.4 L379.3,130.4 L367.9,130.8 L367.2,134.3 L366.4,137.8 L376.7,142.8 L375.4,146.6 L364.2,144.6 L362.8,148 L361.3,151.2 L370.3,158.2 L368.3,161.7 L357.7,157.4 L355.6,160.4 L353.4,163.3 L360.8,172 L358.1,175 L348.6,168.6 L346,171.1 L343.3,173.4 L348.6,183.5 L345.4,185.9 L337.4,177.7 L334.4,179.5 L331.2,181.3 L334.4,192.2 L330.7,193.9 L324.6,184.2 L321.2,185.4 L317.8,186.4 L318.6,197.8 L314.7,198.6 L310.8,187.9 L307.2,188.4 L303.6,188.7 L302,200 L298,200 L296.4,188.7 L292.8,188.4 L289.2,187.9 L285.3,198.6 L281.4,197.8 L282.2,186.4 L278.8,185.4 L275.4,184.2 L269.3,193.9 L265.6,192.2 L268.8,181.3 L265.6,179.5 L262.6,177.7 L254.6,185.9 L251.4,183.5 L256.7,173.4 L254,171.1 L251.4,168.6 L241.9,175 L239.2,172 L246.6,163.3 L244.4,160.4 L242.3,157.4 L231.7,161.7 L229.7,158.2 L238.7,151.2 L237.2,148 L235.8,144.6 L224.6,146.6 L223.3,142.8 L233.6,137.8 L232.8,134.3 L232.1,130.8 L220.7,130.4 L220.3,126.4 L231.3,123.6 Z"/>
+<circle class="gp-hub" cx="200" cy="120" r="4"/><circle class="gp-hub" cx="300" cy="120" r="5"/>
+<circle class="gp-dot" cx="200" cy="105" r="4.5"/><circle class="gp-dot" cx="300" cy="58" r="5"/>
+<path class="gp-arr" marker-end="url(#gp-a)" d="M234.4,95.9 A42,42 0 0,0 165.6,95.9"/>
+<path class="gp-arr" marker-end="url(#gp-a)" d="M247.2,44.6 A92,92 0 0,1 352.8,44.6"/>
+<text class="gp-t" x="160" y="104" text-anchor="end">Small gear</text>
+<text class="gp-s" x="160" y="122" text-anchor="end">10 teeth: turns</text>
+<text class="gp-s" x="160" y="140" text-anchor="end">3 times, gently</text>
+<text class="gp-t" x="300" y="224" text-anchor="middle">Big gear</text>
+<text class="gp-s" x="300" y="242" text-anchor="middle">30 teeth: turns once, 3 times harder</text>
+</svg>

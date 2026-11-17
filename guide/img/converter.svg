@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 280" width="420" height="280">
+<title>A torque converter's torque multiplication against its speed ratio</title>
+<!-- TorqueConverter.torque_ratio: stall_ratio (2.0 on the cars and vans) at speed ratio 0, falling
+     linearly to 1.0 at COUPLING_POINT 0.9, 1.0 past it. Lock-up closes past the coupling point.
+     Plot: x = 60 + 330*sr, y = 220 - 160*(ratio - 0.5)/1.75 ... drawn on ratio 0..2.2. -->
+<style>
+.cv-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.cv-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.cv-axis{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:none}
+.cv-grid{stroke:var(--fig-grid,#e3e0d8);stroke-width:1;fill:none}
+.cv-zone{fill:var(--fig-fill,#f3f1ec)}
+.cv-curve{stroke:var(--fig-blue,#1d5ca8);stroke-width:3.5;fill:none;stroke-linejoin:round}
+.cv-orange-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+.cv-dot{fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.cv-t{fill:var(--fig-ink,#e9e7e2)}.cv-s{fill:var(--fig-muted,#a6a6b0)}.cv-axis{stroke:var(--fig-ink,#e9e7e2)}
+.cv-grid{stroke:var(--fig-grid,#30323a)}.cv-zone{fill:var(--fig-fill,#22242a)}.cv-curve{stroke:var(--fig-blue,#8ab6ff)}
+.cv-orange-t{fill:var(--fig-orange,#f0a060)}.cv-dot{fill:var(--fig-orange,#f0a060)}}
+</style>
+<!-- y: ratio r -> 220 - 80*r (0 at 220, 1 at 140, 2 at 60) ; x: sr -> 60 + 330*sr -->
+<rect class="cv-zone" x="357" y="40" width="33" height="180"/>
+<line class="cv-grid" x1="60" y1="140" x2="390" y2="140"/>
+<line class="cv-grid" x1="60" y1="60" x2="390" y2="60"/>
+<line class="cv-grid" x1="357" y1="40" x2="357" y2="220"/>
+<path class="cv-axis" d="M60,34 L60,220 L394,220"/>
+<polyline class="cv-curve" points="60,60 357,140 390,140"/>
+<circle class="cv-dot" cx="60" cy="60" r="5.5"/>
+<text class="cv-orange-t" x="72" y="54">stall: torque doubled</text>
+<text class="cv-s" x="72" y="190">at stall the wheels are held and the engine</text>
+<text class="cv-s" x="72" y="206">runs near 2400 rpm</text>
+<text class="cv-orange-t" x="352" y="160" text-anchor="end">coupling point</text>
+<text class="cv-s" x="373" y="36" text-anchor="middle">lock-up</text>
+<text class="cv-s" x="54" y="64" text-anchor="end">2</text>
+<text class="cv-s" x="54" y="144" text-anchor="end">1</text>
+<text class="cv-s" x="54" y="224" text-anchor="end">0</text>
+<text class="cv-s" x="60" y="238" text-anchor="middle">0</text>
+<text class="cv-s" x="225" y="238" text-anchor="middle">0.5</text>
+<text class="cv-s" x="357" y="238" text-anchor="middle">0.9</text>
+<text class="cv-s" x="392" y="238" text-anchor="end">1</text>
+<text class="cv-t" x="16" y="140" text-anchor="middle" transform="rotate(-90 16 140)">torque multiplied by</text>
+<text class="cv-t" x="225" y="266" text-anchor="middle">gearbox side's speed over engine's speed</text>
+</svg>
