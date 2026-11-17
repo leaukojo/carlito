@@ -288,10 +288,9 @@ pushes the other.
 **Heat and fade.** Each friction brake is one lumped temperature (`BrakeThermal`, a simple model,
 labelled), heated by the work its reacted torque does on the wheel's spin (`RayWheel.heat_brake`,
 so a locked wheel heats nothing) and cooled by the air with road speed. Past its class's onset the
-brake loses torque by the curve's factor, foot and parking alike (one lining), while the pedal map
-and the parking grade stay cold, so a faded brake asks more pedal. The retarder and engine braking
-heat nothing; a
-trailer heats and fades unpublished. Figures: `docs/sources.md` § Brake heat; runs and the check
+brake loses torque by the curve's factor, foot and parking alike (one lining). The pedal map and
+the parking grade stay cold figures: a faded brake asks more pedal and parks on less. The retarder
+and engine braking heat nothing; a trailer heats and fades unpublished. Figures: `docs/sources.md` § Brake heat; runs and the check
 against field runs: `docs/vehicle_measurements.md` § Brake heat.
 
 **P (park).** Gear byte 0xFE, a value RAMN never sends. Below `WheelDrive.PAWL_ENGAGE_SPEED`
