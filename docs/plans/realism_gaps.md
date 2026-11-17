@@ -10,29 +10,18 @@ Serves: standing rule 3 (telemetry out of an honest sim): `fuel_rate`, `engine_l
 grip and brake figures a learner can compare with a real vehicle's.
 State: done: `doc=top` table (top speed, quarter mile); phase 4's first bullet (`race`,
 `race-future`: the side force's centre behind the COM, user's choice 2026-11-17,
-`.claude/review_journal/sessions/2026-11-17-race-yaw-mode.md`). Next: phase 1. Open findings: none.
+`.claude/review_journal/sessions/2026-11-17-race-yaw-mode.md`); phase 1's fault was the cruise
+hold (a laden rig coasting through the band; `CRUISE_DRIFT`), the rig keeps 2.78 m² (its
+silhouette's; user's choice 2026-11-18); phase 1 done. Next: phase 2. Open findings: the fixed hold
+moved every body's cruise burn up 10-40 % (`delivery` 90 km/h 7.8 L/100 km): phase 4's "cruise
+fuel ~40 % low" on the vans is re-judged against the new table before any drag change.
 
 Each phase is one session, ends with the suite and the `vehicle-feel` skill's steps where a spec
 moves, and re-runs only the `doc=` tables it names (background, `--fixed-fps 60`). The plane is
 out of scope. Real-world targets below are from memory: each phase opens a source for its target
 before tuning to it (root CLAUDE.md: a sourced figure cites a page actually opened).
 
-## Phase 1 — Semi road load (effort: medium, mode: investigate then fix)
-
-Symptom: `semi` + 24 t at 70 km/h burns 8.0 L/h at 11 % load (real: roughly double); 8.5 L/h at
-50 km/h, more than at 70; about the 8 t `garbage-truck`'s burn.
-- The road load is not the fault: `doc=top`'s run prints `balance: tyres 3370 N - resistance
-  3214 N (declared 3214)` at 88 km/h, the 32 t's `crr` 0.007 plus drag on 2.18 + 0.6 m² (trailer
-  `box_spec.tres`). That is ~55 kW at the wheels at 70 km/h, which 8.0 L/h (~78 kW of diesel)
-  cannot supply, and 11 % `engine_load` of ~300 kW is 33 kW. So `fuel_rate` and `engine_load`
-  under-read on the semi (the 8 t `garbage-truck`'s 8.3 L/h for ~19 kW is plausible). Start in
-  the fuel and load model: what the cruise hold averages, and the torque the crank carries
-  against the tyres' force through the 12-speed's ratio and `efficiency`.
-- Rig `drag_area` 2.78 m² in all against a real rig's 5-6 m²: raise it second (tractor or
-  trailer spec), with a sourced target.
-- Explain the 50 > 70 km/h burn (gear and rpm per hold); fix if it is a fuel-map fault.
-- Add L/100 km to the cruise table's cell.
-- Re-run: `doc=cruise`, `doc=wind`, `doc=top`, `doc=accel` (the governed tops must hold).
+## Phase 1 — Semi road load: done (see State)
 
 ## Phase 2 — Kenney trucks: mass and centre of mass (effort: high, mode: tune)
 

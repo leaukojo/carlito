@@ -185,6 +185,8 @@
 ; DRAG AREA 2.18 m^2 = 0.70 (a flat-fronted cab-over) x 0.82 x the cab's own 1.92 x 1.98 box: the
 ; Cd x 0.82 x w x h recipe gen_kenney_vehicles derives every generated spec from, measured off
 ; semi.tscn's collision boxes. rolling_resistance 0.007 is a commercial radial.
+; The rig's 2.78 m^2 is this silhouette's, not a full-size artic's: its ~1.92 x 2.6 m front is about
+; half a real rig's 2.55 x 4.0, and a real rig's CdA here would read a flat plate's Cd (~1.1).
 ;
 ; The trailer declares its OWN small drag area (box_spec 0.60, see there for the wake argument) and
 ; BOTH bodies apply their own aero, so a coupled rig resists tractor + trailer = 2.78 m^2, about

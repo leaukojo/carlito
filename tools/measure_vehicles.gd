@@ -392,7 +392,7 @@ const PITCH_TRIM := 0.25
 ## Each runs at every speed of the body's CRUISE_SETS row, from a standstill, in automatic D: the
 ## PI pedal (SPEED_HOLD_KP / _KI, a fuel command through `_pi_pedal`) follows a setpoint ramped
 ## from the speed it is at to the target at the row's m/s², then holds it until the speed stays
-## within CRUISE_TOL for CRUISE_SETTLE_S with no shift; that settle prints the cruise line (gear,
+## within CRUISE_TOL for CRUISE_SETTLE_S with no shift and under CRUISE_DRIFT; that settle prints the cruise line (gear,
 ## rpm, pedal and `engine_load` averaged over it; a hold whose mean fuel command reaches
 ## LAUNCH_FLOORED is flagged as the body's top). `kickdown` then steps the pedal to 1 until
 ## KICK_GAIN_KMH more; `pulse` (re-settled first) drives the hold's PI pedal as on/off for PULSE_S,
@@ -407,6 +407,10 @@ const CRUISE_SETS := {
 }
 const CRUISE_TOL := 0.3            ## m/s off the target that still counts as held
 const CRUISE_SETTLE_S := 5.0
+## m/s the speed may drift over the hold's CRUISE_SETTLE_S, else the hold starts again: inside
+## CRUISE_TOL alone a 32 t rig coasting at 0.08 m/s² crosses the band in ~5 s on a fraction of its
+## road load. 0.05 over 5 s is 0.01 m/s², ~10 % of the laden semi's road load at 70 km/h.
+const CRUISE_DRIFT := 0.05
 const KICK_GAIN_KMH := 20.0
 const PULSE_PERIOD_S := 1.0        ## default `pulse=<s>`
 const PULSE_S := 30.0              ## s of pulsing at each speed
@@ -444,6 +448,8 @@ const DOC_WIND: Array[String] = ["sedan", "delivery", "garbage-truck", "semi"]
 ## doc=freerev: one body per pedal map's free crank (PETROL, a light and a heavy LINEAR, ALL_SPEED).
 const DOC_FREEREV: Array[String] = ["sedan", "delivery", "semi", "tractor-kenney"]
 const DOC_SECONDS := 60.0
+## doc=cruise, doc=wind: the laden semi's 70 km/h hold settles ~60 s in (CRUISE_DRIFT).
+const DOC_CRUISE_SECONDS := 90.0
 ## doc=top: every wheel-driven variant floored until its speed settles; the cap leaves a body at
 ## 250 km/h inside RUN_LENGTH.
 const DOC_TOP_SECONDS := 90.0
@@ -815,6 +821,7 @@ var _cr_pedal := 0.0               ## the pedal that drove the last tick
 var _cr_fuel := 0.0                ## the PI's fuel command behind it (`_cruise_pi`)
 var _cr_settled := false           ## this speed's cruise line printed
 var _cr_hold_t := 0.0              ## s within CRUISE_TOL with no shift
+var _cr_hold_v0 := NAN             ## m/s at the hold's first tick: the drift test (CRUISE_DRIFT)
 var _cr_sums := Vector3.ZERO       ## pedal, rpm and engine_load summed over the hold
 var _cr_ticks := 0
 var _cr_fuel_sum := 0.0            ## the fuel command summed over the hold: the floored test
@@ -1085,6 +1092,8 @@ func _ready() -> void:
 			_tc = false  # the preset runs each body floored, then `tc`
 		elif _doc == "top":
 			_seconds = DOC_TOP_SECONDS
+		elif _doc == "cruise" or _doc == "wind":
+			_seconds = DOC_CRUISE_SECONDS
 		elif _doc == "steer":
 			_step = true
 		elif _doc == "tyres":
@@ -5422,6 +5431,7 @@ func _begin_cruise_window(stage: Cruise) -> void:
 
 func _reset_cruise_hold() -> void:
 	_cr_hold_t = 0.0
+	_cr_hold_v0 = NAN
 	_cr_sums = Vector3.ZERO
 	_cr_fuel_sum = 0.0
 	_cr_burn_sum = 0.0
@@ -5484,6 +5494,8 @@ func _tick_cruise(delta: float) -> void:
 func _tick_cruise_hold(delta: float, v: float, shifted: bool, window: float) -> void:
 	var dt: Drivetrain = _car.drivetrain
 	if _cr_set == _cr_target and absf(v - _cr_target) <= CRUISE_TOL and not shifted:
+		if is_nan(_cr_hold_v0):
+			_cr_hold_v0 = v
 		_cr_hold_t += delta
 		_cr_sums += Vector3(_cr_pedal, dt.rpm, VehicleTelemetry.engine_load_pct(dt.rpm,
 				dt.applied_throttle, _car.spec))
@@ -5493,8 +5505,10 @@ func _tick_cruise_hold(delta: float, v: float, shifted: bool, window: float) -> 
 	else:
 		_reset_cruise_hold()
 	if _cr_hold_t >= CRUISE_SETTLE_S:
-		_report_cruise_hold(window)
-		return
+		if absf(v - _cr_hold_v0) <= CRUISE_DRIFT:
+			_report_cruise_hold(window)
+			return
+		_reset_cruise_hold()  # still drifting: the band held a transient, not a cruise
 	if window >= _seconds:
 		print("  %-13s : %.0f km/h not held in %.0f s (%.1f km/h now, pedal %.2f, %s)" % ["cruise",
 				_cr_target * 3.6, _seconds, v * 3.6, _cr_pedal, MeasureRig.gear_label(dt.gear_byte)])
@@ -5755,10 +5769,12 @@ func _cruise_table() -> Array[String]:
 	var lines := DocRegion.wrap(("%s (`measure_vehicles -- doc=cruise`; per body `-- <variant> %.0f"
 			+ " cruise`): each speed held on the flat strip from a standstill, the setpoint ramped at"
 			+ " %.1f m/s² (%.1f on the trucks and the tractor), settled after %.0f s within %.1f m/s with"
-			+ " no shift; a speed within the governor's band is dropped. Each cell: the gear, the crank's"
-			+ " rpm, the pedal, `engine_load` and `fuel_rate` (L/h) over the hold.") % [DocRegion.measured(), _seconds,
-			CRUISE_SETS["car"]["ramp"], CRUISE_SETS["truck"]["ramp"], CRUISE_SETTLE_S, CRUISE_TOL])
-	lines.append_array(["", "| Body | Held at (km/h: gear, rpm, pedal, load, burn) |",
+			+ " no shift and under %.2f m/s of drift; a speed within the governor's band is dropped. Each"
+			+ " cell: the gear, the crank's rpm, the pedal, `engine_load` and `fuel_rate` (L/h, L/100 km)"
+			+ " over the hold.") % [DocRegion.measured(), _seconds,
+			CRUISE_SETS["car"]["ramp"], CRUISE_SETS["truck"]["ramp"], CRUISE_SETTLE_S, CRUISE_TOL,
+			CRUISE_DRIFT])
+	lines.append_array(["", "| Body | Held at (km/h: gear rpm, pedal, load, L/h, L/100 km) |",
 			"| --- | --- |"])
 	for e in _sweep:
 		if not e.has("cruise"):
@@ -5771,9 +5787,9 @@ func _cruise_table() -> Array[String]:
 			if not bool(c["held"]):
 				cells.append("%.0f: not held (%.1f)" % [c["kmh"], c["now_kmh"]])
 			else:
-				cells.append("%.0f: %s %.0f rpm, %.2f, %.0f %%, %.1f L/h%s" % [c["kmh"],
+				cells.append("%.0f: %s %.0f, %.2f, %.0f %%, %.1f, %.1f%s" % [c["kmh"],
 						MeasureRig.gear_label(c["gear"]), c["rpm"], c["pedal"], c["load"], c["burn"],
-						" (floored: its top)" if c["floored"] else ""])
+						c["burn"] / c["kmh"] * 100.0, " (floored: its top)" if c["floored"] else ""])
 		lines.append("| %s | %s |" % [label, "; ".join(cells)])
 	return lines
 
