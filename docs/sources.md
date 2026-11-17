@@ -378,7 +378,7 @@ tyre's 0.013 on asphalt [68]. A class scales grip per surface; drag is tyre-blin
 | ROCK | 0.70 | 0.01 | none found; drag as setts, 0.015 [68] | estimate |
 | MUD | 0.45 | 0.10 | grip under Wong's wet earth road (0.55, so 0.65) [63], for deep soft mud; drag below | grip estimate, drag computed |
 | FIELD | 0.50 | 0.06 | grip a road tread in tilled soil, none found; drag below | grip estimate, drag computed |
-| SNOW | 0.40 | 0.02 | packed snow: a winter tyre's measured peak, 0.40 braking and 0.38 cornering at the nominal load [214], is 0.46 of the 0.85 dry, the Winter class's 0.97 x 1.2 over this; drag none found | primary (a 2006 central-European winter tyre); drag estimate |
+| SNOW | 0.40 | 0.02 | packed snow: a winter tyre's measured peak, 0.40 braking and 0.38 cornering at the nominal load [214], 0.39 between them, is 0.46 of the 0.85 dry, the Winter class's 0.97 x 1.2 over this; drag none found | primary (a 2006 central-European winter tyre); drag estimate |
 | ICE | 0.12 | 0 | Wong's 0.10 [63]; black ice at most 0.10 in Bosch [68] | secondary |
 
 MUD and FIELD drag: Zoz and Grisso's radial motion resistance `1.2/Bn + 0.5 s/sqrt(Bn) + 0.03` [45]

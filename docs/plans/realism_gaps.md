@@ -18,11 +18,10 @@ bodies are car-width, so the 12-14 t class that carries the driveline (user's ch
 / `brake_check` carry no firetruck row, so not re-run): `firetruck` 12 t, `com_y` 0.90 (0-50
 8.6 s, tips after the front saturates at 0.62 g, K 0.57 / 0.70); `garbage-truck` unchanged (8 t
 empty, 13 t full); springs and brakes stay; the handbrake-lock guard and the retarder floor
-narrowed (user's choices). Phase 3 done but its drive test: `Surface` wet 0.75 (Bosch [68]), snow
+narrowed (user's choices). Phase 3 done (drive test OK 2026-11-18): `Surface` wet 0.75 (Bosch [68]), snow
 0.40 and Summer / Studded snow factors from VTI's measured peaks (`docs/sources.md` [214]); `sedan`
 wet 0.65 g, snow 0.30 / 0.36 / 0.42 / 0.51 g summer to studded; `doc=grade` unmoved; the mud tyre's
-0.78 g on ice read 0.07 g since becd1d6. Next: the wet bend and snow strip drive test, then phase
-4. Open findings: the Winter-over-all-season 1.2 on snow rests on unopened pages ([66], [67]); the
+0.78 g on ice read 0.07 g since becd1d6. Next: phase 4. Open findings: the Winter-over-all-season 1.2 on snow rests on unopened pages ([66], [67]); the
 600 Nm retarder is an unsourced estimate (Allison 3000: 1490-2170 Nm per a search summary; the
 1.6 ceiling then binds the empty garbage truck); the laden firetruck rolls in the 70 km/h 30 %
 step with ESC on: the Kenney trucks carry no `esc_roll_lift_g` (R13 roll-over control); the
@@ -50,15 +49,7 @@ Symptom: `garbage-truck` (8 t) and `firetruck` (7.5 t) launch 0-50 in ~6 s (real
   `doc=brake_check` (its 0-of-7 miss against the field runs is re-judged at the new mass),
   `doc=top`.
 
-## Phase 3 — Surface grip (effort: low, mode: tune)
-
-Symptom: snow all-season 0.40-0.47 g and winter ~0.5 g (real 0.2-0.3 / 0.3-0.4), nearly equal to
-wet; wet ~0.5 g (real ~0.7).
-- Retune the `Surface` snow and wet grip and the `TyreClass` factors on them; ice, mud and field
-  read plausible and stay.
-- The `garbage-truck` mud tyre on ice reads 0.78 g cornering beside 0.08-0.13: find the artefact
-  in the cornering pass's path g when the body slides.
-- Re-run: `doc=tyres`; check `doc=grade` mud is unmoved.
+## Phase 3 — Surface grip: done (see State)
 
 ## Phase 4 — Cars near the line (effort: medium, mode: tune)
 

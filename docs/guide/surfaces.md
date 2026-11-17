@@ -66,7 +66,7 @@ tread, which the game calls the [tyre class](glossary.md#tyre-class). A class sa
 tread differs from the reference all-season tyre, as a factor per surface. That way one winter
 class serves a small car and an eight-tonne truck alike.
 
-![A bar chart of peak grip for four car tyres on five kinds of ground. On dry asphalt: all-season 1, summer 1.1, winter 0.97, studded 0.94. On ice: all-season 0.12, summer about 0.09, winter about 0.18, studded about 0.28. On snow: summer about 0.27, all-season 0.45, winter and studded about 0.52.](img/surface-grip.svg "Peak grip of the four car tyres, as a share of the all-season tyre's grip on dry asphalt.")
+![A bar chart of peak grip for four car tyres on five kinds of ground. On dry asphalt: all-season 1, summer 1.1, winter 0.97, studded 0.94. On ice: all-season 0.12, summer about 0.09, winter about 0.18, studded about 0.28. On snow: summer about 0.33, all-season 0.4, winter about 0.47, studded about 0.57.](img/surface-grip.svg "Peak grip of the four car tyres, as a share of the all-season tyre's grip on dry asphalt.")
 <!-- TyreClass.grip_response = REF_GRIP x (dry / stock dry) x surface_grip; the four PASSENGER classes -->
 
 The nine classes are:
