@@ -723,7 +723,10 @@ const VARIANTS := {
 	# deg/g, under the sourced 0.7-8.2 band, and ESC off spins 5 or more lifted / held cells; 75/25 and
 	# up lift a wheel in held steps. As a what-if, +0.06 deg/kN of designed toe-in leaves 3.
 	# Undoing it needs roll camber, not modelled.
-	"suv": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.62, "anti_roll_rate": 18000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "mass": 1500.0, "torque_mul": 1.05, "mu_lat": 0.88, "max_steer_deg": 34.0, "driven_rear": true, "centre_diff_bias": 3.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0, "brake_heat": "suv_lc"},
+	# `suv` governed at 180: the class's RAV4 Hybrid lists "Max. speed (mph) 112" (Toyota UK tech
+	# specs, 2024-09-20, opened: media.toyota.co.uk .../240920-RAV4-Tech-Specs.pdf); free, it runs to
+	# 223, so the sheet's figure is a limit (the word not printed).
+	"suv": {"family": "car", "roll_steer_rear": 0.05, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.62, "anti_roll_rate": 18000.0, "anti_roll_rate_rear": -1.0, "rear_lat_grip": 1.08, "cornering_peak_load": 0.0, "mass": 1500.0, "torque_mul": 1.05, "mu_lat": 0.88, "max_steer_deg": 34.0, "driven_rear": true, "centre_diff_bias": 3.0, "speed_limit_kmh": 180.0, "brake_torque": 2000.0, "handbrake_torque": 1700.0, "brake_heat": "suv_lc"},
 	# 1.54 is the biggest multiplier in the family: 285 Nm through an AWD 1600 kg body.
 	# Off the COMPROMISE: the 36 kN/m pair split 27 / 9, the law on, equal tyres. Under roll steer its
 	# step sweep spins only the 100 km/h 30 % lifted cell the compromise spins too; BalanceModel.limit

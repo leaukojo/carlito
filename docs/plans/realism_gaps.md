@@ -22,7 +22,7 @@ narrowed (user's choices). Phase 3 done (drive test OK 2026-11-18): `Surface` we
 0.34 and Summer / Studded snow factors from VTI's measured peaks (`docs/sources.md` [214]; the
 review moved snow from 0.40, which had divided by Wong's 0.85 dry, not the bodies' mu ~1; AutoBild
 [215] confirms); `doc=grade` unmoved; the mud tyre's 0.78 g on ice read 0.07 g since becd1d6.
-Next: a snow-strip re-drive at 0.34, then phase 4. Open findings: the Winter-over-all-season 1.2
+Snow re-drive at 0.34 OK. Next: phase 4. Open findings: the Winter-over-all-season 1.2
 on snow rests on unopened pages ([66], [67]; [215] has no all-season); AutoBild's summer stops
 1.8x the winters' on snow [215] against VTI's 1.28-1.54 (Summer's factor keeps VTI's); the
 600 Nm retarder is an unsourced estimate (Allison 3000: 1490-2170 Nm per a search summary; the

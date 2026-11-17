@@ -1138,11 +1138,12 @@ func test_every_declared_speed_limit_fits_the_byte_it_is_published_in() -> void:
 				% [variant, limit]).is_equal(float(roundi(limit)))
 		if limit > 0.0:
 			governed += 1
-	# ...and the sweep must actually be sweeping something: ten shipped specs carry a limiter
-	# (van, pickup, pickup-flat, ambulance, garbage-truck, firetruck, tractor-kenney, tractor-cvt,
-	# semi, conventional), and a regen that dropped the field would otherwise pass this silently.
+	# ...and the sweep must actually be sweeping something: eleven shipped specs carry a limiter
+	# (suv, van, pickup, pickup-flat, ambulance, garbage-truck, firetruck, tractor-kenney,
+	# tractor-cvt, semi, conventional), and a regen that dropped the field would otherwise pass
+	# this silently.
 	assert_int(governed).override_failure_message(
-			"no shipped spec declares a speed_limit_kmh any more").is_equal(10)
+			"no shipped spec declares a speed_limit_kmh any more").is_equal(11)
 
 
 ## The unnamed interface the shell duck-types at ~8 sites (vehicle_select's ATTACH button,

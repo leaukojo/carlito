@@ -83,6 +83,7 @@ shift_up_light_rpm = 1800.0
 shift_down_light_rpm = 1150.0
 kickdown_pedal = 0.8
 shift_dwell_s = 1.5
+speed_limit_kmh = 180.0
 steer_speed = 7.0
 headlight_paths = Array[NodePath]([NodePath("Lamps/HeadlightL"), NodePath("Lamps/HeadlightR")])
 head_lamp_paths = Array[NodePath]([NodePath("Lamps/HeadLensL"), NodePath("Lamps/HeadLensR")])
