@@ -78,6 +78,7 @@ const META_KEYS := [
 	"torque_mul",     # scales the baseline curve
 	"cd", "cl",       # aero coefficients, applied to the MEASURED frontal box
 	"downforce_front",  # the wing's front share, a per-variant opt-in like `cl`
+	"side_cp_frac",   # the side force's centre, overriding SIDE_CP_FRAC (the race bodies)
 	"com_y",          # body-space height of the COM over the road, overriding the family figure
 	"com_y_frac",     # the same height as a fraction of the body's AABB top (a rescale)
 	"front_weight",   # the longitudinal balance, as the front axle's static share

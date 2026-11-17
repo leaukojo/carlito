@@ -53,7 +53,7 @@ const CY_SIDE := 1.2
 const SIDE_FILL := 0.82
 ## The side force acts this share of the wheelbase ahead of the axles' midpoint: a road vehicle's
 ## centre of pressure sits in its front half at small yaw (§ Crosswind); the fraction is an
-## estimate. Read off the wheelbase, never the body length: on these short-wheelbase bodies a
+## estimate. A race body overrides it (`side_cp_frac`). Read off the wheelbase, never the body length: on these short-wheelbase bodies a
 ## quarter of the length sits ~0.36 of a wheelbase ahead of the sedan's COM, and a sedan held
 ## straight at 90 km/h in 13 m/s then yaws downwind at ~4x the 2-3 deg/s computed for a real one.
 ## COMPROMISE: one fixed point; the real centre moves back toward the side's centroid as yaw grows.
@@ -749,6 +749,11 @@ const VARIANTS := {
 	# split, as a race car runs its centre of pressure just behind its CG for stability (an F1 car
 	# ~45 % front; docs/sources.md, secondary): as speed rises the rear gains load faster than the
 	# front, and the limit stays front-first (test_vehicle_catalog's aero-balance guard).
+	# `side_cp_frac` -0.25: unlike a road car, a race car runs its side force's centre behind its CG
+	# for stability at speed (docs/sources.md § Crosswind); the quarter wheelbase behind the axles'
+	# midpoint mirrors SIDE_CP_FRAC and is an estimate. Ahead of the COM, the side force turned the
+	# nose into any slip and both bodies left the strip in a yaw divergence from ~250 km/h
+	# (test_vehicle_catalog's yaw-mode guard).
 	# The two gear boxes differ on gear 1, a launch choice: `race` has TC to hold a 3.2 first at the
 	# grip peak. `race-future` is AWD with no TC, and 409 Nm through a 3.2 first spins all four tyres
 	# (0-100 3.25 s, 1.4 s of it spinning), so its first is 2.375, about where the engine stops
@@ -773,8 +778,8 @@ const VARIANTS := {
 	# need of) and closes at its rating: on J 0.06 the rev drop already spans ~2 ticks, a dog box's
 	# near-instant engagement (estimate). A clutch multiplies nothing: `converter_stall_ratio` 1.0.
 	# `yaw_index` 0: no measured open-wheeler, so Jolt's tensor (docs/handling.md § Inertia).
-	"race": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "converter_stall_ratio": 1.0, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.25, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "abs_equipped": false, "esc_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": true, "brake_torque": 2000.0, "park_pawl_torque": 0.0, "brake_heat": "racing"},
-	"race-future": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "converter_stall_ratio": 1.0, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "esc_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": false, "brake_torque": 2000.0, "park_pawl_torque": 0.0, "brake_heat": "racing"},
+	"race": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "converter_stall_ratio": 1.0, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "side_cp_frac": -0.25, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.25, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "abs_equipped": false, "esc_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": true, "brake_torque": 2000.0, "park_pawl_torque": 0.0, "brake_heat": "racing"},
+	"race-future": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "converter_stall_ratio": 1.0, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "side_cp_frac": -0.25, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "esc_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": false, "brake_torque": 2000.0, "park_pawl_torque": 0.0, "brake_heat": "racing"},
 	# Commercial bodies: RWD, governed at 180 like the real things (measured 198-200 ungoverned).
 	# Bars: the 36 kN/m pair split 24 / 12 kN/m: the corner pass saturates the front first (0.98 /
 	# 0.83 at 0.72 g), LLTD 58 %, roll 4.0 deg, no wheel lifted; BalanceModel.corner_limit +20.4 %.
@@ -942,13 +947,14 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	gd.downforce_front = float(ov.get("downforce_front", -1.0))
 	gd.side_area = float(roundi(
 			CY_SIDE * SIDE_FILL * body_box.size.z * body_box.size.y * 100.0)) / 100.0
-	# The aero centre (x 0) is the same box's mid-height, SIDE_CP_FRAC of the wheelbase ahead of the
-	# axles' midpoint (front = -Z): the height sets drag's pitch moment and the side force's roll
-	# moment, z the side force's yaw moment. Drag is along the nose, so z moves no drag figure.
-	# Snapped like the areas.
+	# The aero centre (x 0) is the same box's mid-height, SIDE_CP_FRAC (or the variant's
+	# `side_cp_frac`) of the wheelbase ahead of the axles' midpoint (front = -Z): the height sets
+	# drag's pitch moment and the side force's roll moment, z the side force's yaw moment. Drag is
+	# along the nose, so z moves no drag figure. Snapped like the areas.
 	var span := _axle_span(geo)
+	var cp_frac := float(ov.get("side_cp_frac", SIDE_CP_FRAC))
 	gd.aero_centre = Vector3(0.0, snappedf(body_box.get_center().y, 0.01),
-			snappedf((span.x + span.y) * 0.5 - SIDE_CP_FRAC * (span.y - span.x), 0.01))
+			snappedf((span.x + span.y) * 0.5 - cp_frac * (span.y - span.x), 0.01))
 	_drag_report.append("%-16s box %.2f w x %.2f h x %.2f l = %.2f m^2, cd %.2f -> Cd*A %.2f, crr %.3f, Cy*A %.2f (pi h^2 %.2f), centre y %.2f z %.2f%s" % [
 			ov.get("_id", ""), body_box.size.x, body_box.size.y, body_box.size.z,
 			FRONTAL_FILL * body_box.size.x * body_box.size.y, get_f.call("cd"),

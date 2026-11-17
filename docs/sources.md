@@ -407,7 +407,7 @@ is a fitment law (the mobility number), a later `GroundDriveSpec` field.
 | `CY_SIDE` 1.2 broadside on the side area | a road vehicle's side-force coefficient on its projected side area rises to 1.17 (fitted) to 1.34 (CFD) and holds from ~75 to ~165 degrees of yaw; on the frontal area the same reads 6.5, which is why high-sided figures look large [78] | sourced (CFD) |
 | One `side_area` for broadside and the small-yaw slope | the `sin(yaw)` form makes them one figure. On a sedan-sized 4.4 × 1.38 m box, 1.2 × 0.82 × L × H is 5.97 m² against `π h²` 5.98; the Kenney bodies, shorter, sit at 0.4-1.3 × `π h²` (`gen_kenney_vehicles` prints both) | computed |
 | A trailer's side area is its full side | cab and trailer take side forces of about the same size at 0-16 degrees of yaw despite the trailer's length; the side force's line of action sits just below each body's mid-height [79] | sourced |
-| The side force acts ahead of the COM | most road vehicles have their centre of pressure in the front half, typically ahead of the neutral steer point, so a crosswind yaws them downwind [80]. `SIDE_CP_FRAC` 0.25 of the wheelbase ahead of the axles' midpoint | sourced; the fraction an estimate |
+| The side force acts ahead of the COM | most road vehicles have their centre of pressure in the front half, typically ahead of the neutral steer point, so a crosswind yaws them downwind [80]. `SIDE_CP_FRAC` 0.25 of the wheelbase ahead of the axles' midpoint. A race car's sits behind its CG, for stability at speed [210]: `race`'s `side_cp_frac` -0.25 | sourced; the fractions estimates |
 | Tanker barrel 0.7 | a circular cylinder's drag coefficient climbs back to ~0.7 near Re 3.5e6 past the drag crisis and holds [81]; the barrel at a 13 m/s crosswind sits at Re 1.5e6, below that plateau, so 0.7 is the upper end | secondary; the figure an estimate |
 
 *Roll steer* (`GroundDriveSpec.roll_steer_front` / `_rear`, `gen_kenney_vehicles.gd`): degrees of
@@ -797,3 +797,4 @@ reads the pipe):
 207. Wikipedia, "Hull speed", oldid 1383394222 (secondary; no inline citations): https://en.wikipedia.org/wiki/Hull_speed
 208. J. F. Hughes, boats FAQ, "What's a formula for top speed?", 1997 (secondary): https://cs.brown.edu/~jhughes/boats/FAQ/node42.html
 209. Timbario et al., "Testing and Modeling of Engine Idle Creep in Conventional Automatic-Equipped Vehicles", HVE-WP-2022-1, Table 2 and its introduction: https://www.edccorp.com/library/HveWpPdfs/HVE-WP-2022-1.pdf
+210. C. Casiraghi (Tatuus Racing), "Race Car Aerodynamics", KTH lecture, 2011-04-08, slide 16: https://www.mech.kth.se/courses/5C1211/Externals_2011/Casiraghi.pdf

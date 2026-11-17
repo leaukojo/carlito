@@ -920,6 +920,44 @@ func test_a_winged_body_stays_front_first_at_any_speed() -> void:
 					% [variant, kmh, float(lim["margin"]) * 100.0]).is_greater(0.0)
 
 
+func test_a_winged_body_holds_its_heading_to_its_top_end() -> void:
+	# The yaw-mode guard: the linear bicycle model at speed (each axle's cornering stiffness at its
+	# load with the downforce on, the side force `side_area` at `aero_arm`) has no positive real
+	# root, `Y_b N_r - N_b (Y_r - m V) > 0`. The yaw inertia only scales the roots and the yaw
+	# damping only steadies them, so both are left out. Front-first at the limit (above) does not
+	# give it: the tyres' stiffness sets the mode, not their peak, and a side force ahead of the
+	# COM turns the nose into a slide.
+	for variant in VehicleCatalog.VARIANTS:
+		var spec := Specs.spec_of(variant)
+		if spec.ground_drive == null or spec.ground_drive.downforce_area <= 0.0:
+			continue
+		for kmh: float in [150.0, 250.0, 300.0]:
+			var v := kmh / 3.6
+			var m := BalanceModel.axles(spec, v)
+			var a: float = m["front_arm"]
+			var b := float(m["wheelbase"]) - a
+			# Drag at `aero_h` against the drive at the road moves load to the rear, per wheel.
+			var pitch := VehicleMath.aero_drag(v, spec.ground_drive.drag_area) \
+					* float(m["aero_h"]) / float(m["wheelbase"]) / 2.0
+			var c := {}
+			for key in ["front", "rear"]:
+				var axle: Dictionary = m[key]
+				var n_load := float(axle["load"]) + float(axle["aero"]) \
+						+ (pitch if key == "rear" else -pitch)
+				c[key] = 2.0 * BalanceModel.wheel_stiffness(m, float(axle["mu"]), n_load,
+						float(axle["share"]))
+			var qs := 0.5 * VehicleMath.AIR_DENSITY * v * v * float(m["side_area"])
+			var y_b := -(float(c["front"]) + float(c["rear"]) + qs)
+			var y_r := -(a * float(c["front"]) - b * float(c["rear"])) / v
+			var n_b := b * float(c["rear"]) - a * float(c["front"]) - float(m["aero_arm"]) * qs
+			var n_r := -(a * a * float(c["front"]) + b * b * float(c["rear"])) / v
+			var stable := y_b * n_r - n_b * (y_r - spec.mass * v)
+			assert_float(stable).override_failure_message(
+					"%s diverges in yaw at %.0f km/h (tyres %+.0f, side force %+.0f N*m/rad)"
+					% [variant, kmh, b * float(c["rear"]) - a * float(c["front"]),
+					-float(m["aero_arm"]) * qs]).is_greater(0.0)
+
+
 func test_every_compliance_steer_loop_settles_inside_three_ticks() -> void:
 	# The angle reads last tick's force, which it moves by the patch's cornering stiffness:
 	# `F_n = F* + g (F_{n-1} - F*)`, so the step's error is `g^n` of it. Under 0.27 it is inside 2 %
