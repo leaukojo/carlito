@@ -1291,7 +1291,8 @@ func heat_brake(speed: float, delta: float) -> void:
 			brake_reacted * brake_friction_share * brake_settled_spin, speed, delta, brake_figures)
 
 
-## The service brake's fade factor at this brake's temperature (`BrakeThermal.fade_factor`).
+## This brake's fade factor at its temperature (`BrakeThermal.fade_factor`), on the foot and
+## parking torque alike.
 func brake_fade() -> float:
 	return BrakeThermal.fade_factor(brake_temp, brake_figures)
 

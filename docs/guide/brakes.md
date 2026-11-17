@@ -62,9 +62,9 @@ has.
 
 ## The handbrake
 
-The [handbrake](glossary.md#handbrake) works the rear wheels only, through its own mechanism, and
-ABS does not control it. It is meant to park the vehicle: every vehicle's handbrake holds it on
-the slope the law requires, and more. Pulled while moving, it locks the rear wheels. A locked
+The [handbrake](glossary.md#handbrake) works the rear wheels only, and ABS does not control it.
+It is meant to park the vehicle: with its brakes cold, every vehicle's handbrake holds it on the
+slope the law requires, and more. Pulled while moving, it locks the rear wheels. A locked
 tyre has no sideways grip, so the back of the car swings round. Pulled hard at speed with a turn
 of the wheel, it spins the car about half a turn: a handbrake turn.
 <!-- GroundDriveSpec.handbrake_torque; BrakeSizing: parks the laden body on 20 % (R13-H) or 18 % (R13); docs/vehicles.md Handbrake turn: "the body turns about a half turn" -->
@@ -76,6 +76,27 @@ a front-wheel-drive car, whose driven wheels it does not hold.
 On the trucks the handbrake is their spring brakes, explained below. The keyboard's handbrake is
 **Space**.
 
+## One brake, two ways to apply it
+
+On many cars the handbrake has no brake of its own. The pedal and the lever reach the same rear
+brakes by two routes. The pedal pushes brake fluid down a pipe, and the fluid pushes a piston that
+presses the pads onto the disc. The lever pulls a steel cable, and the cable works a small
+mechanism in the same caliper that pushes the same piston. A truck does the same with air and a
+spring: the pedal lets air into the brake chamber, and the parking spring pushes the same rod to
+the same shoes.
+
+![A rear disc brake seen edge on. The disc turns with the wheel hub; a caliper straddles its rim with a pad on each side. A brake fluid pipe from the pedal and a steel cable from the handbrake lever both end at the caliper's one piston, which presses the same pads. The pads carry one temperature and one fade for both.](img/brake-two-ways.svg "One brake, two routes. The pedal's fluid and the lever's cable press the same pads on the same disc.")
+<!-- Drawn by hand; WheelDrive.tick and TowedBody.tick_towed -->
+
+So the two share everything that rubs and heats: the pads or shoes, and the disc or drum under
+them. If the pedal has made that metal hot, the lever finds it hot too.
+
+The game does the same. Each rear wheel has one brake torque made of both: the foot brake's share
+plus the handbrake's, or a truck's spring brakes. That sum goes through the wheel's one
+temperature and one fade factor, so a hot brake loses the same share of both. A trailer's brakes
+work the same way. The plane's brakes have no heat model, so its park brake never fades.
+<!-- WheelDrive.tick: parking_torque(...) * w.brake_fade() on the rears; TowedBody.tick_towed: (service + parking) * w.brake_fade(); RayWheel.brake_fade; plane_spec.tres sets no brake_heat_capacity (0: factor 1) -->
+
 ## Heat and fade
 
 ![A graph of braking force left against brake temperature for four kinds of brake. Drums start to lose force at about 180 °C and are down to half at about 480 °C. Pads on discs hold full force to 400 °C, then fall to half by 750 °C. Racing pads hold to 650 °C. A tractor's wet discs, read off the oil, fade from 90 °C.](img/brake-fade.svg "Fade. Past a temperature that depends on its kind, a hot brake gives less force for the same pedal.")
@@ -86,6 +107,17 @@ brake as one lump of metal with one temperature. Braking heats it by exactly the
 the wheel; the air cools it, faster the faster the vehicle moves. It is a simple model, and the
 game labels it as one.
 <!-- BrakeThermal: one lumped temperature, FHWA's GSRS brake model plus disc radiation; RayWheel.heat_brake (a locked wheel heats nothing) -->
+
+![A flow diagram. A moving vehicle sends energy through a braked wheel that is still turning into the brake, one lump of metal with one temperature. From the brake it goes to the air, faster the faster the vehicle moves, and a hot disc also glows heat away. Two dashed paths lead elsewhere: a locked wheel, where the tyre skids and the brake stays cool, and the retarder and engine braking, which slow the vehicle and heat no brake.](img/brake-heat-path.svg "Where a stop's energy goes. Only a friction brake on a turning wheel heats, whether the pedal or the handbrake applies it.")
+<!-- RayWheel.heat_brake: reacted torque x friction share x settled spin; BrakeThermal.loss_w: convection rising with road speed, plus radiation on the discs -->
+
+Inside the game the heat a brake takes each moment is its braking torque times how fast its wheel
+turns. The air takes heat away in proportion to how much hotter than the air the brake is, more
+the faster the vehicle moves; a disc also radiates heat, which counts most when it is very hot.
+<!-- RayWheel.heat_brake; BrakeThermal.loss_w: (g0 + g1 * speed) * (T - ambient) + emissivity * sigma * A_r * (T^4 - ambient^4); drums: emissivity 0 -->
+
+The hot brake is the same lining for the pedal and the handbrake, so when it heats from one it
+weakens for both.
 
 When a brake gets hot enough, its lining grips less and the brake
 [fades](glossary.md#brake-fade): the same pedal gives less braking, so you have to press harder.
@@ -99,11 +131,37 @@ Where that begins depends on the hardware:
 
 A locked wheel does not heat its brake at all: the brake is not turning, so it does no work. The
 tyre is doing the slowing then. The retarder and engine braking heat nothing. The handbrake
-pulls the same pads or shoes as the pedal, so it heats and fades with them. A trailer's brakes heat and fade too, but their temperature is not
-published.
+presses the same pads or shoes as the pedal, so it heats and fades with them. A trailer's brakes
+heat and fade too, but their temperature is not published.
 <!-- docs/vehicles.md Heat and fade -->
 
 This is why long downhill runs are hard on brakes, and why trucks have a retarder.
+
+### The handbrake on a hot brake
+
+After a long descent on the foot brake, the handbrake is no way out: it is as tired as the pedal.
+Two examples, with the brakes at 480 °C:
+
+| | `sedan` | `garbage-truck` |
+| --- | --- | --- |
+| Brake | pads on discs | drums |
+| Handbrake, one rear wheel, cold | about 1400 Nm | about 6500 Nm |
+| Force left at 480 °C | 86 % | 50 % |
+| Handbrake, one rear wheel, at 480 °C | about 1200 Nm | about 3250 Nm |
+| Locks the rear wheels at speed | yes, cold and hot | cold only |
+| Steepest slope it parks on | about 32 %, cold and hot | about 32 % cold, 24 % hot |
+<!-- sedan_spec.tres / garbage-truck_spec.tres handbrake_torque 1400 / 6500, brake_fade_curve_rear PAD / DRUM; BrakeThermal.PAD (465, 0.86)-(615, 0.86) and DRUM (480, 0.5); BrakeSizing.rear_lock_ratio 1.59 -> 1.37 and 1.08 -> 0.54, BrakeSizing.park_grade with handbrake_torque x factor, run 2026-11-17 -->
+
+The sedan's pads are still in their first, gentle step of fade, and its handbrake is strong
+enough that its rear tyres, not its brakes, set how hard it holds: it still locks the rears and
+parks as before. The truck's drums have lost half their force. Its handbrake no longer locks the
+rears at speed, and it parks on a gentler slope than when cold, though still steeper than the
+18 % the law asks of a truck. On anything steeper the truck can creep until the drums cool. The
+trucks have no P position to fall back on; the road cars, vans and tractors do, and the
+gearbox's parking lock does not fade.
+<!-- BrakeSizing.PARK_GRADE_HEAVY 0.18; Drivetrain.has_park_pawl: park_pawl_torque set on the road cars, vans and tractors, not on race, race-future, garbage-truck or firetruck -->
+
+The game's parking figures elsewhere, such as the slope the law requires, are for cold brakes.
 
 ## The retarder
 
@@ -144,13 +202,21 @@ empty.
 - **No brake wear or failure** apart from the air running out on a truck.
 - **No exhaust brake.** The trucks' auxiliary brake is the retarder.
 - **No smoke or glowing discs**: brake heat shows only in the numbers.
+- **No fluid fade.** On a real car, brake fluid can boil on a long descent, and the pedal goes
+  soft while a cable handbrake still works. The game has no brake fluid, so there is no soft
+  pedal, and the handbrake never outlasts the foot brake.
+- **No separate handbrake shoes.** Some cars with rear discs park on a small drum brake inside the
+  disc's hub, with its own lining that the foot brake does not heat. In the game the handbrake
+  always shares the foot brake's lining.
+- **No shrinking disc.** A disc clamped while hot shrinks as it cools, which can loosen a parked
+  caliper's grip. The game does not model it.
 
 ## What you see in sloppyCAN
 
 | Signal | Direction | Unit | What it shows |
 | --- | --- | --- | --- |
 | `brake` | in | % | The foot brake. Half pedal is about half a g; full pedal is the whole hardware. |
-| `handbrake` | in | flag | The parking brake: the rear wheels, or a truck's spring brakes, or the plane's park brake. |
+| `handbrake` | in | flag | The parking brake: the rear wheels, or a truck's spring brakes, or the plane's park brake. It fades with its brake. |
 | `brake_temp` | out | °C | The hottest friction brake on the vehicle, from the heat model. Car, truck, tractor. Its warning, 260 °C, is late for a drum and early for a disc. |
 | `retarder` | in | % | Truck: the retarder request. |
 | `retarder_state` | out | % | Truck: the retarder's torque as actually applied, after it fades at low speed. |
@@ -168,9 +234,12 @@ empty.
    until the dashboard shows FULL, whose bars include the brake temperature.
 2. Ride the foot brake all the way down. The temperature climbs past 180 °C, and the same pedal
    slows the truck less and less: the drums are fading.
-3. Stop and let them cool. Now go down again with sloppyCAN holding the `retarder` on. The brake
+3. Cook the drums again on the foot brake, then pull the handbrake (**Space**) at speed. The
+   rear wheels no longer lock, and the truck slows less than it would with cold brakes. Stop on
+   the grade with the handbrake alone: on a steep enough slope it creeps until the drums cool.
+4. Stop and let them cool. Now go down again with sloppyCAN holding the `retarder` on. The brake
    temperature stays low.
-4. In the `sedan` on **Flatland**, pull the handbrake (**Space**) at about 40 km/h with the
+5. In the `sedan` on **Flatland**, pull the handbrake (**Space**) at about 40 km/h with the
    steering turned: the rear swings round.
 
 </div>

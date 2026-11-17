@@ -162,7 +162,8 @@ front, because braking moves weight forward onto the front tyres.
 
 ### Brake fade
 Brakes getting weaker as they get very hot. In the game each brake has one temperature; past a
-point that depends on the brake type, the same pedal gives less braking. See [Brakes](brakes.md).
+point that depends on the brake type, the same pedal gives less braking, and so does the handbrake,
+which works the same brakes. See [Brakes](brakes.md).
 
 ### Brake pipe
 On a train, the air pipe that runs the length of the train and controls every carriage's brakes.
@@ -452,7 +453,8 @@ waves, and never pass a set limit above the steady wind.
 
 ### Handbrake
 The parking brake, worked by a lever. In the game it brakes only the rear wheels, hard enough to
-lock them, which is what lets a car slide its rear round in a handbrake turn.
+lock them, which is what lets a car slide its rear round in a handbrake turn. It works the same
+rear brakes as the pedal, so when they are hot it fades with them.
 
 ### Hand throttle
 A lever that sets an engine speed and stays where it is put, so the driver's foot is free. The

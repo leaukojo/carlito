@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 342" width="420" height="342">
+<title>Where a stop's energy goes: into the brake as heat, then out to the air</title>
+<!-- Drawn by hand. RayWheel.heat_brake: heat in = brake_reacted * brake_friction_share *
+     brake_settled_spin (a locked wheel's settled spin is 0: no heat; the retarder's share is not
+     friction). BrakeThermal.step: one lump C; BrakeThermal.loss_w: (g0 + g1 * speed) * (T - ambient)
+     plus radiation (emissivity 0 on the drums, whose g0/g1 carry it). -->
+<style>
+.bh-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.bh-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.bh-box{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:var(--fig-fill,#f1eee7)}
+.bh-hot{stroke:var(--fig-red,#b3261e);stroke-width:2;fill:var(--fig-fill,#f1eee7)}
+.bh-in{stroke:var(--fig-orange,#c45a12);stroke-width:5;fill:none}
+.bh-in-f{fill:var(--fig-orange,#c45a12)}
+.bh-out{stroke:var(--fig-blue,#1d5ca8);stroke-width:5;fill:none}
+.bh-out-f{fill:var(--fig-blue,#1d5ca8)}
+.bh-no{stroke:var(--fig-muted,#6b6b75);stroke-width:2;fill:none;stroke-dasharray:6 4}
+.bh-no-f{fill:var(--fig-muted,#6b6b75)}
+@media (prefers-color-scheme:dark){
+.bh-t{fill:var(--fig-ink,#e9e7e2)}.bh-s{fill:var(--fig-muted,#a6a6b0)}
+.bh-box{stroke:var(--fig-ink,#e9e7e2);fill:var(--fig-fill,#26282e)}
+.bh-hot{stroke:var(--fig-red,#f08a80);fill:var(--fig-fill,#26282e)}
+.bh-in{stroke:var(--fig-orange,#f0a060)}.bh-in-f{fill:var(--fig-orange,#f0a060)}
+.bh-out{stroke:var(--fig-blue,#8ab6ff)}.bh-out-f{fill:var(--fig-blue,#8ab6ff)}
+.bh-no{stroke:var(--fig-muted,#a6a6b0)}.bh-no-f{fill:var(--fig-muted,#a6a6b0)}}
+</style>
+<!-- The moving vehicle -->
+<rect class="bh-box" x="10" y="54" width="96" height="56" rx="6"/>
+<text class="bh-t" x="58" y="78" text-anchor="middle">Moving</text>
+<text class="bh-t" x="58" y="96" text-anchor="middle">vehicle</text>
+<!-- Into the brake: a braked wheel that still turns -->
+<path class="bh-in" d="M106,82 L150,82"/>
+<path class="bh-in-f" d="M148,72 L166,82 L148,92 Z"/>
+<text class="bh-s" x="136" y="24" text-anchor="middle">a braked wheel,</text>
+<text class="bh-s" x="136" y="40" text-anchor="middle">still turning</text>
+<!-- The brake's one lump -->
+<rect class="bh-hot" x="168" y="48" width="140" height="70" rx="6"/>
+<text class="bh-t" x="238" y="70" text-anchor="middle">Brake</text>
+<text class="bh-s" x="238" y="88" text-anchor="middle">one lump of metal,</text>
+<text class="bh-s" x="238" y="106" text-anchor="middle">one temperature</text>
+<!-- Out to the air -->
+<path class="bh-out" d="M308,82 L340,82"/>
+<path class="bh-out-f" d="M338,72 L356,82 L338,92 Z"/>
+<rect class="bh-box" x="358" y="58" width="54" height="48" rx="6"/>
+<text class="bh-t" x="385" y="87" text-anchor="middle">Air</text>
+<text class="bh-s" x="412" y="140" text-anchor="end">cools faster the faster</text>
+<text class="bh-s" x="412" y="156" text-anchor="end">the vehicle moves; a hot</text>
+<text class="bh-s" x="412" y="172" text-anchor="end">disc also glows heat away</text>
+<!-- What never reaches the brake -->
+<path class="bh-no" d="M58,110 L58,196"/>
+<path class="bh-no-f" d="M50,194 L58,210 L66,194 Z"/>
+<rect class="bh-box" x="10" y="212" width="180" height="66" rx="6"/>
+<text class="bh-t" x="100" y="234" text-anchor="middle">Locked wheel</text>
+<text class="bh-s" x="100" y="252" text-anchor="middle">the tyre skids;</text>
+<text class="bh-s" x="100" y="268" text-anchor="middle">the brake stays cool</text>
+<path class="bh-no" d="M92,110 L216,196"/>
+<path class="bh-no-f" d="M208,198 L226,206 L217,188 Z"/>
+<rect class="bh-box" x="210" y="212" width="200" height="66" rx="6"/>
+<text class="bh-t" x="310" y="234" text-anchor="middle">Retarder, engine braking</text>
+<text class="bh-s" x="310" y="252" text-anchor="middle">slow the vehicle,</text>
+<text class="bh-s" x="310" y="268" text-anchor="middle">heat no brake</text>
+<text class="bh-s" x="210" y="310" text-anchor="middle">Only a friction brake on a turning wheel heats:</text>
+<text class="bh-s" x="210" y="328" text-anchor="middle">the foot brake and the handbrake alike.</text>
+</svg>

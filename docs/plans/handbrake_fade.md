@@ -6,11 +6,13 @@ driver who has cooked the brakes on a descent still has a full-strength handbrak
 real vehicles do not give. This plan applies the brake's fade to its parking torque, and gives the
 player guide a section that explains the two ways one brake is applied.
 
-Written 2026-11-13. Status: **phase 1 done (2026-11-17), awaiting the user's drive.**
+Written 2026-11-13. Status: **phases 1 and 2 done (2026-11-17), awaiting the user's checks.**
 Serves: `brake_temp` and `handbrake` behaving as on a real vehicle (standing rule 3: a simple
 honest model). No contract signal is added or retyped; `handbrake`'s description is reworded.
 State: done: phase 1 (D3 confirmed; no run-time reader predicts a hold from the cold torque).
-Next: the user's phase 1 drive (`suv`), then phase 2. Open findings: none.
+Done: phase 2 (the guide's figures checked as files; serving the guide was not permitted).
+Next: the user's phase 1 drive (`suv`) and phase 2 read in the served guide; then distil and
+delete this plan. Open findings: none.
 
 Each phase is one session and ends with the suite (`node tools/godot_run.mjs --tests -- -a tests`)
 and a short "please verify" list for the user. Phase 2 needs phase 1 merged: it describes the code.
