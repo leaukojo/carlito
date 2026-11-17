@@ -369,7 +369,7 @@ tyre's 0.013 on asphalt [68]. A class scales grip per surface; drag is tyre-blin
 
 | Surface | Grip | Drag | Basis | Grade |
 | --- | --- | --- | --- | --- |
-| WET | 0.55 | 0 | the bottom of Wong's wet asphalt, 0.5-0.7 [63]; between 0.6 (a clear slip spike on the wet bend, still controllable) and 0.5 (spins the car out) | secondary |
+| WET | 0.75 | 0 | Bosch's new tyre on a wet road (its thinnest film, slowest row), 0.65 against 0.85 dry (0.76) [68]; Wong's wet asphalt 0.5-0.7 [63] | secondary |
 | PAD | 0.95 | 0 | dry concrete grips as asphalt [63], less the skyport's paint | estimate |
 | GRAVEL | 0.71 | 0.01 | Wong's gravel 0.60 [63]; rolled gravel 0.02 [68] | secondary |
 | DIRT | 0.80 | 0.04 | Wong's dry earth road 0.68 [63]; unpaved road 0.05 [68] | secondary |
@@ -378,7 +378,7 @@ tyre's 0.013 on asphalt [68]. A class scales grip per surface; drag is tyre-blin
 | ROCK | 0.70 | 0.01 | none found; drag as setts, 0.015 [68] | estimate |
 | MUD | 0.45 | 0.10 | grip under Wong's wet earth road (0.55, so 0.65) [63], for deep soft mud; drag below | grip estimate, drag computed |
 | FIELD | 0.50 | 0.06 | grip a road tread in tilled soil, none found; drag below | grip estimate, drag computed |
-| SNOW | 0.45 | 0.02 | hard-packed: snow braking puts the winter references at 22.3-22.7 m (mu ~0.44) and the all-season tyres at 22.6-24.4 [66], a quarter behind with summer tyres at twice the winter's distance in a blog's comparison [67]; Wong's 0.20 [63] is that summer tyre; drag none found | secondary, [67] indicative (no method stated); drag estimate |
+| SNOW | 0.40 | 0.02 | packed snow: a winter tyre's measured peak, 0.40 braking and 0.38 cornering at the nominal load [214], is 0.46 of the 0.85 dry, the Winter class's 0.97 x 1.2 over this; drag none found | primary (a 2006 central-European winter tyre); drag estimate |
 | ICE | 0.12 | 0 | Wong's 0.10 [63]; black ice at most 0.10 in Bosch [68] | secondary |
 
 MUD and FIELD drag: Zoz and Grisso's radial motion resistance `1.2/Bn + 0.5 s/sqrt(Bn) + 0.03` [45]
@@ -394,7 +394,8 @@ is a fitment law (the mobility number), a later `GroundDriveSpec` field.
 | Figure | Basis | Grade |
 | --- | --- | --- |
 | Summer `dry` 1.10 | the best all-season 6.5 m behind the summer reference's 37.0 m dry, SUV size [70]; car sizes run closer | secondary; 1.10 an estimate |
-| Summer and Winter on snow | as SNOW above [66, 67] | secondary |
+| Winter on snow, 1.2 over the all-season | 31 against 38 m in a blog's comparison [67]; the AutoBild field's 22.3-22.7 against 22.6-24.4 m [66] | secondary, [67] indicative |
+| Summer and Studded on snow | the summer tyre's peak 0.26 braking and 0.30 cornering, the studded 0.51 and 0.45, against the winter's 0.40 and 0.38 [214]: 0.72 and 1.23 of the winter | primary; the studded an older Nordic tyre beside a central-European winter |
 | Winter and Summer on ice | ice braking: winter 17.7, all-season 26.2, summer 35.5 m [71] | secondary |
 | Studded on ice | new studs about twice friction tyres on severe ice, worn studs as studless [72]; 1.6x a modern studless taken | secondary; the figure an estimate |
 | Mud on wet asphalt | wet-tar braking on a Hilux: mud-terrains 38.7 m, ~9 m past highway-terrains [73] | secondary |
@@ -812,3 +813,4 @@ reads the pipe):
 211. Isuzu Commercial Truck of America, N-Series diesel specifications (NRR column, standard cab): https://isuzucv.com/nseries/nseries_diesel_specifications
 212. Volvo Trucks UK, "Fire and Rescue" brochure, 08/22, p. 15 (chassis table): https://www.volvotrucks.co.uk/content/dam/volvo-trucks/markets/uk/trucks/Volvo-Fire-and-Rescue-Brochure.pdf
 213. A. K. Rosenhan, "How to tilt-test fire apparatus", Trailer/Body Builders, 2013-06-01 (secondary, quoting NFPA 1901-2009 4.13): https://www.trailer-bodybuilders.com/truck-bodies/how-tilt-test-fire-apparatus
+214. J. Svendenius, "Validation of the Brush Model towards VTI-measurement data recorded in Arjeplog 2006", TFRT-7617, Lund University, 2007, Tables 4 and 7 (brush-model friction, longitudinal and lateral, on a VTI test truck; ContiSportContact 225/45R17, ContiWinterContact TS810 and Gislaved Nordfrost 3 215/55R16): https://lup.lub.lu.se/search/files/4590032/8627412.pdf

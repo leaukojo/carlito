@@ -20,7 +20,7 @@ const MAX_DRAG := 0.5
 const NAMES: Array[String] = [
 	"Asphalt", "Wet", "Pad", "Gravel", "Dirt", "Grass", "Sand", "Rock", "Mud", "Field", "Snow", "Ice",
 ]
-const REF_GRIP: Array[float] = [1.0, 0.55, 0.95, 0.71, 0.8, 0.5, 0.6, 0.7, 0.45, 0.5, 0.45, 0.12]
+const REF_GRIP: Array[float] = [1.0, 0.75, 0.95, 0.71, 0.8, 0.5, 0.6, 0.7, 0.45, 0.5, 0.4, 0.12]
 const DRAG: Array[float] = [0.0, 0.0, 0.0, 0.01, 0.04, 0.06, 0.05, 0.01, 0.1, 0.06, 0.02, 0.0]
 
 

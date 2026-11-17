@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="TyreClass" load_steps=2 format=3]
 
-; Factors as responses (dry x factor) over the all-season tyre; brackets are docs/sources.md. dry 1.10: an SUV-size test put the best all-season 6.5 m (18 %) behind the summer reference's 37.0 m [70]; car sizes run closer (estimate). Snow 0.61 in all: twice a winter tyre's 50 km/h stop, 62 m against the all-season's 38 [67]; Wong's packed snow 0.20 is this tyre (Surface). Ice 0.74 in all: 35.5 m against 26.2 from 40 km/h [71]. Field, grass and mud factors 0.9: fewer voids (estimate). crr: label B against the all-season's C, 2020/740 [74].
+; Factors as responses (dry x factor) over the all-season tyre; brackets are docs/sources.md. dry 1.10: an SUV-size test put the best all-season 6.5 m (18 %) behind the summer reference's 37.0 m [70]; car sizes run closer (estimate). Snow 0.84 in all: 0.72 of the Winter class's, a summer tyre's measured peak on packed snow 0.26 braking and 0.30 cornering against a winter's 0.40 and 0.38 [214]. Ice 0.74 in all: 35.5 m against 26.2 from 40 km/h [71]. Field, grass and mud factors 0.9: fewer voids (estimate). crr: label B against the all-season's C, 2020/740 [74].
 
 [ext_resource type="Script" path="res://src/vehicles/base/tyre_class.gd" id="1_tyre"]
 
@@ -15,6 +15,6 @@ surface_grip = Dictionary[String, float]({
 "Grass": 0.9,
 "Ice": 0.67,
 "Mud": 0.9,
-"Snow": 0.55
+"Snow": 0.76
 })
 crr_factor = 0.95

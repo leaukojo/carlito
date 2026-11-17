@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="TyreClass" load_steps=2 format=3]
 
-; Factors as responses (dry x factor) over the all-season tyre; brackets are docs/sources.md. dry 0.94: studs on asphalt, below the studless (estimate). Snow 1.18 in all: at least the studless (estimate). Ice 2.35 in all: new studs about twice friction tyres on severe ice [72]; taken as 1.6x a modern studless (estimate). Field and mud factors 1.05: the studless tread (estimate). crr 1.10: estimate, studs over label C.
+; Factors as responses (dry x factor) over the all-season tyre; brackets are docs/sources.md. dry 0.94: studs on asphalt, below the studless (estimate). Snow 1.43 in all: 1.23 of the Winter class's, a studded tyre's measured peak on packed snow 0.51 braking and 0.45 cornering against a winter's 0.40 and 0.38 [214] (an older Nordic stud beside a central-European winter). Ice 2.35 in all: new studs about twice friction tyres on severe ice [72]; taken as 1.6x a modern studless (estimate). Field and mud factors 1.05: the studless tread (estimate). crr 1.10: estimate, studs over label C.
 
 [ext_resource type="Script" path="res://src/vehicles/base/tyre_class.gd" id="1_tyre"]
 
@@ -14,6 +14,6 @@ surface_grip = Dictionary[String, float]({
 "Field": 1.05,
 "Ice": 2.5,
 "Mud": 1.05,
-"Snow": 1.25
+"Snow": 1.52
 })
 crr_factor = 1.1

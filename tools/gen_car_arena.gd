@@ -143,7 +143,7 @@ const ROAD_GAP := 4.0
 const CHECK_STEP := 2.0
 
 # --- splat -----------------------------------------------------------------------------------------
-## Channel 4 is Wet (`Surface.WET`; its 0.55: `docs/systems.md` § Level framework): under the wet
+## Channel 4 is Wet (`Surface.WET`; its grip: `docs/sources.md` § Surfaces): under the wet
 ## road's bend, invisible there (`slip` is the warning), and on the pad's wet strip. Channel 5 is
 ## Snow, painted only on the pad.
 const WET_CHANNEL := 4

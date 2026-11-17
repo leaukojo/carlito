@@ -24,9 +24,9 @@ field (ploughed soil), snow and ice. Each one carries two numbers.
 
 - **Grip.** How much of a tyre's dry-road grip is left on this ground. It is measured against
   one reference tyre, an ordinary all-season car tyre, which keeps all its grip on dry asphalt
-  (1) and about half of it on wet asphalt, grass or mud. On snow it keeps a little under half,
-  and on ice only about a tenth.
-  <!-- surface.gd REF_GRIP: Asphalt 1, Wet 0.55, Pad 0.95, Gravel 0.71, Dirt 0.8, Grass 0.5, Sand 0.6, Rock 0.7, Mud 0.45, Field 0.5, Snow 0.45, Ice 0.12 -->
+  (1), three quarters of it on wet asphalt and about half on grass or mud. On snow it keeps
+  four tenths, and on ice only about a tenth.
+  <!-- surface.gd REF_GRIP: Asphalt 1, Wet 0.75, Pad 0.95, Gravel 0.71, Dirt 0.8, Grass 0.5, Sand 0.6, Rock 0.7, Mud 0.45, Field 0.5, Snow 0.4, Ice 0.12 -->
 - **Drag.** How much harder the ground is to roll over than a hard road. Hard ground (asphalt,
   pad, ice) adds nothing. Gravel and rock add a little. Soft ground adds much more, because the
   tyre sinks in and has to climb out of its own rut all the time: mud adds the most, about ten
