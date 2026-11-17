@@ -757,11 +757,12 @@ const VARIANTS := {
 	# nose into any slip and both bodies left the strip in a yaw divergence from ~250 km/h
 	# (test_vehicle_catalog's yaw-mode guard).
 	# The two gear boxes differ on gear 1, a launch choice: `race` has TC to hold a 3.2 first at the
-	# grip peak. `race-future` is AWD with no TC, and 409 Nm through a 3.2 first spins all four tyres
-	# (0-100 3.25 s, 1.4 s of it spinning), so its first is 2.375, about where the engine stops
-	# saturating them (0-100 3.00 s; measure_vehicles, 2026-10-08), with 2-5 re-spread
-	# (1.33/1.31/1.29/1.27/1.26). Both keep a long top gear (0.66 vs CAR_BASE's 0.925), reaching
-	# 288.0 / 295.8 km/h.
+	# grip peak. `race-future` is AWD with no TC; its first is 2.375, long to limit the spin (all
+	# four tyres still spin 0.75 s of the 0-100), with 2-5 re-spread (1.33/1.31/1.29/1.27/1.26).
+	# Both keep a long top gear (0.66 vs CAR_BASE's 0.925).
+	# `race-future` 350 kW (`torque_mul` 2.98, 551 Nm): its class, the Formula E Gen3, is 840 kg with
+	# driver, 350 kW peak (300 race), 322 km/h theoretical (Wikipedia, "Formula E Gen3", opened
+	# 2026-11-18); no 0-100 given.
 	# Differentials: `race` carries a plate LSD on its driven rear (2.5); `race-future` the same
 	# rear plus a Torsen-type centre (3.0). Neither carries ABS (formula cars race without it) or
 	# hill-start assist.
@@ -771,7 +772,7 @@ const VARIANTS := {
 	# `ride_hz` 1.6, stiffer than a saloon as a winged car is: at the family's 1.39 these light
 	# bodies' fronts bottom under the top-speed wing load (test_downforce_fits_inside_...).
 	# `torque_mul` tracks CAR_BASE so absolute torque stays fixed (2.10x185=389 Nm,
-	# 2.21x185=409 Nm) — re-derive on any CAR_BASE torque edit.
+	# 2.98x185=551 Nm) — re-derive on any CAR_BASE torque edit.
 	# `rear_lat_grip` 1.15: the wide rears a rear-heavy formula car runs; on equal tyres the heavier
 	# rear axle's load-sensitive mu sits under the front's and the body steers loose. Bars even
 	# (10 kN/m each): +11.3 / +10.5 % front-first (BalanceModel.limit).
@@ -781,7 +782,7 @@ const VARIANTS := {
 	# near-instant engagement (estimate). A clutch multiplies nothing: `converter_stall_ratio` 1.0.
 	# `yaw_index` 0: no measured open-wheeler, so Jolt's tensor (docs/handling.md § Inertia).
 	"race": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "converter_stall_ratio": 1.0, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "side_cp_frac": -0.25, "mass": 900.0, "torque_mul": 2.10, "final_drive": 4.2, "gear_ratios": [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], "mu_long": 1.35, "mu_lat": 1.4, "rear_lat_grip": 1.15, "max_steer_deg": 40.0, "driven_front": false, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.21, "min_steer_frac": 0.25, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "abs_equipped": false, "esc_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": true, "brake_torque": 2000.0, "park_pawl_torque": 0.0, "brake_heat": "racing"},
-	"race-future": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "converter_stall_ratio": 1.0, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "side_cp_frac": -0.25, "mass": 850.0, "torque_mul": 2.21, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "esc_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": false, "brake_torque": 2000.0, "park_pawl_torque": 0.0, "brake_heat": "racing"},
+	"race-future": {"family": "car", "roll_steer_front": 0.0, "roll_steer_rear": 0.0, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.RACE, "tyre": "slick", "anti_roll_rate": 10000.0, "anti_roll_rate_rear": -1.0, "yaw_index": 0.0, "shift_up_light_rpm": 0.0, "shift_down_light_rpm": 0.0, "kickdown_pedal": 0.0, "shift_dwell_s": 0.0, "shift_handover_s": 0.0, "shift_cut_s": 0.15, "engine_inertia": 0.06, "coupling": VehicleSpec.Coupling.CLUTCH, "converter_stall_ratio": 1.0, "ride_hz": 1.6, "com_y": 0.30, "cd": 0.70, "cl": 2.50, "downforce_front": 0.40, "side_cp_frac": -0.25, "mass": 850.0, "torque_mul": 2.98, "final_drive": 4.2, "gear_ratios": [2.375, 1.786, 1.363, 1.057, 0.832, 0.66], "mu_long": 1.25, "mu_lat": 1.35, "rear_lat_grip": 1.15, "max_steer_deg": 42.0, "driven_rear": true, "front_weight": 0.42, "wheels": [WHEEL_DEFAULT, WHEEL_DEFAULT], "wheel_x_out": 0.36, "min_steer_frac": 0.24, "steer_falloff_speed": 42.0, "diff_bias_rear": 2.5, "centre_diff_bias": 3.0, "abs_equipped": false, "esc_equipped": false, "hill_hold": HillHold.Kind.NONE, "tcs_equipped": false, "brake_torque": 2000.0, "park_pawl_torque": 0.0, "brake_heat": "racing"},
 	# Commercial bodies: RWD, governed at 180 like the real things (measured 198-200 ungoverned).
 	# Bars: the 36 kN/m pair split 24 / 12 kN/m: the corner pass saturates the front first (0.98 /
 	# 0.83 at 0.72 g), LLTD 58 %, roll 4.0 deg, no wheel lifted; BalanceModel.corner_limit +20.4 %.

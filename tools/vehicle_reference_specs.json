@@ -50,10 +50,9 @@
 		"top_speed_kmh": 300.0
 	},
 	"race-future": {
-		"label": "typical modern electric hypercar (e.g. Rimac Nevera class)",
-		"marks_s": {"50": 1.1, "96.56": 2.5, "100": 2.6, "150": 6.0, "200": 10.5},
-		"quarter_mile_s": 10.0, "quarter_mile_kmh": 225.0,
-		"top_speed_kmh": 350.0
+		"label": "electric formula car (Formula E Gen3 class: 840 kg with driver, 350 kW, 322 km/h theoretical; Wikipedia 'Formula E Gen3'); no acceleration mark sourced",
+		"marks_s": {},
+		"top_speed_kmh": 322.0
 	},
 	"van": {
 		"label": "typical full-size cargo van (e.g. Ford Transit class)",

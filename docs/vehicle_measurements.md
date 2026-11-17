@@ -243,7 +243,7 @@ off.
 | `taxi` | 3.23 / 3.20 / 3.8 | 8.48 / 8.47 / 9.0 | 0.00 / 0.00 / 0.00 / 0.90 / 2.32 (0.35) | 0.90 (0.10 / -0.00 / 0.00) / 0.91 (0.09 / -0.00 / 0.00) |
 | `police` | 2.67 / 2.65 / 2.6 | 7.12 / 7.10 / 6.2 | 0.00 / 0.00 / 0.00 / 0.47 / 2.18 (0.37) | 0.85 (0.15 / 0.00 / 0.00) / 0.86 (0.14 / 0.00 / 0.00) |
 | `race` | 1.58 / 1.58 / 1.6 | 3.60 / 3.60 / 3.7 | 0.00 / 0.00 / 0.00 / 1.48 / 0.08 (0.08) | 1.00 (0.00 / -0.00 / 0.00) / 1.00 (0.00 / 0.00 / 0.00) |
-| `race-future` | 1.45 / 1.53 / 1.1 | 3.10 / 3.17 / 2.6 | 0.00 / 0.00 / 0.00 / 0.00 / 1.38 (0.82) | 0.81 (0.19 / 0.00 / 0.00) / 0.77 (0.23 / 0.00 / 0.00) |
+| `race-future` | 1.23 / 1.55 / - | 2.63 / 2.90 / - | 0.17 / 0.00 / 0.00 / 0.00 / 0.22 (0.22) | 0.96 (0.03 / 0.01 / 0.00) / 0.76 (0.23 / 0.01 / 0.00) |
 | `van` | 3.58 / 3.57 / 4.3 | 10.17 / 10.15 / 10.2 | 0.00 / 0.00 / 0.00 / 0.02 / 3.55 (1.08) | 0.62 (0.38 / 0.00 / 0.00) / 0.63 (0.37 / -0.00 / 0.00) |
 | `pickup` | 3.33 / 3.32 / 3.0 | 9.37 / 9.35 / 7.0 | 0.00 / 0.00 / 0.00 / 0.02 / 3.30 (1.00) | 0.65 (0.35 / 0.00 / 0.00) / 0.65 (0.35 / 0.00 / 0.00) |
 | `pickup-flat` | 3.25 / 3.23 / 3.5 | 9.10 / 9.08 / 8.1 | 0.00 / 0.00 / 0.00 / 0.02 / 3.22 (0.98) | 0.64 (0.36 / 0.00 / 0.00) / 0.65 (0.35 / -0.00 / 0.00) |
@@ -262,7 +262,7 @@ The car family carries an ideal traction control (`tcs_equipped`; not `race-futu
 each driven wheel bounded by its share of what the coupling may pass, solved with the brakes inside
 the differentials (`RayWheel.settled_spin`), so floored and `tc` match: the grip-bound cars spend
 a short stretch of the 0-50 held at the peak, with no spin and no limiter. `race` holds the peak on
-TC for longer; `race-future` does not spin. The semis (ASR) are torque-bound for most of it with
+TC for longer; `race-future` spins briefly. The semis (ASR) are torque-bound for most of it with
 grip to spare and run 0-50 a little under a loaded diesel rig's typical time. Energy bounds it
 (½mv² of the rig's mass at the engine's peak power, 90 % efficient, no shifts); a loaded diesel
 needs far longer to 60 mph.
@@ -290,12 +290,12 @@ and the quarter mile against the reference's.
 | `sedan-sports` | 233 km/h, settled | D6, 6678 rpm | 250 km/h | 0.93 | 14.4 s at 159 km/h / 13.3 s at 170 km/h |
 | `sedan` | 220 km/h, time cap | D6, 6027 rpm | 210 km/h | 1.05 | 16.0 s at 146 km/h / 15.8 s at 140 km/h |
 | `hatchback-sports` | 228 km/h, settled | D6, 6690 rpm | 250 km/h | 0.91 | 15.0 s at 159 km/h / 14.5 s at 154 km/h |
-| `suv` | 223 km/h, time cap | D6, 6004 rpm | 180 km/h | 1.24 | 16.7 s at 138 km/h / 16.2 s at 136 km/h |
+| `suv` | 176 km/h, settled | D6, 4721 rpm | 180 km/h | 0.98 | 16.7 s at 138 km/h / 16.2 s at 136 km/h |
 | `suv-luxury` | 246 km/h, settled | D6, 6632 rpm | 245 km/h | 1.00 | 14.7 s at 154 km/h / 14.0 s at 160 km/h |
 | `taxi` | 201 km/h, settled | D6, 5506 rpm | 180 km/h | 1.12 | 16.4 s at 141 km/h / 16.5 s at 132 km/h |
 | `police` | 236 km/h, settled | D6, 6605 rpm | 240 km/h | 0.98 | 15.3 s at 149 km/h / 14.3 s at 156 km/h |
 | `race` | 292 km/h, settled | D6, 6109 rpm | 300 km/h | 0.97 | 11.6 s at 198 km/h / 11.5 s at 200 km/h |
-| `race-future` | 301 km/h, settled | D6, 6235 rpm | 350 km/h | 0.86 | 11.0 s at 207 km/h / 10.0 s at 225 km/h |
+| `race-future` | 320 km/h, settled | D6, 6642 rpm | 322 km/h | 0.99 | 10.1 s at 229 km/h |
 | `van` | 176 km/h, settled | D6, 4744 rpm | 160 km/h | 1.10 | 17.4 s at 132 km/h / 17.5 s at 122 km/h |
 | `pickup` | 176 km/h, settled | D6, 4748 rpm | 180 km/h | 0.98 | 16.9 s at 136 km/h / 15.4 s at 145 km/h |
 | `pickup-flat` | 176 km/h, settled | D6, 4749 rpm | 170 km/h | 1.04 | 16.7 s at 138 km/h / 16.1 s at 138 km/h |
