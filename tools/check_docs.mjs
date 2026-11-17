@@ -231,7 +231,7 @@ for (const f of docs.filter((d) => /(^|\/)CLAUDE\.md$/.test(d))) {
 // Characters, so merging lines frees nothing, summed over the top-level docs/*.md (plans/ are temporary; sources.md is reference
 // data, read on demand; machine_setup.md is read once per machine; TODO.md, HUMAN_EXPLANATIONS.md
 // and making_a_level.md are the user's own). One cap, no per-doc caps.
-const DOCS_CHAR_CAP = 269723;
+const DOCS_CHAR_CAP = 268541;
 const UNCAPPED_DOCS = ['docs/sources.md', 'docs/machine_setup.md', 'docs/TODO.md',
   'docs/HUMAN_EXPLANATIONS.md', 'docs/making_a_level.md'];
 const docSizes = docs.filter((d) => /^docs\/[^/]+\.md$/.test(d) && !UNCAPPED_DOCS.includes(d))

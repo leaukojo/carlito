@@ -10,7 +10,7 @@ extends Node3D
 ## tanker's surge at 0 (`MeasureRig.SurgePin`). `steady` replaces P2 onward with a straight hold
 ## at `tip_kmh` on the strip and reports the axle-load signals' spread at rest and in the hold
 ## (what the dashboard's AXLE and TRLR bars draw). `doc=trailer_roll` runs
-## the laden box rig's P7 step and ramp with the tractor's ESC and the trailer's roll-over control
+## the laden box rig's P7 step with the tractor's ESC and the trailer's roll-over control
 ## each on and off (`MeasureRig.TRAILER_ROLL_CONFIGS`), re-spawning the rig per run, and writes the
 ## `trailer_roll_p7` region of docs/vehicle_measurements.md.
 ##
@@ -151,9 +151,9 @@ func _ready() -> void:
 					+ " `-- semi doc=trailer_roll` alone")
 			get_tree().quit(1)
 			return
-		for ramp in [false, true]:
-			for cfg: Array in MeasureRig.TRAILER_ROLL_CONFIGS:
-				_doc_runs.append({"esc_off": cfg[0], "trsp_off": cfg[1], "ramp": ramp})
+		# The step alone: a slow wind-on reads as measure_vehicles' doc=trailer_roll corner pass.
+		for cfg: Array in MeasureRig.TRAILER_ROLL_CONFIGS:
+			_doc_runs.append({"esc_off": cfg[0], "trsp_off": cfg[1], "ramp": false})
 		args = PackedStringArray(["semi", "trailer=box"])
 	_parse_trailer_arg(args)
 	MeasureRig.add_slab(self, "Strip", Vector3(STRIP_WIDTH, 2.0, STRIP_LENGTH))
@@ -801,21 +801,19 @@ static func _p7_cell(r: Dictionary) -> String:
 			"holds, peak %.2f g" % float(r["peak_g"]))
 
 
-## The `trailer_roll_p7` region: a row per `MeasureRig.TRAILER_ROLL_CONFIGS` entry, the step and the
-## ramp as cells.
+## The `trailer_roll_p7` region: a row per `MeasureRig.TRAILER_ROLL_CONFIGS` entry, the step as its
+## cell.
 func _trailer_roll_table() -> Array[String]:
 	var lines := DocRegion.wrap(("%s (`measure_semi_launch -- semi doc=trailer_roll`): the laden box"
-			+ " rig's P7 at %.0f km/h, a full-lock step (pedal lifted) and a %.0f s wind-on at a held"
-			+ " speed; cells as the corner's above, `holds` with the peak `v r` g, the time from the"
-			+ " steer.") % [DocRegion.measured(), TIP_SPEED_MS * 3.6, RAMP_S])
-	lines.append_array(["", "| Tractor ESC | Trailer's own | Full-lock step | Slow wind-on |",
-			"| --- | --- | --- | --- |"])
+			+ " rig's P7 at %.0f km/h, a full-lock step (pedal lifted); cells as the corner's above,"
+			+ " `holds` with the peak `v r` g, the time from the steer.") % [DocRegion.measured(),
+			TIP_SPEED_MS * 3.6])
+	lines.append_array(["", "| Tractor ESC | Trailer's own | Full-lock step |", "| --- | --- | --- |"])
 	for cfg: Array in MeasureRig.TRAILER_ROLL_CONFIGS:
 		var cells: Array[String] = []
-		for ramp in [false, true]:
-			for r in _doc_done:
-				if r["esc_off"] == cfg[0] and r["trsp_off"] == cfg[1] and r["ramp"] == ramp:
-					cells.append(_p7_cell(r))
+		for r in _doc_done:
+			if r["esc_off"] == cfg[0] and r["trsp_off"] == cfg[1]:
+				cells.append(_p7_cell(r))
 		lines.append("| %s | %s | %s |" % ["off" if cfg[0] else "on", "off" if cfg[1] else "on",
 				" | ".join(cells)])
 	return lines

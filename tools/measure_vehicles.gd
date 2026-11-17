@@ -430,8 +430,9 @@ const XWIND_MARKS: Array[float] = [1.0]
 
 # --- doc presets (`doc=<id>` as arg 1) -------------------------------------
 ## Each runs a fixed set and rewrites its `docs/vehicle_measurements.md` region (`doc_region.gd`). Cornering
-## and accel run every wheel-driven variant (accel twice, floored then `tc`, each only to
-## 100 km/h), top the same once to its settled speed; braking the set below, heavies from 90 % of their top.
+## and accel run every wheel-driven variant but their DOC_*_SKIP twins (accel twice, floored then
+## `tc`, each only to 100 km/h), top every one once to its settled speed; braking the set below,
+## heavies from 90 % of their top.
 const DocRegion := preload("res://tools/doc_region.gd")
 const DOC_BRAKING: Array[String] = ["sedan", "pickup", "delivery", "garbage-truck", "semi", "race"]
 ## doc=cruise: one body per shift map (the car's, the sports car's, the governed light
@@ -447,6 +448,15 @@ const DOC_STEER: Array[String] = ["sedan", "sedan-sports", "suv", "race", "van",
 const DOC_WIND: Array[String] = ["sedan", "delivery", "garbage-truck", "semi"]
 ## doc=freerev: one body per pedal map's free crank (PETROL, a light and a heavy LINEAR, ALL_SPEED).
 const DOC_FREEREV: Array[String] = ["sedan", "delivery", "semi", "tractor-kenney"]
+## Twin bodies left out of a table where they read as their twin does (doc=top keeps every body).
+## doc=accel: `semi` runs 0-50 as `semi-conventional`, which also carries a 0-100 ref; `taxi` and
+## `delivery-flat` differ from their twins (0-100, refs).
+const DOC_ACCEL_SKIP: Array[String] = ["pickup-flat", "semi"]
+const DOC_CORNERING_SKIP: Array[String] = ["taxi", "pickup-flat", "delivery-flat", "semi-conventional"]
+## doc=esc: `taxi`'s ESC-off series differs from `sedan`'s.
+const DOC_ESC_SKIP: Array[String] = ["pickup-flat", "delivery-flat"]
+## doc=accel: a `tc` mark within this of the floored one prints as `=` (an ideal TC car's).
+const DOC_TC_SAME_S := 0.05
 const DOC_SECONDS := 60.0
 ## doc=cruise, doc=wind: the laden semi's 70 km/h hold settles ~60 s in (CRUISE_DRIFT).
 const DOC_CRUISE_SECONDS := 90.0
@@ -1178,7 +1188,10 @@ func _ready() -> void:
 			_load_course(strip)
 		add_child(strip)
 	if which == "all" or _doc == "cornering" or _doc == "accel" or _doc == "top":
-		_queue.assign(MeasureRig.wheel_driven_variants())
+		var skip: Array = DOC_ACCEL_SKIP if _doc == "accel" \
+				else DOC_CORNERING_SKIP if _doc == "cornering" else []
+		_queue.assign(MeasureRig.wheel_driven_variants().filter(
+				func(v: String) -> bool: return not skip.has(v)))
 	elif _doc == "braking":
 		_queue = DOC_BRAKING.duplicate()
 	elif _doc == "cruise":
@@ -1191,6 +1204,8 @@ func _ready() -> void:
 		_queue = DOC_FREEREV.duplicate()
 	elif _doc == "esc":
 		for v in _sine_variants():
+			if DOC_ESC_SKIP.has(v):
+				continue
 			_queue.append_array([v, v])
 			_esc_offs.append_array([false, true])
 	elif _doc == "trailer_roll":
@@ -6078,8 +6093,8 @@ func _accel_table() -> Array[String]:
 	var lines := DocRegion.wrap(("%s (`measure_vehicles -- doc=accel`; per body `-- <variant> %.0f`,"
 			+ " plus `tc` for the slip-limited run): standing starts on the strip, pedal floored (with the"
 			+ " body's own traction control where fitted), then"
-			+ " slip-limited at the %.2f grip peak (`tc`), beside the real-world reference"
-			+ " (`tools/vehicle_reference_specs.json`). The breakdown is the floored run's 0-50"
+			+ " slip-limited at the %.2f grip peak (`tc`; `=` within %.2f s of floored), beside the"
+			+ " real-world reference (`tools/vehicle_reference_specs.json`). The breakdown is the floored run's 0-50"
 			+ " seconds: a driven wheel past %.2f slip, the limiter's fuel cut, a shift cut, the body's"
 			+ " traction control holding a driven wheel back, and"
 			+ " torque-bound (pedal floored, no cut or hold, every driven tyre under its peak), the part of"
@@ -6087,7 +6102,8 @@ func _accel_table() -> Array[String]:
 			+ " their load-scaled `mu_long` budget, floored / tc, with the rest of that budget in"
 			+ " brackets: the grip curve short of its peak with the slip under / past %.2f, and"
 			+ " what the one-tick force cap took off.")
-			% [DocRegion.measured(), _seconds, TcPedal.TARGET_SLIP, SPIN_SLIP, TcPedal.TARGET_SLIP])
+			% [DocRegion.measured(), _seconds, TcPedal.TARGET_SLIP, DOC_TC_SAME_S, SPIN_SLIP,
+			TcPedal.TARGET_SLIP])
 	lines.append_array(["", "| Body | 0-50 floored / tc / ref | 0-100 floored / tc / ref"
 			+ " | 0-50 spin / limiter / shift / tcs / torque-bound (stall) | 0-50 grip use (under peak /"
 			+ " past peak / tick cap) |",
@@ -6104,8 +6120,11 @@ func _accel_table() -> Array[String]:
 			var floored: Dictionary = e["launch"]["marks"]
 			var tc: Dictionary = e.get("launch_tc", {}).get("marks", {})
 			var ref_v: Variant = ref.get("%.0f" % kmh)
-			cells.append("%s / %s / %s" % [_secs(floored.get(kmh)), _secs(tc.get(kmh)),
-					_secs(ref_v, "%.1f")])
+			var tc_cell := _secs(tc.get(kmh))
+			if floored.get(kmh) != null and tc.get(kmh) != null \
+					and absf(float(tc[kmh]) - float(floored[kmh])) < DOC_TC_SAME_S:
+				tc_cell = "="
+			cells.append("%s / %s / %s" % [_secs(floored.get(kmh)), tc_cell, _secs(ref_v, "%.1f")])
 		var loss: Dictionary = e["launch"]["loss"].get(LAUNCH_MARKS[0], {})
 		cells.append("-" if loss.is_empty() else "%.2f / %.2f / %.2f / %.2f / %.2f (%.2f)"
 				% [loss["spin"], loss["limiter"], loss["shift"], loss["tcs"], loss["torque"],

@@ -5,7 +5,7 @@ A read of every table in `docs/vehicle_measurements.md` against real-world order
 plan fixes each one at its source: a sim bug where there is one, a vehicle parameter otherwise.
 A gap stays only where the Kenney body's proportions force it, and is then said in the doc.
 
-Written 2026-11-13. Status: **not started.**
+Written 2026-11-13. Status: **phases 1-5 done.**
 Serves: standing rule 3 (telemetry out of an honest sim): `fuel_rate`, `engine_load`, `speed`,
 grip and brake figures a learner can compare with a real vehicle's.
 State: done: `doc=top` table (top speed, quarter mile); phase 4's first bullet (`race`,
@@ -33,7 +33,11 @@ opened, tests a tractor on an unbraked control trailer, no laden-artic figure). 
 pickups' brakes are an F-150's hardware on the compact class; the `pickup`'s 80 % RWD grade is
 unchecked (a 50/50 body at `mu_long` 1.05 and h/L ~0.2 computes ~66 %); the vans' cruise fuel is
 not re-sourced. Re-run `doc=accel`, `top`, `grade`; `cornering` and `cruise` hold no moved spec.
-Phase 4 done. Next: phase 5. Open findings: the Winter-over-all-season 1.2
+Phase 4 done. Phase 5 done (2026-11-18): `tc` within 0.05 s prints `=`; twins skipped per
+table where they read alike (`DOC_*_SKIP`; `taxi` stays in `doc=esc`, its ESC-off series differs);
+P7 keeps the step (its wind-on matched the corner column in all four configs); cap -1182. The
+re-run `doc=esc` moved every A ~6 % lower (its table was 11-16's; ESC on all PASS). Next: distil
+into `docs/`, delete the plan. Open findings: the Winter-over-all-season 1.2
 on snow rests on unopened pages ([66], [67]; [215] has no all-season); AutoBild's summer stops
 1.8x the winters' on snow [215] against VTI's 1.28-1.54 (Summer's factor keeps VTI's); the
 600 Nm retarder is an unsourced estimate (Allison 3000: 1490-2170 Nm per a search summary; the
@@ -67,7 +71,7 @@ Symptom: `garbage-truck` (8 t) and `firetruck` (7.5 t) launch 0-50 in ~6 s (real
 
 ## Phase 4 — Cars near the line: done (see State)
 
-## Phase 5 — Trim redundant measurements (effort: low, mode: edit)
+## Phase 5 — Trim redundant measurements: done (see State)
 
 Only where the readings are essentially the same:
 - `doc=accel`: drop the `tc` figure from the 0-50 / 0-100 cells for bodies with `tcs_equipped`
