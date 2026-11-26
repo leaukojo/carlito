@@ -454,7 +454,10 @@ func test_a_reading_with_a_towed_body_draws() -> void:
 
 
 ## With the dashboard and the touch pads up, the panel stands above both and still fits the window.
+## The window is the project's size: Linux headless is 64 px, too small for any panel.
 func test_the_panel_clears_the_dashboard_and_the_touch_pads() -> void:
+	var root_size := get_tree().root.size
+	get_tree().root.size = Vector2i(1152, 648)
 	var saved := GameState.current_vehicle
 	GameState.current_vehicle = "car"
 	var dash: Dashboard = auto_free(Dashboard.new())
@@ -495,6 +498,7 @@ func test_the_panel_clears_the_dashboard_and_the_touch_pads() -> void:
 	assert_float(pads.drive_top()).is_equal(INF)
 	assert_bool(is_nan(pads.drive_span().x)).is_true()
 	GameState.current_vehicle = saved
+	get_tree().root.size = root_size
 
 
 ## Bound to the verification pad's spawned car, it shows and reads every wheel each tick.
