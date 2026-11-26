@@ -2,6 +2,18 @@ extends GdUnitTestSuite
 ## ChassisView: the panel's pure mapping (grip steps, patch area, placement, hatch) and its
 ## visibility rules. The reading itself is tests/test_chassis_reading.gd's.
 
+var _root_size: Vector2i
+
+
+## Every case runs in the project's window: Linux headless is 64 px, too small for any panel.
+func before_test() -> void:
+	_root_size = get_tree().root.size
+	get_tree().root.size = Vector2i(1152, 648)
+
+
+func after_test() -> void:
+	get_tree().root.size = _root_size
+
 
 func test_grip_steps_are_cool_warm_and_at_the_limit() -> void:
 	assert_int(ChassisView.grip_step(0.0)).is_equal(0)
@@ -454,10 +466,7 @@ func test_a_reading_with_a_towed_body_draws() -> void:
 
 
 ## With the dashboard and the touch pads up, the panel stands above both and still fits the window.
-## The window is the project's size: Linux headless is 64 px, too small for any panel.
 func test_the_panel_clears_the_dashboard_and_the_touch_pads() -> void:
-	var root_size := get_tree().root.size
-	get_tree().root.size = Vector2i(1152, 648)
 	var saved := GameState.current_vehicle
 	GameState.current_vehicle = "car"
 	var dash: Dashboard = auto_free(Dashboard.new())
@@ -498,7 +507,6 @@ func test_the_panel_clears_the_dashboard_and_the_touch_pads() -> void:
 	assert_float(pads.drive_top()).is_equal(INF)
 	assert_bool(is_nan(pads.drive_span().x)).is_true()
 	GameState.current_vehicle = saved
-	get_tree().root.size = root_size
 
 
 ## Bound to the verification pad's spawned car, it shows and reads every wheel each tick.
