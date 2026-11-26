@@ -4,7 +4,7 @@ An ultra-lightweight, general-purpose vehicle simulator that runs in a web brows
 
 **Try it:** [leaukojo.github.io/carlito](https://leaukojo.github.io/carlito/)
 
-**Mechanics guide:** [leaukojo.github.io/carlito/guide](https://leaukojo.github.io/carlito/guide/)
+**Mechanics guide:** [leaukojo.github.io/carlito/guide](https://leaukojo.github.io/carlito/guide/) (a local copy: `npx serve docs/guide`, then open the address it prints; the pages are also plain Markdown in `docs/guide/`)
 
 <table>
 <tr>
@@ -69,7 +69,7 @@ godot --headless --path . --export-release "Web" build/web/index.html
 ```
 The project is well-documented for AI agents, so you should be able to make requests such as "add a level" or "add a vehicle" with minimal token usage.
 
-If you want to contribute, see `docs/TODO.md` for a list of current issues. If you want to make a new level, see `docs/making_a_level.md`. If you want to understand how the simulation works, see `docs/HUMAN_EXPLANATIONS.md`.
+If you want to contribute, see `docs/TODO.md` for a list of current issues. If you want to make a new level, or understand how the game is built, see the guide's [Inside the project](https://leaukojo.github.io/carlito/guide/#how-its-built) pages (`docs/guide/how-its-built.md`, `docs/guide/making-a-level.md`).
 
 ## Credits
 

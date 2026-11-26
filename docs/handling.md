@@ -91,22 +91,22 @@ measured pitch per g reads over the springs-and-links prediction: -1 to +10 % on
 a trailer, and +5 % on the coupled rigs: `semi` and `semi-conventional` with the box,
 `tractor-kenney` with the farm tipper (`-- all 45 trace` prints each body's `pitch` line).
 
-The `front axle` gate judges the overshoot alone (the gap less the other three; a two-tick mean)
+The `front axle` gate judges the overshoot alone (the gap less the other three)
 per event (the launch, then each shift's settle) against what a body damped at 0.3 of critical,
 the road band's low end, overshoots a step of that event's swing (`exp(-ζπ/√(1-ζ²))`, 37 %), never
 under 5 points. A launch swings from parked; a shift, the larger of the steady share's rise through
 its handover and cut and its fall since. So a short, tall body is not failed for its footprint: the
-laden `semi`'s launch swings ~69 points and overshoots 5, `sedan-sports`' 43 and 6.
+laden `semi`'s launch swings ~47 points and overshoots 6, `sedan-sports`' 50 and 12.
 
-Cars, vans, Kenney trucks and both semis pass (`-- all 45 trace`). The AMT's cut returns over
-`shift_torque_ramp_s`, so its drive does not step into the pitch mode.
+Cars, Kenney trucks and both semis pass; `delivery`/`delivery-flat` FAIL by 0.1. The AMT's cut
+returns over `shift_torque_ramp_s`, so its drive does not step into the pitch mode.
 
-The tractor's floored skip-shifts fail, and the gate is a report: the powershift reduces no torque
-(its source holds or raises it, `docs/drivetrain.md` § The shift's handover), so the crank's
-inertia reaches the wheels. Bobtail, D7>D12 overshoots 15.1 points of a 5.8 allowance and D12>D15
-6.8 of 5.0; with the tipper, D6>D10 8.2 of 5.0 (`-- tractor-kenney 60 trace trailer=bobtail` /
-`trailer=farm_tipper`). The 0.3 reference is the road band's; no tractor pitch damping is sourced
-(below), so these FAILs are not a damping defect.
+The tractor's launch and floored skip-shifts fail, and the gate is a report: the powershift reduces
+no torque (`docs/drivetrain.md` § The shift's handover), so the crank's inertia reaches the wheels;
+the launch's close hands it over and drops it on the lock tick. Bobtail, the launch overshoots 20.5
+points of a 16.4 allowance, D7>D12 19.9 of 5.4, D12>D15 9.1 of 5.0; with the tipper, D6>D10 11.7
+of 5.0 (`-- tractor-kenney 60 trace trailer=bobtail` / `trailer=farm_tipper`). The 0.3 reference
+is the road band's; no tractor pitch damping is sourced (below).
 
 The bobtail semis are where the gate reads the steer axle's damping and the contact itself:
 - The cab-over's launch is the shortest wheelbase's largest swing, and its overshoot is the nose
@@ -182,7 +182,7 @@ Sources (`c = PKY2 * Fz0 / ref`, `s` = mu lost per doubling): passenger 205/60R1
 ed. Table A3.1: PKY2 2.13, Fz0 4 kN, 15 %) -> `CAR_BASE` c 2.56, s 0.10; van 185/80R14 (projectchrono `mf_185_80R14.tir`: 1.39, 3.8 kN,
 19 %) -> c 1.92 (estimate), s 0.08; truck 315/80R22.5 (projectchrono `CityBus_Pac02Tire.tir`:
 3.33, 35 kN, 10 %) -> c 3.33, s 0.08; ag radial has no open set -> c 3.0, s 0.12 (estimates).
-Tractor `rear_lat_grip` 1.077 = `1 + s * log2(rated rear / rated front)` (650/65R38 / 540/65R28).
+Tractor `rear_tyre_rating` 1.557: rated rear / front (650/65R38 / 540/65R28), its side laws' `Fz0`.
 - **Roll steer.** Each axle steers `roll_steer_front` / `_rear` deg per deg of its own suspension
   roll, `atan((c_right - c_left) / track)` off the bar's latch (`RayWheel.roll_steer`), never the
   world roll (a bank moves no link). + = toward understeer: front out of the turn, rear into it.
@@ -242,7 +242,7 @@ and one `side_area` is both the broadside figure and the small-yaw slope (`docs/
 § Crosswind). A headwind or tailwind moves `engine_load`, fuel and top speed by drag's
 `0.5 rho CdA ((v ± w)^2 - v^2)`. A crosswind pushes the body downwind and, acting ahead of the COM,
 yaws it downwind too (`docs/vehicle_measurements.md` § Wind). A parked body is pushed as well: the
-gate reads the air, and the static hold resists it (`measure_grade -- <v> park=16.7 cross
+force reads the air, and the static hold resists it (`measure_grade -- <v> park=16.7 cross
 wind=0:13` holds every `doc=park` body under a millimetre but the `semi`, whose known cross-slope
 creep grows). In a slide the across-air part takes `Cy*A` instead of drag's `Cd*A`, about seven
 times more on a car, at a point ahead of the COM. That lowers the step pass's steady K (`docs/vehicle_measurements.md` § Step steer) a little in
@@ -256,10 +256,10 @@ rate and a bank-compensated lateral acceleration, with body slip estimated from 
 asks is the bicycle model's on the body's own steady K (`esc_reference_k`, the corner model's K
 against g; the refuse truck's per hopper level, `esc_laden_k`), bounded by the measured g plus a margin. Past a dead-band
 it brakes one wheel (the outer front against oversteer, the inner rear against understeer) inside
-the spin step with ABS on, and trims the delivered fuel in proportion. On the semis it adds roll
-stability: past `ROLL_SHARE` of the rig's measured first lift at its parked coupled load
-(`esc_roll_lift_g`), or as the steer asks that g, it brakes every wheel and the trailer and cuts
-the fuel; the yaw torque keeps its priority on a wheel (`corner_torques`).
+the spin step with ABS on, and trims the delivered fuel in proportion. On the trucks it adds roll
+stability: past `ROLL_SHARE` of the measured first lift at the load (`esc_roll_lift_g`: a semi's
+parked coupled load, a rigid truck's live mass), or as the steer asks that g, it brakes every wheel and a semi's trailer and cuts
+the fuel, the unit's own wheels through its chambers' fill (`roll_chamber_step`); the yaw torque keeps its priority on a wheel (`corner_torques`).
 - **Switch and lamps.** `esc_off` (the bridge, or SANDBOX ▸ STABILITY CONTROL) takes TC with it;
   `tcs_off` leaves ESC on. Status bits 7 and 9-11 report it (a truck's VDC1, `docs/truck.md`); the
   ESC lamp is steady while off and flashes while ESC acts. Only roll stability past `LAMP_DECEL`

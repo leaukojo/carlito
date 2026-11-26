@@ -47,7 +47,7 @@ Rules: `src/vehicles/CLAUDE.md`; derivations and figures: § Physics derivations
 | Governor | `spec.speed_limit_kmh` (0 = ungoverned, J1939 SPN 74) fades throttle via `governor_scale` over `GOVERNOR_BAND` m/s; `governed_upshift` stops it stranding a gear. Wire: `speed_limit` (u8, 1 km/h/bit, 0-250), range-less |
 | `RayWheel` | one cylinder cast per wheel (the tyre's radius and width, down its travel), spring-damper + slip tires. Grip: `HeightmapTerrain.grip_at()` into `mu_long`/`mu_lat`, nearest surface within `SURFACE_GRIP_REACH` |
 | `BaseVehicle` | consumes `InputRouter.get_vehicle_input()`, runs wheels/drivetrain, publishes telemetry, lamps, horn. No `ground_drive` → no `WheelDrive`. Seams: `_make_telemetry()`, `_tick_extras(input, delta)` |
-| Road resistance | `VehicleMath.air_force` (`WheelDrive._apply_resistance` / `TowedBody.tick_towed`) against the level's wind (`WindField.at`), read in the body frame: drag `0.5 * rho * |air| * Cd*A * u` off `drag_area` along the nose and side force `0.5 * rho * |air| * Cy*A * w` off `side_area` across it, both at `aero_centre` (body space from the origin, never the live COM; generated: the body AABB's mid-height, a quarter wheelbase ahead of the axles' midpoint; hand-built: derived in each header; `docs/handling.md` § Aero balance, § Crosswind). Still air and straight running is the plain drag term. Rolling: a moment `crr * N * r` on each wheel, the surface's drag added to `crr`, the spin settle's first stage (before TC and the brake), so the tyre carries it to the road (`RayWheel.tick`; `rolling_crr` = the fitted class's `rolling_resistance`, N = suspension force, not `mass * g`). On a steered front the force has a side component (`crr * N * sin(steer)`) that the front tyres must also carry (`BalanceModel.corner` carries it: `docs/handling.md` § Balance). `DAMP_MODE_REPLACE` at 0, not `physics/3d/default_linear_damp`. Kenney Cd*A derived (`gen_kenney_vehicles`: `cd * FRONTAL_FILL * w * h`, its own `cd`), Cy*A likewise (`CY_SIDE * SIDE_FILL * l * h`). Tested `tests/test_vehicle_math.gd` / `tests/test_vehicle_catalog.gd` |
+| Road resistance | `VehicleMath.air_force` (`WheelDrive._apply_resistance` / `TowedBody.tick_towed`) against the level's wind (`WindField.at`), read in the body frame: drag `0.5 * rho * |air| * Cd*A * u` off `drag_area` along the nose and side force `0.5 * rho * |air| * Cy*A * w` off `side_area` across it, both at `aero_centre` (body space from the origin, never the live COM; generated: the body AABB's mid-height, a quarter wheelbase ahead of the axles' midpoint; hand-built: derived in each header; `docs/handling.md` § Aero balance, § Crosswind). Still air and straight running is the plain drag term. Rolling: a moment `crr * N * r` on each wheel, the spin settle's first stage (before TC and the brake), so the tyre carries it to the road (`RayWheel.tick`; `rolling_crr` = the fitted class's `rolling_resistance`, N = suspension force, not `mass * g`); the surface's drag a force at the hub (`RayWheel._soil_force`). On a steered front the force has a side component (`crr * N * sin(steer)`) that the front tyres must also carry (`BalanceModel.corner` carries it: `docs/handling.md` § Balance). `DAMP_MODE_REPLACE` at 0, not `physics/3d/default_linear_damp`. Kenney Cd*A derived (`gen_kenney_vehicles`: `cd * FRONTAL_FILL * w * h`, its own `cd`), Cy*A likewise (`CY_SIDE * SIDE_FILL * l * h`). Tested `tests/test_vehicle_math.gd` / `tests/test_vehicle_catalog.gd` |
 | Downforce | `VehicleMath.aero_downforce`, `WheelDrive._apply_downforce`: `0.5 * rho * C*A * v^2` off `downforce_area` (Cl*A), through the suspension, split between the axle stations by `downforce_front` (`VehicleMath.downforce_point`; unset = through the live COM). Open-wheelers only (`cl`); lifts `race`'s top speed (`docs/vehicle_measurements.md` § Cruise) |
 | Drift | `handbrake_torque` locks the rears; the combined-slip tyre drops a locked wheel's side force |
 | Holds | `hill_hold` (`HillHold`, `WheelDrive.hold_step`): hill-start assist (ASSIST: the ABS bodies, `hill_hold_s` set per class: Honda's hold on the cars, Volvo VN's on the vans, trucks and semis, `docs/sources.md` [23, 24]) and the tractor's powershift hill hold (STANDSTILL); `InputRouter.auto_hold` for the local path. Tested `tests/test_hill_hold.gd`, `tests/test_input_arbitration.gd` |
@@ -77,8 +77,8 @@ slip. Under an equal split, the wheel that slips further grips less and spins fu
 the pair delivers 2× the weaker wheel's grip. That is real open-diff behaviour, and it is why an
 open body sticks floored on bumps while a feathered pedal crosses. The tractor's MFWD is rigid, as a real one is: engaged, it multiplies mud gradeability
 (`docs/vehicle_measurements.md` § Gradeability), at the cost of real driveline wind-up in tight turns. The 2WD tractor floored in
-mud climbs 16.7 % (9.5 deg) against a 17.7 deg traction ceiling. Held at the peak (`tc`) it climbs
-25.0 % (14.1 deg), so the floored shortfall is the peel, not the tractor. A real 2WD tractor bogs in
+mud climbs 19.9 % (11.3 deg) against a 17.2 deg traction ceiling. Held at the peak (`tc`) it climbs
+29.0 % (16.2 deg), so the floored shortfall is the peel, not the tractor. A real 2WD tractor bogs in
 mud too; MFWD and the diff lock are the answer. The same peel limits it ploughing (`docs/tractor.md`
 § Draft, hitch, linkage).
 **Wheel radius.** Each axle runs its drawn tyre's radius (`GroundDriveSpec.axle_radius`): 0.36 m (the kit
@@ -98,9 +98,7 @@ names only the deepest contact, so the second sweep reads each contact's own nor
 a square step (`kerb`, 12 / 20 cm) a tyre first touches the face ahead of its hub, partway up its
 arc (a disk touches a little further out, steeper); a crawl's largest tick binds no clamp and peaks
 at a gentle g. A ray jumps the whole step in one tick (several g, clamp-bound) and, tilted with the
-body, pushes sideways off the face; parallel rays strand the trucks on 20 cm. Cost, `semi` + `box`:
-the cast costs an order of magnitude over the ray, natively and on web (`kerb`,
-`docs/vehicle_measurements.md` § Measure-tool run lines).
+body, pushes sideways off the face; parallel rays strand the trucks on 20 cm.
 
 The sweep bisects to 1/256 of the travel, so the hub's drop is read between its last free stop and
 its first touching one: `settled_drop` backs the touching stop out by the rest contact's overlap.
@@ -111,11 +109,11 @@ touching query from the shapes rounded by their convex radius, or, once a box's 
 about 2900 times the two radii from the wheel (`GJKClosestPoint.h`, the
 `FLT_EPSILON * GetMaxYLengthSq()` exit), from the sharp ones, and near that distance from either,
 call by call. For a 0.36 x 0.2 tyre that is 139 m on a slab and 46 / 37 m on a 20 / 12 cm kerb: so
-`measure_vehicles`' 6 km strip and 80 m kerb and Flatland's `InfiniteGround`, not heightmaps or
-welded meshes. A sharp sweep stops up to the rim's reach short of the rounded touch;
+Flatland's 4 km `InfiniteGround`, not heightmaps, welded meshes or a `WorldBoundaryShape3D` (an
+exact plane: `measure_vehicles`' ground). A sharp sweep stops up to the rim's reach short of the rounded touch;
 `settled_drop` reads past it. Posed level about its axle (`query_basis`), the query reads a long
 box off a coarse float32 grid; far out, the hub's float32 still grids it.
-A stop the rest test reads clear is a free one, so the bracket moves a step on and the contact is read there.
+A stop the rest test reads clear is free: the contact is read a step on, none if clear there too.
 Settling on the stop before it puts a whole step into one tick's compression: on a semi's steer
 axle at a steady pull, a one-tick swing of about ten points of its parked load, up and back
 (`test_wheel_spin`'s hub-on-a-sweep-stop case; the trace's `contact` lines).
@@ -146,10 +144,10 @@ and a parked `semi` slides 5 m off its hand brake on 16.7 deg. The body's slip f
 (`slip_floor_for`) keeps the grip curve inside those caps, so a crawl reaches the full budget and
 the cap takes nothing off any launch (`doc=accel`'s tick cap 0.00); per-wheel floors held
 `suv-luxury` at 66.8 % against 81.0 % (both at a 1.0 converter). Guard: `test_wheel_spin` (`contact_masses`, `slip_floor_for`).
-The rolling resistance has no cap of its own: a moment on the wheel that never reverses it, it
+The tyre's rolling resistance has no cap of its own: a moment on the wheel that never reverses it, it
 reaches the body through the tyre's one force under that force's cap, on every wheel at every
-speed, coupled or not. A second force at the contact needs a stick test that sees every other force
-on the contact's speed, which one contact cannot. Guards: `test_wheel_spin`
+speed, coupled or not. The soil's drag stops under the travel's cap; a rut spring holds the creep
+it lets through, so it sees every other force. Guards: `test_wheel_spin`
 (`test_a_free_wheel_crawling_uphill_pays_its_whole_rolling_resistance`), and CI's
 `measure_semi_launch -- <unit> steady strict` (`REST_STEP_KG`).
 
@@ -223,11 +221,12 @@ the wheels' own spin steps with every wheel's holds inside it:
    diff must pass it beats its brake; a TC-held one stays at its ceiling unless the diff passes it
    more than its drive share.
 
-COMPROMISE: one pass. An axle coupling between wheels of unequal compliance moves that axle's mean
-after the centre balanced it (`race-future`'s rear LSD, the tractor's lock under MFWD); exact needs
-each axle solved inside the centre's solve. Likewise a biasing centre or axle moves the driven
-wheels' mean after the gearbox output settled against it (the pawl: `LOCK_STUCK_SPIN`); a crank
-above a rigid one (MFWD, the rear lock) is solved nested (`WheelDrive._rigid_downstream`).
+The gearbox output is solved over the couplings under it: the pawl's lock always, a crank above a
+rigid one (MFWD, the rear lock) too (`WheelDrive._rigid_downstream`).
+
+COMPROMISE: one pass below the output. An axle coupling between wheels of unequal compliance moves
+that axle's mean after the centre balanced it (`race-future`'s rear LSD, the tractor's lock under
+MFWD); exact needs each axle solved inside the centre's solve.
 
 ### Tyres and surfaces
 
@@ -275,7 +274,7 @@ grip in a tyre-limited stop. `BrakeSizing` is the arithmetic the generator repor
 | Saloon discs | `sedan`, `taxi`, `hatchback-sports` | 1450 (1.32-1.64) | 1400 | 3000 |
 | Performance | `sedan-sports`, `police` | 1800 (1.57-1.94) | 1400 | 3000 |
 | SUV / light commercial | `suv`, `suv-luxury` | 2000 (1.42-1.51) | 1700 | 3000 |
-| Full-size light commercial, each its reference's | `van` (Transit), `pickup`, `pickup-flat` (F-150) | 2911; 3385 (2.06-2.56) | 1700 | 3000 |
+| Full-size light commercial, each its reference's | `van` (Transit); `pickup`, `pickup-flat` (Hilux) | 2911; 1948 (1.42-2.06) | 1700 | 3000 |
 | Racing | `race`, `race-future` | 2000 (2.52-2.67) | 1400 | none |
 | 3.5-5 t van | `delivery`, `delivery-flat`, `ambulance` | 5200 (1.23-1.47) | 4800 | 8000 |
 | 26 t chassis, spring brakes | `garbage-truck`, `firetruck` | 15500 (1.46-2.20) | 6500 / 7000 | none |
@@ -296,19 +295,20 @@ against field runs: `docs/vehicle_measurements.md` § Brake heat.
 
 **P (park).** Gear byte 0xFE, a value RAMN never sends. Below `WheelDrive.PAWL_ENGAGE_SPEED`
 (1 m/s) the pawl locks the gearbox output to the case, and above it the pawl ratchets over the
-teeth and holds nothing. The lock is the first coupling `_couple_differentials` solves. It is
-`Differential.braked_coupling_torque` with the driven wheels on one side and a ground of no
-compliance on the other, rated at the pawl times the driven wheels, and its torque reaches them
-equally through the diffs, as a drive torque does. The driven wheels are held only through their
+teeth and holds nothing. The lock is the first coupling `_couple_differentials` solves: the
+torque, rated at the pawl times the driven wheels, that stops the driven wheels' mean once the
+diffs under it have solved on it (`Differential.falling_root` over
+`WheelDrive._settled_drive_spin`). It reaches them equally through the diffs, as a drive torque
+does. The driven wheels are held only through their
 diffs:
 - the wheels of an open axle (or an open centre's two axles) still turn against each other, so a
   car in P with one driven wheel on ice slides away;
 - a diff lock or the tractor's MFWD shaft ties the wheels it couples.
 
-The diffs solve after the lock and move the driven wheels' mean by what their compliances differ
-(the one pass: 7.5e-4 rad/s on `suv-luxury` parked on 16 %). So the whole driveline counts as held
-(`RayWheel.hold_by_lock`, the patch spring on) only when the lock carries less than its rating and
-every locked wheel settles under `LOCK_STUCK_SPIN` (0.01 rad/s, 3.5 mm/s at a car's tread). A wheel
+The whole driveline counts as held (`RayWheel.hold_by_lock`, the patch spring on) only when the
+lock carries less than its rating and every locked wheel settles under `LOCK_STUCK_SPIN`
+(0.01 rad/s, 3.5 mm/s at a car's tread). A body that rolls back before P goes in holds too
+(`measure_grade -- <variant> park=<deg> rolled`). A wheel
 an open diff counter-rotates off lost grip turns at rad/s. The `pawl` columns of the park table
 below hold P alone, with no brake.
 

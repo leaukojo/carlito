@@ -119,12 +119,10 @@ The bodies that fail the stall hold at 2.0, each against its own reference
 | `sedan-sports` (Performance): BMW M340i (G20), M Sport brakes [143, 144] | 348 × 36 vented / 345 × 24 vented | 40 + 44 / 1 × 42 | 95 / 66-73 | 2810 / 1524 | 225/45 R18, 255/40 R18; 0.330 | 2365 against 1800 | sizes, caliper types, pads, tyres sourced; front pistons a forum's reading of the caliper stamp [145], the rear's the F30's single-piston rear [130]: estimates |
 | `police` (Performance): Dodge Charger Pursuit, 2023 RWD [146, 147] | 368 / 351 | 2 × 48 / 1 × 44.5 | not found (0.774 share) | 4127 / 1688 | P245/55 R18; 0.363 | 2884 against 1800 | sizes and piston counts sourced; piston diameters secondary (retail listings, one unsure of its axle) [148] |
 | `van` (SUV / LC): Ford Transit, standard front axle [149] | 307 / 307, pad bands to 165 / 201 inner | 2 × 48 / 1 × 54 | the band | 3420 / 2336 | LT235/65 R16; 0.356 | 2911 against 2000 | sourced, Ford's 2026 sheet (the 2020-on van); `r_eff` the band's middle; tyre secondary |
-| `pickup` (SUV / LC): Ford F-150, 2020 [150] | 350 × 34 vented / 336 × 24 | 2 × 54 / 1 × 54 | 68 / not found (0.774 share) | 5167 / 2382 | 265/70 R17; 0.401 | 3385 against 2000 | rotors, pistons sourced; front pad secondary (a retail listing); tyre an estimate (no 2015-2020 OEM size opened) |
-| `pickup-flat` (SUV / LC): Ford F-250 Super Duty, 2016 [151] | 363 / 363 | 2 × 60 / not found | 71 / not found | 6605 / not found | LT245/75 R17; 0.400 | front alone 5950 against 2000 | rotors and caliper type sourced; front pistons and pad secondary; the generation before 2017 |
 
 Every reference sits past its class's shipped torque, and every one whose mass was found is
 heavier than its body: the GTI 1390-1454 kg [142], the M340i xDrive 1670 [144], the Charger 4,217-
-4,292 lb [146], the F-250 5,941 lb [151], against 1000-1500 kg.
+4,292 lb [146], against 1000-1500 kg.
 
 The fade record (the brake heat model's hardware), masses as catalogue weights of one disc or drum:
 
@@ -134,7 +132,6 @@ The fade record (the brake heat model's hardware), masses as catalogue weights o
 | Performance | 340 × 30 vented; 11.6 (slotted, OE 34106797602) | 345 × 24 vented; 10.112 (other BMW OE numbers) | low-metallic or semi-metallic; PAD curve | about 2.0 [8]; no sports figure found | sizes sourced; masses size matches [128]; the pad secondary (retail titles in search summaries); other makers' 12.35 / 9.08-9.9 [168], secondary |
 | SUV / light commercial | 319 × 28 vented; 8.4 | drum 295.1 × 67; 10.8 (Brembo 14.D637.10; Blue Print 11.31) [168] | not found; PAD front, DRUM rear | not found; the cars' 2.0 [8] an estimate | sourced [133, 134]; the disc an aftermarket one listed for the GUN126; the drum secondary |
 | Full-size LC: `van` (Transit V363) | 308 × 33 vented; 11.93 | 308 × 16 solid; 8.63 | not found; PAD | n/a | secondary [168] (Brembo 09.C243.10, 08.C539.11, the single-tyre axle) |
-| Full-size LC: `pickup(-flat)` (F-150) | 350 × 34 vented; about 13 | 336 × 24, taken vented; about 9 | not found; PAD | n/a | estimates: the front between a 330 × 32 at 11.72 and a 380 × 34 at 15.6 on diameter squared, the rear off the BMW 345 × 24 [168] |
 | Racing | taken 345 × 32 vented; about 12 | taken 320 vented; about 9 | RACE curve | n/a | estimate: one-piece iron (a 330 × 32 at 11.72 [168]); two-piece 9.5-10.5 |
 | 3.5-5 t van | 308 × 31 vented; 11.3 (Brembo 09.C644.11, the DRW axle) | the EU DRW's 308 × 18 solid (08.C540.11); 9.36, not the listed 280 | not found; PAD | 6R80 not found; the cars' 2.0 [8] an estimate | secondary [135, 168] |
 | 26 t chassis | drum 16.5 × 5 in; 79-80 lb | drum 16.5 × 7 in; 90-99 lb; a standard cast one 112 lb (Gunite 3600A) [153] | not found; DRUM curve | 3000 RDS offered with TC-418 / 419 / 421 [140]: 1.98 / 2.02 / 1.77 [139] | drum masses sourced, Gunite GOLD lightweight cast [138] and the standard 3600A [153]; the RDS's converters secondary, their ratios sourced |
@@ -225,7 +222,6 @@ first-order lumped model calibrated on a 33 t 3-S2 rig with thermocouples in eve
 | Performance | 6.15 / 5.36 | 0.346 / 0.356 | 1.38 + 0.35 v / 1.42 + 0.36 v | 0.173 / 0.178 | PAD |
 | SUV / LC | 4.45 / 8.36 (drum, GSRS-scaled) | 0.305 / drum | 1.22 + 0.31 v / 2.85 + 0.13 v | 0.153 / 0 | PAD / DRUM |
 | `van` | 6.32 / 4.57 | 0.284 / 0.195 | 1.14 + 0.28 v / 0.78 + 0.20 v | 0.142 / 0.195 | PAD |
-| `pickup(-flat)` | 6.89 / 4.77 | 0.367 / 0.338 | 1.47 + 0.37 v / 1.35 + 0.34 v | 0.183 / 0.169 | PAD |
 | Racing | 6.36 / 4.77 | 0.356 / 0.307 | 1.42 + 0.36 v / 1.23 + 0.31 v | 0.178 / 0.153 | RACE |
 | 3.5-5 t van | 6.00 / 4.96 | 0.284 / 0.195 | 1.14 + 0.28 v / 0.78 + 0.20 v | 0.142 / 0.195 | PAD |
 | 26 t chassis drums | 39.3 / 39.3 | GSRS | 13.4 + 0.625 v | 0 (in `G`) | DRUM |
@@ -262,6 +258,12 @@ trailer nothing.
 - **Field run** with a trailer's brake temperatures on a retarder-held descent: not found.
 - **Measured** on the semi: `docs/vehicle_measurements.md` § Brake heat, the retarder row and its
   kingpin column.
+
+*The Kenney trucks' retarder rating* (`TRUCK_BASE.retarder_rating_nm`): Allison's 3000 integral
+hydraulic retarder comes in five capacities at the gearbox output, lb-ft (N·m): High 1600 (2170),
+Medium 1300 (1763), Low 1100 (1490), Very Low 811 (1100), Ultra Low 553 (750) [218, 219]. The
+trucks carry Very Low; the level is the buyer's order, so the pick is an estimate inside the
+sourced range (`docs/truck.md` § Air, retarder, axle load).
 
 *Engine friction:* `docs/drivetrain.md` § Motoring and friction. The diesels' is Volvo Penta friction power, [5] and [7]; the petrol's is EPA's measured Malibu motoring curve [91].
 
@@ -394,8 +396,9 @@ is a fitment law (the mobility number), a later `GroundDriveSpec` field.
 | Figure | Basis | Grade |
 | --- | --- | --- |
 | Summer `dry` 1.10 | the best all-season 6.5 m behind the summer reference's 37.0 m dry, SUV size [70]; car sizes run closer | secondary; 1.10 an estimate |
-| Winter on snow, 1.2 over the all-season | 31 against 38 m in a blog's comparison [67]; the AutoBild field's 22.3-22.7 against 22.6-24.4 m [66] | secondary, [67] indicative |
-| Summer and Studded on snow | the summer tyre's peak 0.26 braking and 0.30 cornering, the studded 0.51 and 0.45, against the winter's 0.40 and 0.38 [214]: 0.72 and 1.23 of the winter | primary; the studded an older Nordic tyre beside a central-European winter |
+| Winter on snow, 1.2 over the all-season | AutoBild's 15 all-season finalists stop from fifty in 22.6-29.9 m (median 24.9) against the winter reference's 22.3 [66]: 1.12 at the median; 38 against 31 m [67] | secondary; [67] indicative |
+| Summer on snow | ABS stops from fifty: 55.3 against the winter reference's 22.3 m [66], 1.8x the winters' [215]; 0.47 of the winter taken, between the two | secondary |
+| Studded on snow | peak 0.51 braking and 0.45 cornering against the winter's 0.40 and 0.38 [214]: 1.23 of the winter | primary; an older Nordic tyre beside a central-European winter |
 | Winter and Summer on ice | ice braking: winter 17.7, all-season 26.2, summer 35.5 m [71] | secondary |
 | Studded on ice | new studs about twice friction tyres on severe ice, worn studs as studless [72]; 1.6x a modern studless taken | secondary; the figure an estimate |
 | Mud on wet asphalt | wet-tar braking on a Hilux: mud-terrains 38.7 m, ~9 m past highway-terrains [73] | secondary |
@@ -561,6 +564,7 @@ understeer as above:
 | The bound's margin `BOUND_MARGIN_G` past the measured `a_y`, over the dead-band's floor below `BOUND_MARGIN_G g / DEADBAND_RATE`, so ploughing reads understeer at the limit | the bound [181], [182]; no margin published | estimate |
 | Gain: `M_z = I_z e / CORRECT_S` (`yaw_moment`) | no figure | estimate |
 | Modulator: zero to the wheel's declared brake in `RISE_S`, back in `RELEASE_S` (a dump at the dead-band's edge rings at 60 Hz) | no pressure-rise rate found | estimate |
+| Roll stability's brake chambers on the unit's own wheels (`StabilityControl.roll_chamber_step`): a first-order fill over `CHAMBER_FILL_S` and vent over `CHAMBER_VENT_S` toward the application, so the unit's own brake moving the lateral g it reads cannot ring the loop at tick rate. Each is the largest time constant that meets its rule, rounded down (the limits and the solve: the constants' comment): the fill R13's response time, the least favourably placed cylinder at "75 per cent of its asymptotic value"; the vent FMVSS 121's release time for trucks and buses | R13 Annex 6 1.1, 2.4 [179]; FMVSS 121 S5.3.4.1(a) [217] | the regulations' ceilings, sourced; a modulator at the axle is faster, no measured figure found: estimate |
 | Roll stability (`StabilityControl.roll_application`): every wheel and the trailer braked and the fuel cut from `ROLL_SHARE` of the rig's first-lift g, full at the lift, on the yaw modulator's rates; the g read is the larger of the measured and the steer's ask (`asked_lat_g`, bounded like the yaw reference), acting off the steering as ESC does [183]; the yaw torque takes priority over the roll part on a wheel (`corner_torques`); the lift table `GroundDriveSpec.esc_roll_lift_g`, keyed on the coupled load the unit senses (EBS load sensing) | the structure [184], [183]; the table measured on the slow wind-on (`measure_semi_launch -- <unit> trailer=<body> ramp`, "rig's first lift"); no intervention point published | measured (the table); estimate (the share) |
 | Engine trim: the delivered fuel capped at `1 − T / T_brake` of the most-braked corner; FMVSS 136's 10 % floor is a heavy-truck J-turn's, and as a floor on every touch it toggled a 10 % cut at the dead-band's edge | the floor [180]; the proportional law | floor sourced (met past a tenth of the brake); the law an estimate |
 | Trailer roll-over control: controls "the wheel speeds on at least two wheels of each axle or axle group by selective braking or automatically commanded braking"; behaviour read off the tyres' vertical force "(or at least lateral acceleration and wheel speeds)", on-board information only; a select-low trailer may go select-high during an intervention | R13 Annex 21 2.2.1, 2.2.2(a), 2.2.5 [179] | sourced; 2.2.5 moot here (the trailer's ABS is per wheel) |
@@ -573,6 +577,13 @@ understeer as above:
 | A dealer's figures for WABCO RSS: a 2 bar test near 0.2, braking from 0.3 (g) | Don-Bur [197] | secondary, absent from WABCO's own text: not used |
 | Expectation: tractor-based systems mitigated trailer wheel lift at higher speeds than trailer-only ones; box vans reached the highest speed before lift, the tanker similar | Soodoo, NHTSA [184] slide 6 | sourced |
 | Agricultural trailers: may brake themselves on on-board information; no requirement found | EU 2015/68 Annex I 2.2.2.19 [196] (Annexes II-XI, XIII not opened) | sourced (permissive); `farm_tipper` carries none (decision, the user, 2026-10-29) |
+
+*Fifth-wheel plate friction* (`FifthWheel.FRICTION_*`, `CouplingProfile.yaw_friction_moment`,
+`Articulation.yaw_friction_torque`):
+
+| Figure | Basis | Grade |
+| --- | --- | --- |
+| The plate's yaw friction moment `N r_eff mu_sat (1 - e^(-k v)) + b v` (v the articulation rate in deg/s), `r_eff` 0.385 m (half the 0.77 m between the plate's mounting points, where it wears). `mu_sat` 0.112-0.12 freshly greased (9.05-16.5 t on the kingpin; peaks of ±5 kN·m at 11.5 t, ±6.5 at 16.5 t), 0.061-0.065 in service ("between fresh lubrication and dry lubrication, the state in which it remains for most of the time"; ±3.5 kN·m at 9.05 t), 0.41 dry (±14 kN·m); `k` 3-10 s/deg, `b` 0-55 N·m·s/deg | Nigam, Chalmers [216] secs. 7.2.1, 7.3, 7.4.2 and App. B (the fitted-parameter tables) | sourced (one plate, on a dolly); the sim runs the in-service law (scenario 1: `mu_sat` 0.0612, `k` 10 s/deg, `b` 55 N·m·s/deg, per radian in code) on the live kingpin load: on the box's 6.5 t it saturates at 1.5 kN·m |
 
 *The train's brake pipe* (`train.gd` `PIPE_*`, `TrainTelemetry.pipe_brake_demand`; the train brake
 reads the pipe):
@@ -665,8 +676,8 @@ reads the pipe):
 63. Wong, *Theory of Ground Vehicles*, 2nd ed., 1993, p. 26 (peak and sliding adhesion) and p. 17 (rolling resistance by tyre and surface), quoted by HPWizard (the book not opened): https://hpwizard.com/tire-friction-coefficient.html
 64. An iRacing forum post (street tyres ~0.35 on dry grass, ~0.72 on asphalt), seen only in search results: https://www.iracing.com/?p=19604
 65. Cenek, Jamieson and McLarin, "Frictional characteristics of roadside grass types", 2005 (abstract): https://trid.trb.org/View/783691
-66. Tyre Reviews, "2025 AutoBild All Season Tyre Test" and "2024 AutoBild All Season Tyre Test" (snow braking), seen in search results: https://www.tyrereviews.com/Tyre-Tests/2025-AutoBild-All-Season-Tyre-Test.htm
-67. TyreMap, "All-Season vs Winter Tyres" (snow braking: winter 31 m, all-season 38, summer 62; no method stated), seen in search results: https://tyremap.com/blog/all-season-vs-winter-tyres-comparison/
+66. Tyre Reviews, "2025 AutoBild All Season Tyre Test" (225/40 R18, snow from fifty; a saved copy read): https://www.tyrereviews.com/Tyre-Tests/2025-AutoBild-All-Season-Tyre-Test.htm
+67. TyreMap, "All-Season vs Winter Tyres 2026" (snow from fifty: winter 31 m, all-season 38, summer 62; credited to ADAC, TCS and Euro NCAP, no test named; a saved copy read): https://tyremap.com/blog/all-season-vs-winter-tyres-comparison/
 68. Robert Bosch GmbH, *Automotive Handbook*, 4th ed., 1996, p. 330 (rolling resistance by surface) and p. 335 (tyre friction by speed and water), quoted by HPWizard: https://hpwizard.com/tire-friction-coefficient.html
 69. Engineering ToolBox, "Rolling Resistance" (car tyre on solid sand 0.04-0.08, on loose sand 0.2-0.4): https://engineeringtoolbox.com/rolling-friction-resistance-d_1303.html
 70. Tyre Reviews, "2020 ADAC SUV All Season Tyre Test" (235/55 R17; summer reference 37.0 m dry, the best all-season 6.5 m more), seen in search results: https://www.tyrereviews.com/Article/2020-ADAC-SUV-All-Season-Tyre-Test.htm
@@ -749,8 +760,6 @@ reads the pipe):
 147. National Auto Fleet Group, 2023 Dodge Charger Police RWD options (rotor diameters 14.5 / 13.8 in): https://www.nationalautofleetgroup.com/Vehicle/Options/431870
 148. Charger Pursuit caliper listings, seen only in search summaries: Power Stop L15129, two 1.890 in pistons (https://www.americanmuscle.com/charger-front-brake-caliper-passenger-side-cla46995.html); Dynamic Friction 331-40642, one 44.5 piston, Pursuit rear (https://www.buybrakes.com/dynamic-friction-331-40642-premium-silver-zinc-coated-caliper)
 149. Ford, 2026 Transit technical specifications (rotors 12.1 in outer, 6.5 / 7.9 in inner; two 1.89 in / one 2.13 in pistons; swept area): https://www.fromtheroad.ford.com/content/dam/fordmediasite/us/en/library/2026/specs/2026_Ford_Transit_Specs.pdf
-150. Ford, 2020 F-150 technical specifications (rotors, `2 x 54mm Sliding Caliper`, `1X54 Sliding eIPB`): https://www.fromtheroad.ford.com/content/dam/fordmediasite/us/en/library/2020/specs/2020-F-150-Technical-Specs.pdf. The front pad's 194 × 68 × 18.5: a VEVOR listing in a search summary
-151. Ford, "2016 Super Duty Pickups" Source Book, 2015-02 (rotor diameter 14.29 / 14.29 in, dual-piston pin-slider calipers, curb weights): https://madocumentupload.marketingassociates.com/api/Document/GetFile?v1=4309947&v2=053118025341&v3=60&v4=2e19d89ae6f8d29d33aefe91e634462a04821c1d39a953b3d469eef6&v5=False. The 2.36 in pistons and Brembo P24215's 71 height: retail listings in search summaries
 152. J. A. Myers, I. L. Ashkenas, W. A. Johnson (Systems Technology Inc.), *Feasibility of a Grade Severity Rating System*, FHWA-RD-79-116, 1980 (the brake temperature model, Eq. 18-20, the 3-S2 test truck, the fade data; read via its OCR layer): https://rosap.ntl.bts.gov/view/dot/30251/dot_30251_DS1.pdf
 153. Accuride, Gunite 3600A brake drum spec sheet, WE1.000 Rev. 4 (16.5 × 7 in, 112 lb): https://Accuridecorp.com/sites/default/files/resources/2020-04/WE1.000%20Rev.%204%20Gunite%203600A%20Brake%20Drum.pdf
 154. University of Wyoming, *Improving the FHWA Grade Severity Rating System*, WY-1901F Vol. 1, 2018 (Myers 1981's Table 2 reprinted; the 425 → 500 °F limit; the fade modes; the updated coefficients): https://rosap.ntl.bts.gov/view/dot/42490/dot_42490_DS1.pdf
@@ -778,7 +787,7 @@ reads the pipe):
 176. AP Racing, "Disc temperatures": https://apracing.com/race-car/brake-discs/disc-temperatures
 177. FMVSS No. 126, electronic stability control, 49 CFR 571.126 (LII): https://www.law.cornell.edu/cfr/text/49/571.126
 178. UN Regulation No. 140/00 (ESC), reproduced verbatim as Appendix A of Australian Design Rule 88/00, F2017L01229: https://legislation.gov.au/F2017L01229/asmade/2017-09-21/text/original/pdf
-179. UN Regulation No. 13, 11 series, MLIT bilingual copy: 2.15, 2.34, 5.2.1.21, 5.2.1.28, 5.2.1.32-33, 5.2.2.23 at https://www.mlit.go.jp/jidosha/un/UN_R013_01.pdf; Annex 16 at https://www.mlit.go.jp/jidosha/un/UN_R013_06.pdf; Annex 19 at https://www.mlit.go.jp/jidosha/un/UN_R013_07.pdf; Annex 21 at https://www.mlit.go.jp/jidosha/un/UN_R013_09.pdf
+179. UN Regulation No. 13, 11 series, MLIT bilingual copy: 2.15, 2.34, 5.2.1.21, 5.2.1.28, 5.2.1.32-33, 5.2.2.23 at https://www.mlit.go.jp/jidosha/un/UN_R013_01.pdf; Annex 6 at https://www.mlit.go.jp/jidosha/un/UN_R013_03.pdf (p. 4); Annex 16 at https://www.mlit.go.jp/jidosha/un/UN_R013_06.pdf; Annex 19 at https://www.mlit.go.jp/jidosha/un/UN_R013_07.pdf; Annex 21 at https://www.mlit.go.jp/jidosha/un/UN_R013_09.pdf
 180. FMVSS No. 136, ESC for heavy vehicles, 49 CFR 571.136 (LII): https://www.law.cornell.edu/cfr/text/49/571.136
 181. Singh, Sivaramakrishnan (Goodyear), "Extended Pacejka Tire Model for Enhanced Vehicle Stability Control", arXiv 2305.18422 (eqs 17-21, 24; the brake rules): https://arxiv.org/pdf/2305.18422
 182. Pitschi, Sagmeister, Werner, Lienkamp, Lohmann, "Stability Control for Real World Testing in Autonomous Racing", arXiv 2608.17779: https://arxiv.org/pdf/2608.17779
@@ -815,3 +824,7 @@ reads the pipe):
 213. A. K. Rosenhan, "How to tilt-test fire apparatus", Trailer/Body Builders, 2013-06-01 (secondary, quoting NFPA 1901-2009 4.13): https://www.trailer-bodybuilders.com/truck-bodies/how-tilt-test-fire-apparatus
 214. J. Svendenius, "Validation of the Brush Model towards VTI-measurement data recorded in Arjeplog 2006", TFRT-7617, Lund University, 2007, Tables 4 and 7 (brush-model friction on a VTI test truck; a summer, a central-European winter and a studded tyre): https://lup.lub.lu.se/search/files/4590032/8627412.pdf
 215. Tyre Reviews, "2025 Winter Tyre Braking Test - 52 Sets!" (AutoBild, 225/40 R18; wet from eighty, snow from fifty, to rest; a saved copy read): https://www.tyrereviews.com/Tyre-Tests/2025-Winter-Tyre-Braking-Test---52-Sets.htm
+216. R. Nigam, "Characteristics of Fifth Wheel and its Influence on handling and maneuvering of Articulated Heavy vehicles", MSc thesis 2018:41, Chalmers University of Technology (Volvo GTT), 2018: https://publications.lib.chalmers.se/records/fulltext/255452/255452.pdf
+217. 49 CFR 571.121, FMVSS No. 121 Air brake systems (Cornell LII copy; S5.3.3-S5.3.4 read): https://www.law.cornell.edu/cfr/text/49/571.121
+218. Allison Transmission, North America refuse brochure SA8818EN (2021; the file is named SA7696EN), "Optional Retarder Provision, Integral, Hydraulic Type": https://allisontransmission.bynder.com/m/3ff1d1417ed395d2/original/SA7696EN-RefuseKeystone-Brochure-SA7696EN-pdf-pdf.pdf
+219. Allison Transmission, 3000 / 4000 RDS brochure SA8000EN (2017), "Optional Retarder Provision" (a dealer's copy): https://cdn.wajax.com/wp-content/uploads/2018/02/SA8000EN-RDS-Brochure.pdf

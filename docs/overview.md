@@ -70,7 +70,7 @@ ISO 11992 trailer bus, or none): `docs/tractor.md`, `docs/truck.md`.
   markers, registered in `LevelRegistry.LEVELS`; the shell (`boot.gd`) boots straight into one.
 - Authored with the kit (`kit/` + `addons/carlito_kit`): heightmap terrain with color-splat
   ground, GridMap palettes, `KitPiece` prefabs, seeded scatter, spline `RoadPath` roads
-  (rails via `RailProfile`). Walkthrough: `docs/making_a_level.md`; reference:
+  (rails via `RailProfile`). Walkthrough: `docs/guide/making-a-level.md`; reference:
   `docs/level_kit.md`.
 - The bake tool merges render meshes per chunk and welds drivable geometry into one
   level-wide collision body, input-hash-stamped; CI fails on stale bakes. `Level` loads

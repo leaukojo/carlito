@@ -35,7 +35,7 @@ the truck's `j1939` `axle_load` (lifting an implement moves its weight onto the 
 - `wheel_speed`/`ground_speed`/`wheel_slip` are the signature ISO pair and its difference:
   wheel-based is the mean spin of the rear axle × tire radius; ground-based is chassis
   forward velocity; `wheel_slip` is how far the first runs ahead of the second (unsigned,
-  J1939 SPN 1858, floored at low speed).
+  J1939 SPN 1858).
 - `pto_mode` is a gearbox selection, not an engine speed: 540/1000 are shaft speeds off
   `PTO_RATED_RPM` (**2043**, the 6175R's 1950 of its 2100 rated, on the curve's 2200;
   `docs/sources.md` § Governor); an unknown byte falls back to 540.
@@ -97,14 +97,14 @@ the truck's `j1939` `axle_load` (lifting an implement moves its weight onto the 
   light front shows as no extra understeer in the linear range (`20 circle`, `20 step`, with and
   without `trailer=spreader`).
   Held on full soil (`20 plough`), the measured draft sits on D497 at each speed held, to 0.0 %.
-  The harrow holds each of the pass's speeds, open or locked. The plough holds the slowest at 16 %
+  The harrow holds each of the pass's speeds, open or locked. The plough holds the slowest at 15 %
   slip either way. With the diff open, pushed on to the reference speed on a floored pedal, it
   peels: the lighter right rear (2709 of 5789 kg, under the plough's left-of-centre mass) passes
   the grip peak and runs away at 122 % slip while the left turns at 9 %, the open diff giving the
   left no more torque than the spinning right; it settles near half the reference speed in D1,
   49 % slip. An open diff already under the peak at the reference speed stays there: the peel is
   the falling side of the grip curve, reached by a heavy foot. Locked, it holds the reference
-  speed in D1 at 10 %, both rears at Fx/Fz ~0.5 under the peak; past it D1's governed top holds
+  speed in D1 at 9 %, both rears at Fx/Fz ~0.5 under the peak; past it D1's governed top holds
   it there. Floored from rest, open, it peels (~50-60 %), its lugged D7 taking D1 in two shifts.
   Ramped in as a driver does, the diff locked as tractor_plough's hint asks (`20 plough course`),
   the course's reference-speed run reads `engine_load` 63 % on full soil and 43 % on the light
@@ -167,9 +167,10 @@ the truck's `j1939` `axle_load` (lifting an implement moves its weight onto the 
   the rating, a held D7 poured the flare into the wheels in a tick (a spike of g, the front axle
   unloaded), and a held D4 flashed its rears into slip.
 - Flat strip (`measure_vehicles -- tractor-kenney 40 trace`):
-  - bobtail: D7, a clean close carrying the engine's torque, then three floored skip-shifts,
-    D7>D12, D12>D15 and D15>D16, each gear held past the trace's dwell floor; rear slip low (~0.10), the front axle
-    kept loaded; D7>D12 and D12>D15 ring past their `front axle` gate (`docs/handling.md` § Pitch);
+  - bobtail: D7, a close carrying 1.33x the engine's torque, then three floored skip-shifts,
+    D7>D12, D12>D15 and D15>D16, each gear held past the trace's dwell floor; rear slip ~0.10,
+    the front axle loaded; the launch, D7>D12 and D12>D15 ring past their `front axle` gate
+    (`docs/handling.md` § Pitch);
   - with the farm tipper: D6, then D10, D12, D13, D14, D15 and D16, each held longer.
 - Standing starts: `docs/vehicle_measurements.md` § Gradeability, `docs/drivetrain.md` § Hill hold; with the tipper on 10 %
   asphalt it picks D4 (`measure_grade -- tractor-kenney rollback tipper` times how soon it moves).

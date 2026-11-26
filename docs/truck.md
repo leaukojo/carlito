@@ -49,7 +49,7 @@ parent of ISOBUS and NMEA 2000.
 
   | Body | Rating at the output | Per driven wheel | Retardation |
   | --- | --- | --- | --- |
-  | `garbage-truck` / `firetruck` (8 / 12 t) | 600 Nm, medium-duty output retarder | 1203 Nm | 0.84 / 0.56 m/s² |
+  | `garbage-truck` / `firetruck` (8 / 12 t) | 1100 Nm, Allison 3000 RDS Very Low | 2205 Nm | 1.54 / 1.03 m/s² |
   | `semi` / `semi-conventional` bobtail (8 t) | 1450 Nm, low end of the hydraulic class | 2120 Nm | 1.47 m/s² (0.37 coupled to the 24 t box, which it leaves unbraked) |
 
   `test_truck` pins a **0.5-1.6 m/s²** band per shipped spec at its own mass (past ~1.6 an
