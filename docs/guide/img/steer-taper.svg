@@ -2,7 +2,7 @@
 <title>Steering lock against speed for three vehicles</title>
 <!-- WheelDrive.steer_lock_deg: max_steer_deg, falling linearly to min_steer_frac x max_steer_deg at
      steer_falloff_speed, flat after. sedan_spec.tres 38 deg, 0.26 at 42 m/s (151 km/h);
-     semi_spec.tres 24 deg, 0.21 at 29 m/s (104 km/h); tractor-kenney_spec.tres 38 deg, 0.55 at
+     semi_spec.tres 24 deg, 0.21 at 25 m/s (90 km/h); tractor-kenney_spec.tres 38 deg, 0.55 at
      11 m/s (40 km/h). Plot: x = 56 + 2.15 x km/h, y = 230 - 4.75 x deg. -->
 <style>
 .st-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
@@ -31,8 +31,8 @@
 <path class="st-axis" d="M56,32 L56,230 L404,230"/>
 <!-- car: 38 deg to 9.9 deg at 151 km/h -->
 <polyline class="st-car" points="56,49.5 381,183 400,183"/>
-<!-- semi: 24 deg to 5.0 deg at 104 km/h -->
-<polyline class="st-semi" points="56,116 280.5,206.1 400,206.1"/>
+<!-- semi: 24 deg to 5.0 deg at 90 km/h -->
+<polyline class="st-semi" points="56,116 249.5,206.1 400,206.1"/>
 <!-- tractor: 38 deg to 20.9 deg at 40 km/h, drawn to 50 km/h -->
 <polyline class="st-tractor" points="56,49.5 141,130.7 163.5,130.7"/>
 <text class="st-car-t" x="250" y="96">sedan</text>

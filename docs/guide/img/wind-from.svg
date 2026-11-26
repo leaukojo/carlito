@@ -23,9 +23,8 @@
 <path class="wf-arrow" d="M120,50 L120,176"/>
 <path class="wf-head" d="M120,192 L110,172 L130,172 Z"/>
 <text class="wf-or-t" x="250" y="70">comes FROM the north</text>
-<text class="wf-s" x="250" y="88">how CONDITIONS and the</text>
+<text class="wf-s" x="250" y="88">how forecasts and the</text>
 <text class="wf-s" x="250" y="104">wind signal twd name it</text>
 <text class="wf-blue-t" x="250" y="150">blows TOWARD the south</text>
-<text class="wf-s" x="250" y="168">how a current's set,</text>
-<text class="wf-s" x="250" y="184">current_set, names it</text>
+<text class="wf-s" x="250" y="168">the way the air moves</text>
 </svg>

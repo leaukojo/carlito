@@ -17,16 +17,16 @@
   'use strict';
   var NS = 'http://www.w3.org/2000/svg';
   var VEHICLES = [
-    { id: 'sedan', name: 'sedan (car)', ratios: [4.5, 2.903, 1.975, 1.431, 1.109, 0.925], fd: 3.9, r: 0.36,
+    { id: 'sedan', icon: 'car', name: 'Saloon car', ratios: [4.5, 2.903, 1.975, 1.431, 1.109, 0.925], fd: 3.9, r: 0.36,
       idle: 900, red: 6800, mass: 1150,
       curve: [[900, 98], [2000, 154], [3200, 184], [4800, 185], [6000, 185], [6600, 170], [6800, 61]] },
-    { id: 'race', name: 'race (racing car)', ratios: [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], fd: 4.2, r: 0.36,
+    { id: 'race', icon: 'race', name: 'Racing car', ratios: [3.2, 2.30, 1.72, 1.32, 0.98, 0.66], fd: 4.2, r: 0.36,
       idle: 900, red: 6800, mass: 900,
       curve: [[900, 205.8], [2000, 323.4], [3200, 386.4], [4800, 388.5], [6000, 388.5], [6600, 357], [6800, 128.1]] },
-    { id: 'semi', name: 'semi (truck, no trailer)', ratios: [6.5, 5.316, 4.277, 3.5, 2.849, 2.327, 1.917, 1.568, 1.26, 1.031, 0.839, 0.69],
+    { id: 'semi', icon: 'semi', name: 'Semi truck, no trailer', ratios: [6.5, 5.316, 4.277, 3.5, 2.849, 2.327, 1.917, 1.568, 1.26, 1.031, 0.839, 0.69],
       fd: 2.925, r: 0.36, idle: 600, red: 2080, mass: 8000,
       curve: [[600, 1500], [780, 1985], [1170, 2308], [1560, 2215], [1820, 1723], [2080, 577]] },
-    { id: 'tractor', name: 'tractor-kenney', ratios: [7, 6.275, 5.625, 5.042, 4.52, 4.051, 3.632, 3.255, 2.918, 2.616, 2.345, 2.102, 1.884, 1.689, 1.514, 1.357],
+    { id: 'tractor', icon: 'tractor', name: 'Farm tractor', ratios: [7, 6.275, 5.625, 5.042, 4.52, 4.051, 3.632, 3.255, 2.918, 2.616, 2.345, 2.102, 1.884, 1.689, 1.514, 1.357],
       fd: 12.299, r: 0.805, idle: 800, red: 2350, mass: 7000,
       curve: [[800, 550], [1200, 680], [1600, 700], [2000, 640], [2200, 560], [2350, 0]] }
   ];
@@ -65,10 +65,9 @@
 
   function make(root) {
     root.innerHTML = '';
-    var title = document.createElement('p');
-    title.className = 'w-title';
-    title.textContent = 'Try it: gears against road speed';
-    root.appendChild(title);
+    GuideKit.vehiclePicker(root, VEHICLES.map(function (x, i) {
+      return { id: String(i), icon: x.icon, name: x.name };
+    }), '0', function (id) { setVehicle(VEHICLES[parseInt(id, 10)]); });
 
     var svg = el('svg', { role: 'img', 'aria-label': 'Each gear\'s road-speed range, from idle to the redline, with a marker at the chosen gear and engine speed' }, root);
 
@@ -76,33 +75,19 @@
     var controls = document.createElement('div');
     controls.className = 'w-controls';
     controls.innerHTML =
-      '<label for="' + uid + '-v">Vehicle</label><select id="' + uid + '-v"></select><span></span>' +
       '<label for="' + uid + '-g">Gear</label><input id="' + uid + '-g" type="range" min="1" step="1">' +
       '<output for="' + uid + '-g"></output>' +
       '<label for="' + uid + '-r">Engine speed</label><input id="' + uid + '-r" type="range" step="10">' +
       '<output for="' + uid + '-r"></output>';
     root.appendChild(controls);
-    var vSel = controls.querySelector('select');
     var gIn = controls.querySelectorAll('input')[0];
     var rIn = controls.querySelectorAll('input')[1];
     var outs = controls.querySelectorAll('output');
-    VEHICLES.forEach(function (v, i) {
-      var o = document.createElement('option');
-      o.value = String(i);
-      o.textContent = v.name;
-      vSel.appendChild(o);
-    });
 
     var readout = document.createElement('div');
     readout.className = 'w-readout';
     readout.setAttribute('aria-live', 'polite');
     root.appendChild(readout);
-    var note = document.createElement('p');
-    note.className = 'w-note';
-    note.textContent = 'Each bar runs from idle to the redline in that gear. The push is the engine\'s full-throttle ' +
-      'torque at this speed through the gears, with the clutch locked; it leaves out the converter, the tyres\' grip ' +
-      'and the air. A governor caps the semi at 90 km/h and the tractor at 40.';
-    root.appendChild(note);
 
     var v = VEHICLES[0];
     // The chart for one vehicle is built once (`build`); a gear or rpm change only restyles two
@@ -167,8 +152,8 @@
         (push >= 10000 ? Math.round(push / 1000) + ' kN' : (Math.round(push / 10) * 10) + ' N') + ' at the tyres: ' +
         'enough to speed the bare vehicle up by about ' + accel.toFixed(1) + ' m/s² if the tyres could take it.';
     }
-    function setVehicle() {
-      v = VEHICLES[parseInt(vSel.value, 10)];
+    function setVehicle(chosen) {
+      v = chosen;
       gIn.max = String(v.ratios.length);
       gIn.value = '1';
       rIn.min = String(v.idle);
@@ -177,10 +162,9 @@
       build();
       draw();
     }
-    vSel.addEventListener('change', setVehicle);
     gIn.addEventListener('input', draw);
     rIn.addEventListener('input', draw);
-    setVehicle();
+    setVehicle(VEHICLES[0]);
   }
 
   window.GuideWidgets = window.GuideWidgets || {};

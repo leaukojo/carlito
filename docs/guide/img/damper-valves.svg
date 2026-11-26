@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 320" width="420" height="320">
+<title>Inside a damper: oil passes the piston through a wide hole on bump and a narrow hole on rebound</title>
+<!-- A schematic of a real damper's piston, not to scale and not the simulator's model. Each hole
+     is closed on its outlet side by a stack of thin discs; the bump stack (top face) is thin, the
+     rebound stack (bottom face) thick, so rebound resists more at the same speed. -->
+<defs>
+<marker id="dv-ah-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="dv-head-blue" d="M0,0 L10,5 L0,10 z"/></marker>
+<marker id="dv-ah-ink" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="dv-head-ink" d="M0,0 L10,5 L0,10 z"/></marker>
+</defs>
+<style>
+.dv-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.dv-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.dv-tube{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-ink,#1c1c1f);stroke-width:2}
+.dv-rod{fill:var(--fig-muted,#6b6b75);stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5}
+.dv-piston{fill:var(--fig-muted,#6b6b75)}
+.dv-hole{fill:var(--fig-fill,#f3f1ec)}
+.dv-eye{fill:none;stroke:var(--fig-ink,#1c1c1f);stroke-width:2}
+.dv-disc{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.8;fill:none;stroke-linecap:round}
+.dv-flow{stroke:var(--fig-blue,#1d5ca8);stroke-width:2.5;fill:none}
+.dv-move{stroke:var(--fig-ink,#1c1c1f);stroke-width:2;fill:none}
+.dv-head-blue{fill:var(--fig-blue,#1d5ca8)}
+.dv-head-ink{fill:var(--fig-ink,#1c1c1f)}
+.dv-sep{stroke:var(--fig-grid,#e3e0d8);stroke-width:1.5}
+@media (prefers-color-scheme:dark){
+.dv-t{fill:var(--fig-ink,#e9e7e2)}.dv-s{fill:var(--fig-muted,#a6a6b0)}
+.dv-tube{fill:var(--fig-fill,#22242a);stroke:var(--fig-ink,#e9e7e2)}
+.dv-rod{fill:var(--fig-muted,#a6a6b0);stroke:var(--fig-ink,#e9e7e2)}
+.dv-piston{fill:var(--fig-muted,#a6a6b0)}.dv-hole{fill:var(--fig-fill,#22242a)}
+.dv-eye{stroke:var(--fig-ink,#e9e7e2)}.dv-disc{stroke:var(--fig-ink,#e9e7e2)}
+.dv-flow{stroke:var(--fig-blue,#8ab6ff)}.dv-move{stroke:var(--fig-ink,#e9e7e2)}
+.dv-head-blue{fill:var(--fig-blue,#8ab6ff)}.dv-head-ink{fill:var(--fig-ink,#e9e7e2)}
+.dv-sep{stroke:var(--fig-grid,#30323a)}}
+</style>
+<line class="dv-sep" x1="210" y1="12" x2="210" y2="300"/>
+
+<!-- ===== left panel: bump ===== -->
+<text class="dv-t" x="105" y="22" text-anchor="middle">Bump</text>
+<text class="dv-s" x="105" y="40" text-anchor="middle">wheel up, piston moves down</text>
+<circle class="dv-eye" cx="105" cy="58" r="6"/>
+<text class="dv-s" x="118" y="62">body</text>
+<rect class="dv-tube" x="40" y="80" width="130" height="170"/>
+<rect class="dv-rod" x="100" y="64" width="10" height="86"/>
+<!-- piston, wide bump hole (left), narrow rebound hole (right) -->
+<rect class="dv-piston" x="41" y="150" width="128" height="22"/>
+<rect class="dv-hole" x="62" y="150" width="12" height="22"/>
+<rect class="dv-hole" x="136" y="150" width="6" height="22"/>
+<!-- bump discs on top, bent open -->
+<path class="dv-disc" d="M100,148 Q80,148 54,130"/>
+<path class="dv-disc" d="M100,145 Q80,145 54,127"/>
+<!-- the nut on the rod's end clamps the rebound discs; held shut -->
+<rect class="dv-rod" x="101" y="172" width="8" height="14"/>
+<path class="dv-disc" d="M110,174 L156,174 M110,177 L156,177 M110,180 L156,180 M110,183 L156,183"/>
+<!-- oil flow and piston movement -->
+<path class="dv-flow" marker-end="url(#dv-ah-blue)" d="M68,232 L68,156 Q62,146 48,139"/>
+<path class="dv-move" marker-end="url(#dv-ah-ink)" d="M24,140 L24,184"/>
+<line class="dv-eye" x1="105" y1="250" x2="105" y2="256"/>
+<circle class="dv-eye" cx="105" cy="262" r="6"/>
+<text class="dv-s" x="118" y="266">wheel</text>
+<text class="dv-s" x="105" y="290" text-anchor="middle">oil passes the wide hole,</text>
+<text class="dv-s" x="105" y="306" text-anchor="middle">bending a few thin discs</text>
+
+<!-- ===== right panel: rebound ===== -->
+<text class="dv-t" x="315" y="22" text-anchor="middle">Rebound</text>
+<text class="dv-s" x="315" y="40" text-anchor="middle">wheel down, piston moves up</text>
+<circle class="dv-eye" cx="315" cy="58" r="6"/>
+<text class="dv-s" x="328" y="62">body</text>
+<rect class="dv-tube" x="250" y="80" width="130" height="170"/>
+<rect class="dv-rod" x="310" y="64" width="10" height="86"/>
+<rect class="dv-piston" x="251" y="150" width="128" height="22"/>
+<rect class="dv-hole" x="272" y="150" width="12" height="22"/>
+<rect class="dv-hole" x="346" y="150" width="6" height="22"/>
+<!-- bump discs held shut -->
+<path class="dv-disc" d="M264,148 L310,148 M264,145 L310,145"/>
+<!-- rebound discs bent open, a little: the stack is stiff -->
+<rect class="dv-rod" x="311" y="172" width="8" height="14"/>
+<path class="dv-disc" d="M320,174 Q342,174 366,182"/>
+<path class="dv-disc" d="M320,177 Q342,177 366,185"/>
+<path class="dv-disc" d="M320,180 Q342,180 366,188"/>
+<path class="dv-disc" d="M320,183 Q342,183 366,191"/>
+<path class="dv-flow" marker-end="url(#dv-ah-blue)" d="M349,96 L349,173 Q357,175 374,177"/>
+<path class="dv-move" marker-end="url(#dv-ah-ink)" d="M234,184 L234,140"/>
+<line class="dv-eye" x1="315" y1="250" x2="315" y2="256"/>
+<circle class="dv-eye" cx="315" cy="262" r="6"/>
+<text class="dv-s" x="328" y="266">wheel</text>
+<text class="dv-s" x="315" y="290" text-anchor="middle">oil squeezes through the narrow</text>
+<text class="dv-s" x="315" y="306" text-anchor="middle">hole, bending many stiff discs</text>
+</svg>

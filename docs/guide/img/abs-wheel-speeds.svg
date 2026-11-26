@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 300" width="420" height="300">
+<title>Speed over one second of hard braking: the car, a locked wheel and an ABS wheel</title>
+<!-- Illustrative shape, not simulator numbers: the car slows steadily, a locked wheel drops to zero within a fraction of a second, an ABS wheel dips and recovers about five times a second while staying close to the car's speed. -->
+<style>
+.wl-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.wl-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.wl-tb{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.wl-tr{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-red,#b3261e)}
+.wl-ln{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:none}
+.wl-lm{stroke:var(--fig-muted,#6b6b75);stroke-width:1.2;fill:none;stroke-dasharray:5 4}
+.wl-b{stroke:var(--fig-blue,#1d5ca8);stroke-width:3;fill:none;stroke-linejoin:round}
+.wl-r{stroke:var(--fig-red,#b3261e);stroke-width:3;fill:none;stroke-linejoin:round}
+@media (prefers-color-scheme:dark){
+.wl-t{fill:var(--fig-ink,#e9e7e2)}.wl-s{fill:var(--fig-muted,#a6a6b0)}
+.wl-tb{fill:var(--fig-blue,#8ab6ff)}.wl-tr{fill:var(--fig-red,#f08a80)}
+.wl-ln{stroke:var(--fig-ink,#e9e7e2);}
+.wl-lm{stroke:var(--fig-muted,#a6a6b0);}
+.wl-b{stroke:var(--fig-blue,#8ab6ff);}
+.wl-r{stroke:var(--fig-red,#f08a80);}}
+</style>
+<path class="wl-ln" d="M60,32 L60,220 L406,220"/>
+<text class="wl-s" x="54" y="44" text-anchor="end">speed</text>
+<text class="wl-s" x="60" y="242" text-anchor="middle">brake pressed</text>
+<text class="wl-s" x="400" y="242" text-anchor="end">one second later</text>
+<polyline class="wl-ln" style="stroke-width:3" fill="none" points="60,40 400,108.4"/>
+<polyline class="wl-r" fill="none" points="60,40 100.8,61.6 141.6,220 400,220"/>
+<polyline class="wl-b" fill="none" style="stroke-width:2.5" points="60,41.8 90.6,84.4 128,55.3 128,55.3 158.6,95.1 196,68.9 196,68.9 226.6,105.7 264,82.4 264,82.4 294.6,116.4 332,96 332,96 362.6,127.1 400,109.5"/>
+<text class="wl-t" x="400" y="96.4" text-anchor="end">car</text>
+<text class="wl-tr" x="162" y="210">locked wheel: stops turning at once</text>
+<text class="wl-tb" x="230" y="176" text-anchor="middle">ABS wheel: dips and recovers</text>
+<line class="wl-lm" x1="257.2" y1="164" x2="257.2" y2="76" style="stroke-dasharray:none"/>
+</svg>

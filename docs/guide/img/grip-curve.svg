@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 290" width="420" height="290">
-<title>The grip curve shared by every tyre in the game</title>
+<title>An example of a grip curve</title>
 <!-- GroundDriveSpec.grip_curve: (0,0) (0.12,1) (0.4,0.9) (1,0.8), linear between points.
      Plot: x = 56 + 344*slip, y = 230 - 190*grip. -->
 <style>
@@ -29,15 +29,15 @@
 <circle class="gc-dot" cx="97.3" cy="40" r="5.5"/>
 <path class="gc-lead" d="M103,38 L150,24"/>
 <text class="gc-orange-t" x="154" y="22">peak grip, at slip 0.12</text>
-<text class="gc-s" x="154" y="38">ABS and traction control hold here</text>
+<text class="gc-s" x="154" y="38">ABS and traction control aim here</text>
 <!-- the tail -->
 <text class="gc-s" x="396" y="98" text-anchor="end">locked or spinning hard:</text>
 <text class="gc-s" x="396" y="114" text-anchor="end">0.8 of the peak</text>
 <text class="gc-s" x="102" y="222">gripping ←</text>
 <text class="gc-s" x="300" y="222" text-anchor="middle">sliding</text>
 <!-- axes -->
-<text class="gc-s" x="50" y="44" text-anchor="end">full</text>
-<text class="gc-s" x="50" y="139" text-anchor="end">half</text>
+<text class="gc-s" x="50" y="44" text-anchor="end">1</text>
+<text class="gc-s" x="50" y="139" text-anchor="end">0.5</text>
 <text class="gc-s" x="50" y="234" text-anchor="end">0</text>
 <text class="gc-t" x="14" y="135" text-anchor="middle" transform="rotate(-90 14 135)">grip</text>
 <text class="gc-s" x="56" y="248" text-anchor="middle">0</text>

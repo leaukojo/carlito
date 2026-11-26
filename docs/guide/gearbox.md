@@ -2,196 +2,210 @@
 
 # Gearbox and shifting
 
-<p class="lead">An engine is strong only in a narrow band of speeds, but a vehicle has to crawl
-up a hill and also cruise on a motorway. The gearbox lets one engine do both, by changing how
-many times the engine turns for each turn of the wheels.</p>
+<p class="lead">This page explains how a gearbox lets one engine both crawl up a hill and cruise
+on a motorway, and how a gear is chosen.</p>
 
 <div class="badges"><span class="label">Which vehicles have this</span>
 <span class="badge yes" title="Six-speed automatics; the racing cars a six-speed sequential">Car</span>
 <span class="badge yes" title="Six-speed automatics on the rigid trucks; twelve-speed automated gearboxes on the semis">Truck</span>
 <span class="badge yes" title="A sixteen-speed powershift, or a stepless CVT">Tractor</span>
-<span class="badge some" title="No gears, but it reads the same gear byte for forward, neutral and reverse thrust">Plane</span>
-<span class="badge no" title="Its outdrive has forward and reverse, without gear changes">Boat</span>
-<span class="badge no" title="Electric motors on the rotors">Drone</span>
-<span class="badge some" title="No gears: the gear byte is its reverser">Train</span>
 </div>
+
+An engine gives its best push only within a band of speeds, and a car has to go from a crawl to
+a motorway. If the engine were joined straight to the wheels, a car that could climb a steep hill
+could not also drive fast, and the other way round. How can one engine do both?
+
+## Two gears: trading speed for strength
+
+A [gear](glossary.md#gear) is a wheel with teeth around its edge. Put two gears side by side so
+that their teeth fit between each other, and turning one turns the other: each tooth pushes the
+next one along. Gears that fit together like this are said to mesh. Two meshed gears turn in
+opposite directions.
+
+When the two gears are different sizes, they turn at different speeds. Every tooth that passes on
+one gear passes on the other, so a gear with 10 teeth has to turn three times to turn a gear with
+30 teeth once. That is a [gear ratio](glossary.md#gear-ratio) of 3.
+
+The big gear turns three times more slowly, but it twists three times harder. A twisting force
+like this is called [torque](glossary.md#torque). A long spanner works the same way: your hand
+travels a long way round for a small turn of the nut, and the nut gets a strong twist. So a gear
+pair trades speed for twist, or twist for speed. Nothing comes free: what is gained in one is paid
+for in the other (and a little is lost to friction on the way). For example, if the small gear
+turns at 3,000 rpm with a twist of 10 N·m, the big one turns at 1,000 rpm with a twist of about 30
+N·m. The power (twist times speed) is the same on both sides.
+
+![A small gear with 10 teeth meshed with a big gear with 30 teeth. They turn in opposite directions. An orange dot marks one tooth on each.](img/gear-pair.svg "A gear pair with a ratio of 3.")
 
 ## What a gear does
 
-On a bicycle, a small front sprocket and a big rear one make pedalling easy but slow: good for a
-hill. A big front sprocket and a small rear one make it hard but fast. A gearbox does the same for
-an engine.
+<figure>
+<img src="img/bicycle-cassette-sprockets.jpg" alt="The rear wheel of a racing bicycle with a stack of ten sprockets, from a small one to a large one, beside the chain and rear derailleur">
+<figcaption>A bicycle's rear sprockets. Photo: Cjp24, CC BY-SA 4.0, <a href="https://commons.wikimedia.org/wiki/File:Bicycle_cassette_-_10-speed.jpg">Wikimedia Commons</a>.</figcaption>
+</figure>
 
-Each gear has a [gear ratio](glossary.md#gear-ratio): how many times the engine turns for one
-turn of the gearbox's output. After the gearbox, a second fixed set of gears, the
-[final drive](glossary.md#final-drive), turns the wheels. Multiply the two and you have how many
-times the engine turns for each turn of the wheels. In the `sedan`'s first gear that is about 18;
-in its sixth, about 3.6.
+On a bicycle, a small front sprocket and a big rear one make pedalling easy but slow (good for a
+hill). A big front sprocket and a small rear one make it hard but fast. A gearbox does the same
+for an engine.
+
+Each gear has a gear ratio: how many times the engine turns for one
+turn of the gearbox's output. After the gearbox, a second fixed set of gears (the
+[final drive](glossary.md#final-drive)) turns the wheels. Multiply the two and you have how many
+times the engine turns for each turn of the wheels. For example, this can be about 18 in a car's
+first gear, and about 3.6 in its sixth.
 <!-- sedan_spec.tres gear_ratios 4.5 ... 0.925; final_drive 3.9 (CAR_BASE): 17.6 and 3.6 -->
 
 The same ratio works on torque, the other way round. A low gear turns the engine many times per
 wheel turn and multiplies its torque by as much, so the wheels push hard but the vehicle moves
 slowly. A high gear multiplies less, so the push is weaker but the speed is higher. A little of
-the power is lost in the gears on the way: the game takes a tenth.
-<!-- VehicleSpec.efficiency 0.9 on every shipped body -->
+the power is lost in the gears on the way.
+
+A gearbox does not make power, only trades speed for twist. For example, with a ratio of 18 an
+engine giving 150 N·m can give the wheels about 2,700 N·m (a little less after friction), but the
+wheels turn 18 times slower than the engine. In a high gear with a ratio of 3.6 the same engine
+gives only about 540 N·m, and the wheels turn five times faster. So a higher gear is not "more
+power". It gives a lower push at a higher speed, for the same power from the engine.
+
+Why not use the highest gear all the time, then? Because the push is too weak to pull away or
+climb, and the engine would be turning slowly, where it is weakest. And why not the lowest? The
+engine would hit its redline at a low road speed, burning fuel and making noise for very little
+speed. A gearbox lets the driver (or the computer) keep the engine in the speeds where it works
+well, whatever the road speed.
 
 <div class="widget" data-widget="gear-speed"></div>
 
-The game's gearboxes:
+<div class="widget-limits" hidden>
 
-| Vehicle | Gears | Kind |
-| --- | --- | --- |
-| Cars, vans, rigid trucks | 6 | Automatic |
-| Racing cars | 6 | Sequential |
-| Semis | 12 | AMT |
-| `tractor-kenney` | 16 | Powershift |
-| `tractor-cvt` | none | CVT |
+Each bar runs from idle to the redline in that gear. The push is the engine's full-throttle
+torque at this speed through the gears, with the clutch locked and a tenth of the power lost in
+the gears. It leaves out the torque converter, the tyres' grip and the air, and the governors that
+stop the simulator's `semi` at 90 km/h and its tractor at 40.
+<!-- widgets/gear-speed.js header; VehicleSpec.efficiency 0.9; semi_spec.tres speed_limit_kmh 90, tractors 40 -->
 
-Each kind is explained further down this page; [Kinds of gearbox](gearbox-kinds.md) shows what
-is inside each.
-<!-- gear_ratios lengths: sedan 6, race 6, semi_spec.tres 12, tractor-kenney_spec.tres 16; tractor-cvt cvt_range_tops -->
+</div>
 
-## The gear byte: P, R, N and D
+## Choosing a gear: P, R, N and D
 
-Every gearbox in the game is set by one number, the [gear byte](glossary.md#gear-byte), the same
-one a real vehicle network uses:
+The selector of an automatic usually has four positions:
 
-- **N**, neutral: no gear, the engine turns freely.
-- **D1 to D24**: a forward gear. A gearbox with fewer gears treats a higher number as its top
-  gear.
-- **R**: reverse.
-- **P**: park. On a vehicle with a [park pawl](glossary.md#park-pawl), a steel tooth locks the
-  gearbox's output. The cars, vans and the powershift tractor have one. The trucks do not: they
-  park on their spring brakes, and P reads as N.
-<!-- Drivetrain GEAR_N 0x00, GEAR_R 0xFF, GEAR_P 0xFE, TOP_GEAR 24; contract gear: "it engages the gearbox's park pawl where one is fitted (cars, vans, the tractor's powershift)... reads as N on a gearbox without one (the trucks park on their spring brakes)" -->
+- **P**, park: a steel tooth (the [park pawl](glossary.md#park-pawl)) locks the gearbox's output,
+  so the wheels cannot turn. A brake could do the same, but a tooth in a notch holds with no
+  force from the driver and cannot fade. Heavy trucks often have no P, and park on their spring
+  brakes instead.
+- **R**, reverse.
+- **N**, neutral: no gear, so the engine turns freely and the vehicle can roll.
+- **D**, drive: the gearbox picks the forward gear itself.
 
-### Driving forwards and backwards from the keyboard
-
-With the AUTOMATIC gearbox there is no gear lever. Pressing the
-accelerator from a standstill selects drive. Holding the brake at a standstill selects reverse:
-the brake key then drives the vehicle backwards, and the accelerator key becomes the brake.
-Pressing the accelerator again at a standstill selects drive.
-<!-- InputRouter local arbitration: brake_reverse at a standstill (REVERSE_ENGAGE_SPEED) requests R with throttle -brake_rev and brake = accel; accel at a standstill in R requests D1 -->
-
-### Shifting by hand
-
-With MANUAL chosen in the GARAGE and sloppyCAN not connected, you change gear yourself: **,** and
-**.** on the keyboard, D-pad down and up on a gamepad, GEAR - and GEAR + on the touch screen.
-Each press moves one step along R, N, 1, 2 and up to the top gear. The vehicle starts in N after
-a spawn or a respawn, and when MANUAL is picked while it stands still; picked on the move, it
-keeps the gear it is in. The accelerator drives in whichever direction the gear points, and the
-brake only brakes: holding it at a standstill never selects reverse. With the accelerator held
-down in N, the message NEUTRAL GEAR SELECTED names the button to shift up.
-<!-- InputRouter.shift_step (the ladder, no wrap), reset_vehicle_cycles (_local_gear = N), arbitrate_local's manual branch; neutral_warning (NEUTRAL_NOTICE_PEDAL 0.9), Boot.neutral_notice; Drivetrain.top_gear; keys project.godot shift_down Comma, shift_up Period; ActionRegistry row "shift" pad dpad_down / dpad_up -->
-
-While sloppyCAN is connected, its gearbox wins: the shift buttons do nothing, and the gear is
-sloppyCAN's byte when it drives, or automatic when it sends no driving controls.
-<!-- InputRouter._local_tick: the local gear acts only with `_manual_gearbox` and no bridge live; ActionRegistry "shift" bridge_owned -->
-
-### Manual gears from sloppyCAN
-
-sloppyCAN sends the gear byte as its `gear` signal. The GARAGE has a GEARBOX row: AUTOMATIC or
-MANUAL.
-
-- **Automatic**: the byte works like an automatic's lever. P parks, R reverses, and any drive
-  gear means "drive", with the gearbox choosing the gear itself. A byte of 0 means no opinion: the
-  vehicle drives forward when the accelerator is pressed.
-- **Manual**: the byte is taken exactly. D3 means third gear, 0 means neutral, and the gearbox
-  never changes gear by itself. The clutch is still worked for you.
-<!-- InputRouter.arbitrate_bridge (manual: the exact byte) -->
+With a manual gearbox, the driver picks each gear with a lever and a clutch pedal (see
+[The manual gearbox](gearbox-kinds.md#the-manual-gearbox)).
 
 ## How the automatic chooses a gear
 
-The automatic's rules are its [shift policy](glossary.md#shift-policy). They follow how real
-automatic gearboxes behave, from measurements of a 2013 family car's six-speed.
-<!-- docs/drivetrain.md The shift policy: the Malibu map [34] -->
+The rules that an automatic follows are called its [shift policy](glossary.md#shift-policy).
 
-- **Light pedal, early shifts.** Driving gently, the `sedan` changes up at about 1800 to 2000 rpm,
-  keeping the engine slow and quiet. With the pedal fully down it holds each gear until about
-  5900 rpm. In between, the shift point slides between the two.
-  <!-- CAR_BASE light pair 1800 / 1150 (raised to 1961 for D1>D2 by the landing floor); sedan_spec.tres shift_up_rpm 5900 -->
-- **Never hunting.** Each upshift must land the engine at least a tenth above the speed at
-  which the gearbox would change down again, so it cannot flick back and forth between two gears.
-  After each change it waits a moment before it may change again.
-  <!-- ShiftPolicy landing floor 1.1; VehicleSpec.shift_dwell_s -->
-- **Kickdown.** Press the accelerator past about four fifths of its travel and the automatic
-  drops one or more gears at once, to the lowest gear it can use without hitting the redline
-  straight away. The semis kick down only past almost full travel; the tractor and the racing cars
-  never do.
-  <!-- VehicleSpec.kickdown_pedal: past 0.8 on the converter automatics, 0.95 on the AMT, none on the powershift and sequential (docs/drivetrain.md table); ShiftPolicy.kickdown_ceiling_rpm 85 % of the redline -->
-- **Hills.** The gearbox keeps an estimate of how hard the vehicle is working against the slope.
-  On a climb it will not change up into a gear that could not hold the speed. Braking down a long
-  hill, it changes down so the engine helps to brake.
-  <!-- ShiftPolicy.on_grade (a 2 % grade's pull), holds_grade, the braked descent -->
-- **Starting gear.** A heavy truck or tractor does not always start in first. The semis' and the
-  tractor's gearboxes pick the highest gear that can still pull away cleanly, judged by the weight
-  they are pulling and the slope. A semi with no trailer starts in sixth on the flat, and with a
-  full trailer in third.
-  <!-- ShiftPolicy.start_gear, start_gear_max (semis 6, tractor 7); docs/drivetrain.md: bobtail semi D6, with the 24 t box D3, tractor D7 bare and D6 with the farm tipper -->
-- **Skipping gears.** With twelve or sixteen close gears, stepping through them one by one would
-  waste time. The semis and the tractor skip gears where the load allows, for example sixth
-  straight to eighth.
-  <!-- VehicleSpec.skip_shifts on the semis' AMT and the tractor's powershift; "the bobtail semi from its D6 start D6>D8" -->
+- **Light pedal, early shifts.** When driving gently, it changes up at low rpm, to keep the engine
+  slow, quiet and thrifty. With the pedal fully down, it holds each gear until close to the
+  redline, because the driver is asking for as much power as possible.
+- **No hunting.** The rpm for changing up and down are kept apart. Otherwise a car cruising at
+  just the rpm where the gearbox changes up would change up, find that the engine is now below
+  the rpm for changing down, change down, and so on, flicking back and forth between two gears.
+- **Kickdown.** Pressing the accelerator most of the way down makes the automatic drop one or more
+  gears at once. A lower gear multiplies the torque more and lets the engine spin nearer its best
+  speed, so the car pulls harder at once (for example, when overtaking).
+- **Hills.** On a climb, it avoids changing up into a gear that could not hold the speed: the
+  higher gear would push too weakly, the car would slow, and the gearbox would have to change
+  straight back down. When braking down a long hill, it can change down so that the engine helps
+  to brake ([engine braking](engine.md#friction-and-engine-braking)).
+- **Starting gear.** Heavy trucks and tractors do not always start in first. First gear can push
+  far harder than a light or flat start needs, and every gear skipped saves time, wear and fuel.
+  They use the highest gear that can still pull away cleanly, which depends on the load and the
+  slope.
+- **Skipping gears.** Gearboxes with twelve or sixteen close gears often skip some when the load
+  allows it (for example, going from sixth straight to eighth), because the engine's speed would
+  hardly change from one to the next.
 
 ## What happens during a change
 
-A gear change cannot happen instantly: the engine has to change speed to suit the new gear. How
-the gearbox handles that moment depends on its kind.
+![A graph of engine speed against road speed for a saloon car in five gears. In each gear the engine's speed climbs along a line to about 5,900 rpm, then drops at the upshift to a lower speed in the next gear, making a sawtooth.](img/gears-rpm-sawtooth.svg "Engine speed against road speed, through five gears.")
 
-- **Automatic (cars, vans, rigid trucks).** Two clutches inside the gearbox hand the drive from one
-  gear to the next, one letting go as the other takes up, so the drive never stops. The engine is
-  briefly given less fuel so it can slow to its new speed.
-- **Powershift (the tractor).** Also clutch to clutch, but with no cut in fuel. The tractor's drive
-  goes on pushing through the change, and you can feel the jolt as each gear takes up.
-- **Automated manual (the semis).** A computer works a clutch and an ordinary gearbox. It cuts the
-  fuel, opens the clutch, changes gear, closes it, and brings the fuel back gradually. The drive
-  stops for a moment on every change.
-- **Sequential (the racing cars).** A short ignition cut, then the clutch snaps shut.
-<!-- docs/drivetrain.md The shift's handover: Drivetrain.handover_rate, handover_fuel; shift_cut_s, shift_torque_ramp_s -->
+The wheels keep turning at the speed of the road, so a new gear means a new engine speed. For
+example, at 100 km/h an engine might turn at 4,000 rpm in fourth gear and at 3,200 in fifth. When
+the car changes up, the engine has to slow down from 4,000 to 3,200 as it joins the new gear
+(and speed up again on a change down). How the change is handled depends on the kind of
+gearbox.
+
+If the engine's speed does not match the new gear when the drive is joined, the coupling has to
+drag the engine to the right speed, which jerks the car and heats the clutch. This is why, on an
+upshift, the gearbox's computer cuts the engine's fuel so that it slows to the new speed more
+quickly, and on a downshift gives it a burst of fuel to spin it up to the new speed first (a
+skilled driver with a manual gearbox does the same with the accelerator).
+
+- **Automatic.** Clutches inside the gearbox hand the drive from one gear to the next (one lets go
+  as the other takes up), so the drive never stops. The engine is briefly given less fuel so that
+  it can slow to its new speed.
+- **Powershift** (tractors). This is also clutch to clutch, so the tractor keeps pulling through
+  the change. You can feel a jolt as each gear takes up.
+- **Automated manual** (semi trucks). A computer works a clutch and an ordinary gearbox. It cuts
+  the fuel, opens the clutch, changes gear, closes the clutch, and brings the fuel back gradually.
+  The drive stops for a moment on every change.
+- **Sequential** (racing cars). The change is very quick, with a short ignition cut.
 
 ## The stepless gearbox
 
-The `tractor-cvt` has no fixed gears at all. Its [CVT](glossary.md#cvt) changes its ratio
-smoothly, from zero up to its fastest, by splitting the engine's power between gears and an oil
-pump. The accelerator does not ask for fuel: it asks for a road speed, and the gearbox sets the
-ratio that gives it while the engine's governor holds the engine speed. A ratio of zero means
-the wheels are held still with the engine running, which is how the CVT tractor stands still on a
-slope. The gear byte it publishes is the mechanical range in use, D1 to D4.
-<!-- docs/drivetrain.md The CVT; Drivetrain.is_cvt, cvt_ratio_step, standstill_hold; contract gear (out): "On a CVT ... a D byte is the mechanical range engaged, D1-D4" -->
+A [CVT](glossary.md#cvt) has no fixed gears. It changes its ratio smoothly, so the engine can
+stay at the speed where it works best while the vehicle speeds up, with no steps to feel. (How it
+does this is in [Kinds of gearbox](gearbox-kinds.md#the-cvt-no-steps-at-all).) On a tractor with a
+CVT, the accelerator asks for a road speed: the gearbox sets the ratio that gives it, while the
+engine's governor holds the engine speed. The ratio can go down to zero, which holds the wheels
+still with the engine running, so the tractor can stand on a slope without its brakes.
 
-## What the game leaves out
+## What Carlito simulates
+
+The parameters the simulator uses for this, and where each is set, are listed in
+[How the simulation works](simulation.md#gearbox-and-shifting):
+
+- **Per vehicle**:
+  - [Ratios and efficiency](simulation.md#ratios) (`gear_ratios`, `reverse_ratio`, `final_drive`,
+    `efficiency`)
+  - [Shift points](simulation.md#shift-points) (`shift_up_rpm`, `shift_down_rpm`,
+    `shift_up_light_rpm`, `shift_down_light_rpm`)
+  - [Kickdown](simulation.md#kickdown) (`kickdown_pedal`)
+  - [Start gear](simulation.md#start-gear) (`start_gear_max`)
+  - [Shift timing](simulation.md#shift-timing) (`shift_cut_s`, `shift_torque_ramp_s`,
+    `shift_handover_s`)
+  - [Least time in gear](simulation.md#least-time-in-gear) (`shift_dwell_s`)
+  - [Skip shifts](simulation.md#skip-shifts) (`skip_shifts`)
+
+<details><summary>Simplification list</summary>
 
 - **No gear lever or paddles**: shifting by hand is one step per button press, and there is no P
   on the manual ladder (the parking brake holds instead).
 - **No clutch pedal**, so no stalling or slipping the clutch by hand.
 - **No crunching gears or missed shifts.**
 - **No range or splitter buttons** on the semis' twelve gears: the automated gearbox chooses.
+- **One shift map.** The automatics' rules follow measurements of one real car (a 2013 family car
+  with a six-speed). The tractor and the racing cars have no kickdown.
+  <!-- docs/drivetrain.md The shift policy: the Malibu map [34]; VehicleSpec.kickdown_pedal -->
+- **A fixed loss.** Every gearbox loses a tenth of the power, in every gear.
+  <!-- VehicleSpec.efficiency 0.9 on every shipped body -->
+
+</details>
 
 ## What you see in sloppyCAN
 
 | Signal | Direction | Unit | What it shows |
 | --- | --- | --- | --- |
-| `gear` | in | enum | The gear byte: N, D1 to D24, R, or P. In AUTOMATIC it works as a lever; in MANUAL it is the exact gear. Car, truck, tractor, plane, train. |
+| `gear` | in | enum | The [gear byte](glossary.md#gear-byte): N, D1 to D24, R, or P. With an automatic it works as a lever; with a manual it is the exact gear. |
 | `gear` | out | enum | The gear actually engaged. P only where a park pawl is fitted; on the CVT, the range in use. |
-| `gear_ratio` | out | ratio | Truck and tractor: the engaged gear's ratio, without the final drive. On the CVT it moves smoothly. 0 in N or P. |
+| `gear_ratio` | out | ratio | The engaged gear's ratio, without the final drive. On the CVT it moves smoothly. 0 in N or P (Truck and tractor). |
+| `gear_top` | out | count | The highest drive gear this vehicle has: 6 on a car, 16 on the tractor, 4 ranges on the CVT. A higher `gear` byte selects this one, so sloppyCAN's Control panel stops here. |
 | `rpm` | out | rev/min | Engine speed: watch it drop at each upshift. |
 | `status` | out | bitfield | Bit 3 is reverse, bit 4 neutral. |
-<!-- contract/carlito_contract.json: gear (in and out), gear_ratio, rpm, status bits 3 and 4 -->
+<!-- contract/carlito_contract.json: gear (in and out), gear_ratio, gear_top, rpm, status bits 3 and 4; gear_top = Drivetrain.top_gear: sedan_spec.tres 6 gear_ratios, tractor-kenney_spec.tres 16, tractor-cvt_spec.tres 4 cvt_range_tops -->
 
-## Try it in the game
+## Scenarios
 
-<div class="box try">
-<p class="box-title">Try it in the game: light pedal and full pedal</p>
-
-1. Pick the `sedan` on **Flatland** with the dashboard showing (**F2**).
-2. Pull away with a light, steady pedal. Watch the gear and the rev counter: it changes up early,
-   below about 2000 rpm, and is in a high gear by 60 km/h.
-3. Stop, then pull away with the pedal fully down. Each gear now runs to near 6000 rpm before the
-   change.
-4. Cruise at 60 km/h with a light pedal, then press it fully down: the automatic kicks down
-   several gears at once and the revs jump.
-
-</div>
+- [Pulling away at full throttle](forces.md#example-pulling-away): first gear, and a strong push.
+- [Full throttle at 150 km/h](forces.md#example-high-gear): a higher gear, and a weaker push.
 
 ## Related
 

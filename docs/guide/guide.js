@@ -1,6 +1,7 @@
 // Carlito Mechanics Guide: a tiny static reader. The sidebar comes from pages.json, each page is a
 // Markdown file rendered with the vendored marked (vendor/marked.min.js, v12). Routes are hashes:
-// #tyres opens tyres.md, #tyres/slip-ratio opens it at that heading. Run it from a static server
+// #tyres opens tyres.md, #tyres/slip-ratio opens it at that heading; no hash opens the first page
+// in sidebar order. Run it from a static server
 // (npx serve docs/guide); browsers refuse fetch() on file:// pages.
 (function () {
   'use strict';
@@ -72,7 +73,9 @@
     var h = location.hash.replace(/^#/, '');
     try { h = decodeURIComponent(h); } catch (e) { /* a malformed escape: use it as written */ }
     var slash = h.indexOf('/');
-    return slash < 0 ? { page: h || 'index', at: '' } : { page: h.slice(0, slash) || 'index', at: h.slice(slash + 1) };
+    // No page named: the landing page, the first in sidebar order.
+    var home = pages.length ? idOf(pages[0].file) : 'index';
+    return slash < 0 ? { page: h || home, at: '' } : { page: h.slice(0, slash) || home, at: h.slice(slash + 1) };
   }
   function escapeHtml(s) {
     return String(s).replace(/[&<>"]/g, function (c) {
@@ -153,7 +156,36 @@
       var src = img.getAttribute('src');
       if (/\.svg$/.test(src)) jobs.push(inlineSvg(img, src));
     });
+    rowFigures(root);
     return Promise.all(jobs);
+  }
+  // Photos with nothing but white space or comments between them share one row; a drawing keeps
+  // the full width, or its labels shrink past reading.
+  function rowFigures(root) {
+    function isPhoto(el) {
+      return el && el.tagName === 'FIGURE' && !el.querySelector('img[src$=".svg"], svg');
+    }
+    root.querySelectorAll('figure').forEach(function (fig) {
+      if (!isPhoto(fig) || fig.parentNode.classList.contains('figure-row')) return;
+      var group = [fig];
+      var next = fig.nextElementSibling;
+      while (isPhoto(next) && onlyGap(group[group.length - 1], next)) {
+        group.push(next);
+        next = next.nextElementSibling;
+      }
+      if (group.length < 2) return;
+      var row = document.createElement('div');
+      row.className = 'figure-row';
+      fig.parentNode.insertBefore(row, fig);
+      group.forEach(function (f) { row.appendChild(f); });
+    });
+  }
+  function onlyGap(a, b) {
+    for (var n = a.nextSibling; n && n !== b; n = n.nextSibling) {
+      if (n.nodeType === 3 && /\S/.test(n.nodeValue)) return false;
+      if (n.nodeType === 1) return false;
+    }
+    return true;
   }
   function inlineSvg(img, src) {
     if (!svgCache[src]) {
@@ -175,7 +207,8 @@
   }
 
   // <div class="widget" data-widget="name"></div> loads widgets/name.js once, which registers
-  // window.GuideWidgets[name] = function (element) { ... }.
+  // window.GuideWidgets[name] = function (element) { ... }. A widget-limits block right after it
+  // becomes the widget's warning pop-up (GuideKit.limitsButton).
   function startWidgets(root) {
     root.querySelectorAll('[data-widget]').forEach(function (el) {
       var name = el.getAttribute('data-widget');
@@ -191,7 +224,7 @@
       }
       widgetsLoading[name].then(function () {
         var make = window.GuideWidgets && window.GuideWidgets[name];
-        if (make) make(el);
+        if (make) { make(el); GuideKit.limitsButton(el); }
       }).catch(function () {
         el.textContent = 'This interactive figure could not load (widgets/' + name + '.js).';
       });
@@ -244,6 +277,18 @@
       '</nav>';
   }
 
+  // A list item that opens with a bold name gets an id from that name, like a heading, so
+  // simulation.md#steering-lock lands on its entry. An id already on the page keeps its owner.
+  function nameListItems(root) {
+    root.querySelectorAll('li').forEach(function (li) {
+      var host = li.firstChild && li.firstChild.nodeName === 'P' ? li.firstChild : li;  // a loose list
+      var first = host.firstChild;
+      if (!first || first.nodeName !== 'STRONG') return;
+      var id = slugify(first.textContent);
+      if (id && !document.getElementById(id)) li.id = id;
+    });
+  }
+
   // ---- routing ----------------------------------------------------------------------------
   function scrollToAnchor(at) {
     var target = at ? document.getElementById(at) : null;
@@ -275,6 +320,7 @@
       content.innerHTML = '<article class="page page-' + id + '">' + marked.parse(md) + '</article>' + pager(id);
       // The article only: the pager's links are already routes, and would read as anchors.
       rewriteLinks(content.querySelector('article'), id);
+      nameListItems(content.querySelector('article'));
       wrapTables(content);
       current = id;
       markCurrent(id);

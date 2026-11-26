@@ -1,123 +1,212 @@
-[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
-
 # Weight transfer and rollover
 
-<p class="lead">A vehicle's weight does not stay spread evenly over its wheels. Braking pushes it
-onto the front, accelerating onto the back, cornering onto the outside. Where the weight goes,
-the grip goes, and if enough of it moves to one side, the vehicle tips over.</p>
+<p class="lead">This page explains how braking, accelerating and cornering move a vehicle's
+weight between its wheels, and when it tips.</p>
 
 <div class="badges"><span class="label">Which vehicles have this</span>
 <span class="badge yes" title="Every car and van">Car</span>
 <span class="badge yes" title="Every truck, semi and trailer">Truck</span>
 <span class="badge yes" title="Both tractors, with or without an implement">Tractor</span>
-<span class="badge some" title="On its landing wheels, on the ground">Plane</span>
-<span class="badge no" title="It floats; its heel and trim are on the floating page">Boat</span>
-<span class="badge no" title="It flies">Drone</span>
-<span class="badge no" title="The train runs as a line of points on the track, with no wheels to load">Train</span>
 </div>
+
+A car standing still puts a steady share of its weight on each wheel, but in a car that is
+braking, speeding up or turning, those shares change. Why do the loads change, and what happens
+when they change a lot? Each tyre's load decides how much it can grip, and if too much weight
+moves to one side, the vehicle tips over.
 
 ## Why weight moves
 
-Stand on a bus that brakes suddenly and you lurch forward. Your feet are slowed by the floor, but
-the rest of you carries on. A vehicle does the same. Its tyres slow it at road level, but most of
-its mass sits higher up, at its [centre of mass](glossary.md#centre-of-mass). That mass carries
-on forward, and it presses the front of the vehicle down onto its front tyres while lifting the
-rear. This is [weight transfer](glossary.md#weight-transfer).
+If you stand on a bus that brakes suddenly, you lurch forward: your feet are slowed by the floor,
+but the rest of you carries on. The same happens to a vehicle. Its tyres slow it at road level, but
+most of its mass sits higher up, at its [centre of mass](glossary.md#centre-of-mass). That mass
+carries on forward, so it presses the front tyres down and lifts weight off the rear ones. This is
+called [weight transfer](glossary.md#weight-transfer). A tall box standing on a trolley does the
+same when the trolley stops suddenly: it tips forward.
+
+It is worth saying what weight transfer is not: the car does not get heavier or lighter. The
+total weight the tyres carry stays the same, and only its share between the wheels changes.
 
 It happens in every direction:
 
-- **Braking** moves weight onto the front wheels.
-- **Accelerating** moves it onto the rear wheels.
-- **Cornering** moves it onto the wheels on the outside of the turn.
+- **Braking** moves weight onto the front wheels
+  ([see the forces](forces.md#example-emergency-stop)).
+- **Accelerating** moves it onto the rear wheels
+  ([see the forces](forces.md#example-pulling-away)).
+- **Cornering** moves it onto the wheels on the outside of the turn
+  ([see the forces](forces.md#example-turning)).
 
-![A car from behind, turning left. The tyres push the car towards the turn at road level; the body, at its centre of mass a height h above the road, carries on outwards. A short load arrow presses on the inside wheel and a long one on the outside wheel.](img/weight-transfer.svg "In a turn the tyres push at the road, but the mass sits higher up, so the outside wheel is pressed down harder.")
-
-How much moves depends on three things: how hard the vehicle brakes, accelerates or turns; how
-high the centre of mass is; and how far apart the wheels are. A higher centre of mass moves more
+How much moves depends on three things: how hard the vehicle brakes, accelerates or turns, how
+high the centre of mass is, and how far apart the wheels are. A higher centre of mass moves more
 weight. A longer [wheelbase](glossary.md#wheelbase) moves less from front to back, and a wider
-[track](glossary.md#track) moves less from side to side. A sports car is low and wide for this
-reason; a van is tall and moves a lot of weight.
+[track](glossary.md#track) moves less from side to side. This is why sports cars are low and wide
+(a tall van moves much more weight).
 
-## How the game does it
+Put together, the load that moves is:
 
-The game does not calculate weight transfer as a separate step. It comes out of the physics on
-its own. Each wheel's spring pushes the body up at its corner. When the body pitches forward
-under braking, the front springs squeeze more and push harder, the rear springs push less, and
-that is the weight moving. Every tyre's grip then follows the load its spring puts on it.
+<div class="formula"><math display="block"><mi>ΔF</mi><mo>=</mo><mfrac><mrow><mi>m</mi><mo>×</mo><mi>a</mi><mo>×</mo><mi>h</mi></mrow><mi>L</mi></mfrac></math></div>
 
-Because the spring sets the load, how much weight moves at each end depends on the
-[suspension](suspension.md) too. In a corner, the axle with the stiffer
-[anti-roll bar](glossary.md#anti-roll-bar) takes more of the side-to-side transfer.
+Here *m* is the vehicle's mass (in kilograms), *a* its acceleration (in metres per second per
+second, and braking and cornering are accelerations too), *h* the height of its centre of mass and
+*L* the distance between the wheels (the wheelbase for braking and accelerating, the track for
+cornering, both in metres). *ΔF* is the load, in [newtons](glossary.md#newton), added to the
+wheels at one end and taken off the other.
 
-### Where the body pivots
+For example, a 1,000 kg car brakes at 8 m/s² (about 0.8 g) with its centre of mass 0.5 m high and
+a wheelbase of 2.5 m: 1,000 × 8 × 0.5 ÷ 2.5 = 1,600 newtons. That is about the weight of 160 kg
+moved from the rear tyres to the front ones, out of a total weight of about 9,800 newtons. Raise
+the centre of mass to 1 m, as in a tall van, and the same braking moves twice as much.
 
-A body's resistance to being turned is its [inertia](glossary.md#inertia). For turning to the
-left and right (its [yaw](glossary.md#yaw)), each road vehicle uses a figure taken from
-measurements of real cars, SUVs, vans and pickups, because the game's simple box-shaped bodies
-would otherwise turn too sluggishly. For leaning and pitching, the game works out the inertia
-from the body's shape. Nothing else slows the body's spinning: the game removes the physics
-engine's built-in rotation damping, so only the tyres and dampers bring a spin to rest.
-<!-- docs/handling.md Inertia: yaw declared through yaw_dynamic_index (cars 1.03, vans 0.91, pickups 0.94), roll and pitch from the shapes; Balance: VehicleSpec.angular_damping 0 on every wheeled body and trailer -->
+<div class="widget" data-widget="weight-transfer"></div>
 
-## Understeer and oversteer
+<div class="widget-limits" hidden>
 
-When a car corners too fast for its tyres, one end slides first.
+The drawing puts the centre of mass midway between the wheels, so both ends carry the same load at
+rest (most cars carry more on the front), and the vehicle stays rigid: it does not lean on its
+springs. The force and load arrows share one scale; the body's height and the wheels' size are
+only a drawing.
 
-- If the **front** slides first, the car runs wide of the turn: it turns less than the driver
-  asked. This is [understeer](glossary.md#understeer). Easing off brings it back into line, so
-  road cars are designed to do this.
-- If the **rear** slides first, the back swings out and the car turns more than asked. This is
-  [oversteer](glossary.md#oversteer). It is harder to catch.
+</div>
 
-Weight transfer decides which end goes first. Because of
-[load sensitivity](glossary.md#load-sensitivity), an axle whose weight is shared very unevenly
-between its two tyres grips less in total than one whose weight is shared evenly. The end that
-carries more of the side-to-side transfer loses grip first.
+The mass changes how many newtons move, but not what share of the weight moves: a vehicle twice as
+heavy moves twice the load, and it also weighs twice as much.
 
-The game's road vehicles are set up to understeer. Their front anti-roll bars are stiffer than
-their rear ones, their suspension steers the wheels a little towards stability as the body leans
-(roll steer, on the [steering page](steering.md#the-suspension-steers-a-little-too)), and every
-car, van and rigid truck loses grip at the front first in a steady turn. The two racing cars push
-down on the road with wings; the game places that downforce so that they too stay
-front-first at any speed.
-<!-- docs/handling.md Balance: "Its leading axle is the pass's first on every Kenney body"; Aero balance: "the limit stays front-first", test_a_winged_body_stays_front_first_at_any_speed -->
+### Where the formula comes from
 
-The driver can still upset that balance. Lifting off the accelerator in the middle of a fast
-corner moves weight forward, off the rear tyres, and can swing the back out. Braking hard in a
-turn does the same, and the handbrake locks the rear wheels outright.
-[Stability control](glossary.md#stability-control) is there to catch it.
+<details><summary>Newton's laws of motion in brief</summary>
+
+1. **First law.** A body stays still, or keeps moving at the same speed in the same direction,
+   unless a force acts on it. Its resistance to a change is its [inertia](glossary.md#inertia).
+2. **Second law.** A force gives a body an acceleration: force = mass × acceleration. The same push
+   speeds up a body twice as heavy half as fast. It holds for turning too: a
+   [torque](glossary.md#torque) sets a body turning, and a body that is not starting to turn has
+   all its torques cancelling out.
+3. **Third law.** When one body pushes on another, the other pushes back just as hard, the opposite
+   way. A braking tyre pushes the road forward, and the road pushes the tyre back.
+
+</details>
+
+Two of Newton's laws of motion are at work. A body keeps moving as it was unless a force changes
+that (the first law; this resistance is the body's [inertia](glossary.md#inertia)), and the force
+it takes is the body's mass × its acceleration (the second law). To slow the 1,000 kg car above at
+8 m/s², the road has to push back on its tyres with 1,000 × 8 = 8,000 newtons.
+
+That push acts at the road, but the mass it slows sits higher up, at the centre of mass. A push
+that is not in line with the mass does more than slow it: it also tries to turn it. That is why the
+tall box on a stopping trolley tips forward: its foot is slowed while its top carries on. The
+road's push slows the car from 0.5 m below its centre of mass, so it tries to tip the car
+nose-down. The size of a turning effect is its [torque](glossary.md#torque): the force × the
+distance from where it acts, here 8,000 × 0.5 = 4,000 newton-metres.
+
+The car does not tip over, because the road answers with a turning effect of its own: it pushes up
+harder on the front tyres and less on the rear ones. A change of *ΔF* at each end, a wheelbase
+apart, makes a torque of *ΔF* × *L*. The car settles where the two balance (a body that is not
+starting to turn has its torques cancel, which is the second law again, applied to turning):
+
+<div class="formula"><math display="block"><mi>ΔF</mi><mo>×</mo><mi>L</mi><mo>=</mo><mi>m</mi><mo>×</mo><mi>a</mi><mo>×</mo><mi>h</mi></math></div>
+
+That is the formula above, written another way: 1,600 × 2.5 = 4,000. The car's resistance to being
+turned (its inertia in pitch) is not in it. That inertia only decides how quickly the nose dips when
+the brakes come on, not how much load has moved once it has.
+
+## The suspension's part
+
+The weight reaches the wheels through the [suspension](suspension.md). When the body pitches
+forward under braking, the front springs squeeze more and push harder, and the rear springs push
+less.
+
+The suspension cannot change how much weight moves in total, but it decides how it is shared. In
+a corner, the axle with the stiffer [anti-roll bar](glossary.md#anti-roll-bar) takes more of the
+side-to-side transfer: more load crosses from its inside tyre to its outside one. Because a tyre's
+grip does not keep pace with its load ([load sensitivity](glossary.md#load-sensitivity)), that
+axle ends up with less grip in total. So the share helps decide which end of a car slides first
+when it corners too fast (see
+[Understeer and oversteer](understeer.md#what-decides-the-balance)).
 
 ## Wheel lift and rollover
 
-If a vehicle corners hard enough, the inside wheels carry no weight at all and lift off the road.
-A little more and it rolls over. Whether a vehicle slides or tips first depends on how its grip
-compares with its shape: a low, wide car runs out of grip and slides long before it could tip,
-but a tall, narrow vehicle can reach its tipping point while its tyres still grip. That tipping
-point is its [rollover threshold](glossary.md#rollover-threshold).
+If a vehicle corners hard enough, the inside wheels carry no weight and lift off the road. A
+little more and it rolls over.
 
-In the game, rollover is not a scripted event. A vehicle tips because the forces on it tip it. In
-a steady turn, the cars, vans, rigid trucks and tractors all slide before they tip. A semi
-tractor unit with no trailer (a bobtail) tips first: it is tall and short. A loaded semi with a
-high trailer is the vehicle most likely to roll, and it carries
-[roll stability control](glossary.md#roll-stability-control) for that reason.
-<!-- docs/handling.md Balance: "past tip_g no turn is steady (the bobtail semis tip first)"; GroundDriveSpec.esc_roll_lift_g on semi_spec.tres -->
+Whether a vehicle slides or tips first depends on how its grip compares with its shape. A low,
+wide car runs out of grip and slides long before it could tip, but a tall, narrow vehicle can
+reach its tipping point while its tyres still grip. That tipping point is called the
+[rollover threshold](glossary.md#rollover-threshold).
 
-### When the game says you have overturned
+The inside wheels lift when the load moved sideways equals half the total weight (*ΔF* = *m* ×
+*g* ÷ 2, with *g* = 9.8 m/s², the acceleration of gravity), which happens at a sideways
+acceleration of:
 
-When a vehicle stays tipped past 70° from upright for one and a half seconds, and has almost
-stopped moving, the game shows the notice OVERTURNED - PRESS BACKSPACE TO RESPAWN. It does not
-put the vehicle back on its wheels by itself: a jump or a steep bank should not count as a
-rollover. The notice goes when the vehicle is upright again or is respawned. No sloppyCAN signal
-reports it.
-<!-- base_vehicle.gd OVERTURNED_DEG 70, OVERTURNED_S 1.5, OVERTURNED_MAX_SPEED 2 m/s, OVERTURNED_NOTICE; "Deliberately NOT a telemetry field" -->
+<div class="formula"><math display="block"><msub><mi>a</mi><mtext>lift</mtext></msub><mo>=</mo><mfrac><mrow><mi>g</mi><mo>×</mo><mi>L</mi></mrow><mrow><mn>2</mn><mo>×</mo><mi>h</mi></mrow></mfrac></math></div>
 
-## What the game leaves out
+with *L* the track. For example, a car with a track of 1.6 m and a centre of mass 0.5 m high
+reaches it at 9.8 × 1.6 ÷ (2 × 0.5) = about 16 m/s², more than its tyres can give on a dry road
+(about 10 m/s²), so it slides first. A loaded truck with a track of 2 m and a centre of mass 2 m
+high reaches it at 9.8 × 2 ÷ (2 × 2) = 4.9 m/s², about half a g, and its tyres can easily give
+that much. It tips first. (Real vehicles
+lean on their springs, which moves the centre of mass outwards and lowers the figure a little.)
+
+The same threshold can be seen another way. The weight pulls the centre of mass down, and the body
+carrying on pushes it outwards. Added together, they make one push that leans outwards, more the
+harder the vehicle corners. While the line of that push reaches the road between the wheels, the
+vehicle stands. Once it lands outside the outside wheels, nothing holds the vehicle up and it tips.
+
+<div class="widget" data-widget="rollover"></div>
+
+<div class="widget-limits" hidden>
+
+The vehicle is rigid: it does not lean on its springs, so its inside wheels lift and it tips at the
+same moment, and the tipped pose is only a drawing. The tyres' grip is one μ for the whole
+vehicle. The two examples are the worked ones above; the body's height and the wheels' size are
+only a drawing.
+
+</div>
+
+Heavy does not mean stable: what matters is how high the load sits and how narrow the vehicle
+is, which is why a truck loaded high with light goods can roll more easily than one carrying a
+heavy load low down. A vehicle that is sliding sideways can also be tipped over by the
+ground: if its tyres hit a kerb or dig into soft ground, the sudden grip pushes the wheels
+while the mass carries on, and the vehicle rolls.
+
+A semi with a high, loaded trailer is especially likely to roll. This is why trucks carry
+[roll stability control](glossary.md#roll-stability-control): it brakes the truck when it senses
+it getting close to its tipping point, to slow it before it tips.
+
+A liquid load makes it worse. In a corner the liquid in a tank sloshes towards the outside of the
+turn, which moves the load's weight outwards, so a tanker rolls more easily than a truck with a
+solid load of the same weight.
+
+<figure>
+<img src="img/coach-tilt-table.jpg" alt="A coach standing on a steel platform that has been tilted steeply to one side, its body leaning over on its wheels">
+<figcaption>A coach on a tilt table, a rollover test. Photo: Rich Webb, CC BY 2.0, <a href="https://commons.wikimedia.org/wiki/File:Wahl_Coaches_coach_(MAN_SR_280)_on_the_MoD_Hurn_tilt_table%2C_31_March_1982.jpg">Wikimedia Commons</a>.</figcaption>
+</figure>
+
+## What Carlito simulates
+
+The parameters the simulator uses for this, and where each is set, are listed in
+[How the simulation works](simulation.md#weight-transfer-and-rollover):
+
+- **Per vehicle**:
+  - [Mass and centre of mass](simulation.md#mass-and-centre-of-mass) (`mass`, `center_of_mass`)
+  - [Turning inertia](simulation.md#turning-inertia) (`yaw_dynamic_index`)
+  - [Track and wheelbase](simulation.md#wheel-positions) (`wheel_positions`)
+  - [Springs](simulation.md#springs) (`spring_rate`, `spring_rate_rear`)
+  - [Anti-roll bars](simulation.md#anti-roll-bars) (`anti_roll_rate`, `anti_roll_rate_rear`)
+
+<details><summary>Simplification list</summary>
 
 - **No roll camber.** In a real car the tyres tilt as the body leans, which changes their grip.
-  The game's tyres stay upright to the body. This is one reason the game's cars understeer a
-  little less than real ones.
+  The simulated tyres stay upright to the body. This is one reason the simulated cars understeer
+  much less than real ones in a gentle turn.
+  <!-- docs/handling.md Balance, "Stated shortfall: linear K": roll camber not modelled -->
 - **No damage.** A rollover dents nothing and breaks nothing.
-<!-- docs/handling.md Balance, "Stated shortfall: linear K": roll camber not modelled -->
+- **Turning inertia from measurements.** A body's resistance to being turned is its
+  [inertia](glossary.md#inertia). For turning left and right ([yaw](glossary.md#yaw)), each road
+  vehicle uses a figure measured on real cars, SUVs, vans and pickups, because the simple
+  box-shaped bodies of the simulation would turn too sluggishly; for leaning and pitching it comes
+  from the body's shape.
+  <!-- docs/handling.md Inertia: yaw declared through yaw_dynamic_index (cars 1.03, vans 0.91, pickups 0.94), roll and pitch from the shapes -->
+
+</details>
 
 ## What you see in sloppyCAN
 
@@ -126,29 +215,20 @@ reports it.
 | `accLong` | out | m/s² | Acceleration along the vehicle: what moves weight between the axles. |
 | `accLat` | out | m/s² | Sideways acceleration: what moves weight from the inside wheels to the outside. |
 | `yaw` | out | rad/s | How fast the vehicle turns. A rate that runs ahead of the steering is oversteer. |
-| `axle_load` | out | kg | Truck and tractor: the weight on the rear axle. It rises under acceleration and falls under braking. |
+| `axle_load` | out | kg | The weight on the rear axle. It rises under acceleration and falls under braking (Truck and tractor). |
 | `status` | out | bitfield | Bit 1, "on the ground", clears the moment any wheel leaves the road, so it shows a wheel lift. Bit 11 lights while roll stability control is braking. |
 <!-- contract/carlito_contract.json: accLong, accLat, yaw, axle_load, status (bit 1 "all wheels in contact for a wheeled chassis", bit 11 roll stability braking) -->
 
-## Try it in the game
+## Scenarios
 
-<div class="box try">
-<p class="box-title">Try it in the game: lift a wheel</p>
-
-1. In the GARAGE pick the `semi` tractor unit and choose NONE for its trailer. Open SANDBOX and
-   set STABILITY CONTROL off, so roll stability control does not step in; the debug overlay
-   (**F3**) shows `roll` and `pitch`. Drive on **Flatland**.
-2. Get up to about 50 km/h and turn the steering hard, then hold it. Watch the `roll` number on the
-   overlay grow, and watch the inside wheels: they leave the ground before the tyres slide.
-3. Now do the same in the `sedan` at the same speed. `roll` stays small, and the car slides wide
-   instead of lifting a wheel.
-4. Brake hard in a straight line in the `sedan` and watch `pitch` go negative: the nose dips as
-   weight moves forward.
-
-</div>
+- [Full truck turning too fast](forces.md#example-truck-lifts-wheel): the inner wheels lift.
+- [Emergency stop](forces.md#example-emergency-stop): weight moves to the front.
+- [Pulling away](forces.md#example-pulling-away): weight moves to the rear.
+- [Turning](forces.md#example-turning): weight moves to the outside.
 
 ## Related
 
+- [Understeer and oversteer](understeer.md): which end of a cornering car lets go first.
 - [Suspension](suspension.md): the springs and bars that carry the moving weight.
-- [Tyres and slip](tyres.md): load sensitivity, and why uneven load costs grip.
+- [Slip and the grip curve](slip.md): load sensitivity, and why uneven load costs grip.
 - [Glossary](glossary.md): every term on this page.

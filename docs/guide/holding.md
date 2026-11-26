@@ -2,120 +2,155 @@
 
 # Holding still
 
-<p class="lead">Standing still sounds simple, but a vehicle on a slope, in gear, with its engine
-running, is being pulled two ways at once. The game has several ways to hold a vehicle in place,
-from the tyre itself to the gearbox's parking lock.</p>
+<p class="lead">This page explains the ways a vehicle is held still on a slope, from the tyre
+itself to the gearbox's parking lock.</p>
 
 <div class="badges"><span class="label">Which vehicles have this</span>
 <span class="badge yes" title="Hill-start assist, auto hold, the park pawl, the handbrake">Car</span>
 <span class="badge yes" title="Hill-start assist, auto hold, spring brakes; no park pawl">Truck</span>
 <span class="badge yes" title="The powershift's hill hold and park pawl, or the CVT's active standstill">Tractor</span>
-<span class="badge some" title="A parking brake on its landing wheels">Plane</span>
-<span class="badge no" title="It floats and drifts">Boat</span>
-<span class="badge no" title="It hovers or lands">Drone</span>
-<span class="badge some" title="A parking brake, on the trains page">Train</span>
 </div>
+
+On a slope, gravity constantly pulls a vehicle downhill, so something has to hold it whenever it
+stops. What does, and why is it sometimes not enough?
+
+## How hard the slope pulls
+
+On a slope, a vehicle's weight splits into two parts: one pulls it down the slope, the other
+presses it onto the road. The steeper the slope, the larger the first and the smaller the second.
+On a road's gentle slope the pull is about the slope's steepness (in percent) as a share of the
+weight. For example, on a 20 % slope (it rises 20 metres over 100 metres), a car weighing 10,000
+newtons is pulled downhill with about 2,000 newtons. Whatever holds the car must push back with
+that much.
 
 ## The tyre holds first
 
-A braked wheel on a slope is not turning, so by the rule in [Tyres and slip](tyres.md) its tyre
-should make no force, and the vehicle would creep downhill. Real rubber holds because it can bend
-a little before it slides, like a stiff spring. The game models that spring, about 2 cm of give in
-each contact patch at walking pace and below. A wheel held by its brake or by the park lock winds
-it up and stays put. A wheel that is free to roll does not, so an unbraked vehicle still rolls
-down a hill.
-<!-- RayWheel stick_step; wheel.gd STICK_DEFLECTION 0.02 m, STICK_SPEED 0.5 m/s; docs/vehicles.md Holding at rest: static friction -->
+A braked wheel on a slope is not turning, yet its tyre has to make a force. It can, because rubber
+bends a little before it slides, like a stiff spring (the same bending that lets a rolling tyre
+grip, see [A tyre needs slip to grip](slip.md#a-tyre-needs-slip-to-grip)). A wheel held by its
+brake or by the parking pawl (a catch in the gearbox that locks the drive) winds this spring up
+and holds the vehicle still. An unbraked wheel does not, so the vehicle rolls down the hill.
 
-The spring can only hold what the brake holds. If the slope's pull is more than the brake can
-take, the vehicle slides with its wheels still locked.
+The tyre can only hold what the brake holds
+([see the forces](forces.md#example-parked-on-a-hill)). If the slope's pull is more than the brake
+can take, the wheels turn against it. If it is more than the tyres can take, the vehicle slides
+with its wheels locked.
+
+The tyres can push back with at most μ times the part of the weight pressing them onto the road
+(see [the coefficient of friction](tyres.md#the-coefficient-of-friction)). So a car with every
+wheel held stays put while the slope rises by less than μ metres for every metre along the flat.
+On dry asphalt, with a μ of about 1, that is a slope of 45 degrees, far steeper than any road, so
+there it is the brake that sets the limit, not the tyres. On ice, with a μ of 0.1, the 20 % slope
+of the example (which needs a μ of about 0.2) is already too steep. A parking brake usually holds
+only two wheels, so only the weight on those two counts, and the steepest slope it can hold is
+gentler still.
 
 ## Rolling back on a hill start
 
-The harder problem is pulling away uphill. The moment the driver lifts off the brake to press the
-accelerator, nothing holds the vehicle until the drive takes up, so it rolls back.
+Pulling away uphill is harder. When the driver moves their foot from the brake to the accelerator,
+nothing holds the vehicle until the drive takes up, so it rolls back
+([see the forces](forces.md#example-hill-start)). The brake lets go in an instant, but an engine
+needs a moment to build up its push (see [the clutch](coupling.md)).
 
 A car with an automatic gearbox is helped by [creep](glossary.md#creep): its torque converter
-pulls gently at idle, enough on its own to hold most cars on a slope of about 5 to 8 %. Past that, or
-on any vehicle with a clutch, which does not creep, the vehicle rolls back. Three systems stop it.
-<!-- docs/drivetrain.md Hill hold: "Creep holds the cars and the vans on 5-9 % and the Kenney trucks on 8-9 %" -->
+pulls gently at idle, which can be enough on a gentle slope. On steeper slopes, or with a clutch
+(which does not creep), the vehicle rolls back. A clutch gives no hold of its own: it only
+passes on the engine's push, so the vehicle stays put only once the engine pushes as hard as the
+slope pulls back. The systems below prevent the roll back.
 
 ### Hill-start assist
 
 [Hill-start assist](glossary.md#hill-start-assist) keeps the foot brake on for a moment after the
 driver releases it. It lets go as soon as the engine's drive is enough to hold the vehicle on the
-slope, or when its timer runs out: about one second on a car, three on the trucks and semis.
-<!-- HillHold Kind.ASSIST; hill_hold_s: sedan_spec.tres 1.0, semi_spec.tres 3.0, garbage-truck_spec.tres 3.0 -->
+slope, or when its timer runs out (after a second or a few seconds, depending on the vehicle). The
+timer is there so that the brake never stays on for good if the driver does not pull away.
 
-It reads the slope from the ground under the wheels, not from how the body is tilted, so a car
-squatting under acceleration is not mistaken for one on a hill. It counts the weight of a trailer,
-and it holds the trailer's brakes too. It ignores rolling resistance, so it lets go slightly late,
-never early. On the flat or pointing downhill it lets go at once.
-<!-- hill_hold.gd: "The grade is the wheels' contact plane, never body pitch"; drive_holds: "Rolling resistance is left out: the hold lets go late, never early"; docs/drivetrain.md: WheelDrive.towed_kg, foot_pedal -->
-
-Every vehicle with ABS has it. Switching ABS off in SANDBOX switches it off too.
+It usually relies on the same hardware as ABS and stability control, which can already brake each
+wheel without the driver's foot.
 
 ### Auto hold
 
-[Auto hold](glossary.md#auto-hold) goes further. With it on, a vehicle that has come to a stop in drive or reverse keeps
-its whole foot brake on, with no pedal pressed, until the driver presses the accelerator. Then
-hill-start assist takes over for the pull-away. It is a setting, SANDBOX ▸ AUTO HOLD, off at
-first and saved, and it works with the keys, the on-screen pedals and a gamepad. While sloppyCAN
-is connected it is off and greyed out: an auto hold is the car's own function, so sloppyCAN
-implements its own. The dashboard's AUTO HOLD lamp glows dim while it is on and
-bright while it is holding.
-<!-- InputRouter.auto_hold; pause_menu.gd AUTO_HOLD_HELP; docs/drivetrain.md: "Gamepad and bridge: real creep"; dashboard.gd auto_hold "dim while switched on, lit while holding" -->
+[Auto hold](glossary.md#auto-hold) goes further. When it is on, a vehicle that has stopped in gear
+keeps its brakes on with no pedal pressed, until the driver presses the accelerator. This spares the
+driver from holding the pedal down at every traffic light. Cars that have it usually let the driver
+switch it on and off, and show it with a lamp.
 
 ### The tractor's hill hold
 
-The powershift tractor has a hold of its own, modelled on a real tractor maker's. Whenever it
-stands still in gear with the accelerator up, it holds itself on the foot brake, with front-wheel
-drive engaged so all four wheels are held. It has no timer. It lets go once the accelerator is
-pressed and the clutch has taken up enough to carry the slope. A real tractor holds inside its
-gearbox; the game uses the brakes, which does the same job.
-<!-- HillHold Kind.STANDSTILL (Valtra HillHold); tractor-kenney_spec.tres hill_hold 2; COMPROMISE at GroundDriveSpec.hill_hold: "a real tractor holds in the transmission" -->
+Some tractors with a powershift have their own hill hold. The tractor holds itself whenever it
+stands still in gear with the accelerator up. There is no timer: it lets go once the accelerator
+is pressed and the clutch has taken up enough to carry the slope.
 
-### Active standstill on the CVT tractor
+### Active standstill on a CVT tractor
 
-The `tractor-cvt` needs no brake to stand still. Its stepless gearbox can set a ratio of zero,
-at which the engine runs but the wheels cannot turn: [active standstill](glossary.md#active-standstill).
-It holds the tractor on a slope until the driver asks to move.
-<!-- Drivetrain.standstill_hold; docs/drivetrain.md The CVT: "a ratio of 0 holds (active standstill)" -->
+A tractor with a CVT needs no brake to stand still. Its gearbox can set a ratio of zero, where the
+engine runs but the wheels cannot turn. This is called
+[active standstill](glossary.md#active-standstill). The gearbox keeps holding the wheels while the
+engine runs, so when the driver asks for movement, the ratio simply opens from zero, and there is
+no moment at which nothing holds the tractor back (see [Kinds of gearbox](gearbox-kinds.md)).
 
 ## Parking
 
 ### The park pawl
 
-An automatic car's P position drops a steel tooth, the [park pawl](glossary.md#park-pawl), into a
-toothed wheel on the gearbox's output. The cars, the vans and the powershift tractor have one. It
-only drops in below about walking pace; faster than that it ratchets over the teeth and holds
-nothing.
-<!-- WheelDrive.PAWL_ENGAGE_SPEED 1 m/s; contract gear: "the gearbox's park pawl where one is fitted (cars, vans, the tractor's powershift)" -->
+The P position of an automatic drops a steel tooth (the [park pawl](glossary.md#park-pawl)) into a
+toothed wheel on the gearbox's output. The teeth are sloped, like those of a ratchet, so at very
+low speed the pawl falls into a gap and locks the wheel. At higher speed it just clicks over the
+teeth and holds nothing, which is why a car must be stopped before P is selected.
 
-The pawl locks the gearbox, not the wheels. The wheels are held only through the
-[differential](glossary.md#differential), and an open differential still lets its two wheels turn
-against each other. So a car parked in P with one driven wheel on ice can slide away. A front-drive
-car in P holds only its front wheels.
-<!-- docs/vehicles.md P (park): "a car in P with one driven wheel on ice slides away" -->
+The pawl locks the gearbox rather than the wheels. The wheels are held through the
+[differential](glossary.md#differential), and an open differential gives its two wheels the same
+torque, so the pair can hold no more than twice what the weaker wheel can. With one driven wheel
+on ice, the other one can roll downhill while the wheel on ice turns backwards over the ice (the
+differential lets them turn against each other), so a car parked in P can creep away. A
+front-drive car in P also only holds its front wheels. This is why the parking brake should be used as well, and why it is a misconception that P alone
+is enough on a steep or slippery slope.
 
-The keyboard never selects P. A vehicle goes into P when sloppyCAN sends the P gear byte. In a
-challenge, where only sloppyCAN may drive, the vehicle also goes into P, with its key at Lock and
-its handbrake on, whenever sloppyCAN is not connected or stops sending, so a lost connection
-parks it rather than letting it roll.
-<!-- InputRouter.locked_idle: key Lock, P, handbrake on: "a lost connection parks it rather than coasting" -->
+<!-- photo: a park pawl and the toothed wheel it locks, in a cut-open gearbox -->
 
 ### The handbrake and spring brakes
 
-The handbrake holds the rear wheels directly, without the gearbox. Every vehicle's handbrake can
-park it, laden, on the slope the law requires: 20 % for cars and light vans, 18 % for the
-heavier vehicles, and in practice far steeper. On the trucks the handbrake is their spring brakes ([Brakes](brakes.md) explains
-them), which is how a truck parks, since its gearbox has no pawl.
+The handbrake holds the rear wheels directly, without the gearbox (see
+[Brakes](brakes.md#the-handbrake) for how it works). The law requires it to hold the loaded
+vehicle on a slope (20 % for cars and light vans in Europe, 18 % for heavier vehicles). On trucks,
+the parking brake uses [spring brakes](brakes.md#air-and-spring-brakes). This is how a truck parks
+when its gearbox has no pawl. A parking brake is a friction brake, so it holds less after a hard
+descent has heated it (see [the handbrake on a hot brake](brakes.md#the-handbrake-on-a-hot-brake)),
+which is a reason to park in gear or in P as well.
 <!-- BrakeSizing: parks the laden body on 20 % (UN R13-H, to 3.5 t) or 18 % (R13) -->
 
-## What the game leaves out
+## What Carlito simulates
 
+The parameters the simulator uses for this, and where each is set, are listed in
+[How the simulation works](simulation.md#holding-still):
+
+- **Simulation-wide**:
+  - [Grip at rest](simulation.md#grip-at-rest) (`STICK_DEFLECTION`, `STICK_SPEED`)
+  - [Park pawl speed](simulation.md#park-pawl-speed) (`PAWL_ENGAGE_SPEED`)
+- **Per vehicle**:
+  - [Hill-start assist](simulation.md#hill-start-assist) (`hill_hold`, `hill_hold_s`)
+  - [Park pawl](simulation.md#park-pawl) (`park_pawl_torque`)
+  - [Handbrake](simulation.md#handbrake) (`handbrake_torque`)
+
+<details><summary>Simplification list</summary>
+
+- **A simple spring at rest.** The give of a still tyre is a spring of about 2 cm in each patch,
+  which fades in below a slow walking pace.
+  <!-- wheel.gd STICK_DEFLECTION 0.02 m, STICK_SPEED 0.5 m/s -->
 - **No electronic parking brake button**, and no automatic handbrake when the engine stops.
-- **No P from the keyboard.**
+- **No P from local controls.** Only sloppyCAN can select it.
 - **No roll-away warning**: a vehicle left in neutral on a hill just rolls.
+- **Hill-start assist's slope.** It reads the slope from the ground under the wheels, not the
+  body's tilt, so a car squatting under acceleration is not taken for one on a hill. It leaves
+  rolling resistance out, so it lets go slightly late, never early.
+  <!-- hill_hold.gd: "The grade is the wheels' contact plane, never body pitch"; drive_holds: "Rolling resistance is left out: the hold lets go late, never early" -->
+- **The tractor's hill hold uses its brakes.** A real tractor holds inside its gearbox; the
+  brakes do the same job.
+- **No auto hold over CAN.** It is off while sloppyCAN is connected, which has to implement its
+  own.
+  <!-- InputRouter.auto_hold; pause_menu.gd AUTO_HOLD_HELP -->
+
+</details>
 
 ## What you see in sloppyCAN
 
@@ -129,26 +164,11 @@ them), which is how a truck parks, since its gearbox has no pawl.
 
 Hill-start assist and auto hold have no signal of their own.
 
-## Try it in the game
+## Scenarios
 
-<div class="box try">
-<p class="box-title">Try it in the game: a hill start</p>
-
-On the keyboard, holding the brake key at a standstill selects reverse
-([Gearbox and shifting](gearbox.md#driving-forwards-and-backwards-from-the-keyboard)), so you
-cannot sit still on the foot brake. These steps use the handbrake and auto hold instead.
-<!-- InputRouter.arbitrate_local: brake_reverse at a standstill (REVERSE_ENGAGE_SPEED 0.5 m/s) with no accel requests R; auto_hold: "the held brake never reads as S at a standstill" -->
-
-1. Find a steep road in **Level 2 - Mountain** with the `race` car. It has a clutch and no
-   hill-start assist.
-2. Stop facing uphill and hold the handbrake (**Space**). Let it go and press the accelerator: the
-   car rolls back a little before it pulls away.
-3. Open SANDBOX and set AUTO HOLD on, then do the same in the `sedan` without the handbrake. As
-   it stops, the AUTO HOLD lamp lights and the car stays put with your hands off the keys.
-4. Press the accelerator. Hill-start assist takes over from the auto hold for a moment, and the
-   car pulls away without rolling back.
-
-</div>
+- [Parked on a hill](forces.md#example-parked-on-a-hill): the brakes hold the car.
+- [Hill start with both pedals released](forces.md#example-hill-start): the car rolls back.
+- [Full truck starting uphill](forces.md#example-truck-uphill): the drive needed to pull away.
 
 ## Related
 

@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 290" width="420" height="290">
+<title>A torque converter cut open: the pump, the turbine and the stator, and the path of the oil round the loop</title>
+<!-- Drawn by hand, no simulator numbers. Schematic half-section: the oil loop runs outwards through the pump, across to the turbine, inwards through it, and back through the stator. -->
+<style>
+.tk-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.tk-tb{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.tk-to{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+.tk-tg{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-green,#2e7d32)}
+.tk-ln{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:none}
+.tk-body{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:var(--fig-fill,#f1eee7)}
+.tk-fi{fill:var(--fig-ink,#1c1c1f)}
+.tk-b{stroke:var(--fig-blue,#1d5ca8);stroke-width:3;fill:none;stroke-linejoin:round}.tk-fb{fill:var(--fig-blue,#1d5ca8)}
+.tk-fo{fill:var(--fig-orange,#c45a12)}
+.tk-fg{fill:var(--fig-green,#2e7d32)}
+@media (prefers-color-scheme:dark){
+.tk-s{fill:var(--fig-muted,#a6a6b0)}
+.tk-tb{fill:var(--fig-blue,#8ab6ff)}.tk-to{fill:var(--fig-orange,#f0a060)}.tk-tg{fill:var(--fig-green,#7cc884)}
+.tk-ln{stroke:var(--fig-ink,#e9e7e2);}
+.tk-body{stroke:var(--fig-ink,#e9e7e2);fill:var(--fig-fill,#26282e)}
+.tk-fi{fill:var(--fig-ink,#e9e7e2)}
+.tk-b{stroke:var(--fig-blue,#8ab6ff);}.tk-fb{fill:var(--fig-blue,#8ab6ff)}
+.tk-fo{fill:var(--fig-orange,#f0a060)}
+.tk-fg{fill:var(--fig-green,#7cc884)}
+}
+</style>
+<defs><marker id="tk-ao" markerWidth="9" markerHeight="9" refX="1" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path class="tk-fo" d="M0,0 L9,4.5 L0,9 Z"/></marker><marker id="tk-ab" markerWidth="9" markerHeight="9" refX="1" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path class="tk-fb" d="M0,0 L9,4.5 L0,9 Z"/></marker></defs>
+<!-- the loop (ring) -->
+<path class="tk-body" fill-rule="evenodd" d="M156,50 L324,50 Q350,50 350,76 L350,174 Q350,200 324,200 L156,200 Q130,200 130,174 L130,76 Q130,50 156,50 Z M174,86 L306,86 Q314,86 314,94 L314,156 Q314,164 306,164 L174,164 Q166,164 166,156 L166,94 Q166,86 174,86 Z"/>
+<!-- vanes: pump (left), turbine (right), stator (bottom) -->
+<path class="tk-ln" d="M132,84.16666666666667 L164,92.16666666666667 M132,100.5 L164,108.5 M132,116.83333333333334 L164,124.83333333333334 M132,133.16666666666666 L164,141.16666666666666 M132,149.5 L164,157.5 M132,165.83333333333331 L164,173.83333333333331 "/>
+<path class="tk-ln" d="M316,84.16666666666667 L348,76.16666666666667 M316,100.5 L348,92.5 M316,116.83333333333334 L348,108.83333333333334 M316,133.16666666666666 L348,125.16666666666666 M316,149.5 L348,141.5 M316,165.83333333333331 L348,157.83333333333331 "/>
+<path class="tk-ln" d="M196,166 l8,32 M222,166 l8,32 M248,166 l8,32 M274,166 l8,32"/>
+<!-- stator highlight and labels on parts -->
+<rect class="tk-fg" x="190" y="166" width="100" height="32" fill-opacity="0.25"/>
+<rect class="tk-fo" x="132" y="76" width="32" height="98" fill-opacity="0.2"/>
+<rect class="tk-fb" x="316" y="76" width="32" height="98" fill-opacity="0.2"/>
+<!-- oil path, clockwise through the middle of the band -->
+<path class="tk-b" d="M148,170 L148,76 Q148,68 156,68 L324,68 Q332,68 332,76 L332,170" style="stroke-width:2.5;stroke-dasharray:none"/>
+<path class="tk-b" d="M332,170 L332,182 Q332,184 330,184 L150,184 Q148,184 148,182 L148,175" style="stroke-width:2.5" marker-end="url(#tk-ab)"/>
+<path class="tk-b" d="M148,106 L148,105" marker-end="url(#tk-ab)" style="stroke-width:2.5"/>
+<path class="tk-b" d="M236,68 L239,68" marker-end="url(#tk-ab)" style="stroke-width:2.5"/>
+<path class="tk-b" d="M332,120 L332,123" marker-end="url(#tk-ab)" style="stroke-width:2.5"/>
+<path class="tk-b" d="M246,184 L243,184" marker-end="url(#tk-ab)" style="stroke-width:2.5"/>
+<text class="tk-s" x="240" y="130" text-anchor="middle">oil circulates</text>
+<text class="tk-s" x="240" y="146" text-anchor="middle">round the loop</text>
+<!-- shafts -->
+<rect class="tk-fi" x="10" y="119" width="120" height="12"/>
+<rect class="tk-fi" x="350" y="119" width="60" height="12"/>
+<text class="tk-s" x="10" y="92">from the</text>
+<text class="tk-s" x="10" y="108">engine</text>
+<text class="tk-s" x="412" y="92" text-anchor="end">to the</text>
+<text class="tk-s" x="412" y="108" text-anchor="end">gearbox</text>
+<!-- part names -->
+<text class="tk-to" x="148" y="226" text-anchor="middle">pump</text>
+<text class="tk-s" x="148" y="244" text-anchor="middle">turned by the</text>
+<text class="tk-s" x="148" y="260" text-anchor="middle">engine</text>
+<text class="tk-tg" x="240" y="226" text-anchor="middle">stator</text>
+<text class="tk-s" x="240" y="244" text-anchor="middle">turns the oil</text>
+<text class="tk-s" x="240" y="260" text-anchor="middle">back round</text>
+<text class="tk-tb" x="332" y="226" text-anchor="middle">turbine</text>
+<text class="tk-s" x="332" y="244" text-anchor="middle">turns the</text>
+<text class="tk-s" x="332" y="260" text-anchor="middle">gearbox</text>
+</svg>

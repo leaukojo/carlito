@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 300" width="420" height="300">
+<title>A tractor as a see-saw about its rear axle: the tool behind pushes the rear down and lifts the front</title>
+<!-- The page's example: tool 1,000 kg hanging 1.5 m behind the rear axle, axles 2.5 m apart: front axle loses 1,000 x 1.5 / 2.5 = 600 kg, rear axle gains 1,000 + 600 = 1,600 kg. Drawn to scale, 60 px per metre. -->
+<style>
+.sw-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.sw-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.sw-tb{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.sw-to{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+.sw-tr{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-red,#b3261e)}
+.sw-ln{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:none}
+.sw-lm{stroke:var(--fig-muted,#6b6b75);stroke-width:1.2;fill:none;stroke-dasharray:5 4}
+.sw-body{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:var(--fig-fill,#f1eee7)}
+.sw-b{stroke:var(--fig-blue,#1d5ca8);stroke-width:3;fill:none;stroke-linejoin:round}.sw-fb{fill:var(--fig-blue,#1d5ca8)}
+.sw-o{stroke:var(--fig-orange,#c45a12);stroke-width:3;fill:none;stroke-linejoin:round}.sw-fo{fill:var(--fig-orange,#c45a12)}
+.sw-r{stroke:var(--fig-red,#b3261e);stroke-width:3;fill:none;stroke-linejoin:round}.sw-fr{fill:var(--fig-red,#b3261e)}
+@media (prefers-color-scheme:dark){
+.sw-t{fill:var(--fig-ink,#e9e7e2)}.sw-s{fill:var(--fig-muted,#a6a6b0)}
+.sw-tb{fill:var(--fig-blue,#8ab6ff)}.sw-to{fill:var(--fig-orange,#f0a060)}.sw-tr{fill:var(--fig-red,#f08a80)}
+.sw-ln{stroke:var(--fig-ink,#e9e7e2);}
+.sw-lm{stroke:var(--fig-muted,#a6a6b0);}
+.sw-body{stroke:var(--fig-ink,#e9e7e2);fill:var(--fig-fill,#26282e)}
+.sw-b{stroke:var(--fig-blue,#8ab6ff);}.sw-fb{fill:var(--fig-blue,#8ab6ff)}
+.sw-o{stroke:var(--fig-orange,#f0a060);}.sw-fo{fill:var(--fig-orange,#f0a060)}
+.sw-r{stroke:var(--fig-red,#f08a80);}.sw-fr{fill:var(--fig-red,#f08a80)}}
+</style>
+<defs><marker id="sw-ao" markerWidth="9" markerHeight="9" refX="1" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path class="sw-fo" d="M0,0 L9,4.5 L0,9 Z"/></marker><marker id="sw-ab" markerWidth="9" markerHeight="9" refX="1" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path class="sw-fb" d="M0,0 L9,4.5 L0,9 Z"/></marker><marker id="sw-ar" markerWidth="9" markerHeight="9" refX="1" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path class="sw-fr" d="M0,0 L9,4.5 L0,9 Z"/></marker></defs>
+<line class="sw-ln" x1="10" y1="200" x2="410" y2="200"/>
+<rect class="sw-body" x="30" y="108" width="200" height="26" rx="6"/>
+<rect class="sw-body" x="80" y="78" width="50" height="30" rx="4"/>
+<circle class="sw-body" cx="50" cy="178" r="22"/>
+<circle class="sw-body" cx="200" cy="162" r="38"/>
+<rect class="sw-body" x="262" y="140" width="56" height="46" rx="4"/>
+<line class="sw-ln" x1="230" y1="130" x2="262" y2="150"/>
+<text class="sw-t" x="290" y="168" text-anchor="middle">tool</text>
+<line class="sw-o" x1="290" y1="44" x2="290" y2="131" marker-end="url(#sw-ao)"/>
+<text class="sw-to" x="290" y="30" text-anchor="middle">1,000 kg</text>
+<line class="sw-r" x1="50" y1="106" x2="50" y2="53" marker-end="url(#sw-ar)"/>
+<text class="sw-tr" x="10" y="16">front axle:</text>
+<text class="sw-tr" x="10" y="32">600 kg lighter</text>
+<line class="sw-b" x1="200" y1="44" x2="200" y2="109" marker-end="url(#sw-ab)"/>
+<text class="sw-tb" x="200" y="16" text-anchor="middle">rear axle:</text>
+<text class="sw-tb" x="200" y="32" text-anchor="middle">1,600 kg heavier</text>
+<line class="sw-lm" x1="50" y1="222" x2="200" y2="222" style="stroke-dasharray:none"/>
+<line class="sw-lm" x1="200" y1="244" x2="290" y2="244" style="stroke-dasharray:none"/>
+<text class="sw-s" x="125" y="240" text-anchor="middle">axles 2.5 m apart</text>
+<text class="sw-s" x="245" y="262" text-anchor="middle">1.5 m behind the axle</text>
+<text class="sw-s" x="200" y="286" text-anchor="middle">1,000 kg × 1.5 m ÷ 2.5 m = 600 kg</text>
+</svg>

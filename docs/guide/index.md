@@ -1,60 +1,33 @@
-[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
-
 # About this guide
 
-<div class="box note">
+## Carlito
 
-**To read this guide** online, open <https://leaukojo.github.io/carlito/guide/>. To read a
-local copy as a website, run `npx serve docs/guide` from the top folder of the repository and
-open the address it prints (usually http://localhost:3000). It needs a web server
-because the pages are loaded as separate files. Without one, every page is still a plain
-Markdown file in `docs/guide/`, readable in any editor.
+Carlito is a driving simulator that runs in a web browser.
+This guide is here to teach about the mechanics that it implements.
 
-</div>
+A simulator could move a car by sliding it across the screen, but Carlito does not do that.
+Each wheel touches the ground, each tyre grips or slides, each engine turns at a real speed through a real gearbox.
+When a tyre slips in the simulation, it is because the forces on it were more than its grip could hold (as in a real car).
 
-<p class="lead">Carlito is a driving game in a web browser. You can drive a car, a truck, a
-tractor, a boat, a drone, a plane or a train. Underneath each one is a model of how real machines
-work. This guide explains those models in plain language.</p>
+## Examples of questions this guide answers
 
-## What the game models
+- [Why does a tyre need to slip to grip at all?](slip.md#a-tyre-needs-slip-to-grip)
+- [How does ABS keep a wheel turning when you brake hard?](driver-aids.md#abs)
+- [Why does a hot brake stop less well?](brakes.md#heat-and-fade)
+- [Why do the two wheels on an axle need to turn at different speeds?](differentials.md#why-wheels-need-to-turn-at-different-speeds)
+- [Why does the tractor's engine labour when the plough goes in?](implements.md#draft-pulling-through-the-soil)
+- [What makes an articulated truck jackknife?](towing.md#jackknife)
+- [Why does an automatic car creep forward when you let go of the brake?](coupling.md#creep)
+- [What tips a vehicle over in a tight turn?](weight-transfer.md#wheel-lift-and-rollover)
+- [Which end of a car lets go first in a corner?](understeer.md#which-end-lets-go-first)
 
-A game could move a car by sliding it across the screen. Carlito does not. Each wheel touches
-the ground, each tyre grips or slides, each engine turns at a real speed through a real gearbox.
-When a tyre slips in the game, it is because the forces on it were more than its grip could hold.
+## CAN bus signals
 
-The guide has one page for each idea: tyres, steering, engines, brakes, boats, aircraft and so
-on. Each page says what the idea means in the real world, how the game models it, which vehicles
-have it, and how to see it for yourself.
+Real vehicles pass messages between their parts over a wiring network called a
+[CAN bus](glossary.md#can-bus). The engine reports its speed, the brakes report their
+temperature, etc. This data is then used by other components (for example, to display the vehicle speed on the dashboard).
 
-The game also talks to a second program, **sloppyCAN**. sloppyCAN is a simulator of the
-electronics inside a vehicle. Real vehicles pass messages between their parts over a wiring
-network called a [CAN bus](glossary.md#can-bus). The engine reports its speed, the brakes report
-their temperature, the dashboard listens. Carlito sends sloppyCAN the same kind of messages,
-called [signals](glossary.md#signal), and sloppyCAN can send commands back, such as "press the
-accelerator". Every page lists the signals that show its idea.
-
-## How a page is laid out
-
-Every idea page follows the same pattern ([the page template](template.md) describes it in full):
-
-1. **A short summary**, then **which vehicles have this**, shown as badges:
-   <span class="badge yes">has it</span> <span class="badge some">some of them</span>
-   <span class="badge no">does not</span>
-2. **The explanation**, one idea at a time, with drawings.
-3. **What you see in sloppyCAN**: the signals that show the idea, with their names and units.
-4. **Try it in the game**: a short experiment.
-
-A word with a dotted underline is explained in the [glossary](glossary.md). On a computer, hold
-the pointer over it to read the explanation without leaving the page.
-
-## Numbers in this guide
-
-The guide uses few numbers, rounded, and only where they help. Each one comes from the game's own
-settings or code, not from a real vehicle's brochure. Where the game's choice is a simplification,
-the page says so.
-
-## Where this guide comes from
-
-The guide is written from the game's source code and its developer notes. It describes what the
-code does today. Where the code and the notes disagree, or something looks wrong, the question is
-recorded in [the open questions](open_questions.md) instead of being guessed at here.
+The simulator talks to a second program, [sloppyCAN](https://github.com/leaukojo/sloppycan), a CAN bus
+simulator and analysis tool that also runs in a web browser. Carlito sends sloppyCAN the same kind
+of messages, called [signals](glossary.md#signal), and sloppyCAN turns most of them into CAN
+traffic you can observe and interact with. sloppyCAN can also send commands back, such as "press the accelerator".

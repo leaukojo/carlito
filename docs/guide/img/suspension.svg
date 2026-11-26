@@ -45,11 +45,11 @@
 <line class="su-line" x1="132" y1="92" x2="132" y2="116"/>
 <rect class="su-damp" x="125" y="114" width="14" height="30"/>
 <line class="su-line" x1="132" y1="144" x2="132" y2="160"/>
-<line class="su-line" x1="112" y1="160" x2="132" y2="160"/>
+<line class="su-line" x1="102" y1="160" x2="132" y2="160"/>
 <line class="su-line" x1="288" y1="92" x2="288" y2="116"/>
 <rect class="su-damp" x="281" y="114" width="14" height="30"/>
 <line class="su-line" x1="288" y1="144" x2="288" y2="160"/>
-<line class="su-line" x1="308" y1="160" x2="288" y2="160"/>
+<line class="su-line" x1="318" y1="160" x2="288" y2="160"/>
 <!-- anti-roll bar -->
 <path class="su-bar" d="M112,196 L150,196 L170,180 L250,180 L270,196 L308,196"/>
 <!-- labels -->

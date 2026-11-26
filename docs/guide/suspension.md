@@ -1,157 +1,234 @@
-[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
-
 # Suspension
 
-<p class="lead">The suspension holds the body up on its wheels. It lets each wheel follow the
-bumps without throwing the body around, and it keeps every tyre pressed onto the road, because a
-tyre that is not pressed down cannot grip.</p>
+<p class="lead">This page explains how the suspension holds the body up and keeps every tyre
+pressed onto the road, so it can grip.</p>
 
 <div class="badges"><span class="label">Which vehicles have this</span>
 <span class="badge yes" title="Springs, dampers, anti-roll bars and link geometry on every car and van">Car</span>
-<span class="badge yes" title="Springs, dampers and bars on every truck and trailer; anti-squat on the rigid trucks">Truck</span>
+<span class="badge yes" title="Springs and dampers on every truck and trailer; anti-roll bars on the semis and trailers; anti-squat on the rigid trucks">Truck</span>
 <span class="badge some" title="No springs: its stiff tyres are the suspension, and the front axle swings on a pivot">Tractor</span>
-<span class="badge some" title="Its three landing wheels have springs and dampers like a car's">Plane</span>
-<span class="badge no" title="It floats: the water holds it up">Boat</span>
-<span class="badge no" title="It flies; its landing feet are rigid">Drone</span>
-<span class="badge no" title="The rails hold it; it has no suspension model">Train</span>
 </div>
 
 ## A spring and a damper at each corner
 
-![One axle seen from behind. The body sits on two springs and two dampers, one pair at each wheel. A bar runs across between the two wheels.](img/suspension.svg "One axle from behind. Each corner has a spring and a damper; an anti-roll bar links the two sides.")
+![One axle seen from behind. The body sits on two springs and two dampers, one pair at each wheel. A bar runs across between the two wheels.](img/suspension.svg "One axle from behind: springs, dampers and an anti-roll bar.")
+
+Why does a car need a suspension at all? A road is never perfectly smooth. If the wheels were
+bolted straight to the body, every bump would throw the whole car upwards, the passengers would be
+shaken, and a wheel that left the ground for a moment would have no grip at all. The suspension
+lets the wheel move up and down over the bump while the body stays much steadier.
 
 Each wheel hangs from the body on two parts that work side by side.
 
 - **The spring** carries the weight. The further it is squeezed, the harder it pushes back, like
-  the spring in a kitchen scale. In the game the push is the spring's stiffness times how far it
-  is squeezed.
+  the spring in a kitchen scale. Its push is its stiffness times how far it is squeezed. For
+  example, a spring with a stiffness of 20,000 newtons per metre, squeezed by 5 cm (0.05 m),
+  pushes with 1,000 newtons.
 - **The [damper](glossary.md#damper)** stops the bouncing. A spring on its own would keep the
   body bobbing up and down after every bump, like a ball on an elastic band. A damper pushes
-  against movement, not against position: the faster the wheel moves up or down, the harder it
-  resists, and when the wheel is still it does nothing.
+  against movement instead of position: the faster the wheel moves up or down, the harder it
+  resists (inside, a piston forces oil through small holes, and the faster it moves, the harder
+  the oil is to push through). When the wheel is still, it does nothing.
 
-The game adds the two forces and pushes the body up with the total at that corner. Two limits
-apply. A suspension can only push, never pull: when a wheel hangs in the air it carries nothing.
-And the push is capped, so a wheel that lands deep inside the ground after a big jump cannot fire
-the vehicle into the sky.
-<!-- RayWheel.tick: suspension_force = clamp(spring_rate x compression + damper_force + bar + links, 0, max_suspension_force) -->
+A common mistake is to think that the damper holds the car up. It does not: when the car stands
+still, the springs alone carry its weight. The damper only slows the movement.
 
-Every wheel has a fixed length of travel, from fully hanging to fully squeezed. On a car it is
-about 28 cm.
-<!-- CAR_BASE rest_length 0.28 m (gen_kenney_vehicles.gd) -->
+Together they decide how much each tyre is pressed onto the road. A wheel hanging in the air
+carries nothing, so it cannot grip. This is also why a softer suspension often grips better on a
+bumpy road: its wheel follows the bump and stays in contact, while a stiff one is thrown off the
+ground. A stiff suspension suits a smooth track instead, where there are few bumps to throw a
+wheel off. There, the body leans less in corners and dips less under braking, so the tyres stay
+flat on the road with their whole tread touching it. The car also answers the steering and the
+brakes at once, instead of waiting for the body to finish leaning. On a race car with wings, it
+keeps the body at the height the wings were designed for.
+
+How far a wheel can move up and down is its travel. A longer travel lets the wheel follow bigger
+bumps and holes. At the top of its travel the wheel meets a rubber stop, and the rest of the bump
+goes straight into the body.
+
+<figure>
+<img src="img/suspension-spring-damper-cutaway.jpg" alt="A pickup truck with its front wing cut away, showing the front wheel and, above it, a coil spring wound around a vertical shock absorber">
+<figcaption>A cutaway front suspension, the damper inside the coil spring. Photo: Aaron &amp; Alli, CC BY 2.0, <a href="https://commons.wikimedia.org/wiki/File:Chicago_Auto_Show_2010_(70)_(4357056503).jpg">Wikimedia Commons</a>.</figcaption>
+</figure>
 
 ### How stiff, and how soft
 
-A car's springs are chosen by how fast the body bounces on them, its
-[ride frequency](glossary.md#ride-frequency). A family
-saloon bounces about 1.4 times a second, a big van about 1.3, the racing cars about 1.6. Each
-car's front and rear springs are sized from that figure and the weight on that axle, so every
-car and van, heavy or light, stands with its springs squeezed by the same share of their travel:
-a little under half.
-<!-- CAR_BASE ride_hz 1.39, VAN_BASE 1.28, race 1.6; `_derive_springs`: "every body stands at the same 0.128 m sag (46 % of rest_length)" -->
+How stiff a suspension is can be described by how fast the body bounces on it, called the
+[ride frequency](glossary.md#ride-frequency). A comfortable car bounces slowly, and a racing car
+faster. A stiffer spring bounces faster and a heavier body bounces slower, so to give the same
+ride frequency a heavier vehicle needs stiffer springs, which is why a truck's springs are many
+times stiffer than a car's. For example, a body twice as heavy needs springs twice as stiff to
+bounce at the same rate.
 
-The dampers are set the same way, as a share of the damping that would stop a bounce dead
-without any overshoot. A car's are set to about a third of that when the wheel moves up (bump)
-and about half when it moves down (rebound). The firmer rebound keeps the wheel from springing
-back too fast after a bump, which would throw the body upwards.
-<!-- CAR_BASE zeta_bump 0.36, zeta_rebound 0.48; sedan 1800 / 2400 N·s/m -->
+Dampers are usually firmer when the wheel moves down (rebound) than when it moves up (bump). On a
+bump, a soft damper lets the wheel move up easily, which keeps the shock away from the body. On
+rebound the squeezed spring is pushing out, and a firm damper keeps the wheel from springing back
+too fast, which would throw the body upwards.
 
-The trucks and their trailers have springs chosen by hand for their loads, many times stiffer
-than a car's. A semi's front springs are about ten times as stiff as a saloon's.
-<!-- semi_spec.tres spring_rate 240000 N/m against the sedan's 22 kN/m -->
+<details><summary>How a damper can be firmer one way than the other</summary>
+
+Inside a damper, a piston moves through a tube full of oil. The oil can only get past the piston
+through small holes, and forcing it through them is what resists the movement. Each hole is
+covered on its far side by a stack of thin steel discs, which bend open when the oil pushes from
+the near side and press shut when it pushes from the far side. So some holes let oil through only
+on bump, and others only on rebound. The rebound holes are narrower and their discs stiffer, so
+the same speed meets more resistance on the way down.
+
+![A damper's tube full of oil, shown twice. On the left (bump), the piston moves down and oil flows up through a wide hole, bending two thin discs open, while a thick stack of discs under the piston keeps a narrow hole shut. On the right (rebound), the piston moves up and oil squeezes down through the narrow hole, bending the thick stack slightly, while the thin discs keep the wide hole shut.](img/damper-valves.svg "Inside a damper: a different hole and set of discs for each direction.")
+
+Many road-car dampers have a second valve at the bottom of the tube that does most of the bump
+work, but the idea is the same: one path for each direction.
+
+</details>
 
 ## The anti-roll bar
 
+<figure>
+<img src="img/suspension-sway-bar.jpg" alt="The underside of a car seen from below: a red steel bar runs across the car, in front of the rear axle housing, bent at its ends to reach the wheels">
+<figcaption>An anti-roll bar (red) across a car's rear axle. Photo: Nick Ares, CC BY-SA 2.0, <a href="https://commons.wikimedia.org/wiki/File:88_IROC_Painted_Rear_Sway_Bar.jpg">Wikimedia Commons</a>.</figcaption>
+</figure>
+
 In a corner, the body leans outwards: it [rolls](glossary.md#roll). Softer springs give a
-gentler ride but more roll. An [anti-roll bar](glossary.md#anti-roll-bar) fixes that without
-stiffening the ride. It is a steel bar across the car, joining the two wheels of one axle. When
-both wheels rise together, over a bump in the middle of the road, the bar just turns and does
-nothing. When one wheel rises more than the other, as the body leans, the bar twists, and its
-twist pushes the low side up and the high side down.
+gentler ride but more roll. An [anti-roll bar](glossary.md#anti-roll-bar) reduces roll without
+stiffening the ride. It is a steel bar across the car, joining the two wheels of one axle. Its
+middle is held to the body by two rubber mounts that let it rotate, and each end bends into an
+arm, joined by a short link to one wheel's suspension, so that the arm's end moves up and down with
+the wheel. When both wheels rise together (for example, over a speed bump), the bar just rotates in
+its mounts and does nothing. When one wheel rises more than the other, as the body leans, the bar
+twists, and its twist pushes the low side up and the high side down.
 
-The game models it this way: each axle's bar pushes with a force set by the difference between
-its left and right springs' squeeze. Most of the road vehicles have bars on both axles, and every
-trailer axle has one. A saloon's front bar is about four times as stiff as its rear one, so the
-front carries about two thirds of the car's resistance to roll.
-<!-- RayWheel.bar_force; CAR_BASE anti_roll_rate 16000, anti_roll_rate_rear 4000: "the front carries ~65-70 % of the roll stiffness" -->
+The bar is a spring that is twisted instead of squeezed (a torsion spring), made of the same kind
+of spring steel as the coil springs, solid or hollow. Unlike them, it ignores how far the wheels
+move and feels only the difference between the two sides.
 
-That split matters for more than comfort. The axle with the stiffer bar moves more weight from
+<div class="widget" data-widget="anti-roll-bar"></div>
+
+<div class="widget-limits" hidden>
+
+The wheels move up and down relative to the body. The red arrows grow with the difference between
+the two wheels, as the simulator's bar force does; the sizes of the parts are only a drawing. The
+small marks along the bar turn twice as far as the real bar would, so that the twist shows.
+<!-- widgets/anti-roll-bar.js: VehicleMath.anti_roll_force, rate x (left - right compression) -->
+
+</div>
+
+The bar has a price: because it links the two sides, a bump under one wheel also pushes on the
+other, so a very stiff bar makes the ride on a rough road less comfortable.
+
+The bars also affect the balance of the car. The axle with the stiffer bar moves more weight from
 its inside tyre to its outside tyre in a corner, and because of
-[load sensitivity](glossary.md#load-sensitivity) that axle loses grip first. A stiff front bar
-makes a car run wide at the front rather than swing out at the back, which is easier to control.
-[Weight transfer and rollover](weight-transfer.md) explains this in full.
+[load sensitivity](glossary.md#load-sensitivity) (the tyre that gains load gains less grip than
+the other one loses), that axle tends to lose grip first. A stiff front bar makes a car run wide at
+the front rather than swing out at the back, which is easier to control (see
+[Understeer and oversteer](understeer.md)).
 
 ## Links that resist dive and squat
 
-When a car brakes, its nose dips: it dives. When it accelerates, its tail drops: it squats. Both
-come from weight moving between the axles. The shape of the links that hold the wheels can resist
-this. As the brakes pull back on the front wheels, angled links turn part of that pull into a
-push that holds the nose up. That is [anti-dive](glossary.md#anti-dive). At the rear, the same
-trick under acceleration is [anti-squat](glossary.md#anti-squat).
+When a car brakes, its nose dips (it dives). When it accelerates, its tail drops (it squats). Both
+come from weight moving between the axles (see [Weight transfer and rollover](weight-transfer.md)).
 
-The game's cars and vans have both, set to resist about 40 % of the dive and 50 % of the squat.
-The rigid trucks have anti-squat only, and the semis neither. The links change only how far the
-body pitches. The weight still moves between the axles exactly as much as before, so the tyres'
-grip and the brakes' balance do not change.
-<!-- CAR_BASE and VAN_BASE anti_dive 0.4, anti_squat 0.5; TRUCK_BASE anti_dive 0, anti_squat 0.5; semi_spec.tres declares neither; docs/handling.md Pitch: "the tyre still carries the whole transfer" -->
+Each wheel is held to the body by links: solid bars, not springs. When the car brakes, the road
+drags the front wheels backwards, and the links pass that drag on to the body. A flat link just
+pushes the body backwards. A link that slopes up from the wheel to the body pushes along its slope:
+backwards, and a little upwards. That upward push helps hold the nose up, so the springs have less
+to carry and the nose dips less. This is [anti-dive](glossary.md#anti-dive); the steeper the link,
+the stronger it is. At the rear, sloping links do the same when the car accelerates, and hold the
+tail up: [anti-squat](glossary.md#anti-squat).
+
+<div class="widget" data-widget="anti-dive"></div>
+
+<div class="widget-limits" hidden>
+
+The share is the simulator's: a link angle holds off the dive or squat in proportion to its slope,
+all of it at the slope of the `sedan`'s centre-of-mass height over its wheelbase (about 17°). The
+widget starts at the sedan's own links: 40 % of the dive and 50 % of the squat. The blue and orange
+arrows split the axle's extra load in that share. The link is drawn steeper than it is, and the
+body's pitch and the sizes of the parts are only a drawing.
+<!-- widgets/anti-dive.js: sedan_spec.tres anti_dive_slope 0.121, anti_squat_slope 0.152; GroundDriveSpec: h / wheelbase = 100 % -->
+
+</div>
+
+The links only change how far the body pitches. The weight still moves between the axles just as
+much, so they do not add any grip.
 
 ## The tractor: tyres as springs, and a swinging axle
 
-A farm tractor has no springs on its axles. Its big soft tyres are its suspension, and the game
-gives each corner a stiff spring and damper that stand for the tyre itself. The rear tyres are
-stiffer still, so they can carry an implement hung on the back.
-<!-- TRACTOR_BASE spring_rate 330000, spring_rate_rear 420000 ("this models the whole axle, not just the rubber"), rest_length 0.12 -->
+Many farm tractors have no springs on their axles. Their big soft tyres are their suspension.
+A tractor works slowly on soft ground, so the bumps are gentle, and tall, low-pressure tyres can
+give enough to take them.
 
-What the tractor does have is a
-[swinging front axle](glossary.md#swinging-front-axle). The whole front axle is one beam, fixed to
-the tractor at a single pivot in the middle. When one front wheel climbs a bump, the beam tilts
-and the other wheel drops, so both keep touching the ground and share the load evenly. The body
-does not lean until the beam reaches its stop, 10° either way. This is why a tractor can cross a
-rutted field with all four wheels down.
-<!-- TRACTOR_BASE front_axle_swing_deg 10.0; RayWheel.swing_step -->
+Tractors do have a [swinging front axle](glossary.md#swinging-front-axle). The whole front axle is
+one beam, fixed to the tractor at a single pivot in the middle. When one front wheel climbs a
+bump, the beam tilts and the other wheel drops, so both keep touching the ground and share the
+load evenly. The bump does not tilt the body until the beam reaches its stop. This is why a tractor can
+cross a rutted field with all four wheels down. (A stiff axle fixed at both ends would be like a
+four-legged table on uneven ground: it rocks on three legs while the fourth hangs in the air.)
 
-The tractor has no anti-roll bars and no anti-dive or anti-squat links.
+<div class="widget" data-widget="swing-axle"></div>
 
-## What the game leaves out
+<div class="widget-limits" hidden>
+
+The stop at 10° each way is the simulator's tractor's. The axle's width and the sizes of the parts
+are only a drawing; the body is shown held level by the rear axle, and the tyres do not squash.
+<!-- widgets/swing-axle.js: TRACTOR_BASE front_axle_swing_deg 10.0 (tools/gen_kenney_vehicles.gd) -->
+
+</div>
+<!-- photo: a tractor's front axle with its central pivot, seen from the front -->
+
+## What Carlito simulates
+
+The parameters the simulator uses for this, and where each is set, are listed in
+[How the simulation works](simulation.md#suspension):
+
+- **Per vehicle**:
+  - [Travel](simulation.md#travel) (`rest_length`)
+  - [Springs](simulation.md#springs) (`spring_rate`, `spring_rate_rear`)
+  - [Dampers](simulation.md#dampers) (`damper_bump`, `damper_rebound`, and their `_rear` versions)
+  - [Anti-roll bars](simulation.md#anti-roll-bars) (`anti_roll_rate`, `anti_roll_rate_rear`)
+  - [Anti-dive and anti-squat](simulation.md#anti-dive-and-anti-squat) (`anti_dive_slope`,
+    `anti_squat_slope`)
+  - [Swinging front axle](simulation.md#swinging-front-axle) (`front_axle_swing_deg`)
+  - [Push ceiling](simulation.md#push-ceiling) (`max_suspension_force`), a simulation limitation
+
+<details><summary>Simplification list</summary>
 
 - **No separate unsprung mass.** A real wheel, brake and axle have their own weight, which
-  bounces on the tyre. In the game the wheel has a spinning mass but no up-and-down mass of its
-  own: only the body moves on the springs.
+  bounces on the tyre. In the simulation the wheel has a spinning mass but no up-and-down mass of
+  its own: only the body moves on the springs.
 - **No tyre spring on road vehicles.** A car's tyre is treated as rigid up and down; only its
   suspension spring gives.
+- **A tractor's tyres are springs and dampers.** Each corner has a stiff spring and damper that
+  stand for the tyre. The front axle swings up to 10° each way.
+  <!-- TRACTOR_BASE spring_rate 330000, spring_rate_rear 420000; front_axle_swing_deg 10.0; RayWheel.swing_step -->
+- **Simple link geometry.** Anti-dive and anti-squat are fixed shares. The cars and vans have
+  both, the rigid trucks only anti-squat, and the semis neither.
+  <!-- CAR_BASE and VAN_BASE anti_dive 0.4, anti_squat 0.5; TRUCK_BASE anti_dive 0, anti_squat 0.5; semi_spec.tres declares neither -->
+- **A push ceiling.** Each corner's push is capped, so a wheel that lands deep inside the
+  ground after a big jump cannot fire the vehicle into the sky.
 - **No adjustable suspension, air suspension or ride height.**
 - **No suspension wear or breakage.**
 
-## What you see in sloppyCAN
+</details>
 
-No signal reports a spring's squeeze. Two signals read the suspension's forces:
+## What you see in sloppyCAN
 
 | Signal | Direction | Unit | What it shows |
 | --- | --- | --- | --- |
-| `axle_load` | out | kg | Truck and tractor: the weight on the rear axle, read off its springs. It rises as a load is added and swings as the vehicle brakes, accelerates or crosses bumps. |
-| `trailer_axle_load` | out | kg | Truck: the same for the trailer's axles. |
-| `pitch`, `roll` | out | deg | Boat, plane and drone only: the body's tilt. The wheeled vehicles show theirs on the F3 overlay, not on the bus. |
-<!-- contract/carlito_contract.json: axle_load (tractor, truck; "the summed RayWheel suspension force on the rear axle"), trailer_axle_load (truck), pitch and roll (boat, plane, drone); debug_overlay.gd _attitude_line reads telemetry.pitch / roll on every vehicle -->
+| `axle_load` | out | kg | The weight on the rear axle, read off its springs. It rises as a load is added and swings as the vehicle brakes, accelerates or crosses bumps (Truck and tractor). |
+| `trailer_axle_load` | out | kg | The same for the trailer's axles (Truck). |
+<!-- contract/carlito_contract.json: axle_load (tractor, truck; "the summed RayWheel suspension force on the rear axle"), trailer_axle_load (truck) -->
 
-## Try it in the game
+The car, the truck and the tractor do not send the body's pitch or roll.
+<!-- contract pitch and roll: not car, truck or tractor -->
 
-<div class="box try">
-<p class="box-title">Try it in the game: watch the body pitch and roll</p>
+## Scenarios
 
-1. The debug overlay in the top right (**F3** shows or hides it) has a `pitch` and `roll` line,
-   in degrees, for any vehicle.
-   <!-- debug_overlay.gd _refresh: _attitude_line -->
-2. Pick the `sedan` on **Flatland**. Accelerate hard from a standstill: `pitch` goes positive as
-   the nose rises. Brake hard: it goes negative as the nose dips, then settles back with a small
-   overshoot as the dampers stop the bounce.
-3. Drive in a steady circle at about 40 km/h. `roll` settles at a steady lean of a few degrees.
-4. Now take the `tractor-kenney` across the farm fields of **Level 1 - Island** and watch its
-   front wheels on uneven ground: the axle tilts on its pivot while the body stays nearly level.
-
-</div>
+- [Pulling away](forces.md#example-pulling-away): the weight that the rear springs take on when the car squats.
+- [Emergency stop](forces.md#example-emergency-stop): the weight that the front springs take on when the car dives.
+- [Turning](forces.md#example-turning): the weight that the outer springs take on when the body rolls.
 
 ## Related
 
 - [Weight transfer and rollover](weight-transfer.md): what the suspension does in a turn.
-- [Tyres and slip](tyres.md): why the load on each tyre matters.
+- [Slip and the grip curve](slip.md): why the load on each tyre matters.
 - [Glossary](glossary.md): every term on this page.

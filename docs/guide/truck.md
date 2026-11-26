@@ -1,13 +1,62 @@
-[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
-
 # The trucks
 
-<p class="lead">The truck family is two rigid trucks and two semi tractor units, the cab-over
-`semi` and the American-style `semi-conventional`, which pull four kinds of semi-trailer. They
-add air brakes, a retarder, heavy loads and, on the garbage truck, a working body with its own
-network.</p>
+<p class="lead">This page shows the parts the simulator models in a truck, what each one does, and
+the signals it shares with sloppyCAN.</p>
+
+<!-- widgets/anatomy.js: its data block cites the spec or code behind every part and layout -->
+<div class="widget an-widget" data-widget="anatomy" data-family="truck"></div>
+
+<!-- Shown behind the widget's warning button (GuideKit.limitsButton). -->
+<div class="widget-limits" hidden>
+
+The drawing is a diagram, not a plan of the truck: each part sits where it reads clearly. The simulator
+does not place an engine or a tank inside the body; their weight is part of the truck's mass and
+its centre of mass.
+<!-- VehicleSpec mass, center_of_mass -->
+
+Two layouts stand for four trucks. The fire truck is the garbage truck without the refuse body:
+heavier, and governed faster. The `semi-conventional`, a bonneted American
+tractor unit, tows the same trailers with no trailer data link: its trailer signals read zero,
+and the one thing its trailer can report is the `trailer_abs_lamp` warning lamp, set by sloppyCAN.
+<!-- firetruck_spec.tres mass 12000, speed_limit_kmh 110, no `arm` mesh (TruckVehicle._find_rig); conventional_spec.tres trailer_bus_equipped false; contract trailer_abs_lamp (j2497) -->
+
+On a truck, `pto_state`, `trailer_axle_load`, `trailer_brake_applied`, `twd` and `tws` reach
+sloppyCAN but travel in no CAN frame. `speed_limit`, `engine_hours` and `axle_load` travel only
+when something on the bus asks for them, as on a real J1939 truck.
+<!-- sloppycan js/isobus.js ibRpto: "A truck's pto_state therefore rides NO frame"; js/iso11992.js unpackable trailer_axle_load, trailer_brake_applied; js/nmea2000.js: 130306 only with a boat; js/carlito.js CAN_MAP_ON_REQUEST, js/j1939-flavor.js onRequest axle_load -->
+
+</div>
+
+## The controls
+
+<!-- widgets/cockpit.js: its data block cites the signals behind every control -->
+<div class="widget an-widget" data-widget="cockpit" data-family="truck"></div>
+
+<div class="widget-limits" hidden>
+
+The simulator has no clutch pedal (it works the clutch for you), and no range or splitter switch.
+The retarder, the key and the indicators are only worked by sloppyCAN (when driving locally, the
+key stays at Ignition).
+<!-- gearbox.md What Carlito simulates; contract retarder: no local key; InputRouter: "local input is always Ignition", turnL / turnR have no local source -->
+
+</div>
 
 ## The family
+
+Carlito currently features four diesel trucks (two rigid trucks, two semi tractors), using the same set of physics. The semi trucks can pull semi-trailers.
+<!-- fuel_type 1, driven_rear (GroundDriveSpec default), hill_hold 1 in every truck spec; SemiTractor.cycle_implement: box, tipper, tanker, flatbed, bobtail -->
+
+The following semi-trailers are available:
+
+- **Box** (24 t): a full load in a tall box, which catches the most crosswind.
+- **Tipper** (19 t): a body that tips up to empty, worked by the truck's PTO.
+- **Tanker** (21 t): its liquid surges forward and back when braking and accelerating.
+- **Flatbed** (14 t): an open deck, and the lightest trailer.
+
+The semi trucks can also drive without a trailer (this is called a [bobtail](glossary.md#bobtail)).
+<!-- TrailerCatalog.TRAILERS and DESC; trailers/*_spec.tres mass -->
+
+<details><summary>Truck list</summary>
 
 | Vehicle | What it is | Weight, about | Gearbox | Governed to |
 | --- | --- | --- | --- | --- |
@@ -17,62 +66,40 @@ network.</p>
 | `semi-conventional` | Bonneted tractor unit, no trailer data link | 8 t | 12-speed AMT | 105 km/h |
 <!-- garbage-truck_spec.tres mass 8000, speed_limit_kmh 85; firetruck_spec.tres 12000, 110; semi_spec.tres 8000, 90; conventional_spec.tres 8000, 105; gear_ratios 6 / 12 -->
 
-All four drive their rear wheels through an open differential.
-
-## What each truck has
-
-- [Tyres](tyres.md) with an M+S drive tread, or winter or mud tyres ([Ground and tyre
-  types](surfaces.md)).
-- [Steering](steering.md) and stiff [suspension](suspension.md); the rigid trucks have
-  anti-squat links.
-- A diesel [engine](engine.md) with a road-speed governor, and the automatic or AMT
-  [gearbox](gearbox.md) above, with a [torque converter](coupling.md) on the rigid trucks and an
-  automated clutch on the semis.
-- [Air brakes with spring parking brakes](brakes.md#air-and-spring-brakes), and a
-  [retarder](brakes.md#the-retarder).
-- [ABS, traction control (ASR) and stability control](driver-aids.md); the semis add
-  [roll stability](driver-aids.md#roll-stability-on-the-semis).
-- [Hill-start assist](holding.md#hill-start-assist); no park pawl.
-- [Air drag and rolling resistance](resistance.md), the [aux models](auxiliary.md) including the two
-  air tanks, and [position and distance](position.md).
-
-## The semis and their trailers
-
-The semis tow the box, tipper, tanker and flatbed semi-trailers on a fifth wheel; with none, they
-drive as a bobtail. [Towing](towing.md) covers the joint, the trailer brakes, the tanker's surge
-and the tipper.
-
-## The garbage truck's body
-
-The garbage truck's front arm lifts bins over the cab and empties them into its hopper. It is
-worked through a separate network from the truck's own, as on real refuse trucks: the body
-speaks CANopen, a different message set, and a gateway passes messages between it and the
-truck's J1939 network.
-<!-- docs/truck.md The refuse body: CiA 422 "CleANopen" body network, CiA 413 truck gateway -->
-
-- Press **P** for the PTO, which powers the body's pump, then **X** to step the body through
-  idle, lift, dump and lower; sloppyCAN sends `body_cmd`.
-- The body only works with the truck parked: the PTO in, the parking brake on, and at most a
-  walking pace. Otherwise the gateway sets an interlock and the arm freezes.
-- While the arm rises, the pump loads the engine through the PTO, so the engine load and the fuel
-  burn rise with each lift. With the truck parked, the engine holds the pump's set speed.
-- Each emptied load adds real weight to the hopper, which the axle load and engine load then
-  show. The only way to empty the hopper is to respawn.
-<!-- docs/truck.md: body_cmd (Idle/Lift/Dump/Lower, X key); body_inhibit computed chassis-side (road speed, PTO state, parking brake); RefuseBody.PUMP_KW; VehicleSpec.pto_mode_rpm 1300; "hopper_load adds real mass to the chassis"; "respawn is the only way to empty the hopper" -->
-
-## Where to drive them
-
-Trucks are allowed on every level but Open Sea and Car Arena. **Level 2 - Mountain** has the long
-grades that load the engine and heat the brakes.
-<!-- *_info.tres allowed_vehicles; level_registry level_2 desc -->
+</details>
 
 ## What you see in sloppyCAN
 
-The trucks speak J1939, the standard of heavy vehicles. Beyond the shared signals they publish
-`engine_load`, `axle_load`, `gear_ratio`, `speed_limit`, `retarder_state`, `air_primary`,
-`air_secondary`, `pto_state` and `engine_hours`, the semi's trailer signals, and the garbage
-truck's body signals: `body_state`, `body_pos`, `body_inhibit`, `body_bus` and `hopper_load`.
-<!-- contract/carlito_contract.json truck signals (flavors j1939, iso11992, cleanopen) -->
+| Signal | Direction | Unit | What it shows |
+| --- | --- | --- | --- |
+| `esc_off` | in | flag | Switches stability control off, and traction control with it (Car and truck). |
+| `engine_load` | out | % | Torque given over the most it can give (Truck and tractor). |
+| `engine_hours` | out | h | The engine's running time (Truck and tractor). |
+| `gear_ratio` | out | ratio | The engaged gear's ratio, without the final drive. 0 in N or P (Truck and tractor). |
+| `axle_load` | out | kg | The weight on the rear axle, read off its springs (Truck and tractor). |
+| `pto` | in | flag | Engage the PTO (Truck and tractor). |
+| `pto_state` | out | flag | The PTO is engaged and the engine is running (Truck and tractor). |
+| `retarder` | in | % | The retarder request. |
+| `retarder_state` | out | % | The retarder's torque as actually applied, after it fades at low speed. |
+| `air_primary`, `air_secondary` | out | bar | The two brake tanks. Warning at 5 bar; the spring brakes apply below 3. |
+| `red_stop`, `amber_warn`, `protect_lamp` | in | flag | The fault lamps (stop, warning, and protect for a fluid level, pressure or temperature), set by sloppyCAN. |
+| `body_cmd` | in | enum | The refuse body command: Idle, Lift, Dump or Lower (Garbage truck). |
+| `body_state` | out | enum | What the body is doing: Stowed, Lifting, Dumping, Lowering or Inhibited (Garbage truck). |
+| `body_pos` | out | % | The arm's travel, 0 stowed, 100 raised over the cab (Garbage truck). |
+| `body_inhibit` | out | flag | The body is locked out, because the truck is faster than walking pace, the PTO is off or the parking brake is released (Garbage truck). |
+| `body_bus` | out | flag | The body's network is powered, which needs the key at Ignition and the PTO engaged (Garbage truck). |
+| `hopper_load` | out | % | How full the hopper is. Each dump cycle adds to it, and to the truck's weight (Garbage truck). |
+| `trailer_connected` | out | flag | A trailer is coupled and has answered on the trailer link (Semi). |
+| `trailer_axle_load` | out | kg | The weight on the trailer's axles, from its own springs (Semi). |
+| `trailer_brake_demand` | out | % | The brake demand sent to the trailer. Not the retarder (Semi). |
+| `trailer_brake_applied` | out | % | How hard the trailer's brakes have actually applied (Semi). |
+| `trailer_abs` | out | flag | The trailer's ABS is holding a wheel (Semi). |
+| `trailer_vdc` | out | flag | The trailer's roll control is braking it (Semi). |
+| `trailer_ebs_fault` | in | flag | A trailer brake fault set by sloppyCAN, for the dashboard (Semi). |
+| `trailer_abs_lamp` | in | flag | The American trailer ABS lamp, set by sloppyCAN (Semi). |
+<!-- contract/carlito_contract.json: the truck's signals the car and tractor do not all share (esc_off [car, truck]; pto, pto_state, engine_load, engine_hours, gear_ratio, axle_load [truck, tractor]; the rest [truck]); body_* and hopper_load: RefuseBody (garbage truck); trailer_*: ISO 11992 / J2497 (semis) -->
+
+[See all signals](signals.md)
 
 ## Related
 

@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 215" width="420" height="215">
+<title>Compliance steer: a sideways push bends the rubber bushes and turns the wheel</title>
+<!-- An illustration, bending exaggerated. Seen from above, the left rear wheel in a right turn. The
+     loaded wheel and carrier are the unloaded ones turned 6.84 deg about (160,130) and moved 5 px
+     right, so the front arm's end moves 8 px into its bush and the rear arm's 2 px:
+     atan((8 - 2) / 50) = 6.84 deg. -->
+<style>
+.cs-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.cs-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.cs-body{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-muted,#6b6b75);stroke-width:1.5}
+.cs-wheel{fill:var(--fig-ink,#1c1c1f)}
+.cs-carrier{fill:var(--fig-muted,#6b6b75)}
+.cs-arm{stroke:var(--fig-muted,#6b6b75);stroke-width:5;fill:none;stroke-linecap:round}
+.cs-ghost{fill:none;stroke:var(--fig-muted,#6b6b75);stroke-width:1.5;stroke-dasharray:4 3}
+.cs-bush{fill:var(--fig-orange,#c45a12);fill-opacity:0.35;stroke:var(--fig-orange,#c45a12);stroke-width:2}
+.cs-pin{fill:var(--fig-ink,#1c1c1f)}
+.cs-push{stroke:var(--fig-green,#2e7d32);stroke-width:3.5;fill:none}
+.cs-fg{fill:var(--fig-green,#2e7d32)}
+.cs-dim{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:none}
+.cs-fi{fill:var(--fig-ink,#1c1c1f)}
+.cs-green-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-green,#2e7d32)}
+.cs-orange-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.cs-t{fill:var(--fig-ink,#e9e7e2)}.cs-s{fill:var(--fig-muted,#a6a6b0)}.cs-body{fill:var(--fig-fill,#22242a);stroke:var(--fig-muted,#a6a6b0)}
+.cs-wheel{fill:var(--fig-ink,#e9e7e2)}.cs-carrier{fill:var(--fig-muted,#a6a6b0)}.cs-arm{stroke:var(--fig-muted,#a6a6b0)}
+.cs-ghost{stroke:var(--fig-muted,#a6a6b0)}.cs-bush{fill:var(--fig-orange,#f0a060);stroke:var(--fig-orange,#f0a060)}
+.cs-pin{fill:var(--fig-ink,#e9e7e2)}.cs-push{stroke:var(--fig-green,#7cc884)}.cs-fg{fill:var(--fig-green,#7cc884)}
+.cs-dim{stroke:var(--fig-ink,#e9e7e2)}.cs-fi{fill:var(--fig-ink,#e9e7e2)}
+.cs-green-t{fill:var(--fig-green,#7cc884)}.cs-orange-t{fill:var(--fig-orange,#f0a060)}}
+</style>
+<defs><marker id="cs-ag" markerWidth="10" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path class="cs-fg" d="M0,0 L10,5 L0,10 Z"/></marker><marker id="cs-ai" markerWidth="8" markerHeight="8" refX="1" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path class="cs-fi" d="M0,0 L8,4 L0,8 Z"/></marker></defs>
+
+<!-- which way is forward -->
+<line class="cs-dim" x1="24" y1="72" x2="24" y2="46" marker-end="url(#cs-ai)"/>
+<text class="cs-s" x="34" y="60">front</text>
+
+<!-- the car body, to the right of the wheel -->
+<rect class="cs-body" x="300" y="60" width="110" height="140" rx="6"/>
+<text class="cs-s" x="360" y="134" text-anchor="middle">car body</text>
+
+<!-- unloaded: wheel straight, arms level, pins centred in their bushes -->
+<rect class="cs-ghost" x="115" y="95" width="30" height="70" rx="6"/>
+<line class="cs-ghost" x1="160" y1="105" x2="300" y2="105"/>
+<line class="cs-ghost" x1="160" y1="155" x2="300" y2="155"/>
+
+<!-- the rubber bushes, fixed in the body -->
+<circle class="cs-bush" cx="300" cy="105" r="13"/>
+<circle class="cs-bush" cx="300" cy="155" r="8"/>
+
+<!-- loaded: the wheel and its carrier pushed right and turned -->
+<line class="cs-arm" x1="168" y1="105" x2="308" y2="105"/>
+<line class="cs-arm" x1="162" y1="155" x2="302" y2="155"/>
+<g transform="translate(5 0) rotate(6.84 160 130)">
+<rect class="cs-wheel" x="115" y="95" width="30" height="70" rx="6"/>
+<rect class="cs-carrier" x="145" y="100" width="15" height="60" rx="3"/>
+</g>
+<circle class="cs-pin" cx="308" cy="105" r="4"/>
+<circle class="cs-pin" cx="302" cy="155" r="4"/>
+
+<!-- labels -->
+<line class="cs-push" x1="24" y1="130" x2="98" y2="130" marker-end="url(#cs-ag)"/>
+<text class="cs-green-t" x="56" y="110" text-anchor="middle">push from</text>
+<text class="cs-green-t" x="56" y="152" text-anchor="middle">the road</text>
+<text class="cs-orange-t" x="300" y="80" text-anchor="middle">soft bush: gives more</text>
+<text class="cs-orange-t" x="300" y="184" text-anchor="middle">stiffer bush: gives less</text>
+<text class="cs-t" x="140" y="200" text-anchor="middle">so the wheel turns slightly</text></svg>

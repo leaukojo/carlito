@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 300" width="420" height="300">
-<title>Air drag and rolling resistance on the sedan against speed</title>
+<title>Air drag and rolling resistance on a saloon against speed</title>
 <!-- sedan_spec.tres drag_area 0.65 m², rolling_resistance 0.012, mass 1150 kg; VehicleMath.AIR_DENSITY 1.225.
      Drag = 0.5 rho CdA v² (VehicleMath.aero_drag); rolling = crr m g = 135 N on a flat road. Crossover near 66 km/h. -->
 <style>

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 292" width="420" height="292">
+<title>A receiver and three satellites, with a circle of distance round each, crossing at the receiver</title>
+<!-- Drawn by hand, no simulator numbers. Illustrative: each circle is centred on a satellite and has the distance the signal travelled as its radius; the circles meet at one point, the receiver. -->
+<style>
+.gn-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.gn-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.gn-lm{stroke:var(--fig-muted,#6b6b75);stroke-width:1.2;fill:none;stroke-dasharray:5 4}
+.gn-body{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:var(--fig-fill,#f1eee7)}
+.gn-fi{fill:var(--fig-ink,#1c1c1f)}
+.gn-b{stroke:var(--fig-blue,#1d5ca8);stroke-width:3;fill:none;stroke-linejoin:round}.gn-fb{fill:var(--fig-blue,#1d5ca8)}
+.gn-o{stroke:var(--fig-orange,#c45a12);stroke-width:3;fill:none;stroke-linejoin:round}.gn-fo{fill:var(--fig-orange,#c45a12)}
+.gn-g{stroke:var(--fig-green,#2e7d32);stroke-width:3;fill:none;stroke-linejoin:round}.gn-fg{fill:var(--fig-green,#2e7d32)}
+@media (prefers-color-scheme:dark){
+.gn-t{fill:var(--fig-ink,#e9e7e2)}.gn-s{fill:var(--fig-muted,#a6a6b0)}
+.gn-lm{stroke:var(--fig-muted,#a6a6b0);}
+.gn-body{stroke:var(--fig-ink,#e9e7e2);fill:var(--fig-fill,#26282e)}
+.gn-fi{fill:var(--fig-ink,#e9e7e2)}
+.gn-b{stroke:var(--fig-blue,#8ab6ff);}.gn-fb{fill:var(--fig-blue,#8ab6ff)}
+.gn-o{stroke:var(--fig-orange,#f0a060);}.gn-fo{fill:var(--fig-orange,#f0a060)}
+.gn-g{stroke:var(--fig-green,#7cc884);}.gn-fg{fill:var(--fig-green,#7cc884)}
+}
+</style>
+<clipPath id="gn-clip"><rect x="0" y="0" width="420" height="240"/></clipPath>
+<circle class="gn-b" cx="70" cy="50" r="229.6" clip-path="url(#gn-clip)" style="stroke-width:2"/>
+<line class="gn-lm" x1="70" y1="50" x2="210" y2="232"/>
+<rect class="gn-body" x="60" y="43" width="20" height="14" rx="2"/><rect class="gn-fb" x="46" y="47" width="12" height="6"/><rect class="gn-fb" x="82" y="47" width="12" height="6"/>
+<circle class="gn-o" cx="215" cy="28" r="204.1" clip-path="url(#gn-clip)" style="stroke-width:2"/>
+<line class="gn-lm" x1="215" y1="28" x2="210" y2="232"/>
+<rect class="gn-body" x="205" y="21" width="20" height="14" rx="2"/><rect class="gn-fo" x="191" y="25" width="12" height="6"/><rect class="gn-fo" x="227" y="25" width="12" height="6"/>
+<circle class="gn-g" cx="360" cy="70" r="220.8" clip-path="url(#gn-clip)" style="stroke-width:2"/>
+<line class="gn-lm" x1="360" y1="70" x2="210" y2="232"/>
+<rect class="gn-body" x="350" y="63" width="20" height="14" rx="2"/><rect class="gn-fg" x="336" y="67" width="12" height="6"/><rect class="gn-fg" x="372" y="67" width="12" height="6"/>
+
+<text class="gn-s" x="70" y="30" text-anchor="middle">satellite 1</text>
+<text class="gn-s" x="215" y="14" text-anchor="middle">satellite 2</text>
+<text class="gn-s" x="360" y="52" text-anchor="middle">satellite 3</text>
+<circle class="gn-fi" cx="210" cy="232" r="6"/>
+<text class="gn-t" x="210" y="258" text-anchor="middle">receiver</text>
+<text class="gn-s" x="10" y="284">Each circle: every place at that distance from its satellite.</text>
+</svg>

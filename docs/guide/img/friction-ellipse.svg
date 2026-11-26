@@ -18,7 +18,7 @@
 <line class="fe-axis" x1="80" y1="150" x2="340" y2="150"/>
 <line class="fe-axis" x1="210" y1="26" x2="210" y2="274"/>
 <text class="fe-blue-t" x="318" y="62">grip limit</text>
-<text class="fe-t" x="210" y="20" text-anchor="middle">driving</text>
+<text class="fe-t" x="210" y="20" text-anchor="middle">pushing forwards</text>
 <text class="fe-t" x="210" y="292" text-anchor="middle">braking</text>
 <text class="fe-t" x="72" y="155" text-anchor="end">turning</text>
 <text class="fe-t" x="348" y="155">turning</text>

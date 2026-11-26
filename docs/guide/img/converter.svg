@@ -27,7 +27,7 @@
 <circle class="cv-dot" cx="60" cy="60" r="5.5"/>
 <text class="cv-orange-t" x="72" y="54">stall: torque doubled</text>
 <text class="cv-s" x="72" y="190">at stall the wheels are held and the engine</text>
-<text class="cv-s" x="72" y="206">runs near 2400 rpm</text>
+<text class="cv-s" x="72" y="206">runs at its stall speed</text>
 <text class="cv-orange-t" x="352" y="160" text-anchor="end">coupling point</text>
 <text class="cv-s" x="373" y="36" text-anchor="middle">lock-up</text>
 <text class="cv-s" x="54" y="64" text-anchor="end">2</text>

@@ -2,247 +2,267 @@
 
 # Brakes
 
-<p class="lead">Brakes turn a vehicle's speed into heat. Each vehicle in the game has its own
-brake hardware, sized from a real vehicle of its kind, and the brakes warm up, cool down and
-lose strength when they get too hot.</p>
+<p class="lead">This page explains how brakes turn speed into heat and fade when hot, the
+handbrake, and a truck's retarder and air brakes.</p>
 
 <div class="badges"><span class="label">Which vehicles have this</span>
-<span class="badge yes" title="Disc brakes on every wheel, a handbrake on the rear">Car</span>
+<span class="badge yes" title="Disc brakes (drums at the rear of the pickups and SUVs), a handbrake on the rear">Car</span>
 <span class="badge yes" title="Air brakes with spring parking brakes, plus a retarder; the trailers brake too">Truck</span>
 <span class="badge yes" title="Wet disc brakes in the rear axle's oil">Tractor</span>
-<span class="badge some" title="Wheel brakes and a parking brake on its three landing wheels">Plane</span>
-<span class="badge no" title="It slows by reversing its propeller">Boat</span>
-<span class="badge no" title="It slows by changing its rotor speeds">Drone</span>
-<span class="badge some" title="A train air brake, on the trains page">Train</span>
 </div>
 
-## Brake hardware
+A car moving at motorway speed carries a great deal of energy of motion, and stopping it means
+getting rid of all of that energy. Energy cannot simply disappear, so where does it go? A brake
+turns it into heat, and the question for a brake is then how much heat it can take.
 
-A car's brake squeezes a pad against a disc that turns with the wheel. The rubbing slows the
-wheel, and the tyre then slows the car. How hard a brake can squeeze is its torque, in newton-
-metres, just like an engine's.
+## Brakes turn movement into heat
 
-Each vehicle in the game has brakes copied from a real vehicle of its class: a family car's
-discs, a sports car's bigger ones, a van's, a 26-tonne truck's air-operated brakes, a farm
-tractor's oil-bathed discs. They are never made bigger to suit the game. Every one of them is
-strong enough to lock its wheels on dry asphalt: the brakes can always ask for more than the tyres
-can give.
-<!-- docs/vehicles.md Brake hardware: declared hardware per class; BrakeSizing: "the foot brake is at least 1.15x the stock tyre, so it can lock" -->
+<figure>
+<img src="img/brake-disc-caliper.jpg" alt="A car's front disc brake with the wheel removed: a flat metal disc on the hub, and a caliper straddling its edge">
+<figcaption>A disc brake with the wheel off. Photo: Riley from Christchurch, New Zealand, CC BY 2.0, <a href="https://commons.wikimedia.org/wiki/File:Alarm_bells!_(25681917701).jpg">Wikimedia Commons</a>.</figcaption>
+</figure>
 
-| Class | Vehicles | Full brake, about |
-| --- | --- | --- |
-| Saloon discs | `sedan`, `taxi`, `hatchback-sports` | 1.3 to 1.6 g |
-| Performance | `sedan-sports`, `police` | 1.6 to 1.9 g |
-| SUV and light commercial | `suv`, `suv-luxury`, `van`, the pickups | 1.4 to 2.6 g |
-| Racing | `race`, `race-future` | 2.5 to 2.7 g |
-| Heavy van | `delivery`, `delivery-flat`, `ambulance` | 1.2 to 1.5 g |
-| Truck air brakes | `garbage-truck`, `firetruck`, the semis | about 2.2 g unladen, 1.5 g on the laden `firetruck` |
-| Tractor wet discs | `tractor-kenney` | about 1.4 g |
-<!-- docs/vehicles.md Brake hardware table: foot brake as g at the body's mass -->
+<figure>
+<img src="img/drum-brake-shoes-backplate.jpg" alt="A mechanic lying beside a jacked-up wheel hub with the brake drum removed, showing the two curved brake shoes and their return springs on the round backing plate">
+<figcaption>A drum brake with the drum off. Photo: Theo van Haren Noman / Anefo, CC0, <a href="https://commons.wikimedia.org/wiki/File:Automontage_Fordgarage,_Bestanddeelnr_901-0686.jpg">Wikimedia Commons</a>.</figcaption>
+</figure>
 
-A [g](glossary.md#units) here is the braking the hardware could give if the tyres had unlimited grip,
-as a share of the pull of gravity. No tyre on a road gives much more than 1 g, so in practice
-the tyres set the limit: the brakes lock the wheels, or ABS holds them just short of locking.
+A car's brake squeezes pads against a disc that turns with the wheel. The rubbing (friction) slows
+the wheel, and the tyre then slows the car. Every bit of the car's energy of motion ends up as heat
+in the pads and the disc.
+
+How much heat? The energy of motion is half the mass times the speed squared, so it grows much
+faster than the speed does. For example, a car of 1,000 kg at 100 km/h (about 28 m/s) carries
+roughly 400,000 joules. If all of that went into 10 kg of steel, the steel would warm by about
+80 °C, within a few seconds. A car at twice the speed carries four times the energy, so it asks
+four times as much of its brakes (a common misconception is that it asks twice as much).
+
+Other kinds of brake do the same job in different ways:
+
+- **Drums**: shoes press on the inside of a drum. The drum is closed, so dirt and water stay out,
+  but for the same reason the heat is trapped inside it. They are common on trucks.
+- **Racing pads**: pads and discs made of materials that keep their grip when very hot, as brakes
+  on a racing car get during hard braking from high speed.
+- **Wet discs**: discs bathed in oil inside the axle, as on farm tractors. Sealed in oil, they stay
+  clean in mud and wear very slowly, and the oil carries the heat away.
+
+How hard a brake can squeeze is given as a torque (in newton-metres), like an engine's. Brakes are
+normally strong enough to lock their wheels on a dry road, so the tyres set the limit and not the
+brakes. So, against a common belief, a brake stronger than that does not stop a vehicle in a
+shorter distance, because a tyre can push on the road with at most μ times its load (see
+[the coefficient of friction](tyres.md#the-coefficient-of-friction)), and the brake cannot ask more
+than that. Braking harder only locks the wheels, or makes ABS step in
+([see the forces](forces.md#example-emergency-stop)).
+
+This is why road vehicles rarely brake at much more than 1 [g](glossary.md#units): with a μ of
+about 1, the tyres cannot pull the vehicle back by more than about its own weight. On ice, with a
+μ of about 0.1 (for example), the limit is about a tenth of that, however good the brakes.
 
 ### Front and rear
 
-When a car brakes, weight moves onto its front wheels, so they can take more braking. The game
-divides each car's braking between front and rear in proportion to the grip each axle has in a
-hard stop. That split is the [brake bias](glossary.md#brake-bias). It is fixed: real cars adjust it
-with valves, the game does not.
-<!-- GroundDriveSpec.brake_bias_front; gen_kenney_vehicles _front_brake_share proportions it by each axle's load-scaled grip in a tyre-limited stop -->
+When a car brakes, its weight moves onto the front wheels, as passengers lean forward in a bus
+(see [Weight transfer](weight-transfer.md#why-weight-moves)). The front tyres are pressed harder,
+so they can take more braking, and the rear ones, pressed less, can take less. The braking is
+therefore shared unevenly between front and rear, with more at the front. That split is called the
+[brake bias](glossary.md#brake-bias).
+
+The split also decides what happens in a panic stop. If the front wheels lock first, the car loses
+its steering but keeps going straight. If the rear wheels lock first, they lose their sideways
+grip and the back swings round, which is much harder to catch (see
+[Slip and the grip curve](slip.md#sharing-grip-between-braking-and-turning)). So makers set the bias to
+favour the front. Because a loaded vehicle puts its weight in a different place from an empty one,
+some vehicles change the split while driving, with valves or electronics.
 
 ### The pedal
 
-A brake pedal that applied a racing car's full hardware at half travel would be impossible to use
-gently. So the game shapes the pedal the same way on every vehicle: half the pedal asks for about
-half a g of braking, whatever the hardware, and the full pedal asks for everything the hardware
-has.
-<!-- WheelDrive.brake_application, BRAKE_HALF_PEDAL_G 0.5; contract brake: "half pedal asks about 0.5 g whatever its capacity" -->
+The pedal is tuned so that gentle braking is easy to control, whatever the strength of the brakes
+(half the pedal does not mean half of the hardware's strength). A fully pressed pedal asks for
+everything the brakes have.
 
 ## The handbrake
 
-The [handbrake](glossary.md#handbrake) works the rear wheels only, and ABS does not control it.
-It is meant to park the vehicle: with its brakes cold, every vehicle's handbrake holds it on the
-slope the law requires, and more. Pulled while moving, it locks the rear wheels (not on the
-laden fire truck, whose heavy rear tyres grip harder than its spring brakes can pull). A locked
-tyre has no sideways grip, so the back of the car swings round. Pulled hard at speed with a turn
-of the wheel, it spins the car about half a turn: a handbrake turn.
-<!-- GroundDriveSpec.handbrake_torque; BrakeSizing: parks the laden body on 20 % (R13-H) or 18 % (R13); docs/vehicles.md Handbrake turn: "the body turns about a half turn" -->
+The [handbrake](glossary.md#handbrake) usually works the rear wheels only, and a mechanical one is
+not controlled by ABS. It is meant to park the vehicle, and the law requires it to hold the vehicle
+on a slope.
 
-It is a brake, not a lock. A strong enough engine can drag the vehicle through it, most easily on
-a front-wheel-drive car, whose driven wheels it does not hold.
-<!-- contract handbrake: "a strong enough drive pulls through it (most easily on a front-driven car...)" -->
+When pulled while moving, it can lock the rear wheels. A locked tyre has almost no sideways grip,
+so the back of the car swings round. Combined with a turn of the steering wheel, this makes a
+handbrake turn.
 
-On the trucks the handbrake is their spring brakes, explained below. The keyboard's handbrake is
-**Space**.
+The handbrake is a brake rather than a lock. A strong enough engine can drag the vehicle through
+it, especially on a front-wheel-drive car: the engine drives the front wheels, and the handbrake
+holds only the rear ones, so it is not working against the engine directly.
 
 ## One brake, two ways to apply it
 
-On many cars the handbrake has no brake of its own. The pedal and the lever reach the same rear
+On many cars, the handbrake has no brake of its own: the pedal and the lever reach the same rear
 brakes by two routes. The pedal pushes brake fluid down a pipe, and the fluid pushes a piston that
 presses the pads onto the disc. The lever pulls a steel cable, and the cable works a small
 mechanism in the same caliper that pushes the same piston. A truck does the same with air and a
 spring: the pedal lets air into the brake chamber, and the parking spring pushes the same rod to
 the same shoes.
 
-![A rear disc brake seen edge on. The disc turns with the wheel hub; a caliper straddles its rim with a pad on each side. A brake fluid pipe from the pedal and a steel cable from the handbrake lever both end at the caliper's one piston, which presses the same pads. The pads carry one temperature and one fade for both.](img/brake-two-ways.svg "One brake, two routes. The pedal's fluid and the lever's cable press the same pads on the same disc.")
-<!-- Drawn by hand; WheelDrive.tick and TowedBody.tick_towed -->
+So the two share everything that rubs and heats. If the pedal has made the brake hot, the lever
+finds it hot too.
 
-So the two share everything that rubs and heats: the pads or shoes, and the disc or drum under
-them. If the pedal has made that metal hot, the lever finds it hot too.
+Some cars are different: they park on a small drum brake inside the rear disc's hub, which has its
+own lining that the foot brake does not heat.
 
-The game does the same. Each rear wheel has one brake torque made of both: the foot brake's share
-plus the handbrake's, or a truck's spring brakes. That sum goes through the wheel's one
-temperature and one fade factor, so a hot brake loses the same share of both. A trailer's brakes
-work the same way. The plane's brakes have no heat model, so its park brake never fades.
-<!-- WheelDrive.tick: parking_torque(...) * w.brake_fade() on the rears; TowedBody.tick_towed: (service + parking) * w.brake_fade(); RayWheel.brake_fade; plane_spec.tres sets no brake_heat_capacity (0: factor 1) -->
+![A rear disc brake seen edge on. The disc turns with the wheel hub; a caliper straddles its rim with a pad on each side. A brake fluid pipe from the pedal and a steel cable from the handbrake lever both end at the caliper's one piston, which presses the same pads. The pads carry one temperature and one fade for both.](img/brake-two-ways.svg "One brake, two routes: the pedal's fluid and the lever's cable.")
 
 ## Heat and fade
 
-![A graph of braking force left against brake temperature for four kinds of brake. Drums start to lose force at about 180 °C and are down to half at about 480 °C. Pads on discs hold full force to 400 °C, then fall to half by 750 °C. Racing pads hold to 650 °C. A tractor's wet discs, read off the oil, fade from 90 °C.](img/brake-fade.svg "Fade. Past a temperature that depends on its kind, a hot brake gives less force for the same pedal.")
+![A flow diagram. A moving vehicle sends energy through a braked wheel that is still turning into the brake (pads and disc, or shoes and drum). From the brake it goes to the air, faster the faster the vehicle moves, and a hot disc also glows heat away. Two dashed paths lead elsewhere: a locked wheel, where the tyre skids and the brake stays cool, and the retarder and engine braking, which slow the vehicle and heat no brake.](img/brake-heat-path.svg "Where a stop's energy goes.")
+
+![A graph of braking force left against brake temperature for four kinds of brake. Drums start to lose force at about 180 °C and are down to half at about 480 °C. Pads on discs hold full force to 400 °C, then fall to half by 750 °C. Racing pads hold to 650 °C. A tractor's wet discs fade from an oil temperature of 90 °C.](img/brake-fade.svg "An example of fade for four kinds of brake.")
 <!-- BrakeThermal PAD, RACE, DRUM, WET curves -->
 
-Every stop turns the vehicle's movement into heat in the brakes. The game models each friction
-brake as one lump of metal with one temperature. Braking heats it by exactly the work it does on
-the wheel; the air cools it, faster the faster the vehicle moves. It is a simple model, and the
-game labels it as one.
-<!-- BrakeThermal: one lumped temperature, FHWA's GSRS brake model plus disc radiation; RayWheel.heat_brake (a locked wheel heats nothing) -->
-
-![A flow diagram. A moving vehicle sends energy through a braked wheel that is still turning into the brake, one lump of metal with one temperature. From the brake it goes to the air, faster the faster the vehicle moves, and a hot disc also glows heat away. Two dashed paths lead elsewhere: a locked wheel, where the tyre skids and the brake stays cool, and the retarder and engine braking, which slow the vehicle and heat no brake.](img/brake-heat-path.svg "Where a stop's energy goes. Only a friction brake on a turning wheel heats, whether the pedal or the handbrake applies it.")
-<!-- RayWheel.heat_brake: reacted torque x friction share x settled spin; BrakeThermal.loss_w: convection rising with road speed, plus radiation on the discs -->
-
-Inside the game the heat a brake takes each moment is its braking torque times how fast its wheel
-turns. The air takes heat away in proportion to how much hotter than the air the brake is, more
-the faster the vehicle moves; a disc also radiates heat, which counts most when it is very hot.
-<!-- RayWheel.heat_brake; BrakeThermal.loss_w: (g0 + g1 * speed) * (T - ambient) + emissivity * sigma * A_r * (T^4 - ambient^4); drums: emissivity 0 -->
+Every stop turns the vehicle's movement into heat in the brakes. The air then cools them down,
+faster when the vehicle is moving fast, because more air flows past the brake each second (and the
+hotter the brake is compared with the air, the faster it loses heat). A single stop from high
+speed makes the brakes hot for a few seconds, but they cool again before the next one. The trouble
+comes when stops follow each other, or when one lasts for minutes, because the heat arrives faster
+than the air can take it away.
 
 When a brake gets hot enough, its lining grips less and the brake
-[fades](glossary.md#brake-fade): the same pedal gives less braking, so you have to press harder.
-Where that begins depends on the hardware:
+[fades](glossary.md#brake-fade): the same pedal gives less braking. The lining is a mixture of
+materials, and when it gets very hot some of them start to break down, so it rubs less well. The
+temperature where this begins depends on the hardware. Drums fade earlier than discs (a disc sits
+in the open air, while a drum keeps its heat inside), and racing pads much later. Wet discs fade
+when their oil gets hot.
 
-- **Drums**, on the rigid trucks: from about 180 °C.
-- **Pads on discs**, on the cars and the semis: from about 400 °C.
-- **Racing pads**: from about 650 °C.
-- **Wet discs**, on the tractor: they sit in the axle's oil, and the game reads the oil's
-  temperature. They fade from about 90 °C.
+Fade is not the same as wear. A faded brake has not worn out: it recovers once it has cooled down.
+The danger is that the driver, feeling the car slow less, presses harder, and that makes the brake
+hotter still.
 
-A locked wheel does not heat its brake at all: the brake is not turning, so it does no work. The
-tyre is doing the slowing then. The retarder and engine braking heat nothing. The handbrake
-presses the same pads or shoes as the pedal, so it heats and fades with them. A trailer's brakes
-heat and fade too, but their temperature is not published.
-<!-- docs/vehicles.md Heat and fade -->
+A locked wheel does not heat its brake, because the brake is not turning, so nothing rubs. The
+skidding tyre is doing the slowing then. Engine braking and retarders do not heat the brakes
+either, because they slow the vehicle somewhere else.
 
-This is why long downhill runs are hard on brakes, and why trucks have a retarder.
+This is why long descents are hard on brakes ([see the forces](forces.md#example-truck-downhill)):
+the brakes would have to take the energy of the whole height lost, for minutes. A driver going
+down a long hill uses a low gear, so that engine braking (see
+[Friction and engine braking](engine.md#friction-and-engine-braking)) holds the speed, and keeps the
+brakes for the moments when they are needed.
+
+<details><summary>Other ways to lose speed without hot brakes</summary>
+
+- **Runaway truck ramps.** On some long mountain roads, a steep gravel bed rises beside the road.
+  A truck whose brakes have faded can steer onto it, and the loose gravel and the slope slow it
+  down.
+- **Exhaust brakes.** Some trucks close a valve in the exhaust pipe, so that the engine has to
+  push against the trapped gas. This works like engine braking, only stronger.
+- **Regenerative braking.** An electric car can run its motor as a generator when slowing down.
+  Part of the energy of motion goes back into the battery instead of becoming heat.
+
+</details>
 
 ### The handbrake on a hot brake
 
-After a long descent on the foot brake, the handbrake is no way out: it is as tired as the pedal.
-Two examples, with the brakes at 480 °C:
+When it shares the rear brakes, the handbrake fades with them, so it is no help after a long
+descent on the foot brake. A truck with hot drums may no longer hold on a steep slope with its
+parking brake, and can creep until they cool. A gearbox's parking lock (where there is one) does
+not fade, because it is a steel tooth and not a rubbing lining (see
+[Holding still](holding.md#the-park-pawl)).
 
-| | `sedan` | `garbage-truck` |
-| --- | --- | --- |
-| Brake | pads on discs | drums |
-| Handbrake, one rear wheel, cold | about 1400 Nm | about 6500 Nm |
-| Force left at 480 °C | 86 % | 50 % |
-| Handbrake, one rear wheel, at 480 °C | about 1200 Nm | about 3250 Nm |
-| Locks the rear wheels at speed | yes, cold and hot | cold only |
-| Steepest slope it parks on | about 32 %, cold and hot | about 32 % cold, 24 % hot |
-<!-- sedan_spec.tres / garbage-truck_spec.tres handbrake_torque 1400 / 6500, brake_fade_curve_rear PAD / DRUM; BrakeThermal.PAD (465, 0.86)-(615, 0.86) and DRUM (480, 0.5); BrakeSizing.rear_lock_ratio 1.59 -> 1.37 and 1.08 -> 0.54, BrakeSizing.park_grade with handbrake_torque x factor, run 2026-11-17 -->
-
-The sedan's pads are still in their first, gentle step of fade, and its handbrake is strong
-enough that its rear tyres, not its brakes, set how hard it holds: it still locks the rears and
-parks as before. The truck's drums have lost half their force. Its handbrake no longer locks the
-rears at speed, and it parks on a gentler slope than when cold, though still steeper than the
-18 % the law asks of a truck. On anything steeper the truck can creep until the drums cool. The
-trucks have no P position to fall back on; the road cars, vans and tractors do, and the
-gearbox's parking lock does not fade.
-<!-- BrakeSizing.PARK_GRADE_HEAVY 0.18; Drivetrain.has_park_pawl: park_pawl_torque set on the road cars, vans and tractors, not on race, race-future, garbage-truck or firetruck -->
-
-The game's parking figures elsewhere, such as the slope the law requires, are for cold brakes.
+On a car, the brake fluid can also boil on a long descent. Fluid cannot be squashed, which is how
+the pedal's push reaches the pads, but the bubbles of vapour that boiling makes can be squashed.
+The pedal then goes soft and sinks, because part of the push is lost compressing bubbles. A cable
+handbrake does not use the fluid, so it still works.
 
 ## The retarder
 
-A [retarder](glossary.md#retarder) is an extra brake inside a truck's driveline, a kind of
-paddle wheel in oil that slows the drive shaft without touching the wheel brakes. It makes no
-heat in the brakes, so it can hold a truck back down a long hill without fading them.
+A [retarder](glossary.md#retarder) is an extra brake inside a truck's driveline. A common kind is
+a paddle wheel turning in oil, which slows the drive shaft without touching the wheel brakes. The
+oil resists the paddles, and the faster they turn, the more it resists. It can hold a truck back
+down a long hill without making the brakes fade. Because its force falls with the shaft's speed, it
+is weak at low speed, so it cannot bring a truck to a stop.
 
-The garbage truck, the fire truck and the semis have one. It slows a bare truck by about a tenth
-of a g, the laden fire truck by about half that. It acts only on the driven wheels, fades away at walking pace, and is capped so it can
-never lock a wheel. On a semi it brakes only the tractor unit: a heavy trailer pushes on, so the
-whole rig slows much less. sloppyCAN works it with the `retarder` signal; there is no key for it.
-<!-- docs/truck.md Air, retarder, axle load: 0.84 m/s² on the garbage truck, 0.56 on the 12 t firetruck, 1.47 on the bobtail semis (0.37 coupled to the 24 t box); RETARDER_SLIP_TARGET; contract retarder: "No local key" -->
+It only acts on the driven wheels. On a semi, it only brakes the tractor unit, and the heavy
+trailer pushes on (see [Towing](towing.md#trailer-brakes)).
 
 ## Air and spring brakes
 
-Big trucks brake with air pressure. A compressor driven by the engine fills tanks, and the brake
-pedal lets that air into the brakes. The game models two tanks, one for each brake circuit. They
-fill while the engine runs, and each full press of the pedal draws some air out. Holding the
-pedal down costs nothing more; pumping it drains the tanks. Stability control's own braking
-draws air in the same way.
-<!-- docs/truck.md: two reservoirs, 0.70 / 0.55 bar a full application, a held one draws nothing more; WheelDrive.service_level -->
+Big trucks brake with air pressure. Air suits trucks for two reasons: a compressed-air system can
+give a lot of force, and a trailer can be joined to it with a simple hose. A compressor driven by
+the engine fills tanks (usually one for each brake circuit), and the brake pedal lets that air into
+the brakes. Each press draws some air out. Holding the pedal down costs nothing more, but pumping
+it drains the tanks faster than the compressor refills them.
 
 A truck's parking brakes are [spring brakes](glossary.md#spring-brake): strong springs that put
-the brakes on, held off by air. If the air runs out, the springs win. That makes them fail-safe:
-a truck that loses its air stops. In the game:
+the brakes on, held off by air. This makes them fail-safe. Why? Because the brakes are on unless
+air pushes the springs back, a pipe that breaks or a compressor that stops leaves the truck braked
+and not free to roll. A warning comes on when the air is low, and if it keeps falling, the springs
+apply the brakes and stop the truck.
 
-- Below 5 bar in either tank, the low-air warning is due.
-- Below 3 bar, the spring brakes apply on the rear wheels, and the gearbox drops to neutral so the
-  truck cannot drive away. A coupled trailer's spring brakes apply too.
-<!-- contract air_primary warn 5.0; TruckTelemetry.AIR_SPRING_BRAKE_BAR 3 bar; Drivetrain.drive_inhibit -->
+![A brake chamber cut open. A coil spring on the left pushes a piston and rod out to the right, towards the brake. Air let in through a port on top fills the chamber on the right and pushes the piston back against the spring.](img/air-brake-chamber.svg "A spring brake chamber, cut open.")
 
-The game keeps it simple: there are no pipes, valves or leaks, only two tanks that fill and
-empty.
+## What Carlito simulates
 
-## What the game leaves out
+The parameters the simulator uses for this, and where each is set, are listed in
+[How the simulation works](simulation.md#brakes):
 
+- **Simulation-wide**:
+  - [Pedal shape](simulation.md#pedal-shape) (`BRAKE_HALF_PEDAL_G`)
+  - [Fade curves](simulation.md#fade-curves)
+- **Per vehicle**:
+  - [Brake torque](simulation.md#brake-torque) (`brake_torque`)
+  - [Front and rear split](simulation.md#front-and-rear-split) (`brake_bias_front`)
+  - [Brakes on the front axle](simulation.md#brakes-on-the-front-axle)
+    (`brake_engages_front_axle`)
+  - [Handbrake](simulation.md#handbrake) (`handbrake_torque`)
+  - [Brake heat](simulation.md#brake-heat) (`brake_heat_capacity`, `brake_cooling_g0`,
+    `brake_cooling_g1`, `brake_emissivity`, `brake_radiating_area`, `brake_fade_curve`, and their
+    `_rear` versions)
+  - [Retarder](simulation.md#retarder) (`retarder_equipped`, `retarder_rating_nm`)
+
+<details><summary>Simplification list</summary>
+
+- **One lump of metal per brake.** The heat in is the braking torque times how fast the wheel
+  turns; the air takes it away in proportion to how much hotter than the air the brake is, more
+  the faster the vehicle moves, and a disc also radiates heat, which counts most when very hot.
+  This is a simple model.
+  <!-- RayWheel.heat_brake; BrakeThermal.loss_w: (g0 + g1 * speed) * (T - ambient) + emissivity * sigma * A_r * (T^4 - ambient^4); drums: emissivity 0 -->
+- **One pedal shape.** On every vehicle, half the pedal asks for about half a g.
+  <!-- WheelDrive.brake_application, BRAKE_HALF_PEDAL_G 0.5 -->
+- **Fixed fade curves**, one for each kind of brake (the ones drawn above).
+- **Parking figures are for cold brakes**, such as the slope the law requires.
+- **No air pipes, valves or leaks**: two tanks that fill and empty, with the warning at 5 bar and
+  the spring brakes at 3.
+  <!-- contract air_primary warn 5.0; TruckTelemetry.AIR_SPRING_BRAKE_BAR 3 bar -->
 - **No adjustable brake bias**, and no proportioning valve that changes the split with load.
 - **No brake wear or failure** apart from the air running out on a truck.
 - **No exhaust brake.** The trucks' auxiliary brake is the retarder.
 - **No smoke or glowing discs**: brake heat shows only in the numbers.
-- **No fluid fade.** On a real car, brake fluid can boil on a long descent, and the pedal goes
-  soft while a cable handbrake still works. The game has no brake fluid, so there is no soft
-  pedal, and the handbrake never outlasts the foot brake.
-- **No separate handbrake shoes.** Some cars with rear discs park on a small drum brake inside the
-  disc's hub, with its own lining that the foot brake does not heat. In the game the handbrake
-  always shares the foot brake's lining.
+- **No fluid fade.** There is no brake fluid, so no soft pedal, and the handbrake never outlasts
+  the foot brake.
+- **No separate handbrake shoes.** The handbrake always shares the foot brake's lining.
 - **No shrinking disc.** A disc clamped while hot shrinks as it cools, which can loosen a parked
-  caliper's grip. The game does not model it.
+  caliper's grip. The simulation does not model it.
+
+</details>
 
 ## What you see in sloppyCAN
 
 | Signal | Direction | Unit | What it shows |
 | --- | --- | --- | --- |
 | `brake` | in | % | The foot brake. Half pedal is about half a g; full pedal is the whole hardware. |
-| `handbrake` | in | flag | The parking brake: the rear wheels, or a truck's spring brakes, or the plane's park brake. It fades with its brake. |
-| `brake_temp` | out | °C | The hottest friction brake on the vehicle, from the heat model. Car, truck, tractor. Its warning, 260 °C, is late for a drum and early for a disc. |
-| `retarder` | in | % | Truck: the retarder request. |
-| `retarder_state` | out | % | Truck: the retarder's torque as actually applied, after it fades at low speed. |
-| `air_primary`, `air_secondary` | out | bar | Truck: the two brake tanks. Warning at 5 bar; the spring brakes apply below 3. |
-| `brakeLamp` | in | flag | Car, truck, tractor: the stop lamps, set by sloppyCAN. |
+| `handbrake` | in | flag | The parking brake: the rear wheels, or a truck's spring brakes. It fades with its brake. |
+| `brake_temp` | out | °C | The hottest friction brake on the vehicle, from the heat model. Its warning, 260 °C, is late for a drum and early for a disc. |
+| `retarder` | in | % | The retarder request (Truck). |
+| `retarder_state` | out | % | The retarder's torque as actually applied, after it fades at low speed (Truck). |
+| `air_primary`, `air_secondary` | out | bar | The two brake tanks. Warning at 5 bar; the spring brakes apply below 3 (Truck). |
+| `brakeLamp` | in | flag | The stop lamps, set by sloppyCAN (Car, truck, tractor). |
 | `status` | out | bitfield | Bit 5 is the handbrake. |
 <!-- contract/carlito_contract.json: brake, handbrake, brake_temp (warn 260), retarder, retarder_state, air_primary / air_secondary (warn 5.0), brakeLamp, status bit 5 -->
 
-## Try it in the game
+## Scenarios
 
-<div class="box try">
-<p class="box-title">Try it in the game: cook the brakes</p>
-
-1. Pick the `garbage-truck` and drive down the long grades of **Level 2 - Mountain**. Press **F2**
-   until the dashboard shows FULL, whose bars include the brake temperature.
-2. Ride the foot brake all the way down. The temperature climbs past 180 °C, and the same pedal
-   slows the truck less and less: the drums are fading.
-3. Cook the drums again on the foot brake, then pull the handbrake (**Space**) at speed. The
-   rear wheels no longer lock, and the truck slows less than it would with cold brakes. Stop on
-   the grade with the handbrake alone: on a steep enough slope it creeps until the drums cool.
-4. Stop and let them cool. Now go down again with sloppyCAN holding the `retarder` on. The brake
-   temperature stays low.
-5. In the `sedan` on **Flatland**, pull the handbrake (**Space**) at about 40 km/h with the
-   steering turned: the rear swings round.
-
-</div>
+- [Emergency stop](forces.md#example-emergency-stop): the tyres set the limit.
+- [Full truck braking down a hill](forces.md#example-truck-downhill): the brakes work all the way down.
+- [Parked on a hill](forces.md#example-parked-on-a-hill): the brakes hold against the slope.
 
 ## Related
 
-- [Tyres and slip](tyres.md): why the tyre, not the brake, usually sets the stopping distance.
+- [Slip and the grip curve](slip.md): why the tyre, not the brake, usually sets the stopping distance.
 - [Glossary](glossary.md): every term on this page.

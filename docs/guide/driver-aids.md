@@ -2,164 +2,195 @@
 
 # ABS, traction and stability control
 
-<p class="lead">A tyre grips best just before it starts to slide, and a driver cannot hold four
-tyres at that point by feel. Driver aids watch each wheel and do it for them: ABS while braking,
-traction control while accelerating, and stability control when the whole vehicle starts to slide
-or tip.</p>
+<p class="lead">This page explains how ABS, traction control and stability control watch each
+wheel and keep the tyres from sliding.</p>
 
 <div class="badges"><span class="label">Which vehicles have this</span>
-<span class="badge yes" title="ABS, traction and stability control on every road car and van; the racing cars have only traction control (race) or nothing (race-future)">Car</span>
-<span class="badge yes" title="ABS, traction control and stability control on every truck; roll stability on the semis; ABS and roll control on the semi-trailers">Truck</span>
+<span class="badge yes" title="ABS, traction and stability control on every road car and van; one racing car has only traction control, the other nothing">Car</span>
+<span class="badge yes" title="ABS, traction control and stability control on every truck, with roll stability; ABS and roll control on the semi-trailers">Truck</span>
 <span class="badge no" title="None: a farm tractor's driver works the diff lock and front drive by hand">Tractor</span>
-<span class="badge no" title="Its landing wheels have none">Plane</span>
-<span class="badge no" title="No wheels">Boat</span>
-<span class="badge no" title="Its flight controller is on the drone page">Drone</span>
-<span class="badge no" title="No wheel model">Train</span>
 </div>
+
+A tyre grips best just before it starts to slide, and a driver cannot keep four tyres at that
+point by feel: a person needs a good part of a second to react, while a computer can check every
+wheel many times a second. Driver aids use that speed: ABS while braking, traction control while
+accelerating, and stability control when the whole vehicle starts to slide or tip.
 
 ## All three aim at the same point
 
-[Tyres and slip](tyres.md) shows the grip curve: grip rises with slip to a peak at a slip of
-0.12, then falls away. A tyre held at the peak gives the most force it can. Past it, it slides,
-grips less, and slides more. Each aid in the game holds the tyres at that peak and no further.
+[Slip and the grip curve](slip.md#the-grip-curve) shows the grip curve: grip rises with slip to a peak,
+then falls away. A tyre held at the peak gives the most force it can. Past it, the tyre slides,
+grips less, and slides more. The aids try to keep the tyres from going past that peak.
 
-The game's aids are ideal. A real ABS has to guess the car's true speed from its wheels, and it
-pulses the brakes on and off many times a second. The game's knows the true road speed exactly
-and holds each wheel smoothly at the peak, with no pulsing. That makes them a little better than
-real ones, and the game says so.
-<!-- wheel.gd ABS_SLIP 0.12: "An honest model of an ideal ABS: it knows the true road speed and holds the slip without cycling"; TCS_SLIP 0.12 -->
+One thing they cannot do is add grip: the road and the tyres decide how much there is, and the aids
+only help the driver use it (see
+[Sharing grip between braking and turning](slip.md#sharing-grip-between-braking-and-turning)).
+A car with every aid still slides on ice if the driver asks for more than the ice can give.
 
 ## ABS
 
-[ABS](glossary.md#abs), the anti-lock braking system, lets off a wheel's brake just enough to keep
-the wheel turning when a hard brake would lock it. In the game it never lets a braked wheel's
-slip go past 0.12. It also watches the truck retarder, so that cannot lock a wheel either.
-<!-- GroundDriveSpec.abs_equipped: "the foot brake (and retarder) may not drive a wheel's braking slip past RayWheel.ABS_SLIP" -->
+![A graph of speed over one second of hard braking. The car's speed falls smoothly. A locked wheel's speed drops to zero within a fraction of a second. An ABS wheel's speed dips and recovers about five times, staying close to the car's speed.](img/abs-wheel-speeds.svg "Wheel speeds in a hard stop, locked and with ABS.")
 
-ABS buys two things: a shorter stop on most surfaces, because the tyre stays at its peak instead
-of sliding at 0.8 of it; and steering, because a turning tyre can still push sideways while a
-locked one cannot.
+[ABS](glossary.md#abs) (anti-lock braking system) releases a wheel's brake just enough to keep the
+wheel turning, when braking hard would lock it. How does it know? Each wheel has a sensor that
+reports how fast it turns. A wheel about to lock slows down much faster than the car does, and
+slower than the other wheels. When the computer sees that, it lets the brake go for a moment, so the
+wheel speeds up again and its grip comes back, and then it applies the brake again. It repeats this
+many times a second, and the driver feels it as a judder in the pedal.
 
-Every car, van and truck has ABS except the two racing cars, and so do the semi-trailers. The
-tractors, the farm trailer and the plane do not.
-<!-- abs_equipped = true in every car, van and truck spec but race and race-future; in box, flatbed, tanker and tipper; not in tractor-*, farm_tipper or plane_spec.tres -->
+ABS has two benefits:
+
+- **A shorter stop on most surfaces**, because the tyre stays near its peak instead of sliding.
+- **Steering while braking**, because a turning tyre can still push sideways while a locked one
+  cannot ([see the forces](forces.md#example-emergency-stop)). This is the main benefit: a driver
+  can brake as hard as possible and still steer round the obstacle.
+
+The shorter stop is not always true: on loose gravel or deep snow, a car without ABS can stop in a
+shorter distance (see [The grip curve](slip.md#the-grip-curve) for why). The car with ABS keeps
+its steering, which is usually worth more.
+
+<details><summary>What the driver feels, and what to do</summary>
+
+When ABS acts, the pedal pulses under the foot and a noise comes from the brakes. This is normal,
+and it means the system is working. The driver should keep pressing hard and steer, because
+letting up or pumping the pedal (the old advice for cars without ABS) only takes the braking away.
+
+</details>
 
 ## Traction control
 
-Traction control is ABS's twin for driving: it stops a driven wheel spinning when the driver asks
-for more than the tyre can take. In the game it holds each driven wheel's drive slip at the same
-peak, 0.12, by taking away just enough of the drive at that wheel. It only ever takes drive away;
-it never brakes a wheel. On trucks this system is often called ASR.
-<!-- wheel.gd TCS_SLIP; RayWheel.tcs_take: "TC removes drive, never brakes" -->
+Traction control does for driving what ABS does for braking: it stops a driven wheel from spinning
+when the driver asks for more than the tyre can take
+([see the forces](forces.md#example-pulling-away)). A spinning wheel has passed the peak of the grip
+curve, so it pushes less and the car accelerates less, and on ice or mud it digs itself in. The
+system sees it the same way ABS does: a driven wheel turning much faster than the car is moving
+(compared with the other wheels) is spinning. Depending on the vehicle, it reduces the engine's
+torque, brakes the spinning wheel, or both. On trucks, this system is often called ASR.
 
-Every car and van has it except the `race-future`, and so do the trucks and the semis. On a
-slippery road, traction control also stops engine braking from making the driven wheels slide
+Braking one spinning wheel helps for a second reason. The ordinary
+[differential](differentials.md) sends the same torque to both driven wheels, so a wheel on ice
+can only take a tiny torque, and the wheel on grip gets no more than that. Putting a brake on the
+spinning wheel makes it able to take more torque, and the other wheel gets the same extra.
+
+Some systems also prevent engine braking from making the driven wheels slide on a slippery road
 (see [the engine](engine.md#friction-and-engine-braking)).
-<!-- tcs_equipped = true on every ABS body plus race; Drivetrain.drag_control -->
 
 ## Stability control
 
-![Two cars turning left, seen from above. The first is spinning: its tail swings out, and stability control brakes its outer front wheel. The second is running wide: it turns too little, and stability control brakes its inner rear wheel.](img/esc.svg "Stability control brakes one wheel to turn the car back onto the line the driver is steering.")
+![Two cars turning left, seen from above. The first is spinning: its tail swings out, and stability control brakes its outer front wheel. The second is running wide: it turns too little, and stability control brakes its inner rear wheel.](img/esc.svg "Stability control braking one wheel.")
 
-[Stability control](glossary.md#stability-control), or ESC, watches the whole vehicle rather than
-one wheel. It works out how fast the vehicle should be turning from the steering and the speed,
-compares that with how fast it really is turning, and steps in when the two differ by more than a
-small margin.
+[Stability control](glossary.md#stability-control) (ESC) watches the whole vehicle rather than one
+wheel. From the steering and the speed, it works out how fast the vehicle should be turning. It
+compares this with how fast it really is turning (measured by sensors), and steps in when the two
+differ too much.
 
-- If the car turns **too much**, its tail swinging out (oversteer), ESC brakes the outer front
-  wheel. That pulls the nose back out of the turn.
-- If the car turns **too little**, running wide (understeer), ESC brakes the inner rear wheel. That
-  pulls the nose into the turn.
-- In both cases it also trims the engine's fuel.
+How can braking one wheel turn a whole car? A braked wheel pulls on its own side of the car, like
+a rower who drags one oar in the water: the car swings towards the braked side. So the system picks the
+wheel whose pull turns the car the way it needs.
 
-Like a real unit, the game's ESC uses only what a car's sensors can measure: speed, the steering,
-how fast the body turns and how hard it is pushed sideways. It works out the sideways slide from
-those, rather than reading the game's true value. It does nothing below 20 km/h or in reverse.
-Its idea of how the car should turn comes from that car's own steady handling, worked out in
-advance for each vehicle, as a real system is calibrated on its car.
-<!-- StabilityControl header; MIN_SPEED 20 km/h ("Not active below it, nor in reverse (R140 6.2)"); GroundDriveSpec.esc_reference_k -->
+- If the car turns **too much**, with its tail swinging out (oversteer), ESC brakes the outer
+  front wheel. That pulls the nose back out of the turn.
+- If the car turns **too little** and runs wide (understeer), ESC brakes the inner rear wheel.
+  That pulls the nose into the turn.
+- In both cases, it can also reduce the engine's torque, which slows the car and gives the tyres
+  more grip to spare.
 
-Every road vehicle with ABS has ESC. The racing cars and the tractors do not.
-<!-- esc_equipped = true on the same specs as abs_equipped -->
+It is normally inactive at very low speed.
 
-### Roll stability on the semis
+<!-- photo: a stability control warning lamp flashing on a dashboard -->
 
-A truck can roll over before its tyres slide. The semis' stability control adds a second job,
-[roll stability control](glossary.md#roll-stability-control). The game measured, for each rig and
-load, the sideways acceleration at which a wheel first lifts. When the rig reaches 70 % of that,
-or the steering asks for it, roll stability brakes every wheel, and the trailer, and cuts the
-fuel. If that braking is firm, it lights the brake lamps.
-<!-- StabilityControl ROLL_SHARE 0.7, LAMP_DECEL 0.7 m/s²; GroundDriveSpec.esc_roll_lift_g -->
+Stability control cannot do more than the tyres allow. It helps most when the car is only a little
+past the limit, and a driver who is going far too fast for the road is still going to leave it
+(see [Understeer and oversteer](understeer.md) for the slides it catches).
 
-The four semi-trailers carry their own roll control too, in their own brake system, as the law
-requires in Europe. It reads the trailer's own sensors and brakes the trailer by itself, whatever
-the truck in front is doing.
-<!-- docs/handling.md Stability control, The semi-trailer's own: trailer_roll_equipped, StabilityControl.trailer_roll_step (not farm_tipper) -->
+### Roll stability on trucks
 
-## Switching them off
+A truck can roll over before its tyres slide, because its load sits high above the ground (see
+[Weight transfer and rollover](weight-transfer.md#wheel-lift-and-rollover)). So the stability
+control of a truck has a second job, called
+[roll stability control](glossary.md#roll-stability-control). When the sideways acceleration gets
+close to what would lift a wheel, it brakes the truck (and its trailer) and cuts the fuel.
 
-| Switch | Where | What it does |
-| --- | --- | --- |
-| TRACTION CONTROL | pause menu, SANDBOX | Off lets the cars' driven wheels spin. Saved. |
-| STABILITY CONTROL | pause menu, SANDBOX | Off switches ESC off, and traction control with it. Saved. |
-| ANTI-LOCK BRAKES | pause menu, SANDBOX | Off lets the wheels lock. It takes stability control, traction control, hill-start assist and auto hold with it. This session only. |
-| DIFFERENTIALS: LOCKED | pause menu, SANDBOX | Also switches stability and traction control off, because a locked axle cancels ESC's one-wheel braking. |
-<!-- pause_menu.gd TCS_HELP, ESC_HELP, ABS_HELP; InputRouter.lab_esc_cause; docs/systems.md -->
+Slowing down is the right answer because the sideways acceleration in a bend depends on the speed
+squared. For example, a truck that takes a bend at half the speed needs only a quarter of the
+sideways acceleration. The system has to act before a wheel lifts, because once a wheel is off the
+ground the truck is already close to going over.
 
-Traction and stability control are saved; ANTI-LOCK BRAKES and DIFFERENTIALS last for the
-session and are locked during a challenge; they act while sloppyCAN drives too.
-sloppyCAN can switch traction control and stability control off with `tcs_off` and `esc_off`;
-while it is connected, those two SANDBOX switches are greyed out.
+Semi-trailers can also have their own roll control, in their own brake system (the law requires it
+in Europe). It reads the trailer's own sensors and brakes the trailer by itself, whatever the truck
+in front is doing.
 
 ## The dashboard lamps
 
-| Lamp | Means |
+Vehicles tell the driver what the aids are doing with warning lamps. The exact names vary.
+
+| Lamp | Usually means |
 | --- | --- |
-| ESC | Steady: stability control is switched off. Flashing: it is acting now. |
-| TC | Traction control is switched off, by its own switch or with ESC or ABS. |
-| ABS OFF | SANDBOX ▸ ANTI-LOCK BRAKES has turned ABS off. |
-| ABS (on a semi) | The trailer's ABS is acting, reported back by the trailer. |
-| VDC | The trailer's own roll control is acting. |
-| TRLR ABS | The trailer's ABS warning lamp on the `semi-conventional`'s American trailer link, set by sloppyCAN. |
-<!-- dashboard.gd LAMP labels: esc_off "ESC", tcs_off "TC", abs_off "ABS OFF", trailer_abs "ABS", trailer_vdc "VDC", trailer_abs_lamp "TRLR ABS"; ESC_FLASH_HZ -->
+| ESC | Flashing: stability control is acting. Steady: it is switched off or has a fault. |
+| TC | Traction control is switched off or has a fault. |
+| ABS | ABS has a fault. |
+| Trailer ABS | The trailer's ABS has a fault. |
 
-## What the game leaves out
+## What Carlito simulates
 
-- **No pulsing**: the aids are ideal, without the cycling of a real ABS or the brake judder you
-  feel through a real pedal.
+The parameters the simulator uses for this, and where each is set, are listed in
+[How the simulation works](simulation.md#abs-traction-and-stability-control):
+
+- **Simulation-wide**:
+  - [Target slip](simulation.md#target-slip) (`ABS_SLIP`, `TCS_SLIP`)
+  - [Stability control's limits](simulation.md#stability-controls-limits) (`MIN_SPEED`,
+    `ROLL_SHARE`)
+- **Per vehicle**:
+  - [Which aids are fitted](simulation.md#which-aids-are-fitted) (`abs_equipped`, `tcs_equipped`,
+    `esc_equipped`)
+  - [Stability control's reference](simulation.md#stability-controls-reference)
+    (`esc_reference_k`, `esc_laden_kg`, `esc_laden_k`)
+  - [Roll stability](simulation.md#roll-stability) (`esc_roll_lift_g`, `trailer_roll_equipped`,
+    `trailer_roll_lift_g`)
+
+<details><summary>Simplification list</summary>
+
+- **Ideal aids, no pulsing.** The simulated ABS knows the true road speed and holds each wheel
+  smoothly at the peak (a slip of 0.12), so it does a little better than a real one. Traction
+  control does the same.
+  <!-- wheel.gd ABS_SLIP, TCS_SLIP 0.12: "An honest model of an ideal ABS: it knows the true road speed and holds the slip without cycling" -->
+- **Traction control only takes drive away.** It never brakes a wheel.
+  <!-- RayWheel.tcs_take: "TC removes drive, never brakes" -->
+- **Calibrated in advance.** Like a real unit, ESC works from what sensors would see rather than
+  from the true slide. How the car should turn comes from that car's own steady handling, worked
+  out in advance. It does nothing below 20 km/h or in reverse, and roll stability steps in at 70 %
+  of the lift point measured for each truck and load.
+  <!-- StabilityControl header, MIN_SPEED, ROLL_SHARE 0.7; GroundDriveSpec.esc_reference_k, esc_roll_lift_g -->
+- **Lamps without faults.** The aids never fail. The semi's ABS lamp shows that the trailer's ABS
+  is acting, instead of a fault.
+  <!-- dashboard.gd trailer_abs "ABS" -->
 - **No brake assist** that adds pedal for a panicking driver.
 - **No aid follows a fitted tyre's own peak**: all tyres share one curve, so the aids always aim
-  at 0.12.
+  at the same slip.
+
+</details>
 
 ## What you see in sloppyCAN
 
 | Signal | Direction | Unit | What it shows |
 | --- | --- | --- | --- |
-| `tcs_off` | in | flag | Car: switches traction control off. |
-| `esc_off` | in | flag | Car and truck: switches stability control off, and traction control with it. |
+| `tcs_off` | in | flag | Switches traction control off (Car). |
+| `esc_off` | in | flag | Switches stability control off, and traction control with it (Car and truck). |
 | `status` | out | bitfield | Bit 7: stability control acting. Bit 8: its brake-lamp request. Bit 9: a fitted ESC switched off. Bit 10: yaw braking. Bit 11: roll stability braking. |
-| `trailer_abs` | out | flag | Truck: the trailer's ABS is holding a wheel back, reported by the trailer. |
-| `trailer_vdc` | out | flag | Truck: the trailer's roll control is braking it. |
-| `slip` | out | ratio, two values | Car, truck, tractor: each axle's mean slip, along the wheels and sideways together. Under ABS or traction control in a straight line it sits near 0.12. |
+| `trailer_abs` | out | flag | The trailer's ABS is holding a wheel back, reported by the trailer (Truck). |
+| `trailer_vdc` | out | flag | The trailer's roll control is braking it (Truck). |
+| `slip` | out | ratio, two values | Each axle's mean slip, along the wheels and sideways together. Under ABS or traction control in a straight line it sits near 0.12 (Car, truck, tractor). |
 <!-- contract/carlito_contract.json: tcs_off, esc_off, status bits 7-11, trailer_abs, trailer_vdc, slip -->
 
-## Try it in the game
+## Scenarios
 
-<div class="box try">
-<p class="box-title">Try it in the game: catch a spin</p>
-
-1. Pick the `police` car on **Flatland**. It is rear-wheel drive and quick.
-2. Drive at about 80 km/h, steer hard one way and then the other. ESC's lamp flashes on the
-   dashboard as it brakes single wheels, and the car stays pointing where you steer.
-3. Open SANDBOX and set STABILITY CONTROL off. Repeat: the tail now swings out much further, and
-   may spin the car round.
-4. Turn it back on. In SANDBOX, switch ANTI-LOCK BRAKES off and stop hard while steering: the car
-   ploughs straight on. The ESC and TC lamps light too, because ABS took them with it.
-
-</div>
+- [Emergency stop](forces.md#example-emergency-stop) and [without ABS](forces.md#example-stop-without-abs): what ABS adds.
+- [Pulling away](forces.md#example-pulling-away) and [on snow without traction control](forces.md#example-wheelspin): what traction control prevents.
+- [Full truck turning too fast](forces.md#example-truck-lifts-wheel): what roll stability prevents.
 
 ## Related
 
-- [Tyres and slip](tyres.md): the grip peak all three aids aim at.
+- [Slip and the grip curve](slip.md): the grip peak all three aids aim at.
 - [Brakes](brakes.md): the hardware they work through.
+- [Understeer and oversteer](understeer.md): the slides stability control catches.
 - [Glossary](glossary.md): every term on this page.

@@ -1,11 +1,12 @@
-// Forces on a vehicle: a top and a side view of one of the seven bodies, with each force drawn as
+// Forces on a vehicle: a top and a side view of one of the three bodies, with each force drawn as
 // an arrow on one shared scale. AN ILLUSTRATION, NOT THE PHYSICS: a simplified, steady-instant
 // copy of the game's formulas (forces.md lists what it leaves out). Plain JS and SVG, no
 // libraries. Every game figure is cited where it is set below, as file and code name; the
 // physics-wide ones:
-//   G 9.8          physics/3d/default_gravity (Godot's default; train_sim.gd GRAVITY 9.8)
+//   G 9.8          physics/3d/default_gravity (Godot's default)
 //   RHO 1.225      vehicle_math.gd AIR_DENSITY
 //   grip curve     GroundDriveSpec.grip_curve: peak 1 at 0.12 slip, 0.8 when locked or spinning
+//   GROUNDS        surface.gd REF_GRIP and DRAG (the all-season tyre's, for all three bodies)
 // Each view has one linear scale (newtons per pixel) with its own bar.
 // Body frame: x forward, y up (side view) or y to the left (top view). Both views face right, so
 // the side view shows the right-hand side; the left wheels' arrows are drawn faint, offset.
@@ -17,6 +18,12 @@
   var VIEW_W = 420, VIEW_H = 280;
   var MAX_ARROW = 85;      // px: the longest ticked force
   var TINY = 2;            // px: shorter than this draws as a dot
+  var GROUNDS = {
+    dry: { name: 'Dry asphalt', grip: 1, drag: 0 },
+    wet: { name: 'Wet asphalt', grip: 0.75, drag: 0 },
+    snow: { name: 'Snow', grip: 0.34, drag: 0.02 },
+    ice: { name: 'Ice', grip: 0.12, drag: 0 }
+  };
 
   // ---- helpers ------------------------------------------------------------------------------
   function clamp(x, a, b) { return Math.min(Math.max(x, a), b); }
@@ -64,61 +71,28 @@
     if (s.windFrom === 'left') return { x: 0, y: -w };
     return { x: 0, y: w };
   }
-  // A world-frame (x forward, y up) vector seen in a body pitched by `rot` (+ = nose up).
-  function toBody(fx, fy, rot) {
-    var c = Math.cos(rot), s = Math.sin(rot);
-    return { x: fx * c + fy * s, y: -fx * s + fy * c };
-  }
 
   // ---- the forces ---------------------------------------------------------------------------
   // colour, dash, plain one-line explanation, and the guide page that says more.
   var FORCES = {
     weight: { name: 'Weight (gravity)', colour: 'var(--fig-ink)', page: 'weight-transfer', pageTitle: 'Weight transfer and rollover',
-      text: 'Gravity pulls every part of the vehicle straight down; the game adds it up at one point, the centre of mass. On a slope, part of it pulls the vehicle downhill.' },
+      text: 'Gravity pulls the vehicle down. On a slope, part of it pulls downhill.' },
     normal: { name: 'Ground push on each wheel', colour: 'var(--fig-blue)', page: 'weight-transfer', pageTitle: 'Weight transfer and rollover',
-      text: 'The ground pushes back up on each tyre, square to the ground. Speeding up, braking and turning move this push between the wheels.' },
-    drive: { name: 'Drive force (tyres)', colour: 'var(--fig-green)', page: 'tyres', pageTitle: 'Tyres and slip',
-      text: 'The engine turns the driven wheels; each tyre pushes back on the ground, and the ground pushes the vehicle forward. A tyre can push only as hard as its grip allows.' },
+      text: 'The ground pushes up on each tyre and holds the vehicle up.' },
+    drive: { name: 'Drive force (tyres)', colour: 'var(--fig-green)', page: 'slip', pageTitle: 'Slip and the grip curve',
+      text: 'The tyres push back on the ground, so the ground pushes the vehicle forward.' },
     brake: { name: 'Braking force (tyres)', colour: 'var(--fig-red)', page: 'brakes', pageTitle: 'Brakes',
-      text: 'The brakes slow the wheels, and the tyres then hold the vehicle back against the ground. At a standstill they hold it still, up to their strength.' },
-    lateral: { name: 'Side force (tyres)', colour: 'var(--fig-orange)', page: 'tyres', pageTitle: 'Tyres and slip',
-      text: 'To turn, the tyres push sideways on the ground, toward the centre of the turn. Asked for more than their grip, they slide.' },
+      text: 'The brakes slow the wheels, and the tyres hold the vehicle back.' },
+    lateral: { name: 'Side force (tyres)', colour: 'var(--fig-orange)', page: 'slip', pageTitle: 'Slip and the grip curve',
+      text: 'To turn, the tyres push sideways, toward the inside of the turn.' },
     rolling: { name: 'Rolling resistance', colour: 'var(--fx-purple, #7b3fb0)', page: 'resistance', pageTitle: 'Air and rolling resistance',
-      text: 'A rolling tyre flexes, which costs a small, steady push backwards; a wheel carrying more weight pays more. It is zero at a standstill.' },
+      text: 'A rolling tyre flexes, which holds the vehicle back a little.' },
     drag: { name: 'Air drag', colour: 'var(--fig-muted)', page: 'resistance', pageTitle: 'Air and rolling resistance',
-      text: 'The air the vehicle moves through holds it back. It is worked out from the speed through the air, so a headwind adds to it.' },
+      text: 'The air holds the vehicle back, more and more the faster it goes.' },
     side: { name: 'Crosswind push', colour: 'var(--fig-muted)', dash: '5 3', page: 'resistance', pageTitle: 'Air and rolling resistance',
-      text: 'Wind blowing across the vehicle pushes it sideways, much harder than on its nose, because the side is much bigger than the front.' },
-    buoyancy: { name: 'Buoyancy', colour: 'var(--fig-blue)', page: 'floating', pageTitle: 'Floating and boats',
-      text: 'Water pushes up on the hull. The game measures it at four points: the deeper a point sits, the harder the water pushes it up.' },
-    prop: { name: 'Propeller thrust', colour: 'var(--fig-green)', page: 'floating', pageTitle: 'Floating and boats',
-      text: 'The propeller pushes water backwards, and the water pushes the boat forwards. It pushes low at the stern, which lifts the bow a little.' },
-    water: { name: 'Water drag', colour: 'var(--fx-teal, #13807a)', page: 'floating', pageTitle: 'Floating and boats',
-      text: 'The water holds the hull back. In the game this grows in step with the speed through the water: twice the speed, twice the drag.' },
-    windage: { name: 'Windage', colour: 'var(--fig-muted)', page: 'floating', pageTitle: 'Floating and boats',
-      text: 'The wind pushes on the part of the boat above the water, a little on the bow and more on the side.' },
-    rudder: { name: 'Rudder turn (a twist)', colour: 'var(--fig-orange)', curl: true, page: 'floating', pageTitle: 'Floating and boats',
-      text: 'The rudder turns the boat. The game applies it as a twist, not a push, so it is drawn as a curl that is not to scale. It grows with speed and with the propeller\'s wash.' },
-    lift: { name: 'Lift', colour: 'var(--fx-teal, #13807a)', page: 'plane-flight', pageTitle: 'Plane flight',
-      text: 'The wing pushes air down, and the air pushes the wing up. Lift grows with the square of the speed, and fades away below the stall speed.' },
-    thrust: { name: 'Propeller thrust', colour: 'var(--fig-green)', page: 'plane-flight', pageTitle: 'Plane flight',
-      text: 'The propeller pulls the plane forward. In the game it depends on the throttle only, not on the speed.' },
-    airdrag: { name: 'Air drag', colour: 'var(--fig-muted)', page: 'plane-flight', pageTitle: 'Plane flight',
-      text: 'The air holds the plane back. Like the lift, it grows with the square of the airspeed, so a headwind adds to it.' },
-    rotor: { name: 'Rotor thrust', colour: 'var(--fig-green)', page: 'drone-flight', pageTitle: 'Drone flight',
-      text: 'Each rotor pushes air down and is pushed up along its own axis. Tilting the drone tips that push, so part of it moves the drone along.' },
-    dronedrag: { name: 'Air drag', colour: 'var(--fig-muted)', page: 'drone-flight', pageTitle: 'Drone flight',
-      text: 'The air holds the drone back, in step with its speed through the air. To hold a speed the drone leans until its rotors cancel this.' },
-    tractive: { name: 'Tractive effort', colour: 'var(--fig-green)', page: 'rail', pageTitle: 'Trains',
-      text: 'The locomotive\'s motors turn its wheels against the rails: a fixed force at low speed, then a fixed power, so less force the faster it goes.' },
-    running: { name: 'Running resistance', colour: 'var(--fx-purple, #7b3fb0)', page: 'rail', pageTitle: 'Trains',
-      text: 'Each car\'s bearings, wheel flanges and air, worked out with the railway\'s Davis formula. It is zero at a standstill.' },
-    trainbrake: { name: 'Braking force', colour: 'var(--fig-red)', page: 'rail', pageTitle: 'Trains',
-      text: 'Every car brakes, up to the same force per car. At a standstill the brakes hold the train, up to that force.' },
-    coupler: { name: 'Coupler pull', colour: 'var(--fig-orange)', page: 'rail', pageTitle: 'Trains',
-      text: 'The links between the cars. Each one pulls the car behind forwards and the car in front backwards by the same amount.' },
+      text: 'Wind blowing across the vehicle pushes it sideways.' },
     net: { name: 'Net force (what is left)', colour: 'var(--fig-ink)', dash: '2 3', page: null,
-      text: 'All the pushes added together. Whatever is left over speeds the vehicle up, slows it down, or turns it.' }
+      text: 'All the forces added together. What is left speeds the vehicle up, slows it or turns it.' }
   };
 
   // ---- wheeled bodies -----------------------------------------------------------------------
@@ -166,7 +140,7 @@
       maxSteer: 38, minSteerFrac: 0.26, falloff: 42, limitKmh: 0,
       loadMax: 0, loadX: 0,
       body: { front: 1.05, rear: 1.0, width: 1.75, height: 1.45, kind: 'car' },
-      sliders: { speed: [0, 180, 60], slope: 30, load: 'The cars carry no load in the game.' }
+      sliders: { speed: [0, 180, 60], slope: 30, load: 'The cars carry no load in the simulator.' }
     }),
     truck: wheeled({
       // garbage-truck_spec.tres: mass 8000, center_of_mass (0, 0.85, -0.262), wheel_positions z
@@ -214,80 +188,41 @@
       loadMax: 1550, loadX: -3.06, loadLabel: 'Load (implement on the hitch)',
       body: { front: 0.75, rear: 0.5, width: 2.0, height: 2.7, kind: 'tractor' },
       sliders: { speed: [0, 45, 12], slope: 30 }
-    }),
-    boat: {
-      // boat-speed-a: mass 600 (boat-speed-a_spec.tres), center_of_mass y -0.317; boat-speed-a.tscn
-      // probe_points x +-0.900, y -0.3, z +-1.618, float_depth 0.3 (so the water sits at y 0),
-      // prop_offset (0, -0.238, 1.820), rudder_torque 6500, drag_long 360, drag_lat 2060; hull
-      // boxes 4.044 x 2.142. boat.gd thrust_force 5200, reverse_thrust_factor 0.4, windage_long 6,
-      // windage_lat 18, windage_offset (0, 0.55, 0.45). vehicle_math.gd RUDDER_SPEED_REF 6,
-      // RUDDER_PROP_WASH 0.5. Steady afloat, the four probes share the weight.
-      kind: 'boat', label: 'Boat (the speedboat)', mass: 600, comY: -0.317,
-      probes: [[1.618, 0.9], [1.618, -0.9], [-1.618, 0.9], [-1.618, -0.9]], probeY: -0.3,
-      thrust: 5200, propX: -1.820, propY: -0.238, rudderTorque: 6500, dragLong: 360, dragLat: 2060,
-      windLong: 6, windLat: 18, windX: -0.45, windY: 0.55, length: 4.044, width: 2.142,
-      sliders: { speed: [0, 60, 25], brake: 'Boats have no brakes.', slope: 'Water is flat.', load: 'The boats carry no load in the game.' }
-    },
-    plane: {
-      // plane_spec.tres: mass 800, center_of_mass y -0.2, wheel_positions nose (0, 0, -2) and mains
-      // (+-1.1, 0, 0.6), wheel_radius 0.22, rest_length 0.3, brake_torque 900 on every wheel
-      // (brake_bias_front -1), mu_long 1.05 (GroundDriveSpec default), rolling_resistance 0
-      // (GroundDriveSpec default), no ABS. plane.gd lift_coeff 13, lift_cap 16000, stall_speed 13,
-      // full_lift_speed 20 (lift_frac: smoothstep between), max_thrust 9000 (rpm lerps idle to
-      // redline with the throttle, so thrust = throttle x 9000 once spooled), drag_coeff 80 plus
-      // drag_sq 10.5 (forward: 80u + 10.5u|u|, VehicleMath.damped_force's coeff_sq), drag_lat 1600
-      // (linear); span 7 and length 5.5 size the drawing only. Lift and drag both use the air speed
-      // along the nose (plane.gd _tick_extras: every aero term reads velocity relative to
-      // WindField), with the wings level (aoa_factor 1).
-      kind: 'plane', label: 'Plane', mass: 800, comY: -0.2,
-      liftCoeff: 13, liftCap: 16000, stall: 13, fullLift: 20, maxThrust: 9000, dragCoeff: 80, dragSq: 10.5, dragLat: 1600,
-      wheels: [{ name: 'nose wheel', x: 2, y: 0 }, { name: 'right main wheel', x: -0.6, y: -1.1 }, { name: 'left main wheel', x: -0.6, y: 1.1 }],
-      wheelR: 0.22, groundY: -0.52, brakeT: 900, mu: 1.05, span: 7, length: 5.5,
-      sliders: { speed: [0, 120, 70], steer: 'In the air, steering banks the plane; this page shows it flying straight.', slope: 'The page shows the plane level.', load: 'The plane carries no load in the game.' }
-    },
-    drone: {
-      // drone_spec.tres mass 5; drone.gd max_thrust 150 (four rotors), climb_force 45 (full climb
-      // stick), horizontal_drag 1.0 and vertical_drag 6.5 N per m/s against the air, max_tilt_deg
-      // 32; drone_motors.gd arm_x = arm_z 0.407; drone_payload.gd MAX_PAYLOAD_KG 4. Lift thrust =
-      // m g + climb x climb_force (drone.gd), leaning to cancel the drag.
-      kind: 'drone', label: 'Drone', mass: 5, maxThrust: 150, climbForce: 45, hDrag: 1.0, maxTilt: 32, arm: 0.407,
-      loadMax: 4,
-      sliders: { speed: [0, 60, 20], steer: 'Steering turns the drone on the spot (yaw), which moves no arrow.', brake: 'Drones have no brakes; they lean back to slow down.', slope: 'Not used in the air.' }
-    },
-    train: {
-      // train.gd loco_mass 50000, wagon_mass 34000, CAR_LENGTHS 6.72 then 4 x 6.24, COUPLER_GAP
-      // 0.3. train_sim.gd tractive_effort: the grip limit mu_adh 0.35 x loco mass x g, then
-      // max_power() / v, max_power() = power_to_mass 17080/715 W/kg x consist mass (4.44 MW);
-      // davis_a 400, davis_b 15, davis_c 0.8 per car; max_brake 90000 per car (Coulomb: holds at
-      // rest); grade force -m g sin(atan grade). The game's train ignores wind (wind_field.gd).
-      kind: 'train', label: 'Train', masses: [50000, 34000, 34000, 34000, 34000], lengths: [6.72, 6.24, 6.24, 6.24, 6.24],
-      gap: 0.3, muAdh: 0.35, powerToMass: 17080 / 715, davisA: 400, davisB: 15, davisC: 0.8, maxBrake: 90000,
-      sliders: { speed: [0, 120, 50], slope: 4, steer: 'The rails do the steering.', load: 'The wagons carry no load in the game.', wind: 'The game\'s train ignores the wind.' }
-    }
+    })
   };
 
   // ---- models -------------------------------------------------------------------------------
-  // Each returns { arrows: [{ id, view: 'top'|'side', x, y, fx, fy, where, far }], curls,
+  // Each returns { arrows: [{ id, view: 'top'|'side', x, y, fx, fy, where, far }],
   // net: { x, y }, mass, notes, sideRot }. Positions in metres, forces in newtons, body frame.
 
   // Best-gear wheel force at speed v: torque_curve x gear x final_drive x efficiency / radius
   // (Drivetrain.wheel_torque). Below the strongest rpm the page lets the clutch or converter slip
-  // so the engine sits there; it leaves out a converter's torque multiplication.
+  // so the engine sits there; it leaves out a converter's torque multiplication. Returns the force
+  // and what it assumes: the gear (1-based, 0 = none), the engine's rpm, and whether the clutch slips.
   function driveForceMax(V, v) {
-    if (V.limitKmh > 0 && v * 3.6 >= V.limitKmh) return 0;  // VehicleSpec.speed_limit_kmh
-    var best = 0;
-    V.gears.forEach(function (gr) {
+    var best = { force: 0, gear: 0, rpm: 0, limited: false };
+    if (V.limitKmh > 0 && v * 3.6 >= V.limitKmh) { best.limited = true; return best; }  // VehicleSpec.speed_limit_kmh
+    V.gears.forEach(function (gr, i) {
       var total = gr * V.finalDrive;
       var rpm = v / V.driveR * total * 60 / (2 * Math.PI);
       if (rpm > V.redline) return;
-      var f = sampleCurve(V.torque, Math.max(rpm, V.peakRpm)) * total * V.eff / V.driveR;
-      if (f > best) best = f;
+      var engine = Math.max(rpm, V.peakRpm);
+      var f = sampleCurve(V.torque, engine) * total * V.eff / V.driveR;
+      if (f > best.force) best = { force: f, gear: i + 1, rpm: engine, limited: false };
     });
     return best;
   }
 
+  // The drive's gear and engine speed (the strongest gear at this speed), or why there is no drive,
+  // tacked onto the readout's first line.
+  function driveNote(V, d) {
+    if (d.limited) return 'The speed limiter cuts the drive at ' + V.limitKmh + ' km/h.';
+    if (!d.gear) return 'Every gear is past the redline: no drive.';
+    return 'Gear: ' + d.gear + ', engine: ' + Math.round(d.rpm / 100) * 100 + ' rpm.';
+  }
+
   // At a standstill a brake holds against the other forces up to its strength; moving, it pushes
-  // against the motion at full strength (the train's Coulomb brake, a wheel's held_force_range).
+  // against the motion at full strength (a wheel's held_force_range).
   function brakeShare(capacity, others, moving, dir) {
     if (moving) return -dir * capacity;
     return -clamp(others, -capacity, capacity);
@@ -325,7 +260,8 @@
       return -sgn(delta) * Math.atan(L / (R + t));
     }
 
-    var drive = s.throttle * driveForceMax(V, v);
+    var driveMax = driveForceMax(V, v);
+    var drive = s.throttle * driveMax.force;
     var nDriven = V.wheels.filter(function (w) { return w.driven; }).length;
     var capTotal = 0;
     V.wheels.forEach(function (w) { capTotal += s.brake * w.brakeT / w.r; });
@@ -395,10 +331,14 @@
         var grounded = N > 0;
         var fDrive = w.driven && grounded ? drive / nDriven : 0;
         var fBrake = grounded ? brakeF[wi] : 0;
-        var fLat = grounded ? axleSide[key] * share : 0;
         var fRoll = moving ? -V.crr * N : 0;  // RayWheel.tick's rolling moment on asphalt
         var muL = V.muLong * N, muY = V.muLat * (w.front ? 1 : V.rearLatGrip) * N;
         var fx = fDrive + fBrake;
+        // Forces along and across the WHEEL, which a steered wheel turns by `ang`. The body needs
+        // its share of the axle's sideways force; a steered wheel's push along itself already gives
+        // part of it (at a standstill, all of it), so the side force makes up the rest.
+        var ang = wheelAngle(w), ca = Math.cos(ang), sa = Math.sin(ang);
+        var fLat = grounded ? (axleSide[key] * share - (fx + fRoll) * sa) / ca : 0;
         // RayWheel.friction_ellipse: the along and across demands share one grip budget.
         var rch = Math.hypot(muL > 0 ? fx / muL : (fx ? 9 : 0), muY > 0 ? fLat / muY : (fLat ? 9 : 0));
         reach[key] = Math.max(reach[key], rch);
@@ -418,10 +358,12 @@
           slideBrake = true;
         }
         out.push({ w: w, N: N, drive: fDrive * k, brake: fBrake * k, lat: fLat * k, roll: fRoll,
-          angle: wheelAngle(w), sliding: sliding });
-        sumX += (fDrive + fBrake) * k + fRoll;
-        sumY += fLat * k;
-        latSum[key] += fLat * k;
+          angle: ang, sliding: sliding, use: grounded ? Math.min(rch, 1) : 0, lifted: !grounded });
+        // Back to the body's axes, as the arrows are drawn.
+        var along = fx * k + fRoll, across = fLat * k;
+        sumX += along * ca - across * sa;
+        sumY += along * sa + across * ca;
+        latSum[key] += along * sa + across * ca;
       });
       accel = (sumX + drag + Wx) / m;
       latActual = latSum;
@@ -434,14 +376,22 @@
       var w = r.w, far = w.y > 0, c = Math.cos(r.angle), sn = Math.sin(r.angle);
       var where = w.name + ' wheel';
       arrows.push({ id: 'normal', view: 'side', x: w.x, y: 0, fx: 0, fy: r.N, where: where, far: far });
+      // The side view shows each force's part along the car: a steered wheel's push is turned, and
+      // its side force then pushes partly backwards or forwards too.
+      var part = sn ? ' (its part along the car)' : '';
       [['drive', r.drive], ['brake', r.brake], ['rolling', r.roll]].forEach(function (p) {
         if (!p[1]) return;
-        arrows.push({ id: p[0], view: 'side', x: w.x, y: 0, fx: p[1], fy: 0, where: where, far: far });
+        arrows.push({ id: p[0], view: 'side', x: w.x, y: 0, fx: p[1] * c, fy: 0, where: where + part, far: far });
         arrows.push({ id: p[0], view: 'top', x: w.x, y: w.y, fx: p[1] * c, fy: p[1] * sn, where: where, sliding: r.sliding });
       });
-      if (r.lat) arrows.push({ id: 'lateral', view: 'top', x: w.x, y: w.y, fx: -r.lat * sn, fy: r.lat * c, where: where, sliding: r.sliding });
+      if (r.lat) {
+        arrows.push({ id: 'lateral', view: 'top', x: w.x, y: w.y, fx: -r.lat * sn, fy: r.lat * c, where: where, sliding: r.sliding });
+        if (sn) arrows.push({ id: 'lateral', view: 'side', x: w.x, y: 0, fx: -r.lat * sn, fy: 0, where: where + part, far: far });
+      }
     });
     arrows.push({ id: 'weight', view: 'side', x: xc, y: h, fx: Wx, fy: -Wn, where: 'the centre of mass' });
+    // On a slope the weight pulls downhill too: the view from above shows that part.
+    if (Wx) arrows.push({ id: 'weight', view: 'top', x: xc, y: 0, fx: Wx, fy: 0, where: 'the centre of mass (the downhill part of the weight)' });
     if (drag) {
       arrows.push({ id: 'drag', view: 'side', x: V.aeroX, y: V.aeroH, fx: drag, fy: 0, where: 'the centre of pressure' });
       arrows.push({ id: 'drag', view: 'top', x: V.aeroX, y: 0, fx: drag, fy: 0, where: 'the centre of pressure' });
@@ -465,210 +415,23 @@
       var braking = res.slideBrake;
       notes.push(braking && !moving ? 'A braked tyre is past its grip: the brakes cannot hold the vehicle here.'
         : braking ? (V.abs ? 'A tyre is at its grip limit: ABS holds it at the peak of the grip curve.'
-          : 'A tyre is past its grip limit: with no ABS it locks, and grip falls to 0.8 of the peak.')
+          : 'A tyre is past its grip limit: without ABS it locks, and grip falls to 0.8 of the peak.')
         : (V.tcs ? 'A driven tyre is at its grip limit: traction control holds it at the peak.'
           : 'A driven tyre is past its grip limit: it spins, and grip falls to 0.8 of the peak.'));
     }
     var held = Math.abs(res.sumY) / m;  // the sideways acceleration the tyres alone give
     var turn = isFinite(R) && moving ? { radius: R, ay: Math.abs(ay), held: held, heldRadius: held > 1e-6 ? v * v / held : Infinity, pull: Math.abs(res.sumY) } : null;
-    return { arrows: arrows, curls: [], net: { x: netX, y: netY }, mass: m, notes: notes, sideRot: th, turn: turn,
-      steerAngles: res.wheels.map(function (r) { return r.angle; }) };
+    return { arrows: arrows, net: { x: netX, y: netY }, mass: m, notes: notes, sideRot: th, turn: turn,
+      driveNote: s.throttle > 0 ? driveNote(V, driveMax) : '',
+      steerAngles: res.wheels.map(function (r) { return r.angle; }),
+      grip: res.wheels.map(function (r) { return { use: r.use, lifted: r.lifted }; }) };
   }
 
-  function modelBoat(V, s) {
-    var m = V.mass, W = m * G, v = s.speed / 3.6;
-    var wind = windVector(s);
-    var ax = v - wind.x, ay = -wind.y;          // air velocity on the hull
-    var thrust = s.throttle * V.thrust;         // thrust_scale(t) = t when t >= 0
-    var water = -V.dragLong * v;                // damped_force: linear in the speed through water
-    var wLong = -V.windLong * ax, wLat = -V.windLat * ay;
-    // VehicleMath.flow_authority with prop wash: |v| / 6 + |throttle| x 0.5, capped at 1.
-    var authority = clamp(v / 6 + s.throttle * 0.5, 0, 1);
-    var twist = s.steer * V.rudderTorque * authority;
-    var arrows = [];
-    V.probes.forEach(function (p) {
-      var where = (p[0] > 0 ? 'bow' : 'stern') + ' ' + (p[1] > 0 ? 'left' : 'right') + ' probe';
-      arrows.push({ id: 'buoyancy', view: 'side', x: p[0], y: V.probeY, fx: 0, fy: W / 4, where: where, far: p[1] > 0 });
-    });
-    arrows.push({ id: 'weight', view: 'side', x: 0, y: V.comY, fx: 0, fy: -W, where: 'the centre of mass' });
-    if (thrust) {
-      arrows.push({ id: 'prop', view: 'side', x: V.propX, y: V.propY, fx: thrust, fy: 0, where: 'the propeller' });
-      arrows.push({ id: 'prop', view: 'top', x: V.propX, y: 0, fx: thrust, fy: 0, where: 'the propeller' });
-    }
-    if (water) {
-      arrows.push({ id: 'water', view: 'side', x: 0, y: V.comY, fx: water, fy: 0, where: 'the centre of mass' });
-      arrows.push({ id: 'water', view: 'top', x: 0, y: 0, fx: water, fy: 0, where: 'the centre of mass' });
-    }
-    if (wLong) {
-      arrows.push({ id: 'windage', view: 'side', x: 0, y: V.comY, fx: wLong, fy: 0, where: 'the centre of mass' });
-      arrows.push({ id: 'windage', view: 'top', x: 0, y: 0, fx: wLong, fy: 0, where: 'the centre of mass' });
-    }
-    if (wLat) arrows.push({ id: 'windage', view: 'top', x: V.windX, y: 0, fx: 0, fy: wLat, where: 'above the water, behind the middle' });
-    var netX = thrust + water + wLong;
-    arrows.push({ id: 'net', view: 'side', x: 0, y: V.comY, fx: netX, fy: 0, where: 'the centre of mass' });
-    arrows.push({ id: 'net', view: 'top', x: 0, y: 0, fx: netX, fy: wLat, where: 'the centre of mass' });
-    var curls = twist ? [{ id: 'rudder', x: V.propX, y: 0, torque: twist, where: 'about the middle of the boat' }] : [];
-    var notes = [];
-    if (s.steer && authority < 0.3) notes.push('The rudder does little this slowly: it needs speed, or the propeller\'s wash over it.');
-    if (wLat) notes.push('The game\'s side drag in the water stops the crosswind from pushing the boat sideways for long; this page shows only the first push.');
-    return { arrows: arrows, curls: curls, net: { x: netX, y: wLat }, mass: m, notes: notes, sideRot: 0 };
-  }
-
-  function modelPlane(V, s) {
-    var m = V.mass, W = m * G, v = s.speed / 3.6;
-    var wind = windVector(s);
-    var ux = v - wind.x, uy = -wind.y;
-    var air = Math.max(ux, 0);
-    var t = clamp((air - V.stall) / (V.fullLift - V.stall), 0, 1);
-    var lift = Math.min(V.liftCoeff * air * air, V.liftCap) * t * t * (3 - 2 * t);  // PlaneVehicle.lift_force
-    var thrust = s.throttle * V.maxThrust;
-    var drag = -(V.dragCoeff + V.dragSq * Math.abs(ux)) * ux, dragY = -V.dragLat * uy;
-    var onGround = lift < W;
-    var gearLoad = onGround ? W - lift : 0;
-    var xn = V.wheels[0].x, xm = V.wheels[1].x;
-    var noseN = gearLoad * (0 - xm) / (xn - xm);
-    var Ns = [noseN, (gearLoad - noseN) / 2, (gearLoad - noseN) / 2];
-    var moving = v > 0.05;
-    var cap = s.brake * V.brakeT / V.wheelR;
-    var arrows = [], sumX = 0, notes = [], locked = false;
-    var brakeAll = onGround ? brakeShare(cap * 3, thrust + drag, moving, 1) : 0;
-    V.wheels.forEach(function (w, i) {
-      var N = Ns[i];
-      var fb = brakeAll / 3;
-      if (Math.abs(fb) > V.mu * N) {
-        fb = sgn(fb) * V.mu * N * (moving ? 0.8 : 1);   // no ABS: a locked wheel slides at 0.8
-        if (moving) locked = true;
-      }
-      sumX += fb;
-      if (onGround) arrows.push({ id: 'normal', view: 'side', x: w.x, y: V.groundY, fx: 0, fy: N, where: 'the ' + w.name, far: w.y > 0 });
-      if (fb) {
-        arrows.push({ id: 'brake', view: 'side', x: w.x, y: V.groundY, fx: fb, fy: 0, where: 'the ' + w.name, far: w.y > 0 });
-        arrows.push({ id: 'brake', view: 'top', x: w.x, y: w.y, fx: fb, fy: 0, where: 'the ' + w.name });
-      }
-    });
-    arrows.push({ id: 'weight', view: 'side', x: 0, y: V.comY, fx: 0, fy: -W, where: 'the centre of mass' });
-    if (lift) arrows.push({ id: 'lift', view: 'side', x: 0, y: 0.1, fx: 0, fy: lift, where: 'the wing' });
-    if (thrust) {
-      arrows.push({ id: 'thrust', view: 'side', x: V.length / 2, y: 0, fx: thrust, fy: 0, where: 'the propeller' });
-      arrows.push({ id: 'thrust', view: 'top', x: V.length / 2, y: 0, fx: thrust, fy: 0, where: 'the propeller' });
-    }
-    if (drag) {
-      arrows.push({ id: 'airdrag', view: 'side', x: 0, y: V.comY, fx: drag, fy: 0, where: 'the centre of mass' });
-      arrows.push({ id: 'airdrag', view: 'top', x: 0, y: 0, fx: drag, fy: 0, where: 'the centre of mass' });
-    }
-    if (dragY) arrows.push({ id: 'airdrag', view: 'top', x: 0, y: 0, fx: 0, fy: dragY, where: 'the centre of mass' });
-    var netX = thrust + drag + sumX, netUp = onGround ? 0 : lift - W;
-    arrows.push({ id: 'net', view: 'side', x: 0, y: V.comY, fx: netX, fy: netUp, where: 'the centre of mass' });
-    arrows.push({ id: 'net', view: 'top', x: 0, y: 0, fx: netX, fy: dragY, where: 'the centre of mass' });
-    if (locked) notes.push('A wheel locks: with no ABS, its grip falls to 0.8 of the peak.');
-    if (air < V.stall && v > 1) notes.push('Below the stall speed the wing gives no lift at all.');
-    if (!onGround) notes.push('Lift is more than the weight: the plane leaves the ground.');
-    else if (lift > 0) notes.push('The wing already carries ' + Math.round(lift / W * 100) + ' % of the weight; the wheels carry the rest.');
-    return { arrows: arrows, curls: [], net: { x: netX, y: netUp }, mass: m, notes: notes, sideRot: 0, airborne: !onGround };
-  }
-
-  function modelDrone(V, s) {
-    var m = V.mass + s.load, W = m * G, v = s.speed / 3.6;
-    var wind = windVector(s);
-    var ux = v - wind.x, uy = -wind.y;
-    var dragX = -V.hDrag * ux, dragY = -V.hDrag * uy;
-    var up = clamp(W + s.throttle * V.climbForce, 0, V.maxThrust);  // drone.gd lift_thrust
-    // Lean so the thrust's level part cancels the drag, up to max_tilt_deg.
-    var hx = -dragX, hy = -dragY, hMag = Math.hypot(hx, hy);
-    var hMax = up * Math.tan(V.maxTilt * Math.PI / 180);
-    var notes = [];
-    if (hMag > hMax) { hx *= hMax / hMag; hy *= hMax / hMag; hMag = hMax; notes.push('The drone is leaning as far as it may (32°) and still cannot hold this speed.'); }
-    var T = Math.hypot(up, hMag);
-    if (T > V.maxThrust) {
-      var k = V.maxThrust / T; up *= k; hx *= k; hy *= k; hMag *= k; T = V.maxThrust;
-      notes.push('The rotors are at full power.');
-    }
-    var tilt = -Math.atan2(hx, up);              // nose down to go forward
-    var arrows = [], per = T / 4;
-    [[V.arm, 1], [-V.arm, 1], [V.arm, -1], [-V.arm, -1]].forEach(function (p) {
-      var where = (p[0] > 0 ? 'front' : 'back') + ' ' + (p[1] > 0 ? 'left' : 'right') + ' rotor';
-      arrows.push({ id: 'rotor', view: 'side', x: p[0], y: 0.08, fx: 0, fy: per, where: where, far: p[1] > 0 });
-      if (hMag > 0) arrows.push({ id: 'rotor', view: 'top', x: p[0], y: p[1] * V.arm, fx: hx / 4, fy: hy / 4, where: where + ' (its level part)' });
-    });
-    var wb = toBody(0, -V.mass * G, tilt);
-    arrows.push({ id: 'weight', view: 'side', x: 0, y: 0, fx: wb.x, fy: wb.y, where: 'the drone' });
-    if (s.load > 0) {
-      var hook = toBody(0, -0.7, tilt), wp = toBody(0, -s.load * G, tilt);
-      arrows.push({ id: 'weight', view: 'side', x: hook.x, y: hook.y, fx: wp.x, fy: wp.y, where: 'the load on the hook' });
-    }
-    if (dragX || dragY) {
-      var db = toBody(dragX, 0, tilt);
-      if (dragX) arrows.push({ id: 'dronedrag', view: 'side', x: 0, y: 0, fx: db.x, fy: db.y, where: 'the drone' });
-      arrows.push({ id: 'dronedrag', view: 'top', x: 0, y: 0, fx: dragX, fy: dragY, where: 'the drone' });
-    }
-    var netX = hx + dragX, netY = hy + dragY, netUp = up - W;
-    var nb = toBody(netX, netUp, tilt);
-    arrows.push({ id: 'net', view: 'side', x: 0, y: 0, fx: nb.x, fy: nb.y, where: 'the drone' });
-    arrows.push({ id: 'net', view: 'top', x: 0, y: 0, fx: netX, fy: netY, where: 'the drone' });
-    if (Math.abs(netUp) > 0.5) notes.push(netUp > 0 ? 'More thrust than weight: the drone climbs.' : 'Less thrust than weight: the drone sinks.');
-    return { arrows: arrows, curls: [], net: { x: netX, y: netUp }, mass: m, notes: notes, sideRot: tilt, tilt: tilt, hookLoad: s.load };
-  }
-
-  function modelTrain(V, s) {
-    var th = Math.atan(s.slope / 100), v = s.speed / 3.6, moving = v > 0.05;
-    var n = V.masses.length, M = 0;
-    V.masses.forEach(function (mm) { M += mm; });
-    // Car centres, front (the loco) first, from x = 0 backwards.
-    var centres = [], x = 0;
-    V.lengths.forEach(function (len) { centres.push(x - len / 2); x -= len + V.gap; });
-    var grip = V.muAdh * V.masses[0] * G;
-    var power = V.powerToMass * M;
-    var te = s.throttle * (v > 0 ? Math.min(grip, power / v) : grip);
-    var forces = [], arrows = [];
-    var davis = moving ? -(V.davisA + V.davisB * v + V.davisC * v * v) : 0;
-    var others = te, grades = [];
-    V.masses.forEach(function (mm) { var gx = -mm * G * Math.sin(th); grades.push(gx); others += gx + davis; });
-    var brakeAll = brakeShare(s.brake * V.maxBrake * n, others, moving, 1);
-    V.masses.forEach(function (mm, i) {
-      var f = grades[i] + davis + brakeAll / n + (i === 0 ? te : 0);
-      forces.push(f);
-      var cx = centres[i], half = V.lengths[i] / 2, name = i === 0 ? 'the locomotive' : 'wagon ' + i;
-      var Wn = mm * G * Math.cos(th);
-      arrows.push({ id: 'weight', view: 'side', x: cx, y: 1.6, fx: grades[i], fy: -Wn, where: name });
-      arrows.push({ id: 'normal', view: 'side', x: cx - half * 0.6, y: 0, fx: 0, fy: Wn / 2, where: name + ', rear bogie' });
-      arrows.push({ id: 'normal', view: 'side', x: cx + half * 0.6, y: 0, fx: 0, fy: Wn / 2, where: name + ', front bogie' });
-      if (davis) {
-        arrows.push({ id: 'running', view: 'side', x: cx, y: 0.3, fx: davis, fy: 0, where: name });
-        arrows.push({ id: 'running', view: 'top', x: cx, y: 0.5, fx: davis, fy: 0, where: name });
-      }
-      if (brakeAll) {
-        arrows.push({ id: 'trainbrake', view: 'side', x: cx - half * 0.6, y: 0, fx: brakeAll / n, fy: 0, where: name });
-        arrows.push({ id: 'trainbrake', view: 'top', x: cx, y: -0.5, fx: brakeAll / n, fy: 0, where: name });
-      }
-    });
-    if (te) {
-      arrows.push({ id: 'tractive', view: 'side', x: centres[0], y: 0, fx: te, fy: 0, where: 'the locomotive\'s wheels' });
-      arrows.push({ id: 'tractive', view: 'top', x: centres[0], y: 0, fx: te, fy: 0, where: 'the locomotive\'s wheels' });
-    }
-    var net = 0;
-    forces.forEach(function (f) { net += f; });
-    var acc = net / M;
-    // The cars share one acceleration; coupler i carries what the cars behind it need beyond their
-    // own forces (TrainSim's spring couplers, settled).
-    for (var i = 0; i < n - 1; i++) {
-      var pull = 0;
-      for (var j = i + 1; j < n; j++) pull += V.masses[j] * acc - forces[j];
-      var cxp = centres[i] - V.lengths[i] / 2 - V.gap / 2, label = 'the coupler behind ' + (i === 0 ? 'the locomotive' : 'wagon ' + i);
-      arrows.push({ id: 'coupler', view: 'side', x: cxp - V.gap / 2, y: 1.0, fx: pull, fy: 0, where: label + ', on the car behind' });
-      arrows.push({ id: 'coupler', view: 'side', x: cxp + V.gap / 2, y: 1.0, fx: -pull, fy: 0, where: label + ', on the car in front' });
-    }
-    arrows.push({ id: 'net', view: 'top', x: centres[2], y: 0, fx: net, fy: 0, where: 'the whole train' });
-    arrows.push({ id: 'net', view: 'side', x: centres[2], y: 1.6, fx: net, fy: 0, where: 'the whole train' });
-    return { arrows: arrows, curls: [], net: { x: net, y: 0 }, mass: M, notes: [], sideRot: th, centres: centres };
-  }
-
+  // The ground scales the tyres' grip and adds its drag; s.aids false switches ABS and TCS off.
   function compute(key, s) {
-    var V = VEHICLES[key];
-    if (V.kind === 'wheeled') return modelWheeled(V, s);
-    if (V.kind === 'boat') return modelBoat(V, s);
-    if (V.kind === 'plane') return modelPlane(V, s);
-    if (V.kind === 'drone') return modelDrone(V, s);
-    return modelTrain(V, s);
+    var V = VEHICLES[key], g = GROUNDS[s.ground || 'dry'], aids = s.aids !== false;
+    return modelWheeled(Object.assign({}, V, { muLong: V.muLong * g.grip, muLat: V.muLat * g.grip,
+      crr: V.crr + g.drag, abs: V.abs && aids, tcs: V.tcs && aids }), s);
   }
 
   // ---- drawing the vehicles -----------------------------------------------------------------
@@ -684,7 +447,8 @@
         if (b.kind === 'truck') out.push({ poly: rect(V.xf - 0.5, -b.width / 2, xF, b.width / 2), cls: 'glass' });
         if (b.kind === 'tractor') out.push({ poly: rect(V.xr - 0.3, -0.7, V.xr + 0.9, 0.7), cls: 'glass' });
         V.wheels.forEach(function (w, i) {
-          out.push({ wheel: true, x: w.x, y: w.y, len: w.r * 2, wid: w.hw * 2, angle: r.steerAngles ? r.steerAngles[i] : 0 });
+          out.push({ wheel: true, x: w.x, y: w.y, len: w.r * 2, wid: w.hw * 2, angle: r.steerAngles ? r.steerAngles[i] : 0,
+            grip: r.grip ? r.grip[i] : null });
         });
       } else {
         var ground = Math.max(V.rF, V.rR) * 0.55;
@@ -704,76 +468,81 @@
           out.push({ line: [[V.xr - 0.2, 0.9], [V.loadX + 0.6, 0.7]] });
         }
       }
-    } else if (V.kind === 'boat') {
-      var hl = V.length / 2, hw = V.width / 2;
-      if (view === 'top') {
-        out.push({ poly: [[-hl, -hw], [hl - 1.1, -hw], [hl, 0], [hl - 1.1, hw], [-hl, hw]], cls: 'body' });
-        out.push({ poly: rect(-0.6, -0.7, 0.4, 0.7), cls: 'glass' });
-      } else {
-        out.push({ poly: [[-hl, -0.4], [hl - 1.2, -0.4], [hl, 0.5], [-hl, 0.5]], cls: 'body' });
-        out.push({ poly: [[-0.6, 0.5], [0.4, 0.5], [0.1, 1.0], [-0.6, 1.0]], cls: 'glass' });
-      }
-    } else if (V.kind === 'plane') {
-      var half = V.length / 2;
-      if (view === 'top') {
-        out.push({ poly: [[-half, -0.3], [half - 0.6, -0.5], [half, -0.3], [half, 0.3], [half - 0.6, 0.5], [-half, 0.3]], cls: 'body' });
-        out.push({ poly: rect(-0.5, -V.span / 2, 0.7, V.span / 2), cls: 'body' });
-        out.push({ poly: rect(-half, -1.5, -half + 0.7, 1.5), cls: 'body' });
-        V.wheels.forEach(function (w) { out.push({ wheel: true, x: w.x, y: w.y, len: V.wheelR * 2, wid: 0.14, angle: 0 }); });
-      } else {
-        out.push({ poly: [[-half, 0.1], [-half, 1.2], [-half + 0.6, 1.2], [-half + 1.2, 0.4], [half - 1.4, 0.75], [half - 0.3, 0.45], [half, 0.0], [half - 0.3, -0.35], [-half + 1.5, -0.25]], cls: 'body' });
-        out.push({ poly: rect(-0.5, 0.05, 0.7, 0.2), cls: 'glass' });
-        V.wheels.forEach(function (w) {
-          if (w.y <= 0) {
-            out.push({ line: [[w.x, -0.25], [w.x, V.groundY + V.wheelR]] });
-            out.push({ circle: true, x: w.x, y: V.groundY + V.wheelR, r: V.wheelR });
-          }
-        });
-      }
-    } else if (V.kind === 'drone') {
-      var arm = V.arm;
-      if (view === 'top') {
-        out.push({ line: [[-arm, -arm], [arm, arm]] });
-        out.push({ line: [[-arm, arm], [arm, -arm]] });
-        [[arm, arm], [arm, -arm], [-arm, arm], [-arm, -arm]].forEach(function (p) { out.push({ circle: true, x: p[0], y: p[1], r: 0.2, cls: 'rotor' }); });
-        out.push({ poly: rect(-0.12, -0.12, 0.16, 0.12), cls: 'body' });
-      } else {
-        out.push({ line: [[-arm, 0.04], [arm, 0.04]] });
-        out.push({ poly: rect(-0.14, -0.08, 0.18, 0.06), cls: 'body' });
-        [arm, -arm].forEach(function (x) { out.push({ poly: rect(x - 0.2, 0.07, x + 0.2, 0.1), cls: 'rotor' }); });
-        if (r.hookLoad > 0) {
-          out.push({ line: [[0, -0.08], [0, -0.6]], world: true });
-          out.push({ poly: rect(-0.12, -0.82, 0.12, -0.6), cls: 'load', world: true });
-        }
-      }
-    } else {
-      r.centres.forEach(function (cx, i) {
-        var half = V.lengths[i] / 2;
-        if (view === 'top') out.push({ poly: rect(cx - half, -1.4, cx + half, 1.4), cls: i === 0 ? 'glass' : 'body' });
-        else {
-          out.push({ poly: i === 0 ? [[cx - half, 0.6], [cx + half, 0.6], [cx + half, 3.2], [cx + half - 1.6, 3.6], [cx - half, 3.6]] : rect(cx - half, 0.6, cx + half, 3.3), cls: i === 0 ? 'glass' : 'body' });
-          [-1, 1].forEach(function (k) { out.push({ circle: true, x: cx + k * half * 0.6, y: 0.4, r: 0.4 }); });
-        }
-      });
     }
     return out;
   }
 
   // ---- the widget ---------------------------------------------------------------------------
-  var ORDER = ['car', 'truck', 'tractor', 'boat', 'plane', 'drone', 'train'];
-  var FORCE_SETS = {
-    wheeled: ['weight', 'normal', 'drive', 'brake', 'lateral', 'rolling', 'drag', 'side', 'net'],
-    boat: ['weight', 'buoyancy', 'prop', 'water', 'windage', 'rudder', 'net'],
-    plane: ['weight', 'lift', 'thrust', 'airdrag', 'normal', 'brake', 'net'],
-    drone: ['weight', 'rotor', 'dronedrag', 'net'],
-    train: ['weight', 'normal', 'tractive', 'running', 'trainbrake', 'coupler', 'net']
-  };
+  var ORDER = ['car', 'truck', 'tractor'];
+  // widget-kit.js icon for each vehicle drawn.
+  var ICON = { car: 'car', truck: 'truck', tractor: 'tractor' };
+
+  // Teaching presets: a vehicle and the sliders it changes (the rest at the vehicle's defaults),
+  // with what to look for. The values were picked by running `compute`, so each one shows what
+  // its name says; re-check them after a model change. `id` is the address other pages link to,
+  // forces.md#example-<id>: renaming one breaks their links.
+  var PRESETS = [
+    { id: 'pulling-away', veh: 'car', name: 'Pulling away at full throttle', set: { speed: 0, throttle: 1 },
+      look: 'The front tyres, which drive, are at their grip limit, so traction control holds them. Speeding up moves weight to the rear, off the wheels that drive.' },
+    { id: 'wheelspin', veh: 'car', name: 'Pulling away on snow, without traction control', set: { speed: 0, throttle: 1, ground: 'snow', aids: false },
+      look: 'The front tyres spin, so they push with only 0.8 of the little grip that snow gives. Switch traction control back on: the car speeds up harder.' },
+    { id: 'high-gear', veh: 'car', name: 'Full throttle at 150 km/h', set: { speed: 150, throttle: 1 },
+      look: 'Even the strongest gear available at this speed pushes far less than first gear does. Lower the speed and watch the gear and the drive force change.' },
+    { id: 'cruising', veh: 'car', name: 'Cruising at 100 km/h', set: { speed: 100, throttle: 0.13 },
+      look: 'The drive just matches air drag and rolling resistance, so the net force is about zero and the speed holds. At this speed air drag is the bigger of the two.' },
+    { id: 'coasting', veh: 'car', name: 'Coasting from 150 km/h', set: { speed: 150, throttle: 0 },
+      look: 'With no drive, only air drag and rolling resistance are left, and they slow the car. Lower the speed: the drag falls quickly, while the rolling resistance stays the same.' },
+    { id: 'headwind', veh: 'car', name: 'Cruising into a headwind', set: { speed: 100, throttle: 0.13, wind: 15, windFrom: 'ahead' },
+      look: 'The same throttle as "Cruising at 100 km/h" no longer holds the speed, because drag follows the speed through the air. Set the wind to come from behind to compare.' },
+    { id: 'emergency-stop', veh: 'car', name: 'Emergency stop from 100 km/h', set: { speed: 100, throttle: 0, brake: 0.8 },
+      look: 'All four tyres are at or near their grip limit; ABS holds the ones at the limit at the peak of the grip curve. Braking moves weight forward: the front ground forces grow, the rear ones shrink.' },
+    { id: 'stop-without-abs', veh: 'car', name: 'Emergency stop without ABS', set: { speed: 100, throttle: 0, brake: 0.8, aids: false },
+      look: 'The same stop, but the tyres at their limit lock and slide, so they grip less and the car slows less. Switch ABS back on to compare.' },
+    { id: 'stop-wet', veh: 'car', name: 'Emergency stop on a wet road', set: { speed: 100, throttle: 0, brake: 0.8, ground: 'wet' },
+      look: 'The brakes ask for as much as on a dry road, but the wet tyres reach their limit sooner, so the car slows less.' },
+    { id: 'stop-snow', veh: 'car', name: 'Emergency stop on snow', set: { speed: 100, throttle: 0, brake: 0.8, ground: 'snow' },
+      look: 'Snow leaves so little grip that the car slows at less than half the rate of a dry stop. Less weight moves to the front, too.' },
+    { id: 'full-lock', veh: 'car', name: 'Full lock at walking pace', set: { speed: 3, steer: 1, throttle: 0.05 },
+      look: 'In the view from above, the inner front wheel is turned much more than the outer one, so that both roll around the same turn centre.' },
+    { id: 'turning', veh: 'car', name: 'Turning, well within grip', set: { speed: 50, steer: 0.05, throttle: 0.12 },
+      look: 'The tyres push the car toward the turn centre and use about a third of their grip. The outer wheels carry more weight than the inner ones.' },
+    { id: 'understeer', veh: 'car', name: 'Turning at the grip limit (understeer)', set: { speed: 50, steer: 0.15, throttle: 0.12 },
+      look: 'The front tyres reach their limit first, so the car starts to run wide. Any more speed or steering and it cannot hold this circle.' },
+    { id: 'too-fast', veh: 'car', name: 'Too fast for the turn', set: { speed: 50, steer: 0.25, throttle: 0.12 },
+      look: 'The wheels point along a tight circle, but the tyres cannot push hard enough: the readout gives the wider circle the car really follows.' },
+    { id: 'braking-in-a-turn', veh: 'car', name: 'Braking in a turn (the rear steps out)', set: { speed: 50, steer: 0.05, throttle: 0, brake: 0.5 },
+      look: 'The same easy turn as "Turning, well within grip", now braking. Braking uses the rear tyres\' grip and takes weight off them, so they reach their limit first: oversteer.' },
+    { id: 'parked-on-a-hill', veh: 'car', name: 'Parked on a 20 % hill', set: { speed: 0, throttle: 0, slope: 20, brake: 0.3 },
+      look: 'The brakes push uphill exactly as hard as the weight pulls downhill, so nothing moves. The downhill part of the weight shows in both views.' },
+    { id: 'hill-start', veh: 'car', name: 'Hill start, with both pedals released', set: { speed: 0, throttle: 0, slope: 15 },
+      look: 'Nothing opposes the downhill part of the weight, so the car rolls back. This is the moment hill-start assist covers. Add brake or throttle until the car holds.' },
+    { id: 'crosswind', veh: 'car', name: 'Crosswind at 100 km/h', set: { speed: 100, throttle: 0.13, wind: 15, windFrom: 'left' },
+      look: 'The wind pushes the car sideways at its centre of pressure, and the tyres push back to keep it straight.' },
+    { id: 'truck-uphill', veh: 'truck', name: 'Full truck starting uphill', set: { speed: 0, throttle: 1, slope: 15, load: 5000 },
+      look: 'About half the drive goes into holding the truck against the slope, so it speeds up at about half the rate it would on the flat (set the slope to 0 to compare).' },
+    { id: 'truck-downhill', veh: 'truck', name: 'Full truck braking down a hill', set: { speed: 50, throttle: 0, slope: -10, load: 5000, brake: 0.07 },
+      look: 'The brakes must push all the way down just to keep the speed from rising. All that work becomes heat, which is why long descents make brakes fade.' },
+    { id: 'truck-governed', veh: 'truck', name: 'At the speed limiter', set: { speed: 85, throttle: 1 },
+      look: 'The throttle is fully open, but the limiter cuts the drive. Lower the speed a little and the drive force returns.' },
+    { id: 'truck-lifts-wheel', veh: 'truck', name: 'Full truck turning too fast: wheels lift', set: { speed: 40, steer: 0.5, throttle: 0.1, load: 5000 },
+      look: 'So much weight moves to the outside that the inner wheels leave the ground. A little more and the truck could roll over.' },
+    { id: 'power-oversteer', veh: 'truck', name: 'Full throttle in a wet turn (the rear steps out)', set: { speed: 15, steer: 0.4, throttle: 1, ground: 'wet', aids: false },
+      look: 'The rear tyres spend their grip on driving and have too little left for turning, so the back steps out: oversteer.' },
+    { id: 'inner-wheel', veh: 'truck', name: 'Power in a tight turn: the inner wheel gives up first', set: { speed: 20, steer: 0.7, throttle: 0.4, ground: 'wet', aids: false },
+      look: 'The inner rear wheel carries less weight than the outer one, so it reaches its limit first and the back starts to step out. The diagram has no differential: in a real truck with an open one, the outer wheel would push no harder than the inner one.' },
+    { id: 'tractor-implement', veh: 'tractor', name: 'Carrying a raised implement', set: { speed: 12, throttle: 0.1, load: 1550 },
+      look: 'The implement hangs behind the rear axle, so it presses the rear wheels down and lifts weight off the front ones. Set the load to 0 to compare.' },
+    { id: 'tractor-wheels-spin', veh: 'tractor', name: 'Steep climb, no implement: the wheels spin', set: { speed: 0, throttle: 1, slope: 25 },
+      look: 'The rear tyres, which drive, reach their grip limit and spin. Compare with the next preset.' },
+    { id: 'tractor-front-lifts', veh: 'tractor', name: 'Steep climb with an implement: the front lifts', set: { speed: 0, throttle: 1, slope: 25, load: 1550 },
+      look: 'The implement behind the rear axle adds grip to the driving wheels, but takes all the weight off the front ones: the tractor is close to tipping over backwards.' }
+  ];
 
   function make(root) {
     root.innerHTML = '';
     var uid = 'fx' + Math.random().toString(36).slice(2, 8);
     var shown = {};
-    Object.keys(FORCES).forEach(function (id) { shown[id] = id !== 'net'; });
+    Object.keys(FORCES).forEach(function (id) { shown[id] = true; });
     var current = 'car';
 
     function addEl(tag, cls, parent, html) {
@@ -783,16 +552,40 @@
       (parent || root).appendChild(e);
       return e;
     }
-    addEl('p', 'w-title', root, 'Try it: the forces on a vehicle');
+    var picker = GuideKit.vehiclePicker(root, ORDER.map(function (k) {
+      return { id: k, icon: ICON[k], name: VEHICLES[k].label };
+    }), 'car', function (k) { setVehicle(k); });
     var pick = addEl('div', 'fx-pick');
-    pick.innerHTML = '<label for="' + uid + '-veh">Vehicle</label> <select id="' + uid + '-veh"></select>';
-    var vehSelect = pick.querySelector('select');
-    ORDER.forEach(function (k) {
-      var o = document.createElement('option');
-      o.value = k;
-      o.textContent = VEHICLES[k].label;
-      vehSelect.appendChild(o);
-    });
+    pick.innerHTML = '<label for="' + uid + '-pre">Example</label> <select id="' + uid + '-pre"></select> ';
+    var presetSelect = pick.querySelector('#' + uid + '-pre');
+    var help = GuideKit.helpButton(pick);
+    var presetHelp = help.panel;
+    // The example the sliders started from, or null. The ? explains it, and shows only while there
+    // is one. Moving a control keeps it as the starting point: the list's blank entry then reads
+    // "<example> (changed)", so choosing the example again puts its settings back.
+    var example = null;
+    var blank = null;
+    // The examples of the vehicle on show; an example belongs to one vehicle.
+    function fillPresets(k) {
+      presetSelect.innerHTML = '';
+      blank = document.createElement('option');
+      blank.value = ''; blank.textContent = 'choose an example';
+      presetSelect.appendChild(blank);
+      PRESETS.forEach(function (p, i) {
+        if (p.veh !== k) return;
+        var o = document.createElement('option');
+        o.value = String(i); o.textContent = p.name;
+        presetSelect.appendChild(o);
+      });
+      example = null;
+      help.open(false);
+      help.button.hidden = true;
+    }
+    function leaveExample() {
+      if (!example || presetSelect.value === '') return;
+      blank.textContent = example.name + ' (changed)';
+      presetSelect.value = '';
+    }
 
     var views = addEl('div', 'fx-views');
     function makeView(title) {
@@ -811,8 +604,6 @@
     var panels = addEl('div', 'fx-panels');
     var controls = addEl('div', 'w-controls', panels);
     var legend = addEl('fieldset', 'fx-legend', panels);
-    var unused = addEl('p', 'w-note');
-    addEl('p', 'w-note', root, 'An illustration, not the physics: a simplified copy of the game\'s formulas at one instant, with wheels on dry asphalt. All arrows in a view share that view\'s scale bar; untick the biggest forces to zoom in on the small ones.');
 
     // sliders: [key, label, min, max, step, default]
     var SL = [
@@ -847,19 +638,46 @@
     });
     addEl('span', '', controls);
     windDir.addEventListener('change', update);
+    var gl = addEl('label', '', controls, 'Ground');
+    gl.setAttribute('for', uid + '-ground');
+    var ground = addEl('select', '', controls);
+    ground.id = uid + '-ground';
+    Object.keys(GROUNDS).forEach(function (k) {
+      var op = document.createElement('option');
+      op.value = k; op.textContent = GROUNDS[k].name;
+      ground.appendChild(op);
+    });
+    addEl('span', '', controls);
+    ground.addEventListener('change', update);
+    var al = addEl('label', '', controls, 'ABS, traction control');
+    al.setAttribute('for', uid + '-aids');
+    var aids = addEl('input', 'fx-check', controls);
+    aids.type = 'checkbox'; aids.id = uid + '-aids';
+    addEl('span', '', controls);
+    aids.addEventListener('change', update);
 
-    function showInfo(id, arrow) {
+    // Kept short on purpose: the name, one plain sentence, and where to read more.
+    function showInfo(id, sliding) {
       var F = FORCES[id];
       var html = '<strong>' + F.name + '.</strong> ' + F.text;
-      if (arrow) html += ' <span class="fx-this">This arrow: ' + fmtN(arrow.mag) + ', at ' + arrow.where + (arrow.sliding ? ', sliding' : '') + '.</span>';
+      if (sliding) html += ' <span class="fx-this">This tyre is sliding.</span>';
       if (F.page) html += ' <a href="#' + F.page + '">More: ' + F.pageTitle + '</a>';
       info.innerHTML = html;
     }
-    info.innerHTML = 'Point at an arrow or a force\'s name, or tap it, to read what it is.';
+    info.innerHTML = 'Click an arrow or a force\'s name to read what it is.';
+    // An arrow is a button: a click, Enter or Space explains it.
+    function onActivate(g, fn) {
+      g.addEventListener('click', fn);
+      g.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); }
+      });
+    }
 
     function setVehicle(key) {
       current = key;
-      var V = VEHICLES[key], cfg = V.sliders, notes = [];
+      picker.set(key);
+      fillPresets(key);
+      var V = VEHICLES[key], cfg = V.sliders;
       var speedCfg = cfg.speed;
       inputs.speed.max = speedCfg[1];
       inputs.speed.value = speedCfg[2];
@@ -871,30 +689,28 @@
       inputs.slope.step = slopeMax > 10 ? 1 : 0.5;
       inputs.slope.value = 0;
       inputs.wind.value = 0;
-      if (V.kind === 'drone') {
-        labels.throttle.textContent = 'Climb stick';
-        inputs.throttle.min = -1; inputs.throttle.value = 0;
-      } else {
-        labels.throttle.textContent = 'Throttle';
-        inputs.throttle.min = 0; inputs.throttle.value = 0.3;
-      }
-      labels.steer.textContent = V.kind === 'boat' ? 'Rudder' : 'Steering';
+      inputs.throttle.value = 0.3;
       var loadMax = V.loadMax || 0;
       inputs.load.max = loadMax || 100;
       inputs.load.step = loadMax > 100 ? 50 : 0.1;
       inputs.load.value = 0;
-      labels.load.textContent = V.loadLabel || (V.kind === 'drone' ? 'Load (on the hook)' : 'Load');
+      labels.load.textContent = V.loadLabel || 'Load';
+      // A control the vehicle has no use for is greyed out; why is its tooltip, not a note.
       ['steer', 'brake', 'slope', 'load', 'wind'].forEach(function (k) {
         var reason = typeof cfg[k] === 'string' ? cfg[k] : null;
         if (k === 'slope' && typeof cfg.slope === 'number') reason = null;
         inputs[k].disabled = !!reason;
         labels[k].classList.toggle('fx-off', !!reason);
-        if (reason) notes.push(labels[k].textContent + ': ' + reason);
+        labels[k].title = inputs[k].title = reason || '';
       });
+      ground.value = 'dry';
+      windDir.value = 'ahead';
+      aids.disabled = !(V.abs || V.tcs);
+      aids.checked = !aids.disabled;
+      al.classList.toggle('fx-off', aids.disabled);
+      al.title = aids.title = aids.disabled ? 'This vehicle has neither.' : '';
       windDir.disabled = inputs.wind.disabled;
       wl.classList.toggle('fx-off', windDir.disabled);
-      unused.textContent = notes.length ? 'Not used here. ' + notes.join(' ') : '';
-      unused.hidden = !notes.length;
       buildLegend();
       update();
     }
@@ -903,20 +719,20 @@
     function buildLegend() {
       legend.innerHTML = '<legend>Forces to show</legend>';
       rows = {};
-      var kind = VEHICLES[current].kind;
-      FORCE_SETS[kind].forEach(function (id) {
+      Object.keys(FORCES).forEach(function (id) {
         var F = FORCES[id];
-        var row = addEl('label', 'fx-row', legend);
+        // The tick shows or hides the force; its name is a button that explains it.
+        var row = addEl('div', 'fx-row', legend);
         var cb = addEl('input', '', row);
         cb.type = 'checkbox'; cb.checked = shown[id];
+        cb.setAttribute('aria-label', 'Show ' + F.name);
         var sw = el('svg', { viewBox: '0 0 28 10', class: 'fx-swatch', 'aria-hidden': 'true' }, row);
-        if (F.curl) el('path', { d: 'M4,8 A7,5 0 1 1 20,6', fill: 'none', stroke: F.colour, 'stroke-width': 2.5 }, sw);
-        else el('line', { x1: 2, y1: 5, x2: 26, y2: 5, stroke: F.colour, 'stroke-width': 3, 'stroke-dasharray': F.dash || 'none' }, sw);
-        addEl('span', 'fx-name', row, F.name);
+        el('line', { x1: 2, y1: 5, x2: 26, y2: 5, stroke: F.colour, 'stroke-width': 3, 'stroke-dasharray': F.dash || 'none' }, sw);
+        var name = addEl('button', 'fx-name', row, F.name);
+        name.type = 'button';
         var val = addEl('span', 'fx-val', row);
-        cb.addEventListener('change', function () { shown[id] = cb.checked; showInfo(id); update(); });
-        row.addEventListener('mouseenter', function () { showInfo(id); });
-        cb.addEventListener('focus', function () { showInfo(id); });
+        cb.addEventListener('change', function () { shown[id] = cb.checked; update(); });
+        name.addEventListener('click', function () { showInfo(id); });
         rows[id] = val;
       });
     }
@@ -926,16 +742,15 @@
         speed: parseFloat(inputs.speed.value), steer: parseFloat(inputs.steer.disabled ? 0 : inputs.steer.value),
         throttle: parseFloat(inputs.throttle.value), brake: inputs.brake.disabled ? 0 : parseFloat(inputs.brake.value),
         slope: inputs.slope.disabled ? 0 : parseFloat(inputs.slope.value), load: inputs.load.disabled ? 0 : parseFloat(inputs.load.value),
-        wind: inputs.wind.disabled ? 0 : parseFloat(inputs.wind.value), windFrom: windDir.value
+        wind: inputs.wind.disabled ? 0 : parseFloat(inputs.wind.value), windFrom: windDir.value,
+        ground: ground.value, aids: aids.checked
       };
     }
 
     function writeOutputs(s) {
       outputs.speed.textContent = Math.round(s.speed) + ' km/h';
       outputs.steer.textContent = inputs.steer.disabled ? '' : s.steer === 0 ? 'straight' : Math.round(Math.abs(s.steer) * 100) + ' % ' + (s.steer > 0 ? 'right' : 'left');
-      outputs.throttle.textContent = VEHICLES[current].kind === 'drone'
-        ? (s.throttle === 0 ? 'hold height' : Math.round(Math.abs(s.throttle) * 100) + ' % ' + (s.throttle > 0 ? 'up' : 'down'))
-        : Math.round(s.throttle * 100) + ' %';
+      outputs.throttle.textContent = Math.round(s.throttle * 100) + ' %';
       outputs.brake.textContent = inputs.brake.disabled ? '' : Math.round(s.brake * 100) + ' %';
       outputs.slope.textContent = inputs.slope.disabled ? '' : s.slope === 0 ? 'level' : Math.abs(s.slope) + ' % ' + (s.slope > 0 ? 'uphill' : 'downhill');
       outputs.load.textContent = inputs.load.disabled ? '' : (s.load >= 100 ? Math.round(s.load) : s.load.toFixed(1)) + ' kg';
@@ -948,7 +763,7 @@
       var V = VEHICLES[current];
       var r = compute(current, s);
       // Legend totals: each force summed in the view that shows the whole of it (a force drawn in
-      // both views appears once in each; the top view holds a drone's or boat's sideways part).
+      // both views appears once in each).
       var sums = { top: {}, side: {} };
       r.arrows.forEach(function (a) { sums[a.view][a.id] = (sums[a.view][a.id] || 0) + Math.hypot(a.fx, a.fy); });
       var netMag = Math.hypot(r.net.x, r.net.y);
@@ -956,8 +771,6 @@
         var t = Math.max(sums.top[id] || 0, sums.side[id] || 0);
         var many = r.arrows.filter(function (a) { return a.id === id && a.view === (sums.side[id] >= (sums.top[id] || 0) ? 'side' : 'top'); }).length > 1;
         if (id === 'net') rows[id].textContent = fmtN(netMag);
-        else if (FORCES[id].curl) rows[id].textContent = r.curls.length ? Math.round(Math.abs(r.curls[0].torque)) + ' N·m' : '0';
-        else if (id === 'coupler') rows[id].textContent = 'up to ' + fmtN(maxCoupler(r));
         else rows[id].textContent = fmtN(t) + (many ? ' in all' : '');
       });
 
@@ -972,11 +785,6 @@
       });
       writeReadout(V, r, s);
     }
-    function maxCoupler(r) {
-      var m = 0;
-      r.arrows.forEach(function (a) { if (a.id === 'coupler') m = Math.max(m, Math.abs(a.fx)); });
-      return m;
-    }
 
     function writeReadout(V, r, s) {
       var along = r.net.x, acc = along / r.mass;
@@ -985,6 +793,7 @@
       else if (s.speed < 0.5 && acc < 0) lines.push('<strong>Net force ' + fmtN(Math.abs(along)) + ' backwards:</strong> the vehicle starts to move back at ' + Math.abs(acc).toFixed(2) + ' m/s².');
       else lines.push('<strong>Net force ' + fmtN(Math.abs(along)) + (acc > 0 ? ' forward' : ' backwards') + ':</strong> ' +
         (acc > 0 ? 'speeding up' : 'slowing down') + ' at ' + Math.abs(acc).toFixed(2) + ' m/s² (' + (Math.abs(acc) / G).toFixed(2) + ' g).');
+      if (r.driveNote) lines[0] += ' ' + r.driveNote;
       if (r.turn) {
         var t = r.turn;
         if (t.held >= t.ay * 0.97) lines.push('Turning on a circle of about ' + Math.round(t.radius) + ' m radius: the tyres push ' +
@@ -1009,7 +818,7 @@
         if (p.wheel) { pts.push([p.x - p.len / 2, p.y - p.wid / 2]); pts.push([p.x + p.len / 2, p.y + p.wid / 2]); }
         if (p.line) p.line.forEach(function (q) { pts.push(q); });
       });
-      if (view === 'side' && V.kind !== 'drone') pts.push([pts[0][0], V.kind === 'plane' ? V.groundY : 0]);
+      if (view === 'side') pts.push([pts[0][0], 0]);
       var rp = pts.map(function (q) { return rotate(q[0], q[1], rot); });
       var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
       rp.forEach(function (q) { minX = Math.min(minX, q[0]); maxX = Math.max(maxX, q[0]); minY = Math.min(minY, q[1]); maxY = Math.max(maxY, q[1]); });
@@ -1018,51 +827,59 @@
       var cx = VIEW_W / 2 - (minX + maxX) / 2 * km, cy = VIEW_H / 2 + (minY + maxY) / 2 * km;
       function P(x, y) { var q = rotate(x, y, rot); return [cx + q[0] * km, cy - q[1] * km]; }
 
-      // ground, water or rail
+      // the ground
       if (view === 'side') {
-        if (V.kind === 'boat') {
-          var wy = P(0, 0)[1];
-          el('rect', { x: 0, y: wy, width: VIEW_W, height: VIEW_H - wy, class: 'fx-water' }, svg);
-          el('line', { x1: 0, y1: wy, x2: VIEW_W, y2: wy, class: 'fx-ground' }, svg);
-        } else if (V.kind !== 'drone' && !(V.kind === 'plane' && r.airborne)) {
-          var gy = V.kind === 'plane' ? V.groundY : 0;
-          var g0 = P(-80, gy), g1 = P(80, gy);
-          el('line', { x1: g0[0], y1: g0[1], x2: g1[0], y2: g1[1], class: 'fx-ground' }, svg);
-        }
-      } else if (V.kind === 'wheeled' && r.turn) {
-        // the turn centre's direction, as a faint line from the rear axle
+        var g0 = P(-80, 0), g1 = P(80, 0);
+        el('line', { x1: g0[0], y1: g0[1], x2: g1[0], y2: g1[1], class: 'fx-ground' }, svg);
+      } else if (r.turn) {
+        // A faint line from the rear axle to the turn centre: a dot there when it fits the view,
+        // else an arrowhead at the view's edge with the distance.
         var side = s.steer > 0 ? -1 : 1, Rr = r.turn.radius;
-        var c0 = P(V.xr, 0), c1 = P(V.xr, side * Math.min(Rr, 6));
+        var c0 = P(V.xr, 0);
+        var room = (side > 0 ? c0[1] : VIEW_H - c0[1]) - 22;  // px to the edge, less the label
+        var fits = Rr * km <= room;
+        var c1 = [c0[0], c0[1] - side * (fits ? Rr * km : room)];
         el('line', { x1: c0[0], y1: c0[1], x2: c1[0], y2: c1[1], class: 'fx-guide' }, svg);
-        if (Rr < 6) svgText(svg, c1[0] + 4, c1[1] + (side > 0 ? -4 : 12), 'turn centre');
+        if (fits) {
+          el('circle', { cx: c1[0], cy: c1[1], r: 3, fill: 'var(--fig-muted)' }, svg);
+        } else {
+          var tip = c1[1] - side * 6;
+          el('path', { d: 'M' + c1[0] + ',' + tip + ' L' + (c1[0] - 4) + ',' + c1[1] + ' L' + (c1[0] + 4) + ',' + c1[1] + ' Z',
+            fill: 'var(--fig-muted)' }, svg);
+        }
+        svgText(svg, c1[0] + 6, c1[1] + 4, 'turn centre' + (fits ? '' : ', ' + Math.round(Rr) + ' m away'));
       }
 
       // the vehicle
       shp.forEach(function (p) {
         if (p.poly) {
-          var pp = p.poly.map(function (q) { return p.world ? Pw(q) : P(q[0], q[1]); });
+          var pp = p.poly.map(function (q) { return P(q[0], q[1]); });
           el('polygon', { points: pp.map(function (q) { return q[0].toFixed(1) + ',' + q[1].toFixed(1); }).join(' '), class: 'fx-' + (p.cls || 'body') }, svg);
         } else if (p.circle) {
           var c = P(p.x, p.y);
-          el('circle', { cx: c[0], cy: c[1], r: p.r * km, class: p.cls === 'rotor' ? 'fx-rotor' : 'fx-wheel' }, svg);
+          el('circle', { cx: c[0], cy: c[1], r: p.r * km, class: 'fx-wheel' }, svg);
         } else if (p.wheel) {
           var wc = P(p.x, p.y);
-          el('rect', { x: wc[0] - p.len / 2 * km, y: wc[1] - p.wid / 2 * km, width: p.len * km, height: p.wid * km, rx: 2, class: 'fx-wheel',
-            transform: 'rotate(' + (-p.angle * 180 / Math.PI).toFixed(2) + ' ' + wc[0].toFixed(1) + ' ' + wc[1].toFixed(1) + ')' }, svg);
+          var rot = 'rotate(' + (-p.angle * 180 / Math.PI).toFixed(2) + ' ' + wc[0].toFixed(1) + ' ' + wc[1].toFixed(1) + ')';
+          el('rect', { x: wc[0] - p.len / 2 * km, y: wc[1] - p.wid / 2 * km, width: p.len * km, height: p.wid * km, rx: 2,
+            class: 'fx-wheel' + (p.grip && p.grip.lifted ? ' fx-lifted' : ''), transform: rot }, svg);
+          // The share of its grip the tyre uses: a fill from the back of the tyre, full at the limit.
+          if (p.grip && p.grip.use > 0.005) {
+            el('rect', { x: wc[0] - p.len / 2 * km, y: wc[1] - p.wid / 2 * km, width: p.len * km * p.grip.use, height: p.wid * km, rx: 2,
+              class: 'fx-grip', fill: p.grip.use >= 0.999 ? 'var(--fig-red)' : p.grip.use >= 0.7 ? 'var(--fig-orange)' : 'var(--fig-green)',
+              transform: rot }, svg);
+          }
         } else if (p.line) {
-          var l0 = p.world ? Pw(p.line[0]) : P(p.line[0][0], p.line[0][1]);
-          var l1 = p.world ? Pw(p.line[1]) : P(p.line[1][0], p.line[1][1]);
+          var l0 = P(p.line[0][0], p.line[0][1]);
+          var l1 = P(p.line[1][0], p.line[1][1]);
           el('line', { x1: l0[0], y1: l0[1], x2: l1[0], y2: l1[1], class: 'fx-strut' }, svg);
         }
       });
-      // a hanging load stays below the drone whatever its tilt
-      function Pw(q) { var o = P(0, 0); return [o[0] + q[0] * km, o[1] - q[1] * km]; }
 
       // arrows: far side first, faint
       var list = r.arrows.filter(function (a) { return a.view === view && shown[a.id]; });
       list.sort(function (a, b) { return (b.far ? 1 : 0) - (a.far ? 1 : 0); });
       list.forEach(function (a) { drawArrow(svg, a, P, rot, kN); });
-      if (view === 'top' && shown.rudder) r.curls.forEach(function (c) { drawCurl(svg, c, P); });
 
       // scale bar and context labels
       if (bar > 0) {
@@ -1075,12 +892,8 @@
         svgText(svg, 12, VIEW_H - 10, 'No force ticked.');
       }
       if (view === 'top') {
-        svgText(svg, 12, 18, (V.kind === 'drone' ? 'flying ' : 'moving ') + Math.round(s.speed) + ' km/h →', { fill: 'var(--fig-ink)' });
+        svgText(svg, 12, 18, 'moving ' + Math.round(s.speed) + ' km/h →', { fill: 'var(--fig-ink)' });
         if (s.wind > 0) drawWind(svg, s);
-      } else if (V.kind === 'drone' && r.tilt) {
-        svgText(svg, 12, 18, 'leaning ' + Math.abs(Math.round(r.tilt * 180 / Math.PI)) + '° ' + (r.tilt < 0 ? 'forward' : 'back'), { fill: 'var(--fig-ink)' });
-      } else if (V.kind === 'plane') {
-        svgText(svg, 12, 18, r.airborne ? 'flying' : 'on the runway', { fill: 'var(--fig-ink)' });
       }
     }
 
@@ -1110,31 +923,7 @@
         el('path', { d: 'M' + (p0[0] + dx) + ',' + (p0[1] + dy) + ' L' + (bx - uy * hw) + ',' + (by + ux * hw) + ' L' + (bx + uy * hw) + ',' + (by - ux * hw) + ' Z', fill: colour }, g);
       }
       el('line', { x1: p0[0], y1: p0[1], x2: p0[0] + dx, y2: p0[1] + dy, class: 'fx-hit' }, g);
-      var hit = function () { showInfo(a.id, { mag: mag, where: a.where, sliding: a.sliding }); };
-      g.addEventListener('mouseenter', hit);
-      g.addEventListener('focus', hit);
-      g.addEventListener('click', hit);
-    }
-
-    function drawCurl(svg, c, P) {
-      var F = FORCES.rudder, p = P(c.x, c.y), R = 20, dir = c.torque > 0 ? 1 : -1;
-      // + torque turns right: clockwise on screen. Screen angle phi grows clockwise (y is down),
-      // so the curl runs 270 degrees from phi0 in the turning direction.
-      var p0 = Math.PI * 0.75, p1 = p0 + dir * Math.PI * 1.5;
-      var sx = p[0] + R * Math.cos(p0), sy = p[1] + R * Math.sin(p0);
-      var ex = p[0] + R * Math.cos(p1), ey = p[1] + R * Math.sin(p1);
-      var g = el('g', { class: 'fx-arrow', tabindex: 0, role: 'button', 'aria-label': F.name + ', ' + Math.round(Math.abs(c.torque)) + ' newton metres' }, svg);
-      el('title', {}, g).textContent = F.name + ': ' + Math.round(Math.abs(c.torque)) + ' N·m (not to scale)';
-      el('path', { d: 'M' + sx + ',' + sy + ' A' + R + ',' + R + ' 0 1 ' + (dir > 0 ? 1 : 0) + ' ' + ex + ',' + ey, fill: 'none', stroke: F.colour, 'stroke-width': 2.5 }, g);
-      var tx = -Math.sin(p1) * dir, ty = Math.cos(p1) * dir;   // direction of travel at the end
-      var nx = Math.cos(p1), ny = Math.sin(p1);
-      el('path', { d: 'M' + (ex + tx * 7) + ',' + (ey + ty * 7) + ' L' + (ex + nx * 4.5) + ',' + (ey + ny * 4.5) + ' L' + (ex - nx * 4.5) + ',' + (ey - ny * 4.5) + ' Z', fill: F.colour }, g);
-      svgText(svg, p[0], p[1] + R + 16, 'not to scale', { 'text-anchor': 'middle', 'font-size': 11 });
-      el('circle', { cx: p[0], cy: p[1], r: R + 4, class: 'fx-hit' }, g);
-      var hit = function () { showInfo('rudder'); };
-      g.addEventListener('mouseenter', hit);
-      g.addEventListener('focus', hit);
-      g.addEventListener('click', hit);
+      onActivate(g, function () { showInfo(a.id, a.sliding); });
     }
 
     function drawWind(svg, s) {
@@ -1146,8 +935,46 @@
       svgText(svg, x, y + 34, 'wind ' + s.wind + ' m/s', { 'text-anchor': 'middle' });
     }
 
-    vehSelect.addEventListener('change', function () { setVehicle(vehSelect.value); });
+    // An example puts every slider back to its vehicle's default, then sets its own.
+    function applyPreset(i) {
+      var p = PRESETS[i];
+      setVehicle(p.veh);
+      presetSelect.value = String(i);
+      Object.keys(p.set).forEach(function (k) {
+        if (k === 'windFrom') windDir.value = p.set[k];
+        else if (k === 'ground') ground.value = p.set[k];
+        else if (k === 'aids') aids.checked = p.set[k];
+        else inputs[k].value = p.set[k];
+      });
+      update();
+      example = p;
+      presetHelp.innerHTML = '<strong>' + p.name + '.</strong> ' + p.look;
+      help.button.hidden = false;
+    }
+    presetSelect.addEventListener('change', function () {
+      if (presetSelect.value !== '') applyPreset(parseInt(presetSelect.value, 10));
+    });
+    controls.addEventListener('input', leaveExample);
+    windDir.addEventListener('change', leaveExample);
+    ground.addEventListener('change', leaveExample);
+    aids.addEventListener('change', leaveExample);
     setVehicle('car');
+
+    // A link from another page, forces.md#example-<id> (the address #forces/example-<id>), opens
+    // with that example chosen and its explanation showing.
+    function fromAddress() {
+      var m = /\/example-([\w-]+)$/.exec(decodeURIComponent(location.hash));
+      if (!m) return;
+      for (var i = 0; i < PRESETS.length; i++) {
+        if (PRESETS[i].id === m[1]) { applyPreset(i); help.open(true); return; }
+      }
+    }
+    function onHash() {
+      if (!document.contains(root)) { window.removeEventListener('hashchange', onHash); return; }
+      fromAddress();
+    }
+    window.addEventListener('hashchange', onHash);
+    fromAddress();
   }
 
   // `compute` is exposed for checking the numbers from a browser console.

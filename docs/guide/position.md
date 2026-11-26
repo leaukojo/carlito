@@ -2,126 +2,123 @@
 
 # Position, heading and distance
 
-<p class="lead">Every vehicle reports where it is, which way it points, how far it has gone and
-how hard it is being shaken. These come straight from the vehicle's movement in the game, the
-same way a real vehicle's sensors would see it.</p>
+<p class="lead">This page explains how a vehicle measures where it is, which way it points, how
+far it has gone and how it is shaken.</p>
 
 <div class="badges"><span class="label">Which vehicles have this</span>
 <span class="badge yes" title="GPS, heading, odometer, accelerations, impact">Car</span>
 <span class="badge yes" title="All of these, plus an hour meter">Truck</span>
 <span class="badge yes" title="All of these, plus an hour meter">Tractor</span>
-<span class="badge yes" title="All of these, plus altitude and vertical speed">Plane</span>
-<span class="badge yes" title="All of these, plus an hour meter and the boat's own course and speeds">Boat</span>
-<span class="badge yes" title="All of these, plus altitude and its own GPS receiver model">Drone</span>
-<span class="badge yes" title="All of these">Train</span>
 </div>
+
+A vehicle has no eyes, so how does it know where it is, how fast it goes and how far it has come?
+Vehicles use sensors to follow their own movement, and share what they measure with the other
+components. Each sensor measures one thing well, and each has its own way of being wrong.
 
 ## GPS: latitude and longitude
 
-The game's world is flat, measured in metres. To give a vehicle a real-looking position, the game
-pins the world's origin, its zero point, to a spot in Paris, and turns metres into degrees of
-[latitude and longitude](glossary.md#gps) from there. North is the same fixed direction in every
-level, and east is a quarter turn to its right. A degree of latitude is about 111 km, and a degree of longitude near Paris is
-about two thirds of that, so the game shrinks it to match.
-<!-- VehicleTelemetry GPS_ORIGIN_LAT 48.8566, GPS_ORIGIN_LON 2.3522, METERS_PER_DEG_LAT 111320; gps_lat maps -Z to north; gps_lon "meters-per-degree shrunk by the origin latitude" -->
+A GPS receiver works out its position from satellite signals, as a
+[latitude and a longitude](glossary.md#gps). How? Each satellite sends out the time on its clock
+and where it is. The signal travels at the speed of light, so the receiver can tell how long it
+took to arrive, and so how far away that satellite is. Knowing its distance from several
+satellites at once, the receiver can only be at one place.
 
-This position is exact: it has no error, drift or loss of signal. Only the drone has a GPS
-receiver model with satellites that can be blocked ([Drone flight](drone-flight.md#satellites-and-sensors)).
+A degree of latitude is about 111 km everywhere. A degree of longitude gets shorter away from the
+equator, because the lines of longitude all meet at the poles (near Paris, a degree of longitude
+is about two thirds as long as one of latitude).
+
+![Three satellites at the top, each with a circle round it whose radius is its distance to the receiver. The three circles cross at one point, where the receiver is.](img/gps-circles.svg "The receiver sits where the distance circles cross (drawn flat; in space they are spheres).")
 
 ## Heading
 
-The [heading](glossary.md#heading) is the compass direction the vehicle's nose points: 0° north,
-90° east, 180° south, 270° west. It is where the vehicle points, not where it travels: a car
-sliding sideways or a boat carried by a current travels a different way from its heading.
-<!-- VehicleTelemetry.heading_from_forward: "0 = north (-Z), 90 = east (+X)" -->
+The [heading](glossary.md#heading) is the compass direction in which the vehicle's nose points: 0°
+for north, 90° east, 180° south and 270° west. This can be different from the direction of travel
+(for example, when a car slides sideways). A car on ice, sliding forward with its nose turned a
+quarter of a turn to the side, has a heading and a direction of travel that are far apart.
 
 ## Speed
 
-Two speed signals are published. One is the speed along the vehicle's own length, in metres per
-second, positive forwards and negative in reverse. The other is the speedometer's reading, in
-km/h, always positive.
-<!-- BaseVehicle._update_telemetry: telemetry.speed = linear_velocity.dot(forward), kmh = |speed| x 3.6; contract speed (m/s, signed), kmh -->
+The speedometer shows how fast the vehicle goes, without a sign. Other components may also need
+the direction, so speed along the vehicle can be given as positive forwards and negative in
+reverse.
 
-The tractor also publishes the two speeds a real tractor compares: how fast its wheels turn, and
-how fast it really moves over the ground ([Tyres and slip](tyres.md#what-you-see-in-sloppycan)).
+Speed is often measured from the rotation of the wheels, which is wrong when they slip: a spinning
+wheel turns faster than the vehicle moves, and a locked wheel does not turn at all while the
+vehicle still slides. This is why tractors can also measure their true speed over the ground (with
+a radar or GPS) and compare the two. The difference tells how much the wheels slip (see
+[Slip and the grip curve](slip.md#slip-ratio-along-the-wheel)).
 
 ## Distance and time
 
-- **The [odometer](glossary.md#odometer)** adds up the distance travelled, in kilometres. It counts
-  backwards travel too. It starts from zero at every spawn and respawn.
-- **The [hour meter](glossary.md#hour-meter)** adds up the time the engine has run with the key at
-  Ignition, as trucks, tractors and boats record it. It also starts from zero at every respawn.
-<!-- VehicleTelemetry.odo_step ("absolute distance travelled, in km"), hours_step; contract engine_hours: "Reseeds to 0 on respawn, like the odometer" -->
+- **The [odometer](glossary.md#odometer)** adds up the distance travelled. A car usually counts the
+  turns of a wheel and multiplies them by the distance one turn covers. For example, a tyre that
+  rolls 2 m in one turn needs 500 turns for a kilometre. A tyre of a different size therefore makes
+  the odometer (and the speedometer) read wrongly.
+- **The [hour meter](glossary.md#hour-meter)** adds up the time the engine has run. Trucks and
+  tractors use it, because they can work for hours without moving much (a tractor driving a
+  stationary pump through its PTO, for example, covers no distance at all).
 
 ## Acceleration and turning
 
-The game measures how fast each vehicle's movement changes, the way an accelerometer would:
+Accelerometers measure acceleration along the vehicle (speeding up or braking) and across it
+(cornering). An accelerometer is a small mass held by springs, and what it measures is how hard the
+case pushes on that mass (shown by how far the springs bend). They also feel gravity: standing still, the ground holds the vehicle up,
+so an accelerometer pointing up reads 1 g, and in free fall, with nothing pushing on it, it reads
+zero. So an accelerometer at rest does not read zero, even though nothing moves.
 
-- along the vehicle (speeding up or braking),
-- across it (cornering),
-- and, on the plane and the drone, up and down along its own up direction.
-
-A real accelerometer also feels gravity, so it reads 1 g upwards even standing still. The game's
-does not: it reads only the change in motion, so a parked car reads zero, and so does a falling
-one.
-<!-- VehicleTelemetry.body_accel: "Kinematic, with no gravity term, so a body at rest and one in free fall both read zero" -->
-
-The yaw rate is how fast the vehicle turns, seen from above, in radians per second. The plane and
-the drone also publish their roll and pitch rates.
+A gyroscope measures the yaw rate: how fast the vehicle turns, seen from above.
 
 ## Impacts
 
-A sudden jolt bigger than about 2.5 g, a crash or a hard landing, is recorded as an impact. The
-game holds its size for a moment and lets it fade, so even a one-tick knock is visible on the
-dashboard and on the bus.
-<!-- BaseVehicle IMPACT_THRESHOLD 25 m/s², IMPACT_DECAY 40 m/s² per s; VehicleTelemetry.impact_gate -->
+A crash or a hard landing is a very short and very large acceleration. For example, a car at about
+50 km/h (14 m/s) that stops in half a metre of crumpling has an acceleration of roughly 14² ÷
+(2 × 0.5) = about 200 m/s², or 20 g, which a normal bump never reaches. Vehicles watch for such
+jolts (for example, to fire the airbags).
 
-A vehicle that falls more than 20 m below sea level, off the edge of the world, is respawned.
-<!-- BaseVehicle FALL_RESPAWN_Y -20 -->
+## What Carlito simulates
 
-## What the game leaves out
+The parameters the simulator uses for this, and where each is set, are listed in
+[How the simulation works](simulation.md#position-heading-and-distance):
 
-- **No GPS error** except on the drone, and no tunnels or buildings that block it.
-- **No curvature of the Earth**: the map is flat, which is accurate over a game level.
-- **No gravity in the accelerometers.**
+- **Simulation-wide**:
+  - [Map origin](simulation.md#map-origin) (`GPS_ORIGIN_LAT`, `GPS_ORIGIN_LON`)
+  - [Impact threshold](simulation.md#impact-threshold) (`IMPACT_THRESHOLD`)
+
+<details><summary>Simplification list</summary>
+
+- **A world near Paris.** The world's origin is pinned to a spot in Paris, and metres are turned
+  into degrees from there.
+  <!-- VehicleTelemetry GPS_ORIGIN_LAT 48.8566, GPS_ORIGIN_LON 2.3522 -->
+- **No GPS error**: the position is exact, with no drift or loss of signal, and no tunnels or
+  buildings block it.
+- **No curvature of the Earth**: the map is flat, which is accurate over the size of a level.
+- **No gravity in the accelerometers.** They read only the change in motion, so a parked car reads
+  zero, and so does a falling one.
+  <!-- VehicleTelemetry.body_accel: "Kinematic, with no gravity term, so a body at rest and one in free fall both read zero" -->
+- **No memory.** The odometer and the hour meter start from zero at every respawn.
+  <!-- contract engine_hours: "Reseeds to 0 on respawn, like the odometer" -->
+- **A simple impact detector.** Any jolt over about 2.5 g counts, and its reading is held for a
+  moment, then fades.
+  <!-- BaseVehicle IMPACT_THRESHOLD 25 m/s², IMPACT_DECAY -->
+
+</details>
 
 ## What you see in sloppyCAN
 
 | Signal | Direction | Unit | What it shows |
 | --- | --- | --- | --- |
-| `lat`, `lon` | out | deg | The GPS position, around the Paris origin. Every vehicle. |
+| `lat`, `lon` | out | deg | The GPS position, around the Paris origin. |
 | `heading` | out | deg | Where the nose points, 0 north, 90 east. |
 | `speed` | out | m/s | Speed along the vehicle, negative in reverse. |
 | `kmh` | out | km/h | The speedometer, always positive. |
 | `odo` | out | km | Distance since the last spawn. |
-| `engine_hours` | out | h | Truck, tractor, boat: engine running time. |
+| `engine_hours` | out | h | Engine running time (Truck and tractor). |
 | `accLong`, `accLat` | out | m/s² | Acceleration along and across the vehicle. |
-| `acc_vert` | out | m/s² | Plane and drone: acceleration along their up axis. |
 | `yaw` | out | rad/s | How fast the vehicle turns. |
 | `impact` | out | m/s² | The size of the last jolt over 2.5 g, fading away. |
-| `ground` | out | flag | Car, truck, tractor, plane: every wheel touching the ground. |
-| `altitude`, `vspeed` | out | m, m/s | Plane and drone: height above sea level, and climb rate. |
-<!-- contract/carlito_contract.json: lat, lon, heading, speed, kmh, odo, engine_hours, accLong, accLat, acc_vert, yaw, impact, ground, altitude, vspeed; WheelDrive.fill_slip clears ground if any wheel is off the road -->
-
-## Try it in the game
-
-<div class="box try">
-<p class="box-title">Try it in the game: a lap of the compass</p>
-
-1. Pick any car on **Flatland** and press **F2** until the dashboard shows FULL. Its line of
-   readings starts with HDG (the heading), ODO (the odometer) and the latitude and longitude.
-   <!-- dashboard.gd readout "HDG %03d  ODO %.1f km  %.4f, %.4f" (FULL only) -->
-2. Drive in a slow circle to the right. The heading climbs through 90, 180 and 270 and back to 0
-   as you go round.
-3. Drive straight north for 100 m. The odometer gains 0.1 km, and the latitude grows by about a
-   thousandth of a degree.
-4. Brake hard. The dashboard does not show the acceleration, but sloppyCAN's `accLong` goes
-   strongly negative, then back to zero as you stop.
-   <!-- dashboard.gd _build_bars: a bar needs a warn or a flavor; accLong has neither, and no overlay line reads it -->
-
-</div>
+| `ground` | out | flag | Every wheel touching the ground. |
+<!-- contract/carlito_contract.json: lat, lon, heading, speed, kmh, odo, engine_hours, accLong, accLat, yaw, impact, ground; WheelDrive.fill_slip clears ground if any wheel is off the road -->
 
 ## Related
 
-- [Floating and boats](floating.md): the boat's course and speed over the ground.
 - [Glossary](glossary.md): every term on this page.

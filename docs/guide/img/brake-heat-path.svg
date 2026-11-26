@@ -35,8 +35,8 @@
 <!-- The brake's one lump -->
 <rect class="bh-hot" x="168" y="48" width="140" height="70" rx="6"/>
 <text class="bh-t" x="238" y="70" text-anchor="middle">Brake</text>
-<text class="bh-s" x="238" y="88" text-anchor="middle">one lump of metal,</text>
-<text class="bh-s" x="238" y="106" text-anchor="middle">one temperature</text>
+<text class="bh-s" x="238" y="88" text-anchor="middle">pads and disc,</text>
+<text class="bh-s" x="238" y="106" text-anchor="middle">or shoes and drum</text>
 <!-- Out to the air -->
 <path class="bh-out" d="M308,82 L340,82"/>
 <path class="bh-out-f" d="M338,72 L356,82 L338,92 Z"/>

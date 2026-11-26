@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 250" width="420" height="250">
+<title>The most a tyre can push along the ground is the friction coefficient times the force pressing it down</title>
+<!-- Drawn by hand, no simulator numbers. The 2,500 N (a quarter of a 1,000 kg car's weight) and a mu of about 1 are the page's own example for a car tyre on dry asphalt. -->
+<style>
+.mu-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.mu-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.mu-tb{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.mu-to{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+.mu-ln{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:none}
+.mu-lm{stroke:var(--fig-muted,#6b6b75);stroke-width:1.2;fill:none;stroke-dasharray:5 4}
+.mu-body{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:var(--fig-fill,#f1eee7)}
+.mu-b{stroke:var(--fig-blue,#1d5ca8);stroke-width:3;fill:none;stroke-linejoin:round}.mu-fb{fill:var(--fig-blue,#1d5ca8)}
+.mu-o{stroke:var(--fig-orange,#c45a12);stroke-width:3;fill:none;stroke-linejoin:round}.mu-fo{fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.mu-t{fill:var(--fig-ink,#e9e7e2)}.mu-s{fill:var(--fig-muted,#a6a6b0)}
+.mu-tb{fill:var(--fig-blue,#8ab6ff)}.mu-to{fill:var(--fig-orange,#f0a060)}
+.mu-ln{stroke:var(--fig-ink,#e9e7e2);}
+.mu-lm{stroke:var(--fig-muted,#a6a6b0);}
+.mu-body{stroke:var(--fig-ink,#e9e7e2);fill:var(--fig-fill,#26282e)}
+.mu-b{stroke:var(--fig-blue,#8ab6ff);}.mu-fb{fill:var(--fig-blue,#8ab6ff)}
+.mu-o{stroke:var(--fig-orange,#f0a060);}.mu-fo{fill:var(--fig-orange,#f0a060)}
+}
+</style>
+<defs><marker id="mu-ao" markerWidth="9" markerHeight="9" refX="1" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path class="mu-fo" d="M0,0 L9,4.5 L0,9 Z"/></marker><marker id="mu-ab" markerWidth="9" markerHeight="9" refX="1" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path class="mu-fb" d="M0,0 L9,4.5 L0,9 Z"/></marker></defs>
+<line class="mu-ln" x1="10" y1="190" x2="410" y2="190"/>
+<circle class="mu-body" cx="110" cy="150" r="40"/>
+<circle class="mu-body" cx="110" cy="150" r="16"/>
+<line class="mu-b" x1="110" y1="40" x2="110" y2="99" marker-end="url(#mu-ab)"/>
+<text class="mu-tb" x="110" y="26" text-anchor="middle">pressed down: 2,500 N</text>
+<line class="mu-o" x1="156" y1="176" x2="263" y2="176" marker-end="url(#mu-ao)"/>
+<text class="mu-to" x="213" y="166" text-anchor="middle">the push</text>
+<line class="mu-lm" x1="270" y1="176" x2="400" y2="176"/>
+<text class="mu-s" x="408" y="166" text-anchor="end">beyond this it slides</text>
+<line class="mu-ln" x1="270" y1="158" x2="270" y2="206"/>
+<text class="mu-t" x="270" y="224" text-anchor="middle">limit of the push = μ × 2,500 N</text>
+<text class="mu-s" x="410" y="244" text-anchor="end">about 2,500 N on dry asphalt (μ about 1)</text>
+</svg>

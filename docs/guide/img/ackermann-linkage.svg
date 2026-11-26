@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 470 255" width="470" height="255">
+<title>How a track rod and angled steering arms turn the inside wheel more</title>
+<!-- Seen from above, front up. Pivots 120 px apart, wheelbase 150 px, arms 30 px aimed at the
+     middle of the rear axle: arm direction (60,150) normalised = (0.371, 0.928). Turning right, the
+     outer (left) arm is rotated 20 deg; the inner (right) angle that keeps the rod at its length
+     (97.7 px) is 24.9 deg. Full Ackermann would ask 27.2 deg (cot 20 - cot inner = 120 / 150), so
+     this simple linkage is close to it, not exact. -->
+<style>
+.ak-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.ak-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.ak-wheel{fill:var(--fig-ink,#1c1c1f)}
+.ak-ghost{fill:none;stroke:var(--fig-muted,#6b6b75);stroke-width:1.5;stroke-dasharray:4 3}
+.ak-axle{stroke:var(--fig-muted,#6b6b75);stroke-width:4;fill:none}
+.ak-link{stroke:var(--fig-orange,#c45a12);stroke-width:4;fill:none;stroke-linecap:round}
+.ak-pin{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5}
+.ak-dash{stroke:var(--fig-blue,#1d5ca8);stroke-width:1.5;stroke-dasharray:5 4;fill:none}
+.ak-dot{fill:var(--fig-blue,#1d5ca8)}
+.ak-move{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:none}
+.ak-fi{fill:var(--fig-ink,#1c1c1f)}
+.ak-blue-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.ak-orange-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.ak-t{fill:var(--fig-ink,#e9e7e2)}.ak-s{fill:var(--fig-muted,#a6a6b0)}.ak-wheel{fill:var(--fig-ink,#e9e7e2)}
+.ak-ghost{stroke:var(--fig-muted,#a6a6b0)}.ak-axle{stroke:var(--fig-muted,#a6a6b0)}.ak-link{stroke:var(--fig-orange,#f0a060)}
+.ak-pin{fill:var(--fig-fill,#22242a);stroke:var(--fig-ink,#e9e7e2)}.ak-dash{stroke:var(--fig-blue,#8ab6ff)}
+.ak-dot{fill:var(--fig-blue,#8ab6ff)}.ak-move{stroke:var(--fig-ink,#e9e7e2)}.ak-fi{fill:var(--fig-ink,#e9e7e2)}
+.ak-blue-t{fill:var(--fig-blue,#8ab6ff)}.ak-orange-t{fill:var(--fig-orange,#f0a060)}}
+</style>
+<defs><marker id="ak-ai" markerWidth="8" markerHeight="8" refX="1" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path class="ak-fi" d="M0,0 L8,4 L0,8 Z"/></marker></defs>
+
+<!-- straight ahead -->
+<text class="ak-t" x="120" y="24" text-anchor="middle">Straight ahead</text>
+<line class="ak-axle" x1="60" y1="70" x2="180" y2="70"/>
+<line class="ak-axle" x1="48" y1="220" x2="192" y2="220"/>
+<rect class="ak-wheel" x="41" y="52" width="14" height="36" rx="4"/>
+<rect class="ak-wheel" x="185" y="52" width="14" height="36" rx="4"/>
+<rect class="ak-wheel" x="41" y="202" width="14" height="36" rx="4"/>
+<rect class="ak-wheel" x="185" y="202" width="14" height="36" rx="4"/>
+<line class="ak-dash" x1="71.1" y1="97.9" x2="120" y2="220"/>
+<line class="ak-dash" x1="168.9" y1="97.9" x2="120" y2="220"/>
+<circle class="ak-dot" cx="120" cy="220" r="5"/>
+<line class="ak-link" x1="60" y1="70" x2="71.1" y2="97.9"/>
+<line class="ak-link" x1="180" y1="70" x2="168.9" y2="97.9"/>
+<line class="ak-link" x1="71.1" y1="97.9" x2="168.9" y2="97.9"/>
+<circle class="ak-pin" cx="60" cy="70" r="4"/>
+<circle class="ak-pin" cx="180" cy="70" r="4"/>
+<text class="ak-orange-t" x="120" y="89" text-anchor="middle">steering arms</text>
+<text class="ak-orange-t" x="120" y="116" text-anchor="middle">track rod</text>
+<text class="ak-blue-t" x="120" y="248" text-anchor="middle">middle of the rear axle</text>
+
+<!-- turning right -->
+<text class="ak-t" x="350" y="24" text-anchor="middle">Turning right</text>
+<line class="ak-axle" x1="290" y1="70" x2="410" y2="70"/>
+<rect class="ak-ghost" x="271" y="52" width="14" height="36" rx="4"/>
+<rect class="ak-ghost" x="415" y="52" width="14" height="36" rx="4"/>
+<rect class="ak-wheel" x="271" y="52" width="14" height="36" rx="4" transform="rotate(20 290 70)"/>
+<rect class="ak-wheel" x="415" y="52" width="14" height="36" rx="4" transform="rotate(24.9 410 70)"/>
+<line class="ak-link" x1="290" y1="70" x2="290.9" y2="100"/>
+<line class="ak-link" x1="410" y1="70" x2="388.2" y2="90.6"/>
+<line class="ak-link" x1="290.9" y1="100" x2="388.2" y2="90.6"/>
+<circle class="ak-pin" cx="290" cy="70" r="4"/>
+<circle class="ak-pin" cx="410" cy="70" r="4"/>
+<line class="ak-move" x1="362" y1="114" x2="334" y2="114" marker-end="url(#ak-ai)"/>
+<text class="ak-s" x="340" y="134" text-anchor="middle">the rod slides across</text>
+<text class="ak-t" x="276" y="164" text-anchor="middle">outside wheel</text>
+<text class="ak-t" x="276" y="182" text-anchor="middle">20°</text>
+<text class="ak-t" x="420" y="164" text-anchor="middle">inside wheel</text>
+<text class="ak-t" x="420" y="182" text-anchor="middle">25°</text>
+</svg>

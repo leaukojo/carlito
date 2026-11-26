@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 300" width="420" height="300">
 <title>Peak grip of four car tyres on five kinds of ground</title>
 <!-- Response = Surface.REF_GRIP x (class dry / all-season dry) x class surface_grip (TyreClass.grip_response).
-     REF_GRIP Asphalt 1, Wet 0.75, Snow 0.34, Ice 0.12, Mud 0.45; summer.tres dry 1.1, Mud 0.9 Snow 0.76 Ice 0.67;
+     REF_GRIP Asphalt 1, Wet 0.75, Snow 0.34, Ice 0.12, Mud 0.45; summer.tres dry 1.1, Mud 0.9 Snow 0.5 Ice 0.67;
      winter.tres dry 0.97, Mud 1.05 Snow 1.2 Ice 1.53; studded.tres dry 0.94, Mud 1.05 Snow 1.52 Ice 2.5.
      Bar height = 190/1.2 per unit of grip. -->
 <style>
@@ -34,7 +34,7 @@
 <rect class="sf-red" x="175.0" y="124.4" width="11" height="111.6"><title>Studded on wet: 0.71</title></rect>
 <text class="sf-s" x="161.0" y="254" text-anchor="middle">Wet</text>
 <rect class="sf-blue" x="204.0" y="182.2" width="11" height="53.8"><title>All-season on snow: 0.34</title></rect>
-<rect class="sf-orange" x="217.0" y="191.0" width="11" height="45.0"><title>Summer on snow: 0.28</title></rect>
+<rect class="sf-orange" x="217.0" y="206.4" width="11" height="29.6"><title>Summer on snow: 0.19</title></rect>
 <rect class="sf-green" x="230.0" y="173.3" width="11" height="62.7"><title>Winter on snow: 0.40</title></rect>
 <rect class="sf-red" x="243.0" y="159.1" width="11" height="76.9"><title>Studded on snow: 0.49</title></rect>
 <text class="sf-s" x="229.0" y="254" text-anchor="middle">Snow</text>

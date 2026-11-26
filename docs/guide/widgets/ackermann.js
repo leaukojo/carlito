@@ -11,9 +11,9 @@
   'use strict';
   var NS = 'http://www.w3.org/2000/svg';
   var BODIES = [
-    { name: 'Sedan', L: 1.584, fx: 0.63, rx: 0.63, lock: 38, fr: 0.36, rr: 0.36 },
-    { name: 'Tractor', L: 2.580, fx: 0.782, rx: 0.896, lock: 38, fr: 0.537, rr: 0.805 },
-    { name: 'Semi tractor unit', L: 3.60, fx: 0.72, rx: 0.62, lock: 24, fr: 0.36, rr: 0.36 }
+    { name: 'Sedan', icon: 'car', L: 1.584, fx: 0.63, rx: 0.63, lock: 38, fr: 0.36, rr: 0.36 },
+    { name: 'Tractor', icon: 'tractor', L: 2.580, fx: 0.782, rx: 0.896, lock: 38, fr: 0.537, rr: 0.805 },
+    { name: 'Semi tractor unit', icon: 'semi', L: 3.60, fx: 0.72, rx: 0.62, lock: 24, fr: 0.36, rr: 0.36 }
   ];
   var W = 420, H = 300;
   var CX = 96, FRONT_Y = 92, REAR_Y = 232; // the car's centre line and axle lines, viewBox units
@@ -36,10 +36,10 @@
 
   function make(root) {
     root.innerHTML = '';
-    var title = document.createElement('p');
-    title.className = 'w-title';
-    title.textContent = 'Try it: Ackermann angles';
-    root.appendChild(title);
+    var body = BODIES[0];
+    GuideKit.vehiclePicker(root, BODIES.map(function (b, i) {
+      return { id: String(i), icon: b.icon, name: b.name };
+    }), '0', function (id) { body = BODIES[parseInt(id, 10)]; update(); });
 
     var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img',
       'aria-label': 'A vehicle seen from above turning right, with lines from each front wheel to the rear axle line' }, root);
@@ -49,7 +49,6 @@
     controls.className = 'w-controls';
     var uid = 'ak' + Math.random().toString(36).slice(2, 8);
     controls.innerHTML =
-      '<label for="' + uid + '-body">Vehicle</label><select id="' + uid + '-body"></select><span></span>' +
       '<label for="' + uid + '-angle">Steering</label>' +
       '<input id="' + uid + '-angle" type="range" min="0" max="38" step="0.5" value="30">' +
       '<output for="' + uid + '-angle"></output>' +
@@ -57,26 +56,14 @@
       '<input id="' + uid + '-frac" type="range" min="0" max="1" step="0.05" value="1">' +
       '<output for="' + uid + '-frac"></output>';
     root.appendChild(controls);
-    var bodySel = controls.querySelector('select');
     var angle = controls.querySelector('#' + uid + '-angle');
     var frac = controls.querySelector('#' + uid + '-frac');
     var outs = controls.querySelectorAll('output');
-    BODIES.forEach(function (b, i) {
-      var o = document.createElement('option');
-      o.value = String(i);
-      o.textContent = b.name;
-      bodySel.appendChild(o);
-    });
 
     var readout = document.createElement('div');
     readout.className = 'w-readout';
     readout.setAttribute('aria-live', 'polite');
     root.appendChild(readout);
-    var note = document.createElement('p');
-    note.className = 'w-note';
-    note.textContent = 'Steering is the bicycle angle, up to this vehicle\'s lock. Ackermann 1 is what every vehicle in ' +
-      'the game uses; 0 is LAB ▸ STEERING: PARALLEL. Drawn turning right; a left turn is the mirror image.';
-    root.appendChild(note);
 
     function wheelRect(parent, x, y, len, wid, turnDeg, cls) {
       el('rect', { x: x - wid / 2, y: y - len / 2, width: wid, height: len, rx: Math.min(4, wid / 3),
@@ -84,7 +71,7 @@
     }
 
     function update() {
-      var b = BODIES[parseInt(bodySel.value, 10)];
+      var b = body;
       angle.max = String(b.lock);
       if (parseFloat(angle.value) > b.lock) angle.value = String(b.lock);
       var delta = parseFloat(angle.value);
@@ -148,7 +135,6 @@
       }
       readout.innerHTML = line1 + '<br>' + line2;
     }
-    bodySel.addEventListener('change', update);
     angle.addEventListener('input', update);
     frac.addEventListener('input', update);
     update();

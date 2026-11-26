@@ -1,108 +1,179 @@
-[AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
-
 # Ground and tyre types
 
-<p class="lead">A tyre grips dry asphalt far better than ice. How far better depends on the tyre:
-a winter tyre bites into snow that a summer tyre skates over. The game keeps a table of twelve
-kinds of ground and nine kinds of tyre, and every wheel reads the pair it stands on.</p>
+<p class="lead">This page explains how grip depends on both the ground and the tyre.</p>
 
 <div class="badges"><span class="label">Which vehicles have this</span>
-<span class="badge yes" title="Every car and van; most can change tyres in the garage">Car</span>
-<span class="badge yes" title="Every truck and trailer; the rigid trucks and semis can change tyres">Truck</span>
-<span class="badge yes" title="Both tractors and the farm trailer, on their stock lug tyres">Tractor</span>
-<span class="badge some" title="Its wheels feel the ground like any other; it has no tyre choice">Plane</span>
-<span class="badge no" title="No wheels: it floats">Boat</span>
-<span class="badge no" title="No wheels: it flies">Drone</span>
-<span class="badge no" title="Steel wheels on rails, without tyres">Train</span>
+<span class="badge yes" title="Every car and van">Car</span>
+<span class="badge yes" title="Every truck and trailer">Truck</span>
+<span class="badge yes" title="Both tractors and the farm trailer, on lug tyres">Tractor</span>
 </div>
 
-## Two numbers per kind of ground
+A tyre grips dry asphalt far better than ice. How much better depends on the tyre (for example, a
+winter tyre grips snow much better than a summer tyre). So why does the ground matter so much,
+and why is no single tyre best everywhere?
 
-The game knows twelve kinds of ground, which it calls [surfaces](glossary.md#surface): asphalt,
-wet asphalt, pad (the painted concrete of an airfield), gravel, dirt, grass, sand, rock, mud,
-field (ploughed soil), snow and ice. Each one carries two numbers.
+## What the ground changes
 
-- **Grip.** How much of a tyre's dry-road grip is left on this ground. It is measured against
-  one reference tyre, an ordinary all-season car tyre, which keeps all its grip on dry asphalt
-  (1), three quarters of it on wet asphalt and about half on grass or mud. On snow it keeps
-  a third, and on ice only about a tenth.
-  <!-- surface.gd REF_GRIP: Asphalt 1, Wet 0.75, Pad 0.95, Gravel 0.71, Dirt 0.8, Grass 0.5, Sand 0.6, Rock 0.7, Mud 0.45, Field 0.5, Snow 0.34, Ice 0.12 -->
-- **Drag.** How much harder the ground is to roll over than a hard road. Hard ground (asphalt,
-  pad, ice) adds nothing. Gravel and rock add a little. Soft ground adds much more, because the
-  tyre sinks in and has to climb out of its own rut all the time: mud adds the most, about ten
-  times a car tyre's own rolling resistance on a road.
-  <!-- surface.gd DRAG: Asphalt 0, Wet 0, Pad 0, Gravel 0.01, Dirt 0.04, Grass 0.06, Sand 0.05, Rock 0.01, Mud 0.1, Field 0.06, Snow 0.02, Ice 0; MAX_DRAG 0.5; a car tyre's own 0.012 (sedan_spec.tres rolling_resistance) -->
+The ground (also called the [surface](glossary.md#surface)) has two effects on a tyre.
 
-The grip number changes only how high the peak of the [grip curve](glossary.md#grip-curve) is.
-The curve keeps its shape on every surface: it still peaks at the same slip, and a sliding tyre
-still keeps 0.8 of the peak. [Tyres and slip](tyres.md) explains the curve.
+- **Grip.** Dry asphalt gives the most grip to an ordinary tyre. Wet asphalt gives less, because
+  water keeps the rubber from sticking (see
+  [Grip comes from friction](tyres.md#grip-comes-from-friction)). Loose ground (gravel, grass,
+  mud, sand) gives less again in most cases, because the tyre can only push against grains that
+  can shift or roll under it. Snow and ice give the least. On snow, the tyre can push only as hard
+  as the snow under it holds together before it shears off. Ice is smooth, and a thin film of
+  water on its surface (thickest near 0 °C) lets the rubber slide over it.
+- **Drag.** Hard ground is easy to roll on. Soft ground is harder, because the tyre sinks in and
+  has to climb out of its own rut all the time. This adds to the tyre's
+  [rolling resistance](glossary.md#rolling-resistance), which
+  [Air and rolling resistance](resistance.md#rolling-resistance) explains. In deep mud, keeping a car moving can
+  feel like driving up a hill.
 
-The drag number is a [rolling resistance](glossary.md#rolling-resistance): a force against the
-direction of travel, a share of the load on the tyre. On mud a car needs a steady push of about a
-tenth of its weight just to keep rolling, as if it were driving up a hill. It does not use any of
-the tyre's grip, so it slows the car without making it slide.
+Each ground changes the coefficient of friction μ that
+[Tyres and grip](tyres.md#the-coefficient-of-friction) explains, and so the height of the peak of
+the [grip curve](glossary.md#grip-curve). A tyre on wet asphalt, for
+example, can give about half the push of the same tyre on dry asphalt.
 
-## How the game knows what is under a wheel
+Does a wider tyre grip better on soft ground? It helps there, but not because its rubber grips
+harder: the same weight is spread over a bigger patch, so the tyre presses less hard on each bit
+of soil and sinks less. That is why farm vehicles on soft fields are fitted with wide tyres.
 
-The ground of an island level is a painted [terrain](glossary.md#terrain). The level's author
-paints it with up to eight colours, and the level says which surface each colour is: green for
-grass, brown for dirt, and so on. Where two colours blend, the game blends their numbers too, in
-the same proportion, so a tyre half on grass and half on dirt gets a grip in between.
-
-Everything that is not painted terrain counts as **dry asphalt**: roads, bridges, ramps, decks,
-the flat test ground and any ground the author left unpainted. A bridge more than about a metre
-above a painted patch does not pick up the paint below it.
-<!-- wheel.gd SURFACE_GRIP_REACH 1.0 m; HeightmapTerrain.grip_at reads Asphalt when unpainted (MIN_SPLAT_TOTAL) -->
-
-The wet road is the one surface you cannot see. In Car Arena, the bend of the wet road is
-painted wet but looks like the rest of the road; only the tyres know.
-<!-- tools/gen_car_arena.gd: channel 4 is Wet, "invisible there" -->
+<figure>
+<img src="img/tractor-tracks-mud.jpg" alt="The print of a tractor tyre in soft brown soil: a wide band of deep, V-shaped lug marks with soil pushed up between them">
+<figcaption>A wide tractor tyre's track in soft soil. Photo: Divi-ded, CC BY 2.0 DE, <a href="https://commons.wikimedia.org/wiki/File:Reifenspur_Traktor.jpg">Wikimedia Commons</a>.</figcaption>
+</figure>
 
 ## Tyre classes
 
-A tyre has two halves in the game. One half belongs to the vehicle: its size, its grip on dry
-asphalt, how its grip changes with load, its rolling resistance on a road. The other half is the
-tread, which the game calls the [tyre class](glossary.md#tyre-class). A class says only how this
-tread differs from the reference all-season tyre, as a factor per surface. That way one winter
-class serves a small car and an eight-tonne truck alike.
+![Eight tyre treads seen face on, from more rubber on the road to more open gaps. Slick: plain rubber. Summer: two straight grooves. All-season: three grooves and slanted cuts at the edges. Winter: zigzag grooves and blocks full of thin zigzag cuts. Studded winter: the same blocks, each with a metal stud. M+S drive: rows of small blocks across the tyre. Mud: big blocks with wide gaps. R-1W lug: slanted bars in a V, with gaps wider than the bars.](img/tyre-treads.svg "Tyre treads, seen face on, with the differences exaggerated.")
 
-![A bar chart of peak grip for four car tyres on five kinds of ground. On dry asphalt: all-season 1, summer 1.1, winter 0.97, studded 0.94. On ice: all-season 0.12, summer about 0.09, winter about 0.18, studded about 0.28. On snow: summer about 0.28, all-season 0.34, winter about 0.4, studded about 0.49.](img/surface-grip.svg "Peak grip of the four car tyres, as a share of the all-season tyre's grip on dry asphalt.")
+Why does the best tyre depend on the ground? Because the tread and the rubber that suit one ground
+do not suit another, as already explained in
+[Tyres and grip](tyres.md#the-coefficient-of-friction). In short:
+
+- **On a dry road**, the grip comes from the rubber touching the road, so every groove cut into
+  the tread takes some away. A racing slick has no grooves at all.
+- **On a wet road**, the tread needs grooves to carry the water out of the contact patch, or the
+  tyre rides up on a film of water (aquaplaning). A road tyre has them, and gives up a little dry
+  grip for them.
+- **On snow and ice**, a winter tyre uses softer rubber that stays flexible in the cold, and many
+  thin cuts in its tread give it extra edges to bite into the snow. Studs and chains go further
+  (see below).
+- **On soft ground**, deep lugs with wide gaps between them dig into the soil and push against
+  it, more like a paddle than like friction on a road.
+
+<details><summary>Studs, chains, mud tyres and the sidewall markings</summary>
+
+- **Studs dig into the ice.** A stud is a small, very hard pin (often tungsten carbide, a ceramic)
+  held in the rubber by a softer jacket, and it sticks out of the tread by a millimetre or so. On
+  ice the pins push against the ice instead of relying on friction. On a dry road they cannot dig
+  in and hold part of the tread off the road, so the tyre grips a little less there.
+- **Studs wear the road.** On bare asphalt they grind ruts into the wheel tracks and raise dust,
+  so many countries allow them only in winter, and some, such as Germany and the Netherlands, ban
+  them. They make a skid on ice much less likely, not impossible.
+- **Chains** are steel links fitted over the tyres. On snow, the links sink in and push against the
+  packed snow around them, as a lug does in mud, instead of the rubber sliding over the top; on
+  ice they bite into the surface like studs. They give the most grip in the worst conditions, but
+  they limit a car to about 50 km/h, and on a dry road they wear quickly and can make the car
+  slide when braking. Some places require them when the conditions or the signs say so; others
+  ban them to protect the road.
+- **Mud tyres dig in.** Wet mud is slippery and weak, so rubber finds little friction on top of
+  it. A mud tyre does not try: its deep, wide grooves let the tread sink in, and each big block
+  pushes against the mud in front of it, as a paddle pushes against water or the cleats of a
+  sports shoe against turf. The grip then comes from how much mud the blocks can shove before it
+  gives way, which is more than friction alone could give. Some are made to run with less air on
+  difficult ground, so the softer tyre bends to follow the shape of the ground.
+- **Mud tyres are poor on the road.** Fewer blocks touch the asphalt, so the patch is smaller and
+  grips less than a road tyre's. They are also loud and uncomfortable, use more fuel and wear
+  quickly. All-terrain tyres sit between the two, giving up some grip off the road for a ride and
+  grip closer to a road tyre's.
+
+</details>
+<!-- Wikipedia "Snow tire": a hard pin "often made of tungsten carbide" in a softer jacket that "anchors the stud in the rubber", to "protrude at least 1 millimetre"; studs "do not eliminate skidding on ice and snow, but they greatly reduce risks"; "Studs abrade dry pavement, causing dust and creating wear in the wheel path"; Europe as of 2024: seasonally restricted in Austria, the Nordic and Baltic countries and others, banned in Germany, the Netherlands and others. M+S: tread "performs better in "Mud and Snow" conditions than regular "non-M+S" street tires", USTMA requires tread recesses of set size; 3PMSF: "10 to 12% better in straight-line "traction test" than a Standard Reference Test Tire", on "a medium packed snow surface". Wikipedia "Snow chains": "approximately 50 km/h (30 mph)"; on dry roads they "rapidly wear" and "can cause a vehicle to slide when braking"; "chains generally give the best traction in severe conditions"; some regions require chains, others "prohibit the use of chains, as they can damage road surfaces". Wikipedia "Off-road tire": "deeper and wider grooves meant to help the tread sink into mud or gravel surfaces"; "the exposed edges of the tread dig into soft ground to give more traction than rolling friction alone" (compared there with cleated shoes); "Some off-road tires are designed to be used with low inflation pressure on difficult terrain, reducing their rigidity"; "on paved surfaces the smaller contact patch affords less traction as compared to street tires"; mud-terrain tyres "uncomfortable, loud, dangerous and inefficient (high fuel use and tyre wear)" on paved roads; all-terrain tyres "compromise between grip on loose terrain and safety or comfort on paved roads". -->
+
+Tyres are therefore grouped in [tyre classes](glossary.md#tyre-class), one per kind of use.
+
+| Class | Usually fitted to | What it is good at |
+| --- | --- | --- |
+| All-season | cars, vans, pickups, SUVs | A compromise that works in most conditions. |
+| Summer | cars, vans | More grip on dry roads; poor on snow and ice. |
+| Winter | cars, vans, trucks | A little less grip on dry roads; more on snow and ice. |
+| Studded winter | cars, vans | Metal studs give much more grip on ice, and a little less on dry roads. |
+| Mud | vans, pickups, SUVs, trucks | Deep open lugs: better in mud, fields, grass and sand; worse on roads, snow and ice; harder to roll. |
+| M+S drive | trucks | Mud-and-snow tyres for the driven axles: a little better on snow and soft ground. |
+| R-1W lug | tractors | Deep farm lugs for mud and fields. |
+| Slick | racing cars | No tread at all: for dry tracks, and very poor in the wet. |
+
+<!-- photo: an all-season car tyre's tread -->
+
+<figure>
+<img src="img/tyre-road-tread.jpg" alt="Two part-worn car tyres side by side, seen from the front: long grooves run round each tyre, and short slanted grooves and thin cuts cross the tread between them">
+<figcaption>A road car's tyres, with grooves. Photo: Trubble, CC BY-SA 2.0, <a href="https://commons.wikimedia.org/wiki/File:Michelin_Pilot_Primacy_HP_(5285287620).jpg">Wikimedia Commons</a>.</figcaption>
+</figure>
+
+<figure>
+<img src="img/tyre-winter-sipes.jpg" alt="Close view of a winter tyre's tread: blocks cut by many thin zigzag slits, with deep grooves between the blocks">
+<figcaption>A winter tyre's thin cuts. Photo: Lombroso, public domain, <a href="https://commons.wikimedia.org/wiki/File:Studless_tire_2.jpg">Wikimedia Commons</a>.</figcaption>
+</figure>
+
+<figure>
+<img src="img/tyre-studded.jpg" alt="A winter tyre on a car, seen from above and to the side: tread blocks cut by zigzag slits, with a round metal stud set in many of the blocks">
+<figcaption>A studded winter tyre. Photo: Santeri Viinamäki, CC BY-SA 4.0, <a href="https://commons.wikimedia.org/wiki/File:Studded_snow_tire_20171027.jpg">Wikimedia Commons</a>.</figcaption>
+</figure>
+
+<figure>
+<img src="img/tyre-mud-terrain.jpg" alt="A tyre on an off-road car standing on sand: big square tread blocks with wide gaps between them, sand caught on their tops">
+<figcaption>A mud tyre on an off-road car. Photo: Dontpanic, public domain, <a href="https://commons.wikimedia.org/wiki/File:Mt_tyre.jpg">Wikimedia Commons</a>.</figcaption>
+</figure>
+
+<!-- photo: a truck's M+S drive tyre -->
+
+<figure>
+<img src="img/tyre-tractor-lugs.jpg" alt="Two tractor tyres standing side by side, their tread made of tall, slanted lugs in a V pattern with wide gaps between">
+<figcaption>A tractor tyre's lugs. Photo: Momčilo Stokanovic, CC BY-SA 4.0, <a href="https://commons.wikimedia.org/wiki/File:Traktorske_gume.jpg">Wikimedia Commons</a>.</figcaption>
+</figure>
+
+<figure>
+<img src="img/tyre-racing-slicks.jpg" alt="Two stacks of wide Formula One racing tyres with completely smooth treads, standing in a pit garage">
+<figcaption>Racing slicks, with no grooves. Photo: vtornet, CC BY 2.0, <a href="https://commons.wikimedia.org/wiki/File:F1_Slick_Tires.jpg">Wikimedia Commons</a>.</figcaption>
+</figure>
+
+## How the class changes grip and drag
+
+The class also changes how hard the tyre is to roll on a road: a summer tyre usually rolls more
+easily than a mud tyre, because the mud tyre's deep lugs bend more with every turn of the wheel
+and so waste more energy.
+
+![A bar chart of peak grip for four car tyres on five kinds of ground. On dry asphalt: all-season 1, summer 1.1, winter 0.97, studded 0.94. On ice: all-season 0.12, summer about 0.09, winter about 0.18, studded about 0.28. On snow: summer about 0.19, all-season 0.34, winter about 0.4, studded about 0.49.](img/surface-grip.svg "Peak grip of four car tyres (1 = all-season on dry asphalt).")
 <!-- TyreClass.grip_response = REF_GRIP x (dry / stock dry) x surface_grip; the four PASSENGER classes -->
 
-The nine classes are:
+## What Carlito simulates
 
-| Class | Fitted to | What it is good at |
-| --- | --- | --- |
-| All-season | cars, vans, pickups, SUVs (their stock tyre) | The reference: every factor is 1. |
-| Summer | cars, vans | A tenth more grip on dry roads; poor on snow and ice, slightly worse on soft ground. |
-| Winter | cars, vans, trucks | A little less on dry roads; about a sixth more on snow, half again on ice. |
-| Studded winter | cars, vans | Metal studs: more than twice the all-season's grip on ice, a little less on dry roads. |
-| Mud | vans, pickups, SUVs, trucks | Deep open lugs: better in mud, ploughed fields, grass and sand; worse on dry, wet, snow and ice; harder to roll. |
-| M+S drive | trucks (their stock tyre) | A truck's mud-and-snow drive tyre: a little better on snow and soft ground. |
-| R-1W lug | the tractors only | Deep farm lugs: a quarter more grip in mud, a fifth more in fields. |
-| Slick | the two racing cars only | No tread at all: on dry asphalt like the reference, but only half its grip in the wet. |
-| Trailer | every trailer | The reference row, unchanged. |
-<!-- src/vehicles/tyres/*.tres: fits, dry, surface_grip, crr_factor; docs/vehicles.md Tyres and surfaces, the Fit table -->
+The parameters the simulator uses for this, and where each is set, are listed in
+[How the simulation works](simulation.md#ground-and-tyre-types):
 
-A class also changes how hard the tyre is to roll on a road: a summer tyre rolls a little more
-easily than the all-season, a mud tyre about a third harder. The ground's own drag, from the
-table above, is the same whatever the tread.
-<!-- summer.tres crr_factor 0.95, mud.tres 1.3, winter 1.05, studded 1.1; Surface.drag is tyre-blind (a COMPROMISE in surface.gd) -->
+- **Simulation-wide**:
+  - [Paint reach](simulation.md#paint-reach) (`SURFACE_GRIP_REACH`)
+- **Per surface**:
+  - [Grip and added drag](simulation.md#ground-and-tyre-types), in the surface list (`REF_GRIP`,
+    `DRAG`)
+- **Per vehicle**:
+  - [Stock tyre class and size](simulation.md#stock-tyre-class-and-size) (`tyre`, `tyre_fit`)
+- **Per tyre class**:
+  - [Grip per surface](simulation.md#grip-per-surface) (`surface_grip`)
+  - [Rolling resistance factor](simulation.md#rolling-resistance-factor) (`crr_factor`)
+  - [Sizes](simulation.md#sizes) (`fits`)
+- **Per level**:
+  - [Where each surface is](simulation.md#where-each-surface-is)
 
-### Choosing tyres
+<details><summary>Simplification list</summary>
 
-In the GARAGE, a vehicle with wheels shows a TYRES row of buttons, its stock tyre first. The game
-remembers the choice for that vehicle, and a respawn keeps it. A challenge always uses the stock
-tyre. Trailers, the tractors and the racing cars have only one class each, so their row shows
-that class shown as chosen.
-<!-- VehicleSelect.tyre_choices (empty only with no ground drive); UserSettings.set_tyre; docs/vehicles.md: "the stock in a challenge" -->
-
-Changing the tread changes only the grip numbers and the rolling resistance. The vehicle's brakes,
-its ABS and its traction control stay as they were: they still aim for the same point on the
-grip curve, which every class shares.
-
-## What the game leaves out
-
+- **Twelve kinds of ground, two numbers each.** Every ground is a grip factor and a drag. The grip
+  changes only the height of the curve's peak, never its shape.
+  <!-- surface.gd REF_GRIP: Asphalt 1, Wet 0.75, Pad 0.95, Gravel 0.71, Dirt 0.8, Grass 0.5, Sand 0.6, Rock 0.7, Mud 0.45, Field 0.5, Snow 0.34, Ice 0.12; DRAG -->
+- **Nine tyre classes.** A class is only a grip factor per ground and a rolling resistance. The
+  tractors, the trailers and the racing cars have one class each.
+  <!-- src/vehicles/tyres/*.tres: fits, dry, surface_grip, crr_factor; docs/vehicles.md Tyres and surfaces, the Fit table -->
 - **No rain.** Wet asphalt is a painted surface, always in the same places. No weather makes the
   road wet or dry, and no surface changes during a drive.
 - **No tyre wear, temperature or pressure.** A tyre grips the same on the first lap and the
@@ -111,6 +182,11 @@ grip curve, which every class shares.
   although a real wide tyre sinks in less.
 - **No sinking.** Mud and sand slow a vehicle and lower its grip, but the wheels do not dig in
   and the vehicle cannot get bogged down to its axles.
+- **Paint reaches only so high.** A bridge more than about a metre above a painted patch reads
+  dry asphalt, not the paint below it.
+  <!-- wheel.gd SURFACE_GRIP_REACH 1.0 m -->
+
+</details>
 
 ## What you see in sloppyCAN
 
@@ -119,30 +195,20 @@ tyres:
 
 | Signal | Direction | Unit | What it shows |
 | --- | --- | --- | --- |
-| `slip` | out | ratio, two values | The front and rear axles' slip, along the wheels and sideways together. On low grip the same pedal makes much more slip. Car, truck, tractor. |
+| `slip` | out | ratio, two values | The front and rear axles' slip, along the wheels and sideways together. On low grip the same pedal makes much more slip (Car, truck, tractor). |
 | `accLong` | out | m/s² | Acceleration along the vehicle. In a full ABS stop it falls in step with the surface's grip. |
-| `wheel_slip` | out | % | Tractor only: how far the rear wheels run ahead of the ground. In mud or a field it climbs. |
-| `engine_load` | out | % | Truck and tractor: how much of the engine's torque is in use. Soft ground's drag raises it at a steady speed. |
+| `wheel_slip` | out | % | How far the rear wheels run ahead of the ground. In mud or a field it climbs (Tractor). |
+| `engine_load` | out | % | How much of the engine's torque is in use. Soft ground's drag raises it at a steady speed (Truck and tractor). |
 <!-- contract/carlito_contract.json: slip, accLong, wheel_slip, engine_load -->
 
-## Try it in the game
+## Scenarios
 
-<div class="box try">
-<p class="box-title">Try it in the game: the same stop on three surfaces</p>
-
-1. The debug overlay in the top right (**F3** shows or hides it) shows a
-   `tyre` line (the class fitted), a `surf` line (the surface under each wheel), a `grip` line
-   (each wheel's grip on it) and a `drag` line (the ground's added drag).
-2. In the GARAGE pick the `sedan` with ALL-SEASON tyres. Open LEVEL, pick **Car Arena**, then
-   use SPAWN POINT to start on the tyre pad.
-3. Drive along the dry, wet and snow strips at about 50 km/h and brake hard on each. The `grip`
-   numbers read about 1, 0.55 and 0.45; the stopping distance grows to match.
-4. Go back to the GARAGE, fit WINTER tyres and repeat on the snow strip. `grip` rises to about
-   0.52 and the car stops in a shorter distance. On the dry strip it now reads 0.97.
-
-</div>
+- [Emergency stop](forces.md#example-emergency-stop): on dry asphalt.
+- [Emergency stop on a wet road](forces.md#example-stop-wet): the same stop, with less grip.
+- [Emergency stop on snow](forces.md#example-stop-snow): the same stop, with much less grip.
+- [Pulling away on snow](forces.md#example-wheelspin): the driven wheels spin.
 
 ## Related
 
-- [Tyres and slip](tyres.md): the grip curve that each surface scales.
+- [Slip and the grip curve](slip.md): the grip curve that each surface scales.
 - [Glossary](glossary.md): every term on this page.

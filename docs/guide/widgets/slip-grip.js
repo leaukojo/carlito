@@ -4,7 +4,7 @@
 //   GroundDriveSpec.grip_curve  (0,0) (0.12,1) (0.4,0.9) (1,0.8), sampled linearly
 //                               (VehicleSpec.sample_curve)
 //   sedan_spec.tres             mass 1150 kg, mu_long 1.05 (the GroundDriveSpec default)
-//   surface.gd REF_GRIP         Asphalt 1, Wet 0.55, Gravel 0.71, Grass 0.5, Snow 0.45, Ice 0.12
+//   surface.gd REF_GRIP         Asphalt 1, Wet 0.75, Gravel 0.71, Grass 0.5, Snow 0.34, Ice 0.12
 //                               (the all-season tyre, the sedan's stock)
 (function () {
   'use strict';
@@ -13,8 +13,8 @@
   var CORNER_LOAD_N = 1150 * 9.81 / 4; // a sedan corner at rest
   var MU_LONG = 1.05;
   var SURFACES = [
-    ['Dry asphalt', 1.0], ['Wet road', 0.55], ['Gravel', 0.71],
-    ['Grass', 0.5], ['Snow', 0.45], ['Ice', 0.12]
+    ['Dry asphalt', 1.0], ['Wet road', 0.75], ['Gravel', 0.71],
+    ['Grass', 0.5], ['Snow', 0.34], ['Ice', 0.12]
   ];
   var NS = 'http://www.w3.org/2000/svg';
   // Plot frame (viewBox units).
@@ -46,7 +46,7 @@
   function state(slip) {
     if (slip < 0.005) return 'Rolling freely: no slip, so no force.';
     if (slip < PEAK - 0.004) return 'Gripping: more slip gives more force.';
-    if (slip <= PEAK + 0.004) return 'At the peak: the most force this tyre can give. ABS and traction control hold a wheel here.';
+    if (slip <= PEAK + 0.004) return 'At the peak: the most force this tyre can give. ABS and traction control try to keep a wheel here.';
     if (slip < 0.98) return 'Sliding: past the peak, more slip gives a little less force.';
     return 'Locked (braking) or spinning hard (driving): 0.8 of the peak.';
   }
@@ -54,11 +54,6 @@
   function make(root) {
     root.innerHTML = '';
     root.classList.add('widget-slip-grip');
-    var title = document.createElement('p');
-    title.className = 'w-title';
-    title.textContent = 'Try it: slip against grip';
-    root.appendChild(title);
-
     var svg = el('svg', { viewBox: '0 0 420 244', role: 'img', 'aria-label': 'The grip curve with a marker at the chosen slip' }, root);
     // grid and axes
     [0.5, 1].forEach(function (g) {
@@ -112,11 +107,6 @@
     readout.className = 'w-readout';
     readout.setAttribute('aria-live', 'polite');
     root.appendChild(readout);
-    var note = document.createElement('p');
-    note.className = 'w-note';
-    note.textContent = 'The same curve serves braking and driving: slip here is its size, whichever way the tyre slips. ' +
-      'The force is for one tyre of the sedan, standing at its share of the car\'s weight, on its stock all-season tyres.';
-    root.appendChild(note);
 
     function update() {
       var slip = parseFloat(slider.value);

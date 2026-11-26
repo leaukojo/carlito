@@ -2,168 +2,154 @@
 
 # Fuel, coolant, battery and air
 
-<p class="lead">A vehicle's dashboard shows more than speed: how much fuel is left, how hot the
-engine is, the battery's voltage, a truck's air pressure. The game works these out with simple
-models, and it says so: each one is a labelled model, not a measurement of a simulated system.</p>
+<p class="lead">This page explains the systems behind the dashboard's fuel, coolant, battery and
+air-pressure readings.</p>
 
 <div class="badges"><span class="label">Which vehicles have this</span>
 <span class="badge yes" title="Fuel, coolant and battery">Car</span>
-<span class="badge yes" title="Fuel, coolant, battery and the two air tanks">Truck</span>
+<span class="badge yes" title="Fuel, coolant, battery, the two air tanks and an hour meter">Truck</span>
 <span class="badge yes" title="Fuel, coolant, battery and an hour meter">Tractor</span>
-<span class="badge yes" title="Fuel, coolant and battery">Plane</span>
-<span class="badge yes" title="Fuel, coolant, battery, oil pressure and three tanks">Boat</span>
-<span class="badge some" title="Its battery pack has its own model, on the drone page">Drone</span>
-<span class="badge some" title="A battery voltage; its power comes from the overhead wire">Train</span>
 </div>
 
-## Why "labelled models"
+An engine needs more than fuel and air to keep going. It must be kept at the right temperature,
+and electricity must reach the spark plugs, the lamps and the computers, and a truck's brakes need
+compressed air. Besides the parts that move a vehicle, several systems keep it running. What does
+each one do, and what do its dashboard readings tell the driver?
 
-Everything about how a vehicle moves is read straight out of the physics that moved it. The
-auxiliary systems are different. The game does not simulate the coolant flowing through a
-radiator, or the chemistry of a battery. Instead each one is a short rule that behaves sensibly,
-and every signal it feeds is marked in the signal contract as a model. That way a reader always
-knows which numbers are measured and which are modelled.
-<!-- CLAUDE.md standing rule 3: "Aux systems (fuel/coolant/battery, engine_load, trim) are simple honest models, labelled"; VehicleTelemetry header -->
+<figure>
+<img src="img/dashboard-fuel-temperature-gauges.jpg" alt="A car's instrument panel with a large speedometer on the left, and on the right a fuel gauge running from E to F and a coolant temperature gauge running from C to H">
+<figcaption>The fuel (left) and coolant temperature (right) gauges. Photo: OKJaguar, CC BY-SA 4.0, <a href="https://commons.wikimedia.org/wiki/File:Honda_Pilot_dashboard.jpg">Wikimedia Commons</a>.</figcaption>
+</figure>
 
 ## Fuel
 
 ### How much is burned
 
-On the cars, trucks and tractors, the fuel burned comes from the engine itself. The game knows
-how much extra torque the fuel adds to the engine at its current speed, and so how much power.
-Fuel holds a known amount of energy per litre, and an engine turns only part of it into work, a
-little over two fifths. From those, the game works out the burn in litres per hour.
-<!-- VehicleTelemetry.fuel_rate_lph; FUEL_INDICATED_EFFICIENCY petrol 0.41, diesel 0.45; FUEL_HEATING_MJ_KG, FUEL_DENSITY_KG_L -->
+Fuel holds a known amount of energy per litre, but an engine turns only part of it into work (the
+rest mostly becomes heat, which leaves through the exhaust and the coolant). How much fuel is burned
+therefore depends on the power that the engine gives:
 
-That simple rule gives realistic results by itself:
+- **Idling** burns a little, just to beat the engine's own friction.
+- **Coasting in gear** can burn nothing, because the fuel is cut. The wheels turn the engine, so it
+  needs no fuel to keep turning, and it slows the vehicle a little (engine braking).
+- **A high gear** burns less than a low one at the same speed, because the engine turns more
+  slowly and loses less to friction.
 
-- Idling burns a little, the fuel needed to beat the engine's own friction: about a third of a
-  litre an hour on the `sedan`, about one and a half on the `semi`.
-- A fuel cut, as when coasting in gear, burns nothing.
-- Driving gently in a high gear burns much less than in a low one at the same speed: the
-  `sedan` at one cruising speed burns about half as much in sixth as in third.
-<!-- docs/drivetrain.md Fuel: "the sedan idles at 0.34 L/h ... the semi at 1.62 L/h"; "the sedan held in D6 burns about half what it does in D3" -->
+For example, a car that burns 8 litres in an hour of motorway driving, with a 50-litre tank, can
+drive about six hours before the tank is empty. Doubling the speed asks for more than double the
+fuel per hour, because the air resists the vehicle much more at high speed (see
+[Resistance](resistance.md)).
 
-The boat and the plane burn by the same rule. Their engine speed follows the throttle on a
-simple line, though, with no propeller load on the engine. They burn at least the fuel that holds
-that speed against the engine's friction, so an idling boat still burns a little. At full
-throttle the line reaches the redline, where the boats' engines have lost torque, so their burn
-tops out just short of full throttle.
-<!-- VehicleTelemetry.fuel_rate_lph COMPROMISE (the rigid crank's free-rev rpm); Drivetrain.process rigid branch: applied_throttle floored at drag_fuel while running; boat and plane engine_friction_frac 0.07 / engine_brake_frac 0.25 (the car-petrol class figure, an estimate) -->
+![A bar for the energy in one litre of petrol burnt by a car. About 70 per cent becomes heat in the engine, which leaves through the exhaust and the radiator. About 10 per cent goes to the gears, pumps and fans. About 20 per cent reaches the wheels and moves the car.](img/fuel-energy-split.svg "Where a litre of petrol's energy goes, in mixed driving. Source: fueleconomy.gov.")
 
 ### The tank
 
-The burn is realistic, but the tank is not. A real car's tank lasts hours, so a fuel gauge would
-never move in a session. The game scales each tank so that it lasts a little over eight minutes
-at full power, and the gauge visibly falls. The low-fuel warning is at 15 %. An empty tank does
-not stop the engine.
-<!-- VehicleTelemetry FUEL_TANK_FULL_LOAD_S 500 s ("A design choice: the tank is a game scale"); contract fuel warn 15 -->
+A sender in the tank measures how much fuel is left, for the gauge. A warning lamp comes on when
+the level is low.
 
 ## Coolant
 
-An engine turns most of its fuel's energy into heat, and the coolant carries it away to the
-radiator. In the game the coolant starts cold, at 20 °C. With the engine running it warms
-towards its working temperature, about 90 °C, and higher the harder the engine works, up to about
-108 °C at full load. It changes gradually, a couple of degrees a second, and cools back to 20 °C
-with the engine off. The warning is at 110 °C, which the model on its own never quite reaches.
-<!-- VehicleTelemetry COOLANT_AMBIENT 20, COOLANT_OPERATING 90, COOLANT_HOT 108; BaseVehicle COOLANT_RATE 2 °C/s; contract coolant warn 110 -->
+An engine turns most of its fuel's energy into heat. The coolant carries part of that heat away to
+the radiator, where the air takes it. A cold engine warms up to its working temperature (about
+90 °C), where a thermostat (a valve that opens when the coolant is hot) and a fan keep it. The
+engine is kept near this temperature because a cold engine wears faster and wastes fuel, while a
+too hot one can be damaged. The temperature rises when the engine works hard, and a warning comes
+on if it gets too hot.
 
-The load that heats the coolant is the fuel's energy, not the pedal: a governed truck holding its speed with the pedal down, but little fuel flowing, stays
-cool.
-<!-- VehicleTelemetry.coolant_target: "the heat the cooling rejects follows the fuel's energy, not the pedal" -->
+The heat comes from burning fuel, so it depends on how much fuel the engine burns rather than on
+the pedal (for example, a governed truck that burns little
+fuel stays cool, even with the pedal down).
 
 ## Battery and alternator
 
-With the engine off, a car's battery rests at about 12.6 V. With it running, the
-[alternator](glossary.md#alternator), a small generator driven by the engine, charges it at
-about 14.2 V. The voltage sags a little as more lamps are lit, up to 0.6 V with every lamp on.
-How hard the engine works makes no difference, since the alternator's regulator holds its set
-voltage. Each lamp counts by its bulb's rating: a headlamp's 55 or 60 W far outweighs a tail
-lamp's 5 W.
-<!-- VehicleTelemetry BATTERY_RESTING 12.6, BATTERY_CHARGING 14.2, BATTERY_LAMP_DROOP 0.6 x LampSet.load_share; LampSet BULB_* (UN ECE R37 categories) -->
+With the engine off, a car's battery rests at about 12.6 V. With the engine running, the
+[alternator](glossary.md#alternator) (a small generator driven by the engine) charges it at about
+14.2 V. A regulator holds this voltage, whatever the engine is doing. The charging voltage is
+higher than the resting one for the same reason that it takes more pressure to fill a tyre than the
+tyre already holds: the current only flows into the battery when it is pushed in.
 
-The electric train has no alternator. While its pantograph is up, the overhead line charges its
-battery, which holds at 14.2 V. With the pantograph down, the battery rests at 12.6 V.
-<!-- VehicleTelemetry.aux_supply_volts; train.gd _tick_extras -->
+While the engine runs, the alternator powers the vehicle, and the battery only evens out the
+difference. A common misconception is that a running car lives on its battery. The battery's main
+job is to start the engine and to power things while the engine is off.
 
-The drone has no alternator: its battery pack has a model of its own, on the
-[drone page](drone-flight.md#the-battery). The `battery` signal carries the pack's voltage there.
+The electrical load can make the voltage drop a little. Some consumers count much more than others.
+Electrical power is the voltage times the current, so a 55 W halogen headlamp, at about 14 V, draws
+nearly 4 A, against about 0.4 A for a 5 W tail lamp (these figures are for example only).
 
 ## A truck's air
 
-The trucks' brakes work on compressed air, kept in two tanks. In the game the engine's compressor
-fills them, each full brake application draws some air out, and holding it costs nothing more.
-That holds whether the driver applies the brakes or stability control does it with no pedal. The second tank loses a little less per press, so the two readings drift apart,
-and a fault in one is not hidden by the other. A trailer being coupled takes about 3 bar
-from the first tank while it fills its own. Below 5 bar the low-air warning is due; below 3 bar the
-spring brakes apply. [Brakes](brakes.md#air-and-spring-brakes) explains why.
-<!-- TruckTelemetry: AIR_CHARGE_RATE 0.45 bar/s, AIR_PRESS_PRIMARY 0.70, AIR_PRESS_SECONDARY 0.55, AIR_SPAWN_BAR 7, AIR_SPRING_BRAKE_BAR 3, TRAILER_CHARGE_S 8 ("coupling costs ~3 bar of primary"); contract air_primary warn 5.0 -->
+The brakes of a truck work on compressed air, kept in tanks (usually two circuits, so that a fault
+in one leaves the other). The engine's compressor fills them, and each press of the brake pedal
+draws some air out. Coupling a trailer also takes air, to fill the trailer's own tank.
+
+A warning comes on when the pressure is low. If it keeps falling, the
+[spring brakes](brakes.md#air-and-spring-brakes) apply, because it is the air that holds them off.
 
 ## Engine load
 
-The trucks and the tractor publish their [engine load](glossary.md#engine-load): the torque the
-engine is giving as a share of the most it can ever give. A plough's draft, a PTO, a hill or a
-headwind all show in it. At idle in gear it reads a few percent, the fuel that beats the friction
-and the converter's creep.
-<!-- VehicleTelemetry.engine_load_pct: "the full-load curve at the delivered fuel ... over peak torque"; docs/drivetrain.md Creep: engine_load 7-11 % at idle in gear -->
+Trucks and tractors report their [engine load](glossary.md#engine-load): the torque the engine is
+giving, as a percentage of the most it can give at any speed. A plough, a PTO, a hill, a headwind, etc. all raise
+it, because each one asks the engine for more torque to keep the vehicle going. It is not zero at
+idle, because some fuel is needed to beat friction. It is not the position of the pedal either: a
+governed engine can give less than its full torque even with the pedal fully down.
 
-## The boat's engine room
+## Warning lamps
 
-The boats have three more models:
+Warning lamps tell the driver about faults that the gauges do not show. Examples are the
+check-engine lamp, the battery lamp, and the red (stop) and amber (warning) lamps of trucks. They
+are switched on by the vehicle's electronic units, often through messages on the CAN bus. In
+general, red means to stop now, and amber means to have the fault looked at soon.
 
-- **Oil pressure**: low at idle, rising to a steady working pressure as the engine speeds up,
-  and zero with the key off.
-- **Tanks**: fresh water drains and waste rises together while the engine runs. The third, a
-  live-well for bait, stays as it is.
-- **Engine hours**, as on the trucks and tractor.
-<!-- BoatTelemetry OIL_PRESS_IDLE 80 kPa, OIL_PRESS_NOMINAL 350 kPa at 1.5 x idle_rpm; TANK_RATE 2 %/s; contract tank_level: "live-well ... held, not modeled" -->
+## What Carlito simulates
 
-## Warning lamps from sloppyCAN
+The parameters the simulator uses for this, and where each is set, are listed in
+[How the simulation works](simulation.md#fuel-coolant-battery-and-air):
 
-Some dashboard lamps are not worked out by the game at all. The check-engine lamp, the battery
-warning lamp and a truck's red and amber fault lamps are set by sloppyCAN and shown exactly as it
-sends them. The game never lights them by itself.
-<!-- contract checkEngine, battery (in), red_stop, amber_warn: "Mirrored VERBATIM ... sloppyCAN is the sole authority" -->
+- **Simulation-wide**:
+  - [Engine efficiency](simulation.md#engine-efficiency) (`FUEL_INDICATED_EFFICIENCY`)
+  - [Tank size](simulation.md#tank-size) (`FUEL_TANK_FULL_LOAD_S`)
+  - [Coolant](simulation.md#coolant) (`COOLANT_AMBIENT`, `COOLANT_OPERATING`, `COOLANT_HOT`,
+    `COOLANT_RATE`)
+  - [Battery](simulation.md#battery) (`BATTERY_RESTING`, `BATTERY_CHARGING`,
+    `BATTERY_LAMP_DROOP`)
+  - [Air](simulation.md#air) (`AIR_PRESS_PRIMARY`, `AIR_PRESS_SECONDARY`)
+- **Per vehicle**:
+  - [Fuel](simulation.md#fuel) (`fuel_type`)
 
-## What the game leaves out
+<details><summary>Simplification list</summary>
 
+- **Simple models.** Unlike the movement of the vehicle, these readings come from short rules that
+  behave sensibly. The flow of the coolant and the chemistry of the battery are not simulated.
+  <!-- CLAUDE.md standing rule 3; VehicleTelemetry header -->
+- **A small tank.** The burn is realistic, but each tank is scaled to last a little over eight
+  minutes at full power, so that the gauge visibly falls.
+  <!-- VehicleTelemetry FUEL_TANK_FULL_LOAD_S 500 s -->
 - **No running out of fuel**: an empty tank leaves the engine running.
-- **No overheating damage**, no thermostat, no radiator fan.
-- **No flat battery**: the battery never runs down, and the starter is not modelled.
+- **No overheating damage**, no thermostat, no radiator fan. The coolant follows the engine's load
+  between 20 °C and about 108 °C, so it never reaches its 110 °C warning by itself.
+  <!-- VehicleTelemetry COOLANT_AMBIENT 20, COOLANT_HOT 108; contract coolant warn 110 -->
+- **No flat battery**: the battery never runs down, and the starter is not modelled. Only the
+  lamps load it.
 - **No air leaks** on the trucks, apart from what the brakes use.
+- **No fault detection.** The simulation never lights a fault lamp by itself: sloppyCAN sets them.
+  <!-- contract checkEngine, battery (in), red_stop, amber_warn: "Mirrored VERBATIM ... sloppyCAN is the sole authority" -->
+
+</details>
 
 ## What you see in sloppyCAN
 
 | Signal | Direction | Unit | What it shows |
 | --- | --- | --- | --- |
-| `fuel` | out | % | The tank level, on a game-scale tank. Warns below 15 %. Car, truck, tractor, boat, plane. |
-| `fuel_rate` | out | L/h | The burn, read off the engine on the wheeled vehicles. Car, truck, tractor, boat. |
-| `coolant` | out | °C | The coolant model. Warns at 110 °C. Car, truck, tractor, boat, plane. |
-| `battery` | out | V | The battery's voltage; on the drone, the pack's. Every vehicle. |
-| `engine_load` | out | % | Truck and tractor: torque given over the most it can give. |
-| `air_primary`, `air_secondary` | out | bar | Truck: the two air tanks. Warn below 5 bar. |
-| `oil_press` | out | kPa | Boat: the oil pressure model. |
-| `tank_level` | out | %, three values | Boat: fresh water, waste, live-well. |
-| `engine_hours` | out | h | Truck, tractor, boat: the engine's running time. |
+| `fuel` | out | % | The tank level, on a scaled-down tank. Warns below 15 %. |
+| `fuel_rate` | out | L/h | The burn, read off the engine. |
+| `coolant` | out | °C | The coolant model. Warns at 110 °C. |
+| `battery` | out | V | The battery's voltage. |
+| `engine_load` | out | % | Torque given over the most it can give (Truck and tractor). |
+| `air_primary`, `air_secondary` | out | bar | The two air tanks. Warn below 5 bar (Truck). |
+| `engine_hours` | out | h | The engine's running time (Truck and tractor). |
 | `checkEngine`, `battery` | in | flag | The check-engine and battery warning lamps, set by sloppyCAN. |
-| `red_stop`, `amber_warn` | in | flag | Truck: the fault lamps, set by sloppyCAN. |
-<!-- contract/carlito_contract.json: fuel (warn 15), fuel_rate, coolant (warn 110), battery (out and in), engine_load, air_primary, air_secondary, oil_press, tank_level (count 3), engine_hours, checkEngine, red_stop, amber_warn -->
-
-## Try it in the game
-
-<div class="box try">
-<p class="box-title">Try it in the game: warm up and burn</p>
-
-1. Pick the `sedan` on **Flatland** and press **F2** until the dashboard shows FULL: the coolant,
-   fuel and burn readings are only on the full dashboard. The coolant starts at
-   20 °C. Watch it climb towards 90 °C as the engine idles.
-2. Drive at full throttle for a minute. The coolant rises a little higher, and the fuel gauge
-   falls noticeably.
-3. Lift off and coast in gear: the fuel rate reads 0 while the engine braking lasts.
-4. Pick the `semi` and press the brake repeatedly while standing: the two air bars fall at
-   different rates, and recover once you stop pumping.
-
-</div>
+| `red_stop`, `amber_warn` | in | flag | The fault lamps, set by sloppyCAN (Truck). |
+<!-- contract/carlito_contract.json: fuel (warn 15), fuel_rate, coolant (warn 110), battery (out and in), engine_load, air_primary, air_secondary, engine_hours, checkEngine, red_stop, amber_warn -->
 
 ## Related
 

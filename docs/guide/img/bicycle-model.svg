@@ -14,12 +14,17 @@
 .bm-centre{fill:var(--fig-blue,#1d5ca8)}
 .bm-blue-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
 .bm-orange-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+.bm-force{stroke:var(--fig-green,#2e7d32);stroke-width:3.5;fill:none}
+.bm-fg{fill:var(--fig-green,#2e7d32)}
+.bm-green-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-green,#2e7d32)}
 @media (prefers-color-scheme:dark){
 .bm-t{fill:var(--fig-ink,#e9e7e2)}.bm-s{fill:var(--fig-muted,#a6a6b0)}.bm-body{fill:var(--fig-fill,#22242a);stroke:var(--fig-muted,#a6a6b0)}
 .bm-wheel{fill:var(--fig-ink,#e9e7e2)}.bm-ghost{stroke:var(--fig-muted,#a6a6b0)}.bm-dash{stroke:var(--fig-blue,#8ab6ff)}
 .bm-path{stroke:var(--fig-orange,#f0a060)}.bm-dim{stroke:var(--fig-ink,#e9e7e2)}.bm-centre{fill:var(--fig-blue,#8ab6ff)}
-.bm-blue-t{fill:var(--fig-blue,#8ab6ff)}.bm-orange-t{fill:var(--fig-orange,#f0a060)}}
+.bm-blue-t{fill:var(--fig-blue,#8ab6ff)}.bm-orange-t{fill:var(--fig-orange,#f0a060)}
+.bm-force{stroke:var(--fig-green,#7cc884)}.bm-fg{fill:var(--fig-green,#7cc884)}.bm-green-t{fill:var(--fig-green,#7cc884)}}
 </style>
+<defs><marker id="bm-ag" markerWidth="10" markerHeight="10" refX="1" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path class="bm-fg" d="M0,0 L10,5 L0,10 Z"/></marker></defs>
 <!-- the car, seen from above, nose up -->
 <rect class="bm-body" x="118" y="78" width="64" height="184" rx="18"/>
 <!-- path of the rear axle: a circle round the turn centre -->
@@ -35,9 +40,15 @@
 <rect class="bm-ghost" x="143" y="92" width="14" height="36" rx="4"/>
 <rect class="bm-wheel" x="143" y="92" width="14" height="36" rx="4" transform="rotate(30 150 110)"/>
 <rect class="bm-wheel" x="143" y="212" width="14" height="36" rx="4"/>
-<path class="bm-dim" d="M150,74 A36,36 0 0 1 168,78.8"/>
-<line class="bm-dim" x1="150" y1="110" x2="150" y2="70"/>
-<text class="bm-t" x="176" y="66">steering angle</text>
+<!-- the tyres' sideways forces: each at right angles to its wheel, so both point at the turn centre -->
+<line class="bm-force" x1="160.4" y1="116" x2="202" y2="140" marker-end="url(#bm-ag)"/>
+<line class="bm-force" x1="160" y1="230" x2="208" y2="230" marker-end="url(#bm-ag)"/>
+<text class="bm-green-t" x="192" y="218">tyres' side forces</text>
+<!-- the angle between straight ahead (dashed) and where the wheel points, radius 46 at 30 deg -->
+<line class="bm-dim" x1="150" y1="110" x2="150" y2="54" style="stroke-dasharray:3 3"/>
+<line class="bm-dim" x1="150" y1="110" x2="178" y2="61.5"/>
+<path class="bm-dim" d="M150,64 A46,46 0 0 1 173,70.2"/>
+<text class="bm-t" x="184" y="62">steering angle</text>
 <!-- the wheelbase -->
 <line class="bm-dim" x1="96" y1="110" x2="96" y2="230"/>
 <line class="bm-dim" x1="90" y1="110" x2="102" y2="110"/>

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 290" width="420" height="290">
-<title>The sedan engine's torque and power against engine speed</title>
+<title>A saloon engine's torque and power against engine speed</title>
 <!-- sedan_spec.tres torque_curve (900,98) (2000,154) (3200,184) (4800,185) (6000,185) (6600,170) (6800,61) N·m,
      linear between points; idle_rpm 900, redline_rpm 6800 (VehicleSpec defaults). Power = torque x rpm x 2pi/60.
      Torque axis 0-200 N·m on the left, power 0-125 kW on the right. -->

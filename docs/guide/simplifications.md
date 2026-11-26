@@ -1,16 +1,15 @@
 [AI-GENERATED CONTENT AWAITING HUMAN REVIEW]
 
-# What the game keeps simple
+# What the simulator keeps simple
 
-<p class="lead">Every model leaves something out. This page gathers, in one place, what Carlito
-approximates and what it does not model at all, so that nobody mistakes the game for more than
-it is. Each idea page has its own short list; this is the whole picture.</p>
+<p class="lead">This page gathers in one place what the simulator approximates and what it does
+not model at all.</p>
 
-## How the game decides what to model
+## How the simulator decides what to model
 
-The game models what a vehicle's own signals would show. Wherever a number reaches sloppyCAN, it
+The simulator models what a vehicle's own signals would show. Wherever a number reaches sloppyCAN, it
 comes from the physics that produced the motion, or from a simple model that is labelled as a
-model. Nothing is invented to look right. Where the game takes a short cut, its code says so, and
+model. Nothing is invented to look right. Where the simulator takes a short cut, its code says so, and
 says what undoing it would cost.
 <!-- CLAUDE.md standing rule 3; "A COMPROMISE states what is true and what undoing it costs" -->
 
@@ -34,7 +33,7 @@ The short cuts fall into three kinds:
 
 ## Tyres and the ground
 
-- **Simplified: one grip curve.** Every tyre in the game has the same shape of grip curve. A tyre
+- **Simplified: one grip curve.** Every tyre in the simulation has the same shape of grip curve. A tyre
   class, a surface and the load change only how high its peak is.
 - **Simplified: soil.** Soft ground's drag is the same for every tyre, wide or narrow, and a wheel
   never sinks in or gets bogged down.
@@ -50,8 +49,8 @@ The short cuts fall into three kinds:
 - **Not modelled: steering feel.** No force comes back through the steering.
 - **Not modelled: articulated and rear-wheel steering.**
 - **Not modelled: unsprung mass and roll camber.** Wheels have no weight of their own that bounces,
-  and tyres do not tilt as the body leans, which is one reason the cars understeer a little less
-  than real ones.
+  and tyres do not tilt as the body leans, which is one reason the cars understeer much less
+  than real ones in a gentle turn.
 <!-- steering.md, suspension.md, weight-transfer.md; docs/handling.md Balance "Stated shortfall: linear K" -->
 
 ## Engine, gearbox and driveline
@@ -60,7 +59,7 @@ The short cuts fall into three kinds:
   is at Ignition.
 - **Simplified: the fuel tank.** The burn is real; the tank is scaled down so its gauge moves in a
   session, and an empty tank does not stop the engine.
-- **Not modelled: a clutch pedal.** The game works every clutch, even with manual gears.
+- **Not modelled: a clutch pedal.** The simulator works every clutch, even when shifting by hand.
 - **Simplified: the gearbox's insides.** Each gearbox is a list of ratios and a way of handing the
   drive from one to the next; no tooth, collar, planet or belt is simulated.
 - **Not modelled: cruise control** on any road vehicle; only the tractor's hand throttle holds a
@@ -75,9 +74,7 @@ The short cuts fall into three kinds:
   at the grip peak, with none of the pulsing of real systems.
 - **Simplified: brake heat.** Each brake is one lump of metal with one temperature.
 - **Simplified: truck air.** Two tanks that fill and empty; no pipes, valves or leaks.
-- **Simplified: the train's brake pipe.** One steady delay stands in for the pipe, the valves and
-  the brake cylinders; the train's brakes follow it.
-<!-- driver-aids.md, brakes.md, rail.md -->
+<!-- driver-aids.md, brakes.md -->
 
 ## Towing and farm work
 
@@ -89,46 +86,29 @@ The short cuts fall into three kinds:
 - **Not modelled: coupling by hand**: no landing legs, air lines or cables.
 <!-- towing.md, implements.md; docs/handling.md Inertia: implement COMPROMISE at TractorVehicle._apply_implement_mass; CLAUDE.md non-goals: crop growth, yield or farm economy -->
 
-## Water and air
+## Air
 
-- **Simplified: buoyancy.** Four float points sized so the hull rests at its depth, not the
-  volume of the hull under the water.
-- **Simplified: water drag.** It grows in proportion to the speed rather than with its square,
-  and a speedboat does not rise onto the plane.
-- **Not modelled: real waves.** The sea is flat; the waves are drawn only.
 - **Simplified: the air.** It has one density everywhere, with no change for height or weather.
 - **Simplified: the wind.** The same everywhere on a level, with no shelter behind hills or
   buildings and no change with height.
-- **Not modelled: inverted flight and spins** on the plane.
-- **Not modelled: sideways flight from the keys** on the drone.
-<!-- floating.md, conditions.md, plane-flight.md, drone-flight.md; CLAUDE.md non-goals: real wave physics -->
-
-## Rails
-
-- **Simplified: the train.** Five point masses along the track, joined by springs.
-- **Ideal: rail grip.** The pull stops at the rails' grip, which never changes; the wheels never
-  spin.
-- **Not modelled: points, signals, timetables or other trains.**
-<!-- rail.md -->
+<!-- resistance.md, conditions.md -->
 
 ## Instruments
 
-- **Labelled models**: fuel, coolant, battery, engine load, air pressure, the boat's oil and tanks,
-  the train's current and voltage, the drone's pack.
-- **Ideal: position.** The GPS position is exact, except on the drone, whose receiver needs open
-  sky.
+- **Labelled models**: fuel, coolant, battery, engine load, air pressure.
+- **Ideal: position.** The GPS position is exact.
 - **Simplified: accelerations.** They read only the change in motion, with no gravity.
 <!-- auxiliary.md, position.md -->
 
-## Not in the game at all
+## Not in the simulator at all
 
-Some things are outside what Carlito sets out to be: multiplayer, an in-game level editor, a
-character who walks around, crop growth or a farm economy, real wave physics, traffic, lane
+Some things are outside what Carlito sets out to be: multiplayer, a built-in level editor, a
+character who walks around, crop growth or a farm economy, traffic, lane
 markings, road junctions, and sharing levels made by others.
 <!-- CLAUDE.md Non-goals -->
 
 ## Related
 
-- [The open questions](open_questions.md): places where the code and its notes disagree, or where
+- [Open questions and ideas](open_questions.md): places where the code and its notes disagree, or where
   something may be a mistake rather than a choice.
 - [Glossary](glossary.md): every term on this page.
