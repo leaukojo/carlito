@@ -135,7 +135,6 @@ static func level_lateral_accel(v_now: Vector3, v_prev: Vector3, basis: Basis, g
 ## terms below are mass-free, so an airborne wheel resists nothing.
 
 const AIR_DENSITY := 1.225  ## kg/m^3, sea level, no altitude/temperature term
-const RESIST_EPS := 0.05    ## m/s floor below which resistance isn't applied (stops jitter)
 
 
 ## Aerodynamic drag magnitude (N): `0.5 * rho * Cd*A * v^2`. `cda` is the lumped Cd x frontal
@@ -188,7 +187,7 @@ static func rolling_drag(crr: float, normal_load: float) -> float:
 ## is read in the body frame with its body-up part dropped: `u` along the nose, `w` to the right.
 ## Drag is `cda` on `u`, side force `cya` on `w`, both scaled by `|(u, w)|`, so the side term is
 ## `q * cya * sin(yaw)`. Each axis is one-tick clamped on `body_mass`, which never enters the force.
-## Gated on the AIR speed, so a parked body in wind is pushed. Still air and straight running give
+## Read on the AIR speed, so a parked body in wind is pushed. Still air and straight running give
 ## `w = 0`: the plain drag term. Rolling resistance is not here: it is a moment on each wheel
 ## (`RayWheel.tick`).
 static func air_force(vel: Vector3, wind: Vector3, basis: Basis, cda: float, cya: float,
@@ -197,7 +196,7 @@ static func air_force(vel: Vector3, wind: Vector3, basis: Basis, cda: float, cya
 	var up := basis.y.normalized()
 	air -= up * air.dot(up)
 	var airspeed := air.length()
-	if airspeed < RESIST_EPS or delta <= 0.0:
+	if delta <= 0.0:
 		return Vector3.ZERO
 	var fwd := -basis.z.normalized()
 	var right := basis.x.normalized()

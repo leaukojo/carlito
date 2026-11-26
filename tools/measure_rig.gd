@@ -1,7 +1,7 @@
 extends RefCounted
 ## What the game-mode measure tools share: the body's spawn and its in-memory spec copy, the flat
-## full-grip slab or tilted ramp it is driven on, the painted surface over it, the tyre class on it,
-## the rig's bodies and laden mass, the PI speed hold, the trailer-roll table, the report labels,
+## full-grip ground, slab or tilted ramp it is driven on, the welded blocks on it, the painted
+## surface over it, the tyre class on it, the rig's bodies and laden mass, the PI speed hold, the trailer-roll table, the report labels,
 ## and the bridge stash it is driven through. Each tool keeps its own layout (strip, pad) and pass
 ## logic.
 
@@ -266,23 +266,19 @@ const TRAILER_ROLL_CONFIGS := [[true, true], [true, false], [false, true], [fals
 const CHATTER_FLIPS := 3
 const CHATTER_EPS := 1e-7
 const CHATTER_REL := 0.01
-## ESC's floor, in its moment share (measure_vehicles' `_esc_share`): a change under 0.5 % of a
-## wheel's brake (~7 N·m on `van`) is the sensors' per-tick noise on a held touch, no direction; a
-## modulator dump's ring swings from 0 to the whole share.
-const ESC_CHATTER_EPS := 0.005
 
 
 ## Pure: the runs in `series` where the tick-to-tick change flips sign on CHATTER_FLIPS or more
 ## consecutive ticks, a tick-rate oscillation. A change under CHATTER_EPS (rad) or CHATTER_REL of
 ## the angle is no direction and ends the run: a one-tick contact blip and its return, ticks apart
-## from the next, are not a ringing loop. `eps`: another series' floor in its own unit.
-static func chatter_runs(series: PackedFloat64Array, eps := CHATTER_EPS) -> int:
+## from the next, are not a ringing loop.
+static func chatter_runs(series: PackedFloat64Array) -> int:
 	var runs := 0
 	var flips := 0
 	var last := 0.0
 	for i in range(1, series.size()):
 		var d := series[i] - series[i - 1]
-		if absf(d) < maxf(eps, CHATTER_REL * absf(series[i])):
+		if absf(d) < maxf(CHATTER_EPS, CHATTER_REL * absf(series[i])):
 			flips = 0
 			last = 0.0
 			continue
@@ -303,8 +299,8 @@ static func chatter_runs(series: PackedFloat64Array, eps := CHATTER_EPS) -> int:
 static func trailer_summary(watch: TrailerWatch, delta: float) -> Dictionary:
 	return {"lift_g": watch.lift_g, "overturn_t": watch.overturn_t,
 			"vdc_s": watch.vdc_ticks * delta,
-			"chatter": chatter_runs(watch.applied, ESC_CHATTER_EPS),
-			"tractor_chatter": chatter_runs(watch.tractor_roll, ESC_CHATTER_EPS)}
+			"chatter": chatter_runs(watch.applied),
+			"tractor_chatter": chatter_runs(watch.tractor_roll)}
 
 
 ## A trailer cell (`trailer_summary`'s figures): its first lift and the time it went over, else
@@ -340,6 +336,20 @@ class PiHold:
 		if not freeze:
 			integral = clampf(integral + err * ki * delta, 0.0, 1.0)
 		return clampf(integral + err * kp, 0.0, 1.0)
+
+
+## The pedal a PI's fuel command `u` takes at `car`'s crank rpm (`PedalMap.pedal_for`): the pedal on
+## a LINEAR map. On the petrol map the first 1 % of pedal steps the fuel from none to netting the
+## motoring out, and a PI on the raw pedal there limit-cycles: `race` held at 30 km/h swings between
+## pedal 0 and 0.06 every 0.4 s, and its step pass reads 1.59 deg/g of understeer for 0.54. Least
+## pedal, not a floored one, at full fuel: a step to 1 through a biasing diff is the pulse the
+## corner pass's PI exists to avoid (with one, `suv` reads rear-first).
+## On a CVT the pedal is itself a ground-speed command (`Drivetrain.cvt_speed_command`), so the
+## driver holds the PI's setpoint `v_set` (m/s) on it, as a CVT tractor's driver sets a speed.
+static func pi_pedal(car: BaseVehicle, u: float, v_set := NAN) -> float:
+	if Drivetrain.is_cvt(car.spec) and not is_nan(v_set):
+		return clampf(v_set / Drivetrain.cvt_top_speed(car.spec), 0.0, 1.0)
+	return PedalMap.pedal_for(car.spec, u, car.drivetrain.rpm)
 
 
 ## Under `surge_off`, `body`'s coupled tanker held at no surge, in memory: after every priority-0
@@ -568,44 +578,80 @@ static func crr(body: Node) -> float:
 	return (body.get("spec") as VehicleSpec).ground_drive.rolling_resistance
 
 
-## A flat slab of `size` under `parent`, centred at `x` with its top face at y = 0.
-static func add_slab(parent: Node, slab_name: String, size: Vector3, x := 0.0) -> void:
-	var ground := _box_body(slab_name, size)
-	ground.position = Vector3(x, -size.y * 0.5, 0.0)
+## The Jolt limit `add_ground`'s plane reaches: its full side, centred on the plane's origin.
+const GROUND_SIZE_SETTING := "physics/jolt_physics_3d/limits/world_boundary_shape_size"
+## m of plane past `add_ground`'s reach, for a run's overshoot.
+const GROUND_MARGIN := 100.0
+## m a welded block (`add_welded_box`) is sunk under the ground, so no face of it lies on y = 0.
+const BLOCK_SINK := 0.5
+## m, the largest cell of a welded block's faces: a triangle's corners stay a few metres from a
+## wheel on it.
+const WELD_CELL := 2.0
+
+
+## The flat ground at y = 0 under `parent`, on TERRAIN: a `WorldBoundaryShape3D`, which Jolt collides
+## as an exact plane (`JPH::PlaneShape`), where a box whose far corner lies past its switch to sharp
+## shapes answers a wheel up to millimetres off its face (`docs/vehicles.md` § Contact). Jolt bounds
+## the plane at GROUND_SIZE_SETTING (`project.godot`); null, printed as an error, which the tool quits
+## on, when that leaves less than `reach` plus GROUND_MARGIN either side of the origin.
+static func add_ground(parent: Node, ground_name: String, reach: float) -> StaticBody3D:
+	var half := float(ProjectSettings.get_setting(GROUND_SIZE_SETTING)) * 0.5
+	if half < reach + GROUND_MARGIN:
+		printerr("%s is %.0f m: the ground needs %.0f" % [GROUND_SIZE_SETTING, half * 2.0,
+				(reach + GROUND_MARGIN) * 2.0])
+		return null
+	var mesh := PlaneMesh.new()
+	mesh.size = Vector2(reach, reach) * 2.0
+	var ground := _static_body(ground_name, WorldBoundaryShape3D.new(), mesh)
 	parent.add_child(ground)
+	return ground
 
 
-## A box of `size` under `parent` at `xform` (its centre), on TERRAIN. Returns it, so a pass can
-## free it (the kerb pass's plateau).
-static func add_box(parent: Node, box_name: String, size: Vector3, xform: Transform3D) -> StaticBody3D:
-	var box := _box_body(box_name, size)
+## A welded block of `size` under `parent` at `xform` (its centre), on TERRAIN: a trimesh, as a
+## level's drivable structures are, whose triangles stay under Jolt's switch to sharp shapes where a
+## box tens of metres long does not (`add_ground`). Returns it, so a pass can free it.
+static func add_welded_box(parent: Node, box_name: String, size: Vector3,
+		xform: Transform3D) -> StaticBody3D:
+	var box := _static_body(box_name, welded_box_shape(size), _box_mesh(size))
 	box.transform = xform
 	parent.add_child(box)
 	return box
 
 
-## `ramp` (built under `parent` from `size` when null) tilted `angle` rad about +X, so its -Z (the
-## body's forward) climbs and its top face passes through (0, `lift`, 0): a long ramp is raised so
-## its foot stays above `BaseVehicle.FALL_RESPAWN_Y`. Returns the ramp.
-static func tilt_ramp(parent: Node, ramp: StaticBody3D, size: Vector3, angle: float,
+## A box of `size` as a trimesh, its faces cut in cells of at most WELD_CELL.
+static func welded_box_shape(size: Vector3) -> ConcavePolygonShape3D:
+	var mesh := _box_mesh(size)
+	mesh.subdivide_width = maxi(ceili(size.x / WELD_CELL) - 1, 0)
+	mesh.subdivide_height = maxi(ceili(size.y / WELD_CELL) - 1, 0)
+	mesh.subdivide_depth = maxi(ceili(size.z / WELD_CELL) - 1, 0)
+	return mesh.create_trimesh_shape()
+
+
+## `ramp` (built under `parent` by `add_ground`, `reach` as there, when null) tilted `angle` rad about
+## +X, so its -Z (the body's forward) climbs and its surface passes through (0, `lift`, 0): a long
+## ramp is raised so its foot stays above `BaseVehicle.FALL_RESPAWN_Y`. An `angle` of 0 is the flat
+## ground. Returns the ramp, null (`add_ground` printed why) when it cannot be built.
+static func tilt_ramp(parent: Node, ramp: StaticBody3D, reach: float, angle: float,
 		lift := 0.0) -> StaticBody3D:
 	if ramp == null:
-		ramp = _box_body("Ramp", size)
-		parent.add_child(ramp)
-	var tilt := Basis(Vector3.RIGHT, angle)
-	ramp.transform = Transform3D(tilt, tilt * Vector3(0.0, -size.y * 0.5, 0.0) + Vector3.UP * lift)
+		ramp = add_ground(parent, "Ramp", reach)
+		if ramp == null:
+			return null
+	ramp.transform = Transform3D(Basis(Vector3.RIGHT, angle), Vector3.UP * lift)
 	return ramp
+
+
+static func _box_mesh(size: Vector3) -> BoxMesh:
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	return mesh
 
 
 ## TERRAIN: every gameplay ray masks Layers.SOLID, so an engine-default body would drop the
 ## vehicle through.
-static func _box_body(body_name: String, size: Vector3) -> StaticBody3D:
-	var shape := BoxShape3D.new()
-	shape.size = size
+static func _static_body(body_name: String, shape: Shape3D, mesh: Mesh) -> StaticBody3D:
 	var collision := CollisionShape3D.new()
 	collision.shape = shape
-	var mesh := BoxMesh.new()
-	mesh.size = size
 	var visual := MeshInstance3D.new()
 	visual.mesh = mesh
 	var body := StaticBody3D.new()
@@ -656,6 +702,14 @@ static func diff_label(gd: GroundDriveSpec) -> String:
 	if gd.diff_bias_rear > 1.0:
 		label += ", rear LSD %.1f:1" % gd.diff_bias_rear
 	return label
+
+
+## Wheelbase (m) off the axle stations (`BrakeSizing.axle_geometry`), foremost front to rearmost
+## rear. A tandem's effective wheelbase is shorter, so a semi's ratio to neutral reads low: compare
+## it only with itself.
+static func wheelbase_of(spec: VehicleSpec) -> float:
+	var ax := BrakeSizing.axle_geometry(spec)
+	return float(ax["rear_z"]) - float(ax["front_z"])
 
 
 ## "FL", "RR": a wheel of `body`'s by its axle (F / R, or A1, A2... front to back past two axles)

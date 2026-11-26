@@ -30,9 +30,9 @@ const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
 const MeasureRig := preload("res://tools/measure_rig.gd")
 const DocRegion := preload("res://tools/doc_region.gd")
 
-const STRIP_LENGTH := 6000.0
-const STRIP_WIDTH := 40.0
-const START_Z := 2800.0
+## m the run may travel from the origin, which it starts at (`MeasureRig.add_ground`): P2 to P6 cover
+## a few hundred.
+const GROUND_REACH := 1000.0
 
 const REPORT_DIR := "res://reports/semi_launch/"
 
@@ -45,13 +45,11 @@ const CHARGE_RELEASE_S := 1.0
 const STOP_SPEED := 0.05
 const STOP_TIMEOUT_S := 40.0
 
-# P7, the rollover probe. Full lock in one tick at road speed, coasting, on a pad wide enough for
+# P7, the rollover probe. Full lock in one tick at road speed, coasting, on ground wide enough for
 # the rig to describe its own circle (~22 m radius at this speed, plus the trailer's swing).
 # It is a STEP at the driver's hand only: `spec.steer_speed` still slews the rack, as it does for
 # a real wheel. Throttle is released at the step so the manoeuvre is a lateral one and not a
 # launch, which is why the entry speed is reported beside the peak.
-const PAD_SIZE := 400.0
-const PAD_X := -700.0        ## far enough off the strip that the two never share collision
 const TIP_SPEED_MS := 11.11  ## 40 km/h; `tip_kmh=<float>` overrides it for one run
 const TIP_SPINUP_TIMEOUT_S := 30.0
 const TIP_HOLD_S := 8.0
@@ -77,10 +75,9 @@ const REST_S := 3.0
 ## average. The fault it catches reads 60 /s and 8 kg or more: a second force at the contact (the
 ## rolling drag) that no stick test sees (docs/vehicles.md § One-tick caps). Neither limit is 0: a
 ## free wheel and the body still swap the contact's speed tick to tick, which reads up to 1 /s and
-## 0.03 kg. REST_FLIPS_S is 3 times that reading; REST_STEP_KG stays above the laden `semi`'s
-## whole-kg AXLE steps (up to 1 kg, the Queue's towing item (c)) until that lands.
+## 0.03 kg. REST_FLIPS_S and REST_STEP_KG are each about 3 times that reading.
 const REST_FLIPS_S := 3.0
-const REST_STEP_KG := 1.0
+const REST_STEP_KG := 0.1
 ## First-order lags the steady report tries on each trace (a sender filter's candidates), s.
 const STEADY_TAUS: Array[float] = [0.1, 0.25, 0.5, 1.0]
 
@@ -156,10 +153,9 @@ func _ready() -> void:
 			_doc_runs.append({"esc_off": cfg[0], "trsp_off": cfg[1], "ramp": false})
 		args = PackedStringArray(["semi", "trailer=box"])
 	_parse_trailer_arg(args)
-	MeasureRig.add_slab(self, "Strip", Vector3(STRIP_WIDTH, 2.0, STRIP_LENGTH))
-	# The P7 skid pad, beside the strip rather than part of it: the launch strip is 40 m wide and a
-	# rig at full lock leaves it in under a second.
-	MeasureRig.add_slab(self, "Pad", Vector3(PAD_SIZE, 2.0, PAD_SIZE), PAD_X)
+	if MeasureRig.add_ground(self, "Ground", GROUND_REACH) == null:
+		get_tree().quit(1)
+		return
 	if not _doc_runs.is_empty():
 		_next_doc_run()
 		return
@@ -205,7 +201,7 @@ func _spawn() -> void:
 	if _pin != null:
 		_pin.set("body", _car)
 	# Strip top is y=0; wheels just touching, no spawn drop onto the springs.
-	MeasureRig.place(_car, Transform3D(Basis.IDENTITY, Vector3(0.0, _car.rest_ride_height(), START_Z)))
+	MeasureRig.place(_car, Transform3D(Basis.IDENTITY, Vector3(0.0, _car.rest_ride_height(), 0.0)))
 	_car.contact_monitor = true
 	_car.max_contacts_reported = 8
 	for i in PH_NAMES.size():
@@ -220,7 +216,7 @@ func _spawn() -> void:
 	var gd: GroundDriveSpec = _car.spec.ground_drive
 	print("=== semi rear-drag probe: %s ===" % _variant)
 	print("  mass %.0f kg, com %s, wheelbase %.2f m" % [_car.spec.mass, _car.spec.center_of_mass,
-			_wheelbase()])
+			MeasureRig.wheelbase_of(_car.spec)])
 	print("  wheel_positions %s" % [gd.wheel_positions])
 	if _csv_suffix != "":
 		print("  run overrides applied:%s" % _csv_suffix)
@@ -617,16 +613,16 @@ func _advance(s: Dictionary) -> void:
 				MeasureRig.drive(100.0, 0.0)
 		Ph.P6:
 			if _pt >= THROTTLE_S:
-				# Re-laid on the skid pad, because a rig at full lock leaves the 40 m strip at
-				# once. The respawn is the only correct way to move a jointed rig: it re-lays
-				# the trailer at its coupled pose and resets both sets of wheels.
+				# Re-laid at the origin, where the launch began. The respawn is the only correct way
+				# to move a jointed rig: it re-lays the trailer at its coupled pose and resets both
+				# sets of wheels.
 				_car.spawn_transform = Transform3D(Basis.IDENTITY,
-						Vector3(PAD_X, _car.rest_ride_height(), PAD_SIZE * 0.5 - 20.0))
+						Vector3(0.0, _car.rest_ride_height(), 0.0))
 				_car.respawn()
 				_prev_speed = 0.0  # or the teleport reads as an acceleration spike in P7
 				_to_phase(Ph.P7)
 				MeasureRig.drive(100.0, 0.0)
-				print("    moved to the skid pad, accelerating to %.1f km/h"
+				print("    moved back to the origin, accelerating to %.1f km/h"
 						% (_tip_speed * 3.6))
 		Ph.P7:
 			if _sub == 0:
@@ -755,7 +751,7 @@ func _rest_ok() -> bool:
 		step = maxf(step, sum / maxf(xs.size() - 1.0, 1.0))
 	var ok := not _rest_speed.is_empty() and flips_s <= REST_FLIPS_S and step <= REST_STEP_KG
 	print(("rest reading: speed sign changes %.1f /s against %.0f, axle-load step %.2f kg a tick"
-			+ " against %.0f, over %d ticks: %s") % [flips_s, REST_FLIPS_S, step, REST_STEP_KG,
+			+ " against %.2f, over %d ticks: %s") % [flips_s, REST_FLIPS_S, step, REST_STEP_KG,
 			_rest_speed.size(), "PASS" if ok else "FAIL"])
 	return ok
 
@@ -819,12 +815,6 @@ func _trailer_roll_table() -> Array[String]:
 	return lines
 
 
-## Foremost front to rearmost rear station (`BrakeSizing.axle_geometry`), whatever the array order.
-func _wheelbase() -> float:
-	var ax := BrakeSizing.axle_geometry(_car.spec)
-	return float(ax["rear_z"]) - float(ax["front_z"])
-
-
 func _write_csv() -> void:
 	MeasureRig.make_report_dir(REPORT_DIR)
 	var path := "%s%s%s.csv" % [REPORT_DIR, _variant, _csv_suffix]
@@ -847,7 +837,8 @@ func _print_summary() -> void:
 	var spring_max := gd.rear_spring_rate() * gd.rest_length
 	print("\n===== SUMMARY: %s =====" % _variant)
 	print("spec: mass %.0f kg, com %s, wheelbase %.2f m, rest_length %.3f m,"
-			% [_car.spec.mass, _car.spec.center_of_mass, _wheelbase(), gd.rest_length]
+			% [_car.spec.mass, _car.spec.center_of_mass, MeasureRig.wheelbase_of(_car.spec),
+			gd.rest_length]
 			+ " spring_rate %.0f N/m (front), %.0f N/m (rear)" % [gd.spring_rate, gd.rear_spring_rate()])
 	print("       rear dampers: bump %.0f, rebound %.0f N*s/m"
 			% [gd.rear_damper_bump(), gd.rear_damper_rebound()])

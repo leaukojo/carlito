@@ -36,7 +36,7 @@ const VARIANTS := {
 	"hatchback-sports": {"scene": KENNEY + "hatchback-sports.tscn", "family": "car",
 		"desc": "Hot hatchback, limited-slip front diff"},
 	"suv": {"scene": KENNEY + "suv.tscn", "family": "car",
-		"desc": "SUV, Torsen-type centre diff"},
+		"desc": "SUV, Torsen-type centre diff, governed to 180 km/h"},
 	"suv-luxury": {"scene": KENNEY + "suv-luxury.tscn", "family": "car",
 		"desc": "Luxury SUV, Torsen-type centre diff"},
 	"taxi": {"scene": KENNEY + "taxi.tscn", "family": "car",

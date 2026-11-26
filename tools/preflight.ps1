@@ -58,4 +58,8 @@ Announce 'Contract sync check'
 node tools/gen_js_contract.mjs --check
 if ($LASTEXITCODE -ne 0) { Fail 'contract sync' }
 
+Announce 'Guide signals page check'
+node tools/gen_guide_signals.mjs --check
+if ($LASTEXITCODE -ne 0) { Fail 'guide signals page (run node tools/gen_guide_signals.mjs)' }
+
 Write-Host "`nPREFLIGHT PASSED" -ForegroundColor Green

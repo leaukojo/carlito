@@ -1,5 +1,5 @@
 {
-	"version": 67,
+	"version": 68,
 	"notes": [
 		"Carlito signal contract. Defines every signal crossing the sloppyCAN<->game bridge.",
 		"Signals are unique by (name, dir). 'battery' exists in both directions on purpose: in = warning LED, out = battery voltage.",
@@ -42,6 +42,7 @@
 		{ "name": "kmh", "dir": "out", "type": "f32", "unit": "km/h", "range": [0, 300], "vehicles": ["car", "truck", "tractor", "boat", "plane", "drone", "train"], "desc": "Absolute speed for the speedometer." },
 		{ "name": "rpm", "dir": "out", "type": "u16", "unit": "rev/min", "range": [0, 8000], "warn_side": "high", "warn": 6800, "vehicles": ["car", "truck", "tractor", "plane"], "desc": "Engine RPM. Real signal: read out of the drivetrain sim, not derived from speed. 'warn' is the tachometer redline." },
 		{ "name": "gear", "dir": "out", "type": "u8", "unit": "enum", "enum": { "0": "N", "1-24": "D1-D24", "254": "P", "255": "R" }, "vehicles": ["car", "truck", "tractor", "plane", "train"], "desc": "Currently engaged gear (same byte semantics as the 'in' gear): P only where a park pawl is fitted, N where a P request found none. On a CVT (the tractor-cvt variant) a D byte is the mechanical range engaged, D1-D4, changing synchronously as the ratio moves (the live ratio is 'gear_ratio'); R stays R." },
+		{ "name": "gear_top", "dir": "out", "type": "u8", "unit": "count", "vehicles": ["car", "truck", "tractor", "plane", "train"], "desc": "The tallest drive byte this vehicle's gearbox selects (Drivetrain.top_gear): a stepped box's ratio count, a CVT's range count (the tractor-cvt's D1-D4). Fixed per vehicle. 'gear' carries the bus's D1-D24; a byte above this one selects this gear, so a controller offering gears (sloppyCAN's Control panel) caps its selector here rather than at the bus's range. No 'range': a count is a readout, not a scale." },
 		{ "name": "throttle", "dir": "out", "type": "i8", "unit": "%", "range": [-100, 100], "vehicles": ["car", "truck", "tractor", "boat", "plane", "drone", "train"], "desc": "The arbitrated pedal (signed by direction), not the fuel the engine receives: where fitted, the governor, limiter and shift cut act after it, and the delivered fuel shows in engine_load / fuel_rate." },
 		{ "name": "yaw", "dir": "out", "type": "f32", "unit": "rad/s", "range": [-10, 10], "vehicles": ["car", "truck", "tractor", "boat", "plane", "drone", "train"], "desc": "Yaw rate." },
 		{ "name": "accLong", "dir": "out", "type": "f32", "unit": "m/s^2", "range": [-30, 30], "vehicles": ["car", "truck", "tractor", "boat", "plane", "drone", "train"], "desc": "Longitudinal acceleration." },

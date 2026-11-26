@@ -260,6 +260,7 @@ func _update_telemetry(input: VehicleInput, delta: float) -> void:
 	telemetry.kmh = absf(telemetry.speed) * 3.6
 	telemetry.rpm = drivetrain.rpm
 	telemetry.gear_byte = drivetrain.gear_byte
+	telemetry.gear_top = top_gear()
 	if Drivetrain.drives_wheels(spec):
 		telemetry.gear_ratio = drivetrain.gearbox_ratio()
 	telemetry.throttle = input.throttle

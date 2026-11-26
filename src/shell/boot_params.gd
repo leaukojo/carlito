@@ -33,6 +33,19 @@ static func parse_query(query: String) -> Dictionary:
 	return out
 
 
+## The level id a boot with these params loads. A link naming a level gets it; one naming only a
+## vehicle gets that family's home level (LevelRegistry.HOME_LEVELS, the garage's DRIVE rule), so
+## `?vehicle=boat-speed-a` floats on open water instead of the default level refusing the boat
+## and quietly spawning its own car; anything else gets `default_level`.
+static func boot_level(params: Dictionary, default_level: String) -> String:
+	var level := String(params.get("level", ""))
+	if level != "":
+		return level
+	var family := VehicleCatalog.family_of(String(params.get("vehicle", "")))
+	var home := String(LevelRegistry.HOME_LEVELS.get(family, ""))
+	return home if is_level(home) else default_level
+
+
 ## Whether `id` names a level in the registry. Dev fixtures count: level select hides them,
 ## but a deep link (and CARLITO_LEVEL) may name one deliberately.
 static func is_level(id: String) -> bool:

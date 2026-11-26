@@ -30,6 +30,9 @@ const LEVELS: Array[Dictionary] = [
 	{ "id": "rough_ground", "name": "Rough Ground", "scene": "res://src/levels/dev/rough_ground/rough_ground.tscn",
 		"desc": "measure_rough's bump and ditch lanes, asphalt and mud, and an ice pad (spawn IcePad).",
 		"dev": true },
+	{ "id": "chassis_pad", "name": "Chassis Pad", "scene": "res://src/levels/dev/chassis_pad/chassis_pad.tscn",
+		"desc": "The chassis view's check: flat asphalt, a 20 m skid circle ahead and a kerb to ride on the right.",
+		"dev": true },
 ]
 
 ## Where each family drives when the garage is on a level that cannot spawn it: DRIVE loads this
@@ -90,7 +93,9 @@ static func allowed_vehicles_of(scene_path: String) -> Variant:
 	if info != null:
 		return info.allowed_vehicles
 	var shipped: Variant = _shipped_table(SHIPPED_VEHICLES).get(scene_path)
-	return PackedStringArray(shipped) if shipped is Array else null
+	if shipped is Array:
+		return PackedStringArray(shipped)
+	return null
 
 
 ## What the export ships as SHIPPED_VEHICLES: scene path -> allowed families, for every

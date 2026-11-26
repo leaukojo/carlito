@@ -98,10 +98,9 @@ func test_slip_is_the_gap_between_wheel_and_ground_speed() -> void:
 func test_slip_is_unsigned_and_quiet_at_standstill() -> void:
 	# Braking slip (ground outrunning the wheels) reads 0 — J1939 SPN 1858 is unsigned.
 	assert_float(TractorT.slip_pct(5.0, 20.0)).is_equal(0.0)
-	# Below the floor the ratio is meaningless noise, so it reports nothing.
+	# A still axle has no ratio: it reads 0. A crawl reads its true ratio, no floor.
 	assert_float(TractorT.slip_pct(0.0, 0.0)).is_equal(0.0)
-	assert_float(TractorT.slip_pct(TractorT.SLIP_FLOOR_KMH, 0.0)).is_equal(0.0)
-	assert_float(TractorT.slip_pct(TractorT.SLIP_FLOOR_KMH + 0.5, 0.0)).is_equal(100.0)
+	assert_float(TractorT.slip_pct(0.2, 0.1)).is_equal_approx(50.0, 1e-4)
 
 
 # --- ISOBUS guidance curvature -> wheel angle (bypasses the speed-tapered rack) -----------

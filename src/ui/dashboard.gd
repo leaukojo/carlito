@@ -315,6 +315,7 @@ var _size_btn: Button = null  ## the MORE/LESS button, null at OFF
 var _vehicle_type := ""        ## the family the current cluster was built for
 var _built := false            ## bind() has run at least once
 var _shown := false            ## the shell's HUD visibility, ANDed with the density
+var _panel: PanelContainer = null  ## the cluster's panel, the last `_build_layout`'s
 
 
 ## Attach to a running Level and build the cluster for its active vehicle type.
@@ -403,6 +404,14 @@ func _on_size_pressed() -> void:
 		_pins.erase(_vehicle_type)
 	size_pinned.emit(_vehicle_type, key)
 	_apply_visible()
+
+
+## The cluster's top edge (local y), or the bottom edge while nothing is shown: what a HUD piece
+## docked above the dashboard stands on (`ChassisView.dock`).
+func top_edge() -> float:
+	if not visible or not is_instance_valid(_panel):
+		return size.y
+	return _panel.position.y
 
 
 ## Shell's HUD visibility, kept separate from density: neither may clobber the other, since
@@ -530,6 +539,7 @@ func _build_layout(want: int) -> PanelContainer:
 	sb.content_margin_bottom = UiTheme.px(self, PANEL_PAD_Y)
 	panel.add_theme_stylebox_override("panel", sb)
 	add_child(panel)
+	_panel = panel
 
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", int(UiTheme.px(self, SECTION_GAP)))

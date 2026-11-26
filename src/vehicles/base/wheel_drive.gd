@@ -24,10 +24,10 @@ const BRAKE_HALF_PEDAL_G := 0.5
 ## pawl ratchets over the teeth, so P holds nothing at speed.
 const PAWL_ENGAGE_SPEED := 1.0
 ## Spin (rad/s) under which every wheel the pawl locks reads as stopped while the pawl holds: the
-## pass solves the lock before the diffs, which then move the driven wheels' mean by the spread
-## their compliances leave (7.5e-4 on `suv-luxury` parked on 16 %, 2026-10-08). 3.5 mm/s at a car's
-## tread, inside a parking gear's backlash; a wheel an open diff counter-rotates off its lost grip
-## turns rad/s.
+## lock lands the driven wheels' mean on the case, and an axle coupling solved after the centre
+## (the one pass) can still leave a wheel turning against its partner. 3.5 mm/s at a car's tread,
+## inside a parking gear's backlash; a wheel an open diff counter-rotates off its lost grip turns
+## rad/s.
 const LOCK_STUCK_SPIN := 0.01
 
 var wheels: Array[RayWheel] = []
@@ -35,6 +35,13 @@ var wheels: Array[RayWheel] = []
 var rear_diff_locked := false
 ## Front diff state as actually run this tick: the LAB's LOCKED on a driven front pair.
 var front_diff_locked := false
+## Each differential under the gearbox output as it ran this tick, x the front axle's, y the rear
+## axle's, z the centre: its capacity (shaft N·m; 0 open, INF locked or rigid) and the torque it
+## moved between its outputs (shaft N·m; + = from the axle's first wheel to its second, from the
+## rear axle to the front). NAN where none ran: an undriven, unlocked axle, an axle of other than
+## two wheels, a body not driving both axles (`_couple_downstream`).
+var diff_capacity := Vector3(NAN, NAN, NAN)
+var diff_moved := Vector3(NAN, NAN, NAN)
 ## Retarder torque actually applied this tick (Nm), summed over driven rear wheels.
 var retarder_torque_applied := 0.0
 ## Spring-brake application on the rear wheels, 0..1, set by the owner for the next tick (a truck's
@@ -114,6 +121,9 @@ var brake_light_request := false
 ## Roll stability's application this tick, 0..1 of every wheel's declared brake
 ## (`StabilityControl.roll_application`); a towing unit sends its trailer at least as much.
 var _roll_app := 0.0
+## What the unit's own brake chambers hold of it, 0..1 (`StabilityControl.roll_chamber_step`): the
+## share its wheels brake with.
+var _roll_chamber := 0.0
 ## The yaw and roll torques per corner as `tick` adds them to the pedal's
 ## (`StabilityControl.corner_torques`).
 var _esc_brake := Vector4.ZERO
@@ -293,7 +303,7 @@ static func mean_service_level(application: float, esc_brake: Vector4, corner: P
 static func pawl_torque(in_park: bool, gd: GroundDriveSpec, ground_speed: float) -> float:
 	if not in_park or absf(ground_speed) >= PAWL_ENGAGE_SPEED:
 		return 0.0
-	return maxf(gd.park_pawl_torque, 0.0)
+	return gd.park_pawl_torque
 
 
 ## Parking-brake torque (Nm) at one rear wheel: the lever (`handbrake01`) or a truck's spring
@@ -341,7 +351,7 @@ func set_esc_mass(gd: GroundDriveSpec, spec_kg: float, kg: float) -> void:
 func build_dust(body: Node3D, gd: GroundDriveSpec) -> void:
 	if gd.wheel_positions.is_empty():
 		return
-	_dust = _build_dust(gd)
+	_dust = _build_dust()
 	body.add_child(_dust)
 
 
@@ -447,15 +457,8 @@ func esc_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 	var prev_velocity := _esc_velocity
 	_esc_velocity = velocity
 	if not gd.esc_equipped or input.esc_off or esc_reference_k.is_empty():
-		_esc_torque = Vector4.ZERO
-		_slip_est = 0.0
-		_roll_app = 0.0
-		_esc_brake = Vector4.ZERO
-		esc_active = false
-		esc_yaw_active = false
-		esc_roll_active = false
+		_clear_esc()
 		esc_switched_off = gd.esc_equipped and input.esc_off
-		brake_light_request = false
 		drivetrain.esc_cap = 1.0
 		return
 	esc_switched_off = false
@@ -480,7 +483,8 @@ func esc_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 	_roll_app = StabilityControl.roll_application(speed, roll_g,
 			StabilityControl.roll_lift_g(gd.esc_roll_lift_g,
 			roll_load_kg if roll_load_kg > 0.0 else _load_kg()), _roll_app, delta)
-	_esc_brake = StabilityControl.corner_torques(_roll_app, _esc_torque,
+	_roll_chamber = StabilityControl.roll_chamber_step(_roll_chamber, _roll_app, delta)
+	_esc_brake = StabilityControl.corner_torques(_roll_chamber, _esc_torque,
 			Vector2(_brake_front, _brake_rear))
 	esc_yaw_active = _esc_torque != Vector4.ZERO
 	esc_roll_active = _roll_app > 0.0
@@ -488,6 +492,25 @@ func esc_step(body: RigidBody3D, gd: GroundDriveSpec, input: VehicleInput,
 	brake_light_request = StabilityControl.brake_light_request(StabilityControl.roll_retardation(
 			_esc_brake, _esc_torque, _corner, _axle_radius, _load_kg()), brake_light_request)
 	drivetrain.esc_cap = minf(out["throttle_cap"], 1.0 - _roll_app)
+
+
+## Stability control braking nothing, with no slip estimate (`esc_step` off, `respawn`).
+func _clear_esc() -> void:
+	_esc_torque = Vector4.ZERO
+	_slip_est = 0.0
+	_roll_app = 0.0
+	_roll_chamber = 0.0
+	_esc_brake = Vector4.ZERO
+	esc_active = false
+	esc_yaw_active = false
+	esc_roll_active = false
+	brake_light_request = false
+
+
+## Stability control brakes `wheels[i]` this tick, for the yaw or the roll: the torque `esc_step`
+## handed its corner, which `tick` adds to the pedal's.
+func esc_brakes(i: int) -> bool:
+	return _esc_brake[_corner[i]] > 0.0
 
 
 ## What the axles the body drives put down (N): each wheel's peak longitudinal force at its load
@@ -527,7 +550,7 @@ func drive_omega(gd: GroundDriveSpec, input: VehicleInput) -> float:
 
 
 ## The foremost front and rearmost rear anchor z (x front, y rear; m, body space), from the built
-## wheels. INF on a side with no wheel (never a real wheeled body).
+## wheels. INF front, -INF rear on a side with no wheel (never a real wheeled body).
 func _axle_stations() -> Vector2:
 	var front_z := INF
 	var rear_z := -INF
@@ -599,9 +622,8 @@ func guidance_steer_unit(input: VehicleInput, gd: GroundDriveSpec) -> float:
 			/ max_rad
 
 
-## Statement order is load-bearing: resistance reads this tick's spring load so it must follow
-## the wheel loop; the differentials settle every wheel's spin and brake off its step, so they must
-## follow spin integration. `axle_torque` is the rigid crank's (`Drivetrain.process`): 0 where the
+## Statement order is load-bearing: the differentials settle every wheel's spin and brake off its
+## step, so they must follow spin integration. `axle_torque` is the rigid crank's (`Drivetrain.process`): 0 where the
 ## engine drives wheels, whose drive arrives through `drivetrain`'s coupling inside the solve.
 func tick(body: RigidBody3D, spec: VehicleSpec, input: VehicleInput, steer: float,
 		axle_torque: float, ground_speed: float, delta: float,
@@ -714,9 +736,10 @@ func _step_swing(gd: GroundDriveSpec, delta: float) -> void:
 ## shaft frame (`shaft_frame`): every torque here is the shaft's, and a wheel geared at `n` takes
 ## `n` times it. `locked` / `lock_capacity`: the park pawl's driven wheels; `drivetrain`: the crank
 ## in D or R.
-## Order: gearbox output, centre, each axle, settle. COMPROMISE: one pass, so a later coupling moves
-## a mean an earlier one balanced; exact needs nested solves. The crank above a rigid coupling is
-## nested (`_rigid_downstream`). docs/vehicles.md, "The solve order".
+## Order: gearbox output, centre, each axle, settle. The gearbox output is solved over the
+## couplings under it: the pawl's lock always, the crank above a rigid one (`_rigid_downstream`).
+## COMPROMISE: each axle after the centre, so an axle coupling moves a mean the centre balanced;
+## exact needs each axle solved inside the centre's solve. docs/vehicles.md, "The solve order".
 func _couple_differentials(gd: GroundDriveSpec, input: VehicleInput, axle_torque: float,
 		locked := PackedInt32Array(), lock_capacity := 0.0, drivetrain: Drivetrain = null) -> void:
 	_coupling.fill(0.0)
@@ -735,8 +758,13 @@ func _couple_differentials(gd: GroundDriveSpec, input: VehicleInput, axle_torque
 	var lock_holds := false
 	if not locked.is_empty() and lock_capacity > 0.0:
 		# Torque the case takes off the output, split over the driven wheels like a drive torque:
-		# it is what the diffs carry in P, so it sizes a biasing diff's capacity too.
-		var lock := -_coupling_torque(locked, PackedInt32Array(), lock_capacity, 0.0, 0.0)
+		# it is what the diffs carry in P, so it sizes a biasing diff's capacity too. Solved over
+		# them: it stops the output once the couplings under it have moved the driven wheels' mean.
+		var base := shaft_torque
+		var lock := Differential.falling_root(
+				func(t: float) -> float: return -_settled_drive_spin(gd, locked, base, t,
+						front_driven, rear_driven),
+				lock_capacity)
 		lock_holds = absf(lock) < lock_capacity
 		_share(locked, lock)
 		for i in locked:
@@ -792,33 +820,39 @@ func _couple_downstream(gd: GroundDriveSpec, shaft_torque: float, front_driven: 
 	var per_wheel := shaft_torque / maxf(1.0, _driven_count)
 	var front_in := per_wheel * _front.size() if front_driven else 0.0
 	var rear_in := per_wheel * _rear.size() if rear_driven else 0.0
+	# The lock's and the crank's solves probe this pass before its last call: that call's readout
+	# stands.
+	diff_capacity = Vector3(NAN, NAN, NAN)
+	diff_moved = Vector3(NAN, NAN, NAN)
 	if front_driven and rear_driven:
 		var centre_cap := INF if gd.centre_diff_rigid \
 				else Differential.bias_capacity(shaft_torque, gd.centre_diff_bias)
 		# Positive moves torque from the rear axle to the front one.
 		var t := _coupling_torque(_rear, _front, centre_cap)
+		diff_capacity.z = centre_cap
+		diff_moved.z = t
 		if t != 0.0:
 			_share(_rear, -t)
 			_share(_front, t)
 			rear_in -= t
 			front_in += t
 	if front_diff_locked:
-		_couple_axle(_front, INF)
+		_couple_axle(_front, INF, 0)
 	elif front_driven:
 		_couple_axle(_front, Differential.bias_capacity(front_in,
-				axle_bias(gd.diff_bias_front, _axle_diff)))
+				axle_bias(gd.diff_bias_front, _axle_diff)), 0)
 	if rear_diff_locked:
-		_couple_axle(_rear, INF)
+		_couple_axle(_rear, INF, 1)
 	elif rear_driven:
 		_couple_axle(_rear, Differential.bias_capacity(rear_in,
-				axle_bias(gd.diff_bias_rear, _axle_diff)))
+				axle_bias(gd.diff_bias_rear, _axle_diff)), 1)
 
 
 ## A rigid coupling sits under the gearbox output: MFWD's centre, or an axle lock on a driven axle.
 ## The one-pass order shares the output's torque equally (the open-diff law) and lands the crank on
 ## the driven wheels' arithmetic mean; a rigid coupling then re-lands them on its compliance-weighted
 ## mean. A light, free wheel beside a loaded one (the tractor's fronts on a steep grade) sits far
-## above it in the first, so a locked clutch held its crank at up to 3x its wheels' spin, every tick
+## above it in the first, so a locked clutch would hold its crank at up to 3x its wheels' spin, every tick
 ## (docs/vehicles.md, "The solve order"). A biasing coupling moves no more than its capacity.
 func _rigid_downstream(gd: GroundDriveSpec, front_driven: bool, rear_driven: bool) -> bool:
 	return (front_driven and rear_driven and gd.centre_diff_rigid) \
@@ -864,11 +898,16 @@ func _report_to_controller(gd: GroundDriveSpec, input: VehicleInput,
 
 
 ## Couple the two wheels of one axle through a diff of `capacity` (shaft torque); only a two-wheel
-## axle is a differential.
-func _couple_axle(axle: PackedInt32Array, capacity: float) -> void:
-	if axle.size() != 2 or capacity <= 0.0:
+## axle is a differential. Records it in `diff_capacity` / `diff_moved` at `k` (0 front, 1 rear).
+func _couple_axle(axle: PackedInt32Array, capacity: float, k: int) -> void:
+	if axle.size() != 2:
+		return
+	diff_capacity[k] = capacity
+	diff_moved[k] = 0.0
+	if capacity <= 0.0:
 		return
 	var t := _coupling_torque(axle.slice(0, 1), axle.slice(1, 2), capacity)
+	diff_moved[k] = t
 	_coupling[axle[0]] -= t * _ratio[axle[0]]
 	_coupling[axle[1]] += t * _ratio[axle[1]]
 
@@ -1055,17 +1094,12 @@ func respawn() -> void:
 	_hold = Vector2.ZERO
 	hill_holding = false
 	_drive_torque = 0.0
-	_esc_torque = Vector4.ZERO
-	_slip_est = 0.0
+	_clear_esc()
 	_esc_velocity = Vector3(NAN, NAN, NAN)
-	_roll_app = 0.0
-	_esc_brake = Vector4.ZERO
-	esc_active = false
-	esc_yaw_active = false
-	esc_roll_active = false
 	esc_switched_off = false
-	brake_light_request = false
 	_swing_turn = 0.0
+	diff_capacity = Vector3(NAN, NAN, NAN)
+	diff_moved = Vector3(NAN, NAN, NAN)
 	for w in wheels:
 		w.reset()
 	if _dust != null:
@@ -1073,12 +1107,10 @@ func respawn() -> void:
 		_dust.emitting = false
 
 
-func _build_dust(gd: GroundDriveSpec) -> GPUParticles3D:
+func _build_dust() -> GPUParticles3D:
 	var pm := ParticleProcessMaterial.new()
-	var half_track := 0.6  ## spans rear track width so dust reads as coming from both wheels
-	for pos in gd.wheel_positions:
-		if RayWheel.is_rear_z(pos.z):
-			half_track = maxf(half_track, absf(pos.x))
+	# Spans the rear track so the dust reads as coming from both wheels.
+	var half_track := maxf(0.6, _half_track.y)
 	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
 	pm.emission_box_extents = Vector3(half_track, 0.1, 0.25)
 	pm.direction = Vector3(0.0, 1.0, 0.0)

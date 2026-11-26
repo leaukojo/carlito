@@ -19,7 +19,7 @@ const SPEC_OVERRIDABLE := {
 }
 const DRIVE_OVERRIDABLE := {
 	"rolling_resistance": "crr", "mu_long": "mu_long", "mu_lat": "mu_lat",
-	"rear_lat_grip": "rear_lat_grip",
+	"rear_lat_grip": "rear_lat_grip", "rear_tyre_rating": "rear_tyre_rating",
 	"max_steer_deg": "max_steer_deg", "ackermann": "ackermann",
 	# Brake hardware: declared classes, never derived (the split is; see the brake test below).
 	"brake_torque": "brake_torque", "handbrake_torque": "handbrake_torque",
@@ -66,6 +66,8 @@ const DRIVELINE_FLAGS := ["rear_diff_lockable", "front_axle_engageable", "retard
 		"rear_twin_tyres"]
 ## One machine's spec scalars: off (0) unless its variant declares them, never on a baseline.
 const MACHINE_SCALARS := {"pto_mode_rpm": "pto_mode_rpm"}
+## One body's measured ground-drive tables: empty unless its variant declares them.
+const MACHINE_TABLES := ["esc_roll_lift_g"]
 ## Driven flags: must not default to false (missing key means baseline's answer).
 const DRIVEN_FLAGS := ["driven_front", "driven_rear"]
 ## The stock tyre: its fit and its class id (`TyreCatalog`).
@@ -216,6 +218,15 @@ func test_machine_scalars_match_the_recipe_and_default_off() -> void:
 			assert_float(float(_spec_of(variant).get(field))) 					.override_failure_message("%s_spec.tres %s" % [variant, field]) 					.is_equal(float(ov.get(MACHINE_SCALARS[field], 0.0)))
 
 
+func test_machine_tables_match_the_recipe_and_default_empty() -> void:
+	for variant: String in Gen.VARIANTS:
+		var ov: Dictionary = Gen.VARIANTS[variant]
+		for field: String in MACHINE_TABLES:
+			assert_that(_spec_of(variant).ground_drive.get(field)) \
+					.override_failure_message("%s_spec.tres %s" % [variant, field]) \
+					.is_equal(PackedVector2Array(ov.get(field, [])))
+
+
 ## A rear's roll and compliance steer describe one axle: an entry that sets one sets the other, so a
 ## multi-link or leaf variant never inherits the twist beam's compliance figure.
 func test_every_entry_that_sets_a_rears_roll_steer_sets_its_compliance_steer() -> void:
@@ -259,6 +270,7 @@ func test_no_variant_overrides_a_baseline_only_field() -> void:
 	honoured.append_array(DRIVEN_FLAGS)
 	honoured.append_array(TYRE_KEYS)
 	honoured.append_array(MACHINE_SCALARS.values())
+	honoured.append_array(MACHINE_TABLES)
 	for variant: String in Gen.VARIANTS:
 		for key: String in Gen.VARIANTS[variant]:
 			assert_bool(honoured.has(key)) \

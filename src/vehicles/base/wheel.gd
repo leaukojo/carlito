@@ -91,19 +91,25 @@ var in_contact := false
 var suspension_force := 0.0
 var slip := 0.0         ## |longitudinal slip ratio|, for dust and the measure tools
 var slip_size := 0.0    ## size of the (slip ratio, side slip) pair the tyre reads; contract 'slip'
+## Length of the slip vector the grip curve read this tick, the side slip over its own peak
+## (`combined_slip_force`'s); 0 off the ground. Past `peak_slip` the tyre slides (`past_peak`).
+var combined_slip := 0.0
 var long_slip := 0.0    ## signed longitudinal slip ratio this tick (+ = wheel faster than the road)
 var slide_speed := 0.0  ## m/s the tread moves over the road along the wheel this tick (tyre smoke)
 var abs_active := false ## the anti-lock held this wheel's brake back this tick
 var tcs_active := false ## traction control held this wheel's drive back this tick
 var force_long := 0.0   ## last tick's longitudinal tire force (N, +=forward); the next tick's link force reads it (`link_slope`)
-## Last tick's rolling resistance (N, + = forward), the tyre's and the ground's: the torque the
-## rolling moment reacted (`roll_reacted`) over the radius. A readout: the tyre's `force_long`
-## carries it to the body.
+## Last tick's rolling resistance of the tyre (N, + = forward): the torque the rolling moment
+## reacted (`roll_reacted`) over the radius. A readout: the tyre's `force_long` carries it to the
+## body.
 var force_roll := 0.0
+## Last tick's soil resistance (N, + = forward, `_soil_force`): a force on the body at the hub,
+## beside the tyre's; 0 off a painted surface and off the ground.
+var force_soil := 0.0
 ## Last tick's lateral tire force (N, post friction circle, + = right); the next tick's compliance
 ## steer reads it through the latch (`latch_bar`).
 var force_lat := 0.0
-## Last tick's whole force on the body at the patch (N, world): suspension and tyre; zero
+## Last tick's whole force on the body at the wheel (N, world): suspension, tyre and soil; zero
 ## off the ground. A coupling's force reads off the bodies' balance with it (`measure_grade`).
 var contact_force := Vector3.ZERO
 ## Hard-road rolling resistance coefficient of this wheel's tyre: the spec's stock
@@ -208,7 +214,8 @@ var corner_mass: float
 ## The load laws' reference load (N), fixed at spawn: the spec's even corner share
 ## (`corner_mass * g` as built, as `BrakeSizing.wheel_grip` reads it), a towed body's its bogie's
 ## static share (`TowedBody`). A hopper's, an implement's or a kingpin's load moves the tyre along
-## its law (Pacejka's fixed nominal load, `docs/handling.md` § Balance), never the reference.
+## its law (Pacejka's fixed nominal load, `docs/handling.md` § Balance), never the reference. The
+## side laws read a rated rear's own (`lateral_reference_load`).
 var reference_load: float
 ## Tighten the one-tick caps and the patch spring below `corner_mass` where the body's own tensor
 ## says the contacts move less mass, across the wheel (roll, yaw) and along it (pitch, yaw):
@@ -239,6 +246,9 @@ var link_slope := 0.0
 ## This axle's side-grip multiple on `mu_lat`: `GroundDriveSpec.rear_lat_grip` at the rear, 1 at
 ## the front.
 var axle_lat_grip := 1.0
+## This axle's tyre rating over the front's: `GroundDriveSpec.rear_tyre_rating` at the rear, 1 at the
+## front (`lateral_reference_load`).
+var lat_rating := 1.0
 ## The share of this corner's load one of its tyres carries, which the side grip and the
 ## cornering-stiffness law read: 0.5 on a twin rear (`GroundDriveSpec.rear_twin_tyres`), else 1.
 var tyre_share := 1.0
@@ -264,6 +274,9 @@ var _prev_compression := 0.0
 ## Contact-patch deflection (m; x along the wheel's forward, y along its side), the static-friction
 ## spring's state: grows with the patch's slide, decays as it rolls, 0 above STICK_SPEED.
 var _stick := Vector2.ZERO
+## The soil's rut deflection (m, along the wheel), its hold's state (`_soil_force`): the contact's
+## travel integrated below STICK_SPEED, 0 above it and off a painted surface.
+var _rut := 0.0
 ## The brake held this wheel at zero spin at its last settle, the differentials' torque included:
 ## only then does the patch spring act along the wheel. A free wheel's spin carries a few kg of
 ## equivalent mass, which a spring would ring at 60 Hz; and an unbraked wheel should roll down a
@@ -272,7 +285,7 @@ var _spin_held := false
 ## This tick's patch, stored by `tick` for `apply_patch`: the tyre's axes (world), the contact's
 ## speed along and across them (m/s), the slip denominator, both budgets and cap masses, the side
 ## slip's peak, the patch spring's force (N; `_patch_sticks` while it acts) and a held wheel's
-## force range, and the tick's grip curve and step.
+## force range, the hub the soil acts at (world), and the tick's grip curve and step.
 var _patch_forward := Vector3.ZERO
 var _patch_side := Vector3.ZERO
 var _patch_v_long := 0.0
@@ -286,6 +299,7 @@ var _patch_spring := Vector2.ZERO
 var _patch_sticks := false
 var _patch_held := false
 var _patch_hold := Vector2.ZERO
+var _patch_hub := Vector3.ZERO
 var _patch_curve := PackedVector2Array()
 var _patch_delta := 0.0
 ## Last tick's `compression`, latched by `latch_bar` for the whole body before any wheel ticks, so
@@ -334,6 +348,7 @@ func apply_suspension(gd: GroundDriveSpec) -> void:
 	compliance_steer_coeff = gd.compliance_steer_rear if is_rear else 0.0
 	link_slope = gd.anti_squat_slope if is_rear else -gd.anti_dive_slope
 	axle_lat_grip = gd.rear_lat_grip if is_rear else 1.0
+	lat_rating = gd.rear_tyre_rating if is_rear else 1.0
 	tyre_share = 0.5 if is_rear and gd.rear_twin_tyres else 1.0
 	wheel_radius = gd.axle_radius(is_rear)
 	wheel_inertia = gd.axle_inertia(is_rear)
@@ -370,12 +385,14 @@ func reset() -> void:
 	suspension_force = 0.0
 	slip = 0.0
 	slip_size = 0.0
+	combined_slip = 0.0
 	long_slip = 0.0
 	slide_speed = 0.0
 	abs_active = false
 	tcs_active = false
 	force_long = 0.0
 	force_roll = 0.0
+	force_soil = 0.0
 	force_lat = 0.0
 	surface_grip = 1.0
 	surface_drag = 0.0
@@ -393,6 +410,7 @@ func reset() -> void:
 	coupled_torque = 0.0
 	lock_torque = 0.0
 	_stick = Vector2.ZERO
+	_rut = 0.0
 	_spin_held = false
 	swing = 0.0
 	contact_force = Vector3.ZERO
@@ -464,16 +482,19 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		suspension_force = 0.0
 		slip = 0.0
 		slip_size = 0.0
+		combined_slip = 0.0
 		long_slip = 0.0
 		slide_speed = 0.0
 		abs_active = false
 		force_long = 0.0
 		force_roll = 0.0
+		force_soil = 0.0
 		force_lat = 0.0
 		contact_normal = Vector3.UP
 		surface_grip = 1.0
 		surface_drag = 0.0
 		_stick = Vector2.ZERO
+		_rut = 0.0
 		contact_force = Vector3.ZERO
 		patch_force = Vector3.ZERO
 		patch_point = Vector3.ZERO
@@ -549,8 +570,9 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 	_patch_long_mass = long_mass
 	_patch_lat_mass = lat_mass
 	# A twin pair at half load each: `mu(L / 2) * L` over `2 C(L / 2)` is this at `L / 2`.
-	_patch_lat_peak = lateral_peak_slip(suspension_force * tyre_share, reference_load,
+	_patch_lat_peak = lateral_peak_slip(suspension_force * tyre_share, lateral_reference_load(),
 			drive_spec.load_sensitivity, drive_spec.cornering_peak_load)
+	_patch_hub = hub
 	_patch_curve = drive_spec.grip_curve
 	_patch_delta = delta
 	# The start slip's force sizes the spin step (its reaction) and nothing else: the body takes the
@@ -584,21 +606,20 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 		f = _with_spring(f)
 	else:
 		_stick = Vector2.ZERO
+	# The soil's rut winds on the contact's travel where its hold fades in (`_soil_force`).
+	_rut = _rut - v_long * delta if stick_w > 0.0 and surface_drag > 0.0 else 0.0
 
 	# The step's stiffness at zero slip, where the secant has none: the curve's first slope under the
 	# one-tick cap.
 	var zero_slip_k := minf(budget_long * zero_slip_rise(drive_spec.grip_curve) / slip_denom,
 			long_mass / delta) * wheel_radius * wheel_radius * delta / wheel_inertia
-	# Rolling resistance, the tyre's hysteresis (`rolling_crr`) and the ground deforming
-	# (`surface_drag`): a moment on the wheel (the patch's pressure centre sits ahead of the axle),
-	# the settle law's first stage (`settle_spin`), so it stops a wheel and never reverses it and the
-	# tyre carries it to the road under its one cap. Never in `hold_torque`: every undriven wheel
-	# would stand held through the first STICK_SPEED of a launch.
-	# COMPROMISE: the ground's share is a force on the wheel in a real soil (its pressure passes
-	# through the axle) and costs a driven wheel slip; as a moment, a driven wheel's own soil drag
-	# costs engine torque and no slip. Undoing it is a capped force at the contact, with a stick test
-	# that sees every other force on the contact's speed.
-	var roll_torque := (rolling_crr + surface_drag) * suspension_force * wheel_radius
+	# The tyre's rolling resistance (`rolling_crr`, its hysteresis): a moment on the wheel (the
+	# patch's pressure centre sits ahead of the axle), the settle law's first stage (`settle_spin`),
+	# so it stops a wheel and never reverses it and the tyre carries it to the road under its one
+	# cap. Never in `hold_torque`: every undriven wheel would stand held through the first
+	# STICK_SPEED of a launch. The ground's share is no moment: a soil's pressure passes through the
+	# axle, a force on the body (`_soil_force`).
+	var roll_torque := rolling_crr * suspension_force * wheel_radius
 	_integrate_spin(drive_torque, -f.x * wheel_radius, brake_torque, delta, slip_vel, v_long,
 			abs_slip, tcs_slip, tcs_drive, floor_vel, zero_slip_k, roll_torque)
 	if not coupled_spin:
@@ -607,11 +628,11 @@ func tick(body: RigidBody3D, drive_spec: GroundDriveSpec, space: PhysicsDirectSp
 
 
 ## Push the body with this tick's tyre force at the slip the spin step settled on: after
-## `settle_spin` (and `hold_by_lock`), so the body and the wheel's step exchange one force.
-## `tick` stores the patch; a `coupled_spin` wheel's owner calls this once its differentials
-## have settled, any other wheel at the end of its own `tick`. Nothing off the ground. Sets the
-## tick's tyre readouts (`force_long`, `force_lat`, `long_slip`, `slip`, `slip_size`,
-## `slide_speed`, `contact_force`).
+## `settle_spin` (and `hold_by_lock`), so the body and the wheel's step exchange one force; and
+## with the soil's (`_soil_force`) at the hub. `tick` stores the patch; a `coupled_spin` wheel's
+## owner calls this once its differentials have settled, any other wheel at the end of its own
+## `tick`. Nothing off the ground. Sets the tick's tyre readouts (`force_long`, `force_lat`,
+## `force_soil`, `long_slip`, `slip`, `slip_size`, `combined_slip`, `slide_speed`, `contact_force`).
 func apply_patch(body: RigidBody3D) -> void:
 	if not in_contact:
 		return
@@ -620,6 +641,7 @@ func apply_patch(body: RigidBody3D) -> void:
 	long_slip = slip_vel / _patch_denom
 	slip = absf(long_slip)
 	slip_size = Vector2(long_slip, -_patch_v_lat / _patch_denom).length()
+	combined_slip = Vector2(long_slip, -_patch_v_lat / _patch_denom / _patch_lat_peak).length()
 	var f := _slip_force(slip_vel)
 	if _patch_sticks:
 		f = _with_spring(f)
@@ -627,10 +649,26 @@ func apply_patch(body: RigidBody3D) -> void:
 	body.apply_force(_patch_forward * f.x + _patch_side * f.y, at)
 	force_long = f.x
 	force_lat = f.y
-	contact_force = contact_normal * suspension_force + _patch_forward * f.x + _patch_side * f.y
+	force_soil = _soil_force(f.x)
+	if force_soil != 0.0:
+		body.apply_force(_patch_forward * force_soil, _patch_hub - body.global_position)
+	contact_force = contact_normal * suspension_force + _patch_forward * (f.x + force_soil) \
+			+ _patch_side * f.y
 	if on_beam:
 		patch_force = body.global_transform.basis.transposed() * contact_force
 		patch_point = body.global_transform.affine_inverse() * contact_point
+
+
+## The friction ellipse's budgets (N; x along the wheel, y across) this tick's tyre force was
+## solved on (`long_budget`, `lat_budget`), as stored by `tick`; ZERO off the ground.
+func patch_budget() -> Vector2:
+	return _patch_budget if in_contact else Vector2.ZERO
+
+
+## The tyre slides this tick: its combined slip is past the grip curve's peak (`peak_slip`), where
+## more slip gives less grip. False off the ground.
+func past_peak() -> bool:
+	return in_contact and combined_slip > peak_slip(_patch_curve)
 
 
 ## The tyre's slip force (N; x along the wheel, y across) at slip velocity `slip_vel` (m/s) along
@@ -652,6 +690,31 @@ func _with_spring(f: Vector2) -> Vector2:
 	if _patch_held:
 		f.x = clampf(f.x, _patch_hold.x, _patch_hold.y)
 	return f
+
+
+## The soil's resistance this tick (N, along the wheel, + = forward): its stresses on the sunken arc
+## pass through the axle, so `surface_drag * N` acts on the body at the hub against the contact's
+## travel, outside the tyre's budget. Never past that drag, in two parts:
+## - the stop, under the one-tick cap on the travel, which alone never reverses it; on a held wheel
+##   (its slip is the travel) it takes what the tyre's `f_long` against it leaves of the cap;
+## - below STICK_SPEED the hold, a rut spring (the patch spring's stiffness on the drag) faded in as
+##   the tyre's is: it holds whatever creep the cap lets through, as static friction does. Pulled
+##   back to the room the stop leaves, it winds only in that creep and stores no push-back.
+func _soil_force(f_long: float) -> float:
+	var drag := surface_drag * suspension_force
+	if drag <= 0.0:
+		return 0.0
+	var v := _patch_v_long
+	var cap := _patch_long_mass * absf(v) / _patch_delta
+	if _patch_held:
+		cap = maxf(cap - maxf(-signf(v) * f_long, 0.0), 0.0)
+	var stop := -signf(v) * minf(drag, cap)
+	var stick_w := clampf(1.0 - Vector2(v, _patch_v_lat).length() / STICK_SPEED, 0.0, 1.0)
+	var k := stick_stiffness(drag, _patch_long_mass, _patch_delta)
+	if stick_w <= 0.0 or k <= 0.0:
+		return stop
+	_rut = clampf(_rut, (-drag - stop) / k, (drag - stop) / k)
+	return stop + stick_w * k * _rut
 
 
 ## Pair each wheel with the one across its axle (same z, opposite side) for the anti-roll bar and
@@ -885,7 +948,7 @@ static func first_carried(pairs: Array[Vector3], margin: float, up: Vector3, hub
 ## and `contact_collider`; false when nothing the spring can carry is under the tyre (`carries`).
 ## The engine's sweep leaves out, whole, a body it starts inside, and its rest test names the
 ## deepest contact of all: where the sweep hit past a body it left out, or the rest test names a
-## contact the spring cannot carry (`_contact_pass`), the wheel sweeps again by contact
+## contact the spring cannot carry or none (`_contact_pass`), the wheel sweeps again by contact
 ## (`_carried_sweep`). `settled_drop` closes the sweep's bisection step
 ## (`docs/vehicles.md` § Physics derivations and figures).
 func _contact_query(space: PhysicsDirectSpaceState3D, body: RigidBody3D, ray_from: Vector3,
@@ -963,7 +1026,8 @@ static func query_basis(wheel_basis: Basis, frame_up: Vector3) -> Basis:
 
 ## The engine's sweep and the rest test where it stops. A contact the spring cannot carry is not
 ## the tread's: it is no contact, and sets `_swept_past`; so does a sweep that hit past a body the
-## tyre starts inside.
+## tyre starts inside, and a stop the rest test reads clear there and a step on (the sweep's hull
+## touching what the cylinder does not: a wall parallel to the tyre's side).
 func _contact_pass(space: PhysicsDirectSpaceState3D, ray_from: Vector3, up: Vector3,
 		wheel_basis: Basis, rest_length: float) -> bool:
 	var motion := -up * rest_length
@@ -1000,28 +1064,25 @@ func _contact_pass(space: PhysicsDirectSpaceState3D, ray_from: Vector3, up: Vect
 		unsafe_drop += rest_length * (fractions[1] - fractions[0])
 		_query.transform.origin = ray_from - up * unsafe_drop
 		rest = space.get_rest_info(_query)
-	if not rest.is_empty() and not carries(rest["normal"], up):
+	if rest.is_empty() or not carries(rest["normal"], up):
 		_swept_past = true
 		return false
 	if fractions[1] <= 0.0:
 		start_overlaps += 1
 	contact_collider = rest.get("collider_id", 0)
-	_contact_drop = safe_drop
-	_contact_normal = up
-	if not rest.is_empty():
-		_contact_normal = rest["normal"]
-		var support := cylinder_support(_contact_normal, wheel_basis.x, wheel_radius, half_width,
-				_convex_radius)
-		var gap := (_query.transform.origin - (rest["point"] as Vector3)).dot(_contact_normal) \
-				- support
-		# On a face the rest test's point and normal are the same from either of the engine's
-		# shapes, so `gap` is the rounded tyre's; a sweep that touched on the sharp one stops up to
-		# the two supports' difference short of it. Clamped at the stop, the reading steps by that
-		# difference each time a leaned wheel sinks through one.
-		var normal_up := _contact_normal.dot(up)
-		var reach := (cylinder_support(_contact_normal, wheel_basis.x, wheel_radius, half_width)
-				- support) / normal_up
-		_contact_drop = settled_drop(safe_drop, unsafe_drop, gap, normal_up, reach)
+	_contact_normal = rest["normal"]
+	var support := cylinder_support(_contact_normal, wheel_basis.x, wheel_radius, half_width,
+			_convex_radius)
+	var gap := (_query.transform.origin - (rest["point"] as Vector3)).dot(_contact_normal) \
+			- support
+	# On a face the rest test's point and normal are the same from either of the engine's
+	# shapes, so `gap` is the rounded tyre's; a sweep that touched on the sharp one stops up to
+	# the two supports' difference short of it. Clamped at the stop, the reading steps by that
+	# difference each time a leaned wheel sinks through one.
+	var normal_up := _contact_normal.dot(up)
+	var reach := (cylinder_support(_contact_normal, wheel_basis.x, wheel_radius, half_width)
+			- support) / normal_up
+	_contact_drop = settled_drop(safe_drop, unsafe_drop, gap, normal_up, reach)
 	return true
 
 
@@ -1063,10 +1124,16 @@ func long_budget(gd: GroundDriveSpec) -> float:
 
 
 ## Its lateral budget (N): `mu_lat` on the axle's and the surface's grip, scaled at one tyre's share of
-## the load (a twin pair at half each), times the whole spring load.
+## the load (a twin pair at half each) against the axle's rated reference, times the whole spring load.
 func lat_budget(gd: GroundDriveSpec) -> float:
 	return load_scaled_mu(gd.mu_lat * axle_lat_grip * surface_grip, suspension_force * tyre_share,
-			reference_load, gd.load_sensitivity) * suspension_force
+			lateral_reference_load(), gd.load_sensitivity) * suspension_force
+
+
+## The reference load (N) the side laws read: `reference_load` times this axle's tyre rating
+## (`lat_rating`), the Magic Formula's `Fz0` of the tyre this axle wears.
+func lateral_reference_load() -> float:
+	return reference_load * lat_rating
 
 
 ## Tyre mu at a load off the corner's static reference: `mu * (1 - sensitivity * log2(load / ref))`,
@@ -1217,6 +1284,18 @@ static func zero_slip_rise(grip_curve: PackedVector2Array) -> float:
 		if p.x > 0.0:
 			return minf(p.y, 1.0) / p.x
 	return 0.0
+
+
+## The combined slip at which `grip_curve`'s grip, capped at 1 as the tyre reads it
+## (`combined_slip_force`), first reaches its highest: the curve's peak. 0 for an empty curve.
+static func peak_slip(grip_curve: PackedVector2Array) -> float:
+	var at := 0.0
+	var best := -INF
+	for p in grip_curve:
+		if minf(p.y, 1.0) > best:
+			best = minf(p.y, 1.0)
+			at = p.x
+	return at
 
 
 ## Wheel spin from drive plus road-reaction torque, semi-implicit (an explicit step rings at the

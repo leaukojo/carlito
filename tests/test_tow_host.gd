@@ -196,57 +196,87 @@ func test_both_pitch_stops_clear_the_steepest_grade_their_machine_can_climb() ->
 
 # --- the plate's own friction ---------------------------------------------------------------------
 
+## The kingpin load (N) of the plate law's source run: [216] App. B, scenario 1, 9050 kg.
+const SOURCE_KINGPIN_N := 9050.0 * BrakeSizing.G
+
+
 func test_the_plate_carries_friction_and_the_pin_does_not() -> void:
 	# A greased fifth wheel is two steel faces rubbing under several tonnes, not a free hinge; a pin
 	# through an eye is nearly free. This is the fourth number that makes a drawbar a drawbar.
-	var plate := _profile_of(FifthWheelScript).yaw_friction_nm
-	var pin := _profile_of(DrawbarScript).yaw_friction_nm
-	# The order a real plate carries, so a decimal point cannot slip unnoticed.
+	var plate := _profile_of(FifthWheelScript).yaw_friction_moment(0.1, SOURCE_KINGPIN_N)
+	var pin := _profile_of(DrawbarScript).yaw_friction_moment(0.1, SOURCE_KINGPIN_N)
+	# The order the source's plate carries (in service, peaks of 3.5 kN*m at this load), so a
+	# decimal point or a degree-radian slip cannot pass unnoticed.
 	assert_float(plate).override_failure_message(
-			"the plate became a free hinge").is_between(1000.0, 3000.0)
+			"the plate became a free hinge").is_between(1000.0, 3500.0)
 	assert_float(pin).override_failure_message("a pin in an eye does not rub").is_equal(0.0)
 
 
-func test_the_friction_opposes_the_relative_rate_and_never_re_centres() -> void:
-	# Coulomb, so the magnitude is the same at any rate and the SIGN is the whole model: it damps
-	# the swing, it never pulls the trailer back toward straight. A spring would be a plate that
-	# steers, which is not a plate.
-	var friction: float = FifthWheelScript.YAW_FRICTION_NM
-	# Plenty of inertia, so the one-tick cap is nowhere near binding.
-	var big := 1.0e6
-	var right := Articulation.yaw_friction_torque(0.5, friction, big, DELTA)
-	var left := Articulation.yaw_friction_torque(-0.5, friction, big, DELTA)
-	assert_float(right).is_equal_approx(-friction, 1e-9)
-	assert_float(left).is_equal_approx(friction, 1e-9)
-	# Same magnitude at a tenth the rate: no velocity term anywhere in it.
-	var gentle := Articulation.yaw_friction_torque(0.05, friction, big, DELTA)
-	assert_float(absf(gentle)).is_equal_approx(friction, 1e-9)
-
-
-func test_the_friction_is_zero_at_zero_relative_rate() -> void:
-	# Nothing to rub against: a rig tracking straight, and a trailer already yawing WITH its
-	# tractor, both read a dead plate. Otherwise the pair would be a torque out of nowhere.
-	var friction: float = FifthWheelScript.YAW_FRICTION_NM
-	assert_float(Articulation.yaw_friction_torque(0.0, friction, 1.0e6, DELTA)).is_equal(0.0)
-	# ...and a coupling that declares none is dead at any rate, which is what keeps the pin free.
+func test_the_plate_law_is_dead_at_zero_rate_and_at_zero_load() -> void:
+	# Nothing to rub against: a rig tracking straight, a trailer already yawing WITH its tractor, and
+	# a plate nothing presses on all read a dead plate. Otherwise the pair is a torque from nowhere.
+	var plate := _profile_of(FifthWheelScript)
+	assert_float(plate.yaw_friction_moment(0.0, SOURCE_KINGPIN_N)).is_equal(0.0)
+	assert_float(plate.yaw_friction_moment(0.5, 0.0)).is_equal(0.0)
+	# ...and a dead law applies nothing at any rate, which is what keeps the pin free.
 	assert_float(Articulation.yaw_friction_torque(1.0, 0.0, 1.0e6, DELTA)).is_equal(0.0)
 
 
-func test_one_tick_may_at_most_stop_part_of_the_relative_yaw() -> void:
-	# RayWheel's 60 Hz rule in torque form. Below the crossing rate the cap binds and the torque is
-	# the plate's share of what zeroes the relative rate this tick — the towed tyres stop the rest,
-	# and the two together taking more reverse it, so the rig buzzes across zero.
-	var friction: float = FifthWheelScript.YAW_FRICTION_NM
-	var moment := 5.0e4
-	var crossing := friction * DELTA / (Articulation.YAW_CAP_SHARE * moment)
-	var slow := crossing * 0.25
-	var capped := absf(Articulation.yaw_friction_torque(slow, friction, moment, DELTA))
-	assert_float(capped).is_equal_approx(Articulation.YAW_CAP_SHARE * moment * slow / DELTA, 1e-6)
-	assert_float(capped).override_failure_message(
-			"the clamp let one tick stop the whole relative yaw").is_less(moment * slow / DELTA)
-	# Above it the Coulomb magnitude is what is applied, so the clamp is a floor-side device only.
-	var fast := absf(Articulation.yaw_friction_torque(crossing * 4.0, friction, moment, DELTA))
-	assert_float(fast).is_equal_approx(friction, 1e-9)
+func test_the_plate_law_doubles_with_the_load_at_saturation() -> void:
+	# The Coulomb part is proportional to the kingpin load ([216] sec. 7.3 b); the grease's viscous
+	# part is not. At 1 rad/s `k |v|` is in the hundreds, so the Coulomb part is saturated.
+	var plate := _profile_of(FifthWheelScript)
+	var rate := 1.0
+	var one := plate.yaw_friction_moment(rate, SOURCE_KINGPIN_N)
+	var two := plate.yaw_friction_moment(rate, 2.0 * SOURCE_KINGPIN_N)
+	var viscous := plate.friction_b * rate
+	assert_float(two - viscous).is_equal_approx(2.0 * (one - viscous), 1e-6)
+	assert_float(one - viscous).is_equal_approx(
+			SOURCE_KINGPIN_N * plate.friction_radius_m * plate.friction_mu, 1e-6)
+
+
+func test_the_plate_law_starts_on_its_small_rate_slope() -> void:
+	# Near straight the law is a damper of slope `N r mu k + b`: what sets the creep at low g.
+	var plate := _profile_of(FifthWheelScript)
+	var slope := SOURCE_KINGPIN_N * plate.friction_radius_m * plate.friction_mu * plate.friction_k \
+			+ plate.friction_b
+	var rate := 1.0e-6
+	assert_float(plate.yaw_friction_moment(rate, SOURCE_KINGPIN_N) / rate) \
+			.is_equal_approx(slope, slope * 1.0e-3)
+
+
+func test_the_friction_opposes_the_relative_rate_and_never_re_centres() -> void:
+	# The SIGN is half the model: it damps the swing, it never pulls the trailer back toward
+	# straight. A spring would be a plate that steers, which is not a plate.
+	var plate := _profile_of(FifthWheelScript)
+	# Plenty of inertia, so the one-tick cap is nowhere near binding.
+	var big := 1.0e6
+	var right := Articulation.yaw_friction_torque(
+			0.5, plate.yaw_friction_moment(0.5, SOURCE_KINGPIN_N), big, DELTA)
+	var left := Articulation.yaw_friction_torque(
+			-0.5, plate.yaw_friction_moment(-0.5, SOURCE_KINGPIN_N), big, DELTA)
+	assert_float(right).is_less(0.0)
+	assert_float(left).is_equal_approx(-right, 1e-9)
+
+
+func test_the_applied_torque_is_the_law_up_to_the_one_tick_cap() -> void:
+	# RayWheel's 60 Hz rule in torque form: never more than zeroes the relative rate this tick on the
+	# pair's free-body moment. The joint swings the trailer about the kingpin as it yaws, so the
+	# relative yaw meets a larger moment than the cap or the towed tyres' caps size on, and together
+	# they stop only part of it in a tick (`test_a_kicked_trailer_never_swings_back_tick_to_tick`).
+	# Under the cap the law is what is applied, so the clamp is a guard and not the model.
+	var plate := _profile_of(FifthWheelScript)
+	for moment: float in [2.0e3, 2.0e4, 2.0e5, 2.0e6]:
+		var rate := 1.0e-5
+		while rate < 2.0:
+			var law := plate.yaw_friction_moment(rate, SOURCE_KINGPIN_N)
+			var cap := moment * rate / DELTA
+			var applied := absf(Articulation.yaw_friction_torque(rate, law, moment, DELTA))
+			assert_float(applied).override_failure_message(
+					"%f rad/s on %f kg*m^2: %f N*m past the cap %f" % [rate, moment, applied, cap]) \
+					.is_less_equal(cap * (1.0 + 1.0e-9))
+			assert_float(applied).is_equal_approx(minf(law, cap), 1e-6)
+			rate *= 3.0
 
 
 # --- the coupling timings ------------------------------------------------------------------------
@@ -726,10 +756,11 @@ const DELTA := 1.0 / 60.0
 const TIPPER := "res://src/vehicles/truck/trailers/tipper.tscn"
 
 ## Which fields of a `CouplingProfile` the two couplings are allowed to disagree about: the three
-## joint angles, the plate friction, the scene wiring, and the two notices a machine words for
-## itself. `no_room_notice` is deliberately absent — both say the same sentence.
+## joint angles, the plate friction's four figures, the scene wiring, and the two notices a machine
+## words for itself. `no_room_notice` is deliberately absent — both say the same sentence.
 const LICENSED_DIFFERENCES: Array[String] = [
-	"pitch_deg", "yaw_deg", "roll_deg", "yaw_friction_nm",
+	"pitch_deg", "yaw_deg", "roll_deg",
+	"friction_radius_m", "friction_mu", "friction_k", "friction_b",
 	"joint_name", "marker_path", "speed_notice", "tip_notice",
 ]
 
@@ -949,7 +980,7 @@ func test_a_coupled_rig_standing_still_stays_mirror_symmetric() -> void:
 	# overshoot in the towed tyres' lateral cap amplifies it tick on tick until the rig stands skewed,
 	# ~8e-3 rad within 1.5 s; the tracking gate never sees it. A plate friction cap that, with the
 	# tyres, overshoots the one-tick stop flips the relative yaw rate every tick instead (~3e-3
-	# rad/s, Coulomb-bounded), a buzz the angle hardly shows (~3e-5 rad), so the rate is read too.
+	# rad/s, friction-bounded), a buzz the angle hardly shows (~3e-5 rad), so the rate is read too.
 	for i in KINDS.size():
 		var kind := KINDS[i]
 		var r: Rig = await _standing_rig(kind, 300.0 * i)
@@ -972,11 +1003,34 @@ func test_a_coupled_rig_standing_still_stays_mirror_symmetric() -> void:
 				.is_less(1.0e-4)
 
 
+func test_a_kicked_trailer_never_swings_back_tick_to_tick() -> void:
+	# The plate's one-tick stop and the towed tyres' caps each size on a free-body moment, which the
+	# joint only makes larger, so a kick's relative yaw falls over ticks and never crosses zero
+	# within one; stops that took more than the whole would flip it every tick. At 1 mrad/s the
+	# box's plate law sits under its cap (the law's creep slope is under the cap's), so the cap guards
+	# rather than binds; the tyre patches' slower swing back crosses zero after the ten ticks read.
+	var r: Rig = await _standing_rig(SEMI)
+	var chassis := r.vehicle as RigidBody3D
+	for _i in 30:
+		await get_tree().physics_frame
+	var trailer := r.host.trailer
+	assert_object(trailer).override_failure_message("the rig stood uncoupled").is_not_null()
+	trailer.angular_velocity += chassis.global_transform.basis.y * 1.0e-3
+	for tick in 10:
+		await get_tree().physics_frame
+		var up := chassis.global_transform.basis.y
+		var rate := (trailer.angular_velocity - chassis.angular_velocity).dot(up)
+		assert_float(rate).override_failure_message(
+				"tick %d after the kick: the relative yaw reversed to %f rad/s" % [tick, rate]) \
+				.is_greater(-1.0e-6)
+
+
 func test_the_shipped_trailers_clamp_only_within_a_hair_of_straight() -> void:
-	# The cap has to be inert in real driving or the plate stops being Coulomb: the rate it binds
-	# under, off each coupled trailer's pair moment with the solver's tensors, must be far below
-	# anything a rig ever articulates at.
-	var friction: float = FifthWheelScript.YAW_FRICTION_NM
+	# The cap has to be inert in real driving or the plate stops being its law: off each coupled
+	# trailer's live kingpin load and pair moment with the solver's tensors, the law is under the cap
+	# at 0.01 rad/s, far below anything a rig ever articulates at. The law is concave in the rate and
+	# the cap linear, so above that rate the cap never binds.
+	var rate := 1.0e-2
 	var r: Rig = await _standing_rig(SEMI)
 	for id: String in TrailerCat.TRAILERS:
 		if not TrailerCat.is_coupled(id):
@@ -986,9 +1040,13 @@ func test_the_shipped_trailers_clamp_only_within_a_hair_of_straight() -> void:
 		var moment := r.host.yaw_pair_moment()
 		assert_float(moment).override_failure_message(
 				"%s reports no pair moment to clamp against" % id).is_greater(1.0e3)
-		var crossing := friction * DELTA / (Articulation.YAW_CAP_SHARE * moment)
-		assert_float(crossing).override_failure_message(
-				"%s: the one-tick cap binds below %f rad/s" % [id, crossing]).is_less(1.0e-2)
+		var load_n := r.host.coupled_load_kg() * BrakeSizing.G
+		assert_float(load_n).override_failure_message(
+				"%s rests nothing on the plate" % id).is_greater(0.0)
+		var law := r.host.profile().yaw_friction_moment(rate, load_n)
+		assert_float(law).override_failure_message(
+				"%s: the one-tick cap binds at %f rad/s (law %f N*m)" % [id, rate, law]) \
+				.is_less_equal(moment * rate / DELTA)
 
 
 func test_roll_stability_reads_the_parked_load_while_the_surge_moves_the_live_one() -> void:

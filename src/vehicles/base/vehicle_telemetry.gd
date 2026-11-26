@@ -68,6 +68,7 @@ var speed := 0.0        ## signed longitudinal m/s (contract 'speed')
 var kmh := 0.0          ## absolute km/h (contract 'kmh')
 var rpm := 0.0          ## real engine RPM out of the drivetrain (contract 'rpm')
 var gear_byte := 0      ## RAMN byte: 0=N, 1..24=D1-D24, 255=R, 254=P (contract 'gear')
+var gear_top := 0       ## the tallest drive byte the gearbox selects, `Drivetrain.top_gear` (contract 'gear_top')
 ## The gearbox's input over output speed (contract 'gear_ratio', J1939 SPN 526):
 ## `Drivetrain.gearbox_ratio`, on a wheel-driving body; 0 elsewhere.
 var gear_ratio := 0.0

@@ -877,7 +877,10 @@ func _on_load_home() -> void:
 	if home.is_empty():
 		return
 	_emit_fit(family)
-	level_drive_chosen.emit(home, _variant, _attachment if _tows() else null)
+	var attachment: Variant = null
+	if _tows():
+		attachment = _attachment
+	level_drive_chosen.emit(home, _variant, attachment)
 
 
 ## Circle / Esc (the shell's back): closes the question first, the garage only after. True when it
@@ -904,7 +907,9 @@ func _reflow() -> void:
 	_fit_pair(_confirm_load, _confirm_cancel, inner)
 	_preview_panel.visible = size.x >= UiTheme.px(self, NARROW_W)
 	_narrow_about.visible = not _preview_panel.visible
-	var home: Container = _about_home if _preview_panel.visible else _narrow_about
+	var home: Container = _narrow_about
+	if _preview_panel.visible:
+		home = _about_home
 	if _about.get_parent() != home:
 		_about.reparent(home, false)
 	# The body still exists while the panel is hidden; only the rendering is switched off.

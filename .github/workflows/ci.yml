@@ -47,6 +47,9 @@ jobs:
       - name: Doc reference check
         run: node tools/check_docs.mjs
 
+      - name: Guide signals page check
+        run: node tools/gen_guide_signals.mjs --check
+
       # A `\` outside a string that is not a line continuation (scripted-edit damage that parses),
       # and editor-only classes as type annotations outside addons/, which parse-fail in exported
       # builds (the node silently does nothing).

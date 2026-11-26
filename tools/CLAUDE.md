@@ -6,7 +6,9 @@ Editor/CI scripts. Kit/bake rules: `kit/CLAUDE.md`; a level generator's manifest
   `shot_stage.gd`. Their PNGs are not byte-deterministic: compare a re-run with `png_drift.gd`.
 - Never speed a measure tool up with `Engine.time_scale` (it enlarges the physics step): pass
   `--fixed-fps 60` before `--`, same tick and output, ~10x faster.
-- A new measurement is a scenario in an existing tool; shared setup goes in `measure_rig.gd`.
+- A new measurement is a scenario under an existing tool scene (its run line and flags); a pass
+  with state of its own lives in a file beside it (`measure_vehicles_<pass>.gd`, the kerb's
+  contract), shared setup in `measure_rig.gd`.
   Run lines, flags, `doc=` presets: `docs/vehicle_measurements.md` § Measure-tool run lines.
 - Generator code shared by two generators goes in its home, not a copy: `level_gen_io.gd`,
   `terrain_grid.gd`, `level_gen_props.gd`, `road_gen.gd` (levels), `vehicle_gen_io.gd` (bodies).

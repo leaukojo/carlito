@@ -292,12 +292,12 @@ func test_retarder_demand_scales_with_the_request_and_stops_at_its_rating() -> v
 func test_the_rating_is_the_gearbox_output_figure_through_the_final_drive() -> void:
 	# Its own hardware figure, at the gearbox output: each driven rear wheel sees its share through
 	# the final drive, whatever the service brake is. Hand figures, so the arithmetic is checked
-	# rather than restated: the semi's 1450 Nm through 2.925 over two wheels, a Kenney truck's 600
+	# rather than restated: the semi's 1450 Nm through 2.925 over two wheels, a Kenney truck's 1100
 	# through 4.01.
 	var semi: VehicleSpec = load("res://src/vehicles/truck/semi_spec.tres")
 	assert_float(DrivetrainScript.retarder_rating(semi)).is_equal_approx(2120.625, 1e-3)
 	var garbage: VehicleSpec = load("res://src/vehicles/kenney/garbage-truck_spec.tres")
-	assert_float(DrivetrainScript.retarder_rating(garbage)).is_equal_approx(1203.0, 1e-3)
+	assert_float(DrivetrainScript.retarder_rating(garbage)).is_equal_approx(2205.5, 1e-3)
 	for spec in _truck_specs():
 		assert_float(spec.ground_drive.retarder_rating_nm).is_greater(0.0)
 

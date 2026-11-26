@@ -192,12 +192,7 @@ static func rated_rpm(spec: VehicleSpec) -> float:
 
 ## The fuel (0..1) that delivers row `row`'s request at `x` (rpm over rated speed).
 static func _row_fuel(spec: VehicleSpec, row: int, x: float, at_rpm: float) -> float:
-	var request := _sample_row(row - 1, x) * Drivetrain.peak_torque(spec)
-	var motoring := Drivetrain.motoring_torque(spec, at_rpm)
-	var span := Drivetrain.engine_torque(spec, at_rpm) - motoring
-	if span <= 0.0:
-		return 1.0 if request > motoring else 0.0
-	return clampf((request - motoring) / span, 0.0, 1.0)
+	return Drivetrain.drag_fuel(spec, at_rpm, _sample_row(row - 1, x) * Drivetrain.peak_torque(spec))
 
 
 ## Row `row` of PETROL_REQUEST at `x`, linear between columns, held flat outside them.

@@ -18,11 +18,11 @@ const LLTD_G := 0.1
 
 ## The model of `spec` at `speed` (m/s), SI units; empty unless one front and one rear pair (no
 ## tandem, kingpin). Per axle (`front` / `rear`): `load` and `aero` (static weight and downforce per
-## wheel, `_normal`), `track`, `spring`, `bar`, `mu` (side mu at the reference load, `rear_lat_grip`
-## in), `share` (`RayWheel.tyre_share`), `roll_steer` (deg/deg), `compliance_steer` (deg/kN a patch;
-## front 0; both + = under), `mu_long`, `driven`, `diff_bias`. Body: `mass`, `h` (COM over the road
-## at the static sag), `ref` (the even corner load), `sensitivity`, `peak_slip` (the grip curve's
-## peak), `peak_load` (x `ref`; 0 = off), `wheelbase`, `front_arm` (COM to the front axle),
+## wheel, `_normal`), `track`, `spring`, `bar`, `mu` (side mu at its `ref`, `rear_lat_grip` in),
+## `ref`, `share` (`RayWheel.tyre_share`), `roll_steer` (deg/deg), `compliance_steer` (deg/kN a
+## patch; front 0; both + = under), `mu_long`, `driven`, `diff_bias`. Body: `mass`, `h` (COM over
+## the road at the static sag), `ref` (the even corner load), `sensitivity`, `peak_slip` (the grip
+## curve's peak), `peak_load` (x `ref`; 0 = off), `wheelbase`, `front_arm` (COM to the front axle),
 ## `yaw_inertia` (declared `yaw_dynamic_index`; NAN where Jolt's: a caller fills it), `yaw_damp`
 ## (`angular_damping`; 0 = none); for `corner`, `grip_curve`, `crr`, `drag_area`, `side_area`,
 ## `aero_h` / `aero_arm`, `ackermann`, `lock` (the mean steer's at `speed`), `centre_bias`, `tcs`.
@@ -97,11 +97,15 @@ static func axles(spec: VehicleSpec, speed := 0.0, ref_kg := 0.0) -> Dictionary:
 	# (`WheelDrive.apply_at`).
 	var at_com := gd.aero_centre == Vector3.ZERO
 	# `ref_kg` > 0: `ref` off that mass, a laden copy keeping its spec's (`RayWheel.reference_load`).
+	var ref := (ref_kg if ref_kg > 0.0 else spec.mass) * G / 4.0
+	# Each axle's side laws read against its own tyre's rating (`RayWheel.lateral_reference_load`).
+	front["ref"] = ref
+	rear["ref"] = ref * gd.rear_tyre_rating
 	return {"front": front, "rear": rear, "mass": spec.mass, "h": h,
 			"side_area": gd.side_area,
 			"aero_h": h if at_com else gd.aero_centre.y + gd.rest_ride_height() - sag,
 			"aero_arm": 0.0 if at_com else spec.center_of_mass.z - gd.aero_centre.z,
-			"ref": (ref_kg if ref_kg > 0.0 else spec.mass) * G / 4.0, "sensitivity": gd.load_sensitivity,
+			"ref": ref, "sensitivity": gd.load_sensitivity,
 			"peak_slip": maxf(peak_slip, 1e-3), "peak_load": gd.cornering_peak_load,
 			"wheelbase": wheelbase, "yaw_inertia": yaw_inertia, "yaw_damp": yaw_damp,
 			"front_arm": a, "grip_curve": gd.grip_curve, "crr": gd.rolling_resistance,
@@ -155,25 +159,32 @@ static func _roll_state(m: Dictionary, lat_g: float, side_g := NAN) -> Dictionar
 	var cap_f := 2.0 * _normal(f)
 	var cap_r := 2.0 * _normal(r)
 	var stop := float(f.get("swing", 0.0))
+	# The front's whole load enters the body at the pivot, `h_p` over the patches, so `pivot_w` comes
+	# off the rolled weight's moment per radian of roll (N*m per rad; 0 without a swinging front).
+	var pivot_w := cap_f * float(f.get("pivot_h", 0.0))
 	var phi := INF
 	var df := 0.0
 	var free := false
-	if stop > 0.0 and k_r > weight_h:
+	if stop > 0.0 and k_r > weight_h - pivot_w and k_f > pivot_w:
 		# Inside the stop the beam carries only the front's share of the tyres' side force
-		# (`m a_y b / L`) entering at the pivot, `F_f h_p`, and the rear's springs hold the rest. The
-		# beam turns off the body by the roll less its tyres' own deflection, `F_f h_p / K_f`.
+		# (`m a_y b / L`) entering at the pivot, `F_f h_p`, and the rear's springs hold the rest:
+		# the body rolls about the line from the rear's ground centre to the pivot, the side force
+		# and the weight on the COM's height over it. The beam tilts on its own tyres by `psi`, its
+		# load at the pivot too, and turns off the body by the roll less that tilt.
 		var wheelbase := float(m["wheelbase"])
 		var pivot_m := float(m["mass"]) * G * absf(lat_g if is_nan(side_g) else side_g) \
 				* (wheelbase - float(m["front_arm"])) / wheelbase * float(f["pivot_h"])
-		phi = (moment - pivot_m) / (k_r - weight_h)
-		df = 2.0 * pivot_m / t_f
-		free = phi - pivot_m / maxf(k_f, 1e-6) <= stop
+		phi = (moment - pivot_m) / (k_r - weight_h + pivot_w)
+		var psi := pivot_m / (k_f - pivot_w)
+		df = 2.0 * k_f * psi / t_f
+		free = phi - psi <= stop
 	if not free:
 		# Every corner elastic; a swinging front against its stop, rigid there, its tyres taking
-		# `K_f (phi - stop)`, continuous with the free beam.
+		# `K_f (phi - stop)`, continuous with the free beam; its patches sit `h phi - h_p stop` off
+		# the COM (the beam `stop` short of the body's roll), hence `(K_f - pivot_w) stop`.
 		if k_f + k_r <= weight_h:
 			return {"phi": INF, "front": cap_f, "rear": cap_r}
-		phi = (moment + k_f * stop) / (k_f + k_r - weight_h)
+		phi = (moment + (k_f - pivot_w) * stop) / (k_f + k_r - weight_h)
 		df = 2.0 * k_f * (phi - stop) / t_f
 	var dr := 2.0 * k_r * phi / t_r
 	if df > cap_f and dr > cap_r or (df > cap_f and k_r <= weight_h) \
@@ -187,7 +198,7 @@ static func _roll_state(m: Dictionary, lat_g: float, side_g := NAN) -> Dictionar
 		# A swinging front's body rolls on to the stop (it lifted on the stability triangle, rear
 		# outer patch to pivot), and the front then holds what the lifted rear cannot.
 		dr = cap_r
-		phi = (moment - cap_r * t_r / 2.0 + k_f * stop) / (k_f - weight_h)
+		phi = (moment - cap_r * t_r / 2.0 + (k_f - pivot_w) * stop) / (k_f - weight_h)
 		df = 2.0 * k_f * (phi - stop) / t_f
 	if df > cap_f + 1e-3 or dr > cap_r + 1e-3:
 		return {"phi": INF, "front": cap_f, "rear": cap_r}
@@ -214,10 +225,13 @@ static func lltd(m: Dictionary) -> float:
 	return front / (front + _roll_stiffness(r) / float(r["track"]))
 
 
-## A wheel's cornering stiffness (N per unit slip) at `n_load` (`RayWheel.combined_slip_force` on the
-## curve's linear rise), its tyres each carrying `share` of it (a twin pair: `2 C(L / 2)`).
-static func wheel_stiffness(m: Dictionary, mu: float, n_load: float, share := 1.0) -> float:
-	var ref: float = m["ref"]
+## A wheel's cornering stiffness (N per unit slip) on `axle` at `n_load` (`RayWheel.combined_slip_force`
+## on the curve's linear rise), its tyres each carrying the axle's `share` of it (a twin pair:
+## `2 C(L / 2)`), its laws read against the axle's `ref`.
+static func wheel_stiffness(m: Dictionary, axle: Dictionary, n_load: float) -> float:
+	var mu: float = axle["mu"]
+	var share: float = axle["share"]
+	var ref: float = axle["ref"]
 	var peak_load: float = m["peak_load"]
 	if peak_load > 0.0:
 		# One tyre's load, floored as `RayWheel.lateral_peak_slip` floors it.
@@ -305,9 +319,7 @@ static func compliance_loop_gain(m: Dictionary) -> float:
 static func _axle_stiffness(m: Dictionary, key: String, lat_g: float) -> float:
 	var axle: Dictionary = m[key]
 	var loads := pair_loads(_normal(axle), _transfer(m, key, lat_g))
-	var share: float = axle["share"]
-	return maxf(wheel_stiffness(m, float(axle["mu"]), loads.x, share)
-			+ wheel_stiffness(m, float(axle["mu"]), loads.y, share), 1e-6)
+	return maxf(wheel_stiffness(m, axle, loads.x) + wheel_stiffness(m, axle, loads.y), 1e-6)
 
 
 ## The angular damping's understeer (deg/g) at `speed` (m/s): the steady yaw rate `lat_g * g / v`
@@ -346,7 +358,7 @@ static func axle_capacity_g(m: Dictionary, lat_g: float) -> Vector2:
 	for i in 2:
 		var key := "front" if i == 0 else "rear"
 		var axle: Dictionary = m[key]
-		out[i] = pair_grip(float(axle["mu"]), _normal(axle), _transfer(m, key, lat_g), float(m["ref"]),
+		out[i] = pair_grip(float(axle["mu"]), _normal(axle), _transfer(m, key, lat_g), float(axle["ref"]),
 				float(m["sensitivity"]), float(axle["share"])) / (2.0 * float(axle["load"]))
 	return out
 
@@ -729,8 +741,8 @@ static func _corner_wheels(m: Dictionary, speed: float, steer: float, x: PackedF
 		w["load"] = n_load
 		w["budget_long"] = RayWheel.load_scaled_mu(float(axle["mu_long"]), n_load, ref, sens) * n_load
 		w["budget_lat"] = RayWheel.load_scaled_mu(float(axle["mu"]), n_load * float(axle["share"]),
-				ref, sens) * n_load
-		w["lat_peak"] = RayWheel.lateral_peak_slip(n_load * float(axle["share"]), ref, sens,
+				float(axle["ref"]), sens) * n_load
+		w["lat_peak"] = RayWheel.lateral_peak_slip(n_load * float(axle["share"]), float(axle["ref"]), sens,
 				float(m["peak_load"]))
 		w["slip_lat"] = -float(w["v_lat"]) / maxf(absf(float(w["v_long"])), 1e-3)
 	_split_drive(m, wheels, drive)

@@ -564,15 +564,15 @@ func test_relevant_entry_still_hides_family_and_capability_gates() -> void:
 
 # --- the on-screen rail --------------------------------------------------------
 
-## The rail carries MENU/GARAGE/LEVEL/CAMERA plus ATTACH (a vehicle control, not a shell one) —
-## RESPAWN and NIGHT are keyboard-only, reached on touch through the pause menu.
-func test_the_touch_rail_is_exactly_menu_garage_level_challenges_camera_and_attach() -> void:
+## The rail carries MENU/GARAGE/LEVEL/CAMERA/CHASSIS plus ATTACH (a vehicle control, not a shell
+## one) — RESPAWN and NIGHT are keyboard-only, reached on touch through the pause menu.
+func test_the_touch_rail_is_exactly_menu_garage_level_challenges_camera_chassis_and_attach() -> void:
 	var labels := {}
 	for entry in Registry.ENTRIES:
 		if int(entry.get("touch", Registry.Touch.NONE)) == Registry.Touch.SHELL_SIGNAL:
 			labels[String(entry.get("touch_label", ""))] = true
 	assert_array(labels.keys()).contains_exactly_in_any_order(
-			["MENU", "VEHICLE", "LEVEL", "CHALLENGE", "CAMERA", "ATTACH"])
+			["MENU", "VEHICLE", "LEVEL", "CHALLENGE", "CAMERA", "CHASSIS", "ATTACH"])
 	assert_bool(Registry.applies(&"respawn", _ctx("car"))).is_true()
 	assert_int(Registry.find(&"respawn").get("touch", Registry.Touch.NONE)).is_equal(Registry.Touch.NONE)
 	assert_int(Registry.find(&"day_night").get("touch", Registry.Touch.NONE)).is_equal(Registry.Touch.NONE)

@@ -36,6 +36,18 @@ func test_a_family_link_falls_to_the_family_default() -> void:
 			.is_equal(VehicleCatalog.first_in_family("truck"))
 
 
+## A link naming only a vehicle boots into its family's home level: the boat needs water, and the
+## default level would refuse it and spawn its own car. A named level always wins.
+func test_a_vehicle_only_link_boots_its_home_level() -> void:
+	var boot := func(q: String) -> String: return BootParams.boot_level(BootParams.parse_query(q), "flatland")
+	assert_str(boot.call("vehicle=boat-speed-a")).is_equal("open_sea")
+	assert_str(boot.call("vehicle=bullet")).is_equal("level_5")
+	assert_str(boot.call("vehicle=semi")).is_equal("flatland")
+	assert_str(boot.call("level=level_3&vehicle=boat-speed-a")).is_equal("level_3")
+	assert_str(boot.call("")).is_equal("flatland")
+	assert_str(boot.call("vehicle=hovercraft")).is_equal("flatland")
+
+
 ## `?challenge=` names a listed challenge; a dev fixture or an unknown id is dropped.
 func test_challenge_link_takes_listed_challenges_only() -> void:
 	assert_str(String(BootParams.parse_query("?challenge=car_start_up")["challenge"])).is_equal("car_start_up")

@@ -14,6 +14,7 @@ signal level_pressed
 signal challenge_pressed
 signal next_attachment_pressed
 signal camera_pressed
+signal chassis_pressed
 signal retry_pressed
 signal info_pressed
 
@@ -33,9 +34,10 @@ const EDGE := 40.0        ## joystick/pedal inset from the window edge
 const STACK_TOP := 10.0   ## same top inset DebugOverlay uses on the other edge
 const STACK_GAP := 8.0
 ## Shell buttons that head the stack in this order, whatever the registry's order; the rest of
-## the universal column follows.
+## the universal column follows. CHASSIS is gated off a body with no wheels, yet a view toggle
+## belongs here beside CAMERA, not in the machine's EQUIP drawer.
 const STACK_HEAD: Array[StringName] = [
-	&"to_menu", &"garage", &"level_select", &"camera_view", &"challenge_select",
+	&"to_menu", &"garage", &"level_select", &"camera_view", &"challenge_select", &"chassis_view",
 ]
 
 ## Size the overlay takes on a pointer display, on top of the theme scale (which is sized for a
@@ -246,6 +248,24 @@ func _exit_tree() -> void:
 
 func set_active(active: bool) -> void:
 	visible = active
+
+
+## The bottom-right pad cluster's top edge (local y), INF while the driving pads are hidden: what
+## a HUD piece standing at the right edge keeps clear of (`ChassisView.dock`).
+func drive_top() -> float:
+	if not visible or _driving == null or not _driving.visible or not is_instance_valid(_pedal_cluster):
+		return INF
+	return _pedal_cluster.get_rect().position.y
+
+
+## The drive block's left and right edges (local x: the QUICK row over the pedals, BRAKE/REV to
+## GAS on a car), NAN while the driving pads are hidden: what `ChassisView` lines its panel up
+## with. An open EQUIP drawer widens the cluster leftward, never this block.
+func drive_span() -> Vector2:
+	if drive_top() == INF or not is_instance_valid(_drive_block):
+		return Vector2(NAN, NAN)
+	var left := _pedal_cluster.get_rect().position.x + _drive_block.position.x
+	return Vector2(left, left + _drive_block.size.x)
 
 
 ## Hides the driving layer for a challenge (Pad drops anything held as it hides).
@@ -659,6 +679,7 @@ func _shell_signals() -> Dictionary:
 		&"garage": func() -> void: garage_pressed.emit(),
 		&"level_select": func() -> void: level_pressed.emit(),
 		&"challenge_select": func() -> void: challenge_pressed.emit(),
+		&"chassis_view": func() -> void: chassis_pressed.emit(),
 		&"next_attachment": func() -> void: next_attachment_pressed.emit(),
 		&"to_menu": func() -> void: menu_pressed.emit(),
 	}

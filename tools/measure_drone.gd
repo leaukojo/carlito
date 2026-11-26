@@ -7,10 +7,11 @@ extends Node3D
 
 const MeasureRig := preload("res://tools/measure_rig.gd")
 
-## The strip: a rangefinder floor, a collision floor, enough width for the translate pass.
-const STRIP_SIZE := Vector3(1200.0, 2.0, 4000.0)
+## m from the origin the floor reaches (`MeasureRig.add_ground`): a rangefinder floor and a collision
+## floor, wide enough for the translate pass, which `GEOFENCE_RADIUS` caps.
+const GROUND_REACH := 500.0
 ## Spawn, and therefore HOME: high enough for a descent pass, low enough for GEOFENCE_CEILING.
-const SPAWN := Vector3(0.0, 80.0, 1400.0)
+const SPAWN := Vector3(0.0, 80.0, 0.0)
 
 ## Seconds arming/spooling centred before each pass's own stick goes in; also covers motor spool.
 const ARM_S := 2.5
@@ -89,13 +90,14 @@ var _failed := false         ## the ESC1 edge has been sent this pass
 
 
 func _ready() -> void:
-	MeasureRig.add_slab(self, "Strip", STRIP_SIZE)
+	if MeasureRig.add_ground(self, "Ground", GROUND_REACH) == null:
+		get_tree().quit(1)
+		return
 	_drone = MeasureRig.spawn(self, "drone-mk2") as DroneVehicle
 	MeasureRig.place(_drone, Transform3D(Basis.IDENTITY, SPAWN))
 	InputRouter.set_touch_source(_source)
 	var spec: VehicleSpec = _drone.spec
-	print("strip: %.0f x %.0f m flat, still air, STABILIZE, %.1f s of centred-stick arming per pass"
-			% [STRIP_SIZE.x, STRIP_SIZE.z, ARM_S])
+	print("ground: flat plane, still air, STABILIZE, %.1f s of centred-stick arming per pass" % ARM_S)
 	print("=== drone: %.1f kg, %.0f N max thrust, %.0f N climb authority, %dS %.1f Ah pack ===\n"
 			% [spec.mass, _drone.max_thrust, _drone.climb_force,
 			DronePower.CELLS, DronePower.PACK_CAPACITY_AH])

@@ -1,0 +1,90 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="Script" path="res://src/levels/base/level.gd" id="1_level"]
+[ext_resource type="Resource" path="res://src/levels/dev/chassis_pad/chassis_pad_info.tres" id="2_info"]
+[ext_resource type="Script" path="res://src/vehicles/base/chase_camera.gd" id="3_cam"]
+[ext_resource type="Script" path="res://src/levels/base/vehicle_spawn.gd" id="4_spawn"]
+[ext_resource type="Environment" path="res://src/levels/base/default_env.tres" id="5_env"]
+[ext_resource type="Script" path="res://src/levels/base/infinite_ground.gd" id="6_ground"]
+
+[sub_resource type="StandardMaterial3D" id="LineMat"]
+shading_mode = 0
+albedo_color = Color(0.92, 0.92, 0.9, 1)
+
+[sub_resource type="TorusMesh" id="CircleMesh"]
+material = SubResource("LineMat")
+inner_radius = 19.85
+outer_radius = 20.15
+rings = 160
+ring_segments = 6
+
+[sub_resource type="Shader" id="KerbShader"]
+code = "shader_type spatial;
+// Red and white kerb stripes, one metre each along the kerb (local z).
+varying float along;
+void vertex() {
+	along = VERTEX.z;
+}
+void fragment() {
+	ALBEDO = mod(floor(along), 2.0) < 1.0 ? vec3(0.75, 0.10, 0.08) : vec3(0.92, 0.92, 0.9);
+	ROUGHNESS = 0.8;
+}
+"
+
+[sub_resource type="ShaderMaterial" id="KerbMat"]
+shader = SubResource("KerbShader")
+
+[sub_resource type="PrismMesh" id="KerbMesh"]
+material = SubResource("KerbMat")
+size = Vector3(1.2, 0.2, 16)
+
+[sub_resource type="ConvexPolygonShape3D" id="KerbShape"]
+points = PackedVector3Array(-0.6, -0.1, -8, 0.6, -0.1, -8, 0, 0.1, -8, -0.6, -0.1, 8, 0.6, -0.1, 8, 0, 0.1, 8)
+
+; Dev verification pad for the chassis view (src/ui/chassis_view.gd): endless flat asphalt, a
+; 20 m skid circle painted ahead of the spawn for steady-state slides and weight transfer, and a
+; 20 cm kerb on the right of the run-up to ride with one side for a lifted wheel. Registered
+; `dev: true`, reached by --level=chassis_pad.
+[node name="ChassisPad" type="Node3D"]
+script = ExtResource("1_level")
+info = ExtResource("2_info")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("5_env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, 0.353553, -0.353553, 0, 0.707107, 0.707107, 0.5, -0.612372, 0.612372, 0, 40, 0)
+light_color = Color(1, 0.96, 0.88, 1)
+shadow_enabled = true
+directional_shadow_blend_splits = true
+directional_shadow_max_distance = 150.0
+
+[node name="ChaseCamera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 6)
+script = ExtResource("3_cam")
+
+[node name="Spawn" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+script = ExtResource("4_spawn")
+
+[node name="Ground" type="StaticBody3D" parent="."]
+script = ExtResource("6_ground")
+
+; Paint only: a flattened torus 3 cm proud of the ground, no collision.
+[node name="SkidCircle" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.1, 0, 0, 0, 1, 0, 0.015, -45)
+cast_shadow = 0
+mesh = SubResource("CircleMesh")
+
+; A runtime body beside the ground (not under Authoring: nothing here bakes), on DRIVABLE (2)
+; with the DYNAMIC mask (VEHICLE | PAYLOAD = 24), as InfiniteGround sets its own.
+[node name="Kerb" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.2, 0.1, -14)
+collision_layer = 2
+collision_mask = 24
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Kerb"]
+shape = SubResource("KerbShape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Kerb"]
+mesh = SubResource("KerbMesh")

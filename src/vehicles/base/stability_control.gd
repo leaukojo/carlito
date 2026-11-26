@@ -7,9 +7,9 @@ extends RefCounted
 ## lateral acceleration, body slip (the velocity left of the nose). Corners: Vector4 FL, FR, RL, RR.
 ## Lateral acceleration is gravity-free, a real unit's bank-compensated reading: a raw one on a side
 ## slope integrates into a slip that is not there.
-## Roll stability (`GroundDriveSpec.esc_roll_lift_g`, the semis): past ROLL_SHARE of the rig's
-## measured first lift (or as the steer asks it), every wheel and the trailer braked, the fuel cut.
-## Figures: `docs/sources.md` § Stability control.
+## Roll stability (`GroundDriveSpec.esc_roll_lift_g`, the trucks): past ROLL_SHARE of the rig's
+## measured first lift (or as the steer asks it), the trailer and every wheel braked (the unit's
+## through `roll_chamber_step`), the fuel cut. Figures: `docs/sources.md` § Stability control.
 
 const G := BrakeSizing.G
 
@@ -35,6 +35,13 @@ const CORRECT_S := 0.25
 ## new side's correction.
 const RISE_S := 0.25
 const RELEASE_S := 0.25
+## Roll stability's air brake chambers (s): a first-order fill and vent toward the application.
+## Each is the slowest the regulations allow, rounded down: the fill R13's (Annex 6 2.4: 75 % of the
+## asymptotic pressure within 0.6 s of a 0.2 s actuation, tau <= 0.357), the vent FMVSS 121's
+## (S5.3.4.1(a): 95 to 5 psi within 0.55 s, tau <= 0.187). A modulator at the axle is faster
+## (estimate: no measured figure found).
+const CHAMBER_FILL_S := 0.35
+const CHAMBER_VENT_S := 0.18
 ## The speed the reference K table is read off the corner model at (estimate: K moves little with
 ## speed on the ESC bodies, none of which carries downforce).
 const REFERENCE_SPEED := 80.0 / 3.6
@@ -174,10 +181,10 @@ static func roll_lift_g(points: PackedVector2Array, load_kg: float) -> float:
 	return VehicleSpec.sample_curve(points, load_kg)
 
 
-## One tick of roll stability's application, 0..1 of every wheel's declared brake and the trailer's
-## demand (the fuel capped at `1 − it`): 0 under ROLL_SHARE of `lift_g`, rising linearly to 1 at
-## it, moving from `prev` at most `delta / rise_s` up and `delta / release_s` down, the yaw
-## modulator's rates. Under MIN_SPEED (or in reverse) the target is 0, released at the rate (a rig
+## One tick of roll stability's application, 0..1 of every wheel's declared brake (the unit's own
+## through `roll_chamber_step`) and the trailer's demand (the fuel capped at `1 − it`): 0 under
+## ROLL_SHARE of `lift_g`, rising linearly to 1 at it, moving from `prev` at most `delta / rise_s`
+## up and `delta / release_s` down, the yaw modulator's rates. Under MIN_SPEED (or in reverse) the target is 0, released at the rate (a rig
 ## slowing through it under full braking does not lurch); with no lift (INF), 0 at once.
 static func roll_application(speed: float, lat_g: float, lift_g: float, prev: float,
 		delta: float, rise_s := RISE_S, release_s := RELEASE_S) -> float:
@@ -188,6 +195,13 @@ static func roll_application(speed: float, lat_g: float, lift_g: float, prev: fl
 		target = clampf((absf(lat_g) - ROLL_SHARE * lift_g) / ((1.0 - ROLL_SHARE) * lift_g),
 				0.0, 1.0)
 	return clampf(target, maxf(prev - delta / release_s, 0.0), prev + delta / rise_s)
+
+
+## One tick of the unit's brake chambers, 0..1 of the full application, toward roll stability's
+## `cmd` (`roll_application`): a first-order fill over CHAMBER_FILL_S, vent over CHAMBER_VENT_S.
+static func roll_chamber_step(pressure: float, cmd: float, delta: float) -> float:
+	var tau := CHAMBER_FILL_S if cmd > pressure else CHAMBER_VENT_S
+	return pressure + (cmd - pressure) * (1.0 - exp(-delta / tau))
 
 
 ## Each corner's stability brake torque (N·m, FL, FR, RL, RR): the yaw controller's `yaw` plus
@@ -206,7 +220,7 @@ static func corner_torques(roll_app: float, yaw: Vector4, brake: Vector2) -> Vec
 
 ## The retardation (m/s²) roll stability commands: each wheel's roll part of its corner's torque
 ## (`corner_torques`' `esc_brake` less the `yaw`), over its axle's radius (x front, y rear), summed
-## and over the sensed load. The commanded torque, what the unit knows.
+## and over the sensed load. The torque the chambers apply (`roll_chamber_step`).
 ## COMPROMISE: on a coupled semi the load is the unit's sensed one (`WheelDrive.brake_load_kg`:
 ## the unit plus the kingpin share), never the rig's: the trailer's braking at the same demand
 ## (`ebs11_demand`) and its bogie-borne mass are left out, so the figure is off the rig's by how

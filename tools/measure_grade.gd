@@ -9,16 +9,17 @@ extends Node3D
 ##
 ## Beside each measurement it prints the three textbook ceilings, so a disagreement points at
 ## which one bit:
-##   traction  tan(a) <= (mu * rear_share - crr) / (1 - mu * h / L)   [driven rear only]
+##   traction  tan(a) <= (mu * rear_share - crr - (1 - rear_share) * crr_tyre) / (1 - mu * h / L)
+##                                                                    [driven rear only]
 ##             tan(a) <= mu - crr                                     [all wheels driven]
 ## "All wheels driven" includes the tractor with `mfwd` engaged. It is the perfect all-wheel
 ## figure, which a rigid or biasing centre can approach; an OPEN centre stays capped by its
 ## lighter axle, under it.
-##   torque    F_gear1_at_idle >= m*g*(sin a + crr * cos a)
+##   torque    F_gear1_at_idle >= m*g*(sin a + (crr + crr_tyre) * cos a)
 ##   tip       tan(a) <= b / h   [b: COM ahead of the rear axle; standing, so a climb sits under it]
 ## All are static, single-body and ignore `load_sensitivity`, so they are a reference, not a
 ## gate. A coupled rig (the semi tows 24 t the moment it spawns) swaps in the rig's mass for the
-## torque ceiling and, for traction, `tan(a) <= mu * share - crr` with `share` the driven wheels'
+## torque ceiling and, for traction, `tan(a) <= mu * share - crr - (1 - share) * crr_tyre`, `share` the driven wheels'
 ## spring load over the rig's weight, read at the last trial's settle; it prints no tip ceiling.
 ##
 ## Dev report, always exits 0.
@@ -42,14 +43,15 @@ const Groups := preload("res://src/levels/base/carlito_groups.gd")
 ## Surfaces by `Surface` name (any one is a flag: `Surface.from_key`).
 const DEFAULT_SURFACES: Array[String] = ["asphalt", "gravel", "grass", "field", "mud"]
 
+## m of ramp a run may use, centred on the origin (`MeasureRig.tilt_ramp` is a plane reaching past it).
 const RAMP_LENGTH := 400.0
-const RAMP_WIDTH := 30.0
-const RAMP_THICKNESS := 2.0
-## Metres up the ramp the body starts, so a failing run has room to slide back without
-## running off the bottom edge.
+## Metres up the ramp the body starts, so a failing run has room to slide back.
 const SPAWN_UP := 60.0
 
 const SETTLE_S := 1.5     ## brake held while the springs take the weight
+## Up-slope m/s (either way) past which the ramp bisect's settle has not held the body: still sliding
+## when the launch begins, against the 0.01 to 0.08 m/s creep a held tyre shows on loose surfaces.
+const SETTLE_HELD_SPEED := 0.25
 const CLIMB_S := 12.0     ## full throttle after that
 const CLIMB_MIN := 8.0    ## m of up-slope gain that calls a climb early
 const SLIDE_BACK := -4.0  ## m of backsliding that calls the trial early
@@ -91,12 +93,17 @@ const DOC_JOBS: Array[Dictionary] = [
 	{"variant": "semi", "mfwd": false, "diff": false, "tc": false},
 ]
 
-## PARK MODE (`park=<deg>`, flags `hand` / `pawl` / `cross`): the body held on the ramp by its foot
+## PARK MODE (`park=<deg>`, flags `hand` / `pawl` / `rolled` / `cross`): the body held on the ramp by its foot
 ## brake (or handbrake, `hand`, or P alone, `pawl`: no brake, a body with no pawl parks in N), nose
 ## up the slope (or across it, `cross`), for PARK_HOLD_S after the settle. Reports how far it
 ## moved: a tyre that holds statically moves nothing. Asphalt only, the hill hold off (`_nohold`):
-## the table is the brake hardware's.
+## the table is the brake hardware's. `rolled` is `pawl` from a roll-back: after the settle the body
+## rolls in N with no brake until PARK_ROLL_MPS down the slope, then P goes in and PARK_ROLLED_S
+## are logged once a second (each wheel's omega, `_spin_held`, `lock_torque`, the speed, the distance).
 const PARK_HOLD_S := 60.0
+const PARK_ROLL_MPS := 0.3
+const PARK_ROLLED_S := 20.0
+const PARK_ROLL_GIVE_UP_S := 10.0  ## s in N without reaching PARK_ROLL_MPS: the run reports and ends
 ## `doc=park` (arg 1): this set, then the `park` region of `docs/vehicle_measurements.md` is rewritten.
 const DOC_PARK_VARIANTS: Array[String] = ["sedan", "suv", "pickup", "garbage-truck",
 		"tractor-kenney", "semi"]
@@ -131,7 +138,9 @@ var _doc := false                     ## `doc=grade`: rewrite the doc region at 
 var _park_queue: Array[Dictionary] = []  ## park mode: variant + angle + mode jobs left
 var _park_doc := false                ## `doc=park`: rewrite the park region at the end
 var _park_mode := "foot"              ## foot | hand | pawl | cross, the current park job's
-var _park_reg := false                ## the current job is the regulation-grade handbrake hold
+var _park_rolled := false             ## `rolled`: P goes in only once the body rolls back
+var _park_in_p := false               ## `rolled`: P is in
+var _park_reg := false               ## the current job is the regulation-grade handbrake hold
 var _park_peak := 0.0                 ## fastest the held body moved after the settle, m/s
 var _park_rows: Array[Dictionary] = []
 var _creep_queue: Array[String] = []  ## creep mode: converter variants left
@@ -222,6 +231,9 @@ var _phase: int = Ph.DONE
 var _t := 0.0
 var _start := Vector3.ZERO
 var _gain := 0.0                      ## up-slope metres gained this trial
+var _settle_move := 0.0               ## up-slope metres the settle moved the body, + = up
+var _launch_speed := 0.0              ## up-slope m/s as the launch begins
+var _hi_unheld := false               ## the failure that set `_hi` was a body still sliding at the launch
 var _trace_t := 0.0
 var _drive_share := NAN               ## driven wheels' share of the rig's weight, at the last settle
 var _rows: Array[Dictionary] = []
@@ -298,8 +310,10 @@ func _ready() -> void:
 		return
 	if which == "doc=park" or not is_nan(park):
 		_nohold = true  ## the brake hardware alone: the tractor's hill hold would join its handbrake
+		_park_rolled = args.has("rolled")
 		_start_park(which, park, "cross" if args.has("cross") else (
-				"hand" if args.has("hand") else ("pawl" if args.has("pawl") else "foot")))
+				"hand" if args.has("hand") else ("pawl" if args.has("pawl") or _park_rolled
+				else "foot")))
 		return
 	if which == "doc=grade":
 		_doc = true
@@ -350,6 +364,7 @@ func _next_surface() -> void:
 	_hi = BISECT_HI
 	_step = _first_step()
 	_best = NAN
+	_hi_unheld = false
 	_begin_trial(_hold if not is_nan(_hold) else (_lo + _hi) * 0.5)
 
 
@@ -365,12 +380,17 @@ func _begin_trial(angle_deg: float) -> void:
 	_phase = Ph.SETTLE
 	_t = 0.0
 	_gain = 0.0
-	_drive(0.0, 100.0)
+	_settle_move = 0.0
+	_launch_speed = 0.0
+	_drive(0.0, 100.0, 1.0)  ## foot brake and handbrake: a body is held here, not caught sliding back
 
 
 func _build_ramp(angle_deg: float) -> void:
 	var a := deg_to_rad(angle_deg)
-	_ramp = MeasureRig.tilt_ramp(self, _ramp, Vector3(RAMP_WIDTH, RAMP_THICKNESS, RAMP_LENGTH), a)
+	_ramp = MeasureRig.tilt_ramp(self, _ramp, RAMP_LENGTH * 0.5, a)
+	if _ramp == null:
+		get_tree().quit(1)
+		return
 	_patch.tan_angle = tan(a)
 	_patch.surface = Surface.from_key(_surface)
 
@@ -430,6 +450,12 @@ func _physics_process(delta: float) -> void:
 		return
 	if _phase == Ph.SETTLE:
 		if _t >= SETTLE_S:
+			var up_dir := Basis(Vector3.RIGHT, deg_to_rad(_angle)) * Vector3(0.0, 0.0, -1.0)
+			_settle_move = (_car.global_position - _start).dot(up_dir)
+			_launch_speed = _car.linear_velocity.dot(up_dir)
+			if absf(_launch_speed) > SETTLE_HELD_SPEED:
+				_end_trial(false, false)
+				return
 			_phase = Ph.CLIMB
 			_t = 0.0
 			_tc_fuel = 1.0
@@ -483,7 +509,7 @@ func _physics_process(delta: float) -> void:
 
 
 
-func _end_trial(climbed: bool) -> void:
+func _end_trial(climbed: bool, held := true) -> void:
 	_phase = Ph.DONE
 	_drive(0.0, 100.0)
 	if _verbose:
@@ -497,14 +523,16 @@ func _end_trial(climbed: bool) -> void:
 		print("      wheels: sum f_long %8.0f N, suspension %8.0f N, surface drag %8.0f N,"
 				% [f_long, susp, drag]
 				+ " weight-along-slope %8.0f N" % (_car.mass * BrakeSizing.G * sin(deg_to_rad(_angle))))
-		print("    %5.2f deg: %-7s gain %6.2f m, speed %5.2f m/s, rear slip %.2f, gear %d"
-				% [_angle, "CLIMB" if climbed else "fail", _gain, _car.telemetry.speed,
-				_rear_slip(), _car.telemetry.gear_byte])
+		print("    %5.2f deg: %-8s settle %+6.3f m, launch %+5.2f m/s, gain %6.2f m, speed %5.2f m/s,"
+				% [_angle, "CLIMB" if climbed else ("fail" if held else "not held"), _settle_move,
+				_launch_speed, _gain, _car.telemetry.speed]
+				+ " rear slip %.2f, gear %d" % [_rear_slip(), _car.telemetry.gear_byte])
 	if climbed:
 		_best = _angle
 		_lo = _angle
 	else:
 		_hi = _angle
+		_hi_unheld = not held
 	_step += 1
 	if _step < BISECT_STEPS:
 		_begin_trial((_lo + _hi) * 0.5)
@@ -520,33 +548,38 @@ func _record() -> void:
 	# The fitted tyre's grip there (`RayWheel.tyre_grip`), the reference tyre's on no class.
 	var s := Vector2(Surface.grip_in(_car.drive.wheels[0].tyre_grip, sid), Surface.drag(sid))
 	var coupled := MeasureRig.towed_mass(_car)
-	var traction := _traction_limit_deg(spec, gd, s.x, s.y)
+	var tyre_crr: float = _car.drive.wheels[0].rolling_crr
+	var traction := _traction_limit_deg(spec, gd, s.x, s.y, tyre_crr)
 	if coupled > 0.0:
 		# The kingpin load on the drive axle has no static figure here: read it off the springs.
 		# Grade transfer included, since the last trial settled on its slope (within a bisection
 		# step of the answer).
-		traction = rad_to_deg(atan(maxf(gd.mu_long * s.x * _drive_share - s.y, 0.0)))
+		traction = rad_to_deg(atan(maxf(gd.mu_long * s.x * _drive_share - s.y
+				- (1.0 - _drive_share) * tyre_crr, 0.0)))
 	_rows.append({
 		"variant": _variant,
 		"surface": _surface,
 		"measured": _best,
 		"traction": traction,
-		"torque": _torque_limit_deg(spec, gd, s.y, spec.mass + coupled),
+		"torque": _torque_limit_deg(spec, gd, s.y + tyre_crr, spec.mass + coupled),
 		"tip": _tip_limit_deg(spec, gd) if coupled <= 0.0 else NAN,  ## kingpin load moves the COM
 		"coupled": coupled,
+		"unheld": _hi_unheld,
 		"label": _doc_label(spec, gd, coupled),
 	})
 	print("  %-16s %-8s measured %5.1f deg (%5.1f %%)%s" % [_variant, _surface,
 			_best if not is_nan(_best) else 0.0,
 			100.0 * tan(deg_to_rad(_best)) if not is_nan(_best) else 0.0,
-			", tyre %s" % _tyre_label if _tyre != "" else ""])
+			(", tyre %s" % _tyre_label if _tyre != "" else "")
+			+ (", not held (sliding at the launch)" if _hi_unheld else "")])
 
 
 ## Steepest grade the tyres alone hold, in degrees: static weight split plus the uphill transfer
-## onto the driven axle, minus the surface's own rolling drag. Single-body and ignoring
-## `load_sensitivity`, so it is the textbook reference the measurement is read against.
+## onto the driven axle, minus the surface's own rolling drag and the undriven wheels' tyre
+## resistance. Single-body and ignoring `load_sensitivity`, so it is the textbook reference the
+## measurement is read against.
 func _traction_limit_deg(spec: VehicleSpec, gd: GroundDriveSpec, grip: float,
-		crr: float) -> float:
+		crr: float, tyre_crr: float) -> float:
 	var mu := gd.mu_long * grip
 	var front_driven := gd.driven_front or (_mfwd and gd.front_axle_engageable)
 	if front_driven and gd.driven_rear:
@@ -573,7 +606,7 @@ func _traction_limit_deg(spec: VehicleSpec, gd: GroundDriveSpec, grip: float,
 	var transfer := mu * h / wheelbase
 	if gd.driven_front and not gd.driven_rear:
 		transfer = -transfer  ## uphill transfer UNLOADS a driven front axle
-	var num := mu * share_rear - crr
+	var num := mu * share_rear - crr - (1.0 - share_rear) * tyre_crr
 	var den := 1.0 - transfer
 	if num <= 0.0 or den <= 0.0:
 		return 0.0 if num <= 0.0 else 90.0
@@ -653,6 +686,8 @@ func _print_table() -> void:
 		if r["coupled"] > 0.0:
 			note = "coupled +%.0f kg — torque on the rig, traction on its sprung drive-axle load" \
 					% r["coupled"]
+		if r["unheld"]:
+			note += ("; " if note != "" else "") + "not held: sliding at the launch"
 		print("%-16s %-8s %7.1f%s %7.0f%% %9.1f%s %9.1f%s %9.1f%s  %s" % [
 			r["variant"], r["surface"],
 			0.0 if is_nan(m) else m, " d",
@@ -695,7 +730,8 @@ func _doc_table() -> Array[String]:
 		if cells == 0:
 			row = "| %s |" % r["label"]
 		var m: float = r["measured"]
-		row += " %.1f %% |" % (0.0 if is_nan(m) else 100.0 * tan(deg_to_rad(m)))
+		row += " %.1f %%%s |" % [0.0 if is_nan(m) else 100.0 * tan(deg_to_rad(m)),
+				" (not held)" if r["unheld"] else ""]
 		cells += 1
 		if cells == DOC_SURFACES.size():
 			lines.append(row)
@@ -746,6 +782,7 @@ func _next_park() -> void:
 	_phase = Ph.PARK_SETTLE
 	_t = 0.0
 	_park_peak = 0.0
+	_park_in_p = false
 	_park_hold()
 
 
@@ -754,7 +791,11 @@ func _park_hold() -> void:
 	if _park_mode == "hand":
 		_drive(0.0, 0.0, 1.0)
 	elif _park_mode == "pawl":
-		_drive(0.0, 0.0, 0.0, Drivetrain.GEAR_P)
+		if _park_rolled and _phase == Ph.PARK_SETTLE:
+			_drive(0.0, 100.0)
+		else:
+			_drive(0.0, 0.0, 0.0, Drivetrain.GEAR_P if not _park_rolled or _park_in_p
+					else Drivetrain.GEAR_N)
 	else:
 		_drive(0.0, 100.0)
 
@@ -766,6 +807,9 @@ func _park_step() -> void:
 			_phase = Ph.PARK_HOLD
 			_t = 0.0
 			_start = _car.global_position
+		return
+	if _park_rolled:
+		_park_rolled_step()
 		return
 	_park_peak = maxf(_park_peak, _car.linear_velocity.length())
 	var moved := (_car.global_position - _start).length()
@@ -781,6 +825,35 @@ func _park_step() -> void:
 						% [i, "R" if w.is_rear else "F", "d" if w.driven else "-",
 						w.suspension_force, w.force_long, w.force_lat, w.omega, w._spin_held])
 	if _t >= PARK_HOLD_S or moved >= PARK_SLIDE:
+		_end_park()
+
+
+## `rolled`: N and no brake until the body is PARK_ROLL_MPS down the slope, then P and a log line a second.
+func _park_rolled_step() -> void:
+	var up_slope := Basis(Vector3.RIGHT, deg_to_rad(_angle)) * Vector3(0.0, 0.0, -1.0)
+	if not _park_in_p:
+		if _car.linear_velocity.dot(up_slope) <= -PARK_ROLL_MPS:
+			_park_in_p = true
+			_t = 0.0
+			_trace_t = 0.0
+			_start = _car.global_position
+			print("  P in at %.3f m/s down the slope" % -_car.linear_velocity.dot(up_slope))
+		elif _t >= PARK_ROLL_GIVE_UP_S:
+			print("  never reached %.1f m/s down the slope in %.0f s" % [PARK_ROLL_MPS, _t])
+			_phase = Ph.DONE
+			_next_park()
+		return
+	var moved := (_car.global_position - _start).length()
+	_park_peak = maxf(_park_peak, _car.linear_velocity.length())
+	_trace_t += get_physics_process_delta_time()
+	if _trace_t >= 1.0 or _t >= PARK_ROLLED_S:
+		_trace_t = 0.0
+		var line := "  t %4.1f  v %6.4f m/s  moved %7.1f mm" % [_t, _car.linear_velocity.length(),
+				moved * 1000.0]
+		for w in _car.drive.wheels:
+			line += "  | %9.5f %s %7.1f" % [w.omega, "H" if w._spin_held else "-", w.lock_torque]
+		print(line)
+	if _t >= PARK_ROLLED_S:
 		_end_park()
 
 
@@ -1053,7 +1126,7 @@ func _roll_step() -> void:
 
 
 ## `verbose` roll-back line, every 0.5 s: the tractor unit's tyre force and slip per axle and its
-## rolling resistance (`RayWheel.force_roll`, tyre plus surface drag, inside the tyre force), and
+## rolling resistance (`RayWheel.force_roll`, the tyre's, inside the tyre force, plus `force_soil`), and
 ## with a trailer its tyres' force, its rolling resistance, its brake and the drawbar's pull, read
 ## off the trailer's own balance (`m a + m g sin - sum Fx` along the slope). Names what bounds a slow pull-away:
 ## traction, the drawbar, or the trailer.
@@ -1067,7 +1140,7 @@ func _print_roll_forces(gain: float) -> void:
 			fx[w.is_rear] += w.force_long
 			slip[w.is_rear] += w.long_slip
 			n[w.is_rear] += 1
-			roll += w.force_roll
+			roll += w.force_roll + w.force_soil
 	var line := "    t %5.2f  %+7.3f m  %5.2f km/h  rpm %4.0f c %d  Fx front %6.0f rear %6.0f N  roll %6.0f N  slip %+.2f / %+.2f" \
 			% [_t, gain, _car.telemetry.speed * 3.6, _car.drivetrain.rpm, _car.drivetrain.coupling_state,
 			fx[false], fx[true], roll, slip[false] / maxi(n[false], 1), slip[true] / maxi(n[true], 1)]
@@ -1080,8 +1153,8 @@ func _print_roll_forces(gain: float) -> void:
 		var t_roll := 0.0
 		for w: RayWheel in trailer.wheels:
 			if w.in_contact:
-				t_fx += w.force_long
-				t_roll += w.force_roll
+				t_fx += w.force_long + w.force_soil
+				t_roll += w.force_roll + w.force_soil
 		var g_pull := trailer.mass * BrakeSizing.G * sin(deg_to_rad(_angle))
 		line += "  | trailer Fx %6.0f N roll %6.0f N brake %.2f  drawbar %6.0f N (grade %6.0f)" % [
 				t_fx, t_roll, trailer.brake_applied(),
@@ -1221,7 +1294,7 @@ func _print_ascent(gain: float) -> void:
 ## and the energy check: the friction brakes' heat (the per-tick `brake_reacted
 ## * brake_friction_share * brake_settled_spin`, never C·ΔT, which cooling empties) against the
 ## rig's drop in kinetic, wheel-spin and potential energy less what the sim's own forces took:
-## rolling (`roll_reacted` over the same spin), air (`VehicleMath.air_force`), the driveline (the shaft torque
+## rolling (`roll_reacted` over the same spin, `force_soil` over the travel), air (`VehicleMath.air_force`), the driveline (the shaft torque
 ## `WheelDrive._drive_torque` on the driven wheels' spin: engine braking and coupling slip), the
 ## retarder's share of the reacted brake and the tyres' slip (their force on the patch's slip
 ## velocity). Straight-line: the patch velocity is read along the body's axes, not a steered wheel's.
@@ -1466,9 +1539,10 @@ func _next_descent() -> void:
 	_angle = 0.0 if _dsc_mode == "stops" else rad_to_deg(atan(_dsc_grade / 100.0))
 	var a := deg_to_rad(_angle)
 	_dsc_lift = _dsc_length * 0.5 * sin(a) + 5.0  ## the foot 5 m over the origin
-	# Wide as a tenth of its length: room for a rig that jackknifes off the steered line on low grip.
-	_ramp = MeasureRig.tilt_ramp(self, _ramp, Vector3(maxf(RAMP_WIDTH, 0.1 * _dsc_length),
-			RAMP_THICKNESS, _dsc_length), a, _dsc_lift)
+	_ramp = MeasureRig.tilt_ramp(self, _ramp, _dsc_length * 0.5, a, _dsc_lift)
+	if _ramp == null:
+		get_tree().quit(1)
+		return
 	_patch.tan_angle = tan(a)
 	_patch.lift = _dsc_lift
 	_surface = String(job.get("surface", "asphalt"))
@@ -1892,6 +1966,8 @@ func _ledger_tick(delta: float) -> void:
 			if not w.in_contact:
 				continue
 			var vel := VehicleMath.point_velocity(b, w.contact_point)
+			# The soil's force works over the contact's travel.
+			l["rolling"] -= w.force_soil * vel.dot(fwd) * delta
 			l["slip"] += slip_loss_w(w.force_long, w.omega, w.wheel_radius, vel.dot(fwd), w.force_lat,
 					vel.dot(right)) * delta
 		if gd.drag_area > 0.0 or b is TowedBody:  ## as `WheelDrive._apply_resistance` / `tick_towed`

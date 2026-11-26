@@ -457,22 +457,21 @@ static func crank_compliance(p_spec: VehicleSpec, at_rpm: float, fuel: float,
 ## (`accessory_torque`).
 static func fuel_to_land(p_spec: VehicleSpec, omega: float, target: float,
 		compliance: float, load_nm := 0.0) -> float:
-	var at_rpm := omega * RADS_TO_RPM
+	return drag_fuel(p_spec, omega * RADS_TO_RPM, load_nm,
+			(target - omega) / maxf(compliance, 1e-12))
+
+
+## The fuel (0..1) at which the engine's net torque at this rpm is `load_nm` plus `spare` (N·m): the
+## one engine law inverted, 1 where full fuel cannot get there. At `spare` 0, drag-torque control's
+## floor (`drag_control`), so the crank stops braking the wheels and never pushes them. `load_nm` is
+## what else the crank drives (`accessory_torque`); `spare` what is left to turn the crank.
+static func drag_fuel(p_spec: VehicleSpec, at_rpm: float, load_nm := 0.0, spare := 0.0) -> float:
 	var motoring := motoring_torque(p_spec, at_rpm)
 	var span := engine_torque(p_spec, at_rpm) - motoring
-	var need := (target - omega) / maxf(compliance, 1e-12) - motoring + load_nm
+	var need := spare - motoring + load_nm
 	if span <= 0.0:
 		return 1.0 if need > 0.0 else 0.0
 	return clampf(need / span, 0.0, 1.0)
-
-
-## The fuel (0..1) at which the engine's net torque is zero at this rpm: drag-torque control's floor
-## (`drag_control`), so the crank stops braking the wheels and never pushes them. `load_nm` is
-## what else the crank drives (`accessory_torque`).
-static func drag_fuel(p_spec: VehicleSpec, at_rpm: float, load_nm := 0.0) -> float:
-	var motoring := motoring_torque(p_spec, at_rpm)
-	var span := engine_torque(p_spec, at_rpm) - motoring
-	return clampf((load_nm - motoring) / span, 0.0, 1.0) if span > 0.0 else 0.0
 
 
 ## The transmission controller's coupling state for this tick (`sync_rpm` is the wheel side through
@@ -547,8 +546,10 @@ static func landing_capacity(pred: float, target: float, compliance: float) -> f
 
 
 ## An upshift's inertia phase (rad/s per s): the rate the oncoming clutch brings the crank down
-## across `rev_drop` (rad/s, the crank over the new gear's speed on the shift's tick), so the phase
-## spans `spec.shift_handover_s`. Landed at that rate (`landing_capacity`), the clutch carries the
+## across `rev_drop` (rad/s, the crank over the new gear's speed on the shift's tick), so a still
+## wheel side makes the phase span `spec.shift_handover_s`; the wheels rise to meet the crank, so it
+## ends sooner (5 ticks on the tractor's launch close, 0.20-0.23 s on its floored skip-shifts).
+## Landed at that rate (`landing_capacity`), the clutch carries the
 ## engine's delivered torque plus `J rev_drop / t`, never past the rating: during the inertia phase
 ## the oncoming clutch's capacity sets the output torque, a little over the driver's demand, the
 ## surplus taking out the crank's inertia (US 10,343,690; the phase lasts ~0.15-0.5 s on a converter

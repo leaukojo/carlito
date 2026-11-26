@@ -34,12 +34,10 @@ const MeasureRig := preload("res://tools/measure_rig.gd")
 const ALL_VARIANTS: Array[String] = ["garbage-truck", "semi", "semi-conventional"]
 const PASSES: Array[String] = ["park", "floor", "roll"]
 
-const RAMP_SIZE := Vector3(30.0, 2.0, 400.0)  ## width, thickness, length
+## m the ground reaches from the origin, where every pass starts (`MeasureRig.tilt_ramp`): the
+## regulation grade for `park`, flat for `floor` and `roll` (the cut stops within about 100 m).
+const GROUND_REACH := 500.0
 const SPAWN_UP := 60.0          ## m up the ramp from its origin; a coupled trailer stays on it
-const FLAT_X := 200.0           ## the flat slab, far enough off the ramp to share no collision
-const FLAT_LENGTH := 1000.0
-const FLAT_WIDTH := 40.0
-const FLAT_START_Z := 400.0
 
 const SETTLE_S := 2.0           ## foot brake held, engine running, while the springs take the weight
 const PUMP_HALF_S := 0.25       ## the brake pumped: this long down, this long up
@@ -98,7 +96,6 @@ func _ready() -> void:
 	for v in _variants:
 		for p in PASSES:
 			_jobs.append({"variant": v, "pass": p})
-	MeasureRig.add_slab(self, "Flat", Vector3(FLAT_WIDTH, 2.0, FLAT_LENGTH), FLAT_X)
 	print("=== air loss: spring brakes + auto-neutral on a live truck ===")
 	_next_job()
 
@@ -117,15 +114,14 @@ func _next_job() -> void:
 	_peak_throttle = 0.0
 	_gate_tick = -1
 	_stopped_t = -1.0
-	if _pass == "park":
-		var angle := atan(BrakeSizing.regulation_grade(MeasureRig.rig_mass(_variant)))
-		_ramp = MeasureRig.tilt_ramp(self, _ramp, RAMP_SIZE, angle)
-		_spawn()
-		MeasureRig.place(_car, MeasureRig.slope_pose(_car, angle, SPAWN_UP))
-	else:
-		_spawn()
-		MeasureRig.place(_car, Transform3D(Basis.IDENTITY,
-				Vector3(FLAT_X, _car.rest_ride_height(), FLAT_START_Z)))
+	var parked := _pass == "park"
+	var angle := atan(BrakeSizing.regulation_grade(MeasureRig.rig_mass(_variant))) if parked else 0.0
+	_ramp = MeasureRig.tilt_ramp(self, _ramp, GROUND_REACH, angle)
+	if _ramp == null:
+		get_tree().quit(1)
+		return
+	_spawn()
+	MeasureRig.place(_car, MeasureRig.slope_pose(_car, angle, SPAWN_UP if parked else 0.0))
 	_to(Ph.SETTLE)
 
 

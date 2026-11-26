@@ -1,4 +1,4 @@
-[gd_scene load_steps=46 format=3 uid="uid://dmwkg23la3w4j"]
+[gd_scene load_steps=48 format=3 uid="uid://dmwkg23la3w4j"]
 
 ; Tri-axle tipper / dump semi-trailer. Hand-built low-poly (Kenney ships no trailers at all), flat
 ; boxes and 8/10-segment cylinders to match the kit's flat-shaded look.
@@ -20,7 +20,12 @@
 ;   - THE NECK STOPS AT z 1.08, where the bulkhead closes it, and does NOT run back to the
 ;     step-down at 1.60 the way the other three trailers' necks do. The neck's top face is 0.16
 ;     above the coupling plane and the body's floor is 0.06 below it, so a neck carried under the
-;     body would stand up through the floor and be visible in the load space on every tip.
+;     body would stand up through the floor and be visible in the load space on every tip. Two
+;     low SILLS under the floor and a STEP face at z 1.57 carry the frame from the bulkhead down
+;     into the rails instead, so the tipped body never shows a gap between neck and running gear.
+;     COMPROMISE: the sills' front 0.16 m (z 1.10 .. 1.26) hangs 0.14 below the coupling plane over
+;     the tractor's tail, like the floor above them; it clears the tractor's mudguards by 0.02 and
+;     its rails by 0.16 at any articulation. Undo cost: start them at 1.26 and the gap returns.
 ;   - THE RAMS ARE POSED FROM MARKERS, not from constants: RamAnchorL/R are the frame eyes and
 ;     TipBody/RamHeadL/R the body eyes, and tipper.gd lays each ram between its pair and slides the
 ;     rod out of the barrel. Re-author either marker and the ram follows. They span 1.12 m closed
@@ -112,6 +117,20 @@ size = Vector3(1.92, 0.16, 2.23)
 [sub_resource type="BoxMesh" id="MeshBulkhead"]
 material = SubResource("MatFrame")
 size = Vector3(1.88, 0.8, 0.1)
+
+; The gooseneck's two side members, run back from the bulkhead to the step: what joins the coupled
+; front to the running gear, so a tipped body shows one frame rather than a front floating ahead of
+; the rails. Their tops carry the lowered body's floor; their undersides at y -0.14 clear the
+; tractor's mudguards (top -0.16) wherever those can swing to.
+[sub_resource type="BoxMesh" id="MeshGooseSill"]
+material = SubResource("MatFrame")
+size = Vector3(0.12, 0.08, 0.56)
+
+; The step face dropping from the sills into the frame rails, at z 1.57 so it stays outside the
+; 1.53 m the tractor's tail corners swing on about the kingpin.
+[sub_resource type="BoxMesh" id="MeshNeckStep"]
+material = SubResource("MatFrame")
+size = Vector3(1.28, 0.36, 0.08)
 
 [sub_resource type="BoxMesh" id="MeshHingeBracket"]
 material = SubResource("MatSteel")
@@ -312,6 +331,18 @@ mesh = SubResource("MeshNeck")
 [node name="Bulkhead" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 1.05)
 mesh = SubResource("MeshBulkhead")
+
+[node name="GooseSillL" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.55, -0.1, 1.34)
+mesh = SubResource("MeshGooseSill")
+
+[node name="GooseSillR" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, -0.1, 1.34)
+mesh = SubResource("MeshGooseSill")
+
+[node name="NeckStep" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.26, 1.61)
+mesh = SubResource("MeshNeckStep")
 
 [node name="HingeBracketL" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.72, -0.1, 6.25)

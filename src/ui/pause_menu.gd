@@ -13,6 +13,8 @@ extends Control
 const WorldConditions := preload("res://src/levels/base/world_conditions.gd")
 const KeyShaper := preload("res://src/input/key_shaper.gd")
 const BridgeSourceScript := preload("res://src/input/sources/bridge_source.gd")
+## The router's script, for its static gates: called on the autoload they warn STATIC_CALLED_ON_INSTANCE.
+const RouterScript := preload("res://src/input/input_router.gd")
 
 signal resume_requested
 signal respawn_requested
@@ -741,8 +743,8 @@ func _relabel_steering() -> void:
 ## What the LAB takes ESC off with on this body ("" for nothing), as the router gates it: never in a
 ## challenge nor on a body without the hardware (`InputRouter.lab_raw`).
 func _lab_esc_cause() -> String:
-	var lab := InputRouter.lab_raw(_abs_off, _axle_diff, _parallel_steer, _caps, _lab_locked)
-	return InputRouter.lab_esc_cause(bool(lab[&"abs_off"]),
+	var lab := RouterScript.lab_raw(_abs_off, _axle_diff, _parallel_steer, _caps, _lab_locked)
+	return RouterScript.lab_esc_cause(bool(lab[&"abs_off"]),
 			int(lab[&"axle_diff"]) as VehicleInput.AxleDiff)
 
 

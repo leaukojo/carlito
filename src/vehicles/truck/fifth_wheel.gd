@@ -16,9 +16,19 @@ const ROLL_LIMIT_DEG := 1.5
 ## collision stays excluded and only this limit stops the rig folding through the cab.
 const YAW_LIMIT_DEG := Articulation.JACKKNIFE_MAX_DEG
 
-## Dry plate friction about the kingpin (N*m), mid of a greased plate's 1-3 kN*m; with tyre grip,
-## all that damps trailer sway.
-const YAW_FRICTION_NM := 2000.0
+## The plate's friction about the kingpin (`CouplingProfile.yaw_friction_moment`); with tyre grip,
+## all that damps trailer sway. A greased plate's measured law in service ("base" lubrication,
+## between fresh and dry, "the state in which it remains for most of the time"): docs/sources.md
+## § Fifth-wheel plate friction, [216] scenario 1. On the box's 6.5 t kingpin load it saturates at
+## 1.5 kN*m; it scales with that load.
+## r (m): half the 0.77 m between the plate's mounting points, where it wears ([216] sec. 7.2.1).
+const FRICTION_RADIUS_M := 0.385
+## mu_sat ([216] App. B, scenario 1).
+const FRICTION_MU := 0.0612
+## k: 10 s/deg ([216] App. B, scenario 1, against the rate in deg/s), per radian.
+const FRICTION_K := 10.0 / deg_to_rad(1.0)
+## b: 55 N*m*s/deg ([216] App. B, scenario 1), per radian.
+const FRICTION_B := 55.0 / deg_to_rad(1.0)
 
 ## Told to the driver when E is pressed with the rig rolling.
 const HITCH_SPEED_NOTICE := "STOP WHERE THERE IS ROOM TO ATTACH"
@@ -33,7 +43,10 @@ func profile() -> CouplingProfile:
 		_profile.pitch_deg = PITCH_LIMIT_DEG
 		_profile.yaw_deg = YAW_LIMIT_DEG
 		_profile.roll_deg = ROLL_LIMIT_DEG
-		_profile.yaw_friction_nm = YAW_FRICTION_NM
+		_profile.friction_radius_m = FRICTION_RADIUS_M
+		_profile.friction_mu = FRICTION_MU
+		_profile.friction_k = FRICTION_K
+		_profile.friction_b = FRICTION_B
 		# Not "FifthWheel": it clashes with this coupler node (both children of the chassis), and Godot
 		# would silently rename the joint.
 		_profile.joint_name = &"KingpinLock"

@@ -29,68 +29,149 @@ func test_a_free_wheel_crawling_uphill_pays_its_whole_rolling_resistance() -> vo
 	# A free wheel rolling at its contact's speed up 25 %, at 0.03 m/s: the rolling moment is a stage
 	# of the wheel's settle, so the wheel pays `crr N` whatever the grade and the speed. A drag force capped per
 	# contact less gravity on the contact's own mass paid nothing under `g sin * dt` (39.6 mm/s here).
-	var grade := atan(0.25)
-	var root: Node3D = auto_free(Node3D.new())
-	root.basis = Basis(Vector3.RIGHT, grade)  # body -Z, the wheel's forward, points uphill
-	add_child(root)
-	_box(root, Vector3(4.0, 1.0, 4.0), Vector3(0.0, -0.5, 0.0))
-	var body := RigidBody3D.new()
-	body.freeze = true
-	body.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
-	body.collision_layer = 0
-	root.add_child(body)
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	var gd: GroundDriveSpecScript = GroundDriveSpecScript.new()
-	gd.wheel_radius = 0.36
-	gd.wheel_inertia = 1.0
-	gd.tyre_half_width = 0.1
-	gd.rest_length = 0.3
-	gd.spring_rate = 100000.0
-	gd.rolling_resistance = 0.02
-	var w := WheelScript.new(Vector3(0.0, 0.6, 0.0), false, true, null, 300.0)
-	w.apply_suspension(gd)
-	var v := 0.03
-	body.linear_velocity = root.basis * Vector3(0.0, 0.0, -v)
-	w.omega = v / gd.wheel_radius
-	w.tick(body, gd, root.get_world_3d().direct_space_state, 0.0, 0.0, TICK, [] as Array[Node])
-	assert_bool(w.in_contact).is_true()
-	assert_float(w.force_roll).is_equal_approx(-0.02 * w.suspension_force,
-			0.05 * 0.02 * w.suspension_force)
-	# The moment is not the brake's: no brake reacts or heats on it, and the wheel is not brake-held.
-	assert_float(w.brake_reacted).is_equal(0.0)
-	assert_bool(w._spin_held).is_false()
-	assert_float(w.roll_reacted).is_equal_approx(-w.force_roll * gd.wheel_radius, 1e-6)
+	# In mud too: the soil's drag is a force on the body (`force_soil`), never in the moment.
+	for terrains: Array[Node] in [[] as Array[Node], _mud()]:
+		var grade := atan(0.25)
+		var root: Node3D = auto_free(Node3D.new())
+		root.basis = Basis(Vector3.RIGHT, grade)  # body -Z, the wheel's forward, points uphill
+		add_child(root)
+		_box(root, Vector3(4.0, 1.0, 4.0), Vector3(0.0, -0.5, 0.0))
+		var body := RigidBody3D.new()
+		body.freeze = true
+		body.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+		body.collision_layer = 0
+		root.add_child(body)
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+		var gd: GroundDriveSpecScript = GroundDriveSpecScript.new()
+		gd.wheel_radius = 0.36
+		gd.wheel_inertia = 1.0
+		gd.tyre_half_width = 0.1
+		gd.rest_length = 0.3
+		gd.spring_rate = 100000.0
+		gd.rolling_resistance = 0.02
+		var w := WheelScript.new(Vector3(0.0, 0.6, 0.0), false, true, null, 300.0)
+		w.apply_suspension(gd)
+		var v := 0.03
+		body.linear_velocity = root.basis * Vector3(0.0, 0.0, -v)
+		w.omega = v / gd.wheel_radius
+		w.tick(body, gd, root.get_world_3d().direct_space_state, 0.0, 0.0, TICK, terrains)
+		assert_bool(w.in_contact).is_true()
+		assert_float(w.force_roll).is_equal_approx(-0.02 * w.suspension_force,
+				0.05 * 0.02 * w.suspension_force)
+		# The moment is not the brake's: no brake reacts or heats on it, and the wheel is not
+		# brake-held.
+		assert_float(w.brake_reacted).is_equal(0.0)
+		assert_bool(w._spin_held).is_false()
+		assert_float(w.roll_reacted).is_equal_approx(-w.force_roll * gd.wheel_radius, 1e-6)
+		# The soil pushes against the climb, never past its drag.
+		assert_float(w.force_soil).is_between(-w.surface_drag * w.suspension_force, 0.0)
+		assert_bool(terrains.is_empty() or w.force_soil < 0.0).is_true()
+		remove_child(root)
+		root.free()
 
 
 func test_a_coasting_body_loses_speed_at_its_rolling_resistance() -> void:
 	# Four free wheels at 3 m/s on the flat, nothing else slowing the body: it loses `sum crr N` over
-	# its mass and its wheels' inertia, every wheel's rolling reaching the body through its tyre.
-	var bench: Array = await _settled_bench(0.012)
+	# its mass and its wheels' inertia, every wheel's rolling reaching the body through its tyre. In
+	# mud the soil's drag joins it: a force on the body, whose tyres then slow the wheels with it.
+	for terrains: Array[Node] in [[] as Array[Node], _mud()]:
+		var drag := 0.0 if terrains.is_empty() else Surface.drag(Surface.MUD)
+		var bench: Array = await _settled_bench(0.012, terrains)
+		var body: RigidBody3D = bench[0]
+		var drive: WheelDrive = bench[1]
+		var spec: VehicleSpec = bench[2]
+		body.linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+		body.linear_damp = 0.0
+		body.linear_velocity = Vector3(0.0, 0.0, -3.0)  # forward is -Z
+		for w in drive.wheels:
+			w.omega = 3.0 / w.wheel_radius
+		await _bench_ticks(body, drive, spec, 0.0, 10, terrains)
+		var v0 := -body.linear_velocity.z
+		var ticks := 60
+		var load_sum := 0.0
+		for _i in ticks:
+			await _bench_ticks(body, drive, spec, 0.0, 1, terrains)
+			for w in drive.wheels:
+				load_sum += w.suspension_force
+		var v1 := -body.linear_velocity.z
+		var inertia := 0.0
+		for w in drive.wheels:
+			inertia += w.wheel_inertia / (w.wheel_radius * w.wheel_radius)
+		var expected := (0.012 + drag) * load_sum / ticks / (spec.mass + inertia)
+		assert_float((v0 - v1) / (ticks * TICK) / expected).override_failure_message(
+				"drag %.2f: lost %.4f of (crr + drag) N / (M + sum I / r^2)"
+				% [drag, (v0 - v1) / (ticks * TICK) / expected]).is_equal_approx(1.0, 0.01)
+		_free_bench(body)
+
+
+func test_the_soil_stops_a_free_body_without_rolling_it_back_and_holds_it_on_a_grade() -> void:
+	# Free wheels on mud. On the flat from 1 m/s the soil stops the body and no wheel turns back
+	# (the body itself rocks back on its springs as its dive unwinds, the patches standing). On 5 %,
+	# under the soil's 0.10, it holds the body: the rut spring sees the grade through the creep the
+	# stop's cap lets through, and takes up its deflection (`grade / drag` of STICK_DEFLECTION, on
+	# a time constant `long_mass / (dt k)`, about 1.2 s here) with no creep after.
+	var terrains := _mud()
+	var bench: Array = await _settled_bench(0.012, terrains)
+	var body: RigidBody3D = bench[0]
+	var drive: WheelDrive = bench[1]
+	var spec: VehicleSpec = bench[2]
+	body.linear_velocity = Vector3(0.0, 0.0, -1.0)  # forward is -Z
+	for w in drive.wheels:
+		w.omega = 1.0 / w.wheel_radius
+	var least := INF
+	for _i in 240:
+		await _bench_ticks(body, drive, spec, 0.0, 1, terrains)
+		for w in drive.wheels:
+			least = minf(least, w.omega)
+	assert_float(least).override_failure_message("a wheel turned back at %.6f rad/s" % least) \
+			.is_greater_equal(0.0)
+	assert_float(body.linear_velocity.length()).is_less(1e-4)
+	_free_bench(body)
+	bench = await _settled_bench(0.012, terrains, atan(0.05))
+	body = bench[0]
+	drive = bench[1]
+	spec = bench[2]
+	var released := body.global_position
+	await _bench_ticks(body, drive, spec, 0.0, 300, terrains)
+	var start := body.global_position
+	await _bench_ticks(body, drive, spec, 0.0, 60, terrains)
+	var settled := start.distance_to(released)
+	var crept := body.global_position.distance_to(start)
+	assert_float(settled).override_failure_message("settled %.4f m" % settled) \
+			.is_less(WheelScript.STICK_DEFLECTION)
+	assert_float(crept).override_failure_message("crept %.5f m in the second after 6.5 s" % crept) \
+			.is_less(1e-4)
+	_free_bench(body)
+
+
+func test_a_saturating_drive_on_flat_mud_gains_at_most_its_grip_less_the_soil() -> void:
+	# Every wheel driven far past its grip, TC holding each at the curve's peak, on flat mud: the
+	# patches give `mu grip N` at most, and the soil takes `drag N` through the axles outside the
+	# tyre's budget, so the body gains at most `(mu grip - drag) g`. As a moment on the wheel the
+	# drive paid the soil and the patches still gave `mu grip N`: the body gained `mu grip g`.
+	var terrains := _mud()
+	var bench: Array = await _settled_bench(0.0, terrains, 0.0, true)
 	var body: RigidBody3D = bench[0]
 	var drive: WheelDrive = bench[1]
 	var spec: VehicleSpec = bench[2]
 	body.linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
 	body.linear_damp = 0.0
-	body.linear_velocity = Vector3(0.0, 0.0, -3.0)  # forward is -Z
+	body.linear_velocity = Vector3(0.0, 0.0, -4.0)  # forward is -Z, over every slip floor
 	for w in drive.wheels:
-		w.omega = 3.0 / w.wheel_radius
-	await _bench_ticks(body, drive, spec, 0.0, 10)
+		w.omega = 4.0 / w.wheel_radius
+	var torque := 20000.0  ## N·m over the axles, several times what the four patches carry
+	await _bench_ticks(body, drive, spec, torque, 10, terrains)
 	var v0 := -body.linear_velocity.z
-	var ticks := 60
-	var load_sum := 0.0
-	for _i in ticks:
-		await _bench_ticks(body, drive, spec, 0.0, 1)
-		for w in drive.wheels:
-			load_sum += w.suspension_force
+	var ticks := 30
+	await _bench_ticks(body, drive, spec, torque, ticks, terrains)
 	var v1 := -body.linear_velocity.z
-	var inertia := 0.0
-	for w in drive.wheels:
-		inertia += w.wheel_inertia / (w.wheel_radius * w.wheel_radius)
-	var expected := 0.012 * load_sum / ticks / (spec.mass + inertia)
-	assert_float((v0 - v1) / (ticks * TICK) / expected).override_failure_message(
-			"lost %.4f of crr N / (M + sum I / r^2)" % ((v0 - v1) / (ticks * TICK) / expected)) \
-			.is_equal_approx(1.0, 0.01)
+	var grip := spec.ground_drive.mu_long * Surface.ref_grip(Surface.MUD)
+	var bound := (grip - Surface.drag(Surface.MUD)) * BrakeSizing.G
+	var gained := (v1 - v0) / (ticks * TICK)
+	assert_float(gained / bound).override_failure_message(
+			"gained %.3f m/s^2, %.3f of (mu grip - drag) g" % [gained, gained / bound]) \
+			.is_between(0.97, 1.01)
 
 
 ## A free wheel and the `mass` (kg) its contact moves, on `fz` N at `crr`, rolling together at
@@ -145,8 +226,11 @@ func test_a_free_wheel_and_its_body_roll_to_rest_and_never_back() -> void:
 
 
 ## A 1500 kg four-wheel bench (rear drive, no drivetrain) settled on flat ground, ticked by its
-## `WheelDrive` once per physics frame: [body, drive, spec].
-func _settled_bench(crr: float) -> Array:
+## `WheelDrive` once per physics frame: [body, drive, spec]. `terrains` paint the ground,
+## `grade` (rad) tilts it with the body's forward (-Z) uphill, `traction` drives every wheel
+## with TC on.
+func _settled_bench(crr: float, terrains: Array[Node] = [], grade := 0.0,
+		traction := false) -> Array:
 	var spec := _bench_spec(1500.0)
 	var gd := spec.ground_drive
 	gd.wheel_radius = 0.36
@@ -156,7 +240,10 @@ func _settled_bench(crr: float) -> Array:
 	gd.damper_bump = 3000.0
 	gd.damper_rebound = 4000.0
 	gd.rolling_resistance = crr
+	gd.driven_front = traction
+	gd.tcs_equipped = traction
 	var root: Node3D = auto_free(Node3D.new())
+	root.basis = Basis(Vector3.RIGHT, grade)
 	add_child(root)
 	_box(root, Vector3(40.0, 1.0, 200.0), Vector3(0.0, -0.5, 0.0))
 	var body := RigidBody3D.new()
@@ -168,20 +255,27 @@ func _settled_bench(crr: float) -> Array:
 	(hull.shape as BoxShape3D).size = Vector3(1.8, 0.6, 4.0)
 	body.add_child(hull)
 	root.add_child(body)
-	body.global_position = Vector3(0.0, 0.58, 0.0)
+	body.position = Vector3(0.0, 0.58, 0.0)
 	var drive := WheelDrive.new(body, spec)
-	await _bench_ticks(body, drive, spec, 0.0, 90)
+	await _bench_ticks(body, drive, spec, 0.0, 90, terrains)
 	return [body, drive, spec]
 
 
+## Free a bench's ground and body (`_settled_bench`), so the next case's casts find only its own.
+func _free_bench(body: RigidBody3D) -> void:
+	var root := body.get_parent()
+	remove_child(root)
+	root.free()
+
+
 func _bench_ticks(body: RigidBody3D, drive: WheelDrive, spec: VehicleSpec, axle_torque: float,
-		ticks: int) -> void:
+		ticks: int, terrains: Array[Node] = []) -> void:
 	var input := VehicleInput.new()
 	for _i in ticks:
 		await get_tree().physics_frame
 		drive.drive_omega(spec.ground_drive, input)
 		drive.tick(body, spec, input, 0.0, axle_torque, body.linear_velocity.length(), TICK,
-				[] as Array[Node])
+				terrains)
 
 
 func test_a_free_wheel_s_slip_never_reverses_tick_to_tick() -> void:
@@ -1402,6 +1496,31 @@ func test_a_full_refuse_hopper_moves_the_shipped_trucks_caps() -> void:
 				empty * BrakeSizing.G, 1e-3)
 
 
+func test_a_rated_rear_reads_its_side_laws_at_its_own_rating() -> void:
+	# `GroundDriveSpec.rear_tyre_rating`: the rear's side grip and stiffness law read against its own
+	# rated load (MF `Fz0`), its longitudinal budget against the spec's even share, the front on it.
+	var gd := GroundDriveSpec.new()
+	gd.mu_long = 1.0
+	gd.mu_lat = 0.95
+	gd.load_sensitivity = 0.12
+	gd.rear_tyre_rating = 1.557
+	var front := RayWheel.new(Vector3(0.0, 0.0, -1.0), true, true, null, 1000.0)
+	var rear := RayWheel.new(Vector3(0.0, 0.0, 1.0), false, true, null, 1000.0)
+	var ref := 1000.0 * BrakeSizing.G
+	for w: RayWheel in [front, rear]:
+		w.apply_suspension(gd)
+		w.suspension_force = 2.0 * ref
+	assert_float(front.lateral_reference_load()).is_equal(front.reference_load)
+	assert_float(rear.lateral_reference_load()).is_equal_approx(ref * 1.557, 1e-2)
+	assert_float(rear.lat_budget(gd)).is_equal_approx(
+			RayWheel.load_scaled_mu(0.95, 2.0 * ref, ref * 1.557, 0.12) * 2.0 * ref, 1e-2)
+	assert_float(rear.long_budget(gd)).is_equal(front.long_budget(gd))
+	assert_float(rear.lat_budget(gd)).is_greater(front.lat_budget(gd))
+	# A towed body rewrites the reference after `apply_suspension` (`TowedBody`): the rating holds.
+	rear.reference_load = 0.5 * ref
+	assert_float(rear.lateral_reference_load()).is_equal_approx(0.5 * ref * 1.557, 1e-2)
+
+
 # --- the foot brake split by axle ----------------------------------------------------------
 
 func test_no_bias_brakes_every_wheel_alike_and_a_bias_keeps_the_total() -> void:
@@ -1685,7 +1804,7 @@ func test_the_cast_on_a_face_reads_the_face() -> void:
 
 
 func test_the_cast_reads_a_face_with_its_hub_on_a_sweep_stop() -> void:
-	# A semi's steer wheel on `measure_vehicles`' 6 km strip, 2.7 km from its centre, the body
+	# A semi's steer wheel on a 40 m x 6 km slab, 2.7 km from its centre, the body
 	# pitched 0.3 deg: its hub stepped 0.1 um at a time across 20 um around one of the sweep's stops
 	# (0.75 of the travel), at twenty places along the strip. Where the stop lies within Jolt's
 	# tolerance of the face, the sweep calls it touching and the rest test clear; the compression
@@ -1721,6 +1840,51 @@ func test_the_cast_reads_a_face_with_its_hub_on_a_sweep_stop() -> void:
 			var hub_y := (body.global_transform * w.anchor).y
 			worst = maxf(worst, absf(w.compression - (0.32 - (hub_y - 0.36) / up.y)))
 	assert_float(worst).is_less(1e-5)
+
+
+func test_a_cast_stop_no_rest_test_confirms_is_no_contact() -> void:
+	# `measure_vehicles -- firetruck 45 scrape onebody`'s FR at t 7.767, moved 2760 m to the origin:
+	# the tyre's side parallel to a wall's face, its hub stepped one float32 ulp at a time across
+	# it. At one pose the sweep's hull touches the face high up the travel and the rest test reads
+	# the cylinder clear at the stop and a step on. That stop is no contact: every pose reads the
+	# flat under the tyre, never the wall's stop near full bump.
+	var root: Node3D = auto_free(Node3D.new())
+	add_child(root)
+	_box(root, Vector3(40.0, 2.0, 200.0), Vector3(0.0, -1.0, 0.0))
+	_box(root, Vector3(1.0, 2.0, 120.0), Vector3(2.4000001764297485, 1.0, 0.0))
+	var body := RigidBody3D.new()
+	body.freeze = true
+	body.collision_layer = 0
+	root.add_child(body)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var gd: GroundDriveSpecScript = GroundDriveSpecScript.new()
+	gd.wheel_radius = 0.36
+	gd.wheel_inertia = 1.0
+	gd.tyre_half_width = 0.21
+	gd.rest_length = 0.32
+	var w := WheelScript.new(Vector3.ZERO, false, false, null, 300.0)
+	w.apply_suspension(gd)
+	var space := root.get_world_3d().direct_space_state
+	# The run's query transform and travel, as `var_to_str` wrote them.
+	var xf: Transform3D = str_to_var("Transform3D(9.202254e-08, -1, -1.8687472e-06, 1, "
+			+ "9.202254e-08, 0, 1.7196687e-13, -1.8687472e-06, 1, 1.6899993, 0.62168145, 2764.7993)")
+	var motion := Vector3(-2.0201147e-08, -0.31996176, -0.0049458514)
+	var up := -motion.normalized()
+	var axle := -xf.basis.y
+	var wheel_basis := Basis(axle, up, axle.cross(up))
+	var worst := 0.0
+	var worst_at := 0
+	for i in range(-40, 41):
+		var from := xf.origin + Vector3(i * 1.1920929e-07, 0.0, -2760.0)
+		var found: bool = w._contact_query(space, body, from, up, wheel_basis, motion.length())
+		# The flat lies `r` under the hub, `(y - r) / up.y` down the travel.
+		var off: float = absf(w._contact_drop - (from.y - 0.36) / up.y) if found else INF
+		if off > worst:
+			worst = off
+			worst_at = i
+	assert_float(worst).override_failure_message("+%d ulp: %.4f m off the flat" % [worst_at, worst]) \
+			.is_less(1e-3)
 
 
 ## A slab whose top face passes through the origin, pitched `grade` rad; a frozen body on it
@@ -2289,6 +2453,9 @@ func test_open_differentials_leave_every_wheel_exactly_as_it_ticked() -> void:
 	for i in drive.wheels.size():
 		assert_float(drive.wheels[i].omega).is_equal(SPREAD_OMEGAS[i])
 	assert_bool(drive.rear_diff_locked).is_false()
+	# All three ran, open: no capacity, nothing moved.
+	assert_vector(drive.diff_capacity).is_equal(Vector3.ZERO)
+	assert_vector(drive.diff_moved).is_equal(Vector3.ZERO)
 
 
 func test_engaged_mfwd_ties_the_front_axle_to_the_rear() -> void:
@@ -2304,6 +2471,9 @@ func test_engaged_mfwd_ties_the_front_axle_to_the_rear() -> void:
 			.is_equal_approx((w[2].omega + w[3].omega) * 0.5, 1e-9)
 	# Both axles stay open inside: the rear pair keeps a spread, only the axle means are tied.
 	assert_float(w[2].omega - w[3].omega).is_greater(0.0)
+	assert_bool(is_inf(drive.diff_capacity.z)).is_true()
+	assert_float(drive.diff_capacity.x).is_equal(0.0)
+	assert_float(drive.diff_capacity.y).is_equal(0.0)
 
 
 func test_disengaged_mfwd_couples_nothing_across_the_axles() -> void:
@@ -2315,6 +2485,9 @@ func test_disengaged_mfwd_couples_nothing_across_the_axles() -> void:
 	drive._couple_differentials(spec.ground_drive, input, 4000.0)
 	for i in drive.wheels.size():
 		assert_float(drive.wheels[i].omega).is_equal(SPREAD_OMEGAS[i])
+	# No centre and no front diff ran: only the driven rear's, open.
+	assert_bool(is_nan(drive.diff_capacity.x) and is_nan(drive.diff_capacity.z)).is_true()
+	assert_float(drive.diff_capacity.y).is_equal(0.0)
 
 
 func test_the_shaft_frame_gears_spin_and_holds_by_n_and_compliance_by_n_squared() -> void:
@@ -2373,6 +2546,8 @@ func test_the_diff_lock_puts_the_rear_pair_on_one_shaft() -> void:
 	# The stiff (gripping) RR moves less than the soft RL: the compliance-weighted mean.
 	assert_float(w[2].omega).is_equal_approx((0.0005 * 30.0 + 0.003 * 20.0) / 0.0035, 1e-9)
 	assert_bool(drive.rear_diff_locked).is_true()
+	assert_bool(is_inf(drive.diff_capacity.y)).is_true()
+	assert_float(drive.diff_moved.y).is_greater(0.0)  # from the faster RL to RR
 	# Undriven front, untouched.
 	assert_float(w[0].omega).is_equal(10.0)
 
@@ -2389,6 +2564,9 @@ func test_a_limited_slip_axle_moves_no_more_than_its_capacity() -> void:
 	var moved := (60.0 - drive.wheels[2].omega) / 0.0001
 	assert_float(moved).is_equal_approx(Differential.bias_capacity(1000.0, 2.5), 1e-6)
 	assert_float((drive.wheels[3].omega - 5.0) / 0.0001).is_equal_approx(moved, 1e-6)
+	# The readouts are a Vector3's, float32.
+	assert_float(drive.diff_moved.y).is_equal_approx(moved, 1e-4)
+	assert_float(drive.diff_capacity.y).is_equal_approx(Differential.bias_capacity(1000.0, 2.5), 1e-4)
 
 
 func test_the_lab_axle_switch_keeps_opens_or_locks_the_driven_axle() -> void:
@@ -2610,9 +2788,8 @@ func test_an_open_axle_counter_rotates_under_the_pawl() -> void:
 
 
 func test_an_awd_body_holds_on_the_pawl_through_its_centre() -> void:
-	# Torsen centre: the lock leaves the axles counter-rotating (+-0.03 rad/s), the centre ties
-	# them back and moves their mean off zero by what their compliances differ (the one pass,
-	# ~0.007 rad/s here), under LOCK_STUCK_SPIN: the whole driveline holds.
+	# Torsen centre: the lock alone would leave the axles counter-rotating; solved through the
+	# centre, it lands the driven mean on the case and the whole driveline holds.
 	var spec := _bench_spec(1600.0)
 	spec.ground_drive.driven_front = true
 	spec.ground_drive.centre_diff_bias = 3.0
@@ -2620,6 +2797,25 @@ func test_an_awd_body_holds_on_the_pawl_through_its_centre() -> void:
 	var input := VehicleInput.new()
 	drive.drive_omega(spec.ground_drive, input)
 	_set_spin(drive, [-0.05, -0.05, -0.08, -0.08], [0.0008, 0.0008, 0.0005, 0.0005])
+	_set_brakes(drive, [0.0, 0.0, 0.0, 0.0])
+	_couple_in_park(drive, spec.ground_drive, input, 3000.0)
+	for w in drive.wheels:
+		assert_float(w.omega).is_equal(0.0)
+		assert_bool(w._spin_held).is_true()
+
+
+func test_an_awd_body_rolling_back_holds_on_the_pawl() -> void:
+	# `suv` in P after a roll-back (sessions/2026-11-26-pawl-rollback-diagnose.md): every wheel
+	# pulled near rolling speed, the fronts twice the rears' compliance. Solved over the centre, the
+	# lock lands the driven mean on the case and the driveline holds.
+	var spec := _bench_spec(1600.0)
+	spec.ground_drive.driven_front = true
+	spec.ground_drive.centre_diff_bias = 3.0
+	var drive := _drive_for(spec)
+	var input := VehicleInput.new()
+	drive.drive_omega(spec.ground_drive, input)
+	_set_spin(drive, [-0.29116, -0.29116, -0.30232, -0.30232],
+			[0.001078, 0.001078, 0.000543, 0.000543])
 	_set_brakes(drive, [0.0, 0.0, 0.0, 0.0])
 	_couple_in_park(drive, spec.ground_drive, input, 3000.0)
 	for w in drive.wheels:
@@ -2961,6 +3157,7 @@ func test_the_wheels_report_abs_and_overrun_slip_to_the_controller() -> void:
 ## A ground patch painting one surface everywhere, duck-typed as a terrain (`RayWheel.terrain_at`).
 class PaintedPatch extends Node:
 	var surface := Surface.ASPHALT
+	var drag := 0.0
 
 	func contains_xz(_p: Vector3) -> bool:
 		return true
@@ -2972,7 +3169,15 @@ class PaintedPatch extends Node:
 		return Surface.grip_in(response, surface)
 
 	func drag_at(_p: Vector3) -> float:
-		return 0.0
+		return drag
+
+
+## A `PaintedPatch` of mud: its grip and its drag.
+func _mud() -> Array[Node]:
+	var patch: PaintedPatch = auto_free(PaintedPatch.new())
+	patch.surface = Surface.MUD
+	patch.drag = Surface.drag(Surface.MUD)
+	return [patch]
 
 
 ## One wheel fitted with `fitted` on a `stock` spec (null, null: no class), on flat ground under a

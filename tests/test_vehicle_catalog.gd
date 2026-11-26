@@ -66,8 +66,10 @@ func test_every_body_and_attachment_has_a_description() -> void:
 ## variant's desc (and lists every variant), the towing table's "What is special" the trailer's.
 func test_the_guide_tables_repeat_the_catalog_descriptions() -> void:
 	var listed := {}
-	for page in ["car", "truck", "tractor", "boat", "drone"]:
-		var rows := _guide_rows("res://docs/guide/%s.md" % page, "What it is")
+	# The watercraft and drone pages wait in docs/guide-drafts/ (the guide covers land vehicles).
+	for page in ["guide/car", "guide/truck", "guide/tractor", "guide-drafts/boat",
+			"guide-drafts/drone"]:
+		var rows := _guide_rows("res://docs/%s.md" % page, "What it is")
 		assert_array(rows).override_failure_message("%s.md has no What it is table" % page) \
 				.is_not_empty()
 		for row: PackedStringArray in rows:
@@ -531,24 +533,30 @@ func test_the_laden_esc_tables_are_the_refuse_hoppers_levels() -> void:
 				.is_equal(gd.esc_laden_kg.size())
 
 
-func test_roll_stability_rides_on_the_semis_from_their_bobtail_load() -> void:
-	# Roll stability on the semis alone, their table keyed on the coupled load from the bare unit's
-	# mass up, ascending.
+func test_roll_stability_rides_on_every_esc_truck_from_its_own_mass() -> void:
+	# R13 asks roll-over control of N2 / N3 trucks (5.2.1.32): every truck-family body with ESC carries
+	# a lift table, no other body one. It is keyed on the load from the body's own mass up (a semi's
+	# bobtail), ascending; on a body whose mass steps with a load (`esc_laden_kg`) every point sits on
+	# a live mass, so a hopper retune without a re-measure fails.
 	var specs := _driven_specs()
 	for variant: String in specs:
 		var spec: VehicleSpecScript = specs[variant]
-		var table := spec.ground_drive.esc_roll_lift_g
-		var semi := variant in ["semi", "semi-conventional"]
+		var gd := spec.ground_drive
+		var table := gd.esc_roll_lift_g
+		var truck := gd.esc_equipped and VehicleCatalog.family_of(variant) == "truck"
 		assert_bool(table.is_empty()).override_failure_message(
-				"%s: roll table %s" % [variant, table]).is_equal(not semi)
+				"%s: roll table %s" % [variant, table]).is_equal(not truck)
 		if table.is_empty():
 			continue
-		assert_bool(spec.ground_drive.esc_equipped).is_true()
 		assert_float(table[0].x).override_failure_message(
-				"%s: the table starts at %.0f kg, the bobtail is %.0f" % [variant, table[0].x, spec.mass]) \
+				"%s: the table starts at %.0f kg, the body is %.0f" % [variant, table[0].x, spec.mass]) \
 				.is_equal_approx(spec.mass, 1.0)
 		for i in range(1, table.size()):
 			assert_float(table[i].x).is_greater(table[i - 1].x)
+			if not gd.esc_laden_kg.is_empty():
+				assert_bool(Array(gd.esc_laden_kg).has(table[i].x)).override_failure_message(
+						"%s: roll table point at %.0f kg, the live masses %s"
+						% [variant, table[i].x, gd.esc_laden_kg]).is_true()
 
 
 func test_every_free_crank_settles_on_its_steepest_droop_without_ringing() -> void:
@@ -950,8 +958,7 @@ func test_a_winged_body_holds_its_heading_to_its_top_end() -> void:
 				var axle: Dictionary = m[key]
 				var n_load := float(axle["load"]) + float(axle["aero"]) \
 						+ (pitch if key == "rear" else -pitch)
-				c[key] = 2.0 * BalanceModel.wheel_stiffness(m, float(axle["mu"]), n_load,
-						float(axle["share"]))
+				c[key] = 2.0 * BalanceModel.wheel_stiffness(m, axle, n_load)
 			var qs := 0.5 * VehicleMath.AIR_DENSITY * v * v * float(m["side_area"])
 			var y_b := -(float(c["front"]) + float(c["rear"]) + qs)
 			var y_r := -(a * float(c["front"]) - b * float(c["rear"])) / v

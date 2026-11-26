@@ -352,22 +352,23 @@ func tick_towing(input: VehicleInput, demand01: float, parking01: float, spool: 
 	_watch_fresh_coupling()
 
 
-## The coupling's Coulomb friction about the articulation axis, as a torque pair (trailer and the
-## equal and opposite on the chassis). Without it only tyre lateral grip damps trailer sway.
+## The coupling's friction about the articulation axis, as a torque pair (trailer and the equal and
+## opposite on the chassis), on the plate's law at the live kingpin load (`coupled_load_kg`: a
+## surge or a raised body moves it). Without it only tyre lateral grip damps trailer sway.
 ##
 ## Against the RELATIVE yaw rate, never toward zero angle (a spring would re-centre the trailer).
 ## Not the joint's angular motor either: Jolt's 6DOF motor is a velocity TARGET, not friction, and
 ## it fights the yaw limit. The axis is the chassis' up, the joint's Y since _build_joint leaves it
 ## unrotated.
 func _apply_yaw_friction(delta: float) -> void:
-	var friction := profile().yaw_friction_nm
-	if friction <= 0.0:
-		return
 	var chassis := _chassis()
 	if chassis == null:
 		return
 	var axis := chassis.global_transform.basis.y.normalized()
 	var rel_rate := (trailer.angular_velocity - chassis.angular_velocity).dot(axis)
+	var friction := profile().yaw_friction_moment(rel_rate, coupled_load_kg() * BrakeSizing.G)
+	if friction <= 0.0:
+		return
 	var torque := Articulation.yaw_friction_torque(
 			rel_rate, friction, yaw_pair_moment(), delta)
 	if is_zero_approx(torque):

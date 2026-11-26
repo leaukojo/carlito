@@ -190,8 +190,9 @@ func test_on_dry_asphalt_summer_leads_and_a_winter_tyre_stops_a_few_to_15_percen
 func test_on_snow_winter_is_within_the_measured_lead_over_summer() -> void:
 	var winter := _vs_ref("winter", Surface.SNOW)
 	var summer := _vs_ref("summer", Surface.SNOW)
-	# Measured: 1.28 cornering, 1.54 braking (docs/sources.md [214]).
-	assert_float(winter / summer).is_between(1.28, 1.54)
+	# Measured ABS stops from fifty: the summer reference 1.8x the winters' [215], 2.48x (55.3
+	# against 22.3 m) [66] (docs/sources.md).
+	assert_float(winter / summer).is_between(1.8, 2.48)
 	assert_float(_vs_ref("all_season", Surface.SNOW)).is_greater(summer)
 	assert_float(_vs_ref("all_season", Surface.SNOW)).is_less(winter)
 	assert_float(_vs_ref("studded", Surface.SNOW)).is_greater_equal(winter)

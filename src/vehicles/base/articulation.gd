@@ -7,11 +7,6 @@ extends RefCounted
 ## 70-90); this geometry touches only at ~140, and the bodies must not collide regardless.
 const JACKKNIFE_MAX_DEG := 75.0
 
-## Share of the one-tick stop the plate friction may take: the towed tyres' caps stop the same yaw
-## in the same tick, so a whole share makes a standing rig buzz
-## (`test_a_coupled_rig_standing_still_stays_mirror_symmetric`).
-const YAW_CAP_SHARE := 0.5
-
 
 ## Signed articulation angle between two body transforms. Flattened onto the horizontal plane,
 ## so a pitched tractor on a ramp does not read as articulated.
@@ -31,14 +26,17 @@ static func coupled_pose(tractor: Transform3D, kingpin_local: Vector3) -> Transf
 	return Transform3D(tractor.basis, tractor * kingpin_local)
 
 
-## Coulomb plate friction torque (N*m) on the towed body, opposing the RELATIVE yaw rate; the
-## caller applies the opposite on the chassis. Coulomb damps sway without re-centring. Clamped to
-## `YAW_CAP_SHARE` of the one-tick stop; `moment` is the pair's (`pair_moment`), or it overshoots.
+## Plate friction torque (N*m) on the towed body: the coupling law's moment `friction_nm` at this
+## rate (`CouplingProfile.yaw_friction_moment`), opposing the RELATIVE yaw rate; the caller applies
+## the opposite on the chassis. It damps sway without re-centring. Clamped to the one-tick stop on
+## `moment`, the pair's free-body figure (`pair_moment`), the 60 Hz guard: the joint swings the
+## trailer about its kingpin as well, so the relative yaw meets a larger moment, and this stop and
+## the towed tyres' caps together take only part of it in a tick.
 static func yaw_friction_torque(rel_yaw_rate: float, friction_nm: float, moment: float,
 		delta: float) -> float:
 	if friction_nm <= 0.0 or delta <= 0.0:
 		return 0.0
-	var cap := YAW_CAP_SHARE * maxf(moment, 0.0) * absf(rel_yaw_rate) / delta
+	var cap := maxf(moment, 0.0) * absf(rel_yaw_rate) / delta
 	return -signf(rel_yaw_rate) * minf(friction_nm, cap)
 
 

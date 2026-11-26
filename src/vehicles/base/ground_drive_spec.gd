@@ -106,6 +106,11 @@ extends Resource
 ## larger rear tyre), 1.0 on equal tyres. Understeer is the bar split and the tyre's load laws
 ## (`docs/handling.md` § Balance).
 @export var rear_lat_grip := 1.0
+## The rear tyre's rated load over the front's (the Magic Formula's `Fz0`): the rear's side-grip and
+## cornering-stiffness laws read against `reference_load` times it (`RayWheel.lateral_reference_load`),
+## so a larger-rated rear carries its load at a smaller share of its rating. The longitudinal and
+## brake laws keep the front's. 1.0 on equal tyres.
+@export var rear_tyre_rating := 1.0
 ## Twin tyres on each rear corner (a dual-rear-wheel van or truck): each carries half the corner's
 ## load, so the side grip and the cornering-stiffness law read at half load (`RayWheel.tyre_share`):
 ## the pair's peak is `1 + load_sensitivity` over one tyre's, its stiffness `2 C(L / 2)`. Lateral
@@ -158,7 +163,9 @@ extends Resource
 ## ESC's roll stability table (x the coupled load in kg, ascending; y g): the rig's lateral g on the
 ## unit's own sensor at its first wheel lift, measured (`measure_semi_launch -- <unit>
 ## trailer=<body> ramp noesc notrsp`, "rig's first lift"; `trailer=bobtail` for the unit's own
-## mass, the first point). Empty = no roll stability (`StabilityControl.roll_lift_g`).
+## mass, the first point); a rigid truck's x is its live mass (`measure_vehicles -- <variant> 60
+## track corner noesc mass=<kg>`, "first wheel lift"). Empty = no roll stability
+## (`StabilityControl.roll_lift_g`).
 @export var esc_roll_lift_g := PackedVector2Array()
 ## A towed body's own roll-over control in its EBS (`StabilityControl.trailer_roll_step`, the
 ## semi-trailers): it brakes itself off its own sensors, whatever the towing unit asks.

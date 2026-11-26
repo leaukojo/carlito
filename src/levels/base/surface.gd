@@ -2,8 +2,8 @@ class_name Surface
 ## The ground a tyre stands on: one shared table; a terrain names each paint channel's surface
 ## (`HeightmapTerrain.channel_surface`), never its own figures. Per surface, `ref_grip` (the
 ## reference all-season tyre's peak over its dry-asphalt peak, [0, 1]) and `drag` (rolling
-## resistance added over the tyre's own hard-road figure, a moment on the wheel beside it: its cost
-## is stated at `RayWheel.tick`'s rolling moment). A tyre class scales `ref_grip` per
+## resistance added over the tyre's own hard-road figure: a force on the body at the hub,
+## `RayWheel._soil_force`). A tyre class scales `ref_grip` per
 ## surface (`TyreClass`); `drag` is tyre-blind (a COMPROMISE: a big tyre pays the car's soil
 ## figure). Each figure's source, derivation and grade: `docs/sources.md` § Sourced figures,
 ## *Surfaces*. How a terrain blends them: `docs/systems.md` § Level framework. Ids are stored in

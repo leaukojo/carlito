@@ -17,9 +17,6 @@ const PTO_RATED_RPM := 1950.0 / 2100.0 * 2200.0
 const PTO_MODE_540 := 0            ## contract 'pto_mode' enum
 const PTO_MODE_1000 := 1
 
-## Wheel speed below which slip reads 0 (the ratio is noise near zero).
-const SLIP_FLOOR_KMH := 0.5
-
 ## Speed (km/h) every implement's `draft_rating()` is given at: D497's typical ploughing speed.
 const DRAFT_S_REF_KMH := 7.0
 
@@ -89,10 +86,9 @@ static func wheel_kmh(axle_omega: float, radius: float) -> float:
 	return absf(axle_omega) * radius * 3.6
 
 
-## ISO wheel slip %, unsigned like J1939 SPN 1858: braking slip and anything below
-## SLIP_FLOOR_KMH both read 0.
+## ISO wheel slip %, unsigned like J1939 SPN 1858: braking slip and a still axle both read 0.
 static func slip_pct(wheel_speed_kmh: float, ground_speed_kmh: float) -> float:
-	if wheel_speed_kmh <= SLIP_FLOOR_KMH:
+	if wheel_speed_kmh <= 0.0:
 		return 0.0
 	return clampf((wheel_speed_kmh - ground_speed_kmh) / wheel_speed_kmh * 100.0, 0.0, 100.0)
 

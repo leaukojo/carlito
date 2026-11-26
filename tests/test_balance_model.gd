@@ -164,8 +164,32 @@ func test_the_runtime_tyre_and_the_model_share_one_law() -> void:
 		var budget := RayWheel.load_scaled_mu(mu, n_load, ref, 0.1) * n_load
 		var side := RayWheel.combined_slip_force(0.0, 0.01, budget, budget,
 				spec.ground_drive.grip_curve, RayWheel.lateral_peak_slip(n_load, ref, 0.1, 2.56)).y
-		var model := BalanceModel.wheel_stiffness(m, mu, n_load)
+		var model := BalanceModel.wheel_stiffness(m, m["front"], n_load)
 		assert_float(side / 0.01).is_equal_approx(model, model * 1e-4)
+
+
+func test_a_rated_rear_reads_its_side_laws_at_its_own_rating() -> void:
+	# `rear_tyre_rating`: the rear axle's side laws read against `ref` times it, the front's and the
+	# longitudinal `ref` stay; the model's stiffness is RayWheel's small-slip force at that reference.
+	var spec := _spec(0.4, 0.12)
+	spec.ground_drive.cornering_peak_load = 3.0
+	spec.ground_drive.rear_tyre_rating = 1.557
+	var m := BalanceModel.axles(spec)
+	var ref: float = m["ref"]
+	assert_float(float((m["front"] as Dictionary)["ref"])).is_equal(ref)
+	assert_float(float((m["rear"] as Dictionary)["ref"])).is_equal_approx(ref * 1.557, 1e-3)
+	var rated := ref * 1.557
+	var mu := 0.97
+	for ratio: float in [0.4, 1.0, 2.0, 3.0]:
+		var n_load := ratio * ref
+		var budget := RayWheel.load_scaled_mu(mu, n_load, rated, 0.12) * n_load
+		var side := RayWheel.combined_slip_force(0.0, 0.01, budget, budget,
+				spec.ground_drive.grip_curve, RayWheel.lateral_peak_slip(n_load, rated, 0.12, 3.0)).y
+		var model := BalanceModel.wheel_stiffness(m, m["rear"], n_load)
+		assert_float(side / 0.01).is_equal_approx(model, model * 1e-4)
+	# The rated rear's capacity at rest: its mu read at a smaller share of its rating.
+	assert_float(BalanceModel.axle_capacity_g(m, 0.0).y).is_equal_approx(
+			RayWheel.load_scaled_mu(mu, float((m["rear"] as Dictionary)["load"]), rated, 0.12), 1e-5)
 
 
 func test_a_twin_rear_is_two_tyres_at_half_the_load() -> void:
@@ -190,7 +214,7 @@ func test_a_twin_rear_is_two_tyres_at_half_the_load() -> void:
 		var one := RayWheel.combined_slip_force(0.0, 0.01, one_budget, one_budget, curve,
 				RayWheel.lateral_peak_slip(n_load * 0.5, ref, 0.08, 1.92)).y
 		assert_float(pair).is_equal_approx(2.0 * one, absf(pair) * 1e-5)
-		var model := BalanceModel.wheel_stiffness(m, mu, n_load, 0.5)
+		var model := BalanceModel.wheel_stiffness(m, m["rear"], n_load)
 		assert_float(pair / 0.01).is_equal_approx(model, model * 1e-4)
 	assert_float(BalanceModel.pair_grip(mu, ref, 0.0, ref, 0.08, 0.5)
 			/ BalanceModel.pair_grip(mu, ref, 0.0, ref, 0.08)).is_equal_approx(1.08, 1e-5)
@@ -832,28 +856,58 @@ func _triangle_g(m: Dictionary) -> float:
 			/ (float(m["h"]) - float((m["front"] as Dictionary)["pivot_h"]) * (wheelbase - a) / wheelbase)
 
 
+## The front's load times its pivot's height (N*m per rad): what the swinging front's load takes
+## off the rolled weight's moment (`BalanceModel._roll_state`).
+func _pivot_w(m: Dictionary) -> float:
+	var f: Dictionary = m["front"]
+	return 2.0 * float(f["load"]) * float(f["pivot_h"])
+
+
+## The front's free beam's transfer (N) at `lat_g`: its tilt on its own tyres under the pivot's
+## moment, its load at the pivot.
+func _free_front(m: Dictionary, lat_g: float) -> float:
+	var f: Dictionary = m["front"]
+	var k_f := BalanceModel._roll_stiffness(f)
+	var pivot_m := _front_side_share(m, lat_g) * float(f["pivot_h"])
+	return 2.0 * pivot_m * k_f / ((k_f - _pivot_w(m)) * float(f["track"]))
+
+
 func test_inside_its_stop_a_swinging_front_carries_only_its_pivots_moment() -> void:
 	var m := BalanceModel.axles(_swing_spec(10.0))
 	var f: Dictionary = m["front"]
 	var g := 0.1
 	var state := BalanceModel._roll_state(m, g)
 	var pivot_m := _front_side_share(m, g) * float(f["pivot_h"])
-	assert_float(float(state["front"])).is_equal_approx(2.0 * pivot_m / float(f["track"]), 1e-3)
-	# The rear's springs hold the rest of the moment, the rolled COM's weight with it.
+	assert_float(float(state["front"])).is_equal_approx(_free_front(m, g), 1e-3)
+	# The rear's springs hold the rest of the moment, the rolled COM's weight with it less what the
+	# front's load takes at the pivot.
 	var weight_h := float(m["mass"]) * BalanceModel.G * float(m["h"])
 	var phi := float(state["phi"])
 	assert_float(float(state["rear"]) * float((m["rear"] as Dictionary)["track"]) / 2.0) \
-			.is_equal_approx(weight_h * (g + phi) - pivot_m, 1e-2)
+			.is_equal_approx(weight_h * (g + phi) - _pivot_w(m) * phi - pivot_m, 1e-2)
+
+
+func test_inside_its_stop_the_side_force_and_the_weight_share_one_lever() -> void:
+	# The body rolls about the line from the rear's ground centre to the pivot: the side force and
+	# the rolled weight both act on the COM's height over it, `h - h_p b / L`.
+	var m := BalanceModel.axles(load("res://src/vehicles/kenney/tractor-kenney_spec.tres"))
+	var wheelbase := float(m["wheelbase"])
+	var lever := float(m["h"]) - float((m["front"] as Dictionary)["pivot_h"]) \
+			* (wheelbase - float(m["front_arm"])) / wheelbase
+	var weight := float(m["mass"]) * BalanceModel.G
+	for g: float in [0.1, 0.3, 0.5]:
+		var phi_one := weight * g * lever / (BalanceModel._roll_stiffness(m["rear"]) - weight * lever)
+		assert_float(float(BalanceModel._roll_state(m, g)["phi"])).is_equal_approx(phi_one,
+				1e-4 * phi_one)
 	assert_float(BalanceModel.lltd(m)).is_less(BalanceModel.lltd(BalanceModel.axles(
 			_spec(0.4, 0.0, 0.0))))
 
 
 func test_the_front_takes_up_roll_without_a_step_at_its_stop() -> void:
 	var m := BalanceModel.axles(_swing_spec(0.5))
-	var f: Dictionary = m["front"]
 	var past := func(g: float) -> bool:
 		var front := float(BalanceModel._roll_state(m, g)["front"])
-		return front > 2.0 * _front_side_share(m, g) * float(f["pivot_h"]) / float(f["track"]) * (1.0 + 1e-6)
+		return front > _free_front(m, g) * (1.0 + 1e-6)
 	var lo := 0.0
 	var hi := 0.5
 	assert_bool(bool(past.call(hi))).is_true()
@@ -887,15 +941,22 @@ func test_on_stiff_tyres_the_rear_inner_lifts_on_the_stability_triangle() -> voi
 
 func test_past_its_stop_a_rolled_body_tips_on_the_wider_base() -> void:
 	# The rear inner lifted, the body rolls on to the stop and the front's outer patch takes over:
-	# it tips once both inner wheels are off, `(t_r a + t_f b) / (2 L h)` less the stop's own roll.
+	# it tips once both inner wheels are off, `(t_r a + t_f b) / (2 L h)` less the stop's own roll,
+	# of which the front's load at the pivot takes back `pivot_w / (m g h)`.
 	var m := BalanceModel.axles(_swing_spec(2.0, 1e9))
+	assert_float(_trapezoid_g(m, 2.0)).is_greater(_triangle_g(m))
+	assert_float(BalanceModel.tip_g(m)).is_equal_approx(_trapezoid_g(m, 2.0), 2e-3)
+	# A stop wide enough to roll the COM past that base tips the body at the rear's first lift.
+	var wide := BalanceModel.axles(_swing_spec(15.0, 1e9))
+	assert_float(_trapezoid_g(wide, 15.0)).is_less(_triangle_g(wide))
+	assert_float(BalanceModel.tip_g(wide)).is_equal_approx(_triangle_g(wide), 2e-3)
+
+
+## The g (rigid limit) at which a body rolled on to its `stop_deg` stop tips on the trapezoid.
+func _trapezoid_g(m: Dictionary, stop_deg: float) -> float:
 	var wheelbase := float(m["wheelbase"])
 	var a := float(m["front_arm"])
-	var trapezoid := (float((m["rear"] as Dictionary)["track"]) * a
+	var weight_h := float(m["mass"]) * BalanceModel.G * float(m["h"])
+	return (float((m["rear"] as Dictionary)["track"]) * a
 			+ float((m["front"] as Dictionary)["track"]) * (wheelbase - a)) / (2.0 * wheelbase
-			* float(m["h"])) - deg_to_rad(2.0)
-	assert_float(trapezoid).is_greater(_triangle_g(m))
-	assert_float(BalanceModel.tip_g(m)).is_equal_approx(trapezoid, 2e-3)
-	# A stop wide enough to roll the COM past that base tips the body at the rear's first lift.
-	var wide := BalanceModel.axles(_swing_spec(10.0, 1e9))
-	assert_float(BalanceModel.tip_g(wide)).is_equal_approx(_triangle_g(wide), 2e-3)
+			* float(m["h"])) - deg_to_rad(stop_deg) * (1.0 - _pivot_w(m) / weight_h)

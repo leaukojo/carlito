@@ -37,6 +37,11 @@ func _notification(what: int) -> void:
 		_panel.offset_top = UiTheme.px(self, HUD_TOP)
 
 
+## The readout's rect (local, full-rect like the HUD), empty while it is hidden.
+func panel_rect() -> Rect2:
+	return _panel.get_rect() if _panel != null and _panel.visible else Rect2()
+
+
 func set_runner(runner: ChallengeRunner) -> void:
 	_runner = runner
 

@@ -363,19 +363,19 @@ func test_air_force_clamped_to_one_tick_zeroing_on_each_axis() -> void:
 	assert_float(f.x).is_equal_approx(-MASS * 3.0 / DELTA, 1e-1)
 
 
-func test_air_force_is_off_in_still_air_at_a_standstill() -> void:
+func test_air_force_is_zero_at_a_standstill_and_the_plain_drag_at_a_creep() -> void:
 	var b := Basis.IDENTITY
 	assert_vector(M.air_force(Vector3.ZERO, Vector3.ZERO, b, 0.6, 5.0, MASS, DELTA)) \
 			.is_equal(Vector3.ZERO)
 	assert_vector(M.air_force(Vector3(0.0, 0.0, -0.01), Vector3.ZERO, b, 0.6, 5.0, MASS, DELTA)) \
-			.is_equal(Vector3.ZERO)
+			.is_equal_approx(Vector3(0.0, 0.0, M.aero_drag(0.01, 0.6)), Vector3.ONE * 1e-9)
 	# A zero delta is a divide-by-zero in the clamp, not a physical case.
 	assert_vector(M.air_force(Vector3(0.0, 0.0, -20.0), Vector3.ZERO, b, 0.6, 5.0, MASS, 0.0)) \
 			.is_equal(Vector3.ZERO)
 
 
 func test_a_crosswind_on_a_parked_body_is_side_force_only() -> void:
-	# The gate reads the air, not the body: a parked body in wind is pushed, broadside at
+	# The force reads the air, not the body: a parked body in wind is pushed, broadside at
 	# `0.5 rho cya w^2`, downwind, and with no drag part.
 	var wind := Vector3(9.0, 0.0, 0.0)  # blowing toward +X, the body's right
 	var f := M.air_force(Vector3.ZERO, wind, Basis.IDENTITY, 0.6, 5.0, MASS, DELTA)

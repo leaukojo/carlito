@@ -135,8 +135,6 @@ const BRAKE_HEAT := {
 			[8360.0, 2.85, 0.13, 0.0, 0.0, BrakeThermal.FadeCurve.DRUM]],
 	"van": [[6320.0, 1.14, 0.28, 0.82, 0.142, BrakeThermal.FadeCurve.PAD],
 			[4570.0, 0.78, 0.20, 0.82, 0.195, BrakeThermal.FadeCurve.PAD]],
-	"pickup": [[6890.0, 1.47, 0.37, 0.82, 0.183, BrakeThermal.FadeCurve.PAD],
-			[4770.0, 1.35, 0.34, 0.82, 0.169, BrakeThermal.FadeCurve.PAD]],
 	"racing": [[6360.0, 1.42, 0.36, 0.82, 0.178, BrakeThermal.FadeCurve.RACE],
 			[4770.0, 1.23, 0.31, 0.82, 0.153, BrakeThermal.FadeCurve.RACE]],
 	# 3.5-5 t van (VAN_BASE).
@@ -208,7 +206,7 @@ const CAR_BASE := {
 	"tyre_fit": TyreClass.Fit.PASSENGER, "tyre": "all_season",
 	"mu_long": 1.05, "mu_lat": 0.97,
 	# Equal tyres front and rear: the balance is the bar split and the tyre's two load laws.
-	"rear_lat_grip": 1.0,
+	"rear_lat_grip": 1.0, "rear_tyre_rating": 1.0,
 	# Every road car carries ABS (EU-mandatory since 2004); the open-wheelers opt out in VARIANTS.
 	"abs_equipped": true,
 	# Traction control too (part of ESC, EU-mandatory since 2014); `race-future` opts out.
@@ -334,9 +332,10 @@ const TRUCK_BASE := {
 	"anti_dive": 0.0, "anti_squat": 0.5,
 	"wheel_inertia": 3.0, "driven_front": false, "driven_rear": true,
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
-	# J1939: only family with an auxiliary retarder on the driven axle. 600 Nm at the gearbox output
-	# is a medium-duty output retarder: 0.84 m/s^2 on the 8 t body through the 4.01 final drive.
-	"retarder_equipped": true, "retarder_rating_nm": 600.0,
+	# J1939: only family with an auxiliary retarder on the driven axle. 1100 Nm at the gearbox output
+	# is the Allison 3000 RDS integral retarder's Very Low setting (docs/sources.md): 1.54 m/s^2 on
+	# the 8 t body through the 4.01 final drive.
+	"retarder_equipped": true, "retarder_rating_nm": 1100.0,
 	# Axle brakes of the ~26 t chassis these bodies are built on (7.1 t steer, 13 t drive axle):
 	# 15500 Nm a wheel is 2.2 g at 8 t, so the light body can lock its wheels and ABS works for it,
 	# and full pedal holds gear 1 at converter stall (BrakeSizing.stall_hold_margin). The spring
@@ -362,7 +361,7 @@ const TRUCK_BASE := {
 	# a garage swap scales it by the class factor only (src/vehicles/CLAUDE.md § Physics). The brake
 	# hardware is declared above.
 	"tyre_fit": TyreClass.Fit.TRUCK, "tyre": "truck_drive",
-	"mu_long": 0.80, "mu_lat": 0.75, "rear_lat_grip": 1.0,
+	"mu_long": 0.80, "mu_lat": 0.75, "rear_lat_grip": 1.0, "rear_tyre_rating": 1.0,
 	# Commercial radials, a touch less load-sensitive than a passenger tyre. Cornering stiffness peaks
 	# at 3.33x the static corner load: MF `PKY2` 3.33 on a 315/80R22.5 (projectchrono
 	# `CityBus_Pac02Tire.tir`), a truck tyre running at its rated `Fz0` as a loaded truck's does.
@@ -457,7 +456,8 @@ const VAN_BASE := {
 	# and a lifted 100 km/h step spins).
 	# The heavy vans: a light-truck fit on the all-season class.
 	"tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "tyre": "all_season",
-	"mu_long": 1.0, "mu_lat": 0.85, "rear_lat_grip": 1.0, "rear_twin_tyres": true,
+	"mu_long": 1.0, "mu_lat": 0.85, "rear_lat_grip": 1.0, "rear_tyre_rating": 1.0,
+	"rear_twin_tyres": true,
 	"abs_equipped": true, "tcs_equipped": true, "esc_equipped": true,
 	# Hill-start assist held 3 s, a truck's (Volvo VN).
 	"hill_hold": HillHold.Kind.ASSIST, "hill_hold_s": 3.0,
@@ -558,14 +558,16 @@ const TRACTOR_BASE := {
 	# diff, so engaged it ties the two axles' mean speeds together (and winds up in tight turns).
 	"centre_diff_rigid": true,
 	"diff_bias_front": 1.0, "diff_bias_rear": 1.0, "centre_diff_bias": 1.0,
-	# `rear_lat_grip` 1.077: the rears are the bigger tyre, so they carry their load at a smaller share
-	# of their rating, `1 + load_sensitivity * log2(rated rear / rated front)`: 650/65R38 157D (4125 kg)
-	# over 540/65R28 142D (2650 kg), a ~180 hp tractor's fit (Michelin MultiBib). It scales the rear's
-	# peak and its cornering stiffness alike. BalanceModel.limit reads equal tyres -5.1 % (rear-first),
-	# these -2.1 %; on its swinging front axle the corner pass tips at 0.72 g before
-	# either axle saturates (BalanceModel.corner_limit unsaturated, 0.62 / 0.63).
+	# `rear_tyre_rating` 1.557: the rears are the bigger tyre, 650/65R38 157D (4125 kg) over
+	# 540/65R28 142D (2650 kg), a ~180 hp tractor's fit (Michelin MultiBib). The rear's side laws read
+	# against its own rated load (MF `Fz0`), so it carries its load at a smaller share of its rating:
+	# mu 1.0767x the front's at the even share (`1 + load_sensitivity * log2(1.557)`), and its
+	# cornering stiffness peaks at 1.557x the front's load, so an implement on the rears stiffens them.
+	# BalanceModel.limit reads equal tyres -5.1 % (rear-first), these -0.9 %; on its swinging front
+	# axle the corner pass tips at 0.70 g before either axle saturates (BalanceModel.corner_limit
+	# unsaturated, 0.65 / 0.67).
 	"tyre_fit": TyreClass.Fit.TRACTOR, "tyre": "ag_lug",
-	"mu_long": 1.0, "mu_lat": 0.95, "rear_lat_grip": 1.077,
+	"mu_long": 1.0, "mu_lat": 0.95, "rear_lat_grip": 1.0, "rear_tyre_rating": 1.557,
 	# No ABS: a farm tractor's service brakes are not anti-lock. They sit on the rear axle only, and
 	# the pedal engages MFWD so the shaft brakes the fronts (a 40 km/h tractor brakes all four).
 	"abs_equipped": false, "brake_engages_front_axle": true,
@@ -788,15 +790,15 @@ const VARIANTS := {
 	# 0.83 at 0.72 g), LLTD 58 %, roll 4.0 deg, no wheel lifted; BalanceModel.corner_limit +20.4 %.
 	# 31 / 5 and 36 / 0 lift the inner front (4.8 / 6.1 deg). K at 0.15 g 0.98 with roll steer.
 	# Full-size light-commercial brakes, each its own reference's at 100 bar, re-referred to the drawn
-	# 0.36 m (docs/sources.md, Brake hardware): the Transit's 2911 on `van`, the F-150's 3385 on both
+	# 0.36 m (docs/sources.md, Brake hardware): the Transit's 2911 on `van`, the Hilux's 1948 on both
 	# pickups. Handbrake and pawl stay the SUV class's (no parking hardware sourced).
 	"van": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "com_y": 0.58, "anti_roll_rate": 24000.0, "anti_roll_rate_rear": 12000.0, "mu_lat": 0.88, "mass": 1600.0, "max_steer_deg": 32.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 2911.0, "handbrake_torque": 1700.0, "brake_heat": "van"},
 	# `ride_lift` 0.08 on the flatbeds: their arches are drawn shallower than the tyre, so at the
 	# flush ride height the rear wheels broke through the bed floor.
 	# `yaw_index` 0.94, the measured pickups' median (docs/handling.md § Inertia): the empty bed
 	# leaves the mass forward.
-	"pickup": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 19600.0, "anti_roll_rate_rear": 8400.0, "ride_lift": 0.08, "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 3385.0, "handbrake_torque": 1700.0, "brake_heat": "pickup"},
-	"pickup-flat": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 19600.0, "anti_roll_rate_rear": 8400.0, "ride_lift": 0.08, "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 3385.0, "handbrake_torque": 1700.0, "brake_heat": "pickup"},
+	"pickup": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 19600.0, "anti_roll_rate_rear": 8400.0, "ride_lift": 0.08, "mass": 1550.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 1948.0, "handbrake_torque": 1700.0, "brake_heat": "suv_lc"},
+	"pickup-flat": {"family": "car", "roll_steer_rear": 0.10, "compliance_steer_rear": 0.0, "tyre_fit": TyreClass.Fit.LIGHT_TRUCK, "yaw_index": 0.94, "anti_roll_rate": 19600.0, "anti_roll_rate_rear": 8400.0, "ride_lift": 0.08, "mass": 1500.0, "torque_mul": 1.05, "max_steer_deg": 33.0, "driven_front": false, "driven_rear": true, "speed_limit_kmh": 180.0, "brake_torque": 1948.0, "handbrake_torque": 1700.0, "brake_heat": "suv_lc"},
 	# heavy vans: car family, van feel (VAN_BASE, not CAR_BASE) — these are 4-5 t vehicles
 	"delivery": {"family": "car", "base": "van", "mass": 4200.0},
 	"delivery-flat": {"family": "car", "base": "van", "com_y": 0.55, "ride_lift": 0.08, "mass": 4000.0},
@@ -819,7 +821,11 @@ const VARIANTS := {
 	# holds the body pump's rated 1300 rpm parked, isochronously: no truck PTO droop figure found, and
 	# electronic set-speed control holds its speed, so the droop stays 0 (`PedalMap.MIN_DROOP`, an
 	# estimate). Interlocks: `TruckTelemetry.pto_mode_engaged`; docs/sources.md § PTO power.
-	"garbage-truck": {"family": "truck", "pto_mode_rpm": 1300.0, "mass": 8000.0, "com_y": 0.85, "front_weight": 0.465, "handbrake_torque": 6500.0, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 85.0},
+	# Roll stability (`esc_roll_lift_g`): the body's own `acc_lat` at its first wheel lift on the
+	# hopper's levels, measured 2026-11-20 (`measure_vehicles -- garbage-truck 60 track corner noesc
+	# mass=<kg>`). From 12375 kg the front tyres slide before a wheel lifts (0.65 g), so the table ends
+	# at 11750 and holds its last point past it (`StabilityControl.roll_lift_g`).
+	"garbage-truck": {"family": "truck", "esc_roll_lift_g": [Vector2(8000, 0.655), Vector2(8625, 0.638), Vector2(9250, 0.623), Vector2(9875, 0.611), Vector2(10500, 0.628), Vector2(11125, 0.625), Vector2(11750, 0.624)], "pto_mode_rpm": 1300.0, "mass": 8000.0, "com_y": 0.85, "front_weight": 0.465, "handbrake_torque": 6500.0, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 85.0},
 	# Emergency vehicles are exempt from the goods-vehicle limiter; 110 is the appliance's own
 	# rating, where the governor settles it (108.2 km/h).
 	# `mass` 12000: a pumping appliance runs at its operational weight (water, kit, crew), here the
@@ -828,7 +834,9 @@ const VARIANTS := {
 	# `com_y` 0.90 is an estimate: an unladen 7.5 t at TRUCK_BASE's 0.75 plus 4.5 t of tank and
 	# lockers at the body's mid-height (1.14). It is 0.65 of the 1.38 m track, under NFPA 1901's
 	# 0.80 ceiling.
-	"firetruck": {"family": "truck", "mass": 12000.0, "com_y": 0.90, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 110.0},
+	# Roll stability (`esc_roll_lift_g`): its `acc_lat` at the first wheel lift, measured 2026-11-20
+	# (`measure_vehicles -- firetruck 60 track corner noesc`).
+	"firetruck": {"family": "truck", "esc_roll_lift_g": [Vector2(12000, 0.546)], "mass": 12000.0, "com_y": 0.90, "max_steer_deg": 22.0, "steer_speed": 1.6, "speed_limit_kmh": 110.0},
 	# tractor family (ISOBUS) — one drivable body.
 	# 40 km/h is type approval, and the limiter is what holds it: the road gear reaches 40 at the
 	# 2200 rated speed with the governor's tail still to run, and the body settles at 38.3 inside
@@ -1037,6 +1045,7 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 	gd.mu_long = get_f.call("mu_long")
 	gd.mu_lat = get_f.call("mu_lat")
 	gd.rear_lat_grip = get_f.call("rear_lat_grip")
+	gd.rear_tyre_rating = get_f.call("rear_tyre_rating")
 	gd.rear_twin_tyres = get_flag.call("rear_twin_tyres")
 	# Family number, not a per-variant knob: baseline only, pinned by test_kenney_variants.
 	gd.load_sensitivity = float(b["load_sensitivity"])
@@ -1118,6 +1127,7 @@ func _build_spec(baseline: String, ov: Dictionary, geo: Dictionary, wheels: Arra
 			gd.esc_laden_kg = RefuseBody.laden_masses_kg(spec.mass)
 			for kg in gd.esc_laden_kg:
 				gd.esc_laden_k.append(StabilityControl.reference_table(spec, kg))
+		gd.esc_roll_lift_g = PackedVector2Array(ov.get("esc_roll_lift_g", []))
 
 	spec.headlight_paths.assign(_lamp_paths["headlight_paths"])
 	spec.head_lamp_paths.assign(_lamp_paths["head_lamp_paths"])

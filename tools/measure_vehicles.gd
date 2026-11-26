@@ -8,19 +8,26 @@ extends Node3D
 ## keyboard path shapes its keys (src/input/key_shaper.gd), which would measure the shaper instead of
 ## the vehicle.
 ## `tyre=<id>` fits that `TyreCatalog` class on each body (`MeasureRig.fit_tyre`; the stock where it
-## is not made in the body's fit); `surface=<name>` paints every slab one `Surface`
-## (`MeasureRig.GripPatch`). Without it the slabs are bare ground, which reads the tyre's asphalt.
+## is not made in the body's fit); `surface=<name>` paints the strip one `Surface`
+## (`MeasureRig.GripPatch`). Without it the strip is bare ground, which reads the tyre's asphalt.
+## A pass with state of its own lives beside this file (`measure_vehicles_<pass>.gd`: hitch, plough,
+## kerb, side, scrape, arm, parked), handed each body and tick through the same run line.
 
 const Catalog := preload("res://src/vehicles/vehicle_catalog.gd")
 const MeasureRig := preload("res://tools/measure_rig.gd")
+const HitchPass := preload("res://tools/measure_vehicles_hitch.gd")
+const PloughPass := preload("res://tools/measure_vehicles_plough.gd")
+const KerbPass := preload("res://tools/measure_vehicles_kerb.gd")
+const SidePass := preload("res://tools/measure_vehicles_side.gd")
+const ScrapePass := preload("res://tools/measure_vehicles_scrape.gd")
+const ArmPass := preload("res://tools/measure_vehicles_arm.gd")
+const ParkedPass := preload("res://tools/measure_vehicles_parked.gd")
 
-const STRIP_LENGTH := 6000.0
-
-## A body that reaches an edge is flagged, never measured silently.
-const STRIP_WIDTH := 40.0
-const START_Z := 2800.0      ## spawn near one end; the body faces -Z, so it runs the length
-## Metres of strip ahead of the spawn; using all of it means the run ran out of road.
-const RUN_LENGTH := START_Z + STRIP_LENGTH * 0.5
+## The strip: `MeasureRig.add_ground`'s plane. The spawn is at the origin, where float32 positions
+## are finest; the body faces -Z.
+const START_Z := 0.0
+## Metres ahead of the spawn a run may use; using all of it means the run ran out of road.
+const RUN_LENGTH := 5800.0
 const DEFAULT_SECONDS := 90.0
 
 ## Top speed is called once gains stop meaningfully over SETTLE_WINDOW; relative threshold
@@ -80,14 +87,11 @@ const CORNER_FIRST_AFTER_S := 1.0
 ## The speed hold is a PI pedal, never bang-bang: full-pedal pulses through a torque-biasing diff
 ## send the whole engine to the slower wheel or axle, and the pass then reads power-on oversteer
 ## instead of grip (`race` spun at a reported 1.62 g; the SUV's rear saturated first).
-## The PI's output is a fuel fraction, fed through `_pi_pedal`: one loop gain on every pedal map.
-## Every pass's speed hold shares the gains (`MeasureRig.PiHold`).
+## The PI's output is a fuel fraction, fed through `MeasureRig.pi_pedal`: one loop gain on every
+## pedal map. Every pass's speed hold shares the gains (`MeasureRig.PiHold`).
 const SPEED_HOLD_KP := 0.8       ## fuel per m/s of speed error
 const SPEED_HOLD_KI := 0.5       ## fuel per second per m/s of speed error
 const SPEED_HOLD_SEED := 0.35      ## integral seed when a hold begins, roughly a car's cruise
-## On ice (grip 0.12) the run-up to CORNER_SPEED takes ~50 m and the circle is ~100 m in radius.
-const PAD_SIZE := 600.0
-const PAD_X := -500.0              ## clear of the strip's +/- STRIP_WIDTH / 2 and the step pad
 
 # --- braking pass (opt-in: pass the `brake` flag) --------------------------
 ## Straight stops on the strip, one per pedal in BRAKE_PEDALS: full throttle up to BRAKE_SPEED (or
@@ -101,41 +105,6 @@ const BRAKE_PEDALS: Array[float] = [0.3, 0.6, 1.0]
 const BRAKE_LOCK_SLIP := 0.3
 const BRAKE_STOP_SPEED := 0.3      ## m/s counted as stopped
 
-## --- both pedals at stall (`stall`, instead of every other pass) ---
-## Settles on the full foot brake, then floors the throttle against it in manual D1 (the worst gear;
-## the automatic box would start the tractor in D3) with traction control off (the ideal TC takes
-## the drive back at a standstill, so it would measure the TC, not the brake), and reports how far
-## the body moved, its peak speed and the driven wheels' peak spin. `InputRouter.brake_override`
-## latches only past BRAKE_OVERRIDE_SPEED, so a body that holds never reaches it: a latch is
-## reported as a failure to hold, never hidden.
-const STALL_SETTLE_S := 1.5
-const STALL_HOLD_S := 10.0
-## --- free crank (`freerev`, instead of every other pass) ---
-## Parked in N on the full foot brake, the pedal stepped through FREEREV_PEDALS, each held
-## FREEREV_HOLD_S: the mean rpm over its last FREEREV_AVG_S, the applied throttle, and whether the
-## limiter cut in that window. A map whose free crank runs away reads the limiter on a light pedal.
-const FREEREV_PEDALS: Array[float] = [0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0]
-const FREEREV_SETTLE_S := 1.5
-const FREEREV_HOLD_S := 4.0
-const FREEREV_AVG_S := 1.0
-## --- standing still (`rest[=n|brake|handbrake]`, instead of every other pass) ---
-## Stood on the strip for REST_SETTLE_S in D with the pedals up (`rest`), in N, on a REST_BRAKE_PCT
-## foot brake or on the handbrake, the last REST_SAMPLE_S read per tick: how often the body's speed
-## changes sign, its swing and drift, the rear springs' swing, and per axle whether the wheel's rim
-## lands on the road's speed while the contact lands on the rim's (wheel and body swapping speeds),
-## the tyre force against its one-tick cap and how often the rolling drag flips. `crr=<x>` sets
-## every wheel's rolling resistance for the pass, the coupled trailer's too.
-const REST_SETTLE_S := 10.0
-const REST_SAMPLE_S := 3.0
-const REST_BRAKE_PCT := 30.0
-## --- handbrake turn (`handbrake`, instead of every other pass) ---
-## Up to HB_SPEED on the strip, then a HB_STEER step with the throttle lifted, held HB_HOLD_S and
-## released straight for HB_AFTER_S: once with the steer alone, once with the handbrake pulled
-## over the same window. Reports the rear wheels' locked time, peak yaw rate and heading change.
-const HB_SPEED := 16.67            ## m/s (60 km/h)
-const HB_STEER := 30.0             ## % of lock, + = right
-const HB_HOLD_S := 1.0
-const HB_AFTER_S := 1.5
 ## --- step steer (`step`, instead of every other pass) ---
 ## At each speed of the body's STEP_SETS row (run up floored, then STEP_SETTLE_S on the PI pedal,
 ## SPEED_HOLD_KP / _KI), the bridge steer is stepped in one tick to each of STEP_LOCKS and held
@@ -156,7 +125,6 @@ const STEP_LOCKS: Array[float] = [10.0, 20.0, 30.0]  ## % of lock, + = right
 const STEP_SETTLE_S := 3.0
 const STEP_HOLD_S := 3.0
 const STEP_STEADY_S := 0.5
-## A held run's cap: the widest 8 s turn at 100 km/h (~0.8 g) strays ~160 m, inside the pad's half.
 const STEP_HOLD_MAX_S := 8.0
 ## `tail_settled`'s gates. 3 s into `suv`'s 100 km/h 10 % held step (2026-10-23) the PI pedal still
 ## gains 0.136 m/s^2 and beta' / r reads 0.009, its K 0.14 deg/g over the 6 s tail's (0.008 m/s^2).
@@ -166,11 +134,9 @@ const STEP_SETTLE_ENDS := 6        ## ticks averaged at each end of the tail
 const STEP_RISE := 0.9
 const STEP_SPIN_DEG := 20.0
 const STEP_ROLL_DEG := 45.0
-## The strip is 40 m wide; a held step's 8 s cap at 100 km/h travels up to ~160 m sideways.
-const STEP_PAD_WIDTH := 400.0
 ## --- sine with dwell (`sine`, instead of every other pass) ---
-## FMVSS 126 S7.6 / S7.9 and R140 9.6 / 9.9 (`docs/sources.md` § Stability control), on the step
-## pad. A: the steer for a steady SINE_A_G in a steer wound on at SINE_RAMP_RATE of full lock per
+## FMVSS 126 S7.6 / S7.9 and R140 9.6 / 9.9 (`docs/sources.md` § Stability control), on the
+## strip. A: the steer for a steady SINE_A_G in a steer wound on at SINE_RAMP_RATE of full lock per
 ## second, SINE_KMH held on the PI pedal. Then each run coasts (pedal lifted) from SINE_KMH into a
 ## SINE_HZ sine of amplitude k·A with a SINE_DWELL_S dwell at its second peak, k from SINE_FIRST_A
 ## by SINE_STEP_A to SINE_LAST_A, on to SINE_MIN_LOCK if that is more, never past full lock; each
@@ -213,139 +179,6 @@ const CIRCLE_SPEED := 1.39         ## m/s (5 km/h)
 const CIRCLE_LOCK := 100.0         ## % of lock, + = right
 const CIRCLE_SETTLE_S := 8.0
 const CIRCLE_HOLD_S := 4.0
-## --- hitch statics (`hitch`, instead of every other pass) ---
-## Parked on the foot brake and the lever, a body with three-point implements is read bare, then per
-## implement (`trailer=` names one; else every carried one) at each of HITCH_STAGES. A reading waits
-## HITCH_WAIT_S (the linkage's 1.5 s stroke and the settle), then averages HITCH_AVG_S: each axle's
-## summed `suspension_force` (kg) against the statics off the live mass and COM; the front change
-## from bare against `m e / L` off the implement point the live COM implies; the front share against
-## HITCH_FRONT_MIN; and the body-frame tensor diagonal against the composite (the bare tensor plus
-## parallel-axis terms for the bare mass and a point implement), the gap Jolt's COM-shift leaves.
-const HITCH_WAIT_S := 4.0
-const HITCH_AVG_S := 1.0
-## Ballasting minimum: at least 20 % of total weight on the front axle to keep the tractor
-## steerable (John Deere operator's manual, "Select Ballast Carefully").
-const HITCH_FRONT_MIN := 0.20
-## `hitch_pos` per reading: the bottom stop, raised, lowered again.
-const HITCH_STAGES: Array[float] = [0.0, 100.0, 0.0]
-## --- draft (`plough`, instead of every other pass) ---
-## The strip answers as level 1's field (`FieldStrip`), so draft acts. Per draft-relevant implement
-## (`trailer=` names one; else each), lowered at rest for HITCH_WAIT_S, then each of PLOUGH_HOLDS
-## held on the circle's PI pedal for PLOUGH_SETTLE_S and averaged over PLOUGH_AVG_S: the draft (N,
-## `TractorVehicle.draft_applied`; the `draft_force` dial beside it) against its D497 figure at the speed held, `engine_load`,
-## `wheel_slip`, `axle_load`, the front share, gear and rpm, and each rear tyre on the last tick
-## (`_rear_contacts`). Then braked to a stop, held
-## PLOUGH_STOP_S, and floored from rest for PLOUGH_START_S with the implement down: every shift as
-## it lands, a trace line every PLOUGH_TRACE_S, and the hunting gate. With `trace[=n]` the start's
-## first `trace_s=` seconds print a line every n ticks instead (`_plough_trace_line`).
-## Per hold, km/h and the rear diff lock (1 in): a ploughing driver locks it. The open pair first:
-## pushed from 3 to 7 on a saturated pedal, the lighter right rear (the plough's mass sits left)
-## peels past the grip peak; an open diff already under the peak at 7 holds there.
-const PLOUGH_HOLDS: Array[Vector2] = [Vector2(3.0, 0.0), Vector2(7.0, 0.0), Vector2(3.0, 1.0),
-		Vector2(7.0, 1.0), Vector2(10.0, 1.0)]
-const PLOUGH_SETTLE_S := 8.0
-const PLOUGH_AVG_S := 3.0
-const PLOUGH_STOP_S := 2.0
-const PLOUGH_START_S := 15.0
-const PLOUGH_TRACE_S := 0.5
-## `plough course`: the strip answers as tractor_plough's course instead (`FieldStrip`), measured
-## off the course scene and `gen_farm_playground.gd` by distance ahead of the course's Spawn: its
-## light bands mix Field with Sand at LIGHT_SOIL_MIX. Per COURSE_RUNS entry (km/h, `hitch_pos`):
-## respawned, the plough set at rest for HITCH_WAIT_S, then the PI pedal on a setpoint ramped at
-## COURSE_RAMP to the run's speed, through the Row to its Exit: `engine_load` and the
-## `draft_force` dial, mean, least and most inside the Row on full soil and on a band (the soil at
-## the hitch point; telemetry lags it a tick), each extreme's distance into the Row, gear and rpm;
-## every shift in the Row.
-## `plough governor`: the all-speed governor's hold (`PedalMap.Kind.ALL_SPEED`), per implement: the
-## hand throttle at the PTO preset (`TractorTelemetry.pto_hand_throttle`), the PTO engaged in 540,
-## the bridge's manual box. Parked in N for HITCH_WAIT_S raised, then lowered (the PTO's onset at
-## rest); then in GOV_GEAR (`gear=` another) on the foot pedal's go request GOV_GO_PEDAL, under the
-## hand: raised for GOV_RAISED_S, then lowered for GOV_LOWERED_S, the draft and the PTO's power
-## coming on together. A line every GOV_LINE_S over the onset's first GOV_FINE_S, then every second:
-## km/h, rpm against the setting and the droop under it, `pto_rpm`, `engine_load`, the dial. The
-## last GOV_AVG_S averaged, with the `droop` gate: the shaft at or over its named speed less the
-## spec's droop (`540 / (1 + droop)`).
-const GOV_GEAR := 2                ## D2: ~8 km/h at the 540 preset, a harrow's working speed
-const GOV_GO_PEDAL := 0.05
-## A CVT's working speed under the governor (its pedal commands ground speed): D2's at the preset.
-const GOV_CVT_KMH := 8.0
-const GOV_RAISED_S := 10.0
-const GOV_LOWERED_S := 15.0
-const GOV_FINE_S := 3.0
-const GOV_LINE_S := 0.25
-const GOV_AVG_S := 3.0
-const COURSE_SCENE := "res://src/levels/island/level_1/courses/tractor_plough_course.tscn"
-const FarmPlayground := preload("res://tools/gen_farm_playground.gd")
-const COURSE_RUNS: Array[Vector2] = [Vector2(3.0, 0.0), Vector2(5.0, 0.0), Vector2(7.0, 0.0),
-		Vector2(9.0, 0.0), Vector2(7.0, 100.0), Vector2(16.0, 100.0)]
-const COURSE_RAMP := 0.5           ## m/s², the tractor's CRUISE_SETS ramp
-const COURSE_TIMEOUT_S := 120.0
-## --- kerb (`kerb`, instead of every other pass) ---
-## Square steps across the strip: how the contact (`RayWheel`) meets an edge. At each of
-## KERB_HEIGHTS a raised plateau is crawled square on at KERB_CRAWL (the circle's PI pedal, braked past it: a converter's creep outruns it), coasted
-## square on from KERB_COAST (run up floored, the
-## pedal lifted as the plateau is laid) and crawled at KERB_OBLIQUE_DEG; every run also takes the
-## step down at its far edge. The plateau is laid once the run-up settles, its edge KERB_LEAD_CRAWL /
-## _COAST ahead of the foremost hub, `wheelbase + KERB_TOP` long. Per wheel and edge, from KERB_LATCH
-## out to KERB_CLEAR past: the hub's distance ahead of the edge along the heading when its contact
-## first sits on the new level (`contact_point` over half the step, or under it on the step down)
-## and the contact normal's lean from vertical then, the peak lean, the largest one-tick compression
-## change, and its peak spring force against `max_suspension_force`. Per edge: the speed at the first
-## contact, the least until every hub is KERB_CLEAR past, and then; the peak vertical acceleration at
-## the COM; the time from the first contact to every hub clear. STUCK is measure_rough's rule.
-const KERB_HEIGHTS: Array[float] = [0.12, 0.20]  ## the road tiles' curb, and a taller step
-const KERB_CRAWL := 1.0            ## m/s
-const KERB_COAST := 8.33           ## m/s (30 km/h)
-const KERB_OBLIQUE_DEG := 30.0
-const KERB_SETTLE_S := 3.0         ## s of crawl before the plateau is laid
-const KERB_LEAD_CRAWL := 3.0       ## m from the foremost hub to the edge, as laid
-const KERB_LEAD_COAST := 15.0
-const KERB_TOP := 10.0             ## m of plateau past the wheelbase
-const KERB_WIDTH := 80.0           ## m along the edge, past the strip either side at 30 degrees
-const KERB_LATCH := 1.0            ## m out from the edge where each wheel's window opens
-const KERB_BRAKE_GAIN := 1.0       ## crawl brake per m/s over KERB_CRAWL
-const KERB_CLEAR := 0.5            ## m past the edge that counts a hub as over it
-const KERB_STUCK_S := 5.0
-const KERB_STUCK_PROGRESS := 0.25  ## m of progress that resets the stuck clock
-const KERB_TIMEOUT_S := 60.0
-## --- side (`side`, instead of every other pass) ---
-## The body laid at rest off its wheels: at each of SIDE_ROLLS (deg about its nose: its left side,
-## its right side, its roof) its hull SIDE_CLEAR over the strip, engine running in D with the pedals
-## up. SIDE_SETTLE_S, then SIDE_LOG_S read every tick. Per wheel (a coupled towed body's too, `T<n>`):
-## the share of ticks in contact and how often that flips, the contact normal's mean part along its
-## body's up and along the axle, the compression's range, the peak spring force and spin. Per rig:
-## the unit's tilt, the peak speeds, and how often `hill_holding`, the front axle's `driven`, the ABS
-## and TC lamps and the dust flip. `trace` prints the ticks.
-const SIDE_ROLLS: Array[float] = [90.0, -90.0, 180.0]
-const SIDE_CLEAR := 0.02           ## m
-const SIDE_SETTLE_S := 2.0
-const SIDE_LOG_S := 5.0
-## --- scrape (`scrape`, instead of every other pass) ---
-## The body driven along a wall: spawned SCRAPE_DEG off the strip's line toward a SCRAPE_HIGH wall
-## on its right, the wall's face SCRAPE_GAP out from its widest tyre, held at SCRAPE_SPEED with the
-## wheel straight for SCRAPE_S; `steer=<pct>` holds the wheel there from SCRAPE_STEER_S on, the body
-## by then along the wall. `onebody` makes the wall a shape of the strip's body (a parapet
-## welded to its deck). Per wheel (a coupled towed body's too, `T<n>`): how far its cylinder
-## reached past the wall's face (at full bump, so to within the body's roll), the share of ticks in
-## contact, the ticks its contact was one the spring cannot carry (`RayWheel.carries`), and the peak
-## spring force across its travel. Per body: the speed it ends at, the peak acceleration across it
-## and yaw rate, the peak tilt. `trace` prints the ticks.
-const SCRAPE_DEG := 5.0
-const SCRAPE_SPEED := 5.0          ## m/s
-const SCRAPE_S := 10.0
-const SCRAPE_STEER_S := 6.0
-const SCRAPE_GAP := 1.0            ## m
-const SCRAPE_HIGH := 2.0           ## m
-const SCRAPE_LONG := 120.0         ## m of wall, from SCRAPE_BEHIND behind the spawn
-const SCRAPE_BEHIND := 20.0        ## m
-## --- arm (`arm`, instead of every other pass) ---
-## The refuse body's arm cycle, parked: in N on the handbrake with the PTO in, ARM_SETTLE_S idle, then
-## LIFT to the top and LOWER to the stow, each to ARM_TIMEOUT_S. A line every ARM_LINE_S: the arm's
-## `body_pos`, rpm against the PTO mode's set speed (`VehicleSpec.pto_mode_rpm`), `engine_load` and
-## the delivered fuel; per stroke its time and its mean and least rpm.
-const ARM_SETTLE_S := 3.0
-const ARM_LINE_S := 0.5
-const ARM_TIMEOUT_S := 15.0
 
 # --- launch breakdown (accel pass) -----------------------------------------
 ## Where the time to each LAUNCH_MARKS mark goes, in seconds since the pass began. The buckets
@@ -390,8 +223,8 @@ const PITCH_TRIM := 0.25
 
 # --- part-pedal probes (`cruise`, `kickdown`, `pulse`, instead of every other pass) ----------
 ## Each runs at every speed of the body's CRUISE_SETS row, from a standstill, in automatic D: the
-## PI pedal (SPEED_HOLD_KP / _KI, a fuel command through `_pi_pedal`) follows a setpoint ramped
-## from the speed it is at to the target at the row's m/s², then holds it until the speed stays
+## PI pedal (SPEED_HOLD_KP / _KI, a fuel command through `MeasureRig.pi_pedal`) follows a setpoint
+## ramped from the speed it is at to the target at the row's m/s², then holds it until the speed stays
 ## within CRUISE_TOL for CRUISE_SETTLE_S with no shift and under CRUISE_DRIFT; that settle prints
 ## the cruise line (gear, rpm, pedal and `engine_load` averaged over it; a hold whose mean fuel
 ## command reaches LAUNCH_FLOORED is flagged as the body's top). `kickdown` then steps the pedal
@@ -475,8 +308,7 @@ const TYRES_STOP_KMH := 50.0
 const REFERENCE_SPECS_PATH := "res://tools/vehicle_reference_specs.json"
 const REPORT_DIR := "res://reports/specs_sweep/"
 
-enum Phase { ACCEL, COAST, TRACKING, CORNERING, BRAKING, STALL, HANDBRAKE, STEP, CRUISE, CIRCLE,
-		KERB, SIDE, SCRAPE, HITCH, PLOUGH, ARM, SINE, FREEREV, REST, DONE }
+enum Phase { ACCEL, COAST, TRACKING, CORNERING, BRAKING, STEP, CRUISE, CIRCLE, PROBE, SINE, DONE }
 ## Where a step-steer run is (`_tick_step`).
 enum Step { RUN_UP, SETTLE, STEPPED }
 ## Where a sine-with-dwell run is (`_tick_sine`): RAMP finds A, STEER is a run of the series.
@@ -486,46 +318,6 @@ enum Cruise { APPROACH, KICK, PULSE, XWIND }
 ## The air a cruise speed runs in (`headtail`): the `wind=` flag's, or WIND_HEADTAIL against or
 ## along the heading on top of it.
 enum Air { STILL, HEAD, TAIL }
-## Where a `plough` run is (`_tick_plough`).
-enum Plough { LOWER, HOLD, STOP, START, COURSE_SET, COURSE_RUN, GOV_PARK_RAISED, GOV_PARK_LOWERED,
-		GOV_RAISED, GOV_LOWERED }
-
-
-## The strip as level 1's field for the `plough` pass, on what `BaseVehicle._collect_grip_terrains`
-## and `TractorVehicle.soil_under` duck-type: `Surface.FIELD` at full weight everywhere. With `bands`
-## (`plough course`), Field at `field` weight and Sand over the rest inside each band, by distance
-## ahead of strip z `start_z` (the body faces -Z).
-class FieldStrip extends Node:
-	var start_z := 0.0
-	var bands: Array[Vector2] = []
-	var field := 1.0
-
-	func ahead(p: Vector3) -> float:
-		return start_z - p.z
-
-	func field_at(p: Vector3) -> float:
-		var s := ahead(p)
-		for b in bands:
-			if s >= b.x and s <= b.y:
-				return field
-		return 1.0
-
-	func contains_xz(_p: Vector3) -> bool:
-		return true
-
-	func height_at(_p: Vector3) -> float:
-		return 0.0
-
-	func grip_at(p: Vector3, response: PackedFloat32Array) -> float:
-		return lerpf(Surface.grip_in(response, Surface.SAND), Surface.grip_in(response, Surface.FIELD),
-				field_at(p))
-
-	func drag_at(p: Vector3) -> float:
-		return lerpf(Surface.drag(Surface.SAND), Surface.drag(Surface.FIELD), field_at(p))
-
-	func surface_weight_at(p: Vector3, surface: int) -> float:
-		return field_at(p) if surface == Surface.FIELD else 0.0
-
 var _queue: Array[String] = []
 ## The first body spawns on the first physics tick, as every later one does (`_finish_vehicle`):
 ## spawned from `_ready` instead it launched a tick early (`sedan,sedan,sedan 30 tc` 0-50 km/h:
@@ -547,35 +339,14 @@ var _coast := false
 var _corner := false
 ## `brake`: run the braking pass last. Off by default, like `corner`.
 var _brake := false
-## `stall` / `handbrake`: run only that probe on each body (see their constants).
+## `stall` / `freerev` / `rest` / `handbrake`: run only that probe on each body
+## (`measure_vehicles_parked.gd`).
 var _stall := false
 var _hb_turn := false
 var _freerev := false
-var _freerev_step := 0        ## index into FREEREV_PEDALS; -1 while settling
-var _freerev_rpm := 0.0       ## rpm summed over the step's averaging window
-var _freerev_ticks := 0
-var _freerev_cut := false     ## the limiter cut inside the step's averaging window
-var _freerev_rows: Array[Dictionary] = []
 var _rest := false
 var _rest_state := ""         ## "" (D, pedals up), "n", "brake" or "handbrake"
 var _rest_crr := NAN          ## `crr=`: every wheel's rolling resistance for the pass
-var _rest_rows: Array[Dictionary] = []          ## one per tick of the sampled window
-var _rest_steps := PackedFloat64Array()         ## mean |speed step| a tick, per second of the pass
-var _rest_step_sum := 0.0
-var _rest_step_n := 0
-var _rest_prev_v := NAN
-var _probe_on := false        ## past the settle / run-up, into the measured window
-var _probe_t := 0.0
-var _probe_x0 := Vector3.ZERO
-## Heading change (deg) integrated off the yaw rate, so a spin past 180 reads as one (a wrapped
-## heading difference cannot tell a J-turn from a full rotation).
-var _probe_turned := 0.0
-var _probe_v_peak := 0.0
-var _probe_spin_peak := 0.0
-var _probe_yaw_peak := 0.0
-var _probe_lock_t := 0.0
-var _probe_override := false
-var _hb_pulled := false       ## this handbrake run pulls the lever (the second of the pair)
 var _step := false
 var _st_runs: Array[Dictionary] = []  ## {kmh, lock, lifted} still to run, this body
 var _st_run := {}                     ## the run in progress
@@ -639,89 +410,24 @@ var _tr_watch := MeasureRig.TrailerWatch.new()
 var _circle := false
 var _ci_hold := MeasureRig.PiHold.new(SPEED_HOLD_KP, SPEED_HOLD_KI)  ## the circle's PI pedal
 var _ci_sums := {}                    ## the circle's figures summed over the hold (`_tick_circle`)
-## `hitch`: run only the hitch statics (§ hitch statics) on each body.
+## `hitch`: run only the hitch statics (`measure_vehicles_hitch.gd`) on each body.
 var _hitch_pass := false
-var _hi_ids: Array[String] = []       ## implements still to read, this body
-var _hi_stage := -1                   ## index into HITCH_STAGES; -1 the bare reading
-var _hi_sums := Vector3.ZERO          ## front N, rear N, ticks over the current average
-var _hi_bare := {}                    ## the bare reading: front kg, mass, COM, body-frame tensor
-## `plough`: run only the draft pass (§ draft) on each body.
+## `plough`: run only the draft pass (`measure_vehicles_plough.gd`) on each body.
 var _plough_pass := false
-var _pl_ids: Array[String] = []       ## draft implements still to run, this body
-var _pl_stage := Plough.LOWER
-var _pl_speed := 0                    ## index into PLOUGH_HOLDS
-var _pl_hold := MeasureRig.PiHold.new(SPEED_HOLD_KP, SPEED_HOLD_KI)  ## the PI pedal
-var _pl_sums := {}                    ## the hold's figures summed (`_tick_plough`)
-var _pl_rating := 0.0                 ## N, the implement's `draft_rating()`
-var _pl_shape := Vector4.ZERO         ## its `draft_shape()`
-var _pl_shifts: Array = []            ## the standing start's shifts (`MeasureRig.shift_record`)
-var _pl_gear := -1                    ## gear byte at the last tick, to catch a shift
-var _pl_trace_t := 0.0                ## s of the start at the next trace line
-var _pl_moving_t := -1.0              ## s into the start the body first passed 0.5 km/h
-var _pl_ticks := 0                    ## ticks into the start, for `trace=n`
-var _pl_peak_slip := 0.0              ## the grip curve's peak slip, every hold and trace (`_rear_contacts`)
-## `plough pto`: the PTO engaged throughout, in the 1000 mode the harrow trials ran; the parked
-## line and each hold print its load on the crank (`Drivetrain.accessory_torque`).
-var _pto := false
-## `plough diff` / `plough mfwd`: the rear diff lock / MFWD engaged throughout (`_plough_extra`).
-var _diff_lock := false
-var _mfwd := false
-## `plough course`: run the course (§ draft) instead of the held speeds and the start.
+## `plough course`: the plough pass's course variant; here for its implement (`trailer=` default).
 var _course := false
-## `plough governor`: run the governor's hold (§ draft) instead of the held speeds and the start.
-var _governor := false
-var _gv_line_t := 0.0                 ## s into the stage at the next printed line
-var _gv_sums := {}                    ## the lowered hold's last GOV_AVG_S, summed
-var _co_strip: FieldStrip
-var _co_row := Vector2.ZERO           ## the Row, m ahead of the course's Spawn
-var _co_id := ""                      ## the implement the course runs
-var _co_runs: Array[Vector2] = []     ## COURSE_RUNS still to run, this body
-var _co_run := Vector2.ZERO           ## this run's km/h and `hitch_pos`
-var _co_set := 0.0                    ## the ramped setpoint, m/s
-var _co_ext := {}                     ## "<signal>, <soil> soil" -> [least, at, most, at, sum, ticks]
-var _co_shifts: Array[String] = []    ## shifts inside the Row
-var _co_gear := -1
-## `kerb`: run only the kerb runs (§ kerb) on each body.
+## `kerb`: run only the kerb runs (`measure_vehicles_kerb.gd`) on each body.
 var _kerb := false
-## `arm`: run only the refuse body's arm cycle (§ arm) on each body.
+## `arm`: run only the refuse body's arm cycle (`measure_vehicles_arm.gd`) on each body.
 var _arm_pass := false
-var _arm_stage := 0                   ## 0 settling, 1 lifting, 2 lowering
-var _arm_line_t := 0.0
-var _arm_sums := Vector3.ZERO         ## rpm summed, ticks, least rpm over the stroke
-var _kb_runs: Array[Dictionary] = []  ## {h, coast, oblique} still to run, this body
-var _kb_run := {}                     ## the run in progress
-var _kb_box: StaticBody3D = null      ## the plateau, once laid
-var _kb_hold := MeasureRig.PiHold.new(SPEED_HOLD_KP, SPEED_HOLD_KI)  ## the crawl's PI pedal
-var _kb_t := 0.0                      ## s since the plateau was laid
-var _kb_heading := Vector3.ZERO       ## the body's heading as the plateau was laid
-var _kb_n := Vector3.ZERO             ## the edges' normal, toward the approach
-var _kb_cos := 1.0                    ## `_kb_heading` along `-_kb_n`
-var _kb_edge_at: Array[Vector3] = []  ## a point on the near and the far edge, y 0
-var _kb_edges: Array[Dictionary] = [] ## per edge, up then down: the run's figures (`_kerb_edge`)
-var _kb_prev_vy := 0.0
-var _kb_origin := Vector3.ZERO
-var _kb_best := 0.0                   ## furthest progress along the heading, m
-var _kb_best_t := 0.0
-var _kb_overlaps := 0                 ## `RayWheel.start_overlaps` as the run began
-## `side`: run only the laid-over holds (§ side) on each body.
+## `side`: run only the laid-over holds (`measure_vehicles_side.gd`) on each body.
 var _side_pass := false
-var _sd_rolls: Array[float] = []      ## SIDE_ROLLS still to run, this body
-var _sd_roll := 0.0                   ## the roll in progress, deg
-var _sd_overlaps := 0                 ## `RayWheel.start_overlaps` as the log began
-var _sd_ticks := 0                    ## ticks logged
-var _sd_wheels: Array[Dictionary] = [] ## per wheel, the log's sums (`_side_wheel`)
-var _sd_flags := {}                   ## flag -> [ticks on, flips, last]
-var _sd_peak := Vector3.ZERO          ## peak linear (x) and angular (y) speed, tilt summed (z)
-## `scrape`: run only the drive along a wall (§ scrape) on each body; `onebody`: the wall a shape
-## of the strip's body.
+## `scrape`: run only the drive along a wall (`measure_vehicles_scrape.gd`) on each body.
 var _scrape := false
-var _scrape_one := false
-var _sc_steer := 0.0                  ## `steer=`: the wheel held there (%) once SCRAPE_STEER_S in
-var _sc_wall: Node3D = null           ## the wall: a body, or the strip's second shape
-var _sc_wall_x := 0.0                 ## its face, m
-var _sc_wheels: Array[Dictionary] = [] ## per wheel, the run's figures (`_tick_scrape`)
-var _sc_peak := Vector3.ZERO          ## peak acceleration across (x, m/s2), yaw rate (y), tilt (z, deg)
-var _sc_prev_v := Vector3.ZERO
+## The `stall`, `freerev`, `rest`, `handbrake`, `hitch`, `plough`, `kerb`, `side`, `scrape` or `arm`
+## pass, built once (null otherwise): each body is handed to its `start`, each tick in Phase.PROBE
+## to its `tick`.
+var _probe: Variant = null
 ## `RayWheel.start_overlaps` as this body spawned (`_finish_vehicle` prints any since).
 var _body_overlaps := 0
 var _body_sweeps := 0                 ## `RayWheel.contact_sweeps`, the same
@@ -742,7 +448,7 @@ var _doc := ""
 var _runs: Array[Dictionary] = []
 ## `tyre=<id>`: the class fitted on each body ("": its stock). Per run under doc=tyres.
 var _tyre := ""
-## `surface=<name>`: the `Surface` the slabs are painted (-1: bare). Per run under doc=tyres.
+## `surface=<name>`: the `Surface` the strip is painted (-1: bare). Per run under doc=tyres.
 var _surface := -1
 var _patch: MeasureRig.GripPatch
 ## `tc`: the accel pass slip-limits the worst driven wheel (`tc_pedal.gd`) instead of flooring.
@@ -793,7 +499,7 @@ var _bar_front := NAN
 ## overridden the same way (NAN: the spec's).
 var _cornering_peak := NAN
 ## `speeds=<km/h>,<km/h>`: the step pass runs these instead of its family's STEP_SETS row (a
-## winged body's balance at speed). The step pad holds the run-up.
+## winged body's balance at speed).
 var _step_speeds: Array[float] = []
 ## `ackermann=<0..1>`: the Ackermann fraction (`GroundDriveSpec.ackermann`) overridden the same way
 ## (NAN: the spec's).
@@ -888,7 +594,6 @@ var _prev_settle_t := 0.0  ## start of the last complete settle window
 var _prev_settle_v := 0.0
 var _prev_v := 0.0
 var _inst_a := 0.0   ## body's own acceleration last tick, for the balance audit
-var _lateral_peak := 0.0  ## m the body strayed from the strip's centre line, against the edge
 
 # tracking pass
 var _latched := false
@@ -912,6 +617,9 @@ var _corner_peak := 0.0
 var _corner_front := 0.0       ## front-axle saturation at the peak (`_corner_first`'s fallback)
 var _corner_rear := 0.0
 var _corner_slid := false      ## the slip-angle gate tripped at some point
+## The body passed STEP_ROLL_DEG (the step pass's rollover): the peaks and `_corner_slid` end there,
+## for `slip_angle` reads a body on its side as its COM's vertical speed.
+var _corner_rolled := false
 var _corner_roll := 0.0        ## chassis roll (deg) at the lateral-g peak
 ## The tyres' summed side force across the body over the mass (m/s^2), under the `v r` smoothing:
 ## what the springs carry, so what the roll answers, where `v r` also counts a yaw swing past an
@@ -936,6 +644,10 @@ var _corner_unloaded := 0
 ## onset, `BalanceModel.tip_g`'s): `g_tick` (`v r`), `g` (smoothed), `path` (`acc_lat`), the roll
 ## (deg) and its rate (deg/s), `t` (s into the ramp); empty until one does.
 var _corner_tip := {}
+## The first tick a wheel leaves the road: `g` the body's own sensor then (`telemetry.acc_lat`, the
+## figure `GroundDriveSpec.esc_roll_lift_g` keys on, as `measure_semi_launch`'s "rig's first lift"),
+## `t` (s into the ramp); empty until one does.
+var _corner_lift := {}
 var _corner_prev_speed := NAN  ## last tick's horizontal speed, for the latch's dv/dt
 ## `ramp=<s>`: the wind-on from zero to full lock (CORNER_RAMP_S), a probe of the pass's lag.
 var _corner_ramp_s := CORNER_RAMP_S
@@ -997,15 +709,9 @@ func _ready() -> void:
 	_hitch_pass = flags.has("hitch")
 	_plough_pass = flags.has("plough")
 	_course = _plough_pass and flags.has("course")
-	_governor = _plough_pass and flags.has("governor")
-	_pto = _plough_pass and (flags.has("pto") or _governor)
-	_diff_lock = _plough_pass and flags.has("diff")
-	_mfwd = _plough_pass and flags.has("mfwd")
 	_kerb = flags.has("kerb")
 	_side_pass = flags.has("side")
 	_scrape = flags.has("scrape")
-	_scrape_one = flags.has("onebody")
-	_sc_steer = clampf(MeasureRig.float_flag(flags, "steer=", 0.0), -100.0, 100.0)
 	_arm_pass = flags.has("arm")
 	_track_only = flags.has("track")
 	_strict = flags.has("strict")
@@ -1167,26 +873,50 @@ func _ready() -> void:
 	_reference = JSON.parse_string(ref_file.get_as_text())
 	# Do not speed up with Engine.time_scale: it enlarges the physics step and breaks the
 	# locked-60-Hz tuning (default car's 0-100 went 5.30 s -> 6.40 s at time_scale 8).
-	MeasureRig.add_slab(self, "Strip", Vector3(STRIP_WIDTH, 2.0, STRIP_LENGTH))
-	if _corner or _doc == "trailer_roll":
-		# Skid pad: a wide square well off to the side, since a body at full lock circles in tens of
-		# metres (a hundred on ice) and the strip is only 40 m wide.
-		MeasureRig.add_slab(self, "Pad", Vector3(PAD_SIZE, 2.0, PAD_SIZE), PAD_X)
-	if _step or _circle or _sine or _doc == "trailer_roll":
-		# Under the strip and either side of it, top face flush with the strip's.
-		MeasureRig.add_slab(self, "StepPad", Vector3(STEP_PAD_WIDTH, 2.0, STRIP_LENGTH))
+	if MeasureRig.add_ground(self, "Ground", RUN_LENGTH) == null:
+		get_tree().quit(1)
+		return
 	if _surface >= 0 or _doc == "tyres":
 		# Before the first body ticks, as the field below.
 		_patch = MeasureRig.GripPatch.new()
 		_patch.name = "GripPatch"
 		add_child(_patch)
-	if _plough_pass:
-		# Before the first body ticks: its wheels find the painted terrains once.
-		var strip := FieldStrip.new()
-		if _course:
-			_co_strip = strip
-			_load_course(strip)
-		add_child(strip)
+	if _circle and _trailer == "":
+		_trailer = "bobtail"
+	if _course and _trailer == "":
+		_trailer = "plough"  # the implement tractor_plough attaches
+	# Before the first body ticks: the plough pass lays its strip, where its wheels find the painted
+	# terrains once.
+	var restart := _reset_pass.bind(Phase.PROBE)
+	var parked := -1
+	if _stall:
+		parked = ParkedPass.Kind.STALL
+	elif _freerev:
+		parked = ParkedPass.Kind.FREEREV
+	elif _rest:
+		parked = ParkedPass.Kind.REST
+	elif _hb_turn:
+		parked = ParkedPass.Kind.HANDBRAKE
+	if parked >= 0:
+		_probe = ParkedPass.new(parked, START_Z, _seconds, BRAKE_LOCK_SLIP, _trailer, _rest_state,
+				_rest_crr, restart, _finish_vehicle)
+	elif _hitch_pass:
+		_probe = HitchPass.new(_trailer, restart, _finish_vehicle)
+	elif _plough_pass:
+		_probe = PloughPass.new(self, flags, START_Z, _trailer, _held_gear, _trace, _trace_every,
+				_trace_s, MeasureRig.PiHold.new(SPEED_HOLD_KP, SPEED_HOLD_KI), restart,
+				_finish_vehicle, _gate_line, _hunting_gate, func() -> void: _failures += 1)
+	elif _kerb:
+		_probe = KerbPass.new(self, START_Z, _seconds,
+				MeasureRig.PiHold.new(SPEED_HOLD_KP, SPEED_HOLD_KI), restart, _finish_vehicle)
+	elif _side_pass:
+		_probe = SidePass.new(START_Z, _trace, restart, _finish_vehicle)
+	elif _scrape:
+		_probe = ScrapePass.new(self, START_Z, _trace, flags.has("onebody"),
+				clampf(MeasureRig.float_flag(flags, "steer=", 0.0), -100.0, 100.0),
+				MeasureRig.PiHold.new(SPEED_HOLD_KP, SPEED_HOLD_KI), restart, _finish_vehicle)
+	elif _arm_pass:
+		_probe = ArmPass.new(restart, _finish_vehicle)
 	if which == "all" or _doc == "cornering" or _doc == "accel" or _doc == "top":
 		var skip: Array = DOC_ACCEL_SKIP if _doc == "accel" \
 				else DOC_CORNERING_SKIP if _doc == "cornering" else []
@@ -1224,10 +954,6 @@ func _ready() -> void:
 		if _queue.is_empty():
 			get_tree().quit(1)
 			return
-	if _circle and _trailer == "":
-		_trailer = "bobtail"
-	if _course and _trailer == "":
-		_trailer = "plough"  # the implement tractor_plough attaches
 	var steer_label := "steer stepped" if _step else "zero steer input"
 	if _sine:
 		steer_label = "sine with dwell"
@@ -1238,9 +964,8 @@ func _ready() -> void:
 	elif _plough_pass:
 		steer_label = "level 1's field (grip %.2f, drag %.2f) under it" % [Surface.ref_grip(Surface.FIELD),
 				Surface.drag(Surface.FIELD)]
-	_strip_text = "%.0f x %.0f m flat, %s, %s, %.0f s cap per pass" % [
-			STEP_PAD_WIDTH if _step or _sine else STRIP_WIDTH, STRIP_LENGTH, _surface_label(), steer_label,
-			_seconds]
+	_strip_text = "a flat plane, %.0f m of run, %s, %s, %.0f s cap per pass" % [
+			RUN_LENGTH, _surface_label(), steer_label, _seconds]
 	print("strip: %s\n" % _strip_text)
 	MeasureRig.drive(100.0, 0.0)
 	_first_pending = true
@@ -1253,7 +978,7 @@ static func _tyre_fit(variant: String) -> int:
 			else TyreClass.Fit.NONE
 
 
-## What the slabs are painted: per run under doc=tyres, else `surface=` or bare ground.
+## What the strip is painted: per run under doc=tyres, else `surface=` or bare ground.
 func _surface_label() -> String:
 	if _doc == "tyres":
 		return "painted per run"
@@ -1371,35 +1096,16 @@ func _next_vehicle() -> void:
 		_car.contact_monitor = true
 		_car.max_contacts_reported = 8
 	_tc_run = _tc
-	if _stall:
-		_start_stall()
-	elif _freerev:
-		_start_freerev()
-	elif _rest:
-		_start_rest()
-	elif _cruise_probe():
+	if _cruise_probe():
 		_start_cruise()
-	elif _hb_turn:
-		_hb_pulled = false
-		_start_handbrake_run()
 	elif _sine:
 		_start_sine()
 	elif _step:
 		_start_step()
 	elif _circle:
 		_start_circle()
-	elif _hitch_pass:
-		_start_hitch()
-	elif _plough_pass:
-		_start_plough()
-	elif _kerb:
-		_start_kerb()
-	elif _side_pass:
-		_start_side()
-	elif _scrape:
-		_start_scrape()
-	elif _arm_pass:
-		_start_arm()
+	elif _probe != null:
+		_probe.start(_car, "%s (%s)" % [_variant, _drive_label(_car.spec)], _current)
 	elif _track_only:
 		_reset_pass(Phase.TRACKING)
 	else:
@@ -1466,7 +1172,6 @@ func _reset_pass(phase: Phase) -> void:
 	_prev_settle_v = 0.0
 	# Must reset: a stale _prev_v reads the first tick of a new pass as the last vehicle's terminal speed falling to zero.
 	_prev_v = 0.0
-	_lateral_peak = 0.0
 	_tc_fuel = 1.0
 	_loss = {"spin": 0.0, "limiter": 0.0, "shift": 0.0, "torque": 0.0, "stall": 0.0, "gears": {},
 			"force": 0.0, "budget": 0.0, "under_peak": 0.0, "past_peak": 0.0, "tick_cap": 0.0,
@@ -1501,6 +1206,7 @@ func _reset_pass(phase: Phase) -> void:
 	_corner_front = 0.0
 	_corner_rear = 0.0
 	_corner_slid = false
+	_corner_rolled = false
 	_corner_roll = 0.0
 	_corner_tyre = 0.0
 	_corner_peak_tyre = 0.0
@@ -1512,6 +1218,7 @@ func _reset_pass(phase: Phase) -> void:
 	_corner_swing = 0.0
 	_corner_unloaded = 0
 	_corner_tip = {}
+	_corner_lift = {}
 	_corner_prev_speed = NAN
 	_corner_hold.integral = 0.0
 	_corner_path = 0.0
@@ -1552,34 +1259,16 @@ func _physics_process(delta: float) -> void:
 		_tick_cornering(delta)
 	elif _phase == Phase.BRAKING:
 		_tick_braking(delta)
-	elif _phase == Phase.STALL:
-		_tick_stall(delta)
-	elif _phase == Phase.FREEREV:
-		_tick_freerev()
-	elif _phase == Phase.REST:
-		_tick_rest(delta)
-	elif _phase == Phase.HANDBRAKE:
-		_tick_handbrake(delta)
 	elif _phase == Phase.STEP:
 		_tick_step(delta)
 	elif _phase == Phase.SINE:
 		_tick_sine(delta)
 	elif _phase == Phase.CRUISE:
 		_tick_cruise(delta)
-	elif _phase == Phase.HITCH:
-		_tick_hitch()
-	elif _phase == Phase.PLOUGH:
-		_tick_plough(delta)
 	elif _phase == Phase.CIRCLE:
 		_tick_circle(delta)
-	elif _phase == Phase.KERB:
-		_tick_kerb(delta)
-	elif _phase == Phase.SIDE:
-		_tick_side()
-	elif _phase == Phase.SCRAPE:
-		_tick_scrape(delta)
-	elif _phase == Phase.ARM:
-		_tick_arm()
+	elif _phase == Phase.PROBE:
+		_probe.tick(delta, _t)
 	else:
 		_tick_tracking()
 
@@ -1610,7 +1299,6 @@ func _tick_accel(delta: float) -> void:
 	_prev_v = v
 	_dist += absf(v) * delta
 	_peak = maxf(_peak, v)
-	_lateral_peak = maxf(_lateral_peak, absf(_car.global_position.x))
 	for kmh in [50.0, 96.56, 100.0, 150.0, 200.0]:
 		if not _marks.has(kmh) and v * 3.6 >= kmh:
 			_marks[kmh] = _t
@@ -1730,7 +1418,7 @@ func _split_deficit(w: RayWheel, gd: GroundDriveSpec, budget: float, delta: floa
 	var curve := RayWheel.combined_slip_force(slip_long,
 			-vel.dot(forward.cross(w.contact_normal)) / slip_denom, budget, budget_lat,
 			gd.grip_curve, RayWheel.lateral_peak_slip(w.suspension_force * w.tyre_share,
-				w.reference_load, gd.load_sensitivity, gd.cornering_peak_load)).x
+				w.lateral_reference_load(), gd.load_sensitivity, gd.cornering_peak_load)).x
 	var capped := curve - w.force_long if absf(curve) > w.long_cap else 0.0
 	_loss["tick_cap"] += capped * delta
 	_loss["under_peak" if w.slip < TcPedal.TARGET_SLIP else "past_peak"] += \
@@ -1836,16 +1524,13 @@ func _sample_gates() -> void:
 	var handover: Dictionary = _gate.get("slipping", {})
 	var in_shift := not handover.is_empty() or _shift_cut
 	var key := "shift_gap" if in_shift else "gap"
-	# Judged on the overshoot (`_gap_split`'s `over`): what the body's pitching and heave leave of it,
-	# as a two-tick mean. Under the tyre's LOW_SPEED_FLOOR a take-up's drive force alternates at the
-	# tick rate, which the body cannot follow and a steady reference must not chase.
+	# Judged on the overshoot (`_gap_split`'s `over`): what the body's pitching and heave leave of it.
 	var kin := _body_kinematics()
 	var split := _gap_split(kin, _gate.get("kin", {}), xfer - share)
 	_gate["kin"] = kin
 	var over := NAN
 	if not split.is_empty():
-		over = 0.5 * (float(split["over"]) + float(_gate.get("last_over", split["over"])))
-		_gate["last_over"] = split["over"]
+		over = float(split["over"])
 	if _inst_a > 0.0 and not is_nan(over) and over > float(_gate[key]["over"]):
 		_gate[key] = {"over": over, "gap": xfer - share, "t": _t, "share": share,
 				"a": _inst_a, "split": split,
@@ -1853,17 +1538,14 @@ func _sample_gates() -> void:
 						MeasureRig.gear_label(handover["to"])]
 				if not handover.is_empty() else "a shift cut"}
 	# Each event (the launch, then each shift's settle) is judged on its own swing: the largest step
-	# the steady share has taken within it, as a two-tick mean like `over`. The launch's runs from
-	# parked (1.0). A shift's is the larger of the rise through its handover and cut (from the shift's
-	# tick to its highest) and the fall since, the body still answering the first as the second comes.
-	# Its worst tick is kept.
-	var xfer_mean := 0.5 * (xfer + float(_gate.get("last_xfer", xfer)))
-	_gate["last_xfer"] = xfer
+	# the steady share has taken within it. The launch's runs from parked (1.0). A shift's is the
+	# larger of the rise through its handover and cut (from the shift's tick to its highest) and the
+	# fall since, the body still answering the first as the second comes. Its worst tick is kept.
 	if shifted:
-		_gate["shift_lo"] = xfer_mean
-		_gate["shift_hi"] = xfer_mean
+		_gate["shift_lo"] = xfer
+		_gate["shift_hi"] = xfer
 	elif in_shift:
-		_gate["shift_hi"] = maxf(float(_gate.get("shift_hi", xfer_mean)), xfer_mean)
+		_gate["shift_hi"] = maxf(float(_gate.get("shift_hi", xfer)), xfer)
 	if key == "gap" and _inst_a > 0.0 and not is_nan(over):
 		var shifts: Array = _gate["shifts"]
 		var event := "launch" if shifts.is_empty() else "%s>%s" % [
@@ -1872,11 +1554,11 @@ func _sample_gates() -> void:
 		if events.is_empty() or events[-1]["event"] != event:
 			var launch := shifts.is_empty()
 			events.append({"event": event, "margin": -INF, "peak": {"over": -INF},
-					"hi": 1.0 if launch else float(_gate.get("shift_hi", xfer_mean)),
-					"lo": 1.0 if launch else float(_gate.get("shift_lo", xfer_mean))})
+					"hi": 1.0 if launch else float(_gate.get("shift_hi", xfer)),
+					"lo": 1.0 if launch else float(_gate.get("shift_lo", xfer))})
 		var e: Dictionary = events[-1]
 		var hi := float(e["hi"])
-		var swing := maxf(hi - float(e["lo"]), hi - xfer_mean)
+		var swing := maxf(hi - float(e["lo"]), hi - xfer)
 		var allowance := maxf(GATE_XFER_GAP, _step_overshoot(GATE_XFER_ZETA) * swing)
 		var tick := {"over": over, "allowance": allowance, "t": _t}
 		if over - allowance > float(e["margin"]):
@@ -2059,12 +1741,12 @@ static func _step_overshoot(zeta: float) -> float:
 	return exp(-zeta * PI / sqrt(1.0 - zeta * zeta))
 
 
-## "8 points of overshoot (two-tick mean) at 2.25 s (that tick: 12 under steady transfer, 49 % of
+## "8 points of overshoot at 2.25 s (that tick: 12 under steady transfer, 49 % of
 ## parked at +0.43 g)": a `_sample_gates` peak. `front split` is that tick's alone.
 static func _gap_label(gap: Dictionary) -> String:
 	if is_inf(float(gap["over"])):
 		return "no accelerating tick"
-	return ("%.0f points of overshoot (two-tick mean) at %.2f s (that tick: %.0f under steady "
+	return ("%.0f points of overshoot at %.2f s (that tick: %.0f under steady "
 			+ "transfer, %.0f %% of parked at %+.2f g)") % [
 			float(gap["over"]) * 100.0, gap["t"], float(gap["gap"]) * 100.0,
 			float(gap["share"]) * 100.0, float(gap["a"]) / BrakeSizing.G]
@@ -2181,7 +1863,7 @@ func _transfer_share(a: float) -> float:
 
 
 ## `_transfer_share`'s `L`: the foremost axle to the mean station of the others (m), not
-## `_wheelbase`'s rearmost, so a tandem shares the transfer.
+## `MeasureRig.wheelbase_of`'s rearmost, so a tandem shares the transfer.
 func _transfer_wheelbase() -> float:
 	var front_z := _front_z()
 	var rear_z := 0.0
@@ -2298,7 +1980,7 @@ func _body_kinematics() -> Dictionary:
 ##   moved off its parked figure, at `e` ahead of the rear stations. Not taken out of `over`: it is
 ##   part steady (the trailer's own transfer) and part the trailer's pitch;
 ## - `residual`: the rest, ~0 when the terms above are the whole story.
-## `over`: the overshoot, the gap less resistance, lag and lean (the gate takes a two-tick mean).
+## `over`: the overshoot, the gap less resistance, lag and lean.
 ## Also the front axle's own split (N): spring, damper (the remainder), bar, link.
 func _gap_split(kin: Dictionary, prev: Dictionary, gap: float) -> Dictionary:
 	if prev.is_empty() or _parked_front <= 0.0:
@@ -2470,10 +2152,10 @@ static func _corner_target(spec: VehicleSpec) -> float:
 ## through the ramp; a governed or slow body simply sits on the pedal.
 func _tick_cornering(delta: float) -> void:
 	var vel: Vector3 = _car.linear_velocity
-	# Horizontal: a body off the pad edge would otherwise reach the speed by falling.
 	var speed := Vector2(vel.x, vel.z).length()
 	var err := _corner_speed - speed
-	var pedal := _pi_pedal(_corner_hold.step(err, delta), _corner_speed) if _corner_ramping else 1.0
+	var pedal := MeasureRig.pi_pedal(_car, _corner_hold.step(err, delta), _corner_speed) \
+			if _corner_ramping else 1.0
 	if not _corner_ramping:
 		MeasureRig.drive(pedal * 100.0, 0.0)
 		# Wait for the speed, but never past the budget — a body that cannot reach 40 km/h says so
@@ -2523,10 +2205,13 @@ func _tick_cornering(delta: float) -> void:
 				"path": absf(_car.telemetry.acc_lat) / BrakeSizing.G, "t": _corner_ramp_t,
 				"roll": absf(VehicleMath.roll_deg(body_basis)),
 				"roll_rate": rad_to_deg(absf(_car.angular_velocity.dot(body_basis.z)))}
+	if _corner_lift.is_empty() and airborne > 0:
+		_corner_lift = {"g": absf(_car.telemetry.acc_lat) / BrakeSizing.G, "t": _corner_ramp_t}
+	_corner_rolled = _corner_rolled or VehicleMath.is_inverted(body_basis, STEP_ROLL_DEG)
 	var slip_angle := absf(vel.dot(body_basis.x)) / maxf(speed, 1.0)
 	_corner_path += (absf(_car.telemetry.acc_lat) - _corner_path) * clampf(delta / CORNER_SMOOTH_S,
 			0.0, 1.0)
-	if slip_angle <= CORNER_MAX_SLIP_ANGLE:
+	if not _corner_rolled and slip_angle <= CORNER_MAX_SLIP_ANGLE:
 		_corner_path_peak = maxf(_corner_path_peak, _corner_path)
 	var accel := (speed - _corner_prev_speed) / delta if not is_nan(_corner_prev_speed) else 0.0
 	_corner_prev_speed = speed
@@ -2553,7 +2238,9 @@ func _tick_cornering(delta: float) -> void:
 							1.0)), "drive_front": drive.x, "drive_rear": drive.y,
 					"speed": speed, "accel": accel, "path": absf(_car.telemetry.acc_lat) / BrakeSizing.G,
 					"loaded": loaded, "grounded": grounded, "t": _corner_ramp_t}
-	if slip_angle > CORNER_MAX_SLIP_ANGLE:
+	if _corner_rolled:
+		pass
+	elif slip_angle > CORNER_MAX_SLIP_ANGLE:
 		_corner_slid = true
 	elif _corner_lat > _corner_peak:
 		_corner_peak = _corner_lat
@@ -2611,6 +2298,8 @@ func _report_cornering(skipped: bool) -> void:
 		first = {"axle": "none", "front": _corner_front, "rear": _corner_rear, "g": _corner_peak / BrakeSizing.G}
 	var axle: String = first["axle"]
 	var note := "  <-- SLID: peak is the last reading before the body let go" if _corner_slid else ""
+	if _corner_rolled:
+		note += "  <-- ROLLED: the peaks end at the roll"
 	# BalanceModel's corner pass beside the reading (`corner_limit`: steered and driven, as the pass
 	# runs), and its free-rolling `limit` (`docs/handling.md` § Balance). Both model the unit alone:
 	# a coupled rig reads "-".
@@ -2682,6 +2371,9 @@ func _report_cornering(skipped: bool) -> void:
 			_car.spec.ground_drive.front_axle_swing_deg]
 			if _car.spec.ground_drive.has_swing_axle() else "")
 			+ ("  <-- OVERTURNED" if _car.is_overturned() else ""))
+	print("  %-13s : first wheel lift %s" % ["", "never" if _corner_lift.is_empty()
+			else "at %.3f g on the body's sensor (`acc_lat`), %.0f %% of the ramp"
+			% [float(_corner_lift["g"]), 100.0 * float(_corner_lift["t"]) / _corner_ramp_s]])
 	_current["cornering"] = {"skipped": false, "peak": _corner_peak, "speed_kmh": _corner_speed * 3.6,
 			"peak_g": _corner_peak / BrakeSizing.G, "path_g": _corner_path_peak / BrakeSizing.G, "front": first["front"],
 			"rear": first["rear"], "first_g": first["g"], "first_found": not _corner_first.is_empty(),
@@ -2793,17 +2485,12 @@ func _report_accel(capped: bool) -> void:
 	# Distance separates "settled at terminal speed" from "ran out of strip" (`_peak` is a running maximum).
 	var v: float = _car.telemetry.speed
 	var ran_out := _dist >= RUN_LENGTH - 50.0
-	var off_edge := _lateral_peak >= STRIP_WIDTH * 0.5 - 2.0
 	print("  %-13s : %.0f m used of %.0f m, %.0f m left; speed now %.1f km/h%s"
 			% ["distance", _dist, RUN_LENGTH, RUN_LENGTH - _dist, v * 3.6,
 			"  <-- STRIP RAN OUT, top speed is not terminal" if ran_out else ""])
-	print("  %-13s : %.1f m off the centre line at most, %.0f m to the edge%s"
-			% ["  lateral", _lateral_peak, STRIP_WIDTH * 0.5,
-			"  <-- LEFT THE STRIP, nothing after that is a measurement" if off_edge else ""])
 	_current["dist"] = _dist
 	_current["run_length"] = RUN_LENGTH
 	_current["ran_out"] = ran_out
-	_current["off_edge"] = off_edge
 	# Force balance vs. the body's own acceleration: `resistance` matches the spec's declared
 	# `0.5*rho*Cd*A*v^2 + crr*N`, `tyres` matches `axle_torque / r`, `rake` is the suspension
 	# force along travel (~0 on flat ground). Summed over the whole combination so a
@@ -2821,7 +2508,7 @@ func _report_accel(capped: bool) -> void:
 			body_load += w.suspension_force
 			# The tyre's force carries the rolling moment: its drive part is the force less it.
 			tyre += w.force_long - w.force_roll
-			applied += absf(w.force_roll)
+			applied += absf(w.force_roll) + absf(w.force_soil)
 			# Per wheel: the four contacts of a body straddling a crest do not share one normal.
 			rake += w.suspension_force * w.contact_normal.dot(vdir)
 		normal_load += body_load
@@ -2944,10 +2631,10 @@ func _report_tracking(skipped: bool) -> void:
 	_after_lateral_passes()
 
 
-## Onto the pad: spawn_transform is what respawn() re-lays the body (and any trailer) on. Pad top is
-## y=0, same as the strip.
+## Back at the spawn: spawn_transform is what respawn() re-lays the body (and any trailer) on.
 func _start_cornering() -> void:
-	_car.spawn_transform = Transform3D(Basis.IDENTITY, Vector3(PAD_X, _car.rest_ride_height(), 0.0))
+	_car.spawn_transform = Transform3D(Basis.IDENTITY,
+			Vector3(0.0, _car.rest_ride_height(), START_Z))
 	_car.respawn()
 	_reset_pass(Phase.CORNERING)
 
@@ -2961,8 +2648,7 @@ func _after_lateral_passes() -> void:
 	_finish_vehicle()
 
 
-## Re-lay the rig at the strip's start (the cornering pass may have moved it to the pad) and run up
-## to this stop's entry speed.
+## Re-lay the rig at the spawn and run up to this stop's entry speed.
 func _start_brake_run() -> void:
 	_car.spawn_transform = Transform3D(Basis.IDENTITY,
 			Vector3(0.0, _car.rest_ride_height(), START_Z))
@@ -3021,320 +2707,6 @@ static func _brake_decel(row: Dictionary, suffix: String) -> String:
 	if float(row.get("rolling_kmh", 0.0)) > 0.0:
 		return "still rolling at %.1f km/h after %.0f s" % [row["rolling_kmh"], row["t"]]
 	return "%.2f g%s" % [row["g"], suffix]
-
-
-func _reset_probe() -> void:
-	_probe_on = false
-	_probe_t = 0.0
-	_probe_v_peak = 0.0
-	_probe_spin_peak = 0.0
-	_probe_yaw_peak = 0.0
-	_probe_turned = 0.0
-	_probe_lock_t = 0.0
-	_probe_override = false
-
-
-func _start_stall() -> void:
-	_reset_pass(Phase.STALL)
-	_reset_probe()
-	InputRouter.set_manual_gearbox(true)
-	MeasureRig.drive(0.0, 100.0, 0.0, false, 1, true)
-
-
-func _tick_stall(delta: float) -> void:
-	if not _probe_on:
-		if _t >= STALL_SETTLE_S:
-			_probe_on = true
-			_probe_x0 = _car.global_position
-			MeasureRig.drive(100.0, 100.0, 0.0, false, 1, true)
-		return
-	_probe_t += delta
-	_probe_v_peak = maxf(_probe_v_peak, absf(_car.telemetry.speed))
-	for w in _car.wheels:
-		if w.driven:
-			_probe_spin_peak = maxf(_probe_spin_peak, absf(w.omega))
-	_probe_override = _probe_override or bool(InputRouter.get("_brake_override"))
-	if _probe_t < STALL_HOLD_S:
-		return
-	var moved := (_car.global_position - _probe_x0).length()
-	var held := not _probe_override and moved < 0.05
-	print(("  %-13s : %s  moved %.3f m in %.0f s, peak %.3f m/s, driven spin peak %.2f rad/s%s;"
-			+ " gear %d, %.0f rpm, applied throttle %.2f")
-			% ["stall", "HOLDS" if held else "CREEPS", moved, STALL_HOLD_S, _probe_v_peak,
-			_probe_spin_peak, ", brake_override latched" if _probe_override else "",
-			_car.drivetrain.gear_byte, _car.drivetrain.rpm, _car.drivetrain.applied_throttle])
-	InputRouter.set_manual_gearbox(false)
-	MeasureRig.drive(100.0, 0.0)
-	_finish_vehicle()
-
-
-func _start_freerev() -> void:
-	_reset_pass(Phase.FREEREV)
-	_freerev_step = -1
-	_freerev_rows = []
-	# Manual: on the automatic a 0 byte with the pedal down reads as D (`arbitrate_bridge`).
-	InputRouter.set_manual_gearbox(true)
-	MeasureRig.drive(0.0, 100.0, 0.0, false, InputRouter.GEAR_N)
-
-
-func _tick_freerev() -> void:
-	if _freerev_step < 0:
-		if _t >= FREEREV_SETTLE_S:
-			_next_freerev_step()
-		return
-	if _t > FREEREV_HOLD_S - FREEREV_AVG_S:
-		_freerev_rpm += _car.drivetrain.rpm
-		_freerev_ticks += 1
-		_freerev_cut = _freerev_cut or _car.drivetrain.on_limiter
-	if _t < FREEREV_HOLD_S:
-		return
-	var pedal := FREEREV_PEDALS[_freerev_step]
-	var mean := _freerev_rpm / maxi(_freerev_ticks, 1)
-	print("  %-13s : %s pedal %.2f  %5.0f rpm, limiter line %.0f, applied throttle %.3f, gear %d%s"
-			% ["freerev", _variant, pedal, mean, Drivetrain.limiter_line(_car.spec, Drivetrain.GEAR_N),
-			_car.drivetrain.applied_throttle, _car.drivetrain.gear_byte,
-			", limiter cut" if _freerev_cut else ""])
-	_freerev_rows.append({"pedal": pedal, "rpm": mean, "cut": _freerev_cut})
-	if _freerev_step + 1 < FREEREV_PEDALS.size():
-		_next_freerev_step()
-		return
-	_current["freerev"] = _freerev_rows
-	_current["freerev_map"] = PedalMap.Kind.keys()[_car.spec.pedal_map]
-	_current["freerev_line"] = Drivetrain.limiter_line(_car.spec, Drivetrain.GEAR_N)
-	InputRouter.set_manual_gearbox(false)
-	MeasureRig.drive(100.0, 0.0)
-	_finish_vehicle()
-
-
-func _next_freerev_step() -> void:
-	_freerev_step += 1
-	_t = 0.0
-	_freerev_rpm = 0.0
-	_freerev_ticks = 0
-	_freerev_cut = false
-	MeasureRig.drive(FREEREV_PEDALS[_freerev_step] * 100.0, 100.0, 0.0, false, InputRouter.GEAR_N)
-
-
-func _start_rest() -> void:
-	_reset_pass(Phase.REST)
-	_rest_rows = []
-	_rest_steps = PackedFloat64Array()
-	_rest_step_sum = 0.0
-	_rest_step_n = 0
-	_rest_prev_v = NAN
-	InputRouter.set_manual_gearbox(_rest_state == "n")
-	MeasureRig.drive(0.0, REST_BRAKE_PCT if _rest_state == "brake" else 0.0, 0.0,
-			_rest_state == "handbrake", InputRouter.GEAR_N if _rest_state == "n" else 1)
-
-
-## Sampled BEFORE the body's own tick (a parent ticks first): the rim and contact speeds a row holds
-## are the pair that tick is about to read; its forces are the tick before's.
-func _tick_rest(delta: float) -> void:
-	var towed := MeasureRig.towed(_car)
-	if not is_nan(_rest_crr):
-		for w in _car.wheels:
-			w.rolling_crr = _rest_crr
-		if towed != null:
-			for w in towed.wheels:
-				w.rolling_crr = _rest_crr
-	var forward := -_car.global_basis.z
-	var v := _car.linear_velocity.dot(forward)
-	if not is_nan(_rest_prev_v):
-		_rest_step_sum += absf(v - _rest_prev_v)
-		_rest_step_n += 1
-	_rest_prev_v = v
-	if _rest_step_n >= Engine.physics_ticks_per_second:
-		_rest_steps.append(_rest_step_sum / _rest_step_n)
-		_rest_step_sum = 0.0
-		_rest_step_n = 0
-	if _t >= REST_SETTLE_S - REST_SAMPLE_S:
-		var rim := PackedFloat64Array()
-		var road := PackedFloat64Array()
-		var force := PackedFloat64Array()
-		var cap := PackedFloat64Array()
-		var roll := PackedFloat64Array()
-		var held := 0
-		for w in _car.wheels:
-			rim.append(w.omega * w.wheel_radius)
-			road.append(VehicleMath.point_velocity(_car, w.contact_point).dot(forward)
-					if w.in_contact else NAN)
-			force.append(w.force_long)
-			cap.append(w.long_cap)
-			roll.append(w.force_roll)
-			if w._spin_held:
-				held += 1
-		_rest_rows.append({"v": v, "acc": _car.telemetry.acc_long, "held": held,
-				"rear_kg": VehicleTelemetry.axle_load_kg(_car.drive.rear_suspension_force()),
-				"towed_kg": VehicleTelemetry.axle_load_kg(towed.bogie_suspension_force())
-						if towed != null else 0.0,
-				"rim": rim, "road": road, "force": force, "cap": cap, "roll": roll})
-	if _t < REST_SETTLE_S:
-		return
-	_print_rest(delta, towed != null)
-	InputRouter.set_manual_gearbox(false)
-	MeasureRig.drive(100.0, 0.0)
-	_finish_vehicle()
-
-
-func _print_rest(delta: float, has_towed: bool) -> void:
-	var window := _rest_rows.size() * delta
-	var states := {"": "D, pedals up", "n": "N", "brake": "D, foot brake %.0f %%" % REST_BRAKE_PCT,
-			"handbrake": "D, handbrake"}
-	var held: int = _rest_rows[_rest_rows.size() - 1]["held"]
-	print("  %-13s : %s, %s%s%s; clutch %s, gear %d, hill hold %s, %d of %d wheels held" % ["rest",
-			_variant, states[_rest_state], ", " + _trailer if _trailer != "" else "",
-			"" if is_nan(_rest_crr) else ", crr %.4f" % _rest_crr,
-			Drivetrain.CouplingState.keys()[_car.drivetrain.coupling_state],
-			_car.drivetrain.gear_byte, "on" if _car.drive.hill_holding else "off", held,
-			_car.wheels.size()])
-	var speeds := _rest_series("v")
-	var speed := _swing(speeds, window)
-	var raw := PackedFloat64Array()
-	for i in range(1, speeds.size()):
-		raw.append((speeds[i] - speeds[i - 1]) / delta)
-	print(("  %-13s : speed: sign changes %.1f /s, p-p %.2f mm/s, mean %+.2f mm/s; raw accel p-p"
-			+ " %.3f m/s2, accLong as sent p-p %.3f m/s2") % ["", speed["flips"],
-			float(speed["pp"]) * 1000.0, float(speed["mean"]) * 1000.0, _swing(raw, window)["pp"],
-			_swing(_rest_series("acc"), window)["pp"]])
-	var rear := _swing(_rest_series("rear_kg"), window)
-	var bogie := _swing(_rest_series("towed_kg"), window)
-	print("  %-13s : springs: rear axle p-p %.1f kg, %.1f kg a tick%s" % ["", rear["pp"],
-			rear["step"], ("; towed bogie p-p %.1f kg, %.1f kg a tick" % [bogie["pp"], bogie["step"]])
-			if has_towed else ""])
-	for is_rear: bool in [false, true]:
-		print("  %-13s : %s" % ["", _rest_axle(is_rear, window)])
-	var steps := PackedStringArray()
-	for s in _rest_steps:
-		steps.append("%.2f" % (s * 1000.0))
-	print("  %-13s : speed step a tick, by second (mm/s): %s" % ["", " ".join(steps)])
-
-
-## `key`'s value on every row of the sampled window.
-func _rest_series(key: String) -> PackedFloat64Array:
-	var xs := PackedFloat64Array()
-	for row in _rest_rows:
-		xs.append(float(row[key]))
-	return xs
-
-
-## A series over `window` s: peak to peak (`pp`), `mean`, sign changes a second (`flips`) and the
-## mean change from one tick to the next (`step`).
-static func _swing(xs: PackedFloat64Array, window: float) -> Dictionary:
-	var lo := INF
-	var hi := -INF
-	var sum := 0.0
-	var flips := 0
-	var step := 0.0
-	for i in xs.size():
-		lo = minf(lo, xs[i])
-		hi = maxf(hi, xs[i])
-		sum += xs[i]
-		if i > 0:
-			step += absf(xs[i] - xs[i - 1])
-			if signf(xs[i]) != signf(xs[i - 1]):
-				flips += 1
-	if xs.is_empty():
-		return {"pp": 0.0, "mean": 0.0, "flips": 0.0, "step": 0.0}
-	return {"pp": hi - lo, "mean": sum / xs.size(), "flips": flips / maxf(window, 1e-9),
-			"step": step / maxi(xs.size() - 1, 1)}
-
-
-## One axle's wheels over the sampled window: the contact's mean speed; how far the rim lands from
-## the road's speed of the tick before, and the contact from the rim's, each over that speed's mean
-## size (0 = lands on it: both near 0 is the wheel and the body swapping speeds); the tyre force
-## over its one-tick cap; the rolling drag and its sign changes a second.
-func _rest_axle(rear: bool, window: float) -> String:
-	var road_sum := 0.0
-	var rim_sum := 0.0
-	var rim_off := 0.0
-	var road_off := 0.0
-	var force_sum := 0.0
-	var cap_sum := 0.0
-	var drag_sum := 0.0
-	var flips := 0
-	var pairs := 0
-	var wheels := 0
-	for wi in _car.wheels.size():
-		if _car.wheels[wi].is_rear != rear:
-			continue
-		wheels += 1
-		for i in _rest_rows.size():
-			var force: PackedFloat64Array = _rest_rows[i]["force"]
-			var cap: PackedFloat64Array = _rest_rows[i]["cap"]
-			var roll: PackedFloat64Array = _rest_rows[i]["roll"]
-			force_sum += absf(force[wi])
-			cap_sum += cap[wi]
-			drag_sum += absf(roll[wi])
-			if i == 0:
-				continue
-			var prev_roll: PackedFloat64Array = _rest_rows[i - 1]["roll"]
-			if signf(roll[wi]) != signf(prev_roll[wi]):
-				flips += 1
-			var prev_road: PackedFloat64Array = _rest_rows[i - 1]["road"]
-			var prev_rim: PackedFloat64Array = _rest_rows[i - 1]["rim"]
-			var road: PackedFloat64Array = _rest_rows[i]["road"]
-			var rim: PackedFloat64Array = _rest_rows[i]["rim"]
-			if is_nan(prev_road[wi]) or is_nan(road[wi]):
-				continue
-			pairs += 1
-			road_sum += absf(prev_road[wi])
-			rim_sum += absf(prev_rim[wi])
-			rim_off += absf(rim[wi] - prev_road[wi])
-			road_off += absf(road[wi] - prev_rim[wi])
-	if wheels == 0 or pairs == 0:
-		return "%s axle: no wheel on the ground" % ("rear" if rear else "front")
-	var samples := float(wheels * _rest_rows.size())
-	# A ratio over a speed under a micrometre a second says nothing: the wheel or the body is still.
-	var still := 1e-6 * pairs
-	return ("%s axle: contact speed %.2f mm/s; the rim lands %s off the road's speed, the contact"
-			+ " %s off the rim's; tyre force %.2f of its cap; drag %.0f N a wheel, flips %.1f /s") % [
-			"rear" if rear else "front", road_sum / pairs * 1000.0,
-			"%.2f" % (rim_off / road_sum) if road_sum > still else "- (road still)",
-			"%.2f" % (road_off / rim_sum) if rim_sum > still else "- (rim still)",
-			force_sum / maxf(cap_sum, 1e-9), drag_sum / samples,
-			flips / (wheels * maxf(window, 1e-9))]
-
-
-func _start_handbrake_run() -> void:
-	_car.spawn_transform = Transform3D(Basis.IDENTITY,
-			Vector3(0.0, _car.rest_ride_height(), START_Z))
-	_car.respawn()
-	_reset_pass(Phase.HANDBRAKE)
-	_reset_probe()
-	MeasureRig.drive(100.0, 0.0)
-
-
-func _tick_handbrake(delta: float) -> void:
-	if not _probe_on:
-		if _car.telemetry.speed >= HB_SPEED or _t >= _seconds:
-			_probe_on = true
-			MeasureRig.drive(0.0, 0.0, HB_STEER, _hb_pulled)
-		return
-	_probe_t += delta
-	if _probe_t >= HB_HOLD_S and _probe_t - delta < HB_HOLD_S:
-		MeasureRig.drive(0.0, 0.0, 0.0, false)
-	_probe_yaw_peak = maxf(_probe_yaw_peak, absf(rad_to_deg(_car.angular_velocity.y)))
-	_probe_turned += rad_to_deg(_car.angular_velocity.y) * delta
-	if _probe_t <= HB_HOLD_S:
-		var locked := false
-		for w in _car.wheels:
-			if w.is_rear and w.in_contact and w.slip > BRAKE_LOCK_SLIP:
-				locked = true
-		if locked:
-			_probe_lock_t += delta
-	if _probe_t < HB_HOLD_S + HB_AFTER_S:
-		return
-	var turned := absf(_probe_turned)
-	var label := "handbrake" if _hb_pulled else "steer only"
-	print(("  %-13s : rears locked %.2f of %.1f s, yaw rate peak %.0f deg/s, turned %.0f deg%s,"
-			+ " %.0f km/h left") % [label, _probe_lock_t, HB_HOLD_S, _probe_yaw_peak, turned,
-			" (spun)" if turned > 180.0 else "", _car.telemetry.speed * 3.6])
-	if not _hb_pulled:
-		_hb_pulled = true
-		_start_handbrake_run()
-		return
-	MeasureRig.drive(100.0, 0.0)
-	_finish_vehicle()
 
 
 ## The step-steer runs (§ step steer) on this body: its family's STEP_SETS row less the speeds its
@@ -3426,7 +2798,7 @@ func _tick_step(delta: float) -> void:
 	var lifted := bool(_st_run["lifted"]) and _st_stage == Step.STEPPED
 	var err := _st_target - v_long
 	var u := _st_hold.step(err, delta)
-	var pedal := 0.0 if lifted else _pi_pedal(u, _st_target)
+	var pedal := 0.0 if lifted else MeasureRig.pi_pedal(_car, u, _st_target)
 	if _st_stage == Step.SETTLE:
 		MeasureRig.drive(pedal * 100.0, 0.0)
 		_rf_velocity = vel
@@ -3538,7 +2910,7 @@ func _tick_sine(delta: float) -> void:
 			_next_sine_run()
 		return
 	var err := target - v_long
-	var pedal := _pi_pedal(_sn_hold.step(err, delta), target)
+	var pedal := MeasureRig.pi_pedal(_car, _sn_hold.step(err, delta), target)
 	if _sn_stage == Sine.SETTLE:
 		MeasureRig.drive(pedal * 100.0, 0.0)
 		if _sn_t >= SINE_SETTLE_S:
@@ -3788,7 +3160,7 @@ func _report_step_run(delta: float) -> void:
 	var xfer := Vector2.ZERO
 	for i in range(_st_xfer.size() - ticks, _st_xfer.size()):
 		xfer += _st_xfer[i]
-	var neutral := v_mean * delta_mean / _wheelbase()
+	var neutral := v_mean * delta_mean / MeasureRig.wheelbase_of(_car.spec)
 	var rise := -1.0
 	var peak := 0.0
 	for i in _st_yaw.size():
@@ -3805,7 +3177,8 @@ func _report_step_run(delta: float) -> void:
 	# force. Held runs only: a lifted run slows through its tail, so it is never steady.
 	r["k_dpg"] = NAN
 	if not r["lifted"] and r["lat_g"] > 0.01:
-		r["k_dpg"] = rad_to_deg((delta_mean - _wheelbase() * steady / v_mean) / r["lat_g"])
+		r["k_dpg"] = rad_to_deg((delta_mean - MeasureRig.wheelbase_of(_car.spec) * steady / v_mean)
+				/ r["lat_g"])
 	# BalanceModel's prediction beside each, off the live spec (a probe flag included) and the live
 	# yaw tensor (Jolt's own where the spec declares none), its downforce at the run's speed.
 	var model := BalanceModel.axles(_car.spec, v_mean)
@@ -3872,7 +3245,7 @@ func _report_esc(r: Dictionary) -> void:
 		if s != 0.0:
 			acting += 1
 		peak = maxf(peak, absf(s))
-	r["esc_chatter"] = MeasureRig.chatter_runs(_st_esc, MeasureRig.ESC_CHATTER_EPS)
+	r["esc_chatter"] = MeasureRig.chatter_runs(_st_esc)
 	print("  %-26s : ESC braking %.0f %% of the step, peak %.2f of a wheel's brake; chatter %d"
 			% ["", 100.0 * acting / maxf(_st_esc.size(), 1.0), peak, r["esc_chatter"]])
 	if _car.spec.ground_drive.esc_roll_lift_g.is_empty():
@@ -3883,7 +3256,7 @@ func _report_esc(r: Dictionary) -> void:
 		if s > 0.0:
 			acting += 1
 		peak = maxf(peak, s)
-	r["roll_chatter"] = MeasureRig.chatter_runs(_st_roll, MeasureRig.ESC_CHATTER_EPS)
+	r["roll_chatter"] = MeasureRig.chatter_runs(_st_roll)
 	print("  %-26s : roll braking %.0f %% of the step, peak %.2f of every brake; chatter %d"
 			% ["", 100.0 * acting / maxf(_st_roll.size(), 1.0), peak, r["roll_chatter"]])
 
@@ -4147,7 +3520,8 @@ func _tick_circle(delta: float) -> void:
 	var b := _car.global_transform.basis
 	var v_long := _car.linear_velocity.dot(-b.z)
 	var err := CIRCLE_SPEED - v_long
-	MeasureRig.drive(_pi_pedal(_ci_hold.step(err, delta), CIRCLE_SPEED) * 100.0, 0.0, CIRCLE_LOCK)
+	MeasureRig.drive(MeasureRig.pi_pedal(_car, _ci_hold.step(err, delta), CIRCLE_SPEED) * 100.0, 0.0,
+			CIRCLE_LOCK)
 	if _t < CIRCLE_SETTLE_S:
 		return
 	var s := _ci_sums
@@ -4176,7 +3550,7 @@ func _tick_circle(delta: float) -> void:
 	var n: float = s["ticks"]
 	var mean: float = s["mean"] / n
 	var r := {"kmh": s["v"] / n * 3.6, "radius": s["radius"] / n, "mean_deg": rad_to_deg(mean),
-			"law_radius": _wheelbase() / tan(mean)}
+			"law_radius": MeasureRig.wheelbase_of(_car.spec) / tan(mean)}
 	for side in ["in", "out"]:
 		var k := maxf(s["n_" + side], 1.0)
 		r["angle_" + side] = s["angle_" + side] / k
@@ -4199,1112 +3573,6 @@ func _slip_angle_deg(w: RayWheel) -> float:
 	fwd = (fwd - n * fwd.dot(n)).normalized()
 	var vel := VehicleMath.point_velocity(_car, w.contact_point)
 	return rad_to_deg(atan2(-vel.dot(fwd.cross(n)), vel.dot(fwd)))
-
-
-## The hitch statics (§ hitch statics) on this body: parked, bare first.
-func _start_hitch() -> void:
-	_reset_pass(Phase.HITCH)
-	_hi_ids = []
-	_hi_bare = {}
-	if not _car is TractorVehicle:
-		print("=== %s: no three-point linkage, hitch skipped ===" % _variant)
-		_finish_vehicle()
-		return
-	for id: String in _car.call(&"attachment_ids"):
-		if not ImplementCatalog.is_attached(id) or ImplementCatalog.is_towed(id):
-			continue
-		if _trailer == "" or id.get_file().get_basename() == _trailer:
-			_hi_ids.append(id)
-	print("=== %s (%s), hitch statics, parked: per-axle kg off the springs ===" % [_variant,
-			_drive_label(_car.spec)])
-	_car.call(&"set_attachment", AttachmentCatalog.NONE)
-	_hi_stage = -1
-	_begin_hitch_reading(100.0)
-
-
-## The arm pass (§ arm): parked in N on the handbrake, the PTO in, in the bridge's manual box.
-func _start_arm() -> void:
-	_reset_pass(Phase.ARM)
-	if not _car is TruckVehicle or not bool(_car.vehicle_capabilities().get("body_cmd", false)):
-		print("=== %s: no refuse body, arm skipped ===" % _variant)
-		_finish_vehicle()
-		return
-	InputRouter.set_manual_gearbox(true)
-	print("=== %s, arm cycle, parked in N, handbrake and PTO on: PTO mode set speed %.0f rpm ===" % [
-			_variant, _car.spec.pto_mode_rpm])
-	_arm_stage = 0
-	_arm_drive(RefuseBody.Cmd.IDLE)
-
-
-func _arm_drive(cmd: int) -> void:
-	MeasureRig.drive(0.0, 0.0, 0.0, true, 0, false, 3, {"pto": true, "body_cmd": cmd})
-	_t = 0.0
-	_arm_line_t = 0.0
-	_arm_sums = Vector3(0.0, 0.0, INF)
-
-
-func _tick_arm() -> void:
-	var tel := _car.telemetry as TruckTelemetry
-	var dt: Drivetrain = _car.drivetrain
-	_arm_sums += Vector3(dt.rpm, 1.0, 0.0)
-	_arm_sums.z = minf(_arm_sums.z, dt.rpm)
-	if _t >= _arm_line_t:
-		_arm_line_t += ARM_LINE_S
-		print("  %-7s %5.2f s: body_pos %3d %%, %4.0f rpm, engine_load %3d %%, fuel %.3f" % [
-				["settle", "lift", "lower"][_arm_stage], _t, tel.body_pos, dt.rpm, tel.engine_load,
-				dt.applied_throttle])
-	var done := false
-	match _arm_stage:
-		0:
-			done = _t >= ARM_SETTLE_S
-		1:
-			done = tel.body_pos >= 100 or _t >= ARM_TIMEOUT_S
-		2:
-			done = tel.body_pos <= 0 or _t >= ARM_TIMEOUT_S
-	if not done:
-		return
-	print("  %s: %.2f s, rpm mean %.0f, least %.0f%s" % [["settle", "lift", "lower"][_arm_stage], _t,
-			_arm_sums.x / maxf(_arm_sums.y, 1.0), _arm_sums.z,
-			" (TIMEOUT)" if _arm_stage > 0 and _t >= ARM_TIMEOUT_S else ""])
-	_arm_stage += 1
-	if _arm_stage == 1:
-		_arm_drive(RefuseBody.Cmd.LIFT)
-	elif _arm_stage == 2:
-		_arm_drive(RefuseBody.Cmd.LOWER)
-	else:
-		MeasureRig.drive(0.0, 0.0)
-		InputRouter.set_manual_gearbox(false)
-		_finish_vehicle()
-
-
-## Command `hitch_pos` (0..100) on the parking brakes and restart the reading's clock.
-func _begin_hitch_reading(hitch_pos: float) -> void:
-	_t = 0.0
-	_hi_sums = Vector3.ZERO
-	MeasureRig.drive(0.0, 100.0, 0.0, true, 1, false, 3, {"hitch_pos": hitch_pos})
-
-
-func _tick_hitch() -> void:
-	if _t < HITCH_WAIT_S:
-		return
-	var axles := Vector2.ZERO
-	for w in _car.wheels:
-		if w.is_rear:
-			axles.y += w.suspension_force
-		else:
-			axles.x += w.suspension_force
-	_hi_sums += Vector3(axles.x, axles.y, 1.0)
-	if _t < HITCH_WAIT_S + HITCH_AVG_S:
-		return
-	_report_hitch_reading()
-	# After the bare reading, or an implement's last stage: on to the next implement.
-	if _hi_stage >= 0 and _hi_stage + 1 < HITCH_STAGES.size():
-		_hi_stage += 1
-	elif _hi_ids.is_empty():
-		MeasureRig.drive(0.0, 0.0)
-		_finish_vehicle()
-		return
-	else:
-		_car.call(&"set_attachment", _hi_ids.pop_front())
-		_hi_stage = 0
-	_begin_hitch_reading(HITCH_STAGES[_hi_stage])
-
-
-## The body-frame inertia tensor (kg·m²) off the live state: `inverse_inertia_tensor` is world-space
-## (`RayWheel.size_cap_masses`' read), so it is turned into the body's axes and inverted.
-func _body_tensor() -> Basis:
-	var state := PhysicsServer3D.body_get_direct_state(_car.get_rid())
-	var b := _car.global_transform.basis
-	return (b.transposed() * state.inverse_inertia_tensor * b).inverse()
-
-
-## Diagonal of the parallel-axis tensor of `kg` at offset `d`: x pitch, y yaw, z roll.
-static func _parallel_axis(kg: float, d: Vector3) -> Vector3:
-	return kg * Vector3(d.y * d.y + d.z * d.z, d.x * d.x + d.z * d.z, d.x * d.x + d.y * d.y)
-
-
-func _report_hitch_reading() -> void:
-	var g := _car.get_gravity().length()
-	var n := maxf(_hi_sums.z, 1.0)
-	var front := _hi_sums.x / n / g
-	var rear := _hi_sums.y / n / g
-	var rear_z := float(BrakeSizing.axle_geometry(_car.spec)["rear_z"])
-	var wheelbase := _wheelbase()
-	var m := _car.mass
-	var com := _car.center_of_mass
-	var front_pred := m * (rear_z - com.z) / wheelbase
-	var share := front / maxf(front + rear, 1e-6)
-	var tensor := _body_tensor()
-	var label := "bare"
-	if _hi_stage >= 0:
-		var where := "raised" if HITCH_STAGES[_hi_stage] > 50.0 else "bottom stop"
-		label = "%s, %s" % [String(_car.call(&"current_attachment")).get_file().get_basename(), where]
-	print(("  %-22s: front %.0f kg, rear %.0f kg; statics %.0f / %.0f (front %+.1f %%, rear %+.1f %%);"
-			+ " front share %.1f %% (min %.0f %%)") % [label, front, rear, front_pred, m - front_pred,
-			(front / front_pred - 1.0) * 100.0, (rear / (m - front_pred) - 1.0) * 100.0, share * 100.0,
-			HITCH_FRONT_MIN * 100.0])
-	var row := {"label": label, "front_kg": front, "rear_kg": rear, "front_pred": front_pred,
-			"share": share, "mass": m, "com_z": com.z, "com_y": com.y}
-	if _hi_stage < 0:
-		_hi_bare = {"front": front, "mass": m, "com": com, "tensor": tensor}
-		print("  %-22s  mass %.0f kg, COM (%.3f, %.3f, %.3f); tensor diagonal %s kg·m²" % ["",
-				m, com.x, com.y, com.z, _diag_label(_diag(tensor))])
-	else:
-		var bare_m: float = _hi_bare["mass"]
-		var bare_com: Vector3 = _hi_bare["com"]
-		var carried := m - bare_m
-		var lines := "  %-22s  mass %.0f kg (+%.0f carried), COM (%.3f, %.3f, %.3f)" % ["", m, carried,
-				com.x, com.y, com.z]
-		if carried > 0.5:
-			# The point the carried load sits at, recovered from the live COM (carried_com inverted).
-			var p := bare_com + (com - bare_com) * m / carried
-			var d_front_pred := carried * (rear_z - p.z) / wheelbase
-			var jolt := _diag(tensor)
-			var composite := _diag(_hi_bare["tensor"]) + _parallel_axis(bare_m, bare_com - com) \
-					+ _parallel_axis(carried, p - com)
-			lines += ("; Δfront %+.0f kg (m e / L %+.0f, e %.2f m behind the rear axle)\n  %-22s  tensor"
-					+ " diagonal %s, composite %s: Jolt carries %.0f / %.0f / %.0f %% (pitch / yaw / roll)") \
-					% [front - float(_hi_bare["front"]), d_front_pred, p.z - rear_z, "",
-					_diag_label(jolt), _diag_label(composite), jolt.x / composite.x * 100.0,
-					jolt.y / composite.y * 100.0, jolt.z / composite.z * 100.0]
-			row["d_front"] = front - float(_hi_bare["front"])
-			row["d_front_pred"] = d_front_pred
-			row["yaw_ratio"] = jolt.y / composite.y
-		print(lines)
-	if not _current.has("hitch"):
-		_current["hitch"] = []
-	(_current["hitch"] as Array).append(row)
-
-
-static func _diag(t: Basis) -> Vector3:
-	return Vector3(t.x.x, t.y.y, t.z.z)
-
-
-static func _diag_label(d: Vector3) -> String:
-	return "%.0f / %.0f / %.0f" % [d.x, d.y, d.z]
-
-
-## The draft pass (§ draft) on this body: each draft-relevant implement in turn.
-func _start_plough() -> void:
-	_reset_pass(Phase.PLOUGH)
-	_pl_ids = []
-	if not _car is TractorVehicle:
-		print("=== %s: no three-point linkage, plough skipped ===" % _variant)
-		_finish_vehicle()
-		return
-	for id: String in _car.call(&"attachment_ids"):
-		if not ImplementCatalog.is_attached(id) or ImplementCatalog.is_towed(id):
-			continue
-		var node := (load(id) as PackedScene).instantiate() as ImplementBase
-		var draft := node.draft_relevant()
-		node.free()
-		if draft and (_trailer == "" or id.get_file().get_basename() == _trailer):
-			_pl_ids.append(id)
-	_pl_peak_slip = 0.0
-	var peak := 0.0
-	for pt in _car.spec.ground_drive.grip_curve:
-		if pt.y > peak:
-			peak = pt.y
-			_pl_peak_slip = pt.x
-	print("=== %s (%s), draft on the field, dial 100 %% = %.2f kN ===" % [_variant,
-			_drive_label(_car.spec), (_car as TractorVehicle).draft_max_force / 1000.0])
-	_next_plough_implement()
-
-
-## Respawn with the next implement on and lower it at rest, or finish the body.
-func _next_plough_implement() -> void:
-	if _pl_ids.is_empty():
-		MeasureRig.drive(0.0, 0.0)
-		_finish_vehicle()
-		return
-	var id: String = _pl_ids.pop_front()
-	if _course:
-		_co_id = id
-		_co_runs = COURSE_RUNS.duplicate()
-		_next_course_run()
-		return
-	if _governor:
-		_start_governor_run(id)
-		return
-	_car.spawn_transform = Transform3D(Basis.IDENTITY,
-			Vector3(0.0, _car.rest_ride_height(), START_Z))
-	_car.respawn()
-	_car.call(&"set_attachment", id)
-	var node := (load(id) as PackedScene).instantiate() as ImplementBase
-	_pl_rating = node.draft_rating()
-	_pl_shape = node.draft_shape()
-	node.free()
-	print("  %s: rated %.2f kN at %.0f km/h, D497 shape (%.0f, %.0f, %.1f) held above %.0f km/h;"
-			% [id.get_file().get_basename(), _pl_rating / 1000.0, TractorTelemetry.DRAFT_S_REF_KMH,
-			_pl_shape.x, _pl_shape.y, _pl_shape.z, _pl_shape.w]
-			+ " g(0) %.2f" % TractorTelemetry.draft_speed01(0.0, _pl_shape))
-	_pl_stage = Plough.LOWER
-	_pl_speed = 0
-	_pl_hold.integral = 0.0
-	_t = 0.0
-	_plough_drive(0.0, 100.0, true)
-
-
-## A held speed's sums, zeroed (`_tick_plough`).
-static func _plough_sums() -> Dictionary:
-	var sums := {"gear": 0}
-	for k: String in ["ticks", "v", "draft", "dial", "load", "slip", "axle", "front", "total", "rpm",
-			"pedal", "pto"]:
-		sums[k] = 0.0
-	return sums
-
-
-## The bridge stash for the pass: the linkage always at its bottom stop.
-func _plough_drive(accel_pct: float, brake_pct: float, handbrake := false) -> void:
-	MeasureRig.drive(accel_pct, brake_pct, 0.0, handbrake, 1, false, 3, _plough_extra(0.0))
-
-
-## The pass's ISOBUS requests: the linkage at `hitch_pos`; the rear diff lock under `diff`, on a
-## locked PLOUGH_HOLDS entry and on the course (tractor_plough's hint locks it); MFWD under `mfwd`;
-## the PTO under `pto` (in 1000, the harrow trials'; under `governor` in 540, with the hand
-## throttle at the PTO preset).
-func _plough_extra(hitch_pos: float) -> Dictionary:
-	var extra := {"hitch_pos": hitch_pos,
-			"diff_lock": _diff_lock or _course or _plough_hold_locked(), "fwd_drive": _mfwd}
-	if _pto:
-		extra.merge({"pto": true, "pto_mode": TractorTelemetry.PTO_MODE_540 if _governor
-				else TractorTelemetry.PTO_MODE_1000})
-	if _governor:
-		extra["hand_throttle"] = TractorTelemetry.pto_hand_throttle(_car.spec) * 100.0
-	return extra
-
-
-## Whether the current PLOUGH_HOLDS entry holds with the rear diff lock in.
-func _plough_hold_locked() -> bool:
-	return _pl_stage == Plough.HOLD and PLOUGH_HOLDS[_pl_speed].y > 0.0
-
-
-func _tick_plough(delta: float) -> void:
-	var v_long := _car.linear_velocity.dot(-_car.global_transform.basis.z)
-	var tel := _car.telemetry as TractorTelemetry
-	if _pl_stage >= Plough.GOV_PARK_RAISED:
-		_tick_governor(v_long, tel)
-		return
-	match _pl_stage:
-		Plough.COURSE_SET:
-			if _t < HITCH_WAIT_S:
-				return
-			_pl_stage = Plough.COURSE_RUN
-			_t = 0.0
-		Plough.COURSE_RUN:
-			_co_set = minf(_co_set + COURSE_RAMP * delta, _co_run.x / 3.6)
-			var err := _co_set - v_long
-			_course_drive(_pi_pedal(_pl_hold.step(err, delta), _co_set) * 100.0, 0.0)
-			var s := _co_strip.ahead(_car.global_position)
-			if s > _co_row.y or _t > COURSE_TIMEOUT_S:
-				_report_course_run(s)
-				_next_course_run()
-			elif s >= _co_row.x:
-				_course_sample(s - _co_row.x, tel)
-		Plough.LOWER:
-			if _t < HITCH_WAIT_S:
-				return
-			print("    parked, lowered: engine_load %d %%, %.0f rpm, fuel %.3f; PTO %s, %.1f N·m on the crank"
-					% [tel.engine_load, _car.drivetrain.rpm, _car.drivetrain.applied_throttle,
-					"%d rpm" % tel.pto_rpm if tel.pto_state else "off",
-					_car.drivetrain.accessory_torque])
-			_pl_stage = Plough.HOLD
-			_t = 0.0
-			_pl_sums = _plough_sums()
-		Plough.HOLD:
-			var err := PLOUGH_HOLDS[_pl_speed].x / 3.6 - v_long
-			var pedal := _pi_pedal(_pl_hold.step(err, delta), PLOUGH_HOLDS[_pl_speed].x / 3.6)
-			_plough_drive(pedal * 100.0, 0.0)
-			if _t < PLOUGH_SETTLE_S:
-				return
-			var axles := Vector2.ZERO
-			for w in _car.wheels:
-				if w.is_rear:
-					axles.y += w.suspension_force
-				else:
-					axles.x += w.suspension_force
-			_pl_sums["ticks"] += 1.0
-			_pl_sums["v"] += v_long
-			_pl_sums["draft"] += absf((_car as TractorVehicle).draft_applied)
-			_pl_sums["dial"] += float(tel.draft_force)
-			_pl_sums["load"] += float(tel.engine_load)
-			_pl_sums["slip"] += float(tel.wheel_slip)
-			_pl_sums["axle"] += tel.axle_load
-			_pl_sums["front"] += axles.x
-			_pl_sums["total"] += axles.x + axles.y
-			_pl_sums["rpm"] += _car.drivetrain.rpm
-			_pl_sums["pedal"] += pedal
-			_pl_sums["pto"] += _car.drivetrain.accessory_torque
-			_pl_sums["gear"] = _car.drivetrain.gear_byte
-			if _t < PLOUGH_SETTLE_S + PLOUGH_AVG_S:
-				return
-			_report_plough_hold()
-			_pl_speed += 1
-			_t = 0.0
-			_pl_sums = _plough_sums()
-			if _pl_speed >= PLOUGH_HOLDS.size():
-				_pl_stage = Plough.STOP
-		Plough.STOP:
-			_plough_drive(0.0, 100.0)
-			if absf(v_long) > 0.05:
-				_t = 0.0
-			if _t < PLOUGH_STOP_S:
-				return
-			_pl_stage = Plough.START
-			_t = 0.0
-			_pl_shifts = []
-			_pl_gear = _car.drivetrain.gear_byte
-			_pl_trace_t = 0.0
-			_pl_moving_t = -1.0
-			_pl_ticks = 0
-			print("    standing start, floored, implement down (from %s):" % MeasureRig.gear_label(_pl_gear))
-			if _trace:
-				print(("      trace: a line every %d tick(s) to %.1f s; c O(pen) S(lipping) L(ocked), ramp"
-						+ " the start-up ramp, clutch its commanded capacity, Tc at the crank (N·m); per rear"
-						+ " wheel the slip ratio, < / > the grip curve's rising / falling side of its %.2f"
-						+ " peak, and Fx / Fz") % [_trace_every, _trace_s, _pl_peak_slip])
-		Plough.START:
-			_plough_drive(100.0, 0.0)
-			var gear: int = _car.drivetrain.gear_byte
-			if gear != _pl_gear:
-				var s := MeasureRig.shift_record(_car, _t, _pl_gear, gear)
-				_pl_shifts.append(s)
-				print("      %5.2f s  %s" % [_t, MeasureRig.shifts_label([s])])
-				_pl_gear = gear
-			if _pl_moving_t < 0.0 and absf(v_long) * 3.6 > 0.5:
-				_pl_moving_t = _t
-			_pl_ticks += 1
-			if _trace and _t < _trace_s:
-				if (_pl_ticks - 1) % _trace_every == 0:
-					print(_plough_trace_line(v_long))
-				_pl_trace_t = _t + PLOUGH_TRACE_S
-			elif _t >= _pl_trace_t:
-				_pl_trace_t += PLOUGH_TRACE_S
-				print("      %5.2f s  %4.1f km/h %s %4.0f rpm, draft %3d %%, wheel_slip %2d %%, engine_load %3d %%"
-						% [_t, v_long * 3.6, MeasureRig.gear_label(gear), _car.drivetrain.rpm, tel.draft_force,
-						tel.wheel_slip, tel.engine_load])
-			if _t < PLOUGH_START_S:
-				return
-			print("      moving (0.5 km/h) at %s; %s" % ["%.2f s" % _pl_moving_t if _pl_moving_t >= 0.0
-					else "never", MeasureRig.shifts_label(_pl_shifts) if not _pl_shifts.is_empty() else "no shift"])
-			var hunt := _hunting_gate(_pl_shifts)
-			_gate_line("hunting", hunt[0], hunt[1])
-			_next_plough_implement()
-
-
-## Respawn with `id` on, raised, parked in N on both brakes with the PTO in and the hand throttle at
-## its preset, in the bridge's manual box (§ draft, `governor`).
-func _start_governor_run(id: String) -> void:
-	_car.spawn_transform = Transform3D(Basis.IDENTITY,
-			Vector3(0.0, _car.rest_ride_height(), START_Z))
-	_car.respawn()
-	_car.call(&"set_attachment", id)
-	InputRouter.set_manual_gearbox(true)
-	var preset := TractorTelemetry.pto_hand_throttle(_car.spec)
-	print("  %s: hand throttle %.1f %% (setting %.0f rpm, the PTO's rated %.0f), PTO 540, droop %.1f %%,"
-			% [id.get_file().get_basename(), preset * 100.0, PedalMap.setting_rpm(_car.spec, preset),
-			TractorTelemetry.PTO_RATED_RPM, _car.spec.governor_droop * 100.0]
-			+ " the shaft's floor %.1f rpm" % _governor_floor())
-	_pl_stage = Plough.GOV_PARK_RAISED
-	_t = 0.0
-	_governor_drive(0.0, 100.0, true, 100.0, 0)
-
-
-## The shaft speed the `droop` gate holds it at or over: 540 less the spec's droop.
-func _governor_floor() -> float:
-	return 540.0 / (1.0 + _car.spec.governor_droop)
-
-
-## The bridge stash for the governor's run: the linkage at `hitch_pos`, in `byte` (N at rest).
-func _governor_drive(accel_pct: float, brake_pct: float, handbrake: bool, hitch_pos: float,
-		byte: int) -> void:
-	MeasureRig.drive(accel_pct, brake_pct, 0.0, handbrake, byte, false, 3, _plough_extra(hitch_pos))
-
-
-## The foot pedal under the hand throttle: the go request GOV_GO_PEDAL, or on a CVT the share of its
-## top speed that commands GOV_CVT_KMH.
-func _governor_pedal() -> float:
-	if Drivetrain.is_cvt(_car.spec):
-		return GOV_CVT_KMH / 3.6 / Drivetrain.cvt_top_speed(_car.spec)
-	return GOV_GO_PEDAL
-
-
-## The governor's working gear: `gear=`, else GOV_GEAR (on a CVT, the range it caps).
-func _governor_gear() -> int:
-	return _held_gear if _held_gear > 0 else GOV_GEAR
-
-
-## One governor line: road speed, gear, the crank against the governor's setting and its droop,
-## the PTO shaft, `engine_load` and the draft dial.
-func _governor_line(v_long: float, tel: TractorTelemetry) -> String:
-	var dt: Drivetrain = _car.drivetrain
-	var setting := PedalMap.setting_rpm(_car.spec, dt.governor_demand)
-	return ("%4.1f km/h %s %4.0f rpm (setting %4.0f, droop %4.1f %%), PTO %4d rpm, engine_load %3d %%,"
-			+ " draft %3d %%") % [v_long * 3.6, MeasureRig.gear_label(dt.gear_byte), dt.rpm, setting,
-			(setting - dt.rpm) / setting * 100.0, tel.pto_rpm, tel.engine_load, tel.draft_force]
-
-
-func _tick_governor(v_long: float, tel: TractorTelemetry) -> void:
-	match _pl_stage:
-		Plough.GOV_PARK_RAISED, Plough.GOV_PARK_LOWERED:
-			var lowered := _pl_stage == Plough.GOV_PARK_LOWERED
-			_governor_drive(0.0, 100.0, true, 0.0 if lowered else 100.0, 0)
-			if _t < HITCH_WAIT_S:
-				return
-			print("    parked in N, %s: %s" % ["lowered" if lowered else "raised",
-					_governor_line(v_long, tel)])
-			_pl_stage = Plough.GOV_RAISED if lowered else Plough.GOV_PARK_LOWERED
-			_t = 0.0
-		Plough.GOV_RAISED:
-			_governor_drive(_governor_pedal() * 100.0, 0.0, false, 100.0, _governor_gear())
-			if _t < GOV_RAISED_S:
-				return
-			print("    working, raised:  %s" % _governor_line(v_long, tel))
-			print("    lowered at %.0f s:" % GOV_RAISED_S)
-			_pl_stage = Plough.GOV_LOWERED
-			_t = 0.0
-			_gv_line_t = 0.0
-			_gv_sums = {"ticks": 0.0, "v": 0.0, "rpm": 0.0, "setting": 0.0, "pto": 0.0, "load": 0.0,
-					"dial": 0.0}
-		Plough.GOV_LOWERED:
-			_governor_drive(_governor_pedal() * 100.0, 0.0, false, 0.0, _governor_gear())
-			if _t >= _gv_line_t:
-				print("      %5.2f s  %s" % [_t, _governor_line(v_long, tel)])
-				_gv_line_t += GOV_LINE_S if _t < GOV_FINE_S else 1.0
-			if _t >= GOV_LOWERED_S - GOV_AVG_S:
-				var dt: Drivetrain = _car.drivetrain
-				_gv_sums["ticks"] += 1.0
-				_gv_sums["v"] += v_long
-				_gv_sums["rpm"] += dt.rpm
-				_gv_sums["setting"] += PedalMap.setting_rpm(_car.spec, dt.governor_demand)
-				_gv_sums["pto"] += float(tel.pto_rpm)
-				_gv_sums["load"] += float(tel.engine_load)
-				_gv_sums["dial"] += float(tel.draft_force)
-			if _t < GOV_LOWERED_S:
-				return
-			_report_governor()
-			InputRouter.set_manual_gearbox(false)
-			_next_plough_implement()
-
-
-## The lowered hold's last GOV_AVG_S against the spec's droop: the `droop` gate.
-func _report_governor() -> void:
-	var s := _gv_sums
-	var n: float = maxf(s["ticks"], 1.0)
-	var setting: float = s["setting"] / n
-	var rpm: float = s["rpm"] / n
-	var pto: float = s["pto"] / n
-	print("    held (last %.0f s): %.1f km/h, %.0f rpm, %.1f %% under the %.0f setting; PTO %.1f rpm;"
-			% [GOV_AVG_S, s["v"] / n * 3.6, rpm, (setting - rpm) / setting * 100.0, setting, pto]
-			+ " engine_load %.0f %%, draft %.0f %%" % [s["load"] / n, s["dial"] / n])
-	var ok := pto >= _governor_floor() - 0.5
-	if not ok:
-		_failures += 1
-	_gate_line("droop", ok, "PTO %.1f rpm against %.1f (540 less the %.0f %% droop)"
-			% [pto, _governor_floor(), _car.spec.governor_droop * 100.0])
-	if not _current.has("governor"):
-		_current["governor"] = []
-	(_current["governor"] as Array).append({"implement": String(_car.call(&"current_attachment"))
-			.get_file().get_basename(), "kmh": s["v"] / n * 3.6, "rpm": rpm, "setting": setting,
-			"pto_rpm": pto, "engine_load": s["load"] / n, "draft_pct": s["dial"] / n})
-
-
-## One held speed's averages against D497 at the speed held (full depth, full soil).
-func _report_plough_hold() -> void:
-	var s := _pl_sums
-	var n: float = maxf(s["ticks"], 1.0)
-	var v: float = s["v"] / n
-	var draft_n: float = s["draft"] / n
-	var d497 := _pl_rating * TractorTelemetry.draft_speed01(v * 3.6, _pl_shape) \
-			* clampf(absf(v) / TractorTelemetry.DRAFT_V_CRAWL, 0.0, 1.0)
-	if not _current.has("plough"):
-		_current["plough"] = []
-	(_current["plough"] as Array).append({"implement": String(_car.call(&"current_attachment"))
-			.get_file().get_basename(), "kmh": v * 3.6, "draft_n": draft_n, "d497_n": d497,
-			"engine_load": s["load"] / n, "wheel_slip": s["slip"] / n, "axle_load": s["axle"] / n,
-			"front_share": s["front"] / maxf(s["total"], 1e-6)})
-	print(("    %4.1f km/h %s (held %4.1f): draft %.2f kN (D497 %.2f, %+.1f %%), dial %.0f %%; engine_load"
-			+ " %.0f %%, wheel_slip %.1f %%, axle_load %.0f kg, front share %.1f %%; %s %.0f rpm,"
-			+ " pedal %.2f%s") % [PLOUGH_HOLDS[_pl_speed].x,
-			"locked" if _diff_lock or _plough_hold_locked() else "open  ", v * 3.6, draft_n / 1000.0,
-			d497 / 1000.0,
-			(draft_n / maxf(d497, 1.0) - 1.0) * 100.0, s["dial"] / n, s["load"] / n, s["slip"] / n,
-			s["axle"] / n, s["front"] / maxf(s["total"], 1e-6) * 100.0, MeasureRig.gear_label(int(s["gear"])),
-			s["rpm"] / n, s["pedal"] / n,
-			"; PTO %.1f N·m on the crank" % (s["pto"] / n) if _pto else ""])
-	var fx := 0.0
-	for w in _car.wheels:
-		fx += w.force_long
-	print("      last tick: draft %.2f kN, every tyre's Fx %.2f kN | rears %s" % [
-			absf((_car as TractorVehicle).draft_applied) / 1000.0, fx / 1000.0,
-			"  ".join(_rear_contacts(true))])
-
-
-## The course's Row and light bands as distances ahead of its Spawn, laid on `strip` (§ draft).
-func _load_course(strip: FieldStrip) -> void:
-	var course := (load(COURSE_SCENE) as PackedScene).instantiate()
-	var spawn := (course.get_node("Spawn") as Node3D).transform
-	var row := course.get_node("Row") as ChallengeZone
-	var row_z := Vector2(row.position.z - row.size.z * 0.5, row.position.z + row.size.z * 0.5)
-	course.free()
-	# The course runs along world z (its Spawn faces +z or -z); distance ahead of the Spawn.
-	var dir := signf(-spawn.basis.z.z)
-	var ahead := func(z: float) -> float: return (z - spawn.origin.z) * dir
-	var a: float = ahead.call(row_z.x)
-	var b: float = ahead.call(row_z.y)
-	_co_row = Vector2(minf(a, b), maxf(a, b))
-	strip.start_z = START_Z
-	strip.field = 1.0 - FarmPlayground.LIGHT_SOIL_MIX
-	var bands: Array[String] = []
-	for band in FarmPlayground.LIGHT_SOIL_BANDS:
-		a = ahead.call(band.x)
-		b = ahead.call(band.y)
-		strip.bands.append(Vector2(minf(a, b), maxf(a, b)))
-		bands.append("%.0f-%.0f m" % [minf(a, b) - _co_row.x, maxf(a, b) - _co_row.x])
-	print("course: tractor_plough's Row %.0f-%.0f m ahead of its Spawn; light bands %s into it, Field"
-			% [_co_row.x, _co_row.y, ", ".join(bands)] + " %.2f (grip %.2f, drag %.3f), diff locked"
-			% [strip.field,
-			lerpf(Surface.ref_grip(Surface.SAND), Surface.ref_grip(Surface.FIELD), strip.field),
-			lerpf(Surface.drag(Surface.SAND), Surface.drag(Surface.FIELD), strip.field)])
-
-
-## The bridge stash for a course run: the linkage held at the run's `hitch_pos`.
-func _course_drive(accel_pct: float, brake_pct: float, handbrake := false) -> void:
-	MeasureRig.drive(accel_pct, brake_pct, 0.0, handbrake, 1, false, 3, _plough_extra(_co_run.y))
-
-
-## Respawn at the course's Spawn for the next COURSE_RUNS entry, or the next implement.
-func _next_course_run() -> void:
-	if _co_runs.is_empty():
-		_next_plough_implement()
-		return
-	_co_run = _co_runs.pop_front()
-	_car.spawn_transform = Transform3D(Basis.IDENTITY,
-			Vector3(0.0, _car.rest_ride_height(), START_Z))
-	_car.respawn()
-	_car.call(&"set_attachment", _co_id)
-	_co_ext = {}
-	_co_shifts = []
-	_co_gear = -1
-	_co_set = 0.0
-	_pl_hold.integral = 0.0
-	_t = 0.0
-	_pl_stage = Plough.COURSE_SET
-	_course_drive(0.0, 100.0, true)
-
-
-## One tick inside the Row, `d` m into it: each signal's extremes by the soil at the hitch point.
-func _course_sample(d: float, tel: TractorTelemetry) -> void:
-	var dt: Drivetrain = _car.drivetrain
-	var hitch := _car.get_node((_car as TractorVehicle).hitch_path) as ThreePointHitch
-	var soil := "band" if _co_strip.field_at(hitch.hitch_point()) < 1.0 else "full"
-	var at := "%4.1f m, %s %4.0f rpm" % [d, MeasureRig.gear_label(dt.gear_byte), dt.rpm]
-	for sig: String in ["engine_load", "draft_force"]:
-		var v := float(tel.get(sig))
-		var key := "%s, %s soil" % [sig, soil]
-		if not _co_ext.has(key):
-			_co_ext[key] = [v, at, v, at, 0.0, 0]
-		var ext: Array = _co_ext[key]
-		ext[4] += v
-		ext[5] += 1
-		if v < ext[0]:
-			ext[0] = v
-			ext[1] = at
-		if v > ext[2]:
-			ext[2] = v
-			ext[3] = at
-	if _co_gear >= 0 and dt.gear_byte != _co_gear:
-		_co_shifts.append("%s>%s at %.1f m" % [MeasureRig.gear_label(_co_gear),
-				MeasureRig.gear_label(dt.gear_byte), d])
-	_co_gear = dt.gear_byte
-
-
-func _report_course_run(s: float) -> void:
-	print("  %s %s, %.0f km/h: %s" % [_co_id.get_file().get_basename(),
-			"down" if _co_run.y <= 0.0 else "raised", _co_run.x,
-			"through the Row in %.1f s" % _t if s > _co_row.y
-			else "TIMEOUT %.1f m into the Row" % (s - _co_row.x)])
-	var keys := _co_ext.keys()
-	keys.sort()
-	for key: String in keys:
-		var ext: Array = _co_ext[key]
-		print("    %-28s mean %3.0f %%, least %3.0f %% (%s), most %3.0f %% (%s)" % [key,
-				ext[4] / maxi(ext[5], 1), ext[0], ext[1], ext[2], ext[3]])
-	print("    shifts in the Row: %s" % (", ".join(_co_shifts) if not _co_shifts.is_empty()
-			else "none"))
-
-
-## One `trace` line of the floored start (§ draft): what the coupling passes, the draft against the
-## rears' summed tyre force, and each rear tyre against its grip curve.
-func _plough_trace_line(v_long: float) -> String:
-	var dt: Drivetrain = _car.drivetrain
-	var fx := 0.0
-	for w in _car.wheels:
-		if w.is_rear:
-			fx += w.force_long
-	return ("      %6.3f %5.2f km/h %s %4.0f rpm %s ramp %.2f clutch %.2f Tc %5.0f fuel %.2f | draft"
-			+ " %5.2f kN, rear Fx %5.2f kN | %s") % [_t, v_long * 3.6, MeasureRig.gear_label(dt.gear_byte),
-			dt.rpm, "OSL"[dt.coupling_state], dt.ramp, dt.clutch, dt.coupling_torque,
-			dt.applied_throttle, absf((_car as TractorVehicle).draft_applied) / 1000.0, fx / 1000.0,
-			"  ".join(_rear_contacts(false))]
-
-
-## Each rear tyre against the grip curve: the slip ratio, < / > the rising / falling side of its
-## `_pl_peak_slip` peak, and Fx / Fz; `with_load` puts Fz in kg ahead of them.
-func _rear_contacts(with_load: bool) -> Array[String]:
-	var rears: Array[String] = []
-	for w in _car.wheels:
-		if w.is_rear:
-			rears.append("%s %s%.3f %s %+.3f" % [MeasureRig.wheel_label(_car,w),
-					"%.0f kg, " % (w.suspension_force / BrakeSizing.G) if with_load else "", w.slip,
-					">" if w.slip > _pl_peak_slip else "<",
-					w.force_long / maxf(w.suspension_force, 1.0)])
-	return rears
-
-
-## The kerb runs (§ kerb) on this body, after the disk's prediction per axle: a disk of radius `r`
-## first meets a step `h` `sqrt(2 r h - h²)` ahead of its hub, its normal leaning back `asin(x / r)`;
-## a cylinder meets an oblique edge `half_width tan θ` sooner, at its leading tread corner.
-func _start_kerb() -> void:
-	_kb_runs = []
-	for h in KERB_HEIGHTS:
-		_kb_runs.append({"h": h, "coast": false, "oblique": false})
-		_kb_runs.append({"h": h, "coast": true, "oblique": false})
-		_kb_runs.append({"h": h, "coast": false, "oblique": true})
-	var gd := _car.spec.ground_drive
-	print("=== %s (%s), kerb ===" % [_variant, _drive_label(_car.spec)])
-	for rear in [false, true]:
-		var r := gd.axle_radius(rear)
-		var parts := PackedStringArray()
-		for h in KERB_HEIGHTS:
-			var x := sqrt(2.0 * r * h - h * h)
-			parts.append("%.0f cm %.2f m, %.0f deg" % [h * 100.0, x, rad_to_deg(asin(x / r))])
-		print("  predicted %-5s r %.2f: disk %s; cylinder +%.2f m at %.0f deg" % [
-				"rear" if rear else "front", r, ", ".join(parts),
-				gd.axle_half_width(rear) * tan(deg_to_rad(KERB_OBLIQUE_DEG)), KERB_OBLIQUE_DEG])
-	_next_kerb_run()
-
-
-func _next_kerb_run() -> void:
-	if _kb_box != null:
-		remove_child(_kb_box)
-		_kb_box.queue_free()
-		_kb_box = null
-	if _kb_runs.is_empty():
-		MeasureRig.drive(0.0, 0.0)
-		_finish_vehicle()
-		return
-	_kb_run = _kb_runs.pop_front()
-	_car.spawn_transform = Transform3D(Basis.IDENTITY,
-			Vector3(0.0, _car.rest_ride_height(), START_Z))
-	_car.respawn()
-	_reset_pass(Phase.KERB)
-	_kb_hold.integral = 0.0
-	_kb_t = 0.0
-	_kb_edges = []
-	_kb_overlaps = RayWheel.start_overlaps
-	MeasureRig.drive(100.0 if _kb_run["coast"] else 0.0, 0.0)
-
-
-func _tick_kerb(delta: float) -> void:
-	var v_long := _car.linear_velocity.dot(-_car.global_transform.basis.z)
-	var coast: bool = _kb_run["coast"]
-	if _kb_box == null:
-		if coast:
-			if v_long >= KERB_COAST or _t >= _seconds:
-				_lay_kerb(KERB_LEAD_COAST)
-				MeasureRig.drive(0.0, 0.0)
-		else:
-			_kerb_crawl(v_long, delta)
-			if _t >= KERB_SETTLE_S:
-				_lay_kerb(KERB_LEAD_CRAWL)
-		return
-	if not coast:
-		_kerb_crawl(v_long, delta)
-	_kb_t += delta
-	var v := _car.linear_velocity.dot(_kb_heading)
-	var ay := (_car.linear_velocity.y - _kb_prev_vy) / delta
-	_kb_prev_vy = _car.linear_velocity.y
-	for e in 2:
-		_kerb_edge_tick(e, v, ay)
-	var progress := (_car.global_position - _kb_origin).dot(_kb_heading)
-	if progress > _kb_best + KERB_STUCK_PROGRESS:
-		_kb_best = progress
-		_kb_best_t = _kb_t
-	var verdict := ""
-	if float(_kb_edges[1]["t_clear"]) >= 0.0:
-		verdict = "over"
-	elif _kb_t - _kb_best_t > KERB_STUCK_S:
-		verdict = "STUCK"
-	elif _kb_t > KERB_TIMEOUT_S:
-		verdict = "TIMEOUT"
-	if verdict != "":
-		_report_kerb_run(verdict)
-		_next_kerb_run()
-
-
-## The crawl's speed hold: the circle's PI pedal at `v_set`, and the brake past it.
-func _kerb_crawl(v_long: float, delta: float, v_set := KERB_CRAWL, steer_pct := 0.0) -> void:
-	var err := v_set - v_long
-	MeasureRig.drive(_pi_pedal(_kb_hold.step(err, delta), v_set) * 100.0,
-			clampf(-err * KERB_BRAKE_GAIN, 0.0, 1.0) * 100.0, steer_pct)
-
-
-## The plateau, its near edge `lead` ahead of the foremost hub along the heading, square to it or
-## KERB_OBLIQUE_DEG off; its top at the run's height.
-func _lay_kerb(lead: float) -> void:
-	var h: float = _kb_run["h"]
-	var xf := _car.global_transform
-	_kb_heading = Vector3(-xf.basis.z.x, 0.0, -xf.basis.z.z).normalized()
-	var oblique := deg_to_rad(KERB_OBLIQUE_DEG) if _kb_run["oblique"] else 0.0
-	_kb_n = Basis(Vector3.UP, oblique) * -_kb_heading
-	_kb_cos = _kb_heading.dot(-_kb_n)
-	var front := -INF
-	for w in _car.wheels:
-		front = maxf(front, (xf * w.anchor).dot(_kb_heading))
-	var near := _car.global_position + _kb_heading * (front - _car.global_position.dot(_kb_heading)
-			+ lead)
-	near.y = 0.0
-	var length := _wheelbase() + KERB_TOP
-	_kb_edge_at = [near, near - _kb_n * length]
-	_kb_box = MeasureRig.add_box(self, "Kerb", Vector3(KERB_WIDTH, h, length), Transform3D(
-			Basis(Vector3.UP, atan2(_kb_n.x, _kb_n.z)),
-			near - _kb_n * (length * 0.5) + Vector3.UP * (h * 0.5)))
-	_kb_edges = [_kerb_edge(), _kerb_edge()]
-	_kb_prev_vy = _car.linear_velocity.y
-	_kb_origin = _car.global_position
-	_kb_best = 0.0
-	_kb_best_t = 0.0
-
-
-## One edge's figures over a kerb run; the arrays are per wheel.
-func _kerb_edge() -> Dictionary:
-	var zero := []
-	zero.resize(_car.wheels.size())
-	zero.fill(0.0)
-	var unset := zero.duplicate()
-	unset.fill(NAN)
-	return {"prev": zero.duplicate(), "x": unset, "lean": unset.duplicate(),
-			"lean_peak": zero.duplicate(), "jump": zero.duplicate(), "peak": zero.duplicate(),
-			"t_first": -1.0, "v_first": NAN, "v_min": INF, "v_clear": NAN,
-			"t_clear": -1.0, "a_peak": 0.0}
-
-
-## Edge `e` (0 the step up, 1 the step down) this tick, at road speed `v` and COM vertical
-## acceleration `ay`.
-func _kerb_edge_tick(e: int, v: float, ay: float) -> void:
-	var edge := _kb_edges[e]
-	var up_edge := e == 0
-	var half_step: float = _kb_run["h"] * 0.5
-	var xf := _car.global_transform
-	var any_in := false
-	var all_clear := true
-	for i in _car.wheels.size():
-		var w: RayWheel = _car.wheels[i]
-		var d := (xf * w.anchor - _kb_edge_at[e]).dot(_kb_n) / _kb_cos
-		var c := w.compression
-		if d > KERB_LATCH:
-			edge["prev"][i] = c
-			all_clear = false
-			continue
-		any_in = true
-		var change: float = c - float(edge["prev"][i])
-		edge["prev"][i] = c
-		if d <= -KERB_CLEAR:
-			continue
-		all_clear = false
-		var lean := rad_to_deg(w.contact_normal.angle_to(Vector3.UP)) if w.in_contact else 0.0
-		edge["lean_peak"][i] = maxf(float(edge["lean_peak"][i]), lean)
-		edge["peak"][i] = maxf(float(edge["peak"][i]), w.suspension_force)
-		edge["jump"][i] = maxf(float(edge["jump"][i]), change if up_edge else -change)
-		var landed := w.in_contact and (w.contact_point.y > half_step if up_edge
-				else w.contact_point.y < half_step)
-		if is_nan(float(edge["x"][i])) and landed:
-			edge["x"][i] = d
-			edge["lean"][i] = lean
-			if float(edge["t_first"]) < 0.0:
-				edge["t_first"] = _kb_t
-				edge["v_first"] = v
-	if any_in and float(edge["t_clear"]) < 0.0:
-		edge["v_min"] = minf(float(edge["v_min"]), v)
-		edge["a_peak"] = maxf(float(edge["a_peak"]), absf(ay))
-		if all_clear:
-			edge["t_clear"] = _kb_t
-			edge["v_clear"] = v
-
-
-func _report_kerb_run(verdict: String) -> void:
-	var h: float = _kb_run["h"]
-	var how := "coast 30 km/h" if _kb_run["coast"] else "crawl"
-	if _kb_run["oblique"]:
-		how += " at %.0f deg" % KERB_OBLIQUE_DEG
-	var cap := _car.spec.ground_drive.max_suspension_force
-	var overlaps := RayWheel.start_overlaps - _kb_overlaps
-	print("  %.0f cm %-18s : %s after %.1f s%s" % [h * 100.0, how, verdict, _kb_t,
-			", %d cast start overlaps" % overlaps if overlaps > 0 else ""])
-	for e in 2:
-		var edge := _kb_edges[e]
-		var edge_name := "up" if e == 0 else "down"
-		if float(edge["t_first"]) < 0.0:
-			print("    %-4s: no wheel on the new level by %.1f m past (airborne)" % [edge_name, KERB_CLEAR])
-			continue
-		var t_clear: float = edge["t_clear"]
-		var v_clear: float = edge["v_clear"]
-		print("    %-4s: %s, v %.2f -> min %.2f -> %s m/s, peak |a_y| %.2f g" % [edge_name,
-				"%.2f s" % (t_clear - float(edge["t_first"])) if t_clear >= 0.0 else "not cleared",
-				edge["v_first"], edge["v_min"], "-" if is_nan(v_clear) else "%.2f" % v_clear,
-				float(edge["a_peak"]) / BrakeSizing.G])
-		for i in _car.wheels.size():
-			var x: float = edge["x"][i]
-			var peak: float = edge["peak"][i]
-			print(("      %-4s on the new level %s ahead, lean %s (peak %.0f deg), largest tick %.0f mm,"
-					+ " peak %.1f of %.1f kN%s") % [MeasureRig.wheel_label(_car,_car.wheels[i]),
-					"-" if is_nan(x) else "%+.2f m" % x,
-					"-" if is_nan(x) else "%.0f deg" % float(edge["lean"][i]),
-					float(edge["lean_peak"][i]), float(edge["jump"][i]) * 1000.0, peak / 1000.0,
-					cap / 1000.0,
-					" (clamp bound)" if peak >= cap - 1.0 else ""])
-	_current["kerb_%.0f_%s" % [h * 100.0, how.replace(" ", "_")]] = verdict
-
-
-## Wheelbase (m) off the axle stations, foremost front to rearmost rear. A tandem's effective
-## wheelbase is shorter, so a semi's ratio to neutral reads low: compare it only with itself.
-## The laid-over holds (§ side) on this body.
-func _start_side() -> void:
-	_sd_rolls = SIDE_ROLLS.duplicate()
-	print("=== %s (%s), side ===" % [_variant, _drive_label(_car.spec)])
-	_next_side_roll()
-
-
-func _next_side_roll() -> void:
-	if _sd_rolls.is_empty():
-		MeasureRig.drive(0.0, 0.0)
-		_finish_vehicle()
-		return
-	_sd_roll = _sd_rolls.pop_front()
-	var laid := Basis(Vector3.BACK, deg_to_rad(_sd_roll))
-	MeasureRig.place(_car, Transform3D(laid,
-			Vector3(0.0, SIDE_CLEAR - _hull_lowest(laid), START_Z)))
-	_car.respawn()
-	_reset_pass(Phase.SIDE)
-	_sd_ticks = 0
-	MeasureRig.drive(0.0, 0.0)
-
-
-## The lowest point (m, <= 0) of the body's own collision shapes about its origin, turned by `turn`.
-func _hull_lowest(turn: Basis) -> float:
-	var low := 0.0
-	for child in _car.get_children():
-		var cs := child as CollisionShape3D
-		if cs == null or cs.shape == null or cs.disabled:
-			continue
-		var box := cs.shape.get_debug_mesh().get_aabb()
-		for i in 8:
-			low = minf(low, (turn * (cs.transform * box.get_endpoint(i))).y)
-	return low
-
-
-func _side_wheel() -> Dictionary:
-	return {"contact": 0, "flips": 0, "last": false, "up": 0.0, "axle": 0.0, "lo": INF, "hi": -INF,
-			"force": 0.0, "omega": 0.0, "abs": 0, "tcs": 0}
-
-
-func _side_flag(flag: String, on: bool) -> void:
-	var row: Array = _sd_flags.get(flag, [0, 0, on])
-	row[0] += int(on)
-	row[1] += int(on != row[2])
-	row[2] = on
-	_sd_flags[flag] = row
-
-
-func _tick_side() -> void:
-	if _t < SIDE_SETTLE_S:
-		return
-	# The unit's wheels, then a coupled towed body's: each read in its own body's frame.
-	var towed := MeasureRig.towed(_car)
-	var wheels: Array[RayWheel] = _car.drive.wheels.duplicate()
-	var own := wheels.size()
-	if towed != null:
-		wheels.append_array(towed.wheels)
-	if _sd_ticks == 0:
-		_sd_overlaps = RayWheel.start_overlaps
-		_sd_wheels = []
-		for i in wheels.size():
-			var fresh := _side_wheel()
-			fresh["label"] = MeasureRig.wheel_label(_car, wheels[i]) if i < own else "T%d" % (i - own)
-			_sd_wheels.append(fresh)
-		_sd_flags = {}
-		_sd_peak = Vector3.ZERO
-	_sd_ticks += 1
-	var b := _car.global_transform.basis
-	var any_abs := false
-	var any_tcs := false
-	var cells := PackedStringArray()
-	for i in mini(wheels.size(), _sd_wheels.size()):
-		var w := wheels[i]
-		var row := _sd_wheels[i]
-		var frame := b if i < own else towed.global_transform.basis
-		var up := w.contact_normal.dot(frame.y)
-		var axle := w.contact_normal.dot(frame.x)
-		if _sd_ticks > 1 and w.in_contact != row["last"]:
-			row["flips"] += 1
-		row["last"] = w.in_contact
-		if w.in_contact:
-			row["contact"] += 1
-			row["up"] += up
-			row["axle"] += absf(axle)
-		row["lo"] = minf(row["lo"], w.compression)
-		row["hi"] = maxf(row["hi"], w.compression)
-		row["force"] = maxf(row["force"], w.suspension_force)
-		row["omega"] = maxf(row["omega"], absf(w.omega))
-		row["abs"] += int(w.abs_active)
-		row["tcs"] += int(w.tcs_active)
-		any_abs = any_abs or w.abs_active
-		any_tcs = any_tcs or w.tcs_active
-		cells.append("%s %s" % [row["label"], ("c%.3f F%.0f n.up %+.2f n.ax %+.2f"
-				% [w.compression, w.suspension_force, up, axle]) if w.in_contact else "-"])
-	var input := InputRouter.get_vehicle_input()
-	var front_driven := false
-	for w in _car.drive.wheels:
-		if not w.is_rear:
-			front_driven = w.driven
-			break
-	var dust: GPUParticles3D = _car.drive.get("_dust")
-	_side_flag("hill_holding", _car.drive.hill_holding)
-	_side_flag("front driven", front_driven)
-	if _car.telemetry is TractorTelemetry:
-		_side_flag("fwd_drive_state", (_car.telemetry as TractorTelemetry).fwd_drive_state)
-	_side_flag("abs", any_abs)
-	_side_flag("tcs", any_tcs)
-	_side_flag("dust", dust != null and dust.emitting)
-	_side_flag("overturned", _car.is_overturned())
-	var tilt := rad_to_deg(b.y.angle_to(Vector3.UP))
-	_sd_peak.x = maxf(_sd_peak.x, _car.linear_velocity.length())
-	_sd_peak.y = maxf(_sd_peak.y, _car.angular_velocity.length())
-	if towed != null:
-		_sd_peak.x = maxf(_sd_peak.x, towed.linear_velocity.length())
-		_sd_peak.y = maxf(_sd_peak.y, towed.angular_velocity.length())
-	_sd_peak.z += tilt
-	if _trace:
-		print("    t %.3f tilt %.1f v %.3f w %.3f pedal %.2f fd %d | %s" % [_t - SIDE_SETTLE_S, tilt,
-				_car.linear_velocity.length(), _car.angular_velocity.length(),
-				_car.drive.foot_pedal(input), int(front_driven), " | ".join(cells)])
-	if _t >= SIDE_SETTLE_S + SIDE_LOG_S:
-		_report_side()
-		_next_side_roll()
-
-
-func _report_side() -> void:
-	var n := float(_sd_ticks)
-	print("  roll %+.0f deg: rests at %.1f deg tilt; peak %.3f m/s, %.3f rad/s; %d cast start overlaps"
-			% [_sd_roll, _sd_peak.z / n, _sd_peak.x, _sd_peak.y,
-			RayWheel.start_overlaps - _sd_overlaps])
-	for i in _sd_wheels.size():
-		var row := _sd_wheels[i]
-		var c := maxf(float(row["contact"]), 1.0)
-		print(("    %-3s contact %3.0f %% (%.1f flips/s), n.up %+.2f, |n.axle| %.2f, compression"
-				+ " %.3f..%.3f m, peak %.0f N, %.1f rad/s, abs %d tcs %d ticks") % [
-				row["label"], 100.0 * row["contact"] / n,
-				row["flips"] / SIDE_LOG_S, row["up"] / c, row["axle"] / c, row["lo"], row["hi"],
-				row["force"], row["omega"], row["abs"], row["tcs"]])
-	var parts := PackedStringArray()
-	for flag: String in _sd_flags:
-		var row: Array = _sd_flags[flag]
-		parts.append("%s %.0f %% (%.1f flips/s)" % [flag, 100.0 * row[0] / n, row[1] / SIDE_LOG_S])
-	print("    " + ", ".join(parts))
-
-
-## The drive along a wall (§ scrape) on this body.
-func _start_scrape() -> void:
-	if _sc_wall != null:
-		_sc_wall.get_parent().remove_child(_sc_wall)
-		_sc_wall.queue_free()
-	var reach := 0.0
-	for w in _car.wheels:
-		reach = maxf(reach, absf(w.anchor.x) + w.half_width)
-	_sc_wall_x = reach + SCRAPE_GAP
-	var size := Vector3(1.0, SCRAPE_HIGH, SCRAPE_LONG)
-	var centre := Vector3(_sc_wall_x + 0.5, SCRAPE_HIGH * 0.5,
-			START_Z + SCRAPE_BEHIND - SCRAPE_LONG * 0.5)
-	if _scrape_one:
-		var strip: StaticBody3D = get_node("Strip")
-		var shape := CollisionShape3D.new()
-		shape.shape = BoxShape3D.new()
-		(shape.shape as BoxShape3D).size = size
-		shape.position = centre - strip.position
-		strip.add_child(shape)
-		_sc_wall = shape
-	else:
-		_sc_wall = MeasureRig.add_box(self, "Wall", size, Transform3D(Basis.IDENTITY, centre))
-	print("=== %s (%s), scrape, the wall %s ===" % [_variant, _drive_label(_car.spec),
-			"a shape of the strip's body" if _scrape_one else "a body of its own"])
-	MeasureRig.place(_car, Transform3D(Basis(Vector3.UP, -deg_to_rad(SCRAPE_DEG)),
-			Vector3(0.0, _car.rest_ride_height(), START_Z)))
-	_car.respawn()
-	_reset_pass(Phase.SCRAPE)
-	_kb_hold.integral = 0.0
-	_sc_wheels = []
-	_sc_peak = Vector3.ZERO
-	_sc_prev_v = Vector3.ZERO
-	MeasureRig.drive(0.0, 0.0)
-
-
-func _tick_scrape(delta: float) -> void:
-	var b := _car.global_transform.basis
-	var v_long := _car.linear_velocity.dot(-b.z)
-	_kerb_crawl(v_long, delta, SCRAPE_SPEED, _sc_steer if _t >= SCRAPE_STEER_S else 0.0)
-	# The unit's wheels, then a coupled towed body's (it couples after the spawn countdown).
-	var towed := MeasureRig.towed(_car)
-	var wheels: Array[RayWheel] = _car.drive.wheels.duplicate()
-	var own := wheels.size()
-	if towed != null:
-		wheels.append_array(towed.wheels)
-	while _sc_wheels.size() < wheels.size():
-		var i := _sc_wheels.size()
-		_sc_wheels.append({"deep": -INF, "contact": 0, "off": 0, "across": 0.0, "ticks": 0,
-				"label": MeasureRig.wheel_label(_car, wheels[i]) if i < own else "T%d" % (i - own)})
-	var cells := PackedStringArray()
-	for i in wheels.size():
-		var w := wheels[i]
-		var row := _sc_wheels[i]
-		var xf := _car.global_transform if i < own else towed.global_transform
-		var mount := w.mount_basis(xf.basis)
-		var axle := Basis(mount.y, w.steer_angle) * mount.x
-		var deep := (xf * w.mount_anchor()).x + RayWheel.cylinder_support(Vector3.RIGHT, axle,
-				w.wheel_radius, w.half_width) - _sc_wall_x
-		row["deep"] = maxf(row["deep"], deep)
-		row["ticks"] += 1
-		if not w.in_contact:
-			cells.append("%s %+.0f mm -" % [row["label"], deep * 1000.0])
-			continue
-		var along := w.contact_normal.dot(mount.y)
-		var off := not RayWheel.carries(w.contact_normal, mount.y)
-		row["contact"] += 1
-		row["off"] += int(off)
-		row["across"] = maxf(row["across"], w.suspension_force * sqrt(maxf(1.0 - along * along, 0.0)))
-		cells.append("%s %+.0f mm c%.3f F%.0f n.up %+.2f n.ax %+.2f%s" % [row["label"], deep * 1000.0,
-				w.compression, w.suspension_force, along, w.contact_normal.dot(axle),
-				" OFF" if off else ""])
-	var accel := (_car.linear_velocity - _sc_prev_v) / delta
-	_sc_prev_v = _car.linear_velocity
-	var tilt := rad_to_deg(b.y.angle_to(Vector3.UP))
-	_sc_peak = _sc_peak.max(Vector3(absf(accel.dot(b.x)), absf(_car.angular_velocity.dot(b.y)), tilt))
-	if _trace:
-		print("    t %.3f v %.2f tilt %.1f | %s" % [_t, v_long, tilt, " | ".join(cells)])
-	if _t >= SCRAPE_S:
-		print("  ends at %.2f m/s; peak %.2f g across, %.1f deg/s yaw, %.1f deg tilt" % [v_long,
-				_sc_peak.x / BrakeSizing.G, rad_to_deg(_sc_peak.y), _sc_peak.z])
-		for row in _sc_wheels:
-			print(("    %-3s %+4.0f mm past the wall's face, contact %3.0f %%, off its travel %d ticks,"
-					+ " peak %.0f N across its travel") % [row["label"], float(row["deep"]) * 1000.0,
-					100.0 * row["contact"] / maxf(float(row["ticks"]), 1.0), row["off"], row["across"]])
-		MeasureRig.drive(0.0, 0.0)
-		_finish_vehicle()
-
-
-func _wheelbase() -> float:
-	var ax := BrakeSizing.axle_geometry(_car.spec)
-	return maxf(float(ax["rear_z"]) - float(ax["front_z"]), 1e-3)
 
 
 ## Each axle group's left-minus-right load (N; x the front, y the rear axles), off the springs'
@@ -5470,8 +3738,8 @@ func _tick_cruise(delta: float) -> void:
 	if dt.on_limiter:
 		_cr_limiter += 1
 	var window := _t - _cr_t0
-	# The strip's far end: past it the body falls, and a gate would judge the respawn.
-	if _car.global_position.z <= -STRIP_LENGTH * 0.5 + 50.0:
+	# RUN_LENGTH used: the ground ends a margin past it (`MeasureRig.add_ground`).
+	if _car.global_position.z <= START_Z - RUN_LENGTH + 50.0:
 		print("  %-13s : at %.0f km/h it ran out %.0f s into the window; the rest skipped"
 				% ["strip", _cr_target * 3.6, window])
 		_cruise_gates()
@@ -5535,37 +3803,24 @@ func _tick_cruise_hold(delta: float, v: float, shifted: bool, window: float) -> 
 		return
 	_cr_set = move_toward(_cr_set, _cr_target, _cr_ramp * delta)
 	_cr_fuel = _cruise_pi(delta, v)
-	_cr_pedal = _pi_pedal(_cr_fuel, _cr_set)
+	_cr_pedal = MeasureRig.pi_pedal(_car, _cr_fuel, _cr_set)
 	_cr_fuel_peak = maxf(_cr_fuel_peak, _cr_fuel)
 	_drive_probe(_cr_pedal)
 
 
-## One tick of the PI's fuel command on the setpoint (SPEED_HOLD_KP / _KI); `_pi_pedal` turns it
-## into the pedal, and the pulse takes it as its duty at full pedal (its mean fuel). The integral is
-## held through a shift cut, as TcPedal holds it: the drive drops there, and it would wind up.
+## One tick of the PI's fuel command on the setpoint (SPEED_HOLD_KP / _KI); `MeasureRig.pi_pedal`
+## turns it into the pedal, and the pulse takes it as its duty at full pedal (its mean fuel). The
+## integral is held through a shift cut, as TcPedal holds it: the drive drops there, and it would
+## wind up.
 func _cruise_pi(delta: float, v: float) -> float:
 	return _cr_hold.step(_cr_set - v, delta, _car.drivetrain.shift_cut_active())
-
-
-## The pedal a PI's fuel command `u` takes at the crank's rpm (`PedalMap.pedal_for`): the pedal on a
-## LINEAR map. On the petrol map the first 1 % of pedal steps the fuel from none to netting the
-## motoring out, and a PI on the raw pedal there limit-cycles: `race` held at 30 km/h swings between
-## pedal 0 and 0.06 every 0.4 s, and its step pass reads 1.59 deg/g of understeer for 0.54. Least
-## pedal, not a floored one, at full fuel: a step to 1 through a biasing diff is the pulse the
-## corner pass's PI exists to avoid (with one, `suv` reads rear-first).
-## On a CVT the pedal is itself a ground-speed command (`Drivetrain.cvt_speed_command`), so the
-## driver holds the PI's setpoint `v_set` (m/s) on it, as a CVT tractor's driver sets a speed.
-func _pi_pedal(u: float, v_set := NAN) -> float:
-	if Drivetrain.is_cvt(_car.spec) and not is_nan(v_set):
-		return clampf(v_set / Drivetrain.cvt_top_speed(_car.spec), 0.0, 1.0)
-	return PedalMap.pedal_for(_car.spec, u, _car.drivetrain.rpm)
 
 
 func _report_cruise_hold(window: float) -> void:
 	var m := _cr_sums / maxf(1.0, _cr_ticks)
 	# Floored on the fuel command, not the pedal: on the petrol map full fuel sits at a pedal under
-	# 1.00 (`_pi_pedal` takes the least pedal reaching it). A CVT's pedal is the speed command the
-	# PI's fuel never reaches (`_pi_pedal`), so it is judged on the pedal.
+	# 1.00 (`MeasureRig.pi_pedal` takes the least pedal reaching it). A CVT's pedal is the speed
+	# command the PI's fuel never reaches (`MeasureRig.pi_pedal`), so it is judged on the pedal.
 	var floored := (m.x if Drivetrain.is_cvt(_car.spec)
 			else _cr_fuel_sum / maxf(1.0, _cr_ticks)) >= LAUNCH_FLOORED
 	var burn := _cr_burn_sum / maxf(1.0, _cr_ticks)
@@ -5814,10 +4069,11 @@ func _freerev_table() -> Array[String]:
 	var lines := DocRegion.wrap(("%s (`measure_vehicles -- doc=freerev`; per body `-- <variant> 40"
 			+ " freerev`): parked in N on the manual box, foot brake held, each pedal held %.0f s; the"
 			+ " mean rpm over its last %.0f s, `*` where the limiter cut. Line: the limiter's in N"
-			+ " (`Drivetrain.limiter_line`).") % [DocRegion.measured(), FREEREV_HOLD_S, FREEREV_AVG_S])
+			+ " (`Drivetrain.limiter_line`).") % [DocRegion.measured(), ParkedPass.FREEREV_HOLD_S,
+			ParkedPass.FREEREV_AVG_S])
 	var head := "| Body (map) | Line |"
 	var rule := "| --- | --- |"
-	for p in FREEREV_PEDALS:
+	for p in ParkedPass.FREEREV_PEDALS:
 		head += " %s |" % str(p)
 		rule += " --- |"
 	lines.append_array(["", head, rule])
@@ -6141,7 +4397,7 @@ func _top_table() -> Array[String]:
 	var lines := DocRegion.wrap(("%s (`measure_vehicles -- doc=top`; per body `-- <variant> %.0f`):"
 			+ " floored from a standstill on the strip until the speed gains under %.1f %% in %.0f s"
 			+ " (`settled`), or the cap (`time cap`: a floor, not the top) or the strip (`strip ran"
-			+ " out`, or `left the strip` over its side: the peak before it) ends the run; `lost`: the"
+			+ " out`: the peak before it) ends the run; `lost`: the"
 			+ " body fell back from its peak. Beside it the gear and"
 			+ " rpm there, the real-world reference (`tools/vehicle_reference_specs.json`), the"
 			+ " measured top over it, and the quarter mile against the reference's.")
@@ -6156,9 +4412,7 @@ func _top_table() -> Array[String]:
 			label += " + %.0f t towed" % (float(e["towed_kg"]) / 1000.0)
 		var ref: Dictionary = _reference.get(e["variant"], {})
 		var how := str(e["top_label"]).trim_prefix("top (").trim_suffix(")")
-		if e["off_edge"]:
-			how = "left the strip"
-		elif e["ran_out"]:
+		if e["ran_out"]:
 			how = "strip ran out"
 		var quarter := "-"
 		if (e["marks"] as Dictionary).has("quarter"):

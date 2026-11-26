@@ -124,20 +124,22 @@
 ;
 ; COMPROMISE: cornering_peak_load stays 0 (off) on the semis and their trailers, where the Kenney
 ; trucks run the truck tyre's 3.33. On, the tractor builds side force faster and out-leans its
-; trailer: the 40 km/h full-lock step lifts the flatbed's trailer at 0.46 g (off: 0.51) and every
-; other trailer within 0.01 g. Undoing it means re-sizing this bar with the law on, then
-; re-measuring every rollover row (docs/truck.md § Truck sizing). With the law on, the laden
-; step's K also falls away from the criterion below (flatbed, 40 km/h, roll steer on: 0.72 > 0.02
-; deg/g at 0.18 g).
+; trailer: the 40 km/h full-lock step (measure_semi_launch -- semi trailer=<t> noesc notrsp, "on"
+; with this field set to 3.33 here: the tool has no flag for it) lifts the flatbed's trailer at 0.45 g (off: 0.49), the box's at 0.32 (0.34), the tanker's at 0.35
+; (0.36), and the tipper's later, 0.43 (0.42). Undoing it means re-sizing this bar with the law
+; on, then re-measuring every rollover row (docs/truck.md § Truck sizing). With the law on, the
+; laden step's K also falls away from the criterion below (measure_vehicles -- semi 40 step
+; trailer=flatbed speeds=40 cornering_peak=3.33, roll steer on: -0.49 against 0.29 deg/g at 0.20
+; and 0.19 g).
 ;
 ; AN ESTIMATE: roll_steer_rear 0.10 on the leaf drive axle is TRUCK_BASE's fitted figure
 ; (gen_kenney_vehicles; docs/sources.md § Roll steer): the leaf axle's roll understeer is sourced,
 ; its size is not. Without it the step pass reads the bobtail at K 0.22 deg/g at 0.06 g, under the
-; tractor criterion's 0.5-2.0 at 0.15 g (Woodrooffe & El-Gindy); with it 0.47-0.50 at 0.12-0.16 g,
-; and laden (box) 0.14 at 0.13 g (-0.27 without), as load on the drive axle cuts a truck's K (UMTRI
-; 1983). The laden 50 km/h 30 % lifted step lifts less (roll peak 38 > 19 deg); held, it rolls
-; either way. No new rolled cell (measure_vehicles -- semi 60 step trailer=<bobtail|box>,
-; 2026-10-23). Front 0: no figure.
+; tractor criterion's 0.5-2.0 at 0.15 g (Woodrooffe & El-Gindy); with it 0.46-0.50 at 0.12-0.16 g,
+; and laden (box) 0.14 at 0.13 g (-0.35 without), as load on the drive axle cuts a truck's K (UMTRI
+; 1983). The laden 50 km/h 30 % steps roll 1.5-1.6 deg either way; the 70 km/h 20 % lifted step
+; lifts the trailer at 0.31-0.32 g either way. No rolled cell (measure_vehicles -- semi 60 step
+; trailer=<bobtail|box>, 2026-11-19, the plate on its measured law). Front 0: no figure.
 ;
 ; THE SPRINGS ARE SIZED PER AXLE: the rear carries the fifth-wheel load as well as its own, and the
 ; drive axle is the ONLY driven axle, so what the plate puts on it (kingpin_share, a 25-30 % band

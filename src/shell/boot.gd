@@ -16,6 +16,7 @@ const DEFAULT_LEVEL := "flatland"
 @onready var _dashboard: Dashboard = $UI/UiScale/Dashboard
 @onready var _touch: TouchControls = $UI/UiScale/TouchControls
 @onready var _debug: DebugOverlay = $UI/UiScale/DebugOverlay
+@onready var _chassis: ChassisView = $UI/UiScale/ChassisView
 @onready var _pad: PadLayer = $PadLayer
 @onready var _pad_legend: PadLegend = $UI/UiScale/PadLegend
 
@@ -78,6 +79,8 @@ func _ready() -> void:
 	_touch.challenge_pressed.connect(_show_challenge_select)
 	_touch.next_attachment_pressed.connect(_cycle_attachment)
 	_touch.camera_pressed.connect(_cycle_camera)
+	_touch.chassis_pressed.connect(_toggle_chassis)
+	_chassis.dock(_dashboard, _touch)
 	_touch.retry_pressed.connect(_on_touch_retry)
 	_touch.info_pressed.connect(_show_challenge_info)
 	_pad.capabilities = _capabilities
@@ -101,10 +104,10 @@ func _ready() -> void:
 	_boot()
 
 
-## Two authorities in order: deep link (`?challenge=` or `?level=&vehicle=` web,
-## `--level=`/`--vehicle=`/CARLITO_LEVEL local), then DEFAULT_LEVEL. BootParams validates every id, so
-## an unknown level falls back instead of booting into nothing. Also the headless CI
-## path: reaching a level never requires a menu.
+## Authorities in order: deep link (`?challenge=` or `?level=&vehicle=` web,
+## `--level=`/`--vehicle=`/CARLITO_LEVEL local), then the vehicle's home level, then DEFAULT_LEVEL
+## (BootParams.boot_level). BootParams validates every id, so an unknown level falls back instead
+## of booting into nothing. Also the headless CI path: reaching a level never requires a menu.
 func _boot() -> void:
 	# A debug build's `--challenge=` goes straight into an attempt.
 	var challenge_id := BootParams.challenge()
@@ -115,11 +118,8 @@ func _boot() -> void:
 	if String(params["challenge"]) != "":
 		_start_challenge(ChallengeRegistry.def_of(params["challenge"]))
 		return
-	var level_id := String(params["level"])
-	var variant := String(params["vehicle"])
-	if level_id.is_empty():
-		level_id = DEFAULT_LEVEL
-	_load_level(LevelRegistry.scene_of(level_id), variant)
+	_load_level(LevelRegistry.scene_of(BootParams.boot_level(params, DEFAULT_LEVEL)),
+			String(params["vehicle"]))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -133,6 +133,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_cycle_attachment()
 	elif event.is_action_pressed("toggle_dashboard"):
 		_toggle_dashboard()
+	elif event.is_action_pressed("chassis_view"):
+		_toggle_chassis()
 	elif event.is_action_pressed("level_select"):
 		_show_level_select()
 	elif event.is_action_pressed("challenge_select"):
@@ -261,6 +263,7 @@ func _begin_challenge(def: ChallengeDef) -> void:
 		_challenge_hud = ChallengeHud.new()
 		_challenge_hud.set_runner(_runner)
 		_ui.add_child(_challenge_hud)
+		_chassis.keep_clear(_challenge_hud)
 		print("Challenge '%s' on %s (%s)" % [def.id, def.arena, def.variant])
 
 
@@ -280,6 +283,7 @@ func _end_challenge() -> void:
 	if is_instance_valid(_challenge_hud):
 		_challenge_hud.queue_free()
 	_challenge_hud = null
+	_chassis.keep_clear(null)
 	if is_instance_valid(_runner):
 		# Before set_night below: the runner puts back the day lighting it found.
 		_runner.end()
@@ -508,6 +512,7 @@ func _open_pause() -> void:
 ## The SETTINGS choices saved by an earlier visit, through the same setters a press uses.
 func _apply_saved_settings() -> void:
 	_dashboard.set_hidden(bool(_settings.value("dash_off")))
+	_chassis.set_on(bool(_settings.value("chassis_on")))
 	_dashboard.set_pins(_settings.value("dash_pins"))
 	_ui.set_user_scale(float(_settings.value("ui_scale")))
 	InputRouter.set_key_softening(float(_settings.value("key_softening")))
@@ -568,6 +573,12 @@ func _on_parallel_steer_changed(on: bool) -> void:
 func _toggle_dashboard() -> void:
 	_dashboard.set_hidden(not _dashboard.is_hidden())
 	_settings.set_value("dash_off", _dashboard.is_hidden())
+
+
+## F6 or touch CHASSIS: shows or puts away the chassis view, saved.
+func _toggle_chassis() -> void:
+	_chassis.set_on(not _chassis.is_on())
+	_settings.set_value("chassis_on", _chassis.is_on())
 
 
 ## RESPAWN on the pause menu or the overturned notice: close any overlay first, or the respawn
@@ -814,6 +825,7 @@ func _finish_load(scene: PackedScene) -> void:
 ## garage swaps the vehicle (its type drives which dashboard cluster is built).
 func _bind_hud() -> void:
 	_dashboard.bind(_level)
+	_chassis.bind(_level)
 	_debug.set_level(_level)
 	_touch.set_capabilities(_capabilities())
 	_sync_pad_legend()
@@ -823,6 +835,7 @@ func _bind_hud() -> void:
 ## Drop every reference to the level about to be freed: nothing may outlive it.
 func _unbind_hud() -> void:
 	_dashboard.bind(null)
+	_chassis.bind(null)
 	_debug.set_level(null)
 	_touch.set_capabilities({})
 	Bridge.bind(null)
@@ -1003,6 +1016,7 @@ func _set_hud_visible(v: bool) -> void:
 	# set_shown, not .visible: the dashboard also hides itself at density OFF, and neither
 	# reason to be hidden may overwrite the other.
 	_dashboard.set_shown(v)
+	_chassis.set_shown(v)
 	_touch.set_active(v)
 	_notice.set_shown(v)
 	if not v:

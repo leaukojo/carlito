@@ -2,6 +2,7 @@ extends GdUnitTestSuite
 ## StabilityControl: the yaw reference and its bound, the body-slip estimate, and the one wheel
 ## braked against the error, stepped by hand at 60 Hz on a car-sized body.
 
+const MeasureRig := preload("res://tools/measure_rig.gd")
 const TICK := 1.0 / 60.0
 const SPEED := 25.0
 const WHEELBASE := 2.6
@@ -272,6 +273,39 @@ func test_roll_stability_releases_below_twenty_kmh_and_is_off_with_no_table() ->
 			.is_equal_approx(0.8 - TICK / StabilityControl.RELEASE_S, 1e-6)
 	assert_float(_roll(LIFT, 0.0, 19.0 / 3.6, true)).is_equal(0.0)
 	assert_float(StabilityControl.roll_application(SPEED, 1.0, INF, 0.8, TICK)).is_equal(0.0)
+
+
+func test_the_roll_chambers_fill_and_vent_within_the_regulations() -> void:
+	assert_float(StabilityControl.roll_chamber_step(0.0, 1.0, TICK)) \
+			.is_equal_approx(1.0 - exp(-TICK / StabilityControl.CHAMBER_FILL_S), 1e-6)
+	# R13 Annex 6 2.4: a 0.2 s actuation, 75 % of the asymptote within 0.6 s.
+	var p := 0.0
+	for i in 36:
+		p = StabilityControl.roll_chamber_step(p, minf((i + 1) * TICK / 0.2, 1.0), TICK)
+	assert_float(p).is_greater_equal(0.75)
+	# FMVSS 121 S5.3.4.1(a): 95 to 5 psi within 0.55 s.
+	p = 0.95
+	for i in 33:
+		p = StabilityControl.roll_chamber_step(p, 0.0, TICK)
+	assert_float(p).is_less_equal(0.05)
+
+
+func test_roll_stability_against_its_own_brakes_g_rings_no_run() -> void:
+	# The unit's own roll brake moves the g it reads by the next tick, 0.1-0.3 g a unit applied on a
+	# coupled semi (`sessions/2026-11-20-trailer-roll-chatter.md`): through the chambers the loop
+	# settles; the controller's command never alternates at tick rate.
+	for k: float in [0.1, 0.3]:
+		var cmd := 0.0
+		var chamber := 0.0
+		var lat := LIFT
+		var series := PackedFloat64Array()
+		for i in 600:
+			cmd = StabilityControl.roll_application(SPEED, lat, LIFT, cmd, TICK)
+			chamber = StabilityControl.roll_chamber_step(chamber, cmd, TICK)
+			series.append(cmd)
+			lat = LIFT - k * chamber
+		assert_int(MeasureRig.chatter_runs(series)).override_failure_message("k %.1f" % k).is_equal(0)
+		assert_float(cmd).is_greater(0.0)
 
 
 func test_the_yaw_torque_survives_a_full_roll_application() -> void:

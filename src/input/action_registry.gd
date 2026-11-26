@@ -333,6 +333,12 @@ const ENTRIES: Array[Dictionary] = [
 		"label": "Debug overlay",
 	},
 	{
+		# F6, after the F2-F5 HUD toggles; saved. Not on a body with no wheels to draw.
+		"id": &"chassis_view", "actions": ["chassis_view"], "group": Group.SHELL,
+		"label": "Chassis view on / off", "excludes": ["boat", "drone", "train"],
+		"touch": Touch.SHELL_SIGNAL, "touch_label": "CHASSIS",
+	},
+	{
 		"id": &"toggle_touch", "actions": ["toggle_touch"], "group": Group.SHELL,
 		"label": "Touch driving controls on / off",
 	},
