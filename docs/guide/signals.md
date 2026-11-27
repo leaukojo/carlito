@@ -34,8 +34,8 @@ sloppyCAN to the simulator. Out: sent by the simulator.</p>
 | `steer` | out | % | car, truck, tractor | Steering as applied by the sim. | [Steering and Ackermann](steering.md) |
 | `slip` | out | ratio | car, truck, tractor | Tire slip PER AXLE, each wheel's slip read as one size: its longitudinal slip ratio and its side slip together, the pair the tyre model reads, averaged over the axle. | [Slip and the grip curve](slip.md) |
 | `ground` | out | flag | car, truck, tractor | Wheels on ground. | [Position, heading and distance](position.md) |
-| `posX` | out | m | car, truck, tractor | World X position. |  |
-| `posZ` | out | m | car, truck, tractor | World Z position. |  |
+| `posX` | out | m | car, truck, tractor | World X position. | [Position, heading and distance](position.md) |
+| `posZ` | out | m | car, truck, tractor | World Z position. | [Position, heading and distance](position.md) |
 | `heading` | out | deg | car, truck, tractor | Compass heading. | [Steering and Ackermann](steering.md) |
 | `lat` | out | deg | car, truck, tractor | GPS latitude; world XZ mapped around the Paris origin. | [Position, heading and distance](position.md) |
 | `lon` | out | deg | car, truck, tractor | GPS longitude. | [Position, heading and distance](position.md) |
