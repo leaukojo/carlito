@@ -94,7 +94,12 @@ func _tick_extras(input: VehicleInput, delta: float) -> void:
 	var foot := drive.pedal_application(drive.foot_pedal(input))
 	var demand01 := TruckTelemetry.ebs11_demand(foot, drive.roll_application())
 	# Spool: hitch_request read in its transport sense (1 = tipping body down), not as a height.
+	# The bridge has no hitch_pos on a truck: body_cmd Lift/Dump also opens it (contract 'body_cmd').
+	# COMPROMISE: borrows the refuse body's CleANopen command; a tipper-own signal replaces it
+	# (docs/TODO.md), undo = these lines and the contract desc sentence.
 	var spool := 1.0 - clampf(input.hitch_request, 0.0, 1.0)
+	if input.body_cmd == RefuseBody.Cmd.LIFT or input.body_cmd == RefuseBody.Cmd.DUMP:
+		spool = 1.0
 	# The trailer's spring brakes follow the lever and this tick's air gate (set by super() above):
 	# they apply on the gate tick, the tractor's rears from its next wheel tick.
 	var parking01 := WheelDrive.parking_application(input.handbrake, drive.spring_brake)

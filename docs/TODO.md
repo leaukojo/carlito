@@ -4,6 +4,12 @@
 A TRACTOR-fit `TyreCatalog` class beside `ag_lug.tres` (the picker shows from two): better on
 asphalt/gravel, worse in field/mud; factors estimated (`docs/vehicles.md` § Tyres and surfaces).
 
+## Truck: the tipper trailer's own bridge command
+Over the bridge, a semi's tipper borrows the refuse body's `body_cmd` (Lift/Dump raise, contract
+v69; `semi.gd`'s spool). Better design: a truck `tip_cmd` "in" signal (Lower / Hold / Raise, a
+body-builder control on the chassis network), with its own sloppyCAN panel row, read by
+`semi.gd` in place of `body_cmd`; drop the borrowed sentence from `body_cmd`'s description.
+
 ## Touch: the engaged DIFF LOCK caption overflows its pad
 "DIFF LOCK ON" is 104 px in Barlow at `UiTheme.FS_BODY`, over the 96 px `BTN_SIZE` pad
 (`touch_controls.gd`, `_show_on`); a wider pad or a shorter engaged caption.
