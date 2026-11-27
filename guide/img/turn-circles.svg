@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 300" width="420" height="300">
+<title>A car seen from above in a tight turn: each wheel runs round its own circle about one turning centre</title>
+<!-- Drawn by hand to scale. Radii from the page's example: inner rear wheel 5 m, outer rear wheel 6.5 m (so a track of 1.5 m). The wheelbase of 2.5 m and so the front radii (5.6 m and 7.0 m, from Pythagoras) are assumed for the drawing; the front wheels are turned so each is square to its radius, as in Ackermann steering. -->
+<style>
+.tc-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.tc-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.tc-tb{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.tc-to{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+.tc-lm{stroke:var(--fig-muted,#6b6b75);stroke-width:1.2;fill:none;stroke-dasharray:5 4}
+.tc-body{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:var(--fig-fill,#f1eee7)}
+.tc-fi{fill:var(--fig-ink,#1c1c1f)}
+.tc-b{stroke:var(--fig-blue,#1d5ca8);stroke-width:3;fill:none;stroke-linejoin:round}.tc-fb{fill:var(--fig-blue,#1d5ca8)}
+.tc-o{stroke:var(--fig-orange,#c45a12);stroke-width:3;fill:none;stroke-linejoin:round}.tc-fo{fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.tc-t{fill:var(--fig-ink,#e9e7e2)}.tc-s{fill:var(--fig-muted,#a6a6b0)}
+.tc-tb{fill:var(--fig-blue,#8ab6ff)}.tc-to{fill:var(--fig-orange,#f0a060)}
+.tc-lm{stroke:var(--fig-muted,#a6a6b0);}
+.tc-body{stroke:var(--fig-ink,#e9e7e2);fill:var(--fig-fill,#26282e)}
+.tc-fi{fill:var(--fig-ink,#e9e7e2)}
+.tc-b{stroke:var(--fig-blue,#8ab6ff);}.tc-fb{fill:var(--fig-blue,#8ab6ff)}
+.tc-o{stroke:var(--fig-orange,#f0a060);}.tc-fo{fill:var(--fig-orange,#f0a060)}
+}
+</style>
+<defs><marker id="tc-ao" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path class="tc-fo" d="M0,0 L9,4.5 L0,9 Z"/></marker><marker id="tc-ab" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path class="tc-fb" d="M0,0 L9,4.5 L0,9 Z"/></marker></defs>
+<polyline class="tc-b" style="stroke-width:2" points="176.7,293.2 177.7,288.4 178.4,283.7 179.1,278.9 179.5,274 179.8,269.2 180,264.4 180,259.5 179.8,254.7 179.5,249.8 179,245 178.4,240.2 177.6,235.4 176.7,230.7 175.6,226 174.4,221.3 173,216.6 171.4,212.1 169.8,207.5 167.9,203 165.9,198.6 163.8,194.3 161.6,190 159.2,185.8 156.6,181.6 154,177.6 151.2,173.6 148.3,169.8 145.2,166 142.1,162.3 138.8,158.7 135.4,155.3 131.9,151.9 128.3,148.7 124.6,145.6 120.8,142.6 116.9,139.7 112.9,137 108.8,134.4 104.7,131.9 100.4,129.6"/>
+<polyline class="tc-b" style="stroke-width:2" points="197.7,262 197.7,257.8 197.5,253.5 197.2,249.3 196.8,245.1 196.4,240.8 195.8,236.6 195.1,232.4 194.3,228.3 193.4,224.1 192.4,220 191.2,215.9 190,211.8 188.7,207.8 187.3,203.8 185.8,199.9 184.1,195.9 182.4,192.1 180.6,188.2 178.7,184.4 176.7,180.7 174.6,177 172.4,173.4 170.1,169.8 167.7,166.3 165.2,162.8 162.7,159.4 160.1,156.1 157.3,152.9 154.5,149.7 151.6,146.6 148.7,143.5 145.7,140.6 142.5,137.7 139.4,134.9 136.1,132.1 132.8,129.5 129.4,126.9 126,124.5 122.4,122.1 118.9,119.8"/>
+<polyline class="tc-o" style="stroke-width:2" points="220.7,302.5 221.9,296.7 222.9,290.8 223.6,284.9 224.3,279 224.7,273.1 224.9,267.1 225,261.1 224.9,255.2 224.6,249.2 224.1,243.3 223.4,237.4 222.6,231.5 221.6,225.6 220.4,219.8 219,214 217.4,208.3 215.7,202.6 213.8,196.9 211.7,191.3 209.5,185.8 207.1,180.4 204.5,175 201.8,169.7 198.9,164.5 195.8,159.4 192.6,154.4 189.2,149.5 185.7,144.6 182.1,139.9 178.3,135.4 174.3,130.9 170.3,126.5 166.1,122.3 161.7,118.2 157.3,114.3 152.7,110.5 148,106.8 143.2,103.2 138.3,99.9 133.3,96.6"/>
+<polyline class="tc-o" style="stroke-width:2" points="238.9,262 238.9,257.1 238.7,252.2 238.4,247.2 238,242.3 237.5,237.4 236.8,232.6 236.1,227.7 235.2,222.9 234.2,218 233.2,213.2 231.9,208.5 230.6,203.7 229.2,199 227.7,194.3 226,189.7 224.3,185.1 222.4,180.5 220.4,176 218.3,171.6 216.2,167.1 213.9,162.8 211.5,158.5 209,154.2 206.4,150.1 203.7,145.9 200.9,141.9 198.1,137.9 195.1,133.9 192,130.1 188.9,126.3 185.6,122.6 182.3,119 178.9,115.4 175.4,112 171.8,108.6 168.2,105.3 164.4,102.1 160.6,98.9 156.8,95.9 152.8,93"/>
+<line class="tc-lm" x1="30" y1="262" x2="245" y2="262"/>
+<line class="tc-lm" x1="30" y1="262" x2="180" y2="187"/>
+<line class="tc-lm" x1="30" y1="262" x2="225" y2="187"/>
+<rect class="tc-body" x="184" y="169" width="37" height="111" rx="8"/>
+<rect class="tc-fi" x="176" y="251" width="8" height="22" rx="2" transform="rotate(0 180 262)"/><rect class="tc-fi" x="221" y="251" width="8" height="22" rx="2" transform="rotate(0 225 262)"/>
+<rect class="tc-fi" x="176" y="176" width="8" height="22" rx="2" transform="rotate(-26.6 180 187)"/><rect class="tc-fi" x="221" y="176" width="8" height="22" rx="2" transform="rotate(-21 225 187)"/>
+<circle class="tc-fi" cx="30" cy="262" r="4.5"/>
+<text class="tc-t" x="8" y="298">turning centre</text>
+<text class="tc-tb" x="100" y="256" text-anchor="middle">5 m</text>
+<text class="tc-to" x="100" y="280" text-anchor="middle">6.5 m</text>
+<text class="tc-s" x="410" y="62" text-anchor="end">Inner wheels run round</text>
+<text class="tc-s" x="410" y="78" text-anchor="end">the smaller circles, outer</text>
+<text class="tc-s" x="410" y="94" text-anchor="end">wheels the larger ones</text>
+<text class="tc-s" x="252" y="266">rear axle line</text>
+</svg>

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 340" width="420" height="340">
+<title>A truck and trailer turning a corner, seen from above: the trailer's rear wheels follow a smaller circle than the cab's front wheels</title>
+<!-- Drawn by hand to a steady turn, illustrative sizes (not simulator numbers): front axle on a 12 m circle, cab wheelbase 4 m, fifth wheel over the drive axle, kingpin to trailer axle 8 m. Each axle's radius from the turning centre follows from Pythagoras (12 m, 11.3 m, 8 m), so the trailer's axle runs well inside the cab's. -->
+<style>
+.tr-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.tr-tb{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.tr-to{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+.tr-lm{stroke:var(--fig-muted,#6b6b75);stroke-width:1.2;fill:none;stroke-dasharray:5 4}
+.tr-body{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:var(--fig-fill,#f1eee7)}
+.tr-fi{fill:var(--fig-ink,#1c1c1f)}
+.tr-b{stroke:var(--fig-blue,#1d5ca8);stroke-width:3;fill:none;stroke-linejoin:round}.tr-fb{fill:var(--fig-blue,#1d5ca8)}
+.tr-o{stroke:var(--fig-orange,#c45a12);stroke-width:3;fill:none;stroke-linejoin:round}.tr-fo{fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.tr-s{fill:var(--fig-muted,#a6a6b0)}
+.tr-tb{fill:var(--fig-blue,#8ab6ff)}.tr-to{fill:var(--fig-orange,#f0a060)}
+.tr-lm{stroke:var(--fig-muted,#a6a6b0);}
+.tr-body{stroke:var(--fig-ink,#e9e7e2);fill:var(--fig-fill,#26282e)}
+.tr-fi{fill:var(--fig-ink,#e9e7e2)}
+.tr-b{stroke:var(--fig-blue,#8ab6ff);}.tr-fb{fill:var(--fig-blue,#8ab6ff)}
+.tr-o{stroke:var(--fig-orange,#f0a060);}.tr-fo{fill:var(--fig-orange,#f0a060)}
+}
+</style>
+<defs><marker id="tr-ao" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path class="tr-fo" d="M0,0 L9,4.5 L0,9 Z"/></marker><marker id="tr-ab" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path class="tr-fb" d="M0,0 L9,4.5 L0,9 Z"/></marker></defs>
+<polyline class="tr-o" style="stroke-width:2.5" points="223,223.9 225,218.2 226.8,212.4 228.4,206.6 229.9,200.8 231.3,194.9 232.5,189 233.5,183 234.3,177.1 235,171.1 235.5,165.1 235.8,159 236,153 236,147 235.8,141 235.5,134.9 235,128.9 234.3,122.9 233.5,117 232.5,111 231.3,105.1 229.9,99.2 228.4,93.4 226.8,87.6 225,81.8 223,76.1 220.8,70.5 218.5,64.9 216.1,59.4 213.5,54 210.7,48.6 207.8,43.3 204.8,38.1 201.6,33 198.2,28 194.7,23 191.1,18.2 187.4,13.5 183.5,8.9 179.5,4.4 175.4,0"/>
+<polyline class="tr-b" style="stroke-width:2.5" points="69.3,285.3 75.9,282.7 82.4,279.8 88.8,276.5 95,272.9 101,269 106.9,264.9 112.5,260.4 117.8,255.7 123,250.7 127.8,245.4 132.5,239.9 136.8,234.2 140.8,228.3 144.6,222.2 148,215.9 151.1,209.5 153.9,202.9 156.4,196.2 158.5,189.3 160.3,182.4 161.7,175.4 162.8,168.3 163.6,161.2 163.9,154 164,146.9 163.6,139.7 162.9,132.6 161.9,125.5 160.5,118.5 158.8,111.5 156.7,104.7 154.3,97.9 151.5,91.3 148.4,84.8 145,78.5 141.3,72.4 137.3,66.5 133,60.8 128.4,55.2 123.6,50"/>
+<line class="tr-lm" x1="20" y1="150" x2="223.6" y2="78"/>
+<line class="tr-lm" x1="20" y1="150" x2="121.8" y2="251.8"/>
+<polygon class="tr-body" points="121.1,270.9 232.8,159.2 214.5,140.8 102.7,252.5"/>
+<polygon class="tr-body" points="235.6,160 235.6,64 211.6,64 211.6,160"/>
+<rect class="tr-fi" x="102.6" y="239.1" width="20" height="7" rx="2" transform="rotate(135 112.6 242.6)"/><rect class="tr-fi" x="121" y="257.5" width="20" height="7" rx="2" transform="rotate(135 131 261)"/><rect class="tr-fi" x="201.6" y="146.5" width="20" height="7" rx="2" transform="rotate(90 211.6 150)"/><rect class="tr-fi" x="225.6" y="146.5" width="20" height="7" rx="2" transform="rotate(90 235.6 150)"/><rect class="tr-fi" x="202.3" y="78.5" width="20" height="7" rx="2" transform="rotate(70.5 212.3 82)"/><rect class="tr-fi" x="225" y="70.5" width="20" height="7" rx="2" transform="rotate(70.5 235 74)"/>
+<circle class="tr-fo" cx="223.6" cy="78" r="4"/>
+<circle class="tr-fb" cx="121.8" cy="251.8" r="4"/>
+<circle class="tr-fi" cx="20" cy="150" r="4.5"/>
+<text class="tr-s" x="10" y="114">turning centre</text>
+<text class="tr-to" x="253.6" y="64">path of the cab's</text>
+<text class="tr-to" x="253.6" y="80">front wheels</text>
+<text class="tr-tb" x="161.8" y="279.8">path of the trailer's</text>
+<text class="tr-tb" x="161.8" y="295.8">rear wheels</text>
+</svg>

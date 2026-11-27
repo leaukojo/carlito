@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 270" width="400" height="270">
+<title>The same steering angle at three speeds</title>
+<!-- An illustration, not game figures. Three arcs from one start (70,230), heading up, turning
+     right: slow r 90 (centre 160,230) to 90 deg; faster r 140 (centre 210,230) to 70 deg; too fast
+     r 260 (centre 330,230) to 45 deg. -->
+<style>
+.sw-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.sw-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.sw-body{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-muted,#6b6b75);stroke-width:1.5}
+.sw-slow{stroke:var(--fig-muted,#6b6b75);stroke-width:2.5;stroke-dasharray:6 4;fill:none}
+.sw-fast{stroke:var(--fig-blue,#1d5ca8);stroke-width:3;fill:none}
+.sw-over{stroke:var(--fig-orange,#c45a12);stroke-width:3;fill:none}
+.sw-blue-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.sw-orange-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.sw-t{fill:var(--fig-ink,#e9e7e2)}.sw-s{fill:var(--fig-muted,#a6a6b0)}.sw-body{fill:var(--fig-fill,#22242a);stroke:var(--fig-muted,#a6a6b0)}
+.sw-slow{stroke:var(--fig-muted,#a6a6b0)}.sw-fast{stroke:var(--fig-blue,#8ab6ff)}.sw-over{stroke:var(--fig-orange,#f0a060)}
+.sw-blue-t{fill:var(--fig-blue,#8ab6ff)}.sw-orange-t{fill:var(--fig-orange,#f0a060)}}
+</style>
+
+<!-- three paths, same steering angle -->
+<path class="sw-over" d="M70,230 A260,260 0 0 1 146.2,46.2"/>
+<path class="sw-fast" d="M70,230 A140,140 0 0 1 162.1,98.4"/>
+<path class="sw-slow" d="M70,230 A90,90 0 0 1 160,140"/>
+<rect class="sw-body" x="61" y="228" width="18" height="32" rx="6"/>
+<text class="sw-orange-t" x="158" y="50">too fast: the tyres slide</text>
+<text class="sw-blue-t" x="172" y="103">faster: a wider circle</text>
+<text class="sw-t" x="170" y="145">slow: where the wheels point</text>
+<text class="sw-s" x="30" y="24">Same steering angle, three speeds</text>
+</svg>

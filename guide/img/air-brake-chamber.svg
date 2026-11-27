@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 270" width="420" height="270">
+<title>An air brake chamber cut open: a spring on one side, air on the other, and the rod to the brake</title>
+<!-- Drawn by hand, no simulator numbers. Illustrative spring brake chamber: the spring pushes the piston and rod out (brake on); air in the other chamber pushes the piston back (brake off). -->
+<style>
+.ab-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.ab-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.ab-tb{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.ab-to{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+.ab-body{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:var(--fig-fill,#f1eee7)}
+.ab-fi{fill:var(--fig-ink,#1c1c1f)}.ab-fm{fill:var(--fig-muted,#6b6b75)}
+.ab-b{stroke:var(--fig-blue,#1d5ca8);stroke-width:3;fill:none;stroke-linejoin:round}.ab-fb{fill:var(--fig-blue,#1d5ca8)}
+.ab-o{stroke:var(--fig-orange,#c45a12);stroke-width:3;fill:none;stroke-linejoin:round}.ab-fo{fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.ab-t{fill:var(--fig-ink,#e9e7e2)}.ab-s{fill:var(--fig-muted,#a6a6b0)}
+.ab-tb{fill:var(--fig-blue,#8ab6ff)}.ab-to{fill:var(--fig-orange,#f0a060)}
+.ab-body{stroke:var(--fig-ink,#e9e7e2);fill:var(--fig-fill,#26282e)}
+.ab-fi{fill:var(--fig-ink,#e9e7e2)}.ab-fm{fill:var(--fig-muted,#a6a6b0)}
+.ab-b{stroke:var(--fig-blue,#8ab6ff);}.ab-fb{fill:var(--fig-blue,#8ab6ff)}
+.ab-o{stroke:var(--fig-orange,#f0a060);}.ab-fo{fill:var(--fig-orange,#f0a060)}
+}
+</style>
+<defs><marker id="ab-ao" markerWidth="9" markerHeight="9" refX="1" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path class="ab-fo" d="M0,0 L9,4.5 L0,9 Z"/></marker><marker id="ab-ab" markerWidth="9" markerHeight="9" refX="1" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path class="ab-fb" d="M0,0 L9,4.5 L0,9 Z"/></marker></defs>
+<!-- housing -->
+<path class="ab-body" d="M60,60 L280,60 L280,200 L60,200 Z"/>
+<!-- piston and rod -->
+<rect class="ab-fm" x="168" y="66" width="12" height="128"/>
+<rect class="ab-fi" x="280" y="124" width="100" height="12"/>
+<rect class="ab-fi" x="180" y="124" width="100" height="12"/>
+<!-- spring -->
+<polyline class="ab-o" points="62,130 76,98 92,162 108,98 124,162 140,98 156,162 168,130" style="stroke-width:3.5;fill:none"/>
+<!-- air port -->
+<rect class="ab-fb" x="214" y="40" width="18" height="22"/>
+<line class="ab-b" x1="223" y1="14" x2="223" y2="49" marker-end="url(#ab-ab)"/>
+<text class="ab-tb" x="240" y="26">air in</text>
+<rect class="ab-fb" x="182" y="66" width="96" height="58" fill-opacity="0.18"/>
+<rect class="ab-fb" x="182" y="136" width="96" height="58" fill-opacity="0.18"/>
+<line class="ab-b" x1="236" y1="100" x2="197" y2="100" marker-end="url(#ab-ab)"/>
+<!-- rod to brake -->
+<text class="ab-t" x="392" y="104" text-anchor="end">rod</text>
+<text class="ab-t" x="392" y="120" text-anchor="end">to the brake</text>
+<!-- labels -->
+<text class="ab-to" x="62" y="228">spring</text>
+<text class="ab-s" x="62" y="246">pushes the rod out:</text>
+<text class="ab-s" x="62" y="262">brake on</text>
+<text class="ab-tb" x="392" y="228" text-anchor="end">air</text>
+<text class="ab-s" x="392" y="246" text-anchor="end">pushes the piston back:</text>
+<text class="ab-s" x="392" y="262" text-anchor="end">brake off</text>
+</svg>

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 290" width="420" height="290">
+<title>Engine speed against road speed through five gears: a sawtooth that falls at each upshift</title>
+<!-- Computed from the sedan: sedan_spec.tres gear_ratios 4.5, 2.903, 1.975, 1.431, 1.109 (first five of six), VehicleSpec.final_drive 3.9, wheel_radius 0.36 m, full-throttle shift_up_rpm 5900, idle 900 rpm. Speed = rpm x 2pi/60 x radius / (gear ratio x final drive). After each upshift the rpm is the old rpm x new ratio / old ratio. -->
+<style>
+.rg-t{font:600 14px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.rg-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.rg-tr{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-red,#b3261e)}
+.rg-ln{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5;fill:none}
+.rg-lm{stroke:var(--fig-muted,#6b6b75);stroke-width:1.2;fill:none;stroke-dasharray:5 4}
+.rg-b{stroke:var(--fig-blue,#1d5ca8);stroke-width:3;fill:none;stroke-linejoin:round}
+.rg-r{stroke:var(--fig-red,#b3261e);stroke-width:3;fill:none;stroke-linejoin:round}
+@media (prefers-color-scheme:dark){
+.rg-t{fill:var(--fig-ink,#e9e7e2)}.rg-s{fill:var(--fig-muted,#a6a6b0)}
+.rg-tr{fill:var(--fig-red,#f08a80)}
+.rg-ln{stroke:var(--fig-ink,#e9e7e2);}
+.rg-lm{stroke:var(--fig-muted,#a6a6b0);}
+.rg-b{stroke:var(--fig-blue,#8ab6ff);}
+.rg-r{stroke:var(--fig-red,#f08a80);}}
+</style>
+<path class="rg-ln" d="M56,28 L56,230 L408,230"/>
+<line class="rg-lm" style="stroke-dasharray:2 4" x1="56" y1="174.6" x2="404" y2="174.6"/><text class="rg-s" x="50" y="178.6" text-anchor="end">2,000</text><line class="rg-lm" style="stroke-dasharray:2 4" x1="56" y1="119.1" x2="404" y2="119.1"/><text class="rg-s" x="50" y="123.1" text-anchor="end">4,000</text><line class="rg-lm" style="stroke-dasharray:2 4" x1="56" y1="63.7" x2="404" y2="63.7"/><text class="rg-s" x="50" y="67.7" text-anchor="end">6,000</text><text class="rg-s" x="56" y="248" text-anchor="middle">0</text><text class="rg-s" x="143" y="248" text-anchor="middle">50</text><text class="rg-s" x="230" y="248" text-anchor="middle">100</text><text class="rg-s" x="317" y="248" text-anchor="middle">150</text><text class="rg-s" x="404" y="248" text-anchor="middle">200</text>
+<line class="rg-b" x1="68.1" y1="205.1" x2="135.4" y2="66.5"/>
+<line class="rg-r" style="stroke-width:2" x1="135.4" y1="66.5" x2="135.4" y2="124.5"/>
+<line class="rg-b" x1="135.4" y1="124.5" x2="179.1" y2="66.5"/>
+<line class="rg-r" style="stroke-width:2" x1="179.1" y1="66.5" x2="179.1" y2="118.8"/>
+<line class="rg-b" x1="179.1" y1="118.8" x2="236.9" y2="66.5"/>
+<line class="rg-r" style="stroke-width:2" x1="236.9" y1="66.5" x2="236.9" y2="111.5"/>
+<line class="rg-b" x1="236.9" y1="111.5" x2="305.6" y2="66.5"/>
+<line class="rg-r" style="stroke-width:2" x1="305.6" y1="66.5" x2="305.6" y2="103.3"/>
+<line class="rg-b" x1="305.6" y1="103.3" x2="378.1" y2="66.5"/>
+<text class="rg-t" x="109.7" y="155.8" text-anchor="middle">1</text><text class="rg-t" x="165.2" y="115.5" text-anchor="middle">2</text><text class="rg-t" x="216" y="112.6" text-anchor="middle">3</text><text class="rg-t" x="279.3" y="109" text-anchor="middle">4</text><text class="rg-t" x="349.9" y="104.9" text-anchor="middle">5</text>
+<text class="rg-s" x="60" y="22">engine rpm</text>
+<text class="rg-s" x="404" y="266" text-anchor="end">road speed (km/h)</text>
+<text class="rg-tr" x="299.6" y="171.8" text-anchor="middle">each upshift drops</text>
+<text class="rg-tr" x="299.6" y="187.8" text-anchor="middle">the engine's speed</text>
+</svg>

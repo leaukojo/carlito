@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 260" width="420" height="260">
+<title>The parts of a tyre: the tread, the sidewall, the rim and the contact patch, and a piece of tread face on with its blocks, grooves and thin cuts</title>
+<!-- Drawn by hand, no simulator numbers. -->
+<style>
+.tp-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-ink,#1c1c1f)}
+.tp-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.tp-to{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+.tp-tread{fill:var(--fig-ink,#1c1c1f);fill-opacity:.9}
+.tp-side{fill:var(--fig-ink,#1c1c1f);fill-opacity:.62}
+.tp-rim{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5}
+.tp-hub{fill:var(--fig-grid,#e3e0d8);stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5}
+.tp-groove{stroke:var(--fig-fill,#f3f1ec);stroke-width:2.5}
+.tp-gap{fill:var(--fig-fill,#f3f1ec)}
+.tp-cut{stroke:var(--fig-fill,#f3f1ec);stroke-width:1.5;fill:none;stroke-linejoin:round}
+.tp-ln{stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5}
+.tp-lead{stroke:var(--fig-muted,#6b6b75);stroke-width:1.2}
+.tp-patch{stroke:var(--fig-orange,#c45a12);stroke-width:4}
+@media (prefers-color-scheme:dark){
+.tp-t{fill:var(--fig-ink,#e9e7e2)}.tp-s{fill:var(--fig-muted,#a6a6b0)}.tp-to{fill:var(--fig-orange,#f0a060)}
+.tp-tread,.tp-side{fill:var(--fig-ink,#e9e7e2)}
+.tp-rim{fill:var(--fig-fill,#22242a);stroke:var(--fig-ink,#e9e7e2)}
+.tp-hub{fill:var(--fig-grid,#30323a);stroke:var(--fig-ink,#e9e7e2)}
+.tp-groove{stroke:var(--fig-fill,#22242a)}.tp-gap{fill:var(--fig-fill,#22242a)}.tp-cut{stroke:var(--fig-fill,#22242a)}
+.tp-ln{stroke:var(--fig-ink,#e9e7e2)}.tp-lead{stroke:var(--fig-muted,#a6a6b0)}
+.tp-patch{stroke:var(--fig-orange,#f0a060)}
+}
+</style>
+<!-- the wheel, side on, flattened where it meets the road -->
+<line class="tp-ln" x1="4" y1="190" x2="176" y2="190"/>
+<path class="tp-tread" fill-rule="evenodd" d="M60,190 A78,78 0 1 1 120,190 Z M156,118 A66,66 0 1 0 24,118 A66,66 0 1 0 156,118 Z"/>
+<circle class="tp-side" cx="90" cy="118" r="66"/>
+<line class="tp-groove" x1="90.0" y1="52.0" x2="90.0" y2="40.0"/><line class="tp-groove" x1="110.4" y1="55.2" x2="114.1" y2="43.8"/><line class="tp-groove" x1="128.8" y1="64.6" x2="135.8" y2="54.9"/><line class="tp-groove" x1="143.4" y1="79.2" x2="153.1" y2="72.2"/><line class="tp-groove" x1="152.8" y1="97.6" x2="164.2" y2="93.9"/><line class="tp-groove" x1="156.0" y1="118.0" x2="168.0" y2="118.0"/><line class="tp-groove" x1="152.8" y1="138.4" x2="164.2" y2="142.1"/><line class="tp-groove" x1="143.4" y1="156.8" x2="153.1" y2="163.8"/><line class="tp-groove" x1="128.8" y1="171.4" x2="135.8" y2="181.1"/>
+<line class="tp-groove" x1="51.2" y1="171.4" x2="44.2" y2="181.1"/><line class="tp-groove" x1="36.6" y1="156.8" x2="26.9" y2="163.8"/><line class="tp-groove" x1="27.2" y1="138.4" x2="15.8" y2="142.1"/><line class="tp-groove" x1="24.0" y1="118.0" x2="12.0" y2="118.0"/><line class="tp-groove" x1="27.2" y1="97.6" x2="15.8" y2="93.9"/><line class="tp-groove" x1="36.6" y1="79.2" x2="26.9" y2="72.2"/><line class="tp-groove" x1="51.2" y1="64.6" x2="44.2" y2="54.9"/><line class="tp-groove" x1="69.6" y1="55.2" x2="65.9" y2="43.8"/>
+<circle class="tp-rim" cx="90" cy="118" r="42"/>
+<circle class="tp-hub" cx="90" cy="118" r="11"/>
+<line class="tp-patch" x1="60" y1="190" x2="120" y2="190"/>
+<text class="tp-to" x="90" y="212" text-anchor="middle">contact patch</text>
+<line class="tp-lead" x1="136" y1="63" x2="176" y2="44"/><text class="tp-t" x="180" y="48">tread</text>
+<line class="tp-lead" x1="144" y1="107" x2="176" y2="100"/><text class="tp-t" x="180" y="104">sidewall</text>
+<line class="tp-lead" x1="118" y1="128" x2="176" y2="150"/><text class="tp-t" x="180" y="154">rim</text>
+<!-- a piece of tread, face on -->
+<text class="tp-s" x="330" y="22" text-anchor="middle">a piece of tread, face on</text>
+<rect class="tp-tread" x="262" y="32" width="136" height="170" rx="6"/>
+<rect class="tp-gap" x="326" y="32" width="8" height="170"/>
+<rect class="tp-gap" x="262" y="70" width="136" height="6"/>
+<rect class="tp-gap" x="262" y="114" width="136" height="6"/>
+<rect class="tp-gap" x="262" y="158" width="136" height="6"/>
+<polyline class="tp-cut" points="272,51 277,47 281,55 286,47 290,55 295,47 299,55 304,47 308,55 313,47 316,51"/>
+<polyline class="tp-cut" points="344,51 349,47 353,55 358,47 362,55 367,47 371,55 376,47 380,55 385,47 388,51"/>
+<polyline class="tp-cut" points="272,95 277,91 281,99 286,91 290,99 295,91 299,99 304,91 308,99 313,91 316,95"/>
+<polyline class="tp-cut" points="344,95 349,91 353,99 358,91 362,99 367,91 371,99 376,91 380,99 385,91 388,95"/>
+<polyline class="tp-cut" points="272,139 277,135 281,143 286,135 290,143 295,135 299,143 304,135 308,143 313,135 316,139"/>
+<polyline class="tp-cut" points="344,139 349,135 353,143 358,135 362,143 367,135 371,143 376,135 380,143 385,135 388,139"/>
+<polyline class="tp-cut" points="272,183 277,179 281,187 286,179 290,187 295,179 299,187 304,179 308,187 313,179 316,183"/>
+<polyline class="tp-cut" points="344,183 349,179 353,187 358,179 362,187 367,179 371,187 376,179 380,187 385,179 388,183"/>
+<line class="tp-lead" x1="294" y1="214" x2="294" y2="194"/><text class="tp-t" x="294" y="228" text-anchor="middle">block</text>
+<line class="tp-lead" x1="330" y1="238" x2="330" y2="194"/><text class="tp-t" x="330" y="252" text-anchor="middle">groove</text>
+<line class="tp-lead" x1="366" y1="214" x2="366" y2="188"/><text class="tp-t" x="366" y="228" text-anchor="middle">thin cut</text>
+</svg>

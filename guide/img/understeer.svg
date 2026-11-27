@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 250" width="420" height="250">
+<title>Understeer and oversteer seen from above</title>
+<!-- An illustration, not game figures. Three arcs from one start point (80,230), turning right:
+     the turn asked for, centre (260,230) r 180 to 255 deg; understeer, centre (310,230) r 230 to
+     242 deg; oversteer, centre (210,230) r 130 to 268 deg. The car on the oversteer arc sits at
+     235 deg, its nose turned 40 deg further into the turn than its path. -->
+<style>
+.uo-ask{stroke:var(--fig-muted,#6b6b75);stroke-width:2;stroke-dasharray:6 5;fill:none}
+.uo-ask-h{fill:var(--fig-muted,#6b6b75)}
+.uo-under{stroke:var(--fig-blue,#1d5ca8);stroke-width:3;fill:none}
+.uo-under-h{fill:var(--fig-blue,#1d5ca8)}
+.uo-over{stroke:var(--fig-orange,#c45a12);stroke-width:3;fill:none}
+.uo-over-h{fill:var(--fig-orange,#c45a12)}
+.uo-car{fill:var(--fig-fill,#f3f1ec);stroke:var(--fig-ink,#1c1c1f);stroke-width:1.5}
+.uo-nose{fill:var(--fig-ink,#1c1c1f)}
+.uo-s{font:13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-muted,#6b6b75)}
+.uo-under-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-blue,#1d5ca8)}
+.uo-over-t{font:600 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;fill:var(--fig-orange,#c45a12)}
+@media (prefers-color-scheme:dark){
+.uo-ask{stroke:var(--fig-muted,#a6a6b0)}.uo-ask-h{fill:var(--fig-muted,#a6a6b0)}
+.uo-under{stroke:var(--fig-blue,#8ab6ff)}.uo-under-h{fill:var(--fig-blue,#8ab6ff)}
+.uo-over{stroke:var(--fig-orange,#f0a060)}.uo-over-h{fill:var(--fig-orange,#f0a060)}
+.uo-car{fill:var(--fig-fill,#24262b);stroke:var(--fig-ink,#e9e7e2)}.uo-nose{fill:var(--fig-ink,#e9e7e2)}
+.uo-s{fill:var(--fig-muted,#a6a6b0)}.uo-under-t{fill:var(--fig-blue,#8ab6ff)}.uo-over-t{fill:var(--fig-orange,#f0a060)}}
+</style>
+<path class="uo-under" d="M80,230 A230,230 0 0 1 202,26.9"/>
+<path class="uo-under-h" d="M209.1,23.1 L204.1,30.9 L199.9,22.9 Z"/>
+<path class="uo-ask" d="M80,230 A180,180 0 0 1 213.4,56.1"/>
+<path class="uo-ask-h" d="M221.1,54 L214.6,60.4 L212.2,51.8 Z"/>
+<path class="uo-over" d="M80,230 A130,130 0 0 1 205.5,100.1"/>
+<path class="uo-over-h" d="M213.5,99.8 L205.7,104.6 L205.3,95.6 Z"/>
+<g transform="translate(80,222)">
+  <rect class="uo-car" x="-7" y="-14" width="14" height="28" rx="3"/>
+  <path class="uo-nose" d="M0,-12 L4,-6 L-4,-6 Z"/>
+</g>
+<g transform="translate(135.4,123.5) rotate(5)">
+  <rect class="uo-car" x="-14" y="-7" width="28" height="14" rx="3"/>
+  <path class="uo-nose" d="M12,0 L6,4 L6,-4 Z"/>
+</g>
+<text class="uo-under-t" x="232" y="30">understeer: runs wide</text>
+<text class="uo-s" x="232" y="62">the turn asked for</text>
+<text class="uo-over-t" x="232" y="104">oversteer: tail out</text>
+<text class="uo-s" x="96" y="242">start</text>
+</svg>
