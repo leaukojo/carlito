@@ -18,10 +18,18 @@ stops. What does, and why is it sometimes not enough?
 
 On a slope, a vehicle's weight splits into two parts: one pulls it down the slope, the other
 presses it onto the road. The steeper the slope, the larger the first and the smaller the second.
-On a road's gentle slope the pull is about the slope's steepness (in percent) as a share of the
-weight. For example, on a 20 % slope (it rises 20 metres over 100 metres), a car weighing 10,000
-newtons is pulled downhill with about 2,000 newtons. Whatever holds the car must push back with
-that much.
+In words:
+
+pull down the slope = weight × sin(slope angle)
+
+A road sign gives a slope in percent instead: how many metres it rises for every 100 metres
+along the flat. On the gentle slopes of roads, the pull is about that percentage of the weight.
+For example, on a 20 % slope (it rises 20 metres over 100 metres, an angle of about 11 degrees), a
+car weighing 10,000 newtons is pulled downhill with about 2,000 newtons. Whatever holds the car
+must push back with that much.
+
+A 100 % slope is not a wall, as the name might suggest: it rises 100 metres over 100 metres, which
+is 45 degrees. A vertical wall would be an endless percentage.
 
 ## The tyre holds first
 
@@ -39,6 +47,9 @@ with its wheels locked.
 The tyres can push back with at most μ times the part of the weight pressing them onto the road
 (see [the coefficient of friction](tyres.md#the-coefficient-of-friction)). So a car with every
 wheel held stays put while the slope rises by less than μ metres for every metre along the flat.
+The weight does not come into it: a heavier vehicle is pulled downhill harder, but it is also
+pressed onto the road harder, by the same share. So a loaded truck slides on an icy slope just as
+a small car does.
 On dry asphalt, with a μ of about 1, that is a slope of 45 degrees, far steeper than any road, so
 there it is the brake that sets the limit, not the tyres. On ice, with a μ of 0.1, the 20 % slope
 of the example (which needs a μ of about 0.2) is already too steep. A parking brake usually holds
@@ -103,8 +114,9 @@ The pawl locks the gearbox rather than the wheels. The wheels are held through t
 torque, so the pair can hold no more than twice what the weaker wheel can. With one driven wheel
 on ice, the other one can roll downhill while the wheel on ice turns backwards over the ice (the
 differential lets them turn against each other), so a car parked in P can creep away. A
-front-drive car in P also only holds its front wheels. This is why the parking brake should be used as well, and why it is a misconception that P alone
-is enough on a steep or slippery slope.
+front-drive car in P also holds only its front wheels, and when it faces uphill they carry less
+of its weight than usual, because the slope shifts weight onto the lower, rear wheels. So P alone is not always enough on a steep or slippery slope, although many
+drivers think it is, and the parking brake should be used as well.
 
 <!-- photo: a park pawl and the toothed wheel it locks, in a cut-open gearbox -->
 
@@ -112,12 +124,11 @@ is enough on a steep or slippery slope.
 
 The handbrake holds the rear wheels directly, without the gearbox (see
 [Brakes](brakes.md#the-handbrake) for how it works). The law requires it to hold the loaded
-vehicle on a slope (20 % for cars and light vans in Europe, 18 % for heavier vehicles). On trucks,
-the parking brake uses [spring brakes](brakes.md#air-and-spring-brakes). This is how a truck parks
-when its gearbox has no pawl. A parking brake is a friction brake, so it holds less after a hard
-descent has heated it (see [the handbrake on a hot brake](brakes.md#the-handbrake-on-a-hot-brake)),
-which is a reason to park in gear or in P as well.
-<!-- BrakeSizing: parks the laden body on 20 % (UN R13-H, to 3.5 t) or 18 % (R13) -->
+vehicle on a steep slope, far steeper than most roads. On trucks, the parking brake uses
+[spring brakes](brakes.md#air-and-spring-brakes). This is how a truck parks when its gearbox has
+no pawl. A parking brake is a friction brake, so it holds less after a hard descent has heated it
+(see [the handbrake on a hot brake](brakes.md#the-handbrake-on-a-hot-brake)), which is a reason to
+park in gear or in P as well.
 
 ## What Carlito simulates
 
@@ -137,6 +148,9 @@ The parameters the simulator uses for this, and where each is set, are listed in
 - **A simple spring at rest.** The give of a still tyre is a spring of about 2 cm in each patch,
   which fades in below a slow walking pace.
   <!-- wheel.gd STICK_DEFLECTION 0.02 m, STICK_SPEED 0.5 m/s -->
+- **Parking brakes sized to one slope.** Each vehicle's parking brake, cold, holds it fully
+  loaded on a 20 % slope, or on an 18 % one if it weighs more than 3.5 tonnes.
+  <!-- BrakeSizing.PARK_GRADE_LIGHT 0.20, PARK_GRADE_HEAVY 0.18, LIGHT_MASS_KG 3500 (its comments: UN R13-H and UN R13; docs/sources.md records R13-H as not opened) -->
 - **No electronic parking brake button**, and no automatic handbrake when the engine stops.
 - **No P from local controls.** Only sloppyCAN can select it.
 - **No roll-away warning**: a vehicle left in neutral on a hill just rolls.
@@ -172,6 +186,7 @@ Hill-start assist and auto hold have no signal of their own.
 
 ## Related
 
+- [Glossary](glossary.md): every term on this page.
 - [Clutch and torque converter](coupling.md): creep, and why a clutch does not hold.
 - [Brakes](brakes.md): the handbrake and the trucks' spring brakes.
-- [Glossary](glossary.md): every term on this page.
+- [Kinds of gearbox](gearbox-kinds.md): the CVT that holds a tractor with a ratio of zero.

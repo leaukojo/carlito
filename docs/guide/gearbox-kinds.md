@@ -11,10 +11,11 @@ computer, by oil pressure or with a belt.</p>
 <span class="badge yes" title="A powershift on one tractor; a power-split CVT on the other">Tractor</span>
 </div>
 
-How a pair of gears trades speed for strength, and why a vehicle needs several pairs, is on
-[Gearbox and shifting](gearbox.md). A gearbox holds those pairs: a big ratio for pulling away,
-called first gear, a small one for cruising, called top gear, and steps in between. It joins only
-one pair at a time.
+A gearbox holds several gear ratios (see [Gearbox and shifting](gearbox.md)): a big one for
+pulling away, called first gear, a small one for cruising, called top gear, and steps in between,
+and it uses only one at a time. The hard part is the change. The gears are turning, the engine is
+pushing, and the old gear has to let go while the new one takes over. How is that done, and can
+the push keep going while it happens?
 
 ## Inside a gearbox: shafts, gears and collars
 
@@ -58,8 +59,16 @@ At that moment the collar and the new gear are turning at different speeds. Push
 together, their dogs would crash into each other with a grinding crunch. So each collar has a
 [synchroniser](glossary.md#synchroniser): a small cone that touches the gear first and rubs on
 it, like a little brake, until both turn at the same speed. Only then can the dogs slip in.
-Gearboxes without synchronisers, such as many old trucks', make the driver match the speeds
-by feel, with a technique called double clutching.
+
+<details><summary>Double clutching, for gearboxes without synchronisers</summary>
+
+Many old trucks' gearboxes have no synchronisers, so the driver has to match the speeds by feel.
+On a change down, for example, the driver presses the clutch and moves the lever to neutral, lets
+the clutch up and blips the accelerator, which spins the engine and the gears behind the clutch up
+to the speed the lower gear needs, then presses the clutch again and moves the lever into the new
+gear. The clutch is pressed twice, hence the name. Done well, the dogs slide in without a sound.
+
+</details>
 
 While the clutch is open, the engine turns nothing, so a manual gearbox stops pushing the vehicle
 for a moment at every change. Why does this matter? A vehicle on a steep hill, or a tractor in
@@ -108,9 +117,15 @@ holds the planets' axles.
 The sun, the carrier and the ring can all turn. Hold one of them still, turn another with the
 engine, and the third becomes the output, turning at a new speed:
 
-- **Ring held, sun driven**: the carrier turns slowly, the same way as the sun. A low gear.
-- **Two parts locked together**: the whole set turns as one block, a ratio of 1.
-- **Carrier held, sun driven**: the ring turns the other way. Reverse.
+- **Ring held, sun driven.** The carrier turns slowly, the same way as the sun, which makes a low
+  gear.
+- **Two parts locked together.** The whole set turns as one block, a ratio of 1.
+- **Carrier held, sun driven.** The ring turns the other way, which makes reverse.
+
+How low is the low gear? With the ring held, the ratio is 1 + the ring's teeth ÷ the sun's teeth.
+For example, with a sun of 30 teeth and a ring of 90, the sun turns 1 + 90 ÷ 30 = 4 times for
+each turn of the carrier. With the carrier held instead, the sun turns 90 ÷ 30 = 3 times for each
+turn of the ring, backwards.
 
 So one small set gives several gears, and an automatic joins a few sets together to give all its
 gears. What holds or locks each part is a clutch or a brake inside the gearbox, squeezed by oil

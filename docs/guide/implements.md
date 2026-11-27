@@ -11,15 +11,15 @@ and the forces each one brings.</p>
 <span class="badge yes" title="Four implements and a trailer, on the hitch, the PTO, the hydraulics and the implement bus">Tractor</span>
 </div>
 
-A tractor does not do the farm work by itself. It is a source of pull, power and oil pressure, and
-the tool does the work. How does a tool, which may weigh as much as a car, get its pull, its power
-and its instructions from the tractor? Farm tractors are used with tools called
-[implements](glossary.md#implement). A tractor can carry them, drag them through the soil, and
-power their moving parts with its engine.
+A tractor does not do the farm work by itself: it is a source of pull, power and oil pressure, and
+the tool behind it does the work. How does a tool, which may weigh as much as a car, get its pull,
+its power and its instructions from the tractor?
 
 ## Five connections
 
-A tractor connects to its tools in five ways:
+The tools a tractor works with are called [implements](glossary.md#implement). A tractor can carry
+them, drag them through the soil, and power their moving parts with its engine. It connects to
+them in five ways:
 
 1. **The three-point hitch**, which carries a tool on the back.
 2. **The drawbar**, which pulls a trailer (see [Towing](towing.md#two-bodies-and-a-joint) for how
@@ -70,9 +70,24 @@ lowered to work, part of its weight rests on the ground instead.
 ## Draft: pulling through the soil
 
 A plough cutting through the ground holds the tractor back hard, because the soil resists being
-cut and turned over. That pull is called the [draft](glossary.md#draft). It depends on the tool,
-how deep it works (a deeper cut takes more soil), how heavy the soil is (farmers call clay heavy:
-its fine particles stick together, so it is harder to cut than sand) and how fast the tractor goes.
+cut and turned over. That pull is called the [draft](glossary.md#draft). It depends on:
+
+- **The tool and its width.** A wider plough turns over a wider strip of soil.
+- **The depth.** A cut twice as deep moves twice as much soil, so it takes about twice the pull.
+- **The soil.** Farmers call clay heavy: its fine particles stick together, so it is harder to cut
+  than sand.
+- **The speed.** Soil thrown aside faster takes more force to throw, so the draft rises as the
+  tractor goes faster, and more so the faster it already goes.
+
+For example, a plough that pulls back with 22,000 newtons at 25 cm deep pulls with about 11,000
+newtons at 12.5 cm. If the same plough speeds up from 7 to 10 km/h, its draft rises by more than
+a quarter, to some 29,000 newtons.
+<!-- plough.gd RATED_DRAFT_N 22410 at 25 cm (SHARE_DEPTH_M) and 7 km/h; DRAFT_SHAPE (652, 0, 5.1): (652 + 5.1 × 100) / (652 + 5.1 × 49) = 1162 / 902 = 1.29, × 22.4 kN = 28.9 kN -->
+
+Engineers estimate draft with a standard formula from tests of many tools in many soils: the pull
+grows in step with the width and the depth, is multiplied by a factor for the soil, and rises with
+the speed.
+<!-- ASABE D497 draft = soil factor × (A + B S + C S²) × width × depth, as quoted in docs/sources.md [45] (Hefele and Oksanen, EcoTIM, arXiv 2604.17991; secondary, not reopened for this page) -->
 
 Draft is a force that the tyres must answer, since the tractor can only pull as hard as its tyres
 can push on the field. For example, a tractor pressing on the ground with 50,000 newtons (all four
@@ -100,15 +115,20 @@ mower, the disc of a spreader, etc.).
 
 The shaft has standard speeds (540 and 1000 rpm are common), which it reaches when the engine runs
 at the PTO's rated speed. The speeds are standard so that a tool built by one maker can be worked
-by a tractor built by another. The hand throttle is used to keep the engine at that speed. The
-shaft follows the engine, so if the engine slows down, the shaft does too, and the tool slows with
-it. This is why the engine is held at the rated speed while a PTO tool works: a tool is built to
-work best at its standard shaft speed.
+by a tractor built by another, and each tool is built to work best at its standard shaft speed.
+The shaft is geared to the engine, so if the engine slows down, the shaft and the tool slow with
+it. So the driver sets the engine to the rated speed with the hand throttle (a lever that holds
+the engine speed without a foot on the pedal) before the tool starts work.
 
-A driven tool takes a lot of power from the engine. The tractor's
-[all-speed governor](glossary.md#all-speed-governor) answers with more fuel, and this shows as a
-higher engine load. Power is the shaft's torque times its speed, so a tool that needs a lot of
-torque asks the engine for a lot of power even at the standard speed.
+Why does the engine not slow down when the tool bites? A driven tool takes a lot of power from the
+engine, and the tractor's [all-speed governor](glossary.md#all-speed-governor) answers with more
+fuel to hold the speed that was set, which shows as a higher engine load. Power is the shaft's
+torque times its speed:
+
+power (watts) = torque (newton-metres) × speed (revolutions per minute) × 2π ÷ 60
+
+For example, a tool that needs 500 N·m at 540 rpm takes 500 × 540 × 2π ÷ 60, about 28,000 watts
+(28 kW) from the engine, before the tractor has pulled anything.
 
 <details><summary>Why a PTO shaft is guarded</summary>
 
@@ -125,8 +145,14 @@ The [hydraulic remote](glossary.md#hydraulic-remote), or SCV (selective control 
 pressurised oil from the tractor's pump to a ram on the tool. It is used to open the gate of a
 spreader's hopper, tip a trailer's body, etc. Oil is used because a liquid cannot be squashed, so
 the pressure the pump makes passes along thin, bendable hoses to the ram, and the ram's wide
-piston turns that pressure into a large push, with no shaft in between. The pump is driven by the engine, so there is no flow when the
-engine is stopped.
+piston turns that pressure into a large push, with no shaft in between:
+
+push = pressure × area of the piston
+
+For example, oil at 200 bar presses with 20 newtons on every square millimetre. A piston 5 cm
+across has an area of about 2,000 square millimetres, so it pushes with about 20 × 2,000 = 40,000
+newtons, enough to lift four tonnes. The pump is driven by the engine, so there is no flow when
+the engine is stopped.
 
 ## The implement bus
 
@@ -140,8 +166,10 @@ its controls in the cab, whoever made either of them.
 
 Trucks can have a PTO too. On a garbage truck, it drives the pump of the refuse body (the
 mechanism that lifts and empties bins). The truck needs a PTO because the body's pump must work
-while the truck stands still, with the engine idling and the wheels not turning. The body often has
-its own network, separate from the truck's. A [tipper semi-trailer](towing.md#moving-loads) uses the truck's PTO to raise its body.
+while the truck stands still with its wheels not turning. While the PTO works, the engine is held
+at a set speed above idle, so that the pump turns fast enough. The body often has its own network,
+separate from the truck's. A [tipper semi-trailer](towing.md#moving-loads) uses the truck's PTO to
+raise its body.
 
 ## What Carlito simulates
 
@@ -207,7 +235,8 @@ The parameters the simulator uses for this, and where each is set, are listed in
 
 ## Related
 
+- [Glossary](glossary.md): every term on this page.
 - [The engine](engine.md): the governor that holds the PTO's speed.
+- [Towing](towing.md): the drawbar and the trailer it pulls.
 - [Differentials and four-wheel drive](differentials.md): the diff lock and front drive the
   plough needs.
-- [Glossary](glossary.md): every term on this page.

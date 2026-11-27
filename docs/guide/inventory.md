@@ -5,8 +5,9 @@
 <p class="lead">This page is the guide writers' checklist: each system the simulator models, which
 vehicles have it, its code and its guide page.</p>
 
-It was built by reading the vehicle and input code and the developer docs (drivetrain, handling,
-vehicles, truck, tractor, systems).
+Its rows come from the vehicle and input code and the developer docs (drivetrain, handling,
+vehicles, truck, tractor, systems). Where they disagree, the row follows the code and the disagreement goes to
+[the open questions](open_questions.md).
 
 The guide covers three of the seven families the signal contract knows: car, truck and tractor.
 The boat, plane, drone and train pages wait in `docs/guide-drafts/`. "Car" includes the vans and the two racers; "truck" includes the garbage truck, the fire truck and

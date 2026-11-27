@@ -51,19 +51,17 @@ Each gear has a gear ratio: how many times the engine turns for one
 turn of the gearbox's output. After the gearbox, a second fixed set of gears (the
 [final drive](glossary.md#final-drive)) turns the wheels. Multiply the two and you have how many
 times the engine turns for each turn of the wheels. For example, this can be about 18 in a car's
-first gear, and about 3.6 in its sixth.
+first gear, and about 3.6 in its sixth. So a "higher" gear has a smaller ratio: the engine turns
+fewer times for each turn of the wheels.
 <!-- sedan_spec.tres gear_ratios 4.5 ... 0.925; final_drive 3.9 (CAR_BASE): 17.6 and 3.6 -->
 
-The same ratio works on torque, the other way round. A low gear turns the engine many times per
-wheel turn and multiplies its torque by as much, so the wheels push hard but the vehicle moves
-slowly. A high gear multiplies less, so the push is weaker but the speed is higher. A little of
-the power is lost in the gears on the way.
-
-A gearbox does not make power, only trades speed for twist. For example, with a ratio of 18 an
-engine giving 150 N·m can give the wheels about 2,700 N·m (a little less after friction), but the
-wheels turn 18 times slower than the engine. In a high gear with a ratio of 3.6 the same engine
-gives only about 540 N·m, and the wheels turn five times faster. So a higher gear is not "more
-power". It gives a lower push at a higher speed, for the same power from the engine.
+The same ratio works on torque, the other way round, as with the two gears above. A low gear turns
+the engine many times per wheel turn and multiplies its torque by as much, so the wheels push hard
+but the vehicle moves slowly. For example, with a ratio of 18 an engine giving 150 N·m can give the
+wheels about 2,700 N·m (a little less after friction in the gears), but the wheels turn 18 times
+slower than the engine. In a high gear with a ratio of 3.6 the same engine gives only about
+540 N·m, and the wheels turn five times faster. So a higher gear is not "more power": it gives a
+lower push at a higher speed, for the same power from the engine.
 
 Why not use the highest gear all the time, then? Because the push is too weak to pull away or
 climb, and the engine would be turning slowly, where it is weakest. And why not the lowest? The
@@ -87,13 +85,13 @@ stop the simulator's `semi` at 90 km/h and its tractor at 40.
 
 The selector of an automatic usually has four positions:
 
-- **P**, park: a steel tooth (the [park pawl](glossary.md#park-pawl)) locks the gearbox's output,
+- **P, park.** A steel tooth (the [park pawl](glossary.md#park-pawl)) locks the gearbox's output,
   so the wheels cannot turn. A brake could do the same, but a tooth in a notch holds with no
   force from the driver and cannot fade. Heavy trucks often have no P, and park on their spring
   brakes instead.
-- **R**, reverse.
-- **N**, neutral: no gear, so the engine turns freely and the vehicle can roll.
-- **D**, drive: the gearbox picks the forward gear itself.
+- **R, reverse.** A reverse gear turns the wheels backwards.
+- **N, neutral.** No gear is joined, so the engine turns freely and the vehicle can roll.
+- **D, drive.** The gearbox picks the forward gear itself.
 
 With a manual gearbox, the driver picks each gear with a lever and a clutch pedal (see
 [The manual gearbox](gearbox-kinds.md#the-manual-gearbox)).
@@ -128,10 +126,18 @@ The rules that an automatic follows are called its [shift policy](glossary.md#sh
 ![A graph of engine speed against road speed for a saloon car in five gears. In each gear the engine's speed climbs along a line to about 5,900 rpm, then drops at the upshift to a lower speed in the next gear, making a sawtooth.](img/gears-rpm-sawtooth.svg "Engine speed against road speed, through five gears.")
 
 The wheels keep turning at the speed of the road, so a new gear means a new engine speed. For
-example, at 100 km/h an engine might turn at 4,000 rpm in fourth gear and at 3,200 in fifth. When
-the car changes up, the engine has to slow down from 4,000 to 3,200 as it joins the new gear
-(and speed up again on a change down). How the change is handled depends on the kind of
+example, at 100 km/h an engine might turn at 4,100 rpm in fourth gear and at 3,200 in fifth. When
+the car changes up, the engine has to slow down from 4,100 to 3,200 as it joins the new gear
+(and speed up again on a change down). How far it drops is set by the two gears' ratios:
+
+new engine speed = old engine speed × new gear's ratio ÷ old gear's ratio
+
+With ratios of 1.43 in fourth and 1.11 in fifth, that is 4,100 × 1.11 ÷ 1.43 = about 3,200 rpm.
+<!-- sedan at 100 km/h: 27.8 m/s ÷ wheel_radius 0.36 × (1.431 or 1.109) × final_drive 3.9 × 60/2π ≈ 4,100 and 3,200 rpm -->
+Gearboxes with many gears close together (a truck's twelve, a tractor's sixteen) make each drop
+small, so the engine stays near its best speed. How the change is handled depends on the kind of
 gearbox.
+<!-- semi_spec.tres steps 1.21-1.24; tractor-kenney 7 → 6.275 is 1.12 -->
 
 If the engine's speed does not match the new gear when the drive is joined, the coupling has to
 drag the engine to the right speed, which jerks the car and heats the clutch. This is why, on an
@@ -177,11 +183,11 @@ The parameters the simulator uses for this, and where each is set, are listed in
 
 <details><summary>Simplification list</summary>
 
-- **No gear lever or paddles**: shifting by hand is one step per button press, and there is no P
-  on the manual ladder (the parking brake holds instead).
+- **No gear lever or paddles.** Shifting by hand moves one gear per press, and there is no P on
+  the manual ladder (the parking brake holds instead).
 - **No clutch pedal**, so no stalling or slipping the clutch by hand.
 - **No crunching gears or missed shifts.**
-- **No range or splitter buttons** on the semis' twelve gears: the automated gearbox chooses.
+- **No range or splitter buttons** on the semis' twelve gears. The automated gearbox chooses.
 - **One shift map.** The automatics' rules follow measurements of one real car (a 2013 family car
   with a six-speed). The tractor and the racing cars have no kickdown.
   <!-- docs/drivetrain.md The shift policy: the Malibu map [34]; VehicleSpec.kickdown_pedal -->

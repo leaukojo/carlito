@@ -126,7 +126,11 @@ The parameters the simulator uses for this, and where each is set, are listed in
 - **Cut what does not teach.** No section that explains how to use a widget (a widget explains
   itself), no navigation lines ("New here? ...": the sidebar and the pager do that), no sentence
   that restates a table or a heading, no fluff ("All three."). A sentence that heads off a
-  misconception, or a worked example, teaches: keep it.
+  misconception, or a worked example, teaches: keep it. So does the reason behind a claim: "it
+  rolls with less effort" needs its why.
+- **Side topics in a box.** A side topic, or a second meaning of a word, goes in a "Learn more"
+  box (see [Boxes](#boxes)). When a passage is hard to follow, first ask whether it belongs on the
+  page at all.
 - **Present tense, what is true now.** Never what the code should do, never its history. Future
   work goes to [Open questions and ideas](open_questions.md).
 
@@ -228,7 +232,9 @@ it when not all do. A vehicle page lists only its family's own signals, then lin
 `<details><summary>Car list</summary>` (blank line, the content, blank line,
 `</details>`) for a table a reader opens only when wanted, and for "learn more" knowledge that
 is nice to have but not needed to follow the page (for example, how racing teams deal with wet
-tracks). Its summary says what is inside.
+tracks). Its summary says what is inside ("How racing teams deal with wet, dirty and slippery
+tracks"); it starts "Learn more: " only where the box could be mistaken for the page's main
+thread, such as a word's second meaning.
 
 ### Links
 

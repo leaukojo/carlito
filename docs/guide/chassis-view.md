@@ -17,7 +17,6 @@ panel itself is not sent to sloppyCAN, but some of what it draws is: the body's 
 (`accLong`, `accLat`) and each axle's slip (`slip`), for example.
 <!-- chassis_view.gd header: "no lag or hold"; "Not in sloppyCAN: no bus has this"; ChassisReading.of each physics frame; contract accLong, accLat, slip -->
 
-
 <!-- figure: a screenshot of the chassis view on a car braking in a turn, its marks labelled -->
 
 ## The tyres
@@ -27,11 +26,11 @@ panel itself is not sent to sloppyCAN, but some of what it draws is: the body's 
 | The size of a tyre's shape | Its share of the weight on all the tyres. The area, not the side, grows with the load, so a tyre carrying twice as much has twice the area. | [Weight transfer and rollover](weight-transfer.md#why-weight-moves) |
 | Blue | Less than 70 % of the tyre's grip in use. | [Sharing grip between braking and turning](slip.md#sharing-grip-between-braking-and-turning) |
 | Yellow | 70 to 95 % in use. | the same |
-| Red | At the limit. | the same |
-| Diagonal stripes | The tyre is past the peak of its grip curve: it is sliding, not just working hard. | [The grip curve](slip.md#the-grip-curve) |
+| Red | At the limit, or sliding past it. | the same |
+| Red with diagonal stripes | The tyre is past the peak of its grip curve: it is sliding, not just working hard. It pushes less than at the peak, but it is still at its limit: more slip only gives less grip. | [The grip curve](slip.md#the-grip-curve) |
 | A dashed outline | The wheel is off the ground. | [Wheel lift and rollover](weight-transfer.md#wheel-lift-and-rollover) |
 | A tiny dot | The tyre touches the ground but carries almost nothing. | the same |
-<!-- chassis_view.gd patch_scale (area = share), COOL_BELOW 0.7, WARM_BELOW 0.95, GRIP_COLORS, past_peak hatch, _draw_dashed_rect, the near-zero dot -->
+<!-- chassis_view.gd patch_scale (area = share), COOL_BELOW 0.7, WARM_BELOW 0.95, GRIP_COLORS, past_peak red and hatched (grip_step sliding), _draw_dashed_rect, the near-zero dot -->
 
 The grip in use counts braking, driving and turning together: a tyre turning hard has little grip
 left to brake with, and the colour shows that. The line at the bottom of the panel repeats the
@@ -48,9 +47,12 @@ three colours.
 <!-- chassis_view.gd force_arrow (ARROW_LEN per weight / wheel count, capped at ARROW_CAP), spin_bar, HELD_COLOR for abs_held / tcs_held / esc_braked -->
 
 The arrows' scale is set by the vehicle's weight, not by what the tyres carry this instant, so a
-bump or a landing changes the arrows, never the scale. The bar's full length is a locked wheel, or one spinning at twice the road speed. The
-grip curve's peak, at a slip of about 12 %, reads about a third of the bar, so a tyre working at
-its best shows a short bar, not a long one.
+bump or a landing changes the arrows, never the scale.
+
+The bar's full length is a slip ratio of 1: a locked wheel, or one spinning at twice the road
+speed. Its length follows the square root of the slip, so that the small slips where a tyre does
+its work still show. For example, the grip curve's peak, at a slip of 0.12, reads √0.12 = about
+0.35 of the bar. A tyre working at its best therefore shows a short bar, not a long one.
 <!-- ARROW_LEN 20 px for weight / count; SPIN_LEN at a slip ratio of 1, sqrt scale: 0.12 reads 0.35 -->
 
 ## The differentials

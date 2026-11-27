@@ -14,7 +14,8 @@ Everything here happens in the Godot editor, mostly in the **Kit** panel at the 
 screen, with five tabs: Palette, Terrain, Scatter, Roads and Polish. Every button and setting is
 described in the repository's `docs/level_kit.md`. The worked example is Level 1, in
 `src/levels/island/level_1/`. Levels 2 to 4 are dressed by hand on a scaffold that
-`tools/gen_islands.gd` generates once; Levels 5 and 6 are made entirely by their own generators, `tools/gen_rail_level.gd` and `tools/gen_skyport.gd`.
+`tools/gen_islands.gd` generates once. Levels 5 and 6 are made entirely by their own generators,
+`tools/gen_rail_level.gd` and `tools/gen_skyport.gd`.
 
 </div>
 
@@ -67,7 +68,7 @@ those folders. `docs/level_kit.md` § Authoring model has the detail.
 
 - **Winding roads**: add a `RoadPath` under Authoring, then use Draw mode on the Roads tab with a
   road profile (`city`, `asphalt` or `gravel`). Flatten the ground under it with **Conform
-  terrain**. Draping a road onto the ground and joining it to city tiles:
+  terrain**. How to drape a road onto the ground and join it to city tiles is in
   `docs/level_kit.md` § Draw mode and drape.
 - **City grids**: on the Palette tab, pick the roads kit and paint road tiles onto its grid (a
   Godot `GridMap`). A cell is 12 m across and 3 m tall; `road-curve` is a wide curve over 2 × 2
@@ -80,8 +81,9 @@ The ground's colour comes from a splat map: up to eight ground types mixed point
 with its own colour. On the Terrain tab, **Auto-splat** picks grass, dirt, sand or rock from each
 point's slope and height; then any of the eight can be painted by hand. Each type also sets the
 tyres' grip there ([Ground and tyre types](surfaces.md)). Paint after the roads and Conform
-terrain, so the paint follows the final heights. The eight types and the blend settings:
-`docs/level_kit.md` § Terrain generation & splat ground.
+terrain, because Auto-splat reads the slope and height, and those change when the ground is
+flattened. The eight types and the blend settings are in `docs/level_kit.md` § Terrain generation
+& splat ground.
 
 ## 6. Scatter
 
@@ -102,24 +104,28 @@ the new ground. `docs/level_kit.md` § Scatter explains how.
 ## 7. Buildings and props
 
 On the Palette tab, pick a kit and a family, click a thumbnail to pick up its prefab, then click
-in the 3D view to place it; it lands in its kit's `<Kit>Props` folder under Authoring. Each prefab
-has a `collision_mode` that sets its collision shape (the list: `docs/level_kit.md` § Authoring
-model). `weld` joins it to the level's one drivable body at bake, for things driven on such as
-ramps and bridges; a `weld` prefab inside scatter stops the bake with an error.
+in the 3D view to place it. It lands in its kit's `<Kit>Props` folder under Authoring. Each prefab
+has a `collision_mode` that sets its collision shape (the modes are listed in `docs/level_kit.md`
+§ Authoring model). A simple box is enough for a wall or a crate that a vehicle only bumps into.
+`weld` joins the prefab to the level's one drivable body at bake, for things driven on such as
+ramps and bridges, so that a wheel rolls from road to ramp with no seam to catch on. A `weld`
+prefab inside scatter stops the bake with an error.
 
 ## 8. Spawn points
 
-Drop a `VehicleSpawn` marker for every allowed vehicle and set its `vehicle_types`. The bake checks that every allowed vehicle has a spawn point
-and stops if one does not.
+Drop a `VehicleSpawn` marker for every allowed vehicle and set its `vehicle_types`. The bake
+checks that every allowed vehicle has a spawn point and stops if one does not, so that no vehicle
+in the level's menu can fail to appear.
 
 ## 9. Register, drive, bake
 
 1. **Register** the level in `src/shell/level_registry.gd`: `id`, `name`, `scene` and `desc`.
    With `dev: true`, it is hidden from level select but still baked, checked and run by the
    automatic checks.
-2. **Drive it before baking.** Open the scene and run it with **Run Current Scene**. Unbaked, the level uses simpler
-   stand-in collision (the roads' and scatter's own meshes, each prefab's `DevCollision`), good
-   enough to drive on. Driving it is how a level is checked.
+2. **Drive it before baking.** Open the scene and run it with **Run Current Scene**. Unbaked,
+   the level uses simpler stand-in collision (the roads' and scatter's own meshes, each prefab's
+   `DevCollision`), good enough to drive on. Driving it is how a level is checked: a gap between
+   a road and the ground, or a ramp too steep to climb, shows at once under the wheels.
 3. **Bake**: select the Authoring node and press **Bake level (save scene first)**. It writes
    `<level>.baked.scn`, which the simulator loads, and `<level>.bake.json`, its record. Commit the
    `.bake.json`; the `.baked.scn` is rebuilt by the bake tool and is not committed.

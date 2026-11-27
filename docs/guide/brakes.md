@@ -31,11 +31,20 @@ A car's brake squeezes pads against a disc that turns with the wheel. The rubbin
 the wheel, and the tyre then slows the car. Every bit of the car's energy of motion ends up as heat
 in the pads and the disc.
 
-How much heat? The energy of motion is half the mass times the speed squared, so it grows much
-faster than the speed does. For example, a car of 1,000 kg at 100 km/h (about 28 m/s) carries
-roughly 400,000 joules. If all of that went into 10 kg of steel, the steel would warm by about
-80 °C, within a few seconds. A car at twice the speed carries four times the energy, so it asks
-four times as much of its brakes (a common misconception is that it asks twice as much).
+How much heat? The energy of motion is
+
+energy of motion = ½ × mass × speed²
+
+with the mass in kilograms and the speed in metres per second, which gives joules. For example, a
+car of 1,000 kg at 100 km/h (about 28 m/s) carries ½ × 1,000 × 28 × 28, roughly 400,000 joules.
+If all of that went into 10 kg of steel, the steel would warm by about 80 °C, within a few
+seconds.
+
+You might expect a car at twice the speed to ask twice as much of its brakes. It asks four times
+as much, because the speed is squared: at 50 km/h the same car carries only about 100,000 joules,
+a quarter of what it carries at 100 km/h. The same square sets the stopping distance: the tyres
+can only push back with so much force, and each metre of braking at that force takes away the
+same amount of energy, so four times the energy takes about four times the distance.
 
 Other kinds of brake do the same job in different ways:
 
@@ -75,9 +84,11 @@ some vehicles change the split while driving, with valves or electronics.
 
 ### The pedal
 
-The pedal is tuned so that gentle braking is easy to control, whatever the strength of the brakes
-(half the pedal does not mean half of the hardware's strength). A fully pressed pedal asks for
-everything the brakes have.
+Brakes are stronger than the tyres can use, so if the pedal shared out their strength evenly over
+its travel, a light push would already lock the wheels. The pedal is instead designed so that a
+light push gives gentle braking that is easy to control, whatever the strength of the brakes
+behind it. So half the pedal does not mean half of the brakes' strength, and only a fully pressed
+pedal asks for everything they have.
 
 ## The handbrake
 
@@ -139,9 +150,17 @@ A locked wheel does not heat its brake, because the brake is not turning, so not
 skidding tyre is doing the slowing then. Engine braking and retarders do not heat the brakes
 either, because they slow the vehicle somewhere else.
 
-This is why long descents are hard on brakes ([see the forces](forces.md#example-truck-downhill)):
-the brakes would have to take the energy of the whole height lost, for minutes. A driver going
-down a long hill uses a low gear, so that engine braking (see
+This is why long descents are hard on brakes ([see the forces](forces.md#example-truck-downhill)).
+A vehicle going down a hill at a steady speed gains energy from the height it loses, and if only the
+brakes hold it back, all of that energy becomes heat in them, for minutes on end:
+
+energy from the height lost = mass × g × height
+
+with g about 10 (newtons per kilogram). For example, a loaded truck of 40,000 kg going down 500
+metres of height gains 40,000 × 10 × 500 = 200,000,000 joules. A stop from 90 km/h (25 m/s) costs
+the same truck ½ × 40,000 × 25 × 25 = 12,500,000 joules, so the descent asks as much of its brakes
+as sixteen hard stops, one after the other. A driver going down a long hill therefore uses a low
+gear, so that engine braking (see
 [Friction and engine braking](engine.md#friction-and-engine-braking)) holds the speed, and keeps the
 brakes for the moments when they are needed.
 
@@ -156,6 +175,20 @@ brakes for the moments when they are needed.
   Part of the energy of motion goes back into the battery instead of becoming heat.
 
 </details>
+
+<div class="widget" data-widget="brake-energy"></div>
+
+<div class="widget-limits" hidden>
+
+The vehicles are the simulator's `sedan`, `race`, `garbage-truck` and `tractor-kenney`, with
+their own brake split, the heat each brake holds and its kind of brake. All the energy of motion
+goes into the brakes, shared between front and rear as the brake force is; in reality the air and
+the tyres' rolling take a little of it. Nothing cools between the stops, so real brakes take more
+stops to get this hot. Each brake is one lump of metal at one temperature, and the tractor's is
+the oil its brakes sit in. Masses above each vehicle's own are for exploring.
+<!-- widgets/brake-energy.js: brake_bias_front, brake_heat_capacity(_rear), brake_fade_curve(_rear) of each spec; BrakeThermal curves -->
+
+</div>
 
 ### The handbrake on a hot brake
 
@@ -264,5 +297,8 @@ The parameters the simulator uses for this, and where each is set, are listed in
 
 ## Related
 
-- [Slip and the grip curve](slip.md): why the tyre, not the brake, usually sets the stopping distance.
 - [Glossary](glossary.md): every term on this page.
+- [Slip and the grip curve](slip.md): why the tyre, not the brake, usually sets the stopping distance.
+- [ABS, traction and stability control](driver-aids.md): the systems that work the brakes for the driver.
+- [Holding still](holding.md): the handbrake, the park pawl and the other ways a vehicle stays put.
+- [Towing](towing.md): how a trailer's brakes share the stop.

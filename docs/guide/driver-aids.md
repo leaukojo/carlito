@@ -11,16 +11,21 @@ wheel and keep the tyres from sliding.</p>
 <span class="badge no" title="None: a farm tractor's driver works the diff lock and front drive by hand">Tractor</span>
 </div>
 
-A tyre grips best just before it starts to slide, and a driver cannot keep four tyres at that
-point by feel: a person needs a good part of a second to react, while a computer can check every
-wheel many times a second. Driver aids use that speed: ABS while braking, traction control while
-accelerating, and stability control when the whole vehicle starts to slide or tip.
+A tyre grips best just before it starts to slide. A driver braking hard on a wet road cannot feel
+where that point is for each of four tyres, let alone hold them all there. How does a modern car
+manage it?
 
 ## All three aim at the same point
 
-[Slip and the grip curve](slip.md#the-grip-curve) shows the grip curve: grip rises with slip to a peak,
-then falls away. A tyre held at the peak gives the most force it can. Past it, the tyre slides,
-grips less, and slides more. The aids try to keep the tyres from going past that peak.
+[Slip and the grip curve](slip.md#the-grip-curve) shows the grip curve: grip rises with slip to a
+peak, then falls away. A tyre held at the peak gives the most force it can. Past it, the tyre
+slides, grips less, and slides more. The aids try to keep the tyres from going past that peak.
+
+A person needs a good part of a second to notice a wheel locking and react, and by then the wheel
+has long since gone past the peak. A computer that reads a sensor on every wheel can check them
+many times a second and act long before a person could. The driver aids use that speed:
+ABS while braking, traction control while accelerating, and stability control when the whole
+vehicle starts to slide or tip.
 
 One thing they cannot do is add grip: the road and the tyres decide how much there is, and the aids
 only help the driver use it (see
@@ -45,9 +50,10 @@ ABS has two benefits:
   cannot ([see the forces](forces.md#example-emergency-stop)). This is the main benefit: a driver
   can brake as hard as possible and still steer round the obstacle.
 
-The shorter stop is not always true: on loose gravel or deep snow, a car without ABS can stop in a
-shorter distance (see [The grip curve](slip.md#the-grip-curve) for why). The car with ABS keeps
-its steering, which is usually worth more.
+The shorter stop is not always true. On loose gravel or deep snow, a locked wheel digs in and
+pushes a wedge of material ahead of it, which helps to stop the car, so a car without ABS can stop
+in a shorter distance (see [The grip curve](slip.md#the-grip-curve)). The car with ABS keeps its
+steering, which is usually worth more.
 
 <details><summary>What the driver feels, and what to do</summary>
 
@@ -70,7 +76,11 @@ torque, brakes the spinning wheel, or both. On trucks, this system is often call
 Braking one spinning wheel helps for a second reason. The ordinary
 [differential](differentials.md) sends the same torque to both driven wheels, so a wheel on ice
 can only take a tiny torque, and the wheel on grip gets no more than that. Putting a brake on the
-spinning wheel makes it able to take more torque, and the other wheel gets the same extra.
+spinning wheel makes it able to take more torque, and the other wheel gets the same extra. For
+example, if the wheel on ice spins as soon as it gets 100 N·m (newton-metres), the wheel on dry
+road also gets only 100 N·m, although it could use 1,000. Brake the spinning wheel with 400 N·m,
+and it now takes 100 + 400 = 500 N·m before it spins, so the wheel on dry road gets 500 N·m too,
+five times as much push.
 
 Some systems also prevent engine braking from making the driven wheels slide on a slippery road
 (see [the engine](engine.md#friction-and-engine-braking)).
@@ -116,9 +126,14 @@ squared. For example, a truck that takes a bend at half the speed needs only a q
 sideways acceleration. The system has to act before a wheel lifts, because once a wheel is off the
 ground the truck is already close to going over.
 
-Semi-trailers can also have their own roll control, in their own brake system (the law requires it
-in Europe). It reads the trailer's own sensors and brakes the trailer by itself, whatever the truck
-in front is doing.
+Semi-trailers can also have their own roll control, in their own brake system (European rules
+require it on most large trailers with air suspension). It reads the trailer's own sensors and
+brakes the trailer by itself, whatever the truck in front is doing. Why does the trailer need its
+own? The truck in front cannot feel the trailer's wheels going light; only the trailer's own
+sensors can.
+<!-- docs/sources.md § Stability control, R13 5.2.2.23 [179]: "roll-over control on air-sprung O3/O4 trailers with up to 3 axles" (recorded there as sourced; not reopened for this page) -->
+<!-- R13 Annex 21 2.2.2(a) [179], docs/sources.md: the trailer reads "the tyres' vertical force (or at least lateral acceleration and wheel speeds)" -->
+
 
 ## The dashboard lamps
 

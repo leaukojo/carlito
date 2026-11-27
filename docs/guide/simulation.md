@@ -78,8 +78,9 @@ Per vehicle:
   tractors).
   <!-- GroundDriveSpec.load_sensitivity: car 0.10, truck/van/trailers 0.08, tractor 0.12 -->
 - **Where the sideways peak sits** (`cornering_peak_load`): how much a heavier load moves the
-  sideways peak to a larger slip angle. Off on the semis and their trailers.
-  <!-- GroundDriveSpec.cornering_peak_load; sedan_spec.tres 2.56; 0 on semi_spec.tres -->
+  sideways peak to a larger slip angle. It moves only the slip angle at which the peak comes, never
+  the peak's height. Off on the `suv`, the semis and the trailers.
+  <!-- GroundDriveSpec.cornering_peak_load; sedan_spec.tres 2.56; 0 (the default) on suv_spec.tres (gen_kenney_vehicles.gd sets 0.0), semi_spec.tres, conventional_spec.tres and every trailer spec -->
 - **Twin rear tyres** (`rear_twin_tyres`): each tyre of a pair takes half its corner's load (the
   `delivery`, `delivery-flat` and `ambulance`).
 - **The rear tyres' rated load** (`rear_tyre_rating`): a bigger rear tyre's rating against the
@@ -232,10 +233,11 @@ Per vehicle:
   has its full side area.
   <!-- sedan side_area 4.16 -->
 - **Where the air pushes** (`aero_centre`): the point where drag acts.
-- **Downforce area** (`downforce_area`): the `race` car's wings press down with
-  about half its weight at 200 km/h. The push goes through the springs, and is never turned into
-  extra grip directly.
-  <!-- VehicleMath.aero_downforce; race downforce_area 2.24 -->
+- **Downforce area** (`downforce_area`): the racing cars' wings press down with about half their
+  weight at 200 km/h. For example, on the `race`: ½ × 1.225 × 55.6² × 2.24 = about 4,200 N,
+  against a weight of 900 × 9.8 = about 8,800 N. The push goes through the springs, so it adds
+  grip only by pressing the tyres down harder.
+  <!-- VehicleMath.aero_downforce; race_spec.tres, race-future_spec.tres downforce_area 2.24; race mass 900, race-future 850 -->
 - **Rolling resistance** (`rolling_resistance`): about 1 % of the load for the cars, less for the
   trucks, and about 2 % for the tractors.
   <!-- sedan_spec.tres rolling_resistance 0.012; semi_spec.tres 0.007; tractor 0.02 -->
@@ -327,9 +329,10 @@ Per vehicle:
 - **Kickdown** (`kickdown_pedal`): past four fifths of the pedal on the automatics, and past almost
   all of it on the semis.
   <!-- VehicleSpec.kickdown_pedal -->
-- **Start gear** (`start_gear_max`): the highest gear a pull-away may start in. A semi with no trailer starts in sixth on the
-  flat, and in third with a full trailer.
-  <!-- docs/drivetrain.md start gears -->
+- **Start gear** (`start_gear_max`): the highest gear a pull-away may start in. The gearbox picks
+  the start gear from the weight and the slope, up to this. The `semi` with no trailer starts in
+  sixth on the flat, and in third with the 24-tonne box trailer.
+  <!-- docs/drivetrain.md § The start gear: "On the flat the bobtail semi starts in D6 and with the 24 t box in D3" -->
 - **Shift timing** (`shift_cut_s`, `shift_torque_ramp_s`, `shift_handover_s`): how long a change
   cuts the fuel and brings it back, and how long an upshift's clutch takes to hand the drive over.
 - **Least time in gear** (`shift_dwell_s`): before a change asked for by the pedal, or a kickdown.
@@ -507,22 +510,28 @@ Per level:
 
 Simulation-wide:
 
-- **Engine efficiency** (`FUEL_INDICATED_EFFICIENCY`): the fuel burned is worked out from the
-  torque that the fuel adds, the engine's speed, and an efficiency of a little over two fifths
-  (the `sedan` idles at about a third of a litre an hour).
-  <!-- VehicleTelemetry.fuel_rate_lph, FUEL_INDICATED_EFFICIENCY -->
-- **Tank size** (`FUEL_TANK_FULL_LOAD_S`): each tank lasts a little over eight minutes at full
-  power.
-  <!-- VehicleTelemetry FUEL_TANK_FULL_LOAD_S 500 s -->
-- **Coolant** (`COOLANT_AMBIENT`, `COOLANT_OPERATING`, `COOLANT_HOT`, `COOLANT_RATE`): between
-  20 °C and about 108 °C, moving towards its target by about 2 °C a second.
-  <!-- VehicleTelemetry COOLANT_AMBIENT 20, COOLANT_HOT 108; COOLANT_RATE 2 -->
-- **Battery** (`BATTERY_RESTING`, `BATTERY_CHARGING`, `BATTERY_LAMP_DROOP`): it drops by up to
-  0.6 V with every lamp on.
-  <!-- BATTERY_LAMP_DROOP 0.6 -->
-- **Air** (`AIR_PRESS_PRIMARY`, `AIR_PRESS_SECONDARY`): a truck's second air tank loses a little
-  less per press than the first, and coupling a trailer takes about 3 bar from the first.
-  <!-- TruckTelemetry AIR_PRESS_PRIMARY, AIR_PRESS_SECONDARY, TRAILER_CHARGE_S -->
+- **Engine efficiency** (`FUEL_INDICATED_EFFICIENCY`): the fuel burned is the torque the fuel
+  adds (the engine's net torque plus its friction), times the engine's speed, divided by an
+  efficiency: 0.41 for petrol and 0.45 for diesel, the same at every speed and load. For example,
+  the `sedan` idles at about a third of a litre an hour, which is just its friction at idle.
+  <!-- VehicleTelemetry.fuel_rate_lph, FUEL_INDICATED_EFFICIENCY [0.41, 0.45]; docs/drivetrain.md Fuel: the sedan idles at 0.34 L/h -->
+- **Tank size** (`FUEL_TANK_FULL_LOAD_S`): each tank lasts 500 seconds (a little over eight
+  minutes) at full fuel at the engine's rated speed, so the gauge visibly falls. The burn that
+  drains it is the real one, and an empty tank leaves the engine running.
+  <!-- VehicleTelemetry FUEL_TANK_FULL_LOAD_S 500 s, tank_litres; base_vehicle.gd: an empty tank does not stop the engine -->
+- **Coolant** (`COOLANT_AMBIENT`, `COOLANT_OPERATING`, `COOLANT_HOT`, `COOLANT_RATE`): 20 °C with
+  the engine off. Running, its target is 90 °C at no load and 108 °C at full fuel, in proportion to
+  the fuel burned, and it moves towards that target by 2 °C a second.
+  <!-- VehicleTelemetry COOLANT_AMBIENT 20, COOLANT_OPERATING 90, COOLANT_HOT 108, coolant_target; BaseVehicle COOLANT_RATE 2; heat_frac = fuel_rate / rated burn -->
+- **Battery** (`BATTERY_RESTING`, `BATTERY_CHARGING`, `BATTERY_LAMP_DROOP`): 12.6 V with the
+  engine off and 14.2 V running, less up to 0.6 V in proportion to the lamps lit, each counted by
+  its bulb's power.
+  <!-- VehicleTelemetry.battery_volts; BATTERY_LAMP_DROOP 0.6; LampSet.load_share, BULB_*_W -->
+- **Air** (`AIR_PRESS_PRIMARY`, `AIR_PRESS_SECONDARY`): a full press of the brake pedal takes
+  0.7 bar from the first tank and 0.55 from the second, and the compressor puts back about
+  0.45 bar a second into each while the engine runs. Coupling a trailer takes about 3 bar from
+  the first tank and 1.5 from the second over the 8 seconds it takes to fill the trailer's.
+  <!-- TruckTelemetry AIR_PRESS_PRIMARY 0.70, AIR_PRESS_SECONDARY 0.55, AIR_CHARGE_RATE 0.45, TRAILER_CHARGE_S 8, TRAILER_AIR_DRAW 0.75 of AIR_DRAW_PRIMARY 1.10 / AIR_DRAW_SECONDARY 0.85 -->
 
 Per vehicle:
 
@@ -536,8 +545,9 @@ Simulation-wide:
 - **Map origin** (`GPS_ORIGIN_LAT`, `GPS_ORIGIN_LON`): the world's origin is pinned to a spot in
   Paris.
   <!-- VehicleTelemetry GPS_ORIGIN_LAT 48.8566, GPS_ORIGIN_LON 2.3522 -->
-- **Impact threshold** (`IMPACT_THRESHOLD`): any jolt over about 2.5 g counts as an impact.
-  <!-- BaseVehicle IMPACT_THRESHOLD 25 m/s² -->
+- **Impact threshold** (`IMPACT_THRESHOLD`): any jolt over 25 m/s² (about 2.5 g) counts as an
+  impact. Its size is held and then shrinks by 40 m/s² each second (`IMPACT_DECAY`).
+  <!-- BaseVehicle IMPACT_THRESHOLD 25 m/s², IMPACT_DECAY 40 -->
 
 ## Related
 

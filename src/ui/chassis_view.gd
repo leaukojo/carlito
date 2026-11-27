@@ -2,12 +2,12 @@ class_name ChassisView
 extends Control
 ## The chassis view: a plan view of the bound body's wheels off `ChassisReading` each physics tick,
 ## front up. Each tyre is a patch whose AREA is its share of the normal load, filled by its grip in
-## use, hatched past the curve's peak, a dashed outline off the ground; on it the road's push, beside
-## it its slip bar; diff links between the wheels; the body's g arrow and load-centre dot at the COM.
-## It draws each reading as given, with no lag or hold (`Instrument`'s rule): a flicker here is the
-## sim flickering. A body with no wheels (boat, drone, train) draws nothing. A coupled body draws
-## behind at its live articulation (`layout_box`, `held_swing`). Not in sloppyCAN: no bus has this.
-##
+## use, at the limit and hatched past the curve's peak, a dashed outline off the ground; on it the
+## road's push, beside it its slip bar; diff links between the wheels; the body's g arrow and
+## load-centre dot at the COM. It draws each reading as given, with no lag or hold (`Instrument`'s
+## rule): a flicker here is the sim flickering. A body with no wheels (boat, drone, train) draws
+## nothing. A coupled body draws behind at its live articulation (`layout_box`, `held_swing`). Not
+## in sloppyCAN: no bus has this.
 ## Full-rect, mouse-transparent; the panel sits at the right edge, docked on the higher of the
 ## dashboard's and the touch pads' top edges (`dock`), below the challenge HUD (`keep_clear`).
 
@@ -168,7 +168,11 @@ func _process(_dt: float) -> void:
 # --- pure mapping (unit-tested) -----------------------------------------------
 
 ## 0 cool, 1 warm, 2 at the limit, for a grip-use ratio (`ChassisReading.WheelReading.grip_use`).
-static func grip_step(use: float) -> int:
+## A `sliding` tyre (`past_peak`) is at its limit whatever its ratio: past the peak its force falls
+## back under the budget (the curve's tail), and more slip only lowers it.
+static func grip_step(use: float, sliding := false) -> int:
+	if sliding:
+		return 2
 	if use < COOL_BELOW:
 		return 0
 	return 1 if use < WARM_BELOW else 2
@@ -468,7 +472,7 @@ func _draw_patches(reading: ChassisReading, rects: Array[Rect2], angle: float, s
 			draw_circle(Vector2.ZERO, 1.5 * s, OUTLINE_COLOR)
 			continue
 		var outline := rounded_rect(rect, 3.0 * s * m)
-		draw_colored_polygon(outline, GRIP_COLORS[grip_step(w.grip_use)])
+		draw_colored_polygon(outline, GRIP_COLORS[grip_step(w.grip_use, w.past_peak)])
 		var hatch := hatch_lines(rect.grow(-1.0 * s), HATCH_STEP * s * m) if w.past_peak \
 				else PackedVector2Array()
 		if not hatch.is_empty():  # a patch narrower than its border, or than one step, has none

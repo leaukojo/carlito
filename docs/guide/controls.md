@@ -24,12 +24,15 @@ driving.
 The keyboard and the touch screen are merged first, then a gamepad's sticks are added on top. A
 few rules hold whatever the source:
 
-- **The brake never becomes throttle.** Each pedal is its own control.
+- **The brake only brakes while the vehicle moves.** Pressing it never speeds the vehicle up the
+  way it is going. With the AUTOMATIC gearbox it can drive the vehicle backwards, but only once
+  the vehicle has stopped and reverse is engaged (see [Choosing a gear](#choosing-a-gear)).
 - **No fuel without the key at Ignition.** With the key at Lock or On, the accelerator does
-  nothing.
-- **Both pedals at once.** Pressing the brake and accelerator together holds the vehicle; if it
-  still moves faster than a walk, the accelerator is cut until one pedal is released, as an engine
-  computer's brake-override does.
+  nothing, because the engine is not running.
+- **Both pedals at once.** Pressing the brake and the accelerator together holds the vehicle. If
+  it still moves faster than a walk (1 m/s), the accelerator is cut until one pedal is released,
+  as the brake override in a real engine computer does, so that a stuck accelerator can never
+  overpower the brakes.
 <!-- InputRouter header "brake > accel > handbrake"; arbitrate_local: "ignition gates throttle; brake never throttles"; BRAKE_OVERRIDE_SPEED 1 m/s -->
 
 The pause menu's CONTROLS page lists the controls of the vehicle you are driving, for each device.

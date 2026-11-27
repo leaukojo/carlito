@@ -22,6 +22,9 @@ func test_grip_steps_are_cool_warm_and_at_the_limit() -> void:
 	assert_int(ChassisView.grip_step(0.94)).is_equal(1)
 	assert_int(ChassisView.grip_step(0.95)).is_equal(2)
 	assert_int(ChassisView.grip_step(1.3)).is_equal(2)
+	# Sliding on the curve's tail (0.8 of the peak fully sideways) is at the limit, not warm.
+	assert_int(ChassisView.grip_step(0.8, true)).is_equal(2)
+	assert_int(ChassisView.grip_step(0.3, true)).is_equal(2)
 
 
 ## Area is the share of the load: an even share reads 1, half a four-wheeler's load doubles the

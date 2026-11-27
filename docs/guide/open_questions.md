@@ -28,14 +28,22 @@ says meanwhile. Newest last.
   semis (and their trailers) only.
 - **Guide meanwhile:** the teaching pages describe roll stability for trucks in general.
 
-### 3. What should the catalog test check?
+### 3. Why does the `suv` have no cornering-load shape?
 
-- **Test:** `tests/test_vehicle_catalog.gd` fails. It reads `boat.md` and `drone.md` in this guide,
-  but both pages wait in `docs/guide-drafts/`. It also expects the `suv` row of `car.md` to match
-  the catalog.
-- **Catalog and guide:** the catalog's `suv` line does not say "governed to 180 km/h", and the
-  guide's does.
-- **Guide meanwhile:** the car page keeps the 180 km/h, which is what the `suv` spec sets.
+- **Code:** `tools/gen_kenney_vehicles.gd` sets `cornering_peak_load` 0.0 on the `suv` on purpose
+  (so its sideways peak does not move with load), while the `suv-luxury` has 2.56. No comment or
+  doc gives a reason.
+- **Docs:** `slip.md`'s simplification list gives the load shape to the cars, the vans, the rigid
+  trucks and the tractor, without an exception for the `suv`.
+- **Guide meanwhile:** `simulation.md` names the `suv` as an exception; `slip.md` is unchanged.
+
+### 4. Should the truck's air stop charging at working pressure?
+
+- **Code:** the compressor adds 0.45 bar a second per tank while the engine runs, up to the
+  signal's 12-bar maximum (`TruckTelemetry.AIR_MAX_BAR`); a truck starts at 7 bar. There is no
+  governor that stops the compressor at a working pressure, as a real truck's does.
+- **Guide meanwhile:** the auxiliary page describes the tanks filling and emptying, without a
+  cut-out pressure.
 
 ## Ideas
 
